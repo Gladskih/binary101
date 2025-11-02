@@ -39,82 +39,85 @@
     background-color: var(--background-page);
     color: var(--text-primary);
     font-family: var(--font-stack);
-    display: grid;
-    place-items: center;
-    line-height: 1.4;
+    display: flex;
+    flex-direction: column;
     -webkit-font-smoothing: antialiased;
+    line-height: 1.4;
   }
   main {
-    width: min(680px, 90vw);
-    display: grid;
-    gap: 1rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
   }
   header {
     text-align: center;
+    padding: 1rem 1rem 0;
     display: grid;
     gap: 0.5rem;
   }
   header h1 {
-    font-size: 1.125rem;
+    font-size: 1rem;
     font-weight: 600;
     margin: 0;
     color: var(--text-primary);
   }
   header p {
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     margin: 0;
     color: var(--text-secondary);
   }
+  /* The drop zone is visually the whole main area. It's also the "button". */
   #dropZone {
+    flex: 1;
+    width: 100%;
+    display: grid;
+    place-items: center;
+    padding: 2rem 1.5rem;
     border: 2px dashed var(--border-card);
-    border-radius: var(--radius-card);
+    border-radius: 0;
     background-color: var(--background-card);
     color: var(--text-secondary);
-    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
     cursor: pointer;
-    padding: 2rem 1.5rem;
-    text-align: center;
-    display: grid;
-    gap: 0.75rem;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast), color var(--transition-fast);
   }
   #dropZone.dragover {
     border-color: var(--accent);
     box-shadow: 0 0 1rem rgb(99 102 241 / 0.4);
     color: var(--text-primary);
   }
-  #dropZone .zoneTitle {
+  #dropZoneInner {
+    display: grid;
+    gap: 0.75rem;
+    max-width: min(480px,90vw);
+    text-align: center;
+  }
+  .zoneTitle {
     font-size: 1rem;
     font-weight: 500;
     color: var(--text-primary);
   }
-  #dropZone .zoneHint {
+  .zoneHint {
     font-size: 0.8rem;
     line-height: 1.3;
     color: var(--text-secondary);
   }
-  #dropZone button {
-    appearance: none;
-    border: 1px solid var(--accent);
-    background-color: var(--accent);
-    color: #fff;
+  #statusMessage {
     font-size: 0.8rem;
-    font-weight: 500;
-    line-height: 1.2;
-    border-radius: var(--radius-chip);
-    padding: 0.6rem 0.8rem;
-    cursor: pointer;
-    transition: filter var(--transition-fast), box-shadow var(--transition-fast);
+    line-height: 1.3;
+    min-height: 1.2em;
+    color: var(--accent);
+    word-break: break-word;
   }
-  #dropZone button:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
+  section#resultsSection {
+    width: min(680px,90vw);
+    margin: 1rem auto 2rem;
+    display: grid;
+    gap: 1rem;
   }
-  #dropZone button:hover {
-    filter: brightness(1.1);
-    box-shadow: 0 10px 20px rgb(0 0 0 / 0.4);
+  #fileInfoCard[hidden] {
+    display: none;
   }
   #fileInfoCard {
-    display: none;
     border: 1px solid var(--border-card);
     border-radius: var(--radius-card);
     background-color: var(--background-card);
@@ -172,11 +175,43 @@
     word-break: break-all;
     color: var(--text-primary);
   }
+  .hashRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .hashValue {
+    word-break: break-all;
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    font-size: 0.8rem;
+    line-height: 1.3;
+  }
+  .hashActionButton {
+    appearance: none;
+    border: 1px solid var(--accent);
+    background-color: var(--accent);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 500;
+    line-height: 1.2;
+    border-radius: var(--radius-chip);
+    padding: 0.5rem 0.6rem;
+    cursor: pointer;
+    transition: filter var(--transition-fast), box-shadow var(--transition-fast);
+  }
+  .hashActionButton:hover,
+  .hashActionButton:focus-visible {
+    filter: brightness(1.1);
+    box-shadow: 0 10px 20px rgb(0 0 0 / 0.4);
+    outline: none;
+  }
   footer {
     text-align: center;
     font-size: 0.7rem;
     color: var(--text-secondary);
     user-select: none;
+    padding: 0 1rem 1rem;
   }
   footer span {
     white-space: nowrap;
@@ -190,190 +225,323 @@
 <main>
   <header>
     <h1>Local File Inspector</h1>
-    <p>Drop a file, paste it, or choose it. The file never leaves your browser.</p>
+    <p>All analysis runs locally in your browser. Nothing is uploaded.</p>
   </header>
-  <section id="dropZone" role="button" tabindex="0" aria-describedby="dropZoneHelp">
-    <div class="zoneTitle">Drop file / Paste (Ctrl+V) / Click to browse</div>
-    <div class="zoneHint" id="dropZoneHelp">
-      Works entirely offline in your browser. Shows size, name, and type (ELF / PE/COFF if detected).
-    </div>
-    <div>
-      <button type="button" id="openFileDialogButton">Choose file…</button>
-    </div>
-  </section>
-  <input id="fileInput" type="file" />
-  <article id="fileInfoCard" aria-live="polite" aria-atomic="true">
-    <div id="fileInfoHeader">
-      <div id="fileOriginalName"></div>
-      <div id="fileMetaRow">
-        <span class="chip" id="fileSizeDisplay"></span>
-        <span class="chip" id="fileKindDisplay"></span>
+  <!--
+    We use <label for="fileInput"> so clicking anywhere triggers the hidden file input.
+    We still add tabindex and key handling for keyboard activation (Space/Enter),
+    because label is not guaranteed to be keyboard-activatable everywhere in a11y terms.
+  -->
+  <label id="dropZone" for="fileInput" tabindex="0" aria-describedby="zoneHelp">
+    <div id="dropZoneInner">
+      <div class="zoneTitle">Drop file / Paste (Ctrl+V) / Click to browse</div>
+      <div class="zoneHint" id="zoneHelp">
+        The whole area is interactive. Single file only. Directories are not supported.
       </div>
+      <div id="statusMessage" aria-live="polite" aria-atomic="true"></div>
     </div>
-    <dl>
-      <dt>Original name</dt>
-      <dd id="fileNameDetail"></dd>
-      <dt>Size</dt>
-      <dd id="fileSizeDetail"></dd>
-      <dt>Binary type</dt>
-      <dd id="fileBinaryTypeDetail"></dd>
-    </dl>
-  </article>
-  <footer>
-    <div>Inspection is client-side only.</div>
-    <div><span>No upload.</span> <span>No tracking.</span></div>
-  </footer>
+  </label>
+  <input id="fileInput" type="file" />
+  <section id="resultsSection">
+    <article id="fileInfoCard" hidden aria-live="polite" aria-atomic="true">
+      <div id="fileInfoHeader">
+        <div id="fileOriginalName"></div>
+        <div id="fileMetaRow">
+          <span class="chip" id="fileSizeDisplay"></span>
+          <span class="chip" id="fileKindDisplay"></span>
+        </div>
+      </div>
+      <dl>
+        <dt>Original name</dt>
+        <dd id="fileNameDetail"></dd>
+        <dt>Size</dt>
+        <dd id="fileSizeDetail"></dd>
+        <dt>Binary type</dt>
+        <dd id="fileBinaryTypeDetail"></dd>
+        <dt>SHA-256</dt>
+        <dd class="hashRow">
+          <span class="hashValue" id="sha256Value"></span>
+          <button type="button" class="hashActionButton" id="sha256Button">Compute SHA-256</button>
+        </dd>
+        <dt>SHA-512</dt>
+        <dd class="hashRow">
+          <span class="hashValue" id="sha512Value"></span>
+          <button type="button" class="hashActionButton" id="sha512Button">Compute SHA-512</button>
+        </dd>
+      </dl>
+    </article>
+  </section>
 </main>
-<script>
-"use strict";
-(() => {
-  const dropZoneElement = document.getElementById("dropZone");
-  const fileInputElement = document.getElementById("fileInput");
-  const openFileDialogButtonElement = document.getElementById("openFileDialogButton");
-  const fileInfoCardElement = document.getElementById("fileInfoCard");
-  const fileOriginalNameElement = document.getElementById("fileOriginalName");
-  const fileSizeDisplayElement = document.getElementById("fileSizeDisplay");
-  const fileKindDisplayElement = document.getElementById("fileKindDisplay");
-  const fileNameDetailElement = document.getElementById("fileNameDetail");
-  const fileSizeDetailElement = document.getElementById("fileSizeDetail");
-  const fileBinaryTypeDetailElement = document.getElementById("fileBinaryTypeDetail");
-  function formatBytes(bytes) {
-    const kilo = 1024;
-    if (bytes < kilo) return bytes + " B";
-    const units = ["KB", "MB", "GB", "TB", "PB"];
-    let value = bytes;
-    let unitIndex = -1;
-    do {
-      value = value / kilo;
-      unitIndex += 1;
-    } while (value >= kilo && unitIndex < units.length - 1);
-    const roundedValue = value >= 100 ? Math.round(value) : Math.round(value * 10) / 10;
-    return roundedValue + " " + units[unitIndex];
-  }
-  function detectBinaryType(fileBytes) {
-    const dataView = new DataView(fileBytes);
-    const byteCount = dataView.byteLength;
-    // ELF magic: 0x7F, 'E', 'L', 'F' at offset 0..3 per ELF specification. 
-    const elfMagic =
-      byteCount >= 4 &&
-      dataView.getUint8(0) === 0x7f &&
-      dataView.getUint8(1) === 0x45 && // 'E'
-      dataView.getUint8(2) === 0x4c && // 'L'
-      dataView.getUint8(3) === 0x46;   // 'F'
-    if (elfMagic) return "ELF";
-    // PE/COFF:
-    // Offset 0x00..1 must be 'MZ' (0x4D, 0x5A) for DOS header signature. 
-    // Offset 0x3C (60 decimal) is e_lfanew, a 32-bit little-endian pointer to the PE header. PE header must start with "PE\0\0". 
-    const mzMagic =
-      byteCount >= 2 &&
-      dataView.getUint8(0) === 0x4d && // 'M'
-      dataView.getUint8(1) === 0x5a;   // 'Z'
-    if (mzMagic && byteCount >= 0x3c + 4) {
-        const peHeaderOffset = dataView.getUint32(0x3c, true); // e_lfanew is little-endian 32-bit
-        if (peHeaderOffset + 4 <= byteCount) {
-          const p0 = dataView.getUint8(peHeaderOffset);
-          const p1 = dataView.getUint8(peHeaderOffset + 1);
-          const p2 = dataView.getUint8(peHeaderOffset + 2);
-          const p3 = dataView.getUint8(peHeaderOffset + 3);
-          const isPeSignature =
-            p0 === 0x50 && // 'P'
-            p1 === 0x45 && // 'E'
-            p2 === 0x00 &&
-            p3 === 0x00;
-          if (isPeSignature) return "PE / COFF";
-        }
-    }
-    return "Not ELF or PE / COFF (or file is too short)";
-  }
-  function showFileInformation(file) {
-    // We only need the first ~512 bytes to detect ELF / PE headers (the PE header offset is given by e_lfanew at 0x3C and typical PE headers start within first few hundred bytes per PE spec references). Keeping this slice small avoids unnecessary memory use for large files. 
-    const headerSlice = file.slice(0, 512);
-    headerSlice.arrayBuffer().then(arrayBuffer => {
-      const binaryType = detectBinaryType(arrayBuffer);
-      const readableSize = formatBytes(file.size);
-      fileOriginalNameElement.textContent = file.name || "(no name)";
-      fileSizeDisplayElement.textContent = readableSize;
-      fileKindDisplayElement.textContent = binaryType;
-      fileNameDetailElement.textContent = file.name || "(no name)";
-      fileSizeDetailElement.textContent = readableSize + " (" + file.size + " bytes)";
-      fileBinaryTypeDetailElement.textContent = binaryType;
-      fileInfoCardElement.style.display = "block";
-    }).catch(error => {
-      // If reading fails, surface minimal info. This branch should rarely execute unless the browser blocks access.
-      fileOriginalNameElement.textContent = file.name || "(no name)";
-      fileSizeDisplayElement.textContent = formatBytes(file.size);
-      fileKindDisplayElement.textContent = "Unreadable";
-      fileNameDetailElement.textContent = file.name || "(no name)";
-      fileSizeDetailElement.textContent = formatBytes(file.size) + " (" + file.size + " bytes)";
-      fileBinaryTypeDetailElement.textContent = "Could not read file header: " + String(error);
-      fileInfoCardElement.style.display = "block";
-    });
-  }
-  function handleIncomingFileList(fileList) {
-    // Only first file is shown; UX stays predictable and does not accumulate cards.
-    if (!fileList || fileList.length === 0) return;
-    const firstFile = fileList[0];
-    showFileInformation(firstFile);
-  }
-  // File dialog
-  openFileDialogButtonElement.addEventListener("click", event => {
-    event.stopPropagation(); // prevent dropZone click handler from firing as well
-    fileInputElement.click();
-  });
+<footer>
+  <div>Inspection is client-side only.</div>
+  <div><span>No upload.</span> <span>No tracking.</span></div>
+</footer>
 
-  fileInputElement.addEventListener("change", event => {
-    const target = event.currentTarget;
-    if (!(target instanceof HTMLInputElement) || !target.files) return;
-    handleIncomingFileList(target.files);
-    // Reset to allow selecting the same file twice in a row
-    target.value = "";
+<script type="module">
+"use strict";
+
+const dropZoneElement = document.getElementById("dropZone");
+const fileInputElement = document.getElementById("fileInput");
+const statusMessageElement = document.getElementById("statusMessage");
+const fileInfoCardElement = document.getElementById("fileInfoCard");
+const fileOriginalNameElement = document.getElementById("fileOriginalName");
+const fileSizeDisplayElement = document.getElementById("fileSizeDisplay");
+const fileKindDisplayElement = document.getElementById("fileKindDisplay");
+const fileNameDetailElement = document.getElementById("fileNameDetail");
+const fileSizeDetailElement = document.getElementById("fileSizeDetail");
+const fileBinaryTypeDetailElement = document.getElementById("fileBinaryTypeDetail");
+const sha256ValueElement = document.getElementById("sha256Value");
+const sha512ValueElement = document.getElementById("sha512Value");
+const sha256ButtonElement = document.getElementById("sha256Button");
+const sha512ButtonElement = document.getElementById("sha512Button");
+
+// This limit prevents trying to load a multi-gigabyte file fully into memory at once.
+// Web Crypto's standard digest API (crypto.subtle.digest) requires the full ArrayBuffer in memory;
+// streaming digests are not yet consistently standardized across browsers.
+const MAX_HASHABLE_BYTES = 200 * 1024 * 1024; // 200 MiB
+
+let currentFile = null;
+
+function setStatusMessage(message) {
+  statusMessageElement.textContent = message;
+}
+
+function clearStatusMessage() {
+  statusMessageElement.textContent = "";
+}
+
+function formatBytes(bytes) {
+  const kilo = 1024;
+  if (bytes < kilo) return bytes + " B";
+  const units = ["KB", "MB", "GB", "TB", "PB"];
+  let value = bytes;
+  let unitIndex = -1;
+  do {
+    value = value / kilo;
+    unitIndex += 1;
+  } while (value >= kilo && unitIndex < units.length - 1);
+  const roundedValue = value >= 100 ? Math.round(value) : Math.round(value * 10) / 10;
+  return roundedValue + " " + units[unitIndex];
+}
+
+function detectBinaryType(arrayBuffer) {
+  const dataView = new DataView(arrayBuffer);
+  const byteCount = dataView.byteLength;
+  // ELF magic: 0x7F, 'E', 'L', 'F' at offset 0..3
+  const isElf =
+    byteCount >= 4 &&
+    dataView.getUint8(0) === 0x7f &&
+    dataView.getUint8(1) === 0x45 && // 'E'
+    dataView.getUint8(2) === 0x4c && // 'L'
+    dataView.getUint8(3) === 0x46;   // 'F'
+  if (isElf) return "ELF";
+  // PE/COFF:
+  // DOS header must start with 'MZ' (0x4D,0x5A).
+  // At offset 0x3C (60 decimal) is e_lfanew, a little-endian 32-bit pointer to the PE header.
+  // PE header must start with 'P','E',0x00,0x00.
+  const isMz =
+    byteCount >= 2 &&
+    dataView.getUint8(0) === 0x4d && // 'M'
+    dataView.getUint8(1) === 0x5a;   // 'Z'
+  if (isMz && byteCount >= 0x3c + 4) {
+    const peHeaderOffset = dataView.getUint32(0x3c, true); // e_lfanew is little-endian 32-bit
+    if (peHeaderOffset + 4 <= byteCount) {
+      const p0 = dataView.getUint8(peHeaderOffset);
+      const p1 = dataView.getUint8(peHeaderOffset + 1);
+      const p2 = dataView.getUint8(peHeaderOffset + 2);
+      const p3 = dataView.getUint8(peHeaderOffset + 3);
+      const isPeSignature =
+        p0 === 0x50 && // 'P'
+        p1 === 0x45 && // 'E'
+        p2 === 0x00 &&
+        p3 === 0x00;
+      if (isPeSignature) return "PE / COFF";
+    }
+  }
+  return "Not ELF or PE / COFF (or file is too short)";
+}
+
+function showFileInformation(file) {
+  currentFile = file;
+  // read only the first 512 bytes to identify ELF / PE
+  const headerSlice = file.slice(0, 512);
+  headerSlice.arrayBuffer().then(arrayBuffer => {
+    const binaryType = detectBinaryType(arrayBuffer);
+    const readableSize = formatBytes(file.size);
+    // basic data
+    fileOriginalNameElement.textContent = file.name || "(no name)";
+    fileSizeDisplayElement.textContent = readableSize;
+    fileKindDisplayElement.textContent = binaryType;
+    fileNameDetailElement.textContent = file.name || "(no name)";
+    fileSizeDetailElement.textContent = readableSize + " (" + file.size + " bytes)";
+    fileBinaryTypeDetailElement.textContent = binaryType;
+    // reset hash display state
+    sha256ValueElement.textContent = "";
+    sha512ValueElement.textContent = "";
+    sha256ButtonElement.hidden = false;
+    sha512ButtonElement.hidden = false;
+    sha256ButtonElement.disabled = false;
+    sha512ButtonElement.disabled = false;
+    fileInfoCardElement.hidden = false;
+    clearStatusMessage();
+  }).catch(error => {
+    // If header read fails, we still show basic size/name but explain failure
+    const readableSize = formatBytes(file.size);
+    fileOriginalNameElement.textContent = file.name || "(no name)";
+    fileSizeDisplayElement.textContent = readableSize;
+    fileKindDisplayElement.textContent = "Unreadable";
+    fileNameDetailElement.textContent = file.name || "(no name)";
+    fileSizeDetailElement.textContent = readableSize + " (" + file.size + " bytes)";
+    fileBinaryTypeDetailElement.textContent = "Could not read file header: " + String(error);
+    sha256ValueElement.textContent = "";
+    sha512ValueElement.textContent = "";
+    sha256ButtonElement.hidden = false;
+    sha512ButtonElement.hidden = false;
+    sha256ButtonElement.disabled = false;
+    sha512ButtonElement.disabled = false;
+    fileInfoCardElement.hidden = false;
+    clearStatusMessage();
   });
-  // Drag and drop
-  ["dragenter", "dragover"].forEach(type => {
-    dropZoneElement.addEventListener(type, event => {
-      event.preventDefault();
-      event.stopPropagation();
-      dropZoneElement.classList.add("dragover");
-    });
+}
+
+// This creates a "virtual file" from pasted text if the clipboard did not contain actual File objects.
+// The goal: if the user pastes raw bytes / text, we still treat it as a file.
+function createFileFromPastedString(textContent) {
+  // Using Date.now() to generate a stable but unique-ish default name.
+  // The name uses .txt because clipboard text is not strongly typed binary.
+  return new File([textContent], "pasted-" + Date.now() + ".txt", { type: "text/plain" });
+}
+
+function handleIncomingFileList(fileList, sourceDescription) {
+  if (!fileList || fileList.length === 0) {
+    setStatusMessage(sourceDescription + ": no files or folders are supported here.");
+    return;
+  }
+  if (fileList.length > 1) {
+    setStatusMessage(sourceDescription + ": multiple files are not supported yet.");
+    return;
+  }
+  const firstFile = fileList[0];
+  showFileInformation(firstFile);
+}
+
+// drag & drop
+["dragenter", "dragover"].forEach(type => {
+  dropZoneElement.addEventListener(type, event => {
+    event.preventDefault();
+    dropZoneElement.classList.add("dragover");
   });
-  ["dragleave", "drop"].forEach(type => {
-    dropZoneElement.addEventListener(type, event => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (event.type === "drop") {
-        const dataTransfer = event.dataTransfer;
-        if (dataTransfer && dataTransfer.files && dataTransfer.files.length > 0) {
-          handleIncomingFileList(dataTransfer.files);
-        }
+});
+["dragleave", "drop"].forEach(type => {
+  dropZoneElement.addEventListener(type, event => {
+    event.preventDefault();
+    if (event.type === "drop") {
+      const dataTransfer = event.dataTransfer;
+      if (!dataTransfer) {
+        setStatusMessage("Drop: could not access data.");
+      } else {
+        const droppedFiles = dataTransfer.files;
+        // If user drags a directory, browsers often give 0 files.
+        handleIncomingFileList(droppedFiles, "Drop");
       }
-      dropZoneElement.classList.remove("dragover");
-    });
+    }
+    dropZoneElement.classList.remove("dragover");
   });
-  // Click on drop zone should also open dialog, which improves discoverability on touch screens.
-  dropZoneElement.addEventListener("click", () => {
+});
+
+// click / keyboard activation of dropZone -> open file dialog
+dropZoneElement.addEventListener("keydown", event => {
+  if (event.key === " " || event.key === "Enter") {
+    event.preventDefault();
     fileInputElement.click();
-  });
-  dropZoneElement.addEventListener("keypress", event => {
-    if (event.key === " " || event.key === "Enter") {
-      event.preventDefault();
-      fileInputElement.click();
+  }
+});
+
+// file dialog change
+fileInputElement.addEventListener("change", event => {
+  const target = event.currentTarget;
+  if (!(target instanceof HTMLInputElement)) return;
+  const { files } = target;
+  handleIncomingFileList(files, "File selection");
+  // Reset to allow selecting the same file twice in a row
+  target.value = "";
+});
+
+// paste support
+window.addEventListener("paste", event => {
+  const clipboardData = event.clipboardData;
+  if (!clipboardData) {
+    setStatusMessage("Paste: clipboard not available.");
+    return;
+  }
+  const files = [];
+  for (const item of clipboardData.items) {
+    if (item.kind === "file") {
+      const fileFromClipboard = item.getAsFile();
+      if (fileFromClipboard) files.push(fileFromClipboard);
     }
-  });
-  // Paste support (Ctrl+V). We listen on window so the user does not need to focus a specific element.
-  window.addEventListener("paste", event => {
-    if (!event.clipboardData) return;
-    const pastedFiles = [];
-    for (const item of event.clipboardData.items) {
-      if (item.kind === "file") {
-        const fileFromClipboard = item.getAsFile();
-        if (fileFromClipboard) pastedFiles.push(fileFromClipboard);
-      }
+  }
+  if (files.length > 0) {
+    // Good: we got real files (for example, pasted image data or file copied from OS)
+    handleIncomingFileList(files, "Paste");
+    return;
+  }
+  // If there are no file items, try text. We treat pasted text as a synthesized file.
+  // If there is no text either, we report unsupported.
+  if (clipboardData.types.includes("text/plain")) {
+    const textContent = clipboardData.getData("text/plain");
+    if (textContent && textContent.length > 0) {
+      const virtualFile = createFileFromPastedString(textContent);
+      handleIncomingFileList([virtualFile], "Paste text");
+      return;
     }
-    if (pastedFiles.length > 0) {
-      handleIncomingFileList(pastedFiles);
-    }
+  }
+  setStatusMessage("Paste: content detected but not a file or plain text.");
+});
+
+// hashing helpers
+function arrayBufferToHex(arrayBuffer) {
+  const bytes = new Uint8Array(arrayBuffer);
+  let hex = "";
+  for (const byte of bytes) {
+    hex += byte.toString(16).padStart(2, "0");
+  }
+  return hex;
+}
+
+function computeHashIfPossible(algorithm, file, outputElement, buttonElement) {
+  if (!file) {
+    outputElement.textContent = "No file selected.";
+    return;
+  }
+  if (file.size > MAX_HASHABLE_BYTES) {
+    // Explaining why we refuse to hash huge files in-browser:
+    outputElement.textContent = "File is too large for in-memory hashing (" + file.size + " bytes).";
+    buttonElement.disabled = true;
+    return;
+  }
+  buttonElement.disabled = true;
+  buttonElement.textContent = "Working…";
+  file.arrayBuffer().then(buffer => {
+    return crypto.subtle.digest(algorithm, buffer);
+  }).then(hashBuffer => {
+    const hexValue = arrayBufferToHex(hashBuffer);
+    outputElement.textContent = hexValue;
+    buttonElement.hidden = true; // hide button after success
+  }).catch(error => {
+    outputElement.textContent = "Hash failed: " + String(error);
+    buttonElement.disabled = false;
+    buttonElement.textContent = "Retry";
   });
-})();
+}
+
+// hash button clicks (lazy computation)
+sha256ButtonElement.addEventListener("click", () => {
+  computeHashIfPossible("SHA-256", currentFile, sha256ValueElement, sha256ButtonElement);
+});
+sha512ButtonElement.addEventListener("click", () => {
+  computeHashIfPossible("SHA-512", currentFile, sha512ValueElement, sha512ButtonElement);
+});
 </script>
 </body>
 </html>
