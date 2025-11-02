@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Local File Inspector</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --background-page: rgb(20 20 24 / 1);
+    --background-card: rgb(32 32 38 / 1);
+    --border-card: rgb(255 255 255 / 0.08);
+    --border-card-hover: rgb(255 255 255 / 0.16);
+    --text-primary: rgb(255 255 255 / 0.92);
+    --text-secondary: rgb(255 255 255 / 0.6);
+    --accent: rgb(99 102 241 / 1);
+    --radius-card: 1rem;
+    --radius-chip: 0.5rem;
+    --font-stack: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --transition-fast: 120ms ease;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --background-page: rgb(246 247 249 / 1);
+      --background-card: rgb(255 255 255 / 1);
+      --border-card: rgb(0 0 0 / 0.08);
+      --border-card-hover: rgb(0 0 0 / 0.16);
+      --text-primary: rgb(17 24 39 / 1);
+      --text-secondary: rgb(55 65 81 / 1);
+      --accent: rgb(79 70 229 / 1);
+    }
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background-color: var(--background-page);
+    color: var(--text-primary);
+    font-family: var(--font-stack);
+    display: grid;
+    place-items: center;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+  }
+  main {
+    width: min(680px, 90vw);
+    display: grid;
+    gap: 1rem;
+  }
+  header {
+    text-align: center;
+    display: grid;
+    gap: 0.5rem;
+  }
+  header h1 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text-primary);
+  }
+  header p {
+    font-size: 0.9rem;
+    margin: 0;
+    color: var(--text-secondary);
+  }
+  #dropZone {
+    border: 2px dashed var(--border-card);
+    border-radius: var(--radius-card);
+    background-color: var(--background-card);
+    color: var(--text-secondary);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    cursor: pointer;
+    padding: 2rem 1.5rem;
+    text-align: center;
+    display: grid;
+    gap: 0.75rem;
+  }
+  #dropZone.dragover {
+    border-color: var(--accent);
+    box-shadow: 0 0 1rem rgb(99 102 241 / 0.4);
+    color: var(--text-primary);
+  }
+  #dropZone .zoneTitle {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+  #dropZone .zoneHint {
+    font-size: 0.8rem;
+    line-height: 1.3;
+    color: var(--text-secondary);
+  }
+  #dropZone button {
+    appearance: none;
+    border: 1px solid var(--accent);
+    background-color: var(--accent);
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 500;
+    line-height: 1.2;
+    border-radius: var(--radius-chip);
+    padding: 0.6rem 0.8rem;
+    cursor: pointer;
+    transition: filter var(--transition-fast), box-shadow var(--transition-fast);
+  }
+  #dropZone button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  #dropZone button:hover {
+    filter: brightness(1.1);
+    box-shadow: 0 10px 20px rgb(0 0 0 / 0.4);
+  }
+  #fileInfoCard {
+    display: none;
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-card);
+    background-color: var(--background-card);
+    padding: 1rem 1.25rem 1.25rem;
+    line-height: 1.5;
+  }
+  #fileInfoHeader {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  #fileOriginalName {
+    font-size: 1rem;
+    font-weight: 600;
+    word-break: break-all;
+    color: var(--text-primary);
+  }
+  #fileMetaRow {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    border-radius: var(--radius-chip);
+    background-color: rgb(0 0 0 / 0.2);
+    color: var(--text-primary);
+    padding: 0.3rem 0.5rem;
+    font-size: 0.7rem;
+    line-height: 1.2;
+  }
+  @media (prefers-color-scheme: light) {
+    .chip {
+      background-color: rgb(0 0 0 / 0.05);
+    }
+  }
+  dl {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    row-gap: 0.5rem;
+    column-gap: 1rem;
+    margin: 0;
+    font-size: 0.85rem;
+  }
+  dt {
+    color: var(--text-secondary);
+  }
+  dd {
+    margin: 0;
+    word-break: break-all;
+    color: var(--text-primary);
+  }
+  footer {
+    text-align: center;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    user-select: none;
+  }
+  footer span {
+    white-space: nowrap;
+  }
+  input[type="file"] {
+    display: none;
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Local File Inspector</h1>
+    <p>Drop a file, paste it, or choose it. The file never leaves your browser.</p>
+  </header>
+  <section id="dropZone" role="button" tabindex="0" aria-describedby="dropZoneHelp">
+    <div class="zoneTitle">Drop file / Paste (Ctrl+V) / Click to browse</div>
+    <div class="zoneHint" id="dropZoneHelp">
+      Works entirely offline in your browser. Shows size, name, and type (ELF / PE/COFF if detected).
+    </div>
+    <div>
+      <button type="button" id="openFileDialogButton">Choose file…</button>
+    </div>
+  </section>
+  <input id="fileInput" type="file" />
+  <article id="fileInfoCard" aria-live="polite" aria-atomic="true">
+    <div id="fileInfoHeader">
+      <div id="fileOriginalName"></div>
+      <div id="fileMetaRow">
+        <span class="chip" id="fileSizeDisplay"></span>
+        <span class="chip" id="fileKindDisplay"></span>
+      </div>
+    </div>
+    <dl>
+      <dt>Original name</dt>
+      <dd id="fileNameDetail"></dd>
+      <dt>Size</dt>
+      <dd id="fileSizeDetail"></dd>
+      <dt>Binary type</dt>
+      <dd id="fileBinaryTypeDetail"></dd>
+    </dl>
+  </article>
+  <footer>
+    <div>Inspection is client-side only.</div>
+    <div><span>No upload.</span> <span>No tracking.</span></div>
+  </footer>
+</main>
+<script>
+"use strict";
+(() => {
+  const dropZoneElement = document.getElementById("dropZone");
+  const fileInputElement = document.getElementById("fileInput");
+  const openFileDialogButtonElement = document.getElementById("openFileDialogButton");
+  const fileInfoCardElement = document.getElementById("fileInfoCard");
+  const fileOriginalNameElement = document.getElementById("fileOriginalName");
+  const fileSizeDisplayElement = document.getElementById("fileSizeDisplay");
+  const fileKindDisplayElement = document.getElementById("fileKindDisplay");
+  const fileNameDetailElement = document.getElementById("fileNameDetail");
+  const fileSizeDetailElement = document.getElementById("fileSizeDetail");
+  const fileBinaryTypeDetailElement = document.getElementById("fileBinaryTypeDetail");
+  function formatBytes(bytes) {
+    const kilo = 1024;
+    if (bytes < kilo) return bytes + " B";
+    const units = ["KB", "MB", "GB", "TB", "PB"];
+    let value = bytes;
+    let unitIndex = -1;
+    do {
+      value = value / kilo;
+      unitIndex += 1;
+    } while (value >= kilo && unitIndex < units.length - 1);
+    const roundedValue = value >= 100 ? Math.round(value) : Math.round(value * 10) / 10;
+    return roundedValue + " " + units[unitIndex];
+  }
+  function detectBinaryType(fileBytes) {
+    const dataView = new DataView(fileBytes);
+    const byteCount = dataView.byteLength;
+    // ELF magic: 0x7F, 'E', 'L', 'F' at offset 0..3 per ELF specification. 
+    const elfMagic =
+      byteCount >= 4 &&
+      dataView.getUint8(0) === 0x7f &&
+      dataView.getUint8(1) === 0x45 && // 'E'
+      dataView.getUint8(2) === 0x4c && // 'L'
+      dataView.getUint8(3) === 0x46;   // 'F'
+    if (elfMagic) return "ELF";
+    // PE/COFF:
+    // Offset 0x00..1 must be 'MZ' (0x4D, 0x5A) for DOS header signature. 
+    // Offset 0x3C (60 decimal) is e_lfanew, a 32-bit little-endian pointer to the PE header. PE header must start with "PE\0\0". 
+    const mzMagic =
+      byteCount >= 2 &&
+      dataView.getUint8(0) === 0x4d && // 'M'
+      dataView.getUint8(1) === 0x5a;   // 'Z'
+    if (mzMagic && byteCount >= 0x3c + 4) {
+        const peHeaderOffset = dataView.getUint32(0x3c, true); // e_lfanew is little-endian 32-bit
+        if (peHeaderOffset + 4 <= byteCount) {
+          const p0 = dataView.getUint8(peHeaderOffset);
+          const p1 = dataView.getUint8(peHeaderOffset + 1);
+          const p2 = dataView.getUint8(peHeaderOffset + 2);
+          const p3 = dataView.getUint8(peHeaderOffset + 3);
+          const isPeSignature =
+            p0 === 0x50 && // 'P'
+            p1 === 0x45 && // 'E'
+            p2 === 0x00 &&
+            p3 === 0x00;
+          if (isPeSignature) return "PE / COFF";
+        }
+    }
+    return "Not ELF or PE / COFF (or file is too short)";
+  }
+  function showFileInformation(file) {
+    // We only need the first ~512 bytes to detect ELF / PE headers (the PE header offset is given by e_lfanew at 0x3C and typical PE headers start within first few hundred bytes per PE spec references). Keeping this slice small avoids unnecessary memory use for large files. 
+    const headerSlice = file.slice(0, 512);
+    headerSlice.arrayBuffer().then(arrayBuffer => {
+      const binaryType = detectBinaryType(arrayBuffer);
+      const readableSize = formatBytes(file.size);
+      fileOriginalNameElement.textContent = file.name || "(no name)";
+      fileSizeDisplayElement.textContent = readableSize;
+      fileKindDisplayElement.textContent = binaryType;
+      fileNameDetailElement.textContent = file.name || "(no name)";
+      fileSizeDetailElement.textContent = readableSize + " (" + file.size + " bytes)";
+      fileBinaryTypeDetailElement.textContent = binaryType;
+      fileInfoCardElement.style.display = "block";
+    }).catch(error => {
+      // If reading fails, surface minimal info. This branch should rarely execute unless the browser blocks access.
+      fileOriginalNameElement.textContent = file.name || "(no name)";
+      fileSizeDisplayElement.textContent = formatBytes(file.size);
+      fileKindDisplayElement.textContent = "Unreadable";
+      fileNameDetailElement.textContent = file.name || "(no name)";
+      fileSizeDetailElement.textContent = formatBytes(file.size) + " (" + file.size + " bytes)";
+      fileBinaryTypeDetailElement.textContent = "Could not read file header: " + String(error);
+      fileInfoCardElement.style.display = "block";
+    });
+  }
+  function handleIncomingFileList(fileList) {
+    // Only first file is shown; UX stays predictable and does not accumulate cards.
+    if (!fileList || fileList.length === 0) return;
+    const firstFile = fileList[0];
+    showFileInformation(firstFile);
+  }
+  // File dialog
+  openFileDialogButtonElement.addEventListener("click", event => {
+    event.stopPropagation(); // prevent dropZone click handler from firing as well
+    fileInputElement.click();
+  });
+
+  fileInputElement.addEventListener("change", event => {
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLInputElement) || !target.files) return;
+    handleIncomingFileList(target.files);
+    // Reset to allow selecting the same file twice in a row
+    target.value = "";
+  });
+  // Drag and drop
+  ["dragenter", "dragover"].forEach(type => {
+    dropZoneElement.addEventListener(type, event => {
+      event.preventDefault();
+      event.stopPropagation();
+      dropZoneElement.classList.add("dragover");
+    });
+  });
+  ["dragleave", "drop"].forEach(type => {
+    dropZoneElement.addEventListener(type, event => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.type === "drop") {
+        const dataTransfer = event.dataTransfer;
+        if (dataTransfer && dataTransfer.files && dataTransfer.files.length > 0) {
+          handleIncomingFileList(dataTransfer.files);
+        }
+      }
+      dropZoneElement.classList.remove("dragover");
+    });
+  });
+  // Click on drop zone should also open dialog, which improves discoverability on touch screens.
+  dropZoneElement.addEventListener("click", () => {
+    fileInputElement.click();
+  });
+  dropZoneElement.addEventListener("keypress", event => {
+    if (event.key === " " || event.key === "Enter") {
+      event.preventDefault();
+      fileInputElement.click();
+    }
+  });
+  // Paste support (Ctrl+V). We listen on window so the user does not need to focus a specific element.
+  window.addEventListener("paste", event => {
+    if (!event.clipboardData) return;
+    const pastedFiles = [];
+    for (const item of event.clipboardData.items) {
+      if (item.kind === "file") {
+        const fileFromClipboard = item.getAsFile();
+        if (fileFromClipboard) pastedFiles.push(fileFromClipboard);
+      }
+    }
+    if (pastedFiles.length > 0) {
+      handleIncomingFileList(pastedFiles);
+    }
+  });
+})();
+</script>
+</body>
+</html>
