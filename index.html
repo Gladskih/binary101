@@ -267,6 +267,10 @@
         <dd id="fileNameDetail"></dd>
         <dt>Size</dt>
         <dd id="fileSizeDetail"></dd>
+        <dt>Timestamp (UTC)</dt>
+        <dd id="fileTimestampDetail"></dd>
+        <dt>Source</dt>
+        <dd id="fileSourceDetail"></dd>
         <dt>Binary type</dt>
         <dd id="fileBinaryTypeDetail"></dd>
         <dt>SHA-256</dt>
@@ -295,9 +299,11 @@
 </footer>
 <script type="module">
 "use strict";
+
 const dropZoneElement = document.getElementById("dropZone");
 const fileInputElement = document.getElementById("fileInput");
 const statusMessageElement = document.getElementById("statusMessage");
+
 const fileInfoCardElement = document.getElementById("fileInfoCard");
 const fileOriginalNameElement = document.getElementById("fileOriginalName");
 const fileSizeDisplayElement = document.getElementById("fileSizeDisplay");
@@ -305,6 +311,9 @@ const fileKindDisplayElement = document.getElementById("fileKindDisplay");
 const fileNameDetailElement = document.getElementById("fileNameDetail");
 const fileSizeDetailElement = document.getElementById("fileSizeDetail");
 const fileBinaryTypeDetailElement = document.getElementById("fileBinaryTypeDetail");
+const fileTimestampDetailElement = document.getElementById("fileTimestampDetail");
+const fileSourceDetailElement = document.getElementById("fileSourceDetail");
+
 const sha256ValueElement = document.getElementById("sha256Value");
 const sha512ValueElement = document.getElementById("sha512Value");
 const sha256ComputeButtonElement = document.getElementById("sha256ComputeButton");
@@ -314,6 +323,8 @@ const sha512CopyButtonElement = document.getElementById("sha512CopyButton");
 
 // currentFile is the active file shown in UI
 let currentFile = null;
+let currentSourceDescription = "";
+let currentAnalysisTimestampUtc = "";
 
 function setStatusMessage(message) {
   statusMessageElement.textContent = message;
@@ -321,6 +332,14 @@ function setStatusMessage(message) {
 
 function clearStatusMessage() {
   statusMessageElement.textContent = "";
+}
+
+// Returns something like "2025-11-02T18:45:12Z"
+// We intentionally do not strip ":" here because this is now metadata, not a filename.
+function getCurrentTimestampUtc() {
+  const now = new Date();
+  const iso = now.toISOString(); // "2025-11-02T18:45:12.345Z"
+  return iso.replace(/\.\d+Z$/, "Z"); // "2025-11-02T18:45:12Z"
 }
 
 function formatBytes(bytes) {
@@ -337,60 +356,260 @@ function formatBytes(bytes) {
   return roundedValue + " " + units[unitIndex];
 }
 
-function detectBinaryType(arrayBuffer) {
-  const dataView = new DataView(arrayBuffer);
-  const byteCount = dataView.byteLength;
-  // ELF magic: 0x7F, 'E', 'L', 'F' at offset 0..3
-  const isElf =
-    byteCount >= 4 &&
-    dataView.getUint8(0) === 0x7f &&
-    dataView.getUint8(1) === 0x45 && // 'E'
-    dataView.getUint8(2) === 0x4c && // 'L'
-    dataView.getUint8(3) === 0x46;   // 'F'
-  if (isElf) return "ELF";
-  // PE/COFF:
-  // DOS header must start with 'MZ' (0x4D,0x5A).
-  // At offset 0x3C (60 decimal) is e_lfanew, a little-endian 32-bit pointer to the PE header.
-  // PE header must start with 'P','E',0x00,0x00.
-  const isMz =
-    byteCount >= 2 &&
-    dataView.getUint8(0) === 0x4d && // 'M'
-    dataView.getUint8(1) === 0x5a;   // 'Z'
-  if (isMz && byteCount >= 0x3c + 4) {
-    const peHeaderOffset = dataView.getUint32(0x3c, true); // e_lfanew is little-endian 32-bit
-    if (peHeaderOffset + 4 <= byteCount) {
-      const p0 = dataView.getUint8(peHeaderOffset);
-      const p1 = dataView.getUint8(peHeaderOffset + 1);
-      const p2 = dataView.getUint8(peHeaderOffset + 2);
-      const p3 = dataView.getUint8(peHeaderOffset + 3);
-      const isPeSignature =
-        p0 === 0x50 && // 'P'
-        p1 === 0x45 && // 'E'
-        p2 === 0x00 &&
-        p3 === 0x00;
-      if (isPeSignature) return "PE / COFF";
-    }
+function readAscii(dataView, offset, length) {
+  if (offset + length > dataView.byteLength) return "";
+  let text = "";
+  for (let i = 0; i < length; i += 1) {
+    text += String.fromCharCode(dataView.getUint8(offset + i));
   }
-  return "Not ELF or PE / COFF (or file is too short)";
+  return text;
 }
 
-async function showFileInformation(file) {
+function detectElf(arrayBuffer) {
+  const view = new DataView(arrayBuffer);
+  if (view.byteLength < 0x14) return null;
+  const isElf =
+    view.getUint8(0) === 0x7f &&
+    view.getUint8(1) === 0x45 &&
+    view.getUint8(2) === 0x4c &&
+    view.getUint8(3) === 0x46;
+  if (!isElf) return null;
+  const eiClass = view.getUint8(4); // 1 = 32-bit, 2 = 64-bit
+  const eiData = view.getUint8(5);  // 1 = little-endian (LSB), 2 = big-endian (MSB)
+  const bitnessDescription =
+    eiClass === 1 ? "32-bit" :
+    eiClass === 2 ? "64-bit" :
+    "unknown-width";
+  const endiannessDescription =
+    eiData === 1 ? "LSB" :
+    eiData === 2 ? "MSB" :
+    "unknown-endian";
+  const littleEndian = eiData === 1;
+  // e_type at 0x10 (16-bit)
+  // e_machine at 0x12 (16-bit)
+  const eType = view.getUint16(0x10, littleEndian);
+  const eMachine = view.getUint16(0x12, littleEndian);
+  const fileTypeDescription = (() => {
+    // e_type values:
+    // 1=relocatable, 2=executable, 3=shared object, 4=core
+    if (eType === 1) return "relocatable";
+    if (eType === 2) return "executable";
+    if (eType === 3) return "shared object";
+    if (eType === 4) return "core";
+    return "type=0x" + eType.toString(16);
+  })();
+  const machineDescription = (() => {
+    // Common e_machine values:
+    // 0x03 = x86, 0x3E = x86-64, 0x28 = ARM, 0xB7 = ARM64, 0x08 = MIPS
+    if (eMachine === 0x03) return "x86";
+    if (eMachine === 0x3e) return "x86-64";
+    if (eMachine === 0x28) return "ARM";
+    if (eMachine === 0xb7) return "ARM64";
+    if (eMachine === 0x08) return "MIPS";
+    return "machine=0x" + eMachine.toString(16);
+  })();
+  return "ELF " + bitnessDescription + " " + endiannessDescription + " " + fileTypeDescription + ", " + machineDescription;
+}
+
+function detectPe(arrayBuffer) {
+  const view = new DataView(arrayBuffer);
+  if (view.byteLength < 0x40) return null;
+  const isMz =
+    view.getUint8(0) === 0x4d &&
+    view.getUint8(1) === 0x5a;
+  if (!isMz) return null;
+  if (view.byteLength < 0x3c + 4) return "PE / COFF (truncated header)";
+  const peHeaderOffset = view.getUint32(0x3c, true); // e_lfanew
+  if (peHeaderOffset + 4 > view.byteLength) return "PE / COFF (truncated header)";
+  const p0 = view.getUint8(peHeaderOffset + 0);
+  const p1 = view.getUint8(peHeaderOffset + 1);
+  const p2 = view.getUint8(peHeaderOffset + 2);
+  const p3 = view.getUint8(peHeaderOffset + 3);
+  const isPeSignature =
+    p0 === 0x50 && // 'P'
+    p1 === 0x45 && // 'E'
+    p2 === 0x00 &&
+    p3 === 0x00;
+  if (!isPeSignature) return null;
+  const fileHeaderOffset = peHeaderOffset + 4;
+  const minSizeForFileHeader = fileHeaderOffset + 20;
+  if (minSizeForFileHeader > view.byteLength) return "PE / COFF (truncated COFF header)";
+  const machine = view.getUint16(fileHeaderOffset + 0, true);
+  const sizeOfOptionalHeader = view.getUint16(fileHeaderOffset + 16, true);
+  const characteristics = view.getUint16(fileHeaderOffset + 18, true);
+  const optionalHeaderOffset = fileHeaderOffset + 20;
+  if (optionalHeaderOffset + sizeOfOptionalHeader > view.byteLength) {
+    return "PE / COFF (truncated optional header)";
+  }
+  const optionalMagic = view.getUint16(optionalHeaderOffset + 0, true);
+  const peFormatDescription =
+    optionalMagic === 0x10b ? "PE32" :
+    optionalMagic === 0x20b ? "PE32+" :
+    optionalMagic === 0x0107 ? "PE32 (ROM image)" :
+    "PE (unknown optional header)";
+  let subsystemDescription = "subsystem=unknown";
+  if (optionalHeaderOffset + 0x46 <= view.byteLength) {
+    const subsystem = view.getUint16(optionalHeaderOffset + 0x44, true);
+    if (subsystem === 2) subsystemDescription = "GUI";
+    else if (subsystem === 3) subsystemDescription = "console";
+    else subsystemDescription = "subsystem=" + subsystem;
+  }
+  const machineDescription = (() => {
+    if (machine === 0x014c) return "x86";
+    if (machine === 0x8664) return "x86-64";
+    if (machine === 0x01c0) return "ARM";
+    if (machine === 0xaa64) return "ARM64";
+    return "machine=0x" + machine.toString(16);
+  })();
+  const isDll = (characteristics & 0x2000) !== 0; // IMAGE_FILE_DLL = 0x2000
+  const binaryKind = isDll ? "DLL" : "executable";
+  return peFormatDescription + " " + binaryKind + " (" + subsystemDescription + ") for " + machineDescription;
+}
+
+function detectMachO(arrayBuffer) {
+  const view = new DataView(arrayBuffer);
+  if (view.byteLength < 4) return null;
+  const magicBE = view.getUint32(0, false);
+  const magicLE = view.getUint32(0, true);
+  // Mach-O and fat binaries use well-known 32-bit magic constants.
+  // 0xFEEDFACE / 0xCEFAEDFE etc. These are magic numbers from Mach-O headers.
+  const MACHO_32_BE = 0xfeedface;
+  const MACHO_32_LE = 0xcefaedfe;
+  const MACHO_64_BE = 0xfeedfacf;
+  const MACHO_64_LE = 0xcffaedfe;
+  const FAT_BE = 0xcafebabe;   // universal / fat binary header (big-endian)
+  const FAT_LE = 0xbebafeca;   // byte-swapped variant
+  if (magicBE === MACHO_32_BE) return "Mach-O 32-bit big-endian";
+  if (magicLE === MACHO_32_LE) return "Mach-O 32-bit little-endian";
+  if (magicBE === MACHO_64_BE) return "Mach-O 64-bit big-endian";
+  if (magicLE === MACHO_64_LE) return "Mach-O 64-bit little-endian";
+  if (magicBE === FAT_BE || magicLE === FAT_LE) return "Mach-O universal binary (Fat)";
+  return null;
+}
+
+function detectPdf(arrayBuffer) {
+  const view = new DataView(arrayBuffer);
+  if (view.byteLength < 5) return null;
+  if (
+    view.getUint8(0) === 0x25 && // %
+    view.getUint8(1) === 0x50 && // P
+    view.getUint8(2) === 0x44 && // D
+    view.getUint8(3) === 0x46 && // F
+    view.getUint8(4) === 0x2d    // -
+  ) {
+    const headerText = readAscii(view, 0, Math.min(12, view.byteLength));
+    return "PDF document (" + headerText.trim() + ")";
+  }
+  return null;
+}
+
+function detectZip(arrayBuffer) {
+  const view = new DataView(arrayBuffer);
+  if (view.byteLength < 4) return null;
+  if (
+    view.getUint8(0) === 0x50 && // 'P'
+    view.getUint8(1) === 0x4b && // 'K'
+    view.getUint8(2) === 0x03 &&
+    view.getUint8(3) === 0x04
+  ) {
+    return "ZIP archive (PK)";
+  }
+  return null;
+}
+
+function detectGzip(arrayBuffer) {
+  const view = new DataView(arrayBuffer);
+  if (view.byteLength < 2) return null;
+  if (
+    view.getUint8(0) === 0x1f &&
+    view.getUint8(1) === 0x8b
+  ) {
+    return "gzip compressed data";
+  }
+  return null;
+}
+
+function detectPng(arrayBuffer) {
+  const view = new DataView(arrayBuffer);
+  if (view.byteLength < 8) return null;
+  if (
+    view.getUint8(0) === 0x89 &&
+    view.getUint8(1) === 0x50 &&
+    view.getUint8(2) === 0x4e &&
+    view.getUint8(3) === 0x47 &&
+    view.getUint8(4) === 0x0d &&
+    view.getUint8(5) === 0x0a &&
+    view.getUint8(6) === 0x1a &&
+    view.getUint8(7) === 0x0a
+  ) {
+    return "PNG image";
+  }
+  return null;
+}
+
+function detectJpeg(arrayBuffer) {
+  const view = new DataView(arrayBuffer);
+  if (view.byteLength < 3) return null;
+  if (
+    view.getUint8(0) === 0xff &&
+    view.getUint8(1) === 0xd8 &&
+    view.getUint8(2) === 0xff
+  ) {
+    return "JPEG image";
+  }
+  return null;
+}
+
+function detectGif(arrayBuffer) {
+  const view = new DataView(arrayBuffer);
+  if (view.byteLength < 6) return null;
+  const signature = readAscii(view, 0, 6);
+  if (signature === "GIF87a" || signature === "GIF89a") {
+    return "GIF image (" + signature + ")";
+  }
+  return null;
+}
+
+function detectBinaryType(arrayBuffer) {
+  const detectors = [
+    detectElf,
+    detectPe,
+    detectMachO,
+    detectPdf,
+    detectZip,
+    detectGzip,
+    detectPng,
+    detectJpeg,
+    detectGif
+  ];
+  for (const detector of detectors) {
+    const result = detector(arrayBuffer);
+    if (result) return result;
+  }
+  return "Unknown binary type";
+}
+
+async function showFileInformation(file, sourceDescription, analysisTimestampUtc) {
   currentFile = file;
-  // We only need the first ~512 bytes to detect ELF / PE.
-  // Reading a small slice is safe and fast even for huge files.
+  currentSourceDescription = sourceDescription;
+  currentAnalysisTimestampUtc = analysisTimestampUtc;
+
   const headerSlice = file.slice(0, 512);
   try {
     const arrayBuffer = await headerSlice.arrayBuffer();
     const binaryType = detectBinaryType(arrayBuffer);
     const readableSize = formatBytes(file.size);
-    // basic data
-    fileOriginalNameElement.textContent = file.name || "(no name)";
+
+    fileOriginalNameElement.textContent = file.name || "";
     fileSizeDisplayElement.textContent = readableSize;
     fileKindDisplayElement.textContent = binaryType;
-    fileNameDetailElement.textContent = file.name || "(no name)";
+
+    fileNameDetailElement.textContent = file.name || "";
     fileSizeDetailElement.textContent = readableSize + " (" + file.size + " bytes)";
+    fileTimestampDetailElement.textContent = analysisTimestampUtc;
+    fileSourceDetailElement.textContent = sourceDescription;
     fileBinaryTypeDetailElement.textContent = binaryType;
-    // reset hash display state
+
     sha256ValueElement.textContent = "";
     sha512ValueElement.textContent = "";
     sha256CopyButtonElement.hidden = true;
@@ -401,17 +620,22 @@ async function showFileInformation(file) {
     sha512ComputeButtonElement.disabled = false;
     sha256ComputeButtonElement.textContent = "Compute SHA-256";
     sha512ComputeButtonElement.textContent = "Compute SHA-512";
+
     fileInfoCardElement.hidden = false;
     clearStatusMessage();
   } catch (error) {
-    // If header read fails, we still try to show basic info
     const readableSize = formatBytes(file.size);
-    fileOriginalNameElement.textContent = file.name || "(no name)";
+
+    fileOriginalNameElement.textContent = file.name || "";
     fileSizeDisplayElement.textContent = readableSize;
     fileKindDisplayElement.textContent = "Unreadable";
-    fileNameDetailElement.textContent = file.name || "(no name)";
+
+    fileNameDetailElement.textContent = file.name || "";
     fileSizeDetailElement.textContent = readableSize + " (" + file.size + " bytes)";
+    fileTimestampDetailElement.textContent = analysisTimestampUtc;
+    fileSourceDetailElement.textContent = sourceDescription;
     fileBinaryTypeDetailElement.textContent = "Could not read file header: " + String(error);
+
     sha256ValueElement.textContent = "";
     sha512ValueElement.textContent = "";
     sha256CopyButtonElement.hidden = true;
@@ -422,6 +646,7 @@ async function showFileInformation(file) {
     sha512ComputeButtonElement.disabled = false;
     sha256ComputeButtonElement.textContent = "Compute SHA-256";
     sha512ComputeButtonElement.textContent = "Compute SHA-512";
+
     fileInfoCardElement.hidden = false;
     clearStatusMessage();
   }
@@ -430,10 +655,8 @@ async function showFileInformation(file) {
 // When the user pastes arbitrary non-file data (for example plain text),
 // we synthesize a File object so the rest of the pipeline still works.
 function createFileFromString(content, suggestedType) {
-  // suggestedType is a best-effort MIME hint (e.g. "text/plain").
-  // File name uses timestamp to avoid collisions.
   const safeType = suggestedType || "application/octet-stream";
-  return new File([content], "pasted-" + Date.now(), { type: safeType });
+  return new File([content], "", { type: safeType });
 }
 
 function handleIncomingFileList(fileList, sourceDescription) {
@@ -446,7 +669,8 @@ function handleIncomingFileList(fileList, sourceDescription) {
     return;
   }
   const firstFile = fileList[0];
-  showFileInformation(firstFile);
+  const timestampUtc = getCurrentTimestampUtc();
+  showFileInformation(firstFile, sourceDescription, timestampUtc);
 }
 
 // drag & drop: note that dropping a directory usually results in 0 files in dataTransfer.files
@@ -485,55 +709,66 @@ fileInputElement.addEventListener("change", event => {
   if (!(target instanceof HTMLInputElement)) return;
   const { files } = target;
   handleIncomingFileList(files, "File selection");
-  // Reset to allow selecting the same file twice in a row
   target.value = "";
 });
 
-// paste handling
+// paste handling with strict disambiguation policy
 window.addEventListener("paste", async event => {
   const clipboardData = event.clipboardData;
   if (!clipboardData) {
     setStatusMessage("Paste: clipboard not available.");
     return;
   }
-  // First, collect File items if present.
+
   const fileItems = [];
-  for (const item of clipboardData.items) {
-    if (item.kind === "file") {
-      const fileFromClipboard = item.getAsFile();
-      if (fileFromClipboard) fileItems.push(fileFromClipboard);
-    }
-  }
-  if (fileItems.length > 0) {
-    handleIncomingFileList(fileItems, "Paste");
-    return;
-  }
-  // If there are no file items, try to interpret any string item as content.
-  // We prefer "text/plain" if available, else we just take the first string item.
   const stringItems = [];
   for (const item of clipboardData.items) {
-    if (item.kind === "string") {
+    if (item.kind === "file") {
+      const f = item.getAsFile();
+      if (f) fileItems.push(f);
+    } else if (item.kind === "string") {
       stringItems.push(item);
     }
   }
+
+  if (fileItems.length > 0 && stringItems.length > 0) {
+    setStatusMessage("Paste: clipboard has multiple data items (file and text); not supported yet.");
+    return;
+  }
+
+  if (fileItems.length > 0) {
+    if (fileItems.length === 1) {
+      handleIncomingFileList(fileItems, "Paste (file)");
+    } else {
+      setStatusMessage("Paste: multiple files are not supported yet.");
+    }
+    return;
+  }
+
   if (stringItems.length === 0) {
-    setStatusMessage("Paste: content detected but cannot extract it as a file.");
+    setStatusMessage("Paste: no usable clipboard data.");
     return;
   }
-  // getAsString is callback-based, so we wrap it
-  const readItemAsString = item =>
-    new Promise(resolve => {
-      item.getAsString(str => resolve({ str, type: item.type }));
-    });
-  // take the first string item (usually text/plain is first / preferred in common browsers)
-  const firstStringItem = stringItems[0];
-  const { str, type } = await readItemAsString(firstStringItem);
-  if (typeof str === "string" && str.length > 0) {
-    const virtualFile = createFileFromString(str, type || "text/plain");
-    handleIncomingFileList([virtualFile], "Paste data");
+  if (stringItems.length > 1) {
+    setStatusMessage("Paste: multiple clipboard text items are not supported yet.");
     return;
   }
-  setStatusMessage("Paste: content detected but could not interpret as text or file.");
+
+  const stringItem = stringItems[0];
+  const textContent = await new Promise(resolve => {
+    stringItem.getAsString(str => resolve(str));
+  });
+
+  if (typeof textContent !== "string" || textContent.length === 0) {
+    setStatusMessage("Paste: clipboard text item is empty.");
+    return;
+  }
+
+  const virtualFile = createFileFromString(
+    textContent,
+    stringItem.type || "application/octet-stream"
+  );
+  handleIncomingFileList([virtualFile], "Paste (clipboard data)");
 });
 
 // hashing helpers
@@ -555,6 +790,7 @@ async function copyToClipboard(text) {
     return false;
   }
 }
+
 // Note: hashing large files means reading them fully into memory via file.arrayBuffer().
 // This can crash the tab by exhausting memory for extremely large files,
 // and that cannot be reliably caught in JavaScript. We still attempt it because
@@ -571,19 +807,20 @@ async function computeHash(algorithm, file, valueElement, computeButtonElement, 
     const hashBuffer = await crypto.subtle.digest(algorithm, fullBuffer);
     const hexValue = arrayBufferToHex(hashBuffer);
     valueElement.textContent = hexValue;
-    // show copy button now that we have a value
     copyButtonElement.hidden = false;
     computeButtonElement.hidden = true;
   } catch (error) {
-    valueElement.textContent = "Hash failed: " + String(error);
+    valueElement.textContent =
+      "Hash failed. The browser could not read the full file into memory (" +
+      (error && error.name ? error.name + ": " : "") +
+      String(error) +
+      "). Very large files may exceed available memory.";
     computeButtonElement.disabled = false;
     computeButtonElement.textContent = "Retry";
-    // copy button stays hidden since we do not have a valid value
     copyButtonElement.hidden = true;
   }
 }
 
-// compute buttons
 sha256ComputeButtonElement.addEventListener("click", () => {
   computeHash(
     "SHA-256",
@@ -593,6 +830,7 @@ sha256ComputeButtonElement.addEventListener("click", () => {
     sha256CopyButtonElement
   );
 });
+
 sha512ComputeButtonElement.addEventListener("click", () => {
   computeHash(
     "SHA-512",
@@ -602,7 +840,7 @@ sha512ComputeButtonElement.addEventListener("click", () => {
     sha512CopyButtonElement
   );
 });
-// copy buttons
+
 sha256CopyButtonElement.addEventListener("click", async () => {
   const text = sha256ValueElement.textContent || "";
   const ok = await copyToClipboard(text);
@@ -612,6 +850,7 @@ sha256CopyButtonElement.addEventListener("click", async () => {
     setStatusMessage("SHA-256 copied.");
   }
 });
+
 sha512CopyButtonElement.addEventListener("click", async () => {
   const text = sha512ValueElement.textContent || "";
   const ok = await copyToClipboard(text);
