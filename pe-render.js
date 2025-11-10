@@ -178,6 +178,15 @@ export function renderPe(pe) {
     out.push(`</section>`);
   }
 
+  // Resources summary
+  if (pe.resources?.top?.length) {
+    const rs = pe.resources.top;
+    out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Resources</h4>`);
+    out.push(`<table class="table"><thead><tr><th>#</th><th>Type</th><th>Leaf items</th></tr></thead><tbody>`);
+    rs.forEach((t, i) => out.push(`<tr><td>${i + 1}</td><td>${safe(t.typeName)}</td><td>${t.leafCount}</td></tr>`));
+    out.push(`</tbody></table></section>`);
+  }
+
   // Export directory
   if (pe.exports) {
     const ex = pe.exports;
@@ -220,6 +229,82 @@ export function renderPe(pe) {
     out.push(`</dl></section>`);
   }
 
+  // Exception directory (.pdata)
+  if (pe.exception) {
+    const e = pe.exception;
+    out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Exception directory (.pdata)</h4><dl>`);
+    out.push(dd("RUNTIME_FUNCTION count", String(e.count), "Number of RUNTIME_FUNCTION entries used for x64 unwinding and SEH."));
+    out.push(`</dl>`);
+    if (e.sample?.length) {
+      out.push(`<table class="table"><thead><tr><th>#</th><th>BeginAddress (RVA)</th><th>EndAddress (RVA)</th><th>UnwindInfo (RVA)</th></tr></thead><tbody>`);
+      e.sample.forEach((r, i) => out.push(`<tr><td>${i + 1}</td><td>${hex(r.BeginAddress, 8)}</td><td>${hex(r.EndAddress, 8)}</td><td>${hex(r.UnwindInfoAddress, 8)}</td></tr>`));
+      out.push(`</tbody></table>`);
+    }
+    out.push(`</section>`);
+  }
+
+  // Bound imports
+  if (pe.boundImports?.entries?.length) {
+    const bi = pe.boundImports;
+    out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Bound imports</h4>`);
+    out.push(`<table class="table"><thead><tr><th>#</th><th>Module</th><th>ForwarderRefs</th><th>TimeDateStamp</th></tr></thead><tbody>`);
+    bi.entries.forEach((x, i) => out.push(`<tr><td>${i + 1}</td><td>${safe(x.name)}</td><td>${x.NumberOfModuleForwarderRefs}</td><td>${isoOrDash(x.TimeDateStamp)}</td></tr>`));
+    out.push(`</tbody></table></section>`);
+  }
+
+  // Delay-load imports
+  if (pe.delayImports?.entries?.length) {
+    const di = pe.delayImports;
+    out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Delay-load imports</h4>`);
+    out.push(`<table class="table"><thead><tr><th>#</th><th>Module</th><th>INT (RVA)</th><th>IAT (RVA)</th><th>BoundIAT (RVA)</th><th>UnloadIAT (RVA)</th><th>TDS</th></tr></thead><tbody>`);
+    di.entries.forEach((x, i) => out.push(`<tr><td>${i + 1}</td><td>${safe(x.name)}</td><td>${hex(x.ImportNameTableRVA, 8)}</td><td>${hex(x.ImportAddressTableRVA, 8)}</td><td>${hex(x.BoundImportAddressTableRVA, 8)}</td><td>${hex(x.UnloadInformationTableRVA, 8)}</td><td>${isoOrDash(x.TimeDateStamp)}</td></tr>`));
+    out.push(`</tbody></table></section>`);
+  }
+
+  // CLR (.NET) header
+  if (pe.clr) {
+    const c = pe.clr;
+    out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">CLR (.NET) header</h4><dl>`);
+    out.push(dd("Size", String(c.cb), "Size of IMAGE_COR20_HEADER in bytes."));
+    out.push(dd("RuntimeVersion", `${c.MajorRuntimeVersion}.${c.MinorRuntimeVersion}`, "CLR runtime version required by this assembly."));
+    out.push(dd("MetaData", `RVA ${hex(c.MetaDataRVA, 8)} Size ${humanSize(c.MetaDataSize)}`, "Location and size of CLR metadata streams (tables/heap)."));
+    out.push(dd("Flags", hex(c.Flags, 8), "CLR flags (e.g., ILONLY, 32BITREQUIRED)."));
+    out.push(dd("EntryPointToken", hex(c.EntryPointToken, 8), "Managed entry point token (method) if IL-only."));
+    out.push(`</dl></section>`);
+  }
+
+  // Security (WIN_CERTIFICATE)
+  if (pe.security) {
+    const s = pe.security;
+    out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Security (WIN_CERTIFICATE)</h4><dl>`);
+    out.push(dd("Certificate records", String(s.count ?? 0), "Number of certificate blobs present (Authenticode)."));
+    out.push(`</dl>`);
+    if (s.certs?.length) {
+      out.push(`<table class="table"><thead><tr><th>#</th><th>Length</th><th>Revision</th><th>Type</th></tr></thead><tbody>`);
+      s.certs.forEach((c, i) => out.push(`<tr><td>${i + 1}</td><td>${humanSize(c.Length)}</td><td>${hex(c.Revision, 4)}</td><td>${hex(c.CertificateType, 4)}</td></tr>`));
+      out.push(`</tbody></table>`);
+    }
+    out.push(`</section>`);
+  }
+
+  // IAT summary
+  if (pe.iat) {
+    const t = pe.iat;
+    out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import Address Table (IAT)</h4><dl>`);
+    out.push(dd("RVA", hex(t.rva, 8), "RVA of the runtime IAT used by the loader to place resolved addresses."));
+    out.push(dd("Size", humanSize(t.size), "Total size of the IAT in bytes."));
+    out.push(`</dl></section>`);
+  }
+
+  // Coverage map
+  if (pe.coverage?.length) {
+    out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Coverage map (file offsets)</h4>`);
+    const cov = [...pe.coverage].sort((a, b) => a.off - b.off);
+    out.push(`<table class="table"><thead><tr><th>#</th><th>Start (off)</th><th>End (off)</th><th>Size</th><th>Region</th></tr></thead><tbody>`);
+    cov.forEach((c, i) => out.push(`<tr><td>${i + 1}</td><td>${hex(c.off, 8)}</td><td>${hex(c.end, 8)}</td><td>${humanSize(c.size)}</td><td>${safe(c.label)}</td></tr>`));
+    out.push(`</tbody></table></section>`);
+  }
+
   // Sanity & overlay
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Sanity</h4><dl>`);
   out.push(dd("ComputedImageEnd", hex(pe.imageEnd || 0, 8), "Computed image end (max section RVA + aligned size)."));
@@ -230,4 +315,3 @@ export function renderPe(pe) {
 
   return out.join("");
 }
-

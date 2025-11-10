@@ -208,6 +208,7 @@ export async function parsePe(file) {
   const LoaderFlags = optDV.getUint32(p, true); p += 4;
   const NumberOfRvaAndSizes = optDV.getUint32(p, true); p += 4;
 
+  const ddStartRel = p; // relative to optOff
   const ddCount = Math.min(16, NumberOfRvaAndSizes, Math.floor((optDV.byteLength - p) / 8));
   const dataDirs = [];
   for (let i = 0; i < ddCount; i++) {
@@ -229,11 +230,30 @@ export async function parsePe(file) {
   }
   const rvaToOff = makeRvaMapper(sections);
 
+  // Coverage map (file offset regions)
+  const coverage = [];
+  const addCov = (label, off, size) => {
+    if (!Number.isFinite(off) || !Number.isFinite(size) || off < 0 || size <= 0) return;
+    coverage.push({ label, off: off >>> 0, end: (off >>> 0) + (size >>> 0), size: size >>> 0 });
+  };
+  // DOS header + stub
+  addCov("DOS header + stub", 0, Math.min(file.size, Math.max(64, e_lfanew)));
+  // PE sig + COFF
+  addCov("PE signature + COFF", e_lfanew, 24);
+  // Optional header
+  addCov("Optional header", optOff, SizeOfOptionalHeader);
+  // Data directories subrange in optional header
+  addCov("Data directories", optOff + ddStartRel, ddCount * 8);
+  // Section headers
+  addCov("Section headers", sectOff, NumberOfSections * 40);
+
   // Overlay detection & image size checks
   let rawEnd = 0; for (const s of sections) rawEnd = Math.max(rawEnd, (s.pointerToRawData >>> 0) + (s.sizeOfRawData >>> 0));
   const overlaySize = file.size > rawEnd ? (file.size - rawEnd) : 0;
   let imageEnd = 0; for (const s of sections) imageEnd = Math.max(imageEnd, alignUp((s.virtualAddress >>> 0) + (s.virtualSize >>> 0), SectionAlignment >>> 0));
   const imageSizeMismatch = imageEnd !== (SizeOfImage >>> 0);
+  // Sections raw regions
+  for (const s of sections) addCov(`Section ${s.name} (raw)`, s.pointerToRawData, s.sizeOfRawData);
 
   // Debug: RSDS
   let rsds = null; {
@@ -241,6 +261,7 @@ export async function parsePe(file) {
     if (dbg?.rva && dbg.size >= 28) {
       const dbgOff = rvaToOff(dbg.rva);
       if (dbgOff != null) {
+        addCov("DEBUG directory", dbgOff, dbg.size);
         const cnt = Math.min(16, Math.floor(dbg.size / 28));
         for (let i = 0; i < cnt; i++) {
           const o = dbgOff + i * 28;
@@ -277,6 +298,7 @@ export async function parsePe(file) {
     if (lc?.rva && lc.size >= 0x40) {
       const base = rvaToOff(lc.rva);
       if (base != null) {
+        addCov("LOAD_CONFIG", base, lc.size);
         const dv = new DataView(await file.slice(base, base + Math.min(lc.size, 0x200)).arrayBuffer());
         const Size = dv.getUint32(0, true), TimeDateStamp = dv.getUint32(4, true);
         const Major = dv.getUint16(8, true), Minor = dv.getUint16(10, true);
@@ -320,6 +342,7 @@ export async function parsePe(file) {
   if (impDir?.rva) {
     const start = rvaToOff(impDir.rva);
     if (start != null) {
+      addCov("IMPORT directory", start, impDir.size);
       const maxDesc = Math.max(1, Math.floor(impDir.size / 20));
       for (let i = 0; i < maxDesc; i++) {
         const off = start + i * 20;
@@ -382,6 +405,7 @@ export async function parsePe(file) {
     if (ex?.rva && ex.size >= 40) {
       const off = rvaToOff(ex.rva);
       if (off != null) {
+        addCov("EXPORT directory", off, ex.size);
         const dv = new DataView(await file.slice(off, off + Math.min(ex.size, 0x200)).arrayBuffer());
         const Characteristics = dv.getUint32(0, true);
         const TimeDateStamp = dv.getUint32(4, true);
@@ -441,6 +465,7 @@ export async function parsePe(file) {
     if (td?.rva) {
       const off = rvaToOff(td.rva);
       if (off != null) {
+        addCov("TLS directory", off, Math.min(td.size || (isPlus ? 0x30 : 0x18), isPlus ? 0x30 : 0x18));
         if (isPlus) {
           const dv = new DataView(await file.slice(off, off + 0x30).arrayBuffer());
           const StartAddressOfRawData = Number(dv.getBigUint64(0, true));
@@ -492,6 +517,7 @@ export async function parsePe(file) {
     if (rd?.rva && rd.size >= 8) {
       const start = rvaToOff(rd.rva);
       if (start != null) {
+        addCov("BASERELOC (.reloc)", start, rd.size);
         let off = start; const end = start + rd.size; const blocks = [];
         while (off + 8 <= end) {
           const dv = new DataView(await file.slice(off, off + 8).arrayBuffer());
@@ -516,13 +542,218 @@ export async function parsePe(file) {
     } else { s.entropy = 0; }
   }
 
+  // Resource directory (summary)
+  let resources = null; {
+    const rs = dataDirs.find(d => d.name === "RESOURCE");
+    if (rs?.rva && rs.size >= 16) {
+      const base = rvaToOff(rs.rva);
+      if (base != null) {
+        addCov("RESOURCE directory", base, rs.size);
+        const limitStart = base, limitEnd = base + rs.size;
+        const view = async (off, len) => new DataView(await file.slice(off, off + len).arrayBuffer());
+        const u16 = (dv, off) => dv.getUint16(off, true);
+        const u32 = (dv, off) => dv.getUint32(off, true);
+        const readUcs2 = async rel => {
+          const so = base + rel; if (so + 2 > limitEnd) return "";
+          const dv = await view(so, 2); const len = u16(dv, 0);
+          const b = new Uint8Array(await file.slice(so + 2, Math.min(limitEnd, so + 2 + len * 2)).arrayBuffer());
+          // naive UCS-2LE → ASCII
+          let s = ""; for (let i = 0; i + 1 < b.length; i += 2) { const ch = b[i] | (b[i + 1] << 8); if (ch === 0) break; s += String.fromCharCode(ch); }
+          return s;
+        };
+        const knownType = id => ({
+          1: "CURSOR", 2: "BITMAP", 3: "ICON", 4: "MENU", 5: "DIALOG", 6: "STRING", 7: "FONTDIR", 8: "FONT", 9: "ACCELERATOR",
+          10: "RCDATA", 11: "MESSAGETABLE", 12: "GROUP_CURSOR", 14: "GROUP_ICON", 16: "VERSION", 17: "DLGINCLUDE", 19: "PLUGPLAY",
+          20: "VXD", 21: "ANICURSOR", 22: "ANIICON", 23: "HTML", 24: "MANIFEST"
+        })[id] || null;
+        const isInside = off => off >= limitStart && off < limitEnd;
+        const seen = new Set();
+        const parseDir = async rel => {
+          const off = base + rel; if (!isInside(off + 16)) return null;
+          const dv = await view(off, 16);
+          const Named = u16(dv, 12); const Ids = u16(dv, 14);
+          const count = Named + Ids;
+          const entriesOff = off + 16;
+          const entries = [];
+          for (let i = 0; i < count; i++) {
+            const e = await view(entriesOff + i * 8, 8);
+            const Name = u32(e, 0); const OffsetToData = u32(e, 4);
+            const nameIsString = (Name & 0x80000000) !== 0;
+            const subdir = (OffsetToData & 0x80000000) !== 0;
+            let name = null, id = null;
+            if (nameIsString) { name = await readUcs2(Name & 0x7fffffff); }
+            else { id = Name & 0xffff; }
+            entries.push({ name, id, subdir, target: OffsetToData & 0x7fffffff });
+          }
+          return { Named, Ids, entries };
+        };
+        const countLeaves = async rel => {
+          const key = "D" + rel; if (seen.has(key)) return 0; seen.add(key);
+          const dir = await parseDir(rel); if (!dir) return 0; let total = 0;
+          for (const e of dir.entries) {
+            if (e.subdir) total += await countLeaves(e.target);
+            else total++;
+          }
+          return total;
+        };
+        const root = await parseDir(0);
+        if (root) {
+          const top = [];
+          for (const e of root.entries) {
+            // Only summarize top-level grouping (type)
+            let typeName = e.id != null ? (knownType(e.id) || `TYPE_${e.id}`) : (e.name || "(named)");
+            let leafCount = 0; if (e.subdir) leafCount = await countLeaves(e.target);
+            top.push({ typeName, kind: e.id != null ? "id" : "name", leafCount });
+          }
+          resources = { top };
+        }
+      }
+    }
+  }
+
+  // Exception directory (.pdata) summary (x64)
+  let exception = null; {
+    const ed = dataDirs.find(d => d.name === "EXCEPTION");
+    if (ed?.rva && ed.size >= 12) {
+      const start = rvaToOff(ed.rva);
+      if (start != null) {
+        addCov("EXCEPTION (.pdata)", start, ed.size);
+        const count = Math.floor(ed.size / 12);
+        const sample = [];
+        const view = new DataView(await file.slice(start, start + Math.min(ed.size, 12 * 64)).arrayBuffer());
+        const n = Math.min(count, 64);
+        for (let i = 0; i < n; i++) {
+          const b = i * 12;
+          const BeginAddress = view.getUint32(b + 0, true);
+          const EndAddress = view.getUint32(b + 4, true);
+          const UnwindInfoAddress = view.getUint32(b + 8, true);
+          sample.push({ BeginAddress, EndAddress, UnwindInfoAddress });
+        }
+        exception = { count, sample };
+      }
+    }
+  }
+
+  // Bound imports summary
+  let boundImports = null; {
+    const bd = dataDirs.find(d => d.name === "BOUND_IMPORT");
+    if (bd?.rva && bd.size >= 8) {
+      const base = rvaToOff(bd.rva);
+      if (base != null) {
+        addCov("BOUND_IMPORT", base, bd.size);
+        const end = base + bd.size;
+        const entries = [];
+        let off = base;
+        while (off + 8 <= end) {
+          const dv = new DataView(await file.slice(off, off + 8).arrayBuffer());
+          const TimeDateStamp = dv.getUint32(0, true);
+          const OffsetModuleName = dv.getUint16(4, true);
+          const NumberOfModuleForwarderRefs = dv.getUint16(6, true);
+          if (TimeDateStamp === 0 && OffsetModuleName === 0 && NumberOfModuleForwarderRefs === 0) break;
+          let name = "";
+          const nameOff = base + OffsetModuleName;
+          if (nameOff >= base && nameOff < end) {
+            name = ascii(new DataView(await file.slice(nameOff, nameOff + 256).arrayBuffer()), 0, 256);
+          }
+          entries.push({ name, TimeDateStamp, NumberOfModuleForwarderRefs });
+          off += 8;
+        }
+        boundImports = { entries };
+      }
+    }
+  }
+
+  // Delay-load imports summary
+  let delayImports = null; {
+    const dd = dataDirs.find(d => d.name === "DELAY_IMPORT");
+    if (dd?.rva && dd.size >= 32) {
+      const base = rvaToOff(dd.rva);
+      if (base != null) {
+        addCov("DELAY_IMPORT", base, dd.size);
+        const entries = [];
+        const end = base + dd.size;
+        let off = base;
+        // IMAGE_DELAYLOAD_DESCRIPTOR is 32 bytes (32-bit) / 48 bytes (with VA); parse minimal 32 bytes to find DllNameRVA
+        while (off + 32 <= end) {
+          const dv = new DataView(await file.slice(off, off + 32).arrayBuffer());
+          const Attributes = dv.getUint32(0, true);
+          const DllNameRVA = dv.getUint32(4, true);
+          const ModuleHandleRVA = dv.getUint32(8, true);
+          const ImportAddressTableRVA = dv.getUint32(12, true);
+          const ImportNameTableRVA = dv.getUint32(16, true);
+          const BoundImportAddressTableRVA = dv.getUint32(20, true);
+          const UnloadInformationTableRVA = dv.getUint32(24, true);
+          const TimeDateStamp = dv.getUint32(28, true);
+          if (Attributes === 0 && DllNameRVA === 0) break;
+          let name = ""; {
+            const nOff = rvaToOff(DllNameRVA);
+            if (nOff != null) name = ascii(new DataView(await file.slice(nOff, nOff + 256).arrayBuffer()), 0, 256);
+          }
+          entries.push({ name, Attributes, ModuleHandleRVA, ImportAddressTableRVA, ImportNameTableRVA, BoundImportAddressTableRVA, UnloadInformationTableRVA, TimeDateStamp });
+          off += 32;
+        }
+        delayImports = { entries };
+      }
+    }
+  }
+
+  // CLR header (managed)
+  let clr = null; {
+    const cd = dataDirs.find(d => d.name === "CLR_RUNTIME");
+    if (cd?.rva && cd.size >= 0x48) {
+      const off = rvaToOff(cd.rva);
+      if (off != null) {
+        addCov("CLR (.NET) header", off, cd.size);
+        const dv = new DataView(await file.slice(off, off + Math.min(cd.size, 0x48)).arrayBuffer());
+        const cb = dv.getUint32(0, true);
+        const MajorRuntimeVersion = dv.getUint16(4, true), MinorRuntimeVersion = dv.getUint16(6, true);
+        const MetaDataRVA = dv.getUint32(8, true), MetaDataSize = dv.getUint32(12, true);
+        const Flags = dv.getUint32(16, true);
+        const EntryPointToken = dv.getUint32(20, true);
+        clr = { cb, MajorRuntimeVersion, MinorRuntimeVersion, MetaDataRVA, MetaDataSize, Flags, EntryPointToken };
+      }
+    }
+  }
+
+  // Security directory (WIN_CERTIFICATE)
+  let security = null; {
+    const sd = dataDirs.find(d => d.name === "SECURITY");
+    if (sd?.rva && sd.size >= 8) {
+      const off = sd.rva; // NOTE: file offset, not RVA
+      if (off + 8 <= file.size) {
+        addCov("SECURITY (WIN_CERTIFICATE)", off, sd.size);
+        const end = Math.min(file.size, off + sd.size);
+        let pos = off; let count = 0; const certs = [];
+        while (pos + 8 <= end && count < 8) {
+          const dv = new DataView(await file.slice(pos, pos + 8).arrayBuffer());
+          const Length = dv.getUint32(0, true);
+          const Revision = dv.getUint16(4, true);
+          const CertificateType = dv.getUint16(6, true);
+          if (Length < 8) break;
+          certs.push({ Length, Revision, CertificateType });
+          pos += ((Length + 7) & ~7); // 8-byte aligned
+          count++;
+        }
+        security = { count, certs };
+      }
+    }
+  }
+
+  // IAT summary
+  let iat = null; {
+    const id = dataDirs.find(d => d.name === "IAT");
+    if (id?.rva && id.size) {
+      const off = rvaToOff(id.rva);
+      if (off != null) { addCov("IAT", off, id.size); iat = { rva: id.rva, size: id.size }; }
+    }
+  }
+
   return {
     dos, signature: "PE",
     coff: { Machine, NumberOfSections, TimeDateStamp, PointerToSymbolTable, NumberOfSymbols, SizeOfOptionalHeader, Characteristics },
     opt: { Magic, isPlus, is32, LinkerMajor, LinkerMinor, SizeOfCode, SizeOfInitializedData, SizeOfUninitializedData, AddressOfEntryPoint, BaseOfCode, BaseOfData, ImageBase, SectionAlignment, FileAlignment, OSVersionMajor, OSVersionMinor, ImageVersionMajor, ImageVersionMinor, SubsystemVersionMajor, SubsystemVersionMinor, Win32VersionValue, SizeOfImage, SizeOfHeaders, CheckSum, Subsystem, DllCharacteristics, SizeOfStackReserve, SizeOfStackCommit, SizeOfHeapReserve, SizeOfHeapCommit, LoaderFlags, NumberOfRvaAndSizes },
-    dirs: dataDirs, sections, rvaToOff, imports, rsds, loadcfg, exports, tls, reloc,
-    overlaySize, imageEnd, imageSizeMismatch,
+    dirs: dataDirs, sections, rvaToOff, imports, rsds, loadcfg, exports, tls, reloc, exception, boundImports, delayImports, clr, security, iat, resources,
+    overlaySize, imageEnd, imageSizeMismatch, coverage,
     hasCert: !!(dataDirs.find(d => d.name === "SECURITY")?.size)
   };
 }
-
