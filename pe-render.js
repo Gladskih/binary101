@@ -193,18 +193,25 @@ export function renderPe(pe) {
       pe.resources.detail.forEach((tp, idx) => {
         out.push(`<details style="margin-top:.5rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${safe(tp.typeName)}</b> — entries</summary>`);
         if (tp.entries?.length) {
-          out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Name/ID</th><th>Lang</th><th>Size</th><th>CodePage</th></tr></thead><tbody>`);
+          out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Name/ID</th><th>Lang</th><th>Size</th><th>CodePage</th><th>Preview</th></tr></thead><tbody>`);
           let row = 0;
           tp.entries.forEach(ent => {
             if (ent.langs?.length) {
               ent.langs.forEach(l => {
                 const nm = ent.name ? safe(ent.name) : (ent.id != null ? ("ID " + ent.id) : "-");
                 const lang = l.lang != null ? ("0x" + (l.lang>>>0).toString(16)) : "-";
-                out.push(`<tr><td>${++row}</td><td>${nm}</td><td>${lang}</td><td>${humanSize(l.size)}</td><td>${l.codePage}</td></tr>`);
+                let prev = "-";
+                if (l.previewKind === "image" && l.previewDataUrl) {
+                  prev = `<img src="${l.previewDataUrl}" alt="icon" style="width:24px;height:24px;image-rendering:auto">`;
+                } else if (l.previewKind === "text" && l.textPreview) {
+                  const snip = (l.textPreview || "").slice(0,300);
+                  prev = `<span class="mono" style="white-space:pre;display:inline-block;max-width:360px;overflow:hidden;text-overflow:ellipsis">${safe(snip)}</span>`;
+                }
+                out.push(`<tr><td>${++row}</td><td>${nm}</td><td>${lang}</td><td>${humanSize(l.size)}</td><td>${l.codePage}</td><td>${prev}</td></tr>`);
               });
             } else {
               const nm = ent.name ? safe(ent.name) : (ent.id != null ? ("ID " + ent.id) : "-");
-              out.push(`<tr><td>${++row}</td><td>${nm}</td><td>-</td><td>-</td><td>-</td></tr>`);
+              out.push(`<tr><td>${++row}</td><td>${nm}</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>`);
             }
           });
           out.push(`</tbody></table>`);

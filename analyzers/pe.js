@@ -607,6 +607,31 @@ export async function parsePe(file) {
         };
         const root = await parseDir(0);
         if (root) {
+          // Build map of RT_ICON id -> {rva,size} for GROUP_ICON previews
+          const iconIndex = new Map();
+          for (const t of root.entries) {
+            if (t.id === 3 && t.subdir) { // RT_ICON
+              const nameDir = await parseDir(t.target);
+              if (nameDir) {
+                for (const n of nameDir.entries) {
+                  if (!n.subdir) continue;
+                  const langDir = await parseDir(n.target);
+                  if (langDir) {
+                    const leaf = langDir.entries.find(le => !le.subdir);
+                    if (leaf) {
+                      const deo2 = base + leaf.target;
+                      if (isInside(deo2 + 16)) {
+                        const dv2 = await view(deo2, 16);
+                        const rva2 = u32(dv2, 0);
+                        const sz2 = u32(dv2, 4);
+                        if (n.id != null) iconIndex.set(n.id, { rva: rva2, size: sz2 });
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
           const top = [];
           const detail = [];
           for (const e of root.entries) {
@@ -635,30 +660,105 @@ export async function parsePe(file) {
                             const Reserved = u32(dv, 12);
                             const lang = langEnt.id != null ? langEnt.id : null;
                             const langEntry = { lang, size: Size, codePage: CodePage, dataRVA: DataRVA, reserved: Reserved };
-                            const dataOff = rvaToOff(DataRVA);
-                            if (dataOff != null && Size > 0 && Size <= 262144) {
-                              try {
+                            // Previews for common resource types
+                            try {
+                              const dataOff = rvaToOff(DataRVA);
+                              if (typeName === "ICON" && dataOff != null && Size > 0 && Size <= 262144) {
                                 const data = new Uint8Array(await file.slice(dataOff, dataOff + Size).arrayBuffer());
-                                // PNG preview for ICON resources
-                                if (typeName === "ICON" && data.length >= 8 && data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47 && data[4] === 0x0d && data[5] === 0x0a && data[6] === 0x1a && data[7] === 0x0a) {
+                                // PNG-backed icon
+                                if (data.length >= 8 && data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47 && data[4] === 0x0d && data[5] === 0x0a && data[6] === 0x1a && data[7] === 0x0a) {
                                   langEntry.previewKind = "image";
                                   langEntry.previewMime = "image/png";
                                   langEntry.previewDataUrl = `data:image/png;base64,${base64FromU8(data)}`;
-                                }
-                                // Manifest preview (text)
-                                if (typeName === "MANIFEST") {
-                                  let text = "";
-                                  if (data.length >= 2 && data[0] === 0xff && data[1] === 0xfe) {
-                                    for (let i = 2; i + 1 < data.length && i < 4096; i += 2) { const ch = data[i] | (data[i + 1] << 8); text += String.fromCharCode(ch); }
-                                  } else if (data.length >= 3 && data[0] === 0xef && data[1] === 0xbb && data[2] === 0xbf) {
-                                    text = new TextDecoder("utf-8").decode(data.subarray(3, Math.min(data.length, 4096)));
-                                  } else {
-                                    try { text = new TextDecoder("utf-8").decode(data.subarray(0, Math.min(data.length, 4096))); } catch {}
+                                } else if (data.length >= 40) {
+                                  // DIB-backed icon (BITMAPINFOHEADER or variants)
+                                  const dvb = new DataView(data.buffer, data.byteOffset, Math.min(64, data.length));
+                                  const hdrSize = dvb.getUint32(0, true);
+                                  if (hdrSize === 40 || hdrSize === 108 || hdrSize === 124) {
+                                    const w = dvb.getInt32(4, true);
+                                    const h2 = dvb.getInt32(8, true);
+                                    const planes = 1;
+                                    const bitCount = dvb.getUint16(14, true);
+                                    const outW = Math.max(1, Math.min(256, Math.abs(w)));
+                                    const outH = Math.max(1, Math.min(256, Math.abs(Math.floor(h2 / 2))));
+                                    const dirSize = 6 + 16;
+                                    const ico = new Uint8Array(dirSize + data.length);
+                                    const dvi = new DataView(ico.buffer);
+                                    dvi.setUint16(0, 0, true); // reserved
+                                    dvi.setUint16(2, 1, true); // type icon
+                                    dvi.setUint16(4, 1, true); // count
+                                    dvi.setUint8(6, outW === 256 ? 0 : outW);
+                                    dvi.setUint8(7, outH === 256 ? 0 : outH);
+                                    dvi.setUint8(8, 0);
+                                    dvi.setUint8(9, 0);
+                                    dvi.setUint16(10, planes, true);
+                                    dvi.setUint16(12, bitCount, true);
+                                    dvi.setUint32(14, data.length >>> 0, true);
+                                    dvi.setUint32(18, dirSize >>> 0, true);
+                                    ico.set(data, dirSize);
+                                    langEntry.previewKind = "image";
+                                    langEntry.previewMime = "image/x-icon";
+                                    langEntry.previewDataUrl = `data:image/x-icon;base64,${base64FromU8(ico)}`;
                                   }
-                                  if (text) { langEntry.previewKind = "text"; langEntry.textPreview = text; }
                                 }
-                              } catch {}
-                            }
+                              } else if (typeName === "MANIFEST" && dataOff != null && Size > 0) {
+                                const data = new Uint8Array(await file.slice(dataOff, dataOff + Math.min(Size, 4096)).arrayBuffer());
+                                let text = "";
+                                if (data.length >= 2 && data[0] === 0xff && data[1] === 0xfe) {
+                                  for (let i = 2; i + 1 < data.length; i += 2) { const ch = data[i] | (data[i + 1] << 8); text += String.fromCharCode(ch); }
+                                } else {
+                                  try { text = new TextDecoder("utf-8").decode(data); } catch {}
+                                }
+                                if (text) { langEntry.previewKind = "text"; langEntry.textPreview = text; }
+                              } else if (typeName === "GROUP_ICON") {
+                                const grpOff = rvaToOff(DataRVA);
+                                if (grpOff != null && Size >= 6) {
+                                  const ab = await file.slice(grpOff, grpOff + Math.min(Size, 4096)).arrayBuffer();
+                                  const g = new DataView(ab);
+                                  const idCount = g.getUint16(4, true);
+                                  if (idCount > 0 && 6 + idCount * 14 <= g.byteLength) {
+                                    let pick = 0; let bestW = 0;
+                                    for (let j = 0; j < idCount; j++) {
+                                      const w = g.getUint8(6 + j * 14 + 0) || 256;
+                                      if (w === 32) { pick = j; bestW = w; break; }
+                                      if (w > bestW) { pick = j; bestW = w; }
+                                    }
+                                    const eOff2 = 6 + pick * 14;
+                                    const bWidth = g.getUint8(eOff2 + 0) || 256;
+                                    const bHeight = g.getUint8(eOff2 + 1) || 256;
+                                    const bColorCount = g.getUint8(eOff2 + 2);
+                                    const wPlanes = g.getUint16(eOff2 + 4, true);
+                                    const wBitCount = g.getUint16(eOff2 + 6, true);
+                                    const nID = g.getUint16(eOff2 + 12, true);
+                                    const ic = iconIndex.get(nID);
+                                    if (ic) {
+                                      const imgOff = rvaToOff(ic.rva);
+                                      if (imgOff != null && ic.size > 0 && ic.size <= 2000000) {
+                                        const imageData = new Uint8Array(await file.slice(imgOff, imgOff + ic.size).arrayBuffer());
+                                        const dirSize = 6 + 16;
+                                        const ico = new Uint8Array(dirSize + imageData.length);
+                                        const dv3 = new DataView(ico.buffer);
+                                        dv3.setUint16(0, 0, true);
+                                        dv3.setUint16(2, 1, true);
+                                        dv3.setUint16(4, 1, true);
+                                        dv3.setUint8(6, bWidth === 256 ? 0 : bWidth);
+                                        dv3.setUint8(7, bHeight === 256 ? 0 : bHeight);
+                                        dv3.setUint8(8, bColorCount);
+                                        dv3.setUint8(9, 0);
+                                        dv3.setUint16(10, wPlanes, true);
+                                        dv3.setUint16(12, wBitCount, true);
+                                        dv3.setUint32(14, imageData.length >>> 0, true);
+                                        dv3.setUint32(18, dirSize >>> 0, true);
+                                        ico.set(imageData, dirSize);
+                                        langEntry.previewKind = "image";
+                                        langEntry.previewMime = "image/x-icon";
+                                        langEntry.previewDataUrl = `data:image/x-icon;base64,${base64FromU8(ico)}`;
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            } catch {}
                             child.langs.push(langEntry);
                           }
                         }
