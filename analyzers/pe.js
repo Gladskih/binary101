@@ -599,13 +599,45 @@ export async function parsePe(file) {
         const root = await parseDir(0);
         if (root) {
           const top = [];
+          const detail = [];
           for (const e of root.entries) {
-            // Only summarize top-level grouping (type)
+            // Top-level entry corresponds to type
             let typeName = e.id != null ? (knownType(e.id) || `TYPE_${e.id}`) : (e.name || "(named)");
             let leafCount = 0; if (e.subdir) leafCount = await countLeaves(e.target);
             top.push({ typeName, kind: e.id != null ? "id" : "name", leafCount });
+            if (e.subdir) {
+              const nameDir = await parseDir(e.target);
+              if (nameDir) {
+                const entries = [];
+                for (const nent of nameDir.entries) {
+                  const child = { id: nent.id ?? null, name: nent.name ?? null, langs: [] };
+                  if (nent.subdir) {
+                    const langDir = await parseDir(nent.target);
+                    if (langDir) {
+                      for (const langEnt of langDir.entries) {
+                        if (!langEnt.subdir) {
+                          const dataEntryRel = langEnt.target;
+                          const deo = base + dataEntryRel;
+                          if (isInside(deo + 16)) {
+                            const dv = await view(deo, 16);
+                            const DataRVA = u32(dv, 0);
+                            const Size = u32(dv, 4);
+                            const CodePage = u32(dv, 8);
+                            const Reserved = u32(dv, 12);
+                            const lang = langEnt.id != null ? langEnt.id : null;
+                            child.langs.push({ lang, size: Size, codePage: CodePage, dataRVA: DataRVA, reserved: Reserved });
+                          }
+                        }
+                      }
+                    }
+                  }
+                  entries.push(child);
+                }
+                detail.push({ typeName, entries });
+              }
+            }
           }
-          resources = { top };
+          resources = { top, detail };
         }
       }
     }
@@ -689,7 +721,59 @@ export async function parsePe(file) {
             const nOff = rvaToOff(DllNameRVA);
             if (nOff != null) name = ascii(new DataView(await file.slice(nOff, nOff + 256).arrayBuffer()), 0, 256);
           }
-          entries.push({ name, Attributes, ModuleHandleRVA, ImportAddressTableRVA, ImportNameTableRVA, BoundImportAddressTableRVA, UnloadInformationTableRVA, TimeDateStamp });
+          // Convert possible VA to RVA depending on Attributes bit 0
+          const rvaFromMaybeVa = (val) => {
+            const isRva = (Attributes & 1) !== 0;
+            let r = isRva ? (val >>> 0) : (((val >>> 0) - (ImageBase >>> 0)) >>> 0);
+            return r >>> 0;
+          };
+          // Parse thunk names from ImportNameTable
+          const funcs = [];
+          const intRva = rvaFromMaybeVa(ImportNameTableRVA);
+          const intOff = intRva ? rvaToOff(intRva) : null;
+          if (intOff != null) {
+            if (isPlus) {
+              for (let t = 0; t < 8 * 16384; t += 8) {
+                const dv2 = new DataView(await file.slice(intOff + t, intOff + t + 8).arrayBuffer());
+                const val = dv2.getBigUint64(0, true);
+                if (val === 0n) break;
+                if ((val & 0x8000000000000000n) !== 0n) { funcs.push({ ordinal: Number(val & 0xffffn) }); }
+                else {
+                  const rva = Number(val & 0xffffffffn);
+                  const hnOff = rvaToOff(rva);
+                  if (hnOff != null) {
+                    const hint = new DataView(await file.slice(hnOff, hnOff + 2).arrayBuffer()).getUint16(0, true);
+                    let s = ""; { let pos = hnOff + 2; for (;;) {
+                      const chunk = new Uint8Array(await file.slice(pos, pos + 64).arrayBuffer()); const idx = chunk.findIndex(c => c === 0);
+                      if (idx === -1) { s += String.fromCharCode(...chunk); pos += 64; if (pos > file.size) break; }
+                      else { if (idx) s += String.fromCharCode(...chunk.slice(0, idx)); break; }
+                    }}
+                    funcs.push({ hint, name: s });
+                  } else funcs.push({ name: "<bad RVA>" });
+                }
+              }
+            } else {
+              for (let t = 0; t < 4 * 32768; t += 4) {
+                const dv2 = new DataView(await file.slice(intOff + t, intOff + t + 4).arrayBuffer());
+                const val = dv2.getUint32(0, true);
+                if (val === 0) break;
+                if ((val & 0x80000000) !== 0) { funcs.push({ ordinal: (val & 0xffff) }); }
+                else {
+                  const hnOff = rvaToOff(val);
+                  if (hnOff != null) {
+                    const hint = new DataView(await file.slice(hnOff, hnOff + 2).arrayBuffer()).getUint16(0, true);
+                    let s = ""; { let pos = hnOff + 2; for (;;) {
+                      const chunk = new Uint8Array(await file.slice(pos, pos + 64).arrayBuffer()); const idx = chunk.findIndex(c => c === 0);
+                      if (idx === -1) { s += String.fromCharCode(...chunk); pos += 64; if (pos > file.size) break; }
+                      else { if (idx) s += String.fromCharCode(...chunk.slice(0, idx)); break; }
+                    }}
+                    funcs.push({ hint, name: s });
+                  } else funcs.push({ name: "<bad RVA>" });
+                }
+              }
+            }
+          }
+          entries.push({ name, Attributes, ModuleHandleRVA, ImportAddressTableRVA, ImportNameTableRVA, BoundImportAddressTableRVA, UnloadInformationTableRVA, TimeDateStamp, functions: funcs });
           off += 32;
         }
         delayImports = { entries };
@@ -711,6 +795,38 @@ export async function parsePe(file) {
         const Flags = dv.getUint32(16, true);
         const EntryPointToken = dv.getUint32(20, true);
         clr = { cb, MajorRuntimeVersion, MinorRuntimeVersion, MetaDataRVA, MetaDataSize, Flags, EntryPointToken };
+        const mdOff = rvaToOff(MetaDataRVA);
+        if (mdOff != null && MetaDataSize >= 0x20) {
+          try {
+            const mdHead = new DataView(await file.slice(mdOff, mdOff + Math.min(MetaDataSize, 0x4000)).arrayBuffer());
+            let p = 0;
+            const sig = mdHead.getUint32(p, true); p += 4; // 'BSJB' (0x424A5342)
+            const verMajor = mdHead.getUint16(p, true); p += 2;
+            const verMinor = mdHead.getUint16(p, true); p += 2;
+            const reserved = mdHead.getUint32(p, true); p += 4;
+            const verLen = mdHead.getUint32(p, true); p += 4;
+            let verStr = "";
+            if (verLen > 0 && p + verLen <= mdHead.byteLength) {
+              const bytes = new Uint8Array(mdHead.buffer, mdHead.byteOffset + p, verLen);
+              verStr = String.fromCharCode(...bytes.filter(b => b >= 0x20 && b <= 0x7e));
+              p += verLen;
+              p = (p + 3) & ~3; // align
+            }
+            const flags = mdHead.getUint16(p, true); p += 2;
+            const streamCount = mdHead.getUint16(p, true); p += 2;
+            const streams = [];
+            for (let i = 0; i < streamCount && p + 8 <= mdHead.byteLength; i++) {
+              const offset = mdHead.getUint32(p, true); p += 4;
+              const size = mdHead.getUint32(p, true); p += 4;
+              let name = "";
+              let limit = Math.min(mdHead.byteLength - p, 64);
+              for (let j = 0; j < limit; j++) { const c = mdHead.getUint8(p++); if (c === 0) break; name += String.fromCharCode(c); }
+              p = (p + 3) & ~3;
+              streams.push({ name, offset, size });
+            }
+            clr.meta = { version: verStr.trim(), verMajor, verMinor, streams };
+          } catch {}
+        }
       }
     }
   }

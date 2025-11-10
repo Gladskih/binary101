@@ -164,9 +164,10 @@ export function renderPe(pe) {
   if (pe.imports?.length) {
     out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import table</h4><div class="smallNote">Hint index speeds up runtime name lookup. Ordinal imports may indicate special APIs.</div>`);
     for (const mod of pe.imports) {
-      out.push(`<div class="smallNote" style="margin-top:.35rem"><b>${safe(mod.dll || "(unknown DLL)")}</b> — ${mod.functions.length} function(s)</div>`);
+      const dll = safe(mod.dll || "(unknown DLL)");
+      out.push(`<details><summary><b>${dll}</b> — ${mod.functions.length} function(s)</summary>`);
       if (mod.functions.length) {
-        out.push(`<table class="table"><thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th></tr></thead><tbody>`);
+        out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th></tr></thead><tbody>`);
         mod.functions.forEach((f, i) => {
           const hint = f.hint != null ? String(f.hint) : "-";
           const nm = f.name ? safe(f.name) : (f.ordinal != null ? ("ORD " + f.ordinal) : "-");
@@ -174,17 +175,42 @@ export function renderPe(pe) {
         });
         out.push(`</tbody></table>`);
       }
+      out.push(`</details>`);
     }
     out.push(`</section>`);
   }
 
-  // Resources summary
+  // Resources summary and details
   if (pe.resources?.top?.length) {
     const rs = pe.resources.top;
     out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Resources</h4>`);
     out.push(`<table class="table"><thead><tr><th>#</th><th>Type</th><th>Leaf items</th></tr></thead><tbody>`);
     rs.forEach((t, i) => out.push(`<tr><td>${i + 1}</td><td>${safe(t.typeName)}</td><td>${t.leafCount}</td></tr>`));
-    out.push(`</tbody></table></section>`);
+    out.push(`</tbody></table>`);
+    if (pe.resources.detail?.length) {
+      pe.resources.detail.forEach((tp, idx) => {
+        out.push(`<details style="margin-top:.5rem"><summary><b>${safe(tp.typeName)}</b> — entries</summary>`);
+        if (tp.entries?.length) {
+          out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Name/ID</th><th>Lang</th><th>Size</th><th>CodePage</th></tr></thead><tbody>`);
+          let row = 0;
+          tp.entries.forEach(ent => {
+            if (ent.langs?.length) {
+              ent.langs.forEach(l => {
+                const nm = ent.name ? safe(ent.name) : (ent.id != null ? ("ID " + ent.id) : "-");
+                const lang = l.lang != null ? ("0x" + (l.lang>>>0).toString(16)) : "-";
+                out.push(`<tr><td>${++row}</td><td>${nm}</td><td>${lang}</td><td>${humanSize(l.size)}</td><td>${l.codePage}</td></tr>`);
+              });
+            } else {
+              const nm = ent.name ? safe(ent.name) : (ent.id != null ? ("ID " + ent.id) : "-");
+              out.push(`<tr><td>${++row}</td><td>${nm}</td><td>-</td><td>-</td><td>-</td></tr>`);
+            }
+          });
+          out.push(`</tbody></table>`);
+        }
+        out.push(`</details>`);
+      });
+    }
+    out.push(`</section>`);
   }
 
   // Export directory
@@ -197,11 +223,12 @@ export function renderPe(pe) {
     out.push(dd("Names", String(ex.NumberOfNames), "Number of entries with names (Export Name Ptr & Ord tables)."));
     out.push(`</dl>`);
     if (ex.entries?.length) {
-      out.push(`<table class="table"><thead><tr><th>#</th><th>Ordinal</th><th>Name</th><th>RVA</th><th>Forwarder</th></tr></thead><tbody>`);
+      out.push(`<details><summary>Show entries (${ex.entries.length})</summary>`);
+      out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Ordinal</th><th>Name</th><th>RVA</th><th>Forwarder</th></tr></thead><tbody>`);
       ex.entries.slice(0, 2000).forEach((e, i) => {
         out.push(`<tr><td>${i + 1}</td><td>${e.ordinal}</td><td>${e.name ? safe(e.name) : "-"}</td><td>${hex(e.rva, 8)}</td><td>${e.forwarder ? safe(e.forwarder) : "-"}</td></tr>`);
       });
-      out.push(`</tbody></table>`);
+      out.push(`</tbody></table></details>`);
     }
     out.push(`</section>`);
   }
@@ -256,9 +283,27 @@ export function renderPe(pe) {
   if (pe.delayImports?.entries?.length) {
     const di = pe.delayImports;
     out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Delay-load imports</h4>`);
-    out.push(`<table class="table"><thead><tr><th>#</th><th>Module</th><th>INT (RVA)</th><th>IAT (RVA)</th><th>BoundIAT (RVA)</th><th>UnloadIAT (RVA)</th><th>TDS</th></tr></thead><tbody>`);
-    di.entries.forEach((x, i) => out.push(`<tr><td>${i + 1}</td><td>${safe(x.name)}</td><td>${hex(x.ImportNameTableRVA, 8)}</td><td>${hex(x.ImportAddressTableRVA, 8)}</td><td>${hex(x.BoundImportAddressTableRVA, 8)}</td><td>${hex(x.UnloadInformationTableRVA, 8)}</td><td>${isoOrDash(x.TimeDateStamp)}</td></tr>`));
-    out.push(`</tbody></table></section>`);
+    di.entries.forEach((x, i) => {
+      out.push(`<details><summary><b>${safe(x.name || '(unknown)')}</b> — ${x.functions?.length || 0} function(s)</summary>`);
+      out.push(`<dl class="smallNote" style="margin-top:.35rem">`);
+      out.push(dd("INT (RVA)", hex(x.ImportNameTableRVA, 8), "Import Name Table RVA for delay-load"));
+      out.push(dd("IAT (RVA)", hex(x.ImportAddressTableRVA, 8), "Import Address Table RVA for delay-load"));
+      out.push(dd("BoundIAT (RVA)", hex(x.BoundImportAddressTableRVA, 8), "Bound IAT RVA"));
+      out.push(dd("UnloadIAT (RVA)", hex(x.UnloadInformationTableRVA, 8), "Unload IAT RVA"));
+      out.push(dd("TimeDateStamp", isoOrDash(x.TimeDateStamp), "Timestamp for bound state or 0."));
+      out.push(`</dl>`);
+      if (x.functions?.length) {
+        out.push(`<table class="table"><thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th></tr></thead><tbody>`);
+        x.functions.forEach((f, j) => {
+          const hint = f.hint != null ? String(f.hint) : "-";
+          const nm = f.name ? safe(f.name) : (f.ordinal != null ? ("ORD " + f.ordinal) : "-");
+          out.push(`<tr><td>${j + 1}</td><td>${hint}</td><td>${nm}</td></tr>`);
+        });
+        out.push(`</tbody></table>`);
+      }
+      out.push(`</details>`);
+    });
+    out.push(`</section>`);
   }
 
   // CLR (.NET) header
@@ -270,7 +315,17 @@ export function renderPe(pe) {
     out.push(dd("MetaData", `RVA ${hex(c.MetaDataRVA, 8)} Size ${humanSize(c.MetaDataSize)}`, "Location and size of CLR metadata streams (tables/heap)."));
     out.push(dd("Flags", hex(c.Flags, 8), "CLR flags (e.g., ILONLY, 32BITREQUIRED)."));
     out.push(dd("EntryPointToken", hex(c.EntryPointToken, 8), "Managed entry point token (method) if IL-only."));
-    out.push(`</dl></section>`);
+    out.push(`</dl>`);
+    if (c.meta) {
+      out.push(`<div class="smallNote">Metadata version: ${safe(c.meta.version || '')}</div>`);
+      if (c.meta.streams?.length) {
+        out.push(`<details style="margin-top:.35rem"><summary>Metadata streams (${c.meta.streams.length})</summary>`);
+        out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Name</th><th>Offset</th><th>Size</th></tr></thead><tbody>`);
+        c.meta.streams.forEach((s, i) => out.push(`<tr><td>${i + 1}</td><td>${safe(s.name)}</td><td>${hex(s.offset, 8)}</td><td>${humanSize(s.size)}</td></tr>`));
+        out.push(`</tbody></table></details>`);
+      }
+    }
+    out.push(`</section>`);
   }
 
   // Security (WIN_CERTIFICATE)
