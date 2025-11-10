@@ -125,6 +125,15 @@ function shannonEntropy(u8) {
   return H; // 0..8 bits/byte
 }
 
+function base64FromU8(u8) {
+  let s = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < u8.length; i += chunk) {
+    s += String.fromCharCode(...u8.subarray(i, Math.min(i + chunk, u8.length)));
+  }
+  try { return btoa(s); } catch { return ""; }
+}
+
 export async function parsePe(file) {
   const head = new DataView(await file.slice(0, Math.min(file.size, 0x400)).arrayBuffer());
   const probe = peProbe(head); if (!probe) return null;
@@ -625,7 +634,32 @@ export async function parsePe(file) {
                             const CodePage = u32(dv, 8);
                             const Reserved = u32(dv, 12);
                             const lang = langEnt.id != null ? langEnt.id : null;
-                            child.langs.push({ lang, size: Size, codePage: CodePage, dataRVA: DataRVA, reserved: Reserved });
+                            const langEntry = { lang, size: Size, codePage: CodePage, dataRVA: DataRVA, reserved: Reserved };
+                            const dataOff = rvaToOff(DataRVA);
+                            if (dataOff != null && Size > 0 && Size <= 262144) {
+                              try {
+                                const data = new Uint8Array(await file.slice(dataOff, dataOff + Size).arrayBuffer());
+                                // PNG preview for ICON resources
+                                if (typeName === "ICON" && data.length >= 8 && data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47 && data[4] === 0x0d && data[5] === 0x0a && data[6] === 0x1a && data[7] === 0x0a) {
+                                  langEntry.previewKind = "image";
+                                  langEntry.previewMime = "image/png";
+                                  langEntry.previewDataUrl = `data:image/png;base64,${base64FromU8(data)}`;
+                                }
+                                // Manifest preview (text)
+                                if (typeName === "MANIFEST") {
+                                  let text = "";
+                                  if (data.length >= 2 && data[0] === 0xff && data[1] === 0xfe) {
+                                    for (let i = 2; i + 1 < data.length && i < 4096; i += 2) { const ch = data[i] | (data[i + 1] << 8); text += String.fromCharCode(ch); }
+                                  } else if (data.length >= 3 && data[0] === 0xef && data[1] === 0xbb && data[2] === 0xbf) {
+                                    text = new TextDecoder("utf-8").decode(data.subarray(3, Math.min(data.length, 4096)));
+                                  } else {
+                                    try { text = new TextDecoder("utf-8").decode(data.subarray(0, Math.min(data.length, 4096))); } catch {}
+                                  }
+                                  if (text) { langEntry.previewKind = "text"; langEntry.textPreview = text; }
+                                }
+                              } catch {}
+                            }
+                            child.langs.push(langEntry);
                           }
                         }
                       }

@@ -38,7 +38,9 @@ export function renderPe(pe) {
   const out = [];
 
   // DOS header
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">DOS header</h4><dl>`);
+  out.push(`<section>`);
+  out.push(`<details><summary style="cursor:pointer;padding:.35rem .6rem;border:1px solid var(--border2);border-radius:8px;background:var(--chip-bg)"><b>DOS header</b> (click to expand)</summary>`);
+  out.push(`<div style="margin-top:.5rem"><dl>`);
   out.push(dd("e_magic", "MZ", "DOS header signature. PE files begin with a small DOS program (stub)."));
   out.push(dd("e_cblp", `${pe.dos.e_cblp} bytes last page`, "Number of bytes on last page of file (legacy)."));
   out.push(dd("e_cp", `${pe.dos.e_cp} pages`, "File size measured in 512-byte pages (legacy)."));
@@ -59,7 +61,7 @@ export function renderPe(pe) {
   const s = pe.dos.stub;
   out.push(`<div class="smallNote">DOS stub: ${s.kind}${s.note ? ` — ${safe(s.note)}` : ""}</div>`);
   if (s.strings?.length) out.push(`<div class="mono smallNote">${s.strings.map(x => `<div>${safe(String(x))}</div>`).join("")}</div>`);
-  out.push(`</section>`);
+  out.push(`</div></details></section>`);
 
   // PE signature
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">PE signature</h4><dl>${dd("Signature", "PE", "The PE\x00\x00 signature follows the DOS header.")}</dl></section>`);
@@ -154,7 +156,7 @@ export function renderPe(pe) {
   if (pe.rsds) {
     out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Debug (PDB)</h4><dl>`);
     out.push(dd("CodeView", "RSDS", "CodeView format signature (RSDS)."));
-    out.push(dd("GUID", pe.rsds.guid, "PDB signature GUID used to match correct PDB file."));
+    out.push(dd("GUID", (pe.rsds.guid||"").toUpperCase(), "PDB signature GUID used to match correct PDB file."));
     out.push(dd("Age", String(pe.rsds.age), "PDB age; increments on certain rebuilds."));
     out.push(dd("Path", pe.rsds.path, "Path to PDB as recorded at link time (can be absolute)."));
     out.push(`</dl></section>`);
@@ -165,7 +167,7 @@ export function renderPe(pe) {
     out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import table</h4><div class="smallNote">Hint index speeds up runtime name lookup. Ordinal imports may indicate special APIs.</div>`);
     for (const mod of pe.imports) {
       const dll = safe(mod.dll || "(unknown DLL)");
-      out.push(`<details><summary><b>${dll}</b> — ${mod.functions.length} function(s)</summary>`);
+      out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${dll}</b> — ${mod.functions.length} function(s)</summary>`);
       if (mod.functions.length) {
         out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th></tr></thead><tbody>`);
         mod.functions.forEach((f, i) => {
@@ -189,7 +191,7 @@ export function renderPe(pe) {
     out.push(`</tbody></table>`);
     if (pe.resources.detail?.length) {
       pe.resources.detail.forEach((tp, idx) => {
-        out.push(`<details style="margin-top:.5rem"><summary><b>${safe(tp.typeName)}</b> — entries</summary>`);
+        out.push(`<details style="margin-top:.5rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${safe(tp.typeName)}</b> — entries</summary>`);
         if (tp.entries?.length) {
           out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Name/ID</th><th>Lang</th><th>Size</th><th>CodePage</th></tr></thead><tbody>`);
           let row = 0;
@@ -223,7 +225,7 @@ export function renderPe(pe) {
     out.push(dd("Names", String(ex.NumberOfNames), "Number of entries with names (Export Name Ptr & Ord tables)."));
     out.push(`</dl>`);
     if (ex.entries?.length) {
-      out.push(`<details><summary>Show entries (${ex.entries.length})</summary>`);
+      out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show entries (${ex.entries.length})</summary>`);
       out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Ordinal</th><th>Name</th><th>RVA</th><th>Forwarder</th></tr></thead><tbody>`);
       ex.entries.slice(0, 2000).forEach((e, i) => {
         out.push(`<tr><td>${i + 1}</td><td>${e.ordinal}</td><td>${e.name ? safe(e.name) : "-"}</td><td>${hex(e.rva, 8)}</td><td>${e.forwarder ? safe(e.forwarder) : "-"}</td></tr>`);
@@ -259,15 +261,14 @@ export function renderPe(pe) {
   // Exception directory (.pdata)
   if (pe.exception) {
     const e = pe.exception;
-    out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Exception directory (.pdata)</h4><dl>`);
-    out.push(dd("RUNTIME_FUNCTION count", String(e.count), "Number of RUNTIME_FUNCTION entries used for x64 unwinding and SEH."));
-    out.push(`</dl>`);
+    out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Exception directory (.pdata)</h4>`);
+    out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">RUNTIME_FUNCTION count ${e.count}</summary>`);
     if (e.sample?.length) {
-      out.push(`<table class="table"><thead><tr><th>#</th><th>BeginAddress (RVA)</th><th>EndAddress (RVA)</th><th>UnwindInfo (RVA)</th></tr></thead><tbody>`);
+      out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>BeginAddress (RVA)</th><th>EndAddress (RVA)</th><th>UnwindInfo (RVA)</th></tr></thead><tbody>`);
       e.sample.forEach((r, i) => out.push(`<tr><td>${i + 1}</td><td>${hex(r.BeginAddress, 8)}</td><td>${hex(r.EndAddress, 8)}</td><td>${hex(r.UnwindInfoAddress, 8)}</td></tr>`));
       out.push(`</tbody></table>`);
     }
-    out.push(`</section>`);
+    out.push(`</details></section>`);
   }
 
   // Bound imports
@@ -284,7 +285,7 @@ export function renderPe(pe) {
     const di = pe.delayImports;
     out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Delay-load imports</h4>`);
     di.entries.forEach((x, i) => {
-      out.push(`<details><summary><b>${safe(x.name || '(unknown)')}</b> — ${x.functions?.length || 0} function(s)</summary>`);
+      out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${safe(x.name || '(unknown)')}</b> — ${x.functions?.length || 0} function(s)</summary>`);
       out.push(`<dl class="smallNote" style="margin-top:.35rem">`);
       out.push(dd("INT (RVA)", hex(x.ImportNameTableRVA, 8), "Import Name Table RVA for delay-load"));
       out.push(dd("IAT (RVA)", hex(x.ImportAddressTableRVA, 8), "Import Address Table RVA for delay-load"));
@@ -313,7 +314,7 @@ export function renderPe(pe) {
     out.push(dd("Size", String(c.cb), "Size of IMAGE_COR20_HEADER in bytes."));
     out.push(dd("RuntimeVersion", `${c.MajorRuntimeVersion}.${c.MinorRuntimeVersion}`, "CLR runtime version required by this assembly."));
     out.push(dd("MetaData", `RVA ${hex(c.MetaDataRVA, 8)} Size ${humanSize(c.MetaDataSize)}`, "Location and size of CLR metadata streams (tables/heap)."));
-    out.push(dd("Flags", hex(c.Flags, 8), "CLR flags (e.g., ILONLY, 32BITREQUIRED)."));
+    out.push(dd("Flags", rowFlags(c.Flags || 0, CLR_FLAG_TEXTS), "CLR flags (e.g., ILONLY, 32BITREQUIRED)."));
     out.push(dd("EntryPointToken", hex(c.EntryPointToken, 8), "Managed entry point token (method) if IL-only."));
     out.push(`</dl>`);
     if (c.meta) {
