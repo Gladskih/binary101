@@ -1,14 +1,18 @@
 "use strict";
 
-import { bufToHex } from "./utils.js";
+import { bufferToHex } from "./utils.js";
 
-export async function computeHashForFile(file, algo) {
-  const buf = await file.arrayBuffer();
-  const h = await crypto.subtle.digest(algo, buf);
-  return bufToHex(h);
+export async function computeHashForFile(file, algorithmName) {
+  const buffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest(algorithmName, buffer);
+  return bufferToHex(hashBuffer);
 }
 
 export async function copyToClipboard(text) {
-  try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
-

@@ -1,89 +1,219 @@
 "use strict";
 
-import { nowIso, humanSize } from "./utils.js";
+import { nowIsoString, formatHumanSize } from "./utils.js";
 import { computeHashForFile, copyToClipboard } from "./hash.js";
 import { detectBinaryType, parseForUi } from "./analyzers/index.js";
 import { renderPe } from "./pe-render.js";
 
-// DOM
-const el = id => document.getElementById(id);
-const dropZone = el("dropZone"), fileInput = el("fileInput"), statusMsg = el("statusMessage");
-const card = el("fileInfoCard");
-const nameTop = el("fileOriginalName"), sizeTop = el("fileSizeDisplay"), kindTop = el("fileKindDisplay");
-const nameDet = el("fileNameDetail"), sizeDet = el("fileSizeDetail"), tsDet = el("fileTimestampDetail"), srcDet = el("fileSourceDetail"), kindDet = el("fileBinaryTypeDetail");
-const peTerm = el("peDetailsTerm"), peVal = el("peDetailsValue");
-const sha256Val = el("sha256Value"), sha512Val = el("sha512Value"), sha256Btn = el("sha256ComputeButton"), sha512Btn = el("sha512ComputeButton"), sha256Copy = el("sha256CopyButton"), sha512Copy = el("sha512CopyButton");
+const getElement = id => document.getElementById(id);
+
+const dropZoneElement = getElement("dropZone");
+const fileInputElement = getElement("fileInput");
+const statusMessageElement = getElement("statusMessage");
+
+const fileInfoCardElement = getElement("fileInfoCard");
+
+const fileNameTopElement = getElement("fileOriginalName");
+const fileSizeTopElement = getElement("fileSizeDisplay");
+const fileKindTopElement = getElement("fileKindDisplay");
+
+const fileNameDetailElement = getElement("fileNameDetail");
+const fileSizeDetailElement = getElement("fileSizeDetail");
+const fileTimestampDetailElement = getElement("fileTimestampDetail");
+const fileSourceDetailElement = getElement("fileSourceDetail");
+const fileBinaryTypeDetailElement = getElement("fileBinaryTypeDetail");
+
+const peDetailsTermElement = getElement("peDetailsTerm");
+const peDetailsValueElement = getElement("peDetailsValue");
+
+const sha256ValueElement = getElement("sha256Value");
+const sha512ValueElement = getElement("sha512Value");
+const sha256ButtonElement = getElement("sha256ComputeButton");
+const sha512ButtonElement = getElement("sha512ComputeButton");
+const sha256CopyButtonElement = getElement("sha256CopyButton");
+const sha512CopyButtonElement = getElement("sha512CopyButton");
 
 let currentFile = null;
 
-// Status UI
-const setStatus = m => { statusMsg.textContent = m || ""; };
-const clearStatus = () => { statusMsg.textContent = ""; };
+const setStatusMessage = message => {
+  statusMessageElement.textContent = message || "";
+};
 
-// Render dispatch
-function renderIntoUi(analyzer, parsed) {
-  if (!parsed) { peTerm.hidden = true; peVal.hidden = true; peVal.innerHTML = ""; return; }
-  if (analyzer === "pe") {
-    peTerm.textContent = "PE/COFF details";
-    peTerm.hidden = false; peVal.hidden = false; peVal.innerHTML = renderPe(parsed);
+const clearStatusMessage = () => {
+  statusMessageElement.textContent = "";
+};
+
+function renderAnalysisIntoUi(analyzerName, parsedResult) {
+  if (!parsedResult) {
+    peDetailsTermElement.hidden = true;
+    peDetailsValueElement.hidden = true;
+    peDetailsValueElement.innerHTML = "";
+    return;
+  }
+  if (analyzerName === "pe") {
+    peDetailsTermElement.textContent = "PE/COFF details";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    peDetailsValueElement.innerHTML = renderPe(parsedResult);
   } else {
-    peTerm.hidden = true; peVal.hidden = true; peVal.innerHTML = "";
+    peDetailsTermElement.hidden = true;
+    peDetailsValueElement.hidden = true;
+    peDetailsValueElement.innerHTML = "";
   }
 }
 
-// Top-level flow
-async function showFileInfo(file, source) {
-  currentFile = file;
-  const type = await detectBinaryType(file);
-  const ts = nowIso(), sizeText = humanSize(file.size);
+function resetHashDisplay() {
+  sha256ValueElement.textContent = "";
+  sha512ValueElement.textContent = "";
+  sha256CopyButtonElement.hidden = true;
+  sha512CopyButtonElement.hidden = true;
+  sha256ButtonElement.hidden = false;
+  sha512ButtonElement.hidden = false;
+  sha256ButtonElement.disabled = false;
+  sha512ButtonElement.disabled = false;
+  sha256ButtonElement.textContent = "Compute SHA-256";
+  sha512ButtonElement.textContent = "Compute SHA-512";
+}
 
-  nameTop.textContent = file.name || ""; sizeTop.textContent = sizeText; kindTop.textContent = type;
-  nameDet.textContent = file.name || ""; sizeDet.textContent = sizeText; tsDet.textContent = ts; srcDet.textContent = source; kindDet.textContent = type;
+async function showFileInfo(file, sourceDescription) {
+  currentFile = file;
+  const typeLabel = await detectBinaryType(file);
+  const timestampIso = nowIsoString();
+  const sizeText = formatHumanSize(file.size);
+
+  fileNameTopElement.textContent = file.name || "";
+  fileSizeTopElement.textContent = sizeText;
+  fileKindTopElement.textContent = typeLabel;
+
+  fileNameDetailElement.textContent = file.name || "";
+  fileSizeDetailElement.textContent = sizeText;
+  fileTimestampDetailElement.textContent = timestampIso;
+  fileSourceDetailElement.textContent = sourceDescription;
+  fileBinaryTypeDetailElement.textContent = typeLabel;
 
   const { analyzer, parsed } = await parseForUi(file);
-  renderIntoUi(analyzer, parsed);
+  renderAnalysisIntoUi(analyzer, parsed);
 
-  sha256Val.textContent = ""; sha512Val.textContent = "";
-  sha256Copy.hidden = true; sha512Copy.hidden = true;
-  sha256Btn.hidden = false; sha512Btn.hidden = false; sha256Btn.disabled = false; sha512Btn.disabled = false;
-  sha256Btn.textContent = "Compute SHA-256"; sha512Btn.textContent = "Compute SHA-512";
-
-  card.hidden = false;
-  clearStatus();
+  resetHashDisplay();
+  fileInfoCardElement.hidden = false;
+  clearStatusMessage();
 }
 
-// Input handlers
-const handleFiles = files => {
-  if (!files || files.length === 0) { setStatus("No file selected."); return; }
-  if (files.length > 1) { setStatus("Multiple files are not supported yet."); return; }
+const handleSelectedFiles = files => {
+  if (!files || files.length === 0) {
+    setStatusMessage("No file selected.");
+    return;
+  }
+  if (files.length > 1) {
+    setStatusMessage("Multiple files are not supported yet.");
+    return;
+  }
   showFileInfo(files[0], "File selection");
 };
-["dragenter", "dragover"].forEach(t => dropZone.addEventListener(t, e => { e.preventDefault(); dropZone.classList.add("dragover"); }));
-["dragleave", "drop"].forEach(t => dropZone.addEventListener(t, e => { e.preventDefault(); if (e.type === "drop") { const dt = e.dataTransfer; if (!dt) setStatus("Drop: cannot access data."); else { handleFiles(dt.files); } } dropZone.classList.remove("dragover"); }));
-dropZone.addEventListener("keydown", e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); fileInput.click(); } });
-fileInput.addEventListener("change", e => { const t = e.currentTarget; if (!(t instanceof HTMLInputElement)) return; handleFiles(t.files); t.value = ""; });
-window.addEventListener("paste", async e => {
-  const d = e.clipboardData; if (!d) { setStatus("Paste: clipboard not available."); return; }
-  const files = [...d.files || []]; if (files.length === 1) { showFileInfo(files[0], "Paste (file)"); return; }
-  const items = [...d.items || []].filter(it => it.kind === "string"); if (items.length !== 1) { setStatus("Paste: unsupported clipboard payload."); return; }
-  const text = await new Promise(r => items[0].getAsString(r)); if (typeof text !== "string" || !text.length) { setStatus("Paste: empty text."); return; }
-  const f = new File([text], "clipboard.bin", { type: "application/octet-stream" }); showFileInfo(f, "Paste (clipboard data)");
+
+["dragenter", "dragover"].forEach(eventName =>
+  dropZoneElement.addEventListener(eventName, event => {
+    event.preventDefault();
+    dropZoneElement.classList.add("dragover");
+  })
+);
+
+["dragleave", "drop"].forEach(eventName =>
+  dropZoneElement.addEventListener(eventName, event => {
+    event.preventDefault();
+    if (event.type === "drop") {
+      const dataTransfer = event.dataTransfer;
+      if (!dataTransfer) {
+        setStatusMessage("Drop: cannot access data.");
+      } else {
+        handleSelectedFiles(dataTransfer.files);
+      }
+    }
+    dropZoneElement.classList.remove("dragover");
+  })
+);
+
+dropZoneElement.addEventListener("keydown", event => {
+  if (event.key === " " || event.key === "Enter") {
+    event.preventDefault();
+    fileInputElement.click();
+  }
 });
 
-// Hashing UI
-async function computeHash(algo, valEl, btnEl, copyEl) {
-  if (!currentFile) { valEl.textContent = "No file selected."; return; }
-  btnEl.disabled = true; btnEl.textContent = "Working...";
+fileInputElement.addEventListener("change", event => {
+  const input = event.currentTarget;
+  if (!(input instanceof HTMLInputElement)) return;
+  handleSelectedFiles(input.files);
+  input.value = "";
+});
+
+window.addEventListener("paste", async event => {
+  const clipboardData = event.clipboardData;
+  if (!clipboardData) {
+    setStatusMessage("Paste: clipboard not available.");
+    return;
+  }
+  const files = [...(clipboardData.files || [])];
+  if (files.length === 1) {
+    showFileInfo(files[0], "Paste (file)");
+    return;
+  }
+  const textItems = [...(clipboardData.items || [])].filter(
+    item => item.kind === "string"
+  );
+  if (textItems.length !== 1) {
+    setStatusMessage("Paste: unsupported clipboard payload.");
+    return;
+  }
+  const text = await new Promise(resolve => textItems[0].getAsString(resolve));
+  if (typeof text !== "string" || text.length === 0) {
+    setStatusMessage("Paste: empty text.");
+    return;
+  }
+  const syntheticFile = new File([text], "clipboard.bin", {
+    type: "application/octet-stream"
+  });
+  showFileInfo(syntheticFile, "Paste (clipboard data)");
+});
+
+async function computeAndDisplayHash(algorithmName, valueElement, buttonElement, copyButtonElement) {
+  if (!currentFile) {
+    valueElement.textContent = "No file selected.";
+    return;
+  }
+  buttonElement.disabled = true;
+  buttonElement.textContent = "Working...";
   try {
-    const s = await computeHashForFile(currentFile, algo);
-    valEl.textContent = s; copyEl.hidden = false; btnEl.hidden = true; clearStatus();
-  } catch (err) {
-    valEl.textContent = "Hash failed: " + String(err && err.name ? err.name + ": " : "") + String(err);
-    btnEl.disabled = false; btnEl.textContent = "Retry"; copyEl.hidden = true;
+    const hashHex = await computeHashForFile(currentFile, algorithmName);
+    valueElement.textContent = hashHex;
+    copyButtonElement.hidden = false;
+    buttonElement.hidden = true;
+    clearStatusMessage();
+  } catch (error) {
+    const namePart = error && error.name ? `${error.name}: ` : "";
+    valueElement.textContent = `Hash failed: ${namePart}${String(error)}`;
+    buttonElement.disabled = false;
+    buttonElement.textContent = "Retry";
+    copyButtonElement.hidden = true;
   }
 }
-sha256Btn.addEventListener("click", () => computeHash("SHA-256", sha256Val, sha256Btn, sha256Copy));
-sha512Btn.addEventListener("click", () => computeHash("SHA-512", sha512Val, sha512Btn, sha512Copy));
-sha256Copy.addEventListener("click", async () => setStatus((await copyToClipboard(sha256Val.textContent || "")) ? "SHA-256 copied." : "Clipboard copy failed."));
-sha512Copy.addEventListener("click", async () => setStatus((await copyToClipboard(sha512Val.textContent || "")) ? "SHA-512 copied." : "Clipboard copy failed."));
 
+sha256ButtonElement.addEventListener("click", () =>
+  computeAndDisplayHash("SHA-256", sha256ValueElement, sha256ButtonElement, sha256CopyButtonElement)
+);
+
+sha512ButtonElement.addEventListener("click", () =>
+  computeAndDisplayHash("SHA-512", sha512ValueElement, sha512ButtonElement, sha512CopyButtonElement)
+);
+
+sha256CopyButtonElement.addEventListener("click", async () => {
+  const text = sha256ValueElement.textContent || "";
+  const copied = await copyToClipboard(text);
+  setStatusMessage(copied ? "SHA-256 copied." : "Clipboard copy failed.");
+});
+
+sha512CopyButtonElement.addEventListener("click", async () => {
+  const text = sha512ValueElement.textContent || "";
+  const copied = await copyToClipboard(text);
+  setStatusMessage(copied ? "SHA-512 copied." : "Clipboard copy failed.");
+});

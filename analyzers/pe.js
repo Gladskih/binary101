@@ -1,6 +1,6 @@
 "use strict";
 
-import { humanSize, hex, ascii, runStrings, alignUp } from "../utils.js";
+import { toHex32, readAsciiString, collectPrintableRuns, alignUpTo } from "../utils.js";
 
 // PE constants used by parser and renderer
 export const MACHINE = [
@@ -94,35 +94,45 @@ export const GUARD_FLAGS = [
   [0x00020000, "CF_LONGJUMP_TABLE_PRESENT"],
 ];
 
-export const peProbe = dv => dv.byteLength >= 0x40 && dv.getUint16(0, true) === 0x5a4d
-  ? ({ e_lfanew: dv.getUint32(0x3c, true) }) : null;
+export const peProbe = dataView =>
+  dataView.byteLength >= 0x40 && dataView.getUint16(0, true) === 0x5a4d
+    ? { e_lfanew: dataView.getUint32(0x3c, true) }
+    : null;
 
-export const mapMachine = m => MACHINE.find(([c]) => c === m)?.[1] || ("machine=" + hex(m, 4));
+export const mapMachine = machineCode =>
+  MACHINE.find(([code]) => code === machineCode)?.[1] || "machine=" + toHex32(machineCode, 4);
 
-function makeRvaMapper(sections) {
-  const spans = sections.map(s => {
-    const va = s.virtualAddress >>> 0;
-    const vs = Math.max(s.virtualSize >>> 0, s.sizeOfRawData >>> 0);
-    const off = s.pointerToRawData >>> 0;
-    return { vaEnd: (va + vs) >>> 0, va, off };
+function createRvaToOffsetMapper(sections) {
+  const spans = sections.map(section => {
+    const virtualAddress = section.virtualAddress >>> 0;
+    const virtualSize = Math.max(section.virtualSize >>> 0, section.sizeOfRawData >>> 0);
+    const fileOffset = section.pointerToRawData >>> 0;
+    return { vaStart: virtualAddress, vaEnd: (virtualAddress + virtualSize) >>> 0, fileOffset };
   });
-  return rva => {
-    rva >>> 0;
-    for (const s of spans) { if (rva >= s.va && rva < s.vaEnd) return (s.off + (rva - s.va)) >>> 0; }
+  return relativeVirtualAddress => {
+    const normalized = relativeVirtualAddress >>> 0;
+    for (const span of spans) {
+      if (normalized >= span.vaStart && normalized < span.vaEnd) {
+        return (span.fileOffset + (normalized - span.vaStart)) >>> 0;
+      }
+    }
     return null;
   };
 }
 
-function shannonEntropy(u8) {
-  if (!u8 || u8.length === 0) return 0;
+function shannonEntropy(bytes) {
+  if (!bytes || bytes.length === 0) return 0;
   const freq = new Uint32Array(256);
-  for (let i = 0; i < u8.length; i++) freq[u8[i]]++;
-  let H = 0; const n = u8.length;
+  for (let index = 0; index < bytes.length; index++) freq[bytes[index]]++;
+  let entropy = 0;
+  const totalCount = bytes.length;
   for (let i = 0; i < 256; i++) {
-    const f = freq[i]; if (!f) continue;
-    const p = f / n; H -= p * Math.log2(p);
+    const count = freq[i];
+    if (!count) continue;
+    const probability = count / totalCount;
+    entropy -= probability * Math.log2(probability);
   }
-  return H; // 0..8 bits/byte
+  return entropy;
 }
 
 function base64FromU8(u8) {
@@ -142,7 +152,7 @@ export async function parsePe(file) {
   // DOS header
   const H = head;
   const dos = {
-    e_magic: ascii(H, 0, 2),
+    e_magic: readAsciiString(H, 0, 2),
     e_cblp: H.getUint16(0x02, true),
     e_cp: H.getUint16(0x04, true),
     e_crlc: H.getUint16(0x06, true),
@@ -166,7 +176,7 @@ export async function parsePe(file) {
   if (e_lfanew > 0x40) {
     const len = Math.min(e_lfanew - 0x40, 64 * 1024);
     const u8 = new Uint8Array(await file.slice(0x40, 0x40 + len).arrayBuffer());
-    const runs = runStrings(u8, 12);
+    const runs = collectPrintableRuns(u8, 12);
     const classic = runs.find(s => /this program cannot be run in dos mode/i.test(s));
     if (classic) stub = { kind: "standard", note: "classic DOS message", strings: [classic] };
     else if (runs.length) stub = { kind: "non-standard", note: "printable text", strings: runs.slice(0, 4) };
@@ -230,14 +240,28 @@ export async function parsePe(file) {
   const sectDV = new DataView(await file.slice(sectOff, sectOff + NumberOfSections * 40).arrayBuffer());
   const sections = [];
   for (let i = 0; i < NumberOfSections; i++) {
-    const b = i * 40; let name = "";
-    for (let j = 0; j < 8; j++) { const c = sectDV.getUint8(b + j); if (c === 0) break; name += String.fromCharCode(c); }
-    const virtualSize = sectDV.getUint32(b + 8, true), virtualAddress = sectDV.getUint32(b + 12, true);
-    const sizeOfRawData = sectDV.getUint32(b + 16, true), pointerToRawData = sectDV.getUint32(b + 20, true);
-    const characteristics = sectDV.getUint32(b + 36, true);
-    sections.push({ name: name || "(unnamed)", virtualSize, virtualAddress, sizeOfRawData, pointerToRawData, characteristics });
+    const baseOffset = i * 40;
+    let name = "";
+    for (let j = 0; j < 8; j++) {
+      const codePoint = sectDV.getUint8(baseOffset + j);
+      if (codePoint === 0) break;
+      name += String.fromCharCode(codePoint);
+    }
+    const virtualSize = sectDV.getUint32(baseOffset + 8, true);
+    const virtualAddress = sectDV.getUint32(baseOffset + 12, true);
+    const sizeOfRawData = sectDV.getUint32(baseOffset + 16, true);
+    const pointerToRawData = sectDV.getUint32(baseOffset + 20, true);
+    const characteristics = sectDV.getUint32(baseOffset + 36, true);
+    sections.push({
+      name: name || "(unnamed)",
+      virtualSize,
+      virtualAddress,
+      sizeOfRawData,
+      pointerToRawData,
+      characteristics
+    });
   }
-  const rvaToOff = makeRvaMapper(sections);
+  const rvaToOff = createRvaToOffsetMapper(sections);
 
   // Coverage map (file offset regions)
   const coverage = [];
@@ -257,9 +281,17 @@ export async function parsePe(file) {
   addCov("Section headers", sectOff, NumberOfSections * 40);
 
   // Overlay detection & image size checks
-  let rawEnd = 0; for (const s of sections) rawEnd = Math.max(rawEnd, (s.pointerToRawData >>> 0) + (s.sizeOfRawData >>> 0));
-  const overlaySize = file.size > rawEnd ? (file.size - rawEnd) : 0;
-  let imageEnd = 0; for (const s of sections) imageEnd = Math.max(imageEnd, alignUp((s.virtualAddress >>> 0) + (s.virtualSize >>> 0), SectionAlignment >>> 0));
+  let rawEnd = 0;
+  for (const section of sections) {
+    const endOfSectionData = (section.pointerToRawData >>> 0) + (section.sizeOfRawData >>> 0);
+    rawEnd = Math.max(rawEnd, endOfSectionData);
+  }
+  const overlaySize = file.size > rawEnd ? file.size - rawEnd : 0;
+  let imageEnd = 0;
+  for (const section of sections) {
+    const endOfSectionImage = (section.virtualAddress >>> 0) + (section.virtualSize >>> 0);
+    imageEnd = Math.max(imageEnd, alignUpTo(endOfSectionImage, SectionAlignment >>> 0));
+  }
   const imageSizeMismatch = imageEnd !== (SizeOfImage >>> 0);
   // Sections raw regions
   for (const s of sections) addCov(`Section ${s.name} (raw)`, s.pointerToRawData, s.sizeOfRawData);
@@ -281,7 +313,7 @@ export async function parsePe(file) {
             if (dv.getUint32(0, true) === 0x53445352) { // 'RSDS'
               const g0 = dv.getUint32(4, true), g1 = dv.getUint16(8, true), g2 = dv.getUint16(10, true);
               const g3 = new Uint8Array(await file.slice(rawPtr + 12, rawPtr + 20).arrayBuffer());
-              const guid = `${hex(g0, 8).slice(2)}-${g1.toString(16).padStart(4, "0")}-${g2.toString(16).padStart(4, "0")}-${[...g3.slice(0, 2)].map(b => b.toString(16).padStart(2, "0")).join("")}-${[...g3.slice(2)].map(b => b.toString(16).padStart(2, "0")).join("")}`.toLowerCase();
+  const guid = `${toHex32(g0, 8).slice(2)}-${g1.toString(16).padStart(4, "0")}-${g2.toString(16).padStart(4, "0")}-${[...g3.slice(0, 2)].map(b => b.toString(16).padStart(2, "0")).join("")}-${[...g3.slice(2)].map(b => b.toString(16).padStart(2, "0")).join("")}`.toLowerCase();
               const age = new DataView(await file.slice(rawPtr + 20, rawPtr + 24).arrayBuffer()).getUint32(0, true);
               let pth = ""; {
                 let pos = rawPtr + 24;
@@ -358,8 +390,12 @@ export async function parsePe(file) {
         const desc = new DataView(await file.slice(off, off + 20).arrayBuffer());
         const OFT = desc.getUint32(0, true), TDS = desc.getUint32(4, true), Fwd = desc.getUint32(8, true), NameRVA = desc.getUint32(12, true), FT = desc.getUint32(16, true);
         if (OFT === 0 && TDS === 0 && Fwd === 0 && NameRVA === 0 && FT === 0) break;
-        const nameOff = rvaToOff(NameRVA); let dll = "";
-        if (nameOff != null) { const dv = new DataView(await file.slice(nameOff, nameOff + 256).arrayBuffer()); dll = ascii(dv, 0, 256); }
+        const nameOff = rvaToOff(NameRVA);
+        let dll = "";
+        if (nameOff != null) {
+          const dv = new DataView(await file.slice(nameOff, nameOff + 256).arrayBuffer());
+          dll = readAsciiString(dv, 0, 256);
+        }
         const thunkRva = OFT || FT; const thunkOff = rvaToOff(thunkRva); const funcs = [];
         if (thunkOff != null) {
           if (isPlus) {
@@ -427,8 +463,12 @@ export async function parsePe(file) {
         const AddressOfNames = dv.getUint32(32, true);
         const AddressOfNameOrdinals = dv.getUint32(36, true);
 
-        let dllName = ""; const nmOff = rvaToOff(NameRVA);
-        if (nmOff != null) dllName = ascii(new DataView(await file.slice(nmOff, nmOff + 256).arrayBuffer()), 0, 256);
+        let dllName = "";
+        const nmOff = rvaToOff(NameRVA);
+        if (nmOff != null) {
+          const nameView = new DataView(await file.slice(nmOff, nmOff + 256).arrayBuffer());
+          dllName = readAsciiString(nameView, 0, 256);
+        }
 
         const funcs = [];
         const eatOff = rvaToOff(AddressOfFunctions);
@@ -447,9 +487,13 @@ export async function parsePe(file) {
             for (let i = 0; i < NumberOfNames; i++) {
               const rva = ent.getUint32(i * 4, true);
               const no = eno.getUint16(i * 2, true);
-              const so = rvaToOff(rva);
-              let nm = ""; if (so != null) nm = ascii(new DataView(await file.slice(so, so + 256).arrayBuffer()), 0, 256);
-              nameMap.set(no, nm);
+          const so = rvaToOff(rva);
+          let nm = "";
+          if (so != null) {
+            const nameView = new DataView(await file.slice(so, so + 256).arrayBuffer());
+            nm = readAsciiString(nameView, 0, 256);
+          }
+          nameMap.set(no, nm);
             }
           }
           for (let ord = 0; ord < NumberOfFunctions; ord++) {
@@ -457,8 +501,11 @@ export async function parsePe(file) {
             const isForwarder = rva >= ex.rva && rva < (ex.rva + ex.size);
             let forwarder = null;
             if (isForwarder) {
-              const fOff = rvaToOff(rva);
-              if (fOff != null) forwarder = ascii(new DataView(await file.slice(fOff, fOff + 256).arrayBuffer()), 0, 256);
+            const fOff = rvaToOff(rva);
+            if (fOff != null) {
+              const forwardView = new DataView(await file.slice(fOff, fOff + 256).arrayBuffer());
+              forwarder = readAsciiString(forwardView, 0, 256);
+            }
             }
             funcs.push({ ordinal: Base + ord, name: nameMap.get(ord) || null, rva, forwarder });
           }
@@ -819,7 +866,8 @@ export async function parsePe(file) {
           let name = "";
           const nameOff = base + OffsetModuleName;
           if (nameOff >= base && nameOff < end) {
-            name = ascii(new DataView(await file.slice(nameOff, nameOff + 256).arrayBuffer()), 0, 256);
+            const nameView = new DataView(await file.slice(nameOff, nameOff + 256).arrayBuffer());
+            name = readAsciiString(nameView, 0, 256);
           }
           entries.push({ name, TimeDateStamp, NumberOfModuleForwarderRefs });
           off += 8;
@@ -851,9 +899,13 @@ export async function parsePe(file) {
           const UnloadInformationTableRVA = dv.getUint32(24, true);
           const TimeDateStamp = dv.getUint32(28, true);
           if (Attributes === 0 && DllNameRVA === 0) break;
-          let name = ""; {
+          let name = "";
+          {
             const nOff = rvaToOff(DllNameRVA);
-            if (nOff != null) name = ascii(new DataView(await file.slice(nOff, nOff + 256).arrayBuffer()), 0, 256);
+            if (nOff != null) {
+              const nameView = new DataView(await file.slice(nOff, nOff + 256).arrayBuffer());
+              name = readAsciiString(nameView, 0, 256);
+            }
           }
           // Convert possible VA to RVA depending on Attributes bit 0
           const rvaFromMaybeVa = (val) => {
