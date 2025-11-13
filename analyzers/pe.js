@@ -1,98 +1,7 @@
 "use strict";
 
 import { toHex32, readAsciiString, collectPrintableRuns, alignUpTo } from "../utils.js";
-
-// PE constants used by parser and renderer
-export const MACHINE = [
-  [0x0000, "UNKNOWN"], [0x014c, "x86 (I386)"], [0x8664, "x86-64 (AMD64)"],
-  [0x01c0, "ARM"], [0x01c4, "ARMv7 Thumb-2 (ARMNT)"], [0xaa64, "ARM64"], [0xa641, "ARM64EC"], [0xa64e, "ARM64X"],
-  [0x0200, "IA-64"], [0x0166, "MIPS"], [0x0168, "MIPS16"], [0x01f0, "POWERPC"], [0x01f1, "POWERPCFP"],
-  [0x9041, "M32R"], [0x01a2, "SH3"], [0x01a3, "SH3DSP"], [0x01a6, "SH4"], [0x01a8, "SH5"], [0x01c2, "ARMv7 (old)"],
-  [0x0EBC, "EFI Byte Code"], [0x5032, "RISC-V32"], [0x5064, "RISC-V64"], [0x5128, "RISC-V128"]
-];
-
-export const SUBSYSTEMS = [
-  [0, "Unknown"], [1, "Native"], [2, "Windows GUI"], [3, "Windows CUI"], [5, "OS/2 CUI"], [7, "POSIX CUI"],
-  [9, "Windows CE GUI"], [10, "EFI Application"], [11, "EFI Boot Service Driver"], [12, "EFI Runtime Driver"],
-  [13, "EFI ROM"], [14, "XBOX"], [16, "Windows Boot Application"]
-];
-
-export const CHAR_FLAGS = [
-  [0x0001, "RELOCS_STRIPPED", "Relocations stripped from the file"],
-  [0x0002, "EXECUTABLE_IMAGE", "Image is valid and can run"],
-  [0x0004, "LINE_NUMS_STRIPPED", "COFF line numbers removed (deprecated)"],
-  [0x0008, "LOCAL_SYMS_STRIPPED", "Local symbols removed (COFF)"],
-  [0x0010, "AGGRESSIVE_WS_TRIM", "Aggressively trim working set (obsolete)"],
-  [0x0020, "LARGE_ADDRESS_AWARE", "Image can handle >2GB addresses"],
-  [0x0040, "BYTES_REVERSED_LO", "Little-endian byte ordering (obsolete)"],
-  [0x0080, "32BIT_MACHINE", "Image is designed for a 32-bit machine"],
-  [0x0100, "DEBUG_STRIPPED", "Debug info removed from file"],
-  [0x0200, "REMOVABLE_RUN_FROM_SWAP", "Copy image to swap file if on removable media"],
-  [0x0400, "NET_RUN_FROM_SWAP", "Copy image to swap file if on network"],
-  [0x0800, "SYSTEM", "System file (kernel/driver)"],
-  [0x1000, "DLL", "Dynamic-link library"],
-  [0x2000, "UP_SYSTEM_ONLY", "Uni-processor machine only"],
-  [0x8000, "BYTES_REVERSED_HI", "Big-endian byte ordering (obsolete)"],
-];
-
-export const DLL_FLAGS = [
-  [0x0020, "HIGH_ENTROPY_VA", "Indicates 64-bit high-entropy ASLR support (PE32+)"],
-  [0x0040, "DYNAMIC_BASE", "Image is relocatable (ASLR)"],
-  [0x0080, "FORCE_INTEGRITY", "Code integrity checks are enforced"],
-  [0x0100, "NX_COMPAT", "Image is compatible with DEP (no-execute)"],
-  [0x0200, "NO_ISOLATION", "Isolation disabled (no SxS)"],
-  [0x0400, "NO_SEH", "No structured exception handling"],
-  [0x0800, "NO_BIND", "Do not bind to import addresses"],
-  [0x1000, "APPCONTAINER", "Must execute in AppContainer"],
-  [0x2000, "WDM_DRIVER", "WDM driver"],
-  [0x4000, "GUARD_CF", "Control Flow Guard enabled"],
-  [0x8000, "TERMINAL_SERVER_AWARE", "Terminal Server aware"],
-];
-
-export const DD_NAMES = [
-  "EXPORT", "IMPORT", "RESOURCE", "EXCEPTION", "SECURITY", "BASERELOC", "DEBUG", "ARCHITECTURE",
-  "GLOBALPTR", "TLS", "LOAD_CONFIG", "BOUND_IMPORT", "IAT", "DELAY_IMPORT", "CLR_RUNTIME", "RESERVED"
-];
-
-export const DD_TIPS = {
-  EXPORT: "Export directory: function addresses and names exported by the image.",
-  IMPORT: "Import directory: modules and symbols that this image depends on (link-time).",
-  RESOURCE: "Resource directory: version, icons, dialogs, manifests, etc.",
-  EXCEPTION: "Exception directory (.pdata): unwind info for x64 structured exception handling.",
-  SECURITY: "Security directory: WIN_CERTIFICATE / Authenticode signatures (not mapped into memory).",
-  BASERELOC: "Base relocation directory (.reloc): fixups applied when image is not loaded at preferred base.",
-  DEBUG: "Debug directory: CodeView/RSDS pointers to PDBs, misc debug info.",
-  TLS: "Thread Local Storage: per-thread data and optional TLS callbacks.",
-  LOAD_CONFIG: "Load Configuration: security hardening structures (CFG, SEH tables, GS cookie).",
-  IAT: "Import Address Table: resolved addresses loaded by the loader (runtime).",
-  DELAY_IMPORT: "Delay-load import descriptors (resolved on first use).",
-  CLR_RUNTIME: ".NET/CLR header for managed assemblies."
-};
-
-export const SEC_FLAG_TEXTS = [
-  [0x00000020, "CNT_CODE"],
-  [0x00000040, "CNT_INITIALIZED_DATA"],
-  [0x00000080, "CNT_UNINITIALIZED_DATA"],
-  [0x02000000, "DISCARDABLE"],
-  [0x04000000, "NOT_CACHED"],
-  [0x08000000, "NOT_PAGED"],
-  [0x10000000, "SHARED"],
-  [0x20000000, "EXECUTE"],
-  [0x40000000, "READ"],
-  [0x80000000, "WRITE"],
-];
-
-export const GUARD_FLAGS = [
-  [0x00000100, "CF_INSTRUMENTED"],
-  [0x00000200, "CF_WRITE_CHECKED"],
-  [0x00000400, "CF_FUNCTION_TABLE_PRESENT"],
-  [0x00000800, "SECURITY_COOKIE_UNUSED"],
-  [0x00001000, "CF_LONGJUMP_TARGET"],
-  [0x00004000, "CF_FUNCTION_TABLE_VALID"],
-  [0x00008000, "CF_EXPORT_SUPPRESSION_INFO_PRESENT"],
-  [0x00010000, "CF_ENABLE_EXPORT_SUPPRESSION"],
-  [0x00020000, "CF_LONGJUMP_TABLE_PRESENT"],
-];
+import { MACHINE, DD_NAMES } from "./pe-constants.js";
 
 export const peProbe = dataView =>
   dataView.byteLength >= 0x40 && dataView.getUint16(0, true) === 0x5a4d
@@ -144,114 +53,171 @@ function base64FromU8(u8) {
   try { return btoa(s); } catch { return ""; }
 }
 
-export async function parsePe(file) {
-  const head = new DataView(await file.slice(0, Math.min(file.size, 0x400)).arrayBuffer());
-  const probe = peProbe(head); if (!probe) return null;
-  const e_lfanew = probe.e_lfanew; if (e_lfanew == null || e_lfanew + 24 > file.size) return null;
-
-  // DOS header
-  const H = head;
+async function parseDosHeaderAndStub(file, headView, peHeaderOffset) {
   const dos = {
-    e_magic: readAsciiString(H, 0, 2),
-    e_cblp: H.getUint16(0x02, true),
-    e_cp: H.getUint16(0x04, true),
-    e_crlc: H.getUint16(0x06, true),
-    e_cparhdr: H.getUint16(0x08, true),
-    e_minalloc: H.getUint16(0x0a, true),
-    e_maxalloc: H.getUint16(0x0c, true),
-    e_ss: H.getUint16(0x0e, true),
-    e_sp: H.getUint16(0x10, true),
-    e_csum: H.getUint16(0x12, true),
-    e_ip: H.getUint16(0x14, true),
-    e_cs: H.getUint16(0x16, true),
-    e_lfarlc: H.getUint16(0x18, true),
-    e_ovno: H.getUint16(0x1a, true),
-    e_res: [H.getUint16(0x1c, true), H.getUint16(0x1e, true), H.getUint16(0x20, true), H.getUint16(0x22, true)],
-    e_oemid: H.getUint16(0x24, true),
-    e_oeminfo: H.getUint16(0x26, true),
-    e_res2: Array.from({ length: 10 }, (_, i) => H.getUint16(0x28 + i * 2, true)),
-    e_lfanew
+    e_magic: readAsciiString(headView, 0, 2),
+    e_cblp: headView.getUint16(0x02, true),
+    e_cp: headView.getUint16(0x04, true),
+    e_crlc: headView.getUint16(0x06, true),
+    e_cparhdr: headView.getUint16(0x08, true),
+    e_minalloc: headView.getUint16(0x0a, true),
+    e_maxalloc: headView.getUint16(0x0c, true),
+    e_ss: headView.getUint16(0x0e, true),
+    e_sp: headView.getUint16(0x10, true),
+    e_csum: headView.getUint16(0x12, true),
+    e_ip: headView.getUint16(0x14, true),
+    e_cs: headView.getUint16(0x16, true),
+    e_lfarlc: headView.getUint16(0x18, true),
+    e_ovno: headView.getUint16(0x1a, true),
+    e_res: [headView.getUint16(0x1c, true), headView.getUint16(0x1e, true), headView.getUint16(0x20, true), headView.getUint16(0x22, true)],
+    e_oemid: headView.getUint16(0x24, true),
+    e_oeminfo: headView.getUint16(0x26, true),
+    e_res2: Array.from({ length: 10 }, (_, index) => headView.getUint16(0x28 + index * 2, true)),
+    e_lfanew: peHeaderOffset
   };
   let stub = { kind: "none", note: "" };
-  if (e_lfanew > 0x40) {
-    const len = Math.min(e_lfanew - 0x40, 64 * 1024);
-    const u8 = new Uint8Array(await file.slice(0x40, 0x40 + len).arrayBuffer());
-    const runs = collectPrintableRuns(u8, 12);
-    const classic = runs.find(s => /this program cannot be run in dos mode/i.test(s));
-    if (classic) stub = { kind: "standard", note: "classic DOS message", strings: [classic] };
-    else if (runs.length) stub = { kind: "non-standard", note: "printable text", strings: runs.slice(0, 4) };
+  if (peHeaderOffset > 0x40) {
+    const stubLength = Math.min(peHeaderOffset - 0x40, 64 * 1024);
+    const stubBytes = new Uint8Array(await file.slice(0x40, 0x40 + stubLength).arrayBuffer());
+    const printableRuns = collectPrintableRuns(stubBytes, 12);
+    const classicMessage = printableRuns.find(text => /this program cannot be run in dos mode/i.test(text));
+    if (classicMessage) stub = { kind: "standard", note: "classic DOS message", strings: [classicMessage] };
+    else if (printableRuns.length) stub = { kind: "non-standard", note: "printable text", strings: printableRuns.slice(0, 4) };
   }
   dos.stub = stub;
+  return dos;
+}
 
-  // PE signature + COFF
-  const coffDV = new DataView(await file.slice(e_lfanew, e_lfanew + 24).arrayBuffer());
-  const sig = String.fromCharCode(coffDV.getUint8(0)) + String.fromCharCode(coffDV.getUint8(1)) + String.fromCharCode(coffDV.getUint8(2)) + String.fromCharCode(coffDV.getUint8(3));
-  if (sig !== "PE\0\0") return null;
-  const coffOff = 4;
-  const Machine = coffDV.getUint16(coffOff + 0, true);
-  const NumberOfSections = coffDV.getUint16(coffOff + 2, true);
-  const TimeDateStamp = coffDV.getUint32(coffOff + 4, true);
-  const PointerToSymbolTable = coffDV.getUint32(coffOff + 8, true);
-  const NumberOfSymbols = coffDV.getUint32(coffOff + 12, true);
-  const SizeOfOptionalHeader = coffDV.getUint16(coffOff + 16, true);
-  const Characteristics = coffDV.getUint16(coffOff + 18, true);
+async function parseCoffHeader(file, peHeaderOffset) {
+  const headerView = new DataView(await file.slice(peHeaderOffset, peHeaderOffset + 24).arrayBuffer());
+  const signature =
+    String.fromCharCode(headerView.getUint8(0)) +
+    String.fromCharCode(headerView.getUint8(1)) +
+    String.fromCharCode(headerView.getUint8(2)) +
+    String.fromCharCode(headerView.getUint8(3));
+  if (signature !== "PE\0\0") return null;
+  const coffOffset = 4;
+  const Machine = headerView.getUint16(coffOffset + 0, true);
+  const NumberOfSections = headerView.getUint16(coffOffset + 2, true);
+  const TimeDateStamp = headerView.getUint32(coffOffset + 4, true);
+  const PointerToSymbolTable = headerView.getUint32(coffOffset + 8, true);
+  const NumberOfSymbols = headerView.getUint32(coffOffset + 12, true);
+  const SizeOfOptionalHeader = headerView.getUint16(coffOffset + 16, true);
+  const Characteristics = headerView.getUint16(coffOffset + 18, true);
+  return { Machine, NumberOfSections, TimeDateStamp, PointerToSymbolTable, NumberOfSymbols, SizeOfOptionalHeader, Characteristics };
+}
 
-  // Optional header
-  const optOff = e_lfanew + 24;
-  const optDV = new DataView(await file.slice(optOff, optOff + Math.min(SizeOfOptionalHeader, 0x600)).arrayBuffer());
-  let p = 0; const Magic = optDV.getUint16(p, true); p += 2;
+async function parseOptionalHeaderAndDirectories(file, peHeaderOffset, sizeOfOptionalHeader) {
+  const optionalHeaderOffset = peHeaderOffset + 24;
+  const optionalHeaderView = new DataView(await file.slice(optionalHeaderOffset, optionalHeaderOffset + Math.min(sizeOfOptionalHeader, 0x600)).arrayBuffer());
+  let position = 0;
+  const Magic = optionalHeaderView.getUint16(position, true); position += 2;
   const isPlus = Magic === 0x20b, is32 = Magic === 0x10b;
-  const LinkerMajor = optDV.getUint8(p++), LinkerMinor = optDV.getUint8(p++);
-  const SizeOfCode = optDV.getUint32(p, true); p += 4;
-  const SizeOfInitializedData = optDV.getUint32(p, true); p += 4;
-  const SizeOfUninitializedData = optDV.getUint32(p, true); p += 4;
-  const AddressOfEntryPoint = optDV.getUint32(p, true); p += 4;
-  const BaseOfCode = optDV.getUint32(p, true); p += 4;
-  let BaseOfData = is32 ? optDV.getUint32(p, true) : undefined; if (is32) p += 4;
-  const ImageBase = isPlus ? Number(optDV.getBigUint64(p, true)) : optDV.getUint32(p, true); p += isPlus ? 8 : 4;
-  const SectionAlignment = optDV.getUint32(p, true); p += 4;
-  const FileAlignment = optDV.getUint32(p, true); p += 4;
-  const OSVersionMajor = optDV.getUint16(p, true), OSVersionMinor = optDV.getUint16(p + 2, true); p += 4;
-  const ImageVersionMajor = optDV.getUint16(p, true), ImageVersionMinor = optDV.getUint16(p + 2, true); p += 4;
-  const SubsystemVersionMajor = optDV.getUint16(p, true), SubsystemVersionMinor = optDV.getUint16(p + 2, true); p += 4;
-  const Win32VersionValue = optDV.getUint32(p, true); p += 4;
-  const SizeOfImage = optDV.getUint32(p, true); p += 4;
-  const SizeOfHeaders = optDV.getUint32(p, true); p += 4;
-  const CheckSum = optDV.getUint32(p, true); p += 4;
-  const Subsystem = optDV.getUint16(p, true); p += 2;
-  const DllCharacteristics = optDV.getUint16(p, true); p += 2;
-  const SizeOfStackReserve = isPlus ? Number(optDV.getBigUint64(p, true)) : optDV.getUint32(p, true); p += isPlus ? 8 : 4;
-  const SizeOfStackCommit = isPlus ? Number(optDV.getBigUint64(p, true)) : optDV.getUint32(p, true); p += isPlus ? 8 : 4;
-  const SizeOfHeapReserve = isPlus ? Number(optDV.getBigUint64(p, true)) : optDV.getUint32(p, true); p += isPlus ? 8 : 4;
-  const SizeOfHeapCommit = isPlus ? Number(optDV.getBigUint64(p, true)) : optDV.getUint32(p, true); p += isPlus ? 8 : 4;
-  const LoaderFlags = optDV.getUint32(p, true); p += 4;
-  const NumberOfRvaAndSizes = optDV.getUint32(p, true); p += 4;
-
-  const ddStartRel = p; // relative to optOff
-  const ddCount = Math.min(16, NumberOfRvaAndSizes, Math.floor((optDV.byteLength - p) / 8));
+  const LinkerMajor = optionalHeaderView.getUint8(position++), LinkerMinor = optionalHeaderView.getUint8(position++);
+  const SizeOfCode = optionalHeaderView.getUint32(position, true); position += 4;
+  const SizeOfInitializedData = optionalHeaderView.getUint32(position, true); position += 4;
+  const SizeOfUninitializedData = optionalHeaderView.getUint32(position, true); position += 4;
+  const AddressOfEntryPoint = optionalHeaderView.getUint32(position, true); position += 4;
+  const BaseOfCode = optionalHeaderView.getUint32(position, true); position += 4;
+  let BaseOfData = is32 ? optionalHeaderView.getUint32(position, true) : undefined;
+  if (is32) position += 4;
+  const ImageBase = isPlus ? Number(optionalHeaderView.getBigUint64(position, true)) : optionalHeaderView.getUint32(position, true);
+  position += isPlus ? 8 : 4;
+  const SectionAlignment = optionalHeaderView.getUint32(position, true); position += 4;
+  const FileAlignment = optionalHeaderView.getUint32(position, true); position += 4;
+  const OSVersionMajor = optionalHeaderView.getUint16(position, true), OSVersionMinor = optionalHeaderView.getUint16(position + 2, true);
+  position += 4;
+  const ImageVersionMajor = optionalHeaderView.getUint16(position, true), ImageVersionMinor = optionalHeaderView.getUint16(position + 2, true);
+  position += 4;
+  const SubsystemVersionMajor = optionalHeaderView.getUint16(position, true), SubsystemVersionMinor = optionalHeaderView.getUint16(position + 2, true);
+  position += 4;
+  const Win32VersionValue = optionalHeaderView.getUint32(position, true);
+  position += 4;
+  const SizeOfImage = optionalHeaderView.getUint32(position, true);
+  position += 4;
+  const SizeOfHeaders = optionalHeaderView.getUint32(position, true);
+  position += 4;
+  const CheckSum = optionalHeaderView.getUint32(position, true);
+  position += 4;
+  const Subsystem = optionalHeaderView.getUint16(position, true);
+  position += 2;
+  const DllCharacteristics = optionalHeaderView.getUint16(position, true);
+  position += 2;
+  const SizeOfStackReserve = isPlus ? Number(optionalHeaderView.getBigUint64(position, true)) : optionalHeaderView.getUint32(position, true);
+  position += isPlus ? 8 : 4;
+  const SizeOfStackCommit = isPlus ? Number(optionalHeaderView.getBigUint64(position, true)) : optionalHeaderView.getUint32(position, true);
+  position += isPlus ? 8 : 4;
+  const SizeOfHeapReserve = isPlus ? Number(optionalHeaderView.getBigUint64(position, true)) : optionalHeaderView.getUint32(position, true);
+  position += isPlus ? 8 : 4;
+  const SizeOfHeapCommit = isPlus ? Number(optionalHeaderView.getBigUint64(position, true)) : optionalHeaderView.getUint32(position, true);
+  position += isPlus ? 8 : 4;
+  const LoaderFlags = optionalHeaderView.getUint32(position, true);
+  position += 4;
+  const NumberOfRvaAndSizes = optionalHeaderView.getUint32(position, true);
+  position += 4;
+  const ddStartRel = position;
+  const ddCount = Math.min(16, NumberOfRvaAndSizes, Math.floor((optionalHeaderView.byteLength - position) / 8));
   const dataDirs = [];
-  for (let i = 0; i < ddCount; i++) {
-    const rva = optDV.getUint32(p + i * 8, true), size = optDV.getUint32(p + i * 8 + 4, true);
-    dataDirs.push({ index: i, name: DD_NAMES[i] || "", rva, size });
+  for (let index = 0; index < ddCount; index++) {
+    const entryOffset = position + index * 8;
+    const rva = optionalHeaderView.getUint32(entryOffset, true);
+    const size = optionalHeaderView.getUint32(entryOffset + 4, true);
+    dataDirs.push({ index, name: DD_NAMES[index] || "", rva, size });
   }
+  const opt = {
+    Magic,
+    isPlus,
+    is32,
+    LinkerMajor,
+    LinkerMinor,
+    SizeOfCode,
+    SizeOfInitializedData,
+    SizeOfUninitializedData,
+    AddressOfEntryPoint,
+    BaseOfCode,
+    BaseOfData,
+    ImageBase,
+    SectionAlignment,
+    FileAlignment,
+    OSVersionMajor,
+    OSVersionMinor,
+    ImageVersionMajor,
+    ImageVersionMinor,
+    SubsystemVersionMajor,
+    SubsystemVersionMinor,
+    Win32VersionValue,
+    SizeOfImage,
+    SizeOfHeaders,
+    CheckSum,
+    Subsystem,
+    DllCharacteristics,
+    SizeOfStackReserve,
+    SizeOfStackCommit,
+    SizeOfHeapReserve,
+    SizeOfHeapCommit,
+    LoaderFlags,
+    NumberOfRvaAndSizes
+  };
+  return { optOff: optionalHeaderOffset, ddStartRel, ddCount, dataDirs, opt };
+}
 
-  // Sections
-  const sectOff = optOff + SizeOfOptionalHeader;
-  const sectDV = new DataView(await file.slice(sectOff, sectOff + NumberOfSections * 40).arrayBuffer());
+async function parseSectionHeaders(file, optionalHeaderOffset, sizeOfOptionalHeader, numberOfSections) {
+  const sectionHeadersOffset = optionalHeaderOffset + sizeOfOptionalHeader;
+  const sectionHeadersView = new DataView(await file.slice(sectionHeadersOffset, sectionHeadersOffset + numberOfSections * 40).arrayBuffer());
   const sections = [];
-  for (let i = 0; i < NumberOfSections; i++) {
-    const baseOffset = i * 40;
+  for (let sectionIndex = 0; sectionIndex < numberOfSections; sectionIndex++) {
+    const baseOffset = sectionIndex * 40;
     let name = "";
-    for (let j = 0; j < 8; j++) {
-      const codePoint = sectDV.getUint8(baseOffset + j);
+    for (let nameIndex = 0; nameIndex < 8; nameIndex++) {
+      const codePoint = sectionHeadersView.getUint8(baseOffset + nameIndex);
       if (codePoint === 0) break;
       name += String.fromCharCode(codePoint);
     }
-    const virtualSize = sectDV.getUint32(baseOffset + 8, true);
-    const virtualAddress = sectDV.getUint32(baseOffset + 12, true);
-    const sizeOfRawData = sectDV.getUint32(baseOffset + 16, true);
-    const pointerToRawData = sectDV.getUint32(baseOffset + 20, true);
-    const characteristics = sectDV.getUint32(baseOffset + 36, true);
+    const virtualSize = sectionHeadersView.getUint32(baseOffset + 8, true);
+    const virtualAddress = sectionHeadersView.getUint32(baseOffset + 12, true);
+    const sizeOfRawData = sectionHeadersView.getUint32(baseOffset + 16, true);
+    const pointerToRawData = sectionHeadersView.getUint32(baseOffset + 20, true);
+    const characteristics = sectionHeadersView.getUint32(baseOffset + 36, true);
     sections.push({
       name: name || "(unnamed)",
       virtualSize,
@@ -262,39 +228,77 @@ export async function parsePe(file) {
     });
   }
   const rvaToOff = createRvaToOffsetMapper(sections);
+  return { sections, rvaToOff, sectOff: sectionHeadersOffset };
+}
 
-  // Coverage map (file offset regions)
+function buildCoverage(fileSize, peHeaderOffset, coff, optionalHeaderOffset, ddStartRel, ddCount, sectionHeadersOffset, sections, sectionAlignment, sizeOfImage) {
   const coverage = [];
   const addCov = (label, off, size) => {
     if (!Number.isFinite(off) || !Number.isFinite(size) || off < 0 || size <= 0) return;
     coverage.push({ label, off: off >>> 0, end: (off >>> 0) + (size >>> 0), size: size >>> 0 });
   };
-  // DOS header + stub
-  addCov("DOS header + stub", 0, Math.min(file.size, Math.max(64, e_lfanew)));
-  // PE sig + COFF
-  addCov("PE signature + COFF", e_lfanew, 24);
-  // Optional header
-  addCov("Optional header", optOff, SizeOfOptionalHeader);
-  // Data directories subrange in optional header
-  addCov("Data directories", optOff + ddStartRel, ddCount * 8);
-  // Section headers
-  addCov("Section headers", sectOff, NumberOfSections * 40);
-
-  // Overlay detection & image size checks
+  addCov("DOS header + stub", 0, Math.min(fileSize, Math.max(64, peHeaderOffset)));
+  addCov("PE signature + COFF", peHeaderOffset, 24);
+  addCov("Optional header", optionalHeaderOffset, coff.SizeOfOptionalHeader);
+  addCov("Data directories", optionalHeaderOffset + ddStartRel, ddCount * 8);
+  addCov("Section headers", sectionHeadersOffset, coff.NumberOfSections * 40);
   let rawEnd = 0;
   for (const section of sections) {
     const endOfSectionData = (section.pointerToRawData >>> 0) + (section.sizeOfRawData >>> 0);
     rawEnd = Math.max(rawEnd, endOfSectionData);
   }
-  const overlaySize = file.size > rawEnd ? file.size - rawEnd : 0;
+  const overlaySize = fileSize > rawEnd ? fileSize - rawEnd : 0;
   let imageEnd = 0;
   for (const section of sections) {
     const endOfSectionImage = (section.virtualAddress >>> 0) + (section.virtualSize >>> 0);
-    imageEnd = Math.max(imageEnd, alignUpTo(endOfSectionImage, SectionAlignment >>> 0));
+    imageEnd = Math.max(imageEnd, alignUpTo(endOfSectionImage, sectionAlignment >>> 0));
   }
-  const imageSizeMismatch = imageEnd !== (SizeOfImage >>> 0);
-  // Sections raw regions
-  for (const s of sections) addCov(`Section ${s.name} (raw)`, s.pointerToRawData, s.sizeOfRawData);
+  const imageSizeMismatch = imageEnd !== (sizeOfImage >>> 0);
+  for (const section of sections) addCov(`Section ${section.name} (raw)`, section.pointerToRawData, section.sizeOfRawData);
+  return { coverage, addCov, overlaySize, imageEnd, imageSizeMismatch };
+}
+
+async function addSectionEntropies(file, sections) {
+  for (const section of sections) {
+    const { pointerToRawData, sizeOfRawData } = section;
+    if (pointerToRawData && sizeOfRawData) {
+      const bytes = new Uint8Array(await file.slice(pointerToRawData, pointerToRawData + sizeOfRawData).arrayBuffer());
+      section.entropy = shannonEntropy(bytes);
+    } else {
+      section.entropy = 0;
+    }
+  }
+}
+
+export async function parsePe(file) {
+  const head = new DataView(await file.slice(0, Math.min(file.size, 0x400)).arrayBuffer());
+  const probe = peProbe(head);
+  if (!probe) return null;
+  const e_lfanew = probe.e_lfanew;
+  if (e_lfanew == null || e_lfanew + 24 > file.size) return null;
+  const dos = await parseDosHeaderAndStub(file, head, e_lfanew);
+  const coff = await parseCoffHeader(file, e_lfanew);
+  if (!coff) return null;
+  const optional = await parseOptionalHeaderAndDirectories(file, e_lfanew, coff.SizeOfOptionalHeader);
+  const { optOff, ddStartRel, ddCount, dataDirs, opt } = optional;
+  const sectInfo = await parseSectionHeaders(file, optOff, coff.SizeOfOptionalHeader, coff.NumberOfSections);
+  const { sections, rvaToOff, sectOff } = sectInfo;
+  const coverageInfo = buildCoverage(file.size, e_lfanew, coff, optOff, ddStartRel, ddCount, sectOff, sections, opt.SectionAlignment, opt.SizeOfImage);
+  const { coverage, addCov, overlaySize, imageEnd, imageSizeMismatch } = coverageInfo;
+  const { isPlus, ImageBase } = opt;
+  let entrySection = null;
+  if (opt.AddressOfEntryPoint) {
+    const entryRva = opt.AddressOfEntryPoint >>> 0;
+    for (let index = 0; index < sections.length; index++) {
+      const section = sections[index];
+      const start = section.virtualAddress >>> 0;
+      const end = (start + (section.virtualSize >>> 0)) >>> 0;
+      if (entryRva >= start && entryRva < end) {
+        entrySection = { name: section.name, index };
+        break;
+      }
+    }
+  }
 
   // Debug: RSDS
   let rsds = null; {
@@ -589,14 +593,7 @@ export async function parsePe(file) {
     }
   }
 
-  // Section entropies
-  for (const s of sections) {
-    const { pointerToRawData: pr, sizeOfRawData: sz } = s;
-    if (pr && sz) {
-      const u8 = new Uint8Array(await file.slice(pr, pr + sz).arrayBuffer());
-      s.entropy = shannonEntropy(u8);
-    } else { s.entropy = 0; }
-  }
+  await addSectionEntropies(file, sections);
 
   // Resource directory (summary)
   let resources = null; {
@@ -1051,11 +1048,31 @@ export async function parsePe(file) {
   }
 
   return {
-    dos, signature: "PE",
-    coff: { Machine, NumberOfSections, TimeDateStamp, PointerToSymbolTable, NumberOfSymbols, SizeOfOptionalHeader, Characteristics },
-    opt: { Magic, isPlus, is32, LinkerMajor, LinkerMinor, SizeOfCode, SizeOfInitializedData, SizeOfUninitializedData, AddressOfEntryPoint, BaseOfCode, BaseOfData, ImageBase, SectionAlignment, FileAlignment, OSVersionMajor, OSVersionMinor, ImageVersionMajor, ImageVersionMinor, SubsystemVersionMajor, SubsystemVersionMinor, Win32VersionValue, SizeOfImage, SizeOfHeaders, CheckSum, Subsystem, DllCharacteristics, SizeOfStackReserve, SizeOfStackCommit, SizeOfHeapReserve, SizeOfHeapCommit, LoaderFlags, NumberOfRvaAndSizes },
-    dirs: dataDirs, sections, rvaToOff, imports, rsds, loadcfg, exports, tls, reloc, exception, boundImports, delayImports, clr, security, iat, resources,
-    overlaySize, imageEnd, imageSizeMismatch, coverage,
+    dos,
+    signature: "PE",
+    coff,
+    opt,
+    dirs: dataDirs,
+    sections,
+    entrySection,
+    rvaToOff,
+    imports,
+    rsds,
+    loadcfg,
+    exports,
+    tls,
+    reloc,
+    exception,
+    boundImports,
+    delayImports,
+    clr,
+    security,
+    iat,
+    resources,
+    overlaySize,
+    imageEnd,
+    imageSizeMismatch,
+    coverage,
     hasCert: !!(dataDirs.find(d => d.name === "SECURITY")?.size)
   };
 }

@@ -1,7 +1,7 @@
 "use strict";
 
 import { dd, rowOpts, rowFlags, humanSize, hex, isoOrDash, safe } from "./utils.js";
-import { MACHINE, SUBSYSTEMS, CHAR_FLAGS, DLL_FLAGS, SEC_FLAG_TEXTS, GUARD_FLAGS, DD_TIPS } from "./analyzers/pe.js";
+import { MACHINE, SUBSYSTEMS, CHAR_FLAGS, DLL_FLAGS, SEC_FLAG_TEXTS, GUARD_FLAGS, DD_TIPS } from "./analyzers/pe-constants.js";
 
 const sectionHintMap = {
   ".text": "Code (executable instructions)",
@@ -36,6 +36,14 @@ function winVersionName(maj, min) {
 export function renderPe(pe) {
   if (!pe) return "";
   const out = [];
+  const bits = pe.opt.isPlus ? "64-bit" : "32-bit";
+  const isDll = (pe.coff.Characteristics & 0x2000) !== 0;
+  const roleText = isDll ? "a reusable library (DLL)" : "an executable program";
+  const sectionCount = Array.isArray(pe.sections) ? pe.sections.length : pe.coff.NumberOfSections;
+  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Big picture</h4>`);
+  out.push(`<div class="smallNote">This Portable Executable is a ${bits} Windows ${roleText}. The file is split into headers (rules and map) and ${sectionCount} sections (code, data, resources and more).</div>`);
+  out.push(`<div class="smallNote">You can read it like a book: DOS and PE headers are the table of contents, the section table lists the chapters, and later views show imports, exports, resources and security so you can see how the program talks to the operating system.</div>`);
+  out.push(`</section>`);
 
   // DOS header
   out.push(`<section>`);
@@ -85,7 +93,8 @@ export function renderPe(pe) {
   out.push(dd("SizeOfCode", humanSize(oh.SizeOfCode), "Total size of all code sections (typically .text)."));
   out.push(dd("SizeOfInitializedData", humanSize(oh.SizeOfInitializedData), "Total size of all initialized data (.rdata, .data)."));
   out.push(dd("SizeOfUninitializedData", humanSize(oh.SizeOfUninitializedData), "Total size of uninitialized data (.bss)."));
-  out.push(dd("AddressOfEntryPoint", hex(oh.AddressOfEntryPoint, 8), "RVA of process/thread entry point."));
+  const entrySectionInfo = pe.entrySection ? `Usually points into section ${pe.entrySection.name || "(unnamed)"} (index ${pe.entrySection.index}).` : "Should point into one of the code sections.";
+  out.push(dd("AddressOfEntryPoint", hex(oh.AddressOfEntryPoint, 8), `RVA of process/thread entry point. ${entrySectionInfo}`));
   out.push(dd("BaseOfCode", hex(oh.BaseOfCode, 8), "RVA where code section (.text) begins."));
   if (oh.BaseOfData !== undefined) out.push(dd("BaseOfData", hex(oh.BaseOfData, 8), "RVA where data section (.data) begins (PE32 only)."));
   out.push(dd("ImageBase", isPlus ? ("0x" + BigInt(oh.ImageBase).toString(16)) : hex(oh.ImageBase, 8), "Preferred image load address (virtual address)."));
@@ -129,7 +138,7 @@ export function renderPe(pe) {
         <td>${hex(s.virtualAddress, 8)}</td>
         <td>${humanSize(s.sizeOfRawData)}</td>
         <td>${hex(s.pointerToRawData, 8)}</td>
-        <td title="Shannon entropy (0..8 bits/byte)">${(s.entropy ?? 0).toFixed(2)}</td>
+        <td title="Shannon entropy (0..8 bits/byte). Near 0 means very simple or empty, near 8 means very mixed data (often compressed or encrypted).">${(s.entropy ?? 0).toFixed(2)}</td>
         <td>${flags.join(" &middot; ")}</td>
       </tr>`);
     }
@@ -164,7 +173,7 @@ export function renderPe(pe) {
 
   // Import table
   if (pe.imports?.length) {
-    out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import table</h4><div class="smallNote">Hint index speeds up runtime name lookup. Ordinal imports may indicate special APIs.</div>`);
+    out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import table</h4><div class="smallNote">Imports list functions this file expects other modules to provide. Hint index speeds up runtime name lookup, and ordinal-only imports often point to more special or low-level routines.</div>`);
     for (const mod of pe.imports) {
       const dll = safe(mod.dll || "(unknown DLL)");
       out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${dll}</b> — ${mod.functions.length} function(s)</summary>`);
