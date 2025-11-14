@@ -254,6 +254,9 @@ function buildCoverage(fileSize, peHeaderOffset, coff, optionalHeaderOffset, ddS
     imageEnd = Math.max(imageEnd, alignUpTo(endOfSectionImage, sectionAlignment >>> 0));
   }
   const imageSizeMismatch = imageEnd !== (sizeOfImage >>> 0);
+  if (overlaySize > 0) {
+    addCov("Overlay (data after last section)", rawEnd, overlaySize);
+  }
   for (const section of sections) addCov(`Section ${section.name} (raw)`, section.pointerToRawData, section.sizeOfRawData);
   return { coverage, addCov, overlaySize, imageEnd, imageSizeMismatch };
 }
@@ -746,14 +749,64 @@ export async function parsePe(file) {
                                   }
                                 }
                               } else if (typeName === "MANIFEST" && dataOff != null && Size > 0) {
-                                const data = new Uint8Array(await file.slice(dataOff, dataOff + Math.min(Size, 4096)).arrayBuffer());
+                                const data = new Uint8Array(await file.slice(dataOff, dataOff + Math.min(Size, 16 * 1024)).arrayBuffer());
                                 let text = "";
                                 if (data.length >= 2 && data[0] === 0xff && data[1] === 0xfe) {
-                                  for (let i = 2; i + 1 < data.length; i += 2) { const ch = data[i] | (data[i + 1] << 8); text += String.fromCharCode(ch); }
+                                  for (let i = 2; i + 1 < data.length; i += 2) {
+                                    const ch = data[i] | (data[i + 1] << 8);
+                                    text += String.fromCharCode(ch);
+                                  }
                                 } else {
                                   try { text = new TextDecoder("utf-8").decode(data); } catch {}
                                 }
-                                if (text) { langEntry.previewKind = "text"; langEntry.textPreview = text; }
+                                if (text) {
+                                  langEntry.previewKind = "text";
+                                  langEntry.textPreview = text;
+                                }
+                              } else if (typeName === "VERSION" && dataOff != null && Size >= 0x40 && Size <= 64 * 1024) {
+                                const buf = new Uint8Array(await file.slice(dataOff, dataOff + Size).arrayBuffer());
+                                const dvv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+                                const readUtf16z = offset => {
+                                  let result = "";
+                                  for (let pos = offset; pos + 1 < buf.length; pos += 2) {
+                                    const ch = dvv.getUint16(pos, true);
+                                    if (ch === 0) break;
+                                    result += String.fromCharCode(ch);
+                                  }
+                                  return result;
+                                };
+                                const length = dvv.getUint16(0, true);
+                                const valueLength = dvv.getUint16(2, true);
+                                const type = dvv.getUint16(4, true);
+                                const key = readUtf16z(6);
+                                const valueStart = (6 + key.length * 2 + 2 + 3) & ~3;
+                                let fixed = null;
+                                if (key === "VS_VERSION_INFO" && valueLength >= 52 && valueStart + 52 <= buf.length) {
+                                  const v0 = dvv.getUint32(valueStart + 0, true);
+                                  const v1 = dvv.getUint32(valueStart + 4, true);
+                                  const v2 = dvv.getUint32(valueStart + 8, true);
+                                  const v3 = dvv.getUint32(valueStart + 12, true);
+                                  const parsePair = v => ({
+                                    major: (v >>> 16) & 0xffff,
+                                    minor: v & 0xffff
+                                  });
+                                  const fileVer = { high: parsePair(v0), low: parsePair(v1) };
+                                  const prodVer = { high: parsePair(v2), low: parsePair(v3) };
+                                  fixed = {
+                                    fileVersion: fileVer,
+                                    productVersion: prodVer,
+                                    fileVersionString: `${fileVer.high.major}.${fileVer.high.minor}.${fileVer.low.major}.${fileVer.low.minor}`,
+                                    productVersionString: `${prodVer.high.major}.${prodVer.high.minor}.${prodVer.low.major}.${prodVer.low.minor}`
+                                  };
+                                }
+                                langEntry.previewKind = "version";
+                                langEntry.versionInfo = {
+                                  length,
+                                  valueLength,
+                                  type,
+                                  key,
+                                  fixed
+                                };
                               } else if (typeName === "GROUP_ICON") {
                                 const grpOff = rvaToOff(DataRVA);
                                 if (grpOff != null && Size >= 6) {

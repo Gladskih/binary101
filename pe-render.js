@@ -38,11 +38,12 @@ export function renderPe(pe) {
   const out = [];
   const bits = pe.opt.isPlus ? "64-bit" : "32-bit";
   const isDll = (pe.coff.Characteristics & 0x2000) !== 0;
-  const roleText = isDll ? "a reusable library (DLL)" : "an executable program";
+  const roleText = isDll ? "dynamic-link library (DLL)" : "executable image";
   const sectionCount = Array.isArray(pe.sections) ? pe.sections.length : pe.coff.NumberOfSections;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Big picture</h4>`);
-  out.push(`<div class="smallNote">This Portable Executable is a ${bits} Windows ${roleText}. The file is split into headers (rules and map) and ${sectionCount} sections (code, data, resources and more).</div>`);
-  out.push(`<div class="smallNote">You can read it like a book: DOS and PE headers are the table of contents, the section table lists the chapters, and later views show imports, exports, resources and security so you can see how the program talks to the operating system.</div>`);
+  out.push(`<div class="smallNote">PE image: ${bits} Windows ${roleText}. Headers describe layout and loader requirements; ${sectionCount} sections carry code, data, resources and relocation information.</div>`);
+  const entryVa = pe.opt.ImageBase + (pe.opt.AddressOfEntryPoint >>> 0);
+  out.push(`<div class="smallNote">Entry point RVA ${hex(pe.opt.AddressOfEntryPoint, 8)} (VA 0x${entryVa.toString(16)}). Imports, relocations, resources and security directories below show how this image integrates with the operating system.</div>`);
   out.push(`</section>`);
 
   // DOS header
@@ -213,8 +214,16 @@ export function renderPe(pe) {
                 if (l.previewKind === "image" && l.previewDataUrl) {
                   prev = `<img src="${l.previewDataUrl}" alt="icon" style="width:24px;height:24px;image-rendering:auto">`;
                 } else if (l.previewKind === "text" && l.textPreview) {
-                  const snip = (l.textPreview || "").slice(0,300);
-                  prev = `<span class="mono" style="white-space:pre;display:inline-block;max-width:360px;overflow:hidden;text-overflow:ellipsis">${safe(snip)}</span>`;
+                  prev = `<details><summary class="mono" style="cursor:pointer">Text preview</summary><div class="mono" style="white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto;margin-top:.35rem">${safe(l.textPreview)}</div></details>`;
+                } else if (l.previewKind === "version" && l.versionInfo) {
+                  const vi = l.versionInfo;
+                  let desc = "";
+                  if (vi.fixed) {
+                    desc = `File ${safe(vi.fixed.fileVersionString)} / Product ${safe(vi.fixed.productVersionString)}`;
+                  } else {
+                    desc = `VS_VERSION_INFO (len=${vi.length}, valueLen=${vi.valueLength})`;
+                  }
+                  prev = `<span class="mono smallNote">${desc}</span>`;
                 }
                 out.push(`<tr><td>${++row}</td><td>${nm}</td><td>${lang}</td><td>${humanSize(l.size)}</td><td>${l.codePage}</td><td>${prev}</td></tr>`);
               });
@@ -271,7 +280,16 @@ export function renderPe(pe) {
     out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Base relocations</h4><dl>`);
     out.push(dd("Blocks", String(r.blocks.length), "Number of relocation blocks in .reloc."));
     out.push(dd("TotalEntries", String(r.totalEntries), "Sum of relocation entries across all blocks."));
-    out.push(`</dl></section>`);
+    out.push(`</dl>`);
+    if (r.blocks.length) {
+      out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show relocation blocks (first ${Math.min(r.blocks.length, 32)})</summary>`);
+      out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>VirtualAddress (page RVA)</th><th>SizeOfBlock</th><th>EntryCount (word entries)</th></tr></thead><tbody>`);
+      r.blocks.slice(0, 32).forEach((b, i) => {
+        out.push(`<tr><td>${i + 1}</td><td>${hex(b.VirtualAddress, 8)}</td><td>${humanSize(b.SizeOfBlock)}</td><td>${b.entryCount}</td></tr>`);
+      });
+      out.push(`</tbody></table></details>`);
+    }
+    out.push(`</section>`);
   }
 
   // Exception directory (.pdata)
