@@ -53,7 +53,3 @@ dd{margin:0;word-break:break-all}
 .table tr:last-child td{border-bottom:none}
 
 footer{display:grid;gap:.25rem;text-align:center;padding:16px;color:var(--muted)}
-@media (min-width:0){
-  main{flex-direction:column!important;align-items:stretch!important}
-  #dropZone{flex:0 0 auto!important;width:min(860px,92vw)!important;margin:16px auto 0!important}
-}
