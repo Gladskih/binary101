@@ -199,31 +199,6 @@ function detectCompoundFile(dv) {
   return null;
 }
 
-function detectCompoundFile(dv) {
-  if (dv.byteLength < 8) return null;
-  const b0 = dv.getUint8(0);
-  const b1 = dv.getUint8(1);
-  const b2 = dv.getUint8(2);
-  const b3 = dv.getUint8(3);
-  const b4 = dv.getUint8(4);
-  const b5 = dv.getUint8(5);
-  const b6 = dv.getUint8(6);
-  const b7 = dv.getUint8(7);
-  if (
-    b0 === 0xd0 &&
-    b1 === 0xcf &&
-    b2 === 0x11 &&
-    b3 === 0xe0 &&
-    b4 === 0xa1 &&
-    b5 === 0xb1 &&
-    b6 === 0x1a &&
-    b7 === 0xe1
-  ) {
-    return "Microsoft Compound File (e.g. Office 97-2003, MSI)";
-  }
-  return null;
-}
-
 function detectPdb(dv) {
   if (dv.byteLength < 32) return null;
   const limit = Math.min(dv.byteLength, 64);
