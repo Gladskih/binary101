@@ -4,6 +4,7 @@ import { nowIsoString, formatHumanSize } from "./binary-utils.js";
 import { computeHashForFile, copyToClipboard } from "./hash.js";
 import { detectBinaryType, parseForUi } from "./analyzers/index.js";
 import { renderPe, renderJpeg } from "./renderers/index.js";
+import { escapeHtml } from "./html-utils.js";
 
 const getElement = id => document.getElementById(id);
 
@@ -22,6 +23,7 @@ const fileSizeDetailElement = getElement("fileSizeDetail");
 const fileTimestampDetailElement = getElement("fileTimestampDetail");
 const fileSourceDetailElement = getElement("fileSourceDetail");
 const fileBinaryTypeDetailElement = getElement("fileBinaryTypeDetail");
+const fileMimeTypeDetailElement = getElement("fileMimeTypeDetail");
 
 const peDetailsTermElement = getElement("peDetailsTerm");
 const peDetailsValueElement = getElement("peDetailsValue");
@@ -35,6 +37,7 @@ const sha512CopyButtonElement = getElement("sha512CopyButton");
 
 let currentFile = null;
 let currentPreviewUrl = null;
+let currentTypeLabel = "";
 
 const setStatusMessage = message => {
   statusMessageElement.textContent = message || "";
@@ -44,45 +47,57 @@ const clearStatusMessage = () => {
   statusMessageElement.textContent = "";
 };
 
-function renderAnalysisIntoUi(analyzerName, parsedResult) {
-  if (!parsedResult) {
-    peDetailsTermElement.hidden = true;
-    peDetailsValueElement.hidden = true;
-    peDetailsValueElement.innerHTML = "";
-    if (currentPreviewUrl) {
-      URL.revokeObjectURL(currentPreviewUrl);
-      currentPreviewUrl = null;
-    }
-    return;
+function clearPreviewUrl() {
+  if (currentPreviewUrl) {
+    URL.revokeObjectURL(currentPreviewUrl);
+    currentPreviewUrl = null;
   }
-  if (analyzerName === "pe") {
-    if (currentPreviewUrl) {
-      URL.revokeObjectURL(currentPreviewUrl);
-      currentPreviewUrl = null;
-    }
+}
+
+function buildImagePreviewHtml() {
+  clearPreviewUrl();
+  if (!currentFile) return "";
+  const mime = (currentFile.type || "").toLowerCase();
+  const label = (currentTypeLabel || "").toLowerCase();
+  const looksLikeImage =
+    mime.startsWith("image/") ||
+    label.includes("image") ||
+    label.includes("icon");
+  if (!looksLikeImage) return "";
+  currentPreviewUrl = URL.createObjectURL(currentFile);
+  const altText = currentFile.name ? `Preview of ${currentFile.name}` : "Image preview";
+  return `<div class="jpegPreview"><img src="${currentPreviewUrl}" alt="${escapeHtml(
+    altText
+  )}" /></div>`;
+}
+
+function renderAnalysisIntoUi(analyzerName, parsedResult) {
+  const previewHtml = buildImagePreviewHtml();
+
+  if (analyzerName === "pe" && parsedResult) {
     peDetailsTermElement.textContent = "PE/COFF details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
     peDetailsValueElement.innerHTML = renderPe(parsedResult);
     return;
   }
-  if (analyzerName === "jpeg") {
-    if (currentPreviewUrl) {
-      URL.revokeObjectURL(currentPreviewUrl);
-      currentPreviewUrl = null;
-    }
-    let previewHtml = "";
-    if (currentFile) {
-      currentPreviewUrl = URL.createObjectURL(currentFile);
-      previewHtml =
-        `<div class="jpegPreview"><img src="${currentPreviewUrl}" alt="JPEG preview" /></div>`;
-    }
+
+  if (analyzerName === "jpeg" && parsedResult) {
     peDetailsTermElement.textContent = "JPEG details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
     peDetailsValueElement.innerHTML = previewHtml + renderJpeg(parsedResult);
     return;
   }
+
+  if (previewHtml) {
+    peDetailsTermElement.textContent = "Image preview";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    peDetailsValueElement.innerHTML = previewHtml;
+    return;
+  }
+
   peDetailsTermElement.hidden = true;
   peDetailsValueElement.hidden = true;
   peDetailsValueElement.innerHTML = "";
@@ -104,8 +119,13 @@ function resetHashDisplay() {
 async function showFileInfo(file, sourceDescription) {
   currentFile = file;
   const typeLabel = await detectBinaryType(file);
+  currentTypeLabel = typeLabel || "";
   const timestampIso = nowIsoString();
   const sizeText = formatHumanSize(file.size);
+  const mimeType =
+    typeof file.type === "string" && file.type.length > 0
+      ? file.type
+      : "Not provided by browser";
 
   fileNameTopElement.textContent = file.name || "";
   fileSizeTopElement.textContent = sizeText;
@@ -116,6 +136,7 @@ async function showFileInfo(file, sourceDescription) {
   fileTimestampDetailElement.textContent = timestampIso;
   fileSourceDetailElement.textContent = sourceDescription;
   fileBinaryTypeDetailElement.textContent = typeLabel;
+  fileMimeTypeDetailElement.textContent = mimeType;
 
   const { analyzer, parsed } = await parseForUi(file);
   renderAnalysisIntoUi(analyzer, parsed);
