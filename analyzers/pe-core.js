@@ -1,15 +1,11 @@
 "use strict";
 
-import { toHex32, readAsciiString, collectPrintableRuns, alignUpTo } from "../binary-utils.js";
-import { MACHINE, DD_NAMES } from "./pe-constants.js";
-
-export const peProbe = dataView =>
-  dataView.byteLength >= 0x40 && dataView.getUint16(0, true) === 0x5a4d
-    ? { e_lfanew: dataView.getUint32(0x3c, true) }
-    : null;
-
-export const mapMachine = machineCode =>
-  MACHINE.find(([code]) => code === machineCode)?.[1] || "machine=" + toHex32(machineCode, 4);
+import { readAsciiString, collectPrintableRuns } from "../binary-utils.js";
+import { DD_NAMES } from "./pe-constants.js";
+import { addSectionEntropies } from "./pe-entropy.js";
+import { buildCoverage } from "./pe-coverage.js";
+import { peProbe } from "./pe-signature.js";
+import { computeEntrySection } from "./pe-core-entry.js";
 
 function createRvaToOffsetMapper(sections) {
   const spans = sections.map(section => {
@@ -27,21 +23,6 @@ function createRvaToOffsetMapper(sections) {
     }
     return null;
   };
-}
-
-function shannonEntropy(bytes) {
-  if (!bytes || bytes.length === 0) return 0;
-  const freq = new Uint32Array(256);
-  for (let index = 0; index < bytes.length; index++) freq[bytes[index]]++;
-  let entropy = 0;
-  const totalCount = bytes.length;
-  for (let i = 0; i < 256; i++) {
-    const count = freq[i];
-    if (!count) continue;
-    const probability = count / totalCount;
-    entropy -= probability * Math.log2(probability);
-  }
-  return entropy;
 }
 
 async function parseDosHeaderAndStub(file, headView, peHeaderOffset) {
@@ -222,48 +203,6 @@ async function parseSectionHeaders(file, optionalHeaderOffset, sizeOfOptionalHea
   return { sections, rvaToOff, sectOff: sectionHeadersOffset };
 }
 
-function buildCoverage(fileSize, peHeaderOffset, coff, optionalHeaderOffset, ddStartRel, ddCount, sectionHeadersOffset, sections, sectionAlignment, sizeOfImage) {
-  const coverage = [];
-  const addCov = (label, off, size) => {
-    if (!Number.isFinite(off) || !Number.isFinite(size) || off < 0 || size <= 0) return;
-    coverage.push({ label, off: off >>> 0, end: (off >>> 0) + (size >>> 0), size: size >>> 0 });
-  };
-  addCov("DOS header + stub", 0, Math.min(fileSize, Math.max(64, peHeaderOffset)));
-  addCov("PE signature + COFF", peHeaderOffset, 24);
-  addCov("Optional header", optionalHeaderOffset, coff.SizeOfOptionalHeader);
-  addCov("Data directories", optionalHeaderOffset + ddStartRel, ddCount * 8);
-  addCov("Section headers", sectionHeadersOffset, coff.NumberOfSections * 40);
-  let rawEnd = 0;
-  for (const section of sections) {
-    const endOfSectionData = (section.pointerToRawData >>> 0) + (section.sizeOfRawData >>> 0);
-    rawEnd = Math.max(rawEnd, endOfSectionData);
-  }
-  const overlaySize = fileSize > rawEnd ? fileSize - rawEnd : 0;
-  let imageEnd = 0;
-  for (const section of sections) {
-    const endOfSectionImage = (section.virtualAddress >>> 0) + (section.virtualSize >>> 0);
-    imageEnd = Math.max(imageEnd, alignUpTo(endOfSectionImage, sectionAlignment >>> 0));
-  }
-  const imageSizeMismatch = imageEnd !== (sizeOfImage >>> 0);
-  if (overlaySize > 0) {
-    addCov("Overlay (data after last section)", rawEnd, overlaySize);
-  }
-  for (const section of sections) addCov(`Section ${section.name} (raw)`, section.pointerToRawData, section.sizeOfRawData);
-  return { coverage, addCov, overlaySize, imageEnd, imageSizeMismatch };
-}
-
-async function addSectionEntropies(file, sections) {
-  for (const section of sections) {
-    const { pointerToRawData, sizeOfRawData } = section;
-    if (pointerToRawData && sizeOfRawData) {
-      const bytes = new Uint8Array(await file.slice(pointerToRawData, pointerToRawData + sizeOfRawData).arrayBuffer());
-      section.entropy = shannonEntropy(bytes);
-    } else {
-      section.entropy = 0;
-    }
-  }
-}
-
 export async function parsePeHeaders(file) {
   const head = new DataView(await file.slice(0, Math.min(file.size, 0x400)).arrayBuffer());
   const probe = peProbe(head);
@@ -292,20 +231,7 @@ export async function parsePeHeaders(file) {
   );
 
   await addSectionEntropies(file, sections);
-
-  let entrySection = null;
-  if (opt.AddressOfEntryPoint) {
-    const entryRva = opt.AddressOfEntryPoint >>> 0;
-    for (let index = 0; index < sections.length; index++) {
-      const section = sections[index];
-      const start = section.virtualAddress >>> 0;
-      const end = (start + (section.virtualSize >>> 0)) >>> 0;
-      if (entryRva >= start && entryRva < end) {
-        entrySection = { name: section.name, index };
-        break;
-      }
-    }
-  }
+  const entrySection = await computeEntrySection(opt, sections);
 
   return {
     dos,
@@ -322,4 +248,3 @@ export async function parsePeHeaders(file) {
     imageSizeMismatch
   };
 }
-

@@ -106,4 +106,64 @@ By adhering to these principles, the project aims to balance flexibility, rich U
 - **Chrome DevTools MCP**: Use Chrome DevTools MCP for debugging and automation. This can help simulate user interactions and validate UI behavior.
 - **Additional Tools**: If MCP lacks functionality, consider integrating other tools or libraries. Communicate specific needs to the project maintainer for evaluation.
 
+# Code Quality Metrics and Standards
+
+All code must adhere to the following metrics and best practices. These are enforced via `.editorconfig`, `.eslintrc.json`, and automated tooling:
+
+## JavaScript Guidelines
+
+### File Structure
+- **Maximum file length**: 300 lines (including comments and blank lines).
+- **Rationale**: Smaller files are easier to understand, test, and maintain. If a file exceeds this, consider refactoring into separate modules.
+
+### Line and Identifier Constraints
+- **Maximum line length**: 100 characters.
+- **Rationale**: Improves readability, especially for side-by-side diffs and small screens.
+- **Identifier length**: Minimum 2 characters (except for conventions like `_`, `i`, `j`, `k`, `x`, `y`).
+- **Rationale**: Descriptive names prevent ambiguity; single-letter vars (except loop counters) harm clarity.
+
+### Function Complexity
+- **Maximum function length**: Aim for 20–30 lines; functions over 50 lines should be refactored.
+- **Maximum cyclomatic complexity**: 10 (enforced by ESLint).
+- **Maximum nested callbacks**: 3 levels (enforced by ESLint).
+- **Rationale**: Complex functions are error-prone and difficult to test. Extract pure functions or helper methods.
+
+### JavaScript Best Practices
+- **Variable declarations**: Use `const` by default, `let` if reassignment is needed, never `var`.
+- **Equality checks**: Always use `===` and `!==` (strict equality).
+- **String quotes**: Use double quotes (`"`); escape when necessary.
+- **Semicolons**: Required at the end of statements.
+- **Brace style**: Use `1tbs` (one true brace style): `if (...) { ... }`.
+- **Magic numbers**: Avoided; define named constants instead.
+- **Unused variables**: Not allowed (prefix with `_` if intentionally unused).
+- **Console usage**: Only `console.error()` and `console.warn()` are allowed in production code; `console.log()` should be removed before commit.
+
+### Async and Performance
+- **Async operations**: Always return `Promise` from async functions; avoid callback hell.
+- **File I/O**: Use `file.slice(...).arrayBuffer()` for memory efficiency; never load entire files into memory unnecessarily.
+- **Blocking operations**: Perform expensive computations in Web Workers or maintain UI responsiveness with `await`.
+
+## HTML Guidelines
+- **Semantic HTML**: Use semantic elements (`<header>`, `<nav>`, `<main>`, `<article>`, `<footer>`) instead of generic `<div>`.
+- **Accessibility**: Include `alt` attributes for images, proper `<label>` elements for form inputs, and ARIA attributes where needed.
+- **Validation**: Ensure HTML is valid (use [W3C Validator](https://validator.w3.org/)).
+
+## CSS Guidelines
+- **Line length**: Maximum 100 characters.
+- **Selectors**: Avoid deep nesting (max 3 levels); use BEM naming convention for clarity.
+- **Colors and fonts**: Define as CSS variables for consistency and maintainability.
+- **Responsive design**: Use mobile-first approach; test on multiple screen sizes.
+- **Performance**: Minimize use of inline styles; defer non-critical CSS with `media="print"` or `defer`.
+
+## Git Conventions
+- **Commit messages**: Use present tense, imperative mood (e.g., "Add README" not "Added README").
+- **Branch names**: Use lowercase with hyphens (e.g., `pe-parser`, `hash-computation`).
+- **PR reviews**: Request reviews before merging; ensure CI/ESLint passes.
+
+## Tools and Configuration
+
+- **ESLint** (`.eslintrc.json`): Enforces JavaScript best practices automatically. Run `npx eslint .` to check.
+- **EditorConfig** (`.editorconfig`): Ensures consistent indentation, line endings, and charset across all editors and IDEs.
+- **Pre-commit hooks** (optional): Consider using Husky + lint-staged to auto-check code before commits.
+
 — End of instructions —
