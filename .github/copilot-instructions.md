@@ -8,7 +8,7 @@ Key entry points
 - `app.js` — main UI wiring (drag/drop, paste, file input, hash buttons).
 - `analyzers/` — binary format detection + parsers (PE parser lives in `analyzers/pe.js`).
 - `pe-render.js` — turns parsed PE objects into HTML snippets for the UI.
-- `utils.js`, `hash.js` — shared helpers (human-readable sizes, hex, Web Crypto wrapper).
+- `binary-utils.js`, `html-utils.js`, `hash.js` — shared helpers (human-readable sizes, hex, HTML rendering, Web Crypto wrapper).
 
 Big-picture architecture & data flow
 - Browser-only app: user selects or pastes a `File` → `app.js` calls `detectBinaryType(file)` and `parseForUi(file)` from `analyzers/index.js`.
@@ -17,7 +17,7 @@ Big-picture architecture & data flow
 - Hashing uses `crypto.subtle.digest` in `hash.js` (called from `app.js`) — keep operations asynchronous and avoid re-reading whole files when possible.
 
 Project-specific conventions and patterns
-- ES modules with relative paths (e.g. `import { foo } from "./utils.js"`). Keep exports named and small.
+- ES modules with relative paths (e.g. `import { formatHumanSize } from "./binary-utils.js"` or `import { safe } from "./html-utils.js"`). Keep exports named and small.
 - Parsers avoid loading entire files; they read small slices (`file.slice(off, off+len).arrayBuffer()`) and return serializable objects. Follow this pattern when adding new analyzers.
 - UI rendering is string-based HTML in `pe-render.js` (not JSX/templating).
 
@@ -41,7 +41,7 @@ Important compatibility notes for the AI agent
 Examples from codebase (use these as patterns)
 - Hashing: `await computeHashForFile(currentFile, "SHA-256")` — put expensive operations behind async functions and update UI state while running (see `computeAndDisplayHash` in `app.js`).
 - Type detection + parsing: `const { analyzer, parsed } = await parseForUi(file); renderAnalysisIntoUi(analyzer, parsed);` (in `app.js`).
-- Adding a new import renderer: `pe-render.js` uses `safe(value)` from `utils.js` to escape HTML. Reuse `safe` for all user-facing strings.
+- Adding a new import renderer: `pe-render.js` uses `safe(value)` from `html-utils.js` to escape HTML. Reuse `safe` for all user-facing strings.
 
 Files you will likely edit
 - `analyzers/pe.js` — the largest parser. Read it to learn RVA→file-offset mapping and slice-based reading.

@@ -22,35 +22,6 @@ export const toHex32 = (value, width = 0) => {
 
 export const toHex64 = value => "0x" + value.toString(16);
 
-export const escapeHtml = input =>
-  String(input)
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;");
-
-export const renderDefinitionRow = (label, valueHtml, tooltip) =>
-  `<dt${tooltip ? ` title="${escapeHtml(tooltip)}"` : ""}>${label}</dt><dd>${valueHtml}</dd>`;
-
-export const renderOptionChips = (selectedCode, options) =>
-  `<div class="optionsRow">${options
-    .map(([code, label]) =>
-      `<span class="opt ${code === selectedCode ? "sel" : "dim"}" title="${escapeHtml(
-        `${label} (${toHex32(code, 4)})`
-      )}">${label}</span>`
-    )
-    .join("")}
-  </div>`;
-
-export const renderFlagChips = (mask, flags) =>
-  `<div class="optionsRow">${flags
-    .map(([bit, name, explanation]) => {
-      const isSet = (mask & bit) !== 0;
-      const label = explanation ? `${name} - ${explanation}` : name;
-      const tooltip = `${label} (${toHex32(bit, 4)})`;
-      return `<span class="opt ${isSet ? "sel" : "dim"}" title="${escapeHtml(tooltip)}">${name}</span>`;
-    })
-    .join("")}
-  </div>`;
-
 export const formatUnixSecondsOrDash = unixSeconds => {
   if (!Number.isFinite(unixSeconds) || unixSeconds <= 0) return "-";
   const date = new Date(unixSeconds * 1000);
@@ -108,13 +79,10 @@ export const nowIso = nowIsoString;
 export const humanSize = formatHumanSize;
 export const hex = toHex32;
 export const hex64 = toHex64;
-export const safe = escapeHtml;
-export const dd = renderDefinitionRow;
-export const rowOpts = renderOptionChips;
-export const rowFlags = renderFlagChips;
 export const isoOrDash = formatUnixSecondsOrDash;
 export const ascii = readAsciiString;
 export const printable = isPrintableByte;
 export const runStrings = collectPrintableRuns;
 export const bufToHex = bufferToHex;
 export const alignUp = alignUpTo;
+

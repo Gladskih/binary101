@@ -1,6 +1,6 @@
 "use strict";
 
-import { bufferToHex } from "./utils.js";
+import { bufferToHex } from "./binary-utils.js";
 
 export async function computeHashForFile(file, algorithmName) {
   const buffer = await file.arrayBuffer();

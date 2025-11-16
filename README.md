@@ -44,7 +44,7 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
 - `app.js`: Handles UI interactions and file processing.
 - `analyzers/`: Contains format-specific parsers (e.g., `pe.js` for PE files).
 - `pe-render.js`: Converts parsed PE data into HTML for display.
-- `utils.js`, `hash.js`: Utility functions for hashing and data formatting.
+- `binary-utils.js`, `html-utils.js`, `hash.js`: Shared helpers for byte/hex formatting, HTML rendering, and hashing.
 
 ## Development
 ### Prerequisites

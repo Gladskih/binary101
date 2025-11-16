@@ -1,6 +1,7 @@
 "use strict";
 
-import { dd, rowOpts, rowFlags, humanSize, hex, isoOrDash, safe } from "./utils.js";
+import { humanSize, hex, isoOrDash } from "./binary-utils.js";
+import { dd, rowOpts, rowFlags, safe } from "./html-utils.js";
 import { MACHINE, SUBSYSTEMS, CHAR_FLAGS, DLL_FLAGS, SEC_FLAG_TEXTS, GUARD_FLAGS, DD_TIPS } from "./analyzers/pe-constants.js";
 
 const sectionHintMap = {

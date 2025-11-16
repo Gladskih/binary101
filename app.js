@@ -1,6 +1,6 @@
 "use strict";
 
-import { nowIsoString, formatHumanSize } from "./utils.js";
+import { nowIsoString, formatHumanSize } from "./binary-utils.js";
 import { computeHashForFile, copyToClipboard } from "./hash.js";
 import { detectBinaryType, parseForUi } from "./analyzers/index.js";
 import { renderPe } from "./pe-render.js";
