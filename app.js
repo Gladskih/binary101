@@ -3,7 +3,7 @@
 import { nowIsoString, formatHumanSize } from "./binary-utils.js";
 import { computeHashForFile, copyToClipboard } from "./hash.js";
 import { detectBinaryType, parseForUi } from "./analyzers/index.js";
-import { renderPe } from "./renderers/index.js";
+import { renderPe, renderJpeg } from "./renderers/index.js";
 
 const getElement = id => document.getElementById(id);
 
@@ -34,6 +34,7 @@ const sha256CopyButtonElement = getElement("sha256CopyButton");
 const sha512CopyButtonElement = getElement("sha512CopyButton");
 
 let currentFile = null;
+let currentPreviewUrl = null;
 
 const setStatusMessage = message => {
   statusMessageElement.textContent = message || "";
@@ -48,18 +49,43 @@ function renderAnalysisIntoUi(analyzerName, parsedResult) {
     peDetailsTermElement.hidden = true;
     peDetailsValueElement.hidden = true;
     peDetailsValueElement.innerHTML = "";
+    if (currentPreviewUrl) {
+      URL.revokeObjectURL(currentPreviewUrl);
+      currentPreviewUrl = null;
+    }
     return;
   }
   if (analyzerName === "pe") {
+    if (currentPreviewUrl) {
+      URL.revokeObjectURL(currentPreviewUrl);
+      currentPreviewUrl = null;
+    }
     peDetailsTermElement.textContent = "PE/COFF details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
     peDetailsValueElement.innerHTML = renderPe(parsedResult);
-  } else {
-    peDetailsTermElement.hidden = true;
-    peDetailsValueElement.hidden = true;
-    peDetailsValueElement.innerHTML = "";
+    return;
   }
+  if (analyzerName === "jpeg") {
+    if (currentPreviewUrl) {
+      URL.revokeObjectURL(currentPreviewUrl);
+      currentPreviewUrl = null;
+    }
+    let previewHtml = "";
+    if (currentFile) {
+      currentPreviewUrl = URL.createObjectURL(currentFile);
+      previewHtml =
+        `<div class="jpegPreview"><img src="${currentPreviewUrl}" alt="JPEG preview" /></div>`;
+    }
+    peDetailsTermElement.textContent = "JPEG details";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    peDetailsValueElement.innerHTML = previewHtml + renderJpeg(parsedResult);
+    return;
+  }
+  peDetailsTermElement.hidden = true;
+  peDetailsValueElement.hidden = true;
+  peDetailsValueElement.innerHTML = "";
 }
 
 function resetHashDisplay() {

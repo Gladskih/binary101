@@ -3,6 +3,7 @@
 import { parsePe } from "./pe/index.js";
 import { peProbe, mapMachine } from "./pe/signature.js";
 import { probeByMagic, probeTextLike } from "./probes.js";
+import { parseJpeg } from "./jpeg/index.js";
 
 // Quick magic-based detectors for non-PE types (label only for now)
 function detectELF(dv) {
@@ -43,6 +44,30 @@ function refineZipLabel(dv) {
   const hasXl = ascii.indexOf("xl/") !== -1;
   const hasPpt = ascii.indexOf("ppt/") !== -1;
   const hasFb2Entry = ascii.indexOf(".fb2") !== -1;
+  const hasOdtMime =
+    ascii.indexOf("application/vnd.oasis.opendocument.text") !== -1;
+  const hasOdsMime =
+    ascii.indexOf("application/vnd.oasis.opendocument.spreadsheet") !== -1;
+  const hasOdpMime =
+    ascii.indexOf("application/vnd.oasis.opendocument.presentation") !== -1;
+  const hasEpubMime = ascii.indexOf("application/epub+zip") !== -1;
+  const hasJarManifest = ascii.indexOf("META-INF/MANIFEST.MF") !== -1;
+  const hasAndroidManifest = ascii.indexOf("AndroidManifest.xml") !== -1;
+  const hasDex = ascii.indexOf("classes.dex") !== -1;
+  const hasVsixManifest = ascii.indexOf("extension.vsixmanifest") !== -1;
+  const hasXpsFixedSeq =
+    ascii.indexOf("FixedDocSeq.fdseq") !== -1 ||
+    ascii.indexOf("FixedDocumentSequence.fdseq") !== -1;
+  if (hasOdtMime) return "OpenDocument text document (ODT)";
+  if (hasOdsMime) return "OpenDocument spreadsheet (ODS)";
+  if (hasOdpMime) return "OpenDocument presentation (ODP)";
+  if (hasEpubMime) return "EPUB e-book";
+  if (hasJarManifest && hasAndroidManifest && hasDex) {
+    return "Android application package (APK)";
+  }
+  if (hasVsixManifest) return "Visual Studio extension package (VSIX)";
+  if (hasJarManifest) return "Java archive (JAR/WAR/EAR/JMOD)";
+  if (hasXpsFixedSeq) return "XPS document";
   if (hasFb2Entry) return "FictionBook e-book inside ZIP (FB2)";
   if (hasContentTypes && hasWord) return "Microsoft Word document (DOCX)";
   if (hasContentTypes && hasXl) return "Microsoft Excel workbook (XLSX)";
@@ -72,7 +97,7 @@ function refineCompoundLabel(dv) {
 }
 
 export async function detectBinaryType(file) {
-  const maxProbeBytes = 8192;
+  const maxProbeBytes = Math.min(file.size || 0, 65536);
   const dv = new DataView(
     await file.slice(0, Math.min(file.size, maxProbeBytes)).arrayBuffer()
   );
@@ -109,11 +134,16 @@ export async function detectBinaryType(file) {
 
 // Parse-and-render entry point (current: PE only)
 export async function parseForUi(file) {
-  const dv = new DataView(await file.slice(0, Math.min(file.size, 64)).arrayBuffer());
-  const probe = peProbe(dv);
-  if (probe) {
+  const dv = new DataView(
+    await file.slice(0, Math.min(file.size, 65536)).arrayBuffer()
+  );
+  if (peProbe(dv)) {
     const pe = await parsePe(file);
     return { analyzer: "pe", parsed: pe };
+  }
+  if (dv.byteLength >= 2 && dv.getUint16(0, false) === 0xffd8) {
+    const jpeg = await parseJpeg(file);
+    if (jpeg) return { analyzer: "jpeg", parsed: jpeg };
   }
   return { analyzer: null, parsed: null };
 }

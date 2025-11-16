@@ -94,6 +94,51 @@ function detectSevenZip(dv) {
   return null;
 }
 
+function detectXz(dv) {
+  if (dv.byteLength < 6) return null;
+  const b0 = dv.getUint8(0);
+  const b1 = dv.getUint8(1);
+  const b2 = dv.getUint8(2);
+  const b3 = dv.getUint8(3);
+  const b4 = dv.getUint8(4);
+  const b5 = dv.getUint8(5);
+  if (
+    b0 === 0xfd &&
+    b1 === 0x37 &&
+    b2 === 0x7a &&
+    b3 === 0x58 &&
+    b4 === 0x5a &&
+    b5 === 0x00
+  ) {
+    return "XZ compressed data";
+  }
+  return null;
+}
+
+function detectLz4(dv) {
+  if (dv.byteLength < 4) return null;
+  const b0 = dv.getUint8(0);
+  const b1 = dv.getUint8(1);
+  const b2 = dv.getUint8(2);
+  const b3 = dv.getUint8(3);
+  if (b0 === 0x04 && b1 === 0x22 && b2 === 0x4d && b3 === 0x18) {
+    return "LZ4 frame";
+  }
+  return null;
+}
+
+function detectZstd(dv) {
+  if (dv.byteLength < 4) return null;
+  const b0 = dv.getUint8(0);
+  const b1 = dv.getUint8(1);
+  const b2 = dv.getUint8(2);
+  const b3 = dv.getUint8(3);
+  if (b0 === 0x28 && b1 === 0xb5 && b2 === 0x2f && b3 === 0xfd) {
+    return "Zstandard compressed data (zstd)";
+  }
+  return null;
+}
+
 function detectRar(dv) {
   if (dv.byteLength < 7) return null;
   const m =
@@ -105,6 +150,12 @@ function detectRar(dv) {
   const b4 = dv.getUint8(4);
   const b5 = dv.getUint8(5);
   return b4 === 0x1a && b5 === 0x07 ? "RAR archive" : null;
+}
+
+function detectCab(dv) {
+  if (dv.byteLength < 4) return null;
+  const sig = dv.getUint32(0, false);
+  return sig === 0x4d534346 ? "Microsoft Cabinet archive (CAB)" : null;
 }
 
 function detectPng(dv) {
@@ -250,6 +301,39 @@ function detectMidi(dv) {
   return sig === 0x4d546864 ? "MIDI audio" : null;
 }
 
+function detectAmr(dv) {
+  if (dv.byteLength < 6) return null;
+  let header = "";
+  const limit = Math.min(dv.byteLength, 9);
+  for (let i = 0; i < limit; i += 1) {
+    const c = dv.getUint8(i);
+    if (c === 0) break;
+    header += String.fromCharCode(c);
+  }
+  if (header.startsWith("#!AMR")) return "AMR audio";
+  return null;
+}
+
+function detectAc3(dv) {
+  if (dv.byteLength < 2) return null;
+  const b0 = dv.getUint8(0);
+  const b1 = dv.getUint8(1);
+  if (b0 === 0x0b && b1 === 0x77) return "Dolby AC-3 audio";
+  return null;
+}
+
+function detectDts(dv) {
+  if (dv.byteLength < 4) return null;
+  const b0 = dv.getUint8(0);
+  const b1 = dv.getUint8(1);
+  const b2 = dv.getUint8(2);
+  const b3 = dv.getUint8(3);
+  if (b0 === 0x7f && b1 === 0xfe && b2 === 0x80 && b3 === 0x01) {
+    return "DTS audio";
+  }
+  return null;
+}
+
 function detectMp3OrAac(dv) {
   if (dv.byteLength < 2) return null;
   const id3 =
@@ -353,6 +437,25 @@ function detectMpegPs(dv) {
   return sig === 0x000001ba ? "MPEG Program Stream (MPG)" : null;
 }
 
+function detectMpegTs(dv) {
+  const packetSize = 188;
+  if (dv.byteLength < packetSize * 3) return null;
+  if (
+    dv.getUint8(0) !== 0x47 ||
+    dv.getUint8(packetSize) !== 0x47 ||
+    dv.getUint8(packetSize * 2) !== 0x47
+  ) {
+    return null;
+  }
+  return "MPEG Transport Stream (TS)";
+}
+
+function detectRealMedia(dv) {
+  if (dv.byteLength < 4) return null;
+  const sig = dv.getUint32(0, false);
+  return sig === 0x2e524d46 ? "RealMedia container (RM/RMVB)" : null;
+}
+
 function detectMatroska(dv) {
   if (dv.byteLength < 4) return null;
   const sig = dv.getUint32(0, false);
@@ -382,6 +485,24 @@ function detectJavaClass(dv) {
   if (dv.byteLength < 4) return null;
   const sig = dv.getUint32(0, false);
   return sig === 0xcafebabe ? "Java class file" : null;
+}
+
+function detectIso9660(dv) {
+  const markers = [0x8001, 0x8801, 0x9001];
+  for (let i = 0; i < markers.length; i += 1) {
+    const offset = markers[i];
+    if (dv.byteLength < offset + 5) continue;
+    const s =
+      String.fromCharCode(dv.getUint8(offset + 0)) +
+      String.fromCharCode(dv.getUint8(offset + 1)) +
+      String.fromCharCode(dv.getUint8(offset + 2)) +
+      String.fromCharCode(dv.getUint8(offset + 3)) +
+      String.fromCharCode(dv.getUint8(offset + 4));
+    if (s === "CD001") {
+      return "ISO-9660 CD/DVD image (ISO)";
+    }
+  }
+  return null;
 }
 
 function detectDjvu(dv) {
@@ -525,7 +646,11 @@ const MAGIC_PROBES = [
   detectGzip,
   detectBzip2,
   detectSevenZip,
+  detectXz,
+  detectLz4,
+  detectZstd,
   detectRar,
+  detectCab,
   detectPng,
   detectJpeg,
   detectGif,
@@ -540,16 +665,22 @@ const MAGIC_PROBES = [
   detectWav,
   detectAiff,
   detectMidi,
+  detectAmr,
+  detectAc3,
+  detectDts,
   detectMp3OrAac,
   detectFlv,
   detectAvi,
   detectAsf,
   detectIsoBmff,
   detectMpegPs,
+  detectMpegTs,
+  detectRealMedia,
   detectMatroska,
   detectTar,
   detectSqlite,
   detectJavaClass,
+  detectIso9660,
   detectDjvu,
   detectPcapNg,
   detectPcap,
