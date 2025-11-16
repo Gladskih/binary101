@@ -3,7 +3,7 @@
 import { nowIsoString, formatHumanSize } from "./binary-utils.js";
 import { computeHashForFile, copyToClipboard } from "./hash.js";
 import { detectBinaryType, parseForUi } from "./analyzers/index.js";
-import { renderPe } from "./pe-render.js";
+import { renderPe } from "./renderers/index.js";
 
 const getElement = id => document.getElementById(id);
 

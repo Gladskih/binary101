@@ -1,6 +1,6 @@
 "use strict";
 
-import { addIconPreview, addGroupIconPreview } from "./pe-resources-preview-icon.js";
+import { addIconPreview, addGroupIconPreview } from "./resources-preview-icon.js";
 
 function addManifestPreview(langEntry, data, typeName) {
   if (typeName !== "MANIFEST") return;

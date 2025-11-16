@@ -1,6 +1,6 @@
 "use strict";
 
-import { alignUpTo } from "../binary-utils.js";
+import { alignUpTo } from "../../binary-utils.js";
 
 export function buildCoverage(fileSize, peHeaderOffset, coff, optionalHeaderOffset, ddStartRel, ddCount, sectionHeadersOffset, sections, sectionAlignment, sizeOfImage) {
   const coverage = [];
@@ -29,4 +29,3 @@ export function buildCoverage(fileSize, peHeaderOffset, coff, optionalHeaderOffs
   for (const section of sections) addCov(`Section ${section.name} (raw)`, section.pointerToRawData, section.sizeOfRawData);
   return { coverage, addCov, overlaySize, imageEnd, imageSizeMismatch };
 }
-

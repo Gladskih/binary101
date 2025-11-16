@@ -1,6 +1,6 @@
 "use strict";
 
-import { readAsciiString } from "../binary-utils.js";
+import { readAsciiString } from "../../binary-utils.js";
 
 export async function parseBoundImports(file, dataDirs, rvaToOff, addCoverageRegion) {
   const dir = dataDirs.find(d => d.name === "BOUND_IMPORT");

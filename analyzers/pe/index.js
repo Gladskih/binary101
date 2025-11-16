@@ -1,15 +1,15 @@
 "use strict";
 
-import { parsePeHeaders } from "./pe-core.js";
-import { parseDebugDirectory, parseLoadConfigDirectory } from "./pe-debug-loadcfg.js";
-import { parseImportDirectory } from "./pe-imports.js";
-import { parseExportDirectory } from "./pe-exports.js";
-import { parseTlsDirectory } from "./pe-tls.js";
-import { parseResources } from "./pe-resources.js";
-import { parseClrDirectory, parseSecurityDirectory } from "./pe-clr-security.js";
-import { parseBaseRelocations } from "./pe-reloc.js";
-import { parseExceptionDirectory } from "./pe-exception.js";
-import { parseBoundImports, parseDelayImports } from "./pe-bound-delay.js";
+import { parsePeHeaders } from "./core.js";
+import { parseDebugDirectory, parseLoadConfigDirectory } from "./debug-loadcfg.js";
+import { parseImportDirectory } from "./imports.js";
+import { parseExportDirectory } from "./exports.js";
+import { parseTlsDirectory } from "./tls.js";
+import { parseResources } from "./resources.js";
+import { parseClrDirectory, parseSecurityDirectory } from "./clr-security.js";
+import { parseBaseRelocations } from "./reloc.js";
+import { parseExceptionDirectory } from "./exception.js";
+import { parseBoundImports, parseDelayImports } from "./bound-delay.js";
 
 function parseIatDirectory(dataDirs, rvaToOff, addCoverageRegion) {
   const dir = dataDirs.find(d => d.name === "IAT");

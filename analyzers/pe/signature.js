@@ -1,7 +1,7 @@
 "use strict";
 
-import { toHex32 } from "../binary-utils.js";
-import { MACHINE } from "./pe-constants.js";
+import { toHex32 } from "../../binary-utils.js";
+import { MACHINE } from "./constants.js";
 
 export const peProbe = dataView =>
   dataView.byteLength >= 0x40 && dataView.getUint16(0, true) === 0x5a4d
@@ -10,4 +10,3 @@ export const peProbe = dataView =>
 
 export const mapMachine = machineCode =>
   MACHINE.find(([code]) => code === machineCode)?.[1] || "machine=" + toHex32(machineCode, 4);
-

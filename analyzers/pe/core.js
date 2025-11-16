@@ -1,11 +1,11 @@
 "use strict";
 
-import { readAsciiString, collectPrintableRuns } from "../binary-utils.js";
-import { DD_NAMES } from "./pe-constants.js";
-import { addSectionEntropies } from "./pe-entropy.js";
-import { buildCoverage } from "./pe-coverage.js";
-import { peProbe } from "./pe-signature.js";
-import { computeEntrySection } from "./pe-core-entry.js";
+import { readAsciiString, collectPrintableRuns } from "../../binary-utils.js";
+import { DD_NAMES } from "./constants.js";
+import { addSectionEntropies } from "./entropy.js";
+import { buildCoverage } from "./coverage.js";
+import { peProbe } from "./signature.js";
+import { computeEntrySection } from "./core-entry.js";
 
 function createRvaToOffsetMapper(sections) {
   const spans = sections.map(section => {

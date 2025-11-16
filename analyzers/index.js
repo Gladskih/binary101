@@ -1,7 +1,7 @@
 "use strict";
 
-import { parsePe } from "./pe.js";
-import { peProbe, mapMachine } from "./pe-signature.js";
+import { parsePe } from "./pe/index.js";
+import { peProbe, mapMachine } from "./pe/signature.js";
 
 // Quick magic-based detectors for non-PE types (label only for now)
 function detectELF(dv) {

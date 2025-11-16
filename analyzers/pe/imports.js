@@ -1,6 +1,6 @@
 "use strict";
 
-import { readAsciiString } from "../binary-utils.js";
+import { readAsciiString } from "../../binary-utils.js";
 
 export async function parseImportDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus) {
   const impDir = dataDirs.find(d => d.name === "IMPORT");
@@ -98,4 +98,3 @@ export async function parseImportDirectory(file, dataDirs, rvaToOff, addCoverage
   }
   return imports;
 }
-

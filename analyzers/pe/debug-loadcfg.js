@@ -1,6 +1,6 @@
 "use strict";
 
-import { toHex32 } from "../binary-utils.js";
+import { toHex32 } from "../../binary-utils.js";
 
 export async function parseDebugDirectory(file, dataDirs, rvaToOff, addCoverageRegion) {
   const debugDir = dataDirs.find(d => d.name === "DEBUG");
@@ -94,4 +94,3 @@ export async function parseLoadConfigDirectory(file, dataDirs, rvaToOff, addCove
     GuardFlags
   };
 }
-

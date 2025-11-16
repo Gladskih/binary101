@@ -1,8 +1,8 @@
 "use strict";
 
-import { humanSize, hex, isoOrDash } from "./binary-utils.js";
-import { dd, rowOpts, rowFlags, safe } from "./html-utils.js";
-import { MACHINE, SUBSYSTEMS, CHAR_FLAGS, DLL_FLAGS, SEC_FLAG_TEXTS, DD_TIPS } from "./analyzers/pe-constants.js";
+import { humanSize, hex, isoOrDash } from "../../binary-utils.js";
+import { dd, rowOpts, rowFlags, safe } from "../../html-utils.js";
+import { MACHINE, SUBSYSTEMS, CHAR_FLAGS, DLL_FLAGS, SEC_FLAG_TEXTS, DD_TIPS } from "../../analyzers/pe/constants.js";
 
 const sectionHintMap = {
   ".text": "Code (executable instructions)",
