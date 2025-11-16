@@ -18,11 +18,8 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
 ## Project Structure (high level)
 - `index.html` & `style.css` &mdash; page shell and styling.
 - `app.js` &mdash; UI wiring: file selection, hashing, dispatch to analyzers and renderers.
-- `analyzers/` &mdash; binary format detection and parsers (PE/COFF split into small modules such as `pe-core.js`, `pe-imports.js`, `pe-resources*.js`, etc.).
-- `pe-render-headers.js` &mdash; renders DOS/COFF/Optional headers and data directories.
-- `pe-render-directories.js` &mdash; renders PE directories (Load Config, Debug, Import/Export, TLS, CLR, Security, IAT).
-- `pe-render-resources.js` &mdash; renders resource summary and per-type entries with previews (icons, manifests, version info).
-- `pe-render-layout.js` &mdash; renders layout-oriented views (relocations, exception/pdata, bound/delay imports, coverage, sanity).
+- `analyzers/` &mdash; binary format detection and parsers. PE/COFF logic lives under `analyzers/pe/` and is split into small modules (headers, imports/exports, resources, TLS, CLR, relocations, etc.).
+- `renderers/` &mdash; HTML renderers for parsed structures. The PE renderer lives under `renderers/pe/` and is split into headers, directory views, resources, and layout/sanity views.
 - `hash.js`, `binary-utils.js`, `html-utils.js` &mdash; shared helpers for hashing, byte/hex formatting and safe HTML generation.
 
 ## Contributing

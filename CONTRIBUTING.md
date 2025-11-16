@@ -4,7 +4,7 @@
 
 ### Prerequisites
 - Modern browser (Chrome, Firefox, Edge)
-- local web server for hosting static files
+- Local web server for hosting static files
 
 ### Getting Started
 1. Fork the repository.
@@ -27,7 +27,7 @@
 
 ## Code Quality Standards
 
-All contributions must adhere to the project's code quality metrics and best practices. These are enforced by `.editorconfig` and `.eslintrc.json` (если значения здесь когда‑нибудь разъедутся с конфигами, источником истины считаются именно конфиги).
+All contributions must adhere to the project's code quality metrics and best practices. These are enforced by `.editorconfig` and `.eslintrc.json`.
 
 ### JavaScript Best Practices
 - **Maximum file length**: 250 lines (including comments and blank lines).
@@ -62,18 +62,14 @@ Before committing, verify your code meets the project standards:
 npx eslint .
 ```
 
-This will check JavaScript files against the ESLint configuration. Fix any errors before submitting your pull request.
+This checks JavaScript files against the ESLint configuration. Fix any errors before submitting your pull request.
 
 ## Project Structure
 
 - `index.html`, `style.css`: Page shell and styling.
 - `app.js`: Handles UI interactions, file selection, hashing, and calls analyzers/renderers.
-- `analyzers/`: Format-specific parsers. PE/COFF logic is split across small modules (e.g. `pe-core.js`, `pe-imports.js`, `pe-resources-*.js`, etc.).
-- `pe-render-headers.js`: Renders DOS/COFF/Optional headers and data directories.
-- `pe-render-directories.js`: Renders PE directories (Load Config, Debug, Import/Export, TLS, CLR, Security, IAT).
-- `pe-render-resources.js`: Renders resource summary and per-type entries with previews (icons, manifests, version info).
-- `pe-render-layout.js`: Renders layout views (relocations, exception/pdata, bound/delay imports, coverage, sanity).
-- `pe-render.js`: Top-level PE renderer that composes the above helpers into a single HTML fragment.
+- `analyzers/`: Format-specific parsers. PE/COFF logic is split across small modules under `analyzers/pe/` (e.g. `core.js`, `imports.js`, `exports.js`, `resources-*.js`, `tls.js`, `clr-security.js`, `reloc.js`, etc.).
+- `renderers/`: Renderers that turn parsed objects into HTML. PE views live in `renderers/pe/` and are split into `headers.js`, `directories.js`, `resources.js`, `layout.js`, composed by `renderers/pe/index.js`.
 - `binary-utils.js`, `html-utils.js`, `hash.js`: Shared helpers for hashing, byte/hex formatting and safe HTML generation.
 
 ## Adding a New Analyzer
