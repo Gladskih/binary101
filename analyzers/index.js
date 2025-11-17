@@ -6,6 +6,7 @@ import { probeByMagic, probeTextLike } from "./probes.js";
 import { parseJpeg } from "./jpeg/index.js";
 import { parseElf } from "./elf/index.js";
 import { isGifSignature, parseGif } from "./gif/index.js";
+import { parseZip } from "./zip/index.js";
 import { parsePng } from "./png/index.js";
 import { parsePdf } from "./pdf/index.js";
 
@@ -199,6 +200,10 @@ export async function parseForUi(file) {
     const gif = await parseGif(file);
     if (gif) return { analyzer: "gif", parsed: gif };
   }
+  if (dv.byteLength >= 4 && dv.getUint32(0, true) === 0x04034b50) {
+    const zip = await parseZip(file);
+    if (zip) return { analyzer: "zip", parsed: zip };
+  }            
   if (dv.byteLength >= 5) {
     const pdfVersion = detectPdfVersion(dv);
     if (pdfVersion) {

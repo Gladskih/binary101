@@ -10,6 +10,7 @@ import {
   renderGif,
   renderPng,
   renderPdf,
+  renderZip,
 } from "./renderers/index.js";
 import { escapeHtml } from "./html-utils.js";
 
@@ -112,6 +113,14 @@ function renderAnalysisIntoUi(analyzerName, parsedResult) {
     peDetailsValueElement.innerHTML = previewHtml + renderGif(parsedResult);
     return;
   }
+  if (analyzerName === "zip" && parsedResult) {
+    peDetailsTermElement.textContent = "ZIP details";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    peDetailsValueElement.innerHTML = renderZip(parsedResult);
+    return;
+  }
+  
   if (analyzerName === "png" && parsedResult) {
     peDetailsTermElement.textContent = "PNG details";
     peDetailsTermElement.hidden = false;
