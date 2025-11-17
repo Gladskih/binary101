@@ -5,6 +5,7 @@ import { peProbe, mapMachine } from "./pe/signature.js";
 import { probeByMagic, probeTextLike } from "./probes.js";
 import { parseJpeg } from "./jpeg/index.js";
 import { parseElf } from "./elf/index.js";
+import { parseFb2 } from "./fb2/index.js";
 
 // Quick magic-based detectors for non-PE types (label only for now)
 function detectELF(dv) {
@@ -133,7 +134,7 @@ export async function detectBinaryType(file) {
   return "Unknown binary type";
 }
 
-// Parse-and-render entry point (current: PE only)
+// Parse-and-render entry point
 export async function parseForUi(file) {
   const dv = new DataView(
     await file.slice(0, Math.min(file.size, 65536)).arrayBuffer()
@@ -145,6 +146,11 @@ export async function parseForUi(file) {
   if (peProbe(dv)) {
     const pe = await parsePe(file);
     return { analyzer: "pe", parsed: pe };
+  }
+  const ascii = toAsciiFromWholeView(dv, 8192).toLowerCase();
+  if (ascii.indexOf("<fictionbook") !== -1) {
+    const fb2 = await parseFb2(file);
+    if (fb2) return { analyzer: "fb2", parsed: fb2 };
   }
   if (dv.byteLength >= 2 && dv.getUint16(0, false) === 0xffd8) {
     const jpeg = await parseJpeg(file);
