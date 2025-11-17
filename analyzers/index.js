@@ -5,6 +5,7 @@ import { peProbe, mapMachine } from "./pe/signature.js";
 import { probeByMagic, probeTextLike } from "./probes.js";
 import { parseJpeg } from "./jpeg/index.js";
 import { parseElf } from "./elf/index.js";
+import { parseZip } from "./zip/index.js";
 import { parsePng } from "./png/index.js";
 import { parsePdf } from "./pdf/index.js";
 
@@ -194,6 +195,10 @@ export async function parseForUi(file) {
     const pe = await parsePe(file);
     return { analyzer: "pe", parsed: pe };
   }
+  if (dv.byteLength >= 4 && dv.getUint32(0, true) === 0x04034b50) {
+    const zip = await parseZip(file);
+    if (zip) return { analyzer: "zip", parsed: zip };
+  }            
   if (dv.byteLength >= 5) {
     const pdfVersion = detectPdfVersion(dv);
     if (pdfVersion) {
