@@ -84,7 +84,7 @@ export function parseGraphicControl(dv, offset) {
   const packed = dv.getUint8(offset + 3);
   const delay = dv.getUint16(offset + 4, true);
   const transparentIndex = dv.getUint8(offset + 6);
-  const terminatorOffset = offset + 3 + blockSize + 1;
+  const terminatorOffset = offset + 3 + blockSize;
   const hasTerminator =
     terminatorOffset < dv.byteLength && dv.getUint8(terminatorOffset) === 0;
   const disposalIndex = (packed >> 2) & 0x07;
