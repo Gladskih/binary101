@@ -3,7 +3,16 @@
 import { nowIsoString, formatHumanSize } from "./binary-utils.js";
 import { computeHashForFile, copyToClipboard } from "./hash.js";
 import { detectBinaryType, parseForUi } from "./analyzers/index.js";
-import { renderPe, renderJpeg, renderElf, renderFb2 } from "./renderers/index.js";
+import {
+  renderPe,
+  renderJpeg,
+  renderElf,
+  renderGif,
+  renderPng,
+  renderPdf,
+  renderZip,
+  renderFb2,
+} from "./renderers/index.js";
 import { escapeHtml } from "./html-utils.js";
 
 const getElement = id => document.getElementById(id);
@@ -103,6 +112,36 @@ function renderAnalysisIntoUi(analyzerName, parsedResult) {
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
     peDetailsValueElement.innerHTML = renderFb2(parsedResult);
+    return;
+  }
+  if (analyzerName === "gif" && parsedResult) {
+    peDetailsTermElement.textContent = "GIF details";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    peDetailsValueElement.innerHTML = previewHtml + renderGif(parsedResult);
+    return;
+  }
+  if (analyzerName === "zip" && parsedResult) {
+    peDetailsTermElement.textContent = "ZIP details";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    peDetailsValueElement.innerHTML = renderZip(parsedResult);
+    return;
+  }
+  
+  if (analyzerName === "png" && parsedResult) {
+    peDetailsTermElement.textContent = "PNG details";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    peDetailsValueElement.innerHTML = previewHtml + renderPng(parsedResult);
+    return;
+  }
+
+  if (analyzerName === "pdf" && parsedResult) {
+    peDetailsTermElement.textContent = "PDF details";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    peDetailsValueElement.innerHTML = renderPdf(parsedResult);
     return;
   }
 
@@ -239,7 +278,12 @@ window.addEventListener("paste", async event => {
   showFileInfo(syntheticFile, "Paste (clipboard data)");
 });
 
-async function computeAndDisplayHash(algorithmName, valueElement, buttonElement, copyButtonElement) {
+async function computeAndDisplayHash(
+  algorithmName,
+  valueElement,
+  buttonElement,
+  copyButtonElement
+) {
   if (!currentFile) {
     valueElement.textContent = "No file selected.";
     return;
