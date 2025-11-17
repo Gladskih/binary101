@@ -11,6 +11,7 @@ import { parseZip } from "./zip/index.js";
 import { parsePng } from "./png/index.js";
 import { parsePdf } from "./pdf/index.js";
 import { parseWebp } from "./webp/index.js";
+import { parseMp3, probeMp3 } from "./mp3/index.js";
 
 // Quick magic-based detectors for non-PE types (label only for now)
 function detectELF(dv) {
@@ -140,6 +141,21 @@ export async function detectBinaryType(file) {
   if (m) return m;
   const magic = probeByMagic(dv);
   if (magic) {
+    if (magic.indexOf("MPEG audio") !== -1) {
+      const mp3 = await parseMp3(file);
+      if (mp3 && mp3.firstFrame) {
+        const info = mp3.firstFrame;
+        const parts = [];
+        if (info.versionLabel) parts.push(info.versionLabel);
+        if (info.layerLabel) parts.push(info.layerLabel);
+        if (info.bitrateKbps) parts.push(`${info.bitrateKbps} kbps`);
+        if (info.sampleRate) parts.push(`${info.sampleRate} Hz`);
+        if (info.channelMode) parts.push(info.channelMode);
+        const label = parts.length ? parts.join(", ") : "MPEG audio";
+        return label;
+      }
+      return "MPEG audio stream (MP3)";
+    }
     if (magic.startsWith("ZIP archive")) {
       const zipLabel = refineZipLabel(dv);
       if (zipLabel) return zipLabel;
@@ -253,6 +269,10 @@ export async function parseForUi(file) {
       const parsedWebp = await parseWebp(file);
       if (parsedWebp) return { analyzer: "webp", parsed: parsedWebp };
     }
+  }
+  if (probeMp3(dv)) {
+    const mp3 = await parseMp3(file);
+    if (mp3) return { analyzer: "mp3", parsed: mp3 };
   }
   return { analyzer: null, parsed: null };
 }
