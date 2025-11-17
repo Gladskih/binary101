@@ -23,8 +23,7 @@ function renderPreviewCell(langEntry) {
   }
   if (kind === "text" && langEntry.textPreview) {
     const text = String(langEntry.textPreview);
-    const short = text.length > 280 ? `${text.slice(0, 277)}…` : text;
-    return `<div class="mono smallNote" style="max-height:7.5rem;overflow:auto;white-space:pre-wrap;word-break:break-word">${safe(short)}</div>`;
+    return `<div class="mono smallNote" style="white-space:pre-wrap;word-break:break-word">${safe(text)}</div>`;
   }
   if (kind === "version" && langEntry.versionInfo) {
     const info = langEntry.versionInfo;
