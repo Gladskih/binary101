@@ -258,6 +258,22 @@ export async function parseZip(file) {
   if (!eocd) return null;
   const zip64Locator = findZip64Locator(tailView, baseOffset);
   const zip64 = zip64Locator ? await parseZip64Eocd(file, zip64Locator, issues) : null;
+  const expectsZip64 =
+    eocd.entriesThisDisk === 0xffff ||
+    eocd.totalEntries === 0xffff ||
+    eocd.centralDirSize === 0xffffffff ||
+    eocd.centralDirOffset === 0xffffffff;
+  if (expectsZip64) {
+    if (!zip64Locator) {
+      issues.push(
+        "EOCD fields use ZIP64 placeholders but ZIP64 locator was not found."
+      );
+    } else if (!zip64) {
+      issues.push(
+        "ZIP64 metadata could not be read even though EOCD fields require it."
+      );
+    }
+  }
   const cdOffsetSource = zip64?.centralDirOffset ?? eocd.centralDirOffset;
   const cdSizeSource = zip64?.centralDirSize ?? eocd.centralDirSize;
   const cdOffset = getSafeNumber(cdOffsetSource);
