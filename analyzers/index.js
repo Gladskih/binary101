@@ -5,6 +5,7 @@ import { peProbe, mapMachine } from "./pe/signature.js";
 import { probeByMagic, probeTextLike } from "./probes.js";
 import { parseJpeg } from "./jpeg/index.js";
 import { parseElf } from "./elf/index.js";
+import { parseFb2 } from "./fb2/index.js";
 import { isGifSignature, parseGif } from "./gif/index.js";
 import { parseZip } from "./zip/index.js";
 import { parsePng } from "./png/index.js";
@@ -200,7 +201,7 @@ export async function detectBinaryType(file) {
   return "Unknown binary type";
 }
 
-// Parse-and-render entry point (current: PE only)
+// Parse-and-render entry point
 export async function parseForUi(file) {
   const dv = new DataView(
     await file.slice(0, Math.min(file.size, 65536)).arrayBuffer()
@@ -212,6 +213,11 @@ export async function parseForUi(file) {
   if (peProbe(dv)) {
     const pe = await parsePe(file);
     return { analyzer: "pe", parsed: pe };
+  }
+  const ascii = toAsciiFromWholeView(dv, 8192).toLowerCase();
+  if (ascii.indexOf("<fictionbook") !== -1) {
+    const fb2 = await parseFb2(file);
+    if (fb2) return { analyzer: "fb2", parsed: fb2 };
   }
   if (isGifSignature(dv)) {
     const gif = await parseGif(file);

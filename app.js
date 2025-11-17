@@ -12,6 +12,7 @@ import {
   renderPdf,
   renderZip,
   renderWebp,
+  renderFb2,
 } from "./renderers/index.js";
 import { escapeHtml } from "./html-utils.js";
 
@@ -107,6 +108,13 @@ function renderAnalysisIntoUi(analyzerName, parsedResult) {
     return;
   }
 
+  if (analyzerName === "fb2" && parsedResult) {
+    peDetailsTermElement.textContent = "FB2 details";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    peDetailsValueElement.innerHTML = renderFb2(parsedResult);
+    return;
+  }
   if (analyzerName === "gif" && parsedResult) {
     peDetailsTermElement.textContent = "GIF details";
     peDetailsTermElement.hidden = false;
