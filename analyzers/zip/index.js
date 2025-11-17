@@ -1,7 +1,5 @@
 "use strict";
-
 import { formatUnixSecondsOrDash, readAsciiString } from "../../binary-utils.js";
-
 const EOCD_SIGNATURE = 0x06054b50;
 const ZIP64_EOCD_LOCATOR_SIGNATURE = 0x07064b50;
 const ZIP64_EOCD_SIGNATURE = 0x06064b50;
@@ -10,7 +8,6 @@ const MIN_EOCD_SIZE = 22;
 const MAX_EOCD_SCAN = 131072;
 const MAX_CENTRAL_DIRECTORY_BYTES = 8 * 1024 * 1024;
 const UTF8_DECODER = new TextDecoder("utf-8", { fatal: false });
-
 const COMPRESSION_METHODS = new Map([
   [0, "Stored"],
   [1, "Shrunk"],
@@ -29,17 +26,13 @@ const COMPRESSION_METHODS = new Map([
   [98, "PPMd"],
   [99, "AES encrypted"]
 ]);
-
 const readUtf8 = bytes => UTF8_DECODER.decode(bytes);
-
 const getSafeNumber = value => {
   if (typeof value === "number") return value;
   if (value <= Number.MAX_SAFE_INTEGER) return Number(value);
   return null;
 };
-
 const getBigUint64 = (dv, offset) => dv.getBigUint64(offset, true);
-
 const dosDateTimeToIso = (dosDate, dosTime) => {
   const seconds = (dosTime & 0x1f) * 2;
   const minutes = (dosTime >> 5) & 0x3f;
@@ -48,10 +41,10 @@ const dosDateTimeToIso = (dosDate, dosTime) => {
   const month = (dosDate >> 5) & 0x0f;
   const year = ((dosDate >> 9) & 0x7f) + 1980;
   if (!year || !month || !day) return null;
-  const unixSeconds = Date.UTC(year, month - 1, day, hours, minutes, seconds) / 1000;
+  const unixSeconds =
+    Date.UTC(year, month - 1, day, hours, minutes, seconds) / 1000;
   return formatUnixSecondsOrDash(unixSeconds);
 };
-
 const readTailForEocd = async file => {
   const fileSize = file.size || 0;
   const probeSize = Math.min(fileSize, MAX_EOCD_SCAN);
@@ -59,7 +52,6 @@ const readTailForEocd = async file => {
   const buffer = await file.slice(start, fileSize).arrayBuffer();
   return { baseOffset: start, dv: new DataView(buffer) };
 };
-
 const parseEocd = (dv, baseOffset) => {
   for (let i = dv.byteLength - MIN_EOCD_SIZE; i >= 0; i -= 1) {
     if (dv.getUint32(i, true) !== EOCD_SIGNATURE) continue;
@@ -88,9 +80,8 @@ const parseEocd = (dv, baseOffset) => {
     };
   }
   return null;
-};
-
-const findZip64Locator = (dv, baseOffset) => {
+  };
+  const findZip64Locator = (dv, baseOffset) => {
   const locatorSize = 20;
   const limit = dv.byteLength - locatorSize;
   let found = null;
@@ -107,18 +98,16 @@ const findZip64Locator = (dv, baseOffset) => {
     };
   }
   return found;
-};
-
-const readDataView = async (file, offset, length) => {
+  };
+  const readDataView = async (file, offset, length) => {
   if (offset == null || length <= 0) return null;
   const fileSize = file.size || 0;
   if (offset >= fileSize) return null;
   const clampedLength = Math.min(length, fileSize - offset);
   const buffer = await file.slice(offset, offset + clampedLength).arrayBuffer();
-  return new DataView(buffer);
-};
-
-const parseZip64Eocd = async (file, locator, issues) => {
+    return new DataView(buffer);
+  };
+  const parseZip64Eocd = async (file, locator, issues) => {
   const offsetNumber = getSafeNumber(locator.zip64EocdOffset);
   if (offsetNumber == null) {
     issues.push("ZIP64 EOCD offset exceeds supported range.");
@@ -260,9 +249,8 @@ const parseCentralDirectoryEntries = (dv, issues) => {
     issues.push("Central directory parsing stopped early due to unexpected data.");
   }
   return entries;
-};
-
-export async function parseZip(file) {
+  };
+  export async function parseZip(file) {
   const issues = [];
   const { baseOffset, dv: tailView } = await readTailForEocd(file);
   const eocd = parseEocd(tailView, baseOffset);

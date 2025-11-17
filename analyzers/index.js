@@ -15,8 +15,24 @@ function detectELF(dv) {
   const le = d === 1; const t = dv.getUint16(0x10, le), m = dv.getUint16(0x12, le);
   const bit = c === 1 ? "32-bit" : c === 2 ? "64-bit" : "?";
   const endian = d === 1 ? "LSB" : d === 2 ? "MSB" : "?";
-  const mach = m === 0x3e ? "x86-64" : m === 0x03 ? "x86" : m === 0xb7 ? "ARM64" : m === 0x28 ? "ARM" : ("machine=" + m.toString(16));
-  const kind = t === 2 ? "executable" : t === 3 ? "shared object" : t === 1 ? "relocatable" : ("type=" + t.toString(16));
+  const mach =
+    m === 0x3e
+      ? "x86-64"
+      : m === 0x03
+        ? "x86"
+        : m === 0xb7
+          ? "ARM64"
+          : m === 0x28
+            ? "ARM"
+            : `machine=${m.toString(16)}`;
+  const kind =
+    t === 2
+      ? "executable"
+      : t === 3
+        ? "shared object"
+        : t === 1
+          ? "relocatable"
+          : `type=${t.toString(16)}`;
   return `ELF ${bit} ${endian} ${kind}, ${mach}`;
 }
 
