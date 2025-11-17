@@ -191,7 +191,7 @@ export function parseId3v2(dv, issues) {
     versionRevision,
     flags,
     size: tagSize,
-    tagTotalSize: declaredTotal,
+    tagTotalSize: Math.min(declaredTotal, dv.byteLength),
     extendedHeaderSize,
     frames,
     hasFooter: flags.footerPresent

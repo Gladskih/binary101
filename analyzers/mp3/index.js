@@ -43,6 +43,30 @@ function detectMultipleId3(id3v2, dv, issues) {
   }
 }
 
+function findFirstFrameWithFallback(dv, audioStart, id3v2, issues) {
+  const primary = findFirstFrame(dv, audioStart, issues);
+  if (primary || !id3v2) return primary;
+
+  if (audioStart < 0 || audioStart > dv.byteLength) {
+    issues.push(
+      "ID3v2 tag size is inconsistent with file length; scanning whole file for MPEG frame header."
+    );
+  } else {
+    issues.push(
+      "ID3v2 tag present but no MPEG frame at declared audio start; scanning whole file instead."
+    );
+  }
+
+  const limit = Math.max(0, dv.byteLength - 4);
+  for (let offset = 0; offset <= limit; offset += 1) {
+    const frame = parseFrameHeader(dv, offset);
+    if (frame) {
+      return frame;
+    }
+  }
+  return null;
+}
+
 export function probeMp3(dv) {
   if (dv.byteLength < 3) return false;
   if (dv.getUint8(0) === 0x49 && dv.getUint8(1) === 0x44 && dv.getUint8(2) === 0x33) {
@@ -66,7 +90,7 @@ export async function parseMp3(file) {
   const lyrics3 = parseLyrics3(dv, issues);
 
   const audioStart = id3v2 ? id3v2.tagTotalSize : 0;
-  const firstFrame = findFirstFrame(dv, audioStart, issues);
+  const firstFrame = findFirstFrameWithFallback(dv, audioStart, id3v2, issues);
   if (!firstFrame) {
     const reason = id3v2
       ? "ID3v2 tag present but no valid MPEG frame header found."

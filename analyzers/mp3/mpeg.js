@@ -38,7 +38,8 @@ function decodeModeExtension(layerBits, modeExtension) {
 export function parseFrameHeader(dv, offset) {
   if (offset + 4 > dv.byteLength) return null;
   const header = dv.getUint32(offset, false);
-  if ((header & 0xffe00000) !== 0xffe00000) return null;
+  const syncWord = (header >>> 21) & 0x7ff;
+  if (syncWord !== 0x7ff) return null;
   const versionBits = (header >> 19) & 0x3;
   const layerBits = (header >> 17) & 0x3;
   if (versionBits === 0x1 || layerBits === 0x0) return null;
