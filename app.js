@@ -3,8 +3,13 @@
 import { nowIsoString, formatHumanSize } from "./binary-utils.js";
 import { computeHashForFile, copyToClipboard } from "./hash.js";
 import { detectBinaryType, parseForUi } from "./analyzers/index.js";
-import { renderPe, renderJpeg, renderElf, renderGif } from "./renderers/index.js";
-import { renderPe, renderJpeg, renderElf, renderPng } from "./renderers/index.js";
+import {
+  renderPe,
+  renderJpeg,
+  renderElf,
+  renderGif,
+  renderPng,
+} from "./renderers/index.js";
 import { escapeHtml } from "./html-utils.js";
 
 const getElement = id => document.getElementById(id);

@@ -167,6 +167,7 @@ export async function parseForUi(file) {
   if (isGifSignature(dv)) {
     const gif = await parseGif(file);
     if (gif) return { analyzer: "gif", parsed: gif };
+  }
   if (dv.byteLength >= 8) {
     const sig0 = dv.getUint32(0, false);
     const sig1 = dv.getUint32(4, false);
