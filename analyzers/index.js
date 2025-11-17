@@ -9,6 +9,7 @@ import { isGifSignature, parseGif } from "./gif/index.js";
 import { parseZip } from "./zip/index.js";
 import { parsePng } from "./png/index.js";
 import { parsePdf } from "./pdf/index.js";
+import { parseWebp } from "./webp/index.js";
 
 // Quick magic-based detectors for non-PE types (label only for now)
 function detectELF(dv) {
@@ -162,6 +163,22 @@ export async function detectBinaryType(file) {
         return `PNG image${suffix}`;
       }
     }
+    if (magic === "WebP image") {
+      const webp = await parseWebp(file);
+      if (webp) {
+        const extras = [];
+        if (webp.dimensions && webp.dimensions.width && webp.dimensions.height) {
+          extras.push(`${webp.dimensions.width}x${webp.dimensions.height}`);
+        }
+        if (webp.format === "VP8L") extras.push("lossless");
+        else if (webp.format === "VP8") extras.push("lossy");
+        else if (webp.format === "VP8X") extras.push("extended");
+        if (webp.hasAlpha) extras.push("alpha");
+        if (webp.hasAnimation) extras.push("animation");
+        const suffix = extras.length ? ` (${extras.join(", ")})` : "";
+        return `WebP image${suffix}`;
+      }
+    }
     if (magic.startsWith("Microsoft Compound File")) {
       const compound = refineCompoundLabel(dv);
       if (compound) return compound;
@@ -222,6 +239,14 @@ export async function parseForUi(file) {
   if (dv.byteLength >= 2 && dv.getUint16(0, false) === 0xffd8) {
     const jpeg = await parseJpeg(file);
     if (jpeg) return { analyzer: "jpeg", parsed: jpeg };
+  }
+  if (dv.byteLength >= 12) {
+    const riff = dv.getUint32(0, false);
+    const webp = dv.getUint32(8, false);
+    if (riff === 0x52494646 && webp === 0x57454250) {
+      const parsedWebp = await parseWebp(file);
+      if (parsedWebp) return { analyzer: "webp", parsed: parsedWebp };
+    }
   }
   return { analyzer: null, parsed: null };
 }

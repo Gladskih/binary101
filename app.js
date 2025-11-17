@@ -11,6 +11,7 @@ import {
   renderPng,
   renderPdf,
   renderZip,
+  renderWebp,
 } from "./renderers/index.js";
 import { escapeHtml } from "./html-utils.js";
 
@@ -126,6 +127,14 @@ function renderAnalysisIntoUi(analyzerName, parsedResult) {
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
     peDetailsValueElement.innerHTML = previewHtml + renderPng(parsedResult);
+    return;
+  }
+
+  if (analyzerName === "webp" && parsedResult) {
+    peDetailsTermElement.textContent = "WebP details";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    peDetailsValueElement.innerHTML = previewHtml + renderWebp(parsedResult);
     return;
   }
 
