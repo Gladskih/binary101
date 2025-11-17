@@ -5,6 +5,7 @@ import { peProbe, mapMachine } from "./pe/signature.js";
 import { probeByMagic, probeTextLike } from "./probes.js";
 import { parseJpeg } from "./jpeg/index.js";
 import { parseElf } from "./elf/index.js";
+import { parsePng } from "./png/index.js";
 
 // Quick magic-based detectors for non-PE types (label only for now)
 function detectELF(dv) {
@@ -112,6 +113,22 @@ export async function detectBinaryType(file) {
       const zipLabel = refineZipLabel(dv);
       if (zipLabel) return zipLabel;
     }
+    if (magic === "PNG image") {
+      const png = await parsePng(file);
+      if (png && png.ihdr) {
+        const dimensions =
+          png.ihdr.width && png.ihdr.height
+            ? `${png.ihdr.width}x${png.ihdr.height}`
+            : null;
+        const color = png.ihdr.colorName || null;
+        const extras = [];
+        if (dimensions) extras.push(dimensions);
+        if (color) extras.push(color);
+        if (png.hasTransparency) extras.push("alpha");
+        const suffix = extras.length ? ` (${extras.join(", ")})` : "";
+        return `PNG image${suffix}`;
+      }
+    }
     if (magic.startsWith("Microsoft Compound File")) {
       const compound = refineCompoundLabel(dv);
       if (compound) return compound;
@@ -145,6 +162,14 @@ export async function parseForUi(file) {
   if (peProbe(dv)) {
     const pe = await parsePe(file);
     return { analyzer: "pe", parsed: pe };
+  }
+  if (dv.byteLength >= 8) {
+    const sig0 = dv.getUint32(0, false);
+    const sig1 = dv.getUint32(4, false);
+    if (sig0 === 0x89504e47 && sig1 === 0x0d0a1a0a) {
+      const png = await parsePng(file);
+      if (png) return { analyzer: "png", parsed: png };
+    }
   }
   if (dv.byteLength >= 2 && dv.getUint16(0, false) === 0xffd8) {
     const jpeg = await parseJpeg(file);
