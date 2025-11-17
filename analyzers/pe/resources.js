@@ -8,6 +8,3 @@ export async function parseResources(file, dataDirs, rvaToOff, addCoverageRegion
   if (!tree) return null;
   return enrichResourcePreviews(file, tree);
 }
-
-// Backwards-compatible alias used earlier in refactor.
-export const parseResourcesSummary = parseResources;
