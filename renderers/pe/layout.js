@@ -103,6 +103,9 @@ export function renderSanity(pe, out) {
   if (pe.imageSizeMismatch) {
     issues.push("SizeOfImage does not match section layout.");
   }
+  if (pe.debugWarning) {
+    issues.push(pe.debugWarning);
+  }
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Sanity</h4>`);
   if (!issues.length) {
     out.push(`<div class="smallNote">No obvious structural issues detected.</div>`);

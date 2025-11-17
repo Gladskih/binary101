@@ -24,13 +24,20 @@ export function renderLoadConfig(pe, out) {
 }
 
 export function renderDebug(pe, out) {
-  if (!pe.rsds) return;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Debug (PDB)</h4><dl>`);
-  out.push(dd("CodeView", "RSDS", "CodeView debug directory entry with RSDS signature."));
-  out.push(dd("GUID", (pe.rsds.guid || "").toUpperCase(), "PDB signature GUID used to match correct PDB file."));
-  out.push(dd("Age", String(pe.rsds.age), "PDB age; increments on certain rebuilds."));
-  out.push(dd("Path", pe.rsds.path, "Path to PDB as recorded at link time (can be absolute)."));
-  out.push(`</dl></section>`);
+  if (!pe.rsds && !pe.debugWarning) return;
+  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Debug (PDB)</h4>`);
+  if (pe.rsds) {
+    out.push(`<dl>`);
+    out.push(dd("CodeView", "RSDS", "CodeView debug directory entry with RSDS signature."));
+    out.push(dd("GUID", (pe.rsds.guid || "").toUpperCase(), "PDB signature GUID used to match correct PDB file."));
+    out.push(dd("Age", String(pe.rsds.age), "PDB age; increments on certain rebuilds."));
+    out.push(dd("Path", pe.rsds.path, "Path to PDB as recorded at link time (can be absolute)."));
+    out.push(`</dl>`);
+  }
+  if (pe.debugWarning) {
+    out.push(`<div class="smallNote">${safe(pe.debugWarning)}</div>`);
+  }
+  out.push(`</section>`);
 }
 
 export function renderImports(pe, out) {
