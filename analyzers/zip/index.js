@@ -80,8 +80,8 @@ const parseEocd = (dv, baseOffset) => {
     };
   }
   return null;
-  };
-  const findZip64Locator = (dv, baseOffset) => {
+};
+const findZip64Locator = (dv, baseOffset) => {
   const locatorSize = 20;
   const limit = dv.byteLength - locatorSize;
   let found = null;
@@ -98,16 +98,17 @@ const parseEocd = (dv, baseOffset) => {
     };
   }
   return found;
-  };
-  const readDataView = async (file, offset, length) => {
+};
+
+const readDataView = async (file, offset, length) => {
   if (offset == null || length <= 0) return null;
   const fileSize = file.size || 0;
   if (offset >= fileSize) return null;
   const clampedLength = Math.min(length, fileSize - offset);
   const buffer = await file.slice(offset, offset + clampedLength).arrayBuffer();
-    return new DataView(buffer);
-  };
-  const parseZip64Eocd = async (file, locator, issues) => {
+  return new DataView(buffer);
+};
+const parseZip64Eocd = async (file, locator, issues) => {
   const offsetNumber = getSafeNumber(locator.zip64EocdOffset);
   if (offsetNumber == null) {
     issues.push("ZIP64 EOCD offset exceeds supported range.");
@@ -249,8 +250,8 @@ const parseCentralDirectoryEntries = (dv, issues) => {
     issues.push("Central directory parsing stopped early due to unexpected data.");
   }
   return entries;
-  };
-  export async function parseZip(file) {
+};
+export async function parseZip(file) {
   const issues = [];
   const { baseOffset, dv: tailView } = await readTailForEocd(file);
   const eocd = parseEocd(tailView, baseOffset);
