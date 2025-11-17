@@ -2,26 +2,151 @@
 
 import { addIconPreview, addGroupIconPreview } from "./resources-preview-icon.js";
 
-function addManifestPreview(langEntry, data, typeName) {
-  if (typeName !== "MANIFEST") return;
-  if (!data.length) return;
-  let text = "";
+function addPreviewIssue(langEntry, message) {
+  if (!message) return;
+  langEntry.previewIssues = langEntry.previewIssues || [];
+  langEntry.previewIssues.push(String(message));
+}
+
+function decodeTextResource(data) {
+  if (!data?.length) return { text: "", encoding: "" };
   if (data.length >= 2 && data[0] === 0xff && data[1] === 0xfe) {
+    let text = "";
     for (let index = 2; index + 1 < data.length; index += 2) {
       const ch = data[index] | (data[index + 1] << 8);
       if (ch === 0) break;
       text += String.fromCharCode(ch);
     }
-  } else {
-    try {
-      text = new TextDecoder("utf-8").decode(data);
-    } catch {
-      text = "";
-    }
+    return { text, encoding: "UTF-16LE" };
   }
+  try {
+    const text = new TextDecoder("utf-8", { fatal: false }).decode(data);
+    return { text, encoding: "UTF-8" };
+  } catch (err) {
+    return { text: "", encoding: "", error: err };
+  }
+}
+
+function addManifestPreview(langEntry, data, typeName) {
+  if (typeName !== "MANIFEST") return;
+  const { text, error } = decodeTextResource(data);
+  if (error) addPreviewIssue(langEntry, "Manifest text could not be fully decoded.");
   if (!text) return;
   langEntry.previewKind = "text";
   langEntry.textPreview = text;
+}
+
+function addHtmlPreview(langEntry, data, typeName) {
+  if (typeName !== "HTML") return;
+  const { text, error, encoding } = decodeTextResource(data);
+  if (error) addPreviewIssue(langEntry, "HTML resource text could not be decoded.");
+  if (!text) return;
+  langEntry.previewKind = "html";
+  langEntry.textPreview = text;
+  langEntry.textEncoding = encoding || null;
+}
+
+function addStringTablePreview(langEntry, data, typeName, entryId) {
+  if (typeName !== "STRING") return;
+  if (data.length < 2) {
+    addPreviewIssue(langEntry, "String table is too small to read.");
+    return;
+  }
+  const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const entries = [];
+  let offset = 0;
+  const baseId = entryId != null ? Math.max(0, entryId - 1) * 16 : null;
+  while (offset + 2 <= data.length && entries.length < 32) {
+    const len = dv.getUint16(offset, true);
+    offset += 2;
+    const byteLen = len * 2;
+    if (offset + byteLen > data.length) {
+      addPreviewIssue(langEntry, "String table data ended unexpectedly.");
+      break;
+    }
+    let text = "";
+    for (let pos = 0; pos + 1 < byteLen; pos += 2) {
+      const ch = dv.getUint16(offset + pos, true);
+      if (ch === 0) break;
+      text += String.fromCharCode(ch);
+    }
+    const id = baseId != null ? baseId + entries.length : null;
+    entries.push({ id, text });
+    offset += byteLen;
+  }
+  if (!entries.length) {
+    addPreviewIssue(langEntry, "No strings could be read from table.");
+    return;
+  }
+  langEntry.previewKind = "stringTable";
+  langEntry.stringTable = entries;
+}
+
+function addMessageTablePreview(langEntry, data, typeName) {
+  if (typeName !== "MESSAGETABLE") return;
+  if (data.length < 4) {
+    addPreviewIssue(langEntry, "Message table header is incomplete.");
+    return;
+  }
+  const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const blockCount = dv.getUint32(0, true);
+  if (!blockCount || 4 + blockCount * 12 > data.length) {
+    addPreviewIssue(langEntry, "Message table block list is invalid.");
+    return;
+  }
+  const messages = [];
+  const maxMessages = 12;
+  let truncated = false;
+  for (let blockIndex = 0; blockIndex < blockCount; blockIndex++) {
+    const base = 4 + blockIndex * 12;
+    const lowId = dv.getUint32(base + 0, true);
+    const highId = dv.getUint32(base + 4, true);
+    const offset = dv.getUint32(base + 8, true);
+    if (offset >= data.length) {
+      addPreviewIssue(langEntry, `Message block ${blockIndex} offset is outside resource.`);
+      continue;
+    }
+    const limit = data.length;
+    let cursor = offset;
+    let currentId = lowId;
+    while (cursor + 4 <= limit && currentId <= highId) {
+      const length = dv.getUint16(cursor + 0, true);
+      const flags = dv.getUint16(cursor + 2, true);
+      if (length < 4 || cursor + length > limit) {
+        addPreviewIssue(langEntry, "Message entry truncated or invalid length.");
+        break;
+      }
+      const textBytes = data.subarray(cursor + 4, cursor + length);
+      const unicode = (flags & 0x0001) !== 0;
+      let text = "";
+      try {
+        if (unicode) {
+          text = new TextDecoder("utf-16le", { fatal: false }).decode(textBytes);
+        } else {
+          text = new TextDecoder("windows-1252", { fatal: false }).decode(textBytes);
+        }
+      } catch {
+        text = "";
+        addPreviewIssue(langEntry, "Message text could not be decoded.");
+      }
+      if (text) {
+        messages.push({ id: currentId, text: text.replace(/\u0000+$/, "") });
+      }
+      cursor += length;
+      currentId++;
+      if (messages.length >= maxMessages) {
+        truncated = true;
+        break;
+      }
+    }
+    if (truncated) break;
+  }
+  if (!messages.length) {
+    addPreviewIssue(langEntry, "No message strings were found.");
+    return;
+  }
+  langEntry.previewKind = "messageTable";
+  langEntry.messageTable = { messages, truncated };
 }
 
 function addVersionPreview(langEntry, data, typeName) {
@@ -135,21 +260,33 @@ export async function enrichResourcePreviews(file, tree) {
         try {
           const dataOff = rvaToOff(langEntry.dataRVA);
           if (dataOff == null || langEntry.size <= 0) continue;
-          if (!isInside(dataOff) || !isInside(dataOff + 1)) {
-            const data = new Uint8Array(await file.slice(dataOff, dataOff + Math.min(langEntry.size, 262144)).arrayBuffer());
-            addIconPreview(langEntry, data, typeName);
-            addManifestPreview(langEntry, data, typeName);
-            addVersionPreview(langEntry, data, typeName);
-            await addGroupIconPreview(file, langEntry, typeName, langEntry.dataRVA, langEntry.size, iconIndex, rvaToOff);
-          } else {
-            const data = new Uint8Array(await file.slice(dataOff, dataOff + Math.min(langEntry.size, 262144)).arrayBuffer());
-            addIconPreview(langEntry, data, typeName);
-            addManifestPreview(langEntry, data, typeName);
-            addVersionPreview(langEntry, data, typeName);
-            await addGroupIconPreview(file, langEntry, typeName, langEntry.dataRVA, langEntry.size, iconIndex, rvaToOff);
-          }
+          const data = new Uint8Array(
+            await file.slice(dataOff, dataOff + Math.min(langEntry.size, 262144)).arrayBuffer()
+          );
+          const safePreview = fn => {
+            try {
+              fn();
+            } catch (err) {
+              addPreviewIssue(langEntry, `Preview failed: ${err?.message || err}`);
+            }
+          };
+          safePreview(() => addIconPreview(langEntry, data, typeName));
+          safePreview(() => addManifestPreview(langEntry, data, typeName));
+          safePreview(() => addHtmlPreview(langEntry, data, typeName));
+          safePreview(() => addVersionPreview(langEntry, data, typeName));
+          safePreview(() => addStringTablePreview(langEntry, data, typeName, entry.id));
+          safePreview(() => addMessageTablePreview(langEntry, data, typeName));
+          await addGroupIconPreview(
+            file,
+            langEntry,
+            typeName,
+            langEntry.dataRVA,
+            langEntry.size,
+            iconIndex,
+            rvaToOff
+          ).catch(err => addPreviewIssue(langEntry, `Icon group preview failed: ${err?.message || err}`));
         } catch {
-          // best-effort previews
+          addPreviewIssue(langEntry, "Resource bytes could not be read for preview.");
         }
       }
     }
