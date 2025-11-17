@@ -198,6 +198,7 @@ export async function parseForUi(file) {
   if (isGifSignature(dv)) {
     const gif = await parseGif(file);
     if (gif) return { analyzer: "gif", parsed: gif };
+  }
   if (dv.byteLength >= 5) {
     const pdfVersion = detectPdfVersion(dv);
     if (pdfVersion) {
