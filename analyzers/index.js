@@ -143,8 +143,8 @@ export async function detectBinaryType(file) {
   if (magic) {
     if (magic.indexOf("MPEG audio") !== -1) {
       const mp3 = await parseMp3(file);
-      if (mp3 && mp3.firstFrame) {
-        const info = mp3.firstFrame;
+      if (mp3 && mp3.isMp3 && mp3.mpeg && mp3.mpeg.firstFrame) {
+        const info = mp3.mpeg.firstFrame;
         const parts = [];
         if (info.versionLabel) parts.push(info.versionLabel);
         if (info.layerLabel) parts.push(info.layerLabel);
@@ -154,7 +154,8 @@ export async function detectBinaryType(file) {
         const label = parts.length ? parts.join(", ") : "MPEG audio";
         return label;
       }
-      return "MPEG audio stream (MP3)";
+      if (mp3 && mp3.isMp3) return "MPEG audio stream (MP3)";
+      return "Unknown binary type";
     }
     if (magic.startsWith("ZIP archive")) {
       const zipLabel = refineZipLabel(dv);
