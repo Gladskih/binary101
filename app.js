@@ -13,6 +13,7 @@ import {
   renderZip,
   renderWebp,
   renderFb2,
+  renderMp3,
 } from "./renderers/index.js";
 import { escapeHtml } from "./html-utils.js";
 
@@ -151,6 +152,14 @@ function renderAnalysisIntoUi(analyzerName, parsedResult) {
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
     peDetailsValueElement.innerHTML = renderPdf(parsedResult);
+    return;
+  }
+
+  if (analyzerName === "mp3" && parsedResult) {
+    peDetailsTermElement.textContent = "MP3 details";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    peDetailsValueElement.innerHTML = renderMp3(parsedResult);
     return;
   }
 
