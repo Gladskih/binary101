@@ -6,13 +6,18 @@ import { probeByMagic, probeTextLike } from "./probes.js";
 import { parseJpeg } from "./jpeg/index.js";
 import { parseElf } from "./elf/index.js";
 import { parseZip } from "./zip/index.js";
+import { parsePng } from "./png/index.js";
+import { parsePdf } from "./pdf/index.js";
 
 // Quick magic-based detectors for non-PE types (label only for now)
 function detectELF(dv) {
   if (dv.byteLength < 0x14) return null;
   if (dv.getUint32(0, false) !== 0x7f454c46) return null; // '\x7FELF'
-  const c = dv.getUint8(4), d = dv.getUint8(5);
-  const le = d === 1; const t = dv.getUint16(0x10, le), m = dv.getUint16(0x12, le);
+  const c = dv.getUint8(4);
+  const d = dv.getUint8(5);
+  const le = d === 1;
+  const t = dv.getUint16(0x10, le);
+  const m = dv.getUint16(0x12, le);
   const bit = c === 1 ? "32-bit" : c === 2 ? "64-bit" : "?";
   const endian = d === 1 ? "LSB" : d === 2 ? "MSB" : "?";
   const mach =
@@ -94,6 +99,13 @@ function refineZipLabel(dv) {
   return null;
 }
 
+function detectPdfVersion(dv) {
+  const ascii = toAsciiFromWholeView(dv, 32);
+  if (!ascii.startsWith("%PDF-")) return null;
+  const match = ascii.match(/%PDF-([0-9]+\.[0-9]+)/);
+  return match ? match[1] : null;
+}
+
 function refineCompoundLabel(dv) {
   const ascii = toAsciiFromWholeView(dv, 65536);
   if (ascii.indexOf("PowerPoint Document") !== -1) {
@@ -128,6 +140,26 @@ export async function detectBinaryType(file) {
     if (magic.startsWith("ZIP archive")) {
       const zipLabel = refineZipLabel(dv);
       if (zipLabel) return zipLabel;
+    }
+    if (magic === "PDF document") {
+      const version = detectPdfVersion(dv);
+      if (version) return `PDF document (v${version})`;
+    }
+    if (magic === "PNG image") {
+      const png = await parsePng(file);
+      if (png && png.ihdr) {
+        const dimensions =
+          png.ihdr.width && png.ihdr.height
+            ? `${png.ihdr.width}x${png.ihdr.height}`
+            : null;
+        const color = png.ihdr.colorName || null;
+        const extras = [];
+        if (dimensions) extras.push(dimensions);
+        if (color) extras.push(color);
+        if (png.hasTransparency) extras.push("alpha");
+        const suffix = extras.length ? ` (${extras.join(", ")})` : "";
+        return `PNG image${suffix}`;
+      }
     }
     if (magic.startsWith("Microsoft Compound File")) {
       const compound = refineCompoundLabel(dv);
@@ -166,6 +198,21 @@ export async function parseForUi(file) {
   if (dv.byteLength >= 4 && dv.getUint32(0, true) === 0x04034b50) {
     const zip = await parseZip(file);
     if (zip) return { analyzer: "zip", parsed: zip };
+  }            
+  if (dv.byteLength >= 5) {
+    const pdfVersion = detectPdfVersion(dv);
+    if (pdfVersion) {
+      const pdf = await parsePdf(file);
+      if (pdf) return { analyzer: "pdf", parsed: pdf };
+    }
+  }
+  if (dv.byteLength >= 8) {
+    const sig0 = dv.getUint32(0, false);
+    const sig1 = dv.getUint32(4, false);
+    if (sig0 === 0x89504e47 && sig1 === 0x0d0a1a0a) {
+      const png = await parsePng(file);
+      if (png) return { analyzer: "png", parsed: png };
+    }
   }
   if (dv.byteLength >= 2 && dv.getUint16(0, false) === 0xffd8) {
     const jpeg = await parseJpeg(file);
