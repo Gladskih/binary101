@@ -40,7 +40,8 @@ export async function parsePe(file) {
 
   const { isPlus, ImageBase } = opt;
 
-  const rsds = await parseDebugDirectory(file, dataDirs, rvaToOff, addCoverageRegion);
+  const { entry: rsds, warning: debugWarning } =
+    (await parseDebugDirectory(file, dataDirs, rvaToOff, addCoverageRegion)) || {};
   const loadcfg = await parseLoadConfigDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus);
   const imports = await parseImportDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus);
   const exportsInfo = await parseExportDirectory(file, dataDirs, rvaToOff, addCoverageRegion);
@@ -67,6 +68,7 @@ export async function parsePe(file) {
     rvaToOff,
     imports,
     rsds,
+    debugWarning,
     loadcfg,
     exports: exportsInfo,
     tls,

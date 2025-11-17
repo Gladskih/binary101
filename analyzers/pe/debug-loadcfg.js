@@ -4,18 +4,38 @@ import { toHex32 } from "../../binary-utils.js";
 
 export async function parseDebugDirectory(file, dataDirs, rvaToOff, addCoverageRegion) {
   const debugDir = dataDirs.find(d => d.name === "DEBUG");
-  if (!debugDir?.rva || debugDir.size < 28) return null;
+  if (!debugDir?.rva || debugDir.size < 28) return { entry: null, warning: null };
   const baseOffset = rvaToOff(debugDir.rva);
-  if (baseOffset == null) return null;
-  addCoverageRegion("DEBUG directory", baseOffset, debugDir.size);
-  const maxEntries = Math.min(16, Math.floor(debugDir.size / 28));
+  if (baseOffset == null) return { entry: null, warning: "Debug directory RVA does not map to a file offset." };
+  const fileSize = typeof file.size === "number" ? file.size : Infinity;
+  if (baseOffset >= fileSize) return { entry: null, warning: "Debug directory starts past end of file." };
+  const availableDirSize = Math.min(debugDir.size, Math.max(0, fileSize - baseOffset));
+  addCoverageRegion("DEBUG directory", baseOffset, availableDirSize);
+  const maxEntries = Math.min(16, Math.floor(availableDirSize / 28));
+  if (maxEntries === 0) {
+    return { entry: null, warning: "Debug directory is smaller than one entry; file may be truncated." };
+  }
+  let warning = availableDirSize < debugDir.size ? "Debug directory is shorter than recorded size (possible truncation)." : null;
   for (let index = 0; index < maxEntries; index++) {
     const entryOffset = baseOffset + index * 28;
+    if (entryOffset + 28 > fileSize) {
+      warning ??= "Debug directory extends beyond end of file (possible truncation).";
+      break;
+    }
     const view = new DataView(await file.slice(entryOffset, entryOffset + 28).arrayBuffer());
+    if (view.byteLength < 24) {
+      warning ??= "Debug directory entry is truncated.";
+      break;
+    }
     const type = view.getUint32(12, true);
     const dataSize = view.getUint32(16, true);
     const dataPointer = view.getUint32(20, true);
+    const dataEnd = dataPointer + dataSize;
     if (type !== 2 || !dataPointer || dataSize < 24) continue;
+    if (dataPointer >= fileSize || dataEnd > fileSize) {
+      warning ??= "Debug directory points outside file bounds; file may be malformed.";
+      continue;
+    }
     const header = new DataView(await file.slice(dataPointer, dataPointer + dataSize).arrayBuffer());
     if (header.getUint32(0, true) !== 0x53445352) continue; // 'RSDS'
     const sig0 = header.getUint32(4, true);
@@ -40,9 +60,9 @@ export async function parseDebugDirectory(file, dataDirs, rvaToOff, addCoverageR
         break;
       }
     }
-    return { guid, age, path };
+    return { entry: { guid, age, path }, warning };
   }
-  return null;
+  return { entry: null, warning };
 }
 
 export async function parseLoadConfigDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus) {
