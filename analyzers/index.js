@@ -5,6 +5,7 @@ import { peProbe, mapMachine } from "./pe/signature.js";
 import { probeByMagic, probeTextLike } from "./probes.js";
 import { parseJpeg } from "./jpeg/index.js";
 import { parseElf } from "./elf/index.js";
+import { isGifSignature, parseGif } from "./gif/index.js";
 
 // Quick magic-based detectors for non-PE types (label only for now)
 function detectELF(dv) {
@@ -145,6 +146,10 @@ export async function parseForUi(file) {
   if (peProbe(dv)) {
     const pe = await parsePe(file);
     return { analyzer: "pe", parsed: pe };
+  }
+  if (isGifSignature(dv)) {
+    const gif = await parseGif(file);
+    if (gif) return { analyzer: "gif", parsed: gif };
   }
   if (dv.byteLength >= 2 && dv.getUint16(0, false) === 0xffd8) {
     const jpeg = await parseJpeg(file);
