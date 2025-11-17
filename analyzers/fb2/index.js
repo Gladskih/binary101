@@ -87,7 +87,9 @@ export async function parseFb2(file) {
   const doc = parser.parseFromString(text, "application/xml");
   const parseError = doc.querySelector("parsererror");
 
-  const root = doc.querySelector("fictionbook");
+  // Root tag is typically written as <FictionBook>, so match both cases
+  // to avoid rejecting valid documents due to case sensitivity in XML.
+  const root = doc.querySelector("fictionbook, FictionBook");
   if (!root) return null;
 
   const description = root.querySelector("description");
