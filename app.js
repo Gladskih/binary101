@@ -3,7 +3,7 @@
 import { nowIsoString, formatHumanSize } from "./binary-utils.js";
 import { computeHashForFile, copyToClipboard } from "./hash.js";
 import { detectBinaryType, parseForUi } from "./analyzers/index.js";
-import { renderPe, renderJpeg, renderElf } from "./renderers/index.js";
+import { renderPe, renderJpeg, renderElf, renderZip } from "./renderers/index.js";
 import { escapeHtml } from "./html-utils.js";
 
 const getElement = id => document.getElementById(id);
@@ -95,6 +95,14 @@ function renderAnalysisIntoUi(analyzerName, parsedResult) {
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
     peDetailsValueElement.innerHTML = previewHtml + renderJpeg(parsedResult);
+    return;
+  }
+
+  if (analyzerName === "zip" && parsedResult) {
+    peDetailsTermElement.textContent = "ZIP details";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    peDetailsValueElement.innerHTML = renderZip(parsedResult);
     return;
   }
 
