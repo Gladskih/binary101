@@ -7,17 +7,37 @@ import { parseJpeg } from "./jpeg/index.js";
 import { parseElf } from "./elf/index.js";
 import { isGifSignature, parseGif } from "./gif/index.js";
 import { parsePng } from "./png/index.js";
+import { parsePdf } from "./pdf/index.js";
 
 // Quick magic-based detectors for non-PE types (label only for now)
 function detectELF(dv) {
   if (dv.byteLength < 0x14) return null;
   if (dv.getUint32(0, false) !== 0x7f454c46) return null; // '\x7FELF'
-  const c = dv.getUint8(4), d = dv.getUint8(5);
-  const le = d === 1; const t = dv.getUint16(0x10, le), m = dv.getUint16(0x12, le);
+  const c = dv.getUint8(4);
+  const d = dv.getUint8(5);
+  const le = d === 1;
+  const t = dv.getUint16(0x10, le);
+  const m = dv.getUint16(0x12, le);
   const bit = c === 1 ? "32-bit" : c === 2 ? "64-bit" : "?";
   const endian = d === 1 ? "LSB" : d === 2 ? "MSB" : "?";
-  const mach = m === 0x3e ? "x86-64" : m === 0x03 ? "x86" : m === 0xb7 ? "ARM64" : m === 0x28 ? "ARM" : ("machine=" + m.toString(16));
-  const kind = t === 2 ? "executable" : t === 3 ? "shared object" : t === 1 ? "relocatable" : ("type=" + t.toString(16));
+  const mach =
+    m === 0x3e
+      ? "x86-64"
+      : m === 0x03
+        ? "x86"
+        : m === 0xb7
+          ? "ARM64"
+          : m === 0x28
+            ? "ARM"
+            : `machine=${m.toString(16)}`;
+  const kind =
+    t === 2
+      ? "executable"
+      : t === 3
+        ? "shared object"
+        : t === 1
+          ? "relocatable"
+          : `type=${t.toString(16)}`;
   return `ELF ${bit} ${endian} ${kind}, ${mach}`;
 }
 
@@ -79,6 +99,13 @@ function refineZipLabel(dv) {
   return null;
 }
 
+function detectPdfVersion(dv) {
+  const ascii = toAsciiFromWholeView(dv, 32);
+  if (!ascii.startsWith("%PDF-")) return null;
+  const match = ascii.match(/%PDF-([0-9]+\.[0-9]+)/);
+  return match ? match[1] : null;
+}
+
 function refineCompoundLabel(dv) {
   const ascii = toAsciiFromWholeView(dv, 65536);
   if (ascii.indexOf("PowerPoint Document") !== -1) {
@@ -113,6 +140,10 @@ export async function detectBinaryType(file) {
     if (magic.startsWith("ZIP archive")) {
       const zipLabel = refineZipLabel(dv);
       if (zipLabel) return zipLabel;
+    }
+    if (magic === "PDF document") {
+      const version = detectPdfVersion(dv);
+      if (version) return `PDF document (v${version})`;
     }
     if (magic === "PNG image") {
       const png = await parsePng(file);
@@ -167,6 +198,12 @@ export async function parseForUi(file) {
   if (isGifSignature(dv)) {
     const gif = await parseGif(file);
     if (gif) return { analyzer: "gif", parsed: gif };
+  if (dv.byteLength >= 5) {
+    const pdfVersion = detectPdfVersion(dv);
+    if (pdfVersion) {
+      const pdf = await parsePdf(file);
+      if (pdf) return { analyzer: "pdf", parsed: pdf };
+    }
   }
   if (dv.byteLength >= 8) {
     const sig0 = dv.getUint32(0, false);

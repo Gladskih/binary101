@@ -9,6 +9,7 @@ import {
   renderElf,
   renderGif,
   renderPng,
+  renderPdf,
 } from "./renderers/index.js";
 import { escapeHtml } from "./html-utils.js";
 
@@ -116,6 +117,14 @@ function renderAnalysisIntoUi(analyzerName, parsedResult) {
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
     peDetailsValueElement.innerHTML = previewHtml + renderPng(parsedResult);
+    return;
+  }
+
+  if (analyzerName === "pdf" && parsedResult) {
+    peDetailsTermElement.textContent = "PDF details";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    peDetailsValueElement.innerHTML = renderPdf(parsedResult);
     return;
   }
 
@@ -252,7 +261,12 @@ window.addEventListener("paste", async event => {
   showFileInfo(syntheticFile, "Paste (clipboard data)");
 });
 
-async function computeAndDisplayHash(algorithmName, valueElement, buttonElement, copyButtonElement) {
+async function computeAndDisplayHash(
+  algorithmName,
+  valueElement,
+  buttonElement,
+  copyButtonElement
+) {
   if (!currentFile) {
     valueElement.textContent = "No file selected.";
     return;
