@@ -33,6 +33,8 @@ main{flex:1;display:flex;flex-direction:column;align-items:stretch}
 dl{display:grid;grid-template-columns:max-content 1fr;row-gap:8px;column-gap:16px;margin:0}
 dt{color:var(--muted)}
 dd{margin:0;word-break:break-all}
+#peDetailsTerm,#peDetailsValue{grid-column:1 / -1}
+#peDetailsValue{padding-left:0}
 
 .hashRow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
 .hashValue{font-family:var(--mono);font-size:12px}
