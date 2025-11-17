@@ -1,169 +1,164 @@
 <!-- Copilot instructions for the binary101 project -->
+
 # Repo Overview
 
-This is a small client-side static web app for inspecting binary files (primarily PE/COFF). It runs entirely in the browser via ES modules — there is no build step or server-side code in this repo.
+This is a small client‑side static web app for inspecting binary files (PE/COFF, images, audio, archives, etc.).  
+It runs entirely in the browser via ES modules – there is no build step or server‑side code in this repo.
 
 Key entry points
-- `index.html` — page shell that imports `app.js` as an ES module.
-- `app.js` — main UI wiring (drag/drop, paste, file input, hash buttons).
-- `analyzers/` — binary format detection + parsers (PE parser lives in `analyzers/pe.js`).
-- `pe-render.js` — turns parsed PE objects into HTML snippets for the UI.
-- `binary-utils.js`, `html-utils.js`, `hash.js` — shared helpers (human-readable sizes, hex, HTML rendering, Web Crypto wrapper).
+- `index.html` – page shell that imports `app.js` as an ES module.
+- `app.js` – main UI wiring (drag/drop, paste, file input, hash buttons).
+- `analyzers/` – binary format detection + parsers:
+  - orchestration in `analyzers/index.js`,
+  - PE in `analyzers/pe/`,
+  - MP3 in `analyzers/mp3/`,
+  - plus JPEG, GIF, PNG, PDF, WebP, ZIP, ELF, FB2, etc.
+- `renderers/` – HTML renderers for parsed objects:
+  - central export in `renderers/index.js`,
+  - PE view in `renderers/pe/index.js`,
+  - MP3 view in `renderers/mp3/index.js`,
+  - plus renderers for JPEG, GIF, PNG, PDF, WebP, ZIP, ELF, FB2.
+- `binary-utils.js`, `html-utils.js`, `hash.js` – shared helpers (human‑readable sizes, hex, HTML escaping, Web Crypto wrapper).
 
-Big-picture architecture & data flow
-- Browser-only app: user selects or pastes a `File` → `app.js` calls `detectBinaryType(file)` and `parseForUi(file)` from `analyzers/index.js`.
-- `analyzers/index.js` performs lightweight magic probes then delegates to format-specific parsers (currently PE via `analyzers/pe.js`).
-- Parsers operate on `File.slice(...).arrayBuffer()` and return plain JS objects (no DOM). `pe-render.js` consumes parser output and returns HTML strings that `app.js` inserts into the page.
-- Hashing uses `crypto.subtle.digest` in `hash.js` (called from `app.js`) — keep operations asynchronous and avoid re-reading whole files when possible.
+# Architecture & Data Flow
 
-Project-specific conventions and patterns
-- ES modules with relative paths (e.g. `import { formatHumanSize } from "./binary-utils.js"` or `import { safe } from "./html-utils.js"`). Keep exports named and small.
-- Parsers avoid loading entire files; they read small slices (`file.slice(off, off+len).arrayBuffer()`) and return serializable objects. Follow this pattern when adding new analyzers.
-- UI rendering is string-based HTML in `pe-render.js` (not JSX/templating).
+- Browser‑only app: user selects or pastes a `File`; `app.js` calls `detectBinaryType(file)` and `parseForUi(file)` from `analyzers/index.js`.
+- `analyzers/index.js` performs lightweight magic probes on a small prefix and delegates to format‑specific parsers (PE, JPEG, PNG, MP3, etc.).
+- Parsers operate on `File.slice(...).arrayBuffer()` and return plain JS objects (no DOM access).  
+  Renderers in `renderers/*` consume parser output and return HTML strings that `app.js` inserts into the page.
+- Hashing uses `crypto.subtle.digest` in `hash.js` (called from `app.js`); keep operations asynchronous and avoid re‑reading whole files when possible.
 
-How to extend the repo (typical tasks)
-- Add a new analyzer: create `analyzers/<format>.js` that exposes probe/parse functions that accept a `File` or `DataView`; update `analyzers/index.js` to call your probe and return `{ analyzer: '<name>', parsed }` from `parseForUi`.
-- Add a new UI section: return a plain object from the parser and update `pe-render.js` (or create a new renderer) to produce safe HTML strings.
+Project‑specific conventions and patterns
+- ES modules with relative paths (e.g. `import { formatHumanSize } from "./binary-utils.js"` or `import { safe } from "./html-utils.js"`).  
+  Keep exports small and named.
+- Parsers avoid loading entire files; they read small slices (`file.slice(off, off + len).arrayBuffer()`) and return serializable objects.  
+  Follow this pattern when adding new analyzers.
+- UI rendering is string‑based HTML in `renderers/*` (no JSX/templating).  
+  Renderers are pure functions from `{ analyzer, parsed }` to HTML string.
 
-Developer workflows (what actually works locally)
+# How to Extend the Repo
+
+Adding a new analyzer
+- Create `analyzers/<format>/index.js` that exposes probe/parse functions accepting a `File` or `DataView`.
+- Update `analyzers/index.js`:
+  - wire your probe into detection (either via `probeByMagic`, a dedicated function, or both),
+  - update `parseForUi(file)` to return `{ analyzer: "<name>", parsed }` when your format is detected.
+- Parsers should:
+  - take care not to read beyond file bounds,
+  - avoid loading the entire file into memory,
+  - return plain JSON‑serializable structures (no methods, no DOM nodes).
+
+Adding a new renderer / UI section
+- Add `renderers/<format>/index.js` exporting a function like `renderFoo(parsed)` that returns an HTML string.
+- Update `renderers/index.js` to export your renderer.
+- Update `app.js` (or the relevant dispatch logic) so that when `parseForUi(file)` returns `{ analyzer: "<format>" }`, the correct renderer is called and the result is injected into the page.
+- Reuse `safe(value)` / `escapeHtml` from `html-utils.js` for all user‑visible strings.
+
+# Developer Workflows
+
 - No build step. To run locally open `index.html` in a modern browser.
 - Recommended local server (serving files from repo root):
-  - Python: `python -m http.server` (run from repository root)
-  - Node: `npx http-server` (run from repository root)
-  - or VS Code: Use the Live Server extension to serve `index.html`.
-- Debugging: use the browser DevTools Sources panel — modules are unbundled and mappable by filename. Add `debugger` statements in `app.js` or `analyzers/pe.js` where needed.
+  - Python: `python -m http.server` (run from repository root),
+  - Node: `npx http-server` (run from repository root),
+  - or VS Code: use the “Live Server” extension to serve `index.html`.
+- Debugging:
+  - use the browser DevTools Sources panel – modules are unbundled and mapped by filename,
+  - add `debugger` statements in `app.js`, `analyzers/*` or `renderers/*` where needed.
 
-Important compatibility notes for the AI agent
-- Target modern browsers only — code uses `BigInt`, `DataView.getBigUint64`, `crypto.subtle`, `File`/`Blob` APIs and ES module imports. Avoid changes that would require transpilation unless you also add a bundler/config.
-- Parsers assume `file.slice(...).arrayBuffer()` calls; keep I/O patterns non-blocking and slice-based for memory efficiency.
-- The UI expects `parseForUi(file)` to return `{ analyzer, parsed }` (see `analyzers/index.js`). If you change that contract, update `app.js` accordingly.
+# Important Notes for AI Assistants (including Copilot)
 
-Examples from codebase (use these as patterns)
-- Hashing: `await computeHashForFile(currentFile, "SHA-256")` — put expensive operations behind async functions and update UI state while running (see `computeAndDisplayHash` in `app.js`).
-- Type detection + parsing: `const { analyzer, parsed } = await parseForUi(file); renderAnalysisIntoUi(analyzer, parsed);` (in `app.js`).
-- Adding a new import renderer: `pe-render.js` uses `safe(value)` from `html-utils.js` to escape HTML. Reuse `safe` for all user-facing strings.
+- Target modern browsers only: the code uses `BigInt`, `DataView.getBigUint64`, `crypto.subtle`, `File`/`Blob` APIs and ES module imports.  
+  Avoid changes that would require transpilation or a bundler unless you also add and document the build setup.
+- Parsers assume `file.slice(...).arrayBuffer()` calls; keep I/O patterns non‑blocking and slice‑based for memory efficiency.
+- The UI expects `parseForUi(file)` to return `{ analyzer, parsed }` (see `analyzers/index.js`).  
+  If you change that contract, update `app.js` and any renderers that depend on it.
+- Prefer extending analyzers/renderer modules over adding ad‑hoc logic inside `app.js`.
+
+# Examples from the Codebase
+
+- Hashing: `await computeHashForFile(currentFile, "SHA-256")` – put expensive operations behind async functions and update UI state while running (see `computeAndDisplayHash` in `app.js`).
+- Type detection + parsing:
+  - `const { analyzer, parsed } = await parseForUi(file);`
+  - `renderAnalysisIntoUi(analyzer, parsed);` (in `app.js`).
+- Rendering PE: `renderPe(pe)` in `renderers/pe/index.js` shows how to break a complex view into smaller helpers.
+- Rendering MP3: `renderMp3(mp3)` in `renderers/mp3/index.js` shows how to stitch together summary, technical details, and warnings.
+- Adding a new import‑style renderer: reuse `safe(value)` from `html-utils.js` to escape HTML, and follow the table/list patterns already used in `renderers/*`.
 
 Files you will likely edit
-- `analyzers/pe.js` — the largest parser. Read it to learn RVA→file-offset mapping and slice-based reading.
-- `pe-render.js` — UI generation for PE objects (examples of how parser output is presented).
-- `app.js` — glue code (update event handlers, status messages, and integration calls here).
+- `app.js` – glue code (update event handlers, status messages, integration calls here).
+- `analyzers/index.js` – format detection and dispatch to specific analyzers.
+- `analyzers/pe/index.js` – the largest parser; good reference for slice‑based reading and complex binary structures.
+- `analyzers/mp3/*` – example of a robust, warning‑rich analyzer with multiple related files.
+- `renderers/pe/index.js` – UI generation for PE objects (examples of how parser output is presented).
+- `renderers/mp3/index.js` – UI generation for MP3 analysis.
 
 If anything is missing or unclear
-- Tell me which area you'd like expanded (analysis patterns, adding new analyzer, testing strategy, or run/debug commands) and I will update this file.
+- Tell me which area you’d like expanded (analysis patterns, adding a new analyzer, testing strategy, or run/debug commands) and I will update this file.
 
 # Project Inspiration and Vision
 
-This project draws inspiration from tools like [regex101](https://regex101.com/), the Linux `file` utility, VirusTotal, and even browser-based IDEs. The goal is to create a website that analyzes files locally, without uploading them anywhere, ensuring privacy and security. This makes it suitable for analyzing sensitive files, whether for work or personal use.
+This project draws inspiration from tools like [regex101](https://regex101.com/), the Linux `file` utility, VirusTotal, and browser‑based IDEs.  
+The goal is to analyze files locally, without uploading them anywhere, ensuring privacy and security.  
+This makes it suitable for analyzing sensitive files, whether for work or personal use.
 
 ## Core Objectives
 
-1. **File Type Detection**: Expand the number of supported file signatures to identify a wide variety of file types. This is the "low-hanging fruit" and the first step in the project's development.
-2. **File Format Parsing**: Provide detailed insights into file structures, explaining the purpose of each byte or field. The goal is not just to display the structure but to educate users by explaining:
-   - Why a field exists
-   - What values it can take
-   - What those values mean
-   - Common values and their significance
+1. **File type detection** – support a wide variety of file signatures (executables, images, archives, audio, documents).
+2. **Deep inspection where it matters** – high‑value formats (PE, MP3, PNG, PDF, ZIP, ELF, etc.) get dedicated analyzers and rich views.
+3. **Safety and privacy** – all parsing happens in the browser; no network calls for analysis.
+4. **Usability** – clean, readable HTML output; sensible defaults; warnings instead of crashes for malformed files.
 
-3. **Executable File Analysis**: Focus on executable formats like PE/COFF and ELF, starting with PE. These formats are of particular interest and will guide the project's structure and evolution.
+# Coding Guidelines
 
-## Development Philosophy
+These mirror the project’s ESLint configuration and are here so Copilot can stay in‑style.
 
-- **Self-Documenting Code**: Write code that is clear and expressive without requiring excessive comments.
-- **Avoid Abbreviations**: Use full, descriptive names for identifiers, except for widely accepted abbreviations.
-- **Keep It Manageable**: Ensure identifiers, strings, functions, classes, files, and folders remain concise and focused.
-- **Best Practices**: Follow best practices in design, architecture, programming, and code style.
-- **Minimize Empty Lines**: Excessive empty lines often indicate the need for refactoring (e.g., extracting a new function).
-- **Comment Where Necessary**:
-  - Explain literals and "magic values" (e.g., why a specific value is used).
-  - Document workarounds and non-obvious solutions.
-- **Modern JavaScript**:
-  - Prefer `const` over `let`, and `let` over `var`.
-  - Use expressions directly where possible, avoiding intermediate variables.
+### JavaScript
 
-By adhering to these principles, the project aims to balance flexibility, rich UI/UX, and ease of future expansion.
-
-# Additional Guidelines for Robustness and Testing
-
-## Robustness in Parsing and Error Handling
-
-- **Adhere to Standards**: Always rely on official documentation, specifications, standards, GitHub issues, and even source code when available. Avoid relying solely on prior knowledge or guessing.
-- **Handle Edge Cases**: Anticipate and handle situations where file formats are violated or used in unexpected ways:
-  - Pointers leading outside the file.
-  - Invalid or undefined values in documentation.
-  - Unusual element orders, identifiers, or oversized fields.
-- **Error Reporting**: Do not suppress or ignore such anomalies. Instead, visibly report them to the user in the UI.
-- **Avoid Silent Failures**: Avoid swallowing exceptions or converting them into boolean return values. Use proper error handling mechanisms to ensure issues are logged and surfaced appropriately.
-
-## Automated Testing
-
-- **Unit Testing**: Introduce unit tests for JavaScript functions, especially for parsers and utilities. Use a framework like [Jest](https://jestjs.io/) or [Mocha](https://mochajs.org/).
-- **Integration Testing**: Test the entire flow from file input to UI rendering. Use tools like [Puppeteer](https://pptr.dev/) or [Playwright](https://playwright.dev/) for browser automation.
-- **Error Scenarios**: Include tests for edge cases and invalid files to ensure robustness.
-- **Test Coverage**: Aim for high test coverage, particularly for critical parsing logic.
-
-## Debugging and MCP Integration
-
-- **Chrome DevTools MCP**: Use Chrome DevTools MCP for debugging and automation. This can help simulate user interactions and validate UI behavior.
-- **Additional Tools**: If MCP lacks functionality, consider integrating other tools or libraries. Communicate specific needs to the project maintainer for evaluation.
-
-# Code Quality Metrics and Standards
-
-All code must adhere to the following metrics and best practices. These are enforced via `.editorconfig`, `.eslintrc.json`, and automated tooling:
-
-## JavaScript Guidelines
-
-### File Structure
-- **Maximum file length**: 300 lines (including comments and blank lines).
-- **Rationale**: Smaller files are easier to understand, test, and maintain. If a file exceeds this, consider refactoring into separate modules.
-
-### Line and Identifier Constraints
-- **Maximum line length**: 100 characters.
-- **Rationale**: Improves readability, especially for side-by-side diffs and small screens.
-- **Identifier length**: Minimum 2 characters (except for conventions like `_`, `i`, `j`, `k`, `x`, `y`).
-- **Rationale**: Descriptive names prevent ambiguity; single-letter vars (except loop counters) harm clarity.
-
-### Function Complexity
-- **Maximum function length**: Aim for 20–30 lines; functions over 50 lines should be refactored.
-- **Maximum cyclomatic complexity**: 10 (enforced by ESLint).
-- **Maximum nested callbacks**: 3 levels (enforced by ESLint).
-- **Rationale**: Complex functions are error-prone and difficult to test. Extract pure functions or helper methods.
-
-### JavaScript Best Practices
-- **Variable declarations**: Use `const` by default, `let` if reassignment is needed, never `var`.
-- **Equality checks**: Always use `===` and `!==` (strict equality).
-- **String quotes**: Use double quotes (`"`); escape when necessary.
-- **Semicolons**: Required at the end of statements.
-- **Brace style**: Use `1tbs` (one true brace style): `if (...) { ... }`.
-- **Magic numbers**: Avoided; define named constants instead.
-- **Unused variables**: Not allowed (prefix with `_` if intentionally unused).
-- **Console usage**: Only `console.error()` and `console.warn()` are allowed in production code; `console.log()` should be removed before commit.
+- **Variable declarations**: use `const` by default; `let` if reassignment is needed; never `var`.
+- **Equality checks**: always use `===` and `!==` (strict equality).
+- **Strings**: use double quotes (`"`); escape when necessary.
+- **Semicolons**: required at the end of statements.
+- **Brace style**: use 1TBS (`if (...) { ... }` on one line).
+- **Magic numbers**: avoid where possible; prefer named constants.
+- **Unused variables**: not allowed (prefix with `_` if intentionally unused).
+- **Console usage**: only `console.error()` and `console.warn()` in production code; remove `console.log()` from commits.
+- **Side effects**:
+  - analyzers should not touch the DOM,
+  - renderers should not perform I/O or parsing.
 
 ### Async and Performance
-- **Async operations**: Always return `Promise` from async functions; avoid callback hell.
-- **File I/O**: Use `file.slice(...).arrayBuffer()` for memory efficiency; never load entire files into memory unnecessarily.
-- **Blocking operations**: Perform expensive computations in Web Workers or maintain UI responsiveness with `await`.
 
-## HTML Guidelines
-- **Semantic HTML**: Use semantic elements (`<header>`, `<nav>`, `<main>`, `<article>`, `<footer>`) instead of generic `<div>`.
-- **Accessibility**: Include `alt` attributes for images, proper `<label>` elements for form inputs, and ARIA attributes where needed.
-- **Validation**: Ensure HTML is valid (use [W3C Validator](https://validator.w3.org/)).
+- **Async operations**: functions doing I/O should return `Promise`; avoid callback‑style APIs.
+- **File I/O**: use `file.slice(...).arrayBuffer()` for memory efficiency; never load entire files unnecessarily.
+- **Blocking work**: keep heavy computations chunked or behind `await` to avoid freezing the UI. Consider Web Workers if you need heavier processing in future changes.
 
-## CSS Guidelines
-- **Line length**: Maximum 100 characters.
-- **Selectors**: Avoid deep nesting (max 3 levels); use BEM naming convention for clarity.
-- **Colors and fonts**: Define as CSS variables for consistency and maintainability.
-- **Responsive design**: Use mobile-first approach; test on multiple screen sizes.
-- **Performance**: Minimize use of inline styles; defer non-critical CSS with `media="print"` or `defer`.
+### HTML
 
-## Git Conventions
-- **Commit messages**: Use present tense, imperative mood (e.g., "Add README" not "Added README").
-- **Branch names**: Use lowercase with hyphens (e.g., `pe-parser`, `hash-computation`).
-- **PR reviews**: Request reviews before merging; ensure CI/ESLint passes.
+- Prefer semantic HTML (`<header>`, `<nav>`, `<main>`, `<article>`, `<footer>`) over generic `<div>`.
+- Respect accessibility basics:
+  - `alt` attributes for images,
+  - proper `<label>` elements for form inputs,
+  - ARIA attributes where appropriate.
+- Keep HTML valid; you can use the W3C validator when in doubt.
 
-## Tools and Configuration
+### CSS
 
-- **ESLint** (`.eslintrc.json`): Enforces JavaScript best practices automatically. Run `npx eslint .` to check.
-- **EditorConfig** (`.editorconfig`): Ensures consistent indentation, line endings, and charset across all editors and IDEs.
-- **Pre-commit hooks** (optional): Consider using Husky + lint-staged to auto-check code before commits.
+- Line length: aim for a maximum of ~100 characters.
+- Selectors: avoid deep nesting (max 3 levels); prefer BEM‑style naming for clarity.
+- Colors and fonts: define as CSS variables where possible for consistency.
+- Performance: minimize inline styles; keep CSS small and focused.
 
-— End of instructions —
+### Git
+
+- Commit messages: use present tense, imperative mood (e.g., “Add MP3 analyzer”, not “Added MP3 analyzer”).
+- Branch names: lowercase with hyphens (e.g., `pe-parser`, `mp3-analyzer`).
+- Pull requests: prefer small, focused changes; ensure ESLint passes.
+
+### Tools and Configuration
+
+- **ESLint** (`.eslintrc.json`) – enforces JavaScript best practices; run `npx eslint .` to check.
+- **EditorConfig** (`.editorconfig`) – keeps indentation, line endings, and charset consistent.
+- Pre‑commit hooks (optional) – you can wire Husky + lint‑staged if you want automatic checks before commits.
+
+End of instructions.
+
