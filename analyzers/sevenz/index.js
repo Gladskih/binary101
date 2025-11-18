@@ -836,8 +836,39 @@ const parseNextHeader = (dv, issues) => {
     return { kind: "header", sections };
   }
   if (firstId === 0x17) {
-    issues.push("Next header is encoded (often encrypted or compressed) and was not decoded.");
-    return { kind: "encoded" };
+    const streams = parseStreamsInfo(ctx);
+    const unpackInfo = streams.unpackInfo;
+    const folders =
+      unpackInfo?.folders?.map((folder, index) => {
+        const coders = (folder.coders || []).map(coder => {
+          const normalized = normalizeMethodId(coder.methodId);
+          const id = describeCoderId(normalized);
+          const archHint = CODER_ARCH_HINTS[normalized];
+          const isEncryption = normalized === "06f10701";
+          return {
+            id,
+            methodId: coder.methodId,
+            numInStreams: coder.inStreams,
+            numOutStreams: coder.outStreams,
+            properties: coder.properties || null,
+            archHint,
+            isEncryption
+          };
+        });
+        const isEncrypted = coders.some(coder => coder.isEncryption);
+        return {
+          index,
+          coders,
+          isEncrypted
+        };
+      }) || [];
+    const hasEncryptedHeader = folders.some(folder => folder.isEncrypted);
+    return {
+      kind: "encoded",
+      headerStreams: streams,
+      headerCoders: folders,
+      hasEncryptedHeader
+    };
   }
   issues.push(`Unexpected next header type 0x${firstId.toString(16)}.`);
   return { kind: "unknown", type: firstId };
@@ -913,6 +944,12 @@ export async function parseSevenZip(file) {
     if (parsedNextHeader.sections?.filesInfo) {
       parsedNextHeader.sections.filesInfo.files = structure.files;
     }
+  }
+  if (parsedNextHeader.kind === "encoded") {
+    result.headerEncoding = {
+      coders: parsedNextHeader.headerCoders || [],
+      hasEncryptedHeader: parsedNextHeader.hasEncryptedHeader || false
+    };
   }
   return result;
 }
