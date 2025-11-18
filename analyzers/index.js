@@ -12,6 +12,7 @@ import { parsePng } from "./png/index.js";
 import { parsePdf } from "./pdf/index.js";
 import { parseWebp } from "./webp/index.js";
 import { parseMp3, probeMp3 } from "./mp3/index.js";
+import { hasSevenZipSignature, parseSevenZip } from "./sevenz/index.js";
 
 // Quick magic-based detectors for non-PE types (label only for now)
 function detectELF(dv) {
@@ -165,6 +166,18 @@ export async function detectBinaryType(file) {
       const version = detectPdfVersion(dv);
       if (version) return `PDF document (v${version})`;
     }
+    if (magic === "7z archive") {
+      const sevenZip = await parseSevenZip(file);
+      if (sevenZip?.is7z) {
+        const version = `${sevenZip.startHeader.versionMajor}.${sevenZip.startHeader.versionMinor}`;
+        const files = sevenZip.nextHeader?.parsed?.sections?.filesInfo?.fileCount;
+        const extras = [];
+        if (files != null) extras.push(`${files} file${files === 1 ? "" : "s"}`);
+        const suffix = extras.length ? ` (${extras.join(", ")})` : "";
+        return `7z archive v${version}${suffix}`;
+      }
+      return "7z archive";
+    }
     if (magic === "PNG image") {
       const png = await parsePng(file);
       if (png && png.ihdr) {
@@ -240,10 +253,14 @@ export async function parseForUi(file) {
     const gif = await parseGif(file);
     if (gif) return { analyzer: "gif", parsed: gif };
   }
+  if (hasSevenZipSignature(dv)) {
+    const sevenZip = await parseSevenZip(file);
+    if (sevenZip?.is7z) return { analyzer: "sevenZip", parsed: sevenZip };
+  }
   if (dv.byteLength >= 4 && dv.getUint32(0, true) === 0x04034b50) {
     const zip = await parseZip(file);
     if (zip) return { analyzer: "zip", parsed: zip };
-  }            
+  }
   if (dv.byteLength >= 5) {
     const pdfVersion = detectPdfVersion(dv);
     if (pdfVersion) {
