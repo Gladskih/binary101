@@ -6,9 +6,85 @@ const SIGNATURE_BYTES = [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c];
 const START_HEADER_SIZE = 32;
 const UTF16_DECODER = new TextDecoder("utf-16le", { fatal: false });
 
+const CODER_NAMES = {
+  "00": "Copy",
+  "03": "Delta",
+  "030101": "LZMA",
+  "21": "LZMA2",
+  "03030103": "BCJ",
+  "0303011b": "BCJ2",
+  "04": "BZip2",
+  "040108": "Deflate",
+  "030401": "PPMd",
+  "06f10701": "AES-256"
+};
+
+const CODER_ARCH_HINTS = {
+  "03030103": "x86",
+  "0303011b": "x86",
+  "03030105": "IA-64",
+  "03030106": "ARM",
+  "03030107": "ARM-Thumb",
+  "03030108": "PowerPC"
+};
+
 const toSafeNumber = value => {
   if (typeof value === "number") return value;
-  if (value <= BigInt(Number.MAX_SAFE_INTEGER)) return Number(value);
+  if (typeof value === "bigint") {
+    if (value <= BigInt(Number.MAX_SAFE_INTEGER)) return Number(value);
+    return null;
+  }
+  return null;
+};
+
+const normalizeMethodId = id => (id || "").toString().toLowerCase();
+
+const describeCoderId = id => CODER_NAMES[normalizeMethodId(id)] || `0x${id}`;
+
+const parseLzmaProps = bytes => {
+  if (!bytes || bytes.length < 5) return null;
+  const first = bytes[0];
+  const pb = Math.floor(first / 45);
+  const remainder = first - pb * 45;
+  const lp = Math.floor(remainder / 9);
+  const lc = remainder - lp * 9;
+  const dictSize =
+    bytes[1] | (bytes[2] << 8) | (bytes[3] << 16) | (bytes[4] << 24);
+  return { dictSize, lc, lp, pb };
+};
+
+const parseLzma2Props = bytes => {
+  if (!bytes || bytes.length < 1) return null;
+  const prop = bytes[0];
+  if (prop > 40) return { dictSize: null };
+  const base = (prop & 1) + 2;
+  const dictSize = base << (Math.floor(prop / 2) + 11);
+  return { dictSize };
+};
+
+const parseDeltaProps = bytes => {
+  if (!bytes || bytes.length < 1) return null;
+  const distance = bytes[0] + 1;
+  return { distance };
+};
+
+const parseBcjProps = (id, bytes) => {
+  const arch = CODER_ARCH_HINTS[normalizeMethodId(id)];
+  if (!bytes || !bytes.length) return arch ? { filterType: arch } : null;
+  if (bytes.length >= 4) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const startOffset = view.getInt32(0, true);
+    return arch ? { filterType: arch, startOffset } : { startOffset };
+  }
+  return arch ? { filterType: arch } : null;
+};
+
+const parseCoderProperties = (methodId, bytes) => {
+  const normalized = normalizeMethodId(methodId);
+  if (normalized === "030101") return parseLzmaProps(bytes);
+  if (normalized === "21") return parseLzma2Props(bytes);
+  if (normalized === "03") return parseDeltaProps(bytes);
+  if (normalized.startsWith("030301")) return parseBcjProps(methodId, bytes);
   return null;
 };
 
@@ -131,7 +207,7 @@ const parsePackDigests = (ctx, count, endOffset, label) => {
     if (crc == null) break;
     digests.push({ index: i, crc });
   }
-  return { digests, allDefined: definedFlags.every(Boolean) };
+  return { digests, allDefined: definedFlags.every(Boolean), definedFlags };
 };
 
 const parsePackInfo = ctx => {
@@ -208,6 +284,7 @@ const parseFolder = (ctx, endOffset) => {
       if (outVal != null) outStreams = toSafeNumber(outVal) || 0;
     }
     let propertiesSize = 0;
+    let properties = null;
     if (hasAttributes) {
       const propSize = readEncodedUint64(ctx, "Coder property size");
       if (propSize != null) {
@@ -217,12 +294,18 @@ const parseFolder = (ctx, endOffset) => {
           ctx.offset = endOffset;
           break;
         }
+        const bytes = new Uint8Array(
+          ctx.dv.buffer,
+          ctx.dv.byteOffset + ctx.offset,
+          propertiesSize
+        );
+        properties = parseCoderProperties(methodId, bytes);
         ctx.offset += propertiesSize;
       }
     }
     totalInStreams += inStreams;
     totalOutStreams += outStreams;
-    coders.push({ methodId, inStreams, outStreams, propertiesSize });
+    coders.push({ methodId, inStreams, outStreams, propertiesSize, properties });
   }
   const bindPairs = [];
   const numBindPairs = Math.max(totalOutStreams - 1, 0);
@@ -239,7 +322,14 @@ const parseFolder = (ctx, endOffset) => {
       packedStreams.push(index);
     }
   }
-  return { coders, totalInStreams, totalOutStreams, bindPairs, packedStreams };
+  return {
+    coders,
+    totalInStreams,
+    totalOutStreams,
+    bindPairs,
+    packedStreams,
+    numPackedStreams
+  };
 };
 
 const parseUnpackInfo = ctx => {
@@ -301,7 +391,7 @@ const parseUnpackInfo = ctx => {
 };
 
 const parseSubStreamsInfo = (ctx, folderCount) => {
-  const info = {};
+  const info = { numUnpackStreams: new Array(folderCount).fill(1) };
   let done = false;
   while (ctx.offset < ctx.dv.byteLength && !done) {
     const id = readByte(ctx, "SubStreamsInfo field id");
@@ -320,7 +410,10 @@ const parseSubStreamsInfo = (ctx, folderCount) => {
     }
     if (id === 0x09) {
       info.substreamSizes = [];
-      const totalEntries = folderCount;
+      const totalEntries = info.numUnpackStreams.reduce((sum, value) => {
+        const count = toSafeNumber(value) ?? 1;
+        return sum + Math.max(count - 1, 0);
+      }, 0);
       for (let i = 0; i < totalEntries; i += 1) {
         const size = readEncodedUint64(ctx, "Substream size");
         info.substreamSizes.push(size);
@@ -328,13 +421,17 @@ const parseSubStreamsInfo = (ctx, folderCount) => {
       continue;
     }
     if (id === 0x0a) {
+      const totalStreams = info.numUnpackStreams.reduce((sum, value) => {
+        const count = toSafeNumber(value) ?? 1;
+        return sum + count;
+      }, 0);
       const digestInfo = parsePackDigests(
         ctx,
-        folderCount,
+        totalStreams,
         ctx.dv.byteLength,
         "Substream"
       );
-      info.substreamCrcs = digestInfo.digests;
+      info.substreamCrcs = digestInfo;
       continue;
     }
     ctx.issues.push(`Unknown SubStreamsInfo field id 0x${id.toString(16)}.`);
@@ -560,6 +657,160 @@ const parseHeader = ctx => {
   return header;
 };
 
+const sumBigIntArray = values =>
+  values.reduce((total, value) => total + (typeof value === "bigint" ? value : 0n), 0n);
+
+const buildFolderDetails = (sections, issues) => {
+  const mainStreams = sections?.mainStreamsInfo;
+  const unpackInfo = mainStreams?.unpackInfo;
+  const packInfo = mainStreams?.packInfo;
+  if (!unpackInfo?.folders?.length) return { folders: [] };
+  const folderCount = unpackInfo.folders.length;
+  const numUnpackStreams =
+    mainStreams?.subStreamsInfo?.numUnpackStreams || new Array(folderCount).fill(1);
+  const substreamSizes = mainStreams?.subStreamsInfo?.substreamSizes || [];
+  const substreamCrcs = mainStreams?.subStreamsInfo?.substreamCrcs;
+  const crcDefined = substreamCrcs?.definedFlags || [];
+  const crcMap = new Map((substreamCrcs?.digests || []).map(d => [d.index, d.crc]));
+  const packSizes = packInfo?.packSizes || [];
+  const folders = [];
+  let packCursor = 0;
+  let substreamSizeCursor = 0;
+  let crcCursor = 0;
+  for (let i = 0; i < folderCount; i += 1) {
+    const folder = unpackInfo.folders[i];
+    const unpackStreams = toSafeNumber(numUnpackStreams[i]) ?? 1;
+    const unpackSizes = unpackInfo.unpackSizes?.[i] || [];
+    const unpackSize = unpackSizes.length ? sumBigIntArray(unpackSizes) : null;
+    const packedStreams = Math.max(folder.numPackedStreams || 0, 0);
+    const packedSizes = [];
+    for (let j = 0; j < packedStreams; j += 1) {
+      if (packCursor >= packSizes.length) break;
+      packedSizes.push(packSizes[packCursor]);
+      packCursor += 1;
+    }
+    const packedSize = packedSizes.length ? sumBigIntArray(packedSizes) : null;
+    const substreams = [];
+    let consumed = 0n;
+    for (let s = 0; s < unpackStreams; s += 1) {
+      let size = null;
+      if (unpackStreams === 1) {
+        size = unpackSize ?? unpackSizes[0] ?? null;
+      } else if (s < unpackStreams - 1) {
+        size = substreamSizes[substreamSizeCursor] ?? null;
+        substreamSizeCursor += 1;
+      } else if (typeof unpackSize === "bigint") {
+        size = unpackSize - consumed;
+      }
+      if (typeof size === "number") size = BigInt(size);
+      if (typeof size === "bigint") consumed += size;
+      const crcFlag = crcDefined[crcCursor];
+      const crc = crcFlag ? crcMap.get(crcCursor) ?? null : null;
+      crcCursor += 1;
+      substreams.push({ size, crc });
+    }
+    const coders = (folder.coders || []).map(coder => {
+      const normalized = normalizeMethodId(coder.methodId);
+      const id = describeCoderId(normalized);
+      const archHint = CODER_ARCH_HINTS[normalized];
+      const isEncryption = normalized === "06f10701";
+      return {
+        id,
+        methodId: coder.methodId,
+        numInStreams: coder.inStreams,
+        numOutStreams: coder.outStreams,
+        properties: coder.properties || null,
+        archHint,
+        isEncryption
+      };
+    });
+    const isEncrypted = coders.some(coder => coder.isEncryption);
+    folders.push({
+      index: i,
+      unpackSize,
+      packedSize,
+      coders,
+      numUnpackStreams: unpackStreams,
+      substreams,
+      isEncrypted
+    });
+  }
+  if (substreamSizeCursor < substreamSizes.length) {
+    issues.push("Extra substream size entries were not matched to folders.");
+  }
+  return { folders };
+};
+
+const buildFileDetails = (sections, folders, issues) => {
+  const files = (sections?.filesInfo?.files || []).map(file => ({ ...file }));
+  if (!files.length) return { files };
+  const filesWithStreams = files.filter(file => file.hasStream !== false);
+  let fileStreamIndex = 0;
+  folders.forEach(folder => {
+    folder.substreams.forEach(sub => {
+      const file = filesWithStreams[fileStreamIndex];
+      if (!file) return;
+      file.folderIndex = folder.index;
+      file.uncompressedSize = sub.size ?? folder.unpackSize ?? null;
+      const packedSize = folder.numUnpackStreams === 1 ? folder.packedSize : null;
+      file.packedSize = packedSize;
+      const uncompNum =
+        typeof file.uncompressedSize === "bigint"
+          ? toSafeNumber(file.uncompressedSize)
+          : file.uncompressedSize;
+      const packedNum = typeof packedSize === "bigint" ? toSafeNumber(packedSize) : packedSize;
+      file.compressionRatio =
+        packedNum != null && uncompNum != null && uncompNum !== 0
+          ? packedNum / uncompNum
+          : null;
+      file.crc32 = sub.crc ?? null;
+      file.isEncrypted = folder.isEncrypted;
+      file.isDirectory = Boolean(file.isDirectory);
+      file.isEmpty =
+        (uncompNum === 0 || file.uncompressedSize === 0n) && file.isDirectory !== true;
+      fileStreamIndex += 1;
+    });
+  });
+  if (fileStreamIndex < filesWithStreams.length) {
+    issues.push("Some file streams were not matched to folders.");
+  }
+  files.forEach(file => {
+    if (file.folderIndex == null) file.folderIndex = null;
+    if (file.uncompressedSize == null) file.uncompressedSize = null;
+    if (file.packedSize == null) file.packedSize = null;
+    if (file.compressionRatio == null) file.compressionRatio = null;
+    if (file.crc32 == null) file.crc32 = null;
+    if (file.isEncrypted == null) file.isEncrypted = false;
+    if (file.isEmpty == null) {
+      const uncompNum =
+        typeof file.uncompressedSize === "bigint"
+          ? toSafeNumber(file.uncompressedSize)
+          : file.uncompressedSize;
+      file.isEmpty = (uncompNum === 0 || file.uncompressedSize === 0n) && !file.isDirectory;
+    }
+  });
+  return { files };
+};
+
+const deriveStructure = (parsed, issues) => {
+  if (!parsed?.sections) return null;
+  const folderDetails = buildFolderDetails(parsed.sections, issues);
+  const fileDetails = buildFileDetails(parsed.sections, folderDetails.folders, issues);
+  const filesWithStreams = fileDetails.files.filter(file => file.hasStream !== false);
+  const archiveFlags = {
+    isSolid:
+      folderDetails.folders.some(folder => folder.numUnpackStreams > 1) ||
+      filesWithStreams.length > folderDetails.folders.length,
+    isHeaderEncrypted: parsed.kind === "encoded",
+    hasEncryptedContent: folderDetails.folders.some(folder => folder.isEncrypted)
+  };
+  return {
+    archiveFlags,
+    folders: folderDetails.folders,
+    files: fileDetails.files
+  };
+};
+
 const parseNextHeader = (dv, issues) => {
   if (!dv || dv.byteLength === 0) {
     issues.push("Next header is empty.");
@@ -642,6 +893,13 @@ export async function parseSevenZip(file) {
   };
   if (parsedNextHeader.sections?.filesInfo?.fileCount === 0) {
     issues.push("No file entries were found in the archive header.");
+  }
+  const structure = deriveStructure(parsedNextHeader, issues);
+  if (structure) {
+    result.structure = structure;
+    if (parsedNextHeader.sections?.filesInfo) {
+      parsedNextHeader.sections.filesInfo.files = structure.files;
+    }
   }
   return result;
 }
