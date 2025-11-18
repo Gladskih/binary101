@@ -14,6 +14,7 @@ import {
   renderWebp,
   renderFb2,
   renderMp3,
+  renderSevenZip,
 } from "./renderers/index.js";
 import { escapeHtml } from "./html-utils.js";
 
@@ -128,6 +129,13 @@ function renderAnalysisIntoUi(analyzerName, parsedResult) {
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
     peDetailsValueElement.innerHTML = renderZip(parsedResult);
+    return;
+  }
+  if (analyzerName === "sevenZip" && parsedResult) {
+    peDetailsTermElement.textContent = "7z details";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    peDetailsValueElement.innerHTML = renderSevenZip(parsedResult);
     return;
   }
   
