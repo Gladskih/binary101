@@ -110,19 +110,24 @@ const readEncodedUint64 = (ctx, label) => {
   const firstByte = readByte(ctx, label);
   if (firstByte == null) return null;
   let mask = 0x80;
-  let i = 0;
-  for (; i < 8; i += 1) {
+  let extraBytes = 0;
+  for (; extraBytes < 8; extraBytes += 1) {
     if ((firstByte & mask) === 0) break;
     mask >>= 1;
   }
-  let value = BigInt(firstByte & (mask - 1));
-  if (i === 8) {
+  let highBits = firstByte & (mask - 1);
+  let value = BigInt(highBits);
+  if (extraBytes === 8) {
     value = 0n;
   }
-  for (let j = 0; j < i; j += 1) {
+  let low = 0n;
+  for (let i = 0; i < extraBytes; i += 1) {
     const next = readByte(ctx, label);
     if (next == null) return null;
-    value = (value << 8n) | BigInt(next);
+    low |= BigInt(next) << BigInt(8 * i);
+  }
+  if (extraBytes > 0) {
+    value = (value << BigInt(8 * extraBytes)) + low;
   }
   return value;
 };
