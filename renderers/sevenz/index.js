@@ -31,10 +31,9 @@ const toSafeNumber = value => {
 const formatSizeDetailed = value => {
   if (value == null) return "-";
   const safeNumber = toSafeNumber(value);
+  if (safeNumber != null) return formatHumanSize(safeNumber);
   const asBigInt = typeof value === "bigint" ? value : BigInt(Math.max(value, 0));
-  const human = safeNumber != null ? formatHumanSize(safeNumber) : `${asBigInt.toString()} bytes`;
-  const bytesLabel = safeNumber != null ? `${safeNumber} bytes` : `${asBigInt.toString()} bytes`;
-  return `${human} (${bytesLabel})`;
+  return `${asBigInt.toString()} bytes`;
 };
 
 const describeCoders = coders => {
@@ -57,8 +56,8 @@ const describeArchiveFlags = flags => {
 };
 
 const formatRatio = value => {
-  if (value == null) return "-";
-  return `${(value * 100).toFixed(1)}%`;
+  if (value == null || !Number.isFinite(value)) return "-";
+  return `${value.toFixed(1)}%`;
 };
 
 const renderOverview = (sevenZip, out) => {

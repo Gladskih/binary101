@@ -315,6 +315,7 @@ const parseFolder = (ctx, endOffset) => {
     bindPairs.push({ inIndex, outIndex });
   }
   const numPackedStreams = Math.max(totalInStreams - numBindPairs, 0);
+  const numOutStreams = Math.max(totalOutStreams - numBindPairs, 0);
   const packedStreams = [];
   if (numPackedStreams > 1) {
     for (let i = 0; i < numPackedStreams; i += 1) {
@@ -328,7 +329,9 @@ const parseFolder = (ctx, endOffset) => {
     totalOutStreams,
     bindPairs,
     packedStreams,
-    numPackedStreams
+    numPackedStreams,
+    numBindPairs,
+    numOutStreams
   };
 };
 
@@ -358,7 +361,7 @@ const parseUnpackInfo = ctx => {
     info.unpackSizes = [];
     for (let i = 0; i < numFoldersNumber; i += 1) {
       const folder = info.folders[i];
-      const outStreams = folder?.totalOutStreams || 1;
+      const outStreams = folder?.numOutStreams || 1;
       const sizes = [];
       for (let j = 0; j < outStreams; j += 1) {
         const size = readEncodedUint64(ctx, "Unpack size");
@@ -709,6 +712,10 @@ const buildFolderDetails = (sections, issues) => {
       crcCursor += 1;
       substreams.push({ size, crc });
     }
+    const folderUnpackSize =
+      substreams.some(sub => typeof sub.size === "bigint")
+        ? sumBigIntArray(substreams.map(sub => sub.size || 0n))
+        : unpackSize;
     const coders = (folder.coders || []).map(coder => {
       const normalized = normalizeMethodId(coder.methodId);
       const id = describeCoderId(normalized);
@@ -727,7 +734,7 @@ const buildFolderDetails = (sections, issues) => {
     const isEncrypted = coders.some(coder => coder.isEncryption);
     folders.push({
       index: i,
-      unpackSize,
+      unpackSize: folderUnpackSize,
       packedSize,
       coders,
       numUnpackStreams: unpackStreams,
@@ -759,10 +766,11 @@ const buildFileDetails = (sections, folders, issues) => {
           ? toSafeNumber(file.uncompressedSize)
           : file.uncompressedSize;
       const packedNum = typeof packedSize === "bigint" ? toSafeNumber(packedSize) : packedSize;
-      file.compressionRatio =
-        packedNum != null && uncompNum != null && uncompNum !== 0
-          ? packedNum / uncompNum
+      const ratio =
+        packedNum != null && uncompNum != null && uncompNum > 0
+          ? (packedNum / uncompNum) * 100
           : null;
+      file.compressionRatio = Number.isFinite(ratio) ? ratio : null;
       file.crc32 = sub.crc ?? null;
       file.isEncrypted = folder.isEncrypted;
       file.isDirectory = Boolean(file.isDirectory);
