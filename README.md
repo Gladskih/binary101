@@ -26,4 +26,4 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
 Please see [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## License
-You are free to use, modify, and distribute this project for any purpose, including commercial applications. The project must not be used for malicious purposes.
+This project is licensed under the MIT License. See `LICENSE` for details.
