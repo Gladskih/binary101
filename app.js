@@ -15,6 +15,7 @@ import {
   renderFb2,
   renderMp3,
   renderSevenZip,
+  renderTar,
 } from "./renderers/index.js";
 import { escapeHtml } from "./html-utils.js";
 
@@ -136,6 +137,14 @@ function renderAnalysisIntoUi(analyzerName, parsedResult) {
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
     peDetailsValueElement.innerHTML = renderSevenZip(parsedResult);
+    return;
+  }
+
+  if (analyzerName === "tar" && parsedResult) {
+    peDetailsTermElement.textContent = "TAR details";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    peDetailsValueElement.innerHTML = renderTar(parsedResult);
     return;
   }
   

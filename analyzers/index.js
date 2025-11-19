@@ -13,6 +13,7 @@ import { parsePdf } from "./pdf/index.js";
 import { parseWebp } from "./webp/index.js";
 import { parseMp3, probeMp3 } from "./mp3/index.js";
 import { hasSevenZipSignature, parseSevenZip } from "./sevenz/index.js";
+import { hasTarSignature, parseTar } from "./tar/index.js";
 
 // Quick magic-based detectors for non-PE types (label only for now)
 function detectELF(dv) {
@@ -256,6 +257,10 @@ export async function parseForUi(file) {
   if (hasSevenZipSignature(dv)) {
     const sevenZip = await parseSevenZip(file);
     if (sevenZip?.is7z) return { analyzer: "sevenZip", parsed: sevenZip };
+  }
+  if (hasTarSignature(dv)) {
+    const tar = await parseTar(file);
+    if (tar?.isTar) return { analyzer: "tar", parsed: tar };
   }
   if (dv.byteLength >= 4 && dv.getUint32(0, true) === 0x04034b50) {
     const zip = await parseZip(file);
