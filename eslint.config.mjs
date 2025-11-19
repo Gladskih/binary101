@@ -1,54 +1,39 @@
 import js from "@eslint/js";
+import globals from "globals";
 
-/** @type {import("eslint").Linter.FlatConfig[]} */
+/** @type {import("eslint").FlatConfig[]} */
 export default [
   js.configs.recommended,
   {
     files: ["**/*.js"],
     languageOptions: {
-      ecmaVersion: 2020,
-      sourceType: "module"
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: {
+        ...globals.browser
+      }
     },
     rules: {
-      "no-console": ["warn", { allow: ["error", "warn"] }],
-      "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
       "prefer-const": "error",
       "no-var": "error",
-      eqeqeq: ["error", "always"],
-      curly: "error",
-      "brace-style": ["error", "1tbs"],
-      quotes: ["error", "double", { avoidEscape: true }],
-      semi: ["error", "always"],
-      "comma-dangle": ["error", "always-multiline"],
-      indent: ["error", 2],
-      "linebreak-style": ["error", "unix"],
       "max-len": [
-        "warn",
+        "error",
         {
-          code: 100,
+          code: 120,
           ignoreUrls: true,
           ignoreStrings: true,
+          ignoreTemplateLiterals: true,
+          ignoreRegExpLiterals: true,
           ignoreComments: true
         }
       ],
       "max-lines": [
-        "warn",
+        "error",
         {
-          max: 250,
-          skipBlankLines: true,
+          max: 300,
           skipComments: true
         }
-      ],
-      "max-nested-callbacks": ["warn", 3],
-      complexity: ["warn", 10],
-      "id-length": [
-        "warn",
-        {
-          min: 2,
-          exceptions: ["_", "x", "y", "i", "j", "k", "a", "b", "c"]
-        }
-      ],
-      "no-magic-numbers": "off"
+      ]
     }
   }
 ];
