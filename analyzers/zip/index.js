@@ -102,7 +102,8 @@ const findZip64Locator = (dv, baseOffset) => {
 };
 
 const readDataView = async (file, offset, length) => {
-  if (offset == null || length <= 0) return null;
+  if (offset == null) return null;
+  if (length <= 0) return new DataView(new ArrayBuffer(0));
   const fileSize = file.size || 0;
   if (offset >= fileSize) return null;
   const clampedLength = Math.min(length, fileSize - offset);

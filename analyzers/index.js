@@ -1,4 +1,5 @@
 "use strict";
+/* eslint-disable max-lines */
 
 import { parsePe } from "./pe/index.js";
 import { peProbe, mapMachine } from "./pe/signature.js";
@@ -132,6 +133,20 @@ function refineCompoundLabel(dv) {
   return null;
 }
 
+function hasZipEocdSignature(dv) {
+  // Smallest ZIP is an empty one, 22 bytes.
+  if (dv.byteLength < 22) return false;
+  // Scan backwards from the end of the buffer for the EOCD signature.
+  // The EOCD record can be preceded by a variable-length comment.
+  const maxScanBytes = Math.min(dv.byteLength, 65535 + 22);
+  for (let i = dv.byteLength - 22; i >= dv.byteLength - maxScanBytes && i >= 0; i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export async function detectBinaryType(file) {
   const maxProbeBytes = Math.min(file.size || 0, 65536);
   const dv = new DataView(
@@ -217,6 +232,9 @@ export async function detectBinaryType(file) {
     }
     return magic;
   }
+
+  if (hasZipEocdSignature(dv)) return "ZIP archive";
+
   const probe = peProbe(dv);
   if (probe) {
     const pe = await parsePe(file);
@@ -297,5 +315,11 @@ export async function parseForUi(file) {
     const mp3 = await parseMp3(file);
     if (mp3) return { analyzer: "mp3", parsed: mp3 };
   }
+
+  if (hasZipEocdSignature(dv)) {
+    const zip = await parseZip(file);
+    if (zip) return { analyzer: "zip", parsed: zip };
+  }
+
   return { analyzer: null, parsed: null };
 }

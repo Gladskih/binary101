@@ -211,7 +211,8 @@ function parseInfoDictionary(dictText) {
   const dict = extractDictionary(dictText, 0);
   if (!dict) return null;
   const parseField = name => {
-    const match = dict.match(new RegExp(`/${name}\\s*\(([^)]*)\)`));
+    const pattern = new RegExp(String.raw`/${name}\s*\(([^)]*)\)`);
+    const match = dict.match(pattern);
     return match ? decodeLiteralString(match[1]) : null;
   };
   return {
