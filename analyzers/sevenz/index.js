@@ -115,7 +115,7 @@ const readEncodedUint64 = (ctx, label) => {
     if ((firstByte & mask) === 0) break;
     mask >>= 1;
   }
-  let highBits = firstByte & (mask - 1);
+  const highBits = firstByte & (mask - 1);
   let value = BigInt(highBits);
   if (extraBytes === 8) {
     value = 0n;

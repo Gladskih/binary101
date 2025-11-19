@@ -38,7 +38,7 @@ export async function parseClrDirectory(file, dataDirs, rvaToOff, addCoverageReg
         const offset = md.getUint32(p, true); p += 4;
         const size = md.getUint32(p, true); p += 4;
         let name = "";
-        let limit = Math.min(md.byteLength - p, 64);
+        const limit = Math.min(md.byteLength - p, 64);
         for (let j = 0; j < limit; j++) {
           const c = md.getUint8(p++);
           if (c === 0) break;

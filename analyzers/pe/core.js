@@ -91,7 +91,7 @@ async function parseOptionalHeaderAndDirectories(file, peHeaderOffset, sizeOfOpt
   const SizeOfUninitializedData = optionalHeaderView.getUint32(position, true); position += 4;
   const AddressOfEntryPoint = optionalHeaderView.getUint32(position, true); position += 4;
   const BaseOfCode = optionalHeaderView.getUint32(position, true); position += 4;
-  let BaseOfData = is32 ? optionalHeaderView.getUint32(position, true) : undefined;
+  const BaseOfData = is32 ? optionalHeaderView.getUint32(position, true) : undefined;
   if (is32) position += 4;
   const ImageBase = isPlus ? Number(optionalHeaderView.getBigUint64(position, true)) : optionalHeaderView.getUint32(position, true);
   position += isPlus ? 8 : 4;

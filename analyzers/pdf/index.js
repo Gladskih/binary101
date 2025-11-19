@@ -139,7 +139,7 @@ function parseTrailerDictionary(trailerText) {
 }
 
 function parseXrefStream(text, startOffset, issues) {
-  let pos = skipWhitespace(text, startOffset);
+  const pos = skipWhitespace(text, startOffset);
   const objectMatch = text.slice(pos, pos + 64).match(/(\d+)\s+(\d+)\s+obj/);
   if (!objectMatch) return null;
   const dict = extractDictionary(text, pos);
