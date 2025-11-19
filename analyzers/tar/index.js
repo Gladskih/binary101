@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 "use strict";
 
 import { formatUnixSecondsOrDash } from "../../binary-utils.js";

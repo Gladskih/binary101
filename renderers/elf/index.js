@@ -9,8 +9,7 @@ import {
   ELF_MACHINE,
   PROGRAM_TYPES,
   SECTION_TYPES,
-  SECTION_FLAGS,
-  PROGRAM_FLAGS
+  SECTION_FLAGS
 } from "../../analyzers/elf/constants.js";
 
 const mapOptions = options => options.map(([code, label]) => [code, label]);

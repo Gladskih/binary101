@@ -21,7 +21,9 @@ export async function parseTlsDirectory(file, dataDirs, rvaToOff, addCoverageReg
       const po = rvaToOff(rva);
       if (po != null) {
         for (let index = 0; index < 1024; index++) {
-          const ptr = new DataView(await file.slice(po + index * 8, po + index * 8 + 8).arrayBuffer()).getBigUint64(0, true);
+          const ptr = new DataView(
+            await file.slice(po + index * 8, po + index * 8 + 8).arrayBuffer()
+          ).getBigUint64(0, true);
           if (ptr === 0n) {
             CallbackCount = index;
             break;
@@ -29,7 +31,15 @@ export async function parseTlsDirectory(file, dataDirs, rvaToOff, addCoverageReg
         }
       }
     }
-    return { StartAddressOfRawData, EndAddressOfRawData, AddressOfIndex, AddressOfCallBacks, SizeOfZeroFill, Characteristics, CallbackCount };
+    return {
+      StartAddressOfRawData,
+      EndAddressOfRawData,
+      AddressOfIndex,
+      AddressOfCallBacks,
+      SizeOfZeroFill,
+      Characteristics,
+      CallbackCount
+    };
   }
   const dv = new DataView(await file.slice(base, base + 0x18).arrayBuffer());
   const StartAddressOfRawData = dv.getUint32(0, true);
@@ -38,6 +48,14 @@ export async function parseTlsDirectory(file, dataDirs, rvaToOff, addCoverageReg
   const AddressOfCallBacks = dv.getUint32(12, true);
   const SizeOfZeroFill = dv.getUint32(16, true);
   const Characteristics = dv.getUint32(20, true);
-  return { StartAddressOfRawData, EndAddressOfRawData, AddressOfIndex, AddressOfCallBacks, SizeOfZeroFill, Characteristics, CallbackCount: 0 };
+  return {
+    StartAddressOfRawData,
+    EndAddressOfRawData,
+    AddressOfIndex,
+    AddressOfCallBacks,
+    SizeOfZeroFill,
+    Characteristics,
+    CallbackCount: 0
+  };
 }
 

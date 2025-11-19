@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 "use strict";
 import { formatUnixSecondsOrDash, readAsciiString } from "../../binary-utils.js";
 const EOCD_SIGNATURE = 0x06054b50;

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 "use strict";
 
 import { dd, safe } from "../../html-utils.js";

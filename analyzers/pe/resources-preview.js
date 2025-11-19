@@ -130,6 +130,7 @@ function addMessageTablePreview(langEntry, data, typeName) {
         addPreviewIssue(langEntry, "Message text could not be decoded.");
       }
       if (text) {
+        // eslint-disable-next-line no-control-regex -- PE message strings are NUL-terminated
         messages.push({ id: currentId, text: text.replace(/\u0000+$/, "") });
       }
       cursor += length;
@@ -236,7 +237,6 @@ export async function enrichResourcePreviews(file, tree) {
       const countL = NamedL + IdsL;
       for (let j = 0; j < countL; j++) {
         const le = await view(langDirOff + 16 + j * 8, 8);
-        const NameL = le.getUint32(0, true);
         const OffsetToDataL = le.getUint32(4, true);
         const subdirL = (OffsetToDataL & 0x80000000) !== 0;
         if (subdirL) continue;

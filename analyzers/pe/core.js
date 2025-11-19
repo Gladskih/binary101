@@ -41,7 +41,12 @@ async function parseDosHeaderAndStub(file, headView, peHeaderOffset) {
     e_cs: headView.getUint16(0x16, true),
     e_lfarlc: headView.getUint16(0x18, true),
     e_ovno: headView.getUint16(0x1a, true),
-    e_res: [headView.getUint16(0x1c, true), headView.getUint16(0x1e, true), headView.getUint16(0x20, true), headView.getUint16(0x22, true)],
+    e_res: [
+      headView.getUint16(0x1c, true),
+      headView.getUint16(0x1e, true),
+      headView.getUint16(0x20, true),
+      headView.getUint16(0x22, true)
+    ],
     e_oemid: headView.getUint16(0x24, true),
     e_oeminfo: headView.getUint16(0x26, true),
     e_res2: Array.from({ length: 10 }, (_, index) => headView.getUint16(0x28 + index * 2, true)),
@@ -54,7 +59,9 @@ async function parseDosHeaderAndStub(file, headView, peHeaderOffset) {
     const printableRuns = collectPrintableRuns(stubBytes, 12);
     const classicMessage = printableRuns.find(text => /this program cannot be run in dos mode/i.test(text));
     if (classicMessage) stub = { kind: "standard", note: "classic DOS message", strings: [classicMessage] };
-    else if (printableRuns.length) stub = { kind: "non-standard", note: "printable text", strings: printableRuns.slice(0, 4) };
+    else if (printableRuns.length) {
+      stub = { kind: "non-standard", note: "printable text", strings: printableRuns.slice(0, 4) };
+    }
   }
   dos.stub = stub;
   return dos;
@@ -76,12 +83,22 @@ async function parseCoffHeader(file, peHeaderOffset) {
   const NumberOfSymbols = headerView.getUint32(coffOffset + 12, true);
   const SizeOfOptionalHeader = headerView.getUint16(coffOffset + 16, true);
   const Characteristics = headerView.getUint16(coffOffset + 18, true);
-  return { Machine, NumberOfSections, TimeDateStamp, PointerToSymbolTable, NumberOfSymbols, SizeOfOptionalHeader, Characteristics };
+  return {
+    Machine,
+    NumberOfSections,
+    TimeDateStamp,
+    PointerToSymbolTable,
+    NumberOfSymbols,
+    SizeOfOptionalHeader,
+    Characteristics
+  };
 }
 
 async function parseOptionalHeaderAndDirectories(file, peHeaderOffset, sizeOfOptionalHeader) {
   const optionalHeaderOffset = peHeaderOffset + 24;
-  const optionalHeaderView = new DataView(await file.slice(optionalHeaderOffset, optionalHeaderOffset + Math.min(sizeOfOptionalHeader, 0x600)).arrayBuffer());
+  const optionalHeaderView = new DataView(
+    await file.slice(optionalHeaderOffset, optionalHeaderOffset + Math.min(sizeOfOptionalHeader, 0x600)).arrayBuffer()
+  );
   let position = 0;
   const Magic = optionalHeaderView.getUint16(position, true); position += 2;
   const isPlus = Magic === 0x20b, is32 = Magic === 0x10b;
@@ -93,15 +110,20 @@ async function parseOptionalHeaderAndDirectories(file, peHeaderOffset, sizeOfOpt
   const BaseOfCode = optionalHeaderView.getUint32(position, true); position += 4;
   const BaseOfData = is32 ? optionalHeaderView.getUint32(position, true) : undefined;
   if (is32) position += 4;
-  const ImageBase = isPlus ? Number(optionalHeaderView.getBigUint64(position, true)) : optionalHeaderView.getUint32(position, true);
+  const ImageBase = isPlus
+    ? Number(optionalHeaderView.getBigUint64(position, true))
+    : optionalHeaderView.getUint32(position, true);
   position += isPlus ? 8 : 4;
   const SectionAlignment = optionalHeaderView.getUint32(position, true); position += 4;
   const FileAlignment = optionalHeaderView.getUint32(position, true); position += 4;
-  const OSVersionMajor = optionalHeaderView.getUint16(position, true), OSVersionMinor = optionalHeaderView.getUint16(position + 2, true);
+  const OSVersionMajor = optionalHeaderView.getUint16(position, true);
+  const OSVersionMinor = optionalHeaderView.getUint16(position + 2, true);
   position += 4;
-  const ImageVersionMajor = optionalHeaderView.getUint16(position, true), ImageVersionMinor = optionalHeaderView.getUint16(position + 2, true);
+  const ImageVersionMajor = optionalHeaderView.getUint16(position, true);
+  const ImageVersionMinor = optionalHeaderView.getUint16(position + 2, true);
   position += 4;
-  const SubsystemVersionMajor = optionalHeaderView.getUint16(position, true), SubsystemVersionMinor = optionalHeaderView.getUint16(position + 2, true);
+  const SubsystemVersionMajor = optionalHeaderView.getUint16(position, true);
+  const SubsystemVersionMinor = optionalHeaderView.getUint16(position + 2, true);
   position += 4;
   const Win32VersionValue = optionalHeaderView.getUint32(position, true);
   position += 4;
@@ -115,13 +137,21 @@ async function parseOptionalHeaderAndDirectories(file, peHeaderOffset, sizeOfOpt
   position += 2;
   const DllCharacteristics = optionalHeaderView.getUint16(position, true);
   position += 2;
-  const SizeOfStackReserve = isPlus ? Number(optionalHeaderView.getBigUint64(position, true)) : optionalHeaderView.getUint32(position, true);
+  const SizeOfStackReserve = isPlus
+    ? Number(optionalHeaderView.getBigUint64(position, true))
+    : optionalHeaderView.getUint32(position, true);
   position += isPlus ? 8 : 4;
-  const SizeOfStackCommit = isPlus ? Number(optionalHeaderView.getBigUint64(position, true)) : optionalHeaderView.getUint32(position, true);
+  const SizeOfStackCommit = isPlus
+    ? Number(optionalHeaderView.getBigUint64(position, true))
+    : optionalHeaderView.getUint32(position, true);
   position += isPlus ? 8 : 4;
-  const SizeOfHeapReserve = isPlus ? Number(optionalHeaderView.getBigUint64(position, true)) : optionalHeaderView.getUint32(position, true);
+  const SizeOfHeapReserve = isPlus
+    ? Number(optionalHeaderView.getBigUint64(position, true))
+    : optionalHeaderView.getUint32(position, true);
   position += isPlus ? 8 : 4;
-  const SizeOfHeapCommit = isPlus ? Number(optionalHeaderView.getBigUint64(position, true)) : optionalHeaderView.getUint32(position, true);
+  const SizeOfHeapCommit = isPlus
+    ? Number(optionalHeaderView.getBigUint64(position, true))
+    : optionalHeaderView.getUint32(position, true);
   position += isPlus ? 8 : 4;
   const LoaderFlags = optionalHeaderView.getUint32(position, true);
   position += 4;
@@ -175,7 +205,9 @@ async function parseOptionalHeaderAndDirectories(file, peHeaderOffset, sizeOfOpt
 
 async function parseSectionHeaders(file, optionalHeaderOffset, sizeOfOptionalHeader, numberOfSections) {
   const sectionHeadersOffset = optionalHeaderOffset + sizeOfOptionalHeader;
-  const sectionHeadersView = new DataView(await file.slice(sectionHeadersOffset, sectionHeadersOffset + numberOfSections * 40).arrayBuffer());
+  const sectionHeadersView = new DataView(
+    await file.slice(sectionHeadersOffset, sectionHeadersOffset + numberOfSections * 40).arrayBuffer()
+  );
   const sections = [];
   for (let sectionIndex = 0; sectionIndex < numberOfSections; sectionIndex++) {
     const baseOffset = sectionIndex * 40;
@@ -214,8 +246,17 @@ export async function parsePeHeaders(file) {
   const coff = await parseCoffHeader(file, e_lfanew);
   if (!coff) return null;
 
-  const { optOff, ddStartRel, ddCount, dataDirs, opt } = await parseOptionalHeaderAndDirectories(file, e_lfanew, coff.SizeOfOptionalHeader);
-  const { sections, rvaToOff, sectOff } = await parseSectionHeaders(file, optOff, coff.SizeOfOptionalHeader, coff.NumberOfSections);
+  const { optOff, ddStartRel, ddCount, dataDirs, opt } = await parseOptionalHeaderAndDirectories(
+    file,
+    e_lfanew,
+    coff.SizeOfOptionalHeader
+  );
+  const { sections, rvaToOff, sectOff } = await parseSectionHeaders(
+    file,
+    optOff,
+    coff.SizeOfOptionalHeader,
+    coff.NumberOfSections
+  );
 
   const { coverage, addCov, overlaySize, imageEnd, imageSizeMismatch } = buildCoverage(
     file.size,

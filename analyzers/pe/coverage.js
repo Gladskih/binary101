@@ -2,7 +2,18 @@
 
 import { alignUpTo } from "../../binary-utils.js";
 
-export function buildCoverage(fileSize, peHeaderOffset, coff, optionalHeaderOffset, ddStartRel, ddCount, sectionHeadersOffset, sections, sectionAlignment, sizeOfImage) {
+export function buildCoverage(
+  fileSize,
+  peHeaderOffset,
+  coff,
+  optionalHeaderOffset,
+  ddStartRel,
+  ddCount,
+  sectionHeadersOffset,
+  sections,
+  sectionAlignment,
+  sizeOfImage
+) {
   const coverage = [];
   const addCov = (label, off, size) => {
     if (!Number.isFinite(off) || !Number.isFinite(size) || off < 0 || size <= 0) return;
@@ -26,6 +37,8 @@ export function buildCoverage(fileSize, peHeaderOffset, coff, optionalHeaderOffs
   }
   const imageSizeMismatch = imageEnd !== (sizeOfImage >>> 0);
   if (overlaySize > 0) addCov("Overlay (data after last section)", rawEnd, overlaySize);
-  for (const section of sections) addCov(`Section ${section.name} (raw)`, section.pointerToRawData, section.sizeOfRawData);
+  for (const section of sections) {
+    addCov(`Section ${section.name} (raw)`, section.pointerToRawData, section.sizeOfRawData);
+  }
   return { coverage, addCov, overlaySize, imageEnd, imageSizeMismatch };
 }

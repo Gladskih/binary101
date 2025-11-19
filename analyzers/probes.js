@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 "use strict";
 
 // Quick magic/text-based probes for common formats (label only; no parsing yet)

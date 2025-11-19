@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 "use strict";
 
 import { nowIsoString, formatHumanSize } from "./binary-utils.js";
