@@ -1,8 +1,7 @@
 /* eslint-disable max-lines */
 "use strict";
 
-import { nowIsoString, formatHumanSize } from "./binary-utils.js";
-import { computeHashForFile, copyToClipboard } from "./hash.js";
+import { nowIsoString, formatHumanSize, bufferToHex } from "./binary-utils.js";
 import { detectBinaryType, parseForUi } from "./analyzers/index.js";
 import {
   renderPe,
@@ -327,8 +326,9 @@ async function computeAndDisplayHash(
   buttonElement.disabled = true;
   buttonElement.textContent = "Working...";
   try {
-    const hashHex = await computeHashForFile(currentFile, algorithmName);
-    valueElement.textContent = hashHex;
+    valueElement.textContent = bufferToHex(
+      await crypto.subtle.digest(algorithmName, await currentFile.arrayBuffer())
+    );
     copyButtonElement.hidden = false;
     buttonElement.hidden = true;
     clearStatusMessage();
@@ -351,12 +351,20 @@ sha512ButtonElement.addEventListener("click", () =>
 
 sha256CopyButtonElement.addEventListener("click", async () => {
   const text = sha256ValueElement.textContent || "";
-  const copied = await copyToClipboard(text);
-  setStatusMessage(copied ? "SHA-256 copied." : "Clipboard copy failed.");
+  try {
+    await navigator.clipboard.writeText(text);
+    setStatusMessage("SHA-256 copied.");
+  } catch {
+    setStatusMessage("Clipboard copy failed.");
+  }
 });
 
 sha512CopyButtonElement.addEventListener("click", async () => {
   const text = sha512ValueElement.textContent || "";
-  const copied = await copyToClipboard(text);
-  setStatusMessage(copied ? "SHA-512 copied." : "Clipboard copy failed.");
+  try {
+    await navigator.clipboard.writeText(text);
+    setStatusMessage("SHA-512 copied.");
+  } catch {
+    setStatusMessage("Clipboard copy failed.");
+  }
 });

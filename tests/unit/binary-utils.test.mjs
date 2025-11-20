@@ -6,7 +6,11 @@ import {
   bufferToHex,
   collectPrintableRuns,
   formatHumanSize,
-  formatUnixSecondsOrDash
+  formatUnixSecondsOrDash,
+  nowIsoString,
+  readAsciiString,
+  toHex32,
+  toHex64
 } from "../../binary-utils.js";
 
 test("formatHumanSize reports readable units", () => {
@@ -26,6 +30,12 @@ test("collectPrintableRuns returns only long enough sequences", () => {
   assert.deepStrictEqual(collectPrintableRuns(bytes, 2), ["ABC", "DE"]);
 });
 
+test("collectPrintableRuns splits very long runs to stay bounded", () => {
+  const bytes = new Uint8Array(4100).fill(0x41); // 'A'
+  const runs = collectPrintableRuns(bytes, 2);
+  assert.deepStrictEqual(runs.map(run => run.length), [4097, 3]);
+});
+
 test("formatUnixSecondsOrDash handles invalid and unusual timestamps", () => {
   assert.strictEqual(formatUnixSecondsOrDash(-1), "-");
   assert.strictEqual(formatUnixSecondsOrDash(NaN), "-");
@@ -40,4 +50,26 @@ test("formatUnixSecondsOrDash handles invalid and unusual timestamps", () => {
 test("bufferToHex converts raw bytes into hex", () => {
   const buffer = new Uint8Array([0x00, 0x10, 0xff]).buffer;
   assert.strictEqual(bufferToHex(buffer), "0010ff");
+});
+
+test("readAsciiString stops at NUL and respects bounds", () => {
+  const bytes = new Uint8Array([0x41, 0x42, 0x00, 0x43]);
+  const view = new DataView(bytes.buffer);
+  assert.strictEqual(readAsciiString(view, 0, 10), "AB");
+  assert.strictEqual(readAsciiString(view, 1, 2), "B");
+});
+
+test("toHex32 masks to unsigned and pads width", () => {
+  assert.strictEqual(toHex32(-1), "0xffffffff");
+  assert.strictEqual(toHex32(0x1a, 4), "0x001a");
+});
+
+test("toHex64 renders 64-bit values", () => {
+  assert.strictEqual(toHex64(0x1fffffffffffffn), "0x1fffffffffffff");
+});
+
+test("nowIsoString returns a valid ISO timestamp", () => {
+  const iso = nowIsoString();
+  assert.ok(!Number.isNaN(Date.parse(iso)));
+  assert.ok(iso.endsWith("Z"));
 });
