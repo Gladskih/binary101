@@ -58,16 +58,32 @@ Scope: the entire repository.
 - Escape all user-controlled values with `escapeHtml` / `safe` from `html-utils.js`.
 - Prefer small helper functions over large monolithic renderers.
 
+## Core Testing Principles
+
+Adherence to these principles is mandatory for all code modifications.
+
+1.  **All Tests Must Pass:** Before committing, ensure that 100% of the test suite passes. No change that breaks an existing test will be accepted.
+2.  **New Functionality Requires New Tests:** Every new feature, function, or analyzer must be accompanied by corresponding unit tests that validate its behavior.
+3.  **Refactoring Must Preserve Tests:** When refactoring existing code without changing its external behavior (i.e., within its established contract), the existing tests for that code must not be changed. They serve as a guarantee that the refactoring was successful.
+4.  **Coverage Must Not Decrease:** Test coverage is a critical quality metric. Before starting work, measure the current test coverage. After your changes and any new tests are complete, measure it again. The new coverage percentage must be greater than or equal to the original percentage.
+5.  **Test the Tests (Red-Green-Refactor):** A test that has never failed cannot be trusted. When writing a new test, you must first see it fail. You can do this by running the test against the code before the feature is implemented, or by temporarily introducing a bug to ensure the test catches it. This "Red-Green" cycle ensures the test is genuinely validating the code's correctness.
+
 ## Testing and Verification
 
-- Primary way to test changes:
-  - run a simple static server from the repo root (for example `python -m http.server` or `npx http-server`),
-  - open `index.html` in a modern browser,
-  - drag-and-drop representative sample files (PE, JPEG, PNG, MP3, ZIP, etc.).
-- If you add or change analyzers, verify:
-  - detection label from `detectBinaryType(file)`,
-  - structured output in the details pane,
-  - warnings appear as non-blocking messages, not crashes.
+This project has both automated tests and relies on manual verification.
+
+### Automated Testing
+
+Before committing any changes, run the full test suite to ensure you haven't introduced any regressions.
+
+-   **Run all tests (unit and e2e):**
+    ```sh
+    npm test
+    ```
+-   **Generate a coverage report:**
+    ```sh
+    npm run test:coverage
+    ```
 
 ## Safety and Robustness
 
