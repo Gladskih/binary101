@@ -54,15 +54,33 @@ All contributions must adhere to the project's code quality metrics and best pra
 - Define colors and fonts as CSS variables for consistency.
 - Use mobile-first approach for responsive design.
 
-## Code Checking
+## Code Quality and Testing
 
-Before committing, verify your code meets the project standards:
+Before submitting a pull request, please ensure your code adheres to the project's standards and that all tests pass.
 
-```bash
-npx eslint .
+### Linting
+
+To check the code for style and quality issues, run:
+
+```sh
+npm run lint
 ```
 
-This checks JavaScript files against the ESLint configuration. Fix any errors before submitting your pull request.
+### Testing
+
+The project has both unit and end-to-end tests. To run all tests, use:
+
+```sh
+npm test
+```
+
+To generate a test coverage report for the unit tests, run:
+
+```sh
+npm run test:coverage
+```
+
+We encourage contributions that improve test coverage.
 
 ## Project Structure
 
@@ -94,14 +112,6 @@ To add support for a new binary format:
 - **Branch names**: Use lowercase with hyphens (e.g., `pe-parser`, `hash-computation`).
 - **Pull requests**: Provide a clear description of your changes. Ensure ESLint passes before submitting.
 
-## Testing
-
-While the project currently has no automated tests, we encourage you to:
-
-- Test your changes manually in the browser using DevTools.
-- Add unit tests for new utilities (using Jest or Mocha).
-- Test edge cases and invalid files to ensure robustness.
-
 ## Reporting Issues
 
 If you encounter bugs or have feature suggestions, please open an issue with:
@@ -113,4 +123,3 @@ If you encounter bugs or have feature suggestions, please open an issue with:
 
 - Check existing issues and pull requests to avoid duplicates.
 - Ask questions in a new issue or discussion thread.
-
