@@ -3,3 +3,6 @@ node_modules/
 
 # Test coverage output
 coverage/
+
+# Test runner artifacts
+test-results/
