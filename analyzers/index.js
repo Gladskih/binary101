@@ -247,6 +247,22 @@ export async function detectBinaryType(file) {
   }
   const text = probeTextLike(dv);
   if (text) return text;
+
+  if (probeMp3(dv)) {
+    const mp3 = await parseMp3(file);
+    if (mp3 && mp3.isMp3 && mp3.mpeg && mp3.mpeg.firstFrame) {
+      const info = mp3.mpeg.firstFrame;
+      const parts = [];
+      if (info.versionLabel) parts.push(info.versionLabel);
+      if (info.layerLabel) parts.push(info.layerLabel);
+      if (info.bitrateKbps) parts.push(`${info.bitrateKbps} kbps`);
+      if (info.sampleRate) parts.push(`${info.sampleRate} Hz`);
+      if (info.channelMode) parts.push(info.channelMode);
+      const label = parts.length ? parts.join(", ") : "MPEG audio";
+      return label;
+    }
+    if (mp3 && mp3.isMp3) return "MPEG audio stream (MP3)";
+  }
   return "Unknown binary type";
 }
 

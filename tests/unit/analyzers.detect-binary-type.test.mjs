@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { detectBinaryType } from "../../analyzers/index.js";
 import { MockFile } from "../helpers/mock-file.mjs";
+import { createMp3File } from "../fixtures/sample-files.mjs";
 
 const fromAscii = text => new Uint8Array(Buffer.from(text, "ascii"));
 
@@ -100,4 +101,13 @@ test("detectBinaryType recognises ELF and Mach-O executables", async () => {
   const macho64 = new Uint8Array([0xfe, 0xed, 0xfa, 0xcf]);
   const machoLabel = await detectBinaryType(new MockFile(macho64, "macho", "application/octet-stream"));
   assert.strictEqual(machoLabel, "Mach-O 64-bit");
+});
+
+test("detectBinaryType recognises MP3 streams even when frames are not at offset 0", async () => {
+  const base = createMp3File();
+  const prefixed = new Uint8Array(base.bytes.length + 16);
+  prefixed.set(base.bytes, 16);
+  const file = new MockFile(prefixed, "prefixed.mp3", "audio/mpeg");
+  const label = await detectBinaryType(file);
+  assert.strictEqual(label, "MPEG Version 1, Layer III, 128 kbps, 44100 Hz, Stereo");
 });

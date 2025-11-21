@@ -171,4 +171,26 @@ test.describe("file type detection", () => {
     await expectBaseDetails(page, "macho.bin", "Mach-O 64-bit");
     await expect(page.locator("#peDetailsTerm")).toBeHidden();
   });
+
+  test("renders MP3 audio summary", async ({ page }) => {
+    const file = createMp3File();
+    await page.setInputFiles("#fileInput", toUpload(file));
+
+    await expectBaseDetails(page, file.name, "MPEG Version 1, Layer III, 128 kbps, 44100 Hz, Stereo");
+    await expect(page.locator("#peDetailsTerm")).toHaveText("MP3 details");
+    await expect(page.locator("#peDetailsValue")).toContainText("MPEG audio stream");
+    await expect(page.locator("#peDetailsValue")).toContainText("Summary");
+  });
+
+  test("shows unknown binary type when no probe matches", async ({ page }) => {
+    const buffer = Buffer.alloc(32, 0);
+    await page.setInputFiles("#fileInput", {
+      name: "unknown.bin",
+      mimeType: "application/octet-stream",
+      buffer
+    });
+
+    await expectBaseDetails(page, "unknown.bin", "Unknown binary type");
+    await expect(page.locator("#peDetailsTerm")).toBeHidden();
+  });
 });
