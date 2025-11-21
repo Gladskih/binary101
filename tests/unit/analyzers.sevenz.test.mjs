@@ -30,6 +30,7 @@ const toFileTime = unixSeconds =>
   (BigInt(unixSeconds) + 11644473600n) * 10000000n;
 
 const buildStructuredHeader = () => {
+  const archiveProps = [0x01, 0x01, 0x00, 0x00];
   const streamsInfo = [
     0x06, // PackInfo
     0x00, // packPos
@@ -47,6 +48,10 @@ const buildStructuredHeader = () => {
     0x0c, // sizes id
     0x05, // unpack size
     0x00, // crc marker reused as end marker
+    0x08, // SubStreamsInfo
+    0x0d, // declare number of unpack streams
+    0x01, // one unpack stream for the folder
+    0x00, // end SubStreamsInfo
     0x00 // end StreamsInfo
   ];
 
@@ -91,7 +96,7 @@ const buildStructuredHeader = () => {
     0x00 // end FilesInfo
   ];
 
-  return new Uint8Array([0x01, 0x04, ...streamsInfo, 0x05, ...filesInfo, 0x00]);
+  return new Uint8Array([0x01, 0x02, ...archiveProps, 0x04, ...streamsInfo, 0x05, ...filesInfo, 0x00]);
 };
 
 const buildEncodedHeader = () =>
