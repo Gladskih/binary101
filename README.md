@@ -22,6 +22,10 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
 - `renderers/` &mdash; HTML renderers for parsed structures. The PE renderer lives under `renderers/pe/` and is split into headers, directory views, resources, and layout/sanity views.
 - `hash.js`, `binary-utils.js`, `html-utils.js` &mdash; shared helpers for hashing, byte/hex formatting and safe HTML generation.
 
+## Supported file types
+- Parsed with detailed views: PE/COFF (PE32 and PE32+), ELF 32/64, PNG, JPEG, GIF, WebP, PDF, TAR, ZIP (including DOCX/XLSX/PPTX and related OpenXML), 7z, MP3, FictionBook FB2.
+- Detected/labelled without deep parsing: Mach-O (32/64/FAT), text/HTML/XML/SVG/JSON/RTF/shebang scripts, gzip/bzip2/XZ/LZ4/Zstandard, RAR, CAB, ISO-9660 images, FLAC/OGG/WAV/AIFF/MIDI/AMR/AC3/DTS, MP4/MOV (ISO BMFF), FLV/AVI/ASF, MPEG PS/TS, RealMedia, Matroska, SQLite, Java class files, Android DEX bytecode, WebAssembly (WASM), Windows Help (HLP), Windows shortcut (LNK), PDB, PCAP/PCAP-NG, DjVu, Microsoft Compound File (DOC/XLS/PPT/MSI/CHM signatures), ZIP-derived APK/VSIX/JAR/WAR/EAR/JMOD/E-book EPUB/XPS/FB2 labels.
+
 ## Contributing
 Please see [CONTRIBUTING.md](CONTRIBUTING.md)
 
