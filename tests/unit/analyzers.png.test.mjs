@@ -12,6 +12,7 @@ import {
   createPngMissingIend,
   createTruncatedPngChunk
 } from "../fixtures/png-fixtures.mjs";
+import { createPngWithManyChunks } from "../fixtures/png-large-chunk.mjs";
 
 test("parsePng rejects invalid signature", async () => {
   const result = await parsePng(createInvalidPngSignature());
@@ -43,4 +44,9 @@ test("parsePng parses IHDR for 2x2 image and reports palette/alpha", async () =>
   assert.ok(png.ihdr);
   assert.strictEqual(png.ihdr.width, 2);
   assert.strictEqual(png.hasTransparency, false);
+});
+
+test("parsePng stops after many chunks with warning", async () => {
+  const png = await parsePng(createPngWithManyChunks());
+  assert.ok(png.issues.some(issue => issue.toLowerCase().includes("truncated")));
 });

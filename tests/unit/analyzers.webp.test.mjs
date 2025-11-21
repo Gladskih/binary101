@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { parseWebp } from "../../analyzers/webp/index.js";
 import { createWebpFile } from "../fixtures/sample-files.mjs";
 import { createInvalidWebpSignature, createWebpWithBadChunkSize } from "../fixtures/webp-fixtures.mjs";
+import { createAnimatedWebpMissingFrame } from "../fixtures/webp-frames-fixtures.mjs";
 
 test("parseWebp rejects non-RIFF/WEBP signatures", async () => {
   const result = await parseWebp(createInvalidWebpSignature());
@@ -21,4 +22,10 @@ test("parseWebp parses minimal WebP and extracts chunks", async () => {
   const webp = await parseWebp(createWebpFile());
   assert.ok(webp.issues.length > 0 || webp.dimensions || webp.chunks.length > 0);
   assert.ok(Array.isArray(webp.chunks));
+});
+
+test("parseWebp flags animation without frames", async () => {
+  const webp = await parseWebp(createAnimatedWebpMissingFrame());
+  assert.ok(webp.hasAnimation);
+  assert.strictEqual(webp.frameCount, 0);
 });
