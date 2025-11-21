@@ -220,6 +220,14 @@ function detectIco(dv) {
   return null;
 }
 
+function detectAni(dv) {
+  if (dv.byteLength < 12) return null;
+  const riff = dv.getUint32(0, false);
+  const acon = dv.getUint32(8, false);
+  if (riff === 0x52494646 && acon === 0x41434f4e) return "Windows animated cursor (ANI)";
+  return null;
+}
+
 function detectFlac(dv) {
   if (dv.byteLength < 4) return null;
   const sig = dv.getUint32(0, false);
@@ -659,6 +667,7 @@ const MAGIC_PROBES = [
   detectTiff,
   detectWebp,
   detectIco,
+  detectAni,
   detectFlac,
   detectCompoundFile,
   detectPdb,

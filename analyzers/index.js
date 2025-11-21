@@ -57,6 +57,28 @@ function detectMachO(dv) {
   return null;
 }
 
+const isValidatedMp3 = mp3 => mp3?.isMp3 && mp3?.mpeg?.secondFrameValidated === true;
+const isShortMp3WithoutSecond = mp3 =>
+  mp3?.isMp3 &&
+  mp3?.mpeg?.firstFrame &&
+  mp3?.mpeg?.secondFrameValidated === false &&
+  Array.isArray(mp3?.warnings) &&
+  mp3.warnings.length === 1 &&
+  mp3.warnings[0].indexOf("cannot be validated (file too small)") !== -1;
+
+function buildMp3Label(mp3) {
+  if (!mp3?.mpeg?.firstFrame) return null;
+  if (!isValidatedMp3(mp3) && !isShortMp3WithoutSecond(mp3)) return null;
+  const info = mp3.mpeg.firstFrame;
+  const parts = [];
+  if (info.versionLabel) parts.push(info.versionLabel);
+  if (info.layerLabel) parts.push(info.layerLabel);
+  if (info.bitrateKbps) parts.push(`${info.bitrateKbps} kbps`);
+  if (info.sampleRate) parts.push(`${info.sampleRate} Hz`);
+  if (info.channelMode) parts.push(info.channelMode);
+  return parts.length ? parts.join(", ") : "MPEG audio stream (MP3)";
+}
+
 function toAsciiFromWholeView(dv, maxBytes) {
   const limit = Math.min(dv.byteLength, maxBytes);
   let result = "";
@@ -160,18 +182,8 @@ export async function detectBinaryType(file) {
   if (magic) {
     if (magic.indexOf("MPEG audio") !== -1) {
       const mp3 = await parseMp3(file);
-      if (mp3 && mp3.isMp3 && mp3.mpeg && mp3.mpeg.firstFrame) {
-        const info = mp3.mpeg.firstFrame;
-        const parts = [];
-        if (info.versionLabel) parts.push(info.versionLabel);
-        if (info.layerLabel) parts.push(info.layerLabel);
-        if (info.bitrateKbps) parts.push(`${info.bitrateKbps} kbps`);
-        if (info.sampleRate) parts.push(`${info.sampleRate} Hz`);
-        if (info.channelMode) parts.push(info.channelMode);
-        const label = parts.length ? parts.join(", ") : "MPEG audio";
-        return label;
-      }
-      if (mp3 && mp3.isMp3) return "MPEG audio stream (MP3)";
+      const label = buildMp3Label(mp3);
+      if (label) return label;
       return "Unknown binary type";
     }
     if (magic.startsWith("ZIP archive")) {
@@ -248,20 +260,11 @@ export async function detectBinaryType(file) {
   const text = probeTextLike(dv);
   if (text) return text;
 
-  if (probeMp3(dv)) {
+  const mp3ProbeView = new DataView(dv.buffer, dv.byteOffset, Math.min(dv.byteLength, 16384));
+  if (probeMp3(mp3ProbeView)) {
     const mp3 = await parseMp3(file);
-    if (mp3 && mp3.isMp3 && mp3.mpeg && mp3.mpeg.firstFrame) {
-      const info = mp3.mpeg.firstFrame;
-      const parts = [];
-      if (info.versionLabel) parts.push(info.versionLabel);
-      if (info.layerLabel) parts.push(info.layerLabel);
-      if (info.bitrateKbps) parts.push(`${info.bitrateKbps} kbps`);
-      if (info.sampleRate) parts.push(`${info.sampleRate} Hz`);
-      if (info.channelMode) parts.push(info.channelMode);
-      const label = parts.length ? parts.join(", ") : "MPEG audio";
-      return label;
-    }
-    if (mp3 && mp3.isMp3) return "MPEG audio stream (MP3)";
+    const label = buildMp3Label(mp3);
+    if (label) return label;
   }
   return "Unknown binary type";
 }
@@ -329,7 +332,7 @@ export async function parseForUi(file) {
   }
   if (probeMp3(dv)) {
     const mp3 = await parseMp3(file);
-    if (mp3) return { analyzer: "mp3", parsed: mp3 };
+    if (isValidatedMp3(mp3) || isShortMp3WithoutSecond(mp3)) return { analyzer: "mp3", parsed: mp3 };
   }
 
   if (hasZipEocdSignature(dv)) {

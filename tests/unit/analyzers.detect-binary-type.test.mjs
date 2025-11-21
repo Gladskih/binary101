@@ -111,3 +111,31 @@ test("detectBinaryType recognises MP3 streams even when frames are not at offset
   const label = await detectBinaryType(file);
   assert.strictEqual(label, "MPEG Version 1, Layer III, 128 kbps, 44100 Hz, Stereo");
 });
+
+test("detectBinaryType reports MP3 for minimal single-frame files", async () => {
+  const full = createMp3File();
+  const singleFrame = full.bytes.slice(0, full.bytes.length / 2);
+  const label = await detectBinaryType(new MockFile(singleFrame, "single-frame.mp3", "audio/mpeg"));
+  assert.strictEqual(label, "MPEG Version 1, Layer III, 128 kbps, 44100 Hz, Stereo");
+});
+
+test("detectBinaryType rejects MP3 label when second frame is invalid", async () => {
+  const full = createMp3File();
+  const firstFrameLength = full.bytes.length / 2;
+  const damaged = new Uint8Array(firstFrameLength + 16);
+  damaged.set(full.bytes.slice(0, firstFrameLength), 0);
+  // Add some junk after the first frame to force a bad second header
+  damaged.fill(0, firstFrameLength);
+  const label = await detectBinaryType(new MockFile(damaged, "damaged.mp3", "audio/mpeg"));
+  assert.strictEqual(label, "Unknown binary type");
+});
+
+test("detectBinaryType recognises animated cursors (ANI)", async () => {
+  const bytes = new Uint8Array([
+    0x52, 0x49, 0x46, 0x46, // "RIFF"
+    0x24, 0x00, 0x00, 0x00, // size placeholder
+    0x41, 0x43, 0x4f, 0x4e  // "ACON"
+  ]);
+  const label = await detectBinaryType(new MockFile(bytes, "aero_busy.ani", "application/octet-stream"));
+  assert.strictEqual(label, "Windows animated cursor (ANI)");
+});
