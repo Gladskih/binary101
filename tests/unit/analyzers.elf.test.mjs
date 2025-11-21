@@ -5,7 +5,19 @@ import { test } from "node:test";
 import { parseElf } from "../../analyzers/elf/index.js";
 import { MockFile } from "../helpers/mock-file.mjs";
 
-const writeElfHeader = (bytes, { phoff = 0n, shoff = 0n, phnum = 0, shnum = 0, shentsize = 64, shstrndx = 0, headerVersion = 1, identVersion = 1 }) => {
+const writeElfHeader = (
+  bytes,
+  {
+    phoff = 0n,
+    shoff = 0n,
+    phnum = 0,
+    shnum = 0,
+    shentsize = 64,
+    shstrndx = 0,
+    headerVersion = 1,
+    identVersion = 1
+  }
+) => {
   const dv = new DataView(bytes.buffer);
   dv.setUint32(0, 0x7f454c46); // \x7FELF
   dv.setUint8(4, 2); // 64-bit
@@ -44,7 +56,16 @@ test("parseElf notes program headers that sit outside the file", async () => {
 test("parseElf surfaces version mismatches and truncated section name table", async () => {
   const bytes = new Uint8Array(160).fill(0);
   // Section table starts after the ELF header, one entry pointing to a truncated name table.
-  writeElfHeader(bytes, { phoff: 0n, phnum: 0, shoff: 64n, shnum: 1, shentsize: 64, shstrndx: 0, headerVersion: 2, identVersion: 2 });
+  writeElfHeader(bytes, {
+    phoff: 0n,
+    phnum: 0,
+    shoff: 64n,
+    shnum: 1,
+    shentsize: 64,
+    shstrndx: 0,
+    headerVersion: 2,
+    identVersion: 2
+  });
   const sectionOffset = 64;
   const dv = new DataView(bytes.buffer);
   dv.setUint32(sectionOffset + 0, 0, true); // nameOff
