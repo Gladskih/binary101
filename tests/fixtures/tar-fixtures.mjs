@@ -29,17 +29,6 @@ export const writeOctal = (buffer, value, offset, length) => {
   buffer[offset + length - 1] = 0; // Null terminate
 };
 
-const writeBinary = (buffer, value, offset, length) => {
-  // For simplicity, handle as big-endian for now, or adapt based on spec for different fields
-  // This is a basic implementation and might need adjustment for full TAR binary number support
-  let val = BigInt(value);
-  for (let i = length - 1; i >= 0; i -= 1) {
-    buffer[offset + i] = Number(val & 0xFFn);
-    val >>= 8n;
-  }
-  buffer[offset] |= 0x80; // Set high bit for binary representation
-};
-
 export const buildTarHeader = (opts = {}) => {
   const {
     name = "",

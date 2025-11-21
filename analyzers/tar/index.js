@@ -1,15 +1,11 @@
-/* eslint-disable max-lines */
 "use strict";
 
 import { formatUnixSecondsOrDash } from "../../binary-utils.js";
 import {
-  toSafeNumber,
   align512,
   isZeroBlock,
   readTarString,
   combineNameParts,
-  parseBase256Number,
-  parseOctalNumber,
   parseTarNumber,
   computeChecksum,
   describeFormat,

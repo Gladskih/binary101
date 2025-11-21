@@ -183,7 +183,6 @@ test("parseZip reads ZIP64 metadata and extra fields", async () => {
   const cdSize = cdEntry.length;
   const zip64RecordOffset = cdSize;
   const zip64Record = buildZip64Record(cdSize, 0);
-  const locatorOffset = zip64RecordOffset + zip64Record.length;
   const locator = buildZip64Locator(zip64RecordOffset);
   const eocd = buildEocd(cdSize, 0, 1, true);
 
