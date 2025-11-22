@@ -53,6 +53,9 @@ dd{margin:0;word-break:break-all}
 .table th,.table td{padding:8px 10px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px}
 .table th{background:rgba(0,0,0,.1);text-align:left;color:var(--muted)}
 .table tr:last-child td{border-bottom:none}
+.tableButton{appearance:none;border:1px solid var(--border2);background:transparent;color:var(--text);padding:4px 8px;border-radius:6px;font-size:12px;font-family:var(--mono);cursor:pointer}
+.tableButton:hover{border-color:var(--accent);color:var(--accent)}
+.tableButton:disabled{opacity:.6;cursor:not-allowed}
 
 .jpegPreview{margin-bottom:10px;max-height:260px;overflow:hidden;display:flex;justify-content:flex-start}
 .jpegPreview img{max-height:260px;max-width:100%;height:auto;width:auto;object-fit:contain;border-radius:6px;border:1px solid var(--border2);background:#000}

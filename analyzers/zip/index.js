@@ -5,7 +5,9 @@ const EOCD_SIGNATURE = 0x06054b50;
 const ZIP64_EOCD_LOCATOR_SIGNATURE = 0x07064b50;
 const ZIP64_EOCD_SIGNATURE = 0x06064b50;
 const CENTRAL_DIR_SIGNATURE = 0x02014b50;
+const LOCAL_FILE_HEADER_SIGNATURE = 0x04034b50;
 const MIN_EOCD_SIZE = 22;
+const MIN_LOCAL_HEADER_SIZE = 30;
 const MAX_EOCD_SCAN = 131072;
 const MAX_CENTRAL_DIRECTORY_BYTES = 8 * 1024 * 1024;
 const UTF8_DECODER = new TextDecoder("utf-8", { fatal: false });
@@ -253,6 +255,59 @@ const parseCentralDirectoryEntries = (dv, issues) => {
   }
   return entries;
 };
+
+const annotateEntryDataOffsets = async (file, entries) => {
+  const fileSize = file.size || 0;
+  for (const entry of entries) {
+    const setExtractError = message => {
+      if (!entry.extractError) entry.extractError = message;
+    };
+    const localOffset = getSafeNumber(entry.localHeaderOffset);
+    if (localOffset == null) {
+      setExtractError("Local header offset exceeds supported range.");
+      continue;
+    }
+    const localHeader = await readDataView(file, localOffset, MIN_LOCAL_HEADER_SIZE);
+    if (!localHeader || localHeader.byteLength < MIN_LOCAL_HEADER_SIZE) {
+      setExtractError("Local file header is truncated or missing.");
+      continue;
+    }
+    if (localHeader.getUint32(0, true) !== LOCAL_FILE_HEADER_SIGNATURE) {
+      setExtractError("Local file header signature mismatch.");
+      continue;
+    }
+    const nameLength = localHeader.getUint16(26, true);
+    const extraLength = localHeader.getUint16(28, true);
+    const dataOffset = localOffset + MIN_LOCAL_HEADER_SIZE + nameLength + extraLength;
+    entry.localHeader = {
+      nameLength,
+      extraLength,
+      offset: localOffset
+    };
+    const compressedSize = getSafeNumber(entry.compressedSize);
+    entry.dataOffset = dataOffset;
+    entry.dataLength = compressedSize;
+    entry.dataEnd = compressedSize == null ? null : dataOffset + compressedSize;
+    const dataPastEnd = entry.dataEnd != null && entry.dataEnd > fileSize;
+    const startPastEnd = dataOffset > fileSize;
+    if (startPastEnd || dataPastEnd) {
+      setExtractError("Compressed data extends beyond the file size.");
+      continue;
+    }
+    if (entry.isEncrypted) {
+      setExtractError("Encrypted entries are not supported for extraction.");
+      continue;
+    }
+    const isSupportedMethod = entry.compressionMethod === 0 || entry.compressionMethod === 8;
+    if (!isSupportedMethod) {
+      setExtractError("Compression method is not supported for extraction.");
+    }
+    if (compressedSize == null) {
+      setExtractError("Compressed size exceeds supported range.");
+    }
+  }
+};
+
 export async function parseZip(file) {
   const issues = [];
   const { baseOffset, dv: tailView } = await readTailForEocd(file);
@@ -302,6 +357,7 @@ export async function parseZip(file) {
       `EOCD reports ${eocd.totalEntries} entries but parsed ${entries.length}.`
     );
   }
+  await annotateEntryDataOffsets(file, entries);
   return {
     eocd,
     zip64Locator,

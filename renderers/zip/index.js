@@ -100,9 +100,19 @@ const renderEntries = (zip, out) => {
   out.push(
     `<table class="table"><thead><tr>` +
       `<th>#</th><th>Name</th><th>Method</th><th>Comp size</th>` +
-      `<th>Uncomp size</th><th>Modified</th><th>Flags</th>` +
+      `<th>Uncomp size</th><th>Modified</th><th>Flags</th><th>Extract</th>` +
     `</tr></thead><tbody>`
   );
+  const renderAction = entry => {
+    if (entry.extractError) {
+      return `<span class="smallNote">${safe(entry.extractError)}</span>`;
+    }
+    if (entry.dataOffset == null || entry.dataLength == null) {
+      return `<span class="smallNote">Unavailable</span>`;
+    }
+    const label = entry.compressionMethod === 8 ? "Decompress" : "Download";
+    return `<button type="button" class="tableButton zipExtractButton" data-zip-entry="${entry.index}">${label}</button>`;
+  };
   entries.forEach(entry => {
     const compSize = formatSize(entry.compressedSize);
     const uncompSize = formatSize(entry.uncompressedSize);
@@ -111,7 +121,8 @@ const renderEntries = (zip, out) => {
       `<tr><td>${entry.index}</td><td>${safe(entry.fileName)}</td>` +
         `<td>${safe(entry.compressionName)}</td>` +
         `<td>${compSize}</td><td>${uncompSize}</td>` +
-        `<td>${mod}</td><td>${safe(describeFlags(entry))}</td></tr>`
+        `<td>${mod}</td><td>${safe(describeFlags(entry))}</td>` +
+        `<td>${renderAction(entry)}</td></tr>`
     );
   });
   out.push(`</tbody></table>`);

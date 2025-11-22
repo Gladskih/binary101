@@ -53,6 +53,8 @@ const sha512CopyButtonElement = getElement("sha512CopyButton");
 let currentFile = null;
 let currentPreviewUrl = null;
 let currentTypeLabel = "";
+let currentAnalyzerName = null;
+let currentParsedResult = null;
 
 const setStatusMessage = message => {
   statusMessageElement.textContent = message || "";
@@ -211,6 +213,93 @@ function renderAnalysisIntoUi(analyzerName, parsedResult) {
   peDetailsValueElement.innerHTML = "";
 }
 
+const sanitizeDownloadName = entry => {
+  const name = typeof entry.fileName === "string" && entry.fileName.length ? entry.fileName : "entry.bin";
+  const parts = name.split(/[\\/]/);
+  const last = parts[parts.length - 1] || "entry.bin";
+  return last.trim().length ? last.trim() : "entry.bin";
+};
+
+const findZipEntryByIndex = index => {
+  if (currentAnalyzerName !== "zip") return null;
+  const entries = currentParsedResult?.centralDirectory?.entries;
+  if (!Array.isArray(entries)) return null;
+  return entries.find(entry => entry.index === index) || null;
+};
+
+const sliceZipEntryBlob = entry => {
+  if (!currentFile) throw new Error("No file selected.");
+  if (entry.dataOffset == null || entry.dataLength == null) {
+    throw new Error("Entry is missing data bounds.");
+  }
+  return currentFile.slice(entry.dataOffset, entry.dataOffset + entry.dataLength);
+};
+
+const decompressZipEntry = async (entry, compressedBlob) => {
+  if (entry.compressionMethod === 0) return compressedBlob;
+  if (typeof DecompressionStream !== "function") {
+    throw new Error("Browser does not support DecompressionStream for deflated entries.");
+  }
+  const stream = compressedBlob.stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return new Response(stream).blob();
+};
+
+const triggerDownload = (blob, suggestedName) => {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = suggestedName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+peDetailsValueElement.addEventListener("click", async event => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const indexAttr = target.getAttribute("data-zip-entry");
+  if (!indexAttr) return;
+  const entryIndex = Number.parseInt(indexAttr, 10);
+  if (Number.isNaN(entryIndex)) return;
+  const entry = findZipEntryByIndex(entryIndex);
+  if (!entry) {
+    setStatusMessage("ZIP entry not found.");
+    return;
+  }
+  if (entry.extractError) {
+    setStatusMessage(entry.extractError);
+    return;
+  }
+  if (!currentFile) {
+    setStatusMessage("No file selected.");
+    return;
+  }
+  if (entry.compressionMethod === 8 && typeof DecompressionStream !== "function") {
+    setStatusMessage("Browser does not support DecompressionStream; cannot decompress this entry.");
+    return;
+  }
+  const originalText = target.textContent;
+  if (target instanceof HTMLButtonElement) {
+    target.disabled = true;
+    target.textContent = entry.compressionMethod === 8 ? "Decompressing..." : "Preparing...";
+  }
+  try {
+    const compressedBlob = await sliceZipEntryBlob(entry);
+    const blob = await decompressZipEntry(entry, compressedBlob);
+    triggerDownload(blob, sanitizeDownloadName(entry));
+    clearStatusMessage();
+  } catch (error) {
+    const message = error && error.message ? error.message : String(error);
+    setStatusMessage(`Extract failed: ${message}`);
+  } finally {
+    if (target instanceof HTMLButtonElement) {
+      target.disabled = false;
+      target.textContent = originalText || "Extract";
+    }
+  }
+});
+
 function resetHashDisplay() {
   sha256ValueElement.textContent = "";
   sha512ValueElement.textContent = "";
@@ -226,6 +315,8 @@ function resetHashDisplay() {
 
 async function showFileInfo(file, sourceDescription) {
   currentFile = file;
+  currentAnalyzerName = null;
+  currentParsedResult = null;
   const typeLabel = await detectBinaryType(file);
   currentTypeLabel = typeLabel || "";
   const timestampIso = nowIsoString();
@@ -247,6 +338,8 @@ async function showFileInfo(file, sourceDescription) {
   fileMimeTypeDetailElement.textContent = mimeType;
 
   const { analyzer, parsed } = await parseForUi(file);
+  currentAnalyzerName = analyzer;
+  currentParsedResult = parsed;
   renderAnalysisIntoUi(analyzer, parsed);
 
   resetHashDisplay();

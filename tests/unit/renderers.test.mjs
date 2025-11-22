@@ -120,3 +120,62 @@ test("renderers produce readable HTML output", async () => {
   const rarHtml = renderRar(rar);
   assert.match(rarHtml, /RAR overview/);
 });
+
+test("renderZip shows extract actions and extraction notices", () => {
+  const zip = {
+    eocd: {
+      offset: 0,
+      diskNumber: 0,
+      centralDirDisk: 0,
+      entriesThisDisk: 2,
+      totalEntries: 2,
+      centralDirSize: 64,
+      centralDirOffset: 128,
+      commentLength: 0,
+      comment: ""
+    },
+    centralDirectory: {
+      offset: 128,
+      size: 64,
+      truncated: false,
+      entries: [
+        {
+          index: 0,
+          fileName: "doc.txt",
+          compressionName: "Stored",
+          compressionMethod: 0,
+          compressedSize: 3,
+          uncompressedSize: 3,
+          modTimeIso: "-",
+          flags: 0,
+          isUtf8: false,
+          isEncrypted: false,
+          usesDataDescriptor: false,
+          dataOffset: 10,
+          dataLength: 3
+        },
+        {
+          index: 1,
+          fileName: "secret.bin",
+          compressionName: "AES",
+          compressionMethod: 99,
+          compressedSize: 5,
+          uncompressedSize: 5,
+          modTimeIso: "-",
+          flags: 0,
+          isUtf8: false,
+          isEncrypted: true,
+          usesDataDescriptor: false,
+          extractError: "Encrypted entries are not supported for extraction."
+        }
+      ]
+    },
+    issues: []
+  };
+
+  const html = renderZip(zip);
+
+  assert.match(html, /data-zip-entry="0"/);
+  assert.match(html, /Download/);
+  assert.match(html, /Encrypted entries are not supported for extraction./);
+});

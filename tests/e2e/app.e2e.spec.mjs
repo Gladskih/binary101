@@ -12,7 +12,8 @@ import {
   createSevenZipFile,
   createTarFile,
   createWebpFile,
-  createZipFile
+  createZipFile,
+  createZipWithEntries
 } from "../fixtures/sample-files.mjs";
 
 const toUpload = file => ({
@@ -192,5 +193,35 @@ test.describe("file type detection", () => {
 
     await expectBaseDetails(page, "unknown.bin", "Unknown binary type");
     await expect(page.locator("#peDetailsTerm")).toBeHidden();
+  });
+
+  test("allows downloading stored and deflated ZIP entries from the UI", async ({ page }) => {
+    const supportsDecompression = await page.evaluate(() => typeof DecompressionStream === "function");
+    test.skip(!supportsDecompression, "DecompressionStream not supported in this browser");
+
+    const zip = createZipWithEntries();
+    await page.setInputFiles("#fileInput", toUpload(zip));
+
+    await expectBaseDetails(page, zip.name, "ZIP archive (PK-based, e.g. Office, JAR, APK)");
+    const table = page.locator("button.zipExtractButton");
+    await expect(table).toHaveCount(2);
+
+    const readDownloadText = async locator => {
+      const [download] = await Promise.all([page.waitForEvent("download"), locator.click()]);
+      const stream = await download.createReadStream();
+      if (!stream) throw new Error("Download stream unavailable");
+      const chunks = [];
+      for await (const chunk of stream) chunks.push(chunk);
+      const content = Buffer.concat(chunks).toString("utf8");
+      return { name: download.suggestedFilename(), content };
+    };
+
+    const storedResult = await readDownloadText(page.locator('[data-zip-entry="0"]'));
+    expect(storedResult.name).toBe("stored.txt");
+    expect(storedResult.content).toBe("stored");
+
+    const deflatedResult = await readDownloadText(page.locator('[data-zip-entry="1"]'));
+    expect(deflatedResult.name).toBe("deflated.txt");
+    expect(deflatedResult.content).toBe("deflated");
   });
 });
