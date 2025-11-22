@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseForUi } from "../../analyzers/index.js";
-import { DOMParser as XmlDomParser } from "xmldom";
+import { DOMParser as XmlDomParser } from "@xmldom/xmldom";
 import {
   renderElf,
   renderFb2,
