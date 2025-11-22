@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- test fixtures aggregate many samples */
 "use strict";
 
 import { MockFile } from "../helpers/mock-file.mjs";
