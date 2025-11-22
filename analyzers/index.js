@@ -58,6 +58,28 @@ function detectMachO(dv) {
   return null;
 }
 
+async function probeMzFormat(file, dv) {
+  const mz = peProbe(dv);
+  if (!mz) return null;
+  const eLfanew = mz.e_lfanew >>> 0;
+  if (eLfanew === 0) return { kind: "mz", eLfanew };
+  if (eLfanew + 2 > file.size) return { kind: "pe", eLfanew };
+  const sigLength = Math.min(4, file.size - eLfanew);
+  let sigBytes;
+  if (eLfanew + sigLength <= dv.byteLength) {
+    sigBytes = new Uint8Array(dv.buffer, dv.byteOffset + eLfanew, sigLength);
+  } else {
+    sigBytes = new Uint8Array(await file.slice(eLfanew, eLfanew + sigLength).arrayBuffer());
+  }
+  const sigText = String.fromCharCode(...sigBytes);
+  if (sigText.startsWith("PE\0\0")) return { kind: "pe", eLfanew };
+  const shortSig = sigText.slice(0, 2);
+  if (shortSig === "NE") return { kind: "ne", eLfanew };
+  if (shortSig === "LE") return { kind: "le", eLfanew };
+  if (shortSig === "LX") return { kind: "lx", eLfanew };
+  return { kind: "mz", eLfanew };
+}
+
 const isValidatedMp3 = mp3 => mp3?.isMp3 && mp3?.mpeg?.secondFrameValidated === true;
 const isShortMp3WithoutSecond = mp3 =>
   mp3?.isMp3 &&
@@ -262,15 +284,20 @@ export async function detectBinaryType(file) {
 
   if (hasZipEocdSignature(dv)) return "ZIP archive";
 
-  const probe = peProbe(dv);
-  if (probe) {
-    const pe = await parsePe(file);
-    if (pe) {
-      const sig = pe.opt.isPlus ? "PE32+" : "PE32";
-      const isDll = (pe.coff.Characteristics & 0x2000) !== 0 ? "DLL" : "executable";
-      return `${sig} ${isDll} for ${mapMachine(pe.coff.Machine)}`;
+  const mzKind = await probeMzFormat(file, dv);
+  if (mzKind) {
+    if (mzKind.kind === "pe") {
+      const pe = await parsePe(file);
+      if (pe) {
+        const sig = pe.opt.isPlus ? "PE32+" : "PE32";
+        const isDll = (pe.coff.Characteristics & 0x2000) !== 0 ? "DLL" : "executable";
+        return `${sig} ${isDll} for ${mapMachine(pe.coff.Machine)}`;
+      }
+      return "PE (unreadable)";
     }
-    return "PE (unreadable)";
+    if (mzKind.kind === "ne") return "NE executable (16-bit Windows/OS/2)";
+    if (mzKind.kind === "le" || mzKind.kind === "lx") return "Linear executable (LX/LE)";
+    return "MS-DOS MZ executable";
   }
   const text = probeTextLike(dv);
   if (text) return text;
@@ -293,9 +320,10 @@ export async function parseForUi(file) {
     const elf = await parseElf(file);
     if (elf) return { analyzer: "elf", parsed: elf };
   }
-  if (peProbe(dv)) {
+  const mzKind = await probeMzFormat(file, dv);
+  if (mzKind?.kind === "pe") {
     const pe = await parsePe(file);
-    return { analyzer: "pe", parsed: pe };
+    if (pe) return { analyzer: "pe", parsed: pe };
   }
   const ascii = toAsciiFromWholeView(dv, 8192).toLowerCase();
   if (ascii.indexOf("<fictionbook") !== -1) {

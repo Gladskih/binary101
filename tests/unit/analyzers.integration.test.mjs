@@ -19,7 +19,8 @@ import {
   createWebpFile,
   createZipFile,
   createRar4File,
-  createRar5File
+  createRar5File,
+  createDosMzExe
 } from "../fixtures/sample-files.mjs";
 import { MockFile } from "../helpers/mock-file.mjs";
 
@@ -69,6 +70,15 @@ test("detectBinaryType recognizes common binary formats", async () => {
   assert.match(detections[6], /^7z archive v0\.4/);
   assert.match(detections[7], /^RAR archive/);
   assert.strictEqual(detections[8], "Text file");
+});
+
+test("detectBinaryType distinguishes DOS MZ executables from PE", async () => {
+  const mzFile = createDosMzExe();
+  const detection = await detectBinaryType(mzFile);
+  assert.strictEqual(detection, "MS-DOS MZ executable");
+  const parsed = await parseForUi(mzFile);
+  assert.strictEqual(parsed.analyzer, null);
+  assert.strictEqual(parsed.parsed, null);
 });
 
 test("parseForUi parses and reports PNG layout", async () => {
