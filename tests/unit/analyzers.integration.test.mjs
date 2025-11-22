@@ -17,7 +17,9 @@ import {
   createSevenZipFile,
   createTarFile,
   createWebpFile,
-  createZipFile
+  createZipFile,
+  createRar4File,
+  createRar5File
 } from "../fixtures/sample-files.mjs";
 import { MockFile } from "../helpers/mock-file.mjs";
 
@@ -54,6 +56,7 @@ test("detectBinaryType recognizes common binary formats", async () => {
     detectBinaryType(createPdfFile()),
     detectBinaryType(createTarFile()),
     detectBinaryType(createSevenZipFile()),
+    detectBinaryType(createRar5File()),
     detectBinaryType(new MockFile(textEncoder.encode("plain text sample"), "note.txt", "text/plain"))
   ]);
 
@@ -64,7 +67,8 @@ test("detectBinaryType recognizes common binary formats", async () => {
   assert.match(detections[4], /^PDF document/);
   assert.match(detections[5], /tar archive/i);
   assert.match(detections[6], /^7z archive v0\.4/);
-  assert.strictEqual(detections[7], "Text file");
+  assert.match(detections[7], /^RAR archive/);
+  assert.strictEqual(detections[8], "Text file");
 });
 
 test("parseForUi parses and reports PNG layout", async () => {
@@ -132,6 +136,17 @@ test("parseForUi parses TAR headers", async () => {
     assert.strictEqual(tar.isTar, true);
     assert.ok(Array.isArray(tar.entries));
     assert.ok(tar.entries[0]);
+  });
+});
+
+test("parseForUi parses RAR v4 and v5 headers", async () => {
+  await assertParsed(createRar4File(), "rar", rar => {
+    assert.strictEqual(rar.version, 4);
+    assert.ok(rar.entries.length >= 1);
+  });
+  await assertParsed(createRar5File(), "rar", rar => {
+    assert.strictEqual(rar.version, 5);
+    assert.ok(rar.entries.length >= 1);
   });
 });
 

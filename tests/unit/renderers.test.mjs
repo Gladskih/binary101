@@ -16,7 +16,8 @@ import {
   renderSevenZip,
   renderTar,
   renderWebp,
-  renderZip
+  renderZip,
+  renderRar
 } from "../../renderers/index.js";
 import {
   createElfFile,
@@ -30,7 +31,8 @@ import {
   createSevenZipFile,
   createTarFile,
   createWebpFile,
-  createZipFile
+  createZipFile,
+  createRar5File
 } from "../fixtures/sample-files.mjs";
 
 class TestDomParser extends XmlDomParser {
@@ -107,4 +109,8 @@ test("renderers produce readable HTML output", async () => {
   const sevenHtml = renderSevenZip(sevenZip);
   assert.match(sevenHtml, /7z overview/);
   assert.match(sevenHtml, /synthetic 7z issue/);
+
+  const rar = await parseOnly(createRar5File());
+  const rarHtml = renderRar(rar);
+  assert.match(rarHtml, /RAR overview/);
 });

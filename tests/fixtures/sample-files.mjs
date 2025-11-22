@@ -6,6 +6,46 @@ export { createPeWithSectionAndIat, createPeFile, createPePlusFile } from "./sam
 const fromBase64 = base64 => new Uint8Array(Buffer.from(base64, "base64"));
 const encoder = new TextEncoder();
 
+const crc32Table = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i += 1) {
+    let c = i;
+    for (let j = 0; j < 8; j += 1) {
+      c = (c & 1) !== 0 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+const crc32 = bytes => {
+  let crc = 0xffffffff;
+  for (let i = 0; i < bytes.length; i += 1) {
+    const idx = (crc ^ bytes[i]) & 0xff;
+    crc = (crc >>> 8) ^ crc32Table[idx];
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+};
+
+const encodeVint = value => {
+  let v = BigInt(value);
+  const out = [];
+  do {
+    let byte = Number(v & 0x7fn);
+    v >>= 7n;
+    if (v !== 0n) byte |= 0x80;
+    out.push(byte);
+  } while (v !== 0n);
+  return out;
+};
+
+const u32le = value => [
+  value & 0xff,
+  (value >> 8) & 0xff,
+  (value >> 16) & 0xff,
+  (value >> 24) & 0xff
+];
+
 export const createPngFile = () =>
   new MockFile(
     fromBase64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/5+hHgAFgwJ/l7nnMgAAAABJRU5ErkJggg=="),
@@ -232,4 +272,122 @@ export const createSevenZipFile = () => {
   combined.set(header, 0);
   combined.set(nextHeader, header.length);
   return new MockFile(combined, "sample.7z", "application/x-7z-compressed");
+};
+
+export const createRar4File = () => {
+  const signature = [0x52, 0x61, 0x72, 0x21, 0x1a, 0x07, 0x00];
+  const LONG_BLOCK = 0x8000;
+  const fileData = new Uint8Array([0x48, 0x69]); // "Hi"
+  const fileName = encoder.encode("hello.txt");
+
+  const mainHeadSize = 13;
+  const mainHeader = [
+    0x00,
+    0x00, // CRC16 placeholder
+    0x73, // HEAD3_MAIN
+    0x00,
+    0x00, // flags
+    mainHeadSize & 0xff,
+    (mainHeadSize >> 8) & 0xff,
+    0x00,
+    0x00, // HighPosAV
+    0x00,
+    0x00,
+    0x00,
+    0x00 // PosAV
+  ];
+
+  const fileHeadSize = 32 + fileName.length;
+  const fileFlags = LONG_BLOCK;
+  const fileHeader = [
+    0x00,
+    0x00, // CRC16 placeholder
+    0x74, // HEAD3_FILE
+    fileFlags & 0xff,
+    (fileFlags >> 8) & 0xff,
+    fileHeadSize & 0xff,
+    (fileHeadSize >> 8) & 0xff,
+    ...u32le(fileData.length),
+    ...u32le(fileData.length),
+    0x02, // host OS Windows
+    ...u32le(crc32(fileData)),
+    ...u32le(0), // file time
+    20, // UnpVer
+    0x30, // Store method
+    fileName.length & 0xff,
+    (fileName.length >> 8) & 0xff,
+    ...u32le(0x20), // file attributes
+    ...fileName
+  ];
+
+  const endHeader = [0x00, 0x00, 0x7b, 0x00, 0x00, 0x07, 0x00];
+
+  const bytes = new Uint8Array(
+    signature.length + mainHeader.length + fileHeader.length + fileData.length + endHeader.length
+  );
+  let cursor = 0;
+  [signature, mainHeader, fileHeader].forEach(part => {
+    bytes.set(part, cursor);
+    cursor += part.length;
+  });
+  bytes.set(fileData, cursor);
+  cursor += fileData.length;
+  bytes.set(endHeader, cursor);
+
+  return new MockFile(bytes, "sample.rar", "application/x-rar-compressed");
+};
+
+export const createRar5File = () => {
+  const signature = [0x52, 0x61, 0x72, 0x21, 0x1a, 0x07, 0x01, 0x00];
+  const HFL_DATA = 0x0002;
+  const FHFL_CRC32 = 0x0004;
+
+  const fileData = new Uint8Array([0x48, 0x69]); // "Hi"
+  const fileName = encoder.encode("note.txt");
+  const buildHeader = headerFields => {
+    const sizeBytes = encodeVint(headerFields.length);
+    const headerBytes = Uint8Array.from([...sizeBytes, ...headerFields]);
+    const headerCrc = crc32(headerBytes);
+    return [...u32le(headerCrc), ...headerBytes];
+  };
+
+  const mainHeader = buildHeader([
+    ...encodeVint(1), // main header type
+    ...encodeVint(0), // header flags
+    ...encodeVint(0) // archive flags
+  ]);
+
+  const fileHeader = buildHeader([
+    ...encodeVint(2), // file header type
+    ...encodeVint(HFL_DATA), // header flags (data area present)
+    ...encodeVint(fileData.length), // packed size
+    ...encodeVint(FHFL_CRC32), // file flags
+    ...encodeVint(fileData.length), // unpacked size
+    ...encodeVint(0x20), // file attributes
+    ...u32le(crc32(fileData)), // data CRC
+    ...encodeVint(0), // compression info (store)
+    ...encodeVint(0), // host OS Windows
+    ...encodeVint(fileName.length),
+    ...fileName
+  ]);
+
+  const endHeader = buildHeader([
+    ...encodeVint(5), // end of archive
+    ...encodeVint(0), // header flags
+    ...encodeVint(0) // archive flags
+  ]);
+
+  const bytes = new Uint8Array(
+    signature.length + mainHeader.length + fileHeader.length + fileData.length + endHeader.length
+  );
+  let cursor = 0;
+  [signature, mainHeader, fileHeader].forEach(part => {
+    bytes.set(part, cursor);
+    cursor += part.length;
+  });
+  bytes.set(fileData, cursor);
+  cursor += fileData.length;
+  bytes.set(endHeader, cursor);
+
+  return new MockFile(bytes, "sample-v5.rar", "application/x-rar-compressed");
 };

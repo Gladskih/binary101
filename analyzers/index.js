@@ -15,6 +15,7 @@ import { parseWebp } from "./webp/index.js";
 import { parseMp3, probeMp3 } from "./mp3/index.js";
 import { hasSevenZipSignature, parseSevenZip } from "./sevenz/index.js";
 import { hasTarSignature, parseTar } from "./tar/index.js";
+import { hasRarSignature, parseRar } from "./rar/index.js";
 
 // Quick magic-based detectors for non-PE types (label only for now)
 function detectELF(dv) {
@@ -238,6 +239,20 @@ export async function detectBinaryType(file) {
         return `WebP image${suffix}`;
       }
     }
+    if (magic === "RAR archive") {
+      const rar = await parseRar(file);
+      if (rar?.isRar) {
+        const extras = [];
+        extras.push(`v${rar.version}`);
+        const count = rar.entries?.length || 0;
+        if (count) extras.push(`${count} file${count === 1 ? "" : "s"}`);
+        if (rar.mainHeader?.isSolid) extras.push("solid");
+        if (rar.mainHeader?.isVolume) extras.push("volume");
+        const suffix = extras.length ? ` (${extras.join(", ")})` : "";
+        return `RAR archive${suffix}`;
+      }
+      return "RAR archive";
+    }
     if (magic.startsWith("Microsoft Compound File")) {
       const compound = refineCompoundLabel(dv);
       if (compound) return compound;
@@ -294,6 +309,10 @@ export async function parseForUi(file) {
   if (hasSevenZipSignature(dv)) {
     const sevenZip = await parseSevenZip(file);
     if (sevenZip?.is7z) return { analyzer: "sevenZip", parsed: sevenZip };
+  }
+  if (hasRarSignature(dv)) {
+    const rar = await parseRar(file);
+    if (rar?.isRar) return { analyzer: "rar", parsed: rar };
   }
   if (hasTarSignature(dv)) {
     const tar = await parseTar(file);
