@@ -3,6 +3,34 @@
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import { formatHumanSize } from "../../binary-utils.js";
 
+const MPEG_VERSION_OPTS = [
+  { code: 0x3, label: "MPEG Version 1", hint: "High sample-rate profile (44.1/48 kHz); common default." },
+  { code: 0x2, label: "MPEG Version 2", hint: "Half-rate profile (22/24/16 kHz); lower-bitrate mode." },
+  { code: 0x0, label: "MPEG Version 2.5", hint: "Low-rate extension (11/12/8 kHz); rare outside voice/streaming." }
+];
+
+const LAYER_OPTS = [
+  { code: 0x3, label: "Layer I", hint: "Earliest MPEG audio layer; rare in MP3 files." },
+  { code: 0x2, label: "Layer II", hint: "MP2 broadcast-style audio; uncommon inside .mp3 files." },
+  { code: 0x1, label: "Layer III", hint: "MP3 codec; dominant/default for consumer audio." }
+];
+
+const CHANNEL_MODE_OPTS = [
+  { code: 0x0, label: "Stereo", hint: "Two separate channels; common music default (no 5.1 in MP3)." },
+  { code: 0x1, label: "Joint stereo", hint: "Shares stereo info to save bits; popular for VBR/low bitrates." },
+  { code: 0x2, label: "Dual channel", hint: "Two independent mono streams; bilingual/broadcast use." },
+  { code: 0x3, label: "Single channel", hint: "Mono; halves bitrate needs, typical for voice content." }
+];
+
+const MPEG_VERSION_LABEL_TO_CODE = new Map(
+  MPEG_VERSION_OPTS.map(({ code, label }) => [label, code])
+);
+
+const LAYER_LABEL_TO_CODE = new Map(LAYER_OPTS.map(({ code, label }) => [label, code]));
+const CHANNEL_MODE_LABEL_TO_CODE = new Map(
+  CHANNEL_MODE_OPTS.map(({ code, label }) => [label, code])
+);
+
 function formatDuration(seconds) {
   if (!Number.isFinite(seconds) || seconds <= 0) return "Unknown";
   const rounded = Math.round(seconds);
@@ -22,9 +50,39 @@ function formatBoolean(value) {
   return value ? "Yes" : "No";
 }
 
+function wrapValue(valueHtml, tooltip) {
+  if (!tooltip) return valueHtml;
+  return `<span class="valueHint" title="${escapeHtml(tooltip)}">${valueHtml}</span>`;
+}
+
+function valueWithNote(valueHtml, note) {
+  if (!note) return valueHtml;
+  return `${valueHtml}<div class="smallNote">${escapeHtml(note)}</div>`;
+}
+
+function valueWithHint(valueHtml, tooltip) {
+  return tooltip ? wrapValue(valueHtml, tooltip) : valueHtml;
+}
+
+function withFieldNote(valueHtml, fieldNote) {
+  if (!fieldNote) return valueHtml;
+  return valueWithNote(valueHtml, fieldNote);
+}
+
+function renderEnumChips(selectedCode, options) {
+  const chips = options
+    .map(({ code, label, hint }) => {
+      const cls = code === selectedCode ? "opt sel" : "opt dim";
+      const title = hint ? ` title="${escapeHtml(hint)}"` : "";
+      return `<span class="${cls}"${title}>${escapeHtml(label)}</span>`;
+    })
+    .join("");
+  return `<div class="optionsRow">${chips}</div>`;
+}
+
 function describeMpegVersion(version) {
   if (!version) {
-    return "MPEG version parsed from the first audio frame; valid values are 1, 2, and 2.5.";
+    return "MPEG audio version parsed from the first frame; valid values are 1, 2, and 2.5 (no other profiles in MP3).";
   }
   if (version.includes("Version 1")) {
     return `${version} - common high-sample-rate profile (default for most music).`;
@@ -39,32 +97,36 @@ function describeMpegVersion(version) {
 }
 
 function describeLayer(layer) {
-  if (!layer) return "MPEG layer defines the audio coding scheme; Layer III is the MP3 format.";
-  if (layer === "Layer III") return "Layer III - the MP3 codec; dominant/default for consumer audio.";
+  if (!layer) {
+    return "MPEG layer chooses the codec flavor; MP3 is Layer III. Only Layers I/II/III exist here.";
+  }
+  if (layer === "Layer III") return "Layer III - the MP3 codec; dominant/default for consumer audio (not a quality grade).";
   if (layer === "Layer II") return "Layer II - MP2 broadcast-style audio; uncommon inside .mp3 files.";
   if (layer === "Layer I") return "Layer I - earliest MPEG audio layer; rare in the wild.";
   return `${layer} - reported by the MPEG header.`;
 }
 
 function describeChannelMode(mode) {
-  if (!mode) return "Channel mode shows how stereo is stored (stereo, joint stereo, dual, mono).";
+  if (!mode) {
+    return "Channel mode is a 2-bit field with four legal values: Stereo, Joint stereo, Dual channel, Single channel (mono). MP3 does not support 5.1 multichannel.";
+  }
   switch (mode) {
     case "Stereo":
-      return "Stereo - two separate channels; common default for music.";
+      return "Stereo - two separate channels; common default for music. MP3 has no 5.1 mode.";
     case "Joint stereo":
-      return "Joint stereo - shares info between channels to save bits; popular for VBR/low bitrate encodes.";
+      return "Joint stereo - shares info between channels to save bits; popular for VBR/low bitrate encodes (still two-channel, not 5.1).";
     case "Dual channel":
-      return "Dual channel - two independent mono streams; rare, used for bilingual/broadcast tracks.";
+      return "Dual channel - two independent mono streams; rare, used for bilingual/broadcast tracks (not surround).";
     case "Single channel":
       return "Single channel - mono; halves bitrate needs, typical for voice content.";
     default:
-      return `${mode} - channel allocation from the frame header.`;
+      return `${mode} - channel allocation from the frame header; only Stereo, Joint stereo, Dual channel, or Single channel are valid in MP3.`;
   }
 }
 
 function describeSampleRate(sampleRateHz) {
   if (!sampleRateHz) {
-    return "Sample rate (Hz) from the MPEG header; common values are 44100, 48000, or lower for voice/streaming.";
+    return "Sample rate (Hz) from the MPEG header; MP3 limits this to a small table depending on version (44.1/48/32 kHz for v1; lower for v2/2.5).";
   }
   if (sampleRateHz === 44100) return "44100 Hz - CD-quality rate; the most popular choice for MP3 music.";
   if (sampleRateHz === 48000) return "48000 Hz - video/broadcast rate; common but slightly less typical for MP3 music.";
@@ -81,7 +143,7 @@ function describeSampleRate(sampleRateHz) {
 function describeBitrate(bitrateKbps, isVbr) {
   const basis = isVbr ? "average for variable bitrate" : "constant/target bitrate";
   if (!bitrateKbps) {
-    return `Bitrate controls size versus quality; value is the ${basis} derived from the first frame or VBR header.`;
+    return `Bitrate controls size versus quality; value is the ${basis} derived from the first frame or VBR header. MP3 uses discrete table values, not arbitrary kbps.`;
   }
   if (bitrateKbps >= 256) return `${bitrateKbps} kbps (${basis}) - very high quality, less common for compact files.`;
   if (bitrateKbps >= 192) return `${bitrateKbps} kbps (${basis}) - high quality, popular modern setting.`;
@@ -336,71 +398,151 @@ function renderSummary(mp3) {
   const { summary, audioDataBytes } = mp3;
   if (!summary) return "";
   const rows = [];
+  const versionCode = MPEG_VERSION_LABEL_TO_CODE.get(summary.mpegVersion);
+  const layerCode = LAYER_LABEL_TO_CODE.get(summary.layer);
+  const channelCode = CHANNEL_MODE_LABEL_TO_CODE.get(summary.channelMode);
   rows.push(
     renderDefinitionRow(
       "MPEG version",
-      escapeHtml(summary.mpegVersion || "Unknown"),
-      describeMpegVersion(summary.mpegVersion)
+      withFieldNote(
+        valueWithHint(
+          versionCode != null
+            ? renderEnumChips(versionCode, MPEG_VERSION_OPTS)
+            : escapeHtml(summary.mpegVersion || "Unknown"),
+          describeMpegVersion(summary.mpegVersion)
+        ),
+        "MPEG audio profile family (v1 high-rate; v2/v2.5 low-rate)."
+      )
     )
   );
   rows.push(
-    renderDefinitionRow("Layer", escapeHtml(summary.layer || "Unknown"), describeLayer(summary.layer))
+    renderDefinitionRow(
+      "Layer",
+      withFieldNote(
+        valueWithHint(
+          layerCode != null
+            ? renderEnumChips(layerCode, LAYER_OPTS)
+            : escapeHtml(summary.layer || "Unknown"),
+          describeLayer(summary.layer)
+        ),
+        "Layer chooses the codec flavor; Layer III is MP3 (not a quality tier)."
+      )
+    )
   );
   rows.push(
     renderDefinitionRow(
       "Channel mode",
-      escapeHtml(summary.channelMode || "Unknown"),
-      describeChannelMode(summary.channelMode)
+      withFieldNote(
+        valueWithHint(
+          channelCode != null
+            ? renderEnumChips(channelCode, CHANNEL_MODE_OPTS)
+            : escapeHtml(summary.channelMode || "Unknown"),
+          describeChannelMode(summary.channelMode)
+        ),
+        "Channel layouts in MP3 are limited to these stereo/mono options; surround (5.1) is not supported."
+      )
     )
   );
   rows.push(
     renderDefinitionRow(
       "Sample rate",
-      summary.sampleRateHz ? `${summary.sampleRateHz} Hz` : "Unknown",
-      describeSampleRate(summary.sampleRateHz)
+      withFieldNote(
+        valueWithHint(
+          summary.sampleRateHz ? `${summary.sampleRateHz} Hz` : "Unknown",
+          describeSampleRate(summary.sampleRateHz)
+        ),
+        "Sample rate from MPEG header (table-limited per version)."
+      )
     )
   );
   rows.push(
     renderDefinitionRow(
       "Average bitrate",
-      summary.bitrateKbps ? `${summary.bitrateKbps} kbps` : "Unknown",
-      describeBitrate(summary.bitrateKbps, summary.isVbr)
+      withFieldNote(
+        valueWithHint(
+          summary.bitrateKbps ? `${summary.bitrateKbps} kbps` : "Unknown",
+          describeBitrate(summary.bitrateKbps, summary.isVbr)
+        ),
+        "Bitrate comes from the MPEG table (preset steps only; e.g., 32–320 kbps for v1 Layer III)."
+      )
     )
   );
   rows.push(
-    renderDefinitionRow("Duration", formatDuration(summary.durationSeconds), describeDuration(summary.durationSeconds))
+    renderDefinitionRow(
+      "Duration",
+      withFieldNote(
+        valueWithHint(formatDuration(summary.durationSeconds), describeDuration(summary.durationSeconds)),
+        "Estimated from VBR header, frame count, or bitrate."
+      )
+    )
   );
   rows.push(
     renderDefinitionRow(
       "Audio payload offset",
-      summary.audioDataOffset != null ? `${summary.audioDataOffset} B` : "Unknown",
-      describeAudioOffset(summary.audioDataOffset)
+      withFieldNote(
+        valueWithHint(
+          summary.audioDataOffset != null ? `${summary.audioDataOffset} B` : "Unknown",
+          describeAudioOffset(summary.audioDataOffset)
+        ),
+        "Byte offset of the first MPEG frame (metadata before it pushes audio back)."
+      )
     )
   );
   rows.push(
     renderDefinitionRow(
       "Estimated audio bytes",
-      audioDataBytes ? formatHumanSize(audioDataBytes) : "Unknown",
-      describeAudioBytes(audioDataBytes)
+      withFieldNote(
+        valueWithHint(
+          audioDataBytes ? formatHumanSize(audioDataBytes) : "Unknown",
+          describeAudioBytes(audioDataBytes)
+        ),
+        "Approximate MPEG audio payload (excludes leading/trailing tags)."
+      )
     )
   );
   rows.push(
-    renderDefinitionRow("VBR", formatBoolean(summary.isVbr), describeVbrFlag(summary.isVbr))
+    renderDefinitionRow(
+      "VBR",
+      withFieldNote(
+        valueWithHint(formatBoolean(summary.isVbr), describeVbrFlag(summary.isVbr)),
+        "Variable vs constant bitrate flag."
+      )
+    )
   );
   rows.push(
-    renderDefinitionRow("ID3v2 tag", formatBoolean(summary.hasId3v2), describeId3v2(summary.hasId3v2))
+    renderDefinitionRow(
+      "ID3v2 tag",
+      withFieldNote(
+        valueWithHint(formatBoolean(summary.hasId3v2), describeId3v2(summary.hasId3v2)),
+        "Modern metadata tag at file start (cover art, text frames)."
+      )
+    )
   );
   rows.push(
-    renderDefinitionRow("ID3v1 tag", formatBoolean(summary.hasId3v1), describeId3v1(summary.hasId3v1))
+    renderDefinitionRow(
+      "ID3v1 tag",
+      withFieldNote(
+        valueWithHint(formatBoolean(summary.hasId3v1), describeId3v1(summary.hasId3v1)),
+        "Legacy 128-byte trailer with plain text fields."
+      )
+    )
   );
   rows.push(
-    renderDefinitionRow("APE tag", formatBoolean(summary.hasApeTag), describeApe(summary.hasApeTag))
+    renderDefinitionRow(
+      "APE tag",
+      withFieldNote(
+        valueWithHint(formatBoolean(summary.hasApeTag), describeApe(summary.hasApeTag)),
+        "Optional metadata/ReplayGain block (uncommon in MP3)."
+      )
+    )
   );
   rows.push(
     renderDefinitionRow(
       "Lyrics3 tag",
-      formatBoolean(summary.hasLyrics3),
-      describeLyrics3(summary.hasLyrics3)
+      withFieldNote(
+        valueWithHint(formatBoolean(summary.hasLyrics3), describeLyrics3(summary.hasLyrics3)),
+        "Optional lyrics tag stored near the end of the file (rare)."
+      )
     )
   );
   return "<h4>Summary</h4><dl>" + rows.join("") + "</dl>";
@@ -410,55 +552,135 @@ function renderMpeg(mpeg) {
   if (!mpeg || !mpeg.firstFrame) return "";
   const f = mpeg.firstFrame;
   const rows = [];
-  rows.push(renderDefinitionRow("Frame offset", `${f.offset} B`, describeFrameOffset(f.offset)));
+  rows.push(
+    renderDefinitionRow(
+      "Frame offset",
+      withFieldNote(
+        valueWithHint(`${f.offset} B`, describeFrameOffset(f.offset)),
+        "Position of the first MPEG frame relative to file start."
+      )
+    )
+  );
   rows.push(
     renderDefinitionRow(
       "Frame length",
-      f.frameLengthBytes ? `${f.frameLengthBytes} B` : "Unknown",
-      describeFrameLength(f.frameLengthBytes)
+      withFieldNote(
+        valueWithHint(
+          f.frameLengthBytes ? `${f.frameLengthBytes} B` : "Unknown",
+          describeFrameLength(f.frameLengthBytes)
+        ),
+        "Size of the first MPEG frame in bytes."
+      )
     )
   );
   rows.push(
     renderDefinitionRow(
       "Samples per frame",
-      f.samplesPerFrame || "Unknown",
-      describeSamplesPerFrame(f.samplesPerFrame)
+      withFieldNote(
+        valueWithHint(f.samplesPerFrame || "Unknown", describeSamplesPerFrame(f.samplesPerFrame)),
+        "PCM samples carried by one frame."
+      )
     )
   );
-  rows.push(renderDefinitionRow("CRC present", formatBoolean(f.hasCrc), describeCrc(f.hasCrc)));
-  rows.push(renderDefinitionRow("Padding", formatBoolean(f.padding), describePadding(f.padding)));
   rows.push(
-    renderDefinitionRow("Private bit", formatBoolean(f.privateBit), describePrivateBit(f.privateBit))
+    renderDefinitionRow(
+      "CRC present",
+      withFieldNote(
+        valueWithHint(formatBoolean(f.hasCrc), describeCrc(f.hasCrc)),
+        "CRC16 checksum bit for this frame."
+      )
+    )
   );
   rows.push(
-    renderDefinitionRow("Copyright", formatBoolean(f.copyright), describeCopyright(f.copyright))
+    renderDefinitionRow(
+      "Padding",
+      withFieldNote(
+        valueWithHint(formatBoolean(f.padding), describePadding(f.padding)),
+        "Padding bit toggles extra slot to keep constant bitrate timing."
+      )
+    )
   );
-  rows.push(renderDefinitionRow("Original", formatBoolean(f.original), describeOriginal(f.original)));
+  rows.push(
+    renderDefinitionRow(
+      "Private bit",
+      withFieldNote(
+        valueWithHint(formatBoolean(f.privateBit), describePrivateBit(f.privateBit)),
+        "Reserved encoder-specific flag."
+      )
+    )
+  );
+  rows.push(
+    renderDefinitionRow(
+      "Copyright",
+      withFieldNote(
+        valueWithHint(formatBoolean(f.copyright), describeCopyright(f.copyright)),
+        "Copyright flag from header."
+      )
+    )
+  );
+  rows.push(
+    renderDefinitionRow(
+      "Original",
+      withFieldNote(
+        valueWithHint(formatBoolean(f.original), describeOriginal(f.original)),
+        "Marks stream as original vs copy."
+      )
+    )
+  );
   if (f.modeExtension) {
     rows.push(
       renderDefinitionRow(
         "Mode extension",
-        escapeHtml(f.modeExtension),
-        describeModeExtension(f.modeExtension, f.channelMode)
+        withFieldNote(
+          valueWithHint(
+            escapeHtml(f.modeExtension),
+            describeModeExtension(f.modeExtension, f.channelMode)
+          ),
+          "Stereo coding tools used only when channel mode is Joint stereo."
+        )
       )
     );
   }
   if (f.emphasis && f.emphasis !== "None") {
-    rows.push(renderDefinitionRow("Emphasis", escapeHtml(f.emphasis), describeEmphasis(f.emphasis)));
+    rows.push(
+      renderDefinitionRow(
+        "Emphasis",
+        withFieldNote(
+          valueWithHint(escapeHtml(f.emphasis), describeEmphasis(f.emphasis)),
+          "Playback de-emphasis request (legacy)."
+        )
+      )
+    );
   }
   if (mpeg.secondFrameValidated === false) {
     rows.push(
-      renderDefinitionRow("Second frame", "Validation failed", describeSecondFrame(false))
+      renderDefinitionRow(
+        "Second frame",
+        withFieldNote(
+          valueWithHint("Validation failed", describeSecondFrame(false)),
+          "Checks if the next frame matches header expectations."
+        )
+      )
     );
   } else if (mpeg.secondFrameValidated === true) {
-    rows.push(renderDefinitionRow("Second frame", "Validated", describeSecondFrame(true)));
+    rows.push(
+      renderDefinitionRow(
+        "Second frame",
+        withFieldNote(
+          valueWithHint("Validated", describeSecondFrame(true)),
+          "Checks if the next frame matches header expectations."
+        )
+      )
+    );
   }
   if (mpeg.nonAudioBytes != null) {
     rows.push(
       renderDefinitionRow(
         "Non-audio bytes",
-        formatHumanSize(mpeg.nonAudioBytes),
-        describeNonAudioBytes(mpeg.nonAudioBytes)
+        withFieldNote(
+          valueWithHint(formatHumanSize(mpeg.nonAudioBytes), describeNonAudioBytes(mpeg.nonAudioBytes)),
+          "Bytes outside MPEG frames (leading/trailing tags or junk)."
+        )
       )
     );
   }
@@ -469,19 +691,57 @@ function renderVbr(vbr) {
   if (!vbr) return "";
   const rows = [];
   rows.push(
-    renderDefinitionRow("Header", escapeHtml(vbr.type), describeVbrHeaderType(vbr.type))
+    renderDefinitionRow(
+      "Header",
+      withFieldNote(
+        valueWithHint(escapeHtml(vbr.type), describeVbrHeaderType(vbr.type)),
+        "VBR header type parsed from the first frame."
+      )
+    )
   );
   if (vbr.frames != null) {
-    rows.push(renderDefinitionRow("Total frames", String(vbr.frames), describeVbrFrames(vbr.frames)));
+    rows.push(
+      renderDefinitionRow(
+        "Total frames",
+        withFieldNote(
+          valueWithHint(String(vbr.frames), describeVbrFrames(vbr.frames)),
+          "Frame count reported by VBR header (used for precise duration)."
+        )
+      )
+    );
   }
   if (vbr.bytes != null) {
-    rows.push(renderDefinitionRow("Total bytes", String(vbr.bytes), describeVbrBytes(vbr.bytes)));
+    rows.push(
+      renderDefinitionRow(
+        "Total bytes",
+        withFieldNote(
+          valueWithHint(String(vbr.bytes), describeVbrBytes(vbr.bytes)),
+          "Total bytes reported by VBR header."
+        )
+      )
+    );
   }
   if (vbr.quality != null) {
-    rows.push(renderDefinitionRow("Quality", String(vbr.quality), describeVbrQuality(vbr.quality)));
+    rows.push(
+      renderDefinitionRow(
+        "Quality",
+        withFieldNote(
+          valueWithHint(String(vbr.quality), describeVbrQuality(vbr.quality)),
+          "Encoder-reported quality hint (0 best, 100 worst)."
+        )
+      )
+    );
   }
   if (vbr.lameEncoder) {
-    rows.push(renderDefinitionRow("Encoder", escapeHtml(vbr.lameEncoder), describeLameEncoder(vbr.lameEncoder)));
+    rows.push(
+      renderDefinitionRow(
+        "Encoder",
+        withFieldNote(
+          valueWithHint(escapeHtml(vbr.lameEncoder), describeLameEncoder(vbr.lameEncoder)),
+          "Encoder string from LAME/VBR header."
+        )
+      )
+    );
   }
   return "<h4>VBR info</h4><dl>" + rows.join("") + "</dl>";
 }
@@ -515,6 +775,11 @@ function renderId3v2Frames(frames) {
         }`;
         return `<tr><td>${id}</td><td>${info}</td><td>${size}</td></tr>`;
       }
+      if (frame.id === "GEOB") {
+        const preview = escapeHtml(detail.preview || "(binary)");
+        const info = "GEOB (General Encapsulated Object) - arbitrary binary payload; preview shows hex.";
+        return `<tr><td>${id}</td><td>${info} ${preview}</td><td>${size}</td></tr>`;
+      }
       const preview = escapeHtml(detail.preview || "(binary)");
       return `<tr><td>${id}</td><td>${preview}</td><td>${size}</td></tr>`;
     })
@@ -529,19 +794,65 @@ function renderId3v2(id3) {
   if (!id3) return "";
   const details = [];
   const version = `${id3.versionMajor}.${id3.versionRevision}`;
-  details.push(renderDefinitionRow("Version", escapeHtml(version)));
-  details.push(renderDefinitionRow("Extended header", formatBoolean(id3.flags.extendedHeader)));
-  details.push(renderDefinitionRow("Footer present", formatBoolean(id3.hasFooter)));
+  details.push(
+    renderDefinitionRow(
+      "Version",
+      withFieldNote(
+        valueWithHint(escapeHtml(version), describeId3Version(id3.versionMajor)),
+        "ID3v2 major.minor version."
+      )
+    )
+  );
+  details.push(
+    renderDefinitionRow(
+      "Extended header",
+      withFieldNote(
+        valueWithHint(formatBoolean(id3.flags.extendedHeader), describeExtendedHeader(id3.flags.extendedHeader)),
+        "Whether optional extended header is present."
+      )
+    )
+  );
+  details.push(
+    renderDefinitionRow(
+      "Footer present",
+      withFieldNote(
+        valueWithHint(formatBoolean(id3.hasFooter), describeFooter(id3.hasFooter)),
+        "ID3v2 footer mirrors the header at the end (rare)."
+      )
+    )
+  );
   details.push(
     renderDefinitionRow(
       "Unsynchronisation",
-      formatBoolean(id3.flags.unsynchronisation)
+      withFieldNote(
+        valueWithHint(formatBoolean(id3.flags.unsynchronisation), describeUnsynchronisation(id3.flags.unsynchronisation)),
+        "Unsynchronisation flag from tag header."
+      )
     )
   );
   if (id3.extendedHeaderSize) {
-    details.push(renderDefinitionRow("Extended header size", `${id3.extendedHeaderSize} B`));
+    details.push(
+      renderDefinitionRow(
+        "Extended header size",
+        withFieldNote(
+          valueWithHint(
+            `${id3.extendedHeaderSize} B`,
+            "Bytes used by the optional ID3v2 extended header; appears only when that flag is set."
+          ),
+          "Size of the extended header when present."
+        )
+      )
+    );
   }
-  details.push(renderDefinitionRow("Declared tag size", `${id3.size} B`));
+  details.push(
+    renderDefinitionRow(
+      "Declared tag size",
+      withFieldNote(
+        valueWithHint(`${id3.size} B`, describeDeclaredSize(id3.size)),
+        "Tag size declared in the ID3 header (frames only)."
+      )
+    )
+  );
   const framesTable = renderId3v2Frames(id3.frames);
   return "<h4>ID3v2 metadata</h4><dl>" + details.join("") + "</dl>" + framesTable;
 }
@@ -565,15 +876,45 @@ function renderId3v1(id3v1) {
 function renderApe(ape) {
   if (!ape) return "";
   const rows = [];
-  rows.push(renderDefinitionRow("Version", `0x${ape.version.toString(16)}`));
-  rows.push(renderDefinitionRow("Size", `${ape.size || "Unknown"} B`));
+  rows.push(
+    renderDefinitionRow(
+      "Version",
+      withFieldNote(
+        valueWithHint(`0x${ape.version.toString(16)}`, "APE tag format version in hexadecimal."),
+        "APE tag format version (hex)."
+      )
+    )
+  );
+  rows.push(
+    renderDefinitionRow(
+      "Size",
+      withFieldNote(
+        valueWithHint(`${ape.size || "Unknown"} B`, describeApeSize(ape.size)),
+        "Declared APE tag size."
+      )
+    )
+  );
   rows.push(
     renderDefinitionRow(
       "Items",
-      ape.itemCount != null ? String(ape.itemCount) : "Unknown"
+      withFieldNote(
+        valueWithHint(
+          ape.itemCount != null ? String(ape.itemCount) : "Unknown",
+          "Number of key/value fields (ReplayGain, metadata, etc.)."
+        ),
+        "Count of APE metadata items."
+      )
     )
   );
-  rows.push(renderDefinitionRow("Offset", `${ape.offset} B`));
+  rows.push(
+    renderDefinitionRow(
+      "Offset",
+      withFieldNote(
+        valueWithHint(`${ape.offset} B`, "Byte offset where the APE footer/header starts."),
+        "File offset where the APE footer/header begins."
+      )
+    )
+  );
   return "<h4>APE tag</h4><dl>" + rows.join("") + "</dl>";
 }
 
@@ -582,9 +923,27 @@ function renderLyrics(lyrics) {
   const rows = [];
   rows.push(renderDefinitionRow("Version", escapeHtml(lyrics.version)));
   if (lyrics.sizeEstimate != null) {
-    rows.push(renderDefinitionRow("Size", `${lyrics.sizeEstimate} B`));
+    rows.push(
+      renderDefinitionRow(
+        "Size",
+        withFieldNote(
+          valueWithHint(`${lyrics.sizeEstimate} B`, describeLyricsSize(lyrics.sizeEstimate)),
+          "Estimated size of Lyrics3 block."
+        )
+      )
+    );
   }
-  if (lyrics.offset != null) rows.push(renderDefinitionRow("Offset", `${lyrics.offset} B`));
+  if (lyrics.offset != null) {
+    rows.push(
+      renderDefinitionRow(
+        "Offset",
+        withFieldNote(
+          valueWithHint(`${lyrics.offset} B`, "Byte offset where the Lyrics3 block begins."),
+          "Byte offset of the Lyrics3 block."
+        )
+      )
+    );
+  }
   return "<h4>Lyrics3</h4><dl>" + rows.join("") + "</dl>";
 }
 

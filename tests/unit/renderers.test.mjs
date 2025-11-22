@@ -87,6 +87,9 @@ test("renderers produce readable HTML output", async () => {
   const mp3 = await parseOnly(createMp3File());
   const mp3Html = renderMp3(mp3);
   assert.match(mp3Html, /MPEG audio/);
+  assert.match(mp3Html, /valueHint/);
+  assert.match(mp3Html, /optionsRow/);
+  assert.match(mp3Html, /CD-quality rate/);
 
   const zip = await parseOnly(createZipFile());
   zip.issues = ["central directory synthetic issue"];
