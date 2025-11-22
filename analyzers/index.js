@@ -16,6 +16,7 @@ import { parseMp3, probeMp3 } from "./mp3/index.js";
 import { hasSevenZipSignature, parseSevenZip } from "./sevenz/index.js";
 import { hasTarSignature, parseTar } from "./tar/index.js";
 import { hasRarSignature, parseRar } from "./rar/index.js";
+import { parseMz } from "./mz/index.js";
 
 // Quick magic-based detectors for non-PE types (label only for now)
 function detectELF(dv) {
@@ -63,7 +64,7 @@ async function probeMzFormat(file, dv) {
   if (!mz) return null;
   const eLfanew = mz.e_lfanew >>> 0;
   if (eLfanew === 0) return { kind: "mz", eLfanew };
-  if (eLfanew + 2 > file.size) return { kind: "pe", eLfanew };
+  if (eLfanew + 4 > file.size) return { kind: "mz", eLfanew };
   const sigLength = Math.min(4, file.size - eLfanew);
   let sigBytes;
   if (eLfanew + sigLength <= dv.byteLength) {
@@ -321,9 +322,16 @@ export async function parseForUi(file) {
     if (elf) return { analyzer: "elf", parsed: elf };
   }
   const mzKind = await probeMzFormat(file, dv);
-  if (mzKind?.kind === "pe") {
-    const pe = await parsePe(file);
-    if (pe) return { analyzer: "pe", parsed: pe };
+  if (mzKind) {
+    if (mzKind.kind === "pe") {
+      const pe = await parsePe(file);
+      if (pe) return { analyzer: "pe", parsed: pe };
+    }
+    const mz = await parseMz(file);
+    if (mz) {
+      if (mzKind.kind && mzKind.kind !== "mz") mz.nextHeader = mzKind.kind;
+      return { analyzer: "mz", parsed: mz };
+    }
   }
   const ascii = toAsciiFromWholeView(dv, 8192).toLowerCase();
   if (ascii.indexOf("<fictionbook") !== -1) {

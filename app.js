@@ -17,6 +17,7 @@ import {
   renderSevenZip,
   renderTar,
   renderRar,
+  renderMz,
 } from "./renderers/index.js";
 import { escapeHtml } from "./html-utils.js";
 
@@ -93,6 +94,14 @@ function renderAnalysisIntoUi(analyzerName, parsedResult) {
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
     peDetailsValueElement.innerHTML = renderPe(parsedResult);
+    return;
+  }
+
+  if (analyzerName === "mz" && parsedResult) {
+    peDetailsTermElement.textContent = "MS-DOS MZ details";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    peDetailsValueElement.innerHTML = renderMz(parsedResult);
     return;
   }
 

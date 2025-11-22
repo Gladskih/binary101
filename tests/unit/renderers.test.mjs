@@ -12,6 +12,7 @@ import {
   renderMp3,
   renderPdf,
   renderPe,
+  renderMz,
   renderPng,
   renderSevenZip,
   renderTar,
@@ -32,7 +33,8 @@ import {
   createTarFile,
   createWebpFile,
   createZipFile,
-  createRar5File
+  createRar5File,
+  createDosMzExe
 } from "../fixtures/sample-files.mjs";
 
 class TestDomParser extends XmlDomParser {
@@ -103,6 +105,10 @@ test("renderers produce readable HTML output", async () => {
   const pe = await parseOnly(createPeFile());
   const peHtml = renderPe(pe);
   assert.match(peHtml, /PE image/);
+
+  const mz = await parseOnly(createDosMzExe());
+  const mzHtml = renderMz(mz);
+  assert.match(mzHtml, /MS-DOS header/);
 
   const sevenZip = await parseOnly(createSevenZipFile());
   sevenZip.issues.push("synthetic 7z issue");

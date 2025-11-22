@@ -77,8 +77,11 @@ test("detectBinaryType distinguishes DOS MZ executables from PE", async () => {
   const detection = await detectBinaryType(mzFile);
   assert.strictEqual(detection, "MS-DOS MZ executable");
   const parsed = await parseForUi(mzFile);
-  assert.strictEqual(parsed.analyzer, null);
-  assert.strictEqual(parsed.parsed, null);
+  assert.strictEqual(parsed.analyzer, "mz");
+  assert.ok(parsed.parsed);
+  assert.strictEqual(parsed.parsed.header.e_magic, "MZ");
+  assert.ok(Array.isArray(parsed.parsed.stubStrings));
+  assert.ok(parsed.parsed.stubStrings.length >= 1);
 });
 
 test("parseForUi parses and reports PNG layout", async () => {
