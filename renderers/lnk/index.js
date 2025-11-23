@@ -52,6 +52,8 @@ const LINKINFO_FLAGS = [
 const formatTime = value => value?.iso || "-";
 const formatSize = value => (value ? formatHumanSize(value) : "-");
 
+const renderHint = text => `<div class="smallNote">${safe(text)}</div>`;
+
 const buildTargetPath = lnk => {
   const info = lnk.linkInfo || {};
   const base = info.localBasePathUnicode || info.localBasePath;
@@ -78,6 +80,11 @@ const renderSummary = (lnk, out) => {
   out.push(dd("Show command", safe(showCommand)));
   out.push(dd("Hotkey", safe(header.hotKeyLabel || "-")));
   out.push(dd("Icon index", header.iconIndex != null ? header.iconIndex.toString() : "-"));
+  out.push(
+    renderHint(
+      "Shortcuts merge multiple sources: LinkInfo paths, optional relative path strings, and shell item ID lists. The target above comes from LinkInfo when available."
+    )
+  );
   out.push(`</dl>`);
   out.push(`</section>`);
 };
@@ -94,6 +101,11 @@ const renderHeader = (lnk, out) => {
   out.push(dd("Created", safe(formatTime(header.creationTime))));
   out.push(dd("Accessed", safe(formatTime(header.accessTime))));
   out.push(dd("Modified", safe(formatTime(header.writeTime))));
+  out.push(
+    renderHint(
+      "Timestamps are stored as Windows FILETIME values in UTC. They describe the link's target when available; all zeros means \"not set.\""
+    )
+  );
   out.push(`</dl>`);
   out.push(`</section>`);
 };
@@ -147,6 +159,11 @@ const renderLinkInfo = (lnk, out) => {
   if (info.truncated) {
     out.push(`<div class="smallNote">LinkInfo extends beyond file size.</div>`);
   }
+  out.push(
+    renderHint(
+      "Local base + common suffix build the resolved path on disk. If the link points to a network location, CommonNetworkRelativeLink carries the UNC/share details instead."
+    )
+  );
   out.push(`</dl>`);
   out.push(`</section>`);
 };
@@ -175,6 +192,11 @@ const renderIdList = (lnk, out) => {
   out.push(dd("Size", `${idList.size} bytes`));
   out.push(dd("Items", idList.items?.length ? idList.items.length.toString() : "0"));
   if (idList.truncated) out.push(`<div class="smallNote">ID list truncated</div>`);
+  out.push(
+    renderHint(
+      "ID lists are shell item IDs (PIDLs) that encode the target location in a shell-neutral way (e.g., control panel items)."
+    )
+  );
   out.push(`</dl>`);
   out.push(`</section>`);
 };
@@ -212,6 +234,11 @@ const renderExtraData = (lnk, out) => {
       `<li>${safe(name)} ${safe(sig)} - ${block.size} bytes${note}${describeBlock(block)}</li>`
     );
   });
+  out.push(
+    renderHint(
+      "Extra data blocks carry optional hints for newer Windows versions: environment path variants, known folders, console settings, or other metadata."
+    )
+  );
   out.push(`</ul>`);
   out.push(`</section>`);
 };
