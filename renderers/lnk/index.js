@@ -80,12 +80,12 @@ const renderSummary = (lnk, out) => {
   out.push(dd("Show command", safe(showCommand)));
   out.push(dd("Hotkey", safe(header.hotKeyLabel || "-")));
   out.push(dd("Icon index", header.iconIndex != null ? header.iconIndex.toString() : "-"));
+  out.push(`</dl>`);
   out.push(
     renderHint(
       "Shortcuts merge multiple sources: LinkInfo paths, optional relative path strings, and shell item ID lists. The target above comes from LinkInfo when available."
     )
   );
-  out.push(`</dl>`);
   out.push(`</section>`);
 };
 
@@ -101,12 +101,17 @@ const renderHeader = (lnk, out) => {
   out.push(dd("Created", safe(formatTime(header.creationTime))));
   out.push(dd("Accessed", safe(formatTime(header.accessTime))));
   out.push(dd("Modified", safe(formatTime(header.writeTime))));
+  out.push(`</dl>`);
   out.push(
     renderHint(
       "Timestamps are stored as Windows FILETIME values in UTC. They describe the link's target when available; all zeros means \"not set.\""
     )
   );
-  out.push(`</dl>`);
+  out.push(
+    renderHint(
+      "Flags gate the optional sections that follow (ID list, LinkInfo, strings, extra blocks). If a field looks empty, check whether its flag was set."
+    )
+  );
   out.push(`</section>`);
 };
 
@@ -159,12 +164,12 @@ const renderLinkInfo = (lnk, out) => {
   if (info.truncated) {
     out.push(`<div class="smallNote">LinkInfo extends beyond file size.</div>`);
   }
+  out.push(`</dl>`);
   out.push(
     renderHint(
       "Local base + common suffix build the resolved path on disk. If the link points to a network location, CommonNetworkRelativeLink carries the UNC/share details instead."
     )
   );
-  out.push(`</dl>`);
   out.push(`</section>`);
 };
 
@@ -180,6 +185,11 @@ const renderStrings = (lnk, out) => {
     if (s[key]) out.push(dd(key, safe(s[key])));
   });
   out.push(`</dl>`);
+  out.push(
+    renderHint(
+      "String data is stored as counted strings (length + characters). When Unicode flag is set, they are UTF-16LE; otherwise ANSI codepage from the creating system."
+    )
+  );
   out.push(`</section>`);
 };
 
@@ -192,12 +202,12 @@ const renderIdList = (lnk, out) => {
   out.push(dd("Size", `${idList.size} bytes`));
   out.push(dd("Items", idList.items?.length ? idList.items.length.toString() : "0"));
   if (idList.truncated) out.push(`<div class="smallNote">ID list truncated</div>`);
+  out.push(`</dl>`);
   out.push(
     renderHint(
       "ID lists are shell item IDs (PIDLs) that encode the target location in a shell-neutral way (e.g., control panel items)."
     )
   );
-  out.push(`</dl>`);
   out.push(`</section>`);
 };
 
@@ -234,12 +244,17 @@ const renderExtraData = (lnk, out) => {
       `<li>${safe(name)} ${safe(sig)} - ${block.size} bytes${note}${describeBlock(block)}</li>`
     );
   });
+  out.push(`</ul>`);
   out.push(
     renderHint(
       "Extra data blocks carry optional hints for newer Windows versions: environment path variants, known folders, console settings, or other metadata."
     )
   );
-  out.push(`</ul>`);
+  out.push(
+    renderHint(
+      "Each block starts with a size + signature (shown above). Unknown signatures are vendor- or shell-extensions; truncated blocks often mean the shortcut was cut short during download/copy."
+    )
+  );
   out.push(`</section>`);
 };
 
@@ -257,6 +272,9 @@ const renderWarnings = (lnk, out) => {
 export function renderLnk(lnk) {
   if (!lnk) return "";
   const out = [];
+  out.push(
+    `<p class="smallNote">Windows shortcuts store multiple ways to reach a target: shell item IDs (PIDLs), plain paths, and optional network or environment-based fallbacks. Flags below tell which pieces are present.</p>`
+  );
   renderSummary(lnk, out);
   renderHeader(lnk, out);
   renderLinkInfo(lnk, out);
