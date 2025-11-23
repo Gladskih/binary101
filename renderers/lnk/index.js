@@ -125,7 +125,8 @@ const renderNetworkInfo = network => {
   if (network.netName) parts.push(`Network path: ${safe(network.netName)}<br/>`);
   if (network.deviceName) parts.push(`Device: ${safe(network.deviceName)}<br/>`);
   const provider =
-    network.networkProviderName || (network.networkProviderType != null ? toHex32(network.networkProviderType, 8) : null);
+    network.networkProviderName ||
+    (network.networkProviderType != null ? toHex32(network.networkProviderType, 8) : null);
   if (provider) parts.push(`Provider: ${safe(provider)}<br/>`);
   if (network.truncated) parts.push(`<span class="smallNote">Network data truncated</span>`);
   parts.push(`</div>`);
