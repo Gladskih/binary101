@@ -143,7 +143,6 @@ test("parseForUi parses Windows shortcuts", async () => {
   await assertParsed(createLnkFile(), "lnk", lnk => {
     assert.strictEqual(lnk.linkInfo.localBasePath, "C:\\Program Files\\Example");
     assert.strictEqual(lnk.stringData.relativePath, ".\\Example\\app.exe");
-    assert.strictEqual(lnk.resolvedPath, "C:\\Program Files\\Example\\app.exe");
     assert.ok(Array.isArray(lnk.extraData.blocks));
     const propertyStore = lnk.extraData.blocks.find(block => block.signature === 0xa0000009);
     assert.ok(propertyStore?.parsed?.storages?.length);

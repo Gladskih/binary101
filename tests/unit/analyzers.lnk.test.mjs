@@ -25,7 +25,6 @@ test("parseLnk reads Shell Link header and targets", async () => {
   assert.strictEqual(fileItem.fileSize, 12345);
   assert.strictEqual(fileItem.attributes, 0x0020);
   assert.strictEqual(lnk.idList.resolvedPath, "C:\\Program Files\\Example\\app.exe");
-  assert.strictEqual(lnk.resolvedPath, "C:\\Program Files\\Example\\app.exe");
   assert.ok(Array.isArray(lnk.extraData.blocks));
   assert.ok(lnk.extraData.blocks.length >= 3);
 });
@@ -44,8 +43,8 @@ test("parseLnk reports extra data details", async () => {
   );
   assert.ok(propertyStore?.parsed?.storages?.length);
   const firstStorage = propertyStore.parsed.storages[0];
-  const targetProperty = firstStorage.properties.find(prop => prop.id === 2);
-  assert.ok(targetProperty);
-  assert.strictEqual(targetProperty.name, "System.Link.TargetParsingPath");
-  assert.strictEqual(targetProperty.value, "C:\\Program Files\\Example\\app.exe");
+  const volumeProperty = firstStorage.properties.find(prop => prop.id === 104);
+  assert.ok(volumeProperty);
+  assert.strictEqual(volumeProperty.name, "System.VolumeId");
+  assert.strictEqual(volumeProperty.value, "8e44de00-5103-3a0b-4785-67a8d9b71bc0");
 });

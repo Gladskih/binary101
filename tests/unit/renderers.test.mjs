@@ -95,10 +95,10 @@ test("renderers produce readable HTML output", async () => {
 
   const lnk = await parseOnly(createLnkFile());
   const lnkHtml = renderLnk(lnk);
-  assert.match(lnkHtml, /Shortcut overview/);
   assert.match(lnkHtml, /Shell link header/);
   assert.match(lnkHtml, /LinkTargetIDList/);
-  assert.match(lnkHtml, /Resolved path/);
+  assert.match(lnkHtml, /LocalBasePath \+ CommonPathSuffix/);
+  assert.match(lnkHtml, /System\.VolumeId/);
   assert.match(lnkHtml, /System\.Link\.TargetParsingPath/);
 
   const zip = await parseOnly(createZipFile());

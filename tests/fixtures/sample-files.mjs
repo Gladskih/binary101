@@ -402,6 +402,7 @@ export const createLnkFile = () => {
   };
 
   const buildPropertyValue = (type, value) => {
+    const vtSize = 4; // VARTYPE (u16) + padding (u16)
     if (type === 0x1f) {
       const length = value.length + 1;
       const data = new Uint8Array(4 + length * 2).fill(0);
@@ -410,49 +411,71 @@ export const createLnkFile = () => {
       for (let i = 0; i < value.length; i += 1) {
         dv.setUint16(4 + i * 2, value.charCodeAt(i), true);
       }
-      return { type, valueSize: 4 + data.length, data };
+      const body = new Uint8Array(vtSize + data.length);
+      const bdv = new DataView(body.buffer);
+      bdv.setUint16(0, type, true);
+      // padding already zero
+      body.set(data, vtSize);
+      return { size: body.length, body };
+    }
+    if (type === 0x48) {
+      const body = new Uint8Array(vtSize + 16).fill(0);
+      const bdv = new DataView(body.buffer);
+      bdv.setUint16(0, type, true);
+      writeGuid(body, vtSize, value);
+      return { size: body.length, body };
     }
     if (type === 0x13) {
-      const data = new Uint8Array(4);
-      new DataView(data.buffer).setUint32(0, value >>> 0, true);
-      return { type, valueSize: 4 + data.length, data };
+      const body = new Uint8Array(vtSize + 4).fill(0);
+      const bdv = new DataView(body.buffer);
+      bdv.setUint16(0, type, true);
+      bdv.setUint32(vtSize, value >>> 0, true);
+      return { size: body.length, body };
     }
-    return { type, valueSize: 4, data: new Uint8Array(0) };
+    return { size: vtSize, body: new Uint8Array(vtSize) };
   };
 
   const buildPropertyStoreBlock = () => {
-    const linkFmtid = "f29f85e0-4ff9-1068-ab91-08002b27b3d9";
-    const entries = [
-      buildPropertyValue(0x1f, "C:\\Program Files\\Example\\app.exe"),
-      buildPropertyValue(0x1f, "C:\\Program Files\\Example"),
-      buildPropertyValue(0x1f, "--demo")
-    ].map((value, index) => {
-      const id = index === 0 ? 2 : index === 1 ? 3 : 5;
-      const bytes = new Uint8Array(8 + value.valueSize);
-      const dv = new DataView(bytes.buffer);
-      dv.setUint32(0, id, true);
-      dv.setUint32(4, value.valueSize, true);
-      dv.setUint32(8, value.type, true);
-      bytes.set(value.data, 12);
-      return bytes;
-    });
-    const terminator = new Uint8Array(8).fill(0);
-    const storageSize = entries.reduce((sum, entry) => sum + entry.length, 0) + terminator.length;
-    const storage = new Uint8Array(16 + 4 + storageSize).fill(0);
-    writeGuid(storage, 0, linkFmtid);
-    new DataView(storage.buffer).setUint32(16, storageSize, true);
-    let cursor = 20;
-    entries.forEach(entry => {
-      storage.set(entry, cursor);
-      cursor += entry.length;
-    });
-    storage.set(terminator, cursor);
-    const blockSize = storage.length + 8;
+    const buildSpsStorage = (fmtid, props) => {
+      const entries = props.map(({ pid, type, value }) => {
+        const val = buildPropertyValue(type, value);
+        const entry = new Uint8Array(8 + val.size);
+        const dv = new DataView(entry.buffer);
+        dv.setUint32(0, val.size, true);
+        dv.setUint32(4, pid, true);
+        entry.set(val.body, 8);
+        return entry;
+      });
+      const terminator = new Uint8Array(8).fill(0);
+      const storageSize = 24 + entries.reduce((sum, e) => sum + e.length, 0) + terminator.length;
+      const storage = new Uint8Array(storageSize).fill(0);
+      const sdv = new DataView(storage.buffer);
+      sdv.setUint32(0, storageSize, true);
+      sdv.setUint32(4, 0x53505331, true); // "SPS1" as 0x53505331 ("SPS1")
+      writeGuid(storage, 8, fmtid);
+      let cursor = 24;
+      entries.forEach(entry => {
+        storage.set(entry, cursor);
+        cursor += entry.length;
+      });
+      storage.set(terminator, cursor);
+      return storage;
+    };
+
+    const volumeStorage = buildSpsStorage("446d16b1-8dad-4870-a748-402ea43d788c", [
+      { pid: 104, type: 0x48, value: "8e44de00-5103-3a0b-4785-67a8d9b71bc0" }
+    ]);
+    const linkStorage = buildSpsStorage("f29f85e0-4ff9-1068-ab91-08002b27b3d9", [
+      { pid: 2, type: 0x1f, value: "C:\\Program Files\\Example\\app.exe" }
+    ]);
+
+    const body = concatParts([volumeStorage, linkStorage]);
+    const blockSize = body.length + 8;
     const block = new Uint8Array(blockSize).fill(0);
     const bdv = new DataView(block.buffer);
     bdv.setUint32(0, blockSize, true);
     bdv.setUint32(4, 0xa0000009, true);
-    block.set(storage, 8);
+    block.set(body, 8);
     return block;
   };
 
@@ -468,14 +491,17 @@ export const createLnkFile = () => {
 
   const buildFileExtensionBlock = longName => {
     const nameBytes = makeNullTerminatedUnicode(longName);
-    const headerSize = 0x12;
+    const version = 3;
+    const headerSize = 20; // size (2) + version (2) + sig (4) + times (8) + unknown (2) + longSize (2)
     const blockSize = headerSize + nameBytes.length;
     const block = new Uint8Array(blockSize).fill(0);
     const dv = new DataView(block.buffer);
     dv.setUint16(0, blockSize, true);
-    dv.setUint16(2, 0x0003, true);
+    dv.setUint16(2, version, true);
     dv.setUint32(4, 0xbeef0004, true);
-    // Creation/access times (FILETIME) left as zero.
+    // Creation and access FAT times left as zero.
+    dv.setUint16(16, 0x0014, true); // typical value for Windows XP/2003, but not interpreted
+    dv.setUint16(18, nameBytes.length, true);
     block.set(nameBytes, headerSize);
     return block;
   };
@@ -483,8 +509,9 @@ export const createLnkFile = () => {
   const buildFileShellItem = (type, shortName, longName, attributes, sizeBytes) => {
     const shortBytes = makeNullTerminatedAscii(shortName);
     const longBlock = buildFileExtensionBlock(longName);
-    const padding = (12 + shortBytes.length) % 2 === 0 ? 0 : 1;
-    const bodyLength = 12 + shortBytes.length + padding + longBlock.length;
+    const base = 12 + shortBytes.length;
+    const padding = base % 2 === 0 ? 0 : 1;
+    const bodyLength = base + padding + longBlock.length;
     const body = new Uint8Array(bodyLength).fill(0);
     const dv = new DataView(body.buffer);
     dv.setUint8(0, type);
@@ -494,8 +521,12 @@ export const createLnkFile = () => {
     dv.setUint16(8, dosTimestamp.dosTime, true);
     dv.setUint16(10, attributes, true);
     body.set(shortBytes, 12);
-    if (padding) body[12 + shortBytes.length] = 0;
-    body.set(longBlock, 12 + shortBytes.length + padding);
+    let offset = 12 + shortBytes.length;
+    if (padding) {
+      body[offset] = 0;
+      offset += 1;
+    }
+    body.set(longBlock, offset);
     const item = new Uint8Array(body.length + 2).fill(0);
     new DataView(item.buffer).setUint16(0, item.length, true);
     item.set(body, 2);

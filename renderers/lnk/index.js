@@ -1,7 +1,7 @@
 "use strict";
 /* eslint-disable max-lines */
 
-import { dd, rowFlags, safe } from "../../html-utils.js";
+import { dd, rowFlags, rowOpts, safe } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
 
 const LINK_FLAGS = [
@@ -50,45 +50,34 @@ const LINKINFO_FLAGS = [
   [0x00000002, "Network relative link"]
 ];
 
+const SHOW_COMMAND_OPTIONS = [
+  [1, "Normal window"],
+  [3, "Maximized"],
+  [7, "Minimized"]
+];
+
 const formatTime = value => value?.iso || "-";
 const formatSize = value => (value ? formatHumanSize(value) : "-");
 
 const renderHint = text => `<div class="smallNote">${safe(text)}</div>`;
 
-const buildTargetPath = lnk => {
-  if (lnk.resolvedPath) return lnk.resolvedPath;
-  const info = lnk.linkInfo || {};
-  const base = info.localBasePathUnicode || info.localBasePath;
-  const suffix = info.commonPathSuffixUnicode || info.commonPathSuffix;
-  if (base && suffix) return base.endsWith("\\") ? `${base}${suffix}` : `${base}\\${suffix}`;
-  if (base) return base;
-  if (suffix) return suffix;
-  const strings = lnk.stringData || {};
-  if (strings.relativePath) return strings.relativePath;
-  if (strings.workingDir && strings.arguments) return `${strings.workingDir} ${strings.arguments}`;
+const findVolumeIdFromPropertyStore = lnk => {
+  const blocks = lnk.extraData?.blocks || [];
+  for (const block of blocks) {
+    if ((block.signature >>> 0) !== 0xa0000009) continue;
+    for (const storage of block.parsed?.storages || []) {
+      for (const prop of storage.properties || []) {
+        if (
+          (prop.name === "System.VolumeId" ||
+            (storage.formatId === "446d16b1-8dad-4870-a748-402ea43d788c" && prop.id === 104)) &&
+          prop.value
+        ) {
+          return { value: prop.value, rawFmtid: storage.formatId, pid: prop.id };
+        }
+      }
+    }
+  }
   return null;
-};
-
-const renderSummary = (lnk, out) => {
-  const header = lnk.header || {};
-  const target = buildTargetPath(lnk);
-  out.push(`<section>`);
-  out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Shortcut overview</h4>`);
-  out.push(`<dl>`);
-  out.push(dd("Target", safe(target || "(not specified)")));
-  out.push(dd("Working directory", safe(lnk.stringData?.workingDir || lnk.linkInfo?.localBasePath || "-")));
-  out.push(dd("Arguments", safe(lnk.stringData?.arguments || "-")));
-  const showCommand = header.showCommandName || header.showCommand || "-";
-  out.push(dd("Show command", safe(showCommand)));
-  out.push(dd("Hotkey", safe(header.hotKeyLabel || "-")));
-  out.push(dd("Icon index", header.iconIndex != null ? header.iconIndex.toString() : "-"));
-  out.push(`</dl>`);
-  out.push(
-    renderHint(
-      "Shortcuts merge multiple sources: LinkInfo paths, optional relative path strings, and shell item ID lists. The target above comes from LinkInfo when available."
-    )
-  );
-  out.push(`</section>`);
 };
 
 const renderHeader = (lnk, out) => {
@@ -96,13 +85,34 @@ const renderHeader = (lnk, out) => {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Shell link header</h4>`);
   out.push(`<dl>`);
-  out.push(dd("LinkCLSID", safe(header.clsid || "-")));
+  const clsidText = header.clsid || "-";
+  const clsidTitle =
+    "COM class identifier for Shell Link objects; 00021401-0000-0000-c000-000000000046 is the standard Shell Link CLSID.";
+  out.push(dd("LinkCLSID", `<span title="${safe(clsidTitle)}">${safe(clsidText)}</span>`));
   out.push(dd("File size", formatSize(header.fileSize)));
   out.push(dd("Flags", rowFlags(header.linkFlags || 0, LINK_FLAGS)));
   out.push(dd("File attributes", rowFlags(header.fileAttributes || 0, FILE_ATTRIBUTE_FLAGS)));
   out.push(dd("Created", safe(formatTime(header.creationTime))));
   out.push(dd("Accessed", safe(formatTime(header.accessTime))));
   out.push(dd("Modified", safe(formatTime(header.writeTime))));
+
+  const showCommandValue = header.showCommand;
+  const showCommandRow =
+    showCommandValue != null ? rowOpts(showCommandValue, SHOW_COMMAND_OPTIONS) : "-";
+  out.push(dd("Show command", showCommandRow));
+
+  out.push(dd("Hotkey", safe(header.hotKeyLabel || "-")));
+
+  let iconIndexHtml = "-";
+  if (header.iconIndex != null) {
+    const iconTitle =
+      "Index of the icon within the icon location or target file; 0 refers to the first icon resource.";
+    iconIndexHtml = `<span title="${safe(iconTitle)}">${safe(
+      header.iconIndex.toString()
+    )}</span>`;
+  }
+  out.push(dd("Icon index", iconIndexHtml));
+
   out.push(`</dl>`);
   out.push(
     renderHint(
@@ -112,6 +122,11 @@ const renderHeader = (lnk, out) => {
   out.push(
     renderHint(
       "Flags gate the optional sections that follow (ID list, LinkInfo, strings, extra blocks). If a field looks empty, check whether its flag was set."
+    )
+  );
+  out.push(
+    renderHint(
+      "LinkCLSID identifies the COM class used for Shell Link objects; the standard value 00021401-0000-0000-c000-000000000046 must be present for a valid .lnk file."
     )
   );
   out.push(`</section>`);
@@ -154,6 +169,7 @@ const renderNetworkInfo = network => {
 
 const formatPropertyValue = value => {
   if (value === null || value === undefined) return "-";
+  if (Array.isArray(value)) return value.map(v => formatPropertyValue(v)).join(", ");
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "bigint") return value.toString();
   return String(value);
@@ -166,16 +182,25 @@ const renderPropertyStore = parsed => {
   storages.forEach(storage => {
     const header = storage.formatId ? `FMTID ${safe(storage.formatId)}` : "Property storage";
     const suffix = storage.truncated ? " (truncated)" : "";
-    out.push(`<div class="smallNote">${header}${suffix}</div>`);
+    const magic = storage.magic ? ` ${safe(storage.magic)}` : "";
+    out.push(`<div class="smallNote">${header}${magic}${suffix}</div>`);
     if (storage.properties?.length) {
       out.push(`<ul class="smallNote">`);
       storage.properties.forEach(prop => {
         const name = prop.name || `Property ${prop.id}`;
-        const type = prop.typeName || (prop.type != null ? `Type ${toHex32(prop.type, 4)}` : null);
+        let typeLabel = "";
+        if (prop.type != null) {
+          const baseHex = toHex32(prop.type & 0xffff, 4);
+          const vtName = prop.typeName ? `VT_${prop.typeName}` : `VT_0x${baseHex}`;
+          typeLabel = ` (${safe(vtName)} 0x${baseHex})`;
+        }
         const value = formatPropertyValue(prop.value);
-        const trimmedType = type ? ` (${safe(type)})` : "";
         const truncated = prop.truncated ? " [truncated]" : "";
-        out.push(`<li>${safe(name)}${trimmedType}: ${safe(value)}${truncated}</li>`);
+        out.push(
+          `<li title="FMTID ${safe(storage.formatId || "")}, PID ${prop.id}">${safe(name)}${typeLabel}: ${safe(
+            value
+          )}${truncated}</li>`
+        );
       });
       out.push(`</ul>`);
     }
@@ -190,12 +215,33 @@ const renderLinkInfo = (lnk, out) => {
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">LinkInfo</h4>`);
   out.push(`<dl>`);
   out.push(dd("Flags", rowFlags(info.flags || 0, LINKINFO_FLAGS)));
-  out.push(dd("Local base path", safe(info.localBasePathUnicode || info.localBasePath || "-")));
-  out.push(dd("Common path suffix", safe(info.commonPathSuffixUnicode || info.commonPathSuffix || "-")));
+  if (info.localBasePath != null) {
+    out.push(dd("LocalBasePath (ANSI)", safe(info.localBasePath)));
+  }
+  if (info.localBasePathUnicode) {
+    out.push(dd("LocalBasePathUnicode (UTF-16LE)", safe(info.localBasePathUnicode)));
+  }
+  if (info.commonPathSuffix != null) {
+    out.push(dd("CommonPathSuffix (ANSI)", safe(info.commonPathSuffix)));
+  }
+  if (info.commonPathSuffixUnicode) {
+    out.push(dd("CommonPathSuffixUnicode (UTF-16LE)", safe(info.commonPathSuffixUnicode)));
+  }
   out.push(dd("Volume", renderVolumeInfo(info.volume)));
   out.push(dd("Network", renderNetworkInfo(info.network) || "-"));
-  const resolved = lnk.resolvedPath || lnk.idList?.resolvedPath || null;
-  if (resolved) out.push(dd("Resolved path", safe(resolved)));
+  const base = info.localBasePathUnicode || info.localBasePath;
+  const suffix = info.commonPathSuffixUnicode || info.commonPathSuffix;
+  let resolved = null;
+  if (base && suffix) {
+    resolved = base.endsWith("\\") ? `${base}${suffix}` : `${base}\\${suffix}`;
+  } else if (base) {
+    resolved = base;
+  } else if (suffix) {
+    resolved = suffix;
+  }
+  if (resolved) {
+    out.push(dd("LocalBasePath + CommonPathSuffix", safe(resolved)));
+  }
   if (info.truncated) {
     out.push(`<div class="smallNote">LinkInfo extends beyond file size.</div>`);
   }
@@ -241,7 +287,7 @@ const renderIdList = (lnk, out) => {
   out.push(`</dl>`);
   if (idList.items?.length) {
     out.push(
-      `<table class="table"><thead><tr><th>#</th><th>Type</th><th>Short name</th><th>Long name</th><th>Size</th><th>Modified (UTC)</th><th>Attributes</th></tr></thead><tbody>`
+      `<table class="table"><thead><tr><th>#</th><th>Type</th><th>Short name</th><th>Long name</th><th title="File size from the file entry shell item; 0 for folders; not the .lnk size">Size</th><th>Modified (UTC)</th><th>Attributes</th></tr></thead><tbody>`
     );
     idList.items.forEach(item => {
       const typeLabel = item.typeName || item.typeHex || "-";
@@ -249,11 +295,11 @@ const renderIdList = (lnk, out) => {
       out.push(
         `<tr><td>${item.index ?? ""}</td>` +
           `<td title="${safe(typeTitle)}">${safe(typeLabel)}</td>` +
-          `<td>${safe(item.shortName || "-")}</td>` +
-          `<td>${safe(item.longName || "-")}</td>` +
+          `<td title="DOS 8.3 short name">${safe(item.shortName || "-")}</td>` +
+          `<td title="Decoded from BEEF0004 extension">${safe(item.longName || "-")}</td>` +
           `<td>${item.fileSize != null ? item.fileSize.toString() : "-"}</td>` +
           `<td>${safe(item.modified || "-")}</td>` +
-          `<td>${item.attributes != null ? safe(toHex32(item.attributes, 4)) : "-"}</td>` +
+          `<td title="File attributes">${item.attributes != null ? safe(toHex32(item.attributes, 4)) : "-"}</td>` +
         `</tr>`
       );
     });
@@ -261,7 +307,7 @@ const renderIdList = (lnk, out) => {
   }
   out.push(
     renderHint(
-      "ID lists are shell item IDs (PIDLs) that describe the target in shell terms. Each item is a segment (root, drive, folder, file); Control Panel or special folders are also expressed this way."
+      "ID lists are shell item IDs (PIDLs) that describe the target in shell terms. Each item is a segment (root, drive, folder, file); Control Panel or special folders are also expressed this way. Short name is the DOS 8.3 name; Long name is taken from the BEEF0004 extension when present. Size comes from the file entry shell item header and reflects the target file size (0 for folders), not the .lnk file size or a field width."
     )
   );
   out.push(`</section>`);
@@ -277,11 +323,13 @@ const describeBlock = block => {
   if (block.signature >>> 0 === 0xa0000003) {
     const t = block.parsed || {};
     const machine = t.machineId ? `Machine: ${safe(t.machineId)}<br/>` : "";
-    const droid = t.droid ? `Droid: ${safe(t.droid)}<br/>` : "";
-    const birth = t.droidBirth ? `Birth droid: ${safe(t.droidBirth)}<br/>` : "";
+    const droidVolume = t.droidVolume ? `Droid VolumeID: ${safe(t.droidVolume)}<br/>` : "";
+    const droidObject = t.droidObject ? `Droid ObjectID: ${safe(t.droidObject)}<br/>` : "";
+    const birthVolume = t.droidBirthVolume ? `Birth VolumeID: ${safe(t.droidBirthVolume)}<br/>` : "";
+    const birthObject = t.droidBirthObject ? `Birth ObjectID: ${safe(t.droidBirthObject)}<br/>` : "";
     return (
-      `<div class="smallNote">Tracker data: shell tracking IDs to find the target after moves/renames.<br/>` +
-      `${machine}${droid}${birth}</div>`
+      `<div class="smallNote" title="NTFS object tracking identifiers used by Distributed Link Tracking; Droid VolumeID is for link tracking and typically does not match System.VolumeId from the property store.">Tracker data: shell tracking IDs to find the target after moves/renames (Droid IDs are separate from System.VolumeId).<br/>` +
+      `${machine}${droidVolume}${droidObject}${birthVolume}${birthObject}</div>`
     );
   }
   if (block.signature >>> 0 === 0xa0000009) {
@@ -344,7 +392,6 @@ export function renderLnk(lnk) {
   out.push(
     `<p class="smallNote">Windows shortcuts store multiple ways to reach a target: shell item IDs (PIDLs), plain paths, and optional network or environment-based fallbacks. Flags below tell which pieces are present.</p>`
   );
-  renderSummary(lnk, out);
   renderHeader(lnk, out);
   renderLinkInfo(lnk, out);
   renderStrings(lnk, out);

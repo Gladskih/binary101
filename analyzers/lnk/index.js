@@ -164,27 +164,6 @@ export async function parseLnk(file) {
           .filter(Boolean)
           .join(linkInfoBase ? "\\" : "")
       : null;
-  const looksAbsolutePath = value =>
-    typeof value === "string" && (/^[a-z]:[\\/]/i.test(value) || value.startsWith("\\\\"));
-  const joinWorkingAndRelative = (workingDir, relativePath) => {
-    if (!relativePath) return null;
-    if (looksAbsolutePath(relativePath)) return relativePath;
-    if (!workingDir) return null;
-    const trimmedBase = workingDir.replace(/[\\/]+$/, "");
-    const trimmedRel = relativePath.replace(/^[.\\/+]+/, "").replace(/^\\\\/, "");
-    if (!trimmedRel) return trimmedBase;
-    return `${trimmedBase}\\${trimmedRel}`;
-  };
-  const propertyStorePath = extraData?.blocks
-    ?.filter(block => (block.signature >>> 0) === 0xa0000009)
-    ?.flatMap(block => block.parsed?.storages || [])
-    ?.flatMap(storage => storage.properties || [])
-    ?.map(prop => prop?.value)
-    ?.find(looksAbsolutePath) || null;
-  const stringBasedPath =
-    joinWorkingAndRelative(stringData.workingDir, stringData.relativePath) ||
-    joinWorkingAndRelative(linkInfoBase, stringData.relativePath);
-  const resolvedPath = propertyStorePath || linkInfoPath || stringBasedPath || idList?.resolvedPath || null;
 
   return {
     header,
@@ -192,7 +171,6 @@ export async function parseLnk(file) {
     linkInfo,
     stringData,
     extraData,
-    resolvedPath,
     warnings
   };
 }

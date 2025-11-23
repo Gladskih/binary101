@@ -99,7 +99,7 @@ test.describe("file type detection", () => {
       file: createLnkFile,
       expectedKind: "Windows shortcut (.lnk)",
       term: "Windows shortcut details",
-      detailText: "Shortcut overview"
+      detailText: "Shell link header"
     },
     {
       name: "ZIP",
@@ -177,6 +177,7 @@ test.describe("file type detection", () => {
     await expect(page.locator("#peDetailsTerm")).toHaveText("Windows shortcut details");
     await expect(page.locator("#peDetailsValue")).toContainText("System.Link.TargetParsingPath");
     await expect(page.locator("#peDetailsValue")).toContainText("C:\\Program Files\\Example\\app.exe");
+    await expect(page.locator("#peDetailsValue")).toContainText("System.VolumeId");
   });
 
   test("detects Mach-O binaries without renderer detail", async ({ page }) => {
