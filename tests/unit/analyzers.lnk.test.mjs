@@ -16,14 +16,25 @@ test("parseLnk reads Shell Link header and targets", async () => {
   assert.strictEqual(lnk.linkInfo.localBasePath, "C:\\Program Files\\Example");
   assert.strictEqual(lnk.linkInfo.commonPathSuffix, "app.exe");
   assert.strictEqual(lnk.linkInfo.volume.driveTypeName, "Fixed drive");
+  assert.ok(Array.isArray(lnk.idList.items));
+  assert.strictEqual(lnk.idList.items.length, 5);
+  assert.strictEqual(lnk.idList.items[0].clsid, "20d04fe0-3aea-1069-a2d8-08002b30309d");
+  const fileItem = lnk.idList.items.find(item => item.typeName === "File");
+  assert.ok(fileItem);
+  assert.strictEqual(fileItem.longName, "app.exe");
+  assert.strictEqual(fileItem.fileSize, 12345);
+  assert.strictEqual(fileItem.attributes, 0x0020);
+  assert.strictEqual(lnk.idList.resolvedPath, "C:\\Program Files\\Example\\app.exe");
+  assert.strictEqual(lnk.resolvedPath, "C:\\Program Files\\Example\\app.exe");
   assert.ok(Array.isArray(lnk.extraData.blocks));
-  assert.ok(lnk.extraData.blocks.length >= 2);
+  assert.ok(lnk.extraData.blocks.length >= 3);
 });
 
 test("parseLnk reports extra data details", async () => {
   const lnk = await parseLnk(createLnkFile());
   const envBlock = lnk.extraData.blocks.find(block => block.signature === 0xa0000001);
   const knownFolder = lnk.extraData.blocks.find(block => block.signature === 0xa000000b);
+  const propertyStore = lnk.extraData.blocks.find(block => block.signature === 0xa0000009);
   assert.ok(envBlock?.parsed?.unicode);
   assert.strictEqual(envBlock.parsed.unicode, "%USERPROFILE%\\Example\\app.exe");
   assert.ok(knownFolder?.parsed?.knownFolderId);
@@ -31,4 +42,10 @@ test("parseLnk reports extra data details", async () => {
     knownFolder.parsed.knownFolderId,
     "fdd39ad0-238f-46af-adb4-6c85480369c7"
   );
+  assert.ok(propertyStore?.parsed?.storages?.length);
+  const firstStorage = propertyStore.parsed.storages[0];
+  const targetProperty = firstStorage.properties.find(prop => prop.id === 2);
+  assert.ok(targetProperty);
+  assert.strictEqual(targetProperty.name, "System.Link.TargetParsingPath");
+  assert.strictEqual(targetProperty.value, "C:\\Program Files\\Example\\app.exe");
 });

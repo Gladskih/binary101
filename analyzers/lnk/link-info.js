@@ -115,6 +115,19 @@ export const parseLinkInfo = (dv, offset, warnings, hasLinkInfo) => {
       ? dv.getUint32(offset + 0x20, true)
       : null;
 
+  const checkOffset = (name, value) => {
+    if (!value) return;
+    if (value < headerSize) {
+      warnings.push(`${name} offset (${value}) is smaller than LinkInfoHeaderSize (${headerSize}).`);
+    }
+  };
+  checkOffset("VolumeID", volumeIdOffset);
+  checkOffset("LocalBasePath", localBasePathOffset);
+  checkOffset("CommonNetworkRelativeLink", commonNetworkRelativeLinkOffset);
+  checkOffset("CommonPathSuffix", commonPathSuffixOffset);
+  checkOffset("LocalBasePathUnicode", localBasePathOffsetUnicode);
+  checkOffset("CommonPathSuffixUnicode", commonPathSuffixOffsetUnicode);
+
   const volume =
     linkFlag(flags, 0x1) && volumeIdOffset
       ? parseVolumeId(dv, offset + volumeIdOffset, end, warnings)

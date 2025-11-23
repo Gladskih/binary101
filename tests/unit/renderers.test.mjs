@@ -97,6 +97,9 @@ test("renderers produce readable HTML output", async () => {
   const lnkHtml = renderLnk(lnk);
   assert.match(lnkHtml, /Shortcut overview/);
   assert.match(lnkHtml, /Shell link header/);
+  assert.match(lnkHtml, /LinkTargetIDList/);
+  assert.match(lnkHtml, /Resolved path/);
+  assert.match(lnkHtml, /System\.Link\.TargetParsingPath/);
 
   const zip = await parseOnly(createZipFile());
   zip.issues = ["central directory synthetic issue"];

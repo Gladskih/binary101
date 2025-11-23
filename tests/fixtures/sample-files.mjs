@@ -103,6 +103,16 @@ const writeGuid = (buffer, offset, guidText) => {
   }
 };
 
+const encodeDosDateTime = date => {
+  const d = new Date(date);
+  const year = Math.max(1980, Math.min(2107, d.getUTCFullYear()));
+  const dosDate =
+    ((year - 1980) << 9) | ((d.getUTCMonth() + 1) << 5) | d.getUTCDate();
+  const dosTime =
+    (d.getUTCHours() << 11) | (d.getUTCMinutes() << 5) | Math.floor(d.getUTCSeconds() / 2);
+  return { dosDate, dosTime };
+};
+
 export const createPngFile = () =>
   new MockFile(
     fromBase64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/5+hHgAFgwJ/l7nnMgAAAABJRU5ErkJggg=="),
@@ -302,6 +312,8 @@ export const createLnkFile = () => {
   hdv.setUint32(0x38, 1, true);
   hdv.setUint32(0x3c, 1, true);
 
+  const dosTimestamp = encodeDosDateTime(new Date(Date.UTC(2024, 0, 2, 12, 0, 0)));
+
   const buildVolumeId = () => {
     const label = makeNullTerminatedAscii("DATA");
     const size = 0x10 + label.length;
@@ -389,15 +401,142 @@ export const createLnkFile = () => {
     return block;
   };
 
-  const idItemData = new Uint8Array([0x11, 0x22, 0x33, 0x44]);
-  const idItemSize = idItemData.length + 2;
-  const idListSize = idItemSize + 2;
-  const idList = new Uint8Array(2 + idListSize).fill(0);
-  const ildv = new DataView(idList.buffer);
-  ildv.setUint16(0, idListSize, true);
-  ildv.setUint16(2, idItemSize, true);
-  idList.set(idItemData, 4);
-  ildv.setUint16(4 + idItemData.length, 0, true);
+  const buildPropertyValue = (type, value) => {
+    if (type === 0x1f) {
+      const length = value.length + 1;
+      const data = new Uint8Array(4 + length * 2).fill(0);
+      const dv = new DataView(data.buffer);
+      dv.setUint32(0, length, true);
+      for (let i = 0; i < value.length; i += 1) {
+        dv.setUint16(4 + i * 2, value.charCodeAt(i), true);
+      }
+      return { type, valueSize: 4 + data.length, data };
+    }
+    if (type === 0x13) {
+      const data = new Uint8Array(4);
+      new DataView(data.buffer).setUint32(0, value >>> 0, true);
+      return { type, valueSize: 4 + data.length, data };
+    }
+    return { type, valueSize: 4, data: new Uint8Array(0) };
+  };
+
+  const buildPropertyStoreBlock = () => {
+    const linkFmtid = "f29f85e0-4ff9-1068-ab91-08002b27b3d9";
+    const entries = [
+      buildPropertyValue(0x1f, "C:\\Program Files\\Example\\app.exe"),
+      buildPropertyValue(0x1f, "C:\\Program Files\\Example"),
+      buildPropertyValue(0x1f, "--demo")
+    ].map((value, index) => {
+      const id = index === 0 ? 2 : index === 1 ? 3 : 5;
+      const bytes = new Uint8Array(8 + value.valueSize);
+      const dv = new DataView(bytes.buffer);
+      dv.setUint32(0, id, true);
+      dv.setUint32(4, value.valueSize, true);
+      dv.setUint32(8, value.type, true);
+      bytes.set(value.data, 12);
+      return bytes;
+    });
+    const terminator = new Uint8Array(8).fill(0);
+    const storageSize = entries.reduce((sum, entry) => sum + entry.length, 0) + terminator.length;
+    const storage = new Uint8Array(16 + 4 + storageSize).fill(0);
+    writeGuid(storage, 0, linkFmtid);
+    new DataView(storage.buffer).setUint32(16, storageSize, true);
+    let cursor = 20;
+    entries.forEach(entry => {
+      storage.set(entry, cursor);
+      cursor += entry.length;
+    });
+    storage.set(terminator, cursor);
+    const blockSize = storage.length + 8;
+    const block = new Uint8Array(blockSize).fill(0);
+    const bdv = new DataView(block.buffer);
+    bdv.setUint32(0, blockSize, true);
+    bdv.setUint32(4, 0xa0000009, true);
+    block.set(storage, 8);
+    return block;
+  };
+
+  const buildRootShellItem = clsid => {
+    const body = new Uint8Array(1 + 16).fill(0);
+    body[0] = 0x1f;
+    writeGuid(body, 1, clsid);
+    const item = new Uint8Array(body.length + 2).fill(0);
+    new DataView(item.buffer).setUint16(0, item.length, true);
+    item.set(body, 2);
+    return item;
+  };
+
+  const buildFileExtensionBlock = longName => {
+    const nameBytes = makeNullTerminatedUnicode(longName);
+    const headerSize = 0x12;
+    const blockSize = headerSize + nameBytes.length;
+    const block = new Uint8Array(blockSize).fill(0);
+    const dv = new DataView(block.buffer);
+    dv.setUint16(0, blockSize, true);
+    dv.setUint16(2, 0x0003, true);
+    dv.setUint32(4, 0xbeef0004, true);
+    // Creation/access times (FILETIME) left as zero.
+    block.set(nameBytes, headerSize);
+    return block;
+  };
+
+  const buildFileShellItem = (type, shortName, longName, attributes, sizeBytes) => {
+    const shortBytes = makeNullTerminatedAscii(shortName);
+    const longBlock = buildFileExtensionBlock(longName);
+    const padding = (12 + shortBytes.length) % 2 === 0 ? 0 : 1;
+    const bodyLength = 12 + shortBytes.length + padding + longBlock.length;
+    const body = new Uint8Array(bodyLength).fill(0);
+    const dv = new DataView(body.buffer);
+    dv.setUint8(0, type);
+    // Sort index (byte 1) left as zero.
+    dv.setUint32(2, sizeBytes >>> 0, true);
+    dv.setUint16(6, dosTimestamp.dosDate, true);
+    dv.setUint16(8, dosTimestamp.dosTime, true);
+    dv.setUint16(10, attributes, true);
+    body.set(shortBytes, 12);
+    if (padding) body[12 + shortBytes.length] = 0;
+    body.set(longBlock, 12 + shortBytes.length + padding);
+    const item = new Uint8Array(body.length + 2).fill(0);
+    new DataView(item.buffer).setUint16(0, item.length, true);
+    item.set(body, 2);
+    return item;
+  };
+
+  const buildDriveShellItem = driveLetter => {
+    const text = `${driveLetter.toUpperCase()}:`;
+    const label = makeNullTerminatedAscii(text);
+    const body = new Uint8Array(2 + label.length).fill(0);
+    body[0] = 0x2f;
+    body[1] = 0x00;
+    body.set(label, 2);
+    const item = new Uint8Array(body.length + 2).fill(0);
+    new DataView(item.buffer).setUint16(0, item.length, true);
+    item.set(body, 2);
+    return item;
+  };
+
+  const buildIdList = () => {
+    const items = [
+      buildRootShellItem("20d04fe0-3aea-1069-a2d8-08002b30309d"),
+      buildDriveShellItem("C"),
+      buildFileShellItem(0x31, "PROGRA~1", "Program Files", 0x0010, 0),
+      buildFileShellItem(0x31, "Example", "Example", 0x0010, 0),
+      buildFileShellItem(0x32, "APP.EXE", "app.exe", 0x0020, 12345)
+    ];
+    const idListSize = items.reduce((sum, item) => sum + item.length, 0) + 2;
+    const list = new Uint8Array(2 + idListSize).fill(0);
+    const ldv = new DataView(list.buffer);
+    ldv.setUint16(0, idListSize, true);
+    let cursor = 2;
+    items.forEach(item => {
+      list.set(item, cursor);
+      cursor += item.length;
+    });
+    ldv.setUint16(cursor, 0, true);
+    return list;
+  };
+
+  const idList = buildIdList();
 
   const linkInfo = buildLinkInfo();
   const strings = [
@@ -409,9 +548,19 @@ export const createLnkFile = () => {
   ];
   const envBlock = buildEnvironmentBlock("%USERPROFILE%\\Example\\app.exe");
   const knownFolderBlock = buildKnownFolderBlock();
+  const propertyStoreBlock = buildPropertyStoreBlock();
   const terminalBlock = new Uint8Array(4).fill(0);
 
-  const bytes = concatParts([header, idList, linkInfo, ...strings, envBlock, knownFolderBlock, terminalBlock]);
+  const bytes = concatParts([
+    header,
+    idList,
+    linkInfo,
+    ...strings,
+    envBlock,
+    knownFolderBlock,
+    propertyStoreBlock,
+    terminalBlock
+  ]);
   return new MockFile(bytes, "sample.lnk", "application/octet-stream");
 };
 

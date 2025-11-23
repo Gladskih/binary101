@@ -1,4 +1,5 @@
 "use strict";
+/* eslint-disable max-lines */
 
 import { dd, rowFlags, safe } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
@@ -55,6 +56,7 @@ const formatSize = value => (value ? formatHumanSize(value) : "-");
 const renderHint = text => `<div class="smallNote">${safe(text)}</div>`;
 
 const buildTargetPath = lnk => {
+  if (lnk.resolvedPath) return lnk.resolvedPath;
   const info = lnk.linkInfo || {};
   const base = info.localBasePathUnicode || info.localBasePath;
   const suffix = info.commonPathSuffixUnicode || info.commonPathSuffix;
@@ -150,6 +152,37 @@ const renderNetworkInfo = network => {
   return parts.join("");
 };
 
+const formatPropertyValue = value => {
+  if (value === null || value === undefined) return "-";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "bigint") return value.toString();
+  return String(value);
+};
+
+const renderPropertyStore = parsed => {
+  const storages = parsed?.storages || [];
+  if (!storages.length) return `<div class="smallNote">Property store present but empty.</div>`;
+  const out = [];
+  storages.forEach(storage => {
+    const header = storage.formatId ? `FMTID ${safe(storage.formatId)}` : "Property storage";
+    const suffix = storage.truncated ? " (truncated)" : "";
+    out.push(`<div class="smallNote">${header}${suffix}</div>`);
+    if (storage.properties?.length) {
+      out.push(`<ul class="smallNote">`);
+      storage.properties.forEach(prop => {
+        const name = prop.name || `Property ${prop.id}`;
+        const type = prop.typeName || (prop.type != null ? `Type ${toHex32(prop.type, 4)}` : null);
+        const value = formatPropertyValue(prop.value);
+        const trimmedType = type ? ` (${safe(type)})` : "";
+        const truncated = prop.truncated ? " [truncated]" : "";
+        out.push(`<li>${safe(name)}${trimmedType}: ${safe(value)}${truncated}</li>`);
+      });
+      out.push(`</ul>`);
+    }
+  });
+  return out.join("");
+};
+
 const renderLinkInfo = (lnk, out) => {
   const info = lnk.linkInfo;
   if (!info) return;
@@ -161,6 +194,8 @@ const renderLinkInfo = (lnk, out) => {
   out.push(dd("Common path suffix", safe(info.commonPathSuffixUnicode || info.commonPathSuffix || "-")));
   out.push(dd("Volume", renderVolumeInfo(info.volume)));
   out.push(dd("Network", renderNetworkInfo(info.network) || "-"));
+  const resolved = lnk.resolvedPath || lnk.idList?.resolvedPath || null;
+  if (resolved) out.push(dd("Resolved path", safe(resolved)));
   if (info.truncated) {
     out.push(`<div class="smallNote">LinkInfo extends beyond file size.</div>`);
   }
@@ -200,12 +235,33 @@ const renderIdList = (lnk, out) => {
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">LinkTargetIDList</h4>`);
   out.push(`<dl>`);
   out.push(dd("Size", `${idList.size} bytes`));
-  out.push(dd("Items", idList.items?.length ? idList.items.length.toString() : "0"));
+  const itemCount = idList.items?.length ? idList.items.length.toString() : "0";
+  out.push(dd("Items", itemCount));
   if (idList.truncated) out.push(`<div class="smallNote">ID list truncated</div>`);
   out.push(`</dl>`);
+  if (idList.items?.length) {
+    out.push(
+      `<table class="table"><thead><tr><th>#</th><th>Type</th><th>Short name</th><th>Long name</th><th>Size</th><th>Modified (UTC)</th><th>Attributes</th></tr></thead><tbody>`
+    );
+    idList.items.forEach(item => {
+      const typeLabel = item.typeName || item.typeHex || "-";
+      const typeTitle = item.typeHex ? `${typeLabel} (${item.typeHex})` : typeLabel;
+      out.push(
+        `<tr><td>${item.index ?? ""}</td>` +
+          `<td title="${safe(typeTitle)}">${safe(typeLabel)}</td>` +
+          `<td>${safe(item.shortName || "-")}</td>` +
+          `<td>${safe(item.longName || "-")}</td>` +
+          `<td>${item.fileSize != null ? item.fileSize.toString() : "-"}</td>` +
+          `<td>${safe(item.modified || "-")}</td>` +
+          `<td>${item.attributes != null ? safe(toHex32(item.attributes, 4)) : "-"}</td>` +
+        `</tr>`
+      );
+    });
+    out.push(`</tbody></table>`);
+  }
   out.push(
     renderHint(
-      "ID lists are shell item IDs (PIDLs) that encode the target location in a shell-neutral way (e.g., control panel items)."
+      "ID lists are shell item IDs (PIDLs) that describe the target in shell terms. Each item is a segment (root, drive, folder, file); Control Panel or special folders are also expressed this way."
     )
   );
   out.push(`</section>`);
@@ -217,6 +273,24 @@ const describeBlock = block => {
     const ansi = block.parsed.ansi ? safe(block.parsed.ansi) : "-";
     const unicode = block.parsed.unicode ? safe(block.parsed.unicode) : "-";
     return `<div class="smallNote">ANSI: ${ansi}<br/>Unicode: ${unicode}</div>`;
+  }
+  if (block.signature >>> 0 === 0xa0000003) {
+    const t = block.parsed || {};
+    const machine = t.machineId ? `Machine: ${safe(t.machineId)}<br/>` : "";
+    const droid = t.droid ? `Droid: ${safe(t.droid)}<br/>` : "";
+    const birth = t.droidBirth ? `Birth droid: ${safe(t.droidBirth)}<br/>` : "";
+    return (
+      `<div class="smallNote">Tracker data: shell tracking IDs to find the target after moves/renames.<br/>` +
+      `${machine}${droid}${birth}</div>`
+    );
+  }
+  if (block.signature >>> 0 === 0xa0000009) {
+    return renderPropertyStore(block.parsed);
+  }
+  if (block.signature >>> 0 === 0xa000000c) {
+    const count = block.parsed?.items?.length ?? 0;
+    const terminator = block.parsed?.terminatorPresent ? "" : " (no terminator)";
+    return `<div class="smallNote">Vista+ IDList: ${count} item(s)${terminator}</div>`;
   }
   if (block.parsed.codePage != null) {
     return `<div class="smallNote">Code page: ${block.parsed.codePage}</div>`;
@@ -247,12 +321,7 @@ const renderExtraData = (lnk, out) => {
   out.push(`</ul>`);
   out.push(
     renderHint(
-      "Extra data blocks carry optional hints for newer Windows versions: environment path variants, known folders, console settings, or other metadata."
-    )
-  );
-  out.push(
-    renderHint(
-      "Each block starts with a size + signature (shown above). Unknown signatures are vendor- or shell-extensions; truncated blocks often mean the shortcut was cut short during download/copy."
+      "Extra data blocks carry optional hints for newer Windows versions: environment path variants, known folders, property stores, console settings, or other metadata. Tracker data (0xa0000003) holds shell tracking IDs and machine/volume hints used to find the target after moves/renames. Each block starts with a size and signature; unknown signatures come from shell extensions, and truncation often means the shortcut was cut short during copy/download."
     )
   );
   out.push(`</section>`);

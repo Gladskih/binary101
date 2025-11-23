@@ -12,6 +12,7 @@ import {
   readGuid,
   showCommandName
 } from "./utils.js";
+import { parsePidlItems } from "./pidl.js";
 
 const parseLinkHeader = (dv, warnings) => {
   if (dv.byteLength < SHELL_LINK_HEADER_SIZE) {
@@ -63,31 +64,43 @@ const parseIdList = (dv, offset, warnings) => {
   if (end > dv.byteLength) {
     warnings.push("LinkTargetIDList extends beyond the file size.");
   }
-  const items = [];
-  let cursor = offset + 2;
-  while (cursor + 2 <= Math.min(end, dv.byteLength)) {
-    const itemSize = dv.getUint16(cursor, true);
-    if (itemSize === 0) break;
-    if (itemSize < 2) {
-      warnings.push("Encountered malformed IDList item with size < 2.");
-      break;
-    }
-    const itemEnd = cursor + itemSize;
-    const truncated = itemEnd > dv.byteLength || itemEnd > end;
-    items.push({
-      size: itemSize,
-      truncated,
-      offset: cursor
-    });
-    if (truncated) break;
-    cursor = itemEnd;
-  }
+  const bodyStart = offset + 2;
+  const bodyEnd = Math.min(end, dv.byteLength);
+  const { items, terminatorPresent } = parsePidlItems(dv, bodyStart, bodyEnd, warnings);
+  const resolvedPath = buildPidlPath(items);
   return {
     size: idListSize,
     items,
+    terminatorPresent,
     truncated: end > dv.byteLength,
+    resolvedPath,
     totalSize: Math.min(idListSize + 2, dv.byteLength - offset)
   };
+};
+
+const buildPidlPath = items => {
+  if (!Array.isArray(items) || !items.length) return null;
+  const parts = [];
+  const driveFromItem = item => {
+    const text = item?.longName || item?.shortName;
+    if (!text) return null;
+    const match = text.match(/^([A-Za-z]):?/);
+    return match ? `${match[1].toUpperCase()}:` : null;
+  };
+  const cleanSegment = text => (text ? text.replace(/[\\/]+/g, "").trim() : null);
+  items.forEach(item => {
+    if (!item || item.typeName === "Root") return;
+    if (item.typeName === "Drive") {
+      const drive = driveFromItem(item);
+      if (drive) parts.push(drive);
+      return;
+    }
+    const label = cleanSegment(item.longName || item.shortName);
+    if (label) parts.push(label);
+  });
+  if (!parts.length) return null;
+  const start = parts[0].endsWith(":") ? [parts.shift()] : [];
+  return [...start, ...parts].join("\\");
 };
 
 const parseStringData = (dv, offset, linkFlags, warnings, isUnicode) => {
@@ -143,6 +156,35 @@ export async function parseLnk(file) {
   cursor = stringData.endOffset || cursor;
 
   const extraData = parseExtraData(dv, cursor, warnings);
+  const linkInfoBase = linkInfo?.localBasePathUnicode || linkInfo?.localBasePath || null;
+  const linkInfoSuffix = linkInfo?.commonPathSuffixUnicode || linkInfo?.commonPathSuffix || null;
+  const linkInfoPath =
+    linkInfoBase || linkInfoSuffix
+      ? [linkInfoBase, linkInfoSuffix && linkInfoBase ? linkInfoSuffix : null]
+          .filter(Boolean)
+          .join(linkInfoBase ? "\\" : "")
+      : null;
+  const looksAbsolutePath = value =>
+    typeof value === "string" && (/^[a-z]:[\\/]/i.test(value) || value.startsWith("\\\\"));
+  const joinWorkingAndRelative = (workingDir, relativePath) => {
+    if (!relativePath) return null;
+    if (looksAbsolutePath(relativePath)) return relativePath;
+    if (!workingDir) return null;
+    const trimmedBase = workingDir.replace(/[\\/]+$/, "");
+    const trimmedRel = relativePath.replace(/^[.\\/+]+/, "").replace(/^\\\\/, "");
+    if (!trimmedRel) return trimmedBase;
+    return `${trimmedBase}\\${trimmedRel}`;
+  };
+  const propertyStorePath = extraData?.blocks
+    ?.filter(block => (block.signature >>> 0) === 0xa0000009)
+    ?.flatMap(block => block.parsed?.storages || [])
+    ?.flatMap(storage => storage.properties || [])
+    ?.map(prop => prop?.value)
+    ?.find(looksAbsolutePath) || null;
+  const stringBasedPath =
+    joinWorkingAndRelative(stringData.workingDir, stringData.relativePath) ||
+    joinWorkingAndRelative(linkInfoBase, stringData.relativePath);
+  const resolvedPath = propertyStorePath || linkInfoPath || stringBasedPath || idList?.resolvedPath || null;
 
   return {
     header,
@@ -150,6 +192,7 @@ export async function parseLnk(file) {
     linkInfo,
     stringData,
     extraData,
+    resolvedPath,
     warnings
   };
 }

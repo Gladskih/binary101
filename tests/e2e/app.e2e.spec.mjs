@@ -13,7 +13,8 @@ import {
   createTarFile,
   createWebpFile,
   createZipFile,
-  createZipWithEntries
+  createZipWithEntries,
+  createLnkFile
 } from "../fixtures/sample-files.mjs";
 
 const toUpload = file => ({
@@ -94,6 +95,13 @@ test.describe("file type detection", () => {
       detailText: "TAR overview"
     },
     {
+      name: "Windows shortcut (.lnk)",
+      file: createLnkFile,
+      expectedKind: "Windows shortcut (.lnk)",
+      term: "Windows shortcut details",
+      detailText: "Shortcut overview"
+    },
+    {
       name: "ZIP",
       file: createZipFile,
       expectedKind: "ZIP archive",
@@ -161,6 +169,15 @@ test.describe("file type detection", () => {
       }
     });
   }
+
+  test("shows Windows shortcut property store data", async ({ page }) => {
+    const mockFile = createLnkFile();
+    await page.setInputFiles("#fileInput", toUpload(mockFile));
+    await expectBaseDetails(page, mockFile.name, "Windows shortcut (.lnk)");
+    await expect(page.locator("#peDetailsTerm")).toHaveText("Windows shortcut details");
+    await expect(page.locator("#peDetailsValue")).toContainText("System.Link.TargetParsingPath");
+    await expect(page.locator("#peDetailsValue")).toContainText("C:\\Program Files\\Example\\app.exe");
+  });
 
   test("detects Mach-O binaries without renderer detail", async ({ page }) => {
     await page.setInputFiles("#fileInput", {
