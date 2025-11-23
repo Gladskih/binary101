@@ -20,7 +20,8 @@ import {
   createZipFile,
   createRar4File,
   createRar5File,
-  createDosMzExe
+  createDosMzExe,
+  createLnkFile
 } from "../fixtures/sample-files.mjs";
 import { MockFile } from "../helpers/mock-file.mjs";
 
@@ -58,6 +59,7 @@ test("detectBinaryType recognizes common binary formats", async () => {
     detectBinaryType(createTarFile()),
     detectBinaryType(createSevenZipFile()),
     detectBinaryType(createRar5File()),
+    detectBinaryType(createLnkFile()),
     detectBinaryType(new MockFile(textEncoder.encode("plain text sample"), "note.txt", "text/plain"))
   ]);
 
@@ -69,7 +71,8 @@ test("detectBinaryType recognizes common binary formats", async () => {
   assert.match(detections[5], /tar archive/i);
   assert.match(detections[6], /^7z archive v0\.4/);
   assert.match(detections[7], /^RAR archive/);
-  assert.strictEqual(detections[8], "Text file");
+  assert.strictEqual(detections[8], "Windows shortcut (.lnk)");
+  assert.strictEqual(detections[9], "Text file");
 });
 
 test("detectBinaryType distinguishes DOS MZ executables from PE", async () => {
@@ -133,6 +136,14 @@ test("parseForUi parses PDF cross-reference data", async () => {
     assert.ok(pdf.header);
     assert.ok(pdf.xref);
     assert.ok(Array.isArray(pdf.issues));
+  });
+});
+
+test("parseForUi parses Windows shortcuts", async () => {
+  await assertParsed(createLnkFile(), "lnk", lnk => {
+    assert.strictEqual(lnk.linkInfo.localBasePath, "C:\\Program Files\\Example");
+    assert.strictEqual(lnk.stringData.relativePath, ".\\Example\\app.exe");
+    assert.ok(Array.isArray(lnk.extraData.blocks));
   });
 });
 

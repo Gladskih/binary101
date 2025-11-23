@@ -17,6 +17,7 @@ import { hasSevenZipSignature, parseSevenZip } from "./sevenz/index.js";
 import { hasTarSignature, parseTar } from "./tar/index.js";
 import { hasRarSignature, parseRar } from "./rar/index.js";
 import { parseMz } from "./mz/index.js";
+import { hasShellLinkSignature, parseLnk } from "./lnk/index.js";
 
 // Quick magic-based detectors for non-PE types (label only for now)
 function detectELF(dv) {
@@ -317,6 +318,10 @@ export async function parseForUi(file) {
   const dv = new DataView(
     await file.slice(0, Math.min(file.size, 65536)).arrayBuffer()
   );
+  if (hasShellLinkSignature(dv)) {
+    const lnk = await parseLnk(file);
+    if (lnk) return { analyzer: "lnk", parsed: lnk };
+  }
   if (detectELF(dv)) {
     const elf = await parseElf(file);
     if (elf) return { analyzer: "elf", parsed: elf };

@@ -47,6 +47,61 @@ const u32le = value => [
   (value >> 16) & 0xff,
   (value >> 24) & 0xff
 ];
+const FILETIME_EPOCH_BIAS_MS = 11644473600000n;
+
+const align4 = value => (value + 3) & ~3;
+
+const encodeUtf16Le = text => {
+  const bytes = new Uint8Array(text.length * 2);
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    bytes[i * 2] = code & 0xff;
+    bytes[i * 2 + 1] = code >> 8;
+  }
+  return bytes;
+};
+
+const makeNullTerminatedAscii = text => {
+  const data = encoder.encode(text);
+  const out = new Uint8Array(data.length + 1);
+  out.set(data, 0);
+  out[out.length - 1] = 0;
+  return out;
+};
+
+const makeNullTerminatedUnicode = text => {
+  const data = encodeUtf16Le(text);
+  const out = new Uint8Array(data.length + 2);
+  out.set(data, 0);
+  return out;
+};
+
+const concatParts = parts => {
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(total);
+  let cursor = 0;
+  parts.forEach(part => {
+    out.set(part, cursor);
+    cursor += part.length;
+  });
+  return out;
+};
+
+const writeGuid = (buffer, offset, guidText) => {
+  const parts = guidText.split("-");
+  const data1 = Number.parseInt(parts[0], 16);
+  const data2 = Number.parseInt(parts[1], 16);
+  const data3 = Number.parseInt(parts[2], 16);
+  const tail = parts[3] + parts[4];
+  const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  view.setUint32(offset, data1, true);
+  view.setUint16(offset + 4, data2, true);
+  view.setUint16(offset + 6, data3, true);
+  for (let i = 0; i < 8; i += 1) {
+    const byte = Number.parseInt(tail.slice(i * 2, i * 2 + 2), 16);
+    buffer[offset + 8 + i] = byte;
+  }
+};
 
 export const createPngFile = () =>
   new MockFile(
@@ -228,6 +283,136 @@ export const createZipWithEntries = () => {
     offset += part.length;
   });
   return new MockFile(total, "entries.zip", "application/zip");
+};
+
+export const createLnkFile = () => {
+  const linkFlags =
+    0x00000001 | 0x00000002 | 0x00000004 | 0x00000008 | 0x00000010 | 0x00000020 | 0x00000040 | 0x00000080;
+  const header = new Uint8Array(0x4c).fill(0);
+  const hdv = new DataView(header.buffer);
+  hdv.setUint32(0, 0x4c, true);
+  writeGuid(header, 4, "00021401-0000-0000-c000-000000000046");
+  hdv.setUint32(0x14, linkFlags, true);
+  hdv.setUint32(0x18, 0x00000020, true);
+  const filetime = (BigInt(Date.UTC(2024, 0, 2, 12, 0, 0)) + FILETIME_EPOCH_BIAS_MS) * 10000n;
+  hdv.setBigUint64(0x1c, filetime, true);
+  hdv.setBigUint64(0x24, filetime, true);
+  hdv.setBigUint64(0x2c, filetime, true);
+  hdv.setUint32(0x34, 12345, true);
+  hdv.setUint32(0x38, 1, true);
+  hdv.setUint32(0x3c, 1, true);
+
+  const buildVolumeId = () => {
+    const label = makeNullTerminatedAscii("DATA");
+    const size = 0x10 + label.length;
+    const vol = new Uint8Array(size).fill(0);
+    const vdv = new DataView(vol.buffer);
+    vdv.setUint32(0, size, true);
+    vdv.setUint32(4, 3, true);
+    vdv.setUint32(8, 0x12345678, true);
+    vdv.setUint32(12, 0x10, true);
+    vol.set(label, 0x10);
+    return vol;
+  };
+
+  const volumeId = buildVolumeId();
+  const localBasePath = makeNullTerminatedAscii("C:\\Program Files\\Example");
+  const commonPathSuffix = makeNullTerminatedAscii("app.exe");
+  const localBasePathUnicode = makeNullTerminatedUnicode("C:\\Program Files\\Example");
+  const commonPathSuffixUnicode = makeNullTerminatedUnicode("app.exe");
+
+  const buildLinkInfo = () => {
+    const headerSize = 0x24;
+    let cursor = headerSize;
+    const offsets = {};
+    const add = (key, length) => {
+      cursor = align4(cursor);
+      offsets[key] = cursor;
+      cursor += length;
+    };
+    add("volumeId", volumeId.length);
+    add("localBasePath", localBasePath.length);
+    add("commonPathSuffix", commonPathSuffix.length);
+    add("localBasePathUnicode", localBasePathUnicode.length);
+    add("commonPathSuffixUnicode", commonPathSuffixUnicode.length);
+    const size = align4(cursor);
+    const info = new Uint8Array(size).fill(0);
+    const idv = new DataView(info.buffer);
+    idv.setUint32(0, size, true);
+    idv.setUint32(4, headerSize, true);
+    idv.setUint32(8, 0x00000001, true);
+    idv.setUint32(0x0c, offsets.volumeId, true);
+    idv.setUint32(0x10, offsets.localBasePath, true);
+    idv.setUint32(0x14, 0, true);
+    idv.setUint32(0x18, offsets.commonPathSuffix, true);
+    idv.setUint32(0x1c, offsets.localBasePathUnicode, true);
+    idv.setUint32(0x20, offsets.commonPathSuffixUnicode, true);
+    info.set(volumeId, offsets.volumeId);
+    info.set(localBasePath, offsets.localBasePath);
+    info.set(commonPathSuffix, offsets.commonPathSuffix);
+    info.set(localBasePathUnicode, offsets.localBasePathUnicode);
+    info.set(commonPathSuffixUnicode, offsets.commonPathSuffixUnicode);
+    return info;
+  };
+
+  const buildUnicodeStringData = text => {
+    const totalChars = text.length + 1;
+    const bytes = new Uint8Array(2 + totalChars * 2).fill(0);
+    const sdv = new DataView(bytes.buffer);
+    sdv.setUint16(0, totalChars, true);
+    for (let i = 0; i < text.length; i += 1) {
+      sdv.setUint16(2 + i * 2, text.charCodeAt(i), true);
+    }
+    return bytes;
+  };
+
+  const buildEnvironmentBlock = target => {
+    const blockSize = 0x314;
+    const block = new Uint8Array(blockSize).fill(0);
+    const bdv = new DataView(block.buffer);
+    bdv.setUint32(0, blockSize, true);
+    bdv.setUint32(4, 0xa0000001, true);
+    const ansi = makeNullTerminatedAscii(target);
+    const unicode = makeNullTerminatedUnicode(target);
+    block.set(ansi.slice(0, 260), 8);
+    block.set(unicode.slice(0, 520), 8 + 260);
+    return block;
+  };
+
+  const buildKnownFolderBlock = () => {
+    const block = new Uint8Array(0x1c).fill(0);
+    const kdv = new DataView(block.buffer);
+    kdv.setUint32(0, 0x1c, true);
+    kdv.setUint32(4, 0xa000000b, true);
+    writeGuid(block, 8, "fdd39ad0-238f-46af-adb4-6c85480369c7");
+    kdv.setUint32(0x18, 0x10, true);
+    return block;
+  };
+
+  const idItemData = new Uint8Array([0x11, 0x22, 0x33, 0x44]);
+  const idItemSize = idItemData.length + 2;
+  const idListSize = idItemSize + 2;
+  const idList = new Uint8Array(2 + idListSize).fill(0);
+  const ildv = new DataView(idList.buffer);
+  ildv.setUint16(0, idListSize, true);
+  ildv.setUint16(2, idItemSize, true);
+  idList.set(idItemData, 4);
+  ildv.setUint16(4 + idItemData.length, 0, true);
+
+  const linkInfo = buildLinkInfo();
+  const strings = [
+    buildUnicodeStringData("Sample shortcut"),
+    buildUnicodeStringData(".\\Example\\app.exe"),
+    buildUnicodeStringData("C:\\Program Files\\Example"),
+    buildUnicodeStringData("--demo"),
+    buildUnicodeStringData("%SystemRoot%\\system32\\shell32.dll,0")
+  ];
+  const envBlock = buildEnvironmentBlock("%USERPROFILE%\\Example\\app.exe");
+  const knownFolderBlock = buildKnownFolderBlock();
+  const terminalBlock = new Uint8Array(4).fill(0);
+
+  const bytes = concatParts([header, idList, linkInfo, ...strings, envBlock, knownFolderBlock, terminalBlock]);
+  return new MockFile(bytes, "sample.lnk", "application/octet-stream");
 };
 
 export const createDosMzExe = () => {

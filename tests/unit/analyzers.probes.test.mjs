@@ -161,7 +161,13 @@ test("probeByMagic detects disk images and miscellaneous binary formats", () => 
     { bytes: djvu, label: "DjVu document" },
     { bytes: [0x0a, 0x0d, 0x0d, 0x0a], label: "PCAP-NG capture file" },
     { bytes: [0xa1, 0xb2, 0xc3, 0xd4], label: "PCAP capture file" },
-    { bytes: [0x4c, 0x00, 0x00, 0x00], label: "Windows shortcut (.lnk)" },
+    {
+      bytes: [
+        0x4c, 0x00, 0x00, 0x00, 0x01, 0x14, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x46
+      ],
+      label: "Windows shortcut (.lnk)"
+    },
     { bytes: [0x00, 0x61, 0x73, 0x6d], label: "WebAssembly binary (WASM)" },
     { bytes: ascii("dex\n035\0"), label: "Android DEX bytecode" },
     { bytes: [0x3f, 0x5f, 0x03, 0x00], label: "Windows Help file (HLP)" }

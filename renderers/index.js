@@ -14,3 +14,4 @@ export { renderSevenZip } from "./sevenz/index.js";
 export { renderTar } from "./tar/index.js";
 export { renderRar } from "./rar/index.js";
 export { renderMz } from "./mz/index.js";
+export { renderLnk } from "./lnk/index.js";

@@ -559,9 +559,23 @@ function detectPcapNg(dv) {
 }
 
 function detectLnk(dv) {
-  if (dv.byteLength < 4) return null;
+  if (dv.byteLength < 0x14) return null;
   const size = dv.getUint32(0, true);
-  return size === 0x0000004c ? "Windows shortcut (.lnk)" : null;
+  if (size !== 0x0000004c) return null;
+  const clsid =
+    dv.getUint32(4, true) === 0x00021401 &&
+    dv.getUint16(8, true) === 0x0000 &&
+    dv.getUint16(10, true) === 0x0000 &&
+    dv.getUint8(12) === 0xc0 &&
+    dv.getUint8(13) === 0x00 &&
+    dv.getUint8(14) === 0x00 &&
+    dv.getUint8(15) === 0x00 &&
+    dv.getUint8(16) === 0x00 &&
+    dv.getUint8(17) === 0x00 &&
+    dv.getUint8(18) === 0x00 &&
+    dv.getUint8(19) === 0x46;
+  if (!clsid) return null;
+  return "Windows shortcut (.lnk)";
 }
 
 function detectWasM(dv) {

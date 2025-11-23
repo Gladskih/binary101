@@ -18,7 +18,8 @@ import {
   renderTar,
   renderWebp,
   renderZip,
-  renderRar
+  renderRar,
+  renderLnk
 } from "../../renderers/index.js";
 import {
   createElfFile,
@@ -34,7 +35,8 @@ import {
   createWebpFile,
   createZipFile,
   createRar5File,
-  createDosMzExe
+  createDosMzExe,
+  createLnkFile
 } from "../fixtures/sample-files.mjs";
 
 class TestDomParser extends XmlDomParser {
@@ -90,6 +92,11 @@ test("renderers produce readable HTML output", async () => {
   assert.match(mp3Html, /valueHint/);
   assert.match(mp3Html, /optionsRow/);
   assert.match(mp3Html, /CD-quality rate/);
+
+  const lnk = await parseOnly(createLnkFile());
+  const lnkHtml = renderLnk(lnk);
+  assert.match(lnkHtml, /Shortcut overview/);
+  assert.match(lnkHtml, /Shell link header/);
 
   const zip = await parseOnly(createZipFile());
   zip.issues = ["central directory synthetic issue"];

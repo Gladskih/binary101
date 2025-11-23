@@ -18,6 +18,7 @@ import {
   renderTar,
   renderRar,
   renderMz,
+  renderLnk,
 } from "./renderers/index.js";
 import { escapeHtml } from "./html-utils.js";
 
@@ -165,6 +166,13 @@ function renderAnalysisIntoUi(analyzerName, parsedResult) {
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
     peDetailsValueElement.innerHTML = renderRar(parsedResult);
+    return;
+  }
+  if (analyzerName === "lnk" && parsedResult) {
+    peDetailsTermElement.textContent = "Windows shortcut details";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    peDetailsValueElement.innerHTML = renderLnk(parsedResult);
     return;
   }
   
