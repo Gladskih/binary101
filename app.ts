@@ -22,6 +22,7 @@ import {
 } from "./renderers/index.js";
 import { escapeHtml } from "./html-utils.js";
 import type { MzParseResult } from "./analyzers/mz/index.js";
+import type { ZipCentralDirectoryEntry, ZipParseResult } from "./analyzers/zip/index.js";
 
 const getElement = (id: string) => document.getElementById(id)!;
 
@@ -146,7 +147,7 @@ function renderAnalysisIntoUi(
     peDetailsTermElement.textContent = "ZIP details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = renderZip(parsedResult);
+    peDetailsValueElement.innerHTML = renderZip(parsedResult as ZipParseResult);
     return;
   }
   if (analyzerName === "sevenZip" && parsedResult) {
@@ -225,37 +226,22 @@ function renderAnalysisIntoUi(
   peDetailsValueElement.innerHTML = "";
 }
 
-type ZipCentralDirectoryEntryForUi = {
-  index: number;
-  fileName?: string;
-  dataOffset?: number | null;
-  dataLength?: number | null;
-  compressionMethod: number;
-  extractError?: string;
-};
-
-type ZipParsedResultForUi = {
-  centralDirectory?: {
-    entries?: ZipCentralDirectoryEntryForUi[];
-  };
-};
-
-const sanitizeDownloadName = (entry: ZipCentralDirectoryEntryForUi): string => {
+const sanitizeDownloadName = (entry: ZipCentralDirectoryEntry): string => {
   const name = typeof entry.fileName === "string" && entry.fileName.length ? entry.fileName : "entry.bin";
   const parts = name.split(/[\\/]/);
   const last = parts[parts.length - 1] || "entry.bin";
   return last.trim().length ? last.trim() : "entry.bin";
 };
 
-const findZipEntryByIndex = (index: number): ZipCentralDirectoryEntryForUi | null => {
+const findZipEntryByIndex = (index: number): ZipCentralDirectoryEntry | null => {
   if (currentAnalyzerName !== "zip") return null;
-  const parsed = currentParsedResult as ZipParsedResultForUi | null;
+  const parsed = currentParsedResult as ZipParseResult | null;
   const entries = parsed?.centralDirectory?.entries;
   if (!Array.isArray(entries)) return null;
   return entries.find(entry => entry.index === index) || null;
 };
 
-const sliceZipEntryBlob = (entry: ZipCentralDirectoryEntryForUi): Blob => {
+const sliceZipEntryBlob = (entry: ZipCentralDirectoryEntry): Blob => {
   if (!currentFile) throw new Error("No file selected.");
   if (entry.dataOffset == null || entry.dataLength == null) {
     throw new Error("Entry is missing data bounds.");
@@ -264,7 +250,7 @@ const sliceZipEntryBlob = (entry: ZipCentralDirectoryEntryForUi): Blob => {
 };
 
 const decompressZipEntry = async (
-  entry: ZipCentralDirectoryEntryForUi,
+  entry: ZipCentralDirectoryEntry,
   compressedBlob: Blob
 ): Promise<Blob> => {
   if (entry.compressionMethod === 0) return compressedBlob;

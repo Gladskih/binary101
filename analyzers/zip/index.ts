@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
-// @ts-nocheck
 "use strict";
 import { formatUnixSecondsOrDash, readAsciiString } from "../../binary-utils.js";
+
 const EOCD_SIGNATURE = 0x06054b50;
 const ZIP64_EOCD_LOCATOR_SIGNATURE = 0x07064b50;
 const ZIP64_EOCD_SIGNATURE = 0x06064b50;
@@ -12,7 +12,87 @@ const MIN_LOCAL_HEADER_SIZE = 30;
 const MAX_EOCD_SCAN = 131072;
 const MAX_CENTRAL_DIRECTORY_BYTES = 8 * 1024 * 1024;
 const UTF8_DECODER = new TextDecoder("utf-8", { fatal: false });
-const COMPRESSION_METHODS = new Map([
+
+export interface ZipEndOfCentralDirectory {
+  offset: number;
+  diskNumber: number;
+  centralDirDisk: number;
+  entriesThisDisk: number;
+  totalEntries: number;
+  centralDirSize: number;
+  centralDirOffset: number;
+  comment: string;
+  commentLength: number;
+}
+
+export interface Zip64Locator {
+  offset: number;
+  diskWithEocd: number;
+  zip64EocdOffset: bigint;
+  totalDisks: number;
+}
+
+export interface Zip64EndOfCentralDirectory {
+  offset: number;
+  size: number;
+  versionMadeBy: number;
+  versionNeeded: number;
+  diskNumber: number;
+  centralDirDisk: number;
+  entriesThisDisk: bigint;
+  totalEntries: bigint;
+  centralDirSize: bigint;
+  centralDirOffset: bigint;
+}
+
+export interface ZipCentralDirectoryEntryLocalHeaderInfo {
+  nameLength: number;
+  extraLength: number;
+  offset: number;
+}
+
+export interface ZipCentralDirectoryEntry {
+  index: number;
+  fileName: string;
+  comment: string;
+  compressionMethod: number;
+  compressionName: string;
+  flags: number;
+  isUtf8: boolean;
+  isEncrypted: boolean;
+  usesDataDescriptor: boolean;
+  modTimeIso: string | null;
+  crc32: number;
+  compressedSize: number | bigint;
+  uncompressedSize: number | bigint;
+  diskNumberStart: number;
+  internalAttrs: number;
+  externalAttrs: number;
+  localHeaderOffset: number | bigint;
+  localHeader?: ZipCentralDirectoryEntryLocalHeaderInfo;
+  dataOffset?: number;
+  dataLength?: number | null;
+  dataEnd?: number | null;
+  extractError?: string;
+}
+
+export interface ZipCentralDirectoryInfo {
+  offset: number;
+  size: number;
+  parsedSize: number;
+  truncated: boolean;
+  entries: ZipCentralDirectoryEntry[];
+}
+
+export interface ZipParseResult {
+  eocd: ZipEndOfCentralDirectory;
+  zip64Locator: Zip64Locator | null;
+  zip64: Zip64EndOfCentralDirectory | null;
+  centralDirectory: ZipCentralDirectoryInfo | null;
+  issues: string[];
+}
+
+const COMPRESSION_METHODS = new Map<number, string>([
   [0, "Stored"],
   [1, "Shrunk"],
   [6, "Imploded"],
@@ -30,14 +110,17 @@ const COMPRESSION_METHODS = new Map([
   [98, "PPMd"],
   [99, "AES encrypted"]
 ]);
-const readUtf8 = bytes => UTF8_DECODER.decode(bytes);
-const getSafeNumber = value => {
+const readUtf8 = (bytes: Uint8Array): string => UTF8_DECODER.decode(bytes);
+
+const getSafeNumber = (value: number | bigint): number | null => {
   if (typeof value === "number") return value;
   if (value <= Number.MAX_SAFE_INTEGER) return Number(value);
   return null;
 };
-const getBigUint64 = (dv, offset) => dv.getBigUint64(offset, true);
-const dosDateTimeToIso = (dosDate, dosTime) => {
+
+const getBigUint64 = (dv: DataView, offset: number): bigint => dv.getBigUint64(offset, true);
+
+const dosDateTimeToIso = (dosDate: number, dosTime: number): string | null => {
   const seconds = (dosTime & 0x1f) * 2;
   const minutes = (dosTime >> 5) & 0x3f;
   const hours = (dosTime >> 11) & 0x1f;
@@ -49,14 +132,18 @@ const dosDateTimeToIso = (dosDate, dosTime) => {
     Date.UTC(year, month - 1, day, hours, minutes, seconds) / 1000;
   return formatUnixSecondsOrDash(unixSeconds);
 };
-const readTailForEocd = async file => {
+
+const readTailForEocd = async (
+  file: File
+): Promise<{ baseOffset: number; dv: DataView }> => {
   const fileSize = file.size || 0;
   const probeSize = Math.min(fileSize, MAX_EOCD_SCAN);
   const start = Math.max(0, fileSize - probeSize);
   const buffer = await file.slice(start, fileSize).arrayBuffer();
   return { baseOffset: start, dv: new DataView(buffer) };
 };
-const parseEocd = (dv, baseOffset) => {
+
+const parseEocd = (dv: DataView, baseOffset: number): ZipEndOfCentralDirectory | null => {
   for (let i = dv.byteLength - MIN_EOCD_SIZE; i >= 0; i -= 1) {
     if (dv.getUint32(i, true) !== EOCD_SIGNATURE) continue;
     const commentLength = dv.getUint16(i + 20, true);
@@ -71,7 +158,7 @@ const parseEocd = (dv, baseOffset) => {
       commentLength > 0
         ? readAsciiString(dv, i + 22, Math.min(commentLength, 32768))
         : "";
-    return {
+    const eocd: ZipEndOfCentralDirectory = {
       offset: baseOffset + i,
       diskNumber,
       centralDirDisk,
@@ -82,13 +169,15 @@ const parseEocd = (dv, baseOffset) => {
       comment,
       commentLength
     };
+    return eocd;
   }
   return null;
 };
-const findZip64Locator = (dv, baseOffset) => {
+
+const findZip64Locator = (dv: DataView, baseOffset: number): Zip64Locator | null => {
   const locatorSize = 20;
   const limit = dv.byteLength - locatorSize;
-  let found = null;
+  let found: Zip64Locator | null = null;
   for (let i = 0; i <= limit; i += 1) {
     if (dv.getUint32(i, true) !== ZIP64_EOCD_LOCATOR_SIGNATURE) continue;
     const diskWithEocd = dv.getUint32(i + 4, true);
@@ -104,7 +193,11 @@ const findZip64Locator = (dv, baseOffset) => {
   return found;
 };
 
-const readDataView = async (file, offset, length) => {
+const readDataView = async (
+  file: File,
+  offset: number | null,
+  length: number
+): Promise<DataView | null> => {
   if (offset == null) return null;
   if (length <= 0) return new DataView(new ArrayBuffer(0));
   const fileSize = file.size || 0;
@@ -113,7 +206,12 @@ const readDataView = async (file, offset, length) => {
   const buffer = await file.slice(offset, offset + clampedLength).arrayBuffer();
   return new DataView(buffer);
 };
-const parseZip64Eocd = async (file, locator, issues) => {
+
+const parseZip64Eocd = async (
+  file: File,
+  locator: Zip64Locator,
+  issues: string[]
+): Promise<Zip64EndOfCentralDirectory | null> => {
   const offsetNumber = getSafeNumber(locator.zip64EocdOffset);
   if (offsetNumber == null) {
     issues.push("ZIP64 EOCD offset exceeds supported range.");
@@ -139,7 +237,7 @@ const parseZip64Eocd = async (file, locator, issues) => {
     issues.push("ZIP64 EOCD record is truncated.");
     return null;
   }
-  return {
+  const result: Zip64EndOfCentralDirectory = {
     offset: offsetNumber,
     size: totalSize,
     versionMadeBy: dv.getUint16(12, true),
@@ -151,9 +249,15 @@ const parseZip64Eocd = async (file, locator, issues) => {
     centralDirSize: getBigUint64(dv, 40),
     centralDirOffset: getBigUint64(dv, 48)
   };
+  return result;
 };
 
-const parseZip64Extra = (dv, start, length, entry) => {
+const parseZip64Extra = (
+  dv: DataView,
+  start: number,
+  length: number,
+  entry: ZipCentralDirectoryEntry
+): void => {
   let cursor = start;
   if (entry.uncompressedSize === 0xffffffff && cursor + 8 <= start + length) {
     entry.uncompressedSize = getBigUint64(dv, cursor);
@@ -172,8 +276,11 @@ const parseZip64Extra = (dv, start, length, entry) => {
   }
 };
 
-const parseCentralDirectoryEntries = (dv, issues) => {
-  const entries = [];
+const parseCentralDirectoryEntries = (
+  dv: DataView,
+  issues: string[]
+): ZipCentralDirectoryEntry[] => {
+  const entries: ZipCentralDirectoryEntry[] = [];
   let cursor = 0;
   let index = 0;
   while (cursor + 46 <= dv.byteLength) {
@@ -211,7 +318,7 @@ const parseCentralDirectoryEntries = (dv, issues) => {
       commentLength
     );
     const comment = commentLength ? readUtf8(commentBytes) : "";
-    const entry = {
+    const entry: ZipCentralDirectoryEntry = {
       index,
       fileName: name,
       comment,
@@ -257,10 +364,13 @@ const parseCentralDirectoryEntries = (dv, issues) => {
   return entries;
 };
 
-const annotateEntryDataOffsets = async (file, entries) => {
+const annotateEntryDataOffsets = async (
+  file: File,
+  entries: ZipCentralDirectoryEntry[]
+): Promise<void> => {
   const fileSize = file.size || 0;
   for (const entry of entries) {
-    const setExtractError = message => {
+    const setExtractError = (message: string): void => {
       if (!entry.extractError) entry.extractError = message;
     };
     const localOffset = getSafeNumber(entry.localHeaderOffset);
@@ -309,8 +419,8 @@ const annotateEntryDataOffsets = async (file, entries) => {
   }
 };
 
-export async function parseZip(file) {
-  const issues = [];
+export async function parseZip(file: File): Promise<ZipParseResult | null> {
+  const issues: string[] = [];
   const { baseOffset, dv: tailView } = await readTailForEocd(file);
   const eocd = parseEocd(tailView, baseOffset);
   if (!eocd) return null;
@@ -338,7 +448,7 @@ export async function parseZip(file) {
   const cdSize = getSafeNumber(cdSizeSource);
   if (cdOffset == null || cdSize == null) {
     issues.push("Central directory offset or size is outside supported range.");
-    return { eocd, zip64, centralDirectory: null, issues };
+    return { eocd, zip64Locator, zip64, centralDirectory: null, issues };
   }
   const cdEnd = cdOffset + cdSize;
   const fileSize = file.size || 0;
@@ -350,7 +460,7 @@ export async function parseZip(file) {
   const cdView = await readDataView(file, cdOffset, limitedSize);
   if (!cdView) {
     issues.push("Central directory could not be read.");
-    return { eocd, zip64, centralDirectory: null, issues };
+    return { eocd, zip64Locator, zip64, centralDirectory: null, issues };
   }
   const entries = parseCentralDirectoryEntries(cdView, issues);
   if (eocd && entries.length !== eocd.totalEntries) {
@@ -359,7 +469,7 @@ export async function parseZip(file) {
     );
   }
   await annotateEntryDataOffsets(file, entries);
-  return {
+  const result: ZipParseResult = {
     eocd,
     zip64Locator,
     zip64,
@@ -372,4 +482,5 @@ export async function parseZip(file) {
     },
     issues
   };
+  return result;
 }
