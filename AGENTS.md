@@ -37,6 +37,12 @@ Scope: the entire repository.
   - `const`/`let`, no `var`,
   - double quotes, semicolons, 1TBS brace style,
   - no unused variables.
+- Module design and naming:
+  - do **not** introduce new generically named modules such as `helpers`, `utils`, `extra`, `extensions`, or similar catch-all names; instead, choose names that describe the domain or responsibility,
+  - keep each module cohesive: it should have a single clear reason to change, rather than being a grab bag of unrelated helpers.
+- Test layout and coverage:
+  - add a dedicated test file per production module,
+  - for every new public function or module, cover both “happy paths” and **all known unhappy paths** and edge conditions (invalid inputs, truncation, boundary values, and other failure modes relevant to that unit).
 
 ## When Adding or Modifying Analyzers
 

@@ -6,7 +6,6 @@
 const MAX_TEXT_INSPECT_BYTES = 256;
 
 type ProbeResult = string | null;
-type MagicProbe = (dv: DataView) => ProbeResult;
 
 function toAsciiPrefix(dv: DataView, maxBytes: number): string {
   const limit = Math.min(dv.byteLength, maxBytes);
@@ -666,7 +665,7 @@ function detectPlainText(dv: DataView): ProbeResult {
   return "Text file";
 }
 
-const MAGIC_PROBES: MagicProbe[] = [
+const MAGIC_PROBES = [
   detectPdf,
   detectZip,
   detectGzip,
@@ -717,7 +716,7 @@ const MAGIC_PROBES: MagicProbe[] = [
   detectWinHelp
 ];
 
-const TEXT_PROBES: MagicProbe[] = [
+const TEXT_PROBES = [
   detectScriptShebang,
   detectHtml,
   detectFb2Xml,

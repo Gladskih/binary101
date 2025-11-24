@@ -46,6 +46,12 @@ All contributions must adhere to the project's code quality metrics and best pra
 - **Magic numbers**: Define named constants instead of using literal numbers.
 - **Identifiers**: Minimum 2 characters (except `_`, `i`, `j`, `k`, `x`, `y`).
 
+### Module Design and Naming
+
+- Prefer small, cohesive modules that have a single, clearly stated responsibility (“one reason to change”). 
+- Do **not** introduce new generically named modules such as `helpers`, `utils`, `extra`, `extensions`, or similar grab-bag names. If you feel tempted to add `helpers.ts`, it usually means there are at least two more meaningful modules hiding in that file.
+- When you need shared logic, group it by concept or section (for example `value-format`, `flags-view`, `semantics`, `signature`) rather than by the generic idea of “helping” another module.
+
 ### HTML Guidelines
 - Use semantic elements (`<header>`, `<nav>`, `<main>`, `<article>`, `<footer>`).
 - Include `alt` attributes for images and proper `<label>` elements for form inputs.
@@ -84,6 +90,14 @@ npm run test:coverage
 ```
 
 We encourage contributions that improve test coverage.
+
+#### Test Layout and Depth
+
+- Use **one test file per production module** whenever practical. 
+- For every new public function or module:
+  - write tests for the “happy paths” behavior, and
+  - write tests for **all known unhappy paths and edge cases**: invalid inputs, truncated data, out-of-bounds offsets, negative or extreme values, and any other failure modes that are meaningful for that unit.
+- When adding tests, follow a red–green cycle: make sure each new test fails at least once for the intended reason before making it pass.
 
 ## Project Structure
 
