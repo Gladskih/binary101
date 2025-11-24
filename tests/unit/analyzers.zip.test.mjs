@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseZip } from "../../analyzers/zip/index.js";
+import { parseZip } from "../../dist/analyzers/zip/index.js";
 
 // Mock the File object for Node.js environment
 class MockFile {

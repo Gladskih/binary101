@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { hasTarSignature } from "../../analyzers/tar/index.js";
+import { hasTarSignature } from "../../dist/analyzers/tar/index.js";
 
 // Helper to create a DataView for testing
 const createDataView = (content, offset = 0) => {

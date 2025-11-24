@@ -2,9 +2,9 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseClrDirectory, parseSecurityDirectory } from "../../analyzers/pe/clr-security.js";
-import { parseBaseRelocations } from "../../analyzers/pe/reloc.js";
-import { parseExceptionDirectory } from "../../analyzers/pe/exception.js";
+import { parseClrDirectory, parseSecurityDirectory } from "../../dist/analyzers/pe/clr-security.js";
+import { parseBaseRelocations } from "../../dist/analyzers/pe/reloc.js";
+import { parseExceptionDirectory } from "../../dist/analyzers/pe/exception.js";
 import { MockFile } from "../helpers/mock-file.mjs";
 
 const encoder = new TextEncoder();

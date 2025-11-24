@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseTar } from "../../analyzers/tar/index.js";
+import { parseTar } from "../../dist/analyzers/tar/index.js";
 import { MockFile } from "../helpers/mock-file.mjs";
 import { createTarFile } from "../fixtures/sample-files.mjs";
 import {

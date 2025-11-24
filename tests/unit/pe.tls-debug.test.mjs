@@ -2,10 +2,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseDebugDirectory, parseLoadConfigDirectory } from "../../analyzers/pe/debug-loadcfg.js";
-import { parseTlsDirectory } from "../../analyzers/pe/tls.js";
-import { buildResourceTree } from "../../analyzers/pe/resources-core.js";
-import { parseImportDirectory } from "../../analyzers/pe/imports.js";
+import { parseDebugDirectory, parseLoadConfigDirectory } from "../../dist/analyzers/pe/debug-loadcfg.js";
+import { parseTlsDirectory } from "../../dist/analyzers/pe/tls.js";
+import { buildResourceTree } from "../../dist/analyzers/pe/resources-core.js";
+import { parseImportDirectory } from "../../dist/analyzers/pe/imports.js";
 import { MockFile } from "../helpers/mock-file.mjs";
 
 const encoder = new TextEncoder();

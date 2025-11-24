@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseZip } from "../../analyzers/zip/index.js";
+import { parseZip } from "../../dist/analyzers/zip/index.js";
 import { createZipWithBadCdOffset, createZipWithMissingZip64 } from "../fixtures/zip-fixtures.mjs";
 
 test("parseZip handles central directory offset beyond file", async () => {

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parsePng } from "../../analyzers/png/index.js";
+import { parsePng } from "../../dist/analyzers/png/index.js";
 import {
   createPngFile,
   createPngWithIhdr

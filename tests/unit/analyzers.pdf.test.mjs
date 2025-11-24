@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parsePdf } from "../../analyzers/pdf/index.js";
+import { parsePdf } from "../../dist/analyzers/pdf/index.js";
 import { createPdfFile } from "../fixtures/sample-files.mjs";
 import { createPdfMissingStartxref, createPdfWithBadXref } from "../fixtures/pdf-fixtures.mjs";
 import { createPdfWithXrefStream } from "../fixtures/pdf-corrupt-stream.mjs";

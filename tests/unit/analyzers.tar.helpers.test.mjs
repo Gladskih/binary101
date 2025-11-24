@@ -13,7 +13,7 @@ import {
   parseBase256Number,
   parseOctalNumber,
   parseTarNumber
-} from "../../analyzers/tar/helpers.js";
+} from "../../dist/analyzers/tar/helpers.js";
 
 test("describeFormat covers different TAR variants", () => {
   assert.deepStrictEqual(describeFormat("ustar", "00"), {

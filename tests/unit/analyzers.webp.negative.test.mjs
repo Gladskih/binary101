@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseWebp } from "../../analyzers/webp/index.js";
+import { parseWebp } from "../../dist/analyzers/webp/index.js";
 
 const buildWebp = bytes => ({
   arrayBuffer: async () => new Uint8Array(bytes).buffer,

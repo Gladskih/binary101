@@ -11,7 +11,7 @@ import {
   readAsciiString,
   toHex32,
   toHex64
-} from "../../binary-utils.js";
+} from "../../dist/binary-utils.js";
 
 test("formatHumanSize reports readable units", () => {
   assert.strictEqual(formatHumanSize(0), "0 B (0 bytes)");

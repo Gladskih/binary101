@@ -7,7 +7,7 @@ import {
   renderFlagChips,
   renderOptionChips,
   safe
-} from "../../html-utils.js";
+} from "../../dist/html-utils.js";
 
 test("escapeHtml replaces risky characters while leaving safe ones alone", () => {
   const raw = `5 < 6 && "quote"`;

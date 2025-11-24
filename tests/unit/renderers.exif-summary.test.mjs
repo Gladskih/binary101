@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { renderJpegExifSummary } from "../../renderers/jpeg/exif-summary.js";
+import { renderJpegExifSummary } from "../../dist/renderers/jpeg/exif-summary.js";
 
 const makeRational = (num, den) => ({ num, den });
 

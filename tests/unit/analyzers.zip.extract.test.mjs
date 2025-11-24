@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseZip } from "../../analyzers/zip/index.js";
+import { parseZip } from "../../dist/analyzers/zip/index.js";
 import { MockFile } from "../helpers/mock-file.mjs";
 
 const encoder = new TextEncoder();

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseLnk } from "../../analyzers/lnk/index.js";
+import { parseLnk } from "../../dist/analyzers/lnk/index.js";
 import { createLnkFile } from "../fixtures/sample-files.mjs";
 
 test("parseLnk reads Shell Link header and targets", async () => {

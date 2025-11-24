@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { probeByMagic, probeTextLike } from "../../analyzers/probes.js";
+import { probeByMagic, probeTextLike } from "../../dist/analyzers/probes.js";
 
 const dvFrom = bytes => new DataView(new Uint8Array(bytes).buffer);
 const ascii = text => [...Buffer.from(text, "ascii")];

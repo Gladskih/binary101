@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseWebp } from "../../analyzers/webp/index.js";
+import { parseWebp } from "../../dist/analyzers/webp/index.js";
 import { createWebpFile } from "../fixtures/sample-files.mjs";
 import { createInvalidWebpSignature, createWebpWithBadChunkSize } from "../fixtures/webp-fixtures.mjs";
 import { createAnimatedWebpMissingFrame } from "../fixtures/webp-frames-fixtures.mjs";

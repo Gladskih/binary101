@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { hasSevenZipSignature, parseSevenZip } from "../../analyzers/sevenz/index.js";
+import { hasSevenZipSignature, parseSevenZip } from "../../dist/analyzers/sevenz/index.js";
 import { MockFile } from "../helpers/mock-file.mjs";
 
 const SIGNATURE = [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c];

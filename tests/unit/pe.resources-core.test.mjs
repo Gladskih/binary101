@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildResourceTree } from "../../analyzers/pe/resources-core.js";
+import { buildResourceTree } from "../../dist/analyzers/pe/resources-core.js";
 import { MockFile } from "../helpers/mock-file.mjs";
 
 const setU16 = (view, off, value) => view.setUint16(off, value, true);

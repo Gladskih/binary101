@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseGif } from "../../analyzers/gif/index.js";
+import { parseGif } from "../../dist/analyzers/gif/index.js";
 import { createGifFile } from "../fixtures/sample-files.mjs";
 import { createGifWithBadTrailer, createGifWithTruncatedExtension } from "../fixtures/gif-fixtures.mjs";
 

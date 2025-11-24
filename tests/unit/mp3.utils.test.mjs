@@ -8,7 +8,7 @@ import {
   decodeSynchsafeInt,
   readZeroTerminatedString,
   safeHexPreview
-} from "../../analyzers/mp3/utils.js";
+} from "../../dist/analyzers/mp3/utils.js";
 
 const makeDv = bytes => new DataView(Uint8Array.from(bytes).buffer);
 

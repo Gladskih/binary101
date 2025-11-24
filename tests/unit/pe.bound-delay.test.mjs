@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseBoundImports, parseDelayImports } from "../../analyzers/pe/bound-delay.js";
+import { parseBoundImports, parseDelayImports } from "../../dist/analyzers/pe/bound-delay.js";
 import { MockFile } from "../helpers/mock-file.mjs";
 
 const encoder = new TextEncoder();

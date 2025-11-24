@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { enrichResourcePreviews } from "../../analyzers/pe/resources-preview.js";
+import { enrichResourcePreviews } from "../../dist/analyzers/pe/resources-preview.js";
 import { MockFile } from "../helpers/mock-file.mjs";
 
 const encoder = new TextEncoder();

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseMp3 } from "../../analyzers/mp3/index.js";
+import { parseMp3 } from "../../dist/analyzers/mp3/index.js";
 import { createMp3File } from "../fixtures/sample-files.mjs";
 import { createMp3WithGarbageFrame, createMp3WithOnlyId3v2 } from "../fixtures/mp3-fixtures.mjs";
 

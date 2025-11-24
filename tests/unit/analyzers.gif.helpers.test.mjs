@@ -10,7 +10,7 @@ import {
   parsePlainTextExtension,
   readAsciiRange,
   readSubBlocks
-} from "../../analyzers/gif/helpers.js";
+} from "../../dist/analyzers/gif/helpers.js";
 
 const makeDv = bytes => new DataView(Uint8Array.from(bytes).buffer);
 

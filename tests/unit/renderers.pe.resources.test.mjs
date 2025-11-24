@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { renderResources } from "../../renderers/pe/resources.js";
+import { renderResources } from "../../dist/renderers/pe/resources.js";
 
 const createPeResources = () => ({
   top: [

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseExifFromApp1 } from "../../analyzers/jpeg/exif.js";
+import { parseExifFromApp1 } from "../../dist/analyzers/jpeg/exif.js";
 
 const writeEntry = (dv, offset, tag, type, count, value, littleEndian = true) => {
   dv.setUint16(offset, tag, littleEndian);

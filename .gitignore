@@ -6,3 +6,6 @@ coverage/
 
 # Test runner artifacts
 test-results/
+
+# Build output
+dist/

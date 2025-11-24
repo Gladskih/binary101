@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseId3v1, parseId3v2 } from "../../analyzers/mp3/id3.js";
+import { parseId3v1, parseId3v2 } from "../../dist/analyzers/mp3/id3.js";
 
 const asciiBytes = text => Array.from(Buffer.from(text, "latin1"));
 

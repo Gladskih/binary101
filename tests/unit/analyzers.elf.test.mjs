@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseElf } from "../../analyzers/elf/index.js";
+import { parseElf } from "../../dist/analyzers/elf/index.js";
 import { MockFile } from "../helpers/mock-file.mjs";
 
 const writeElfHeader = (

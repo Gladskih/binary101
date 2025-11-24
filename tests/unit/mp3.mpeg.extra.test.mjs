@@ -8,7 +8,7 @@ import {
   parseFrameHeader,
   parseVbrHeader,
   validateNextFrame
-} from "../../analyzers/mp3/mpeg.js";
+} from "../../dist/analyzers/mp3/mpeg.js";
 
 const makeHeaderValue = ({
   versionBits = 0x3,

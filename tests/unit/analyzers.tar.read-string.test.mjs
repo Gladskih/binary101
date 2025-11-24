@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readTarString, decodeNullTerminated } from "../../analyzers/tar/helpers.js";
+import { readTarString, decodeNullTerminated } from "../../dist/analyzers/tar/helpers.js";
 
 const TEXT_ENCODER = new TextEncoder();
 

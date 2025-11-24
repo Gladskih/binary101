@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseJpeg } from "../../analyzers/jpeg/index.js";
+import { parseJpeg } from "../../dist/analyzers/jpeg/index.js";
 import { createJpegFile } from "../fixtures/sample-files.mjs";
 import { createJpegNoSof, createJpegWithBrokenExif } from "../fixtures/jpeg-fixtures.mjs";
 

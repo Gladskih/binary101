@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { detectBinaryType } from "../../analyzers/index.js";
+import { detectBinaryType } from "../../dist/analyzers/index.js";
 import { MockFile } from "../helpers/mock-file.mjs";
 import { createMp3File } from "../fixtures/sample-files.mjs";
 

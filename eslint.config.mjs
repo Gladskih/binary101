@@ -1,5 +1,7 @@
 import js from "@eslint/js";
 import globals from "globals";
+import tsParser from "@typescript-eslint/parser";
+import tsPlugin from "@typescript-eslint/eslint-plugin";
 
 const sharedRules = {
   "prefer-const": "error",
@@ -39,6 +41,24 @@ export default [
     rules: sharedRules
   },
   {
+    files: ["**/*.ts"],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        ecmaVersion: "latest",
+        sourceType: "module",
+        project: "./tsconfig.json"
+      },
+      globals: {
+        ...globals.browser
+      }
+    },
+    plugins: {
+      "@typescript-eslint": tsPlugin
+    },
+    rules: sharedRules
+  },
+  {
     files: ["tests/**/*.{js,mjs}", "playwright.config.mjs"],
     languageOptions: {
       ecmaVersion: "latest",
@@ -48,6 +68,9 @@ export default [
       }
     },
     rules: sharedRules
+  },
+  {
+    ignores: ["dist/**", "coverage/**", "test-results/**"]
   }
 ];
 

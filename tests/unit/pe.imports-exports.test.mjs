@@ -2,8 +2,8 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseExportDirectory } from "../../analyzers/pe/exports.js";
-import { parseImportDirectory } from "../../analyzers/pe/imports.js";
+import { parseExportDirectory } from "../../dist/analyzers/pe/exports.js";
+import { parseImportDirectory } from "../../dist/analyzers/pe/imports.js";
 import { MockFile } from "../helpers/mock-file.mjs";
 
 const encoder = new TextEncoder();

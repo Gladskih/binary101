@@ -2,8 +2,8 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parsePaxHeaders, applyPaxValues } from "../../analyzers/tar/helpers.js";
-import { formatUnixSecondsOrDash } from "../../binary-utils.js"; // Import needed for applyPaxValues test
+import { parsePaxHeaders, applyPaxValues } from "../../dist/analyzers/tar/helpers.js";
+import { formatUnixSecondsOrDash } from "../../dist/binary-utils.js"; // Import needed for applyPaxValues test
 
 const TEXT_ENCODER = new TextEncoder();
 

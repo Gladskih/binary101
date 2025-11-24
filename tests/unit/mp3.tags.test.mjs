@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseApeTag, parseLyrics3 } from "../../analyzers/mp3/tags.js";
+import { parseApeTag, parseLyrics3 } from "../../dist/analyzers/mp3/tags.js";
 
 const dvFrom = bytes => new DataView(new Uint8Array(bytes).buffer);
 
