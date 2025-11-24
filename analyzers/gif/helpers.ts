@@ -1,7 +1,6 @@
-// @ts-nocheck
 "use strict";
 
-export const DISPOSAL_METHODS = [
+export const DISPOSAL_METHODS: string[] = [
   "No disposal specified",
   "Keep previous frame (do not dispose)",
   "Restore to background color",
@@ -12,7 +11,7 @@ export const DISPOSAL_METHODS = [
   "Reserved"
 ];
 
-export function readAsciiRange(dv, offset, length) {
+export function readAsciiRange(dv: DataView, offset: number, length: number): string {
   let text = "";
   for (let i = 0; i < length && offset + i < dv.byteLength; i += 1) {
     const code = dv.getUint8(offset + i);
@@ -22,7 +21,7 @@ export function readAsciiRange(dv, offset, length) {
   return text;
 }
 
-export function bytesToAscii(bytes) {
+export function bytesToAscii(bytes: ArrayLike<number>): string {
   let text = "";
   for (let i = 0; i < bytes.length; i += 1) {
     const code = bytes[i];
@@ -32,12 +31,24 @@ export function bytesToAscii(bytes) {
   return text;
 }
 
-export function readSubBlocks(dv, offset, previewLimit = 0) {
+export interface GifSubBlocks {
+  endOffset: number;
+  totalSize: number;
+  blockCount: number;
+  truncated: boolean;
+  previewBytes: number[];
+}
+
+export function readSubBlocks(
+  dv: DataView,
+  offset: number,
+  previewLimit = 0
+): GifSubBlocks {
   let cursor = offset;
   let totalSize = 0;
   let blockCount = 0;
   let truncated = false;
-  const previewBytes = [];
+  const previewBytes: number[] = [];
   while (true) {
     if (cursor >= dv.byteLength) { truncated = true; break; }
     const size = dv.getUint8(cursor);
@@ -66,7 +77,20 @@ export function readSubBlocks(dv, offset, previewLimit = 0) {
   return { endOffset: cursor, totalSize, blockCount, truncated, previewBytes };
 }
 
-export function parseGraphicControl(dv, offset) {
+export interface GifGraphicControlExtension {
+  disposalMethod: string;
+  delayMs: number;
+  transparentColorIndex: number | null;
+  userInputFlag: boolean;
+}
+
+export interface GifGraphicControlResult {
+  gce: GifGraphicControlExtension | null;
+  nextOffset: number;
+  warning: string | null;
+}
+
+export function parseGraphicControl(dv: DataView, offset: number): GifGraphicControlResult {
   if (offset + 6 > dv.byteLength) {
     return {
       gce: null,
@@ -89,7 +113,7 @@ export function parseGraphicControl(dv, offset) {
   const hasTerminator =
     terminatorOffset < dv.byteLength && dv.getUint8(terminatorOffset) === 0;
   const disposalIndex = (packed >> 2) & 0x07;
-  const gce = {
+  const gce: GifGraphicControlExtension = {
     disposalMethod:
       DISPOSAL_METHODS[disposalIndex] || `Reserved (${disposalIndex})`,
     delayMs: delay * 10,
@@ -105,7 +129,24 @@ export function parseGraphicControl(dv, offset) {
   };
 }
 
-export function parseApplicationExtension(dv, offset) {
+export interface GifApplicationExtensionInfo {
+  identifier: string;
+  authCode: string;
+  loopCount: number | null;
+  dataSize: number;
+  truncated: boolean;
+}
+
+export interface GifApplicationExtensionResult {
+  nextOffset: number;
+  info: GifApplicationExtensionInfo | null;
+  warning: string | null;
+}
+
+export function parseApplicationExtension(
+  dv: DataView,
+  offset: number
+): GifApplicationExtensionResult {
   const minLength = offset + 14;
   if (minLength > dv.byteLength) {
     return {
@@ -142,7 +183,17 @@ export function parseApplicationExtension(dv, offset) {
   };
 }
 
-export function parseCommentExtension(dv, offset) {
+export interface GifCommentInfo {
+  text: string;
+  truncated: boolean;
+}
+
+export interface GifCommentResult {
+  nextOffset: number;
+  comment: GifCommentInfo;
+}
+
+export function parseCommentExtension(dv: DataView, offset: number): GifCommentResult {
   const subBlocks = readSubBlocks(dv, offset + 2, 512);
   return {
     nextOffset: subBlocks.endOffset,
@@ -155,7 +206,15 @@ export function parseCommentExtension(dv, offset) {
   };
 }
 
-export function parsePlainTextExtension(dv, offset) {
+export interface GifPlainTextResult {
+  nextOffset: number;
+  warning: string | null;
+}
+
+export function parsePlainTextExtension(
+  dv: DataView,
+  offset: number
+): GifPlainTextResult {
   const headerEnd = offset + 2 + 1 + 12;
   if (headerEnd > dv.byteLength) {
     return {
