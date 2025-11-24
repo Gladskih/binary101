@@ -1,14 +1,117 @@
 /* eslint-disable max-lines */
-// @ts-nocheck
 "use strict";
 
 import { formatUnixSecondsOrDash, toHex32 } from "../../binary-utils.js";
+
+interface SevenZipContext {
+  dv: DataView;
+  offset: number;
+  issues: string[];
+  // Additional helpers may attach scratch properties; keep them flexible.
+  [key: string]: unknown;
+}
+
+interface SevenZipCoder {
+  id: string;
+  methodId: string;
+  numInStreams: number;
+  numOutStreams: number;
+  properties: unknown | null;
+  archHint?: string;
+  isEncryption: boolean;
+}
+
+interface SevenZipSubstream {
+  size: bigint | null;
+  crc: number | null;
+}
+
+export interface SevenZipFolderSummary {
+  index: number;
+  unpackSize: bigint | null;
+  packedSize: bigint | null;
+  coders: SevenZipCoder[];
+  numUnpackStreams: number;
+  substreams: SevenZipSubstream[];
+  isEncrypted: boolean;
+}
+
+export interface SevenZipFileSummary {
+  index: number;
+  name: string;
+  folderIndex: number | null;
+  uncompressedSize: bigint | number | null;
+  packedSize: bigint | number | null;
+  compressionRatio: number | null;
+  crc32: number | null;
+  modifiedTime: string | null;
+  attributes: string | null;
+  hasStream?: boolean;
+  isEmptyStream?: boolean;
+  isEmptyFile?: boolean;
+  isDirectory?: boolean;
+  isAnti?: boolean;
+  isEncrypted?: boolean;
+  isEmpty?: boolean;
+}
+
+export interface SevenZipArchiveFlags {
+  isSolid: boolean;
+  isHeaderEncrypted: boolean;
+  hasEncryptedContent: boolean;
+}
+
+export interface SevenZipStructure {
+  archiveFlags: SevenZipArchiveFlags;
+  folders: SevenZipFolderSummary[];
+  files: SevenZipFileSummary[];
+}
+
+export interface SevenZipStartHeader {
+  versionMajor: number;
+  versionMinor: number;
+  startHeaderCrc: number;
+  nextHeaderOffset: bigint;
+  nextHeaderSize: bigint;
+  nextHeaderCrc: number;
+  absoluteNextHeaderOffset: bigint;
+}
+
+export interface SevenZipParsedNextHeader {
+  kind: string;
+  sections?: unknown;
+  headerStreams?: unknown;
+  headerCoders?: SevenZipFolderSummary[];
+  hasEncryptedHeader?: boolean;
+  type?: number;
+}
+
+export interface SevenZipNextHeaderInfo {
+  offset: bigint;
+  size: bigint;
+  crc: number;
+  parsed: SevenZipParsedNextHeader;
+}
+
+export interface SevenZipHeaderEncoding {
+  coders: SevenZipFolderSummary[];
+  hasEncryptedHeader: boolean;
+}
+
+export interface SevenZipParseResult {
+  is7z: boolean;
+  startHeader?: SevenZipStartHeader;
+  nextHeader?: SevenZipNextHeaderInfo;
+  structure?: SevenZipStructure;
+  headerEncoding?: SevenZipHeaderEncoding;
+  issues: string[];
+}
 
 const SIGNATURE_BYTES = [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c];
 const START_HEADER_SIZE = 32;
 const UTF16_DECODER = new TextDecoder("utf-16le", { fatal: false });
 
-const CODER_NAMES = {
+const CODER_NAMES: Record<string, string> = {
   "00": "Copy",
   "03": "Delta",
   "030101": "LZMA",
@@ -21,7 +124,7 @@ const CODER_NAMES = {
   "06f10701": "AES-256"
 };
 
-const CODER_ARCH_HINTS = {
+const CODER_ARCH_HINTS: Record<string, string> = {
   "03030103": "x86",
   "0303011b": "x86",
   "03030105": "IA-64",
@@ -30,7 +133,7 @@ const CODER_ARCH_HINTS = {
   "03030108": "PowerPC"
 };
 
-const toSafeNumber = value => {
+const toSafeNumber = (value: number | bigint | null | undefined): number | null => {
   if (typeof value === "number") return value;
   if (typeof value === "bigint") {
     if (value <= BigInt(Number.MAX_SAFE_INTEGER)) return Number(value);
@@ -39,11 +142,15 @@ const toSafeNumber = value => {
   return null;
 };
 
-const normalizeMethodId = id => (id || "").toString().toLowerCase();
+const normalizeMethodId = (id: string | null | undefined): string =>
+  (id || "").toString().toLowerCase();
 
-const describeCoderId = id => CODER_NAMES[normalizeMethodId(id)] || `0x${id}`;
+const describeCoderId = (id: string): string =>
+  CODER_NAMES[normalizeMethodId(id)] || `0x${id}`;
 
-const parseLzmaProps = bytes => {
+const parseLzmaProps = (bytes: Uint8Array | null | undefined):
+  | { dictSize: number; lc: number; lp: number; pb: number }
+  | null => {
   if (!bytes || bytes.length < 5) return null;
   const first = bytes[0];
   const pb = Math.floor(first / 45);
@@ -55,7 +162,7 @@ const parseLzmaProps = bytes => {
   return { dictSize, lc, lp, pb };
 };
 
-const parseLzma2Props = bytes => {
+const parseLzma2Props = (bytes: Uint8Array | null | undefined): { dictSize: number | null } | null => {
   if (!bytes || bytes.length < 1) return null;
   const prop = bytes[0];
   if (prop > 40) return { dictSize: null };
@@ -64,13 +171,16 @@ const parseLzma2Props = bytes => {
   return { dictSize };
 };
 
-const parseDeltaProps = bytes => {
+const parseDeltaProps = (bytes: Uint8Array | null | undefined): { distance: number } | null => {
   if (!bytes || bytes.length < 1) return null;
   const distance = bytes[0] + 1;
   return { distance };
 };
 
-const parseBcjProps = (id, bytes) => {
+const parseBcjProps = (
+  id: string,
+  bytes: Uint8Array | null | undefined
+): { filterType?: string; startOffset?: number } | null => {
   const arch = CODER_ARCH_HINTS[normalizeMethodId(id)];
   if (!bytes || !bytes.length) return arch ? { filterType: arch } : null;
   if (bytes.length >= 4) {
@@ -81,7 +191,10 @@ const parseBcjProps = (id, bytes) => {
   return arch ? { filterType: arch } : null;
 };
 
-const parseCoderProperties = (methodId, bytes) => {
+const parseCoderProperties = (
+  methodId: string,
+  bytes: Uint8Array | null | undefined
+): unknown => {
   const normalized = normalizeMethodId(methodId);
   if (normalized === "030101") return parseLzmaProps(bytes);
   if (normalized === "21") return parseLzma2Props(bytes);
@@ -90,7 +203,7 @@ const parseCoderProperties = (methodId, bytes) => {
   return null;
 };
 
-const filetimeToIso = filetime => {
+const filetimeToIso = (filetime: bigint | null | undefined): string | null => {
   if (typeof filetime !== "bigint") return null;
   const windowsEpochDiff = 11644473600n;
   const seconds = filetime / 10000000n - windowsEpochDiff;
@@ -98,7 +211,7 @@ const filetimeToIso = filetime => {
   return formatUnixSecondsOrDash(Number(seconds));
 };
 
-const readByte = (ctx, label) => {
+const readByte = (ctx: SevenZipContext, label?: string): number | null => {
   if (ctx.offset >= ctx.dv.byteLength) {
     if (label) ctx.issues.push(`${label} is truncated.`);
     return null;
@@ -108,7 +221,7 @@ const readByte = (ctx, label) => {
   return value;
 };
 
-const readEncodedUint64 = (ctx, label) => {
+const readEncodedUint64 = (ctx: SevenZipContext, label?: string): bigint | null => {
   const firstByte = readByte(ctx, label);
   if (firstByte == null) return null;
   let mask = 0x80;
@@ -134,7 +247,12 @@ const readEncodedUint64 = (ctx, label) => {
   return value;
 };
 
-const readBoolVector = (ctx, count, endOffset, label) => {
+const readBoolVector = (
+  ctx: SevenZipContext,
+  count: number,
+  endOffset: number,
+  label?: string
+): boolean[] | null => {
   if (ctx.offset >= endOffset) {
     if (label) ctx.issues.push(`${label} is truncated.`);
     return null;
@@ -162,7 +280,11 @@ const readBoolVector = (ctx, count, endOffset, label) => {
   return values;
 };
 
-const readUint64Le = (ctx, endOffset, label) => {
+const readUint64Le = (
+  ctx: SevenZipContext,
+  endOffset: number,
+  label?: string
+): bigint | null => {
   if (ctx.offset + 8 > endOffset) {
     if (label) ctx.issues.push(`${label} is truncated.`);
     ctx.offset = endOffset;
@@ -173,7 +295,11 @@ const readUint64Le = (ctx, endOffset, label) => {
   return value;
 };
 
-const readUint32Le = (ctx, endOffset, label) => {
+const readUint32Le = (
+  ctx: SevenZipContext,
+  endOffset: number,
+  label?: string
+): number | null => {
   if (ctx.offset + 4 > endOffset) {
     if (label) ctx.issues.push(`${label} is truncated.`);
     ctx.offset = endOffset;
@@ -184,8 +310,8 @@ const readUint32Le = (ctx, endOffset, label) => {
   return value;
 };
 
-const parseArchiveProperties = ctx => {
-  const properties = [];
+const parseArchiveProperties = (ctx: SevenZipContext): { count: number } => {
+  const properties: Array<{ id: number; size: number }> = [];
   while (ctx.offset < ctx.dv.byteLength) {
     const propertyType = readByte(ctx, "Archive property id");
     if (propertyType == null) break;
@@ -204,8 +330,17 @@ const parseArchiveProperties = ctx => {
   return { count: properties.length };
 };
 
-const parsePackDigests = (ctx, count, endOffset, label) => {
-  const digests = [];
+const parsePackDigests = (
+  ctx: SevenZipContext,
+  count: number,
+  endOffset: number,
+  label: string
+): {
+  digests: Array<{ index: number; crc: number }>;
+  allDefined?: boolean;
+  definedFlags?: boolean[];
+} => {
+  const digests: Array<{ index: number; crc: number }> = [];
   const definedFlags = readBoolVector(ctx, count, endOffset, `${label} definition flags`);
   if (!definedFlags) return { digests };
   for (let i = 0; i < count; i += 1) {
@@ -217,10 +352,20 @@ const parsePackDigests = (ctx, count, endOffset, label) => {
   return { digests, allDefined: definedFlags.every(Boolean), definedFlags };
 };
 
-const parsePackInfo = ctx => {
+const parsePackInfo = (ctx: SevenZipContext): {
+  packPos: bigint | null;
+  numPackStreams: bigint | null;
+  packSizes: bigint[];
+  packCrcs: Array<{ index: number; crc: number }>;
+} => {
   const packPos = readEncodedUint64(ctx, "Pack position");
   const numPackStreams = readEncodedUint64(ctx, "Pack stream count");
-  const result = {
+  const result: {
+    packPos: bigint | null;
+    numPackStreams: bigint | null;
+    packSizes: bigint[];
+    packCrcs: Array<{ index: number; crc: number }>;
+  } = {
     packPos,
     numPackStreams,
     packSizes: [],
@@ -260,7 +405,19 @@ const parsePackInfo = ctx => {
   return result;
 };
 
-const parseFolder = (ctx, endOffset) => {
+const parseFolder = (
+  ctx: SevenZipContext,
+  endOffset: number
+): {
+  coders: any[];
+  totalInStreams: number;
+  totalOutStreams: number;
+  bindPairs: Array<{ inIndex: bigint | null; outIndex: bigint | null }>;
+  packedStreams: Array<bigint | null>;
+  numPackedStreams: number;
+  numBindPairs: number;
+  numOutStreams: number;
+} => {
   const numCoders = readEncodedUint64(ctx, "Coder count");
   const numCodersNumber = toSafeNumber(numCoders) || 0;
   const coders = [];
@@ -342,8 +499,8 @@ const parseFolder = (ctx, endOffset) => {
   };
 };
 
-const parseUnpackInfo = ctx => {
-  const info = { folders: [] };
+const parseUnpackInfo = (ctx: SevenZipContext): any => {
+  const info: any = { folders: [] };
   const folderId = readByte(ctx, "UnpackInfo section id");
   if (folderId == null) return info;
   if (folderId !== 0x0b) {
@@ -400,8 +557,8 @@ const parseUnpackInfo = ctx => {
   return info;
 };
 
-const parseSubStreamsInfo = (ctx, folderCount) => {
-  const info = { numUnpackStreams: new Array(folderCount).fill(1) };
+const parseSubStreamsInfo = (ctx: SevenZipContext, folderCount: number): any => {
+  const info: any = { numUnpackStreams: new Array(folderCount).fill(1) };
   let done = false;
   while (ctx.offset < ctx.dv.byteLength && !done) {
     const id = readByte(ctx, "SubStreamsInfo field id");
@@ -420,10 +577,13 @@ const parseSubStreamsInfo = (ctx, folderCount) => {
     }
     if (id === 0x09) {
       info.substreamSizes = [];
-      const totalEntries = info.numUnpackStreams.reduce((sum, value) => {
-        const count = toSafeNumber(value) ?? 1;
-        return sum + Math.max(count - 1, 0);
-      }, 0);
+      const totalEntries = (info.numUnpackStreams as Array<bigint | number | null | undefined>).reduce(
+        (sum: number, value: bigint | number | null | undefined) => {
+          const count = toSafeNumber(value) ?? 1;
+          return sum + Math.max(count - 1, 0);
+        },
+        0
+      );
       for (let i = 0; i < totalEntries; i += 1) {
         const size = readEncodedUint64(ctx, "Substream size");
         info.substreamSizes.push(size);
@@ -431,10 +591,13 @@ const parseSubStreamsInfo = (ctx, folderCount) => {
       continue;
     }
     if (id === 0x0a) {
-      const totalStreams = info.numUnpackStreams.reduce((sum, value) => {
-        const count = toSafeNumber(value) ?? 1;
-        return sum + count;
-      }, 0);
+      const totalStreams = (info.numUnpackStreams as Array<bigint | number | null | undefined>).reduce(
+        (sum: number, value: bigint | number | null | undefined) => {
+          const count = toSafeNumber(value) ?? 1;
+          return sum + count;
+        },
+        0
+      );
       const digestInfo = parsePackDigests(
         ctx,
         totalStreams,
@@ -450,8 +613,8 @@ const parseSubStreamsInfo = (ctx, folderCount) => {
   return info;
 };
 
-const parseStreamsInfo = ctx => {
-  const info = {};
+const parseStreamsInfo = (ctx: SevenZipContext): any => {
+  const info: any = {};
   let done = false;
   while (ctx.offset < ctx.dv.byteLength && !done) {
     const id = readByte(ctx, "StreamsInfo field id");
@@ -480,7 +643,12 @@ const parseStreamsInfo = ctx => {
   return info;
 };
 
-const parseTimes = (ctx, fileCount, endOffset, label) => {
+const parseTimes = (
+  ctx: SevenZipContext,
+  fileCount: number,
+  endOffset: number,
+  label: string
+): Array<string | null> | null => {
   const external = readByte(ctx, `${label} external flag`);
   if (external == null) return null;
   if (external !== 0) {
@@ -501,7 +669,11 @@ const parseTimes = (ctx, fileCount, endOffset, label) => {
   return times;
 };
 
-const parseAttributes = (ctx, fileCount, endOffset) => {
+const parseAttributes = (
+  ctx: SevenZipContext,
+  fileCount: number,
+  endOffset: number
+): Array<number | null> | null => {
   const external = readByte(ctx, "Attribute external flag");
   if (external == null) return null;
   if (external !== 0) {
@@ -522,9 +694,13 @@ const parseAttributes = (ctx, fileCount, endOffset) => {
   return attributes;
 };
 
-const parseNames = (ctx, fileCount, endOffset) => {
+const parseNames = (
+  ctx: SevenZipContext,
+  fileCount: number,
+  endOffset: number
+): { names: string[]; external: boolean } => {
   const external = readByte(ctx, "Name external flag");
-  if (external == null) return { names: [] };
+  if (external == null) return { names: [], external: false };
   if (external !== 0) {
     ctx.issues.push("File names are stored externally; unable to read.");
     ctx.offset = endOffset;
@@ -546,19 +722,19 @@ const parseNames = (ctx, fileCount, endOffset) => {
   return { names, external: false };
 };
 
-const parseFilesInfo = ctx => {
+const parseFilesInfo = (ctx: SevenZipContext): any => {
   const numFiles = readEncodedUint64(ctx, "File count");
   const fileCount = toSafeNumber(numFiles);
   if (fileCount == null) {
     return { fileCount: null, files: [] };
   }
-  const files = new Array(fileCount).fill(null).map((_, index) => ({ index: index + 1 }));
-  let emptyStreams = null;
-  let emptyFiles = null;
-  let antiItems = null;
-  let names = null;
-  let mTimes = null;
-  let attributes = null;
+  const files: any[] = new Array(fileCount).fill(null).map((_, index) => ({ index: index + 1 }));
+  let emptyStreams: boolean[] | null = null;
+  let emptyFiles: boolean[] | null = null;
+  let antiItems: boolean[] | null = null;
+  let names: string[] | null = null;
+  let mTimes: Array<string | null> | null = null;
+  let attributes: Array<number | null> | null = null;
   while (ctx.offset < ctx.dv.byteLength) {
     const propertyType = readByte(ctx, "File property id");
     if (propertyType == null) break;
@@ -635,8 +811,8 @@ const parseFilesInfo = ctx => {
   };
 };
 
-const parseHeader = ctx => {
-  const header = {};
+const parseHeader = (ctx: SevenZipContext): any => {
+  const header: any = {};
   while (ctx.offset < ctx.dv.byteLength) {
     const sectionId = readByte(ctx, "Header section id");
     if (sectionId == null) break;
@@ -667,10 +843,14 @@ const parseHeader = ctx => {
   return header;
 };
 
-const sumBigIntArray = values =>
-  values.reduce((total, value) => total + (typeof value === "bigint" ? value : 0n), 0n);
+const sumBigIntArray = (values: Array<bigint | number | null | undefined>): bigint =>
+  values.reduce<bigint>(
+    (total: bigint, value: bigint | number | null | undefined) =>
+      total + (typeof value === "bigint" ? value : 0n),
+    0n
+  );
 
-const buildFolderDetails = (sections, issues) => {
+const buildFolderDetails = (sections: any, issues: string[]): { folders: SevenZipFolderSummary[] } => {
   const mainStreams = sections?.mainStreamsInfo;
   const unpackInfo = mainStreams?.unpackInfo;
   const packInfo = mainStreams?.packInfo;
@@ -681,9 +861,9 @@ const buildFolderDetails = (sections, issues) => {
   const substreamSizes = mainStreams?.subStreamsInfo?.substreamSizes || [];
   const substreamCrcs = mainStreams?.subStreamsInfo?.substreamCrcs;
   const crcDefined = substreamCrcs?.definedFlags || [];
-  const crcMap = new Map((substreamCrcs?.digests || []).map(d => [d.index, d.crc]));
+  const crcMap = new Map((substreamCrcs?.digests || []).map((d: any) => [d.index, d.crc]));
   const packSizes = packInfo?.packSizes || [];
-  const folders = [];
+  const folders: SevenZipFolderSummary[] = [];
   let packCursor = 0;
   let substreamSizeCursor = 0;
   let crcCursor = 0;
@@ -700,7 +880,7 @@ const buildFolderDetails = (sections, issues) => {
       packCursor += 1;
     }
     const packedSize = packedSizes.length ? sumBigIntArray(packedSizes) : null;
-    const substreams = [];
+    const substreams: SevenZipSubstream[] = [];
     let consumed = 0n;
     for (let s = 0; s < unpackStreams; s += 1) {
       let size = null;
@@ -715,15 +895,19 @@ const buildFolderDetails = (sections, issues) => {
       if (typeof size === "number") size = BigInt(size);
       if (typeof size === "bigint") consumed += size;
       const crcFlag = crcDefined[crcCursor];
-      const crc = crcFlag ? crcMap.get(crcCursor) ?? null : null;
+      let crc: number | null = null;
+      if (crcFlag) {
+        const value = crcMap.get(crcCursor);
+        crc = typeof value === "number" ? value : null;
+      }
       crcCursor += 1;
-      substreams.push({ size, crc });
+      substreams.push({ size: size as bigint | null, crc });
     }
     const folderUnpackSize =
       substreams.some(sub => typeof sub.size === "bigint")
         ? sumBigIntArray(substreams.map(sub => sub.size || 0n))
         : unpackSize;
-    const coders = (folder.coders || []).map(coder => {
+    const coders: SevenZipCoder[] = (folder.coders || []).map((coder: any) => {
       const normalized = normalizeMethodId(coder.methodId);
       const id = describeCoderId(normalized);
       const archHint = CODER_ARCH_HINTS[normalized];
@@ -739,7 +923,7 @@ const buildFolderDetails = (sections, issues) => {
       };
     });
     const isEncrypted = coders.some(coder => coder.isEncryption);
-    folders.push({
+    const folderSummary: SevenZipFolderSummary = {
       index: i,
       unpackSize: folderUnpackSize,
       packedSize,
@@ -747,7 +931,8 @@ const buildFolderDetails = (sections, issues) => {
       numUnpackStreams: unpackStreams,
       substreams,
       isEncrypted
-    });
+    };
+    folders.push(folderSummary);
   }
   if (substreamSizeCursor < substreamSizes.length) {
     issues.push("Extra substream size entries were not matched to folders.");
@@ -755,8 +940,12 @@ const buildFolderDetails = (sections, issues) => {
   return { folders };
 };
 
-const buildFileDetails = (sections, folders, issues) => {
-  const files = (sections?.filesInfo?.files || []).map(file => ({ ...file }));
+const buildFileDetails = (
+  sections: any,
+  folders: SevenZipFolderSummary[],
+  issues: string[]
+): { files: SevenZipFileSummary[] } => {
+  const files: SevenZipFileSummary[] = (sections?.filesInfo?.files || []).map((file: any) => ({ ...file }));
   if (!files.length) return { files };
   const filesWithStreams = files.filter(file => file.hasStream !== false);
   let fileStreamIndex = 0;
@@ -807,7 +996,10 @@ const buildFileDetails = (sections, folders, issues) => {
   return { files };
 };
 
-const deriveStructure = (parsed, issues) => {
+const deriveStructure = (
+  parsed: SevenZipParsedNextHeader,
+  issues: string[]
+): SevenZipStructure | null => {
   if (!parsed?.sections) return null;
   const folderDetails = buildFolderDetails(parsed.sections, issues);
   const fileDetails = buildFileDetails(parsed.sections, folderDetails.folders, issues);
@@ -826,13 +1018,13 @@ const deriveStructure = (parsed, issues) => {
   };
 };
 
-const parseNextHeader = (dv, issues) => {
+const parseNextHeader = (dv: DataView | null, issues: string[]): SevenZipParsedNextHeader => {
   if (!dv || dv.byteLength === 0) {
     issues.push("Next header is empty.");
     return { kind: "empty" };
   }
   const firstId = dv.getUint8(0);
-  const ctx = { dv, offset: 1, issues };
+  const ctx: SevenZipContext = { dv, offset: 1, issues };
   if (firstId === 0x01) {
     const sections = parseHeader(ctx);
     return { kind: "header", sections };
@@ -841,8 +1033,8 @@ const parseNextHeader = (dv, issues) => {
     const streams = parseStreamsInfo(ctx);
     const unpackInfo = streams.unpackInfo;
     const folders =
-      unpackInfo?.folders?.map((folder, index) => {
-        const coders = (folder.coders || []).map(coder => {
+      unpackInfo?.folders?.map((folder: any, index: number) => {
+        const coders = (folder.coders || []).map((coder: any) => {
           const normalized = normalizeMethodId(coder.methodId);
           const id = describeCoderId(normalized);
           const archHint = CODER_ARCH_HINTS[normalized];
@@ -857,14 +1049,14 @@ const parseNextHeader = (dv, issues) => {
             isEncryption
           };
         });
-        const isEncrypted = coders.some(coder => coder.isEncryption);
+        const isEncrypted = coders.some((coder: SevenZipCoder) => coder.isEncryption);
         return {
           index,
           coders,
           isEncrypted
         };
       }) || [];
-    const hasEncryptedHeader = folders.some(folder => folder.isEncrypted);
+    const hasEncryptedHeader = folders.some((folder: SevenZipFolderSummary) => folder.isEncrypted);
     return {
       kind: "encoded",
       headerStreams: streams,
@@ -876,7 +1068,7 @@ const parseNextHeader = (dv, issues) => {
   return { kind: "unknown", type: firstId };
 };
 
-const hasSignature = dv => {
+const hasSignature = (dv: DataView | null): boolean => {
   if (!dv || dv.byteLength < SIGNATURE_BYTES.length) return false;
   for (let i = 0; i < SIGNATURE_BYTES.length; i += 1) {
     if (dv.getUint8(i) !== SIGNATURE_BYTES[i]) return false;
@@ -884,8 +1076,8 @@ const hasSignature = dv => {
   return true;
 };
 
-export async function parseSevenZip(file) {
-  const issues = [];
+export async function parseSevenZip(file: File): Promise<SevenZipParseResult> {
+  const issues: string[] = [];
   const startHeaderBuffer = await file.slice(0, START_HEADER_SIZE).arrayBuffer();
   const startHeader = new DataView(startHeaderBuffer);
   if (startHeader.byteLength < START_HEADER_SIZE || !hasSignature(startHeader)) {
@@ -900,7 +1092,7 @@ export async function parseSevenZip(file) {
   const absoluteNextHeaderOffset = 32n + nextHeaderOffset;
   const sizeNumber = toSafeNumber(nextHeaderSize);
   const offsetNumber = toSafeNumber(absoluteNextHeaderOffset);
-  const result = {
+  const result: SevenZipParseResult = {
     is7z: true,
     startHeader: {
       versionMajor,
@@ -911,7 +1103,7 @@ export async function parseSevenZip(file) {
       nextHeaderCrc,
       absoluteNextHeaderOffset
     },
-    nextHeader: null,
+    nextHeader: undefined,
     issues
   };
   if (offsetNumber == null || sizeNumber == null) {
@@ -923,7 +1115,7 @@ export async function parseSevenZip(file) {
     issues.push("Next header lies outside the file bounds.");
     return result;
   }
-  let nextHeaderDv = null;
+  let nextHeaderDv: DataView | null = null;
   if (sizeNumber > 0) {
     const buffer = await file
       .slice(offsetNumber, offsetNumber + sizeNumber)
@@ -937,14 +1129,15 @@ export async function parseSevenZip(file) {
     crc: nextHeaderCrc,
     parsed: parsedNextHeader
   };
-  if (parsedNextHeader.sections?.filesInfo?.fileCount === 0) {
+  const sections: any = parsedNextHeader.sections as any;
+  if (sections?.filesInfo?.fileCount === 0) {
     issues.push("No file entries were found in the archive header.");
   }
   const structure = deriveStructure(parsedNextHeader, issues);
   if (structure) {
     result.structure = structure;
-    if (parsedNextHeader.sections?.filesInfo) {
-      parsedNextHeader.sections.filesInfo.files = structure.files;
+    if (sections?.filesInfo) {
+      sections.filesInfo.files = structure.files;
     }
   }
   if (parsedNextHeader.kind === "encoded") {
@@ -956,9 +1149,9 @@ export async function parseSevenZip(file) {
   return result;
 }
 
-export const isSevenZip = async file => {
+export const isSevenZip = async (file: File): Promise<boolean> => {
   const dv = new DataView(await file.slice(0, START_HEADER_SIZE).arrayBuffer());
   return hasSignature(dv);
 };
 
-export const hasSevenZipSignature = dv => hasSignature(dv);
+export const hasSevenZipSignature = (dv: DataView): boolean => hasSignature(dv);

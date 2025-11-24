@@ -23,6 +23,9 @@ import {
 import { escapeHtml } from "./html-utils.js";
 import type { MzParseResult } from "./analyzers/mz/index.js";
 import type { ZipCentralDirectoryEntry, ZipParseResult } from "./analyzers/zip/index.js";
+import type { SevenZipParseResult } from "./analyzers/sevenz/index.js";
+import type { TarParseResult } from "./analyzers/tar/index.js";
+import type { RarParseResult } from "./analyzers/rar/index.js";
 
 const getElement = (id: string) => document.getElementById(id)!;
 
@@ -154,7 +157,7 @@ function renderAnalysisIntoUi(
     peDetailsTermElement.textContent = "7z details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = renderSevenZip(parsedResult);
+    peDetailsValueElement.innerHTML = renderSevenZip(parsedResult as SevenZipParseResult);
     return;
   }
 
@@ -162,7 +165,7 @@ function renderAnalysisIntoUi(
     peDetailsTermElement.textContent = "TAR details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = renderTar(parsedResult);
+    peDetailsValueElement.innerHTML = renderTar(parsedResult as TarParseResult);
     return;
   }
 
@@ -170,7 +173,7 @@ function renderAnalysisIntoUi(
     peDetailsTermElement.textContent = "RAR details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = renderRar(parsedResult);
+    peDetailsValueElement.innerHTML = renderRar(parsedResult as RarParseResult);
     return;
   }
   if (analyzerName === "lnk" && parsedResult) {

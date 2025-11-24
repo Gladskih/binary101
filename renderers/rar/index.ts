@@ -1,10 +1,10 @@
-// @ts-nocheck
 "use strict";
 
 import { dd, safe } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
+import type { RarEntry, RarParseResult } from "../../analyzers/rar/index.js";
 
-const formatSize = value => {
+const formatSize = (value: number | bigint | null | undefined): string => {
   if (value == null) return "-";
   if (typeof value === "bigint") {
     if (value <= BigInt(Number.MAX_SAFE_INTEGER)) {
@@ -15,8 +15,8 @@ const formatSize = value => {
   return formatHumanSize(value);
 };
 
-const formatFlags = entry => {
-  const bits = [];
+const formatFlags = (entry: RarEntry): string => {
+  const bits: string[] = [];
   if (entry.isDirectory) bits.push("Dir");
   if (entry.isSolid) bits.push("Solid");
   if (entry.isEncrypted) bits.push("Encrypted");
@@ -26,7 +26,7 @@ const formatFlags = entry => {
   return bits.length ? bits.join(", ") : "-";
 };
 
-const renderSummary = (rar, out) => {
+const renderSummary = (rar: RarParseResult, out: string[]): void => {
   const count = rar.entries?.length || 0;
   const main = rar.mainHeader || {};
   out.push(`<section>`);
@@ -43,7 +43,7 @@ const renderSummary = (rar, out) => {
   out.push(`</section>`);
 };
 
-const renderEntries = (rar, out) => {
+const renderEntries = (rar: RarParseResult, out: string[]): void => {
   const entries = rar.entries || [];
   if (!entries.length) return;
   const limit = 200;
@@ -56,7 +56,7 @@ const renderEntries = (rar, out) => {
       `<th>Method</th><th>Host</th><th>Flags</th><th>Modified</th>` +
     `</tr></thead><tbody>`
   );
-  list.forEach(entry => {
+  list.forEach((entry: RarEntry) => {
     const packed = formatSize(entry.packSize);
     const unpacked = formatSize(entry.unpackedSize);
     const flags = formatFlags(entry);
@@ -81,7 +81,7 @@ const renderEntries = (rar, out) => {
   out.push(`</section>`);
 };
 
-const renderIssues = (rar, out) => {
+const renderIssues = (rar: RarParseResult, out: string[]): void => {
   const issues = rar.issues || [];
   if (!issues.length) return;
   out.push(`<section>`);
@@ -92,9 +92,9 @@ const renderIssues = (rar, out) => {
   out.push(`</section>`);
 };
 
-export function renderRar(rar) {
+export function renderRar(rar: RarParseResult | null): string {
   if (!rar) return "";
-  const out = [];
+  const out: string[] = [];
   renderSummary(rar, out);
   renderEntries(rar, out);
   renderIssues(rar, out);

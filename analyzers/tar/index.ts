@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use strict";
 
 import { formatUnixSecondsOrDash } from "../../binary-utils.js";
@@ -21,7 +20,7 @@ const TAR_BLOCK_SIZE = 512;
 const TAR_SIGNATURE_OFFSET = 257;
 const TAR_SIGNATURE = "ustar";
 
-const TYPEFLAG_DESCRIPTIONS = {
+const TYPEFLAG_DESCRIPTIONS: Record<string, string> = {
   "0": "Regular file",
   "\0": "Regular file",
   "1": "Hard link",
@@ -41,7 +40,7 @@ const TYPEFLAG_DESCRIPTIONS = {
   "V": "Tape volume header"
 };
 
-export function hasTarSignature(dv) {
+export function hasTarSignature(dv: DataView | null): boolean {
   if (!dv || dv.byteLength < TAR_SIGNATURE_OFFSET + TAR_SIGNATURE.length) return false;
   for (let i = 0; i < TAR_SIGNATURE.length; i += 1) {
     const char = String.fromCharCode(dv.getUint8(TAR_SIGNATURE_OFFSET + i));
@@ -50,8 +49,79 @@ export function hasTarSignature(dv) {
   return true;
 }
 
-export async function parseTar(file) {
-  const issues = [];
+export interface TarEntry {
+  index: number;
+  name: string;
+  rawName: string;
+  prefix: string;
+  typeFlag: string;
+  typeLabel: string;
+  size: number;
+  mode: number | null;
+  modeSymbolic: string | null;
+  modeOctal: string | null;
+  uid: number | null;
+  gid: number | null;
+  uname: string | null;
+  gname: string | null;
+  linkName: string | null;
+  devMajor: number | null;
+  devMinor: number | null;
+  mtime: number | null;
+  mtimeIso: string;
+  checksum: number | null;
+  checksumComputed: number | null;
+  checksumValid: boolean | null;
+  dataOffset: number;
+  blocks: number;
+  usesLongName?: boolean;
+  usesLongLink?: boolean;
+  usedPaxPath?: boolean;
+  hasPax?: boolean;
+  paxKeys?: string[];
+}
+
+export interface TarStats {
+  totalEntries: number;
+  regularFiles: number;
+  directories: number;
+  symlinks: number;
+  metadataEntries: number;
+  totalFileBytes: number;
+  blocksConsumed: number;
+  truncatedEntries: number;
+}
+
+export interface TarFeatures {
+  usedLongNames: boolean;
+  usedLongLinks: boolean;
+  usedPaxHeaders: boolean;
+  usedGlobalPax: boolean;
+  checksumMismatches: number;
+}
+
+export interface TarFormatInfo {
+  kind?: string;
+  label?: string;
+  magic?: string;
+  version?: string;
+}
+
+export interface TarParseResult {
+  isTar: boolean;
+  blockSize: number;
+  blockCount: number;
+  fileSize: number;
+  format: TarFormatInfo;
+  entries: TarEntry[];
+  stats: TarStats;
+  features: TarFeatures;
+  terminatorBlocks: number;
+  issues: string[];
+}
+
+export async function parseTar(file: File): Promise<TarParseResult> {
+  const issues: string[] = [];
   const buffer = await file.arrayBuffer();
   const bytes = new Uint8Array(buffer);
   const fileSize = bytes.byteLength;
@@ -60,8 +130,8 @@ export async function parseTar(file) {
   if (remainder !== 0) {
     issues.push("File size is not aligned to 512-byte TAR blocks; trailing data will be ignored.");
   }
-  const entries = [];
-  const stats = {
+  const entries: TarEntry[] = [];
+  const stats: TarStats = {
     totalEntries: 0,
     regularFiles: 0,
     directories: 0,
@@ -71,7 +141,7 @@ export async function parseTar(file) {
     blocksConsumed: 0,
     truncatedEntries: 0
   };
-  const features = {
+  const features: TarFeatures = {
     usedLongNames: false,
     usedLongLinks: false,
     usedPaxHeaders: false,
@@ -178,7 +248,7 @@ export async function parseTar(file) {
       continue;
     }
 
-    const entry = {
+    const entry: TarEntry = {
       index: entries.length,
       name: pendingLongName || combineNameParts(prefix, name),
       rawName: name,

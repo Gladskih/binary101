@@ -1,17 +1,23 @@
-/* eslint-disable max-lines */
-// @ts-nocheck
 "use strict";
 
 import { dd, safe } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
+import type {
+  SevenZipArchiveFlags,
+  SevenZipFileSummary,
+  SevenZipFolderSummary,
+  SevenZipParseResult,
+  SevenZipParsedNextHeader,
+  SevenZipStartHeader
+} from "../../analyzers/sevenz/index.js";
 
-const formatOffset = value => {
+const formatOffset = (value: number | bigint | null | undefined): string => {
   if (value == null) return "-";
   if (typeof value === "bigint") return `0x${value.toString(16)}`;
   return toHex32(value, 8);
 };
 
-const formatSize = value => {
+const formatSize = (value: number | bigint | null | undefined): string => {
   if (value == null) return "-";
   if (typeof value === "bigint") {
     if (value <= BigInt(Number.MAX_SAFE_INTEGER)) {
@@ -22,7 +28,7 @@ const formatSize = value => {
   return formatHumanSize(value);
 };
 
-const toSafeNumber = value => {
+const toSafeNumber = (value: number | bigint | null | undefined): number | null => {
   if (typeof value === "number") return value;
   if (typeof value === "bigint" && value <= BigInt(Number.MAX_SAFE_INTEGER)) {
     return Number(value);
@@ -30,7 +36,7 @@ const toSafeNumber = value => {
   return null;
 };
 
-const formatSizeDetailed = value => {
+const formatSizeDetailed = (value: number | bigint | null | undefined): string => {
   if (value == null) return "-";
   const safeNumber = toSafeNumber(value);
   if (safeNumber != null) return formatHumanSize(safeNumber);
@@ -38,7 +44,7 @@ const formatSizeDetailed = value => {
   return `${asBigInt.toString()} bytes`;
 };
 
-const describeCoders = coders => {
+const describeCoders = (coders: SevenZipFolderSummary["coders"] | undefined): string => {
   if (!coders?.length) return "-";
   return coders
     .map(coder => {
@@ -55,13 +61,13 @@ const describeCoders = coders => {
     .join(" + ");
 };
 
-const ARCHIVE_FLAG_DEFS = [
+const ARCHIVE_FLAG_DEFS: Array<[number, string, string]> = [
   [1, "Solid", "Solid compression: multiple files share a single compressed stream."],
   [2, "Header enc", "Header is stored in encoded form (often encrypted or compressed)."],
   [4, "Encrypted data", "At least one folder appears to use AES-256 encryption."]
 ];
 
-const FILE_FLAG_DEFS = [
+const FILE_FLAG_DEFS: Array<[number, string, string]> = [
   [1, "dir", "Directory entry; represents a folder rather than file data."],
   [2, "enc", "File data (or its folder) appears to be encrypted."],
   [4, "empty", "Zero-length file data after decompression."],
@@ -176,8 +182,11 @@ const KNOWN_METHODS = [
   ]
 ];
 
-const renderFlagsOrNone = (mask, defs) => {
-  const parts = [];
+const renderFlagsOrNone = (
+  mask: number,
+  defs: Array<[number, string, string?]>
+): string => {
+  const parts: string[] = [];
   if (!mask) {
     parts.push(
       `<span class="opt sel" title="No flags set">None</span>`
@@ -194,7 +203,7 @@ const renderFlagsOrNone = (mask, defs) => {
   return `<div class="optionsRow">${parts.join("")}</div>`;
 };
 
-const describeHeaderKind = parsed => {
+const describeHeaderKind = (parsed: SevenZipParsedNextHeader | undefined): string => {
   if (!parsed) return "Unknown (next header not parsed)";
   if (parsed.kind === "header") {
     return "Plain Header structure: metadata is stored uncompressed at the next-header location.";
@@ -213,15 +222,18 @@ const describeHeaderKind = parsed => {
   return String(parsed.kind);
 };
 
-const formatRatio = value => {
+const formatRatio = (value: number | null | undefined): string => {
   if (value == null || !Number.isFinite(value)) return "-";
   return `${value.toFixed(1)}%`;
 };
 
-const renderOverview = (sevenZip, out) => {
-  const header = sevenZip.startHeader || {};
-  const next = sevenZip.nextHeader || {};
-  const flags = sevenZip.structure?.archiveFlags;
+const renderOverview = (sevenZip: SevenZipParseResult, out: string[]): void => {
+  const header = (sevenZip.startHeader || {}) as Partial<SevenZipStartHeader>;
+  const next = (sevenZip.nextHeader || {}) as {
+    crc?: number;
+    parsed?: SevenZipParsedNextHeader;
+  };
+  const flags = sevenZip.structure?.archiveFlags as SevenZipArchiveFlags | undefined;
   const headerEncoding = sevenZip.headerEncoding || null;
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">7z overview</h4>`);
@@ -240,7 +252,7 @@ const renderOverview = (sevenZip, out) => {
   out.push(
     dd(
       "Start header CRC",
-      toHex32(header.startHeaderCrc, 8),
+      toHex32(header.startHeaderCrc ?? 0, 8),
       "CRC32 over the 20 bytes that follow this field in the signature header (Next Header offset, size and CRC). The Start Header CRC field itself is not included."
     )
   );
@@ -263,7 +275,7 @@ const renderOverview = (sevenZip, out) => {
   out.push(
     dd(
       "Next header CRC",
-      toHex32(next.crc ?? header.nextHeaderCrc, 8),
+      toHex32((next.crc ?? header.nextHeaderCrc) ?? 0, 8),
       "CRC32 checksum of the header database after decoding. A mismatch indicates damaged or tampered metadata."
     )
   );
@@ -323,8 +335,8 @@ const renderOverview = (sevenZip, out) => {
   out.push(`</section>`);
 };
 
-const renderSignatureLayout = (sevenZip, out) => {
-  const header = sevenZip.startHeader;
+const renderSignatureLayout = (sevenZip: SevenZipParseResult, out: string[]): void => {
+  const header = sevenZip.startHeader as SevenZipStartHeader | undefined;
   if (!header) return;
   out.push(`<section>`);
   out.push(
@@ -379,7 +391,7 @@ const renderSignatureLayout = (sevenZip, out) => {
   out.push(`</section>`);
 };
 
-const describeFileType = file => {
+const describeFileType = (file: SevenZipFileSummary): string => {
   if (file.isAnti) return "Anti-item";
   if (file.isDirectory) return "Directory";
   if (file.isEmptyStream && file.isEmptyFile) return "Empty file";
@@ -388,7 +400,7 @@ const describeFileType = file => {
   return "File";
 };
 
-const renderFolders = (sevenZip, out) => {
+const renderFolders = (sevenZip: SevenZipParseResult, out: string[]): void => {
   const folders = sevenZip.structure?.folders || [];
   if (!folders.length) return;
   out.push(`<section>`);
@@ -422,7 +434,7 @@ const renderFolders = (sevenZip, out) => {
   out.push(`</section>`);
 };
 
-const renderFiles = (sevenZip, out) => {
+const renderFiles = (sevenZip: SevenZipParseResult, out: string[]): void => {
   const files = sevenZip.structure?.files || [];
   const folders = sevenZip.structure?.folders || [];
   if (!files.length) return;
@@ -448,7 +460,7 @@ const renderFiles = (sevenZip, out) => {
       `<th title="Convenience flags derived from header fields: dir (directory), enc (encrypted), empty (zero-length), no-stream (no associated data).">Flags</th>` +
     `</tr></thead><tbody>`
   );
-  shown.forEach(file => {
+  shown.forEach((file: SevenZipFileSummary) => {
     const type = describeFileType(file);
     const modified = file.modifiedTime ? safe(file.modifiedTime) : "-";
     const attrs = file.attributes ? safe(file.attributes) : "-";
@@ -485,7 +497,7 @@ const renderFiles = (sevenZip, out) => {
   out.push(`</section>`);
 };
 
-const renderKnownMethods = out => {
+const renderKnownMethods = (out: string[]): void => {
   if (!KNOWN_METHODS.length) return;
   out.push(`<section>`);
   out.push(
@@ -507,7 +519,7 @@ const renderKnownMethods = out => {
   out.push(`</section>`);
 };
 
-const renderIssues = (sevenZip, out) => {
+const renderIssues = (sevenZip: SevenZipParseResult, out: string[]): void => {
   const issues = sevenZip.issues || [];
   if (!issues.length) return;
   out.push(`<section>`);
@@ -518,9 +530,9 @@ const renderIssues = (sevenZip, out) => {
   out.push(`</section>`);
 };
 
-export function renderSevenZip(sevenZip) {
+export function renderSevenZip(sevenZip: SevenZipParseResult | null): string {
   if (!sevenZip || !sevenZip.is7z) return "";
-  const out = [];
+  const out: string[] = [];
   renderOverview(sevenZip, out);
   renderFolders(sevenZip, out);
   renderFiles(sevenZip, out);

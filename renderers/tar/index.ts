@@ -1,18 +1,19 @@
-// @ts-nocheck
 "use strict";
 
 import { dd, safe } from "../../html-utils.js";
 import { formatHumanSize } from "../../binary-utils.js";
+import type { TarEntry, TarParseResult } from "../../analyzers/tar/index.js";
 
-const formatSize = value => {
+const formatSize = (value: number | null | undefined): string => {
   if (value == null) return "-";
   if (!Number.isFinite(value)) return `${value} bytes`;
   return formatHumanSize(value);
 };
 
-const formatCount = value => (value == null ? "-" : value.toString());
+const formatCount = (value: number | null | undefined): string =>
+  value == null ? "-" : value.toString();
 
-const formatMode = entry => {
+const formatMode = (entry: TarEntry): string => {
   if (entry.modeSymbolic && entry.modeOctal) {
     return `${safe(entry.modeSymbolic)} (${safe(entry.modeOctal)})`;
   }
@@ -21,14 +22,14 @@ const formatMode = entry => {
   return "-";
 };
 
-const describeType = entry => {
+const describeType = (entry: TarEntry): string => {
   const label = entry.typeLabel || "Entry";
   const code = entry.typeFlag || "";
   return code ? `${safe(label)} <span class="dim">(${safe(code)})</span>` : safe(label);
 };
 
-const describeNotes = entry => {
-  const notes = [];
+const describeNotes = (entry: TarEntry): string => {
+  const notes: string[] = [];
   if (entry.linkName) notes.push(`→ ${entry.linkName}`);
   if (entry.usesLongName) notes.push("GNU long name");
   if (entry.usesLongLink) notes.push("GNU long link");
@@ -40,20 +41,20 @@ const describeNotes = entry => {
   return notes.length ? safe(notes.join("; ")) : "-";
 };
 
-const describeOwner = entry => {
+const describeOwner = (entry: TarEntry): string => {
   const owner = entry.uname || (entry.uid != null ? entry.uid.toString() : "-");
   const group = entry.gname || (entry.gid != null ? entry.gid.toString() : "-");
   if (owner === "-" && group === "-") return "-";
   return `${safe(owner)} / ${safe(group)}`;
 };
 
-const renderOptionsRow = (label, isActive, tooltip) => {
+const renderOptionsRow = (label: string, isActive: boolean, tooltip?: string): string => {
   const cls = isActive ? "opt sel" : "opt dim";
   const title = tooltip ? ` title="${safe(tooltip)}"` : "";
   return `<span class="${cls}"${title}>${safe(label)}</span>`;
 };
 
-const renderSummary = (tar, out) => {
+const renderSummary = (tar: TarParseResult, out: string[]): void => {
   const { stats, format, blockCount, blockSize, terminatorBlocks } = tar;
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">TAR overview</h4>`);
@@ -81,7 +82,7 @@ const renderSummary = (tar, out) => {
   out.push(`</section>`);
 };
 
-const renderFeatures = (tar, out) => {
+const renderFeatures = (tar: TarParseResult, out: string[]): void => {
   const features = tar.features || {};
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Detected features</h4>`);
@@ -134,7 +135,7 @@ const renderFeatures = (tar, out) => {
   out.push(`</section>`);
 };
 
-const renderEntries = (tar, out) => {
+const renderEntries = (tar: TarParseResult, out: string[]): void => {
   const entries = tar.entries || [];
   if (!entries.length) return;
   const limit = 200;
@@ -147,7 +148,7 @@ const renderEntries = (tar, out) => {
       `<th>Modified</th><th>Owner/Group</th><th>Mode</th><th>Notes</th>` +
     `</tr></thead><tbody>`
   );
-  visible.forEach(entry => {
+  visible.forEach((entry: TarEntry) => {
     const size = safe(formatSize(entry.size));
     const modified = safe(entry.mtimeIso || "-");
     const owner = describeOwner(entry);
@@ -172,7 +173,7 @@ const renderEntries = (tar, out) => {
   out.push(`</section>`);
 };
 
-const renderIssues = (tar, out) => {
+const renderIssues = (tar: TarParseResult, out: string[]): void => {
   const issues = tar.issues || [];
   if (!issues.length) return;
   out.push(`<section>`);
@@ -183,9 +184,9 @@ const renderIssues = (tar, out) => {
   out.push(`</section>`);
 };
 
-export function renderTar(tar) {
+export function renderTar(tar: TarParseResult | null): string {
   if (!tar) return "";
-  const out = [];
+  const out: string[] = [];
   renderSummary(tar, out);
   renderFeatures(tar, out);
   renderEntries(tar, out);
