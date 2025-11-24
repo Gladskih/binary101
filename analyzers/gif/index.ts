@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use strict";
 
 import {
@@ -9,8 +8,25 @@ import {
   parseCommentExtension,
   parsePlainTextExtension
 } from "./helpers.js";
+import type {
+  GifApplicationExtension,
+  GifComment,
+  GifFrame,
+  GifGraphicControlExtension,
+  GifParseResult
+} from "./types.js";
 
-function parseImageDescriptor(dv, offset, nextGraphicControl) {
+interface GifImageDescriptorResult {
+  frame: GifFrame | null;
+  nextOffset: number;
+  warning: string | null;
+}
+
+function parseImageDescriptor(
+  dv: DataView,
+  offset: number,
+  nextGraphicControl: GifGraphicControlExtension | null
+): GifImageDescriptorResult {
   if (offset + 10 > dv.byteLength) {
     return {
       frame: null,
@@ -70,7 +86,7 @@ function parseImageDescriptor(dv, offset, nextGraphicControl) {
   };
 }
 
-export async function parseGif(file) {
+export async function parseGif(file: File): Promise<GifParseResult | null> {
   const dv = new DataView(await file.arrayBuffer());
   if (dv.byteLength < 13) return null;
   const sig = readAsciiRange(dv, 0, 6);
@@ -90,7 +106,7 @@ export async function parseGif(file) {
     pixelAspectByte === 0 ? null : (pixelAspectByte + 15) / 64;
 
   let offset = 13;
-  const warnings = [];
+  const warnings: string[] = [];
   if (hasGct) {
     const gctBytes = globalColorCount * 3;
     if (offset + gctBytes > dv.byteLength) {
@@ -101,12 +117,12 @@ export async function parseGif(file) {
     }
   }
 
-  const frames = [];
-  const comments = [];
-  const applicationExtensions = [];
+  const frames: GifFrame[] = [];
+  const comments: GifComment[] = [];
+  const applicationExtensions: GifApplicationExtension[] = [];
   let plainTextCount = 0;
   let loopCount = null;
-  let lastGce = null;
+  let lastGce: GifGraphicControlExtension | null = null;
   let hasTrailer = false;
 
   while (offset < dv.byteLength) {
@@ -191,7 +207,7 @@ export async function parseGif(file) {
   };
 }
 
-export const isGifSignature = dv => {
+export const isGifSignature = (dv: DataView): boolean => {
   if (dv.byteLength < 6) return false;
   const sig = readAsciiRange(dv, 0, 6);
   return sig === "GIF87a" || sig === "GIF89a";

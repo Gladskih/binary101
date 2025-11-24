@@ -1,5 +1,11 @@
 "use strict";
 
+import type {
+  GifApplicationExtension,
+  GifComment,
+  GifGraphicControlExtension
+} from "./types.js";
+
 export const DISPOSAL_METHODS: string[] = [
   "No disposal specified",
   "Keep previous frame (do not dispose)",
@@ -37,6 +43,12 @@ export interface GifSubBlocks {
   blockCount: number;
   truncated: boolean;
   previewBytes: number[];
+}
+
+export interface GifGraphicControlResult {
+  gce: GifGraphicControlExtension | null;
+  nextOffset: number;
+  warning: string | null;
 }
 
 export function readSubBlocks(
@@ -77,16 +89,9 @@ export function readSubBlocks(
   return { endOffset: cursor, totalSize, blockCount, truncated, previewBytes };
 }
 
-export interface GifGraphicControlExtension {
-  disposalMethod: string;
-  delayMs: number;
-  transparentColorIndex: number | null;
-  userInputFlag: boolean;
-}
-
-export interface GifGraphicControlResult {
-  gce: GifGraphicControlExtension | null;
+export interface GifApplicationExtensionResult {
   nextOffset: number;
+  info: GifApplicationExtension | null;
   warning: string | null;
 }
 
@@ -129,18 +134,9 @@ export function parseGraphicControl(dv: DataView, offset: number): GifGraphicCon
   };
 }
 
-export interface GifApplicationExtensionInfo {
-  identifier: string;
-  authCode: string;
-  loopCount: number | null;
-  dataSize: number;
-  truncated: boolean;
-}
-
-export interface GifApplicationExtensionResult {
+export interface GifCommentResult {
   nextOffset: number;
-  info: GifApplicationExtensionInfo | null;
-  warning: string | null;
+  comment: GifComment;
 }
 
 export function parseApplicationExtension(
@@ -181,16 +177,6 @@ export function parseApplicationExtension(
     nextOffset: subBlocks.endOffset,
     warning: null
   };
-}
-
-export interface GifCommentInfo {
-  text: string;
-  truncated: boolean;
-}
-
-export interface GifCommentResult {
-  nextOffset: number;
-  comment: GifCommentInfo;
 }
 
 export function parseCommentExtension(dv: DataView, offset: number): GifCommentResult {
