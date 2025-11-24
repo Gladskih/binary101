@@ -1,9 +1,9 @@
-// @ts-nocheck
 "use strict";
 
 import { readAsciiString } from "../../binary-utils.js";
+import type { ExifData, ExifGps, ExifRational, ExifRawTag } from "./types.js";
 
-const EXIF_TYPE_SIZE = {
+const EXIF_TYPE_SIZE: Record<number, number> = {
   1: 1, // BYTE
   2: 1, // ASCII
   3: 2, // SHORT
@@ -11,24 +11,31 @@ const EXIF_TYPE_SIZE = {
   5: 8 // RATIONAL
 };
 
-function readUint16(dv, offset, littleEndian) {
+function readUint16(dv: DataView, offset: number, littleEndian: boolean): number | null {
   if (offset + 2 > dv.byteLength) return null;
   return dv.getUint16(offset, littleEndian);
 }
 
-function readUint32(dv, offset, littleEndian) {
+function readUint32(dv: DataView, offset: number, littleEndian: boolean): number | null {
   if (offset + 4 > dv.byteLength) return null;
   return dv.getUint32(offset, littleEndian);
 }
 
-function readRational(dv, offset, littleEndian) {
+function readRational(dv: DataView, offset: number, littleEndian: boolean): ExifRational | null {
   const num = readUint32(dv, offset, littleEndian);
   const den = readUint32(dv, offset + 4, littleEndian);
   if (num == null || den == null || den === 0) return null;
   return { num, den };
 }
 
-function readTagValueOffset(dv, base, entryOffset, littleEndian, type, count) {
+function readTagValueOffset(
+  dv: DataView,
+  base: number,
+  entryOffset: number,
+  littleEndian: boolean,
+  type: number,
+  count: number
+): number | null {
   const typeSize = EXIF_TYPE_SIZE[type];
   if (!typeSize) return null;
   const valueBytes = typeSize * count;
@@ -40,7 +47,71 @@ function readTagValueOffset(dv, base, entryOffset, littleEndian, type, count) {
   return base + valueOrOffset;
 }
 
-export function parseExifFromApp1(dv, tiffOffset) {
+function createRawTagPreview(
+  dv: DataView,
+  valueOffset: number,
+  type: number,
+  valueCount: number,
+  littleEndian: boolean
+): string {
+  const maxAscii = 64;
+  const maxNumeric = 8;
+  if (type === 2) {
+    const str = readAsciiString(dv, valueOffset, Math.min(valueCount, maxAscii));
+    if (!str) return "";
+    return valueCount > maxAscii ? `${str}...` : str;
+  }
+  if (type === 3 || type === 4) {
+    const values: number[] = [];
+    const step = type === 3 ? 2 : 4;
+    const maxCount = Math.min(valueCount, maxNumeric);
+    for (let i = 0; i < maxCount; i += 1) {
+      const off = valueOffset + i * step;
+      const v =
+        type === 3 ? readUint16(dv, off, littleEndian) : readUint32(dv, off, littleEndian);
+      if (v == null) break;
+      values.push(v);
+    }
+    const preview = values.join(", ");
+    return valueCount > maxNumeric ? `${preview}, ...` : preview;
+  }
+  if (type === 5) {
+    const values: string[] = [];
+    const maxCount = Math.min(valueCount, 4);
+    for (let i = 0; i < maxCount; i += 1) {
+      const off = valueOffset + i * 8;
+      const r = readRational(dv, off, littleEndian);
+      if (!r) break;
+      values.push(`${r.num}/${r.den}`);
+    }
+    const preview = values.join(", ");
+    return valueCount > 4 ? `${preview}, ...` : preview;
+  }
+  return "(binary/unsupported type)";
+}
+
+function recordRawTag(
+  exif: ExifData,
+  dv: DataView,
+  littleEndian: boolean,
+  ifdName: string,
+  tag: number,
+  type: number,
+  valueCount: number,
+  valueOffset: number
+): void {
+  const preview = createRawTagPreview(dv, valueOffset, type, valueCount, littleEndian);
+  const rawTag: ExifRawTag = {
+    ifd: ifdName,
+    tag,
+    type,
+    count: valueCount,
+    preview
+  };
+  exif.rawTags.push(rawTag);
+}
+
+export function parseExifFromApp1(dv: DataView, tiffOffset: number): ExifData | null {
   if (tiffOffset + 8 > dv.byteLength) return null;
   const endianMark = readUint16(dv, tiffOffset, false);
   const littleEndian = endianMark === 0x4949;
@@ -52,7 +123,7 @@ export function parseExifFromApp1(dv, tiffOffset) {
   const ifd0 = tiffOffset + ifd0Rel;
   if (ifd0 + 2 > dv.byteLength) return null;
 
-  const exif = {
+  const exif: ExifData = {
     orientation: null,
     make: null,
     model: null,
@@ -68,63 +139,14 @@ export function parseExifFromApp1(dv, tiffOffset) {
     rawTags: []
   };
 
-  let exifIfdRel = null;
-  let gpsIfdRel = null;
+  let exifIfdRel: number | null = null;
+  let gpsIfdRel: number | null = null;
 
-  const recordRawTag = (ifdName, tag, type, valueCount, valueOffset) => {
-    const maxAscii = 64;
-    const maxNumeric = 8;
-    let preview = "";
-    if (type === 2) {
-      const str = readAsciiString(
-        dv,
-        valueOffset,
-        Math.min(valueCount, maxAscii)
-      );
-      preview = str || "";
-      if (valueCount > maxAscii) preview += "…";
-    } else if (type === 3 || type === 4) {
-      const values = [];
-      const step = type === 3 ? 2 : 4;
-      const maxCount = Math.min(valueCount, maxNumeric);
-      for (let i = 0; i < maxCount; i += 1) {
-        const off = valueOffset + i * step;
-        const v =
-          type === 3
-            ? readUint16(dv, off, littleEndian)
-            : readUint32(dv, off, littleEndian);
-        if (v == null) break;
-        values.push(v);
-      }
-      preview = values.join(", ");
-      if (valueCount > maxNumeric) preview += ", …";
-    } else if (type === 5) {
-      const values = [];
-      const maxCount = Math.min(valueCount, 4);
-      for (let i = 0; i < maxCount; i += 1) {
-        const off = valueOffset + i * 8;
-        const r = readRational(dv, off, littleEndian);
-        if (!r) break;
-        values.push(`${r.num}/${r.den}`);
-      }
-      preview = values.join(", ");
-      if (valueCount > 4) preview += ", …";
-    } else {
-      preview = "(binary/unsupported type)";
-    }
-    exif.rawTags.push({
-      ifd: ifdName,
-      tag,
-      type,
-      count: valueCount,
-      preview
-    });
-  };
-
-  const parseIfd = (ifdOffset, ifdName, isRoot) => {
-    const count = readUint16(dv, ifdOffset, littleEndian);
+  const parseIfd = (ifdStart: number, ifdName: string, isRoot: boolean): void => {
+    if (ifdStart + 2 > dv.byteLength) return;
+    const count = readUint16(dv, ifdStart, littleEndian);
     if (count == null) return;
-    let entryOffset = ifdOffset + 2;
+    let entryOffset = ifdStart + 2;
     for (let i = 0; i < count; i += 1) {
       if (entryOffset + 12 > dv.byteLength) break;
       const tag = readUint16(dv, entryOffset, littleEndian);
@@ -145,7 +167,7 @@ export function parseExifFromApp1(dv, tiffOffset) {
       }
 
       if (isRoot) {
-        if (tag === 0x0112 && type === 3 && valueCount === 1) {
+        if (tag === 0x0112 && type === 3 && valueCount >= 1) {
           const v = readUint16(dv, valueOffset, littleEndian);
           if (v != null) exif.orientation = v;
         } else if ((tag === 0x010f || tag === 0x0110) && type === 2) {
@@ -161,9 +183,10 @@ export function parseExifFromApp1(dv, tiffOffset) {
         }
       } else {
         if (tag === 0x8827 && (type === 3 || type === 4) && valueCount >= 1) {
-          const v = type === 3
-            ? readUint16(dv, valueOffset, littleEndian)
-            : readUint32(dv, valueOffset, littleEndian);
+          const v =
+            type === 3
+              ? readUint16(dv, valueOffset, littleEndian)
+              : readUint32(dv, valueOffset, littleEndian);
           if (v != null) exif.iso = v;
         } else if (tag === 0x829a && type === 5 && valueCount >= 1) {
           const r = readRational(dv, valueOffset, littleEndian);
@@ -181,19 +204,21 @@ export function parseExifFromApp1(dv, tiffOffset) {
           const v = readUint16(dv, valueOffset, littleEndian);
           if (v != null) exif.flash = v;
         } else if (tag === 0xa002 && (type === 3 || type === 4) && valueCount >= 1) {
-          const v = type === 3
-            ? readUint16(dv, valueOffset, littleEndian)
-            : readUint32(dv, valueOffset, littleEndian);
+          const v =
+            type === 3
+              ? readUint16(dv, valueOffset, littleEndian)
+              : readUint32(dv, valueOffset, littleEndian);
           if (v != null) exif.pixelXDimension = v;
         } else if (tag === 0xa003 && (type === 3 || type === 4) && valueCount >= 1) {
-          const v = type === 3
-            ? readUint16(dv, valueOffset, littleEndian)
-            : readUint32(dv, valueOffset, littleEndian);
+          const v =
+            type === 3
+              ? readUint16(dv, valueOffset, littleEndian)
+              : readUint32(dv, valueOffset, littleEndian);
           if (v != null) exif.pixelYDimension = v;
         }
       }
 
-      recordRawTag(ifdName, tag, type, valueCount, valueOffset);
+      recordRawTag(exif, dv, littleEndian, ifdName, tag, type, valueCount, valueOffset);
 
       entryOffset += 12;
     }
@@ -211,7 +236,7 @@ export function parseExifFromApp1(dv, tiffOffset) {
   if (gpsIfdRel != null) {
     const gpsIfd = tiffOffset + gpsIfdRel;
     if (gpsIfd + 2 <= dv.byteLength) {
-      const gps = {
+      const gps: ExifGps = {
         latRef: null,
         lat: null,
         lonRef: null,
@@ -239,7 +264,7 @@ export function parseExifFromApp1(dv, tiffOffset) {
             continue;
           }
 
-          recordRawTag("GPSIFD", tag, type, valueCount, valueOffset);
+          recordRawTag(exif, dv, littleEndian, "GPSIFD", tag, type, valueCount, valueOffset);
 
           if (tag === 0x0001 && type === 2 && valueCount >= 1) {
             gps.latRef = readAsciiString(dv, valueOffset, valueCount).trim();

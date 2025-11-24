@@ -1,34 +1,81 @@
-// @ts-nocheck
 "use strict";
 
 const MAX_PARSE_BYTES = 1024 * 512;
 
-function firstByTag(parent, tagName) {
+type NodeWithChildren = Element | Document | null;
+
+interface Fb2Sequence {
+  name: string;
+  number: string;
+}
+
+interface Fb2Languages {
+  lang: string;
+  srcLang: string;
+}
+
+interface Fb2DocumentInfo {
+  authors: string[];
+  programUsed: string;
+  documentId: string;
+  documentVersion: string;
+  documentDate: string | null;
+  sourceUrls: string[];
+  sourceOcr: string;
+}
+
+interface Fb2PublishInfo {
+  publisher: string;
+  isbn: string;
+  year: string;
+  city: string;
+}
+
+export interface Fb2ParseResult {
+  size: number;
+  bytesInspected: number;
+  parseError: boolean;
+  title: string;
+  genres: string[];
+  keywords: string[];
+  languages: Fb2Languages;
+  annotation: string | null;
+  sequence: Fb2Sequence | null;
+  coverImage: string | null;
+  titleAuthors: string[];
+  bodyCount: number;
+  sectionCount: number;
+  binaryCount: number;
+  documentInfo: Fb2DocumentInfo;
+  publishInfo: Fb2PublishInfo;
+}
+
+function firstByTag(parent: NodeWithChildren, tagName: string): Element | null {
   if (!parent) return null;
   const els = parent.getElementsByTagName(tagName);
   return els && els.length ? els[0] : null;
 }
 
-function allByTag(parent, tagName) {
+function allByTag(parent: NodeWithChildren, tagName: string): Element[] {
   if (!parent) return [];
   const els = parent.getElementsByTagName(tagName);
   return els && els.length ? Array.from(els) : [];
 }
 
-function textFromElement(parent, tagName) {
+function textFromElement(parent: NodeWithChildren, tagName: string): string {
   if (!parent) return "";
   const el = firstByTag(parent, tagName);
   if (!el) return "";
   return (el.textContent || "").trim();
 }
 
-function collectTexts(parent, tagName) {
+function collectTexts(parent: NodeWithChildren, tagName: string): string[] {
   return allByTag(parent, tagName)
     .map(el => (el.textContent || "").trim())
     .filter(Boolean);
 }
 
-function pickImageHref(imageEl) {
+function pickImageHref(imageEl: Element | null): string | null {
   if (!imageEl) return null;
   return (
     imageEl.getAttribute("href") ||
@@ -37,7 +84,7 @@ function pickImageHref(imageEl) {
   );
 }
 
-function formatAuthor(authorEl) {
+function formatAuthor(authorEl: Element | null): string | null {
   if (!authorEl) return null;
   const parts = [
     textFromElement(authorEl, "first-name"),
@@ -50,21 +97,21 @@ function formatAuthor(authorEl) {
   return parts.join(" ");
 }
 
-function collectAuthors(parent, tagName = "author") {
-  return allByTag(parent, tagName).map(formatAuthor).filter(Boolean);
+function collectAuthors(parent: NodeWithChildren, tagName = "author"): string[] {
+  return allByTag(parent, tagName).map(formatAuthor).filter(Boolean) as string[];
 }
 
-function summarizeAnnotation(titleInfo) {
+function summarizeAnnotation(titleInfo: Element | null): string | null {
   if (!titleInfo) return null;
   const annotationEl = firstByTag(titleInfo, "annotation");
   if (!annotationEl) return null;
   const text = (annotationEl.textContent || "").trim();
   if (!text) return null;
   const limit = 320;
-  return text.length > limit ? `${text.slice(0, limit)}…` : text;
+  return text.length > limit ? `${text.slice(0, limit)}...` : text;
 }
 
-function parseSequence(titleInfo) {
+function parseSequence(titleInfo: Element | null): Fb2Sequence | null {
   if (!titleInfo) return null;
   const seq = firstByTag(titleInfo, "sequence");
   if (!seq) return null;
@@ -74,7 +121,7 @@ function parseSequence(titleInfo) {
   return { name, number };
 }
 
-function parseDateWithValue(el) {
+function parseDateWithValue(el: Element | null): string | null {
   if (!el) return null;
   const valueAttr = el.getAttribute("value");
   const text = (el.textContent || "").trim();
@@ -84,13 +131,13 @@ function parseDateWithValue(el) {
   return valueAttr || text || null;
 }
 
-export async function parseFb2(file) {
+export async function parseFb2(file: File): Promise<Fb2ParseResult | null> {
   const readBytes = Math.min(file.size || 0, MAX_PARSE_BYTES);
   const buffer = await file.slice(0, readBytes).arrayBuffer();
   const decoder = new TextDecoder("utf-8", { fatal: false });
   const text = decoder.decode(buffer);
   const lower = text.toLowerCase();
-  if (lower.indexOf("<fictionbook") === -1) return null;
+  if (!lower.includes("<fictionbook")) return null;
 
   const parser = new DOMParser();
   const doc = parser.parseFromString(text, "application/xml");
@@ -111,16 +158,14 @@ export async function parseFb2(file) {
   const title = textFromElement(titleInfo, "book-title");
   const genres = collectTexts(titleInfo, "genre");
   const keywords = collectTexts(titleInfo, "keywords");
-  const languages = {
+  const languages: Fb2Languages = {
     lang: textFromElement(titleInfo, "lang"),
     srcLang: textFromElement(titleInfo, "src-lang")
   };
   const annotation = summarizeAnnotation(titleInfo);
   const sequence = parseSequence(titleInfo);
   const titleAuthors = collectAuthors(titleInfo);
-  const coverImage = pickImageHref(
-    firstByTag(firstByTag(titleInfo, "coverpage"), "image")
-  );
+  const coverImage = pickImageHref(firstByTag(firstByTag(titleInfo, "coverpage"), "image"));
 
   const documentAuthors = collectAuthors(documentInfo);
   const programUsed = textFromElement(documentInfo, "program-used");

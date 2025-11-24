@@ -1,12 +1,23 @@
-// @ts-nocheck
 "use strict";
+
+import type {
+  PdfCatalog,
+  PdfHeader,
+  PdfInfoDictionary,
+  PdfIndirectRef,
+  PdfPages,
+  PdfParseResult,
+  PdfTrailer,
+  PdfXref,
+  PdfXrefTable
+} from "./types.js";
 
 const MAX_XREF_ENTRIES = 20000;
 const MAX_OBJECT_SCAN = 65536;
 
 const decoder = new TextDecoder("latin1", { fatal: false });
 
-function parseHeader(text, issues) {
+function parseHeader(text: string, issues: string[]): PdfHeader {
   const firstLineEnd = text.indexOf("\n");
   const headerLine =
     firstLineEnd !== -1 ? text.slice(0, firstLineEnd).trimEnd() : text.trimEnd();
@@ -19,7 +30,7 @@ function parseHeader(text, issues) {
   return { headerLine, version: match[1], binaryMarker: binaryMarker ? binaryMarker[0] : null };
 }
 
-function parseStartxref(text, issues) {
+function parseStartxref(text: string, issues: string[]): number | null {
   const idx = text.lastIndexOf("startxref");
   if (idx === -1) {
     issues.push("startxref marker not found.");
@@ -34,13 +45,13 @@ function parseStartxref(text, issues) {
   return Number.parseInt(match[1], 10);
 }
 
-function skipWhitespace(text, position) {
+function skipWhitespace(text: string, position: number): number {
   let pos = position;
   while (pos < text.length && /\s/.test(text[pos])) pos += 1;
   return pos;
 }
 
-function parseXrefTable(text, startOffset, issues) {
+function parseXrefTable(text: string, startOffset: number, issues: string[]): PdfXrefTable | null {
   let pos = skipWhitespace(text, startOffset);
   if (!text.startsWith("xref", pos)) return null;
   pos += 4;
@@ -51,8 +62,8 @@ function parseXrefTable(text, startOffset, issues) {
     return null;
   }
   const lines = tableBody.slice(0, trailerIndex).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  const sections = [];
-  const entries = [];
+  const sections: PdfXrefTable["sections"] = [];
+  const entries: PdfXrefTable["entries"] = [];
   let lineIndex = 0;
   while (lineIndex < lines.length) {
     const headerParts = lines[lineIndex].split(/\s+/);
@@ -98,7 +109,7 @@ function parseXrefTable(text, startOffset, issues) {
   return { kind: "table", startOffset, sections, entries, trailerText };
 }
 
-function extractDictionary(text, startAt) {
+function extractDictionary(text: string, startAt: number): string | null {
   const dictStart = text.indexOf("<<", startAt);
   if (dictStart === -1) return null;
   let depth = 0;
@@ -118,14 +129,14 @@ function extractDictionary(text, startAt) {
   return null;
 }
 
-function parseIndirectRef(dictText, name) {
+function parseIndirectRef(dictText: string, name: string): PdfIndirectRef | null {
   const pattern = new RegExp(`/${name}\\s+(\\d+)\\s+(\\d+)\\s+R`);
   const match = dictText.match(pattern);
   if (!match) return null;
   return { objectNumber: Number.parseInt(match[1], 10), generation: Number.parseInt(match[2], 10) };
 }
 
-function parseTrailerDictionary(trailerText) {
+function parseTrailerDictionary(trailerText: string): PdfTrailer {
   const dict = extractDictionary(trailerText, 0);
   if (!dict) return { raw: trailerText.trim(), size: null, rootRef: null, infoRef: null, id: null };
   const sizeMatch = dict.match(/\/Size\s+(\d+)/);
@@ -139,7 +150,7 @@ function parseTrailerDictionary(trailerText) {
   };
 }
 
-function parseXrefStream(text, startOffset, issues) {
+function parseXrefStream(text: string, startOffset: number, issues: string[]): PdfXref | null {
   const pos = skipWhitespace(text, startOffset);
   const objectMatch = text.slice(pos, pos + 64).match(/(\d+)\s+(\d+)\s+obj/);
   if (!objectMatch) return null;
@@ -155,7 +166,7 @@ function parseXrefStream(text, startOffset, issues) {
   };
 }
 
-function parseXref(text, startOffset, issues) {
+function parseXref(text: string, startOffset: number | null, issues: string[]): PdfXref | null {
   if (startOffset == null || Number.isNaN(startOffset)) return null;
   if (startOffset < 0 || startOffset >= text.length) {
     issues.push("startxref offset points outside the file.");
@@ -172,16 +183,21 @@ function parseXref(text, startOffset, issues) {
   return null;
 }
 
-function buildOffsetMap(xref) {
+function buildOffsetMap(xref: PdfXref | null): Map<number, number> | null {
   if (!xref || xref.kind !== "table") return null;
-  const map = new Map();
+  const map = new Map<number, number>();
   xref.entries
-    .filter(e => e.inUse)
+    .filter(entry => entry.inUse)
     .forEach(entry => map.set(entry.objectNumber, entry.offset));
   return map;
 }
 
-function readObjectText(text, offset, issues, label) {
+function readObjectText(
+  text: string,
+  offset: number | undefined,
+  issues: string[],
+  label: string
+): string | null {
   if (offset == null || offset < 0 || offset >= text.length) {
     issues.push(`${label} offset is outside the file.`);
     return null;
@@ -195,7 +211,7 @@ function readObjectText(text, offset, issues, label) {
   return slice.slice(0, endIdx);
 }
 
-function decodeLiteralString(value) {
+function decodeLiteralString(value: string): string {
   return value
     .replace(/\\n/g, "\n")
     .replace(/\\r/g, "\r")
@@ -207,11 +223,11 @@ function decodeLiteralString(value) {
     .replace(/\\\\/g, "\\");
 }
 
-function parseInfoDictionary(dictText) {
+function parseInfoDictionary(dictText: string | null): PdfInfoDictionary | null {
   if (!dictText) return null;
   const dict = extractDictionary(dictText, 0);
   if (!dict) return null;
-  const parseField = name => {
+  const parseField = (name: string): string | null => {
     const pattern = new RegExp(String.raw`/${name}\s*\(([^)]*)\)`);
     const match = dict.match(pattern);
     return match ? decodeLiteralString(match[1]) : null;
@@ -229,7 +245,7 @@ function parseInfoDictionary(dictText) {
   };
 }
 
-function parseCatalogDictionary(dictText) {
+function parseCatalogDictionary(dictText: string | null): PdfCatalog | null {
   if (!dictText) return null;
   const dict = extractDictionary(dictText, 0);
   if (!dict) return null;
@@ -239,7 +255,7 @@ function parseCatalogDictionary(dictText) {
   return { raw: dict.trim(), pagesRef, namesRef, outlinesRef };
 }
 
-function parsePagesDictionary(dictText) {
+function parsePagesDictionary(dictText: string | null): PdfPages | null {
   if (!dictText) return null;
   const dict = extractDictionary(dictText, 0);
   if (!dict) return null;
@@ -247,19 +263,19 @@ function parsePagesDictionary(dictText) {
   return { raw: dict.trim(), count: countMatch ? Number.parseInt(countMatch[1], 10) : null };
 }
 
-export async function parsePdf(file) {
+export async function parsePdf(file: File): Promise<PdfParseResult | null> {
   const buffer = await file.arrayBuffer();
   const text = decoder.decode(buffer);
-  const issues = [];
+  const issues: string[] = [];
   const header = parseHeader(text, issues);
   const startxref = parseStartxref(text, issues);
   const xref = parseXref(text, startxref, issues);
-  const trailer = xref && xref.trailer ? xref.trailer : null;
+  const trailer: PdfTrailer | null = xref && "trailer" in xref ? xref.trailer || null : null;
   const offsets = buildOffsetMap(xref);
 
-  let info = null;
-  let catalog = null;
-  let pages = null;
+  let info: PdfInfoDictionary | null = null;
+  let catalog: PdfCatalog | null = null;
+  let pages: PdfPages | null = null;
 
   if (offsets && trailer && trailer.infoRef) {
     const infoOffset = offsets.get(trailer.infoRef.objectNumber);

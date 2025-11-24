@@ -1,191 +1,29 @@
-// @ts-nocheck
 "use strict";
 
-import { readAsciiString } from "../../binary-utils.js";
+import type {
+  PngChunk,
+  PngIccProfile,
+  PngIhdr,
+  PngParseResult,
+  PngPhysicalInfo,
+  PngTextChunk
+} from "./types.js";
+import {
+  parseGamma,
+  parseIcc,
+  parseIhdr,
+  parsePhys,
+  parseTextChunk,
+  parseTransparency,
+  readChunkHeader,
+  readChunkType
+} from "./chunk-parsers.js";
 
 const PNG_SIG0 = 0x89504e47;
 const PNG_SIG1 = 0x0d0a1a0a;
-const IHDR_LENGTH = 13;
 const MAX_CHUNKS = 4096;
-const MAX_TEXT_PREVIEW = 256;
 
-const COLOR_TYPES = new Map([
-  [
-    0,
-    {
-      name: "Grayscale",
-      channels: 1,
-      palette: false,
-      alpha: false,
-      bits: [1, 2, 4, 8, 16]
-    }
-  ],
-  [
-    2,
-    {
-      name: "Truecolor",
-      channels: 3,
-      palette: false,
-      alpha: false,
-      bits: [8, 16]
-    }
-  ],
-  [
-    3,
-    {
-      name: "Indexed-color",
-      channels: 1,
-      palette: true,
-      alpha: false,
-      bits: [1, 2, 4, 8]
-    }
-  ],
-  [
-    4,
-    {
-      name: "Grayscale + alpha",
-      channels: 2,
-      palette: false,
-      alpha: true,
-      bits: [8, 16]
-    }
-  ],
-  [
-    6,
-    {
-      name: "Truecolor + alpha",
-      channels: 4,
-      palette: false,
-      alpha: true,
-      bits: [8, 16]
-    }
-  ]
-]);
-
-function readChunkHeader(dv, offset) {
-  if (offset + 8 > dv.byteLength) return null;
-  const length = dv.getUint32(offset, false);
-  return { length };
-}
-
-function readChunkType(dv, offset) {
-  return readAsciiString(dv, offset + 4, 4);
-}
-
-function parseIhdr(dv, offset, length, issues) {
-  if (length !== IHDR_LENGTH) {
-    issues.push(`IHDR length should be 13 bytes, found ${length}.`);
-    if (offset + 8 + IHDR_LENGTH > dv.byteLength) return null;
-  }
-  if (offset + 8 + IHDR_LENGTH > dv.byteLength) return null;
-  const dataOffset = offset + 8;
-  const width = dv.getUint32(dataOffset, false);
-  const height = dv.getUint32(dataOffset + 4, false);
-  const bitDepth = dv.getUint8(dataOffset + 8);
-  const colorType = dv.getUint8(dataOffset + 9);
-  const compression = dv.getUint8(dataOffset + 10);
-  const filter = dv.getUint8(dataOffset + 11);
-  const interlace = dv.getUint8(dataOffset + 12);
-  const colorInfo = COLOR_TYPES.get(colorType);
-  if (!colorInfo) {
-    issues.push(`Unknown color type ${colorType}.`);
-  } else if (!colorInfo.bits.includes(bitDepth)) {
-    issues.push(`Bit depth ${bitDepth} is invalid for ${colorInfo.name}.`);
-  }
-  if (compression !== 0) {
-    issues.push(`Unexpected compression method ${compression} (expected 0).`);
-  }
-  if (filter !== 0) {
-    issues.push(`Unexpected filter method ${filter} (expected 0).`);
-  }
-  if (interlace !== 0 && interlace !== 1) {
-    issues.push(`Unknown interlace method ${interlace}.`);
-  }
-  const channels = colorInfo ? colorInfo.channels : null;
-  const bitsPerPixel = channels ? bitDepth * channels : null;
-  const bytesPerPixel = bitsPerPixel ? Math.ceil(bitsPerPixel / 8) : null;
-  return {
-    width,
-    height,
-    bitDepth,
-    colorType,
-    compression,
-    filter,
-    interlace,
-    channels,
-    bitsPerPixel,
-    bytesPerPixel,
-    colorName: colorInfo ? colorInfo.name : "Unknown",
-    usesPalette: !!(colorInfo && colorInfo.palette),
-    hasAlphaChannel: !!(colorInfo && colorInfo.alpha)
-  };
-}
-
-function parseTextChunk(dv, offset, length) {
-  const dataOffset = offset + 8;
-  const end = dataOffset + length;
-  if (end > dv.byteLength) return null;
-  let key = "";
-  let value = "";
-  for (let i = dataOffset; i < end; i += 1) {
-    const byte = dv.getUint8(i);
-    if (byte === 0x00) {
-      key = readAsciiString(dv, dataOffset, i - dataOffset);
-      if (i + 1 <= end) {
-        const valueLength = Math.min(end - (i + 1), MAX_TEXT_PREVIEW);
-        value = readAsciiString(dv, i + 1, valueLength);
-      }
-      break;
-    }
-  }
-  if (!key) return null;
-  return { key, value, length };
-}
-
-function parsePhys(dv, offset, length) {
-  if (length !== 9 || offset + 17 > dv.byteLength) return null;
-  const dataOffset = offset + 8;
-  const pixelsPerUnitX = dv.getUint32(dataOffset, false);
-  const pixelsPerUnitY = dv.getUint32(dataOffset + 4, false);
-  const unitSpecifier = dv.getUint8(dataOffset + 8);
-  return { pixelsPerUnitX, pixelsPerUnitY, unitSpecifier };
-}
-
-function parseGamma(dv, offset, length) {
-  if (length !== 4 || offset + 16 > dv.byteLength) return null;
-  const dataOffset = offset + 8;
-  const gammaInt = dv.getUint32(dataOffset, false);
-  return gammaInt / 100000;
-}
-
-function parseIcc(dv, offset, length) {
-  if (length < 2 || offset + 8 + length > dv.byteLength) return null;
-  const dataOffset = offset + 8;
-  const end = dataOffset + length;
-  let name = "";
-  for (let i = dataOffset; i < end; i += 1) {
-    const byte = dv.getUint8(i);
-    if (byte === 0) {
-      name = readAsciiString(dv, dataOffset, i - dataOffset);
-      break;
-    }
-  }
-  if (!name) return null;
-  const compressionOffset = dataOffset + name.length + 1;
-  if (compressionOffset >= end) return null;
-  const compression = dv.getUint8(compressionOffset);
-  return { name, compression };
-}
-
-function parseTransparency(length, colorType) {
-  if (length === 0) return false;
-  if (colorType === 3) return true;
-  if (colorType === 0) return length === 2;
-  if (colorType === 2) return length === 6;
-  return colorType === 4 || colorType === 6;
-}
-
-export async function parsePng(file) {
+export async function parsePng(file: File): Promise<PngParseResult | null> {
   const buffer = await file.arrayBuffer();
   const dv = new DataView(buffer);
   const size = dv.byteLength;
@@ -194,18 +32,18 @@ export async function parsePng(file) {
     return null;
   }
 
-  const chunks = [];
-  const issues = [];
-  const texts = [];
+  const chunks: PngChunk[] = [];
+  const issues: string[] = [];
+  const texts: PngTextChunk[] = [];
   let offset = 8;
   let chunkCount = 0;
-  let ihdr = null;
-  let firstChunkType = null;
+  let ihdr: PngIhdr | null = null;
+  let firstChunkType: string | null = null;
   let paletteEntries = 0;
   let hasTransparency = false;
-  let gamma = null;
-  let iccProfile = null;
-  let physical = null;
+  let gamma: number | null = null;
+  let iccProfile: PngIccProfile | null = null;
+  let physical: PngPhysicalInfo | null = null;
   let idatChunks = 0;
   let idatSize = 0;
   let sawIend = false;
@@ -221,7 +59,7 @@ export async function parsePng(file) {
     const crcOffset = dataEnd;
     const nextOffset = crcOffset + 4;
     const truncated = dataEnd > size || nextOffset > size;
-    const chunk = {
+    const chunk: PngChunk = {
       type: typeString,
       length,
       offset,

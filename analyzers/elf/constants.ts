@@ -1,17 +1,18 @@
-// @ts-nocheck
 "use strict";
 
-export const ELF_CLASS = [
+import type { ElfOptionEntry } from "./types.js";
+
+export const ELF_CLASS: ElfOptionEntry[] = [
   [1, "ELF32", "32-bit objects with 4-byte addresses."],
   [2, "ELF64", "64-bit objects with 8-byte addresses."]
 ];
 
-export const ELF_DATA = [
+export const ELF_DATA: ElfOptionEntry[] = [
   [1, "Little endian", "Least-significant byte first (LSB)."],
   [2, "Big endian", "Most-significant byte first (MSB)."]
 ];
 
-export const ELF_TYPE = [
+export const ELF_TYPE: ElfOptionEntry[] = [
   [0, "No type", "Unspecified."],
   [1, "Relocatable", "Object file used for linking."],
   [2, "Executable", "Loadable image with an entry point."],
@@ -19,7 +20,7 @@ export const ELF_TYPE = [
   [4, "Core dump", "Process image captured after a crash."]
 ];
 
-export const ELF_MACHINE = [
+export const ELF_MACHINE: ElfOptionEntry[] = [
   [0, "No machine"],
   [3, "Intel 80386"],
   [7, "Intel 80860"],
@@ -35,7 +36,7 @@ export const ELF_MACHINE = [
   [257, "LoongArch"]
 ];
 
-export const PROGRAM_TYPES = [
+export const PROGRAM_TYPES: ElfOptionEntry[] = [
   [0, "PT_NULL", "Unused program header entry."],
   [1, "PT_LOAD", "Loadable segment."],
   [2, "PT_DYNAMIC", "Dynamic linking information."],
@@ -49,7 +50,7 @@ export const PROGRAM_TYPES = [
   [0x6474e552, "GNU_RELRO", "Relocations read-only after relocations (GNU)."]
 ];
 
-export const SECTION_TYPES = [
+export const SECTION_TYPES: ElfOptionEntry[] = [
   [0, "SHT_NULL", "Unused."],
   [1, "SHT_PROGBITS", "Program-defined contents."],
   [2, "SHT_SYMTAB", "Linker symbol table."],
@@ -69,7 +70,7 @@ export const SECTION_TYPES = [
   [0x6fffffff, "GNU_VERSYM", "Version symbol table."]
 ];
 
-export const SECTION_FLAGS = [
+export const SECTION_FLAGS: ElfOptionEntry[] = [
   [0x1, "WRITE", "Section is writable at runtime."],
   [0x2, "ALLOC", "Occupies memory when loaded."],
   [0x4, "EXECINSTR", "Contains executable code."],
@@ -84,7 +85,7 @@ export const SECTION_FLAGS = [
   [0xf0000000, "MASKPROC", "Processor-specific flags."]
 ];
 
-export const PROGRAM_FLAGS = [
+export const PROGRAM_FLAGS: ElfOptionEntry[] = [
   [0x1, "X", "Execute permission."],
   [0x2, "W", "Writable."],
   [0x4, "R", "Readable."]

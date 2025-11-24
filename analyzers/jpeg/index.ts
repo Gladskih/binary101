@@ -1,10 +1,17 @@
-// @ts-nocheck
 "use strict";
 
 import { readAsciiString } from "../../binary-utils.js";
 import { parseExifFromApp1 } from "./exif.js";
+import type {
+  ExifData,
+  JpegComment,
+  JpegJfif,
+  JpegParseResult,
+  JpegSegment,
+  JpegSof
+} from "./types.js";
 
-const MARKER_NAMES = new Map([
+const MARKER_NAMES = new Map<number, string>([
   [0xffd8, "SOI (Start of Image)"],
   [0xffd9, "EOI (End of Image)"],
   [0xffc0, "SOF0 (Start of Frame, baseline)"],
@@ -22,14 +29,14 @@ const MARKER_NAMES = new Map([
   [0xfffe, "COM (Comment)"]
 ]);
 
-const isRestartMarker = marker => marker >= 0xffd0 && marker <= 0xffd7;
+const isRestartMarker = (marker: number): boolean => marker >= 0xffd0 && marker <= 0xffd7;
 
-function readUint16BE(dv, offset) {
+function readUint16BE(dv: DataView, offset: number): number | null {
   if (offset + 2 > dv.byteLength) return null;
   return dv.getUint16(offset, false);
 }
 
-function scanForRarSignature(dv) {
+function scanForRarSignature(dv: DataView): boolean {
   if (dv.byteLength < 6) return false;
   const limit = dv.byteLength - 6;
   for (let i = 2; i <= limit; i += 1) {
@@ -40,37 +47,31 @@ function scanForRarSignature(dv) {
     const ex = dv.getUint8(i + 3);
     const b4 = dv.getUint8(i + 4);
     const b5 = dv.getUint8(i + 5);
-    if (
-      a === 0x61 &&
-      rr === 0x72 &&
-      ex === 0x21 &&
-      b4 === 0x1a &&
-      b5 === 0x07
-    ) {
+    if (a === 0x61 && rr === 0x72 && ex === 0x21 && b4 === 0x1a && b5 === 0x07) {
       return true;
     }
   }
   return false;
 }
 
-export async function parseJpeg(file) {
+export async function parseJpeg(file: File): Promise<JpegParseResult | null> {
   const buffer = await file.arrayBuffer();
   const dv = new DataView(buffer);
   const size = dv.byteLength;
   if (size < 4) return null;
   if (readUint16BE(dv, 0) !== 0xffd8) return null;
 
-  const segments = [];
+  const segments: JpegSegment[] = [];
   let offset = 2;
-  let sof = null;
+  let sof: JpegSof | null = null;
   let hasExif = false;
   let hasJfif = false;
-  let jfif = null;
+  let jfif: JpegJfif | null = null;
   let hasIcc = false;
   let hasAdobe = false;
   let foundEoi = false;
-  const comments = [];
-  let exif = null;
+  const comments: JpegComment[] = [];
+  let exif: ExifData | null = null;
 
   while (offset + 2 <= size) {
     const marker = readUint16BE(dv, offset);
@@ -97,13 +98,14 @@ export async function parseJpeg(file) {
       continue;
     }
     if (offset + 2 > size) break;
-    const segLen = readUint16BE(dv, offset);
-    if (!segLen || segLen < 2 || offset + segLen > size) break;
+    const segLenRaw = readUint16BE(dv, offset);
+    if (segLenRaw == null || segLenRaw < 2 || offset + segLenRaw > size) break;
+    const segLen = segLenRaw;
     const segStart = markerOffset;
     const segTotalLen = 2 + segLen;
 
     const name = MARKER_NAMES.get(marker) || "Segment";
-    const seg = {
+    const seg: JpegSegment = {
       marker,
       name,
       offset: segStart,
@@ -170,7 +172,7 @@ export async function parseJpeg(file) {
       const maxCommentBytes = Math.min(segLen - 2, 256);
       const comment = readAsciiString(dv, offset + 2, maxCommentBytes);
       if (comment) {
-        const commentInfo = {
+        const commentInfo: JpegComment = {
           text: comment,
           truncated: segLen - 2 > maxCommentBytes
         };
