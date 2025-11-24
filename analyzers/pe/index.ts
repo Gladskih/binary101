@@ -15,11 +15,9 @@ import type {
   PeCore,
   PeCoverageEntry,
   PeDataDirectory,
-  PeSection,
   PeTlsDirectory,
   RvaToOffset
 } from "./types.js";
-import type { PeBoundImportEntry, PeDelayImportEntry } from "./bound-delay.js";
 
 interface PeIatDirectory {
   rva: number;

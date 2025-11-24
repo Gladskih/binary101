@@ -1,5 +1,4 @@
 "use strict";
-
 import type {
   PdfCatalog,
   PdfHeader,
@@ -11,12 +10,9 @@ import type {
   PdfXref,
   PdfXrefTable
 } from "./types.js";
-
 const MAX_XREF_ENTRIES = 20000;
 const MAX_OBJECT_SCAN = 65536;
-
 const decoder = new TextDecoder("latin1", { fatal: false });
-
 function parseHeader(text: string, issues: string[]): PdfHeader {
   const firstLineEnd = text.indexOf("\n");
   const headerLine =
@@ -29,7 +25,6 @@ function parseHeader(text: string, issues: string[]): PdfHeader {
   const binaryMarker = text.slice(0, 256).match(/%[^\n]{4,}/);
   return { headerLine, version: match[1], binaryMarker: binaryMarker ? binaryMarker[0] : null };
 }
-
 function parseStartxref(text: string, issues: string[]): number | null {
   const idx = text.lastIndexOf("startxref");
   if (idx === -1) {
@@ -44,13 +39,11 @@ function parseStartxref(text: string, issues: string[]): number | null {
   }
   return Number.parseInt(match[1], 10);
 }
-
 function skipWhitespace(text: string, position: number): number {
   let pos = position;
   while (pos < text.length && /\s/.test(text[pos])) pos += 1;
   return pos;
 }
-
 function parseXrefTable(text: string, startOffset: number, issues: string[]): PdfXrefTable | null {
   let pos = skipWhitespace(text, startOffset);
   if (!text.startsWith("xref", pos)) return null;
@@ -182,7 +175,6 @@ function parseXref(text: string, startOffset: number | null, issues: string[]): 
   issues.push("Unable to read cross-reference information at startxref offset.");
   return null;
 }
-
 function buildOffsetMap(xref: PdfXref | null): Map<number, number> | null {
   if (!xref || xref.kind !== "table") return null;
   const map = new Map<number, number>();
@@ -262,7 +254,6 @@ function parsePagesDictionary(dictText: string | null): PdfPages | null {
   const countMatch = dict.match(/\/Count\s+(\d+)/);
   return { raw: dict.trim(), count: countMatch ? Number.parseInt(countMatch[1], 10) : null };
 }
-
 export async function parsePdf(file: File): Promise<PdfParseResult | null> {
   const buffer = await file.arrayBuffer();
   const text = decoder.decode(buffer);

@@ -27,7 +27,7 @@ export interface ResourceTree {
   limitEnd: number;
   top: Array<{ typeName: string; kind: "name" | "id"; leafCount: number }>;
   detail: Array<{ typeName: string; entries: ResourceDetailEntry[] }>;
-  view: (off: number, len: number) => Promise<DataView>;
+  view: (offset: number, length: number) => Promise<DataView>;
   rvaToOff: RvaToOffset;
 }
 

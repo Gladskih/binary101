@@ -1,5 +1,4 @@
 "use strict";
-
 import { readAsciiString } from "../../binary-utils.js";
 import {
   ELF_CLASS,
@@ -21,17 +20,13 @@ import type {
 } from "./types.js";
 
 const ELF_MAGIC = 0x7f454c46;
-
 const decodeOption = (value: number, options: ElfOptionEntry[]): string | null =>
   options.find(entry => entry[0] === value)?.[1] || null;
-
 const decodeFlags = (mask: number, flags: ElfOptionEntry[]): string[] =>
   flags
     .filter(([bit]) => (mask & bit) !== 0)
     .map(([, name]) => name);
-
 const bigFrom32 = (value: number): bigint => BigInt(value >>> 0);
-
 const toSafeNumber = (value: number | bigint, label: string, issues: string[]): number | null => {
   if (typeof value === "number") return value;
   const num = Number(value);
@@ -41,7 +36,6 @@ const toSafeNumber = (value: number | bigint, label: string, issues: string[]): 
   }
   return num;
 };
-
 async function sliceView(
   file: File,
   offset: number,
@@ -54,7 +48,6 @@ async function sliceView(
   const truncated = buffer.byteLength !== length;
   return { dv: new DataView(buffer), truncated };
 }
-
 function parseIdent(dv: DataView, issues: string[]): ElfIdent {
   const cls = dv.getUint8(4);
   const data = dv.getUint8(5);
@@ -222,7 +215,6 @@ async function parseProgramHeaders(
   }
   return entries;
 }
-
 function readStringFromTable(tableDv: DataView | null, offset: number): string {
   if (!tableDv || offset >= tableDv.byteLength) return "";
   return readAsciiString(tableDv, offset, tableDv.byteLength - offset);
@@ -247,7 +239,6 @@ async function loadSectionNameTable(
   if (truncated) issues.push("Section name table is truncated.");
   return dv;
 }
-
 async function parseSectionHeaders(
   file: File,
   header: ElfHeader,
@@ -284,7 +275,6 @@ async function parseSectionHeaders(
   }
   return sections;
 }
-
 export async function parseElf(file: File): Promise<ElfParseResult | null> {
   const buffer = await file.slice(0, Math.min(file.size, 4096)).arrayBuffer();
   const dv = new DataView(buffer);

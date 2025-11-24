@@ -1,14 +1,14 @@
 "use strict";
 
+export type RvaToOffset = (rva: number) => number | null;
+export type AddCoverageRegion = (label: string, offset: number, size: number) => void;
+
 export interface PeDataDirectory {
   index?: number;
   name: string;
   rva: number;
   size: number;
 }
-
-export type RvaToOffset = (rva: number) => number | null;
-export type AddCoverageRegion = (label: string, offset: number, size: number) => void;
 
 export interface PeSection {
   name: string;

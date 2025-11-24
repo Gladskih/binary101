@@ -7,7 +7,10 @@ export async function parseExceptionDirectory(
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   addCoverageRegion: AddCoverageRegion
-): Promise<{ count: number; sample: Array<{ BeginAddress: number; EndAddress: number; UnwindInfoAddress: number }> } | null> {
+): Promise<{
+  count: number;
+  sample: Array<{ BeginAddress: number; EndAddress: number; UnwindInfoAddress: number }>;
+} | null> {
   const dir = dataDirs.find(d => d.name === "EXCEPTION");
   if (!dir?.rva || dir.size < 12) return null;
   const base = rvaToOff(dir.rva);

@@ -56,7 +56,19 @@ export default [
     plugins: {
       "@typescript-eslint": tsPlugin
     },
-    rules: sharedRules
+    rules: {
+      ...sharedRules,
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          args: "all",
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrors: "none"
+        }
+      ]
+    }
   },
   {
     files: ["tests/**/*.{js,mjs}", "playwright.config.mjs"],
