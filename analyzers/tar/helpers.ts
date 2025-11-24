@@ -1,12 +1,12 @@
-// @ts-nocheck
 "use strict";
 
 import { formatUnixSecondsOrDash } from "../../binary-utils.js";
+import type { TarEntry, TarFormatInfo } from "./types.js";
 
 const TAR_BLOCK_SIZE = 512;
 const TEXT_DECODER = new TextDecoder("utf-8", { fatal: false });
 
-export const toSafeNumber = value => {
+export const toSafeNumber = (value: unknown): number | null => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "bigint") {
     const max = BigInt(Number.MAX_SAFE_INTEGER);
@@ -17,19 +17,24 @@ export const toSafeNumber = value => {
   return null;
 };
 
-export const align512 = value => {
+export const align512 = (value: number): number => {
   if (value <= 0) return 0;
   return Math.ceil(value / TAR_BLOCK_SIZE) * TAR_BLOCK_SIZE;
 };
 
-export const isZeroBlock = bytes => {
+export const isZeroBlock = (bytes: Uint8Array): boolean => {
   for (let i = 0; i < bytes.length; i += 1) {
     if (bytes[i] !== 0) return false;
   }
   return true;
 };
 
-export const readTarString = (bytes, offset, length, options = {}) => {
+export const readTarString = (
+  bytes: Uint8Array,
+  offset: number,
+  length: number,
+  options: { trimSpaces?: boolean } = {}
+): string => {
   const { trimSpaces = true } = options;
   const slice = bytes.subarray(offset, offset + length);
   let end = slice.length;
@@ -42,14 +47,14 @@ export const readTarString = (bytes, offset, length, options = {}) => {
   return text;
 };
 
-export const combineNameParts = (prefix, baseName) => {
+export const combineNameParts = (prefix: string, baseName: string): string => {
   const cleanPrefix = prefix ? prefix.replace(/\/+$/, "") : "";
   if (cleanPrefix && baseName) return `${cleanPrefix}/${baseName}`;
   if (cleanPrefix) return cleanPrefix;
   return baseName || "";
 };
 
-export const parseBase256Number = field => {
+export const parseBase256Number = (field: ArrayLike<number>): number | null => {
   const bytes = new Uint8Array(field);
   if (!bytes.length) return null;
   bytes[0] &= 0x7f; // clear the indicator bit
@@ -61,7 +66,7 @@ export const parseBase256Number = field => {
   return safeNumber;
 };
 
-export const parseOctalNumber = field => {
+export const parseOctalNumber = (field: Uint8Array): number | null => {
   let text = "";
   for (let i = 0; i < field.length; i += 1) {
     const byte = field[i];
@@ -77,7 +82,11 @@ export const parseOctalNumber = field => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-export const parseTarNumber = (bytes, offset, length) => {
+export const parseTarNumber = (
+  bytes: Uint8Array,
+  offset: number,
+  length: number
+): number | null => {
   const field = bytes.subarray(offset, offset + length);
   if (!field.length) return null;
   const first = field[0];
@@ -87,7 +96,7 @@ export const parseTarNumber = (bytes, offset, length) => {
   return parseOctalNumber(field);
 };
 
-export const computeChecksum = headerBytes => {
+export const computeChecksum = (headerBytes: Uint8Array): number => {
   let sum = 0;
   for (let i = 0; i < TAR_BLOCK_SIZE; i += 1) {
     if (i >= 148 && i < 156) {
@@ -99,7 +108,10 @@ export const computeChecksum = headerBytes => {
   return sum;
 };
 
-export const describeFormat = (magic, version) => {
+export const describeFormat = (
+  magic: string | null | undefined,
+  version: string | null | undefined
+): TarFormatInfo => {
   const normalizedMagic = magic || "";
   const normalizedVersion = version || "";
   if (normalizedMagic === "ustar" && normalizedVersion === "00") {
@@ -134,7 +146,7 @@ export const describeFormat = (magic, version) => {
   };
 };
 
-export const formatModeSymbolic = mode => {
+export const formatModeSymbolic = (mode: number | null): string | null => {
   if (mode == null) return null;
   const owner = [
     (mode & 0o400) ? "r" : "-",
@@ -163,20 +175,24 @@ export const formatModeSymbolic = mode => {
   return owner.join("") + group.join("") + other.join("");
 };
 
-export const formatModeOctal = mode => {
+export const formatModeOctal = (mode: number | null): string | null => {
   if (mode == null) return null;
   return mode.toString(8).padStart(6, "0");
 };
 
-export const decodeNullTerminated = bytes => {
+export const decodeNullTerminated = (bytes: Uint8Array): string => {
   const text = TEXT_DECODER.decode(bytes);
   const zeroIndex = text.indexOf("\0");
   return zeroIndex === -1 ? text : text.slice(0, zeroIndex);
 };
 
-export const parsePaxHeaders = (bytes, issues, label) => {
+export const parsePaxHeaders = (
+  bytes: Uint8Array,
+  issues: string[],
+  label: string | null | undefined
+): Record<string, string> => {
   const text = TEXT_DECODER.decode(bytes);
-  const values = {};
+  const values: Record<string, string> = {};
   let cursor = 0;
   while (cursor < text.length) {
     const spaceIndex = text.indexOf(" ", cursor);
@@ -201,7 +217,10 @@ export const parsePaxHeaders = (bytes, issues, label) => {
   return values;
 };
 
-export const applyPaxValues = (entry, paxValues) => {
+export const applyPaxValues = (
+  entry: TarEntry,
+  paxValues: Record<string, string> | null | undefined
+): void => {
   if (!paxValues) return;
   const keys = Object.keys(paxValues);
   if (!keys.length) return;

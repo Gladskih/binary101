@@ -30,6 +30,7 @@ export interface TarEntry {
   usedPaxPath?: boolean;
   hasPax?: boolean;
   paxKeys?: string[];
+  pax?: Record<string, string>;
 }
 
 export interface TarStats {
@@ -70,4 +71,3 @@ export interface TarParseResult {
   terminatorBlocks: number;
   issues: string[];
 }
-
