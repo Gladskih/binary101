@@ -20,6 +20,30 @@ import { hasRarSignature, parseRar } from "./rar/index.js";
 import { parseMz } from "./mz/index.js";
 import { hasShellLinkSignature, parseLnk } from "./lnk/index.js";
 
+export type AnalyzerName =
+  | "lnk"
+  | "elf"
+  | "pe"
+  | "mz"
+  | "fb2"
+  | "gif"
+  | "sevenZip"
+  | "rar"
+  | "tar"
+  | "zip"
+  | "pdf"
+  | "png"
+  | "jpeg"
+  | "webp"
+  | "mp3";
+
+export interface ParseForUiResult {
+  analyzer: AnalyzerName | null;
+  // Concrete analyzer result types live in analyzers/<format>/; we keep this
+  // broad here and let renderers narrow as needed.
+  parsed: unknown;
+}
+
 // Quick magic-based detectors for non-PE types (label only for now)
 function detectELF(dv) {
   if (dv.byteLength < 0x14) return null;
@@ -195,7 +219,7 @@ function hasZipEocdSignature(dv) {
   return false;
 }
 
-export async function detectBinaryType(file) {
+export async function detectBinaryType(file: File): Promise<string> {
   const maxProbeBytes = Math.min(file.size || 0, 65536);
   const dv = new DataView(
     await file.slice(0, Math.min(file.size, maxProbeBytes)).arrayBuffer()
@@ -315,7 +339,7 @@ export async function detectBinaryType(file) {
 }
 
 // Parse-and-render entry point
-export async function parseForUi(file) {
+export async function parseForUi(file: File): Promise<ParseForUiResult> {
   const dv = new DataView(
     await file.slice(0, Math.min(file.size, 65536)).arrayBuffer()
   );

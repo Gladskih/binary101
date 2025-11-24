@@ -2,7 +2,7 @@
 "use strict";
 
 import { nowIsoString, formatHumanSize, bufferToHex } from "./binary-utils.js";
-import { detectBinaryType, parseForUi } from "./analyzers/index.js";
+import { detectBinaryType, parseForUi, type AnalyzerName, type ParseForUiResult } from "./analyzers/index.js";
 import {
   renderPe,
   renderJpeg,
@@ -51,13 +51,13 @@ const sha512ButtonElement = getElement("sha512ComputeButton") as HTMLButtonEleme
 const sha256CopyButtonElement = getElement("sha256CopyButton") as HTMLButtonElement;
 const sha512CopyButtonElement = getElement("sha512CopyButton") as HTMLButtonElement;
 
-let currentFile = null;
-let currentPreviewUrl = null;
+let currentFile: File | null = null;
+let currentPreviewUrl: string | null = null;
 let currentTypeLabel = "";
-let currentAnalyzerName = null;
-let currentParsedResult = null;
+let currentAnalyzerName: AnalyzerName | null = null;
+let currentParsedResult: ParseForUiResult["parsed"] | null = null;
 
-const setStatusMessage = message => {
+const setStatusMessage = (message: string | null | undefined): void => {
   statusMessageElement.textContent = message || "";
 };
 
@@ -65,14 +65,14 @@ const clearStatusMessage = () => {
   statusMessageElement.textContent = "";
 };
 
-function clearPreviewUrl() {
+function clearPreviewUrl(): void {
   if (currentPreviewUrl) {
     URL.revokeObjectURL(currentPreviewUrl);
     currentPreviewUrl = null;
   }
 }
 
-function buildImagePreviewHtml() {
+function buildImagePreviewHtml(): string {
   clearPreviewUrl();
   if (!currentFile) return "";
   const mime = (currentFile.type || "").toLowerCase();
@@ -89,7 +89,10 @@ function buildImagePreviewHtml() {
   )}" /></div>`;
 }
 
-function renderAnalysisIntoUi(analyzerName, parsedResult) {
+function renderAnalysisIntoUi(
+  analyzerName: AnalyzerName | null,
+  parsedResult: ParseForUiResult["parsed"]
+): void {
   const previewHtml = buildImagePreviewHtml();
 
   if (analyzerName === "pe" && parsedResult) {
@@ -221,21 +224,37 @@ function renderAnalysisIntoUi(analyzerName, parsedResult) {
   peDetailsValueElement.innerHTML = "";
 }
 
-const sanitizeDownloadName = entry => {
+type ZipCentralDirectoryEntryForUi = {
+  index: number;
+  fileName?: string;
+  dataOffset?: number | null;
+  dataLength?: number | null;
+  compressionMethod: number;
+  extractError?: string;
+};
+
+type ZipParsedResultForUi = {
+  centralDirectory?: {
+    entries?: ZipCentralDirectoryEntryForUi[];
+  };
+};
+
+const sanitizeDownloadName = (entry: ZipCentralDirectoryEntryForUi): string => {
   const name = typeof entry.fileName === "string" && entry.fileName.length ? entry.fileName : "entry.bin";
   const parts = name.split(/[\\/]/);
   const last = parts[parts.length - 1] || "entry.bin";
   return last.trim().length ? last.trim() : "entry.bin";
 };
 
-const findZipEntryByIndex = index => {
+const findZipEntryByIndex = (index: number): ZipCentralDirectoryEntryForUi | null => {
   if (currentAnalyzerName !== "zip") return null;
-  const entries = currentParsedResult?.centralDirectory?.entries;
+  const parsed = currentParsedResult as ZipParsedResultForUi | null;
+  const entries = parsed?.centralDirectory?.entries;
   if (!Array.isArray(entries)) return null;
   return entries.find(entry => entry.index === index) || null;
 };
 
-const sliceZipEntryBlob = entry => {
+const sliceZipEntryBlob = (entry: ZipCentralDirectoryEntryForUi): Blob => {
   if (!currentFile) throw new Error("No file selected.");
   if (entry.dataOffset == null || entry.dataLength == null) {
     throw new Error("Entry is missing data bounds.");
@@ -243,7 +262,10 @@ const sliceZipEntryBlob = entry => {
   return currentFile.slice(entry.dataOffset, entry.dataOffset + entry.dataLength);
 };
 
-const decompressZipEntry = async (entry, compressedBlob) => {
+const decompressZipEntry = async (
+  entry: ZipCentralDirectoryEntryForUi,
+  compressedBlob: Blob
+): Promise<Blob> => {
   if (entry.compressionMethod === 0) return compressedBlob;
   if (typeof DecompressionStream !== "function") {
     throw new Error("Browser does not support DecompressionStream for deflated entries.");
@@ -252,7 +274,7 @@ const decompressZipEntry = async (entry, compressedBlob) => {
   return new Response(stream).blob();
 };
 
-const triggerDownload = (blob, suggestedName) => {
+const triggerDownload = (blob: Blob, suggestedName: string): void => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -300,7 +322,7 @@ peDetailsValueElement.addEventListener("click", async event => {
     triggerDownload(blob, sanitizeDownloadName(entry));
     clearStatusMessage();
   } catch (error) {
-    const message = error && error.message ? error.message : String(error);
+    const message = error instanceof Error && error.message ? error.message : String(error);
     setStatusMessage(`Extract failed: ${message}`);
   } finally {
     if (buttonTarget) {
@@ -310,7 +332,7 @@ peDetailsValueElement.addEventListener("click", async event => {
   }
 });
 
-function resetHashDisplay() {
+function resetHashDisplay(): void {
   sha256ValueElement.textContent = "";
   sha512ValueElement.textContent = "";
   sha256CopyButtonElement.hidden = true;
@@ -323,7 +345,7 @@ function resetHashDisplay() {
   sha512ButtonElement.textContent = "Compute SHA-512";
 }
 
-async function showFileInfo(file, sourceDescription) {
+async function showFileInfo(file: File, sourceDescription: string): Promise<void> {
   currentFile = file;
   currentAnalyzerName = null;
   currentParsedResult = null;
@@ -357,7 +379,7 @@ async function showFileInfo(file, sourceDescription) {
   clearStatusMessage();
 }
 
-const handleSelectedFiles = files => {
+const handleSelectedFiles = (files: FileList | null): void => {
   if (!files || files.length === 0) {
     setStatusMessage("No file selected.");
     return;
@@ -436,11 +458,11 @@ window.addEventListener("paste", async event => {
 });
 
 async function computeAndDisplayHash(
-  algorithmName,
-  valueElement,
-  buttonElement,
-  copyButtonElement
-) {
+  algorithmName: AlgorithmIdentifier,
+  valueElement: HTMLElement,
+  buttonElement: HTMLButtonElement,
+  copyButtonElement: HTMLButtonElement
+): Promise<void> {
   if (!currentFile) {
     valueElement.textContent = "No file selected.";
     return;
@@ -455,7 +477,7 @@ async function computeAndDisplayHash(
     buttonElement.hidden = true;
     clearStatusMessage();
   } catch (error) {
-    const namePart = error && error.name ? `${error.name}: ` : "";
+    const namePart = error instanceof Error && error.name ? `${error.name}: ` : "";
     valueElement.textContent = `Hash failed: ${namePart}${String(error)}`;
     buttonElement.disabled = false;
     buttonElement.textContent = "Retry";

@@ -23,6 +23,12 @@ test("renderDefinitionRow emits tooltip-escaped definition pairs", () => {
   assert.ok(html.endsWith("</dd>"));
 });
 
+test("renderDefinitionRow omits title attribute when tooltip is missing", () => {
+  const html = renderDefinitionRow("Plain", "<i>value</i>");
+  assert.ok(html.startsWith("<dt"));
+  assert.ok(!html.includes('title="'));
+});
+
 test("renderOptionChips marks the selected option and formats tooltips", () => {
   const html = renderOptionChips(0x02, [
     [0x01, "One"],
@@ -41,4 +47,11 @@ test("renderFlagChips marks set bits, dims others, and escapes labels", () => {
 
   assert.ok(html.includes('class="opt sel" title="READ - &lt;allowed> (0x0001)"'));
   assert.ok(html.includes('class="opt dim" title="WRITE - write access (0x0002)"'));
+});
+
+test("escapeHtml handles non-string inputs", () => {
+  const htmlNumber = escapeHtml(42);
+  const htmlNull = escapeHtml(null);
+  assert.strictEqual(htmlNumber, "42");
+  assert.strictEqual(htmlNull, "null");
 });

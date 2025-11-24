@@ -6,7 +6,7 @@
     "lib": ["ESNext", "DOM"],
     "rootDir": ".",
     "outDir": "dist",
-    "strict": false,
+    "strict": true,
     "noEmitOnError": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
