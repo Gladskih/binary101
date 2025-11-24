@@ -6,23 +6,22 @@ Scope: the entire repository.
 ## Architecture
 
 - Static browser app:
-  - `index.html` + `app.js` bootstraps the UI.
-  - `app.js` calls `detectBinaryType(file)` and `parseForUi(file)` from `analyzers/index.js`.
+  - `index.html` + compiled `app.js` in `dist/` bootstraps the UI.
+  - Source lives in `app.ts`, which calls `detectBinaryType(file)` and `parseForUi(file)` from `analyzers/index.ts`.
 - Analyzers:
   - live under `analyzers/<format>/` (for example `pe`, `jpeg`, `png`, `mp3`, `zip`),
   - are responsible for reading bytes and returning plain JS objects (no DOM).
 - Renderers:
   - live under `renderers/<format>/`,
   - take `{ analyzer, parsed }` data and return HTML strings,
-  - are wired through `renderers/index.js`.
+  - are wired through `renderers/index.ts`.
 - Shared helpers:
-  - `binary-utils.js` - hex/size/time helpers,
-  - `html-utils.js` - HTML escaping and small rendering helpers,
-  - `hash.js` - hashing via Web Crypto.
+  - `binary-utils.ts` - hex/size/time helpers,
+  - `html-utils.ts` - HTML escaping and small rendering helpers.
 
 ## General Editing Guidelines
 
-- Do not introduce a build step or bundler; keep plain ES modules loaded directly in the browser.
+- The project already has a minimal TypeScript build step (`tsc` to `dist/`). Do not introduce additional build steps or bundlers; keep plain ES modules loaded directly in the browser.
 - Prefer small, focused changes over large refactors.
 - Code should be self-documenting:
   - use clear, descriptive names for functions, variables, and modules,
@@ -30,21 +29,21 @@ Scope: the entire repository.
 - Abbreviations:
   - avoid project-specific or obscure abbreviations,
   - only use common ones that are widely understood (for example `id`, `url`, `crc`, `pe`, `mp3`).
-- Maintain the contract: `parseForUi(file)` -> `{ analyzer, parsed }` and update `app.js` plus renderers together if you change that shape.
+- Maintain the contract: `parseForUi(file)` -> `{ analyzer, parsed }` and update `app.ts` plus renderers together if you change that shape.
 - Keep analyzers and renderers separate:
   - analyzers: pure parsing, no DOM, no `console.log` (warnings go into result objects),
   - renderers: pure HTML formatting, no file I/O.
-- Follow the style rules from `.github/copilot-instructions.md` and `.eslintrc.json`:
+- Follow the style rules from `.github/copilot-instructions.md` and `eslint.config.mjs`:
   - `const`/`let`, no `var`,
   - double quotes, semicolons, 1TBS brace style,
   - no unused variables.
 
 ## When Adding or Modifying Analyzers
 
-- Prefer creating a new directory `analyzers/<format>/` with an `index.js` entry.
+- Prefer creating a new directory `analyzers/<format>/` with an `index.ts` entry.
 - Use slice-based I/O (`file.slice(...).arrayBuffer()`) and bounds checks; never read past the end of the file.
 - For new formats:
-  - add detection/probing in `analyzers/index.js`,
+  - add detection/probing in `analyzers/index.ts`,
   - hook into `parseForUi` so the UI can render it,
   - add a matching renderer under `renderers/<format>/`.
 - Reuse existing analyzers (PE, PNG, MP3, ZIP, PDF) as reference for structure, warnings, and error handling.
@@ -55,7 +54,7 @@ Scope: the entire repository.
   - no network access,
   - no direct DOM manipulation,
   - just return HTML strings.
-- Escape all user-controlled values with `escapeHtml` / `safe` from `html-utils.js`.
+- Escape all user-controlled values with `escapeHtml` / `safe` from `html-utils.ts`.
 - Prefer small helper functions over large monolithic renderers.
 
 ## Core Testing Principles

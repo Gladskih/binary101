@@ -4,6 +4,7 @@
 
 ### Prerequisites
 - Modern browser (Chrome, Firefox, Edge)
+- Node.js and npm (for linting, tests, and the TypeScript build)
 - Local web server for hosting static files
 
 ### Getting Started
@@ -13,26 +14,28 @@
    git clone https://github.com/YOUR_USERNAME/binary101.git
    cd binary101
    ```
-3. Start a local server:
-   - Using Python:
-     ```bash
-     python -m http.server
-     ```
-   - Using Node.js:
-     ```bash
-     npx http-server .
-     ```
-   - Using VS Code: Install the "Live Server" extension and open `index.html`.
-4. Open the app in your browser at `http://localhost:8080` (or the port specified by your server).
+3. Install dependencies:
+   ```bash
+   npm install
+   ```
+4. Build the static assets (outputs to the `dist/` directory):
+   ```bash
+   npm run build
+   ```
+5. Start a local server from `dist/`:
+   ```bash
+   npx http-server dist
+   ```
+6. Open the app in your browser at `http://localhost:8080` (or the port specified by your server).
 
 ## Code Quality Standards
 
-All contributions must adhere to the project's code quality metrics and best practices. These are enforced by `.editorconfig` and `.eslintrc.json`.
+All contributions must adhere to the project's code quality metrics and best practices. These are enforced by `.editorconfig` and `eslint.config.mjs`.
 
 ### JavaScript Best Practices
 - **Maximum file length**: 250 lines (including comments and blank lines).
 - **Maximum line length**: 100 characters.
-- **Maximum function length**: Aim for 20–30 lines; refactor functions over 50 lines.
+- **Maximum function length**: Aim for 20-30 lines; refactor functions over 50 lines.
 - **Cyclomatic complexity**: Keep below 10; use helper functions to reduce complexity.
 - **Nested callbacks**: Maximum 3 levels.
 - **Variable declarations**: Use `const` by default, `let` only if reassignment is needed.
@@ -84,22 +87,22 @@ We encourage contributions that improve test coverage.
 
 ## Project Structure
 
-- `index.html`, `style.css`: Page shell and styling.
-- `app.js`: Handles UI interactions, file selection, hashing, and calls analyzers/renderers.
-- `analyzers/`: Format-specific parsers. PE/COFF logic is split across small modules under `analyzers/pe/` (e.g. `core.js`, `imports.js`, `exports.js`, `resources-*.js`, `tls.js`, `clr-security.js`, `reloc.js`, etc.).
-- `renderers/`: Renderers that turn parsed objects into HTML. PE views live in `renderers/pe/` and are split into `headers.js`, `directories.js`, `resources.js`, `layout.js`, composed by `renderers/pe/index.js`.
-- `binary-utils.js`, `html-utils.js`, `hash.js`: Shared helpers for hashing, byte/hex formatting and safe HTML generation.
+- `index.html`, `style.css`: Page shell and styling (copied into `dist/` on build).
+- `app.ts`: Handles UI interactions, file selection, hashing, and calls analyzers/renderers (compiled to `dist/app.js`).
+- `analyzers/`: Format-specific TypeScript parsers. PE/COFF logic is split across small modules under `analyzers/pe/` (e.g. `core.ts`, `imports.ts`, `exports.ts`, `resources-*.ts`, `tls.ts`, `clr-security.ts`, `reloc.ts`, etc.), compiled under `dist/analyzers/`.
+- `renderers/`: TypeScript renderers that turn parsed objects into HTML. PE views live in `renderers/pe/` and are split into `headers.ts`, `directories.ts`, `resources.ts`, `layout.ts`, composed by `renderers/pe/index.ts`, compiled under `dist/renderers/`.
+- `binary-utils.ts`, `html-utils.ts`: Shared helpers for hashing, byte/hex formatting and safe HTML generation.
 
 ## Adding a New Analyzer
 
 To add support for a new binary format:
 
-1. Create a new file in the `analyzers/` directory (e.g., `analyzers/elf.js`).
+1. Create a new file in the `analyzers/` directory (e.g., `analyzers/elf/index.ts`).
 2. Implement `probe` and `parse` functions:
    - `probe(file)`: Returns `true` if the file matches the format.
    - `parse(file)`: Returns a parsed object with format details.
-3. Update `analyzers/index.js` to include your new analyzer.
-4. Create a renderer module (e.g. `elf-render.js`) that converts your parsed object into HTML, and update `app.js` to call it when the analyzer matches.
+3. Update `analyzers/index.ts` to include your new analyzer.
+4. Create a renderer module (e.g. `renderers/elf/index.ts`) that converts your parsed object into HTML, update `renderers/index.ts` to export it, and update `app.ts` to call it when the analyzer matches.
 
 ### Important Patterns
 - **Memory efficiency**: Use `file.slice(...).arrayBuffer()` to read file segments; avoid loading entire files.
