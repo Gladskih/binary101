@@ -1,16 +1,43 @@
-// @ts-nocheck
 "use strict";
 
 import { readAsciiString } from "../../binary-utils.js";
+import type {
+  AddCoverageRegion,
+  PeDataDirectory,
+  RvaToOffset
+} from "./types.js";
 
-export async function parseBoundImports(file, dataDirs, rvaToOff, addCoverageRegion) {
+export interface PeBoundImportEntry {
+  name: string;
+  TimeDateStamp: number;
+  NumberOfModuleForwarderRefs: number;
+}
+
+export interface PeDelayImportEntry {
+  name: string;
+  Attributes: number;
+  ModuleHandleRVA: number;
+  ImportAddressTableRVA: number;
+  ImportNameTableRVA: number;
+  BoundImportAddressTableRVA: number;
+  UnloadInformationTableRVA: number;
+  TimeDateStamp: number;
+  functions: Array<{ ordinal?: number; hint?: number; name?: string }>;
+}
+
+export async function parseBoundImports(
+  file: File,
+  dataDirs: PeDataDirectory[],
+  rvaToOff: RvaToOffset,
+  addCoverageRegion: AddCoverageRegion
+): Promise<{ entries: PeBoundImportEntry[] } | null> {
   const dir = dataDirs.find(d => d.name === "BOUND_IMPORT");
   if (!dir?.rva || dir.size < 8) return null;
   const base = rvaToOff(dir.rva);
   if (base == null) return null;
   addCoverageRegion("BOUND_IMPORT", base, dir.size);
   const end = base + dir.size;
-  const entries = [];
+  const entries: PeBoundImportEntry[] = [];
   let off = base;
   while (off + 8 <= end) {
     const dv = new DataView(await file.slice(off, off + 8).arrayBuffer());
@@ -30,14 +57,21 @@ export async function parseBoundImports(file, dataDirs, rvaToOff, addCoverageReg
   return { entries };
 }
 
-export async function parseDelayImports(file, dataDirs, rvaToOff, addCoverageRegion, isPlus, imageBase) {
+export async function parseDelayImports(
+  file: File,
+  dataDirs: PeDataDirectory[],
+  rvaToOff: RvaToOffset,
+  addCoverageRegion: AddCoverageRegion,
+  isPlus: boolean,
+  imageBase: number
+): Promise<{ entries: PeDelayImportEntry[] } | null> {
   const dir = dataDirs.find(d => d.name === "DELAY_IMPORT");
   if (!dir?.rva || dir.size < 32) return null;
   const base = rvaToOff(dir.rva);
   if (base == null) return null;
   addCoverageRegion("DELAY_IMPORT", base, dir.size);
   const end = base + dir.size;
-  const entries = [];
+  const entries: PeDelayImportEntry[] = [];
   let off = base;
   while (off + 32 <= end) {
     const dv = new DataView(await file.slice(off, off + 32).arrayBuffer());
@@ -56,7 +90,7 @@ export async function parseDelayImports(file, dataDirs, rvaToOff, addCoverageReg
       const nameView = new DataView(await file.slice(nameOff, nameOff + 256).arrayBuffer());
       name = readAsciiString(nameView, 0, 256);
     }
-    const rvaFromMaybeVa = value => {
+    const rvaFromMaybeVa = (value: number): number => {
       const isRva = (Attributes & 1) !== 0;
       const raw = value >>> 0;
       if (raw === 0) return 0;
@@ -64,7 +98,7 @@ export async function parseDelayImports(file, dataDirs, rvaToOff, addCoverageReg
       const baseImage = imageBase >>> 0;
       return ((raw - baseImage) >>> 0);
     };
-    const functions = [];
+    const functions: Array<{ ordinal?: number; hint?: number; name?: string }> = [];
     const intRva = rvaFromMaybeVa(ImportNameTableRVA);
     const intOff = intRva ? rvaToOff(intRva) : null;
     if (intOff != null) {

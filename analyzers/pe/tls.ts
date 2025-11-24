@@ -1,7 +1,15 @@
-// @ts-nocheck
 "use strict";
 
-export async function parseTlsDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus, imageBase) {
+import type { AddCoverageRegion, PeDataDirectory, PeTlsDirectory, RvaToOffset } from "./types.js";
+
+export async function parseTlsDirectory(
+  file: File,
+  dataDirs: PeDataDirectory[],
+  rvaToOff: RvaToOffset,
+  addCoverageRegion: AddCoverageRegion,
+  isPlus: boolean,
+  imageBase: number
+): Promise<PeTlsDirectory | null> {
   const dir = dataDirs.find(d => d.name === "TLS");
   if (!dir?.rva) return null;
   const base = rvaToOff(dir.rva);

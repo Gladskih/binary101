@@ -1,22 +1,33 @@
-// @ts-nocheck
 "use strict";
 
 import { alignUpTo } from "../../binary-utils.js";
+import type {
+  AddCoverageRegion,
+  PeCoffHeader,
+  PeCoverageEntry,
+  PeSection
+} from "./types.js";
 
 export function buildCoverage(
-  fileSize,
-  peHeaderOffset,
-  coff,
-  optionalHeaderOffset,
-  ddStartRel,
-  ddCount,
-  sectionHeadersOffset,
-  sections,
-  sectionAlignment,
-  sizeOfImage
-) {
-  const coverage = [];
-  const addCov = (label, off, size) => {
+  fileSize: number,
+  peHeaderOffset: number,
+  coff: PeCoffHeader,
+  optionalHeaderOffset: number,
+  ddStartRel: number,
+  ddCount: number,
+  sectionHeadersOffset: number,
+  sections: PeSection[],
+  sectionAlignment: number,
+  sizeOfImage: number
+): {
+  coverage: PeCoverageEntry[];
+  addCov: AddCoverageRegion;
+  overlaySize: number;
+  imageEnd: number;
+  imageSizeMismatch: boolean;
+} {
+  const coverage: PeCoverageEntry[] = [];
+  const addCov: AddCoverageRegion = (label, off, size) => {
     if (!Number.isFinite(off) || !Number.isFinite(size) || off < 0 || size <= 0) return;
     coverage.push({ label, off: off >>> 0, end: (off >>> 0) + (size >>> 0), size: size >>> 0 });
   };

@@ -1,7 +1,13 @@
-// @ts-nocheck
 "use strict";
 
-export async function parseClrDirectory(file, dataDirs, rvaToOff, addCoverageRegion) {
+import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
+
+export async function parseClrDirectory(
+  file: File,
+  dataDirs: PeDataDirectory[],
+  rvaToOff: RvaToOffset,
+  addCoverageRegion: AddCoverageRegion
+): Promise<Record<string, unknown> | null> {
   const dir = dataDirs.find(d => d.name === "CLR_RUNTIME");
   if (!dir?.rva || dir.size < 0x48) return null;
   const base = rvaToOff(dir.rva);
@@ -16,7 +22,15 @@ export async function parseClrDirectory(file, dataDirs, rvaToOff, addCoverageReg
   const Flags = view.getUint32(16, true);
   const EntryPointToken = view.getUint32(20, true);
   const metaOffset = rvaToOff(MetaDataRVA);
-  const clr = { cb, MajorRuntimeVersion, MinorRuntimeVersion, MetaDataRVA, MetaDataSize, Flags, EntryPointToken };
+  const clr: Record<string, unknown> = {
+    cb,
+    MajorRuntimeVersion,
+    MinorRuntimeVersion,
+    MetaDataRVA,
+    MetaDataSize,
+    Flags,
+    EntryPointToken
+  };
   if (metaOffset != null && MetaDataSize >= 0x20) {
     try {
       const md = new DataView(await file.slice(metaOffset, metaOffset + Math.min(MetaDataSize, 0x4000)).arrayBuffer());
@@ -34,7 +48,7 @@ export async function parseClrDirectory(file, dataDirs, rvaToOff, addCoverageReg
       }
       const flags = md.getUint16(p, true); p += 2;
       const streamCount = md.getUint16(p, true); p += 2;
-      const streams = [];
+      const streams: Array<{ name: string; offset: number; size: number }> = [];
       for (let i = 0; i < streamCount && p + 8 <= md.byteLength; i++) {
         const offset = md.getUint32(p, true); p += 4;
         const size = md.getUint32(p, true); p += 4;
@@ -56,7 +70,11 @@ export async function parseClrDirectory(file, dataDirs, rvaToOff, addCoverageReg
   return clr;
 }
 
-export async function parseSecurityDirectory(file, dataDirs, addCoverageRegion) {
+export async function parseSecurityDirectory(
+  file: File,
+  dataDirs: PeDataDirectory[],
+  addCoverageRegion: AddCoverageRegion
+): Promise<{ count: number; certs: Array<{ Length: number; Revision: number; CertificateType: number }> } | null> {
   const dir = dataDirs.find(d => d.name === "SECURITY");
   if (!dir?.rva || dir.size < 8) return null;
   const off = dir.rva;

@@ -1,9 +1,14 @@
-// @ts-nocheck
 "use strict";
 
 import { toHex32 } from "../../binary-utils.js";
+import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
 
-export async function parseDebugDirectory(file, dataDirs, rvaToOff, addCoverageRegion) {
+export async function parseDebugDirectory(
+  file: File,
+  dataDirs: PeDataDirectory[],
+  rvaToOff: RvaToOffset,
+  addCoverageRegion: AddCoverageRegion
+): Promise<{ entry: { guid: string; age: number; path: string } | null; warning: string | null }> {
   const debugDir = dataDirs.find(d => d.name === "DEBUG");
   if (!debugDir?.rva || debugDir.size < 28) return { entry: null, warning: null };
   const baseOffset = rvaToOff(debugDir.rva);
@@ -66,7 +71,24 @@ export async function parseDebugDirectory(file, dataDirs, rvaToOff, addCoverageR
   return { entry: null, warning };
 }
 
-export async function parseLoadConfigDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus) {
+export async function parseLoadConfigDirectory(
+  file: File,
+  dataDirs: PeDataDirectory[],
+  rvaToOff: RvaToOffset,
+  addCoverageRegion: AddCoverageRegion,
+  isPlus: boolean
+): Promise<{
+  Size: number;
+  TimeDateStamp: number;
+  Major: number;
+  Minor: number;
+  SecurityCookie: number;
+  SEHandlerTable: number;
+  SEHandlerCount: number;
+  GuardCFFunctionTable: number;
+  GuardCFFunctionCount: number;
+  GuardFlags: number;
+} | null> {
   const lcDir = dataDirs.find(d => d.name === "LOAD_CONFIG");
   if (!lcDir?.rva || lcDir.size < 0x40) return null;
   const base = rvaToOff(lcDir.rva);
@@ -100,7 +122,7 @@ export async function parseLoadConfigDirectory(file, dataDirs, rvaToOff, addCove
     GuardCFFunctionCount = view.getUint32(0x4c, true);
     GuardFlags = view.getUint32(0x50, true);
   }
-  const saneCount = value =>
+  const saneCount = (value: number): number =>
     Number.isFinite(value) && value >= 0 && value <= 10_000_000 ? value : 0;
   return {
     Size,

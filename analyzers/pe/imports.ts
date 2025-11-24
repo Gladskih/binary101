@@ -1,17 +1,38 @@
-// @ts-nocheck
 "use strict";
 
 import { readAsciiString } from "../../binary-utils.js";
+import type {
+  AddCoverageRegion,
+  PeDataDirectory,
+  RvaToOffset
+} from "./types.js";
 
-export async function parseImportDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus) {
+export interface PeImportFunction {
+  ordinal?: number;
+  hint?: number;
+  name?: string;
+}
+
+export interface PeImportEntry {
+  dll: string;
+  functions: PeImportFunction[];
+}
+
+export async function parseImportDirectory(
+  file: File,
+  dataDirs: PeDataDirectory[],
+  rvaToOff: RvaToOffset,
+  addCoverageRegion: AddCoverageRegion,
+  isPlus: boolean
+): Promise<PeImportEntry[]> {
   const impDir = dataDirs.find(d => d.name === "IMPORT");
-  const imports = [];
+  const imports: PeImportEntry[] = [];
   if (!impDir?.rva) return imports;
   const start = rvaToOff(impDir.rva);
   if (start == null) return imports;
   addCoverageRegion("IMPORT directory", start, impDir.size);
   const maxDescriptors = Math.max(1, Math.floor(impDir.size / 20));
-  for (let index = 0; index < maxDescriptors; index++) {
+  for (let index = 0; index < maxDescriptors; index += 1) {
     const offset = start + index * 20;
     const desc = new DataView(await file.slice(offset, offset + 20).arrayBuffer());
     const originalFirstThunk = desc.getUint32(0, true);
@@ -26,7 +47,7 @@ export async function parseImportDirectory(file, dataDirs, rvaToOff, addCoverage
     }
     const thunkRva = originalFirstThunk || firstThunk;
     const thunkOffset = rvaToOff(thunkRva);
-    const functions = [];
+    const functions: PeImportFunction[] = [];
     if (thunkOffset != null) {
       if (isPlus) {
         for (let t = 0; t < 8 * 16384; t += 8) {

@@ -1,9 +1,8 @@
-// @ts-nocheck
 "use strict";
 
 import { parsePeHeaders } from "./core.js";
 import { parseDebugDirectory, parseLoadConfigDirectory } from "./debug-loadcfg.js";
-import { parseImportDirectory } from "./imports.js";
+import { parseImportDirectory, type PeImportEntry } from "./imports.js";
 import { parseExportDirectory } from "./exports.js";
 import { parseTlsDirectory } from "./tls.js";
 import { parseResources } from "./resources.js";
@@ -11,8 +10,57 @@ import { parseClrDirectory, parseSecurityDirectory } from "./clr-security.js";
 import { parseBaseRelocations } from "./reloc.js";
 import { parseExceptionDirectory } from "./exception.js";
 import { parseBoundImports, parseDelayImports } from "./bound-delay.js";
+import type {
+  AddCoverageRegion,
+  PeCore,
+  PeCoverageEntry,
+  PeDataDirectory,
+  PeSection,
+  PeTlsDirectory,
+  RvaToOffset
+} from "./types.js";
+import type { PeBoundImportEntry, PeDelayImportEntry } from "./bound-delay.js";
 
-function parseIatDirectory(dataDirs, rvaToOff, addCoverageRegion) {
+interface PeIatDirectory {
+  rva: number;
+  size: number;
+}
+
+export interface PeParseResult {
+  dos: PeCore["dos"];
+  signature: "PE";
+  coff: PeCore["coff"];
+  opt: PeCore["opt"];
+  dirs: PeDataDirectory[];
+  sections: PeCore["sections"];
+  entrySection: PeCore["entrySection"];
+  rvaToOff: RvaToOffset;
+  imports: PeImportEntry[];
+  rsds: { guid: string; age: number; path: string } | null | undefined;
+  debugWarning: string | null | undefined;
+  loadcfg: Record<string, unknown> | null;
+  exports: Awaited<ReturnType<typeof parseExportDirectory>>;
+  tls: PeTlsDirectory | null;
+  reloc: Awaited<ReturnType<typeof parseBaseRelocations>>;
+  exception: Awaited<ReturnType<typeof parseExceptionDirectory>>;
+  boundImports: Awaited<ReturnType<typeof parseBoundImports>>;
+  delayImports: Awaited<ReturnType<typeof parseDelayImports>>;
+  clr: Record<string, unknown> | null;
+  security: { count: number; certs: Array<{ Length: number; Revision: number; CertificateType: number }> } | null;
+  iat: PeIatDirectory | null;
+  resources: unknown;
+  overlaySize: number;
+  imageEnd: number;
+  imageSizeMismatch: boolean;
+  coverage: PeCoverageEntry[];
+  hasCert: boolean;
+}
+
+function parseIatDirectory(
+  dataDirs: PeDataDirectory[],
+  rvaToOff: RvaToOffset,
+  addCoverageRegion: AddCoverageRegion
+): PeIatDirectory | null {
   const dir = dataDirs.find(d => d.name === "IAT");
   if (!dir?.rva || !dir.size) return null;
   const off = rvaToOff(dir.rva);
@@ -21,7 +69,7 @@ function parseIatDirectory(dataDirs, rvaToOff, addCoverageRegion) {
   return { rva: dir.rva, size: dir.size };
 }
 
-export async function parsePe(file) {
+export async function parsePe(file: File): Promise<PeParseResult | null> {
   const core = await parsePeHeaders(file);
   if (!core) return null;
   const {

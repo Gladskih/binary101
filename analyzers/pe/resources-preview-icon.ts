@@ -1,7 +1,9 @@
-// @ts-nocheck
 "use strict";
 
-function base64FromU8(u8) {
+import type { RvaToOffset } from "./types.js";
+import type { ResourceLangWithPreview } from "./resources-preview-types.js";
+
+function base64FromU8(u8: Uint8Array): string {
   let s = "";
   const chunk = 0x8000;
   for (let index = 0; index < u8.length; index += chunk) {
@@ -14,7 +16,7 @@ function base64FromU8(u8) {
   }
 }
 
-export function addIconPreview(langEntry, data, typeName) {
+export function addIconPreview(langEntry: ResourceLangWithPreview, data: Uint8Array, typeName: string): void {
   if (typeName !== "ICON") return;
   if (data.length < 8) return;
   const isPng =
@@ -55,7 +57,15 @@ export function addIconPreview(langEntry, data, typeName) {
   langEntry.previewDataUrl = `data:image/x-icon;base64,${base64FromU8(ico)}`;
 }
 
-export async function addGroupIconPreview(file, langEntry, typeName, dataRva, size, iconIndex, rvaToOff) {
+export async function addGroupIconPreview(
+  file: File,
+  langEntry: ResourceLangWithPreview,
+  typeName: string,
+  dataRva: number,
+  size: number,
+  iconIndex: Map<number, { rva: number; size: number }>,
+  rvaToOff: RvaToOffset
+): Promise<void> {
   if (typeName !== "GROUP_ICON") return;
   const grpOff = rvaToOff(dataRva);
   if (grpOff == null || size < 6) return;
