@@ -1,25 +1,27 @@
-// @ts-nocheck
 "use strict";
 
 import { dd, safe } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
+import type { MzParseResult, MzRelocationEntry } from "../../analyzers/mz/index.js";
 
-const hex16 = value => (value == null ? "-" : "0x" + toHex32(value, 4));
-const hex32 = value => (value == null ? "-" : "0x" + toHex32(value, 8));
-const describeNext = kind => {
+const hex16 = (value: number | null | undefined): string =>
+  value == null ? "-" : "0x" + toHex32(value, 4);
+const hex32 = (value: number | null | undefined): string =>
+  value == null ? "-" : "0x" + toHex32(value, 8);
+const describeNext = (kind: string | undefined): string => {
   if (!kind) return "Plain MZ (no NE/PE header)";
   if (kind === "ne") return "NE (16-bit Windows/OS/2) header";
   if (kind === "le" || kind === "lx") return "Linear executable (LE/LX) header";
   if (kind === "pe") return "PE header";
   return kind.toUpperCase();
 };
-const segOff = (seg, off) => {
+const segOff = (seg: number | null | undefined, off: number | null | undefined): string => {
   if (seg == null || off == null) return "-";
   return `${toHex32(seg, 4)}:${toHex32(off, 4)}`;
 };
 
-const renderHeader = (mz, out) => {
-  const h = mz.header || {};
+const renderHeader = (mz: MzParseResult, out: string[]): void => {
+  const h = mz.header;
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">MS-DOS header</h4>`);
   out.push(`<dl>`);
@@ -38,13 +40,13 @@ const renderHeader = (mz, out) => {
   out.push(`</section>`);
 };
 
-const renderRelocations = (mz, out) => {
+const renderRelocations = (mz: MzParseResult, out: string[]): void => {
   const relocs = mz.relocations || [];
   if (!relocs.length) return;
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Relocation table</h4>`);
   out.push(`<table class="table"><thead><tr><th>#</th><th>Segment</th><th>Offset</th></tr></thead><tbody>`);
-  relocs.slice(0, 64).forEach(reloc => {
+  relocs.slice(0, 64).forEach((reloc: MzRelocationEntry) => {
     out.push(
       `<tr><td>${reloc.index}</td><td>${hex16(reloc.segment)}</td><td>${hex16(reloc.offset)}</td></tr>`
     );
@@ -56,7 +58,7 @@ const renderRelocations = (mz, out) => {
   out.push(`</section>`);
 };
 
-const renderStub = (mz, out) => {
+const renderStub = (mz: MzParseResult, out: string[]): void => {
   const stubStrings = mz.stubStrings || [];
   if (!stubStrings.length) return;
   out.push(`<section>`);
@@ -67,7 +69,7 @@ const renderStub = (mz, out) => {
   out.push(`</section>`);
 };
 
-const renderWarnings = (mz, out) => {
+const renderWarnings = (mz: MzParseResult, out: string[]): void => {
   const issues = mz.warnings || [];
   if (!issues.length) return;
   out.push(`<section>`);
@@ -78,9 +80,9 @@ const renderWarnings = (mz, out) => {
   out.push(`</section>`);
 };
 
-export function renderMz(mz) {
+export function renderMz(mz: MzParseResult | null): string {
   if (!mz) return "";
-  const out = [];
+  const out: string[] = [];
   renderHeader(mz, out);
   renderRelocations(mz, out);
   renderStub(mz, out);

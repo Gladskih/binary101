@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use strict";
 
 import { collectPrintableRuns, readAsciiString } from "../../binary-utils.js";
@@ -6,13 +5,51 @@ import { collectPrintableRuns, readAsciiString } from "../../binary-utils.js";
 const HEADER_SIZE = 0x40;
 const DEFAULT_READ_LIMIT = 4096;
 
-export async function parseMz(file) {
+export interface MzHeader {
+  e_magic: string;
+  e_cblp: number;
+  e_cp: number;
+  e_crlc: number;
+  e_cparhdr: number;
+  e_minalloc: number;
+  e_maxalloc: number;
+  e_ss: number;
+  e_sp: number;
+  e_csum: number;
+  e_ip: number;
+  e_cs: number;
+  e_lfarlc: number;
+  e_ovno: number;
+  e_res: number[];
+  e_oemid: number;
+  e_oeminfo: number;
+  e_res2: number[];
+  e_lfanew: number | null;
+}
+
+export interface MzRelocationEntry {
+  index: number;
+  segment: number;
+  offset: number;
+}
+
+export interface MzParseResult {
+  signature: "MZ";
+  header: MzHeader;
+  payloadStart: number;
+  relocations: MzRelocationEntry[];
+  stubStrings: string[];
+  warnings: string[];
+  nextHeader?: string;
+}
+
+export async function parseMz(file: File): Promise<MzParseResult | null> {
   const readLimit = Math.min(file.size || 0, DEFAULT_READ_LIMIT);
   const dv = new DataView(await file.slice(0, readLimit).arrayBuffer());
   if (dv.byteLength < 0x1c) return null;
   if (dv.getUint16(0, true) !== 0x5a4d) return null;
 
-  const header = {
+  const header: MzHeader = {
     e_magic: readAsciiString(dv, 0x00, 2),
     e_cblp: dv.getUint16(0x02, true),
     e_cp: dv.getUint16(0x04, true),
@@ -40,7 +77,7 @@ export async function parseMz(file) {
   };
 
   const payloadStart = header.e_cparhdr * 16;
-  let stubStrings = [];
+  let stubStrings: string[] = [];
   if (payloadStart < dv.byteLength) {
     const stubLength = dv.byteLength - payloadStart;
     const sliceLength = Math.min(stubLength, 2048);
@@ -50,7 +87,7 @@ export async function parseMz(file) {
     }
   }
 
-  const relocations = [];
+  const relocations: MzRelocationEntry[] = [];
   const relocTableOff = header.e_lfarlc;
   const relocCount = header.e_crlc;
   if (relocTableOff && relocCount) {
@@ -63,7 +100,7 @@ export async function parseMz(file) {
     }
   }
 
-  const warnings = [];
+  const warnings: string[] = [];
   if (header.e_lfanew != null && header.e_lfanew >= file.size) {
     warnings.push("e_lfanew points beyond file size");
   }

@@ -21,6 +21,7 @@ import {
   renderLnk,
 } from "./renderers/index.js";
 import { escapeHtml } from "./html-utils.js";
+import type { MzParseResult } from "./analyzers/mz/index.js";
 
 const getElement = (id: string) => document.getElementById(id)!;
 
@@ -107,7 +108,7 @@ function renderAnalysisIntoUi(
     peDetailsTermElement.textContent = "MS-DOS MZ details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = renderMz(parsedResult);
+    peDetailsValueElement.innerHTML = renderMz(parsedResult as MzParseResult);
     return;
   }
 
