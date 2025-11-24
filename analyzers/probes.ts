@@ -1,12 +1,14 @@
 /* eslint-disable max-lines */
-// @ts-nocheck
 "use strict";
 
 // Quick magic/text-based probes for common formats (label only; no parsing yet)
 
 const MAX_TEXT_INSPECT_BYTES = 256;
 
-function toAsciiPrefix(dv, maxBytes) {
+type ProbeResult = string | null;
+type MagicProbe = (dv: DataView) => ProbeResult;
+
+function toAsciiPrefix(dv: DataView, maxBytes: number): string {
   const limit = Math.min(dv.byteLength, maxBytes);
   let result = "";
   for (let i = 0; i < limit; i += 1) {
@@ -18,7 +20,7 @@ function toAsciiPrefix(dv, maxBytes) {
   return result;
 }
 
-function isMostlyText(dv) {
+function isMostlyText(dv: DataView): boolean {
   if (dv.byteLength === 0) return false;
   const limit = Math.min(dv.byteLength, MAX_TEXT_INSPECT_BYTES);
   let printable = 0;
@@ -44,7 +46,7 @@ function isMostlyText(dv) {
 
 // --- Binary/container probes (non-PE) ---
 
-function detectPdf(dv) {
+function detectPdf(dv: DataView): ProbeResult {
   if (dv.byteLength < 5) return null;
   const m =
     String.fromCharCode(dv.getUint8(0)) +
@@ -55,19 +57,19 @@ function detectPdf(dv) {
   return m === "%PDF-" ? "PDF document" : null;
 }
 
-function detectZip(dv) {
+function detectZip(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const sig = dv.getUint32(0, true);
   return sig === 0x04034b50 ? "ZIP archive (PK-based, e.g. Office, JAR, APK)" : null;
 }
 
-function detectGzip(dv) {
+function detectGzip(dv: DataView): ProbeResult {
   if (dv.byteLength < 2) return null;
   const sig = dv.getUint16(0, true);
   return sig === 0x8b1f ? "gzip compressed data" : null;
 }
 
-function detectBzip2(dv) {
+function detectBzip2(dv: DataView): ProbeResult {
   if (dv.byteLength < 3) return null;
   const b0 = dv.getUint8(0);
   const b1 = dv.getUint8(1);
@@ -75,7 +77,7 @@ function detectBzip2(dv) {
   return b0 === 0x42 && b1 === 0x5a && b2 === 0x68 ? "bzip2 compressed data" : null;
 }
 
-function detectSevenZip(dv) {
+function detectSevenZip(dv: DataView): ProbeResult {
   if (dv.byteLength < 6) return null;
   const b0 = dv.getUint8(0);
   const b1 = dv.getUint8(1);
@@ -96,7 +98,7 @@ function detectSevenZip(dv) {
   return null;
 }
 
-function detectXz(dv) {
+function detectXz(dv: DataView): ProbeResult {
   if (dv.byteLength < 6) return null;
   const b0 = dv.getUint8(0);
   const b1 = dv.getUint8(1);
@@ -117,7 +119,7 @@ function detectXz(dv) {
   return null;
 }
 
-function detectLz4(dv) {
+function detectLz4(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const b0 = dv.getUint8(0);
   const b1 = dv.getUint8(1);
@@ -129,7 +131,7 @@ function detectLz4(dv) {
   return null;
 }
 
-function detectZstd(dv) {
+function detectZstd(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const b0 = dv.getUint8(0);
   const b1 = dv.getUint8(1);
@@ -141,7 +143,7 @@ function detectZstd(dv) {
   return null;
 }
 
-function detectRar(dv) {
+function detectRar(dv: DataView): ProbeResult {
   if (dv.byteLength < 7) return null;
   const m =
     String.fromCharCode(dv.getUint8(0)) +
@@ -154,20 +156,20 @@ function detectRar(dv) {
   return b4 === 0x1a && b5 === 0x07 ? "RAR archive" : null;
 }
 
-function detectCab(dv) {
+function detectCab(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const sig = dv.getUint32(0, false);
   return sig === 0x4d534346 ? "Microsoft Cabinet archive (CAB)" : null;
 }
 
-function detectPng(dv) {
+function detectPng(dv: DataView): ProbeResult {
   if (dv.byteLength < 8) return null;
   const sig0 = dv.getUint32(0, false);
   const sig1 = dv.getUint32(4, false);
   return sig0 === 0x89504e47 && sig1 === 0x0d0a1a0a ? "PNG image" : null;
 }
 
-function detectJpeg(dv) {
+function detectJpeg(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const marker = dv.getUint16(0, false);
   if (marker !== 0xffd8) return null;
@@ -178,7 +180,7 @@ function detectJpeg(dv) {
   return "JPEG image";
 }
 
-function detectGif(dv) {
+function detectGif(dv: DataView): ProbeResult {
   if (dv.byteLength < 6) return null;
   const sig =
     String.fromCharCode(dv.getUint8(0)) +
@@ -191,27 +193,27 @@ function detectGif(dv) {
   return null;
 }
 
-function detectBmp(dv) {
+function detectBmp(dv: DataView): ProbeResult {
   if (dv.byteLength < 2) return null;
   const sig = dv.getUint16(0, false);
   return sig === 0x424d ? "BMP bitmap image" : null;
 }
 
-function detectTiff(dv) {
+function detectTiff(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const sig = dv.getUint32(0, false);
   if (sig === 0x49492a00 || sig === 0x4d4d002a) return "TIFF image";
   return null;
 }
 
-function detectWebp(dv) {
+function detectWebp(dv: DataView): ProbeResult {
   if (dv.byteLength < 12) return null;
   const riff = dv.getUint32(0, false);
   const webp = dv.getUint32(8, false);
   return riff === 0x52494646 && webp === 0x57454250 ? "WebP image" : null;
 }
 
-function detectIco(dv) {
+function detectIco(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const reserved = dv.getUint16(0, true);
   const type = dv.getUint16(2, true);
@@ -221,7 +223,7 @@ function detectIco(dv) {
   return null;
 }
 
-function detectAni(dv) {
+function detectAni(dv: DataView): ProbeResult {
   if (dv.byteLength < 12) return null;
   const riff = dv.getUint32(0, false);
   const acon = dv.getUint32(8, false);
@@ -229,13 +231,13 @@ function detectAni(dv) {
   return null;
 }
 
-function detectFlac(dv) {
+function detectFlac(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const sig = dv.getUint32(0, false);
   return sig === 0x664c6143 ? "FLAC audio" : null;
 }
 
-function detectCompoundFile(dv) {
+function detectCompoundFile(dv: DataView): ProbeResult {
   if (dv.byteLength < 8) return null;
   const b0 = dv.getUint8(0);
   const b1 = dv.getUint8(1);
@@ -260,7 +262,7 @@ function detectCompoundFile(dv) {
   return null;
 }
 
-function detectPdb(dv) {
+function detectPdb(dv: DataView): ProbeResult {
   if (dv.byteLength < 32) return null;
   const limit = Math.min(dv.byteLength, 64);
   let header = "";
@@ -281,13 +283,13 @@ function detectPdb(dv) {
   return null;
 }
 
-function detectOgg(dv) {
+function detectOgg(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const sig = dv.getUint32(0, false);
   return sig === 0x4f676753 ? "Ogg container (Vorbis/Opus/FLAC)" : null;
 }
 
-function detectWav(dv) {
+function detectWav(dv: DataView): ProbeResult {
   if (dv.byteLength < 12) return null;
   const riff = dv.getUint32(0, false);
   const wave = dv.getUint32(8, false);
@@ -295,7 +297,7 @@ function detectWav(dv) {
   return null;
 }
 
-function detectAiff(dv) {
+function detectAiff(dv: DataView): ProbeResult {
   if (dv.byteLength < 12) return null;
   const form = dv.getUint32(0, false);
   const aiff = dv.getUint32(8, false);
@@ -305,13 +307,13 @@ function detectAiff(dv) {
   return null;
 }
 
-function detectMidi(dv) {
+function detectMidi(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const sig = dv.getUint32(0, false);
   return sig === 0x4d546864 ? "MIDI audio" : null;
 }
 
-function detectAmr(dv) {
+function detectAmr(dv: DataView): ProbeResult {
   if (dv.byteLength < 6) return null;
   let header = "";
   const limit = Math.min(dv.byteLength, 9);
@@ -324,7 +326,7 @@ function detectAmr(dv) {
   return null;
 }
 
-function detectAc3(dv) {
+function detectAc3(dv: DataView): ProbeResult {
   if (dv.byteLength < 2) return null;
   const b0 = dv.getUint8(0);
   const b1 = dv.getUint8(1);
@@ -332,7 +334,7 @@ function detectAc3(dv) {
   return null;
 }
 
-function detectDts(dv) {
+function detectDts(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const b0 = dv.getUint8(0);
   const b1 = dv.getUint8(1);
@@ -344,7 +346,7 @@ function detectDts(dv) {
   return null;
 }
 
-function detectMp3OrAac(dv) {
+function detectMp3OrAac(dv: DataView): ProbeResult {
   if (dv.byteLength < 2) return null;
   const id3 =
     dv.byteLength >= 3 &&
@@ -362,7 +364,7 @@ function detectMp3OrAac(dv) {
   return null;
 }
 
-function detectFlv(dv) {
+function detectFlv(dv: DataView): ProbeResult {
   if (dv.byteLength < 3) return null;
   const sig =
     String.fromCharCode(dv.getUint8(0)) +
@@ -371,7 +373,7 @@ function detectFlv(dv) {
   return sig === "FLV" ? "FLV video" : null;
 }
 
-function detectAvi(dv) {
+function detectAvi(dv: DataView): ProbeResult {
   if (dv.byteLength < 12) return null;
   const riff = dv.getUint32(0, false);
   const avi = dv.getUint32(8, false);
@@ -379,7 +381,7 @@ function detectAvi(dv) {
   return null;
 }
 
-function detectAsf(dv) {
+function detectAsf(dv: DataView): ProbeResult {
   if (dv.byteLength < 16) return null;
   const b0 = dv.getUint8(0);
   const b1 = dv.getUint8(1);
@@ -408,7 +410,7 @@ function detectAsf(dv) {
   return null;
 }
 
-function detectIsoBmff(dv) {
+function detectIsoBmff(dv: DataView): ProbeResult {
   if (dv.byteLength < 12) return null;
   const ftyp = dv.getUint32(4, false);
   if (ftyp !== 0x66747970) return null;
@@ -441,13 +443,13 @@ function detectIsoBmff(dv) {
   return "ISO-BMFF container (MP4/3GP/QuickTime/HEIF)";
 }
 
-function detectMpegPs(dv) {
+function detectMpegPs(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const sig = dv.getUint32(0, false);
   return sig === 0x000001ba ? "MPEG Program Stream (MPG)" : null;
 }
 
-function detectMpegTs(dv) {
+function detectMpegTs(dv: DataView): ProbeResult {
   const packetSize = 188;
   if (dv.byteLength < packetSize * 3) return null;
   if (
@@ -460,20 +462,20 @@ function detectMpegTs(dv) {
   return "MPEG Transport Stream (TS)";
 }
 
-function detectRealMedia(dv) {
+function detectRealMedia(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const sig = dv.getUint32(0, false);
   return sig === 0x2e524d46 ? "RealMedia container (RM/RMVB)" : null;
 }
 
-function detectMatroska(dv) {
+function detectMatroska(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const sig = dv.getUint32(0, false);
   if (sig !== 0x1a45dfa3) return null;
   return "Matroska/WebM container";
 }
 
-function detectTar(dv) {
+function detectTar(dv: DataView): ProbeResult {
   if (dv.byteLength < 262) return null;
   const offset = 257;
   const u =
@@ -485,19 +487,19 @@ function detectTar(dv) {
   return u === "ustar" ? "TAR archive" : null;
 }
 
-function detectSqlite(dv) {
+function detectSqlite(dv: DataView): ProbeResult {
   if (dv.byteLength < 16) return null;
   const prefix = toAsciiPrefix(dv, 16);
   return prefix.startsWith("SQLite format 3") ? "SQLite 3.x database" : null;
 }
 
-function detectJavaClass(dv) {
+function detectJavaClass(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const sig = dv.getUint32(0, false);
   return sig === 0xcafebabe ? "Java class file" : null;
 }
 
-function detectIso9660(dv) {
+function detectIso9660(dv: DataView): ProbeResult {
   const markers = [0x8001, 0x8801, 0x9001];
   for (let i = 0; i < markers.length; i += 1) {
     const offset = markers[i];
@@ -515,7 +517,7 @@ function detectIso9660(dv) {
   return null;
 }
 
-function detectDjvu(dv) {
+function detectDjvu(dv: DataView): ProbeResult {
   if (dv.byteLength < 16) return null;
   const header =
     String.fromCharCode(dv.getUint8(0)) +
@@ -538,7 +540,7 @@ function detectDjvu(dv) {
   return null;
 }
 
-function detectPcap(dv) {
+function detectPcap(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const sigBE = dv.getUint32(0, false);
   const sigLE = dv.getUint32(0, true);
@@ -553,13 +555,13 @@ function detectPcap(dv) {
   return null;
 }
 
-function detectPcapNg(dv) {
+function detectPcapNg(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const sig = dv.getUint32(0, false);
   return sig === 0x0a0d0d0a ? "PCAP-NG capture file" : null;
 }
 
-function detectLnk(dv) {
+function detectLnk(dv: DataView): ProbeResult {
   if (dv.byteLength < 0x14) return null;
   const size = dv.getUint32(0, true);
   if (size !== 0x0000004c) return null;
@@ -579,13 +581,13 @@ function detectLnk(dv) {
   return "Windows shortcut (.lnk)";
 }
 
-function detectWasM(dv) {
+function detectWasM(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const sig = dv.getUint32(0, false);
   return sig === 0x0061736d ? "WebAssembly binary (WASM)" : null;
 }
 
-function detectDex(dv) {
+function detectDex(dv: DataView): ProbeResult {
   if (dv.byteLength < 8) return null;
   const prefix =
     String.fromCharCode(dv.getUint8(0)) +
@@ -596,7 +598,7 @@ function detectDex(dv) {
   return "Android DEX bytecode";
 }
 
-function detectWinHelp(dv) {
+function detectWinHelp(dv: DataView): ProbeResult {
   if (dv.byteLength < 4) return null;
   const b0 = dv.getUint8(0);
   const b1 = dv.getUint8(1);
@@ -610,7 +612,7 @@ function detectWinHelp(dv) {
 
 // --- Text-like probes ---
 
-function detectScriptShebang(dv) {
+function detectScriptShebang(dv: DataView): ProbeResult {
   if (dv.byteLength < 2) return null;
   const b0 = dv.getUint8(0);
   const b1 = dv.getUint8(1);
@@ -618,7 +620,7 @@ function detectScriptShebang(dv) {
   return null;
 }
 
-function detectHtml(dv) {
+function detectHtml(dv: DataView): ProbeResult {
   const text = toAsciiPrefix(dv, MAX_TEXT_INSPECT_BYTES).trimStart().toLowerCase();
   if (text.startsWith("<!doctype html") || text.startsWith("<html")) {
     return "HTML document";
@@ -626,7 +628,7 @@ function detectHtml(dv) {
   return null;
 }
 
-function detectXmlOrSvg(dv) {
+function detectXmlOrSvg(dv: DataView): ProbeResult {
   const text = toAsciiPrefix(dv, MAX_TEXT_INSPECT_BYTES).trimStart();
   const lower = text.toLowerCase();
   if (!lower.startsWith("<?xml")) return null;
@@ -634,7 +636,7 @@ function detectXmlOrSvg(dv) {
   return "XML document";
 }
 
-function detectJson(dv) {
+function detectJson(dv: DataView): ProbeResult {
   const text = toAsciiPrefix(dv, MAX_TEXT_INSPECT_BYTES).trimStart();
   if (!text) return null;
   const first = text[0];
@@ -645,26 +647,26 @@ function detectJson(dv) {
   return "JSON data";
 }
 
-function detectRtf(dv) {
+function detectRtf(dv: DataView): ProbeResult {
   const text = toAsciiPrefix(dv, MAX_TEXT_INSPECT_BYTES).trimStart();
   if (!text) return null;
   if (text.startsWith("{\\rtf")) return "RTF document";
   return null;
 }
 
-function detectFb2Xml(dv) {
+function detectFb2Xml(dv: DataView): ProbeResult {
   const text = toAsciiPrefix(dv, MAX_TEXT_INSPECT_BYTES).trimStart().toLowerCase();
   if (!text) return null;
   if (text.indexOf("<fictionbook") !== -1) return "FictionBook e-book (FB2)";
   return null;
 }
 
-function detectPlainText(dv) {
+function detectPlainText(dv: DataView): ProbeResult {
   if (!isMostlyText(dv)) return null;
   return "Text file";
 }
 
-const MAGIC_PROBES = [
+const MAGIC_PROBES: MagicProbe[] = [
   detectPdf,
   detectZip,
   detectGzip,
@@ -715,7 +717,7 @@ const MAGIC_PROBES = [
   detectWinHelp
 ];
 
-const TEXT_PROBES = [
+const TEXT_PROBES: MagicProbe[] = [
   detectScriptShebang,
   detectHtml,
   detectFb2Xml,
@@ -725,7 +727,7 @@ const TEXT_PROBES = [
   detectPlainText
 ];
 
-export function probeByMagic(dv) {
+export function probeByMagic(dv: DataView): ProbeResult {
   for (const probe of MAGIC_PROBES) {
     const label = probe(dv);
     if (label) return label;
@@ -733,7 +735,7 @@ export function probeByMagic(dv) {
   return null;
 }
 
-export function probeTextLike(dv) {
+export function probeTextLike(dv: DataView): ProbeResult {
   if (!isMostlyText(dv)) return null;
   for (const probe of TEXT_PROBES) {
     const label = probe(dv);
