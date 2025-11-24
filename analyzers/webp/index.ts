@@ -1,7 +1,13 @@
-// @ts-nocheck
 "use strict";
 
 import { alignUpTo } from "../../binary-utils.js";
+import type {
+  WebpAnimationInfo,
+  WebpChunk,
+  WebpChunkStats,
+  WebpDimensions,
+  WebpParseResult
+} from "./types.js";
 
 const RIFF_SIG = 0x52494646;
 const WEBP_SIG = 0x57454250;
@@ -12,7 +18,7 @@ const VP8L_MIN_HEADER = 5;
 const VP8X_MIN_HEADER = 10;
 const ANIM_HEADER_SIZE = 6;
 
-function readFourCc(dv, offset) {
+function readFourCc(dv: DataView, offset: number): string | null {
   if (offset + 4 > dv.byteLength) return null;
   return (
     String.fromCharCode(dv.getUint8(offset)) +
@@ -22,7 +28,12 @@ function readFourCc(dv, offset) {
   );
 }
 
-function parseVp8Dimensions(dv, offset, length, issues) {
+function parseVp8Dimensions(
+  dv: DataView,
+  offset: number,
+  length: number,
+  issues: string[]
+): WebpDimensions | null {
   if (length < VP8_MIN_HEADER || offset + VP8_MIN_HEADER > dv.byteLength) {
     issues.push("VP8 chunk too small to read frame header.");
     return null;
@@ -39,7 +50,12 @@ function parseVp8Dimensions(dv, offset, length, issues) {
   return width && height ? { width, height, source: "VP8 key frame" } : null;
 }
 
-function parseVp8lDimensions(dv, offset, length, issues) {
+function parseVp8lDimensions(
+  dv: DataView,
+  offset: number,
+  length: number,
+  issues: string[]
+): WebpDimensions | null {
   if (length < VP8L_MIN_HEADER || offset + VP8L_MIN_HEADER > dv.byteLength) {
     issues.push("VP8L chunk too small to read lossless header.");
     return null;
@@ -55,7 +71,12 @@ function parseVp8lDimensions(dv, offset, length, issues) {
   return { width, height, source: "VP8L lossless header" };
 }
 
-function parseVp8xChunk(dv, offset, length, issues) {
+function parseVp8xChunk(
+  dv: DataView,
+  offset: number,
+  length: number,
+  issues: string[]
+): WebpDimensions | null {
   if (length < VP8X_MIN_HEADER || offset + VP8X_MIN_HEADER > dv.byteLength) {
     issues.push("VP8X chunk too small to read canvas info.");
     return null;
@@ -84,10 +105,20 @@ function parseVp8xChunk(dv, offset, length, issues) {
     hasXmp: (flags & 0x04) !== 0,
     hasAnimation: (flags & 0x02) !== 0
   };
-  return { flags, width, height, features, source: "VP8X canvas" };
+  return {
+    width,
+    height,
+    features,
+    source: "VP8X canvas"
+  };
 }
 
-function parseAnimChunk(dv, offset, length, issues) {
+function parseAnimChunk(
+  dv: DataView,
+  offset: number,
+  length: number,
+  issues: string[]
+): WebpAnimationInfo | null {
   if (length < ANIM_HEADER_SIZE || offset + ANIM_HEADER_SIZE > dv.byteLength) {
     issues.push("ANIM chunk too small to read header.");
     return null;
@@ -97,7 +128,7 @@ function parseAnimChunk(dv, offset, length, issues) {
   return { backgroundColor, loopCount };
 }
 
-export async function parseWebp(file) {
+export async function parseWebp(file: File): Promise<WebpParseResult | null> {
   const dv = new DataView(await file.arrayBuffer());
   if (dv.byteLength < 12) return null;
   if (dv.getUint32(0, false) !== RIFF_SIG || dv.getUint32(8, false) !== WEBP_SIG) {
@@ -107,25 +138,25 @@ export async function parseWebp(file) {
   const size = dv.byteLength;
   const riffSizeField = dv.getUint32(4, true);
   const expectedRiffSize = size >= 8 ? size - 8 : size;
-  const issues = [];
+  const issues: string[] = [];
   if (riffSizeField !== expectedRiffSize) {
     issues.push(
       `RIFF size field (${riffSizeField}) does not match file size (${expectedRiffSize}).`
     );
   }
 
-  const chunks = [];
+  const chunks: WebpChunk[] = [];
   let offset = 12;
   let chunkCount = 0;
-  let dimensions = null;
-  let format = null;
+  let dimensions: WebpDimensions | null = null;
+  let format: string | null = null;
   let hasAlpha = false;
   let hasAnimation = false;
   let hasIccProfile = false;
   let hasExif = false;
   let hasXmp = false;
   let frameCount = 0;
-  let animationInfo = null;
+  let animationInfo: WebpAnimationInfo | null = null;
 
   while (offset + 8 <= dv.byteLength && chunkCount < MAX_CHUNKS) {
     const type = readFourCc(dv, offset);
@@ -151,11 +182,11 @@ export async function parseWebp(file) {
       if (info) {
         dimensions = info;
         format = "VP8X";
-        hasAlpha = hasAlpha || info.features.hasAlpha;
-        hasAnimation = hasAnimation || info.features.hasAnimation;
-        hasIccProfile = hasIccProfile || info.features.hasIccProfile;
-        hasExif = hasExif || info.features.hasExif;
-        hasXmp = hasXmp || info.features.hasXmp;
+        hasAlpha = hasAlpha || info.features?.hasAlpha === true;
+        hasAnimation = hasAnimation || info.features?.hasAnimation === true;
+        hasIccProfile = hasIccProfile || info.features?.hasIccProfile === true;
+        hasExif = hasExif || info.features?.hasExif === true;
+        hasXmp = hasXmp || info.features?.hasXmp === true;
       }
     } else if (type === "VP8 " && !dimensions) {
       const lossyDimensions = parseVp8Dimensions(
@@ -206,7 +237,7 @@ export async function parseWebp(file) {
     issues.push("Chunk scan stopped after reaching maximum chunk count.");
   }
 
-  const chunkStats = {
+  const chunkStats: WebpChunkStats = {
     chunkCount: chunks.length,
     parsedBytes: offset,
     overlayBytes: offset < dv.byteLength ? dv.byteLength - offset : 0
