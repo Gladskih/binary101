@@ -1,9 +1,8 @@
-// @ts-nocheck
 "use strict";
 
 import { readAsciiString } from "../../binary-utils.js";
 
-export function decodeSynchsafeInt(dv, offset) {
+export function decodeSynchsafeInt(dv: DataView, offset: number): number | null {
   if (offset + 4 > dv.byteLength) return null;
   const b0 = dv.getUint8(offset);
   const b1 = dv.getUint8(offset + 1);
@@ -15,7 +14,11 @@ export function decodeSynchsafeInt(dv, offset) {
   return (b0 << 21) | (b1 << 14) | (b2 << 7) | b3;
 }
 
-export function decodeId3v2FrameSize(versionMajor, dv, offset) {
+export function decodeId3v2FrameSize(
+  versionMajor: number,
+  dv: DataView,
+  offset: number
+): number | null {
   if (versionMajor === 2) {
     if (offset + 3 > dv.byteLength) return null;
     return (
@@ -28,7 +31,12 @@ export function decodeId3v2FrameSize(versionMajor, dv, offset) {
   return versionMajor === 4 ? decodeSynchsafeInt(dv, offset) : dv.getUint32(offset, false);
 }
 
-export function decodeId3Text(encoding, dv, offset, length) {
+export function decodeId3Text(
+  encoding: number,
+  dv: DataView,
+  offset: number,
+  length: number
+): string {
   if (length <= 0 || offset + length > dv.byteLength) return "";
   if (encoding === 0) return readAsciiString(dv, offset, length).replace(/\0/g, "").trim();
   const data = new Uint8Array(dv.buffer, dv.byteOffset + offset, length);
@@ -40,7 +48,12 @@ export function decodeId3Text(encoding, dv, offset, length) {
   return decoder.decode(data).replace(/\0/g, "").trim();
 }
 
-export function readZeroTerminatedString(dv, offset, maxLength, encoding) {
+export function readZeroTerminatedString(
+  dv: DataView,
+  offset: number,
+  maxLength: number,
+  encoding: number
+): string {
   const limit = Math.min(dv.byteLength, offset + maxLength);
   let end = offset;
   while (end < limit && dv.getUint8(end) !== 0) end += 1;
@@ -48,14 +61,14 @@ export function readZeroTerminatedString(dv, offset, maxLength, encoding) {
   return decodeId3Text(encoding, dv, offset, length);
 }
 
-export function safeHexPreview(dv, offset, length) {
+export function safeHexPreview(dv: DataView, offset: number, length: number): string {
   const maxPreview = 24;
   const clampedLength = Math.min(length, maxPreview, dv.byteLength - offset);
-  const bytes = [];
+  const bytes: string[] = [];
   for (let i = 0; i < clampedLength; i += 1) {
     const value = dv.getUint8(offset + i);
     bytes.push(value.toString(16).padStart(2, "0"));
   }
-  const suffix = length > maxPreview ? "…" : "";
+  const suffix = length > maxPreview ? "..." : "";
   return `${bytes.join(" ")}${suffix}`;
 }

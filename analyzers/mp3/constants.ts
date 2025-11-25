@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use strict";
 
 export const ID3_HEADER_SIZE = 10;
@@ -7,40 +6,40 @@ export const MAX_ID3V2_FRAMES = 32;
 export const MAX_FRAME_SCAN = 262144;
 export const MAX_EMBEDDED_IMAGE_BYTES = 5_000_000;
 
-export const MPEG_VERSION = new Map([
+export const MPEG_VERSION: Map<number, string> = new Map([
   [0x0, "MPEG Version 2.5"],
   [0x2, "MPEG Version 2"],
   [0x3, "MPEG Version 1"]
 ]);
 
-export const MPEG_LAYER = new Map([
+export const MPEG_LAYER: Map<number, string> = new Map([
   [0x1, "Layer III"],
   [0x2, "Layer II"],
   [0x3, "Layer I"]
 ]);
 
-export const CHANNEL_MODE = new Map([
+export const CHANNEL_MODE: Map<number, string> = new Map([
   [0x0, "Stereo"],
   [0x1, "Joint stereo"],
   [0x2, "Dual channel"],
   [0x3, "Single channel"]
 ]);
 
-export const EMPHASIS = new Map([
+export const EMPHASIS: Map<number, string> = new Map([
   [0x0, "None"],
   [0x1, "50/15 ms"],
   [0x2, "Reserved"],
   [0x3, "CCIT J.17"]
 ]);
 
-export const MODE_EXTENSION_LAYER_III = new Map([
+export const MODE_EXTENSION_LAYER_III: Map<number, string> = new Map([
   [0x0, "None"],
   [0x1, "Intensity stereo"],
   [0x2, "MS stereo"],
   [0x3, "Intensity + MS stereo"]
 ]);
 
-export const PICTURE_TYPES = [
+export const PICTURE_TYPES: readonly string[] = [
   "Other",
   "32x32 icon",
   "Other icon",
