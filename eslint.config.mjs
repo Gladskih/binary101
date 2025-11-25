@@ -68,13 +68,42 @@ export default [
           caughtErrors: "none"
         }
       ],
-      "@typescript-eslint/no-explicit-any": "error"
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/ban-ts-comment": [
+        "error",
+        {
+          "ts-ignore": true,
+          "ts-nocheck": true,
+          "ts-check": false,
+          "ts-expect-error": "allow-with-description",
+          minimumDescriptionLength: 5
+        }
+      ],
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-misused-promises": "error",
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        {
+          prefer: "type-imports",
+          fixStyle: "separate-type-imports"
+        }
+      ]
     }
   },
   {
     files: ["analyzers/sevenz/index.ts"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off"
+    }
+  },
+  {
+    files: [
+      "renderers/**/*.ts",
+      "analyzers/lnk/**/*.ts",
+      "analyzers/rar/**/*.ts"
+    ],
+    rules: {
+      "@typescript-eslint/ban-ts-comment": "off"
     }
   },
   {

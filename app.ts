@@ -266,7 +266,7 @@ const triggerDownload = (blob: Blob, suggestedName: string): void => {
   URL.revokeObjectURL(url);
 };
 
-peDetailsValueElement.addEventListener("click", async event => {
+const handleZipEntryClick = async (event: Event): Promise<void> => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
   const buttonTarget: HTMLButtonElement | null =
@@ -311,6 +311,10 @@ peDetailsValueElement.addEventListener("click", async event => {
       buttonTarget.textContent = originalText || "Extract";
     }
   }
+};
+
+peDetailsValueElement.addEventListener("click", event => {
+  void handleZipEntryClick(event);
 });
 
 function resetHashDisplay(): void {
@@ -372,7 +376,7 @@ const handleSelectedFiles = (files: FileList | null): void => {
     setStatusMessage("No file selected.");
     return;
   }
-  showFileInfo(first, "File selection");
+  void showFileInfo(first, "File selection");
 };
 
 ["dragenter", "dragover"].forEach(eventName =>
@@ -412,7 +416,7 @@ fileInputElement.addEventListener("change", event => {
   input.value = "";
 });
 
-window.addEventListener("paste", async event => {
+const handlePaste = async (event: ClipboardEvent): Promise<void> => {
   const clipboardData = event.clipboardData;
   if (!clipboardData) {
     setStatusMessage("Paste: clipboard not available.");
@@ -422,7 +426,7 @@ window.addEventListener("paste", async event => {
   if (files.length === 1) {
     const [file] = files;
     if (file) {
-      showFileInfo(file, "Paste (file)");
+      await showFileInfo(file, "Paste (file)");
     }
     return;
   }
@@ -446,7 +450,11 @@ window.addEventListener("paste", async event => {
   const syntheticFile = new File([text], "clipboard.bin", {
     type: "application/octet-stream"
   });
-  showFileInfo(syntheticFile, "Paste (clipboard data)");
+  await showFileInfo(syntheticFile, "Paste (clipboard data)");
+};
+
+window.addEventListener("paste", event => {
+  void handlePaste(event as ClipboardEvent);
 });
 
 async function computeAndDisplayHash(
@@ -477,30 +485,31 @@ async function computeAndDisplayHash(
   }
 }
 
-sha256ButtonElement.addEventListener("click", () =>
-  computeAndDisplayHash("SHA-256", sha256ValueElement, sha256ButtonElement, sha256CopyButtonElement)
-);
-
-sha512ButtonElement.addEventListener("click", () =>
-  computeAndDisplayHash("SHA-512", sha512ValueElement, sha512ButtonElement, sha512CopyButtonElement)
-);
-
-sha256CopyButtonElement.addEventListener("click", async () => {
-  const text = sha256ValueElement.textContent || "";
-  try {
-    await navigator.clipboard.writeText(text);
-    setStatusMessage("SHA-256 copied.");
-  } catch {
-    setStatusMessage("Clipboard copy failed.");
-  }
+sha256ButtonElement.addEventListener("click", () => {
+  void computeAndDisplayHash("SHA-256", sha256ValueElement, sha256ButtonElement, sha256CopyButtonElement);
 });
 
-sha512CopyButtonElement.addEventListener("click", async () => {
-  const text = sha512ValueElement.textContent || "";
+sha512ButtonElement.addEventListener("click", () => {
+  void computeAndDisplayHash("SHA-512", sha512ValueElement, sha512ButtonElement, sha512CopyButtonElement);
+});
+
+const copyHashToClipboard = async (
+  valueElement: HTMLElement,
+  successMessage: string
+): Promise<void> => {
+  const text = valueElement.textContent || "";
   try {
     await navigator.clipboard.writeText(text);
-    setStatusMessage("SHA-512 copied.");
+    setStatusMessage(successMessage);
   } catch {
     setStatusMessage("Clipboard copy failed.");
   }
+};
+
+sha256CopyButtonElement.addEventListener("click", () => {
+  void copyHashToClipboard(sha256ValueElement, "SHA-256 copied.");
+});
+
+sha512CopyButtonElement.addEventListener("click", () => {
+  void copyHashToClipboard(sha512ValueElement, "SHA-512 copied.");
 });

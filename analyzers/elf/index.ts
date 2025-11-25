@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 "use strict";
 import { readAsciiString } from "../../binary-utils.js";
 import {
