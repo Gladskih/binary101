@@ -13,6 +13,7 @@ import { parsePng } from "./png/index.js";
 import { parsePdf } from "./pdf/index.js";
 import { parseWebp } from "./webp/index.js";
 import { parseMp3, probeMp3 } from "./mp3/index.js";
+import type { Mp3ParseResult, Mp3SuccessResult } from "./mp3/types.js";
 import { hasSevenZipSignature, parseSevenZip } from "./sevenz/index.js";
 import { hasTarSignature, parseTar } from "./tar/index.js";
 import { hasRarSignature, parseRar } from "./rar/index.js";
@@ -48,23 +49,6 @@ type MzProbeKind = "mz" | "pe" | "ne" | "le" | "lx";
 interface MzProbeResult {
   kind: MzProbeKind;
   eLfanew: number;
-}
-
-interface Mp3FrameInfo {
-  versionLabel?: string | null;
-  layerLabel?: string | null;
-  bitrateKbps?: number | null;
-  sampleRate?: number | null;
-  channelMode?: string | null;
-}
-
-interface Mp3Analysis {
-  isMp3?: boolean;
-  mpeg?: {
-    firstFrame?: Mp3FrameInfo | null;
-    secondFrameValidated?: boolean | null;
-  } | null;
-  warnings?: string[] | null;
 }
 
 // Quick magic-based detectors for non-PE types (label only for now)
@@ -131,23 +115,23 @@ async function probeMzFormat(file: File, dv: DataView): Promise<MzProbeResult | 
 }
 
 const isValidatedMp3 = (
-  mp3: Mp3Analysis | null | undefined
-): mp3 is Mp3Analysis & { mpeg: { firstFrame: Mp3FrameInfo; secondFrameValidated: true } } =>
-  Boolean(mp3?.isMp3 && mp3?.mpeg?.firstFrame && mp3?.mpeg?.secondFrameValidated === true);
+  mp3: Mp3ParseResult | null | undefined
+): mp3 is Mp3SuccessResult =>
+  Boolean(mp3?.isMp3 === true && mp3?.mpeg?.firstFrame && mp3?.mpeg.secondFrameValidated === true);
 
 const isShortMp3WithoutSecond = (
-  mp3: Mp3Analysis | null | undefined
-): mp3 is Mp3Analysis & { mpeg: { firstFrame: Mp3FrameInfo; secondFrameValidated: false }; warnings: string[] } =>
+  mp3: Mp3ParseResult | null | undefined
+): mp3 is Mp3SuccessResult =>
   Boolean(
-    mp3?.isMp3 &&
+    mp3?.isMp3 === true &&
     mp3?.mpeg?.firstFrame &&
-    mp3?.mpeg?.secondFrameValidated === false &&
+    mp3?.mpeg.secondFrameValidated === false &&
     Array.isArray(mp3?.warnings) &&
     mp3.warnings.length === 1 &&
     mp3.warnings[0].indexOf("cannot be validated (file too small)") !== -1
   );
 
-function buildMp3Label(mp3: Mp3Analysis | null | undefined): string | null {
+function buildMp3Label(mp3: Mp3ParseResult | null | undefined): string | null {
   if (!mp3?.mpeg?.firstFrame) return null;
   if (!isValidatedMp3(mp3) && !isShortMp3WithoutSecond(mp3)) return null;
   const info = mp3.mpeg.firstFrame;
@@ -262,7 +246,7 @@ export async function detectBinaryType(file: File): Promise<string> {
   const magic = probeByMagic(dv);
   if (magic) {
     if (magic.indexOf("MPEG audio") !== -1) {
-      const mp3: Mp3Analysis | null = await parseMp3(file);
+      const mp3: Mp3ParseResult = await parseMp3(file);
       const label = buildMp3Label(mp3);
       if (label) return label;
       return "Unknown binary type";
@@ -365,7 +349,7 @@ export async function detectBinaryType(file: File): Promise<string> {
 
   const mp3ProbeView = new DataView(dv.buffer, dv.byteOffset, Math.min(dv.byteLength, 16384));
   if (probeMp3(mp3ProbeView)) {
-    const mp3: Mp3Analysis | null = await parseMp3(file);
+    const mp3: Mp3ParseResult = await parseMp3(file);
     const label = buildMp3Label(mp3);
     if (label) return label;
   }
@@ -450,7 +434,7 @@ export async function parseForUi(file: File): Promise<ParseForUiResult> {
     }
   }
   if (probeMp3(dv)) {
-    const mp3: Mp3Analysis | null = await parseMp3(file);
+    const mp3: Mp3ParseResult = await parseMp3(file);
     if (isValidatedMp3(mp3) || isShortMp3WithoutSecond(mp3)) return { analyzer: "mp3", parsed: mp3 };
   }
 
