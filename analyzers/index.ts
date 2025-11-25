@@ -1,23 +1,33 @@
 "use strict";
 /* eslint-disable max-lines */
 
-import { parsePe } from "./pe/index.js";
+import { parsePe, type PeParseResult } from "./pe/index.js";
 import { peProbe, mapMachine } from "./pe/signature.js";
 import { probeByMagic, probeTextLike } from "./probes.js";
 import { parseJpeg } from "./jpeg/index.js";
+import type { JpegParseResult } from "./jpeg/types.js";
 import { parseElf } from "./elf/index.js";
+import type { ElfParseResult } from "./elf/types.js";
 import { parseFb2 } from "./fb2/index.js";
+import type { Fb2ParseResult } from "./fb2/index.js";
 import { isGifSignature, parseGif } from "./gif/index.js";
+import type { GifParseResult } from "./gif/types.js";
 import { parseZip } from "./zip/index.js";
+import type { ZipParseResult } from "./zip/index.js";
 import { parsePng } from "./png/index.js";
+import type { PngParseResult } from "./png/types.js";
 import { parsePdf } from "./pdf/index.js";
+import type { PdfParseResult } from "./pdf/types.js";
 import { parseWebp } from "./webp/index.js";
+import type { WebpParseResult } from "./webp/types.js";
 import { parseMp3, probeMp3 } from "./mp3/index.js";
 import type { Mp3ParseResult, Mp3SuccessResult } from "./mp3/types.js";
-import { hasSevenZipSignature, parseSevenZip } from "./sevenz/index.js";
+import { hasSevenZipSignature, parseSevenZip, type SevenZipParseResult } from "./sevenz/index.js";
 import { hasTarSignature, parseTar } from "./tar/index.js";
-import { hasRarSignature, parseRar } from "./rar/index.js";
+import type { TarParseResult } from "./tar/types.js";
+import { hasRarSignature, parseRar, type RarParseResult } from "./rar/index.js";
 import { parseMz } from "./mz/index.js";
+import type { MzParseResult } from "./mz/index.js";
 import { hasShellLinkSignature, parseLnk } from "./lnk/index.js";
 
 export type AnalyzerName =
@@ -37,12 +47,32 @@ export type AnalyzerName =
   | "webp"
   | "mp3";
 
-export interface ParseForUiResult {
-  analyzer: AnalyzerName | null;
-  // Concrete analyzer result types live in analyzers/<format>/; we keep this
-  // broad here and let renderers narrow as needed.
-  parsed: unknown;
-}
+type AnalyzerParseMap = {
+  lnk: unknown;
+  elf: ElfParseResult;
+  pe: PeParseResult;
+  mz: MzParseResult;
+  fb2: Fb2ParseResult;
+  gif: GifParseResult;
+  sevenZip: SevenZipParseResult;
+  rar: RarParseResult;
+  tar: TarParseResult;
+  zip: ZipParseResult;
+  pdf: PdfParseResult;
+  png: PngParseResult;
+  jpeg: JpegParseResult;
+  webp: WebpParseResult;
+  mp3: Mp3ParseResult;
+};
+
+type AnalyzerResultUnion = {
+  [Name in AnalyzerName]: { analyzer: Name; parsed: AnalyzerParseMap[Name] };
+}[AnalyzerName];
+
+export type ParseForUiResult = AnalyzerResultUnion | { analyzer: null; parsed: null };
+
+export type ParsedByAnalyzer<Name extends AnalyzerName> =
+  Extract<ParseForUiResult, { analyzer: Name }>["parsed"];
 
 type MzProbeKind = "mz" | "pe" | "ne" | "le" | "lx";
 

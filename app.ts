@@ -2,7 +2,7 @@
 "use strict";
 
 import { nowIsoString, formatHumanSize, bufferToHex } from "./binary-utils.js";
-import { detectBinaryType, parseForUi, type AnalyzerName, type ParseForUiResult } from "./analyzers/index.js";
+import { detectBinaryType, parseForUi, type ParseForUiResult } from "./analyzers/index.js";
 import {
   renderPe,
   renderJpeg,
@@ -21,11 +21,7 @@ import {
   renderLnk,
 } from "./renderers/index.js";
 import { escapeHtml } from "./html-utils.js";
-import type { MzParseResult } from "./analyzers/mz/index.js";
-import type { ZipCentralDirectoryEntry, ZipParseResult } from "./analyzers/zip/index.js";
-import type { SevenZipParseResult } from "./analyzers/sevenz/index.js";
-import type { TarParseResult } from "./analyzers/tar/index.js";
-import type { RarParseResult } from "./analyzers/rar/index.js";
+import type { ZipCentralDirectoryEntry } from "./analyzers/zip/index.js";
 
 const getElement = (id: string) => document.getElementById(id)!;
 
@@ -59,8 +55,7 @@ const sha512CopyButtonElement = getElement("sha512CopyButton") as HTMLButtonElem
 let currentFile: File | null = null;
 let currentPreviewUrl: string | null = null;
 let currentTypeLabel = "";
-let currentAnalyzerName: AnalyzerName | null = null;
-let currentParsedResult: ParseForUiResult["parsed"] | null = null;
+let currentParseResult: ParseForUiResult = { analyzer: null, parsed: null };
 
 const setStatusMessage = (message: string | null | undefined): void => {
   statusMessageElement.textContent = message || "";
@@ -94,125 +89,122 @@ function buildImagePreviewHtml(): string {
   )}" /></div>`;
 }
 
-function renderAnalysisIntoUi(
-  analyzerName: AnalyzerName | null,
-  parsedResult: ParseForUiResult["parsed"]
-): void {
+function renderAnalysisIntoUi(result: ParseForUiResult): void {
   const previewHtml = buildImagePreviewHtml();
 
-  if (analyzerName === "pe" && parsedResult) {
+  if (result.analyzer === "pe") {
     peDetailsTermElement.textContent = "PE/COFF details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = renderPe(parsedResult);
+    peDetailsValueElement.innerHTML = renderPe(result.parsed);
     return;
   }
 
-  if (analyzerName === "mz" && parsedResult) {
+  if (result.analyzer === "mz") {
     peDetailsTermElement.textContent = "MS-DOS MZ details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = renderMz(parsedResult as MzParseResult);
+    peDetailsValueElement.innerHTML = renderMz(result.parsed);
     return;
   }
 
-  if (analyzerName === "elf" && parsedResult) {
+  if (result.analyzer === "elf") {
     peDetailsTermElement.textContent = "ELF details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = renderElf(parsedResult);
+    peDetailsValueElement.innerHTML = renderElf(result.parsed);
     return;
   }
 
-  if (analyzerName === "jpeg" && parsedResult) {
+  if (result.analyzer === "jpeg") {
     peDetailsTermElement.textContent = "JPEG details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = previewHtml + renderJpeg(parsedResult);
+    peDetailsValueElement.innerHTML = previewHtml + renderJpeg(result.parsed);
     return;
   }
 
-  if (analyzerName === "fb2" && parsedResult) {
+  if (result.analyzer === "fb2") {
     peDetailsTermElement.textContent = "FB2 details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = renderFb2(parsedResult);
+    peDetailsValueElement.innerHTML = renderFb2(result.parsed);
     return;
   }
-  if (analyzerName === "gif" && parsedResult) {
+  if (result.analyzer === "gif") {
     peDetailsTermElement.textContent = "GIF details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = previewHtml + renderGif(parsedResult);
+    peDetailsValueElement.innerHTML = previewHtml + renderGif(result.parsed);
     return;
   }
-  if (analyzerName === "zip" && parsedResult) {
+  if (result.analyzer === "zip") {
     peDetailsTermElement.textContent = "ZIP details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = renderZip(parsedResult as ZipParseResult);
+    peDetailsValueElement.innerHTML = renderZip(result.parsed);
     return;
   }
-  if (analyzerName === "sevenZip" && parsedResult) {
+  if (result.analyzer === "sevenZip") {
     peDetailsTermElement.textContent = "7z details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = renderSevenZip(parsedResult as SevenZipParseResult);
+    peDetailsValueElement.innerHTML = renderSevenZip(result.parsed);
     return;
   }
 
-  if (analyzerName === "tar" && parsedResult) {
+  if (result.analyzer === "tar") {
     peDetailsTermElement.textContent = "TAR details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = renderTar(parsedResult as TarParseResult);
+    peDetailsValueElement.innerHTML = renderTar(result.parsed);
     return;
   }
 
-  if (analyzerName === "rar" && parsedResult) {
+  if (result.analyzer === "rar") {
     peDetailsTermElement.textContent = "RAR details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = renderRar(parsedResult as RarParseResult);
+    peDetailsValueElement.innerHTML = renderRar(result.parsed);
     return;
   }
-  if (analyzerName === "lnk" && parsedResult) {
+  if (result.analyzer === "lnk") {
     peDetailsTermElement.textContent = "Windows shortcut details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = renderLnk(parsedResult);
+    peDetailsValueElement.innerHTML = renderLnk(result.parsed);
     return;
   }
-  
-  if (analyzerName === "png" && parsedResult) {
+
+  if (result.analyzer === "png") {
     peDetailsTermElement.textContent = "PNG details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = previewHtml + renderPng(parsedResult);
+    peDetailsValueElement.innerHTML = previewHtml + renderPng(result.parsed);
     return;
   }
 
-  if (analyzerName === "webp" && parsedResult) {
+  if (result.analyzer === "webp") {
     peDetailsTermElement.textContent = "WebP details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = previewHtml + renderWebp(parsedResult);
+    peDetailsValueElement.innerHTML = previewHtml + renderWebp(result.parsed);
     return;
   }
 
-  if (analyzerName === "pdf" && parsedResult) {
+  if (result.analyzer === "pdf") {
     peDetailsTermElement.textContent = "PDF details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = renderPdf(parsedResult);
+    peDetailsValueElement.innerHTML = renderPdf(result.parsed);
     return;
   }
 
-  if (analyzerName === "mp3" && parsedResult) {
+  if (result.analyzer === "mp3") {
     peDetailsTermElement.textContent = "MP3 details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = renderMp3(parsedResult);
+    peDetailsValueElement.innerHTML = renderMp3(result.parsed);
     return;
   }
 
@@ -237,9 +229,8 @@ const sanitizeDownloadName = (entry: ZipCentralDirectoryEntry): string => {
 };
 
 const findZipEntryByIndex = (index: number): ZipCentralDirectoryEntry | null => {
-  if (currentAnalyzerName !== "zip") return null;
-  const parsed = currentParsedResult as ZipParseResult | null;
-  const entries = parsed?.centralDirectory?.entries;
+  if (currentParseResult.analyzer !== "zip") return null;
+  const entries = currentParseResult.parsed.centralDirectory?.entries;
   if (!Array.isArray(entries)) return null;
   return entries.find(entry => entry.index === index) || null;
 };
@@ -337,8 +328,7 @@ function resetHashDisplay(): void {
 
 async function showFileInfo(file: File, sourceDescription: string): Promise<void> {
   currentFile = file;
-  currentAnalyzerName = null;
-  currentParsedResult = null;
+  currentParseResult = { analyzer: null, parsed: null };
   const typeLabel = await detectBinaryType(file);
   currentTypeLabel = typeLabel || "";
   const timestampIso = nowIsoString();
@@ -359,10 +349,9 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
   fileBinaryTypeDetailElement.textContent = typeLabel;
   fileMimeTypeDetailElement.textContent = mimeType;
 
-  const { analyzer, parsed } = await parseForUi(file);
-  currentAnalyzerName = analyzer;
-  currentParsedResult = parsed;
-  renderAnalysisIntoUi(analyzer, parsed);
+  const parsedResult = await parseForUi(file);
+  currentParseResult = parsedResult;
+  renderAnalysisIntoUi(parsedResult);
 
   resetHashDisplay();
   fileInfoCardElement.hidden = false;
