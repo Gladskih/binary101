@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use strict";
 /* eslint-disable max-lines */
 
@@ -44,8 +43,32 @@ export interface ParseForUiResult {
   parsed: unknown;
 }
 
+type MzProbeKind = "mz" | "pe" | "ne" | "le" | "lx";
+
+interface MzProbeResult {
+  kind: MzProbeKind;
+  eLfanew: number;
+}
+
+interface Mp3FrameInfo {
+  versionLabel?: string | null;
+  layerLabel?: string | null;
+  bitrateKbps?: number | null;
+  sampleRate?: number | null;
+  channelMode?: string | null;
+}
+
+interface Mp3Analysis {
+  isMp3?: boolean;
+  mpeg?: {
+    firstFrame?: Mp3FrameInfo | null;
+    secondFrameValidated?: boolean | null;
+  } | null;
+  warnings?: string[] | null;
+}
+
 // Quick magic-based detectors for non-PE types (label only for now)
-function detectELF(dv) {
+function detectELF(dv: DataView): string | null {
   if (dv.byteLength < 0x14) return null;
   if (dv.getUint32(0, false) !== 0x7f454c46) return null; // '\x7FELF'
   const c = dv.getUint8(4);
@@ -71,12 +94,12 @@ function detectELF(dv) {
       : t === 3
         ? "shared object"
         : t === 1
-          ? "relocatable"
+        ? "relocatable"
           : `type=${t.toString(16)}`;
   return `ELF ${bit} ${endian} ${kind}, ${mach}`;
 }
 
-function detectMachO(dv) {
+function detectMachO(dv: DataView): string | null {
   if (dv.byteLength < 4) return null;
   const be = dv.getUint32(0, false), le = dv.getUint32(0, true);
   if (be === 0xfeedface || le === 0xcefaedfe) return "Mach-O 32-bit";
@@ -85,14 +108,14 @@ function detectMachO(dv) {
   return null;
 }
 
-async function probeMzFormat(file, dv) {
+async function probeMzFormat(file: File, dv: DataView): Promise<MzProbeResult | null> {
   const mz = peProbe(dv);
   if (!mz) return null;
   const eLfanew = mz.e_lfanew >>> 0;
   if (eLfanew === 0) return { kind: "mz", eLfanew };
   if (eLfanew + 4 > file.size) return { kind: "mz", eLfanew };
   const sigLength = Math.min(4, file.size - eLfanew);
-  let sigBytes;
+  let sigBytes: Uint8Array;
   if (eLfanew + sigLength <= dv.byteLength) {
     sigBytes = new Uint8Array(dv.buffer, dv.byteOffset + eLfanew, sigLength);
   } else {
@@ -107,20 +130,28 @@ async function probeMzFormat(file, dv) {
   return { kind: "mz", eLfanew };
 }
 
-const isValidatedMp3 = mp3 => mp3?.isMp3 && mp3?.mpeg?.secondFrameValidated === true;
-const isShortMp3WithoutSecond = mp3 =>
-  mp3?.isMp3 &&
-  mp3?.mpeg?.firstFrame &&
-  mp3?.mpeg?.secondFrameValidated === false &&
-  Array.isArray(mp3?.warnings) &&
-  mp3.warnings.length === 1 &&
-  mp3.warnings[0].indexOf("cannot be validated (file too small)") !== -1;
+const isValidatedMp3 = (
+  mp3: Mp3Analysis | null | undefined
+): mp3 is Mp3Analysis & { mpeg: { firstFrame: Mp3FrameInfo; secondFrameValidated: true } } =>
+  Boolean(mp3?.isMp3 && mp3?.mpeg?.firstFrame && mp3?.mpeg?.secondFrameValidated === true);
 
-function buildMp3Label(mp3) {
+const isShortMp3WithoutSecond = (
+  mp3: Mp3Analysis | null | undefined
+): mp3 is Mp3Analysis & { mpeg: { firstFrame: Mp3FrameInfo; secondFrameValidated: false }; warnings: string[] } =>
+  Boolean(
+    mp3?.isMp3 &&
+    mp3?.mpeg?.firstFrame &&
+    mp3?.mpeg?.secondFrameValidated === false &&
+    Array.isArray(mp3?.warnings) &&
+    mp3.warnings.length === 1 &&
+    mp3.warnings[0].indexOf("cannot be validated (file too small)") !== -1
+  );
+
+function buildMp3Label(mp3: Mp3Analysis | null | undefined): string | null {
   if (!mp3?.mpeg?.firstFrame) return null;
   if (!isValidatedMp3(mp3) && !isShortMp3WithoutSecond(mp3)) return null;
   const info = mp3.mpeg.firstFrame;
-  const parts = [];
+  const parts: string[] = [];
   if (info.versionLabel) parts.push(info.versionLabel);
   if (info.layerLabel) parts.push(info.layerLabel);
   if (info.bitrateKbps) parts.push(`${info.bitrateKbps} kbps`);
@@ -129,7 +160,7 @@ function buildMp3Label(mp3) {
   return parts.length ? parts.join(", ") : "MPEG audio stream (MP3)";
 }
 
-function toAsciiFromWholeView(dv, maxBytes) {
+function toAsciiFromWholeView(dv: DataView, maxBytes: number): string {
   const limit = Math.min(dv.byteLength, maxBytes);
   let result = "";
   for (let i = 0; i < limit; i += 1) {
@@ -138,7 +169,7 @@ function toAsciiFromWholeView(dv, maxBytes) {
   return result;
 }
 
-function refineZipLabel(dv) {
+function refineZipLabel(dv: DataView): string | null {
   const ascii = toAsciiFromWholeView(dv, 65536);
   const hasContentTypes = ascii.indexOf("[Content_Types].xml") !== -1;
   const hasRelsRoot = ascii.indexOf("_rels/.rels") !== -1;
@@ -178,14 +209,14 @@ function refineZipLabel(dv) {
   return null;
 }
 
-function detectPdfVersion(dv) {
+function detectPdfVersion(dv: DataView): string | null {
   const ascii = toAsciiFromWholeView(dv, 32);
   if (!ascii.startsWith("%PDF-")) return null;
   const match = ascii.match(/%PDF-([0-9]+\.[0-9]+)/);
   return match ? match[1] : null;
 }
 
-function refineCompoundLabel(dv) {
+function refineCompoundLabel(dv: DataView): string | null {
   const ascii = toAsciiFromWholeView(dv, 65536);
   if (ascii.indexOf("PowerPoint Document") !== -1) {
     return "Microsoft PowerPoint binary document (PPT)";
@@ -205,7 +236,7 @@ function refineCompoundLabel(dv) {
   return null;
 }
 
-function hasZipEocdSignature(dv) {
+function hasZipEocdSignature(dv: DataView): boolean {
   // Smallest ZIP is an empty one, 22 bytes.
   if (dv.byteLength < 22) return false;
   // Scan backwards from the end of the buffer for the EOCD signature.
@@ -231,7 +262,7 @@ export async function detectBinaryType(file: File): Promise<string> {
   const magic = probeByMagic(dv);
   if (magic) {
     if (magic.indexOf("MPEG audio") !== -1) {
-      const mp3 = await parseMp3(file);
+      const mp3: Mp3Analysis | null = await parseMp3(file);
       const label = buildMp3Label(mp3);
       if (label) return label;
       return "Unknown binary type";
@@ -247,12 +278,15 @@ export async function detectBinaryType(file: File): Promise<string> {
     if (magic === "7z archive") {
       const sevenZip = await parseSevenZip(file);
       if (sevenZip?.is7z) {
-        const version = `${sevenZip.startHeader.versionMajor}.${sevenZip.startHeader.versionMinor}`;
-        const files = sevenZip.nextHeader?.parsed?.sections?.filesInfo?.fileCount;
-        const extras = [];
-        if (files != null) extras.push(`${files} file${files === 1 ? "" : "s"}`);
+        const version = sevenZip.startHeader
+          ? `${sevenZip.startHeader.versionMajor}.${sevenZip.startHeader.versionMinor}`
+          : null;
+        const files = sevenZip.structure?.files?.length;
+        const extras: string[] = [];
+        if (typeof files === "number" && files > 0) extras.push(`${files} file${files === 1 ? "" : "s"}`);
         const suffix = extras.length ? ` (${extras.join(", ")})` : "";
-        return `7z archive v${version}${suffix}`;
+        if (version) return `7z archive v${version}${suffix}`;
+        return `7z archive${suffix}`;
       }
       return "7z archive";
     }
@@ -264,7 +298,7 @@ export async function detectBinaryType(file: File): Promise<string> {
             ? `${png.ihdr.width}x${png.ihdr.height}`
             : null;
         const color = png.ihdr.colorName || null;
-        const extras = [];
+        const extras: string[] = [];
         if (dimensions) extras.push(dimensions);
         if (color) extras.push(color);
         if (png.hasTransparency) extras.push("alpha");
@@ -275,7 +309,7 @@ export async function detectBinaryType(file: File): Promise<string> {
     if (magic === "WebP image") {
       const webp = await parseWebp(file);
       if (webp) {
-        const extras = [];
+        const extras: string[] = [];
         if (webp.dimensions && webp.dimensions.width && webp.dimensions.height) {
           extras.push(`${webp.dimensions.width}x${webp.dimensions.height}`);
         }
@@ -291,7 +325,7 @@ export async function detectBinaryType(file: File): Promise<string> {
     if (magic === "RAR archive") {
       const rar = await parseRar(file);
       if (rar?.isRar) {
-        const extras = [];
+        const extras: string[] = [];
         extras.push(`v${rar.version}`);
         const count = rar.entries?.length || 0;
         if (count) extras.push(`${count} file${count === 1 ? "" : "s"}`);
@@ -331,7 +365,7 @@ export async function detectBinaryType(file: File): Promise<string> {
 
   const mp3ProbeView = new DataView(dv.buffer, dv.byteOffset, Math.min(dv.byteLength, 16384));
   if (probeMp3(mp3ProbeView)) {
-    const mp3 = await parseMp3(file);
+    const mp3: Mp3Analysis | null = await parseMp3(file);
     const label = buildMp3Label(mp3);
     if (label) return label;
   }
@@ -416,7 +450,7 @@ export async function parseForUi(file: File): Promise<ParseForUiResult> {
     }
   }
   if (probeMp3(dv)) {
-    const mp3 = await parseMp3(file);
+    const mp3: Mp3Analysis | null = await parseMp3(file);
     if (isValidatedMp3(mp3) || isShortMp3WithoutSecond(mp3)) return { analyzer: "mp3", parsed: mp3 };
   }
 
