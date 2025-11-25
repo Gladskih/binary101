@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use strict";
 
 import {
@@ -16,27 +15,34 @@ import {
   XING_FLAG_TOC
 } from "./constants.js";
 import { readAsciiString } from "../../binary-utils.js";
+import type { MpegFrameHeader, VbrHeader } from "./types.js";
 
-function samplesPerFrame(versionBits, layerBits) {
+function samplesPerFrame(versionBits: number, layerBits: number): number | null {
   if (layerBits === 0x3) return 384;
   if (layerBits === 0x2) return 1152;
   if (layerBits === 0x1) return versionBits === 0x3 ? 1152 : 576;
   return null;
 }
 
-function frameLengthBytes(versionBits, layerBits, bitrateKbps, sampleRate, padding) {
+function frameLengthBytes(
+  versionBits: number,
+  layerBits: number,
+  bitrateKbps: number | null,
+  sampleRate: number | null,
+  padding: boolean
+): number | null {
   const samples = samplesPerFrame(versionBits, layerBits);
   if (!samples || !bitrateKbps || !sampleRate) return null;
   const base = (samples * bitrateKbps * 1000) / (8 * sampleRate);
   return Math.floor(base + (padding ? 1 : 0));
 }
 
-function decodeModeExtension(layerBits, modeExtension) {
+function decodeModeExtension(layerBits: number, modeExtension: number): string | null {
   if (layerBits !== 0x1) return null;
   return MODE_EXTENSION_LAYER_III.get(modeExtension) || null;
 }
 
-export function parseFrameHeader(dv, offset) {
+export function parseFrameHeader(dv: DataView, offset: number): MpegFrameHeader | null {
   if (offset + 4 > dv.byteLength) return null;
   const header = dv.getUint32(offset, false);
   const syncWord = (header >>> 21) & 0x7ff;
@@ -51,9 +57,10 @@ export function parseFrameHeader(dv, offset) {
   const channelModeBits = (header >> 6) & 0x3;
   const emphasisCode = header & 0x3;
   const versionKey = versionBits === 0x2 || versionBits === 0x0 ? 0x2 : versionBits;
-  const bitrateTable = BITRATES[versionKey][layerBits];
+  const bitrateTable =
+    (BITRATES as Record<number, Record<number, Array<number | null>>>)[versionKey]?.[layerBits];
   const bitrateKbps = bitrateTable ? bitrateTable[bitrateIndex] : null;
-  const sampleRateTable = SAMPLE_RATES[versionBits];
+  const sampleRateTable = (SAMPLE_RATES as Record<number, number[]>)[versionBits];
   const sampleRate = sampleRateTable ? sampleRateTable[sampleRateIndex] : null;
   const length = frameLengthBytes(versionBits, layerBits, bitrateKbps, sampleRate, padding);
   return {
@@ -79,7 +86,7 @@ export function parseFrameHeader(dv, offset) {
   };
 }
 
-export function findFirstFrame(dv, startOffset, issues) {
+export function findFirstFrame(dv: DataView, startOffset: number, issues: string[]): MpegFrameHeader | null {
   const limit = Math.min(dv.byteLength - 4, startOffset + MAX_FRAME_SCAN);
   for (let offset = startOffset; offset <= limit; offset += 1) {
     const frame = parseFrameHeader(dv, offset);
@@ -93,7 +100,11 @@ export function findFirstFrame(dv, startOffset, issues) {
   return null;
 }
 
-export function validateNextFrame(dv, firstFrame, issues) {
+export function validateNextFrame(
+  dv: DataView,
+  firstFrame: MpegFrameHeader | null,
+  issues: string[]
+): boolean {
   if (!firstFrame || !firstFrame.frameLengthBytes) return false;
   const nextOffset = firstFrame.offset + firstFrame.frameLengthBytes;
   if (nextOffset + 4 > dv.byteLength) {
@@ -112,13 +123,13 @@ export function validateNextFrame(dv, firstFrame, issues) {
   return true;
 }
 
-function sideInfoSize(versionBits, channelModeBits) {
+function sideInfoSize(versionBits: number, channelModeBits: number): number {
   const isMono = channelModeBits === 0x3;
   if (versionBits === 0x3) return isMono ? 17 : 32;
   return isMono ? 9 : 17;
 }
 
-function parseXingOrInfo(dv, frame) {
+function parseXingOrInfo(dv: DataView, frame: MpegFrameHeader): VbrHeader | null {
   const start = frame.offset + 4 + sideInfoSize(frame.versionBits, frame.channelModeBits);
   if (start + 8 > dv.byteLength) return null;
   const tag = readAsciiString(dv, start, 4);
@@ -144,7 +155,7 @@ function parseXingOrInfo(dv, frame) {
   return { type: tag, flags, frames, bytes, quality, lameEncoder, vbrDetected: tag === "Xing" };
 }
 
-function parseVbri(dv, frame) {
+function parseVbri(dv: DataView, frame: MpegFrameHeader): VbrHeader | null {
   const start = frame.offset + 4 + 32;
   if (start + 26 > dv.byteLength) return null;
   const tag = readAsciiString(dv, start, 4);
@@ -155,11 +166,16 @@ function parseVbri(dv, frame) {
   return { type: tag, flags: null, frames, bytes, quality, lameEncoder: null, vbrDetected: true };
 }
 
-export function parseVbrHeader(dv, frame) {
+export function parseVbrHeader(dv: DataView, frame: MpegFrameHeader): VbrHeader | null {
   return parseXingOrInfo(dv, frame) || parseVbri(dv, frame);
 }
 
-export function estimateDuration(firstFrame, vbr, audioBytes, issues) {
+export function estimateDuration(
+  firstFrame: MpegFrameHeader | null,
+  vbr: VbrHeader | null,
+  audioBytes: number,
+  issues: string[]
+): number | null {
   if (vbr && vbr.frames && firstFrame && firstFrame.samplesPerFrame && firstFrame.sampleRate) {
     return (vbr.frames * firstFrame.samplesPerFrame) / firstFrame.sampleRate;
   }

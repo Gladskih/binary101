@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use strict";
 
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
@@ -29,14 +28,16 @@ import {
   valueWithHint,
   withFieldNote
 } from "./formatting.js";
+import type { Mp3SuccessResult } from "../../analyzers/mp3/types.js";
 
-export function renderSummary(mp3) {
-  const { summary, audioDataBytes } = mp3;
+export function renderSummary(mp3: Mp3SuccessResult | null | unknown): string {
+  const data = mp3 as Mp3SuccessResult | null;
+  const { summary, audioDataBytes } = data || {};
   if (!summary) return "";
   const rows = [];
-  const versionCode = MPEG_VERSION_LABEL_TO_CODE.get(summary.mpegVersion);
-  const layerCode = LAYER_LABEL_TO_CODE.get(summary.layer);
-  const channelCode = CHANNEL_MODE_LABEL_TO_CODE.get(summary.channelMode);
+  const versionCode = MPEG_VERSION_LABEL_TO_CODE.get(summary.mpegVersion || "");
+  const layerCode = LAYER_LABEL_TO_CODE.get(summary.layer || "");
+  const channelCode = CHANNEL_MODE_LABEL_TO_CODE.get(summary.channelMode || "");
   rows.push(
     renderDefinitionRow(
       "MPEG version",

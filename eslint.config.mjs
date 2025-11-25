@@ -67,7 +67,14 @@ export default [
           varsIgnorePattern: "^_",
           caughtErrors: "none"
         }
-      ]
+      ],
+      "@typescript-eslint/no-explicit-any": "error"
+    }
+  },
+  {
+    files: ["analyzers/sevenz/index.ts"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off"
     }
   },
   {

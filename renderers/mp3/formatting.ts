@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use strict";
 
 import { escapeHtml } from "../../html-utils.js";
@@ -30,8 +29,8 @@ export const CHANNEL_MODE_LABEL_TO_CODE = new Map(
   CHANNEL_MODE_OPTS.map(({ code, label }) => [label, code])
 );
 
-export function formatDuration(seconds) {
-  if (!Number.isFinite(seconds) || seconds <= 0) return "Unknown";
+export function formatDuration(seconds: number | null | undefined): string {
+  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0) return "Unknown";
   const rounded = Math.round(seconds);
   const minutes = Math.floor(rounded / 60);
   const secs = rounded % 60;
@@ -43,30 +42,33 @@ export function formatDuration(seconds) {
   return `${minutes}:${secs.toString().padStart(2, "0")}`;
 }
 
-export function formatBoolean(value) {
+export function formatBoolean(value: boolean | null | undefined): string {
   return value ? "Yes" : "No";
 }
 
-export function wrapValue(valueHtml, tooltip) {
+export function wrapValue(valueHtml: string, tooltip: string | null | undefined): string {
   if (!tooltip) return valueHtml;
   return `<span class="valueHint" title="${escapeHtml(tooltip)}">${valueHtml}</span>`;
 }
 
-export function valueWithNote(valueHtml, note) {
+export function valueWithNote(valueHtml: string, note: string | null | undefined): string {
   if (!note) return valueHtml;
   return `${valueHtml}<div class="smallNote">${escapeHtml(note)}</div>`;
 }
 
-export function valueWithHint(valueHtml, tooltip) {
+export function valueWithHint(valueHtml: string, tooltip: string | null | undefined): string {
   return tooltip ? wrapValue(valueHtml, tooltip) : valueHtml;
 }
 
-export function withFieldNote(valueHtml, fieldNote) {
+export function withFieldNote(valueHtml: string, fieldNote: string | null | undefined): string {
   if (!fieldNote) return valueHtml;
   return valueWithNote(valueHtml, fieldNote);
 }
 
-export function renderEnumChips(selectedCode, options) {
+export function renderEnumChips(
+  selectedCode: number | null | undefined,
+  options: Array<{ code: number; label: string; hint?: string }>
+): string {
   const chips = options
     .map(({ code, label, hint }) => {
       const cls = code === selectedCode ? "opt sel" : "opt dim";
@@ -77,7 +79,7 @@ export function renderEnumChips(selectedCode, options) {
   return `<div class="optionsRow">${chips}</div>`;
 }
 
-export function describeMpegVersion(version) {
+export function describeMpegVersion(version: string | null | undefined): string {
   if (!version) {
     return "MPEG audio version parsed from the first frame; valid values are 1, 2, and 2.5 (no other profiles in MP3).";
   }
@@ -93,7 +95,7 @@ export function describeMpegVersion(version) {
   return `${version} - unusual or reserved value from the header.`;
 }
 
-export function describeLayer(layer) {
+export function describeLayer(layer: string | null | undefined): string {
   if (!layer) {
     return "MPEG layer chooses the codec flavor; MP3 is Layer III. Only Layers I/II/III exist here.";
   }
@@ -103,7 +105,7 @@ export function describeLayer(layer) {
   return `${layer} - reported by the MPEG header.`;
 }
 
-export function describeChannelMode(mode) {
+export function describeChannelMode(mode: string | null | undefined): string {
   if (!mode) {
     return "Channel mode is a 2-bit field with four legal values: Stereo, Joint stereo, Dual channel, Single channel (mono). MP3 does not support 5.1 multichannel.";
   }
@@ -121,14 +123,17 @@ export function describeChannelMode(mode) {
   }
 }
 
-export function describeSampleRate(sampleRateHz) {
+export function describeSampleRate(sampleRateHz: number | null | undefined): string {
   if (!sampleRateHz) return "Sample rate decoded from the MPEG header.";
   if (sampleRateHz >= 44100) return `${sampleRateHz} Hz - standard CD-quality rate for MP3 audio.`;
   if (sampleRateHz >= 32000) return `${sampleRateHz} Hz - mid-tier sample rate for low-bitrate encodes.`;
   return `${sampleRateHz} Hz - low sample rate (often voice/streaming content).`;
 }
 
-export function describeBitrate(bitrateKbps, isVbr) {
+export function describeBitrate(
+  bitrateKbps: number | null | undefined,
+  isVbr: boolean | null | undefined
+): string {
   if (!bitrateKbps) return "Bitrate comes from the MPEG table (preset steps only).";
   const vbrText = isVbr ? "variable bitrate " : "";
   if (bitrateKbps >= 256) return `${bitrateKbps} kbps ${vbrText}- high bitrate (typical for music).`;
@@ -136,52 +141,52 @@ export function describeBitrate(bitrateKbps, isVbr) {
   return `${bitrateKbps} kbps ${vbrText}- low bitrate (voice or aggressive compression).`;
 }
 
-export function describeDuration(seconds) {
-  if (!Number.isFinite(seconds)) return "Estimated duration of the audio stream.";
+export function describeDuration(seconds: number | null | undefined): string {
+  if (typeof seconds !== "number" || !Number.isFinite(seconds)) return "Estimated duration of the audio stream.";
   if (seconds < 10) return "Very short clip; could be a ringtone, intro, or truncated file.";
   if (seconds > 600) return "Long duration; likely a full album, mix, or lengthy recording.";
   return "Approximate duration derived from frames, bitrate, or VBR headers.";
 }
 
-export function describeAudioOffset(offset) {
+export function describeAudioOffset(offset: number | null | undefined): string {
   if (offset == null) return "Offset of the first MPEG frame after any tags or junk.";
   if (offset === 0) return "Audio starts immediately at the beginning of the file.";
   if (offset < 1024) return `${offset} B of metadata/padding before the first frame.`;
   return `${offset} B before audio starts; likely ID3 metadata or padding.`;
 }
 
-export function describeAudioBytes(audioBytes) {
+export function describeAudioBytes(audioBytes: number | null | undefined): string {
   if (!audioBytes) return "Estimated size of MPEG audio payload.";
   return `${audioBytes} B of MPEG frame data (approximate).`;
 }
 
-export function describeVbrFlag(isVbr) {
+export function describeVbrFlag(isVbr: boolean | null | undefined): string {
   if (isVbr == null) return "Whether the MPEG frames indicate variable bitrate.";
   return isVbr
     ? "Variable bitrate detected (frames differ in size)."
     : "Constant bitrate detected (frames have uniform size).";
 }
 
-export function describeId3v2(hasId3v2) {
+export function describeId3v2(hasId3v2: boolean | null | undefined): string {
   if (hasId3v2 == null) return "Whether an ID3v2 tag is present at the start of the file.";
   return hasId3v2
     ? "ID3v2 tag found (modern metadata with cover art and rich fields)."
     : "No ID3v2 tag detected (file may still have other tags).";
 }
 
-export function describeId3v1(hasId3v1) {
+export function describeId3v1(hasId3v1: boolean | null | undefined): string {
   if (hasId3v1 == null) return "Whether a legacy ID3v1 footer is present at the end of the file.";
   return hasId3v1
     ? "ID3v1 footer found (128-byte legacy tag)."
     : "No ID3v1 footer detected.";
 }
 
-export function describeApe(hasApe) {
+export function describeApe(hasApe: boolean | null | undefined): string {
   if (hasApe == null) return "Whether an APEv2 metadata block exists (ReplayGain or extra tags).";
   return hasApe ? "APEv2 metadata present (often carries ReplayGain)." : "No APE metadata detected.";
 }
 
-export function describeLyrics3(hasLyrics) {
+export function describeLyrics3(hasLyrics: boolean | null | undefined): string {
   if (hasLyrics == null) return "Whether a Lyrics3 block exists near the end of the file.";
   return hasLyrics ? "Lyrics3 metadata present (rare format)." : "No Lyrics3 metadata detected.";
 }

@@ -1,10 +1,10 @@
-// @ts-nocheck
 "use strict";
 
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import { valueWithHint, withFieldNote } from "./formatting.js";
+import type { VbrHeader } from "../../analyzers/mp3/types.js";
 
-function describeVbrHeaderType(type) {
+function describeVbrHeaderType(type: string | null | undefined): string {
   if (!type) return "VBR headers (Xing/Info/VBRI) advertise frames/bytes for accurate duration.";
   if (type === "Xing") return "Xing header - signals VBR and may include a seek table; common with LAME encodes.";
   if (type === "Info") return "Info header - like Xing but for CBR streams; common when LAME writes encoder metadata.";
@@ -12,29 +12,29 @@ function describeVbrHeaderType(type) {
   return `${type} header reported in the first frame.`;
 }
 
-function describeVbrFrames(frames) {
+function describeVbrFrames(frames: number | null | undefined): string {
   if (frames == null) return "Total frames reported by the VBR header; used for precise duration.";
   if (frames < 10) return `${frames} frames - extremely short snippet.`;
   if (frames < 1000) return `${frames} frames - short clip length.`;
   return `${frames} frames - typical or long track; count improves seek accuracy.`;
 }
 
-function describeVbrBytes(bytes) {
+function describeVbrBytes(bytes: number | null | undefined): string {
   if (bytes == null) return "Total bytes reported by the VBR header; helps check file completeness.";
   return `${bytes} bytes reported by VBR header; should roughly match audio payload size.`;
 }
 
-function describeVbrQuality(quality) {
+function describeVbrQuality(quality: number | null | undefined): string {
   if (quality == null) return "Quality score from the VBR header (0 = best, 100 = worst) when provided by encoder.";
   return `${quality} (0 best, 100 worst) - encoder-provided quality hint; lower is better.`;
 }
 
-function describeLameEncoder(name) {
+function describeLameEncoder(name: string | null | undefined): string {
   if (!name) return "Encoder string from the LAME tag when present.";
   return `${name} encoder string - helpful for spotting default/popular encoders (LAME, GOGO, etc.).`;
 }
 
-export function renderVbr(vbr) {
+export function renderVbr(vbr: VbrHeader | null | undefined): string {
   if (!vbr) return "";
   const rows = [];
   rows.push(

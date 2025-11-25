@@ -1,10 +1,10 @@
-// @ts-nocheck
 "use strict";
 
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import { formatBoolean, valueWithHint, withFieldNote } from "./formatting.js";
+import type { ApeTag, Id3v1Tag, Id3v2Tag, Lyrics3Tag } from "../../analyzers/mp3/types.js";
 
-function describeId3Version(versionMajor) {
+function describeId3Version(versionMajor: number | null | undefined): string {
   if (versionMajor == null) return "ID3v2 major.minor version from the tag header.";
   if (versionMajor >= 4) return `ID3v2.${versionMajor} - modern version; 2.3/2.4 are most common.`;
   if (versionMajor === 3) return "ID3v2.3 - widely supported and common default in many tools.";
@@ -12,44 +12,44 @@ function describeId3Version(versionMajor) {
   return `ID3v2.${versionMajor} - unusual version value.`;
 }
 
-function describeExtendedHeader(hasExtended) {
+function describeExtendedHeader(hasExtended: boolean | null | undefined): string {
   if (hasExtended) {
     return "Extended header present - may include CRC/restrictions; uncommon but valid.";
   }
   return "No extended header (typical).";
 }
 
-function describeFooter(hasFooter) {
+function describeFooter(hasFooter: boolean | null | undefined): string {
   if (hasFooter) return "Footer present - tag mirrored at the end; rare but allowed by ID3v2.4.";
   return "No footer (typical for ID3v2).";
 }
 
-function describeUnsynchronisation(flag) {
+function describeUnsynchronisation(flag: boolean | null | undefined): string {
   if (flag) {
     return "Unsynchronisation used to avoid false frame sync bytes; seen in older tags, now less common.";
   }
   return "Unsynchronisation off (modern default).";
 }
 
-function describeDeclaredSize(size) {
+function describeDeclaredSize(size: number | null | undefined): string {
   return `${size} B declared tag size - includes frames only; large sizes often mean embedded images.`;
 }
 
-function describeApeSize(size) {
+function describeApeSize(size: number | null | undefined): string {
   if (size == null) return "APE tag size as declared in the footer/header.";
   if (size < 1000) return `${size} B APE tag - tiny (likely ReplayGain only).`;
   if (size < 500000) return `${size} B APE tag - moderate metadata block.`;
   return `${size} B APE tag - large block (possible embedded data).`;
 }
 
-function describeLyricsSize(sizeEstimate) {
-  if (sizeEstimate == null) return "Lyrics3 block size estimate.";
+function describeLyricsSize(sizeEstimate: number | string | null | undefined): string {
+  if (typeof sizeEstimate !== "number") return "Lyrics3 block size estimate.";
   if (sizeEstimate < 500) return `${sizeEstimate} B Lyrics3 block - tiny snippet.`;
   if (sizeEstimate < 5000) return `${sizeEstimate} B Lyrics3 block - short lyrics (rare format).`;
   return `${sizeEstimate} B Lyrics3 block - large lyrics section; unusual.`;
 }
 
-export function renderId3v2Frames(frames) {
+export function renderId3v2Frames(frames: Id3v2Tag["frames"] | null | undefined): string {
   if (!frames || frames.length === 0) return "<p>No frames parsed.</p>";
   const rows = frames
     .map(frame => {
@@ -87,7 +87,7 @@ export function renderId3v2Frames(frames) {
   return tableHead + rows + "</tbody></table>";
 }
 
-export function renderId3v2(id3) {
+export function renderId3v2(id3: Id3v2Tag | null | undefined): string {
   if (!id3) return "";
   const details = [];
   const version = `${id3.versionMajor}.${id3.versionRevision}`;
@@ -157,7 +157,7 @@ export function renderId3v2(id3) {
   return "<h4>ID3v2 metadata</h4><dl>" + details.join("") + "</dl>" + framesTable;
 }
 
-export function renderId3v1(id3v1) {
+export function renderId3v1(id3v1: Id3v1Tag | null | undefined): string {
   if (!id3v1) return "";
   const rows = [];
   rows.push(renderDefinitionRow("Title", escapeHtml(id3v1.title || "(empty)")));
@@ -173,7 +173,7 @@ export function renderId3v1(id3v1) {
   return "<h4>ID3v1 tag</h4><dl>" + rows.join("") + "</dl>";
 }
 
-export function renderApe(ape) {
+export function renderApe(ape: ApeTag | null | undefined): string {
   if (!ape) return "";
   const rows = [];
   rows.push(
@@ -215,7 +215,7 @@ export function renderApe(ape) {
   return "<h4>APE tag</h4><dl>" + rows.join("") + "</dl>";
 }
 
-export function renderLyrics(lyrics) {
+export function renderLyrics(lyrics: Lyrics3Tag | null | undefined): string {
   if (!lyrics) return "";
   const rows = [];
   rows.push(renderDefinitionRow("Version", escapeHtml(lyrics.version)));

@@ -1,22 +1,22 @@
-// @ts-nocheck
 "use strict";
 
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
+import type { GifComment, GifParseResult } from "../../analyzers/gif/types.js";
 
-function renderLoopInfo(loopCount) {
+function renderLoopInfo(loopCount: number | null | undefined): string {
   if (loopCount == null) return "Not specified (plays once by default)";
   if (loopCount === 0) return "0 (loop forever)";
   return `${loopCount} time${loopCount === 1 ? "" : "s"}`;
 }
 
-function renderPixelAspect(ratio) {
+function renderPixelAspect(ratio: number | null | undefined): string {
   if (ratio == null) return "Not specified";
   const rounded = Math.round(ratio * 100) / 100;
   return `${rounded}:1 (encoded as ${(ratio * 64 - 15).toFixed(0)})`;
 }
 
-function renderWarnings(warnings) {
+function renderWarnings(warnings: string[] | null | undefined): string {
   if (!warnings || warnings.length === 0) return "";
   const items = warnings
     .map(warning => `<li>${escapeHtml(warning)}</li>`)
@@ -24,7 +24,7 @@ function renderWarnings(warnings) {
   return `<div class="warnBox"><div class="warnTitle">Warnings</div><ul>${items}</ul></div>`;
 }
 
-function renderComments(comments) {
+function renderComments(comments: GifComment[] | null | undefined): string {
   if (!comments || comments.length === 0) return "";
   const items = comments
     .map((comment, index) => {
@@ -38,7 +38,7 @@ function renderComments(comments) {
   return `<div><h4>Comments</h4><ul>${items}</ul></div>`;
 }
 
-function renderApplicationExtensions(apps) {
+function renderApplicationExtensions(apps: GifParseResult["applicationExtensions"]): string {
   if (!apps || apps.length === 0) return "";
   const rows = apps
     .map(app => {
@@ -66,7 +66,7 @@ function renderApplicationExtensions(apps) {
   );
 }
 
-function renderFrames(frames) {
+function renderFrames(frames: GifParseResult["frames"]): string {
   if (!frames || frames.length === 0) return "";
   const header =
     "<h4>Frames</h4>" +
@@ -104,8 +104,9 @@ function renderFrames(frames) {
   return header + rows + "</tbody></table>";
 }
 
-export function renderGif(gif) {
-  if (!gif) return "";
+export function renderGif(gif: GifParseResult | null | unknown): string {
+  const data = gif as GifParseResult | null;
+  if (!data) return "";
   const {
     size,
     version,
@@ -126,7 +127,7 @@ export function renderGif(gif) {
     hasTrailer,
     overlayBytes,
     warnings
-  } = gif;
+  } = data;
 
   const out = [];
   out.push("<h3>GIF structure</h3>");

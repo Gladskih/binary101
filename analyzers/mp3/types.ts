@@ -19,6 +19,9 @@ export interface Id3v2FrameDetail {
   url?: string;
   description?: string;
   preview?: string;
+  mimeType?: string;
+  pictureType?: string;
+  imageSize?: number;
 }
 
 export interface Id3v2Frame {

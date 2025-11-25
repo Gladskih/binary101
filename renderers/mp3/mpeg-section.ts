@@ -1,17 +1,17 @@
-// @ts-nocheck
 "use strict";
 
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import { formatHumanSize } from "../../binary-utils.js";
 import { formatBoolean, valueWithHint, withFieldNote } from "./formatting.js";
+import type { Mp3SuccessResult, MpegFrameHeader } from "../../analyzers/mp3/types.js";
 
-function describeFrameOffset(offset) {
+function describeFrameOffset(offset: number): string {
   return offset === 0
     ? "First MPEG frame starts at the beginning of the file."
     : `${offset} B offset - audio begins after tags or padding.`;
 }
 
-function describeFrameLength(length) {
+function describeFrameLength(length: number | null | undefined): string {
   if (!length) {
     return "Frame length could not be computed from the header fields.";
   }
@@ -21,7 +21,7 @@ function describeFrameLength(length) {
   return `${length} B per frame - unusually large; check for parsing issues or very high bitrates.`;
 }
 
-function describeSamplesPerFrame(samples) {
+function describeSamplesPerFrame(samples: number | null | undefined): string {
   if (!samples) return "Number of PCM samples carried by one MPEG frame.";
   if (samples === 1152) return "1152 samples per frame - standard for MPEG1 Layer III (common).";
   if (samples === 576) return "576 samples per frame - short blocks for MPEG2/2.5 Layer III (low bitrate mode).";
@@ -29,55 +29,59 @@ function describeSamplesPerFrame(samples) {
   return `${samples} samples per frame from header.`;
 }
 
-function describeCrc(hasCrc) {
+function describeCrc(hasCrc: boolean | null | undefined): string {
   if (hasCrc) {
     return "CRC16 present: decoder can verify frame integrity; rarely used because it costs extra bits.";
   }
   return "No CRC (most encoders default to this to save bits).";
 }
 
-function describePadding(padding) {
+function describePadding(padding: boolean | null | undefined): string {
   if (padding) {
     return "Padding bit set - occasional extra slot to keep constant bitrate timing; normal for some bitrates.";
   }
   return "No padding on this frame - also normal; encoders toggle this to maintain timing.";
 }
 
-function describePrivateBit(privateBit) {
+function describePrivateBit(privateBit: boolean | null | undefined): string {
   if (privateBit) {
     return "Private bit is set; reserved for encoder-specific flags (rarely used by players).";
   }
   return "Private bit clear - common default; field is free for encoder use.";
 }
 
-function describeCopyright(copyright) {
+function describeCopyright(copyright: boolean | null | undefined): string {
   if (copyright) {
     return "Copyright bit set - indicates protected content; seldom relied on by players.";
   }
   return "Copyright bit clear - common default for user-encoded files.";
 }
 
-function describeOriginal(original) {
+function describeOriginal(original: boolean | null | undefined): string {
   if (original) {
     return "Original bit set - marked as an original stream (common for encoder output).";
   }
   return "Original bit clear - marked as a copy; uncommon.";
 }
 
-function describeModeExtension(modeExtension, channelMode) {
+function describeModeExtension(
+  modeExtension: string | null | undefined,
+  channelMode: string | null | undefined
+): string {
   if (!modeExtension) {
     return "Mode extension applies only to Joint stereo; intensity/MS stereo choices help save bitrate.";
   }
-  return `${modeExtension} - stereo coding tool used when channel mode is ${channelMode}; MS stereo is the popular option.`;
+  const base = `${modeExtension} - stereo coding tool used when channel mode is ${channelMode};`;
+  return `${base} MS stereo is the popular option.`;
 }
 
-function describeEmphasis(emphasis) {
+function describeEmphasis(emphasis: string | null | undefined): string {
   if (!emphasis) return "Emphasis flag requests de-emphasis EQ on playback; rarely used today.";
   if (emphasis === "None") return "No emphasis (default/typical).";
   return `${emphasis} emphasis - legacy feature, rare to see in modern files.`;
 }
 
-function describeSecondFrame(validated) {
+function describeSecondFrame(validated: boolean | null | undefined): string {
   if (validated === true) {
     return "Second frame header matches the first one; suggests a consistent stream.";
   }
@@ -87,7 +91,7 @@ function describeSecondFrame(validated) {
   return "Second frame could not be checked.";
 }
 
-function describeNonAudioBytes(nonAudioBytes) {
+function describeNonAudioBytes(nonAudioBytes: number | null | undefined): string {
   if (nonAudioBytes == null) return "Bytes outside MPEG frames (front tags + trailing tags/junk).";
   if (nonAudioBytes === 0) return "No non-audio padding detected after the first frame.";
   if (nonAudioBytes < 1000) return `${formatHumanSize(nonAudioBytes)} of non-audio data - small tags or padding.`;
@@ -97,9 +101,9 @@ function describeNonAudioBytes(nonAudioBytes) {
   return `${formatHumanSize(nonAudioBytes)} of non-audio data - unusually large; may contain bundled files or junk.`;
 }
 
-export function renderMpeg(mpeg) {
+export function renderMpeg(mpeg: Mp3SuccessResult["mpeg"] | null | undefined): string {
   if (!mpeg || !mpeg.firstFrame) return "";
-  const f = mpeg.firstFrame;
+  const f: MpegFrameHeader = mpeg.firstFrame;
   const rows = [];
   rows.push(
     renderDefinitionRow(
@@ -123,7 +127,10 @@ export function renderMpeg(mpeg) {
     renderDefinitionRow(
       "Samples per frame",
       withFieldNote(
-        valueWithHint(f.samplesPerFrame || "Unknown", describeSamplesPerFrame(f.samplesPerFrame)),
+        valueWithHint(
+          f.samplesPerFrame != null ? `${f.samplesPerFrame}` : "Unknown",
+          describeSamplesPerFrame(f.samplesPerFrame)
+        ),
         "PCM samples carried by one frame."
       )
     )

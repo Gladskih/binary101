@@ -1,15 +1,61 @@
-// @ts-nocheck
 "use strict";
 
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import { formatHumanSize } from "../../binary-utils.js";
 
-function renderList(items) {
+interface Fb2Languages {
+  lang?: string | null;
+  srcLang?: string | null;
+}
+
+interface Fb2Sequence {
+  name?: string | null;
+  number?: string | number | null;
+}
+
+interface Fb2DocumentInfo {
+  authors?: string[];
+  programUsed?: string | null;
+  documentId?: string | null;
+  documentVersion?: string | null;
+  documentDate?: string | null;
+  sourceUrls?: string[];
+  sourceOcr?: string | null;
+}
+
+interface Fb2PublishInfo {
+  publisher?: string | null;
+  city?: string | null;
+  year?: string | null;
+  isbn?: string | null;
+}
+
+interface Fb2ParseResult {
+  size: number;
+  bytesInspected?: number | null;
+  parseError?: string | null;
+  title?: string | null;
+  genres?: string[] | null;
+  keywords?: string[] | null;
+  languages?: Fb2Languages | null;
+  annotation?: string | null;
+  sequence?: Fb2Sequence | null;
+  coverImage?: string | null;
+  titleAuthors?: string[] | null;
+  bodyCount?: number | null;
+  sectionCount?: number | null;
+  binaryCount?: number | null;
+  documentInfo?: Fb2DocumentInfo | null;
+  publishInfo?: Fb2PublishInfo | null;
+  embeddedBinaryWarnings?: string[] | null;
+}
+
+function renderList(items: string[] | null | undefined): string {
   if (!items || !items.length) return "";
   return `<ul>${items.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
 }
 
-function renderLanguages(languages) {
+function renderLanguages(languages: Fb2ParseResult["languages"]): string {
   if (!languages) return "Unknown";
   const parts = [];
   if (languages.lang) parts.push(`Primary: ${escapeHtml(languages.lang)}`);
@@ -17,7 +63,7 @@ function renderLanguages(languages) {
   return parts.length ? parts.join("; ") : "Unknown";
 }
 
-function renderSequence(sequence) {
+function renderSequence(sequence: Fb2ParseResult["sequence"]): string {
   if (!sequence) return "Not specified";
   const { name, number } = sequence;
   if (name && number) return `${escapeHtml(name)} (#${escapeHtml(number)})`;
@@ -26,7 +72,7 @@ function renderSequence(sequence) {
   return "Not specified";
 }
 
-function renderDocumentInfo(info) {
+function renderDocumentInfo(info: Fb2DocumentInfo | null | undefined): string {
   if (!info) return "";
   const out = [];
   out.push("<h4>Document info</h4><dl>");
@@ -88,7 +134,7 @@ function renderDocumentInfo(info) {
   return out.join("");
 }
 
-function renderPublishInfo(publishInfo) {
+function renderPublishInfo(publishInfo: Fb2PublishInfo | null | undefined): string {
   if (!publishInfo) return "";
   const out = [];
   out.push("<h4>Publication info</h4><dl>");
@@ -124,8 +170,9 @@ function renderPublishInfo(publishInfo) {
   return out.join("");
 }
 
-export function renderFb2(fb2) {
-  if (!fb2) return "";
+export function renderFb2(fb2: Fb2ParseResult | null | unknown): string {
+  const data = fb2 as Fb2ParseResult | null;
+  if (!data) return "";
   const {
     size,
     bytesInspected,
@@ -143,7 +190,7 @@ export function renderFb2(fb2) {
     binaryCount,
     documentInfo,
     publishInfo
-  } = fb2;
+  } = data;
 
   const out = [];
   out.push("<h3>FictionBook 2.0 (FB2) metadata</h3><dl>");
@@ -157,7 +204,9 @@ export function renderFb2(fb2) {
   out.push(
     renderDefinitionRow(
       "Bytes inspected",
-      escapeHtml(formatHumanSize(bytesInspected)),
+      bytesInspected != null
+        ? escapeHtml(formatHumanSize(bytesInspected))
+        : "Unknown",
       "Parser reads only the opening portion where FB2 metadata resides."
     )
   );

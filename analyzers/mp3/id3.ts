@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use strict";
 
 import { readAsciiString } from "../../binary-utils.js";
@@ -17,8 +16,15 @@ import {
   readZeroTerminatedString,
   safeHexPreview
 } from "./utils.js";
+import type {
+  Id3v1Tag,
+  Id3v2Frame,
+  Id3v2FrameDetail,
+  Id3v2FrameFlagSet,
+  Id3v2Tag
+} from "./types.js";
 
-function parseId3v2FrameFlags(versionMajor, dv, offset) {
+function parseId3v2FrameFlags(versionMajor: number, dv: DataView, offset: number): Id3v2FrameFlagSet {
   if (versionMajor === 2) return {};
   if (offset + 2 > dv.byteLength) return {};
   const status = dv.getUint8(offset);
@@ -35,7 +41,13 @@ function parseId3v2FrameFlags(versionMajor, dv, offset) {
   };
 }
 
-function parseApicFrame(frameStart, size, dv, issues, encoding) {
+function parseApicFrame(
+  frameStart: number,
+  size: number,
+  dv: DataView,
+  issues: string[],
+  encoding: number
+): Id3v2FrameDetail | null {
   const mime = readZeroTerminatedString(dv, frameStart + 1, size - 1, 0);
   const mimeEnd = frameStart + 1 + mime.length + 1;
   if (mimeEnd + 1 > dv.byteLength) return null;
@@ -61,38 +73,65 @@ function parseApicFrame(frameStart, size, dv, issues, encoding) {
   };
 }
 
-function parseTextFrame(id, frameStart, size, dv, encoding) {
+function parseTextFrame(
+  id: string,
+  frameStart: number,
+  size: number,
+  dv: DataView,
+  encoding: number
+): Id3v2FrameDetail {
   const value = decodeId3Text(encoding, dv, frameStart + 1, size - 1);
   return { type: "text", id, value };
 }
 
-function parseTxxxFrame(frameStart, size, dv, encoding) {
+function parseTxxxFrame(
+  frameStart: number,
+  size: number,
+  dv: DataView,
+  encoding: number
+): Id3v2FrameDetail {
   const description = readZeroTerminatedString(dv, frameStart + 1, size - 1, encoding);
   const descEnd = frameStart + 1 + description.length + 1;
   const value = decodeId3Text(encoding, dv, descEnd, size - (descEnd - frameStart));
   return { type: "text", id: "TXXX", description, value };
 }
 
-function parseWxxxFrame(frameStart, size, dv, encoding) {
+function parseWxxxFrame(
+  frameStart: number,
+  size: number,
+  dv: DataView,
+  encoding: number
+): Id3v2FrameDetail {
   const description = readZeroTerminatedString(dv, frameStart + 1, size - 1, encoding);
   const descEnd = frameStart + 1 + description.length + 1;
   const url = decodeId3Text(0, dv, descEnd, size - (descEnd - frameStart));
   return { type: "url", id: "WXXX", description, url };
 }
 
-function parseCommentFrame(frameStart, size, dv, encoding) {
+function parseCommentFrame(
+  frameStart: number,
+  size: number,
+  dv: DataView,
+  encoding: number
+): Id3v2FrameDetail {
   if (size < 4) return { type: "text", id: "COMM", value: "(truncated)" };
   const lang = readAsciiString(dv, frameStart + 1, 3);
   const value = decodeId3Text(encoding, dv, frameStart + 4, size - 4);
   return { type: "text", id: "COMM", value: `${lang}: ${value}` };
 }
 
-function parseGenericFrame(id, frameStart, size, dv) {
+function parseGenericFrame(id: string, frameStart: number, size: number, dv: DataView): Id3v2FrameDetail {
   return { type: "binary", id, preview: safeHexPreview(dv, frameStart, size) };
 }
 
-function parseId3v2Frames(versionMajor, dv, offset, endOffset, issues) {
-  const frames = [];
+function parseId3v2Frames(
+  versionMajor: number,
+  dv: DataView,
+  offset: number,
+  endOffset: number,
+  issues: string[]
+): Id3v2Frame[] {
+  const frames: Id3v2Frame[] = [];
   const headerSize = versionMajor === 2 ? 6 : 10;
   const idLength = versionMajor === 2 ? 3 : 4;
   let cursor = offset;
@@ -114,7 +153,7 @@ function parseId3v2Frames(versionMajor, dv, offset, endOffset, issues) {
     }
     const encoding = dv.getUint8(frameStart);
     const flags = parseId3v2FrameFlags(versionMajor, dv, flagsOffset);
-    let detail = null;
+    let detail: Id3v2FrameDetail | null = null;
     if (id === "TXXX") detail = parseTxxxFrame(frameStart, size, dv, encoding);
     else if (id === "WXXX") detail = parseWxxxFrame(frameStart, size, dv, encoding);
     else if (id === "APIC") detail = parseApicFrame(frameStart, size, dv, issues, encoding);
@@ -139,7 +178,7 @@ function parseId3v2Frames(versionMajor, dv, offset, endOffset, issues) {
   return frames;
 }
 
-export function parseId3v2(dv, issues) {
+export function parseId3v2(dv: DataView, issues: string[]): Id3v2Tag | null {
   if (dv.byteLength < 10) return null;
   if (readAsciiString(dv, 0, 3) !== "ID3") return null;
   const versionMajor = dv.getUint8(3);
@@ -199,11 +238,11 @@ export function parseId3v2(dv, issues) {
   };
 }
 
-function readId3v1String(dv, offset, length) {
+function readId3v1String(dv: DataView, offset: number, length: number): string {
   return readAsciiString(dv, offset, length).replace(/\0/g, "").trim();
 }
 
-export function parseId3v1(dv) {
+export function parseId3v1(dv: DataView): Id3v1Tag | null {
   if (dv.byteLength < ID3V1_SIZE) return null;
   const start = dv.byteLength - ID3V1_SIZE;
   if (readAsciiString(dv, start, 3) !== "TAG") return null;

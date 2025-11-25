@@ -1,9 +1,9 @@
-// @ts-nocheck
 "use strict";
 
 import { readAsciiString } from "../../binary-utils.js";
+import type { ApeTag, Lyrics3Tag } from "./types.js";
 
-function findSignatureBackward(dv, signature, searchBackBytes) {
+function findSignatureBackward(dv: DataView, signature: string, searchBackBytes: number): number {
   const start = Math.max(0, dv.byteLength - searchBackBytes);
   for (let i = dv.byteLength - signature.length; i >= start; i -= 1) {
     if (readAsciiString(dv, i, signature.length) === signature) return i;
@@ -11,7 +11,7 @@ function findSignatureBackward(dv, signature, searchBackBytes) {
   return -1;
 }
 
-export function parseApeTag(dv, issues) {
+export function parseApeTag(dv: DataView, issues: string[]): ApeTag | null {
   const footerSize = 32;
   if (dv.byteLength < footerSize) return null;
   const offset = findSignatureBackward(dv, "APETAGEX", 1024);
@@ -26,7 +26,7 @@ export function parseApeTag(dv, issues) {
   return { offset, size, version, itemCount };
 }
 
-export function parseLyrics3(dv, issues) {
+export function parseLyrics3(dv: DataView, issues: string[]): Lyrics3Tag | null {
   const endMarkerOffset = findSignatureBackward(dv, "LYRICS200", 2048);
   if (endMarkerOffset !== -1 && endMarkerOffset >= 6) {
     const sizeString = readAsciiString(dv, endMarkerOffset - 6, 6);
