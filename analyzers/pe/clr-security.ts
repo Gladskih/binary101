@@ -62,7 +62,7 @@ export async function parseClrDirectory(
         p = (p + 3) & ~3;
         streams.push({ name, offset, size });
       }
-      clr.meta = { version: verStr, verMajor, verMinor, streams, sig, flags, reserved };
+      clr["meta"] = { version: verStr, verMajor, verMinor, streams, sig, flags, reserved };
     } catch {
       // malformed CLR metadata; keep only header fields
     }

@@ -502,6 +502,7 @@ function detectIso9660(dv: DataView): ProbeResult {
   const markers = [0x8001, 0x8801, 0x9001];
   for (let i = 0; i < markers.length; i += 1) {
     const offset = markers[i];
+    if (offset === undefined) continue;
     if (dv.byteLength < offset + 5) continue;
     const s =
       String.fromCharCode(dv.getUint8(offset + 0)) +

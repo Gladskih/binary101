@@ -5,7 +5,12 @@ import type { PeSection } from "./types.js";
 function shannonEntropy(bytes: Uint8Array): number {
   if (!bytes || bytes.length === 0) return 0;
   const freq = new Uint32Array(256);
-  for (let index = 0; index < bytes.length; index += 1) freq[bytes[index]] += 1;
+  for (let index = 0; index < bytes.length; index += 1) {
+    const value = bytes[index];
+    if (value === undefined) continue;
+    const current = freq[value] ?? 0;
+    freq[value] = current + 1;
+  }
   let entropy = 0;
   const totalCount = bytes.length;
   for (let i = 0; i < 256; i += 1) {

@@ -59,9 +59,9 @@ export function parseFrameHeader(dv: DataView, offset: number): MpegFrameHeader 
   const versionKey = versionBits === 0x2 || versionBits === 0x0 ? 0x2 : versionBits;
   const bitrateTable =
     (BITRATES as Record<number, Record<number, Array<number | null>>>)[versionKey]?.[layerBits];
-  const bitrateKbps = bitrateTable ? bitrateTable[bitrateIndex] : null;
+  const bitrateKbps = bitrateTable ? bitrateTable[bitrateIndex] ?? null : null;
   const sampleRateTable = (SAMPLE_RATES as Record<number, number[]>)[versionBits];
-  const sampleRate = sampleRateTable ? sampleRateTable[sampleRateIndex] : null;
+  const sampleRate = sampleRateTable ? sampleRateTable[sampleRateIndex] ?? null : null;
   const length = frameLengthBytes(versionBits, layerBits, bitrateKbps, sampleRate, padding);
   return {
     offset,

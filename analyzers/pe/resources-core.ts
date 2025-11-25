@@ -92,7 +92,10 @@ export async function buildResourceTree(
     const bytes = new Uint8Array(await file.slice(so + 2, Math.min(limitEnd, so + 2 + len * 2)).arrayBuffer());
     let s = "";
     for (let index = 0; index + 1 < bytes.length; index += 2) {
-      const ch = bytes[index] | (bytes[index + 1] << 8);
+      const first = bytes[index];
+      const second = bytes[index + 1];
+      if (first === undefined || second === undefined) break;
+      const ch = first | (second << 8);
       if (ch === 0) break;
       s += String.fromCharCode(ch);
     }

@@ -378,7 +378,12 @@ const handleSelectedFiles = (files: FileList | null): void => {
     setStatusMessage("Multiple files are not supported yet.");
     return;
   }
-  showFileInfo(files[0], "File selection");
+  const first = files.item(0);
+  if (!first) {
+    setStatusMessage("No file selected.");
+    return;
+  }
+  showFileInfo(first, "File selection");
 };
 
 ["dragenter", "dragover"].forEach(eventName =>
@@ -426,7 +431,10 @@ window.addEventListener("paste", async event => {
   }
   const files = clipboardData.files ? Array.from(clipboardData.files) : [];
   if (files.length === 1) {
-    showFileInfo(files[0], "Paste (file)");
+    const [file] = files;
+    if (file) {
+      showFileInfo(file, "Paste (file)");
+    }
     return;
   }
   const textItems = (clipboardData.items ? Array.from(clipboardData.items) : []).filter(
@@ -436,7 +444,12 @@ window.addEventListener("paste", async event => {
     setStatusMessage("Paste: unsupported clipboard payload.");
     return;
   }
-  const text = await new Promise(resolve => textItems[0].getAsString(resolve));
+  const [textItem] = textItems;
+  if (!textItem) {
+    setStatusMessage("Paste: clipboard item missing.");
+    return;
+  }
+  const text = await new Promise<string | null>(resolve => textItem.getAsString(resolve));
   if (typeof text !== "string" || text.length === 0) {
     setStatusMessage("Paste: empty text.");
     return;

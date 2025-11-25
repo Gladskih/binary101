@@ -194,7 +194,7 @@ export async function parseOptionalHeaderAndDirectories(
     SizeOfUninitializedData,
     AddressOfEntryPoint,
     BaseOfCode,
-    BaseOfData,
+    ...(BaseOfData !== undefined ? { BaseOfData } : {}),
     ImageBase,
     SectionAlignment,
     FileAlignment,

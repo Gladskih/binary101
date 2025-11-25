@@ -228,6 +228,10 @@ async function loadSectionNameTable(
 ): Promise<DataView | null> {
   if (!sections.length || header.shstrndx >= sections.length) return null;
   const shstr = sections[header.shstrndx];
+  if (!shstr) {
+    issues.push("Section name table header is missing.");
+    return null;
+  }
   const off = toSafeNumber(shstr.offset, "Section name table offset", issues);
   const size = toSafeNumber(shstr.size, "Section name table size", issues);
   if (off == null || size == null) return null;

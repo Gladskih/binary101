@@ -31,6 +31,7 @@ export function bytesToAscii(bytes: ArrayLike<number>): string {
   let text = "";
   for (let i = 0; i < bytes.length; i += 1) {
     const code = bytes[i];
+    if (code === undefined) break;
     if (code === 0) break;
     text += String.fromCharCode(code);
   }
@@ -163,8 +164,9 @@ export function parseApplicationExtension(
   const subBlocks = readSubBlocks(dv, offset + 14, 8);
   let loopCount = null;
   const preview = subBlocks.previewBytes;
-  if (preview.length >= 3 && preview[0] === 1) {
-    loopCount = preview[1] | (preview[2] << 8);
+  const [marker, low, high] = preview;
+  if (preview.length >= 3 && marker === 1 && low !== undefined && high !== undefined) {
+    loopCount = low | (high << 8);
   }
   return {
     info: {

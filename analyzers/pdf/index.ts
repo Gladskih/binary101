@@ -23,7 +23,9 @@ function parseHeader(text: string, issues: string[]): PdfHeader {
     return { headerLine, version: null };
   }
   const binaryMarker = text.slice(0, 256).match(/%[^\n]{4,}/);
-  return { headerLine, version: match[1], binaryMarker: binaryMarker ? binaryMarker[0] : null };
+  const version = match[1] || null;
+  const marker = binaryMarker?.[0] ?? null;
+  return { headerLine, version, binaryMarker: marker };
 }
 function parseStartxref(text: string, issues: string[]): number | null {
   const idx = text.lastIndexOf("startxref");
@@ -37,11 +39,20 @@ function parseStartxref(text: string, issues: string[]): number | null {
     issues.push("startxref present but offset is unreadable.");
     return null;
   }
-  return Number.parseInt(match[1], 10);
+  const offsetText = match[1];
+  if (!offsetText) {
+    issues.push("startxref present but offset text is missing.");
+    return null;
+  }
+  return Number.parseInt(offsetText, 10);
 }
 function skipWhitespace(text: string, position: number): number {
   let pos = position;
-  while (pos < text.length && /\s/.test(text[pos])) pos += 1;
+  while (pos < text.length) {
+    const ch = text.charAt(pos);
+    if (!ch || !/\s/.test(ch)) break;
+    pos += 1;
+  }
   return pos;
 }
 function parseXrefTable(text: string, startOffset: number, issues: string[]): PdfXrefTable | null {
@@ -59,13 +70,19 @@ function parseXrefTable(text: string, startOffset: number, issues: string[]): Pd
   const entries: PdfXrefTable["entries"] = [];
   let lineIndex = 0;
   while (lineIndex < lines.length) {
-    const headerParts = lines[lineIndex].split(/\s+/);
-    if (headerParts.length < 2) {
+    const headerLine = lines[lineIndex];
+    if (!headerLine) {
+      issues.push("xref subsection header line is missing.");
+      break;
+    }
+    const headerParts = headerLine.split(/\s+/);
+    const [startText, countText] = headerParts;
+    if (headerParts.length < 2 || !startText || !countText) {
       issues.push("xref subsection header is malformed.");
       break;
     }
-    const startObj = Number.parseInt(headerParts[0], 10);
-    const count = Number.parseInt(headerParts[1], 10);
+    const startObj = Number.parseInt(startText, 10);
+    const count = Number.parseInt(countText, 10);
     if (Number.isNaN(startObj) || Number.isNaN(count)) {
       issues.push("xref subsection uses non-numeric bounds.");
       break;
@@ -78,18 +95,31 @@ function parseXrefTable(text: string, startOffset: number, issues: string[]): Pd
         break;
       }
       const entryLine = lines[lineIndex];
+      if (!entryLine) {
+        issues.push(`xref entry ${startObj + i} is missing.`);
+        lineIndex += 1;
+        continue;
+      }
       const entryMatch = entryLine.match(/^(\d{10})\s+(\d{5})\s+([fn])/);
       if (!entryMatch) {
         issues.push(`xref entry ${startObj + i} is malformed.`);
         lineIndex += 1;
         continue;
       }
+      const offsetText = entryMatch[1];
+      const generationText = entryMatch[2];
+      const flag = entryMatch[3];
+      if (!offsetText || !generationText || !flag) {
+        issues.push(`xref entry ${startObj + i} is incomplete.`);
+        lineIndex += 1;
+        continue;
+      }
       const objectNumber = startObj + i;
       entries.push({
         objectNumber,
-        offset: Number.parseInt(entryMatch[1], 10),
-        generation: Number.parseInt(entryMatch[2], 10),
-        inUse: entryMatch[3] === "n"
+        offset: Number.parseInt(offsetText, 10),
+        generation: Number.parseInt(generationText, 10),
+        inUse: flag === "n"
       });
       lineIndex += 1;
       if (entries.length >= MAX_XREF_ENTRIES) {
@@ -126,7 +156,10 @@ function parseIndirectRef(dictText: string, name: string): PdfIndirectRef | null
   const pattern = new RegExp(`/${name}\\s+(\\d+)\\s+(\\d+)\\s+R`);
   const match = dictText.match(pattern);
   if (!match) return null;
-  return { objectNumber: Number.parseInt(match[1], 10), generation: Number.parseInt(match[2], 10) };
+  const objectNumberText = match[1];
+  const generationText = match[2];
+  if (!objectNumberText || !generationText) return null;
+  return { objectNumber: Number.parseInt(objectNumberText, 10), generation: Number.parseInt(generationText, 10) };
 }
 
 function parseTrailerDictionary(trailerText: string): PdfTrailer {
@@ -134,12 +167,19 @@ function parseTrailerDictionary(trailerText: string): PdfTrailer {
   if (!dict) return { raw: trailerText.trim(), size: null, rootRef: null, infoRef: null, id: null };
   const sizeMatch = dict.match(/\/Size\s+(\d+)/);
   const idMatch = dict.match(/\/ID\s*\[\s*<([^>]+)>\s*<([^>]+)>\s*\]/);
+  const size = sizeMatch?.[1] ? Number.parseInt(sizeMatch[1], 10) : null;
+  const idPart1 = idMatch?.[1];
+  const idPart2 = idMatch?.[2];
+  let id: [string, string] | null = null;
+  if (typeof idPart1 === "string" && typeof idPart2 === "string") {
+    id = [idPart1, idPart2];
+  }
   return {
     raw: dict.trim(),
-    size: sizeMatch ? Number.parseInt(sizeMatch[1], 10) : null,
+    size,
     rootRef: parseIndirectRef(dict, "Root"),
     infoRef: parseIndirectRef(dict, "Info"),
-    id: idMatch ? [idMatch[1], idMatch[2]] : null
+    id
   };
 }
 
@@ -147,14 +187,17 @@ function parseXrefStream(text: string, startOffset: number, issues: string[]): P
   const pos = skipWhitespace(text, startOffset);
   const objectMatch = text.slice(pos, pos + 64).match(/(\d+)\s+(\d+)\s+obj/);
   if (!objectMatch) return null;
+  const objectNumberText = objectMatch[1];
+  const generationText = objectMatch[2];
+  if (!objectNumberText || !generationText) return null;
   const dict = extractDictionary(text, pos);
   if (!dict || dict.indexOf("/XRef") === -1) return null;
   issues.push("Cross-reference stream detected; detailed entries are not decoded yet.");
   return {
     kind: "stream",
     startOffset,
-    objectNumber: Number.parseInt(objectMatch[1], 10),
-    generation: Number.parseInt(objectMatch[2], 10),
+    objectNumber: Number.parseInt(objectNumberText, 10),
+    generation: Number.parseInt(generationText, 10),
     trailer: parseTrailerDictionary(dict)
   };
 }
@@ -222,7 +265,7 @@ function parseInfoDictionary(dictText: string | null): PdfInfoDictionary | null 
   const parseField = (name: string): string | null => {
     const pattern = new RegExp(String.raw`/${name}\s*\(([^)]*)\)`);
     const match = dict.match(pattern);
-    return match ? decodeLiteralString(match[1]) : null;
+    return match?.[1] ? decodeLiteralString(match[1]) : null;
   };
   return {
     raw: dict.trim(),
@@ -252,7 +295,8 @@ function parsePagesDictionary(dictText: string | null): PdfPages | null {
   const dict = extractDictionary(dictText, 0);
   if (!dict) return null;
   const countMatch = dict.match(/\/Count\s+(\d+)/);
-  return { raw: dict.trim(), count: countMatch ? Number.parseInt(countMatch[1], 10) : null };
+  const countText = countMatch?.[1];
+  return { raw: dict.trim(), count: countText ? Number.parseInt(countText, 10) : null };
 }
 export async function parsePdf(file: File): Promise<PdfParseResult | null> {
   const buffer = await file.arrayBuffer();

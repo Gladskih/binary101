@@ -53,7 +53,7 @@ export interface Fb2ParseResult {
 function firstByTag(parent: NodeWithChildren, tagName: string): Element | null {
   if (!parent) return null;
   const els = parent.getElementsByTagName(tagName);
-  return els && els.length ? els[0] : null;
+  return els && els.length ? els.item(0) : null;
 }
 
 function allByTag(parent: NodeWithChildren, tagName: string): Element[] {

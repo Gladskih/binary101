@@ -12,14 +12,21 @@ function decodeTextResource(
   data: Uint8Array
 ): { text: string; encoding: string; error?: unknown } {
   if (!data?.length) return { text: "", encoding: "" };
-  if (data.length >= 2 && data[0] === 0xff && data[1] === 0xfe) {
-    let text = "";
-    for (let index = 2; index + 1 < data.length; index += 2) {
-      const ch = data[index] | (data[index + 1] << 8);
-      if (ch === 0) break;
-      text += String.fromCharCode(ch);
+  if (data.length >= 2) {
+    const bom0 = data[0];
+    const bom1 = data[1];
+    if (bom0 !== undefined && bom1 !== undefined && bom0 === 0xff && bom1 === 0xfe) {
+      let text = "";
+      for (let index = 2; index + 1 < data.length; index += 2) {
+        const first = data[index];
+        const second = data[index + 1];
+        if (first === undefined || second === undefined) break;
+        const ch = first | (second << 8);
+        if (ch === 0) break;
+        text += String.fromCharCode(ch);
+      }
+      return { text, encoding: "UTF-16LE" };
     }
-    return { text, encoding: "UTF-16LE" };
   }
   try {
     const text = new TextDecoder("utf-8", { fatal: false }).decode(data);
@@ -118,15 +125,30 @@ export function addMessageTablePreview(
     const texts: string[] = [];
     let pos = 0;
     for (let s = 0; s < count && pos + 4 <= entryBytes.length; s += 1) {
-      const len = entryBytes[pos] | (entryBytes[pos + 1] << 8);
-      const flags = entryBytes[pos + 2] | (entryBytes[pos + 3] << 8);
+      const lenLow = entryBytes[pos];
+      const lenHigh = entryBytes[pos + 1];
+      const flagLow = entryBytes[pos + 2];
+      const flagHigh = entryBytes[pos + 3];
+      if (
+        lenLow === undefined ||
+        lenHigh === undefined ||
+        flagLow === undefined ||
+        flagHigh === undefined
+      ) {
+        break;
+      }
+      const len = lenLow | (lenHigh << 8);
+      const flags = flagLow | (flagHigh << 8);
       const isUnicode = (flags & 0x0001) !== 0;
       pos += 4;
       if (pos + len > entryBytes.length) break;
       let str = "";
       if (isUnicode) {
         for (let chPos = 0; chPos + 1 < len; chPos += 2) {
-          const code = entryBytes[pos + chPos] | (entryBytes[pos + chPos + 1] << 8);
+          const first = entryBytes[pos + chPos];
+          const second = entryBytes[pos + chPos + 1];
+          if (first === undefined || second === undefined) break;
+          const code = first | (second << 8);
           str += String.fromCharCode(code);
         }
       } else {
@@ -157,9 +179,10 @@ export function addVersionPreview(
   const len = dv.getUint16(0, true);
   const valueLength = dv.getUint16(2, true);
   const type = dv.getUint16(4, true);
-  const key = String.fromCharCode(...new Uint8Array(data.buffer, data.byteOffset + 6, Math.max(0, data.length - 6)))
-    .split("\0")[0]
-    .trim();
+  const keyParts = String.fromCharCode(
+    ...new Uint8Array(data.buffer, data.byteOffset + 6, Math.max(0, data.length - 6))
+  ).split("\0");
+  const key = (keyParts[0] ?? "").trim();
   let valueStart = 6 + (key.length + 2 + (key.length % 2 === 0 ? 0 : 1));
   valueStart = (valueStart + 3) & ~3;
   let fixed = null;

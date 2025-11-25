@@ -121,15 +121,20 @@ const isValidatedMp3 = (
 
 const isShortMp3WithoutSecond = (
   mp3: Mp3ParseResult | null | undefined
-): mp3 is Mp3SuccessResult =>
-  Boolean(
-    mp3?.isMp3 === true &&
-    mp3?.mpeg?.firstFrame &&
-    mp3?.mpeg.secondFrameValidated === false &&
-    Array.isArray(mp3?.warnings) &&
-    mp3.warnings.length === 1 &&
-    mp3.warnings[0].indexOf("cannot be validated (file too small)") !== -1
-  );
+): mp3 is Mp3SuccessResult => {
+  if (
+    !mp3 ||
+    mp3.isMp3 !== true ||
+    !mp3.mpeg?.firstFrame ||
+    mp3.mpeg.secondFrameValidated !== false
+  ) {
+    return false;
+  }
+  const warnings = mp3.warnings;
+  if (!Array.isArray(warnings) || warnings.length !== 1) return false;
+  const [onlyWarning] = warnings;
+  return typeof onlyWarning === "string" && onlyWarning.indexOf("cannot be validated (file too small)") !== -1;
+};
 
 function buildMp3Label(mp3: Mp3ParseResult | null | undefined): string | null {
   if (!mp3?.mpeg?.firstFrame) return null;
@@ -197,7 +202,7 @@ function detectPdfVersion(dv: DataView): string | null {
   const ascii = toAsciiFromWholeView(dv, 32);
   if (!ascii.startsWith("%PDF-")) return null;
   const match = ascii.match(/%PDF-([0-9]+\.[0-9]+)/);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 function refineCompoundLabel(dv: DataView): string | null {

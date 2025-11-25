@@ -10,6 +10,7 @@ export function computeEntrySection(
   const entryRva = opt.AddressOfEntryPoint >>> 0;
   for (let index = 0; index < sections.length; index += 1) {
     const section = sections[index];
+    if (!section) continue;
     const start = section.virtualAddress >>> 0;
     const end = (start + (section.virtualSize >>> 0)) >>> 0;
     if (entryRva >= start && entryRva < end) {

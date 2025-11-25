@@ -152,19 +152,28 @@ const parseLzmaProps = (bytes: Uint8Array | null | undefined):
   | { dictSize: number; lc: number; lp: number; pb: number }
   | null => {
   if (!bytes || bytes.length < 5) return null;
-  const first = bytes[0];
+  const [first, b1, b2, b3, b4] = bytes;
+  if (
+    first === undefined ||
+    b1 === undefined ||
+    b2 === undefined ||
+    b3 === undefined ||
+    b4 === undefined
+  ) {
+    return null;
+  }
   const pb = Math.floor(first / 45);
   const remainder = first - pb * 45;
   const lp = Math.floor(remainder / 9);
   const lc = remainder - lp * 9;
-  const dictSize =
-    bytes[1] | (bytes[2] << 8) | (bytes[3] << 16) | (bytes[4] << 24);
+  const dictSize = b1 | (b2 << 8) | (b3 << 16) | (b4 << 24);
   return { dictSize, lc, lp, pb };
 };
 
 const parseLzma2Props = (bytes: Uint8Array | null | undefined): { dictSize: number | null } | null => {
   if (!bytes || bytes.length < 1) return null;
   const prop = bytes[0];
+  if (prop === undefined) return null;
   if (prop > 40) return { dictSize: null };
   const base = (prop & 1) + 2;
   const dictSize = base << (Math.floor(prop / 2) + 11);
@@ -173,7 +182,9 @@ const parseLzma2Props = (bytes: Uint8Array | null | undefined): { dictSize: numb
 
 const parseDeltaProps = (bytes: Uint8Array | null | undefined): { distance: number } | null => {
   if (!bytes || bytes.length < 1) return null;
-  const distance = bytes[0] + 1;
+  const first = bytes[0];
+  if (first === undefined) return null;
+  const distance = first + 1;
   return { distance };
 };
 
@@ -1103,7 +1114,6 @@ export async function parseSevenZip(file: File): Promise<SevenZipParseResult> {
       nextHeaderCrc,
       absoluteNextHeaderOffset
     },
-    nextHeader: undefined,
     issues
   };
   if (offsetNumber == null || sizeNumber == null) {

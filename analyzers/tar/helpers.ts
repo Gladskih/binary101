@@ -57,10 +57,12 @@ export const combineNameParts = (prefix: string, baseName: string): string => {
 export const parseBase256Number = (field: ArrayLike<number>): number | null => {
   const bytes = new Uint8Array(field);
   if (!bytes.length) return null;
-  bytes[0] &= 0x7f; // clear the indicator bit
+  bytes[0] = (bytes[0] ?? 0) & 0x7f; // clear the indicator bit
   let value = 0n;
   for (let i = 0; i < bytes.length; i += 1) {
-    value = (value << 8n) | BigInt(bytes[i]);
+    const byte = bytes[i];
+    if (byte === undefined) continue;
+    value = (value << 8n) | BigInt(byte);
   }
   const safeNumber = toSafeNumber(value);
   return safeNumber;
@@ -70,6 +72,7 @@ export const parseOctalNumber = (field: Uint8Array): number | null => {
   let text = "";
   for (let i = 0; i < field.length; i += 1) {
     const byte = field[i];
+    if (byte === undefined) break;
     if (byte === 0) break;
     if (byte === 0x20) {
       if (text.length === 0) continue;
@@ -90,6 +93,7 @@ export const parseTarNumber = (
   const field = bytes.subarray(offset, offset + length);
   if (!field.length) return null;
   const first = field[0];
+  if (first === undefined) return null;
   if ((first & 0x80) !== 0) {
     return parseBase256Number(field);
   }
@@ -102,7 +106,8 @@ export const computeChecksum = (headerBytes: Uint8Array): number => {
     if (i >= 148 && i < 156) {
       sum += 0x20;
     } else {
-      sum += headerBytes[i];
+      const byte = headerBytes[i];
+      sum += byte ?? 0;
     }
   }
   return sum;
@@ -227,35 +232,35 @@ export const applyPaxValues = (
   entry.pax = paxValues;
   entry.hasPax = true;
   entry.paxKeys = keys;
-  if (paxValues.path) {
-    entry.name = paxValues.path;
+  if (paxValues["path"]) {
+    entry.name = paxValues["path"];
     entry.usedPaxPath = true;
   }
-  if (paxValues.linkpath) {
-    entry.linkName = paxValues.linkpath;
+  if (paxValues["linkpath"]) {
+    entry.linkName = paxValues["linkpath"];
   }
-  if (paxValues.size) {
-    const sizeValue = Number.parseFloat(paxValues.size);
+  if (paxValues["size"]) {
+    const sizeValue = Number.parseFloat(paxValues["size"]);
     if (Number.isFinite(sizeValue)) {
       entry.size = Math.max(0, Math.floor(sizeValue));
     }
   }
-  if (paxValues.uid) {
-    const uid = Number.parseInt(paxValues.uid, 10);
+  if (paxValues["uid"]) {
+    const uid = Number.parseInt(paxValues["uid"], 10);
     if (Number.isFinite(uid)) entry.uid = uid;
   }
-  if (paxValues.gid) {
-    const gid = Number.parseInt(paxValues.gid, 10);
+  if (paxValues["gid"]) {
+    const gid = Number.parseInt(paxValues["gid"], 10);
     if (Number.isFinite(gid)) entry.gid = gid;
   }
-  if (paxValues.uname) {
-    entry.uname = paxValues.uname;
+  if (paxValues["uname"]) {
+    entry.uname = paxValues["uname"];
   }
-  if (paxValues.gname) {
-    entry.gname = paxValues.gname;
+  if (paxValues["gname"]) {
+    entry.gname = paxValues["gname"];
   }
-  if (paxValues.mtime) {
-    const mtime = Number.parseFloat(paxValues.mtime);
+  if (paxValues["mtime"]) {
+    const mtime = Number.parseFloat(paxValues["mtime"]);
     if (Number.isFinite(mtime)) {
       entry.mtime = Math.floor(mtime);
       entry.mtimeIso = formatUnixSecondsOrDash(entry.mtime);
