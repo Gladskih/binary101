@@ -8,6 +8,7 @@ import {
   describeFileType,
   describeHeaderKind
 } from "../../renderers/sevenz/semantics.js";
+import type { SevenZipFileSummary } from "../../analyzers/sevenz/types.js";
 
 void test("describeCoders describes empty and populated coder chains", () => {
   assert.strictEqual(describeCoders(undefined), "-");
@@ -76,26 +77,37 @@ void test("describeHeaderKind covers all branches including unknown and custom",
 });
 
 void test("describeFileType gives priority to anti and directory flags", () => {
-  assert.strictEqual(describeFileType({ isAnti: true }), "Anti-item");
-  assert.strictEqual(describeFileType({ isDirectory: true }), "Directory");
+  assert.strictEqual(describeFileType({ isAnti: true } as unknown as SevenZipFileSummary), "Anti-item");
+  assert.strictEqual(
+    describeFileType({ isDirectory: true } as unknown as SevenZipFileSummary),
+    "Directory"
+  );
 
   // Directory takes precedence over other flags.
   assert.strictEqual(
-    describeFileType({
-      isDirectory: true,
-      isEmptyStream: true,
-      hasStream: false
-    }),
+    describeFileType(
+      {
+        isDirectory: true,
+        isEmptyStream: true,
+        hasStream: false
+      } as unknown as SevenZipFileSummary
+    ),
     "Directory"
   );
 
   assert.strictEqual(
-    describeFileType({ isEmptyStream: true, isEmptyFile: true }),
+    describeFileType({ isEmptyStream: true, isEmptyFile: true } as unknown as SevenZipFileSummary),
     "Empty file"
   );
-  assert.strictEqual(describeFileType({ isEmptyStream: true }), "Metadata only");
-  assert.strictEqual(describeFileType({ hasStream: false }), "No stream");
-  assert.strictEqual(describeFileType({}), "File");
+  assert.strictEqual(
+    describeFileType({ isEmptyStream: true } as unknown as SevenZipFileSummary),
+    "Metadata only"
+  );
+  assert.strictEqual(
+    describeFileType({ hasStream: false } as unknown as SevenZipFileSummary),
+    "No stream"
+  );
+  assert.strictEqual(describeFileType({} as unknown as SevenZipFileSummary), "File");
 });
 
 void test("KNOWN_METHODS catalog includes common compression and encryption methods", () => {

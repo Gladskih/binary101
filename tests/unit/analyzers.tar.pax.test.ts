@@ -3,9 +3,37 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parsePaxHeaders, applyPaxValues } from "../../analyzers/tar/helpers.js";
+import type { TarEntry } from "../../analyzers/tar/types.js";
 import { formatUnixSecondsOrDash } from "../../binary-utils.js"; // Import needed for applyPaxValues test
 
 const TEXT_ENCODER = new TextEncoder();
+const createTarEntry = (overrides: Partial<TarEntry> = {}): TarEntry => ({
+  index: 0,
+  name: "",
+  rawName: "",
+  prefix: "",
+  typeFlag: "0",
+  typeLabel: "regular file",
+  size: 0,
+  mode: null,
+  modeSymbolic: null,
+  modeOctal: null,
+  uid: null,
+  gid: null,
+  uname: null,
+  gname: null,
+  linkName: null,
+  devMajor: null,
+  devMinor: null,
+  mtime: 0,
+  mtimeIso: formatUnixSecondsOrDash(0),
+  checksum: null,
+  checksumComputed: null,
+  checksumValid: null,
+  dataOffset: 0,
+  blocks: 0,
+  ...overrides,
+});
 
 void test("parsePaxHeaders parses valid PAX headers", () => {
   // Each record format: <length> <key>=<value>\n where length includes digits+space+key=value+newline
@@ -60,7 +88,7 @@ void test("parsePaxHeaders handles multiple records and ignores trailing data", 
 });
 
 void test("applyPaxValues applies path, linkpath, size, uid, gid, uname, gname, mtime", () => {
-  const entry: Record<string, unknown> = {
+  const entry = createTarEntry({
     name: "old_name",
     linkName: "old_link",
     size: 100,
@@ -70,7 +98,7 @@ void test("applyPaxValues applies path, linkpath, size, uid, gid, uname, gname, 
     gname: "old_group",
     mtime: 123456789,
     mtimeIso: formatUnixSecondsOrDash(123456789),
-  };
+  });
   const paxValues = {
     path: "new/path/to/file",
     linkpath: "new/link/path",
@@ -100,25 +128,27 @@ void test("applyPaxValues applies path, linkpath, size, uid, gid, uname, gname, 
 });
 
 void test("applyPaxValues handles missing paxValues", () => {
-  const entry = { name: "test" };
+  const entry = createTarEntry({ name: "test" });
+  const before = { ...entry };
   applyPaxValues(entry, null);
-  assert.deepStrictEqual(entry, { name: "test" });
+  assert.deepStrictEqual(entry, before);
 });
 
 void test("applyPaxValues handles empty paxValues object", () => {
-  const entry = { name: "test" };
+  const entry = createTarEntry({ name: "test" });
+  const before = { ...entry };
   applyPaxValues(entry, {});
-  assert.deepStrictEqual(entry, { name: "test" });
+  assert.deepStrictEqual(entry, before);
 });
 
 void test("applyPaxValues handles invalid size, uid, gid, mtime", () => {
-  const entry = {
+  const entry = createTarEntry({
     name: "old_name",
     size: 100,
     uid: 1000,
     gid: 100,
     mtime: 123456789,
-  };
+  });
   const paxValues = {
     size: "invalid_size",
     uid: "invalid_uid",

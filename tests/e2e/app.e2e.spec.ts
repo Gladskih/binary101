@@ -20,7 +20,7 @@ import {
 const toUpload = file => ({
   name: file.name,
   mimeType: file.type,
-  buffer: Buffer.from(file.bytes)
+  buffer: Buffer.from(file.data)
 });
 
 const expectBaseDetails = async (page, fileName, expectedKind) => {

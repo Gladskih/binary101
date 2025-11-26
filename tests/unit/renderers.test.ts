@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseForUi } from "../../analyzers/index.js";
+import type { AnalyzerName, ParsedByAnalyzer } from "../../analyzers/index.js";
 import { DOMParser as XmlDomParser } from "@xmldom/xmldom";
 import {
   renderElf,
@@ -21,6 +22,7 @@ import {
   renderRar,
   renderLnk
 } from "../../renderers/index.js";
+import type { ZipParseResult } from "../../analyzers/zip/index.js";
 import {
   createElfFile,
   createFb2File,
@@ -55,45 +57,52 @@ class TestDomParser extends XmlDomParser {
 
 global.DOMParser = TestDomParser;
 
-const parseOnly = async file => (await parseForUi(file)).parsed;
+const parseOnly = async <Name extends AnalyzerName>(
+  file: File,
+  expectedAnalyzer: Name
+): Promise<ParsedByAnalyzer<Name>> => {
+  const result = await parseForUi(file);
+  assert.strictEqual(result.analyzer, expectedAnalyzer);
+  return result.parsed as ParsedByAnalyzer<Name>;
+};
 
 void test("renderers produce readable HTML output", async () => {
-  const png = await parseOnly(createPngFile());
+  const png = await parseOnly(createPngFile(), "png");
   png.issues = (png.issues || []).concat("synthetic PNG warning");
   const pngHtml = renderPng(png);
   assert.match(pngHtml, /PNG/);
   assert.match(pngHtml, /synthetic PNG warning/);
 
-  const gif = await parseOnly(createGifFile());
-  gif.comments = [{ text: "hi there" }];
+  const gif = await parseOnly(createGifFile(), "gif");
+  gif.comments = [{ text: "hi there", truncated: false }];
   const gifHtml = renderGif(gif);
   assert.match(gifHtml, /GIF/);
   assert.match(gifHtml, /hi there/);
 
-  const jpeg = await parseOnly(createJpegFile());
+  const jpeg = await parseOnly(createJpegFile(), "jpeg");
   const jpegHtml = renderJpeg(jpeg);
   assert.match(jpegHtml, /JPEG/);
 
-  const webp = await parseOnly(createWebpFile());
+  const webp = await parseOnly(createWebpFile(), "webp");
   const webpHtml = renderWebp(webp);
   assert.match(webpHtml, /WebP/);
 
-  const fb2 = await parseOnly(createFb2File());
+  const fb2 = await parseOnly(createFb2File(), "fb2");
   const fb2Html = renderFb2(fb2);
   assert.match(fb2Html, /Example/);
 
-  const pdf = await parseOnly(createPdfFile());
+  const pdf = await parseOnly(createPdfFile(), "pdf");
   const pdfHtml = renderPdf(pdf);
   assert.match(pdfHtml, /PDF/);
 
-  const mp3 = await parseOnly(createMp3File());
+  const mp3 = await parseOnly(createMp3File(), "mp3");
   const mp3Html = renderMp3(mp3);
   assert.match(mp3Html, /MPEG audio/);
   assert.match(mp3Html, /valueHint/);
   assert.match(mp3Html, /optionsRow/);
   assert.match(mp3Html, /CD-quality rate/);
 
-  const lnk = await parseOnly(createLnkFile());
+  const lnk = await parseOnly(createLnkFile(), "lnk");
   const lnkHtml = renderLnk(lnk);
   assert.match(lnkHtml, /Shell link header/);
   assert.match(lnkHtml, /LinkTargetIDList/);
@@ -101,41 +110,41 @@ void test("renderers produce readable HTML output", async () => {
   assert.match(lnkHtml, /System\.VolumeId/);
   assert.match(lnkHtml, /System\.Link\.TargetParsingPath/);
 
-  const zip = await parseOnly(createZipFile());
+  const zip = await parseOnly(createZipFile(), "zip");
   zip.issues = ["central directory synthetic issue"];
   const zipHtml = renderZip(zip);
   assert.match(zipHtml, /ZIP overview/);
   assert.match(zipHtml, /synthetic issue/);
 
-  const tar = await parseOnly(createTarFile());
+  const tar = await parseOnly(createTarFile(), "tar");
   const tarHtml = renderTar(tar);
   assert.match(tarHtml, /TAR/);
 
-  const elf = await parseOnly(createElfFile());
+  const elf = await parseOnly(createElfFile(), "elf");
   const elfHtml = renderElf(elf);
   assert.match(elfHtml, /ELF header/);
 
-  const pe = await parseOnly(createPeFile());
+  const pe = await parseOnly(createPeFile(), "pe");
   const peHtml = renderPe(pe);
   assert.match(peHtml, /PE image/);
 
-  const mz = await parseOnly(createDosMzExe());
+  const mz = await parseOnly(createDosMzExe(), "mz");
   const mzHtml = renderMz(mz);
   assert.match(mzHtml, /MS-DOS header/);
 
-  const sevenZip = await parseOnly(createSevenZipFile());
+  const sevenZip = await parseOnly(createSevenZipFile(), "sevenZip");
   sevenZip.issues.push("synthetic 7z issue");
   const sevenHtml = renderSevenZip(sevenZip);
   assert.match(sevenHtml, /7z overview/);
   assert.match(sevenHtml, /synthetic 7z issue/);
 
-  const rar = await parseOnly(createRar5File());
+  const rar = await parseOnly(createRar5File(), "rar");
   const rarHtml = renderRar(rar);
   assert.match(rarHtml, /RAR overview/);
 });
 
 void test("renderZip shows extract actions and extraction notices", () => {
-  const zip = {
+  const zip: ZipParseResult = {
     eocd: {
       offset: 0,
       diskNumber: 0,
@@ -147,14 +156,18 @@ void test("renderZip shows extract actions and extraction notices", () => {
       commentLength: 0,
       comment: ""
     },
+    zip64Locator: null,
+    zip64: null,
     centralDirectory: {
       offset: 128,
       size: 64,
+      parsedSize: 64,
       truncated: false,
       entries: [
         {
           index: 0,
           fileName: "doc.txt",
+          comment: "",
           compressionName: "Stored",
           compressionMethod: 0,
           compressedSize: 3,
@@ -164,12 +177,18 @@ void test("renderZip shows extract actions and extraction notices", () => {
           isUtf8: false,
           isEncrypted: false,
           usesDataDescriptor: false,
+          crc32: 0,
+          diskNumberStart: 0,
+          internalAttrs: 0,
+          externalAttrs: 0,
+          localHeaderOffset: 0,
           dataOffset: 10,
           dataLength: 3
         },
         {
           index: 1,
           fileName: "secret.bin",
+          comment: "",
           compressionName: "AES",
           compressionMethod: 99,
           compressedSize: 5,
@@ -179,6 +198,11 @@ void test("renderZip shows extract actions and extraction notices", () => {
           isUtf8: false,
           isEncrypted: true,
           usesDataDescriptor: false,
+          crc32: 0,
+          diskNumberStart: 0,
+          internalAttrs: 0,
+          externalAttrs: 0,
+          localHeaderOffset: 0,
           extractError: "Encrypted entries are not supported for extraction."
         }
       ]

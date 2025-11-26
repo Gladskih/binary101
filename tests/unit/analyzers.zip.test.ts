@@ -1,27 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseZip } from "../../analyzers/zip/index.js";
-
-// Mock the File object for Node.js environment
-class MockFile {
-  buffer: Uint8Array;
-  name: string;
-  size: number;
-
-  constructor(buffer: Uint8Array, name: string) {
-    this.buffer = buffer;
-    this.name = name;
-    this.size = buffer.length;
-  }
-
-  slice(start: number, end?: number): MockFile {
-    return new MockFile(this.buffer.slice(start, end), this.name);
-  }
-
-  async arrayBuffer(): Promise<ArrayBuffer> {
-    return this.buffer.slice().buffer;
-  }
-}
+import { MockFile } from "../helpers/mock-file.js";
 
 const encoder = new TextEncoder();
 type CentralDirectoryOptions = {

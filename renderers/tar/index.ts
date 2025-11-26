@@ -83,7 +83,7 @@ const renderSummary = (tar: TarParseResult, out: string[]): void => {
 };
 
 const renderFeatures = (tar: TarParseResult, out: string[]): void => {
-  const features = tar.features || {};
+  const features = tar.features;
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Detected features</h4>`);
   const parts = [];

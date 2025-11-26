@@ -6,7 +6,7 @@ import { renderMpeg } from "./mpeg-section.js";
 import { renderSummary } from "./summary-section.js";
 import { renderVbr } from "./vbr-section.js";
 import { renderWarnings } from "./warnings.js";
-import type { Mp3ParseResult, Mp3SuccessResult } from "../../analyzers/mp3/types.js";
+import type { Mp3FailureResult, Mp3ParseResult, Mp3SuccessResult } from "../../analyzers/mp3/types.js";
 
 export function renderMp3(mp3: Mp3ParseResult | null | unknown): string {
   const data = mp3 as Mp3ParseResult | null;
@@ -14,8 +14,9 @@ export function renderMp3(mp3: Mp3ParseResult | null | unknown): string {
   const out = [];
   out.push("<h3>MPEG audio (MP3)</h3>");
   if (!data.isMp3) {
-    out.push(`<p>Not detected as MP3: ${escapeHtml(data.reason || "Unknown reason")}</p>`);
-    out.push(renderWarnings(data.warnings));
+    const failure = data as Mp3FailureResult;
+    out.push(`<p>Not detected as MP3: ${escapeHtml(failure.reason || "Unknown reason")}</p>`);
+    out.push(renderWarnings(failure.warnings));
     return out.join("");
   }
   const success = data as Mp3SuccessResult;

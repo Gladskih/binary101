@@ -1,0 +1,15 @@
+}
+
+export interface GifComment {
+  text: string;
+  truncated: boolean;
+}
+
+export interface GifParseResult {
+  size: number;
+  version: string;
+  width: number;
+  height: number;
+  hasGlobalColorTable: boolean;
+  globalColorCount: number;
+  globalColorTableSorted: boolean;

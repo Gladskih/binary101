@@ -16,6 +16,11 @@ const collectCoverage = () => {
   return { regions, add };
 };
 
+type ClrParseResult = {
+  MajorRuntimeVersion?: number;
+  meta?: { version?: string; streams: unknown[] };
+} | null;
+
 void test("parseClrDirectory parses metadata header and streams", async () => {
   const fileBytes = new Uint8Array(0x400).fill(0);
   const clrOffset = 0x100;
@@ -52,7 +57,7 @@ void test("parseClrDirectory parses metadata header and streams", async () => {
 
   const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: 0x60 }];
   const { regions, add } = collectCoverage();
-  const clr = await parseClrDirectory(new MockFile(fileBytes, "clr.bin"), dirs, rvaToOff, add);
+  const clr: ClrParseResult = await parseClrDirectory(new MockFile(fileBytes, "clr.bin"), dirs, rvaToOff, add);
   assert.ok(clr);
   assert.strictEqual(clr.MajorRuntimeVersion, 4);
   assert.strictEqual(clr.meta.version, "v4.0.30319");

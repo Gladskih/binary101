@@ -105,8 +105,8 @@ void test("detectBinaryType recognises ELF and Mach-O executables", async () => 
 
 void test("detectBinaryType recognises MP3 streams even when frames are not at offset 0", async () => {
   const base = createMp3File();
-  const prefixed = new Uint8Array(base.bytes.length + 16);
-  prefixed.set(base.bytes, 16);
+  const prefixed = new Uint8Array(base.data.length + 16);
+  prefixed.set(base.data, 16);
   const file = new MockFile(prefixed, "prefixed.mp3", "audio/mpeg");
   const label = await detectBinaryType(file);
   assert.strictEqual(label, "MPEG Version 1, Layer III, 128 kbps, 44100 Hz, Stereo");
@@ -114,16 +114,16 @@ void test("detectBinaryType recognises MP3 streams even when frames are not at o
 
 void test("detectBinaryType reports MP3 for minimal single-frame files", async () => {
   const full = createMp3File();
-  const singleFrame = full.bytes.slice(0, full.bytes.length / 2);
+  const singleFrame = full.data.slice(0, full.data.length / 2);
   const label = await detectBinaryType(new MockFile(singleFrame, "single-frame.mp3", "audio/mpeg"));
   assert.strictEqual(label, "MPEG Version 1, Layer III, 128 kbps, 44100 Hz, Stereo");
 });
 
 void test("detectBinaryType rejects MP3 label when second frame is invalid", async () => {
   const full = createMp3File();
-  const firstFrameLength = full.bytes.length / 2;
+  const firstFrameLength = full.data.length / 2;
   const damaged = new Uint8Array(firstFrameLength + 16);
-  damaged.set(full.bytes.slice(0, firstFrameLength), 0);
+  damaged.set(full.data.slice(0, firstFrameLength), 0);
   // Add some junk after the first frame to force a bad second header
   damaged.fill(0, firstFrameLength);
   const label = await detectBinaryType(new MockFile(damaged, "damaged.mp3", "audio/mpeg"));

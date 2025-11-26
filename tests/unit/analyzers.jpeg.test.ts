@@ -15,7 +15,6 @@ void test("parseJpeg returns null for missing SOF", async () => {
 void test("parseJpeg captures broken EXIF", async () => {
   const jpeg = await parseJpeg(createJpegWithBrokenExif());
   assert.ok(jpeg);
-  assert.ok(jpeg.warnings?.length >= 0 || true);
 });
 
 void test("parseJpeg parses minimal JPEG and counts segments", async () => {

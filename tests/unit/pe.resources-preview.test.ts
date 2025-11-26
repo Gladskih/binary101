@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { enrichResourcePreviews } from "../../analyzers/pe/resources-preview.js";
 import { MockFile } from "../helpers/mock-file.js";
+import type { ResourceTree } from "../../analyzers/pe/resources-core.js";
 
 const encoder = new TextEncoder();
 const pngSmall = Uint8Array.from(
@@ -105,18 +106,18 @@ void test("enrichResourcePreviews builds previews for common PE resources", asyn
   dataEntry.setUint32(8, 0, true);
   dataEntry.setUint32(12, 0, true);
 
-  const tree = {
+  const tree: ResourceTree = {
     base: 0,
     limitEnd: directoryBuffer.byteLength,
     top: [],
     detail: [
-      { typeName: "ICON", entries: [{ id: 1, langs: [{ lang: 1033, size: icon.size, codePage: 1200, dataRVA: icon.offset }] }] },
-      { typeName: "GROUP_ICON", entries: [{ id: 2, langs: [{ lang: 1033, size: groupIcon.size, codePage: 0, dataRVA: groupIcon.offset }] }] },
-      { typeName: "MANIFEST", entries: [{ id: 3, langs: [{ lang: null, size: manifest.size, codePage: 65001, dataRVA: manifest.offset }] }] },
-      { typeName: "HTML", entries: [{ id: 4, langs: [{ lang: 1031, size: html.size, codePage: 65001, dataRVA: html.offset }] }] },
-      { typeName: "STRING", entries: [{ id: 1, langs: [{ lang: 1031, size: stringTable.size, codePage: 1200, dataRVA: stringTable.offset }] }] },
-      { typeName: "MESSAGETABLE", entries: [{ id: 5, langs: [{ lang: 2057, size: messageTable.size, codePage: 0, dataRVA: messageTable.offset }] }] },
-      { typeName: "VERSION", entries: [{ id: 6, langs: [{ lang: 3082, size: version.size, codePage: 1200, dataRVA: version.offset }] }] }
+      { typeName: "ICON", entries: [{ id: 1, name: null, langs: [{ lang: 1033, size: icon.size, codePage: 1200, dataRVA: icon.offset, reserved: 0 }] }] },
+      { typeName: "GROUP_ICON", entries: [{ id: 2, name: null, langs: [{ lang: 1033, size: groupIcon.size, codePage: 0, dataRVA: groupIcon.offset, reserved: 0 }] }] },
+      { typeName: "MANIFEST", entries: [{ id: 3, name: null, langs: [{ lang: null, size: manifest.size, codePage: 65001, dataRVA: manifest.offset, reserved: 0 }] }] },
+      { typeName: "HTML", entries: [{ id: 4, name: null, langs: [{ lang: 1031, size: html.size, codePage: 65001, dataRVA: html.offset, reserved: 0 }] }] },
+      { typeName: "STRING", entries: [{ id: 1, name: null, langs: [{ lang: 1031, size: stringTable.size, codePage: 1200, dataRVA: stringTable.offset, reserved: 0 }] }] },
+      { typeName: "MESSAGETABLE", entries: [{ id: 5, name: null, langs: [{ lang: 2057, size: messageTable.size, codePage: 0, dataRVA: messageTable.offset, reserved: 0 }] }] },
+      { typeName: "VERSION", entries: [{ id: 6, name: null, langs: [{ lang: 3082, size: version.size, codePage: 1200, dataRVA: version.offset, reserved: 0 }] }] }
     ],
     view: async (off, len) => new DataView(directoryBuffer, off, len),
     rvaToOff: value => value
@@ -152,5 +153,6 @@ void test("enrichResourcePreviews builds previews for common PE resources", asyn
 
   const versionLang = result.detail.find(g => g.typeName === "VERSION").entries[0].langs[0];
   assert.strictEqual(versionLang.previewKind, "version");
-  assert.ok(versionLang.versionInfo.fixed?.fileVersionString);
+  const versionInfo = versionLang.versionInfo as { fixed?: { fileVersionString?: string } } | undefined;
+  assert.ok(versionInfo?.fixed?.fileVersionString);
 });

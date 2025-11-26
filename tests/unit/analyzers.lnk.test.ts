@@ -5,9 +5,24 @@ import { test } from "node:test";
 import { parseLnk } from "../../analyzers/lnk/index.js";
 import { createLnkFile } from "../fixtures/sample-files.js";
 
+type LnkParseShape = {
+  header: { clsid?: string; creationTime?: { iso?: string } };
+  stringData: { relativePath?: string; arguments?: string };
+  linkInfo: {
+    localBasePath?: string;
+    commonPathSuffix?: string;
+    volume?: { driveTypeName?: string };
+  };
+  idList: {
+    items: Array<{ typeName?: string; clsid?: string; longName?: string; fileSize?: number; attributes?: number }>;
+    resolvedPath?: string;
+  };
+  extraData: { blocks: Array<{ signature: number; parsed?: Record<string, unknown> }> };
+};
+
 void test("parseLnk reads Shell Link header and targets", async () => {
   const file = createLnkFile();
-  const lnk = await parseLnk(file);
+  const lnk = (await parseLnk(file)) as unknown as LnkParseShape;
   assert.ok(lnk);
   assert.strictEqual(lnk.header.clsid, "00021401-0000-0000-c000-000000000046");
   assert.ok(lnk.header.creationTime.iso.startsWith("2024-01-02"));
@@ -29,8 +44,18 @@ void test("parseLnk reads Shell Link header and targets", async () => {
   assert.ok(lnk.extraData.blocks.length >= 3);
 });
 
+interface Property {
+  id: number;
+  name: string;
+  value: string;
+}
+
+interface Storage {
+  properties: Property[];
+}
+
 void test("parseLnk reports extra data details", async () => {
-  const lnk = await parseLnk(createLnkFile());
+  const lnk = (await parseLnk(createLnkFile())) as unknown as LnkParseShape;
   const envBlock = lnk.extraData.blocks.find(block => block.signature === 0xa0000001);
   const knownFolder = lnk.extraData.blocks.find(block => block.signature === 0xa000000b);
   const propertyStore = lnk.extraData.blocks.find(block => block.signature === 0xa0000009);
@@ -41,8 +66,9 @@ void test("parseLnk reports extra data details", async () => {
     knownFolder.parsed.knownFolderId,
     "fdd39ad0-238f-46af-adb4-6c85480369c7"
   );
-  assert.ok(propertyStore?.parsed?.storages?.length);
-  const firstStorage = propertyStore.parsed.storages[0];
+  const storages = propertyStore?.parsed?.storages as Storage[];
+  assert.ok(storages?.length);
+  const firstStorage = storages[0];
   const volumeProperty = firstStorage.properties.find(prop => prop.id === 104);
   assert.ok(volumeProperty);
   assert.strictEqual(volumeProperty.name, "System.VolumeId");

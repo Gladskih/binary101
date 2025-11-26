@@ -9,6 +9,7 @@ import {
   parseVbrHeader,
   validateNextFrame
 } from "../../analyzers/mp3/mpeg.js";
+import type { MpegFrameHeader, VbrHeader } from "../../analyzers/mp3/types.js";
 
 const makeHeaderValue = ({
   versionBits = 0x3,
@@ -128,18 +129,50 @@ void test("parseVbrHeader detects Xing/Info and VBRI markers", () => {
 });
 
 void test("estimateDuration chooses best available information", () => {
-  const baseFrame = {
-    samplesPerFrame: 1152,
+  const baseFrame: MpegFrameHeader = {
+    offset: 0,
+    rawHeader: makeHeaderValue({ bitrateIndex: 0x9 }),
+    versionBits: 0x3,
+    versionLabel: "MPEG1",
+    layerBits: 0x1,
+    layerLabel: "Layer III",
+    hasCrc: false,
+    bitrateKbps: 128,
     sampleRate: 44100,
-    bitrateKbps: 128
+    padding: false,
+    privateBit: false,
+    channelModeBits: 0,
+    channelMode: "Stereo",
+    modeExtension: null,
+    copyright: false,
+    original: false,
+    emphasis: null,
+    frameLengthBytes: 418,
+    samplesPerFrame: 1152
   };
 
-  const vbrFrames = { frames: 100, bytes: null, vbrDetected: true };
+  const vbrFrames: VbrHeader = {
+    type: "Xing",
+    flags: null,
+    frames: 100,
+    bytes: null,
+    quality: null,
+    lameEncoder: null,
+    vbrDetected: true
+  };
   const issues = [];
   const framesDuration = estimateDuration(baseFrame, vbrFrames, 0, issues);
   assert.strictEqual(framesDuration, (100 * 1152) / 44100);
 
-  const vbrBytes = { frames: null, bytes: 44100, vbrDetected: true };
+  const vbrBytes: VbrHeader = {
+    type: "Xing",
+    flags: null,
+    frames: null,
+    bytes: 44100,
+    quality: null,
+    lameEncoder: null,
+    vbrDetected: true
+  };
   const bytesDuration = estimateDuration(baseFrame, vbrBytes, 0, issues);
   assert.strictEqual(bytesDuration, (44100 * 8) / (128000));
 

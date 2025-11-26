@@ -42,11 +42,8 @@ class TestDomParser extends XmlDomParser {
 
 global.DOMParser = TestDomParser;
 
-const assertParsed = async (
-  file: MockFile,
-  expectedAnalyzer: string,
-  checks: (parsed: unknown) => void = () => {}
-) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const assertParsed = async (file: MockFile, expectedAnalyzer: string, checks: (parsed: any) => void = () => {}) => {
   const { analyzer, parsed } = await parseForUi(file);
   assert.strictEqual(analyzer, expectedAnalyzer);
   assert.ok(parsed, `Expected parsed data for ${expectedAnalyzer}`);

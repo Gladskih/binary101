@@ -1,8 +1,9 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "rootDir": "tests",
+    "rootDir": ".",
     "types": ["node", "@playwright/test"],
+    "lib": ["ESNext", "DOM"],
     "strict": false,
     "noImplicitAny": false,
     "noImplicitOverride": false,
@@ -11,6 +12,6 @@
     "exactOptionalPropertyTypes": false,
     "noEmit": true
   },
-  "include": ["tests/**/*.ts"],
+  "include": ["tests/**/*.ts", "tests/**/*.d.ts"],
   "exclude": ["node_modules", "dist", "coverage", "test-results"]
 }
