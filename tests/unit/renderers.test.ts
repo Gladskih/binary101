@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseForUi } from "../../dist/analyzers/index.js";
+import { parseForUi } from "../../analyzers/index.js";
 import { DOMParser as XmlDomParser } from "@xmldom/xmldom";
 import {
   renderElf,
@@ -20,7 +20,7 @@ import {
   renderZip,
   renderRar,
   renderLnk
-} from "../../dist/renderers/index.js";
+} from "../../renderers/index.js";
 import {
   createElfFile,
   createFb2File,
@@ -57,7 +57,7 @@ global.DOMParser = TestDomParser;
 
 const parseOnly = async file => (await parseForUi(file)).parsed;
 
-test("renderers produce readable HTML output", async () => {
+void test("renderers produce readable HTML output", async () => {
   const png = await parseOnly(createPngFile());
   png.issues = (png.issues || []).concat("synthetic PNG warning");
   const pngHtml = renderPng(png);
@@ -134,7 +134,7 @@ test("renderers produce readable HTML output", async () => {
   assert.match(rarHtml, /RAR overview/);
 });
 
-test("renderZip shows extract actions and extraction notices", () => {
+void test("renderZip shows extract actions and extraction notices", () => {
   const zip = {
     eocd: {
       offset: 0,

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseZip } from "../../dist/analyzers/zip/index.js";
+import { parseZip } from "../../analyzers/zip/index.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const encoder = new TextEncoder();
@@ -96,7 +96,7 @@ const buildSingleEntryZip = ({
   };
 };
 
-test("parseZip annotates data offsets for stored entries", async () => {
+void test("parseZip annotates data offsets for stored entries", async () => {
   const { file, dataOffset, dataLength } = buildSingleEntryZip({
     name: "note.txt",
     method: 0,
@@ -111,7 +111,7 @@ test("parseZip annotates data offsets for stored entries", async () => {
   assert.deepEqual(entry.localHeader, { nameLength: 8, extraLength: 0, offset: 0 });
 });
 
-test("parseZip marks unsupported compression methods", async () => {
+void test("parseZip marks unsupported compression methods", async () => {
   const { file } = buildSingleEntryZip({
     name: "data.bin",
     method: 12, // BZIP2
@@ -125,7 +125,7 @@ test("parseZip marks unsupported compression methods", async () => {
   assert.match(entry.extractError, /not supported/i);
 });
 
-test("parseZip flags entries whose compressed data runs past the file size", async () => {
+void test("parseZip flags entries whose compressed data runs past the file size", async () => {
   const { file } = buildSingleEntryZip({
     name: "short.bin",
     method: 0,

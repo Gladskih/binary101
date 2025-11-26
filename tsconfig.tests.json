@@ -1,7 +1,6 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "outDir": "dist-tests",
     "rootDir": "tests",
     "types": ["node", "@playwright/test"],
     "strict": false,
@@ -9,8 +8,9 @@
     "noImplicitOverride": false,
     "noPropertyAccessFromIndexSignature": false,
     "noUncheckedIndexedAccess": false,
-    "exactOptionalPropertyTypes": false
+    "exactOptionalPropertyTypes": false,
+    "noEmit": true
   },
   "include": ["tests/**/*.ts"],
-  "exclude": ["node_modules", "dist", "coverage", "test-results", "dist-tests"]
+  "exclude": ["node_modules", "dist", "coverage", "test-results"]
 }

@@ -2,13 +2,13 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildResourceTree } from "../../dist/analyzers/pe/resources-core.js";
+import { buildResourceTree } from "../../analyzers/pe/resources-core.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const setU16 = (view, off, value) => view.setUint16(off, value, true);
 const setU32 = (view, off, value) => view.setUint32(off, value, true);
 
-test("buildResourceTree returns null when resource directory is missing or unmapped", async () => {
+void test("buildResourceTree returns null when resource directory is missing or unmapped", async () => {
   const file = new MockFile(new Uint8Array(0));
   const noDir = await buildResourceTree(file, [], () => 0, () => {});
   assert.strictEqual(noDir, null);
@@ -18,7 +18,7 @@ test("buildResourceTree returns null when resource directory is missing or unmap
   assert.strictEqual(unmapped, null);
 });
 
-test("buildResourceTree parses nested resource directories and skips truncated labels", async () => {
+void test("buildResourceTree parses nested resource directories and skips truncated labels", async () => {
   const bytes = new Uint8Array(0x130).fill(0);
   const dv = new DataView(bytes.buffer);
 

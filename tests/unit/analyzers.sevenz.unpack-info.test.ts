@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseFolder, parseUnpackInfo } from "../../dist/analyzers/sevenz/unpack-info.js";
+import { parseFolder, parseUnpackInfo } from "../../analyzers/sevenz/unpack-info.js";
 
 const makeCtx = bytes => ({
   dv: new DataView(Uint8Array.from(bytes).buffer),
@@ -10,7 +10,7 @@ const makeCtx = bytes => ({
   issues: []
 });
 
-test("parseFolder reads coder entries without attributes", () => {
+void test("parseFolder reads coder entries without attributes", () => {
   // coderCount=1, coder flags (idSize=1, simple, no attrs), methodId=0x21 (LZMA2)
   const ctx = makeCtx([0x01, 0x01, 0x21]);
   const folder = parseFolder(ctx, ctx.dv.byteLength);
@@ -24,7 +24,7 @@ test("parseFolder reads coder entries without attributes", () => {
   assert.equal(folder.totalOutStreams, 1);
 });
 
-test("parseUnpackInfo reads folder list, sizes and end marker", () => {
+void test("parseUnpackInfo reads folder list, sizes and end marker", () => {
   // UnpackInfo header (0x0b), folderCount=1, external=0,
   // folder: coderCount=1, flags=0x01, methodId=0x21
   // unpack sizes id=0x0c, one size=5, end marker 0x00 (re-read after crc probe)

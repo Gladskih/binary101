@@ -7,9 +7,9 @@ import {
   describeCoders,
   describeFileType,
   describeHeaderKind
-} from "../../dist/renderers/sevenz/semantics.js";
+} from "../../renderers/sevenz/semantics.js";
 
-test("describeCoders describes empty and populated coder chains", () => {
+void test("describeCoders describes empty and populated coder chains", () => {
   assert.strictEqual(describeCoders(undefined), "-");
   assert.strictEqual(describeCoders([]), "-");
 
@@ -61,7 +61,7 @@ test("describeCoders describes empty and populated coder chains", () => {
   assert.match(twoCoders, /\+/);
 });
 
-test("describeHeaderKind covers all branches including unknown and custom", () => {
+void test("describeHeaderKind covers all branches including unknown and custom", () => {
   assert.strictEqual(describeHeaderKind(undefined), "Unknown (next header not parsed)");
 
   assert.match(describeHeaderKind({ kind: "header" }), /Plain Header structure/);
@@ -75,7 +75,7 @@ test("describeHeaderKind covers all branches including unknown and custom", () =
   assert.strictEqual(describeHeaderKind({ kind: "custom" }), "custom");
 });
 
-test("describeFileType gives priority to anti and directory flags", () => {
+void test("describeFileType gives priority to anti and directory flags", () => {
   assert.strictEqual(describeFileType({ isAnti: true }), "Anti-item");
   assert.strictEqual(describeFileType({ isDirectory: true }), "Directory");
 
@@ -98,10 +98,9 @@ test("describeFileType gives priority to anti and directory flags", () => {
   assert.strictEqual(describeFileType({}), "File");
 });
 
-test("KNOWN_METHODS catalog includes common compression and encryption methods", () => {
+void test("KNOWN_METHODS catalog includes common compression and encryption methods", () => {
   const hasLzma2 = KNOWN_METHODS.some(([id, name]) => id === "21" && name === "LZMA2");
   const hasAes = KNOWN_METHODS.some(([id, name]) => id === "06f10701" && name === "AES-256");
   assert.ok(hasLzma2);
   assert.ok(hasAes);
 });
-

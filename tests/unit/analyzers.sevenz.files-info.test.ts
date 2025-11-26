@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseFilesInfo } from "../../dist/analyzers/sevenz/files-info.js";
+import { parseFilesInfo } from "../../analyzers/sevenz/files-info.js";
 
 const encodeUint64 = value => {
   if (value < 0 || value > 0x7f) throw new Error("encodeUint64 helper only supports small values");
@@ -15,7 +15,7 @@ const makeCtx = bytes => ({
   issues: []
 });
 
-test("parseFilesInfo reads names and defaults remaining flags", () => {
+void test("parseFilesInfo reads names and defaults remaining flags", () => {
   const namesBuffer = Buffer.from("foo\u0000bar\u0000", "utf16le");
   const namesSize = 1 + namesBuffer.length; // external flag + names bytes
   const bytes = [

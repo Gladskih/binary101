@@ -2,15 +2,15 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseDebugDirectory, parseLoadConfigDirectory } from "../../dist/analyzers/pe/debug-loadcfg.js";
-import { parseTlsDirectory } from "../../dist/analyzers/pe/tls.js";
-import { buildResourceTree } from "../../dist/analyzers/pe/resources-core.js";
-import { parseImportDirectory } from "../../dist/analyzers/pe/imports.js";
+import { parseDebugDirectory, parseLoadConfigDirectory } from "../../analyzers/pe/debug-loadcfg.js";
+import { parseTlsDirectory } from "../../analyzers/pe/tls.js";
+import { buildResourceTree } from "../../analyzers/pe/resources-core.js";
+import { parseImportDirectory } from "../../analyzers/pe/imports.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const encoder = new TextEncoder();
 
-test("parseDebugDirectory reads CodeView RSDS entry", async () => {
+void test("parseDebugDirectory reads CodeView RSDS entry", async () => {
   const bytes = new Uint8Array(512).fill(0);
   const dv = new DataView(bytes.buffer);
   const debugRva = 0x40;
@@ -49,7 +49,7 @@ test("parseDebugDirectory reads CodeView RSDS entry", async () => {
   assert.match(result.entry.path, /app\.pdb/);
 });
 
-test("parseLoadConfigDirectory reads 32-bit and 64-bit fields", async () => {
+void test("parseLoadConfigDirectory reads 32-bit and 64-bit fields", async () => {
   const bytes = new Uint8Array(512).fill(0);
   const dv = new DataView(bytes.buffer);
   const lcRva = 0x80;
@@ -104,7 +104,7 @@ test("parseLoadConfigDirectory reads 32-bit and 64-bit fields", async () => {
   assert.equal(lc64.GuardFlags, 0xbeef);
 });
 
-test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
+void test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
   const bytes = new Uint8Array(256).fill(0);
   const dv = new DataView(bytes.buffer);
   const tlsRva = 0x20;
@@ -151,7 +151,7 @@ test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
   assert.equal(tls64.CallbackCount, 1);
 });
 
-test("buildResourceTree walks a small resource directory", async () => {
+void test("buildResourceTree walks a small resource directory", async () => {
   const base = 0x10;
   const bytes = new Uint8Array(256).fill(0);
   const dv = new DataView(bytes.buffer);
@@ -192,7 +192,7 @@ test("buildResourceTree walks a small resource directory", async () => {
   assert.equal(tree.detail[0].entries[0].langs[0].size, 16);
 });
 
-test("parseImportDirectory supports 64-bit imports path", async () => {
+void test("parseImportDirectory supports 64-bit imports path", async () => {
   const bytes = new Uint8Array(512).fill(0);
   const dv = new DataView(bytes.buffer);
   const impBase = 0x40;

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { renderResources } from "../../dist/renderers/pe/resources.js";
+import { renderResources } from "../../renderers/pe/resources.js";
 
 const createPeResources = () => ({
   top: [
@@ -144,7 +144,7 @@ const createPeResources = () => ({
   ]
 });
 
-test("renderResources renders preview cells for common resource types", () => {
+void test("renderResources renders preview cells for common resource types", () => {
   const pe = { resources: createPeResources() };
   const out = [];
 

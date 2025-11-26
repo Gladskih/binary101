@@ -7,9 +7,9 @@ import {
   formatSize,
   formatSizeDetailed,
   formatRatio
-} from "../../dist/renderers/sevenz/value-format.js";
+} from "../../renderers/sevenz/value-format.js";
 
-test("formatOffset renders null, numbers, bigint and negatives", () => {
+void test("formatOffset renders null, numbers, bigint and negatives", () => {
   assert.strictEqual(formatOffset(null), "-");
   assert.strictEqual(formatOffset(0), "0x00000000");
   assert.strictEqual(formatOffset(0x1234), "0x00001234");
@@ -19,7 +19,7 @@ test("formatOffset renders null, numbers, bigint and negatives", () => {
   assert.strictEqual(formatOffset(-1), "0xffffffff");
 });
 
-test("formatSize renders small, bigint and huge values", () => {
+void test("formatSize renders small, bigint and huge values", () => {
   assert.strictEqual(formatSize(0), "0 B (0 bytes)");
   assert.strictEqual(formatSize(1024), "1 KB (1024 bytes)");
 
@@ -35,7 +35,7 @@ test("formatSize renders small, bigint and huge values", () => {
   assert.match(negative, /-512/);
 });
 
-test("formatSizeDetailed clamps unsafe sizes and formats bigints", () => {
+void test("formatSizeDetailed clamps unsafe sizes and formats bigints", () => {
   assert.strictEqual(formatSizeDetailed(2048n), "2 KB (2048 bytes)");
 
   // Huge bigint stays as a raw byte count.
@@ -48,7 +48,7 @@ test("formatSizeDetailed clamps unsafe sizes and formats bigints", () => {
   assert.match(negativeDetailed, /-5/);
 });
 
-test("formatRatio handles normal, zero and invalid values", () => {
+void test("formatRatio handles normal, zero and invalid values", () => {
   assert.strictEqual(formatRatio(0.0), "0.0%");
   assert.strictEqual(formatRatio(12.345), "12.3%");
 

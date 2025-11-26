@@ -8,7 +8,7 @@ import {
   parseFrameHeader,
   parseVbrHeader,
   validateNextFrame
-} from "../../dist/analyzers/mp3/mpeg.js";
+} from "../../analyzers/mp3/mpeg.js";
 
 const makeHeaderValue = ({
   versionBits = 0x3,
@@ -34,7 +34,7 @@ const writeHeader = (array, offset, headerValue) => {
   view.setUint32(offset, headerValue, false);
 };
 
-test("parseFrameHeader rejects invalid headers and decodes basics", () => {
+void test("parseFrameHeader rejects invalid headers and decodes basics", () => {
   const tooShort = new DataView(new Uint8Array([0xff]).buffer);
   assert.strictEqual(parseFrameHeader(tooShort, 0), null);
 
@@ -54,7 +54,7 @@ test("parseFrameHeader rejects invalid headers and decodes basics", () => {
   assert.strictEqual(parsed.channelMode, "Dual channel");
 });
 
-test("findFirstFrame flags unusually distant headers", () => {
+void test("findFirstFrame flags unusually distant headers", () => {
   const data = new Uint8Array(41000).fill(0);
   writeHeader(data, 40000, makeHeaderValue({ padding: 1 }));
   const issues = [];
@@ -63,7 +63,7 @@ test("findFirstFrame flags unusually distant headers", () => {
   assert.ok(issues.some(msg => msg.includes("unusually far")), "expected distance warning");
 });
 
-test("validateNextFrame reports truncated, invalid, and mismatched frames", () => {
+void test("validateNextFrame reports truncated, invalid, and mismatched frames", () => {
   const headerValue = makeHeaderValue({ bitrateIndex: 0x9, sampleRateIndex: 0x0 });
   const shortData = new Uint8Array(100).fill(0);
   writeHeader(shortData, 0, headerValue);
@@ -94,7 +94,7 @@ test("validateNextFrame reports truncated, invalid, and mismatched frames", () =
   assert.ok(mismatchIssues.some(msg => msg.includes("disagree")));
 });
 
-test("parseVbrHeader detects Xing/Info and VBRI markers", () => {
+void test("parseVbrHeader detects Xing/Info and VBRI markers", () => {
   const headerValue = makeHeaderValue({ channelModeBits: 0x0 });
   const data = new Uint8Array(200).fill(0);
   writeHeader(data, 0, headerValue);
@@ -127,7 +127,7 @@ test("parseVbrHeader detects Xing/Info and VBRI markers", () => {
   assert.strictEqual(vbri.bytes, 1000);
 });
 
-test("estimateDuration chooses best available information", () => {
+void test("estimateDuration chooses best available information", () => {
   const baseFrame = {
     samplesPerFrame: 1152,
     sampleRate: 44100,

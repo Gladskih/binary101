@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parsePe } from "../../dist/analyzers/pe/index.js";
+import { parsePe } from "../../analyzers/pe/index.js";
 
 // Mock the File object for Node.js environment
 class MockFile {
@@ -64,7 +64,7 @@ function createTinyPEHeader() {
   return new Uint8Array(buffer);
 }
 
-test("parsePe correctly parses a minimal PE header", async () => {
+void test("parsePe correctly parses a minimal PE header", async () => {
   const peBytes = createTinyPEHeader();
   const mockFile = new MockFile(peBytes, "minimal.exe");
 
@@ -79,7 +79,7 @@ test("parsePe correctly parses a minimal PE header", async () => {
   assert.strictEqual(result.opt.ImageBase, 0x00400000, "Optional header ImageBase should be parsed correctly");
 });
 
-test("parsePe returns null for a non-PE file", async () => {
+void test("parsePe returns null for a non-PE file", async () => {
   const notPeBytes = new Uint8Array(256).fill(0xff);
   const mockFile = new MockFile(notPeBytes, "not-a-pe.bin");
 
@@ -178,7 +178,7 @@ function createPeWithSectionAndIat() {
   return new Uint8Array(buffer);
 }
 
-test("parsePe returns coverage and mapping for PE32 with one section and IAT", async () => {
+void test("parsePe returns coverage and mapping for PE32 with one section and IAT", async () => {
   const peBytes = createPeWithSectionAndIat();
   const mockFile = new MockFile(peBytes, "section.exe");
 

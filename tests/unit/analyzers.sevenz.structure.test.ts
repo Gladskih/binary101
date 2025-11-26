@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildFolderDetails, buildFileDetails } from "../../dist/analyzers/sevenz/structure.js";
+import { buildFolderDetails, buildFileDetails } from "../../analyzers/sevenz/structure.js";
 
 const makeSections = overrides => ({
   mainStreamsInfo: {
@@ -19,7 +19,7 @@ const makeSections = overrides => ({
   ...overrides
 });
 
-test("buildFolderDetails reports missing folder entry and extra sizes", () => {
+void test("buildFolderDetails reports missing folder entry and extra sizes", () => {
   const issues = [];
   const sections = makeSections({
     mainStreamsInfo: {
@@ -34,7 +34,7 @@ test("buildFolderDetails reports missing folder entry and extra sizes", () => {
   assert.ok(issues.some(msg => msg.includes("Extra substream size entries")));
 });
 
-test("buildFileDetails warns when streams are not matched to folders", () => {
+void test("buildFileDetails warns when streams are not matched to folders", () => {
   const issues = [];
   const sections = makeSections({
     filesInfo: {

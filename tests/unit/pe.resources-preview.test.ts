@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { enrichResourcePreviews } from "../../dist/analyzers/pe/resources-preview.js";
+import { enrichResourcePreviews } from "../../analyzers/pe/resources-preview.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const encoder = new TextEncoder();
@@ -18,7 +18,7 @@ const writeUtf16 = (bytes, offset, text) => {
   }
 };
 
-test("enrichResourcePreviews builds previews for common PE resources", async () => {
+void test("enrichResourcePreviews builds previews for common PE resources", async () => {
   const fileBytes = new Uint8Array(2000);
   const writeData = (offset, bytes) => {
     fileBytes.set(bytes, offset);

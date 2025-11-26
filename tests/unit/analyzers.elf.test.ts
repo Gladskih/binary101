@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseElf } from "../../dist/analyzers/elf/index.js";
+import { parseElf } from "../../analyzers/elf/index.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const writeElfHeader = (
@@ -38,13 +38,13 @@ const writeElfHeader = (
   dv.setUint16(0x3e, shstrndx, true);
 };
 
-test("parseElf returns null for non-ELF files", async () => {
+void test("parseElf returns null for non-ELF files", async () => {
   const file = new MockFile(new Uint8Array([0, 1, 2, 3]));
   const parsed = await parseElf(file);
   assert.strictEqual(parsed, null);
 });
 
-test("parseElf notes program headers that sit outside the file", async () => {
+void test("parseElf notes program headers that sit outside the file", async () => {
   const bytes = new Uint8Array(64).fill(0);
   writeElfHeader(bytes, { phoff: 200n, phnum: 1, shnum: 0 });
   const parsed = await parseElf(new MockFile(bytes, "elf-invalid.bin", "application/x-elf"));
@@ -53,7 +53,7 @@ test("parseElf notes program headers that sit outside the file", async () => {
   assert.ok(parsed.issues.some(msg => msg.includes("Program header table falls outside the file.")));
 });
 
-test("parseElf surfaces version mismatches and truncated section name table", async () => {
+void test("parseElf surfaces version mismatches and truncated section name table", async () => {
   const bytes = new Uint8Array(160).fill(0);
   // Section table starts after the ELF header, one entry pointing to a truncated name table.
   writeElfHeader(bytes, {

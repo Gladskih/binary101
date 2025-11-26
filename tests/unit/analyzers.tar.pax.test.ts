@@ -2,12 +2,12 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parsePaxHeaders, applyPaxValues } from "../../dist/analyzers/tar/helpers.js";
-import { formatUnixSecondsOrDash } from "../../dist/binary-utils.js"; // Import needed for applyPaxValues test
+import { parsePaxHeaders, applyPaxValues } from "../../analyzers/tar/helpers.js";
+import { formatUnixSecondsOrDash } from "../../binary-utils.js"; // Import needed for applyPaxValues test
 
 const TEXT_ENCODER = new TextEncoder();
 
-test("parsePaxHeaders parses valid PAX headers", () => {
+void test("parsePaxHeaders parses valid PAX headers", () => {
   // Each record format: <length> <key>=<value>\n where length includes digits+space+key=value+newline
   // "29 path=./long/path/to/file\n" = 29 bytes
   // "18 size=123456789\n" = 18 bytes
@@ -20,7 +20,7 @@ test("parsePaxHeaders parses valid PAX headers", () => {
   assert.deepStrictEqual(issues, []);
 });
 
-test("parsePaxHeaders handles empty PAX data", () => {
+void test("parsePaxHeaders handles empty PAX data", () => {
   const paxData = "";
   const bytes = TEXT_ENCODER.encode(paxData);
   const issues = [];
@@ -29,7 +29,7 @@ test("parsePaxHeaders handles empty PAX data", () => {
   assert.deepStrictEqual(issues, ["PAX header (test) is present but empty or invalid."]);
 });
 
-test("parsePaxHeaders handles invalid record length", () => {
+void test("parsePaxHeaders handles invalid record length", () => {
   const paxData = "abc path=file\n";
   const bytes = TEXT_ENCODER.encode(paxData);
   const issues = [];
@@ -38,7 +38,7 @@ test("parsePaxHeaders handles invalid record length", () => {
   assert.deepStrictEqual(issues, ["PAX header (test) is present but empty or invalid."]);
 });
 
-test("parsePaxHeaders handles records without '='", () => {
+void test("parsePaxHeaders handles records without '='", () => {
   const paxData = "10 noprefix\n"; // This record will be ignored as it has no '='
   const bytes = TEXT_ENCODER.encode(paxData);
   const issues = [];
@@ -47,7 +47,7 @@ test("parsePaxHeaders handles records without '='", () => {
   assert.deepStrictEqual(issues, ["PAX header (test) is present but empty or invalid."]);
 });
 
-test("parsePaxHeaders handles multiple records and ignores trailing data", () => {
+void test("parsePaxHeaders handles multiple records and ignores trailing data", () => {
   // "7 a=b\n" has: 1 digit + space + 1 char key + = + 1 char value + newline = 7 chars (CORRECT)
   // "7 c=d\n" has: 1 digit + space + 1 char key + = + 1 char value + newline = 7 chars (CORRECT)
   const paxData = "7 a=b\n7 c=d\nGARBAGE";
@@ -59,8 +59,8 @@ test("parsePaxHeaders handles multiple records and ignores trailing data", () =>
   assert.deepStrictEqual(issues, []);
 });
 
-test("applyPaxValues applies path, linkpath, size, uid, gid, uname, gname, mtime", () => {
-  const entry: Record<string, any> = {
+void test("applyPaxValues applies path, linkpath, size, uid, gid, uname, gname, mtime", () => {
+  const entry: Record<string, unknown> = {
     name: "old_name",
     linkName: "old_link",
     size: 100,
@@ -99,19 +99,19 @@ test("applyPaxValues applies path, linkpath, size, uid, gid, uname, gname, mtime
   assert.ok(entry.usedPaxPath);
 });
 
-test("applyPaxValues handles missing paxValues", () => {
+void test("applyPaxValues handles missing paxValues", () => {
   const entry = { name: "test" };
   applyPaxValues(entry, null);
   assert.deepStrictEqual(entry, { name: "test" });
 });
 
-test("applyPaxValues handles empty paxValues object", () => {
+void test("applyPaxValues handles empty paxValues object", () => {
   const entry = { name: "test" };
   applyPaxValues(entry, {});
   assert.deepStrictEqual(entry, { name: "test" });
 });
 
-test("applyPaxValues handles invalid size, uid, gid, mtime", () => {
+void test("applyPaxValues handles invalid size, uid, gid, mtime", () => {
   const entry = {
     name: "old_name",
     size: 100,

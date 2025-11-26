@@ -2,13 +2,13 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { detectBinaryType } from "../../dist/analyzers/index.js";
+import { detectBinaryType } from "../../analyzers/index.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { createMp3File } from "../fixtures/sample-files.js";
 
 const fromAscii = text => new Uint8Array(Buffer.from(text, "ascii"));
 
-test("detectBinaryType refines ZIP-based document labels", async () => {
+void test("detectBinaryType refines ZIP-based document labels", async () => {
   const zipSignature = [0x50, 0x4b, 0x03, 0x04];
   const docxPayload = "[Content_Types].xml word/document.xml";
   const bytes = new Uint8Array(zipSignature.length + docxPayload.length);
@@ -25,7 +25,7 @@ test("detectBinaryType refines ZIP-based document labels", async () => {
   assert.strictEqual(apkLabel, "Android application package (APK)");
 });
 
-test("detectBinaryType refines Compound File formats", async () => {
+void test("detectBinaryType refines Compound File formats", async () => {
   const compoundMagic = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
   const workbook = "Workbook";
   const bytes = new Uint8Array(compoundMagic.length + workbook.length);
@@ -35,7 +35,7 @@ test("detectBinaryType refines Compound File formats", async () => {
   assert.strictEqual(label, "Microsoft Excel binary workbook (XLS)");
 });
 
-test("detectBinaryType reports EOCD-only ZIPs and PDF versions", async () => {
+void test("detectBinaryType reports EOCD-only ZIPs and PDF versions", async () => {
   const eocd = new Uint8Array(32).fill(0);
   eocd.set([0x50, 0x4b, 0x05, 0x06], eocd.length - 22);
   const zipLabel = await detectBinaryType(new MockFile(eocd, "eocd.zip", "application/zip"));
@@ -46,7 +46,7 @@ test("detectBinaryType reports EOCD-only ZIPs and PDF versions", async () => {
   assert.strictEqual(pdfLabel, "PDF document (v1.5)");
 });
 
-test("detectBinaryType refines additional ZIP-based formats", async () => {
+void test("detectBinaryType refines additional ZIP-based formats", async () => {
   const zipSignature = [0x50, 0x4b, 0x03, 0x04];
   const cases = [
     { marker: "[Content_Types].xml xl/workbook.xml", expected: "Microsoft Excel workbook (XLSX)" },
@@ -70,7 +70,7 @@ test("detectBinaryType refines additional ZIP-based formats", async () => {
   }
 });
 
-test("detectBinaryType refines compound formats beyond Excel", async () => {
+void test("detectBinaryType refines compound formats beyond Excel", async () => {
   const magic = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
   const fixtures = [
     { suffix: "PowerPoint Document", expected: "Microsoft PowerPoint binary document (PPT)" },
@@ -87,7 +87,7 @@ test("detectBinaryType refines compound formats beyond Excel", async () => {
   }
 });
 
-test("detectBinaryType recognises ELF and Mach-O executables", async () => {
+void test("detectBinaryType recognises ELF and Mach-O executables", async () => {
   const elf = new Uint8Array(0x20).fill(0);
   elf.set([0x7f, 0x45, 0x4c, 0x46], 0);
   elf[4] = 2; // 64-bit
@@ -103,7 +103,7 @@ test("detectBinaryType recognises ELF and Mach-O executables", async () => {
   assert.strictEqual(machoLabel, "Mach-O 64-bit");
 });
 
-test("detectBinaryType recognises MP3 streams even when frames are not at offset 0", async () => {
+void test("detectBinaryType recognises MP3 streams even when frames are not at offset 0", async () => {
   const base = createMp3File();
   const prefixed = new Uint8Array(base.bytes.length + 16);
   prefixed.set(base.bytes, 16);
@@ -112,14 +112,14 @@ test("detectBinaryType recognises MP3 streams even when frames are not at offset
   assert.strictEqual(label, "MPEG Version 1, Layer III, 128 kbps, 44100 Hz, Stereo");
 });
 
-test("detectBinaryType reports MP3 for minimal single-frame files", async () => {
+void test("detectBinaryType reports MP3 for minimal single-frame files", async () => {
   const full = createMp3File();
   const singleFrame = full.bytes.slice(0, full.bytes.length / 2);
   const label = await detectBinaryType(new MockFile(singleFrame, "single-frame.mp3", "audio/mpeg"));
   assert.strictEqual(label, "MPEG Version 1, Layer III, 128 kbps, 44100 Hz, Stereo");
 });
 
-test("detectBinaryType rejects MP3 label when second frame is invalid", async () => {
+void test("detectBinaryType rejects MP3 label when second frame is invalid", async () => {
   const full = createMp3File();
   const firstFrameLength = full.bytes.length / 2;
   const damaged = new Uint8Array(firstFrameLength + 16);
@@ -130,7 +130,7 @@ test("detectBinaryType rejects MP3 label when second frame is invalid", async ()
   assert.strictEqual(label, "Unknown binary type");
 });
 
-test("detectBinaryType recognises animated cursors (ANI)", async () => {
+void test("detectBinaryType recognises animated cursors (ANI)", async () => {
   const bytes = new Uint8Array([
     0x52, 0x49, 0x46, 0x46, // "RIFF"
     0x24, 0x00, 0x00, 0x00, // size placeholder

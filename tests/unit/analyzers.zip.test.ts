@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseZip } from "../../dist/analyzers/zip/index.js";
+import { parseZip } from "../../analyzers/zip/index.js";
 
 // Mock the File object for Node.js environment
 class MockFile {
@@ -131,7 +131,7 @@ const buildZip64Locator = zip64Offset => {
   return bytes;
 };
 
-test("parseZip correctly identifies a minimal, empty ZIP file", async () => {
+void test("parseZip correctly identifies a minimal, empty ZIP file", async () => {
   const emptyZipBytes = new Uint8Array([
     0x50, 0x4b, 0x05, 0x06, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -147,7 +147,7 @@ test("parseZip correctly identifies a minimal, empty ZIP file", async () => {
   assert.strictEqual(result.issues.length, 0, "There should be no parsing issues for a valid empty zip");
 });
 
-test("parseZip returns null for a non-ZIP file", async () => {
+void test("parseZip returns null for a non-ZIP file", async () => {
   const notZipBytes = new Uint8Array([
     0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
     0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
@@ -161,7 +161,7 @@ test("parseZip returns null for a non-ZIP file", async () => {
   assert.strictEqual(result, null, "parseZip should return null for a file that is not a ZIP");
 });
 
-test("parseZip parses central directory entries with timestamps", async () => {
+void test("parseZip parses central directory entries with timestamps", async () => {
   const cdEntry = buildCentralDirectoryEntry("hello.txt", { compressedSize: 7, uncompressedSize: 7 });
   const cdSize = cdEntry.length;
   const eocd = buildEocd(cdSize, 0, 1);
@@ -179,7 +179,7 @@ test("parseZip parses central directory entries with timestamps", async () => {
   assert.strictEqual(result.issues.length, 0);
 });
 
-test("parseZip reads ZIP64 metadata and extra fields", async () => {
+void test("parseZip reads ZIP64 metadata and extra fields", async () => {
   const zip64Sizes = {
     uncompressed: 0x111111111n,
     compressed: 0x222222222n,

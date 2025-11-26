@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseId3v1, parseId3v2 } from "../../dist/analyzers/mp3/id3.js";
+import { parseId3v1, parseId3v2 } from "../../analyzers/mp3/id3.js";
 
 const asciiBytes = text => Array.from(Buffer.from(text, "latin1"));
 
@@ -34,7 +34,7 @@ const concat = arrays => {
   return out;
 };
 
-test("parseId3v2 parses multiple frame types", () => {
+void test("parseId3v2 parses multiple frame types", () => {
   const textFrame = buildFrame("TPE1", Uint8Array.from([0x00, ...asciiBytes("Artist")]));
   const txxxFrame = buildFrame(
     "TXXX",
@@ -91,7 +91,7 @@ test("parseId3v2 parses multiple frame types", () => {
   assert.strictEqual(url?.detail.url, "https://tickets.example");
 });
 
-test("parseId3v2 handles extended headers and truncation warnings", () => {
+void test("parseId3v2 handles extended headers and truncation warnings", () => {
   const header = new Uint8Array(10);
   header.set(asciiBytes("ID3"), 0);
   header[3] = 3;
@@ -110,7 +110,7 @@ test("parseId3v2 handles extended headers and truncation warnings", () => {
   assert.ok(issues.some(msg => msg.includes("truncated")));
 });
 
-test("parseId3v2 returns null or warnings for invalid tags", () => {
+void test("parseId3v2 returns null or warnings for invalid tags", () => {
   // Missing header
   assert.strictEqual(parseId3v2(new DataView(new ArrayBuffer(4)), []), null);
 
@@ -131,7 +131,7 @@ test("parseId3v2 returns null or warnings for invalid tags", () => {
   assert.ok(issues.some(msg => msg.includes("Invalid ID3v2 tag size")));
 });
 
-test("parseId3v1 extracts classic 128-byte footer", () => {
+void test("parseId3v1 extracts classic 128-byte footer", () => {
   const data = new Uint8Array(200).fill(0x20);
   const start = data.length - 128;
   data.set(asciiBytes("TAG"), start);

@@ -8,11 +8,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tests.json",
     "build": "tsc && node scripts/copy-static.mjs",
-    "build:tests": "tsc -p tsconfig.tests.json",
     "test": "npm run build && npm run test:unit && npm run test:e2e",
-    "test:unit": "npm run build:tests && node --test dist-tests/unit/**/*.js",
-    "test:unit:run": "node --test dist-tests/unit/**/*.js",
-    "test:coverage": "npm run build && npm run build:tests && c8 --all --exclude=dist/app.js --exclude=dist/renderers/** --exclude=dist-tests/** --exclude=playwright.config.mjs --exclude=eslint.config.mjs --exclude=tests/e2e/** node --test dist-tests/unit/**/*.js",
+    "test:unit": "tsx --test tests/unit/**/*.ts",
+    "test:coverage": "c8 --all --exclude=playwright.config.mjs --exclude=eslint.config.mjs --exclude=tests/e2e/** tsx --test tests/unit/**/*.ts",
     "test:e2e": "playwright test"
   },
   "devDependencies": {
@@ -26,6 +24,7 @@
     "eslint": "^9.39.1",
     "globals": "^16.5.0",
     "http-server": "^14.1.1",
+    "tsx": "^4.19.1",
     "typescript": "^5.6.3"
   }
 }

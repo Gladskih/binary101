@@ -2,11 +2,11 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseApeTag, parseLyrics3 } from "../../dist/analyzers/mp3/tags.js";
+import { parseApeTag, parseLyrics3 } from "../../analyzers/mp3/tags.js";
 
 const dvFrom = bytes => new DataView(new Uint8Array(bytes).buffer);
 
-test("parseApeTag locates footer data and reports fields", () => {
+void test("parseApeTag locates footer data and reports fields", () => {
   const bytes = new Uint8Array(80).fill(0);
   const footerOffset = bytes.length - 32;
   bytes.set(Buffer.from("APETAGEX", "ascii"), footerOffset);
@@ -24,7 +24,7 @@ test("parseApeTag locates footer data and reports fields", () => {
   assert.deepStrictEqual(issues, []);
 });
 
-test("parseApeTag warns when declared size exceeds buffer", () => {
+void test("parseApeTag warns when declared size exceeds buffer", () => {
   const bytes = new Uint8Array(64).fill(0);
   const footerOffset = bytes.length - 32;
   bytes.set(Buffer.from("APETAGEX", "ascii"), footerOffset);
@@ -39,7 +39,7 @@ test("parseApeTag warns when declared size exceeds buffer", () => {
   assert.ok(issues.some(msg => msg.includes("truncated")));
 });
 
-test("parseLyrics3 extracts v2 info and flags truncated legacy tags", () => {
+void test("parseLyrics3 extracts v2 info and flags truncated legacy tags", () => {
   const bytes = new Uint8Array(256).fill(0x41); // 'A'
   const endOffset = 200;
   bytes.set(Buffer.from("000012", "ascii"), endOffset - 6);

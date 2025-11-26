@@ -2,13 +2,13 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseExportDirectory } from "../../dist/analyzers/pe/exports.js";
-import { parseImportDirectory } from "../../dist/analyzers/pe/imports.js";
+import { parseExportDirectory } from "../../analyzers/pe/exports.js";
+import { parseImportDirectory } from "../../analyzers/pe/imports.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const encoder = new TextEncoder();
 
-test("parseExportDirectory extracts names and forwarders", async () => {
+void test("parseExportDirectory extracts names and forwarders", async () => {
   const bytes = new Uint8Array(1024).fill(0);
   const dv = new DataView(bytes.buffer);
   const baseExp = 128;
@@ -57,7 +57,7 @@ test("parseExportDirectory extracts names and forwarders", async () => {
   assert.equal(result.entries[1].name, "FuncB");
 });
 
-test("parseImportDirectory reads import descriptors with names and ordinals", async () => {
+void test("parseImportDirectory reads import descriptors with names and ordinals", async () => {
   const bytes = new Uint8Array(1024).fill(0);
   const dv = new DataView(bytes.buffer);
   const impBase = 500;

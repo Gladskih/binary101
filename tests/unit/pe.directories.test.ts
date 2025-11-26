@@ -2,9 +2,9 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseClrDirectory, parseSecurityDirectory } from "../../dist/analyzers/pe/clr-security.js";
-import { parseBaseRelocations } from "../../dist/analyzers/pe/reloc.js";
-import { parseExceptionDirectory } from "../../dist/analyzers/pe/exception.js";
+import { parseClrDirectory, parseSecurityDirectory } from "../../analyzers/pe/clr-security.js";
+import { parseBaseRelocations } from "../../analyzers/pe/reloc.js";
+import { parseExceptionDirectory } from "../../analyzers/pe/exception.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const encoder = new TextEncoder();
@@ -16,7 +16,7 @@ const collectCoverage = () => {
   return { regions, add };
 };
 
-test("parseClrDirectory parses metadata header and streams", async () => {
+void test("parseClrDirectory parses metadata header and streams", async () => {
   const fileBytes = new Uint8Array(0x400).fill(0);
   const clrOffset = 0x100;
   const metaOffset = 0x200;
@@ -60,7 +60,7 @@ test("parseClrDirectory parses metadata header and streams", async () => {
   assert.ok(regions.some(r => r.label.includes("CLR (.NET) header")));
 });
 
-test("parseSecurityDirectory walks WIN_CERTIFICATE entries", async () => {
+void test("parseSecurityDirectory walks WIN_CERTIFICATE entries", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const secOff = 0x100;
   const dv = new DataView(bytes.buffer);
@@ -81,7 +81,7 @@ test("parseSecurityDirectory walks WIN_CERTIFICATE entries", async () => {
   assert.ok(regions.some(r => r.label.includes("SECURITY")));
 });
 
-test("parseBaseRelocations counts entries and stops on invalid blocks", async () => {
+void test("parseBaseRelocations counts entries and stops on invalid blocks", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const relOff = 0x40;
   const dv = new DataView(bytes.buffer);
@@ -99,7 +99,7 @@ test("parseBaseRelocations counts entries and stops on invalid blocks", async ()
   assert.ok(regions.some(r => r.label.includes("BASERELOC")));
 });
 
-test("parseExceptionDirectory samples pdata entries", async () => {
+void test("parseExceptionDirectory samples pdata entries", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const exOff = 0x80;
   const dv = new DataView(bytes.buffer);

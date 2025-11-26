@@ -2,9 +2,9 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { renderSignatureLayout } from "../../dist/renderers/sevenz/signature.js";
+import { renderSignatureLayout } from "../../renderers/sevenz/signature.js";
 
-test("signature section renders header map when startHeader is present", () => {
+void test("signature section renders header map when startHeader is present", () => {
   const out = [];
   const sevenZip = {
     is7z: true,
@@ -28,7 +28,7 @@ test("signature section renders header map when startHeader is present", () => {
   assert.match(html, /NextHeaderSize/);
 });
 
-test("signature section renders sensible zero values", () => {
+void test("signature section renders sensible zero values", () => {
   const out = [];
   const sevenZip = {
     is7z: true,
@@ -52,10 +52,9 @@ test("signature section renders sensible zero values", () => {
   assert.match(html, /0 B \(0 bytes\)/);
 });
 
-test("signature section does not render when startHeader is missing", () => {
+void test("signature section does not render when startHeader is missing", () => {
   const out = [];
   const sevenZip = { is7z: true, issues: [] };
   renderSignatureLayout(sevenZip, out);
   assert.strictEqual(out.length, 0);
 });
-

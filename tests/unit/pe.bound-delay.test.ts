@@ -2,12 +2,12 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseBoundImports, parseDelayImports } from "../../dist/analyzers/pe/bound-delay.js";
+import { parseBoundImports, parseDelayImports } from "../../analyzers/pe/bound-delay.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const encoder = new TextEncoder();
 
-test("parseDelayImports reads delay descriptors, names, and ordinals", async () => {
+void test("parseDelayImports reads delay descriptors, names, and ordinals", async () => {
   const bytes = new Uint8Array(512).fill(0);
   const dv = new DataView(bytes.buffer);
 
@@ -57,7 +57,7 @@ test("parseDelayImports reads delay descriptors, names, and ordinals", async () 
   assert.deepEqual(entry.functions[1], { ordinal: 2 });
 });
 
-test("parseBoundImports extracts bound import names", async () => {
+void test("parseBoundImports extracts bound import names", async () => {
   const base = 400;
   const bytes = new Uint8Array(512).fill(0);
   const dv = new DataView(bytes.buffer);

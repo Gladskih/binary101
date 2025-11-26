@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseTar } from "../../dist/analyzers/tar/index.js";
+import { parseTar } from "../../analyzers/tar/index.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { createTarFile } from "../fixtures/sample-files.js";
 import {
@@ -16,19 +16,19 @@ import {
 
 const TAR_BLOCK_SIZE = 512;
 
-test("parseTar detects invalid checksum", async () => {
+void test("parseTar detects invalid checksum", async () => {
   const tar = await parseTar(createTarWithBadChecksum());
   assert.ok(tar);
   assert.strictEqual(tar.features.checksumMismatches, 1);
 });
 
-test("parseTar handles short payloads gracefully", async () => {
+void test("parseTar handles short payloads gracefully", async () => {
   const tar = await parseTar(createTarWithShortFile());
   assert.ok(tar);
   assert.ok(tar.isTar); // Just check it parsed as TAR
 });
 
-test("parseTar parses valid minimal tar", async () => {
+void test("parseTar parses valid minimal tar", async () => {
   const tar = await parseTar(createTarFile());
   assert.strictEqual(tar.isTar, true);
   assert.ok(Array.isArray(tar.entries));
@@ -43,7 +43,7 @@ test("parseTar parses valid minimal tar", async () => {
   assert.ok(tar.issues[0].includes("Archive did not terminate with the standard two zero blocks."));
 });
 
-test("parseTar parses a directory entry", async () => {
+void test("parseTar parses a directory entry", async () => {
   const tar = await parseTar(createTarFileWithEntries([
     { name: "my_directory/", typeFlag: "5", mode: 0o755 }
   ]));
@@ -60,7 +60,7 @@ test("parseTar parses a directory entry", async () => {
   assert.strictEqual(tar.stats.totalEntries, 1);
 });
 
-test("parseTar parses a regular file with content", async () => {
+void test("parseTar parses a regular file with content", async () => {
   const fileContent = "This is some test content.";
   const tar = await parseTar(createTarFileWithEntries([
     { name: "testfile.txt", typeFlag: "0", content: fileContent }
@@ -76,7 +76,7 @@ test("parseTar parses a regular file with content", async () => {
   assert.strictEqual(tar.stats.totalFileBytes, fileContent.length);
 });
 
-test("parseTar handles GNU long filename (L typeflag)", async () => {
+void test("parseTar handles GNU long filename (L typeflag)", async () => {
   const longName = "this/is/a/very/long/filename/that/exceeds/the/standard/tar/header/limit/by/a/significant/amount/and/should/be/handled/by/the/L/typeflag/mechanism.txt";
   const tar = await parseTar(createTarFileWithEntries([
     { longName, name: "short_name.txt", typeFlag: "0", content: "data" }
@@ -90,7 +90,7 @@ test("parseTar handles GNU long filename (L typeflag)", async () => {
   assert.strictEqual(tar.stats.metadataEntries, 1); // For the L-type header
 });
 
-test("parseTar handles GNU long linkname (K typeflag)", async () => {
+void test("parseTar handles GNU long linkname (K typeflag)", async () => {
   const longLink = "this/is/a/very/long/linkname/that/exceeds/the/standard/tar/header/limit/by/a/significant/amount/and/should/be/handled/by/the/K/typeflag/mechanism.txt";
   const tar = await parseTar(createTarFileWithEntries([
     { longLink, name: "link_to_file", typeFlag: "2", linkName: "short_link.txt" }
@@ -104,7 +104,7 @@ test("parseTar handles GNU long linkname (K typeflag)", async () => {
   assert.strictEqual(tar.stats.metadataEntries, 1); // For the K-type header
 });
 
-test("parseTar handles PAX extended header (x typeflag)", async () => {
+void test("parseTar handles PAX extended header (x typeflag)", async () => {
   const paxData = "29 path=./new/pax/path\n21 size=12345\n";
   const tar = await parseTar(createTarFileWithEntries([
     { paxHeader: paxData, typeFlag: "x" },
@@ -114,7 +114,7 @@ test("parseTar handles PAX extended header (x typeflag)", async () => {
   assert.strictEqual(tar.features.usedPaxHeaders, true);
 });
 
-test("parseTar handles global PAX header (g typeflag)", async () => {
+void test("parseTar handles global PAX header (g typeflag)", async () => {
   const globalPaxData = "11 uid=500\n11 gid=500\n";
   const tar = await parseTar(createTarFileWithEntries([
     { paxHeader: globalPaxData, typeFlag: "g" },
@@ -126,7 +126,7 @@ test("parseTar handles global PAX header (g typeflag)", async () => {
   assert.strictEqual(tar.features.usedGlobalPax, true);
 });
 
-test("parseTar handles combined global and per-file PAX headers", async () => {
+void test("parseTar handles combined global and per-file PAX headers", async () => {
   const globalPaxData = "11 uid=500\n";
   const perFilePaxData = "11 gid=600\n";
   const tar = await parseTar(createTarFileWithEntries([
@@ -140,7 +140,7 @@ test("parseTar handles combined global and per-file PAX headers", async () => {
   assert.strictEqual(tar.features.usedPaxHeaders, true);
 });
 
-test("parseTar populates stats and features correctly", async () => {
+void test("parseTar populates stats and features correctly", async () => {
   const tar = await parseTar(createTarFileWithEntries([
     { name: "file1.txt", typeFlag: "0", content: "data" },
     { name: "dir/", typeFlag: "5" },
@@ -165,7 +165,7 @@ test("parseTar populates stats and features correctly", async () => {
   assert.ok(tar.issues[0].includes("File size is not aligned to 512-byte TAR blocks"));
 });
 
-test("parseTar detects unaligned file size issue", async () => {
+void test("parseTar detects unaligned file size issue", async () => {
   const tar = await parseTar(createTarFileWithEntries([
     { name: "file.txt", typeFlag: "0", content: "data" }
   ], { appendZeroBlocks: 1 })); // Only one zero block
@@ -173,7 +173,7 @@ test("parseTar detects unaligned file size issue", async () => {
   assert.ok(tar.issues[0].includes("Archive did not terminate with the standard two zero blocks."));
 });
 
-test("parseTar detects archive not terminated with two zero blocks", async () => {
+void test("parseTar detects archive not terminated with two zero blocks", async () => {
   const tar = await parseTar(createTarFileWithEntries([
     { name: "file.txt", typeFlag: "0", content: "data" }
   ], { appendZeroBlocks: 1 })); // Only one zero block
@@ -181,7 +181,7 @@ test("parseTar detects archive not terminated with two zero blocks", async () =>
   assert.ok(tar.issues[0].includes("Archive did not terminate with the standard two zero blocks."));
 });
 
-test("parseTar correctly parses magic and version for format", async () => {
+void test("parseTar correctly parses magic and version for format", async () => {
   const tar = await parseTar(createTarFileWithEntries([
     { name: "file.txt", typeFlag: "0" }
   ]));
@@ -191,7 +191,7 @@ test("parseTar correctly parses magic and version for format", async () => {
   assert.strictEqual(tar.format.kind, "posix");
 });
 
-test("parseTar handles legacy V7 format (no magic)", async () => {
+void test("parseTar handles legacy V7 format (no magic)", async () => {
   const tar = await parseTar(createTarFileWithEntries([
     { name: "file.txt", typeFlag: "0", magic: "", version: "" }
   ]));
@@ -201,7 +201,7 @@ test("parseTar handles legacy V7 format (no magic)", async () => {
   assert.strictEqual(tar.format.kind, "legacy");
 });
 
-test("parseTar handles other typeFlags and their labels", async () => {
+void test("parseTar handles other typeFlags and their labels", async () => {
   const tar = await parseTar(createTarFileWithEntries([
     { name: "hardlink", typeFlag: "1", linkName: "target" }, // Hard link
     { name: "char_device", typeFlag: "3", devMajor: 1, devMinor: 2 }, // Character device
@@ -221,7 +221,7 @@ test("parseTar handles other typeFlags and their labels", async () => {
   assert.strictEqual(tar.entries[4].typeLabel, "Reserved");
 });
 
-test("parseTar handles missing size gracefully", async () => {
+void test("parseTar handles missing size gracefully", async () => {
   // Create a header where size field is empty/invalid
   const headerBytes = buildTarHeader({ name: "no-size.txt", typeFlag: "0" });
   for (let i = 124; i < 136; i++) {
@@ -244,7 +244,7 @@ test("parseTar handles missing size gracefully", async () => {
   assert.ok(tar.issues.some(issue => issue.includes("is missing a valid size; assuming 0.")));
 });
 
-test("parseTar handles data exceeding file size", async () => {
+void test("parseTar handles data exceeding file size", async () => {
   // Create a TAR with two entries where the second header fits but its data doesn't
   const header1 = buildTarHeader({ name: "file1.txt", typeFlag: "0", size: 0 }); // Zero-length file
   const checksum1 = calculateChecksum(header1);
@@ -286,7 +286,7 @@ test("parseTar handles data exceeding file size", async () => {
   assert.ok(tar.isTar);
 });
 
-test("parseTar handles truncated entry data", async () => {
+void test("parseTar handles truncated entry data", async () => {
   // Create a file that declares a size that would spill into the next block but does not have enough data
   const headerBytes = buildTarHeader({ name: "truncated.txt", typeFlag: "0", size: 513 }); // Requires 2 data blocks
   const checksum = calculateChecksum(headerBytes);

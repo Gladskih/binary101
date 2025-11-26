@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseExifFromApp1 } from "../../dist/analyzers/jpeg/exif.js";
+import { parseExifFromApp1 } from "../../analyzers/jpeg/exif.js";
 
 const writeEntry = (dv, offset, tag, type, count, value, littleEndian = true) => {
   dv.setUint16(offset, tag, littleEndian);
@@ -11,7 +11,7 @@ const writeEntry = (dv, offset, tag, type, count, value, littleEndian = true) =>
   dv.setUint32(offset + 8, value, littleEndian);
 };
 
-test("parseExifFromApp1 parses EXIF and GPS fields with raw tags", () => {
+void test("parseExifFromApp1 parses EXIF and GPS fields with raw tags", () => {
   const buffer = new ArrayBuffer(512);
   const dv = new DataView(buffer);
   const u8 = new Uint8Array(buffer);
@@ -103,7 +103,7 @@ test("parseExifFromApp1 parses EXIF and GPS fields with raw tags", () => {
   assert.ok(exif.rawTags.length >= 10);
 });
 
-test("parseExifFromApp1 returns null for invalid headers", () => {
+void test("parseExifFromApp1 returns null for invalid headers", () => {
   const dv = new DataView(new ArrayBuffer(4));
   assert.equal(parseExifFromApp1(dv, 0), null);
 });

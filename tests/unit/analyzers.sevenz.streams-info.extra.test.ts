@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseStreamsInfo } from "../../dist/analyzers/sevenz/streams-info.js";
+import { parseStreamsInfo } from "../../analyzers/sevenz/streams-info.js";
 
 const makeCtx = bytes => ({
   dv: new DataView(Uint8Array.from(bytes).buffer),
@@ -10,7 +10,7 @@ const makeCtx = bytes => ({
   issues: []
 });
 
-test("parseStreamsInfo records unknown field ids", () => {
+void test("parseStreamsInfo records unknown field ids", () => {
   const ctx = makeCtx([0x09]); // unknown id, not terminated
   const info = parseStreamsInfo(ctx);
   assert.deepEqual(info, {});

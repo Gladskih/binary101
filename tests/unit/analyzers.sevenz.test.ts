@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { hasSevenZipSignature, parseSevenZip } from "../../dist/analyzers/sevenz/index.js";
+import { hasSevenZipSignature, parseSevenZip } from "../../analyzers/sevenz/index.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const SIGNATURE = [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c];
@@ -115,13 +115,13 @@ const buildEncodedHeader = () =>
     0x00 // end StreamsInfo
   ]);
 
-test("hasSevenZipSignature detects 7z magic bytes", () => {
+void test("hasSevenZipSignature detects 7z magic bytes", () => {
   const sig = new Uint8Array([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c, 0, 0]);
   assert.equal(hasSevenZipSignature(new DataView(sig.buffer)), true);
   assert.equal(hasSevenZipSignature(new DataView(new Uint8Array([0x00, 0x01]).buffer)), false);
 });
 
-test("parseSevenZip reports out-of-bounds next header", async () => {
+void test("parseSevenZip reports out-of-bounds next header", async () => {
   const header = new Uint8Array(48).fill(0);
   header.set([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c], 0);
   header[6] = 0; // version major
@@ -147,13 +147,13 @@ test("parseSevenZip reports out-of-bounds next header", async () => {
   assert.ok(parsed.issues.some(msg => msg.includes("outside the file bounds")));
 });
 
-test("parseSevenZip returns non-7z for missing signature", async () => {
+void test("parseSevenZip returns non-7z for missing signature", async () => {
   const file = new MockFile(new Uint8Array(16).fill(0), "not7z.bin");
   const parsed = await parseSevenZip(file);
   assert.equal(parsed.is7z, false);
 });
 
-test("parseSevenZip builds folder and file structures from header", async () => {
+void test("parseSevenZip builds folder and file structures from header", async () => {
   const archive = buildSevenZipFile(buildStructuredHeader());
   const parsed = await parseSevenZip(archive);
   assert.equal(parsed.is7z, true);
@@ -169,7 +169,7 @@ test("parseSevenZip builds folder and file structures from header", async () => 
   assert.ok(parsed.structure.files[0].modifiedTime);
 });
 
-test("parseSevenZip reports encoded headers and encryption markers", async () => {
+void test("parseSevenZip reports encoded headers and encryption markers", async () => {
   const encryptedHeader = buildSevenZipFile(buildEncodedHeader());
   const parsed = await parseSevenZip(encryptedHeader);
   assert.equal(parsed.is7z, true);

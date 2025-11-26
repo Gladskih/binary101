@@ -2,10 +2,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseLnk } from "../../dist/analyzers/lnk/index.js";
+import { parseLnk } from "../../analyzers/lnk/index.js";
 import { createLnkFile } from "../fixtures/sample-files.js";
 
-test("parseLnk reads Shell Link header and targets", async () => {
+void test("parseLnk reads Shell Link header and targets", async () => {
   const file = createLnkFile();
   const lnk = await parseLnk(file);
   assert.ok(lnk);
@@ -29,7 +29,7 @@ test("parseLnk reads Shell Link header and targets", async () => {
   assert.ok(lnk.extraData.blocks.length >= 3);
 });
 
-test("parseLnk reports extra data details", async () => {
+void test("parseLnk reports extra data details", async () => {
   const lnk = await parseLnk(createLnkFile());
   const envBlock = lnk.extraData.blocks.find(block => block.signature === 0xa0000001);
   const knownFolder = lnk.extraData.blocks.find(block => block.signature === 0xa000000b);

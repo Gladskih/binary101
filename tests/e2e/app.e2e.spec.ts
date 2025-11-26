@@ -36,7 +36,7 @@ test.describe("file type detection", () => {
     await expect(page.getByRole("heading", { name: "Local File Inspector" })).toBeVisible();
   });
 
-  test("uploads a text file, shows its details, and hashes", async ({ page }) => {
+  void test("uploads a text file, shows its details, and hashes", async ({ page }) => {
     const fileContent = "Hello from Playwright";
     await page.setInputFiles("#fileInput", {
       name: "sample.txt",
@@ -153,7 +153,7 @@ test.describe("file type detection", () => {
   ];
 
   for (const { name, file, expectedKind, term, detailText } of happyCases) {
-    test(`recognises ${name} files`, async ({ page }) => {
+    void test(`recognises ${name} files`, async ({ page }) => {
       const mockFile = file();
       await page.setInputFiles("#fileInput", toUpload(mockFile));
       await expectBaseDetails(page, mockFile.name, expectedKind);
@@ -170,7 +170,7 @@ test.describe("file type detection", () => {
     });
   }
 
-  test("shows Windows shortcut property store data", async ({ page }) => {
+  void test("shows Windows shortcut property store data", async ({ page }) => {
     const mockFile = createLnkFile();
     await page.setInputFiles("#fileInput", toUpload(mockFile));
     await expectBaseDetails(page, mockFile.name, "Windows shortcut (.lnk)");
@@ -180,7 +180,7 @@ test.describe("file type detection", () => {
     await expect(page.locator("#peDetailsValue")).toContainText("System.VolumeId");
   });
 
-  test("detects Mach-O binaries without renderer detail", async ({ page }) => {
+  void test("detects Mach-O binaries without renderer detail", async ({ page }) => {
     await page.setInputFiles("#fileInput", {
       name: "macho.bin",
       mimeType: "application/octet-stream",
@@ -191,7 +191,7 @@ test.describe("file type detection", () => {
     await expect(page.locator("#peDetailsTerm")).toBeHidden();
   });
 
-  test("renders MP3 audio summary", async ({ page }) => {
+  void test("renders MP3 audio summary", async ({ page }) => {
     const file = createMp3File();
     await page.setInputFiles("#fileInput", toUpload(file));
 
@@ -201,7 +201,7 @@ test.describe("file type detection", () => {
     await expect(page.locator("#peDetailsValue")).toContainText("Summary");
   });
 
-  test("shows unknown binary type when no probe matches", async ({ page }) => {
+  void test("shows unknown binary type when no probe matches", async ({ page }) => {
     const buffer = Buffer.alloc(32, 0);
     await page.setInputFiles("#fileInput", {
       name: "unknown.bin",
@@ -213,7 +213,7 @@ test.describe("file type detection", () => {
     await expect(page.locator("#peDetailsTerm")).toBeHidden();
   });
 
-  test("allows downloading stored and deflated ZIP entries from the UI", async ({ page }) => {
+  void test("allows downloading stored and deflated ZIP entries from the UI", async ({ page }) => {
     const supportsDecompression = await page.evaluate(() => typeof DecompressionStream === "function");
     test.skip(!supportsDecompression, "DecompressionStream not supported in this browser");
 

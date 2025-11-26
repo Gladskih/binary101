@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { detectBinaryType, parseForUi } from "../../dist/analyzers/index.js";
+import { detectBinaryType, parseForUi } from "../../analyzers/index.js";
 import { DOMParser as XmlDomParser } from "@xmldom/xmldom";
 import {
   createElfFile,
@@ -45,7 +45,7 @@ global.DOMParser = TestDomParser;
 const assertParsed = async (
   file: MockFile,
   expectedAnalyzer: string,
-  checks: (parsed: any) => void = () => {}
+  checks: (parsed: unknown) => void = () => {}
 ) => {
   const { analyzer, parsed } = await parseForUi(file);
   assert.strictEqual(analyzer, expectedAnalyzer);
@@ -53,7 +53,7 @@ const assertParsed = async (
   checks(parsed);
 };
 
-test("detectBinaryType recognizes common binary formats", async () => {
+void test("detectBinaryType recognizes common binary formats", async () => {
   const detections = await Promise.all([
     detectBinaryType(createPngWithIhdr()),
     detectBinaryType(createGifFile()),
@@ -79,7 +79,7 @@ test("detectBinaryType recognizes common binary formats", async () => {
   assert.strictEqual(detections[9], "Text file");
 });
 
-test("detectBinaryType distinguishes DOS MZ executables from PE", async () => {
+void test("detectBinaryType distinguishes DOS MZ executables from PE", async () => {
   const mzFile = createDosMzExe();
   const detection = await detectBinaryType(mzFile);
   assert.strictEqual(detection, "MS-DOS MZ executable");
@@ -91,7 +91,7 @@ test("detectBinaryType distinguishes DOS MZ executables from PE", async () => {
   assert.ok(parsed.parsed.stubStrings.length >= 1);
 });
 
-test("parseForUi parses and reports PNG layout", async () => {
+void test("parseForUi parses and reports PNG layout", async () => {
   await assertParsed(createPngFile(), "png", png => {
     assert.strictEqual(png.ihdr.width, 1);
     assert.strictEqual(png.ihdr.height, 1);
@@ -99,7 +99,7 @@ test("parseForUi parses and reports PNG layout", async () => {
   });
 });
 
-test("parseForUi parses PE headers and sections", async () => {
+void test("parseForUi parses PE headers and sections", async () => {
   await assertParsed(createPeFile(), "pe", pe => {
     assert.strictEqual(pe.coff.NumberOfSections, 1);
     assert.ok(pe.sections);
@@ -107,7 +107,7 @@ test("parseForUi parses PE headers and sections", async () => {
   });
 });
 
-test("parseForUi parses GIF frames and trailer", async () => {
+void test("parseForUi parses GIF frames and trailer", async () => {
   await assertParsed(createGifFile(), "gif", gif => {
     assert.ok(gif.hasTrailer);
     assert.ok(Array.isArray(gif.frames));
@@ -115,27 +115,27 @@ test("parseForUi parses GIF frames and trailer", async () => {
   });
 });
 
-test("parseForUi parses JPEG metadata", async () => {
+void test("parseForUi parses JPEG metadata", async () => {
   await assertParsed(createJpegFile(), "jpeg", jpeg => {
     assert.ok(Array.isArray(jpeg.segments));
     assert.ok(jpeg.segmentCount >= 1);
   });
 });
 
-test("parseForUi parses WebP chunks", async () => {
+void test("parseForUi parses WebP chunks", async () => {
   await assertParsed(createWebpFile(), "webp", webp => {
     assert.ok(Array.isArray(webp.chunks));
   });
 });
 
-test("parseForUi parses FB2 XML", async () => {
+void test("parseForUi parses FB2 XML", async () => {
   await assertParsed(createFb2File(), "fb2", fb2 => {
     assert.ok(fb2.title);
     assert.ok(fb2.bodyCount >= 0);
   });
 });
 
-test("parseForUi parses PDF cross-reference data", async () => {
+void test("parseForUi parses PDF cross-reference data", async () => {
   await assertParsed(createPdfFile(), "pdf", pdf => {
     assert.ok(pdf.header);
     assert.ok(pdf.xref);
@@ -143,7 +143,7 @@ test("parseForUi parses PDF cross-reference data", async () => {
   });
 });
 
-test("parseForUi parses Windows shortcuts", async () => {
+void test("parseForUi parses Windows shortcuts", async () => {
   await assertParsed(createLnkFile(), "lnk", lnk => {
     assert.strictEqual(lnk.linkInfo.localBasePath, "C:\\Program Files\\Example");
     assert.strictEqual(lnk.stringData.relativePath, ".\\Example\\app.exe");
@@ -153,7 +153,7 @@ test("parseForUi parses Windows shortcuts", async () => {
   });
 });
 
-test("parseForUi parses MP3 frames and summary", async () => {
+void test("parseForUi parses MP3 frames and summary", async () => {
   await assertParsed(createMp3File(), "mp3", mp3 => {
     assert.strictEqual(mp3.isMp3, true);
     assert.ok(mp3.mpeg.firstFrame);
@@ -161,7 +161,7 @@ test("parseForUi parses MP3 frames and summary", async () => {
   });
 });
 
-test("parseForUi parses TAR headers", async () => {
+void test("parseForUi parses TAR headers", async () => {
   await assertParsed(createTarFile(), "tar", tar => {
     assert.strictEqual(tar.isTar, true);
     assert.ok(Array.isArray(tar.entries));
@@ -169,7 +169,7 @@ test("parseForUi parses TAR headers", async () => {
   });
 });
 
-test("parseForUi parses RAR v4 and v5 headers", async () => {
+void test("parseForUi parses RAR v4 and v5 headers", async () => {
   await assertParsed(createRar4File(), "rar", rar => {
     assert.strictEqual(rar.version, 4);
     assert.ok(rar.entries.length >= 1);
@@ -180,21 +180,21 @@ test("parseForUi parses RAR v4 and v5 headers", async () => {
   });
 });
 
-test("parseForUi parses ZIP EOCD", async () => {
+void test("parseForUi parses ZIP EOCD", async () => {
   await assertParsed(createZipFile(), "zip", zip => {
     assert.ok(zip.eocd);
     assert.ok(zip.centralDirectory);
   });
 });
 
-test("parseForUi parses ELF header and sections", async () => {
+void test("parseForUi parses ELF header and sections", async () => {
   await assertParsed(createElfFile(), "elf", elf => {
     assert.strictEqual(elf.ident.className, "ELF64");
     assert.ok(Array.isArray(elf.sections));
   });
 });
 
-test("parseForUi parses 7z start header even when next header is unknown", async () => {
+void test("parseForUi parses 7z start header even when next header is unknown", async () => {
   await assertParsed(createSevenZipFile(), "sevenZip", sevenZip => {
     assert.strictEqual(sevenZip.is7z, true);
     assert.ok(Array.isArray(sevenZip.issues));

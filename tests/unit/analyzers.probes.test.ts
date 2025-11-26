@@ -2,12 +2,12 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { probeByMagic, probeTextLike } from "../../dist/analyzers/probes.js";
+import { probeByMagic, probeTextLike } from "../../analyzers/probes.js";
 
 const dvFrom = bytes => new DataView(new Uint8Array(bytes).buffer);
 const ascii = text => [...Buffer.from(text, "ascii")];
 
-test("probeByMagic identifies common signatures", () => {
+void test("probeByMagic identifies common signatures", () => {
   assert.strictEqual(
     probeByMagic(dvFrom([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
     "PNG image"
@@ -31,7 +31,7 @@ test("probeByMagic identifies common signatures", () => {
   );
 });
 
-test("probeByMagic covers varied archive and container signatures", () => {
+void test("probeByMagic covers varied archive and container signatures", () => {
   const sevenZip = [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c, 0x00, 0x00];
   assert.strictEqual(probeByMagic(dvFrom(sevenZip)), "7z archive");
 
@@ -55,13 +55,13 @@ test("probeByMagic covers varied archive and container signatures", () => {
   assert.strictEqual(probeByMagic(new DataView(tarBytes.buffer)), "TAR archive");
 });
 
-test("probeByMagic safely handles empty and non-matching buffers", () => {
+void test("probeByMagic safely handles empty and non-matching buffers", () => {
   assert.strictEqual(probeByMagic(dvFrom([])), null);
   const zeros = new Uint8Array(400).fill(0);
   assert.strictEqual(probeByMagic(new DataView(zeros.buffer)), null);
 });
 
-test("probeByMagic detects additional compression formats", () => {
+void test("probeByMagic detects additional compression formats", () => {
   const cases = [
     { bytes: [0x1f, 0x8b, 0x08, 0x00], label: "gzip compressed data" },
     { bytes: ascii("BZh"), label: "bzip2 compressed data" },
@@ -75,7 +75,7 @@ test("probeByMagic detects additional compression formats", () => {
   });
 });
 
-test("probeByMagic detects image and document headers", () => {
+void test("probeByMagic detects image and document headers", () => {
   const isoBase = new Uint8Array(12);
   const isoView = new DataView(isoBase.buffer);
   isoView.setUint32(4, 0x66747970, false); // ftyp
@@ -116,7 +116,7 @@ test("probeByMagic detects image and document headers", () => {
   });
 });
 
-test("probeByMagic detects audio and video container signatures", () => {
+void test("probeByMagic detects audio and video container signatures", () => {
   const tsBytes = new Uint8Array(188 * 3).fill(0);
   tsBytes[0] = 0x47;
   tsBytes[188] = 0x47;
@@ -144,7 +144,7 @@ test("probeByMagic detects audio and video container signatures", () => {
   });
 });
 
-test("probeByMagic detects disk images and miscellaneous binary formats", () => {
+void test("probeByMagic detects disk images and miscellaneous binary formats", () => {
   const tar = new Uint8Array(300).fill(0);
   tar.set(ascii("ustar"), 257);
 
@@ -177,7 +177,7 @@ test("probeByMagic detects disk images and miscellaneous binary formats", () => 
   });
 });
 
-test("probeTextLike classifies plain text and HTML-like payloads", () => {
+void test("probeTextLike classifies plain text and HTML-like payloads", () => {
   const html = "<!doctype html><html><body>Hello</body></html>";
   const htmlDv = dvFrom([...Buffer.from(html, "utf-8")]);
   assert.strictEqual(probeTextLike(htmlDv), "HTML document");
@@ -187,7 +187,7 @@ test("probeTextLike classifies plain text and HTML-like payloads", () => {
   assert.strictEqual(probeTextLike(textDv), "Text file");
 });
 
-test("probeTextLike recognizes XML, SVG, JSON and FB2 markers", () => {
+void test("probeTextLike recognizes XML, SVG, JSON and FB2 markers", () => {
   const svg = '<?xml version="1.0"?><svg><rect/></svg>';
   const svgDv = dvFrom([...Buffer.from(svg, "utf-8")]);
   assert.strictEqual(probeTextLike(svgDv), "SVG image (XML)");
@@ -201,7 +201,7 @@ test("probeTextLike recognizes XML, SVG, JSON and FB2 markers", () => {
   assert.strictEqual(probeTextLike(jsonDv), "JSON data");
 });
 
-test("probeTextLike detects shebang, XML, RTF and rejects binary blobs", () => {
+void test("probeTextLike detects shebang, XML, RTF and rejects binary blobs", () => {
   const shebang = "#!/usr/bin/env node\nconsole.log('hi');";
   assert.strictEqual(probeTextLike(dvFrom([...Buffer.from(shebang, "utf-8")])), "Text script (shebang)");
 

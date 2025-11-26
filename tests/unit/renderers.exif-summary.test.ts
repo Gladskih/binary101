@@ -2,11 +2,11 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { renderJpegExifSummary } from "../../dist/renderers/jpeg/exif-summary.js";
+import { renderJpegExifSummary } from "../../renderers/jpeg/exif-summary.js";
 
 const makeRational = (num, den) => ({ num, den });
 
-test("renderJpegExifSummary formats rich EXIF data and raw tags", () => {
+void test("renderJpegExifSummary formats rich EXIF data and raw tags", () => {
   const exif = {
     make: "ACME",
     model: "CAM-42",
@@ -50,7 +50,7 @@ test("renderJpegExifSummary formats rich EXIF data and raw tags", () => {
   assert.match(html, /timestamp/);
 });
 
-test("renderJpegExifSummary handles edge EXIF values", () => {
+void test("renderJpegExifSummary handles edge EXIF values", () => {
   const exif = {
     make: "",
     model: "",
