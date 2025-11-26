@@ -6,6 +6,8 @@ import type {
   SevenZipParsedNextHeader
 } from "../../analyzers/sevenz/index.js";
 
+type SevenZipHeaderLike = SevenZipParsedNextHeader | { kind: string; type?: number };
+
 export const describeCoders = (
   coders: SevenZipFolderSummary["coders"] | undefined
 ): string => {
@@ -134,24 +136,24 @@ export const KNOWN_METHODS = [
 ];
 
 export const describeHeaderKind = (
-  parsed: SevenZipParsedNextHeader | undefined
+  parsed: SevenZipHeaderLike | undefined
 ): string => {
   if (!parsed) return "Unknown (next header not parsed)";
-  if (parsed.kind === "header") {
-    return "Plain Header structure: metadata is stored uncompressed at the next-header location.";
+  switch (parsed.kind) {
+    case "header":
+      return "Plain Header structure: metadata is stored uncompressed at the next-header location.";
+    case "encoded":
+      return "Encoded Header: the header database itself is compressed or encrypted; this viewer does not decode it.";
+    case "empty":
+      return "Empty Header: no header database is present after the signature header.";
+    case "unknown": {
+      const typeText =
+        parsed.type != null ? `0x${parsed.type.toString(16)}` : "unknown id";
+      return `Unexpected next-header type ${typeText}.`;
+    }
+    default:
+      return parsed.kind;
   }
-  if (parsed.kind === "encoded") {
-    return "Encoded Header: the header database itself is compressed or encrypted; this viewer does not decode it.";
-  }
-  if (parsed.kind === "empty") {
-    return "Empty Header: no header database is present after the signature header.";
-  }
-  if (parsed.kind === "unknown") {
-    const typeText =
-      parsed.type != null ? `0x${parsed.type.toString(16)}` : "unknown id";
-    return `Unexpected next-header type ${typeText}.`;
-  }
-  return String(parsed.kind);
 };
 
 export const describeFileType = (file: SevenZipFileSummary): string => {
@@ -162,4 +164,3 @@ export const describeFileType = (file: SevenZipFileSummary): string => {
   if (file.hasStream === false) return "No stream";
   return "File";
 };
-
