@@ -42,7 +42,7 @@ import {
 } from "../fixtures/sample-files.js";
 
 class TestDomParser extends XmlDomParser {
-  parseFromString(text, type) {
+  override parseFromString(text: string, type: string) {
     const doc = super.parseFromString(text, type);
     if (!doc.querySelector) {
       doc.querySelector = selector => {

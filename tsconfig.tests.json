@@ -6,9 +6,9 @@
     "lib": ["ESNext", "DOM"],
     "strict": false,
     "noImplicitAny": false,
-    "noImplicitOverride": false,
-    "noPropertyAccessFromIndexSignature": false,
-    "noUncheckedIndexedAccess": false,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": false,
     "noEmit": true
   },

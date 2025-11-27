@@ -353,17 +353,17 @@ export const createLnkFile = () => {
     idv.setUint32(0, size, true);
     idv.setUint32(4, headerSize, true);
     idv.setUint32(8, 0x00000001, true);
-    idv.setUint32(0x0c, offsets.volumeId, true);
-    idv.setUint32(0x10, offsets.localBasePath, true);
+    idv.setUint32(0x0c, offsets["volumeId"], true);
+    idv.setUint32(0x10, offsets["localBasePath"], true);
     idv.setUint32(0x14, 0, true);
-    idv.setUint32(0x18, offsets.commonPathSuffix, true);
-    idv.setUint32(0x1c, offsets.localBasePathUnicode, true);
-    idv.setUint32(0x20, offsets.commonPathSuffixUnicode, true);
-    info.set(volumeId, offsets.volumeId);
-    info.set(localBasePath, offsets.localBasePath);
-    info.set(commonPathSuffix, offsets.commonPathSuffix);
-    info.set(localBasePathUnicode, offsets.localBasePathUnicode);
-    info.set(commonPathSuffixUnicode, offsets.commonPathSuffixUnicode);
+    idv.setUint32(0x18, offsets["commonPathSuffix"], true);
+    idv.setUint32(0x1c, offsets["localBasePathUnicode"], true);
+    idv.setUint32(0x20, offsets["commonPathSuffixUnicode"], true);
+    info.set(volumeId, offsets["volumeId"]);
+    info.set(localBasePath, offsets["localBasePath"]);
+    info.set(commonPathSuffix, offsets["commonPathSuffix"]);
+    info.set(localBasePathUnicode, offsets["localBasePathUnicode"]);
+    info.set(commonPathSuffixUnicode, offsets["commonPathSuffixUnicode"]);
     return info;
   };
 

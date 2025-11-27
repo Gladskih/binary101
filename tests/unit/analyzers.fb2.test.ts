@@ -8,7 +8,7 @@ import { createFb2File } from "../fixtures/sample-files.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 class TestDomParser extends XmlDomParser {
-  parseFromString(text, type) {
+  override parseFromString(text: string, type: string) {
     const doc = super.parseFromString(text, type);
     if (!doc.querySelector) {
       doc.querySelector = selector => {
