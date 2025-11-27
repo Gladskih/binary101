@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use strict";
 
 import { dd, rowFlags, rowOpts, safe } from "../../html-utils.js";
@@ -12,10 +11,17 @@ import {
   SECTION_TYPES,
   SECTION_FLAGS
 } from "../../analyzers/elf/constants.js";
+import type {
+  ElfOptionEntry,
+  ElfParseResult,
+  ElfProgramHeader,
+  ElfSectionHeader
+} from "../../analyzers/elf/types.js";
 
-const mapOptions = options => options.map(([code, label]) => [code, label]);
+const mapOptions = (options: ElfOptionEntry[]): Array<[number, string]> =>
+  options.map(([code, label]) => [code, label]);
 
-const formatHex = (value, width) => {
+const formatHex = (value: bigint | number, width?: number): string => {
   if (typeof value === "bigint") {
     const hex = value.toString(16);
     const pad = width ? hex.padStart(width, "0") : hex;
@@ -24,10 +30,10 @@ const formatHex = (value, width) => {
   return toHex32(value, width || 0);
 };
 
-const formatList = values =>
+const formatList = (values: string[] | null | undefined): string =>
   values && values.length ? safe(values.join(", ")) : "-";
 
-function renderOverview(elf, out) {
+function renderOverview(elf: ElfParseResult, out: string[]): void {
   const bits = elf.is64 ? "64-bit" : "32-bit";
   const endian = elf.littleEndian ? "little-endian" : "big-endian";
   const machine = elf.header.machineName || `machine ${elf.header.machine}`;
@@ -45,7 +51,7 @@ function renderOverview(elf, out) {
   out.push(`</section>`);
 }
 
-function renderIdent(elf, out) {
+function renderIdent(elf: ElfParseResult, out: string[]): void {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Identification</h4>`);
   out.push(`<dl>`);
@@ -57,7 +63,7 @@ function renderIdent(elf, out) {
   out.push(`</section>`);
 }
 
-function renderHeader(elf, out) {
+function renderHeader(elf: ElfParseResult, out: string[]): void {
   const h = elf.header;
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">ELF header</h4>`);
@@ -76,7 +82,7 @@ function renderHeader(elf, out) {
   out.push(`</section>`);
 }
 
-function renderProgramHeaders(elf, out) {
+function renderProgramHeaders(elf: ElfParseResult, out: string[]): void {
   if (!elf.programHeaders?.length) return;
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Program headers</h4>`);
@@ -88,7 +94,7 @@ function renderProgramHeaders(elf, out) {
   );
   const pad = elf.is64 ? 16 : 8;
   const programTypeOpts = mapOptions(PROGRAM_TYPES);
-  elf.programHeaders.forEach(ph => {
+  elf.programHeaders.forEach((ph: ElfProgramHeader) => {
     const typeLabel =
       ph.typeName || rowOpts(ph.type, programTypeOpts) || safe(`0x${ph.type.toString(16)}`);
     const flags = formatList(ph.flagNames);
@@ -105,7 +111,7 @@ function renderProgramHeaders(elf, out) {
   out.push(`</section>`);
 }
 
-function renderSectionHeaders(elf, out) {
+function renderSectionHeaders(elf: ElfParseResult, out: string[]): void {
   if (!elf.sections?.length) return;
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Section headers</h4>`);
@@ -117,7 +123,7 @@ function renderSectionHeaders(elf, out) {
   );
   const pad = elf.is64 ? 16 : 8;
   const sectionTypeOpts = mapOptions(SECTION_TYPES);
-  elf.sections.forEach(sec => {
+  elf.sections.forEach((sec: ElfSectionHeader) => {
     const typeLabel =
       sec.typeName || rowOpts(sec.type, sectionTypeOpts) || safe(`0x${sec.type.toString(16)}`);
     const flagsMask = typeof sec.flags === "bigint" ? Number(sec.flags & 0xffffffffn) : sec.flags;
@@ -134,7 +140,7 @@ function renderSectionHeaders(elf, out) {
   out.push(`</section>`);
 }
 
-function renderIssues(elf, out) {
+function renderIssues(elf: ElfParseResult, out: string[]): void {
   if (!elf.issues?.length) return;
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Notices</h4>`);
@@ -144,9 +150,9 @@ function renderIssues(elf, out) {
   out.push(`</section>`);
 }
 
-export function renderElf(elf) {
+export function renderElf(elf: ElfParseResult | null): string {
   if (!elf) return "";
-  const out = [];
+  const out: string[] = [];
   renderOverview(elf, out);
   renderIdent(elf, out);
   renderHeader(elf, out);

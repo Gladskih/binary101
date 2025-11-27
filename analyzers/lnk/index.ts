@@ -1,9 +1,15 @@
-// @ts-nocheck
 "use strict";
 
 import { parseExtraData } from "./extra-data.js";
 import { parseLinkInfo } from "./link-info.js";
-import type { LnkParseResult } from "./types.js";
+import type {
+  LnkHeader,
+  LnkIdList,
+  LnkIdListItem,
+  LnkLinkInfo,
+  LnkParseResult,
+  LnkStringData
+} from "./types.js";
 import {
   SHELL_LINK_CLSID,
   SHELL_LINK_HEADER_SIZE,
@@ -16,7 +22,9 @@ import {
 } from "./utils.js";
 import { parsePidlItems } from "./pidl.js";
 
-const parseLinkHeader = (dv, warnings) => {
+type LnkStringField = Exclude<keyof LnkStringData, "size" | "endOffset">;
+
+const parseLinkHeader = (dv: DataView, warnings: string[]): LnkHeader | null => {
   if (dv.byteLength < SHELL_LINK_HEADER_SIZE) {
     warnings.push("Shell link header is truncated.");
     return null;
@@ -56,10 +64,17 @@ const parseLinkHeader = (dv, warnings) => {
   };
 };
 
-const parseIdList = (dv, offset, warnings) => {
+const parseIdList = (dv: DataView, offset: number, warnings: string[]): LnkIdList => {
   if (offset + 2 > dv.byteLength) {
     warnings.push("LinkTargetIDList length is truncated.");
-    return { size: 0, items: [], truncated: true, totalSize: 0 };
+    return {
+      size: 0,
+      items: [],
+      truncated: true,
+      terminatorPresent: false,
+      resolvedPath: null,
+      totalSize: 0
+    };
   }
   const idListSize = dv.getUint16(offset, true);
   const end = offset + 2 + idListSize;
@@ -80,16 +95,17 @@ const parseIdList = (dv, offset, warnings) => {
   };
 };
 
-const buildPidlPath = items => {
-  if (!Array.isArray(items) || !items.length) return null;
-  const parts = [];
-  const driveFromItem = item => {
+const buildPidlPath = (items: LnkIdListItem[]): string | null => {
+  if (!items.length) return null;
+  const parts: string[] = [];
+  const driveFromItem = (item: LnkIdListItem): string | null => {
     const text = item?.longName || item?.shortName;
     if (!text) return null;
     const match = text.match(/^([A-Za-z]):?/);
-    return match ? `${match[1].toUpperCase()}:` : null;
+    return match && match[1] ? `${match[1].toUpperCase()}:` : null;
   };
-  const cleanSegment = text => (text ? text.replace(/[\\/]+/g, "").trim() : null);
+  const cleanSegment = (text: string | null): string | null =>
+    text ? text.replace(/[\\/]+/g, "").trim() : null;
   items.forEach(item => {
     if (!item || item.typeName === "Root") return;
     if (item.typeName === "Drive") {
@@ -101,14 +117,23 @@ const buildPidlPath = items => {
     if (label) parts.push(label);
   });
   if (!parts.length) return null;
-  const start = parts[0].endsWith(":") ? [parts.shift()] : [];
-  return [...start, ...parts].join("\\");
+  const [first] = parts;
+  if (first && first.endsWith(":")) {
+    return [first, ...parts.slice(1)].join("\\");
+  }
+  return parts.join("\\");
 };
 
-const parseStringData = (dv, offset, linkFlags, warnings, isUnicode) => {
-  const strings = {};
+const parseStringData = (
+  dv: DataView,
+  offset: number,
+  linkFlags: number,
+  warnings: string[],
+  isUnicode: boolean
+): LnkStringData => {
+  const strings: Partial<Record<LnkStringField, string>> = {};
   let cursor = offset;
-  const readIf = (mask, field) => {
+  const readIf = (mask: number, field: LnkStringField) => {
     if (!linkFlag(linkFlags, mask)) return;
     const { value, size } = readCountedString(dv, cursor, isUnicode, warnings, field);
     cursor += size;
@@ -119,7 +144,7 @@ const parseStringData = (dv, offset, linkFlags, warnings, isUnicode) => {
   readIf(0x00000010, "workingDir");
   readIf(0x00000020, "arguments");
   readIf(0x00000040, "iconLocation");
-  return { ...strings, size: cursor - offset, endOffset: cursor };
+  return { ...(strings as Partial<LnkStringData>), size: cursor - offset, endOffset: cursor };
 };
 
 export const hasShellLinkSignature = (dv: DataView): boolean =>
@@ -130,17 +155,19 @@ export const hasShellLinkSignature = (dv: DataView): boolean =>
 export async function parseLnk(file: File): Promise<LnkParseResult | null> {
   const buffer = await file.slice(0, file.size || 0).arrayBuffer();
   const dv = new DataView(buffer);
-  const warnings = [];
+  const warnings: string[] = [];
 
   if (!hasShellLinkSignature(dv)) return null;
   const header = parseLinkHeader(dv, warnings);
   if (!header) return null;
 
   let cursor = SHELL_LINK_HEADER_SIZE;
-  const idList = linkFlag(header.linkFlags, 0x1) ? parseIdList(dv, cursor, warnings) : null;
+  const idList = linkFlag(header.linkFlags, 0x1)
+    ? parseIdList(dv, cursor, warnings)
+    : null;
   if (idList) cursor += idList.totalSize;
 
-  const linkInfo = parseLinkInfo(
+  const linkInfo: LnkLinkInfo | null = parseLinkInfo(
     dv,
     cursor,
     warnings,
@@ -160,12 +187,12 @@ export async function parseLnk(file: File): Promise<LnkParseResult | null> {
   const extraData = parseExtraData(dv, cursor, warnings);
   const linkInfoBase = linkInfo?.localBasePathUnicode || linkInfo?.localBasePath || null;
   const linkInfoSuffix = linkInfo?.commonPathSuffixUnicode || linkInfo?.commonPathSuffix || null;
-  const linkInfoPath =
-    linkInfoBase || linkInfoSuffix
-      ? [linkInfoBase, linkInfoSuffix && linkInfoBase ? linkInfoSuffix : null]
-          .filter(Boolean)
-          .join(linkInfoBase ? "\\" : "")
-      : null;
+  const linkInfoParts: string[] = [];
+  if (linkInfoBase) linkInfoParts.push(linkInfoBase);
+  if (linkInfoSuffix) linkInfoParts.push(linkInfoSuffix);
+  const linkInfoPath = linkInfoParts.length
+    ? linkInfoParts.join(linkInfoBase ? "\\" : "")
+    : null;
 
   return {
     header,

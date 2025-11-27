@@ -1,24 +1,26 @@
-// @ts-nocheck
 "use strict";
 
 import { humanSize } from "../../binary-utils.js";
 import { safe } from "../../html-utils.js";
+import type { PeParseResult } from "../../analyzers/pe/index.js";
+import type { ResourceTree } from "../../analyzers/pe/resources-core.js";
+import type { ResourceDetailGroup, ResourceLangWithPreview } from "../../analyzers/pe/resources-preview-types.js";
 
-function formatLang(lang) {
+function formatLang(lang: number | null | undefined): string {
   if (lang == null) return "-";
   const id = Number(lang) >>> 0;
   return "0x" + id.toString(16).padStart(4, "0");
 }
 
-function formatCodePage(codePage) {
+function formatCodePage(codePage: number | null | undefined): string {
   if (!codePage) return "-";
   return String(codePage);
 }
 
-function renderPreviewCell(langEntry) {
+function renderPreviewCell(langEntry: ResourceLangWithPreview | null | undefined): string {
   if (!langEntry) return "-";
   const kind = langEntry.previewKind;
-  const issues = (langEntry.previewIssues || []).filter(Boolean);
+  const issues = (langEntry.previewIssues || []).filter((issue): issue is string => Boolean(issue));
   const issuesHtml = issues.length
     ? `<div class="smallNote" style="color:var(--warning-text,#b45309)">⚠ ${issues
         .map(safe)
@@ -50,10 +52,13 @@ function renderPreviewCell(langEntry) {
     );
   }
   if (kind === "version" && langEntry.versionInfo) {
-    const info = langEntry.versionInfo;
-    const parts = [];
-    if (info.fileVersionString) parts.push(`File: ${safe(info.fileVersionString)}`);
-    if (info.productVersionString) parts.push(`Product: ${safe(info.productVersionString)}`);
+    const info = langEntry.versionInfo as Record<string, unknown>;
+    const parts: string[] = [];
+    const fileVersion = typeof info["fileVersionString"] === "string" ? info["fileVersionString"] : null;
+    if (fileVersion) parts.push(`File: ${safe(fileVersion)}`);
+    const productVersion =
+      typeof info["productVersionString"] === "string" ? info["productVersionString"] : null;
+    if (productVersion) parts.push(`Product: ${safe(productVersion)}`);
     const main = parts.length ? `<div class="smallNote">${parts.join(" · ")}</div>` : "-";
     return main + issuesHtml;
   }
@@ -68,7 +73,10 @@ function renderPreviewCell(langEntry) {
   if (kind === "messageTable" && langEntry.messageTable?.messages) {
     const msgs = langEntry.messageTable.messages.slice(0, 8);
     const list = msgs
-      .map(m => `<li><span class="mono">${m.id != null ? `#${safe(m.id)}` : "msg"}</span>: ${safe(m.text || "")}</li>`)
+      .map(m => {
+        const text = Array.isArray(m.strings) ? m.strings.join(" | ") : "";
+        return `<li><span class="mono">${m.id != null ? `#${safe(m.id)}` : "msg"}</span>: ${safe(text)}</li>`;
+      })
       .join("");
     const more = langEntry.messageTable.truncated
       ? "<div class=\"smallNote\">(more messages not shown)</div>"
@@ -79,8 +87,12 @@ function renderPreviewCell(langEntry) {
   return "-";
 }
 
-export function renderResources(pe, out) {
-  const resources = pe.resources;
+type PeWithResources = Pick<PeParseResult, "resources">;
+
+export function renderResources(pe: PeParseResult | PeWithResources, out: string[]): void {
+  const resources = (pe as PeWithResources).resources as
+    | { top?: ResourceTree["top"]; detail?: ResourceDetailGroup[] }
+    | null;
   if (!resources) return;
 
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Resources</h4>`);

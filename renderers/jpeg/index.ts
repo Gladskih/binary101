@@ -1,12 +1,12 @@
-// @ts-nocheck
 "use strict";
 
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
 import { renderJpegExifSummary } from "./exif-summary.js";
 import { renderJfifSummary } from "./jfif-summary.js";
+import type { JpegComment, JpegParseResult, JpegSegment } from "../../analyzers/jpeg/types.js";
 
-export function renderJpeg(jpeg) {
+export function renderJpeg(jpeg: JpegParseResult | null): string {
   if (!jpeg) return "";
   const {
     size,
@@ -24,7 +24,7 @@ export function renderJpeg(jpeg) {
     comments
   } = jpeg;
 
-  const out = [];
+  const out: string[] = [];
 
   out.push("<h3>JPEG structure</h3>");
   out.push("<dl>");
@@ -119,7 +119,7 @@ export function renderJpeg(jpeg) {
   );
 
   if (comments && comments.length) {
-    comments.forEach((comment, index) => {
+    comments.forEach((comment: JpegComment, index) => {
       const label = comments.length === 1 ? "COM comment" : `COM comment #${index + 1}`;
       const suffix = comment.truncated ? " (truncated preview)" : "";
       out.push(
@@ -150,7 +150,7 @@ export function renderJpeg(jpeg) {
     out.push('<table class="byteView"><thead><tr>');
     out.push("<th>#</th><th>Marker</th><th>Name</th><th>Offset</th><th>Length (bytes)</th>");
     out.push("</tr></thead><tbody>");
-    segments.forEach((seg, idx) => {
+    segments.forEach((seg: JpegSegment, idx) => {
       const markerHex = toHex32(seg.marker, 4);
       const offHex = toHex32(seg.offset, 8);
       const lenHex = toHex32(seg.length, 8);

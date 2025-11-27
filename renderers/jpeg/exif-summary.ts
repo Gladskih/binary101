@@ -1,18 +1,18 @@
-// @ts-nocheck
 "use strict";
 
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import { toHex32 } from "../../binary-utils.js";
+import type { ExifData, ExifGps, ExifRational, ExifRawTag } from "../../analyzers/jpeg/types.js";
 
-function formatRationalDisplay(r) {
+function formatRationalDisplay(r: ExifRational | null | undefined): number | null {
   if (!r || !r.num || !r.den) return null;
   if (r.den === 0) return null;
   return r.num / r.den;
 }
 
-function describeOrientation(value) {
+function describeOrientation(value: number | null | undefined): string {
   if (value == null) return "Not specified";
-  const map = {
+  const map: Record<number, string> = {
     1: "1 (Top-left, normal)",
     2: "2 (Top-right, mirrored horizontally)",
     3: "3 (Bottom-right, rotated 180°)",
@@ -29,7 +29,7 @@ function describeOrientation(value) {
   return `${label} — requires rotation when displaying`;
 }
 
-function describeExposureTime(r) {
+function describeExposureTime(r: ExifRational | null | undefined): string {
   const v = formatRationalDisplay(r);
   if (!v || v <= 0) return "Not available";
   if (v >= 1) {
@@ -51,7 +51,7 @@ function describeExposureTime(r) {
   return `${frac} s — slow shutter (motion blur or low light)`;
 }
 
-function describeFNumber(r) {
+function describeFNumber(r: ExifRational | null | undefined): string {
   const v = formatRationalDisplay(r);
   if (!v || v <= 0) return "Not available";
   const rounded = Math.round(v * 10) / 10;
@@ -61,7 +61,7 @@ function describeFNumber(r) {
   return `f/${rounded} — high f-number, more depth of field (less light)`;
 }
 
-function describeIso(iso) {
+function describeIso(iso: number | null | undefined): string {
   if (!iso || iso <= 0) return "Not specified";
   if (iso <= 64) return `ISO ${iso} — low noise, needs a lot of light`;
   if (iso <= 800) return `ISO ${iso} — typical everyday range`;
@@ -69,7 +69,7 @@ function describeIso(iso) {
   return `ISO ${iso} — very high, strong noise likely`;
 }
 
-function describeFocalLength(r) {
+function describeFocalLength(r: ExifRational | null | undefined): string {
   const v = formatRationalDisplay(r);
   if (!v || v <= 0) return "Not available";
   const rounded = Math.round(v * 10) / 10;
@@ -80,7 +80,7 @@ function describeFocalLength(r) {
   return `${rounded} mm — super-telephoto, narrow field of view`;
 }
 
-function describeFlash(code) {
+function describeFlash(code: number | null | undefined): string {
   if (code == null) return "Not specified";
   const fired = (code & 0x1) !== 0;
   if (fired) {
@@ -89,15 +89,17 @@ function describeFlash(code) {
   return `${code} — flash did not fire (ambient light only)`;
 }
 
-function describeExifDate(raw) {
+function describeExifDate(raw: string | null | undefined): string {
   if (!raw || typeof raw !== "string") return "Not specified";
   const trimmed = raw.trim();
   const parts = trimmed.split(" ");
   if (parts.length !== 2) {
     return `${trimmed} — camera local time (format not standard)`;
   }
-  const datePart = parts[0].replace(/:/g, "-");
-  const isoCandidate = `${datePart}T${parts[1]}`;
+  const [dateToken, timeToken] = parts;
+  if (!dateToken || !timeToken) return `${trimmed} — camera local time (format not standard)`;
+  const datePart = dateToken.replace(/:/g, "-");
+  const isoCandidate = `${datePart}T${timeToken}`;
   const d = new Date(isoCandidate);
   if (Number.isNaN(d.getTime())) {
     return `${trimmed} — camera local time (cannot parse)`;
@@ -115,7 +117,7 @@ function describeExifDate(raw) {
   return `${trimmed} — camera local time (time zone not recorded in EXIF)`;
 }
 
-function rationalToDegreesTriple(triple) {
+function rationalToDegreesTriple(triple: ExifRational[] | null | undefined): number | null {
   if (!triple || triple.length !== 3) return null;
   const d = formatRationalDisplay(triple[0]);
   const m = formatRationalDisplay(triple[1]);
@@ -124,7 +126,7 @@ function rationalToDegreesTriple(triple) {
   return d + m / 60 + s / 3600;
 }
 
-function describeGps(gps) {
+function describeGps(gps: ExifGps | null | undefined): string {
   if (!gps) return "Not available";
   const latDeg = rationalToDegreesTriple(gps.lat);
   const lonDeg = rationalToDegreesTriple(gps.lon);
@@ -138,8 +140,9 @@ function describeGps(gps) {
   return `${latText}, ${lonText} — approximate capture location`;
 }
 
-export function renderJpegExifSummary(exif) {
-  const out = [];
+export function renderJpegExifSummary(exif: ExifData | null): string {
+  if (!exif) return "";
+  const out: string[] = [];
   out.push("<h4>EXIF summary</h4>");
   out.push("<dl>");
   out.push(
@@ -212,7 +215,7 @@ export function renderJpegExifSummary(exif) {
   );
   out.push("</dl>");
 
-  const raw = Array.isArray(exif.rawTags) ? exif.rawTags : [];
+  const raw: ExifRawTag[] = Array.isArray(exif.rawTags) ? exif.rawTags : [];
   if (raw.length) {
     const TAG_INFO = new Map([
       [0x010f, { name: "Make", desc: "Camera manufacturer name." }],
@@ -262,12 +265,13 @@ export function renderJpegExifSummary(exif) {
     out.push('<table class="byteView"><thead><tr>');
     out.push("<th>IFD</th><th>Tag</th><th>Name</th><th>Type</th><th>Count</th><th>Preview</th>");
     out.push("</tr></thead><tbody>");
-    raw.forEach(tag => {
+    raw.forEach((tag: ExifRawTag) => {
       const tagHex = toHex32(tag.tag, 4);
       const info = TAG_INFO.get(tag.tag);
       const name = info ? info.name : "";
+      const desc = info?.desc ? escapeHtml(info.desc) : "";
       const nameCell = name
-        ? `<td title="${escapeHtml(info.desc || "")}">${escapeHtml(name)}</td>`
+        ? `<td title="${desc}">${escapeHtml(name)}</td>`
         : "<td></td>";
       out.push("<tr>");
       out.push(`<td>${escapeHtml(tag.ifd || "")}</td>`);

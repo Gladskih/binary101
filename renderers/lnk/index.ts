@@ -1,11 +1,22 @@
-// @ts-nocheck
 "use strict";
 /* eslint-disable max-lines */
 
 import { dd, rowFlags, rowOpts, safe } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
+import type {
+  LnkExtraDataBlock,
+  LnkIdList,
+  LnkLinkInfo,
+  LnkParseResult,
+  LnkProperty,
+  LnkPropertyStorage,
+  LnkPropertyStoreData,
+  LnkStringData,
+  LnkTrackerData,
+  LnkVistaIdListData
+} from "../../analyzers/lnk/types.js";
 
-const LINK_FLAGS = [
+const LINK_FLAGS: Array<[number, string, string?]> = [
   [0x00000001, "Has ID list", "LinkTargetIDList present"],
   [0x00000002, "Has LinkInfo", "LinkInfo structure present"],
   [0x00000004, "Has name"],
@@ -26,7 +37,7 @@ const LINK_FLAGS = [
   [0x02000000, "Prefer environment path"]
 ];
 
-const FILE_ATTRIBUTE_FLAGS = [
+const FILE_ATTRIBUTE_FLAGS: Array<[number, string, string?]> = [
   [0x00000001, "Read-only"],
   [0x00000002, "Hidden"],
   [0x00000004, "System"],
@@ -46,24 +57,28 @@ const FILE_ATTRIBUTE_FLAGS = [
   [0x00020000, "No scrub data"]
 ];
 
-const LINKINFO_FLAGS = [
+const LINKINFO_FLAGS: Array<[number, string, string?]> = [
   [0x00000001, "Volume ID + local base"],
   [0x00000002, "Network relative link"]
 ];
 
-const SHOW_COMMAND_OPTIONS = [
+const SHOW_COMMAND_OPTIONS: Array<[number, string]> = [
   [1, "Normal window"],
   [3, "Maximized"],
   [7, "Minimized"]
 ];
 
-const formatTime = value => value?.iso || "-";
-const formatSize = value => (value ? formatHumanSize(value) : "-");
+type LnkStringField = keyof Omit<LnkStringData, "size" | "endOffset">;
 
-const renderHint = text => `<div class="smallNote">${safe(text)}</div>`;
+const formatTime = (value: { iso: string | null } | null | undefined): string =>
+  value?.iso || "-";
+const formatSize = (value: number | null | undefined): string =>
+  value ? formatHumanSize(value) : "-";
 
-const renderHeader = (lnk, out) => {
-  const header = lnk.header || {};
+const renderHint = (text: string): string => `<div class="smallNote">${safe(text)}</div>`;
+
+const renderHeader = (lnk: LnkParseResult, out: string[]): void => {
+  const { header } = lnk;
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Shell link header</h4>`);
   out.push(`<dl>`);
@@ -114,9 +129,9 @@ const renderHeader = (lnk, out) => {
   out.push(`</section>`);
 };
 
-const renderVolumeInfo = volume => {
+const renderVolumeInfo = (volume: LnkLinkInfo["volume"]): string => {
   if (!volume) return "-";
-  const out = [];
+  const out: string[] = [];
   out.push(`<div class="smallNote">`);
   out.push(`Drive type: ${safe(volume.driveTypeName || "-")}<br/>`);
   out.push(
@@ -134,9 +149,9 @@ const renderVolumeInfo = volume => {
   return out.join("");
 };
 
-const renderNetworkInfo = network => {
+const renderNetworkInfo = (network: LnkLinkInfo["network"]): string => {
   if (!network) return "";
-  const parts = [];
+  const parts: string[] = [];
   parts.push(`<div class="smallNote">`);
   if (network.netName) parts.push(`Network path: ${safe(network.netName)}<br/>`);
   if (network.deviceName) parts.push(`Device: ${safe(network.deviceName)}<br/>`);
@@ -149,7 +164,7 @@ const renderNetworkInfo = network => {
   return parts.join("");
 };
 
-const formatPropertyValue = value => {
+const formatPropertyValue = (value: unknown): string => {
   if (value === null || value === undefined) return "-";
   if (Array.isArray(value)) return value.map(v => formatPropertyValue(v)).join(", ");
   if (typeof value === "boolean") return value ? "true" : "false";
@@ -157,18 +172,18 @@ const formatPropertyValue = value => {
   return String(value);
 };
 
-const renderPropertyStore = parsed => {
+const renderPropertyStore = (parsed: LnkPropertyStoreData | null | undefined): string => {
   const storages = parsed?.storages || [];
   if (!storages.length) return `<div class="smallNote">Property store present but empty.</div>`;
-  const out = [];
-  storages.forEach(storage => {
+  const out: string[] = [];
+  storages.forEach((storage: LnkPropertyStorage) => {
     const header = storage.formatId ? `FMTID ${safe(storage.formatId)}` : "Property storage";
     const suffix = storage.truncated ? " (truncated)" : "";
     const magic = storage.magic ? ` ${safe(storage.magic)}` : "";
     out.push(`<div class="smallNote">${header}${magic}${suffix}</div>`);
     if (storage.properties?.length) {
       out.push(`<ul class="smallNote">`);
-      storage.properties.forEach(prop => {
+      storage.properties.forEach((prop: LnkProperty) => {
         const name = prop.name || `Property ${prop.id}`;
         let typeLabel = "";
         if (prop.type != null) {
@@ -190,7 +205,7 @@ const renderPropertyStore = parsed => {
   return out.join("");
 };
 
-const renderLinkInfo = (lnk, out) => {
+const renderLinkInfo = (lnk: LnkParseResult, out: string[]): void => {
   const info = lnk.linkInfo;
   if (!info) return;
   out.push(`<section>`);
@@ -236,16 +251,17 @@ const renderLinkInfo = (lnk, out) => {
   out.push(`</section>`);
 };
 
-const renderStrings = (lnk, out) => {
-  const s = lnk.stringData || {};
-  const keys = ["name", "relativePath", "workingDir", "arguments", "iconLocation"];
-  const hasValue = keys.some(key => s[key]);
+const renderStrings = (lnk: LnkParseResult, out: string[]): void => {
+  const s = lnk.stringData;
+  const keys: LnkStringField[] = ["name", "relativePath", "workingDir", "arguments", "iconLocation"];
+  const hasValue = keys.some(key => Boolean(s[key]));
   if (!hasValue) return;
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">String data</h4>`);
   out.push(`<dl>`);
   keys.forEach(key => {
-    if (s[key]) out.push(dd(key, safe(s[key])));
+    const value = s[key];
+    if (value) out.push(dd(key, safe(value)));
   });
   out.push(`</dl>`);
   out.push(
@@ -256,8 +272,8 @@ const renderStrings = (lnk, out) => {
   out.push(`</section>`);
 };
 
-const renderIdList = (lnk, out) => {
-  const idList = lnk.idList;
+const renderIdList = (lnk: LnkParseResult, out: string[]): void => {
+  const idList: LnkIdList | null = lnk.idList;
   if (!idList) return;
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">LinkTargetIDList</h4>`);
@@ -295,47 +311,66 @@ const renderIdList = (lnk, out) => {
   out.push(`</section>`);
 };
 
-const describeBlock = block => {
-  if (!block.parsed) return "";
-  if (block.parsed.ansi || block.parsed.unicode) {
-    const ansi = block.parsed.ansi ? safe(block.parsed.ansi) : "-";
-    const unicode = block.parsed.unicode ? safe(block.parsed.unicode) : "-";
-    return `<div class="smallNote">ANSI: ${ansi}<br/>Unicode: ${unicode}</div>`;
+const describeBlock = (block: LnkExtraDataBlock): string => {
+  const signature = block.signature >>> 0;
+  switch (signature) {
+    case 0xa0000001:
+    case 0xa0000006:
+    case 0xa0000007: {
+      const parsed = block.parsed as { ansi: string | null; unicode: string | null } | null;
+      if (!parsed) return "";
+      const ansi = parsed.ansi ? safe(parsed.ansi) : "-";
+      const unicode = parsed.unicode ? safe(parsed.unicode) : "-";
+      return `<div class="smallNote">ANSI: ${ansi}<br/>Unicode: ${unicode}</div>`;
+    }
+    case 0xa0000003: {
+      const parsed = block.parsed as LnkTrackerData | null;
+      if (!parsed) return "";
+      const machine = parsed.machineId ? `Machine: ${safe(parsed.machineId)}<br/>` : "";
+      const droidVolume = parsed.droidVolume ? `Droid VolumeID: ${safe(parsed.droidVolume)}<br/>` : "";
+      const droidObject = parsed.droidObject ? `Droid ObjectID: ${safe(parsed.droidObject)}<br/>` : "";
+      const birthVolume = parsed.droidBirthVolume
+        ? `Birth VolumeID: ${safe(parsed.droidBirthVolume)}<br/>`
+        : "";
+      const birthObject = parsed.droidBirthObject
+        ? `Birth ObjectID: ${safe(parsed.droidBirthObject)}<br/>`
+        : "";
+      return (
+        `<div class="smallNote" title="NTFS object tracking identifiers used by Distributed Link Tracking; Droid VolumeID is for link tracking and typically does not match System.VolumeId from the property store.">Tracker data: shell tracking IDs to find the target after moves/renames (Droid IDs are separate from System.VolumeId).<br/>` +
+        `${machine}${droidVolume}${droidObject}${birthVolume}${birthObject}</div>`
+      );
+    }
+    case 0xa0000009:
+      return renderPropertyStore(block.parsed as LnkPropertyStoreData | null);
+    case 0xa000000c: {
+      const parsed = block.parsed as LnkVistaIdListData | null;
+      if (!parsed) return "";
+      const count = parsed.items?.length ?? 0;
+      const terminator = parsed.terminatorPresent ? "" : " (no terminator)";
+      return `<div class="smallNote">Vista+ IDList: ${count} item(s)${terminator}</div>`;
+    }
+    case 0xa0000004: {
+      const parsed = block.parsed as { codePage?: number } | null;
+      if (!parsed || parsed.codePage == null) return "";
+      return `<div class="smallNote">Code page: ${parsed.codePage}</div>`;
+    }
+    case 0xa0000005: {
+      const parsed = block.parsed as { folderId?: number; offset?: number } | null;
+      if (parsed?.folderId == null || parsed.offset == null) return "";
+      return `<div class="smallNote">Folder ID: ${parsed.folderId} (offset ${parsed.offset})</div>`;
+    }
+    case 0xa000000b: {
+      const parsed = block.parsed as { knownFolderId?: string | null; offset?: number } | null;
+      if (!parsed?.knownFolderId || parsed.offset == null) return "";
+      return `<div class="smallNote">Known folder: ${safe(parsed.knownFolderId)} (offset ${parsed.offset})</div>`;
+    }
+    default:
+      return "";
   }
-  if (block.signature >>> 0 === 0xa0000003) {
-    const t = block.parsed || {};
-    const machine = t.machineId ? `Machine: ${safe(t.machineId)}<br/>` : "";
-    const droidVolume = t.droidVolume ? `Droid VolumeID: ${safe(t.droidVolume)}<br/>` : "";
-    const droidObject = t.droidObject ? `Droid ObjectID: ${safe(t.droidObject)}<br/>` : "";
-    const birthVolume = t.droidBirthVolume ? `Birth VolumeID: ${safe(t.droidBirthVolume)}<br/>` : "";
-    const birthObject = t.droidBirthObject ? `Birth ObjectID: ${safe(t.droidBirthObject)}<br/>` : "";
-    return (
-      `<div class="smallNote" title="NTFS object tracking identifiers used by Distributed Link Tracking; Droid VolumeID is for link tracking and typically does not match System.VolumeId from the property store.">Tracker data: shell tracking IDs to find the target after moves/renames (Droid IDs are separate from System.VolumeId).<br/>` +
-      `${machine}${droidVolume}${droidObject}${birthVolume}${birthObject}</div>`
-    );
-  }
-  if (block.signature >>> 0 === 0xa0000009) {
-    return renderPropertyStore(block.parsed);
-  }
-  if (block.signature >>> 0 === 0xa000000c) {
-    const count = block.parsed?.items?.length ?? 0;
-    const terminator = block.parsed?.terminatorPresent ? "" : " (no terminator)";
-    return `<div class="smallNote">Vista+ IDList: ${count} item(s)${terminator}</div>`;
-  }
-  if (block.parsed.codePage != null) {
-    return `<div class="smallNote">Code page: ${block.parsed.codePage}</div>`;
-  }
-  if (block.parsed.folderId != null) {
-    return `<div class="smallNote">Folder ID: ${block.parsed.folderId} (offset ${block.parsed.offset})</div>`;
-  }
-  if (block.parsed.knownFolderId) {
-    return `<div class="smallNote">Known folder: ${safe(block.parsed.knownFolderId)} (offset ${block.parsed.offset})</div>`;
-  }
-  return "";
 };
 
-const renderExtraData = (lnk, out) => {
-  const blocks = lnk.extraData?.blocks || [];
+const renderExtraData = (lnk: LnkParseResult, out: string[]): void => {
+  const blocks: LnkExtraDataBlock[] = lnk.extraData?.blocks ?? [];
   if (!blocks.length) return;
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Extra data blocks</h4>`);
@@ -357,7 +392,7 @@ const renderExtraData = (lnk, out) => {
   out.push(`</section>`);
 };
 
-const renderWarnings = (lnk, out) => {
+const renderWarnings = (lnk: LnkParseResult, out: string[]): void => {
   const issues = lnk.warnings || [];
   if (!issues.length) return;
   out.push(`<section>`);
@@ -368,9 +403,9 @@ const renderWarnings = (lnk, out) => {
   out.push(`</section>`);
 };
 
-export function renderLnk(lnk) {
+export function renderLnk(lnk: LnkParseResult | null): string {
   if (!lnk) return "";
-  const out = [];
+  const out: string[] = [];
   out.push(
     `<p class="smallNote">Windows shortcuts store multiple ways to reach a target: shell item IDs (PIDLs), plain paths, and optional network or environment-based fallbacks. Flags below tell which pieces are present.</p>`
   );

@@ -1,9 +1,18 @@
-// @ts-nocheck
 "use strict";
 
 import { readGuid } from "./utils.js";
+import type { LnkExtensionBlock, LnkIdListItem, LnkTrackerData } from "./types.js";
 
-const dosDateTimeToIso = (dosDate, dosTime) => {
+type ParsedFileEntry = {
+  shortName: string | null;
+  longName: string | null;
+  fileSize: number;
+  modified: string | null;
+  attributes: number;
+  extensionBlocks: LnkExtensionBlock[];
+};
+
+const dosDateTimeToIso = (dosDate: number, dosTime: number): string | null => {
   const day = dosDate & 0x1f;
   const month = (dosDate >> 5) & 0x0f;
   const year = ((dosDate >> 9) & 0x7f) + 1980;
@@ -20,7 +29,10 @@ const dosDateTimeToIso = (dosDate, dosTime) => {
   return iso;
 };
 
-const readAsciiZ = (bytes, offset) => {
+const readAsciiZ = (
+  bytes: Uint8Array,
+  offset: number
+): { text: string | null; bytesConsumed: number } => {
   let end = offset;
   while (end < bytes.length && bytes[end] !== 0) end += 1;
   const raw = bytes.subarray(offset, end);
@@ -28,15 +40,18 @@ const readAsciiZ = (bytes, offset) => {
   for (const b of raw) {
     if (b >= 0x20 && b <= 0x7e) text += String.fromCharCode(b);
   }
-  return { text: text.trim() || null, bytesConsumed: (end - offset) + (end < bytes.length ? 1 : 0) };
+  return {
+    text: text.trim() || null,
+    bytesConsumed: end - offset + (end < bytes.length ? 1 : 0)
+  };
 };
 
-const readAsciiNullTerminated = (bytes, offset) => {
+const readAsciiNullTerminated = (bytes: Uint8Array, offset: number): string => {
   const { text } = readAsciiZ(bytes, offset);
   return text || "";
 };
 
-const readUtf16NullTerminated = (bytes, offset) => {
+const readUtf16NullTerminated = (bytes: Uint8Array, offset: number): string => {
   if (offset >= bytes.length - 1) return "";
   const length = bytes.length - offset;
   if (length < 4 || length % 2 !== 0) return "";
@@ -54,8 +69,11 @@ const readUtf16NullTerminated = (bytes, offset) => {
   return result.trim();
 };
 
-const parseExtensionBlocks = (bytes, offset) => {
-  const blocks = [];
+const parseExtensionBlocks = (
+  bytes: Uint8Array,
+  offset: number
+): { longName: string | null; blocks: LnkExtensionBlock[] } => {
+  const blocks: LnkExtensionBlock[] = [];
   let cursor = offset;
   let longName = null;
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -114,7 +132,7 @@ const parseExtensionBlocks = (bytes, offset) => {
   return { longName, blocks };
 };
 
-const parseFileEntry = bytes => {
+const parseFileEntry = (bytes: Uint8Array | null): ParsedFileEntry | null => {
   // File/folder shell items (type 0x31/0x32) with DOS date/time.
   if (!bytes || bytes.length < 12) return null;
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -135,7 +153,7 @@ const parseFileEntry = bytes => {
   if (offset % 2 !== 0 && offset < bytes.length) offset += 1;
 
   let longName = null;
-  let extensionBlocks = [];
+  let extensionBlocks: LnkExtensionBlock[] = [];
   if (offset + 8 <= bytes.length) {
     const extBytes = bytes.subarray(offset, bytes.length);
     ({ longName, blocks: extensionBlocks } = parseExtensionBlocks(extBytes, 0));
@@ -150,7 +168,9 @@ const parseFileEntry = bytes => {
   };
 };
 
-const parseDriveItem = bytes => {
+const parseDriveItem = (
+  bytes: Uint8Array | null
+): { shortName: string | null; longName: string | null } | null => {
   if (!bytes || bytes.length < 2) return null;
   // Drive shell items store the drive label as an ANSI string after a small header.
   const labelOffsets = [1, 2, 3];
@@ -161,7 +181,7 @@ const parseDriveItem = bytes => {
   return null;
 };
 
-export const parseTrackerData = blockDv => {
+export const parseTrackerData = (blockDv: DataView): LnkTrackerData | null => {
   if (blockDv.byteLength < 64) return null;
   const length = blockDv.byteLength >= 12 ? blockDv.getUint32(8, true) : null;
   const version = blockDv.byteLength >= 16 ? blockDv.getUint32(12, true) : null;
@@ -170,7 +190,7 @@ export const parseTrackerData = blockDv => {
     blockDv.byteOffset + 16,
     Math.min(16, blockDv.byteLength - 16)
   );
-  let machineId = "";
+  let machineId: string | null = "";
   for (const b of machineBytes) {
     if (b === 0) break;
     if (b >= 0x20 && b <= 0x7e) machineId += String.fromCharCode(b);
@@ -183,7 +203,7 @@ export const parseTrackerData = blockDv => {
   return { length, version, machineId, droidVolume, droidObject, droidBirthVolume, droidBirthObject };
 };
 
-const typeNameFromByte = value => {
+const typeNameFromByte = (value: number | null): string => {
   switch (value) {
     case 0x1f:
       return "Root";
@@ -198,8 +218,16 @@ const typeNameFromByte = value => {
   }
 };
 
-export const parsePidlItems = (dv, start, end, warnings) => {
-  const items = [];
+export const parsePidlItems = (
+  dv: DataView,
+  start: number,
+  end: number,
+  warnings: string[]
+): { items: LnkIdListItem[]; endOffset: number; terminatorPresent: boolean } => {
+  const items: LnkIdListItem[] = [];
+  const hasFileMeta = (
+    entry: ParsedFileEntry | { shortName: string | null; longName: string | null } | null
+  ): entry is ParsedFileEntry => Boolean(entry && "fileSize" in entry);
   let cursor = start;
   while (cursor + 2 <= end && cursor + 2 <= dv.byteLength) {
     const size = dv.getUint16(cursor, true);
@@ -217,7 +245,7 @@ export const parsePidlItems = (dv, start, end, warnings) => {
       dv.byteOffset + bodyStart,
       Math.max(0, bodyEnd - bodyStart)
     );
-    const typeByte = body.length ? body[0] : null;
+    const typeByte = body.length ? body[0] ?? null : null;
     const typeName = typeNameFromByte(typeByte);
     const fileEntry =
       typeName === "Folder" || typeName === "File"
@@ -229,18 +257,19 @@ export const parsePidlItems = (dv, start, end, warnings) => {
     if (typeName === "Root" && body.length >= 17) {
       clsid = readGuid(new DataView(body.buffer, body.byteOffset, body.byteLength), 1);
     }
+    const fileDetails = hasFileMeta(fileEntry) ? fileEntry : null;
     items.push({
       index: items.length,
       size,
       typeByte,
       typeName,
       typeHex: typeByte != null ? `0x${typeByte.toString(16).padStart(2, "0")}` : null,
-      fileSize: fileEntry?.fileSize ?? null,
-      modified: fileEntry?.modified || null,
-      attributes: fileEntry?.attributes ?? null,
+      fileSize: fileDetails?.fileSize ?? null,
+      modified: fileDetails?.modified || null,
+      attributes: fileDetails?.attributes ?? null,
       shortName: fileEntry?.shortName || null,
       longName: fileEntry?.longName || null,
-      extensionBlocks: fileEntry?.extensionBlocks || [],
+      extensionBlocks: fileDetails?.extensionBlocks || [],
       clsid,
       truncated
     });

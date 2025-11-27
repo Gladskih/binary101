@@ -1,5 +1,6 @@
-// @ts-nocheck
 "use strict";
+
+import type { LnkFiletime } from "./types.js";
 
 const FILETIME_TICKS_PER_MS = 10000n;
 const FILETIME_EPOCH_BIAS_MS = 11644473600000n;
@@ -8,9 +9,9 @@ const UTF16_DECODER = new TextDecoder("utf-16le", { fatal: false });
 export const SHELL_LINK_HEADER_SIZE = 0x4c;
 export const SHELL_LINK_CLSID = "00021401-0000-0000-c000-000000000046";
 
-export const linkFlag = (flags, mask) => (flags & mask) !== 0;
+export const linkFlag = (flags: number, mask: number): boolean => (flags & mask) !== 0;
 
-export const driveTypeName = driveType => {
+export const driveTypeName = (driveType: number): string | null => {
   switch (driveType) {
     case 0:
       return "Unknown";
@@ -31,7 +32,7 @@ export const driveTypeName = driveType => {
   }
 };
 
-export const providerTypeName = value => {
+export const providerTypeName = (value: number): string | null => {
   switch (value) {
     case 0x001a0000:
       return "NetWare";
@@ -58,11 +59,11 @@ export const providerTypeName = value => {
   }
 };
 
-const hotKeyName = vk => {
+const hotKeyName = (vk: number): string | null => {
   if (vk >= 0x41 && vk <= 0x5a) return String.fromCharCode(vk);
   if (vk >= 0x30 && vk <= 0x39) return String.fromCharCode(vk);
   if (vk >= 0x70 && vk <= 0x87) return `F${vk - 0x6f}`;
-  const map = {
+  const map: Record<number, string> = {
     0x08: "Backspace",
     0x09: "Tab",
     0x0d: "Enter",
@@ -82,11 +83,11 @@ const hotKeyName = vk => {
   return map[vk] || null;
 };
 
-export const describeHotKey = value => {
+export const describeHotKey = (value: number): string | null => {
   if (!value) return null;
   const key = value & 0xff;
   const modifiers = value >> 8;
-  const parts = [];
+  const parts: string[] = [];
   if (modifiers & 0x01) parts.push("Shift");
   if (modifiers & 0x02) parts.push("Ctrl");
   if (modifiers & 0x04) parts.push("Alt");
@@ -95,7 +96,7 @@ export const describeHotKey = value => {
   return parts.join("+");
 };
 
-export const showCommandName = value => {
+export const showCommandName = (value: number): string | null => {
   switch (value) {
     case 1:
       return "Normal window";
@@ -108,29 +109,29 @@ export const showCommandName = value => {
   }
 };
 
-export const readGuid = (dv, offset) => {
+export const readGuid = (dv: DataView, offset: number): string | null => {
   if (offset + 16 > dv.byteLength) return null;
   const data1 = dv.getUint32(offset, true).toString(16).padStart(8, "0");
   const data2 = dv.getUint16(offset + 4, true).toString(16).padStart(4, "0");
   const data3 = dv.getUint16(offset + 6, true).toString(16).padStart(4, "0");
-  const b = [];
+  const b: string[] = [];
   for (let i = 0; i < 8; i += 1) {
     b.push(dv.getUint8(offset + 8 + i).toString(16).padStart(2, "0"));
   }
   return `${data1}-${data2}-${data3}-${b.slice(0, 2).join("")}-${b.slice(2).join("")}`.toLowerCase();
 };
 
-const decodeAnsi = bytes => {
+const decodeAnsi = (bytes: ArrayLike<number>): string => {
   let out = "";
   for (let i = 0; i < bytes.length; i += 1) {
-    const code = bytes[i];
+    const code = bytes[i] ?? 0;
     if (code === 0) break;
     out += String.fromCharCode(code);
   }
   return out;
 };
 
-export const readFiletime = (dv, offset) => {
+export const readFiletime = (dv: DataView, offset: number): LnkFiletime => {
   if (offset + 8 > dv.byteLength || typeof dv.getBigUint64 !== "function") {
     return { raw: null, iso: null };
   }
@@ -146,11 +147,16 @@ export const readFiletime = (dv, offset) => {
   return { raw, iso: taggedIso };
 };
 
-export const readNullTerminatedString = (dv, offset, maxEnd, isUnicode) => {
+export const readNullTerminatedString = (
+  dv: DataView,
+  offset: number,
+  maxEnd: number,
+  isUnicode: boolean
+): string => {
   const limit = Math.min(maxEnd, dv.byteLength);
   if (offset >= limit) return "";
   if (isUnicode) {
-    const codes = [];
+    const codes: number[] = [];
     for (let i = offset; i + 1 < limit; i += 2) {
       const code = dv.getUint16(i, true);
       if (code === 0) break;
@@ -158,7 +164,7 @@ export const readNullTerminatedString = (dv, offset, maxEnd, isUnicode) => {
     }
     return String.fromCharCode(...codes);
   }
-  const bytes = [];
+  const bytes: number[] = [];
   for (let i = offset; i < limit; i += 1) {
     const code = dv.getUint8(i);
     if (code === 0) break;
@@ -167,7 +173,13 @@ export const readNullTerminatedString = (dv, offset, maxEnd, isUnicode) => {
   return decodeAnsi(bytes);
 };
 
-export const readCountedString = (dv, offset, isUnicode, warnings, label) => {
+export const readCountedString = (
+  dv: DataView,
+  offset: number,
+  isUnicode: boolean,
+  warnings: string[],
+  label: string
+): { value: string | null; size: number } => {
   if (offset + 2 > dv.byteLength) {
     warnings.push(`${label} length is truncated`);
     return { value: null, size: dv.byteLength - offset };

@@ -1,18 +1,30 @@
-// @ts-nocheck
 /* eslint-disable max-lines */
 "use strict";
 
 import { readGuid, readNullTerminatedString, readFiletime } from "./utils.js";
 import { parseTrackerData, parsePidlItems } from "./pidl.js";
+import type {
+  LnkEnvironmentStrings,
+  LnkExtraData,
+  LnkExtraDataBlock,
+  LnkKnownFolderData,
+  LnkProperty,
+  LnkPropertyScalar,
+  LnkPropertyStorage,
+  LnkPropertyStoreData,
+  LnkPropertyValue,
+  LnkSpecialFolderData,
+  LnkVistaIdListData
+} from "./types.js";
 
-const PROPERTY_KEY_LABELS = {
+const PROPERTY_KEY_LABELS: Record<string, string> = {
   "f29f85e0-4ff9-1068-ab91-08002b27b3d9:2": "System.Link.TargetParsingPath",
   "f29f85e0-4ff9-1068-ab91-08002b27b3d9:3": "System.Link.WorkingDirectory",
   "f29f85e0-4ff9-1068-ab91-08002b27b3d9:5": "System.Link.Arguments",
   "446d16b1-8dad-4870-a748-402ea43d788c:104": "System.VolumeId"
 };
 
-const PROPERTY_TYPE_NAMES = {
+const PROPERTY_TYPE_NAMES: Record<number, string> = {
   0x0000: "Empty",
   0x0001: "Null",
   0x0002: "Signed 16-bit",
@@ -36,17 +48,17 @@ const PROPERTY_TYPE_NAMES = {
   0x0048: "CLSID"
 };
 
-const ansiFromBytes = bytes => {
+const ansiFromBytes = (bytes: Uint8Array): string => {
   let out = "";
   for (let i = 0; i < bytes.length; i += 1) {
-    const code = bytes[i];
+    const code = bytes[i] ?? 0;
     if (code === 0) break;
     out += String.fromCharCode(code);
   }
   return out;
 };
 
-const nameForExtraBlock = signature => {
+const nameForExtraBlock = (signature: number): string | null => {
   switch (signature >>> 0) {
     case 0xa0000001:
       return "Environment variables";
@@ -75,7 +87,7 @@ const nameForExtraBlock = signature => {
   }
 };
 
-const parseFixedStringBlock = blockDv => {
+const parseFixedStringBlock = (blockDv: DataView): LnkEnvironmentStrings => {
   const ansi = readNullTerminatedString(blockDv, 8, Math.min(blockDv.byteLength, 8 + 260), false);
   const unicode = readNullTerminatedString(
     blockDv,
@@ -86,30 +98,36 @@ const parseFixedStringBlock = blockDv => {
   return { ansi: ansi || null, unicode: unicode || null };
 };
 
-const parseKnownFolderBlock = blockDv => {
+const parseKnownFolderBlock = (blockDv: DataView): LnkKnownFolderData | null => {
   if (blockDv.byteLength < 0x1c) return null;
   const guid = readGuid(blockDv, 8);
   const offset = blockDv.getUint32(0x18, true);
   return { knownFolderId: guid, offset };
 };
 
-const parseSpecialFolderBlock = blockDv => {
+const parseSpecialFolderBlock = (blockDv: DataView): LnkSpecialFolderData | null => {
   if (blockDv.byteLength < 0x10) return null;
   const folderId = blockDv.getUint32(8, true);
   const offset = blockDv.getUint32(12, true);
   return { folderId, offset };
 };
 
-const parseConsoleFeBlock = blockDv => {
+const parseConsoleFeBlock = (blockDv: DataView): { codePage: number } | null => {
   if (blockDv.byteLength < 0x0c) return null;
   return { codePage: blockDv.getUint16(8, true) };
 };
 
-const propertyKeyLabel = (formatId, propertyId) => PROPERTY_KEY_LABELS[`${formatId}:${propertyId}`] || null;
+const propertyKeyLabel = (formatId: string | null, propertyId: number): string | null =>
+  PROPERTY_KEY_LABELS[`${formatId}:${propertyId}`] || null;
 
-const propertyTypeName = type => PROPERTY_TYPE_NAMES[type] || null;
+const propertyTypeName = (type: number): string | null => PROPERTY_TYPE_NAMES[type] || null;
 
-const parsePropertyString = (dv, offset, available, isUnicode) => {
+const parsePropertyString = (
+  dv: DataView,
+  offset: number,
+  available: number,
+  isUnicode: boolean
+): string | null => {
   if (available < 4) return null;
   const count = dv.getUint32(offset, true);
   if (count <= 0) return "";
@@ -120,7 +138,9 @@ const parsePropertyString = (dv, offset, available, isUnicode) => {
   if (isUnicode) {
     let result = "";
     for (let i = 0; i + 1 < bytes.length; i += 2) {
-      const code = bytes[i] | (bytes[i + 1] << 8);
+      const low = bytes[i] ?? 0;
+      const high = bytes[i + 1] ?? 0;
+      const code = low | (high << 8);
       if (code === 0) break;
       result += String.fromCharCode(code);
     }
@@ -129,14 +149,19 @@ const parsePropertyString = (dv, offset, available, isUnicode) => {
   return ansiFromBytes(bytes).replace(/\0+$/, "");
 };
 
-const decodeVector = (dv, offset, available, baseType) => {
-  if (available < 4) return { value: null, truncated: true };
+const decodeVector = (
+  dv: DataView,
+  offset: number,
+  available: number,
+  baseType: number
+): { value: LnkPropertyScalar[]; truncated: boolean } => {
+  if (available < 4) return { value: [], truncated: true };
   const count = dv.getUint32(offset, true);
-  const values = [];
+  const values: LnkPropertyScalar[] = [];
   let cursor = offset + 4;
   for (let i = 0; i < count && cursor < offset + available; i += 1) {
     const remaining = offset + available - cursor;
-    let element = null;
+    let element: LnkPropertyScalar | null = null;
     switch (baseType) {
       case 0x0011: // UI1
         element = dv.getUint8(cursor);
@@ -193,9 +218,29 @@ const decodeVector = (dv, offset, available, baseType) => {
   return { value: values, truncated: cursor > offset + available };
 };
 
-const parsePropertyValue = (dv, offset, declaredSize, warnings, label) => {
+const parsePropertyValue = (
+  dv: DataView,
+  offset: number,
+  declaredSize: number,
+  warnings: string[],
+  label: string
+): {
+    type: number | null;
+    typeName: string | null;
+    value: LnkPropertyValue;
+    truncated: boolean;
+    valueSize: number;
+    isVector: boolean;
+  } => {
   if (declaredSize < 4 || offset + 4 > dv.byteLength) {
-    return { type: null, typeName: null, value: null, truncated: true };
+    return {
+      type: null,
+      typeName: null,
+      value: null,
+      truncated: true,
+      valueSize: declaredSize,
+      isVector: false
+    };
   }
   let type = dv.getUint16(offset, true);
   const rawType = type;
@@ -214,10 +259,10 @@ const parsePropertyValue = (dv, offset, declaredSize, warnings, label) => {
   const clampedEnd = Math.min(declaredEnd, dv.byteLength);
   const available = Math.max(0, clampedEnd - dataStart);
   const typeName = propertyTypeName(baseType);
-  let value = null;
+  let value: LnkPropertyValue = null;
   let truncated = declaredEnd > dv.byteLength;
 
-  const parseScalar = () => {
+  const parseScalar = (): LnkPropertyValue => {
     switch (baseType) {
       case 0x001f:
         return parsePropertyString(dv, dataStart, available, true);
@@ -272,15 +317,19 @@ const parsePropertyValue = (dv, offset, declaredSize, warnings, label) => {
     value = parseScalar();
   }
 
-  if (declaredEnd > dv.byteLength && warnings) {
+  if (declaredEnd > dv.byteLength) {
     const labelText = label || "property store entry";
     warnings.push(`${labelText} value is truncated.`);
   }
   return { type, typeName, value, truncated, valueSize: declaredSize, isVector };
 };
 
-const parsePropertyStorage = (dv, warnings, formatId) => {
-  const properties = [];
+const parsePropertyStorage = (
+  dv: DataView,
+  warnings: string[],
+  formatId: string | null
+): { properties: LnkProperty[]; endOffset: number } => {
+  const properties: LnkProperty[] = [];
   let cursor = 0;
   const limit = dv.byteLength;
   while (cursor + 8 <= limit) {
@@ -309,8 +358,8 @@ const parsePropertyStorage = (dv, warnings, formatId) => {
   return { properties, endOffset: cursor };
 };
 
-const parsePropertyStore = (blockDv, warnings) => {
-  const storages = [];
+const parsePropertyStore = (blockDv: DataView, warnings: string[]): LnkPropertyStoreData => {
+  const storages: LnkPropertyStorage[] = [];
   const limit = blockDv.byteLength;
   let cursor = 8; // skip block header
   while (cursor + 24 <= limit) {
@@ -321,7 +370,7 @@ const parsePropertyStore = (blockDv, warnings) => {
       break;
     }
     const magicValue = blockDv.getUint32(cursor + 4, true);
-    let magic;
+    let magic: string;
     if (magicValue === 0x53505331) {
       magic = "SPS1";
     } else if (magicValue === 0x53505332) {
@@ -356,13 +405,13 @@ const parsePropertyStore = (blockDv, warnings) => {
   return { storages };
 };
 
-const parseVistaIdList = (blockDv, warnings) => {
-  if (blockDv.byteLength <= 8) return { items: [], terminatorPresent: false, truncated: true };
+const parseVistaIdList = (blockDv: DataView, warnings: string[]): LnkVistaIdListData => {
+  if (blockDv.byteLength <= 8) return { items: [], terminatorPresent: false };
   const { items, terminatorPresent } = parsePidlItems(blockDv, 8, blockDv.byteLength, warnings);
   return { items, terminatorPresent };
 };
 
-const parseExtraBlock = (signature, blockDv, warnings) => {
+const parseExtraBlock = (signature: number, blockDv: DataView, warnings: string[]): unknown => {
   switch (signature >>> 0) {
     case 0xa0000001:
     case 0xa0000006:
@@ -385,8 +434,8 @@ const parseExtraBlock = (signature, blockDv, warnings) => {
   }
 };
 
-export const parseExtraData = (dv, offset, warnings) => {
-  const blocks = [];
+export const parseExtraData = (dv: DataView, offset: number, warnings: string[]): LnkExtraData => {
+  const blocks: LnkExtraDataBlock[] = [];
   let cursor = offset;
   let terminatorPresent = false;
   while (cursor + 4 <= dv.byteLength) {
@@ -403,13 +452,14 @@ export const parseExtraData = (dv, offset, warnings) => {
     const blockEnd = cursor + size;
     const clampedEnd = Math.min(blockEnd, dv.byteLength);
     const blockDv = new DataView(dv.buffer, dv.byteOffset + cursor, clampedEnd - cursor);
-    blocks.push({
+    const block: LnkExtraDataBlock = {
       size,
       signature,
       name: nameForExtraBlock(signature),
       truncated: blockEnd > dv.byteLength,
       parsed: parseExtraBlock(signature, blockDv, warnings)
-    });
+    };
+    blocks.push(block);
     if (blockEnd > dv.byteLength) break;
     cursor = blockEnd;
   }

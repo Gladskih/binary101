@@ -15,7 +15,7 @@ export interface ExifGps {
 export interface ExifRawTag {
   ifd: string;
   tag: number;
-  type: number;
+  type: number | string;
   count: number;
   preview: string;
 }
@@ -30,8 +30,8 @@ export interface ExifData {
   fNumber: ExifRational | null;
   focalLength: ExifRational | null;
   flash: number | null;
-  pixelXDimension: number | null;
-  pixelYDimension: number | null;
+  pixelXDimension?: number | null;
+  pixelYDimension?: number | null;
   gps: ExifGps | null;
   rawTags: ExifRawTag[];
 }

@@ -1,10 +1,10 @@
-// @ts-nocheck
 "use strict";
 
 import { humanSize, hex } from "../../binary-utils.js";
 import { safe } from "../../html-utils.js";
+import type { PeParseResult } from "../../analyzers/pe/index.js";
 
-export function renderReloc(pe, out) {
+export function renderReloc(pe: PeParseResult, out: string[]): void {
   if (!pe.reloc) return;
   const reloc = pe.reloc;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Base relocations</h4>`);
@@ -15,14 +15,14 @@ export function renderReloc(pe, out) {
   if (reloc.blocks?.length) {
     out.push(`<table class="table"><thead><tr><th>#</th><th>Page RVA</th><th>Block size</th><th>Entries</th></tr></thead><tbody>`);
     reloc.blocks.slice(0, 256).forEach((block, index) => {
-      out.push(`<tr><td>${index + 1}</td><td>${hex(block.VirtualAddress, 8)}</td><td>${humanSize(block.SizeOfBlock)}</td><td>${block.entryCount}</td></tr>`);
+      out.push(`<tr><td>${index + 1}</td><td>${hex(block.pageRva, 8)}</td><td>${humanSize(block.size)}</td><td>${block.count}</td></tr>`);
     });
     out.push(`</tbody></table>`);
   }
   out.push(`</section>`);
 }
 
-export function renderException(pe, out) {
+export function renderException(pe: PeParseResult, out: string[]): void {
   if (!pe.exception) return;
   const ex = pe.exception;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Exception directory (.pdata)</h4>`);
@@ -39,7 +39,7 @@ export function renderException(pe, out) {
   out.push(`</section>`);
 }
 
-export function renderBoundImports(pe, out) {
+export function renderBoundImports(pe: PeParseResult, out: string[]): void {
   if (!pe.boundImports) return;
   const bi = pe.boundImports;
   if (!bi.entries?.length) return;
@@ -51,7 +51,7 @@ export function renderBoundImports(pe, out) {
   out.push(`</tbody></table></section>`);
 }
 
-export function renderDelayImports(pe, out) {
+export function renderDelayImports(pe: PeParseResult, out: string[]): void {
   if (!pe.delayImports) return;
   const di = pe.delayImports;
   if (!di.entries?.length) return;
@@ -83,21 +83,21 @@ export function renderDelayImports(pe, out) {
   out.push(`</section>`);
 }
 
-export function renderCoverage(pe, out) {
+export function renderCoverage(pe: PeParseResult, out: string[]): void {
   if (!pe.coverage) return;
   const cov = pe.coverage;
-  if (!cov.coverage?.length) return;
+  if (!cov.length) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Coverage map (file offsets)</h4>`);
   out.push(`<div class="smallNote">Shows which parts of the file were recognized as headers, directories and section data. Gaps may indicate overlays or unknown data.</div>`);
   out.push(`<table class="table"><thead><tr><th>#</th><th>Label</th><th>Offset</th><th>Size</th></tr></thead><tbody>`);
-  cov.coverage.forEach((seg, index) => {
+  cov.forEach((seg, index) => {
     out.push(`<tr><td>${index + 1}</td><td>${safe(seg.label)}</td><td>${hex(seg.off, 8)}</td><td>${humanSize(seg.size)}</td></tr>`);
   });
   out.push(`</tbody></table></section>`);
 }
 
-export function renderSanity(pe, out) {
-  const issues = [];
+export function renderSanity(pe: PeParseResult, out: string[]): void {
+  const issues: string[] = [];
   if (pe.overlaySize > 0) {
     issues.push(`Overlay after last section: ${humanSize(pe.overlaySize)}.`);
   }

@@ -1,10 +1,10 @@
-// @ts-nocheck
 "use strict";
 
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
+import type { PngChunk, PngParseResult, PngTextChunk } from "../../analyzers/png/types.js";
 
-function renderIssues(issues) {
+function renderIssues(issues: string[] | null | undefined): string {
   if (!issues || issues.length === 0) return "";
   const bulletItems = issues
     .map(issue => `<li>${escapeHtml(issue)}</li>`)
@@ -12,7 +12,7 @@ function renderIssues(issues) {
   return `<h4>Warnings</h4><ul class="issueList">${bulletItems}</ul>`;
 }
 
-function renderTextChunks(texts) {
+function renderTextChunks(texts: PngTextChunk[] | null | undefined): string {
   if (!texts || texts.length === 0) return "";
   const rows = texts
     .map((text, index) => {
@@ -32,23 +32,23 @@ function renderTextChunks(texts) {
   );
 }
 
-function describeInterlace(code) {
+function describeInterlace(code: number | null | undefined): string {
   if (code === 0) return "None";
   if (code === 1) return "Adam7 (7-pass interlace)";
   return code == null ? "Unknown" : `Unknown (${code})`;
 }
 
-function describeCompression(code) {
+function describeCompression(code: number | null | undefined): string {
   if (code === 0) return "Deflate/inflate (RFC 1951)";
   return code == null ? "Unknown" : `Unknown (${code})`;
 }
 
-function describeFilter(code) {
+function describeFilter(code: number | null | undefined): string {
   if (code === 0) return "Adaptive filtering (5 basic filters)";
   return code == null ? "Unknown" : `Unknown (${code})`;
 }
 
-function renderChunks(chunks) {
+function renderChunks(chunks: PngChunk[] | null | undefined): string {
   if (!chunks || chunks.length === 0) return "";
   const header =
     "<h4>Chunks</h4>" +
@@ -85,7 +85,7 @@ function renderChunks(chunks) {
   );
 }
 
-export function renderPng(png) {
+export function renderPng(png: PngParseResult | null): string {
   if (!png) return "";
   const {
     size,
@@ -105,7 +105,7 @@ export function renderPng(png) {
     issues
   } = png;
 
-  const out = [];
+  const out: string[] = [];
   out.push("<h3>PNG structure</h3>");
   out.push("<dl>");
   out.push(renderDefinitionRow("File size", escapeHtml(formatHumanSize(size))));

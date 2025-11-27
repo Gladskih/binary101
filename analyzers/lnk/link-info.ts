@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use strict";
 
 import {
@@ -7,8 +6,14 @@ import {
   providerTypeName,
   readNullTerminatedString
 } from "./utils.js";
+import type { LnkLinkInfo, LnkNetworkInfo, LnkVolumeInfo } from "./types.js";
 
-const parseVolumeId = (dv, start, maxEnd, warnings) => {
+const parseVolumeId = (
+  dv: DataView,
+  start: number,
+  maxEnd: number,
+  warnings: string[]
+): LnkVolumeInfo | null => {
   if (start + 0x10 > maxEnd || start + 0x10 > dv.byteLength) {
     warnings.push("VolumeID is truncated.");
     return null;
@@ -26,7 +31,7 @@ const parseVolumeId = (dv, start, maxEnd, warnings) => {
       ? readNullTerminatedString(dv, start + volumeLabelOffset, end, false)
       : null;
   const labelUnicode =
-    hasUnicodeOffset && volumeLabelOffsetUnicode > 0
+    hasUnicodeOffset && volumeLabelOffsetUnicode != null && volumeLabelOffsetUnicode > 0
       ? readNullTerminatedString(dv, start + volumeLabelOffsetUnicode, end, true)
       : null;
   return {
@@ -41,7 +46,12 @@ const parseVolumeId = (dv, start, maxEnd, warnings) => {
   };
 };
 
-const parseCommonNetworkRelativeLink = (dv, start, maxEnd, warnings) => {
+const parseCommonNetworkRelativeLink = (
+  dv: DataView,
+  start: number,
+  maxEnd: number,
+  warnings: string[]
+): LnkNetworkInfo | null => {
   if (start + 0x14 > maxEnd || start + 0x14 > dv.byteLength) {
     warnings.push("CommonNetworkRelativeLink is truncated.");
     return null;
@@ -85,7 +95,12 @@ const parseCommonNetworkRelativeLink = (dv, start, maxEnd, warnings) => {
   };
 };
 
-export const parseLinkInfo = (dv, offset, warnings, hasLinkInfo) => {
+export const parseLinkInfo = (
+  dv: DataView,
+  offset: number,
+  warnings: string[],
+  hasLinkInfo: boolean
+): LnkLinkInfo | null => {
   if (!hasLinkInfo) return null;
   if (offset + 4 > dv.byteLength) {
     warnings.push("LinkInfo size is truncated.");
@@ -116,7 +131,7 @@ export const parseLinkInfo = (dv, offset, warnings, hasLinkInfo) => {
       ? dv.getUint32(offset + 0x20, true)
       : null;
 
-  const checkOffset = (name, value) => {
+  const checkOffset = (name: string, value: number | null): void => {
     if (!value) return;
     if (value < headerSize) {
       warnings.push(`${name} offset (${value}) is smaller than LinkInfoHeaderSize (${headerSize}).`);

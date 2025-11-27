@@ -1,16 +1,23 @@
-// @ts-nocheck
 "use strict";
 
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import { formatHumanSize } from "../../binary-utils.js";
+import type {
+  PdfCatalog,
+  PdfInfoDictionary,
+  PdfParseResult,
+  PdfPages,
+  PdfTrailer,
+  PdfXref
+} from "../../analyzers/pdf/types.js";
 
-function renderIssues(issues) {
+function renderIssues(issues: string[] | null | undefined): string {
   if (!issues || issues.length === 0) return "";
   const items = issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("");
   return `<h4>Warnings</h4><ul class="issueList">${items}</ul>`;
 }
 
-function renderCrossReference(xref) {
+function renderCrossReference(xref: PdfXref | null): string {
   if (!xref) return "";
   if (xref.kind === "stream") {
     return (
@@ -49,9 +56,9 @@ function renderCrossReference(xref) {
   );
 }
 
-function renderTrailer(trailer) {
+function renderTrailer(trailer: PdfTrailer | null): string {
   if (!trailer) return "";
-  const parts = [];
+  const parts: string[] = [];
   parts.push("<h4>Trailer</h4><dl>");
   parts.push(
     renderDefinitionRow(
@@ -97,7 +104,7 @@ function renderTrailer(trailer) {
   return parts.join("");
 }
 
-function renderInfo(info) {
+function renderInfo(info: PdfInfoDictionary | null): string {
   if (!info) return "";
   const rows = [
     ["Title", info.title],
@@ -124,9 +131,9 @@ function renderInfo(info) {
   );
 }
 
-function renderCatalog(catalog, pages) {
+function renderCatalog(catalog: PdfCatalog | null, pages: PdfPages | null): string {
   if (!catalog) return "";
-  const rows = [];
+  const rows: string[] = [];
   rows.push(
     renderDefinitionRow(
       "Pages",
@@ -169,9 +176,9 @@ function renderCatalog(catalog, pages) {
   return "<h4>Catalog</h4><dl>" + rows.join("") + "</dl>";
 }
 
-export function renderPdf(pdf) {
+export function renderPdf(pdf: PdfParseResult | null): string {
   if (!pdf) return "";
-  const parts = [];
+  const parts: string[] = [];
   parts.push("<h3>PDF structure</h3>");
   parts.push("<dl>");
   parts.push(
