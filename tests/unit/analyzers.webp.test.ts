@@ -6,6 +6,7 @@ import { parseWebp } from "../../analyzers/webp/index.js";
 import { createWebpFile } from "../fixtures/sample-files.js";
 import { createInvalidWebpSignature, createWebpWithBadChunkSize } from "../fixtures/webp-fixtures.js";
 import { createAnimatedWebpMissingFrame } from "../fixtures/webp-frames-fixtures.js";
+import { expectDefined } from "../helpers/expect-defined.js";
 
 void test("parseWebp rejects non-RIFF/WEBP signatures", async () => {
   const result = await parseWebp(createInvalidWebpSignature());
@@ -13,19 +14,18 @@ void test("parseWebp rejects non-RIFF/WEBP signatures", async () => {
 });
 
 void test("parseWebp captures size mismatch issues", async () => {
-  const webp = await parseWebp(createWebpWithBadChunkSize());
-  assert.ok(webp);
+  const webp = expectDefined(await parseWebp(createWebpWithBadChunkSize()));
   assert.ok(webp.issues.length > 0);
 });
 
 void test("parseWebp parses minimal WebP and extracts chunks", async () => {
-  const webp = await parseWebp(createWebpFile());
+  const webp = expectDefined(await parseWebp(createWebpFile()));
   assert.ok(webp.issues.length > 0 || webp.dimensions || webp.chunks.length > 0);
   assert.ok(Array.isArray(webp.chunks));
 });
 
 void test("parseWebp flags animation without frames", async () => {
-  const webp = await parseWebp(createAnimatedWebpMissingFrame());
+  const webp = expectDefined(await parseWebp(createAnimatedWebpMissingFrame()));
   assert.ok(webp.hasAnimation);
   assert.strictEqual(webp.frameCount, 0);
 });

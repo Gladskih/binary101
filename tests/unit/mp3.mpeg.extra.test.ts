@@ -10,6 +10,7 @@ import {
   validateNextFrame
 } from "../../analyzers/mp3/mpeg.js";
 import type { MpegFrameHeader, VbrHeader } from "../../analyzers/mp3/types.js";
+import { expectDefined } from "../helpers/expect-defined.js";
 
 type HeaderOptions = {
   versionBits?: number;
@@ -77,7 +78,7 @@ void test("validateNextFrame reports truncated, invalid, and mismatched frames",
   const headerValue = makeHeaderValue({ bitrateIndex: 0x9, sampleRateIndex: 0x0 });
   const shortData = new Uint8Array(100).fill(0);
   writeHeader(shortData, 0, headerValue);
-  const shortFrame = parseFrameHeader(new DataView(shortData.buffer), 0);
+  const shortFrame = expectDefined(parseFrameHeader(new DataView(shortData.buffer), 0));
   const shortIssues: string[] = [];
   assert.strictEqual(validateNextFrame(new DataView(shortData.buffer), shortFrame, shortIssues), false);
   assert.ok(shortIssues.some(msg => msg.includes("too small")));
@@ -86,7 +87,7 @@ void test("validateNextFrame reports truncated, invalid, and mismatched frames",
   const invalidSecond = new Uint8Array(frameLength + 8).fill(0);
   writeHeader(invalidSecond, 0, headerValue);
   const issues: string[] = [];
-  const parsedFrame = parseFrameHeader(new DataView(invalidSecond.buffer), 0);
+  const parsedFrame = expectDefined(parseFrameHeader(new DataView(invalidSecond.buffer), 0));
   assert.strictEqual(validateNextFrame(new DataView(invalidSecond.buffer), parsedFrame, issues), false);
   assert.ok(issues.some(msg => msg.includes("invalid")));
 
@@ -99,7 +100,7 @@ void test("validateNextFrame reports truncated, invalid, and mismatched frames",
     makeHeaderValue({ versionBits: 0x2, layerBits: 0x2 })
   );
   const mismatchIssues: string[] = [];
-  const mismatchFrame = parseFrameHeader(mismatchView, 0);
+  const mismatchFrame = expectDefined(parseFrameHeader(mismatchView, 0));
   assert.strictEqual(validateNextFrame(mismatchView, mismatchFrame, mismatchIssues), false);
   assert.ok(mismatchIssues.some(msg => msg.includes("disagree")));
 });
@@ -109,15 +110,14 @@ void test("parseVbrHeader detects Xing/Info and VBRI markers", () => {
   const data = new Uint8Array(200).fill(0);
   writeHeader(data, 0, headerValue);
   const dv = new DataView(data.buffer);
-  const frame = parseFrameHeader(dv, 0);
+  const frame = expectDefined(parseFrameHeader(dv, 0));
   const start = 4 + 32; // side info for MPEG1 stereo
   const flags = 0x3; // frames + bytes
   data.set([0x58, 0x69, 0x6e, 0x67], start); // "Xing"
   dv.setUint32(start + 4, flags, false);
   dv.setUint32(start + 8, 123, false);
   dv.setUint32(start + 12, 456, false);
-  const xing = parseVbrHeader(dv, frame);
-  assert.ok(xing);
+  const xing = expectDefined(parseVbrHeader(dv, frame));
   assert.strictEqual(xing.frames, 123);
   assert.strictEqual(xing.bytes, 456);
   assert.strictEqual(xing.vbrDetected, true);
@@ -129,9 +129,8 @@ void test("parseVbrHeader detects Xing/Info and VBRI markers", () => {
   vbriView.setUint16(36 + 8, 99, false); // quality
   vbriView.setUint32(36 + 10, 1000, false); // bytes
   vbriView.setUint32(36 + 14, 77, false); // frames
-  const vbriFrame = parseFrameHeader(vbriView, 0);
-  const vbri = parseVbrHeader(vbriView, vbriFrame);
-  assert.ok(vbri);
+  const vbriFrame = expectDefined(parseFrameHeader(vbriView, 0));
+  const vbri = expectDefined(parseVbrHeader(vbriView, vbriFrame));
   assert.strictEqual(vbri.type, "VBRI");
   assert.strictEqual(vbri.frames, 77);
   assert.strictEqual(vbri.bytes, 1000);
@@ -186,7 +185,8 @@ void test("estimateDuration chooses best available information", () => {
   assert.strictEqual(bytesDuration, (44100 * 8) / (128000));
 
   const audioDuration = estimateDuration(baseFrame, null, 5000, issues);
-  assert.ok(audioDuration > 0);
+  const definedDuration = expectDefined(audioDuration);
+  assert.ok(definedDuration > 0);
 
   const missing = estimateDuration(null, null, -1, issues);
   assert.strictEqual(missing, null);

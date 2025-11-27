@@ -84,5 +84,7 @@ void test("buildFileDetails warns when streams are not matched to folders", () =
   const { files } = buildFileDetails(sections, folders, issues);
   assert.equal(files.length, 1);
   assert.ok(issues.some(msg => msg.includes("not matched")));
-  assert.equal(files[0].folderIndex, null);
+  const file = files[0];
+  assert.ok(file);
+  assert.equal(file.folderIndex, null);
 });

@@ -31,5 +31,7 @@ void test("parsePackInfo reads sizes and stops on unknown field ids", () => {
   assert.equal(info.packPos, 0n);
   assert.equal(info.numPackStreams, 1n);
   assert.equal(ctx.issues.length, 1);
-  assert.match(ctx.issues[0], /Unknown PackInfo field id/);
+  const issue = ctx.issues[0];
+  assert.ok(issue);
+  assert.match(issue, /Unknown PackInfo field id/);
 });

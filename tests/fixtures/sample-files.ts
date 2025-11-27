@@ -22,9 +22,10 @@ const crc32Table = (() => {
 
 const crc32 = (bytes: Uint8Array): number => {
   let crc = 0xffffffff;
-  for (let i = 0; i < bytes.length; i += 1) {
-    const idx = (crc ^ bytes[i]) & 0xff;
-    crc = (crc >>> 8) ^ crc32Table[idx];
+  for (const byte of bytes) {
+    const idx = (crc ^ byte) & 0xff;
+    const tableValue = crc32Table[idx] ?? 0;
+    crc = (crc >>> 8) ^ tableValue;
   }
   return (crc ^ 0xffffffff) >>> 0;
 };
@@ -89,10 +90,14 @@ const concatParts = (parts: Uint8Array[]): Uint8Array => {
 
 const writeGuid = (buffer: Uint8Array, offset: number, guidText: string): void => {
   const parts = guidText.split("-");
-  const data1 = Number.parseInt(parts[0], 16);
-  const data2 = Number.parseInt(parts[1], 16);
-  const data3 = Number.parseInt(parts[2], 16);
-  const tail = parts[3] + parts[4];
+  const [data1Text, data2Text, data3Text, tailStart, tailEnd] = parts;
+  if (!data1Text || !data2Text || !data3Text || !tailStart || !tailEnd) {
+    throw new Error("Invalid GUID text");
+  }
+  const data1 = Number.parseInt(data1Text, 16);
+  const data2 = Number.parseInt(data2Text, 16);
+  const data3 = Number.parseInt(data3Text, 16);
+  const tail = tailStart + tailEnd;
   const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
   view.setUint32(offset, data1, true);
   view.setUint16(offset + 4, data2, true);
@@ -177,7 +182,7 @@ export const createTarFile = () => {
   writeString(header, "group", 297, 32);
 
   let sum = 0;
-  for (let i = 0; i < header.length; i += 1) sum += header[i];
+  for (let i = 0; i < header.length; i += 1) sum += header[i] ?? 0;
   const checksum = formatOffset(sum);
   writeString(header, checksum, 148, 8);
 
@@ -344,8 +349,21 @@ export const createLnkFile = () => {
   const buildLinkInfo = () => {
     const headerSize = 0x24;
     let cursor = headerSize;
-    const offsets: Record<string, number> = {};
-    const add = (key: string, length: number): void => {
+    type LinkOffsets = {
+      volumeId: number;
+      localBasePath: number;
+      commonPathSuffix: number;
+      localBasePathUnicode: number;
+      commonPathSuffixUnicode: number;
+    };
+    const offsets: LinkOffsets = {
+      volumeId: 0,
+      localBasePath: 0,
+      commonPathSuffix: 0,
+      localBasePathUnicode: 0,
+      commonPathSuffixUnicode: 0
+    };
+    const add = (key: keyof LinkOffsets, length: number): void => {
       cursor = align4(cursor);
       offsets[key] = cursor;
       cursor += length;
@@ -361,17 +379,17 @@ export const createLnkFile = () => {
     idv.setUint32(0, size, true);
     idv.setUint32(4, headerSize, true);
     idv.setUint32(8, 0x00000001, true);
-    idv.setUint32(0x0c, offsets["volumeId"], true);
-    idv.setUint32(0x10, offsets["localBasePath"], true);
+    idv.setUint32(0x0c, offsets.volumeId, true);
+    idv.setUint32(0x10, offsets.localBasePath, true);
     idv.setUint32(0x14, 0, true);
-    idv.setUint32(0x18, offsets["commonPathSuffix"], true);
-    idv.setUint32(0x1c, offsets["localBasePathUnicode"], true);
-    idv.setUint32(0x20, offsets["commonPathSuffixUnicode"], true);
-    info.set(volumeId, offsets["volumeId"]);
-    info.set(localBasePath, offsets["localBasePath"]);
-    info.set(commonPathSuffix, offsets["commonPathSuffix"]);
-    info.set(localBasePathUnicode, offsets["localBasePathUnicode"]);
-    info.set(commonPathSuffixUnicode, offsets["commonPathSuffixUnicode"]);
+    idv.setUint32(0x18, offsets.commonPathSuffix, true);
+    idv.setUint32(0x1c, offsets.localBasePathUnicode, true);
+    idv.setUint32(0x20, offsets.commonPathSuffixUnicode, true);
+    info.set(volumeId, offsets.volumeId);
+    info.set(localBasePath, offsets.localBasePath);
+    info.set(commonPathSuffix, offsets.commonPathSuffix);
+    info.set(localBasePathUnicode, offsets.localBasePathUnicode);
+    info.set(commonPathSuffixUnicode, offsets.commonPathSuffixUnicode);
     return info;
   };
 
@@ -657,15 +675,22 @@ export const createPdfFile = () => {
   };
 
   const body = [add(header), add(obj1), add(obj2), add(obj3), add(obj4)].join("");
+  const [, obj1Offset, obj2Offset, obj3Offset, obj4Offset] = offsets as [
+    number,
+    number,
+    number,
+    number,
+    number
+  ];
   const xrefOffset = cursor;
   const pad = (value: number): string => value.toString().padStart(10, "0");
   const xref =
     "xref\n0 5\n" +
     `${pad(0)} 65535 f \n` +
-    `${pad(offsets[1])} 00000 n \n` +
-    `${pad(offsets[2])} 00000 n \n` +
-    `${pad(offsets[3])} 00000 n \n` +
-    `${pad(offsets[4])} 00000 n \n`;
+    `${pad(obj1Offset)} 00000 n \n` +
+    `${pad(obj2Offset)} 00000 n \n` +
+    `${pad(obj3Offset)} 00000 n \n` +
+    `${pad(obj4Offset)} 00000 n \n`;
   const trailer = `trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
   const pdfText = body + xref + trailer;
   return new MockFile(encoder.encode(pdfText), "sample.pdf", "application/pdf");

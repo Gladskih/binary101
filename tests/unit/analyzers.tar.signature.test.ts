@@ -39,7 +39,7 @@ void test("hasTarSignature returns false when DataView is too short", () => {
 
 void test("hasTarSignature returns false when DataView is null or undefined", () => {
   assert.strictEqual(hasTarSignature(null), false);
-  assert.strictEqual(hasTarSignature(undefined), false);
+  assert.strictEqual(hasTarSignature(undefined as unknown as DataView), false);
 });
 
 void test("hasTarSignature returns true for empty string at 257 for other reasons", () => {

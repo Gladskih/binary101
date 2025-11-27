@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { enrichResourcePreviews } from "../../analyzers/pe/resources-preview.js";
 import { MockFile } from "../helpers/mock-file.js";
 import type { ResourceTree } from "../../analyzers/pe/resources-core.js";
+import { expectDefined } from "../helpers/expect-defined.js";
 
 const encoder = new TextEncoder();
 const pngSmall = Uint8Array.from(
@@ -125,33 +126,41 @@ void test("enrichResourcePreviews builds previews for common PE resources", asyn
 
   const result = await enrichResourcePreviews(file, tree);
 
-  const iconLang = result.detail.find(g => g.typeName === "ICON").entries[0].langs[0];
+  const langOf = (typeName: string) => {
+    const group = expectDefined(result.detail.find(g => g.typeName === typeName));
+    const entry = expectDefined(group.entries[0]);
+    return expectDefined(entry.langs[0]);
+  };
+
+  const iconLang = langOf("ICON");
   assert.strictEqual(iconLang.previewKind, "image");
   assert.strictEqual(iconLang.previewMime, "image/png");
 
-  const groupLang = result.detail.find(g => g.typeName === "GROUP_ICON").entries[0].langs[0];
+  const groupLang = langOf("GROUP_ICON");
   assert.strictEqual(groupLang.previewKind, "image");
-  assert.match(groupLang.previewMime, /x-icon/);
+  assert.match(expectDefined(groupLang.previewMime), /x-icon/);
 
-  const manifestLang = result.detail.find(g => g.typeName === "MANIFEST").entries[0].langs[0];
+  const manifestLang = langOf("MANIFEST");
   assert.strictEqual(manifestLang.previewKind, "text");
-  assert.match(manifestLang.textPreview, /assembly/);
+  assert.match(expectDefined(manifestLang.textPreview), /assembly/);
 
-  const htmlLang = result.detail.find(g => g.typeName === "HTML").entries[0].langs[0];
+  const htmlLang = langOf("HTML");
   assert.strictEqual(htmlLang.previewKind, "html");
-  assert.match(htmlLang.textPreview, /<body>hi/);
+  assert.match(expectDefined(htmlLang.textPreview), /<body>hi/);
 
-  const stringLang = result.detail.find(g => g.typeName === "STRING").entries[0].langs[0];
+  const stringLang = langOf("STRING");
   assert.strictEqual(stringLang.previewKind, "stringTable");
-  assert.ok(stringLang.stringTable.length >= 1);
+  const stringTablePreview = expectDefined(stringLang.stringTable);
+  assert.ok(stringTablePreview.length >= 1);
   assert.ok((stringLang.previewIssues || []).length > 0);
 
-  const msgLang = result.detail.find(g => g.typeName === "MESSAGETABLE").entries[0].langs[0];
+  const msgLang = langOf("MESSAGETABLE");
   assert.strictEqual(msgLang.previewKind, "messageTable");
-  assert.ok(msgLang.messageTable.messages.length >= 1);
-  assert.strictEqual(msgLang.messageTable.truncated, false);
+  const messageTablePreview = expectDefined(msgLang.messageTable);
+  assert.ok(messageTablePreview.messages.length >= 1);
+  assert.strictEqual(messageTablePreview.truncated, false);
 
-  const versionLang = result.detail.find(g => g.typeName === "VERSION").entries[0].langs[0];
+  const versionLang = langOf("VERSION");
   assert.strictEqual(versionLang.previewKind, "version");
   const versionInfo = versionLang.versionInfo as { fixed?: { fileVersionString?: string } } | undefined;
   assert.ok(versionInfo?.fixed?.fileVersionString);

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { hasSevenZipSignature, parseSevenZip } from "../../analyzers/sevenz/index.js";
 import { MockFile } from "../helpers/mock-file.js";
+import { expectDefined } from "../helpers/expect-defined.js";
 
 const SIGNATURE = [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c];
 
@@ -158,26 +159,32 @@ void test("parseSevenZip builds folder and file structures from header", async (
   const parsed = await parseSevenZip(archive);
   assert.equal(parsed.is7z, true);
   assert.strictEqual(parsed.issues.length, 0);
-  assert.ok(parsed.structure);
-  assert.strictEqual(parsed.structure.folders.length, 1);
-  assert.strictEqual(parsed.structure.folders[0].coders[0].id, "LZMA2");
-  assert.strictEqual(parsed.structure.files.length, 2);
-  assert.strictEqual(parsed.structure.files[0].name, "file1");
-  assert.strictEqual(parsed.structure.files[0].folderIndex, 0);
-  assert.strictEqual(parsed.structure.files[0].compressionRatio, 100);
-  assert.strictEqual(parsed.structure.files[1].isDirectory, true);
-  assert.ok(parsed.structure.files[0].modifiedTime);
+  const structure = expectDefined(parsed.structure);
+  assert.strictEqual(structure.folders.length, 1);
+  const firstFolder = expectDefined(structure.folders[0]);
+  const firstCoder = expectDefined(firstFolder.coders[0]);
+  assert.strictEqual(firstCoder.id, "LZMA2");
+  assert.strictEqual(structure.files.length, 2);
+  const firstFile = expectDefined(structure.files[0]);
+  assert.strictEqual(firstFile.name, "file1");
+  assert.strictEqual(firstFile.folderIndex, 0);
+  assert.strictEqual(firstFile.compressionRatio, 100);
+  const secondFile = expectDefined(structure.files[1]);
+  assert.strictEqual(secondFile.isDirectory, true);
+  assert.ok(firstFile.modifiedTime);
 });
 
 void test("parseSevenZip reports encoded headers and encryption markers", async () => {
   const encryptedHeader = buildSevenZipFile(buildEncodedHeader());
   const parsed = await parseSevenZip(encryptedHeader);
   assert.equal(parsed.is7z, true);
-  assert.strictEqual(parsed.nextHeader.parsed.kind, "encoded");
-  assert.ok(parsed.headerEncoding);
-  assert.strictEqual(parsed.headerEncoding.hasEncryptedHeader, true);
+  const nextHeader = expectDefined(parsed.nextHeader);
+  const parsedNextHeader = expectDefined(nextHeader.parsed);
+  assert.strictEqual(parsedNextHeader.kind, "encoded");
+  const headerEncoding = expectDefined(parsed.headerEncoding);
+  assert.strictEqual(headerEncoding.hasEncryptedHeader, true);
   assert.ok(
-    parsed.headerEncoding.coders.some(folder =>
+    headerEncoding.coders.some(folder =>
       folder.coders.some(coder => coder.id === "AES-256")
     )
   );

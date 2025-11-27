@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseExifFromApp1 } from "../../analyzers/jpeg/exif.js";
+import { expectDefined } from "../helpers/expect-defined.js";
 
 const writeEntry = (
   dv: DataView,
@@ -93,20 +94,19 @@ void test("parseExifFromApp1 parses EXIF and GPS fields with raw tags", () => {
   writeEntry(dv, 238, 0x0004, 5, 3, gpsLonOffset);
   dv.setUint32(200 + 2 + 4 * 12, 0, true);
 
-  const exif = parseExifFromApp1(new DataView(buffer), 0);
-  assert.ok(exif);
+  const exif = expectDefined(parseExifFromApp1(new DataView(buffer), 0));
   assert.equal(exif.orientation, 1);
   assert.equal(exif.iso, 200);
-  assert.equal(exif.exposureTime.num, 1);
-  assert.equal(exif.fNumber.num, 28);
-  assert.equal(exif.focalLength.num, 85);
+  assert.equal(expectDefined(exif.exposureTime).num, 1);
+  assert.equal(expectDefined(exif.fNumber).num, 28);
+  assert.equal(expectDefined(exif.focalLength).num, 85);
   assert.equal(exif.dateTimeOriginal, dateString);
   assert.equal(exif.flash, 1);
   assert.equal(exif.pixelXDimension, 4000);
   assert.equal(exif.pixelYDimension, 3000);
-  assert.ok(exif.gps);
-  assert.equal(exif.gps.latRef, "N");
-  assert.equal(exif.gps.lonRef, "E");
+  const gps = expectDefined(exif.gps);
+  assert.equal(gps.latRef, "N");
+  assert.equal(gps.lonRef, "E");
   assert.ok(Array.isArray(exif.rawTags));
   assert.ok(exif.rawTags.length >= 10);
 });

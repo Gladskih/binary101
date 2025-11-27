@@ -30,7 +30,7 @@ export const calculateChecksum = (headerBytes: Uint8Array): number => {
     if (i >= 148 && i < 156) {
       sum += 0x20; // Checksum field is treated as spaces for calculation
     } else {
-      sum += headerBytes[i];
+      sum += headerBytes[i] ?? 0;
     }
   }
   return sum;

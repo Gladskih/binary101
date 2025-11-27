@@ -14,6 +14,7 @@ import {
 } from "../fixtures/png-fixtures.js";
 import { createPngWithManyChunks } from "../fixtures/png-large-chunk.js";
 import { MockFile } from "../helpers/mock-file.js";
+import { expectDefined } from "../helpers/expect-defined.js";
 
 const buildChunk = (type: string, data: ArrayLike<number>): Uint8Array => {
   const payload = new Uint8Array(data);
@@ -81,39 +82,35 @@ void test("parsePng rejects invalid signature", async () => {
 });
 
 void test("parsePng catches missing IEND and invalid IHDR length", async () => {
-  const png = await parsePng(createPngMissingIend());
-  assert.ok(png);
+  const png = expectDefined(await parsePng(createPngMissingIend()));
   assert.ok(png.issues.some(issue => issue.includes("IHDR length")));
   assert.ok(png.issues.some(issue => issue.includes("IEND chunk missing")));
 });
 
 void test("parsePng detects truncated chunk", async () => {
-  const png = await parsePng(createTruncatedPngChunk());
-  assert.ok(png);
+  const png = expectDefined(await parsePng(createTruncatedPngChunk()));
   assert.ok(png.issues.some(issue => issue.includes("truncated")));
 });
 
 void test("parsePng parses small images and chunk metadata", async () => {
-  const png = await parsePng(createPngFile());
-  assert.ok(png);
-  assert.strictEqual(png.ihdr.width, 1);
+  const png = expectDefined(await parsePng(createPngFile()));
+  assert.strictEqual(expectDefined(png.ihdr).width, 1);
   assert.strictEqual(png.chunkCount > 0, true);
 });
 
 void test("parsePng parses IHDR for 2x2 image and reports palette/alpha", async () => {
-  const png = await parsePng(createPngWithIhdr());
-  assert.ok(png.ihdr);
-  assert.strictEqual(png.ihdr.width, 2);
+  const png = expectDefined(await parsePng(createPngWithIhdr()));
+  assert.strictEqual(expectDefined(png.ihdr).width, 2);
   assert.strictEqual(png.hasTransparency, false);
 });
 
 void test("parsePng stops after many chunks with warning", async () => {
-  const png = await parsePng(createPngWithManyChunks());
+  const png = expectDefined(await parsePng(createPngWithManyChunks()));
   assert.ok(png.issues.some(issue => issue.toLowerCase().includes("truncated")));
 });
 
 void test("parsePng reads ancillary chunks for metadata", async () => {
-  const png = await parsePng(createPngWithAncillaryChunks());
+  const png = expectDefined(await parsePng(createPngWithAncillaryChunks()));
   assert.ok(png.physical);
   assert.ok(png.gamma);
   assert.ok(png.iccProfile);

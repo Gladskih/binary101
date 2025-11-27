@@ -7,6 +7,7 @@ import { parseTlsDirectory } from "../../analyzers/pe/tls.js";
 import { buildResourceTree } from "../../analyzers/pe/resources-core.js";
 import { parseImportDirectory } from "../../analyzers/pe/imports.js";
 import { MockFile } from "../helpers/mock-file.js";
+import { expectDefined } from "../helpers/expect-defined.js";
 
 const encoder = new TextEncoder();
 
@@ -43,10 +44,10 @@ void test("parseDebugDirectory reads CodeView RSDS entry", async () => {
     () => {}
   );
 
-  assert.ok(result.entry);
-  assert.equal(result.entry.age, 3);
-  assert.match(result.entry.guid, /11223344-5566-7788-aabb-ccddeeff0011/);
-  assert.match(result.entry.path, /app\.pdb/);
+  const entry = expectDefined(result.entry);
+  assert.equal(entry.age, 3);
+  assert.match(entry.guid, /11223344-5566-7788-aabb-ccddeeff0011/);
+  assert.match(entry.path, /app\.pdb/);
 });
 
 void test("parseLoadConfigDirectory reads 32-bit and 64-bit fields", async () => {
@@ -65,14 +66,13 @@ void test("parseLoadConfigDirectory reads 32-bit and 64-bit fields", async () =>
   dv.setUint32(lcRva + 0x50, 0x1111, true); // GuardFlags
 
   const file = new MockFile(bytes, "loadcfg.bin");
-  const lc = await parseLoadConfigDirectory(
+  const lc = expectDefined(await parseLoadConfigDirectory(
     file,
     [{ name: "LOAD_CONFIG", rva: lcRva, size: 0x54 }],
     value => value,
     () => {},
     false
-  );
-  assert.ok(lc);
+  ));
   assert.equal(lc.SecurityCookie, 0xCAFEBABE);
   assert.equal(lc.SEHandlerCount, 3);
   assert.equal(lc.GuardCFFunctionCount, 2);
@@ -91,14 +91,13 @@ void test("parseLoadConfigDirectory reads 32-bit and 64-bit fields", async () =>
   dv64.setBigUint64(0x68, 0x9abcn, true);
   dv64.setUint32(0x70, 6, true);
   dv64.setUint32(0x74, 0xbeef, true);
-  const lc64 = await parseLoadConfigDirectory(
+  const lc64 = expectDefined(await parseLoadConfigDirectory(
     new MockFile(bytes64),
     [{ name: "LOAD_CONFIG", rva: 0x10, size: 0x90 }],
     value => (value === 0x10 ? 0 : value),
     () => {},
     true
-  );
-  assert.ok(lc64);
+  ));
   assert.equal(lc64.SEHandlerCount, 5);
   assert.equal(lc64.GuardCFFunctionCount, 6);
   assert.equal(lc64.GuardFlags, 0xbeef);
@@ -116,15 +115,14 @@ void test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
   dv.setUint32(tlsRva + 20, 0, true);
   dv.setUint32(0x40, 0x1111, true);
   dv.setUint32(0x44, 0); // terminator
-  const tls = await parseTlsDirectory(
+  const tls = expectDefined(await parseTlsDirectory(
     new MockFile(bytes),
     [{ name: "TLS", rva: tlsRva, size: 0x18 }],
     value => value,
     () => {},
     false,
     0
-  );
-  assert.ok(tls);
+  ));
   assert.equal(tls.CallbackCount, 0); // 32-bit path doesn't enumerate
 
   // 64-bit version with callbacks
@@ -139,15 +137,14 @@ void test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
   // callbacks table at offset 0x80 in file (imageBase 0)
   dv64.setBigUint64(0x80, 0x7000n, true);
   dv64.setBigUint64(0x88, 0n, true);
-  const tls64 = await parseTlsDirectory(
+  const tls64 = expectDefined(await parseTlsDirectory(
     new MockFile(bytes64),
     [{ name: "TLS", rva: 0x10, size: 0x30 }],
     value => (value === 0x10 ? 0 : value),
     () => {},
     true,
     0
-  );
-  assert.ok(tls64);
+  ));
   assert.equal(tls64.CallbackCount, 1);
 });
 
@@ -179,17 +176,19 @@ void test("buildResourceTree walks a small resource directory", async () => {
   dv.setUint32(dataEntry + 8, 1252, true); // CodePage
   dv.setUint32(dataEntry + 12, 0, true); // Reserved
 
-  const tree = await buildResourceTree(
+  const tree = expectDefined(await buildResourceTree(
     new MockFile(bytes),
     [{ name: "RESOURCE", rva: base, size: 0x80 }],
     value => value,
     () => {}
-  );
+  ));
 
-  assert.ok(tree);
   assert.equal(tree.top.length, 1);
-  assert.equal(tree.top[0].leafCount, 1);
-  assert.equal(tree.detail[0].entries[0].langs[0].size, 16);
+  const topEntry = expectDefined(tree.top[0]);
+  assert.equal(topEntry.leafCount, 1);
+  const detailEntry = expectDefined(tree.detail[0]);
+  const lang = expectDefined(expectDefined(detailEntry.entries[0]).langs[0]);
+  assert.equal(lang.size, 16);
 });
 
 void test("parseImportDirectory supports 64-bit imports path", async () => {
@@ -215,7 +214,8 @@ void test("parseImportDirectory supports 64-bit imports path", async () => {
     true
   );
   assert.equal(imports.length, 1);
-  assert.equal(imports[0].functions.length, 2);
-  assert.deepEqual(imports[0].functions[0], { hint: 0x77, name: "RegOpenKey" });
-  assert.deepEqual(imports[0].functions[1], { ordinal: 5 });
+  const firstImport = expectDefined(imports[0]);
+  assert.equal(firstImport.functions.length, 2);
+  assert.deepEqual(firstImport.functions[0], { hint: 0x77, name: "RegOpenKey" });
+  assert.deepEqual(firstImport.functions[1], { ordinal: 5 });
 });

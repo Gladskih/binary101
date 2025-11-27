@@ -81,9 +81,9 @@ export const createPeWithSectionAndIat = () => {
 
   const sectionHeaderOffset = optionalOffset + optionalHeaderSize;
   const nameBytes = [0x2e, 0x74, 0x65, 0x78, 0x74];
-  for (let index = 0; index < nameBytes.length; index += 1) {
-    view.setUint8(sectionHeaderOffset + index, nameBytes[index]);
-  }
+  nameBytes.forEach((byte, index) => {
+    view.setUint8(sectionHeaderOffset + index, byte);
+  });
   view.setUint32(sectionHeaderOffset + 8, sectionVirtualSize, true);
   view.setUint32(sectionHeaderOffset + 12, sectionVirtualAddress, true);
   view.setUint32(sectionHeaderOffset + 16, sizeOfRawData, true);
@@ -173,9 +173,9 @@ export const createPePlusWithSection = () => {
 
   const sectionHeaderOffset = optionalOffset + optionalHeaderSize;
   const nameBytes = [0x2e, 0x74, 0x65, 0x78, 0x74];
-  for (let index = 0; index < nameBytes.length; index += 1) {
-    view.setUint8(sectionHeaderOffset + index, nameBytes[index]);
-  }
+  nameBytes.forEach((byte, index) => {
+    view.setUint8(sectionHeaderOffset + index, byte);
+  });
   view.setUint32(sectionHeaderOffset + 8, sectionVirtualSize, true);
   view.setUint32(sectionHeaderOffset + 12, sectionVirtualAddress, true);
   view.setUint32(sectionHeaderOffset + 16, sizeOfRawData, true);

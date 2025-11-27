@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseBoundImports, parseDelayImports } from "../../analyzers/pe/bound-delay.js";
 import { MockFile } from "../helpers/mock-file.js";
+import { expectDefined } from "../helpers/expect-defined.js";
 
 const encoder = new TextEncoder();
 
@@ -47,9 +48,9 @@ void test("parseDelayImports reads delay descriptors, names, and ordinals", asyn
     0
   );
 
-  assert.ok(result);
+  const definedResult = expectDefined(result);
   assert.equal(addCoverageRegions.length, 1);
-  const entry = result.entries[0];
+  const entry = expectDefined(definedResult.entries[0]);
   assert.equal(entry.name, "kernel32.dll");
   assert.equal(entry.TimeDateStamp, 0x12345678);
   assert.equal(entry.functions.length, 2);
@@ -76,8 +77,9 @@ void test("parseBoundImports extracts bound import names", async () => {
     () => {}
   );
 
-  assert.ok(result);
-  assert.equal(result.entries.length, 1);
-  assert.equal(result.entries[0].name, "USER32.dll");
-  assert.equal(result.entries[0].TimeDateStamp, 0x01020304);
+  const definedResult = expectDefined(result);
+  assert.equal(definedResult.entries.length, 1);
+  const entry = expectDefined(definedResult.entries[0]);
+  assert.equal(entry.name, "USER32.dll");
+  assert.equal(entry.TimeDateStamp, 0x01020304);
 });

@@ -15,7 +15,8 @@ void test("parseFolder reads coder entries without attributes", () => {
   const ctx = makeCtx([0x01, 0x01, 0x21]);
   const folder = parseFolder(ctx, ctx.dv.byteLength);
   assert.equal(folder.coders.length, 1);
-  const [coder] = folder.coders;
+  const coder = folder.coders[0];
+  assert.ok(coder);
   assert.equal(coder.methodId, "21");
   assert.equal(coder.inStreams, 1);
   assert.equal(coder.outStreams, 1);

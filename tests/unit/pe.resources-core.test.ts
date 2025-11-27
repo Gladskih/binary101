@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildResourceTree } from "../../analyzers/pe/resources-core.js";
 import { MockFile } from "../helpers/mock-file.js";
+import { expectDefined } from "../helpers/expect-defined.js";
 
 const setU16 = (view: DataView, off: number, value: number): void => view.setUint16(off, value, true);
 const setU32 = (view: DataView, off: number, value: number): void => view.setUint32(off, value, true);
@@ -64,16 +65,17 @@ void test("buildResourceTree parses nested resource directories and skips trunca
     (label, start, size) => coverage.push({ label, start, size })
   );
 
-  assert.ok(tree);
-  assert.strictEqual(tree.top.length, 2);
-  assert.deepStrictEqual(tree.top[0], { typeName: "ICON", kind: "id", leafCount: 1 });
-  assert.deepStrictEqual(tree.top[1], { typeName: "", kind: "name", leafCount: 0 });
-  assert.ok(tree.detail.find(d => d.typeName === "ICON"));
+  const definedTree = expectDefined(tree);
+  assert.strictEqual(definedTree.top.length, 2);
+  assert.deepStrictEqual(definedTree.top[0], { typeName: "ICON", kind: "id", leafCount: 1 });
+  assert.deepStrictEqual(definedTree.top[1], { typeName: "", kind: "name", leafCount: 0 });
+  assert.ok(definedTree.detail.find(d => d.typeName === "ICON"));
 
-  const iconDetail = tree.detail.find(d => d.typeName === "ICON");
-  assert.ok(iconDetail.entries[0]);
-  assert.strictEqual(iconDetail.entries[0].name, "Test");
-  assert.deepStrictEqual(iconDetail.entries[0].langs[0], {
+  const iconDetail = expectDefined(definedTree.detail.find(d => d.typeName === "ICON"));
+  const iconEntry = expectDefined(iconDetail.entries[0]);
+  const iconLang = expectDefined(iconEntry.langs[0]);
+  assert.strictEqual(iconEntry.name, "Test");
+  assert.deepStrictEqual(iconLang, {
     lang: 0x409,
     size: 0x10,
     codePage: 0x4b0,
@@ -81,5 +83,5 @@ void test("buildResourceTree parses nested resource directories and skips trunca
     reserved: 0
   });
 
-  assert.strictEqual(coverage[0].label, "RESOURCE directory");
+  assert.strictEqual(expectDefined(coverage[0]).label, "RESOURCE directory");
 });

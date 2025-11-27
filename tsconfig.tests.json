@@ -4,7 +4,7 @@
     "rootDir": ".",
     "types": ["node", "@playwright/test"],
     "lib": ["ESNext", "DOM"],
-    "strict": false,
+    "strict": true,
     "noImplicitAny": true,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,

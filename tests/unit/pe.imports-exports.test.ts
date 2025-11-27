@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { parseExportDirectory } from "../../analyzers/pe/exports.js";
 import { parseImportDirectory } from "../../analyzers/pe/imports.js";
 import { MockFile } from "../helpers/mock-file.js";
+import { expectDefined } from "../helpers/expect-defined.js";
 
 const encoder = new TextEncoder();
 
@@ -50,11 +51,12 @@ void test("parseExportDirectory extracts names and forwarders", async () => {
     () => {}
   );
 
-  assert.ok(result);
-  assert.equal(result.dllName, "demo.dll");
-  assert.equal(result.entries.length, 2);
-  assert.equal(result.entries[1].forwarder, "KERNEL32.Forward");
-  assert.equal(result.entries[1].name, "FuncB");
+  const definedResult = expectDefined(result);
+  assert.equal(definedResult.dllName, "demo.dll");
+  assert.equal(definedResult.entries.length, 2);
+  const secondEntry = expectDefined(definedResult.entries[1]);
+  assert.equal(secondEntry.forwarder, "KERNEL32.Forward");
+  assert.equal(secondEntry.name, "FuncB");
 });
 
 void test("parseImportDirectory reads import descriptors with names and ordinals", async () => {
@@ -89,8 +91,9 @@ void test("parseImportDirectory reads import descriptors with names and ordinals
   );
 
   assert.equal(imports.length, 1);
-  assert.equal(imports[0].dll, "SHELL32.dll");
-  assert.equal(imports[0].functions.length, 2);
-  assert.deepEqual(imports[0].functions[0], { hint: 0x55aa, name: "ImportX" });
-  assert.deepEqual(imports[0].functions[1], { ordinal: 3 });
+  const firstImport = expectDefined(imports[0]);
+  assert.equal(firstImport.dll, "SHELL32.dll");
+  assert.equal(firstImport.functions.length, 2);
+  assert.deepEqual(firstImport.functions[0], { hint: 0x55aa, name: "ImportX" });
+  assert.deepEqual(firstImport.functions[1], { ordinal: 3 });
 });

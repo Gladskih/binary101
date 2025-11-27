@@ -10,6 +10,7 @@ import type {
   LnkPropertyStoreBlock
 } from "../../analyzers/lnk/types.js";
 import { createLnkFile } from "../fixtures/sample-files.js";
+import { expectDefined } from "../helpers/expect-defined.js";
 
 const isEnvironmentBlock = (block: LnkExtraDataBlock): block is LnkEnvironmentBlock =>
   block.signature === 0xa0000001;
@@ -22,8 +23,7 @@ const isPropertyStoreBlock = (block: LnkExtraDataBlock): block is LnkPropertySto
 
 void test("parseLnk reads Shell Link header and targets", async () => {
   const file = createLnkFile();
-  const lnk = await parseLnk(file);
-  assert.ok(lnk);
+  const lnk = expectDefined(await parseLnk(file));
   assert.strictEqual(lnk.header.clsid, "00021401-0000-0000-c000-000000000046");
   const createdIso = lnk.header.creationTime.iso;
   assert.ok(createdIso);
@@ -38,7 +38,8 @@ void test("parseLnk reads Shell Link header and targets", async () => {
   assert.ok(lnk.idList);
   assert.ok(Array.isArray(lnk.idList.items));
   assert.strictEqual(lnk.idList.items.length, 5);
-  assert.strictEqual(lnk.idList.items[0].clsid, "20d04fe0-3aea-1069-a2d8-08002b30309d");
+  const firstItem = expectDefined(lnk.idList.items[0]);
+  assert.strictEqual(firstItem.clsid, "20d04fe0-3aea-1069-a2d8-08002b30309d");
   const fileItem = lnk.idList.items.find(item => item.typeName === "File");
   assert.ok(fileItem);
   assert.strictEqual(fileItem.longName, "app.exe");
@@ -50,27 +51,23 @@ void test("parseLnk reads Shell Link header and targets", async () => {
 });
 
 void test("parseLnk reports extra data details", async () => {
-  const lnk = await parseLnk(createLnkFile());
-  assert.ok(lnk);
-  const envBlock = lnk.extraData.blocks.find(isEnvironmentBlock);
-  const knownFolder = lnk.extraData.blocks.find(isKnownFolderBlock);
-  const propertyStore = lnk.extraData.blocks.find(isPropertyStoreBlock);
-  assert.ok(envBlock);
+  const lnk = expectDefined(await parseLnk(createLnkFile()));
+  const envBlock = expectDefined(lnk.extraData.blocks.find(isEnvironmentBlock));
   assert.ok(envBlock.parsed);
   assert.strictEqual(envBlock.parsed.unicode, "%USERPROFILE%\\Example\\app.exe");
-  assert.ok(knownFolder);
+  const knownFolder = expectDefined(lnk.extraData.blocks.find(isKnownFolderBlock));
   assert.ok(knownFolder.parsed);
   assert.strictEqual(
-    knownFolder.parsed.knownFolderId,
+    expectDefined(knownFolder.parsed).knownFolderId,
     "fdd39ad0-238f-46af-adb4-6c85480369c7"
   );
-  assert.ok(propertyStore);
-  assert.ok(propertyStore.parsed);
-  const { storages } = propertyStore.parsed;
+  const propertyStore = expectDefined(lnk.extraData.blocks.find(isPropertyStoreBlock));
+  const parsedStore = expectDefined(propertyStore.parsed);
+  const { storages } = parsedStore;
   assert.ok(storages.length);
-  const firstStorage = storages[0];
+  const firstStorage = expectDefined(storages[0]);
   const volumeProperty = firstStorage.properties.find(prop => prop.id === 104);
-  assert.ok(volumeProperty);
-  assert.strictEqual(volumeProperty.name, "System.VolumeId");
-  assert.strictEqual(volumeProperty.value, "8e44de00-5103-3a0b-4785-67a8d9b71bc0");
+  const definedVolumeProperty = expectDefined(volumeProperty);
+  assert.strictEqual(definedVolumeProperty.name, "System.VolumeId");
+  assert.strictEqual(definedVolumeProperty.value, "8e44de00-5103-3a0b-4785-67a8d9b71bc0");
 });

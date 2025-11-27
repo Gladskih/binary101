@@ -24,6 +24,7 @@ import {
   createLnkFile
 } from "../fixtures/sample-files.js";
 import { MockFile } from "../helpers/mock-file.js";
+import { expectDefined } from "../helpers/expect-defined.js";
 
 const textEncoder = new TextEncoder();
 class TestDomParser extends XmlDomParser {
@@ -42,15 +43,19 @@ class TestDomParser extends XmlDomParser {
 
 global.DOMParser = TestDomParser;
 
-const assertParsed = async (
+const assertParsed = async <TParsed = unknown>(
   file: MockFile,
   expectedAnalyzer: string,
-  checks: (parsed: unknown) => void = () => {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  checks?: (parsed: any) => void
 ): Promise<void> => {
   const { analyzer, parsed } = await parseForUi(file);
   assert.strictEqual(analyzer, expectedAnalyzer);
   assert.ok(parsed, `Expected parsed data for ${expectedAnalyzer}`);
-  checks(parsed);
+  if (checks) {
+    const parsedValue = expectDefined(parsed) as unknown as TParsed;
+    checks(parsedValue);
+  }
 };
 
 void test("detectBinaryType recognizes common binary formats", async () => {

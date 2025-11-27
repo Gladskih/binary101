@@ -6,6 +6,7 @@ import { parseClrDirectory, parseSecurityDirectory } from "../../analyzers/pe/cl
 import { parseBaseRelocations } from "../../analyzers/pe/reloc.js";
 import { parseExceptionDirectory } from "../../analyzers/pe/exception.js";
 import { MockFile } from "../helpers/mock-file.js";
+import { expectDefined } from "../helpers/expect-defined.js";
 
 const encoder = new TextEncoder();
 const rvaToOff = (rva: number): number => rva;
@@ -40,33 +41,34 @@ void test("parseClrDirectory parses metadata header and streams", async () => {
   clrView.setUint32(clrOffset + 16, 0x01, true);
   clrView.setUint32(clrOffset + 20, 0x06000001, true);
 
-  const meta = new DataView(fileBytes.buffer, metaOffset, metaSize);
+  const metaView = new DataView(fileBytes.buffer, metaOffset, metaSize);
   let p = 0;
-  meta.setUint32(p, 0x424a5342, true); p += 4;
-  meta.setUint16(p, 1, true); p += 2;
-  meta.setUint16(p, 1, true); p += 2;
-  meta.setUint32(p, 0, true); p += 4;
+  metaView.setUint32(p, 0x424a5342, true); p += 4;
+  metaView.setUint16(p, 1, true); p += 2;
+  metaView.setUint16(p, 1, true); p += 2;
+  metaView.setUint32(p, 0, true); p += 4;
   const verStr = encoder.encode("v4.0.30319");
-  meta.setUint32(p, verStr.length, true); p += 4;
+  metaView.setUint32(p, verStr.length, true); p += 4;
   fileBytes.set(verStr, metaOffset + p);
   p = (p + verStr.length + 3) & ~3;
-  meta.setUint16(p, 0, true); p += 2;
-  meta.setUint16(p, 2, true); p += 2;
-  meta.setUint32(p, 0x20, true); p += 4;
-  meta.setUint32(p, 0x100, true); p += 4;
+  metaView.setUint16(p, 0, true); p += 2;
+  metaView.setUint16(p, 2, true); p += 2;
+  metaView.setUint32(p, 0x20, true); p += 4;
+  metaView.setUint32(p, 0x100, true); p += 4;
   fileBytes.set(encoder.encode("#~\0"), metaOffset + p);
   p = (p + 4 + 3) & ~3;
-  meta.setUint32(p, 0x120, true); p += 4;
-  meta.setUint32(p, 0x80, true); p += 4;
+  metaView.setUint32(p, 0x120, true); p += 4;
+  metaView.setUint32(p, 0x80, true); p += 4;
   fileBytes.set(encoder.encode("#Strings\0"), metaOffset + p);
 
   const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: 0x60 }];
   const { regions, add } = collectCoverage();
   const clr: ClrParseResult = await parseClrDirectory(new MockFile(fileBytes, "clr.bin"), dirs, rvaToOff, add);
-  assert.ok(clr);
-  assert.strictEqual(clr.MajorRuntimeVersion, 4);
-  assert.strictEqual(clr.meta.version, "v4.0.30319");
-  assert.strictEqual(clr.meta.streams.length, 2);
+  const definedClr = expectDefined(clr);
+  const meta = expectDefined(definedClr.meta);
+  assert.strictEqual(definedClr.MajorRuntimeVersion, 4);
+  assert.strictEqual(meta.version, "v4.0.30319");
+  assert.strictEqual(meta.streams.length, 2);
   assert.ok(regions.some(r => r.label.includes("CLR (.NET) header")));
 });
 

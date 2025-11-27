@@ -11,6 +11,7 @@ import {
   readAsciiRange,
   readSubBlocks
 } from "../../analyzers/gif/helpers.js";
+import { expectDefined } from "../helpers/expect-defined.js";
 
 const makeDv = (bytes: ArrayLike<number>): DataView =>
   new DataView(Uint8Array.from(bytes).buffer);
@@ -42,9 +43,10 @@ void test("parseGraphicControl handles valid and missing terminator", () => {
   const dv = makeDv(bytes);
   const { gce, warning } = parseGraphicControl(dv, 0);
   assert.equal(warning, null);
-  assert.equal(gce.disposalMethod, "Keep previous frame (do not dispose)");
-  assert.equal(gce.delayMs, 20);
-  assert.equal(gce.transparentColorIndex, 7);
+  const definedGce = expectDefined(gce);
+  assert.equal(definedGce.disposalMethod, "Keep previous frame (do not dispose)");
+  assert.equal(definedGce.delayMs, 20);
+  assert.equal(definedGce.transparentColorIndex, 7);
 
   const missingTerminator = parseGraphicControl(makeDv([0x21, 0xf9, 4, 0x00, 0, 0, 0, 0x99]), 0);
   assert.ok(missingTerminator.warning?.includes("missing terminator"));
@@ -61,9 +63,10 @@ void test("parseApplicationExtension parses loop count and warns on size", () =>
   const dv = makeDv(header);
   const { info, warning } = parseApplicationExtension(dv, 0);
   assert.equal(warning, null);
-  assert.equal(info.identifier, "NETSCAPE");
-  assert.equal(info.authCode, "2.0");
-  assert.equal(info.loopCount, 1);
+  const definedInfo = expectDefined(info);
+  assert.equal(definedInfo.identifier, "NETSCAPE");
+  assert.equal(definedInfo.authCode, "2.0");
+  assert.equal(definedInfo.loopCount, 1);
 
   const badSize = parseApplicationExtension(
     makeDv([0x21, 0xff, 0x05, ...new Array(11).fill(0)]),

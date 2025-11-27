@@ -14,5 +14,5 @@ void test("parseStreamsInfo records unknown field ids", () => {
   const ctx = makeCtx([0x09]); // unknown id, not terminated
   const info = parseStreamsInfo(ctx);
   assert.deepEqual(info, {});
-  assert.ok(ctx.issues[0].includes("Unknown StreamsInfo field id"));
+  assert.ok(ctx.issues[0]?.includes("Unknown StreamsInfo field id"));
 });

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseZip } from "../../analyzers/zip/index.js";
 import { MockFile } from "../helpers/mock-file.js";
+import { expectDefined } from "../helpers/expect-defined.js";
 
 const encoder = new TextEncoder();
 
@@ -102,8 +103,9 @@ void test("parseZip annotates data offsets for stored entries", async () => {
     method: 0,
     dataBytes: encoder.encode("test")
   });
-  const result = await parseZip(file);
-  const [entry] = result.centralDirectory.entries;
+  const result = expectDefined(await parseZip(file));
+  const centralDirectory = expectDefined(result.centralDirectory);
+  const entry = expectDefined(centralDirectory.entries[0]);
 
   assert.strictEqual(entry.dataOffset, dataOffset);
   assert.strictEqual(entry.dataLength, dataLength);
@@ -117,12 +119,14 @@ void test("parseZip marks unsupported compression methods", async () => {
     method: 12, // BZIP2
     dataBytes: encoder.encode("payload")
   });
-  const result = await parseZip(file);
-  const [entry] = result.centralDirectory.entries;
+  const result = expectDefined(await parseZip(file));
+  const centralDirectory = expectDefined(result.centralDirectory);
+  const entry = expectDefined(centralDirectory.entries[0]);
 
   assert.strictEqual(entry.dataOffset, 30 + "data.bin".length);
   assert.strictEqual(entry.dataLength, "payload".length);
-  assert.match(entry.extractError, /not supported/i);
+  const extractError = expectDefined(entry.extractError);
+  assert.match(extractError, /not supported/i);
 });
 
 void test("parseZip flags entries whose compressed data runs past the file size", async () => {
@@ -132,8 +136,10 @@ void test("parseZip flags entries whose compressed data runs past the file size"
     dataBytes: new Uint8Array([0xaa]),
     compressedSize: 999
   });
-  const result = await parseZip(file);
-  const [entry] = result.centralDirectory.entries;
+  const result = expectDefined(await parseZip(file));
+  const centralDirectory = expectDefined(result.centralDirectory);
+  const entry = expectDefined(centralDirectory.entries[0]);
 
-  assert.match(entry.extractError, /beyond the file size/i);
+  const extractError = expectDefined(entry.extractError);
+  assert.match(extractError, /beyond the file size/i);
 });

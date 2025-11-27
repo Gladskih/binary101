@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseElf } from "../../analyzers/elf/index.js";
 import { MockFile } from "../helpers/mock-file.js";
+import { expectDefined } from "../helpers/expect-defined.js";
 
 type ElfHeaderOptions = {
   phoff?: bigint;
@@ -59,9 +60,9 @@ void test("parseElf notes program headers that sit outside the file", async () =
   const bytes = new Uint8Array(64).fill(0);
   writeElfHeader(bytes, { phoff: 200n, phnum: 1, shnum: 0 });
   const parsed = await parseElf(new MockFile(bytes, "elf-invalid.bin", "application/x-elf"));
-  assert.ok(parsed);
-  assert.deepStrictEqual(parsed.programHeaders, []);
-  assert.ok(parsed.issues.some(msg => msg.includes("Program header table falls outside the file.")));
+  const definedParsed = expectDefined(parsed);
+  assert.deepStrictEqual(definedParsed.programHeaders, []);
+  assert.ok(definedParsed.issues.some(msg => msg.includes("Program header table falls outside the file.")));
 });
 
 void test("parseElf surfaces version mismatches and truncated section name table", async () => {
@@ -85,9 +86,10 @@ void test("parseElf surfaces version mismatches and truncated section name table
   dv.setBigUint64(sectionOffset + 32, 50n, true); // size of names (truncated)
 
   const parsed = await parseElf(new MockFile(bytes, "elf-truncated.bin", "application/x-elf"));
-  assert.ok(parsed);
-  assert.strictEqual(parsed.sections.length, 1);
-  assert.strictEqual(parsed.sections[0].name, "");
-  assert.ok(parsed.issues.some(msg => msg.includes("Unexpected ELF version")));
-  assert.ok(parsed.issues.some(msg => msg.includes("Section name table is truncated.")));
+  const definedParsed = expectDefined(parsed);
+  assert.strictEqual(definedParsed.sections.length, 1);
+  const section = expectDefined(definedParsed.sections[0]);
+  assert.strictEqual(section.name, "");
+  assert.ok(definedParsed.issues.some(msg => msg.includes("Unexpected ELF version")));
+  assert.ok(definedParsed.issues.some(msg => msg.includes("Section name table is truncated.")));
 });

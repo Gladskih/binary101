@@ -13,43 +13,42 @@ import {
   calculateChecksum,
   writeOctal
 } from "../fixtures/tar-fixtures.js";
+import { expectDefined } from "../helpers/expect-defined.js";
 
 const TAR_BLOCK_SIZE = 512;
 
 void test("parseTar detects invalid checksum", async () => {
-  const tar = await parseTar(createTarWithBadChecksum());
-  assert.ok(tar);
+  const tar = expectDefined(await parseTar(createTarWithBadChecksum()));
   assert.strictEqual(tar.features.checksumMismatches, 1);
 });
 
 void test("parseTar handles short payloads gracefully", async () => {
-  const tar = await parseTar(createTarWithShortFile());
-  assert.ok(tar);
+  const tar = expectDefined(await parseTar(createTarWithShortFile()));
   assert.ok(tar.isTar); // Just check it parsed as TAR
 });
 
 void test("parseTar parses valid minimal tar", async () => {
-  const tar = await parseTar(createTarFile());
+  const tar = expectDefined(await parseTar(createTarFile()));
   assert.strictEqual(tar.isTar, true);
   assert.ok(Array.isArray(tar.entries));
   assert.strictEqual(tar.entries.length, 1);
-  const [entry] = tar.entries;
+  const entry = expectDefined(tar.entries[0]);
   assert.strictEqual(entry.name, "hello.txt");
   assert.strictEqual(entry.size, 0);
   assert.strictEqual(entry.typeFlag, "0");
   assert.strictEqual(entry.typeLabel, "Regular file");
   // The original createTarFile in sample-files.js doesn't add two zero blocks
   assert.strictEqual(tar.issues.length, 1);
-  assert.ok(tar.issues[0].includes("Archive did not terminate with the standard two zero blocks."));
+  assert.ok(expectDefined(tar.issues[0]).includes("Archive did not terminate with the standard two zero blocks."));
 });
 
 void test("parseTar parses a directory entry", async () => {
-  const tar = await parseTar(createTarFileWithEntries([
+  const tar = expectDefined(await parseTar(createTarFileWithEntries([
     { name: "my_directory/", typeFlag: "5", mode: 0o755 }
-  ]));
+  ])));
   assert.strictEqual(tar.isTar, true);
   assert.strictEqual(tar.entries.length, 1);
-  const [entry] = tar.entries;
+  const entry = expectDefined(tar.entries[0]);
   assert.strictEqual(entry.name, "my_directory/");
   assert.strictEqual(entry.typeFlag, "5");
   assert.strictEqual(entry.typeLabel, "Directory");
@@ -62,12 +61,12 @@ void test("parseTar parses a directory entry", async () => {
 
 void test("parseTar parses a regular file with content", async () => {
   const fileContent = "This is some test content.";
-  const tar = await parseTar(createTarFileWithEntries([
+  const tar = expectDefined(await parseTar(createTarFileWithEntries([
     { name: "testfile.txt", typeFlag: "0", content: fileContent }
-  ]));
+  ])));
   assert.strictEqual(tar.isTar, true);
   assert.strictEqual(tar.entries.length, 1);
-  const [entry] = tar.entries;
+  const entry = expectDefined(tar.entries[0]);
   assert.strictEqual(entry.name, "testfile.txt");
   assert.strictEqual(entry.size, fileContent.length);
   assert.strictEqual(entry.typeFlag, "0");
@@ -78,12 +77,12 @@ void test("parseTar parses a regular file with content", async () => {
 
 void test("parseTar handles GNU long filename (L typeflag)", async () => {
   const longName = "this/is/a/very/long/filename/that/exceeds/the/standard/tar/header/limit/by/a/significant/amount/and/should/be/handled/by/the/L/typeflag/mechanism.txt";
-  const tar = await parseTar(createTarFileWithEntries([
+  const tar = expectDefined(await parseTar(createTarFileWithEntries([
     { longName, name: "short_name.txt", typeFlag: "0", content: "data" }
-  ]));
+  ])));
   assert.strictEqual(tar.isTar, true);
   assert.strictEqual(tar.entries.length, 1);
-  const [entry] = tar.entries;
+  const entry = expectDefined(tar.entries[0]);
   assert.strictEqual(entry.name, longName);
   assert.strictEqual(entry.usesLongName, true);
   assert.strictEqual(tar.features.usedLongNames, true);
@@ -92,12 +91,12 @@ void test("parseTar handles GNU long filename (L typeflag)", async () => {
 
 void test("parseTar handles GNU long linkname (K typeflag)", async () => {
   const longLink = "this/is/a/very/long/linkname/that/exceeds/the/standard/tar/header/limit/by/a/significant/amount/and/should/be/handled/by/the/K/typeflag/mechanism.txt";
-  const tar = await parseTar(createTarFileWithEntries([
+  const tar = expectDefined(await parseTar(createTarFileWithEntries([
     { longLink, name: "link_to_file", typeFlag: "2", linkName: "short_link.txt" }
-  ]));
+  ])));
   assert.strictEqual(tar.isTar, true);
   assert.strictEqual(tar.entries.length, 1);
-  const [entry] = tar.entries;
+  const entry = expectDefined(tar.entries[0]);
   assert.strictEqual(entry.linkName, longLink);
   assert.strictEqual(entry.usesLongLink, true);
   assert.strictEqual(tar.features.usedLongLinks, true);
@@ -141,12 +140,12 @@ void test("parseTar handles combined global and per-file PAX headers", async () 
 });
 
 void test("parseTar populates stats and features correctly", async () => {
-  const tar = await parseTar(createTarFileWithEntries([
+  const tar = expectDefined(await parseTar(createTarFileWithEntries([
     { name: "file1.txt", typeFlag: "0", content: "data" },
     { name: "dir/", typeFlag: "5" },
     { name: "link", typeFlag: "2", linkName: "file1.txt" },
     { longName: "long/file/name.txt", typeFlag: "0", content: "more data" },
-  ], { unalignedFileSize: 10 })); // Add an unaligned file size
+  ], { unalignedFileSize: 10 }))); // Add an unaligned file size
   assert.strictEqual(tar.isTar, true);
   assert.strictEqual(tar.stats.totalEntries, 4);
   assert.strictEqual(tar.stats.regularFiles, 2);
@@ -162,29 +161,29 @@ void test("parseTar populates stats and features correctly", async () => {
   assert.strictEqual(tar.features.usedGlobalPax, false);
   assert.strictEqual(tar.features.checksumMismatches, 0);
   assert.strictEqual(tar.issues.length, 1);
-  assert.ok(tar.issues[0].includes("File size is not aligned to 512-byte TAR blocks"));
+  assert.ok(expectDefined(tar.issues[0]).includes("File size is not aligned to 512-byte TAR blocks"));
 });
 
 void test("parseTar detects unaligned file size issue", async () => {
-  const tar = await parseTar(createTarFileWithEntries([
+  const tar = expectDefined(await parseTar(createTarFileWithEntries([
     { name: "file.txt", typeFlag: "0", content: "data" }
-  ], { appendZeroBlocks: 1 })); // Only one zero block
+  ], { appendZeroBlocks: 1 }))); // Only one zero block
   assert.strictEqual(tar.issues.length, 1);
-  assert.ok(tar.issues[0].includes("Archive did not terminate with the standard two zero blocks."));
+  assert.ok(expectDefined(tar.issues[0]).includes("Archive did not terminate with the standard two zero blocks."));
 });
 
 void test("parseTar detects archive not terminated with two zero blocks", async () => {
-  const tar = await parseTar(createTarFileWithEntries([
+  const tar = expectDefined(await parseTar(createTarFileWithEntries([
     { name: "file.txt", typeFlag: "0", content: "data" }
-  ], { appendZeroBlocks: 1 })); // Only one zero block
+  ], { appendZeroBlocks: 1 }))); // Only one zero block
   assert.strictEqual(tar.issues.length, 1);
-  assert.ok(tar.issues[0].includes("Archive did not terminate with the standard two zero blocks."));
+  assert.ok(expectDefined(tar.issues[0]).includes("Archive did not terminate with the standard two zero blocks."));
 });
 
 void test("parseTar correctly parses magic and version for format", async () => {
-  const tar = await parseTar(createTarFileWithEntries([
+  const tar = expectDefined(await parseTar(createTarFileWithEntries([
     { name: "file.txt", typeFlag: "0" }
-  ]));
+  ])));
   assert.strictEqual(tar.format.magic, "ustar");
   assert.strictEqual(tar.format.version, "00");
   assert.strictEqual(tar.format.label, "POSIX ustar (1988)");
@@ -192,9 +191,9 @@ void test("parseTar correctly parses magic and version for format", async () => 
 });
 
 void test("parseTar handles legacy V7 format (no magic)", async () => {
-  const tar = await parseTar(createTarFileWithEntries([
+  const tar = expectDefined(await parseTar(createTarFileWithEntries([
     { name: "file.txt", typeFlag: "0", magic: "", version: "" }
-  ]));
+  ])));
   assert.strictEqual(tar.format.magic, "");
   assert.strictEqual(tar.format.version, "");
   assert.strictEqual(tar.format.label, "Legacy V7 header (no magic)");
@@ -202,23 +201,28 @@ void test("parseTar handles legacy V7 format (no magic)", async () => {
 });
 
 void test("parseTar handles other typeFlags and their labels", async () => {
-  const tar = await parseTar(createTarFileWithEntries([
+  const tar = expectDefined(await parseTar(createTarFileWithEntries([
     { name: "hardlink", typeFlag: "1", linkName: "target" }, // Hard link
     { name: "char_device", typeFlag: "3", devMajor: 1, devMinor: 2 }, // Character device
     { name: "block_device", typeFlag: "4", devMajor: 3, devMinor: 4 }, // Block device
     { name: "fifo", typeFlag: "6" }, // FIFO/pipe
     { name: "reserved", typeFlag: "7" }, // Reserved
-  ]));
+  ])));
 
-  assert.strictEqual(tar.entries[0].typeLabel, "Hard link");
-  assert.strictEqual(tar.entries[1].typeLabel, "Character device");
-  assert.strictEqual(tar.entries[1].devMajor, 1);
-  assert.strictEqual(tar.entries[1].devMinor, 2);
-  assert.strictEqual(tar.entries[2].typeLabel, "Block device");
-  assert.strictEqual(tar.entries[2].devMajor, 3);
-  assert.strictEqual(tar.entries[2].devMinor, 4);
-  assert.strictEqual(tar.entries[3].typeLabel, "FIFO/pipe");
-  assert.strictEqual(tar.entries[4].typeLabel, "Reserved");
+  const entry0 = expectDefined(tar.entries[0]);
+  const entry1 = expectDefined(tar.entries[1]);
+  const entry2 = expectDefined(tar.entries[2]);
+  const entry3 = expectDefined(tar.entries[3]);
+  const entry4 = expectDefined(tar.entries[4]);
+  assert.strictEqual(entry0.typeLabel, "Hard link");
+  assert.strictEqual(entry1.typeLabel, "Character device");
+  assert.strictEqual(entry1.devMajor, 1);
+  assert.strictEqual(entry1.devMinor, 2);
+  assert.strictEqual(entry2.typeLabel, "Block device");
+  assert.strictEqual(entry2.devMajor, 3);
+  assert.strictEqual(entry2.devMinor, 4);
+  assert.strictEqual(entry3.typeLabel, "FIFO/pipe");
+  assert.strictEqual(entry4.typeLabel, "Reserved");
 });
 
 void test("parseTar handles missing size gracefully", async () => {
@@ -235,12 +239,13 @@ void test("parseTar handles missing size gracefully", async () => {
     "no-size.tar",
     "application/x-tar"
   );
-  
-  const tar = await parseTar(mockFile);
+
+  const tar = expectDefined(await parseTar(mockFile));
   assert.strictEqual(tar.isTar, true);
   assert.strictEqual(tar.entries.length, 1);
-  assert.strictEqual(tar.entries[0].name, "no-size.txt");
-  assert.strictEqual(tar.entries[0].size, 0); // Should default to 0
+  const entry = expectDefined(tar.entries[0]);
+  assert.strictEqual(entry.name, "no-size.txt");
+  assert.strictEqual(entry.size, 0); // Should default to 0
   assert.ok(tar.issues.some(issue => issue.includes("is missing a valid size; assuming 0.")));
 });
 
@@ -281,7 +286,7 @@ void test("parseTar handles data exceeding file size", async () => {
   fileBytes.set(header2, TAR_BLOCK_SIZE);
 
   const mockFile = new MockFile(fileBytes, "test.tar", "application/x-tar");
-  const tar = await parseTar(mockFile);
+  const tar = expectDefined(await parseTar(mockFile));
   // Just verify parsing works without the unreachable code path issue
   assert.ok(tar.isTar);
 });
@@ -300,7 +305,8 @@ void test("parseTar handles truncated entry data", async () => {
   fileBytes.set(new Uint8Array(TAR_BLOCK_SIZE).fill(0), TAR_BLOCK_SIZE + 513 + TAR_BLOCK_SIZE); // Zero block 2
 
   const mockFile = new MockFile(fileBytes, "truncated.tar", "application/x-tar");
-  const tar = await parseTar(mockFile);
+  const tar = expectDefined(await parseTar(mockFile));
   assert.strictEqual(tar.entries.length, 1);
-  assert.strictEqual(tar.entries[0].name, "truncated.txt");
+  const entry = expectDefined(tar.entries[0]);
+  assert.strictEqual(entry.name, "truncated.txt");
 });

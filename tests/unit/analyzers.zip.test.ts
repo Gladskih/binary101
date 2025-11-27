@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseZip } from "../../analyzers/zip/index.js";
 import { MockFile } from "../helpers/mock-file.js";
+import { expectDefined } from "../helpers/expect-defined.js";
 
 const encoder = new TextEncoder();
 type CentralDirectoryOptions = {
@@ -124,11 +125,12 @@ void test("parseZip correctly identifies a minimal, empty ZIP file", async () =>
   ]);
   const mockFile = new MockFile(emptyZipBytes, "empty.zip");
 
-  const result = await parseZip(mockFile);
+  const result = expectDefined(await parseZip(mockFile));
+  const centralDirectory = expectDefined(result.centralDirectory);
 
   assert.ok(result, "parseZip should return a result for a valid empty ZIP");
   assert.strictEqual(result.eocd.totalEntries, 0, "EOCD should report 0 entries");
-  assert.strictEqual(result.centralDirectory.entries.length, 0, "There should be no central directory entries");
+  assert.strictEqual(centralDirectory.entries.length, 0, "There should be no central directory entries");
   assert.strictEqual(result.issues.length, 0, "There should be no parsing issues for a valid empty zip");
 });
 
@@ -153,14 +155,16 @@ void test("parseZip parses central directory entries with timestamps", async () 
   const buffer = new Uint8Array(cdSize + eocd.length);
   buffer.set(cdEntry, 0);
   buffer.set(eocd, cdSize);
-  const result = await parseZip(new MockFile(buffer, "with-cd.zip"));
+  const result = expectDefined(await parseZip(new MockFile(buffer, "with-cd.zip")));
+  const centralDirectory = expectDefined(result.centralDirectory);
 
   assert.ok(result);
-  assert.strictEqual(result.centralDirectory.entries.length, 1);
-  const [entry] = result.centralDirectory.entries;
+  assert.strictEqual(centralDirectory.entries.length, 1);
+  const entry = expectDefined(centralDirectory.entries[0]);
   assert.strictEqual(entry.fileName, "hello.txt");
   assert.strictEqual(entry.compressionName, "Deflated");
-  assert.ok(entry.modTimeIso.includes("2020-05-04T10:20:30"));
+  const modTimeIso = expectDefined(entry.modTimeIso);
+  assert.ok(modTimeIso.includes("2020-05-04T10:20:30"));
   assert.strictEqual(result.issues.length, 0);
 });
 
@@ -194,14 +198,15 @@ void test("parseZip reads ZIP64 metadata and extra fields", async () => {
   cursor += locator.length;
   buffer.set(eocd, cursor);
 
-  const result = await parseZip(new MockFile(buffer, "zip64.zip"));
+  const result = expectDefined(await parseZip(new MockFile(buffer, "zip64.zip")));
   assert.ok(result.zip64);
   assert.ok(result.zip64Locator);
-  assert.strictEqual(result.centralDirectory.entries.length, 1);
-  const [entry] = result.centralDirectory.entries;
+  const centralDirectory = expectDefined(result.centralDirectory);
+  assert.strictEqual(centralDirectory.entries.length, 1);
+  const entry = expectDefined(centralDirectory.entries[0]);
   assert.strictEqual(entry.uncompressedSize, zip64Sizes.uncompressed);
   assert.strictEqual(entry.compressedSize, zip64Sizes.compressed);
   assert.strictEqual(entry.localHeaderOffset, zip64Sizes.offset);
-  assert.strictEqual(result.centralDirectory.truncated, false);
+  assert.strictEqual(centralDirectory.truncated, false);
   assert.ok(result.issues.every(issue => issue.toLowerCase().indexOf("error") === -1));
 });
