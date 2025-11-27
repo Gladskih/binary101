@@ -3,6 +3,7 @@
 
 import { parseExtraData } from "./extra-data.js";
 import { parseLinkInfo } from "./link-info.js";
+import type { LnkParseResult } from "./types.js";
 import {
   SHELL_LINK_CLSID,
   SHELL_LINK_HEADER_SIZE,
@@ -121,12 +122,12 @@ const parseStringData = (dv, offset, linkFlags, warnings, isUnicode) => {
   return { ...strings, size: cursor - offset, endOffset: cursor };
 };
 
-export const hasShellLinkSignature = dv =>
+export const hasShellLinkSignature = (dv: DataView): boolean =>
   dv.byteLength >= SHELL_LINK_HEADER_SIZE &&
   dv.getUint32(0, true) === SHELL_LINK_HEADER_SIZE &&
   readGuid(dv, 4) === SHELL_LINK_CLSID;
 
-export async function parseLnk(file) {
+export async function parseLnk(file: File): Promise<LnkParseResult | null> {
   const buffer = await file.slice(0, file.size || 0).arrayBuffer();
   const dv = new DataView(buffer);
   const warnings = [];

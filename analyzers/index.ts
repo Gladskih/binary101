@@ -29,6 +29,7 @@ import { hasRarSignature, parseRar, type RarParseResult } from "./rar/index.js";
 import { parseMz } from "./mz/index.js";
 import type { MzParseResult } from "./mz/index.js";
 import { hasShellLinkSignature, parseLnk } from "./lnk/index.js";
+import type { LnkParseResult } from "./lnk/types.js";
 
 export type AnalyzerName =
   | "lnk"
@@ -48,7 +49,7 @@ export type AnalyzerName =
   | "mp3";
 
 type AnalyzerParseMap = {
-  lnk: unknown;
+  lnk: LnkParseResult;
   elf: ElfParseResult;
   pe: PeParseResult;
   mz: MzParseResult;

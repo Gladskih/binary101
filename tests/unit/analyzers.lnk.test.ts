@@ -3,34 +3,39 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseLnk } from "../../analyzers/lnk/index.js";
+import type {
+  LnkEnvironmentBlock,
+  LnkExtraDataBlock,
+  LnkKnownFolderBlock,
+  LnkPropertyStoreBlock
+} from "../../analyzers/lnk/types.js";
 import { createLnkFile } from "../fixtures/sample-files.js";
 
-type LnkParseShape = {
-  header: { clsid?: string; creationTime?: { iso?: string } };
-  stringData: { relativePath?: string; arguments?: string };
-  linkInfo: {
-    localBasePath?: string;
-    commonPathSuffix?: string;
-    volume?: { driveTypeName?: string };
-  };
-  idList: {
-    items: Array<{ typeName?: string; clsid?: string; longName?: string; fileSize?: number; attributes?: number }>;
-    resolvedPath?: string;
-  };
-  extraData: { blocks: Array<{ signature: number; parsed?: Record<string, unknown> }> };
-};
+const isEnvironmentBlock = (block: LnkExtraDataBlock): block is LnkEnvironmentBlock =>
+  block.signature === 0xa0000001;
+
+const isKnownFolderBlock = (block: LnkExtraDataBlock): block is LnkKnownFolderBlock =>
+  block.signature === 0xa000000b;
+
+const isPropertyStoreBlock = (block: LnkExtraDataBlock): block is LnkPropertyStoreBlock =>
+  block.signature === 0xa0000009;
 
 void test("parseLnk reads Shell Link header and targets", async () => {
   const file = createLnkFile();
-  const lnk = (await parseLnk(file)) as unknown as LnkParseShape;
+  const lnk = await parseLnk(file);
   assert.ok(lnk);
   assert.strictEqual(lnk.header.clsid, "00021401-0000-0000-c000-000000000046");
-  assert.ok(lnk.header.creationTime.iso.startsWith("2024-01-02"));
+  const createdIso = lnk.header.creationTime.iso;
+  assert.ok(createdIso);
+  assert.ok(createdIso.startsWith("2024-01-02"));
   assert.strictEqual(lnk.stringData.relativePath, ".\\Example\\app.exe");
   assert.strictEqual(lnk.stringData.arguments, "--demo");
+  assert.ok(lnk.linkInfo);
   assert.strictEqual(lnk.linkInfo.localBasePath, "C:\\Program Files\\Example");
   assert.strictEqual(lnk.linkInfo.commonPathSuffix, "app.exe");
+  assert.ok(lnk.linkInfo.volume);
   assert.strictEqual(lnk.linkInfo.volume.driveTypeName, "Fixed drive");
+  assert.ok(lnk.idList);
   assert.ok(Array.isArray(lnk.idList.items));
   assert.strictEqual(lnk.idList.items.length, 5);
   assert.strictEqual(lnk.idList.items[0].clsid, "20d04fe0-3aea-1069-a2d8-08002b30309d");
@@ -44,30 +49,25 @@ void test("parseLnk reads Shell Link header and targets", async () => {
   assert.ok(lnk.extraData.blocks.length >= 3);
 });
 
-interface Property {
-  id: number;
-  name: string;
-  value: string;
-}
-
-interface Storage {
-  properties: Property[];
-}
-
 void test("parseLnk reports extra data details", async () => {
-  const lnk = (await parseLnk(createLnkFile())) as unknown as LnkParseShape;
-  const envBlock = lnk.extraData.blocks.find(block => block.signature === 0xa0000001);
-  const knownFolder = lnk.extraData.blocks.find(block => block.signature === 0xa000000b);
-  const propertyStore = lnk.extraData.blocks.find(block => block.signature === 0xa0000009);
-  assert.ok(envBlock?.parsed?.unicode);
+  const lnk = await parseLnk(createLnkFile());
+  assert.ok(lnk);
+  const envBlock = lnk.extraData.blocks.find(isEnvironmentBlock);
+  const knownFolder = lnk.extraData.blocks.find(isKnownFolderBlock);
+  const propertyStore = lnk.extraData.blocks.find(isPropertyStoreBlock);
+  assert.ok(envBlock);
+  assert.ok(envBlock.parsed);
   assert.strictEqual(envBlock.parsed.unicode, "%USERPROFILE%\\Example\\app.exe");
-  assert.ok(knownFolder?.parsed?.knownFolderId);
+  assert.ok(knownFolder);
+  assert.ok(knownFolder.parsed);
   assert.strictEqual(
     knownFolder.parsed.knownFolderId,
     "fdd39ad0-238f-46af-adb4-6c85480369c7"
   );
-  const storages = propertyStore?.parsed?.storages as Storage[];
-  assert.ok(storages?.length);
+  assert.ok(propertyStore);
+  assert.ok(propertyStore.parsed);
+  const { storages } = propertyStore.parsed;
+  assert.ok(storages.length);
   const firstStorage = storages[0];
   const volumeProperty = firstStorage.properties.find(prop => prop.id === 104);
   assert.ok(volumeProperty);
