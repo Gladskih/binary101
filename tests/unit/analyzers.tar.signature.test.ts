@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { hasTarSignature } from "../../analyzers/tar/index.js";
 
 // Helper to create a DataView for testing
-const createDataView = (content, offset = 0) => {
+const createDataView = (content: string, offset = 0): DataView => {
   const buffer = new ArrayBuffer(offset + content.length);
   const view = new Uint8Array(buffer);
   for (let i = 0; i < content.length; i++) {

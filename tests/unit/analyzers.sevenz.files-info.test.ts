@@ -4,15 +4,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseFilesInfo } from "../../analyzers/sevenz/files-info.js";
 
-const encodeUint64 = value => {
+const encodeUint64 = (value: number): number[] => {
   if (value < 0 || value > 0x7f) throw new Error("encodeUint64 helper only supports small values");
   return [value];
 };
 
-const makeCtx = bytes => ({
+const makeCtx = (bytes: ArrayLike<number>) => ({
   dv: new DataView(Uint8Array.from(bytes).buffer),
   offset: 0,
-  issues: []
+  issues: [] as string[]
 });
 
 void test("parseFilesInfo reads names and defaults remaining flags", () => {

@@ -4,16 +4,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseId3v1, parseId3v2 } from "../../analyzers/mp3/id3.js";
 
-const asciiBytes = text => Array.from(Buffer.from(text, "latin1"));
+const asciiBytes = (text: string): number[] => Array.from(Buffer.from(text, "latin1"));
 
-const encodeSyncsafe = value => [
+const encodeSyncsafe = (value: number): number[] => [
   (value >> 21) & 0x7f,
   (value >> 14) & 0x7f,
   (value >> 7) & 0x7f,
   value & 0x7f
 ];
 
-const buildFrame = (id, payload) => {
+const buildFrame = (id: string, payload: Uint8Array): Uint8Array => {
   const frame = new Uint8Array(10 + payload.length);
   frame.set(asciiBytes(id), 0);
   const dv = new DataView(frame.buffer);
@@ -23,7 +23,7 @@ const buildFrame = (id, payload) => {
   return frame;
 };
 
-const concat = arrays => {
+const concat = (arrays: Uint8Array[]): Uint8Array => {
   const total = arrays.reduce((sum, arr) => sum + arr.length, 0);
   const out = new Uint8Array(total);
   let cursor = 0;
@@ -72,7 +72,7 @@ void test("parseId3v2 parses multiple frame types", () => {
   header.set(encodeSyncsafe(size), 6);
 
   const tag = concat([header, frames]);
-  const resultIssues = [];
+  const resultIssues: string[] = [];
   const parsed = parseId3v2(new DataView(tag.buffer), resultIssues);
 
   assert.ok(parsed);
@@ -103,7 +103,7 @@ void test("parseId3v2 handles extended headers and truncation warnings", () => {
   const extHeader = new Uint8Array([0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
   const truncatedFrame = buildFrame("TPE1", Uint8Array.from([0x00, ...asciiBytes("A")]));
   const combined = concat([header, extHeader, truncatedFrame]);
-  const issues = [];
+  const issues: string[] = [];
   const parsed = parseId3v2(new DataView(combined.buffer), issues);
 
   assert.ok(parsed);
@@ -112,7 +112,8 @@ void test("parseId3v2 handles extended headers and truncation warnings", () => {
 
 void test("parseId3v2 returns null or warnings for invalid tags", () => {
   // Missing header
-  assert.strictEqual(parseId3v2(new DataView(new ArrayBuffer(4)), []), null);
+  const emptyIssues: string[] = [];
+  assert.strictEqual(parseId3v2(new DataView(new ArrayBuffer(4)), emptyIssues), null);
 
   // Bad sync-safe size
   const badHeader = Uint8Array.from([
@@ -125,7 +126,7 @@ void test("parseId3v2 returns null or warnings for invalid tags", () => {
     0xff,
     0xff
   ]);
-  const issues = [];
+  const issues: string[] = [];
   const parsed = parseId3v2(new DataView(badHeader.buffer), issues);
   assert.ok(parsed);
   assert.ok(issues.some(msg => msg.includes("Invalid ID3v2 tag size")));

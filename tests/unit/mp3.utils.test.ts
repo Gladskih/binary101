@@ -10,7 +10,7 @@ import {
   safeHexPreview
 } from "../../analyzers/mp3/utils.js";
 
-const makeDv = bytes => new DataView(Uint8Array.from(bytes).buffer);
+const makeDv = (bytes: ArrayLike<number>): DataView => new DataView(Uint8Array.from(bytes).buffer);
 
 void test("decodeSynchsafeInt rejects invalid bytes and decodes valid values", () => {
   const valid = makeDv([0x00, 0x00, 0x04, 0x00]);

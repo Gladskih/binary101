@@ -4,10 +4,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseArchiveProperties, parseHeader } from "../../analyzers/sevenz/header-sections.js";
 
-const makeCtx = bytes => ({
+const makeCtx = (bytes: ArrayLike<number>) => ({
   dv: new DataView(Uint8Array.from(bytes).buffer),
   offset: 0,
-  issues: []
+  issues: [] as string[]
 });
 
 void test("parseArchiveProperties skips invalid size and records issue", () => {

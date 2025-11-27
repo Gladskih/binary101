@@ -12,7 +12,8 @@ import {
   readSubBlocks
 } from "../../analyzers/gif/helpers.js";
 
-const makeDv = bytes => new DataView(Uint8Array.from(bytes).buffer);
+const makeDv = (bytes: ArrayLike<number>): DataView =>
+  new DataView(Uint8Array.from(bytes).buffer);
 
 void test("readAsciiRange and bytesToAscii stop at NUL", () => {
   const dv = makeDv([0x41, 0x42, 0x00, 0x43]);

@@ -126,7 +126,7 @@ export const buildFileDetails = (
 ): { files: SevenZipFileSummary[] } => {
   const sourceFiles = sections.filesInfo?.files;
   if (!sourceFiles?.length) return { files: [] };
-  const files: SevenZipFileSummary[] = sourceFiles.map(file => ({
+  const files: SevenZipFileSummary[] = sourceFiles.map((file): SevenZipFileSummary => ({
     index: file.index,
     name: file.name || "(no name)",
     folderIndex: null,

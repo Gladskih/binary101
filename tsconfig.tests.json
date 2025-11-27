@@ -5,7 +5,7 @@
     "types": ["node", "@playwright/test"],
     "lib": ["ESNext", "DOM"],
     "strict": false,
-    "noImplicitAny": false,
+    "noImplicitAny": true,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,
     "noUncheckedIndexedAccess": true,

@@ -30,7 +30,7 @@ class TestDomParser extends XmlDomParser {
   override parseFromString(text: string, type: string) {
     const doc = super.parseFromString(text, type);
     if (!doc.querySelector) {
-      doc.querySelector = selector => {
+      doc.querySelector = (selector: string) => {
         const tagName = selector.replace(/[^a-zA-Z0-9:-]/g, "");
         const matches = doc.getElementsByTagName(tagName);
         return matches && matches.length ? matches[0] : null;
@@ -42,8 +42,11 @@ class TestDomParser extends XmlDomParser {
 
 global.DOMParser = TestDomParser;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const assertParsed = async (file: MockFile, expectedAnalyzer: string, checks: (parsed: any) => void = () => {}) => {
+const assertParsed = async (
+  file: MockFile,
+  expectedAnalyzer: string,
+  checks: (parsed: unknown) => void = () => {}
+): Promise<void> => {
   const { analyzer, parsed } = await parseForUi(file);
   assert.strictEqual(analyzer, expectedAnalyzer);
   assert.ok(parsed, `Expected parsed data for ${expectedAnalyzer}`);
@@ -145,7 +148,9 @@ void test("parseForUi parses Windows shortcuts", async () => {
     assert.strictEqual(lnk.linkInfo.localBasePath, "C:\\Program Files\\Example");
     assert.strictEqual(lnk.stringData.relativePath, ".\\Example\\app.exe");
     assert.ok(Array.isArray(lnk.extraData.blocks));
-    const propertyStore = lnk.extraData.blocks.find(block => block.signature === 0xa0000009);
+    const propertyStore = lnk.extraData.blocks.find(
+      (block: { signature?: number; parsed?: { storages?: unknown[] } }) => block.signature === 0xa0000009
+    );
     assert.ok(propertyStore?.parsed?.storages?.length);
   });
 });

@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { renderSignatureLayout } from "../../renderers/sevenz/signature.js";
 
 void test("signature section renders header map when startHeader is present", () => {
-  const out = [];
+  const out: string[] = [];
   const sevenZip = {
     is7z: true,
     startHeader: {
@@ -17,7 +17,7 @@ void test("signature section renders header map when startHeader is present", ()
       nextHeaderCrc: 0x89abcdef,
       absoluteNextHeaderOffset: 0x1234n
     },
-    issues: []
+    issues: [] as string[]
   };
 
   renderSignatureLayout(sevenZip, out);
@@ -29,7 +29,7 @@ void test("signature section renders header map when startHeader is present", ()
 });
 
 void test("signature section renders sensible zero values", () => {
-  const out = [];
+  const out: string[] = [];
   const sevenZip = {
     is7z: true,
     startHeader: {
@@ -41,7 +41,7 @@ void test("signature section renders sensible zero values", () => {
       nextHeaderCrc: 0,
       absoluteNextHeaderOffset: 0n
     },
-    issues: []
+    issues: [] as string[]
   };
 
   renderSignatureLayout(sevenZip, out);
@@ -53,8 +53,8 @@ void test("signature section renders sensible zero values", () => {
 });
 
 void test("signature section does not render when startHeader is missing", () => {
-  const out = [];
-  const sevenZip = { is7z: true, issues: [] };
+  const out: string[] = [];
+  const sevenZip = { is7z: true, issues: [] as string[] };
   renderSignatureLayout(sevenZip, out);
   assert.strictEqual(out.length, 0);
 });

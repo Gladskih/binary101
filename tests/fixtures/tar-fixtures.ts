@@ -24,7 +24,7 @@ type TarHeaderOptions = {
   prefix?: string;
 };
 
-export const calculateChecksum = headerBytes => {
+export const calculateChecksum = (headerBytes: Uint8Array): number => {
   let sum = 0;
   for (let i = 0; i < TAR_BLOCK_SIZE; i += 1) {
     if (i >= 148 && i < 156) {
@@ -36,16 +36,28 @@ export const calculateChecksum = headerBytes => {
   return sum;
 };
 
-const writeString = (buffer, text, offset, length) => {
+const writeString = (buffer: Uint8Array, text: string, offset: number, length: number): void => {
   const bytes = TEXT_ENCODER.encode(text);
   const max = Math.min(bytes.length, length);
   buffer.set(bytes.slice(0, max), offset);
 };
 
-export const writeOctal = (buffer, value, offset, length) => {
+export const writeOctal = (
+  buffer: Uint8Array,
+  value: number,
+  offset: number,
+  length: number
+): void => {
   const octalString = value.toString(8).padStart(length - 1, "0");
   writeString(buffer, octalString, offset, length - 1);
   buffer[offset + length - 1] = 0; // Null terminate
+};
+
+type TarEntry = TarHeaderOptions & {
+  content?: string;
+  paxHeader?: string;
+  longName?: string;
+  longLink?: string;
 };
 
 export const buildTarHeader = (opts: TarHeaderOptions = {}) => {
@@ -96,11 +108,11 @@ export const buildTarHeader = (opts: TarHeaderOptions = {}) => {
 };
 
 export const createTarFileWithEntries = (
-  entries,
+  entries: TarEntry[],
   options: { appendZeroBlocks?: number; unalignedFileSize?: number } = {}
-) => {
+): MockFile => {
   const { appendZeroBlocks = 2, unalignedFileSize = 0 } = options;
-  const tarBlocks = [];
+  const tarBlocks: Uint8Array[] = [];
 
   for (const entry of entries) {
     // Handle PAX Global/Extended headers

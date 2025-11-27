@@ -11,10 +11,10 @@ import {
   readUint64Le
 } from "../../analyzers/sevenz/readers.js";
 
-const makeCtx = (bytes, offset = 0) => ({
+const makeCtx = (bytes: ArrayLike<number>, offset = 0) => ({
   dv: new DataView(Uint8Array.from(bytes).buffer),
   offset,
-  issues: []
+  issues: [] as string[]
 });
 
 void test("toSafeNumber handles numbers, safe bigints and rejects large bigints", () => {

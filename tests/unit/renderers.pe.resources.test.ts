@@ -4,7 +4,44 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderResources } from "../../renderers/pe/resources.js";
 
-const createPeResources = () => ({
+type ResourceLangPreview = {
+  lang: number | null;
+  size: number;
+  codePage?: number;
+  previewKind: string;
+  previewMime?: string;
+  previewDataUrl?: string;
+  previewIssues?: string[];
+  textPreview?: string;
+  textEncoding?: string;
+  stringTable?: Array<{ id: number; text: string }>;
+  messageTable?: { messages: Array<{ id: number; text: string }>; truncated: boolean };
+  versionInfo?: { fileVersionString?: string; productVersionString?: string };
+};
+
+type ResourceEntry = {
+  id?: number;
+  name?: string;
+  langs: ResourceLangPreview[];
+};
+
+type ResourceDetail = {
+  typeName: string;
+  entries: ResourceEntry[];
+};
+
+type ResourceSummary = {
+  typeName: string;
+  kind: string;
+  leafCount: number;
+};
+
+type ResourceTreeMock = {
+  top: ResourceSummary[];
+  detail: ResourceDetail[];
+};
+
+const createPeResources = (): ResourceTreeMock => ({
   top: [
     { typeName: "ICON", kind: "id", leafCount: 2 },
     { typeName: "HTML", kind: "name", leafCount: 1 }
@@ -146,7 +183,7 @@ const createPeResources = () => ({
 
 void test("renderResources renders preview cells for common resource types", () => {
   const pe = { resources: createPeResources() };
-  const out = [];
+  const out: string[] = [];
 
   renderResources(pe, out);
   const html = out.join("");

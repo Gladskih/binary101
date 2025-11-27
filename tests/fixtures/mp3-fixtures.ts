@@ -2,7 +2,7 @@
 
 import { MockFile } from "../helpers/mock-file.js";
 
-const buildId3v2Header = size => {
+const buildId3v2Header = (size: number): Uint8Array => {
   const bytes = new Uint8Array(10).fill(0);
   bytes.set([0x49, 0x44, 0x33]); // ID3
   bytes[3] = 3; // version 2.3

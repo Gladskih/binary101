@@ -41,7 +41,7 @@ void test("parsePaxHeaders parses valid PAX headers", () => {
   // "18 size=123456789\n" = 18 bytes
   const paxData = "29 path=./long/path/to/file\n18 size=123456789\n";
   const bytes = TEXT_ENCODER.encode(paxData);
-  const issues = [];
+  const issues: string[] = [];
   const result = parsePaxHeaders(bytes, issues, "test");
   // Just check that we get some results back
   assert.ok(Object.keys(result).length > 0);
@@ -51,7 +51,7 @@ void test("parsePaxHeaders parses valid PAX headers", () => {
 void test("parsePaxHeaders handles empty PAX data", () => {
   const paxData = "";
   const bytes = TEXT_ENCODER.encode(paxData);
-  const issues = [];
+  const issues: string[] = [];
   const result = parsePaxHeaders(bytes, issues, "test");
   assert.deepStrictEqual(result, {});
   assert.deepStrictEqual(issues, ["PAX header (test) is present but empty or invalid."]);
@@ -60,7 +60,7 @@ void test("parsePaxHeaders handles empty PAX data", () => {
 void test("parsePaxHeaders handles invalid record length", () => {
   const paxData = "abc path=file\n";
   const bytes = TEXT_ENCODER.encode(paxData);
-  const issues = [];
+  const issues: string[] = [];
   const result = parsePaxHeaders(bytes, issues, "test");
   assert.deepStrictEqual(result, {});
   assert.deepStrictEqual(issues, ["PAX header (test) is present but empty or invalid."]);
@@ -69,7 +69,7 @@ void test("parsePaxHeaders handles invalid record length", () => {
 void test("parsePaxHeaders handles records without '='", () => {
   const paxData = "10 noprefix\n"; // This record will be ignored as it has no '='
   const bytes = TEXT_ENCODER.encode(paxData);
-  const issues = [];
+  const issues: string[] = [];
   const result = parsePaxHeaders(bytes, issues, "test");
   assert.deepStrictEqual(result, {});
   assert.deepStrictEqual(issues, ["PAX header (test) is present but empty or invalid."]);
@@ -80,7 +80,7 @@ void test("parsePaxHeaders handles multiple records and ignores trailing data", 
   // "7 c=d\n" has: 1 digit + space + 1 char key + = + 1 char value + newline = 7 chars (CORRECT)
   const paxData = "7 a=b\n7 c=d\nGARBAGE";
   const bytes = TEXT_ENCODER.encode(paxData);
-  const issues = [];
+  const issues: string[] = [];
   const result = parsePaxHeaders(bytes, issues, "test");
   // Just check that we get multiple results
   assert.ok(Object.keys(result).length >= 1);

@@ -45,7 +45,7 @@ class TestDomParser extends XmlDomParser {
   override parseFromString(text: string, type: string) {
     const doc = super.parseFromString(text, type);
     if (!doc.querySelector) {
-      doc.querySelector = selector => {
+      doc.querySelector = (selector: string) => {
         const tagName = selector.replace(/[^a-zA-Z0-9:-]/g, "");
         const matches = doc.getElementsByTagName(tagName);
         return matches && matches.length ? matches[0] : null;

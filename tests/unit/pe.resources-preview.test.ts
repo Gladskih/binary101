@@ -11,7 +11,7 @@ const pngSmall = Uint8Array.from(
   Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/5+hHgAFgwJ/l7nnMgAAAABJRU5ErkJggg==", "base64")
 );
 
-const writeUtf16 = (bytes, offset, text) => {
+const writeUtf16 = (bytes: Uint8Array, offset: number, text: string): void => {
   for (let i = 0; i < text.length; i += 1) {
     const code = text.charCodeAt(i);
     bytes[offset + i * 2] = code & 0xff;
@@ -21,7 +21,7 @@ const writeUtf16 = (bytes, offset, text) => {
 
 void test("enrichResourcePreviews builds previews for common PE resources", async () => {
   const fileBytes = new Uint8Array(2000);
-  const writeData = (offset, bytes) => {
+  const writeData = (offset: number, bytes: Uint8Array) => {
     fileBytes.set(bytes, offset);
     return { offset, size: bytes.length };
   };
@@ -119,8 +119,8 @@ void test("enrichResourcePreviews builds previews for common PE resources", asyn
       { typeName: "MESSAGETABLE", entries: [{ id: 5, name: null, langs: [{ lang: 2057, size: messageTable.size, codePage: 0, dataRVA: messageTable.offset, reserved: 0 }] }] },
       { typeName: "VERSION", entries: [{ id: 6, name: null, langs: [{ lang: 3082, size: version.size, codePage: 1200, dataRVA: version.offset, reserved: 0 }] }] }
     ],
-    view: async (off, len) => new DataView(directoryBuffer, off, len),
-    rvaToOff: value => value
+    view: async (off: number, len: number) => new DataView(directoryBuffer, off, len),
+    rvaToOff: (value: number) => value
   };
 
   const result = await enrichResourcePreviews(file, tree);

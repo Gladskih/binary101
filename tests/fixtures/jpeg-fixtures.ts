@@ -2,15 +2,15 @@
 
 import { MockFile } from "../helpers/mock-file.js";
 
-const buildJpeg = segments => {
-  const bytes = [];
+const buildJpeg = (segments: number[][]): MockFile => {
+  const bytes: number[] = [];
   // SOI
   bytes.push(0xff, 0xd8);
   segments.forEach(seg => bytes.push(...seg));
   return new MockFile(new Uint8Array(bytes), "sample.jpg", "image/jpeg");
 };
 
-const segment = (marker, payload) => {
+const segment = (marker: number, payload: number[]): number[] => {
   const len = payload.length + 2;
   return [0xff, marker, (len >> 8) & 0xff, len & 0xff, ...payload];
 };

@@ -6,7 +6,7 @@ import { detectBinaryType } from "../../analyzers/index.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { createMp3File } from "../fixtures/sample-files.js";
 
-const fromAscii = text => new Uint8Array(Buffer.from(text, "ascii"));
+const fromAscii = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "ascii"));
 
 void test("detectBinaryType refines ZIP-based document labels", async () => {
   const zipSignature = [0x50, 0x4b, 0x03, 0x04];

@@ -4,10 +4,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseStreamsInfo } from "../../analyzers/sevenz/streams-info.js";
 
-const makeCtx = bytes => ({
+const makeCtx = (bytes: ArrayLike<number>) => ({
   dv: new DataView(Uint8Array.from(bytes).buffer),
   offset: 0,
-  issues: []
+  issues: [] as string[]
 });
 
 void test("parseStreamsInfo records unknown field ids", () => {

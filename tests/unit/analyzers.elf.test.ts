@@ -5,8 +5,19 @@ import { test } from "node:test";
 import { parseElf } from "../../analyzers/elf/index.js";
 import { MockFile } from "../helpers/mock-file.js";
 
+type ElfHeaderOptions = {
+  phoff?: bigint;
+  shoff?: bigint;
+  phnum?: number;
+  shnum?: number;
+  shentsize?: number;
+  shstrndx?: number;
+  headerVersion?: number;
+  identVersion?: number;
+};
+
 const writeElfHeader = (
-  bytes,
+  bytes: Uint8Array,
   {
     phoff = 0n,
     shoff = 0n,
@@ -16,8 +27,8 @@ const writeElfHeader = (
     shstrndx = 0,
     headerVersion = 1,
     identVersion = 1
-  }
-) => {
+  }: ElfHeaderOptions = {}
+): void => {
   const dv = new DataView(bytes.buffer);
   dv.setUint32(0, 0x7f454c46); // \x7FELF
   dv.setUint8(4, 2); // 64-bit

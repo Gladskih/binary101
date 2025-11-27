@@ -8,11 +8,16 @@ import { parseExceptionDirectory } from "../../analyzers/pe/exception.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const encoder = new TextEncoder();
-const rvaToOff = rva => rva;
+const rvaToOff = (rva: number): number => rva;
 
-const collectCoverage = () => {
-  const regions = [];
-  const add = (label, start, size) => regions.push({ label, start, size });
+type CoverageEntry = { label: string; start: number; size: number };
+
+const collectCoverage = (): {
+  regions: CoverageEntry[];
+  add: (label: string, start: number, size: number) => void;
+} => {
+  const regions: CoverageEntry[] = [];
+  const add = (label: string, start: number, size: number) => regions.push({ label, start, size });
   return { regions, add };
 };
 

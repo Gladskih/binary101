@@ -15,7 +15,7 @@ import {
 import { createPngWithManyChunks } from "../fixtures/png-large-chunk.js";
 import { MockFile } from "../helpers/mock-file.js";
 
-const buildChunk = (type, data) => {
+const buildChunk = (type: string, data: ArrayLike<number>): Uint8Array => {
   const payload = new Uint8Array(data);
   const chunk = new Uint8Array(8 + payload.length + 4);
   const dv = new DataView(chunk.buffer);

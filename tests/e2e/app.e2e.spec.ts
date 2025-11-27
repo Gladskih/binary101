@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import {
   createElfFile,
   createFb2File,
@@ -16,14 +17,15 @@ import {
   createZipWithEntries,
   createLnkFile
 } from "../fixtures/sample-files.js";
+import type { MockFile } from "../helpers/mock-file.js";
 
-const toUpload = file => ({
+const toUpload = (file: MockFile) => ({
   name: file.name,
   mimeType: file.type,
   buffer: Buffer.from(file.data)
 });
 
-const expectBaseDetails = async (page, fileName, expectedKind) => {
+const expectBaseDetails = async (page: Page, fileName: string, expectedKind: string): Promise<void> => {
   await expect(page.locator("#fileInfoCard")).toBeVisible();
   await expect(page.locator("#fileOriginalName")).toHaveText(fileName);
   await expect(page.locator("#fileKindDisplay")).toHaveText(expectedKind);
@@ -224,11 +226,11 @@ test.describe("file type detection", () => {
     const table = page.locator("button.zipExtractButton");
     await expect(table).toHaveCount(2);
 
-    const readDownloadText = async locator => {
+    const readDownloadText = async (locator: Locator): Promise<{ name: string; content: string }> => {
       const [download] = await Promise.all([page.waitForEvent("download"), locator.click()]);
       const stream = await download.createReadStream();
       if (!stream) throw new Error("Download stream unavailable");
-      const chunks = [];
+      const chunks: Buffer[] = [];
       for await (const chunk of stream) chunks.push(chunk);
       const content = Buffer.concat(chunks).toString("utf8");
       return { name: download.suggestedFilename(), content };

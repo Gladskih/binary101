@@ -5,8 +5,8 @@ import { test } from "node:test";
 import { buildResourceTree } from "../../analyzers/pe/resources-core.js";
 import { MockFile } from "../helpers/mock-file.js";
 
-const setU16 = (view, off, value) => view.setUint16(off, value, true);
-const setU32 = (view, off, value) => view.setUint32(off, value, true);
+const setU16 = (view: DataView, off: number, value: number): void => view.setUint16(off, value, true);
+const setU32 = (view: DataView, off: number, value: number): void => view.setUint32(off, value, true);
 
 void test("buildResourceTree returns null when resource directory is missing or unmapped", async () => {
   const file = new MockFile(new Uint8Array(0));
@@ -56,7 +56,7 @@ void test("buildResourceTree parses nested resource directories and skips trunca
   setU32(dv, 0x8c, 0x00000000); // Reserved
 
   const dataDirs = [{ name: "RESOURCE", rva: 0x00000001, size: 0x120 }];
-  const coverage = [];
+  const coverage: Array<{ label: string; start: number; size: number }> = [];
   const tree = await buildResourceTree(
     new MockFile(bytes, "pe-resources.bin", "application/octet-stream"),
     dataDirs,

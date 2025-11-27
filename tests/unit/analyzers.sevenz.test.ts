@@ -7,7 +7,7 @@ import { MockFile } from "../helpers/mock-file.js";
 
 const SIGNATURE = [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c];
 
-const buildStartHeader = (nextHeaderLength, nextHeaderOffset = 0n) => {
+const buildStartHeader = (nextHeaderLength: number | bigint, nextHeaderOffset = 0n): Uint8Array => {
   const header = new Uint8Array(32).fill(0);
   header.set(SIGNATURE, 0);
   const view = new DataView(header.buffer);
@@ -18,7 +18,7 @@ const buildStartHeader = (nextHeaderLength, nextHeaderOffset = 0n) => {
   return header;
 };
 
-const buildSevenZipFile = nextHeaderBytes => {
+const buildSevenZipFile = (nextHeaderBytes: Uint8Array): MockFile => {
   const startHeader = buildStartHeader(nextHeaderBytes.length);
   const bytes = new Uint8Array(startHeader.length + nextHeaderBytes.length);
   bytes.set(startHeader, 0);
@@ -26,7 +26,7 @@ const buildSevenZipFile = nextHeaderBytes => {
   return new MockFile(bytes, "custom.7z", "application/x-7z-compressed");
 };
 
-const toFileTime = unixSeconds =>
+const toFileTime = (unixSeconds: number | bigint): bigint =>
   (BigInt(unixSeconds) + 11644473600n) * 10000000n;
 
 const buildStructuredHeader = () => {

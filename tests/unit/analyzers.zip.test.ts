@@ -60,7 +60,12 @@ const buildCentralDirectoryEntry = (name: string, options: CentralDirectoryOptio
   return new Uint8Array(buffer);
 };
 
-const buildEocd = (cdSize, cdOffset, entryCount, placeholders = false) => {
+const buildEocd = (
+  cdSize: number,
+  cdOffset: number,
+  entryCount: number,
+  placeholders = false
+): Uint8Array => {
   const bytes = new Uint8Array(22);
   const dv = new DataView(bytes.buffer);
   dv.setUint32(0, 0x06054b50, true);
@@ -74,7 +79,7 @@ const buildEocd = (cdSize, cdOffset, entryCount, placeholders = false) => {
   return bytes;
 };
 
-const buildZip64Extra = (uncompressed, compressed, offset) => {
+const buildZip64Extra = (uncompressed: bigint, compressed: bigint, offset: bigint): Uint8Array => {
   const bytes = new Uint8Array(28);
   const dv = new DataView(bytes.buffer);
   dv.setUint16(0, 0x0001, true);
@@ -85,7 +90,7 @@ const buildZip64Extra = (uncompressed, compressed, offset) => {
   return bytes;
 };
 
-const buildZip64Record = (cdSize, cdOffset) => {
+const buildZip64Record = (cdSize: number, cdOffset: number): Uint8Array => {
   const bytes = new Uint8Array(56);
   const dv = new DataView(bytes.buffer);
   dv.setUint32(0, 0x06064b50, true);
@@ -101,7 +106,7 @@ const buildZip64Record = (cdSize, cdOffset) => {
   return bytes;
 };
 
-const buildZip64Locator = zip64Offset => {
+const buildZip64Locator = (zip64Offset: number): Uint8Array => {
   const bytes = new Uint8Array(20);
   const dv = new DataView(bytes.buffer);
   dv.setUint32(0, 0x07064b50, true);

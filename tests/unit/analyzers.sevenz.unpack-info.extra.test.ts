@@ -4,10 +4,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseUnpackInfo } from "../../analyzers/sevenz/unpack-info.js";
 
-const makeCtx = bytes => ({
+const makeCtx = (bytes: ArrayLike<number>) => ({
   dv: new DataView(Uint8Array.from(bytes).buffer),
   offset: 0,
-  issues: []
+  issues: [] as string[]
 });
 
 void test("parseUnpackInfo handles external flag and missing end marker", () => {

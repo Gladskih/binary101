@@ -2,7 +2,7 @@
 
 import { MockFile } from "../helpers/mock-file.js";
 
-const fromHex = hex => new Uint8Array(Buffer.from(hex.replace(/\s+/g, ""), "hex"));
+const fromHex = (hex: string): Uint8Array => new Uint8Array(Buffer.from(hex.replace(/\s+/g, ""), "hex"));
 
 export const createGifWithBadTrailer = () =>
   new MockFile(

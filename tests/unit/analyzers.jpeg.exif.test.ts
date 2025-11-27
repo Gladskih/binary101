@@ -4,7 +4,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseExifFromApp1 } from "../../analyzers/jpeg/exif.js";
 
-const writeEntry = (dv, offset, tag, type, count, value, littleEndian = true) => {
+const writeEntry = (
+  dv: DataView,
+  offset: number,
+  tag: number,
+  type: number,
+  count: number,
+  value: number,
+  littleEndian = true
+): void => {
   dv.setUint16(offset, tag, littleEndian);
   dv.setUint16(offset + 2, type, littleEndian);
   dv.setUint32(offset + 4, count, littleEndian);
@@ -34,7 +42,7 @@ void test("parseExifFromApp1 parses EXIF and GPS fields with raw tags", () => {
   // Exif IFD
   dv.setUint16(100, 8, true);
   let dataPtr = 300;
-  const writeRational = (num, den) => {
+  const writeRational = (num: number, den: number): number => {
     dv.setUint32(dataPtr, num, true);
     dv.setUint32(dataPtr + 4, den, true);
     const off = dataPtr;
@@ -64,7 +72,7 @@ void test("parseExifFromApp1 parses EXIF and GPS fields with raw tags", () => {
   dv.setUint16(200, 4, true);
   const gpsLatOffset = dataPtr;
   const gpsLonOffset = gpsLatOffset + 24;
-  const writeGpsTriple = base => {
+  const writeGpsTriple = (base: number): void => {
     dv.setUint32(base + 0, 37, true);
     dv.setUint32(base + 4, 1, true);
     dv.setUint32(base + 8, 47, true);

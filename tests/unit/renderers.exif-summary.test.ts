@@ -3,11 +3,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderJpegExifSummary } from "../../renderers/jpeg/exif-summary.js";
+import type { ExifData, ExifRational } from "../../analyzers/jpeg/types.js";
 
-const makeRational = (num, den) => ({ num, den });
+const makeRational = (num: number, den: number): ExifRational => ({ num, den });
 
 void test("renderJpegExifSummary formats rich EXIF data and raw tags", () => {
-  const exif = {
+  const exif: ExifData = {
     make: "ACME",
     model: "CAM-42",
     orientation: 1,
@@ -51,7 +52,7 @@ void test("renderJpegExifSummary formats rich EXIF data and raw tags", () => {
 });
 
 void test("renderJpegExifSummary handles edge EXIF values", () => {
-  const exif = {
+  const exif: ExifData = {
     make: "",
     model: "",
     orientation: 7,

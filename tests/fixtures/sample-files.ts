@@ -5,7 +5,7 @@ import { MockFile } from "../helpers/mock-file.js";
 import { deflateRawSync } from "node:zlib";
 export { createPeWithSectionAndIat, createPeFile, createPePlusFile } from "./sample-files-pe.js";
 
-const fromBase64 = base64 => new Uint8Array(Buffer.from(base64, "base64"));
+const fromBase64 = (base64: string): Uint8Array => new Uint8Array(Buffer.from(base64, "base64"));
 const encoder = new TextEncoder();
 
 const crc32Table = (() => {
@@ -20,7 +20,7 @@ const crc32Table = (() => {
   return table;
 })();
 
-const crc32 = bytes => {
+const crc32 = (bytes: Uint8Array): number => {
   let crc = 0xffffffff;
   for (let i = 0; i < bytes.length; i += 1) {
     const idx = (crc ^ bytes[i]) & 0xff;
@@ -29,7 +29,7 @@ const crc32 = bytes => {
   return (crc ^ 0xffffffff) >>> 0;
 };
 
-const encodeVint = value => {
+const encodeVint = (value: number | bigint): number[] => {
   let v = BigInt(value);
   const out = [];
   do {
@@ -41,7 +41,7 @@ const encodeVint = value => {
   return out;
 };
 
-const u32le = value => [
+const u32le = (value: number): number[] => [
   value & 0xff,
   (value >> 8) & 0xff,
   (value >> 16) & 0xff,
@@ -49,9 +49,9 @@ const u32le = value => [
 ];
 const FILETIME_EPOCH_BIAS_MS = 11644473600000n;
 
-const align4 = value => (value + 3) & ~3;
+const align4 = (value: number): number => (value + 3) & ~3;
 
-const encodeUtf16Le = text => {
+const encodeUtf16Le = (text: string): Uint8Array => {
   const bytes = new Uint8Array(text.length * 2);
   for (let i = 0; i < text.length; i += 1) {
     const code = text.charCodeAt(i);
@@ -61,7 +61,7 @@ const encodeUtf16Le = text => {
   return bytes;
 };
 
-const makeNullTerminatedAscii = text => {
+const makeNullTerminatedAscii = (text: string): Uint8Array => {
   const data = encoder.encode(text);
   const out = new Uint8Array(data.length + 1);
   out.set(data, 0);
@@ -69,14 +69,14 @@ const makeNullTerminatedAscii = text => {
   return out;
 };
 
-const makeNullTerminatedUnicode = text => {
+const makeNullTerminatedUnicode = (text: string): Uint8Array => {
   const data = encodeUtf16Le(text);
   const out = new Uint8Array(data.length + 2);
   out.set(data, 0);
   return out;
 };
 
-const concatParts = parts => {
+const concatParts = (parts: Uint8Array[]): Uint8Array => {
   const total = parts.reduce((sum, part) => sum + part.length, 0);
   const out = new Uint8Array(total);
   let cursor = 0;
@@ -87,7 +87,7 @@ const concatParts = parts => {
   return out;
 };
 
-const writeGuid = (buffer, offset, guidText) => {
+const writeGuid = (buffer: Uint8Array, offset: number, guidText: string): void => {
   const parts = guidText.split("-");
   const data1 = Number.parseInt(parts[0], 16);
   const data2 = Number.parseInt(parts[1], 16);
@@ -103,7 +103,7 @@ const writeGuid = (buffer, offset, guidText) => {
   }
 };
 
-const encodeDosDateTime = date => {
+const encodeDosDateTime = (date: number | string | Date): { dosDate: number; dosTime: number } => {
   const d = new Date(date);
   const year = Math.max(1980, Math.min(2107, d.getUTCFullYear()));
   const dosDate =
@@ -152,8 +152,8 @@ export const createFb2File = () => {
   return new MockFile(encoder.encode(xml), "sample.fb2", "text/xml");
 };
 
-const formatOffset = value => value.toString(8).padStart(7, "0") + "\0";
-const writeString = (buffer, text, offset, length) => {
+const formatOffset = (value: number): string => value.toString(8).padStart(7, "0") + "\0";
+const writeString = (buffer: Uint8Array, text: string, offset: number, length: number): void => {
   const bytes = encoder.encode(text);
   const max = Math.min(bytes.length, length);
   buffer.set(bytes.slice(0, max), offset);
@@ -198,22 +198,30 @@ export const createZipFile = () =>
     "application/zip"
   );
 
-export const createZipWithEntries = () => {
-  const entries = [
+export const createZipWithEntries = (): MockFile => {
+  const entries: Array<{ name: string; method: number; data: Uint8Array }> = [
     { name: "stored.txt", method: 0, data: encoder.encode("stored") },
     { name: "deflated.txt", method: 8, data: encoder.encode("deflated") }
   ];
 
-  const parts = [];
+  const parts: Uint8Array[] = [];
   let cursor = 0;
-  const append = bytes => {
+  const append = (bytes: Uint8Array): number => {
     parts.push(bytes);
     const start = cursor;
     cursor += bytes.length;
     return start;
   };
 
-  const cdEntries = [];
+  type CentralDirectoryEntry = {
+    nameBytes: Uint8Array;
+    method: number;
+    crc: number;
+    compSize: number;
+    uncompSize: number;
+    localOffset: number;
+  };
+  const cdEntries: CentralDirectoryEntry[] = [];
   entries.forEach(entry => {
     const nameBytes = encoder.encode(entry.name);
     const dataBytes = entry.data;
@@ -337,7 +345,7 @@ export const createLnkFile = () => {
     const headerSize = 0x24;
     let cursor = headerSize;
     const offsets: Record<string, number> = {};
-    const add = (key, length) => {
+    const add = (key: string, length: number): void => {
       cursor = align4(cursor);
       offsets[key] = cursor;
       cursor += length;
@@ -367,7 +375,7 @@ export const createLnkFile = () => {
     return info;
   };
 
-  const buildUnicodeStringData = text => {
+  const buildUnicodeStringData = (text: string): Uint8Array => {
     const totalChars = text.length + 1;
     const bytes = new Uint8Array(2 + totalChars * 2).fill(0);
     const sdv = new DataView(bytes.buffer);
@@ -378,7 +386,7 @@ export const createLnkFile = () => {
     return bytes;
   };
 
-  const buildEnvironmentBlock = target => {
+  const buildEnvironmentBlock = (target: string): Uint8Array => {
     const blockSize = 0x314;
     const block = new Uint8Array(blockSize).fill(0);
     const bdv = new DataView(block.buffer);
@@ -401,9 +409,12 @@ export const createLnkFile = () => {
     return block;
   };
 
-  const buildPropertyValue = (type, value) => {
+  const buildPropertyValue = (
+    type: number,
+    value: number | string
+  ): { size: number; body: Uint8Array } => {
     const vtSize = 4; // VARTYPE (u16) + padding (u16)
-    if (type === 0x1f) {
+    if (type === 0x1f && typeof value === "string") {
       const length = value.length + 1;
       const data = new Uint8Array(4 + length * 2).fill(0);
       const dv = new DataView(data.buffer);
@@ -418,14 +429,14 @@ export const createLnkFile = () => {
       body.set(data, vtSize);
       return { size: body.length, body };
     }
-    if (type === 0x48) {
+    if (type === 0x48 && typeof value === "string") {
       const body = new Uint8Array(vtSize + 16).fill(0);
       const bdv = new DataView(body.buffer);
       bdv.setUint16(0, type, true);
       writeGuid(body, vtSize, value);
       return { size: body.length, body };
     }
-    if (type === 0x13) {
+    if (type === 0x13 && typeof value === "number") {
       const body = new Uint8Array(vtSize + 4).fill(0);
       const bdv = new DataView(body.buffer);
       bdv.setUint16(0, type, true);
@@ -435,8 +446,11 @@ export const createLnkFile = () => {
     return { size: vtSize, body: new Uint8Array(vtSize) };
   };
 
-  const buildPropertyStoreBlock = () => {
-    const buildSpsStorage = (fmtid, props) => {
+  const buildPropertyStoreBlock = (): Uint8Array => {
+    const buildSpsStorage = (
+      fmtid: string,
+      props: Array<{ pid: number; type: number; value: number | string }>
+    ): Uint8Array => {
       const entries = props.map(({ pid, type, value }) => {
         const val = buildPropertyValue(type, value);
         const entry = new Uint8Array(8 + val.size);
@@ -447,7 +461,7 @@ export const createLnkFile = () => {
         return entry;
       });
       const terminator = new Uint8Array(8).fill(0);
-      const storageSize = 24 + entries.reduce((sum, e) => sum + e.length, 0) + terminator.length;
+      const storageSize = 24 + entries.reduce<number>((sum, e) => sum + e.length, 0) + terminator.length;
       const storage = new Uint8Array(storageSize).fill(0);
       const sdv = new DataView(storage.buffer);
       sdv.setUint32(0, storageSize, true);
@@ -479,7 +493,7 @@ export const createLnkFile = () => {
     return block;
   };
 
-  const buildRootShellItem = clsid => {
+  const buildRootShellItem = (clsid: string): Uint8Array => {
     const body = new Uint8Array(1 + 16).fill(0);
     body[0] = 0x1f;
     writeGuid(body, 1, clsid);
@@ -489,7 +503,7 @@ export const createLnkFile = () => {
     return item;
   };
 
-  const buildFileExtensionBlock = longName => {
+  const buildFileExtensionBlock = (longName: string): Uint8Array => {
     const nameBytes = makeNullTerminatedUnicode(longName);
     const version = 3;
     const headerSize = 20; // size (2) + version (2) + sig (4) + times (8) + unknown (2) + longSize (2)
@@ -506,7 +520,13 @@ export const createLnkFile = () => {
     return block;
   };
 
-  const buildFileShellItem = (type, shortName, longName, attributes, sizeBytes) => {
+  const buildFileShellItem = (
+    type: number,
+    shortName: string,
+    longName: string,
+    attributes: number,
+    sizeBytes: number
+  ): Uint8Array => {
     const shortBytes = makeNullTerminatedAscii(shortName);
     const longBlock = buildFileExtensionBlock(longName);
     const base = 12 + shortBytes.length;
@@ -533,7 +553,7 @@ export const createLnkFile = () => {
     return item;
   };
 
-  const buildDriveShellItem = driveLetter => {
+  const buildDriveShellItem = (driveLetter: string): Uint8Array => {
     const text = `${driveLetter.toUpperCase()}:`;
     const label = makeNullTerminatedAscii(text);
     const body = new Uint8Array(2 + label.length).fill(0);
@@ -628,9 +648,9 @@ export const createPdfFile = () => {
     "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R >>\nendobj\n";
   const obj4 = "4 0 obj\n<< /Length 11 >>\nstream\nHello World\nendstream\nendobj\n";
 
-  const offsets = [];
+  const offsets: number[] = [];
   let cursor = 0;
-  const add = segment => {
+  const add = (segment: string): string => {
     offsets.push(cursor);
     cursor += Buffer.byteLength(segment, "latin1");
     return segment;
@@ -638,7 +658,7 @@ export const createPdfFile = () => {
 
   const body = [add(header), add(obj1), add(obj2), add(obj3), add(obj4)].join("");
   const xrefOffset = cursor;
-  const pad = value => value.toString().padStart(10, "0");
+  const pad = (value: number): string => value.toString().padStart(10, "0");
   const xref =
     "xref\n0 5\n" +
     `${pad(0)} 65535 f \n` +
@@ -826,7 +846,7 @@ export const createRar5File = () => {
 
   const fileData = new Uint8Array([0x48, 0x69]); // "Hi"
   const fileName = encoder.encode("note.txt");
-  const buildHeader = headerFields => {
+  const buildHeader = (headerFields: number[]): number[] => {
     const sizeBytes = encodeVint(headerFields.length);
     const headerBytes = Uint8Array.from([...sizeBytes, ...headerFields]);
     const headerCrc = crc32(headerBytes);

@@ -11,6 +11,15 @@ import {
 } from "../../analyzers/mp3/mpeg.js";
 import type { MpegFrameHeader, VbrHeader } from "../../analyzers/mp3/types.js";
 
+type HeaderOptions = {
+  versionBits?: number;
+  layerBits?: number;
+  bitrateIndex?: number;
+  sampleRateIndex?: number;
+  padding?: number | boolean;
+  channelModeBits?: number;
+};
+
 const makeHeaderValue = ({
   versionBits = 0x3,
   layerBits = 0x1,
@@ -18,7 +27,7 @@ const makeHeaderValue = ({
   sampleRateIndex = 0x0,
   padding = 0,
   channelModeBits = 0x0
-} = {}) => {
+}: HeaderOptions = {}): number => {
   let value = 0xffe00000; // sync word
   value |= versionBits << 19;
   value |= layerBits << 17;
@@ -30,7 +39,7 @@ const makeHeaderValue = ({
   return value >>> 0;
 };
 
-const writeHeader = (array, offset, headerValue) => {
+const writeHeader = (array: Uint8Array, offset: number, headerValue: number): void => {
   const view = new DataView(array.buffer);
   view.setUint32(offset, headerValue, false);
 };
@@ -58,7 +67,7 @@ void test("parseFrameHeader rejects invalid headers and decodes basics", () => {
 void test("findFirstFrame flags unusually distant headers", () => {
   const data = new Uint8Array(41000).fill(0);
   writeHeader(data, 40000, makeHeaderValue({ padding: 1 }));
-  const issues = [];
+  const issues: string[] = [];
   const frame = findFirstFrame(new DataView(data.buffer), 0, issues);
   assert.ok(frame);
   assert.ok(issues.some(msg => msg.includes("unusually far")), "expected distance warning");
@@ -69,14 +78,14 @@ void test("validateNextFrame reports truncated, invalid, and mismatched frames",
   const shortData = new Uint8Array(100).fill(0);
   writeHeader(shortData, 0, headerValue);
   const shortFrame = parseFrameHeader(new DataView(shortData.buffer), 0);
-  const shortIssues = [];
+  const shortIssues: string[] = [];
   assert.strictEqual(validateNextFrame(new DataView(shortData.buffer), shortFrame, shortIssues), false);
   assert.ok(shortIssues.some(msg => msg.includes("too small")));
 
   const frameLength = shortFrame.frameLengthBytes || 0;
   const invalidSecond = new Uint8Array(frameLength + 8).fill(0);
   writeHeader(invalidSecond, 0, headerValue);
-  const issues = [];
+  const issues: string[] = [];
   const parsedFrame = parseFrameHeader(new DataView(invalidSecond.buffer), 0);
   assert.strictEqual(validateNextFrame(new DataView(invalidSecond.buffer), parsedFrame, issues), false);
   assert.ok(issues.some(msg => msg.includes("invalid")));
@@ -89,7 +98,7 @@ void test("validateNextFrame reports truncated, invalid, and mismatched frames",
     parsedFrame.frameLengthBytes || 0,
     makeHeaderValue({ versionBits: 0x2, layerBits: 0x2 })
   );
-  const mismatchIssues = [];
+  const mismatchIssues: string[] = [];
   const mismatchFrame = parseFrameHeader(mismatchView, 0);
   assert.strictEqual(validateNextFrame(mismatchView, mismatchFrame, mismatchIssues), false);
   assert.ok(mismatchIssues.some(msg => msg.includes("disagree")));
@@ -160,7 +169,7 @@ void test("estimateDuration chooses best available information", () => {
     lameEncoder: null,
     vbrDetected: true
   };
-  const issues = [];
+  const issues: string[] = [];
   const framesDuration = estimateDuration(baseFrame, vbrFrames, 0, issues);
   assert.strictEqual(framesDuration, (100 * 1152) / 44100);
 
