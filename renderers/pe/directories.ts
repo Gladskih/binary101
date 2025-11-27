@@ -1,30 +1,46 @@
-// @ts-nocheck
 "use strict";
 
 import { humanSize, hex, isoOrDash } from "../../binary-utils.js";
 import { dd, safe } from "../../html-utils.js";
 import { GUARD_FLAGS } from "../../analyzers/pe/constants.js";
+import type { PeParseResult } from "../../analyzers/pe/index.js";
+import type { PeLoadConfig } from "../../analyzers/pe/debug-loadcfg.js";
+import type { PeTlsDirectory } from "../../analyzers/pe/types.js";
 
-export function renderLoadConfig(pe, out) {
+const formatVa = (value: number | bigint, isPlus: boolean): string => {
+  if (!value) return "-";
+  return isPlus ? `0x${BigInt(value).toString(16)}` : hex(Number(value), 8);
+};
+
+const renderGuardFlags = (lc: PeLoadConfig, out: string[]): void => {
+  if (typeof lc.GuardFlags !== "number") return;
+  const flags = GUARD_FLAGS.filter(([bit]) => (lc.GuardFlags & bit) !== 0).map(([, name]) => name);
+  out.push(
+    dd(
+      "GuardFlags",
+      lc.GuardFlags ? hex(lc.GuardFlags, 8) : "0",
+      flags.length ? flags.join(", ") : "No CFG-related flags set."
+    )
+  );
+};
+
+export function renderLoadConfig(pe: PeParseResult, out: string[]): void {
   if (!pe.loadcfg) return;
   const lc = pe.loadcfg;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Load Config</h4><dl>`);
   out.push(dd("Size", hex(lc.Size, 8), "Structure size of IMAGE_LOAD_CONFIG_DIRECTORY."));
   out.push(dd("TimeDateStamp", isoOrDash(lc.TimeDateStamp), "Build timestamp for load config data."));
   out.push(dd("Version", `${lc.Major}.${lc.Minor}`, "Load config version (varies between OS/toolchain versions)."));
-  out.push(dd("SecurityCookie", lc.SecurityCookie ? (pe.opt.isPlus ? "0x" + BigInt(lc.SecurityCookie).toString(16) : hex(lc.SecurityCookie, 8)) : "-", "Address of the GS cookie (stack guard)."));
-  out.push(dd("SEHandlerTable", lc.SEHandlerTable ? (pe.opt.isPlus ? "0x" + BigInt(lc.SEHandlerTable).toString(16) : hex(lc.SEHandlerTable, 8)) : "-", "SafeSEH handler table (x86 only)."));
-  out.push(dd("SEHandlerCount", lc.SEHandlerCount ?? "-", "Number of SafeSEH handlers (x86)."));
-  out.push(dd("GuardCFFunctionTable", lc.GuardCFFunctionTable ? (pe.opt.isPlus ? "0x" + BigInt(lc.GuardCFFunctionTable).toString(16) : hex(lc.GuardCFFunctionTable, 8)) : "-", "CFG function table VA."));
-  out.push(dd("GuardCFFunctionCount", lc.GuardCFFunctionCount ?? "-", "Number of CFG functions listed."));
-  if (typeof lc.GuardFlags === "number") {
-    const flags = GUARD_FLAGS.filter(([bit]) => (lc.GuardFlags & bit) !== 0).map(([, name]) => name);
-    out.push(dd("GuardFlags", lc.GuardFlags ? hex(lc.GuardFlags, 8) : "0", flags.length ? flags.join(", ") : "No CFG-related flags set."));
-  }
+  out.push(dd("SecurityCookie", formatVa(lc.SecurityCookie, pe.opt.isPlus), "Address of the GS cookie (stack guard)."));
+  out.push(dd("SEHandlerTable", formatVa(lc.SEHandlerTable, pe.opt.isPlus), "SafeSEH handler table (x86 only)."));
+  out.push(dd("SEHandlerCount", String(lc.SEHandlerCount ?? "-"), "Number of SafeSEH handlers (x86)."));
+  out.push(dd("GuardCFFunctionTable", formatVa(lc.GuardCFFunctionTable, pe.opt.isPlus), "CFG function table VA."));
+  out.push(dd("GuardCFFunctionCount", String(lc.GuardCFFunctionCount ?? "-"), "Number of CFG functions listed."));
+  renderGuardFlags(lc, out);
   out.push(`</dl></section>`);
 }
 
-export function renderDebug(pe, out) {
+export function renderDebug(pe: PeParseResult, out: string[]): void {
   if (!pe.rsds && !pe.debugWarning) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Debug (PDB)</h4>`);
   if (pe.rsds) {
@@ -41,7 +57,7 @@ export function renderDebug(pe, out) {
   out.push(`</section>`);
 }
 
-export function renderImports(pe, out) {
+export function renderImports(pe: PeParseResult, out: string[]): void {
   if (!pe.imports?.length) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import table</h4><div class="smallNote">Imports list functions this file expects other modules to provide. Hint index speeds up runtime name lookup, and ordinal-only imports often point to more special or low-level routines.</div>`);
   for (const mod of pe.imports) {
@@ -61,7 +77,7 @@ export function renderImports(pe, out) {
   out.push(`</section>`);
 }
 
-export function renderExports(pe, out) {
+export function renderExports(pe: PeParseResult, out: string[]): void {
   if (!pe.exports) return;
   const ex = pe.exports;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Export directory</h4><dl>`);
@@ -81,9 +97,9 @@ export function renderExports(pe, out) {
   out.push(`</section>`);
 }
 
-export function renderTls(pe, out) {
+export function renderTls(pe: PeParseResult, out: string[]): void {
   if (!pe.tls) return;
-  const t = pe.tls;
+  const t: PeTlsDirectory = pe.tls;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">TLS directory</h4><dl>`);
   out.push(dd("StartAddressOfRawData", "0x" + BigInt(t.StartAddressOfRawData).toString(16), "VA for beginning of TLS template data."));
   out.push(dd("EndAddressOfRawData", "0x" + BigInt(t.EndAddressOfRawData).toString(16), "VA for end of TLS template data."));
@@ -95,7 +111,7 @@ export function renderTls(pe, out) {
   out.push(`</dl></section>`);
 }
 
-export function renderClr(pe, out) {
+export function renderClr(pe: PeParseResult, out: string[]): void {
   if (!pe.clr) return;
   const c = pe.clr;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">CLR (.NET) header</h4><dl>`);
@@ -121,7 +137,7 @@ export function renderClr(pe, out) {
   out.push(`</section>`);
 }
 
-export function renderSecurity(pe, out) {
+export function renderSecurity(pe: PeParseResult, out: string[]): void {
   if (!pe.security) return;
   const s = pe.security;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Security (WIN_CERTIFICATE)</h4><dl>`);
@@ -137,7 +153,7 @@ export function renderSecurity(pe, out) {
   out.push(`</section>`);
 }
 
-export function renderIat(pe, out) {
+export function renderIat(pe: PeParseResult, out: string[]): void {
   if (!pe.iat) return;
   const t = pe.iat;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import Address Table (IAT)</h4><dl>`);

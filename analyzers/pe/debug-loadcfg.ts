@@ -3,6 +3,19 @@
 import { toHex32 } from "../../binary-utils.js";
 import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
 
+export interface PeLoadConfig {
+  Size: number;
+  TimeDateStamp: number;
+  Major: number;
+  Minor: number;
+  SecurityCookie: number;
+  SEHandlerTable: number;
+  SEHandlerCount: number;
+  GuardCFFunctionTable: number;
+  GuardCFFunctionCount: number;
+  GuardFlags: number;
+}
+
 export async function parseDebugDirectory(
   file: File,
   dataDirs: PeDataDirectory[],
@@ -77,18 +90,7 @@ export async function parseLoadConfigDirectory(
   rvaToOff: RvaToOffset,
   addCoverageRegion: AddCoverageRegion,
   isPlus: boolean
-): Promise<{
-  Size: number;
-  TimeDateStamp: number;
-  Major: number;
-  Minor: number;
-  SecurityCookie: number;
-  SEHandlerTable: number;
-  SEHandlerCount: number;
-  GuardCFFunctionTable: number;
-  GuardCFFunctionCount: number;
-  GuardFlags: number;
-} | null> {
+): Promise<PeLoadConfig | null> {
   const lcDir = dataDirs.find(d => d.name === "LOAD_CONFIG");
   if (!lcDir?.rva || lcDir.size < 0x40) return null;
   const base = rvaToOff(lcDir.rva);

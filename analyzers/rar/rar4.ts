@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use strict";
 
 import {
@@ -35,8 +34,28 @@ import {
   readDataView,
   toSafeNumber
 } from "./utils.js";
+import type { RarEntry, RarParseResult, RarMainHeader, RarEndHeader } from "./index.js";
 
-const parseRar4FileHeader = (headerDv, flags, issues, headerOffset) => {
+interface Rar4FileHeaderParse {
+  entry: RarEntry & {
+    headerOffset: number;
+    flags: number;
+    rawName: string;
+    versionRequired: number;
+    hasSalt: boolean;
+    hasUnicodeName: boolean;
+    hasExtendedTime: boolean;
+    salt: Uint8Array | null;
+  };
+  nextOffsetDelta: bigint;
+}
+
+const parseRar4FileHeader = (
+  headerDv: DataView,
+  flags: number,
+  issues: string[],
+  headerOffset: number
+): Rar4FileHeaderParse | null => {
   if (headerDv.byteLength < 32) {
     issues.push("RAR file header is shorter than expected.");
     return null;
@@ -114,12 +133,12 @@ const parseRar4FileHeader = (headerDv, flags, issues, headerOffset) => {
   return { entry, nextOffsetDelta: packSizeBig };
 };
 
-export const parseRar4 = async file => {
-  const issues = [];
-  const entries = [];
+export const parseRar4 = async (file: File): Promise<RarParseResult> => {
+  const issues: string[] = [];
+  const entries: RarEntry[] = [];
   const fileSize = file.size || 0;
-  let mainHeader = null;
-  let endHeader = null;
+  let mainHeader: (RarMainHeader & { offset: number; flags: number }) | null = null;
+  let endHeader: RarEndHeader | null = null;
   let offset = SIGNATURE_V4.length;
   let guard = 0;
 

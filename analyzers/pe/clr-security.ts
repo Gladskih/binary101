@@ -2,12 +2,40 @@
 
 import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
 
+export interface PeClrStreamInfo {
+  name: string;
+  offset: number;
+  size: number;
+}
+
+export interface PeClrMeta {
+  version?: string;
+  verMajor?: number;
+  verMinor?: number;
+  reserved?: number;
+  flags?: number;
+  streamCount?: number;
+  signature?: number;
+  streams: PeClrStreamInfo[];
+}
+
+export interface PeClrHeader {
+  cb: number;
+  MajorRuntimeVersion: number;
+  MinorRuntimeVersion: number;
+  MetaDataRVA: number;
+  MetaDataSize: number;
+  Flags: number;
+  EntryPointToken: number;
+  meta?: PeClrMeta;
+}
+
 export async function parseClrDirectory(
   file: File,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   addCoverageRegion: AddCoverageRegion
-): Promise<Record<string, unknown> | null> {
+): Promise<PeClrHeader | null> {
   const dir = dataDirs.find(d => d.name === "CLR_RUNTIME");
   if (!dir?.rva || dir.size < 0x48) return null;
   const base = rvaToOff(dir.rva);
@@ -22,7 +50,7 @@ export async function parseClrDirectory(
   const Flags = view.getUint32(16, true);
   const EntryPointToken = view.getUint32(20, true);
   const metaOffset = rvaToOff(MetaDataRVA);
-  const clr: Record<string, unknown> = {
+  const clr: PeClrHeader = {
     cb,
     MajorRuntimeVersion,
     MinorRuntimeVersion,
@@ -48,7 +76,7 @@ export async function parseClrDirectory(
       }
       const flags = md.getUint16(p, true); p += 2;
       const streamCount = md.getUint16(p, true); p += 2;
-      const streams: Array<{ name: string; offset: number; size: number }> = [];
+      const streams: PeClrStreamInfo[] = [];
       for (let i = 0; i < streamCount && p + 8 <= md.byteLength; i++) {
         const offset = md.getUint32(p, true); p += 4;
         const size = md.getUint32(p, true); p += 4;
@@ -62,7 +90,16 @@ export async function parseClrDirectory(
         p = (p + 3) & ~3;
         streams.push({ name, offset, size });
       }
-      clr["meta"] = { version: verStr, verMajor, verMinor, streams, sig, flags, reserved };
+      clr.meta = {
+        version: verStr,
+        verMajor,
+        verMinor,
+        reserved,
+        flags,
+        streamCount,
+        signature: sig,
+        streams
+      };
     } catch {
       // malformed CLR metadata; keep only header fields
     }

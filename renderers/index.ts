@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use strict";
 
 export { renderPe } from "./pe/index.js";

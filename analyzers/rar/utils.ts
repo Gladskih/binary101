@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use strict";
 
 import { formatUnixSecondsOrDash } from "../../binary-utils.js";
@@ -19,16 +18,17 @@ const CRC32_TABLE = (() => {
   return table;
 })();
 
-export const crc32 = bytes => {
+export const crc32 = (bytes: Uint8Array): number => {
   let crc = 0xffffffff;
   for (let i = 0; i < bytes.length; i += 1) {
-    const index = (crc ^ bytes[i]) & 0xff;
-    crc = (crc >>> 8) ^ CRC32_TABLE[index];
+    const byte = bytes.at(i) ?? 0;
+    const tableValue = CRC32_TABLE.at((crc ^ byte) & 0xff) ?? 0;
+    crc = (crc >>> 8) ^ tableValue;
   }
   return (crc ^ 0xffffffff) >>> 0;
 };
 
-export const toSafeNumber = value => {
+export const toSafeNumber = (value: number | bigint | null | undefined): number | null => {
   if (typeof value === "number") return value;
   if (typeof value === "bigint") {
     if (value <= BigInt(Number.MAX_SAFE_INTEGER)) return Number(value);
@@ -37,14 +37,21 @@ export const toSafeNumber = value => {
   return null;
 };
 
-export const readDataView = async (file, offset, length) => {
+export const readDataView = async (
+  file: File,
+  offset: number,
+  length: number
+): Promise<DataView | null> => {
   if (offset >= (file.size || 0)) return null;
   const clampedLength = Math.max(0, Math.min(length, (file.size || 0) - offset));
   const buffer = await file.slice(offset, offset + clampedLength).arrayBuffer();
   return new DataView(buffer);
 };
 
-export const readVint = (dv, offset) => {
+export const readVint = (
+  dv: DataView,
+  offset: number
+): { value: bigint | null; length: number } => {
   let value = 0n;
   let shift = 0n;
   let length = 0;
@@ -61,13 +68,13 @@ export const readVint = (dv, offset) => {
   return { value: null, length: 0 };
 };
 
-export const combineToBigInt = (high, low) => {
+export const combineToBigInt = (high: number, low: number): bigint => {
   const hi = BigInt(high >>> 0);
   const lo = BigInt(low >>> 0);
   return (hi << 32n) + lo;
 };
 
-export const formatDosDateTime = dosValue => {
+export const formatDosDateTime = (dosValue: number): string => {
   const seconds = (dosValue & 0x1f) * 2;
   const minutes = (dosValue >> 5) & 0x3f;
   const hours = (dosValue >> 11) & 0x1f;
@@ -79,7 +86,7 @@ export const formatDosDateTime = dosValue => {
   return formatUnixSecondsOrDash(unixSeconds);
 };
 
-export const mapHostV4 = value =>
+export const mapHostV4 = (value: number): string =>
   value === 0
     ? "MS-DOS"
     : value === 1
@@ -91,12 +98,13 @@ export const mapHostV4 = value =>
           : value === 4
             ? "Mac OS"
             : value === 5
-              ? "BeOS"
-              : `Host ${value}`;
+            ? "BeOS"
+            : `Host ${value}`;
 
-export const mapHostV5 = value => (value === 0 ? "Windows" : value === 1 ? "Unix" : `Host ${value}`);
+export const mapHostV5 = (value: number): string =>
+  value === 0 ? "Windows" : value === 1 ? "Unix" : `Host ${value}`;
 
-export const decodeNameBytes = (bytes, preferUtf8 = true) => {
+export const decodeNameBytes = (bytes: Uint8Array, preferUtf8 = true): string => {
   if (!bytes || bytes.length === 0) return "";
   if (preferUtf8) {
     try {
@@ -108,14 +116,15 @@ export const decodeNameBytes = (bytes, preferUtf8 = true) => {
   return LATIN1_DECODER.decode(bytes);
 };
 
-export const detectRarVersionBytes = bytes => {
-  const matches = sig => sig.every((b, idx) => bytes[idx] === b);
+export const detectRarVersionBytes = (bytes: Uint8Array): number | null => {
+  const matches = (sig: readonly number[]) =>
+    sig.every((b, idx) => idx < bytes.length && bytes[idx] === b);
   if (bytes.length >= SIGNATURE_V5.length && matches(SIGNATURE_V5)) return 5;
   if (bytes.length >= SIGNATURE_V4.length && matches(SIGNATURE_V4)) return 4;
   return null;
 };
 
-export const hasRarSignature = dv => {
+export const hasRarSignature = (dv: DataView): boolean => {
   const bytes = new Uint8Array(dv.buffer, dv.byteOffset, Math.min(dv.byteLength, SIGNATURE_V5.length));
   return detectRarVersionBytes(bytes) != null;
 };

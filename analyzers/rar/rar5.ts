@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use strict";
 
 import { formatUnixSecondsOrDash } from "../../binary-utils.js";
@@ -24,8 +23,9 @@ import {
   SIGNATURE_V5
 } from "./constants.js";
 import { crc32, decodeNameBytes, mapHostV5, readDataView, readVint, toSafeNumber } from "./utils.js";
+import type { RarEntry, RarParseResult, RarMainHeader, RarEndHeader } from "./index.js";
 
-const computeRar5DictSize = (compInfo, algoVersion, isDirectory) => {
+const computeRar5DictSize = (compInfo: number, algoVersion: number, isDirectory: boolean): bigint | null => {
   if (isDirectory || algoVersion > 1) return null;
   const basePower = (compInfo >> 10) & (algoVersion === 0 ? 0x0f : 0x1f);
   let size = 0x20000n << BigInt(basePower);
@@ -36,12 +36,12 @@ const computeRar5DictSize = (compInfo, algoVersion, isDirectory) => {
   return size;
 };
 
-export const parseRar5 = async file => {
-  const issues = [];
-  const entries = [];
+export const parseRar5 = async (file: File): Promise<RarParseResult> => {
+  const issues: string[] = [];
+  const entries: RarEntry[] = [];
   const fileSize = file.size || 0;
-  let mainHeader = null;
-  let endHeader = null;
+  let mainHeader: (RarMainHeader & { offset: number; flags: number }) | null = null;
+  let endHeader: RarEndHeader | null = null;
   let offset = SIGNATURE_V5.length;
   let guard = 0;
 
@@ -80,7 +80,9 @@ export const parseRar5 = async file => {
     const typeInfo = readVint(headerDv, cursor);
     if (typeInfo.value == null) break;
     cursor += typeInfo.length;
-    const headerType = toSafeNumber(typeInfo.value);
+    const headerTypeNumber = toSafeNumber(typeInfo.value);
+    if (headerTypeNumber == null) break;
+    const headerType = headerTypeNumber;
     const flagsInfo = readVint(headerDv, cursor);
     if (flagsInfo.value == null) break;
     cursor += flagsInfo.length;
@@ -131,7 +133,7 @@ export const parseRar5 = async file => {
       cursor += unpSizeInfo.length;
       const attrInfo = readVint(headerDv, cursor);
       cursor += attrInfo.length;
-      let modified = null;
+      let modified: string | null = null;
       if ((fileFlags & FHFL_UTIME) !== 0) {
         if (cursor + 4 <= headerLimit) {
           const mtime = headerDv.getUint32(cursor, true);
@@ -141,7 +143,7 @@ export const parseRar5 = async file => {
           issues.push("RAR file time field is truncated.");
         }
       }
-      let dataCrc = null;
+      let dataCrc: number | null = null;
       if ((fileFlags & FHFL_CRC32) !== 0) {
         if (cursor + 4 <= headerLimit) {
           dataCrc = headerDv.getUint32(cursor, true);

@@ -1,6 +1,6 @@
-// @ts-nocheck
 "use strict";
 
+import type { PeParseResult } from "../../analyzers/pe/index.js";
 import { renderHeaders } from "./headers.js";
 import {
   renderLoadConfig,
@@ -22,9 +22,9 @@ import {
   renderSanity
 } from "./layout.js";
 
-export function renderPe(pe) {
+export function renderPe(pe: PeParseResult | null | undefined): string {
   if (!pe) return "";
-  const out = [];
+  const out: string[] = [];
   renderHeaders(pe, out);
   renderLoadConfig(pe, out);
   renderDebug(pe, out);

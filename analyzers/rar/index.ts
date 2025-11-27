@@ -51,11 +51,14 @@ export interface RarParseResult {
   issues: string[];
 }
 
+const parseRar4Typed = async (file: File): Promise<RarParseResult> => parseRar4(file);
+const parseRar5Typed = async (file: File): Promise<RarParseResult> => parseRar5(file);
+
 export async function parseRar(file: File): Promise<RarParseResult> {
   const signatureBytes = new Uint8Array(await file.slice(0, SIGNATURE_V5.length).arrayBuffer());
   const version = detectRarVersionBytes(signatureBytes);
-  if (version === 4) return parseRar4(file) as unknown as RarParseResult;
-  if (version === 5) return parseRar5(file) as unknown as RarParseResult;
+  if (version === 4) return parseRar4Typed(file);
+  if (version === 5) return parseRar5Typed(file);
   return {
     isRar: false,
     version: null,

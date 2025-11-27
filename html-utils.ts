@@ -16,7 +16,7 @@ export const renderDefinitionRow = (
 
 export const renderOptionChips = (
   selectedCode: number,
-  options: Array<[number, string]>
+  options: Array<[number, string, string?]>
 ): string =>
   `<div class="optionsRow">${options
     .map(([code, label]) =>

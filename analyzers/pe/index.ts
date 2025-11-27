@@ -1,12 +1,12 @@
 "use strict";
 
 import { parsePeHeaders } from "./core.js";
-import { parseDebugDirectory, parseLoadConfigDirectory } from "./debug-loadcfg.js";
+import { parseDebugDirectory, parseLoadConfigDirectory, type PeLoadConfig } from "./debug-loadcfg.js";
 import { parseImportDirectory, type PeImportEntry } from "./imports.js";
 import { parseExportDirectory } from "./exports.js";
 import { parseTlsDirectory } from "./tls.js";
 import { parseResources } from "./resources.js";
-import { parseClrDirectory, parseSecurityDirectory } from "./clr-security.js";
+import { parseClrDirectory, parseSecurityDirectory, type PeClrHeader } from "./clr-security.js";
 import { parseBaseRelocations } from "./reloc.js";
 import { parseExceptionDirectory } from "./exception.js";
 import { parseBoundImports, parseDelayImports } from "./bound-delay.js";
@@ -36,14 +36,14 @@ export interface PeParseResult {
   imports: PeImportEntry[];
   rsds: { guid: string; age: number; path: string } | null | undefined;
   debugWarning: string | null | undefined;
-  loadcfg: Record<string, unknown> | null;
+  loadcfg: PeLoadConfig | null;
   exports: Awaited<ReturnType<typeof parseExportDirectory>>;
   tls: PeTlsDirectory | null;
   reloc: Awaited<ReturnType<typeof parseBaseRelocations>>;
   exception: Awaited<ReturnType<typeof parseExceptionDirectory>>;
   boundImports: Awaited<ReturnType<typeof parseBoundImports>>;
   delayImports: Awaited<ReturnType<typeof parseDelayImports>>;
-  clr: Record<string, unknown> | null;
+  clr: PeClrHeader | null;
   security: { count: number; certs: Array<{ Length: number; Revision: number; CertificateType: number }> } | null;
   iat: PeIatDirectory | null;
   resources: unknown;
