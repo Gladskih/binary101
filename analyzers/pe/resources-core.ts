@@ -70,6 +70,7 @@ export async function buildResourceTree(
     }> = [];
     for (let index = 0; index < count; index++) {
       const e = await view(off + 16 + index * 8, 8);
+      if (e.byteLength < 8) break;
       const Name = u32(e, 0);
       const OffsetToData = u32(e, 4);
       const nameIsString = (Name & 0x80000000) !== 0;
@@ -139,6 +140,7 @@ export async function buildResourceTree(
                 const dataEntryOff = base + langEnt.target;
                 if (!isInside(dataEntryOff + 16)) continue;
                 const dv = await view(dataEntryOff, 16);
+                if (dv.byteLength < 16) continue;
                 const DataRVA = u32(dv, 0);
                 const Size = u32(dv, 4);
                 const CodePage = u32(dv, 8);

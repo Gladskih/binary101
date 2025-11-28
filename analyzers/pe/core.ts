@@ -17,21 +17,19 @@ export async function parsePeHeaders(file: File): Promise<PeCore | null> {
   const probe = peProbe(head);
   if (!probe) return null;
   const e_lfanew = probe.e_lfanew;
-  if (e_lfanew == null || e_lfanew + 24 > file.size) return null;
+  if (e_lfanew == null || e_lfanew + 4 > file.size) return null;
 
   const dos = await parseDosHeaderAndStub(file, head, e_lfanew);
   const coff = await parseCoffHeader(file, e_lfanew);
   if (!coff) return null;
 
-  const { optOff, ddStartRel, ddCount, dataDirs, opt } = await parseOptionalHeaderAndDirectories(
-    file,
-    e_lfanew,
-    coff.SizeOfOptionalHeader
-  );
+  const optionalResult = await parseOptionalHeaderAndDirectories(file, e_lfanew, coff.SizeOfOptionalHeader);
+  if (!optionalResult) return null;
+  const { optOff, optSize, ddStartRel, ddCount, dataDirs, opt } = optionalResult;
   const { sections, rvaToOff, sectOff } = await parseSectionHeaders(
     file,
     optOff,
-    coff.SizeOfOptionalHeader,
+    optSize,
     coff.NumberOfSections
   );
 
@@ -40,6 +38,7 @@ export async function parsePeHeaders(file: File): Promise<PeCore | null> {
     e_lfanew,
     coff,
     optOff,
+    optSize,
     ddStartRel,
     ddCount,
     sectOff,

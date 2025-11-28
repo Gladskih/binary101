@@ -27,6 +27,7 @@ export async function parseBaseRelocations(
   let totalEntries = 0;
   while (off + 8 <= end && blocks.length < 256) {
     const dv = new DataView(await file.slice(off, off + 8).arrayBuffer());
+    if (dv.byteLength < 8) break;
     const pageRva = dv.getUint32(0, true);
     const blockSize = dv.getUint32(4, true);
     if (!pageRva || !blockSize) break;
@@ -34,13 +35,14 @@ export async function parseBaseRelocations(
     const blockEnd = Math.min(end, off + blockSize);
     const entryCount = Math.floor((blockEnd - off - 8) / 2);
     const blockView = new DataView(await file.slice(off + 8, off + 8 + entryCount * 2).arrayBuffer());
+    const availableEntries = Math.floor(blockView.byteLength / 2);
     const entries: Array<{ type: number; offset: number }> = [];
-    for (let i = 0; i < entryCount; i += 1) {
+    for (let i = 0; i < availableEntries; i += 1) {
       const raw = blockView.getUint16(i * 2, true);
       entries.push({ type: (raw >> 12) & 0xf, offset: raw & 0xfff });
     }
-    blocks.push({ pageRva, size: blockSize, count: entryCount, entries });
-    totalEntries += entryCount;
+    blocks.push({ pageRva, size: blockSize, count: availableEntries, entries });
+    totalEntries += availableEntries;
     off = blockEnd;
   }
   return { blocks, totalEntries };

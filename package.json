@@ -6,12 +6,14 @@
   "license": "MIT",
   "scripts": {
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tests.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tests.json && tsc --noEmit -p tsconfig.scripts.json",
     "build": "tsc && node scripts/copy-static.mjs",
     "test": "npm run build && npm run test:unit && npm run test:e2e",
-    "test:unit": "tsx --test tests/unit/**/*.ts",
-    "test:coverage": "c8 --all --exclude=playwright.config.mjs --exclude=eslint.config.mjs --exclude=tests/e2e/** tsx --test tests/unit/**/*.ts",
-    "test:e2e": "playwright test"
+    "test:unit": "tsx --test tests/unit/**/*.ts --test-ignore tests/unit/analyzers.pe.extreme-fixtures.test.ts",
+    "test:coverage": "c8 --all --exclude=playwright.config.mjs --exclude=eslint.config.mjs --exclude=tests/e2e/** tsx --test tests/unit/**/*.ts --test-ignore tests/unit/analyzers.pe.extreme-fixtures.test.ts",
+    "test:e2e": "playwright test",
+    "test:pe-extreme": "tsx --test tests/unit/analyzers.pe.extreme-fixtures.test.ts",
+    "fetch:pe-fixtures": "tsx scripts/fetchExternalPeFixtures.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

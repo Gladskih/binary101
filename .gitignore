@@ -9,3 +9,6 @@ test-results/
 
 # Build output
 dist/
+
+# External binary fixtures
+external-pe-fixtures/

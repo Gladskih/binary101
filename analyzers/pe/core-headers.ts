@@ -1,5 +1,7 @@
 "use strict";
 
+/* eslint-disable max-lines */
+
 import { readAsciiString, collectPrintableRuns } from "../../binary-utils.js";
 import { DD_NAMES } from "./constants.js";
 import type {
@@ -76,6 +78,7 @@ export async function parseDosHeaderAndStub(
 
 export async function parseCoffHeader(file: File, peHeaderOffset: number): Promise<PeCoffHeader | null> {
   const headerView = new DataView(await file.slice(peHeaderOffset, peHeaderOffset + 24).arrayBuffer());
+  if (headerView.byteLength < 4) return null;
   const signature =
     String.fromCharCode(headerView.getUint8(0)) +
     String.fromCharCode(headerView.getUint8(1)) +
@@ -83,13 +86,17 @@ export async function parseCoffHeader(file: File, peHeaderOffset: number): Promi
     String.fromCharCode(headerView.getUint8(3));
   if (signature !== "PE\0\0") return null;
   const coffOffset = 4;
-  const Machine = headerView.getUint16(coffOffset + 0, true);
-  const NumberOfSections = headerView.getUint16(coffOffset + 2, true);
-  const TimeDateStamp = headerView.getUint32(coffOffset + 4, true);
-  const PointerToSymbolTable = headerView.getUint32(coffOffset + 8, true);
-  const NumberOfSymbols = headerView.getUint32(coffOffset + 12, true);
-  const SizeOfOptionalHeader = headerView.getUint16(coffOffset + 16, true);
-  const Characteristics = headerView.getUint16(coffOffset + 18, true);
+  const u16 = (off: number): number =>
+    off + 2 <= headerView.byteLength ? headerView.getUint16(off, true) : 0;
+  const u32 = (off: number): number =>
+    off + 4 <= headerView.byteLength ? headerView.getUint32(off, true) : 0;
+  const Machine = u16(coffOffset + 0);
+  const NumberOfSections = u16(coffOffset + 2);
+  const TimeDateStamp = u32(coffOffset + 4);
+  const PointerToSymbolTable = u32(coffOffset + 8);
+  const NumberOfSymbols = u32(coffOffset + 12);
+  const SizeOfOptionalHeader = u16(coffOffset + 16);
+  const Characteristics = u16(coffOffset + 18);
   return {
     Machine,
     NumberOfSections,
@@ -107,75 +114,133 @@ export async function parseOptionalHeaderAndDirectories(
   sizeOfOptionalHeader: number
 ): Promise<{
   optOff: number;
+  optSize: number;
   ddStartRel: number;
   ddCount: number;
   dataDirs: PeDataDirectory[];
   opt: PeOptionalHeader;
 }> {
   const optionalHeaderOffset = peHeaderOffset + 24;
+  const maxReadable = Math.max(0, Math.min(file.size - optionalHeaderOffset, 0x600));
+  const declaredSize = Math.min(sizeOfOptionalHeader, maxReadable);
+  const minimumIntent = Math.min(0x80, maxReadable);
+  const viewSize = Math.min(maxReadable, Math.max(declaredSize, minimumIntent));
   const optionalHeaderView = new DataView(
-    await file.slice(optionalHeaderOffset, optionalHeaderOffset + Math.min(sizeOfOptionalHeader, 0x600)).arrayBuffer()
+    await file.slice(optionalHeaderOffset, optionalHeaderOffset + viewSize).arrayBuffer()
   );
   let position = 0;
-  const Magic = optionalHeaderView.getUint16(position, true); position += 2;
-  const isPlus = Magic === 0x20b, is32 = Magic === 0x10b;
-  const LinkerMajor = optionalHeaderView.getUint8(position++), LinkerMinor = optionalHeaderView.getUint8(position++);
-  const SizeOfCode = optionalHeaderView.getUint32(position, true); position += 4;
-  const SizeOfInitializedData = optionalHeaderView.getUint32(position, true); position += 4;
-  const SizeOfUninitializedData = optionalHeaderView.getUint32(position, true); position += 4;
-  const AddressOfEntryPoint = optionalHeaderView.getUint32(position, true); position += 4;
-  const BaseOfCode = optionalHeaderView.getUint32(position, true); position += 4;
-  const BaseOfData = is32 ? optionalHeaderView.getUint32(position, true) : undefined;
-  if (is32) position += 4;
-  const ImageBase = isPlus
-    ? Number(optionalHeaderView.getBigUint64(position, true))
-    : optionalHeaderView.getUint32(position, true);
+  const has = (length: number): boolean => position + length <= optionalHeaderView.byteLength;
+  const read = <T>(length: number, fn: () => T, fallback: T): T => {
+    if (!has(length)) return fallback;
+    return fn();
+  };
+
+  const Magic = read(2, () => optionalHeaderView.getUint16(position, true), 0); position += 2;
+  const isPlus = Magic === 0x20b, is32 = Magic === 0x10b || Magic === 0x107;
+  const linker = read<[number, number]>(2, () => [
+    optionalHeaderView.getUint8(position),
+    optionalHeaderView.getUint8(position + 1)
+  ], [0, 0]);
+  const [LinkerMajor, LinkerMinor] = linker; position += 2;
+  const SizeOfCodeVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
+  position += 4;
+  const SizeOfInitializedDataVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
+  position += 4;
+  const SizeOfUninitializedDataVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
+  position += 4;
+  const AddressOfEntryPointVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
+  position += 4;
+  const BaseOfCodeVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
+  position += 4;
+  let BaseOfData: number | undefined;
+  if (is32) {
+    BaseOfData = read(4, () => optionalHeaderView.getUint32(position, true), 0);
+    position += 4;
+  }
+  const ImageBase = read(
+    isPlus ? 8 : 4,
+    () => isPlus
+      ? Number(optionalHeaderView.getBigUint64(position, true))
+      : optionalHeaderView.getUint32(position, true),
+    0
+  );
   position += isPlus ? 8 : 4;
-  const SectionAlignment = optionalHeaderView.getUint32(position, true); position += 4;
-  const FileAlignment = optionalHeaderView.getUint32(position, true); position += 4;
-  const OSVersionMajor = optionalHeaderView.getUint16(position, true);
-  const OSVersionMinor = optionalHeaderView.getUint16(position + 2, true);
+  const SectionAlignmentVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
   position += 4;
-  const ImageVersionMajor = optionalHeaderView.getUint16(position, true);
-  const ImageVersionMinor = optionalHeaderView.getUint16(position + 2, true);
+  const FileAlignmentVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
   position += 4;
-  const SubsystemVersionMajor = optionalHeaderView.getUint16(position, true);
-  const SubsystemVersionMinor = optionalHeaderView.getUint16(position + 2, true);
+  const osVersion = read<[number, number]>(4, () => [
+    optionalHeaderView.getUint16(position, true),
+    optionalHeaderView.getUint16(position + 2, true)
+  ], [0, 0]);
+  const [OSVersionMajor, OSVersionMinor] = osVersion;
   position += 4;
-  const Win32VersionValue = optionalHeaderView.getUint32(position, true);
+  const imageVersion = read<[number, number]>(4, () => [
+    optionalHeaderView.getUint16(position, true),
+    optionalHeaderView.getUint16(position + 2, true)
+  ], [0, 0]);
+  const [ImageVersionMajor, ImageVersionMinor] = imageVersion;
   position += 4;
-  const SizeOfImage = optionalHeaderView.getUint32(position, true);
+  const subsystemVersion = read<[number, number]>(4, () => [
+    optionalHeaderView.getUint16(position, true),
+    optionalHeaderView.getUint16(position + 2, true)
+  ], [0, 0]);
+  const [SubsystemVersionMajor, SubsystemVersionMinor] = subsystemVersion;
   position += 4;
-  const SizeOfHeaders = optionalHeaderView.getUint32(position, true);
+  const Win32VersionValueVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
   position += 4;
-  const CheckSum = optionalHeaderView.getUint32(position, true);
+  const SizeOfImageVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
   position += 4;
-  const Subsystem = optionalHeaderView.getUint16(position, true);
+  const SizeOfHeadersVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
+  position += 4;
+  const CheckSumVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
+  position += 4;
+  const SubsystemVal = read(2, () => optionalHeaderView.getUint16(position, true), 0);
   position += 2;
-  const DllCharacteristics = optionalHeaderView.getUint16(position, true);
+  const DllCharacteristicsVal = read(2, () => optionalHeaderView.getUint16(position, true), 0);
   position += 2;
-  const SizeOfStackReserve = isPlus
-    ? Number(optionalHeaderView.getBigUint64(position, true))
-    : optionalHeaderView.getUint32(position, true);
+  const SizeOfStackReserve = read(
+    isPlus ? 8 : 4,
+    () => isPlus
+      ? Number(optionalHeaderView.getBigUint64(position, true))
+      : optionalHeaderView.getUint32(position, true),
+    0
+  );
   position += isPlus ? 8 : 4;
-  const SizeOfStackCommit = isPlus
-    ? Number(optionalHeaderView.getBigUint64(position, true))
-    : optionalHeaderView.getUint32(position, true);
+  const SizeOfStackCommit = read(
+    isPlus ? 8 : 4,
+    () => isPlus
+      ? Number(optionalHeaderView.getBigUint64(position, true))
+      : optionalHeaderView.getUint32(position, true),
+    0
+  );
   position += isPlus ? 8 : 4;
-  const SizeOfHeapReserve = isPlus
-    ? Number(optionalHeaderView.getBigUint64(position, true))
-    : optionalHeaderView.getUint32(position, true);
+  const SizeOfHeapReserve = read(
+    isPlus ? 8 : 4,
+    () => isPlus
+      ? Number(optionalHeaderView.getBigUint64(position, true))
+      : optionalHeaderView.getUint32(position, true),
+    0
+  );
   position += isPlus ? 8 : 4;
-  const SizeOfHeapCommit = isPlus
-    ? Number(optionalHeaderView.getBigUint64(position, true))
-    : optionalHeaderView.getUint32(position, true);
+  const SizeOfHeapCommit = read(
+    isPlus ? 8 : 4,
+    () => isPlus
+      ? Number(optionalHeaderView.getBigUint64(position, true))
+      : optionalHeaderView.getUint32(position, true),
+    0
+  );
   position += isPlus ? 8 : 4;
-  const LoaderFlags = optionalHeaderView.getUint32(position, true);
+  const LoaderFlagsVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
   position += 4;
-  const NumberOfRvaAndSizes = optionalHeaderView.getUint32(position, true);
+  const NumberOfRvaAndSizesVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
   position += 4;
   const ddStartRel = position;
-  const ddCount = Math.min(16, NumberOfRvaAndSizes, Math.floor((optionalHeaderView.byteLength - position) / 8));
+  const ddCount = Math.min(
+    16,
+    NumberOfRvaAndSizesVal,
+    Math.max(0, Math.floor((optionalHeaderView.byteLength - position) / 8))
+  );
   const dataDirs: PeDataDirectory[] = [];
   for (let index = 0; index < ddCount; index++) {
     const entryOffset = position + index * 8;
@@ -183,41 +248,43 @@ export async function parseOptionalHeaderAndDirectories(
     const size = optionalHeaderView.getUint32(entryOffset + 4, true);
     dataDirs.push({ index, name: DD_NAMES[index] || "", rva, size });
   }
+  const consumedSize = Math.min(optionalHeaderView.byteLength, position + ddCount * 8);
+  const optSize = Math.max(consumedSize, declaredSize);
   const opt: PeOptionalHeader = {
     Magic,
     isPlus,
     is32,
     LinkerMajor,
     LinkerMinor,
-    SizeOfCode,
-    SizeOfInitializedData,
-    SizeOfUninitializedData,
-    AddressOfEntryPoint,
-    BaseOfCode,
+    SizeOfCode: SizeOfCodeVal,
+    SizeOfInitializedData: SizeOfInitializedDataVal,
+    SizeOfUninitializedData: SizeOfUninitializedDataVal,
+    AddressOfEntryPoint: AddressOfEntryPointVal,
+    BaseOfCode: BaseOfCodeVal,
     ...(BaseOfData !== undefined ? { BaseOfData } : {}),
     ImageBase,
-    SectionAlignment,
-    FileAlignment,
+    SectionAlignment: SectionAlignmentVal,
+    FileAlignment: FileAlignmentVal,
     OSVersionMajor,
     OSVersionMinor,
     ImageVersionMajor,
     ImageVersionMinor,
     SubsystemVersionMajor,
     SubsystemVersionMinor,
-    Win32VersionValue,
-    SizeOfImage,
-    SizeOfHeaders,
-    CheckSum,
-    Subsystem,
-    DllCharacteristics,
-    SizeOfStackReserve,
-    SizeOfStackCommit,
-    SizeOfHeapReserve,
-    SizeOfHeapCommit,
-    LoaderFlags,
-    NumberOfRvaAndSizes
+    Win32VersionValue: Win32VersionValueVal,
+    SizeOfImage: SizeOfImageVal,
+    SizeOfHeaders: SizeOfHeadersVal,
+    CheckSum: CheckSumVal,
+    Subsystem: SubsystemVal,
+    DllCharacteristics: DllCharacteristicsVal,
+    SizeOfStackReserve: SizeOfStackReserve as number,
+    SizeOfStackCommit: SizeOfStackCommit as number,
+    SizeOfHeapReserve: SizeOfHeapReserve as number,
+    SizeOfHeapCommit: SizeOfHeapCommit as number,
+    LoaderFlags: LoaderFlagsVal,
+    NumberOfRvaAndSizes: NumberOfRvaAndSizesVal
   };
-  return { optOff: optionalHeaderOffset, ddStartRel, ddCount, dataDirs, opt };
+  return { optOff: optionalHeaderOffset, optSize, ddStartRel, ddCount, dataDirs, opt };
 }
 
 export async function parseSectionHeaders(
@@ -233,6 +300,7 @@ export async function parseSectionHeaders(
   const sections: PeSection[] = [];
   for (let sectionIndex = 0; sectionIndex < numberOfSections; sectionIndex += 1) {
     const baseOffset = sectionIndex * 40;
+    if (sectionHeadersView.byteLength < baseOffset + 40) break;
     let name = "";
     for (let nameIndex = 0; nameIndex < 8; nameIndex += 1) {
       const codePoint = sectionHeadersView.getUint8(baseOffset + nameIndex);

@@ -22,11 +22,13 @@ export async function enrichResourcePreviews(
 
   const iconIndex = new Map<number, { rva: number; size: number }>();
   const rootDirView = await view(base, 16);
+  if (rootDirView.byteLength < 16) return { top, detail };
   const NamedRoot = rootDirView.getUint16(12, true);
   const IdsRoot = rootDirView.getUint16(14, true);
   const countRoot = NamedRoot + IdsRoot;
   for (let index = 0; index < countRoot; index += 1) {
     const e = await view(base + 16 + index * 8, 8);
+    if (e.byteLength < 8) break;
     const Name = e.getUint32(0, true);
     const OffsetToData = e.getUint32(4, true);
     const subdir = (OffsetToData & 0x80000000) !== 0;
@@ -36,11 +38,13 @@ export async function enrichResourcePreviews(
     const nameDirOff = base + nameDirRel;
     if (!isInside(nameDirOff + 16)) continue;
     const nameDirView = await view(nameDirOff, 16);
+    if (nameDirView.byteLength < 16) continue;
     const Named = nameDirView.getUint16(12, true);
     const Ids = nameDirView.getUint16(14, true);
     const count = Named + Ids;
     for (let idx = 0; idx < count; idx += 1) {
       const e2 = await view(nameDirOff + 16 + idx * 8, 8);
+      if (e2.byteLength < 8) break;
       const Name2 = e2.getUint32(0, true);
       const OffsetToData2 = e2.getUint32(4, true);
       const subdir2 = (OffsetToData2 & 0x80000000) !== 0;
@@ -50,11 +54,13 @@ export async function enrichResourcePreviews(
       const langDirOff = base + langDirRel;
       if (!isInside(langDirOff + 16)) continue;
       const langDirView = await view(langDirOff, 16);
+      if (langDirView.byteLength < 16) continue;
       const NamedL = langDirView.getUint16(12, true);
       const IdsL = langDirView.getUint16(14, true);
       const countL = NamedL + IdsL;
       for (let j = 0; j < countL; j += 1) {
         const le = await view(langDirOff + 16 + j * 8, 8);
+        if (le.byteLength < 8) break;
         const OffsetToDataL = le.getUint32(4, true);
         const subdirL = (OffsetToDataL & 0x80000000) !== 0;
         if (subdirL) continue;
@@ -62,6 +68,7 @@ export async function enrichResourcePreviews(
         const deo2 = base + dataRel;
         if (!isInside(deo2 + 16)) continue;
         const dv2 = await view(deo2, 16);
+        if (dv2.byteLength < 8) continue;
         const rva2 = dv2.getUint32(0, true);
         const sz2 = dv2.getUint32(4, true);
         if (id2 != null) iconIndex.set(id2, { rva: rva2, size: sz2 });

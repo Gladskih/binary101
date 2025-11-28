@@ -13,6 +13,7 @@ export function buildCoverage(
   peHeaderOffset: number,
   coff: PeCoffHeader,
   optionalHeaderOffset: number,
+  optionalHeaderSize: number,
   ddStartRel: number,
   ddCount: number,
   sectionHeadersOffset: number,
@@ -25,7 +26,7 @@ export function buildCoverage(
   overlaySize: number;
   imageEnd: number;
   imageSizeMismatch: boolean;
-} {
+  } {
   const coverage: PeCoverageEntry[] = [];
   const addCov: AddCoverageRegion = (label, off, size) => {
     if (!Number.isFinite(off) || !Number.isFinite(size) || off < 0 || size <= 0) return;
@@ -33,7 +34,7 @@ export function buildCoverage(
   };
   addCov("DOS header + stub", 0, Math.min(fileSize, Math.max(64, peHeaderOffset)));
   addCov("PE signature + COFF", peHeaderOffset, 24);
-  addCov("Optional header", optionalHeaderOffset, coff.SizeOfOptionalHeader);
+  addCov("Optional header", optionalHeaderOffset, optionalHeaderSize);
   addCov("Data directories", optionalHeaderOffset + ddStartRel, ddCount * 8);
   addCov("Section headers", sectionHeadersOffset, coff.NumberOfSections * 40);
   let rawEnd = 0;
