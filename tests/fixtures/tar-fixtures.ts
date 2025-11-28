@@ -170,23 +170,21 @@ export const createTarFileWithEntries = (
 
     const contentBytes = TEXT_ENCODER.encode(entry.content || "");
     const contentSize = contentBytes.byteLength;
-    const headerOpts = {
-      name: entry.name,
-      mode: entry.mode,
-      uid: entry.uid,
-      gid: entry.gid,
-      size: contentSize,
-      mtime: entry.mtime,
-      typeFlag: entry.typeFlag,
-      linkName: entry.linkName,
-      magic: entry.magic,
-      version: entry.version,
-      uname: entry.uname,
-      gname: entry.gname,
-      devMajor: entry.devMajor,
-      devMinor: entry.devMinor,
-      prefix: entry.prefix
-    };
+    const headerOpts: TarHeaderOptions = { size: contentSize };
+    if (entry.name !== undefined) headerOpts.name = entry.name;
+    if (entry.mode !== undefined) headerOpts.mode = entry.mode;
+    if (entry.uid !== undefined) headerOpts.uid = entry.uid;
+    if (entry.gid !== undefined) headerOpts.gid = entry.gid;
+    if (entry.mtime !== undefined) headerOpts.mtime = entry.mtime;
+    if (entry.typeFlag !== undefined) headerOpts.typeFlag = entry.typeFlag;
+    if (entry.linkName !== undefined) headerOpts.linkName = entry.linkName;
+    if (entry.magic !== undefined) headerOpts.magic = entry.magic;
+    if (entry.version !== undefined) headerOpts.version = entry.version;
+    if (entry.uname !== undefined) headerOpts.uname = entry.uname;
+    if (entry.gname !== undefined) headerOpts.gname = entry.gname;
+    if (entry.devMajor !== undefined) headerOpts.devMajor = entry.devMajor;
+    if (entry.devMinor !== undefined) headerOpts.devMinor = entry.devMinor;
+    if (entry.prefix !== undefined) headerOpts.prefix = entry.prefix;
     const headerBlock = buildTarHeader(headerOpts);
     tarBlocks.push(headerBlock);
 
