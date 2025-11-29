@@ -58,6 +58,27 @@ void test("parseDelayImports reads delay descriptors, names, and ordinals", asyn
   assert.deepEqual(entry.functions[1], { ordinal: 2 });
 });
 
+void test("parseDelayImports stops on truncated thunk table without throwing", async () => {
+  const bytes = new Uint8Array(128).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const base = 16;
+  dv.setUint32(base + 0, 1, true); // Attributes (RVA)
+  dv.setUint32(base + 16, 0x70, true); // INT RVA points near end
+  // Only 4 bytes of INT available, less than 8 needed for 64-bit thunk.
+  dv.setUint32(0x70, 0x12345678, true);
+
+  const result = await parseDelayImports(
+    new MockFile(bytes),
+    [{ name: "DELAY_IMPORT", rva: base, size: 32 }],
+    value => value,
+    () => {},
+    true,
+    0
+  );
+  const definedResult = expectDefined(result);
+  assert.ok(definedResult.entries.length >= 0);
+});
+
 void test("parseBoundImports extracts bound import names", async () => {
   const base = 400;
   const bytes = new Uint8Array(512).fill(0);

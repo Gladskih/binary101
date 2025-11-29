@@ -58,8 +58,11 @@ export function renderDebug(pe: PeParseResult, out: string[]): void {
 }
 
 export function renderImports(pe: PeParseResult, out: string[]): void {
-  if (!pe.imports?.length) return;
+  if (!pe.imports?.length && !pe.importsWarning) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import table</h4><div class="smallNote">Imports list functions this file expects other modules to provide. Hint index speeds up runtime name lookup, and ordinal-only imports often point to more special or low-level routines.</div>`);
+  if (pe.importsWarning) {
+    out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(pe.importsWarning)}</div>`);
+  }
   for (const mod of pe.imports) {
     const dll = safe(mod.dll || "(unknown DLL)");
     out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${dll}</b> \u2014 ${mod.functions?.length || 0} function(s)</summary>`);

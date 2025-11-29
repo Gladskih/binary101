@@ -75,6 +75,7 @@ export async function parseDelayImports(
   let off = base;
   while (off + 32 <= end) {
     const dv = new DataView(await file.slice(off, off + 32).arrayBuffer());
+    if (dv.byteLength < 32) break;
     const Attributes = dv.getUint32(0, true);
     const DllNameRVA = dv.getUint32(4, true);
     const ModuleHandleRVA = dv.getUint32(8, true);
@@ -105,6 +106,7 @@ export async function parseDelayImports(
       if (isPlus) {
         for (let index = 0; index < 8 * 16384; index += 8) {
           const thunkView = new DataView(await file.slice(intOff + index, intOff + index + 8).arrayBuffer());
+          if (thunkView.byteLength < 8) break;
           const value = thunkView.getBigUint64(0, true);
           if (value === 0n) break;
           if ((value & 0x8000000000000000n) !== 0n) {
@@ -114,12 +116,14 @@ export async function parseDelayImports(
             const hintNameOff = rvaToOff(hintNameRva);
             if (hintNameOff != null) {
               const hintView = new DataView(await file.slice(hintNameOff, hintNameOff + 2).arrayBuffer());
+              if (hintView.byteLength < 2) break;
               const hint = hintView.getUint16(0, true);
               let funcName = "";
               let pos = hintNameOff + 2;
               for (;;) {
                 const chunk = new Uint8Array(await file.slice(pos, pos + 64).arrayBuffer());
                 const zeroIndex = chunk.indexOf(0);
+                if (chunk.byteLength === 0) break;
                 if (zeroIndex === -1) {
                   funcName += String.fromCharCode(...chunk);
                   pos += 64;
@@ -138,6 +142,7 @@ export async function parseDelayImports(
       } else {
         for (let index = 0; index < 4 * 32768; index += 4) {
           const thunkView = new DataView(await file.slice(intOff + index, intOff + index + 4).arrayBuffer());
+          if (thunkView.byteLength < 4) break;
           const value = thunkView.getUint32(0, true);
           if (value === 0) break;
           if ((value & 0x80000000) !== 0) {
@@ -146,12 +151,14 @@ export async function parseDelayImports(
             const hintNameOff = rvaToOff(value);
             if (hintNameOff != null) {
               const hintView = new DataView(await file.slice(hintNameOff, hintNameOff + 2).arrayBuffer());
+              if (hintView.byteLength < 2) break;
               const hint = hintView.getUint16(0, true);
               let funcName = "";
               let pos = hintNameOff + 2;
               for (;;) {
                 const chunk = new Uint8Array(await file.slice(pos, pos + 64).arrayBuffer());
                 const zeroIndex = chunk.indexOf(0);
+                if (chunk.byteLength === 0) break;
                 if (zeroIndex === -1) {
                   funcName += String.fromCharCode(...chunk);
                   pos += 64;

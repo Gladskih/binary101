@@ -61,6 +61,10 @@ const sourceConfigs: FixtureSourceConfig[] = [
   {
     label: "hasherezade-pesieve-tests",
     apiRoot: "https://api.github.com/repos/hasherezade/pesieve_tests/contents"
+  },
+  {
+    label: "tinype-win10",
+    apiRoot: "https://api.github.com/repos/ayaka14732/TinyPE-on-Win10/contents"
   }
 ];
 

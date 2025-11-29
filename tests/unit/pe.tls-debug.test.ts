@@ -206,7 +206,7 @@ void test("parseImportDirectory supports 64-bit imports path", async () => {
   dv.setUint16(0x180, 0x0077, true);
   encoder.encodeInto("RegOpenKey\0", new Uint8Array(bytes.buffer, 0x182));
 
-  const imports = await parseImportDirectory(
+  const { entries: imports } = await parseImportDirectory(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: impBase, size: 40 }],
     value => value,

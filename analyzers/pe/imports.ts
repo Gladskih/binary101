@@ -18,23 +18,33 @@ export interface PeImportEntry {
   functions: PeImportFunction[];
 }
 
+export interface PeImportParseResult {
+  entries: PeImportEntry[];
+  warning?: string;
+}
+
 export async function parseImportDirectory(
   file: File,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   addCoverageRegion: AddCoverageRegion,
   isPlus: boolean
-): Promise<PeImportEntry[]> {
+): Promise<PeImportParseResult> {
   const impDir = dataDirs.find(d => d.name === "IMPORT");
   const imports: PeImportEntry[] = [];
-  if (!impDir?.rva) return imports;
+  let warning: string | undefined;
+  if (!impDir?.rva) return { entries: imports };
   const start = rvaToOff(impDir.rva);
-  if (start == null) return imports;
+  if (start == null || start >= file.size) return { entries: imports };
   addCoverageRegion("IMPORT directory", start, impDir.size);
   const maxDescriptors = Math.max(1, Math.floor(impDir.size / 20));
   for (let index = 0; index < maxDescriptors; index += 1) {
     const offset = start + index * 20;
     const desc = new DataView(await file.slice(offset, offset + 20).arrayBuffer());
+    if (desc.byteLength < 20) {
+      warning = "Import directory truncated before descriptor end.";
+      break;
+    }
     const originalFirstThunk = desc.getUint32(0, true);
     const nameRva = desc.getUint32(12, true);
     const firstThunk = desc.getUint32(16, true);
@@ -52,6 +62,10 @@ export async function parseImportDirectory(
       if (isPlus) {
         for (let t = 0; t < 8 * 16384; t += 8) {
           const dv = new DataView(await file.slice(thunkOffset + t, thunkOffset + t + 8).arrayBuffer());
+          if (dv.byteLength < 8) {
+            warning = warning ?? "Import thunks truncated (64-bit).";
+            break;
+          }
           const value = dv.getBigUint64(0, true);
           if (value === 0n) break;
           if ((value & 0x8000000000000000n) !== 0n) {
@@ -61,12 +75,20 @@ export async function parseImportDirectory(
             const hintNameOffset = rvaToOff(hintNameRva);
             if (hintNameOffset != null) {
               const hintView = new DataView(await file.slice(hintNameOffset, hintNameOffset + 2).arrayBuffer());
+              if (hintView.byteLength < 2) {
+                warning = warning ?? "Import hint/name table truncated.";
+                break;
+              }
               const hint = hintView.getUint16(0, true);
               let name = "";
               let pos = hintNameOffset + 2;
               for (;;) {
                 const chunk = new Uint8Array(await file.slice(pos, pos + 64).arrayBuffer());
                 const zeroIndex = chunk.indexOf(0);
+                if (chunk.byteLength === 0) {
+                  warning = warning ?? "Import name string truncated.";
+                  break;
+                }
                 if (zeroIndex === -1) {
                   name += String.fromCharCode(...chunk);
                   pos += 64;
@@ -85,6 +107,10 @@ export async function parseImportDirectory(
       } else {
         for (let t = 0; t < 4 * 32768; t += 4) {
           const dv = new DataView(await file.slice(thunkOffset + t, thunkOffset + t + 4).arrayBuffer());
+          if (dv.byteLength < 4) {
+            warning = warning ?? "Import thunks truncated (32-bit).";
+            break;
+          }
           const value = dv.getUint32(0, true);
           if (value === 0) break;
           if ((value & 0x80000000) !== 0) {
@@ -93,12 +119,20 @@ export async function parseImportDirectory(
             const hintNameOffset = rvaToOff(value);
             if (hintNameOffset != null) {
               const hintView = new DataView(await file.slice(hintNameOffset, hintNameOffset + 2).arrayBuffer());
+              if (hintView.byteLength < 2) {
+                warning = warning ?? "Import hint/name table truncated.";
+                break;
+              }
               const hint = hintView.getUint16(0, true);
               let name = "";
               let pos = hintNameOffset + 2;
               for (;;) {
                 const chunk = new Uint8Array(await file.slice(pos, pos + 64).arrayBuffer());
                 const zeroIndex = chunk.indexOf(0);
+                if (chunk.byteLength === 0) {
+                  warning = warning ?? "Import name string truncated.";
+                  break;
+                }
                 if (zeroIndex === -1) {
                   name += String.fromCharCode(...chunk);
                   pos += 64;
@@ -118,5 +152,5 @@ export async function parseImportDirectory(
     }
     imports.push({ dll: dllName, functions });
   }
-  return imports;
+  return warning ? { entries: imports, warning } : { entries: imports };
 }

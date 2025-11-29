@@ -34,6 +34,7 @@ export interface PeParseResult {
   entrySection: PeCore["entrySection"];
   rvaToOff: RvaToOffset;
   imports: PeImportEntry[];
+  importsWarning?: string;
   rsds: { guid: string; age: number; path: string } | null | undefined;
   debugWarning: string | null | undefined;
   loadcfg: PeLoadConfig | null;
@@ -90,7 +91,7 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
   const { entry: rsds, warning: debugWarning } =
     (await parseDebugDirectory(file, dataDirs, rvaToOff, addCoverageRegion)) || {};
   const loadcfg = await parseLoadConfigDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus);
-  const imports = await parseImportDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus);
+  const importResult = await parseImportDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus);
   const exportsInfo = await parseExportDirectory(file, dataDirs, rvaToOff, addCoverageRegion);
   const tls = await parseTlsDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus, ImageBase);
   const resources = await parseResources(file, dataDirs, rvaToOff, addCoverageRegion);
@@ -113,7 +114,8 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     sections,
     entrySection,
     rvaToOff,
-    imports,
+    imports: importResult.entries,
+    ...(importResult.warning ? { importsWarning: importResult.warning } : {}),
     rsds,
     debugWarning,
     loadcfg,

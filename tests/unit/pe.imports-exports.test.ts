@@ -82,7 +82,7 @@ void test("parseImportDirectory reads import descriptors with names and ordinals
   encoder.encodeInto("ImportX\0", new Uint8Array(bytes.buffer, 702));
 
   const file = new MockFile(bytes, "imports.bin");
-  const imports = await parseImportDirectory(
+  const { entries: imports } = await parseImportDirectory(
     file,
     [{ name: "IMPORT", rva: impBase, size: 40 }],
     value => value,
@@ -96,4 +96,48 @@ void test("parseImportDirectory reads import descriptors with names and ordinals
   assert.equal(firstImport.functions.length, 2);
   assert.deepEqual(firstImport.functions[0], { hint: 0x55aa, name: "ImportX" });
   assert.deepEqual(firstImport.functions[1], { ordinal: 3 });
+});
+
+void test("parseExportDirectory stops at available function table size", async () => {
+  const bytes = new Uint8Array(128).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const expRva = 0x20;
+  dv.setUint32(expRva + 20, 10, true); // NumberOfFunctions huge
+  dv.setUint32(expRva + 28, 0x60, true); // AddressOfFunctions
+  // Only one function entry fits in the buffer.
+  dv.setUint32(0x60, 0x1234, true);
+
+  const file = new MockFile(bytes, "exports-trunc.bin");
+  const result = await parseExportDirectory(
+    file,
+    [{ name: "EXPORT", rva: expRva, size: 40 }],
+    value => value,
+    () => {}
+  );
+  const definedResult = expectDefined(result);
+  assert.equal(definedResult.entries.length, 8); // limited by available bytes (32 / 4)
+  const firstEntry = expectDefined(definedResult.entries[0]);
+  assert.equal(firstEntry.rva, 0x1234);
+  assert.equal(definedResult.entries[7]?.rva, 0);
+});
+
+void test("parseImportDirectory reports warning on truncated thunk table", async () => {
+  const bytes = new Uint8Array(128).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const impBase = 0x20;
+  dv.setUint32(impBase + 12, 0x60, true); // name RVA
+  dv.setUint32(impBase + 16, 0x70, true); // FirstThunk RVA
+  dv.setUint16(0x60, 0); // empty name
+  // Only 4 bytes available for a 64-bit thunk, forcing truncation.
+  dv.setUint32(0x70, 0x12345678, true);
+
+  const { entries, warning } = await parseImportDirectory(
+    new MockFile(bytes),
+    [{ name: "IMPORT", rva: impBase, size: 40 }],
+    value => value,
+    () => {},
+    true
+  );
+  assert.ok(entries.length >= 0);
+  assert.ok(warning && /truncated/i.test(warning));
 });

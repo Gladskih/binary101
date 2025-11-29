@@ -97,7 +97,8 @@ export async function parseExportDirectory(
         }
       }
     }
-    for (let idx = 0; idx < NumberOfFunctions; idx += 1) {
+    const maxFuncs = Math.min(NumberOfFunctions, Math.floor(funcTable.byteLength / 4));
+    for (let idx = 0; idx < maxFuncs; idx += 1) {
       const funcRva = funcTable.getUint32(idx * 4, true);
       const funcName: string | null = functionNames.get(idx) ?? null;
       let forwarder: string | null = null;
