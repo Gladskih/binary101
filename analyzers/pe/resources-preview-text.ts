@@ -175,42 +175,81 @@ export function addVersionPreview(
 ): void {
   if (typeName !== "VERSION") return;
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  if (dv.byteLength < 6) return;
+  const headerSize = 6; // VS_VERSIONINFO header: wLength(2) + wValueLength(2) + wType(2)
+  const dwordAlign = 4;
+  const fixedMinSize = 24; // VS_FIXEDFILEINFO size in bytes
+  if (dv.byteLength < headerSize) return;
   const len = dv.getUint16(0, true);
   const valueLength = dv.getUint16(2, true);
-  const type = dv.getUint16(4, true);
-  const keyParts = String.fromCharCode(
-    ...new Uint8Array(data.buffer, data.byteOffset + 6, Math.max(0, data.length - 6))
-  ).split("\0");
-  const key = (keyParts[0] ?? "").trim();
-  let valueStart = 6 + (key.length + 2 + (key.length % 2 === 0 ? 0 : 1));
-  valueStart = (valueStart + 3) & ~3;
-  let fixed = null;
-  if (valueLength >= 52 && valueStart + 52 <= data.length) {
-    const dvv = new DataView(data.buffer, data.byteOffset + valueStart, Math.min(52, dv.byteLength - valueStart));
-    const v0 = dvv.getUint32(0, true);
-    const v1 = dvv.getUint32(4, true);
-    const v2 = dvv.getUint32(8, true);
-    const v3 = dvv.getUint32(12, true);
-    const parsePair = (v: number) => ({
-      major: (v >>> 16) & 0xffff,
-      minor: v & 0xffff
-    });
-    const fileVer = { high: parsePair(v0), low: parsePair(v1) };
-    const prodVer = { high: parsePair(v2), low: parsePair(v3) };
-    fixed = {
-      fileVersion: fileVer,
-      productVersion: prodVer,
-      fileVersionString: `${fileVer.high.major}.${fileVer.high.minor}.${fileVer.low.major}.${fileVer.low.minor}`,
-      productVersionString: `${prodVer.high.major}.${prodVer.high.minor}.${prodVer.low.major}.${prodVer.low.minor}`
-    };
+  let keyBytes = 0;
+  const keyLimit = Math.min(len, dv.byteLength);
+  const expectedKey = "VS_VERSION_INFO";
+  let pos = headerSize;
+  let validKey = true;
+  for (let idx = 0; idx < expectedKey.length; idx += 1) {
+    if (pos + 1 >= keyLimit) {
+      validKey = false;
+      break;
+    }
+    const code = dv.getUint16(pos, true);
+    keyBytes += 2;
+    if (code !== expectedKey.charCodeAt(idx)) {
+      validKey = false;
+      break;
+    }
+    pos += 2;
   }
+  if (validKey) {
+    if (pos + 1 < keyLimit) {
+      const terminator = dv.getUint16(pos, true);
+      keyBytes += 2;
+      if (terminator !== 0) validKey = false;
+    } else {
+      validKey = false;
+    }
+  }
+  if (!validKey) {
+    addPreviewIssue(langEntry, "VERSION resource key is missing or invalid.");
+    return;
+  }
+  // Align start of VS_FIXEDFILEINFO to DWORD boundary after the UTF-16 key string.
+  const valueStart = (headerSize + keyBytes + (dwordAlign - 1)) & ~(dwordAlign - 1);
+  if (valueLength < fixedMinSize || valueStart + fixedMinSize > data.length) {
+    addPreviewIssue(langEntry, "Version block is too small to read VS_FIXEDFILEINFO.");
+    return;
+  }
+  const fixedView = new DataView(
+    data.buffer,
+    data.byteOffset + valueStart,
+    Math.min(valueLength, dv.byteLength - valueStart)
+  );
+  const signature = fixedView.getUint32(0, true);
+  const structVersion = fixedView.getUint32(4, true);
+  if (signature !== 0xfEEF04BD) {
+    addPreviewIssue(langEntry, "VS_FIXEDFILEINFO signature is missing or invalid.");
+    return;
+  }
+  if (structVersion !== 0x00010000) {
+    addPreviewIssue(langEntry, "VS_FIXEDFILEINFO struct version is unexpected.");
+    return;
+  }
+  if (fixedView.byteLength < fixedMinSize) {
+    addPreviewIssue(langEntry, "VS_FIXEDFILEINFO is truncated.");
+    return;
+  }
+  const v0 = fixedView.getUint32(8, true);
+  const v1 = fixedView.getUint32(12, true);
+  const v2 = fixedView.getUint32(16, true);
+  const v3 = fixedView.getUint32(20, true);
+  const parsePair = (v: number) => ({
+    major: (v >>> 16) & 0xffff,
+    minor: v & 0xffff
+  });
+  const fileVer = { high: parsePair(v0), low: parsePair(v1) };
+  const prodVer = { high: parsePair(v2), low: parsePair(v3) };
   langEntry.previewKind = "version";
   langEntry.versionInfo = {
-    length: len,
-    valueLength,
-    type,
-    key,
-    fixed
+    fileVersionString: `${fileVer.high.major}.${fileVer.high.minor}.${fileVer.low.major}.${fileVer.low.minor}`,
+    productVersionString: `${prodVer.high.major}.${prodVer.high.minor}.${prodVer.low.major}.${prodVer.low.minor}`
   };
 }

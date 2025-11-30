@@ -16,7 +16,11 @@ type ResourceLangPreview = {
   textEncoding?: string;
   stringTable?: Array<{ id: number; text: string }>;
   messageTable?: { messages: Array<{ id: number; text: string }>; truncated: boolean };
-  versionInfo?: { fileVersionString?: string; productVersionString?: string };
+  versionInfo?: {
+    fileVersionString?: string;
+    productVersionString?: string;
+    fixed?: { fileVersionString?: string; productVersionString?: string };
+  };
 };
 
 type ResourceEntry = {

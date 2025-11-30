@@ -77,10 +77,12 @@ void test("enrichResourcePreviews builds previews for common PE resources", asyn
   const key = "VS_VERSION_INFO";
   writeUtf16(versionBytes, 6, key);
   const valueStart = (6 + key.length * 2 + 2 + 3) & ~3;
-  dvv.setUint32(valueStart + 0, 0x00010002, true);
-  dvv.setUint32(valueStart + 4, 0x00030004, true);
-  dvv.setUint32(valueStart + 8, 0x00050006, true);
-  dvv.setUint32(valueStart + 12, 0x00070008, true);
+  dvv.setUint32(valueStart + 0, 0xfEEF04BD, true); // signature
+  dvv.setUint32(valueStart + 4, 0x00010000, true); // struct version
+  dvv.setUint32(valueStart + 8, 0x00090000, true); // file ms (9.0)
+  dvv.setUint32(valueStart + 12, 0x521E0008, true); // file ls (21022.8)
+  dvv.setUint32(valueStart + 16, 0x00090000, true); // product ms (9.0)
+  dvv.setUint32(valueStart + 20, 0x521E0008, true); // product ls (21022.8)
   const version = writeData(640, versionBytes);
 
   const file = new MockFile(fileBytes);
@@ -162,6 +164,10 @@ void test("enrichResourcePreviews builds previews for common PE resources", asyn
 
   const versionLang = langOf("VERSION");
   assert.strictEqual(versionLang.previewKind, "version");
-  const versionInfo = versionLang.versionInfo as { fixed?: { fileVersionString?: string } } | undefined;
-  assert.ok(versionInfo?.fixed?.fileVersionString);
+  const versionInfo = versionLang.versionInfo as {
+    fileVersionString?: string;
+    productVersionString?: string;
+  } | undefined;
+  assert.strictEqual(versionInfo?.fileVersionString, "9.0.21022.8");
+  assert.strictEqual(versionInfo?.productVersionString, "9.0.21022.8");
 });

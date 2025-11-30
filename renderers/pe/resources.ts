@@ -53,11 +53,11 @@ function renderPreviewCell(langEntry: ResourceLangWithPreview | null | undefined
   }
   if (kind === "version" && langEntry.versionInfo) {
     const info = langEntry.versionInfo as Record<string, unknown>;
-    const parts: string[] = [];
     const fileVersion = typeof info["fileVersionString"] === "string" ? info["fileVersionString"] : null;
-    if (fileVersion) parts.push(`File: ${safe(fileVersion)}`);
     const productVersion =
       typeof info["productVersionString"] === "string" ? info["productVersionString"] : null;
+    const parts: string[] = [];
+    if (fileVersion) parts.push(`File: ${safe(fileVersion)}`);
     if (productVersion) parts.push(`Product: ${safe(productVersion)}`);
     const main = parts.length ? `<div class="smallNote">${parts.join(" · ")}</div>` : "-";
     return main + issuesHtml;
