@@ -44,6 +44,9 @@ export function renderBoundImports(pe: PeParseResult, out: string[]): void {
   const bi = pe.boundImports;
   if (!bi.entries?.length) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Bound imports</h4>`);
+  if (bi.warning) {
+    out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(bi.warning)}</div>`);
+  }
   out.push(`<table class="table"><thead><tr><th>#</th><th>Module</th><th>TimeDateStamp</th><th>ForwarderRefs</th></tr></thead><tbody>`);
   bi.entries.forEach((e, index) => {
     out.push(`<tr><td>${index + 1}</td><td>${safe(e.name || "")}</td><td>${hex(e.TimeDateStamp, 8)}</td><td>${e.NumberOfModuleForwarderRefs}</td></tr>`);
@@ -56,6 +59,9 @@ export function renderDelayImports(pe: PeParseResult, out: string[]): void {
   const di = pe.delayImports;
   if (!di.entries?.length) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Delay-load imports</h4>`);
+  if (di.warning) {
+    out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(di.warning)}</div>`);
+  }
   for (const entry of di.entries) {
     const dll = safe(entry.name || "(unknown DLL)");
     const fnCount = entry.functions?.length || 0;

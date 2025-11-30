@@ -30,7 +30,7 @@ export async function parseBoundImports(
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   addCoverageRegion: AddCoverageRegion
-): Promise<{ entries: PeBoundImportEntry[] } | null> {
+): Promise<{ entries: PeBoundImportEntry[]; warning?: string } | null> {
   const dir = dataDirs.find(d => d.name === "BOUND_IMPORT");
   if (!dir?.rva || dir.size < 8) return null;
   const base = rvaToOff(dir.rva);
@@ -38,9 +38,14 @@ export async function parseBoundImports(
   addCoverageRegion("BOUND_IMPORT", base, dir.size);
   const end = base + dir.size;
   const entries: PeBoundImportEntry[] = [];
+  const warnings = new Set<string>();
   let off = base;
   while (off + 8 <= end) {
     const dv = new DataView(await file.slice(off, off + 8).arrayBuffer());
+    if (dv.byteLength < 8) {
+      warnings.add("Bound import descriptor truncated.");
+      break;
+    }
     const TimeDateStamp = dv.getUint32(0, true);
     const OffsetModuleName = dv.getUint16(4, true);
     const NumberOfModuleForwarderRefs = dv.getUint16(6, true);
@@ -50,11 +55,14 @@ export async function parseBoundImports(
     if (nameOff >= base && nameOff < end) {
       const nameView = new DataView(await file.slice(nameOff, nameOff + 256).arrayBuffer());
       name = readAsciiString(nameView, 0, 256);
+    } else if (OffsetModuleName) {
+      warnings.add("Bound import name offset points outside directory.");
     }
     entries.push({ name, TimeDateStamp, NumberOfModuleForwarderRefs });
     off += 8;
   }
-  return { entries };
+  const warning = warnings.size ? Array.from(warnings).join(" · ") : undefined;
+  return warning ? { entries, warning } : { entries };
 }
 
 export async function parseDelayImports(
@@ -64,7 +72,7 @@ export async function parseDelayImports(
   addCoverageRegion: AddCoverageRegion,
   isPlus: boolean,
   imageBase: number
-): Promise<{ entries: PeDelayImportEntry[] } | null> {
+): Promise<{ entries: PeDelayImportEntry[]; warning?: string } | null> {
   const dir = dataDirs.find(d => d.name === "DELAY_IMPORT");
   if (!dir?.rva || dir.size < 32) return null;
   const base = rvaToOff(dir.rva);
@@ -72,10 +80,14 @@ export async function parseDelayImports(
   addCoverageRegion("DELAY_IMPORT", base, dir.size);
   const end = base + dir.size;
   const entries: PeDelayImportEntry[] = [];
+  const warnings = new Set<string>();
   let off = base;
   while (off + 32 <= end) {
     const dv = new DataView(await file.slice(off, off + 32).arrayBuffer());
-    if (dv.byteLength < 32) break;
+    if (dv.byteLength < 32) {
+      warnings.add("Delay import descriptor truncated.");
+      break;
+    }
     const Attributes = dv.getUint32(0, true);
     const DllNameRVA = dv.getUint32(4, true);
     const ModuleHandleRVA = dv.getUint32(8, true);
@@ -90,6 +102,8 @@ export async function parseDelayImports(
     if (nameOff != null) {
       const nameView = new DataView(await file.slice(nameOff, nameOff + 256).arrayBuffer());
       name = readAsciiString(nameView, 0, 256);
+    } else if (DllNameRVA) {
+      warnings.add("Delay import name RVA does not map to file data.");
     }
     const rvaFromMaybeVa = (value: number): number => {
       const isRva = (Attributes & 1) !== 0;
@@ -106,7 +120,10 @@ export async function parseDelayImports(
       if (isPlus) {
         for (let index = 0; index < 8 * 16384; index += 8) {
           const thunkView = new DataView(await file.slice(intOff + index, intOff + index + 8).arrayBuffer());
-          if (thunkView.byteLength < 8) break;
+          if (thunkView.byteLength < 8) {
+            warnings.add("Delay import thunk table truncated (64-bit).");
+            break;
+          }
           const value = thunkView.getBigUint64(0, true);
           if (value === 0n) break;
           if ((value & 0x8000000000000000n) !== 0n) {
@@ -123,7 +140,10 @@ export async function parseDelayImports(
               for (;;) {
                 const chunk = new Uint8Array(await file.slice(pos, pos + 64).arrayBuffer());
                 const zeroIndex = chunk.indexOf(0);
-                if (chunk.byteLength === 0) break;
+                if (chunk.byteLength === 0 || (zeroIndex === -1 && pos + 64 > file.size)) {
+                  warnings.add("Delay import name string truncated.");
+                  break;
+                }
                 if (zeroIndex === -1) {
                   funcName += String.fromCharCode(...chunk);
                   pos += 64;
@@ -142,7 +162,10 @@ export async function parseDelayImports(
       } else {
         for (let index = 0; index < 4 * 32768; index += 4) {
           const thunkView = new DataView(await file.slice(intOff + index, intOff + index + 4).arrayBuffer());
-          if (thunkView.byteLength < 4) break;
+          if (thunkView.byteLength < 4) {
+            warnings.add("Delay import thunk table truncated (32-bit).");
+            break;
+          }
           const value = thunkView.getUint32(0, true);
           if (value === 0) break;
           if ((value & 0x80000000) !== 0) {
@@ -158,7 +181,10 @@ export async function parseDelayImports(
               for (;;) {
                 const chunk = new Uint8Array(await file.slice(pos, pos + 64).arrayBuffer());
                 const zeroIndex = chunk.indexOf(0);
-                if (chunk.byteLength === 0) break;
+                if (chunk.byteLength === 0 || (zeroIndex === -1 && pos + 64 > file.size)) {
+                  warnings.add("Delay import name string truncated.");
+                  break;
+                }
                 if (zeroIndex === -1) {
                   funcName += String.fromCharCode(...chunk);
                   pos += 64;
@@ -189,5 +215,6 @@ export async function parseDelayImports(
     });
     off += 32;
   }
-  return { entries };
+  const warning = warnings.size ? Array.from(warnings).join(" · ") : undefined;
+  return warning ? { entries, warning } : { entries };
 }

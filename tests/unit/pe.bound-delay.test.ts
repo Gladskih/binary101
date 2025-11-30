@@ -58,14 +58,36 @@ void test("parseDelayImports reads delay descriptors, names, and ordinals", asyn
   assert.deepEqual(entry.functions[1], { ordinal: 2 });
 });
 
-void test("parseDelayImports stops on truncated thunk table without throwing", async () => {
-  const bytes = new Uint8Array(128).fill(0);
+void test("parseDelayImports warns when 32-bit thunk table truncates mid-entry", async () => {
+  const bytes = new Uint8Array(0x54).fill(0);
   const dv = new DataView(bytes.buffer);
-  const base = 16;
+  const base = 0x10;
   dv.setUint32(base + 0, 1, true); // Attributes (RVA)
-  dv.setUint32(base + 16, 0x70, true); // INT RVA points near end
-  // Only 4 bytes of INT available, less than 8 needed for 64-bit thunk.
-  dv.setUint32(0x70, 0x12345678, true);
+  dv.setUint32(base + 16, 0x50, true); // INT RVA points near end
+  // First thunk is ordinal and fits; second thunk would be out of file.
+  dv.setUint32(0x50, 0x80000002, true);
+
+  const result = await parseDelayImports(
+    new MockFile(bytes),
+    [{ name: "DELAY_IMPORT", rva: base, size: 32 }],
+    value => value,
+    () => {},
+    false,
+    0
+  );
+  const definedResult = expectDefined(result);
+  assert.equal(definedResult.entries.length, 1);
+  assert.ok(definedResult.warning?.toLowerCase().includes("thunk table truncated"));
+});
+
+void test("parseDelayImports tolerates truncated INT in 64-bit path", async () => {
+  const bytes = new Uint8Array(0x54).fill(0); // only 4 bytes available after 0x50
+  const dv = new DataView(bytes.buffer);
+  const base = 0x10;
+  dv.setUint32(base + 0, 1, true); // Attributes (RVA)
+  dv.setUint32(base + 16, 0x50, true); // INT RVA points near end
+  // Only 4 bytes available for a 64-bit thunk.
+  dv.setUint32(0x50, 0xdeadbeef, true);
 
   const result = await parseDelayImports(
     new MockFile(bytes),
@@ -76,7 +98,62 @@ void test("parseDelayImports stops on truncated thunk table without throwing", a
     0
   );
   const definedResult = expectDefined(result);
-  assert.ok(definedResult.entries.length >= 0);
+  assert.equal(definedResult.entries.length, 1);
+  const entry = expectDefined(definedResult.entries[0]);
+  assert.equal(entry.functions.length, 0);
+  assert.ok(definedResult.warning?.toLowerCase().includes("thunk table truncated"));
+});
+
+void test("parseDelayImports handles empty INT in 32-bit path", async () => {
+  const bytes = new Uint8Array(96).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const base = 0x10;
+  dv.setUint32(base + 0, 1, true); // Attributes (RVA)
+  dv.setUint32(base + 16, 0x50, true); // INT RVA near end
+  dv.setUint32(0x50, 0x12345678, true);
+
+  const result = await parseDelayImports(
+    new MockFile(bytes),
+    [{ name: "DELAY_IMPORT", rva: base, size: 32 }],
+    value => value,
+    () => {},
+    false,
+    0
+  );
+  const definedResult = expectDefined(result);
+  assert.equal(definedResult.entries.length, 1);
+  const entry = expectDefined(definedResult.entries[0]);
+  assert.ok(entry.functions.length >= 0);
+  assert.equal(definedResult.warning, undefined);
+});
+
+void test("parseDelayImports handles truncated hint/name strings", async () => {
+  const bytes = new Uint8Array(128).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const base = 0x20;
+  dv.setUint32(base + 0, 1, true); // Attributes (RVA)
+  dv.setUint32(base + 16, 0x60, true); // INT RVA
+  // INT entry points to hint/name near end of file; string is not null-terminated within buffer.
+  dv.setUint32(0x60, 0x78, true);
+  dv.setUint16(0x78, 0x7f7f, true);
+  // Fill rest with non-zero bytes to avoid early NUL.
+  bytes.fill(0x41, 0x7a);
+
+  const result = await parseDelayImports(
+    new MockFile(bytes),
+    [{ name: "DELAY_IMPORT", rva: base, size: 32 }],
+    value => value,
+    () => {},
+    false,
+    0
+  );
+  const definedResult = expectDefined(result);
+  assert.equal(definedResult.entries.length, 1);
+  const entryFn = expectDefined(definedResult.entries[0]);
+  assert.ok(entryFn.functions.length >= 1);
+  const firstFn = expectDefined(entryFn.functions[0]);
+  assert.ok(typeof firstFn.name === "string");
+  assert.ok(definedResult.warning?.toLowerCase().includes("name string truncated"));
 });
 
 void test("parseBoundImports extracts bound import names", async () => {
@@ -103,4 +180,38 @@ void test("parseBoundImports extracts bound import names", async () => {
   const entry = expectDefined(definedResult.entries[0]);
   assert.equal(entry.name, "USER32.dll");
   assert.equal(entry.TimeDateStamp, 0x01020304);
+});
+
+void test("parseBoundImports stops on truncated descriptor", async () => {
+  const base = 16;
+  const bytes = new Uint8Array(18).fill(0); // less than one full descriptor
+  const result = await parseBoundImports(
+    new MockFile(bytes),
+    [{ name: "BOUND_IMPORT", rva: base, size: 8 }],
+    value => value,
+    () => {}
+  );
+  const definedResult = expectDefined(result);
+  assert.equal(definedResult.entries.length, 0);
+  assert.ok(definedResult.warning?.toLowerCase().includes("truncated"));
+});
+
+void test("parseBoundImports handles name offset outside directory", async () => {
+  const base = 32;
+  const bytes = new Uint8Array(128).fill(0);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(base + 0, 0x11111111, true);
+  dv.setUint16(base + 4, 0x80, true); // offset beyond directory size
+  dv.setUint16(base + 6, 0, true);
+
+  const result = await parseBoundImports(
+    new MockFile(bytes),
+    [{ name: "BOUND_IMPORT", rva: base, size: 16 }],
+    value => value,
+    () => {}
+  );
+  const definedResult = expectDefined(result);
+  assert.equal(definedResult.entries.length, 1);
+  assert.equal(definedResult.entries[0]?.name, "");
+  assert.ok(definedResult.warning?.toLowerCase().includes("name offset"));
 });
