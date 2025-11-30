@@ -74,7 +74,7 @@ function clearPreviewUrl(): void {
 }
 
 type PreviewRender = {
-  kind: "image" | "video";
+  kind: "image" | "video" | "audio";
   html: string;
 };
 
@@ -97,6 +97,16 @@ function buildPreviewHtml(): PreviewRender | null {
       )}" /></div>`
     };
   }
+  if (previewCandidate.kind === "audio") {
+    return {
+      kind: "audio",
+      html: [
+        '<div class="audioPreview">',
+        `<audio controls preload="metadata" src="${currentPreviewUrl}"${previewCandidate.mimeType ? ` type="${previewCandidate.mimeType}"` : ""}></audio>`,
+        "</div>"
+      ].join("")
+    };
+  }
   const fallbackText = currentFile.name
     ? `Your browser cannot play this video inline: ${currentFile.name}.`
     : "Your browser cannot play this video inline.";
@@ -116,6 +126,7 @@ function buildPreviewHtml(): PreviewRender | null {
 function renderAnalysisIntoUi(result: ParseForUiResult): void {
   const preview = buildPreviewHtml();
   const imagePreviewHtml = preview?.kind === "image" ? preview.html : "";
+  const audioPreviewHtml = preview?.kind === "audio" ? preview.html : "";
 
   if (result.analyzer === "pe") {
     peDetailsTermElement.textContent = "PE/COFF details";
@@ -229,12 +240,17 @@ function renderAnalysisIntoUi(result: ParseForUiResult): void {
     peDetailsTermElement.textContent = "MP3 details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = renderMp3(result.parsed);
+    peDetailsValueElement.innerHTML = audioPreviewHtml + renderMp3(result.parsed);
     return;
   }
 
   if (preview) {
-    const label = preview.kind === "video" ? "Video preview" : "Image preview";
+    const label =
+      preview.kind === "video"
+        ? "Video preview"
+        : preview.kind === "audio"
+          ? "Audio preview"
+          : "Image preview";
     peDetailsTermElement.textContent = label;
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
@@ -255,6 +271,24 @@ function renderAnalysisIntoUi(result: ParseForUiResult): void {
         videoElement.addEventListener("loadedmetadata", onSuccess, { once: true });
         ["error", "stalled", "abort"].forEach(eventName => {
           videoElement.addEventListener(eventName, removePreview, { once: true });
+        });
+      }
+    } else if (preview.kind === "audio") {
+      const audioElement = peDetailsValueElement.querySelector(".audioPreview audio") as HTMLAudioElement | null;
+      if (audioElement) {
+        const removePreview = (): void => {
+          const container = audioElement.closest(".audioPreview") as HTMLElement | null;
+          if (container?.parentElement) container.parentElement.removeChild(container);
+          setStatusMessage("Preview not shown: browser cannot play this audio format inline.");
+        };
+        const onSuccess = (): void => {
+          audioElement.removeEventListener("error", removePreview);
+          audioElement.removeEventListener("stalled", removePreview);
+          audioElement.removeEventListener("abort", removePreview);
+        };
+        audioElement.addEventListener("loadedmetadata", onSuccess, { once: true });
+        ["error", "stalled", "abort"].forEach(eventName => {
+          audioElement.addEventListener(eventName, removePreview, { once: true });
         });
       }
     }

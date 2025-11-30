@@ -25,6 +25,16 @@ void test("derives video type from ISO-BMFF label when MIME is blank", () => {
   assert.deepEqual(preview, { kind: "video", mimeType: "video/mp4" });
 });
 
+void test("returns audio preview when MIME indicates audio", () => {
+  const preview = choosePreviewForFile({
+    fileName: "sound.bin",
+    mimeType: "audio/mpeg",
+    typeLabel: "MPEG audio stream (MP3/AAC)"
+  });
+
+  assert.deepEqual(preview, { kind: "audio", mimeType: "audio/mpeg" });
+});
+
 void test("returns image preview for HEIC even though ISO-BMFF is used", () => {
   const preview = choosePreviewForFile({
     fileName: "photo.heic",
@@ -42,7 +52,7 @@ void test("avoids flagging audio-only MPEG as video", () => {
     typeLabel: "MPEG audio stream (MP3/AAC)"
   });
 
-  assert.strictEqual(preview, null);
+  assert.deepEqual(preview, { kind: "audio", mimeType: "audio/mpeg" });
 });
 
 void test("maps transport streams to a video preview type", () => {

@@ -202,6 +202,7 @@ test.describe("file type detection", () => {
     await expect(page.locator("#peDetailsTerm")).toHaveText("MP3 details");
     await expect(page.locator("#peDetailsValue")).toContainText("MPEG audio stream");
     await expect(page.locator("#peDetailsValue")).toContainText("Summary");
+    await expect(page.locator(".audioPreview audio")).toBeVisible();
   });
 
   void test("renders MP4 video preview", async ({ page }) => {

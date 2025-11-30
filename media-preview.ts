@@ -1,6 +1,6 @@
 "use strict";
 
-export type PreviewKind = "image" | "video";
+export type PreviewKind = "image" | "video" | "audio";
 
 export interface PreviewCandidate {
   kind: PreviewKind;
@@ -54,6 +54,14 @@ const looksLikeVideo = (mimeType: string, typeLabel: string): boolean => {
   return false;
 };
 
+const looksLikeAudio = (mimeType: string, typeLabel: string): boolean => {
+  if (mimeType.startsWith("audio/")) return true;
+  if (typeLabel.indexOf("audio") !== -1) return true;
+  if (typeLabel.indexOf("mp3") !== -1) return true;
+  if (typeLabel.indexOf("mpeg audio") !== -1) return true;
+  return false;
+};
+
 export const choosePreviewForFile = (context: PreviewContext): PreviewCandidate | null => {
   const mimeType = (context.mimeType || "").toLowerCase();
   const typeLabel = (context.typeLabel || "").toLowerCase();
@@ -62,7 +70,9 @@ export const choosePreviewForFile = (context: PreviewContext): PreviewCandidate 
   }
   if (mimeType.startsWith("image/")) return { kind: "image", mimeType };
   if (mimeType.startsWith("video/")) return { kind: "video", mimeType };
+  if (mimeType.startsWith("audio/")) return { kind: "audio", mimeType };
   const videoMime = deriveVideoMimeFromLabel(typeLabel) || (looksLikeVideo(mimeType, typeLabel) ? "video/mp4" : null);
   if (videoMime) return { kind: "video", mimeType: videoMime };
+  if (looksLikeAudio(mimeType, typeLabel)) return { kind: "audio", mimeType: mimeType || "audio/mpeg" };
   return null;
 };
