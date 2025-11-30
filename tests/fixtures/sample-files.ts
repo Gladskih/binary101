@@ -146,6 +146,20 @@ export const createWebpFile = () =>
     "image/webp"
   );
 
+export const createMp4File = () =>
+  new MockFile(
+    new Uint8Array([
+      0x00, 0x00, 0x00, 0x18, // size
+      0x66, 0x74, 0x79, 0x70, // "ftyp"
+      0x69, 0x73, 0x6f, 0x6d, // major brand "isom"
+      0x00, 0x00, 0x02, 0x00, // minor version
+      0x69, 0x73, 0x6f, 0x6d, // compatible brand "isom"
+      0x6d, 0x70, 0x34, 0x31 // compatible brand "mp41"
+    ]),
+    "sample.mp4",
+    "video/mp4"
+  );
+
 export const createFb2File = () => {
   const xml = [
     '<?xml version="1.0" encoding="UTF-8"?>',

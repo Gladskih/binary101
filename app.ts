@@ -21,6 +21,7 @@ import {
   renderLnk,
 } from "./renderers/index.js";
 import { escapeHtml } from "./html-utils.js";
+import { choosePreviewForFile } from "./media-preview.js";
 import type { ZipCentralDirectoryEntry } from "./analyzers/zip/index.js";
 
 const getElement = (id: string) => document.getElementById(id)!;
@@ -72,25 +73,50 @@ function clearPreviewUrl(): void {
   }
 }
 
-function buildImagePreviewHtml(): string {
+type PreviewRender = {
+  kind: "image" | "video";
+  html: string;
+};
+
+function buildPreviewHtml(): PreviewRender | null {
   clearPreviewUrl();
-  if (!currentFile) return "";
-  const mime = (currentFile.type || "").toLowerCase();
-  const label = (currentTypeLabel || "").toLowerCase();
-  const looksLikeImage =
-    mime.startsWith("image/") ||
-    label.includes("image") ||
-    label.includes("icon");
-  if (!looksLikeImage) return "";
+  if (!currentFile) return null;
+  const previewCandidate = choosePreviewForFile({
+    fileName: currentFile.name || "",
+    mimeType: currentFile.type || "",
+    typeLabel: currentTypeLabel || ""
+  });
+  if (!previewCandidate) return null;
   currentPreviewUrl = URL.createObjectURL(currentFile);
-  const altText = currentFile.name ? `Preview of ${currentFile.name}` : "Image preview";
-  return `<div class="jpegPreview"><img src="${currentPreviewUrl}" alt="${escapeHtml(
-    altText
-  )}" /></div>`;
+  if (previewCandidate.kind === "image") {
+    const altText = currentFile.name ? `Preview of ${currentFile.name}` : "Image preview";
+    return {
+      kind: "image",
+      html: `<div class="jpegPreview"><img src="${currentPreviewUrl}" alt="${escapeHtml(
+        altText
+      )}" /></div>`
+    };
+  }
+  const fallbackText = currentFile.name
+    ? `Your browser cannot play this video inline: ${currentFile.name}.`
+    : "Your browser cannot play this video inline.";
+  const sourceTypeAttr = previewCandidate.mimeType ? ` type="${previewCandidate.mimeType}"` : "";
+  return {
+    kind: "video",
+    html: [
+      '<div class="videoPreview">',
+      '<video controls preload="metadata" playsinline>',
+      `<source src="${currentPreviewUrl}"${sourceTypeAttr}>`,
+      escapeHtml(fallbackText),
+      "</video>",
+      "</div>"
+    ].join("")
+  };
 }
 
 function renderAnalysisIntoUi(result: ParseForUiResult): void {
-  const previewHtml = buildImagePreviewHtml();
+  const preview = buildPreviewHtml();
+  const imagePreviewHtml = preview?.kind === "image" ? preview.html : "";
 
   if (result.analyzer === "pe") {
     peDetailsTermElement.textContent = "PE/COFF details";
@@ -120,7 +146,7 @@ function renderAnalysisIntoUi(result: ParseForUiResult): void {
     peDetailsTermElement.textContent = "JPEG details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = previewHtml + renderJpeg(result.parsed);
+    peDetailsValueElement.innerHTML = imagePreviewHtml + renderJpeg(result.parsed);
     return;
   }
 
@@ -135,7 +161,7 @@ function renderAnalysisIntoUi(result: ParseForUiResult): void {
     peDetailsTermElement.textContent = "GIF details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = previewHtml + renderGif(result.parsed);
+    peDetailsValueElement.innerHTML = imagePreviewHtml + renderGif(result.parsed);
     return;
   }
   if (result.analyzer === "zip") {
@@ -180,7 +206,7 @@ function renderAnalysisIntoUi(result: ParseForUiResult): void {
     peDetailsTermElement.textContent = "PNG details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = previewHtml + renderPng(result.parsed);
+    peDetailsValueElement.innerHTML = imagePreviewHtml + renderPng(result.parsed);
     return;
   }
 
@@ -188,7 +214,7 @@ function renderAnalysisIntoUi(result: ParseForUiResult): void {
     peDetailsTermElement.textContent = "WebP details";
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = previewHtml + renderWebp(result.parsed);
+    peDetailsValueElement.innerHTML = imagePreviewHtml + renderWebp(result.parsed);
     return;
   }
 
@@ -208,11 +234,12 @@ function renderAnalysisIntoUi(result: ParseForUiResult): void {
     return;
   }
 
-  if (previewHtml) {
-    peDetailsTermElement.textContent = "Image preview";
+  if (preview) {
+    const label = preview.kind === "video" ? "Video preview" : "Image preview";
+    peDetailsTermElement.textContent = label;
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
-    peDetailsValueElement.innerHTML = previewHtml;
+    peDetailsValueElement.innerHTML = preview.html;
     return;
   }
 

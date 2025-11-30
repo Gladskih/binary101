@@ -31,6 +31,7 @@
   },
   "include": [
     "app.ts",
+    "media-preview.ts",
     "binary-utils.ts",
     "html-utils.ts",
     "analyzers/**/*.ts",

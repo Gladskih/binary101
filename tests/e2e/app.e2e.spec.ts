@@ -6,6 +6,7 @@ import {
   createGifFile,
   createJpegFile,
   createMp3File,
+  createMp4File,
   createPdfFile,
   createPeFile,
   createPePlusFile,
@@ -201,6 +202,17 @@ test.describe("file type detection", () => {
     await expect(page.locator("#peDetailsTerm")).toHaveText("MP3 details");
     await expect(page.locator("#peDetailsValue")).toContainText("MPEG audio stream");
     await expect(page.locator("#peDetailsValue")).toContainText("Summary");
+  });
+
+  void test("renders MP4 video preview", async ({ page }) => {
+    const videoFile = createMp4File();
+    await page.setInputFiles("#fileInput", toUpload(videoFile));
+
+    await expectBaseDetails(page, videoFile.name, "MP4/QuickTime container (ISO-BMFF)");
+    await expect(page.locator("#peDetailsTerm")).toHaveText("Video preview");
+    await expect(page.locator(".videoPreview video")).toBeVisible();
+    await expect(page.locator(".videoPreview source")).toHaveAttribute("type", "video/mp4");
+    await expect(page.locator(".videoPreview source")).toHaveAttribute("src", /blob:/);
   });
 
   void test("shows unknown binary type when no probe matches", async ({ page }) => {
