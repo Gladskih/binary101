@@ -12,6 +12,7 @@ import {
   renderPdf,
   renderZip,
   renderWebp,
+  renderWebm,
   renderFb2,
   renderMp3,
   renderSevenZip,
@@ -77,6 +78,47 @@ type PreviewRender = {
   kind: "image" | "video" | "audio";
   html: string;
 };
+
+function attachPreviewGuards(preview: PreviewRender | null): void {
+  if (!preview) return;
+  if (preview.kind === "video") {
+    const videoElement = peDetailsValueElement.querySelector(".videoPreview video") as HTMLVideoElement | null;
+    if (videoElement) {
+      const removePreview = (): void => {
+        const container = videoElement.closest(".videoPreview") as HTMLElement | null;
+        if (container?.parentElement) container.parentElement.removeChild(container);
+        setStatusMessage("Preview not shown: browser cannot play this video format inline.");
+      };
+      const onSuccess = (): void => {
+        videoElement.removeEventListener("error", removePreview);
+        videoElement.removeEventListener("stalled", removePreview);
+        videoElement.removeEventListener("abort", removePreview);
+      };
+      videoElement.addEventListener("loadedmetadata", onSuccess, { once: true });
+      ["error", "stalled", "abort"].forEach(eventName => {
+        videoElement.addEventListener(eventName, removePreview, { once: true });
+      });
+    }
+  } else if (preview.kind === "audio") {
+    const audioElement = peDetailsValueElement.querySelector(".audioPreview audio") as HTMLAudioElement | null;
+    if (audioElement) {
+      const removePreview = (): void => {
+        const container = audioElement.closest(".audioPreview") as HTMLElement | null;
+        if (container?.parentElement) container.parentElement.removeChild(container);
+        setStatusMessage("Preview not shown: browser cannot play this audio format inline.");
+      };
+      const onSuccess = (): void => {
+        audioElement.removeEventListener("error", removePreview);
+        audioElement.removeEventListener("stalled", removePreview);
+        audioElement.removeEventListener("abort", removePreview);
+      };
+      audioElement.addEventListener("loadedmetadata", onSuccess, { once: true });
+      ["error", "stalled", "abort"].forEach(eventName => {
+        audioElement.addEventListener(eventName, removePreview, { once: true });
+      });
+    }
+  }
+}
 
 function buildPreviewHtml(): PreviewRender | null {
   clearPreviewUrl();
@@ -228,6 +270,16 @@ function renderAnalysisIntoUi(result: ParseForUiResult): void {
     return;
   }
 
+  if (result.analyzer === "webm") {
+    peDetailsTermElement.textContent = "WebM details";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    const videoPreviewHtml = preview?.kind === "video" ? preview.html : "";
+    peDetailsValueElement.innerHTML = videoPreviewHtml + renderWebm(result.parsed);
+    attachPreviewGuards(preview);
+    return;
+  }
+
   if (result.analyzer === "pdf") {
     peDetailsTermElement.textContent = "PDF details";
     peDetailsTermElement.hidden = false;
@@ -255,43 +307,7 @@ function renderAnalysisIntoUi(result: ParseForUiResult): void {
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
     peDetailsValueElement.innerHTML = preview.html;
-    if (preview.kind === "video") {
-      const videoElement = peDetailsValueElement.querySelector(".videoPreview video") as HTMLVideoElement | null;
-      if (videoElement) {
-        const removePreview = (): void => {
-          const container = videoElement.closest(".videoPreview") as HTMLElement | null;
-          if (container?.parentElement) container.parentElement.removeChild(container);
-          setStatusMessage("Preview not shown: browser cannot play this video format inline.");
-        };
-        const onSuccess = (): void => {
-          videoElement.removeEventListener("error", removePreview);
-          videoElement.removeEventListener("stalled", removePreview);
-          videoElement.removeEventListener("abort", removePreview);
-        };
-        videoElement.addEventListener("loadedmetadata", onSuccess, { once: true });
-        ["error", "stalled", "abort"].forEach(eventName => {
-          videoElement.addEventListener(eventName, removePreview, { once: true });
-        });
-      }
-    } else if (preview.kind === "audio") {
-      const audioElement = peDetailsValueElement.querySelector(".audioPreview audio") as HTMLAudioElement | null;
-      if (audioElement) {
-        const removePreview = (): void => {
-          const container = audioElement.closest(".audioPreview") as HTMLElement | null;
-          if (container?.parentElement) container.parentElement.removeChild(container);
-          setStatusMessage("Preview not shown: browser cannot play this audio format inline.");
-        };
-        const onSuccess = (): void => {
-          audioElement.removeEventListener("error", removePreview);
-          audioElement.removeEventListener("stalled", removePreview);
-          audioElement.removeEventListener("abort", removePreview);
-        };
-        audioElement.addEventListener("loadedmetadata", onSuccess, { once: true });
-        ["error", "stalled", "abort"].forEach(eventName => {
-          audioElement.addEventListener(eventName, removePreview, { once: true });
-        });
-      }
-    }
+    attachPreviewGuards(preview);
     return;
   }
 

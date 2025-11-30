@@ -88,6 +88,75 @@ const concatParts = (parts: Uint8Array[]): Uint8Array => {
   return out;
 };
 
+const encodeEbmlId = (id: number): Uint8Array => {
+  const bytes: number[] = [];
+  let value = id >>> 0;
+  while (value > 0) {
+    bytes.unshift(value & 0xff);
+    value >>>= 8;
+  }
+  if (bytes.length === 0) bytes.push(0);
+  return new Uint8Array(bytes);
+};
+
+const encodeEbmlVint = (value: number): Uint8Array => {
+  let length = 1;
+  while (length < 8 && value >= 1 << (7 * length)) {
+    length += 1;
+  }
+  const marker = 1 << (7 * length);
+  let remaining = marker | value;
+  const out = new Uint8Array(length);
+  for (let i = length - 1; i >= 0; i -= 1) {
+    out[i] = remaining & 0xff;
+    remaining >>>= 8;
+  }
+  return out;
+};
+
+const encodeEbmlUInt = (value: number, width = 0): Uint8Array => {
+  let length = Math.max(1, width);
+  while (length < 8 && value >= 1 << (length * 8)) {
+    length += 1;
+  }
+  const out = new Uint8Array(length);
+  for (let i = 0; i < length; i += 1) {
+    const shift = (length - i - 1) * 8;
+    out[i] = (value >> shift) & 0xff;
+  }
+  return out;
+};
+
+const encodeEbmlFloat = (value: number, width = 8): Uint8Array => {
+  const buffer = new ArrayBuffer(width);
+  const view = new DataView(buffer);
+  if (width === 4) {
+    view.setFloat32(0, value, false);
+  } else {
+    view.setFloat64(0, value, false);
+  }
+  return new Uint8Array(buffer);
+};
+
+const ebmlElement = (id: number, payload: Uint8Array): Uint8Array => {
+  const idBytes = encodeEbmlId(id);
+  const sizeBytes = encodeEbmlVint(payload.length);
+  const out = new Uint8Array(idBytes.length + sizeBytes.length + payload.length);
+  out.set(idBytes, 0);
+  out.set(sizeBytes, idBytes.length);
+  out.set(payload, idBytes.length + sizeBytes.length);
+  return out;
+};
+
+const ebmlString = (id: number, text: string): Uint8Array =>
+  ebmlElement(id, encoder.encode(text));
+
+const ebmlUInt = (id: number, value: number, width = 0): Uint8Array =>
+  ebmlElement(id, encodeEbmlUInt(value, width));
+
+const ebmlFloat = (id: number, value: number, width = 8): Uint8Array =>
+  ebmlElement(id, encodeEbmlFloat(value, width));
+
 const writeGuid = (buffer: Uint8Array, offset: number, guidText: string): void => {
   const parts = guidText.split("-");
   const [data1Text, data2Text, data3Text, tailStart, tailEnd] = parts;
@@ -159,6 +228,113 @@ export const createMp4File = () =>
     "sample.mp4",
     "video/mp4"
   );
+
+export const createWebmFile = () => {
+  const ebmlHeader = ebmlElement(
+    0x1a45dfa3,
+    concatParts([
+      ebmlUInt(0x4286, 1, 1), // EBMLVersion
+      ebmlUInt(0x42f7, 1, 1), // EBMLReadVersion
+      ebmlUInt(0x42f2, 4, 1), // EBMLMaxIDLength
+      ebmlUInt(0x42f3, 8, 1), // EBMLMaxSizeLength
+      ebmlString(0x4282, "webm"),
+      ebmlUInt(0x4287, 4, 1), // DocTypeVersion
+      ebmlUInt(0x4285, 2, 1) // DocTypeReadVersion
+    ])
+  );
+
+  const timecodeScale = ebmlUInt(0x2ad7b1, 1000000, 3); // ns
+  const duration = ebmlFloat(0x4489, 2000, 8); // 2 seconds with default scale
+  const muxingApp = ebmlString(0x4d80, "binary101-tests");
+  const writingApp = ebmlString(0x5741, "binary101-webm");
+  const title = ebmlString(0x7ba9, "Example WebM");
+  const info = ebmlElement(0x1549a966, concatParts([timecodeScale, duration, muxingApp, writingApp, title]));
+
+  const videoSettings = ebmlElement(
+    0xe0,
+    concatParts([
+      ebmlUInt(0xb0, 320, 2), // PixelWidth
+      ebmlUInt(0xba, 240, 2), // PixelHeight
+      ebmlUInt(0x54b0, 320, 2), // DisplayWidth
+      ebmlUInt(0x54ba, 240, 2) // DisplayHeight
+    ])
+  );
+
+  const videoTrack = ebmlElement(
+    0xae,
+    concatParts([
+      ebmlUInt(0xd7, 1, 1), // TrackNumber
+      ebmlUInt(0x73c5, 1, 1), // TrackUID
+      ebmlUInt(0x83, 1, 1), // TrackType video
+      ebmlUInt(0x88, 1, 1), // FlagDefault
+      ebmlUInt(0xb9, 1, 1), // FlagEnabled
+      ebmlUInt(0x9c, 0, 1), // FlagLacing off
+      ebmlUInt(0x23e383, 41666666, 4), // DefaultDuration ~24 fps
+      ebmlString(0x86, "V_VP8"),
+      ebmlString(0x536e, "Video track"),
+      ebmlString(0x22b59c, "eng"),
+      videoSettings
+    ])
+  );
+
+  const audioSettings = ebmlElement(
+    0xe1,
+    concatParts([
+      ebmlFloat(0xb5, 48000, 8), // SamplingFrequency
+      ebmlUInt(0x9f, 2, 1), // Channels
+      ebmlUInt(0x6264, 16, 1) // BitDepth
+    ])
+  );
+
+  const audioTrack = ebmlElement(
+    0xae,
+    concatParts([
+      ebmlUInt(0xd7, 2, 1),
+      ebmlUInt(0x73c5, 2, 1),
+      ebmlUInt(0x83, 2, 1), // TrackType audio
+      ebmlUInt(0x88, 1, 1),
+      ebmlUInt(0xb9, 1, 1),
+      ebmlString(0x86, "A_OPUS"),
+      ebmlString(0x536e, "Audio track"),
+      ebmlString(0x22b59c, "eng"),
+      audioSettings
+    ])
+  );
+
+  const tracks = ebmlElement(0x1654ae6b, concatParts([videoTrack, audioTrack]));
+
+  const buildSeekHead = (infoOffset: number, tracksOffset: number): Uint8Array => {
+    const seekInfo = ebmlElement(
+      0x4dbb,
+      concatParts([
+        ebmlElement(0x53ab, encodeEbmlId(0x1549a966)),
+        ebmlUInt(0x53ac, infoOffset, 2)
+      ])
+    );
+    const seekTracks = ebmlElement(
+      0x4dbb,
+      concatParts([
+        ebmlElement(0x53ab, encodeEbmlId(0x1654ae6b)),
+        ebmlUInt(0x53ac, tracksOffset, 2)
+      ])
+    );
+    return ebmlElement(0x114d9b74, concatParts([seekInfo, seekTracks]));
+  };
+
+  let seekHead = buildSeekHead(0, 0);
+  for (let i = 0; i < 4; i += 1) {
+    const infoOffset = seekHead.length;
+    const tracksOffset = seekHead.length + info.length;
+    const rebuilt = buildSeekHead(infoOffset, tracksOffset);
+    if (rebuilt.length === seekHead.length) break;
+    seekHead = rebuilt;
+  }
+
+  const segmentPayload = concatParts([seekHead, info, tracks]);
+  const segment = ebmlElement(0x18538067, segmentPayload);
+  const bytes = concatParts([ebmlHeader, segment]);
+  return new MockFile(bytes, "sample.webm", "video/webm");
+};
 
 export const createFb2File = () => {
   const xml = [

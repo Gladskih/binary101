@@ -20,6 +20,7 @@ import {
   createZipFile,
   createRar4File,
   createRar5File,
+  createWebmFile,
   createDosMzExe,
   createLnkFile
 } from "../fixtures/sample-files.js";
@@ -69,6 +70,7 @@ void test("detectBinaryType recognizes common binary formats", async () => {
     detectBinaryType(createSevenZipFile()),
     detectBinaryType(createRar5File()),
     detectBinaryType(createLnkFile()),
+    detectBinaryType(createWebmFile()),
     detectBinaryType(new MockFile(textEncoder.encode("plain text sample"), "note.txt", "text/plain"))
   ]);
 
@@ -81,7 +83,8 @@ void test("detectBinaryType recognizes common binary formats", async () => {
   assert.match(detections[6], /^7z archive v0\.4/);
   assert.match(detections[7], /^RAR archive/);
   assert.strictEqual(detections[8], "Windows shortcut (.lnk)");
-  assert.strictEqual(detections[9], "Text file");
+  assert.match(detections[9], /^WebM/);
+  assert.strictEqual(detections[10], "Text file");
 });
 
 void test("detectBinaryType distinguishes DOS MZ executables from PE", async () => {
@@ -173,6 +176,14 @@ void test("parseForUi parses TAR headers", async () => {
     assert.strictEqual(tar.isTar, true);
     assert.ok(Array.isArray(tar.entries));
     assert.ok(tar.entries[0]);
+  });
+});
+
+void test("parseForUi parses WebM metadata and tracks", async () => {
+  await assertParsed(createWebmFile(), "webm", webm => {
+    assert.strictEqual(webm.docType, "webm");
+    assert.ok(webm.segment?.info?.durationSeconds);
+    assert.ok(webm.segment?.tracks.length);
   });
 });
 

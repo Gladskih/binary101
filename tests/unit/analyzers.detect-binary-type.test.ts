@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { detectBinaryType } from "../../analyzers/index.js";
 import { MockFile } from "../helpers/mock-file.js";
-import { createMp3File } from "../fixtures/sample-files.js";
+import { createMp3File, createWebmFile } from "../fixtures/sample-files.js";
 
 const fromAscii = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "ascii"));
 
@@ -110,6 +110,12 @@ void test("detectBinaryType recognises MP3 streams even when frames are not at o
   const file = new MockFile(prefixed, "prefixed.mp3", "audio/mpeg");
   const label = await detectBinaryType(file);
   assert.strictEqual(label, "MPEG Version 1, Layer III, 128 kbps, 44100 Hz, Stereo");
+});
+
+void test("detectBinaryType reports WebM with track summary", async () => {
+  const label = await detectBinaryType(createWebmFile());
+  assert.ok(label.startsWith("WebM"));
+  assert.match(label, /video/i);
 });
 
 void test("detectBinaryType reports MP3 for minimal single-frame files", async () => {

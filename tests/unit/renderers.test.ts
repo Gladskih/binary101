@@ -15,6 +15,7 @@ import {
   renderPe,
   renderMz,
   renderPng,
+  renderWebm,
   renderSevenZip,
   renderTar,
   renderWebp,
@@ -37,6 +38,7 @@ import {
   createWebpFile,
   createZipFile,
   createRar5File,
+  createWebmFile,
   createDosMzExe,
   createLnkFile
 } from "../fixtures/sample-files.js";
@@ -86,6 +88,11 @@ void test("renderers produce readable HTML output", async () => {
   const webp = await parseOnly(createWebpFile(), "webp");
   const webpHtml = renderWebp(webp);
   assert.match(webpHtml, /WebP/);
+
+  const webm = await parseOnly(createWebmFile(), "webm");
+  const webmHtml = renderWebm(webm);
+  assert.match(webmHtml, /WebM/);
+  assert.match(webmHtml, /Tracks/);
 
   const fb2 = await parseOnly(createFb2File(), "fb2");
   const fb2Html = renderFb2(fb2);

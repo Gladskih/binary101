@@ -20,6 +20,8 @@ import { parsePdf } from "./pdf/index.js";
 import type { PdfParseResult } from "./pdf/types.js";
 import { parseWebp } from "./webp/index.js";
 import type { WebpParseResult } from "./webp/types.js";
+import { parseWebm, buildWebmLabel } from "./webm/index.js";
+import type { WebmParseResult } from "./webm/types.js";
 import { parseMp3, probeMp3 } from "./mp3/index.js";
 import type { Mp3ParseResult, Mp3SuccessResult } from "./mp3/types.js";
 import { hasSevenZipSignature, parseSevenZip, type SevenZipParseResult } from "./sevenz/index.js";
@@ -46,6 +48,7 @@ export type AnalyzerName =
   | "png"
   | "jpeg"
   | "webp"
+  | "webm"
   | "mp3";
 
 type AnalyzerParseMap = {
@@ -63,6 +66,7 @@ type AnalyzerParseMap = {
   png: PngParseResult;
   jpeg: JpegParseResult;
   webp: WebpParseResult;
+  webm: WebmParseResult;
   mp3: Mp3ParseResult;
 };
 
@@ -295,6 +299,12 @@ export async function detectBinaryType(file: File): Promise<string> {
       const version = detectPdfVersion(dv);
       if (version) return `PDF document (v${version})`;
     }
+    if (magic === "Matroska/WebM container") {
+      const webm = await parseWebm(file);
+      const label = buildWebmLabel(webm);
+      if (label) return label;
+      return magic;
+    }
     if (magic === "7z archive") {
       const sevenZip = await parseSevenZip(file);
       if (sevenZip?.is7z) {
@@ -468,6 +478,10 @@ export async function parseForUi(file: File): Promise<ParseForUiResult> {
       const parsedWebp = await parseWebp(file);
       if (parsedWebp) return { analyzer: "webp", parsed: parsedWebp };
     }
+  }
+  if (dv.byteLength >= 4 && dv.getUint32(0, false) === 0x1a45dfa3) {
+    const webm = await parseWebm(file);
+    if (webm) return { analyzer: "webm", parsed: webm };
   }
   if (probeMp3(dv)) {
     const mp3: Mp3ParseResult = await parseMp3(file);
