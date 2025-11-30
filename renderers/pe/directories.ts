@@ -89,6 +89,11 @@ export function renderExports(pe: PeParseResult, out: string[]): void {
   out.push(dd("Functions", String(ex.NumberOfFunctions), "Total entries in Export Address Table (including unnamed)."));
   out.push(dd("Names", String(ex.NumberOfNames), "Number of entries with names (Export Name Ptr & Ord tables)."));
   out.push(`</dl>`);
+  if (ex.issues?.length) {
+    out.push(`<ul class="smallNote">`);
+    ex.issues.forEach(issue => out.push(`<li>${safe(issue)}</li>`));
+    out.push(`</ul>`);
+  }
   if (ex.entries?.length) {
     out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show entries (${ex.entries.length})</summary>`);
     out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Ordinal</th><th>Name</th><th>RVA</th><th>Forwarder</th></tr></thead><tbody>`);

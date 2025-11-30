@@ -121,6 +121,62 @@ void test("parseExportDirectory stops at available function table size", async (
   assert.equal(definedResult.entries[7]?.rva, 0);
 });
 
+void test("parseExportDirectory truncates entries when EAT is shorter than NumberOfFunctions", async () => {
+  const bytes = new Uint8Array(0x48).fill(0); // 72 bytes
+  const dv = new DataView(bytes.buffer);
+  const expRva = 0x10;
+  dv.setUint32(expRva + 20, 10, true); // NumberOfFunctions claims 10
+  dv.setUint32(expRva + 28, 0x40, true); // AddressOfFunctions near buffer end
+  // Only two dwords fit at 0x40..0x47.
+  dv.setUint32(0x40, 0x1111, true);
+  dv.setUint32(0x44, 0x2222, true);
+
+  const result = await parseExportDirectory(
+    new MockFile(bytes, "exports-eat-trunc.bin"),
+    [{ name: "EXPORT", rva: expRva, size: 64 }],
+    value => value,
+    () => {}
+  );
+  const definedResult = expectDefined(result);
+  assert.equal(definedResult.entries.length, 2);
+  assert.equal(definedResult.entries[0]?.rva, 0x1111);
+  assert.equal(definedResult.entries[1]?.rva, 0x2222);
+});
+
+void test("parseExportDirectory ignores names beyond available name/ordinal tables", async () => {
+  const bytes = new Uint8Array(0xe0).fill(0); // 224 bytes
+  const dv = new DataView(bytes.buffer);
+  const expRva = 0x20;
+  dv.setUint32(expRva + 16, 1, true); // OrdinalBase
+  dv.setUint32(expRva + 20, 2, true); // NumberOfFunctions
+  dv.setUint32(expRva + 24, 3, true); // NumberOfNames claims 3
+  dv.setUint32(expRva + 28, 0x80, true); // AddressOfFunctions
+  dv.setUint32(expRva + 32, 0xd4, true); // AddressOfNames (only two entries fit)
+  dv.setUint32(expRva + 36, 0xdc, true); // AddressOfNameOrdinals (only two entries fit)
+  // Function RVAs
+  dv.setUint32(0x80, 0x1000, true);
+  dv.setUint32(0x84, 0x2000, true);
+  // Name pointer table (only 8 bytes available for two entries)
+  dv.setUint32(0xd4, 0xc0, true);
+  dv.setUint32(0xd8, 0x00, true);
+  // Ordinal table (only 4 bytes available for two entries)
+  dv.setUint16(0xdc, 0, true); // maps to first function
+  dv.setUint16(0xde, 1, true); // maps (empty) second name to second function
+  // Name string
+  encoder.encodeInto("OnlyName\0", new Uint8Array(bytes.buffer, 0xc0));
+
+  const result = await parseExportDirectory(
+    new MockFile(bytes, "exports-names-trunc.bin"),
+    [{ name: "EXPORT", rva: expRva, size: 80 }],
+    value => value,
+    () => {}
+  );
+  const definedResult = expectDefined(result);
+  assert.equal(definedResult.entries.length, 2);
+  assert.equal(definedResult.entries[0]?.name, "OnlyName");
+  assert.ok(definedResult.entries[1]?.name === null || definedResult.entries[1]?.name === "");
+});
+
 void test("parseImportDirectory reports warning on truncated thunk table", async () => {
   const bytes = new Uint8Array(128).fill(0);
   const dv = new DataView(bytes.buffer);

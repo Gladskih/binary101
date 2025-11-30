@@ -73,6 +73,10 @@ export async function parseExportDirectory(
         .slice(funcTableOff, funcTableOff + NumberOfFunctions * 4)
         .arrayBuffer()
     );
+    const maxFuncs = Math.min(NumberOfFunctions, Math.floor(funcTable.byteLength / 4));
+    if (maxFuncs < NumberOfFunctions) {
+      issues.push("Export address table is truncated; some function RVAs are missing.");
+    }
     const nameTable =
       nameTableOff != null
         ? new DataView(await file.slice(nameTableOff, nameTableOff + NumberOfNames * 4).arrayBuffer())
@@ -88,6 +92,9 @@ export async function parseExportDirectory(
         Math.floor(nameTable.byteLength / 4),
         Math.floor(ordTable.byteLength / 2)
       );
+      if (maxNames < NumberOfNames) {
+        issues.push("Export name/ordinal tables are truncated; some names are missing.");
+      }
       for (let nameIndex = 0; nameIndex < maxNames; nameIndex += 1) {
         const nameRva = nameTable.getUint32(nameIndex * 4, true);
         const funcIndex = ordTable.getUint16(nameIndex * 2, true);
@@ -97,7 +104,6 @@ export async function parseExportDirectory(
         }
       }
     }
-    const maxFuncs = Math.min(NumberOfFunctions, Math.floor(funcTable.byteLength / 4));
     for (let idx = 0; idx < maxFuncs; idx += 1) {
       const funcRva = funcTable.getUint32(idx * 4, true);
       const funcName: string | null = functionNames.get(idx) ?? null;
