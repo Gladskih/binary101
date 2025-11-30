@@ -2,7 +2,7 @@
 
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
-import type { WebmParseResult, WebmSeekHead, WebmTrack } from "../../analyzers/webm/types.js";
+import type { WebmCues, WebmParseResult, WebmSeekHead, WebmTrack } from "../../analyzers/webm/types.js";
 
 const renderIssues = (issues: string[] | null | undefined): string => {
   if (!issues || issues.length === 0) return "";
@@ -100,6 +100,40 @@ const renderSeekHead = (seekHead: WebmSeekHead | null | undefined): string => {
   );
 };
 
+const renderCues = (cues: WebmCues | null | undefined): string => {
+  if (!cues || cues.cuePoints.length === 0) return "";
+  const rows = cues.cuePoints
+    .map((cue, index) => {
+      const time =
+        cue.timecodeSeconds != null
+          ? `${cue.timecodeSeconds} s`
+          : cue.timecode != null
+            ? String(cue.timecode)
+            : "-";
+      const positions = cue.positions
+        .map(position => {
+          const track = position.track != null ? `Track ${position.track}` : "Track ?";
+          const cluster = position.clusterPosition != null ? `@ ${position.clusterPosition}` : "@ -";
+          return `${track} ${cluster}`;
+        })
+        .join("; ");
+      return (
+        "<tr>" +
+        `<td>${index + 1}</td>` +
+        `<td>${escapeHtml(time)}</td>` +
+        `<td>${escapeHtml(positions || "-")}</td>` +
+        "</tr>"
+      );
+    })
+    .join("");
+  const truncated = cues.truncated ? '<p class="dim">Cues section truncated.</p>' : "";
+  return (
+    "<h4>Cues</h4>" +
+    '<table class="byteView"><thead><tr><th>#</th><th>Time</th><th>Positions</th></tr></thead>' +
+    `<tbody>${rows}</tbody></table>${truncated}`
+  );
+};
+
 export function renderWebm(webm: WebmParseResult | null | unknown): string {
   const data = webm as WebmParseResult | null;
   if (!data) return "";
@@ -157,6 +191,7 @@ export function renderWebm(webm: WebmParseResult | null | unknown): string {
   }
   out.push("</dl>");
   out.push(renderTracks(segment?.tracks));
+  out.push(renderCues(segment?.cues));
   out.push(renderSeekHead(segment?.seekHead));
   out.push(renderIssues(data.issues));
   return out.join("");

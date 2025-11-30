@@ -1,0 +1,52 @@
+"use strict";
+
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { parseSegment } from "../../analyzers/webm/segment.js";
+import { readElementAt } from "../../analyzers/webm/ebml.js";
+import { createWebmFile, createWebmWithAttachments } from "../fixtures/sample-files.js";
+
+const parseTracksFromFixture = async () => {
+  const file = createWebmFile();
+  const issues: string[] = [];
+  const ebmlHeader = await readElementAt(file, 0, issues);
+  assert.ok(ebmlHeader);
+  assert.notStrictEqual(ebmlHeader?.size, null);
+  const segOffset = ebmlHeader!.dataOffset + (ebmlHeader!.size as number);
+  const segmentHeader = await readElementAt(file, segOffset, issues);
+  assert.ok(segmentHeader);
+  const segment = await parseSegment(file, segmentHeader, issues, "webm");
+  return { tracks: segment.tracks, issues };
+};
+
+void test("parseSegment wires track flags and pixel crop", async () => {
+  const { tracks, issues } = await parseTracksFromFixture();
+  const video = tracks.find(track => track.trackType === 1);
+  assert.ok(video);
+  assert.strictEqual(video?.flagDefault, true);
+  assert.strictEqual(video?.flagEnabled, true);
+  assert.ok(video?.video?.pixelCrop?.top === 1);
+  assert.ok(issues.some(msg => msg.toLowerCase().includes("cues")));
+});
+
+void test("parseSegment defaults missing language to und", async () => {
+  const { tracks } = await parseTracksFromFixture();
+  const audio = tracks.find(track => track.trackType === 2);
+  assert.ok(audio);
+  assert.strictEqual(audio?.language, "und");
+  assert.strictEqual(audio?.languageDefaulted, true);
+});
+
+void test("parseSegment warns on attachments in strict WebM", async () => {
+  const file = createWebmWithAttachments();
+  const issues: string[] = [];
+  const ebmlHeader = await readElementAt(file, 0, issues);
+  assert.ok(ebmlHeader);
+  assert.notStrictEqual(ebmlHeader?.size, null);
+  const segOffset = ebmlHeader!.dataOffset + (ebmlHeader!.size as number);
+  const segmentHeader = await readElementAt(file, segOffset, issues);
+  assert.ok(segmentHeader);
+  const segment = await parseSegment(file, segmentHeader, issues, "webm");
+  assert.ok(segment);
+  assert.ok(issues.some(msg => msg.toLowerCase().includes("attachments")));
+});

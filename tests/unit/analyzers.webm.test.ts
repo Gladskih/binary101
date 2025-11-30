@@ -29,8 +29,8 @@ void test("parseWebm reads EBML header, info and tracks", async () => {
   assert.strictEqual(audioTrack?.languageDefaulted, true);
   const label = buildWebmLabel(parsed);
   assert.ok(label);
-  assert.match(label ?? "", /WebM/);
-  assert.match(label ?? "", /video/);
+  assert.match(label as string, /WebM/);
+  assert.match(label as string, /video/);
   assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("cues")));
 });
 

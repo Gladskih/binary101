@@ -1,0 +1,21 @@
+{
+  "all": true,
+  "excludeAfterRemap": true,
+  "src": [
+    "analyzers",
+    "renderers",
+    "app.ts",
+    "binary-utils.ts",
+    "html-utils.ts",
+    "media-preview.ts"
+  ],
+  "exclude": [
+    "playwright.config.mjs",
+    "eslint.config.mjs",
+    "tests/e2e/**",
+    "**/types.ts",
+    "**/*types.ts",
+    "scripts/**",
+    "tests/external/**"
+  ]
+}

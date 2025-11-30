@@ -64,6 +64,24 @@ export interface WebmTrack {
   audio: WebmTrackAudio | null;
 }
 
+export interface WebmCueTrackPosition {
+  track: number | null;
+  clusterPosition: number | null;
+  relativePosition: number | null;
+  blockNumber: number | null;
+}
+
+export interface WebmCuePoint {
+  timecode: number | null;
+  timecodeSeconds: number | null;
+  positions: WebmCueTrackPosition[];
+}
+
+export interface WebmCues {
+  cuePoints: WebmCuePoint[];
+  truncated: boolean;
+}
+
 export interface WebmSeekEntry {
   id: number;
   name: string;
@@ -84,6 +102,7 @@ export interface WebmSegment {
   info: WebmInfo | null;
   tracks: WebmTrack[];
   seekHead: WebmSeekHead | null;
+  cues: WebmCues | null;
   scannedElements: Array<{ id: number; offset: number; size: number | null }>;
   scanLimit: number;
 }
@@ -96,3 +115,5 @@ export interface WebmParseResult {
   segment: WebmSegment | null;
   issues: string[];
 }
+
+export type Issues = string[];

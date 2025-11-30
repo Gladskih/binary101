@@ -1,0 +1,33 @@
+"use strict";
+
+export const EBML_ID = 0x1a45dfa3;
+export const SEGMENT_ID = 0x18538067;
+export const INFO_ID = 0x1549a966;
+export const TRACKS_ID = 0x1654ae6b;
+export const TRACK_ENTRY_ID = 0xae;
+export const SEEK_HEAD_ID = 0x114d9b74;
+export const SEEK_ENTRY_ID = 0x4dbb;
+export const SEEK_ID_ID = 0x53ab;
+export const SEEK_POSITION_ID = 0x53ac;
+export const CUES_ID = 0x1c53bb6b;
+export const ATTACHMENTS_ID = 0x1941a469;
+export const TAGS_ID = 0x1254c367;
+export const CHAPTERS_ID = 0x1043a770;
+export const CUE_POINT_ID = 0xbb;
+export const CUE_TIME_ID = 0xb3;
+export const CUE_TRACK_POSITIONS_ID = 0xb7;
+export const CUE_TRACK_ID = 0xf7;
+export const CUE_CLUSTER_POSITION_ID = 0xf1;
+export const CUE_RELATIVE_POSITION_ID = 0xf0;
+export const CUE_BLOCK_NUMBER_ID = 0x5378;
+export const VIDEO_ID = 0xe0;
+export const AUDIO_ID = 0xe1;
+
+export const EBML_DATE_EPOCH_MS = Date.UTC(2001, 0, 1, 0, 0, 0);
+export const MAX_ELEMENT_HEADER = 12;
+export const MAX_EBML_HEADER_BYTES = 65536;
+export const INITIAL_SCAN_BYTES = 1024 * 1024;
+export const MAX_INFO_BYTES = 256 * 1024;
+export const MAX_TRACKS_BYTES = 1024 * 1024;
+export const MAX_SEEK_BYTES = 256 * 1024;
+export const MAX_CUES_BYTES = 1024 * 1024;
