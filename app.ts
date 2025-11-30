@@ -100,13 +100,12 @@ function buildPreviewHtml(): PreviewRender | null {
   const fallbackText = currentFile.name
     ? `Your browser cannot play this video inline: ${currentFile.name}.`
     : "Your browser cannot play this video inline.";
-  const sourceTypeAttr = previewCandidate.mimeType ? ` type="${previewCandidate.mimeType}"` : "";
   return {
     kind: "video",
     html: [
       '<div class="videoPreview">',
       '<video controls preload="metadata" playsinline>',
-      `<source src="${currentPreviewUrl}"${sourceTypeAttr}>`,
+      `<source src="${currentPreviewUrl}"${previewCandidate.mimeType ? ` type="${previewCandidate.mimeType}"` : ""}>`,
       escapeHtml(fallbackText),
       "</video>",
       "</div>"
@@ -240,6 +239,25 @@ function renderAnalysisIntoUi(result: ParseForUiResult): void {
     peDetailsTermElement.hidden = false;
     peDetailsValueElement.hidden = false;
     peDetailsValueElement.innerHTML = preview.html;
+    if (preview.kind === "video") {
+      const videoElement = peDetailsValueElement.querySelector(".videoPreview video") as HTMLVideoElement | null;
+      if (videoElement) {
+        const removePreview = (): void => {
+          const container = videoElement.closest(".videoPreview") as HTMLElement | null;
+          if (container?.parentElement) container.parentElement.removeChild(container);
+          setStatusMessage("Preview not shown: browser cannot play this video format inline.");
+        };
+        const onSuccess = (): void => {
+          videoElement.removeEventListener("error", removePreview);
+          videoElement.removeEventListener("stalled", removePreview);
+          videoElement.removeEventListener("abort", removePreview);
+        };
+        videoElement.addEventListener("loadedmetadata", onSuccess, { once: true });
+        ["error", "stalled", "abort"].forEach(eventName => {
+          videoElement.addEventListener(eventName, removePreview, { once: true });
+        });
+      }
+    }
     return;
   }
 
@@ -360,33 +378,43 @@ function resetHashDisplay(): void {
 async function showFileInfo(file: File, sourceDescription: string): Promise<void> {
   currentFile = file;
   currentParseResult = { analyzer: null, parsed: null };
-  const typeLabel = await detectBinaryType(file);
-  currentTypeLabel = typeLabel || "";
-  const timestampIso = nowIsoString();
-  const sizeText = formatHumanSize(file.size);
-  const mimeType =
-    typeof file.type === "string" && file.type.length > 0
-      ? file.type
-      : "Not provided by browser";
+  try {
+    const typeLabel = await detectBinaryType(file);
+    currentTypeLabel = typeLabel || "";
+    const timestampIso = nowIsoString();
+    const sizeText = formatHumanSize(file.size);
+    const mimeType =
+      typeof file.type === "string" && file.type.length > 0
+        ? file.type
+        : "Not provided by browser";
 
-  fileNameTopElement.textContent = file.name || "";
-  fileSizeTopElement.textContent = sizeText;
-  fileKindTopElement.textContent = typeLabel;
+    fileNameTopElement.textContent = file.name || "";
+    fileSizeTopElement.textContent = sizeText;
+    fileKindTopElement.textContent = typeLabel;
 
-  fileNameDetailElement.textContent = file.name || "";
-  fileSizeDetailElement.textContent = sizeText;
-  fileTimestampDetailElement.textContent = timestampIso;
-  fileSourceDetailElement.textContent = sourceDescription;
-  fileBinaryTypeDetailElement.textContent = typeLabel;
-  fileMimeTypeDetailElement.textContent = mimeType;
+    fileNameDetailElement.textContent = file.name || "";
+    fileSizeDetailElement.textContent = sizeText;
+    fileTimestampDetailElement.textContent = timestampIso;
+    fileSourceDetailElement.textContent = sourceDescription;
+    fileBinaryTypeDetailElement.textContent = typeLabel;
+    fileMimeTypeDetailElement.textContent = mimeType;
 
-  const parsedResult = await parseForUi(file);
-  currentParseResult = parsedResult;
-  renderAnalysisIntoUi(parsedResult);
+    const parsedResult = await parseForUi(file);
+    currentParseResult = parsedResult;
+    renderAnalysisIntoUi(parsedResult);
 
-  resetHashDisplay();
-  fileInfoCardElement.hidden = false;
-  clearStatusMessage();
+    resetHashDisplay();
+    fileInfoCardElement.hidden = false;
+    clearStatusMessage();
+  } catch (error) {
+    currentTypeLabel = "";
+    setStatusMessage(
+      `Unable to read file: ${error instanceof Error && error.message ? error.message : String(error)}`
+    );
+    peDetailsTermElement.hidden = true;
+    peDetailsValueElement.hidden = true;
+    peDetailsValueElement.innerHTML = "";
+  }
 }
 
 const handleSelectedFiles = (files: FileList | null): void => {

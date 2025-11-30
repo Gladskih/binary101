@@ -95,6 +95,74 @@ function findFirstFrameWithFallback(
 
 export function probeMp3(dv: DataView): boolean {
   if (dv.byteLength < 3) return false;
+  // Avoid misclassifying common video/container headers as MP3.
+  if (dv.byteLength >= 4) {
+    const sig = dv.getUint32(0, false);
+    if (sig === 0x000001ba || sig === 0x000001bb) return false; // MPEG PS pack/stream
+    if (sig === 0x1a45dfa3) return false; // Matroska/WebM
+  }
+  if (dv.byteLength >= 12) {
+    const riff = dv.getUint32(0, false);
+    const avi = dv.getUint32(8, false);
+    if (riff === 0x52494646 && avi === 0x41564920) return false; // RIFF AVI
+    const ftyp = dv.getUint32(4, false);
+    const brand = dv.getUint32(8, false);
+    if (ftyp === 0x66747970) {
+      if (
+        brand === 0x33677034 || // 3gp4
+        brand === 0x33677035 || // 3gp5
+        brand === 0x33677036 || // 3gp6
+        brand === 0x6d703431 || // mp41
+        brand === 0x6d703432 || // mp42
+        brand === 0x71742020 // qt
+      ) {
+        return false; // ISO-BMFF (likely audio/video container)
+      }
+    }
+  }
+  const packetSize = 188;
+  if (dv.byteLength >= packetSize * 3) {
+    if (
+      dv.getUint8(0) === 0x47 &&
+      dv.getUint8(packetSize) === 0x47 &&
+      dv.getUint8(packetSize * 2) === 0x47
+    ) {
+      return false; // MPEG TS
+    }
+  }
+  if (dv.byteLength >= 16) {
+    const b0 = dv.getUint8(0);
+    const b1 = dv.getUint8(1);
+    const b2 = dv.getUint8(2);
+    const b3 = dv.getUint8(3);
+    const b4 = dv.getUint8(4);
+    const b5 = dv.getUint8(5);
+    const b6 = dv.getUint8(6);
+    const b7 = dv.getUint8(7);
+    const b8 = dv.getUint8(8);
+    const b9 = dv.getUint8(9);
+    const b10 = dv.getUint8(10);
+    const b11 = dv.getUint8(11);
+    const b12 = dv.getUint8(12);
+    const b13 = dv.getUint8(13);
+    const b14 = dv.getUint8(14);
+    const b15 = dv.getUint8(15);
+    if (
+      b0 === 0x30 && b1 === 0x26 && b2 === 0xb2 && b3 === 0x75 &&
+      b4 === 0x8e && b5 === 0x66 && b6 === 0xcf && b7 === 0x11 &&
+      b8 === 0xa6 && b9 === 0xd9 && b10 === 0x00 && b11 === 0xaa &&
+      b12 === 0x00 && b13 === 0x62 && b14 === 0xce && b15 === 0x6c
+    ) {
+      return false; // ASF/WMV/WMA
+    }
+  }
+  if (dv.byteLength >= 3) {
+    const flvSig =
+      String.fromCharCode(dv.getUint8(0)) +
+      String.fromCharCode(dv.getUint8(1)) +
+      String.fromCharCode(dv.getUint8(2));
+    if (flvSig === "FLV") return false;
+  }
   if (dv.getUint8(0) === 0x49 && dv.getUint8(1) === 0x44 && dv.getUint8(2) === 0x33) {
     return true;
   }

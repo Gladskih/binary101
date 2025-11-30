@@ -119,6 +119,17 @@ void test("detectBinaryType reports MP3 for minimal single-frame files", async (
   assert.strictEqual(label, "MPEG Version 1, Layer III, 128 kbps, 44100 Hz, Stereo");
 });
 
+void test("detectBinaryType does not mislabel MPEG Program Stream as MP3", async () => {
+  const bytes = new Uint8Array(64).fill(0);
+  // MPEG PS pack start code 0x000001ba
+  bytes[0] = 0x00;
+  bytes[1] = 0x00;
+  bytes[2] = 0x01;
+  bytes[3] = 0xba;
+  const label = await detectBinaryType(new MockFile(bytes, "sample.mpg", "video/mpeg"));
+  assert.strictEqual(label, "MPEG Program Stream (MPG)");
+});
+
 void test("detectBinaryType rejects MP3 label when second frame is invalid", async () => {
   const full = createMp3File();
   const firstFrameLength = full.data.length / 2;
