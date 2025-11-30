@@ -177,3 +177,23 @@ void test("parseImportDirectory warns on unmapped thunk RVA (x86)", async () => 
   assert.ok(entries.length >= 0);
   assert.ok(warning && /thunk rva/i.test(warning));
 });
+
+void test("parseImportDirectory aggregates multiple warnings", async () => {
+  const bytes = new Uint8Array(64).fill(0);
+  const impBase = 0x10;
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(impBase + 12, 0x200, true); // bad name RVA
+  dv.setUint32(impBase + 16, 0x300, true); // bad thunk RVA
+  // Also truncate descriptor by limiting size.
+
+  const { warning } = await parseImportDirectory(
+    new MockFile(bytes),
+    [{ name: "IMPORT", rva: impBase, size: 16 }],
+    value => (value < bytes.length ? value : null),
+    () => {},
+    false
+  );
+  assert.ok(warning);
+  assert.ok(/name rva/i.test(warning));
+  assert.ok(/thunk rva/i.test(warning));
+});
