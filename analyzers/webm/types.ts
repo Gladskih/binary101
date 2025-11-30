@@ -28,6 +28,12 @@ export interface WebmTrackVideo {
   displayHeight: number | null;
   stereoMode: number | null;
   alphaMode: number | null;
+  pixelCrop?: {
+    top: number | null;
+    bottom: number | null;
+    left: number | null;
+    right: number | null;
+  };
 }
 
 export interface WebmTrackAudio {
@@ -44,6 +50,7 @@ export interface WebmTrack {
   trackTypeLabel: string;
   name: string | null;
   language: string | null;
+  languageDefaulted?: boolean;
   codecId: string | null;
   codecName: string | null;
   defaultDuration: number | null;

@@ -20,6 +20,10 @@ const SEEK_HEAD_ID = 0x114d9b74;
 const SEEK_ENTRY_ID = 0x4dbb;
 const SEEK_ID_ID = 0x53ab;
 const SEEK_POSITION_ID = 0x53ac;
+const CUES_ID = 0x1c53bb6b;
+const ATTACHMENTS_ID = 0x1941a469;
+const TAGS_ID = 0x1254c367;
+const CHAPTERS_ID = 0x1043a770;
 const VIDEO_ID = 0xe0;
 const AUDIO_ID = 0xe1;
 
@@ -104,6 +108,27 @@ const readVint = (dv: DataView, offset: number): Vint | null => {
   const data = value & (marker - 1n);
   const unknown = data === marker - 1n;
   return { length, value, data, unknown };
+};
+
+const validateDocTypeCompatibility = (
+  issues: Issues,
+  docTypeLower: string,
+  header: WebmParseResult["ebmlHeader"]
+): void => {
+  if (!docTypeLower) return;
+  if (header.docTypeReadVersion != null && header.docTypeVersion != null) {
+    if (header.docTypeReadVersion > header.docTypeVersion) {
+      issues.push("DocTypeReadVersion is greater than DocTypeVersion.");
+    }
+  }
+  if (docTypeLower === "webm") {
+    if (header.docTypeReadVersion != null && header.docTypeReadVersion > 2) {
+      issues.push("DocTypeReadVersion exceeds WebM spec (should be <= 2).");
+    }
+    if (header.docTypeVersion != null && header.docTypeVersion > 4) {
+      issues.push("DocTypeVersion exceeds WebM spec (should be <= 4).");
+    }
+  }
 };
 
 const readElementHeader = (
@@ -444,6 +469,7 @@ const parseVideo = (
   };
   let cursor = 0;
   const limit = Math.min(size, dv.byteLength - offset);
+  const pixelCrop = { top: null as number | null, bottom: null as number | null, left: null as number | null, right: null as number | null };
   while (cursor < limit) {
     const header = readElementHeader(dv, offset + cursor, absoluteOffset + cursor, issues);
     if (!header || header.headerSize === 0) break;
@@ -467,9 +493,24 @@ const parseVideo = (
     } else if (header.id === 0x53c0 && available > 0) {
       const value = readUnsigned(dv, dataStart, available, issues, "AlphaMode");
       video.alphaMode = value != null ? Number(value) : null;
+    } else if (header.id === 0x54aa && available > 0) {
+      const value = readUnsigned(dv, dataStart, available, issues, "PixelCropBottom");
+      pixelCrop.bottom = value != null ? Number(value) : null;
+    } else if (header.id === 0x54bb && available > 0) {
+      const value = readUnsigned(dv, dataStart, available, issues, "PixelCropTop");
+      pixelCrop.top = value != null ? Number(value) : null;
+    } else if (header.id === 0x54cc && available > 0) {
+      const value = readUnsigned(dv, dataStart, available, issues, "PixelCropLeft");
+      pixelCrop.left = value != null ? Number(value) : null;
+    } else if (header.id === 0x54dd && available > 0) {
+      const value = readUnsigned(dv, dataStart, available, issues, "PixelCropRight");
+      pixelCrop.right = value != null ? Number(value) : null;
     }
     if (header.size == null) break;
     cursor += header.headerSize + header.size;
+  }
+  if (pixelCrop.top !== null || pixelCrop.bottom !== null || pixelCrop.left !== null || pixelCrop.right !== null) {
+    video.pixelCrop = pixelCrop;
   }
   return video;
 };
@@ -579,10 +620,21 @@ const parseTrackEntry = (
     } else if (header.id === 0x23e383 && available > 0) {
       const value = readUnsigned(dv, dataStart, available, issues, "DefaultDuration");
       if (value != null) {
-        const asNumber = toSafeNumber(value, issues, "DefaultDuration");
-        track.defaultDuration = asNumber;
-        if (asNumber && asNumber > 0) {
-          track.defaultDurationFps = Math.round((1e9 / asNumber) * 100) / 100;
+        let numeric: number | null = null;
+        const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
+        if (value > maxSafe) {
+          if (header.size != null && header.size <= 8) {
+            numeric = Number(value & 0xffffffffn);
+            issues.push("DefaultDuration is larger than safe range; using low 32 bits.");
+          } else {
+            issues.push("DefaultDuration is too large to represent precisely.");
+          }
+        } else {
+          numeric = Number(value);
+        }
+        track.defaultDuration = numeric;
+        if (numeric && numeric > 0) {
+          track.defaultDurationFps = Math.round((1e9 / numeric) * 100) / 100;
         }
       }
     } else if (header.id === 0xb9 && available > 0) {
@@ -606,6 +658,10 @@ const parseTrackEntry = (
     }
     if (header.size == null) break;
     cursor += header.headerSize + header.size;
+  }
+  if (!track.language) {
+    track.language = "und";
+    track.languageDefaulted = true;
   }
   return track;
 };
@@ -658,7 +714,8 @@ const pickElement = (
 const parseSegment = async (
   file: File,
   segmentHeader: EbmlElementHeader,
-  issues: Issues
+  issues: Issues,
+  docTypeLower: string
 ): Promise<WebmSegment> => {
   const segmentSize = segmentHeader.size ?? Math.max(0, file.size - segmentHeader.dataOffset);
   const segment: WebmSegment = {
@@ -723,6 +780,20 @@ const parseSegment = async (
     );
   }
 
+  const ids = new Set(scan.scanned.map(element => element.id));
+  const hasCues = ids.has(CUES_ID);
+  const hasAttachments = ids.has(ATTACHMENTS_ID);
+  const hasTags = ids.has(TAGS_ID);
+  const hasChapters = ids.has(CHAPTERS_ID);
+  if (!hasCues) {
+    issues.push("Cues element not found; seeking metadata may be missing.");
+  }
+  if (docTypeLower === "webm") {
+    if (hasAttachments) issues.push("Attachments element present; invalid for WebM.");
+    if (hasTags) issues.push("Tags element present; invalid for WebM.");
+    if (hasChapters) issues.push("Chapters element present; invalid for WebM.");
+  }
+
   return segment;
 };
 
@@ -748,6 +819,8 @@ export async function parseWebm(file: File): Promise<WebmParseResult | null> {
   const ebmlHeader = await readElementAt(file, 0, issues);
   if (!ebmlHeader || ebmlHeader.id !== EBML_ID) return null;
   const { ebmlHeader: headerInfo, docType } = await parseEbmlHeader(file, ebmlHeader, issues);
+  const docTypeLower = docType ? docType.toLowerCase() : "";
+  validateDocTypeCompatibility(issues, docTypeLower, headerInfo);
   const segmentOffset =
     ebmlHeader.size != null ? ebmlHeader.dataOffset + ebmlHeader.size : ebmlHeader.dataOffset;
   const segmentHeader = await readElementAt(file, segmentOffset, issues);
@@ -762,8 +835,8 @@ export async function parseWebm(file: File): Promise<WebmParseResult | null> {
       issues
     };
   }
-  const segment = await parseSegment(file, segmentHeader, issues);
-  const lowerDoc = docType ? docType.toLowerCase() : "";
+  const segment = await parseSegment(file, segmentHeader, issues, docTypeLower);
+  const lowerDoc = docTypeLower;
   return {
     isWebm: lowerDoc === "webm",
     isMatroska: lowerDoc === "matroska",
