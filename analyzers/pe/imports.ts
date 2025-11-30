@@ -38,6 +38,9 @@ export async function parseImportDirectory(
   if (start == null || start >= file.size) return { entries: imports };
   addCoverageRegion("IMPORT directory", start, impDir.size);
   const maxDescriptors = Math.max(1, Math.floor(impDir.size / 20));
+  const setWarning = (msg: string): void => {
+    if (!warning) warning = msg;
+  };
   for (let index = 0; index < maxDescriptors; index += 1) {
     const offset = start + index * 20;
     const desc = new DataView(await file.slice(offset, offset + 20).arrayBuffer());
@@ -54,11 +57,15 @@ export async function parseImportDirectory(
     if (nameOffset != null) {
       const dv = new DataView(await file.slice(nameOffset, nameOffset + 256).arrayBuffer());
       dllName = readAsciiString(dv, 0, 256);
+    } else if (nameRva) {
+      setWarning("Import name RVA does not map to file data.");
     }
     const thunkRva = originalFirstThunk || firstThunk;
     const thunkOffset = rvaToOff(thunkRva);
     const functions: PeImportFunction[] = [];
-    if (thunkOffset != null) {
+    if (thunkOffset == null) {
+      if (thunkRva) setWarning("Import thunk RVA does not map to file data.");
+    } else {
       if (isPlus) {
         for (let t = 0; t < 8 * 16384; t += 8) {
           const dv = new DataView(await file.slice(thunkOffset + t, thunkOffset + t + 8).arrayBuffer());

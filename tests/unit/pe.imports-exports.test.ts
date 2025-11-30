@@ -141,3 +141,39 @@ void test("parseImportDirectory reports warning on truncated thunk table", async
   assert.ok(entries.length >= 0);
   assert.ok(warning && /truncated/i.test(warning));
 });
+
+void test("parseImportDirectory warns on unmapped name RVA", async () => {
+  const bytes = new Uint8Array(128).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const impBase = 0x10;
+  dv.setUint32(impBase + 12, 0x200, true); // Name RVA outside file
+  dv.setUint32(impBase + 16, 0, true); // FirstThunk
+
+  const { warning } = await parseImportDirectory(
+    new MockFile(bytes),
+    [{ name: "IMPORT", rva: impBase, size: 40 }],
+    value => (value < bytes.length ? value : null),
+    () => {},
+    false
+  );
+  assert.ok(warning && /name rva/i.test(warning));
+});
+
+void test("parseImportDirectory warns on unmapped thunk RVA (x86)", async () => {
+  const bytes = new Uint8Array(128).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const impBase = 0x10;
+  dv.setUint32(impBase + 12, 0x40, true); // Name RVA valid
+  dv.setUint32(impBase + 16, 0x200, true); // FirstThunk outside file
+  encoder.encodeInto("KERNEL32.dll\0", new Uint8Array(bytes.buffer, 0x40));
+
+  const { entries, warning } = await parseImportDirectory(
+    new MockFile(bytes),
+    [{ name: "IMPORT", rva: impBase, size: 40 }],
+    value => (value < bytes.length ? value : null),
+    () => {},
+    false
+  );
+  assert.ok(entries.length >= 0);
+  assert.ok(warning && /thunk rva/i.test(warning));
+});
