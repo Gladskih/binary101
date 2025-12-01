@@ -4,7 +4,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseSegment } from "../../analyzers/webm/segment.js";
 import { readElementAt } from "../../analyzers/webm/ebml.js";
-import { createWebmFile, createWebmWithAttachments, createWebmWithCues } from "../fixtures/sample-files.js";
+import {
+  createWebmFile,
+  createWebmWithAttachments,
+  createWebmWithCues,
+  createWebmWithInvalidCodecs
+} from "../fixtures/sample-files.js";
 
 const parseTracksFromFixture = async () => {
   const file = createWebmFile();
@@ -75,4 +80,22 @@ void test("parseSegment warns on attachments in strict WebM", async () => {
   const segment = await parseSegment(file, segmentHeader, issues, "webm");
   assert.ok(segment);
   assert.ok(issues.some(msg => msg.toLowerCase().includes("attachments")));
+});
+
+void test("parseSegment flags invalid WebM codec IDs", async () => {
+  const file = createWebmWithInvalidCodecs();
+  const issues: string[] = [];
+  const ebmlHeader = await readElementAt(file, 0, issues);
+  assert.ok(ebmlHeader);
+  assert.notStrictEqual(ebmlHeader?.size, null);
+  const segOffset = ebmlHeader!.dataOffset + (ebmlHeader!.size as number);
+  const segmentHeader = await readElementAt(file, segOffset, issues);
+  assert.ok(segmentHeader);
+  const segment = await parseSegment(file, segmentHeader, issues, "webm");
+  const video = segment.tracks.find(track => track.trackType === 1);
+  const audio = segment.tracks.find(track => track.trackType === 2);
+  assert.strictEqual(video?.codecIdValidForWebm, false);
+  assert.strictEqual(audio?.codecIdValidForWebm, false);
+  assert.ok(issues.some(msg => msg.includes("V_MS/VFW/FOURCC")));
+  assert.ok(issues.some(msg => msg.includes("A_MPEG/L3")));
 });

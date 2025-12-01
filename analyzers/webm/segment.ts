@@ -223,6 +223,18 @@ export const parseSegment = async (
       segment.tracks = await parseTracks(file, resolved, issues);
     }
   }
+  if (docTypeLower === "webm") {
+    const allowed = new Set(["V_VP8", "V_VP9", "V_AV1", "A_VORBIS", "A_OPUS"]);
+    for (const track of segment.tracks) {
+      if (track.codecId) {
+        const isAllowed = allowed.has(track.codecId);
+        track.codecIdValidForWebm = isAllowed;
+        if (!isAllowed) {
+          issues.push(`CodecID ${track.codecId} is not allowed in WebM.`);
+        }
+      }
+    }
+  }
 
   let cuesHeader: EbmlElementHeader | null = null;
   const scannedCue = scan.scanned.find(element => element.id === CUES_ID);

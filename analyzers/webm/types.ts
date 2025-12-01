@@ -53,6 +53,7 @@ export interface WebmTrack {
   languageDefaulted?: boolean;
   codecId: string | null;
   codecName: string | null;
+  codecIdValidForWebm?: boolean;
   defaultDuration: number | null;
   defaultDurationFps: number | null;
   codecPrivateSize: number | null;
