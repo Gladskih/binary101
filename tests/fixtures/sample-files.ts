@@ -157,6 +157,16 @@ const ebmlUInt = (id: number, value: number, width = 0): Uint8Array =>
 const ebmlFloat = (id: number, value: number, width = 8): Uint8Array =>
   ebmlElement(id, encodeEbmlFloat(value, width));
 
+const simpleBlock = (track: number, timecode: number, flags: number, payload: Uint8Array): Uint8Array => {
+  const out = new Uint8Array(1 + 2 + 1 + payload.length);
+  out[0] = 0x80 | (track & 0x7f);
+  const tc = new DataView(out.buffer, out.byteOffset + 1, 2);
+  tc.setInt16(0, timecode, false);
+  out[3] = flags;
+  out.set(payload, 4);
+  return ebmlElement(0xa3, out);
+};
+
 const writeGuid = (buffer: Uint8Array, offset: number, guidText: string): void => {
   const parts = guidText.split("-");
   const [data1Text, data2Text, data3Text, tailStart, tailEnd] = parts;
@@ -426,7 +436,12 @@ export const createWebmWithCues = () => {
     return ebmlElement(0x1c53bb6b, cuesPayload);
   };
 
-  const cluster = ebmlElement(0x1f43b675, ebmlUInt(0xe7, 0, 1));
+  const clusterBlocks = concatParts([
+    ebmlUInt(0xe7, 0, 1),
+    simpleBlock(1, 0, 0x80, new Uint8Array([0x00])),
+    simpleBlock(2, 100, 0x00, new Uint8Array([0x00]))
+  ]);
+  const cluster = ebmlElement(0x1f43b675, clusterBlocks);
 
   const buildSeekHead = (infoOffset: number, tracksOffset: number, cuesOffset: number) => {
     const seekInfo = ebmlElement(
@@ -580,6 +595,72 @@ export const createWebmWithInvalidCodecs = () => {
   const segment = ebmlElement(0x18538067, segmentPayload);
   const bytes = concatParts([ebmlHeader, segment]);
   return new MockFile(bytes, "invalid-codec.webm", "video/webm");
+};
+
+export const createWebmWithTags = () => {
+  const ebmlHeader = ebmlElement(
+    0x1a45dfa3,
+    concatParts([
+      ebmlUInt(0x4286, 1, 1),
+      ebmlUInt(0x42f7, 1, 1),
+      ebmlUInt(0x42f2, 4, 1),
+      ebmlUInt(0x42f3, 8, 1),
+      ebmlString(0x4282, "webm"),
+      ebmlUInt(0x4287, 4, 1),
+      ebmlUInt(0x4285, 2, 1)
+    ])
+  );
+
+  const timecodeScale = ebmlUInt(0x2ad7b1, 1000000, 3);
+  const muxingApp = ebmlString(0x4d80, "binary101-tests");
+  const writingApp = ebmlString(0x5741, "binary101-webm");
+  const info = ebmlElement(0x1549a966, concatParts([timecodeScale, muxingApp, writingApp]));
+
+  const videoSettings = ebmlElement(0xe0, concatParts([ebmlUInt(0xb0, 320, 2), ebmlUInt(0xba, 240, 2)]));
+  const videoTrack = ebmlElement(
+    0xae,
+    concatParts([
+      ebmlUInt(0xd7, 1, 1),
+      ebmlUInt(0x73c5, 1, 1),
+      ebmlUInt(0x83, 1, 1),
+      ebmlString(0x86, "V_VP8"),
+      videoSettings
+    ])
+  );
+
+  const audioSettings = ebmlElement(
+    0xe1,
+    concatParts([ebmlFloat(0xb5, 44100, 8), ebmlUInt(0x9f, 2, 1), ebmlUInt(0x6264, 16, 1)])
+  );
+  const audioTrack = ebmlElement(
+    0xae,
+    concatParts([
+      ebmlUInt(0xd7, 2, 1),
+      ebmlUInt(0x73c5, 2, 1),
+      ebmlUInt(0x83, 2, 1),
+      ebmlString(0x86, "A_VORBIS"),
+      audioSettings
+    ])
+  );
+  const tracks = ebmlElement(0x1654ae6b, concatParts([videoTrack, audioTrack]));
+
+  const tagTargets = ebmlElement(0x63c0, ebmlUInt(0x63c5, 1, 1)); // TrackUID 1
+  const simpleTag = ebmlElement(
+    0x67c8,
+    concatParts([
+      ebmlString(0x45a3, "TITLE"),
+      ebmlString(0x4487, "Example title"),
+      ebmlString(0x447a, "eng"),
+      ebmlUInt(0x4484, 1, 1)
+    ])
+  );
+  const tag = ebmlElement(0x7373, concatParts([tagTargets, simpleTag]));
+  const tags = ebmlElement(0x1254c367, tag);
+
+  const segmentPayload = concatParts([info, tracks, tags]);
+  const segment = ebmlElement(0x18538067, segmentPayload);
+  const bytes = concatParts([ebmlHeader, segment]);
+  return new MockFile(bytes, "tags.webm", "video/webm");
 };
 
 export const createFb2File = () => {

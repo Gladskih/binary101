@@ -39,6 +39,13 @@ void test("parseCues reads cue points and offsets", async () => {
   assert.ok(cuesHeader);
   assert.strictEqual(cuesHeader?.id, CUES_ID);
 
+  const clusterHeader = await readElementAt(
+    file,
+    cuesHeader!.offset + cuesHeader!.headerSize + (cuesHeader!.size ?? 0),
+    issues
+  );
+  assert.ok(clusterHeader);
+
   const cues = await parseCues(file, cuesHeader!, issues, 1000000);
   assert.strictEqual(cues.cuePoints.length, 2);
   const [first, second] = cues.cuePoints;
@@ -49,6 +56,7 @@ void test("parseCues reads cue points and offsets", async () => {
   const position = first.positions[0];
   assert.ok(position);
   assert.strictEqual(position.track, 1);
-  assert.strictEqual(position.clusterPosition, 297);
+  const clusterRel = clusterHeader!.offset - segmentHeader!.dataOffset;
+  assert.strictEqual(position.clusterPosition, clusterRel);
   assert.strictEqual(cues.truncated, false);
 });

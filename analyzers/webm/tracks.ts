@@ -7,8 +7,11 @@ import {
   TRACK_ENTRY_ID
 } from "./constants.js";
 import { clampReadLength, readElementHeader, readUnsigned, readFloat, readUtf8 } from "./ebml.js";
+import { parseVorbisCodecPrivate } from "./codecprivate.js";
 import type { EbmlElementHeader } from "./ebml.js";
 import type { Issues, WebmTrack, WebmTrackAudio, WebmTrackVideo } from "./types.js";
+
+const VORBIS_CODEC_ID = "A_VORBIS";
 
 const parseVideo = (
   dv: DataView,
@@ -145,6 +148,7 @@ export const parseTrackEntry = (
     defaultDuration: null,
     defaultDurationFps: null,
     codecPrivateSize: null,
+    codecPrivateVorbis: null,
     flagEnabled: null,
     flagDefault: null,
     flagForced: null,
@@ -211,8 +215,11 @@ export const parseTrackEntry = (
     } else if (header.id === 0x9c && available > 0) {
       const value = readUnsigned(dv, dataStart, available, issues, "FlagLacing");
       track.flagLacing = value != null ? Number(value) !== 0 : null;
-    } else if (header.id === 0x63a2) {
+    } else if (header.id === 0x63a2 && header.size != null) {
       track.codecPrivateSize = header.size;
+      if (track.codecId === VORBIS_CODEC_ID) {
+        track.codecPrivateVorbis = parseVorbisCodecPrivate(dv, dataStart, header.size, issues);
+      }
     } else if (header.id === VIDEO_ID && header.size != null) {
       track.video = parseVideo(dv, dataStart, header.size, header.dataOffset, issues);
     } else if (header.id === AUDIO_ID && header.size != null) {

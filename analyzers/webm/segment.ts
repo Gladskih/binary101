@@ -3,6 +3,7 @@
 import {
   ATTACHMENTS_ID,
   CHAPTERS_ID,
+  CLUSTER_ID,
   CUES_ID,
   INFO_ID,
   INITIAL_SCAN_BYTES,
@@ -26,6 +27,8 @@ import type { Issues, WebmSeekHead, WebmSegment } from "./types.js";
 import { parseInfo } from "./info.js";
 import { parseTracks } from "./tracks.js";
 import { parseCues } from "./cues.js";
+import { countBlocksInCluster } from "./cluster.js";
+import { parseTags } from "./tags.js";
 
 const describeElement = (id: number): string => {
   switch (id) {
@@ -42,7 +45,7 @@ const describeElement = (id: number): string => {
   }
 };
 
-interface SegmentScanResult {
+type SegmentScanResult = {
   infoHeader: EbmlElementHeader | null;
   tracksHeader: EbmlElementHeader | null;
   seekHeaders: EbmlElementHeader[];
@@ -50,7 +53,7 @@ interface SegmentScanResult {
   issues: string[];
   bytesScanned: number;
   hitLimit: boolean;
-}
+};
 
 const scanSegment = async (
   file: File,
@@ -87,7 +90,6 @@ const scanSegment = async (
   issues.push(...result.issues);
   return result;
 };
-
 const parseSeekHead = async (
   file: File,
   seekHead: EbmlElementHeader,
@@ -159,7 +161,6 @@ const pickElement = (
   const offset = candidate.absoluteOffset;
   return { id: targetId, size: null, headerSize: 0, dataOffset: offset, offset, sizeUnknown: true };
 };
-
 export const parseSegment = async (
   file: File,
   segmentHeader: EbmlElementHeader,
@@ -176,6 +177,11 @@ export const parseSegment = async (
     tracks: [],
     seekHead: null,
     cues: null,
+    tags: null,
+    clusterCount: 0,
+    blockCount: 0,
+    keyframeCount: 0,
+    firstClusterOffset: null,
     scannedElements: [],
     scanLimit: Math.min(INITIAL_SCAN_BYTES, segmentSize)
   };
@@ -191,6 +197,18 @@ export const parseSegment = async (
     segment.scanLimit = initialScan.bytesScanned;
   }
   segment.scannedElements = scan.scanned;
+  const clusters = scan.scanned.filter(element => element.id === CLUSTER_ID);
+  segment.clusterCount = clusters.length;
+  if (clusters.length > 0) {
+    segment.firstClusterOffset = clusters[0]?.offset ?? null;
+  }
+  for (const cluster of clusters) {
+    const resolvedCluster = await readElementAt(file, cluster.offset, issues);
+    if (!resolvedCluster || resolvedCluster.id !== CLUSTER_ID) continue;
+    const stats = await countBlocksInCluster(file, resolvedCluster, issues);
+    segment.blockCount += stats.blocks;
+    segment.keyframeCount += stats.keyframes;
+  }
   let seekHead: WebmSeekHead | null = null;
   const [firstSeek] = scan.seekHeaders;
   if (firstSeek) {
@@ -268,6 +286,14 @@ export const parseSegment = async (
     if (hasAttachments) issues.push("Attachments element present; invalid for WebM.");
     if (hasTags) issues.push("Tags element present; invalid for WebM.");
     if (hasChapters) issues.push("Chapters element present; invalid for WebM.");
+  }
+
+  if (hasTags) {
+    const tagHeader = scan.scanned.find(element => element.id === TAGS_ID);
+    if (tagHeader) {
+      const resolved = await readElementAt(file, tagHeader.offset, issues);
+      if (resolved && resolved.id === TAGS_ID) segment.tags = await parseTags(file, resolved, issues);
+    }
   }
 
   return segment;

@@ -95,6 +95,13 @@ void test("renderers produce readable HTML output", async () => {
   assert.match(webmHtml, /Tracks/);
   assert.match(webmHtml, /VP8/);
   assert.match(webmHtml, /Opus/);
+  assert.match(webmHtml, /UID/);
+  assert.match(webmHtml, /Flags/);
+  assert.match(webmHtml, /FlagEnabled:/);
+  assert.match(webmHtml, /FlagDefault:/);
+  assert.match(webmHtml, /FlagForced:/);
+  assert.match(webmHtml, /FlagLacing:/);
+  assert.match(webmHtml, /CodecPrivate/);
   assert.match(webmHtml, /Cues/);
   assert.match(webmHtml, /Track 1/);
 

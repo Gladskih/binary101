@@ -3,6 +3,7 @@
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
 import type { WebmCues, WebmParseResult, WebmSeekHead, WebmTrack } from "../../analyzers/webm/types.js";
+import { renderTagsSection } from "./tags-view.js";
 
 const VIDEO_CODEC_OPTIONS = [
   ["V_VP8", "VP8"],
@@ -49,14 +50,11 @@ const describeTrackDetails = (track: WebmTrack): string => {
   return parts.length ? parts.join(", ") : "No details";
 };
 
-const renderTrackFlags = (track: WebmTrack): string => {
-  const flags: string[] = [];
-  if (track.flagEnabled != null) flags.push(track.flagEnabled ? "Enabled" : "Disabled");
-  if (track.flagDefault != null) flags.push(track.flagDefault ? "Default" : "Not default");
-  if (track.flagForced === true) flags.push("Forced");
-  if (track.flagLacing === false) flags.push("No lacing");
-  if (track.codecPrivateSize != null) flags.push(`CodecPrivate: ${track.codecPrivateSize} B`);
-  return flags.length ? flags.join(", ") : "None noted";
+const renderFlagState = (value: boolean | null | undefined, defaultValue: boolean): string => {
+  if (value === true) return "true";
+  if (value === false) return "false";
+  const defLabel = defaultValue ? "true" : "false";
+  return `not set -> ${defLabel}`;
 };
 
 const renderCodecChips = (track: WebmTrack): string => {
@@ -83,27 +81,62 @@ const renderCodecChips = (track: WebmTrack): string => {
   return `<div class="optionsRow">${chips.join("")}</div>`;
 };
 
+const renderFlagsColumn = (track: WebmTrack): string => {
+  const lines = [
+    `FlagEnabled: ${renderFlagState(track.flagEnabled, true)}`,
+    `FlagDefault: ${renderFlagState(track.flagDefault, true)}`,
+    `FlagForced: ${renderFlagState(track.flagForced, false)}`,
+    `FlagLacing: ${renderFlagState(track.flagLacing, true)}`
+  ];
+  const htmlLines = lines.map(line => escapeHtml(line)).join("<br />");
+  return `<div class="flagColumn">${htmlLines}</div>`;
+};
+
+const renderCodecPrivate = (track: WebmTrack): string => {
+  if (track.codecPrivateSize == null) return "-";
+  const base = `${track.codecPrivateSize} B`;
+  const vorbis = track.codecPrivateVorbis;
+  if (!vorbis) return base;
+  const parts: string[] = [];
+  parts.push("Vorbis");
+  if (vorbis.headerPacketLengths) {
+    parts.push(
+      `packets ${vorbis.headerPacketLengths[0]}/${vorbis.headerPacketLengths[1]}/${vorbis.headerPacketLengths[2]} B`
+    );
+  }
+  if (vorbis.vendor) {
+    parts.push(`vendor "${vorbis.vendor}"`);
+  }
+  if (vorbis.truncated) {
+    parts.push("truncated");
+  }
+  return `${base} (${parts.join(", ")})`;
+};
+
 const renderTracks = (tracks: WebmTrack[] | null | undefined): string => {
   if (!tracks || tracks.length === 0) return "<p>No tracks parsed.</p>";
   const rows = tracks
     .map((track, index) => {
       const number = track.trackNumber != null ? track.trackNumber : index + 1;
       const uid = track.trackUid != null ? String(track.trackUid) : "-";
+      const codecPrivate = renderCodecPrivate(track);
       return (
         "<tr>" +
         `<td>${number}</td>` +
         `<td>${escapeHtml(track.trackTypeLabel)}</td>` +
         `<td>${renderCodecChips(track)}</td>` +
+        `<td>${escapeHtml(uid)}</td>` +
+        `<td>${renderFlagsColumn(track)}</td>` +
         `<td>${escapeHtml(describeTrackDetails(track))}</td>` +
-        `<td>${escapeHtml(renderTrackFlags(track))}<br /><span class="dim">UID: ${escapeHtml(uid)}</span></td>` +
+        `<td>${escapeHtml(codecPrivate)}</td>` +
         "</tr>"
       );
     })
     .join("");
   return (
     "<h4>Tracks</h4>" +
-    '<table class="byteView"><thead><tr>' +
-    "<th>#</th><th>Type</th><th>Codec</th><th>Details</th><th>Flags</th>" +
+    '<table class="table"><thead><tr>' +
+    "<th>#</th><th>Type</th><th>Codec</th><th>UID</th><th>Flags</th><th>Details</th><th>CodecPrivate</th>" +
     `</tr></thead><tbody>${rows}</tbody></table>`
   );
 };
@@ -203,6 +236,22 @@ export function renderWebm(webm: WebmParseResult | null | unknown): string {
       segment?.size != null ? escapeHtml(formatHumanSize(segment.size)) : "Unknown"
     )
   );
+  const clusterDetails =
+    segment?.clusterCount != null
+      ? `${segment.clusterCount}${
+          segment.firstClusterOffset != null
+            ? ` (first @ ${segment.firstClusterOffset} / ${toHex32(segment.firstClusterOffset, 8)})`
+            : ""
+        }`
+      : "Unknown";
+  out.push(renderDefinitionRow("Clusters", escapeHtml(clusterDetails)));
+  if (segment) {
+    const blocksLabel =
+      segment.blockCount || segment.keyframeCount
+        ? `${segment.blockCount} (keyframes ${segment.keyframeCount})`
+        : "Unknown";
+    out.push(renderDefinitionRow("Blocks", escapeHtml(blocksLabel)));
+  }
   out.push(
     renderDefinitionRow(
       "Timecode scale",
@@ -225,6 +274,7 @@ export function renderWebm(webm: WebmParseResult | null | unknown): string {
   }
   out.push("</dl>");
   out.push(renderTracks(segment?.tracks));
+  out.push(renderTagsSection(segment?.tags ?? null));
   out.push(renderCues(segment?.cues));
   out.push(renderSeekHead(segment?.seekHead));
   out.push(renderIssues(data.issues));

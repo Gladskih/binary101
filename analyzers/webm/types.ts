@@ -43,6 +43,22 @@ export interface WebmTrackAudio {
   bitDepth: number | null;
 }
 
+export interface WebmCodecPrivateVorbis {
+  headerPacketLengths: [number, number, number] | null;
+  vendor: string | null;
+  truncated: boolean;
+}
+
+export interface WebmTagEntry {
+  name: string | null;
+  value: string | null;
+  binarySize: number | null;
+  language: string | null;
+  defaultFlag: boolean | null;
+  targetTrackUid: string | number | null;
+  truncated: boolean;
+}
+
 export interface WebmTrack {
   trackNumber: number | null;
   trackUid: string | number | null;
@@ -57,6 +73,7 @@ export interface WebmTrack {
   defaultDuration: number | null;
   defaultDurationFps: number | null;
   codecPrivateSize: number | null;
+  codecPrivateVorbis?: WebmCodecPrivateVorbis | null;
   flagEnabled: boolean | null;
   flagDefault: boolean | null;
   flagForced: boolean | null;
@@ -104,8 +121,13 @@ export interface WebmSegment {
   tracks: WebmTrack[];
   seekHead: WebmSeekHead | null;
   cues: WebmCues | null;
+  clusterCount: number;
+  firstClusterOffset: number | null;
+  blockCount: number;
+  keyframeCount: number;
   scannedElements: Array<{ id: number; offset: number; size: number | null }>;
   scanLimit: number;
+  tags?: WebmTagEntry[] | null;
 }
 
 export interface WebmParseResult {

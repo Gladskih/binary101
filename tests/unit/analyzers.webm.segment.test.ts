@@ -53,6 +53,10 @@ void test("parseSegment parses cue points when present", async () => {
   assert.ok(segmentHeader);
   const segment = await parseSegment(file, segmentHeader, issues, "webm");
   assert.ok(segment.cues);
+  assert.strictEqual(segment.clusterCount, 1);
+  assert.ok(segment.firstClusterOffset && segment.firstClusterOffset > 0);
+  assert.strictEqual(segment.blockCount, 2);
+  assert.strictEqual(segment.keyframeCount, 1);
   assert.strictEqual(segment.cues?.cuePoints.length, 2);
   const first = segment.cues?.cuePoints[0];
   const second = segment.cues?.cuePoints[1];
