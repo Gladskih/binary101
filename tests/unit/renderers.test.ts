@@ -93,6 +93,8 @@ void test("renderers produce readable HTML output", async () => {
   const webmHtml = renderWebm(webm);
   assert.match(webmHtml, /WebM/);
   assert.match(webmHtml, /Tracks/);
+  assert.match(webmHtml, /VP8/);
+  assert.match(webmHtml, /Opus/);
   assert.match(webmHtml, /Cues/);
   assert.match(webmHtml, /Track 1/);
 

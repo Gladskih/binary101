@@ -4,6 +4,17 @@ import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
 import type { WebmCues, WebmParseResult, WebmSeekHead, WebmTrack } from "../../analyzers/webm/types.js";
 
+const VIDEO_CODEC_OPTIONS = [
+  ["V_VP8", "VP8"],
+  ["V_VP9", "VP9"],
+  ["V_AV1", "AV1"]
+] as const;
+
+const AUDIO_CODEC_OPTIONS = [
+  ["A_VORBIS", "Vorbis"],
+  ["A_OPUS", "Opus"]
+] as const;
+
 const renderIssues = (issues: string[] | null | undefined): string => {
   if (!issues || issues.length === 0) return "";
   const items = issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("");
@@ -48,18 +59,41 @@ const renderTrackFlags = (track: WebmTrack): string => {
   return flags.length ? flags.join(", ") : "None noted";
 };
 
+const renderCodecChips = (track: WebmTrack): string => {
+  const codecId = track.codecId || "";
+  const options =
+    track.trackType === 1
+      ? VIDEO_CODEC_OPTIONS
+      : track.trackType === 2
+        ? AUDIO_CODEC_OPTIONS
+        : [...VIDEO_CODEC_OPTIONS, ...AUDIO_CODEC_OPTIONS];
+  const chips = options.map(([id, label]) => {
+    const isSelected = codecId === id;
+    const tooltip = `${label} (${id})`;
+    return `<span class="opt ${isSelected ? "sel" : "dim"}" title="${escapeHtml(tooltip)}">${escapeHtml(label)}</span>`;
+  });
+  if (codecId && !options.some(([id]) => id === codecId)) {
+    const tooltip = track.codecIdValidForWebm === false ? "Not allowed in WebM" : "Codec not in WebM list";
+    chips.push(
+      `<span class="opt sel" title="${escapeHtml(tooltip)}">${escapeHtml(codecId)}</span>`
+    );
+  } else if (!codecId) {
+    chips.push('<span class="opt dim" title="Codec not set">Unknown</span>');
+  }
+  return `<div class="optionsRow">${chips.join("")}</div>`;
+};
+
 const renderTracks = (tracks: WebmTrack[] | null | undefined): string => {
   if (!tracks || tracks.length === 0) return "<p>No tracks parsed.</p>";
   const rows = tracks
     .map((track, index) => {
       const number = track.trackNumber != null ? track.trackNumber : index + 1;
       const uid = track.trackUid != null ? String(track.trackUid) : "-";
-      const codec = escapeHtml(track.codecId || track.codecName || "Unknown");
       return (
         "<tr>" +
         `<td>${number}</td>` +
         `<td>${escapeHtml(track.trackTypeLabel)}</td>` +
-        `<td>${codec}</td>` +
+        `<td>${renderCodecChips(track)}</td>` +
         `<td>${escapeHtml(describeTrackDetails(track))}</td>` +
         `<td>${escapeHtml(renderTrackFlags(track))}<br /><span class="dim">UID: ${escapeHtml(uid)}</span></td>` +
         "</tr>"
