@@ -42,10 +42,12 @@ void test("parseCues reads cue points and offsets", async () => {
   const cues = await parseCues(file, cuesHeader!, issues, 1000000);
   assert.strictEqual(cues.cuePoints.length, 2);
   const [first, second] = cues.cuePoints;
+  assert.ok(first && second);
   assert.strictEqual(first.timecode, 0);
   assert.strictEqual(first.timecodeSeconds, 0);
   assert.strictEqual(second.timecodeSeconds, 1);
   const position = first.positions[0];
+  assert.ok(position);
   assert.strictEqual(position.track, 1);
   assert.strictEqual(position.clusterPosition, 297);
   assert.strictEqual(cues.truncated, false);
