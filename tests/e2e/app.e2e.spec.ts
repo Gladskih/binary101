@@ -209,8 +209,12 @@ test.describe("file type detection", () => {
     const videoFile = createMp4File();
     await page.setInputFiles("#fileInput", toUpload(videoFile));
 
-    await expectBaseDetails(page, videoFile.name, "MP4/QuickTime container (ISO-BMFF)");
-    await expect(page.locator("#peDetailsTerm")).toHaveText("Video preview");
+    await expectBaseDetails(
+      page,
+      videoFile.name,
+      "isom MP4 (video: avc1.42001e, 320x180; audio: mp4a.40.2, 48000 Hz, 2 ch; 2.000 s)"
+    );
+    await expect(page.locator("#peDetailsTerm")).toHaveText("MP4 details");
     await expect(page.locator(".videoPreview video")).toBeVisible();
     await expect(page.locator(".videoPreview source")).toHaveAttribute("type", "video/mp4");
     await expect(page.locator(".videoPreview source")).toHaveAttribute("src", /blob:/);

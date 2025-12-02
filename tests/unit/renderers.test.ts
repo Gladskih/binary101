@@ -11,6 +11,7 @@ import {
   renderGif,
   renderJpeg,
   renderMp3,
+  renderMp4,
   renderPdf,
   renderPe,
   renderMz,
@@ -30,6 +31,7 @@ import {
   createGifFile,
   createJpegFile,
   createMp3File,
+  createMp4File,
   createPdfFile,
   createPeFile,
   createPngFile,
@@ -104,6 +106,12 @@ void test("renderers produce readable HTML output", async () => {
   assert.match(webmHtml, /CodecPrivate/);
   assert.match(webmHtml, /Cues/);
   assert.match(webmHtml, /Track 1/);
+
+  const mp4 = await parseOnly(createMp4File(), "mp4");
+  const mp4Html = renderMp4(mp4);
+  assert.match(mp4Html, /MP4/);
+  assert.match(mp4Html, /Tracks/);
+  assert.match(mp4Html, /Top-level boxes/);
 
   const fb2 = await parseOnly(createFb2File(), "fb2");
   const fb2Html = renderFb2(fb2);

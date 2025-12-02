@@ -15,6 +15,7 @@ import {
   renderWebm,
   renderFb2,
   renderMp3,
+  renderMp4,
   renderSevenZip,
   renderTar,
   renderRar,
@@ -276,6 +277,16 @@ function renderAnalysisIntoUi(result: ParseForUiResult): void {
     peDetailsValueElement.hidden = false;
     const videoPreviewHtml = preview?.kind === "video" ? preview.html : "";
     peDetailsValueElement.innerHTML = videoPreviewHtml + renderWebm(result.parsed);
+    attachPreviewGuards(preview);
+    return;
+  }
+
+  if (result.analyzer === "mp4") {
+    peDetailsTermElement.textContent = "MP4 details";
+    peDetailsTermElement.hidden = false;
+    peDetailsValueElement.hidden = false;
+    const videoPreviewHtml = preview?.kind === "video" ? preview.html : "";
+    peDetailsValueElement.innerHTML = videoPreviewHtml + renderMp4(result.parsed);
     attachPreviewGuards(preview);
     return;
   }

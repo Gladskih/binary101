@@ -32,6 +32,8 @@ import { parseMz } from "./mz/index.js";
 import type { MzParseResult } from "./mz/index.js";
 import { hasShellLinkSignature, parseLnk } from "./lnk/index.js";
 import type { LnkParseResult } from "./lnk/types.js";
+import { parseMp4, buildMp4Label } from "./mp4/index.js";
+import type { Mp4ParseResult } from "./mp4/types.js";
 
 export type AnalyzerName =
   | "lnk"
@@ -49,7 +51,8 @@ export type AnalyzerName =
   | "jpeg"
   | "webp"
   | "webm"
-  | "mp3";
+  | "mp3"
+  | "mp4";
 
 type AnalyzerParseMap = {
   lnk: LnkParseResult;
@@ -68,6 +71,7 @@ type AnalyzerParseMap = {
   webp: WebpParseResult;
   webm: WebmParseResult;
   mp3: Mp3ParseResult;
+  mp4: Mp4ParseResult;
 };
 
 type AnalyzerResultUnion = {
@@ -291,6 +295,19 @@ export async function detectBinaryType(file: File): Promise<string> {
       if (label) return label;
       return "Unknown binary type";
     }
+    if (
+      magic.indexOf("MP4/QuickTime") !== -1 ||
+      (magic.indexOf("ISO-BMFF") !== -1 && magic.indexOf("HEIF") === -1 && magic.indexOf("HEIC") === -1) ||
+      magic.indexOf("3GP") !== -1
+    ) {
+      const brand = dv.byteLength >= 12 ? dv.getUint32(8, false) : 0;
+      if (brand !== 0x68656963 && brand !== 0x68656978 && brand !== 0x68657663) {
+        const mp4 = await parseMp4(file);
+        const label = buildMp4Label(mp4);
+        if (label) return label;
+        return magic;
+      }
+    }
     if (magic.startsWith("ZIP archive")) {
       const zipLabel = refineZipLabel(dv);
       if (zipLabel) return zipLabel;
@@ -477,6 +494,16 @@ export async function parseForUi(file: File): Promise<ParseForUiResult> {
     if (riff === 0x52494646 && webp === 0x57454250) {
       const parsedWebp = await parseWebp(file);
       if (parsedWebp) return { analyzer: "webp", parsed: parsedWebp };
+    }
+  }
+  if (dv.byteLength >= 12) {
+    const ftyp = dv.getUint32(4, false);
+    if (ftyp === 0x66747970) {
+      const brand = dv.getUint32(8, false);
+      if (brand !== 0x68656963 && brand !== 0x68656978 && brand !== 0x68657663) {
+        const mp4 = await parseMp4(file);
+        if (mp4) return { analyzer: "mp4", parsed: mp4 };
+      }
     }
   }
   if (dv.byteLength >= 4 && dv.getUint32(0, false) === 0x1a45dfa3) {
