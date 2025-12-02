@@ -9,7 +9,7 @@ import type {
   LnkKnownFolderBlock,
   LnkPropertyStoreBlock
 } from "../../analyzers/lnk/types.js";
-import { createLnkFile } from "../fixtures/sample-files.js";
+import { createLnkFile } from "../fixtures/lnk-sample-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
 const isEnvironmentBlock = (block: LnkExtraDataBlock): block is LnkEnvironmentBlock =>

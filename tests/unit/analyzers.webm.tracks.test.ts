@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseSegment } from "../../analyzers/webm/segment.js";
 import { readElementAt } from "../../analyzers/webm/ebml.js";
-import { createWebmFile, createWebmWithAttachments } from "../fixtures/sample-files.js";
+import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
+import { createWebmWithAttachments } from "../fixtures/webm-attachments-fixtures.js";
 
 const parseTracksFromFixture = async () => {
   const file = createWebmFile();

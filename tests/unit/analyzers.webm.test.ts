@@ -3,7 +3,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseWebm, buildWebmLabel } from "../../analyzers/webm/index.js";
-import { createWebmFile, createWebmWithAttachments } from "../fixtures/sample-files.js";
+import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
+import { createWebmWithAttachments } from "../fixtures/webm-attachments-fixtures.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 void test("parseWebm reads EBML header, info and tracks", async () => {

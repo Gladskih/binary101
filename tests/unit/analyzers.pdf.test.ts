@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parsePdf } from "../../analyzers/pdf/index.js";
-import { createPdfFile } from "../fixtures/sample-files.js";
+import { createPdfFile } from "../fixtures/document-sample-files.js";
 import { createPdfMissingStartxref, createPdfWithBadXref } from "../fixtures/pdf-fixtures.js";
 import { createPdfWithXrefStream } from "../fixtures/pdf-corrupt-stream.js";
 import { expectDefined } from "../helpers/expect-defined.js";

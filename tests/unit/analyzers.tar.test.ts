@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseTar } from "../../analyzers/tar/index.js";
 import { MockFile } from "../helpers/mock-file.js";
-import { createTarFile } from "../fixtures/sample-files.js";
+import { createTarFile } from "../fixtures/tar-fixtures.js";
 import {
   createTarWithBadChecksum,
   createTarWithShortFile,

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseForUi } from "../../analyzers/index.js";
 import type { WebmParseResult } from "../../analyzers/webm/types.js";
-import { createWebmWithTags } from "../fixtures/sample-files.js";
+import { createWebmWithTags } from "../fixtures/webm-tags-fixtures.js";
 
 void test("parseForUi surfaces tags with names and values", async () => {
   const file = createWebmWithTags();

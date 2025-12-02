@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseJpeg } from "../../analyzers/jpeg/index.js";
-import { createJpegFile } from "../fixtures/sample-files.js";
+import { createJpegFile } from "../fixtures/image-sample-files.js";
 import { createJpegNoSof, createJpegWithBrokenExif } from "../fixtures/jpeg-fixtures.js";
 
 void test("parseJpeg returns null for missing SOF", async () => {

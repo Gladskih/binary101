@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DOMParser as XmlDomParser } from "@xmldom/xmldom";
 import { parseFb2 } from "../../analyzers/fb2/index.js";
-import { createFb2File } from "../fixtures/sample-files.js";
+import { createFb2File } from "../fixtures/document-sample-files.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 class TestDomParser extends XmlDomParser {

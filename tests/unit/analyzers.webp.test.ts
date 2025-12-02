@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseWebp } from "../../analyzers/webp/index.js";
-import { createWebpFile } from "../fixtures/sample-files.js";
+import { createWebpFile } from "../fixtures/image-sample-files.js";
 import { createInvalidWebpSignature, createWebpWithBadChunkSize } from "../fixtures/webp-fixtures.js";
 import { createAnimatedWebpMissingFrame } from "../fixtures/webp-frames-fixtures.js";
 import { expectDefined } from "../helpers/expect-defined.js";

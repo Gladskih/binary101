@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { parseCues } from "../../analyzers/webm/cues.js";
 import { CUES_ID } from "../../analyzers/webm/constants.js";
 import { readElementAt, readElementHeader } from "../../analyzers/webm/ebml.js";
-import { createWebmWithCues } from "../fixtures/sample-files.js";
+import { createWebmWithCues } from "../fixtures/webm-cues-fixtures.js";
 
 void test("parseCues reads cue points and offsets", async () => {
   const file = createWebmWithCues();

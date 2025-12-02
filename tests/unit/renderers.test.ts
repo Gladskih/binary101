@@ -25,25 +25,18 @@ import {
   renderLnk
 } from "../../renderers/index.js";
 import type { ZipParseResult } from "../../analyzers/zip/index.js";
-import {
-  createElfFile,
-  createFb2File,
-  createGifFile,
-  createJpegFile,
-  createMp3File,
-  createMp4File,
-  createPdfFile,
-  createPeFile,
-  createPngFile,
-  createSevenZipFile,
-  createTarFile,
-  createWebpFile,
-  createZipFile,
-  createRar5File,
-  createWebmWithCues,
-  createDosMzExe,
-  createLnkFile
-} from "../fixtures/sample-files.js";
+import { createMp3File } from "../fixtures/audio-sample-files.js";
+import { createFb2File, createPdfFile } from "../fixtures/document-sample-files.js";
+import { createDosMzExe } from "../fixtures/dos-sample-file.js";
+import { createElfFile } from "../fixtures/elf-sample-file.js";
+import { createGifFile, createJpegFile, createPngFile, createWebpFile } from "../fixtures/image-sample-files.js";
+import { createLnkFile } from "../fixtures/lnk-sample-file.js";
+import { createMp4File } from "../fixtures/mp4-fixtures.js";
+import { createPeFile } from "../fixtures/sample-files-pe.js";
+import { createRar5File, createSevenZipFile } from "../fixtures/rar-sevenzip-fixtures.js";
+import { createTarFile } from "../fixtures/tar-fixtures.js";
+import { createZipFile } from "../fixtures/zip-fixtures.js";
+import { createWebmWithCues } from "../fixtures/webm-cues-fixtures.js";
 
 class TestDomParser extends XmlDomParser {
   override parseFromString(text: string, type: string) {

@@ -1,6 +1,7 @@
 "use strict";
 
 import { MockFile } from "../helpers/mock-file.js";
+import { formatOffset } from "./archive-fixture-helpers.js";
 
 const TEXT_ENCODER = new TextEncoder();
 const TAR_BLOCK_SIZE = 512;
@@ -241,4 +242,35 @@ export const createTarWithShortFile = () => {
   tar.set(dataBlock, TAR_BLOCK_SIZE);
   tar.set(endBlock, TAR_BLOCK_SIZE * 2);
   return new MockFile(tar, "short-file.tar", "application/x-tar");
+};
+
+export const createTarFile = () => {
+  const header = new Uint8Array(TAR_BLOCK_SIZE).fill(0);
+  const writeString = (buffer: Uint8Array, text: string, offset: number, length: number): void => {
+    const bytes = TEXT_ENCODER.encode(text);
+    const max = Math.min(bytes.length, length);
+    buffer.set(bytes.slice(0, max), offset);
+  };
+  writeString(header, "hello.txt", 0, 100);
+  writeString(header, "0000777\0", 100, 8);
+  writeString(header, "0000000\0", 108, 8);
+  writeString(header, "0000000\0", 116, 8);
+  writeString(header, "00000000000\0", 124, 12);
+  writeString(header, "00000000000\0", 136, 12);
+  for (let i = 148; i < 156; i += 1) header[i] = 0x20;
+  writeString(header, "0", 156, 1);
+  writeString(header, "ustar", 257, 6);
+  writeString(header, "00", 263, 2);
+  writeString(header, "user", 265, 32);
+  writeString(header, "group", 297, 32);
+
+  let sum = 0;
+  for (let i = 0; i < header.length; i += 1) sum += header[i] ?? 0;
+  writeString(header, formatOffset(sum), 148, 8);
+
+  const endBlock = new Uint8Array(TAR_BLOCK_SIZE).fill(0);
+  const tarBytes = new Uint8Array(TAR_BLOCK_SIZE * 2);
+  tarBytes.set(header, 0);
+  tarBytes.set(endBlock, TAR_BLOCK_SIZE);
+  return new MockFile(tarBytes, "sample.tar", "application/x-tar");
 };

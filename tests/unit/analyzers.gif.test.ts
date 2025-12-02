@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseGif } from "../../analyzers/gif/index.js";
-import { createGifFile } from "../fixtures/sample-files.js";
+import { createGifFile } from "../fixtures/image-sample-files.js";
 import { createGifWithBadTrailer, createGifWithTruncatedExtension } from "../fixtures/gif-fixtures.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 

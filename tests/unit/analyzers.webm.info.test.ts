@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { parseEbmlHeader, validateDocTypeCompatibility } from "../../analyzers/webm/info.js";
 import { readElementAt } from "../../analyzers/webm/ebml.js";
 import { parseSegment } from "../../analyzers/webm/segment.js";
-import { createWebmFile } from "../fixtures/sample-files.js";
+import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
 import type { WebmParseResult } from "../../analyzers/webm/types.js";
 
 void test("parseEbmlHeader extracts docType and versions", async () => {

@@ -4,26 +4,17 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { detectBinaryType, parseForUi } from "../../analyzers/index.js";
 import { DOMParser as XmlDomParser } from "@xmldom/xmldom";
-import {
-  createElfFile,
-  createFb2File,
-  createGifFile,
-  createJpegFile,
-  createMp3File,
-  createPdfFile,
-  createPngFile,
-  createPngWithIhdr,
-  createPeFile,
-  createSevenZipFile,
-  createTarFile,
-  createWebpFile,
-  createZipFile,
-  createRar4File,
-  createRar5File,
-  createWebmFile,
-  createDosMzExe,
-  createLnkFile
-} from "../fixtures/sample-files.js";
+import { createElfFile } from "../fixtures/elf-sample-file.js";
+import { createFb2File, createPdfFile } from "../fixtures/document-sample-files.js";
+import { createGifFile, createJpegFile, createPngFile, createPngWithIhdr, createWebpFile } from "../fixtures/image-sample-files.js";
+import { createLnkFile } from "../fixtures/lnk-sample-file.js";
+import { createMp3File } from "../fixtures/audio-sample-files.js";
+import { createPeFile } from "../fixtures/sample-files-pe.js";
+import { createRar4File, createRar5File, createSevenZipFile } from "../fixtures/rar-sevenzip-fixtures.js";
+import { createDosMzExe } from "../fixtures/dos-sample-file.js";
+import { createTarFile } from "../fixtures/tar-fixtures.js";
+import { createZipFile } from "../fixtures/zip-fixtures.js";
+import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 

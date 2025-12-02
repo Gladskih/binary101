@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseMp4, buildMp4Label } from "../../analyzers/mp4/index.js";
 import { parseForUi } from "../../analyzers/index.js";
-import { createMp4File } from "../fixtures/sample-files.js";
+import { createMp4File } from "../fixtures/mp4-fixtures.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 void test("parseMp4 reads movie header and tracks", async () => {

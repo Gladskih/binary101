@@ -4,7 +4,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { detectBinaryType } from "../../analyzers/index.js";
 import { MockFile } from "../helpers/mock-file.js";
-import { createMp3File, createWebmFile, createMp4File } from "../fixtures/sample-files.js";
+import { createMp3File } from "../fixtures/audio-sample-files.js";
+import { createMp4File } from "../fixtures/mp4-fixtures.js";
+import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
 
 const fromAscii = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "ascii"));
 

@@ -3,10 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parsePng } from "../../analyzers/png/index.js";
-import {
-  createPngFile,
-  createPngWithIhdr
-} from "../fixtures/sample-files.js";
+import { createPngFile, createPngWithIhdr } from "../fixtures/image-sample-files.js";
 import {
   createInvalidPngSignature,
   createPngMissingIend,

@@ -1,23 +1,15 @@
 import { expect, test } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
-import {
-  createElfFile,
-  createFb2File,
-  createGifFile,
-  createJpegFile,
-  createMp3File,
-  createMp4File,
-  createPdfFile,
-  createPeFile,
-  createPePlusFile,
-  createPngFile,
-  createSevenZipFile,
-  createTarFile,
-  createWebpFile,
-  createZipFile,
-  createZipWithEntries,
-  createLnkFile
-} from "../fixtures/sample-files.js";
+import { createFb2File, createPdfFile } from "../fixtures/document-sample-files.js";
+import { createElfFile } from "../fixtures/elf-sample-file.js";
+import { createGifFile, createJpegFile, createPngFile, createWebpFile } from "../fixtures/image-sample-files.js";
+import { createLnkFile } from "../fixtures/lnk-sample-file.js";
+import { createMp3File } from "../fixtures/audio-sample-files.js";
+import { createMp4File } from "../fixtures/mp4-fixtures.js";
+import { createPeFile, createPePlusFile } from "../fixtures/sample-files-pe.js";
+import { createSevenZipFile } from "../fixtures/rar-sevenzip-fixtures.js";
+import { createTarFile } from "../fixtures/tar-fixtures.js";
+import { createZipFile, createZipWithEntries } from "../fixtures/zip-fixtures.js";
 import type { MockFile } from "../helpers/mock-file.js";
 
 const toUpload = (file: MockFile) => ({
