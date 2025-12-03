@@ -1,0 +1,67 @@
+"use strict";
+
+import type { PeParseResult } from "./pe/index.js";
+import type { JpegParseResult } from "./jpeg/types.js";
+import type { ElfParseResult } from "./elf/types.js";
+import type { Fb2ParseResult } from "./fb2/index.js";
+import type { GifParseResult } from "./gif/types.js";
+import type { ZipParseResult } from "./zip/index.js";
+import type { PngParseResult } from "./png/types.js";
+import type { PdfParseResult } from "./pdf/types.js";
+import type { WebpParseResult } from "./webp/types.js";
+import type { WebmParseResult } from "./webm/types.js";
+import type { Mp3ParseResult } from "./mp3/types.js";
+import type { SevenZipParseResult } from "./sevenz/index.js";
+import type { TarParseResult } from "./tar/types.js";
+import type { RarParseResult } from "./rar/index.js";
+import type { MzParseResult } from "./mz/index.js";
+import type { LnkParseResult } from "./lnk/types.js";
+import type { Mp4ParseResult } from "./mp4/types.js";
+
+export type AnalyzerName =
+  | "lnk"
+  | "elf"
+  | "pe"
+  | "mz"
+  | "fb2"
+  | "gif"
+  | "sevenZip"
+  | "rar"
+  | "tar"
+  | "zip"
+  | "pdf"
+  | "png"
+  | "jpeg"
+  | "webp"
+  | "webm"
+  | "mp3"
+  | "mp4";
+
+type AnalyzerParseMap = {
+  lnk: LnkParseResult;
+  elf: ElfParseResult;
+  pe: PeParseResult;
+  mz: MzParseResult;
+  fb2: Fb2ParseResult;
+  gif: GifParseResult;
+  sevenZip: SevenZipParseResult;
+  rar: RarParseResult;
+  tar: TarParseResult;
+  zip: ZipParseResult;
+  pdf: PdfParseResult;
+  png: PngParseResult;
+  jpeg: JpegParseResult;
+  webp: WebpParseResult;
+  webm: WebmParseResult;
+  mp3: Mp3ParseResult;
+  mp4: Mp4ParseResult;
+};
+
+type AnalyzerResultUnion = {
+  [Name in AnalyzerName]: { analyzer: Name; parsed: AnalyzerParseMap[Name] };
+}[AnalyzerName];
+
+export type ParseForUiResult = AnalyzerResultUnion | { analyzer: null; parsed: null };
+
+export type ParsedByAnalyzer<Name extends AnalyzerName> =
+  Extract<ParseForUiResult, { analyzer: Name }>["parsed"];

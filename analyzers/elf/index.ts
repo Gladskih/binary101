@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 "use strict";
 import { readAsciiString } from "../../binary-utils.js";
 import {
@@ -11,15 +10,7 @@ import {
   SECTION_FLAGS,
   PROGRAM_FLAGS
 } from "./constants.js";
-import type {
-  ElfHeader,
-  ElfIdent,
-  ElfOptionEntry,
-  ElfParseResult,
-  ElfProgramHeader,
-  ElfSectionHeader
-} from "./types.js";
-
+import type { ElfHeader, ElfIdent, ElfOptionEntry, ElfParseResult, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 const ELF_MAGIC = 0x7f454c46;
 const decodeOption = (value: number, options: ElfOptionEntry[]): string | null =>
   options.find(entry => entry[0] === value)?.[1] || null;

@@ -1,72 +1,16 @@
 "use strict";
-/* eslint-disable max-lines */
 
 import { dd, rowFlags, rowOpts, safe } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
+import { describeBlock } from "./extra-blocks.js";
+import { FILE_ATTRIBUTE_FLAGS, LINKINFO_FLAGS, LINK_FLAGS, SHOW_COMMAND_OPTIONS } from "./constants.js";
 import type {
   LnkExtraDataBlock,
   LnkIdList,
   LnkLinkInfo,
   LnkParseResult,
-  LnkProperty,
-  LnkPropertyStorage,
-  LnkPropertyStoreData,
-  LnkStringData,
-  LnkTrackerData,
-  LnkVistaIdListData
+  LnkStringData
 } from "../../analyzers/lnk/types.js";
-
-const LINK_FLAGS: Array<[number, string, string?]> = [
-  [0x00000001, "Has ID list", "LinkTargetIDList present"],
-  [0x00000002, "Has LinkInfo", "LinkInfo structure present"],
-  [0x00000004, "Has name"],
-  [0x00000008, "Has relative path"],
-  [0x00000010, "Has working dir"],
-  [0x00000020, "Has arguments"],
-  [0x00000040, "Has icon location"],
-  [0x00000080, "Unicode strings"],
-  [0x00000100, "Force no LinkInfo"],
-  [0x00000200, "Has environment path"],
-  [0x00000400, "Run separately"],
-  [0x00001000, "Has Darwin ID"],
-  [0x00002000, "Run as different user"],
-  [0x00004000, "Has expanded icon"],
-  [0x00008000, "No PIDL alias"],
-  [0x00020000, "Shim layer"],
-  [0x00080000, "Enable metadata"],
-  [0x02000000, "Prefer environment path"]
-];
-
-const FILE_ATTRIBUTE_FLAGS: Array<[number, string, string?]> = [
-  [0x00000001, "Read-only"],
-  [0x00000002, "Hidden"],
-  [0x00000004, "System"],
-  [0x00000010, "Directory"],
-  [0x00000020, "Archive"],
-  [0x00000040, "Device"],
-  [0x00000080, "Normal"],
-  [0x00000100, "Temporary"],
-  [0x00000200, "Sparse"],
-  [0x00000400, "Reparse point"],
-  [0x00000800, "Compressed"],
-  [0x00001000, "Offline"],
-  [0x00002000, "Not indexed"],
-  [0x00004000, "Encrypted"],
-  [0x00008000, "Integrity stream"],
-  [0x00010000, "Virtual"],
-  [0x00020000, "No scrub data"]
-];
-
-const LINKINFO_FLAGS: Array<[number, string, string?]> = [
-  [0x00000001, "Volume ID + local base"],
-  [0x00000002, "Network relative link"]
-];
-
-const SHOW_COMMAND_OPTIONS: Array<[number, string]> = [
-  [1, "Normal window"],
-  [3, "Maximized"],
-  [7, "Minimized"]
-];
 
 type LnkStringField = keyof Omit<LnkStringData, "size" | "endOffset">;
 
@@ -162,47 +106,6 @@ const renderNetworkInfo = (network: LnkLinkInfo["network"]): string => {
   if (network.truncated) parts.push(`<span class="smallNote">Network data truncated</span>`);
   parts.push(`</div>`);
   return parts.join("");
-};
-
-const formatPropertyValue = (value: unknown): string => {
-  if (value === null || value === undefined) return "-";
-  if (Array.isArray(value)) return value.map(v => formatPropertyValue(v)).join(", ");
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "bigint") return value.toString();
-  return String(value);
-};
-
-const renderPropertyStore = (parsed: LnkPropertyStoreData | null | undefined): string => {
-  const storages = parsed?.storages || [];
-  if (!storages.length) return `<div class="smallNote">Property store present but empty.</div>`;
-  const out: string[] = [];
-  storages.forEach((storage: LnkPropertyStorage) => {
-    const header = storage.formatId ? `FMTID ${safe(storage.formatId)}` : "Property storage";
-    const suffix = storage.truncated ? " (truncated)" : "";
-    const magic = storage.magic ? ` ${safe(storage.magic)}` : "";
-    out.push(`<div class="smallNote">${header}${magic}${suffix}</div>`);
-    if (storage.properties?.length) {
-      out.push(`<ul class="smallNote">`);
-      storage.properties.forEach((prop: LnkProperty) => {
-        const name = prop.name || `Property ${prop.id}`;
-        let typeLabel = "";
-        if (prop.type != null) {
-          const baseHex = toHex32(prop.type & 0xffff, 4);
-          const vtName = prop.typeName ? `VT_${prop.typeName}` : `VT_0x${baseHex}`;
-          typeLabel = ` (${safe(vtName)} 0x${baseHex})`;
-        }
-        const value = formatPropertyValue(prop.value);
-        const truncated = prop.truncated ? " [truncated]" : "";
-        out.push(
-          `<li title="FMTID ${safe(storage.formatId || "")}, PID ${prop.id}">${safe(name)}${typeLabel}: ${safe(
-            value
-          )}${truncated}</li>`
-        );
-      });
-      out.push(`</ul>`);
-    }
-  });
-  return out.join("");
 };
 
 const renderLinkInfo = (lnk: LnkParseResult, out: string[]): void => {
@@ -309,64 +212,6 @@ const renderIdList = (lnk: LnkParseResult, out: string[]): void => {
     )
   );
   out.push(`</section>`);
-};
-
-const describeBlock = (block: LnkExtraDataBlock): string => {
-  const signature = block.signature >>> 0;
-  switch (signature) {
-    case 0xa0000001:
-    case 0xa0000006:
-    case 0xa0000007: {
-      const parsed = block.parsed as { ansi: string | null; unicode: string | null } | null;
-      if (!parsed) return "";
-      const ansi = parsed.ansi ? safe(parsed.ansi) : "-";
-      const unicode = parsed.unicode ? safe(parsed.unicode) : "-";
-      return `<div class="smallNote">ANSI: ${ansi}<br/>Unicode: ${unicode}</div>`;
-    }
-    case 0xa0000003: {
-      const parsed = block.parsed as LnkTrackerData | null;
-      if (!parsed) return "";
-      const machine = parsed.machineId ? `Machine: ${safe(parsed.machineId)}<br/>` : "";
-      const droidVolume = parsed.droidVolume ? `Droid VolumeID: ${safe(parsed.droidVolume)}<br/>` : "";
-      const droidObject = parsed.droidObject ? `Droid ObjectID: ${safe(parsed.droidObject)}<br/>` : "";
-      const birthVolume = parsed.droidBirthVolume
-        ? `Birth VolumeID: ${safe(parsed.droidBirthVolume)}<br/>`
-        : "";
-      const birthObject = parsed.droidBirthObject
-        ? `Birth ObjectID: ${safe(parsed.droidBirthObject)}<br/>`
-        : "";
-      return (
-        `<div class="smallNote" title="NTFS object tracking identifiers used by Distributed Link Tracking; Droid VolumeID is for link tracking and typically does not match System.VolumeId from the property store.">Tracker data: shell tracking IDs to find the target after moves/renames (Droid IDs are separate from System.VolumeId).<br/>` +
-        `${machine}${droidVolume}${droidObject}${birthVolume}${birthObject}</div>`
-      );
-    }
-    case 0xa0000009:
-      return renderPropertyStore(block.parsed as LnkPropertyStoreData | null);
-    case 0xa000000c: {
-      const parsed = block.parsed as LnkVistaIdListData | null;
-      if (!parsed) return "";
-      const count = parsed.items?.length ?? 0;
-      const terminator = parsed.terminatorPresent ? "" : " (no terminator)";
-      return `<div class="smallNote">Vista+ IDList: ${count} item(s)${terminator}</div>`;
-    }
-    case 0xa0000004: {
-      const parsed = block.parsed as { codePage?: number } | null;
-      if (!parsed || parsed.codePage == null) return "";
-      return `<div class="smallNote">Code page: ${parsed.codePage}</div>`;
-    }
-    case 0xa0000005: {
-      const parsed = block.parsed as { folderId?: number; offset?: number } | null;
-      if (parsed?.folderId == null || parsed.offset == null) return "";
-      return `<div class="smallNote">Folder ID: ${parsed.folderId} (offset ${parsed.offset})</div>`;
-    }
-    case 0xa000000b: {
-      const parsed = block.parsed as { knownFolderId?: string | null; offset?: number } | null;
-      if (!parsed?.knownFolderId || parsed.offset == null) return "";
-      return `<div class="smallNote">Known folder: ${safe(parsed.knownFolderId)} (offset ${parsed.offset})</div>`;
-    }
-    default:
-      return "";
-  }
 };
 
 const renderExtraData = (lnk: LnkParseResult, out: string[]): void => {

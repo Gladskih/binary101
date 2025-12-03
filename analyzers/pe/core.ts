@@ -7,9 +7,9 @@ import { computeEntrySection } from "./core-entry.js";
 import {
   parseCoffHeader,
   parseDosHeaderAndStub,
-  parseOptionalHeaderAndDirectories,
-  parseSectionHeaders
+  parseOptionalHeaderAndDirectories
 } from "./core-headers.js";
+import { parseSectionHeaders } from "./sections.js";
 import type { PeCore } from "./types.js";
 
 export async function parsePeHeaders(file: File): Promise<PeCore | null> {
