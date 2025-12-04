@@ -7,6 +7,7 @@ import { MockFile } from "../helpers/mock-file.js";
 import { createMp3File } from "../fixtures/audio-sample-files.js";
 import { createMp4File } from "../fixtures/mp4-fixtures.js";
 import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
+import { createFlacFile } from "../fixtures/flac-fixtures.js";
 
 const fromAscii = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "ascii"));
 
@@ -131,6 +132,14 @@ void test("detectBinaryType reports MP3 for minimal single-frame files", async (
   const singleFrame = full.data.slice(0, full.data.length / 2);
   const label = await detectBinaryType(new MockFile(singleFrame, "single-frame.mp3", "audio/mpeg"));
   assert.strictEqual(label, "MPEG Version 1, Layer III, 128 kbps, 44100 Hz, Stereo");
+});
+
+void test("detectBinaryType refines FLAC labels using stream info", async () => {
+  const label = await detectBinaryType(createFlacFile());
+  assert.match(label, /^FLAC audio/);
+  assert.match(label, /44100/);
+  assert.match(label, /2ch/);
+  assert.match(label, /16-bit/);
 });
 
 void test("detectBinaryType does not mislabel MPEG Program Stream as MP3", async () => {

@@ -6,11 +6,22 @@ import { detectBinaryType, parseForUi } from "../../analyzers/index.js";
 import { DOMParser as XmlDomParser } from "@xmldom/xmldom";
 import { createElfFile } from "../fixtures/elf-sample-file.js";
 import { createFb2File, createPdfFile } from "../fixtures/document-sample-files.js";
-import { createGifFile, createJpegFile, createPngFile, createPngWithIhdr, createWebpFile } from "../fixtures/image-sample-files.js";
+import {
+  createGifFile,
+  createJpegFile,
+  createPngFile,
+  createPngWithIhdr,
+  createWebpFile
+} from "../fixtures/image-sample-files.js";
 import { createLnkFile } from "../fixtures/lnk-sample-file.js";
 import { createMp3File } from "../fixtures/audio-sample-files.js";
+import { createFlacFile } from "../fixtures/flac-fixtures.js";
 import { createPeFile } from "../fixtures/sample-files-pe.js";
-import { createRar4File, createRar5File, createSevenZipFile } from "../fixtures/rar-sevenzip-fixtures.js";
+import {
+  createRar4File,
+  createRar5File,
+  createSevenZipFile
+} from "../fixtures/rar-sevenzip-fixtures.js";
 import { createDosMzExe } from "../fixtures/dos-sample-file.js";
 import { createTarFile } from "../fixtures/tar-fixtures.js";
 import { createZipFile } from "../fixtures/zip-fixtures.js";
@@ -18,6 +29,7 @@ import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
 import { createAniFile, createAviFile, createWavFile } from "../fixtures/riff-sample-files.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
+import type { FlacMetadataBlockDetail } from "../../analyzers/flac/types.js";
 
 const textEncoder = new TextEncoder();
 class TestDomParser extends XmlDomParser {
@@ -66,7 +78,10 @@ void test("detectBinaryType recognizes common binary formats", async () => {
     detectBinaryType(createWavFile()),
     detectBinaryType(createAviFile()),
     detectBinaryType(createAniFile()),
-    detectBinaryType(new MockFile(textEncoder.encode("plain text sample"), "note.txt", "text/plain"))
+    detectBinaryType(
+      new MockFile(textEncoder.encode("plain text sample"), "note.txt", "text/plain")
+    ),
+    detectBinaryType(createFlacFile())
   ]);
 
   assert.match(detections[0], /^PNG image/);
@@ -83,6 +98,7 @@ void test("detectBinaryType recognizes common binary formats", async () => {
   assert.match(detections[11], /^AVI\/DivX video/);
   assert.match(detections[12], /animated cursor/i);
   assert.strictEqual(detections[13], "Text file");
+  assert.match(detections[14], /^FLAC audio/);
 });
 
 void test("detectBinaryType distinguishes DOS MZ executables from PE", async () => {
@@ -177,7 +193,8 @@ void test("parseForUi parses Windows shortcuts", async () => {
     assert.strictEqual(lnk.stringData.relativePath, ".\\Example\\app.exe");
     assert.ok(Array.isArray(lnk.extraData.blocks));
     const propertyStore = lnk.extraData.blocks.find(
-      (block: { signature?: number; parsed?: { storages?: unknown[] } }) => block.signature === 0xa0000009
+      (block: { signature?: number; parsed?: { storages?: unknown[] } }) =>
+        block.signature === 0xa0000009
     );
     assert.ok(propertyStore?.parsed?.storages?.length);
   });
@@ -188,6 +205,18 @@ void test("parseForUi parses MP3 frames and summary", async () => {
     assert.strictEqual(mp3.isMp3, true);
     assert.ok(mp3.mpeg.firstFrame);
     assert.ok(mp3.summary);
+  });
+});
+
+void test("parseForUi parses FLAC stream info and metadata blocks", async () => {
+  await assertParsed(createFlacFile(), "flac", flac => {
+    assert.strictEqual(flac.streamInfo?.sampleRate, 44100);
+    assert.strictEqual(flac.streamInfo?.channels, 2);
+    assert.ok(Array.isArray(flac.blocks));
+    const comments = flac.blocks.find(
+      (block: FlacMetadataBlockDetail) => block.type === "VORBIS_COMMENT"
+    );
+    assert.ok(comments);
   });
 });
 

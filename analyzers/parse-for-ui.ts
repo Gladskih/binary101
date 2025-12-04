@@ -11,6 +11,7 @@ import { parsePdf } from "./pdf/index.js";
 import { parseWebp } from "./webp/index.js";
 import { parseWebm } from "./webm/index.js";
 import { parseMp3, probeMp3 } from "./mp3/index.js";
+import { parseFlac } from "./flac/index.js";
 import { hasSevenZipSignature, parseSevenZip } from "./sevenz/index.js";
 import { hasTarSignature, parseTar } from "./tar/index.js";
 import { hasRarSignature, parseRar } from "./rar/index.js";
@@ -127,6 +128,10 @@ const parseForUi = async (file: File): Promise<ParseForUiResult> => {
   if (dv.byteLength >= 4 && dv.getUint32(0, false) === 0x1a45dfa3) {
     const webm = await parseWebm(file);
     if (webm) return { analyzer: "webm", parsed: webm };
+  }
+  if (dv.byteLength >= 4 && dv.getUint32(0, false) === 0x664c6143) {
+    const flac = await parseFlac(file);
+    if (flac) return { analyzer: "flac", parsed: flac };
   }
   if (probeMp3(dv)) {
     const mp3 = await parseMp3(file);

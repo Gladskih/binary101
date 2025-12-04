@@ -11,6 +11,7 @@ import type { PdfParseResult } from "./pdf/types.js";
 import type { WebpParseResult } from "./webp/types.js";
 import type { WebmParseResult } from "./webm/types.js";
 import type { Mp3ParseResult } from "./mp3/types.js";
+import type { FlacParseResult } from "./flac/types.js";
 import type { SevenZipParseResult } from "./sevenz/index.js";
 import type { TarParseResult } from "./tar/types.js";
 import type { RarParseResult } from "./rar/index.js";
@@ -38,6 +39,7 @@ export type AnalyzerName =
   | "webp"
   | "webm"
   | "mp3"
+  | "flac"
   | "mp4"
   | "wav"
   | "avi"
@@ -60,6 +62,7 @@ type AnalyzerParseMap = {
   webp: WebpParseResult;
   webm: WebmParseResult;
   mp3: Mp3ParseResult;
+  flac: FlacParseResult;
   mp4: Mp4ParseResult;
   wav: WavParseResult;
   avi: AviParseResult;

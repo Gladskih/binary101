@@ -13,6 +13,7 @@ import {
   renderWebm,
   renderFb2,
   renderMp3,
+  renderFlac,
   renderMp4,
   renderSevenZip,
   renderTar,
@@ -189,6 +190,14 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
     ctx.termElement.hidden = false;
     ctx.valueElement.hidden = false;
     ctx.valueElement.innerHTML = audioPreviewHtml + renderMp3(result.parsed);
+    return;
+  }
+
+  if (result.analyzer === "flac") {
+    ctx.termElement.textContent = "FLAC details";
+    ctx.termElement.hidden = false;
+    ctx.valueElement.hidden = false;
+    ctx.valueElement.innerHTML = audioPreviewHtml + renderFlac(result.parsed);
     return;
   }
 

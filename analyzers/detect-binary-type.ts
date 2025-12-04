@@ -7,6 +7,7 @@ import { parsePng } from "./png/index.js";
 import { parseWebp } from "./webp/index.js";
 import { parseWebm, buildWebmLabel } from "./webm/index.js";
 import { parseMp3, probeMp3 } from "./mp3/index.js";
+import { parseFlac } from "./flac/index.js";
 import { parseSevenZip } from "./sevenz/index.js";
 import { parseRar } from "./rar/index.js";
 import { parseMp4, buildMp4Label } from "./mp4/index.js";
@@ -26,6 +27,7 @@ import type { Mp3ParseResult } from "./mp3/types.js";
 import type { WavParseResult } from "./wav/types.js";
 import type { AviParseResult } from "./avi/types.js";
 import type { AniParseResult } from "./ani/types.js";
+import type { FlacParseResult } from "./flac/types.js";
 
 const buildWavLabel = (wav: WavParseResult | null): string | null => {
   if (!wav) return null;
@@ -68,6 +70,19 @@ const buildAniLabel = (ani: AniParseResult | null): string | null => {
   return `Windows animated cursor (${parts.join(", ")})`;
 };
 
+const buildFlacLabel = (flac: FlacParseResult | null): string | null => {
+  if (!flac?.streamInfo) return null;
+  const parts: string[] = [];
+  const info = flac.streamInfo;
+  if (info.channels) parts.push(`${info.channels}ch`);
+  if (info.sampleRate) parts.push(`${info.sampleRate}Hz`);
+  if (info.bitsPerSample) parts.push(`${info.bitsPerSample}-bit`);
+  if (info.durationSeconds) parts.push(`${info.durationSeconds} s`);
+  if (info.averageBitrateKbps) parts.push(`${info.averageBitrateKbps} kbps`);
+  const suffix = parts.length ? ` (${parts.join(", ")})` : "";
+  return `FLAC audio${suffix}`;
+};
+
 const detectBinaryType = async (file: File): Promise<string> => {
   const maxProbeBytes = Math.min(file.size || 0, 65536);
   const dv = new DataView(
@@ -93,7 +108,9 @@ const detectBinaryType = async (file: File): Promise<string> => {
     }
     if (
       magic.indexOf("MP4/QuickTime") !== -1 ||
-      (magic.indexOf("ISO-BMFF") !== -1 && magic.indexOf("HEIF") === -1 && magic.indexOf("HEIC") === -1) ||
+      (magic.indexOf("ISO-BMFF") !== -1 &&
+        magic.indexOf("HEIF") === -1 &&
+        magic.indexOf("HEIC") === -1) ||
       magic.indexOf("3GP") !== -1
     ) {
       const brand = dv.byteLength >= 12 ? dv.getUint32(8, false) : 0;
@@ -132,7 +149,9 @@ const detectBinaryType = async (file: File): Promise<string> => {
           : null;
         const files = sevenZip.structure?.files?.length;
         const extras: string[] = [];
-        if (typeof files === "number" && files > 0) extras.push(`${files} file${files === 1 ? "" : "s"}`);
+        if (typeof files === "number" && files > 0) {
+          extras.push(`${files} file${files === 1 ? "" : "s"}`);
+        }
         const suffix = extras.length ? ` (${extras.join(", ")})` : "";
         if (version) return `7z archive v${version}${suffix}`;
         return `7z archive${suffix}`;
@@ -154,6 +173,11 @@ const detectBinaryType = async (file: File): Promise<string> => {
         const suffix = extras.length ? ` (${extras.join(", ")})` : "";
         return `PNG image${suffix}`;
       }
+    }
+    if (magic.indexOf("FLAC audio") !== -1) {
+      const flac = await parseFlac(file);
+      const label = buildFlacLabel(flac);
+      if (label) return label;
     }
     if (magic === "WebP image") {
       const webp = await parseWebp(file);
