@@ -1,18 +1,19 @@
 # Binary101
 
-Binary101 is a browser-based static web application for inspecting binary files, with a focus on executable formats. The app runs entirely in the browser using TypeScript/JavaScript (ES modules). Source is compiled to browser-ready JavaScript via a small TypeScript build step, but there is still no server-side code.
+Binary101 is a browser-based static web application for inspecting binary files. The app runs entirely in the browser using TypeScript/JavaScript (ES modules). Source is compiled to browser-ready JavaScript via a small TypeScript build step, but there is still no server-side code.
 
 ## Inspiration and Purpose
 This project draws inspiration from tools like [regex101](https://regex101.com/), the Linux `file` utility, and VirusTotal. It is designed for educational and research purposes, helping users understand binary file structures and formats. By analyzing files locally in the browser, it ensures privacy and security, making it suitable for sensitive files.
 
 ## Features
-- **File Type Detection**: Automatically identifies binary file types.
-- **PE/COFF Parsing**: Provides detailed insights into the structure of PE files.
-- **Hashing**: Computes cryptographic hashes (e.g., SHA-256) for files.
-- **Privacy-Focused**: All file analysis is performed locally in the browser.
+- **Deep analyzers**: Detailed views for PE/COFF (PE32/PE32+), MS-DOS MZ, ELF 32/64, PNG, JPEG, GIF, WebP (RIFF), WAV (RIFF), AVI (RIFF), ANI (RIFF), WebM/Matroska, MP4/QuickTime/3GP (ISO-BMFF), PDF, TAR, ZIP (DOCX/XLSX/PPTX/OpenXML), 7z, RAR v4/v5, MP3, FB2, LNK.
+- **Detected/labelled**: Mach-O (32/64/FAT), text/HTML/XML/SVG/JSON/RTF/shebang, gzip/bzip2/XZ/LZ4/Zstandard, CAB, ISO-9660, FLAC/OGG/AIFF/MIDI/AMR/AC3/DTS, FLV/ASF, MPEG PS/TS, RealMedia, SQLite, Java class, Android DEX, WebAssembly, Windows Help (HLP), PDB, PCAP/PCAP-NG, DjVu, Microsoft Compound File (DOC/XLS/PPT/MSI/CHM), APK/VSIX/JAR/WAR/EAR/JMOD/EPUB/XPS labels, HEIF/HEIC.
+- **Rendering**: previews for supported audio/video/image types.
+- **Hashing**: SHA-256 and SHA-512 computed in-browser.
+- **Privacy**: No uploads or network calls for analysis.
 
 ## Usage
-- Drag and drop a binary file onto the app, or use the file input to upload.
+- Drag and drop a file onto the page, paste a file, or use the file picker.
 - View detailed analysis of the file structure and computed hashes.
 
 ## Project Structure (high level)
@@ -21,10 +22,6 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
 - `analyzers/` &mdash; TypeScript binary format detection and parsers. PE/COFF logic lives under `analyzers/pe/` and is split into small modules (headers, imports/exports, resources, TLS, CLR, relocations, etc.), compiled under `dist/analyzers/`.
 - `renderers/` &mdash; TypeScript HTML renderers for parsed structures. The PE renderer lives under `renderers/pe/` and is split into headers, directory views, resources, and layout/sanity views, compiled under `dist/renderers/`.
 - `binary-utils.ts`, `html-utils.ts` &mdash; shared helpers for hashing, byte/hex formatting and safe HTML generation.
-
-## Supported file types
-- Parsed with detailed views: PE/COFF (PE32 and PE32+), ELF 32/64, PNG, JPEG, GIF, WebP, WebM/Matroska, PDF, TAR, ZIP (including DOCX/XLSX/PPTX and related OpenXML), 7z, RAR (v4/v5 headers and entries), MP3, FictionBook FB2.
-- Detected/labelled without deep parsing: Mach-O (32/64/FAT), text/HTML/XML/SVG/JSON/RTF/shebang scripts, gzip/bzip2/XZ/LZ4/Zstandard, CAB, ISO-9660 images, FLAC/OGG/WAV/AIFF/MIDI/AMR/AC3/DTS, MP4/MOV (ISO BMFF), FLV/AVI/ASF, MPEG PS/TS, RealMedia, SQLite, Java class files, Android DEX bytecode, WebAssembly (WASM), Windows Help (HLP), Windows shortcut (LNK), PDB, PCAP/PCAP-NG, DjVu, Microsoft Compound File (DOC/XLS/PPT/MSI/CHM signatures), ZIP-derived APK/VSIX/JAR/WAR/EAR/JMOD/E-book EPUB/XPS/FB2 labels.
 
 ## Contributing
 Please see [CONTRIBUTING.md](CONTRIBUTING.md)
