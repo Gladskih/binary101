@@ -2,7 +2,8 @@
 
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
-import type { WebpParseResult, WebpChunk } from "../../analyzers/webp/types.js";
+import { renderChunkTable } from "../riff/chunk-table.js";
+import type { WebpParseResult } from "../../analyzers/webp/types.js";
 
 function renderIssues(issues: string[] | null | undefined): string {
   if (!issues || issues.length === 0) return "";
@@ -45,39 +46,6 @@ function describeBackgroundColor(webp: WebpParseResult): string {
     return "Not set";
   }
   return toHex32(webp.animationInfo.backgroundColor, 8);
-}
-
-function renderChunks(chunks: WebpChunk[] | null | undefined): string {
-  if (!chunks || chunks.length === 0) return "";
-  const header =
-    "<h4>Chunks</h4>" +
-    "<p>Each WebP file is a RIFF container made of four-character chunks. " +
-    "Offsets are measured from the start of the file. Sizes are reported " +
-    "without the padding byte used for even alignment.</p>";
-  const rows = chunks
-    .map((chunk, index) => {
-      const type = escapeHtml(chunk.type || "");
-      const offset = chunk.offset != null ? chunk.offset : 0;
-      const size = chunk.size != null ? chunk.size : 0;
-      const padded = chunk.paddedSize != null ? chunk.paddedSize : size;
-      const truncated = chunk.truncated ? " class=\"dim\"" : "";
-      return (
-        `<tr${truncated}>` +
-        `<td>${index}</td>` +
-        `<td>${type}</td>` +
-        `<td title="${toHex32(offset, 8)}">${offset}</td>` +
-        `<td title="${toHex32(size, 8)}">${size} B</td>` +
-        `<td title="${toHex32(padded, 8)}">${padded} B</td>` +
-        "</tr>"
-      );
-    })
-    .join("");
-  return (
-    header +
-    '<table class="byteView"><thead><tr>' +
-    "<th>#</th><th>Type</th><th>Offset</th><th>Size</th><th>Padded</th>" +
-    `</tr></thead><tbody>${rows}</tbody></table>`
-  );
 }
 
 export function renderWebp(webp: WebpParseResult | null | unknown): string {
@@ -146,6 +114,6 @@ export function renderWebp(webp: WebpParseResult | null | unknown): string {
   }
   out.push("</dl>");
   out.push(renderIssues(issues));
-  out.push(renderChunks(data.chunks));
+  out.push(renderChunkTable(data.chunks));
   return out.join("");
 }

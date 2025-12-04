@@ -10,6 +10,9 @@ import { parseMp3, probeMp3 } from "./mp3/index.js";
 import { parseSevenZip } from "./sevenz/index.js";
 import { parseRar } from "./rar/index.js";
 import { parseMp4, buildMp4Label } from "./mp4/index.js";
+import { parseWav } from "./wav/index.js";
+import { parseAvi } from "./avi/index.js";
+import { parseAni } from "./ani/index.js";
 import { detectELF, detectMachO } from "./format-detectors.js";
 import {
   detectPdfVersion,
@@ -20,6 +23,50 @@ import {
 import { buildMp3Label } from "./mp3-labels.js";
 import { probeMzFormat } from "./mz-probe.js";
 import type { Mp3ParseResult } from "./mp3/types.js";
+import type { WavParseResult } from "./wav/types.js";
+import type { AviParseResult } from "./avi/types.js";
+import type { AniParseResult } from "./ani/types.js";
+
+const buildWavLabel = (wav: WavParseResult | null): string | null => {
+  if (!wav) return null;
+  const parts: string[] = [];
+  if (wav.format?.formatName) parts.push(wav.format.formatName);
+  else if (wav.format?.audioFormat != null) {
+    parts.push(`0x${wav.format.audioFormat.toString(16)}`);
+  }
+  if (wav.format?.channels) parts.push(`${wav.format.channels}ch`);
+  if (wav.format?.sampleRate) parts.push(`${wav.format.sampleRate}Hz`);
+  if (wav.format?.bitsPerSample) parts.push(`${wav.format.bitsPerSample}-bit`);
+  const suffix = parts.length ? ` (${parts.join(", ")})` : "";
+  return `WAVE audio${suffix}`;
+};
+
+const buildAviLabel = (avi: AviParseResult | null): string | null => {
+  if (!avi) return null;
+  const parts: string[] = [];
+  const main = avi.mainHeader;
+  if (main?.width && main?.height) parts.push(`${main.width}x${main.height}`);
+  const fps = main?.frameRate;
+  if (fps) parts.push(`${fps} fps`);
+  const videoStreams = avi.streams.filter(stream => stream.header?.type === "vids").length;
+  const audioStreams = avi.streams.filter(stream => stream.header?.type === "auds").length;
+  if (videoStreams || audioStreams) {
+    parts.push(`${videoStreams} video / ${audioStreams} audio`);
+  }
+  const suffix = parts.length ? ` (${parts.join(", ")})` : "";
+  return `AVI/DivX video${suffix}`;
+};
+
+const buildAniLabel = (ani: AniParseResult | null): string | null => {
+  if (!ani) return null;
+  const parts: string[] = ["ANI"];
+  if (ani.header?.width && ani.header?.height) {
+    parts.push(`${ani.header.width}x${ani.header.height}`);
+  }
+  if (ani.header?.frameCount) parts.push(`${ani.header.frameCount} frames`);
+  if (ani.header?.defaultFps) parts.push(`${ani.header.defaultFps} fps`);
+  return `Windows animated cursor (${parts.join(", ")})`;
+};
 
 const detectBinaryType = async (file: File): Promise<string> => {
   const maxProbeBytes = Math.min(file.size || 0, 65536);
@@ -37,6 +84,12 @@ const detectBinaryType = async (file: File): Promise<string> => {
       const label = buildMp3Label(mp3);
       if (label) return label;
       return "Unknown binary type";
+    }
+    if (magic.indexOf("WAVE audio") !== -1) {
+      const wav = await parseWav(file);
+      const label = buildWavLabel(wav);
+      if (label) return label;
+      return magic;
     }
     if (
       magic.indexOf("MP4/QuickTime") !== -1 ||
@@ -62,6 +115,12 @@ const detectBinaryType = async (file: File): Promise<string> => {
     if (magic === "Matroska/WebM container") {
       const webm = await parseWebm(file);
       const label = buildWebmLabel(webm);
+      if (label) return label;
+      return magic;
+    }
+    if (magic.indexOf("AVI/DivX video") !== -1) {
+      const avi = await parseAvi(file);
+      const label = buildAviLabel(avi);
       if (label) return label;
       return magic;
     }
@@ -111,6 +170,12 @@ const detectBinaryType = async (file: File): Promise<string> => {
         const suffix = extras.length ? ` (${extras.join(", ")})` : "";
         return `WebP image${suffix}`;
       }
+    }
+    if (magic.indexOf("Windows animated cursor") !== -1) {
+      const ani = await parseAni(file);
+      const label = buildAniLabel(ani);
+      if (label) return label;
+      return magic;
     }
     if (magic === "RAR archive") {
       const rar = await parseRar(file);

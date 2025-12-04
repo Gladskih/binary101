@@ -17,6 +17,10 @@ import { hasRarSignature, parseRar } from "./rar/index.js";
 import { parseMz } from "./mz/index.js";
 import { hasShellLinkSignature, parseLnk } from "./lnk/index.js";
 import { parseMp4 } from "./mp4/index.js";
+import { parseWav } from "./wav/index.js";
+import { parseAvi } from "./avi/index.js";
+import { parseAni } from "./ani/index.js";
+import { readFourCc } from "./riff/index.js";
 import type { ParseForUiResult } from "./analyzer-types.js";
 import { detectELF } from "./format-detectors.js";
 import { detectPdfVersion, hasZipEocdSignature, toAsciiFromWholeView } from "./detection-labels.js";
@@ -93,10 +97,21 @@ const parseForUi = async (file: File): Promise<ParseForUiResult> => {
   }
   if (dv.byteLength >= 12) {
     const riff = dv.getUint32(0, false);
-    const webp = dv.getUint32(8, false);
-    if (riff === 0x52494646 && webp === 0x57454250) {
-      const parsedWebp = await parseWebp(file);
-      if (parsedWebp) return { analyzer: "webp", parsed: parsedWebp };
+    if (riff === 0x52494646 || riff === 0x52494658) {
+      const formType = readFourCc(dv, 8);
+      if (formType === "WEBP") {
+        const parsedWebp = await parseWebp(file);
+        if (parsedWebp) return { analyzer: "webp", parsed: parsedWebp };
+      } else if (formType === "WAVE") {
+        const wav = await parseWav(file);
+        if (wav) return { analyzer: "wav", parsed: wav };
+      } else if (formType === "AVI " || formType === "AVIX") {
+        const avi = await parseAvi(file);
+        if (avi) return { analyzer: "avi", parsed: avi };
+      } else if (formType === "ACON") {
+        const ani = await parseAni(file);
+        if (ani) return { analyzer: "ani", parsed: ani };
+      }
     }
   }
   if (dv.byteLength >= 12) {

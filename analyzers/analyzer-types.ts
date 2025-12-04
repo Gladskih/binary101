@@ -17,6 +17,9 @@ import type { RarParseResult } from "./rar/index.js";
 import type { MzParseResult } from "./mz/index.js";
 import type { LnkParseResult } from "./lnk/types.js";
 import type { Mp4ParseResult } from "./mp4/types.js";
+import type { WavParseResult } from "./wav/types.js";
+import type { AviParseResult } from "./avi/types.js";
+import type { AniParseResult } from "./ani/types.js";
 
 export type AnalyzerName =
   | "lnk"
@@ -35,7 +38,10 @@ export type AnalyzerName =
   | "webp"
   | "webm"
   | "mp3"
-  | "mp4";
+  | "mp4"
+  | "wav"
+  | "avi"
+  | "ani";
 
 type AnalyzerParseMap = {
   lnk: LnkParseResult;
@@ -55,6 +61,9 @@ type AnalyzerParseMap = {
   webm: WebmParseResult;
   mp3: Mp3ParseResult;
   mp4: Mp4ParseResult;
+  wav: WavParseResult;
+  avi: AviParseResult;
+  ani: AniParseResult;
 };
 
 type AnalyzerResultUnion = {

@@ -18,7 +18,10 @@ import {
   renderTar,
   renderRar,
   renderMz,
-  renderLnk
+  renderLnk,
+  renderWav,
+  renderAvi,
+  renderAni
 } from "../renderers/index.js";
 import type { PreviewRender } from "./preview.js";
 
@@ -135,6 +138,14 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
     return;
   }
 
+  if (result.analyzer === "ani") {
+    ctx.termElement.textContent = "ANI details";
+    ctx.termElement.hidden = false;
+    ctx.valueElement.hidden = false;
+    ctx.valueElement.innerHTML = imagePreviewHtml + renderAni(result.parsed);
+    return;
+  }
+
   if (result.analyzer === "webm") {
     ctx.termElement.textContent = "WebM details";
     ctx.termElement.hidden = false;
@@ -155,6 +166,16 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
     return;
   }
 
+  if (result.analyzer === "avi") {
+    ctx.termElement.textContent = "AVI details";
+    ctx.termElement.hidden = false;
+    ctx.valueElement.hidden = false;
+    const videoPreviewHtml = preview?.kind === "video" ? preview.html : "";
+    ctx.valueElement.innerHTML = videoPreviewHtml + renderAvi(result.parsed);
+    ctx.attachGuards(preview);
+    return;
+  }
+
   if (result.analyzer === "pdf") {
     ctx.termElement.textContent = "PDF details";
     ctx.termElement.hidden = false;
@@ -168,6 +189,14 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
     ctx.termElement.hidden = false;
     ctx.valueElement.hidden = false;
     ctx.valueElement.innerHTML = audioPreviewHtml + renderMp3(result.parsed);
+    return;
+  }
+
+  if (result.analyzer === "wav") {
+    ctx.termElement.textContent = "WAV details";
+    ctx.termElement.hidden = false;
+    ctx.valueElement.hidden = false;
+    ctx.valueElement.innerHTML = audioPreviewHtml + renderWav(result.parsed);
     return;
   }
 

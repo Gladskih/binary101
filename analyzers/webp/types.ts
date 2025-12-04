@@ -1,5 +1,7 @@
 "use strict";
 
+import type { RiffChunk } from "../riff/types.js";
+
 export interface WebpDimensions {
   width: number;
   height: number;
@@ -18,13 +20,7 @@ export interface WebpAnimationInfo {
   loopCount: number;
 }
 
-export interface WebpChunk {
-  type: string | null;
-  offset: number;
-  size: number;
-  paddedSize: number;
-  truncated: boolean;
-}
+export type WebpChunk = RiffChunk;
 
 export interface WebpChunkStats {
   chunkCount: number;

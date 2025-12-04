@@ -15,6 +15,7 @@ import { createDosMzExe } from "../fixtures/dos-sample-file.js";
 import { createTarFile } from "../fixtures/tar-fixtures.js";
 import { createZipFile } from "../fixtures/zip-fixtures.js";
 import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
+import { createAniFile, createAviFile, createWavFile } from "../fixtures/riff-sample-files.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
@@ -62,6 +63,9 @@ void test("detectBinaryType recognizes common binary formats", async () => {
     detectBinaryType(createRar5File()),
     detectBinaryType(createLnkFile()),
     detectBinaryType(createWebmFile()),
+    detectBinaryType(createWavFile()),
+    detectBinaryType(createAviFile()),
+    detectBinaryType(createAniFile()),
     detectBinaryType(new MockFile(textEncoder.encode("plain text sample"), "note.txt", "text/plain"))
   ]);
 
@@ -75,7 +79,10 @@ void test("detectBinaryType recognizes common binary formats", async () => {
   assert.match(detections[7], /^RAR archive/);
   assert.strictEqual(detections[8], "Windows shortcut (.lnk)");
   assert.match(detections[9], /^WebM/);
-  assert.strictEqual(detections[10], "Text file");
+  assert.match(detections[10], /^WAVE audio/);
+  assert.match(detections[11], /^AVI\/DivX video/);
+  assert.match(detections[12], /animated cursor/i);
+  assert.strictEqual(detections[13], "Text file");
 });
 
 void test("detectBinaryType distinguishes DOS MZ executables from PE", async () => {
@@ -124,6 +131,28 @@ void test("parseForUi parses JPEG metadata", async () => {
 void test("parseForUi parses WebP chunks", async () => {
   await assertParsed(createWebpFile(), "webp", webp => {
     assert.ok(Array.isArray(webp.chunks));
+  });
+});
+
+void test("parseForUi parses WAV audio", async () => {
+  await assertParsed(createWavFile(), "wav", wav => {
+    assert.strictEqual(wav.format?.channels, 1);
+    assert.ok(wav.data?.durationSeconds);
+  });
+});
+
+void test("parseForUi parses AVI headers and streams", async () => {
+  await assertParsed(createAviFile(), "avi", avi => {
+    assert.strictEqual(avi.mainHeader?.width, 320);
+    assert.strictEqual(avi.streams.length, 1);
+    assert.strictEqual(avi.streams[0]?.header?.type, "vids");
+  });
+});
+
+void test("parseForUi parses ANI metadata", async () => {
+  await assertParsed(createAniFile(), "ani", ani => {
+    assert.strictEqual(ani.header?.frameCount, 2);
+    assert.ok(ani.frames >= 2);
   });
 });
 

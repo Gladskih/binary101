@@ -22,7 +22,10 @@ import {
   renderWebp,
   renderZip,
   renderRar,
-  renderLnk
+  renderLnk,
+  renderWav,
+  renderAvi,
+  renderAni
 } from "../../renderers/index.js";
 import type { ZipParseResult } from "../../analyzers/zip/index.js";
 import { createMp3File } from "../fixtures/audio-sample-files.js";
@@ -37,6 +40,7 @@ import { createRar5File, createSevenZipFile } from "../fixtures/rar-sevenzip-fix
 import { createTarFile } from "../fixtures/tar-fixtures.js";
 import { createZipFile } from "../fixtures/zip-fixtures.js";
 import { createWebmWithCues } from "../fixtures/webm-cues-fixtures.js";
+import { createAniFile, createAviFile, createWavFile } from "../fixtures/riff-sample-files.js";
 
 class TestDomParser extends XmlDomParser {
   override parseFromString(text: string, type: string) {
@@ -84,6 +88,10 @@ void test("renderers produce readable HTML output", async () => {
   const webpHtml = renderWebp(webp);
   assert.match(webpHtml, /WebP/);
 
+  const ani = await parseOnly(createAniFile(), "ani");
+  const aniHtml = renderAni(ani);
+  assert.match(aniHtml, /ANI/);
+
   const webm = await parseOnly(createWebmWithCues(), "webm");
   const webmHtml = renderWebm(webm);
   assert.match(webmHtml, /WebM/);
@@ -106,6 +114,10 @@ void test("renderers produce readable HTML output", async () => {
   assert.match(mp4Html, /Tracks/);
   assert.match(mp4Html, /Top-level boxes/);
 
+  const avi = await parseOnly(createAviFile(), "avi");
+  const aviHtml = renderAvi(avi);
+  assert.match(aviHtml, /AVI/);
+
   const fb2 = await parseOnly(createFb2File(), "fb2");
   const fb2Html = renderFb2(fb2);
   assert.match(fb2Html, /Example/);
@@ -120,6 +132,10 @@ void test("renderers produce readable HTML output", async () => {
   assert.match(mp3Html, /valueHint/);
   assert.match(mp3Html, /optionsRow/);
   assert.match(mp3Html, /CD-quality rate/);
+
+  const wav = await parseOnly(createWavFile(), "wav");
+  const wavHtml = renderWav(wav);
+  assert.match(wavHtml, /WAVE audio/);
 
   const lnk = await parseOnly(createLnkFile(), "lnk");
   const lnkHtml = renderLnk(lnk);
