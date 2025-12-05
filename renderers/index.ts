@@ -21,3 +21,4 @@ export { renderLnk } from "./lnk/index.js";
 export { renderWav } from "./wav/index.js";
 export { renderAvi } from "./avi/index.js";
 export { renderAni } from "./ani/index.js";
+export { renderSqlite } from "./sqlite/index.js";

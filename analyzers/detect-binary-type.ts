@@ -28,6 +28,7 @@ import type { WavParseResult } from "./wav/types.js";
 import type { AviParseResult } from "./avi/types.js";
 import type { AniParseResult } from "./ani/types.js";
 import type { FlacParseResult } from "./flac/types.js";
+import { buildSqliteLabel, parseSqlite } from "./sqlite/index.js";
 
 const buildWavLabel = (wav: WavParseResult | null): string | null => {
   if (!wav) return null;
@@ -218,6 +219,12 @@ const detectBinaryType = async (file: File): Promise<string> => {
     if (magic.startsWith("Microsoft Compound File")) {
       const compound = refineCompoundLabel(dv);
       if (compound) return compound;
+    }
+    if (magic.indexOf("SQLite 3.x database") !== -1) {
+      const sqlite = await parseSqlite(file);
+      const label = buildSqliteLabel(sqlite);
+      if (label) return label;
+      return magic;
     }
     return magic;
   }

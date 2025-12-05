@@ -27,6 +27,7 @@ import { detectELF } from "./format-detectors.js";
 import { detectPdfVersion, hasZipEocdSignature, toAsciiFromWholeView } from "./detection-labels.js";
 import { isShortMp3WithoutSecond, isValidatedMp3 } from "./mp3-labels.js";
 import { probeMzFormat } from "./mz-probe.js";
+import { hasSqliteSignature, parseSqlite } from "./sqlite/index.js";
 
 const parseForUi = async (file: File): Promise<ParseForUiResult> => {
   const dv = new DataView(
@@ -132,6 +133,10 @@ const parseForUi = async (file: File): Promise<ParseForUiResult> => {
   if (dv.byteLength >= 4 && dv.getUint32(0, false) === 0x664c6143) {
     const flac = await parseFlac(file);
     if (flac) return { analyzer: "flac", parsed: flac };
+  }
+  if (hasSqliteSignature(dv)) {
+    const sqlite = await parseSqlite(file);
+    if (sqlite) return { analyzer: "sqlite", parsed: sqlite };
   }
   if (probeMp3(dv)) {
     const mp3 = await parseMp3(file);

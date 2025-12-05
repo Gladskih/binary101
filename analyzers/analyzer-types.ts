@@ -21,9 +21,11 @@ import type { Mp4ParseResult } from "./mp4/types.js";
 import type { WavParseResult } from "./wav/types.js";
 import type { AviParseResult } from "./avi/types.js";
 import type { AniParseResult } from "./ani/types.js";
+import type { SqliteParseResult } from "./sqlite/types.js";
 
 export type AnalyzerName =
   | "lnk"
+  | "sqlite"
   | "elf"
   | "pe"
   | "mz"
@@ -47,6 +49,7 @@ export type AnalyzerName =
 
 type AnalyzerParseMap = {
   lnk: LnkParseResult;
+  sqlite: SqliteParseResult;
   elf: ElfParseResult;
   pe: PeParseResult;
   mz: MzParseResult;

@@ -25,7 +25,8 @@ import {
   renderLnk,
   renderWav,
   renderAvi,
-  renderAni
+  renderAni,
+  renderSqlite
 } from "../../renderers/index.js";
 import type { ZipParseResult } from "../../analyzers/zip/index.js";
 import { createMp3File } from "../fixtures/audio-sample-files.js";
@@ -41,6 +42,7 @@ import { createTarFile } from "../fixtures/tar-fixtures.js";
 import { createZipFile } from "../fixtures/zip-fixtures.js";
 import { createWebmWithCues } from "../fixtures/webm-cues-fixtures.js";
 import { createAniFile, createAviFile, createWavFile } from "../fixtures/riff-sample-files.js";
+import { createSqliteFile } from "../fixtures/sqlite-fixtures.js";
 
 class TestDomParser extends XmlDomParser {
   override parseFromString(text: string, type: string) {
@@ -176,6 +178,12 @@ void test("renderers produce readable HTML output", async () => {
   const rar = await parseOnly(createRar5File(), "rar");
   const rarHtml = renderRar(rar);
   assert.match(rarHtml, /RAR overview/);
+
+  const sqlite = await parseOnly(createSqliteFile(), "sqlite");
+  const sqliteHtml = renderSqlite(sqlite);
+  assert.match(sqliteHtml, /SQLite database/);
+  assert.match(sqliteHtml, /File header/);
+  assert.match(sqliteHtml, /sqlite_schema/);
 });
 
 void test("renderZip shows extract actions and extraction notices", () => {

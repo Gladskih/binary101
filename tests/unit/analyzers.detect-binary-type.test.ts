@@ -8,6 +8,7 @@ import { createMp3File } from "../fixtures/audio-sample-files.js";
 import { createMp4File } from "../fixtures/mp4-fixtures.js";
 import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
 import { createFlacFile } from "../fixtures/flac-fixtures.js";
+import { createSqliteFile } from "../fixtures/sqlite-fixtures.js";
 
 const fromAscii = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "ascii"));
 
@@ -172,4 +173,11 @@ void test("detectBinaryType recognises animated cursors (ANI)", async () => {
   ]);
   const label = await detectBinaryType(new MockFile(bytes, "aero_busy.ani", "application/octet-stream"));
   assert.strictEqual(label, "Windows animated cursor (ANI)");
+});
+
+void test("detectBinaryType refines SQLite labels with page and encoding info", async () => {
+  const label = await detectBinaryType(createSqliteFile());
+  assert.match(label, /^SQLite database/);
+  assert.match(label, /512 byte pages/);
+  assert.match(label, /UTF-8/);
 });

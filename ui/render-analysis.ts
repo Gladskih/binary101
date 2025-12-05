@@ -22,7 +22,8 @@ import {
   renderLnk,
   renderWav,
   renderAvi,
-  renderAni
+  renderAni,
+  renderSqlite
 } from "../renderers/index.js";
 import type { PreviewRender } from "./preview.js";
 
@@ -67,6 +68,13 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
     ctx.termElement.hidden = false;
     ctx.valueElement.hidden = false;
     ctx.valueElement.innerHTML = imagePreviewHtml + renderJpeg(result.parsed);
+    return;
+  }
+  if (result.analyzer === "sqlite") {
+    ctx.termElement.textContent = "SQLite details";
+    ctx.termElement.hidden = false;
+    ctx.valueElement.hidden = false;
+    ctx.valueElement.innerHTML = renderSqlite(result.parsed);
     return;
   }
 
