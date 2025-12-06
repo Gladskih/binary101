@@ -23,7 +23,8 @@ import {
   renderWav,
   renderAvi,
   renderAni,
-  renderSqlite
+  renderSqlite,
+  renderAsf
 } from "../renderers/index.js";
 import type { PreviewRender } from "./preview.js";
 
@@ -181,6 +182,17 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
     ctx.valueElement.hidden = false;
     const videoPreviewHtml = preview?.kind === "video" ? preview.html : "";
     ctx.valueElement.innerHTML = videoPreviewHtml + renderAvi(result.parsed);
+    ctx.attachGuards(preview);
+    return;
+  }
+
+  if (result.analyzer === "asf") {
+    ctx.termElement.textContent = "ASF details";
+    ctx.termElement.hidden = false;
+    ctx.valueElement.hidden = false;
+    const mediaPreviewHtml =
+      preview?.kind === "video" || preview?.kind === "audio" ? preview.html : "";
+    ctx.valueElement.innerHTML = mediaPreviewHtml + renderAsf(result.parsed);
     ctx.attachGuards(preview);
     return;
   }

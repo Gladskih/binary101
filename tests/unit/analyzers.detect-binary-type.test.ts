@@ -9,6 +9,7 @@ import { createMp4File } from "../fixtures/mp4-fixtures.js";
 import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
 import { createFlacFile } from "../fixtures/flac-fixtures.js";
 import { createSqliteFile } from "../fixtures/sqlite-fixtures.js";
+import { createSampleAsfFile } from "../fixtures/asf-fixtures.js";
 
 const fromAscii = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "ascii"));
 
@@ -126,6 +127,12 @@ void test("detectBinaryType reports MP4 with track summary", async () => {
   const label = await detectBinaryType(createMp4File());
   assert.match(label, /MP4/);
   assert.match(label, /video:/);
+});
+
+void test("detectBinaryType builds ASF labels with stream info", async () => {
+  const label = await detectBinaryType(createSampleAsfFile());
+  assert.ok(label.startsWith("ASF container"));
+  assert.ok(label.includes("audio / 1 video"));
 });
 
 void test("detectBinaryType reports MP3 for minimal single-frame files", async () => {

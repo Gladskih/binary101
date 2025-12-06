@@ -27,6 +27,7 @@ import { createTarFile } from "../fixtures/tar-fixtures.js";
 import { createZipFile } from "../fixtures/zip-fixtures.js";
 import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
 import { createAniFile, createAviFile, createWavFile } from "../fixtures/riff-sample-files.js";
+import { createSampleAsfFile } from "../fixtures/asf-fixtures.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import type { FlacMetadataBlockDetail } from "../../analyzers/flac/types.js";
@@ -49,7 +50,7 @@ class TestDomParser extends XmlDomParser {
 global.DOMParser = TestDomParser;
 
 const assertParsed = async <TParsed = unknown>(
-  file: MockFile,
+  file: MockFile | File,
   expectedAnalyzer: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   checks?: (parsed: any) => void
@@ -162,6 +163,13 @@ void test("parseForUi parses AVI headers and streams", async () => {
     assert.strictEqual(avi.mainHeader?.width, 320);
     assert.strictEqual(avi.streams.length, 1);
     assert.strictEqual(avi.streams[0]?.header?.type, "vids");
+  });
+});
+
+void test("parseForUi parses ASF headers and streams", async () => {
+  await assertParsed(createSampleAsfFile(), "asf", asf => {
+    assert.strictEqual(asf.streams.length, 2);
+    assert.ok(asf.contentDescription?.title);
   });
 });
 

@@ -22,6 +22,9 @@ import { parseWav } from "./wav/index.js";
 import { parseAvi } from "./avi/index.js";
 import { parseAni } from "./ani/index.js";
 import { readFourCc } from "./riff/index.js";
+import { parseAsf } from "./asf/index.js";
+import { ASF_HEADER_GUID } from "./asf/constants.js";
+import { guidToString as readAsfGuid } from "./asf/shared.js";
 import type { ParseForUiResult } from "./analyzer-types.js";
 import { detectELF } from "./format-detectors.js";
 import { detectPdfVersion, hasZipEocdSignature, toAsciiFromWholeView } from "./detection-labels.js";
@@ -115,6 +118,10 @@ const parseForUi = async (file: File): Promise<ParseForUiResult> => {
         if (ani) return { analyzer: "ani", parsed: ani };
       }
     }
+  }
+  if (dv.byteLength >= 16 && readAsfGuid(dv, 0) === ASF_HEADER_GUID) {
+    const asf = await parseAsf(file);
+    if (asf) return { analyzer: "asf", parsed: asf };
   }
   if (dv.byteLength >= 12) {
     const ftyp = dv.getUint32(4, false);

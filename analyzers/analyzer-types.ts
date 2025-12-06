@@ -22,6 +22,7 @@ import type { WavParseResult } from "./wav/types.js";
 import type { AviParseResult } from "./avi/types.js";
 import type { AniParseResult } from "./ani/types.js";
 import type { SqliteParseResult } from "./sqlite/types.js";
+import type { AsfParseResult } from "./asf/types.js";
 
 export type AnalyzerName =
   | "lnk"
@@ -45,7 +46,8 @@ export type AnalyzerName =
   | "mp4"
   | "wav"
   | "avi"
-  | "ani";
+  | "ani"
+  | "asf";
 
 type AnalyzerParseMap = {
   lnk: LnkParseResult;
@@ -70,6 +72,7 @@ type AnalyzerParseMap = {
   wav: WavParseResult;
   avi: AviParseResult;
   ani: AniParseResult;
+  asf: AsfParseResult;
 };
 
 type AnalyzerResultUnion = {

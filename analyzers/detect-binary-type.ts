@@ -15,6 +15,7 @@ import { parseWav } from "./wav/index.js";
 import { parseAvi } from "./avi/index.js";
 import { parseAni } from "./ani/index.js";
 import { detectELF, detectMachO } from "./format-detectors.js";
+import { parseAsf, buildAsfLabel } from "./asf/index.js";
 import {
   detectPdfVersion,
   hasZipEocdSignature,
@@ -133,6 +134,12 @@ const detectBinaryType = async (file: File): Promise<string> => {
     if (magic === "Matroska/WebM container") {
       const webm = await parseWebm(file);
       const label = buildWebmLabel(webm);
+      if (label) return label;
+      return magic;
+    }
+    if (magic.indexOf("ASF container") !== -1) {
+      const asf = await parseAsf(file);
+      const label = buildAsfLabel(asf);
       if (label) return label;
       return magic;
     }
