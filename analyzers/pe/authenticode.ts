@@ -41,6 +41,12 @@ export interface X509CertificateInfo {
   notAfter?: string;
 }
 
+export interface AuthenticodeVerificationInfo {
+  computedFileDigest?: string;
+  fileDigestMatches?: boolean;
+  warnings?: string[];
+}
+
 export interface AuthenticodeInfo {
   format: "pkcs7";
   contentType?: string;
@@ -53,6 +59,7 @@ export interface AuthenticodeInfo {
   fileDigest?: string;
   signers?: AuthenticodeSignerInfo[];
   certificates?: X509CertificateInfo[];
+  verification?: AuthenticodeVerificationInfo;
   signerCount?: number;
   certificateCount?: number;
   warnings?: string[];
@@ -108,4 +115,3 @@ export const decodeWinCertificate = (
   if (warnings.length) entry.warnings = warnings;
   return entry;
 };
-

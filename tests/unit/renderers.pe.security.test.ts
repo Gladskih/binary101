@@ -56,6 +56,10 @@ void test("renderSecurity includes expanded Authenticode details", () => {
       digestAlgorithms: ["sha256"],
       fileDigestAlgorithmName: "sha256",
       fileDigest: "deadbeef",
+      verification: {
+        computedFileDigest: "deadbeef",
+        fileDigestMatches: true
+      },
       signerCount: 1,
       certificateCount: 1,
       signers: [
@@ -83,6 +87,8 @@ void test("renderSecurity includes expanded Authenticode details", () => {
   renderSecurity(pe, out);
   const html = out.join("");
   assert.ok(html.includes("File digest (sha256): deadbeef"));
+  assert.ok(html.includes("Computed digest: deadbeef"));
+  assert.ok(html.includes("Digest matches file: yes"));
   assert.ok(html.includes("Signer 1:"));
   assert.ok(html.includes("Issuer CN=Test Issuer"));
   assert.ok(html.includes("Certificate 1:"));

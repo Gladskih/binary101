@@ -105,6 +105,9 @@ export interface PeCore {
   dos: PeDosHeader;
   coff: PeCoffHeader;
   opt: PeOptionalHeader;
+  optOff: number;
+  ddStartRel: number;
+  ddCount: number;
   dataDirs: PeDataDirectory[];
   sections: PeSection[];
   entrySection: { name: string; index: number } | null;

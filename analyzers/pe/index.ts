@@ -1,6 +1,7 @@
 "use strict";
 
 import { parsePeHeaders } from "./core.js";
+import { verifyAuthenticodeFileDigest } from "./authenticode-verify.js";
 import { parseDebugDirectory, parseLoadConfigDirectory, type PeLoadConfig } from "./debug-loadcfg.js";
 import { parseImportDirectory, type PeImportEntry } from "./imports.js";
 import { parseExportDirectory } from "./exports.js";
@@ -101,7 +102,21 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
   const boundImports = await parseBoundImports(file, dataDirs, rvaToOff, addCoverageRegion);
   const delayImports = await parseDelayImports(file, dataDirs, rvaToOff, addCoverageRegion, isPlus, ImageBase);
   const clr = await parseClrDirectory(file, dataDirs, rvaToOff, addCoverageRegion);
-  const security = await parseSecurityDirectory(file, dataDirs, addCoverageRegion);
+  let security = await parseSecurityDirectory(file, dataDirs, addCoverageRegion);
+  if (security?.certs?.length) {
+    const securityDir = dataDirs.find(d => d.name === "SECURITY");
+    const certs = await Promise.all(
+      security.certs.map(async cert => {
+        if (!cert.authenticode) return cert;
+        const verification = await verifyAuthenticodeFileDigest(file, core, securityDir, cert.authenticode);
+        return {
+          ...cert,
+          authenticode: { ...cert.authenticode, verification }
+        };
+      })
+    );
+    security = { ...security, certs };
+  }
   const iat = parseIatDirectory(dataDirs, rvaToOff, addCoverageRegion);
 
   const dirs = dataDirs;

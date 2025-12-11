@@ -196,3 +196,29 @@ void test("parsePe ignores IAT directories that do not map to a file offset", as
   assert.strictEqual(result.iat, null, "Unmapped IAT should be reported as null");
   assert.ok(!result.coverage.some(region => region.label === "IAT"), "Coverage should not include IAT region");
 });
+
+void test("parsePe attaches Authenticode verification when security directory exists", async () => {
+  const peBytes = createPeWithSectionAndIat();
+  const view = new DataView(peBytes.buffer, peBytes.byteOffset, peBytes.byteLength);
+  const peHeaderOffset = 0x80;
+  const coffOffset = peHeaderOffset + 4;
+  const optionalOffset = coffOffset + 20;
+  const dataDirStart = optionalOffset + 0x60;
+  const securityEntryOffset = dataDirStart + 4 * 8;
+  const certOff = peBytes.length - 0x20;
+  const certSize = 0x20;
+
+  view.setUint32(securityEntryOffset, certOff, true);
+  view.setUint32(securityEntryOffset + 4, certSize, true);
+  view.setUint32(certOff, 12, true);
+  view.setUint16(certOff + 4, 0x0200, true);
+  view.setUint16(certOff + 6, 0x0002, true);
+  peBytes[certOff + 8] = 0x30;
+
+  const result = await parsePe(new MockFile(peBytes, "signed.exe"));
+  assert.ok(result);
+  assert.ok(result.security);
+  const cert = result.security.certs[0];
+  assert.ok(cert?.authenticode?.verification);
+  assert.ok(cert.authenticode.verification?.warnings?.length);
+});

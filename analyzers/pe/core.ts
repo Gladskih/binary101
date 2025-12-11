@@ -24,7 +24,6 @@ export async function parsePeHeaders(file: File): Promise<PeCore | null> {
   if (!coff) return null;
 
   const optionalResult = await parseOptionalHeaderAndDirectories(file, e_lfanew, coff.SizeOfOptionalHeader);
-  if (!optionalResult) return null;
   const { optOff, optSize, ddStartRel, ddCount, dataDirs, opt } = optionalResult;
   const { sections, rvaToOff, sectOff } = await parseSectionHeaders(
     file,
@@ -54,6 +53,9 @@ export async function parsePeHeaders(file: File): Promise<PeCore | null> {
     dos,
     coff,
     opt,
+    optOff,
+    ddStartRel,
+    ddCount,
     dataDirs,
     sections,
     entrySection,

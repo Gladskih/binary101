@@ -175,6 +175,12 @@ export function renderSecurity(pe: PeParseResult, out: string[]): void {
           const alg = auth.fileDigestAlgorithmName || auth.fileDigestAlgorithm || "unknown";
           detailParts.push(`File digest (${alg}): ${auth.fileDigest}`);
         }
+        if (auth.verification?.computedFileDigest) {
+          detailParts.push(`Computed digest: ${auth.verification.computedFileDigest}`);
+        }
+        if (auth.verification?.fileDigestMatches != null) {
+          detailParts.push(`Digest matches file: ${auth.verification.fileDigestMatches ? "yes" : "no"}`);
+        }
         if (auth.signerCount != null) {
           detailParts.push(`Signers: ${auth.signerCount}`);
         }
@@ -211,6 +217,9 @@ export function renderSecurity(pe: PeParseResult, out: string[]): void {
               detailParts.push(`Certificate ${certIndex + 1}: ${certParts.join(", ")}`);
             }
           });
+        }
+        if (auth.verification?.warnings?.length) {
+          auth.verification.warnings.forEach(w => detailParts.push(`ƒsÿ ${w}`));
         }
       }
       if (cert.warnings?.length) {
