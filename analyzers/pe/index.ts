@@ -6,7 +6,8 @@ import { parseImportDirectory, type PeImportEntry } from "./imports.js";
 import { parseExportDirectory } from "./exports.js";
 import { parseTlsDirectory } from "./tls.js";
 import { parseResources } from "./resources.js";
-import { parseClrDirectory, parseSecurityDirectory, type PeClrHeader } from "./clr-security.js";
+import { parseClrDirectory, type PeClrHeader } from "./clr.js";
+import { parseSecurityDirectory, type ParsedSecurityDirectory } from "./security.js";
 import { parseBaseRelocations } from "./reloc.js";
 import { parseExceptionDirectory } from "./exception.js";
 import { parseBoundImports, parseDelayImports } from "./bound-delay.js";
@@ -45,7 +46,7 @@ export interface PeParseResult {
   boundImports: Awaited<ReturnType<typeof parseBoundImports>>;
   delayImports: Awaited<ReturnType<typeof parseDelayImports>>;
   clr: PeClrHeader | null;
-  security: { count: number; certs: Array<{ Length: number; Revision: number; CertificateType: number }> } | null;
+  security: ParsedSecurityDirectory | null;
   iat: PeIatDirectory | null;
   resources: unknown;
   overlaySize: number;

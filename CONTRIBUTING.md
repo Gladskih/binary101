@@ -103,8 +103,8 @@ We encourage contributions that improve test coverage.
 
 - `index.html`, `style.css`: Page shell and styling (copied into `dist/` on build).
 - `app.ts`: Handles UI interactions, file selection, hashing, and calls analyzers/renderers (compiled to `dist/app.js`).
-- `analyzers/`: Format-specific TypeScript parsers. PE/COFF logic is split across small modules under `analyzers/pe/` (e.g. `core.ts`, `imports.ts`, `exports.ts`, `resources-*.ts`, `tls.ts`, `clr-security.ts`, `reloc.ts`, etc.), compiled under `dist/analyzers/`.
-- `renderers/`: TypeScript renderers that turn parsed objects into HTML. PE views live in `renderers/pe/` and are split into `headers.ts`, `directories.ts`, `resources.ts`, `layout.ts`, composed by `renderers/pe/index.ts`, compiled under `dist/renderers/`.
+- `analyzers/`: Format-specific TypeScript parsers, compiled under `dist/analyzers/`.
+- `renderers/`: TypeScript renderers that turn parsed objects into HTML, compiled under `dist/renderers/`.
 - `binary-utils.ts`, `html-utils.ts`: Shared helpers for hashing, byte/hex formatting and safe HTML generation.
 
 ## Adding a New Analyzer

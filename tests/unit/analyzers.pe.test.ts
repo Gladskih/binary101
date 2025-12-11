@@ -68,7 +68,7 @@ void test("parsePe returns null for a non-PE file", async () => {
   assert.strictEqual(result, null, "parsePe should return null for a file that is not a PE");
 });
 
-function createPeWithSectionAndIat() {
+function createPeWithSectionAndIat(iatRvaOverride = 0x1100) {
   const peHeaderOffset = 0x80;
   const coffHeaderSize = 20;
   const optionalHeaderSize = 0xe0;
@@ -80,7 +80,7 @@ function createPeWithSectionAndIat() {
   const sizeOfRawData = fileAlignment;
   const pointerToRawData = fileAlignment;
   const addressOfEntryPoint = 0x1100;
-  const iatRva = 0x1100;
+  const iatRva = iatRvaOverride;
   const iatSize = 0x40;
   const sizeOfImage = 0x2000;
   const overlaySize = 0x20;
@@ -185,4 +185,14 @@ void test("parsePe returns coverage and mapping for PE32 with one section and IA
   assert.strictEqual(result.imageEnd, 0x2000);
   assert.strictEqual(result.imageSizeMismatch, false);
   assert.strictEqual(result.hasCert, false);
+});
+
+void test("parsePe ignores IAT directories that do not map to a file offset", async () => {
+  const peBytes = createPeWithSectionAndIat(0x3000);
+  const mockFile = new MockFile(peBytes, "unmapped-iat.exe");
+
+  const result = await parsePe(mockFile);
+  assert.ok(result, "parsePe should return a parsed object");
+  assert.strictEqual(result.iat, null, "Unmapped IAT should be reported as null");
+  assert.ok(!result.coverage.some(region => region.label === "IAT"), "Coverage should not include IAT region");
 });

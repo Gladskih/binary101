@@ -2,7 +2,8 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseClrDirectory, parseSecurityDirectory } from "../../analyzers/pe/clr-security.js";
+import { parseClrDirectory } from "../../analyzers/pe/clr.js";
+import { parseSecurityDirectory } from "../../analyzers/pe/security.js";
 import { parseBaseRelocations } from "../../analyzers/pe/reloc.js";
 import { parseExceptionDirectory } from "../../analyzers/pe/exception.js";
 import { MockFile } from "../helpers/mock-file.js";
@@ -87,9 +88,13 @@ void test("parseSecurityDirectory walks WIN_CERTIFICATE entries", async () => {
   const dirs = [{ name: "SECURITY", rva: secOff, size: 40 }];
   const { regions, add } = collectCoverage();
   const parsed = await parseSecurityDirectory(new MockFile(bytes, "sec.bin"), dirs, add);
-  assert.ok(parsed);
-  assert.strictEqual(parsed.count, 2);
-  assert.strictEqual(parsed.certs.length, 2);
+  const sec = expectDefined(parsed);
+  const firstCert = expectDefined(sec.certs[0]);
+  assert.strictEqual(sec.count, 2);
+  assert.strictEqual(sec.certs.length, 2);
+  assert.strictEqual(firstCert.certificateType, 0x0002);
+  assert.strictEqual(firstCert.typeName.includes("PKCS#7"), true);
+  assert.ok(firstCert.authenticode);
   assert.ok(regions.some(r => r.label.includes("SECURITY")));
 });
 

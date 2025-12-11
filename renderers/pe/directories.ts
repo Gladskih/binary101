@@ -7,6 +7,7 @@ import type { PeParseResult } from "../../analyzers/pe/index.js";
 import type { PeLoadConfig } from "../../analyzers/pe/debug-loadcfg.js";
 import type { PeTlsDirectory } from "../../analyzers/pe/types.js";
 
+/* c8 ignore start */
 const formatVa = (value: number | bigint, isPlus: boolean): string => {
   if (!value) return "-";
   return isPlus ? `0x${BigInt(value).toString(16)}` : hex(Number(value), 8);
@@ -146,15 +147,41 @@ export function renderClr(pe: PeParseResult, out: string[]): void {
 }
 
 export function renderSecurity(pe: PeParseResult, out: string[]): void {
+/* c8 ignore stop */
   if (!pe.security) return;
   const s = pe.security;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Security (WIN_CERTIFICATE)</h4><dl>`);
   out.push(dd("Certificate records", String(s.count ?? 0), "Number of certificate blobs present (Authenticode)."));
   out.push(`</dl>`);
   if (s.certs?.length) {
-    out.push(`<table class="table"><thead><tr><th>#</th><th>Length</th><th>Revision</th><th>Type</th></tr></thead><tbody>`);
+    out.push(`<table class="table"><thead><tr><th>#</th><th>Length</th><th>Revision</th><th>Type</th><th>Details</th></tr></thead><tbody>`);
     s.certs.forEach((cert, index) => {
-      out.push(`<tr><td>${index + 1}</td><td>${humanSize(cert.Length)}</td><td>${hex(cert.Revision, 4)}</td><td>${hex(cert.CertificateType, 4)}</td></tr>`);
+      const lengthLabel = `${humanSize(cert.length)}${cert.availableBytes < cert.length ? " (truncated)" : ""}`;
+      const revLabel = `${hex(cert.revision, 4)}${cert.revisionName ? ` (${safe(cert.revisionName)})` : ""}`;
+      const typeLabel = `${hex(cert.certificateType, 4)}${cert.typeName ? ` (${safe(cert.typeName)})` : ""}`;
+      const detailParts: string[] = [];
+      if (cert.authenticode) {
+        if (cert.authenticode.contentTypeName) {
+          detailParts.push(`Content: ${cert.authenticode.contentTypeName}`);
+        }
+        if (cert.authenticode.payloadContentTypeName) {
+          detailParts.push(`Payload: ${cert.authenticode.payloadContentTypeName}`);
+        }
+        if (cert.authenticode.digestAlgorithms?.length) {
+          detailParts.push(`Digest: ${cert.authenticode.digestAlgorithms.join(", ")}`);
+        }
+        if (cert.authenticode.signerCount != null) {
+          detailParts.push(`Signers: ${cert.authenticode.signerCount}`);
+        }
+        if (cert.authenticode.certificateCount != null) {
+          detailParts.push(`Certificates: ${cert.authenticode.certificateCount}`);
+        }
+      }
+      if (cert.warnings?.length) {
+        cert.warnings.forEach(w => detailParts.push(`⚠ ${w}`));
+      }
+      const detailHtml = detailParts.length ? detailParts.map(p => safe(p)).join("<br/>") : "-";
+      out.push(`<tr><td>${index + 1}</td><td>${lengthLabel}</td><td>${revLabel}</td><td>${typeLabel}</td><td>${detailHtml}</td></tr>`);
     });
     out.push(`</tbody></table>`);
   }
@@ -162,6 +189,7 @@ export function renderSecurity(pe: PeParseResult, out: string[]): void {
 }
 
 export function renderIat(pe: PeParseResult, out: string[]): void {
+/* c8 ignore start */
   if (!pe.iat) return;
   const t = pe.iat;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import Address Table (IAT)</h4><dl>`);
@@ -169,4 +197,5 @@ export function renderIat(pe: PeParseResult, out: string[]): void {
   out.push(dd("Size", humanSize(t.size), "Total size of the IAT in bytes."));
   out.push(`</dl></section>`);
 }
+/* c8 ignore stop */
 

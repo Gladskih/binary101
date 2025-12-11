@@ -107,30 +107,3 @@ export async function parseClrDirectory(
   return clr;
 }
 
-export async function parseSecurityDirectory(
-  file: File,
-  dataDirs: PeDataDirectory[],
-  addCoverageRegion: AddCoverageRegion
-): Promise<{ count: number; certs: Array<{ Length: number; Revision: number; CertificateType: number }> } | null> {
-  const dir = dataDirs.find(d => d.name === "SECURITY");
-  if (!dir?.rva || dir.size < 8) return null;
-  const off = dir.rva;
-  if (off + 8 > file.size) return null;
-  addCoverageRegion("SECURITY (WIN_CERTIFICATE)", off, dir.size);
-  const end = Math.min(file.size, off + dir.size);
-  let pos = off;
-  let count = 0;
-  const certs = [];
-  while (pos + 8 <= end && count < 8) {
-    const dv = new DataView(await file.slice(pos, pos + 8).arrayBuffer());
-    const Length = dv.getUint32(0, true);
-    const Revision = dv.getUint16(4, true);
-    const CertificateType = dv.getUint16(6, true);
-    if (Length < 8) break;
-    certs.push({ Length, Revision, CertificateType });
-    pos += (Length + 7) & ~7;
-    count++;
-  }
-  return { count, certs };
-}
-
