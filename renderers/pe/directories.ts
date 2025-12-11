@@ -160,21 +160,57 @@ export function renderSecurity(pe: PeParseResult, out: string[]): void {
       const revLabel = `${hex(cert.revision, 4)}${cert.revisionName ? ` (${safe(cert.revisionName)})` : ""}`;
       const typeLabel = `${hex(cert.certificateType, 4)}${cert.typeName ? ` (${safe(cert.typeName)})` : ""}`;
       const detailParts: string[] = [];
-      if (cert.authenticode) {
-        if (cert.authenticode.contentTypeName) {
-          detailParts.push(`Content: ${cert.authenticode.contentTypeName}`);
+      const auth = cert.authenticode;
+      if (auth) {
+        if (auth.contentTypeName) {
+          detailParts.push(`Content: ${auth.contentTypeName}`);
         }
-        if (cert.authenticode.payloadContentTypeName) {
-          detailParts.push(`Payload: ${cert.authenticode.payloadContentTypeName}`);
+        if (auth.payloadContentTypeName) {
+          detailParts.push(`Payload: ${auth.payloadContentTypeName}`);
         }
-        if (cert.authenticode.digestAlgorithms?.length) {
-          detailParts.push(`Digest: ${cert.authenticode.digestAlgorithms.join(", ")}`);
+        if (auth.digestAlgorithms?.length) {
+          detailParts.push(`Digest: ${auth.digestAlgorithms.join(", ")}`);
         }
-        if (cert.authenticode.signerCount != null) {
-          detailParts.push(`Signers: ${cert.authenticode.signerCount}`);
+        if (auth.fileDigest) {
+          const alg = auth.fileDigestAlgorithmName || auth.fileDigestAlgorithm || "unknown";
+          detailParts.push(`File digest (${alg}): ${auth.fileDigest}`);
         }
-        if (cert.authenticode.certificateCount != null) {
-          detailParts.push(`Certificates: ${cert.authenticode.certificateCount}`);
+        if (auth.signerCount != null) {
+          detailParts.push(`Signers: ${auth.signerCount}`);
+        }
+        if (auth.signers?.length) {
+          auth.signers.forEach((signer, signerIndex) => {
+            const signerParts: string[] = [];
+            if (signer.issuer) signerParts.push(`Issuer ${signer.issuer}`);
+            if (signer.serialNumber) signerParts.push(`Serial ${signer.serialNumber}`);
+            if (signer.digestAlgorithmName || signer.digestAlgorithm) {
+              signerParts.push(`DigestAlg ${signer.digestAlgorithmName || signer.digestAlgorithm}`);
+            }
+            if (signer.signatureAlgorithmName || signer.signatureAlgorithm) {
+              signerParts.push(`SigAlg ${signer.signatureAlgorithmName || signer.signatureAlgorithm}`);
+            }
+            if (signer.signingTime) signerParts.push(`Time ${signer.signingTime}`);
+            if (signerParts.length) {
+              detailParts.push(`Signer ${signerIndex + 1}: ${signerParts.join(", ")}`);
+            }
+          });
+        }
+        if (auth.certificateCount != null) {
+          detailParts.push(`Certificates: ${auth.certificateCount}`);
+        }
+        if (auth.certificates?.length) {
+          auth.certificates.forEach((certificate, certIndex) => {
+            const certParts: string[] = [];
+            if (certificate.subject) certParts.push(`Subject ${certificate.subject}`);
+            if (certificate.issuer) certParts.push(`Issuer ${certificate.issuer}`);
+            if (certificate.serialNumber) certParts.push(`Serial ${certificate.serialNumber}`);
+            if (certificate.notBefore || certificate.notAfter) {
+              certParts.push(`Validity ${certificate.notBefore || "?"} \u2192 ${certificate.notAfter || "?"}`);
+            }
+            if (certParts.length) {
+              detailParts.push(`Certificate ${certIndex + 1}: ${certParts.join(", ")}`);
+            }
+          });
         }
       }
       if (cert.warnings?.length) {
@@ -198,4 +234,3 @@ export function renderIat(pe: PeParseResult, out: string[]): void {
   out.push(`</dl></section>`);
 }
 /* c8 ignore stop */
-
