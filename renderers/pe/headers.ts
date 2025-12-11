@@ -35,8 +35,8 @@ const linkerVersionHint = (major: number, minor: number): string => {
     "14.3": "VS2022 era"
   };
   const hint =
-    map[`${major}.0`] ||
     map[version] ||
+    map[`${major}.0`] ||
     (major >= 14 ? "MSVC (VS2015+ era or lld-link)" : "MSVC (pre-VS2015)");
   return `${version} - ${hint}`;
 };
@@ -77,7 +77,10 @@ const renderSections = (pe: PeParseResult, out: string[]): void => {
   if (!sections.length) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Section headers</h4>`);
   out.push(
-    `<table class="table"><thead><tr><th>Name</th><th>VirtualSize</th><th>RVA</th><th>RawSize</th><th>FilePtr</th><th>Entropy</th><th>Flags</th></tr></thead><tbody>`
+    `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show sections (${sections.length})</summary>`
+  );
+  out.push(
+    `<table class="table" style="margin-top:.35rem"><thead><tr><th>Name</th><th>VirtualSize</th><th>RVA</th><th>RawSize</th><th>FilePtr</th><th>Entropy</th><th>Flags</th></tr></thead><tbody>`
   );
   sections.forEach(section => {
     const flags = SEC_FLAG_TEXTS.filter(([bit]) => (section.characteristics & bit) !== 0).map(([, text]) => text);
@@ -95,7 +98,7 @@ const renderSections = (pe: PeParseResult, out: string[]): void => {
         <td>${flags.join(" &middot; ")}</td>
       </tr>`);
   });
-  out.push(`</tbody></table></section>`);
+  out.push(`</tbody></table></details></section>`);
 };
 
 export function renderHeaders(pe: PeParseResult, out: string[]): void {

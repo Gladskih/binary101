@@ -58,7 +58,8 @@ void test("renderSecurity includes expanded Authenticode details", () => {
       fileDigest: "deadbeef",
       verification: {
         computedFileDigest: "deadbeef",
-        fileDigestMatches: true
+        fileDigestMatches: true,
+        warnings: ["synthetic verification warning"]
       },
       signerCount: 1,
       certificateCount: 1,
@@ -93,6 +94,7 @@ void test("renderSecurity includes expanded Authenticode details", () => {
   assert.ok(html.includes("Issuer CN=Test Issuer"));
   assert.ok(html.includes("Certificate 1:"));
   assert.ok(html.includes("Subject CN=Test Subject"));
+  assert.ok(html.includes("synthetic verification warning"));
 });
 
 void test("renderSecurity renders count without certificate table", () => {
@@ -102,4 +104,34 @@ void test("renderSecurity renders count without certificate table", () => {
   const html = out.join("");
   assert.ok(html.includes("Certificate records"));
   assert.ok(!html.includes("<table"));
+});
+
+void test("renderSecurity tolerates missing fields and renders negative matches", () => {
+  const certWithGaps = {
+    offset: 0,
+    length: 32,
+    availableBytes: 32,
+    revision: 0x0200,
+    certificateType: 0x0002,
+    authenticode: {
+      format: "pkcs7" as const,
+      fileDigestAlgorithm: "sha256",
+      fileDigest: "deadbeef",
+      verification: { fileDigestMatches: false },
+      signers: [{ digestAlgorithm: "sha256", signatureAlgorithm: "rsaEncryption" }],
+      certificates: [{ notAfter: "2025-01-01T00:00:00Z" }]
+    }
+  };
+  const bareCert = {
+    offset: 32,
+    length: 8,
+    availableBytes: 8,
+    revision: 0,
+    certificateType: 0
+  };
+  const pe = { security: { certs: [certWithGaps, bareCert] } } as unknown as PeParseResult;
+  const out: string[] = [];
+  renderSecurity(pe, out);
+  const html = out.join("");
+  assert.ok(html.includes("Digest matches file: no"));
 });

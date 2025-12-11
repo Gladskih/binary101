@@ -154,7 +154,10 @@ export function renderSecurity(pe: PeParseResult, out: string[]): void {
   out.push(dd("Certificate records", String(s.count ?? 0), "Number of certificate blobs present (Authenticode)."));
   out.push(`</dl>`);
   if (s.certs?.length) {
-    out.push(`<table class="table"><thead><tr><th>#</th><th>Length</th><th>Revision</th><th>Type</th><th>Details</th></tr></thead><tbody>`);
+    out.push(
+      `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show certificates (${s.certs.length})</summary>`
+    );
+    out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Length</th><th>Revision</th><th>Type</th><th>Details</th></tr></thead><tbody>`);
     s.certs.forEach((cert, index) => {
       const lengthLabel = `${humanSize(cert.length)}${cert.availableBytes < cert.length ? " (truncated)" : ""}`;
       const revLabel = `${hex(cert.revision, 4)}${cert.revisionName ? ` (${safe(cert.revisionName)})` : ""}`;
@@ -228,7 +231,7 @@ export function renderSecurity(pe: PeParseResult, out: string[]): void {
       const detailHtml = detailParts.length ? detailParts.map(p => safe(p)).join("<br/>") : "-";
       out.push(`<tr><td>${index + 1}</td><td>${lengthLabel}</td><td>${revLabel}</td><td>${typeLabel}</td><td>${detailHtml}</td></tr>`);
     });
-    out.push(`</tbody></table>`);
+    out.push(`</tbody></table></details>`);
   }
   out.push(`</section>`);
 }

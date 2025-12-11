@@ -13,11 +13,14 @@ export function renderReloc(pe: PeParseResult, out: string[]): void {
   out.push(`<dt>Total entries</dt><dd>${reloc.totalEntries ?? 0}</dd>`);
   out.push(`</dl>`);
   if (reloc.blocks?.length) {
-    out.push(`<table class="table"><thead><tr><th>#</th><th>Page RVA</th><th>Block size</th><th>Entries</th></tr></thead><tbody>`);
+    out.push(
+      `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show blocks (${reloc.blocks.length})</summary>`
+    );
+    out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Page RVA</th><th>Block size</th><th>Entries</th></tr></thead><tbody>`);
     reloc.blocks.slice(0, 256).forEach((block, index) => {
       out.push(`<tr><td>${index + 1}</td><td>${hex(block.pageRva, 8)}</td><td>${humanSize(block.size)}</td><td>${block.count}</td></tr>`);
     });
-    out.push(`</tbody></table>`);
+    out.push(`</tbody></table></details>`);
   }
   out.push(`</section>`);
 }
@@ -30,11 +33,14 @@ export function renderException(pe: PeParseResult, out: string[]): void {
   out.push(`<dt>Entry count</dt><dd>${ex.count ?? 0}</dd>`);
   out.push(`</dl>`);
   if (ex.sample?.length) {
-    out.push(`<table class="table"><thead><tr><th>#</th><th>BeginAddress</th><th>EndAddress</th><th>UnwindInfoAddress</th></tr></thead><tbody>`);
+    out.push(
+      `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show unwind entries (${ex.sample.length})</summary>`
+    );
+    out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>BeginAddress</th><th>EndAddress</th><th>UnwindInfoAddress</th></tr></thead><tbody>`);
     ex.sample.forEach((row, index) => {
       out.push(`<tr><td>${index + 1}</td><td>${hex(row.BeginAddress, 8)}</td><td>${hex(row.EndAddress, 8)}</td><td>${hex(row.UnwindInfoAddress, 8)}</td></tr>`);
     });
-    out.push(`</tbody></table>`);
+    out.push(`</tbody></table></details>`);
   }
   out.push(`</section>`);
 }
@@ -47,11 +53,14 @@ export function renderBoundImports(pe: PeParseResult, out: string[]): void {
   if (bi.warning) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(bi.warning)}</div>`);
   }
-  out.push(`<table class="table"><thead><tr><th>#</th><th>Module</th><th>TimeDateStamp</th><th>ForwarderRefs</th></tr></thead><tbody>`);
+  out.push(
+    `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show bound imports (${bi.entries.length})</summary>`
+  );
+  out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Module</th><th>TimeDateStamp</th><th>ForwarderRefs</th></tr></thead><tbody>`);
   bi.entries.forEach((e, index) => {
     out.push(`<tr><td>${index + 1}</td><td>${safe(e.name || "")}</td><td>${hex(e.TimeDateStamp, 8)}</td><td>${e.NumberOfModuleForwarderRefs}</td></tr>`);
   });
-  out.push(`</tbody></table></section>`);
+  out.push(`</tbody></table></details></section>`);
 }
 
 export function renderDelayImports(pe: PeParseResult, out: string[]): void {
@@ -95,11 +104,14 @@ export function renderCoverage(pe: PeParseResult, out: string[]): void {
   if (!cov.length) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Coverage map (file offsets)</h4>`);
   out.push(`<div class="smallNote">Shows which parts of the file were recognized as headers, directories and section data. Gaps may indicate overlays or unknown data.</div>`);
-  out.push(`<table class="table"><thead><tr><th>#</th><th>Label</th><th>Offset</th><th>Size</th></tr></thead><tbody>`);
+  out.push(
+    `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show coverage segments (${cov.length})</summary>`
+  );
+  out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Label</th><th>Offset</th><th>Size</th></tr></thead><tbody>`);
   cov.forEach((seg, index) => {
     out.push(`<tr><td>${index + 1}</td><td>${safe(seg.label)}</td><td>${hex(seg.off, 8)}</td><td>${humanSize(seg.size)}</td></tr>`);
   });
-  out.push(`</tbody></table></section>`);
+  out.push(`</tbody></table></details></section>`);
 }
 
 export function renderSanity(pe: PeParseResult, out: string[]): void {
@@ -125,4 +137,3 @@ export function renderSanity(pe: PeParseResult, out: string[]): void {
   }
   out.push(`</section>`);
 }
-
