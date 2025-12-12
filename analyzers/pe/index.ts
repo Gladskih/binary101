@@ -12,6 +12,7 @@ import { parseSecurityDirectory, type ParsedSecurityDirectory } from "./security
 import { parseBaseRelocations } from "./reloc.js";
 import { parseExceptionDirectory } from "./exception.js";
 import { parseBoundImports, parseDelayImports } from "./bound-delay.js";
+import { analyzePeInstructionSets, type PeInstructionSetReport } from "./disassembly.js";
 import type {
   AddCoverageRegion,
   PeCore,
@@ -55,6 +56,7 @@ export interface PeParseResult {
   imageSizeMismatch: boolean;
   coverage: PeCoverageEntry[];
   hasCert: boolean;
+  disassembly?: PeInstructionSetReport;
 }
 
 function parseIatDirectory(
@@ -118,6 +120,14 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     security = { ...security, certs };
   }
   const iat = parseIatDirectory(dataDirs, rvaToOff, addCoverageRegion);
+  const disassembly = await analyzePeInstructionSets(file, {
+    coffMachine: coff.Machine,
+    is64Bit: opt.isPlus,
+    imageBase: opt.ImageBase,
+    entrypointRva: opt.AddressOfEntryPoint,
+    rvaToOff,
+    sections
+  });
 
   const dirs = dataDirs;
 
@@ -149,6 +159,7 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     imageEnd,
     imageSizeMismatch,
     coverage,
-    hasCert: !!security?.count
+    hasCert: !!security?.count,
+    disassembly
   };
 }

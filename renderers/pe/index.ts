@@ -2,6 +2,7 @@
 
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 import { renderHeaders } from "./headers.js";
+import { renderInstructionSets } from "./disassembly.js";
 import {
   renderLoadConfig,
   renderDebug,
@@ -26,6 +27,7 @@ export function renderPe(pe: PeParseResult | null | undefined): string {
   if (!pe) return "";
   const out: string[] = [];
   renderHeaders(pe, out);
+  renderInstructionSets(pe, out);
   renderLoadConfig(pe, out);
   renderDebug(pe, out);
   renderImports(pe, out);

@@ -2,6 +2,7 @@
   "all": true,
   "excludeAfterRemap": true,
   "exclude": [
+    "dist/**",
     "playwright.config.mjs",
     "eslint.config.mjs",
     "tests/e2e/**",

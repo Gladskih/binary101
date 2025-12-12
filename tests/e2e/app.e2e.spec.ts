@@ -136,18 +136,20 @@ test.describe("file type detection", () => {
       file: createPeFile,
       expectedKind: "PE32 executable for x86 (I386)",
       term: "PE/COFF details",
-      detailText: "PE signature"
+      detailText: "PE signature",
+      extraDetailText: "Instruction sets"
     },
     {
       name: "PE32+ (x86-64)",
       file: createPePlusFile,
       expectedKind: "PE32+ executable for x86-64 (AMD64)",
       term: "PE/COFF details",
-      detailText: "PE signature"
+      detailText: "PE signature",
+      extraDetailText: "Instruction sets"
     }
   ];
 
-  for (const { name, file, expectedKind, term, detailText } of happyCases) {
+  for (const { name, file, expectedKind, term, detailText, extraDetailText } of happyCases) {
     void test(`recognises ${name} files`, async ({ page }) => {
       const mockFile = file();
       await page.setInputFiles("#fileInput", toUpload(mockFile));
@@ -159,6 +161,10 @@ test.describe("file type detection", () => {
         await expect(detailsTerm).toHaveText(term);
         await expect(detailsValue).toBeVisible();
         await expect(detailsValue).toContainText(detailText);
+        if (extraDetailText) {
+          await expect(detailsValue).toContainText(extraDetailText);
+          await expect(detailsValue).not.toContainText("Failed to load iced-x86 disassembler");
+        }
       } else {
         await expect(detailsTerm).toBeHidden();
       }
