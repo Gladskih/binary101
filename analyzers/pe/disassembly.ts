@@ -1,6 +1,5 @@
-"use strict";
-
 import type { PeSection, RvaToOffset } from "./types.js";
+import { describeCpuidFeature, formatCpuidLabel } from "./cpuid-features.js";
 
 export interface PeInstructionSetUsage {
   id: string;
@@ -11,7 +10,8 @@ export interface PeInstructionSetUsage {
 
 export interface PeInstructionSetReport {
   bitness: 32 | 64;
-  bytesAnalyzed: number;
+  bytesSampled: number;
+  bytesDecoded: number;
   instructionCount: number;
   invalidInstructionCount: number;
   instructionSets: PeInstructionSetUsage[];
@@ -25,6 +25,19 @@ export interface AnalyzePeInstructionSetOptions {
   entrypointRva: number;
   rvaToOff: RvaToOffset;
   sections: PeSection[];
+  maxDecodeBytes?: number;
+  maxInstructions?: number;
+  yieldEveryInstructions?: number;
+  signal?: AbortSignal;
+  onProgress?: (progress: PeInstructionSetProgress) => void;
+}
+
+export interface PeInstructionSetProgress {
+  stage: "loading" | "decoding" | "done";
+  bytesSampled: number;
+  bytesDecoded: number;
+  instructionCount: number;
+  invalidInstructionCount: number;
 }
 
 interface IcedInstruction {
@@ -40,70 +53,19 @@ interface IcedDecoder {
   decodeOut(instruction: IcedInstruction): void;
   free(): void;
 }
-
 interface IcedX86Module {
   Code: Record<string, number> & Record<number, string | undefined>;
   CpuidFeature: Record<string, number> & Record<number, string | undefined>;
   Decoder: new (bitness: number, data: Uint8Array, options: number) => IcedDecoder;
   DecoderOptions: { None: number };
 }
-
 const IMAGE_FILE_MACHINE_I386 = 0x014c;
 const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
 const IMAGE_SCN_CNT_CODE = 0x00000020;
 
-const MAX_DECODE_BYTES = 256 * 1024;
-const MAX_INSTRUCTIONS = 20_000;
+const DEFAULT_MAX_DECODE_BYTES = 256 * 1024;
+const DEFAULT_MAX_INSTRUCTIONS = 100_000;
 const MAX_CONSECUTIVE_INVALID = 128;
-
-const formatCpuidLabel = (name: string): string => {
-  if (name === "X64") return "x86-64";
-  if (name.startsWith("AVX512_")) return `AVX-512 ${name.slice("AVX512_".length).replaceAll("_", " ")}`;
-  if (name.startsWith("AVX10_")) return `AVX10 ${name.slice("AVX10_".length).replaceAll("_", " ")}`;
-  if (/^SSE4_[12]$/.test(name)) return name.replace("_", ".");
-  return name;
-};
-
-const CPUID_DESCRIPTIONS: Record<string, string> = {
-  X64: "x86-64 long mode (64-bit registers and addressing).",
-  SSE: "Streaming SIMD Extensions (128-bit SIMD instructions).",
-  SSE2: "SSE2 SIMD (128-bit integer + double-precision); baseline on x86-64.",
-  SSE3: "SSE3 extensions (mostly SIMD horizontal/complex ops).",
-  SSSE3: "Supplemental SSE3 (byte-shuffle and other SIMD extensions).",
-  SSE4_1: "SSE4.1 SIMD extensions (dot products, blends, etc.).",
-  SSE4_2: "SSE4.2 SIMD extensions (string/CRC-related instructions).",
-  AVX: "Advanced Vector Extensions (VEX encoding, 256-bit YMM registers).",
-  AVX2: "AVX2 integer 256-bit SIMD extensions (incl. gathers).",
-  FMA: "FMA3 fused multiply-add (floating point).",
-  BMI1: "Bit Manipulation Instructions 1 (e.g., ANDN, BEXTR).",
-  BMI2: "Bit Manipulation Instructions 2 (e.g., MULX, PDEP/PEXT).",
-  AES: "AES-NI crypto instructions (AES rounds).",
-  PCLMULQDQ: "Carry-less multiply (GF(2) multiply; used in GCM/CRC).",
-  POPCNT: "Population count instruction.",
-  LZCNT: "Leading zero count (ABM/LZCNT).",
-  SHA: "SHA extensions (SHA1/SHA256 rounds).",
-  AVX512F: "AVX-512 Foundation (512-bit ZMM registers).",
-  AVX512VL: "AVX-512 Vector Length extensions (128/256-bit forms).",
-  AVX512BW: "AVX-512 Byte/Word instructions.",
-  AVX512DQ: "AVX-512 Doubleword/Quadword instructions.",
-  AVX512CD: "AVX-512 Conflict Detection (CD).",
-  AVX512_VBMI: "AVX-512 VBMI (Vector Byte Manipulation Instructions).",
-  AVX512_VBMI2: "AVX-512 VBMI2 (additional byte manipulation).",
-  AVX512_VNNI: "AVX-512 VNNI (integer dot-product for ML).",
-  AVX512_BITALG: "AVX-512 BITALG (bit algorithms).",
-  AVX512_VPOPCNTDQ: "AVX-512 VPOPCNTDQ (vector popcount)."
-};
-
-const describeCpuidFeature = (name: string): string => {
-  const known = CPUID_DESCRIPTIONS[name];
-  if (known) return known;
-  if (name.startsWith("AVX512_")) return "AVX-512 extension (subset; typically requires AVX512F).";
-  if (name.startsWith("AVX10_")) return "AVX10 extension (newer AVX family).";
-  if (name.startsWith("AVX")) return "Advanced Vector Extensions family feature.";
-  if (name.startsWith("SSE")) return "SSE family SIMD extension.";
-  if (name.endsWith("_ONLY")) return "CPU-specific/legacy-only instruction variant.";
-  return "CPUID feature flag required by at least one decoded instruction.";
-};
 
 const isExecutableSection = (section: PeSection): boolean => (section.characteristics & IMAGE_SCN_CNT_CODE) !== 0;
 
@@ -123,6 +85,13 @@ const findBestCodeSection = (sections: PeSection[]): PeSection | null => {
   return sections.find(isExecutableSection) || sections[0] || null;
 };
 
+const reportProgress = (opts: AnalyzePeInstructionSetOptions, progress: PeInstructionSetProgress): void => {
+  if (!opts.onProgress) return;
+  try { opts.onProgress(progress); } catch { /* ignore */ }
+};
+
+const yieldToEventLoop = async (): Promise<void> => new Promise<void>(resolve => setTimeout(resolve, 0));
+
 export async function analyzePeInstructionSets(
   file: File,
   opts: AnalyzePeInstructionSetOptions
@@ -131,19 +100,39 @@ export async function analyzePeInstructionSets(
   const coffMachine = opts.coffMachine >>> 0;
   const supported = coffMachine === IMAGE_FILE_MACHINE_I386 || coffMachine === IMAGE_FILE_MACHINE_AMD64;
   const bitness: 32 | 64 = opts.is64Bit ? 64 : 32;
+  const maxDecodeBytes =
+    typeof opts.maxDecodeBytes === "number" &&
+    Number.isSafeInteger(opts.maxDecodeBytes) &&
+    opts.maxDecodeBytes > 0
+      ? opts.maxDecodeBytes
+      : DEFAULT_MAX_DECODE_BYTES;
+  const maxInstructions =
+    typeof opts.maxInstructions === "number" &&
+    Number.isSafeInteger(opts.maxInstructions) &&
+    opts.maxInstructions > 0
+      ? opts.maxInstructions
+      : DEFAULT_MAX_INSTRUCTIONS;
+  const yieldEveryInstructions =
+    typeof opts.yieldEveryInstructions === "number" &&
+    Number.isSafeInteger(opts.yieldEveryInstructions) &&
+    opts.yieldEveryInstructions > 0
+      ? opts.yieldEveryInstructions
+      : 0;
+  const emptyReport = (bytesSampled: number): PeInstructionSetReport => ({
+    bitness,
+    bytesSampled,
+    bytesDecoded: 0,
+    instructionCount: 0,
+    invalidInstructionCount: 0,
+    instructionSets: [],
+    issues
+  });
 
   if (!supported) {
     issues.push(
       `Disassembly is only supported for x86/x86-64 (Machine ${coffMachine.toString(16)}).`
     );
-    return {
-      bitness,
-      bytesAnalyzed: 0,
-      instructionCount: 0,
-      invalidInstructionCount: 0,
-      instructionSets: [],
-      issues
-    };
+    return emptyReport(0);
   }
 
   if (coffMachine === IMAGE_FILE_MACHINE_AMD64 && bitness !== 64) {
@@ -166,14 +155,7 @@ export async function analyzePeInstructionSets(
     section = findBestCodeSection(opts.sections);
     if (!section) {
       issues.push("No section headers available to locate code bytes.");
-      return {
-        bitness,
-        bytesAnalyzed: 0,
-        instructionCount: 0,
-        invalidInstructionCount: 0,
-        instructionSets: [],
-        issues
-      };
+      return emptyReport(0);
     }
     startRva = section.virtualAddress >>> 0;
     startOffset = section.pointerToRawData >>> 0;
@@ -183,51 +165,43 @@ export async function analyzePeInstructionSets(
   const sectionEnd = section
     ? Math.min(file.size, (section.pointerToRawData >>> 0) + (section.sizeOfRawData >>> 0))
     : file.size;
-  const sliceEnd = Math.min(sectionEnd, startOffset + MAX_DECODE_BYTES);
+  const sliceEnd = Math.min(sectionEnd, startOffset + maxDecodeBytes);
   if (startOffset >= file.size || sliceEnd <= startOffset) {
     issues.push("No bytes available at selected disassembly start offset.");
-    return {
-      bitness,
-      bytesAnalyzed: 0,
-      instructionCount: 0,
-      invalidInstructionCount: 0,
-      instructionSets: [],
-      issues
-    };
+    return emptyReport(0);
   }
 
   const data = new Uint8Array(await file.slice(startOffset, sliceEnd).arrayBuffer());
   if (data.length === 0) {
     issues.push("Disassembly sample is empty after bounds checks.");
-    return {
-      bitness,
-      bytesAnalyzed: 0,
-      instructionCount: 0,
-      invalidInstructionCount: 0,
-      instructionSets: [],
-      issues
-    };
+    return emptyReport(0);
+  }
+
+  if (opts.signal?.aborted) {
+    issues.push("Disassembly cancelled.");
+    return emptyReport(data.length);
   }
 
   let iced: IcedX86Module;
+  reportProgress(opts, {
+    stage: "loading",
+    bytesSampled: data.length,
+    bytesDecoded: 0,
+    instructionCount: 0,
+    invalidInstructionCount: 0
+  });
   try {
     iced = (await import("iced-x86")) as unknown as IcedX86Module;
   } catch (err) {
     issues.push(`Failed to load iced-x86 disassembler (${String(err)})`);
-    return {
-      bitness,
-      bytesAnalyzed: data.length,
-      instructionCount: 0,
-      invalidInstructionCount: 0,
-      instructionSets: [],
-      issues
-    };
+    return emptyReport(data.length);
   }
   const { Code, CpuidFeature, Decoder, DecoderOptions } = iced;
 
   const featureCounts = new Map<number, number>();
   let instructionCount = 0;
   let invalidInstructionCount = 0;
+  let bytesDecoded = 0;
   let consecutiveInvalid = 0;
 
   const decoder = new Decoder(bitness, data, DecoderOptions.None);
@@ -242,7 +216,20 @@ export async function analyzePeInstructionSets(
     instr = decoder.decode();
     while (true) {
       instructionCount++;
-      if (instr.code === Code["INVALID"] || instr.length === 0) {
+      if (opts.signal?.aborted) {
+        issues.push("Disassembly cancelled.");
+        break;
+      }
+
+      const len = instr.length;
+      if (len <= 0) {
+        invalidInstructionCount++;
+        issues.push("Stopping early after a zero-length instruction decode.");
+        break;
+      }
+      bytesDecoded = Math.min(data.length, bytesDecoded + len);
+
+      if (instr.code === Code["INVALID"]) {
         invalidInstructionCount++;
         consecutiveInvalid++;
       } else {
@@ -258,10 +245,22 @@ export async function analyzePeInstructionSets(
         break;
       }
       if (!decoder.canDecode) break;
-      if (instructionCount >= MAX_INSTRUCTIONS) {
-        issues.push(`Stopping after ${MAX_INSTRUCTIONS} instructions (analysis limit).`);
+      if (instructionCount >= maxInstructions) {
+        issues.push(`Stopping after ${maxInstructions} instructions (analysis limit).`);
         break;
       }
+
+      if (yieldEveryInstructions && instructionCount % yieldEveryInstructions === 0) {
+        reportProgress(opts, {
+          stage: "decoding",
+          bytesSampled: data.length,
+          bytesDecoded,
+          instructionCount,
+          invalidInstructionCount
+        });
+        await yieldToEventLoop();
+      }
+
       decoder.decodeOut(instr);
     }
   } catch (err) {
@@ -293,7 +292,8 @@ export async function analyzePeInstructionSets(
 
   return {
     bitness,
-    bytesAnalyzed: data.length,
+    bytesSampled: data.length,
+    bytesDecoded,
     instructionCount,
     invalidInstructionCount,
     instructionSets,

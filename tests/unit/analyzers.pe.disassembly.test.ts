@@ -146,3 +146,66 @@ void test("analyzePeInstructionSets stops after too many consecutive invalid ins
   assert.ok(report.invalidInstructionCount > 0);
   assert.ok(report.issues.some(issue => issue.toLowerCase().includes("too many consecutive invalid")));
 });
+
+void test("analyzePeInstructionSets reports decoded bytes when capped", async () => {
+  const bytes = new Uint8Array([0x90, 0x90]); // nop; nop
+  const file = new MockFile(bytes, "cap.bin");
+
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x8664,
+    is64Bit: true,
+    imageBase: 0x140000000,
+    entrypointRva: 0x1000,
+    rvaToOff: () => 0,
+    sections: [
+      {
+        name: ".text",
+        virtualSize: bytes.length,
+        virtualAddress: 0x1000,
+        sizeOfRawData: bytes.length,
+        pointerToRawData: 0,
+        characteristics: 0x60000020
+      }
+    ],
+    maxInstructions: 1
+  });
+
+  assert.ok(report);
+  assert.equal(report.bytesSampled, 2);
+  assert.equal(report.bytesDecoded, 1);
+  assert.equal(report.instructionCount, 1);
+  assert.ok(report.issues.some(issue => issue.toLowerCase().includes("analysis limit")));
+});
+
+void test("analyzePeInstructionSets reports progress while decoding", async () => {
+  const bytes = new Uint8Array([0x90, 0x90]); // nop; nop
+  const file = new MockFile(bytes, "progress.bin");
+  const stages: string[] = [];
+
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x8664,
+    is64Bit: true,
+    imageBase: 0x140000000,
+    entrypointRva: 0x1000,
+    rvaToOff: () => 0,
+    sections: [
+      {
+        name: ".text",
+        virtualSize: bytes.length,
+        virtualAddress: 0x1000,
+        sizeOfRawData: bytes.length,
+        pointerToRawData: 0,
+        characteristics: 0x60000020
+      }
+    ],
+    yieldEveryInstructions: 1,
+    onProgress: progress => {
+      stages.push(progress.stage);
+      assert.ok(progress.bytesSampled > 0);
+    }
+  });
+
+  assert.ok(report);
+  assert.ok(stages.includes("loading"));
+  assert.ok(stages.includes("decoding"));
+});
