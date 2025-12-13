@@ -1,0 +1,115 @@
+import { formatHumanSize } from "../binary-utils.js";
+import type { ParseForUiResult } from "../analyzers/index.js";
+import type { PeParseResult } from "../analyzers/pe/index.js";
+import {
+  analyzePeInstructionSets,
+  type AnalyzePeInstructionSetOptions,
+  type PeInstructionSetProgress,
+  type PeInstructionSetReport
+} from "../analyzers/pe/disassembly.js";
+
+type AnalyzePeInstructionSets = (
+  file: File,
+  opts: AnalyzePeInstructionSetOptions
+) => Promise<PeInstructionSetReport>;
+
+type PeDisassemblyControllerOptions = {
+  getCurrentFile: () => File | null;
+  getCurrentParseResult: () => ParseForUiResult;
+  renderResult: (result: ParseForUiResult) => void;
+  analyze?: AnalyzePeInstructionSets;
+};
+
+export type PeDisassemblyController = {
+  cancel: () => void;
+  start: (file: File, pe: PeParseResult) => void;
+};
+
+const PROGRESS_TEXT_ID = "peInstructionSetsProgressText";
+const PROGRESS_BAR_ID = "peInstructionSetsProgress";
+
+const updatePeDisassemblyProgress = (progress: PeInstructionSetProgress): void => {
+  const bar = document.getElementById(PROGRESS_BAR_ID);
+  const text = document.getElementById(PROGRESS_TEXT_ID);
+
+  if (bar instanceof HTMLProgressElement) {
+    bar.max = Math.max(1, progress.bytesSampled);
+    if (progress.stage === "loading") {
+      bar.removeAttribute("value");
+    } else {
+      bar.value = Math.min(progress.bytesSampled, progress.bytesDecoded);
+    }
+  }
+
+  if (text instanceof HTMLElement) {
+    const stageLabel =
+      progress.stage === "loading"
+        ? "Loading disassembler…"
+        : progress.stage === "decoding"
+          ? "Disassembling…"
+          : "Done.";
+    const percent =
+      progress.bytesSampled > 0 ? Math.round((progress.bytesDecoded / progress.bytesSampled) * 100) : 0;
+    const bytesText =
+      progress.bytesSampled > 0
+        ? `${formatHumanSize(progress.bytesDecoded)} / ${formatHumanSize(progress.bytesSampled)}`
+        : "0 B";
+    text.textContent = `${stageLabel} ${percent}% (${bytesText}), ${progress.instructionCount} instr., ${progress.invalidInstructionCount} invalid.`;
+  }
+};
+
+export const createPeDisassemblyController = (
+  opts: PeDisassemblyControllerOptions
+): PeDisassemblyController => {
+  let abortController: AbortController | null = null;
+  let runId = 0;
+  const analyze = opts.analyze ?? analyzePeInstructionSets;
+
+  const cancel = (): void => {
+    runId++;
+    abortController?.abort();
+    abortController = null;
+  };
+
+  const start = (file: File, pe: PeParseResult): void => {
+    cancel();
+    const localRunId = ++runId;
+    const localAbortController = new AbortController();
+    abortController = localAbortController;
+    updatePeDisassemblyProgress({
+      stage: "loading",
+      bytesSampled: 1,
+      bytesDecoded: 0,
+      instructionCount: 0,
+      invalidInstructionCount: 0
+    });
+
+    void (async () => {
+      const report = await analyze(file, {
+        coffMachine: pe.coff.Machine,
+        is64Bit: pe.opt.isPlus,
+        imageBase: pe.opt.ImageBase,
+        entrypointRva: pe.opt.AddressOfEntryPoint,
+        rvaToOff: pe.rvaToOff,
+        sections: pe.sections,
+        yieldEveryInstructions: 1024,
+        signal: localAbortController.signal,
+        onProgress: progress => {
+          if (localRunId !== runId) return;
+          updatePeDisassemblyProgress(progress);
+        }
+      });
+
+      if (localRunId !== runId) return;
+      if (localAbortController.signal.aborted) return;
+      if (opts.getCurrentFile() !== file) return;
+
+      const current = opts.getCurrentParseResult();
+      if (current.analyzer !== "pe" || !current.parsed) return;
+      current.parsed.disassembly = report;
+      opts.renderResult(current);
+    })();
+  };
+
+  return { cancel, start };
+};

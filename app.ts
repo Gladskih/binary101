@@ -6,6 +6,7 @@ import { renderAnalysisIntoUi as renderParsedResult } from "./ui/render-analysis
 import { attachPreviewGuards, buildPreviewHtml } from "./ui/preview.js";
 import { computeAndDisplayHash, copyHashToClipboard, resetHashDisplay } from "./ui/hash-controls.js";
 import { createZipEntryClickHandler } from "./ui/zip-actions.js";
+import { createPeDisassemblyController } from "./ui/pe-disassembly.js";
 
 const getElement = (id: string) => document.getElementById(id)!;
 
@@ -80,6 +81,12 @@ const renderResult = (result: ParseForUiResult): void => {
   });
 };
 
+const peDisassembly = createPeDisassemblyController({
+  getCurrentFile: () => currentFile,
+  getCurrentParseResult: () => currentParseResult,
+  renderResult
+});
+
 const zipClickHandler = createZipEntryClickHandler({
   getParseResult: () => currentParseResult,
   getFile: () => currentFile,
@@ -91,6 +98,7 @@ peDetailsValueElement.addEventListener("click", event => {
 });
 
 async function showFileInfo(file: File, sourceDescription: string): Promise<void> {
+  peDisassembly.cancel();
   currentFile = file;
   currentParseResult = { analyzer: null, parsed: null };
   try {
@@ -117,6 +125,9 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     const parsedResult = await parseForUi(file);
     currentParseResult = parsedResult;
     renderResult(parsedResult);
+    if (parsedResult.analyzer === "pe" && parsedResult.parsed) {
+      peDisassembly.start(file, parsedResult.parsed);
+    }
 
     resetHashDisplay(sha256Controls, sha512Controls);
     fileInfoCardElement.hidden = false;
