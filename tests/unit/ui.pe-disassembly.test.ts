@@ -5,17 +5,17 @@ import type { ParseForUiResult } from "../../analyzers/index.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 import type { AnalyzePeInstructionSetOptions, PeInstructionSetReport } from "../../analyzers/pe/disassembly.js";
 import { MockFile } from "../helpers/mock-file.js";
-
 type GlobalDom = {
   document?: unknown;
   HTMLElement?: unknown;
   HTMLProgressElement?: unknown;
 };
-
 class FakeHTMLElement {
   textContent: string | null = null;
+  className = "";
+  hidden = false;
+  disabled = false;
 }
-
 class FakeHTMLProgressElement extends FakeHTMLElement {
   max = 0;
   value = 0;
@@ -24,7 +24,6 @@ class FakeHTMLProgressElement extends FakeHTMLElement {
     this.removedAttributes.push(name);
   }
 }
-
 const createMinimalPe = (): PeParseResult =>
   ({
     coff: { Machine: 0x8664 },
@@ -32,8 +31,9 @@ const createMinimalPe = (): PeParseResult =>
     rvaToOff: () => 0,
     sections: []
   }) as unknown as PeParseResult;
-
-const installFakeDom = (): {
+const installFakeDom = (
+  extraElements: Record<string, FakeHTMLElement> = {}
+): {
   progress: FakeHTMLProgressElement;
   text: FakeHTMLElement;
   restore: () => void;
@@ -52,10 +52,9 @@ const installFakeDom = (): {
     getElementById: (id: string): unknown => {
       if (id === "peInstructionSetsProgress") return progress;
       if (id === "peInstructionSetsProgressText") return text;
-      return null;
+      return extraElements[id] ?? null;
     }
   };
-
   return {
     progress,
     text,
@@ -66,11 +65,9 @@ const installFakeDom = (): {
     }
   };
 };
-
 const flushTimers = async (): Promise<void> => {
   await new Promise<void>(resolve => setTimeout(resolve, 0));
 };
-
 const createFakeReport = (): PeInstructionSetReport => ({
   bitness: 64,
   bytesSampled: 10,
@@ -80,14 +77,12 @@ const createFakeReport = (): PeInstructionSetReport => ({
   instructionSets: [],
   issues: []
 });
-
 void test("pe disassembly controller updates progress and renders when complete", async () => {
   const dom = installFakeDom();
   const pe = createMinimalPe();
   const file = new MockFile(new Uint8Array([0x90]), "pe.bin");
   const parseResult: ParseForUiResult = { analyzer: "pe", parsed: pe };
   const renders: ParseForUiResult[] = [];
-
   const analyze = async (_file: File, opts: AnalyzePeInstructionSetOptions): Promise<PeInstructionSetReport> => {
     opts.onProgress?.({
       stage: "loading",
@@ -112,7 +107,6 @@ void test("pe disassembly controller updates progress and renders when complete"
     });
     return createFakeReport();
   };
-
   const controller = createPeDisassemblyController({
     getCurrentFile: () => file,
     getCurrentParseResult: () => parseResult,
@@ -121,10 +115,8 @@ void test("pe disassembly controller updates progress and renders when complete"
     },
     analyze
   });
-
   controller.start(file, pe);
   await flushTimers();
-
   assert.equal(renders.length, 1);
   assert.ok(pe.disassembly);
   assert.equal(pe.disassembly.instructionCount, 3);
@@ -132,22 +124,18 @@ void test("pe disassembly controller updates progress and renders when complete"
   assert.equal(dom.progress.value, 10);
   assert.ok(dom.progress.removedAttributes.includes("value"));
   assert.ok(dom.text.textContent?.includes("Done."));
-
   dom.restore();
 });
-
 void test("pe disassembly controller does not render after cancel", async () => {
   const dom = installFakeDom();
   const pe = createMinimalPe();
   const file = new MockFile(new Uint8Array([0x90]), "pe.bin");
   const parseResult: ParseForUiResult = { analyzer: "pe", parsed: pe };
   const renders: ParseForUiResult[] = [];
-
   const analyze = async (): Promise<PeInstructionSetReport> => {
     await flushTimers();
     return createFakeReport();
   };
-
   const controller = createPeDisassemblyController({
     getCurrentFile: () => file,
     getCurrentParseResult: () => parseResult,
@@ -156,18 +144,14 @@ void test("pe disassembly controller does not render after cancel", async () => 
     },
     analyze
   });
-
   controller.start(file, pe);
   controller.cancel();
   await flushTimers();
   await flushTimers();
-
   assert.equal(renders.length, 0);
   assert.equal(pe.disassembly, undefined);
-
   dom.restore();
 });
-
 void test("pe disassembly controller ignores results when file changes", async () => {
   const dom = installFakeDom();
   const pe = createMinimalPe();
@@ -214,6 +198,102 @@ void test("pe disassembly controller ignores results when current parse result i
 
   assert.equal(renders.length, 0);
   assert.equal(pe.disassembly, undefined);
+
+  dom.restore();
+});
+
+void test("pe disassembly controller updates instruction-set chip table while decoding", async () => {
+  const chip = new FakeHTMLElement();
+  chip.className = "opt dim";
+  const count = new FakeHTMLElement();
+  count.className = "dim";
+  count.textContent = "0";
+
+  const dom = installFakeDom({
+    peInstructionSetChip_SSE2: chip,
+    peInstructionSetCount_SSE2: count
+  });
+
+  const pe = createMinimalPe();
+  const file = new MockFile(new Uint8Array([0x90]), "pe.bin");
+  const parseResult: ParseForUiResult = { analyzer: "pe", parsed: pe };
+
+  const controller = createPeDisassemblyController({
+    getCurrentFile: () => file,
+    getCurrentParseResult: () => parseResult,
+    renderResult: () => {},
+    analyze: async (_file: File, opts: AnalyzePeInstructionSetOptions): Promise<PeInstructionSetReport> => {
+      opts.onProgress?.({
+        stage: "decoding",
+        bytesSampled: 10,
+        bytesDecoded: 5,
+        instructionCount: 2,
+        invalidInstructionCount: 0,
+        knownFeatureCounts: { SSE2: 7 }
+      });
+      opts.onProgress?.({
+        stage: "done",
+        bytesSampled: 10,
+        bytesDecoded: 10,
+        instructionCount: 3,
+        invalidInstructionCount: 0,
+        knownFeatureCounts: { SSE2: 9 }
+      });
+      return createFakeReport();
+    }
+  });
+
+  controller.start(file, pe);
+  await flushTimers();
+
+  assert.equal(count.textContent, "9");
+  assert.equal(count.className, "");
+  assert.equal(chip.className, "opt sel");
+
+  dom.restore();
+});
+
+void test("pe disassembly controller toggles analyze/cancel buttons and renders 0-byte progress", async () => {
+  const analyzeButton = new FakeHTMLElement();
+  const cancelButton = new FakeHTMLElement();
+  cancelButton.hidden = true;
+
+  const dom = installFakeDom({
+    peInstructionSetsAnalyzeButton: analyzeButton,
+    peInstructionSetsCancelButton: cancelButton
+  });
+
+  const pe = createMinimalPe();
+  const file = new MockFile(new Uint8Array([0x90]), "pe.bin");
+  const parseResult: ParseForUiResult = { analyzer: "pe", parsed: pe };
+
+  const controller = createPeDisassemblyController({
+    getCurrentFile: () => file,
+    getCurrentParseResult: () => parseResult,
+    renderResult: () => {},
+    analyze: async (_file: File, opts: AnalyzePeInstructionSetOptions): Promise<PeInstructionSetReport> => {
+      opts.onProgress?.({
+        stage: "loading",
+        bytesSampled: 0,
+        bytesDecoded: 0,
+        instructionCount: 0,
+        invalidInstructionCount: 0
+      });
+      await flushTimers();
+      return createFakeReport();
+    }
+  });
+
+  controller.start(file, pe);
+
+  assert.equal(analyzeButton.disabled, true);
+  assert.equal(cancelButton.hidden, false);
+  assert.ok(dom.text.textContent?.includes("0 B"));
+
+  await flushTimers();
+  await flushTimers();
+  assert.equal(analyzeButton.disabled, false);
+  assert.equal(cancelButton.hidden, true);
 
   dom.restore();
 });

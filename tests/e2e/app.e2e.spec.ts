@@ -259,4 +259,18 @@ test.describe("file type detection", () => {
     expect(deflatedResult.name).toBe("deflated.txt");
     expect(deflatedResult.content).toBe("deflated");
   });
+
+  void test("runs PE instruction-set analysis on demand", async ({ page }) => {
+    const mockFile = createPePlusFile();
+    await page.setInputFiles("#fileInput", toUpload(mockFile));
+    await expectBaseDetails(page, mockFile.name, "PE32+ executable for x86-64 (AMD64)");
+
+    const detailsValue = page.locator("#peDetailsValue");
+    await expect(detailsValue).toContainText("Instruction sets");
+    await expect(detailsValue.locator("#peInstructionSetsAnalyzeButton")).toBeVisible();
+
+    await detailsValue.locator("#peInstructionSetsAnalyzeButton").click();
+    await expect(detailsValue).toContainText("Disassembly sample");
+    await expect(detailsValue).not.toContainText("Failed to load iced-x86 disassembler");
+  });
 });

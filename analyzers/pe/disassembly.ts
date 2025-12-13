@@ -1,13 +1,11 @@
 import type { PeSection, RvaToOffset } from "./types.js";
-import { describeCpuidFeature, formatCpuidLabel } from "./cpuid-features.js";
-
+import { KNOWN_CPUID_FEATURES, describeCpuidFeature, formatCpuidLabel } from "./cpuid-features.js";
 export interface PeInstructionSetUsage {
   id: string;
   label: string;
   description: string;
   instructionCount: number;
 }
-
 export interface PeInstructionSetReport {
   bitness: 32 | 64;
   bytesSampled: number;
@@ -17,7 +15,6 @@ export interface PeInstructionSetReport {
   instructionSets: PeInstructionSetUsage[];
   issues: string[];
 }
-
 export interface AnalyzePeInstructionSetOptions {
   coffMachine: number;
   is64Bit: boolean;
@@ -31,15 +28,14 @@ export interface AnalyzePeInstructionSetOptions {
   signal?: AbortSignal;
   onProgress?: (progress: PeInstructionSetProgress) => void;
 }
-
 export interface PeInstructionSetProgress {
   stage: "loading" | "decoding" | "done";
   bytesSampled: number;
   bytesDecoded: number;
   instructionCount: number;
   invalidInstructionCount: number;
+  knownFeatureCounts?: Record<string, number>;
 }
-
 interface IcedInstruction {
   code: number;
   length: number;
@@ -62,13 +58,9 @@ interface IcedX86Module {
 const IMAGE_FILE_MACHINE_I386 = 0x014c;
 const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
 const IMAGE_SCN_CNT_CODE = 0x00000020;
-
 const DEFAULT_MAX_DECODE_BYTES = 256 * 1024;
-const DEFAULT_MAX_INSTRUCTIONS = 100_000;
 const MAX_CONSECUTIVE_INVALID = 128;
-
 const isExecutableSection = (section: PeSection): boolean => (section.characteristics & IMAGE_SCN_CNT_CODE) !== 0;
-
 const findSectionContainingRva = (sections: PeSection[], rva: number): PeSection | null => {
   for (const section of sections) {
     const start = section.virtualAddress >>> 0;
@@ -78,20 +70,16 @@ const findSectionContainingRva = (sections: PeSection[], rva: number): PeSection
   }
   return null;
 };
-
 const findBestCodeSection = (sections: PeSection[]): PeSection | null => {
   const byName = sections.find(section => section.name.toLowerCase() === ".text");
   if (byName) return byName;
   return sections.find(isExecutableSection) || sections[0] || null;
 };
-
 const reportProgress = (opts: AnalyzePeInstructionSetOptions, progress: PeInstructionSetProgress): void => {
   if (!opts.onProgress) return;
   try { opts.onProgress(progress); } catch { /* ignore */ }
 };
-
 const yieldToEventLoop = async (): Promise<void> => new Promise<void>(resolve => setTimeout(resolve, 0));
-
 export async function analyzePeInstructionSets(
   file: File,
   opts: AnalyzePeInstructionSetOptions
@@ -106,12 +94,12 @@ export async function analyzePeInstructionSets(
     opts.maxDecodeBytes > 0
       ? opts.maxDecodeBytes
       : DEFAULT_MAX_DECODE_BYTES;
-  const maxInstructions =
+  let maxInstructions =
     typeof opts.maxInstructions === "number" &&
     Number.isSafeInteger(opts.maxInstructions) &&
     opts.maxInstructions > 0
       ? opts.maxInstructions
-      : DEFAULT_MAX_INSTRUCTIONS;
+      : 0;
   const yieldEveryInstructions =
     typeof opts.yieldEveryInstructions === "number" &&
     Number.isSafeInteger(opts.yieldEveryInstructions) &&
@@ -127,30 +115,25 @@ export async function analyzePeInstructionSets(
     instructionSets: [],
     issues
   });
-
   if (!supported) {
     issues.push(
       `Disassembly is only supported for x86/x86-64 (Machine ${coffMachine.toString(16)}).`
     );
     return emptyReport(0);
   }
-
   if (coffMachine === IMAGE_FILE_MACHINE_AMD64 && bitness !== 64) {
     issues.push("Machine is AMD64 but optional header reports 32-bit mode.");
   } else if (coffMachine === IMAGE_FILE_MACHINE_I386 && bitness !== 32) {
     issues.push("Machine is I386 but optional header reports 64-bit mode.");
   }
-
   let startRva = opts.entrypointRva >>> 0;
   let startOffset = startRva ? opts.rvaToOff(startRva) : null;
   let section: PeSection | null = null;
-
   if (startOffset != null && startRva) {
     section = findSectionContainingRva(opts.sections, startRva);
   } else if (startRva) {
     issues.push(`Entrypoint RVA 0x${startRva.toString(16)} could not be mapped to a file offset.`);
   }
-
   if (!startRva || startOffset == null) {
     section = findBestCodeSection(opts.sections);
     if (!section) {
@@ -161,7 +144,6 @@ export async function analyzePeInstructionSets(
     startOffset = section.pointerToRawData >>> 0;
     issues.push(`Falling back to section ${section.name || "(unnamed)"} for disassembly sample.`);
   }
-
   const sectionEnd = section
     ? Math.min(file.size, (section.pointerToRawData >>> 0) + (section.sizeOfRawData >>> 0))
     : file.size;
@@ -170,18 +152,17 @@ export async function analyzePeInstructionSets(
     issues.push("No bytes available at selected disassembly start offset.");
     return emptyReport(0);
   }
-
   const data = new Uint8Array(await file.slice(startOffset, sliceEnd).arrayBuffer());
   if (data.length === 0) {
     issues.push("Disassembly sample is empty after bounds checks.");
     return emptyReport(0);
   }
+  if (!maxInstructions) maxInstructions = data.length;
 
   if (opts.signal?.aborted) {
     issues.push("Disassembly cancelled.");
     return emptyReport(data.length);
   }
-
   let iced: IcedX86Module;
   reportProgress(opts, {
     stage: "loading",
@@ -199,18 +180,27 @@ export async function analyzePeInstructionSets(
   const { Code, CpuidFeature, Decoder, DecoderOptions } = iced;
 
   const featureCounts = new Map<number, number>();
+  const knownFeatures = KNOWN_CPUID_FEATURES
+    .map(id => ({ id, value: CpuidFeature[id] }))
+    .filter((entry): entry is { id: string; value: number } => typeof entry.value === "number");
+  const getKnownFeatureCounts = (): Record<string, number> => {
+    const out: Record<string, number> = {};
+    for (const { id, value } of knownFeatures) {
+      const count = featureCounts.get(value);
+      if (count) out[id] = count;
+    }
+    return out;
+  };
   let instructionCount = 0;
   let invalidInstructionCount = 0;
   let bytesDecoded = 0;
   let consecutiveInvalid = 0;
-
   const decoder = new Decoder(bitness, data, DecoderOptions.None);
   const imageBase = Number.isSafeInteger(opts.imageBase) && opts.imageBase >= 0 ? BigInt(opts.imageBase) : 0n;
   if (!Number.isSafeInteger(opts.imageBase)) {
     issues.push("ImageBase is not a safe integer; instruction pointers may be approximate.");
   }
   decoder.ip = BigInt.asUintN(64, imageBase + BigInt(startRva));
-
   let instr: IcedInstruction | null = null;
   try {
     instr = decoder.decode();
@@ -256,11 +246,11 @@ export async function analyzePeInstructionSets(
           bytesSampled: data.length,
           bytesDecoded,
           instructionCount,
-          invalidInstructionCount
+          invalidInstructionCount,
+          knownFeatureCounts: getKnownFeatureCounts()
         });
         await yieldToEventLoop();
       }
-
       decoder.decodeOut(instr);
     }
   } catch (err) {
@@ -277,7 +267,6 @@ export async function analyzePeInstructionSets(
       // ignore
     }
   }
-
   const instructionSets = [...featureCounts.entries()]
     .map(([feature, count]) => {
       const id = (CpuidFeature as Record<number, string | undefined>)[feature] || `#${feature}`;
@@ -290,6 +279,14 @@ export async function analyzePeInstructionSets(
     })
     .sort((a, b) => b.instructionCount - a.instructionCount || a.id.localeCompare(b.id));
 
+  reportProgress(opts, {
+    stage: "done",
+    bytesSampled: data.length,
+    bytesDecoded,
+    instructionCount,
+    invalidInstructionCount,
+    knownFeatureCounts: getKnownFeatureCounts()
+  });
   return {
     bitness,
     bytesSampled: data.length,

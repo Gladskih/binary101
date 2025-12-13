@@ -208,4 +208,42 @@ void test("analyzePeInstructionSets reports progress while decoding", async () =
   assert.ok(report);
   assert.ok(stages.includes("loading"));
   assert.ok(stages.includes("decoding"));
+  assert.ok(stages.includes("done"));
+});
+
+void test("analyzePeInstructionSets reports known feature counts in progress snapshots", async () => {
+  const bytes = new Uint8Array([
+    // vmovaps xmm1,xmm5 (AVX)
+    0xc5, 0xf8, 0x28, 0xcd,
+    // nop (keeps decoder.canDecode=true so we can observe a progress snapshot)
+    0x90
+  ]);
+  const file = new MockFile(bytes, "progress-avx.bin");
+  const seen: Array<Record<string, number> | undefined> = [];
+
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x8664,
+    is64Bit: true,
+    imageBase: 0x140000000,
+    entrypointRva: 0x1000,
+    rvaToOff: () => 0,
+    sections: [
+      {
+        name: ".text",
+        virtualSize: bytes.length,
+        virtualAddress: 0x1000,
+        sizeOfRawData: bytes.length,
+        pointerToRawData: 0,
+        characteristics: 0x60000020
+      }
+    ],
+    yieldEveryInstructions: 1,
+    onProgress: progress => {
+      if (progress.stage !== "decoding") return;
+      seen.push(progress.knownFeatureCounts);
+    }
+  });
+
+  assert.ok(report);
+  assert.ok(seen.some(snapshot => snapshot?.["AVX"] === 1));
 });

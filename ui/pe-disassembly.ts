@@ -25,8 +25,29 @@ export type PeDisassemblyController = {
   start: (file: File, pe: PeParseResult) => void;
 };
 
+const ANALYZE_BUTTON_ID = "peInstructionSetsAnalyzeButton";
+const CANCEL_BUTTON_ID = "peInstructionSetsCancelButton";
 const PROGRESS_TEXT_ID = "peInstructionSetsProgressText";
 const PROGRESS_BAR_ID = "peInstructionSetsProgress";
+const CHIP_ID_PREFIX = "peInstructionSetChip_";
+const COUNT_ID_PREFIX = "peInstructionSetCount_";
+
+const setDisassemblyUiRunning = (running: boolean): void => {
+  const analyzeButton = document.getElementById(ANALYZE_BUTTON_ID);
+  if (analyzeButton && "disabled" in analyzeButton) {
+    (analyzeButton as HTMLButtonElement).disabled = running;
+  }
+
+  const cancelButton = document.getElementById(CANCEL_BUTTON_ID);
+  if (cancelButton && "hidden" in cancelButton) {
+    (cancelButton as HTMLElement).hidden = !running;
+  }
+
+  const bar = document.getElementById(PROGRESS_BAR_ID);
+  if (bar instanceof HTMLProgressElement) {
+    bar.hidden = !running;
+  }
+};
 
 const updatePeDisassemblyProgress = (progress: PeInstructionSetProgress): void => {
   const bar = document.getElementById(PROGRESS_BAR_ID);
@@ -44,9 +65,9 @@ const updatePeDisassemblyProgress = (progress: PeInstructionSetProgress): void =
   if (text instanceof HTMLElement) {
     const stageLabel =
       progress.stage === "loading"
-        ? "Loading disassembler…"
+        ? "Loading disassembler..."
         : progress.stage === "decoding"
-          ? "Disassembling…"
+          ? "Disassembling..."
           : "Done.";
     const percent =
       progress.bytesSampled > 0 ? Math.round((progress.bytesDecoded / progress.bytesSampled) * 100) : 0;
@@ -55,6 +76,29 @@ const updatePeDisassemblyProgress = (progress: PeInstructionSetProgress): void =
         ? `${formatHumanSize(progress.bytesDecoded)} / ${formatHumanSize(progress.bytesSampled)}`
         : "0 B";
     text.textContent = `${stageLabel} ${percent}% (${bytesText}), ${progress.instructionCount} instr., ${progress.invalidInstructionCount} invalid.`;
+  }
+
+  if (progress.knownFeatureCounts) {
+    for (const [id, count] of Object.entries(progress.knownFeatureCounts)) {
+      const countElement = document.getElementById(`${COUNT_ID_PREFIX}${id}`);
+      if (countElement instanceof HTMLElement) {
+        countElement.textContent = String(count);
+        countElement.className = count > 0 ? "" : "dim";
+      }
+
+      const chipElement = document.getElementById(`${CHIP_ID_PREFIX}${id}`);
+      if (chipElement instanceof HTMLElement) {
+        chipElement.className = count > 0 ? "opt sel" : "opt dim";
+      }
+    }
+  }
+};
+
+const setCancelled = (): void => {
+  setDisassemblyUiRunning(false);
+  const progressText = document.getElementById(PROGRESS_TEXT_ID);
+  if (progressText instanceof HTMLElement) {
+    progressText.textContent = "Cancelled.";
   }
 };
 
@@ -67,15 +111,19 @@ export const createPeDisassemblyController = (
 
   const cancel = (): void => {
     runId++;
-    abortController?.abort();
+    if (!abortController) return;
+    abortController.abort();
     abortController = null;
+    setCancelled();
   };
 
   const start = (file: File, pe: PeParseResult): void => {
     cancel();
+    setDisassemblyUiRunning(true);
     const localRunId = ++runId;
     const localAbortController = new AbortController();
     abortController = localAbortController;
+
     updatePeDisassemblyProgress({
       stage: "loading",
       bytesSampled: 1,
@@ -107,6 +155,8 @@ export const createPeDisassemblyController = (
       const current = opts.getCurrentParseResult();
       if (current.analyzer !== "pe" || !current.parsed) return;
       current.parsed.disassembly = report;
+      setDisassemblyUiRunning(false);
+      abortController = null;
       opts.renderResult(current);
     })();
   };

@@ -87,6 +87,10 @@ void test("renderInstructionSets renders a progress placeholder before analysis"
   renderInstructionSets(pe, out);
   const html = out.join("");
 
+  assert.ok(html.includes("peInstructionSetsAnalyzeButton"));
+  assert.ok(html.includes("peInstructionSetsCancelButton"));
   assert.ok(html.includes("peInstructionSetsProgress"));
   assert.ok(html.includes("peInstructionSetsProgressText"));
+  assert.ok(html.includes("peInstructionSetChip_SSE"));
+  assert.ok(html.includes("peInstructionSetCount_SSE"));
 });

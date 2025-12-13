@@ -94,6 +94,27 @@ const zipClickHandler = createZipEntryClickHandler({
 });
 
 peDetailsValueElement.addEventListener("click", event => {
+  const targetNode = event.target as Node | null;
+  const targetElement = targetNode instanceof Element ? targetNode : targetNode?.parentElement ?? null;
+  const analyzeButton = targetElement?.closest("#peInstructionSetsAnalyzeButton");
+  const cancelButton = targetElement?.closest("#peInstructionSetsCancelButton");
+
+  if (analyzeButton) {
+    event.preventDefault();
+    if (!currentFile) return;
+    if (currentParseResult.analyzer !== "pe" || !currentParseResult.parsed) return;
+    delete currentParseResult.parsed.disassembly;
+    renderResult(currentParseResult);
+    peDisassembly.start(currentFile, currentParseResult.parsed);
+    return;
+  }
+
+  if (cancelButton) {
+    event.preventDefault();
+    peDisassembly.cancel();
+    return;
+  }
+
   void zipClickHandler(event);
 });
 
@@ -125,9 +146,6 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     const parsedResult = await parseForUi(file);
     currentParseResult = parsedResult;
     renderResult(parsedResult);
-    if (parsedResult.analyzer === "pe" && parsedResult.parsed) {
-      peDisassembly.start(file, parsedResult.parsed);
-    }
 
     resetHashDisplay(sha256Controls, sha512Controls);
     fileInfoCardElement.hidden = false;
