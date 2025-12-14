@@ -4,6 +4,8 @@ import { humanSize, hex } from "../../binary-utils.js";
 import { safe } from "../../html-utils.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 
+const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
+
 export function renderReloc(pe: PeParseResult, out: string[]): void {
   if (!pe.reloc) return;
   const reloc = pe.reloc;
@@ -124,6 +126,23 @@ export function renderSanity(pe: PeParseResult, out: string[]): void {
   }
   if (pe.debugWarning) {
     issues.push(pe.debugWarning);
+  }
+  const entrypointRva = pe.opt?.AddressOfEntryPoint ? (pe.opt.AddressOfEntryPoint >>> 0) : 0;
+  const sections = Array.isArray(pe.sections) ? pe.sections : [];
+  if (entrypointRva && sections.length) {
+    const entrySection = sections.find(section => {
+      const start = section.virtualAddress >>> 0;
+      const size = Math.max(section.virtualSize >>> 0, section.sizeOfRawData >>> 0);
+      const end = start + size;
+      return entrypointRva >= start && entrypointRva < end;
+    });
+    if (!entrySection) {
+      issues.push(`AddressOfEntryPoint points outside any section (RVA ${hex(entrypointRva, 8)}).`);
+    } else if ((entrySection.characteristics & IMAGE_SCN_MEM_EXECUTE) === 0) {
+      issues.push(
+        `Entry point is in a non-executable section (${entrySection.name || "(unnamed)"}; missing IMAGE_SCN_MEM_EXECUTE).`
+      );
+    }
   }
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Sanity</h4>`);
   if (!issues.length) {

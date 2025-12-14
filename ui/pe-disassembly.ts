@@ -142,7 +142,7 @@ export const createPeDisassemblyController = (
         coffMachine: pe.coff.Machine,
         is64Bit: pe.opt.isPlus,
         imageBase: pe.opt.ImageBase,
-        entrypointRva: exportRvas.length > 0 ? 0 : pe.opt.AddressOfEntryPoint,
+        entrypointRva: pe.opt.AddressOfEntryPoint,
         exportRvas,
         rvaToOff: pe.rvaToOff,
         sections: pe.sections,

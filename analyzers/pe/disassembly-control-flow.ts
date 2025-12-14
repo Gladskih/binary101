@@ -166,17 +166,20 @@ export async function disassembleControlFlowForInstructionSets(opts: {
         }
         bytesDecoded = Math.min(bytesSampled, bytesDecoded + len);
 
-        const isInvalid =
-          instr.code === opts.iced.Code["INVALID"] || instr.flowControl === opts.iced.FlowControl["Exception"];
-        if (isInvalid) {
+        const isInvalidDecode = instr.code === opts.iced.Code["INVALID"];
+        const isUd2Trap = instr.code === opts.iced.Code["Ud2"];
+        const isHardException = instr.flowControl === opts.iced.FlowControl["Exception"] && !isUd2Trap;
+        if (isInvalidDecode || isHardException) {
           invalidInstructionCount++;
           opts.issues.push(`Stopping at an invalid instruction at RVA 0x${instrRva.toString(16)}.`);
           break;
         }
 
-        const features = instr.cpuidFeatures();
-        for (const feature of features) {
-          opts.featureCounts.set(feature, (opts.featureCounts.get(feature) || 0) + 1);
+        if (!isUd2Trap) {
+          const features = instr.cpuidFeatures();
+          for (const feature of features) {
+            opts.featureCounts.set(feature, (opts.featureCounts.get(feature) || 0) + 1);
+          }
         }
 
         if (opts.iced.FlowControl["UnconditionalBranch"] === instr.flowControl) {

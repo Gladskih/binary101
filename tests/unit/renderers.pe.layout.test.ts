@@ -120,3 +120,47 @@ void test("renderSanity renders issues and clean state", () => {
   renderSanity(clean, outClean);
   assert.ok(outClean.join("").includes("No obvious structural issues"));
 });
+
+void test("renderSanity reports suspicious entrypoint sections", () => {
+  const outside = {
+    overlaySize: 0,
+    imageSizeMismatch: false,
+    debugWarning: null,
+    opt: { AddressOfEntryPoint: 0x3000 },
+    sections: [
+      {
+        name: ".text",
+        virtualSize: 0x100,
+        virtualAddress: 0x1000,
+        sizeOfRawData: 0x100,
+        pointerToRawData: 0,
+        characteristics: 0x60000020
+      }
+    ]
+  } as unknown as PeParseResult;
+
+  const outOutside: string[] = [];
+  renderSanity(outside, outOutside);
+  assert.ok(outOutside.join("").includes("AddressOfEntryPoint points outside any section"));
+
+  const nonExecutable = {
+    overlaySize: 0,
+    imageSizeMismatch: false,
+    debugWarning: null,
+    opt: { AddressOfEntryPoint: 0x2000 },
+    sections: [
+      {
+        name: ".data",
+        virtualSize: 0x100,
+        virtualAddress: 0x2000,
+        sizeOfRawData: 0x100,
+        pointerToRawData: 0,
+        characteristics: 0x40000040
+      }
+    ]
+  } as unknown as PeParseResult;
+
+  const outNonExecutable: string[] = [];
+  renderSanity(nonExecutable, outNonExecutable);
+  assert.ok(outNonExecutable.join("").includes("missing IMAGE_SCN_MEM_EXECUTE"));
+});

@@ -97,3 +97,36 @@ void test("analyzePeInstructionSets uses export RVAs when provided", async () =>
   assert.equal(report.instructionCount, 1);
   assert.equal(report.invalidInstructionCount, 0);
 });
+
+void test("analyzePeInstructionSets continues past UD2 trap instructions", async () => {
+  const bytes = new Uint8Array([
+    0x0f, 0x0b, // ud2 (intentional trap)
+    0x90, // nop
+    0x90 // nop
+  ]);
+  const file = new MockFile(bytes, "ud2.bin");
+
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x8664,
+    is64Bit: true,
+    imageBase: 0x140000000,
+    entrypointRva: 0x1000,
+    rvaToOff: () => 0,
+    sections: [
+      {
+        name: ".text",
+        virtualSize: bytes.length,
+        virtualAddress: 0x1000,
+        sizeOfRawData: bytes.length,
+        pointerToRawData: 0,
+        characteristics: 0x60000020
+      }
+    ]
+  });
+
+  assert.ok(report);
+  assert.equal(report.instructionCount, 3);
+  assert.equal(report.invalidInstructionCount, 0);
+  assert.equal(report.bytesDecoded, bytes.length);
+  assert.ok(!report.issues.some(issue => issue.toLowerCase().includes("invalid instruction")));
+});

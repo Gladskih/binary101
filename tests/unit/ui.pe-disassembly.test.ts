@@ -297,3 +297,37 @@ void test("pe disassembly controller toggles analyze/cancel buttons and renders 
 
   dom.restore();
 });
+
+void test("pe disassembly controller always includes AddressOfEntryPoint alongside exports", async () => {
+  const dom = installFakeDom();
+  const pe = createMinimalPe();
+  pe.exports = {
+    entries: [
+      { rva: 0x1234, forwarder: null },
+      { rva: 0x2000, forwarder: "KERNEL32.Sleep" }
+    ]
+  } as unknown as PeParseResult["exports"];
+
+  const file = new MockFile(new Uint8Array([0x90]), "pe.bin");
+  const parseResult: ParseForUiResult = { analyzer: "pe", parsed: pe };
+
+  let captured: AnalyzePeInstructionSetOptions | null = null;
+  const controller = createPeDisassemblyController({
+    getCurrentFile: () => file,
+    getCurrentParseResult: () => parseResult,
+    renderResult: () => {},
+    analyze: async (_file: File, opts: AnalyzePeInstructionSetOptions): Promise<PeInstructionSetReport> => {
+      captured = opts;
+      return createFakeReport();
+    }
+  });
+
+  controller.start(file, pe);
+  await flushTimers();
+
+  assert.ok(captured);
+  assert.equal(captured.entrypointRva, pe.opt.AddressOfEntryPoint);
+  assert.deepEqual(captured.exportRvas, [0x1234]);
+
+  dom.restore();
+});

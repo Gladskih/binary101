@@ -53,6 +53,9 @@ export function renderInstructionSets(pe: PeParseResult, out: string[]): void {
   out.push(
     `<div class="smallNote">Disassembly sample (${mode}): ${disasm.instructionCount} instruction(s) decoded from ${disasm.bytesDecoded} / ${disasm.bytesSampled} byte(s). Invalid decodes: ${disasm.invalidInstructionCount}.</div>`
   );
+  out.push(
+    `<div class="smallNote dim">Note: this is a static, control-flow guided sample of reachable code paths; it is not a full disassembly and may miss code behind indirect jumps/calls, unpacking, or runtime generation.</div>`
+  );
 
   if (disasm.issues?.length) {
     const items = disasm.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("");

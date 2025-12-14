@@ -246,3 +246,38 @@ void test("analyzePeInstructionSets reports known feature counts in progress sna
   assert.ok(report);
   assert.ok(seen.some(snapshot => snapshot?.["AVX"] === 1));
 });
+
+void test("analyzePeInstructionSets warns and skips entrypoints in non-executable sections", async () => {
+  const bytes = new Uint8Array([0x90]); // nop
+  const file = new MockFile(bytes, "entrypoint-data.bin");
+
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x8664,
+    is64Bit: true,
+    imageBase: 0x140000000,
+    entrypointRva: 0x2000, // points into .data
+    rvaToOff: () => 0,
+    sections: [
+      {
+        name: ".text",
+        virtualSize: bytes.length,
+        virtualAddress: 0x1000,
+        sizeOfRawData: bytes.length,
+        pointerToRawData: 0,
+        characteristics: 0x60000020
+      },
+      {
+        name: ".data",
+        virtualSize: 4,
+        virtualAddress: 0x2000,
+        sizeOfRawData: 4,
+        pointerToRawData: 0,
+        characteristics: 0x40000040
+      }
+    ]
+  });
+
+  assert.ok(report);
+  assert.equal(report.instructionCount, 1);
+  assert.ok(report.issues.some(issue => issue.toLowerCase().includes("non-executable section")));
+});

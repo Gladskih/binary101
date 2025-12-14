@@ -54,7 +54,11 @@ const isIcedX86Module = (value: unknown): value is IcedX86Module => {
 const IMAGE_FILE_MACHINE_I386 = 0x014c;
 const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
 const IMAGE_SCN_CNT_CODE = 0x00000020;
-const isExecutableSection = (section: PeSection): boolean => (section.characteristics & IMAGE_SCN_CNT_CODE) !== 0;
+const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
+const isExecutableSection = (section: PeSection): boolean =>
+  (section.characteristics & (IMAGE_SCN_CNT_CODE | IMAGE_SCN_MEM_EXECUTE)) !== 0;
+const isMemoryExecutableSection = (section: PeSection): boolean =>
+  (section.characteristics & IMAGE_SCN_MEM_EXECUTE) !== 0;
 const findSectionContainingRva = (sections: PeSection[], rva: number): PeSection | null => {
   for (const section of sections) {
     const start = section.virtualAddress >>> 0;
@@ -121,24 +125,47 @@ export async function analyzePeInstructionSets(
   } else if (coffMachine === IMAGE_FILE_MACHINE_I386 && bitness !== 32) {
     issues.push("Machine is I386 but optional header reports 64-bit mode.");
   }
-  const requestedEntrypoints = uniqueU32s(
-    [...(Array.isArray(opts.exportRvas) ? opts.exportRvas : []), opts.entrypointRva >>> 0].filter(
-      rva => Number.isSafeInteger(rva) && rva > 0
-    )
+  const requestedExportRvas = uniqueU32s(
+    (Array.isArray(opts.exportRvas) ? opts.exportRvas : []).filter(rva => Number.isSafeInteger(rva) && rva > 0)
   );
+  const requestedEntrypointRva = Number.isSafeInteger(opts.entrypointRva) && opts.entrypointRva > 0
+    ? (opts.entrypointRva >>> 0)
+    : 0;
+
   const resolvedEntrypoints: number[] = [];
-  for (const rva of requestedEntrypoints) {
-    const off = opts.rvaToOff(rva);
+  const resolvedEntrypointsSet = new Set<number>();
+  const addEntrypoint = (source: "Entry point" | "Export", rva: number): void => {
+    const normalized = rva >>> 0;
+    if (resolvedEntrypointsSet.has(normalized)) return;
+
+    const off = opts.rvaToOff(normalized);
     if (off == null) {
-      issues.push(`Entrypoint RVA 0x${rva.toString(16)} could not be mapped to a file offset.`);
-      continue;
+      issues.push(`${source} RVA 0x${normalized.toString(16)} could not be mapped to a file offset.`);
+      return;
     }
-    const containing = findSectionContainingRva(opts.sections, rva);
+
+    const containing = findSectionContainingRva(opts.sections, normalized);
     if (!containing) {
-      issues.push(`Entrypoint RVA 0x${rva.toString(16)} is not within any section.`);
-      continue;
+      issues.push(`${source} RVA 0x${normalized.toString(16)} is not within any section.`);
+      return;
     }
-    resolvedEntrypoints.push(rva);
+
+    if (!isMemoryExecutableSection(containing)) {
+      issues.push(
+        `${source} RVA 0x${normalized.toString(16)} points into a non-executable section (${containing.name}; missing IMAGE_SCN_MEM_EXECUTE).`
+      );
+      return;
+    }
+
+    resolvedEntrypointsSet.add(normalized);
+    resolvedEntrypoints.push(normalized);
+  };
+
+  if (requestedEntrypointRva) {
+    addEntrypoint("Entry point", requestedEntrypointRva);
+  }
+  for (const rva of requestedExportRvas) {
+    addEntrypoint("Export", rva);
   }
   if (resolvedEntrypoints.length === 0) {
     const fallback = findBestCodeSection(opts.sections);
