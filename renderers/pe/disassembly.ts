@@ -70,7 +70,7 @@ export function renderInstructionSets(pe: PeParseResult, out: string[]): void {
     out.push(`<div class="smallNote dim">No instruction-set requirements were detected in the sampled bytes.</div>`);
   }
 
-  const knownIds = new Set(KNOWN_CPUID_FEATURES);
+  const knownIds = new Set<string>(KNOWN_CPUID_FEATURES);
   out.push(
     `<table class="table" style="margin-top:.35rem"><thead><tr><th>Set</th><th>Instr.</th><th>What it is</th></tr></thead><tbody>`
   );
@@ -109,4 +109,3 @@ export function renderInstructionSets(pe: PeParseResult, out: string[]): void {
 
   out.push(`</section>`);
 }
-

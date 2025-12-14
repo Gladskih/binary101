@@ -272,5 +272,6 @@ test.describe("file type detection", () => {
     await detailsValue.locator("#peInstructionSetsAnalyzeButton").click();
     await expect(detailsValue).toContainText("Disassembly sample");
     await expect(detailsValue).not.toContainText("Failed to load iced-x86 disassembler");
+    await expect(detailsValue).not.toContainText("Disassembly failed");
   });
 });

@@ -76,4 +76,3 @@ export const describeCpuidFeature = (name: string): string => {
   if (name.endsWith("_ONLY")) return "CPU-specific/legacy-only instruction variant.";
   return "CPUID feature flag required by at least one decoded instruction.";
 };
-

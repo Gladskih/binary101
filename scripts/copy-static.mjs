@@ -51,6 +51,8 @@ if (existsSync(icedX86Dir)) {
     `export default module.exports;\n` +
     `export const Code = module.exports.Code;\n` +
     `export const CpuidFeature = module.exports.CpuidFeature;\n` +
+    `export const FlowControl = module.exports.FlowControl;\n` +
+    `export const OpKind = module.exports.OpKind;\n` +
     `export const DecoderOptions = module.exports.DecoderOptions;\n` +
     `export const Mnemonic = module.exports.Mnemonic;\n` +
     `export const getIcedFeatures = module.exports.getIcedFeatures;\n` +

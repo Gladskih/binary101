@@ -133,11 +133,17 @@ export const createPeDisassemblyController = (
     });
 
     void (async () => {
+      const exportRvas =
+        pe.exports?.entries
+          ?.filter(entry => entry.rva && !entry.forwarder)
+          .map(entry => entry.rva >>> 0) ?? [];
+
       const report = await analyze(file, {
         coffMachine: pe.coff.Machine,
         is64Bit: pe.opt.isPlus,
         imageBase: pe.opt.ImageBase,
-        entrypointRva: pe.opt.AddressOfEntryPoint,
+        entrypointRva: exportRvas.length > 0 ? 0 : pe.opt.AddressOfEntryPoint,
+        exportRvas,
         rvaToOff: pe.rvaToOff,
         sections: pe.sections,
         yieldEveryInstructions: 1024,

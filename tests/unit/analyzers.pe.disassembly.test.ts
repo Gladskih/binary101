@@ -113,10 +113,10 @@ void test("analyzePeInstructionSets reports out-of-bounds start offsets", async 
 
   assert.ok(report);
   assert.equal(report.instructionCount, 0);
-  assert.ok(report.issues.some(issue => issue.toLowerCase().includes("no bytes")));
+  assert.ok(report.issues.some(issue => issue.toLowerCase().includes("section")));
 });
 
-void test("analyzePeInstructionSets stops after too many consecutive invalid instructions", async () => {
+void test("analyzePeInstructionSets stops at the first invalid instruction", async () => {
   const invalidInstr = new Uint8Array([0xf0, 0x01, 0xce]); // lock add esi,ecx (invalid lock prefix)
   const bytes = new Uint8Array(invalidInstr.length * 200);
   for (let i = 0; i < 200; i++) {
@@ -143,12 +143,12 @@ void test("analyzePeInstructionSets stops after too many consecutive invalid ins
   });
 
   assert.ok(report);
-  assert.ok(report.invalidInstructionCount > 0);
-  assert.ok(report.issues.some(issue => issue.toLowerCase().includes("too many consecutive invalid")));
+  assert.equal(report.invalidInstructionCount, 1);
+  assert.ok(report.issues.some(issue => issue.toLowerCase().includes("invalid instruction")));
 });
 
-void test("analyzePeInstructionSets reports decoded bytes when capped", async () => {
-  const bytes = new Uint8Array([0x90, 0x90]); // nop; nop
+void test("analyzePeInstructionSets reports decoded bytes when returning early", async () => {
+  const bytes = new Uint8Array([0xc3, 0x90]); // ret; nop (should stop at ret)
   const file = new MockFile(bytes, "cap.bin");
 
   const report = await analyzePeInstructionSets(file, {
@@ -166,15 +166,14 @@ void test("analyzePeInstructionSets reports decoded bytes when capped", async ()
         pointerToRawData: 0,
         characteristics: 0x60000020
       }
-    ],
-    maxInstructions: 1
+    ]
   });
 
   assert.ok(report);
   assert.equal(report.bytesSampled, 2);
   assert.equal(report.bytesDecoded, 1);
   assert.equal(report.instructionCount, 1);
-  assert.ok(report.issues.some(issue => issue.toLowerCase().includes("analysis limit")));
+  assert.equal(report.invalidInstructionCount, 0);
 });
 
 void test("analyzePeInstructionSets reports progress while decoding", async () => {
