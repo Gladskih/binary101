@@ -138,12 +138,20 @@ export const createPeDisassemblyController = (
           ?.filter(entry => entry.rva && !entry.forwarder)
           .map(entry => entry.rva >>> 0) ?? [];
 
+      const unwindBeginRvas =
+        pe.opt.isPlus && Array.isArray(pe.exception?.beginRvas)
+          ? pe.exception.beginRvas
+              .filter(rva => Number.isSafeInteger(rva) && rva > 0)
+              .map(rva => rva >>> 0)
+          : [];
+
       const report = await analyze(file, {
         coffMachine: pe.coff.Machine,
         is64Bit: pe.opt.isPlus,
         imageBase: pe.opt.ImageBase,
         entrypointRva: pe.opt.AddressOfEntryPoint,
         exportRvas,
+        unwindBeginRvas,
         rvaToOff: pe.rvaToOff,
         sections: pe.sections,
         yieldEveryInstructions: 1024,

@@ -3,54 +3,7 @@ import type { PeSection } from "./types.js";
 import { KNOWN_CPUID_FEATURES, describeCpuidFeature, formatCpuidLabel } from "./cpuid-features.js";
 import type { AnalyzePeInstructionSetOptions, PeInstructionSetProgress, PeInstructionSetReport } from "./disassembly-model.js";
 import { disassembleControlFlowForInstructionSets } from "./disassembly-control-flow.js";
-type IcedInstruction = {
-  code: number;
-  length: number;
-  ip: bigint;
-  nextIP: bigint;
-  readonly flowControl: number;
-  readonly nearBranchTarget: bigint;
-  op0Kind: number;
-  cpuidFeatures(): Int32Array;
-  free(): void;
-};
-
-type IcedDecoder = {
-  ip: bigint;
-  canDecode: boolean;
-  position: number;
-  decodeOut(instruction: IcedInstruction): void;
-  free(): void;
-};
-
-type IcedX86Module = {
-  Code: Record<string, number> & Record<number, string | undefined>;
-  CpuidFeature: Record<string, number> & Record<number, string | undefined>;
-  Decoder: new (bitness: number, data: Uint8Array, options: number) => IcedDecoder;
-  DecoderOptions: { None: number };
-  FlowControl: Record<string, number> & Record<number, string | undefined>;
-  OpKind: Record<string, number> & Record<number, string | undefined>;
-  Instruction: new () => IcedInstruction;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
-
-const isIcedX86Module = (value: unknown): value is IcedX86Module => {
-  if (!isRecord(value)) return false;
-
-  const decoderOptions = value["DecoderOptions"];
-  if (!isRecord(decoderOptions) || typeof decoderOptions["None"] !== "number") return false;
-
-  const code = value["Code"];
-  if (!isRecord(code) || typeof code["INVALID"] !== "number") return false;
-
-  const cpuidFeature = value["CpuidFeature"];
-  const flowControl = value["FlowControl"];
-  const opKind = value["OpKind"];
-  if (!isRecord(cpuidFeature) || !isRecord(flowControl) || !isRecord(opKind)) return false;
-
-  return typeof value["Decoder"] === "function" && typeof value["Instruction"] === "function";
-};
+import { isIcedX86Module } from "./disassembly-iced.js";
 const IMAGE_FILE_MACHINE_I386 = 0x014c;
 const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
 const IMAGE_SCN_CNT_CODE = 0x00000020;
@@ -128,13 +81,18 @@ export async function analyzePeInstructionSets(
   const requestedExportRvas = uniqueU32s(
     (Array.isArray(opts.exportRvas) ? opts.exportRvas : []).filter(rva => Number.isSafeInteger(rva) && rva > 0)
   );
+  const requestedUnwindBeginRvas = uniqueU32s(
+    (Array.isArray(opts.unwindBeginRvas) ? opts.unwindBeginRvas : []).filter(
+      rva => Number.isSafeInteger(rva) && rva > 0
+    )
+  );
   const requestedEntrypointRva = Number.isSafeInteger(opts.entrypointRva) && opts.entrypointRva > 0
     ? (opts.entrypointRva >>> 0)
     : 0;
 
   const resolvedEntrypoints: number[] = [];
   const resolvedEntrypointsSet = new Set<number>();
-  const addEntrypoint = (source: "Entry point" | "Export", rva: number): void => {
+  const addEntrypoint = (source: "Entry point" | "Export" | "Unwind", rva: number): void => {
     const normalized = rva >>> 0;
     if (resolvedEntrypointsSet.has(normalized)) return;
 
@@ -166,6 +124,9 @@ export async function analyzePeInstructionSets(
   }
   for (const rva of requestedExportRvas) {
     addEntrypoint("Export", rva);
+  }
+  for (const rva of requestedUnwindBeginRvas) {
+    addEntrypoint("Unwind", rva);
   }
   if (resolvedEntrypoints.length === 0) {
     const fallback = findBestCodeSection(opts.sections);

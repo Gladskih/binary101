@@ -34,17 +34,28 @@ void test("renderReloc wraps relocation table in details", () => {
   assert.ok(html.includes("Show blocks (1)"));
 });
 
-void test("renderException wraps unwind sample in details", () => {
+void test("renderException renders pdata stats", () => {
   const pe = {
     exception: {
-      count: 1,
-      sample: [{ BeginAddress: 0x1000, EndAddress: 0x1010, UnwindInfoAddress: 0x2000 }]
+      functionCount: 1,
+      beginRvas: [0x1000],
+      uniqueUnwindInfoCount: 1,
+      handlerUnwindInfoCount: 1,
+      chainedUnwindInfoCount: 0,
+      invalidEntryCount: 0,
+      issues: []
     }
   } as unknown as PeParseResult;
   const out: string[] = [];
   renderException(pe, out);
   const html = out.join("");
-  assert.ok(html.includes("Show unwind entries (1)"));
+  assert.ok(html.includes("Functions (RUNTIME_FUNCTION entries)"));
+  assert.ok(html.includes("<dd>1</dd>"));
+  assert.ok(html.includes("Unique UNWIND_INFO blocks"));
+  assert.ok(html.includes("Handlers present (EHANDLER/UHANDLER)"));
+  assert.ok(html.includes("Chained (CHAININFO)"));
+  assert.ok(html.includes("Missing/invalid ranges"));
+  assert.ok(!html.includes("Show unwind entries"));
 });
 
 void test("renderBoundImports renders warning and details table", () => {

@@ -32,17 +32,18 @@ export function renderException(pe: PeParseResult, out: string[]): void {
   const ex = pe.exception;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Exception directory (.pdata)</h4>`);
   out.push(`<dl>`);
-  out.push(`<dt>Entry count</dt><dd>${ex.count ?? 0}</dd>`);
+  out.push(`<dt>Functions (RUNTIME_FUNCTION entries)</dt><dd>${ex.functionCount ?? 0}</dd>`);
+  out.push(`<dt>Unique UNWIND_INFO blocks</dt><dd>${ex.uniqueUnwindInfoCount ?? 0}</dd>`);
+  out.push(`<dt>Handlers present (EHANDLER/UHANDLER)</dt><dd>${ex.handlerUnwindInfoCount ?? 0}</dd>`);
+  out.push(`<dt>Chained (CHAININFO)</dt><dd>${ex.chainedUnwindInfoCount ?? 0}</dd>`);
+  out.push(`<dt>Missing/invalid ranges</dt><dd>${ex.invalidEntryCount ?? 0}</dd>`);
   out.push(`</dl>`);
-  if (ex.sample?.length) {
-    out.push(
-      `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show unwind entries (${ex.sample.length})</summary>`
-    );
-    out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>BeginAddress</th><th>EndAddress</th><th>UnwindInfoAddress</th></tr></thead><tbody>`);
-    ex.sample.forEach((row, index) => {
-      out.push(`<tr><td>${index + 1}</td><td>${hex(row.BeginAddress, 8)}</td><td>${hex(row.EndAddress, 8)}</td><td>${hex(row.UnwindInfoAddress, 8)}</td></tr>`);
-    });
-    out.push(`</tbody></table></details>`);
+  if (ex.issues?.length) {
+    out.push(`<ul class="smallNote">`);
+    for (const issue of ex.issues) {
+      out.push(`<li>${safe(issue)}</li>`);
+    }
+    out.push(`</ul>`);
   }
   out.push(`</section>`);
 }

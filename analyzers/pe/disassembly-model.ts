@@ -25,6 +25,7 @@ export interface AnalyzePeInstructionSetOptions {
   imageBase: number;
   entrypointRva: number;
   exportRvas?: number[];
+  unwindBeginRvas?: number[];
   rvaToOff: RvaToOffset;
   sections: PeSection[];
   yieldEveryInstructions?: number;
