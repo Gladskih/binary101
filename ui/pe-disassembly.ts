@@ -145,6 +145,13 @@ export const createPeDisassemblyController = (
               .map(rva => rva >>> 0)
           : [];
 
+      const unwindHandlerRvas =
+        pe.opt.isPlus && Array.isArray(pe.exception?.handlerRvas)
+          ? pe.exception.handlerRvas
+              .filter(rva => Number.isSafeInteger(rva) && rva > 0)
+              .map(rva => rva >>> 0)
+          : [];
+
       const tlsCallbackRvas = Array.isArray(pe.tls?.CallbackRvas)
         ? pe.tls.CallbackRvas.filter(rva => Number.isSafeInteger(rva) && rva > 0).map(rva => rva >>> 0)
         : [];
@@ -156,6 +163,7 @@ export const createPeDisassemblyController = (
         entrypointRva: pe.opt.AddressOfEntryPoint,
         exportRvas,
         unwindBeginRvas,
+        unwindHandlerRvas,
         tlsCallbackRvas,
         rvaToOff: pe.rvaToOff,
         sections: pe.sections,

@@ -7,6 +7,8 @@ const UNW_FLAG_EHANDLER = 0x01;
 const UNW_FLAG_UHANDLER = 0x02;
 const UNW_FLAG_CHAININFO = 0x04;
 
+const alignTo4 = (value: number): number => (value + 3) & ~3;
+
 export async function parseExceptionDirectory(
   file: File,
   dataDirs: PeDataDirectory[],
@@ -15,6 +17,7 @@ export async function parseExceptionDirectory(
 ): Promise<{
   functionCount: number;
   beginRvas: number[];
+  handlerRvas: number[];
   uniqueUnwindInfoCount: number;
   handlerUnwindInfoCount: number;
   chainedUnwindInfoCount: number;
@@ -44,6 +47,7 @@ export async function parseExceptionDirectory(
     return {
       functionCount: 0,
       beginRvas: [],
+      handlerRvas: [],
       uniqueUnwindInfoCount: 0,
       handlerUnwindInfoCount: 0,
       chainedUnwindInfoCount: 0,
@@ -58,6 +62,8 @@ export async function parseExceptionDirectory(
 
   const beginRvas: number[] = [];
   const unwindRvas = new Set<number>();
+  const handlerRvas: number[] = [];
+  const handlerRvasSet = new Set<number>();
   let invalidEntryCount = 0;
 
   for (let index = 0; index < parsedCount; index += 1) {
@@ -95,29 +101,69 @@ export async function parseExceptionDirectory(
   let handlerUnwindInfoCount = 0;
   let chainedUnwindInfoCount = 0;
 
-  for (const unwindInfoRva of unwindRvas) {
-    const off = rvaToOff(unwindInfoRva);
+  const unwindQueue = [...unwindRvas.values()];
+  const unwindVisited = new Set<number>(unwindRvas);
+  const enqueueUnwindRva = (rva: number): void => {
+    const normalized = rva >>> 0;
+    if (!normalized) return;
+    if (unwindVisited.has(normalized)) return;
+    unwindVisited.add(normalized);
+    unwindQueue.push(normalized);
+  };
+
+  while (unwindQueue.length > 0) {
+    const unwindInfoRva = unwindQueue.pop();
+    if (unwindInfoRva == null) break;
+
+    const directOff = rvaToOff(unwindInfoRva);
+    const alignedRva = (unwindInfoRva - (unwindInfoRva % 4)) >>> 0;
+    const alignedOff = alignedRva !== unwindInfoRva ? rvaToOff(alignedRva) : null;
+    const off = directOff ?? alignedOff;
     if (off == null || off < 0 || off >= file.size) {
       unreadableUnwindCount += 1;
       continue;
     }
 
-    const bytes = new Uint8Array(await file.slice(off, off + 1).arrayBuffer());
-    if (bytes.byteLength < 1) {
+    const headerBuf = await file.slice(off, off + 4).arrayBuffer();
+    if (headerBuf.byteLength < 4) {
       unreadableUnwindCount += 1;
       continue;
     }
 
-    const b0 = bytes[0] ?? 0;
+    const header = new DataView(headerBuf);
+    const b0 = header.getUint8(0);
+    const countOfCodes = header.getUint8(2);
     const version = b0 & 0x07;
     const flags = b0 >> 3;
     if (version !== 1) unexpectedUnwindVersionCount += 1;
 
     if ((flags & (UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER)) !== 0) {
       handlerUnwindInfoCount += 1;
+
+      const handlerOff = off + alignTo4(4 + countOfCodes * 2);
+      if (handlerOff >= 0 && handlerOff + 4 <= file.size) {
+        const handlerBuf = await file.slice(handlerOff, handlerOff + 4).arrayBuffer();
+        if (handlerBuf.byteLength >= 4) {
+          const handlerRva = new DataView(handlerBuf).getUint32(0, true) >>> 0;
+          if (handlerRva && !handlerRvasSet.has(handlerRva)) {
+            handlerRvasSet.add(handlerRva);
+            handlerRvas.push(handlerRva);
+          }
+        }
+      }
     }
     if ((flags & UNW_FLAG_CHAININFO) !== 0) {
       chainedUnwindInfoCount += 1;
+
+      const chainOff = off + alignTo4(4 + countOfCodes * 2);
+      if (chainOff >= 0 && chainOff + RUNTIME_FUNCTION_ENTRY_SIZE <= file.size) {
+        const chainBuf = await file.slice(chainOff, chainOff + RUNTIME_FUNCTION_ENTRY_SIZE).arrayBuffer();
+        if (chainBuf.byteLength >= RUNTIME_FUNCTION_ENTRY_SIZE) {
+          const chainView = new DataView(chainBuf);
+          const chainedUnwindInfoRva = chainView.getUint32(8, true) >>> 0;
+          enqueueUnwindRva(chainedUnwindInfoRva);
+        }
+      }
     }
   }
 
@@ -131,7 +177,8 @@ export async function parseExceptionDirectory(
   return {
     functionCount: parsedCount,
     beginRvas,
-    uniqueUnwindInfoCount: unwindRvas.size,
+    handlerRvas,
+    uniqueUnwindInfoCount: unwindVisited.size,
     handlerUnwindInfoCount,
     chainedUnwindInfoCount,
     invalidEntryCount,

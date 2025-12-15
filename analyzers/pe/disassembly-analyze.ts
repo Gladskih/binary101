@@ -86,21 +86,23 @@ export async function analyzePeInstructionSets(
       rva => Number.isSafeInteger(rva) && rva > 0
     )
   );
+  const requestedUnwindHandlerRvas = uniqueU32s(
+    (Array.isArray(opts.unwindHandlerRvas) ? opts.unwindHandlerRvas : []).filter(
+      rva => Number.isSafeInteger(rva) && rva > 0
+    )
+  );
   const requestedTlsCallbackRvas = uniqueU32s(
     (Array.isArray(opts.tlsCallbackRvas) ? opts.tlsCallbackRvas : []).filter(
       rva => Number.isSafeInteger(rva) && rva > 0
     )
   );
-  const requestedEntrypointRva = Number.isSafeInteger(opts.entrypointRva) && opts.entrypointRva > 0
-    ? (opts.entrypointRva >>> 0)
-    : 0;
-
+  const requestedEntrypointRva =
+    Number.isSafeInteger(opts.entrypointRva) && opts.entrypointRva > 0 ? (opts.entrypointRva >>> 0) : 0;
   const resolvedEntrypoints: number[] = [];
   const resolvedEntrypointsSet = new Set<number>();
-  const addEntrypoint = (source: "Entry point" | "Export" | "Unwind" | "TLS callback", rva: number): void => {
+  const addEntrypoint = (source: "Entry point" | "Export" | "Unwind" | "Unwind handler" | "TLS callback", rva: number): void => {
     const normalized = rva >>> 0;
     if (resolvedEntrypointsSet.has(normalized)) return;
-
     const off = opts.rvaToOff(normalized);
     if (off == null) {
       issues.push(`${source} RVA 0x${normalized.toString(16)} could not be mapped to a file offset.`);
@@ -132,6 +134,9 @@ export async function analyzePeInstructionSets(
   }
   for (const rva of requestedUnwindBeginRvas) {
     addEntrypoint("Unwind", rva);
+  }
+  for (const rva of requestedUnwindHandlerRvas) {
+    addEntrypoint("Unwind handler", rva);
   }
   for (const rva of requestedTlsCallbackRvas) {
     addEntrypoint("TLS callback", rva);

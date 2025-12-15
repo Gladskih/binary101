@@ -129,6 +129,37 @@ void test("analyzePeInstructionSets uses unwind begin RVAs when provided", async
   assert.equal(report.invalidInstructionCount, 0);
 });
 
+void test("analyzePeInstructionSets uses unwind handler RVAs when provided", async () => {
+  const bytes = new Uint8Array([
+    0xf0, 0x01, 0xce, // invalid instruction bytes
+    0x90 // nop (unwind handler)
+  ]);
+  const file = new MockFile(bytes, "unwind-handler.bin");
+
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x8664,
+    is64Bit: true,
+    imageBase: 0x140000000,
+    entrypointRva: 0,
+    unwindHandlerRvas: [0x1003],
+    rvaToOff: (rva: number) => (rva >= 0x1000 && rva < 0x1000 + bytes.length ? rva - 0x1000 : null),
+    sections: [
+      {
+        name: ".text",
+        virtualSize: bytes.length,
+        virtualAddress: 0x1000,
+        sizeOfRawData: bytes.length,
+        pointerToRawData: 0,
+        characteristics: 0x60000020
+      }
+    ]
+  });
+
+  assert.ok(report);
+  assert.equal(report.instructionCount, 1);
+  assert.equal(report.invalidInstructionCount, 0);
+});
+
 void test("analyzePeInstructionSets uses TLS callback RVAs when provided", async () => {
   const bytes = new Uint8Array([
     0xf0, 0x01, 0xce, // invalid instruction bytes

@@ -128,6 +128,7 @@ void test("parseExceptionDirectory parses pdata entries and unwind info stats", 
   dv.setUint32(exOff + 20, 0x2010, true);
 
   bytes[0x2000] = 0x09; // UNWIND_INFO: version=1, flags=EHANDLER
+  dv.setUint32(0x2000 + 4, 0x1500, true); // ExceptionHandler RVA
   bytes[0x2010] = 0x21; // UNWIND_INFO: version=1, flags=CHAININFO
 
   const dirs = [{ name: "EXCEPTION", rva: exOff, size: 24 }];
@@ -141,6 +142,7 @@ void test("parseExceptionDirectory parses pdata entries and unwind info stats", 
   assert.strictEqual(parsed.handlerUnwindInfoCount, 1);
   assert.strictEqual(parsed.chainedUnwindInfoCount, 1);
   assert.strictEqual(parsed.invalidEntryCount, 0);
+  assert.deepEqual(parsed.handlerRvas, [0x1500]);
   assert.deepEqual(parsed.issues, []);
   assert.ok(regions.some(r => r.label.includes("EXCEPTION")));
 });
