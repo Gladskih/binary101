@@ -41,6 +41,7 @@ type DisassemblyYieldSnapshot = {
 };
 
 const MAX_RVA = 0xffff_ffff;
+const MAX_DECODE_STOP_ISSUES = 200;
 
 const toRva = (ip: bigint, imageBase: bigint): number | null => {
   if (ip < imageBase) return null;
@@ -99,6 +100,17 @@ export async function disassembleControlFlowForInstructionSets(opts: {
     ...entry,
     decoder: new opts.iced.Decoder(opts.bitness, entry.data, opts.iced.DecoderOptions.None)
   }));
+
+  let decodeStopIssuesLogged = 0;
+  let decodeStopIssuesSuppressed = 0;
+  const recordDecodeStopIssue = (message: string): void => {
+    if (decodeStopIssuesLogged < MAX_DECODE_STOP_ISSUES) {
+      opts.issues.push(message);
+      decodeStopIssuesLogged += 1;
+    } else {
+      decodeStopIssuesSuppressed += 1;
+    }
+  };
 
   const getDecoderForRva = (rva: number): (typeof decoders)[number] | null => {
     for (const entry of decoders) {
@@ -161,7 +173,7 @@ export async function disassembleControlFlowForInstructionSets(opts: {
         const len = instr.length;
         if (len <= 0) {
           invalidInstructionCount++;
-          opts.issues.push("Stopping at a zero-length instruction decode.");
+          recordDecodeStopIssue("Stopping at a zero-length instruction decode.");
           break;
         }
         bytesDecoded = Math.min(bytesSampled, bytesDecoded + len);
@@ -171,7 +183,7 @@ export async function disassembleControlFlowForInstructionSets(opts: {
         const isHardException = instr.flowControl === opts.iced.FlowControl["Exception"] && !isUd2Trap;
         if (isInvalidDecode || isHardException) {
           invalidInstructionCount++;
-          opts.issues.push(`Stopping at an invalid instruction at RVA 0x${instrRva.toString(16)}.`);
+          recordDecodeStopIssue(`Stopping at an invalid instruction at RVA 0x${instrRva.toString(16)}.`);
           break;
         }
 
@@ -220,6 +232,11 @@ export async function disassembleControlFlowForInstructionSets(opts: {
     }
     return { bytesDecoded, instructionCount, invalidInstructionCount };
   } finally {
+    if (decodeStopIssuesSuppressed > 0) {
+      opts.issues.push(
+        `Additional ${decodeStopIssuesSuppressed} decode stop(s) omitted; showing first ${MAX_DECODE_STOP_ISSUES}.`
+      );
+    }
     safeFree(instr);
     for (const entry of decoders) {
       safeFree(entry.decoder);
