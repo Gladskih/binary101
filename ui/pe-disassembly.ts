@@ -145,6 +145,10 @@ export const createPeDisassemblyController = (
               .map(rva => rva >>> 0)
           : [];
 
+      const tlsCallbackRvas = Array.isArray(pe.tls?.CallbackRvas)
+        ? pe.tls.CallbackRvas.filter(rva => Number.isSafeInteger(rva) && rva > 0).map(rva => rva >>> 0)
+        : [];
+
       const report = await analyze(file, {
         coffMachine: pe.coff.Machine,
         is64Bit: pe.opt.isPlus,
@@ -152,6 +156,7 @@ export const createPeDisassemblyController = (
         entrypointRva: pe.opt.AddressOfEntryPoint,
         exportRvas,
         unwindBeginRvas,
+        tlsCallbackRvas,
         rvaToOff: pe.rvaToOff,
         sections: pe.sections,
         yieldEveryInstructions: 1024,

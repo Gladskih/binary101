@@ -123,7 +123,8 @@ void test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
     false,
     0
   ));
-  assert.equal(tls.CallbackCount, 0); // 32-bit path doesn't enumerate
+  assert.equal(tls.CallbackCount, 1);
+  assert.deepEqual(tls.CallbackRvas, [0x1111]);
 
   // 64-bit version with callbacks
   const bytes64 = new Uint8Array(512).fill(0);
@@ -146,6 +147,78 @@ void test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
     0
   ));
   assert.equal(tls64.CallbackCount, 1);
+  assert.deepEqual(tls64.CallbackRvas, [0x7000]);
+});
+
+void test("parseTlsDirectory returns null for missing or unmapped TLS directory", async () => {
+  const file = new MockFile(new Uint8Array(16));
+  assert.equal(await parseTlsDirectory(file, [], value => value, () => {}, false, 0), null);
+
+  assert.equal(await parseTlsDirectory(
+    file,
+    [{ name: "TLS", rva: 0x20, size: 0x18 }],
+    () => null,
+    () => {},
+    false,
+    0
+  ), null);
+});
+
+void test("parseTlsDirectory returns null for truncated TLS directory headers", async () => {
+  const tlsRva = 0x20;
+  const truncated32 = new Uint8Array(tlsRva + 0x10).fill(0);
+  assert.equal(await parseTlsDirectory(
+    new MockFile(truncated32),
+    [{ name: "TLS", rva: tlsRva, size: 0x18 }],
+    value => value,
+    () => {},
+    false,
+    0
+  ), null);
+
+  const truncated64 = new Uint8Array(tlsRva + 0x20).fill(0);
+  assert.equal(await parseTlsDirectory(
+    new MockFile(truncated64),
+    [{ name: "TLS", rva: tlsRva, size: 0x30 }],
+    value => value,
+    () => {},
+    true,
+    0
+  ), null);
+});
+
+void test("parseTlsDirectory skips invalid callback pointers and tolerates out-of-range callback tables", async () => {
+  const bytes = new Uint8Array(256).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const tlsRva = 0x20;
+  dv.setUint32(tlsRva + 12, 0x2040, true); // callbacks VA (imageBase 0x2000 + rva 0x40)
+  dv.setUint32(0x40, 0x1000, true); // callback VA below imageBase => invalid
+  dv.setUint32(0x44, 0, true); // terminator
+  const tls = expectDefined(await parseTlsDirectory(
+    new MockFile(bytes),
+    [{ name: "TLS", rva: tlsRva, size: 0x18 }],
+    value => value,
+    () => {},
+    false,
+    0x2000
+  ));
+  assert.equal(tls.CallbackCount, 0);
+  assert.deepEqual(tls.CallbackRvas, []);
+
+  const bytesOutOfRange = new Uint8Array(64).fill(0);
+  const dvOutOfRange = new DataView(bytesOutOfRange.buffer);
+  dvOutOfRange.setUint32(tlsRva + 12, 0x1000, true);
+  const rvaToOff = (rva: number): number => (rva === tlsRva ? tlsRva : bytesOutOfRange.length + 4);
+  const tlsOutOfRange = expectDefined(await parseTlsDirectory(
+    new MockFile(bytesOutOfRange),
+    [{ name: "TLS", rva: tlsRva, size: 0x18 }],
+    rvaToOff,
+    () => {},
+    false,
+    0
+  ));
+  assert.equal(tlsOutOfRange.CallbackCount, 0);
+  assert.deepEqual(tlsOutOfRange.CallbackRvas, []);
 });
 
 void test("buildResourceTree walks a small resource directory", async () => {

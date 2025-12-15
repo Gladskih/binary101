@@ -127,4 +127,5 @@ export interface PeTlsDirectory {
   SizeOfZeroFill: number;
   Characteristics: number;
   CallbackCount: number;
+  CallbackRvas?: number[];
 }

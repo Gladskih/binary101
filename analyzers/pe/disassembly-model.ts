@@ -26,6 +26,7 @@ export interface AnalyzePeInstructionSetOptions {
   entrypointRva: number;
   exportRvas?: number[];
   unwindBeginRvas?: number[];
+  tlsCallbackRvas?: number[];
   rvaToOff: RvaToOffset;
   sections: PeSection[];
   yieldEveryInstructions?: number;

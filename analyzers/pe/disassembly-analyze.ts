@@ -86,13 +86,18 @@ export async function analyzePeInstructionSets(
       rva => Number.isSafeInteger(rva) && rva > 0
     )
   );
+  const requestedTlsCallbackRvas = uniqueU32s(
+    (Array.isArray(opts.tlsCallbackRvas) ? opts.tlsCallbackRvas : []).filter(
+      rva => Number.isSafeInteger(rva) && rva > 0
+    )
+  );
   const requestedEntrypointRva = Number.isSafeInteger(opts.entrypointRva) && opts.entrypointRva > 0
     ? (opts.entrypointRva >>> 0)
     : 0;
 
   const resolvedEntrypoints: number[] = [];
   const resolvedEntrypointsSet = new Set<number>();
-  const addEntrypoint = (source: "Entry point" | "Export" | "Unwind", rva: number): void => {
+  const addEntrypoint = (source: "Entry point" | "Export" | "Unwind" | "TLS callback", rva: number): void => {
     const normalized = rva >>> 0;
     if (resolvedEntrypointsSet.has(normalized)) return;
 
@@ -127,6 +132,9 @@ export async function analyzePeInstructionSets(
   }
   for (const rva of requestedUnwindBeginRvas) {
     addEntrypoint("Unwind", rva);
+  }
+  for (const rva of requestedTlsCallbackRvas) {
+    addEntrypoint("TLS callback", rva);
   }
   if (resolvedEntrypoints.length === 0) {
     const fallback = findBestCodeSection(opts.sections);
