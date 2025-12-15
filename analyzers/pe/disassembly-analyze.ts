@@ -78,29 +78,23 @@ export async function analyzePeInstructionSets(
   } else if (coffMachine === IMAGE_FILE_MACHINE_I386 && bitness !== 32) {
     issues.push("Machine is I386 but optional header reports 64-bit mode.");
   }
-  const requestedExportRvas = uniqueU32s(
-    (Array.isArray(opts.exportRvas) ? opts.exportRvas : []).filter(rva => Number.isSafeInteger(rva) && rva > 0)
-  );
-  const requestedUnwindBeginRvas = uniqueU32s(
-    (Array.isArray(opts.unwindBeginRvas) ? opts.unwindBeginRvas : []).filter(
-      rva => Number.isSafeInteger(rva) && rva > 0
-    )
-  );
-  const requestedUnwindHandlerRvas = uniqueU32s(
-    (Array.isArray(opts.unwindHandlerRvas) ? opts.unwindHandlerRvas : []).filter(
-      rva => Number.isSafeInteger(rva) && rva > 0
-    )
-  );
-  const requestedTlsCallbackRvas = uniqueU32s(
-    (Array.isArray(opts.tlsCallbackRvas) ? opts.tlsCallbackRvas : []).filter(
-      rva => Number.isSafeInteger(rva) && rva > 0
-    )
-  );
+  const normalizeRvaList = (values: unknown): number[] =>
+    uniqueU32s(
+      (Array.isArray(values) ? values : []).filter(
+        (rva): rva is number => Number.isSafeInteger(rva) && rva > 0
+      )
+    );
+  const requestedExportRvas = normalizeRvaList(opts.exportRvas);
+  const requestedUnwindBeginRvas = normalizeRvaList(opts.unwindBeginRvas);
+  const requestedUnwindHandlerRvas = normalizeRvaList(opts.unwindHandlerRvas);
+  const requestedGuardCFFunctionRvas = normalizeRvaList(opts.guardCFFunctionRvas);
+  const requestedTlsCallbackRvas = normalizeRvaList(opts.tlsCallbackRvas);
   const requestedEntrypointRva =
     Number.isSafeInteger(opts.entrypointRva) && opts.entrypointRva > 0 ? (opts.entrypointRva >>> 0) : 0;
   const resolvedEntrypoints: number[] = [];
   const resolvedEntrypointsSet = new Set<number>();
-  const addEntrypoint = (source: "Entry point" | "Export" | "Unwind" | "Unwind handler" | "TLS callback", rva: number): void => {
+  type EntrypointSource = "Entry point" | "Export" | "Unwind" | "Unwind handler" | "GuardCF function" | "TLS callback";
+  const addEntrypoint = (source: EntrypointSource, rva: number): void => {
     const normalized = rva >>> 0;
     if (resolvedEntrypointsSet.has(normalized)) return;
     const off = opts.rvaToOff(normalized);
@@ -108,20 +102,17 @@ export async function analyzePeInstructionSets(
       issues.push(`${source} RVA 0x${normalized.toString(16)} could not be mapped to a file offset.`);
       return;
     }
-
     const containing = findSectionContainingRva(opts.sections, normalized);
     if (!containing) {
       issues.push(`${source} RVA 0x${normalized.toString(16)} is not within any section.`);
       return;
     }
-
     if (!isMemoryExecutableSection(containing)) {
       issues.push(
         `${source} RVA 0x${normalized.toString(16)} points into a non-executable section (${containing.name}; missing IMAGE_SCN_MEM_EXECUTE).`
       );
       return;
     }
-
     resolvedEntrypointsSet.add(normalized);
     resolvedEntrypoints.push(normalized);
   };
@@ -137,6 +128,9 @@ export async function analyzePeInstructionSets(
   }
   for (const rva of requestedUnwindHandlerRvas) {
     addEntrypoint("Unwind handler", rva);
+  }
+  for (const rva of requestedGuardCFFunctionRvas) {
+    addEntrypoint("GuardCF function", rva);
   }
   for (const rva of requestedTlsCallbackRvas) {
     addEntrypoint("TLS callback", rva);

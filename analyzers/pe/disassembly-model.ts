@@ -27,6 +27,7 @@ export interface AnalyzePeInstructionSetOptions {
   exportRvas?: number[];
   unwindBeginRvas?: number[];
   unwindHandlerRvas?: number[];
+  guardCFFunctionRvas?: number[];
   tlsCallbackRvas?: number[];
   rvaToOff: RvaToOffset;
   sections: PeSection[];

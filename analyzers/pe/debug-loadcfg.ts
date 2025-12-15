@@ -16,6 +16,21 @@ export interface PeLoadConfig {
   GuardFlags: number;
 }
 
+const MAX_RVA_BIGINT = 0xffff_ffffn;
+
+const toRvaFromVa = (virtualAddress: number, imageBase: number): number | null => {
+  if (!Number.isSafeInteger(virtualAddress) || virtualAddress <= 0) return null;
+  if (!Number.isSafeInteger(imageBase) || imageBase < 0) return null;
+
+  const va = BigInt(virtualAddress);
+  const base = BigInt(imageBase);
+  if (va < base) return null;
+
+  const delta = va - base;
+  if (delta > MAX_RVA_BIGINT) return null;
+  return Number(delta);
+};
+
 export async function parseDebugDirectory(
   file: File,
   dataDirs: PeDataDirectory[],
@@ -138,4 +153,34 @@ export async function parseLoadConfigDirectory(
     GuardCFFunctionCount: saneCount(GuardCFFunctionCount),
     GuardFlags
   };
+}
+
+export async function readGuardCFFunctionTableRvas(
+  file: File,
+  rvaToOff: RvaToOffset,
+  imageBase: number,
+  guardCFFunctionTableVa: number,
+  guardCFFunctionCount: number
+): Promise<number[]> {
+  if (!Number.isSafeInteger(guardCFFunctionCount) || guardCFFunctionCount <= 0) return [];
+
+  const tableRva = toRvaFromVa(guardCFFunctionTableVa, imageBase);
+  if (tableRva == null) return [];
+
+  const off = rvaToOff(tableRva);
+  if (off == null || off < 0 || off >= file.size) return [];
+
+  const ENTRY_SIZE = 8;
+  const maxEntries = Math.floor((file.size - off) / ENTRY_SIZE);
+  const entriesToRead = Math.min(guardCFFunctionCount, maxEntries);
+  if (entriesToRead <= 0) return [];
+
+  const dv = new DataView(await file.slice(off, off + entriesToRead * ENTRY_SIZE).arrayBuffer());
+  const rvas: number[] = [];
+  for (let index = 0; index < entriesToRead; index += 1) {
+    const entryOff = index * ENTRY_SIZE;
+    const rva = dv.getUint32(entryOff + 0, true) >>> 0;
+    if (rva) rvas.push(rva);
+  }
+  return rvas;
 }

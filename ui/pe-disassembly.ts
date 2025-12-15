@@ -7,6 +7,7 @@ import {
   type PeInstructionSetProgress,
   type PeInstructionSetReport
 } from "../analyzers/pe/disassembly.js";
+import { readGuardCFFunctionTableRvas } from "../analyzers/pe/debug-loadcfg.js";
 
 type AnalyzePeInstructionSets = (
   file: File,
@@ -156,6 +157,16 @@ export const createPeDisassemblyController = (
         ? pe.tls.CallbackRvas.filter(rva => Number.isSafeInteger(rva) && rva > 0).map(rva => rva >>> 0)
         : [];
 
+      const guardCFFunctionRvas = pe.loadcfg
+        ? await readGuardCFFunctionTableRvas(
+            file,
+            pe.rvaToOff,
+            pe.opt.ImageBase,
+            pe.loadcfg.GuardCFFunctionTable,
+            pe.loadcfg.GuardCFFunctionCount
+          ).catch(() => [])
+        : [];
+
       const report = await analyze(file, {
         coffMachine: pe.coff.Machine,
         is64Bit: pe.opt.isPlus,
@@ -164,6 +175,7 @@ export const createPeDisassemblyController = (
         exportRvas,
         unwindBeginRvas,
         unwindHandlerRvas,
+        guardCFFunctionRvas,
         tlsCallbackRvas,
         rvaToOff: pe.rvaToOff,
         sections: pe.sections,
