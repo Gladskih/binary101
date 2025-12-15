@@ -1,7 +1,7 @@
 "use strict";
 
 import { probeByMagic, probeTextLike } from "./probes.js";
-import { parsePe } from "./pe/index.js";
+import { parseCoffHeader } from "./pe/core-headers.js";
 import { mapMachine } from "./pe/signature.js";
 import { parsePng } from "./png/index.js";
 import { parseWebp } from "./webp/index.js";
@@ -241,13 +241,15 @@ const detectBinaryType = async (file: File): Promise<string> => {
   const mzKind = await probeMzFormat(file, dv);
   if (mzKind) {
     if (mzKind.kind === "pe") {
-      const pe = await parsePe(file);
-      if (pe) {
-        const sig = pe.opt.isPlus ? "PE32+" : "PE32";
-        const isDll = (pe.coff.Characteristics & 0x2000) !== 0 ? "DLL" : "executable";
-        return `${sig} ${isDll} for ${mapMachine(pe.coff.Machine)}`;
-      }
-      return "PE (unreadable)";
+      const peHeaderOffset = mzKind.eLfanew >>> 0;
+      const coff = await parseCoffHeader(file, peHeaderOffset);
+      if (!coff) return "PE (unreadable)";
+      const optionalHeaderOffset = peHeaderOffset + 24;
+      const magicView = new DataView(await file.slice(optionalHeaderOffset, optionalHeaderOffset + 2).arrayBuffer());
+      const magic = magicView.byteLength >= 2 ? magicView.getUint16(0, true) : 0;
+      const sig = magic === 0x20b ? "PE32+" : "PE32";
+      const isDll = (coff.Characteristics & 0x2000) !== 0 ? "DLL" : "executable";
+      return `${sig} ${isDll} for ${mapMachine(coff.Machine)}`;
     }
     if (mzKind.kind === "ne") return "NE executable (16-bit Windows/OS/2)";
     if (mzKind.kind === "le" || mzKind.kind === "lx") return "Linear executable (LX/LE)";

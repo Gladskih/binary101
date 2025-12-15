@@ -10,6 +10,7 @@ import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
 import { createFlacFile } from "../fixtures/flac-fixtures.js";
 import { createSqliteFile } from "../fixtures/sqlite-fixtures.js";
 import { createSampleAsfFile } from "../fixtures/asf-fixtures.js";
+import { createPeFile, createPePlusFile } from "../fixtures/sample-files-pe.js";
 
 const fromAscii = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "ascii"));
 
@@ -187,4 +188,24 @@ void test("detectBinaryType refines SQLite labels with page and encoding info", 
   assert.match(label, /^SQLite database/);
   assert.match(label, /512 byte pages/);
   assert.match(label, /UTF-8/);
+});
+
+void test("detectBinaryType reports PE32 and PE32+ labels without full parsing", async () => {
+  const pe32Label = await detectBinaryType(createPeFile());
+  assert.strictEqual(pe32Label, "PE32 executable for x86 (I386)");
+
+  const pe64Label = await detectBinaryType(createPePlusFile());
+  assert.strictEqual(pe64Label, "PE32+ executable for x86-64 (AMD64)");
+});
+
+void test("detectBinaryType tolerates truncated optional headers for PE labels", async () => {
+  const peHeaderOffset = 0x40;
+  const bytes = new Uint8Array(peHeaderOffset + 4).fill(0);
+  bytes[0] = 0x4d;
+  bytes[1] = 0x5a;
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0x3c, peHeaderOffset, true);
+  bytes.set([0x50, 0x45, 0x00, 0x00], peHeaderOffset);
+  const label = await detectBinaryType(new MockFile(bytes, "tiny.exe"));
+  assert.strictEqual(label, "PE32 executable for UNKNOWN");
 });

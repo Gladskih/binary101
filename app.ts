@@ -123,6 +123,12 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
   currentFile = file;
   currentParseResult = { analyzer: null, parsed: null };
   try {
+    clearPreviewUrl();
+    fileInfoCardElement.hidden = true;
+    peDetailsTermElement.hidden = true;
+    peDetailsValueElement.hidden = true;
+    peDetailsValueElement.innerHTML = "";
+    setStatusMessage("Detecting file type...");
     const typeLabel = await detectBinaryType(file);
     currentTypeLabel = typeLabel || "";
     const timestampIso = nowIsoString();
@@ -143,12 +149,13 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     fileBinaryTypeDetailElement.textContent = typeLabel;
     fileMimeTypeDetailElement.textContent = mimeType;
 
+    fileInfoCardElement.hidden = false;
+    setStatusMessage("Parsing file details...");
     const parsedResult = await parseForUi(file);
     currentParseResult = parsedResult;
     renderResult(parsedResult);
 
     resetHashDisplay(sha256Controls, sha512Controls);
-    fileInfoCardElement.hidden = false;
     clearStatusMessage();
   } catch (error) {
     currentTypeLabel = "";

@@ -2,17 +2,11 @@
 
 import type { PeSection } from "./types.js";
 
-function shannonEntropy(bytes: Uint8Array): number {
-  if (!bytes || bytes.length === 0) return 0;
-  const freq = new Uint32Array(256);
-  for (let index = 0; index < bytes.length; index += 1) {
-    const value = bytes[index];
-    if (value === undefined) continue;
-    const current = freq[value] ?? 0;
-    freq[value] = current + 1;
-  }
+const ENTROPY_CHUNK_BYTES = 1024 * 1024;
+
+function shannonEntropyFromFrequency(freq: Uint32Array, totalCount: number): number {
+  if (totalCount <= 0) return 0;
   let entropy = 0;
-  const totalCount = bytes.length;
   for (let i = 0; i < 256; i += 1) {
     const count = freq[i];
     if (!count) continue;
@@ -26,10 +20,19 @@ export async function addSectionEntropies(file: File, sections: PeSection[]): Pr
   for (const section of sections) {
     const { pointerToRawData, sizeOfRawData } = section;
     if (pointerToRawData && sizeOfRawData) {
-      const bytes = new Uint8Array(
-        await file.slice(pointerToRawData, pointerToRawData + sizeOfRawData).arrayBuffer()
-      );
-      section.entropy = shannonEntropy(bytes);
+      const readableSize = Math.max(0, Math.min(sizeOfRawData, file.size - pointerToRawData));
+      const freq = new Uint32Array(256);
+      let totalCount = 0;
+      for (let offset = 0; offset < readableSize; offset += ENTROPY_CHUNK_BYTES) {
+        const chunkStart = pointerToRawData + offset;
+        const chunkEnd = Math.min(pointerToRawData + readableSize, chunkStart + ENTROPY_CHUNK_BYTES);
+        const bytes = new Uint8Array(await file.slice(chunkStart, chunkEnd).arrayBuffer());
+        for (const value of bytes) {
+          freq[value] = (freq[value] ?? 0) + 1;
+        }
+        totalCount += bytes.length;
+      }
+      section.entropy = shannonEntropyFromFrequency(freq, totalCount);
     } else {
       section.entropy = 0;
     }

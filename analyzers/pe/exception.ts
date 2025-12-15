@@ -100,6 +100,39 @@ export async function parseExceptionDirectory(
   let unexpectedUnwindVersionCount = 0;
   let handlerUnwindInfoCount = 0;
   let chainedUnwindInfoCount = 0;
+  const UNWIND_SCAN_CHUNK_SIZE = 262144;
+  const chunkCache = new Map<number, Uint8Array>();
+  const readChunk = async (chunkStartOff: number): Promise<Uint8Array> => {
+    const normalizedStart = Math.max(0, Math.min(chunkStartOff, file.size));
+    const cached = chunkCache.get(normalizedStart);
+    if (cached) return cached;
+    const chunkEnd = Math.min(file.size, normalizedStart + UNWIND_SCAN_CHUNK_SIZE);
+    const bytes = new Uint8Array(await file.slice(normalizedStart, chunkEnd).arrayBuffer());
+    chunkCache.set(normalizedStart, bytes);
+    return bytes;
+  };
+  const readBytes = async (off: number, length: number): Promise<Uint8Array | null> => {
+    if (length <= 0) return new Uint8Array();
+    if (off < 0 || off >= file.size) return null;
+    const end = off + length;
+    if (end > file.size) return null;
+    const chunkStart = off - (off % UNWIND_SCAN_CHUNK_SIZE);
+    const chunk = await readChunk(chunkStart);
+    const rel = off - chunkStart;
+    if (rel >= 0 && rel + length <= chunk.length) return chunk.subarray(rel, rel + length);
+    const buf = await file.slice(off, end).arrayBuffer();
+    if (buf.byteLength < length) return null;
+    return new Uint8Array(buf);
+  };
+  const readU32LE = async (off: number): Promise<number | null> => {
+    const bytes = await readBytes(off, 4);
+    if (!bytes || bytes.length < 4) return null;
+    const b0 = bytes[0] ?? 0;
+    const b1 = bytes[1] ?? 0;
+    const b2 = bytes[2] ?? 0;
+    const b3 = bytes[3] ?? 0;
+    return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0;
+  };
 
   const unwindQueue = [...unwindRvas.values()];
   const unwindVisited = new Set<number>(unwindRvas);
@@ -124,15 +157,14 @@ export async function parseExceptionDirectory(
       continue;
     }
 
-    const headerBuf = await file.slice(off, off + 4).arrayBuffer();
-    if (headerBuf.byteLength < 4) {
+    const headerBytes = await readBytes(off, 4);
+    if (!headerBytes || headerBytes.length < 4) {
       unreadableUnwindCount += 1;
       continue;
     }
 
-    const header = new DataView(headerBuf);
-    const b0 = header.getUint8(0);
-    const countOfCodes = header.getUint8(2);
+    const b0 = headerBytes[0] ?? 0;
+    const countOfCodes = headerBytes[2] ?? 0;
     const version = b0 & 0x07;
     const flags = b0 >> 3;
     if (version !== 1) unexpectedUnwindVersionCount += 1;
@@ -141,29 +173,18 @@ export async function parseExceptionDirectory(
       handlerUnwindInfoCount += 1;
 
       const handlerOff = off + alignTo4(4 + countOfCodes * 2);
-      if (handlerOff >= 0 && handlerOff + 4 <= file.size) {
-        const handlerBuf = await file.slice(handlerOff, handlerOff + 4).arrayBuffer();
-        if (handlerBuf.byteLength >= 4) {
-          const handlerRva = new DataView(handlerBuf).getUint32(0, true) >>> 0;
-          if (handlerRva && !handlerRvasSet.has(handlerRva)) {
-            handlerRvasSet.add(handlerRva);
-            handlerRvas.push(handlerRva);
-          }
-        }
+      const handlerRva = await readU32LE(handlerOff);
+      if (handlerRva && !handlerRvasSet.has(handlerRva)) {
+        handlerRvasSet.add(handlerRva);
+        handlerRvas.push(handlerRva);
       }
     }
     if ((flags & UNW_FLAG_CHAININFO) !== 0) {
       chainedUnwindInfoCount += 1;
 
       const chainOff = off + alignTo4(4 + countOfCodes * 2);
-      if (chainOff >= 0 && chainOff + RUNTIME_FUNCTION_ENTRY_SIZE <= file.size) {
-        const chainBuf = await file.slice(chainOff, chainOff + RUNTIME_FUNCTION_ENTRY_SIZE).arrayBuffer();
-        if (chainBuf.byteLength >= RUNTIME_FUNCTION_ENTRY_SIZE) {
-          const chainView = new DataView(chainBuf);
-          const chainedUnwindInfoRva = chainView.getUint32(8, true) >>> 0;
-          enqueueUnwindRva(chainedUnwindInfoRva);
-        }
-      }
+      const chainedUnwindInfoRva = await readU32LE(chainOff + 8);
+      if (chainedUnwindInfoRva) enqueueUnwindRva(chainedUnwindInfoRva);
     }
   }
 
