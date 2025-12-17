@@ -184,3 +184,39 @@ export async function readGuardCFFunctionTableRvas(
   }
   return rvas;
 }
+
+export async function readSafeSehHandlerTableRvas(
+  file: File,
+  rvaToOff: RvaToOffset,
+  imageBase: number,
+  seHandlerTableVa: number,
+  seHandlerCount: number
+): Promise<number[]> {
+  if (!Number.isSafeInteger(seHandlerCount) || seHandlerCount <= 0) return [];
+
+  const tableRva =
+    toRvaFromVa(seHandlerTableVa, imageBase) ??
+    (Number.isSafeInteger(seHandlerTableVa) && seHandlerTableVa > 0 ? (seHandlerTableVa >>> 0) : null);
+  if (tableRva == null) return [];
+
+  const off = rvaToOff(tableRva);
+  if (off == null || off < 0 || off >= file.size) return [];
+
+  const ENTRY_SIZE = 4;
+  const maxEntries = Math.floor((file.size - off) / ENTRY_SIZE);
+  const entriesToRead = Math.min(seHandlerCount, maxEntries);
+  if (entriesToRead <= 0) return [];
+
+  const dv = new DataView(await file.slice(off, off + entriesToRead * ENTRY_SIZE).arrayBuffer());
+  const rvas: number[] = [];
+  for (let index = 0; index < entriesToRead; index += 1) {
+    const entryOff = index * ENTRY_SIZE;
+    const addressOrRva = dv.getUint32(entryOff, true) >>> 0;
+    if (!addressOrRva) continue;
+
+    const rva = addressOrRva < imageBase ? addressOrRva : toRvaFromVa(addressOrRva, imageBase);
+    if (rva == null) continue;
+    rvas.push(rva >>> 0);
+  }
+  return rvas;
+}

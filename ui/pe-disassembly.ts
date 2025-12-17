@@ -7,7 +7,9 @@ import {
   type PeInstructionSetProgress,
   type PeInstructionSetReport
 } from "../analyzers/pe/disassembly.js";
-import { readGuardCFFunctionTableRvas } from "../analyzers/pe/debug-loadcfg.js";
+import { readGuardCFFunctionTableRvas, readSafeSehHandlerTableRvas } from "../analyzers/pe/debug-loadcfg.js";
+
+const IMAGE_FILE_MACHINE_I386 = 0x014c;
 
 type AnalyzePeInstructionSets = (
   file: File,
@@ -167,6 +169,17 @@ export const createPeDisassemblyController = (
           ).catch(() => [])
         : [];
 
+      const safeSehHandlerRvas =
+        pe.coff.Machine === IMAGE_FILE_MACHINE_I386 && !pe.opt.isPlus && pe.loadcfg
+          ? await readSafeSehHandlerTableRvas(
+              file,
+              pe.rvaToOff,
+              pe.opt.ImageBase,
+              pe.loadcfg.SEHandlerTable,
+              pe.loadcfg.SEHandlerCount
+            ).catch(() => [])
+          : [];
+
       const report = await analyze(file, {
         coffMachine: pe.coff.Machine,
         is64Bit: pe.opt.isPlus,
@@ -176,6 +189,7 @@ export const createPeDisassemblyController = (
         unwindBeginRvas,
         unwindHandlerRvas,
         guardCFFunctionRvas,
+        safeSehHandlerRvas,
         tlsCallbackRvas,
         rvaToOff: pe.rvaToOff,
         sections: pe.sections,

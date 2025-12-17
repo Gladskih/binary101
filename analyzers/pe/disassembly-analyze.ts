@@ -88,12 +88,14 @@ export async function analyzePeInstructionSets(
   const requestedUnwindBeginRvas = normalizeRvaList(opts.unwindBeginRvas);
   const requestedUnwindHandlerRvas = normalizeRvaList(opts.unwindHandlerRvas);
   const requestedGuardCFFunctionRvas = normalizeRvaList(opts.guardCFFunctionRvas);
+  const requestedSafeSehHandlerRvas = normalizeRvaList(opts.safeSehHandlerRvas);
   const requestedTlsCallbackRvas = normalizeRvaList(opts.tlsCallbackRvas);
   const requestedEntrypointRva =
     Number.isSafeInteger(opts.entrypointRva) && opts.entrypointRva > 0 ? (opts.entrypointRva >>> 0) : 0;
   const resolvedEntrypoints: number[] = [];
   const resolvedEntrypointsSet = new Set<number>();
-  type EntrypointSource = "Entry point" | "Export" | "Unwind" | "Unwind handler" | "GuardCF function" | "TLS callback";
+  type EntrypointSource =
+    "Entry point" | "Export" | "Unwind" | "Unwind handler" | "GuardCF function" | "SafeSEH handler" | "TLS callback";
   const addEntrypoint = (source: EntrypointSource, rva: number): void => {
     const normalized = rva >>> 0;
     if (resolvedEntrypointsSet.has(normalized)) return;
@@ -131,6 +133,9 @@ export async function analyzePeInstructionSets(
   }
   for (const rva of requestedGuardCFFunctionRvas) {
     addEntrypoint("GuardCF function", rva);
+  }
+  for (const rva of requestedSafeSehHandlerRvas) {
+    addEntrypoint("SafeSEH handler", rva);
   }
   for (const rva of requestedTlsCallbackRvas) {
     addEntrypoint("TLS callback", rva);
