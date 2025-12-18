@@ -2,7 +2,9 @@
 
 import { parsePeHeaders } from "./core.js";
 import { verifyAuthenticodeFileDigest } from "./authenticode-verify.js";
-import { parseDebugDirectory, parseLoadConfigDirectory, type PeLoadConfig } from "./debug-loadcfg.js";
+import { parseDebugDirectory } from "./debug-directory.js";
+import { parseLoadConfigDirectory, type PeLoadConfig } from "./load-config.js";
+import { collectLoadConfigWarnings } from "./load-config-warnings.js";
 import { parseImportDirectory, type PeImportEntry } from "./imports.js";
 import { parseExportDirectory } from "./exports.js";
 import { parseTlsDirectory } from "./tls.js";
@@ -95,6 +97,10 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
   const { entry: rsds, warning: debugWarning } =
     (await parseDebugDirectory(file, dataDirs, rvaToOff, addCoverageRegion)) || {};
   const loadcfg = await parseLoadConfigDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus);
+  if (loadcfg) {
+    const warnings = collectLoadConfigWarnings(file.size, rvaToOff, ImageBase, opt.SizeOfImage, loadcfg);
+    if (warnings.length) loadcfg.warnings = warnings;
+  }
   const importResult = await parseImportDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus);
   const exportsInfo = await parseExportDirectory(file, dataDirs, rvaToOff, addCoverageRegion);
   const tls = await parseTlsDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus, ImageBase);

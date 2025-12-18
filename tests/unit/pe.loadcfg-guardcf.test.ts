@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readGuardCFFunctionTableRvas } from "../../analyzers/pe/debug-loadcfg.js";
+import { readGuardCFFunctionTableRvas } from "../../analyzers/pe/load-config.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 void test("readGuardCFFunctionTableRvas reads RVAs from the CFG function table", async () => {
@@ -56,4 +56,3 @@ void test("readGuardCFFunctionTableRvas truncates reads when the table spills pa
   );
   assert.deepEqual(rvas, [0x1000]);
 });
-

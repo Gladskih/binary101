@@ -4,10 +4,9 @@ import { humanSize, hex, isoOrDash } from "../../binary-utils.js";
 import { dd, safe } from "../../html-utils.js";
 import { GUARD_FLAGS } from "../../analyzers/pe/constants.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
-import type { PeLoadConfig } from "../../analyzers/pe/debug-loadcfg.js";
+import type { PeLoadConfig } from "../../analyzers/pe/load-config.js";
 import type { PeTlsDirectory } from "../../analyzers/pe/types.js";
 
-/* c8 ignore start */
 const formatVa = (value: number | bigint, isPlus: boolean): string => {
   if (!value) return "-";
   return isPlus ? `0x${BigInt(value).toString(16)}` : hex(Number(value), 8);
@@ -28,15 +27,31 @@ const renderGuardFlags = (lc: PeLoadConfig, out: string[]): void => {
 export function renderLoadConfig(pe: PeParseResult, out: string[]): void {
   if (!pe.loadcfg) return;
   const lc = pe.loadcfg;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Load Config</h4><dl>`);
+  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Load Config</h4>`);
+  if (lc.warnings?.length) {
+    out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(lc.warnings.join("; "))}</div>`);
+  }
+  out.push(`<dl>`);
   out.push(dd("Size", hex(lc.Size, 8), "Structure size of IMAGE_LOAD_CONFIG_DIRECTORY."));
   out.push(dd("TimeDateStamp", isoOrDash(lc.TimeDateStamp), "Build timestamp for load config data."));
   out.push(dd("Version", `${lc.Major}.${lc.Minor}`, "Load config version (varies between OS/toolchain versions)."));
   out.push(dd("SecurityCookie", formatVa(lc.SecurityCookie, pe.opt.isPlus), "Address of the GS cookie (stack guard)."));
   out.push(dd("SEHandlerTable", formatVa(lc.SEHandlerTable, pe.opt.isPlus), "SafeSEH handler table (x86 only)."));
   out.push(dd("SEHandlerCount", String(lc.SEHandlerCount ?? "-"), "Number of SafeSEH handlers (x86)."));
+  out.push(dd("GuardCFCheckFunctionPointer", formatVa(lc.GuardCFCheckFunctionPointer, pe.opt.isPlus), "CFG: guard check function pointer used to validate indirect call/jump targets."));
+  out.push(dd("GuardCFDispatchFunctionPointer", formatVa(lc.GuardCFDispatchFunctionPointer, pe.opt.isPlus), "CFG: guard dispatch function pointer used for certain indirect control transfers."));
   out.push(dd("GuardCFFunctionTable", formatVa(lc.GuardCFFunctionTable, pe.opt.isPlus), "CFG function table VA."));
   out.push(dd("GuardCFFunctionCount", String(lc.GuardCFFunctionCount ?? "-"), "Number of CFG functions listed."));
+  out.push(dd("GuardEHContinuationTable", formatVa(lc.GuardEHContinuationTable, pe.opt.isPlus), "CFG: VA of EH continuation table (valid exception-handling continuation targets)."));
+  out.push(dd("GuardEHContinuationCount", String(lc.GuardEHContinuationCount ?? "-"), "Number of EH continuation targets in the table."));
+  out.push(dd("GuardLongJumpTargetTable", formatVa(lc.GuardLongJumpTargetTable, pe.opt.isPlus), "CFG: VA of longjmp target table (valid longjmp destinations)."));
+  out.push(dd("GuardLongJumpTargetCount", String(lc.GuardLongJumpTargetCount ?? "-"), "Number of longjmp targets in the table."));
+  out.push(dd("GuardAddressTakenIatEntryTable", formatVa(lc.GuardAddressTakenIatEntryTable, pe.opt.isPlus), "CFG export suppression: VA of a table of RVAs of import thunks whose imported function addresses are taken/used as function pointers (so the loader can enable those targets under CFG ES)."));
+  out.push(dd("GuardAddressTakenIatEntryCount", String(lc.GuardAddressTakenIatEntryCount ?? "-"), "Number of entries in GuardAddressTakenIatEntryTable."));
+  out.push(dd("GuardXFGCheckFunctionPointer", formatVa(lc.GuardXFGCheckFunctionPointer, pe.opt.isPlus), "XFG: extended-flow-guard check function pointer."));
+  out.push(dd("GuardXFGDispatchFunctionPointer", formatVa(lc.GuardXFGDispatchFunctionPointer, pe.opt.isPlus), "XFG: extended-flow-guard dispatch function pointer."));
+  out.push(dd("GuardXFGTableDispatchFunctionPointer", formatVa(lc.GuardXFGTableDispatchFunctionPointer, pe.opt.isPlus), "XFG: table dispatch function pointer."));
+  out.push(dd("GuardMemcpyFunctionPointer", formatVa(lc.GuardMemcpyFunctionPointer, pe.opt.isPlus), "CFG: guard memcpy function pointer used by some toolchains/runtime checks."));
   renderGuardFlags(lc, out);
   out.push(`</dl></section>`);
 }
@@ -147,7 +162,6 @@ export function renderClr(pe: PeParseResult, out: string[]): void {
 }
 
 export function renderSecurity(pe: PeParseResult, out: string[]): void {
-/* c8 ignore stop */
   if (!pe.security) return;
   const s = pe.security;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Security (WIN_CERTIFICATE)</h4><dl>`);
@@ -237,7 +251,6 @@ export function renderSecurity(pe: PeParseResult, out: string[]): void {
 }
 
 export function renderIat(pe: PeParseResult, out: string[]): void {
-/* c8 ignore start */
   if (!pe.iat) return;
   const t = pe.iat;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import Address Table (IAT)</h4><dl>`);
@@ -245,4 +258,3 @@ export function renderIat(pe: PeParseResult, out: string[]): void {
   out.push(dd("Size", humanSize(t.size), "Total size of the IAT in bytes."));
   out.push(`</dl></section>`);
 }
-/* c8 ignore stop */

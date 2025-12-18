@@ -30,6 +30,7 @@ export interface AnalyzePeInstructionSetOptions {
   guardCFFunctionRvas?: number[];
   safeSehHandlerRvas?: number[];
   tlsCallbackRvas?: number[];
+  extraEntrypoints?: Array<{ source: string; rvas: number[] }>;
   rvaToOff: RvaToOffset;
   sections: PeSection[];
   yieldEveryInstructions?: number;

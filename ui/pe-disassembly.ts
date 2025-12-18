@@ -7,7 +7,13 @@ import {
   type PeInstructionSetProgress,
   type PeInstructionSetReport
 } from "../analyzers/pe/disassembly.js";
-import { readGuardCFFunctionTableRvas, readSafeSehHandlerTableRvas } from "../analyzers/pe/debug-loadcfg.js";
+import {
+  readGuardCFFunctionTableRvas,
+  readGuardEhContinuationTableRvas,
+  readGuardLongJumpTargetTableRvas,
+  readLoadConfigPointerRva,
+  readSafeSehHandlerTableRvas
+} from "../analyzers/pe/load-config.js";
 
 const IMAGE_FILE_MACHINE_I386 = 0x014c;
 
@@ -180,6 +186,49 @@ export const createPeDisassemblyController = (
             ).catch(() => [])
           : [];
 
+      const extraEntrypoints: Array<{ source: string; rvas: number[] }> = [];
+      const addPointerSeed = (source: string, pointerVa: number | undefined): void => {
+        if (!Number.isSafeInteger(pe.opt.ImageBase)) return;
+        const rva = readLoadConfigPointerRva(pe.opt.ImageBase, pointerVa ?? 0);
+        if (rva == null) return;
+        extraEntrypoints.push({ source, rvas: [rva] });
+      };
+
+      if (pe.loadcfg) {
+        addPointerSeed("GuardCF check function", pe.loadcfg.GuardCFCheckFunctionPointer);
+        addPointerSeed("GuardCF dispatch function", pe.loadcfg.GuardCFDispatchFunctionPointer);
+        addPointerSeed("GuardXFG check function", pe.loadcfg.GuardXFGCheckFunctionPointer);
+        addPointerSeed("GuardXFG dispatch function", pe.loadcfg.GuardXFGDispatchFunctionPointer);
+        addPointerSeed("GuardXFG table dispatch function", pe.loadcfg.GuardXFGTableDispatchFunctionPointer);
+        addPointerSeed("Guard memcpy function", pe.loadcfg.GuardMemcpyFunctionPointer);
+      }
+
+      const guardEhContinuationRvas = pe.loadcfg
+        ? await readGuardEhContinuationTableRvas(
+            file,
+            pe.rvaToOff,
+            pe.opt.ImageBase,
+            pe.loadcfg.GuardEHContinuationTable,
+            pe.loadcfg.GuardEHContinuationCount
+          ).catch(() => [])
+        : [];
+      if (guardEhContinuationRvas.length) {
+        extraEntrypoints.push({ source: "GuardEH continuation", rvas: guardEhContinuationRvas });
+      }
+
+      const guardLongJumpTargetRvas = pe.loadcfg
+        ? await readGuardLongJumpTargetTableRvas(
+            file,
+            pe.rvaToOff,
+            pe.opt.ImageBase,
+            pe.loadcfg.GuardLongJumpTargetTable,
+            pe.loadcfg.GuardLongJumpTargetCount
+          ).catch(() => [])
+        : [];
+      if (guardLongJumpTargetRvas.length) {
+        extraEntrypoints.push({ source: "Guard longjmp target", rvas: guardLongJumpTargetRvas });
+      }
+
       const report = await analyze(file, {
         coffMachine: pe.coff.Machine,
         is64Bit: pe.opt.isPlus,
@@ -191,6 +240,7 @@ export const createPeDisassemblyController = (
         guardCFFunctionRvas,
         safeSehHandlerRvas,
         tlsCallbackRvas,
+        ...(extraEntrypoints.length ? { extraEntrypoints } : {}),
         rvaToOff: pe.rvaToOff,
         sections: pe.sections,
         yieldEveryInstructions: 1024,

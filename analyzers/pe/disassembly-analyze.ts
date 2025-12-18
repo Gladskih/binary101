@@ -92,11 +92,25 @@ export async function analyzePeInstructionSets(
   const requestedTlsCallbackRvas = normalizeRvaList(opts.tlsCallbackRvas);
   const requestedEntrypointRva =
     Number.isSafeInteger(opts.entrypointRva) && opts.entrypointRva > 0 ? (opts.entrypointRva >>> 0) : 0;
+  const requestedExtraEntrypoints = Array.isArray(opts.extraEntrypoints) ? opts.extraEntrypoints : [];
+  const entrypointGroups: Array<{ source: string; rvas: number[] }> = [
+    ...(requestedEntrypointRva ? [{ source: "Entry point", rvas: [requestedEntrypointRva] }] : []),
+    { source: "Export", rvas: requestedExportRvas },
+    { source: "Unwind", rvas: requestedUnwindBeginRvas },
+    { source: "Unwind handler", rvas: requestedUnwindHandlerRvas },
+    { source: "GuardCF function", rvas: requestedGuardCFFunctionRvas },
+    { source: "SafeSEH handler", rvas: requestedSafeSehHandlerRvas },
+    { source: "TLS callback", rvas: requestedTlsCallbackRvas }
+  ];
+  for (const entry of requestedExtraEntrypoints) {
+    if (!entry || typeof entry.source !== "string" || !entry.source) continue;
+    const rvas = normalizeRvaList(entry.rvas);
+    if (!rvas.length) continue;
+    entrypointGroups.push({ source: entry.source, rvas });
+  }
   const resolvedEntrypoints: number[] = [];
   const resolvedEntrypointsSet = new Set<number>();
-  type EntrypointSource =
-    "Entry point" | "Export" | "Unwind" | "Unwind handler" | "GuardCF function" | "SafeSEH handler" | "TLS callback";
-  const addEntrypoint = (source: EntrypointSource, rva: number): void => {
+  const addEntrypoint = (source: string, rva: number): void => {
     const normalized = rva >>> 0;
     if (resolvedEntrypointsSet.has(normalized)) return;
     const off = opts.rvaToOff(normalized);
@@ -118,27 +132,8 @@ export async function analyzePeInstructionSets(
     resolvedEntrypointsSet.add(normalized);
     resolvedEntrypoints.push(normalized);
   };
-
-  if (requestedEntrypointRva) {
-    addEntrypoint("Entry point", requestedEntrypointRva);
-  }
-  for (const rva of requestedExportRvas) {
-    addEntrypoint("Export", rva);
-  }
-  for (const rva of requestedUnwindBeginRvas) {
-    addEntrypoint("Unwind", rva);
-  }
-  for (const rva of requestedUnwindHandlerRvas) {
-    addEntrypoint("Unwind handler", rva);
-  }
-  for (const rva of requestedGuardCFFunctionRvas) {
-    addEntrypoint("GuardCF function", rva);
-  }
-  for (const rva of requestedSafeSehHandlerRvas) {
-    addEntrypoint("SafeSEH handler", rva);
-  }
-  for (const rva of requestedTlsCallbackRvas) {
-    addEntrypoint("TLS callback", rva);
+  for (const group of entrypointGroups) {
+    for (const rva of group.rvas) addEntrypoint(group.source, rva);
   }
   if (resolvedEntrypoints.length === 0) {
     const fallback = findBestCodeSection(opts.sections);

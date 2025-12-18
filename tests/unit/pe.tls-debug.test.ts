@@ -2,7 +2,8 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseDebugDirectory, parseLoadConfigDirectory } from "../../analyzers/pe/debug-loadcfg.js";
+import { parseDebugDirectory } from "../../analyzers/pe/debug-directory.js";
+import { parseLoadConfigDirectory } from "../../analyzers/pe/load-config.js";
 import { parseTlsDirectory } from "../../analyzers/pe/tls.js";
 import { buildResourceTree } from "../../analyzers/pe/resources-core.js";
 import { parseImportDirectory } from "../../analyzers/pe/imports.js";
@@ -19,7 +20,8 @@ void test("parseDebugDirectory reads CodeView RSDS entry", async () => {
   // Debug directory entry at 0x40
   dv.setUint32(debugRva + 12, 2, true); // type CodeView
   dv.setUint32(debugRva + 16, 32, true); // size
-  dv.setUint32(debugRva + 20, dataRva, true); // pointer
+  dv.setUint32(debugRva + 20, dataRva, true); // AddressOfRawData (RVA)
+  dv.setUint32(debugRva + 24, dataRva, true); // PointerToRawData (file offset)
   // RSDS header
   dv.setUint32(dataRva + 0, 0x53445352, true); // RSDS
   dv.setUint32(dataRva + 4, 0x11223344, true);
@@ -58,17 +60,17 @@ void test("parseLoadConfigDirectory reads 32-bit and 64-bit fields", async () =>
   dv.setUint32(lcRva + 4, 0x12345678, true);
   dv.setUint16(lcRva + 8, 5, true);
   dv.setUint16(lcRva + 10, 1, true);
-  dv.setUint32(lcRva + 0x34, 0xCAFEBABE, true); // SecurityCookie
+  dv.setUint32(lcRva + 0x3c, 0xCAFEBABE, true); // SecurityCookie
   dv.setUint32(lcRva + 0x40, 0x200, true); // SEHandlerTable
   dv.setUint32(lcRva + 0x44, 3, true); // SEHandlerCount
-  dv.setUint32(lcRva + 0x48, 0x300, true); // GuardCFFunctionTable
-  dv.setUint32(lcRva + 0x4c, 2, true);
-  dv.setUint32(lcRva + 0x50, 0x1111, true); // GuardFlags
+  dv.setUint32(lcRva + 0x50, 0x300, true); // GuardCFFunctionTable
+  dv.setUint32(lcRva + 0x54, 2, true);
+  dv.setUint32(lcRva + 0x58, 0x1111, true); // GuardFlags
 
   const file = new MockFile(bytes, "loadcfg.bin");
   const lc = expectDefined(await parseLoadConfigDirectory(
     file,
-    [{ name: "LOAD_CONFIG", rva: lcRva, size: 0x54 }],
+    [{ name: "LOAD_CONFIG", rva: lcRva, size: 0x5c }],
     value => value,
     () => {},
     false
@@ -81,19 +83,19 @@ void test("parseLoadConfigDirectory reads 32-bit and 64-bit fields", async () =>
   // 64-bit path
   const bytes64 = new Uint8Array(512).fill(0);
   const dv64 = new DataView(bytes64.buffer);
-  dv64.setUint32(0, 0x90, true);
+  dv64.setUint32(0, 0x140, true);
   dv64.setUint32(4, 0x9abcdef0, true);
   dv64.setUint16(8, 10, true);
   dv64.setUint16(10, 2, true);
-  dv64.setBigUint64(0x40, 0x1234n, true);
-  dv64.setBigUint64(0x58, 0x5678n, true);
-  dv64.setUint32(0x60, 5, true);
-  dv64.setBigUint64(0x68, 0x9abcn, true);
-  dv64.setUint32(0x70, 6, true);
-  dv64.setUint32(0x74, 0xbeef, true);
+  dv64.setBigUint64(0x58, 0x1234n, true);
+  dv64.setBigUint64(0x60, 0x5678n, true);
+  dv64.setBigUint64(0x68, 5n, true);
+  dv64.setBigUint64(0x80, 0x9abcn, true);
+  dv64.setBigUint64(0x88, 6n, true);
+  dv64.setUint32(0x90, 0xbeef, true);
   const lc64 = expectDefined(await parseLoadConfigDirectory(
     new MockFile(bytes64),
-    [{ name: "LOAD_CONFIG", rva: 0x10, size: 0x90 }],
+    [{ name: "LOAD_CONFIG", rva: 0x10, size: 0x140 }],
     value => (value === 0x10 ? 0 : value),
     () => {},
     true
