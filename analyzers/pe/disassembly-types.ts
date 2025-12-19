@@ -46,3 +46,4 @@ export interface PeInstructionSetProgress {
   invalidInstructionCount: number;
   knownFeatureCounts?: Record<string, number>;
 }
+

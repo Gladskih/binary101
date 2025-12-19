@@ -29,6 +29,53 @@ void test("renderInstructionSets (ELF) renders a chip table", () => {
   assert.ok(html.includes("CpuidFeature.SSE2"));
 });
 
+void test("renderInstructionSets (ELF) renders a seed summary and escapes sources", () => {
+  const elf = {
+    disassembly: {
+      bitness: 64,
+      bytesSampled: 10,
+      bytesDecoded: 6,
+      instructionCount: 2,
+      invalidInstructionCount: 0,
+      issues: [],
+      instructionSets: [],
+      seedSummary: {
+        entrypointVaddr: 0x401000n,
+        uniqueEntrypoints: 3,
+        fallbackSource: "Segment #0 (PT_LOAD + PF_X)",
+        sources: [
+          {
+            source: "ELF header entry point",
+            candidates: 1,
+            added: 1,
+            skippedZero: 0,
+            skippedNotExecutable: 0,
+            skippedDuplicate: 0
+          },
+          {
+            source: "<b>DT_INIT_ARRAY</b>",
+            candidates: 2,
+            added: 1,
+            skippedZero: 0,
+            skippedNotExecutable: 1,
+            skippedDuplicate: 0
+          }
+        ]
+      }
+    }
+  } as unknown as ElfParseResult;
+
+  const out: string[] = [];
+  renderInstructionSets(elf, out);
+  const html = out.join("");
+
+  assert.ok(html.includes("Seeds (3 unique entrypoint(s))"));
+  assert.ok(html.includes("Entry point: 0x401000"));
+  assert.ok(html.includes("fallback: Segment #0 (PT_LOAD + PF_X)"));
+  assert.ok(html.includes("&lt;b>DT_INIT_ARRAY&lt;/b>"));
+  assert.ok(!html.includes("<b>DT_INIT_ARRAY</b>"));
+});
+
 void test("renderInstructionSets (ELF) escapes user-controlled strings", () => {
   const elf = {
     disassembly: {
@@ -93,4 +140,3 @@ void test("renderInstructionSets (ELF) renders a progress placeholder before ana
   assert.ok(html.includes("elfInstructionSetChip_SSE"));
   assert.ok(html.includes("elfInstructionSetCount_SSE"));
 });
-

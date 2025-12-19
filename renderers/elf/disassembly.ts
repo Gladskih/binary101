@@ -64,6 +64,41 @@ export function renderInstructionSets(elf: ElfParseResult, out: string[]): void 
     );
   }
 
+  if (disasm.seedSummary) {
+    const seeds = disasm.seedSummary;
+    const dimZero = (value: number): string => (value ? escapeHtml(String(value)) : `<span class="dim">0</span>`);
+    const entryText = `0x${seeds.entrypointVaddr.toString(16)}`;
+    out.push(
+      `<details style="margin-top:.35rem"><summary class="dim" style="cursor:pointer">Seeds (${seeds.uniqueEntrypoints} unique entrypoint(s))</summary>`
+    );
+    out.push(
+      `<div class="smallNote dim">Seeds are candidate start addresses for control-flow guided sampling (entry point, constructor arrays, function symbols, unwind tables, etc.). Only seeds inside executable segments/sections are used.</div>`
+    );
+    out.push(
+      `<div class="smallNote">Entry point: ${escapeHtml(entryText)}${
+        seeds.fallbackSource ? `; fallback: ${escapeHtml(seeds.fallbackSource)}` : ""
+      }</div>`
+    );
+    if (seeds.sources.length) {
+      out.push(
+        `<table class="table" style="margin-top:.35rem"><thead><tr><th>Source</th><th>Cand.</th><th>Added</th><th>Not exec</th><th>Dup.</th><th>Zero</th></tr></thead><tbody>`
+      );
+      for (const source of seeds.sources) {
+        out.push(
+          `<tr><td>${escapeHtml(source.source)}</td><td>${dimZero(source.candidates)}</td><td>${dimZero(
+            source.added
+          )}</td><td>${dimZero(source.skippedNotExecutable)}</td><td>${dimZero(source.skippedDuplicate)}</td><td>${dimZero(
+            source.skippedZero
+          )}</td></tr>`
+        );
+      }
+      out.push(`</tbody></table>`);
+    } else {
+      out.push(`<div class="smallNote dim">No seed sources were collected.</div>`);
+    }
+    out.push(`</details>`);
+  }
+
   const countsById = new Map<string, number>();
   for (const set of disasm.instructionSets) {
     countsById.set(set.id, (countsById.get(set.id) || 0) + set.instructionCount);

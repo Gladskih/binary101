@@ -1,7 +1,7 @@
 "use strict";
 import type { PeSection } from "./types.js";
 import { KNOWN_CPUID_FEATURES, describeCpuidFeature, formatCpuidLabel } from "../x86/cpuid-features.js";
-import type { AnalyzePeInstructionSetOptions, PeInstructionSetProgress, PeInstructionSetReport } from "./disassembly-model.js";
+import type { AnalyzePeInstructionSetOptions, PeInstructionSetProgress, PeInstructionSetReport } from "./disassembly-types.js";
 import { disassembleControlFlowForInstructionSets } from "../x86/disassembly-control-flow.js";
 import { isIcedX86Module } from "../x86/disassembly-iced.js";
 const IMAGE_FILE_MACHINE_I386 = 0x014c;

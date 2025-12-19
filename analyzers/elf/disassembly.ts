@@ -5,6 +5,5 @@ export type {
   ElfInstructionSetProgress,
   ElfInstructionSetReport,
   ElfInstructionSetUsage
-} from "./disassembly-model.js";
+} from "./disassembly-types.js";
 export { analyzeElfInstructionSets } from "./disassembly-analyze.js";
-

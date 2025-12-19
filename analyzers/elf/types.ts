@@ -1,6 +1,6 @@
 "use strict";
 
-import type { ElfInstructionSetReport } from "./disassembly-model.js";
+import type { ElfInstructionSetReport } from "./disassembly-types.js";
 
 export type ElfOptionEntry = [number, string, string?];
 

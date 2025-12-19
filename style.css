@@ -54,6 +54,8 @@ dd{margin:0;word-break:break-all}
 .table th{background:rgba(0,0,0,.1);text-align:left;color:var(--muted)}
 .flagColumn{font-family:var(--mono);word-break:normal;white-space:normal}
 .table tr:last-child td{border-bottom:none}
+.tableWrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tableWrap .table{min-width:720px}
 .tableButton{appearance:none;border:1px solid var(--border2);background:transparent;color:var(--text);padding:4px 8px;border-radius:6px;font-size:12px;font-family:var(--mono);cursor:pointer}
 .tableButton:hover{border-color:var(--accent);color:var(--accent)}
 .tableButton:disabled{opacity:.6;cursor:not-allowed}

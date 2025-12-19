@@ -9,6 +9,22 @@ export interface ElfInstructionSetUsage {
   instructionCount: number;
 }
 
+export interface ElfDisassemblySeedSourceStats {
+  source: string;
+  candidates: number;
+  added: number;
+  skippedZero: number;
+  skippedNotExecutable: number;
+  skippedDuplicate: number;
+}
+
+export interface ElfDisassemblySeedSummary {
+  entrypointVaddr: bigint;
+  uniqueEntrypoints: number;
+  fallbackSource?: string | null;
+  sources: ElfDisassemblySeedSourceStats[];
+}
+
 export interface ElfInstructionSetReport {
   bitness: 32 | 64;
   bytesSampled: number;
@@ -17,6 +33,7 @@ export interface ElfInstructionSetReport {
   invalidInstructionCount: number;
   instructionSets: ElfInstructionSetUsage[];
   issues: string[];
+  seedSummary?: ElfDisassemblySeedSummary;
 }
 
 export interface AnalyzeElfInstructionSetOptions {

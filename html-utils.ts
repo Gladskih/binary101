@@ -19,11 +19,13 @@ export const renderOptionChips = (
   options: Array<[number, string, string?]>
 ): string =>
   `<div class="optionsRow">${options
-    .map(([code, label]) =>
-      `<span class="opt ${code === selectedCode ? "sel" : "dim"}" title="${escapeHtml(
-        `${label} (${toHex32(code, 4)})`
-      )}">${label}</span>`
-    )
+    .map(([code, label, explanation]) => {
+      const tooltipLabel = explanation ? `${label} - ${explanation}` : label;
+      const tooltip = `${tooltipLabel} (${toHex32(code, 4)})`;
+      return `<span class="opt ${code === selectedCode ? "sel" : "dim"}" title="${escapeHtml(
+        tooltip
+      )}">${label}</span>`;
+    })
     .join("")}
   </div>`;
 

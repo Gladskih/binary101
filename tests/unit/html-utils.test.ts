@@ -39,6 +39,16 @@ void test("renderOptionChips marks the selected option and formats tooltips", ()
   assert.ok(html.includes('class="opt sel" title="Two (0x0002)"'));
 });
 
+void test("renderOptionChips includes explanations in tooltips when available", () => {
+  const html = renderOptionChips(0x01, [
+    [0x01, "One", "first option"],
+    [0x02, "Two"]
+  ]);
+
+  assert.ok(html.includes('class="opt sel" title="One - first option (0x0001)"'));
+  assert.ok(html.includes('class="opt dim" title="Two (0x0002)"'));
+});
+
 void test("renderFlagChips marks set bits, dims others, and escapes labels", () => {
   const html = renderFlagChips(0x01, [
     [0x01, "READ", "<allowed>"],

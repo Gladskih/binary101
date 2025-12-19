@@ -7,9 +7,11 @@ import {
 } from "../x86/cpuid-features.js";
 import type {
   AnalyzeElfInstructionSetOptions,
+  ElfDisassemblySeedSourceStats,
+  ElfDisassemblySeedSummary,
   ElfInstructionSetProgress,
   ElfInstructionSetReport
-} from "./disassembly-model.js";
+} from "./disassembly-types.js";
 import { findElfRegionContainingVaddr, getElfExecutableRegions } from "./executable-regions.js";
 import { collectElfDisassemblySeedGroups } from "./disassembly-seeds.js";
 import { disassembleControlFlowForInstructionSetsVaddr } from "../x86/disassembly-control-flow-vaddr.js";
@@ -54,38 +56,33 @@ export async function analyzeElfInstructionSets(
     opts.yieldEveryInstructions > 0
       ? opts.yieldEveryInstructions
       : 0;
-
-  const emptyReport = (bytesSampled: number): ElfInstructionSetReport => ({
+  const emptyReport = (bytesSampled: number, seedSummary?: ElfDisassemblySeedSummary): ElfInstructionSetReport => ({
     bitness,
     bytesSampled,
     bytesDecoded: 0,
     instructionCount: 0,
     invalidInstructionCount: 0,
     instructionSets: [],
-    issues
+    issues,
+    ...(seedSummary ? { seedSummary } : {})
   });
-
   if (!supported) {
     issues.push(`Disassembly is only supported for x86/x86-64 (e_machine ${machine}).`);
     return emptyReport(0);
   }
-
   if (!opts.littleEndian) {
     issues.push("Big-endian ELF is not supported for x86/x86-64 disassembly.");
   }
-
   if (machine === ELF_MACHINE_X86_64 && bitness !== 64) {
     issues.push("Machine is x86-64 but ELF class reports 32-bit mode.");
   } else if (machine === ELF_MACHINE_I386 && bitness !== 32) {
     issues.push("Machine is i386 but ELF class reports 64-bit mode.");
   }
-
   const regions = getElfExecutableRegions(opts.programHeaders, opts.sections);
   if (!regions.length) {
     issues.push("No executable segments/sections available to locate code bytes.");
     return emptyReport(0);
   }
-
   const sampledSections = (
     await Promise.all(
       regions.map(async region => {
@@ -105,36 +102,44 @@ export async function analyzeElfInstructionSets(
       })
     )
   ).filter((entry): entry is SampledSection => entry != null && entry.data.length > 0);
-
   const bytesSampled = sampledSections.reduce((sum, entry) => sum + entry.data.length, 0);
   if (bytesSampled === 0) {
     issues.push("No bytes available in selected executable segment(s)/section(s) for disassembly.");
     return emptyReport(0);
   }
-
   const requestedEntrypointVaddr = typeof opts.entrypointVaddr === "bigint" ? opts.entrypointVaddr : 0n;
-
+  const seedSources: ElfDisassemblySeedSourceStats[] = [];
+  let fallbackSource: string | null = null;
   const entrypoints: bigint[] = [];
   const entrypointsSet = new Set<bigint>();
-  const addEntrypoint = (vaddr: bigint): void => {
+  const isExecutableSeed = (vaddr: bigint): boolean => findElfRegionContainingVaddr(regions, vaddr) != null;
+  const addSeedVaddr = (vaddr: bigint): "added" | "duplicate" | "notExecutable" | "zero" => {
+    if (vaddr === 0n) return "zero";
+    if (!isExecutableSeed(vaddr)) return "notExecutable";
     const normalized = BigInt.asUintN(64, vaddr);
-    if (entrypointsSet.has(normalized)) return;
+    if (entrypointsSet.has(normalized)) return "duplicate";
     entrypointsSet.add(normalized);
     entrypoints.push(normalized);
+    return "added";
   };
-
-  const isExecutableSeed = (vaddr: bigint): boolean => findElfRegionContainingVaddr(regions, vaddr) != null;
-  const tryAddSeed = (vaddr: bigint): boolean => {
-    if (!isExecutableSeed(vaddr)) return false;
-    addEntrypoint(vaddr);
-    return true;
-  };
-
   if (requestedEntrypointVaddr !== 0n) {
     const source = `Entry point 0x${requestedEntrypointVaddr.toString(16)}`;
-    if (!tryAddSeed(requestedEntrypointVaddr)) {
+    const entryStats: ElfDisassemblySeedSourceStats = {
+      source: "ELF header entry point",
+      candidates: 1,
+      added: 0,
+      skippedZero: 0,
+      skippedNotExecutable: 0,
+      skippedDuplicate: 0
+    };
+    const result = addSeedVaddr(requestedEntrypointVaddr);
+    if (result === "added") entryStats.added += 1;
+    else if (result === "duplicate") entryStats.skippedDuplicate += 1;
+    else if (result === "notExecutable") {
+      entryStats.skippedNotExecutable += 1;
       issues.push(`${source} does not map into an executable segment/section.`);
     }
+    seedSources.push(entryStats);
   }
 
   const seedGroups = await collectElfDisassemblySeedGroups({
@@ -146,22 +151,42 @@ export async function analyzeElfInstructionSets(
     issues
   });
   for (const group of seedGroups) {
-    let notExec = 0;
+    const stats: ElfDisassemblySeedSourceStats = {
+      source: group.source,
+      candidates: 0,
+      added: 0,
+      skippedZero: 0,
+      skippedNotExecutable: 0,
+      skippedDuplicate: 0
+    };
     for (const vaddr of group.vaddrs) {
-      if (vaddr === 0n) continue;
-      if (!tryAddSeed(vaddr)) notExec += 1;
+      stats.candidates += 1;
+      const result = addSeedVaddr(vaddr);
+      if (result === "added") stats.added += 1;
+      else if (result === "duplicate") stats.skippedDuplicate += 1;
+      else if (result === "zero") stats.skippedZero += 1;
+      else stats.skippedNotExecutable += 1;
     }
-    if (notExec > 0) {
-      issues.push(`Skipped ${notExec} seed(s) from ${group.source} outside executable ranges.`);
+    if (stats.skippedNotExecutable > 0) {
+      issues.push(`Skipped ${stats.skippedNotExecutable} seed(s) from ${group.source} outside executable ranges.`);
     }
+    if (stats.candidates > 0) seedSources.push(stats);
   }
 
   if (entrypoints.length === 0) {
     const fallback = sampledSections[0];
     if (!fallback) return emptyReport(0);
-    entrypoints.push(BigInt.asUintN(64, fallback.vaddrStart));
+    fallbackSource = fallback.label;
+    addSeedVaddr(fallback.vaddrStart);
     issues.push(`Falling back to ${fallback.label} for disassembly sample.`);
   }
+
+  const seedSummary: ElfDisassemblySeedSummary = {
+    entrypointVaddr: requestedEntrypointVaddr,
+    uniqueEntrypoints: entrypoints.length,
+    fallbackSource,
+    sources: seedSources
+  };
 
   reportProgress(opts, {
     stage: "loading",
@@ -172,7 +197,7 @@ export async function analyzeElfInstructionSets(
   });
   if (opts.signal?.aborted) {
     issues.push("Disassembly cancelled.");
-    return emptyReport(bytesSampled);
+    return emptyReport(bytesSampled, seedSummary);
   }
 
   let iced: unknown;
@@ -180,11 +205,11 @@ export async function analyzeElfInstructionSets(
     iced = await import("iced-x86");
   } catch (err) {
     issues.push(`Failed to load iced-x86 disassembler (${String(err)})`);
-    return emptyReport(bytesSampled);
+    return emptyReport(bytesSampled, seedSummary);
   }
   if (!isIcedX86Module(iced)) {
     issues.push("Failed to load iced-x86 disassembler (unexpected module shape).");
-    return emptyReport(bytesSampled);
+    return emptyReport(bytesSampled, seedSummary);
   }
 
   const featureCounts = new Map<number, number>();
@@ -268,7 +293,7 @@ export async function analyzeElfInstructionSets(
     instructionCount,
     invalidInstructionCount,
     instructionSets,
-    issues
+    issues,
+    seedSummary
   };
 }
-
