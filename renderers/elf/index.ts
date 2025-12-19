@@ -1,6 +1,5 @@
 "use strict";
 
-import { formatHumanSize, toHex32 } from "../../binary-utils.js";
 import { dd, rowOpts, safe } from "../../html-utils.js";
 import {
   ELF_CLASS,
@@ -17,26 +16,12 @@ import type {
   ElfSectionHeader
 } from "../../analyzers/elf/types.js";
 import { renderInstructionSets } from "./disassembly.js";
-
-const formatHex = (value: bigint | number, width?: number): string => {
-  if (typeof value === "bigint") {
-    const hex = value.toString(16);
-    const pad = width ? hex.padStart(width, "0") : hex;
-    return `0x${pad}`;
-  }
-  return toHex32(value, width || 0);
-};
-
-const formatList = (values: string[] | null | undefined): string =>
-  values && values.length ? safe(values.join(", ")) : "-";
-
-const formatMaybeHumanSize = (value: bigint): string => {
-  const num = Number(value);
-  if (Number.isSafeInteger(num) && num >= 0) {
-    return `<span title="${safe(formatHex(value))}">${safe(formatHumanSize(num))}</span>`;
-  }
-  return safe(formatHex(value));
-};
+import { renderElfDebug } from "./debug.js";
+import { renderElfLinking } from "./linking.js";
+import { renderElfNotes } from "./notes.js";
+import { renderElfSymbols } from "./symbols.js";
+import { renderElfTls } from "./tls.js";
+import { formatElfHex, formatElfList, formatElfMaybeHumanSize } from "./value-format.js";
 
 const SECTION_HINTS: Record<string, string> = {
   ".text": "Executable code (instructions).",
@@ -66,7 +51,7 @@ function renderOverview(elf: ElfParseResult, out: string[]): void {
   const endian = elf.littleEndian ? "little-endian" : "big-endian";
   const machine = elf.header.machineName || `machine ${elf.header.machine}`;
   const type = elf.header.typeName || `type ${elf.header.type}`;
-  const entry = formatHex(elf.header.entry, elf.is64 ? 16 : 8);
+  const entry = formatElfHex(elf.header.entry, elf.is64 ? 16 : 8);
   out.push(`<section>`);
   out.push(
     `<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Big picture</h4>`
@@ -98,9 +83,9 @@ function renderHeader(elf: ElfParseResult, out: string[]): void {
   out.push(`<dl>`);
   out.push(dd("Type", rowOpts(h.type, ELF_TYPE)));
   out.push(dd("Machine", rowOpts(h.machine, ELF_MACHINE)));
-  out.push(dd("Entry", formatHex(h.entry)));
-  const phText = `${h.phnum} entries @ ${formatHex(h.phoff)}`;
-  const shText = `${h.shnum} entries @ ${formatHex(h.shoff)}`;
+  out.push(dd("Entry", formatElfHex(h.entry)));
+  const phText = `${h.phnum} entries @ ${formatElfHex(h.phoff)}`;
+  const shText = `${h.shnum} entries @ ${formatElfHex(h.shoff)}`;
   out.push(dd("Program headers", phText));
   out.push(dd("Section headers", shText));
   out.push(dd("Header size", `${h.ehsize} bytes`));
@@ -129,14 +114,14 @@ function renderProgramHeaders(elf: ElfParseResult, out: string[]): void {
     const opt = programTypeMap.get(ph.type);
     const typeLabel = ph.typeName || opt?.[1] || `0x${ph.type.toString(16)}`;
     const typeTitle = opt?.[2] ? `${typeLabel} - ${opt[2]}` : typeLabel;
-    const flags = formatList(ph.flagNames);
+    const flags = formatElfList(ph.flagNames);
     out.push(
       `<tr><td>${ph.index}</td><td><span title="${safe(typeTitle)}">${safe(typeLabel)}</span></td>` +
-        `<td>${safe(formatHex(ph.offset))}</td>` +
-        `<td>${safe(formatHex(ph.vaddr))}</td>` +
-        `<td>${formatMaybeHumanSize(ph.filesz)}</td>` +
-        `<td>${formatMaybeHumanSize(ph.memsz)}</td>` +
-        `<td>${flags}</td><td>${safe(formatHex(ph.align))}</td></tr>`
+        `<td>${safe(formatElfHex(ph.offset))}</td>` +
+        `<td>${safe(formatElfHex(ph.vaddr))}</td>` +
+        `<td>${formatElfMaybeHumanSize(ph.filesz)}</td>` +
+        `<td>${formatElfMaybeHumanSize(ph.memsz)}</td>` +
+        `<td>${flags}</td><td>${safe(formatElfHex(ph.align))}</td></tr>`
     );
   });
   out.push(`</tbody></table>`);
@@ -166,13 +151,13 @@ function renderSectionHeaders(elf: ElfParseResult, out: string[]): void {
     const nameCell = hint
       ? `<span title="${safe(hint)}"><b>${safe(sec.name)}</b></span>`
       : safe(sec.name || "");
-    const flags = formatList(sec.flagNames);
+    const flags = formatElfList(sec.flagNames);
     out.push(
       `<tr><td>${sec.index}</td><td>${nameCell}</td>` +
-        `<td><span title="${safe(typeTitle)}">${safe(typeLabel)}</span></td><td>${safe(formatHex(sec.offset))}</td>` +
-        `<td>${formatMaybeHumanSize(sec.size)}</td>` +
-        `<td>${safe(formatHex(sec.addr))}</td>` +
-        `<td>${flags}</td><td>${safe(formatHex(sec.addralign))}</td></tr>`
+        `<td><span title="${safe(typeTitle)}">${safe(typeLabel)}</span></td><td>${safe(formatElfHex(sec.offset))}</td>` +
+        `<td>${formatElfMaybeHumanSize(sec.size)}</td>` +
+        `<td>${safe(formatElfHex(sec.addr))}</td>` +
+        `<td>${flags}</td><td>${safe(formatElfHex(sec.addralign))}</td></tr>`
     );
   });
   out.push(`</tbody></table>`);
@@ -195,6 +180,11 @@ export function renderElf(elf: ElfParseResult | null): string {
   renderOverview(elf, out);
   renderIdent(elf, out);
   renderHeader(elf, out);
+  renderElfLinking(elf, out);
+  renderElfSymbols(elf, out);
+  renderElfTls(elf, out);
+  renderElfNotes(elf, out);
+  renderElfDebug(elf, out);
   renderInstructionSets(elf, out);
   renderProgramHeaders(elf, out);
   renderSectionHeaders(elf, out);
