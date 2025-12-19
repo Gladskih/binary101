@@ -1,5 +1,4 @@
 "use strict";
-
 import { nowIsoString, formatHumanSize } from "./binary-utils.js";
 import { detectBinaryType, parseForUi, type ParseForUiResult } from "./analyzers/index.js";
 import { renderAnalysisIntoUi as renderParsedResult } from "./ui/render-analysis.js";
@@ -7,29 +6,23 @@ import { attachPreviewGuards, buildPreviewHtml } from "./ui/preview.js";
 import { computeAndDisplayHash, copyHashToClipboard, resetHashDisplay } from "./ui/hash-controls.js";
 import { createZipEntryClickHandler } from "./ui/zip-actions.js";
 import { createPeDisassemblyController } from "./ui/pe-disassembly.js";
-
+import { createElfDisassemblyController } from "./ui/elf-disassembly.js";
 const getElement = (id: string) => document.getElementById(id)!;
-
 const dropZoneElement = getElement("dropZone") as HTMLElement;
 const fileInputElement = getElement("fileInput") as HTMLInputElement;
 const statusMessageElement = getElement("statusMessage") as HTMLElement;
-
 const fileInfoCardElement = getElement("fileInfoCard") as HTMLElement;
-
 const fileNameTopElement = getElement("fileOriginalName") as HTMLElement;
 const fileSizeTopElement = getElement("fileSizeDisplay") as HTMLElement;
 const fileKindTopElement = getElement("fileKindDisplay") as HTMLElement;
-
 const fileNameDetailElement = getElement("fileNameDetail") as HTMLElement;
 const fileSizeDetailElement = getElement("fileSizeDetail") as HTMLElement;
 const fileTimestampDetailElement = getElement("fileTimestampDetail") as HTMLElement;
 const fileSourceDetailElement = getElement("fileSourceDetail") as HTMLElement;
 const fileBinaryTypeDetailElement = getElement("fileBinaryTypeDetail") as HTMLElement;
 const fileMimeTypeDetailElement = getElement("fileMimeTypeDetail") as HTMLElement;
-
 const peDetailsTermElement = getElement("peDetailsTerm") as HTMLElement;
 const peDetailsValueElement = getElement("peDetailsValue") as HTMLElement;
-
 const sha256ValueElement = getElement("sha256Value") as HTMLElement;
 const sha512ValueElement = getElement("sha512Value") as HTMLElement;
 const sha256ButtonElement = getElement("sha256ComputeButton") as HTMLButtonElement;
@@ -46,19 +39,16 @@ const sha512Controls = {
   buttonElement: sha512ButtonElement,
   copyButtonElement: sha512CopyButtonElement
 };
-
 let currentFile: File | null = null;
 let currentPreviewUrl: string | null = null;
 let currentTypeLabel = "";
 let currentParseResult: ParseForUiResult = { analyzer: null, parsed: null };
-
 const setPreviewUrl = (url: string | null): void => {
   if (currentPreviewUrl) {
     URL.revokeObjectURL(currentPreviewUrl);
   }
   currentPreviewUrl = url;
 };
-
 const setStatusMessage = (message: string | null | undefined): void => {
   statusMessageElement.textContent = message || "";
 };
@@ -87,6 +77,12 @@ const peDisassembly = createPeDisassemblyController({
   renderResult
 });
 
+const elfDisassembly = createElfDisassemblyController({
+  getCurrentFile: () => currentFile,
+  getCurrentParseResult: () => currentParseResult,
+  renderResult
+});
+
 const zipClickHandler = createZipEntryClickHandler({
   getParseResult: () => currentParseResult,
   getFile: () => currentFile,
@@ -96,10 +92,12 @@ const zipClickHandler = createZipEntryClickHandler({
 peDetailsValueElement.addEventListener("click", event => {
   const targetNode = event.target as Node | null;
   const targetElement = targetNode instanceof Element ? targetNode : targetNode?.parentElement ?? null;
-  const analyzeButton = targetElement?.closest("#peInstructionSetsAnalyzeButton");
-  const cancelButton = targetElement?.closest("#peInstructionSetsCancelButton");
+  const peAnalyzeButton = targetElement?.closest("#peInstructionSetsAnalyzeButton");
+  const peCancelButton = targetElement?.closest("#peInstructionSetsCancelButton");
+  const elfAnalyzeButton = targetElement?.closest("#elfInstructionSetsAnalyzeButton");
+  const elfCancelButton = targetElement?.closest("#elfInstructionSetsCancelButton");
 
-  if (analyzeButton) {
+  if (peAnalyzeButton) {
     event.preventDefault();
     if (!currentFile) return;
     if (currentParseResult.analyzer !== "pe" || !currentParseResult.parsed) return;
@@ -109,9 +107,25 @@ peDetailsValueElement.addEventListener("click", event => {
     return;
   }
 
-  if (cancelButton) {
+  if (peCancelButton) {
     event.preventDefault();
     peDisassembly.cancel();
+    return;
+  }
+
+  if (elfAnalyzeButton) {
+    event.preventDefault();
+    if (!currentFile) return;
+    if (currentParseResult.analyzer !== "elf" || !currentParseResult.parsed) return;
+    delete currentParseResult.parsed.disassembly;
+    renderResult(currentParseResult);
+    elfDisassembly.start(currentFile, currentParseResult.parsed);
+    return;
+  }
+
+  if (elfCancelButton) {
+    event.preventDefault();
+    elfDisassembly.cancel();
     return;
   }
 
@@ -120,6 +134,7 @@ peDetailsValueElement.addEventListener("click", event => {
 
 async function showFileInfo(file: File, sourceDescription: string): Promise<void> {
   peDisassembly.cancel();
+  elfDisassembly.cancel();
   currentFile = file;
   currentParseResult = { analyzer: null, parsed: null };
   try {

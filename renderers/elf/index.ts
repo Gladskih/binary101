@@ -17,6 +17,7 @@ import type {
   ElfProgramHeader,
   ElfSectionHeader
 } from "../../analyzers/elf/types.js";
+import { renderInstructionSets } from "./disassembly.js";
 
 const mapOptions = (options: ElfOptionEntry[]): Array<[number, string]> =>
   options.map(([code, label]) => [code, label]);
@@ -156,6 +157,7 @@ export function renderElf(elf: ElfParseResult | null): string {
   renderOverview(elf, out);
   renderIdent(elf, out);
   renderHeader(elf, out);
+  renderInstructionSets(elf, out);
   renderProgramHeaders(elf, out);
   renderSectionHeaders(elf, out);
   renderIssues(elf, out);

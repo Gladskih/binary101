@@ -1,5 +1,7 @@
 "use strict";
 
+import type { ElfInstructionSetReport } from "./disassembly-model.js";
+
 export type ElfOptionEntry = [number, string, string?];
 
 export interface ElfIdent {
@@ -65,6 +67,7 @@ export interface ElfParseResult {
   programHeaders: ElfProgramHeader[];
   sections: ElfSectionHeader[];
   issues: string[];
+  disassembly?: ElfInstructionSetReport;
   is64: boolean;
   littleEndian: boolean;
   fileSize: number;

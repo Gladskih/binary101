@@ -23,7 +23,7 @@ type IcedDecoder = {
 export type IcedX86Module = {
   Code: Record<string, number> & Record<number, string | undefined>;
   CpuidFeature: Record<string, number> & Record<number, string | undefined>;
-  Decoder: new (bitness: number, data: Uint8Array, options: number) => IcedDecoder;
+  Decoder: new (bitness: number, data: Uint8Array<ArrayBufferLike>, options: number) => IcedDecoder;
   DecoderOptions: { None: number };
   FlowControl: Record<string, number> & Record<number, string | undefined>;
   OpKind: Record<string, number> & Record<number, string | undefined>;
@@ -48,4 +48,3 @@ export const isIcedX86Module = (value: unknown): value is IcedX86Module => {
 
   return typeof value["Decoder"] === "function" && typeof value["Instruction"] === "function";
 };
-

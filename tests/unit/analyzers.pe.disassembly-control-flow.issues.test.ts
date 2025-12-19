@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { disassembleControlFlowForInstructionSets } from "../../analyzers/pe/disassembly-control-flow.js";
+import { disassembleControlFlowForInstructionSets } from "../../analyzers/x86/disassembly-control-flow.js";
 
 type FakeInstruction = {
   code: number;

@@ -22,7 +22,7 @@ type IcedDecoder = {
 
 type IcedX86Module = {
   Code: Record<string, number> & Record<number, string | undefined>;
-  Decoder: new (bitness: number, data: Uint8Array, options: number) => IcedDecoder;
+  Decoder: new (bitness: number, data: Uint8Array<ArrayBufferLike>, options: number) => IcedDecoder;
   DecoderOptions: { None: number };
   FlowControl: Record<string, number> & Record<number, string | undefined>;
   OpKind: Record<string, number> & Record<number, string | undefined>;
@@ -31,7 +31,7 @@ type IcedX86Module = {
 
 type DisassemblySection = {
   rvaStart: number;
-  data: Uint8Array;
+  data: Uint8Array<ArrayBufferLike>;
 };
 
 type DisassemblyYieldSnapshot = {

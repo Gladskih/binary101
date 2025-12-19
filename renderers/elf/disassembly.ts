@@ -1,22 +1,22 @@
 "use strict";
 
 import { escapeHtml } from "../../html-utils.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
+import type { ElfParseResult } from "../../analyzers/elf/types.js";
 import {
   KNOWN_CPUID_FEATURES,
   describeCpuidFeature,
   formatCpuidLabel
 } from "../../analyzers/x86/cpuid-features.js";
 
-const ANALYZE_BUTTON_ID = "peInstructionSetsAnalyzeButton";
-const CANCEL_BUTTON_ID = "peInstructionSetsCancelButton";
-const PROGRESS_TEXT_ID = "peInstructionSetsProgressText";
-const PROGRESS_BAR_ID = "peInstructionSetsProgress";
-const CHIP_ID_PREFIX = "peInstructionSetChip_";
-const COUNT_ID_PREFIX = "peInstructionSetCount_";
+const ANALYZE_BUTTON_ID = "elfInstructionSetsAnalyzeButton";
+const CANCEL_BUTTON_ID = "elfInstructionSetsCancelButton";
+const PROGRESS_TEXT_ID = "elfInstructionSetsProgressText";
+const PROGRESS_BAR_ID = "elfInstructionSetsProgress";
+const CHIP_ID_PREFIX = "elfInstructionSetChip_";
+const COUNT_ID_PREFIX = "elfInstructionSetCount_";
 
-export function renderInstructionSets(pe: PeParseResult, out: string[]): void {
-  const disasm = pe.disassembly;
+export function renderInstructionSets(elf: ElfParseResult, out: string[]): void {
+  const disasm = elf.disassembly;
 
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Instruction sets</h4>`);
   const analyzeLabel = disasm ? "Re-analyze instruction sets" : "Analyze instruction sets";
@@ -54,7 +54,7 @@ export function renderInstructionSets(pe: PeParseResult, out: string[]): void {
     `<div class="smallNote">Disassembly sample (${mode}): ${disasm.instructionCount} instruction(s) decoded from ${disasm.bytesDecoded} / ${disasm.bytesSampled} byte(s). Invalid decodes: ${disasm.invalidInstructionCount}.</div>`
   );
   out.push(
-    `<div class="smallNote dim">Note: this is a static, control-flow guided sample of reachable code paths; it is not a full disassembly and may miss code behind indirect jumps/calls, unpacking, or runtime generation.</div>`
+    `<div class="smallNote dim">Note: this is a static, control-flow guided sample of reachable code paths; it is not a full disassembly and may miss code behind indirect jumps/calls, self-modifying code, unpacking, or runtime generation.</div>`
   );
 
   if (disasm.issues?.length) {
