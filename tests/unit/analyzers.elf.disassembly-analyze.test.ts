@@ -75,13 +75,13 @@ void test("analyzeElfInstructionSets samples bytes but returns early when aborte
   assert.ok(report.issues.some(issue => issue.includes("cancelled")));
 });
 
-void test("analyzeElfInstructionSets rejects binaries with executable spans larger than 4GiB", async () => {
+void test("analyzeElfInstructionSets supports executable spans larger than 4GiB (ELF64)", async () => {
   const file = new MockFile(new Uint8Array([0x90]), "elf.bin");
   const report = await analyzeElfInstructionSets(file, {
     machine: 62,
     is64Bit: true,
     littleEndian: true,
-    entrypointVaddr: 0n,
+    entrypointVaddr: 0x1_0000_0000n,
     programHeaders: [
       ph({ index: 0, flags: 0x1, vaddr: 0x0n, offset: 0n, filesz: 1n }),
       ph({ index: 1, flags: 0x1, vaddr: 0x1_0000_0000n, offset: 0n, filesz: 1n })
@@ -89,8 +89,11 @@ void test("analyzeElfInstructionSets rejects binaries with executable spans larg
     sections: []
   });
 
-  assert.equal(report.bytesSampled, 0);
-  assert.ok(report.issues.some(issue => issue.includes("exceeds 4GiB")));
+  assert.equal(report.bytesSampled, 2);
+  assert.equal(report.bytesDecoded, 1);
+  assert.equal(report.instructionCount, 1);
+  assert.equal(report.invalidInstructionCount, 0);
+  assert.ok(!report.issues.some(issue => issue.includes("exceeds 4GiB")));
 });
 
 void test("analyzeElfInstructionSets can decode a small executable slice via iced-x86", async () => {
