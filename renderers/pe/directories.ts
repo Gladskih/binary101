@@ -1,60 +1,9 @@
 "use strict";
 
-import { humanSize, hex, isoOrDash } from "../../binary-utils.js";
+import { humanSize, hex } from "../../binary-utils.js";
 import { dd, safe } from "../../html-utils.js";
-import { GUARD_FLAGS } from "../../analyzers/pe/constants.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
-import type { PeLoadConfig } from "../../analyzers/pe/load-config.js";
 import type { PeTlsDirectory } from "../../analyzers/pe/types.js";
-
-const formatVa = (value: number | bigint, isPlus: boolean): string => {
-  if (!value) return "-";
-  return isPlus ? `0x${BigInt(value).toString(16)}` : hex(Number(value), 8);
-};
-
-const renderGuardFlags = (lc: PeLoadConfig, out: string[]): void => {
-  if (typeof lc.GuardFlags !== "number") return;
-  const flags = GUARD_FLAGS.filter(([bit]) => (lc.GuardFlags & bit) !== 0).map(([, name]) => name);
-  out.push(
-    dd(
-      "GuardFlags",
-      lc.GuardFlags ? hex(lc.GuardFlags, 8) : "0",
-      flags.length ? flags.join(", ") : "No CFG-related flags set."
-    )
-  );
-};
-
-export function renderLoadConfig(pe: PeParseResult, out: string[]): void {
-  if (!pe.loadcfg) return;
-  const lc = pe.loadcfg;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Load Config</h4>`);
-  if (lc.warnings?.length) {
-    out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(lc.warnings.join("; "))}</div>`);
-  }
-  out.push(`<dl>`);
-  out.push(dd("Size", hex(lc.Size, 8), "Structure size of IMAGE_LOAD_CONFIG_DIRECTORY."));
-  out.push(dd("TimeDateStamp", isoOrDash(lc.TimeDateStamp), "Build timestamp for load config data."));
-  out.push(dd("Version", `${lc.Major}.${lc.Minor}`, "Load config version (varies between OS/toolchain versions)."));
-  out.push(dd("SecurityCookie", formatVa(lc.SecurityCookie, pe.opt.isPlus), "Address of the GS cookie (stack guard)."));
-  out.push(dd("SEHandlerTable", formatVa(lc.SEHandlerTable, pe.opt.isPlus), "SafeSEH handler table (x86 only)."));
-  out.push(dd("SEHandlerCount", String(lc.SEHandlerCount ?? "-"), "Number of SafeSEH handlers (x86)."));
-  out.push(dd("GuardCFCheckFunctionPointer", formatVa(lc.GuardCFCheckFunctionPointer, pe.opt.isPlus), "CFG: guard check function pointer used to validate indirect call/jump targets."));
-  out.push(dd("GuardCFDispatchFunctionPointer", formatVa(lc.GuardCFDispatchFunctionPointer, pe.opt.isPlus), "CFG: guard dispatch function pointer used for certain indirect control transfers."));
-  out.push(dd("GuardCFFunctionTable", formatVa(lc.GuardCFFunctionTable, pe.opt.isPlus), "CFG function table VA."));
-  out.push(dd("GuardCFFunctionCount", String(lc.GuardCFFunctionCount ?? "-"), "Number of CFG functions listed."));
-  out.push(dd("GuardEHContinuationTable", formatVa(lc.GuardEHContinuationTable, pe.opt.isPlus), "CFG: VA of EH continuation table (valid exception-handling continuation targets)."));
-  out.push(dd("GuardEHContinuationCount", String(lc.GuardEHContinuationCount ?? "-"), "Number of EH continuation targets in the table."));
-  out.push(dd("GuardLongJumpTargetTable", formatVa(lc.GuardLongJumpTargetTable, pe.opt.isPlus), "CFG: VA of longjmp target table (valid longjmp destinations)."));
-  out.push(dd("GuardLongJumpTargetCount", String(lc.GuardLongJumpTargetCount ?? "-"), "Number of longjmp targets in the table."));
-  out.push(dd("GuardAddressTakenIatEntryTable", formatVa(lc.GuardAddressTakenIatEntryTable, pe.opt.isPlus), "CFG export suppression: VA of a table of RVAs of import thunks whose imported function addresses are taken/used as function pointers (so the loader can enable those targets under CFG ES)."));
-  out.push(dd("GuardAddressTakenIatEntryCount", String(lc.GuardAddressTakenIatEntryCount ?? "-"), "Number of entries in GuardAddressTakenIatEntryTable."));
-  out.push(dd("GuardXFGCheckFunctionPointer", formatVa(lc.GuardXFGCheckFunctionPointer, pe.opt.isPlus), "XFG: extended-flow-guard check function pointer."));
-  out.push(dd("GuardXFGDispatchFunctionPointer", formatVa(lc.GuardXFGDispatchFunctionPointer, pe.opt.isPlus), "XFG: extended-flow-guard dispatch function pointer."));
-  out.push(dd("GuardXFGTableDispatchFunctionPointer", formatVa(lc.GuardXFGTableDispatchFunctionPointer, pe.opt.isPlus), "XFG: table dispatch function pointer."));
-  out.push(dd("GuardMemcpyFunctionPointer", formatVa(lc.GuardMemcpyFunctionPointer, pe.opt.isPlus), "CFG: guard memcpy function pointer used by some toolchains/runtime checks."));
-  renderGuardFlags(lc, out);
-  out.push(`</dl></section>`);
-}
 
 export function renderDebug(pe: PeParseResult, out: string[]): void {
   if (!pe.rsds && !pe.debugWarning) return;

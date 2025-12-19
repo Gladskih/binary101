@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readGuardCFFunctionTableRvas } from "../../analyzers/pe/load-config.js";
+import { readGuardCFFunctionTableRvas } from "../../analyzers/pe/load-config-tables.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 void test("readGuardCFFunctionTableRvas reads RVAs from the CFG function table", async () => {
@@ -13,9 +13,7 @@ void test("readGuardCFFunctionTableRvas reads RVAs from the CFG function table",
   const bytes = new Uint8Array(0x200).fill(0);
   const dv = new DataView(bytes.buffer);
   dv.setUint32(tableRva + 0, 0x1000, true);
-  dv.setUint32(tableRva + 4, 0, true);
-  dv.setUint32(tableRva + 8, 0x1100, true);
-  dv.setUint32(tableRva + 12, 1, true);
+  dv.setUint32(tableRva + 4, 0x1100, true);
 
   const rvas = await readGuardCFFunctionTableRvas(
     new MockFile(bytes, "guardcf.bin"),
@@ -23,6 +21,30 @@ void test("readGuardCFFunctionTableRvas reads RVAs from the CFG function table",
     imageBase,
     tableVa,
     2
+  );
+  assert.deepEqual(rvas, [0x1000, 0x1100]);
+});
+
+void test("readGuardCFFunctionTableRvas supports 5-byte GFIDS entries when GuardFlags encodes a stride", async () => {
+  const imageBase = 0x400000;
+  const tableRva = 0x80;
+  const tableVa = imageBase + tableRva;
+  const guardFlags = 0x10000000;
+
+  const bytes = new Uint8Array(0x200).fill(0);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(tableRva + 0, 0x1000, true);
+  dv.setUint8(tableRva + 4, 0x7f); // metadata byte (ignored)
+  dv.setUint32(tableRva + 5, 0x1100, true);
+  dv.setUint8(tableRva + 9, 0x01); // metadata byte (ignored)
+
+  const rvas = await readGuardCFFunctionTableRvas(
+    new MockFile(bytes, "guardcf-5b.bin"),
+    rva => rva,
+    imageBase,
+    tableVa,
+    2,
+    guardFlags
   );
   assert.deepEqual(rvas, [0x1000, 0x1100]);
 });
@@ -42,10 +64,9 @@ void test("readGuardCFFunctionTableRvas returns empty list for invalid or unmapp
 });
 
 void test("readGuardCFFunctionTableRvas truncates reads when the table spills past EOF", async () => {
-  const bytes = new Uint8Array(0x88).fill(0);
+  const bytes = new Uint8Array(0x84).fill(0);
   const dv = new DataView(bytes.buffer);
   dv.setUint32(0x80 + 0, 0x1000, true);
-  dv.setUint32(0x80 + 4, 0, true);
 
   const rvas = await readGuardCFFunctionTableRvas(
     new MockFile(bytes, "guardcf-truncated.bin"),

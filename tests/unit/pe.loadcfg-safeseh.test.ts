@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readSafeSehHandlerTableRvas } from "../../analyzers/pe/load-config.js";
+import { readSafeSehHandlerTableRvas } from "../../analyzers/pe/load-config-tables.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 void test("readSafeSehHandlerTableRvas reads RVAs from a SafeSEH table storing handler VAs", async () => {

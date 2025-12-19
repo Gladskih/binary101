@@ -6,8 +6,8 @@ import {
   readGuardAddressTakenIatEntryTableRvas,
   readGuardEhContinuationTableRvas,
   readGuardLongJumpTargetTableRvas,
-  readLoadConfigPointerRva
-} from "../../analyzers/pe/load-config.js";
+} from "../../analyzers/pe/load-config-tables.js";
+import { readLoadConfigPointerRva } from "../../analyzers/pe/load-config.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 void test("readLoadConfigPointerRva converts VA to RVA and rejects invalid values", () => {
@@ -28,6 +28,25 @@ void test("readGuardEhContinuationTableRvas reads RVAs and truncates at EOF", as
 
   assert.deepEqual(
     await readGuardEhContinuationTableRvas(new MockFile(bytes, "eh.bin"), rva => rva, imageBase, tableVa, 3),
+    [0x1000, 0x1100]
+  );
+});
+
+void test("readGuardEhContinuationTableRvas supports 5-byte entries when GuardFlags encodes a stride", async () => {
+  const imageBase = 0x400000;
+  const tableRva = 0x80;
+  const tableVa = imageBase + tableRva;
+  const guardFlags = 0x10000000;
+
+  const bytes = new Uint8Array(0x200).fill(0);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(tableRva + 0, 0x1000, true);
+  dv.setUint8(tableRva + 4, 0x00);
+  dv.setUint32(tableRva + 5, 0x1100, true);
+  dv.setUint8(tableRva + 9, 0x00);
+
+  assert.deepEqual(
+    await readGuardEhContinuationTableRvas(new MockFile(bytes, "eh-5b.bin"), rva => rva, imageBase, tableVa, 2, guardFlags),
     [0x1000, 0x1100]
   );
 });

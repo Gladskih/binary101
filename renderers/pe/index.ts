@@ -3,8 +3,8 @@
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 import { renderHeaders } from "./headers.js";
 import { renderInstructionSets } from "./disassembly.js";
+import { renderLoadConfig } from "./load-config.js";
 import {
-  renderLoadConfig,
   renderDebug,
   renderImports,
   renderExports,

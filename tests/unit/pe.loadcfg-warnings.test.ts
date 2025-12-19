@@ -13,7 +13,7 @@ void test("collectLoadConfigWarnings reports tables that do not fit in file/imag
   const lcRva = 0x80;
 
   dv.setUint32(lcRva + 0x00, 0xc0, true); // Size
-  dv.setUint32(lcRva + 0x50, 0x1f0, true); // GuardCFFunctionTable
+  dv.setUint32(lcRva + 0x50, 0x1f4, true); // GuardCFFunctionTable
   dv.setUint32(lcRva + 0x54, 4, true); // GuardCFFunctionCount
 
   const file = new MockFile(bytes, "loadcfg-warn.bin");

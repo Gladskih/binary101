@@ -7,13 +7,13 @@ import {
   type PeInstructionSetProgress,
   type PeInstructionSetReport
 } from "../analyzers/pe/disassembly.js";
+import { readLoadConfigPointerRva } from "../analyzers/pe/load-config.js";
 import {
   readGuardCFFunctionTableRvas,
   readGuardEhContinuationTableRvas,
   readGuardLongJumpTargetTableRvas,
-  readLoadConfigPointerRva,
   readSafeSehHandlerTableRvas
-} from "../analyzers/pe/load-config.js";
+} from "../analyzers/pe/load-config-tables.js";
 
 const IMAGE_FILE_MACHINE_I386 = 0x014c;
 
@@ -171,7 +171,8 @@ export const createPeDisassemblyController = (
             pe.rvaToOff,
             pe.opt.ImageBase,
             pe.loadcfg.GuardCFFunctionTable,
-            pe.loadcfg.GuardCFFunctionCount
+            pe.loadcfg.GuardCFFunctionCount,
+            pe.loadcfg.GuardFlags
           ).catch(() => [])
         : [];
 
@@ -209,7 +210,8 @@ export const createPeDisassemblyController = (
             pe.rvaToOff,
             pe.opt.ImageBase,
             pe.loadcfg.GuardEHContinuationTable,
-            pe.loadcfg.GuardEHContinuationCount
+            pe.loadcfg.GuardEHContinuationCount,
+            pe.loadcfg.GuardFlags
           ).catch(() => [])
         : [];
       if (guardEhContinuationRvas.length) {
@@ -222,7 +224,8 @@ export const createPeDisassemblyController = (
             pe.rvaToOff,
             pe.opt.ImageBase,
             pe.loadcfg.GuardLongJumpTargetTable,
-            pe.loadcfg.GuardLongJumpTargetCount
+            pe.loadcfg.GuardLongJumpTargetCount,
+            pe.loadcfg.GuardFlags
           ).catch(() => [])
         : [];
       if (guardLongJumpTargetRvas.length) {
