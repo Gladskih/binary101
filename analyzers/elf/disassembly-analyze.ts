@@ -16,6 +16,7 @@ import {
   findElfRegionContainingVaddr,
   getElfExecutableRegions
 } from "./executable-regions.js";
+import { collectElfDisassemblySeedGroups } from "./disassembly-seeds.js";
 import { disassembleControlFlowForInstructionSets } from "../x86/disassembly-control-flow.js";
 import { isIcedX86Module } from "../x86/disassembly-iced.js";
 
@@ -25,18 +26,6 @@ const ELF_MACHINE_X86_64 = 62;
 const MAX_RVA = 0xffff_ffff;
 
 type SampledSection = { rvaStart: number; data: Uint8Array<ArrayBuffer>; label: string };
-
-const uniqueU32s = (values: number[]): number[] => {
-  const seen = new Set<number>();
-  const out: number[] = [];
-  for (const value of values) {
-    const normalized = value >>> 0;
-    if (seen.has(normalized)) continue;
-    seen.add(normalized);
-    out.push(normalized);
-  }
-  return out;
-};
 
 const reportProgress = (opts: AnalyzeElfInstructionSetOptions, progress: ElfInstructionSetProgress): void => {
   if (!opts.onProgress) return;
@@ -66,7 +55,6 @@ const toRva = (vaddr: bigint, imageBase: bigint): number | null => {
   if (!Number.isSafeInteger(num) || num < 0) return null;
   return num >>> 0;
 };
-
 
 export async function analyzeElfInstructionSets(
   file: File,
@@ -117,9 +105,7 @@ export async function analyzeElfInstructionSets(
   const imageBase = computeElfImageBase(regions);
   const span = computeElfExecutableSpan(regions, imageBase);
   if (span > BigInt(MAX_RVA)) {
-    issues.push(
-      `Executable address span (${span.toString(16)}h) exceeds 4GiB; this sampler currently only supports up to 4GiB ranges.`
-    );
+    issues.push(`Executable address span (${span.toString(16)}h) exceeds 4GiB; this sampler currently only supports up to 4GiB ranges.`);
     return emptyReport(0);
   }
 
@@ -147,39 +133,67 @@ export async function analyzeElfInstructionSets(
       })
     )
   ).filter((entry): entry is SampledSection => entry != null && entry.data.length > 0);
-
   const bytesSampled = sampledSections.reduce((sum, entry) => sum + entry.data.length, 0);
   if (bytesSampled === 0) {
     issues.push("No bytes available in selected executable segment(s)/section(s) for disassembly.");
     return emptyReport(0);
   }
-
   const requestedEntrypointVaddr = typeof opts.entrypointVaddr === "bigint" ? opts.entrypointVaddr : 0n;
-  const resolvedEntrypoints: number[] = [];
-  const addEntrypoint = (source: string, vaddr: bigint): void => {
+  const entrypointRvas: number[] = [];
+  const entrypointRvasSet = new Set<number>();
+  const addEntrypointRva = (rva: number): void => {
+    const normalized = rva >>> 0;
+    if (entrypointRvasSet.has(normalized)) return;
+    entrypointRvasSet.add(normalized);
+    entrypointRvas.push(normalized);
+  };
+  const tryResolveSeedToRva = (vaddr: bigint): "ok" | "notExec" | "outOfRange" => {
     const region = findElfRegionContainingVaddr(regions, vaddr);
-    if (!region) {
-      issues.push(`${source} does not map into an executable segment/section.`);
-      return;
-    }
+    if (!region) return "notExec";
     const rva = toRva(vaddr, imageBase);
-    if (rva == null) {
-      issues.push(`${source} is outside the supported range for this sampler.`);
-      return;
-    }
-    resolvedEntrypoints.push(rva);
+    if (rva == null) return "outOfRange";
+    addEntrypointRva(rva);
+    return "ok";
   };
   if (requestedEntrypointVaddr !== 0n) {
-    addEntrypoint(`Entry point 0x${requestedEntrypointVaddr.toString(16)}`, requestedEntrypointVaddr);
+    const source = `Entry point 0x${requestedEntrypointVaddr.toString(16)}`;
+    const result = tryResolveSeedToRva(requestedEntrypointVaddr);
+    if (result === "notExec") {
+      issues.push(`${source} does not map into an executable segment/section.`);
+    } else if (result === "outOfRange") {
+      issues.push(`${source} is outside the supported range for this sampler.`);
+    }
   }
-  const normalizedEntrypoints = uniqueU32s(resolvedEntrypoints);
-  if (normalizedEntrypoints.length === 0) {
+  const seedGroups = await collectElfDisassemblySeedGroups({
+    file,
+    programHeaders: opts.programHeaders,
+    sections: opts.sections,
+    is64: opts.is64Bit,
+    littleEndian: opts.littleEndian,
+    issues
+  });
+  for (const group of seedGroups) {
+    let outOfRange = 0;
+    let notExec = 0;
+    for (const vaddr of group.vaddrs) {
+      if (vaddr === 0n) continue;
+      const result = tryResolveSeedToRva(vaddr);
+      if (result === "notExec") notExec += 1;
+      else if (result === "outOfRange") outOfRange += 1;
+    }
+    if (notExec > 0) {
+      issues.push(`Skipped ${notExec} seed(s) from ${group.source} outside executable ranges.`);
+    }
+    if (outOfRange > 0) {
+      issues.push(`Skipped ${outOfRange} seed(s) from ${group.source} outside the supported address range.`);
+    }
+  }
+  if (entrypointRvas.length === 0) {
     const fallback = sampledSections[0];
     if (!fallback) return emptyReport(0);
-    normalizedEntrypoints.push(fallback.rvaStart >>> 0);
+    entrypointRvas.push(fallback.rvaStart >>> 0);
     issues.push(`Falling back to ${fallback.label} for disassembly sample.`);
   }
-
   reportProgress(opts, {
     stage: "loading",
     bytesSampled,
@@ -191,7 +205,6 @@ export async function analyzeElfInstructionSets(
     issues.push("Disassembly cancelled.");
     return emptyReport(bytesSampled);
   }
-
   let iced: unknown;
   try {
     iced = await import("iced-x86");
@@ -203,7 +216,6 @@ export async function analyzeElfInstructionSets(
     issues.push("Failed to load iced-x86 disassembler (unexpected module shape).");
     return emptyReport(bytesSampled);
   }
-
   const featureCounts = new Map<number, number>();
   const knownFeatures = KNOWN_CPUID_FEATURES
     .map(id => ({ id, value: iced.CpuidFeature[id] }))
@@ -216,26 +228,27 @@ export async function analyzeElfInstructionSets(
     }
     return out;
   };
-
   let bytesDecoded = 0;
   let instructionCount = 0;
   let invalidInstructionCount = 0;
-  reportProgress(opts, {
-    stage: "decoding",
-    bytesSampled,
-    bytesDecoded,
-    instructionCount,
-    invalidInstructionCount,
-    knownFeatureCounts: getKnownFeatureCounts()
-  });
-
+  const reportDecodingProgress = (): void => {
+    reportProgress(opts, {
+      stage: "decoding",
+      bytesSampled,
+      bytesDecoded,
+      instructionCount,
+      invalidInstructionCount,
+      knownFeatureCounts: getKnownFeatureCounts()
+    });
+  };
+  reportDecodingProgress();
   try {
     const result = await disassembleControlFlowForInstructionSets({
       iced,
       bitness,
       imageBase,
       sections: sampledSections.map(entry => ({ rvaStart: entry.rvaStart, data: entry.data })),
-      entrypoints: normalizedEntrypoints,
+      entrypoints: entrypointRvas,
       yieldEveryInstructions,
       featureCounts,
       issues,
@@ -244,14 +257,7 @@ export async function analyzeElfInstructionSets(
         bytesDecoded = snapshot.bytesDecoded;
         instructionCount = snapshot.instructionCount;
         invalidInstructionCount = snapshot.invalidInstructionCount;
-        reportProgress(opts, {
-          stage: "decoding",
-          bytesSampled,
-          bytesDecoded,
-          instructionCount,
-          invalidInstructionCount,
-          knownFeatureCounts: getKnownFeatureCounts()
-        });
+        reportDecodingProgress();
         await yieldToEventLoop();
       }
     });
@@ -261,7 +267,6 @@ export async function analyzeElfInstructionSets(
   } catch (err) {
     issues.push(`Disassembly failed (${String(err)})`);
   }
-
   const instructionSets = [...featureCounts.entries()]
     .map(([feature, count]) => {
       const id = iced.CpuidFeature[feature] ?? `#${feature}`;
@@ -273,7 +278,6 @@ export async function analyzeElfInstructionSets(
       };
     })
     .sort((a, b) => b.instructionCount - a.instructionCount || a.id.localeCompare(b.id));
-
   reportProgress(opts, {
     stage: "done",
     bytesSampled,
@@ -282,7 +286,6 @@ export async function analyzeElfInstructionSets(
     invalidInstructionCount,
     knownFeatureCounts: getKnownFeatureCounts()
   });
-
   return {
     bitness,
     bytesSampled,
