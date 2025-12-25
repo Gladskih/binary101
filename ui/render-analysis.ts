@@ -24,7 +24,8 @@ import {
   renderAvi,
   renderAni,
   renderSqlite,
-  renderAsf
+  renderAsf,
+  renderMpegPs
 } from "../renderers/index.js";
 import type { PreviewRender } from "./preview.js";
 
@@ -172,6 +173,16 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
     ctx.valueElement.hidden = false;
     const videoPreviewHtml = preview?.kind === "video" ? preview.html : "";
     ctx.valueElement.innerHTML = videoPreviewHtml + renderMp4(result.parsed);
+    ctx.attachGuards(preview);
+    return;
+  }
+
+  if (result.analyzer === "mpegps") {
+    ctx.termElement.textContent = "MPEG Program Stream details";
+    ctx.termElement.hidden = false;
+    ctx.valueElement.hidden = false;
+    const videoPreviewHtml = preview?.kind === "video" ? preview.html : "";
+    ctx.valueElement.innerHTML = videoPreviewHtml + renderMpegPs(result.parsed);
     ctx.attachGuards(preview);
     return;
   }

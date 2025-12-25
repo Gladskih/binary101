@@ -23,3 +23,4 @@ export { renderAvi } from "./avi/index.js";
 export { renderAni } from "./ani/index.js";
 export { renderSqlite } from "./sqlite/index.js";
 export { renderAsf } from "./asf/index.js";
+export { renderMpegPs } from "./mpegps/index.js";

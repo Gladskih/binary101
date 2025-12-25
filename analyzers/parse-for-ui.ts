@@ -31,6 +31,7 @@ import { detectPdfVersion, hasZipEocdSignature, toAsciiFromWholeView } from "./d
 import { isShortMp3WithoutSecond, isValidatedMp3 } from "./mp3-labels.js";
 import { probeMzFormat } from "./mz-probe.js";
 import { hasSqliteSignature, parseSqlite } from "./sqlite/index.js";
+import { parseMpegPs } from "./mpegps/index.js";
 
 const parseForUi = async (file: File): Promise<ParseForUiResult> => {
   const dv = new DataView(
@@ -132,6 +133,10 @@ const parseForUi = async (file: File): Promise<ParseForUiResult> => {
         if (mp4) return { analyzer: "mp4", parsed: mp4 };
       }
     }
+  }
+  if (dv.byteLength >= 4 && dv.getUint32(0, false) === 0x000001ba) {
+    const mpegps = await parseMpegPs(file);
+    if (mpegps) return { analyzer: "mpegps", parsed: mpegps };
   }
   if (dv.byteLength >= 4 && dv.getUint32(0, false) === 0x1a45dfa3) {
     const webm = await parseWebm(file);

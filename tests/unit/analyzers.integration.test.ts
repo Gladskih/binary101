@@ -28,6 +28,7 @@ import { createZipFile } from "../fixtures/zip-fixtures.js";
 import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
 import { createAniFile, createAviFile, createWavFile } from "../fixtures/riff-sample-files.js";
 import { createSampleAsfFile } from "../fixtures/asf-fixtures.js";
+import { createMpegPsFile } from "../fixtures/mpegps-fixtures.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import type { FlacMetadataBlockDetail } from "../../analyzers/flac/types.js";
@@ -241,6 +242,13 @@ void test("parseForUi parses WebM metadata and tracks", async () => {
     assert.strictEqual(webm.docType, "webm");
     assert.ok(webm.segment?.info?.durationSeconds);
     assert.ok(webm.segment?.tracks.length);
+  });
+});
+
+void test("parseForUi parses MPEG Program Streams (MPEG-PS)", async () => {
+  await assertParsed(createMpegPsFile(), "mpegps", mpegps => {
+    assert.strictEqual(mpegps.packHeaders.totalCount >= 1, true);
+    assert.strictEqual(mpegps.pes.totalPackets >= 1, true);
   });
 });
 
