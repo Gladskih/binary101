@@ -203,7 +203,7 @@ test.describe("file type detection", () => {
     await expect(page.locator(".audioPreview audio")).toBeVisible();
   });
 
-  void test("renders MP4 video preview", async ({ page }) => {
+  void test("renders MP4 details and suppresses unplayable previews", async ({ page }) => {
     const videoFile = createMp4File();
     await page.setInputFiles("#fileInput", toUpload(videoFile));
 
@@ -213,9 +213,7 @@ test.describe("file type detection", () => {
       "isom MP4 (video: avc1.42001e, 320x180; audio: mp4a.40.2, 48000 Hz, 2 ch; 2.000 s)"
     );
     await expect(page.locator("#peDetailsTerm")).toHaveText("MP4 details");
-    await expect(page.locator(".videoPreview video")).toBeVisible();
-    await expect(page.locator(".videoPreview source")).toHaveAttribute("type", "video/mp4");
-    await expect(page.locator(".videoPreview source")).toHaveAttribute("src", /blob:/);
+    await expect(page.locator(".videoPreview video")).toHaveCount(0);
   });
 
   void test("shows unknown binary type when no probe matches", async ({ page }) => {

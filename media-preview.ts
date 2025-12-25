@@ -13,6 +13,13 @@ export interface PreviewContext {
   typeLabel: string;
 }
 
+export type CanPlayTypeFn = (mimeType: string) => string;
+
+export type MediaCanPlayType = {
+  video: CanPlayTypeFn;
+  audio: CanPlayTypeFn;
+};
+
 const labelContains = (label: string, needle: string): boolean =>
   label.indexOf(needle) !== -1;
 
@@ -74,5 +81,28 @@ export const choosePreviewForFile = (context: PreviewContext): PreviewCandidate 
   const videoMime = deriveVideoMimeFromLabel(typeLabel) || (looksLikeVideo(mimeType, typeLabel) ? "video/mp4" : null);
   if (videoMime) return { kind: "video", mimeType: videoMime };
   if (looksLikeAudio(mimeType, typeLabel)) return { kind: "audio", mimeType: mimeType || "audio/mpeg" };
+  return null;
+};
+
+const isPlayableByCanPlayType = (
+  candidate: PreviewCandidate,
+  canPlayType: MediaCanPlayType
+): boolean => {
+  if (candidate.kind === "image") return true;
+  if (!candidate.mimeType) return true;
+  const probe = candidate.kind === "video" ? canPlayType.video : canPlayType.audio;
+  const result = probe(candidate.mimeType);
+  return typeof result === "string" && result.length > 0;
+};
+
+export const choosePlayablePreviewCandidate = (
+  primary: PreviewCandidate | null,
+  derivedFromLabel: PreviewCandidate | null,
+  canPlayType: MediaCanPlayType | null
+): PreviewCandidate | null => {
+  if (!primary) return null;
+  if (!canPlayType) return primary;
+  if (isPlayableByCanPlayType(primary, canPlayType)) return primary;
+  if (derivedFromLabel && isPlayableByCanPlayType(derivedFromLabel, canPlayType)) return derivedFromLabel;
   return null;
 };

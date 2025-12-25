@@ -1,7 +1,11 @@
 "use strict";
 
 import { escapeHtml } from "../html-utils.js";
-import { choosePreviewForFile } from "../media-preview.js";
+import {
+  choosePlayablePreviewCandidate,
+  choosePreviewForFile,
+  type MediaCanPlayType
+} from "../media-preview.js";
 
 type PreviewRender = {
   kind: "image" | "video" | "audio";
@@ -14,14 +18,36 @@ type PreviewContext = {
   setPreviewUrl: (url: string | null) => void;
 };
 
+const buildCanPlayTypeProbes = (): MediaCanPlayType | null => {
+  if (typeof document === "undefined") return null;
+  const videoProbe = document.createElement("video");
+  const audioProbe = document.createElement("audio");
+  return {
+    video: mimeType => videoProbe.canPlayType(mimeType),
+    audio: mimeType => audioProbe.canPlayType(mimeType)
+  };
+};
+
 const buildPreviewHtml = ({ file, typeLabel, setPreviewUrl }: PreviewContext): PreviewRender | null => {
   setPreviewUrl(null);
   if (!file) return null;
-  const previewCandidate = choosePreviewForFile({
+  const context = {
     fileName: file.name || "",
     mimeType: file.type || "",
     typeLabel: typeLabel || ""
-  });
+  };
+  const primaryCandidate = choosePreviewForFile(context);
+  if (!primaryCandidate) return null;
+  const labelDerivedCandidate =
+    context.mimeType && context.mimeType.length > 0
+      ? choosePreviewForFile({ ...context, mimeType: "" })
+      : null;
+  const canPlayType = buildCanPlayTypeProbes();
+  const previewCandidate = choosePlayablePreviewCandidate(
+    primaryCandidate,
+    labelDerivedCandidate,
+    canPlayType
+  );
   if (!previewCandidate) return null;
   const previewUrl = URL.createObjectURL(file);
   setPreviewUrl(previewUrl);
@@ -70,37 +96,25 @@ const attachPreviewGuards = (
     const videoElement = container.querySelector(".videoPreview video") as HTMLVideoElement | null;
     if (videoElement) {
       const removePreview = (): void => {
+        if (!videoElement.isConnected) return;
         const wrapper = videoElement.closest(".videoPreview") as HTMLElement | null;
         if (wrapper?.parentElement) wrapper.parentElement.removeChild(wrapper);
         setStatusMessage("Preview not shown: browser cannot play this video format inline.");
       };
-      const onSuccess = (): void => {
-        videoElement.removeEventListener("error", removePreview);
-        videoElement.removeEventListener("stalled", removePreview);
-        videoElement.removeEventListener("abort", removePreview);
-      };
-      videoElement.addEventListener("loadedmetadata", onSuccess, { once: true });
-      ["error", "stalled", "abort"].forEach(eventName => {
-        videoElement.addEventListener(eventName, removePreview, { once: true });
-      });
+      videoElement.addEventListener("error", removePreview, { once: true });
+      const sourceElement = videoElement.querySelector("source") as HTMLSourceElement | null;
+      sourceElement?.addEventListener("error", removePreview, { once: true });
     }
   } else if (preview.kind === "audio") {
     const audioElement = container.querySelector(".audioPreview audio") as HTMLAudioElement | null;
     if (audioElement) {
       const removePreview = (): void => {
+        if (!audioElement.isConnected) return;
         const wrapper = audioElement.closest(".audioPreview") as HTMLElement | null;
         if (wrapper?.parentElement) wrapper.parentElement.removeChild(wrapper);
         setStatusMessage("Preview not shown: browser cannot play this audio format inline.");
       };
-      const onSuccess = (): void => {
-        audioElement.removeEventListener("error", removePreview);
-        audioElement.removeEventListener("stalled", removePreview);
-        audioElement.removeEventListener("abort", removePreview);
-      };
-      audioElement.addEventListener("loadedmetadata", onSuccess, { once: true });
-      ["error", "stalled", "abort"].forEach(eventName => {
-        audioElement.addEventListener(eventName, removePreview, { once: true });
-      });
+      audioElement.addEventListener("error", removePreview, { once: true });
     }
   }
 };

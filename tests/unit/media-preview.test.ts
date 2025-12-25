@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { choosePreviewForFile } from "../../media-preview.js";
+import { choosePlayablePreviewCandidate, choosePreviewForFile } from "../../media-preview.js";
 
 void test("prefers video preview when MIME type is already video", () => {
   const preview = choosePreviewForFile({
@@ -63,4 +63,54 @@ void test("maps transport streams to a video preview type", () => {
   });
 
   assert.deepEqual(preview, { kind: "video", mimeType: "video/mp2t" });
+});
+
+void test("choosePlayablePreviewCandidate falls back to label-derived video MIME", () => {
+  const primary = choosePreviewForFile({
+    fileName: "mislabeled.mpg",
+    mimeType: "video/mpeg",
+    typeLabel: "MP4/QuickTime container (ISO-BMFF)"
+  });
+  const derived = choosePreviewForFile({
+    fileName: "mislabeled.mpg",
+    mimeType: "",
+    typeLabel: "MP4/QuickTime container (ISO-BMFF)"
+  });
+
+  const chosen = choosePlayablePreviewCandidate(primary, derived, {
+    video: mimeType => (mimeType === "video/mp4" ? "maybe" : ""),
+    audio: () => ""
+  });
+
+  assert.deepEqual(chosen, { kind: "video", mimeType: "video/mp4" });
+});
+
+void test("choosePlayablePreviewCandidate hides MPEG Program Stream previews when unsupported", () => {
+  const primary = choosePreviewForFile({
+    fileName: "clip.mpg",
+    mimeType: "video/mpeg",
+    typeLabel: "MPEG Program Stream (MPG)"
+  });
+  const derived = choosePreviewForFile({
+    fileName: "clip.mpg",
+    mimeType: "",
+    typeLabel: "MPEG Program Stream (MPG)"
+  });
+
+  const chosen = choosePlayablePreviewCandidate(primary, derived, {
+    video: () => "",
+    audio: () => ""
+  });
+
+  assert.equal(chosen, null);
+});
+
+void test("choosePlayablePreviewCandidate returns primary when playability checks are missing", () => {
+  const primary = choosePreviewForFile({
+    fileName: "clip.mpg",
+    mimeType: "video/mpeg",
+    typeLabel: "MPEG Program Stream (MPG)"
+  });
+
+  assert.deepEqual(choosePlayablePreviewCandidate(primary, null, null), primary);
 });
