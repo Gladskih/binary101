@@ -12,6 +12,7 @@ import {
   renderJpeg,
   renderMp3,
   renderMp4,
+  renderPcap,
   renderPdf,
   renderPe,
   renderMz,
@@ -43,6 +44,7 @@ import { createZipFile } from "../fixtures/zip-fixtures.js";
 import { createWebmWithCues } from "../fixtures/webm-cues-fixtures.js";
 import { createAniFile, createAviFile, createWavFile } from "../fixtures/riff-sample-files.js";
 import { createSqliteFile } from "../fixtures/sqlite-fixtures.js";
+import { createPcapFile } from "../fixtures/pcap-fixtures.js";
 
 class TestDomParser extends XmlDomParser {
   override parseFromString(text: string, type: string) {
@@ -115,6 +117,10 @@ void test("renderers produce readable HTML output", async () => {
   assert.match(mp4Html, /MP4/);
   assert.match(mp4Html, /Tracks/);
   assert.match(mp4Html, /Top-level boxes/);
+
+  const pcap = await parseOnly(createPcapFile(), "pcap");
+  const pcapHtml = renderPcap(pcap);
+  assert.match(pcapHtml, /PCAP/i);
 
   const avi = await parseOnly(createAviFile(), "avi");
   const aviHtml = renderAvi(avi);

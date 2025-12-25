@@ -32,6 +32,7 @@ import { isShortMp3WithoutSecond, isValidatedMp3 } from "./mp3-labels.js";
 import { probeMzFormat } from "./mz-probe.js";
 import { hasSqliteSignature, parseSqlite } from "./sqlite/index.js";
 import { parseMpegPs } from "./mpegps/index.js";
+import { parsePcap } from "./pcap/index.js";
 
 const parseForUi = async (file: File): Promise<ParseForUiResult> => {
   const dv = new DataView(
@@ -123,6 +124,13 @@ const parseForUi = async (file: File): Promise<ParseForUiResult> => {
   if (dv.byteLength >= 16 && readAsfGuid(dv, 0) === ASF_HEADER_GUID) {
     const asf = await parseAsf(file);
     if (asf) return { analyzer: "asf", parsed: asf };
+  }
+  if (dv.byteLength >= 4) {
+    const sig = dv.getUint32(0, false);
+    if (sig === 0xa1b2c3d4 || sig === 0xa1b23c4d || sig === 0xd4c3b2a1 || sig === 0x4d3cb2a1) {
+      const pcap = await parsePcap(file);
+      if (pcap) return { analyzer: "pcap", parsed: pcap };
+    }
   }
   if (dv.byteLength >= 12) {
     const ftyp = dv.getUint32(4, false);

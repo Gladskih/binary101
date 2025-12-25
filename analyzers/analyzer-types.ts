@@ -24,6 +24,7 @@ import type { AniParseResult } from "./ani/types.js";
 import type { SqliteParseResult } from "./sqlite/types.js";
 import type { AsfParseResult } from "./asf/types.js";
 import type { MpegPsParseResult } from "./mpegps/types.js";
+import type { PcapParseResult } from "./pcap/types.js";
 
 export type AnalyzerName =
   | "lnk"
@@ -46,6 +47,7 @@ export type AnalyzerName =
   | "flac"
   | "mp4"
   | "mpegps"
+  | "pcap"
   | "wav"
   | "avi"
   | "ani"
@@ -72,6 +74,7 @@ type AnalyzerParseMap = {
   flac: FlacParseResult;
   mp4: Mp4ParseResult;
   mpegps: MpegPsParseResult;
+  pcap: PcapParseResult;
   wav: WavParseResult;
   avi: AviParseResult;
   ani: AniParseResult;

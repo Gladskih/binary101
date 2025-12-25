@@ -25,7 +25,8 @@ import {
   renderAni,
   renderSqlite,
   renderAsf,
-  renderMpegPs
+  renderMpegPs,
+  renderPcap
 } from "../renderers/index.js";
 import type { PreviewRender } from "./preview.js";
 
@@ -205,6 +206,14 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
       preview?.kind === "video" || preview?.kind === "audio" ? preview.html : "";
     ctx.valueElement.innerHTML = mediaPreviewHtml + renderAsf(result.parsed);
     ctx.attachGuards(preview);
+    return;
+  }
+
+  if (result.analyzer === "pcap") {
+    ctx.termElement.textContent = "PCAP details";
+    ctx.termElement.hidden = false;
+    ctx.valueElement.hidden = false;
+    ctx.valueElement.innerHTML = renderPcap(result.parsed);
     return;
   }
 
