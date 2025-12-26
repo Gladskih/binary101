@@ -15,6 +15,7 @@ export { renderFlac } from "./flac/index.js";
 export { renderMp4 } from "./mp4/index.js";
 export { renderSevenZip } from "./sevenz/index.js";
 export { renderTar } from "./tar/index.js";
+export { renderGzip } from "./gzip/index.js";
 export { renderRar } from "./rar/index.js";
 export { renderMz } from "./mz/index.js";
 export { renderLnk } from "./lnk/index.js";

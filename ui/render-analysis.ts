@@ -17,6 +17,7 @@ import {
   renderMp4,
   renderSevenZip,
   renderTar,
+  renderGzip,
   renderRar,
   renderMz,
   renderLnk,
@@ -116,6 +117,14 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
     ctx.termElement.hidden = false;
     ctx.valueElement.hidden = false;
     ctx.valueElement.innerHTML = renderTar(result.parsed);
+    return;
+  }
+
+  if (result.analyzer === "gzip") {
+    ctx.termElement.textContent = "gzip details";
+    ctx.termElement.hidden = false;
+    ctx.valueElement.hidden = false;
+    ctx.valueElement.innerHTML = renderGzip(result.parsed);
     return;
   }
 

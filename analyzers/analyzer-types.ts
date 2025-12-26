@@ -14,6 +14,7 @@ import type { Mp3ParseResult } from "./mp3/types.js";
 import type { FlacParseResult } from "./flac/types.js";
 import type { SevenZipParseResult } from "./sevenz/index.js";
 import type { TarParseResult } from "./tar/types.js";
+import type { GzipParseResult } from "./gzip/types.js";
 import type { RarParseResult } from "./rar/index.js";
 import type { MzParseResult } from "./mz/index.js";
 import type { LnkParseResult } from "./lnk/types.js";
@@ -37,6 +38,7 @@ export type AnalyzerName =
   | "sevenZip"
   | "rar"
   | "tar"
+  | "gzip"
   | "zip"
   | "pdf"
   | "png"
@@ -64,6 +66,7 @@ type AnalyzerParseMap = {
   sevenZip: SevenZipParseResult;
   rar: RarParseResult;
   tar: TarParseResult;
+  gzip: GzipParseResult;
   zip: ZipParseResult;
   pdf: PdfParseResult;
   png: PngParseResult;

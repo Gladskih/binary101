@@ -33,6 +33,7 @@ import { probeMzFormat } from "./mz-probe.js";
 import { hasSqliteSignature, parseSqlite } from "./sqlite/index.js";
 import { parseMpegPs } from "./mpegps/index.js";
 import { parsePcap } from "./pcap/index.js";
+import { parseGzip } from "./gzip/index.js";
 
 const parseForUi = async (file: File): Promise<ParseForUiResult> => {
   const dv = new DataView(
@@ -78,6 +79,10 @@ const parseForUi = async (file: File): Promise<ParseForUiResult> => {
   if (hasTarSignature(dv)) {
     const tar = await parseTar(file);
     if (tar?.isTar) return { analyzer: "tar", parsed: tar };
+  }
+  if (dv.byteLength >= 2 && dv.getUint16(0, true) === 0x8b1f) {
+    const gzip = await parseGzip(file);
+    if (gzip) return { analyzer: "gzip", parsed: gzip };
   }
   if (dv.byteLength >= 4 && dv.getUint32(0, true) === 0x04034b50) {
     const zip = await parseZip(file);

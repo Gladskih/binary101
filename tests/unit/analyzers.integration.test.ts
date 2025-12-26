@@ -30,6 +30,7 @@ import { createAniFile, createAviFile, createWavFile } from "../fixtures/riff-sa
 import { createSampleAsfFile } from "../fixtures/asf-fixtures.js";
 import { createMpegPsFile } from "../fixtures/mpegps-fixtures.js";
 import { createPcapFile } from "../fixtures/pcap-fixtures.js";
+import { createGzipFile } from "../fixtures/gzip-fixtures.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import type { FlacMetadataBlockDetail } from "../../analyzers/flac/types.js";
@@ -235,6 +236,13 @@ void test("parseForUi parses TAR headers", async () => {
     assert.strictEqual(tar.isTar, true);
     assert.ok(Array.isArray(tar.entries));
     assert.ok(tar.entries[0]);
+  });
+});
+
+void test("parseForUi parses gzip headers", async () => {
+  await assertParsed(createGzipFile({ payload: textEncoder.encode("hello") }), "gzip", gzip => {
+    assert.strictEqual(gzip.header.compressionMethod, 8);
+    assert.ok(gzip.stream.compressedSize != null);
   });
 });
 
