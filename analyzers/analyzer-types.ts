@@ -7,6 +7,7 @@ import type { Fb2ParseResult } from "./fb2/index.js";
 import type { GifParseResult } from "./gif/types.js";
 import type { ZipParseResult } from "./zip/index.js";
 import type { PngParseResult } from "./png/types.js";
+import type { BmpParseResult } from "./bmp/types.js";
 import type { PdfParseResult } from "./pdf/types.js";
 import type { WebpParseResult } from "./webp/types.js";
 import type { WebmParseResult } from "./webm/types.js";
@@ -42,6 +43,7 @@ export type AnalyzerName =
   | "zip"
   | "pdf"
   | "png"
+  | "bmp"
   | "jpeg"
   | "webp"
   | "webm"
@@ -70,6 +72,7 @@ type AnalyzerParseMap = {
   zip: ZipParseResult;
   pdf: PdfParseResult;
   png: PngParseResult;
+  bmp: BmpParseResult;
   jpeg: JpegParseResult;
   webp: WebpParseResult;
   webm: WebmParseResult;

@@ -6,6 +6,7 @@ import { DOMParser as XmlDomParser } from "@xmldom/xmldom";
 import { createElfFile } from "../fixtures/elf-sample-file.js";
 import { createFb2File, createPdfFile } from "../fixtures/document-sample-files.js";
 import {
+  createBmpFile,
   createGifFile,
   createJpegFile,
   createPngFile,
@@ -83,7 +84,8 @@ void test("detectBinaryType recognizes common binary formats", async () => {
     detectBinaryType(
       new MockFile(textEncoder.encode("plain text sample"), "note.txt", "text/plain")
     ),
-    detectBinaryType(createFlacFile())
+    detectBinaryType(createFlacFile()),
+    detectBinaryType(createBmpFile())
   ]);
 
   assert.match(detections[0], /^PNG image/);
@@ -101,8 +103,8 @@ void test("detectBinaryType recognizes common binary formats", async () => {
   assert.match(detections[12], /animated cursor/i);
   assert.strictEqual(detections[13], "Text file");
   assert.match(detections[14], /^FLAC audio/);
+  assert.match(detections[15], /^BMP bitmap image/);
 });
-
 void test("detectBinaryType distinguishes DOS MZ executables from PE", async () => {
   const mzFile = createDosMzExe();
   const detection = await detectBinaryType(mzFile);
@@ -114,7 +116,6 @@ void test("detectBinaryType distinguishes DOS MZ executables from PE", async () 
   assert.ok(Array.isArray(parsed.parsed.stubStrings));
   assert.ok(parsed.parsed.stubStrings.length >= 1);
 });
-
 void test("parseForUi parses and reports PNG layout", async () => {
   await assertParsed(createPngFile(), "png", png => {
     assert.strictEqual(png.ihdr.width, 1);
@@ -122,7 +123,14 @@ void test("parseForUi parses and reports PNG layout", async () => {
     assert.ok(Array.isArray(png.chunks));
   });
 });
-
+void test("parseForUi parses BMP header fields", async () => {
+  await assertParsed(createBmpFile(), "bmp", bmp => {
+    assert.strictEqual(bmp.isBmp, true);
+    assert.strictEqual(bmp.dibHeader.width, 1);
+    assert.strictEqual(bmp.dibHeader.height, 1);
+    assert.strictEqual(bmp.dibHeader.bitsPerPixel, 24);
+  });
+});
 void test("parseForUi parses PE headers and sections", async () => {
   await assertParsed(createPeFile(), "pe", pe => {
     assert.strictEqual(pe.coff.NumberOfSections, 1);
@@ -130,7 +138,6 @@ void test("parseForUi parses PE headers and sections", async () => {
     assert.ok(pe.coverage);
   });
 });
-
 void test("parseForUi parses GIF frames and trailer", async () => {
   await assertParsed(createGifFile(), "gif", gif => {
     assert.ok(gif.hasTrailer);
@@ -138,27 +145,23 @@ void test("parseForUi parses GIF frames and trailer", async () => {
     assert.strictEqual(gif.frames.length >= 0, true);
   });
 });
-
 void test("parseForUi parses JPEG metadata", async () => {
   await assertParsed(createJpegFile(), "jpeg", jpeg => {
     assert.ok(Array.isArray(jpeg.segments));
     assert.ok(jpeg.segmentCount >= 1);
   });
 });
-
 void test("parseForUi parses WebP chunks", async () => {
   await assertParsed(createWebpFile(), "webp", webp => {
     assert.ok(Array.isArray(webp.chunks));
   });
 });
-
 void test("parseForUi parses WAV audio", async () => {
   await assertParsed(createWavFile(), "wav", wav => {
     assert.strictEqual(wav.format?.channels, 1);
     assert.ok(wav.data?.durationSeconds);
   });
 });
-
 void test("parseForUi parses AVI headers and streams", async () => {
   await assertParsed(createAviFile(), "avi", avi => {
     assert.strictEqual(avi.mainHeader?.width, 320);
@@ -166,21 +169,18 @@ void test("parseForUi parses AVI headers and streams", async () => {
     assert.strictEqual(avi.streams[0]?.header?.type, "vids");
   });
 });
-
 void test("parseForUi parses ASF headers and streams", async () => {
   await assertParsed(createSampleAsfFile(), "asf", asf => {
     assert.strictEqual(asf.streams.length, 2);
     assert.ok(asf.contentDescription?.title);
   });
 });
-
 void test("parseForUi parses ANI metadata", async () => {
   await assertParsed(createAniFile(), "ani", ani => {
     assert.strictEqual(ani.header?.frameCount, 2);
     assert.ok(ani.frames >= 2);
   });
 });
-
 void test("parseForUi parses FB2 XML", async () => {
   await assertParsed(createFb2File(), "fb2", fb2 => {
     assert.ok(fb2.title);

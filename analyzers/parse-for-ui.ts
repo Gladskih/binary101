@@ -7,6 +7,7 @@ import { parseFb2 } from "./fb2/index.js";
 import { isGifSignature, parseGif } from "./gif/index.js";
 import { parseZip } from "./zip/index.js";
 import { parsePng } from "./png/index.js";
+import { parseBmp } from "./bmp/index.js";
 import { parsePdf } from "./pdf/index.js";
 import { parseWebp } from "./webp/index.js";
 import { parseWebm } from "./webm/index.js";
@@ -106,6 +107,10 @@ const parseForUi = async (file: File): Promise<ParseForUiResult> => {
   if (dv.byteLength >= 2 && dv.getUint16(0, false) === 0xffd8) {
     const jpeg = await parseJpeg(file);
     if (jpeg) return { analyzer: "jpeg", parsed: jpeg };
+  }
+  if (dv.byteLength >= 2 && dv.getUint16(0, false) === 0x424d) {
+    const bmp = await parseBmp(file);
+    if (bmp) return { analyzer: "bmp", parsed: bmp };
   }
   if (dv.byteLength >= 12) {
     const riff = dv.getUint32(0, false);

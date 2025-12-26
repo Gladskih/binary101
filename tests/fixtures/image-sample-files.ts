@@ -32,6 +32,13 @@ export const createWebpFile = () =>
     "image/webp"
   );
 
+export const createBmpFile = () =>
+  new MockFile(
+    fromBase64("Qk06AAAAAAAAADYAAAAoAAAAAQAAAAEAAAABABgAAAAAAAQAAAATCwAAEwsAAAAAAAAAAAAAAAD/AA=="),
+    "sample.bmp",
+    "image/bmp"
+  );
+
 export const createPngWithIhdr = () =>
   new MockFile(
     fromBase64("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAB7GkOtAAAADUlEQVR42mNk+M9QDwADaQH4UNIAMwAAAABJRU5ErkJggg=="),

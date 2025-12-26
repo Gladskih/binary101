@@ -7,6 +7,7 @@ import {
   renderElf,
   renderGif,
   renderPng,
+  renderBmp,
   renderPdf,
   renderZip,
   renderWebp,
@@ -148,6 +149,14 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
     ctx.termElement.hidden = false;
     ctx.valueElement.hidden = false;
     ctx.valueElement.innerHTML = imagePreviewHtml + renderPng(result.parsed);
+    return;
+  }
+
+  if (result.analyzer === "bmp") {
+    ctx.termElement.textContent = "BMP details";
+    ctx.termElement.hidden = false;
+    ctx.valueElement.hidden = false;
+    ctx.valueElement.innerHTML = imagePreviewHtml + renderBmp(result.parsed);
     return;
   }
 

@@ -2,7 +2,13 @@ import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { createFb2File, createPdfFile } from "../fixtures/document-sample-files.js";
 import { createElfFile } from "../fixtures/elf-sample-file.js";
-import { createGifFile, createJpegFile, createPngFile, createWebpFile } from "../fixtures/image-sample-files.js";
+import {
+  createBmpFile,
+  createGifFile,
+  createJpegFile,
+  createPngFile,
+  createWebpFile
+} from "../fixtures/image-sample-files.js";
 import { createLnkFile } from "../fixtures/lnk-sample-file.js";
 import { createMp3File } from "../fixtures/audio-sample-files.js";
 import { createMp4File } from "../fixtures/mp4-fixtures.js";
@@ -75,6 +81,13 @@ test.describe("file type detection", () => {
       expectedKind: "WebP image",
       term: "WebP details",
       detailText: "Chunks"
+    },
+    {
+      name: "BMP",
+      file: createBmpFile,
+      expectedKind: "BMP bitmap image",
+      term: "BMP details",
+      detailText: "BMP structure"
     },
     {
       name: "FictionBook (FB2)",
