@@ -49,8 +49,10 @@ void test("parseGzip parses gzip header fields and trailer", async () => {
 
   assert.strictEqual(parsed.trailer.crc32, crc32(payload));
   assert.strictEqual(parsed.trailer.isize, payload.length);
-  assert.strictEqual(parsed.stream.compressedOffset > 0, true);
-  assert.strictEqual(parsed.stream.compressedSize > 0, true);
+  assert.ok(parsed.stream.compressedOffset != null);
+  assert.ok(parsed.stream.compressedOffset > 0);
+  assert.ok(parsed.stream.compressedSize != null);
+  assert.ok(parsed.stream.compressedSize > 0);
 });
 
 void test("parseGzip returns null for non-gzip signatures", async () => {

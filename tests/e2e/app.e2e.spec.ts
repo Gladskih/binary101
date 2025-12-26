@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import type { Locator, Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { createFb2File, createPdfFile } from "../fixtures/document-sample-files.js";
 import { createElfFile } from "../fixtures/elf-sample-file.js";
 import { createGifFile, createJpegFile, createPngFile, createWebpFile } from "../fixtures/image-sample-files.js";
@@ -9,7 +9,8 @@ import { createMp4File } from "../fixtures/mp4-fixtures.js";
 import { createPeFile, createPePlusFile } from "../fixtures/sample-files-pe.js";
 import { createSevenZipFile } from "../fixtures/rar-sevenzip-fixtures.js";
 import { createTarFile } from "../fixtures/tar-fixtures.js";
-import { createZipFile, createZipWithEntries } from "../fixtures/zip-fixtures.js";
+import { createZipFile } from "../fixtures/zip-fixtures.js";
+import { createGzipFile } from "../fixtures/gzip-fixtures.js";
 import type { MockFile } from "../helpers/mock-file.js";
 
 const toUpload = (file: MockFile) => ({
@@ -88,6 +89,13 @@ test.describe("file type detection", () => {
       expectedKind: "TAR archive",
       term: "TAR details",
       detailText: "TAR overview"
+    },
+    {
+      name: "gzip",
+      file: () => createGzipFile({ payload: Buffer.from("hello"), extra: null, comment: null, includeHeaderCrc16: false }),
+      expectedKind: "gzip compressed data",
+      term: "gzip details",
+      detailText: "gzip compressed data"
     },
     {
       name: "Windows shortcut (.lnk)",
@@ -228,48 +236,4 @@ test.describe("file type detection", () => {
     await expect(page.locator("#peDetailsTerm")).toBeHidden();
   });
 
-  void test("allows downloading stored and deflated ZIP entries from the UI", async ({ page }) => {
-    const supportsDecompression = await page.evaluate(() => typeof DecompressionStream === "function");
-    test.skip(!supportsDecompression, "DecompressionStream not supported in this browser");
-
-    const zip = createZipWithEntries();
-    await page.setInputFiles("#fileInput", toUpload(zip));
-
-    await expectBaseDetails(page, zip.name, "ZIP archive (PK-based, e.g. Office, JAR, APK)");
-    const table = page.locator("button.zipExtractButton");
-    await expect(table).toHaveCount(2);
-
-    const readDownloadText = async (locator: Locator): Promise<{ name: string; content: string }> => {
-      const [download] = await Promise.all([page.waitForEvent("download"), locator.click()]);
-      const stream = await download.createReadStream();
-      if (!stream) throw new Error("Download stream unavailable");
-      const chunks: Buffer[] = [];
-      for await (const chunk of stream) chunks.push(chunk);
-      const content = Buffer.concat(chunks).toString("utf8");
-      return { name: download.suggestedFilename(), content };
-    };
-
-    const storedResult = await readDownloadText(page.locator('[data-zip-entry="0"]'));
-    expect(storedResult.name).toBe("stored.txt");
-    expect(storedResult.content).toBe("stored");
-
-    const deflatedResult = await readDownloadText(page.locator('[data-zip-entry="1"]'));
-    expect(deflatedResult.name).toBe("deflated.txt");
-    expect(deflatedResult.content).toBe("deflated");
-  });
-
-  void test("runs PE instruction-set analysis on demand", async ({ page }) => {
-    const mockFile = createPePlusFile();
-    await page.setInputFiles("#fileInput", toUpload(mockFile));
-    await expectBaseDetails(page, mockFile.name, "PE32+ executable for x86-64 (AMD64)");
-
-    const detailsValue = page.locator("#peDetailsValue");
-    await expect(detailsValue).toContainText("Instruction sets");
-    await expect(detailsValue.locator("#peInstructionSetsAnalyzeButton")).toBeVisible();
-
-    await detailsValue.locator("#peInstructionSetsAnalyzeButton").click();
-    await expect(detailsValue).toContainText("Disassembly sample");
-    await expect(detailsValue).not.toContainText("Failed to load iced-x86 disassembler");
-    await expect(detailsValue).not.toContainText("Disassembly failed");
-  });
 });

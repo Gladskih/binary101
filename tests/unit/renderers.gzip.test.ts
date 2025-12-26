@@ -16,6 +16,7 @@ void test("renderGzip renders header and trailer summary", async () => {
   assert.match(html, /gzip/i);
   assert.match(html, /Header/i);
   assert.match(html, /Trailer/i);
+  assert.match(html, /data-gzip-action="decompress"/);
 });
 
 void test("renderGzip omits optional sections when fields are absent", async () => {

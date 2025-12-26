@@ -85,7 +85,11 @@ export function renderGzip(parsed: GzipParseResult | null | unknown): string {
   out.push(dd("File truncated", safe(stream.truncatedFile ? "Yes" : "No")));
   out.push("</dl>");
 
+  out.push("<h4>Actions</h4>");
+  out.push(
+    `<button type="button" class="tableButton gzipDecompressButton" data-gzip-action="decompress">Decompress</button>`
+  );
+
   out.push(renderIssues(data.issues));
   return out.join("");
 }
-

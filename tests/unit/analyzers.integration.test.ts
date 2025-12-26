@@ -1,5 +1,4 @@
 "use strict";
-
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { detectBinaryType, parseForUi } from "../../analyzers/index.js";
@@ -34,7 +33,6 @@ import { createGzipFile } from "../fixtures/gzip-fixtures.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import type { FlacMetadataBlockDetail } from "../../analyzers/flac/types.js";
-
 const textEncoder = new TextEncoder();
 class TestDomParser extends XmlDomParser {
   override parseFromString(text: string, type: string) {

@@ -1,5 +1,4 @@
 "use strict";
-
 import type {
   GzipExtraFieldSummary,
   GzipHeader,
@@ -8,17 +7,14 @@ import type {
   GzipStreamLayout,
   GzipTrailer
 } from "./types.js";
-
 const BASE_HEADER_SIZE = 10;
 const TRAILER_SIZE = 8;
 const MAX_ISSUES = 200;
 const MAX_HEADER_SCAN_BYTES = 1024 * 1024;
-
 const describeCompressionMethod = (method: number): string | null => {
   if (method === 8) return "Deflate";
   return null;
 };
-
 const OS_NAMES: Record<number, string> = {
   0: "FAT filesystem (MS-DOS, OS/2, NT/Win32)",
   1: "Amiga",
@@ -36,14 +32,12 @@ const OS_NAMES: Record<number, string> = {
   13: "Acorn RISCOS",
   255: "Unknown"
 };
-
 const describeOs = (os: number): string | null => OS_NAMES[os] || null;
 
 const readUint16le = (bytes: Uint8Array, offset: number): number | null => {
   if (offset + 2 > bytes.length) return null;
   return (bytes[offset] ?? 0) | ((bytes[offset + 1] ?? 0) << 8);
 };
-
 const readUint32le = (bytes: Uint8Array, offset: number): number | null => {
   if (offset + 4 > bytes.length) return null;
   return (
@@ -280,7 +274,11 @@ export const parseGzip = async (file: File): Promise<GzipParseResult | null> => 
     }
   }
 
-  if (header.headerBytesTotal != null && stream.trailerOffset != null && stream.trailerOffset >= header.headerBytesTotal) {
+  if (
+    header.headerBytesTotal != null &&
+    stream.trailerOffset != null &&
+    stream.trailerOffset >= header.headerBytesTotal
+  ) {
     stream.compressedOffset = header.headerBytesTotal;
     stream.compressedSize = stream.trailerOffset - header.headerBytesTotal;
   } else if (header.headerBytesTotal != null && file.size >= header.headerBytesTotal + TRAILER_SIZE) {

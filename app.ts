@@ -5,6 +5,7 @@ import { renderAnalysisIntoUi as renderParsedResult } from "./ui/render-analysis
 import { attachPreviewGuards, buildPreviewHtml } from "./ui/preview.js";
 import { computeAndDisplayHash, copyHashToClipboard, resetHashDisplay } from "./ui/hash-controls.js";
 import { createZipEntryClickHandler } from "./ui/zip-actions.js";
+import { createGzipClickHandler } from "./ui/gzip-actions.js";
 import { createPeDisassemblyController } from "./ui/pe-disassembly.js";
 import { createElfDisassemblyController } from "./ui/elf-disassembly.js";
 const getElement = (id: string) => document.getElementById(id)!;
@@ -52,15 +53,12 @@ const setPreviewUrl = (url: string | null): void => {
 const setStatusMessage = (message: string | null | undefined): void => {
   statusMessageElement.textContent = message || "";
 };
-
 const clearStatusMessage = () => {
   statusMessageElement.textContent = "";
 };
-
 const clearPreviewUrl = (): void => {
   setPreviewUrl(null);
 };
-
 const renderResult = (result: ParseForUiResult): void => {
   renderParsedResult(result, {
     buildPreview: () =>
@@ -70,25 +68,26 @@ const renderResult = (result: ParseForUiResult): void => {
     valueElement: peDetailsValueElement
   });
 };
-
 const peDisassembly = createPeDisassemblyController({
   getCurrentFile: () => currentFile,
   getCurrentParseResult: () => currentParseResult,
   renderResult
 });
-
 const elfDisassembly = createElfDisassemblyController({
   getCurrentFile: () => currentFile,
   getCurrentParseResult: () => currentParseResult,
   renderResult
 });
-
 const zipClickHandler = createZipEntryClickHandler({
   getParseResult: () => currentParseResult,
   getFile: () => currentFile,
   setStatusMessage
 });
-
+const gzipClickHandler = createGzipClickHandler({
+  getParseResult: () => currentParseResult,
+  getFile: () => currentFile,
+  setStatusMessage
+});
 peDetailsValueElement.addEventListener("click", event => {
   const targetNode = event.target as Node | null;
   const targetElement = targetNode instanceof Element ? targetNode : targetNode?.parentElement ?? null;
@@ -129,6 +128,7 @@ peDetailsValueElement.addEventListener("click", event => {
     return;
   }
 
+  void gzipClickHandler(event);
   void zipClickHandler(event);
 });
 
