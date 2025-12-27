@@ -9,6 +9,7 @@ import {
   createBmp16BitBitfieldsFile,
   createBmp8BitPaletteFile,
   createBmpFile,
+  createBmpV5SrgbFile,
   createTruncatedBmpFile
 } from "../fixtures/bmp-fixtures.js";
 
@@ -45,3 +46,9 @@ void test("renderBmp renders warnings for truncated inputs", async () => {
   assert.match(html, /truncated/i);
 });
 
+void test("renderBmp renders option chips for enumerated BMP fields", async () => {
+  const bmp = await parseBmp(createBmpV5SrgbFile());
+  assert.ok(bmp);
+  const html = renderBmp(bmp);
+  assert.match(html, /optionsRow/);
+});

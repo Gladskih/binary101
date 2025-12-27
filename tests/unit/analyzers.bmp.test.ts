@@ -9,6 +9,10 @@ import {
   createBmp8BitPaletteFile,
   createBmpCoreHeaderFile,
   createBmpFile,
+  createBmpOs2InfoHeader2File,
+  createBmpV5EmbeddedProfileFile,
+  createBmpV5LinkedProfileFile,
+  createBmpV5SrgbFile,
   createBmpWithPixelOffsetPastEof,
   createTruncatedBmpFile
 } from "../fixtures/bmp-fixtures.js";
@@ -41,6 +45,16 @@ void test("parseBmp parses BITMAPCOREHEADER variant", async () => {
   assert.strictEqual(bmp.fileHeader.pixelArrayOffset, 26);
 });
 
+void test("parseBmp parses BITMAPINFOHEADER2 (OS/2 2.x) without misreading extra fields as masks", async () => {
+  const bmp = expectDefined(await parseBmp(createBmpOs2InfoHeader2File()));
+  assert.strictEqual(bmp.dibHeader.headerSize, 64);
+  assert.strictEqual(bmp.dibHeader.headerKind, "BITMAPINFOHEADER2");
+  assert.strictEqual(bmp.dibHeader.width, 1);
+  assert.strictEqual(bmp.dibHeader.height, 1);
+  assert.strictEqual(bmp.dibHeader.bitsPerPixel, 24);
+  assert.strictEqual(bmp.dibHeader.masks, null);
+});
+
 void test("parseBmp parses palette metadata for indexed BMPs", async () => {
   const bmp = expectDefined(await parseBmp(createBmp8BitPaletteFile()));
   assert.strictEqual(bmp.dibHeader.bitsPerPixel, 8);
@@ -70,3 +84,25 @@ void test("parseBmp reports pixel array offsets past EOF", async () => {
   assert.ok(bmp.issues.some(issue => issue.toLowerCase().includes("pixel array")));
 });
 
+void test("parseBmp parses BITMAPV5HEADER color space metadata", async () => {
+  const bmp = expectDefined(await parseBmp(createBmpV5SrgbFile()));
+  const dib = (bmp as unknown as { dibHeader: Record<string, unknown> }).dibHeader;
+  assert.strictEqual(dib["headerSize"], 124);
+  assert.strictEqual(dib["colorSpaceType"], 0x73524742);
+  assert.strictEqual(dib["intent"], 4);
+});
+
+void test("parseBmp decodes PROFILE_LINKED filenames in BITMAPV5HEADER", async () => {
+  const bmp = expectDefined(await parseBmp(createBmpV5LinkedProfileFile()));
+  const dib = (bmp as unknown as { dibHeader: Record<string, unknown> }).dibHeader;
+  const profile = dib["profile"] as { fileName?: string } | null;
+  assert.ok(profile);
+  assert.strictEqual(profile?.fileName, "sRGB.icc");
+});
+
+void test("parseBmp detects embedded ICC profile signatures for PROFILE_EMBEDDED", async () => {
+  const bmp = expectDefined(await parseBmp(createBmpV5EmbeddedProfileFile()));
+  assert.ok(bmp.dibHeader.profile);
+  assert.strictEqual(bmp.dibHeader.profile.kind, "embedded");
+  assert.strictEqual(bmp.dibHeader.profile.embedded?.signature, "acsp");
+});

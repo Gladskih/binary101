@@ -23,6 +23,32 @@ export type BmpBitmasks = {
   alpha: BmpBitmaskChannel | null;
 };
 
+export type BmpCieXyz = {
+  x: number | null;
+  y: number | null;
+  z: number | null;
+};
+
+export type BmpCieXyzTriple = {
+  red: BmpCieXyz;
+  green: BmpCieXyz;
+  blue: BmpCieXyz;
+};
+
+export type BmpEmbeddedProfile = {
+  signature: string | null;
+};
+
+export type BmpProfileInfo = {
+  kind: "linked" | "embedded" | "unknown";
+  offsetFromHeader: number;
+  fileOffset: number;
+  size: number;
+  truncated: boolean;
+  fileName: string | null;
+  embedded: BmpEmbeddedProfile | null;
+};
+
 export type BmpDibHeader = {
   headerSize: number | null;
   headerKind: string | null;
@@ -40,6 +66,18 @@ export type BmpDibHeader = {
   colorsUsed: number | null;
   importantColors: number | null;
   masks: BmpBitmasks | null;
+  colorSpaceType: number | null;
+  colorSpaceTypeName: string | null;
+  endpoints: BmpCieXyzTriple | null;
+  gammaRed: number | null;
+  gammaGreen: number | null;
+  gammaBlue: number | null;
+  intent: number | null;
+  intentName: string | null;
+  profileDataOffset: number | null;
+  profileSize: number | null;
+  profile: BmpProfileInfo | null;
+  reserved: number | null;
   truncated: boolean;
 };
 
@@ -71,4 +109,3 @@ export type BmpParseResult = {
   pixelArray: BmpPixelArraySummary | null;
   issues: string[];
 };
-

@@ -28,7 +28,7 @@ void test("bmp parsing helpers describe known and unknown headers/compression", 
   assert.strictEqual(describeDibKind(40), "BITMAPINFOHEADER");
   assert.strictEqual(describeDibKind(108), "BITMAPV4HEADER");
   assert.strictEqual(describeDibKind(124), "BITMAPV5HEADER");
-  assert.strictEqual(describeDibKind(64), "DIB (64 bytes)");
+  assert.strictEqual(describeDibKind(64), "BITMAPINFOHEADER2");
   assert.strictEqual(describeDibKind(16), "Core DIB (16 bytes)");
   assert.strictEqual(describeDibKind(null), null);
 
@@ -66,4 +66,3 @@ void test("bmp parsing helpers compute row stride and recognize uncompressed lay
   assert.strictEqual(isUncompressedLayout(6), true);
   assert.strictEqual(isUncompressedLayout(1), false);
 });
-

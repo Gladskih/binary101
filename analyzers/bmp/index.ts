@@ -1,27 +1,15 @@
 "use strict";
-import type {
-  BmpBitmaskChannel,
-  BmpBitmasks,
-  BmpDibHeader,
-  BmpFileHeader,
-  BmpPaletteSummary,
-  BmpParseResult,
-  BmpPixelArraySummary
-} from "./types.js";
+import type { BmpFileHeader, BmpPaletteSummary, BmpParseResult, BmpPixelArraySummary } from "./types.js";
 import {
   FILE_HEADER_SIZE,
   MAX_PREFIX_BYTES,
-  buildBitmaskChannel,
   computeRowStride,
-  describeCompression,
-  describeDibKind,
   isUncompressedLayout,
-  readInt32le,
+  parseDibHeader,
   readUint16le,
   readUint32le
 } from "./bmp-parsing.js";
 
-const DIB_SIZE_OFFSET = FILE_HEADER_SIZE;
 const MAX_ISSUES = 200;
 export const parseBmp = async (file: File): Promise<BmpParseResult | null> => {
   const issues: string[] = [];
@@ -33,12 +21,12 @@ export const parseBmp = async (file: File): Promise<BmpParseResult | null> => {
   if (bytes.length < 2) return null;
   if (bytes[0] !== 0x42 || bytes[1] !== 0x4d) return null;
 
-  const ensureBytes = async (required: number): Promise<boolean> => {
-    if (required > MAX_PREFIX_BYTES) return false;
-    if (required <= bytes.length) return true;
+  const ensureBytes = async (required: number): Promise<Uint8Array> => {
+    if (required > MAX_PREFIX_BYTES) return bytes;
+    if (required <= bytes.length) return bytes;
     const end = Math.min(file.size, required);
     bytes = new Uint8Array(await file.slice(0, end).arrayBuffer());
-    return bytes.length >= required;
+    return bytes;
   };
 
   const fileHeader: BmpFileHeader = {
@@ -72,129 +60,7 @@ export const parseBmp = async (file: File): Promise<BmpParseResult | null> => {
     pushIssue(`bfReserved2 is non-zero (${fileHeader.reserved2}).`);
   }
 
-  let dibSize = readUint32le(bytes, DIB_SIZE_OFFSET);
-  if (dibSize == null) {
-    if (file.size >= FILE_HEADER_SIZE) {
-      pushIssue("DIB header size field missing (file truncated).");
-    }
-    dibSize = null;
-  } else if (dibSize < 12) {
-    pushIssue(`DIB header size is too small (${dibSize}).`);
-  } else if (dibSize > MAX_PREFIX_BYTES) {
-    pushIssue(`DIB header size is unusually large (${dibSize}); refusing to read full prefix.`);
-  }
-
-  const dibEnd = dibSize != null ? FILE_HEADER_SIZE + dibSize : FILE_HEADER_SIZE;
-  const haveDibBytes = dibSize != null ? await ensureBytes(dibEnd) : false;
-  const dibTruncated = dibSize != null ? !haveDibBytes || dibEnd > file.size : true;
-  if (dibSize != null && dibEnd > file.size) {
-    pushIssue("DIB header truncated (not enough bytes in file).");
-  }
-
-  let width: number | null = null;
-  let height: number | null = null;
-  let signedHeight: number | null = null;
-  let topDown: boolean | null = null;
-  let planes: number | null = null;
-  let bitsPerPixel: number | null = null;
-  let compression: number | null = null;
-  let imageSize: number | null = null;
-  let xPixelsPerMeter: number | null = null;
-  let yPixelsPerMeter: number | null = null;
-  let colorsUsed: number | null = null;
-  let importantColors: number | null = null;
-  let masks: BmpBitmasks | null = null;
-  let masksAfterHeaderBytes = 0;
-
-  if (dibSize != null && dibSize >= 12 && dibSize < 40) {
-    width = readUint16le(bytes, 18);
-    height = readUint16le(bytes, 20);
-    signedHeight = height;
-    topDown = false;
-    planes = readUint16le(bytes, 22);
-    bitsPerPixel = readUint16le(bytes, 24);
-  } else if (dibSize != null && dibSize >= 40) {
-    width = readInt32le(bytes, 18);
-    signedHeight = readInt32le(bytes, 22);
-    if (signedHeight != null) {
-      topDown = signedHeight < 0;
-      height = Math.abs(signedHeight);
-    }
-    planes = readUint16le(bytes, 26);
-    bitsPerPixel = readUint16le(bytes, 28);
-    compression = readUint32le(bytes, 30);
-    imageSize = readUint32le(bytes, 34);
-    xPixelsPerMeter = readInt32le(bytes, 38);
-    yPixelsPerMeter = readInt32le(bytes, 42);
-    colorsUsed = readUint32le(bytes, 46);
-    importantColors = readUint32le(bytes, 50);
-
-    if (dibSize >= 52) {
-      const redMask = readUint32le(bytes, 54);
-      const greenMask = readUint32le(bytes, 58);
-      const blueMask = readUint32le(bytes, 62);
-      const alphaMask = dibSize >= 56 ? readUint32le(bytes, 66) : null;
-      masks = {
-        red: buildBitmaskChannel(redMask),
-        green: buildBitmaskChannel(greenMask),
-        blue: buildBitmaskChannel(blueMask),
-        alpha: buildBitmaskChannel(alphaMask)
-      };
-    } else if (dibSize === 40 && (compression === 3 || compression === 6)) {
-      masksAfterHeaderBytes = compression === 6 ? 16 : 12;
-      const required = FILE_HEADER_SIZE + dibSize + masksAfterHeaderBytes;
-      await ensureBytes(required);
-      const redMask = readUint32le(bytes, 54);
-      const greenMask = readUint32le(bytes, 58);
-      const blueMask = readUint32le(bytes, 62);
-      const alphaMask = compression === 6 ? readUint32le(bytes, 66) : null;
-      masks = {
-        red: buildBitmaskChannel(redMask),
-        green: buildBitmaskChannel(greenMask),
-        blue: buildBitmaskChannel(blueMask),
-        alpha: buildBitmaskChannel(alphaMask)
-      };
-      if (required > file.size) pushIssue("BITFIELDS masks truncated (file ends early).");
-    }
-  }
-
-  if (width != null && width <= 0) pushIssue(`Width is non-positive (${width}).`);
-  if (height != null && height <= 0) pushIssue(`Height is non-positive (${height}).`);
-  if (planes != null && planes !== 1) pushIssue(`Planes value is unusual (${planes}); expected 1.`);
-
-  if (masks) {
-    const channels: Array<[string, BmpBitmaskChannel | null]> = [
-      ["Red", masks.red],
-      ["Green", masks.green],
-      ["Blue", masks.blue],
-      ["Alpha", masks.alpha]
-    ];
-    for (const [name, channel] of channels) {
-      if (channel && !channel.contiguous) {
-        pushIssue(`${name} mask is not a contiguous run of bits (mask=${channel.mask.toString(16)}).`);
-      }
-    }
-  }
-
-  const dibHeader: BmpDibHeader = {
-    headerSize: dibSize,
-    headerKind: describeDibKind(dibSize),
-    width,
-    height,
-    signedHeight,
-    topDown,
-    planes,
-    bitsPerPixel,
-    compression,
-    compressionName: describeCompression(compression),
-    imageSize,
-    xPixelsPerMeter,
-    yPixelsPerMeter,
-    colorsUsed,
-    importantColors,
-    masks,
-    truncated: dibTruncated
-  };
+  const { dibSize, dibHeader, masksAfterHeaderBytes } = await parseDibHeader(bytes, file.size, ensureBytes, pushIssue);
 
   const pixelArrayOffset = fileHeader.pixelArrayOffset;
   const minPixelOffset = FILE_HEADER_SIZE + (dibSize ?? 0) + masksAfterHeaderBytes;
@@ -215,6 +81,8 @@ export const parseBmp = async (file: File): Promise<BmpParseResult | null> => {
   const paletteOffset = minPixelOffset;
   const paletteEntrySize = dibSize != null && dibSize < 40 ? 3 : 4;
   const paletteExpectedEntries = (() => {
+    const bitsPerPixel = dibHeader.bitsPerPixel;
+    const colorsUsed = dibHeader.colorsUsed;
     if (bitsPerPixel == null) return null;
     if (bitsPerPixel > 0 && bitsPerPixel <= 8) {
       const maxEntries = 1 << bitsPerPixel;
@@ -255,10 +123,13 @@ export const parseBmp = async (file: File): Promise<BmpParseResult | null> => {
     };
   }
 
-  const rowStride = computeRowStride(width, bitsPerPixel);
+  const rowStride = computeRowStride(dibHeader.width, dibHeader.bitsPerPixel);
   const expectedPixelBytes =
-    isUncompressedLayout(compression) && rowStride != null && height != null && height > 0
-      ? BigInt(rowStride) * BigInt(height)
+    isUncompressedLayout(dibHeader.compression) &&
+    rowStride != null &&
+    dibHeader.height != null &&
+    dibHeader.height > 0
+      ? BigInt(rowStride) * BigInt(dibHeader.height)
       : null;
 
   const pixelAvailableBytes =
@@ -286,6 +157,58 @@ export const parseBmp = async (file: File): Promise<BmpParseResult | null> => {
     truncated: pixelTruncated,
     extraBytes
   };
+
+  const decodeLatin1 = (chunk: Uint8Array): string => {
+    let out = "";
+    for (const byte of chunk) out += String.fromCharCode(byte);
+    return out;
+  };
+
+  const profileOffsetFromHeader = dibHeader.profileDataOffset;
+  const profileSize = dibHeader.profileSize;
+  const profileCSType = dibHeader.colorSpaceType;
+  const wantsProfile =
+    profileCSType === 0x4c494e4b || profileCSType === 0x4d424544;
+  if (wantsProfile && profileOffsetFromHeader != null && profileSize != null) {
+    const fileOffset = FILE_HEADER_SIZE + profileOffsetFromHeader;
+    const truncated = fileOffset + profileSize > file.size;
+    if (profileOffsetFromHeader < (dibSize ?? 0)) {
+      pushIssue("Profile data offset overlaps the BITMAPV5HEADER.");
+    }
+    if (fileOffset > file.size) {
+      pushIssue("Profile data offset points past EOF.");
+    }
+    if (profileSize === 0) pushIssue("Profile size is zero (PROFILE_LINKED/EMBEDDED expects data).");
+
+    const profileEnd = Math.min(file.size, fileOffset + profileSize);
+    let fileName: string | null = null;
+    let embeddedSignature: string | null = null;
+    if (profileSize > 0 && fileOffset < file.size) {
+      const readSize = Math.min(profileSize, 256);
+      const chunk = new Uint8Array(await file.slice(fileOffset, fileOffset + readSize).arrayBuffer());
+      if (profileCSType === 0x4c494e4b) {
+        const raw = decodeLatin1(chunk);
+        const nul = raw.indexOf("\u0000");
+        fileName = (nul === -1 ? raw : raw.slice(0, nul)).trim();
+      } else if (profileCSType === 0x4d424544 && chunk.length >= 40) {
+        embeddedSignature = chunk[36] != null && chunk[37] != null && chunk[38] != null && chunk[39] != null
+          ? decodeLatin1(chunk.slice(36, 40))
+          : null;
+      }
+    }
+
+    dibHeader.profile = {
+      kind: profileCSType === 0x4c494e4b ? "linked" : "embedded",
+      offsetFromHeader: profileOffsetFromHeader,
+      fileOffset,
+      size: profileSize,
+      truncated,
+      fileName: fileName || null,
+      embedded: embeddedSignature ? { signature: embeddedSignature } : null
+    };
+    if (truncated) pushIssue("ICC profile data truncated (file ends early).");
+    if (profileEnd < minPixelOffset) pushIssue("ICC profile data overlaps headers/palette region.");
+  }
 
   return {
     isBmp: true,
