@@ -30,6 +30,7 @@ import type { AviParseResult } from "./avi/types.js";
 import type { AniParseResult } from "./ani/types.js";
 import type { FlacParseResult } from "./flac/types.js";
 import { buildSqliteLabel, parseSqlite } from "./sqlite/index.js";
+import { isTgaFileName } from "./tga/index.js";
 
 const buildWavLabel = (wav: WavParseResult | null): string | null => {
   if (!wav) return null;
@@ -237,7 +238,6 @@ const detectBinaryType = async (file: File): Promise<string> => {
   }
 
   if (hasZipEocdSignature(dv)) return "ZIP archive";
-
   const mzKind = await probeMzFormat(file, dv);
   if (mzKind) {
     if (mzKind.kind === "pe") {
@@ -255,9 +255,39 @@ const detectBinaryType = async (file: File): Promise<string> => {
     if (mzKind.kind === "le" || mzKind.kind === "lx") return "Linear executable (LX/LE)";
     return "MS-DOS MZ executable";
   }
+  const maybeTga = await (async (): Promise<string | null> => {
+    const likelyByName = isTgaFileName(file.name);
+    let hasFooterSignature = false;
+    if (!likelyByName && file.size >= 26) {
+      const tail = new DataView(await file.slice(file.size - 26, file.size).arrayBuffer());
+      let signature = "";
+      for (let index = 0; index < 16 && 8 + index < tail.byteLength; index += 1) {
+        const byteValue = tail.getUint8(8 + index);
+        if (byteValue === 0) break;
+        signature += String.fromCharCode(byteValue);
+      }
+      hasFooterSignature =
+        signature === "TRUEVISION-XFILE" &&
+        tail.byteLength >= 26 &&
+        tail.getUint8(24) === 0x2e &&
+        tail.getUint8(25) === 0x00;
+    }
+    if (!likelyByName && !hasFooterSignature) return null;
+    if (dv.byteLength < 18) return "TGA image";
+    const imageType = dv.getUint8(2);
+    const width = dv.getUint16(12, true);
+    const height = dv.getUint16(14, true);
+    const pixelDepth = dv.getUint8(16);
+    const parts: string[] = [];
+    if (width && height) parts.push(`${width}x${height}`);
+    if (pixelDepth) parts.push(`${pixelDepth}-bit`);
+    if (imageType === 9 || imageType === 10 || imageType === 11) parts.push("RLE");
+    const suffix = parts.length ? ` (${parts.join(", ")})` : "";
+    return `TGA image${suffix}`;
+  })();
+  if (maybeTga) return maybeTga;
   const text = probeTextLike(dv);
   if (text) return text;
-
   const mp3ProbeView = new DataView(dv.buffer, dv.byteOffset, Math.min(dv.byteLength, 16384));
   if (probeMp3(mp3ProbeView)) {
     const mp3: Mp3ParseResult = await parseMp3(file);
@@ -266,5 +296,4 @@ const detectBinaryType = async (file: File): Promise<string> => {
   }
   return "Unknown binary type";
 };
-
 export { detectBinaryType };

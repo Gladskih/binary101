@@ -8,6 +8,7 @@ export { renderGif } from "./gif/index.js";
 export { renderZip } from "./zip/index.js";
 export { renderPng } from "./png/index.js";
 export { renderBmp } from "./bmp/index.js";
+export { renderTga } from "./tga/index.js";
 export { renderPdf } from "./pdf/index.js";
 export { renderWebp } from "./webp/index.js";
 export { renderWebm } from "./webm/index.js";

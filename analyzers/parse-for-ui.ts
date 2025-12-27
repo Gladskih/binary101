@@ -8,6 +8,7 @@ import { isGifSignature, parseGif } from "./gif/index.js";
 import { parseZip } from "./zip/index.js";
 import { parsePng } from "./png/index.js";
 import { parseBmp } from "./bmp/index.js";
+import { isTgaFileName, parseTga } from "./tga/index.js";
 import { parsePdf } from "./pdf/index.js";
 import { parseWebp } from "./webp/index.js";
 import { parseWebm } from "./webm/index.js";
@@ -111,6 +112,22 @@ const parseForUi = async (file: File): Promise<ParseForUiResult> => {
   if (dv.byteLength >= 2 && dv.getUint16(0, false) === 0x424d) {
     const bmp = await parseBmp(file);
     if (bmp) return { analyzer: "bmp", parsed: bmp };
+  }
+  const hasTgaFooterSignature = await (async (): Promise<boolean> => {
+    if (file.size < 26) return false;
+    const tail = new DataView(await file.slice(file.size - 26, file.size).arrayBuffer());
+    if (tail.byteLength < 26) return false;
+    let signature = "";
+    for (let index = 0; index < 16 && 8 + index < tail.byteLength; index += 1) {
+      const byteValue = tail.getUint8(8 + index);
+      if (byteValue === 0) break;
+      signature += String.fromCharCode(byteValue);
+    }
+    return signature === "TRUEVISION-XFILE" && tail.getUint8(24) === 0x2e && tail.getUint8(25) === 0x00;
+  })();
+  if (isTgaFileName(file.name) || hasTgaFooterSignature) {
+    const tga = await parseTga(file);
+    if (tga) return { analyzer: "tga", parsed: tga };
   }
   if (dv.byteLength >= 12) {
     const riff = dv.getUint32(0, false);

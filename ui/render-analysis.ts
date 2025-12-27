@@ -8,6 +8,7 @@ import {
   renderGif,
   renderPng,
   renderBmp,
+  renderTga,
   renderPdf,
   renderZip,
   renderWebp,
@@ -157,6 +158,14 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
     ctx.termElement.hidden = false;
     ctx.valueElement.hidden = false;
     ctx.valueElement.innerHTML = imagePreviewHtml + renderBmp(result.parsed);
+    return;
+  }
+
+  if (result.analyzer === "tga") {
+    ctx.termElement.textContent = "TGA details";
+    ctx.termElement.hidden = false;
+    ctx.valueElement.hidden = false;
+    ctx.valueElement.innerHTML = renderTga(result.parsed);
     return;
   }
 

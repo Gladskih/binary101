@@ -39,6 +39,13 @@ export const createBmpFile = () =>
     "image/bmp"
   );
 
+export const createTgaFile = () =>
+  new MockFile(
+    fromBase64("AAACAAAAAAAAAAAAAQABABgAAAD/"),
+    "sample.tga",
+    "image/x-tga"
+  );
+
 export const createPngWithIhdr = () =>
   new MockFile(
     fromBase64("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAB7GkOtAAAADUlEQVR42mNk+M9QDwADaQH4UNIAMwAAAABJRU5ErkJggg=="),

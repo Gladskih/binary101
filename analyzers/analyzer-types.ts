@@ -8,6 +8,7 @@ import type { GifParseResult } from "./gif/types.js";
 import type { ZipParseResult } from "./zip/index.js";
 import type { PngParseResult } from "./png/types.js";
 import type { BmpParseResult } from "./bmp/types.js";
+import type { TgaParseResult } from "./tga/types.js";
 import type { PdfParseResult } from "./pdf/types.js";
 import type { WebpParseResult } from "./webp/types.js";
 import type { WebmParseResult } from "./webm/types.js";
@@ -44,6 +45,7 @@ export type AnalyzerName =
   | "pdf"
   | "png"
   | "bmp"
+  | "tga"
   | "jpeg"
   | "webp"
   | "webm"
@@ -73,6 +75,7 @@ type AnalyzerParseMap = {
   pdf: PdfParseResult;
   png: PngParseResult;
   bmp: BmpParseResult;
+  tga: TgaParseResult;
   jpeg: JpegParseResult;
   webp: WebpParseResult;
   webm: WebmParseResult;

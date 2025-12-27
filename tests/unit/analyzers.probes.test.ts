@@ -96,7 +96,37 @@ void test("probeByMagic detects image and document headers", () => {
       bytes: [...ascii("RIFF"), 0x00, 0x00, 0x00, 0x00, ...ascii("WEBP")],
       label: "WebP image"
     },
-    { bytes: [0x00, 0x00, 0x01, 0x00], label: "ICO/CUR icon image" },
+    {
+      bytes: [
+        0x00,
+        0x00,
+        0x01,
+        0x00,
+        0x01,
+        0x00,
+        0x01,
+        0x01,
+        0x00,
+        0x00,
+        0x01,
+        0x00,
+        0x20,
+        0x00,
+        0x04,
+        0x00,
+        0x00,
+        0x00,
+        0x16,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00
+      ],
+      label: "ICO/CUR icon image"
+    },
     {
       bytes: [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1],
       label: "Microsoft Compound File (e.g. Office 97-2003, MSI)"

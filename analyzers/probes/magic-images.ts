@@ -53,13 +53,24 @@ const detectWebp = (dv: DataView): ProbeResult => {
 };
 
 const detectIco = (dv: DataView): ProbeResult => {
-  if (dv.byteLength < 4) return null;
+  if (dv.byteLength < 6) return null;
   const reserved = dv.getUint16(0, true);
   const type = dv.getUint16(2, true);
-  if (reserved === 0 && (type === 1 || type === 2)) {
-    return "ICO/CUR icon image";
-  }
-  return null;
+  const count = dv.getUint16(4, true);
+  if (reserved !== 0 || (type !== 1 && type !== 2) || count === 0) return null;
+
+  const directoryBytes = 6 + count * 16;
+  if (directoryBytes > dv.byteLength) return null;
+
+  const firstEntryOffset = 6;
+  const entryReserved = dv.getUint8(firstEntryOffset + 3);
+  const bytesInRes = dv.getUint32(firstEntryOffset + 8, true);
+  const imageOffset = dv.getUint32(firstEntryOffset + 12, true);
+  if (entryReserved !== 0 || bytesInRes === 0) return null;
+  if (imageOffset < directoryBytes || imageOffset >= dv.byteLength) return null;
+  if (imageOffset + bytesInRes > dv.byteLength) return null;
+
+  return "ICO/CUR icon image";
 };
 
 const detectAni = (dv: DataView): ProbeResult => {

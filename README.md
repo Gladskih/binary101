@@ -6,7 +6,7 @@ Binary101 is a browser-based static web application for inspecting binary files.
 This project draws inspiration from tools like [regex101](https://regex101.com/), the Linux `file` utility, and VirusTotal. It is designed for educational and research purposes, helping users understand binary file structures and formats. By analyzing files locally in the browser, it ensures privacy and security, making it suitable for sensitive files.
 
 ## Features
-- **Deep analyzers**: Detailed views for PE/COFF (PE32/PE32+), MS-DOS MZ, ELF 32/64, PNG, BMP, JPEG, GIF, WebP (RIFF), WAV (RIFF), AVI (RIFF), ANI (RIFF), WebM/Matroska, MP4/QuickTime/3GP (ISO-BMFF), MPEG Program Stream (MPEG-PS), PCAP capture files, gzip compressed data, PDF, TAR, ZIP (DOCX/XLSX/PPTX/OpenXML), 7z, RAR v4/v5, MP3, FB2, SQLite, LNK, ASF (WMV/WMA).
+- **Deep analyzers**: Detailed views for PE/COFF (PE32/PE32+), MS-DOS MZ, ELF 32/64, PNG, BMP, TGA, JPEG, GIF, WebP (RIFF), WAV (RIFF), AVI (RIFF), ANI (RIFF), WebM/Matroska, MP4/QuickTime/3GP (ISO-BMFF), MPEG Program Stream (MPEG-PS), PCAP capture files, gzip compressed data, PDF, TAR, ZIP (DOCX/XLSX/PPTX/OpenXML), 7z, RAR v4/v5, MP3, FB2, SQLite, LNK, ASF (WMV/WMA).
 - **Detected/labelled**: Mach-O (32/64/FAT), text/HTML/XML/SVG/JSON/RTF/shebang, gzip/bzip2/XZ/LZ4/Zstandard, CAB, ISO-9660, OGG/AIFF/MIDI/AMR/AC3/DTS, FLV, MPEG PS/TS, RealMedia, Java class, Android DEX, WebAssembly, Windows Help (HLP), PDB, PCAP/PCAP-NG, DjVu, Microsoft Compound File (DOC/XLS/PPT/MSI/CHM), APK/VSIX/JAR/WAR/EAR/JMOD/EPUB/XPS labels, HEIF/HEIC.
 - **Rendering**: previews for supported audio/video/image types.
 - **Hashing**: SHA-256 and SHA-512 computed in-browser.

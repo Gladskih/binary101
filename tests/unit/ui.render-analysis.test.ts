@@ -5,6 +5,7 @@ import { test } from "node:test";
 import type { ParseForUiResult } from "../../analyzers/index.js";
 import type { ElfParseResult } from "../../analyzers/elf/types.js";
 import type { BmpParseResult } from "../../analyzers/bmp/types.js";
+import type { TgaParseResult } from "../../analyzers/tga/types.js";
 import { renderAnalysisIntoUi } from "../../ui/render-analysis.js";
 
 void test("renderAnalysisIntoUi renders ELF output and updates visibility flags", () => {
@@ -116,4 +117,62 @@ void test("renderAnalysisIntoUi renders BMP output", () => {
   assert.equal(termElement.textContent, "BMP details");
   assert.equal(valueElement.hidden, false);
   assert.ok(valueElement.innerHTML.includes("BMP structure"));
+});
+
+void test("renderAnalysisIntoUi renders TGA output", () => {
+  const tga = {
+    isTga: true,
+    fileSize: 21,
+    version: "1.0",
+    header: {
+      idLength: 0,
+      colorMapType: 0,
+      colorMapTypeName: "No color map",
+      imageType: 2,
+      imageTypeName: "Truecolor (uncompressed)",
+      colorMapFirstEntryIndex: 0,
+      colorMapLength: 0,
+      colorMapEntryBits: 0,
+      xOrigin: 0,
+      yOrigin: 0,
+      width: 1,
+      height: 1,
+      pixelDepth: 24,
+      pixelSizeBytes: 3,
+      imageDescriptor: 0,
+      attributeBitsPerPixel: 0,
+      origin: "bottom-left",
+      reservedDescriptorBits: 0,
+      truncated: false
+    },
+    imageId: null,
+    colorMap: null,
+    imageData: {
+      offset: 18,
+      availableBytes: 3,
+      expectedDecodedBytes: 3n,
+      decodedBytesHint: "1 * 1 * 3 bytes/pixel",
+      truncated: false
+    },
+    footer: null,
+    extensionArea: null,
+    developerDirectory: null,
+    issues: []
+  } as unknown as TgaParseResult;
+  const result: ParseForUiResult = { analyzer: "tga", parsed: tga };
+
+  const termElement = { textContent: "", hidden: true } as unknown as HTMLElement;
+  const valueElement = { innerHTML: "", hidden: true } as unknown as HTMLElement;
+
+  renderAnalysisIntoUi(result, {
+    buildPreview: () => null,
+    attachGuards: () => {},
+    termElement,
+    valueElement
+  });
+
+  assert.equal(termElement.hidden, false);
+  assert.equal(termElement.textContent, "TGA details");
+  assert.equal(valueElement.hidden, false);
+  assert.ok(valueElement.innerHTML.includes("TGA structure"));
 });
