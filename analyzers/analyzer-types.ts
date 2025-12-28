@@ -28,6 +28,7 @@ import type { SqliteParseResult } from "./sqlite/types.js";
 import type { AsfParseResult } from "./asf/types.js";
 import type { MpegPsParseResult } from "./mpegps/types.js";
 import type { PcapParseResult } from "./pcap/types.js";
+import type { Iso9660ParseResult } from "./iso9660/types.js";
 
 export type AnalyzerName =
   | "lnk"
@@ -42,6 +43,7 @@ export type AnalyzerName =
   | "tar"
   | "gzip"
   | "zip"
+  | "iso9660"
   | "pdf"
   | "png"
   | "bmp"
@@ -72,6 +74,7 @@ type AnalyzerParseMap = {
   tar: TarParseResult;
   gzip: GzipParseResult;
   zip: ZipParseResult;
+  iso9660: Iso9660ParseResult;
   pdf: PdfParseResult;
   png: PngParseResult;
   bmp: BmpParseResult;

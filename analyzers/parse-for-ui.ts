@@ -17,6 +17,7 @@ import { parseFlac } from "./flac/index.js";
 import { hasSevenZipSignature, parseSevenZip } from "./sevenz/index.js";
 import { hasTarSignature, parseTar } from "./tar/index.js";
 import { hasRarSignature, parseRar } from "./rar/index.js";
+import { hasIso9660Signature, parseIso9660 } from "./iso9660/index.js";
 import { parseMz } from "./mz/index.js";
 import { hasShellLinkSignature, parseLnk } from "./lnk/index.js";
 import { parseMp4 } from "./mp4/index.js";
@@ -77,6 +78,10 @@ const parseForUi = async (file: File): Promise<ParseForUiResult> => {
   if (hasRarSignature(dv)) {
     const rar = await parseRar(file);
     if (rar?.isRar) return { analyzer: "rar", parsed: rar };
+  }
+  if (hasIso9660Signature(dv)) {
+    const iso = await parseIso9660(file);
+    if (iso) return { analyzer: "iso9660", parsed: iso };
   }
   if (hasTarSignature(dv)) {
     const tar = await parseTar(file);

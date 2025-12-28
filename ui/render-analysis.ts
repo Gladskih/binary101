@@ -21,6 +21,7 @@ import {
   renderTar,
   renderGzip,
   renderRar,
+  renderIso9660,
   renderMz,
   renderLnk,
   renderWav,
@@ -52,7 +53,6 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
     ctx.valueElement.innerHTML = renderPe(result.parsed);
     return;
   }
-
   if (result.analyzer === "mz") {
     ctx.termElement.textContent = "MS-DOS MZ details";
     ctx.termElement.hidden = false;
@@ -60,7 +60,6 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
     ctx.valueElement.innerHTML = renderMz(result.parsed);
     return;
   }
-
   if (result.analyzer === "elf") {
     ctx.termElement.textContent = "ELF details";
     ctx.termElement.hidden = false;
@@ -68,7 +67,6 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
     ctx.valueElement.innerHTML = renderElf(result.parsed);
     return;
   }
-
   if (result.analyzer === "jpeg") {
     ctx.termElement.textContent = "JPEG details";
     ctx.termElement.hidden = false;
@@ -83,7 +81,6 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
     ctx.valueElement.innerHTML = renderSqlite(result.parsed);
     return;
   }
-
   if (result.analyzer === "fb2") {
     ctx.termElement.textContent = "FB2 details";
     ctx.termElement.hidden = false;
@@ -113,7 +110,6 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
     ctx.valueElement.innerHTML = renderSevenZip(result.parsed);
     return;
   }
-
   if (result.analyzer === "tar") {
     ctx.termElement.textContent = "TAR details";
     ctx.termElement.hidden = false;
@@ -121,7 +117,13 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
     ctx.valueElement.innerHTML = renderTar(result.parsed);
     return;
   }
-
+  if (result.analyzer === "iso9660") {
+    ctx.termElement.textContent = "ISO-9660 details";
+    ctx.termElement.hidden = false;
+    ctx.valueElement.hidden = false;
+    ctx.valueElement.innerHTML = renderIso9660(result.parsed);
+    return;
+  }
   if (result.analyzer === "gzip") {
     ctx.termElement.textContent = "gzip details";
     ctx.termElement.hidden = false;
@@ -129,7 +131,6 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
     ctx.valueElement.innerHTML = renderGzip(result.parsed);
     return;
   }
-
   if (result.analyzer === "rar") {
     ctx.termElement.textContent = "RAR details";
     ctx.termElement.hidden = false;

@@ -6,7 +6,9 @@ import type { ParseForUiResult } from "../../analyzers/index.js";
 import type { ElfParseResult } from "../../analyzers/elf/types.js";
 import type { BmpParseResult } from "../../analyzers/bmp/types.js";
 import type { TgaParseResult } from "../../analyzers/tga/types.js";
+import { parseIso9660 } from "../../analyzers/iso9660/index.js";
 import { renderAnalysisIntoUi } from "../../ui/render-analysis.js";
+import { createIso9660PrimaryFile } from "../fixtures/iso9660-fixtures.js";
 
 void test("renderAnalysisIntoUi renders ELF output and updates visibility flags", () => {
   const elf = {
@@ -175,4 +177,26 @@ void test("renderAnalysisIntoUi renders TGA output", () => {
   assert.equal(termElement.textContent, "TGA details");
   assert.equal(valueElement.hidden, false);
   assert.ok(valueElement.innerHTML.includes("TGA structure"));
+});
+
+void test("renderAnalysisIntoUi renders ISO-9660 output", async () => {
+  const file = createIso9660PrimaryFile();
+  const iso = await parseIso9660(file);
+  assert.ok(iso);
+  const result: ParseForUiResult = { analyzer: "iso9660", parsed: iso };
+
+  const termElement = { textContent: "", hidden: true } as unknown as HTMLElement;
+  const valueElement = { innerHTML: "", hidden: true } as unknown as HTMLElement;
+
+  renderAnalysisIntoUi(result, {
+    buildPreview: () => null,
+    attachGuards: () => {},
+    termElement,
+    valueElement
+  });
+
+  assert.equal(termElement.hidden, false);
+  assert.equal(termElement.textContent, "ISO-9660 details");
+  assert.equal(valueElement.hidden, false);
+  assert.ok(valueElement.innerHTML.includes("ISO-9660 overview"));
 });

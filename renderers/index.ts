@@ -19,6 +19,7 @@ export { renderSevenZip } from "./sevenz/index.js";
 export { renderTar } from "./tar/index.js";
 export { renderGzip } from "./gzip/index.js";
 export { renderRar } from "./rar/index.js";
+export { renderIso9660 } from "./iso9660/index.js";
 export { renderMz } from "./mz/index.js";
 export { renderLnk } from "./lnk/index.js";
 export { renderWav } from "./wav/index.js";
