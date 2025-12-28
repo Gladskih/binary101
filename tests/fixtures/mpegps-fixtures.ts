@@ -95,3 +95,20 @@ export const createMpegPsFile = (): MockFile => {
   return new MockFile(bytes, "sample.mpg", "video/mpeg");
 };
 
+export const createMpegPsChunkBoundaryFile = (): MockFile => {
+  const chunkSize = 1024 * 1024;
+  const pack1 = createMpeg2PackHeader({ scrBase90k: 0, scrExt: 0, muxRate: 25200, stuffingLength: 0 });
+  const pack2 = createMpeg2PackHeader({ scrBase90k: 90000, scrExt: 0, muxRate: 25200, stuffingLength: 0 });
+  const pack3 = createMpeg2PackHeader({ scrBase90k: 180000, scrExt: 0, muxRate: 25200, stuffingLength: 0 });
+  const secondPackOffset = chunkSize + 0x38;
+  const thirdPackOffset = chunkSize * 2 + 0x38;
+  const endCodeOffset = thirdPackOffset + pack3.length;
+
+  const bytes = new Uint8Array(endCodeOffset + 4);
+  bytes.set(pack1, 0);
+  bytes.set(pack2, secondPackOffset);
+  bytes.set(pack3, thirdPackOffset);
+  bytes.set(new Uint8Array([0x00, 0x00, 0x01, 0xb9]), endCodeOffset);
+
+  return new MockFile(bytes, "chunk-boundary.mpg", "video/mpeg");
+};

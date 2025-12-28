@@ -68,12 +68,10 @@ export const parseProgramStreamMap = (
 
   const crcOffset = payload.length - 4;
   const crc32 =
-    crcOffset >= 0 && crcOffset + 4 <= payload.length
-      ? (((payload[crcOffset] ?? 0) << 24) |
-          ((payload[crcOffset + 1] ?? 0) << 16) |
-          ((payload[crcOffset + 2] ?? 0) << 8) |
-          (payload[crcOffset + 3] ?? 0)) >>> 0
-      : null;
+    (((payload[crcOffset] ?? 0) << 24) |
+      ((payload[crcOffset + 1] ?? 0) << 16) |
+      ((payload[crcOffset + 2] ?? 0) << 8) |
+      (payload[crcOffset + 3] ?? 0)) >>> 0;
 
   return {
     length,
@@ -85,4 +83,3 @@ export const parseProgramStreamMap = (
     crc32
   };
 };
-

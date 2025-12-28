@@ -67,12 +67,10 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
   };
   let offset = 0;
   let lastScrSeconds: number | null = null;
-
   while (offset + 4 <= file.size) {
     const ok = await ensureBytes(offset, 4);
     if (!ok) break;
-    const local = offset - reader.chunkBase;
-
+    let local = offset - reader.chunkBase;
     const b0 = reader.chunkBytes[local] ?? 0;
     const b1 = reader.chunkBytes[local + 1] ?? 0;
     const b2 = reader.chunkBytes[local + 2] ?? 0;
@@ -85,19 +83,17 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
       offset = next;
       continue;
     }
-
     const code = reader.chunkBytes[local + 3] ?? 0;
     const startCode = ((b0 << 24) | (b1 << 16) | (b2 << 8) | code) >>> 0;
-
     if (startCode === PACK_START_CODE) {
       const hdrOk = await ensureBytes(offset, 14);
       if (!hdrOk) {
         pushIssue(`Truncated pack header at ${formatOffsetHex(offset)}.`);
         break;
       }
+      local = offset - reader.chunkBase;
       const b4 = reader.chunkBytes[local + 4] ?? 0;
       state.packHeaders.totalCount += 1;
-
       if ((b4 & 0xc0) === 0x40) {
         state.packHeaders.mpeg2Count += 1;
         const parsed = parseMpeg2PackHeader(reader.chunkBytes, local, offset, pushIssue);
@@ -157,7 +153,6 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
         }
         continue;
       }
-
       state.packHeaders.invalidCount += 1;
       pushIssue(`Unknown pack header format byte ${formatByteHex(b4)} at ${formatOffsetHex(offset)}.`);
       const next = await findNextStartCode(offset + 4);
@@ -165,13 +160,13 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
       offset = next;
       continue;
     }
-
     if (startCode === SYSTEM_HEADER_START_CODE) {
       const okLen = await ensureBytes(offset, 6);
       if (!okLen) {
         pushIssue(`Truncated system header length at ${formatOffsetHex(offset)}.`);
         break;
       }
+      local = offset - reader.chunkBase;
       const headerLength = readUint16be(reader.chunkBytes, local + 4);
       const totalSize = 6 + headerLength;
       if (offset + totalSize > file.size) {
@@ -185,6 +180,7 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
         pushIssue(`Unable to read full system header at ${formatOffsetHex(offset)}.`);
         break;
       }
+      local = offset - reader.chunkBase;
       const payload = reader.chunkBytes.subarray(local + 6, local + 6 + headerLength);
       state.systemHeaders.totalCount += 1;
       state.systemHeaders.lengthTotal += headerLength;
@@ -205,6 +201,7 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
         pushIssue(`Truncated Program Stream Map length at ${formatOffsetHex(offset)}.`);
         break;
       }
+      local = offset - reader.chunkBase;
       const mapLength = readUint16be(reader.chunkBytes, local + 4);
       const totalSize = 6 + mapLength;
       if (offset + totalSize > file.size) {
@@ -218,6 +215,7 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
         pushIssue(`Unable to read full Program Stream Map at ${formatOffsetHex(offset)}.`);
         break;
       }
+      local = offset - reader.chunkBase;
       const payload = reader.chunkBytes.subarray(local + 6, local + 6 + mapLength);
       const parsed = parseProgramStreamMap(payload, pushIssue);
       state.programStreamMaps.totalCount += 1;
@@ -244,6 +242,7 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
       break;
     }
     const streamId = code;
+    local = offset - reader.chunkBase;
     const packetLength = readUint16be(reader.chunkBytes, local + 4);
     const stream = getOrCreateStream(state, streamId);
     state.pesTotalPackets += 1;
@@ -268,6 +267,7 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
 
     const headerOk = await ensureBytes(offset, Math.min(totalSize, 64));
     if (headerOk && packetLength >= 3) {
+      local = offset - reader.chunkBase;
       const flags0 = reader.chunkBytes[local + 6] ?? 0;
       const flags1 = reader.chunkBytes[local + 7] ?? 0;
       const headerDataLength = reader.chunkBytes[local + 8] ?? 0;
