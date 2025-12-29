@@ -7,6 +7,7 @@ export const ISO9660_DESCRIPTOR_BLOCK_SIZE = 2048;
 export const ISO9660_SYSTEM_AREA_BLOCKS = 16;
 
 const formatOffsetHex = (offset: number): string => toHex32(offset >>> 0, 8);
+const ECMA119_SPEC_URL = "https://ecma-international.org/publications-and-standards/standards/ecma-119/";
 
 export const readUint16Le = (bytes: Uint8Array, offset: number): number | null => {
   if (offset < 0 || offset + 2 > bytes.length) return null;
@@ -50,7 +51,9 @@ export const readBothEndianUint16 = (
   if (le == null || be == null) return null;
   if (le !== be) {
     pushIssue(
-      `${fieldName} stores mismatched LE (${le}) and BE (${be}) values at ${formatOffsetHex(absoluteBaseOffset + offset)}.`
+      `${fieldName} stores mismatched LE (${le}) and BE (${be}) values at ${formatOffsetHex(absoluteBaseOffset + offset)}. ` +
+        `Per ECMA-119 (ISO 9660) §8.2.4 (Both-byte orders), both halves should match; using LE. ` +
+        `Spec: ${ECMA119_SPEC_URL}`
     );
   }
   return le;
@@ -68,7 +71,9 @@ export const readBothEndianUint32 = (
   if (le == null || be == null) return null;
   if (le !== be) {
     pushIssue(
-      `${fieldName} stores mismatched LE (${le}) and BE (${be}) values at ${formatOffsetHex(absoluteBaseOffset + offset)}.`
+      `${fieldName} stores mismatched LE (${le}) and BE (${be}) values at ${formatOffsetHex(absoluteBaseOffset + offset)}. ` +
+        `Per ECMA-119 (ISO 9660) §8.3.4 (Both-byte orders), both halves should match; using LE. ` +
+        `Spec: ${ECMA119_SPEC_URL}`
     );
   }
   return le;
@@ -183,4 +188,3 @@ export const describeVolumeDescriptorType = (typeCode: number): string => {
       return `Unknown (${typeCode})`;
   }
 };
-
