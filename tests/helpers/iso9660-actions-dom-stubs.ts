@@ -12,6 +12,10 @@ export type AnchorStub = {
 export type Iso9660ActionsDomStubs = {
   getButton: () => HTMLButtonElement;
   getChild: () => Element;
+  getDirButton: () => HTMLButtonElement;
+  getDirChild: () => Element;
+  getDirContainer: () => Element;
+  getDirRow: () => { hidden: boolean };
   getAnchor: () => AnchorStub | null;
   getCreatedBlob: () => Blob | null;
   getMessages: () => Array<string | null | undefined>;
@@ -51,10 +55,26 @@ export const installIso9660ActionsDomStubs = (): Iso9660ActionsDomStubs => {
     }
 
     closest(selector: string): FakeElement | null {
-      if (selector !== "button.isoExtractButton") return null;
+      let wantedTag = "";
+      let wantedClass: string | null = null;
+      if (selector === "button.isoExtractButton") {
+        wantedTag = "button";
+        wantedClass = "isoExtractButton";
+      } else if (selector === "button.isoDirToggleButton") {
+        wantedTag = "button";
+        wantedClass = "isoDirToggleButton";
+      } else if (selector === "tr") {
+        wantedTag = "tr";
+        wantedClass = null;
+      } else {
+        return null;
+      }
       let current: FakeElement | null = this;
       while (current) {
-        if (current.tagName === "button" && current.classes.has("isoExtractButton")) {
+        if (
+          current.tagName === wantedTag &&
+          (wantedClass == null || current.classes.has(wantedClass))
+        ) {
           return current;
         }
         current = current.parent;
@@ -84,6 +104,27 @@ export const installIso9660ActionsDomStubs = (): Iso9660ActionsDomStubs => {
   globals["Element"] = FakeElement;
   globals["HTMLButtonElement"] = FakeButtonElement;
 
+  class FakeRowElement extends FakeElement {
+    hidden = true;
+
+    constructor() {
+      super("tr", null);
+    }
+  }
+
+  class FakeHtmlElement extends FakeElement {
+    innerHTML = "";
+    readonly attributes = new Map<string, string>();
+
+    getAttribute(name: string): string | null {
+      return this.attributes.get(name) ?? null;
+    }
+
+    setAttribute(name: string, value: string): void {
+      this.attributes.set(name, value);
+    }
+  }
+
   let anchor: AnchorStub | null = null;
   let createdBlob: Blob | null = null;
 
@@ -103,6 +144,10 @@ export const installIso9660ActionsDomStubs = (): Iso9660ActionsDomStubs => {
     }
   };
 
+  const dirRow = new FakeRowElement();
+  const dirContainer = new FakeHtmlElement("div", dirRow);
+  const dirContainerId = "isoDir-0";
+
   globals["document"] = {
     body,
     createElement(tagName: string) {
@@ -116,6 +161,9 @@ export const installIso9660ActionsDomStubs = (): Iso9660ActionsDomStubs => {
         }
       };
       return anchor;
+    },
+    getElementById(id: string) {
+      return id === dirContainerId ? dirContainer : null;
     }
   };
 
@@ -132,12 +180,28 @@ export const installIso9660ActionsDomStubs = (): Iso9660ActionsDomStubs => {
 
   const child = new FakeElement("span", button);
 
+  const dirButton = new FakeButtonElement();
+  dirButton.addClass("isoDirToggleButton");
+  dirButton.setAttribute("data-iso-action", "toggle-dir");
+  dirButton.setAttribute("data-iso-lba", "0");
+  dirButton.setAttribute("data-iso-size", "0");
+  dirButton.setAttribute("data-iso-path", "/");
+  dirButton.setAttribute("data-iso-depth", "0");
+  dirButton.setAttribute("data-iso-target", dirContainerId);
+  dirButton.textContent = "Expand";
+
+  const dirChild = new FakeElement("span", dirButton);
+
   const messages: Array<string | null | undefined> = [];
 
   return {
     getAnchor: () => anchor,
     getButton: () => button as unknown as HTMLButtonElement,
     getChild: () => child as unknown as Element,
+    getDirButton: () => dirButton as unknown as HTMLButtonElement,
+    getDirChild: () => dirChild as unknown as Element,
+    getDirContainer: () => dirContainer as unknown as Element,
+    getDirRow: () => dirRow as unknown as { hidden: boolean },
     getCreatedBlob: () => createdBlob,
     getMessages: () => messages,
     restore: () => {
@@ -161,4 +225,3 @@ export const installIso9660ActionsDomStubs = (): Iso9660ActionsDomStubs => {
     }
   };
 };
-

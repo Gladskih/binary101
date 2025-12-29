@@ -194,6 +194,7 @@ export const createIso9660PrimaryFile = (): MockFile => {
   const rootDirLba = 21;
   const subDirLba = 22;
   const fileLba = 23;
+  const subFileLba = 24;
 
   const pathTable = new Uint8Array(10);
   pathTable[0] = 1;
@@ -230,7 +231,8 @@ export const createIso9660PrimaryFile = (): MockFile => {
   cursor = 0;
   for (const record of [
     createDotDirectoryRecord(subDirLba, BLOCK_SIZE),
-    createDotDotDirectoryRecord(rootDirLba, BLOCK_SIZE)
+    createDotDotDirectoryRecord(rootDirLba, BLOCK_SIZE),
+    createDirectoryRecord({ extentLba: subFileLba, dataLength: 5, flags: 0x00, fileIdBytes: asciiId("INNER.TXT;1") })
   ]) {
     subDir.set(record, cursor);
     cursor += record.length;
@@ -238,6 +240,7 @@ export const createIso9660PrimaryFile = (): MockFile => {
   bytes.set(subDir, subDirLba * BLOCK_SIZE);
 
   bytes.set(asciiBytes("HELLO"), fileLba * BLOCK_SIZE);
+  bytes.set(asciiBytes("INNER"), subFileLba * BLOCK_SIZE);
 
   return new MockFile(bytes, "sample.iso", "application/x-iso9660-image");
 };
@@ -281,7 +284,6 @@ export const createIso9660JolietFile = (): MockFile => {
   jolietPathTable[8] = 0x00;
   jolietPathTable[9] = 0x00;
   bytes.set(jolietPathTable, jolietPathTableLba * BLOCK_SIZE);
-
   const jolietRootDir = new Uint8Array(BLOCK_SIZE);
   let cursor = 0;
   for (const record of [
@@ -293,8 +295,6 @@ export const createIso9660JolietFile = (): MockFile => {
     cursor += record.length;
   }
   bytes.set(jolietRootDir, jolietRootDirLba * BLOCK_SIZE);
-
   bytes.set(asciiBytes("OK"), 50 * BLOCK_SIZE);
-
   return new MockFile(bytes, "joliet.iso", "application/x-iso9660-image");
 };

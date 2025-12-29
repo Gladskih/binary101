@@ -150,6 +150,17 @@ const renderRootDirectory = (iso: Iso9660ParseResult, out: string[]): void => {
     out.push("<th>Name</th><th>Kind</th><th>Size</th><th>Extent</th><th>Flags</th><th>Recorded</th><th>Extract</th>");
     out.push("</tr></thead><tbody>");
     const renderExtractAction = (entry: Iso9660DirectoryEntrySummary, index: number): string => {
+      if (entry.kind === "directory") {
+        if (entry.extentLocationLba == null) return "<span class=\"smallNote\">Unavailable</span>";
+        const targetId = `isoDir-${index}`;
+        const path = entry.name ? `/${entry.name}` : "/";
+        const sizeAttr = entry.dataLength != null ? ` data-iso-size="${safe(String(entry.dataLength))}"` : "";
+        return (
+          `<button type="button" class="tableButton isoDirToggleButton" data-iso-action="toggle-dir"` +
+            ` data-iso-lba="${safe(String(entry.extentLocationLba))}"${sizeAttr}` +
+            ` data-iso-path="${safe(path)}" data-iso-depth="0" data-iso-target="${safe(targetId)}">Expand</button>`
+        );
+      }
       if (entry.kind !== "file") return "<span class=\"smallNote\">-</span>";
       if (entry.extentLocationLba == null || entry.dataLength == null) {
         return "<span class=\"smallNote\">Unavailable</span>";
@@ -163,6 +174,7 @@ const renderRootDirectory = (iso: Iso9660ParseResult, out: string[]): void => {
       );
     };
     root.entries.forEach((entry: Iso9660DirectoryEntrySummary, index: number) => {
+      const childRowTarget = entry.kind === "directory" && entry.extentLocationLba != null ? `isoDir-${index}` : null;
       out.push(
         "<tr>" +
           `<td>${safe(entry.name || "(unnamed)")}</td>` +
@@ -174,6 +186,13 @@ const renderRootDirectory = (iso: Iso9660ParseResult, out: string[]): void => {
           `<td>${renderExtractAction(entry, index)}</td>` +
         "</tr>"
       );
+      if (childRowTarget) {
+        out.push(
+          `<tr hidden><td colspan="7">` +
+            `<div id="${safe(childRowTarget)}" class="isoDirChildren" data-iso-loaded="0"></div>` +
+          `</td></tr>`
+        );
+      }
     });
     out.push("</tbody></table>");
     if (root.omittedEntries) {

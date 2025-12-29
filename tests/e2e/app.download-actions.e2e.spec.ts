@@ -115,6 +115,31 @@ test.describe("download actions", () => {
     expect(content).toBe("HELLO");
   });
 
+  void test("expands ISO-9660 directories and downloads nested files", async ({ page }) => {
+    const iso = createIso9660PrimaryFile();
+    await page.setInputFiles("#fileInput", toUpload(iso));
+
+    await expectBaseDetails(page, iso.name, "ISO-9660 CD/DVD image (ISO)");
+    await expect(page.locator("#peDetailsTerm")).toHaveText("ISO-9660 details");
+
+    const expand = page.locator("button.isoDirToggleButton");
+    await expect(expand).toHaveCount(1);
+    await expand.click();
+
+    const nestedButton = page.locator('tr:has-text("INNER.TXT") button.isoExtractButton');
+    await expect(nestedButton).toHaveCount(1);
+
+    const [download] = await Promise.all([page.waitForEvent("download"), nestedButton.click()]);
+    const stream = await download.createReadStream();
+    if (!stream) throw new Error("Download stream unavailable");
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    const content = Buffer.concat(chunks).toString("utf8");
+
+    expect(download.suggestedFilename()).toBe("INNER.TXT");
+    expect(content).toBe("INNER");
+  });
+
   void test("runs PE instruction-set analysis on demand", async ({ page }) => {
     const mockFile = createPePlusFile();
     await page.setInputFiles("#fileInput", toUpload(mockFile));

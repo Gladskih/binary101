@@ -27,7 +27,7 @@ void test("parseIso9660 parses a primary volume and root directory entries", asy
   assert.ok(parsed.rootDirectory.entries.some(e => e.name === "SUBDIR"));
   assert.ok(parsed.traversal);
   assert.strictEqual(parsed.traversal.scannedDirectories, 2);
-  assert.strictEqual(parsed.traversal.scannedFiles, 1);
+  assert.strictEqual(parsed.traversal.scannedFiles, 2);
 });
 
 void test("parseIso9660 prefers Joliet supplementary descriptors when present", async () => {
