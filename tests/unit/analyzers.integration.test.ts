@@ -26,6 +26,7 @@ import { createDosMzExe } from "../fixtures/dos-sample-file.js";
 import { createTarFile } from "../fixtures/tar-fixtures.js";
 import { createZipFile } from "../fixtures/zip-fixtures.js";
 import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
+import { createMkvFile } from "../fixtures/mkv-base-fixtures.js";
 import { createAniFile, createAviFile, createWavFile } from "../fixtures/riff-sample-files.js";
 import { createSampleAsfFile } from "../fixtures/asf-fixtures.js";
 import { createMpegPsFile } from "../fixtures/mpegps-fixtures.js";
@@ -85,7 +86,8 @@ void test("detectBinaryType recognizes common binary formats", async () => {
       new MockFile(textEncoder.encode("plain text sample"), "note.txt", "text/plain")
     ),
     detectBinaryType(createFlacFile()),
-    detectBinaryType(createBmpFile())
+    detectBinaryType(createBmpFile()),
+    detectBinaryType(createMkvFile())
   ]);
 
   assert.match(detections[0], /^PNG image/);
@@ -104,6 +106,7 @@ void test("detectBinaryType recognizes common binary formats", async () => {
   assert.strictEqual(detections[13], "Text file");
   assert.match(detections[14], /^FLAC audio/);
   assert.match(detections[15], /^BMP bitmap image/);
+  assert.match(detections[16], /^Matroska/);
 });
 void test("detectBinaryType distinguishes DOS MZ executables from PE", async () => {
   const mzFile = createDosMzExe();
@@ -249,6 +252,16 @@ void test("parseForUi parses WebM metadata and tracks", async () => {
     assert.strictEqual(webm.docType, "webm");
     assert.ok(webm.segment?.info?.durationSeconds);
     assert.ok(webm.segment?.tracks.length);
+  });
+});
+
+void test("parseForUi parses Matroska (MKV) metadata, tags and attachments", async () => {
+  await assertParsed(createMkvFile(), "mkv", mkv => {
+    assert.strictEqual(mkv.docType, "matroska");
+    assert.ok(mkv.segment?.info?.durationSeconds);
+    assert.ok(mkv.segment?.tracks.length);
+    assert.ok(mkv.segment?.tags?.length);
+    assert.ok(mkv.segment?.attachments?.files?.length);
   });
 });
 

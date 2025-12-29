@@ -180,7 +180,7 @@ const parseForUi = async (file: File): Promise<ParseForUiResult> => {
   }
   if (dv.byteLength >= 4 && dv.getUint32(0, false) === 0x1a45dfa3) {
     const webm = await parseWebm(file);
-    if (webm) return { analyzer: "webm", parsed: webm };
+    if (webm) return { analyzer: webm.isWebm ? "webm" : "mkv", parsed: webm };
   }
   if (dv.byteLength >= 4 && dv.getUint32(0, false) === 0x664c6143) {
     const flac = await parseFlac(file);

@@ -29,6 +29,7 @@ import { parseTracks } from "./tracks.js";
 import { parseCues } from "./cues.js";
 import { countBlocksInCluster } from "./cluster.js";
 import { parseTags } from "./tags.js";
+import { parseAttachments } from "./attachments.js";
 
 const describeElement = (id: number): string => {
   switch (id) {
@@ -178,6 +179,7 @@ export const parseSegment = async (
     seekHead: null,
     cues: null,
     tags: null,
+    attachments: null,
     clusterCount: 0,
     blockCount: 0,
     keyframeCount: 0,
@@ -275,10 +277,11 @@ export const parseSegment = async (
   }
 
   const ids = new Set(scan.scanned.map(element => element.id));
-  const hasCues = ids.has(CUES_ID) || segment.cues != null;
-  const hasAttachments = ids.has(ATTACHMENTS_ID);
-  const hasTags = ids.has(TAGS_ID);
-  const hasChapters = ids.has(CHAPTERS_ID);
+  const seekIds = new Set((seekHead?.entries || []).filter(entry => entry.absoluteOffset != null).map(entry => entry.id));
+  const hasCues = ids.has(CUES_ID) || seekIds.has(CUES_ID) || segment.cues != null;
+  const hasAttachments = ids.has(ATTACHMENTS_ID) || seekIds.has(ATTACHMENTS_ID);
+  const hasTags = ids.has(TAGS_ID) || seekIds.has(TAGS_ID);
+  const hasChapters = ids.has(CHAPTERS_ID) || seekIds.has(CHAPTERS_ID);
   if (!hasCues) {
     issues.push("Cues element not found; seeking metadata may be missing.");
   }
@@ -288,10 +291,36 @@ export const parseSegment = async (
     if (hasChapters) issues.push("Chapters element present; invalid for WebM.");
   }
 
+  if (hasAttachments) {
+    const attachmentsHeader =
+      scan.scanned.find(element => element.id === ATTACHMENTS_ID) ||
+      seekHead?.entries.find(entry => entry.id === ATTACHMENTS_ID && entry.absoluteOffset != null) ||
+      null;
+    const attachmentsOffset = attachmentsHeader
+      ? "offset" in attachmentsHeader
+        ? attachmentsHeader.offset
+        : attachmentsHeader.absoluteOffset
+      : null;
+    if (attachmentsOffset != null) {
+      const resolved = await readElementAt(file, attachmentsOffset, issues);
+      if (resolved && resolved.id === ATTACHMENTS_ID) {
+        segment.attachments = await parseAttachments(file, resolved, issues);
+      }
+    }
+  }
+
   if (hasTags) {
-    const tagHeader = scan.scanned.find(element => element.id === TAGS_ID);
-    if (tagHeader) {
-      const resolved = await readElementAt(file, tagHeader.offset, issues);
+    const tagHeader =
+      scan.scanned.find(element => element.id === TAGS_ID) ||
+      seekHead?.entries.find(entry => entry.id === TAGS_ID && entry.absoluteOffset != null) ||
+      null;
+    const tagsOffset = tagHeader
+      ? "offset" in tagHeader
+        ? tagHeader.offset
+        : tagHeader.absoluteOffset
+      : null;
+    if (tagsOffset != null) {
+      const resolved = await readElementAt(file, tagsOffset, issues);
       if (resolved && resolved.id === TAGS_ID) segment.tags = await parseTags(file, resolved, issues);
     }
   }

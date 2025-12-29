@@ -12,6 +12,7 @@ export { renderTga } from "./tga/index.js";
 export { renderPdf } from "./pdf/index.js";
 export { renderWebp } from "./webp/index.js";
 export { renderWebm } from "./webm/index.js";
+export { renderMkv } from "./mkv/index.js";
 export { renderMp3 } from "./mp3/index.js";
 export { renderFlac } from "./flac/index.js";
 export { renderMp4 } from "./mp4/index.js";

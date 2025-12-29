@@ -13,6 +13,7 @@ import {
   renderZip,
   renderWebp,
   renderWebm,
+  renderMkv,
   renderFb2,
   renderMp3,
   renderFlac,
@@ -192,6 +193,16 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
     ctx.valueElement.hidden = false;
     const videoPreviewHtml = preview?.kind === "video" ? preview.html : "";
     ctx.valueElement.innerHTML = videoPreviewHtml + renderWebm(result.parsed);
+    ctx.attachGuards(preview);
+    return;
+  }
+
+  if (result.analyzer === "mkv") {
+    ctx.termElement.textContent = "Matroska (MKV) details";
+    ctx.termElement.hidden = false;
+    ctx.valueElement.hidden = false;
+    const videoPreviewHtml = preview?.kind === "video" ? preview.html : "";
+    ctx.valueElement.innerHTML = videoPreviewHtml + renderMkv(result.parsed);
     ctx.attachGuards(preview);
     return;
   }

@@ -51,6 +51,7 @@ export type AnalyzerName =
   | "jpeg"
   | "webp"
   | "webm"
+  | "mkv"
   | "mp3"
   | "flac"
   | "mp4"
@@ -82,6 +83,7 @@ type AnalyzerParseMap = {
   jpeg: JpegParseResult;
   webp: WebpParseResult;
   webm: WebmParseResult;
+  mkv: WebmParseResult;
   mp3: Mp3ParseResult;
   flac: FlacParseResult;
   mp4: Mp4ParseResult;

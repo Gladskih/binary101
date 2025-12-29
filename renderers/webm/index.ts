@@ -2,7 +2,13 @@
 
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
-import type { WebmCues, WebmParseResult, WebmSeekHead, WebmTrack } from "../../analyzers/webm/types.js";
+import type {
+  WebmAttachments,
+  WebmCues,
+  WebmParseResult,
+  WebmSeekHead,
+  WebmTrack
+} from "../../analyzers/webm/types.js";
 import { renderTagsSection } from "./tags-view.js";
 
 const VIDEO_CODEC_OPTIONS = [
@@ -201,11 +207,45 @@ const renderCues = (cues: WebmCues | null | undefined): string => {
   );
 };
 
+const renderAttachments = (attachments: WebmAttachments | null | undefined): string => {
+  if (!attachments || attachments.files.length === 0) return "";
+  const rows = attachments.files
+    .map((attached, index) => {
+      const uid = attached.uid != null ? String(attached.uid) : "-";
+      const size = attached.dataSize != null ? formatHumanSize(attached.dataSize) : "-";
+      return (
+        "<tr>" +
+        `<td>${index + 1}</td>` +
+        `<td>${escapeHtml(attached.fileName || "-")}</td>` +
+        `<td>${escapeHtml(attached.mediaType || "-")}</td>` +
+        `<td>${escapeHtml(uid)}</td>` +
+        `<td>${escapeHtml(size)}</td>` +
+        `<td>${escapeHtml(attached.description || "-")}</td>` +
+        "</tr>"
+      );
+    })
+    .join("");
+  const truncated = attachments.truncated ? '<p class="dim">Attachments section truncated.</p>' : "";
+  return (
+    "<h4>Attachments</h4>" +
+    '<table class="byteView"><thead><tr>' +
+    "<th>#</th><th>Name</th><th>Type</th><th>UID</th><th>Size</th><th>Description</th>" +
+    `</tr></thead><tbody>${rows}</tbody></table>${truncated}`
+  );
+};
+
 export function renderWebm(webm: WebmParseResult | null | unknown): string {
   const data = webm as WebmParseResult | null;
   if (!data) return "";
   const out: string[] = [];
-  out.push("<h3>WebM / Matroska container</h3>");
+  const containerTitle = data.isWebm
+    ? "WebM container"
+    : data.isMatroska
+      ? "Matroska (MKV) container"
+      : data.docType
+        ? `Matroska (${data.docType}) container`
+        : "Matroska/WebM container";
+  out.push(`<h3>${escapeHtml(containerTitle)}</h3>`);
   const segment = data.segment;
   const info = segment?.info || null;
   out.push("<dl>");
@@ -274,6 +314,7 @@ export function renderWebm(webm: WebmParseResult | null | unknown): string {
   }
   out.push("</dl>");
   out.push(renderTracks(segment?.tracks));
+  out.push(renderAttachments(segment?.attachments ?? null));
   out.push(renderTagsSection(segment?.tags ?? null));
   out.push(renderCues(segment?.cues));
   out.push(renderSeekHead(segment?.seekHead));

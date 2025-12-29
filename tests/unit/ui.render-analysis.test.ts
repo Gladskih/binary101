@@ -6,9 +6,11 @@ import type { ParseForUiResult } from "../../analyzers/index.js";
 import type { ElfParseResult } from "../../analyzers/elf/types.js";
 import type { BmpParseResult } from "../../analyzers/bmp/types.js";
 import type { TgaParseResult } from "../../analyzers/tga/types.js";
+import { parseForUi } from "../../analyzers/index.js";
 import { parseIso9660 } from "../../analyzers/iso9660/index.js";
 import { renderAnalysisIntoUi } from "../../ui/render-analysis.js";
 import { createIso9660PrimaryFile } from "../fixtures/iso9660-fixtures.js";
+import { createMkvFile } from "../fixtures/mkv-base-fixtures.js";
 
 void test("renderAnalysisIntoUi renders ELF output and updates visibility flags", () => {
   const elf = {
@@ -199,4 +201,26 @@ void test("renderAnalysisIntoUi renders ISO-9660 output", async () => {
   assert.equal(termElement.textContent, "ISO-9660 details");
   assert.equal(valueElement.hidden, false);
   assert.ok(valueElement.innerHTML.includes("ISO-9660 overview"));
+});
+
+void test("renderAnalysisIntoUi renders MKV output and video preview", async () => {
+  const parsed = await parseForUi(createMkvFile());
+  assert.equal(parsed.analyzer, "mkv");
+
+  const previewHtml = "<div>video preview</div>";
+  const termElement = { textContent: "", hidden: true } as unknown as HTMLElement;
+  const valueElement = { innerHTML: "", hidden: true } as unknown as HTMLElement;
+
+  renderAnalysisIntoUi(parsed, {
+    buildPreview: () => ({ kind: "video", html: previewHtml }),
+    attachGuards: () => {},
+    termElement,
+    valueElement
+  });
+
+  assert.equal(termElement.hidden, false);
+  assert.equal(termElement.textContent, "Matroska (MKV) details");
+  assert.equal(valueElement.hidden, false);
+  assert.ok(valueElement.innerHTML.includes(previewHtml));
+  assert.ok(valueElement.innerHTML.includes("Matroska (MKV) container"));
 });

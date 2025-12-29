@@ -59,6 +59,20 @@ export interface WebmTagEntry {
   truncated: boolean;
 }
 
+export interface WebmAttachedFile {
+  fileName: string | null;
+  description: string | null;
+  mediaType: string | null;
+  uid: string | number | null;
+  dataSize: number | null;
+  truncated: boolean;
+}
+
+export interface WebmAttachments {
+  files: WebmAttachedFile[];
+  truncated: boolean;
+}
+
 export interface WebmTrack {
   trackNumber: number | null;
   trackUid: string | number | null;
@@ -128,6 +142,7 @@ export interface WebmSegment {
   scannedElements: Array<{ id: number; offset: number; size: number | null }>;
   scanLimit: number;
   tags?: WebmTagEntry[] | null;
+  attachments?: WebmAttachments | null;
 }
 
 export interface WebmParseResult {
