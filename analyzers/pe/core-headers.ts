@@ -2,6 +2,7 @@
 
 import { readAsciiString, collectPrintableRuns } from "../../binary-utils.js";
 import { DD_NAMES } from "./constants.js";
+import { parseRichHeaderFromDosStub } from "./rich-header.js";
 import type { PeCoffHeader, PeDataDirectory, PeDosHeader, PeOptionalHeader } from "./types.js";
 
 export async function parseDosHeaderAndStub(
@@ -39,6 +40,7 @@ export async function parseDosHeaderAndStub(
   if (peHeaderOffset > 0x40) {
     const stubLength = Math.min(peHeaderOffset - 0x40, 64 * 1024);
     const stubBytes = new Uint8Array(await file.slice(0x40, 0x40 + stubLength).arrayBuffer());
+    dos.rich = parseRichHeaderFromDosStub(stubBytes);
     const printableRuns = collectPrintableRuns(stubBytes, 12);
     const classicMessage = printableRuns.find(text => /this program cannot be run in dos mode/i.test(text));
     if (classicMessage) dos.stub = { kind: "standard", note: "classic DOS message", strings: [classicMessage] };

@@ -33,6 +33,19 @@ export interface PeDosStub {
   strings?: string[];
 }
 
+export interface PeRichHeaderEntry {
+  productId: number;
+  buildNumber: number;
+  count: number;
+}
+
+export interface PeRichHeader {
+  xorKey: number;
+  checksum: number | null;
+  entries: PeRichHeaderEntry[];
+  warnings?: string[];
+}
+
 export interface PeDosHeader {
   e_magic: string;
   e_cblp: number;
@@ -54,6 +67,7 @@ export interface PeDosHeader {
   e_res2: number[];
   e_lfanew: number;
   stub: PeDosStub;
+  rich?: PeRichHeader | null;
 }
 
 export interface PeCoffHeader {
