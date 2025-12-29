@@ -16,9 +16,9 @@ const FILE_FLAGS: Array<[number, string, string]> = [
   [0x04, "Associated", "Associated file"],
   [0x08, "Record", "Record format is specified"],
   [0x10, "Protection", "Owner/group permissions are specified"],
-  [0x20, "Multi-extent", "File uses multiple extents"],
+  [0x20, "Reserved", "Reserved by ISO-9660"],
   [0x40, "Reserved", "Reserved by ISO-9660"],
-  [0x80, "Reserved", "Reserved by ISO-9660"]
+  [0x80, "Multi-extent", "Not the final directory record for this file"]
 ];
 
 const formatLba = (lba: number | null | undefined, blockSize: number): string => {
@@ -147,9 +147,22 @@ const renderRootDirectory = (iso: Iso9660ParseResult, out: string[]): void => {
 
   if (root.entries.length) {
     out.push('<table class="table"><thead><tr>');
-    out.push("<th>Name</th><th>Kind</th><th>Size</th><th>Extent</th><th>Flags</th><th>Recorded</th>");
+    out.push("<th>Name</th><th>Kind</th><th>Size</th><th>Extent</th><th>Flags</th><th>Recorded</th><th>Extract</th>");
     out.push("</tr></thead><tbody>");
-    root.entries.forEach((entry: Iso9660DirectoryEntrySummary) => {
+    const renderExtractAction = (entry: Iso9660DirectoryEntrySummary, index: number): string => {
+      if (entry.kind !== "file") return "<span class=\"smallNote\">-</span>";
+      if (entry.extentLocationLba == null || entry.dataLength == null) {
+        return "<span class=\"smallNote\">Unavailable</span>";
+      }
+      if ((entry.fileFlags & 0x80) !== 0) {
+        return "<span class=\"smallNote\">Multi-extent</span>";
+      }
+      return (
+        `<button type="button" class="tableButton isoExtractButton" data-iso-action="extract"` +
+          ` data-iso-entry="${safe(String(index))}">Download</button>`
+      );
+    };
+    root.entries.forEach((entry: Iso9660DirectoryEntrySummary, index: number) => {
       out.push(
         "<tr>" +
           `<td>${safe(entry.name || "(unnamed)")}</td>` +
@@ -158,6 +171,7 @@ const renderRootDirectory = (iso: Iso9660ParseResult, out: string[]): void => {
           `<td>${safe(formatLba(entry.extentLocationLba, iso.selectedBlockSize))}</td>` +
           `<td>${rowFlags(entry.fileFlags, FILE_FLAGS)}</td>` +
           `<td>${safe(entry.recordingDateTime || "-")}</td>` +
+          `<td>${renderExtractAction(entry, index)}</td>` +
         "</tr>"
       );
     });

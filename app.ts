@@ -6,6 +6,7 @@ import { attachPreviewGuards, buildPreviewHtml } from "./ui/preview.js";
 import { computeAndDisplayHash, copyHashToClipboard, resetHashDisplay } from "./ui/hash-controls.js";
 import { createZipEntryClickHandler } from "./ui/zip-actions.js";
 import { createGzipClickHandler } from "./ui/gzip-actions.js";
+import { createIso9660EntryClickHandler } from "./ui/iso9660-actions.js";
 import { createPeDisassemblyController } from "./ui/pe-disassembly.js";
 import { createElfDisassemblyController } from "./ui/elf-disassembly.js";
 const getElement = (id: string) => document.getElementById(id)!;
@@ -88,6 +89,11 @@ const gzipClickHandler = createGzipClickHandler({
   getFile: () => currentFile,
   setStatusMessage
 });
+const isoClickHandler = createIso9660EntryClickHandler({
+  getParseResult: () => currentParseResult,
+  getFile: () => currentFile,
+  setStatusMessage
+});
 peDetailsValueElement.addEventListener("click", event => {
   const targetNode = event.target as Node | null;
   const targetElement = targetNode instanceof Element ? targetNode : targetNode?.parentElement ?? null;
@@ -95,7 +101,6 @@ peDetailsValueElement.addEventListener("click", event => {
   const peCancelButton = targetElement?.closest("#peInstructionSetsCancelButton");
   const elfAnalyzeButton = targetElement?.closest("#elfInstructionSetsAnalyzeButton");
   const elfCancelButton = targetElement?.closest("#elfInstructionSetsCancelButton");
-
   if (peAnalyzeButton) {
     event.preventDefault();
     if (!currentFile) return;
@@ -105,13 +110,11 @@ peDetailsValueElement.addEventListener("click", event => {
     peDisassembly.start(currentFile, currentParseResult.parsed);
     return;
   }
-
   if (peCancelButton) {
     event.preventDefault();
     peDisassembly.cancel();
     return;
   }
-
   if (elfAnalyzeButton) {
     event.preventDefault();
     if (!currentFile) return;
@@ -121,17 +124,15 @@ peDetailsValueElement.addEventListener("click", event => {
     elfDisassembly.start(currentFile, currentParseResult.parsed);
     return;
   }
-
   if (elfCancelButton) {
     event.preventDefault();
     elfDisassembly.cancel();
     return;
   }
-
+  void isoClickHandler(event);
   void gzipClickHandler(event);
   void zipClickHandler(event);
 });
-
 async function showFileInfo(file: File, sourceDescription: string): Promise<void> {
   peDisassembly.cancel();
   elfDisassembly.cancel();
@@ -156,7 +157,6 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     fileNameTopElement.textContent = file.name || "";
     fileSizeTopElement.textContent = sizeText;
     fileKindTopElement.textContent = typeLabel;
-
     fileNameDetailElement.textContent = file.name || "";
     fileSizeDetailElement.textContent = sizeText;
     fileTimestampDetailElement.textContent = timestampIso;

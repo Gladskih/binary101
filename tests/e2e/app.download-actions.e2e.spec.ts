@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 import { createGzipFile } from "../fixtures/gzip-fixtures.js";
+import { createIso9660PrimaryFile } from "../fixtures/iso9660-fixtures.js";
 import { createPePlusFile } from "../fixtures/sample-files-pe.js";
 import { createZipWithEntries } from "../fixtures/zip-fixtures.js";
 import type { MockFile } from "../helpers/mock-file.js";
@@ -93,6 +94,27 @@ test.describe("download actions", () => {
     expect(content).toBe("hello");
   });
 
+  void test("allows downloading ISO-9660 file contents from the UI", async ({ page }) => {
+    const iso = createIso9660PrimaryFile();
+    await page.setInputFiles("#fileInput", toUpload(iso));
+
+    await expectBaseDetails(page, iso.name, "ISO-9660 CD/DVD image (ISO)");
+    await expect(page.locator("#peDetailsTerm")).toHaveText("ISO-9660 details");
+
+    const button = page.locator("button.isoExtractButton");
+    await expect(button).toHaveCount(1);
+
+    const [download] = await Promise.all([page.waitForEvent("download"), button.click()]);
+    const stream = await download.createReadStream();
+    if (!stream) throw new Error("Download stream unavailable");
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    const content = Buffer.concat(chunks).toString("utf8");
+
+    expect(download.suggestedFilename()).toBe("HELLO.TXT");
+    expect(content).toBe("HELLO");
+  });
+
   void test("runs PE instruction-set analysis on demand", async ({ page }) => {
     const mockFile = createPePlusFile();
     await page.setInputFiles("#fileInput", toUpload(mockFile));
@@ -108,4 +130,3 @@ test.describe("download actions", () => {
     await expect(detailsValue).not.toContainText("Disassembly failed");
   });
 });
-

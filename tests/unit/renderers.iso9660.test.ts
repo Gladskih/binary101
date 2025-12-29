@@ -16,5 +16,5 @@ void test("renderIso9660 renders ISO overview and root directory", async () => {
   assert.ok(html.includes("Primary Volume Descriptor"));
   assert.ok(html.includes("Root directory"));
   assert.ok(html.includes("TESTVOL"));
+  assert.ok(html.includes("isoExtractButton"));
 });
-
