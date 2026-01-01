@@ -119,6 +119,11 @@ void test("renderHeaders covers known/unknown branches and exact linker versions
   ];
   pe.entrySection = { name: ".text", index: 0 };
   pe.dos.stub = { kind: "stub", note: "hello", strings: ["hi"] };
+  pe.dos.rich = {
+    xorKey: 0x12345678,
+    checksum: 0,
+    entries: [{ productId: 0x0091, buildNumber: 0x1c87, count: 3 }]
+  };
 
   const out: string[] = [];
   renderHeaders(pe, out);
@@ -129,6 +134,8 @@ void test("renderHeaders covers known/unknown branches and exact linker versions
   assert.ok(html.includes("14.2 - VS2019 era"));
   assert.ok(html.includes("Windows 7"));
   assert.ok(html.includes("DOS stub: stub - hello"));
+  assert.ok(html.includes("Rich header"));
+  assert.ok(html.includes("Tool and build names"));
   assert.ok(html.includes("Show sections (2)"));
 });
 
@@ -148,4 +155,5 @@ void test("renderHeaders handles fallbacks and missing optional parts", () => {
   assert.ok(html.includes("executable image"));
   assert.ok(html.includes("13.0 - MSVC (pre-VS2015)"));
   assert.ok(html.includes("11.0 (11.0)"));
+  assert.ok(html.includes("Rich header: not present"));
 });

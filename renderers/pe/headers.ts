@@ -4,6 +4,7 @@ import { humanSize, hex, isoOrDash } from "../../binary-utils.js";
 import { dd, rowOpts, rowFlags, safe } from "../../html-utils.js";
 import { MACHINE, SUBSYSTEMS, CHAR_FLAGS, DLL_FLAGS, SEC_FLAG_TEXTS, DD_TIPS } from "../../analyzers/pe/constants.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
+import { renderRichHeader } from "./rich-header.js";
 
 const SECTION_HINTS: Record<string, string> = {
   ".text": "Code (executable instructions)",
@@ -157,6 +158,15 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
   out.push(`<div class="smallNote">DOS stub: ${stub.kind}${stub.note ? ` - ${safe(stub.note)}` : ""}</div>`);
   if (stub.strings?.length) {
     out.push(`<div class="mono smallNote">${stub.strings.map(x => `<div>${safe(String(x))}</div>`).join("")}</div>`);
+  }
+  if (pe.dos.rich) {
+    out.push(`<div style="margin-top:.75rem">`);
+    renderRichHeader(pe, out);
+    out.push(`</div>`);
+  } else {
+    out.push(
+      `<div class="smallNote" style="margin-top:.5rem">Rich header: not present (no DanS/Rich signature found in DOS stub).</div>`
+    );
   }
   out.push(`</div></details></section>`);
 
