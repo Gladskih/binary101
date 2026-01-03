@@ -137,6 +137,8 @@ void test("renderHeaders covers known/unknown branches and exact linker versions
   assert.ok(html.includes("Rich header"));
   assert.ok(html.includes("Tool and build names"));
   assert.ok(html.includes("Show sections (2)"));
+  assert.ok(html.includes("peChecksumValidateButton"));
+  assert.ok(html.includes("peChecksumStatus"));
 });
 
 void test("renderHeaders handles fallbacks and missing optional parts", () => {

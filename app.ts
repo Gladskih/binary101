@@ -9,6 +9,7 @@ import { createGzipClickHandler } from "./ui/gzip-actions.js";
 import { createIso9660EntryClickHandler } from "./ui/iso9660-actions.js";
 import { createPeDisassemblyController } from "./ui/pe-disassembly.js";
 import { createElfDisassemblyController } from "./ui/elf-disassembly.js";
+import { createPeChecksumClickHandler } from "./ui/pe-checksum-controls.js";
 const getElement = (id: string) => document.getElementById(id)!;
 const dropZoneElement = getElement("dropZone") as HTMLElement;
 const fileInputElement = getElement("fileInput") as HTMLInputElement;
@@ -94,6 +95,11 @@ const isoClickHandler = createIso9660EntryClickHandler({
   getFile: () => currentFile,
   setStatusMessage
 });
+const peChecksumClickHandler = createPeChecksumClickHandler({
+  getParseResult: () => currentParseResult,
+  getFile: () => currentFile,
+  setStatusMessage
+});
 peDetailsValueElement.addEventListener("click", event => {
   const targetNode = event.target as Node | null;
   const targetElement = targetNode instanceof Element ? targetNode : targetNode?.parentElement ?? null;
@@ -129,6 +135,7 @@ peDetailsValueElement.addEventListener("click", event => {
     elfDisassembly.cancel();
     return;
   }
+  void peChecksumClickHandler(event);
   void isoClickHandler(event);
   void gzipClickHandler(event);
   void zipClickHandler(event);
@@ -153,7 +160,6 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
       typeof file.type === "string" && file.type.length > 0
         ? file.type
         : "Not provided by browser";
-
     fileNameTopElement.textContent = file.name || "";
     fileSizeTopElement.textContent = sizeText;
     fileKindTopElement.textContent = typeLabel;
@@ -163,7 +169,6 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     fileSourceDetailElement.textContent = sourceDescription;
     fileBinaryTypeDetailElement.textContent = typeLabel;
     fileMimeTypeDetailElement.textContent = mimeType;
-
     fileInfoCardElement.hidden = false;
     setStatusMessage("Parsing file details...");
     const parsedResult = await parseForUi(file);
@@ -183,7 +188,6 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     peDetailsValueElement.innerHTML = "";
   }
 }
-
 const handleSelectedFiles = (files: FileList | null): void => {
   if (!files || files.length === 0) {
     setStatusMessage("No file selected.");
@@ -200,14 +204,12 @@ const handleSelectedFiles = (files: FileList | null): void => {
   }
   void showFileInfo(first, "File selection");
 };
-
 ["dragenter", "dragover"].forEach(eventName =>
   dropZoneElement.addEventListener(eventName, event => {
     event.preventDefault();
     dropZoneElement.classList.add("dragover");
   })
 );
-
 ["dragleave", "drop"].forEach(eventName =>
   dropZoneElement.addEventListener(eventName, event => {
     event.preventDefault();
@@ -223,14 +225,12 @@ const handleSelectedFiles = (files: FileList | null): void => {
     dropZoneElement.classList.remove("dragover");
   })
 );
-
 dropZoneElement.addEventListener("keydown", event => {
   if (event.key === " " || event.key === "Enter") {
     event.preventDefault();
     fileInputElement.click();
   }
 });
-
 fileInputElement.addEventListener("change", event => {
   const input = event.currentTarget;
   if (!(input instanceof HTMLInputElement)) return;

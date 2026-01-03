@@ -205,7 +205,15 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
   out.push(dd("DllCharacteristics", rowFlags(oh.DllCharacteristics, DLL_FLAGS), "DLL characteristics (ASLR, DEP, etc.)."));
   out.push(dd("SizeOfImage", humanSize(oh.SizeOfImage), "Size of image in memory, including all headers and sections."));
   out.push(dd("SizeOfHeaders", humanSize(oh.SizeOfHeaders), "Combined size of DOS stub, PE header, and section headers."));
-  out.push(dd("CheckSum", hex(oh.CheckSum, 8), "Image checksum (used by some system components)."));
+  const checksumHtml = [
+    `<div style="display:flex;flex-direction:column;gap:.35rem">`,
+    `<div class="mono">${safe(hex(oh.CheckSum, 8))}</div>`,
+    `<div class="smallNote">Validation: <span id="peChecksumStatus">Not validated yet.</span></div>`,
+    `<div class="smallNote">Computed: <span class="mono" id="peChecksumComputed">-</span></div>`,
+    `<div><button type="button" class="actionButton" id="peChecksumValidateButton">Validate CheckSum</button></div>`,
+    `</div>`
+  ].join("");
+  out.push(dd("CheckSum", checksumHtml, "Image checksum (used by some system components)."));
   out.push(dd("SizeOfStackReserve", humanSize(oh.SizeOfStackReserve), "Stack reservation size."));
   out.push(dd("SizeOfStackCommit", humanSize(oh.SizeOfStackCommit), "Stack commit size."));
   out.push(dd("SizeOfHeapReserve", humanSize(oh.SizeOfHeapReserve), "Heap reservation size."));
