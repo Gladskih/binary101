@@ -138,12 +138,6 @@ export default [
     }
   },
   {
-    files: ["analyzers/sevenz/index.ts"],
-    rules: {
-      "@typescript-eslint/no-explicit-any": "off"
-    }
-  },
-  {
     files: [
       "renderers/**/*.ts",
       "analyzers/lnk/**/*.ts",
