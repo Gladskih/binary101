@@ -2,6 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="
+      default-src 'none';
+      base-uri 'self';
+      connect-src 'self';
+      img-src 'self' blob: data:;
+      media-src 'self' blob: data:;
+      font-src 'self';
+      script-src 'self' 'wasm-unsafe-eval' 'sha256-dw15IHKILanlypGRgNYDp8m2o4Egnj96KXWtVtjFslg=';
+      style-src 'self' 'unsafe-inline'
+    "
+  >
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#141418">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f7f9">
+  <meta
+    name="description"
+    content="Binary101 is a browser-based local file inspector for binary formats. Runs locally in your browser; nothing is uploaded."
+  >
   <title>Local File Inspector</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="./style.css">
@@ -69,13 +90,7 @@
     <div><span>No upload.</span> <span>No tracking.</span></div>
   </footer>
 
-  <script type="importmap">
-    {
-      "imports": {
-        "iced-x86": "./vendor/iced-x86/iced_x86.js"
-      }
-    }
-  </script>
+  <script type="importmap">{"imports":{"iced-x86":"./vendor/iced-x86/iced_x86.js"}}</script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
