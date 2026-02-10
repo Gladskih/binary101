@@ -108,16 +108,19 @@ This makes it suitable for analyzing sensitive files, whether for work or person
 
 # Coding Guidelines
 
-These mirror the project's ESLint configuration and are here so assistants can stay in style.
+These mostly mirror the project's ESLint configuration and are here so assistants can stay in style.
+When these guidelines conflict with ESLint, follow ESLint.
 
 ### JavaScript / TypeScript
 
 - **Variable declarations**: use `const` by default; `let` only if reassignment is needed; never `var`.
-- **Equality checks**: always use `===` and `!==` (strict equality).
 - **Strings**: use double quotes (`"`); escape when necessary.
 - **Semicolons**: required at the end of statements.
 - **Brace style**: use 1TBS (`if (...) { ... }` on one line).
-- **Magic numbers**: avoid where possible; prefer named constants.
+- **Minimize empty lines**: excessive empty lines usually indicate a function is doing too much; prefer extracting a helper.
+- **Prefer expressions directly**: if a value is used once, prefer an in-place expression/early return over introducing an intermediate variable.
+- **Avoid single-use constants**: do not introduce a named `const` that is referenced only once; keep the literal inline and add a short comment explaining where it comes from.
+- **Magic values**: explain non-obvious literals with a comment (ideally citing the spec name/section or the file-format field it represents). Extract a named constant only when it is reused or substantially improves readability.
 - **Unused variables**: not allowed (prefix with `_` if intentionally unused).
 - **Console usage**: only `console.error()` and `console.warn()` in production code; remove `console.log()` from commits.
 - **Side effects**:
