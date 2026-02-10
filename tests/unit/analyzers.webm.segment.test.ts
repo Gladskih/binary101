@@ -7,6 +7,7 @@ import { readElementAt } from "../../analyzers/webm/ebml.js";
 import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
 import { createWebmWithAttachments } from "../fixtures/webm-attachments-fixtures.js";
 import { createWebmWithCues } from "../fixtures/webm-cues-fixtures.js";
+import { createWebmWithDurationMismatch } from "../fixtures/webm-duration-fixtures.js";
 import { createWebmWithInvalidCodecs } from "../fixtures/webm-invalid-codecs-fixtures.js";
 
 const parseTracksFromFixture = async () => {
@@ -100,4 +101,23 @@ void test("parseSegment flags invalid WebM codec IDs", async () => {
   assert.strictEqual(audio?.codecIdValidForWebm, false);
   assert.ok(issues.some(msg => msg.includes("V_MS/VFW/FOURCC")));
   assert.ok(issues.some(msg => msg.includes("A_MPEG/L3")));
+});
+
+void test("parseSegment computes real duration per track", async () => {
+  const file = createWebmWithDurationMismatch();
+  const issues: string[] = [];
+  const ebmlHeader = await readElementAt(file, 0, issues);
+  assert.ok(ebmlHeader);
+  assert.notStrictEqual(ebmlHeader?.size, null);
+  const segOffset = ebmlHeader!.dataOffset + (ebmlHeader!.size as number);
+  const segmentHeader = await readElementAt(file, segOffset, issues);
+  assert.ok(segmentHeader);
+  const segment = await parseSegment(file, segmentHeader, issues, "webm");
+  assert.ok(segment.computedDuration);
+  assert.ok(segment.computedDuration?.videoSeconds != null);
+  assert.ok(segment.computedDuration?.audioSeconds != null);
+  assert.ok(segment.computedDuration?.overallSeconds != null);
+  assert.strictEqual(segment.computedDuration?.videoSeconds, 1);
+  assert.strictEqual(segment.computedDuration?.audioSeconds, 2.5);
+  assert.strictEqual(segment.computedDuration?.overallSeconds, 2.5);
 });

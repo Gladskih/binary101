@@ -4,6 +4,7 @@ import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
 import type {
   WebmAttachments,
+  WebmComputedDuration,
   WebmCues,
   WebmParseResult,
   WebmSeekHead
@@ -25,6 +26,19 @@ const formatDuration = (seconds: number | null | undefined): string => {
   const minutes = Math.floor(seconds / 60);
   const remaining = Math.round(seconds - minutes * 60);
   return `${minutes} min ${remaining} s`;
+};
+
+const formatComputedDuration = (computed: WebmComputedDuration | null | undefined): string | null => {
+  if (!computed || computed.overallSeconds == null) return null;
+  const overall = formatDuration(computed.overallSeconds);
+  const video = computed.videoSeconds != null ? formatDuration(computed.videoSeconds) : null;
+  const audio = computed.audioSeconds != null ? formatDuration(computed.audioSeconds) : null;
+  if (!video && !audio) return overall;
+  if (video && audio && video === audio) return overall;
+  const parts: string[] = [];
+  if (video) parts.push(`video ${video}`);
+  if (audio) parts.push(`audio ${audio}`);
+  return `${overall} (${parts.join("; ")})`;
 };
 
 const renderSeekHead = (seekHead: WebmSeekHead | null | undefined): string => {
@@ -185,6 +199,16 @@ export function renderWebm(webm: WebmParseResult | null | unknown): string {
       "Duration is reported in timecode units scaled by TimecodeScale."
     )
   );
+  const computedDuration = formatComputedDuration(segment?.computedDuration);
+  if (computedDuration) {
+    out.push(
+      renderDefinitionRow(
+        "Duration (computed)",
+        escapeHtml(computedDuration),
+        "Computed from Cluster/Block timestamps (uses BlockDuration/DefaultDuration when available)."
+      )
+    );
+  }
   out.push(renderDefinitionRow("Title", escapeHtml(info?.title || "Not set")));
   out.push(renderDefinitionRow("Muxing app", escapeHtml(info?.muxingApp || "Unknown")));
   out.push(renderDefinitionRow("Writing app", escapeHtml(info?.writingApp || "Unknown")));

@@ -114,6 +114,21 @@ export interface WebmCues {
   truncated: boolean;
 }
 
+export interface WebmComputedTrackDuration {
+  trackNumber: number | null;
+  trackType: number | null;
+  trackTypeLabel: string;
+  codecId: string | null;
+  durationSeconds: number | null;
+}
+
+export interface WebmComputedDuration {
+  overallSeconds: number | null;
+  videoSeconds: number | null;
+  audioSeconds: number | null;
+  tracks: WebmComputedTrackDuration[];
+}
+
 export interface WebmSeekEntry {
   id: number;
   name: string;
@@ -139,6 +154,7 @@ export interface WebmSegment {
   firstClusterOffset: number | null;
   blockCount: number;
   keyframeCount: number;
+  computedDuration?: WebmComputedDuration | null;
   scannedElements: Array<{ id: number; offset: number; size: number | null }>;
   scanLimit: number;
   tags?: WebmTagEntry[] | null;
