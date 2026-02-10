@@ -41,6 +41,20 @@ const formatComputedDuration = (computed: WebmComputedDuration | null | undefine
   return `${overall} (${parts.join("; ")})`;
 };
 
+const renderComputedDurationExplainer = (timecodeScaleNs: number | null | undefined): string =>
+  "<details class=\"dim\">" +
+  "<summary>How this is computed</summary>" +
+  "<p>WebM/Matroska stores media as a sequence of <b>Clusters</b>. Each cluster has a base timestamp (<b>Cluster Timecode</b>), and each video/audio <b>Block</b> inside it has a small relative timestamp. We add them together to get the real start time of each packet/frame.</p>" +
+  "<p>We scan all clusters, read block timestamps, and for each track compute the latest <i>end time</i> we can infer. End time is:</p>" +
+  "<ul>" +
+  "<li><b>start time + BlockDuration</b> (when present), otherwise</li>" +
+  "<li><b>start time + DefaultDuration</b> from track metadata (typically video), multiplied by the number of frames in the block (lacing), otherwise</li>" +
+  "<li>for the final packet/frame, a small <b>best-effort estimate</b> based on the typical spacing between timestamps (median delta).</li>" +
+  "</ul>" +
+  `<p>Overall duration is the maximum of the audio and video track durations. This may differ from <b>Info/Duration</b> metadata if a muxer wrote an incorrect value or the file was edited; metadata mismatch does not necessarily make the file invalid.</p>` +
+  `<p>TimecodeScale used: <b>${escapeHtml(timecodeScaleNs != null ? `${timecodeScaleNs} ns` : "Unknown")}</b>.</p>` +
+  "</details>";
+
 const renderSeekHead = (seekHead: WebmSeekHead | null | undefined): string => {
   if (!seekHead || !seekHead.entries || seekHead.entries.length === 0) return "";
   const rows = seekHead.entries
@@ -204,8 +218,8 @@ export function renderWebm(webm: WebmParseResult | null | unknown): string {
     out.push(
       renderDefinitionRow(
         "Duration (computed)",
-        escapeHtml(computedDuration),
-        "Computed from Cluster/Block timestamps (uses BlockDuration/DefaultDuration when available)."
+        `<div>${escapeHtml(computedDuration)}</div>${renderComputedDurationExplainer(info?.timecodeScale)}`,
+        null
       )
     );
   }
