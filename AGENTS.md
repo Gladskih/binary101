@@ -33,10 +33,7 @@ Scope: the entire repository.
 - Keep analyzers and renderers separate:
   - analyzers: pure parsing, no DOM, no `console.log` (warnings go into result objects),
   - renderers: pure HTML formatting, no file I/O.
-- Follow the style rules from `.github/copilot-instructions.md` and `eslint.config.mjs`:
-  - `const`/`let`, no `var`,
-  - double quotes, semicolons, 1TBS brace style,
-  - no unused variables.
+- Follow the style rules from `CONTRIBUTING.md` and the lint rules in `eslint.config.mjs`.
 - Module design and naming:
   - do **not** introduce new generically named modules such as `helpers`, `utils`, `extra`, `extensions`, or similar catch-all names; instead, choose names that describe the domain or responsibility,
   - keep each module cohesive: it should have a single clear reason to change, rather than being a grab bag of unrelated helpers.

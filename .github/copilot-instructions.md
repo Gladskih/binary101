@@ -106,61 +106,7 @@ This makes it suitable for analyzing sensitive files, whether for work or person
 3. **Safety and privacy** - all parsing happens in the browser; no network calls for analysis.
 4. **Usability** - clean, readable HTML output; sensible defaults; warnings instead of crashes for malformed files.
 
-# Coding Guidelines
+# Code Style
 
-These mostly mirror the project's ESLint configuration and are here so assistants can stay in style.
-When these guidelines conflict with ESLint, follow ESLint.
-
-### JavaScript / TypeScript
-
-- **Variable declarations**: use `const` by default; `let` only if reassignment is needed; never `var`.
-- **Strings**: use double quotes (`"`); escape when necessary.
-- **Semicolons**: required at the end of statements.
-- **Brace style**: use 1TBS (`if (...) { ... }` on one line).
-- **Minimize empty lines**: excessive empty lines usually indicate a function is doing too much; prefer extracting a helper.
-- **Prefer expressions directly**: if a value is used once, prefer an in-place expression/early return over introducing an intermediate variable.
-- **Avoid single-use constants**: do not introduce a named `const` that is referenced only once; keep the literal inline and add a short comment explaining where it comes from.
-- **Magic values**: explain non-obvious literals with a comment (ideally citing the spec name/section or the file-format field it represents). Extract a named constant only when it is reused or substantially improves readability.
-- **Unused variables**: not allowed (prefix with `_` if intentionally unused).
-- **Console usage**: only `console.error()` and `console.warn()` in production code; remove `console.log()` from commits.
-- **Side effects**:
-  - analyzers should not touch the DOM,
-  - renderers should not perform I/O or parsing.
-
-### Async and Performance
-
-- **Async operations**: functions doing I/O should return `Promise`; avoid callback-style APIs.
-- **File I/O**: use `file.slice(...).arrayBuffer()` for memory efficiency; never load entire files unnecessarily.
-- **Blocking work**: keep heavy computations chunked or behind `await` to avoid freezing the UI. Consider Web Workers if you need heavier processing in future changes.
-
-### HTML
-
-- Prefer semantic HTML (`<header>`, `<nav>`, `<main>`, `<article>`, `<footer>`) over generic `<div>`.
-- Respect accessibility basics:
-  - `alt` attributes for images,
-  - proper `<label>` elements for form inputs,
-  - ARIA attributes where appropriate.
-- Keep HTML valid; you can use the W3C validator when in doubt.
-
-### CSS
-
-- Line length: aim for a maximum of about 100 characters.
-- Selectors: avoid deep nesting (maximum 3 levels); prefer BEM-style naming for clarity.
-- Colors and fonts: define as CSS variables where possible for consistency.
-- Performance: minimize inline styles; keep CSS small and focused.
-
-### Git
-
-- Commit messages: use present tense, imperative mood (for example "Add MP3 analyzer", not "Added MP3 analyzer").
-- Branch names: lowercase with hyphens (for example `pe-parser`, `mp3-analyzer`).
-- Pull requests: prefer small, focused changes; ensure ESLint passes.
-
-### Tools and Configuration
-
-- **ESLint** (`eslint.config.mjs`) - uses the modern flat config and ESLint 9.
-  Run `npm run lint` (or `npx eslint .`) from the repo root.
-- **EditorConfig** (`.editorconfig`) - keeps indentation, line endings, and charset consistent.
-- Pre-commit hooks (optional) - you can wire Husky + lint-staged if you want automatic checks before commits.
-
-End of instructions.
+Keep code style rules centralized in `CONTRIBUTING.md` and follow the lint rules in `eslint.config.mjs`.
 

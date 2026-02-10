@@ -33,17 +33,20 @@
 All contributions must adhere to the project's code quality metrics and best practices. These are enforced by `.editorconfig` and `eslint.config.mjs`.
 
 ### JavaScript Best Practices
-- **Maximum file length**: 250 lines (including comments and blank lines).
-- **Maximum line length**: 100 characters.
+- Follow ESLint as the source of truth; keep `npm run lint` passing.
+- **Maximum file length**: Keep modules small; if a file grows large, prefer extracting cohesive helpers/modules.
+- **Maximum line length**: Aim for 100 characters where practical.
 - **Maximum function length**: Aim for 20-30 lines; refactor functions over 50 lines.
 - **Cyclomatic complexity**: Keep below 10; use helper functions to reduce complexity.
 - **Nested callbacks**: Maximum 3 levels.
 - **Variable declarations**: Use `const` by default, `let` only if reassignment is needed.
-- **Equality**: Always use `===` and `!==`.
 - **String quotes**: Use double quotes (`"`).
 - **Semicolons**: Required at the end of statements.
+- **Minimize empty lines**: Excessive empty lines usually indicate a function is doing too much; prefer extracting a helper.
+- **Prefer expressions directly**: If a value is used once, prefer an in-place expression/early return over introducing an intermediate variable.
+- **Avoid single-use constants**: Do not introduce a named `const` that is referenced only once; keep the literal inline and add a short comment explaining where it comes from.
+- **Magic values**: Explain non-obvious literals with a comment (ideally citing the spec name/section or the file-format field it represents). Extract a named constant only when it is reused or substantially improves readability.
 - **Console usage**: Only `console.error()` and `console.warn()` are allowed in production code.
-- **Magic numbers**: Define named constants instead of using literal numbers.
 - **Identifiers**: Minimum 2 characters (except `_`, `i`, `j`, `k`, `x`, `y`).
 
 ### Module Design and Naming
