@@ -84,31 +84,7 @@ export function renderTls(pe: PeParseResult, out: string[]): void {
   out.push(`</dl></section>`);
 }
 
-export function renderClr(pe: PeParseResult, out: string[]): void {
-  if (!pe.clr) return;
-  const c = pe.clr;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">CLR (.NET) header</h4><dl>`);
-  out.push(dd("Size", String(c.cb), "Size of IMAGE_COR20_HEADER in bytes."));
-  out.push(dd("RuntimeVersion", `${c.MajorRuntimeVersion}.${c.MinorRuntimeVersion}`, "CLR runtime version required by this assembly."));
-  out.push(dd("MetaData", `RVA ${hex(c.MetaDataRVA, 8)} Size ${humanSize(c.MetaDataSize)}`, "Location and size of CLR metadata streams (tables/heap)."));
-  out.push(dd("Flags", hex(c.Flags, 8), "CLR image flags."));
-  out.push(dd("EntryPointToken", hex(c.EntryPointToken, 8), "Managed entry point (token) for mixed-mode assemblies."));
-  out.push(`</dl>`);
-  if (c.meta) {
-    if (c.meta.version) {
-      out.push(`<div class="smallNote">Metadata version: ${safe(c.meta.version)}</div>`);
-    }
-    if (c.meta.streams?.length) {
-      out.push(`<details style="margin-top:.35rem"><summary>Metadata streams (${c.meta.streams.length})</summary>`);
-      out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Name</th><th>Offset</th><th>Size</th></tr></thead><tbody>`);
-      c.meta.streams.forEach((stream, index) => {
-        out.push(`<tr><td>${index + 1}</td><td>${safe(stream.name)}</td><td>${hex(stream.offset, 8)}</td><td>${humanSize(stream.size)}</td></tr>`);
-      });
-      out.push(`</tbody></table></details>`);
-    }
-  }
-  out.push(`</section>`);
-}
+export { renderClr } from "./clr.js";
 
 export function renderSecurity(pe: PeParseResult, out: string[]): void {
   if (!pe.security) return;

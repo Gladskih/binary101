@@ -2,33 +2,48 @@
 
 import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
 
-export interface PeClrStreamInfo {
-  name: string;
-  offset: number;
-  size: number;
-}
+import {
+  buildCor20Issues,
+  COR20_HEADER_MIN_BYTES,
+  COR20_HEADER_SIZE_BYTES,
+  readCor20Header
+} from "./clr-cor20-header.js";
+import { parseClrMetadataRoot } from "./clr-metadata-root.js";
+import { parseVTableFixups } from "./clr-vtable-fixups.js";
+import type { PeClrHeader } from "./clr-types.js";
 
-export interface PeClrMeta {
-  version?: string;
-  verMajor?: number;
-  verMinor?: number;
-  reserved?: number;
-  flags?: number;
-  streamCount?: number;
-  signature?: number;
-  streams: PeClrStreamInfo[];
-}
+export type { PeClrHeader, PeClrMeta, PeClrStreamInfo, PeClrVTableFixup } from "./clr-types.js";
 
-export interface PeClrHeader {
-  cb: number;
-  MajorRuntimeVersion: number;
-  MinorRuntimeVersion: number;
-  MetaDataRVA: number;
-  MetaDataSize: number;
-  Flags: number;
-  EntryPointToken: number;
-  meta?: PeClrMeta;
-}
+const addOptionalDirIssues = (
+  name: string,
+  rva: number,
+  size: number,
+  fileSize: number,
+  rvaToOff: RvaToOffset,
+  issues: string[]
+): void => {
+  if (rva === 0 && size === 0) return;
+  if (rva === 0 && size !== 0) {
+    issues.push(`${name} has a non-zero size but RVA is 0.`);
+    return;
+  }
+  if (rva !== 0 && size === 0) {
+    issues.push(`${name} has an RVA but size is 0.`);
+    return;
+  }
+  const off = rvaToOff(rva);
+  if (off == null) {
+    issues.push(`${name} RVA could not be mapped to a file offset.`);
+    return;
+  }
+  if (off < 0 || off >= fileSize) {
+    issues.push(`${name} location is outside the file.`);
+    return;
+  }
+  if (off + size > fileSize) {
+    issues.push(`${name} data is truncated; spills past end of file.`);
+  }
+};
 
 export async function parseClrDirectory(
   file: File,
@@ -37,73 +52,106 @@ export async function parseClrDirectory(
   addCoverageRegion: AddCoverageRegion
 ): Promise<PeClrHeader | null> {
   const dir = dataDirs.find(d => d.name === "CLR_RUNTIME");
-  if (!dir?.rva || dir.size < 0x48) return null;
+  if (!dir) return null;
+  if (dir.rva === 0 && dir.size === 0) return null;
+  const fileSize = file.size;
+  const issues: string[] = [];
+  if (dir.rva === 0 && dir.size !== 0) issues.push("CLR directory has a non-zero size but RVA is 0.");
+  if (dir.rva !== 0 && dir.size === 0) issues.push("CLR directory has an RVA but size is 0.");
+  if (dir.rva === 0) {
+    const empty = readCor20Header(new DataView(new ArrayBuffer(0)));
+    if (issues.length) empty.issues = issues;
+    return empty;
+  }
   const base = rvaToOff(dir.rva);
-  if (base == null) return null;
-  addCoverageRegion("CLR (.NET) header", base, dir.size);
-  const view = new DataView(await file.slice(base, base + Math.min(dir.size, 0x48)).arrayBuffer());
-  const cb = view.getUint32(0, true);
-  const MajorRuntimeVersion = view.getUint16(4, true);
-  const MinorRuntimeVersion = view.getUint16(6, true);
-  const MetaDataRVA = view.getUint32(8, true);
-  const MetaDataSize = view.getUint32(12, true);
-  const Flags = view.getUint32(16, true);
-  const EntryPointToken = view.getUint32(20, true);
-  const metaOffset = rvaToOff(MetaDataRVA);
-  const clr: PeClrHeader = {
-    cb,
-    MajorRuntimeVersion,
-    MinorRuntimeVersion,
-    MetaDataRVA,
-    MetaDataSize,
-    Flags,
-    EntryPointToken
-  };
-  if (metaOffset != null && MetaDataSize >= 0x20) {
-    try {
-      const md = new DataView(await file.slice(metaOffset, metaOffset + Math.min(MetaDataSize, 0x4000)).arrayBuffer());
-      let p = 0;
-      const sig = md.getUint32(p, true); p += 4;
-      const verMajor = md.getUint16(p, true); p += 2;
-      const verMinor = md.getUint16(p, true); p += 2;
-      const reserved = md.getUint32(p, true); p += 4;
-      const verLen = md.getUint32(p, true); p += 4;
-      let verStr = "";
-      if (verLen > 0 && p + verLen <= md.byteLength) {
-        const bytes = new Uint8Array(md.buffer, md.byteOffset + p, verLen);
-        verStr = String.fromCharCode(...bytes.filter(b => b >= 0x20 && b <= 0x7e)).trim();
-        p = (p + verLen + 3) & ~3;
-      }
-      const flags = md.getUint16(p, true); p += 2;
-      const streamCount = md.getUint16(p, true); p += 2;
-      const streams: PeClrStreamInfo[] = [];
-      for (let i = 0; i < streamCount && p + 8 <= md.byteLength; i++) {
-        const offset = md.getUint32(p, true); p += 4;
-        const size = md.getUint32(p, true); p += 4;
-        let name = "";
-        const limit = Math.min(md.byteLength - p, 64);
-        for (let j = 0; j < limit; j++) {
-          const c = md.getUint8(p++);
-          if (c === 0) break;
-          name += String.fromCharCode(c);
-        }
-        p = (p + 3) & ~3;
-        streams.push({ name, offset, size });
-      }
-      clr.meta = {
-        version: verStr,
-        verMajor,
-        verMinor,
-        reserved,
-        flags,
-        streamCount,
-        signature: sig,
-        streams
-      };
-    } catch {
-      // malformed CLR metadata; keep only header fields
+  if (base == null) {
+    issues.push("CLR directory RVA could not be mapped to a file offset.");
+    const empty = readCor20Header(new DataView(new ArrayBuffer(0)));
+    if (issues.length) empty.issues = issues;
+    return empty;
+  }
+  if (base < 0 || base >= fileSize) {
+    issues.push("CLR directory location is outside the file.");
+    const empty = readCor20Header(new DataView(new ArrayBuffer(0)));
+    if (issues.length) empty.issues = issues;
+    return empty;
+  }
+  const availableSize = Math.min(dir.size, Math.max(0, fileSize - base));
+  if (availableSize > 0) addCoverageRegion("CLR (.NET) header", base, availableSize);
+  issues.push(...buildCor20Issues(dir.size, availableSize));
+  const clr = readCor20Header(
+    new DataView(
+      await file
+        .slice(base, base + Math.min(availableSize, COR20_HEADER_SIZE_BYTES))
+        .arrayBuffer()
+    )
+  );
+  if (clr.cb !== 0 && clr.cb !== COR20_HEADER_SIZE_BYTES) {
+    issues.push(`CLR header cb is ${clr.cb} bytes; expected ${COR20_HEADER_SIZE_BYTES} (0x48).`);
+  }
+  if (clr.cb !== 0 && clr.cb < COR20_HEADER_MIN_BYTES) {
+    issues.push("CLR header cb is smaller than the minimum header size (0x18 bytes).");
+  }
+  if (clr.cb !== 0 && dir.size !== 0 && dir.size < clr.cb) {
+    issues.push("CLR directory size is smaller than the header cb field; header appears truncated.");
+  }
+  if (clr.MetaDataRVA === 0 && clr.MetaDataSize !== 0) {
+    issues.push("Metadata has a non-zero size but RVA is 0.");
+  }
+  if (clr.MetaDataRVA !== 0 && clr.MetaDataSize === 0) {
+    issues.push("Metadata has an RVA but size is 0.");
+  }
+  if (clr.MetaDataRVA !== 0 && clr.MetaDataSize !== 0) {
+    const metaOffset = rvaToOff(clr.MetaDataRVA);
+    if (metaOffset == null) {
+      issues.push("Metadata RVA could not be mapped to a file offset.");
+    } else {
+      const meta = await parseClrMetadataRoot(file, metaOffset, clr.MetaDataSize, issues);
+      if (meta) clr.meta = meta;
     }
   }
+  addOptionalDirIssues("Resources", clr.ResourcesRVA, clr.ResourcesSize, fileSize, rvaToOff, issues);
+  addOptionalDirIssues(
+    "StrongNameSignature",
+    clr.StrongNameSignatureRVA,
+    clr.StrongNameSignatureSize,
+    fileSize,
+    rvaToOff,
+    issues
+  );
+  addOptionalDirIssues(
+    "CodeManagerTable",
+    clr.CodeManagerTableRVA,
+    clr.CodeManagerTableSize,
+    fileSize,
+    rvaToOff,
+    issues
+  );
+  addOptionalDirIssues(
+    "ExportAddressTableJumps",
+    clr.ExportAddressTableJumpsRVA,
+    clr.ExportAddressTableJumpsSize,
+    fileSize,
+    rvaToOff,
+    issues
+  );
+  addOptionalDirIssues(
+    "ManagedNativeHeader",
+    clr.ManagedNativeHeaderRVA,
+    clr.ManagedNativeHeaderSize,
+    fileSize,
+    rvaToOff,
+    issues
+  );
+  const fixups = await parseVTableFixups(
+    file,
+    rvaToOff,
+    fileSize,
+    clr.VTableFixupsRVA,
+    clr.VTableFixupsSize,
+    issues
+  );
+  if (fixups) clr.vtableFixups = fixups;
+  if (issues.length) clr.issues = issues;
   return clr;
 }
-
