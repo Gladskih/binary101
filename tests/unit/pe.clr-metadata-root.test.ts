@@ -31,7 +31,62 @@ void test("parseClrMetadataRoot reports unexpected metadata root signatures", as
   cursor += 2;
   dv.setUint16(cursor, 0, true);
   const issues: string[] = [];
-  const meta = await parseClrMetadataRoot(new MockFile(bytes, "meta-bad-sig.bin"), metaOffset, metaSize, issues);
+  const meta = await parseClrMetadataRoot(
+    new MockFile(bytes, "meta-bad-sig.bin"),
+    metaOffset,
+    metaSize,
+    issues
+  );
   assert.strictEqual(meta, null);
   assert.ok(issues.some(issue => issue.toLowerCase().includes("signature")));
+});
+
+void test("parseClrMetadataRoot parses stream headers beyond 0x4000 metadata offsets", async () => {
+  const encoder = new TextEncoder();
+  const metaOffset = 0x40;
+  const metaSize = 0x5000;
+  const bytes = new Uint8Array(metaOffset + metaSize).fill(0);
+  const dv = new DataView(bytes.buffer, metaOffset, metaSize);
+  let cursor = 0;
+  dv.setUint32(cursor, 0x424a5342, true);
+  cursor += 4;
+  dv.setUint16(cursor, 1, true);
+  cursor += 2;
+  dv.setUint16(cursor, 1, true);
+  cursor += 2;
+  dv.setUint32(cursor, 0, true);
+  cursor += 4;
+
+  const versionLength = 0x4fd0;
+  dv.setUint32(cursor, versionLength, true);
+  cursor += 4;
+  const versionPayload = new Uint8Array(versionLength).fill(0);
+  versionPayload.set(encoder.encode("v9.9"));
+  bytes.set(versionPayload, metaOffset + cursor);
+  cursor = align4(cursor + versionLength);
+
+  dv.setUint16(cursor, 0, true);
+  cursor += 2;
+  dv.setUint16(cursor, 1, true);
+  cursor += 2;
+
+  dv.setUint32(cursor, 0x40, true);
+  cursor += 4;
+  dv.setUint32(cursor, 0x80, true);
+  cursor += 4;
+  bytes.set(encoder.encode("#Strings\0"), metaOffset + cursor);
+
+  const issues: string[] = [];
+  const meta = await parseClrMetadataRoot(
+    new MockFile(bytes, "meta-large-header.bin"),
+    metaOffset,
+    metaSize,
+    issues
+  );
+
+  assert.ok(meta);
+  assert.strictEqual(meta.version, "v9.9");
+  assert.strictEqual(meta.streams.length, 1);
+  assert.strictEqual(meta.streams[0]?.name, "#Strings");
+  assert.deepStrictEqual(issues, []);
 });
