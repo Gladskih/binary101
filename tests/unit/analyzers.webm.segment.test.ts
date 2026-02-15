@@ -9,6 +9,7 @@ import { createWebmWithAttachments } from "../fixtures/webm-attachments-fixtures
 import { createWebmWithCues } from "../fixtures/webm-cues-fixtures.js";
 import { createWebmWithDurationMismatch } from "../fixtures/webm-duration-fixtures.js";
 import { createWebmWithInvalidCodecs } from "../fixtures/webm-invalid-codecs-fixtures.js";
+import { createWebmWithVariableVp8FrameSizes } from "../fixtures/webm-vp8-frame-size-fixtures.js";
 
 const parseTracksFromFixture = async () => {
   const file = createWebmFile();
@@ -120,4 +121,36 @@ void test("parseSegment computes real duration per track", async () => {
   assert.strictEqual(segment.computedDuration?.videoSeconds, 1);
   assert.strictEqual(segment.computedDuration?.audioSeconds, 2.5);
   assert.strictEqual(segment.computedDuration?.overallSeconds, 2.5);
+});
+
+void test("parseSegment detects VP8 bitstream frame-size anomalies", async () => {
+  const file = createWebmWithVariableVp8FrameSizes();
+  const issues: string[] = [];
+  const ebmlHeader = await readElementAt(file, 0, issues);
+  assert.ok(ebmlHeader);
+  assert.notStrictEqual(ebmlHeader?.size, null);
+  const segOffset = ebmlHeader!.dataOffset + (ebmlHeader!.size as number);
+  const segmentHeader = await readElementAt(file, segOffset, issues);
+  assert.ok(segmentHeader);
+  const segment = await parseSegment(file, segmentHeader, issues, "webm");
+  const video = segment.tracks.find(track => track.trackType === 1);
+  assert.ok(video);
+  const stats = (video as { bitstreamFrameStats?: unknown }).bitstreamFrameStats as {
+    blockCount: number;
+    keyframeCount: number;
+    parsedFrameCount: number;
+    uniqueSizes: Array<{ width: number; height: number; count: number }>;
+    mismatchWithTrackEntryCount: number;
+    allBlocksAreKeyframes: boolean | null;
+  } | null;
+  assert.ok(stats);
+  assert.strictEqual(stats?.blockCount, 3);
+  assert.strictEqual(stats?.keyframeCount, 3);
+  assert.strictEqual(stats?.parsedFrameCount, 3);
+  assert.strictEqual(stats?.uniqueSizes.length, 3);
+  assert.strictEqual(stats?.mismatchWithTrackEntryCount, 2);
+  assert.strictEqual(stats?.allBlocksAreKeyframes, true);
+  assert.ok(issues.some(msg => msg.includes("variable VP8 keyframe sizes")));
+  assert.ok(issues.some(msg => msg.includes("TrackEntry PixelWidth/PixelHeight")));
+  assert.ok(issues.some(msg => msg.includes("all blocks marked as keyframes")));
 });

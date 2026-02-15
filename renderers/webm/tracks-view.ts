@@ -14,13 +14,77 @@ const AUDIO_CODEC_OPTIONS = [
   ["A_OPUS", "Opus"]
 ] as const;
 
+const greatestCommonDivisor = (left: number, right: number): number => {
+  let a = Math.abs(left);
+  let b = Math.abs(right);
+  while (b !== 0) {
+    const next = a % b;
+    a = b;
+    b = next;
+  }
+  return a === 0 ? 1 : a;
+};
+
+const describeSampleAspectRatio = (track: WebmTrack): string | null => {
+  const pixelWidth = track.video?.pixelWidth ?? null;
+  const pixelHeight = track.video?.pixelHeight ?? null;
+  const displayWidth = track.video?.displayWidth ?? null;
+  const displayHeight = track.video?.displayHeight ?? null;
+  if (
+    pixelWidth == null ||
+    pixelHeight == null ||
+    displayWidth == null ||
+    displayHeight == null ||
+    pixelWidth <= 0 ||
+    pixelHeight <= 0 ||
+    displayWidth <= 0 ||
+    displayHeight <= 0
+  ) {
+    return null;
+  }
+  const sarNumerator = displayWidth * pixelHeight;
+  const sarDenominator = displayHeight * pixelWidth;
+  if (!Number.isFinite(sarNumerator) || !Number.isFinite(sarDenominator)) return null;
+  const divisor = greatestCommonDivisor(sarNumerator, sarDenominator);
+  return `${Math.floor(sarNumerator / divisor)}:${Math.floor(sarDenominator / divisor)}`;
+};
+
+const describeBitstreamFrameSizes = (track: WebmTrack): string | null => {
+  const stats = track.bitstreamFrameStats;
+  if (!stats) return null;
+  const parts: string[] = [];
+  parts.push(`Bitstream blocks ${stats.blockCount}, keyframes ${stats.keyframeCount}`);
+  if (stats.parsedFrameCount > 0) {
+    const range =
+      stats.minWidth != null &&
+      stats.maxWidth != null &&
+      stats.minHeight != null &&
+      stats.maxHeight != null
+        ? `${stats.minWidth}x${stats.minHeight}..${stats.maxWidth}x${stats.maxHeight}`
+        : "unknown";
+    parts.push(`Bitstream sizes ${stats.uniqueSizes.length} unique (range ${range})`);
+    if (stats.mismatchWithTrackEntryCount > 0) {
+      parts.push(`TrackEntry mismatch in ${stats.mismatchWithTrackEntryCount}/${stats.parsedFrameCount}`);
+    }
+    if (stats.allBlocksAreKeyframes === true) parts.push("All blocks marked keyframe");
+  }
+  return parts.join(", ");
+};
+
 const describeTrackDetails = (track: WebmTrack): string => {
   const parts: string[] = [];
   if (track.video) {
-    const width = track.video.displayWidth || track.video.pixelWidth;
-    const height = track.video.displayHeight || track.video.pixelHeight;
-    if (width && height) parts.push(`${width} x ${height}`);
+    if (track.video.pixelWidth && track.video.pixelHeight) {
+      parts.push(`Pixel ${track.video.pixelWidth} x ${track.video.pixelHeight}`);
+    }
+    if (track.video.displayWidth && track.video.displayHeight) {
+      parts.push(`Display ${track.video.displayWidth} x ${track.video.displayHeight}`);
+    }
+    const sar = describeSampleAspectRatio(track);
+    if (sar) parts.push(`SAR ${sar}`);
     if (track.defaultDurationFps) parts.push(`${track.defaultDurationFps} fps`);
+    const bitstreamSummary = describeBitstreamFrameSizes(track);
+    if (bitstreamSummary) parts.push(bitstreamSummary);
   }
   if (track.audio) {
     if (track.audio.samplingFrequency) parts.push(`${Math.round(track.audio.samplingFrequency)} Hz`);
@@ -122,4 +186,3 @@ export const renderTracks = (tracks: WebmTrack[] | null | undefined): string => 
     `</tr></thead><tbody>${rows}</tbody></table>`
   );
 };
-

@@ -43,6 +43,26 @@ export interface WebmTrackAudio {
   bitDepth: number | null;
 }
 
+export interface WebmTrackBitstreamFrameSize {
+  width: number;
+  height: number;
+  count: number;
+}
+
+export interface WebmTrackBitstreamFrameStats {
+  trackNumber: number;
+  blockCount: number;
+  keyframeCount: number;
+  parsedFrameCount: number;
+  uniqueSizes: WebmTrackBitstreamFrameSize[];
+  minWidth: number | null;
+  maxWidth: number | null;
+  minHeight: number | null;
+  maxHeight: number | null;
+  mismatchWithTrackEntryCount: number;
+  allBlocksAreKeyframes: boolean | null;
+}
+
 export interface WebmCodecPrivateVorbis {
   headerPacketLengths: [number, number, number] | null;
   vendor: string | null;
@@ -94,6 +114,7 @@ export interface WebmTrack {
   flagLacing: boolean | null;
   video: WebmTrackVideo | null;
   audio: WebmTrackAudio | null;
+  bitstreamFrameStats?: WebmTrackBitstreamFrameStats | null;
 }
 
 export interface WebmCueTrackPosition {

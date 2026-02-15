@@ -9,6 +9,9 @@ type OnClusterBlock = (timing: {
   timecode: number | null;
   durationTimecode: number | null;
   frames: number;
+  isKeyframe: boolean;
+  lacingMode: number | null;
+  payload: Uint8Array | null;
 }) => void;
 
 export const countBlocksInCluster = async (
@@ -29,10 +32,38 @@ export const countBlocksInCluster = async (
   const parseBlockHeader = (
     offset: number,
     available: number
-  ): { trackNumber: number | null; relativeTimecode: number | null; flags: number | null; frames: number } => {
-    if (available < 4) return { trackNumber: null, relativeTimecode: null, flags: null, frames: 1 };
+  ): {
+    trackNumber: number | null;
+    relativeTimecode: number | null;
+    flags: number | null;
+    frames: number;
+    lacingMode: number | null;
+    payloadOffset: number | null;
+    payloadSize: number | null;
+  } => {
+    if (available < 4) {
+      return {
+        trackNumber: null,
+        relativeTimecode: null,
+        flags: null,
+        frames: 1,
+        lacingMode: null,
+        payloadOffset: null,
+        payloadSize: null
+      };
+    }
     const trackVint = readVint(dv, offset);
-    if (!trackVint) return { trackNumber: null, relativeTimecode: null, flags: null, frames: 1 };
+    if (!trackVint) {
+      return {
+        trackNumber: null,
+        relativeTimecode: null,
+        flags: null,
+        frames: 1,
+        lacingMode: null,
+        payloadOffset: null,
+        payloadSize: null
+      };
+    }
     const trackData = trackVint.data;
     const trackNumber =
       trackData <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(trackData) : null;
@@ -40,17 +71,35 @@ export const countBlocksInCluster = async (
     const timecodeOffset = offset + trackVint.length;
     if (timecodeOffset + 2 > offset + available) {
       issues.push("Block timecode is truncated.");
-      return { trackNumber, relativeTimecode: null, flags: null, frames: 1 };
+      return {
+        trackNumber,
+        relativeTimecode: null,
+        flags: null,
+        frames: 1,
+        lacingMode: null,
+        payloadOffset: null,
+        payloadSize: null
+      };
     }
     const relativeTimecode = dv.getInt16(timecodeOffset, false);
     const flagsOffset = timecodeOffset + 2;
     if (flagsOffset >= offset + available) {
       issues.push("Block flags are truncated.");
-      return { trackNumber, relativeTimecode, flags: null, frames: 1 };
+      return {
+        trackNumber,
+        relativeTimecode,
+        flags: null,
+        frames: 1,
+        lacingMode: null,
+        payloadOffset: null,
+        payloadSize: null
+      };
     }
     const flags = dv.getUint8(flagsOffset);
     const lacingMode = (flags & 0x06) >> 1;
     let frames = 1;
+    let payloadOffset: number | null = flagsOffset + 1;
+    let payloadSize: number | null = Math.max(0, offset + available - (flagsOffset + 1));
     if (lacingMode !== 0) {
       const laceCountOffset = flagsOffset + 1;
       if (laceCountOffset < offset + available) {
@@ -58,8 +107,10 @@ export const countBlocksInCluster = async (
       } else {
         issues.push("Block lacing header is truncated.");
       }
+      payloadOffset = null;
+      payloadSize = null;
     }
-    return { trackNumber, relativeTimecode, flags, frames };
+    return { trackNumber, relativeTimecode, flags, frames, lacingMode, payloadOffset, payloadSize };
   };
 
   while (cursor < limit) {
@@ -80,14 +131,24 @@ export const countBlocksInCluster = async (
     } else if (header.id === 0xa3 && available > 3) {
       const block = parseBlockHeader(dataStart, available);
       blocks += 1;
-      if (block.flags != null && (block.flags & 0x80) !== 0) keyframes += 1;
+      const isKeyframe = block.flags != null && (block.flags & 0x80) !== 0;
+      if (isKeyframe) keyframes += 1;
       if (onBlock && block.trackNumber != null && block.relativeTimecode != null) {
         const base = clusterTimecode ?? 0;
+        const payload =
+          block.payloadOffset != null &&
+          block.payloadSize != null &&
+          block.payloadSize > 0
+            ? new Uint8Array(dv.buffer, dv.byteOffset + block.payloadOffset, block.payloadSize)
+            : null;
         onBlock({
           trackNumber: block.trackNumber,
           timecode: base + block.relativeTimecode,
           durationTimecode: null,
-          frames: block.frames
+          frames: block.frames,
+          isKeyframe,
+          lacingMode: block.lacingMode,
+          payload
         });
       }
     } else if (header.id === 0xa0 && available > 0) {
@@ -96,8 +157,14 @@ export const countBlocksInCluster = async (
       let hasReference = false;
       let hasBlock = false;
       let durationTimecode: number | null = null;
-      let blockTiming: { trackNumber: number | null; relativeTimecode: number | null; frames: number } | null =
-        null;
+      let blockTiming: {
+        trackNumber: number | null;
+        relativeTimecode: number | null;
+        frames: number;
+        lacingMode: number | null;
+        payloadOffset: number | null;
+        payloadSize: number | null;
+      } | null = null;
       while (innerCursor < innerLimit) {
         const innerHeader = readElementHeader(dv, innerCursor, clusterHeader.dataOffset + innerCursor, issues);
         if (!innerHeader || innerHeader.headerSize === 0 || innerHeader.size == null) break;
@@ -111,7 +178,10 @@ export const countBlocksInCluster = async (
             blockTiming = {
               trackNumber: parsed.trackNumber,
               relativeTimecode: parsed.relativeTimecode,
-              frames: parsed.frames
+              frames: parsed.frames,
+              lacingMode: parsed.lacingMode,
+              payloadOffset: parsed.payloadOffset,
+              payloadSize: parsed.payloadSize
             };
           }
         } else if (innerHeader.id === 0xfb) {
@@ -133,14 +203,24 @@ export const countBlocksInCluster = async (
         }
         innerCursor += innerHeader.headerSize + innerHeader.size;
       }
-      if (hasBlock && !hasReference) keyframes += 1;
+      const isKeyframe = hasBlock && !hasReference;
+      if (isKeyframe) keyframes += 1;
       if (onBlock && blockTiming?.trackNumber != null && blockTiming.relativeTimecode != null) {
         const base = clusterTimecode ?? 0;
+        const payload =
+          blockTiming.payloadOffset != null &&
+          blockTiming.payloadSize != null &&
+          blockTiming.payloadSize > 0
+            ? new Uint8Array(dv.buffer, dv.byteOffset + blockTiming.payloadOffset, blockTiming.payloadSize)
+            : null;
         onBlock({
           trackNumber: blockTiming.trackNumber,
           timecode: base + blockTiming.relativeTimecode,
           durationTimecode,
-          frames: blockTiming.frames
+          frames: blockTiming.frames,
+          isKeyframe,
+          lacingMode: blockTiming.lacingMode,
+          payload
         });
       }
     }

@@ -43,6 +43,7 @@ import { createRar5File, createSevenZipFile } from "../fixtures/rar-sevenzip-fix
 import { createTarFile } from "../fixtures/tar-fixtures.js";
 import { createZipFile } from "../fixtures/zip-fixtures.js";
 import { createWebmWithCues } from "../fixtures/webm-cues-fixtures.js";
+import { createWebmWithVariableVp8FrameSizes } from "../fixtures/webm-vp8-frame-size-fixtures.js";
 import { createAniFile, createAviFile, createWavFile } from "../fixtures/riff-sample-files.js";
 import { createSqliteFile } from "../fixtures/sqlite-fixtures.js";
 import { createPcapFile } from "../fixtures/pcap-fixtures.js";
@@ -114,6 +115,14 @@ void test("renderers produce readable HTML output", async () => {
   assert.match(webmHtml, /CodecPrivate/);
   assert.match(webmHtml, /Cues/);
   assert.match(webmHtml, /Track 1/);
+
+  const variableVp8 = await parseOnly(createWebmWithVariableVp8FrameSizes(), "webm");
+  const variableVp8Html = renderWebm(variableVp8);
+  assert.match(variableVp8Html, /SAR 345:316/);
+  assert.match(variableVp8Html, /Bitstream sizes 3 unique/);
+  assert.match(variableVp8Html, /TrackEntry mismatch in 2\/3/);
+  assert.match(variableVp8Html, /Warnings/);
+  assert.match(variableVp8Html, /variable VP8 keyframe sizes/);
 
   const mp4 = await parseOnly(createMp4File(), "mp4");
   const mp4Html = renderMp4(mp4);
