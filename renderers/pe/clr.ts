@@ -20,8 +20,56 @@ const CLR_IMAGE_FLAGS: Array<[number, string, string?]> = [
   [0x00020000, "32BITPREFERRED", "Prefer 32-bit (where supported)."]
 ];
 
+const TOKEN_TABLE_NAMES: Record<number, string> = {
+  0x02: "TypeDef",
+  0x04: "Field",
+  0x06: "MethodDef",
+  0x08: "Param",
+  0x0a: "MemberRef",
+  0x20: "Assembly",
+  0x23: "AssemblyRef",
+  0x26: "File",
+  0x27: "ExportedType",
+  0x2b: "MethodSpec"
+};
+
+const VTABLE_FIXUP_TYPE_FLAGS: Array<[number, string]> = [
+  [0x0001, "32BIT"],
+  [0x0002, "64BIT"],
+  [0x0004, "FROM_UNMANAGED"],
+  [0x0010, "CALL_MOST_DERIVED"]
+];
+
+const KNOWN_METADATA_STREAM_TYPES: Record<string, string> = {
+  "#~": "Compressed metadata tables",
+  "#-": "Uncompressed metadata tables",
+  "#Strings": "String heap",
+  "#US": "User string heap",
+  "#GUID": "GUID heap",
+  "#Blob": "Blob heap"
+};
+
 const formatClrDirectory = (rva: number, size: number): string =>
   rva || size ? `RVA ${hex(rva, 8)} Size ${humanSize(size)}` : "-";
+
+const decodeEntryPointToken = (token: number): string => {
+  const tableId = (token >>> 24) & 0xff;
+  const rowId = token & 0x00ffffff;
+  const tableName = TOKEN_TABLE_NAMES[tableId] || "UnknownTable";
+  return `${hex(token, 8)} (${tableName}, RID ${rowId})`;
+};
+
+const formatVTableFixupType = (value: number): string => {
+  const names = VTABLE_FIXUP_TYPE_FLAGS.filter(([flag]) => (value & flag) !== 0).map(([, name]) => name);
+  const knownMask = VTABLE_FIXUP_TYPE_FLAGS.reduce((mask, [flag]) => mask | flag, 0);
+  if ((value & ~knownMask) !== 0) {
+    names.push("UNKNOWN_BITS");
+  }
+  return names.length ? `${hex(value, 4)} (${names.join(" | ")})` : hex(value, 4);
+};
+
+const describeMetadataStreamType = (name: string): string =>
+  KNOWN_METADATA_STREAM_TYPES[name] || "Unknown stream type";
 
 const renderClrSubdirectories = (pe: PeParseResult, out: string[]): void => {
   const clrHeader = pe.clr;
@@ -49,7 +97,7 @@ const renderClrSubdirectories = (pe: PeParseResult, out: string[]): void => {
       "VTableFixups",
       clrHeader.VTableFixupsRVA,
       clrHeader.VTableFixupsSize,
-      "VTable fixups table (interop)."
+      "VTable fixups table used for unmanaged interop stubs."
     ],
     [
       "ExportAddressTableJumps",
@@ -92,7 +140,7 @@ const renderClrSubdirectories = (pe: PeParseResult, out: string[]): void => {
     clrHeader.vtableFixups.forEach((entry, index) => {
       out.push(
         `<tr><td>${index + 1}</td><td>${hex(entry.RVA, 8)}</td>` +
-          `<td>${entry.Count}</td><td>${hex(entry.Type, 4)}</td></tr>`
+          `<td>${entry.Count}</td><td>${safe(formatVTableFixupType(entry.Type))}</td></tr>`
       );
     });
     out.push(`</tbody></table></details>`);
@@ -104,9 +152,38 @@ const renderClrMetadata = (pe: PeParseResult, out: string[]): void => {
   const clrHeader = pe.clr;
   if (!clrHeader?.meta) return;
   const meta = clrHeader.meta;
+  out.push(`<details style="margin-top:.35rem" open><summary>Metadata root</summary><dl>`);
   if (meta.version) {
-    out.push(`<div class="smallNote">Metadata version: ${safe(meta.version)}</div>`);
+    out.push(dd("VersionString", safe(meta.version), "Metadata version string from the metadata root."));
   }
+  if (meta.verMajor != null && meta.verMinor != null) {
+    out.push(
+      dd(
+        "Version",
+        `${meta.verMajor}.${meta.verMinor}`,
+        "Metadata root format version fields (major/minor)."
+      )
+    );
+  }
+  if (meta.signature != null) {
+    out.push(dd("Signature", hex(meta.signature, 8), "Metadata root signature, expected BSJB."));
+  }
+  if (meta.flags != null) {
+    out.push(dd("Flags", hex(meta.flags, 4), "Metadata root flags field."));
+  }
+  if (meta.reserved != null) {
+    out.push(dd("Reserved", hex(meta.reserved, 8), "Reserved metadata root value (usually 0)."));
+  }
+  if (meta.streamCount != null) {
+    out.push(
+      dd(
+        "StreamCount",
+        `${meta.streamCount} declared, ${meta.streams.length} parsed`,
+        "Declared stream header count versus successfully parsed stream entries."
+      )
+    );
+  }
+  out.push(`</dl></details>`);
   if (!meta.streams?.length) return;
   out.push(
     `<details style="margin-top:.35rem"><summary>` +
@@ -115,13 +192,14 @@ const renderClrMetadata = (pe: PeParseResult, out: string[]): void => {
   );
   out.push(
     `<table class="table" style="margin-top:.35rem">` +
-      `<thead><tr><th>#</th><th>Name</th><th>Offset</th><th>Size</th></tr></thead>` +
+      `<thead><tr><th>#</th><th>Name</th><th>Type</th><th>Offset</th><th>End</th><th>Size</th></tr></thead>` +
       `<tbody>`
   );
   meta.streams.forEach((stream, index) => {
+    const streamEnd = stream.offset + stream.size;
     out.push(
-      `<tr><td>${index + 1}</td><td>${safe(stream.name)}</td>` +
-        `<td>${hex(stream.offset, 8)}</td><td>${humanSize(stream.size)}</td></tr>`
+      `<tr><td>${index + 1}</td><td>${safe(stream.name)}</td><td>${safe(describeMetadataStreamType(stream.name))}</td>` +
+        `<td>${hex(stream.offset, 8)}</td><td>${hex(streamEnd, 8)}</td><td>${humanSize(stream.size)}</td></tr>`
     );
   });
   out.push(`</tbody></table></details>`);
@@ -170,8 +248,8 @@ export function renderClr(pe: PeParseResult, out: string[]): void {
     out.push(
       dd(
         "EntryPointToken",
-        hex(clrHeader.EntryPointToken, 8),
-        "Managed entry point method token (MethodDef/...)."
+        safe(decodeEntryPointToken(clrHeader.EntryPointToken)),
+        "Managed method token (table id + RID) used as the startup entry point."
       )
     );
   }
@@ -185,4 +263,3 @@ export function renderClr(pe: PeParseResult, out: string[]): void {
   renderClrMetadata(pe, out);
   out.push(`</section>`);
 }
-
