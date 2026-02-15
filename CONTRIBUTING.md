@@ -38,6 +38,7 @@ All contributions must adhere to the project's code quality metrics and best pra
 - **Maximum line length**: Aim for 100 characters where practical.
 - **Maximum function length**: Aim for 20-30 lines; refactor functions over 50 lines.
 - **Cyclomatic complexity**: Keep below 10; use helper functions to reduce complexity.
+- **No boolean control parameters**: Do not add boolean parameters that switch execution flow (`foo(..., true/false)` + `if`). Split behavior into separate functions and share common logic via composition.
 - **Nested callbacks**: Maximum 3 levels.
 - **Variable declarations**: Use `const` by default, `let` only if reassignment is needed.
 - **String quotes**: Use double quotes (`"`).

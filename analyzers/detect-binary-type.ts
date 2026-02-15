@@ -5,7 +5,7 @@ import { parseCoffHeader } from "./pe/core-headers.js";
 import { mapMachine } from "./pe/signature.js";
 import { parsePng } from "./png/index.js";
 import { parseWebp } from "./webp/index.js";
-import { parseWebm, buildWebmLabel } from "./webm/index.js";
+import { probeWebm, buildWebmLabel } from "./webm/index.js";
 import { parseMp3, probeMp3 } from "./mp3/index.js";
 import { parseFlac } from "./flac/index.js";
 import { parseSevenZip } from "./sevenz/index.js";
@@ -133,7 +133,7 @@ const detectBinaryType = async (file: File): Promise<string> => {
       if (version) return `PDF document (v${version})`;
     }
     if (magic === "Matroska/WebM container") {
-      const webm = await parseWebm(file);
+      const webm = await probeWebm(file);
       const label = buildWebmLabel(webm);
       if (label) return label;
       return magic;

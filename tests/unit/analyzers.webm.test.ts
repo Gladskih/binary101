@@ -2,9 +2,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseWebm, buildWebmLabel } from "../../analyzers/webm/index.js";
+import { parseWebm, probeWebm, buildWebmLabel } from "../../analyzers/webm/index.js";
 import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
 import { createWebmWithAttachments } from "../fixtures/webm-attachments-fixtures.js";
+import { createWebmWithVariableVp8FrameSizes } from "../fixtures/webm-vp8-frame-size-fixtures.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 void test("parseWebm reads EBML header, info and tracks", async () => {
@@ -47,4 +48,20 @@ void test("parseWebm warns on Matroska-only elements in WebM", async () => {
   const parsed = await parseWebm(createWebmWithAttachments());
   assert.ok(parsed);
   assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("attachments")));
+});
+
+void test("probeWebm skips expensive cluster scan", async () => {
+  const file = createWebmWithVariableVp8FrameSizes();
+  const summary = await probeWebm(file);
+  assert.ok(summary);
+  assert.strictEqual(summary?.segment?.blockCount, 0);
+  assert.strictEqual(summary?.segment?.keyframeCount, 0);
+  assert.strictEqual(summary?.segment?.computedDuration ?? null, null);
+  const track = summary?.segment?.tracks.find(item => item.trackType === 1);
+  assert.strictEqual(track?.bitstreamFrameStats ?? null, null);
+
+  const full = await parseWebm(file);
+  assert.ok(full);
+  assert.strictEqual(full?.segment?.blockCount, 3);
+  assert.strictEqual(full?.segment?.keyframeCount, 3);
 });

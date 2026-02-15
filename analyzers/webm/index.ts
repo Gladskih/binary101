@@ -6,10 +6,13 @@ import {
 } from "./constants.js";
 import { readElementAt } from "./ebml.js";
 import { parseEbmlHeader, validateDocTypeCompatibility } from "./info.js";
-import { parseSegment } from "./segment.js";
+import { parseSegment, parseSegmentSummary } from "./segment.js";
 import type { WebmParseResult } from "./types.js";
 
-export async function parseWebm(file: File): Promise<WebmParseResult | null> {
+const parseWebmWithSegmentParser = async (
+  file: File,
+  segmentParser: typeof parseSegment
+): Promise<WebmParseResult | null> => {
   if (file.size < 4) return null;
   const prefix = new DataView(await file.slice(0, Math.min(file.size, 1024)).arrayBuffer());
   if (prefix.getUint32(0, false) !== EBML_ID) return null;
@@ -33,7 +36,7 @@ export async function parseWebm(file: File): Promise<WebmParseResult | null> {
       issues
     };
   }
-  const segment = await parseSegment(file, segmentHeader, issues, docTypeLower);
+  const segment = await segmentParser(file, segmentHeader, issues, docTypeLower);
   return {
     isWebm: docTypeLower === "webm",
     isMatroska: docTypeLower === "matroska",
@@ -42,6 +45,14 @@ export async function parseWebm(file: File): Promise<WebmParseResult | null> {
     segment,
     issues
   };
+};
+
+export async function probeWebm(file: File): Promise<WebmParseResult | null> {
+  return parseWebmWithSegmentParser(file, parseSegmentSummary);
+}
+
+export async function parseWebm(file: File): Promise<WebmParseResult | null> {
+  return parseWebmWithSegmentParser(file, parseSegment);
 }
 
 export const buildWebmLabel = (parsed: WebmParseResult | null | undefined): string | null => {
