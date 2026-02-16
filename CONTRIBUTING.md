@@ -127,6 +127,11 @@ To add support for a new binary format:
 - **Error handling**: Report anomalies visibly in the UI instead of silently failing.
 - **Return types**: Parsers should return plain JavaScript objects (no DOM).
 
+### Detection Pipeline Policy
+
+- Current default architecture is `probe+parse`: keep detection lightweight and run full parsing in `parseForUi`.
+- Existing legacy exceptions are tracked in `TODO.md`.
+
 ## Git Conventions
 
 - **Commit messages**: Use present tense, imperative mood (e.g., "Add PE parser" not "Added PE parser").
