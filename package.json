@@ -12,6 +12,7 @@
     "test:unit": "tsx --test tests/unit/**/*.ts",
     "test:coverage": "c8 --config .c8rc.json tsx --test tests/unit/**/*.ts",
     "test:e2e": "playwright test",
+    "test:elf-wsl": "tsx --test tests/external/analyzers.elf.wsl-readelf.test.ts",
     "test:pe-extreme": "tsx --test tests/external/analyzers.pe.extreme-fixtures.test.ts",
     "fetch:pe-fixtures": "tsx scripts/fetchExternalPeFixtures.ts"
   },
