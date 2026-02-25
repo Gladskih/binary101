@@ -1,7 +1,13 @@
 "use strict";
 
 import { dd, safe } from "../../html-utils.js";
-import type { ElfDynamicInfo, ElfInterpreterInfo, ElfParseResult } from "../../analyzers/elf/types.js";
+import { DYNAMIC_FLAGS, DYNAMIC_FLAGS_1 } from "../../analyzers/elf/constants.js";
+import type {
+  ElfDynamicInfo,
+  ElfInterpreterInfo,
+  ElfOptionEntry,
+  ElfParseResult
+} from "../../analyzers/elf/types.js";
 import { formatElfHex, formatElfList, formatElfMaybeHumanSize } from "./value-format.js";
 
 const formatAddrOrDash = (value: bigint | null | undefined): string => (value != null ? safe(formatElfHex(value)) : "-");
@@ -17,6 +23,34 @@ const collectIssues = (interpreter?: ElfInterpreterInfo, dynamic?: ElfDynamicInf
   dynamic?.issues?.forEach(issue => issues.push(`Dynamic: ${issue}`));
   return issues;
 };
+
+const toUint32 = (value: number): number => value >>> 0;
+
+const describeDynamicFlags = (value: number, knownFlags: ElfOptionEntry[]): string => {
+  const normalized = toUint32(value);
+  const enabledFlags = knownFlags.filter(([bit]) => (normalized & toUint32(bit)) !== 0);
+  const knownMask = knownFlags.reduce((mask, [bit]) => (mask | toUint32(bit)) >>> 0, 0);
+  const unknownMask = (normalized & (~knownMask >>> 0)) >>> 0;
+  const items = enabledFlags.length
+    ? enabledFlags
+        .map(([, name, explanation]) => {
+          const details = explanation ? `: ${safe(explanation)}` : "";
+          return `<li><span class="mono">${safe(name)}</span>${details}</li>`;
+        })
+        .join("")
+    : `<li>No known flags set.</li>`;
+  const unknownItem =
+    unknownMask !== 0
+      ? `<li><span class="mono">Unknown bits: ${safe(formatElfHex(unknownMask, 8))}</span></li>`
+      : "";
+  return (
+    `<div><span class="mono">${safe(formatElfHex(normalized, 8))}</span></div>` +
+    `<ul style="margin:.35rem 0 0 1.1rem">${items}${unknownItem}</ul>`
+  );
+};
+
+const formatDynamicFlags = (value: number | null | undefined, knownFlags: ElfOptionEntry[]): string =>
+  value != null ? describeDynamicFlags(value, knownFlags) : "-";
 
 export function renderElfLinking(elf: ElfParseResult, out: string[]): void {
   const interpreter = elf.interpreter;
@@ -45,8 +79,20 @@ export function renderElfLinking(elf: ElfParseResult, out: string[]): void {
     out.push(dd("Preinit array", formatRangeOrDash(dynamic.preinitArray)));
     out.push(dd("Init array", formatRangeOrDash(dynamic.initArray)));
     out.push(dd("Fini array", formatRangeOrDash(dynamic.finiArray)));
-    out.push(dd("Flags (DT_FLAGS)", dynamic.flags != null ? safe(formatElfHex(dynamic.flags, 8)) : "-"));
-    out.push(dd("Flags_1 (DT_FLAGS_1)", dynamic.flags1 != null ? safe(formatElfHex(dynamic.flags1, 8)) : "-"));
+    out.push(
+      dd(
+        "Flags (DT_FLAGS)",
+        formatDynamicFlags(dynamic.flags, DYNAMIC_FLAGS),
+        "Base dynamic-loader behavior flags. Known bits are decoded below."
+      )
+    );
+    out.push(
+      dd(
+        "Flags_1 (DT_FLAGS_1)",
+        formatDynamicFlags(dynamic.flags1, DYNAMIC_FLAGS_1),
+        "Extended dynamic-loader behavior flags. Known bits are decoded below."
+      )
+    );
   }
 
   out.push(`</dl>`);
@@ -61,4 +107,3 @@ export function renderElfLinking(elf: ElfParseResult, out: string[]): void {
 
   out.push(`</section>`);
 }
-

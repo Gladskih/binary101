@@ -20,4 +20,12 @@ void test("renderElfLinking renders interpreter and DT_NEEDED libraries", async 
   assert.ok(html.includes(expectDefined(expected.needed[1])));
   assert.ok(html.includes(expected.soname));
   assert.ok(html.includes(expected.runpath));
+  assert.ok(html.includes("Flags (DT_FLAGS)"));
+  assert.ok(html.includes("DF_TEXTREL"));
+  assert.ok(html.includes("DF_STATIC_TLS"));
+  assert.ok(html.includes("Unknown bits: 0x00001220"));
+  assert.ok(html.includes("Flags_1 (DT_FLAGS_1)"));
+  assert.ok(html.includes("DF_1_NODELETE"));
+  assert.ok(html.includes("DF_1_INITFIRST"));
+  assert.ok(html.includes("DF_1_NOOPEN"));
 });

@@ -46,6 +46,75 @@ const SECTION_HINTS: Record<string, string> = {
 
 const knownSectionName = (name: string): string | null => SECTION_HINTS[name.toLowerCase()] || null;
 
+const SHT_RELA = 4;
+const SHT_DYNAMIC = 6;
+const SHT_REL = 9;
+const SHT_SYMTAB = 2;
+const SHT_DYNSYM = 11;
+const SHT_GROUP = 17;
+
+const sectionIndexWithName = (sectionsByIndex: Map<number, ElfSectionHeader>, index: number): string => {
+  if (index === 0) return "0 (SHN_UNDEF)";
+  const section = sectionsByIndex.get(index);
+  if (!section) return `${index} (missing section)`;
+  return section.name ? `${index} (${section.name})` : `${index}`;
+};
+
+const sectionLinkMeaning = (section: ElfSectionHeader): string => {
+  switch (section.type) {
+    case SHT_SYMTAB:
+    case SHT_DYNSYM:
+      return "sh_link points to the string table used by this symbol table.";
+    case SHT_REL:
+    case SHT_RELA:
+      return "sh_link points to the symbol table used by relocations in this section.";
+    case SHT_DYNAMIC:
+      return "sh_link usually points to the dynamic string table (.dynstr).";
+    default:
+      return "sh_link is section-type specific auxiliary data.";
+  }
+};
+
+const sectionInfoMeaning = (section: ElfSectionHeader): string => {
+  switch (section.type) {
+    case SHT_SYMTAB:
+    case SHT_DYNSYM:
+      return "sh_info stores one greater than the last local symbol index.";
+    case SHT_REL:
+    case SHT_RELA:
+      return "sh_info points to the section that relocations apply to.";
+    case SHT_GROUP:
+      return "sh_info stores the symbol-table index of the group signature symbol.";
+    default:
+      return "sh_info meaning depends on section type and flags.";
+  }
+};
+
+const formatSectionLink = (section: ElfSectionHeader, sectionsByIndex: Map<number, ElfSectionHeader>): string => {
+  const label = sectionIndexWithName(sectionsByIndex, section.link);
+  return `<span title="${safe(sectionLinkMeaning(section))}">${safe(label)}</span>`;
+};
+
+const formatSectionInfo = (section: ElfSectionHeader, sectionsByIndex: Map<number, ElfSectionHeader>): string => {
+  if (section.type === SHT_SYMTAB || section.type === SHT_DYNSYM) {
+    const text = `${section.info} (symbol index after last local symbol)`;
+    return `<span title="${safe(sectionInfoMeaning(section))}">${safe(text)}</span>`;
+  }
+  if (section.type === SHT_REL || section.type === SHT_RELA) {
+    const text = sectionIndexWithName(sectionsByIndex, section.info);
+    return `<span title="${safe(sectionInfoMeaning(section))}">${safe(text)}</span>`;
+  }
+  return `<span title="${safe(sectionInfoMeaning(section))}">${safe(String(section.info))}</span>`;
+};
+
+const formatSectionEntSize = (section: ElfSectionHeader): string => {
+  if (section.entsize === 0n) {
+    return `<span title="sh_entsize: 0 means variable-sized data or a non-table section.">0</span>`;
+  }
+  const value = formatElfMaybeHumanSize(section.entsize);
+  return `<span title="sh_entsize: fixed size of one entry in this section table.">${value}</span>`;
+};
+
 function renderOverview(elf: ElfParseResult, out: string[]): void {
   const bits = elf.is64 ? "64-bit" : "32-bit";
   const endian = elf.littleEndian ? "little-endian" : "big-endian";
@@ -133,6 +202,11 @@ function renderSectionHeaders(elf: ElfParseResult, out: string[]): void {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Section headers</h4>`);
   out.push(
+    `<div class="smallNote"><span class="mono">sh_link</span> is section-type specific, ` +
+      `<span class="mono">sh_info</span> meaning depends on section type, and ` +
+      `<span class="mono">sh_entsize</span> is the fixed record size (0 for variable/non-table data).</div>`
+  );
+  out.push(
     `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show section headers (${elf.sections.length})</summary>`
   );
   out.push(`<div class="tableWrap">`);
@@ -140,9 +214,13 @@ function renderSectionHeaders(elf: ElfParseResult, out: string[]): void {
     `<table class="table"><thead><tr>` +
       `<th>#</th><th>Name</th><th>Type</th><th>Offset</th>` +
       `<th>Size</th><th>Addr</th><th>Flags</th><th>Align</th>` +
+      `<th title="sh_link: section index reference with type-specific meaning.">Link</th>` +
+      `<th title="sh_info: extra data with type-specific meaning.">Info</th>` +
+      `<th title="sh_entsize: size of one fixed-size entry in table-like sections.">EntSize</th>` +
     `</tr></thead><tbody>`
   );
   const sectionTypeMap = new Map<number, ElfOptionEntry>(SECTION_TYPES.map(entry => [entry[0], entry]));
+  const sectionsByIndex = new Map<number, ElfSectionHeader>(elf.sections.map(section => [section.index, section]));
   elf.sections.forEach((sec: ElfSectionHeader) => {
     const opt = sectionTypeMap.get(sec.type);
     const typeLabel = sec.typeName || opt?.[1] || `0x${sec.type.toString(16)}`;
@@ -157,7 +235,10 @@ function renderSectionHeaders(elf: ElfParseResult, out: string[]): void {
         `<td><span title="${safe(typeTitle)}">${safe(typeLabel)}</span></td><td>${safe(formatElfHex(sec.offset))}</td>` +
         `<td>${formatElfMaybeHumanSize(sec.size)}</td>` +
         `<td>${safe(formatElfHex(sec.addr))}</td>` +
-        `<td>${flags}</td><td>${safe(formatElfHex(sec.addralign))}</td></tr>`
+        `<td>${flags}</td><td>${safe(formatElfHex(sec.addralign))}</td>` +
+        `<td>${formatSectionLink(sec, sectionsByIndex)}</td>` +
+        `<td>${formatSectionInfo(sec, sectionsByIndex)}</td>` +
+        `<td>${formatSectionEntSize(sec)}</td></tr>`
     );
   });
   out.push(`</tbody></table>`);

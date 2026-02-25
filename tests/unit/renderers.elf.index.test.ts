@@ -21,7 +21,7 @@ void test("renderElf (ELF) renders collapsible program/section tables with hints
       phentsize: 56,
       phnum: 1,
       shentsize: 64,
-      shnum: 1,
+      shnum: 3,
       shstrndx: 0
     },
     programHeaders: [
@@ -42,6 +42,38 @@ void test("renderElf (ELF) renders collapsible program/section tables with hints
     sections: [
       {
         nameOff: 0,
+        type: 3,
+        typeName: "SHT_STRTAB",
+        flags: 0n,
+        flagNames: [],
+        addr: 0x400900n,
+        offset: 0x900n,
+        size: 0x80n,
+        link: 0,
+        info: 0,
+        addralign: 0x1n,
+        entsize: 0n,
+        index: 1,
+        name: ".dynstr"
+      },
+      {
+        nameOff: 0,
+        type: 11,
+        typeName: "SHT_DYNSYM",
+        flags: 0x2n,
+        flagNames: ["ALLOC"],
+        addr: 0x400980n,
+        offset: 0x980n,
+        size: 0x60n,
+        link: 1,
+        info: 2,
+        addralign: 0x8n,
+        entsize: 0x18n,
+        index: 2,
+        name: ".dynsym"
+      },
+      {
+        nameOff: 0,
         type: 1,
         typeName: "SHT_PROGBITS",
         flags: 0x6n,
@@ -53,7 +85,7 @@ void test("renderElf (ELF) renders collapsible program/section tables with hints
         info: 0,
         addralign: 0x10n,
         entsize: 0n,
-        index: 0,
+        index: 3,
         name: ".text"
       }
     ],
@@ -66,11 +98,18 @@ void test("renderElf (ELF) renders collapsible program/section tables with hints
   const html = renderElf(elf);
 
   assert.ok(html.includes("Show program headers (1)"));
-  assert.ok(html.includes("Show section headers (1)"));
+  assert.ok(html.includes("Show section headers (3)"));
   assert.ok(html.includes('class="tableWrap"'));
   assert.ok(html.includes('title="PT_LOAD - Loadable segment."'));
   assert.ok(html.includes('title="Executable code (instructions)."'));
   assert.ok(html.includes("<b>.text</b>"));
   assert.ok(html.includes("4 KB (4096 bytes)"));
+  assert.ok(html.includes("Link"));
+  assert.ok(html.includes("Info"));
+  assert.ok(html.includes("EntSize"));
+  assert.ok(html.includes("sh_link is section-type specific"));
+  assert.ok(html.includes("sh_info meaning depends on section type"));
+  assert.ok(html.includes("1 (.dynstr)"));
+  assert.ok(html.includes("2 (symbol index after last local symbol)"));
+  assert.ok(html.includes("24 bytes"));
 });
-
