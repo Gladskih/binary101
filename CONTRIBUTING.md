@@ -56,6 +56,20 @@ All contributions must adhere to the project's code quality metrics and best pra
 - Do **not** introduce new generically named modules such as `helpers`, `utils`, `extra`, `extensions`, or similar grab-bag names. If you feel tempted to add `helpers.ts`, it usually means there are at least two more meaningful modules hiding in that file.
 - When you need shared logic, group it by concept or section (for example `value-format`, `flags-view`, `semantics`, `signature`) rather than by the generic idea of “helping” another module.
 
+### Repository Conventions
+
+- Prefer small, focused changes over large refactors.
+- Keep code self-documenting:
+  - use clear, descriptive names for functions, variables, and modules,
+  - keep control flow straightforward; avoid clever tricks when a simple construct is enough.
+- Abbreviations:
+  - avoid project-specific or obscure abbreviations,
+  - only use common ones that are widely understood (for example `id`, `url`, `crc`, `pe`, `mp3`).
+- Keep analyzers and renderers separate:
+  - analyzers are pure parsing (no DOM, no direct UI code),
+  - renderers are pure HTML formatting (no file I/O).
+- Maintain the UI parse contract: `parseForUi(file)` must continue to return `{ analyzer, parsed }`.
+
 ### HTML Guidelines
 - Use semantic elements (`<header>`, `<nav>`, `<main>`, `<article>`, `<footer>`).
 - Include `alt` attributes for images and proper `<label>` elements for form inputs.
