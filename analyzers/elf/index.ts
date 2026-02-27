@@ -1,14 +1,10 @@
 "use strict";
-import { readAsciiString } from "../../binary-utils.js";
 import {
   ELF_CLASS,
   ELF_DATA,
   ELF_TYPE,
   ELF_MACHINE,
-  PROGRAM_TYPES,
-  SECTION_TYPES,
-  SECTION_FLAGS,
-  PROGRAM_FLAGS
+  decodeOption
 } from "./constants.js";
 import { parseElfComment } from "./comment.js";
 import { parseElfDebugLink } from "./debug-link.js";
@@ -17,33 +13,30 @@ import { parseElfDynamicSymbols } from "./dynamic-symbols.js";
 import { parseElfInterpreter } from "./interpreter.js";
 import { parseElfNotes } from "./notes.js";
 import { parseElfTlsInfo } from "./tls.js";
-import type { ElfHeader, ElfIdent, ElfOptionEntry, ElfParseResult, ElfProgramHeader, ElfSectionHeader } from "./types.js";
+import {
+  parseProgramHeadersWithGuards,
+  parseSectionHeadersWithNames,
+  resolveExtendedHeaderCounts
+} from "./header-tables.js";
+import type { ElfHeader, ElfIdent, ElfParseResult, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 const ELF_MAGIC = 0x7f454c46;
-const decodeOption = (value: number, options: ElfOptionEntry[]): string | null =>
-  options.find(entry => entry[0] === value)?.[1] || null;
-const decodeFlags = (mask: number, flags: ElfOptionEntry[]): string[] =>
-  flags
-    .filter(([bit]) => (mask & bit) !== 0)
-    .map(([, name]) => name);
-const bigFrom32 = (value: number): bigint => BigInt(value >>> 0);
-const toSafeNumber = (value: number | bigint, label: string, issues: string[]): number | null => {
-  if (typeof value === "number") return value;
-  const num = Number(value);
-  if (!Number.isSafeInteger(num)) {
-    issues.push(`${label} (${value.toString()}) is too large to index into the file.`);
-    return null;
-  }
-  return num;
-};
-type SliceViewResult = { dv: DataView | null; truncated: boolean };
-async function sliceView(file: File, offset: number, length: number): Promise<SliceViewResult> {
-  const end = offset + length;
-  const bounded = end > file.size ? file.size : end;
-  if (offset >= file.size || bounded <= offset) return { dv: null, truncated: true };
-  const buffer = await file.slice(offset, bounded).arrayBuffer();
-  const truncated = buffer.byteLength !== length;
-  return { dv: new DataView(buffer), truncated };
-}
+const bigFrom32 = (value: number): bigint => BigInt.asUintN(32, BigInt(value));
+const emptyElfHeader = (): ElfHeader => ({
+  type: 0,
+  typeName: null,
+  machine: 0,
+  machineName: null,
+  entry: 0n,
+  phoff: 0n,
+  shoff: 0n,
+  flags: 0,
+  ehsize: 0,
+  phentsize: 0,
+  phnum: 0,
+  shentsize: 0,
+  shnum: 0,
+  shstrndx: 0
+});
 function parseIdent(dv: DataView, issues: string[]): ElfIdent {
   const cls = dv.getUint8(4);
   const data = dv.getUint8(5);
@@ -90,178 +83,50 @@ function parseElfHeader(dv: DataView, is64: boolean, little: boolean, issues: st
     shstrndx
   };
 }
-function parseProgramHeader(view: DataView, is64: boolean, little: boolean): Omit<ElfProgramHeader, "index"> {
-  const u32 = (offset: number): number => view.getUint32(offset, little);
-  const u64 = (offset: number): bigint => view.getBigUint64(offset, little);
-  if (is64) {
-    const type = u32(0);
-    const flags = u32(4);
-    return {
-      type,
-      typeName: decodeOption(type, PROGRAM_TYPES) || null,
-      offset: u64(8),
-      vaddr: u64(16),
-      paddr: u64(24),
-      filesz: u64(32),
-      memsz: u64(40),
-      flags,
-      flagNames: decodeFlags(flags, PROGRAM_FLAGS),
-      align: u64(48)
-    };
-  }
-  const type = u32(0);
-  const offset = bigFrom32(u32(4));
-  const vaddr = bigFrom32(u32(8));
-  const paddr = bigFrom32(u32(12));
-  const filesz = bigFrom32(u32(16));
-  const memsz = bigFrom32(u32(20));
-  const flags = u32(24);
-  return {
-    type,
-    typeName: decodeOption(type, PROGRAM_TYPES) || null,
-    offset,
-    vaddr,
-    paddr,
-    filesz,
-    memsz,
-    flags,
-    flagNames: decodeFlags(flags, PROGRAM_FLAGS),
-    align: bigFrom32(u32(28))
-  };
-}
-function parseSectionHeader(view: DataView, is64: boolean, little: boolean): Omit<ElfSectionHeader, "index" | "name"> {
-  const u32 = (offset: number): number => view.getUint32(offset, little);
-  const u64 = (offset: number): bigint => view.getBigUint64(offset, little);
-  if (is64) {
-    const nameOff = u32(0);
-    const type = u32(4);
-    const flags = u64(8);
-    return {
-      nameOff,
-      type,
-      typeName: decodeOption(type, SECTION_TYPES) || null,
-      flags,
-      flagNames: decodeFlags(Number(flags & 0xffffffffn), SECTION_FLAGS),
-      addr: u64(16),
-      offset: u64(24),
-      size: u64(32),
-      link: u32(40),
-      info: u32(44),
-      addralign: u64(48),
-      entsize: u64(56)
-    };
-  }
-  const nameOff = u32(0);
-  const type = u32(4);
-  const flags = bigFrom32(u32(8));
-  return {
-    nameOff,
-    type,
-    typeName: decodeOption(type, SECTION_TYPES) || null,
-    flags,
-    flagNames: decodeFlags(Number(flags), SECTION_FLAGS),
-    addr: bigFrom32(u32(12)),
-    offset: bigFrom32(u32(16)),
-    size: bigFrom32(u32(20)),
-    link: u32(24),
-    info: u32(28),
-    addralign: bigFrom32(u32(32)),
-    entsize: bigFrom32(u32(36))
-  };
-}
-async function parseProgramHeaders(
-  file: File, header: ElfHeader, is64: boolean, little: boolean, issues: string[]
-): Promise<ElfProgramHeader[]> {
-  if (!header.phoff || !header.phnum) return [];
-  const tableOffset = toSafeNumber(header.phoff, "Program header offset", issues);
-  if (tableOffset == null) return [];
-  const tableSize = header.phentsize * header.phnum;
-  const { dv, truncated } = await sliceView(file, tableOffset, tableSize);
-  if (!dv) {
-    issues.push("Program header table falls outside the file.");
-    return [];
-  }
-  if (truncated) issues.push("Program header table is truncated.");
-  const entries: ElfProgramHeader[] = [];
-  const usableCount = Math.min(header.phnum, Math.floor(dv.byteLength / header.phentsize));
-  for (let index = 0; index < usableCount; index += 1) {
-    const begin = index * header.phentsize;
-    const view = new DataView(
-      dv.buffer,
-      begin,
-      Math.min(header.phentsize, dv.byteLength - begin)
-    );
-    entries.push({ ...parseProgramHeader(view, is64, little), index });
-  }
-  return entries;
-}
-function readStringFromTable(tableDv: DataView | null, offset: number): string {
-  if (!tableDv || offset >= tableDv.byteLength) return "";
-  return readAsciiString(tableDv, offset, tableDv.byteLength - offset);
-}
-async function loadSectionNameTable(
-  file: File, sections: ElfSectionHeader[], header: ElfHeader, issues: string[]
-): Promise<DataView | null> {
-  if (!sections.length || header.shstrndx >= sections.length) return null;
-  const shstr = sections[header.shstrndx];
-  if (!shstr) {
-    issues.push("Section name table header is missing.");
-    return null;
-  }
-  const off = toSafeNumber(shstr.offset, "Section name table offset", issues);
-  const size = toSafeNumber(shstr.size, "Section name table size", issues);
-  if (off == null || size == null) return null;
-  const { dv, truncated } = await sliceView(file, off, size);
-  if (!dv) {
-    issues.push("Section name table falls outside the file.");
-    return null;
-  }
-  if (truncated) issues.push("Section name table is truncated.");
-  return dv;
-}
-async function parseSectionHeaders(
-  file: File, header: ElfHeader, is64: boolean, little: boolean, issues: string[]
-): Promise<ElfSectionHeader[]> {
-  if (!header.shoff || !header.shnum) return [];
-  const tableOffset = toSafeNumber(header.shoff, "Section header offset", issues);
-  if (tableOffset == null) return [];
-  const tableSize = header.shentsize * header.shnum;
-  const { dv, truncated } = await sliceView(file, tableOffset, tableSize);
-  if (!dv) {
-    issues.push("Section header table falls outside the file.");
-    return [];
-  }
-  if (truncated) issues.push("Section header table is truncated.");
-  const sections: ElfSectionHeader[] = [];
-  const usableCount = Math.min(header.shnum, Math.floor(dv.byteLength / header.shentsize));
-  for (let index = 0; index < usableCount; index += 1) {
-    const begin = index * header.shentsize;
-    const view = new DataView(
-      dv.buffer,
-      begin,
-      Math.min(header.shentsize, dv.byteLength - begin)
-    );
-    sections.push({ ...parseSectionHeader(view, is64, little), index });
-  }
-  const namesTable = await loadSectionNameTable(file, sections, header, issues);
-  if (namesTable) {
-    sections.forEach(section => {
-      section.name = readStringFromTable(namesTable, section.nameOff);
-    });
-  }
-  return sections;
-}
 export async function parseElf(file: File): Promise<ElfParseResult | null> {
   const buffer = await file.slice(0, Math.min(file.size, 4096)).arrayBuffer();
   const dv = new DataView(buffer);
+  // Minimum ELF header for ident + base fields: sizeof(Elf32_Ehdr) = 0x34.
   if (dv.byteLength < 0x34 || dv.getUint32(0, false) !== ELF_MAGIC) return null;
   const issues: string[] = [];
   const ident = parseIdent(dv, issues);
   const is64 = ident.classByte === 2;
   const little = ident.dataByte === 1;
-  const header = parseElfHeader(dv, is64, little, issues);
-  const programHeaders = await parseProgramHeaders(file, header, is64, little, issues);
-  const sections = await parseSectionHeaders(file, header, is64, little, issues);
+  const buildResult = (
+    header: ElfHeader,
+    programHeaders: ElfProgramHeader[],
+    sections: ElfSectionHeader[]
+  ): ElfParseResult => ({
+    ident,
+    header,
+    programHeaders,
+    sections,
+    issues,
+    is64,
+    littleEndian: little,
+    fileSize: file.size
+  });
+  // ELF header size from spec: sizeof(Elf32_Ehdr)=0x34, sizeof(Elf64_Ehdr)=0x40.
+  const minHeaderSize = is64 ? 0x40 : 0x34;
+  // ELF section header size from spec: sizeof(Elf32_Shdr)=0x28, sizeof(Elf64_Shdr)=0x40.
+  const expectedSectionHeaderSize = is64 ? 0x40 : 0x28;
+  if (dv.byteLength < minHeaderSize) {
+    issues.push(`ELF${is64 ? "64" : "32"} header is truncated: expected at least ${minHeaderSize} bytes, got ${dv.byteLength}.`);
+    return buildResult(emptyElfHeader(), [], []);
+  }
+  const parsedHeader = parseElfHeader(dv, is64, little, issues);
+  const header = await resolveExtendedHeaderCounts(file, parsedHeader, is64, little, issues, expectedSectionHeaderSize);
+  if (header.ehsize < minHeaderSize) {
+    issues.push(
+      `ELF header size e_ehsize (${header.ehsize}) is smaller than ELF${is64 ? "64" : "32"} minimum (${minHeaderSize}).`
+    );
+    return buildResult(header, [], []);
+  }
+  if (header.ehsize > file.size) {
+    issues.push(`ELF header size e_ehsize (${header.ehsize}) exceeds file size (${file.size}).`);
+  }
+  const programHeaders = await parseProgramHeadersWithGuards(file, header, is64, little, issues);
+  const sections = await parseSectionHeadersWithNames(file, header, is64, little, issues, expectedSectionHeaderSize);
   const tls = parseElfTlsInfo(programHeaders, sections);
   const [interpreter, dynamic, dynSymbols, notes, comment, debugLink] = await Promise.all([
     parseElfInterpreter(file, programHeaders),
@@ -271,16 +136,7 @@ export async function parseElf(file: File): Promise<ElfParseResult | null> {
     parseElfComment(file, sections),
     parseElfDebugLink(file, sections, little)
   ]);
-  const result: ElfParseResult = {
-    ident,
-    header,
-    programHeaders,
-    sections,
-    issues,
-    is64,
-    littleEndian: little,
-    fileSize: file.size
-  };
+  const result = buildResult(header, programHeaders, sections);
   if (interpreter) result.interpreter = interpreter;
   if (dynamic) result.dynamic = dynamic;
   if (dynSymbols) result.dynSymbols = dynSymbols;

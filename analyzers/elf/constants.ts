@@ -2,6 +2,14 @@
 
 import type { ElfOptionEntry } from "./types.js";
 
+export const decodeOption = (value: number, options: ElfOptionEntry[]): string | null =>
+  options.find(entry => entry[0] === value)?.[1] || null;
+
+export const decodeFlags = (mask: number, flags: ElfOptionEntry[]): string[] =>
+  flags
+    .filter(([bit]) => (mask & bit) !== 0)
+    .map(([, name]) => name);
+
 export const ELF_CLASS: ElfOptionEntry[] = [
   [1, "ELF32", "32-bit objects with 4-byte addresses."],
   [2, "ELF64", "64-bit objects with 8-byte addresses."]
