@@ -39,13 +39,16 @@ All contributions must adhere to the project's code quality metrics and best pra
 - **Maximum function length**: Aim for 20-30 lines; refactor functions over 50 lines.
 - **Cyclomatic complexity**: Keep below 10; use helper functions to reduce complexity.
 - **No boolean control parameters**: Do not add boolean parameters that switch execution flow (`foo(..., true/false)` + `if`). Split behavior into separate functions and share common logic via composition.
+- **No derived fields in returned results**: Prefer a single source of truth in parsed objects. Do not return multiple representations of the same data.
+- **No argument-bag types**: Do not introduce a named `*Args`/`*Opts` type whose only purpose is to bundle positional parameters into an object. Prefer explicit parameters, or use an options object only when it models a real configuration surface.
+- **No repeated expensive work within the same parse**: Don't rescan/redecode/rehash the same bytes multiple times while processing one file. Compute once and reuse when the result is used more than once.
 - **Nested callbacks**: Maximum 3 levels.
 - **Variable declarations**: Use `const` by default, `let` only if reassignment is needed.
 - **String quotes**: Use double quotes (`"`).
 - **Semicolons**: Required at the end of statements.
 - **Minimize empty lines**: Excessive empty lines usually indicate a function is doing too much; prefer extracting a helper.
 - **Prefer expressions directly**: If a value is used once, prefer an in-place expression/early return over introducing an intermediate variable.
-- **Avoid single-use constants**: Do not introduce a named `const` that is referenced only once; keep the literal inline and add a short comment explaining where it comes from.
+- **No single-use constants**: Do not introduce a named `const` that is referenced only once; keep the literal inline and add a short comment explaining where it comes from.
 - **Magic values**: Explain non-obvious literals with a comment (ideally citing the spec name/section or the file-format field it represents). Extract a named constant only when it is reused or substantially improves readability.
 - **Console usage**: Only `console.error()` and `console.warn()` are allowed in production code.
 - **Identifiers**: Minimum 2 characters (except `_`, `i`, `j`, `k`, `x`, `y`).
