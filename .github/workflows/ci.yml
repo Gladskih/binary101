@@ -7,7 +7,6 @@ on:
   pull_request:
     branches:
       - main
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -29,7 +28,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: lts/*
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -52,10 +51,6 @@ jobs:
 
       - name: Test (e2e)
         run: npm run test:e2e
-
-      - name: Setup Pages
-        if: github.event_name == 'push'
-        uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
         if: github.event_name == 'push'
