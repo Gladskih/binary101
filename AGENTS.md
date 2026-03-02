@@ -5,7 +5,8 @@ Scope: the entire repository.
 ## Architecture
 
 - Static browser app:
-  - `index.html` + compiled `app.js` in `dist/` bootstraps the UI.
+  - `index.html` is the Vite entry HTML for the UI.
+  - Production builds go to `dist/`, with hashed assets under `dist/assets/`.
   - Source lives in `app.ts`, which calls `detectBinaryType(file)` and `parseForUi(file)` from `analyzers/index.ts`.
 - Analyzers:
   - live under `analyzers/<format>/` (for example `pe`, `jpeg`, `png`, `mp3`, `zip`),

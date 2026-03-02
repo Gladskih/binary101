@@ -1,6 +1,6 @@
 # Binary101
 
-Binary101 is a browser-based static web application for inspecting binary files. The app runs entirely in the browser using TypeScript/JavaScript (ES modules). Source is compiled to browser-ready JavaScript via a small TypeScript build step, but there is still no server-side code.
+Binary101 is a browser-based static web application for inspecting binary files. The app runs entirely in the browser using TypeScript/JavaScript (ES modules) and is built with Vite into a static site. There is still no server-side code.
 
 ## Inspiration and Purpose
 This project draws inspiration from tools like [regex101](https://regex101.com/), the Linux `file` utility, and VirusTotal. It is designed for educational and research purposes, helping users understand binary file structures and formats. By analyzing files locally in the browser, it ensures privacy and security, making it suitable for sensitive files.
@@ -16,11 +16,16 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
 - Drag and drop a file onto the page, paste a file, or use the file picker.
 - View detailed analysis of the file structure and computed hashes.
 
+## Development
+- `npm run dev` &mdash; start the Vite dev server.
+- `npm run build` &mdash; create the production build in `dist/`.
+- `npm run preview` &mdash; serve the built site locally on `http://127.0.0.1:4173`.
+
 ## Project Structure (high level)
-- `index.html` & `style.css` &mdash; page shell and styling (copied into `dist/` on build).
-- `app.ts` &mdash; UI wiring: file selection, hashing, dispatch to analyzers and renderers (compiled to `dist/app.js`).
-- `analyzers/` &mdash; TypeScript binary format detection and parsers. PE/COFF logic lives under `analyzers/pe/` and is split into small modules (headers, imports/exports, resources, TLS, CLR, relocations, etc.), compiled under `dist/analyzers/`.
-- `renderers/` &mdash; TypeScript HTML renderers for parsed structures. The PE renderer lives under `renderers/pe/` and is split into headers, directory views, resources, and layout/sanity views, compiled under `dist/renderers/`.
+- `index.html` & `style.css` &mdash; Vite HTML entry and page styling.
+- `app.ts` &mdash; UI wiring: file selection, hashing, dispatch to analyzers and renderers; Vite bundles it into `dist/assets/`.
+- `analyzers/` &mdash; TypeScript binary format detection and parsers. PE/COFF logic lives under `analyzers/pe/` and is split into small modules (headers, imports/exports, resources, TLS, CLR, relocations, etc.).
+- `renderers/` &mdash; TypeScript HTML renderers for parsed structures. The PE renderer lives under `renderers/pe/` and is split into headers, directory views, resources, and layout/sanity views.
 - `binary-utils.ts`, `html-utils.ts` &mdash; shared helpers for hashing, byte/hex formatting and safe HTML generation.
 
 ## Contributing

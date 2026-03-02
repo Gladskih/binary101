@@ -3,11 +3,19 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "imports": {
+    "#iced-x86-loader": "./analyzers/x86/load-iced-x86.node.ts"
+  },
   "license": "MIT",
   "scripts": {
+    "prepare:iced-x86": "node scripts/prepare-iced-x86.mjs",
+    "predev": "npm run prepare:iced-x86",
+    "dev": "vite",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tests.json && tsc --noEmit -p tsconfig.scripts.json",
-    "build": "tsc && node scripts/copy-static.mjs",
+    "prebuild": "npm run prepare:iced-x86",
+    "build": "vite build",
+    "preview": "vite preview",
     "test": "npm run build && npm run test:unit && npm run test:e2e",
     "test:unit": "tsx --test tests/unit/**/*.ts",
     "test:coverage": "c8 --config .c8rc.json tsx --test tests/unit/**/*.ts",
@@ -27,8 +35,8 @@
     "eslint": "^9.39.1",
     "globals": "^16.5.0",
     "iced-x86": "^1.21.0",
-    "http-server": "^14.1.1",
     "tsx": "^4.19.1",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vite": "^7.3.1"
   }
 }

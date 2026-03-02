@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: "./tests/e2e",
   reporter: "list",
   webServer: {
-    command: "npx http-server dist -a 127.0.0.1 -p 4173",
+    command: "npm run preview",
     url: "http://127.0.0.1:4173",
     reuseExistingServer: !process.env.CI
   },

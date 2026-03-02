@@ -3,11 +3,11 @@
 # Repo Overview
 
 This is a small client-side static web app for inspecting binary files (PE/COFF, images, audio, archives, etc.).
-It runs entirely in the browser via ES modules. Source is written in TypeScript and compiled to JavaScript into the `dist/` folder; there is no server-side code.
+It runs entirely in the browser via ES modules. Source is written in TypeScript and bundled by Vite into the `dist/` folder; there is no server-side code.
 
 Key entry points
-- `index.html` - page shell that imports `app.js` from `dist/` as an ES module.
-- `app.ts` - main UI wiring (drag/drop, paste, file input, hash buttons), compiled to `dist/app.js`.
+- `index.html` - Vite HTML entry for the app shell.
+- `app.ts` - main UI wiring (drag/drop, paste, file input, hash buttons), bundled into `dist/assets/`.
 - `analyzers/` - binary format detection and parsers:
   - orchestration in `analyzers/index.ts`,
   - PE in `analyzers/pe/`,
@@ -56,17 +56,17 @@ Adding a new renderer or UI section
 
 # Developer Workflows
 
-- Build step: run `npm run build` to compile TypeScript sources into the `dist/` folder, then open `dist/index.html` in a modern browser.
-- Recommended local server (serving files from `dist/`):
-  - Node: `npx http-server dist`.
+- Dev server: run `npm run dev` and open the URL printed by Vite.
+- Build step: run `npm run build` to produce the static site in `dist/`.
+- Preview the production build with `npm run preview`.
 - Debugging:
-  - use the browser DevTools Sources panel; modules are unbundled and mapped by filename,
+  - use the browser DevTools Sources panel; source maps are available from the Vite build,
   - add `debugger` statements in `app.ts`, `analyzers/*` or `renderers/*` where needed.
 
 # Important Notes for AI Assistants (including Copilot)
 
 - Target modern browsers only: the code uses `BigInt`, `DataView.getBigUint64`, `crypto.subtle`, `File`/`Blob` APIs and ES module imports.
-  Avoid changes that would require transpilation or a bundler unless you also add and document the build setup.
+  Vite is already part of the build setup, so keep browser-facing changes compatible with that pipeline.
 - Parsers assume `file.slice(...).arrayBuffer()` calls; keep I/O patterns non-blocking and slice-based for memory efficiency.
 - The UI expects `parseForUi(file)` to return `{ analyzer, parsed }` (see `analyzers/index.ts`).
   If you change that contract, update `app.ts` and any renderers that depend on it.

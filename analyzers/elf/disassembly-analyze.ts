@@ -16,6 +16,7 @@ import { findElfRegionContainingVaddr, getElfExecutableRegions } from "./executa
 import { collectElfDisassemblySeedGroups } from "./disassembly-seeds.js";
 import { disassembleControlFlowForInstructionSetsVaddr } from "../x86/disassembly-control-flow-vaddr.js";
 import { isIcedX86Module } from "../x86/disassembly-iced.js";
+import { loadIcedX86 } from "#iced-x86-loader";
 
 const ELF_MACHINE_I386 = 3;
 const ELF_MACHINE_X86_64 = 62;
@@ -202,7 +203,7 @@ export async function analyzeElfInstructionSets(
 
   let iced: unknown;
   try {
-    iced = await import("iced-x86");
+    iced = await loadIcedX86();
   } catch (err) {
     issues.push(`Failed to load iced-x86 disassembler (${String(err)})`);
     return emptyReport(bytesSampled, seedSummary);

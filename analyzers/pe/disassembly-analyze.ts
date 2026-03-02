@@ -4,6 +4,7 @@ import { KNOWN_CPUID_FEATURES, describeCpuidFeature, formatCpuidLabel } from "..
 import type { AnalyzePeInstructionSetOptions, PeInstructionSetProgress, PeInstructionSetReport } from "./disassembly-types.js";
 import { disassembleControlFlowForInstructionSets } from "../x86/disassembly-control-flow.js";
 import { isIcedX86Module } from "../x86/disassembly-iced.js";
+import { loadIcedX86 } from "#iced-x86-loader";
 const IMAGE_FILE_MACHINE_I386 = 0x014c;
 const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
 const IMAGE_SCN_CNT_CODE = 0x00000020;
@@ -199,7 +200,7 @@ export async function analyzePeInstructionSets(
   }
   let iced: unknown;
   try {
-    iced = await import("iced-x86");
+    iced = await loadIcedX86();
   } catch (err) {
     issues.push(`Failed to load iced-x86 disassembler (${String(err)})`);
     return emptyReport(bytesSampled);

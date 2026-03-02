@@ -3,6 +3,7 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "types": ["vite/client"],
     "lib": ["ESNext", "DOM"],
     "rootDir": ".",
     "outDir": "dist",

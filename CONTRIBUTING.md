@@ -4,7 +4,7 @@
 
 ### Prerequisites
 - Modern browser (Chrome, Firefox, Edge)
-- Node.js and npm (for linting, tests, and the TypeScript build)
+- Node.js and npm (for linting, tests, and the Vite build)
 - Local web server for hosting static files
 
 ### Getting Started
@@ -18,15 +18,19 @@
    ```bash
    npm install
    ```
-4. Build the static assets (outputs to the `dist/` directory):
+4. Start the development server:
+   ```bash
+   npm run dev
+   ```
+5. Build the static assets (outputs to the `dist/` directory):
    ```bash
    npm run build
    ```
-5. Start a local server from `dist/`:
+6. Preview the production build locally:
    ```bash
-   npx http-server dist
+   npm run preview
    ```
-6. Open the app in your browser at `http://localhost:8080` (or the port specified by your server).
+7. Open the app in your browser at the URL printed by Vite (`http://localhost:5173` for dev, `http://127.0.0.1:4173` for preview by default).
 
 ## Code Quality Standards
 
@@ -122,10 +126,10 @@ We encourage contributions that improve test coverage.
 
 ## Project Structure
 
-- `index.html`, `style.css`: Page shell and styling (copied into `dist/` on build).
-- `app.ts`: Handles UI interactions, file selection, hashing, and calls analyzers/renderers (compiled to `dist/app.js`).
-- `analyzers/`: Format-specific TypeScript parsers, compiled under `dist/analyzers/`.
-- `renderers/`: TypeScript renderers that turn parsed objects into HTML, compiled under `dist/renderers/`.
+- `index.html`, `style.css`: Vite entry HTML and page styling.
+- `app.ts`: Handles UI interactions, file selection, hashing, and calls analyzers/renderers; bundled into `dist/assets/`.
+- `analyzers/`: Format-specific TypeScript parsers bundled by Vite.
+- `renderers/`: TypeScript renderers that turn parsed objects into HTML and are bundled by Vite.
 - `binary-utils.ts`, `html-utils.ts`: Shared helpers for hashing, byte/hex formatting and safe HTML generation.
 
 ## Adding a New Analyzer
