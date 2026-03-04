@@ -159,7 +159,7 @@ export default [
     rules: sharedRules
   },
   {
-    ignores: ["dist/**", "coverage/**", "test-results/**"]
+    ignores: ["dist/**", "coverage/**", "test-results/**", "public/vendor/**"]
   }
 ];
 
