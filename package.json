@@ -7,6 +7,9 @@
     "#iced-x86-loader": "./analyzers/x86/load-iced-x86.node.ts"
   },
   "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "prepare:iced-x86": "node scripts/prepare-iced-x86.mjs",
     "predev": "npm run prepare:iced-x86",
