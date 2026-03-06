@@ -51,9 +51,9 @@ All contributions must adhere to the project's code quality metrics and best pra
 - **String quotes**: Use double quotes (`"`).
 - **Semicolons**: Required at the end of statements.
 - **Minimize empty lines**: Excessive empty lines usually indicate a function is doing too much; prefer extracting a helper.
+- **No single-use constants**: Do not introduce a named `const` that is referenced only once.
 - **Prefer expressions directly**: If a value is used once, prefer an in-place expression/early return over introducing an intermediate variable.
-- **No single-use constants**: Do not introduce a named `const` that is referenced only once; keep the literal inline and add a short comment explaining where it comes from.
-- **Magic values**: Explain non-obvious literals with a comment (ideally citing the spec name/section or the file-format field it represents). Extract a named constant only when it is reused or substantially improves readability.
+- **Magic values**: Explain non-obvious literals with a comment when practical, cites the authoritative source used (spec section, RFC section, or upstream source/header URL).
 - **Console usage**: Only `console.error()` and `console.warn()` are allowed in production code.
 - **Identifiers**: Minimum 2 characters (except `_`, `i`, `j`, `k`, `x`, `y`).
 
@@ -114,7 +114,7 @@ To generate a test coverage report for the unit tests, run:
 npm run test:coverage
 ```
 
-We encourage contributions that improve test coverage.
+Run the coverage report before and after your change; coverage must not go down.
 
 #### Test Layout and Depth
 
@@ -141,7 +141,7 @@ To add support for a new binary format:
    - `probe(file)`: Returns `true` if the file matches the format.
    - `parse(file)`: Returns a parsed object with format details.
 3. Update `analyzers/index.ts` to include your new analyzer.
-4. Create a renderer module (e.g. `renderers/elf/index.ts`) that converts your parsed object into HTML, update `renderers/index.ts` to export it, and update `app.ts` to call it when the analyzer matches.
+4. Create a renderer module (e.g. `renderers/elf/index.ts`) that converts your parsed object into HTML and wire it in `ui/render-analysis.ts`.
 
 ### Important Patterns
 - **Memory efficiency**: Use `file.slice(...).arrayBuffer()` to read file segments; avoid loading entire files.
