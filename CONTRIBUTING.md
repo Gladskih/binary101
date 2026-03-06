@@ -5,7 +5,6 @@
 ### Prerequisites
 - Modern browser (Chrome, Firefox, Edge)
 - Node.js and npm (for linting, tests, and the Vite build)
-- Local web server for hosting static files
 
 ### Getting Started
 1. Fork the repository.
