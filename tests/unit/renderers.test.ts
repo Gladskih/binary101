@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { parseForUi } from "../../analyzers/index.js";
 import type { AnalyzerName, ParsedByAnalyzer } from "../../analyzers/index.js";
 import { DOMParser as XmlDomParser } from "@xmldom/xmldom";
+import { renderMachO } from "../../renderers/macho/index.js";
 import {
   renderElf,
   renderFb2,
@@ -37,6 +38,7 @@ import { createDosMzExe } from "../fixtures/dos-sample-file.js";
 import { createElfFile } from "../fixtures/elf-sample-file.js";
 import { createGifFile, createJpegFile, createPngFile, createWebpFile } from "../fixtures/image-sample-files.js";
 import { createLnkFile } from "../fixtures/lnk-sample-file.js";
+import { createMachOFile, createMachOUniversalFile } from "../fixtures/macho-fixtures.js";
 import { createMp4File } from "../fixtures/mp4-fixtures.js";
 import { createPeFile } from "../fixtures/sample-files-pe.js";
 import { createRar5File, createSevenZipFile } from "../fixtures/rar-sevenzip-fixtures.js";
@@ -182,6 +184,17 @@ void test("renderers produce readable HTML output", async () => {
   const elf = await parseOnly(createElfFile(), "elf");
   const elfHtml = renderElf(elf);
   assert.match(elfHtml, /ELF header/);
+
+  const macho = await parseOnly(createMachOFile(), "macho");
+  const machoHtml = renderMachO(macho);
+  assert.match(machoHtml, /Mach-O header/);
+  assert.match(machoHtml, /libSystem\.B\.dylib/);
+  assert.match(machoHtml, /Code signing/);
+
+  const universal = await parseOnly(createMachOUniversalFile(), "macho");
+  const universalHtml = renderMachO(universal);
+  assert.match(universalHtml, /Universal binary/);
+  assert.match(universalHtml, /Slice 0/);
 
   const pe = await parseOnly(createPeFile(), "pe");
   const peHtml = renderPe(pe);

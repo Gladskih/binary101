@@ -10,6 +10,7 @@ import { parseForUi } from "../../analyzers/index.js";
 import { parseIso9660 } from "../../analyzers/iso9660/index.js";
 import { renderAnalysisIntoUi } from "../../ui/render-analysis.js";
 import { createIso9660PrimaryFile } from "../fixtures/iso9660-fixtures.js";
+import { createMachOFile } from "../fixtures/macho-fixtures.js";
 import { createMkvFile } from "../fixtures/mkv-base-fixtures.js";
 
 void test("renderAnalysisIntoUi renders ELF output and updates visibility flags", () => {
@@ -223,4 +224,25 @@ void test("renderAnalysisIntoUi renders MKV output and video preview", async () 
   assert.equal(valueElement.hidden, false);
   assert.ok(valueElement.innerHTML.includes(previewHtml));
   assert.ok(valueElement.innerHTML.includes("Matroska (MKV) container"));
+});
+
+void test("renderAnalysisIntoUi renders Mach-O output", async () => {
+  const parsed = await parseForUi(createMachOFile());
+  assert.equal(parsed.analyzer, "macho");
+
+  const termElement = { textContent: "", hidden: true } as unknown as HTMLElement;
+  const valueElement = { innerHTML: "", hidden: true } as unknown as HTMLElement;
+
+  renderAnalysisIntoUi(parsed, {
+    buildPreview: () => null,
+    attachGuards: () => {},
+    termElement,
+    valueElement
+  });
+
+  assert.equal(termElement.hidden, false);
+  assert.equal(termElement.textContent, "Mach-O details");
+  assert.equal(valueElement.hidden, false);
+  assert.ok(valueElement.innerHTML.includes("Mach-O header"));
+  assert.ok(valueElement.innerHTML.includes("Code signing"));
 });

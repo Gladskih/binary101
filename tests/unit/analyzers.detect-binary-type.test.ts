@@ -10,6 +10,7 @@ import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
 import { createFlacFile } from "../fixtures/flac-fixtures.js";
 import { createSqliteFile } from "../fixtures/sqlite-fixtures.js";
 import { createSampleAsfFile } from "../fixtures/asf-fixtures.js";
+import { createMachOFile, createMachOUniversalFile } from "../fixtures/macho-fixtures.js";
 import { createPeFile, createPePlusFile } from "../fixtures/sample-files-pe.js";
 
 const fromAscii = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "ascii"));
@@ -104,9 +105,27 @@ void test("detectBinaryType recognises ELF and Mach-O executables", async () => 
   const elfLabel = await detectBinaryType(new MockFile(elf, "elf.bin", "application/octet-stream"));
   assert.strictEqual(elfLabel, "ELF 64-bit LSB executable, x86-64");
 
-  const macho64 = new Uint8Array([0xfe, 0xed, 0xfa, 0xcf]);
+  const macho64 = new Uint8Array([0xcf, 0xfa, 0xed, 0xfe]);
   const machoLabel = await detectBinaryType(new MockFile(macho64, "macho", "application/octet-stream"));
   assert.strictEqual(machoLabel, "Mach-O 64-bit");
+});
+
+void test("detectBinaryType recognises real Mach-O fixtures", async () => {
+  const thinLabel = await detectBinaryType(createMachOFile());
+  assert.strictEqual(thinLabel, "Mach-O 64-bit");
+
+  const fatLabel = await detectBinaryType(createMachOUniversalFile());
+  assert.strictEqual(fatLabel, "Mach-O universal (Fat)");
+});
+
+void test("detectBinaryType does not route Java class files through Mach-O detection", async () => {
+  const javaClass = new MockFile(
+    new Uint8Array([0xca, 0xfe, 0xba, 0xbe, 0x00, 0x00, 0x00, 0x34, 0x00, 0x01]),
+    "Example.class",
+    "application/java-vm"
+  );
+  const label = await detectBinaryType(javaClass);
+  assert.strictEqual(label, "Java class file");
 });
 
 void test("detectBinaryType recognises MP3 streams even when frames are not at offset 0", async () => {

@@ -28,9 +28,10 @@ import { createMkvFile } from "../fixtures/mkv-base-fixtures.js";
 import { createAniFile, createAviFile, createWavFile } from "../fixtures/riff-sample-files.js";
 import { createSampleAsfFile } from "../fixtures/asf-fixtures.js";
 import { createMpegPsFile } from "../fixtures/mpegps-fixtures.js";
+import { createMachOFile, createMachOUniversalFile } from "../fixtures/macho-fixtures.js";
 import { createPcapFile } from "../fixtures/pcap-fixtures.js";
 import { createGzipFile } from "../fixtures/gzip-fixtures.js";
-import type { MockFile } from "../helpers/mock-file.js";
+import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import type { FlacMetadataBlockDetail } from "../../analyzers/flac/types.js";
 const textEncoder = new TextEncoder();
@@ -248,6 +249,47 @@ void test("parseForUi parses ELF header and sections", async () => {
     assert.strictEqual(elf.ident.className, "ELF64");
     assert.ok(Array.isArray(elf.sections));
   });
+});
+
+void test("parseForUi parses thin Mach-O executables", async () => {
+  await assertParsed(createMachOFile(), "macho", macho => {
+    assert.strictEqual(macho.kind, "thin");
+    assert.strictEqual(macho.image?.header.cputype, 0x01000007);
+    assert.strictEqual(macho.image?.segments.length, 2);
+    assert.ok(macho.image?.symtab?.symbols.length);
+  });
+});
+
+void test("parseForUi parses universal Mach-O binaries", async () => {
+  await assertParsed(createMachOUniversalFile(), "macho", macho => {
+    assert.strictEqual(macho.kind, "fat");
+    assert.strictEqual(macho.slices.length, 2);
+    assert.strictEqual(macho.slices[1]?.image?.header.cputype, 0x0100000c);
+  });
+});
+
+void test("parseForUi does not route Java class files through Mach-O parsing", async () => {
+  const javaClass = new MockFile(
+    new Uint8Array([0xca, 0xfe, 0xba, 0xbe, 0x00, 0x00, 0x00, 0x34, 0x00, 0x01]),
+    "Example.class",
+    "application/java-vm"
+  );
+  const parsed = await parseForUi(javaClass);
+  assert.deepStrictEqual(parsed, { analyzer: null, parsed: null });
+});
+
+void test("parseForUi keeps truncated thin Mach-O results visible with warnings", async () => {
+  const truncatedMachO = new MockFile(
+    new Uint8Array([0xfe, 0xed, 0xfa, 0xcf]),
+    "truncated-macho",
+    "application/octet-stream"
+  );
+  const parsed = await parseForUi(truncatedMachO);
+  assert.strictEqual(parsed.analyzer, "macho");
+  assert.ok(parsed.parsed);
+  assert.strictEqual(parsed.parsed.kind, "thin");
+  assert.ok(parsed.parsed.image);
+  assert.match(parsed.parsed.image.issues[0] ?? "", /header is truncated/i);
 });
 
 void test("parseForUi parses 7z start header even when next header is unknown", async () => {

@@ -3,6 +3,7 @@
 import { parsePe } from "./pe/index.js";
 import { parseJpeg } from "./jpeg/index.js";
 import { parseElf } from "./elf/index.js";
+import { parseMachO } from "./macho/index.js";
 import { parseFb2 } from "./fb2/index.js";
 import { isGifSignature, parseGif } from "./gif/index.js";
 import { parseZip } from "./zip/index.js";
@@ -29,9 +30,10 @@ import { parseAsf } from "./asf/index.js";
 import { ASF_HEADER_GUID } from "./asf/constants.js";
 import { guidToString as readAsfGuid } from "./asf/shared.js";
 import type { ParseForUiResult } from "./analyzer-types.js";
-import { detectELF } from "./format-detectors.js";
 import { detectPdfVersion, hasZipEocdSignature, toAsciiFromWholeView } from "./detection-labels.js";
+import { probeElf } from "./elf/probe.js";
 import { isShortMp3WithoutSecond, isValidatedMp3 } from "./mp3-labels.js";
+import { probeMachO } from "./macho/probe.js";
 import { probeMzFormat } from "./mz-probe.js";
 import { hasSqliteSignature, parseSqlite } from "./sqlite/index.js";
 import { parseMpegPs } from "./mpegps/index.js";
@@ -46,9 +48,13 @@ const parseForUi = async (file: File): Promise<ParseForUiResult> => {
     const lnk = await parseLnk(file);
     if (lnk) return { analyzer: "lnk", parsed: lnk };
   }
-  if (detectELF(dv)) {
+  if (probeElf(dv)) {
     const elf = await parseElf(file);
     if (elf) return { analyzer: "elf", parsed: elf };
+  }
+  if (probeMachO(dv, file.size)) {
+    const macho = await parseMachO(file);
+    if (macho) return { analyzer: "macho", parsed: macho };
   }
   const mzKind = await probeMzFormat(file, dv);
   if (mzKind) {

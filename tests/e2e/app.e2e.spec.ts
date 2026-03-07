@@ -17,6 +17,7 @@ import { createSevenZipFile } from "../fixtures/rar-sevenzip-fixtures.js";
 import { createTarFile } from "../fixtures/tar-fixtures.js";
 import { createZipFile } from "../fixtures/zip-fixtures.js";
 import { createGzipFile } from "../fixtures/gzip-fixtures.js";
+import { createMachOFile } from "../fixtures/macho-fixtures.js";
 import type { MockFile } from "../helpers/mock-file.js";
 
 const toUpload = (file: MockFile) => ({
@@ -202,15 +203,14 @@ test.describe("file type detection", () => {
     await expect(page.locator("#peDetailsValue")).toContainText("System.VolumeId");
   });
 
-  void test("detects Mach-O binaries without renderer detail", async ({ page }) => {
-    await page.setInputFiles("#fileInput", {
-      name: "macho.bin",
-      mimeType: "application/octet-stream",
-      buffer: Buffer.from([0xfe, 0xed, 0xfa, 0xcf])
-    });
+  void test("renders Mach-O analysis", async ({ page }) => {
+    const file = createMachOFile();
+    await page.setInputFiles("#fileInput", toUpload(file));
 
-    await expectBaseDetails(page, "macho.bin", "Mach-O 64-bit");
-    await expect(page.locator("#peDetailsTerm")).toBeHidden();
+    await expectBaseDetails(page, file.name, "Mach-O 64-bit");
+    await expect(page.locator("#peDetailsTerm")).toHaveText("Mach-O details");
+    await expect(page.locator("#peDetailsValue")).toContainText("Mach-O header");
+    await expect(page.locator("#peDetailsValue")).toContainText("Code signing");
   });
 
   void test("renders MP3 audio summary", async ({ page }) => {

@@ -1,6 +1,7 @@
 "use strict";
 
 import type { ParseForUiResult } from "../analyzers/index.js";
+import { renderMachO } from "../renderers/macho/index.js";
 import {
   renderPe,
   renderJpeg,
@@ -73,6 +74,9 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
       return;
     case "elf":
       show("ELF details", renderElf(result.parsed));
+      return;
+    case "macho":
+      show("Mach-O details", renderMachO(result.parsed));
       return;
     case "jpeg":
       show("JPEG details", imagePreviewHtml + renderJpeg(result.parsed));

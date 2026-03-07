@@ -14,7 +14,8 @@ import { parseMp4, buildMp4Label } from "./mp4/index.js";
 import { parseWav } from "./wav/index.js";
 import { parseAvi } from "./avi/index.js";
 import { parseAni } from "./ani/index.js";
-import { detectELF, detectMachO } from "./format-detectors.js";
+import { probeElf } from "./elf/probe.js";
+import { probeMachO } from "./macho/probe.js";
 import { parseAsf, buildAsfLabel } from "./asf/index.js";
 import {
   detectPdfVersion,
@@ -91,9 +92,9 @@ const detectBinaryType = async (file: File): Promise<string> => {
   const dv = new DataView(
     await file.slice(0, Math.min(file.size, maxProbeBytes)).arrayBuffer()
   );
-  const elf = detectELF(dv);
+  const elf = probeElf(dv);
   if (elf) return elf;
-  const macho = detectMachO(dv);
+  const macho = probeMachO(dv, file.size);
   if (macho) return macho;
   const magic = probeByMagic(dv);
   if (magic) {
