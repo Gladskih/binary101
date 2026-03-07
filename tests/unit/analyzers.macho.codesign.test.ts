@@ -110,3 +110,75 @@ void test("parseCodeSignature does not read CodeDirectory fields past the declar
   assert.equal(parsed.codeDirectory?.runtime, null);
   assert.match(parsed.issues.join("\n"), /truncated before the 64-bit code limit/);
 });
+
+void test("parseCodeSignature reads runtime and exec segment fields from complete CodeDirectory blobs", async () => {
+  const bytes = new Uint8Array(120);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, CSMAGIC_EMBEDDED_SIGNATURE, false);
+  view.setUint32(4, 116, false);
+  view.setUint32(8, 1, false);
+  view.setUint32(12, 0, false);
+  view.setUint32(16, 20, false);
+  view.setUint32(20, CSMAGIC_CODEDIRECTORY, false);
+  view.setUint32(24, 96, false);
+  view.setUint32(28, 0x20500, false);
+  view.setUint32(40, 1, false);
+  view.setUint32(44, 2, false);
+  view.setUint32(48, 0x11111111, false);
+  view.setUint8(56, 32);
+  view.setUint8(57, 2);
+  view.setUint8(59, 12);
+  view.setBigUint64(76, 0x2222222222222222n, false);
+  view.setBigUint64(84, 0x3333333333333333n, false);
+  view.setBigUint64(92, 0x4444444444444444n, false);
+  view.setBigUint64(100, 0x7n, false);
+  view.setUint32(108, 7, false);
+
+  const parsed = await parseCodeSignature(wrapMachOBytes(bytes, "codesign-runtime"), 0, bytes.length, 0, 0, bytes.length);
+
+  assert.equal(parsed.codeDirectory?.codeLimit, 0x2222222222222222n);
+  assert.equal(parsed.codeDirectory?.execSegBase, 0x3333333333333333n);
+  assert.equal(parsed.codeDirectory?.execSegLimit, 0x4444444444444444n);
+  assert.equal(parsed.codeDirectory?.execSegFlags, 0x7n);
+  assert.equal(parsed.codeDirectory?.runtime, 7);
+});
+
+void test("parseCodeSignature reports code-sign data and superblob lengths that exceed the image", async () => {
+  const bytes = new Uint8Array(16);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, CSMAGIC_EMBEDDED_SIGNATURE, false);
+  view.setUint32(4, 32, false);
+  view.setUint32(8, 0, false);
+
+  const parsed = await parseCodeSignature(wrapMachOBytes(bytes, "codesign-overflow"), 0, bytes.length, 0, 0, 32);
+
+  assert.match(parsed.issues.join("\n"), /Code-signing data extends beyond the Mach-O image/);
+  assert.match(parsed.issues.join("\n"), /Code-signing superblob length exceeds available data/);
+});
+
+void test("parseCodeSignature reports truncated superblob headers after the blob header", async () => {
+  const bytes = new Uint8Array(10);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, CSMAGIC_EMBEDDED_SIGNATURE, false);
+  view.setUint32(4, bytes.length, false);
+
+  const parsed = await parseCodeSignature(wrapMachOBytes(bytes, "codesign-short-superblob-header"), 0, bytes.length, 0, 0, bytes.length);
+
+  assert.match(parsed.issues.join("\n"), /Code-signing superblob is truncated/);
+});
+
+void test("parseCodeSignature reports embedded blobs that declare less than a header", async () => {
+  const bytes = new Uint8Array(28);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, CSMAGIC_EMBEDDED_SIGNATURE, false);
+  view.setUint32(4, bytes.length, false);
+  view.setUint32(8, 1, false);
+  view.setUint32(12, 0x10000, false);
+  view.setUint32(16, 20, false);
+  view.setUint32(20, 0xfade0b01, false);
+  view.setUint32(24, 4, false);
+
+  const parsed = await parseCodeSignature(wrapMachOBytes(bytes, "codesign-short-blob"), 0, bytes.length, 0, 0, bytes.length);
+
+  assert.match(parsed.issues.join("\n"), /declares length 4 smaller than a blob header/);
+});
