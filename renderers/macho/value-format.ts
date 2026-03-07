@@ -11,7 +11,7 @@ const formatHex = (value: bigint | number): string =>
       : toHex32(value);
 
 const formatByteSize = (value: bigint | number): string => {
-  const asBigInt = typeof value === "bigint" ? value : BigInt(value >>> 0);
+  const asBigInt = typeof value === "bigint" ? value : BigInt(value);
   if (asBigInt <= BigInt(Number.MAX_SAFE_INTEGER)) {
     return formatHumanSize(Number(asBigInt));
   }

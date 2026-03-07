@@ -37,6 +37,7 @@ import {
   symbolTypeLabelFor
 } from "../../renderers/macho/symbol-semantics.js";
 import { renderSymtab } from "../../renderers/macho/symbols-view.js";
+import { formatByteSize } from "../../renderers/macho/value-format.js";
 
 void test("Mach-O renderer semantics expose fallback labels", () => {
   const image = createRendererMachOImage();
@@ -68,6 +69,7 @@ void test("Mach-O renderer semantics expose fallback labels", () => {
   assert.deepEqual(codeDirectoryExecSegLabels(null), []);
   assert.equal(pageSizeBytes(0), null);
   assert.equal(pageSizeBytes(12), 4096);
+  assert.match(formatByteSize(0x100000000), /4294967296 bytes/);
 });
 
 void test("Mach-O symbol semantics and symbol view cover bindings, descriptions, and summaries", () => {
