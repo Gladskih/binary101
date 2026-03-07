@@ -2,7 +2,7 @@
 
 Current status notes:
 
-- Mach-O is detected/labeled today, but there is no deep Mach-O analyzer or renderer yet.
+- Mach-O now has a deep analyzer/renderer for thin and FAT binaries; remaining work is about deeper loader/linkedit and code-signing semantics.
 - PCAP-NG is detected/labeled today, but only classic PCAP has a deep analyzer/renderer.
 - PE Authenticode support currently parses certificates and can verify the embedded file digest, but it does not build a full trust chain or enforce a trust policy yet.
 
@@ -23,8 +23,9 @@ Current status notes:
 - [ ] Upgrade PE Authenticode from digest checking to full offline signature validation: CMS/PKCS#7 sanity checks, signer/certificate chain building, time validity, EKU/purpose checks, and explicit trust verdicts.
 - [ ] Add an optional built-in CA trust bundle/profile for offline Authenticode validation, with clear UI that distinguishes cryptographic validity from trust policy.
 - [ ] Continue deepening ELF: more relocation/linking/debug metadata, better explanation of loader behavior, and more complete security/sanity analysis.
-- [ ] Add a real Mach-O analyzer and renderer for 32-bit, 64-bit, and FAT/universal binaries.
-- [ ] Mach-O scope should include load commands, segments/sections, symbols, dylibs, universal slices, and code-signing metadata where practical.
+- [ ] Deepen Mach-O load-command coverage: replace more "listed only" commands with command-specific parsing and explanations where the format is well-specified.
+- [ ] Extend Mach-O loader/linkedit analysis: exports trie, chained fixups, relocations, and richer dyld binding/rebasing semantics.
+- [ ] Expand Mach-O code-signing analysis beyond blob metadata: parse more embedded payloads and separate structural validity from trust/policy where practical.
 - [ ] Add a real PCAP-NG analyzer and renderer instead of detection-only labeling.
 
 ## P2 - Depth For Supported Formats
