@@ -14,13 +14,13 @@ import {
   formatUuid,
   getMachOMagicInfo,
   parseHeader,
-  readCommandString,
   subView
 } from "./format.js";
 import { buildTruncatedImage } from "./truncated-image.js";
 import {
   parseBuildVersion, parseDylib, parseDyldInfo, parseEncryptionInfo,
-  parseFileSetEntry, parseLinkeditData, parseLoadCommandRecord, parseSegment, parseVersionMin
+  parseFileSetEntry, parseLinkeditData, parseLoadCommandRecord, parseRpath, parseSegment,
+  parseStringCommand, parseVersionMin
 } from "./load-command-parsers.js";
 import { parseSymtab } from "./symbol-table.js";
 import { parseCodeSignature } from "./codesign.js";
@@ -76,6 +76,8 @@ const parseThinImage = async (
     : await reader.read(0, headerSize);
   const header = parseHeader(fullHeaderView, magicInfo);
   const availableCommandBytes = Math.max(0, imageSize - headerSize);
+  const commandRegionSize = Math.min(header.sizeofcmds, availableCommandBytes);
+  const commandRegionEnd = headerSize + commandRegionSize;
   if (availableCommandBytes < header.sizeofcmds) {
     issues.push(`Load-command region is truncated: expected ${header.sizeofcmds} bytes, got ${Math.max(0, imageSize - headerSize)}.`);
   }
@@ -100,13 +102,13 @@ const parseThinImage = async (
   let cursor = headerSize;
   const little = header.littleEndian;
   for (let index = 0; index < header.ncmds; index += 1) {
-    if (cursor + 8 > imageSize) {
-      issues.push(`Load command ${index}: header extends beyond available command bytes.`);
+    if (cursor + 8 > commandRegionEnd) {
+      issues.push(`Load command ${index}: header extends beyond the declared load-command region.`);
       break;
     }
     const commandHeader = await reader.read(cursor, 8);
     if (commandHeader.byteLength < 8) {
-      issues.push(`Load command ${index}: header extends beyond available command bytes.`);
+      issues.push(`Load command ${index}: header extends beyond the declared load-command region.`);
       break;
     }
     const cmd = commandHeader.getUint32(0, little);
@@ -116,8 +118,8 @@ const parseThinImage = async (
       issues.push(`Load command ${index}: invalid cmdsize ${cmdsize}.`);
       break;
     }
-    if (cursor + cmdsize > imageSize) {
-      issues.push(`Load command ${index}: extends beyond available command bytes.`);
+    if (cursor + cmdsize > commandRegionEnd) {
+      issues.push(`Load command ${index}: extends beyond the declared load-command region.`);
       break;
     }
     const cmdView = await reader.read(cursor, cmdsize);
@@ -138,16 +140,11 @@ const parseThinImage = async (
         else dylibs.push(dylib);
       }
     } else if (cmd === LC_RPATH) {
-      rpaths.push({
-        loadCommandIndex: index,
-        path: cmdView.byteLength >= 12 ? readCommandString(cmdView, cmdView.getUint32(8, little)) : ""
-      });
+      const rpath = parseRpath(cmdView, index, little, issues);
+      if (rpath) rpaths.push(rpath);
     } else if (cmd === LC_LOAD_DYLINKER || cmd === LC_ID_DYLINKER) {
-      stringCommands.push({
-        loadCommandIndex: index,
-        command: cmd,
-        value: cmdView.byteLength >= 12 ? readCommandString(cmdView, cmdView.getUint32(8, little)) : ""
-      });
+      const stringCommand = parseStringCommand(cmdView, index, little, cmd, issues);
+      if (stringCommand) stringCommands.push(stringCommand);
     } else if (cmd === LC_UUID) {
       uuid = cmdView.byteLength >= 24 ? formatUuid(cmdView, 8) : null;
       if (uuid == null) issues.push(`Load command ${index}: UUID command is truncated.`);

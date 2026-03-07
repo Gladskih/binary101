@@ -3,7 +3,6 @@
 import {
   loadCommandName
 } from "./load-command-info.js";
-import { readCommandString } from "./format.js";
 import type {
   MachOBuildTool,
   MachOBuildVersion,
@@ -13,6 +12,8 @@ import type {
   MachOFileSetEntry,
   MachOLinkeditData,
   MachOLoadCommand,
+  MachORpath,
+  MachOStringCommand,
   MachOVersionMin
 } from "./types.js";
 import { parseSegment } from "./segment-parser.js";
@@ -33,6 +34,30 @@ const parseLoadCommandRecord = (
   });
 };
 
+const readBoundedCommandString = (
+  cmdView: DataView,
+  stringOffset: number,
+  loadCommandIndex: number,
+  fieldLabel: string,
+  issues: string[]
+): string => {
+  if (stringOffset >= cmdView.byteLength) {
+    issues.push(
+      `Load command ${loadCommandIndex}: ${fieldLabel} offset ${stringOffset} points outside the command.`
+    );
+    return "";
+  }
+  const bytes = new Uint8Array(cmdView.buffer, cmdView.byteOffset, cmdView.byteLength);
+  let text = "";
+  for (let index = stringOffset; index < bytes.length; index += 1) {
+    const byteValue = bytes[index];
+    if (byteValue === 0) return text;
+    text += String.fromCharCode(byteValue);
+  }
+  issues.push(`Load command ${loadCommandIndex}: ${fieldLabel} is not NUL-terminated within cmdsize.`);
+  return text;
+};
+
 const parseDylib = (
   cmdView: DataView,
   loadCommandIndex: number,
@@ -47,7 +72,13 @@ const parseDylib = (
   return {
     loadCommandIndex,
     command: cmd,
-    name: readCommandString(cmdView, cmdView.getUint32(8, little)),
+    name: readBoundedCommandString(
+      cmdView,
+      cmdView.getUint32(8, little),
+      loadCommandIndex,
+      "dylib name",
+      issues
+    ),
     timestamp: cmdView.getUint32(12, little),
     currentVersion: cmdView.getUint32(16, little),
     compatibilityVersion: cmdView.getUint32(20, little)
@@ -187,9 +218,61 @@ const parseFileSetEntry = (
   }
   return {
     loadCommandIndex,
-    entryId: readCommandString(cmdView, cmdView.getUint32(24, little)),
+    entryId: readBoundedCommandString(
+      cmdView,
+      cmdView.getUint32(24, little),
+      loadCommandIndex,
+      "fileset entry id",
+      issues
+    ),
     vmaddr: cmdView.getBigUint64(8, little),
     fileoff: cmdView.getBigUint64(16, little)
+  };
+};
+
+const parseRpath = (
+  cmdView: DataView,
+  loadCommandIndex: number,
+  little: boolean,
+  issues: string[]
+): MachORpath | null => {
+  if (cmdView.byteLength < 12) {
+    issues.push(`Load command ${loadCommandIndex}: LC_RPATH is truncated.`);
+    return null;
+  }
+  return {
+    loadCommandIndex,
+    path: readBoundedCommandString(
+      cmdView,
+      cmdView.getUint32(8, little),
+      loadCommandIndex,
+      "rpath path",
+      issues
+    )
+  };
+};
+
+const parseStringCommand = (
+  cmdView: DataView,
+  loadCommandIndex: number,
+  little: boolean,
+  cmd: number,
+  issues: string[]
+): MachOStringCommand | null => {
+  if (cmdView.byteLength < 12) {
+    issues.push(`Load command ${loadCommandIndex}: ${loadCommandName(cmd)} is truncated.`);
+    return null;
+  }
+  return {
+    loadCommandIndex,
+    command: cmd,
+    value: readBoundedCommandString(
+      cmdView,
+      cmdView.getUint32(8, little),
+      loadCommandIndex,
+      `${loadCommandName(cmd)} string`,
+      issues
+    )
   };
 };
 
@@ -201,6 +284,8 @@ export {
   parseFileSetEntry,
   parseLinkeditData,
   parseLoadCommandRecord,
+  parseRpath,
   parseSegment,
+  parseStringCommand,
   parseVersionMin
 };

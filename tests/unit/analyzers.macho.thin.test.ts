@@ -5,6 +5,7 @@ import { test } from "node:test";
 import {
   LC_DYLD_INFO_ONLY,
   LC_FILESET_ENTRY,
+  LC_LOAD_DYLINKER,
   LC_RPATH,
   LC_VERSION_MIN_MACOSX
 } from "../../analyzers/macho/commands.js";
@@ -64,7 +65,7 @@ void test("parseThinImage reports load commands that extend past available bytes
   view.setUint32(loadCommandSizeOffset(fixture.layout.textSegmentCommandOffset), fixture.bytes.length, true);
   const parsed = await parseThinImage(wrapMachOBytes(fixture.bytes, "thin-overflow-cmd"), 0, fixture.bytes.length);
   assert.ok(parsed);
-  assert.match(parsed.issues[0] || "", /extends beyond available command bytes/);
+  assert.match(parsed.issues[0] || "", /extends beyond the declared load-command region/);
 });
 
 void test("parseThinImage reports truncated UUID commands", async () => {
@@ -132,7 +133,22 @@ void test("parseThinImage reports short command headers when the declared image 
   const parsed = await parseThinImage(tracked.file, 0, tracked.file.size);
 
   assert.ok(parsed);
-  assert.match(parsed.issues.join("\n"), /header extends beyond available command bytes/);
+  assert.match(parsed.issues.join("\n"), /header extends beyond the declared load-command region/);
+});
+
+void test("parseThinImage stops at sizeofcmds even when the image contains more bytes", async () => {
+  const firstCommand = createLoadCommand(LC_RPATH, 4);
+  const secondCommand = createLoadCommand(LC_LOAD_DYLINKER, 4);
+  const bytes = createThinImageWithCommands(firstCommand, secondCommand);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(16, 2, true);
+  view.setUint32(20, firstCommand.length, true);
+
+  const parsed = await parseThinImage(wrapMachOBytes(bytes, "thin-sizeofcmds-boundary"), 0, bytes.length);
+
+  assert.ok(parsed);
+  assert.equal(parsed.loadCommands.length, 1);
+  assert.match(parsed.issues.join("\n"), /header extends beyond the declared load-command region/);
 });
 
 void test("parseThinImage parses RPATH, minimum-version, dyld-info, and fileset-entry commands", async () => {
@@ -182,4 +198,25 @@ void test("parseThinImage parses RPATH, minimum-version, dyld-info, and fileset-
   assert.equal(parsed.minVersions[0]?.version, 0x000a0f00);
   assert.equal(parsed.dyldInfo?.command, LC_DYLD_INFO_ONLY);
   assert.equal(parsed.fileSetEntries[0]?.entryId, "com.example.slice");
+});
+
+void test("parseThinImage reports malformed load-command strings instead of silently blanking them", async () => {
+  const dylinkerCommand = createLoadCommand(LC_LOAD_DYLINKER, 4);
+  const dylinkerView = new DataView(dylinkerCommand.buffer);
+  dylinkerView.setUint32(8, 20, true);
+
+  const rpathCommand = createLoadCommand(LC_RPATH, 8);
+  const rpathView = new DataView(rpathCommand.buffer);
+  rpathView.setUint32(8, 12, true);
+  rpathCommand.set(new TextEncoder().encode("path"), 12);
+
+  const parsed = await parseThinImage(
+    wrapMachOBytes(createThinImageWithCommands(dylinkerCommand, rpathCommand), "thin-invalid-lc-str"),
+    0,
+    THIN_HEADER_SIZE + dylinkerCommand.length + rpathCommand.length
+  );
+
+  assert.ok(parsed);
+  assert.match(parsed.issues.join("\n"), /LC_LOAD_DYLINKER string offset 20 points outside the command/);
+  assert.match(parsed.issues.join("\n"), /rpath path is not NUL-terminated within cmdsize/);
 });

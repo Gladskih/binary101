@@ -7,6 +7,7 @@ import {
   LC_DYLD_INFO,
   LC_ENCRYPTION_INFO_64,
   LC_LOAD_DYLIB,
+  LC_LOAD_DYLINKER,
   LC_VERSION_MIN_MACOSX
 } from "../../analyzers/macho/commands.js";
 import {
@@ -16,6 +17,8 @@ import {
   parseEncryptionInfo,
   parseFileSetEntry,
   parseLinkeditData,
+  parseRpath,
+  parseStringCommand,
   parseVersionMin
 } from "../../analyzers/macho/load-command-parsers.js";
 
@@ -49,6 +52,37 @@ void test("Mach-O load-command parsers decode dylib and minimum-version commands
     parseVersionMin(new DataView(new Uint8Array(12).buffer), 5, true, LC_VERSION_MIN_MACOSX, versionIssues),
     null
   );
+});
+
+void test("Mach-O load-command string parsers warn on invalid offsets and missing terminators", () => {
+  const dylibBytes = new Uint8Array(24);
+  const dylibView = new DataView(dylibBytes.buffer);
+  dylibView.setUint32(8, 40, true);
+  const dylibIssues: string[] = [];
+  const dylib = parseDylib(dylibView, 16, true, LC_LOAD_DYLIB, dylibIssues);
+  assert.ok(dylib);
+  assert.equal(dylib.name, "");
+  assert.match(dylibIssues[0] || "", /dylib name offset 40 points outside the command/);
+
+  const rpathBytes = new Uint8Array(16);
+  const rpathView = new DataView(rpathBytes.buffer);
+  rpathView.setUint32(8, 12, true);
+  rpathBytes.set(encoder.encode("path"), 12);
+  const rpathIssues: string[] = [];
+  const rpath = parseRpath(rpathView, 17, true, rpathIssues);
+  assert.ok(rpath);
+  assert.equal(rpath.path, "path");
+  assert.match(rpathIssues[0] || "", /rpath path is not NUL-terminated within cmdsize/);
+
+  const stringBytes = new Uint8Array(16);
+  const stringView = new DataView(stringBytes.buffer);
+  stringView.setUint32(8, 12, true);
+  stringBytes.set(encoder.encode("dyld"), 12);
+  const stringIssues: string[] = [];
+  const stringCommand = parseStringCommand(stringView, 18, true, LC_LOAD_DYLINKER, stringIssues);
+  assert.ok(stringCommand);
+  assert.equal(stringCommand.value, "dyld");
+  assert.match(stringIssues[0] || "", /LC_LOAD_DYLINKER string is not NUL-terminated within cmdsize/);
 });
 
 void test("Mach-O load-command parsers decode build-version and dyld info payloads", () => {
@@ -133,4 +167,13 @@ void test("Mach-O load-command parsers decode linkedit, encryption, and fileset 
   assert.ok(fileset);
   assert.equal(fileset.entryId, "entry-id");
   assert.equal(parseFileSetEntry(new DataView(new Uint8Array(24).buffer), 15, true, filesetIssues), null);
+
+  const badFilesetBytes = new Uint8Array(32);
+  const badFilesetView = new DataView(badFilesetBytes.buffer);
+  badFilesetView.setUint32(24, 40, true);
+  const badFilesetIssues: string[] = [];
+  const badFileset = parseFileSetEntry(badFilesetView, 16, true, badFilesetIssues);
+  assert.ok(badFileset);
+  assert.equal(badFileset.entryId, "");
+  assert.match(badFilesetIssues[0] || "", /fileset entry id offset 40 points outside the command/);
 });
