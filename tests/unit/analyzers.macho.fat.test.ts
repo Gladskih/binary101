@@ -11,6 +11,7 @@ import {
   createThinMachOFixture
 } from "../fixtures/macho-thin-sample.js";
 import { createMachOUniversalLayout, wrapMachOBytes } from "../fixtures/macho-fixtures.js";
+import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
 
 const fatMagicInfo = (bytes: Uint8Array) => {
   const magicInfo = getMachOMagicInfo(new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength));
@@ -85,4 +86,17 @@ void test("parseFatBinary parses FAT_MAGIC_64 slice records", async () => {
   assert.equal(parsed.slices[0]?.reserved, 0x1234);
   assert.equal(parsed.slices[0]?.image?.header.is64, true);
   assert.deepEqual(parsed.issues, []);
+});
+
+void test("parseFatBinary reads fat slice records incrementally", async () => {
+  const bytes = new Uint8Array(0x10028);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, FAT_MAGIC_64, false);
+  view.setUint32(4, 0xffffffff, false);
+  const tracked = createSliceTrackingFile(bytes, bytes.length, "fat-incremental");
+
+  const parsed = await parseFatBinary(tracked.file, fatMagicInfo(bytes));
+
+  assert.equal(parsed.slices.length, Math.floor((bytes.length - 8) / 32));
+  assert.ok(Math.max(...tracked.requests) < tracked.file.size);
 });

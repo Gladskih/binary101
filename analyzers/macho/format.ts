@@ -18,7 +18,14 @@ export type MachOMagicInfo = {
   magicName: string;
 };
 
+export type MachORangeReader = {
+  read: (offset: number, size: number) => Promise<DataView>;
+  readZeroTerminatedString: (offset: number, maxLength: number) => Promise<string>;
+};
+
 const bigFromUint32 = (value: number): bigint => BigInt(value >>> 0);
+const EMPTY_VIEW = new DataView(new ArrayBuffer(0));
+const MACHO_READER_WINDOW_BYTES = 64 * 1024;
 
 const magicInfoFromValue = (magic: number): MachOMagicInfo | null => {
   switch (magic) {
@@ -61,6 +68,66 @@ const clampRangeSize = (limit: number, offset: number, size: number): number => 
 
 const readRange = async (file: File, offset: number, size: number): Promise<DataView> =>
   new DataView(await file.slice(offset, offset + size).arrayBuffer());
+
+const createRangeReader = (
+  file: File,
+  baseOffset: number,
+  limit: number
+): MachORangeReader => {
+  let windowOffset = -1;
+  let windowView: DataView | null = null;
+
+  const read = async (offset: number, size: number): Promise<DataView> => {
+    const availableSize = clampRangeSize(limit, offset, size);
+    if (availableSize <= 0) return EMPTY_VIEW;
+    if (
+      windowView &&
+      offset >= windowOffset &&
+      offset + availableSize <= windowOffset + windowView.byteLength
+    ) {
+      return subView(windowView, offset - windowOffset, availableSize);
+    }
+    const readSize =
+      availableSize > MACHO_READER_WINDOW_BYTES
+        ? availableSize
+        : clampRangeSize(limit, offset, Math.max(availableSize, MACHO_READER_WINDOW_BYTES));
+    const view = await readRange(file, baseOffset + offset, readSize);
+    if (availableSize <= MACHO_READER_WINDOW_BYTES) {
+      windowOffset = offset;
+      windowView = view;
+    } else {
+      windowOffset = -1;
+      windowView = null;
+    }
+    return availableSize === view.byteLength
+      ? view
+      : subView(view, 0, Math.min(availableSize, view.byteLength));
+  };
+
+  const readZeroTerminatedString = async (offset: number, maxLength: number): Promise<string> => {
+    if (offset < 0 || offset >= limit || maxLength <= 0) return "";
+    let cursor = offset;
+    let remaining = Math.min(maxLength, limit - offset);
+    let text = "";
+    while (remaining > 0) {
+      const chunk = await read(cursor, Math.min(remaining, MACHO_READER_WINDOW_BYTES));
+      if (!chunk.byteLength) break;
+      for (let index = 0; index < chunk.byteLength; index += 1) {
+        const byteValue = chunk.getUint8(index);
+        if (byteValue === 0) return text;
+        text += String.fromCharCode(byteValue);
+      }
+      cursor += chunk.byteLength;
+      remaining -= chunk.byteLength;
+    }
+    return text;
+  };
+
+  return {
+    read,
+    readZeroTerminatedString
+  };
+};
 
 const readFixedString = (view: DataView, offset: number, length: number): string => {
   let text = "";
@@ -150,6 +217,7 @@ const parseHeader = (view: DataView, magicInfo: MachOMagicInfo): MachOFileHeader
 export {
   bigFromUint32,
   clampRangeSize,
+  createRangeReader,
   formatBuildToolVersion,
   formatPackedVersion,
   formatSourceVersion,

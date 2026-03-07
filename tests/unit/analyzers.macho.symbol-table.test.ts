@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseSymtab } from "../../analyzers/macho/symbol-table.js";
 import { wrapMachOBytes } from "../fixtures/macho-fixtures.js";
+import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
 
 void test("parseSymtab reports truncated symbol tables and invalid string indexes", async () => {
   const bytes = new Uint8Array(0x24);
@@ -72,4 +73,21 @@ void test("parseSymtab parses 32-bit symbol entries", async () => {
   assert.equal(parsed.symbols[0]?.value, 0x1234n);
   assert.equal(parsed.symbols[0]?.libraryOrdinal, 1);
   assert.deepEqual(parsed.issues, []);
+});
+
+void test("parseSymtab resolves names without reading the full string table", async () => {
+  const bytes = new Uint8Array(0x25);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 1, true);
+  bytes[4] = 0x0f;
+  bytes[5] = 1;
+  view.setUint16(6, 0, true);
+  view.setBigUint64(8, 0n, true);
+  bytes.set(new Uint8Array([0x00, 0x66, 0x6f, 0x6f, 0x00]), 0x20);
+  const tracked = createSliceTrackingFile(bytes, 0x100000, "symtab-lazy-strings");
+
+  const parsed = await parseSymtab(tracked.file, 0, tracked.file.size, true, true, 0, 1, 0x20, 0xfffe0);
+
+  assert.equal(parsed.symbols[0]?.name, "foo");
+  assert.ok(Math.max(...tracked.requests) <= 64 * 1024);
 });

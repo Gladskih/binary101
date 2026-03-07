@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseThinImage } from "../../analyzers/macho/thin.js";
 import { createThinMachOFixtureData, wrapMachOBytes } from "../fixtures/macho-fixtures.js";
+import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
 
 const loadCommandSizeOffset = (commandOffset: number): number => commandOffset + 4;
 
@@ -67,4 +68,26 @@ void test("parseThinImage reports truncated symtab commands", async () => {
   const parsed = await parseThinImage(wrapMachOBytes(fixture.bytes, "thin-truncated-symtab"), 0, fixture.bytes.length);
   assert.ok(parsed);
   assert.match(parsed.issues.join("\n"), /symbol-table command is truncated/);
+});
+
+void test("parseThinImage reads load commands incrementally", async () => {
+  const bytes = new Uint8Array(40);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 0xcffaedfe, false);
+  view.setUint32(4, 0x01000007, true);
+  view.setUint32(8, 3, true);
+  view.setUint32(12, 2, true);
+  view.setUint32(16, 1, true);
+  view.setUint32(20, 0x100000, true);
+  view.setUint32(24, 0, true);
+  view.setUint32(28, 0, true);
+  view.setUint32(32, 0, true);
+  view.setUint32(36, 8, true);
+  const tracked = createSliceTrackingFile(bytes, 0x100020, "thin-incremental");
+
+  const parsed = await parseThinImage(tracked.file, 0, tracked.file.size);
+
+  assert.ok(parsed);
+  assert.equal(parsed.loadCommands.length, 1);
+  assert.ok(Math.max(...tracked.requests) <= 64 * 1024);
 });

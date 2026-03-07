@@ -10,11 +10,11 @@ import {
   LC_VERSION_MIN_WATCHOS
 } from "./commands.js";
 import {
+  createRangeReader,
   formatUuid,
   getMachOMagicInfo,
   parseHeader,
   readCommandString,
-  readRange,
   subView
 } from "./format.js";
 import { buildTruncatedImage } from "./truncated-image.js";
@@ -56,7 +56,8 @@ const parseThinImage = async (
   imageOffset: number,
   imageSize: number
 ): Promise<MachOImage | null> => {
-  const headerView = await readRange(file, imageOffset, Math.min(imageSize, 32));
+  const reader = createRangeReader(file, imageOffset, imageSize);
+  const headerView = await reader.read(0, Math.min(imageSize, 32));
   const magicInfo = getMachOMagicInfo(headerView);
   if (!magicInfo || magicInfo.kind !== "thin") return null;
   const headerSize = magicInfo.is64 ? 32 : 28;
@@ -72,13 +73,12 @@ const parseThinImage = async (
   const issues: string[] = [];
   const fullHeaderView = headerView.byteLength >= headerSize
     ? subView(headerView, 0, headerSize)
-    : await readRange(file, imageOffset, headerSize);
+    : await reader.read(0, headerSize);
   const header = parseHeader(fullHeaderView, magicInfo);
-  const loadRegionSize = Math.min(imageSize, headerSize + header.sizeofcmds);
-  if (loadRegionSize < headerSize + header.sizeofcmds) {
+  const availableCommandBytes = Math.max(0, imageSize - headerSize);
+  if (availableCommandBytes < header.sizeofcmds) {
     issues.push(`Load-command region is truncated: expected ${header.sizeofcmds} bytes, got ${Math.max(0, imageSize - headerSize)}.`);
   }
-  const loadRegion = await readRange(file, imageOffset, loadRegionSize);
   const loadCommands: MachOLoadCommand[] = [];
   const segments: MachOSegment[] = [];
   const dylibs: MachODylib[] = [];
@@ -100,22 +100,27 @@ const parseThinImage = async (
   let cursor = headerSize;
   const little = header.littleEndian;
   for (let index = 0; index < header.ncmds; index += 1) {
-    if (cursor + 8 > loadRegion.byteLength) {
+    if (cursor + 8 > imageSize) {
       issues.push(`Load command ${index}: header extends beyond available command bytes.`);
       break;
     }
-    const cmd = loadRegion.getUint32(cursor, little);
-    const cmdsize = loadRegion.getUint32(cursor + 4, little);
+    const commandHeader = await reader.read(cursor, 8);
+    if (commandHeader.byteLength < 8) {
+      issues.push(`Load command ${index}: header extends beyond available command bytes.`);
+      break;
+    }
+    const cmd = commandHeader.getUint32(0, little);
+    const cmdsize = commandHeader.getUint32(4, little);
     parseLoadCommandRecord(loadCommands, imageOffset, cursor, cmd, cmdsize, index);
     if (cmdsize < 8) {
       issues.push(`Load command ${index}: invalid cmdsize ${cmdsize}.`);
       break;
     }
-    if (cursor + cmdsize > loadRegion.byteLength) {
+    if (cursor + cmdsize > imageSize) {
       issues.push(`Load command ${index}: extends beyond available command bytes.`);
       break;
     }
-    const cmdView = subView(loadRegion, cursor, cmdsize);
+    const cmdView = await reader.read(cursor, cmdsize);
     if (cmd === LC_SEGMENT || cmd === LC_SEGMENT_64) {
       const segment = parseSegment(cmdView, index, cmd === LC_SEGMENT_64, little, nextSectionIndex, issues);
       if (segment) segments.push(segment);
