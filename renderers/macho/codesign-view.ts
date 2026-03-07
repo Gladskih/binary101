@@ -8,7 +8,7 @@ import {
   codeDirectoryHashLabel,
   codeSignatureBlobLabel,
   codeSignatureSlotLabelFor,
-  pageSizeBytes
+  pageSizeLabel
 } from "./codesign-semantics.js";
 import { formatByteSize, formatHex, formatList } from "./value-format.js";
 
@@ -36,8 +36,7 @@ const renderCodeSignature = (signature: MachOCodeSignature): string => {
     details.push(dd("Flags", formatList(codeDirectoryFlagLabels(codeDirectory.flags))));
     const execSegLabels = codeDirectoryExecSegLabels(codeDirectory.execSegFlags);
     if (execSegLabels.length) details.push(dd("Exec segment flags", formatList(execSegLabels)));
-    const pageSize = pageSizeBytes(codeDirectory.pageSizeShift);
-    if (pageSize != null) details.push(dd("Page size", safe(formatByteSize(pageSize))));
+    details.push(dd("Page size", safe(pageSizeLabel(codeDirectory.pageSizeShift))));
   }
   const slots = !signature.slots.length
     ? ""

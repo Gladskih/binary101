@@ -26,7 +26,7 @@ import {
   codeDirectoryExecSegLabels,
   codeDirectoryHashLabel,
   codeSignatureBlobLabel,
-  pageSizeBytes
+  pageSizeLabel
 } from "../../renderers/macho/codesign-semantics.js";
 import { renderCodeSignature } from "../../renderers/macho/codesign-view.js";
 import {
@@ -67,8 +67,8 @@ void test("Mach-O renderer semantics expose fallback labels", () => {
   assert.equal(codeSignatureBlobLabel(CSMAGIC_CODEDIRECTORY), "CodeDirectory");
   assert.equal(codeDirectoryHashLabel(99), "hash 99");
   assert.deepEqual(codeDirectoryExecSegLabels(null), []);
-  assert.equal(pageSizeBytes(0), null);
-  assert.equal(pageSizeBytes(12), 4096);
+  assert.equal(pageSizeLabel(0), "Infinite");
+  assert.equal(pageSizeLabel(12), "4 KB (4096 bytes)");
   assert.match(formatByteSize(0x100000000), /4294967296 bytes/);
 });
 
@@ -145,7 +145,14 @@ void test("Mach-O symbol semantics and symbol view cover bindings, descriptions,
   ]);
   assert.deepEqual(symbolDescriptionLabels(symbols[2]!), ["Private undefined (lazy)", "Reference to weak symbol"]);
   assert.deepEqual(symbolBindingLabels(image, symbols[0]!), ["local"]);
-  assert.deepEqual(symbolBindingLabels(image, symbols[3]!), ["external", "Dynamic lookup"]);
+  assert.deepEqual(symbolBindingLabels(image, symbols[3]!), ["external", "Dylib #254"]);
+  assert.deepEqual(symbolBindingLabels(image, {
+    ...symbols[1]!,
+    index: 5,
+    name: "_flat",
+    description: 0,
+    libraryOrdinal: DYNAMIC_LOOKUP_ORDINAL
+  }), ["external", "Dynamic lookup"]);
   assert.deepEqual(summarizeSymbols(symbols), {
     debug: 1,
     externalDefined: 0,
@@ -157,8 +164,18 @@ void test("Mach-O symbol semantics and symbol view cover bindings, descriptions,
   const html = renderSymtab(image);
   assert.match(html, /Show symbols \(5\)/);
   assert.match(html, /Main executable/);
-  assert.match(html, /Dynamic lookup/);
+  assert.match(html, /Dylib #254/);
   assert.match(html, /Debug \/ STAB/);
+
+  image.dylibs = Array.from({ length: DYNAMIC_LOOKUP_ORDINAL }, (_, index) => ({
+    loadCommandIndex: index,
+    command: 0,
+    name: `/usr/lib/lib${index}.dylib`,
+    timestamp: 0,
+    currentVersion: 0,
+    compatibilityVersion: 0
+  }));
+  assert.deepEqual(symbolBindingLabels(image, symbols[3]!), ["external", "/usr/lib/lib253.dylib"]);
 });
 
 void test("Mach-O code-signing view renders full and sparse signatures", () => {
@@ -179,7 +196,7 @@ void test("Mach-O code-signing view renders full and sparse signatures", () => {
       hashSize: 32,
       hashType: 99,
       platform: 11,
-      pageSizeShift: 12,
+      pageSizeShift: 0,
       nSpecialSlots: 2,
       nCodeSlots: 4,
       codeLimit: 0x2000n,
@@ -196,6 +213,7 @@ void test("Mach-O code-signing view renders full and sparse signatures", () => {
   assert.match(fullHtml, /TEAMID/);
   assert.match(fullHtml, /Exec segment flags/);
   assert.match(fullHtml, /Page size/);
+  assert.match(fullHtml, /Infinite/);
   assert.match(fullHtml, /hash 99/);
 
   const sparseHtml = renderCodeSignature({

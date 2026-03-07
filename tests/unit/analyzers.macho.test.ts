@@ -14,6 +14,7 @@ void test("parseMachO parses thin 64-bit Mach-O executables with symbols and cod
   assert.ok(parsed.image);
   assert.equal(parsed.image.header.is64, true);
   assert.equal(parsed.image.header.littleEndian, true);
+  assert.equal(parsed.image.header.magic, 0xfeedfacf);
   assert.equal(parsed.image.header.cputype, 0x01000007);
   assert.equal(parsed.image.header.filetype, 0x2);
   assert.equal(parsed.image.entryPoint?.entryoff, 0x230n);

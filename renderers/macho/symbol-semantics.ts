@@ -55,7 +55,13 @@ const symbolDescriptionLabels = (symbol: MachOSymbol): string[] => {
 const symbolLibraryLabel = (image: MachOImage, symbol: MachOSymbol): string | null => {
   if (symbol.libraryOrdinal == null) return null;
   if (symbol.libraryOrdinal === EXECUTABLE_ORDINAL) return "Main executable";
-  if (symbol.libraryOrdinal === DYNAMIC_LOOKUP_ORDINAL) return "Dynamic lookup";
+  if (
+    symbol.libraryOrdinal === DYNAMIC_LOOKUP_ORDINAL &&
+    symbolTypeBits(symbol.type) === N_UNDF &&
+    image.dylibs.length < DYNAMIC_LOOKUP_ORDINAL
+  ) {
+    return "Dynamic lookup";
+  }
   return image.dylibs[symbol.libraryOrdinal - 1]?.name || `Dylib #${symbol.libraryOrdinal}`;
 };
 
