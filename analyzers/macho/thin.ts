@@ -22,6 +22,13 @@ import {
   parseFileSetEntry, parseLinkeditData, parseLoadCommandRecord, parseRpath, parseSegment,
   parseStringCommand, parseVersionMin
 } from "./load-command-parsers.js";
+import {
+  validateDyldInfoRanges,
+  validateEncryptionInfoRanges,
+  validateFileSetEntryRanges,
+  validateLinkeditDataRanges,
+  validateSegmentRanges
+} from "./range-validation.js";
 import { parseSymtab } from "./symbol-table.js";
 import { parseCodeSignature } from "./codesign.js";
 import type {
@@ -223,6 +230,11 @@ const parseThinImage = async (
           entryoff: entryPoint.entryoff,
           stacksize: entryPoint.stacksize
         };
+  validateSegmentRanges(segments, imageSize, issues);
+  validateDyldInfoRanges(dyldInfo, imageSize, issues);
+  validateLinkeditDataRanges(linkeditData, imageSize, issues);
+  validateEncryptionInfoRanges(encryptionInfos, imageSize, issues);
+  validateFileSetEntryRanges(fileSetEntries, imageSize, issues);
   const symtab = symtabCommand
     ? await parseSymtab(
         file,
@@ -233,7 +245,8 @@ const parseThinImage = async (
         symtabCommand.symoff,
         symtabCommand.nsyms,
         symtabCommand.stroff,
-        symtabCommand.strsize
+        symtabCommand.strsize,
+        header.filetype
       )
     : null;
   if (symtab?.issues.length) issues.push(...symtab.issues);

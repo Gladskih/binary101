@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseSegment } from "../../analyzers/macho/segment-parser.js";
+import { createMachOIncidentalValues } from "../fixtures/macho-incidental-values.js";
 
 const encoder = new TextEncoder();
 
@@ -18,15 +19,16 @@ void test("parseSegment reports truncated segment commands", () => {
 });
 
 void test("parseSegment reports section counts that do not fit in the command", () => {
+  const values = createMachOIncidentalValues();
   const bytes = new Uint8Array(72 + 80);
   const view = new DataView(bytes.buffer);
   writeAscii(bytes, 8, "__TEXT");
   view.setUint32(64, 2, true);
   writeAscii(bytes, 72, "__text");
   writeAscii(bytes, 88, "__TEXT");
-  view.setBigUint64(104, 0x100000000n, true);
-  view.setBigUint64(112, 8n, true);
-  view.setUint32(120, 0x200, true);
+  view.setBigUint64(104, values.nextBigUint64(), true);
+  view.setBigUint64(112, BigInt((values.nextUint8() & 0x0f) + 8), true);
+  view.setUint32(120, (values.nextUint16() & 0x01f0) + 0x200, true);
   const issues: string[] = [];
   const segment = parseSegment(view, 1, true, true, { value: 1 }, issues);
   assert.ok(segment);
@@ -41,7 +43,9 @@ void test("parseSegment parses 32-bit segments and uses unnamed fallback in warn
   view.setUint32(28, 0x200, true);
   view.setUint32(32, 0x200, true);
   view.setUint32(36, 0x200, true);
+  // VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE
   view.setUint32(40, 7, true);
+  // VM_PROT_READ | VM_PROT_EXECUTE
   view.setUint32(44, 5, true);
   view.setUint32(48, 2, true);
   view.setUint32(52, 0x4, true);

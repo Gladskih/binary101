@@ -2,7 +2,6 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FAT_MAGIC, FAT_MAGIC_64 } from "../../analyzers/macho/commands.js";
 import { getMachOMagicInfo } from "../../analyzers/macho/format.js";
 import { parseFatBinary } from "../../analyzers/macho/fat.js";
 import {
@@ -11,7 +10,12 @@ import {
   createThinMachOFixture
 } from "../fixtures/macho-thin-sample.js";
 import { createMachOUniversalLayout, wrapMachOBytes } from "../fixtures/macho-fixtures.js";
+import { createMachOIncidentalValues } from "../fixtures/macho-incidental-values.js";
 import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
+
+// mach-o/fat.h: FAT_MAGIC and FAT_MAGIC_64.
+const FAT_MAGIC = 0xcafebabe;
+const FAT_MAGIC_64 = 0xcafebabf;
 
 const fatMagicInfo = (bytes: Uint8Array) => {
   const magicInfo = getMachOMagicInfo(new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength));
@@ -57,13 +61,15 @@ void test("parseFatBinary reports slices without supported Mach-O payloads", asy
 });
 
 void test("parseFatBinary parses FAT_MAGIC_64 slice records", async () => {
+  const values = createMachOIncidentalValues();
   const thin = createThinMachOFixture(
     CPU_TYPE_X86_64,
     CPU_SUBTYPE_X86_64_ALL,
-    0x44,
-    "com.example.binary101.fat64"
+    values.nextUint8(),
+    values.nextLabel("com.example.binary101.fat64")
   ).bytes;
   const sliceOffset = 0x1000;
+  const reserved = values.nextUint16();
   const bytes = new Uint8Array(sliceOffset + thin.length);
   const view = new DataView(bytes.buffer);
   view.setUint32(0, FAT_MAGIC_64, false);
@@ -73,7 +79,7 @@ void test("parseFatBinary parses FAT_MAGIC_64 slice records", async () => {
   view.setBigUint64(16, BigInt(sliceOffset), false);
   view.setBigUint64(24, BigInt(thin.length), false);
   view.setUint32(32, 12, false);
-  view.setUint32(36, 0x1234, false);
+  view.setUint32(36, reserved, false);
   bytes.set(thin, sliceOffset);
 
   const parsed = await parseFatBinary(wrapMachOBytes(bytes, "fat64-valid"), fatMagicInfo(bytes));
@@ -83,7 +89,7 @@ void test("parseFatBinary parses FAT_MAGIC_64 slice records", async () => {
   assert.equal(parsed.slices[0]?.offset, sliceOffset);
   assert.equal(parsed.slices[0]?.size, thin.length);
   assert.equal(parsed.slices[0]?.align, 12);
-  assert.equal(parsed.slices[0]?.reserved, 0x1234);
+  assert.equal(parsed.slices[0]?.reserved, reserved);
   assert.equal(parsed.slices[0]?.image?.header.is64, true);
   assert.deepEqual(parsed.issues, []);
 });
@@ -92,6 +98,7 @@ void test("parseFatBinary reads fat slice records incrementally", async () => {
   const bytes = new Uint8Array(0x10028);
   const view = new DataView(bytes.buffer);
   view.setUint32(0, FAT_MAGIC_64, false);
+  // Deliberately absurd slice count so the parser must cap reads to available records.
   view.setUint32(4, 0xffffffff, false);
   const tracked = createSliceTrackingFile(bytes, bytes.length, "fat-incremental");
 

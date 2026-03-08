@@ -9,7 +9,7 @@ import {
   symbolDescriptionLabels,
   symbolTypeLabelFor
 } from "./symbol-semantics.js";
-import { formatByteSize, formatHex } from "./value-format.js";
+import { formatByteSize, formatFileOffset, formatHex } from "./value-format.js";
 
 const renderSymbols = (image: MachOImage, symbols: MachOSymbol[]): string => {
   if (!symbols.length) return "";
@@ -39,8 +39,14 @@ const renderSymtab = (image: MachOImage): string => {
   const counts = summarizeSymbols(image.symtab.symbols);
   return (
     `<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Symbols</h4><dl>` +
-    dd("Symbol table", safe(`${image.symtab.nsyms} entries @ ${formatHex(image.symtab.symoff)}`)) +
-    dd("Strings", safe(`${formatByteSize(image.symtab.strsize)} @ ${formatHex(image.symtab.stroff)}`)) +
+    dd(
+      "Symbol table",
+      safe(`${image.symtab.nsyms} entries @ ${formatFileOffset(image.offset, image.symtab.symoff)}`)
+    ) +
+    dd(
+      "Strings",
+      safe(`${formatByteSize(image.symtab.strsize)} @ ${formatFileOffset(image.offset, image.symtab.stroff)}`)
+    ) +
     dd("Local / defined / undefined", safe(`${counts.local} / ${counts.externalDefined} / ${counts.undefined}`)) +
     dd("Debug / indirect", safe(`${counts.debug} / ${counts.indirect}`)) +
     `</dl>${renderSymbols(image, image.symtab.symbols)}</section>`

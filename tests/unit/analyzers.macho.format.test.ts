@@ -2,14 +2,14 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MH_CIGAM } from "../../analyzers/macho/commands.js";
 import { createRangeReader, getMachOMagicInfo } from "../../analyzers/macho/format.js";
 import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
 import { wrapMachOBytes } from "../fixtures/macho-fixtures.js";
+import { createMachOIncidentalValues } from "../fixtures/macho-incidental-values.js";
 
 void test("Mach-O format helpers recognise swapped thin magics", () => {
   const bytes = new Uint8Array(8);
-  new DataView(bytes.buffer).setUint32(4, MH_CIGAM, false);
+  new DataView(bytes.buffer).setUint32(4, 0xcefaedfe, false); // MH_CIGAM
 
   const info = getMachOMagicInfo(new DataView(bytes.buffer), 4);
 
@@ -17,7 +17,7 @@ void test("Mach-O format helpers recognise swapped thin magics", () => {
     kind: "thin",
     is64: false,
     littleEndian: true,
-    magic: MH_CIGAM,
+    magic: 0xcefaedfe,
     magicName: "MH_CIGAM"
   });
 });
@@ -36,8 +36,10 @@ void test("createRangeReader does not cache oversized reads", async () => {
 });
 
 void test("createRangeReader returns unterminated strings when maxLength is exhausted", async () => {
-  const bytes = new Uint8Array([0x61, 0x62, 0x63]);
+  const values = createMachOIncidentalValues();
+  const unterminatedLabel = values.nextLabel("abc");
+  const bytes = new TextEncoder().encode(unterminatedLabel);
   const reader = createRangeReader(wrapMachOBytes(bytes, "macho-unterminated-string"), 0, bytes.length);
 
-  assert.equal(await reader.readZeroTerminatedString(0, bytes.length), "abc");
+  assert.equal(await reader.readZeroTerminatedString(0, bytes.length), unterminatedLabel);
 });

@@ -17,6 +17,8 @@ import {
 import { symbolTypeName } from "../../analyzers/macho/load-command-info.js";
 import type { MachOImage, MachOSymbol } from "../../analyzers/macho/types.js";
 
+const MH_OBJECT = 0x1;
+
 const sectionNameByIndex = (image: MachOImage, sectionIndex: number): string | null => {
   if (sectionIndex === 0) return null;
   for (const segment of image.segments) {
@@ -31,6 +33,11 @@ const symbolIsDebug = (type: number): boolean => (type & N_STAB) !== 0;
 const symbolIsExternal = (type: number): boolean => (type & N_EXT) !== 0;
 const symbolIsPrivateExternal = (type: number): boolean => (type & N_PEXT) !== 0;
 const symbolTypeBits = (type: number): number => type & N_TYPE;
+const symbolCanUseLibraryOrdinal = (image: MachOImage, symbol: MachOSymbol): boolean =>
+  symbol.libraryOrdinal != null &&
+  !symbolIsDebug(symbol.type) &&
+  symbolIsExternal(symbol.type) &&
+  image.header.filetype !== MH_OBJECT;
 
 const symbolTypeLabelFor = (symbol: MachOSymbol): string =>
   symbolIsDebug(symbol.type) ? "Debug / STAB" : symbolTypeName(symbolTypeBits(symbol.type));
@@ -54,23 +61,31 @@ const symbolDescriptionLabels = (symbol: MachOSymbol): string[] => {
 };
 
 const symbolLibraryLabel = (image: MachOImage, symbol: MachOSymbol): string | null => {
-  if (symbol.libraryOrdinal == null) return null;
+  if (!symbolCanUseLibraryOrdinal(image, symbol)) return null;
+  const libraryOrdinal = symbol.libraryOrdinal;
+  if (libraryOrdinal == null) return null;
   if (
-    symbol.libraryOrdinal === SELF_LIBRARY_ORDINAL &&
-    symbolIsExternal(symbol.type) &&
+    libraryOrdinal === SELF_LIBRARY_ORDINAL &&
     symbolTypeBits(symbol.type) !== N_UNDF
   ) {
     return "This image";
   }
-  if (symbol.libraryOrdinal === EXECUTABLE_ORDINAL) return "Main executable";
+  if (libraryOrdinal === EXECUTABLE_ORDINAL) return "Main executable";
   if (
-    symbol.libraryOrdinal === DYNAMIC_LOOKUP_ORDINAL &&
+    libraryOrdinal === DYNAMIC_LOOKUP_ORDINAL &&
     symbolTypeBits(symbol.type) === N_UNDF &&
     image.dylibs.length < DYNAMIC_LOOKUP_ORDINAL
   ) {
     return "Dynamic lookup";
   }
-  return image.dylibs[symbol.libraryOrdinal - 1]?.name || `Dylib #${symbol.libraryOrdinal}`;
+  if (
+    symbolTypeBits(symbol.type) !== N_UNDF &&
+    symbolTypeBits(symbol.type) !== N_INDR &&
+    libraryOrdinal !== SELF_LIBRARY_ORDINAL
+  ) {
+    return null;
+  }
+  return image.dylibs[libraryOrdinal - 1]?.name || `Dylib #${libraryOrdinal}`;
 };
 
 const symbolBindingLabels = (image: MachOImage, symbol: MachOSymbol): string[] => {

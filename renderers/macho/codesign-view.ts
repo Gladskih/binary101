@@ -10,11 +10,14 @@ import {
   codeSignatureSlotLabelFor,
   pageSizeLabel
 } from "./codesign-semantics.js";
-import { formatByteSize, formatHex, formatList } from "./value-format.js";
+import { formatByteSize, formatFileOffset, formatHex, formatList } from "./value-format.js";
 
-const renderCodeSignature = (signature: MachOCodeSignature): string => {
+const renderCodeSignature = (signature: MachOCodeSignature, imageOffset = 0): string => {
   const details: string[] = [
-    dd("Blob", safe(`${codeSignatureBlobLabel(signature.magic)} @ ${formatHex(signature.dataoff)}`)),
+    dd(
+      "Blob",
+      safe(`${codeSignatureBlobLabel(signature.magic)} @ ${formatFileOffset(imageOffset, signature.dataoff)}`)
+    ),
     dd("Size", safe(formatByteSize(signature.datasize)))
   ];
   if (signature.blobCount != null) details.push(dd("Indexed blobs", safe(String(signature.blobCount))));

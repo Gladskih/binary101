@@ -6,6 +6,7 @@ import { parseMachO } from "../../analyzers/macho/index.js";
 import type { MachOParseResult } from "../../analyzers/macho/types.js";
 import { renderMachO } from "../../renderers/macho/index.js";
 import { createMachOFile, createMachOUniversalFile } from "../fixtures/macho-fixtures.js";
+import { CPU_SUBTYPE_X86_64_ALL, CPU_TYPE_X86_64 } from "../fixtures/macho-thin-sample.js";
 
 void test("renderMachO renders rich thin binaries from raw analyzer fields", async () => {
   const parsed = await parseMachO(createMachOFile());
@@ -25,11 +26,11 @@ void test("renderMachO renders sparse thin binaries without optional sections", 
       offset: 0,
       size: 0x1000,
       header: {
-        magic: 0xfeedfacf,
+        magic: 0xfeedfacf, // MH_MAGIC_64
         is64: true,
         littleEndian: true,
-        cputype: 0x01000007,
-        cpusubtype: 3,
+        cputype: CPU_TYPE_X86_64,
+        cpusubtype: CPU_SUBTYPE_X86_64_ALL,
         filetype: 0x2,
         ncmds: 0,
         sizeofcmds: 0,

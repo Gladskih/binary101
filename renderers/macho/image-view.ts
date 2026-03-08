@@ -28,7 +28,7 @@ import {
 } from "./version-semantics.js";
 import { renderCodeSignature } from "./codesign-view.js";
 import { renderSymtab } from "./symbols-view.js";
-import { formatByteSize, formatHex, formatList } from "./value-format.js";
+import { formatByteSize, formatFileOffset, formatFileRange, formatHex, formatList } from "./value-format.js";
 
 const entryFileOffset = (image: MachOImage, entryPoint: MachOEntryPoint): bigint =>
   BigInt(image.offset) + entryPoint.entryoff;
@@ -190,7 +190,7 @@ const renderLinkedImages = (image: MachOImage): string => {
   return out.join("");
 };
 
-const renderSegments = (segments: MachOSegment[]): string => {
+const renderSegments = (image: MachOImage, segments: MachOSegment[]): string => {
   if (!segments.length) return "";
   const out: string[] = [];
   out.push(`<section>`);
@@ -206,7 +206,7 @@ const renderSegments = (segments: MachOSegment[]): string => {
     out.push(
       `<tr><td>${safe(segment.name || "<unnamed>")}</td>` +
         `<td><span class="mono">${safe(formatHex(segment.vmaddr))}</span> / ${safe(formatByteSize(segment.vmsize))}</td>` +
-        `<td><span class="mono">${safe(formatHex(segment.fileoff))}</span> / ${safe(formatByteSize(segment.filesize))}</td>` +
+        `<td><span class="mono">${safe(formatFileOffset(image.offset, segment.fileoff))}</span> / ${safe(formatByteSize(segment.filesize))}</td>` +
         `<td>init: ${safe(initProtection)}<br>max: ${safe(maxProtection)}</td>` +
         `<td>${segment.sections.length}</td>` +
         `<td>${formatList(segmentFlags(segment.flags))}</td></tr>`
@@ -221,7 +221,7 @@ const renderSegments = (segments: MachOSegment[]): string => {
         `<tr><td>${section.index}</td><td>${safe(section.sectionName)}</td><td>${safe(section.segmentName)}</td>` +
           `<td><span class="mono">${safe(formatHex(section.addr))}</span></td>` +
           `<td>${safe(formatByteSize(section.size))}</td>` +
-          `<td><span class="mono">${safe(formatHex(section.offset))}</span></td>` +
+          `<td><span class="mono">${safe(formatFileOffset(image.offset, section.offset))}</span></td>` +
           `<td>${safe(sectionTypeName(section.flags))}</td>` +
           `<td>${formatList(sectionAttributeFlagNames(section.flags))}</td></tr>`
       );
@@ -240,9 +240,9 @@ const renderImage = (image: MachOImage): string => {
   out.push(renderEntryPoint(image));
   out.push(renderLinkedImages(image));
   out.push(renderLoadCommands(image));
-  out.push(renderSegments(image.segments));
+  out.push(renderSegments(image, image.segments));
   out.push(renderSymtab(image));
-  if (image.codeSignature) out.push(renderCodeSignature(image.codeSignature));
+  if (image.codeSignature) out.push(renderCodeSignature(image.codeSignature, image.offset));
   if (
     image.dyldInfo ||
     image.linkeditData.length ||
@@ -259,15 +259,25 @@ const renderImage = (image: MachOImage): string => {
       out.push(
         dd(
           loadCommandName(item.command),
-          safe(`${formatHex(item.dataoff)} + ${formatByteSize(item.datasize)}`)
+          safe(formatFileRange(image.offset, item.dataoff, item.datasize))
         )
       );
     }
     for (const info of image.encryptionInfos) {
-      out.push(dd(loadCommandName(info.command), safe(`${formatHex(info.cryptoff)} + ${formatByteSize(info.cryptsize)}, cryptid ${info.cryptid}`)));
+      out.push(
+        dd(
+          loadCommandName(info.command),
+          safe(`${formatFileRange(image.offset, info.cryptoff, info.cryptsize)}, cryptid ${info.cryptid}`)
+        )
+      );
     }
     for (const entry of image.fileSetEntries) {
-      out.push(dd("Fileset entry", `<span class="mono">${safe(entry.entryId || "-")}</span> @ ${safe(formatHex(entry.fileoff))}`));
+      out.push(
+        dd(
+          "Fileset entry",
+          `<span class="mono">${safe(entry.entryId || "-")}</span> @ ${safe(formatFileOffset(image.offset, entry.fileoff))}`
+        )
+      );
     }
     out.push(`</dl></section>`);
   }

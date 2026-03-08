@@ -1,7 +1,22 @@
 "use strict";
 
+import { N_EXT, N_STAB } from "./commands.js";
 import { bigFromUint32, clampRangeSize, createRangeReader } from "./format.js";
 import type { MachOSymbol, MachOSymtabInfo } from "./types.js";
+
+const getTwoLevelLibraryOrdinal = (
+  filetype: number,
+  type: number,
+  description: number
+): number | null => {
+  const isDebugSymbol = (type & N_STAB) !== 0;
+  const isExternalSymbol = (type & N_EXT) !== 0;
+  // mach-o/loader.h: MH_OBJECT == 0x1. Relocatable object files reuse the
+  // high byte of n_desc for object-file flags instead of two-level ordinals.
+  const isRelocatableObjectFile = filetype === 0x1;
+  if (isDebugSymbol || !isExternalSymbol || isRelocatableObjectFile) return null;
+  return (description >>> 8) & 0xff;
+};
 
 const parseSymtab = async (
   file: File,
@@ -12,7 +27,8 @@ const parseSymtab = async (
   symoff: number,
   nsyms: number,
   stroff: number,
-  strsize: number
+  strsize: number,
+  filetype = 0
 ): Promise<MachOSymtabInfo> => {
   const issues: string[] = [];
   const entrySize = is64 ? 16 : 12;
@@ -44,18 +60,18 @@ const parseSymtab = async (
       const value = is64
         ? symbolView.getBigUint64(offset + 8, little)
         : bigFromUint32(symbolView.getUint32(offset + 8, little));
-      if (stringIndex >= stringSize && stringSize > 0) {
+      const isValidStringIndex = stringSize > 0 ? stringIndex < stringSize : stringIndex === 0;
+      if (!isValidStringIndex) {
         issues.push(`Symbol ${symbolIndex} string index ${stringIndex} is outside the string table.`);
       }
       let name = "";
-      if (stringIndex < stringSize) {
+      if (stringSize > 0 && stringIndex < stringSize) {
         name = nameCache.get(stringIndex) || "";
         if (!nameCache.has(stringIndex)) {
           name = await stringReader.readZeroTerminatedString(stringIndex, stringSize - stringIndex);
           nameCache.set(stringIndex, name);
         }
       }
-      const libraryOrdinal = (description >>> 8) & 0xff;
       symbols.push({
         index: symbolIndex,
         name,
@@ -63,7 +79,7 @@ const parseSymtab = async (
         type,
         sectionIndex,
         description,
-        libraryOrdinal,
+        libraryOrdinal: getTwoLevelLibraryOrdinal(filetype, type, description),
         value
       });
     }

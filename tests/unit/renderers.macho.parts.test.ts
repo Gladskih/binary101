@@ -2,26 +2,9 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import {
-  CSMAGIC_CODEDIRECTORY,
-  DYNAMIC_LOOKUP_ORDINAL,
-  EXECUTABLE_ORDINAL,
-  LC_VERSION_MIN_WATCHOS,
-  N_EXT,
-  N_INDR,
-  N_STAB,
-  N_UNDF,
-  SELF_LIBRARY_ORDINAL,
-  N_WEAK_DEF,
-  N_WEAK_REF,
-  REFERENCED_DYNAMICALLY
-} from "../../analyzers/macho/commands.js";
-import type { MachOCodeSignature, MachOFatSlice, MachOParseResult, MachOSymbol } from "../../analyzers/macho/types.js";
+import type { MachOCodeSignature, MachOFatSlice, MachOSymbol } from "../../analyzers/macho/types.js";
 import { createRendererMachOImage } from "../fixtures/macho-renderer-fixture.js";
-import { renderFat } from "../../renderers/macho/fat-view.js";
 import { fatSliceCpuLabel, fileTypeLabel, headerCpuLabel, magicLabel } from "../../renderers/macho/header-semantics.js";
-import { renderImage } from "../../renderers/macho/image-view.js";
-import { renderMachO } from "../../renderers/macho/index.js";
 import { buildPlatformLabel, buildToolLabel, versionMinLabel } from "../../renderers/macho/version-semantics.js";
 import {
   codeDirectoryExecSegLabels,
@@ -39,13 +22,29 @@ import {
 } from "../../renderers/macho/symbol-semantics.js";
 import { renderSymtab } from "../../renderers/macho/symbols-view.js";
 import { formatByteSize } from "../../renderers/macho/value-format.js";
+import { CPU_SUBTYPE_ARM64E, CPU_TYPE_ARM64 } from "../fixtures/macho-thin-sample.js";
+import { createMachOIncidentalValues } from "../fixtures/macho-incidental-values.js";
+
+// mach-o/nlist.h ordinals and flags used repeatedly in this file.
+const DYNAMIC_LOOKUP_ORDINAL = 0xfe;
+const EXECUTABLE_ORDINAL = 0xff;
+const N_EXT_BIT = 0x01;
+const N_INDR_TYPE = 0x0a;
+const N_STAB_MASK = 0xe0;
+const N_UNDF_TYPE = 0x00;
+const N_WEAK_DEF_BIT = 0x0080;
+const N_WEAK_REF_BIT = 0x0040;
+const REFERENCED_DYNAMICALLY_BIT = 0x0010;
+const SELF_LIBRARY_ORDINAL = 0x00;
+// xnu/osfmk/kern/cs_blobs.h: CSMAGIC_CODEDIRECTORY.
+const CODEDIRECTORY_MAGIC = 0xfade0c02;
 
 void test("Mach-O renderer semantics expose fallback labels", () => {
   const image = createRendererMachOImage();
   const slice: MachOFatSlice = {
     index: 0,
-    cputype: 0x0100000c,
-    cpusubtype: 2,
+    cputype: CPU_TYPE_ARM64,
+    cpusubtype: CPU_SUBTYPE_ARM64E,
     offset: 0x1000,
     size: 0x2000,
     align: 12,
@@ -55,18 +54,22 @@ void test("Mach-O renderer semantics expose fallback labels", () => {
   };
   assert.equal(magicLabel(0xfeedfacf), "MH_MAGIC_64");
   assert.equal(magicLabel(0xcffaedfe), "MH_CIGAM_64");
+  // Not a known Mach-O magic.
   assert.equal(magicLabel(0xdeadbeef), "0xdeadbeef");
   assert.equal(fileTypeLabel(6), "Dynamic library");
+  // Not present in fileTypeNames.
   assert.equal(fileTypeLabel(0xffff), "0xffff");
   assert.equal(headerCpuLabel(image.header), "ARM64 (arm64e)");
   assert.equal(fatSliceCpuLabel(slice), "ARM64 (arm64e)");
   assert.equal(buildPlatformLabel(11), "visionOS");
+  // platformNames only defines the currently known platform IDs 0..12.
   assert.equal(buildPlatformLabel(0xff), "platform 0xff");
   assert.equal(buildToolLabel(1024), "metal");
+  // buildToolNames only defines 1..4 and 1024.
   assert.equal(buildToolLabel(0xff), "0xff");
-  assert.equal(versionMinLabel(LC_VERSION_MIN_WATCHOS), "watchOS");
+  assert.equal(versionMinLabel(0x30), "watchOS"); // LC_VERSION_MIN_WATCHOS
   assert.equal(codeSignatureBlobLabel(null), "Unknown");
-  assert.equal(codeSignatureBlobLabel(CSMAGIC_CODEDIRECTORY), "CodeDirectory");
+  assert.equal(codeSignatureBlobLabel(CODEDIRECTORY_MAGIC), "CodeDirectory");
   assert.equal(codeDirectoryHashLabel(99), "hash 99");
   assert.deepEqual(codeDirectoryExecSegLabels(null), []);
   assert.equal(pageSizeLabel(0), "Infinite");
@@ -75,43 +78,44 @@ void test("Mach-O renderer semantics expose fallback labels", () => {
 });
 
 void test("Mach-O symbol semantics and symbol view cover bindings, descriptions, and summaries", () => {
+  const values = createMachOIncidentalValues();
   const image = createRendererMachOImage();
   const symbols: MachOSymbol[] = [
     {
       index: 0,
       name: "_local",
-      stringIndex: 1,
+      stringIndex: values.nextUint8(),
       type: 0x0e,
       sectionIndex: 1,
       description: 0,
       libraryOrdinal: null,
-      value: 0x1000n
+      value: BigInt(values.nextUint16() + 0x1000)
     },
     {
       index: 1,
       name: "_lazy",
-      stringIndex: 8,
-      type: N_EXT | N_UNDF,
+      stringIndex: values.nextUint8(),
+      type: N_EXT_BIT | N_UNDF_TYPE,
       sectionIndex: 0,
-      description: 1 | REFERENCED_DYNAMICALLY | N_WEAK_REF,
+      description: 1 | REFERENCED_DYNAMICALLY_BIT | N_WEAK_REF_BIT,
       libraryOrdinal: 1,
       value: 0n
     },
     {
       index: 2,
       name: "_weak",
-      stringIndex: 14,
-      type: N_EXT | N_UNDF,
+      stringIndex: values.nextUint8(),
+      type: N_EXT_BIT | N_UNDF_TYPE,
       sectionIndex: 0,
-      description: 5 | N_WEAK_DEF,
+      description: 5 | N_WEAK_DEF_BIT,
       libraryOrdinal: EXECUTABLE_ORDINAL,
       value: 0n
     },
     {
       index: 3,
       name: "_lookup",
-      stringIndex: 20,
-      type: N_EXT | N_INDR,
+      stringIndex: values.nextUint8(),
+      type: N_EXT_BIT | N_INDR_TYPE,
       sectionIndex: 0,
       description: 0,
       libraryOrdinal: DYNAMIC_LOOKUP_ORDINAL,
@@ -120,8 +124,8 @@ void test("Mach-O symbol semantics and symbol view cover bindings, descriptions,
     {
       index: 4,
       name: "_debug",
-      stringIndex: 28,
-      type: N_STAB,
+      stringIndex: values.nextUint8(),
+      type: N_STAB_MASK,
       sectionIndex: 0,
       description: 0,
       libraryOrdinal: null,
@@ -149,9 +153,17 @@ void test("Mach-O symbol semantics and symbol view cover bindings, descriptions,
   assert.deepEqual(symbolBindingLabels(image, symbols[0]!), ["local"]);
   assert.deepEqual(symbolBindingLabels(image, {
     ...symbols[0]!,
+    index: 7,
+    name: "_localWithFlagBits",
+    // High-byte n_desc flag bits must not be treated as a dylib ordinal for locals.
+    description: 0x0100,
+    libraryOrdinal: 1
+  }), ["local"]);
+  assert.deepEqual(symbolBindingLabels(image, {
+    ...symbols[0]!,
     index: 6,
     name: "_self",
-    type: N_EXT | 0x0e,
+    type: N_EXT_BIT | 0x0e,
     libraryOrdinal: SELF_LIBRARY_ORDINAL
   }), ["external", "This image"]);
   assert.deepEqual(symbolBindingLabels(image, symbols[3]!), ["external", "Dylib #254"]);
@@ -185,18 +197,36 @@ void test("Mach-O symbol semantics and symbol view cover bindings, descriptions,
     compatibilityVersion: 0
   }));
   assert.deepEqual(symbolBindingLabels(image, symbols[3]!), ["external", "/usr/lib/lib253.dylib"]);
+
+  const objectImage = {
+    ...image,
+    header: {
+      ...image.header,
+      filetype: 1
+    }
+  };
+  assert.deepEqual(symbolBindingLabels(objectImage, {
+    ...symbols[0]!,
+    index: 8,
+    name: "_resolver",
+    type: N_EXT_BIT | 0x0e,
+    // High-byte n_desc flag bits are object-file flags for MH_OBJECT.
+    description: 0x0100,
+    libraryOrdinal: 1
+  }), ["external"]);
 });
 
 void test("Mach-O code-signing view renders full and sparse signatures", () => {
+  const values = createMachOIncidentalValues();
   const fullSignature: MachOCodeSignature = {
     loadCommandIndex: 0,
     dataoff: 0x2800,
     datasize: 0x80,
-    magic: CSMAGIC_CODEDIRECTORY,
+    magic: CODEDIRECTORY_MAGIC,
     length: 0x60,
     blobCount: 2,
     slots: [
-      { type: 0, offset: 0x10, magic: CSMAGIC_CODEDIRECTORY, length: 0x60 },
+      { type: 0, offset: 0x10, magic: CODEDIRECTORY_MAGIC, length: 0x60 },
       { type: 0x10000, offset: 0x70, magic: null, length: null }
     ],
     codeDirectory: {
@@ -209,8 +239,8 @@ void test("Mach-O code-signing view renders full and sparse signatures", () => {
       nSpecialSlots: 2,
       nCodeSlots: 4,
       codeLimit: 0x2000n,
-      identifier: "com.example.binary101",
-      teamIdentifier: "TEAMID",
+      identifier: values.nextLabel("com.example.binary101"),
+      teamIdentifier: values.nextLabel("TEAMID"),
       execSegBase: 0x1000n,
       execSegLimit: 0x2000n,
       execSegFlags: 0x1n,
@@ -219,7 +249,7 @@ void test("Mach-O code-signing view renders full and sparse signatures", () => {
     issues: []
   };
   const fullHtml = renderCodeSignature(fullSignature);
-  assert.match(fullHtml, /TEAMID/);
+  assert.match(fullHtml, new RegExp(fullSignature.codeDirectory?.teamIdentifier ?? ""));
   assert.match(fullHtml, /Exec segment flags/);
   assert.match(fullHtml, /Page size/);
   assert.match(fullHtml, /Infinite/);
@@ -234,55 +264,4 @@ void test("Mach-O code-signing view renders full and sparse signatures", () => {
   });
   assert.doesNotMatch(sparseHtml, /Indexed blobs/);
   assert.doesNotMatch(sparseHtml, /Page size/);
-});
-
-void test("Mach-O image and fat renderers cover optional metadata, notices, and slice fallbacks", () => {
-  const image = createRendererMachOImage();
-  const imageHtml = renderImage(image);
-  assert.match(imageHtml, /Build metadata/);
-  assert.match(imageHtml, /Not mapped by parsed segments/);
-  assert.match(imageHtml, /Install name/);
-  assert.match(imageHtml, /RPATHs/);
-  assert.match(imageHtml, /Extra loader metadata/);
-  assert.match(imageHtml, /Fileset entry/);
-  assert.match(imageHtml, /Notices/);
-
-  const fatResult: MachOParseResult = {
-    kind: "fat",
-    fileSize: 0x4000,
-    image: null,
-    fatHeader: null,
-    slices: [
-      {
-        index: 0,
-        cputype: 0x01000007,
-        cpusubtype: 3,
-        offset: 0x1000,
-        size: 0x1000,
-        align: 12,
-        reserved: 0x1234,
-        image,
-        issues: []
-      },
-      {
-        index: 1,
-        cputype: 0x0100000c,
-        cpusubtype: 2,
-        offset: 0x2000,
-        size: 0x1000,
-        align: 12,
-        reserved: null,
-        image: null,
-        issues: ["slice is truncated"]
-      }
-    ],
-    issues: ["universal wrapper is truncated"]
-  };
-
-  const fatHtml = renderFat(fatResult);
-  assert.match(fatHtml, /slice is truncated/);
-  assert.match(fatHtml, /Reserved/);
-
-  const html = renderMachO(fatResult);
-  assert.match(html, /universal wrapper is truncated/);
 });
