@@ -3,6 +3,12 @@
 import {
   loadCommandName
 } from "./load-command-info.js";
+import {
+  readDylibName,
+  readFileSetEntryId,
+  readRpathValue,
+  readStringCommandValue
+} from "./load-command-strings.js";
 import type {
   MachOBuildTool,
   MachOBuildVersion,
@@ -34,30 +40,6 @@ const parseLoadCommandRecord = (
   });
 };
 
-const readBoundedCommandString = (
-  cmdView: DataView,
-  stringOffset: number,
-  loadCommandIndex: number,
-  fieldLabel: string,
-  issues: string[]
-): string => {
-  if (stringOffset >= cmdView.byteLength) {
-    issues.push(
-      `Load command ${loadCommandIndex}: ${fieldLabel} offset ${stringOffset} points outside the command.`
-    );
-    return "";
-  }
-  const bytes = new Uint8Array(cmdView.buffer, cmdView.byteOffset, cmdView.byteLength);
-  let text = "";
-  for (let index = stringOffset; index < bytes.length; index += 1) {
-    const byteValue = bytes[index];
-    if (byteValue === 0) return text;
-    text += String.fromCharCode(byteValue);
-  }
-  issues.push(`Load command ${loadCommandIndex}: ${fieldLabel} is not NUL-terminated within cmdsize.`);
-  return text;
-};
-
 const parseDylib = (
   cmdView: DataView,
   loadCommandIndex: number,
@@ -72,13 +54,7 @@ const parseDylib = (
   return {
     loadCommandIndex,
     command: cmd,
-    name: readBoundedCommandString(
-      cmdView,
-      cmdView.getUint32(8, little),
-      loadCommandIndex,
-      "dylib name",
-      issues
-    ),
+    name: readDylibName(cmdView, loadCommandIndex, little, issues),
     timestamp: cmdView.getUint32(12, little),
     currentVersion: cmdView.getUint32(16, little),
     compatibilityVersion: cmdView.getUint32(20, little)
@@ -218,13 +194,7 @@ const parseFileSetEntry = (
   }
   return {
     loadCommandIndex,
-    entryId: readBoundedCommandString(
-      cmdView,
-      cmdView.getUint32(24, little),
-      loadCommandIndex,
-      "fileset entry id",
-      issues
-    ),
+    entryId: readFileSetEntryId(cmdView, loadCommandIndex, little, issues),
     vmaddr: cmdView.getBigUint64(8, little),
     fileoff: cmdView.getBigUint64(16, little)
   };
@@ -242,13 +212,7 @@ const parseRpath = (
   }
   return {
     loadCommandIndex,
-    path: readBoundedCommandString(
-      cmdView,
-      cmdView.getUint32(8, little),
-      loadCommandIndex,
-      "rpath path",
-      issues
-    )
+    path: readRpathValue(cmdView, loadCommandIndex, little, issues)
   };
 };
 
@@ -266,13 +230,7 @@ const parseStringCommand = (
   return {
     loadCommandIndex,
     command: cmd,
-    value: readBoundedCommandString(
-      cmdView,
-      cmdView.getUint32(8, little),
-      loadCommandIndex,
-      `${loadCommandName(cmd)} string`,
-      issues
-    )
+    value: readStringCommandValue(cmdView, loadCommandIndex, little, cmd, issues)
   };
 };
 

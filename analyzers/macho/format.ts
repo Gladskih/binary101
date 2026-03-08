@@ -52,7 +52,6 @@ const getMachOMagicInfo = (view: DataView, offset = 0): MachOMagicInfo | null =>
 };
 
 const machOMagicName = (magic: number): string | null => magicInfoFromValue(magic)?.magicName || null;
-const thinMagicValue = (is64: boolean): number => (is64 ? MH_MAGIC_64 : MH_MAGIC);
 
 const isRangeWithin = (limit: number, offset: number, size: number): boolean =>
   Number.isInteger(offset) &&
@@ -197,7 +196,7 @@ const parseHeader = (view: DataView, magicInfo: MachOMagicInfo): MachOFileHeader
   // Field offsets match mach_header / mach_header_64 in mach-o/loader.h.
   const little = magicInfo.littleEndian;
   return {
-    magic: thinMagicValue(magicInfo.is64),
+    magic: magicInfo.magic,
     is64: magicInfo.is64,
     littleEndian: little,
     cputype: view.getUint32(4, little),
@@ -226,6 +225,5 @@ export {
   readRange,
   readZeroTerminatedString,
   resolveEntryVirtualAddress,
-  subView,
-  thinMagicValue
+  subView
 };

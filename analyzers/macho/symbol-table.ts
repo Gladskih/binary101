@@ -63,7 +63,7 @@ const parseSymtab = async (
         type,
         sectionIndex,
         description,
-        libraryOrdinal: libraryOrdinal === 0 ? null : libraryOrdinal,
+        libraryOrdinal,
         value
       });
     }

@@ -1,6 +1,5 @@
 "use strict";
 
-import { thinMagicValue } from "./format.js";
 import type { getMachOMagicInfo } from "./format.js";
 import type { MachOImage } from "./types.js";
 
@@ -19,7 +18,7 @@ const buildTruncatedImage = (
     offset: imageOffset,
     size: imageSize,
     header: {
-      magic: thinMagicValue(magicInfo.is64),
+      magic: magicInfo.magic,
       is64: magicInfo.is64,
       littleEndian: little,
       cputype: readHeaderUint32(headerView, 4, little),

@@ -11,6 +11,7 @@ import {
   N_INDR,
   N_STAB,
   N_UNDF,
+  SELF_LIBRARY_ORDINAL,
   N_WEAK_DEF,
   N_WEAK_REF,
   REFERENCED_DYNAMICALLY
@@ -53,6 +54,7 @@ void test("Mach-O renderer semantics expose fallback labels", () => {
     issues: []
   };
   assert.equal(magicLabel(0xfeedfacf), "MH_MAGIC_64");
+  assert.equal(magicLabel(0xcffaedfe), "MH_CIGAM_64");
   assert.equal(magicLabel(0xdeadbeef), "0xdeadbeef");
   assert.equal(fileTypeLabel(6), "Dynamic library");
   assert.equal(fileTypeLabel(0xffff), "0xffff");
@@ -145,6 +147,13 @@ void test("Mach-O symbol semantics and symbol view cover bindings, descriptions,
   ]);
   assert.deepEqual(symbolDescriptionLabels(symbols[2]!), ["Private undefined (lazy)", "Reference to weak symbol"]);
   assert.deepEqual(symbolBindingLabels(image, symbols[0]!), ["local"]);
+  assert.deepEqual(symbolBindingLabels(image, {
+    ...symbols[0]!,
+    index: 6,
+    name: "_self",
+    type: N_EXT | 0x0e,
+    libraryOrdinal: SELF_LIBRARY_ORDINAL
+  }), ["external", "This image"]);
   assert.deepEqual(symbolBindingLabels(image, symbols[3]!), ["external", "Dylib #254"]);
   assert.deepEqual(symbolBindingLabels(image, {
     ...symbols[1]!,

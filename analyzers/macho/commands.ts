@@ -4,6 +4,7 @@
 // code-signing blob magics come from Apple's public headers:
 // - mach-o/loader.h: https://github.com/apple-oss-distributions/cctools/blob/main/include/mach-o/loader.h
 // - mach-o/fat.h: https://github.com/apple-oss-distributions/cctools/blob/main/include/mach-o/fat.h
+// - mach-o/nlist.h: https://github.com/apple-oss-distributions/cctools/blob/main/include/mach-o/nlist.h
 // - xnu/osfmk/kern/cs_blobs.h: https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/kern/cs_blobs.h
 
 const MH_MAGIC = 0xfeedface;
@@ -49,6 +50,7 @@ const N_INDR = 0x0a;
 const N_WEAK_REF = 0x0040;
 const N_WEAK_DEF = 0x0080;
 const REFERENCED_DYNAMICALLY = 0x0010;
+const SELF_LIBRARY_ORDINAL = 0x00;
 const EXECUTABLE_ORDINAL = 0xff;
 const DYNAMIC_LOOKUP_ORDINAL = 0xfe;
 const CSMAGIC_CODEDIRECTORY = 0xfade0c02;
@@ -103,5 +105,6 @@ export {
   N_UNDF,
   N_WEAK_DEF,
   N_WEAK_REF,
-  REFERENCED_DYNAMICALLY
+  REFERENCED_DYNAMICALLY,
+  SELF_LIBRARY_ORDINAL
 };

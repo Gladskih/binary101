@@ -85,6 +85,51 @@ void test("Mach-O load-command string parsers warn on invalid offsets and missin
   assert.match(stringIssues[0] || "", /LC_LOAD_DYLINKER string is not NUL-terminated within cmdsize/);
 });
 
+void test("Mach-O load-command string parsers reject offsets into fixed command fields", () => {
+  const dylibBytes = new Uint8Array(24);
+  const dylibView = new DataView(dylibBytes.buffer);
+  dylibView.setUint32(8, 12, true);
+  dylibView.setUint32(12, 0x00444142, true);
+  const dylibIssues: string[] = [];
+  const dylib = parseDylib(dylibView, 19, true, LC_LOAD_DYLIB, dylibIssues);
+  assert.ok(dylib);
+  assert.equal(dylib.name, "");
+  assert.match(dylibIssues[0] || "", /dylib name offset 12 points inside the fixed command fields/);
+
+  const rpathBytes = new Uint8Array(12);
+  const rpathView = new DataView(rpathBytes.buffer);
+  rpathView.setUint32(8, 8, true);
+  const rpathIssues: string[] = [];
+  const rpath = parseRpath(rpathView, 20, true, rpathIssues);
+  assert.ok(rpath);
+  assert.equal(rpath.path, "");
+  assert.match(rpathIssues[0] || "", /rpath path offset 8 points inside the fixed command fields/);
+
+  const stringBytes = new Uint8Array(12);
+  const stringView = new DataView(stringBytes.buffer);
+  stringView.setUint32(8, 8, true);
+  const stringIssues: string[] = [];
+  const stringCommand = parseStringCommand(stringView, 21, true, LC_LOAD_DYLINKER, stringIssues);
+  assert.ok(stringCommand);
+  assert.equal(stringCommand.value, "");
+  assert.match(
+    stringIssues[0] || "",
+    /LC_LOAD_DYLINKER string offset 8 points inside the fixed command fields/
+  );
+
+  const filesetBytes = new Uint8Array(32);
+  const filesetView = new DataView(filesetBytes.buffer);
+  filesetView.setUint32(24, 24, true);
+  const filesetIssues: string[] = [];
+  const fileset = parseFileSetEntry(filesetView, 22, true, filesetIssues);
+  assert.ok(fileset);
+  assert.equal(fileset.entryId, "");
+  assert.match(
+    filesetIssues[0] || "",
+    /fileset entry id offset 24 points inside the fixed command fields/
+  );
+});
+
 void test("Mach-O load-command parsers decode build-version and dyld info payloads", () => {
   const buildBytes = new Uint8Array(32);
   const buildView = new DataView(buildBytes.buffer);

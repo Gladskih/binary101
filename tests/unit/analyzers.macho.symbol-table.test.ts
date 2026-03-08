@@ -91,3 +91,29 @@ void test("parseSymtab resolves names without reading the full string table", as
   assert.equal(parsed.symbols[0]?.name, "foo");
   assert.ok(Math.max(...tracked.requests) <= 64 * 1024);
 });
+
+void test("parseSymtab preserves SELF_LIBRARY_ORDINAL for defined external symbols", async () => {
+  const bytes = new Uint8Array(0x20);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 0, true);
+  bytes[4] = 0x0f;
+  bytes[5] = 1;
+  view.setUint16(6, 0, true);
+  view.setBigUint64(8, 0x1234n, true);
+  bytes[0x10] = 0;
+
+  const parsed = await parseSymtab(
+    wrapMachOBytes(bytes, "symtab-self-ordinal"),
+    0,
+    bytes.length,
+    true,
+    true,
+    0,
+    1,
+    0x10,
+    1
+  );
+
+  assert.equal(parsed.symbols[0]?.libraryOrdinal, 0);
+  assert.deepEqual(parsed.issues, []);
+});

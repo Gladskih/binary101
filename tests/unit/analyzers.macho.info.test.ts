@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  MH_CIGAM_64,
   LC_ID_DYLIB,
   LC_LAZY_LOAD_DYLIB,
   LC_LOAD_UPWARD_DYLIB,
@@ -99,13 +100,14 @@ void test("buildTruncatedImage preserves available header fields for 32-bit and 
 
   const thin64Bytes = new Uint8Array(32);
   const thin64View = new DataView(thin64Bytes.buffer);
-  thin64View.setUint32(0, 0xfeedfacf, false);
-  thin64View.setUint32(4, 0x01000007, false);
-  thin64View.setUint32(28, 0x55aa, false);
+  thin64View.setUint32(0, MH_CIGAM_64, false);
+  thin64View.setUint32(4, 0x01000007, true);
+  thin64View.setUint32(28, 0x55aa, true);
   const thin64Magic = getMachOMagicInfo(new DataView(thin64Bytes.buffer, 0, 4));
   assert.ok(thin64Magic);
   assert.equal(thin64Magic.kind, "thin");
   const thin64 = buildTruncatedImage(0, thin64Bytes.length, thin64View, thin64Magic, "short");
+  assert.equal(thin64.header.magic, MH_CIGAM_64);
   assert.equal(thin64.header.cputype, 0x01000007);
   assert.equal(thin64.header.reserved, 0x55aa);
 });

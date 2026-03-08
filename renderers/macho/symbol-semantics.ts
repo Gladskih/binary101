@@ -6,6 +6,7 @@ import {
   N_EXT,
   N_INDR,
   N_PEXT,
+  SELF_LIBRARY_ORDINAL,
   N_STAB,
   N_TYPE,
   N_UNDF,
@@ -54,6 +55,13 @@ const symbolDescriptionLabels = (symbol: MachOSymbol): string[] => {
 
 const symbolLibraryLabel = (image: MachOImage, symbol: MachOSymbol): string | null => {
   if (symbol.libraryOrdinal == null) return null;
+  if (
+    symbol.libraryOrdinal === SELF_LIBRARY_ORDINAL &&
+    symbolIsExternal(symbol.type) &&
+    symbolTypeBits(symbol.type) !== N_UNDF
+  ) {
+    return "This image";
+  }
   if (symbol.libraryOrdinal === EXECUTABLE_ORDINAL) return "Main executable";
   if (
     symbol.libraryOrdinal === DYNAMIC_LOOKUP_ORDINAL &&
