@@ -31,6 +31,7 @@ import { createMpegPsFile } from "../fixtures/mpegps-fixtures.js";
 import { createMachOFile, createMachOUniversalFile } from "../fixtures/macho-fixtures.js";
 import { createPcapFile } from "../fixtures/pcap-fixtures.js";
 import { createGzipFile } from "../fixtures/gzip-fixtures.js";
+import { createMinimalJavaClassBytes } from "../fixtures/java-class-fixtures.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import type { FlacMetadataBlockDetail } from "../../analyzers/flac/types.js";
@@ -137,7 +138,6 @@ void test("parseForUi parses FB2 XML", async () => {
     assert.ok(fb2.bodyCount >= 0);
   });
 });
-
 void test("parseForUi parses PDF cross-reference data", async () => {
   await assertParsed(createPdfFile(), "pdf", pdf => {
     assert.ok(pdf.header);
@@ -269,11 +269,7 @@ void test("parseForUi parses universal Mach-O binaries", async () => {
 });
 
 void test("parseForUi does not route Java class files through Mach-O parsing", async () => {
-  const javaClass = new MockFile(
-    new Uint8Array([0xca, 0xfe, 0xba, 0xbe, 0x00, 0x00, 0x00, 0x34, 0x00, 0x01]),
-    "Example.class",
-    "application/java-vm"
-  );
+  const javaClass = new MockFile(createMinimalJavaClassBytes());
   const parsed = await parseForUi(javaClass);
   assert.deepStrictEqual(parsed, { analyzer: null, parsed: null });
 });

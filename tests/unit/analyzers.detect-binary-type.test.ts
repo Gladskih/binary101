@@ -6,6 +6,7 @@ import { detectBinaryType } from "../../analyzers/index.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { createMp3File } from "../fixtures/audio-sample-files.js";
 import { createMp4File } from "../fixtures/mp4-fixtures.js";
+import { createMinimalJavaClassBytes } from "../fixtures/java-class-fixtures.js";
 import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
 import { createFlacFile } from "../fixtures/flac-fixtures.js";
 import { createSqliteFile } from "../fixtures/sqlite-fixtures.js";
@@ -119,11 +120,7 @@ void test("detectBinaryType recognises real Mach-O fixtures", async () => {
 });
 
 void test("detectBinaryType does not route Java class files through Mach-O detection", async () => {
-  const javaClass = new MockFile(
-    new Uint8Array([0xca, 0xfe, 0xba, 0xbe, 0x00, 0x00, 0x00, 0x34, 0x00, 0x01]),
-    "Example.class",
-    "application/java-vm"
-  );
+  const javaClass = new MockFile(createMinimalJavaClassBytes());
   const label = await detectBinaryType(javaClass);
   assert.strictEqual(label, "Java class file");
 });

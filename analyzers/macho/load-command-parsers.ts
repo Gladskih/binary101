@@ -1,5 +1,6 @@
 "use strict";
 
+import { LC_ENCRYPTION_INFO_64 } from "./commands.js";
 import {
   loadCommandName
 } from "./load-command-info.js";
@@ -169,7 +170,7 @@ const parseEncryptionInfo = (
   cmd: number,
   issues: string[]
 ): MachOEncryptionInfo | null => {
-  if (cmdView.byteLength < 20) {
+  if (cmdView.byteLength < (cmd === LC_ENCRYPTION_INFO_64 ? 24 : 20)) {
     issues.push(`Load command ${loadCommandIndex}: ${loadCommandName(cmd)} is truncated.`);
     return null;
   }

@@ -202,7 +202,7 @@ void test("Mach-O load-command parsers decode linkedit, encryption, and fileset 
     null
   );
 
-  const encryptionBytes = new Uint8Array(20);
+  const encryptionBytes = new Uint8Array(24);
   const encryptionView = new DataView(encryptionBytes.buffer);
   const encryptionOffset = (values.nextUint16() & 0x01f0) + 0x300;
   const encryptionSize = (values.nextUint8() & 0x7f) + 0x80;
@@ -215,16 +215,18 @@ void test("Mach-O load-command parsers decode linkedit, encryption, and fileset 
   const encryption = parseEncryptionInfo(encryptionView, 12, true, 0x2c, encryptionIssues);
   assert.ok(encryption);
   assert.equal(encryption.cryptid, encryptionId);
+  const truncatedEncryptionIssues: string[] = [];
   assert.equal(
     parseEncryptionInfo(
-      new DataView(new Uint8Array(12).buffer),
+      new DataView(new Uint8Array(20).buffer),
       13,
       true,
       0x2c,
-      encryptionIssues
+      truncatedEncryptionIssues
     ),
     null
   );
+  assert.match(truncatedEncryptionIssues[0] || "", /LC_ENCRYPTION_INFO_64 is truncated/);
 
   const entryId = values.nextLabel("entry");
   const filesetBytes = new Uint8Array(40 + entryId.length);

@@ -110,6 +110,32 @@ void test("parseCodeSignature rejects CodeDirectory string offsets that point in
   assert.match(parsed.issues.join("\n"), /team identifier offset 12 points inside the fixed header/i);
 });
 
+void test("parseCodeSignature reads the 64-bit code limit starting with CodeDirectory version 0x20300", async () => {
+  const values = createMachOIncidentalValues();
+  const codeLimit = values.nextBigUint64();
+  const bytes = new Uint8Array(88);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, EMBEDDED_SIGNATURE_MAGIC, false);
+  view.setUint32(4, bytes.length, false);
+  view.setUint32(8, 1, false);
+  view.setUint32(12, 0, false);
+  view.setUint32(16, 20, false);
+  view.setUint32(20, CODEDIRECTORY_MAGIC, false);
+  view.setUint32(24, 64, false);
+  // xnu/osfmk/kern/cs_blobs.h: CS_SUPPORTSCODELIMIT64 == 0x20300.
+  view.setUint32(28, 0x20300, false);
+  view.setUint8(56, 32);
+  view.setUint8(57, 2);
+  view.setUint8(59, 12);
+  view.setBigUint64(76, codeLimit, false);
+
+  const parsed = await parseCodeSignature(wrapMachOBytes(bytes, "codesign-code-limit64"), 0, bytes.length, 0, 0, bytes.length);
+
+  assert.equal(parsed.codeDirectory?.codeLimit, codeLimit);
+  assert.equal(parsed.codeDirectory?.execSegBase, null);
+  assert.equal(parsed.codeDirectory?.runtime, null);
+});
+
 void test("parseCodeSignature does not read CodeDirectory fields past the declared blob length", async () => {
   const values = createMachOIncidentalValues();
   const truncatedCodeLimit = values.nextUint32();
@@ -126,7 +152,7 @@ void test("parseCodeSignature does not read CodeDirectory fields past the declar
   view.setUint32(16, 20, false);
   view.setUint32(20, CODEDIRECTORY_MAGIC, false);
   view.setUint32(24, 44, false);
-  // CodeDirectory version 0x20500 is the first one with 64-bit code-limit fields.
+  // xnu/osfmk/kern/cs_blobs.h: runtime fields arrive in CodeDirectory version 0x20500.
   view.setUint32(28, 0x20500, false);
   view.setUint32(40, 0, false);
   view.setUint32(44, 0, false);
@@ -170,7 +196,7 @@ void test("parseCodeSignature reads runtime and exec segment fields from complet
   view.setUint32(16, 20, false);
   view.setUint32(20, CODEDIRECTORY_MAGIC, false);
   view.setUint32(24, 96, false);
-  // CodeDirectory version 0x20500 is the first one with 64-bit code-limit fields.
+  // xnu/osfmk/kern/cs_blobs.h: runtime fields arrive in CodeDirectory version 0x20500.
   view.setUint32(28, 0x20500, false);
   view.setUint32(40, 1, false);
   view.setUint32(44, 2, false);

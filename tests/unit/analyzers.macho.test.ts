@@ -4,7 +4,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { resolveEntryVirtualAddress } from "../../analyzers/macho/format.js";
 import { parseMachO } from "../../analyzers/macho/index.js";
+import { createMinimalJavaClassBytes } from "../fixtures/java-class-fixtures.js";
 import { createMachOFile, createMachOUniversalFile, wrapMachOBytes } from "../fixtures/macho-fixtures.js";
+import { MockFile } from "../helpers/mock-file.js";
 import { CPU_SUBTYPE_ARM64E, CPU_TYPE_ARM64, CPU_TYPE_X86_64 } from "../fixtures/macho-thin-sample.js";
 
 void test("parseMachO parses thin 64-bit Mach-O executables with symbols and code signing", async () => {
@@ -51,4 +53,10 @@ void test("parseMachO keeps truncated thin headers visible as issues", async () 
   assert.equal(parsed.image.header.magic, 0xfeedfacf);
   assert.deepEqual(parsed.image.loadCommands, []);
   assert.match(parsed.image.issues[0] ?? "", /header is truncated/i);
+});
+
+void test("parseMachO does not treat Java class files as Mach-O fat binaries", async () => {
+  const parsed = await parseMachO(new MockFile(createMinimalJavaClassBytes()));
+
+  assert.equal(parsed, null);
 });
