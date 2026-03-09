@@ -8,6 +8,7 @@ Current status notes:
 
 - Remove detection pipeline debt: migrate legacy `detectBinaryType` paths that still call full `parse*` to lightweight `probe*` + one full parse in `parseForUi`.
 - Introduce a single format registry that defines, per format: probe, human label builder, parser, renderer, preview support, and nested-analysis support.
+- Concrete plan for the routing refactor: first introduce typed `FormatDescriptor` entries plus factory entrypoints like `createParseForUi(registry)` and `createDetectBinaryType(registry)` without changing public behavior; then migrate `parseForUi` to registry-driven routing; then migrate `detectBinaryType` and label enrichment to the same registry so probe order and format guards live in one place; finally split tests so routing logic is covered by registry-level unit/component tests and keep only a small set of real seam cases in broader integration/e2e coverage.
 - Make "unknown binary type" rare for files larger than 1 KiB: expand cheap magic/container/text probes until unidentified files are exceptions rather than the norm.
 - Add an "unknown sample triage" workflow: keep a local corpus of unidentified real-world files, classify them, and turn them into probes/tests.
 - Audit analyzers for unnecessary `file.arrayBuffer()` reads and switch to bounded `file.slice(...).arrayBuffer()` reads where possible.
