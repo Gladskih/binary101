@@ -7,13 +7,16 @@ const createRvaToOffsetMapper = (sections: PeSection[]): RvaToOffset => {
     const virtualAddress = section.virtualAddress >>> 0;
     const virtualSize = Math.max(section.virtualSize >>> 0, section.sizeOfRawData >>> 0);
     const fileOffset = section.pointerToRawData >>> 0;
-    return { vaStart: virtualAddress, vaEnd: (virtualAddress + virtualSize) >>> 0, fileOffset };
+    const rawSize = section.sizeOfRawData >>> 0;
+    return { vaStart: virtualAddress, vaEnd: (virtualAddress + virtualSize) >>> 0, fileOffset, rawSize };
   });
   return relativeVirtualAddress => {
     const normalized = relativeVirtualAddress >>> 0;
     for (const span of spans) {
       if (normalized >= span.vaStart && normalized < span.vaEnd) {
-        return (span.fileOffset + (normalized - span.vaStart)) >>> 0;
+        const delta = normalized - span.vaStart;
+        if (delta >= span.rawSize) return null;
+        return (span.fileOffset + delta) >>> 0;
       }
     }
     return null;
