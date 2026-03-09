@@ -59,7 +59,12 @@ export async function parseBoundImports(
       warnings.add("Bound import name offset points outside directory.");
     }
     entries.push({ name, TimeDateStamp, NumberOfModuleForwarderRefs });
-    off += 8;
+    const nextOff = off + 8 + NumberOfModuleForwarderRefs * 8;
+    if (nextOff > end) {
+      warnings.add("Bound import forwarder refs extend past directory.");
+      break;
+    }
+    off = nextOff;
   }
   const warning = warnings.size ? Array.from(warnings).join(" · ") : undefined;
   return warning ? { entries, warning } : { entries };
@@ -71,7 +76,7 @@ export async function parseDelayImports(
   rvaToOff: RvaToOffset,
   addCoverageRegion: AddCoverageRegion,
   isPlus: boolean,
-  imageBase: number
+  _imageBase: number
 ): Promise<{ entries: PeDelayImportEntry[]; warning?: string } | null> {
   const dir = dataDirs.find(d => d.name === "DELAY_IMPORT");
   if (!dir?.rva || dir.size < 32) return null;
@@ -105,16 +110,8 @@ export async function parseDelayImports(
     } else if (DllNameRVA) {
       warnings.add("Delay import name RVA does not map to file data.");
     }
-    const rvaFromMaybeVa = (value: number): number => {
-      const isRva = (Attributes & 1) !== 0;
-      const raw = value >>> 0;
-      if (raw === 0) return 0;
-      if (isRva) return raw;
-      const baseImage = imageBase >>> 0;
-      return ((raw - baseImage) >>> 0);
-    };
     const functions: Array<{ ordinal?: number; hint?: number; name?: string }> = [];
-    const intRva = rvaFromMaybeVa(ImportNameTableRVA);
+    const intRva = ImportNameTableRVA >>> 0;
     const intOff = intRva ? rvaToOff(intRva) : null;
     if (intOff != null) {
       if (isPlus) {

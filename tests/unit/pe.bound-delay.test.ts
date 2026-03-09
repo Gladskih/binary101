@@ -215,3 +215,72 @@ void test("parseBoundImports handles name offset outside directory", async () =>
   assert.equal(definedResult.entries[0]?.name, "");
   assert.ok(definedResult.warning?.toLowerCase().includes("name offset"));
 });
+
+void test("parseBoundImports skips over forwarder refs before the next descriptor", async () => {
+  const base = 0x40;
+  const bytes = new Uint8Array(256).fill(0);
+  const dv = new DataView(bytes.buffer);
+
+  dv.setUint32(base + 0, 0x11111111, true);
+  dv.setUint16(base + 4, 0x30, true);
+  dv.setUint16(base + 6, 1, true);
+
+  dv.setUint32(base + 8, 0x22222222, true);
+  dv.setUint16(base + 12, 0x40, true);
+  dv.setUint16(base + 14, 0, true);
+
+  dv.setUint32(base + 16, 0x33333333, true);
+  dv.setUint16(base + 20, 0x50, true);
+  dv.setUint16(base + 22, 0, true);
+
+  encoder.encodeInto("KERNEL32.dll\0", new Uint8Array(bytes.buffer, base + 0x30));
+  encoder.encodeInto("NTDLL.dll\0", new Uint8Array(bytes.buffer, base + 0x40));
+  encoder.encodeInto("USER32.dll\0", new Uint8Array(bytes.buffer, base + 0x50));
+
+  const result = await parseBoundImports(
+    new MockFile(bytes),
+    [{ name: "BOUND_IMPORT", rva: base, size: 96 }],
+    value => value,
+    () => {}
+  );
+
+  const definedResult = expectDefined(result);
+  assert.deepEqual(
+    definedResult.entries.map(entry => entry.name),
+    ["KERNEL32.dll", "USER32.dll"]
+  );
+});
+
+void test("parseDelayImports treats descriptor fields as RVA when Attributes is zero", async () => {
+  const bytes = new Uint8Array(512).fill(0);
+  const dv = new DataView(bytes.buffer);
+
+  const base = 0x40;
+  const dllNameRva = 0x120;
+  const intRva = 0x160;
+  const hintNameRva = 0x1a0;
+
+  dv.setUint32(base + 0, 0, true);
+  dv.setUint32(base + 4, dllNameRva, true);
+  dv.setUint32(base + 16, intRva, true);
+
+  dv.setUint32(intRva + 0, hintNameRva, true);
+  dv.setUint32(intRva + 4, 0, true);
+
+  dv.setUint16(hintNameRva, 0x10, true);
+  encoder.encodeInto("Func\0", new Uint8Array(bytes.buffer, hintNameRva + 2));
+  encoder.encodeInto("kernel32.dll\0", new Uint8Array(bytes.buffer, dllNameRva));
+
+  const result = await parseDelayImports(
+    new MockFile(bytes),
+    [{ name: "DELAY_IMPORT", rva: base, size: 32 }],
+    value => value,
+    () => {},
+    false,
+    0x400000
+  );
+
+  const definedResult = expectDefined(result);
+  const entry = expectDefined(definedResult.entries[0]);
+  assert.deepEqual(entry.functions, [{ hint: 0x10, name: "Func" }]);
+});
