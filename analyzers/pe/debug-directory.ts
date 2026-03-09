@@ -89,7 +89,7 @@ export async function parseDebugDirectory(
       continue;
     }
 
-    const header = new DataView(await file.slice(dataOffset, dataOffset + dataSize).arrayBuffer());
+    const header = new DataView(await file.slice(dataOffset, dataOffset + CODEVIEW_RSDS_MIN_SIZE).arrayBuffer());
     if (header.getUint32(0, true) !== CODEVIEW_SIGNATURE_RSDS) continue;
     const sig0 = header.getUint32(4, true);
     const sig1 = header.getUint16(8, true);

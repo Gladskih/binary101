@@ -6,6 +6,7 @@ import { parseExportDirectory } from "../../analyzers/pe/exports.js";
 import { parseImportDirectory } from "../../analyzers/pe/imports.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
+import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
 
 const encoder = new TextEncoder();
 
@@ -252,4 +253,28 @@ void test("parseImportDirectory aggregates multiple warnings", async () => {
   assert.ok(warning);
   assert.ok(/name rva/i.test(warning));
   assert.ok(/thunk rva/i.test(warning));
+});
+
+void test("parseExportDirectory bounds the initial directory read to the fixed header size", async () => {
+  const bytes = new Uint8Array(0x80).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const expRva = 0x20;
+  dv.setUint32(expRva + 16, 1, true);
+  dv.setUint32(expRva + 20, 1, true);
+  dv.setUint32(expRva + 28, 0x2000, true);
+
+  const tracked = createSliceTrackingFile(bytes, 0x400000, "exports-bounded-read.bin");
+  const result = await parseExportDirectory(
+    tracked.file,
+    [{ name: "EXPORT", rva: expRva, size: 0x200000 }],
+    value => (value < bytes.length ? value : null),
+    () => {}
+  );
+
+  const definedResult = expectDefined(result);
+  assert.ok(definedResult.issues.some(issue => /does not map/i.test(issue)));
+  assert.ok(
+    Math.max(...tracked.requests) <= 40,
+    `Expected fixed-size export header read, got requests ${tracked.requests.join(", ")}`
+  );
 });
