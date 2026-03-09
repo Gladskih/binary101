@@ -21,6 +21,48 @@ const NLIST64_SIZE = 16;
 const NLIST32_SIZE = 12;
 const textEncoder = new TextEncoder();
 
+const writeNlist64 = (
+  bytes: Uint8Array,
+  entryOffset: number,
+  options: {
+    stringIndex: number;
+    type: number;
+    sectionIndex: number;
+    description: number;
+    value: bigint;
+  }
+): void => {
+  // mach-o/nlist.h: nlist_64 stores n_strx/u32, n_type/u8, n_sect/u8,
+  // n_desc/u16, n_value/u64 in that order.
+  const view = new DataView(bytes.buffer, bytes.byteOffset + entryOffset, NLIST64_SIZE);
+  view.setUint32(0, options.stringIndex, true);
+  bytes[entryOffset + 4] = options.type;
+  bytes[entryOffset + 5] = options.sectionIndex;
+  view.setUint16(6, options.description, true);
+  view.setBigUint64(8, options.value, true);
+};
+
+const writeNlist32 = (
+  bytes: Uint8Array,
+  entryOffset: number,
+  options: {
+    stringIndex: number;
+    type: number;
+    sectionIndex: number;
+    description: number;
+    value: number;
+  }
+): void => {
+  // mach-o/nlist.h: nlist stores n_strx/u32, n_type/u8, n_sect/u8,
+  // n_desc/u16, n_value/u32 in that order.
+  const view = new DataView(bytes.buffer, bytes.byteOffset + entryOffset, NLIST32_SIZE);
+  view.setUint32(0, options.stringIndex, true);
+  bytes[entryOffset + 4] = options.type;
+  bytes[entryOffset + 5] = options.sectionIndex;
+  view.setUint16(6, options.description, true);
+  view.setUint32(8, options.value, true);
+};
+
 void test("parseSymtab reports truncated symbol tables and invalid string indexes", async () => {
   const values = createMachOIncidentalValues();
   const symbolTableOffset = NLIST64_SIZE;
@@ -28,10 +70,13 @@ void test("parseSymtab reports truncated symbol tables and invalid string indexe
   const stringBytes = textEncoder.encode(`\0${values.nextLabel("name")}`);
   const invalidStringIndex = stringBytes.length * 2;
   const bytes = new Uint8Array(stringTableOffset + stringBytes.length);
-  const view = new DataView(bytes.buffer);
-  view.setUint32(symbolTableOffset, invalidStringIndex, true);
-  bytes[symbolTableOffset + 4] = N_EXT_BIT;
-  view.setBigUint64(symbolTableOffset + 8, 0n, true);
+  writeNlist64(bytes, symbolTableOffset, {
+    stringIndex: invalidStringIndex,
+    type: N_EXT_BIT,
+    sectionIndex: 0,
+    description: 0,
+    value: 0n
+  });
   bytes.set(stringBytes, stringTableOffset);
   const parsed = await parseSymtab(
     wrapMachOBytes(bytes, "symtab-negative"),
@@ -75,12 +120,15 @@ void test("parseSymtab parses 32-bit symbol entries", async () => {
   const stringTableOffset = NLIST32_SIZE;
   const symbolValue = values.nextUint32();
   const bytes = new Uint8Array(stringTableOffset + stringBytes.length);
-  const view = new DataView(bytes.buffer);
-  view.setUint32(0, 1, true);
-  bytes[4] = N_EXT_BIT | N_SECT;
-  bytes[5] = (values.nextUint8() & 0x07) + 1;
-  view.setUint16(6, 0x0100, true);
-  view.setUint32(8, symbolValue, true);
+  writeNlist32(bytes, 0, {
+    stringIndex: 1,
+    type: N_EXT_BIT | N_SECT,
+    sectionIndex: (values.nextUint8() & 0x07) + 1,
+    // mach-o/nlist.h: the high byte of n_desc stores library ordinal 1 for
+    // MH_TWOLEVEL images.
+    description: 0x0100,
+    value: symbolValue
+  });
   bytes.set(stringBytes, stringTableOffset);
 
   const parsed = await parseSymtab(
@@ -110,11 +158,13 @@ void test("parseSymtab resolves names without reading the full string table", as
   const stringBytes = textEncoder.encode(`\0${symbolName}\0`);
   const stringTableOffset = NLIST64_SIZE;
   const bytes = new Uint8Array(stringTableOffset + stringBytes.length);
-  const view = new DataView(bytes.buffer);
-  view.setUint32(0, 1, true);
-  bytes[4] = N_EXT_BIT | N_SECT;
-  bytes[5] = 1;
-  view.setBigUint64(8, 0n, true);
+  writeNlist64(bytes, 0, {
+    stringIndex: 1,
+    type: N_EXT_BIT | N_SECT,
+    sectionIndex: 1,
+    description: 0,
+    value: 0n
+  });
   const tracked = createSliceTrackingFile(bytes, 0x100000, "symtab-lazy-strings");
   bytes.set(stringBytes, stringTableOffset);
 
@@ -139,12 +189,14 @@ void test("parseSymtab resolves names without reading the full string table", as
 void test("parseSymtab preserves SELF_LIBRARY_ORDINAL for defined external symbols", async () => {
   const values = createMachOIncidentalValues();
   const bytes = new Uint8Array(NLIST64_SIZE + 1);
-  const view = new DataView(bytes.buffer);
   const stringTableOffset = NLIST64_SIZE;
-  view.setUint32(0, 0, true);
-  bytes[4] = N_EXT_BIT | N_SECT;
-  bytes[5] = 1;
-  view.setBigUint64(8, BigInt(values.nextUint16() + 0x1000), true);
+  writeNlist64(bytes, 0, {
+    stringIndex: 0,
+    type: N_EXT_BIT | N_SECT,
+    sectionIndex: 1,
+    description: 0,
+    value: BigInt(values.nextUint16() + 0x1000)
+  });
   bytes[stringTableOffset] = 0;
 
   const parsed = await parseSymtab(
@@ -167,11 +219,13 @@ void test("parseSymtab preserves SELF_LIBRARY_ORDINAL for defined external symbo
 
 void test("parseSymtab rejects non-zero string indexes when the string table is empty", async () => {
   const bytes = new Uint8Array(NLIST64_SIZE);
-  const view = new DataView(bytes.buffer);
-  view.setUint32(0, 1, true);
-  bytes[4] = N_EXT_BIT | N_SECT;
-  bytes[5] = 1;
-  view.setBigUint64(8, 0n, true);
+  writeNlist64(bytes, 0, {
+    stringIndex: 1,
+    type: N_EXT_BIT | N_SECT,
+    sectionIndex: 1,
+    description: 0,
+    value: 0n
+  });
 
   const parsed = await parseSymtab(
     wrapMachOBytes(bytes, "symtab-empty-strings"),
@@ -195,12 +249,15 @@ void test("parseSymtab does not treat MH_OBJECT n_desc flags as library ordinals
   const stringBytes = textEncoder.encode(`\0${symbolName}\0`);
   const stringTableOffset = NLIST64_SIZE;
   const bytes = new Uint8Array(stringTableOffset + stringBytes.length);
-  const view = new DataView(bytes.buffer);
-  view.setUint32(0, 1, true);
-  bytes[4] = N_EXT_BIT | N_SECT;
-  bytes[5] = 1;
-  view.setUint16(6, 0x0100, true);
-  view.setBigUint64(8, BigInt(values.nextUint16() + 0x1000), true);
+  writeNlist64(bytes, 0, {
+    stringIndex: 1,
+    type: N_EXT_BIT | N_SECT,
+    sectionIndex: 1,
+    // In MH_OBJECT files these same high-byte bits are object-file flags, not
+    // two-level library ordinals.
+    description: 0x0100,
+    value: BigInt(values.nextUint16() + 0x1000)
+  });
   bytes.set(stringBytes, stringTableOffset);
 
   // mach-o/loader.h: MH_OBJECT == 0x1.
@@ -227,12 +284,15 @@ void test("parseSymtab ignores library ordinals when MH_TWOLEVEL is not set", as
   const stringBytes = textEncoder.encode(`\0${symbolName}\0`);
   const stringTableOffset = NLIST64_SIZE;
   const bytes = new Uint8Array(stringTableOffset + stringBytes.length);
-  const view = new DataView(bytes.buffer);
-  view.setUint32(0, 1, true);
-  bytes[4] = N_EXT_BIT | N_SECT;
-  bytes[5] = 1;
-  view.setUint16(6, 0x0100, true);
-  view.setBigUint64(8, 0n, true);
+  writeNlist64(bytes, 0, {
+    stringIndex: 1,
+    type: N_EXT_BIT | N_SECT,
+    sectionIndex: 1,
+    // mach-o/nlist.h: without MH_TWOLEVEL, this high byte must not be treated
+    // as a bound-library ordinal even though it numerically encodes 1.
+    description: 0x0100,
+    value: 0n
+  });
   bytes.set(stringBytes, stringTableOffset);
 
   const parsed = await parseSymtab(
