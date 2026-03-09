@@ -5,6 +5,7 @@ import { bigFromUint32, clampRangeSize, createRangeReader } from "./format.js";
 import type { MachOCodeDirectory, MachOCodeSignature, MachOCodeSignatureSlot } from "./types.js";
 
 const codeDirectoryVersionText = (version: number): string => `0x${version.toString(16)}`;
+const blobMagicText = (magic: number): string => `0x${magic.toString(16)}`;
 const earliestCodeDirectorySize = (version: number): number => {
   // CS_CodeDirectory grows by appending fields. These byte sizes are the
   // offsets of end_earliest / end_withScatter / end_withTeam /
@@ -147,6 +148,9 @@ const parseCodeSignature = async (
   base.magic = headerView.getUint32(0, false);
   base.length = headerView.getUint32(4, false);
   if (base.magic !== CSMAGIC_EMBEDDED_SIGNATURE && base.magic !== CSMAGIC_EMBEDDED_SIGNATURE_OLD) {
+    issues.push(
+      `Code-signing data has unexpected top-level magic ${blobMagicText(base.magic)}; expected an embedded signature superblob.`
+    );
     return base;
   }
   const declaredLength = base.length || 0;

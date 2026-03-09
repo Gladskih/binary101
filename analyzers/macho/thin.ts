@@ -253,7 +253,8 @@ const parseThinImage = async (
         symtabCommand.nsyms,
         symtabCommand.stroff,
         symtabCommand.strsize,
-        header.filetype
+        header.filetype,
+        header.flags
       )
     : null;
   if (symtab?.issues.length) issues.push(...symtab.issues);

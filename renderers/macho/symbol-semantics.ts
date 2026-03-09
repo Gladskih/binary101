@@ -3,6 +3,7 @@
 import {
   DYNAMIC_LOOKUP_ORDINAL,
   EXECUTABLE_ORDINAL,
+  MH_TWOLEVEL,
   N_EXT,
   N_INDR,
   N_PEXT,
@@ -37,7 +38,8 @@ const symbolCanUseLibraryOrdinal = (image: MachOImage, symbol: MachOSymbol): boo
   symbol.libraryOrdinal != null &&
   !symbolIsDebug(symbol.type) &&
   symbolIsExternal(symbol.type) &&
-  image.header.filetype !== MH_OBJECT;
+  image.header.filetype !== MH_OBJECT &&
+  (image.header.flags & MH_TWOLEVEL) !== 0;
 
 const symbolTypeLabelFor = (symbol: MachOSymbol): string =>
   symbolIsDebug(symbol.type) ? "Debug / STAB" : symbolTypeName(symbolTypeBits(symbol.type));

@@ -1,5 +1,6 @@
 "use strict";
 
+import { FAT_MAGIC_64 } from "../../analyzers/macho/commands.js";
 import { MockFile } from "../helpers/mock-file.js";
 import type { ThinMachOFixture, ThinMachOFixtureLayout } from "./macho-thin-types.js";
 import { CPU_SUBTYPE_X86_64_ALL, CPU_TYPE_X86_64, createThinMachOFixture } from "./macho-thin-sample.js";
@@ -34,6 +35,12 @@ export const createMachOUniversalLayout = (): UniversalMachOFixture =>
 
 export const createMachOUniversalFile = (): MockFile =>
   createMockMachOFile(createMachOUniversalBytes(), "sample-universal");
+
+export const createTruncatedFatMachOBytes = (magic = FAT_MAGIC_64): Uint8Array => {
+  const bytes = new Uint8Array(4);
+  new DataView(bytes.buffer).setUint32(0, magic, false);
+  return bytes;
+};
 
 export const wrapMachOBytes = (bytes: Uint8Array, name = "sample-macho"): MockFile =>
   createMockMachOFile(bytes, name);

@@ -36,6 +36,8 @@ const N_WEAK_DEF_BIT = 0x0080;
 const N_WEAK_REF_BIT = 0x0040;
 const REFERENCED_DYNAMICALLY_BIT = 0x0010;
 const SELF_LIBRARY_ORDINAL = 0x00;
+// mach-o/loader.h: MH_TWOLEVEL == 0x80.
+const TWOLEVEL_NAMESPACE_FLAG = 0x80;
 // xnu/osfmk/kern/cs_blobs.h: CSMAGIC_CODEDIRECTORY.
 const CODEDIRECTORY_MAGIC = 0xfade0c02;
 
@@ -80,6 +82,7 @@ void test("Mach-O renderer semantics expose fallback labels", () => {
 void test("Mach-O symbol semantics and symbol view cover bindings, descriptions, and summaries", () => {
   const values = createMachOIncidentalValues();
   const image = createRendererMachOImage();
+  image.header.flags |= TWOLEVEL_NAMESPACE_FLAG;
   const symbols: MachOSymbol[] = [
     {
       index: 0,
@@ -214,6 +217,15 @@ void test("Mach-O symbol semantics and symbol view cover bindings, descriptions,
     description: 0x0100,
     libraryOrdinal: 1
   }), ["external"]);
+
+  const flatNamespaceImage = {
+    ...image,
+    header: {
+      ...image.header,
+      flags: image.header.flags & ~TWOLEVEL_NAMESPACE_FLAG
+    }
+  };
+  assert.deepEqual(symbolBindingLabels(flatNamespaceImage, symbols[1]!), ["external"]);
 });
 
 void test("Mach-O code-signing view renders full and sparse signatures", () => {

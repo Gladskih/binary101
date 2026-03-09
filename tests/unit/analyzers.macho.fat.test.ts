@@ -107,3 +107,28 @@ void test("parseFatBinary reads fat slice records incrementally", async () => {
   assert.equal(parsed.slices.length, Math.floor((bytes.length - 8) / 32));
   assert.ok(Math.max(...tracked.requests) < tracked.file.size);
 });
+
+void test("parseFatBinary reports slices that overlap the fat-arch table and violate alignment", async () => {
+  const fixture = createMachOUniversalLayout();
+  const bytes = fixture.bytes;
+  const view = new DataView(bytes.buffer);
+  // fat_header plus two fat_arch records occupies 48 bytes in this fixture.
+  view.setUint32(16, 44, false);
+  view.setUint32(24, 12, false);
+
+  const parsed = await parseFatBinary(wrapMachOBytes(bytes, "fat-table-overlap"), fatMagicInfo(bytes));
+
+  assert.match(parsed.slices[0]?.issues.join("\n") || "", /overlaps the fat architecture table/i);
+  assert.match(parsed.slices[0]?.issues.join("\n") || "", /not aligned to 2\^12 bytes/i);
+});
+
+void test("parseFatBinary reports overlapping slices", async () => {
+  const fixture = createMachOUniversalLayout();
+  const bytes = fixture.bytes;
+  const view = new DataView(bytes.buffer);
+  view.setUint32(36, fixture.slice0Offset + 0x100, false);
+
+  const parsed = await parseFatBinary(wrapMachOBytes(bytes, "fat-overlap"), fatMagicInfo(bytes));
+
+  assert.match(parsed.slices[1]?.issues.join("\n") || "", /overlaps slice 0/i);
+});

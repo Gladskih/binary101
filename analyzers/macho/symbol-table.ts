@@ -1,11 +1,12 @@
 "use strict";
 
-import { N_EXT, N_STAB } from "./commands.js";
+import { MH_TWOLEVEL, N_EXT, N_STAB } from "./commands.js";
 import { bigFromUint32, clampRangeSize, createRangeReader } from "./format.js";
 import type { MachOSymbol, MachOSymtabInfo } from "./types.js";
 
 const getTwoLevelLibraryOrdinal = (
   filetype: number,
+  headerFlags: number,
   type: number,
   description: number
 ): number | null => {
@@ -14,7 +15,10 @@ const getTwoLevelLibraryOrdinal = (
   // mach-o/loader.h: MH_OBJECT == 0x1. Relocatable object files reuse the
   // high byte of n_desc for object-file flags instead of two-level ordinals.
   const isRelocatableObjectFile = filetype === 0x1;
-  if (isDebugSymbol || !isExternalSymbol || isRelocatableObjectFile) return null;
+  // mach-o/nlist.h: library ordinals in n_desc are only meaningful for images
+  // linked with MH_TWOLEVEL namespace bindings.
+  const usesTwoLevelNamespace = (headerFlags & MH_TWOLEVEL) !== 0;
+  if (isDebugSymbol || !isExternalSymbol || isRelocatableObjectFile || !usesTwoLevelNamespace) return null;
   return (description >>> 8) & 0xff;
 };
 
@@ -28,7 +32,8 @@ const parseSymtab = async (
   nsyms: number,
   stroff: number,
   strsize: number,
-  filetype = 0
+  filetype = 0,
+  headerFlags = 0
 ): Promise<MachOSymtabInfo> => {
   const issues: string[] = [];
   const entrySize = is64 ? 16 : 12;
@@ -79,7 +84,7 @@ const parseSymtab = async (
         type,
         sectionIndex,
         description,
-        libraryOrdinal: getTwoLevelLibraryOrdinal(filetype, type, description),
+        libraryOrdinal: getTwoLevelLibraryOrdinal(filetype, headerFlags, type, description),
         value
       });
     }

@@ -11,6 +11,7 @@ const MH_MAGIC = 0xfeedface;
 const MH_CIGAM = 0xcefaedfe;
 const MH_MAGIC_64 = 0xfeedfacf;
 const MH_CIGAM_64 = 0xcffaedfe;
+const MH_TWOLEVEL = 0x80;
 const FAT_MAGIC = 0xcafebabe;
 const FAT_MAGIC_64 = 0xcafebabf;
 const LC_SEGMENT = 0x1;
@@ -97,6 +98,7 @@ export {
   MH_CIGAM_64,
   MH_MAGIC,
   MH_MAGIC_64,
+  MH_TWOLEVEL,
   N_EXT,
   N_INDR,
   N_PEXT,

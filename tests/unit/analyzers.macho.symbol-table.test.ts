@@ -11,6 +11,8 @@ import { createMachOIncidentalValues } from "../fixtures/macho-incidental-values
 const N_EXT_BIT = 0x01;
 // mach-o/loader.h: MH_EXECUTE == 0x2.
 const EXECUTABLE_FILETYPE = 0x2;
+// mach-o/loader.h: MH_TWOLEVEL == 0x80.
+const TWOLEVEL_NAMESPACE_FLAG = 0x80;
 // mach-o/nlist.h: N_SECT == 0x0e.
 const N_SECT = 0x0e;
 // mach-o/nlist.h: sizeof(struct nlist_64) == 16.
@@ -41,7 +43,8 @@ void test("parseSymtab reports truncated symbol tables and invalid string indexe
     2,
     stringTableOffset,
     stringBytes.length,
-    EXECUTABLE_FILETYPE
+    EXECUTABLE_FILETYPE,
+    TWOLEVEL_NAMESPACE_FLAG
   );
   assert.match(parsed.issues.join("\n"), /declares 2 symbols but only 1 entries fit/);
   assert.match(parsed.issues.join("\n"), new RegExp(`string index ${invalidStringIndex} is outside the string table`));
@@ -90,7 +93,8 @@ void test("parseSymtab parses 32-bit symbol entries", async () => {
     1,
     stringTableOffset,
     stringBytes.length,
-    EXECUTABLE_FILETYPE
+    EXECUTABLE_FILETYPE,
+    TWOLEVEL_NAMESPACE_FLAG
   );
 
   assert.equal(parsed.symbols.length, 1);
@@ -124,7 +128,8 @@ void test("parseSymtab resolves names without reading the full string table", as
     1,
     stringTableOffset,
     0xfffe0,
-    EXECUTABLE_FILETYPE
+    EXECUTABLE_FILETYPE,
+    TWOLEVEL_NAMESPACE_FLAG
   );
 
   assert.equal(parsed.symbols[0]?.name, symbolName);
@@ -152,7 +157,8 @@ void test("parseSymtab preserves SELF_LIBRARY_ORDINAL for defined external symbo
     1,
     stringTableOffset,
     1,
-    EXECUTABLE_FILETYPE
+    EXECUTABLE_FILETYPE,
+    TWOLEVEL_NAMESPACE_FLAG
   );
 
   assert.equal(parsed.symbols[0]?.libraryOrdinal, 0);
@@ -209,6 +215,38 @@ void test("parseSymtab does not treat MH_OBJECT n_desc flags as library ordinals
     stringTableOffset,
     stringBytes.length,
     0x1
+  );
+
+  assert.equal(parsed.symbols[0]?.libraryOrdinal, null);
+  assert.deepEqual(parsed.issues, []);
+});
+
+void test("parseSymtab ignores library ordinals when MH_TWOLEVEL is not set", async () => {
+  const values = createMachOIncidentalValues();
+  const symbolName = values.nextLabel("flat");
+  const stringBytes = textEncoder.encode(`\0${symbolName}\0`);
+  const stringTableOffset = NLIST64_SIZE;
+  const bytes = new Uint8Array(stringTableOffset + stringBytes.length);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 1, true);
+  bytes[4] = N_EXT_BIT | N_SECT;
+  bytes[5] = 1;
+  view.setUint16(6, 0x0100, true);
+  view.setBigUint64(8, 0n, true);
+  bytes.set(stringBytes, stringTableOffset);
+
+  const parsed = await parseSymtab(
+    wrapMachOBytes(bytes, "symtab-flat-namespace"),
+    0,
+    bytes.length,
+    true,
+    true,
+    0,
+    1,
+    stringTableOffset,
+    stringBytes.length,
+    EXECUTABLE_FILETYPE,
+    0
   );
 
   assert.equal(parsed.symbols[0]?.libraryOrdinal, null);

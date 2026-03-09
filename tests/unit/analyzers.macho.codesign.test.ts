@@ -15,7 +15,7 @@ void test("parseCodeSignature reports blobs that are too short for a header", as
   assert.match(parsed.issues[0] || "", /too short to contain a blob header/);
 });
 
-void test("parseCodeSignature preserves non-superblob headers without parsing slots", async () => {
+void test("parseCodeSignature reports unexpected top-level blob magic without parsing slots", async () => {
   const bytes = new Uint8Array(8);
   const view = new DataView(bytes.buffer);
   view.setUint32(0, CODEDIRECTORY_MAGIC, false);
@@ -24,6 +24,7 @@ void test("parseCodeSignature preserves non-superblob headers without parsing sl
   assert.equal(parsed.magic, CODEDIRECTORY_MAGIC);
   assert.equal(parsed.codeDirectory, null);
   assert.equal(parsed.slots.length, 0);
+  assert.match(parsed.issues.join("\n"), /unexpected.*magic/i);
 });
 
 void test("parseCodeSignature reports truncated superblob index tables and out-of-range blobs", async () => {

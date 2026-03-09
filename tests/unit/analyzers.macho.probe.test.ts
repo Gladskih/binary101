@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { probeMachO } from "../../analyzers/macho/probe.js";
 import { createMinimalJavaClassBytes } from "../fixtures/java-class-fixtures.js";
+import { createTruncatedFatMachOBytes } from "../fixtures/macho-fixtures.js";
 
 const dvFromMagic = (magic: number, byteLength = 8): DataView => {
   const bytes = new Uint8Array(byteLength);
@@ -28,4 +29,9 @@ void test("probeMachO excludes Java class files and swapped fat constants", () =
   // Byte-swapped FAT_MAGIC / FAT_MAGIC_64 are not valid Mach-O signatures.
   assert.strictEqual(probeMachO(dvFromMagic(0xbebafeca)), null);
   assert.strictEqual(probeMachO(dvFromMagic(0xbfbafeca)), null);
+});
+
+void test("probeMachO keeps truncated fat wrappers visible", () => {
+  const truncatedFat = new DataView(createTruncatedFatMachOBytes().buffer);
+  assert.strictEqual(probeMachO(truncatedFat, truncatedFat.byteLength), "Mach-O universal (Fat, truncated)");
 });

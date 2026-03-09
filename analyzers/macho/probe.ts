@@ -23,7 +23,10 @@ const probeMachO = (dv: DataView, fileSize = dv.byteLength): string | null => {
   // so FAT_CIGAM* are swapped constants, not standalone file signatures:
   // https://github.com/apple-oss-distributions/cctools/blob/main/include/mach-o/fat.h
   if (magic !== 0xcafebabe && magic !== 0xcafebabf) return null;
-  if (fileSize < 8 || dv.byteLength < 8) return null;
+  // A 4-byte FAT magic is ambiguous with a severely truncated Java class file,
+  // but routing it into the Mach-O parser preserves malformed fat wrappers and
+  // lets parseFatBinary surface "Fat header is truncated."
+  if (fileSize < 8 || dv.byteLength < 8) return "Mach-O universal (Fat, truncated)";
   if (isLikelyJavaClassFile(dv, fileSize)) return null;
   return "Mach-O universal (Fat)";
 };

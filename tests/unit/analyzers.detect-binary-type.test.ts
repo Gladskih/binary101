@@ -7,6 +7,7 @@ import { MockFile } from "../helpers/mock-file.js";
 import { createMp3File } from "../fixtures/audio-sample-files.js";
 import { createMp4File } from "../fixtures/mp4-fixtures.js";
 import { createMinimalJavaClassBytes } from "../fixtures/java-class-fixtures.js";
+import { createTruncatedFatMachOBytes } from "../fixtures/macho-fixtures.js";
 import { createWebmFile } from "../fixtures/webm-base-fixtures.js";
 import { createFlacFile } from "../fixtures/flac-fixtures.js";
 import { createSqliteFile } from "../fixtures/sqlite-fixtures.js";
@@ -117,6 +118,11 @@ void test("detectBinaryType recognises real Mach-O fixtures", async () => {
 
   const fatLabel = await detectBinaryType(createMachOUniversalFile());
   assert.strictEqual(fatLabel, "Mach-O universal (Fat)");
+});
+
+void test("detectBinaryType keeps truncated fat wrappers visible", async () => {
+  const label = await detectBinaryType(new MockFile(createTruncatedFatMachOBytes()));
+  assert.strictEqual(label, "Mach-O universal (Fat, truncated)");
 });
 
 void test("detectBinaryType does not route Java class files through Mach-O detection", async () => {
