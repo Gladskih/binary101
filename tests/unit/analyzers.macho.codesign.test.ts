@@ -75,6 +75,41 @@ void test("parseCodeSignature reports truncated CodeDirectory blobs", async () =
   assert.match(parsed.issues.join("\n"), /CodeDirectory blob is truncated/);
 });
 
+void test("parseCodeSignature rejects CodeDirectory string offsets that point into the fixed header", async () => {
+  const values = createMachOIncidentalValues();
+  const bytes = new Uint8Array(72);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, EMBEDDED_SIGNATURE_MAGIC, false);
+  view.setUint32(4, bytes.length, false);
+  view.setUint32(8, 1, false);
+  view.setUint32(12, 0, false);
+  view.setUint32(16, 20, false);
+  view.setUint32(20, CODEDIRECTORY_MAGIC, false);
+  view.setUint32(24, 52, false);
+  // xnu/osfmk/kern/cs_blobs.h: CS_SUPPORTSTEAMID == 0x20200.
+  view.setUint32(28, 0x20200, false);
+  view.setUint32(32, values.nextUint32(), false);
+  view.setUint32(40, 12, false);
+  view.setUint8(56, 32);
+  view.setUint8(57, 2);
+  view.setUint8(59, 12);
+  view.setUint32(68, 12, false);
+
+  const parsed = await parseCodeSignature(
+    wrapMachOBytes(bytes, "codesign-header-string-offset"),
+    0,
+    bytes.length,
+    0,
+    0,
+    bytes.length
+  );
+
+  assert.equal(parsed.codeDirectory?.identifier, null);
+  assert.equal(parsed.codeDirectory?.teamIdentifier, null);
+  assert.match(parsed.issues.join("\n"), /identifier offset 12 points inside the fixed header/i);
+  assert.match(parsed.issues.join("\n"), /team identifier offset 12 points inside the fixed header/i);
+});
+
 void test("parseCodeSignature does not read CodeDirectory fields past the declared blob length", async () => {
   const values = createMachOIncidentalValues();
   const truncatedCodeLimit = values.nextUint32();

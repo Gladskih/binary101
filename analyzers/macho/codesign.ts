@@ -5,6 +5,19 @@ import { bigFromUint32, clampRangeSize, createRangeReader } from "./format.js";
 import type { MachOCodeDirectory, MachOCodeSignature, MachOCodeSignatureSlot } from "./types.js";
 
 const codeDirectoryVersionText = (version: number): string => `0x${version.toString(16)}`;
+const earliestCodeDirectorySize = (version: number): number => {
+  // CS_CodeDirectory grows by appending fields. These byte sizes are the
+  // offsets of end_earliest / end_withScatter / end_withTeam /
+  // end_withCodeLimit64 / end_withExecSeg / end_withPreEncryptOffset /
+  // end_withLinkage in xnu/osfmk/kern/cs_blobs.h.
+  if (version >= 0x20600) return 108;
+  if (version >= 0x20500) return 96;
+  if (version >= 0x20400) return 88;
+  if (version >= 0x20300) return 64;
+  if (version >= 0x20200) return 52;
+  if (version >= 0x20100) return 48;
+  return 44;
+};
 
 const parseCodeDirectory = async (
   reader: ReturnType<typeof createRangeReader>,
@@ -43,8 +56,13 @@ const parseCodeDirectory = async (
   let execSegLimit: bigint | null = null;
   let execSegFlags: bigint | null = null;
   let runtime: number | null = null;
+  const minimumStringOffset = earliestCodeDirectorySize(version);
   const readBlobString = async (stringOffset: number, label: string): Promise<string | null> => {
     if (stringOffset === 0) return null;
+    if (stringOffset < minimumStringOffset) {
+      issues.push(`CodeDirectory ${label} offset ${stringOffset} points inside the fixed header.`);
+      return null;
+    }
     if (stringOffset >= parseLength) {
       issues.push(`CodeDirectory ${label} offset points outside the blob.`);
       return null;

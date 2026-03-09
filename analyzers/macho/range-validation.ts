@@ -28,21 +28,57 @@ const hasFileBackedSectionData = (section: MachOSection): boolean => {
   return sectionType !== 0x01 && sectionType !== 0x0c && sectionType !== 0x12;
 };
 
+const isRangeWithinRange = (
+  outerOffset: bigint,
+  outerSize: bigint,
+  innerOffset: bigint,
+  innerSize: bigint
+): boolean =>
+  outerOffset >= 0n &&
+  outerSize >= 0n &&
+  innerOffset >= outerOffset &&
+  innerSize >= 0n &&
+  innerOffset <= outerOffset + outerSize &&
+  innerSize <= outerOffset + outerSize - innerOffset;
+
 const validateSectionRanges = (
   segment: MachOSegment,
   imageSize: number,
   issues: string[]
 ): void => {
   for (const section of segment.sections) {
+    const segmentName = segment.name || "<unnamed>";
+    const sectionName = section.sectionName || "<unnamed>";
     if (
       hasFileBackedSectionData(section) &&
       section.size > 0n &&
       !isBigIntRangeWithin(imageSize, BigInt(section.offset), section.size)
     ) {
       issues.push(
-        `Load command ${segment.loadCommandIndex}: section ${segment.name || "<unnamed>"},` +
-          `${section.sectionName || "<unnamed>"} data range (${section.offset}, ${section.size}) ` +
+        `Load command ${segment.loadCommandIndex}: section ${segmentName},` +
+          `${sectionName} data range (${section.offset}, ${section.size}) ` +
           `extends beyond the Mach-O image.`
+      );
+    }
+    if (
+      hasFileBackedSectionData(section) &&
+      section.size > 0n &&
+      !isRangeWithinRange(segment.fileoff, segment.filesize, BigInt(section.offset), section.size)
+    ) {
+      issues.push(
+        `Load command ${segment.loadCommandIndex}: section ${segmentName},${sectionName} ` +
+          `file range (${section.offset}, ${section.size}) extends beyond segment ${segmentName} ` +
+          `file range (${segment.fileoff}, ${segment.filesize}).`
+      );
+    }
+    if (
+      section.size > 0n &&
+      !isRangeWithinRange(segment.vmaddr, segment.vmsize, section.addr, section.size)
+    ) {
+      issues.push(
+        `Load command ${segment.loadCommandIndex}: section ${segmentName},${sectionName} ` +
+          `VM range (${section.addr}, ${section.size}) extends beyond segment ${segmentName} ` +
+          `VM range (${segment.vmaddr}, ${segment.vmsize}).`
       );
     }
     if (
@@ -54,8 +90,8 @@ const validateSectionRanges = (
       )
     ) {
       issues.push(
-        `Load command ${segment.loadCommandIndex}: section ${segment.name || "<unnamed>"},` +
-          `${section.sectionName || "<unnamed>"} relocation range (${section.reloff}, ` +
+        `Load command ${segment.loadCommandIndex}: section ${segmentName},` +
+          `${sectionName} relocation range (${section.reloff}, ` +
           `${BigInt(section.nreloc) * RELOCATION_INFO_SIZE}) extends beyond the Mach-O image.`
       );
     }

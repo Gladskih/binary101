@@ -108,6 +108,7 @@ const parseThinImage = async (
   let codeSignatureCommand: CodeSignatureCommand | null = null;
   let cursor = headerSize;
   const little = header.littleEndian;
+  const loadCommandAlignment = header.is64 ? 8 : 4;
   for (let index = 0; index < header.ncmds; index += 1) {
     if (cursor + 8 > commandRegionEnd) {
       issues.push(`Load command ${index}: header extends beyond the declared load-command region.`);
@@ -123,6 +124,12 @@ const parseThinImage = async (
     parseLoadCommandRecord(loadCommands, imageOffset, cursor, cmd, cmdsize, index);
     if (cmdsize < 8) {
       issues.push(`Load command ${index}: invalid cmdsize ${cmdsize}.`);
+      break;
+    }
+    if (cmdsize % loadCommandAlignment !== 0) {
+      issues.push(
+        `Load command ${index}: cmdsize ${cmdsize} is not aligned to ${loadCommandAlignment} bytes.`
+      );
       break;
     }
     if (cursor + cmdsize > commandRegionEnd) {
