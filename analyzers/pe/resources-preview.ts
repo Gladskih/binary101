@@ -18,7 +18,8 @@ export async function enrichResourcePreviews(
 ): Promise<{ top: ResourceTree["top"]; detail: ResourceDetailGroup[] }> {
   const { base, limitEnd, top, view, rvaToOff } = tree;
   const detail = tree.detail as ResourceDetailGroup[];
-  const isInside = (off: number): boolean => off >= base && off < limitEnd;
+  const isRangeInside = (off: number, len: number): boolean =>
+    off >= base && len >= 0 && off + len <= limitEnd;
 
   const iconIndex = new Map<number, { rva: number; size: number }>();
   const rootDirView = await view(base, 16);
@@ -36,7 +37,7 @@ export async function enrichResourcePreviews(
     if (id !== 3 || !subdir) continue;
     const nameDirRel = OffsetToData & 0x7fffffff;
     const nameDirOff = base + nameDirRel;
-    if (!isInside(nameDirOff + 16)) continue;
+    if (!isRangeInside(nameDirOff, 16)) continue;
     const nameDirView = await view(nameDirOff, 16);
     if (nameDirView.byteLength < 16) continue;
     const Named = nameDirView.getUint16(12, true);
@@ -52,7 +53,7 @@ export async function enrichResourcePreviews(
       if (!subdir2) continue;
       const langDirRel = OffsetToData2 & 0x7fffffff;
       const langDirOff = base + langDirRel;
-      if (!isInside(langDirOff + 16)) continue;
+      if (!isRangeInside(langDirOff, 16)) continue;
       const langDirView = await view(langDirOff, 16);
       if (langDirView.byteLength < 16) continue;
       const NamedL = langDirView.getUint16(12, true);
@@ -66,7 +67,7 @@ export async function enrichResourcePreviews(
         if (subdirL) continue;
         const dataRel = OffsetToDataL & 0x7fffffff;
         const deo2 = base + dataRel;
-        if (!isInside(deo2 + 16)) continue;
+        if (!isRangeInside(deo2, 16)) continue;
         const dv2 = await view(deo2, 16);
         if (dv2.byteLength < 8) continue;
         const rva2 = dv2.getUint32(0, true);

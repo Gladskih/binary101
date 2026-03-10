@@ -47,7 +47,8 @@ export async function buildResourceTree(
     new DataView(await file.slice(off, off + len).arrayBuffer());
   const u16 = (dv: DataView, off: number): number => dv.getUint16(off, true);
   const u32 = (dv: DataView, off: number): number => dv.getUint32(off, true);
-  const isInside = (off: number): boolean => off >= base && off < limitEnd;
+  const isRangeInside = (off: number, len: number): boolean =>
+    off >= base && len >= 0 && off + len <= limitEnd;
 
   const parseDir = async (
     rel: number
@@ -57,7 +58,7 @@ export async function buildResourceTree(
     entries: Array<{ nameIsString: boolean; subdir: boolean; nameOrId: number | null; target: number }>;
   } | null> => {
     const off = base + rel;
-    if (!isInside(off + 16)) return null;
+    if (!isRangeInside(off, 16)) return null;
     const dv = await view(off, 16);
     const Named = u16(dv, 12);
     const Ids = u16(dv, 14);
@@ -138,7 +139,7 @@ export async function buildResourceTree(
               for (const langEnt of langDir.entries) {
                 if (langEnt.subdir) continue;
                 const dataEntryOff = base + langEnt.target;
-                if (!isInside(dataEntryOff + 16)) continue;
+                if (!isRangeInside(dataEntryOff, 16)) continue;
                 const dv = await view(dataEntryOff, 16);
                 if (dv.byteLength < 16) continue;
                 const DataRVA = u32(dv, 0);

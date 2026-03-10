@@ -25,12 +25,12 @@ export async function parseBaseRelocations(
   }> = [];
   let off = base;
   let totalEntries = 0;
-  while (off + 8 <= end && blocks.length < 256) {
+  while (off + 8 <= end) {
     const dv = new DataView(await file.slice(off, off + 8).arrayBuffer());
     if (dv.byteLength < 8) break;
     const pageRva = dv.getUint32(0, true);
     const blockSize = dv.getUint32(4, true);
-    if (!pageRva || !blockSize) break;
+    if (!blockSize) break;
     if (blockSize < 8) break;
     const blockEnd = Math.min(end, off + blockSize);
     const entryCount = Math.floor((blockEnd - off - 8) / 2);

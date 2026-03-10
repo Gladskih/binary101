@@ -112,3 +112,55 @@ void test("parseLoadConfigDirectory uses official field offsets (64-bit)", async
   assert.equal(lc.CastGuardOsDeterminedFailureMode, 0x13579bdf);
   assert.equal(lc.UmaFunctionPointers, 0);
 });
+
+void test("parseLoadConfigDirectory reads 32-bit and 64-bit fields", async () => {
+  const bytes = new Uint8Array(512).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const lcRva = 0x80;
+  dv.setUint32(lcRva + 0, 0x80, true);
+  dv.setUint32(lcRva + 4, 0x12345678, true);
+  dv.setUint16(lcRva + 8, 5, true);
+  dv.setUint16(lcRva + 10, 1, true);
+  dv.setUint32(lcRva + 0x3c, 0xcafebabe, true);
+  dv.setUint32(lcRva + 0x40, 0x200, true);
+  dv.setUint32(lcRva + 0x44, 3, true);
+  dv.setUint32(lcRva + 0x50, 0x300, true);
+  dv.setUint32(lcRva + 0x54, 2, true);
+  dv.setUint32(lcRva + 0x58, 0x1111, true);
+
+  const lc = expectDefined(await parseLoadConfigDirectory(
+    new MockFile(bytes, "loadcfg.bin"),
+    [{ name: "LOAD_CONFIG", rva: lcRva, size: 0x5c }],
+    value => value,
+    () => {},
+    false
+  ));
+  assert.equal(lc.SecurityCookie, 0xcafebabe);
+  assert.equal(lc.SEHandlerCount, 3);
+  assert.equal(lc.GuardCFFunctionCount, 2);
+  assert.equal(lc.GuardFlags, 0x1111);
+
+  const bytes64 = new Uint8Array(512).fill(0);
+  const dv64 = new DataView(bytes64.buffer);
+  dv64.setUint32(0, 0x140, true);
+  dv64.setUint32(4, 0x9abcdef0, true);
+  dv64.setUint16(8, 10, true);
+  dv64.setUint16(10, 2, true);
+  dv64.setBigUint64(0x58, 0x1234n, true);
+  dv64.setBigUint64(0x60, 0x5678n, true);
+  dv64.setBigUint64(0x68, 5n, true);
+  dv64.setBigUint64(0x80, 0x9abcn, true);
+  dv64.setBigUint64(0x88, 6n, true);
+  dv64.setUint32(0x90, 0xbeef, true);
+
+  const lc64 = expectDefined(await parseLoadConfigDirectory(
+    new MockFile(bytes64),
+    [{ name: "LOAD_CONFIG", rva: 0x10, size: 0x140 }],
+    value => (value === 0x10 ? 0 : value),
+    () => {},
+    true
+  ));
+  assert.equal(lc64.SEHandlerCount, 5);
+  assert.equal(lc64.GuardCFFunctionCount, 6);
+  assert.equal(lc64.GuardFlags, 0xbeef);
+});

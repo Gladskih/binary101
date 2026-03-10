@@ -34,9 +34,11 @@ export async function parseExportDirectory(
     let pos = offset;
     while (text.length < 1024) {
       const chunk = new Uint8Array(await file.slice(pos, pos + 64).arrayBuffer());
+      if (chunk.byteLength === 0) break;
       const zeroIndex = chunk.indexOf(0);
       if (zeroIndex === -1) {
         text += String.fromCharCode(...chunk);
+        if (pos + chunk.byteLength >= file.size) break;
         pos += 64;
       } else {
         if (zeroIndex > 0) text += String.fromCharCode(...chunk.slice(0, zeroIndex));

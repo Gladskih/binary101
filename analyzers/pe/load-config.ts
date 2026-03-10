@@ -108,6 +108,7 @@ export async function parseLoadConfigDirectory(
   const fileSize = typeof file.size === "number" ? file.size : Infinity;
   if (base >= fileSize) return null;
   const availableSize = Math.min(lcDir.size, Math.max(0, fileSize - base));
+  if (availableSize < 12) return null;
   addCoverageRegion("LOAD_CONFIG", base, availableSize);
   const view = new DataView(await file.slice(base, base + Math.min(availableSize, 0x200)).arrayBuffer());
   const Size = view.getUint32(0, true);

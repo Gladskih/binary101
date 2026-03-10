@@ -85,3 +85,83 @@ void test("buildResourceTree parses nested resource directories and skips trunca
 
   assert.strictEqual(expectDefined(coverage[0]).label, "RESOURCE directory");
 });
+
+void test("buildResourceTree accepts data entries that end exactly at the resource boundary", async () => {
+  const bytes = new Uint8Array(0x70).fill(0);
+  const dv = new DataView(bytes.buffer);
+
+  setU16(dv, 12, 0);
+  setU16(dv, 14, 1);
+  setU32(dv, 16, 0x00000003);
+  setU32(dv, 20, 0x80000020);
+
+  setU16(dv, 0x20 + 12, 0);
+  setU16(dv, 0x20 + 14, 1);
+  setU32(dv, 0x20 + 16, 0x00000001);
+  setU32(dv, 0x20 + 20, 0x80000040);
+
+  setU16(dv, 0x40 + 12, 0);
+  setU16(dv, 0x40 + 14, 1);
+  setU32(dv, 0x40 + 16, 0x00000409);
+  setU32(dv, 0x40 + 20, 0x00000060);
+
+  setU32(dv, 0x60 + 0, 0x00002000);
+  setU32(dv, 0x60 + 4, 0x00000010);
+  setU32(dv, 0x60 + 8, 0x000004b0);
+  setU32(dv, 0x60 + 12, 0x00000000);
+
+  const tree = await buildResourceTree(
+    new MockFile(bytes, "resource-boundary.bin"),
+    [{ name: "RESOURCE", rva: 1, size: bytes.length }],
+    () => 0,
+    () => {}
+  );
+
+  const definedTree = expectDefined(tree);
+  assert.deepStrictEqual(definedTree.top, [{ typeName: "ICON", kind: "id", leafCount: 1 }]);
+  const iconDetail = expectDefined(definedTree.detail[0]);
+  const iconEntry = expectDefined(iconDetail.entries[0]);
+  assert.strictEqual(expectDefined(iconEntry.langs[0]).dataRVA, 0x2000);
+});
+
+void test("buildResourceTree walks a small resource directory", async () => {
+  const base = 0x10;
+  const bytes = new Uint8Array(256).fill(0);
+  const dv = new DataView(bytes.buffer);
+  setU16(dv, base + 12, 0);
+  setU16(dv, base + 14, 1);
+  setU32(dv, base + 16, 3);
+  setU32(dv, base + 20, 0x80000020);
+
+  const nameDir = base + 0x20;
+  setU16(dv, nameDir + 12, 0);
+  setU16(dv, nameDir + 14, 1);
+  setU32(dv, nameDir + 16, 1);
+  setU32(dv, nameDir + 20, 0x80000040);
+
+  const langDir = base + 0x40;
+  setU16(dv, langDir + 12, 0);
+  setU16(dv, langDir + 14, 1);
+  setU32(dv, langDir + 16, 0);
+  setU32(dv, langDir + 20, 0x00000060);
+
+  const dataEntry = base + 0x60;
+  setU32(dv, dataEntry + 0, 0x1000);
+  setU32(dv, dataEntry + 4, 16);
+  setU32(dv, dataEntry + 8, 1252);
+  setU32(dv, dataEntry + 12, 0);
+
+  const tree = expectDefined(await buildResourceTree(
+    new MockFile(bytes),
+    [{ name: "RESOURCE", rva: base, size: 0x80 }],
+    value => value,
+    () => {}
+  ));
+
+  assert.equal(tree.top.length, 1);
+  const topEntry = expectDefined(tree.top[0]);
+  assert.equal(topEntry.leafCount, 1);
+  const detailEntry = expectDefined(tree.detail[0]);
+  const lang = expectDefined(expectDefined(detailEntry.entries[0]).langs[0]);
+  assert.equal(lang.size, 16);
+});

@@ -171,3 +171,67 @@ void test("enrichResourcePreviews builds previews for common PE resources", asyn
   assert.strictEqual(versionInfo?.fileVersionString, "9.0.21022.8");
   assert.strictEqual(versionInfo?.productVersionString, "9.0.21022.8");
 });
+
+void test("enrichResourcePreviews indexes icon resources that end exactly at the directory boundary", async () => {
+  const fileBytes = new Uint8Array(512);
+  fileBytes.set(pngSmall, 200);
+
+  const groupIconBytes = new Uint8Array(20).fill(0);
+  const dvg = new DataView(groupIconBytes.buffer);
+  dvg.setUint16(4, 1, true);
+  dvg.setUint8(6, 32);
+  dvg.setUint8(7, 32);
+  dvg.setUint16(10, 1, true);
+  dvg.setUint16(12, 32, true);
+  dvg.setUint32(14, pngSmall.length, true);
+  dvg.setUint16(18, 1, true);
+  fileBytes.set(groupIconBytes, 260);
+
+  const directoryBuffer = new ArrayBuffer(0x70);
+  const root = new DataView(directoryBuffer);
+  root.setUint16(14, 1, true);
+  root.setUint32(16 + 0, 3, true);
+  root.setUint32(16 + 4, 0x80000020, true);
+
+  const nameDir = new DataView(directoryBuffer, 0x20);
+  nameDir.setUint16(14, 1, true);
+  nameDir.setUint32(16 + 0, 1, true);
+  nameDir.setUint32(16 + 4, 0x80000040, true);
+
+  const langDir = new DataView(directoryBuffer, 0x40);
+  langDir.setUint16(14, 1, true);
+  langDir.setUint32(16 + 4, 0x00000060, true);
+
+  const dataEntry = new DataView(directoryBuffer, 0x60);
+  dataEntry.setUint32(0, 200, true);
+  dataEntry.setUint32(4, pngSmall.length, true);
+  dataEntry.setUint32(8, 0, true);
+  dataEntry.setUint32(12, 0, true);
+
+  const tree: ResourceTree = {
+    base: 0,
+    limitEnd: 0x70,
+    top: [],
+    detail: [
+      {
+        typeName: "GROUP_ICON",
+        entries: [
+          {
+            id: 2,
+            name: null,
+            langs: [{ lang: 1033, size: groupIconBytes.length, codePage: 0, dataRVA: 260, reserved: 0 }]
+          }
+        ]
+      }
+    ],
+    view: async (off: number, len: number) => new DataView(directoryBuffer, off, len),
+    rvaToOff: value => value
+  };
+
+  const result = await enrichResourcePreviews(new MockFile(fileBytes), tree);
+  const group = expectDefined(result.detail[0]);
+  const entry = expectDefined(group.entries[0]);
+  const lang = expectDefined(entry.langs[0]);
+  assert.strictEqual(lang.previewKind, "image");
+  assert.match(expectDefined(lang.previewMime), /x-icon/);
+});
