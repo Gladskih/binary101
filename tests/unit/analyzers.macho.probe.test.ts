@@ -35,3 +35,28 @@ void test("probeMachO keeps truncated fat wrappers visible", () => {
   const truncatedFat = new DataView(createTruncatedFatMachOBytes().buffer);
   assert.strictEqual(probeMachO(truncatedFat, truncatedFat.byteLength), "Mach-O universal (Fat, truncated)");
 });
+
+void test("probeMachO keeps plausible large fat binaries out of the Java-class fast path", () => {
+  const sliceCount = 45;
+  const headerSize = 8;
+  const archSize = 20;
+  const sliceSize = 4;
+  const tableSize = headerSize + sliceCount * archSize;
+  const bytes = new Uint8Array(tableSize + sliceCount * sliceSize);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 0xcafebabe, false);
+  view.setUint32(4, sliceCount, false);
+  for (let index = 0; index < sliceCount; index += 1) {
+    const recordOffset = headerSize + index * archSize;
+    const sliceOffset = tableSize + index * sliceSize;
+    // mach/machine.h: CPU_TYPE_X86_64 == 0x01000007.
+    view.setUint32(recordOffset, 0x01000007, false);
+    view.setUint32(recordOffset + 4, 3, false);
+    view.setUint32(recordOffset + 8, sliceOffset, false);
+    view.setUint32(recordOffset + 12, sliceSize, false);
+    view.setUint32(recordOffset + 16, 0, false);
+    // mach-o/loader.h: MH_MAGIC_64 == 0xfeedfacf.
+    view.setUint32(sliceOffset, 0xfeedfacf, false);
+  }
+  assert.strictEqual(probeMachO(new DataView(bytes.buffer), bytes.length), "Mach-O universal (Fat)");
+});

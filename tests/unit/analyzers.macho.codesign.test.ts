@@ -4,101 +4,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseCodeSignature } from "../../analyzers/macho/codesign.js";
 import { CSMAGIC_CODEDIRECTORY, CSMAGIC_EMBEDDED_SIGNATURE } from "../../analyzers/macho/commands.js";
+import { writeBlobHeader, writeCodeDirectory, writeSuperBlob } from "../fixtures/macho-codesign-test-helpers.js";
 import { wrapMachOBytes } from "../fixtures/macho-fixtures.js";
 import { createMachOIncidentalValues } from "../fixtures/macho-incidental-values.js";
 
 // xnu/osfmk/kern/cs_blobs.h: CSMAGIC_BLOBWRAPPER.
 const BLOBWRAPPER_MAGIC = 0xfade0b01;
-
-const writeBlobHeader = (bytes: Uint8Array, blobOffset: number, magic: number, length: number): void => {
-  // CS_Blob starts with big-endian magic/u32 and length/u32.
-  const view = new DataView(bytes.buffer, bytes.byteOffset + blobOffset, 8);
-  view.setUint32(0, magic, false);
-  view.setUint32(4, length, false);
-};
-
-const writeSuperBlob = (
-  bytes: Uint8Array,
-  options: {
-    length: number;
-    declaredCount?: number;
-    entries: Array<{
-      type: number;
-      blobOffset: number;
-    }>;
-  }
-): void => {
-  // CS_SuperBlob extends CS_Blob with count/u32 and (type, offset) index entries.
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  writeBlobHeader(bytes, 0, CSMAGIC_EMBEDDED_SIGNATURE, options.length);
-  view.setUint32(8, options.declaredCount ?? options.entries.length, false);
-  for (const [index, entry] of options.entries.entries()) {
-    const entryOffset = 12 + index * 8;
-    view.setUint32(entryOffset, entry.type, false);
-    view.setUint32(entryOffset + 4, entry.blobOffset, false);
-  }
-};
-
-const writeCodeDirectory = (
-  bytes: Uint8Array,
-  blobOffset: number,
-  options: {
-    length: number;
-    version: number;
-    flags?: number;
-    hashOffset?: number;
-    identOffset?: number;
-    nSpecialSlots?: number;
-    nCodeSlots?: number;
-    codeLimit32?: number;
-    hashSize?: number;
-    hashType?: number;
-    platform?: number;
-    pageSizePower?: number;
-    scatterOffset?: number;
-    teamOffset?: number;
-    codeLimit64?: bigint;
-    execSegBase?: bigint;
-    execSegLimit?: bigint;
-    execSegFlags?: bigint;
-    runtime?: number;
-  }
-): void => {
-  // CS_CodeDirectory appends fields as the version grows, but the shared prefix
-  // layout is fixed in xnu/osfmk/kern/cs_blobs.h.
-  const view = new DataView(bytes.buffer, bytes.byteOffset + blobOffset, bytes.byteLength - blobOffset);
-  writeBlobHeader(bytes, blobOffset, CSMAGIC_CODEDIRECTORY, options.length);
-  view.setUint32(8, options.version, false);
-  for (const [fieldOffset, value] of [
-    [12, options.flags],
-    [16, options.hashOffset],
-    [20, options.identOffset],
-    [24, options.nSpecialSlots],
-    [28, options.nCodeSlots],
-    [32, options.codeLimit32],
-    [44, options.scatterOffset],
-    [48, options.teamOffset],
-    [88, options.runtime]
-  ] satisfies Array<[number, number | undefined]>) {
-    if (value !== undefined) view.setUint32(fieldOffset, value, false);
-  }
-  for (const [fieldOffset, value] of [
-    [36, options.hashSize],
-    [37, options.hashType],
-    [38, options.platform],
-    [39, options.pageSizePower]
-  ] satisfies Array<[number, number | undefined]>) {
-    if (value !== undefined) view.setUint8(fieldOffset, value);
-  }
-  for (const [fieldOffset, value] of [
-    [56, options.codeLimit64],
-    [64, options.execSegBase],
-    [72, options.execSegLimit],
-    [80, options.execSegFlags]
-  ] satisfies Array<[number, bigint | undefined]>) {
-    if (value !== undefined) view.setBigUint64(fieldOffset, value, false);
-  }
-};
 
 void test("parseCodeSignature reports blobs that are too short for a header", async () => {
   const parsed = await parseCodeSignature(wrapMachOBytes(new Uint8Array(4), "codesign-short"), 0, 4, 0, 0, 4);
@@ -125,6 +36,24 @@ void test("parseCodeSignature reports truncated superblob index tables and out-o
   const parsed = await parseCodeSignature(wrapMachOBytes(bytes, "codesign-bad-index"), 0, bytes.length, 0, 0, bytes.length);
   assert.match(parsed.issues.join("\n"), /declares 2 entries but only 1 index records fit/);
   assert.match(parsed.issues.join("\n"), /points outside available data/);
+});
+
+void test("parseCodeSignature rejects blob offsets that point into the superblob index table", async () => {
+  const bytes = new Uint8Array(28);
+  writeSuperBlob(bytes, {
+    length: bytes.length,
+    entries: [{ type: 0, blobOffset: 12 }]
+  });
+  const parsed = await parseCodeSignature(
+    wrapMachOBytes(bytes, "codesign-header-offset"),
+    0,
+    bytes.length,
+    0,
+    0,
+    bytes.length
+  );
+  assert.equal(parsed.codeDirectory, null);
+  assert.match(parsed.issues.join("\n"), /points inside the superblob header or index table/i);
 });
 
 void test("parseCodeSignature respects the declared superblob length", async () => {
@@ -182,6 +111,41 @@ void test("parseCodeSignature rejects CodeDirectory string offsets that point in
   assert.equal(parsed.codeDirectory?.teamIdentifier, null);
   assert.match(parsed.issues.join("\n"), /identifier offset 12 points inside the fixed header/i);
   assert.match(parsed.issues.join("\n"), /team identifier offset 12 points inside the fixed header/i);
+});
+
+void test("parseCodeSignature warns when CodeDirectory strings are not NUL-terminated within the blob", async () => {
+  const values = createMachOIncidentalValues();
+  const identifier = values.nextLabel("identifier");
+  const identifierBytes = new TextEncoder().encode(identifier);
+  const blobOffset = 20;
+  const identifierOffset = 48;
+  const codeDirectoryLength = identifierOffset + identifierBytes.length;
+  const bytes = new Uint8Array(blobOffset + codeDirectoryLength);
+  writeSuperBlob(bytes, {
+    length: bytes.length,
+    entries: [{ type: 0, blobOffset }]
+  });
+  // xnu/osfmk/kern/cs_blobs.h: version 0x20100 extends the fixed header to 48
+  // bytes before dynamic content begins.
+  writeCodeDirectory(bytes, blobOffset, {
+    length: codeDirectoryLength,
+    version: 0x20100,
+    identOffset: identifierOffset,
+    hashSize: 32,
+    hashType: 2,
+    pageSizePower: 12
+  });
+  bytes.set(identifierBytes, blobOffset + identifierOffset);
+  const parsed = await parseCodeSignature(
+    wrapMachOBytes(bytes, "codesign-unterminated-identifier"),
+    0,
+    bytes.length,
+    0,
+    0,
+    bytes.length
+  );
+  assert.equal(parsed.codeDirectory?.identifier, identifier);
+  assert.match(parsed.issues.join("\n"), /identifier is not NUL-terminated within the CodeDirectory blob/i);
 });
 
 void test("parseCodeSignature reads the 64-bit code limit starting with CodeDirectory version 0x20300", async () => {

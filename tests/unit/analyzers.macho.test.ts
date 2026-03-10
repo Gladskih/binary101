@@ -69,6 +69,34 @@ void test("parseMachO keeps truncated fat headers visible as issues", async () =
   assert.match(parsed.issues[0] ?? "", /Fat header is truncated/i);
 });
 
+void test("parseMachO does not misclassify large fat binaries as Java class files", async () => {
+  const sliceCount = 45;
+  const headerSize = 8;
+  const archSize = 20;
+  const sliceSize = 4;
+  const tableSize = headerSize + sliceCount * archSize;
+  const bytes = new Uint8Array(tableSize + sliceCount * sliceSize);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 0xcafebabe, false);
+  view.setUint32(4, sliceCount, false);
+  for (let index = 0; index < sliceCount; index += 1) {
+    const recordOffset = headerSize + index * archSize;
+    const sliceOffset = tableSize + index * sliceSize;
+    // mach/machine.h: CPU_TYPE_X86_64 == 0x01000007.
+    view.setUint32(recordOffset, CPU_TYPE_X86_64, false);
+    view.setUint32(recordOffset + 4, 3, false);
+    view.setUint32(recordOffset + 8, sliceOffset, false);
+    view.setUint32(recordOffset + 12, sliceSize, false);
+    view.setUint32(recordOffset + 16, 0, false);
+    // mach-o/loader.h: MH_MAGIC_64 == 0xfeedfacf.
+    view.setUint32(sliceOffset, 0xfeedfacf, false);
+  }
+  const parsed = await parseMachO(wrapMachOBytes(bytes, "fat-not-java"));
+  assert.ok(parsed);
+  assert.equal(parsed.kind, "fat");
+  assert.equal(parsed.slices.length, sliceCount);
+});
+
 void test("parseMachO does not treat Java class files as Mach-O fat binaries", async () => {
   const parsed = await parseMachO(new MockFile(createMinimalJavaClassBytes()));
 
