@@ -22,6 +22,7 @@ import {
   parseFileSetEntry, parseLinkeditData, parseLoadCommandRecord, parseRpath, parseSegment,
   parseStringCommand, parseVersionMin
 } from "./load-command-parsers.js";
+import { noteDuplicateSingletonCommand } from "./load-command-singletons.js";
 import {
   validateDyldInfoRanges,
   validateEncryptionInfoRanges,
@@ -109,6 +110,7 @@ const parseThinImage = async (
   let cursor = headerSize;
   const little = header.littleEndian;
   const loadCommandAlignment = header.is64 ? 8 : 4;
+  const seenSingletonCommands = new Map<number | symbol, number>();
   for (let index = 0; index < header.ncmds; index += 1) {
     if (cursor + 8 > commandRegionEnd) {
       issues.push(`Load command ${index}: header extends beyond the declared load-command region.`);
@@ -122,6 +124,7 @@ const parseThinImage = async (
     const cmd = commandHeader.getUint32(0, little);
     const cmdsize = commandHeader.getUint32(4, little);
     parseLoadCommandRecord(loadCommands, imageOffset, cursor, cmd, cmdsize, index);
+    noteDuplicateSingletonCommand(seenSingletonCommands, cmd, index, issues);
     if (cmdsize < 8) {
       issues.push(`Load command ${index}: invalid cmdsize ${cmdsize}.`);
       break;
@@ -247,14 +250,11 @@ const parseThinImage = async (
         file,
         imageOffset,
         imageSize,
-        header.is64,
-        little,
+        header,
         symtabCommand.symoff,
         symtabCommand.nsyms,
         symtabCommand.stroff,
-        symtabCommand.strsize,
-        header.filetype,
-        header.flags
+        symtabCommand.strsize
       )
     : null;
   if (symtab?.issues.length) issues.push(...symtab.issues);

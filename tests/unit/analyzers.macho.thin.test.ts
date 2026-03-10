@@ -260,3 +260,27 @@ void test("parseThinImage reports malformed load-command strings instead of sile
   assert.match(parsed.issues.join("\n"), /LC_LOAD_DYLINKER string offset 20 points outside the command/);
   assert.match(parsed.issues.join("\n"), /rpath path is not NUL-terminated within cmdsize/);
 });
+
+void test("parseThinImage warns when singleton load commands appear more than once", async () => {
+  const firstUuid = createLoadCommand(0x1b, 16);
+  const secondUuid = createLoadCommand(0x1b, 16);
+  const firstMain = createLoadCommand(0x80000028, 16);
+  const firstMainView = new DataView(firstMain.buffer);
+  firstMainView.setBigUint64(8, 0x100n, true);
+  firstMainView.setBigUint64(16, 0x200n, true);
+  const secondMain = createLoadCommand(0x80000028, 16);
+  const secondMainView = new DataView(secondMain.buffer);
+  secondMainView.setBigUint64(8, 0x300n, true);
+  secondMainView.setBigUint64(16, 0x400n, true);
+  const parsed = await parseThinImage(
+    wrapMachOBytes(
+      createThinImageWithCommands(firstUuid, secondUuid, firstMain, secondMain),
+      "thin-duplicate-singletons"
+    ),
+    0,
+    THIN_HEADER_SIZE + firstUuid.length + secondUuid.length + firstMain.length + secondMain.length
+  );
+  assert.ok(parsed);
+  assert.match(parsed.issues.join("\n"), /multiple LC_UUID commands/i);
+  assert.match(parsed.issues.join("\n"), /multiple LC_MAIN commands/i);
+});

@@ -1,8 +1,26 @@
 "use strict";
 
-import { MH_TWOLEVEL, N_EXT, N_STAB } from "./commands.js";
+import {
+  MH_CIGAM,
+  MH_CIGAM_64,
+  MH_MAGIC,
+  MH_MAGIC_64,
+  MH_TWOLEVEL,
+  N_EXT,
+  N_STAB
+} from "./commands.js";
 import { bigFromUint32, clampRangeSize, createRangeReader } from "./format.js";
-import type { MachOSymbol, MachOSymtabInfo } from "./types.js";
+import type { MachOFileHeader, MachOSymbol, MachOSymtabInfo } from "./types.js";
+
+type SymbolRecord = {
+  stringIndex: number;
+  type: number;
+  sectionIndex: number;
+  description: number;
+  value: bigint;
+};
+
+type ReadSymbolRecord = (symbolView: DataView, offset: number) => SymbolRecord;
 
 const getTwoLevelLibraryOrdinal = (
   filetype: number,
@@ -22,31 +40,97 @@ const getTwoLevelLibraryOrdinal = (
   return (description >>> 8) & 0xff;
 };
 
-const parseSymtab = async (
-  file: File,
-  imageOffset: number,
+const readSymbol32Big = (symbolView: DataView, offset: number): SymbolRecord => ({
+  stringIndex: symbolView.getUint32(offset, false),
+  type: symbolView.getUint8(offset + 4),
+  sectionIndex: symbolView.getUint8(offset + 5),
+  description: symbolView.getUint16(offset + 6, false),
+  value: bigFromUint32(symbolView.getUint32(offset + 8, false))
+});
+
+const readSymbol32Little = (symbolView: DataView, offset: number): SymbolRecord => ({
+  stringIndex: symbolView.getUint32(offset, true),
+  type: symbolView.getUint8(offset + 4),
+  sectionIndex: symbolView.getUint8(offset + 5),
+  description: symbolView.getUint16(offset + 6, true),
+  value: bigFromUint32(symbolView.getUint32(offset + 8, true))
+});
+
+const readSymbol64Big = (symbolView: DataView, offset: number): SymbolRecord => ({
+  stringIndex: symbolView.getUint32(offset, false),
+  type: symbolView.getUint8(offset + 4),
+  sectionIndex: symbolView.getUint8(offset + 5),
+  description: symbolView.getUint16(offset + 6, false),
+  value: symbolView.getBigUint64(offset + 8, false)
+});
+
+const readSymbol64Little = (symbolView: DataView, offset: number): SymbolRecord => ({
+  stringIndex: symbolView.getUint32(offset, true),
+  type: symbolView.getUint8(offset + 4),
+  sectionIndex: symbolView.getUint8(offset + 5),
+  description: symbolView.getUint16(offset + 6, true),
+  value: symbolView.getBigUint64(offset + 8, true)
+});
+
+const getSymbolCount = (
   imageSize: number,
-  is64: boolean,
-  little: boolean,
   symoff: number,
   nsyms: number,
-  stroff: number,
-  strsize: number,
-  filetype = 0,
-  headerFlags = 0
-): Promise<MachOSymtabInfo> => {
-  const issues: string[] = [];
-  const entrySize = is64 ? 16 : 12;
-  const requestedSymbolBytes = nsyms * entrySize;
-  const availableSymbolBytes = clampRangeSize(imageSize, symoff, requestedSymbolBytes);
+  entrySize: number,
+  issues: string[]
+): number => {
+  const availableSymbolBytes = clampRangeSize(imageSize, symoff, nsyms * entrySize);
   const symbolCount = Math.floor(availableSymbolBytes / entrySize);
   if (symbolCount < nsyms) {
     issues.push(`Symbol table declares ${nsyms} symbols but only ${symbolCount} entries fit in the image.`);
   }
+  return symbolCount;
+};
+
+const getStringTableSize = (
+  imageSize: number,
+  stroff: number,
+  strsize: number,
+  issues: string[]
+): number => {
   const stringSize = clampRangeSize(imageSize, stroff, strsize);
-  if (stringSize < strsize) {
-    issues.push("String table extends beyond the Mach-O image.");
+  if (stringSize < strsize) issues.push("String table extends beyond the Mach-O image.");
+  return stringSize;
+};
+
+const resolveSymbolName = async (
+  stringIndex: number,
+  symbolIndex: number,
+  stringSize: number,
+  stringReader: ReturnType<typeof createRangeReader>,
+  nameCache: Map<number, string>,
+  issues: string[]
+): Promise<string> => {
+  if (stringSize === 0 || stringIndex >= stringSize) return "";
+  const cachedName = nameCache.get(stringIndex);
+  if (cachedName !== undefined) return cachedName;
+  const name = await stringReader.readZeroTerminatedString(stringIndex, stringSize - stringIndex);
+  if (name.length === stringSize - stringIndex) {
+    issues.push(`Symbol ${symbolIndex} name is not NUL-terminated within the string table.`);
   }
+  nameCache.set(stringIndex, name);
+  return name;
+};
+
+const readSymbols = async (
+  file: File,
+  imageOffset: number,
+  symoff: number,
+  symbolCount: number,
+  entrySize: number,
+  readSymbolRecord: ReadSymbolRecord,
+  stroff: number,
+  stringSize: number,
+  filetype: number,
+  headerFlags: number,
+  issues: string[]
+): Promise<MachOSymbol[]> => {
+  if (symbolCount === 0) return [];
   const symbolReader = createRangeReader(file, imageOffset + symoff, symbolCount * entrySize);
   const stringReader = createRangeReader(file, imageOffset + stroff, stringSize);
   const nameCache = new Map<number, string>();
@@ -57,38 +141,61 @@ const parseSymtab = async (
     const symbolView = await symbolReader.read(batchStart * entrySize, batchCount * entrySize);
     for (let batchIndex = 0; batchIndex < batchCount; batchIndex += 1) {
       const symbolIndex = batchStart + batchIndex;
-      const offset = batchIndex * entrySize;
-      const stringIndex = symbolView.getUint32(offset, little);
-      const type = symbolView.getUint8(offset + 4);
-      const sectionIndex = symbolView.getUint8(offset + 5);
-      const description = symbolView.getUint16(offset + 6, little);
-      const value = is64
-        ? symbolView.getBigUint64(offset + 8, little)
-        : bigFromUint32(symbolView.getUint32(offset + 8, little));
-      const isValidStringIndex = stringSize > 0 ? stringIndex < stringSize : stringIndex === 0;
-      if (!isValidStringIndex) {
-        issues.push(`Symbol ${symbolIndex} string index ${stringIndex} is outside the string table.`);
-      }
-      let name = "";
-      if (stringSize > 0 && stringIndex < stringSize) {
-        name = nameCache.get(stringIndex) || "";
-        if (!nameCache.has(stringIndex)) {
-          name = await stringReader.readZeroTerminatedString(stringIndex, stringSize - stringIndex);
-          nameCache.set(stringIndex, name);
-        }
+      const symbol = readSymbolRecord(symbolView, batchIndex * entrySize);
+      if ((stringSize > 0 && symbol.stringIndex >= stringSize) || (stringSize === 0 && symbol.stringIndex !== 0)) {
+        issues.push(`Symbol ${symbolIndex} string index ${symbol.stringIndex} is outside the string table.`);
       }
       symbols.push({
         index: symbolIndex,
-        name,
-        stringIndex,
-        type,
-        sectionIndex,
-        description,
-        libraryOrdinal: getTwoLevelLibraryOrdinal(filetype, headerFlags, type, description),
-        value
+        name: await resolveSymbolName(
+          symbol.stringIndex,
+          symbolIndex,
+          stringSize,
+          stringReader,
+          nameCache,
+          issues
+        ),
+        stringIndex: symbol.stringIndex,
+        type: symbol.type,
+        sectionIndex: symbol.sectionIndex,
+        description: symbol.description,
+        libraryOrdinal: getTwoLevelLibraryOrdinal(filetype, headerFlags, symbol.type, symbol.description),
+        value: symbol.value
       });
     }
   }
+  return symbols;
+};
+
+const parseSymbolTable = async (
+  file: File,
+  imageOffset: number,
+  imageSize: number,
+  entrySize: number,
+  readSymbolRecord: ReadSymbolRecord,
+  symoff: number,
+  nsyms: number,
+  stroff: number,
+  strsize: number,
+  filetype: number,
+  headerFlags: number
+): Promise<MachOSymtabInfo> => {
+  const issues: string[] = [];
+  const symbolCount = getSymbolCount(imageSize, symoff, nsyms, entrySize, issues);
+  const stringSize = getStringTableSize(imageSize, stroff, strsize, issues);
+  const symbols = await readSymbols(
+    file,
+    imageOffset,
+    symoff,
+    symbolCount,
+    entrySize,
+    readSymbolRecord,
+    stroff,
+    stringSize,
+    filetype,
+    headerFlags,
+    issues
+  );
   return {
     symoff,
     nsyms,
@@ -97,6 +204,89 @@ const parseSymtab = async (
     symbols,
     issues
   };
+};
+
+const parseSymtab = async (
+  file: File,
+  imageOffset: number,
+  imageSize: number,
+  header: MachOFileHeader,
+  symoff: number,
+  nsyms: number,
+  stroff: number,
+  strsize: number
+): Promise<MachOSymtabInfo> => {
+  switch (header.magic) {
+    case MH_MAGIC:
+      // mach-o/nlist.h: sizeof(struct nlist) == 12.
+      return parseSymbolTable(
+        file,
+        imageOffset,
+        imageSize,
+        12,
+        readSymbol32Big,
+        symoff,
+        nsyms,
+        stroff,
+        strsize,
+        header.filetype,
+        header.flags
+      );
+    case MH_CIGAM:
+      // mach-o/nlist.h: sizeof(struct nlist) == 12.
+      return parseSymbolTable(
+        file,
+        imageOffset,
+        imageSize,
+        12,
+        readSymbol32Little,
+        symoff,
+        nsyms,
+        stroff,
+        strsize,
+        header.filetype,
+        header.flags
+      );
+    case MH_MAGIC_64:
+      // mach-o/nlist.h: sizeof(struct nlist_64) == 16.
+      return parseSymbolTable(
+        file,
+        imageOffset,
+        imageSize,
+        16,
+        readSymbol64Big,
+        symoff,
+        nsyms,
+        stroff,
+        strsize,
+        header.filetype,
+        header.flags
+      );
+    case MH_CIGAM_64:
+      // mach-o/nlist.h: sizeof(struct nlist_64) == 16.
+      return parseSymbolTable(
+        file,
+        imageOffset,
+        imageSize,
+        16,
+        readSymbol64Little,
+        symoff,
+        nsyms,
+        stroff,
+        strsize,
+        header.filetype,
+        header.flags
+      );
+    default:
+      return {
+        symoff,
+        nsyms,
+        stroff,
+        strsize,
+        symbols: [],
+        issues: [`Symbol table parser does not support Mach-O magic 0x${header.magic.toString(16)}.`]
+      };
+  }
 };
 
 export { parseSymtab };
