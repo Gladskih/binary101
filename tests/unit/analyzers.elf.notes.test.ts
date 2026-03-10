@@ -51,3 +51,55 @@ void test("parseElfNotes reports truncated note payloads", async () => {
   assert.ok(notes);
   assert.ok(notes.issues.some(issue => issue.includes("truncated")));
 });
+
+void test("parseElfNotes deduplicates notes when PT_NOTE overlaps SHT_NOTE ranges", async () => {
+  const bytes = new Uint8Array(0x40).fill(0);
+  const dv = new DataView(bytes.buffer);
+
+  dv.setUint32(0x00, 4, true);
+  dv.setUint32(0x04, 4, true);
+  dv.setUint32(0x08, 3, true);
+  bytes.set(new TextEncoder().encode("GNU\0"), 0x0c);
+  bytes.set([0x11, 0x22, 0x33, 0x44], 0x10);
+
+  dv.setUint32(0x14, 4, true);
+  dv.setUint32(0x18, 16, true);
+  dv.setUint32(0x1c, 1, true);
+  bytes.set(new TextEncoder().encode("GNU\0"), 0x20);
+  dv.setUint32(0x24, 0, true);
+  dv.setUint32(0x28, 1, true);
+  dv.setUint32(0x2c, 2, true);
+  dv.setUint32(0x30, 3, true);
+
+  const file = new MockFile(bytes, "overlap-notes.bin", "application/x-elf");
+  const notes = await parseElfNotes({
+    file,
+    programHeaders: [
+      {
+        type: 4,
+        typeName: "PT_NOTE",
+        offset: 0n,
+        vaddr: 0n,
+        paddr: 0n,
+        filesz: 0x34n,
+        memsz: 0x34n,
+        flags: 0,
+        flagNames: [],
+        align: 4n,
+        index: 0
+      } as ElfProgramHeader
+    ],
+    sections: [
+      makeSection({ type: 7, name: ".note.gnu.build-id", offset: 0n, size: 0x14n, index: 0 }),
+      makeSection({ type: 7, name: ".note.gnu.abi-tag", offset: 0x14n, size: 0x20n, index: 1 })
+    ],
+    littleEndian: true
+  });
+
+  assert.ok(notes);
+  assert.equal(notes.entries.length, 2);
+  assert.equal(
+    notes.entries.filter(entry => entry.typeName === "NT_GNU_BUILD_ID").length,
+    1
+  );
+});

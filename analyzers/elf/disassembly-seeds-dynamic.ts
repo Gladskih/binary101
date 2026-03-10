@@ -2,6 +2,7 @@
 
 import type { ElfProgramHeader } from "./types.js";
 import type { ElfDisassemblySeedGroup } from "./disassembly-seeds-types.js";
+import { readDynsymCountFromGnuHash, readDynsymCountFromSysvHash } from "./dynsym-count.js";
 import { vaddrToFileOffset } from "./vaddr-to-file-offset.js";
 
 const PT_LOAD = 1;
@@ -9,6 +10,7 @@ const PT_DYNAMIC = 2;
 
 const DT_NULL = 0;
 const DT_HASH = 4;
+const DT_GNU_HASH = 0x6ffffef5;
 const DT_STRTAB = 5;
 const DT_SYMTAB = 6;
 const DT_SYMENT = 11;
@@ -96,30 +98,6 @@ const readPointerArrayAtVaddr = async (opts: {
     if (value !== 0n) out.push(value);
   }
   return out;
-};
-
-const readDynsymCountFromSysvHash = async (opts: {
-  file: File;
-  programHeaders: ElfProgramHeader[];
-  hashVaddr: bigint;
-  littleEndian: boolean;
-  issues: string[];
-}): Promise<number | null> => {
-  const hashOffset = vaddrToFileOffset(opts.programHeaders, opts.hashVaddr);
-  if (hashOffset == null) {
-    opts.issues.push("DT_HASH does not map into a PT_LOAD segment.");
-    return null;
-  }
-  const start = toSafeIndex(hashOffset, "DT_HASH file offset", opts.issues);
-  if (start == null) return null;
-  const bytes = new Uint8Array(await opts.file.slice(start, Math.min(opts.file.size, start + 8)).arrayBuffer());
-  if (bytes.byteLength < 8) {
-    opts.issues.push("DT_HASH table header is truncated.");
-    return null;
-  }
-  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const nchain = dv.getUint32(4, opts.littleEndian);
-  return Number.isSafeInteger(nchain) && nchain > 0 ? nchain : null;
 };
 
 const readDynsymFunctionVaddrs = async (opts: {
@@ -229,15 +207,35 @@ export async function collectElfDisassemblySeedsFromDynamic(opts: {
   const symtab = tags.get(DT_SYMTAB);
   const syment = tags.get(DT_SYMENT);
   const hash = tags.get(DT_HASH);
-  if (symtab && syment && hash && symtab !== 0n && syment !== 0n && hash !== 0n) {
+  const gnuHash = tags.get(DT_GNU_HASH);
+  if (
+    symtab &&
+    syment &&
+    symtab !== 0n &&
+    syment !== 0n &&
+    ((hash && hash !== 0n) || (gnuHash && gnuHash !== 0n))
+  ) {
     const entrySize = Number(syment);
-    const count = await readDynsymCountFromSysvHash({
-      file: opts.file,
-      programHeaders: opts.programHeaders,
-      hashVaddr: hash,
-      littleEndian: opts.littleEndian,
-      issues: opts.issues
-    });
+    const count =
+      (hash && hash !== 0n
+        ? await readDynsymCountFromSysvHash({
+            file: opts.file,
+            programHeaders: opts.programHeaders,
+            hashVaddr: hash,
+            littleEndian: opts.littleEndian,
+            issues: opts.issues
+          })
+        : null) ??
+      (gnuHash && gnuHash !== 0n
+        ? await readDynsymCountFromGnuHash({
+            file: opts.file,
+            programHeaders: opts.programHeaders,
+            hashVaddr: gnuHash,
+            is64: opts.is64,
+            littleEndian: opts.littleEndian,
+            issues: opts.issues
+          })
+        : null);
     if (Number.isSafeInteger(entrySize) && entrySize > 0 && count) {
       const vaddrs = await readDynsymFunctionVaddrs({
         file: opts.file,

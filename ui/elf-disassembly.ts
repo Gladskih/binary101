@@ -102,6 +102,14 @@ const setCancelled = (): void => {
   }
 };
 
+const setFailed = (message: string): void => {
+  setDisassemblyUiRunning(false);
+  const progressText = document.getElementById(PROGRESS_TEXT_ID);
+  if (progressText instanceof HTMLElement) {
+    progressText.textContent = message ? `Failed. ${message}` : "Failed.";
+  }
+};
+
 export const createElfDisassemblyController = (
   opts: ElfDisassemblyControllerOptions
 ): ElfDisassemblyController => {
@@ -133,31 +141,39 @@ export const createElfDisassemblyController = (
     });
 
     void (async () => {
-      const report = await analyze(file, {
-        machine: elf.header.machine,
-        is64Bit: elf.is64,
-        littleEndian: elf.littleEndian,
-        entrypointVaddr: elf.header.entry,
-        programHeaders: elf.programHeaders,
-        sections: elf.sections,
-        yieldEveryInstructions: 1024,
-        signal: localAbortController.signal,
-        onProgress: progress => {
-          if (localRunId !== runId) return;
-          updateElfDisassemblyProgress(progress);
-        }
-      });
+      try {
+        const report = await analyze(file, {
+          machine: elf.header.machine,
+          is64Bit: elf.is64,
+          littleEndian: elf.littleEndian,
+          entrypointVaddr: elf.header.entry,
+          programHeaders: elf.programHeaders,
+          sections: elf.sections,
+          yieldEveryInstructions: 1024,
+          signal: localAbortController.signal,
+          onProgress: progress => {
+            if (localRunId !== runId) return;
+            updateElfDisassemblyProgress(progress);
+          }
+        });
 
-      if (localRunId !== runId) return;
-      if (localAbortController.signal.aborted) return;
-      if (opts.getCurrentFile() !== file) return;
+        if (localRunId !== runId) return;
+        if (localAbortController.signal.aborted) return;
+        if (opts.getCurrentFile() !== file) return;
 
-      const current = opts.getCurrentParseResult();
-      if (current.analyzer !== "elf" || !current.parsed) return;
-      current.parsed.disassembly = report;
-      setDisassemblyUiRunning(false);
-      abortController = null;
-      opts.renderResult(current);
+        const current = opts.getCurrentParseResult();
+        if (current.analyzer !== "elf" || !current.parsed) return;
+        current.parsed.disassembly = report;
+        setDisassemblyUiRunning(false);
+        abortController = null;
+        opts.renderResult(current);
+      } catch (error) {
+        if (localRunId !== runId) return;
+        if (localAbortController.signal.aborted) return;
+        if (opts.getCurrentFile() !== file) return;
+        abortController = null;
+        setFailed(error instanceof Error ? error.message : String(error));
+      }
     })();
   };
 

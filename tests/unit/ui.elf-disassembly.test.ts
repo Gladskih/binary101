@@ -245,3 +245,45 @@ void test("elf disassembly controller passes ELF details into analyzer options",
   dom.restore();
 });
 
+void test("elf disassembly controller recovers cleanly from analyzer failures", async () => {
+  const analyzeButton = new FakeHTMLElement();
+  const cancelButton = new FakeHTMLElement();
+  cancelButton.hidden = true;
+  const progress = new FakeHTMLProgressElement();
+  const text = new FakeHTMLElement();
+  const dom = installFakeDom({
+    elfInstructionSetsAnalyzeButton: analyzeButton,
+    elfInstructionSetsCancelButton: cancelButton,
+    elfInstructionSetsProgress: progress,
+    elfInstructionSetsProgressText: text
+  });
+  const elf = createMinimalElf();
+  const file = new MockFile(new Uint8Array([0x90]), "elf.bin");
+  const parseResult: ParseForUiResult = { analyzer: "elf", parsed: elf };
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown): void => {
+    unhandled.push(reason);
+  };
+  process.on("unhandledRejection", onUnhandled);
+
+  const controller = createElfDisassemblyController({
+    getCurrentFile: () => file,
+    getCurrentParseResult: () => parseResult,
+    renderResult: () => {},
+    analyze: async (): Promise<ElfInstructionSetReport> => {
+      throw new Error("boom");
+    }
+  });
+
+  controller.start(file, elf);
+  await flushTimers();
+  await flushTimers();
+  process.off("unhandledRejection", onUnhandled);
+
+  assert.equal(unhandled.length, 0);
+  assert.equal(analyzeButton.disabled, false);
+  assert.equal(cancelButton.hidden, true);
+  assert.ok(text.textContent?.includes("Failed."));
+  dom.restore();
+});
+

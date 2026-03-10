@@ -2,6 +2,7 @@
 
 import { readAsciiString } from "../../binary-utils.js";
 import type { ElfDynamicSymbol, ElfDynamicSymbolInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
+import { readDynsymCountFromGnuHash, readDynsymCountFromSysvHash } from "./dynsym-count.js";
 import { vaddrToFileOffset } from "./vaddr-to-file-offset.js";
 
 const PT_DYNAMIC = 2;
@@ -9,6 +10,7 @@ const SHT_DYNSYM = 11;
 
 const DT_NULL = 0;
 const DT_HASH = 4;
+const DT_GNU_HASH = 0x6ffffef5;
 const DT_STRTAB = 5;
 const DT_SYMTAB = 6;
 const DT_STRSZ = 10;
@@ -214,19 +216,26 @@ const parseDynsymFromDynamicTags = async (opts: {
   if (symtabVaddr === 0n || syment === 0n || strtabVaddr === 0n || strsz === 0n) return null;
 
   const hashVaddr = entries.find(entry => entry.tag === DT_HASH)?.value ?? 0n;
+  const gnuHashVaddr = entries.find(entry => entry.tag === DT_GNU_HASH)?.value ?? 0n;
   let symbolCount: number | null = null;
   if (hashVaddr !== 0n) {
-    const hashOff = vaddrToFileOffset(opts.programHeaders, hashVaddr);
-    if (hashOff != null) {
-      const start = toSafeIndex(hashOff, "DT_HASH file offset", opts.issues);
-      if (start != null) {
-        const bytes = new Uint8Array(await opts.file.slice(start, Math.min(opts.file.size, start + 8)).arrayBuffer());
-        if (bytes.byteLength === 8) {
-          const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-          symbolCount = dv.getUint32(4, opts.littleEndian);
-        }
-      }
-    }
+    symbolCount = await readDynsymCountFromSysvHash({
+      file: opts.file,
+      programHeaders: opts.programHeaders,
+      hashVaddr,
+      littleEndian: opts.littleEndian,
+      issues: opts.issues
+    });
+  }
+  if (symbolCount == null && gnuHashVaddr !== 0n) {
+    symbolCount = await readDynsymCountFromGnuHash({
+      file: opts.file,
+      programHeaders: opts.programHeaders,
+      hashVaddr: gnuHashVaddr,
+      is64: opts.is64,
+      littleEndian: opts.littleEndian,
+      issues: opts.issues
+    });
   }
 
   const entrySize = Number(syment);

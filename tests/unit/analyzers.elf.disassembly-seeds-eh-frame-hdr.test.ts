@@ -192,3 +192,26 @@ void test("collectElfDisassemblySeedsFromEhFrameHdr supports sleb128 sign extens
   assert.deepEqual(groups[0]?.vaddrs, [0x5004n]);
 });
 
+void test("collectElfDisassemblySeedsFromEhFrameHdr ignores omitted search tables", async () => {
+  const bytes = new Uint8Array(4);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint8(0, 1); // version
+  dv.setUint8(1, 0x80); // eh_frame_ptr_enc would be unsupported if decoded
+  dv.setUint8(2, 0x80); // fde_count_enc would be unsupported if decoded
+  dv.setUint8(3, 0xff); // table_enc: omit
+
+  const file = new MockFile(bytes, "eh-frame-hdr-omit.bin");
+  const issues: string[] = [];
+  const groups = await collectElfDisassemblySeedsFromEhFrameHdr({
+    file,
+    programHeaders: [ph({ type: 0x6474e550, offset: 0n, vaddr: 0x5000n, filesz: 4n })],
+    sections: [],
+    is64: false,
+    littleEndian: true,
+    issues
+  });
+
+  assert.equal(groups.length, 0);
+  assert.deepEqual(issues, []);
+});
+

@@ -178,6 +178,7 @@ export async function collectElfDisassemblySeedsFromEhFrameHdr(opts: {
   const ehFramePtrEnc = dv.getUint8(1);
   const fdeCountEnc = dv.getUint8(2);
   const tableEnc = dv.getUint8(3);
+  if (tableEnc === DW_EH_PE_omit) return [];
 
   const pointerSize: 4 | 8 = opts.is64 ? 8 : 4;
   let cursor = 4;

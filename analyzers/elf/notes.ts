@@ -63,16 +63,23 @@ const describeNoteValue = (name: string, type: number, bytes: Uint8Array, little
   return null;
 };
 
+type ParsedNote = {
+  entry: ElfNoteEntry;
+  fileOffsetKey: string;
+};
+
 const parseNotesFromBytes = (
   bytes: Uint8Array,
   littleEndian: boolean,
   source: string,
-  issues: string[]
-): ElfNoteEntry[] => {
+  issues: string[],
+  fileOffsetStart: bigint
+): ParsedNote[] => {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const entries: ElfNoteEntry[] = [];
+  const entries: ParsedNote[] = [];
   let offset = 0;
   while (offset + 12 <= dv.byteLength) {
+    const noteStart = fileOffsetStart + BigInt(offset);
     const namesz = dv.getUint32(offset, littleEndian);
     const descsz = dv.getUint32(offset + 4, littleEndian);
     const type = dv.getUint32(offset + 8, littleEndian);
@@ -109,13 +116,16 @@ const parseNotesFromBytes = (
               : null;
 
     entries.push({
-      source,
-      name,
-      type,
-      typeName,
-      description,
-      value,
-      descSize: descsz
+      fileOffsetKey: noteStart.toString(),
+      entry: {
+        source,
+        name,
+        type,
+        typeName,
+        description,
+        value,
+        descSize: descsz
+      }
     });
   }
   return entries;
@@ -130,17 +140,18 @@ export async function parseElfNotes(opts: {
   const issues: string[] = [];
   const ranges: Array<{ offset: bigint; size: bigint; source: string }> = [];
 
-  opts.programHeaders
-    .filter(ph => ph.type === PT_NOTE && ph.filesz > 0n)
-    .forEach(ph => ranges.push({ offset: ph.offset, size: ph.filesz, source: `PT_NOTE segment #${ph.index}` }));
-
   opts.sections
     .filter(sec => sec.type === SHT_NOTE && sec.size > 0n)
     .forEach(sec => ranges.push({ offset: sec.offset, size: sec.size, source: sec.name ? `Section "${sec.name}"` : `SHT_NOTE section #${sec.index}` }));
 
+  opts.programHeaders
+    .filter(ph => ph.type === PT_NOTE && ph.filesz > 0n)
+    .forEach(ph => ranges.push({ offset: ph.offset, size: ph.filesz, source: `PT_NOTE segment #${ph.index}` }));
+
   if (!ranges.length) return null;
 
   const dedupe = new Set<string>();
+  const seenNotes = new Set<string>();
   const all: ElfNoteEntry[] = [];
   for (const range of ranges) {
     const key = `${range.offset.toString()}-${range.size.toString()}`;
@@ -157,7 +168,12 @@ export async function parseElfNotes(opts: {
     }
     if (end !== start + size) issues.push(`${range.source} is truncated.`);
     const bytes = new Uint8Array(await opts.file.slice(start, end).arrayBuffer());
-    all.push(...parseNotesFromBytes(bytes, opts.littleEndian, range.source, issues));
+    const parsedNotes = parseNotesFromBytes(bytes, opts.littleEndian, range.source, issues, range.offset);
+    for (const parsed of parsedNotes) {
+      if (seenNotes.has(parsed.fileOffsetKey)) continue;
+      seenNotes.add(parsed.fileOffsetKey);
+      all.push(parsed.entry);
+    }
   }
 
   return { entries: all, issues };

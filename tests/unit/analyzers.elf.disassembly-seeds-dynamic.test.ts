@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ElfProgramHeader } from "../../analyzers/elf/types.js";
 import { collectElfDisassemblySeedsFromDynamic } from "../../analyzers/elf/disassembly-seeds-dynamic.js";
+import { createElfGnuHashDynamicFixture } from "../fixtures/elf-gnu-hash-file.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const ph = (overrides: Partial<ElfProgramHeader>): ElfProgramHeader =>
@@ -242,5 +243,21 @@ void test("collectElfDisassemblySeedsFromDynamic reads 32-bit function symbols f
   const symtab = groups.find(group => group.source === "DT_SYMTAB (function symbols)");
   assert.ok(symtab);
   assert.deepEqual(symtab?.vaddrs, [0x2000n]);
+});
+
+void test("collectElfDisassemblySeedsFromDynamic reads GNU-hash symbol counts", async () => {
+  const fixture = createElfGnuHashDynamicFixture();
+  const issues: string[] = [];
+  const groups = await collectElfDisassemblySeedsFromDynamic({
+    file: fixture.file,
+    programHeaders: fixture.programHeaders,
+    is64: true,
+    littleEndian: true,
+    issues
+  });
+
+  const symtab = groups.find(group => group.source === "DT_SYMTAB (function symbols)");
+  assert.ok(symtab);
+  assert.deepEqual(symtab?.vaddrs, [fixture.symbolVaddr]);
 });
 
