@@ -62,3 +62,32 @@ void test("parsePe tolerates truncated optional header and reads section table",
   // RVA mapping should still work for the declared section.
   assert.strictEqual(parsed.rvaToOff(0x1000), rawPointer);
 });
+
+void test("parsePe locates section table using declared SizeOfOptionalHeader", async () => {
+  const peOffset = 0x40;
+  const optionalSize = 0x20;
+  const sectionOffset = peOffset + 24 + optionalSize;
+  const rawPointer = 0x200;
+  const rawSize = 0x80;
+  const totalSize = rawPointer + rawSize;
+  const buffer = new Uint8Array(totalSize);
+  const dv = new DataView(buffer.buffer);
+
+  dv.setUint16(0, 0x5a4d, true);
+  dv.setUint32(0x3c, peOffset, true);
+  writeSignatureAndCoff(buffer, peOffset, optionalSize, 1);
+  dv.setUint16(peOffset + 24, 0x10b, true);
+
+  const sh = new DataView(buffer.buffer, buffer.byteOffset + sectionOffset, 40);
+  sh.setUint32(8, rawSize, true);
+  sh.setUint32(12, 0x1000, true);
+  sh.setUint32(16, rawSize, true);
+  sh.setUint32(20, rawPointer, true);
+  sh.setUint32(36, 0x60000020, true);
+
+  const parsed = await parsePe(new MockFile(buffer, "small-optional-header.exe"));
+  assert.ok(parsed, "Expected parsePe to parse PE with tiny declared optional header");
+  assert.strictEqual(parsed.sections.length, 1, "Section table should be read from declared boundary");
+  assert.strictEqual(parsed.sections[0]?.virtualAddress, 0x1000);
+  assert.strictEqual(parsed.rvaToOff(0x1000), rawPointer);
+});

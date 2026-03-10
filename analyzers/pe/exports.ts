@@ -24,10 +24,10 @@ export async function parseExportDirectory(
   if (!dir?.rva || dir.size < 40) return null;
   const base = rvaToOff(dir.rva);
   if (base == null) return null;
-  addCoverageRegion("EXPORT directory", base, dir.size);
-  const dv = new DataView(await file.slice(base, base + dir.size).arrayBuffer());
-  const tableSize = Math.min(40, dv.byteLength);
-  if (tableSize < 40) return null;
+  const availableDirSize = Math.max(0, Math.min(dir.size, file.size - base));
+  addCoverageRegion("EXPORT directory", base, availableDirSize);
+  if (availableDirSize < 40) return null;
+  const dv = new DataView(await file.slice(base, base + 40).arrayBuffer());
   const readStr = async (offset: number): Promise<string> => {
     if (offset < 0 || offset >= file.size) return "";
     let text = "";
@@ -60,12 +60,12 @@ export async function parseExportDirectory(
   const issues: string[] = [];
   const entries: Array<{ ordinal: number; rva: number; name: string | null; forwarder?: string | null }> = [];
 
-  const namePtr = rvaToOff(NameRva);
+  const namePtr = NameRva ? rvaToOff(NameRva) : null;
   const name = namePtr != null ? await readStr(namePtr) : "";
 
-  const funcTableOff = rvaToOff(AddressOfFunctions);
-  const nameTableOff = rvaToOff(AddressOfNames);
-  const ordTableOff = rvaToOff(AddressOfNameOrdinals);
+  const funcTableOff = AddressOfFunctions ? rvaToOff(AddressOfFunctions) : null;
+  const nameTableOff = AddressOfNames ? rvaToOff(AddressOfNames) : null;
+  const ordTableOff = AddressOfNameOrdinals ? rvaToOff(AddressOfNameOrdinals) : null;
 
   if (funcTableOff != null) {
     const funcTable = new DataView(

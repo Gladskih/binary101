@@ -6,6 +6,27 @@ import type { PeParseResult } from "../../analyzers/pe/index.js";
 
 const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
 
+const computeRawImageEnd = (pe: PeParseResult): number =>
+  (Array.isArray(pe.sections) ? pe.sections : []).reduce((maxEnd, section) => {
+    const end = (section.pointerToRawData >>> 0) + (section.sizeOfRawData >>> 0);
+    return Math.max(maxEnd, end);
+  }, 0);
+
+const computeSecurityOverlayCoverage = (pe: PeParseResult): number => {
+  if (!Number.isFinite(pe.overlaySize) || pe.overlaySize <= 0) return 0;
+  const securityDir = Array.isArray(pe.dirs) ? pe.dirs.find(dir => dir.name === "SECURITY") : null;
+  if (!securityDir || !securityDir.size) return 0;
+
+  const overlayStart = computeRawImageEnd(pe);
+  const overlayEnd = overlayStart + (pe.overlaySize >>> 0);
+  const certStart = securityDir.rva >>> 0;
+  const certEnd = certStart + (securityDir.size >>> 0);
+  const coveredStart = Math.max(overlayStart, certStart);
+  const coveredEnd = Math.min(overlayEnd, certEnd);
+
+  return coveredEnd > coveredStart ? coveredEnd - coveredStart : 0;
+};
+
 export function renderReloc(pe: PeParseResult, out: string[]): void {
   if (!pe.reloc) return;
   const reloc = pe.reloc;
@@ -119,8 +140,9 @@ export function renderCoverage(pe: PeParseResult, out: string[]): void {
 
 export function renderSanity(pe: PeParseResult, out: string[]): void {
   const issues: string[] = [];
-  if (pe.overlaySize > 0) {
-    issues.push(`Overlay after last section: ${humanSize(pe.overlaySize)}.`);
+  const unexplainedOverlaySize = Math.max(0, (pe.overlaySize >>> 0) - computeSecurityOverlayCoverage(pe));
+  if (unexplainedOverlaySize > 0) {
+    issues.push(`Overlay after last section: ${humanSize(unexplainedOverlaySize)}.`);
   }
   if (pe.imageSizeMismatch) {
     issues.push("SizeOfImage does not match section layout.");

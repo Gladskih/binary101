@@ -47,3 +47,27 @@ void test("parseSectionHeaders reads section entries and maps RVAs to offsets", 
   assert.strictEqual(rvaToOff(0x2000 + 0x10), 0x800 + 0x10);
   assert.strictEqual(rvaToOff(0x3000), null);
 });
+
+void test("parseSectionHeaders does not map zero-filled virtual tail beyond raw section bytes", async () => {
+  const table = createSectionTable([
+    { name: ".data", va: 0x1000, vs: 0x300, rawSize: 0x200, rawOff: 0x400 }
+  ]);
+  const optionalHeaderOffset = 0x80;
+  const sizeOfOptionalHeader = 0xE0;
+  const fileBytes = new Uint8Array(optionalHeaderOffset + sizeOfOptionalHeader + table.length);
+  fileBytes.set(table, optionalHeaderOffset + sizeOfOptionalHeader);
+
+  const { rvaToOff } = await parseSectionHeaders(
+    new MockFile(fileBytes),
+    optionalHeaderOffset,
+    sizeOfOptionalHeader,
+    1
+  );
+
+  assert.strictEqual(rvaToOff(0x1000 + 0x1ff), 0x400 + 0x1ff);
+  assert.strictEqual(
+    rvaToOff(0x1000 + 0x200),
+    null,
+    "RVA in zero-filled tail should not map to bytes from another file region"
+  );
+});
