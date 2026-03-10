@@ -1,4 +1,5 @@
 - Follow `CONTRIBUTING.md` as the authoritative source for coding, testing, and verification rules and consider it a strict quality gate.
+- After completing any task and before reporting success, explicitly audit the final changes against all applicable `CONTRIBUTING.md` rules.
 - Reuse existing analyzers as reference for structure, warnings, and error handling.
 - All parsing must be resilient to malformed or truncated files:
   - always bounds-check offsets and sizes,
