@@ -159,3 +159,16 @@ void test("renderHeaders handles fallbacks and missing optional parts", () => {
   assert.ok(html.includes("11.0 (11.0)"));
   assert.ok(html.includes("Rich header: not present"));
 });
+
+void test("renderHeaders maps COFF characteristic bits to the correct semantic labels", () => {
+  const pe = createBasePe();
+  pe.coff.Characteristics = 0x5000; // SYSTEM | UP_SYSTEM_ONLY
+
+  const out: string[] = [];
+  renderHeaders(pe, out);
+  const html = out.join("");
+
+  assert.match(html, /<span class="opt sel"[^>]*>SYSTEM<\/span>/);
+  assert.match(html, /<span class="opt dim"[^>]*>DLL<\/span>/);
+  assert.match(html, /<span class="opt sel"[^>]*>UP_SYSTEM_ONLY<\/span>/);
+});

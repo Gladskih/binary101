@@ -29,9 +29,9 @@ export const CHAR_FLAGS: OptionEntry[] = [
   [0x0100, "DEBUG_STRIPPED", "Debug info removed from file"],
   [0x0200, "REMOVABLE_RUN_FROM_SWAP", "Copy image to swap file if on removable media"],
   [0x0400, "NET_RUN_FROM_SWAP", "Copy image to swap file if on network"],
-  [0x0800, "SYSTEM", "System file (kernel/driver)"],
-  [0x1000, "DLL", "Dynamic-link library"],
-  [0x2000, "UP_SYSTEM_ONLY", "Uni-processor machine only"],
+  [0x1000, "SYSTEM", "System file (kernel/driver)"],
+  [0x2000, "DLL", "Dynamic-link library"],
+  [0x4000, "UP_SYSTEM_ONLY", "Uni-processor machine only"],
   [0x8000, "BYTES_REVERSED_HI", "Big-endian byte ordering (obsolete)"]
 ];
 
