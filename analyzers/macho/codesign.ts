@@ -6,6 +6,12 @@ import type { MachOCodeDirectory, MachOCodeSignature, MachOCodeSignatureSlot } f
 
 const codeDirectoryVersionText = (version: number): string => `0x${version.toString(16)}`;
 const blobMagicText = (magic: number): string => `0x${magic.toString(16)}`;
+// CS_SuperBlob extends the 8-byte CS_Blob header with a 4-byte count field in
+// xnu/osfmk/kern/cs_blobs.h, so the fixed header before index entries is 12
+// bytes.
+const CS_SUPERBLOB_HEADER_SIZE = 12;
+const CS_SUPERBLOB_INDEX_SIZE = 8;
+
 const earliestCodeDirectorySize = (version: number): number => {
   // CS_CodeDirectory grows by appending fields. These byte sizes are the
   // offsets of end_earliest / end_withScatter / end_withTeam /
@@ -68,7 +74,11 @@ const parseCodeDirectory = async (
       issues.push(`CodeDirectory ${label} offset points outside the blob.`);
       return null;
     }
-    return reader.readZeroTerminatedString(offset + stringOffset, parseLength - stringOffset);
+    const text = await reader.readZeroTerminatedString(offset + stringOffset, parseLength - stringOffset);
+    if (text.length === parseLength - stringOffset) {
+      issues.push(`CodeDirectory ${label} is not NUL-terminated within the CodeDirectory blob.`);
+    }
+    return text;
   };
   // Version gates follow CS_CodeDirectory evolution in xnu/osfmk/kern/cs_blobs.h.
   if (version >= 0x20200 && parseLength < 52) {
@@ -158,40 +168,48 @@ const parseCodeSignature = async (
     issues.push("Code-signing superblob length exceeds available data.");
   }
   const superblobLength = Math.min(declaredLength, availableSize);
-  const superblobHeader = await reader.read(0, Math.min(superblobLength, 12));
-  if (superblobHeader.byteLength < 12) {
+  const superblobHeader = await reader.read(0, Math.min(superblobLength, CS_SUPERBLOB_HEADER_SIZE));
+  if (superblobHeader.byteLength < CS_SUPERBLOB_HEADER_SIZE) {
     issues.push("Code-signing superblob is truncated.");
     return base;
   }
   const blobCount = superblobHeader.getUint32(8, false);
   base.blobCount = blobCount;
-  const availableIndexes = Math.floor(Math.max(0, superblobLength - 12) / 8);
+  const availableIndexes = Math.floor(
+    Math.max(0, superblobLength - CS_SUPERBLOB_HEADER_SIZE) / CS_SUPERBLOB_INDEX_SIZE
+  );
+  const indexTableSize =
+    CS_SUPERBLOB_HEADER_SIZE + Math.min(blobCount, availableIndexes) * CS_SUPERBLOB_INDEX_SIZE;
   if (availableIndexes < blobCount) {
     issues.push(`Code-signing superblob declares ${blobCount} entries but only ${availableIndexes} index records fit.`);
   }
   for (let index = 0; index < Math.min(blobCount, availableIndexes); index += 1) {
-    const indexOffset = 12 + index * 8;
-    const indexView = await reader.read(indexOffset, 8);
+    const indexOffset = CS_SUPERBLOB_HEADER_SIZE + index * CS_SUPERBLOB_INDEX_SIZE;
+    const indexView = await reader.read(indexOffset, CS_SUPERBLOB_INDEX_SIZE);
     const type = indexView.getUint32(0, false);
     const blobOffset = indexView.getUint32(4, false);
     let magic: number | null = null;
     let length: number | null = null;
-    const blobAvailableLength = Math.max(0, superblobLength - blobOffset);
-    if (blobAvailableLength >= 8) {
-      const blobHeader = await reader.read(blobOffset, 8);
-      magic = blobHeader.getUint32(0, false);
-      length = blobHeader.getUint32(4, false);
-      if (length < 8) {
-        issues.push(`Code-signing blob index ${index} declares length ${length} smaller than a blob header.`);
-      }
-      if (length > blobAvailableLength) {
-        issues.push(`Code-signing blob index ${index} exceeds the declared superblob bounds.`);
-      }
-      if (type === 0 && magic === CSMAGIC_CODEDIRECTORY && length >= 8) {
-        base.codeDirectory = await parseCodeDirectory(reader, blobOffset, blobAvailableLength, issues);
-      }
+    if (blobOffset < indexTableSize) {
+      issues.push(`Code-signing blob index ${index} points inside the superblob header or index table.`);
     } else {
-      issues.push(`Code-signing blob index ${index} points outside available data.`);
+      const blobAvailableLength = Math.max(0, superblobLength - blobOffset);
+      if (blobAvailableLength >= 8) {
+        const blobHeader = await reader.read(blobOffset, 8);
+        magic = blobHeader.getUint32(0, false);
+        length = blobHeader.getUint32(4, false);
+        if (length < 8) {
+          issues.push(`Code-signing blob index ${index} declares length ${length} smaller than a blob header.`);
+        }
+        if (length > blobAvailableLength) {
+          issues.push(`Code-signing blob index ${index} exceeds the declared superblob bounds.`);
+        }
+        if (type === 0 && magic === CSMAGIC_CODEDIRECTORY && length >= 8) {
+          base.codeDirectory = await parseCodeDirectory(reader, blobOffset, blobAvailableLength, issues);
+        }
+      } else {
+        issues.push(`Code-signing blob index ${index} points outside available data.`);
+      }
     }
     const slot: MachOCodeSignatureSlot = {
       type,
