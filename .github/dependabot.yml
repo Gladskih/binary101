@@ -6,6 +6,7 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 3
+    versioning-strategy: "increase-if-necessary"
     commit-message:
       prefix: "deps"
     groups:
@@ -15,6 +16,10 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major"
 
   - package-ecosystem: "github-actions"
     directory: "/"
