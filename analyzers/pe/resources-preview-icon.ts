@@ -79,7 +79,6 @@ export async function addGroupIconPreview(
     const w = g.getUint8(6 + index * 14 + 0) || 256;
     if (w === 32) {
       pick = index;
-      bestW = w;
       break;
     }
     if (w > bestW) {

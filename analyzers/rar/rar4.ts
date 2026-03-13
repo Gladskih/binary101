@@ -98,7 +98,6 @@ const parseRar4FileHeader = (
   if ((flags & LHD_SALT) !== 0) {
     if (cursor + 8 <= headerDv.byteLength) {
       salt = new Uint8Array(headerDv.buffer, headerDv.byteOffset + cursor, 8);
-      cursor += 8;
     } else {
       issues.push("RAR salt field is truncated.");
     }

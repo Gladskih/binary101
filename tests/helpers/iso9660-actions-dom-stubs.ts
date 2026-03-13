@@ -55,20 +55,18 @@ export const installIso9660ActionsDomStubs = (): Iso9660ActionsDomStubs => {
     }
 
     closest(selector: string): FakeElement | null {
-      let wantedTag = "";
-      let wantedClass: string | null = null;
-      if (selector === "button.isoExtractButton") {
-        wantedTag = "button";
-        wantedClass = "isoExtractButton";
-      } else if (selector === "button.isoDirToggleButton") {
-        wantedTag = "button";
-        wantedClass = "isoDirToggleButton";
-      } else if (selector === "tr") {
-        wantedTag = "tr";
-        wantedClass = null;
-      } else {
+      const wantedSelector =
+        selector === "button.isoExtractButton"
+          ? ["button", "isoExtractButton"]
+          : selector === "button.isoDirToggleButton"
+            ? ["button", "isoDirToggleButton"]
+            : selector === "tr"
+              ? ["tr", null]
+              : null;
+      if (!wantedSelector) {
         return null;
       }
+      const [wantedTag, wantedClass] = wantedSelector;
       let current: FakeElement | null = this;
       while (current) {
         if (

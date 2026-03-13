@@ -164,9 +164,9 @@ const createIso9660EntryClickHandler = ({ getParseResult, getFile, setStatusMess
     const directName = button.getAttribute("data-iso-name");
     const directFlags = parseNumberAttr(button.getAttribute("data-iso-flags"));
 
-    let offset: number | null = null;
-    let length: number | null = null;
-    let suggestedName: string | null = null;
+    let offset: number;
+    let length: number;
+    let suggestedName: string | null;
     let fileFlags: number | null = directFlags;
 
     if (directOffset != null && directLength != null) {

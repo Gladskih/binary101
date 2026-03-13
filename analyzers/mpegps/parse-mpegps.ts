@@ -232,7 +232,6 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
 
     if (startCode === PROGRAM_END_CODE) {
       state.programEndCodeOffset = state.programEndCodeOffset ?? offset;
-      offset += 4;
       break;
     }
 

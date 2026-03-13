@@ -10,10 +10,10 @@ export const parseMvhd = (view: DataView, start: number, size: number, issues: s
   }
   const version = view.getUint8(start);
   let offset = start + 4;
-  let creation: number | null = null;
-  let modification: number | null = null;
-  let timescale: number | null = null;
-  let duration: number | null = null;
+  let creation: number;
+  let modification: number;
+  let timescale: number;
+  let duration: number;
   if (version === 1) {
     if (offset + 28 > start + size) {
       issues.push("mvhd version 1 box truncated.");

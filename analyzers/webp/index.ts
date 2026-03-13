@@ -134,7 +134,6 @@ export async function parseWebp(file: File): Promise<WebpParseResult | null> {
   let hasIccProfile = false;
   let hasExif = false;
   let hasXmp = false;
-  let frameCount = 0;
   let animationInfo: WebpAnimationInfo | null = null;
 
   const vp8xChunk = findFirstChunk(riff.chunks, "VP8X");
@@ -183,7 +182,7 @@ export async function parseWebp(file: File): Promise<WebpParseResult | null> {
     issues.push("ANIM chunk is truncated.");
   }
 
-  frameCount = flatChunks.filter(chunk => chunk.id === "ANMF").length;
+  const frameCount = flatChunks.filter(chunk => chunk.id === "ANMF").length;
   if (frameCount > 0) hasAnimation = true;
   hasAlpha = hasAlpha || flatChunks.some(chunk => chunk.id === "ALPH");
   hasIccProfile = hasIccProfile || flatChunks.some(chunk => chunk.id === "ICCP");

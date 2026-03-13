@@ -46,7 +46,7 @@ const readUleb128 = (bytes: Uint8Array<ArrayBuffer>, start: number): { value: bi
 const readSleb128 = (bytes: Uint8Array<ArrayBuffer>, start: number): { value: bigint; size: number } | null => {
   let result = 0n;
   let shift = 0n;
-  let byte = 0;
+  let byte: number;
   for (let index = 0; index < 10; index += 1) {
     const pos = start + index;
     if (pos >= bytes.byteLength) return null;

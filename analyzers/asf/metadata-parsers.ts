@@ -44,6 +44,51 @@ export const parseContentDescription = (
   };
 };
 
+const parseExtendedDescriptorValue = (
+  dv: DataView,
+  valueType: number,
+  cursor: number,
+  safeLen: number
+): Pick<AsfExtendedDescriptor, "valueType" | "value"> => {
+  switch (valueType) {
+    case 0:
+      return {
+        valueType: "Unicode string",
+        value: readUnicodeString(dv, cursor, safeLen)
+      };
+    case 1:
+      return {
+        valueType: "Binary blob",
+        value: `Binary (${safeLen} bytes)`
+      };
+    case 2:
+      return {
+        valueType: "Boolean (WORD)",
+        value: safeLen >= 2 && dv.getUint16(cursor, true) !== 0 ? "true" : "false"
+      };
+    case 3:
+      return {
+        valueType: "DWORD",
+        value: safeLen >= 4 ? String(dv.getUint32(cursor, true)) : ""
+      };
+    case 4:
+      return {
+        valueType: "QWORD",
+        value: safeLen >= 8 ? numberOrString(readUint64(dv, cursor))?.toString() || "" : ""
+      };
+    case 5:
+      return {
+        valueType: "WORD",
+        value: safeLen >= 2 ? String(dv.getUint16(cursor, true)) : ""
+      };
+    default:
+      return {
+        valueType: `Type ${valueType}`,
+        value: `Type ${valueType} (${safeLen} bytes)`
+      };
+  }
+};
+
 export const parseExtendedContent = (
   dv: DataView,
   start: number,
@@ -69,31 +114,11 @@ export const parseExtendedContent = (
     cursor += 4;
     const truncated = cursor + valueLen > start + length;
     const safeLen = Math.max(0, Math.min(valueLen, start + length - cursor));
-    let value = "";
-    if (valueType === 0) value = readUnicodeString(dv, cursor, safeLen);
-    else if (valueType === 1) value = `Binary (${safeLen} bytes)`;
-    else if (valueType === 2) value = safeLen >= 2 && dv.getUint16(cursor, true) !== 0 ? "true" : "false";
-    else if (valueType === 3) value = safeLen >= 4 ? String(dv.getUint32(cursor, true)) : "";
-    else if (valueType === 4) value = safeLen >= 8 ? numberOrString(readUint64(dv, cursor))?.toString() || "" : "";
-    else if (valueType === 5) value = safeLen >= 2 ? String(dv.getUint16(cursor, true)) : "";
-    else value = `Type ${valueType} (${safeLen} bytes)`;
+    const parsedValue = parseExtendedDescriptorValue(dv, valueType, cursor, safeLen);
     descriptors.push({
       name,
-      valueType:
-        valueType === 0
-          ? "Unicode string"
-          : valueType === 1
-            ? "Binary blob"
-            : valueType === 2
-              ? "Boolean (WORD)"
-              : valueType === 3
-                ? "DWORD"
-                : valueType === 4
-                  ? "QWORD"
-                  : valueType === 5
-                    ? "WORD"
-                    : `Type ${valueType}`,
-      value,
+      valueType: parsedValue.valueType,
+      value: parsedValue.value,
       truncated
     });
     cursor += valueLen;

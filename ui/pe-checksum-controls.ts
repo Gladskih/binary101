@@ -52,7 +52,6 @@ const computePeChecksum = async (
     warnings.push("Checksum field is outside the file bounds.");
     return { checksum: null, warnings };
   }
-
   const buffer = await file.arrayBuffer();
   const bytes = new Uint8Array(buffer);
   const byteLength = bytes.length;
@@ -61,26 +60,19 @@ const computePeChecksum = async (
   const checksumWordIndex = checksumOffset / 2;
   const checksumWordIndex2 = checksumWordIndex + 1;
   let checksum = 0;
-
   for (let offset = 0; offset < paddedLength; offset += 2) {
     const index = offset / 2;
     if (index === checksumWordIndex || index === checksumWordIndex2) continue;
-
-    let word = 0;
-    if (offset + 2 <= byteLength) {
-      word = bytes[offset]! | (bytes[offset + 1]! << 8);
-    } else {
-      word = offset < byteLength ? bytes[offset]! : 0;
-    }
-
-    checksum += word;
+    checksum +=
+      offset + 2 <= byteLength
+        ? bytes[offset]! | (bytes[offset + 1]! << 8)
+        : offset < byteLength
+          ? bytes[offset]!
+          : 0;
     checksum = (checksum & 0xffff) + (checksum >>> 16);
   }
-
   // PE checksum algorithm: sum 16-bit words, fold, then add original file length.
-  checksum = checksum & 0xffff;
-
-  return { checksum: (checksum + byteLength) >>> 0, warnings };
+  return { checksum: ((checksum & 0xffff) + byteLength) >>> 0, warnings };
 };
 
 const createPeChecksumClickHandler =
@@ -89,33 +81,28 @@ const createPeChecksumClickHandler =
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     if (target.id !== CHECKSUM_BUTTON_ID) return;
-
     const file = getFile();
     if (!file) {
       setStatusMessage("No file selected.");
       return;
     }
-
     const parseResult = getParseResult();
     if (parseResult.analyzer !== "pe" || !parseResult.parsed) {
       setStatusMessage("Not a PE file.");
       return;
     }
-
     const statusElement = document.getElementById(CHECKSUM_STATUS_ID);
     const computedElement = document.getElementById(CHECKSUM_COMPUTED_ID);
     if (!(statusElement instanceof HTMLElement) || !(computedElement instanceof HTMLElement)) {
       setStatusMessage("Checksum UI is not available.");
       return;
     }
-
     const button = target as HTMLElement & { disabled?: boolean };
     const originalText = button.textContent || "Validate CheckSum";
     button.textContent = "Working...";
     if ("disabled" in button) {
       button.disabled = true;
     }
-
     try {
       const checksumOffset = resolveChecksumOffset(parseResult.parsed);
       if (checksumOffset == null) {
@@ -124,7 +111,6 @@ const createPeChecksumClickHandler =
         button.textContent = "Retry CheckSum";
         return;
       }
-
       const { checksum, warnings } = await computePeChecksum(file, checksumOffset);
       if (checksum == null) {
         statusElement.textContent = warnings.join(" ") || "Unable to compute checksum.";
@@ -132,7 +118,6 @@ const createPeChecksumClickHandler =
         button.textContent = "Retry CheckSum";
         return;
       }
-
       const stored = parseResult.parsed.opt.CheckSum >>> 0;
       const statusParts = [
         checksum === stored ? "Matches stored value." : "Does not match stored value."

@@ -36,14 +36,10 @@ export const parsePackInfo = (ctx: SevenZipContext): SevenZipPackInfo => {
   };
   const countNumber = toSafeNumber(numPackStreams);
   if (packPos == null || numPackStreams == null || countNumber == null) return result;
-  let done = false;
-  while (ctx.offset < ctx.dv.byteLength && !done) {
+  while (ctx.offset < ctx.dv.byteLength) {
     const id = readByte(ctx, "Pack info field id");
     if (id == null) break;
-    if (id === 0x00) {
-      done = true;
-      break;
-    }
+    if (id === 0x00) break;
     if (id === 0x09) {
       for (let i = 0; i < countNumber; i += 1) {
         const size = readEncodedUint64(ctx, "Pack stream size");

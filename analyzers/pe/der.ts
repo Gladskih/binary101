@@ -103,20 +103,16 @@ const decodeBmpString = (bytes: Uint8Array): string => {
 export const decodeDerString = (bytes: Uint8Array, element: DerElement): string | undefined => {
   const raw = bytes.subarray(element.start + element.header, element.end);
   if (!raw.length) return undefined;
-  let text = "";
-  if (element.tag === TAG_UTF8_STRING) {
-    text = utf8Decoder.decode(raw);
-  } else if (
-    element.tag === TAG_PRINTABLE_STRING ||
-    element.tag === TAG_IA5_STRING ||
-    element.tag === TAG_T61_STRING
-  ) {
-    text = String.fromCharCode(...raw);
-  } else if (element.tag === TAG_BMP_STRING) {
-    text = decodeBmpString(raw);
-  } else {
-    text = utf8Decoder.decode(raw);
-  }
+  const text =
+    element.tag === TAG_UTF8_STRING
+      ? utf8Decoder.decode(raw)
+      : element.tag === TAG_PRINTABLE_STRING ||
+          element.tag === TAG_IA5_STRING ||
+          element.tag === TAG_T61_STRING
+        ? String.fromCharCode(...raw)
+        : element.tag === TAG_BMP_STRING
+          ? decodeBmpString(raw)
+          : utf8Decoder.decode(raw);
   return text.replace(/\0/g, "").trim() || undefined;
 };
 
@@ -169,4 +165,3 @@ export const parseAlgorithmIdentifier = (
   if (mapped && mapped !== oid) return { oid, name: mapped };
   return { oid };
 };
-

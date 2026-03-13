@@ -86,7 +86,7 @@ const parseX509Certificate = (
   index++;
   const issuerEl = tbsChildren[index++];
   const validityEl = tbsChildren[index++];
-  const subjectEl = tbsChildren[index++];
+  const subjectEl = tbsChildren[index];
   const info: X509CertificateInfo = {};
   if (serialEl?.tag === TAG_INTEGER) {
     info.serialNumber = bytesToHex(bytes.subarray(serialEl.start + serialEl.header, serialEl.end));
@@ -197,7 +197,7 @@ const parseSignerInfo = (
     signingTime = parseSigningTime(bytes, maybeSignedAttrs);
     index++;
   }
-  const signatureAlg = parseAlgorithmIdentifier(bytes, children[index++], warnings, oid => describeOid(oid));
+  const signatureAlg = parseAlgorithmIdentifier(bytes, children[index], warnings, oid => describeOid(oid));
   const signer: AuthenticodeSignerInfo = {};
   if (issuer) signer.issuer = issuer;
   if (serialNumber) signer.serialNumber = serialNumber;

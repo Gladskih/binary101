@@ -51,7 +51,6 @@ export const parseVorbisCodecPrivate = (
   const commentOffset = idOffset + idLength;
   const setupOffset = commentOffset + commentLength;
   if (setupOffset > bytes.length) {
-    truncated = true;
     issues.push("Vorbis CodecPrivate packets exceed available data.");
     return { headerPacketLengths: null, vendor: null, truncated: true };
   }

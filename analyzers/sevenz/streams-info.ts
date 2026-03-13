@@ -14,14 +14,10 @@ export const parseSubStreamsInfo = (
   folderCount: number
 ): SevenZipSubStreamsInfo => {
   const info: SevenZipSubStreamsInfo = { numUnpackStreams: new Array(folderCount).fill(1) };
-  let done = false;
-  while (ctx.offset < ctx.dv.byteLength && !done) {
+  while (ctx.offset < ctx.dv.byteLength) {
     const id = readByte(ctx, "SubStreamsInfo field id");
     if (id == null) break;
-    if (id === 0x00) {
-      done = true;
-      break;
-    }
+    if (id === 0x00) break;
     if (id === 0x0d) {
       info.numUnpackStreams = [];
       for (let i = 0; i < folderCount; i += 1) {
@@ -64,14 +60,10 @@ export const parseSubStreamsInfo = (
 
 export const parseStreamsInfo = (ctx: SevenZipContext): SevenZipStreamsInfo => {
   const info: SevenZipStreamsInfo = {};
-  let done = false;
-  while (ctx.offset < ctx.dv.byteLength && !done) {
+  while (ctx.offset < ctx.dv.byteLength) {
     const id = readByte(ctx, "StreamsInfo field id");
     if (id == null) break;
-    if (id === 0x00) {
-      done = true;
-      break;
-    }
+    if (id === 0x00) break;
     if (id === 0x06) {
       info.packInfo = parsePackInfo(ctx);
       continue;

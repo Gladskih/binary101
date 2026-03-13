@@ -73,8 +73,8 @@ export const parseDirectoryRecord = (
   const isOne = fileIdentifierLength === 1 && identifierBytes[0] === 0x01;
   const zeroMeaning = opts?.zeroIdentifierMeaning || "dot";
 
-  let fileIdentifierRaw: string | null = null;
-  let fileIdentifier: string | null = null;
+  let fileIdentifierRaw: string | null;
+  let fileIdentifier: string | null;
   let fileVersion: number | null = null;
   let isDotEntry = false;
   let isDotDotEntry = false;

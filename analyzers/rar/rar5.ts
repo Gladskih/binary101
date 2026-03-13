@@ -114,7 +114,6 @@ export const parseRar5 = async (file: File): Promise<RarParseResult> => {
       if ((archiveFlags & MHFL_VOLNUMBER) !== 0) {
         const volInfo = readVint(headerDv, cursor);
         volumeNumber = toSafeNumber(volInfo.value);
-        cursor += volInfo.length;
       }
       mainHeader = {
         offset,
@@ -170,7 +169,6 @@ export const parseRar5 = async (file: File): Promise<RarParseResult> => {
       }
       const nameBytes = new Uint8Array(headerDv.buffer, headerDv.byteOffset + cursor, nameAvailable);
       const name = decodeNameBytes(nameBytes, true);
-      cursor += nameAvailable;
 
       const unpackedSize = (fileFlags & FHFL_UNPUNKNOWN) !== 0 ? null : unpSizeInfo.value;
       const dictSize = computeRar5DictSize(compValue, compVersionBits, (fileFlags & FHFL_DIRECTORY) !== 0);

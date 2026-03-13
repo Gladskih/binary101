@@ -88,7 +88,7 @@ const decodeVector = (
   let cursor = offset + 4;
   for (let i = 0; i < count && cursor < offset + available; i += 1) {
     const remaining = offset + available - cursor;
-    let element: LnkPropertyScalar | null = null;
+    let element: LnkPropertyScalar;
     switch (baseType) {
       case 0x0011:
         element = dv.getUint8(cursor);
@@ -184,7 +184,6 @@ const parsePropertyValue = (
   const clampedEnd = Math.min(declaredEnd, dv.byteLength);
   const available = Math.max(0, clampedEnd - dataStart);
   const typeName = propertyTypeName(baseType);
-  let value: LnkPropertyValue = null;
   let truncated = declaredEnd > dv.byteLength;
 
   const parseScalar = (): LnkPropertyValue => {
@@ -234,13 +233,9 @@ const parsePropertyValue = (
     }
   };
 
-  if (isVector) {
-    const { value: vec, truncated: vecTrunc } = decodeVector(dv, dataStart, available, baseType);
-    value = vec;
-    truncated = truncated || vecTrunc;
-  } else {
-    value = parseScalar();
-  }
+  const parsedVector = isVector ? decodeVector(dv, dataStart, available, baseType) : null;
+  const value = parsedVector ? parsedVector.value : parseScalar();
+  truncated = truncated || parsedVector?.truncated === true;
 
   if (declaredEnd > dv.byteLength) {
     const labelText = label || "property store entry";
