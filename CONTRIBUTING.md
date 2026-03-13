@@ -4,7 +4,7 @@
 
 ### Prerequisites
 - Modern browser (Chrome, Firefox, Edge)
-- Node.js and npm (for linting, tests, and the Vite build)
+- Node.js 24.x LTS and npm (for linting, tests, and the Vite build)
 
 ### Getting Started
 1. Fork the repository.
