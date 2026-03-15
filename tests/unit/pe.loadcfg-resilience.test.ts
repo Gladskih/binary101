@@ -22,5 +22,8 @@ void test("parseLoadConfigDirectory returns null instead of throwing on a trunca
     );
 
   await assert.doesNotReject(parse);
-  assert.equal(await parse(), null);
+  const parsed = await parse();
+  assert.ok(parsed);
+  assert.equal(parsed?.TimeDateStamp, 0x12345678);
+  assert.ok(parsed?.warnings?.some(warning => warning.toLowerCase().includes("truncated")));
 });

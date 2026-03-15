@@ -67,3 +67,37 @@ void test("parseSecurityDirectory walks all certificates in the declared table",
   assert.strictEqual(sec.count, certCount);
   assert.strictEqual(sec.certs.length, certCount);
 });
+
+void test("parseSecurityDirectory reports corruption when rounded certificate sizes do not cover the table", async () => {
+  const secOff = 0x80;
+  const bytes = new Uint8Array(0x200).fill(0);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(secOff + 0, 12, true);
+  dv.setUint16(secOff + 4, 0x0200, true);
+  dv.setUint16(secOff + 6, 0x0002, true);
+
+  const parsed = await parseSecurityDirectory(
+    new MockFile(bytes, "sec-gap.bin"),
+    [{ name: "SECURITY", rva: secOff, size: 40 }],
+    () => {}
+  );
+
+  const sec = expectDefined(parsed);
+  assert.strictEqual(sec.count, 1);
+  assert.ok(sec.warnings?.some(warning => warning.toLowerCase().includes("corrupt")));
+});
+
+void test("parseSecurityDirectory preserves truncated directories as warnings instead of dropping them", async () => {
+  const secOff = 0x40;
+  const bytes = new Uint8Array(secOff + 4).fill(0);
+
+  const parsed = await parseSecurityDirectory(
+    new MockFile(bytes, "sec-truncated.bin"),
+    [{ name: "SECURITY", rva: secOff, size: 8 }],
+    () => {}
+  );
+
+  const sec = expectDefined(parsed);
+  assert.strictEqual(sec.count, 0);
+  assert.ok(sec.warnings?.some(warning => warning.toLowerCase().includes("truncated")));
+});

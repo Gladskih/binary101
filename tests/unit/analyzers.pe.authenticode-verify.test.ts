@@ -30,6 +30,49 @@ void test("computePeAuthenticodeDigest hashes PE with checksum and security excl
   assert.strictEqual(computed, expectedDigest);
 });
 
+void test("computePeAuthenticodeDigest excludes overlay bytes beyond the last section", async () => {
+  const bytes = new Uint8Array(256);
+  bytes.forEach((_, index) => {
+    bytes[index] = index;
+  });
+  bytes.fill(0xa5, 224);
+
+  const file = new MockFile(bytes, "overlay-signed.exe");
+  const securityDir = { name: "SECURITY", index: 4, rva: 192, size: 16 };
+  const core = {
+    optOff: 0,
+    ddStartRel: 100,
+    dataDirs: [securityDir],
+    opt: { SizeOfHeaders: 160 },
+    sections: [
+      {
+        name: ".text",
+        virtualSize: 0x20,
+        virtualAddress: 0x1000,
+        sizeOfRawData: 0x20,
+        pointerToRawData: 160,
+        characteristics: 0x60000020
+      }
+    ]
+  };
+
+  const expectedBytes = new Uint8Array([
+    ...bytes.slice(0, 64),
+    ...bytes.slice(68, 132),
+    ...bytes.slice(140, 160),
+    ...bytes.slice(160, 192)
+  ]);
+  const expectedDigest = toHex(await crypto.subtle.digest("SHA-256", expectedBytes));
+
+  const computed = await computePeAuthenticodeDigest(
+    file,
+    core as Parameters<typeof computePeAuthenticodeDigest>[1],
+    securityDir,
+    "SHA-256"
+  );
+  assert.strictEqual(computed, expectedDigest);
+});
+
 void test("computePeAuthenticodeDigest uses SECURITY index from data directories when missing", async () => {
   const bytes = new Uint8Array(200);
   bytes.forEach((_, index) => {

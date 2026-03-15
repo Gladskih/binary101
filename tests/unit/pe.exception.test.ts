@@ -195,3 +195,26 @@ void test("parseExceptionDirectory counts invalid RUNTIME_FUNCTION ranges", asyn
   assert.strictEqual(parsed.functionCount, 2);
   assert.strictEqual(parsed.invalidEntryCount, 1);
 });
+
+void test("parseExceptionDirectory does not decode x64 unwind records for unsupported machines", async () => {
+  const bytes = new Uint8Array(0x400).fill(0);
+  const exOff = 0x80;
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(exOff + 0, 0x1000, true);
+  dv.setUint32(exOff + 4, 0x1010, true);
+  dv.setUint32(exOff + 8, 0x2000, true);
+  bytes[0x2000] = 0x09;
+
+  const parsed = await parseExceptionDirectory(
+    new MockFile(bytes, "exception-x86.bin"),
+    [{ name: "EXCEPTION", rva: exOff, size: 12 }],
+    rvaToOff,
+    coverageAdd,
+    0x014c
+  );
+
+  assert.ok(parsed);
+  assert.strictEqual(parsed.functionCount, 0);
+  assert.strictEqual(parsed.uniqueUnwindInfoCount, 0);
+  assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("machine")));
+});
