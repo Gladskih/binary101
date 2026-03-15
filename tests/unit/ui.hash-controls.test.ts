@@ -30,7 +30,13 @@ const createHashControlsFixture = (): {
   };
 };
 
-const createHashText = (): string => "0123456789abcdef";
+const createClipboardDigestText = (): string => {
+  const bytes = new Uint8Array(8);
+  bytes.forEach((_, index) => {
+    bytes[index] = index;
+  });
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+};
 const createHashValueElement = (textContent: string): HTMLElement =>
   ({ textContent }) as HTMLElement;
 
@@ -127,7 +133,7 @@ void test("computeAndDisplayHash surfaces failures and leaves the button retryab
 
 void test("copyHashToClipboard reports success when clipboard writes succeed", async () => {
   let copiedText = "";
-  const hashText = createHashText();
+  const hashText = createClipboardDigestText();
   const restoreNavigator = installClipboardStub(async (text: string): Promise<void> => {
     copiedText = text;
   });
@@ -142,7 +148,7 @@ void test("copyHashToClipboard reports success when clipboard writes succeed", a
 });
 
 void test("copyHashToClipboard reports failure when clipboard writes reject", async () => {
-  const hashText = createHashText();
+  const hashText = createClipboardDigestText();
   const restoreNavigator = installClipboardStub(async (): Promise<void> => {
     throw new Error("denied");
   });
