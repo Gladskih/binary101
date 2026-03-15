@@ -106,6 +106,21 @@ void test("renderSecurity renders count without certificate table", () => {
   assert.ok(!html.includes("<table"));
 });
 
+void test("renderSecurity renders top-level directory warnings", () => {
+  const pe = {
+    security: {
+      count: 0,
+      certs: [],
+      warnings: ["Attribute certificate table is truncated by end of file."]
+    }
+  } as unknown as PeParseResult;
+  const out: string[] = [];
+  renderSecurity(pe, out);
+  const html = out.join("");
+  assert.ok(html.includes("Attribute certificate table is truncated by end of file."));
+  assert.ok(html.includes("<ul"));
+});
+
 void test("renderSecurity tolerates missing fields and renders negative matches", () => {
   const certWithGaps = {
     offset: 0,

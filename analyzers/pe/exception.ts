@@ -6,14 +6,36 @@ const RUNTIME_FUNCTION_ENTRY_SIZE = 12;
 const UNW_FLAG_EHANDLER = 0x01;
 const UNW_FLAG_UHANDLER = 0x02;
 const UNW_FLAG_CHAININFO = 0x04;
+const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
 
 const alignTo4 = (value: number): number => (value + 3) & ~3;
+
+const createEmptyExceptionDirectory = (issues: string[]): {
+  functionCount: number;
+  beginRvas: number[];
+  handlerRvas: number[];
+  uniqueUnwindInfoCount: number;
+  handlerUnwindInfoCount: number;
+  chainedUnwindInfoCount: number;
+  invalidEntryCount: number;
+  issues: string[];
+} => ({
+  functionCount: 0,
+  beginRvas: [],
+  handlerRvas: [],
+  uniqueUnwindInfoCount: 0,
+  handlerUnwindInfoCount: 0,
+  chainedUnwindInfoCount: 0,
+  invalidEntryCount: 0,
+  issues
+});
 
 export async function parseExceptionDirectory(
   file: File,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion
+  addCoverageRegion: AddCoverageRegion,
+  machine = IMAGE_FILE_MACHINE_AMD64
 ): Promise<{
   functionCount: number;
   beginRvas: number[];
@@ -31,6 +53,11 @@ export async function parseExceptionDirectory(
 
   const maxBytes = Math.max(0, Math.min(dir.size, file.size - base));
   addCoverageRegion("EXCEPTION directory", base, maxBytes);
+  if (machine !== IMAGE_FILE_MACHINE_AMD64) {
+    return createEmptyExceptionDirectory([
+      `Exception directory decoding is only implemented for AMD64; machine 0x${machine.toString(16)} uses a different format.`
+    ]);
+  }
 
   const declaredCount = Math.floor(dir.size / RUNTIME_FUNCTION_ENTRY_SIZE);
   const parsedCount = Math.floor(maxBytes / RUNTIME_FUNCTION_ENTRY_SIZE);
@@ -44,16 +71,7 @@ export async function parseExceptionDirectory(
   }
   if (parsedCount === 0) {
     issues.push("Exception directory does not contain a complete RUNTIME_FUNCTION entry.");
-    return {
-      functionCount: 0,
-      beginRvas: [],
-      handlerRvas: [],
-      uniqueUnwindInfoCount: 0,
-      handlerUnwindInfoCount: 0,
-      chainedUnwindInfoCount: 0,
-      invalidEntryCount: 0,
-      issues
-    };
+    return createEmptyExceptionDirectory(issues);
   }
 
   const dv = new DataView(

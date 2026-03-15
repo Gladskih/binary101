@@ -12,7 +12,8 @@ export function computeEntrySection(
     const section = sections[index];
     if (!section) continue;
     const start = section.virtualAddress >>> 0;
-    const end = (start + (section.virtualSize >>> 0)) >>> 0;
+    const span = Math.max(section.virtualSize >>> 0, section.sizeOfRawData >>> 0);
+    const end = (start + span) >>> 0;
     if (entryRva >= start && entryRva < end) {
       return { name: section.name, index };
     }

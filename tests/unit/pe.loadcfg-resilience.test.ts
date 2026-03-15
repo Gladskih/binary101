@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { parseLoadConfigDirectory } from "../../analyzers/pe/load-config.js";
 import { MockFile } from "../helpers/mock-file.js";
 
-void test("parseLoadConfigDirectory returns null instead of throwing on a truncated mapped header", async () => {
+void test("parseLoadConfigDirectory returns a partial result with warnings on a truncated mapped header", async () => {
   const bytes = new Uint8Array(0x18).fill(0);
   const dv = new DataView(bytes.buffer);
   const loadConfigRva = 0x10;

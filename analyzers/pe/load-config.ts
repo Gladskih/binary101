@@ -1,5 +1,6 @@
 "use strict";
 import type { PeDynamicRelocations } from "./dynamic-relocations.js";
+import { createPeLoadConfigResult } from "./load-config-result.js";
 import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
 
 export type PeLoadConfigCodeIntegrity = {
@@ -71,6 +72,7 @@ export interface PeLoadConfig {
   dynamicRelocations?: PeDynamicRelocations | null;
   warnings?: string[];
 }
+
 const MAX_RVA_BIGINT = 0xffff_ffffn;
 const toRvaFromVa = (virtualAddress: number, imageBase: number): number | null => {
   if (!Number.isSafeInteger(virtualAddress) || virtualAddress <= 0) return null;
@@ -102,20 +104,53 @@ export async function parseLoadConfigDirectory(
   isPlus: boolean
 ): Promise<PeLoadConfig | null> {
   const lcDir = dataDirs.find(d => d.name === "LOAD_CONFIG");
-  if (!lcDir?.rva || lcDir.size < 0x40) return null;
+  if (!lcDir || (lcDir.rva === 0 && lcDir.size === 0)) return null;
+  const warnings: string[] = [];
+  if (!lcDir.rva) {
+    warnings.push("LOAD_CONFIG has a non-zero size but RVA is 0.");
+    return createPeLoadConfigResult(warnings);
+  }
   const base = rvaToOff(lcDir.rva);
-  if (base == null) return null;
+  if (base == null) {
+    warnings.push("LOAD_CONFIG RVA could not be mapped to a file offset.");
+    return createPeLoadConfigResult(warnings);
+  }
   const fileSize = typeof file.size === "number" ? file.size : Infinity;
-  if (base >= fileSize) return null;
+  if (base >= fileSize) {
+    warnings.push("LOAD_CONFIG starts past end of file.");
+    return createPeLoadConfigResult(warnings);
+  }
   const availableSize = Math.min(lcDir.size, Math.max(0, fileSize - base));
-  if (availableSize < 12) return null;
+  if (availableSize < lcDir.size) {
+    warnings.push("LOAD_CONFIG directory is truncated by end of file.");
+  }
+  if (lcDir.size > 0 && lcDir.size < 0x40) {
+    warnings.push("LOAD_CONFIG directory is smaller than the minimum documented header size (0x40 bytes).");
+  }
+  if (availableSize === 0) {
+    warnings.push("LOAD_CONFIG does not contain any readable bytes.");
+    return createPeLoadConfigResult(warnings);
+  }
   addCoverageRegion("LOAD_CONFIG", base, availableSize);
   const view = new DataView(await file.slice(base, base + Math.min(availableSize, 0x200)).arrayBuffer());
+  if (view.byteLength < 4) {
+    warnings.push("LOAD_CONFIG is truncated before the Size field.");
+    return createPeLoadConfigResult(warnings);
+  }
+  if (view.byteLength < 12) {
+    warnings.push("LOAD_CONFIG is truncated before the fixed header fields are complete.");
+  }
   const Size = view.getUint32(0, true);
-  const TimeDateStamp = view.getUint32(4, true);
-  const Major = view.getUint16(8, true);
-  const Minor = view.getUint16(10, true);
+  const TimeDateStamp = view.byteLength >= 8 ? view.getUint32(4, true) : 0;
+  const Major = view.byteLength >= 10 ? view.getUint16(8, true) : 0;
+  const Minor = view.byteLength >= 12 ? view.getUint16(10, true) : 0;
   const declaredSize = Number.isFinite(Size) && Size > 0 && Size <= 0x10000 ? Size : 0;
+  if (declaredSize > 0 && declaredSize < 0x40) {
+    warnings.push("LOAD_CONFIG Size field is smaller than the minimum documented header size (0x40 bytes).");
+  }
+  if (declaredSize > 0 && availableSize < declaredSize) {
+    warnings.push("LOAD_CONFIG bytes available in file are smaller than the Size field.");
+  }
   const withinDeclared = (endExclusive: number): boolean => !declaredSize || declaredSize >= endExclusive;
   const has = (offset: number, byteLength: number): boolean =>
     view.byteLength >= offset + byteLength && withinDeclared(offset + byteLength);
@@ -176,7 +211,7 @@ export async function parseLoadConfigDirectory(
   const CastGuardOsDeterminedFailureMode = isPlus ? readU64(0x130) : readU32(0xb8);
   const GuardMemcpyFunctionPointer = isPlus ? readU64(0x138) : readU32(0xbc);
   const UmaFunctionPointers = isPlus ? readU64(0x140) : readU32(0xc0);
-  return {
+  const result: PeLoadConfig = {
     Size,
     TimeDateStamp,
     Major,
@@ -228,6 +263,8 @@ export async function parseLoadConfigDirectory(
     UmaFunctionPointers: UmaFunctionPointers || 0,
     GuardFlags
   };
+  if (warnings.length) result.warnings = warnings;
+  return result;
 }
 export function readLoadConfigPointerRva(imageBase: number, pointerVa: number): number | null {
   return toRvaFromPointer(pointerVa, imageBase);

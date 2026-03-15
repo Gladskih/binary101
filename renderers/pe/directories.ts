@@ -92,6 +92,11 @@ export function renderSecurity(pe: PeParseResult, out: string[]): void {
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Security (WIN_CERTIFICATE)</h4><dl>`);
   out.push(dd("Certificate records", String(s.count ?? 0), "Number of certificate blobs present (Authenticode)."));
   out.push(`</dl>`);
+  if (s.warnings?.length) {
+    out.push(`<ul class="smallNote">`);
+    s.warnings.forEach(warning => out.push(`<li>${safe(warning)}</li>`));
+    out.push(`</ul>`);
+  }
   if (s.certs?.length) {
     out.push(
       `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show certificates (${s.certs.length})</summary>`

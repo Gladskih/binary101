@@ -37,6 +37,21 @@ interface PeIatDirectory {
   size: number;
 }
 
+const appendUniqueWarnings = (
+  existing: string[] | undefined,
+  messages: string[]
+): string[] | undefined => {
+  if (!messages.length) return existing;
+  const merged = new Set(existing ?? []);
+  messages.forEach(message => merged.add(message));
+  return [...merged];
+};
+
+const mergeLoadConfigWarnings = (loadcfg: PeLoadConfig, messages: string[]): void => {
+  const merged = appendUniqueWarnings(loadcfg.warnings, messages);
+  if (merged?.length) loadcfg.warnings = merged;
+};
+
 export interface PeParseResult {
   dos: PeCore["dos"];
   signature: "PE";
@@ -107,53 +122,72 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
   const loadcfg = await parseLoadConfigDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus);
   if (loadcfg) {
     const warnings = collectLoadConfigWarnings(file.size, rvaToOff, ImageBase, opt.SizeOfImage, loadcfg);
-    if (warnings.length) loadcfg.warnings = warnings;
+    mergeLoadConfigWarnings(loadcfg, warnings);
 
     const tables: PeLoadConfigTables = {};
     const guardFlags = loadcfg.GuardFlags;
+    const addLoadConfigWarning = (message: string): void => {
+      mergeLoadConfigWarnings(loadcfg, [message]);
+    };
 
     if (Number.isSafeInteger(loadcfg.GuardCFFunctionCount) && loadcfg.GuardCFFunctionCount > 0) {
-      tables.guardFidRvas = await readGuardCFFunctionTableRvas(
-        file,
-        rvaToOff,
-        ImageBase,
-        loadcfg.GuardCFFunctionTable,
-        loadcfg.GuardCFFunctionCount,
-        guardFlags
-      ).catch(() => []);
+      try {
+        tables.guardFidRvas = await readGuardCFFunctionTableRvas(
+          file,
+          rvaToOff,
+          ImageBase,
+          loadcfg.GuardCFFunctionTable,
+          loadcfg.GuardCFFunctionCount,
+          guardFlags
+        );
+      } catch (error) {
+        addLoadConfigWarning(`LOAD_CONFIG: failed to read GuardCFFunctionTable (${String(error)}).`);
+      }
     }
 
     if (Number.isSafeInteger(loadcfg.GuardEHContinuationCount) && loadcfg.GuardEHContinuationCount > 0) {
-      tables.guardEhContinuationRvas = await readGuardEhContinuationTableRvas(
-        file,
-        rvaToOff,
-        ImageBase,
-        loadcfg.GuardEHContinuationTable,
-        loadcfg.GuardEHContinuationCount,
-        guardFlags
-      ).catch(() => []);
+      try {
+        tables.guardEhContinuationRvas = await readGuardEhContinuationTableRvas(
+          file,
+          rvaToOff,
+          ImageBase,
+          loadcfg.GuardEHContinuationTable,
+          loadcfg.GuardEHContinuationCount,
+          guardFlags
+        );
+      } catch (error) {
+        addLoadConfigWarning(`LOAD_CONFIG: failed to read GuardEHContinuationTable (${String(error)}).`);
+      }
     }
 
     if (Number.isSafeInteger(loadcfg.GuardLongJumpTargetCount) && loadcfg.GuardLongJumpTargetCount > 0) {
-      tables.guardLongJumpTargetRvas = await readGuardLongJumpTargetTableRvas(
-        file,
-        rvaToOff,
-        ImageBase,
-        loadcfg.GuardLongJumpTargetTable,
-        loadcfg.GuardLongJumpTargetCount,
-        guardFlags
-      ).catch(() => []);
+      try {
+        tables.guardLongJumpTargetRvas = await readGuardLongJumpTargetTableRvas(
+          file,
+          rvaToOff,
+          ImageBase,
+          loadcfg.GuardLongJumpTargetTable,
+          loadcfg.GuardLongJumpTargetCount,
+          guardFlags
+        );
+      } catch (error) {
+        addLoadConfigWarning(`LOAD_CONFIG: failed to read GuardLongJumpTargetTable (${String(error)}).`);
+      }
     }
 
     if (Number.isSafeInteger(loadcfg.GuardAddressTakenIatEntryCount) && loadcfg.GuardAddressTakenIatEntryCount > 0) {
-      tables.guardIatRvas = await readGuardAddressTakenIatEntryTableRvas(
-        file,
-        rvaToOff,
-        ImageBase,
-        loadcfg.GuardAddressTakenIatEntryTable,
-        loadcfg.GuardAddressTakenIatEntryCount,
-        guardFlags
-      ).catch(() => []);
+      try {
+        tables.guardIatRvas = await readGuardAddressTakenIatEntryTableRvas(
+          file,
+          rvaToOff,
+          ImageBase,
+          loadcfg.GuardAddressTakenIatEntryTable,
+          loadcfg.GuardAddressTakenIatEntryCount,
+          guardFlags
+        );
+      } catch (error) {
+        addLoadConfigWarning(`LOAD_CONFIG: failed to read GuardAddressTakenIatEntryTable (${String(error)}).`);
+      }
     }
 
     if (
@@ -162,34 +196,43 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
       Number.isSafeInteger(loadcfg.SEHandlerCount) &&
       loadcfg.SEHandlerCount > 0
     ) {
-      tables.safeSehHandlerRvas = await readSafeSehHandlerTableRvas(
-        file,
-        rvaToOff,
-        ImageBase,
-        loadcfg.SEHandlerTable,
-        loadcfg.SEHandlerCount
-      ).catch(() => []);
+      try {
+        tables.safeSehHandlerRvas = await readSafeSehHandlerTableRvas(
+          file,
+          rvaToOff,
+          ImageBase,
+          loadcfg.SEHandlerTable,
+          loadcfg.SEHandlerCount
+        );
+      } catch (error) {
+        addLoadConfigWarning(`LOAD_CONFIG: failed to read SEHandlerTable (${String(error)}).`);
+      }
     }
 
     if (Object.keys(tables).length) {
       loadcfg.tables = tables;
     }
 
-    loadcfg.dynamicRelocations = await parseDynamicRelocationsFromLoadConfig(
-      file,
-      sections,
-      rvaToOff,
-      ImageBase,
-      isPlus,
-      loadcfg
-    ).catch(() => null);
+    try {
+      loadcfg.dynamicRelocations = await parseDynamicRelocationsFromLoadConfig(
+        file,
+        sections,
+        rvaToOff,
+        ImageBase,
+        isPlus,
+        loadcfg
+      );
+    } catch (error) {
+      addLoadConfigWarning(`LOAD_CONFIG: failed to read dynamic relocations (${String(error)}).`);
+      loadcfg.dynamicRelocations = null;
+    }
   }
   const importResult = await parseImportDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus);
   const exportsInfo = await parseExportDirectory(file, dataDirs, rvaToOff, addCoverageRegion);
   const tls = await parseTlsDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus, ImageBase);
   const resources = await parseResources(file, dataDirs, rvaToOff, addCoverageRegion);
   const reloc = await parseBaseRelocations(file, dataDirs, rvaToOff, addCoverageRegion);
-  const exception = await parseExceptionDirectory(file, dataDirs, rvaToOff, addCoverageRegion);
+  const exception = await parseExceptionDirectory(file, dataDirs, rvaToOff, addCoverageRegion, coff.Machine);
   const boundImports = await parseBoundImports(file, dataDirs, rvaToOff, addCoverageRegion);
   const delayImports = await parseDelayImports(file, dataDirs, rvaToOff, addCoverageRegion, isPlus, ImageBase);
   const clr = await parseClrDirectory(file, dataDirs, rvaToOff, addCoverageRegion);

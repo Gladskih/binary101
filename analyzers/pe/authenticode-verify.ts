@@ -2,7 +2,7 @@
 
 import { bufferToHex } from "../../binary-utils.js";
 import type { AuthenticodeInfo } from "./authenticode.js";
-import type { PeCore, PeDataDirectory } from "./types.js";
+import type { PeCore, PeDataDirectory, PeSection } from "./types.js";
 
 type DigestFunction = (algorithm: AlgorithmIdentifier, data: ArrayBuffer) => Promise<ArrayBuffer>;
 
@@ -32,9 +32,60 @@ const pushSlice = (parts: Blob[], file: File, start: number, end: number): void 
   }
 };
 
+const pushSliceExcludingRange = (
+  parts: Blob[],
+  file: File,
+  start: number,
+  end: number,
+  excludedStart: number,
+  excludedEnd: number
+): void => {
+  const safeStart = Math.max(0, Math.min(start, file.size));
+  const safeEnd = Math.max(0, Math.min(end, file.size));
+  if (safeEnd <= safeStart) return;
+  if (excludedEnd <= safeStart || excludedStart >= safeEnd) {
+    pushSlice(parts, file, safeStart, safeEnd);
+    return;
+  }
+  pushSlice(parts, file, safeStart, Math.max(safeStart, excludedStart));
+  pushSlice(parts, file, Math.min(safeEnd, excludedEnd), safeEnd);
+};
+
+const compareSectionOffsets = (left: PeSection, right: PeSection): number =>
+  (left.pointerToRawData >>> 0) - (right.pointerToRawData >>> 0) ||
+  (left.virtualAddress >>> 0) - (right.virtualAddress >>> 0);
+
+const listSectionHashRegions = (fileSize: number, sections: PeSection[]): Array<{ start: number; end: number }> =>
+  sections
+    .filter(section => (section.sizeOfRawData >>> 0) > 0)
+    .slice()
+    .sort(compareSectionOffsets)
+    .map(section => {
+      const start = section.pointerToRawData >>> 0;
+      const end = Math.min(fileSize, start + (section.sizeOfRawData >>> 0));
+      return { start, end };
+    })
+    .filter(region => region.end > region.start);
+
+const computeHeaderHashEnd = (
+  fileSize: number,
+  sizeOfHeaders: number,
+  afterSecurityEntry: number,
+  sections: PeSection[]
+): number => {
+  const sectionRegions = listSectionHashRegions(fileSize, sections);
+  const firstSectionStart = sectionRegions[0]?.start;
+  const normalizedHeadersSize =
+    Number.isSafeInteger(sizeOfHeaders) && sizeOfHeaders > 0 ? Math.min(fileSize, sizeOfHeaders) : fileSize;
+  const limitedHeaderEnd =
+    firstSectionStart != null ? Math.min(normalizedHeadersSize, firstSectionStart) : normalizedHeadersSize;
+  return Math.max(afterSecurityEntry, limitedHeaderEnd);
+};
+
 export const computePeAuthenticodeDigest = async (
   file: File,
-  core: Pick<PeCore, "optOff" | "ddStartRel" | "dataDirs">,
+  core: Pick<PeCore, "optOff" | "ddStartRel" | "dataDirs"> &
+    Partial<Pick<PeCore, "opt" | "sections">>,
   securityDir: PeDataDirectory | undefined,
   algorithm: AlgorithmIdentifier,
   digestFunction?: DigestFunction
@@ -50,11 +101,19 @@ export const computePeAuthenticodeDigest = async (
 
   const parts: Blob[] = [];
   const afterSecurityEntry = securityEntryOff + 8;
+  const sections = Array.isArray(core.sections) ? core.sections : [];
+  const headerHashEnd = computeHeaderHashEnd(
+    file.size,
+    core.opt?.SizeOfHeaders ?? file.size,
+    afterSecurityEntry,
+    sections
+  );
   pushSlice(parts, file, 0, checksumOff);
   pushSlice(parts, file, checksumOff + 4, securityEntryOff);
-  pushSlice(parts, file, afterSecurityEntry, certOff);
-  const tailStart = certEnd > afterSecurityEntry ? certEnd : afterSecurityEntry;
-  pushSlice(parts, file, tailStart, file.size);
+  pushSliceExcludingRange(parts, file, afterSecurityEntry, headerHashEnd, certOff, certEnd);
+  for (const sectionRegion of listSectionHashRegions(file.size, sections)) {
+    pushSliceExcludingRange(parts, file, sectionRegion.start, sectionRegion.end, certOff, certEnd);
+  }
 
   const data = await new Blob(parts).arrayBuffer();
   const digest = digestFunction ?? ((a: AlgorithmIdentifier, d: ArrayBuffer) => crypto.subtle.digest(a, d));
@@ -64,7 +123,8 @@ export const computePeAuthenticodeDigest = async (
 
 export const verifyAuthenticodeFileDigest = async (
   file: File,
-  core: Pick<PeCore, "optOff" | "ddStartRel" | "dataDirs">,
+  core: Pick<PeCore, "optOff" | "ddStartRel" | "dataDirs"> &
+    Partial<Pick<PeCore, "opt" | "sections">>,
   securityDir: PeDataDirectory | undefined,
   auth: AuthenticodeInfo,
   digestFunction?: DigestFunction
