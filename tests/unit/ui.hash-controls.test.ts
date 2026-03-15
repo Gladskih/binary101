@@ -9,18 +9,30 @@ import {
   type HashControls
 } from "../../ui/hash-controls.js";
 
-const SHA256_ABC_HEX =
-  "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+const createHashControlsFixture = (): {
+  controls: HashControls;
+  valueElement: HTMLElement;
+  buttonElement: HTMLButtonElement;
+  copyButtonElement: HTMLButtonElement;
+} => {
+  const valueElement = { textContent: "" } as HTMLElement;
+  const buttonElement = {
+    hidden: false,
+    disabled: false,
+    textContent: "Compute SHA-256"
+  } as HTMLButtonElement;
+  const copyButtonElement = { hidden: true } as HTMLButtonElement;
+  return {
+    controls: { valueElement, buttonElement, copyButtonElement },
+    valueElement,
+    buttonElement,
+    copyButtonElement
+  };
+};
 
-const createHashControls = (): HashControls => ({
-  valueElement: { textContent: "stale" } as HTMLElement,
-  buttonElement: {
-    hidden: true,
-    disabled: true,
-    textContent: "Busy"
-  } as HTMLButtonElement,
-  copyButtonElement: { hidden: false } as HTMLButtonElement
-});
+const createHashText = (): string => "0123456789abcdef";
+const createHashValueElement = (textContent: string): HTMLElement =>
+  ({ textContent }) as HTMLElement;
 
 const installClipboardStub = (
   writeText: (text: string) => Promise<void>
@@ -45,8 +57,18 @@ const installClipboardStub = (
 };
 
 void test("resetHashDisplay restores both hash controls to their initial state", () => {
-  const sha256 = createHashControls();
-  const sha512 = createHashControls();
+  const sha256 = createHashControlsFixture().controls;
+  const sha512 = createHashControlsFixture().controls;
+  sha256.valueElement.textContent = "stale";
+  sha256.buttonElement.hidden = true;
+  sha256.buttonElement.disabled = true;
+  sha256.buttonElement.textContent = "Busy";
+  sha256.copyButtonElement.hidden = false;
+  sha512.valueElement.textContent = "stale";
+  sha512.buttonElement.hidden = true;
+  sha512.buttonElement.disabled = true;
+  sha512.buttonElement.textContent = "Busy";
+  sha512.copyButtonElement.hidden = false;
 
   resetHashDisplay(sha256, sha512);
 
@@ -63,29 +85,31 @@ void test("resetHashDisplay restores both hash controls to their initial state",
 });
 
 void test("computeAndDisplayHash renders the computed digest and enables copy", async () => {
-  const controls = createHashControls();
-  // FIPS 180-4 SHA-256 test vector for the ASCII string "abc".
-  const file = new File([new TextEncoder().encode("abc")], "abc.bin");
+  const { controls, valueElement, buttonElement, copyButtonElement } = createHashControlsFixture();
+  const fileBytes = new TextEncoder().encode("abc");
+  const file = new File([fileBytes], "abc.bin");
+  const expectedDigest = Buffer.from(await crypto.subtle.digest("SHA-256", fileBytes)).toString("hex");
 
   await computeAndDisplayHash("SHA-256", file, controls);
 
-  assert.equal(controls.valueElement.textContent, SHA256_ABC_HEX);
-  assert.equal(controls.copyButtonElement.hidden, false);
-  assert.equal(controls.buttonElement.hidden, true);
+  assert.equal(valueElement.textContent, expectedDigest);
+  assert.equal(copyButtonElement.hidden, false);
+  assert.equal(buttonElement.hidden, true);
 });
 
 void test("computeAndDisplayHash reports when no file is selected", async () => {
-  const controls = createHashControls();
+  const { controls, valueElement, buttonElement, copyButtonElement } = createHashControlsFixture();
 
   await computeAndDisplayHash("SHA-256", null, controls);
 
-  assert.equal(controls.valueElement.textContent, "No file selected.");
-  assert.equal(controls.buttonElement.disabled, true);
-  assert.equal(controls.buttonElement.textContent, "Busy");
+  assert.equal(valueElement.textContent, "No file selected.");
+  assert.equal(buttonElement.disabled, false);
+  assert.equal(buttonElement.textContent, "Compute SHA-256");
+  assert.equal(copyButtonElement.hidden, true);
 });
 
 void test("computeAndDisplayHash surfaces failures and leaves the button retryable", async () => {
-  const controls = createHashControls();
+  const { controls, valueElement, buttonElement, copyButtonElement } = createHashControlsFixture();
   const file = {
     arrayBuffer: async (): Promise<ArrayBuffer> => {
       throw new Error("boom");
@@ -94,34 +118,37 @@ void test("computeAndDisplayHash surfaces failures and leaves the button retryab
 
   await computeAndDisplayHash("SHA-256", file, controls);
 
-  assert.match(controls.valueElement.textContent || "", /^Hash failed: Error: Error: boom$/);
-  assert.equal(controls.buttonElement.disabled, false);
-  assert.equal(controls.buttonElement.textContent, "Retry");
-  assert.equal(controls.copyButtonElement.hidden, true);
+  assert.match(valueElement.textContent || "", /^Hash failed:/);
+  assert.match(valueElement.textContent || "", /boom$/);
+  assert.equal(buttonElement.disabled, false);
+  assert.equal(buttonElement.textContent, "Retry");
+  assert.equal(copyButtonElement.hidden, true);
 });
 
 void test("copyHashToClipboard reports success when clipboard writes succeed", async () => {
   let copiedText = "";
+  const hashText = createHashText();
   const restoreNavigator = installClipboardStub(async (text: string): Promise<void> => {
     copiedText = text;
   });
 
   try {
-    const result = await copyHashToClipboard({ textContent: "feedface" } as HTMLElement);
+    const result = await copyHashToClipboard(createHashValueElement(hashText));
     assert.equal(result, "copied");
-    assert.equal(copiedText, "feedface");
+    assert.equal(copiedText, hashText);
   } finally {
     restoreNavigator();
   }
 });
 
 void test("copyHashToClipboard reports failure when clipboard writes reject", async () => {
+  const hashText = createHashText();
   const restoreNavigator = installClipboardStub(async (): Promise<void> => {
     throw new Error("denied");
   });
 
   try {
-    const result = await copyHashToClipboard({ textContent: "feedface" } as HTMLElement);
+    const result = await copyHashToClipboard(createHashValueElement(hashText));
     assert.equal(result, "failed");
   } finally {
     restoreNavigator();

@@ -3,23 +3,36 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createZipEntryClickHandler } from "../../ui/zip-actions.js";
-import { createZipEntry, createZipParseResult, installZipEnvironment } from "../fixtures/ui-zip-actions-fixtures.js";
+import {
+  createDeflatedZipEntry,
+  createZipEntry,
+  createZipParseResult,
+  installZipEnvironment
+} from "../fixtures/ui-zip-actions-fixtures.js";
 
-void test("zip entry click handler ignores unrelated targets and invalid indices", async () => {
-  const environment = installZipEnvironment();
+const createStatusSink = (): {
+  messages: Array<string | null | undefined>;
+  setStatusMessage: (message: string | null | undefined) => void;
+} => {
   const messages: Array<string | null | undefined> = [];
-  const globals = globalThis as unknown as Record<string, unknown>;
-  const handler = createZipEntryClickHandler({
-    getParseResult: () => createZipParseResult([]),
-    getFile: () => null,
+  return {
+    messages,
     setStatusMessage: message => {
       messages.push(message);
     }
+  };
+};
+
+void test("zip entry click handler ignores unrelated targets and invalid indices", async () => {
+  const environment = installZipEnvironment();
+  const { messages, setStatusMessage } = createStatusSink();
+  const handler = createZipEntryClickHandler({
+    getParseResult: () => createZipParseResult([]),
+    getFile: () => null,
+    setStatusMessage
   });
 
   try {
-    assert.ok(new (globals["HTMLElement"] as new () => object)());
-    assert.ok(new (globals["HTMLButtonElement"] as new () => object)());
     await handler({ target: {} } as Event);
 
     const malformedTarget = Object.assign(
@@ -36,7 +49,7 @@ void test("zip entry click handler ignores unrelated targets and invalid indices
 
 void test("zip entry click handler reports missing entries and stored extraction errors", async () => {
   const environment = installZipEnvironment();
-  const messages: Array<string | null | undefined> = [];
+  const { messages, setStatusMessage } = createStatusSink();
   const erroredEntry = createZipEntry({
     extractError: "Entry spans beyond the file."
   });
@@ -45,18 +58,14 @@ void test("zip entry click handler reports missing entries and stored extraction
     const missingEntryHandler = createZipEntryClickHandler({
       getParseResult: () => createZipParseResult([]),
       getFile: () => null,
-      setStatusMessage: message => {
-        messages.push(message);
-      }
+      setStatusMessage
     });
     await missingEntryHandler({ target: environment.button } as unknown as Event);
 
     const erroredEntryHandler = createZipEntryClickHandler({
       getParseResult: () => createZipParseResult([erroredEntry]),
       getFile: () => null,
-      setStatusMessage: message => {
-        messages.push(message);
-      }
+      setStatusMessage
     });
     await erroredEntryHandler({ target: environment.button } as unknown as Event);
 
@@ -68,7 +77,7 @@ void test("zip entry click handler reports missing entries and stored extraction
 
 void test("zip entry click handler extracts stored entries and sanitizes the download name", async () => {
   const environment = installZipEnvironment();
-  const messages: Array<string | null | undefined> = [];
+  const { messages, setStatusMessage } = createStatusSink();
   const file = new File([new TextEncoder().encode("__DATA__")], "archive.zip");
   const entry = createZipEntry({
     fileName: "folder/result.bin",
@@ -83,9 +92,7 @@ void test("zip entry click handler extracts stored entries and sanitizes the dow
     const handler = createZipEntryClickHandler({
       getParseResult: () => createZipParseResult([entry]),
       getFile: () => file,
-      setStatusMessage: message => {
-        messages.push(message);
-      }
+      setStatusMessage
     });
 
     await handler({ target: environment.button } as unknown as Event);
@@ -106,20 +113,17 @@ void test("zip entry click handler extracts stored entries and sanitizes the dow
 void test("zip entry click handler decompresses deflated entries and falls back to entry.bin", async () => {
   const environment = installZipEnvironment();
   const globals = globalThis as unknown as Record<string, unknown>;
-  const messages: Array<string | null | undefined> = [];
+  const { messages, setStatusMessage } = createStatusSink();
   const file = new File([new TextEncoder().encode("COMP")], "archive.zip");
-  const entry = createZipEntry({
+  const entry = createDeflatedZipEntry({
     fileName: "folder/ ",
-    compressionMethod: 8,
-    compressionName: "deflate",
     compressedSize: 4,
     uncompressedSize: 4,
     dataOffset: 0,
     dataLength: 4,
     dataEnd: 4
   });
-  // The handler owns the piping and download flow; browser-native inflation is outside this unit,
-  // so a pass-through TransformStream is sufficient to cover the supported DecompressionStream path.
+  // ZIP stores raw DEFLATE payloads, so the browser stream format must be "deflate-raw".
   globals["DecompressionStream"] = class {
     constructor(format: string) {
       assert.equal(format, "deflate-raw");
@@ -131,9 +135,7 @@ void test("zip entry click handler decompresses deflated entries and falls back 
     const handler = createZipEntryClickHandler({
       getParseResult: () => createZipParseResult([entry]),
       getFile: () => file,
-      setStatusMessage: message => {
-        messages.push(message);
-      }
+      setStatusMessage
     });
 
     await handler({ target: environment.button } as unknown as Event);
@@ -150,11 +152,9 @@ void test("zip entry click handler decompresses deflated entries and falls back 
 
 void test("zip entry click handler reports unsupported deflate and missing file errors", async () => {
   const environment = installZipEnvironment();
-  const messages: Array<string | null | undefined> = [];
-  const entry = createZipEntry({
+  const { messages, setStatusMessage } = createStatusSink();
+  const entry = createDeflatedZipEntry({
     fileName: "clip.deflate",
-    compressionMethod: 8,
-    compressionName: "deflate",
     compressedSize: 4,
     uncompressedSize: 4,
     dataOffset: 0,
@@ -166,9 +166,7 @@ void test("zip entry click handler reports unsupported deflate and missing file 
     const missingFileHandler = createZipEntryClickHandler({
       getParseResult: () => createZipParseResult([entry]),
       getFile: () => null,
-      setStatusMessage: message => {
-        messages.push(message);
-      }
+      setStatusMessage
     });
     await missingFileHandler({ target: environment.button } as unknown as Event);
 
@@ -177,9 +175,7 @@ void test("zip entry click handler reports unsupported deflate and missing file 
     const unsupportedHandler = createZipEntryClickHandler({
       getParseResult: () => createZipParseResult([entry]),
       getFile: () => new File([new TextEncoder().encode("COMP")], "archive.zip"),
-      setStatusMessage: message => {
-        messages.push(message);
-      }
+      setStatusMessage
     });
     await unsupportedHandler({ target: environment.button } as unknown as Event);
 
@@ -194,7 +190,7 @@ void test("zip entry click handler reports unsupported deflate and missing file 
 
 void test("zip entry click handler restores the button after extraction failures", async () => {
   const environment = installZipEnvironment();
-  const messages: Array<string | null | undefined> = [];
+  const { messages, setStatusMessage } = createStatusSink();
   const file = new File([new TextEncoder().encode("COMP")], "archive.zip");
   const entry = createZipEntry({
     fileName: "broken.bin",
@@ -206,9 +202,7 @@ void test("zip entry click handler restores the button after extraction failures
     const handler = createZipEntryClickHandler({
       getParseResult: () => createZipParseResult([entry]),
       getFile: () => file,
-      setStatusMessage: message => {
-        messages.push(message);
-      }
+      setStatusMessage
     });
 
     await handler({ target: environment.button } as unknown as Event);

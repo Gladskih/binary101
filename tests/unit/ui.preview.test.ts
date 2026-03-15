@@ -274,6 +274,17 @@ void test("attachPreviewGuards removes broken audio previews and sets a status m
   ]);
 });
 
-void test("attachPreviewGuards ignores null previews", () => {
-  attachPreviewGuards(null, {} as unknown as HTMLElement, () => {});
+void test("attachPreviewGuards tolerates missing media elements", () => {
+  const statusMessages: Array<string | null | undefined> = [];
+  const container = {
+    querySelector() {
+      return null;
+    }
+  } as unknown as HTMLElement;
+
+  attachPreviewGuards({ kind: "audio", html: "" }, container, message => {
+    statusMessages.push(message);
+  });
+
+  assert.deepEqual(statusMessages, []);
 });

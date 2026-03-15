@@ -22,16 +22,15 @@ export const installZipEnvironment = (): {
   const originalCreateObjectURL = URL.createObjectURL;
   const originalRevokeObjectURL = URL.revokeObjectURL;
 
-  function HTMLElementStub() {}
-  HTMLElementStub.prototype.getAttribute = function getAttribute(this: {
-    attributes?: Map<string, string>;
-  }, name: string): string | null {
-    return this.attributes?.get(name) ?? null;
-  };
+  class HTMLElementStub {
+    getAttribute(this: {
+      attributes?: Map<string, string>;
+    }, name: string): string | null {
+      return this.attributes?.get(name) ?? null;
+    }
+  }
 
-  function HTMLButtonElementStub() {}
-  HTMLButtonElementStub.prototype = Object.create(HTMLElementStub.prototype);
-  HTMLButtonElementStub.prototype.constructor = HTMLButtonElementStub;
+  class HTMLButtonElementStub extends HTMLElementStub {}
 
   globals["HTMLElement"] = HTMLElementStub;
   globals["HTMLButtonElement"] = HTMLButtonElementStub;
@@ -67,11 +66,13 @@ export const installZipEnvironment = (): {
   };
   URL.revokeObjectURL = () => {};
 
-  const button = Object.assign(Object.create(HTMLButtonElementStub.prototype), {
-    attributes: new Map([["data-zip-entry", "0"]]),
+  const button = Object.assign(new HTMLButtonElementStub() as HTMLButtonElement & {
+    attributes: Map<string, string>;
+  }, {
+    attributes: new Map<string, string>([["data-zip-entry", "0"]]),
     textContent: "Extract",
     disabled: false
-  }) as HTMLButtonElement;
+  });
 
   return {
     button,
@@ -153,3 +154,13 @@ export const createZipEntry = (
   localHeaderOffset: 0,
   ...overrides
 });
+
+export const createDeflatedZipEntry = (
+  overrides: Partial<ZipCentralDirectoryEntry> = {}
+): ZipCentralDirectoryEntry =>
+  createZipEntry({
+    // PKZIP APPNOTE compression method 8 denotes a raw DEFLATE payload.
+    compressionMethod: 8,
+    compressionName: "deflate",
+    ...overrides
+  });
