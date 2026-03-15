@@ -8,6 +8,7 @@ import { MockFile } from "../helpers/mock-file.js";
 const rvaToOff = (rva: number): number => rva;
 
 const coverageAdd = (_label: string, _start: number, _size: number): void => {};
+const IMAGE_FILE_MACHINE_I386 = 0x014c;
 
 void test("parseExceptionDirectory parses pdata entries and unwind info stats", async () => {
   const bytes = new Uint8Array(0x3000).fill(0);
@@ -200,6 +201,8 @@ void test("parseExceptionDirectory does not decode x64 unwind records for unsupp
   const bytes = new Uint8Array(0x400).fill(0);
   const exOff = 0x80;
   const dv = new DataView(bytes.buffer);
+  // Microsoft PE format spec, .pdata section:
+  // the exception directory layout is machine-specific, so an x86 image must not decode AMD64 pdata semantics.
   dv.setUint32(exOff + 0, 0x1000, true);
   dv.setUint32(exOff + 4, 0x1010, true);
   dv.setUint32(exOff + 8, 0x2000, true);
@@ -210,7 +213,7 @@ void test("parseExceptionDirectory does not decode x64 unwind records for unsupp
     [{ name: "EXCEPTION", rva: exOff, size: 12 }],
     rvaToOff,
     coverageAdd,
-    0x014c
+    IMAGE_FILE_MACHINE_I386
   );
 
   assert.ok(parsed);

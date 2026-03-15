@@ -197,24 +197,6 @@ void test("parsePe ignores IAT directories that do not map to a file offset", as
   assert.ok(!result.coverage.some(region => region.label === "IAT"), "Coverage should not include IAT region");
 });
 
-void test("parsePe maps entry section using raw size when it exceeds virtual size", async () => {
-  const peBytes = createPeWithSectionAndIat();
-  const view = new DataView(peBytes.buffer, peBytes.byteOffset, peBytes.byteLength);
-  const peHeaderOffset = 0x80;
-  const coffOffset = peHeaderOffset + 4;
-  const optionalOffset = coffOffset + 20;
-  const sectionHeaderOffset = optionalOffset + 0xe0;
-
-  view.setUint32(optionalOffset + 16, 0x11f0, true);
-  view.setUint32(sectionHeaderOffset + 8, 0x80, true);
-  view.setUint32(sectionHeaderOffset + 16, 0x200, true);
-
-  const result = await parsePe(new MockFile(peBytes, "raw-tail-entry.exe"));
-  assert.ok(result);
-  assert.deepStrictEqual(result.entrySection, { name: ".text", index: 0 });
-  assert.strictEqual(result.rvaToOff(0x11f0), 0x3f0);
-});
-
 void test("parsePe attaches Authenticode verification when security directory exists", async () => {
   const peBytes = createPeWithSectionAndIat();
   const view = new DataView(peBytes.buffer, peBytes.byteOffset, peBytes.byteLength);

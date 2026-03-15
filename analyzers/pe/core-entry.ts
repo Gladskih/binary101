@@ -3,7 +3,7 @@
 import type { PeOptionalHeader, PeSection } from "./types.js";
 
 export function computeEntrySection(
-  opt: PeOptionalHeader,
+  opt: Pick<PeOptionalHeader, "AddressOfEntryPoint">,
   sections: PeSection[]
 ): { name: string; index: number } | null {
   if (!opt.AddressOfEntryPoint) return null;

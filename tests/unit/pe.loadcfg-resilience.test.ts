@@ -9,6 +9,8 @@ void test("parseLoadConfigDirectory returns a partial result with warnings on a 
   const bytes = new Uint8Array(0x18).fill(0);
   const dv = new DataView(bytes.buffer);
   const loadConfigRva = 0x10;
+  // Microsoft PE format spec, Load Configuration Directory:
+  // 0x40 bytes is the minimum documented header span for the legacy fixed fields we keep visible as warnings.
   dv.setUint32(loadConfigRva + 0, 0x40, true);
   dv.setUint32(loadConfigRva + 4, 0x12345678, true);
 

@@ -72,6 +72,8 @@ void test("parseSecurityDirectory reports corruption when rounded certificate si
   const secOff = 0x80;
   const bytes = new Uint8Array(0x200).fill(0);
   const dv = new DataView(bytes.buffer);
+  // Microsoft PE format spec, attribute certificate table:
+  // WIN_CERTIFICATE.dwLength is 8-byte aligned in the table walk, so 12-byte content rounds up to 16 bytes.
   dv.setUint32(secOff + 0, 12, true);
   dv.setUint16(secOff + 4, 0x0200, true);
   dv.setUint16(secOff + 6, 0x0002, true);
@@ -89,6 +91,7 @@ void test("parseSecurityDirectory reports corruption when rounded certificate si
 
 void test("parseSecurityDirectory preserves truncated directories as warnings instead of dropping them", async () => {
   const secOff = 0x40;
+  // Fewer than 8 bytes are available at the declared table offset, so even the WIN_CERTIFICATE header is truncated.
   const bytes = new Uint8Array(secOff + 4).fill(0);
 
   const parsed = await parseSecurityDirectory(
