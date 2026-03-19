@@ -125,10 +125,8 @@ Run the coverage report before and after your change; coverage must not go down.
 
 #### Test Data Values
 
-- Do not scatter arbitrary literals through tests when the specific value is not part of the behavior under test.
-- If a value is structurally significant, make that obvious:
-  - derive it from named format constants or fixture layout helpers when possible,
-  - otherwise add a short comment that explains why the exact literal matters and cite the authoritative source when relevant.
+- Do not scatter arbitrary literals through tests when the specific value is not important.
+- If a value is significant, add a short comment that explains why the exact literal matters and cite the authoritative source when relevant.
 - If a value is incidental, generate it through deterministic test helpers or fixture builders.
 - Do not use neighboring production constants as the oracle in a unit test; encode the checked value in the test itself and comment any special literal.
 
