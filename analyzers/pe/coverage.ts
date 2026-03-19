@@ -26,7 +26,7 @@ export function buildCoverage(
   overlaySize: number;
   imageEnd: number;
   imageSizeMismatch: boolean;
-  } {
+} {
   const coverage: PeCoverageEntry[] = [];
   const addCov: AddCoverageRegion = (label, off, size) => {
     if (!Number.isFinite(off) || !Number.isFinite(size) || off < 0 || size <= 0) return;
@@ -37,15 +37,20 @@ export function buildCoverage(
   addCov("Optional header", optionalHeaderOffset, optionalHeaderSize);
   addCov("Data directories", optionalHeaderOffset + ddStartRel, ddCount * 8);
   addCov("Section headers", sectionHeadersOffset, coff.NumberOfSections * 40);
-  let rawEnd = Math.max(optionalHeaderOffset + optionalHeaderSize, sectionHeadersOffset + coff.NumberOfSections * 40);
+  const headersEnd = Math.max(
+    optionalHeaderOffset + optionalHeaderSize,
+    sectionHeadersOffset + coff.NumberOfSections * 40
+  );
+  let rawEnd = headersEnd;
   for (const section of sections) {
     const endOfSectionData = (section.pointerToRawData >>> 0) + (section.sizeOfRawData >>> 0);
     rawEnd = Math.max(rawEnd, endOfSectionData);
   }
   const overlaySize = fileSize > rawEnd ? fileSize - rawEnd : 0;
-  let imageEnd = 0;
+  let imageEnd = alignUpTo(headersEnd, sectionAlignment >>> 0);
   for (const section of sections) {
-    const endOfSectionImage = (section.virtualAddress >>> 0) + (section.virtualSize >>> 0);
+    const endOfSectionImage =
+      (section.virtualAddress >>> 0) + ((section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0));
     imageEnd = Math.max(imageEnd, alignUpTo(endOfSectionImage, sectionAlignment >>> 0));
   }
   const imageSizeMismatch = imageEnd !== (sizeOfImage >>> 0);

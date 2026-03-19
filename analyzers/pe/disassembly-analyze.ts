@@ -9,6 +9,8 @@ const IMAGE_FILE_MACHINE_I386 = 0x014c;
 const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
 const IMAGE_SCN_CNT_CODE = 0x00000020;
 const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
+const getMappedSectionSpan = (section: PeSection): number =>
+  (section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0);
 const isExecutableSection = (section: PeSection): boolean =>
   (section.characteristics & (IMAGE_SCN_CNT_CODE | IMAGE_SCN_MEM_EXECUTE)) !== 0;
 const isMemoryExecutableSection = (section: PeSection): boolean =>
@@ -16,7 +18,7 @@ const isMemoryExecutableSection = (section: PeSection): boolean =>
 const findSectionContainingRva = (sections: PeSection[], rva: number): PeSection | null => {
   for (const section of sections) {
     const start = section.virtualAddress >>> 0;
-    const size = Math.max(section.virtualSize >>> 0, section.sizeOfRawData >>> 0);
+    const size = getMappedSectionSpan(section);
     const end = start + size;
     if (rva >= start && rva < end) return section;
   }
@@ -168,7 +170,7 @@ export async function analyzePeInstructionSets(
   }
   const loadSectionBytes = async (section: PeSection): Promise<Uint8Array> => {
     const start = section.pointerToRawData >>> 0;
-    const size = section.sizeOfRawData >>> 0;
+    const size = Math.min(section.sizeOfRawData >>> 0, getMappedSectionSpan(section));
     if (!size) return new Uint8Array();
     const end = Math.min(file.size, start + size);
     if (start >= file.size || end <= start) return new Uint8Array();

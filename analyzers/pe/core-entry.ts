@@ -2,6 +2,9 @@
 
 import type { PeOptionalHeader, PeSection } from "./types.js";
 
+const getMappedSectionSpan = (section: PeSection): number =>
+  (section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0);
+
 export function computeEntrySection(
   opt: Pick<PeOptionalHeader, "AddressOfEntryPoint">,
   sections: PeSection[]
@@ -12,7 +15,7 @@ export function computeEntrySection(
     const section = sections[index];
     if (!section) continue;
     const start = section.virtualAddress >>> 0;
-    const span = Math.max(section.virtualSize >>> 0, section.sizeOfRawData >>> 0);
+    const span = getMappedSectionSpan(section);
     const end = (start + span) >>> 0;
     if (entryRva >= start && entryRva < end) {
       return { name: section.name, index };

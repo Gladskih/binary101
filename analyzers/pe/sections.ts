@@ -2,13 +2,16 @@
 
 import type { PeSection, RvaToOffset } from "./types.js";
 
+const getMappedSectionSpan = (section: PeSection): number =>
+  (section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0);
+
 const createRvaToOffsetMapper = (sections: PeSection[]): RvaToOffset => {
   const spans = sections.map(section => {
     const virtualAddress = section.virtualAddress >>> 0;
-    const virtualSize = Math.max(section.virtualSize >>> 0, section.sizeOfRawData >>> 0);
+    const mappedSpan = getMappedSectionSpan(section);
     const fileOffset = section.pointerToRawData >>> 0;
     const rawSize = section.sizeOfRawData >>> 0;
-    return { vaStart: virtualAddress, vaEnd: (virtualAddress + virtualSize) >>> 0, fileOffset, rawSize };
+    return { vaStart: virtualAddress, vaEnd: (virtualAddress + mappedSpan) >>> 0, fileOffset, rawSize };
   });
   return relativeVirtualAddress => {
     const normalized = relativeVirtualAddress >>> 0;
