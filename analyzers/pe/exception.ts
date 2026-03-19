@@ -93,9 +93,6 @@ export async function parseExceptionDirectory(
     const unwindInfoRva = entryView.getUint32(8, true) >>> 0;
     parsedCount += 1;
 
-    if (begin) beginRvas.push(begin);
-    if (unwindInfoRva) unwindRvas.add(unwindInfoRva);
-
     let invalid = false;
     if (!begin || !end || begin >= end) invalid = true;
 
@@ -114,6 +111,8 @@ export async function parseExceptionDirectory(
       if (unwindOff == null || unwindOff < 0 || unwindOff >= file.size) invalid = true;
     }
 
+    if (!invalid && begin) beginRvas.push(begin);
+    if (unwindInfoRva) unwindRvas.add(unwindInfoRva);
     if (invalid) invalidEntryCount += 1;
   }
   if (parsedCount === 0) {
@@ -191,7 +190,7 @@ export async function parseExceptionDirectory(
     const flags = b0 >> 3;
     if (version !== 1) unexpectedUnwindVersionCount += 1;
 
-    if ((flags & (UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER)) !== 0) {
+    if ((flags & UNW_FLAG_CHAININFO) === 0 && (flags & (UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER)) !== 0) {
       handlerUnwindInfoCount += 1;
 
       const handlerOff = off + alignTo4(4 + countOfCodes * 2);

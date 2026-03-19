@@ -93,8 +93,13 @@ const toRvaFromPointer = (value: number, imageBase: number): number | null => {
   return value >>> 0;
 };
 const toSafeU64 = (value: bigint): number => {
-  const maxSafeBigInt = BigInt(Number.MAX_SAFE_INTEGER);
-  return value <= maxSafeBigInt ? Number(value) : 0;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 0;
+  try {
+    return BigInt(num) === value ? num : 0;
+  } catch {
+    return 0;
+  }
 };
 export async function parseLoadConfigDirectory(
   file: File,

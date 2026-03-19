@@ -80,9 +80,15 @@ export async function readSafeSehHandlerTableRvas(
 
   const out: number[] = [];
   for (const addressOrRva of rawValues) {
-    const rva = readLoadConfigPointerRva(imageBase, addressOrRva);
-    if (rva == null) continue;
-    out.push(rva >>> 0);
+    const normalized = addressOrRva >>> 0;
+    const converted = readLoadConfigPointerRva(imageBase, normalized);
+    // Some PE producers emit VA-style SafeSEH entries for small images. Keep the raw RVA when the
+    // entry is already far away from ImageBase so large valid RVAs are not rewritten incorrectly.
+    if (converted != null && normalized >= imageBase && normalized - imageBase < 0x100000) {
+      out.push(converted >>> 0);
+      continue;
+    }
+    out.push(normalized);
   }
   return out;
 }
