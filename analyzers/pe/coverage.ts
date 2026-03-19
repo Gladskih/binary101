@@ -37,7 +37,7 @@ export function buildCoverage(
   addCov("Optional header", optionalHeaderOffset, optionalHeaderSize);
   addCov("Data directories", optionalHeaderOffset + ddStartRel, ddCount * 8);
   addCov("Section headers", sectionHeadersOffset, coff.NumberOfSections * 40);
-  let rawEnd = 0;
+  let rawEnd = Math.max(optionalHeaderOffset + optionalHeaderSize, sectionHeadersOffset + coff.NumberOfSections * 40);
   for (const section of sections) {
     const endOfSectionData = (section.pointerToRawData >>> 0) + (section.sizeOfRawData >>> 0);
     rawEnd = Math.max(rawEnd, endOfSectionData);

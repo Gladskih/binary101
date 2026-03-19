@@ -47,7 +47,10 @@ export async function parseDebugDirectory(
   if (maxEntries === 0) {
     return { entry: null, warning: "Debug directory is smaller than one entry; file may be truncated." };
   }
-  let warning = availableDirSize < debugDir.size ? "Debug directory is shorter than recorded size (possible truncation)." : null;
+  let warning =
+    availableDirSize < debugDir.size
+      ? "Debug directory is shorter than recorded size (possible truncation)."
+      : null;
   let codeViewMappingWarning: string | null = null;
   for (let index = 0; index < maxEntries; index++) {
     const entryOffset = baseOffset + index * IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE;
@@ -102,12 +105,18 @@ export async function parseDebugDirectory(
     const age = header.getUint32(20, true);
     let path = "";
     let pos = dataOffset + CODEVIEW_RSDS_MIN_SIZE;
-    while (pos < dataOffset + dataSize && path.length < CODEVIEW_PATH_MAX_BYTES) {
-      const chunk = new Uint8Array(await file.slice(pos, pos + CODEVIEW_PATH_READ_CHUNK_SIZE).arrayBuffer());
+    const pathEnd = dataOffset + dataSize;
+    while (pos < pathEnd && path.length < CODEVIEW_PATH_MAX_BYTES) {
+      const chunkLength = Math.min(
+        CODEVIEW_PATH_READ_CHUNK_SIZE,
+        pathEnd - pos,
+        CODEVIEW_PATH_MAX_BYTES - path.length
+      );
+      const chunk = new Uint8Array(await file.slice(pos, pos + chunkLength).arrayBuffer());
       const zeroIndex = chunk.indexOf(0);
       if (zeroIndex === -1) {
         path += String.fromCharCode(...chunk);
-        pos += CODEVIEW_PATH_READ_CHUNK_SIZE;
+        pos += chunkLength;
       } else {
         if (zeroIndex > 0) path += String.fromCharCode(...chunk.slice(0, zeroIndex));
         break;

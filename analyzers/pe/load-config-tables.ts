@@ -28,15 +28,14 @@ const readRvaTable = async (
   if (!Number.isSafeInteger(entrySize) || entrySize <= 0) return [];
   const tableRva = readLoadConfigPointerRva(imageBase, tableVa);
   if (tableRva == null) return [];
-  const off = rvaToOff(tableRva);
-  if (off == null || off < 0 || off >= file.size) return [];
-  const maxEntries = Math.floor((file.size - off) / entrySize);
-  const entriesToRead = Math.min(count, maxEntries);
-  if (entriesToRead <= 0) return [];
-  const dv = new DataView(await file.slice(off, off + entriesToRead * entrySize).arrayBuffer());
   const rvas: number[] = [];
-  for (let index = 0; index < entriesToRead; index += 1) {
-    const rva = readEntry(dv, index * entrySize) >>> 0;
+  for (let index = 0; index < count; index += 1) {
+    const entryRva = (tableRva + index * entrySize) >>> 0;
+    const entryOff = rvaToOff(entryRva);
+    if (entryOff == null || entryOff < 0 || entryOff + entrySize > file.size) break;
+    const dv = new DataView(await file.slice(entryOff, entryOff + entrySize).arrayBuffer());
+    if (dv.byteLength < entrySize) break;
+    const rva = readEntry(dv, 0) >>> 0;
     if (rva) rvas.push(rva);
   }
   return rvas;
@@ -147,4 +146,3 @@ export async function readGuardAddressTakenIatEntryTableRvas(
     (dv, entryOff) => dv.getUint32(entryOff, true)
   );
 }
-

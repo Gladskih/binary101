@@ -23,8 +23,7 @@ export type PeDynamicRelocations = {
 };
 
 const toSafeU64 = (value: bigint): number => {
-  const maxSafeBigInt = BigInt(Number.MAX_SAFE_INTEGER);
-  return value <= maxSafeBigInt ? Number(value) : 0;
+  return Number(value);
 };
 
 const readU64Maybe = (view: DataView, offset: number): number => {
@@ -140,7 +139,7 @@ export async function parseDynamicRelocationsFromLoadConfig(
       const relocStart = cursor + headerBytes;
       const available = Math.max(0, dataEnd - relocStart);
       const take = Math.min(baseRelocSize, available);
-      entries.push({ kind: "v1", symbol: symbol >>> 0, baseRelocSize, availableBytes: take });
+      entries.push({ kind: "v1", symbol, baseRelocSize, availableBytes: take });
       cursor = relocStart + take;
       if (take < baseRelocSize) {
         warn(
@@ -171,7 +170,7 @@ export async function parseDynamicRelocationsFromLoadConfig(
         kind: "v2",
         headerSize: headerSize >>> 0,
         fixupInfoSize,
-        symbol: symbol >>> 0,
+        symbol,
         symbolGroup: symbolGroup >>> 0,
         flags: flags >>> 0,
         availableBytes: take

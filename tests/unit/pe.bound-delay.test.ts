@@ -7,7 +7,12 @@ import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
 const encoder = new TextEncoder();
-const writeDelayImportDllName = (bytes: Uint8Array, view: DataView, descriptorOffset: number, nameRva: number): void => {
+const writeDelayImportDllName = (
+  bytes: Uint8Array,
+  view: DataView,
+  descriptorOffset: number,
+  nameRva: number
+): void => {
   view.setUint32(descriptorOffset + 4, nameRva, true);
   encoder.encodeInto("delay.dll\0", new Uint8Array(bytes.buffer, nameRva));
 };

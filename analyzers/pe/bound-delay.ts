@@ -7,6 +7,90 @@ import type {
   RvaToOffset
 } from "./types.js";
 
+const readBoundedAsciiString = async (
+  file: File,
+  offset: number,
+  limit: number
+): Promise<{ text: string; truncated: boolean } | null> => {
+  if (offset < 0 || offset >= file.size || limit <= 0) return null;
+  const readLength = Math.min(limit, file.size - offset);
+  const view = new DataView(await file.slice(offset, offset + readLength).arrayBuffer());
+  const text = readAsciiString(view, 0, readLength);
+  return { text, truncated: text.length === readLength };
+};
+
+const readBoundImportName = async (
+  file: File,
+  nameOffset: number,
+  directoryStart: number,
+  directoryEnd: number,
+  warnings: Set<string>
+): Promise<string> => {
+  if (nameOffset < directoryStart || nameOffset >= directoryEnd) {
+    warnings.add("Bound import name offset points outside directory.");
+    return "";
+  }
+  if (nameOffset >= file.size) {
+    warnings.add("Bound import name offset points outside file data.");
+    return "";
+  }
+  const result = await readBoundedAsciiString(
+    file,
+    nameOffset,
+    Math.min(256, directoryEnd - nameOffset)
+  );
+  if (!result) {
+    warnings.add("Bound import name offset points outside file data.");
+    return "";
+  }
+  if (result.truncated) warnings.add("Bound import name is truncated.");
+  return result.text;
+};
+
+const readDelayImportName = async (
+  file: File,
+  nameOffset: number,
+  warnings: Set<string>
+): Promise<string> => {
+  if (nameOffset < 0 || nameOffset >= file.size) {
+    warnings.add("Delay import name RVA does not map to file data.");
+    return "";
+  }
+  const result = await readBoundedAsciiString(file, nameOffset, 256);
+  if (!result) {
+    warnings.add("Delay import name RVA does not map to file data.");
+    return "";
+  }
+  if (result.truncated) warnings.add("Delay import name string truncated.");
+  return result.text;
+};
+
+const readDelayImportHintName = async (
+  file: File,
+  rvaToOff: RvaToOffset,
+  hintNameRva: number,
+  warnings: Set<string>
+): Promise<{ ordinal?: number; hint?: number; name?: string }> => {
+  const hintNameOff = rvaToOff(hintNameRva);
+  if (hintNameOff == null || hintNameOff < 0 || hintNameOff >= file.size) {
+    warnings.add("Delay import hint/name RVA does not map to file data.");
+    return { name: "<bad RVA>" };
+  }
+  const hintView = new DataView(await file.slice(hintNameOff, hintNameOff + 2).arrayBuffer());
+  if (hintView.byteLength < 2) {
+    warnings.add("Delay import hint/name table truncated.");
+    return { name: "" };
+  }
+  const hint = hintView.getUint16(0, true);
+  const result = await readBoundedAsciiString(file, hintNameOff + 2, 256);
+  if (!result) {
+    warnings.add("Delay import name string does not map to file data.");
+    return { hint, name: "" };
+  }
+  if (result.truncated) warnings.add("Delay import name string truncated.");
+  return { hint, name: result.text };
+};
+
 export interface PeBoundImportEntry {
   name: string;
   TimeDateStamp: number;
@@ -50,15 +134,13 @@ export async function parseBoundImports(
     const OffsetModuleName = dv.getUint16(4, true);
     const NumberOfModuleForwarderRefs = dv.getUint16(6, true);
     if (!TimeDateStamp && !OffsetModuleName && !NumberOfModuleForwarderRefs) break;
-    let name = "";
-    const nameOff = base + OffsetModuleName;
-    if (nameOff >= base && nameOff < end) {
-      const nameView = new DataView(await file.slice(nameOff, nameOff + 256).arrayBuffer());
-      name = readAsciiString(nameView, 0, 256);
-    } else if (OffsetModuleName) {
-      warnings.add("Bound import name offset points outside directory.");
-    }
-    entries.push({ name, TimeDateStamp, NumberOfModuleForwarderRefs });
+    entries.push({
+      name: OffsetModuleName
+        ? await readBoundImportName(file, base + OffsetModuleName, base, end, warnings)
+        : "",
+      TimeDateStamp,
+      NumberOfModuleForwarderRefs
+    });
     const nextOff = off + 8 + NumberOfModuleForwarderRefs * 8;
     if (nextOff > end) {
       warnings.add("Bound import forwarder refs extend past directory.");
@@ -102,14 +184,9 @@ export async function parseDelayImports(
     const UnloadInformationTableRVA = dv.getUint32(24, true);
     const TimeDateStamp = dv.getUint32(28, true);
     if (!Attributes && !DllNameRVA) break;
-    let name = "";
+    if (Attributes !== 0) warnings.add("Delay import descriptor Attributes must be zero.");
     const nameOff = rvaToOff(DllNameRVA);
-    if (nameOff != null) {
-      const nameView = new DataView(await file.slice(nameOff, nameOff + 256).arrayBuffer());
-      name = readAsciiString(nameView, 0, 256);
-    } else if (DllNameRVA) {
-      warnings.add("Delay import name RVA does not map to file data.");
-    }
+    if (DllNameRVA && nameOff == null) warnings.add("Delay import name RVA does not map to file data.");
     const functions: Array<{ ordinal?: number; hint?: number; name?: string }> = [];
     const intRva = ImportNameTableRVA >>> 0;
     const intOff = intRva ? rvaToOff(intRva) : null;
@@ -126,34 +203,7 @@ export async function parseDelayImports(
           if ((value & 0x8000000000000000n) !== 0n) {
             functions.push({ ordinal: Number(value & 0xffffn) });
           } else {
-            const hintNameRva = Number(value & 0xffffffffn);
-            const hintNameOff = rvaToOff(hintNameRva);
-            if (hintNameOff != null) {
-              const hintView = new DataView(await file.slice(hintNameOff, hintNameOff + 2).arrayBuffer());
-              if (hintView.byteLength < 2) break;
-              const hint = hintView.getUint16(0, true);
-              let funcName = "";
-              let pos = hintNameOff + 2;
-              for (;;) {
-                const chunk = new Uint8Array(await file.slice(pos, pos + 64).arrayBuffer());
-                const zeroIndex = chunk.indexOf(0);
-                if (chunk.byteLength === 0 || (zeroIndex === -1 && pos + 64 > file.size)) {
-                  warnings.add("Delay import name string truncated.");
-                  break;
-                }
-                if (zeroIndex === -1) {
-                  funcName += String.fromCharCode(...chunk);
-                  pos += 64;
-                  if (pos > file.size) break;
-                } else {
-                  if (zeroIndex > 0) funcName += String.fromCharCode(...chunk.slice(0, zeroIndex));
-                  break;
-                }
-              }
-              functions.push({ hint, name: funcName });
-            } else {
-              functions.push({ name: "<bad RVA>" });
-            }
+            functions.push(await readDelayImportHintName(file, rvaToOff, Number(value & 0xffffffffn), warnings));
           }
         }
       } else {
@@ -168,39 +218,13 @@ export async function parseDelayImports(
           if ((value & 0x80000000) !== 0) {
             functions.push({ ordinal: value & 0xffff });
           } else {
-            const hintNameOff = rvaToOff(value);
-            if (hintNameOff != null) {
-              const hintView = new DataView(await file.slice(hintNameOff, hintNameOff + 2).arrayBuffer());
-              if (hintView.byteLength < 2) break;
-              const hint = hintView.getUint16(0, true);
-              let funcName = "";
-              let pos = hintNameOff + 2;
-              for (;;) {
-                const chunk = new Uint8Array(await file.slice(pos, pos + 64).arrayBuffer());
-                const zeroIndex = chunk.indexOf(0);
-                if (chunk.byteLength === 0 || (zeroIndex === -1 && pos + 64 > file.size)) {
-                  warnings.add("Delay import name string truncated.");
-                  break;
-                }
-                if (zeroIndex === -1) {
-                  funcName += String.fromCharCode(...chunk);
-                  pos += 64;
-                  if (pos > file.size) break;
-                } else {
-                  if (zeroIndex > 0) funcName += String.fromCharCode(...chunk.slice(0, zeroIndex));
-                  break;
-                }
-              }
-              functions.push({ hint, name: funcName });
-            } else {
-              functions.push({ name: "<bad RVA>" });
-            }
+            functions.push(await readDelayImportHintName(file, rvaToOff, value, warnings));
           }
         }
       }
     }
     entries.push({
-      name,
+      name: nameOff != null ? await readDelayImportName(file, nameOff, warnings) : "",
       Attributes,
       ModuleHandleRVA,
       ImportAddressTableRVA,

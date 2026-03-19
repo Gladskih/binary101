@@ -99,7 +99,7 @@ export async function parseOptionalHeaderAndDirectories(
   const maxReadable = Math.max(0, Math.min(file.size - optionalHeaderOffset, 0x600));
   const declaredSize = Math.min(sizeOfOptionalHeader, maxReadable);
   const minimumIntent = Math.min(0x80, maxReadable);
-  const viewSize = Math.min(maxReadable, Math.max(declaredSize, minimumIntent));
+  const viewSize = declaredSize > 0 ? declaredSize : minimumIntent;
   const optionalHeaderView = new DataView(
     await file.slice(optionalHeaderOffset, optionalHeaderOffset + viewSize).arrayBuffer()
   );

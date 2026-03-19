@@ -60,35 +60,38 @@ export async function parseExceptionDirectory(
   }
 
   const declaredCount = Math.floor(dir.size / RUNTIME_FUNCTION_ENTRY_SIZE);
-  const parsedCount = Math.floor(maxBytes / RUNTIME_FUNCTION_ENTRY_SIZE);
   const issues: string[] = [];
 
   if (dir.size % RUNTIME_FUNCTION_ENTRY_SIZE !== 0) {
     issues.push("Exception directory size is not a multiple of RUNTIME_FUNCTION entry size (12 bytes).");
   }
-  if (parsedCount < declaredCount) {
-    issues.push("Exception directory is truncated; some RUNTIME_FUNCTION entries are missing.");
-  }
-  if (parsedCount === 0) {
-    issues.push("Exception directory does not contain a complete RUNTIME_FUNCTION entry.");
-    return createEmptyExceptionDirectory(issues);
-  }
-
-  const dv = new DataView(
-    await file.slice(base, base + parsedCount * RUNTIME_FUNCTION_ENTRY_SIZE).arrayBuffer()
-  );
-
   const beginRvas: number[] = [];
   const unwindRvas = new Set<number>();
   const handlerRvas: number[] = [];
   const handlerRvasSet = new Set<number>();
   let invalidEntryCount = 0;
+  let parsedCount = 0;
 
-  for (let index = 0; index < parsedCount; index += 1) {
-    const entryBase = index * RUNTIME_FUNCTION_ENTRY_SIZE;
-    const begin = dv.getUint32(entryBase + 0, true) >>> 0;
-    const end = dv.getUint32(entryBase + 4, true) >>> 0;
-    const unwindInfoRva = dv.getUint32(entryBase + 8, true) >>> 0;
+  for (let index = 0; index < declaredCount; index += 1) {
+    const entryRva = (dir.rva + index * RUNTIME_FUNCTION_ENTRY_SIZE) >>> 0;
+    const entryOff = rvaToOff(entryRva);
+    if (entryOff == null || entryOff < 0 || entryOff + RUNTIME_FUNCTION_ENTRY_SIZE > file.size) {
+      issues.push("Exception directory is truncated; some RUNTIME_FUNCTION entries are missing.");
+      break;
+    }
+
+    const entryView = new DataView(
+      await file.slice(entryOff, entryOff + RUNTIME_FUNCTION_ENTRY_SIZE).arrayBuffer()
+    );
+    if (entryView.byteLength < RUNTIME_FUNCTION_ENTRY_SIZE) {
+      issues.push("Exception directory is truncated; some RUNTIME_FUNCTION entries are missing.");
+      break;
+    }
+
+    const begin = entryView.getUint32(0, true) >>> 0;
+    const end = entryView.getUint32(4, true) >>> 0;
+    const unwindInfoRva = entryView.getUint32(8, true) >>> 0;
+    parsedCount += 1;
 
     if (begin) beginRvas.push(begin);
     if (unwindInfoRva) unwindRvas.add(unwindInfoRva);
@@ -112,6 +115,10 @@ export async function parseExceptionDirectory(
     }
 
     if (invalid) invalidEntryCount += 1;
+  }
+  if (parsedCount === 0) {
+    issues.push("Exception directory does not contain a complete RUNTIME_FUNCTION entry.");
+    return createEmptyExceptionDirectory(issues);
   }
 
   let unreadableUnwindCount = 0;
@@ -166,10 +173,7 @@ export async function parseExceptionDirectory(
     const unwindInfoRva = unwindQueue.pop();
     if (unwindInfoRva == null) break;
 
-    const directOff = rvaToOff(unwindInfoRva);
-    const alignedRva = (unwindInfoRva - (unwindInfoRva % 4)) >>> 0;
-    const alignedOff = alignedRva !== unwindInfoRva ? rvaToOff(alignedRva) : null;
-    const off = directOff ?? alignedOff;
+    const off = rvaToOff(unwindInfoRva);
     if (off == null || off < 0 || off >= file.size) {
       unreadableUnwindCount += 1;
       continue;

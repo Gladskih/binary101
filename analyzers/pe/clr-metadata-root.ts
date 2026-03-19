@@ -169,7 +169,7 @@ const parseMetadataRootWithReader = async (
     }
     streams.push({ name, offset, size });
   }
-  if (streams.length < streamCountRaw) {
+  if (streams.length < Math.min(streamCountRaw, MAX_METADATA_STREAMS)) {
     issues.push("Metadata stream list is incomplete; fewer streams were parsed than declared.");
   }
   return {

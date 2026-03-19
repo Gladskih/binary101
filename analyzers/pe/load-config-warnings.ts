@@ -26,9 +26,13 @@ export function collectLoadConfigWarnings(
       warnings.push(`LOAD_CONFIG: ${name} pointer 0x${tableVa.toString(16)} is not a valid RVA/VA.`);
       return;
     }
-    if (Number.isFinite(sizeOfImage) && sizeOfImage > 0 && tableRva < sizeOfImage) {
-      const maxImage = Math.floor((sizeOfImage - tableRva) / entrySize);
-      if (count > maxImage) warnings.push(`LOAD_CONFIG: ${name} spills past SizeOfImage (${count} > ${maxImage}).`);
+    if (Number.isFinite(sizeOfImage) && sizeOfImage > 0) {
+      if (tableRva >= sizeOfImage) {
+        warnings.push(`LOAD_CONFIG: ${name} RVA 0x${tableRva.toString(16)} is outside SizeOfImage.`);
+      } else {
+        const maxImage = Math.floor((sizeOfImage - tableRva) / entrySize);
+        if (count > maxImage) warnings.push(`LOAD_CONFIG: ${name} spills past SizeOfImage (${count} > ${maxImage}).`);
+      }
     }
     if (!Number.isFinite(fileSize) || fileSize <= 0) return;
     const off = rvaToOff(tableRva);

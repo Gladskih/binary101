@@ -33,6 +33,8 @@ export async function parseImportDirectory(
   const impDir = dataDirs.find(d => d.name === "IMPORT");
   const imports: PeImportEntry[] = [];
   const warnings = new Set<string>();
+  const isReadableOffset = (offset: number | null): offset is number =>
+    offset != null && offset >= 0 && offset < file.size;
   if (!impDir?.rva) return { entries: imports };
   const start = rvaToOff(impDir.rva);
   if (start == null || start >= file.size) return { entries: imports };
@@ -54,7 +56,7 @@ export async function parseImportDirectory(
     if (!originalFirstThunk && !nameRva && !firstThunk) break;
     const nameOffset = rvaToOff(nameRva);
     let dllName = "";
-    if (nameOffset != null) {
+    if (isReadableOffset(nameOffset)) {
       const dv = new DataView(await file.slice(nameOffset, nameOffset + 256).arrayBuffer());
       dllName = readAsciiString(dv, 0, 256);
     } else if (nameRva) {
@@ -63,7 +65,7 @@ export async function parseImportDirectory(
     const thunkRva = originalFirstThunk || firstThunk;
     const thunkOffset = rvaToOff(thunkRva);
     const functions: PeImportFunction[] = [];
-    if (thunkOffset == null) {
+    if (!isReadableOffset(thunkOffset)) {
       if (thunkRva) addWarning("Import thunk RVA does not map to file data.");
     } else {
       if (isPlus) {
@@ -80,7 +82,7 @@ export async function parseImportDirectory(
           } else {
             const hintNameRva = Number(value & 0xffffffffn);
             const hintNameOffset = rvaToOff(hintNameRva);
-            if (hintNameOffset != null) {
+            if (isReadableOffset(hintNameOffset)) {
               const hintView = new DataView(await file.slice(hintNameOffset, hintNameOffset + 2).arrayBuffer());
               if (hintView.byteLength < 2) {
                 addWarning("Import hint/name table truncated.");
@@ -124,7 +126,7 @@ export async function parseImportDirectory(
             functions.push({ ordinal: value & 0xffff });
           } else {
             const hintNameOffset = rvaToOff(value);
-            if (hintNameOffset != null) {
+            if (isReadableOffset(hintNameOffset)) {
               const hintView = new DataView(await file.slice(hintNameOffset, hintNameOffset + 2).arrayBuffer());
               if (hintView.byteLength < 2) {
                 addWarning("Import hint/name table truncated.");

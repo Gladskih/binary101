@@ -28,6 +28,8 @@ export async function parseExportDirectory(
   addCoverageRegion("EXPORT directory", base, availableDirSize);
   if (availableDirSize < 40) return null;
   const dv = new DataView(await file.slice(base, base + 40).arrayBuffer());
+  const isReadableOffset = (offset: number | null): offset is number =>
+    offset != null && offset >= 0 && offset < file.size;
   const readStr = async (offset: number): Promise<string> => {
     if (offset < 0 || offset >= file.size) return "";
     let text = "";
@@ -63,13 +65,20 @@ export async function parseExportDirectory(
   const entries: Array<{ ordinal: number; rva: number; name: string | null; forwarder?: string | null }> = [];
 
   const namePtr = NameRva ? rvaToOff(NameRva) : null;
-  const name = namePtr != null ? await readStr(namePtr) : "";
+  let name = "";
+  if (NameRva) {
+    if (isReadableOffset(namePtr)) {
+      name = await readStr(namePtr);
+    } else {
+      issues.push("Export DLL name RVA does not map to file data.");
+    }
+  }
 
   const funcTableOff = AddressOfFunctions ? rvaToOff(AddressOfFunctions) : null;
   const nameTableOff = AddressOfNames ? rvaToOff(AddressOfNames) : null;
   const ordTableOff = AddressOfNameOrdinals ? rvaToOff(AddressOfNameOrdinals) : null;
 
-  if (funcTableOff != null) {
+  if (isReadableOffset(funcTableOff)) {
     const funcTable = new DataView(
       await file
         .slice(funcTableOff, funcTableOff + NumberOfFunctions * 4)
@@ -80,11 +89,11 @@ export async function parseExportDirectory(
       issues.push("Export address table is truncated; some function RVAs are missing.");
     }
     const nameTable =
-      nameTableOff != null
+      isReadableOffset(nameTableOff)
         ? new DataView(await file.slice(nameTableOff, nameTableOff + NumberOfNames * 4).arrayBuffer())
         : null;
     const ordTable =
-      ordTableOff != null
+      isReadableOffset(ordTableOff)
         ? new DataView(await file.slice(ordTableOff, ordTableOff + NumberOfNames * 2).arrayBuffer())
         : null;
     const functionNames = new Map<number, string>();
@@ -101,8 +110,10 @@ export async function parseExportDirectory(
         const nameRva = nameTable.getUint32(nameIndex * 4, true);
         const funcIndex = ordTable.getUint16(nameIndex * 2, true);
         const nameOffset = rvaToOff(nameRva);
-        if (nameOffset != null) {
+        if (isReadableOffset(nameOffset)) {
           functionNames.set(funcIndex, await readStr(nameOffset));
+        } else if (nameRva) {
+          issues.push("Export name RVA does not map to file data.");
         }
       }
     }
@@ -112,8 +123,10 @@ export async function parseExportDirectory(
       let forwarder: string | null = null;
       if (funcRva >= dir.rva && funcRva < dir.rva + dir.size) {
         const fwdOff = rvaToOff(funcRva);
-        if (fwdOff != null) {
+        if (isReadableOffset(fwdOff)) {
           forwarder = await readStr(fwdOff);
+        } else if (funcRva) {
+          issues.push("Export forwarder RVA does not map to file data.");
         }
       }
       entries.push({

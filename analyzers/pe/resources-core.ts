@@ -70,7 +70,9 @@ export async function buildResourceTree(
       target: number;
     }> = [];
     for (let index = 0; index < count; index++) {
-      const e = await view(off + 16 + index * 8, 8);
+      const entryOff = off + 16 + index * 8;
+      if (!isRangeInside(entryOff, 8)) break;
+      const e = await view(entryOff, 8);
       if (e.byteLength < 8) break;
       const Name = u32(e, 0);
       const OffsetToData = u32(e, 4);

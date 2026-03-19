@@ -44,16 +44,31 @@ export const readDerElement = (bytes: Uint8Array, offset: number): DerElement | 
     length = lenByte;
   } else {
     const lenCount = lenByte & 0x7f;
-    if (lenCount === 0 || lenCount > 3 || offset + 2 + lenCount > bytes.length) return null;
+    // DER definite lengths can use four octets here so 32-bit-sized payloads remain representable.
+    if (lenCount === 0 || lenCount > 4 || offset + 2 + lenCount > bytes.length) return null;
     for (let index = 0; index < lenCount; index++) {
       const lenVal = bytes.at(offset + 2 + index);
       if (lenVal === undefined) return null;
-      length = (length << 8) | lenVal;
+      length = length * 256 + lenVal;
     }
     header += lenCount;
   }
   if (offset + header + length > bytes.length) return null;
   return { tag, cls, constructed, length, header, start: offset, end: offset + header + length };
+};
+
+const readBase128Value = (
+  bytes: Uint8Array,
+  offset: number
+): { value: number; length: number } | null => {
+  let value = 0;
+  for (let index = offset; index < bytes.length; index += 1) {
+    const byte = bytes.at(index);
+    if (byte === undefined) return null;
+    value = value * 128 + (byte & 0x7f);
+    if ((byte & 0x80) === 0) return { value, length: index - offset + 1 };
+  }
+  return null;
 };
 
 export const readDerChildren = (bytes: Uint8Array, element: DerElement): DerElement[] => {
@@ -71,21 +86,21 @@ export const readDerChildren = (bytes: Uint8Array, element: DerElement): DerElem
 export const decodeOid = (bytes: Uint8Array, offset: number, length: number): string | null => {
   if (length <= 0 || offset + length > bytes.length) return null;
   const view = bytes.subarray(offset, offset + length);
-  const first = view.at(0);
-  if (first === undefined) return null;
-  const parts = [Math.floor(first / 40), first % 40];
-  let value = 0;
-  for (let index = 1; index < view.length; index++) {
-    const byte = view.at(index);
-    if (byte === undefined) return null;
-    value = (value << 7) | (byte & 0x7f);
-    if ((byte & 0x80) === 0) {
-      parts.push(value);
-      value = 0;
-    }
+  const first = readBase128Value(view, 0);
+  if (!first) return null;
+  const firstArc = first.value < 40 ? 0 : first.value < 80 ? 1 : 2;
+  const secondArc = first.value < 40
+    ? first.value
+    : first.value < 80
+      ? first.value - 40
+      : first.value - 80;
+  const parts = [firstArc, secondArc];
+  for (let index = first.length; index < view.length;) {
+    const arc = readBase128Value(view, index);
+    if (!arc) return null;
+    parts.push(arc.value);
+    index += arc.length;
   }
-  const last = view.at(view.length - 1);
-  if (last === undefined || (last & 0x80) !== 0) return null;
   return parts.join(".");
 };
 
@@ -117,7 +132,9 @@ export const decodeDerString = (bytes: Uint8Array, element: DerElement): string 
 };
 
 export const parseDerTime = (bytes: Uint8Array, element: DerElement): string | undefined => {
-  const rawText = utf8Decoder.decode(bytes.subarray(element.start + element.header, element.end)).trim();
+  const rawText = utf8Decoder.decode(
+    bytes.subarray(element.start + element.header, element.end)
+  ).trim();
   if (!rawText) return undefined;
   if (element.tag === TAG_UTC_TIME) {
     const match = rawText.match(/^(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})?Z$/);

@@ -44,9 +44,11 @@ void test("parseImportDirectory reports warning on truncated thunk table", async
   const dv = new DataView(bytes.buffer);
   const impBase = 0x20;
   dv.setUint32(impBase + 12, 0x60, true);
-  dv.setUint32(impBase + 16, 0x70, true);
+  // The import lookup table starts four bytes before EOF, so a PE32+ thunk entry is physically truncated.
+  // PE/COFF import thunk entries are 8 bytes in PE32+.
+  dv.setUint32(impBase + 16, 0x7c, true);
   dv.setUint16(0x60, 0);
-  dv.setUint32(0x70, 0x12345678, true);
+  dv.setUint32(0x7c, 0x12345678, true);
 
   const { entries, warning } = await parseImportDirectory(
     new MockFile(bytes),

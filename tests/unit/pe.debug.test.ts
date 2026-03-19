@@ -14,8 +14,10 @@ void test("parseDebugDirectory reads CodeView RSDS entry", async () => {
   const dv = new DataView(bytes.buffer);
   const debugRva = 0x40;
   const dataRva = 0x120;
+  const codeViewPathBytes = encoder.encode("C:\\path\\app.pdb\0");
   dv.setUint32(debugRva + 12, 2, true);
-  dv.setUint32(debugRva + 16, 32, true);
+  // RSDS data size is the fixed 24-byte header plus the NUL-terminated PDB path.
+  dv.setUint32(debugRva + 16, 24 + codeViewPathBytes.length, true);
   dv.setUint32(debugRva + 20, dataRva, true);
   dv.setUint32(debugRva + 24, dataRva, true);
   dv.setUint32(dataRva + 0, 0x53445352, true);
@@ -31,7 +33,9 @@ void test("parseDebugDirectory reads CodeView RSDS entry", async () => {
   dv.setUint8(dataRva + 18, 0x00);
   dv.setUint8(dataRva + 19, 0x11);
   dv.setUint32(dataRva + 20, 3, true);
-  encoder.encodeInto("C:\\path\\app.pdb\0", new Uint8Array(bytes.buffer, dataRva + 24));
+  codeViewPathBytes.forEach((byteValue, index) => {
+    bytes[dataRva + 24 + index] = byteValue;
+  });
 
   const result = await parseDebugDirectory(
     new MockFile(bytes, "debug.bin"),
