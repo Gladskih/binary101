@@ -3,6 +3,12 @@ import { test } from "node:test";
 import { parsePe } from "../../analyzers/pe/index.js";
 import { MockFile } from "../helpers/mock-file.js";
 
+const DOS_SIGNATURE = 0x5a4d;
+const PE_SIGNATURE = 0x00004550;
+const IMAGE_FILE_MACHINE_I386 = 0x014c;
+const IMAGE_FILE_EXECUTABLE_IMAGE = 0x0002;
+const IMAGE_NT_OPTIONAL_HDR32_MAGIC = 0x10b;
+
 /**
  * Creates a byte array for a minimal valid PE32 header.
  * This is useful for testing the PE parser without requiring an actual file.
@@ -19,27 +25,60 @@ function createTinyPEHeader() {
   const view = new DataView(buffer);
 
   // DOS Header
-  view.setUint16(0, 0x5a4d, true); // 'MZ'
+  view.setUint16(0, DOS_SIGNATURE, true); // 'MZ'
   view.setUint32(0x3c, peSignatureOffset, true); // e_lfanew
 
   // PE Signature
-  view.setUint32(peSignatureOffset, 0x00004550, true); // 'PE\0\0'
+  view.setUint32(peSignatureOffset, PE_SIGNATURE, true); // 'PE\0\0'
 
   // COFF File Header
   const coffHeaderOffset = peSignatureOffset + 4;
-  view.setUint16(coffHeaderOffset, 0x014c, true); // Machine: x86
+  view.setUint16(coffHeaderOffset, IMAGE_FILE_MACHINE_I386, true); // Machine: x86
   view.setUint16(coffHeaderOffset + 2, 0, true); // NumberOfSections
   view.setUint32(coffHeaderOffset + 4, 0, true); // TimeDateStamp
   view.setUint32(coffHeaderOffset + 8, 0, true); // PointerToSymbolTable
   view.setUint32(coffHeaderOffset + 12, 0, true); // NumberOfSymbols
   view.setUint16(coffHeaderOffset + 16, optionalHeaderSize, true); // SizeOfOptionalHeader
-  view.setUint16(coffHeaderOffset + 18, 0x0102, true); // Characteristics
+  view.setUint16(coffHeaderOffset + 18, IMAGE_FILE_EXECUTABLE_IMAGE, true); // Characteristics
 
   // Optional Header (PE32)
   const optionalHeaderOffset = coffHeaderOffset + coffHeaderSize;
-  view.setUint16(optionalHeaderOffset, 0x10b, true); // Magic: PE32
+  view.setUint16(optionalHeaderOffset, IMAGE_NT_OPTIONAL_HDR32_MAGIC, true); // Magic: PE32
   view.setUint32(optionalHeaderOffset + 28, 0x00400000, true); // ImageBase
   view.setUint32(optionalHeaderOffset + 56, totalHeaderSize, true); // SizeOfHeaders
+
+  return new Uint8Array(buffer);
+}
+
+function createHeadersOnlyPeWithAlignedImageSize() {
+  const peSignatureOffset = 64;
+  const coffHeaderSize = 20;
+  const optionalHeaderSize = 224;
+  const fileAlignment = 0x200;
+  const sectionAlignment = 0x1000;
+  const sizeOfHeaders = fileAlignment;
+  const sizeOfImage = sectionAlignment;
+
+  const buffer = new ArrayBuffer(sizeOfHeaders);
+  const view = new DataView(buffer);
+
+  view.setUint16(0, DOS_SIGNATURE, true); // 'MZ'
+  view.setUint32(0x3c, peSignatureOffset, true); // e_lfanew
+  view.setUint32(peSignatureOffset, PE_SIGNATURE, true); // 'PE\0\0'
+
+  const coffHeaderOffset = peSignatureOffset + 4;
+  view.setUint16(coffHeaderOffset, IMAGE_FILE_MACHINE_I386, true); // Machine: x86
+  view.setUint16(coffHeaderOffset + 2, 0, true); // NumberOfSections
+  view.setUint16(coffHeaderOffset + 16, optionalHeaderSize, true);
+  view.setUint16(coffHeaderOffset + 18, IMAGE_FILE_EXECUTABLE_IMAGE, true);
+
+  const optionalHeaderOffset = coffHeaderOffset + coffHeaderSize;
+  view.setUint16(optionalHeaderOffset, IMAGE_NT_OPTIONAL_HDR32_MAGIC, true); // Magic: PE32
+  view.setUint32(optionalHeaderOffset + 28, 0x00400000, true); // ImageBase
+  view.setUint32(optionalHeaderOffset + 32, sectionAlignment, true);
+  view.setUint32(optionalHeaderOffset + 36, fileAlignment, true);
+  view.setUint32(optionalHeaderOffset + 56, sizeOfImage, true);
+  view.setUint32(optionalHeaderOffset + 60, sizeOfHeaders, true);
 
   return new Uint8Array(buffer);
 }
@@ -52,10 +91,10 @@ void test("parsePe correctly parses a minimal PE header", async () => {
 
   assert.ok(result, "parsePe should return a result for a valid PE file");
   assert.strictEqual(result.dos.e_lfanew, 64, "DOS header should point to the PE signature");
-  assert.strictEqual(result.coff.Machine, 0x014c, "COFF header Machine should be x86");
+  assert.strictEqual(result.coff.Machine, IMAGE_FILE_MACHINE_I386, "COFF header Machine should be x86");
   assert.strictEqual(result.coff.NumberOfSections, 0, "COFF header should report 0 sections");
   assert.ok(result.opt, "Optional header should be parsed");
-  assert.strictEqual(result.opt.Magic, 0x10b, "Optional header magic should be PE32");
+  assert.strictEqual(result.opt.Magic, IMAGE_NT_OPTIONAL_HDR32_MAGIC, "Optional header magic should be PE32");
   assert.strictEqual(result.opt.ImageBase, 0x00400000, "Optional header ImageBase should be parsed correctly");
 });
 
@@ -69,6 +108,20 @@ void test("parsePe does not treat a headers-only image as overlay data", async (
     !result.coverage.some(region => region.label.startsWith("Overlay")),
     "Coverage should not report an overlay region when no bytes exist past the headers"
   );
+});
+
+void test("parsePe includes the aligned headers in imageEnd for sectionless images", async () => {
+  const peBytes = createHeadersOnlyPeWithAlignedImageSize();
+
+  const result = await parsePe(new MockFile(peBytes, "headers-sizeofimage.exe"));
+
+  assert.ok(result, "parsePe should return a parsed object for a valid PE file");
+  assert.strictEqual(
+    result.imageEnd,
+    0x1000,
+    "SizeOfImage includes all headers rounded to SectionAlignment even when the image has no sections"
+  );
+  assert.strictEqual(result.imageSizeMismatch, false);
 });
 
 void test("parsePe returns null for a non-PE file", async () => {
@@ -101,24 +154,24 @@ function createPeWithSectionAndIat(iatRvaOverride = 0x1100) {
   const buffer = new ArrayBuffer(fileSize);
   const view = new DataView(buffer);
 
-  view.setUint16(0x00, 0x5a4d, true);
+  view.setUint16(0x00, DOS_SIGNATURE, true);
   view.setUint32(0x3c, peHeaderOffset, true);
 
   const peSignatureOffset = peHeaderOffset;
-  view.setUint32(peSignatureOffset, 0x00004550, true);
+  view.setUint32(peSignatureOffset, PE_SIGNATURE, true);
 
   const coffOffset = peSignatureOffset + 4;
-  view.setUint16(coffOffset, 0x014c, true);
+  view.setUint16(coffOffset, IMAGE_FILE_MACHINE_I386, true);
   view.setUint16(coffOffset + 2, numberOfSections, true);
-  view.setUint32(coffOffset + 4, 0x65c0e6a0, true);
+  view.setUint32(coffOffset + 4, 0, true);
   view.setUint32(coffOffset + 8, 0, true);
   view.setUint32(coffOffset + 12, 0, true);
   view.setUint16(coffOffset + 16, optionalHeaderSize, true);
-  view.setUint16(coffOffset + 18, 0x0002, true);
+  view.setUint16(coffOffset + 18, IMAGE_FILE_EXECUTABLE_IMAGE, true);
 
   const optionalOffset = coffOffset + coffHeaderSize;
   let optPos = optionalOffset;
-  view.setUint16(optPos, 0x10b, true); optPos += 2;
+  view.setUint16(optPos, IMAGE_NT_OPTIONAL_HDR32_MAGIC, true); optPos += 2;
   view.setUint8(optPos, 14); optPos += 1;
   view.setUint8(optPos, 0); optPos += 1;
   view.setUint32(optPos, sizeOfRawData, true); optPos += 4;

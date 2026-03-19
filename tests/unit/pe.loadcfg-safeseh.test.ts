@@ -45,6 +45,27 @@ void test("readSafeSehHandlerTableRvas reads RVAs from a SafeSEH table storing h
   assert.deepEqual(rvas, [0x1000, 0x1100]);
 });
 
+void test("readSafeSehHandlerTableRvas preserves handler RVAs that are numerically above ImageBase", async () => {
+  const imageBase = 0x400000;
+  const tableRva = 0x80;
+  const tableVa = imageBase + tableRva;
+
+  const bytes = new Uint8Array(0x200).fill(0);
+  const dv = new DataView(bytes.buffer);
+  // The SafeSEH table entries are RVAs, not VAs. Large images can legitimately have handler RVAs above ImageBase.
+  dv.setUint32(tableRva + 0, 0x500000, true);
+
+  const rvas = await readSafeSehHandlerTableRvas(
+    new MockFile(bytes, "safeseh-high-rva.bin"),
+    rva => rva,
+    imageBase,
+    tableVa,
+    1
+  );
+
+  assert.deepEqual(rvas, [0x500000]);
+});
+
 void test("readSafeSehHandlerTableRvas returns empty list for invalid or unmapped tables", async () => {
   const bytes = new Uint8Array(0x100).fill(0);
   const file = new MockFile(bytes, "safeseh-invalid.bin");

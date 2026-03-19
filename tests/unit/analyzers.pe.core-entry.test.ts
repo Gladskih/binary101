@@ -11,16 +11,16 @@ const ENTRYPOINT_IN_RAW_TAIL = SECTION_RVA + 0x1f0;
 const ENTRY_SECTION_BOUNDARY_CASES = [
   { label: "section start", entryRva: SECTION_RVA, expected: { name: ".text", index: 0 } },
   { label: "virtual tail", entryRva: SECTION_RVA + SECTION_VIRTUAL_SIZE - 1, expected: { name: ".text", index: 0 } },
-  { label: "raw tail", entryRva: ENTRYPOINT_IN_RAW_TAIL, expected: { name: ".text", index: 0 } },
+  { label: "raw tail", entryRva: ENTRYPOINT_IN_RAW_TAIL, expected: null },
   { label: "raw end excluded", entryRva: SECTION_RVA + SECTION_RAW_SIZE, expected: null },
   { label: "before section", entryRva: SECTION_RVA - 1, expected: null },
   { label: "after raw tail", entryRva: SECTION_RVA + SECTION_RAW_SIZE + 1, expected: null }
 ] as const;
 
-void test("computeEntrySection uses the larger of virtual size and raw size", () => {
+void test("computeEntrySection uses the in-memory VirtualSize, not file-alignment padding", () => {
   // Microsoft PE format spec, section table:
-  // SizeOfRawData is file-aligned and may exceed VirtualSize, which reflects the in-memory span.
-  // The entrypoint below sits inside the raw tail [0x1000, 0x1200) but outside the virtual span [0x1000, 0x1080).
+  // VirtualSize is the section size when loaded into memory, while SizeOfRawData may be larger on disk because
+  // it is rounded to FileAlignment. An AddressOfEntryPoint in the raw tail is not inside the mapped image.
   const opt = { AddressOfEntryPoint: ENTRYPOINT_IN_RAW_TAIL } as const;
   const sections = [
     {
@@ -33,10 +33,10 @@ void test("computeEntrySection uses the larger of virtual size and raw size", ()
     }
   ];
 
-  assert.deepStrictEqual(computeEntrySection(opt, sections), { name: ".text", index: 0 });
+  assert.strictEqual(computeEntrySection(opt, sections), null);
 });
 
-void test("computeEntrySection respects section boundaries around the raw and virtual spans", () => {
+void test("computeEntrySection respects the mapped section boundary instead of the raw-file tail", () => {
   const sections = [
     {
       name: ".text",

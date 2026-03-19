@@ -123,3 +123,31 @@ void test("parseTlsDirectory skips invalid callback pointers and tolerates out-o
   assert.equal(tlsOutOfRange.CallbackCount, 0);
   assert.deepEqual(tlsOutOfRange.CallbackRvas, []);
 });
+
+void test("parseTlsDirectory walks the full null-terminated callback array without a hard 1024-entry cap", async () => {
+  const tlsRva = 0x20;
+  const callbackTableRva = 0x100;
+  const callbackCount = 1025;
+  const bytes = new Uint8Array(callbackTableRva + (callbackCount + 1) * 4).fill(0);
+  const dv = new DataView(bytes.buffer);
+
+  // Microsoft PE format, TLS Callback Functions:
+  // the callback array is null-terminated; the format does not define a fixed maximum entry count.
+  dv.setUint32(tlsRva + 12, callbackTableRva, true);
+  for (let index = 0; index < callbackCount; index += 1) {
+    dv.setUint32(callbackTableRva + index * 4, 0x2000 + index * 4, true);
+  }
+  dv.setUint32(callbackTableRva + callbackCount * 4, 0, true);
+
+  const tls = expectDefined(await parseTlsDirectory(
+    new MockFile(bytes),
+    [{ name: "TLS", rva: tlsRva, size: 0x18 }],
+    value => value,
+    () => {},
+    false,
+    0
+  ));
+
+  assert.equal(tls.CallbackCount, callbackCount);
+  assert.equal(tls.CallbackRvas?.at(-1), 0x2000 + (callbackCount - 1) * 4);
+});

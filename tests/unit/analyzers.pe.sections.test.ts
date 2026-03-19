@@ -71,3 +71,27 @@ void test("parseSectionHeaders does not map zero-filled virtual tail beyond raw 
     "RVA in zero-filled tail should not map to bytes from another file region"
   );
 });
+
+void test("parseSectionHeaders does not map raw-file padding beyond VirtualSize into the loaded image", async () => {
+  const table = createSectionTable([
+    { name: ".text", va: 0x1000, vs: 0x80, rawSize: 0x200, rawOff: 0x400 }
+  ]);
+  const optionalHeaderOffset = 0x80;
+  const sizeOfOptionalHeader = 0xE0;
+  const fileBytes = new Uint8Array(optionalHeaderOffset + sizeOfOptionalHeader + table.length);
+  fileBytes.set(table, optionalHeaderOffset + sizeOfOptionalHeader);
+
+  const { rvaToOff } = await parseSectionHeaders(
+    new MockFile(fileBytes),
+    optionalHeaderOffset,
+    sizeOfOptionalHeader,
+    1
+  );
+
+  assert.strictEqual(rvaToOff(0x1000 + 0x7f), 0x400 + 0x7f);
+  assert.strictEqual(
+    rvaToOff(0x1000 + 0x80),
+    null,
+    "RVA in raw padding beyond VirtualSize should not resolve inside the image"
+  );
+});

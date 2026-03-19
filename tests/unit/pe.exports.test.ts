@@ -15,7 +15,7 @@ void test("parseExportDirectory extracts names and forwarders", async () => {
   const baseExp = 128;
 
   dv.setUint32(baseExp + 0, 1, true);
-  dv.setUint32(baseExp + 4, 0x11223344, true);
+  dv.setUint32(baseExp + 4, 0, true);
   dv.setUint16(baseExp + 8, 1, true);
   dv.setUint16(baseExp + 10, 0, true);
   const nameRva = 300;
@@ -207,4 +207,29 @@ void test("parseExportDirectory reports when a mapped DLL name offset falls past
   ));
 
   assert.ok(result.issues.some(issue => /name/i.test(issue)));
+});
+
+void test("parseExportDirectory reports out-of-range entries in the export ordinal table", async () => {
+  const bytes = new Uint8Array(0x200).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const expRva = 0x20;
+  dv.setUint32(expRva + 16, 1, true); // OrdinalBase
+  dv.setUint32(expRva + 20, 1, true); // NumberOfFunctions
+  dv.setUint32(expRva + 24, 1, true); // NumberOfNames
+  dv.setUint32(expRva + 28, 0x80, true); // Export Address Table RVA
+  dv.setUint32(expRva + 32, 0xa0, true); // Name Pointer RVA
+  dv.setUint32(expRva + 36, 0xc0, true); // Ordinal Table RVA
+  dv.setUint32(0x80, 0x1000, true);
+  dv.setUint32(0xa0, 0xe0, true);
+  dv.setUint16(0xc0, 5, true); // Unbiased ordinal index past NumberOfFunctions=1
+  encoder.encodeInto("BadOrdinal\0", new Uint8Array(bytes.buffer, 0xe0));
+
+  const result = expectDefined(await parseExportDirectory(
+    new MockFile(bytes, "exports-bad-ordinal.bin"),
+    [{ name: "EXPORT", rva: expRva, size: 64 }],
+    value => value,
+    () => {}
+  ));
+
+  assert.ok(result.issues.some(issue => /ordinal/i.test(issue)));
 });

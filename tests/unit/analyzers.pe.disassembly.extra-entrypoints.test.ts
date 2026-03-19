@@ -36,3 +36,31 @@ void test("analyzePeInstructionSets uses extra entrypoints when provided", async
   assert.equal(report.invalidInstructionCount, 0);
 });
 
+void test("analyzePeInstructionSets rejects extra entrypoints that exist only in raw padding past VirtualSize", async () => {
+  const bytes = new Uint8Array([0x90, 0x90, 0x90, 0x90]);
+  const file = new MockFile(bytes, "raw-tail-entry.bin");
+
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x8664,
+    is64Bit: true,
+    imageBase: 0x140000000,
+    entrypointRva: 0,
+    extraEntrypoints: [{ source: "Extra seed", rvas: [0x1002] }],
+    rvaToOff: (rva: number) => (rva >= 0x1000 && rva < 0x1000 + bytes.length ? rva - 0x1000 : null),
+    sections: [
+      {
+        name: ".text",
+        virtualSize: 1,
+        virtualAddress: 0x1000,
+        sizeOfRawData: bytes.length,
+        pointerToRawData: 0,
+        characteristics: 0x60000020
+      }
+    ]
+  });
+
+  assert.ok(report);
+  assert.ok(
+    report.issues.some(issue => issue.includes("Extra seed") && issue.includes("not within any section"))
+  );
+});

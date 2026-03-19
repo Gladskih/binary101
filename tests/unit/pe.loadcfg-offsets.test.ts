@@ -11,6 +11,7 @@ void test("parseLoadConfigDirectory uses official field offsets (32-bit)", async
   const dv = new DataView(bytes.buffer);
   const lcRva = 0x80;
 
+  // Distinct sentinels make field-offset mixups observable without borrowing production constants as an oracle.
   dv.setUint32(lcRva + 0x00, 0xc4, true); // Size
   dv.setUint32(lcRva + 0x04, 0x12345678, true); // TimeDateStamp
   dv.setUint16(lcRva + 0x08, 5, true); // MajorVersion
@@ -74,6 +75,7 @@ void test("parseLoadConfigDirectory uses official field offsets (64-bit)", async
   const bytes = new Uint8Array(512).fill(0);
   const dv = new DataView(bytes.buffer);
 
+  // Distinct sentinels make field-offset mixups observable without borrowing production constants as an oracle.
   dv.setUint32(0x00, 0x148, true); // Size
   dv.setUint32(0x04, 0x9abcdef0, true); // TimeDateStamp
   dv.setUint16(0x08, 10, true); // MajorVersion
@@ -163,4 +165,28 @@ void test("parseLoadConfigDirectory reads 32-bit and 64-bit fields", async () =>
   assert.equal(lc64.SEHandlerCount, 5);
   assert.equal(lc64.GuardCFFunctionCount, 6);
   assert.equal(lc64.GuardFlags, 0xbeef);
+});
+
+void test("parseLoadConfigDirectory preserves representable 64-bit values instead of collapsing them to zero", async () => {
+  const bytes = new Uint8Array(512).fill(0);
+  const dv = new DataView(bytes.buffer);
+
+  // IMAGE_LOAD_CONFIG_DIRECTORY64 uses 8-byte fields here, and 2^53 is still exactly representable in JS.
+  const exactJsU64 = 0x0020000000000000n;
+  dv.setUint32(0x00, 0x148, true);
+  dv.setBigUint64(0x58, exactJsU64, true); // SecurityCookie
+  dv.setBigUint64(0x140, exactJsU64, true); // UmaFunctionPointers
+
+  const lc = expectDefined(
+    await parseLoadConfigDirectory(
+      new MockFile(bytes, "loadcfg64-exact-u64.bin"),
+      [{ name: "LOAD_CONFIG", rva: 0x10, size: 0x148 }],
+      value => (value === 0x10 ? 0 : value),
+      () => {},
+      true
+    )
+  );
+
+  assert.equal(lc.SecurityCookie, Number(exactJsU64));
+  assert.equal(lc.UmaFunctionPointers, Number(exactJsU64));
 });

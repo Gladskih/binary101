@@ -5,6 +5,27 @@ import { test } from "node:test";
 import { analyzePeInstructionSets } from "../../analyzers/pe/disassembly.js";
 import { MockFile } from "../helpers/mock-file.js";
 
+const IMAGE_FILE_MACHINE_I386 = 0x014c;
+const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
+const IMAGE_BASE_I386 = 0x400000;
+const IMAGE_BASE_AMD64 = 0x140000000;
+const TEXT_SECTION_RVA = 0x1000;
+const TEXT_SECTION_CHARACTERISTICS = 0x60000020;
+
+const createTextSection = (rawSize: number, virtualSize = rawSize) => [
+  {
+    name: ".text",
+    virtualSize,
+    virtualAddress: TEXT_SECTION_RVA,
+    sizeOfRawData: rawSize,
+    pointerToRawData: 0,
+    characteristics: TEXT_SECTION_CHARACTERISTICS
+  }
+];
+
+const mapTextRvaToOffset = (rawSize: number) => (rva: number): number | null =>
+  rva >= TEXT_SECTION_RVA && rva < TEXT_SECTION_RVA + rawSize ? rva - TEXT_SECTION_RVA : null;
+
 void test("analyzePeInstructionSets follows unconditional jumps and skips invalid bytes", async () => {
   const bytes = new Uint8Array([
     0xeb, 0x02, // jmp +2 (to the final nop)
@@ -14,21 +35,12 @@ void test("analyzePeInstructionSets follows unconditional jumps and skips invali
   const file = new MockFile(bytes, "jmp.bin");
 
   const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x8664,
+    coffMachine: IMAGE_FILE_MACHINE_AMD64,
     is64Bit: true,
-    imageBase: 0x140000000,
-    entrypointRva: 0x1000,
+    imageBase: IMAGE_BASE_AMD64,
+    entrypointRva: TEXT_SECTION_RVA,
     rvaToOff: () => 0,
-    sections: [
-      {
-        name: ".text",
-        virtualSize: bytes.length,
-        virtualAddress: 0x1000,
-        sizeOfRawData: bytes.length,
-        pointerToRawData: 0,
-        characteristics: 0x60000020
-      }
-    ]
+    sections: createTextSection(bytes.length)
   });
 
   assert.ok(report);
@@ -44,21 +56,12 @@ void test("analyzePeInstructionSets samples full section bytes by default", asyn
   const file = new MockFile(bytes, "big.bin");
 
   const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x8664,
+    coffMachine: IMAGE_FILE_MACHINE_AMD64,
     is64Bit: true,
-    imageBase: 0x140000000,
-    entrypointRva: 0x1000,
+    imageBase: IMAGE_BASE_AMD64,
+    entrypointRva: TEXT_SECTION_RVA,
     rvaToOff: () => 0,
-    sections: [
-      {
-        name: ".text",
-        virtualSize: bytes.length,
-        virtualAddress: 0x1000,
-        sizeOfRawData: bytes.length,
-        pointerToRawData: 0,
-        characteristics: 0x60000020
-      }
-    ]
+    sections: createTextSection(bytes.length)
   });
 
   assert.ok(report);
@@ -67,191 +70,41 @@ void test("analyzePeInstructionSets samples full section bytes by default", asyn
   assert.equal(report.instructionCount, 1);
 });
 
-void test("analyzePeInstructionSets uses export RVAs when provided", async () => {
-  const bytes = new Uint8Array([
-    0xf0, 0x01, 0xce, // invalid instruction bytes
-    0x90 // nop (export start)
-  ]);
-  const file = new MockFile(bytes, "export.bin");
+for (const seedCase of [
+  { label: "export RVAs", fileName: "export.bin", seedOptions: { exportRvas: [TEXT_SECTION_RVA + 3] } },
+  { label: "unwind begin RVAs", fileName: "unwind.bin", seedOptions: { unwindBeginRvas: [TEXT_SECTION_RVA + 3] } },
+  { label: "unwind handler RVAs", fileName: "unwind-handler.bin", seedOptions: { unwindHandlerRvas: [TEXT_SECTION_RVA + 3] } },
+  { label: "GuardCF function RVAs", fileName: "guardcf.bin", seedOptions: { guardCFFunctionRvas: [TEXT_SECTION_RVA + 3] } },
+  {
+    label: "SafeSEH handler RVAs",
+    fileName: "safeseh.bin",
+    seedOptions: { safeSehHandlerRvas: [TEXT_SECTION_RVA + 3] },
+    coffMachine: IMAGE_FILE_MACHINE_I386,
+    imageBase: IMAGE_BASE_I386,
+    is64Bit: false
+  },
+  { label: "TLS callback RVAs", fileName: "tls-callback.bin", seedOptions: { tlsCallbackRvas: [TEXT_SECTION_RVA + 3] } }
+]) {
+  void test(`analyzePeInstructionSets uses ${seedCase.label} when provided`, async () => {
+    const bytes = new Uint8Array([
+      0xf0, 0x01, 0xce, // invalid instruction bytes
+      0x90 // nop at the seeded entrypoint
+    ]);
+    const report = await analyzePeInstructionSets(new MockFile(bytes, seedCase.fileName), {
+      coffMachine: seedCase.coffMachine ?? IMAGE_FILE_MACHINE_AMD64,
+      is64Bit: seedCase.is64Bit ?? true,
+      imageBase: seedCase.imageBase ?? IMAGE_BASE_AMD64,
+      entrypointRva: 0,
+      rvaToOff: mapTextRvaToOffset(bytes.length),
+      sections: createTextSection(bytes.length),
+      ...seedCase.seedOptions
+    });
 
-  const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x8664,
-    is64Bit: true,
-    imageBase: 0x140000000,
-    entrypointRva: 0,
-    exportRvas: [0x1003],
-    rvaToOff: (rva: number) => (rva >= 0x1000 && rva < 0x1000 + bytes.length ? rva - 0x1000 : null),
-    sections: [
-      {
-        name: ".text",
-        virtualSize: bytes.length,
-        virtualAddress: 0x1000,
-        sizeOfRawData: bytes.length,
-        pointerToRawData: 0,
-        characteristics: 0x60000020
-      }
-    ]
+    assert.ok(report);
+    assert.equal(report.instructionCount, 1);
+    assert.equal(report.invalidInstructionCount, 0);
   });
-
-  assert.ok(report);
-  assert.equal(report.instructionCount, 1);
-  assert.equal(report.invalidInstructionCount, 0);
-});
-
-void test("analyzePeInstructionSets uses unwind begin RVAs when provided", async () => {
-  const bytes = new Uint8Array([
-    0xf0, 0x01, 0xce, // invalid instruction bytes
-    0x90 // nop (unwind begin)
-  ]);
-  const file = new MockFile(bytes, "unwind.bin");
-
-  const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x8664,
-    is64Bit: true,
-    imageBase: 0x140000000,
-    entrypointRva: 0,
-    unwindBeginRvas: [0x1003],
-    rvaToOff: (rva: number) => (rva >= 0x1000 && rva < 0x1000 + bytes.length ? rva - 0x1000 : null),
-    sections: [
-      {
-        name: ".text",
-        virtualSize: bytes.length,
-        virtualAddress: 0x1000,
-        sizeOfRawData: bytes.length,
-        pointerToRawData: 0,
-        characteristics: 0x60000020
-      }
-    ]
-  });
-
-  assert.ok(report);
-  assert.equal(report.instructionCount, 1);
-  assert.equal(report.invalidInstructionCount, 0);
-});
-
-void test("analyzePeInstructionSets uses unwind handler RVAs when provided", async () => {
-  const bytes = new Uint8Array([
-    0xf0, 0x01, 0xce, // invalid instruction bytes
-    0x90 // nop (unwind handler)
-  ]);
-  const file = new MockFile(bytes, "unwind-handler.bin");
-
-  const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x8664,
-    is64Bit: true,
-    imageBase: 0x140000000,
-    entrypointRva: 0,
-    unwindHandlerRvas: [0x1003],
-    rvaToOff: (rva: number) => (rva >= 0x1000 && rva < 0x1000 + bytes.length ? rva - 0x1000 : null),
-    sections: [
-      {
-        name: ".text",
-        virtualSize: bytes.length,
-        virtualAddress: 0x1000,
-        sizeOfRawData: bytes.length,
-        pointerToRawData: 0,
-        characteristics: 0x60000020
-      }
-    ]
-  });
-
-  assert.ok(report);
-  assert.equal(report.instructionCount, 1);
-  assert.equal(report.invalidInstructionCount, 0);
-});
-
-void test("analyzePeInstructionSets uses GuardCF function RVAs when provided", async () => {
-  const bytes = new Uint8Array([
-    0xf0, 0x01, 0xce, // invalid instruction bytes
-    0x90 // nop (GuardCF function)
-  ]);
-  const file = new MockFile(bytes, "guardcf.bin");
-
-  const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x8664,
-    is64Bit: true,
-    imageBase: 0x140000000,
-    entrypointRva: 0,
-    guardCFFunctionRvas: [0x1003],
-    rvaToOff: (rva: number) => (rva >= 0x1000 && rva < 0x1000 + bytes.length ? rva - 0x1000 : null),
-    sections: [
-      {
-        name: ".text",
-        virtualSize: bytes.length,
-        virtualAddress: 0x1000,
-        sizeOfRawData: bytes.length,
-        pointerToRawData: 0,
-        characteristics: 0x60000020
-      }
-    ]
-  });
-
-  assert.ok(report);
-  assert.equal(report.instructionCount, 1);
-  assert.equal(report.invalidInstructionCount, 0);
-});
-
-void test("analyzePeInstructionSets uses SafeSEH handler RVAs when provided", async () => {
-  const bytes = new Uint8Array([
-    0xf0, 0x01, 0xce, // invalid instruction bytes
-    0x90 // nop (SafeSEH handler)
-  ]);
-  const file = new MockFile(bytes, "safeseh.bin");
-
-  const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x014c,
-    is64Bit: false,
-    imageBase: 0x400000,
-    entrypointRva: 0,
-    safeSehHandlerRvas: [0x1003],
-    rvaToOff: (rva: number) => (rva >= 0x1000 && rva < 0x1000 + bytes.length ? rva - 0x1000 : null),
-    sections: [
-      {
-        name: ".text",
-        virtualSize: bytes.length,
-        virtualAddress: 0x1000,
-        sizeOfRawData: bytes.length,
-        pointerToRawData: 0,
-        characteristics: 0x60000020
-      }
-    ]
-  });
-
-  assert.ok(report);
-  assert.equal(report.instructionCount, 1);
-  assert.equal(report.invalidInstructionCount, 0);
-});
-
-void test("analyzePeInstructionSets uses TLS callback RVAs when provided", async () => {
-  const bytes = new Uint8Array([
-    0xf0, 0x01, 0xce, // invalid instruction bytes
-    0x90 // nop (TLS callback)
-  ]);
-  const file = new MockFile(bytes, "tls-callback.bin");
-
-  const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x8664,
-    is64Bit: true,
-    imageBase: 0x140000000,
-    entrypointRva: 0,
-    tlsCallbackRvas: [0x1003],
-    rvaToOff: (rva: number) => (rva >= 0x1000 && rva < 0x1000 + bytes.length ? rva - 0x1000 : null),
-    sections: [
-      {
-        name: ".text",
-        virtualSize: bytes.length,
-        virtualAddress: 0x1000,
-        sizeOfRawData: bytes.length,
-        pointerToRawData: 0,
-        characteristics: 0x60000020
-      }
-    ]
-  });
-
-  assert.ok(report);
-  assert.equal(report.instructionCount, 1);
-  assert.equal(report.invalidInstructionCount, 0);
-});
+}
 
 void test("analyzePeInstructionSets continues past UD2 trap instructions", async () => {
   const bytes = new Uint8Array([
@@ -262,21 +115,12 @@ void test("analyzePeInstructionSets continues past UD2 trap instructions", async
   const file = new MockFile(bytes, "ud2.bin");
 
   const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x8664,
+    coffMachine: IMAGE_FILE_MACHINE_AMD64,
     is64Bit: true,
-    imageBase: 0x140000000,
-    entrypointRva: 0x1000,
+    imageBase: IMAGE_BASE_AMD64,
+    entrypointRva: TEXT_SECTION_RVA,
     rvaToOff: () => 0,
-    sections: [
-      {
-        name: ".text",
-        virtualSize: bytes.length,
-        virtualAddress: 0x1000,
-        sizeOfRawData: bytes.length,
-        pointerToRawData: 0,
-        characteristics: 0x60000020
-      }
-    ]
+    sections: createTextSection(bytes.length)
   });
 
   assert.ok(report);
@@ -284,4 +128,24 @@ void test("analyzePeInstructionSets continues past UD2 trap instructions", async
   assert.equal(report.invalidInstructionCount, 0);
   assert.equal(report.bytesDecoded, bytes.length);
   assert.ok(!report.issues.some(issue => issue.toLowerCase().includes("invalid instruction")));
+});
+
+void test("analyzePeInstructionSets samples only the loaded VirtualSize, not raw-file padding", async () => {
+  const bytes = new Uint8Array([
+    0x90, // mapped code byte
+    0x90, 0x90, 0x90 // raw padding bytes that are not part of the loaded image
+  ]);
+  const file = new MockFile(bytes, "raw-tail.bin");
+
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: IMAGE_FILE_MACHINE_AMD64,
+    is64Bit: true,
+    imageBase: IMAGE_BASE_AMD64,
+    entrypointRva: TEXT_SECTION_RVA,
+    rvaToOff: () => 0,
+    sections: createTextSection(bytes.length, 1)
+  });
+
+  assert.ok(report);
+  assert.equal(report.bytesSampled, 1);
 });
