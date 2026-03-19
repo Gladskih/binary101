@@ -84,3 +84,39 @@ void test("parseDebugDirectory bounds CodeView reads to header and path chunks",
     `Expected bounded CodeView reads, got requests ${tracked.requests.join(", ")}`
   );
 });
+
+void test("parseDebugDirectory clamps the CodeView path to SizeOfData", async () => {
+  const bytes = new Uint8Array(512).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const debugRva = 0x40;
+  const dataRva = 0x120;
+  dv.setUint32(debugRva + 12, 2, true);
+  dv.setUint32(debugRva + 16, 25, true); // 24-byte RSDS header + 1 byte of path data.
+  dv.setUint32(debugRva + 20, dataRva, true);
+  dv.setUint32(debugRva + 24, dataRva, true);
+  dv.setUint32(dataRva + 0, 0x53445352, true);
+  dv.setUint32(dataRva + 4, 0x11223344, true);
+  dv.setUint16(dataRva + 8, 0x5566, true);
+  dv.setUint16(dataRva + 10, 0x7788, true);
+  dv.setUint8(dataRva + 12, 0xaa);
+  dv.setUint8(dataRva + 13, 0xbb);
+  dv.setUint8(dataRva + 14, 0xcc);
+  dv.setUint8(dataRva + 15, 0xdd);
+  dv.setUint8(dataRva + 16, 0xee);
+  dv.setUint8(dataRva + 17, 0xff);
+  dv.setUint8(dataRva + 18, 0x00);
+  dv.setUint8(dataRva + 19, 0x11);
+  dv.setUint32(dataRva + 20, 9, true);
+  // The stored path is longer than SizeOfData allows, so only the initial "A" is valid.
+  encoder.encodeInto("ABC\0", new Uint8Array(bytes.buffer, dataRva + 24));
+
+  const result = await parseDebugDirectory(
+    new MockFile(bytes, "debug-sizeofdata.bin"),
+    [{ name: "DEBUG", rva: debugRva, size: 28 }],
+    value => value,
+    () => {}
+  );
+
+  const entry = expectDefined(result.entry);
+  assert.equal(entry.path, "A");
+});

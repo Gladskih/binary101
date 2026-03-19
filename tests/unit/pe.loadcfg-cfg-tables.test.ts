@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  readGuardCFFunctionTableRvas,
   readGuardAddressTakenIatEntryTableRvas,
   readGuardEhContinuationTableRvas,
   readGuardLongJumpTargetTableRvas,
@@ -60,4 +61,25 @@ void test("Guard longjmp/address-taken IAT CFG tables return empty list for unma
 
   assert.deepEqual(await readGuardLongJumpTargetTableRvas(file, () => null, imageBase, tableVa, 1), []);
   assert.deepEqual(await readGuardAddressTakenIatEntryTableRvas(file, () => null, imageBase, tableVa, 1), []);
+});
+
+void test("readGuardCFFunctionTableRvas stops when later entries no longer map through rvaToOff", async () => {
+  const imageBase = 0x400000;
+  const tableRva = 0x80;
+  const tableVa = imageBase + tableRva;
+  const bytes = new Uint8Array(8).fill(0);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(0, 0x1111, true);
+  dv.setUint32(4, 0x2222, true);
+
+  const rvas = await readGuardCFFunctionTableRvas(
+    new MockFile(bytes, "cfg-gap.bin"),
+    // Only the first table RVA is mapped; the second logical entry should not be read from a flat raw span.
+    rva => (rva === tableRva ? 0 : null),
+    imageBase,
+    tableVa,
+    2
+  );
+
+  assert.deepEqual(rvas, [0x1111]);
 });

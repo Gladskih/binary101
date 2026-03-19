@@ -59,6 +59,18 @@ void test("parsePe correctly parses a minimal PE header", async () => {
   assert.strictEqual(result.opt.ImageBase, 0x00400000, "Optional header ImageBase should be parsed correctly");
 });
 
+void test("parsePe does not treat a headers-only image as overlay data", async () => {
+  const peBytes = createTinyPEHeader();
+  const result = await parsePe(new MockFile(peBytes, "headers-only.exe"));
+
+  assert.ok(result, "parsePe should return a parsed object for a valid PE file");
+  assert.strictEqual(result.overlaySize, 0, "Header bytes are not overlay when the image has no sections");
+  assert.ok(
+    !result.coverage.some(region => region.label.startsWith("Overlay")),
+    "Coverage should not report an overlay region when no bytes exist past the headers"
+  );
+});
+
 void test("parsePe returns null for a non-PE file", async () => {
   const notPeBytes = new Uint8Array(256).fill(0xff);
   const mockFile = new MockFile(notPeBytes, "not-a-pe.bin");

@@ -19,6 +19,28 @@ void test("buildResourceTree returns null when resource directory is missing or 
   assert.strictEqual(unmapped, null);
 });
 
+void test("buildResourceTree ignores directory entries that lie past the declared resource span", async () => {
+  const bytes = new Uint8Array(0x40).fill(0);
+  const dv = new DataView(bytes.buffer);
+
+  setU16(dv, 12, 0);
+  setU16(dv, 14, 1);
+  // The resource data directory declares only the 16-byte root header.
+  setU32(dv, 16, 3);
+  // High bit marks a subdirectory and the low bits point to relative offset 0x20, which lies past dir.size=16.
+  setU32(dv, 20, 0x80000020);
+
+  const tree = expectDefined(await buildResourceTree(
+    new MockFile(bytes, "resource-oob-root.bin"),
+    [{ name: "RESOURCE", rva: 1, size: 16 }],
+    () => 0,
+    () => {}
+  ));
+
+  assert.deepStrictEqual(tree.top, []);
+  assert.deepStrictEqual(tree.detail, []);
+});
+
 void test("buildResourceTree parses nested resource directories and skips truncated labels", async () => {
   const bytes = new Uint8Array(0x130).fill(0);
   const dv = new DataView(bytes.buffer);

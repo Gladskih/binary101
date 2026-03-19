@@ -78,6 +78,24 @@ void test("parseImportDirectory warns on unmapped name RVA", async () => {
   assert.ok(warning && /name rva/i.test(warning));
 });
 
+void test("parseImportDirectory warns when a mapped DLL name offset falls past EOF", async () => {
+  const bytes = new Uint8Array(128).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const impBase = 0x10;
+  dv.setUint32(impBase + 12, 0x40, true);
+
+  const { warning } = await parseImportDirectory(
+    new MockFile(bytes),
+    [{ name: "IMPORT", rva: impBase, size: 40 }],
+    // The mapper accepts the descriptor itself but pushes the DLL name 0x200 bytes past a 128-byte file.
+    value => (value === impBase ? impBase : value === 0 ? null : value + 0x200),
+    () => {},
+    false
+  );
+
+  assert.ok(warning && /name rva/i.test(warning));
+});
+
 void test("parseImportDirectory warns on unmapped thunk RVA (x86)", async () => {
   const bytes = new Uint8Array(128).fill(0);
   const dv = new DataView(bytes.buffer);

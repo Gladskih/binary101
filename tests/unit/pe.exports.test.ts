@@ -188,3 +188,23 @@ void test("parseExportDirectory stops reading export strings at EOF without unbo
 
   assert.equal(expectDefined(result).dllName, "A");
 });
+
+void test("parseExportDirectory reports when a mapped DLL name offset falls past EOF", async () => {
+  const bytes = new Uint8Array(128).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const expRva = 0x10;
+  dv.setUint32(expRva + 12, 0x40, true);
+  dv.setUint32(expRva + 20, 1, true);
+  dv.setUint32(expRva + 28, 0x60, true);
+  dv.setUint32(0x60, 0x1234, true);
+
+  const result = expectDefined(await parseExportDirectory(
+    new MockFile(bytes, "exports-name-oob.bin"),
+    [{ name: "EXPORT", rva: expRva, size: 40 }],
+    // The export directory itself maps, but every other RVA is shifted 0x200 bytes past EOF.
+    value => (value === expRva || value === 0x60 ? value : value === 0 ? null : value + 0x200),
+    () => {}
+  ));
+
+  assert.ok(result.issues.some(issue => /name/i.test(issue)));
+});

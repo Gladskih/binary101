@@ -131,3 +131,68 @@ void test("parseDynamicRelocationsFromLoadConfig warns when the declared V1 payl
   assert.equal(parsed.version, 1);
   assert.ok(parsed.warnings?.some(w => w.toLowerCase().includes("truncated")));
 });
+
+void test("parseDynamicRelocationsFromLoadConfig preserves 64-bit V1 symbols for PE32+", async () => {
+  const tableOff = 0x80;
+  const bytes = new Uint8Array(0x200).fill(0);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(tableOff + 0x00, 1, true); // Version
+  // PE32+ V1 entry header is 8-byte symbol + 4-byte BaseRelocSize, so dataSize is 0x0c here.
+  dv.setUint32(tableOff + 0x04, 0x0c, true);
+  // The high dword must survive parsing; truncation to 32 bits is the bug under test.
+  dv.setBigUint64(tableOff + 0x08, 0x0000000100000001n, true);
+  dv.setUint32(tableOff + 0x10, 0, true);
+
+  const lc = makeLoadConfig({ DynamicValueRelocTableSection: 1, DynamicValueRelocTableOffset: tableOff });
+  const parsed = expectDefined(
+    await parseDynamicRelocationsFromLoadConfig(
+      new MockFile(bytes, "dynrel-v1-pe32plus.bin"),
+      makeSingleSection(),
+      rva => rva,
+      0x140000000,
+      true,
+      lc
+    )
+  );
+
+  assert.equal(parsed.version, 1);
+  assert.equal(parsed.entries.length, 1);
+  const entry = expectDefined(parsed.entries[0]);
+  assert.equal(entry.kind, "v1");
+  if (entry.kind !== "v1") throw new Error("Expected v1 entry.");
+  assert.equal(entry.symbol, Number(0x0000000100000001n));
+});
+
+void test("parseDynamicRelocationsFromLoadConfig preserves 64-bit V2 symbols for PE32+", async () => {
+  const tableOff = 0x80;
+  const bytes = new Uint8Array(0x200).fill(0);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(tableOff + 0x00, 2, true); // Version
+  // PE32+ V2 minimum header is 0x18 bytes: 8 bytes of fixed fields + 8-byte symbol + group + flags.
+  dv.setUint32(tableOff + 0x04, 0x18, true);
+  dv.setUint32(tableOff + 0x08, 0x18, true); // HeaderSize
+  dv.setUint32(tableOff + 0x0c, 0, true); // FixupInfoSize
+  // The high dword must survive parsing; truncation to 32 bits is the bug under test.
+  dv.setBigUint64(tableOff + 0x10, 0x0000000100000002n, true);
+  dv.setUint32(tableOff + 0x18, 7, true);
+  dv.setUint32(tableOff + 0x1c, 0x55, true);
+
+  const lc = makeLoadConfig({ DynamicValueRelocTableSection: 1, DynamicValueRelocTableOffset: tableOff });
+  const parsed = expectDefined(
+    await parseDynamicRelocationsFromLoadConfig(
+      new MockFile(bytes, "dynrel-v2-pe32plus.bin"),
+      makeSingleSection(),
+      rva => rva,
+      0x140000000,
+      true,
+      lc
+    )
+  );
+
+  assert.equal(parsed.version, 2);
+  assert.equal(parsed.entries.length, 1);
+  const entry = expectDefined(parsed.entries[0]);
+  assert.equal(entry.kind, "v2");
+  if (entry.kind !== "v2") throw new Error("Expected v2 entry.");
+  assert.equal(entry.symbol, Number(0x0000000100000002n));
+});

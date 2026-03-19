@@ -31,3 +31,27 @@ void test("collectLoadConfigWarnings reports tables that do not fit in file/imag
   const warnings = collectLoadConfigWarnings(file.size, value => value, 0x400000, 0x200, lc);
   assert.ok(warnings.some(w => w.includes("GuardCFFunctionTable")));
 });
+
+void test("collectLoadConfigWarnings reports tables that start outside SizeOfImage even when raw bytes exist", async () => {
+  const bytes = new Uint8Array(0x400).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const lcRva = 0x80;
+
+  dv.setUint32(lcRva + 0x00, 0xc0, true);
+  // This RVA is outside SizeOfImage=0x200 below but still inside the raw file, which is the bug trigger.
+  dv.setUint32(lcRva + 0x50, 0x300, true);
+  dv.setUint32(lcRva + 0x54, 1, true);
+
+  const lc = expectDefined(
+    await parseLoadConfigDirectory(
+      new MockFile(bytes, "loadcfg-sizeofimage.bin"),
+      [{ name: "LOAD_CONFIG", rva: lcRva, size: 0xc0 }],
+      value => value,
+      () => {},
+      false
+    )
+  );
+
+  const warnings = collectLoadConfigWarnings(bytes.length, value => value, 0x400000, 0x200, lc);
+  assert.ok(warnings.some(w => /GuardCFFunctionTable/.test(w) && /SizeOfImage/.test(w)));
+});

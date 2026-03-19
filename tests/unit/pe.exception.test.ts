@@ -110,6 +110,42 @@ void test("parseExceptionDirectory reports truncation when the directory spills 
   assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("truncated")));
 });
 
+void test("parseExceptionDirectory stops when later RUNTIME_FUNCTION slots no longer map through rvaToOff", async () => {
+  const bytes = new Uint8Array(0x200).fill(0);
+  const exRva = 0x80;
+  const dv = new DataView(bytes.buffer);
+
+  dv.setUint32(0x00, 0x1000, true);
+  dv.setUint32(0x04, 0x1010, true);
+  dv.setUint32(0x08, 0x2000, true);
+  dv.setUint32(0x0c, 0x1200, true);
+  dv.setUint32(0x10, 0x1210, true);
+  dv.setUint32(0x14, 0x2200, true);
+  bytes[0x60] = 0x01;
+  bytes[0xa0] = 0x01;
+
+  const sparseRvaToOff = (rva: number): number | null => {
+    // Only the first pdata slot is actually mapped; the second logical slot must not be read from flat bytes.
+    if (rva === exRva) return 0;
+    if (rva >= 0x1000 && rva < 0x1010) return 0x20 + (rva - 0x1000);
+    if (rva >= 0x1200 && rva < 0x1210) return 0x40 + (rva - 0x1200);
+    if (rva === 0x2000) return 0x60;
+    if (rva === 0x2200) return 0xa0;
+    return null;
+  };
+
+  const parsed = await parseExceptionDirectory(
+    new MockFile(bytes, "exception-gap.bin"),
+    [{ name: "EXCEPTION", rva: exRva, size: 24 }],
+    sparseRvaToOff,
+    coverageAdd
+  );
+
+  assert.ok(parsed);
+  assert.strictEqual(parsed.functionCount, 1);
+  assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("truncated")));
+});
+
 void test("parseExceptionDirectory returns empty stats when no complete entry is available", async () => {
   const exOff = 0x80;
   const bytes = new Uint8Array(exOff + 6).fill(0);
@@ -195,6 +231,38 @@ void test("parseExceptionDirectory counts invalid RUNTIME_FUNCTION ranges", asyn
   assert.ok(parsed);
   assert.strictEqual(parsed.functionCount, 2);
   assert.strictEqual(parsed.invalidEntryCount, 1);
+});
+
+void test("parseExceptionDirectory does not parse aligned-down UNWIND_INFO after the recorded RVA is invalid", async () => {
+  const bytes = new Uint8Array(0x2400).fill(0);
+  const exOff = 0x80;
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(exOff + 0, 0x1000, true);
+  dv.setUint32(exOff + 4, 0x1010, true);
+  dv.setUint32(exOff + 8, 0x2002, true);
+
+  bytes[0x2000] = 0x09;
+  dv.setUint32(0x2004, 0x1500, true);
+
+  const alignedOnlyRvaToOff = (rva: number): number | null => {
+    if (rva === exOff) return exOff;
+    // 0x2002 is invalid, but 0x2000 is mapped; the parser must not invent a handler by rounding down.
+    if (rva >= 0x1000 && rva < 0x1010) return 0x1000 + (rva - 0x1000);
+    if (rva === 0x2000) return 0x2000;
+    return null;
+  };
+
+  const parsed = await parseExceptionDirectory(
+    new MockFile(bytes, "exception-unaligned-unwind.bin"),
+    [{ name: "EXCEPTION", rva: exOff, size: 12 }],
+    alignedOnlyRvaToOff,
+    coverageAdd
+  );
+
+  assert.ok(parsed);
+  assert.strictEqual(parsed.invalidEntryCount, 1);
+  assert.strictEqual(parsed.handlerUnwindInfoCount, 0);
+  assert.deepEqual(parsed.handlerRvas, []);
 });
 
 void test("parseExceptionDirectory does not decode x64 unwind records for unsupported machines", async () => {
