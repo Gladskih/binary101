@@ -14,9 +14,6 @@ const IMAGE_DEBUG_DIRECTORY_OFF_SIZE_OF_DATA = 0x10;
 const IMAGE_DEBUG_DIRECTORY_OFF_ADDRESS_OF_RAW_DATA = 0x14;
 const IMAGE_DEBUG_DIRECTORY_OFF_POINTER_TO_RAW_DATA = 0x18;
 
-// Guard against degenerate/malicious files with huge debug directory sizes.
-const MAX_DEBUG_DIRECTORY_ENTRIES = 16;
-
 // PE/COFF: IMAGE_DEBUG_TYPE_CODEVIEW
 const IMAGE_DEBUG_TYPE_CODEVIEW = 2;
 
@@ -35,18 +32,17 @@ export async function parseDebugDirectory(
   addCoverageRegion: AddCoverageRegion
 ): Promise<{ entry: { guid: string; age: number; path: string } | null; warning: string | null }> {
   const debugDir = dataDirs.find(d => d.name === "DEBUG");
-  if (!debugDir?.rva || debugDir.size < IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE) return { entry: null, warning: null };
+  if (!debugDir?.rva) return { entry: null, warning: null };
   const baseOffset = rvaToOff(debugDir.rva);
   if (baseOffset == null) return { entry: null, warning: "Debug directory RVA does not map to a file offset." };
   const fileSize = typeof file.size === "number" ? file.size : Infinity;
   if (baseOffset >= fileSize) return { entry: null, warning: "Debug directory starts past end of file." };
   const availableDirSize = Math.min(debugDir.size, Math.max(0, fileSize - baseOffset));
   addCoverageRegion("DEBUG directory", baseOffset, availableDirSize);
-  const maxEntries =
-    Math.min(MAX_DEBUG_DIRECTORY_ENTRIES, Math.floor(availableDirSize / IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE));
-  if (maxEntries === 0) {
+  if (availableDirSize < IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE) {
     return { entry: null, warning: "Debug directory is smaller than one entry; file may be truncated." };
   }
+  const maxEntries = Math.floor(availableDirSize / IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE);
   let warning =
     availableDirSize < debugDir.size
       ? "Debug directory is shorter than recorded size (possible truncation)."

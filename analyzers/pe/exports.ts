@@ -109,6 +109,10 @@ export async function parseExportDirectory(
       for (let nameIndex = 0; nameIndex < maxNames; nameIndex += 1) {
         const nameRva = nameTable.getUint32(nameIndex * 4, true);
         const funcIndex = ordTable.getUint16(nameIndex * 2, true);
+        if (funcIndex >= NumberOfFunctions) {
+          issues.push(`Export ordinal table entry ${funcIndex} is out of range for ${NumberOfFunctions} functions.`);
+          continue;
+        }
         const nameOffset = rvaToOff(nameRva);
         if (isReadableOffset(nameOffset)) {
           functionNames.set(funcIndex, await readStr(nameOffset));

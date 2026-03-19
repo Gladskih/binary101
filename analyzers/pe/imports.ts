@@ -38,21 +38,28 @@ export async function parseImportDirectory(
   if (!impDir?.rva) return { entries: imports };
   const start = rvaToOff(impDir.rva);
   if (start == null || start >= file.size) return { entries: imports };
-  addCoverageRegion("IMPORT directory", start, impDir.size);
-  const maxDescriptors = Math.max(1, Math.floor(impDir.size / 20));
+  const availableDirSize = Math.max(0, Math.min(impDir.size, file.size - start));
+  addCoverageRegion("IMPORT directory", start, availableDirSize);
+  const maxDescriptors = Math.ceil(availableDirSize / 20);
   const addWarning = (msg: string): void => {
     warnings.add(msg);
   };
   for (let index = 0; index < maxDescriptors; index += 1) {
     const offset = start + index * 20;
-    const desc = new DataView(await file.slice(offset, offset + 20).arrayBuffer());
-    if (desc.byteLength < 20) {
-      addWarning("Import directory truncated before descriptor end.");
-      break;
-    }
-    const originalFirstThunk = desc.getUint32(0, true);
-    const nameRva = desc.getUint32(12, true);
-    const firstThunk = desc.getUint32(16, true);
+    const descriptorSize = Math.min(20, Math.max(0, availableDirSize - index * 20));
+    if (descriptorSize <= 0) break;
+    const descriptorTruncated = descriptorSize < 20;
+    const desc = new DataView(await file.slice(offset, offset + descriptorSize).arrayBuffer());
+    const readDescriptorField = (fieldOffset: number, fieldName: string): number | null => {
+      if (desc.byteLength < fieldOffset + 4) {
+        addWarning(`Import descriptor is truncated before the ${fieldName} field.`);
+        return null;
+      }
+      return desc.getUint32(fieldOffset, true);
+    };
+    const originalFirstThunk = readDescriptorField(0, "OriginalFirstThunk") ?? 0;
+    const nameRva = readDescriptorField(12, "name RVA") ?? 0;
+    const firstThunk = readDescriptorField(16, "thunk RVA") ?? 0;
     if (!originalFirstThunk && !nameRva && !firstThunk) break;
     const nameOffset = rvaToOff(nameRva);
     let dllName = "";
@@ -62,6 +69,7 @@ export async function parseImportDirectory(
     } else if (nameRva) {
       addWarning("Import name RVA does not map to file data.");
     }
+    if (descriptorTruncated) break;
     const thunkRva = originalFirstThunk || firstThunk;
     const thunkOffset = rvaToOff(thunkRva);
     const functions: PeImportFunction[] = [];
@@ -78,6 +86,9 @@ export async function parseImportDirectory(
           const value = dv.getBigUint64(0, true);
           if (value === 0n) break;
           if ((value & 0x8000000000000000n) !== 0n) {
+            if ((value & 0x7fffffffffff0000n) !== 0n) {
+              addWarning("Import ordinal thunk has reserved bits set.");
+            }
             functions.push({ ordinal: Number(value & 0xffffn) });
           } else {
             const hintNameRva = Number(value & 0xffffffffn);
@@ -123,6 +134,9 @@ export async function parseImportDirectory(
           const value = dv.getUint32(0, true);
           if (value === 0) break;
           if ((value & 0x80000000) !== 0) {
+            if ((value & 0x7fff0000) !== 0) {
+              addWarning("Import ordinal thunk has reserved bits set.");
+            }
             functions.push({ ordinal: value & 0xffff });
           } else {
             const hintNameOffset = rvaToOff(value);
