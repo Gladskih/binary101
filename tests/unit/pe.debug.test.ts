@@ -19,6 +19,7 @@ const RSDS_TEST_GUID_BYTES = Uint8Array.from([
   0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10
 ]);
 const RSDS_TEST_GUID_TEXT = "04030201-0605-0807-090a-0b0c0d0e0f10";
+const rsdsRecordSize = (path: string): number => RSDS_HEADER_SIZE + encoder.encode(`${path}\0`).length;
 
 const writeRsdsRecord = (
   view: DataView,
@@ -112,6 +113,32 @@ void test("parseDebugDirectory warns when the declared directory is smaller than
 
   assert.equal(result.entry, null);
   assert.ok(result.warning && /smaller|truncated/i.test(result.warning));
+});
+
+void test("parseDebugDirectory does not decode entries past an rvaToOff gap", async () => {
+  const path = "C:\\symbols\\gap.pdb";
+  const debugRva = IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE * 2;
+  const secondEntryRva = debugRva + IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE;
+  const dataRva = secondEntryRva + IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE;
+  const bytes = new Uint8Array(dataRva + rsdsRecordSize(path)).fill(0);
+  const dv = new DataView(bytes.buffer);
+  writeRsdsRecord(
+    dv,
+    bytes,
+    secondEntryRva,
+    dataRva,
+    5,
+    path
+  );
+
+  const result = await parseDebugDirectory(
+    new MockFile(bytes, "debug-gap.bin"),
+    [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE * 2 }],
+    value => (value === debugRva ? debugRva : null),
+    () => {}
+  );
+
+  assert.equal(result.entry, null);
 });
 
 void test("parseDebugDirectory continues past the first 16 entries to find later CodeView records", async () => {

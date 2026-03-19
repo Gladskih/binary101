@@ -150,6 +150,51 @@ void test("computePeAuthenticodeDigest dispatches to the strict parsed-PE path w
   assert.strictEqual(dispatchedDigest, strictDigest);
 });
 
+void test("computePeAuthenticodeDigestFromParsedPe orders sections by RVA before hashing", async () => {
+  const { bytes, core, file } = createStrictAuthenticodeFixture();
+  const originalSection = core.sections[0];
+  assert.ok(originalSection);
+  const splitRawSize = originalSection.sizeOfRawData / 2;
+  const laterRvaRawOffset = originalSection.pointerToRawData;
+  const earlierRvaRawOffset = laterRvaRawOffset + splitRawSize;
+  const reorderedCore = {
+    ...core,
+    dataDirs: [],
+    sections: [
+      {
+        ...originalSection,
+        name: ".late",
+        virtualSize: splitRawSize,
+        virtualAddress: originalSection.virtualAddress + splitRawSize,
+        sizeOfRawData: splitRawSize,
+        pointerToRawData: laterRvaRawOffset
+      },
+      {
+        ...originalSection,
+        name: ".early",
+        virtualSize: splitRawSize,
+        sizeOfRawData: splitRawSize,
+        pointerToRawData: earlierRvaRawOffset
+      }
+    ]
+  };
+  // Authenticode orders sections by address range before hashing, even if raw file offsets are out of order.
+  const expectedBytes = collectFixtureBytes(bytes, [
+    ...listLegacyBestEffortAuthenticodeHashRanges(reorderedCore.opt.SizeOfHeaders),
+    { start: earlierRvaRawOffset, end: earlierRvaRawOffset + splitRawSize },
+    { start: laterRvaRawOffset, end: laterRvaRawOffset + splitRawSize }
+  ]);
+  const expectedDigest = toHex(await crypto.subtle.digest("SHA-256", expectedBytes));
+
+  const computed = await computePeAuthenticodeDigestFromParsedPe(
+    file,
+    reorderedCore,
+    undefined,
+    "SHA-256"
+  );
+  assert.strictEqual(computed, expectedDigest);
+});
+
 void test("computePeAuthenticodeDigest dispatches to the legacy best-effort path when parsed section context is absent", async () => {
   const { core, file, securityDir } = createBestEffortAuthenticodeFixture();
   const bestEffortDigest = await computePeAuthenticodeDigestBestEffort(file, core, securityDir, "SHA-256");

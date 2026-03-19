@@ -7,6 +7,10 @@ import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
 type CoverageEntry = { label: string; start: number; size: number };
+const WIN_CERTIFICATE_HEADER_SIZE = 8;
+const WIN_CERT_REVISION_2_0 = 0x0200;
+const WIN_CERT_TYPE_X509 = 0x0001;
+const WIN_CERT_TYPE_PKCS_SIGNED_DATA = 0x0002;
 
 const collectCoverage = (): {
   regions: CoverageEntry[];
@@ -19,17 +23,24 @@ const collectCoverage = (): {
   return { regions, add };
 };
 
+const writeWinCertificateHeader = (
+  view: DataView,
+  off: number,
+  length: number,
+  certificateType: number
+): void => {
+  view.setUint32(off + 0, length, true);
+  view.setUint16(off + 4, WIN_CERT_REVISION_2_0, true);
+  view.setUint16(off + 6, certificateType, true);
+};
+
 void test("parseSecurityDirectory walks WIN_CERTIFICATE entries", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const secOff = 0x100;
   const dv = new DataView(bytes.buffer);
-  dv.setUint32(secOff + 0, 12, true);
-  dv.setUint16(secOff + 4, 0x0200, true);
-  dv.setUint16(secOff + 6, 0x0002, true);
+  writeWinCertificateHeader(dv, secOff, 12, WIN_CERT_TYPE_PKCS_SIGNED_DATA);
   const second = secOff + 16;
-  dv.setUint32(second + 0, 16, true);
-  dv.setUint16(second + 4, 0x0200, true);
-  dv.setUint16(second + 6, 0x0002, true);
+  writeWinCertificateHeader(dv, second, 16, WIN_CERT_TYPE_PKCS_SIGNED_DATA);
 
   const dirs = [{ name: "SECURITY", rva: secOff, size: 40 }];
   const { regions, add } = collectCoverage();
@@ -39,7 +50,7 @@ void test("parseSecurityDirectory walks WIN_CERTIFICATE entries", async () => {
 
   assert.strictEqual(sec.count, 2);
   assert.strictEqual(sec.certs.length, 2);
-  assert.strictEqual(firstCert.certificateType, 0x0002);
+  assert.strictEqual(firstCert.certificateType, WIN_CERT_TYPE_PKCS_SIGNED_DATA);
   assert.strictEqual(firstCert.typeName.includes("PKCS#7"), true);
   assert.ok(firstCert.authenticode);
   assert.ok(regions.some(r => r.label.includes("SECURITY")));
@@ -48,18 +59,16 @@ void test("parseSecurityDirectory walks WIN_CERTIFICATE entries", async () => {
 void test("parseSecurityDirectory walks all certificates in the declared table", async () => {
   const certCount = 9;
   const secOff = 0x40;
-  const bytes = new Uint8Array(secOff + certCount * 8).fill(0);
+  const bytes = new Uint8Array(secOff + certCount * WIN_CERTIFICATE_HEADER_SIZE).fill(0);
   const dv = new DataView(bytes.buffer);
   for (let index = 0; index < certCount; index += 1) {
-    const off = secOff + index * 8;
-    dv.setUint32(off + 0, 8, true);
-    dv.setUint16(off + 4, 0x0200, true);
-    dv.setUint16(off + 6, 0x0001, true);
+    const off = secOff + index * WIN_CERTIFICATE_HEADER_SIZE;
+    writeWinCertificateHeader(dv, off, WIN_CERTIFICATE_HEADER_SIZE, WIN_CERT_TYPE_X509);
   }
 
   const parsed = await parseSecurityDirectory(
     new MockFile(bytes, "sec-many.bin"),
-    [{ name: "SECURITY", rva: secOff, size: certCount * 8 }],
+    [{ name: "SECURITY", rva: secOff, size: certCount * WIN_CERTIFICATE_HEADER_SIZE }],
     () => {}
   );
 
@@ -74,9 +83,7 @@ void test("parseSecurityDirectory reports corruption when rounded certificate si
   const dv = new DataView(bytes.buffer);
   // Microsoft PE format spec, attribute certificate table:
   // WIN_CERTIFICATE.dwLength is 8-byte aligned in the table walk, so 12-byte content rounds up to 16 bytes.
-  dv.setUint32(secOff + 0, 12, true);
-  dv.setUint16(secOff + 4, 0x0200, true);
-  dv.setUint16(secOff + 6, 0x0002, true);
+  writeWinCertificateHeader(dv, secOff, 12, WIN_CERT_TYPE_PKCS_SIGNED_DATA);
 
   const parsed = await parseSecurityDirectory(
     new MockFile(bytes, "sec-gap.bin"),
@@ -96,11 +103,30 @@ void test("parseSecurityDirectory preserves truncated directories as warnings in
 
   const parsed = await parseSecurityDirectory(
     new MockFile(bytes, "sec-truncated.bin"),
-    [{ name: "SECURITY", rva: secOff, size: 8 }],
+    [{ name: "SECURITY", rva: secOff, size: WIN_CERTIFICATE_HEADER_SIZE }],
     () => {}
   );
 
   const sec = expectDefined(parsed);
   assert.strictEqual(sec.count, 0);
   assert.ok(sec.warnings?.some(warning => warning.toLowerCase().includes("truncated")));
+});
+
+void test("parseSecurityDirectory warns when the certificate table offset is not quadword aligned", async () => {
+  const secOff = 0x40 + 1; // Intentionally misaligned by 1 byte; attribute certificate tables must start on an 8-byte boundary.
+  const bytes = new Uint8Array(secOff + WIN_CERTIFICATE_HEADER_SIZE).fill(0);
+  const dv = new DataView(bytes.buffer);
+  // Microsoft PE format, attribute certificate table:
+  // the certificate table entry is a file offset to a quadword-aligned table.
+  writeWinCertificateHeader(dv, secOff, WIN_CERTIFICATE_HEADER_SIZE, WIN_CERT_TYPE_X509);
+
+  const parsed = await parseSecurityDirectory(
+    new MockFile(bytes, "sec-unaligned.bin"),
+    [{ name: "SECURITY", rva: secOff, size: WIN_CERTIFICATE_HEADER_SIZE }],
+    () => {}
+  );
+
+  const sec = expectDefined(parsed);
+  assert.strictEqual(sec.count, 1);
+  assert.ok(sec.warnings?.some(warning => /align/i.test(warning)));
 });

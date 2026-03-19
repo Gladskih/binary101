@@ -176,6 +176,25 @@ void test("analyzePeInstructionSets reports decoded bytes when returning early",
   assert.equal(report.invalidInstructionCount, 0);
 });
 
+void test("analyzePeInstructionSets accepts a header-resident entrypoint when rvaToOff resolves it", async () => {
+  const file = new MockFile(new Uint8Array([0xc3]), "header-entrypoint.bin"); // ret
+
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x8664, // IMAGE_FILE_MACHINE_AMD64
+    is64Bit: true,
+    imageBase: 0x140000000, // Conventional PE32+ image base
+    entrypointRva: 0x80, // Header RVA: below SizeOfHeaders in the companion parsePe fixture
+    // PE headers are part of the loaded image; an RVA inside SizeOfHeaders is still a valid entrypoint.
+    rvaToOff: (rva: number) => (rva === 0x80 ? 0 : null),
+    sections: []
+  });
+
+  assert.ok(report);
+  assert.equal(report.instructionCount, 1);
+  assert.equal(report.bytesSampled, 1);
+  assert.ok(!report.issues.some(issue => issue.toLowerCase().includes("not within any section")));
+});
+
 void test("analyzePeInstructionSets reports progress while decoding", async () => {
   const bytes = new Uint8Array([0x90, 0x90]); // nop; nop
   const file = new MockFile(bytes, "progress.bin");

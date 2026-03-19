@@ -8,6 +8,7 @@ import { expectDefined } from "../helpers/expect-defined.js";
 import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
 
 const encoder = new TextEncoder();
+const IMAGE_EXPORT_DIRECTORY_SIZE = 40; // IMAGE_EXPORT_DIRECTORY
 
 void test("parseExportDirectory extracts names and forwarders", async () => {
   const bytes = new Uint8Array(1024).fill(0);
@@ -126,6 +127,35 @@ void test("parseExportDirectory ignores names beyond available name/ordinal tabl
   assert.ok(definedResult.entries[1]?.name === null || definedResult.entries[1]?.name === "");
 });
 
+void test("parseExportDirectory does not read EAT slots past an rvaToOff gap", async () => {
+  const expRva = IMAGE_EXPORT_DIRECTORY_SIZE;
+  const eatRva = expRva + IMAGE_EXPORT_DIRECTORY_SIZE;
+  const firstTargetRva = 0x1111;
+  const secondTargetRva = 0x2222;
+  const bytes = new Uint8Array(eatRva + Uint32Array.BYTES_PER_ELEMENT * 2).fill(0);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(expRva + 16, 1, true);
+  dv.setUint32(expRva + 20, 2, true);
+  dv.setUint32(expRva + 28, eatRva, true);
+  dv.setUint32(eatRva, firstTargetRva, true);
+  dv.setUint32(eatRva + Uint32Array.BYTES_PER_ELEMENT, secondTargetRva, true);
+
+  const sparseRvaToOff = (rva: number): number | null => {
+    if (rva === expRva || rva === eatRva) return rva;
+    return null;
+  };
+
+  const result = expectDefined(await parseExportDirectory(
+    new MockFile(bytes, "exports-gap.bin"),
+    [{ name: "EXPORT", rva: expRva, size: IMAGE_EXPORT_DIRECTORY_SIZE }],
+    sparseRvaToOff,
+    () => {}
+  ));
+
+  assert.equal(result.entries.length, 1);
+  assert.equal(result.entries[0]?.rva, firstTargetRva);
+});
+
 void test("parseExportDirectory bounds the initial directory read to the fixed header size", async () => {
   const bytes = new Uint8Array(0x80).fill(0);
   const dv = new DataView(bytes.buffer);
@@ -232,4 +262,31 @@ void test("parseExportDirectory reports out-of-range entries in the export ordin
   ));
 
   assert.ok(result.issues.some(issue => /ordinal/i.test(issue)));
+});
+
+void test("parseExportDirectory reports missing export name and ordinal tables when NumberOfNames is non-zero", async () => {
+  const expRva = IMAGE_EXPORT_DIRECTORY_SIZE;
+  const eatRva = expRva + IMAGE_EXPORT_DIRECTORY_SIZE;
+  const onlyFunctionRva = 0x1000;
+  const bytes = new Uint8Array(eatRva + Uint32Array.BYTES_PER_ELEMENT).fill(0);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(expRva + 16, 1, true); // OrdinalBase
+  dv.setUint32(expRva + 20, 1, true); // NumberOfFunctions
+  dv.setUint32(expRva + 24, 1, true); // NumberOfNames
+  dv.setUint32(expRva + 28, eatRva, true); // Export Address Table RVA
+  // Microsoft PE Format:
+  // NumberOfNames counts both the name pointer table and the parallel ordinal table.
+  dv.setUint32(expRva + 32, 0, true); // Name Pointer RVA
+  dv.setUint32(expRva + 36, 0, true); // Ordinal Table RVA
+  dv.setUint32(eatRva, onlyFunctionRva, true);
+
+  const result = expectDefined(await parseExportDirectory(
+    new MockFile(bytes, "exports-missing-name-tables.bin"),
+    [{ name: "EXPORT", rva: expRva, size: IMAGE_EXPORT_DIRECTORY_SIZE }],
+    value => value,
+    () => {}
+  ));
+
+  assert.equal(result.entries.length, 1);
+  assert.ok(result.issues.some(issue => /name pointer|ordinal table/i.test(issue)));
 });

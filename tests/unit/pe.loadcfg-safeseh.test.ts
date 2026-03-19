@@ -66,6 +66,28 @@ void test("readSafeSehHandlerTableRvas preserves handler RVAs that are numerical
   assert.deepEqual(rvas, [0x500000]);
 });
 
+void test("readSafeSehHandlerTableRvas does not rewrite valid RVAs that happen to be near ImageBase", async () => {
+  const imageBase = 0x400000;
+  const tableRva = Uint32Array.BYTES_PER_ELEMENT;
+  const tableVa = imageBase + tableRva;
+
+  const bytes = new Uint8Array(tableRva + Uint32Array.BYTES_PER_ELEMENT).fill(0);
+  const dv = new DataView(bytes.buffer);
+  // Microsoft PE format, Load Configuration Directory:
+  // SEHandlerTable points to a table of RVAs, not VAs.
+  dv.setUint32(tableRva, 0x450000, true); // Only 0x50000 above ImageBase, so VA-subtraction heuristics corrupt it.
+
+  const rvas = await readSafeSehHandlerTableRvas(
+    new MockFile(bytes, "safeseh-near-imagebase-rva.bin"),
+    rva => rva,
+    imageBase,
+    tableVa,
+    1
+  );
+
+  assert.deepEqual(rvas, [0x450000]);
+});
+
 void test("readSafeSehHandlerTableRvas returns empty list for invalid or unmapped tables", async () => {
   const bytes = new Uint8Array(0x100).fill(0);
   const file = new MockFile(bytes, "safeseh-invalid.bin");

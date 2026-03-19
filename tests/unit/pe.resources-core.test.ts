@@ -8,6 +8,8 @@ import { expectDefined } from "../helpers/expect-defined.js";
 
 const setU16 = (view: DataView, off: number, value: number): void => view.setUint16(off, value, true);
 const setU32 = (view: DataView, off: number, value: number): void => view.setUint32(off, value, true);
+const IMAGE_RESOURCE_DIRECTORY_SIZE = 16; // IMAGE_RESOURCE_DIRECTORY
+const IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE = 8; // IMAGE_RESOURCE_DIRECTORY_ENTRY
 
 void test("buildResourceTree returns null when resource directory is missing or unmapped", async () => {
   const file = new MockFile(new Uint8Array(0));
@@ -17,6 +19,39 @@ void test("buildResourceTree returns null when resource directory is missing or 
   const dataDirs = [{ name: "RESOURCE", rva: 0x200, size: 32 }];
   const unmapped = await buildResourceTree(file, dataDirs, () => null, () => {});
   assert.strictEqual(unmapped, null);
+});
+
+void test("buildResourceTree returns null when the root directory header is truncated by EOF", async () => {
+  const bytes = new Uint8Array(IMAGE_RESOURCE_DIRECTORY_SIZE / 2).fill(0);
+  const tree = await buildResourceTree(
+    new MockFile(bytes, "resource-root-truncated.bin"),
+    [{ name: "RESOURCE", rva: 1, size: IMAGE_RESOURCE_DIRECTORY_SIZE }],
+    () => 0,
+    () => {}
+  );
+  assert.strictEqual(tree, null);
+});
+
+void test("buildResourceTree preserves full numeric resource IDs", async () => {
+  const bytes = new Uint8Array(
+    IMAGE_RESOURCE_DIRECTORY_SIZE + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE
+  ).fill(0);
+  const dv = new DataView(bytes.buffer);
+  setU16(dv, IMAGE_RESOURCE_DIRECTORY_SIZE - 4, 0);
+  setU16(dv, IMAGE_RESOURCE_DIRECTORY_SIZE - 2, 1);
+  // PE/COFF resource directory entries store numeric IDs in the full 32-bit field when the high bit is clear.
+  // Use a value above 0xffff so truncation to 16 bits is immediately visible (0x12345 = 74565).
+  setU32(dv, IMAGE_RESOURCE_DIRECTORY_SIZE, 0x00012345);
+  setU32(dv, IMAGE_RESOURCE_DIRECTORY_SIZE + Uint32Array.BYTES_PER_ELEMENT, 0x00000000);
+
+  const tree = expectDefined(await buildResourceTree(
+    new MockFile(bytes, "resource-32bit-id.bin"),
+    [{ name: "RESOURCE", rva: 1, size: bytes.length }],
+    () => 0,
+    () => {}
+  ));
+
+  assert.deepStrictEqual(tree.top, [{ typeName: "TYPE_74565", kind: "id", leafCount: 0 }]);
 });
 
 void test("buildResourceTree ignores directory entries that lie past the declared resource span", async () => {

@@ -124,6 +124,20 @@ void test("parsePe includes the aligned headers in imageEnd for sectionless imag
   assert.strictEqual(result.imageSizeMismatch, false);
 });
 
+void test("parsePe maps RVAs inside SizeOfHeaders back to file offsets for sectionless images", async () => {
+  const peBytes = createHeadersOnlyPeWithAlignedImageSize();
+  const view = new DataView(peBytes.buffer, peBytes.byteOffset, peBytes.byteLength);
+  const optionalHeaderOffset = 64 + 4 + 20; // e_lfanew + "PE\0\0" + IMAGE_FILE_HEADER
+  // Microsoft PE format and ImageRvaToVa:
+  // headers are part of the loaded image, so an RVA inside SizeOfHeaders should resolve inside the file headers.
+  view.setUint32(optionalHeaderOffset + 16, 0x80, true); // AddressOfEntryPoint inside SizeOfHeaders (= 0x200)
+
+  const result = await parsePe(new MockFile(peBytes, "header-rva.exe"));
+
+  assert.ok(result, "parsePe should return a parsed object for a valid PE file");
+  assert.strictEqual(result.rvaToOff(0x80), 0x80);
+});
+
 void test("parsePe returns null for a non-PE file", async () => {
   const notPeBytes = new Uint8Array(256).fill(0xff);
   const mockFile = new MockFile(notPeBytes, "not-a-pe.bin");

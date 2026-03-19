@@ -88,11 +88,11 @@ const buildSpcIndirectDataWithDigest = (): Uint8Array => {
   return seq(data, digestInfo);
 };
 
-const buildSignedDataDetailed = (): Uint8Array => {
+const buildSignedDataDetailedWithCertificateCount = (certificateCount: number): Uint8Array => {
   const digestAlgorithm = seq(oid("2.16.840.1.101.3.4.2.1"), nul());
   const spc = buildSpcIndirectDataWithDigest();
   const signedContent = seq(oid("1.3.6.1.4.1.311.2.1.4"), ctx0(octet(spc)));
-  const certificates = ctx0(set(buildCertificate()));
+  const certificates = ctx0(set(...Array.from({ length: certificateCount }, () => buildCertificate())));
   const signerInfo = seq(
     int(1),
     seq(name(rdn("2.5.4.3", "Test Issuer")), int(0x1234)),
@@ -104,6 +104,8 @@ const buildSignedDataDetailed = (): Uint8Array => {
   const signerInfos = set(signerInfo);
   return seq(int(1), set(digestAlgorithm), signedContent, certificates, signerInfos);
 };
+
+const buildSignedDataDetailed = (): Uint8Array => buildSignedDataDetailedWithCertificateCount(1);
 
 void test("decodePkcs7 extracts signer, certificate, and file digest details", () => {
   const signedData = buildSignedDataDetailed();
@@ -121,3 +123,11 @@ void test("decodePkcs7 extracts signer, certificate, and file digest details", (
   assert.ok(decoded.certificates?.[0]?.notBefore?.includes("2024-01-01"));
 });
 
+void test("decodePkcs7 does not truncate certificate parsing after sixteen entries", () => {
+  const signedData = buildSignedDataDetailedWithCertificateCount(17); // Deliberately 16 + 1 to catch fixed-size caps.
+  const wrapper = seq(oid("1.2.840.113549.1.7.2"), ctx0(signedData));
+  const decoded = decodePkcs7(wrapper);
+
+  assert.strictEqual(decoded.certificateCount, 17);
+  assert.strictEqual(decoded.certificates?.length, 17);
+});

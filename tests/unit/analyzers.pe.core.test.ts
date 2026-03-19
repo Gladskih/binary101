@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parsePeHeaders } from "../../analyzers/pe/core.js";
 import { MockFile } from "../helpers/mock-file.js";
+import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
 
 const DOS_SIGNATURE_MZ = 0x5a4d;
 const DOS_E_LFANEW_OFFSET = 0x3c;
@@ -32,6 +33,48 @@ void test("parsePeHeaders returns null when PE signature is missing", async () =
   const parsed = await parsePeHeaders(new MockFile(bytes, "bad-pe-sig.exe"));
 
   assert.strictEqual(parsed, null);
+});
+
+void test("parsePeHeaders returns null when the COFF file header is truncated after a valid PE signature", async () => {
+  // The buffer ends immediately after the 4-byte "PE\0\0" signature, so the 20-byte COFF header is absent.
+  const bytes = new Uint8Array(PE_SIGNATURE_OFFSET + 4).fill(0);
+  const view = new DataView(bytes.buffer);
+  view.setUint16(0, DOS_SIGNATURE_MZ, true);
+  view.setUint32(DOS_E_LFANEW_OFFSET, PE_SIGNATURE_OFFSET, true);
+  bytes.set([0x50, 0x45, 0x00, 0x00], PE_SIGNATURE_OFFSET); // "PE\0\0"
+
+  const parsed = await parsePeHeaders(new MockFile(bytes, "truncated-coff.exe"));
+
+  assert.strictEqual(parsed, null);
+});
+
+void test("parsePeHeaders does not trust NumberOfSections beyond the loader limit when reading section headers", async () => {
+  const coffOffset = PE_SIGNATURE_OFFSET + 4;
+  // This buffer is only large enough for DOS + PE signatures + the COFF header.
+  const bytes = new Uint8Array(coffOffset + 20).fill(0);
+  const view = new DataView(bytes.buffer);
+
+  view.setUint16(0, DOS_SIGNATURE_MZ, true);
+  view.setUint32(DOS_E_LFANEW_OFFSET, PE_SIGNATURE_OFFSET, true);
+  bytes.set([0x50, 0x45, 0x00, 0x00], PE_SIGNATURE_OFFSET); // "PE\0\0"
+  view.setUint16(coffOffset, 0x014c, true); // IMAGE_FILE_MACHINE_I386
+  // Microsoft PE format: the Windows loader limits the number of sections to 96.
+  view.setUint16(coffOffset + 2, 0xffff, true); // Deliberately absurd to prove the parser clamps before reading.
+  view.setUint16(coffOffset + 16, 0, true); // SizeOfOptionalHeader = 0, so only the section table read is under test.
+
+  // Advertise a large logical file size so oversize slice requests remain observable instead of being clipped by File.size.
+  const tracked = createSliceTrackingFile(
+    bytes,
+    coffOffset + 20 + 0xffff * 40,
+    "section-count-cap.exe"
+  );
+  await parsePeHeaders(tracked.file);
+
+  assert.ok(
+    // PE section headers are 40 bytes each, so 96 entries cap the table at 3840 bytes.
+    Math.max(...tracked.requests) <= 96 * 40,
+    `Expected bounded section-table reads, got requests ${tracked.requests.join(", ")}`
+  );
 });
 
 void test("parsePeHeaders does not read optional-header fields from section-header bytes past SizeOfOptionalHeader", async () => {

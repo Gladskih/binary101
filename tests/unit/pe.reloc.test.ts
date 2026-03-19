@@ -87,3 +87,25 @@ void test("parseBaseRelocations does not silently cap valid tables at 256 blocks
   assert.ok(parsed);
   assert.strictEqual(parsed.blocks.length, blockCount);
 });
+
+void test("parseBaseRelocations stops when later blocks no longer map through rvaToOff", async () => {
+  const blockSize = 8; // IMAGE_BASE_RELOCATION header only: VirtualAddress + SizeOfBlock.
+  const relOff = blockSize * 4;
+  const bytes = new Uint8Array(relOff + blockSize * 2).fill(0);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(relOff + 0, 0x1000, true);
+  dv.setUint32(relOff + 4, blockSize, true);
+  dv.setUint32(relOff + blockSize, 0x2000, true);
+  dv.setUint32(relOff + blockSize + 4, blockSize, true);
+
+  const sparseRvaToOff = (rva: number): number | null => (rva === relOff ? relOff : null);
+  const parsed = await parseBaseRelocations(
+    new MockFile(bytes, "reloc-gap.bin"),
+    [{ name: "BASERELOC", rva: relOff, size: blockSize * 2 }],
+    sparseRvaToOff,
+    () => {}
+  );
+
+  assert.ok(parsed);
+  assert.strictEqual(parsed.blocks.length, 1);
+});
