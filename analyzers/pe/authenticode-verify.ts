@@ -56,15 +56,15 @@ const pushSliceExcludingRange = (
   pushSlice(parts, file, Math.min(safeEnd, excludedEnd), safeEnd);
 };
 
-const compareSectionOffsets = (left: PeSection, right: PeSection): number =>
-  (left.pointerToRawData >>> 0) - (right.pointerToRawData >>> 0) ||
-  (left.virtualAddress >>> 0) - (right.virtualAddress >>> 0);
+const compareSectionHashOrder = (left: PeSection, right: PeSection): number =>
+  (left.virtualAddress >>> 0) - (right.virtualAddress >>> 0) ||
+  (left.pointerToRawData >>> 0) - (right.pointerToRawData >>> 0);
 
 const listSectionHashRegions = (fileSize: number, sections: PeSection[]): Array<{ start: number; end: number }> =>
   sections
     .filter(section => (section.sizeOfRawData >>> 0) > 0)
     .slice()
-    .sort(compareSectionOffsets)
+    .sort(compareSectionHashOrder)
     .map(section => {
       const start = section.pointerToRawData >>> 0;
       const end = Math.min(fileSize, start + (section.sizeOfRawData >>> 0));
@@ -79,7 +79,8 @@ const computeHeaderHashEnd = (
   sections: PeSection[]
 ): number => {
   const sectionRegions = listSectionHashRegions(fileSize, sections);
-  const firstSectionStart = sectionRegions[0]?.start;
+  const firstSectionStart =
+    sectionRegions.length ? Math.min(...sectionRegions.map(region => region.start)) : undefined;
   const normalizedHeadersSize =
     Number.isSafeInteger(sizeOfHeaders) && sizeOfHeaders > 0 ? Math.min(fileSize, sizeOfHeaders) : fileSize;
   const limitedHeaderEnd =

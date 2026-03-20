@@ -49,7 +49,12 @@ export async function parseDebugDirectory(
       : null;
   let codeViewMappingWarning: string | null = null;
   for (let index = 0; index < maxEntries; index++) {
-    const entryOffset = baseOffset + index * IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE;
+    const entryRva = debugDir.rva + index * IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE;
+    const entryOffset = rvaToOff(entryRva >>> 0);
+    if (entryOffset == null) {
+      warning ??= "Debug directory no longer maps through rvaToOff.";
+      break;
+    }
     if (entryOffset + IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE > fileSize) {
       warning ??= "Debug directory extends beyond end of file (possible truncation).";
       break;

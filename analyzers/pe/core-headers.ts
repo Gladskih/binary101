@@ -5,6 +5,9 @@ import { DD_NAMES } from "./constants.js";
 import { parseRichHeaderFromDosStub } from "./rich-header.js";
 import type { PeCoffHeader, PeDataDirectory, PeDosHeader, PeOptionalHeader } from "./types.js";
 
+const IMAGE_FILE_HEADER_SIZE = 20;
+const IMAGE_FILE_HEADER_MAX_SECTIONS = 96;
+
 export async function parseDosHeaderAndStub(
   file: File,
   headView: DataView,
@@ -60,13 +63,12 @@ export async function parseCoffHeader(file: File, peHeaderOffset: number): Promi
     String.fromCharCode(headerView.getUint8(2)) +
     String.fromCharCode(headerView.getUint8(3));
   if (signature !== "PE\0\0") return null;
+  if (headerView.byteLength < 4 + IMAGE_FILE_HEADER_SIZE) return null;
   const coffOffset = 4;
-  const u16 = (off: number): number =>
-    off + 2 <= headerView.byteLength ? headerView.getUint16(off, true) : 0;
-  const u32 = (off: number): number =>
-    off + 4 <= headerView.byteLength ? headerView.getUint32(off, true) : 0;
+  const u16 = (off: number): number => headerView.getUint16(off, true);
+  const u32 = (off: number): number => headerView.getUint32(off, true);
   const Machine = u16(coffOffset + 0);
-  const NumberOfSections = u16(coffOffset + 2);
+  const NumberOfSections = Math.min(u16(coffOffset + 2), IMAGE_FILE_HEADER_MAX_SECTIONS);
   const TimeDateStamp = u32(coffOffset + 4);
   const PointerToSymbolTable = u32(coffOffset + 8);
   const NumberOfSymbols = u32(coffOffset + 12);

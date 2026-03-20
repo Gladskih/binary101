@@ -49,6 +49,22 @@ export async function parseExportDirectory(
     }
     return text;
   };
+  const readMappedU32 = async (tableRva: number, index: number): Promise<number | null> => {
+    const entryRva = tableRva + index * 4;
+    const entryOff = rvaToOff(entryRva >>> 0);
+    if (!isReadableOffset(entryOff) || entryOff + 4 > file.size) return null;
+    const entryView = new DataView(await file.slice(entryOff, entryOff + 4).arrayBuffer());
+    if (entryView.byteLength < 4) return null;
+    return entryView.getUint32(0, true);
+  };
+  const readMappedU16 = async (tableRva: number, index: number): Promise<number | null> => {
+    const entryRva = tableRva + index * 2;
+    const entryOff = rvaToOff(entryRva >>> 0);
+    if (!isReadableOffset(entryOff) || entryOff + 2 > file.size) return null;
+    const entryView = new DataView(await file.slice(entryOff, entryOff + 2).arrayBuffer());
+    if (entryView.byteLength < 2) return null;
+    return entryView.getUint16(0, true);
+  };
 
   const Characteristics = dv.getUint32(0, true);
   const TimeDateStamp = dv.getUint32(4, true);
@@ -79,36 +95,25 @@ export async function parseExportDirectory(
   const ordTableOff = AddressOfNameOrdinals ? rvaToOff(AddressOfNameOrdinals) : null;
 
   if (isReadableOffset(funcTableOff)) {
-    const funcTable = new DataView(
-      await file
-        .slice(funcTableOff, funcTableOff + NumberOfFunctions * 4)
-        .arrayBuffer()
-    );
-    const maxFuncs = Math.min(NumberOfFunctions, Math.floor(funcTable.byteLength / 4));
-    if (maxFuncs < NumberOfFunctions) {
-      issues.push("Export address table is truncated; some function RVAs are missing.");
-    }
-    const nameTable =
-      isReadableOffset(nameTableOff)
-        ? new DataView(await file.slice(nameTableOff, nameTableOff + NumberOfNames * 4).arrayBuffer())
-        : null;
-    const ordTable =
-      isReadableOffset(ordTableOff)
-        ? new DataView(await file.slice(ordTableOff, ordTableOff + NumberOfNames * 2).arrayBuffer())
-        : null;
     const functionNames = new Map<number, string>();
-    if (nameTable && ordTable) {
-      const maxNames = Math.min(
-        NumberOfNames,
-        Math.floor(nameTable.byteLength / 4),
-        Math.floor(ordTable.byteLength / 2)
-      );
-      if (maxNames < NumberOfNames) {
-        issues.push("Export name/ordinal tables are truncated; some names are missing.");
+    if (NumberOfNames > 0) {
+      if (!AddressOfNames || !isReadableOffset(nameTableOff)) {
+        issues.push("Export name pointer table is missing or does not map while NumberOfNames is non-zero.");
       }
-      for (let nameIndex = 0; nameIndex < maxNames; nameIndex += 1) {
-        const nameRva = nameTable.getUint32(nameIndex * 4, true);
-        const funcIndex = ordTable.getUint16(nameIndex * 2, true);
+      if (!AddressOfNameOrdinals || !isReadableOffset(ordTableOff)) {
+        issues.push("Export ordinal table is missing or does not map while NumberOfNames is non-zero.");
+      }
+    }
+    if (AddressOfNames && AddressOfNameOrdinals && isReadableOffset(nameTableOff) && isReadableOffset(ordTableOff)) {
+      for (let nameIndex = 0; nameIndex < NumberOfNames; nameIndex += 1) {
+        const nameRva = await readMappedU32(AddressOfNames, nameIndex);
+        const funcIndex = await readMappedU16(AddressOfNameOrdinals, nameIndex);
+        if (nameRva == null || funcIndex == null) {
+          if (nameIndex < NumberOfNames) {
+            issues.push("Export name/ordinal tables are truncated; some names are missing.");
+          }
+          break;
+        }
         if (funcIndex >= NumberOfFunctions) {
           issues.push(`Export ordinal table entry ${funcIndex} is out of range for ${NumberOfFunctions} functions.`);
           continue;
@@ -121,8 +126,14 @@ export async function parseExportDirectory(
         }
       }
     }
-    for (let idx = 0; idx < maxFuncs; idx += 1) {
-      const funcRva = funcTable.getUint32(idx * 4, true);
+    for (let idx = 0; idx < NumberOfFunctions; idx += 1) {
+      const funcRva = await readMappedU32(AddressOfFunctions, idx);
+      if (funcRva == null) {
+        if (idx < NumberOfFunctions) {
+          issues.push("Export address table is truncated; some function RVAs are missing.");
+        }
+        break;
+      }
       const funcName: string | null = functionNames.get(idx) ?? null;
       let forwarder: string | null = null;
       if (funcRva >= dir.rva && funcRva < dir.rva + dir.size) {

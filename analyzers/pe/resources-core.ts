@@ -60,6 +60,7 @@ export async function buildResourceTree(
     const off = base + rel;
     if (!isRangeInside(off, 16)) return null;
     const dv = await view(off, 16);
+    if (dv.byteLength < 16) return null;
     const Named = u16(dv, 12);
     const Ids = u16(dv, 14);
     const count = Named + Ids;
@@ -81,7 +82,7 @@ export async function buildResourceTree(
       entries.push({
         nameIsString,
         subdir,
-        nameOrId: nameIsString ? (Name & 0x7fffffff) : (Name & 0xffff),
+        nameOrId: nameIsString ? (Name & 0x7fffffff) : (Name >>> 0),
         target: OffsetToData & 0x7fffffff
       });
     }

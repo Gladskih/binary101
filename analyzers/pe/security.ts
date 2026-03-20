@@ -26,6 +26,9 @@ export async function parseSecurityDirectory(
     warnings.push("Attribute certificate table starts past end of file.");
     return { count: 0, certs: [], warnings };
   }
+  if ((off & 7) !== 0) {
+    warnings.push("Attribute certificate table offset is not quadword aligned.");
+  }
   const end = Math.min(file.size, off + dir.size);
   const availableSize = Math.max(0, end - off);
   addCoverageRegion("SECURITY (WIN_CERTIFICATE)", off, availableSize);

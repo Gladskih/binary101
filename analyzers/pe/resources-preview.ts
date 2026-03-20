@@ -12,6 +12,87 @@ import {
 import type { ResourceDetailGroup, ResourceLangWithPreview } from "./resources-preview-types.js";
 import type { ResourceTree } from "./resources-core.js";
 
+const STRING_TABLE_ENTRY_COUNT = 16;
+const MESSAGE_BLOCK_HEADER_SIZE = 12;
+const MESSAGE_ENTRY_HEADER_SIZE = 4;
+
+const truncateStringTablePreview = (langEntry: ResourceLangWithPreview): void => {
+  if (langEntry.previewKind !== "stringTable") return;
+  if (langEntry.stringPreview?.length && langEntry.stringPreview.length > STRING_TABLE_ENTRY_COUNT) {
+    langEntry.stringPreview = langEntry.stringPreview.slice(0, STRING_TABLE_ENTRY_COUNT);
+  }
+  if (langEntry.stringTable?.length && langEntry.stringTable.length > STRING_TABLE_ENTRY_COUNT) {
+    langEntry.stringTable = langEntry.stringTable.slice(0, STRING_TABLE_ENTRY_COUNT);
+  }
+};
+
+const decodeMessageEntryText = (entryBytes: Uint8Array, isUnicode: boolean): string => {
+  if (!entryBytes.length) return "";
+  if (isUnicode) {
+    let text = "";
+    for (let index = 0; index + 1 < entryBytes.length; index += 2) {
+      const first = entryBytes[index];
+      const second = entryBytes[index + 1];
+      if (first === undefined || second === undefined) break;
+      const code = first | (second << 8);
+      if (code === 0) break;
+      text += String.fromCharCode(code);
+    }
+    return text.trim();
+  }
+  const zeroIndex = entryBytes.indexOf(0);
+  const slice = zeroIndex === -1 ? entryBytes : entryBytes.slice(0, zeroIndex);
+  return new TextDecoder("utf-8", { fatal: false }).decode(slice).trim();
+};
+
+const decodeMessageTablePreview = (
+  data: Uint8Array
+): { messages: Array<{ id: number; strings: string[] }>; truncated: boolean } | null => {
+  if (data.byteLength < 4) return null;
+  const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const blockCount = dv.getUint32(0, true);
+  const maxBlocks = Math.min(blockCount, Math.floor((data.byteLength - 4) / MESSAGE_BLOCK_HEADER_SIZE));
+  const messages: Array<{ id: number; strings: string[] }> = [];
+  let truncated = maxBlocks < blockCount;
+  for (let blockIndex = 0; blockIndex < maxBlocks; blockIndex += 1) {
+    const blockOff = 4 + blockIndex * MESSAGE_BLOCK_HEADER_SIZE;
+    if (blockOff + MESSAGE_BLOCK_HEADER_SIZE > data.byteLength) {
+      truncated = true;
+      break;
+    }
+    const lowId = dv.getUint32(blockOff, true);
+    const highId = dv.getUint32(blockOff + 4, true);
+    const entryOffset = dv.getUint32(blockOff + 8, true);
+    if (highId < lowId || entryOffset >= data.byteLength) {
+      truncated = true;
+      continue;
+    }
+    const blockEnd = blockIndex + 1 < maxBlocks
+      ? Math.min(data.byteLength, dv.getUint32(4 + (blockIndex + 1) * MESSAGE_BLOCK_HEADER_SIZE + 8, true))
+      : data.byteLength;
+    const entryCount = highId - lowId + 1;
+    const strings: string[] = [];
+    let pos = entryOffset;
+    for (let entryIndex = 0; entryIndex < entryCount; entryIndex += 1) {
+      if (pos + MESSAGE_ENTRY_HEADER_SIZE > blockEnd) {
+        truncated = true;
+        break;
+      }
+      const length = dv.getUint16(pos, true);
+      const flags = dv.getUint16(pos + 2, true);
+      if (length < MESSAGE_ENTRY_HEADER_SIZE || pos + length > blockEnd) {
+        truncated = true;
+        break;
+      }
+      const entryBytes = data.subarray(pos + MESSAGE_ENTRY_HEADER_SIZE, pos + length);
+      strings.push(decodeMessageEntryText(entryBytes, (flags & 0x0001) !== 0));
+      pos += length;
+    }
+    messages.push({ id: lowId, strings });
+  }
+  return { messages, truncated };
+};
+
 export async function enrichResourcePreviews(
   file: File,
   tree: ResourceTree
@@ -103,6 +184,14 @@ export async function enrichResourcePreviews(
           safePreview(() => addVersionPreview(langEntry, data, typeName));
           safePreview(() => addStringTablePreview(langEntry, data, typeName, entry.id));
           safePreview(() => addMessageTablePreview(langEntry, data, typeName));
+          truncateStringTablePreview(langEntry);
+          if (typeName === "MESSAGETABLE") {
+            const messageTable = decodeMessageTablePreview(data);
+            if (messageTable) {
+              langEntry.previewKind = "messageTable";
+              langEntry.messageTable = messageTable;
+            }
+          }
           await addGroupIconPreview(
             file,
             langEntry,

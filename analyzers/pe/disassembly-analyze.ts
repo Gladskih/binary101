@@ -9,6 +9,7 @@ const IMAGE_FILE_MACHINE_I386 = 0x014c;
 const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
 const IMAGE_SCN_CNT_CODE = 0x00000020;
 const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
+const HEADER_ENTRYPOINT_SAMPLE_MAX_BYTES = 256;
 const getMappedSectionSpan = (section: PeSection): number =>
   (section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0);
 const isExecutableSection = (section: PeSection): boolean =>
@@ -29,6 +30,12 @@ const findBestCodeSection = (sections: PeSection[]): PeSection | null => {
   if (byName) return byName;
   return sections.find(isExecutableSection) || sections[0] || null;
 };
+const normalizeRvaList = (values: unknown): number[] =>
+  uniqueU32s(
+    (Array.isArray(values) ? values : []).filter(
+      (rva): rva is number => Number.isSafeInteger(rva) && rva > 0
+    )
+  );
 const uniqueU32s = (values: number[]): number[] => {
   const seen = new Set<number>();
   const out: number[] = [];
@@ -42,9 +49,7 @@ const uniqueU32s = (values: number[]): number[] => {
 };
 const reportProgress = (opts: AnalyzePeInstructionSetOptions, progress: PeInstructionSetProgress): void => {
   if (!opts.onProgress) return;
-  try {
-    opts.onProgress(progress);
-  } catch {
+  try { opts.onProgress(progress); } catch {
     // Progress callbacks are UI-facing; analysis should continue even if a consumer throws.
   }
 };
@@ -72,21 +77,12 @@ export async function analyzePeInstructionSets(
     instructionSets: [],
     issues
   });
-  if (!supported) {
-    issues.push(`Disassembly is only supported for x86/x86-64 (Machine ${coffMachine.toString(16)}).`);
-    return emptyReport(0);
-  }
+  if (!supported) return (issues.push(`Disassembly is only supported for x86/x86-64 (Machine ${coffMachine.toString(16)}).`), emptyReport(0));
   if (coffMachine === IMAGE_FILE_MACHINE_AMD64 && bitness !== 64) {
     issues.push("Machine is AMD64 but optional header reports 32-bit mode.");
   } else if (coffMachine === IMAGE_FILE_MACHINE_I386 && bitness !== 32) {
     issues.push("Machine is I386 but optional header reports 64-bit mode.");
   }
-  const normalizeRvaList = (values: unknown): number[] =>
-    uniqueU32s(
-      (Array.isArray(values) ? values : []).filter(
-        (rva): rva is number => Number.isSafeInteger(rva) && rva > 0
-      )
-    );
   const requestedExportRvas = normalizeRvaList(opts.exportRvas);
   const requestedUnwindBeginRvas = normalizeRvaList(opts.unwindBeginRvas);
   const requestedUnwindHandlerRvas = normalizeRvaList(opts.unwindHandlerRvas);
@@ -113,6 +109,8 @@ export async function analyzePeInstructionSets(
   }
   const resolvedEntrypoints: number[] = [];
   const resolvedEntrypointsSet = new Set<number>();
+  const firstSectionRva =
+    opts.sections.reduce((min, section) => Math.min(min, section.virtualAddress >>> 0), 0xffffffff);
   const addEntrypoint = (source: string, rva: number): void => {
     const normalized = rva >>> 0;
     if (resolvedEntrypointsSet.has(normalized)) return;
@@ -122,14 +120,14 @@ export async function analyzePeInstructionSets(
       return;
     }
     const containing = findSectionContainingRva(opts.sections, normalized);
-    if (!containing) {
-      issues.push(`${source} RVA 0x${normalized.toString(16)} is not within any section.`);
-      return;
-    }
-    if (!isMemoryExecutableSection(containing)) {
+    if (containing && !isMemoryExecutableSection(containing)) {
       issues.push(
         `${source} RVA 0x${normalized.toString(16)} points into a non-executable section (${containing.name}; missing IMAGE_SCN_MEM_EXECUTE).`
       );
+      return;
+    }
+    if (!containing && opts.sections.length > 0 && normalized >= firstSectionRva) {
+      issues.push(`${source} RVA 0x${normalized.toString(16)} is not within any section.`);
       return;
     }
     resolvedEntrypointsSet.add(normalized);
@@ -152,9 +150,7 @@ export async function analyzePeInstructionSets(
     return emptyReport(0);
   }
   const imageBase = Number.isSafeInteger(opts.imageBase) && opts.imageBase >= 0 ? BigInt(opts.imageBase) : 0n;
-  if (!Number.isSafeInteger(opts.imageBase)) {
-    issues.push("ImageBase is not a safe integer; instruction pointers may be approximate.");
-  }
+  if (!Number.isSafeInteger(opts.imageBase)) issues.push("ImageBase is not a safe integer; instruction pointers may be approximate.");
   const entrypointSections = resolvedEntrypoints
     .map(rva => findSectionContainingRva(opts.sections, rva))
     .filter((section): section is PeSection => section != null);
@@ -164,7 +160,7 @@ export async function analyzePeInstructionSets(
   ])
     .map(rva => findSectionContainingRva(opts.sections, rva))
     .filter((section): section is PeSection => section != null);
-  if (sectionsToSample.length === 0) {
+  if (sectionsToSample.length === 0 && resolvedEntrypoints.every(rva => opts.rvaToOff(rva) == null)) {
     issues.push("No section headers available to locate code bytes.");
     return emptyReport(0);
   }
@@ -176,14 +172,24 @@ export async function analyzePeInstructionSets(
     if (start >= file.size || end <= start) return new Uint8Array();
     return new Uint8Array(await file.slice(start, end).arrayBuffer());
   };
-  const sampledSections = (
-    await Promise.all(
-      sectionsToSample.map(async section => ({
-        rvaStart: section.virtualAddress >>> 0,
-        data: await loadSectionBytes(section)
-      }))
-    )
-  ).filter(entry => entry.data.length > 0);
+  const loadMappedEntrypointBytes = async (rva: number): Promise<{ rvaStart: number; data: Uint8Array } | null> => {
+    if (findSectionContainingRva(opts.sections, rva)) return null;
+    const start = opts.rvaToOff(rva);
+    if (start == null || start < 0 || start >= file.size) return null;
+    const end = Math.min(file.size, start + HEADER_ENTRYPOINT_SAMPLE_MAX_BYTES);
+    if (end <= start) return null;
+    return {
+      rvaStart: rva >>> 0,
+      data: new Uint8Array(await file.slice(start, end).arrayBuffer())
+    };
+  };
+  const sampledSections = (await Promise.all([
+    ...sectionsToSample.map(async section => ({
+      rvaStart: section.virtualAddress >>> 0,
+      data: await loadSectionBytes(section)
+    })),
+    ...resolvedEntrypoints.map(loadMappedEntrypointBytes)
+  ])).filter((entry): entry is { rvaStart: number; data: Uint8Array } => entry != null && entry.data.length > 0);
   const bytesSampled = sampledSections.reduce((sum, entry) => sum + entry.data.length, 0);
   if (bytesSampled === 0) {
     issues.push("No bytes available in selected section(s) for disassembly.");
@@ -212,9 +218,7 @@ export async function analyzePeInstructionSets(
     return emptyReport(bytesSampled);
   }
   const featureCounts = new Map<number, number>();
-  const knownFeatures = KNOWN_CPUID_FEATURES
-    .map(id => ({ id, value: iced.CpuidFeature[id] }))
-    .filter((entry): entry is { id: string; value: number } => typeof entry.value === "number");
+  const knownFeatures = KNOWN_CPUID_FEATURES.map(id => ({ id, value: iced.CpuidFeature[id] })).filter((entry): entry is { id: string; value: number } => typeof entry.value === "number");
   const getKnownFeatureCounts = (): Record<string, number> => {
     const out: Record<string, number> = {};
     for (const { id, value } of knownFeatures) {

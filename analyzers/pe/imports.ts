@@ -7,6 +7,15 @@ import type {
   RvaToOffset
 } from "./types.js";
 
+const IMAGE_IMPORT_DESCRIPTOR_SIZE = 20;
+const IMAGE_THUNK_DATA32_SIZE = 4;
+const IMAGE_THUNK_DATA64_SIZE = 8;
+const IMAGE_ORDINAL_FLAG32 = 0x80000000;
+const IMAGE_ORDINAL_FLAG64 = 0x8000000000000000n;
+const IMAGE_IMPORT_NAME_MASK64 = 0x7fffffffn;
+const IMAGE_IMPORT_NAME_RESERVED_MASK64 = 0x7fffffff80000000n;
+const IMAGE_IMPORT_ORDINAL_RESERVED_MASK64 = 0x7fffffffffff0000n;
+
 export interface PeImportFunction {
   ordinal?: number;
   hint?: number;
@@ -35,20 +44,25 @@ export async function parseImportDirectory(
   const warnings = new Set<string>();
   const isReadableOffset = (offset: number | null): offset is number =>
     offset != null && offset >= 0 && offset < file.size;
+  const maxThunkEntries = (entrySize: number): number =>
+    Math.floor(file.size / entrySize) + 1;
   if (!impDir?.rva) return { entries: imports };
   const start = rvaToOff(impDir.rva);
   if (start == null || start >= file.size) return { entries: imports };
   const availableDirSize = Math.max(0, Math.min(impDir.size, file.size - start));
   addCoverageRegion("IMPORT directory", start, availableDirSize);
-  const maxDescriptors = Math.ceil(availableDirSize / 20);
+  const maxDescriptors = Math.ceil(availableDirSize / IMAGE_IMPORT_DESCRIPTOR_SIZE);
   const addWarning = (msg: string): void => {
     warnings.add(msg);
   };
   for (let index = 0; index < maxDescriptors; index += 1) {
-    const offset = start + index * 20;
-    const descriptorSize = Math.min(20, Math.max(0, availableDirSize - index * 20));
+    const offset = start + index * IMAGE_IMPORT_DESCRIPTOR_SIZE;
+    const descriptorSize = Math.min(
+      IMAGE_IMPORT_DESCRIPTOR_SIZE,
+      Math.max(0, availableDirSize - index * IMAGE_IMPORT_DESCRIPTOR_SIZE)
+    );
     if (descriptorSize <= 0) break;
-    const descriptorTruncated = descriptorSize < 20;
+    const descriptorTruncated = descriptorSize < IMAGE_IMPORT_DESCRIPTOR_SIZE;
     const desc = new DataView(await file.slice(offset, offset + descriptorSize).arrayBuffer());
     const readDescriptorField = (fieldOffset: number, fieldName: string): number | null => {
       if (desc.byteLength < fieldOffset + 4) {
@@ -71,27 +85,37 @@ export async function parseImportDirectory(
     }
     if (descriptorTruncated) break;
     const thunkRva = originalFirstThunk || firstThunk;
-    const thunkOffset = rvaToOff(thunkRva);
     const functions: PeImportFunction[] = [];
-    if (!isReadableOffset(thunkOffset)) {
-      if (thunkRva) addWarning("Import thunk RVA does not map to file data.");
-    } else {
+    if (thunkRva) {
       if (isPlus) {
-        for (let t = 0; t < 8 * 16384; t += 8) {
-          const dv = new DataView(await file.slice(thunkOffset + t, thunkOffset + t + 8).arrayBuffer());
-          if (dv.byteLength < 8) {
+        for (let thunkIndex = 0; thunkIndex < maxThunkEntries(IMAGE_THUNK_DATA64_SIZE); thunkIndex += 1) {
+          const thunkEntryRva = thunkRva + thunkIndex * IMAGE_THUNK_DATA64_SIZE;
+          const thunkEntryOffset = rvaToOff(thunkEntryRva >>> 0);
+          if (!isReadableOffset(thunkEntryOffset)) {
+            if (thunkIndex === 0) addWarning("Import thunk RVA does not map to file data.");
+            break;
+          }
+          const dv = new DataView(
+            await file
+              .slice(thunkEntryOffset, thunkEntryOffset + IMAGE_THUNK_DATA64_SIZE)
+              .arrayBuffer()
+          );
+          if (dv.byteLength < IMAGE_THUNK_DATA64_SIZE) {
             addWarning("Import thunks truncated (64-bit).");
             break;
           }
           const value = dv.getBigUint64(0, true);
           if (value === 0n) break;
-          if ((value & 0x8000000000000000n) !== 0n) {
-            if ((value & 0x7fffffffffff0000n) !== 0n) {
+          if ((value & IMAGE_ORDINAL_FLAG64) !== 0n) {
+            if ((value & IMAGE_IMPORT_ORDINAL_RESERVED_MASK64) !== 0n) {
               addWarning("Import ordinal thunk has reserved bits set.");
             }
             functions.push({ ordinal: Number(value & 0xffffn) });
           } else {
-            const hintNameRva = Number(value & 0xffffffffn);
+            if ((value & IMAGE_IMPORT_NAME_RESERVED_MASK64) !== 0n) {
+              addWarning("Import name thunk has reserved bits set.");
+            }
+            const hintNameRva = Number(value & IMAGE_IMPORT_NAME_MASK64);
             const hintNameOffset = rvaToOff(hintNameRva);
             if (isReadableOffset(hintNameOffset)) {
               const hintView = new DataView(await file.slice(hintNameOffset, hintNameOffset + 2).arrayBuffer());
@@ -125,15 +149,25 @@ export async function parseImportDirectory(
           }
         }
       } else {
-        for (let t = 0; t < 4 * 32768; t += 4) {
-          const dv = new DataView(await file.slice(thunkOffset + t, thunkOffset + t + 4).arrayBuffer());
-          if (dv.byteLength < 4) {
+        for (let thunkIndex = 0; thunkIndex < maxThunkEntries(IMAGE_THUNK_DATA32_SIZE); thunkIndex += 1) {
+          const thunkEntryRva = thunkRva + thunkIndex * IMAGE_THUNK_DATA32_SIZE;
+          const thunkEntryOffset = rvaToOff(thunkEntryRva >>> 0);
+          if (!isReadableOffset(thunkEntryOffset)) {
+            if (thunkIndex === 0) addWarning("Import thunk RVA does not map to file data.");
+            break;
+          }
+          const dv = new DataView(
+            await file
+              .slice(thunkEntryOffset, thunkEntryOffset + IMAGE_THUNK_DATA32_SIZE)
+              .arrayBuffer()
+          );
+          if (dv.byteLength < IMAGE_THUNK_DATA32_SIZE) {
             addWarning("Import thunks truncated (32-bit).");
             break;
           }
           const value = dv.getUint32(0, true);
           if (value === 0) break;
-          if ((value & 0x80000000) !== 0) {
+          if ((value & IMAGE_ORDINAL_FLAG32) !== 0) {
             if ((value & 0x7fff0000) !== 0) {
               addWarning("Import ordinal thunk has reserved bits set.");
             }

@@ -24,17 +24,23 @@ export async function parseBaseRelocations(
     entries: Array<{ type: number; offset: number }>;
   }> = [];
   let off = base;
+  let rel = 0;
   let totalEntries = 0;
   while (off + 8 <= end) {
-    const dv = new DataView(await file.slice(off, off + 8).arrayBuffer());
+    const blockRva = dir.rva + rel;
+    const blockOff = rvaToOff(blockRva >>> 0);
+    if (blockOff == null) break;
+    const dv = new DataView(await file.slice(blockOff, blockOff + 8).arrayBuffer());
     if (dv.byteLength < 8) break;
     const pageRva = dv.getUint32(0, true);
     const blockSize = dv.getUint32(4, true);
     if (!blockSize) break;
     if (blockSize < 8) break;
-    const blockEnd = Math.min(end, off + blockSize);
-    const entryCount = Math.floor((blockEnd - off - 8) / 2);
-    const blockView = new DataView(await file.slice(off + 8, off + 8 + entryCount * 2).arrayBuffer());
+    const blockEnd = Math.min(end, blockOff + blockSize);
+    const entryCount = Math.floor((blockEnd - blockOff - 8) / 2);
+    const blockView = new DataView(
+      await file.slice(blockOff + 8, blockOff + 8 + entryCount * 2).arrayBuffer()
+    );
     const availableEntries = Math.floor(blockView.byteLength / 2);
     const entries: Array<{ type: number; offset: number }> = [];
     for (let i = 0; i < availableEntries; i += 1) {
@@ -44,6 +50,7 @@ export async function parseBaseRelocations(
     blocks.push({ pageRva, size: blockSize, count: availableEntries, entries });
     totalEntries += availableEntries;
     off = blockEnd;
+    rel += blockSize;
   }
   return { blocks, totalEntries };
 }

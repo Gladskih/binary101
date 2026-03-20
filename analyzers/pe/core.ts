@@ -29,7 +29,8 @@ export async function parsePeHeaders(file: File): Promise<PeCore | null> {
     file,
     optOff,
     coff.SizeOfOptionalHeader,
-    coff.NumberOfSections
+    coff.NumberOfSections,
+    opt.SizeOfHeaders
   );
 
   const { coverage, addCov, overlaySize, imageEnd, imageSizeMismatch } = buildCoverage(

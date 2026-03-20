@@ -35,7 +35,8 @@ void test("parseSectionHeaders reads section entries and maps RVAs to offsets", 
     file,
     optionalHeaderOffset,
     sizeOfOptionalHeader,
-    2
+    2,
+    optionalHeaderOffset + sizeOfOptionalHeader
   );
 
   assert.strictEqual(sectOff, optionalHeaderOffset + sizeOfOptionalHeader);
@@ -61,7 +62,8 @@ void test("parseSectionHeaders does not map zero-filled virtual tail beyond raw 
     new MockFile(fileBytes),
     optionalHeaderOffset,
     sizeOfOptionalHeader,
-    1
+    1,
+    optionalHeaderOffset + sizeOfOptionalHeader
   );
 
   assert.strictEqual(rvaToOff(0x1000 + 0x1ff), 0x400 + 0x1ff);
@@ -85,7 +87,8 @@ void test("parseSectionHeaders does not map raw-file padding beyond VirtualSize 
     new MockFile(fileBytes),
     optionalHeaderOffset,
     sizeOfOptionalHeader,
-    1
+    1,
+    optionalHeaderOffset + sizeOfOptionalHeader
   );
 
   assert.strictEqual(rvaToOff(0x1000 + 0x7f), 0x400 + 0x7f);

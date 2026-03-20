@@ -3,8 +3,6 @@
 import type { AddCoverageRegion, PeDataDirectory, PeTlsDirectory, RvaToOffset } from "./types.js";
 
 const MAX_RVA_BIGINT = 0xffff_ffffn;
-const TLS_CALLBACK_CHUNK_SIZE_32 = 4096;
-const TLS_CALLBACK_CHUNK_SIZE_64 = 8192;
 
 const toRvaFromVa32 = (virtualAddress: number, imageBase: number): number | null => {
   if (!Number.isSafeInteger(virtualAddress) || virtualAddress <= 0) return null;
@@ -25,26 +23,23 @@ const toRvaFromVa64 = (virtualAddress: bigint, imageBase: bigint): number | null
 
 const readTlsCallbackRvas = async (
   file: File,
-  offset: number,
+  rvaToOff: RvaToOffset,
+  tableRva: number,
   entrySize: number,
   readPointer: (dv: DataView, entryOffset: number) => number | bigint,
   toRva: (pointer: number | bigint) => number | null
 ): Promise<number[]> => {
-  const start = offset >>> 0;
   const callbacks: number[] = [];
-  const chunkSize = entrySize === 8 ? TLS_CALLBACK_CHUNK_SIZE_64 : TLS_CALLBACK_CHUNK_SIZE_32;
-
-  for (let chunkStart = start; chunkStart < file.size; chunkStart += chunkSize) {
-    const chunkEnd = Math.min(file.size, chunkStart + chunkSize);
-    if (chunkEnd <= chunkStart) break;
-    const dv = new DataView(await file.slice(chunkStart, chunkEnd).arrayBuffer());
-    const available = Math.floor(dv.byteLength / entrySize);
-    for (let index = 0; index < available; index += 1) {
-      const pointer = readPointer(dv, index * entrySize);
-      if (pointer === 0 || pointer === 0n) return callbacks;
-      const rva = toRva(pointer);
-      if (rva != null) callbacks.push(rva);
-    }
+  for (let index = 0; ; index += 1) {
+    const entryRva = (tableRva + index * entrySize) >>> 0;
+    const entryOff = rvaToOff(entryRva);
+    if (entryOff == null || entryOff < 0 || entryOff + entrySize > file.size) break;
+    const dv = new DataView(await file.slice(entryOff, entryOff + entrySize).arrayBuffer());
+    if (dv.byteLength < entrySize) break;
+    const pointer = readPointer(dv, 0);
+    if (pointer === 0 || pointer === 0n) return callbacks;
+    const rva = toRva(pointer);
+    if (rva != null) callbacks.push(rva);
   }
   return callbacks;
 };
@@ -61,11 +56,13 @@ export async function parseTlsDirectory(
   if (!dir?.rva) return null;
   const base = rvaToOff(dir.rva);
   if (base == null) return null;
-  const size = dir.size || (isPlus ? 0x30 : 0x18);
-  addCoverageRegion("TLS directory", base, Math.min(size, isPlus ? 0x30 : 0x18));
+  const minSize = isPlus ? 0x30 : 0x18;
+  if (dir.size < minSize) return null;
+  const size = dir.size || minSize;
+  addCoverageRegion("TLS directory", base, Math.min(size, minSize));
   if (isPlus) {
-    const buf = await file.slice(base, base + 0x30).arrayBuffer();
-    if (buf.byteLength < 0x30) return null;
+    const buf = await file.slice(base, base + minSize).arrayBuffer();
+    if (buf.byteLength < minSize) return null;
     const dv = new DataView(buf);
     const StartAddressOfRawDataVa = dv.getBigUint64(0, true);
     const EndAddressOfRawDataVa = dv.getBigUint64(8, true);
@@ -77,10 +74,11 @@ export async function parseTlsDirectory(
     const imageBaseBigint = Number.isSafeInteger(imageBase) && imageBase >= 0 ? BigInt(imageBase) : 0n;
     const callbackTableRva = toRvaFromVa64(AddressOfCallBacksVa, imageBaseBigint);
     const callbackTableOff = callbackTableRva != null ? rvaToOff(callbackTableRva) : null;
-    const CallbackRvas = callbackTableOff != null
+    const CallbackRvas = callbackTableRva != null
       ? await readTlsCallbackRvas(
         file,
-        callbackTableOff,
+        rvaToOff,
+        callbackTableRva,
         8,
         (dv, entryOffset) => dv.getBigUint64(entryOffset, true),
         pointer => (typeof pointer === "bigint" ? toRvaFromVa64(pointer, imageBaseBigint) : null)
@@ -100,8 +98,8 @@ export async function parseTlsDirectory(
       CallbackRvas
     };
   }
-  const buf = await file.slice(base, base + 0x18).arrayBuffer();
-  if (buf.byteLength < 0x18) return null;
+  const buf = await file.slice(base, base + minSize).arrayBuffer();
+  if (buf.byteLength < minSize) return null;
   const dv = new DataView(buf);
   const StartAddressOfRawData = dv.getUint32(0, true);
   const EndAddressOfRawData = dv.getUint32(4, true);
@@ -111,10 +109,11 @@ export async function parseTlsDirectory(
   const Characteristics = dv.getUint32(20, true);
   const callbackTableRva = toRvaFromVa32(AddressOfCallBacks, imageBase);
   const callbackTableOff = callbackTableRva != null ? rvaToOff(callbackTableRva) : null;
-  const CallbackRvas = callbackTableOff != null
+  const CallbackRvas = callbackTableRva != null
     ? await readTlsCallbackRvas(
       file,
-      callbackTableOff,
+      rvaToOff,
+      callbackTableRva,
       4,
       (dv, entryOffset) => dv.getUint32(entryOffset, true),
       pointer => (typeof pointer === "number" ? toRvaFromVa32(pointer, imageBase) : null)

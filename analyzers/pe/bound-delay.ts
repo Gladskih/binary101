@@ -7,6 +7,14 @@ import type {
   RvaToOffset
 } from "./types.js";
 
+const IMAGE_DELAYLOAD_DESCRIPTOR_SIZE = 32;
+const IMAGE_THUNK_DATA32_SIZE = 4;
+const IMAGE_THUNK_DATA64_SIZE = 8;
+const IMAGE_ORDINAL_FLAG32 = 0x80000000;
+const IMAGE_ORDINAL_FLAG64 = 0x8000000000000000n;
+const IMAGE_DELAY_IMPORT_NAME_MASK64 = 0x7fffffffn;
+const IMAGE_DELAY_IMPORT_NAME_RESERVED_MASK64 = 0x7fffffff80000000n;
+
 const readBoundedAsciiString = async (
   file: File,
   offset: number,
@@ -161,17 +169,20 @@ export async function parseDelayImports(
   _imageBase: number
 ): Promise<{ entries: PeDelayImportEntry[]; warning?: string } | null> {
   const dir = dataDirs.find(d => d.name === "DELAY_IMPORT");
-  if (!dir?.rva || dir.size < 32) return null;
+  if (!dir?.rva || dir.size < IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) return null;
   const base = rvaToOff(dir.rva);
   if (base == null) return null;
   addCoverageRegion("DELAY_IMPORT", base, dir.size);
   const end = base + dir.size;
   const entries: PeDelayImportEntry[] = [];
   const warnings = new Set<string>();
+  const maxThunkEntries = (entrySize: number): number => Math.floor(file.size / entrySize) + 1;
   let off = base;
-  while (off + 32 <= end) {
-    const dv = new DataView(await file.slice(off, off + 32).arrayBuffer());
-    if (dv.byteLength < 32) {
+  while (off + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE <= end) {
+    const dv = new DataView(
+      await file.slice(off, off + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE).arrayBuffer()
+    );
+    if (dv.byteLength < IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) {
       warnings.add("Delay import descriptor truncated.");
       break;
     }
@@ -189,33 +200,67 @@ export async function parseDelayImports(
     if (DllNameRVA && nameOff == null) warnings.add("Delay import name RVA does not map to file data.");
     const functions: Array<{ ordinal?: number; hint?: number; name?: string }> = [];
     const intRva = ImportNameTableRVA >>> 0;
-    const intOff = intRva ? rvaToOff(intRva) : null;
-    if (intOff != null) {
-      if (isPlus) {
-        for (let index = 0; index < 8 * 16384; index += 8) {
-          const thunkView = new DataView(await file.slice(intOff + index, intOff + index + 8).arrayBuffer());
-          if (thunkView.byteLength < 8) {
+    if (intRva) {
+      const intOff = rvaToOff(intRva);
+      if (intOff == null) {
+        warnings.add("Delay Import Name Table RVA does not map to file data.");
+      } else if (isPlus) {
+        for (let index = 0; index < maxThunkEntries(IMAGE_THUNK_DATA64_SIZE); index += 1) {
+          const thunkEntryRva = intRva + index * IMAGE_THUNK_DATA64_SIZE;
+          const thunkEntryOff = rvaToOff(thunkEntryRva >>> 0);
+          if (thunkEntryOff == null) break;
+          if (thunkEntryOff < 0 || thunkEntryOff + IMAGE_THUNK_DATA64_SIZE > file.size) {
+            warnings.add("Delay import thunk table truncated (64-bit).");
+            break;
+          }
+          const thunkView = new DataView(
+            await file
+              .slice(thunkEntryOff, thunkEntryOff + IMAGE_THUNK_DATA64_SIZE)
+              .arrayBuffer()
+          );
+          if (thunkView.byteLength < IMAGE_THUNK_DATA64_SIZE) {
             warnings.add("Delay import thunk table truncated (64-bit).");
             break;
           }
           const value = thunkView.getBigUint64(0, true);
           if (value === 0n) break;
-          if ((value & 0x8000000000000000n) !== 0n) {
+          if ((value & IMAGE_ORDINAL_FLAG64) !== 0n) {
             functions.push({ ordinal: Number(value & 0xffffn) });
           } else {
-            functions.push(await readDelayImportHintName(file, rvaToOff, Number(value & 0xffffffffn), warnings));
+            if ((value & IMAGE_DELAY_IMPORT_NAME_RESERVED_MASK64) !== 0n) {
+              warnings.add("Delay import name thunk has reserved bits set.");
+            }
+            functions.push(
+              await readDelayImportHintName(
+                file,
+                rvaToOff,
+                Number(value & IMAGE_DELAY_IMPORT_NAME_MASK64),
+                warnings
+              )
+            );
           }
         }
       } else {
-        for (let index = 0; index < 4 * 32768; index += 4) {
-          const thunkView = new DataView(await file.slice(intOff + index, intOff + index + 4).arrayBuffer());
-          if (thunkView.byteLength < 4) {
+        for (let index = 0; index < maxThunkEntries(IMAGE_THUNK_DATA32_SIZE); index += 1) {
+          const thunkEntryRva = intRva + index * IMAGE_THUNK_DATA32_SIZE;
+          const thunkEntryOff = rvaToOff(thunkEntryRva >>> 0);
+          if (thunkEntryOff == null) break;
+          if (thunkEntryOff < 0 || thunkEntryOff + IMAGE_THUNK_DATA32_SIZE > file.size) {
+            warnings.add("Delay import thunk table truncated (32-bit).");
+            break;
+          }
+          const thunkView = new DataView(
+            await file
+              .slice(thunkEntryOff, thunkEntryOff + IMAGE_THUNK_DATA32_SIZE)
+              .arrayBuffer()
+          );
+          if (thunkView.byteLength < IMAGE_THUNK_DATA32_SIZE) {
             warnings.add("Delay import thunk table truncated (32-bit).");
             break;
           }
           const value = thunkView.getUint32(0, true);
           if (value === 0) break;
-          if ((value & 0x80000000) !== 0) {
+          if ((value & IMAGE_ORDINAL_FLAG32) !== 0) {
             functions.push({ ordinal: value & 0xffff });
           } else {
             functions.push(await readDelayImportHintName(file, rvaToOff, value, warnings));
@@ -234,7 +279,7 @@ export async function parseDelayImports(
       TimeDateStamp,
       functions
     });
-    off += 32;
+    off += IMAGE_DELAYLOAD_DESCRIPTOR_SIZE;
   }
   const warning = warnings.size ? Array.from(warnings).join(" · ") : undefined;
   return warning ? { entries, warning } : { entries };
