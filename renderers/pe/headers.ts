@@ -103,13 +103,17 @@ const renderSections = (pe: PeParseResult, out: string[]): void => {
 };
 
 export function renderHeaders(pe: PeParseResult, out: string[]): void {
-  const bits = pe.opt.isPlus ? "64-bit" : "32-bit";
   const isDll = (pe.coff.Characteristics & 0x2000) !== 0;
   const roleText = isDll ? "dynamic-link library (DLL)" : "executable image";
+  const imageTypeText = pe.opt.isPlus
+    ? `64-bit Windows ${roleText}`
+    : pe.opt.is32
+      ? `32-bit Windows ${roleText}`
+      : `Windows ${roleText} with an unrecognized optional-header magic`;
   const sectionCount = Array.isArray(pe.sections) ? pe.sections.length : pe.coff.NumberOfSections;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Big picture</h4>`);
   out.push(
-    `<div class="smallNote">PE image: ${bits} Windows ${roleText}. Headers describe layout and loader requirements; ${sectionCount} sections carry code, data, resources and relocation information.</div>`
+    `<div class="smallNote">PE image: ${imageTypeText}. Headers describe layout and loader requirements; ${sectionCount} sections carry code, data, resources and relocation information.</div>`
   );
   const entryVa = pe.opt.ImageBase + (pe.opt.AddressOfEntryPoint >>> 0);
   out.push(

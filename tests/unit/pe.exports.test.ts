@@ -10,146 +10,121 @@ import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
 const encoder = new TextEncoder();
 const IMAGE_EXPORT_DIRECTORY_SIZE = 40; // IMAGE_EXPORT_DIRECTORY
 
+const parseExportFixture = (
+  bytes: Uint8Array | File,
+  directory: { rva: number; size: number },
+  rvaToOff: (rva: number) => number | null = value => value,
+  addCoverageRegion: (label: string, start: number, size: number) => void = () => {}
+) => parseExportDirectory(
+  bytes instanceof Uint8Array ? new MockFile(bytes) : bytes,
+  [{ name: "EXPORT", ...directory }],
+  rvaToOff,
+  addCoverageRegion
+);
+
 void test("parseExportDirectory extracts names and forwarders", async () => {
   const bytes = new Uint8Array(1024).fill(0);
   const dv = new DataView(bytes.buffer);
-  const baseExp = 128;
+  const directoryRva = 128;
+  const dllNameRva = 300;
+  const functionTableRva = 400;
+  const nameTableRva = 420;
+  const ordinalTableRva = 430;
+  const exportedNameRva = 440;
+  const forwarderRva = directoryRva + 64;
 
-  dv.setUint32(baseExp + 0, 1, true);
-  dv.setUint32(baseExp + 4, 0, true);
-  dv.setUint16(baseExp + 8, 1, true);
-  dv.setUint16(baseExp + 10, 0, true);
-  const nameRva = 300;
-  dv.setUint32(baseExp + 12, nameRva, true);
-  dv.setUint32(baseExp + 16, 1, true);
-  dv.setUint32(baseExp + 20, 2, true);
-  dv.setUint32(baseExp + 24, 1, true);
-  dv.setUint32(baseExp + 28, 400, true);
-  dv.setUint32(baseExp + 32, 420, true);
-  dv.setUint32(baseExp + 36, 430, true);
-
-  encoder.encodeInto("demo.dll\0", new Uint8Array(bytes.buffer, nameRva));
-  dv.setUint32(400 + 0, 0x7000, true);
-  const forwarderRva = baseExp + 64;
-  dv.setUint32(400 + 4, forwarderRva, true);
-  dv.setUint32(420, 440, true);
-  dv.setUint16(430, 1, true);
-  encoder.encodeInto("FuncB\0", new Uint8Array(bytes.buffer, 440));
+  dv.setUint32(directoryRva + 0, 1, true);
+  dv.setUint16(directoryRva + 8, 1, true);
+  dv.setUint32(directoryRva + 12, dllNameRva, true);
+  dv.setUint32(directoryRva + 16, 1, true);
+  dv.setUint32(directoryRva + 20, 2, true);
+  dv.setUint32(directoryRva + 24, 1, true);
+  dv.setUint32(directoryRva + 28, functionTableRva, true);
+  dv.setUint32(directoryRva + 32, nameTableRva, true);
+  dv.setUint32(directoryRva + 36, ordinalTableRva, true);
+  encoder.encodeInto("demo.dll\0", new Uint8Array(bytes.buffer, dllNameRva));
+  dv.setUint32(functionTableRva + 0, 0x7000, true);
+  dv.setUint32(functionTableRva + 4, forwarderRva, true);
+  dv.setUint32(nameTableRva, exportedNameRva, true);
+  dv.setUint16(ordinalTableRva, 1, true);
+  encoder.encodeInto("FuncB\0", new Uint8Array(bytes.buffer, exportedNameRva));
   encoder.encodeInto("KERNEL32.Forward\0", new Uint8Array(bytes.buffer, forwarderRva));
 
-  const result = await parseExportDirectory(
-    new MockFile(bytes, "exports.bin"),
-    [{ name: "EXPORT", rva: baseExp, size: 96 }],
-    value => value,
-    () => {}
-  );
-
-  const definedResult = expectDefined(result);
-  assert.equal(definedResult.dllName, "demo.dll");
-  assert.equal(definedResult.entries.length, 2);
-  const secondEntry = expectDefined(definedResult.entries[1]);
-  assert.equal(secondEntry.forwarder, "KERNEL32.Forward");
-  assert.equal(secondEntry.name, "FuncB");
+  const result = expectDefined(await parseExportFixture(bytes, { rva: directoryRva, size: 96 }));
+  assert.equal(result.dllName, "demo.dll");
+  assert.equal(result.entries.length, 2);
+  assert.equal(expectDefined(result.entries[1]).forwarder, "KERNEL32.Forward");
+  assert.equal(expectDefined(result.entries[1]).name, "FuncB");
 });
 
 void test("parseExportDirectory stops at available function table size", async () => {
   const bytes = new Uint8Array(128).fill(0);
   const dv = new DataView(bytes.buffer);
-  const expRva = 0x20;
-  dv.setUint32(expRva + 20, 10, true);
-  dv.setUint32(expRva + 28, 0x60, true);
+  const directoryRva = 0x20;
+  dv.setUint32(directoryRva + 20, 10, true);
+  dv.setUint32(directoryRva + 28, 0x60, true);
   dv.setUint32(0x60, 0x1234, true);
 
-  const result = await parseExportDirectory(
-    new MockFile(bytes, "exports-trunc.bin"),
-    [{ name: "EXPORT", rva: expRva, size: 40 }],
-    value => value,
-    () => {}
-  );
-
-  const definedResult = expectDefined(result);
-  assert.equal(definedResult.entries.length, 8);
-  const firstEntry = expectDefined(definedResult.entries[0]);
-  assert.equal(firstEntry.rva, 0x1234);
-  assert.equal(definedResult.entries[7]?.rva, 0);
+  const result = expectDefined(await parseExportFixture(bytes, { rva: directoryRva, size: 40 }));
+  assert.equal(result.entries.length, 8);
+  assert.equal(expectDefined(result.entries[0]).rva, 0x1234);
+  assert.equal(result.entries[7]?.rva, 0);
 });
 
 void test("parseExportDirectory truncates entries when EAT is shorter than NumberOfFunctions", async () => {
   const bytes = new Uint8Array(0x48).fill(0);
   const dv = new DataView(bytes.buffer);
-  const expRva = 0x10;
-  dv.setUint32(expRva + 20, 10, true);
-  dv.setUint32(expRva + 28, 0x40, true);
+  const directoryRva = 0x10;
+  dv.setUint32(directoryRva + 20, 10, true);
+  dv.setUint32(directoryRva + 28, 0x40, true);
   dv.setUint32(0x40, 0x1111, true);
   dv.setUint32(0x44, 0x2222, true);
 
-  const result = await parseExportDirectory(
-    new MockFile(bytes, "exports-eat-trunc.bin"),
-    [{ name: "EXPORT", rva: expRva, size: 64 }],
-    value => value,
-    () => {}
-  );
-
-  const definedResult = expectDefined(result);
-  assert.equal(definedResult.entries.length, 2);
-  assert.equal(definedResult.entries[0]?.rva, 0x1111);
-  assert.equal(definedResult.entries[1]?.rva, 0x2222);
+  const result = expectDefined(await parseExportFixture(bytes, { rva: directoryRva, size: 64 }));
+  assert.equal(result.entries.length, 2);
+  assert.equal(result.entries[0]?.rva, 0x1111);
+  assert.equal(result.entries[1]?.rva, 0x2222);
 });
 
-void test("parseExportDirectory ignores names beyond available name/ordinal tables", async () => {
+void test("parseExportDirectory ignores names beyond available name and ordinal tables", async () => {
   const bytes = new Uint8Array(0xe0).fill(0);
   const dv = new DataView(bytes.buffer);
-  const expRva = 0x20;
-  dv.setUint32(expRva + 16, 1, true);
-  dv.setUint32(expRva + 20, 2, true);
-  dv.setUint32(expRva + 24, 3, true);
-  dv.setUint32(expRva + 28, 0x80, true);
-  dv.setUint32(expRva + 32, 0xd4, true);
-  dv.setUint32(expRva + 36, 0xdc, true);
+  const directoryRva = 0x20;
+  dv.setUint32(directoryRva + 16, 1, true);
+  dv.setUint32(directoryRva + 20, 2, true);
+  dv.setUint32(directoryRva + 24, 3, true);
+  dv.setUint32(directoryRva + 28, 0x80, true);
+  dv.setUint32(directoryRva + 32, 0xd4, true);
+  dv.setUint32(directoryRva + 36, 0xdc, true);
   dv.setUint32(0x80, 0x1000, true);
   dv.setUint32(0x84, 0x2000, true);
   dv.setUint32(0xd4, 0xc0, true);
-  dv.setUint32(0xd8, 0x00, true);
   dv.setUint16(0xdc, 0, true);
   dv.setUint16(0xde, 1, true);
   encoder.encodeInto("OnlyName\0", new Uint8Array(bytes.buffer, 0xc0));
 
-  const result = await parseExportDirectory(
-    new MockFile(bytes, "exports-names-trunc.bin"),
-    [{ name: "EXPORT", rva: expRva, size: 80 }],
-    value => value,
-    () => {}
-  );
-
-  const definedResult = expectDefined(result);
-  assert.equal(definedResult.entries.length, 2);
-  assert.equal(definedResult.entries[0]?.name, "OnlyName");
-  assert.ok(definedResult.entries[1]?.name === null || definedResult.entries[1]?.name === "");
+  const result = expectDefined(await parseExportFixture(bytes, { rva: directoryRva, size: 80 }));
+  assert.equal(result.entries.length, 2);
+  assert.equal(result.entries[0]?.name, "OnlyName");
+  assert.ok(result.entries[1]?.name === null || result.entries[1]?.name === "");
 });
 
 void test("parseExportDirectory does not read EAT slots past an rvaToOff gap", async () => {
-  const expRva = IMAGE_EXPORT_DIRECTORY_SIZE;
-  const eatRva = expRva + IMAGE_EXPORT_DIRECTORY_SIZE;
+  const directoryRva = IMAGE_EXPORT_DIRECTORY_SIZE;
+  const eatRva = directoryRva + IMAGE_EXPORT_DIRECTORY_SIZE;
   const firstTargetRva = 0x1111;
-  const secondTargetRva = 0x2222;
   const bytes = new Uint8Array(eatRva + Uint32Array.BYTES_PER_ELEMENT * 2).fill(0);
   const dv = new DataView(bytes.buffer);
-  dv.setUint32(expRva + 16, 1, true);
-  dv.setUint32(expRva + 20, 2, true);
-  dv.setUint32(expRva + 28, eatRva, true);
+  dv.setUint32(directoryRva + 16, 1, true);
+  dv.setUint32(directoryRva + 20, 2, true);
+  dv.setUint32(directoryRva + 28, eatRva, true);
   dv.setUint32(eatRva, firstTargetRva, true);
-  dv.setUint32(eatRva + Uint32Array.BYTES_PER_ELEMENT, secondTargetRva, true);
+  dv.setUint32(eatRva + Uint32Array.BYTES_PER_ELEMENT, 0x2222, true);
 
-  const sparseRvaToOff = (rva: number): number | null => {
-    if (rva === expRva || rva === eatRva) return rva;
-    return null;
-  };
-
-  const result = expectDefined(await parseExportDirectory(
-    new MockFile(bytes, "exports-gap.bin"),
-    [{ name: "EXPORT", rva: expRva, size: IMAGE_EXPORT_DIRECTORY_SIZE }],
-    sparseRvaToOff,
-    () => {}
+  const result = expectDefined(await parseExportFixture(
+    bytes,
+    { rva: directoryRva, size: IMAGE_EXPORT_DIRECTORY_SIZE },
+    rva => (rva === directoryRva || rva === eatRva ? rva : null)
   ));
 
   assert.equal(result.entries.length, 1);
@@ -159,23 +134,21 @@ void test("parseExportDirectory does not read EAT slots past an rvaToOff gap", a
 void test("parseExportDirectory bounds the initial directory read to the fixed header size", async () => {
   const bytes = new Uint8Array(0x80).fill(0);
   const dv = new DataView(bytes.buffer);
-  const expRva = 0x20;
-  dv.setUint32(expRva + 16, 1, true);
-  dv.setUint32(expRva + 20, 1, true);
-  dv.setUint32(expRva + 28, 0x2000, true);
+  const directoryRva = 0x20;
+  dv.setUint32(directoryRva + 16, 1, true);
+  dv.setUint32(directoryRva + 20, 1, true);
+  dv.setUint32(directoryRva + 28, 0x2000, true);
 
   const tracked = createSliceTrackingFile(bytes, 0x400000, "exports-bounded-read.bin");
-  const result = await parseExportDirectory(
+  const result = expectDefined(await parseExportFixture(
     tracked.file,
-    [{ name: "EXPORT", rva: expRva, size: 0x200000 }],
-    value => (value < bytes.length ? value : null),
-    () => {}
-  );
+    { rva: directoryRva, size: 0x200000 },
+    value => (value < bytes.length ? value : null)
+  ));
 
-  const definedResult = expectDefined(result);
-  assert.ok(definedResult.issues.some(issue => /does not map/i.test(issue)));
+  assert.ok(result.issues.some(issue => /does not map/i.test(issue)));
   assert.ok(
-    Math.max(...tracked.requests) <= 40,
+    Math.max(...tracked.requests) <= IMAGE_EXPORT_DIRECTORY_SIZE,
     `Expected fixed-size export header read, got requests ${tracked.requests.join(", ")}`
   );
 });
@@ -183,8 +156,8 @@ void test("parseExportDirectory bounds the initial directory read to the fixed h
 void test("parseExportDirectory stops reading export strings at EOF without unbounded retries", async () => {
   const bytes = new Uint8Array(0x41).fill(0);
   const dv = new DataView(bytes.buffer);
-  const expRva = 0x10;
-  dv.setUint32(expRva + 12, 0x40, true);
+  const directoryRva = 0x10;
+  dv.setUint32(directoryRva + 12, 0x40, true);
   bytes[0x40] = 0x41;
 
   let sliceCalls = 0;
@@ -196,9 +169,7 @@ void test("parseExportDirectory stops reading export strings at EOF without unbo
     webkitRelativePath: "",
     slice(start?: number, end?: number, contentType?: string): Blob {
       sliceCalls += 1;
-      if (sliceCalls > 4) {
-        throw new Error("Too many export string reads");
-      }
+      if (sliceCalls > 4) throw new Error("Too many export string reads");
       const sliceStart = Math.max(0, Math.trunc(start ?? 0));
       const sliceEnd = Math.max(sliceStart, Math.trunc(end ?? bytes.length));
       const actualStart = Math.min(sliceStart, bytes.length);
@@ -209,31 +180,46 @@ void test("parseExportDirectory stops reading export strings at EOF without unbo
     }
   } as File;
 
-  const result = await parseExportDirectory(
-    file,
-    [{ name: "EXPORT", rva: expRva, size: 40 }],
-    value => value,
-    () => {}
-  );
-
+  const result = await parseExportFixture(file, { rva: directoryRva, size: 40 });
   assert.equal(expectDefined(result).dllName, "A");
+});
+
+void test("parseExportDirectory reads export strings beyond the old 1024-byte parser cap", async () => {
+  const longDllName = `${"d".repeat(1025)}.dll`;
+  const nameBytes = encoder.encode(`${longDllName}\0`);
+  const directoryRva = 0x20;
+  const nameRva = 0x80;
+  const eatRva = nameRva + nameBytes.length;
+  const bytes = new Uint8Array(eatRva + Uint32Array.BYTES_PER_ELEMENT).fill(0);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(directoryRva + 12, nameRva, true);
+  dv.setUint32(directoryRva + 16, 1, true);
+  dv.setUint32(directoryRva + 20, 1, true);
+  dv.setUint32(directoryRva + 28, eatRva, true);
+  dv.setUint32(eatRva, 0x1000, true);
+  bytes.set(nameBytes, nameRva);
+
+  const result = expectDefined(await parseExportFixture(
+    bytes,
+    { rva: directoryRva, size: IMAGE_EXPORT_DIRECTORY_SIZE }
+  ));
+
+  assert.equal(result.dllName, longDllName);
 });
 
 void test("parseExportDirectory reports when a mapped DLL name offset falls past EOF", async () => {
   const bytes = new Uint8Array(128).fill(0);
   const dv = new DataView(bytes.buffer);
-  const expRva = 0x10;
-  dv.setUint32(expRva + 12, 0x40, true);
-  dv.setUint32(expRva + 20, 1, true);
-  dv.setUint32(expRva + 28, 0x60, true);
+  const directoryRva = 0x10;
+  dv.setUint32(directoryRva + 12, 0x40, true);
+  dv.setUint32(directoryRva + 20, 1, true);
+  dv.setUint32(directoryRva + 28, 0x60, true);
   dv.setUint32(0x60, 0x1234, true);
 
-  const result = expectDefined(await parseExportDirectory(
-    new MockFile(bytes, "exports-name-oob.bin"),
-    [{ name: "EXPORT", rva: expRva, size: 40 }],
-    // The export directory itself maps, but every other RVA is shifted 0x200 bytes past EOF.
-    value => (value === expRva || value === 0x60 ? value : value === 0 ? null : value + 0x200),
-    () => {}
+  const result = expectDefined(await parseExportFixture(
+    bytes,
+    { rva: directoryRva, size: 40 },
+    value => (value === directoryRva || value === 0x60 ? value : value === 0 ? null : value + 0x200)
   ));
 
   assert.ok(result.issues.some(issue => /name/i.test(issue)));
@@ -242,51 +228,56 @@ void test("parseExportDirectory reports when a mapped DLL name offset falls past
 void test("parseExportDirectory reports out-of-range entries in the export ordinal table", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const dv = new DataView(bytes.buffer);
-  const expRva = 0x20;
-  dv.setUint32(expRva + 16, 1, true); // OrdinalBase
-  dv.setUint32(expRva + 20, 1, true); // NumberOfFunctions
-  dv.setUint32(expRva + 24, 1, true); // NumberOfNames
-  dv.setUint32(expRva + 28, 0x80, true); // Export Address Table RVA
-  dv.setUint32(expRva + 32, 0xa0, true); // Name Pointer RVA
-  dv.setUint32(expRva + 36, 0xc0, true); // Ordinal Table RVA
+  const directoryRva = 0x20;
+  dv.setUint32(directoryRva + 16, 1, true);
+  dv.setUint32(directoryRva + 20, 1, true);
+  dv.setUint32(directoryRva + 24, 1, true);
+  dv.setUint32(directoryRva + 28, 0x80, true);
+  dv.setUint32(directoryRva + 32, 0xa0, true);
+  dv.setUint32(directoryRva + 36, 0xc0, true);
   dv.setUint32(0x80, 0x1000, true);
   dv.setUint32(0xa0, 0xe0, true);
-  dv.setUint16(0xc0, 5, true); // Unbiased ordinal index past NumberOfFunctions=1
+  dv.setUint16(0xc0, 5, true);
   encoder.encodeInto("BadOrdinal\0", new Uint8Array(bytes.buffer, 0xe0));
 
-  const result = expectDefined(await parseExportDirectory(
-    new MockFile(bytes, "exports-bad-ordinal.bin"),
-    [{ name: "EXPORT", rva: expRva, size: 64 }],
-    value => value,
-    () => {}
-  ));
-
+  const result = expectDefined(await parseExportFixture(bytes, { rva: directoryRva, size: 64 }));
   assert.ok(result.issues.some(issue => /ordinal/i.test(issue)));
 });
 
 void test("parseExportDirectory reports missing export name and ordinal tables when NumberOfNames is non-zero", async () => {
-  const expRva = IMAGE_EXPORT_DIRECTORY_SIZE;
-  const eatRva = expRva + IMAGE_EXPORT_DIRECTORY_SIZE;
-  const onlyFunctionRva = 0x1000;
+  const directoryRva = IMAGE_EXPORT_DIRECTORY_SIZE;
+  const eatRva = directoryRva + IMAGE_EXPORT_DIRECTORY_SIZE;
   const bytes = new Uint8Array(eatRva + Uint32Array.BYTES_PER_ELEMENT).fill(0);
   const dv = new DataView(bytes.buffer);
-  dv.setUint32(expRva + 16, 1, true); // OrdinalBase
-  dv.setUint32(expRva + 20, 1, true); // NumberOfFunctions
-  dv.setUint32(expRva + 24, 1, true); // NumberOfNames
-  dv.setUint32(expRva + 28, eatRva, true); // Export Address Table RVA
-  // Microsoft PE Format:
-  // NumberOfNames counts both the name pointer table and the parallel ordinal table.
-  dv.setUint32(expRva + 32, 0, true); // Name Pointer RVA
-  dv.setUint32(expRva + 36, 0, true); // Ordinal Table RVA
-  dv.setUint32(eatRva, onlyFunctionRva, true);
+  dv.setUint32(directoryRva + 16, 1, true);
+  dv.setUint32(directoryRva + 20, 1, true);
+  dv.setUint32(directoryRva + 24, 1, true);
+  dv.setUint32(directoryRva + 28, eatRva, true);
+  dv.setUint32(eatRva, 0x1000, true);
 
-  const result = expectDefined(await parseExportDirectory(
-    new MockFile(bytes, "exports-missing-name-tables.bin"),
-    [{ name: "EXPORT", rva: expRva, size: IMAGE_EXPORT_DIRECTORY_SIZE }],
-    value => value,
-    () => {}
+  const result = expectDefined(await parseExportFixture(
+    bytes,
+    { rva: directoryRva, size: IMAGE_EXPORT_DIRECTORY_SIZE }
   ));
 
   assert.equal(result.entries.length, 1);
   assert.ok(result.issues.some(issue => /name pointer|ordinal table/i.test(issue)));
+});
+
+void test("parseExportDirectory reports truncated export strings that run to EOF without a terminator", async () => {
+  const bytes = new Uint8Array(0x80).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const directoryRva = 0x20;
+  const eatRva = 0x60;
+  const dllNameRva = 0x7f;
+  dv.setUint32(directoryRva + 12, dllNameRva, true);
+  dv.setUint32(directoryRva + 16, 1, true);
+  dv.setUint32(directoryRva + 20, 1, true);
+  dv.setUint32(directoryRva + 28, eatRva, true);
+  dv.setUint32(eatRva, 0x1000, true);
+  bytes[dllNameRva] = 0x41;
+
+  const result = expectDefined(await parseExportFixture(bytes, { rva: directoryRva, size: 0x60 }));
+  assert.equal(result.dllName, "A");
+  assert.ok(result.issues.some(issue => /truncated|string/i.test(issue)));
 });

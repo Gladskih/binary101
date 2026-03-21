@@ -212,3 +212,30 @@ void test("parseTlsDirectory walks the full null-terminated callback array witho
     firstCallbackRva + (callbackCount - 1) * TLS_CALLBACK_ENTRY_SIZE32
   );
 });
+
+void test("parseTlsDirectory reports TLS callback coverage only through the null terminator", async () => {
+  const tlsRva = IMAGE_TLS_DIRECTORY32_SIZE;
+  const callbackTableRva = tlsRva + IMAGE_TLS_DIRECTORY32_SIZE;
+  const bytes = new Uint8Array(256).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const coverage: Array<{ label: string; start: number; size: number }> = [];
+  dv.setUint32(tlsRva + 12, callbackTableRva, true);
+  dv.setUint32(callbackTableRva, 0x2000, true);
+  dv.setUint32(callbackTableRva + TLS_CALLBACK_ENTRY_SIZE32, 0, true);
+
+  const tls = expectDefined(await parseTlsDirectory32(
+    new MockFile(bytes),
+    [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY32_SIZE }],
+    value => value,
+    (label, start, size) => coverage.push({ label, start, size }),
+    0
+  ));
+
+  assert.equal(tls.CallbackCount, 1);
+  const callbackCoverage = expectDefined(coverage.find(entry => entry.label === "TLS callbacks"));
+  assert.deepEqual(callbackCoverage, {
+    label: "TLS callbacks",
+    start: callbackTableRva,
+    size: TLS_CALLBACK_ENTRY_SIZE32 * 2
+  });
+});

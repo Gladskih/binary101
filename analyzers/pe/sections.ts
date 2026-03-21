@@ -3,7 +3,6 @@
 import type { PeSection, RvaToOffset } from "./types.js";
 
 const IMAGE_SECTION_HEADER_SIZE = 40;
-const IMAGE_FILE_HEADER_MAX_SECTIONS = 96;
 
 const getMappedSectionSpan = (section: PeSection): number =>
   (section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0);
@@ -43,7 +42,7 @@ const parseSectionHeaders = async (
   sizeOfHeaders: number
 ): Promise<{ sections: PeSection[]; rvaToOff: RvaToOffset; sectOff: number }> => {
   const sectionHeadersOffset = optionalHeaderOffset + sizeOfOptionalHeader;
-  const safeSectionCount = Math.min(numberOfSections >>> 0, IMAGE_FILE_HEADER_MAX_SECTIONS);
+  const safeSectionCount = numberOfSections >>> 0;
   const sectionHeadersView = new DataView(
     await file
       .slice(

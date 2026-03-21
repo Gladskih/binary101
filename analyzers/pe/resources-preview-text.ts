@@ -78,7 +78,8 @@ export function addStringTablePreview(
   const entries: Array<{ id: number | null; text: string }> = [];
   let offset = 0;
   const baseId = entryId != null ? Math.max(0, entryId - 1) * 16 : null;
-  while (offset + 2 <= data.length && entries.length < 32) {
+  // Win32 STRINGTABLE blocks contain exactly 16 UTF-16 entries.
+  while (offset + 2 <= data.length && entries.length < 16) {
     const len = dv.getUint16(offset, true);
     offset += 2;
     const byteLen = len * 2;
@@ -103,69 +104,6 @@ export function addStringTablePreview(
   langEntry.previewKind = "stringTable";
   langEntry.stringPreview = entries;
   langEntry.stringTable = entries;
-}
-
-export function addMessageTablePreview(
-  langEntry: ResourceLangWithPreview,
-  data: Uint8Array,
-  typeName: string
-): void {
-  if (typeName !== "MESSAGETABLE") return;
-  const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  const messageCount = Math.min(16, Math.floor(data.length / 24));
-  const messages: Array<{ id: number; strings: string[] }> = [];
-  for (let index = 0; index < messageCount; index += 1) {
-    const id = dv.getUint32(index * 24 + 0, true);
-    const count = dv.getUint16(index * 24 + 4, true);
-    const entryRva = dv.getUint32(index * 24 + 8, true);
-    const entrySize = dv.getUint32(index * 24 + 12, true);
-    const entryStart = entryRva - data.byteOffset;
-    if (entryStart < 0 || entryStart + entrySize > data.length) break;
-    const entryBytes = new Uint8Array(data.buffer, data.byteOffset + entryStart, entrySize);
-    const texts: string[] = [];
-    let pos = 0;
-    for (let s = 0; s < count && pos + 4 <= entryBytes.length; s += 1) {
-      const lenLow = entryBytes[pos];
-      const lenHigh = entryBytes[pos + 1];
-      const flagLow = entryBytes[pos + 2];
-      const flagHigh = entryBytes[pos + 3];
-      if (
-        lenLow === undefined ||
-        lenHigh === undefined ||
-        flagLow === undefined ||
-        flagHigh === undefined
-      ) {
-        break;
-      }
-      const len = lenLow | (lenHigh << 8);
-      const flags = flagLow | (flagHigh << 8);
-      const isUnicode = (flags & 0x0001) !== 0;
-      pos += 4;
-      if (pos + len > entryBytes.length) break;
-      let str = "";
-      if (isUnicode) {
-        for (let chPos = 0; chPos + 1 < len; chPos += 2) {
-          const first = entryBytes[pos + chPos];
-          const second = entryBytes[pos + chPos + 1];
-          if (first === undefined || second === undefined) break;
-          const code = first | (second << 8);
-          str += String.fromCharCode(code);
-        }
-      } else {
-        str = new TextDecoder("utf-8", { fatal: false }).decode(
-          entryBytes.subarray(pos, pos + len).filter(b => b !== 0)
-        );
-      }
-      texts.push(str.trim());
-      pos += len;
-    }
-    messages.push({ id, strings: texts });
-  }
-  if (messages.length) {
-    langEntry.previewKind = "messageTable";
-    langEntry.messageItems = messages;
-    langEntry.messageTable = { messages, truncated: false };
-  }
 }
 
 export function addVersionPreview(

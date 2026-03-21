@@ -84,6 +84,24 @@ void test("parseDebugDirectory bounds CodeView reads to header and path chunks",
   );
 });
 
+void test("parseDebugDirectory reads CodeView paths beyond the old 1024-byte parser cap", async () => {
+  const bytes = new Uint8Array(1600).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const debugRva = 0x40;
+  const dataRva = 0x120;
+  const longPath = `C:\\symbols\\${"a".repeat(1100)}\\app.pdb`;
+  writeRsdsRecord(dv, bytes, debugRva, dataRva, 13, longPath);
+
+  const result = await parseDebugDirectory(
+    new MockFile(bytes, "debug-long-path.bin"),
+    [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE }],
+    value => value,
+    () => {}
+  );
+
+  assert.equal(expectDefined(result.entry).path, longPath);
+});
+
 void test("parseDebugDirectory clamps the CodeView path to SizeOfData", async () => {
   const bytes = new Uint8Array(512).fill(0);
   const dv = new DataView(bytes.buffer);
@@ -113,6 +131,23 @@ void test("parseDebugDirectory warns when the declared directory is smaller than
 
   assert.equal(result.entry, null);
   assert.ok(result.warning && /smaller|truncated/i.test(result.warning));
+});
+
+void test("parseDebugDirectory warns when the directory size leaves trailing bytes after whole entries", async () => {
+  const bytes = new Uint8Array(64).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const debugRva = 0x10;
+  dv.setUint32(debugRva + 12, 0, true);
+
+  const result = await parseDebugDirectory(
+    new MockFile(bytes, "debug-misaligned.bin"),
+    [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE + 1 }],
+    value => value,
+    () => {}
+  );
+
+  assert.equal(result.entry, null);
+  assert.ok(result.warning && /multiple|truncated|trailing/i.test(result.warning));
 });
 
 void test("parseDebugDirectory does not decode entries past an rvaToOff gap", async () => {
@@ -167,4 +202,29 @@ void test("parseDebugDirectory continues past the first 16 entries to find later
   const entry = expectDefined(result.entry);
   assert.equal(entry.age, 11);
   assert.match(entry.path, /late-entry\.pdb/);
+});
+
+void test("parseDebugDirectory warns when a CodeView entry is smaller than the minimum RSDS header", async () => {
+  const bytes = new Uint8Array(256).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const debugRva = 0x40;
+  const dataRva = 0x80;
+  dv.setUint32(debugRva + 12, IMAGE_DEBUG_TYPE_CODEVIEW, true);
+  // RSDS needs 24 bytes: signature + GUID + age.
+  dv.setUint32(debugRva + 16, RSDS_HEADER_SIZE - 1, true);
+  dv.setUint32(debugRva + 20, dataRva, true);
+  dv.setUint32(debugRva + 24, dataRva, true);
+
+  const result = await parseDebugDirectory(
+    new MockFile(bytes, "debug-short-rsds.bin"),
+    [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE }],
+    value => value,
+    () => {}
+  );
+
+  assert.equal(result.entry, null);
+  assert.ok(
+    result.warning && /codeview|rsds|small|truncated/i.test(result.warning),
+    "Expected a warning for CodeView entries smaller than the RSDS minimum"
+  );
 });

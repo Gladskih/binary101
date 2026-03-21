@@ -63,25 +63,19 @@ function renderPreviewCell(langEntry: ResourceLangWithPreview | null | undefined
     return main + issuesHtml;
   }
   if (kind === "stringTable" && Array.isArray(langEntry.stringTable)) {
-    const entries = langEntry.stringTable.slice(0, 8);
-    const list = entries
+    const list = langEntry.stringTable
       .map(e => `<li><span class="mono">${e.id != null ? `#${safe(e.id)}` : "(index)"}</span> ${safe(e.text || "")}</li>`)
       .join("");
-    const more = langEntry.stringTable.length > entries.length ? "<div class=\"smallNote\">(more strings not shown)</div>" : "";
-    return `<ol class="smallNote" style="padding-left:1.25rem;margin:0">${list}</ol>${more}${issuesHtml}`;
+    return `<ol class="smallNote" style="padding-left:1.25rem;margin:0">${list}</ol>${issuesHtml}`;
   }
   if (kind === "messageTable" && langEntry.messageTable?.messages) {
-    const msgs = langEntry.messageTable.messages.slice(0, 8);
-    const list = msgs
+    const list = langEntry.messageTable.messages
       .map(m => {
         const text = Array.isArray(m.strings) ? m.strings.join(" | ") : "";
         return `<li><span class="mono">${m.id != null ? `#${safe(m.id)}` : "msg"}</span>: ${safe(text)}</li>`;
       })
       .join("");
-    const more = langEntry.messageTable.truncated
-      ? "<div class=\"smallNote\">(more messages not shown)</div>"
-      : "";
-    return `<ol class="smallNote" style="padding-left:1.25rem;margin:0">${list}</ol>${more}${issuesHtml}`;
+    return `<ol class="smallNote" style="padding-left:1.25rem;margin:0">${list}</ol>${issuesHtml}`;
   }
   if (issuesHtml) return issuesHtml;
   return "-";
@@ -91,12 +85,18 @@ type PeWithResources = Pick<PeParseResult, "resources">;
 
 export function renderResources(pe: PeParseResult | PeWithResources, out: string[]): void {
   const resources = (pe as PeWithResources).resources as
-    | { top?: ResourceTree["top"]; detail?: ResourceDetailGroup[] }
+    | { top?: ResourceTree["top"]; detail?: ResourceDetailGroup[]; issues?: string[] }
     | null;
   if (!resources) return;
+  const issues = (resources.issues || []).filter((issue): issue is string => Boolean(issue));
 
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Resources</h4>`);
   out.push(`<div class="smallNote">Windows resources are organized as a three-level tree: type → name/ID → language. Icons, string tables, manifests, embedded HTML, message tables and version info often live here.</div>`);
+  if (issues.length) {
+    out.push(
+      `<div class="smallNote" style="color:var(--warning-text,#b45309)">⚠ ${issues.map(safe).join(" · ")}</div>`
+    );
+  }
 
   if (resources.top?.length) {
     out.push(`<table class="table" style="margin-top:.5rem"><thead><tr><th>Type</th><th>Key kind</th><th>Leaf entries</th></tr></thead><tbody>`);

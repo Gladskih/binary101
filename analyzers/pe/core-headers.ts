@@ -10,7 +10,46 @@ import { parseRichHeaderFromDosStub } from "./rich-header.js";
 import type { PeCoffHeader, PeDataDirectory, PeDosHeader, PeOptionalHeader } from "./types.js";
 
 const IMAGE_FILE_HEADER_SIZE = 20;
-const IMAGE_FILE_HEADER_MAX_SECTIONS = 96;
+const OPTIONAL_HEADER_DATA_DIRECTORY_MAX_COUNT = 16;
+
+const createEmptyOptionalHeader = (
+  magic: number,
+  isPlus: boolean,
+  is32: boolean
+): PeOptionalHeader => ({
+  Magic: magic,
+  isPlus,
+  is32,
+  LinkerMajor: 0,
+  LinkerMinor: 0,
+  SizeOfCode: 0,
+  SizeOfInitializedData: 0,
+  SizeOfUninitializedData: 0,
+  AddressOfEntryPoint: 0,
+  BaseOfCode: 0,
+  ...(is32 ? { BaseOfData: 0 } : {}),
+  ImageBase: 0,
+  SectionAlignment: 0,
+  FileAlignment: 0,
+  OSVersionMajor: 0,
+  OSVersionMinor: 0,
+  ImageVersionMajor: 0,
+  ImageVersionMinor: 0,
+  SubsystemVersionMajor: 0,
+  SubsystemVersionMinor: 0,
+  Win32VersionValue: 0,
+  SizeOfImage: 0,
+  SizeOfHeaders: 0,
+  CheckSum: 0,
+  Subsystem: 0,
+  DllCharacteristics: 0,
+  SizeOfStackReserve: 0,
+  SizeOfStackCommit: 0,
+  SizeOfHeapReserve: 0,
+  SizeOfHeapCommit: 0,
+  LoaderFlags: 0,
+  NumberOfRvaAndSizes: 0
+});
 
 export async function parseDosHeaderAndStub(
   file: File,
@@ -45,14 +84,14 @@ export async function parseDosHeaderAndStub(
     stub: { kind: "none", note: "" }
   };
   if (peHeaderOffset > 0x40) {
-    const stubLength = Math.min(peHeaderOffset - 0x40, 64 * 1024);
+    const stubLength = peHeaderOffset - 0x40;
     const stubBytes = new Uint8Array(await file.slice(0x40, 0x40 + stubLength).arrayBuffer());
     dos.rich = parseRichHeaderFromDosStub(stubBytes);
     const printableRuns = collectPrintableRuns(stubBytes, 12);
     const classicMessage = printableRuns.find(text => /this program cannot be run in dos mode/i.test(text));
     if (classicMessage) dos.stub = { kind: "standard", note: "classic DOS message", strings: [classicMessage] };
     else if (printableRuns.length) {
-      dos.stub = { kind: "non-standard", note: "printable text", strings: printableRuns.slice(0, 4) };
+      dos.stub = { kind: "non-standard", note: "printable text", strings: printableRuns };
     }
   }
   return dos;
@@ -72,7 +111,7 @@ export async function parseCoffHeader(file: File, peHeaderOffset: number): Promi
   const u16 = (off: number): number => headerView.getUint16(off, true);
   const u32 = (off: number): number => headerView.getUint32(off, true);
   const Machine = u16(coffOffset + 0);
-  const NumberOfSections = Math.min(u16(coffOffset + 2), IMAGE_FILE_HEADER_MAX_SECTIONS);
+  const NumberOfSections = u16(coffOffset + 2);
   const TimeDateStamp = u32(coffOffset + 4);
   const PointerToSymbolTable = u32(coffOffset + 8);
   const NumberOfSymbols = u32(coffOffset + 12);
@@ -100,9 +139,14 @@ export async function parseOptionalHeaderAndDirectories(
   ddCount: number;
   dataDirs: PeDataDirectory[];
   opt: PeOptionalHeader;
+  warnings?: string[];
 }> {
   const optionalHeaderOffset = peHeaderOffset + 24;
-  const maxReadable = Math.max(0, Math.min(file.size - optionalHeaderOffset, 0x600));
+  const warnings: string[] = [];
+  const maxReadable = Math.max(0, file.size - optionalHeaderOffset);
+  if (sizeOfOptionalHeader > 0 && maxReadable < sizeOfOptionalHeader) {
+    warnings.push("Optional header is truncated by end of file.");
+  }
   const declaredSize = Math.min(sizeOfOptionalHeader, maxReadable);
   const minimumIntent = Math.min(0x80, maxReadable);
   const viewSize = declaredSize > 0 ? declaredSize : minimumIntent;
@@ -118,6 +162,20 @@ export async function parseOptionalHeaderAndDirectories(
 
   const Magic = read(2, () => optionalHeaderView.getUint16(position, true), 0); position += 2;
   const isPlus = Magic === 0x20b, is32 = Magic === 0x10b || Magic === 0x107;
+  if (sizeOfOptionalHeader > 0 && !isPlus && !is32) {
+    warnings.push(
+      `Optional header Magic ${`0x${(Magic >>> 0).toString(16)}`} is not PE32, PE32+, or ROM.`
+    );
+    return {
+      optOff: optionalHeaderOffset,
+      optSize: declaredSize,
+      ddStartRel: 0,
+      ddCount: 0,
+      dataDirs: [],
+      opt: createEmptyOptionalHeader(Magic, false, false),
+      ...(warnings.length ? { warnings } : {})
+    };
+  }
   const linker = read<[number, number]>(2, () => [
     optionalHeaderView.getUint8(position),
     optionalHeaderView.getUint8(position + 1)
@@ -138,7 +196,7 @@ export async function parseOptionalHeaderAndDirectories(
     : parseOptionalHeaderTail32(optionalHeaderView, position);
   const ddStartRel = tail.nextPosition;
   const ddCount = Math.min(
-    16,
+    OPTIONAL_HEADER_DATA_DIRECTORY_MAX_COUNT,
     tail.NumberOfRvaAndSizes,
     Math.max(0, Math.floor((optionalHeaderView.byteLength - ddStartRel) / 8))
   );
@@ -185,5 +243,13 @@ export async function parseOptionalHeaderAndDirectories(
     LoaderFlags: tail.LoaderFlags,
     NumberOfRvaAndSizes: tail.NumberOfRvaAndSizes
   };
-  return { optOff: optionalHeaderOffset, optSize, ddStartRel, ddCount, dataDirs, opt };
+  return {
+    optOff: optionalHeaderOffset,
+    optSize,
+    ddStartRel,
+    ddCount,
+    dataDirs,
+    opt,
+    ...(warnings.length ? { warnings } : {})
+  };
 }

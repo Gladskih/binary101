@@ -21,7 +21,6 @@ const writeRuntimeFunction = (
   view.setUint32(offset + 4, end, true);
   view.setUint32(offset + 8, unwindInfoRva, true);
 };
-
 const parseExceptionFixture = (
   bytes: Uint8Array,
   fileName: string,
@@ -29,14 +28,13 @@ const parseExceptionFixture = (
   directorySize: number,
   mapping: (rva: number) => number | null = rvaToOff,
   machine?: number
-) =>
-  parseExceptionDirectory(
-    new MockFile(bytes, fileName),
-    [{ name: "EXCEPTION", rva: directoryRva, size: directorySize }],
-    mapping,
-    coverageAdd,
-    machine
-  );
+) => parseExceptionDirectory(
+  new MockFile(bytes, fileName),
+  [{ name: "EXCEPTION", rva: directoryRva, size: directorySize }],
+  mapping,
+  coverageAdd,
+  machine
+);
 
 void test("parseExceptionDirectory parses pdata entries and unwind info stats", async () => {
   const bytes = new Uint8Array(0x3000).fill(0);
@@ -48,9 +46,7 @@ void test("parseExceptionDirectory parses pdata entries and unwind info stats", 
   bytes[0x2000] = 0x09;
   dv.setUint32(0x2000 + 4, 0x1500, true);
   bytes[0x2010] = 0x21;
-
   const parsed = await parseExceptionFixture(bytes, "exception.bin", exOff, 24);
-
   assert.ok(parsed);
   assert.strictEqual(parsed.functionCount, 2);
   assert.deepEqual(parsed.beginRvas, [0x1000, 0x1100]);
@@ -61,7 +57,6 @@ void test("parseExceptionDirectory parses pdata entries and unwind info stats", 
   assert.deepEqual(parsed.handlerRvas, [0x1500]);
   assert.deepEqual(parsed.issues, []);
 });
-
 void test("parseExceptionDirectory does not cap large pdata directories at 1024 entries", async () => {
   const entryCount = 1025;
   const exOff = 0x100;
@@ -73,41 +68,46 @@ void test("parseExceptionDirectory does not cap large pdata directories at 1024 
     const begin = 0x1000 + index * 0x10;
     writeRuntimeFunction(dv, exOff + index * 12, begin, begin + 0x10, unwindInfoRva);
   }
-
   const parsed = await parseExceptionFixture(bytes, "exception-big.bin", exOff, entryCount * 12);
-
   assert.ok(parsed);
   assert.strictEqual(parsed.functionCount, entryCount);
   assert.strictEqual(parsed.beginRvas.length, entryCount);
   assert.strictEqual(parsed.uniqueUnwindInfoCount, 1);
 });
-
 void test("parseExceptionDirectory reports misaligned directory sizes", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const exOff = 0x80;
   const dv = new DataView(bytes.buffer);
   writeRuntimeFunction(dv, exOff, 0x10, 0x20, 0);
-
   const parsed = await parseExceptionFixture(bytes, "exception-misaligned.bin", exOff, 13);
-
   assert.ok(parsed);
   assert.strictEqual(parsed.functionCount, 1);
   assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("not a multiple")));
 });
-
+void test("parseExceptionDirectory reports unsorted RUNTIME_FUNCTION entries", async () => {
+  const bytes = new Uint8Array(0x400).fill(0);
+  const exOff = 0x80;
+  const dv = new DataView(bytes.buffer);
+  // Microsoft x64 exception-handling docs:
+  // RUNTIME_FUNCTION entries are sorted by function start address before emission into .pdata.
+  writeRuntimeFunction(dv, exOff + 0, 0x100, 0x110, 0x200);
+  writeRuntimeFunction(dv, exOff + 12, 0x80, 0x90, 0x210);
+  bytes[0x200] = 0x01;
+  bytes[0x210] = 0x01;
+  const parsed = await parseExceptionFixture(bytes, "exception-unsorted.bin", exOff, 24);
+  assert.ok(parsed);
+  assert.ok(parsed.issues.some(issue => /sorted|order/i.test(issue)));
+});
 void test("parseExceptionDirectory reports truncation when the directory spills past EOF", async () => {
   const exOff = 0x80;
   const bytes = new Uint8Array(exOff + 12).fill(0);
   const dv = new DataView(bytes.buffer);
   writeRuntimeFunction(dv, exOff, 0x10, 0x20, 0);
-
   const parsed = await parseExceptionFixture(bytes, "exception-truncated.bin", exOff, 24);
-
   assert.ok(parsed);
   assert.strictEqual(parsed.functionCount, 1);
   assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("truncated")));
 });
-
 void test("parseExceptionDirectory stops when later RUNTIME_FUNCTION slots no longer map through rvaToOff", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const exRva = 0x80;
@@ -134,7 +134,6 @@ void test("parseExceptionDirectory stops when later RUNTIME_FUNCTION slots no lo
   assert.strictEqual(parsed.functionCount, 1);
   assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("truncated")));
 });
-
 void test("parseExceptionDirectory returns empty stats when no complete entry is available", async () => {
   const exOff = 0x80;
   const bytes = new Uint8Array(exOff + 6).fill(0);
@@ -145,7 +144,6 @@ void test("parseExceptionDirectory returns empty stats when no complete entry is
   assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("truncated")));
   assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("does not contain")));
 });
-
 void test("parseExceptionDirectory reports unreadable UNWIND_INFO blocks", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const exOff = 0x80;
@@ -161,7 +159,6 @@ void test("parseExceptionDirectory reports unreadable UNWIND_INFO blocks", async
   assert.strictEqual(parsed.invalidEntryCount, 1);
   assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("could not be read")));
 });
-
 void test("parseExceptionDirectory reports unexpected UNWIND_INFO versions", async () => {
   const bytes = new Uint8Array(0x400).fill(0);
   const exOff = 0x80;
@@ -179,7 +176,6 @@ void test("parseExceptionDirectory reports unexpected UNWIND_INFO versions", asy
   assert.strictEqual(parsed.invalidEntryCount, 0);
   assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("unexpected version")));
 });
-
 void test("parseExceptionDirectory counts invalid RUNTIME_FUNCTION ranges", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const exOff = 0x80;
@@ -193,7 +189,6 @@ void test("parseExceptionDirectory counts invalid RUNTIME_FUNCTION ranges", asyn
   assert.strictEqual(parsed.functionCount, 2);
   assert.strictEqual(parsed.invalidEntryCount, 1);
 });
-
 void test("parseExceptionDirectory does not expose invalid function ranges as unwind begin seeds", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const exOff = 0x80;
@@ -207,7 +202,6 @@ void test("parseExceptionDirectory does not expose invalid function ranges as un
   assert.strictEqual(parsed.invalidEntryCount, 1);
   assert.deepEqual(parsed.beginRvas, [0x10]);
 });
-
 void test("parseExceptionDirectory does not parse aligned-down UNWIND_INFO after the recorded RVA is invalid", async () => {
   const bytes = new Uint8Array(0x2400).fill(0);
   const exOff = 0x80;
@@ -238,7 +232,6 @@ void test("parseExceptionDirectory does not parse aligned-down UNWIND_INFO after
   assert.strictEqual(parsed.handlerUnwindInfoCount, 0);
   assert.deepEqual(parsed.handlerRvas, []);
 });
-
 void test("parseExceptionDirectory does not decode x64 unwind records for unsupported machines", async () => {
   const bytes = new Uint8Array(0x400).fill(0);
   const exOff = 0x80;
@@ -262,7 +255,6 @@ void test("parseExceptionDirectory does not decode x64 unwind records for unsupp
   assert.strictEqual(parsed.uniqueUnwindInfoCount, 0);
   assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("machine")));
 });
-
 void test("parseExceptionDirectory does not invent handler RVAs from chained unwind records", async () => {
   const bytes = new Uint8Array(0x400).fill(0);
   const exOff = 0x80;
@@ -301,4 +293,5 @@ void test("parseExceptionDirectory does not invent handler RVAs from chained unw
   assert.strictEqual(parsed.handlerUnwindInfoCount, 0);
   assert.deepEqual(parsed.handlerRvas, []);
   assert.strictEqual(parsed.chainedUnwindInfoCount, 1);
+  assert.ok(parsed.issues.some(issue => /chaininfo|ehandler|uhandler/i.test(issue)));
 });

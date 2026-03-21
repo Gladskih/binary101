@@ -30,7 +30,7 @@ void test("parseVTableFixups reports RVAs when size is zero", async () => {
   assert.ok(issues.some(issue => issue.toLowerCase().includes("size is 0")));
 });
 
-void test("parseVTableFixups reports when entry parsing is capped", async () => {
+void test("parseVTableFixups parses every declared entry instead of stopping at an implementation cap", async () => {
   const base = 0x100;
   const entrySize = 8;
   const declaredEntries = 2049;
@@ -40,9 +40,13 @@ void test("parseVTableFixups reports when entry parsing is capped", async () => 
   dv.setUint32(base + 0x00, 0x1111, true);
   dv.setUint16(base + 0x04, 1, true);
   dv.setUint16(base + 0x06, 1, true);
+  const lastEntryOffset = base + (declaredEntries - 1) * entrySize;
+  dv.setUint32(lastEntryOffset + 0x00, 0x2222, true);
+  dv.setUint16(lastEntryOffset + 0x04, 2, true);
+  dv.setUint16(lastEntryOffset + 0x06, 3, true);
   const issues: string[] = [];
   const parsed = await parseVTableFixups(
-    new MockFile(bytes, "vt-capped.bin"),
+    new MockFile(bytes, "vt-many.bin"),
     rvaToOff,
     bytes.length,
     base,
@@ -50,6 +54,7 @@ void test("parseVTableFixups reports when entry parsing is capped", async () => 
     issues
   );
   assert.ok(parsed);
-  assert.strictEqual(parsed.length, 2048);
-  assert.ok(issues.some(issue => issue.toLowerCase().includes("capped")));
+  assert.strictEqual(parsed.length, declaredEntries);
+  assert.deepStrictEqual(parsed.at(-1), { RVA: 0x2222, Count: 2, Type: 3 });
+  assert.deepStrictEqual(issues, []);
 });

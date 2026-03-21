@@ -59,13 +59,13 @@ export function renderExports(pe: PeParseResult, out: string[]): void {
     ex.issues.forEach(issue => out.push(`<li>${safe(issue)}</li>`));
     out.push(`</ul>`);
   }
-  if (ex.entries?.length) {
-    out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show entries (${ex.entries.length})</summary>`);
-    out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Ordinal</th><th>Name</th><th>RVA</th><th>Forwarder</th></tr></thead><tbody>`);
-    ex.entries.slice(0, 2000).forEach((e, index) => {
-      out.push(`<tr><td>${index + 1}</td><td>${e.ordinal}</td><td>${e.name ? safe(e.name) : "-"}</td><td>${hex(e.rva, 8)}</td><td>${e.forwarder ? safe(e.forwarder) : "-"}</td></tr>`);
-    });
-    out.push(`</tbody></table></details>`);
+    if (ex.entries?.length) {
+      out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show entries (${ex.entries.length})</summary>`);
+      out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Ordinal</th><th>Name</th><th>RVA</th><th>Forwarder</th></tr></thead><tbody>`);
+      ex.entries.forEach((e, index) => {
+        out.push(`<tr><td>${index + 1}</td><td>${e.ordinal}</td><td>${e.name ? safe(e.name) : "-"}</td><td>${hex(e.rva, 8)}</td><td>${e.forwarder ? safe(e.forwarder) : "-"}</td></tr>`);
+      });
+      out.push(`</tbody></table></details>`);
   }
   out.push(`</section>`);
 }

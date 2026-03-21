@@ -220,9 +220,16 @@ const parseImportDirectoryWithThunkReader = async (
       return desc.getUint32(fieldOffset, true);
     };
     const originalFirstThunk = readDescriptorField(0, "OriginalFirstThunk") ?? 0;
+    const timeDateStamp = readDescriptorField(4, "TimeDateStamp") ?? 0;
+    const forwarderChain = readDescriptorField(8, "ForwarderChain") ?? 0;
     const nameRva = readDescriptorField(12, "name RVA") ?? 0;
     const firstThunk = readDescriptorField(16, "thunk RVA") ?? 0;
-    if (!originalFirstThunk && !nameRva && !firstThunk) break;
+    if (!originalFirstThunk && !timeDateStamp && !forwarderChain && !nameRva && !firstThunk) break;
+    if (!nameRva) {
+      addWarning("Import descriptor is missing the DLL name RVA.");
+      if (descriptorTruncated) break;
+      continue;
+    }
     const nameOffset = rvaToOff(nameRva);
     let dllName = "";
     if (isReadableOffset(nameOffset)) {

@@ -130,3 +130,22 @@ void test("parseSecurityDirectory warns when the certificate table offset is not
   assert.strictEqual(sec.count, 1);
   assert.ok(sec.warnings?.some(warning => /align/i.test(warning)));
 });
+
+void test("parseSecurityDirectory warns when WIN_CERTIFICATE.dwLength is not quadword aligned", async () => {
+  const secOff = 0x40;
+  const bytes = new Uint8Array(secOff + 16).fill(0);
+  const dv = new DataView(bytes.buffer);
+  // Microsoft PE format:
+  // dwLength includes any padding required to keep each WIN_CERTIFICATE entry quadword aligned.
+  writeWinCertificateHeader(dv, secOff, 12, WIN_CERT_TYPE_X509);
+
+  const parsed = await parseSecurityDirectory(
+    new MockFile(bytes, "sec-length-not-aligned.bin"),
+    [{ name: "SECURITY", rva: secOff, size: 16 }],
+    () => {}
+  );
+
+  const sec = expectDefined(parsed);
+  assert.strictEqual(sec.count, 1);
+  assert.ok(sec.warnings?.some(warning => /length|align/i.test(warning)));
+});

@@ -48,7 +48,7 @@ void test("parsePeHeaders returns null when the COFF file header is truncated af
   assert.strictEqual(parsed, null);
 });
 
-void test("parsePeHeaders does not trust NumberOfSections beyond the loader limit when reading section headers", async () => {
+void test("parsePeHeaders reads the full declared section-table span without a private section-count cap", async () => {
   const coffOffset = PE_SIGNATURE_OFFSET + 4;
   // This buffer is only large enough for DOS + PE signatures + the COFF header.
   const bytes = new Uint8Array(coffOffset + 20).fill(0);
@@ -59,7 +59,7 @@ void test("parsePeHeaders does not trust NumberOfSections beyond the loader limi
   bytes.set([0x50, 0x45, 0x00, 0x00], PE_SIGNATURE_OFFSET); // "PE\0\0"
   view.setUint16(coffOffset, 0x014c, true); // IMAGE_FILE_MACHINE_I386
   // Microsoft PE format: the Windows loader limits the number of sections to 96.
-  view.setUint16(coffOffset + 2, 0xffff, true); // Deliberately absurd to prove the parser clamps before reading.
+  view.setUint16(coffOffset + 2, 0xffff, true); // Deliberately absurd to prove the parser does not impose a private cap.
   view.setUint16(coffOffset + 16, 0, true); // SizeOfOptionalHeader = 0, so only the section table read is under test.
 
   // Advertise a large logical file size so oversize slice requests remain observable instead of being clipped by File.size.
@@ -71,10 +71,28 @@ void test("parsePeHeaders does not trust NumberOfSections beyond the loader limi
   await parsePeHeaders(tracked.file);
 
   assert.ok(
-    // PE section headers are 40 bytes each, so 96 entries cap the table at 3840 bytes.
-    Math.max(...tracked.requests) <= 96 * 40,
-    `Expected bounded section-table reads, got requests ${tracked.requests.join(", ")}`
+    tracked.requests.includes(0xffff * 40),
+    `Expected a full declared section-table read, got requests ${tracked.requests.join(", ")}`
   );
+});
+
+void test("parsePeHeaders preserves the raw COFF NumberOfSections field while reading section headers", async () => {
+  const coffOffset = PE_SIGNATURE_OFFSET + 4;
+  const bytes = new Uint8Array(coffOffset + 20).fill(0);
+  const view = new DataView(bytes.buffer);
+  view.setUint16(0, DOS_SIGNATURE_MZ, true);
+  view.setUint32(DOS_E_LFANEW_OFFSET, PE_SIGNATURE_OFFSET, true);
+  bytes.set([0x50, 0x45, 0x00, 0x00], PE_SIGNATURE_OFFSET); // "PE\0\0"
+  view.setUint16(coffOffset, 0x014c, true); // IMAGE_FILE_MACHINE_I386
+  // PE/COFF file header: NumberOfSections is the raw 16-bit header field value.
+  view.setUint16(coffOffset + 2, 0xffff, true);
+  view.setUint16(coffOffset + 16, 0, true);
+
+  const parsed = await parsePeHeaders(new MockFile(bytes, "raw-section-count.exe"));
+
+  assert.ok(parsed);
+  assert.strictEqual(parsed.coff.NumberOfSections, 0xffff);
+  assert.strictEqual(parsed.sections.length, 0);
 });
 
 void test("parsePeHeaders does not read optional-header fields from section-header bytes past SizeOfOptionalHeader", async () => {
@@ -109,4 +127,89 @@ void test("parsePeHeaders does not read optional-header fields from section-head
   assert.strictEqual(parsed.opt.SizeOfImage, 0);
   assert.strictEqual(parsed.opt.NumberOfRvaAndSizes, 0);
   assert.deepStrictEqual(parsed.dataDirs, []);
+});
+
+void test("parsePeHeaders keeps truncated optional headers visible with warnings", async () => {
+  const coffOffset = PE_SIGNATURE_OFFSET + 4;
+  const bytes = new Uint8Array(coffOffset + 20 + 8).fill(0);
+  const view = new DataView(bytes.buffer);
+  view.setUint16(0, DOS_SIGNATURE_MZ, true);
+  view.setUint32(DOS_E_LFANEW_OFFSET, PE_SIGNATURE_OFFSET, true);
+  bytes.set([0x50, 0x45, 0x00, 0x00], PE_SIGNATURE_OFFSET); // "PE\0\0"
+  view.setUint16(coffOffset, 0x014c, true); // IMAGE_FILE_MACHINE_I386
+  view.setUint16(coffOffset + 2, 0, true);
+  view.setUint16(coffOffset + 16, 0xe0, true); // Typical PE32 optional header size
+  // Microsoft PE format:
+  // every image file requires an optional header, so a declared image header that is physically truncated is invalid.
+  view.setUint16(coffOffset + 20, 0x10b, true);
+
+  const parsed = await parsePeHeaders(new MockFile(bytes, "truncated-optional-header.exe"));
+
+  assert.ok(parsed);
+  assert.strictEqual(parsed.opt.Magic, 0x10b);
+  assert.ok(parsed.warnings?.some(warning => /optional header|truncated/i.test(warning)));
+});
+
+void test("parsePeHeaders keeps images with unknown OptionalHeader.Magic visible with warnings", async () => {
+  const coffOffset = PE_SIGNATURE_OFFSET + 4;
+  const optionalHeaderSize = 0xe0;
+  const bytes = new Uint8Array(coffOffset + 20 + optionalHeaderSize).fill(0);
+  const view = new DataView(bytes.buffer);
+
+  view.setUint16(0, DOS_SIGNATURE_MZ, true);
+  view.setUint32(DOS_E_LFANEW_OFFSET, PE_SIGNATURE_OFFSET, true);
+  bytes.set([0x50, 0x45, 0x00, 0x00], PE_SIGNATURE_OFFSET); // "PE\0\0"
+  view.setUint16(coffOffset, 0x014c, true); // IMAGE_FILE_MACHINE_I386
+  view.setUint16(coffOffset + 2, 0, true);
+  view.setUint16(coffOffset + 16, optionalHeaderSize, true);
+  // Microsoft PE format says the optional-header magic must be validated for format compatibility.
+  view.setUint16(coffOffset + 20, 0x1337, true);
+
+  const parsed = await parsePeHeaders(new MockFile(bytes, "unknown-optional-magic.exe"));
+
+  assert.ok(parsed);
+  assert.strictEqual(parsed.opt.Magic, 0x1337);
+  assert.strictEqual(parsed.opt.is32, false);
+  assert.strictEqual(parsed.opt.isPlus, false);
+  assert.deepStrictEqual(parsed.dataDirs, []);
+  assert.ok(parsed.warnings?.some(warning => /magic/i.test(warning)));
+});
+
+void test("parsePeHeaders honors declared optional headers larger than the old private 0x600 cap", async () => {
+  const coffOffset = PE_SIGNATURE_OFFSET + 4;
+  const optionalHeaderSize = 0x700;
+  const bytes = new Uint8Array(coffOffset + 20 + optionalHeaderSize).fill(0);
+  const view = new DataView(bytes.buffer);
+  view.setUint16(0, DOS_SIGNATURE_MZ, true);
+  view.setUint32(DOS_E_LFANEW_OFFSET, PE_SIGNATURE_OFFSET, true);
+  bytes.set([0x50, 0x45, 0x00, 0x00], PE_SIGNATURE_OFFSET); // "PE\0\0"
+  view.setUint16(coffOffset, 0x014c, true);
+  view.setUint16(coffOffset + 16, optionalHeaderSize, true);
+  // COFF SizeOfOptionalHeader is a 16-bit field; larger-but-present headers must not be rejected by a private cap.
+  view.setUint16(coffOffset + 20, 0x10b, true);
+  view.setUint32(coffOffset + 24 + 28, 0x00400000, true); // ImageBase in the PE32 layout.
+
+  const parsed = await parsePeHeaders(new MockFile(bytes, "large-optional-header.exe"));
+
+  assert.ok(parsed);
+  assert.strictEqual(parsed.opt.Magic, 0x10b);
+  assert.deepStrictEqual(parsed.warnings ?? [], []);
+});
+
+void test("parsePeHeaders scans the full DOS stub instead of stopping at 64 KiB", async () => {
+  const stubMessage = "custom stub message past 64 KiB";
+  const stubStart = 0x40;
+  const peOffset = stubStart + 0x10000 + stubMessage.length + 1;
+  const bytes = new Uint8Array(peOffset + 24).fill(0);
+  const view = new DataView(bytes.buffer);
+  view.setUint16(0, DOS_SIGNATURE_MZ, true);
+  view.setUint32(DOS_E_LFANEW_OFFSET, peOffset, true);
+  bytes.set(new TextEncoder().encode(stubMessage), stubStart + 0x10000);
+  bytes.set([0x50, 0x45, 0x00, 0x00], peOffset); // "PE\0\0"
+  view.setUint16(peOffset + 4, 0x014c, true);
+
+  const parsed = await parsePeHeaders(new MockFile(bytes, "full-stub-scan.exe"));
+
+  assert.ok(parsed);
+  assert.ok(parsed.dos.stub.strings?.includes(stubMessage));
 });

@@ -30,22 +30,25 @@ const readTlsCallbackRvas32 = async (
   rvaToOff: RvaToOffset,
   tableRva: number,
   imageBase: number
-): Promise<number[]> => {
+): Promise<{ rvas: number[]; tableBytes: number }> => {
   const callbacks: number[] = [];
   for (let index = 0; ; index += 1) {
     const entryRva = (tableRva + index * TLS_CALLBACK_ENTRY_SIZE32) >>> 0;
     const entryOff = rvaToOff(entryRva);
-    if (entryOff == null || entryOff < 0 || entryOff + TLS_CALLBACK_ENTRY_SIZE32 > file.size) break;
+    if (entryOff == null || entryOff < 0 || entryOff + TLS_CALLBACK_ENTRY_SIZE32 > file.size) {
+      return { rvas: callbacks, tableBytes: callbacks.length * TLS_CALLBACK_ENTRY_SIZE32 };
+    }
     const dv = new DataView(
       await file.slice(entryOff, entryOff + TLS_CALLBACK_ENTRY_SIZE32).arrayBuffer()
     );
-    if (dv.byteLength < TLS_CALLBACK_ENTRY_SIZE32) break;
+    if (dv.byteLength < TLS_CALLBACK_ENTRY_SIZE32) {
+      return { rvas: callbacks, tableBytes: callbacks.length * TLS_CALLBACK_ENTRY_SIZE32 };
+    }
     const pointer = dv.getUint32(0, true);
-    if (pointer === 0) return callbacks;
+    if (pointer === 0) return { rvas: callbacks, tableBytes: (index + 1) * TLS_CALLBACK_ENTRY_SIZE32 };
     const rva = toRvaFromVa32(pointer, imageBase);
     if (rva != null) callbacks.push(rva);
   }
-  return callbacks;
 };
 
 const readTlsCallbackRvas64 = async (
@@ -53,22 +56,25 @@ const readTlsCallbackRvas64 = async (
   rvaToOff: RvaToOffset,
   tableRva: number,
   imageBase: bigint
-): Promise<number[]> => {
+): Promise<{ rvas: number[]; tableBytes: number }> => {
   const callbacks: number[] = [];
   for (let index = 0; ; index += 1) {
     const entryRva = (tableRva + index * TLS_CALLBACK_ENTRY_SIZE64) >>> 0;
     const entryOff = rvaToOff(entryRva);
-    if (entryOff == null || entryOff < 0 || entryOff + TLS_CALLBACK_ENTRY_SIZE64 > file.size) break;
+    if (entryOff == null || entryOff < 0 || entryOff + TLS_CALLBACK_ENTRY_SIZE64 > file.size) {
+      return { rvas: callbacks, tableBytes: callbacks.length * TLS_CALLBACK_ENTRY_SIZE64 };
+    }
     const dv = new DataView(
       await file.slice(entryOff, entryOff + TLS_CALLBACK_ENTRY_SIZE64).arrayBuffer()
     );
-    if (dv.byteLength < TLS_CALLBACK_ENTRY_SIZE64) break;
+    if (dv.byteLength < TLS_CALLBACK_ENTRY_SIZE64) {
+      return { rvas: callbacks, tableBytes: callbacks.length * TLS_CALLBACK_ENTRY_SIZE64 };
+    }
     const pointer = dv.getBigUint64(0, true);
-    if (pointer === 0n) return callbacks;
+    if (pointer === 0n) return { rvas: callbacks, tableBytes: (index + 1) * TLS_CALLBACK_ENTRY_SIZE64 };
     const rva = toRvaFromVa64(pointer, imageBase);
     if (rva != null) callbacks.push(rva);
   }
-  return callbacks;
 };
 
 const findTlsDirectoryBase = (
@@ -102,11 +108,16 @@ export const parseTlsDirectory32 = async (
   const Characteristics = dv.getUint32(20, true);
   const callbackTableRva = toRvaFromVa32(AddressOfCallBacks, imageBase);
   const callbackTableOff = callbackTableRva != null ? rvaToOff(callbackTableRva) : null;
-  const CallbackRvas = callbackTableRva != null
+  const callbackInfo = callbackTableRva != null
     ? await readTlsCallbackRvas32(file, rvaToOff, callbackTableRva, imageBase)
-    : [];
-  if (callbackTableOff != null && callbackTableOff >= 0 && callbackTableOff < file.size) {
-    addCoverageRegion("TLS callbacks", callbackTableOff, Math.max(0, file.size - callbackTableOff));
+    : { rvas: [], tableBytes: 0 };
+  if (
+    callbackTableOff != null &&
+    callbackTableOff >= 0 &&
+    callbackTableOff < file.size &&
+    callbackInfo.tableBytes > 0
+  ) {
+    addCoverageRegion("TLS callbacks", callbackTableOff, callbackInfo.tableBytes);
   }
   return {
     StartAddressOfRawData,
@@ -115,8 +126,8 @@ export const parseTlsDirectory32 = async (
     AddressOfCallBacks,
     SizeOfZeroFill,
     Characteristics,
-    CallbackCount: CallbackRvas.length,
-    CallbackRvas
+    CallbackCount: callbackInfo.rvas.length,
+    CallbackRvas: callbackInfo.rvas
   };
 };
 
@@ -143,11 +154,16 @@ export const parseTlsDirectory64 = async (
   const imageBaseBigint = Number.isSafeInteger(imageBase) && imageBase >= 0 ? BigInt(imageBase) : 0n;
   const callbackTableRva = toRvaFromVa64(AddressOfCallBacksVa, imageBaseBigint);
   const callbackTableOff = callbackTableRva != null ? rvaToOff(callbackTableRva) : null;
-  const CallbackRvas = callbackTableRva != null
+  const callbackInfo = callbackTableRva != null
     ? await readTlsCallbackRvas64(file, rvaToOff, callbackTableRva, imageBaseBigint)
-    : [];
-  if (callbackTableOff != null && callbackTableOff >= 0 && callbackTableOff < file.size) {
-    addCoverageRegion("TLS callbacks", callbackTableOff, Math.max(0, file.size - callbackTableOff));
+    : { rvas: [], tableBytes: 0 };
+  if (
+    callbackTableOff != null &&
+    callbackTableOff >= 0 &&
+    callbackTableOff < file.size &&
+    callbackInfo.tableBytes > 0
+  ) {
+    addCoverageRegion("TLS callbacks", callbackTableOff, callbackInfo.tableBytes);
   }
   return {
     StartAddressOfRawData: Number(StartAddressOfRawDataVa),
@@ -156,7 +172,7 @@ export const parseTlsDirectory64 = async (
     AddressOfCallBacks: Number(AddressOfCallBacksVa),
     SizeOfZeroFill,
     Characteristics,
-    CallbackCount: CallbackRvas.length,
-    CallbackRvas
+    CallbackCount: callbackInfo.rvas.length,
+    CallbackRvas: callbackInfo.rvas
   };
 };

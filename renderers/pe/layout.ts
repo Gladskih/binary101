@@ -40,7 +40,7 @@ export function renderReloc(pe: PeParseResult, out: string[]): void {
       `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show blocks (${reloc.blocks.length})</summary>`
     );
     out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Page RVA</th><th>Block size</th><th>Entries</th></tr></thead><tbody>`);
-    reloc.blocks.slice(0, 256).forEach((block, index) => {
+    reloc.blocks.forEach((block, index) => {
       out.push(`<tr><td>${index + 1}</td><td>${hex(block.pageRva, 8)}</td><td>${humanSize(block.size)}</td><td>${block.count}</td></tr>`);
     });
     out.push(`</tbody></table></details>`);
@@ -139,7 +139,7 @@ export function renderCoverage(pe: PeParseResult, out: string[]): void {
 }
 
 export function renderSanity(pe: PeParseResult, out: string[]): void {
-  const issues: string[] = [];
+  const issues = [...(pe.warnings || [])];
   const unexplainedOverlaySize = Math.max(0, (pe.overlaySize >>> 0) - computeSecurityOverlayCoverage(pe));
   if (unexplainedOverlaySize > 0) {
     issues.push(`Overlay after last section: ${humanSize(unexplainedOverlaySize)}.`);

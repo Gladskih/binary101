@@ -60,6 +60,7 @@ export interface PeParseResult {
   signature: "PE";
   coff: PeCore["coff"];
   opt: PeCore["opt"];
+  warnings?: string[];
   dirs: PeDataDirectory[];
   sections: PeCore["sections"];
   entrySection: PeCore["entrySection"];
@@ -265,15 +266,13 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     security = { ...security, certs };
   }
   const iat = parseIatDirectory(dataDirs, rvaToOff, addCoverageRegion);
-
-  const dirs = dataDirs;
-
   return {
     dos,
     signature: "PE",
     coff,
     opt,
-    dirs,
+    ...(core.warnings?.length ? { warnings: core.warnings } : {}),
+    dirs: dataDirs,
     sections,
     entrySection,
     rvaToOff,

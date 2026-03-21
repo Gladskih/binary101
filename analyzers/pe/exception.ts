@@ -71,6 +71,8 @@ export async function parseExceptionDirectory(
   const handlerRvasSet = new Set<number>();
   let invalidEntryCount = 0;
   let parsedCount = 0;
+  let previousBegin: number | null = null;
+  let reportedUnsortedEntries = false;
 
   for (let index = 0; index < declaredCount; index += 1) {
     const entryRva = (dir.rva + index * RUNTIME_FUNCTION_ENTRY_SIZE) >>> 0;
@@ -111,7 +113,14 @@ export async function parseExceptionDirectory(
       if (unwindOff == null || unwindOff < 0 || unwindOff >= file.size) invalid = true;
     }
 
-    if (!invalid && begin) beginRvas.push(begin);
+    if (!invalid && begin) {
+      if (previousBegin != null && begin < previousBegin && !reportedUnsortedEntries) {
+        issues.push("RUNTIME_FUNCTION entries are not sorted by BeginAddress.");
+        reportedUnsortedEntries = true;
+      }
+      previousBegin = begin;
+      beginRvas.push(begin);
+    }
     if (unwindInfoRva) unwindRvas.add(unwindInfoRva);
     if (invalid) invalidEntryCount += 1;
   }
@@ -189,6 +198,9 @@ export async function parseExceptionDirectory(
     const version = b0 & 0x07;
     const flags = b0 >> 3;
     if (version !== 1) unexpectedUnwindVersionCount += 1;
+    if ((flags & UNW_FLAG_CHAININFO) !== 0 && (flags & (UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER)) !== 0) {
+      issues.push("UNWIND_INFO sets CHAININFO together with EHANDLER/UHANDLER.");
+    }
 
     if ((flags & UNW_FLAG_CHAININFO) === 0 && (flags & (UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER)) !== 0) {
       handlerUnwindInfoCount += 1;

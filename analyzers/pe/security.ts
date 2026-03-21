@@ -48,6 +48,9 @@ export async function parseSecurityDirectory(
       warnings.push("WIN_CERTIFICATE length is smaller than the 8-byte header.");
       break;
     }
+    if ((Length & 7) !== 0) {
+      warnings.push("WIN_CERTIFICATE length is not quadword aligned.");
+    }
     const available = Math.min(Length, end - pos);
     const blob = new Uint8Array(await file.slice(pos, pos + available).arrayBuffer());
     certs.push(decodeWinCertificate(blob, Length, pos));

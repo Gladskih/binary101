@@ -21,8 +21,6 @@ const IMAGE_DEBUG_TYPE_CODEVIEW = 2;
 const CODEVIEW_RSDS_MIN_SIZE = 24;
 const CODEVIEW_SIGNATURE_RSDS = 0x53445352; // "RSDS" as a little-endian uint32
 
-// Keep path parsing bounded even if the string is not NUL-terminated.
-const CODEVIEW_PATH_MAX_BYTES = 1024;
 const CODEVIEW_PATH_READ_CHUNK_SIZE = 64;
 
 export async function parseDebugDirectory(
@@ -47,6 +45,9 @@ export async function parseDebugDirectory(
     availableDirSize < debugDir.size
       ? "Debug directory is shorter than recorded size (possible truncation)."
       : null;
+  if (availableDirSize % IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE !== 0) {
+    warning ??= "Debug directory size has trailing bytes after whole entries.";
+  }
   let codeViewMappingWarning: string | null = null;
   for (let index = 0; index < maxEntries; index++) {
     const entryRva = debugDir.rva + index * IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE;
@@ -73,7 +74,10 @@ export async function parseDebugDirectory(
     const pointerToRawDataOff = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_POINTER_TO_RAW_DATA, true);
 
     if (type !== IMAGE_DEBUG_TYPE_CODEVIEW) continue;
-    if (dataSize < CODEVIEW_RSDS_MIN_SIZE) continue;
+    if (dataSize < CODEVIEW_RSDS_MIN_SIZE) {
+      warning ??= "CodeView debug entry is smaller than the minimum RSDS header.";
+      continue;
+    }
 
     const dataOffset = pointerToRawDataOff
       ? pointerToRawDataOff
@@ -107,12 +111,8 @@ export async function parseDebugDirectory(
     let path = "";
     let pos = dataOffset + CODEVIEW_RSDS_MIN_SIZE;
     const pathEnd = dataOffset + dataSize;
-    while (pos < pathEnd && path.length < CODEVIEW_PATH_MAX_BYTES) {
-      const chunkLength = Math.min(
-        CODEVIEW_PATH_READ_CHUNK_SIZE,
-        pathEnd - pos,
-        CODEVIEW_PATH_MAX_BYTES - path.length
-      );
+    while (pos < pathEnd) {
+      const chunkLength = Math.min(CODEVIEW_PATH_READ_CHUNK_SIZE, pathEnd - pos);
       const chunk = new Uint8Array(await file.slice(pos, pos + chunkLength).arrayBuffer());
       const zeroIndex = chunk.indexOf(0);
       if (zeroIndex === -1) {

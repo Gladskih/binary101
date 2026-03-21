@@ -15,7 +15,7 @@ type ResourceLangPreview = {
   textPreview?: string;
   textEncoding?: string;
   stringTable?: Array<{ id: number; text: string }>;
-  messageTable?: { messages: Array<{ id: number; text: string }>; truncated: boolean };
+  messageTable?: { messages: Array<{ id: number; strings: string[] }>; truncated: boolean };
   versionInfo?: {
     fileVersionString?: string;
     productVersionString?: string;
@@ -43,6 +43,7 @@ type ResourceSummary = {
 type ResourceTreeMock = {
   top: ResourceSummary[];
   detail: ResourceDetail[];
+  issues?: string[];
 };
 
 const createPeResources = (): ResourceTreeMock => ({
@@ -50,6 +51,7 @@ const createPeResources = (): ResourceTreeMock => ({
     { typeName: "ICON", kind: "id", leafCount: 2 },
     { typeName: "HTML", kind: "name", leafCount: 1 }
   ],
+  issues: ["RT_ICON name directory could not be mapped."],
   detail: [
     {
       typeName: "ICON",
@@ -136,8 +138,8 @@ const createPeResources = (): ResourceTreeMock => ({
               previewKind: "messageTable",
               messageTable: {
                 messages: [
-                  { id: 1, text: "hello" },
-                  { id: 2, text: "world" }
+                  { id: 1, strings: ["hello"] },
+                  { id: 2, strings: ["world"] }
                 ],
                 truncated: true
               }
@@ -194,12 +196,13 @@ void test("renderResources renders preview cells for common resource types", () 
 
   assert.match(html, /Resources/);
   assert.match(html, /ICON/);
+  assert.match(html, /RT_ICON name directory could not be mapped/);
   assert.match(html, /image\/png/);
   assert.match(html, /opaque background/);
   assert.match(html, /assembly/);
   assert.match(html, /Encoding: UTF-8/);
-  assert.match(html, /more strings not shown/);
-  assert.match(html, /more messages not shown/);
+  assert.match(html, /#41/);
+  assert.match(html, /world/);
   assert.match(html, /1\.2\.3\.4/);
   assert.match(html, /Resource bytes could not be read/);
 });

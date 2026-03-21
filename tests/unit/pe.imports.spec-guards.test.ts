@@ -148,3 +148,33 @@ void test("parseImportDirectory walks the full null-terminated PE32+ thunk array
   assert.equal(firstImport.functions.length, importCount);
   assert.deepEqual(firstImport.functions.at(-1), { ordinal: importCount });
 });
+
+void test("parseImportDirectory does not treat a partially non-zero descriptor as the null terminator", async () => {
+  const dllName = "KERNEL32.dll";
+  const reserve = createRvaLayout();
+  const impBase = reserve(IMPORT_DIRECTORY_SIZE + IMAGE_IMPORT_DESCRIPTOR_SIZE);
+  const dllNameRva = reserve(cStringSize(dllName));
+  const thunkRva = reserve(IMAGE_THUNK_DATA32_SIZE * 2);
+  const bytes = new Uint8Array(reserve(0)).fill(0);
+  const dv = new DataView(bytes.buffer);
+  // Microsoft PE format, Import Directory Table:
+  // the terminator is an empty descriptor filled with null values, not merely one with zero Name/Thunk RVAs.
+  dv.setUint32(impBase + 4, 0x12345678, true); // Non-zero TimeDateStamp keeps this descriptor malformed, not null.
+  dv.setUint32(impBase + IMAGE_IMPORT_DESCRIPTOR_SIZE + 12, dllNameRva, true);
+  dv.setUint32(impBase + IMAGE_IMPORT_DESCRIPTOR_SIZE + 16, thunkRva, true);
+  encoder.encodeInto(`${dllName}\0`, new Uint8Array(bytes.buffer, dllNameRva));
+  dv.setUint32(thunkRva, 0x80000002, true);
+  dv.setUint32(thunkRva + IMAGE_THUNK_DATA32_SIZE, 0, true);
+
+  const { entries } = await parseImportDirectory32(
+    new MockFile(bytes),
+    [{ name: "IMPORT", rva: impBase, size: IMPORT_DIRECTORY_SIZE + IMAGE_IMPORT_DESCRIPTOR_SIZE }],
+    value => value,
+    () => {}
+  );
+
+  const firstImport = expectDefined(entries[0]);
+  assert.equal(entries.length, 1);
+  assert.equal(firstImport.dll, dllName);
+  assert.deepEqual(firstImport.functions, [{ ordinal: 2 }]);
+});

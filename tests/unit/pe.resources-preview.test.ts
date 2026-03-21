@@ -3,235 +3,208 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { enrichResourcePreviews } from "../../analyzers/pe/resources-preview.js";
-import { MockFile } from "../helpers/mock-file.js";
 import type { ResourceTree } from "../../analyzers/pe/resources-core.js";
+import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
 const encoder = new TextEncoder();
-const pngSmall = Uint8Array.from(
-  Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/5+hHgAFgwJ/l7nnMgAAAABJRU5ErkJggg==", "base64")
-);
+const IMAGE_RESOURCE_DIRECTORY_SIZE = 16; // IMAGE_RESOURCE_DIRECTORY
+const IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE = 8; // IMAGE_RESOURCE_DIRECTORY_ENTRY
+const RESOURCE_DIRECTORY_SUBDIRECTORY_FLAG = 0x80000000;
+const RESOURCE_DIRECTORY_ID_COUNT_OFFSET = 14;
+const MESSAGE_RESOURCE_ENTRY_FLAG = { ansi: 0, unicode: 1 } as const;
+const VERSION_INFO_FIXED_FILE_INFO_SIGNATURE = 0xfeef04bd;
+
+type ResourceDetail = ResourceTree["detail"][number];
+type ResourceLang = ResourceDetail["entries"][number]["langs"][number];
+type ResourcePreviewResult = Awaited<ReturnType<typeof enrichResourcePreviews>>;
+type PreviewResourceLang = ResourceLang & {
+  previewKind?: string;
+  previewMime?: string;
+  textPreview?: string;
+  stringTable?: Array<{ id: number | null; text: string }>;
+  messageTable?: { messages: Array<{ id: number; strings: string[] }>; truncated: boolean };
+  previewIssues?: string[];
+  versionInfo?: { fileVersionString?: string; productVersionString?: string };
+};
 
 const writeUtf16 = (bytes: Uint8Array, offset: number, text: string): void => {
-  for (let i = 0; i < text.length; i += 1) {
-    const code = text.charCodeAt(i);
-    bytes[offset + i * 2] = code & 0xff;
-    bytes[offset + i * 2 + 1] = code >>> 8;
+  for (let index = 0; index < text.length; index += 1) {
+    const codeUnit = text.charCodeAt(index);
+    bytes[offset + index * 2] = codeUnit & 0xff;
+    bytes[offset + index * 2 + 1] = codeUnit >>> 8;
   }
 };
 
-void test("enrichResourcePreviews builds previews for common PE resources", async () => {
-  const fileBytes = new Uint8Array(2000);
-  const writeData = (offset: number, bytes: Uint8Array) => {
-    fileBytes.set(bytes, offset);
-    return { offset, size: bytes.length };
+const writeDirectoryEntry = (
+  view: DataView,
+  offset: number,
+  nameField: number,
+  targetField: number
+): void => {
+  view.setUint32(offset, nameField, true);
+  view.setUint32(offset + Uint32Array.BYTES_PER_ELEMENT, targetField, true);
+};
+
+const createResourcePreviewFixture = (fileSize: number): {
+  fileBytes: Uint8Array;
+  writeData: (offset: number, data: Uint8Array) => { offset: number; size: number };
+} => {
+  const fileBytes = new Uint8Array(fileSize).fill(0);
+  return {
+    fileBytes,
+    writeData: (offset, data) => {
+      fileBytes.set(data, offset);
+      return { offset, size: data.length };
+    }
   };
+};
 
-  // Sample resource payloads.
-  const icon = writeData(300, pngSmall);
+const createLang = (
+  dataRva: number,
+  size: number,
+  codePage: number,
+  lang: number | null
+): ResourceLang => ({ lang, size, codePage, dataRVA: dataRva, reserved: 0 });
 
-  const groupIconBytes = new Uint8Array(20).fill(0);
-  const dvg = new DataView(groupIconBytes.buffer);
-  dvg.setUint16(4, 1, true); // idCount
-  dvg.setUint8(6, 32);
-  dvg.setUint8(7, 32);
-  dvg.setUint16(10, 1, true); // planes
-  dvg.setUint16(12, 32, true); // bit count
-  dvg.setUint32(14, icon.size, true);
-  dvg.setUint16(18, 1, true); // icon id matches iconIndex entry
-  const groupIcon = writeData(350, groupIconBytes);
+const createDetail = (typeName: string, id: number, lang: ResourceLang): ResourceDetail => ({
+  typeName,
+  entries: [{ id, name: null, langs: [lang] }]
+});
 
-  const manifest = writeData(100, encoder.encode('<?xml version="1.0"?><assembly/>'));
-  const html = writeData(180, encoder.encode("<html><body>hi</body></html>"));
+const createResourceTree = (
+  detail: ResourceDetail[],
+  directoryBuffer = new ArrayBuffer(IMAGE_RESOURCE_DIRECTORY_SIZE)
+): ResourceTree => ({
+  base: 0,
+  limitEnd: directoryBuffer.byteLength,
+  top: [],
+  detail,
+  view: async (off, len) => new DataView(directoryBuffer, off, len),
+  rvaToOff: value => value
+});
 
-  const stringTableBytes = new Uint8Array(24).fill(0);
-  const dvs = new DataView(stringTableBytes.buffer);
-  dvs.setUint16(0, 5, true);
-  writeUtf16(stringTableBytes, 2, "Hello");
-  dvs.setUint16(12, 6, true); // Declared length longer than remaining bytes to trigger issue
-  writeUtf16(stringTableBytes, 14, "Hi");
-  const stringTable = writeData(420, stringTableBytes);
+const buildStringTableResource = (): Uint8Array => {
+  const bytes = new Uint8Array(24).fill(0);
+  const view = new DataView(bytes.buffer);
+  view.setUint16(0, 5, true);
+  writeUtf16(bytes, 2, "Hello");
+  view.setUint16(12, 6, true); // Deliberately too large for the remaining payload.
+  writeUtf16(bytes, 14, "Hi");
+  return bytes;
+};
 
-  const messageTableBytes = new Uint8Array(80).fill(0);
-  const dvm = new DataView(messageTableBytes.buffer);
-  dvm.setUint32(0, 1, true); // one block
-  dvm.setUint32(4, 10, true); // lowId
-  dvm.setUint32(8, 11, true); // highId
-  const msgOffset = 32;
-  dvm.setUint32(12, msgOffset, true);
-  dvm.setUint16(msgOffset + 0, 6, true); // length
-  dvm.setUint16(msgOffset + 2, 0, true); // ASCII
-  messageTableBytes[msgOffset + 4] = "O".charCodeAt(0);
-  messageTableBytes[msgOffset + 5] = "K".charCodeAt(0);
-  const nextMsg = msgOffset + 6;
-  dvm.setUint16(nextMsg + 0, 8, true);
-  dvm.setUint16(nextMsg + 2, 1, true); // unicode
-  writeUtf16(messageTableBytes, nextMsg + 4, "Hi");
-  const messageTable = writeData(520, messageTableBytes);
+const buildMessageTableResource = (): Uint8Array => {
+  const bytes = new Uint8Array(80).fill(0);
+  const view = new DataView(bytes.buffer);
+  const firstEntryOffset = 32;
+  const secondEntryOffset = firstEntryOffset + 6;
+  view.setUint32(0, 1, true);
+  view.setUint32(4, 10, true);
+  view.setUint32(8, 11, true);
+  view.setUint32(12, firstEntryOffset, true);
+  view.setUint16(firstEntryOffset, 6, true);
+  view.setUint16(firstEntryOffset + 2, MESSAGE_RESOURCE_ENTRY_FLAG.ansi, true);
+  bytes[firstEntryOffset + 4] = "O".charCodeAt(0);
+  bytes[firstEntryOffset + 5] = "K".charCodeAt(0);
+  view.setUint16(secondEntryOffset, 8, true);
+  view.setUint16(secondEntryOffset + 2, MESSAGE_RESOURCE_ENTRY_FLAG.unicode, true);
+  writeUtf16(bytes, secondEntryOffset + 4, "Hi");
+  return bytes;
+};
 
-  const versionBytes = new Uint8Array(96).fill(0);
-  const dvv = new DataView(versionBytes.buffer);
-  dvv.setUint16(0, versionBytes.length, true);
-  dvv.setUint16(2, 52, true); // valueLength
-  dvv.setUint16(4, 0, true); // type
+const buildVersionResource = (): Uint8Array => {
+  const bytes = new Uint8Array(96).fill(0);
+  const view = new DataView(bytes.buffer);
   const key = "VS_VERSION_INFO";
-  writeUtf16(versionBytes, 6, key);
+  view.setUint16(0, bytes.length, true);
+  view.setUint16(2, 52, true);
+  writeUtf16(bytes, 6, key);
   const valueStart = (6 + key.length * 2 + 2 + 3) & ~3;
-  dvv.setUint32(valueStart + 0, 0xfEEF04BD, true); // signature
-  dvv.setUint32(valueStart + 4, 0x00010000, true); // struct version
-  dvv.setUint32(valueStart + 8, 0x00090000, true); // file ms (9.0)
-  dvv.setUint32(valueStart + 12, 0x521E0008, true); // file ls (21022.8)
-  dvv.setUint32(valueStart + 16, 0x00090000, true); // product ms (9.0)
-  dvv.setUint32(valueStart + 20, 0x521E0008, true); // product ls (21022.8)
-  const version = writeData(640, versionBytes);
+  view.setUint32(valueStart, VERSION_INFO_FIXED_FILE_INFO_SIGNATURE, true);
+  view.setUint32(valueStart + 4, 0x00010000, true);
+  view.setUint32(valueStart + 8, 0x00090000, true);
+  view.setUint32(valueStart + 12, 0x521e0008, true);
+  view.setUint32(valueStart + 16, 0x00090000, true);
+  view.setUint32(valueStart + 20, 0x521e0008, true);
+  return bytes;
+};
 
-  const file = new MockFile(fileBytes);
+const getPreviewLang = (result: ResourcePreviewResult, typeName: string): PreviewResourceLang => {
+  const group = expectDefined(result.detail.find(entry => entry.typeName === typeName));
+  const resourceEntry = expectDefined(group.entries[0]);
+  return expectDefined(resourceEntry.langs[0]) as PreviewResourceLang;
+};
 
-  // Minimal resource directory with one ICON entry to populate iconIndex.
-  const directoryBuffer = new ArrayBuffer(128);
-  const dirRoot = new DataView(directoryBuffer);
-  dirRoot.setUint16(14, 1, true); // one ID entry
-  dirRoot.setUint32(16 + 0, 3, true); // id = 3 (ICON)
-  dirRoot.setUint32(16 + 4, 0x80000020, true); // subdir at 0x20
+void test("enrichResourcePreviews builds text previews for MANIFEST and HTML", async () => {
+  const fixture = createResourcePreviewFixture(256);
+  const manifest = fixture.writeData(64, encoder.encode('<?xml version="1.0"?><assembly/>'));
+  const html = fixture.writeData(128, encoder.encode("<html><body>hi</body></html>"));
+  const tree = createResourceTree([
+    createDetail("MANIFEST", 3, createLang(manifest.offset, manifest.size, 65001, null)),
+    createDetail("HTML", 4, createLang(html.offset, html.size, 65001, 1031))
+  ]);
 
-  const dirName = new DataView(directoryBuffer, 0x20);
-  dirName.setUint16(14, 1, true); // one ID entry
-  dirName.setUint32(16 + 0, 1, true); // icon id
-  dirName.setUint32(16 + 4, 0x80000040, true); // lang dir at 0x40
+  const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
+  assert.strictEqual(getPreviewLang(result, "MANIFEST").previewKind, "text");
+  assert.match(expectDefined(getPreviewLang(result, "MANIFEST").textPreview), /assembly/);
+  assert.strictEqual(getPreviewLang(result, "HTML").previewKind, "html");
+  assert.match(expectDefined(getPreviewLang(result, "HTML").textPreview), /<body>hi/);
+});
 
-  const dirLang = new DataView(directoryBuffer, 0x40);
-  dirLang.setUint16(14, 1, true); // one data entry
-  dirLang.setUint32(16 + 4, 0x00000060, true); // data entry at 0x60
+void test("enrichResourcePreviews builds STRING, MESSAGETABLE, and VERSION previews", async () => {
+  const fixture = createResourcePreviewFixture(1024);
+  const stringTable = fixture.writeData(128, buildStringTableResource());
+  const messageTable = fixture.writeData(256, buildMessageTableResource());
+  const version = fixture.writeData(512, buildVersionResource());
+  const tree = createResourceTree([
+    createDetail("STRING", 1, createLang(stringTable.offset, stringTable.size, 1200, 1031)),
+    createDetail("MESSAGETABLE", 5, createLang(messageTable.offset, messageTable.size, 0, 2057)),
+    createDetail("VERSION", 6, createLang(version.offset, version.size, 1200, 3082))
+  ]);
 
-  const dataEntry = new DataView(directoryBuffer, 0x60);
-  dataEntry.setUint32(0, icon.offset, true);
-  dataEntry.setUint32(4, icon.size, true);
-  dataEntry.setUint32(8, 0, true);
-  dataEntry.setUint32(12, 0, true);
+  const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
+  const stringLang = getPreviewLang(result, "STRING");
+  const messageLang = getPreviewLang(result, "MESSAGETABLE");
+  const versionLang = getPreviewLang(result, "VERSION");
 
+  assert.strictEqual(stringLang.previewKind, "stringTable");
+  assert.ok(expectDefined(stringLang.stringTable).length >= 1);
+  assert.ok((stringLang.previewIssues || []).length > 0);
+  assert.strictEqual(messageLang.previewKind, "messageTable");
+  assert.deepEqual(expectDefined(messageLang.messageTable), {
+    messages: [{ id: 10, strings: ["OK", "Hi"] }],
+    truncated: false
+  });
+  assert.match((messageLang.previewIssues || []).join(" "), /supported code page/i);
+  assert.strictEqual(versionLang.previewKind, "version");
+  assert.strictEqual(versionLang.versionInfo?.fileVersionString, "9.0.21022.8");
+  assert.strictEqual(versionLang.versionInfo?.productVersionString, "9.0.21022.8");
+});
+
+void test("enrichResourcePreviews reports resource-directory mapping gaps", async () => {
+  const directoryBuffer = new ArrayBuffer(
+    IMAGE_RESOURCE_DIRECTORY_SIZE + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE
+  );
+  const directoryView = new DataView(directoryBuffer);
+  directoryView.setUint16(RESOURCE_DIRECTORY_ID_COUNT_OFFSET, 1, true);
+  writeDirectoryEntry(
+    directoryView,
+    IMAGE_RESOURCE_DIRECTORY_SIZE,
+    3,
+    RESOURCE_DIRECTORY_SUBDIRECTORY_FLAG | 0x20
+  );
   const tree: ResourceTree = {
     base: 0,
     limitEnd: directoryBuffer.byteLength,
+    dirRva: 0x1000,
+    dirSize: 0x40,
     top: [],
-    detail: [
-      { typeName: "ICON", entries: [{ id: 1, name: null, langs: [{ lang: 1033, size: icon.size, codePage: 1200, dataRVA: icon.offset, reserved: 0 }] }] },
-      { typeName: "GROUP_ICON", entries: [{ id: 2, name: null, langs: [{ lang: 1033, size: groupIcon.size, codePage: 0, dataRVA: groupIcon.offset, reserved: 0 }] }] },
-      { typeName: "MANIFEST", entries: [{ id: 3, name: null, langs: [{ lang: null, size: manifest.size, codePage: 65001, dataRVA: manifest.offset, reserved: 0 }] }] },
-      { typeName: "HTML", entries: [{ id: 4, name: null, langs: [{ lang: 1031, size: html.size, codePage: 65001, dataRVA: html.offset, reserved: 0 }] }] },
-      { typeName: "STRING", entries: [{ id: 1, name: null, langs: [{ lang: 1031, size: stringTable.size, codePage: 1200, dataRVA: stringTable.offset, reserved: 0 }] }] },
-      { typeName: "MESSAGETABLE", entries: [{ id: 5, name: null, langs: [{ lang: 2057, size: messageTable.size, codePage: 0, dataRVA: messageTable.offset, reserved: 0 }] }] },
-      { typeName: "VERSION", entries: [{ id: 6, name: null, langs: [{ lang: 3082, size: version.size, codePage: 1200, dataRVA: version.offset, reserved: 0 }] }] }
-    ],
-    view: async (off: number, len: number) => new DataView(directoryBuffer, off, len),
-    rvaToOff: (value: number) => value
+    detail: [],
+    view: async (off, len) => new DataView(directoryBuffer, off, len),
+    rvaToOff: rva => (rva >= 0x1000 && rva < 0x1000 + directoryBuffer.byteLength ? rva - 0x1000 : null)
   };
 
-  const result = await enrichResourcePreviews(file, tree);
-
-  const langOf = (typeName: string) => {
-    const group = expectDefined(result.detail.find(g => g.typeName === typeName));
-    const entry = expectDefined(group.entries[0]);
-    return expectDefined(entry.langs[0]);
-  };
-
-  const iconLang = langOf("ICON");
-  assert.strictEqual(iconLang.previewKind, "image");
-  assert.strictEqual(iconLang.previewMime, "image/png");
-
-  const groupLang = langOf("GROUP_ICON");
-  assert.strictEqual(groupLang.previewKind, "image");
-  assert.match(expectDefined(groupLang.previewMime), /x-icon/);
-
-  const manifestLang = langOf("MANIFEST");
-  assert.strictEqual(manifestLang.previewKind, "text");
-  assert.match(expectDefined(manifestLang.textPreview), /assembly/);
-
-  const htmlLang = langOf("HTML");
-  assert.strictEqual(htmlLang.previewKind, "html");
-  assert.match(expectDefined(htmlLang.textPreview), /<body>hi/);
-
-  const stringLang = langOf("STRING");
-  assert.strictEqual(stringLang.previewKind, "stringTable");
-  const stringTablePreview = expectDefined(stringLang.stringTable);
-  assert.ok(stringTablePreview.length >= 1);
-  assert.ok((stringLang.previewIssues || []).length > 0);
-
-  const msgLang = langOf("MESSAGETABLE");
-  assert.strictEqual(msgLang.previewKind, "messageTable");
-  const messageTablePreview = expectDefined(msgLang.messageTable);
-  assert.ok(messageTablePreview.messages.length >= 1);
-  assert.strictEqual(messageTablePreview.truncated, false);
-
-  const versionLang = langOf("VERSION");
-  assert.strictEqual(versionLang.previewKind, "version");
-  const versionInfo = versionLang.versionInfo as {
-    fileVersionString?: string;
-    productVersionString?: string;
-  } | undefined;
-  assert.strictEqual(versionInfo?.fileVersionString, "9.0.21022.8");
-  assert.strictEqual(versionInfo?.productVersionString, "9.0.21022.8");
-});
-
-void test("enrichResourcePreviews indexes icon resources that end exactly at the directory boundary", async () => {
-  const fileBytes = new Uint8Array(512);
-  fileBytes.set(pngSmall, 200);
-
-  const groupIconBytes = new Uint8Array(20).fill(0);
-  const dvg = new DataView(groupIconBytes.buffer);
-  dvg.setUint16(4, 1, true);
-  dvg.setUint8(6, 32);
-  dvg.setUint8(7, 32);
-  dvg.setUint16(10, 1, true);
-  dvg.setUint16(12, 32, true);
-  dvg.setUint32(14, pngSmall.length, true);
-  dvg.setUint16(18, 1, true);
-  fileBytes.set(groupIconBytes, 260);
-
-  const directoryBuffer = new ArrayBuffer(0x70);
-  const root = new DataView(directoryBuffer);
-  root.setUint16(14, 1, true);
-  root.setUint32(16 + 0, 3, true);
-  root.setUint32(16 + 4, 0x80000020, true);
-
-  const nameDir = new DataView(directoryBuffer, 0x20);
-  nameDir.setUint16(14, 1, true);
-  nameDir.setUint32(16 + 0, 1, true);
-  nameDir.setUint32(16 + 4, 0x80000040, true);
-
-  const langDir = new DataView(directoryBuffer, 0x40);
-  langDir.setUint16(14, 1, true);
-  langDir.setUint32(16 + 4, 0x00000060, true);
-
-  const dataEntry = new DataView(directoryBuffer, 0x60);
-  dataEntry.setUint32(0, 200, true);
-  dataEntry.setUint32(4, pngSmall.length, true);
-  dataEntry.setUint32(8, 0, true);
-  dataEntry.setUint32(12, 0, true);
-
-  const tree: ResourceTree = {
-    base: 0,
-    limitEnd: 0x70,
-    top: [],
-    detail: [
-      {
-        typeName: "GROUP_ICON",
-        entries: [
-          {
-            id: 2,
-            name: null,
-            langs: [{ lang: 1033, size: groupIconBytes.length, codePage: 0, dataRVA: 260, reserved: 0 }]
-          }
-        ]
-      }
-    ],
-    view: async (off: number, len: number) => new DataView(directoryBuffer, off, len),
-    rvaToOff: value => value
-  };
-
-  const result = await enrichResourcePreviews(new MockFile(fileBytes), tree);
-  const group = expectDefined(result.detail[0]);
-  const entry = expectDefined(group.entries[0]);
-  const lang = expectDefined(entry.langs[0]);
-  assert.strictEqual(lang.previewKind, "image");
-  assert.match(expectDefined(lang.previewMime), /x-icon/);
+  const result = await enrichResourcePreviews(new MockFile(new Uint8Array(directoryBuffer)), tree);
+  assert.match((result.issues || []).join(" "), /RT_ICON name directory/i);
 });

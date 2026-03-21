@@ -93,14 +93,6 @@ const toRvaFromVa = (virtualAddress: number, imageBase: number): number | null =
   return Number(delta);
 };
 
-const toRvaFromPointer = (value: number, imageBase: number): number | null => {
-  const converted = toRvaFromVa(value, imageBase);
-  if (converted != null) return converted;
-  if (!Number.isSafeInteger(imageBase) || imageBase < 0) return null;
-  if (!Number.isSafeInteger(value) || value <= 0 || value > 0xffff_ffff) return null;
-  return value >>> 0;
-};
-
 const toSafeU64 = (value: bigint): number => {
   const num = Number(value);
   if (!Number.isFinite(num)) return 0;
@@ -146,7 +138,7 @@ const parseLoadConfigDirectoryWithBuilder = async (
     return createPeLoadConfigResult(warnings);
   }
   addCoverageRegion("LOAD_CONFIG", base, availableSize);
-  const view = new DataView(await file.slice(base, base + Math.min(availableSize, 0x200)).arrayBuffer());
+  const view = new DataView(await file.slice(base, base + availableSize).arrayBuffer());
   if (view.byteLength < 4) {
     warnings.push("LOAD_CONFIG is truncated before the Size field.");
     return createPeLoadConfigResult(warnings);
@@ -200,5 +192,5 @@ export const parseLoadConfigDirectory64 = async (
   parseLoadConfigDirectoryWithBuilder(file, dataDirs, rvaToOff, addCoverageRegion, buildLoadConfig64);
 
 export function readLoadConfigPointerRva(imageBase: number, pointerVa: number): number | null {
-  return toRvaFromPointer(pointerVa, imageBase);
+  return toRvaFromVa(pointerVa, imageBase);
 }

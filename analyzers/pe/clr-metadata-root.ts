@@ -4,11 +4,12 @@ import type { PeClrMeta, PeClrStreamInfo } from "./clr-types.js";
 
 export const CLR_METADATA_ROOT_MIN_BYTES = 0x20;
 
-const CLR_STREAM_NAME_LIMIT_BYTES = 64;
+// ECMA-335 II.24.2.2 ("Stream header"): "The name is limited to 32 characters."
+const CLR_STREAM_NAME_SPEC_LIMIT = 32;
+// ECMA-335 II.24.2.1 ("Metadata root"): signature "BSJB" = 0x424A5342.
 const CLR_METADATA_SIGNATURE_BSJB = 0x424a5342;
 const ASCII_PRINTABLE_MIN = 0x20;
 const ASCII_PRINTABLE_MAX = 0x7e;
-const MAX_METADATA_STREAMS = 2048;
 
 interface Cursor {
   offset: number;
@@ -74,8 +75,7 @@ const readStreamNameAt = async (
   if (cursor.offset >= declaredMetaSize) return null;
   let name = "";
   const remainingBytes = declaredMetaSize - cursor.offset;
-  const limit = Math.min(remainingBytes, CLR_STREAM_NAME_LIMIT_BYTES);
-  for (let index = 0; index < limit; index += 1) {
+  for (let index = 0; index < remainingBytes; index += 1) {
     const byteView = await reader.readAt(cursor.offset, 1);
     if (!byteView) return null;
     cursor.offset += 1;
@@ -138,18 +138,9 @@ const parseMetadataRootWithReader = async (
     issues.push("Metadata root is truncated; missing stream header fields.");
     return null;
   }
-  if (streamCountRaw > MAX_METADATA_STREAMS) {
-    issues.push(
-      `Metadata stream count (${streamCountRaw}) is very large; parsing capped at ` +
-        `${MAX_METADATA_STREAMS} streams.`
-    );
-  }
   const streams: PeClrStreamInfo[] = [];
-  for (
-    let streamIndex = 0;
-    streamIndex < Math.min(streamCountRaw, MAX_METADATA_STREAMS);
-    streamIndex += 1
-  ) {
+  const seenStreamNames = new Set<string>();
+  for (let streamIndex = 0; streamIndex < streamCountRaw; streamIndex += 1) {
     const offset = await readU32At(reader, cursor);
     const size = await readU32At(reader, cursor);
     if (offset == null || size == null) {
@@ -161,15 +152,28 @@ const parseMetadataRootWithReader = async (
       issues.push("Metadata stream headers are truncated; some stream names are missing.");
       break;
     }
+    if (name.length > CLR_STREAM_NAME_SPEC_LIMIT) {
+      issues.push(
+        `Metadata stream "${name}" exceeds the ECMA-335 32-character stream-name limit.`
+      );
+    }
+    if ((size & 3) !== 0) {
+      issues.push(`Metadata stream "${name}" size is not a multiple of 4 bytes.`);
+    }
     if (declaredMetaSize > 0 && offset + size > declaredMetaSize) {
       issues.push(
         `Metadata stream "${name}" extends past declared metadata size ` +
           `(${toHex(offset + size, 8)} > ${toHex(declaredMetaSize, 8)}).`
       );
     }
+    if (seenStreamNames.has(name)) {
+      issues.push(`Metadata stream "${name}" is duplicated.`);
+    } else {
+      seenStreamNames.add(name);
+    }
     streams.push({ name, offset, size });
   }
-  if (streams.length < Math.min(streamCountRaw, MAX_METADATA_STREAMS)) {
+  if (streams.length < streamCountRaw) {
     issues.push("Metadata stream list is incomplete; fewer streams were parsed than declared.");
   }
   return {

@@ -25,6 +25,9 @@ export interface ResourceDetailEntry {
 export interface ResourceTree {
   base: number;
   limitEnd: number;
+  dirRva?: number;
+  dirSize?: number;
+  issues?: string[];
   top: Array<{ typeName: string; kind: "name" | "id"; leafCount: number }>;
   detail: Array<{ typeName: string; entries: ResourceDetailEntry[] }>;
   view: (offset: number, length: number) => Promise<DataView>;
@@ -43,24 +46,55 @@ export async function buildResourceTree(
   if (base == null) return null;
   addCoverageRegion("RESOURCE directory", base, dir.size);
   const limitEnd = base + dir.size;
+  const issues: string[] = [];
   const view = async (off: number, len: number): Promise<DataView> =>
     new DataView(await file.slice(off, off + len).arrayBuffer());
   const u16 = (dv: DataView, off: number): number => dv.getUint16(off, true);
   const u32 = (dv: DataView, off: number): number => dv.getUint32(off, true);
-  const isRangeInside = (off: number, len: number): boolean =>
-    off >= base && len >= 0 && off + len <= limitEnd;
+  const addIssue = (message: string): void => {
+    if (!issues.includes(message)) issues.push(message);
+  };
+  const formatRelOffset = (rel: number): string => `0x${(rel >>> 0).toString(16)}`;
+  const describeRelOffsetFailure = (rel: number, len: number, subject: string): string => {
+    if (rel < 0 || len < 0 || rel + len > dir.size) return `${subject} lies outside the declared span.`;
+    const mappedOff = rvaToOff((dir.rva + rel) >>> 0);
+    if (mappedOff != null && mappedOff >= 0 && mappedOff < file.size && mappedOff + len > file.size) {
+      return `${subject} is truncated by end of file.`;
+    }
+    const fallbackOff = base + rel;
+    if (fallbackOff >= base && fallbackOff < file.size && fallbackOff + len > file.size) {
+      return `${subject} is truncated by end of file.`;
+    }
+    return `${subject} could not be mapped within the declared resource span.`;
+  };
+  const resolveRelOffset = (rel: number, len: number): number | null => {
+    if (rel < 0 || len < 0 || rel + len > dir.size) return null;
+    const mappedOff = rvaToOff((dir.rva + rel) >>> 0);
+    if (mappedOff != null && mappedOff >= 0 && mappedOff + len <= file.size) {
+      if (rel === 0 || mappedOff !== base) return mappedOff;
+    }
+    const fallbackOff = base + rel;
+    if (fallbackOff < base || fallbackOff + len > limitEnd || fallbackOff + len > file.size) return null;
+    return fallbackOff;
+  };
 
   const parseDir = async (
     rel: number
   ): Promise<{
     Named: number;
-    Ids: number;
-    entries: Array<{ nameIsString: boolean; subdir: boolean; nameOrId: number | null; target: number }>;
+      Ids: number;
+      entries: Array<{ nameIsString: boolean; subdir: boolean; nameOrId: number | null; target: number }>;
   } | null> => {
-    const off = base + rel;
-    if (!isRangeInside(off, 16)) return null;
+    const off = resolveRelOffset(rel, 16);
+    if (off == null) {
+      addIssue(describeRelOffsetFailure(rel, 16, `Resource directory at ${formatRelOffset(rel)}`));
+      return null;
+    }
     const dv = await view(off, 16);
-    if (dv.byteLength < 16) return null;
+    if (dv.byteLength < 16) {
+      addIssue(`Resource directory header at ${formatRelOffset(rel)} is truncated.`);
+      return null;
+    }
     const Named = u16(dv, 12);
     const Ids = u16(dv, 14);
     const count = Named + Ids;
@@ -71,10 +105,18 @@ export async function buildResourceTree(
       target: number;
     }> = [];
     for (let index = 0; index < count; index++) {
-      const entryOff = off + 16 + index * 8;
-      if (!isRangeInside(entryOff, 8)) break;
+      const entryOff = resolveRelOffset(rel + 16 + index * 8, 8);
+      if (entryOff == null) {
+        addIssue(
+          `Resource directory entries for ${formatRelOffset(rel)} extend past the declared span.`
+        );
+        break;
+      }
       const e = await view(entryOff, 8);
-      if (e.byteLength < 8) break;
+      if (e.byteLength < 8) {
+        addIssue(`Resource directory entry at ${formatRelOffset(rel + 16 + index * 8)} is truncated.`);
+        break;
+      }
       const Name = u32(e, 0);
       const OffsetToData = u32(e, 4);
       const nameIsString = (Name & 0x80000000) !== 0;
@@ -90,11 +132,36 @@ export async function buildResourceTree(
   };
 
   const readUcs2Label = async (rel: number): Promise<string> => {
-    const so = base + rel;
-    if (so + 2 > limitEnd) return "";
+    const so = resolveRelOffset(rel, 2);
+    if (so == null) {
+      addIssue(
+        describeRelOffsetFailure(rel, 2, `Resource string name header at ${formatRelOffset(rel)}`)
+      );
+      return "";
+    }
     const dv = await view(so, 2);
+    if (dv.byteLength < 2) {
+      addIssue(`Resource string name header at ${formatRelOffset(rel)} is truncated.`);
+      return "";
+    }
     const len = u16(dv, 0);
-    const bytes = new Uint8Array(await file.slice(so + 2, Math.min(limitEnd, so + 2 + len * 2)).arrayBuffer());
+    const declaredBytesLength = len * 2;
+    const bytesLength = Math.min(declaredBytesLength, Math.max(0, dir.size - (rel + 2)));
+    if (bytesLength < declaredBytesLength) {
+      addIssue(`Resource string name at ${formatRelOffset(rel)} is truncated.`);
+    }
+    const textOff = resolveRelOffset(rel + 2, bytesLength);
+    if (textOff == null) {
+      addIssue(
+        describeRelOffsetFailure(
+          rel + 2,
+          bytesLength,
+          `Resource string name payload at ${formatRelOffset(rel + 2)}`
+        )
+      );
+      return "";
+    }
+    const bytes = new Uint8Array(await file.slice(textOff, textOff + bytesLength).arrayBuffer());
     let s = "";
     for (let index = 0; index + 1 < bytes.length; index += 2) {
       const first = bytes[index];
@@ -108,7 +175,19 @@ export async function buildResourceTree(
   };
 
   const root = await parseDir(0);
-  if (!root) return null;
+  if (!root) {
+    return {
+      base,
+      limitEnd,
+      dirRva: dir.rva,
+      dirSize: dir.size,
+      ...(issues.length ? { issues } : {}),
+      top: [],
+      detail: [],
+      view,
+      rvaToOff
+    };
+  }
 
   const top: Array<{ typeName: string; kind: "name" | "id"; leafCount: number }> = [];
   const detail: Array<{ typeName: string; entries: ResourceDetailEntry[] }> = [];
@@ -140,11 +219,28 @@ export async function buildResourceTree(
             const langDir = await parseDir(nameEntry.target);
             if (langDir) {
               for (const langEnt of langDir.entries) {
-                if (langEnt.subdir) continue;
-                const dataEntryOff = base + langEnt.target;
-                if (!isRangeInside(dataEntryOff, 16)) continue;
+                if (langEnt.subdir) {
+                  addIssue(
+                    `Resource language entry at ${formatRelOffset(langEnt.target)} points to a subdirectory.`
+                  );
+                  continue;
+                }
+                const dataEntryOff = resolveRelOffset(langEnt.target, 16);
+                if (dataEntryOff == null) {
+                  addIssue(
+                    describeRelOffsetFailure(
+                      langEnt.target,
+                      16,
+                      `Resource data entry at ${formatRelOffset(langEnt.target)}`
+                    )
+                  );
+                  continue;
+                }
                 const dv = await view(dataEntryOff, 16);
-                if (dv.byteLength < 16) continue;
+                if (dv.byteLength < 16) {
+                  addIssue(`Resource data entry at ${formatRelOffset(langEnt.target)} is truncated.`);
+                  continue;
+                }
                 const DataRVA = u32(dv, 0);
                 const Size = u32(dv, 4);
                 const CodePage = u32(dv, 8);
@@ -165,5 +261,15 @@ export async function buildResourceTree(
     if (typeDetailEntries.length) detail.push({ typeName, entries: typeDetailEntries });
   }
 
-  return { base, limitEnd, top, detail, view, rvaToOff };
+  return {
+    base,
+    limitEnd,
+    dirRva: dir.rva,
+    dirSize: dir.size,
+    ...(issues.length ? { issues } : {}),
+    top,
+    detail,
+    view,
+    rvaToOff
+  };
 }

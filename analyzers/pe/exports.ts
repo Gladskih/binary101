@@ -30,24 +30,24 @@ export async function parseExportDirectory(
   const dv = new DataView(await file.slice(base, base + 40).arrayBuffer());
   const isReadableOffset = (offset: number | null): offset is number =>
     offset != null && offset >= 0 && offset < file.size;
-  const readStr = async (offset: number): Promise<string> => {
-    if (offset < 0 || offset >= file.size) return "";
+  const readStr = async (offset: number): Promise<{ text: string; truncated: boolean }> => {
+    if (offset < 0 || offset >= file.size) return { text: "", truncated: false };
     let text = "";
     let pos = offset;
-    while (text.length < 1024) {
+    while (pos < file.size) {
       const chunk = new Uint8Array(await file.slice(pos, pos + 64).arrayBuffer());
-      if (chunk.byteLength === 0) break;
+      if (chunk.byteLength === 0) return { text, truncated: true };
       const zeroIndex = chunk.indexOf(0);
       if (zeroIndex === -1) {
         text += String.fromCharCode(...chunk);
-        if (pos + chunk.byteLength >= file.size) break;
+        if (pos + chunk.byteLength >= file.size) return { text, truncated: true };
         pos += 64;
       } else {
         if (zeroIndex > 0) text += String.fromCharCode(...chunk.slice(0, zeroIndex));
-        break;
+        return { text, truncated: false };
       }
     }
-    return text;
+    return { text, truncated: true };
   };
   const readMappedU32 = async (tableRva: number, index: number): Promise<number | null> => {
     const entryRva = tableRva + index * 4;
@@ -84,7 +84,9 @@ export async function parseExportDirectory(
   let name = "";
   if (NameRva) {
     if (isReadableOffset(namePtr)) {
-      name = await readStr(namePtr);
+      const nameInfo = await readStr(namePtr);
+      name = nameInfo.text;
+      if (nameInfo.truncated) issues.push("Export DLL name string truncated.");
     } else {
       issues.push("Export DLL name RVA does not map to file data.");
     }
@@ -120,7 +122,9 @@ export async function parseExportDirectory(
         }
         const nameOffset = rvaToOff(nameRva);
         if (isReadableOffset(nameOffset)) {
-          functionNames.set(funcIndex, await readStr(nameOffset));
+          const nameInfo = await readStr(nameOffset);
+          functionNames.set(funcIndex, nameInfo.text);
+          if (nameInfo.truncated) issues.push("Export name string truncated.");
         } else if (nameRva) {
           issues.push("Export name RVA does not map to file data.");
         }
@@ -139,7 +143,9 @@ export async function parseExportDirectory(
       if (funcRva >= dir.rva && funcRva < dir.rva + dir.size) {
         const fwdOff = rvaToOff(funcRva);
         if (isReadableOffset(fwdOff)) {
-          forwarder = await readStr(fwdOff);
+          const forwarderInfo = await readStr(fwdOff);
+          forwarder = forwarderInfo.text;
+          if (forwarderInfo.truncated) issues.push("Export forwarder string truncated.");
         } else if (funcRva) {
           issues.push("Export forwarder RVA does not map to file data.");
         }

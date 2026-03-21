@@ -91,3 +91,20 @@ void test("parsePe locates section table using declared SizeOfOptionalHeader", a
   assert.strictEqual(parsed.sections[0]?.virtualAddress, 0x1000);
   assert.strictEqual(parsed.rvaToOff(0x1000), rawPointer);
 });
+
+void test("parsePe keeps physically truncated optional headers visible with warnings", async () => {
+  const peOffset = 0x40;
+  const optionalSize = 0xe0;
+  const buffer = new Uint8Array(peOffset + 24 + 2);
+  const dv = new DataView(buffer.buffer);
+  dv.setUint16(0, 0x5a4d, true);
+  dv.setUint32(0x3c, peOffset, true);
+  writeSignatureAndCoff(buffer, peOffset, optionalSize, 0);
+  dv.setUint16(peOffset + 24, 0x10b, true);
+
+  const parsed = await parsePe(new MockFile(buffer, "truncated-optional-visible.exe"));
+
+  assert.ok(parsed);
+  assert.strictEqual(parsed.signature, "PE");
+  assert.ok(parsed.warnings?.some(warning => /optional header|truncated/i.test(warning)));
+});

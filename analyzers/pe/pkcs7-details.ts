@@ -118,22 +118,20 @@ export const parseCertificateContext = (
 ): X509CertificateInfo[] => {
   const certs: X509CertificateInfo[] = [];
   let pos = element.start + element.header;
-  let iterations = 0;
-  while (pos < element.end && iterations < 16) {
+  while (pos < element.end) {
     const child = readDerElement(bytes, pos);
     if (!child || child.end > element.end || child.end <= pos) break;
     if (child.tag === TAG_SET) {
       for (const setChild of readDerChildren(bytes, child)) {
         if (setChild.tag !== TAG_SEQUENCE) continue;
         const info = parseX509Certificate(bytes, setChild, warnings);
-        if (info) certs.push(info);
+        certs.push(info || {});
       }
     } else if (child.tag === TAG_SEQUENCE) {
       const info = parseX509Certificate(bytes, child, warnings);
-      if (info) certs.push(info);
+      certs.push(info || {});
     }
     pos = child.end;
-    iterations++;
   }
   return certs;
 };

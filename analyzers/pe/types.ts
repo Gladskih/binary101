@@ -119,6 +119,7 @@ export interface PeCore {
   dos: PeDosHeader;
   coff: PeCoffHeader;
   opt: PeOptionalHeader;
+  warnings?: string[];
   optOff: number;
   ddStartRel: number;
   ddCount: number;

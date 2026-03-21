@@ -54,6 +54,7 @@ export async function parsePeHeaders(file: File): Promise<PeCore | null> {
     dos,
     coff,
     opt,
+    ...(optionalResult.warnings?.length ? { warnings: optionalResult.warnings } : {}),
     optOff,
     ddStartRel,
     ddCount,

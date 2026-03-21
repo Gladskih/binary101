@@ -260,6 +260,28 @@ void test("decodePkcs7 counts certificates even without a SET wrapper", () => {
   assert.ok(!decoded.warnings?.length);
 });
 
+void test("decodePkcs7 does not truncate raw certificate contexts after sixteen entries", () => {
+  const digestAlgorithm = seq(oid("1.3.14.3.2.26"), nul());
+  const digestSet = set(digestAlgorithm);
+  const payloadInfo = seq(oid("1.2.840.113549.1.7.1"));
+  const simpleCert = seq(int(5));
+  const rawCerts = ctx0(concat(...Array.from({ length: 17 }, () => simpleCert)));
+  const signerInfo = seq(
+    int(1),
+    seq(int(1), int(2)),
+    seq(oid("1.3.14.3.2.26"), nul()),
+    seq(oid("1.2.840.113549.1.1.1"), nul()),
+    octet(Uint8Array.of(0x00))
+  );
+  const signerInfos = set(signerInfo);
+  const signedData = seq(int(1), digestSet, payloadInfo, rawCerts, signerInfos);
+  const wrapper = seq(oid("1.2.840.113549.1.7.2"), ctx0(signedData));
+  const decoded = decodePkcs7(wrapper);
+
+  assert.strictEqual(decoded.certificateCount, 17);
+  assert.strictEqual(decoded.certificates?.length, 17);
+});
+
 void test("decodePkcs7 treats malformed contentType OIDs as unknown", () => {
   const malformed = seq(tag(0x06, Uint8Array.of(0x81)));
   const decoded = decodePkcs7(malformed);

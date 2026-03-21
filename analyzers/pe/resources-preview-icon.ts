@@ -69,7 +69,7 @@ export async function addGroupIconPreview(
   if (typeName !== "GROUP_ICON") return;
   const grpOff = rvaToOff(dataRva);
   if (grpOff == null || size < 6) return;
-  const ab = await file.slice(grpOff, grpOff + Math.min(size, 4096)).arrayBuffer();
+  const ab = await file.slice(grpOff, grpOff + size).arrayBuffer();
   const g = new DataView(ab);
   const idCount = g.getUint16(4, true);
   if (!idCount || 6 + idCount * 14 > g.byteLength) return;
@@ -96,7 +96,7 @@ export async function addGroupIconPreview(
   const ic = iconIndex.get(nID);
   if (!ic) return;
   const imgOff = rvaToOff(ic.rva);
-  if (imgOff == null || ic.size <= 0 || ic.size > 2_000_000) return;
+  if (imgOff == null || ic.size <= 0) return;
   const imageData = new Uint8Array(await file.slice(imgOff, imgOff + ic.size).arrayBuffer());
   const dirSize = 6 + 16;
   const ico = new Uint8Array(dirSize + imageData.length);

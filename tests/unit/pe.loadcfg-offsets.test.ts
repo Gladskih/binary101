@@ -4,10 +4,19 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   parseLoadConfigDirectory32,
-  parseLoadConfigDirectory64
+  parseLoadConfigDirectory64,
+  readLoadConfigPointerRva
 } from "../../analyzers/pe/load-config.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
+
+void test("readLoadConfigPointerRva converts VAs to RVAs and rejects non-VA values", () => {
+  assert.equal(readLoadConfigPointerRva(0x400000, 0x401234), 0x1234);
+  // PE Load Config pointer fields are documented as VAs, so a raw RVA below ImageBase is malformed.
+  assert.equal(readLoadConfigPointerRva(0x400000, 0x1234), null);
+  assert.equal(readLoadConfigPointerRva(0x400000, 0), null);
+  assert.equal(readLoadConfigPointerRva(-1, 0x401234), null);
+});
 
 void test("parseLoadConfigDirectory uses official field offsets (32-bit)", async () => {
   const bytes = new Uint8Array(512).fill(0);

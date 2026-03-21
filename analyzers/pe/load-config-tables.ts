@@ -84,7 +84,7 @@ export async function readSafeSehHandlerTableRvas(
 
   const allEntriesLookLikeAbsoluteVasNearImageBase =
     rawValues.length > 1 &&
-    imageBase > 0 &&
+    imageBase >= 0x400000 &&
     rawValues.every(value => value >= imageBase && value - imageBase < SAFESEH_COMPAT_VA_WINDOW);
   if (!allEntriesLookLikeAbsoluteVasNearImageBase) return rawValues.map(value => value >>> 0);
   return rawValues.map(value => readLoadConfigPointerRva(imageBase, value) ?? (value >>> 0));

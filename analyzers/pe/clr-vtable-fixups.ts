@@ -4,7 +4,6 @@ import type { PeClrVTableFixup } from "./clr-types.js";
 import type { RvaToOffset } from "./types.js";
 
 const VTABLE_FIXUP_ENTRY_SIZE_BYTES = 8;
-const MAX_VTABLE_FIXUP_ENTRIES = 2048;
 
 export const parseVTableFixups = async (
   file: File,
@@ -46,13 +45,7 @@ export const parseVTableFixups = async (
   if (parsedCount < declaredCount) {
     issues.push("VTableFixups data is truncated; some entries are missing.");
   }
-  const entryCount = Math.min(parsedCount, MAX_VTABLE_FIXUP_ENTRIES);
-  if (declaredCount > MAX_VTABLE_FIXUP_ENTRIES) {
-    issues.push(
-      `VTableFixups entry count (${declaredCount}) is very large; parsing capped at ` +
-        `${MAX_VTABLE_FIXUP_ENTRIES} entries.`
-    );
-  }
+  const entryCount = parsedCount;
   if (entryCount === 0) return null;
   const fixupView = new DataView(
     await file
