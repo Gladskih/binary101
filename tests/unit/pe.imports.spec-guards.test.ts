@@ -108,7 +108,7 @@ void test("parseImportDirectory stops when later thunk slots no longer map throu
     return null;
   };
 
-  const { entries } = await parseImportDirectory32(
+  const { entries, warning } = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: impBase, size: IMPORT_DIRECTORY_SIZE }],
     sparseRvaToOff,
@@ -117,6 +117,7 @@ void test("parseImportDirectory stops when later thunk slots no longer map throu
 
   const firstImport = expectDefined(entries[0]);
   assert.deepEqual(firstImport.functions, [{ hint: mappedHint, name: mappedName }]);
+  assert.ok(warning && /truncated|unmapped|thunk/i.test(warning));
 });
 
 void test("parseImportDirectory walks the full null-terminated PE32+ thunk array without a fixed cap", async () => {

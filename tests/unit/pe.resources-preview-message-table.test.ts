@@ -53,3 +53,25 @@ void test("decodeMessageTablePreview warns instead of silently falling back to U
   assert.notStrictEqual(preview.messages[0]?.strings[0], String.fromCharCode(0x00e9));
   assert.strictEqual(preview.truncated, false);
 });
+
+void test("decodeMessageTablePreview preserves significant leading and trailing whitespace", () => {
+  const preview = expectDefined(decodeMessageTablePreview(
+    buildSingleAnsiMessageTable(30, [0x20, 0x20, 0x41, 0x0d, 0x0a]),
+    WINDOWS_1252_CODE_PAGE
+  ));
+
+  assert.deepEqual(preview.messages, [{ id: 30, strings: ["  A\r\n"] }]);
+  assert.deepStrictEqual(preview.issues, []);
+  assert.strictEqual(preview.truncated, false);
+});
+
+void test("decodeMessageTablePreview decodes ANSI entries with Windows code page 932", () => {
+  const preview = expectDefined(decodeMessageTablePreview(
+    buildSingleAnsiMessageTable(40, [0x82, 0xa0]),
+    932 // Windows Shift_JIS code page
+  ));
+
+  assert.deepEqual(preview.messages, [{ id: 40, strings: ["\u3042"] }]);
+  assert.deepStrictEqual(preview.issues, []);
+  assert.strictEqual(preview.truncated, false);
+});

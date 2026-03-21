@@ -185,3 +185,26 @@ void test("parseBaseRelocations follows sparse block mappings", async () => {
   assert.strictEqual(parsed.totalEntries, 1);
   assert.deepStrictEqual(parsed.blocks[1]?.entries, [{ type: 3, offset: 1 }]);
 });
+
+void test("parseBaseRelocations does not continue from a block size that breaks 32-bit block alignment", async () => {
+  const directoryOffset = 0x10;
+  const misalignedBlockSize = IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE + Uint16Array.BYTES_PER_ELEMENT;
+  const bytes = new Uint8Array(0x40).fill(0);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(directoryOffset + 0, 0x1000, true);
+  // Microsoft PE format: base relocation blocks must start on a 32-bit boundary.
+  view.setUint32(directoryOffset + 4, misalignedBlockSize, true);
+  view.setUint16(directoryOffset + 8, IMAGE_REL_BASED_HIGHLOW_OFFSET_1, true);
+  view.setUint32(directoryOffset + 10, 0x2000, true);
+  view.setUint32(directoryOffset + 14, IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE, true);
+
+  const parsed = await parseBaseRelocations(
+    new MockFile(bytes, "reloc-misaligned-block.bin"),
+    [{ name: "BASERELOC", rva: directoryOffset, size: misalignedBlockSize + IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE }],
+    rvaToOff,
+    () => {}
+  );
+
+  assert.ok(parsed);
+  assert.strictEqual(parsed.blocks.length, 1);
+});

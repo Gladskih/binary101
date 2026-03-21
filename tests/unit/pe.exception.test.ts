@@ -108,6 +108,17 @@ void test("parseExceptionDirectory reports truncation when the directory spills 
   assert.strictEqual(parsed.functionCount, 1);
   assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("truncated")));
 });
+void test("parseExceptionDirectory preserves a declared EXCEPTION directory that is smaller than one RUNTIME_FUNCTION entry", async () => {
+  const exOff = 0x80;
+  const bytes = new Uint8Array(exOff + 8).fill(0);
+
+  // Microsoft x64 pdata entries are 12-byte RUNTIME_FUNCTION records.
+  const parsed = await parseExceptionFixture(bytes, "exception-too-small-directory.bin", exOff, 8);
+
+  assert.ok(parsed);
+  assert.strictEqual(parsed.functionCount, 0);
+  assert.ok(parsed.issues.some(issue => /runtime_function|truncated|12 bytes/i.test(issue)));
+});
 void test("parseExceptionDirectory stops when later RUNTIME_FUNCTION slots no longer map through rvaToOff", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const exRva = 0x80;
@@ -231,6 +242,24 @@ void test("parseExceptionDirectory does not parse aligned-down UNWIND_INFO after
   assert.strictEqual(parsed.invalidEntryCount, 1);
   assert.strictEqual(parsed.handlerUnwindInfoCount, 0);
   assert.deepEqual(parsed.handlerRvas, []);
+});
+void test("parseExceptionDirectory reports truncated handler payloads after UNWIND_INFO code slots", async () => {
+  const bytes = new Uint8Array(0x204).fill(0);
+  const exOff = 0x80;
+  const unwindInfoRva = 0x200;
+  const dv = new DataView(bytes.buffer);
+
+  writeRuntimeFunction(dv, exOff, 0x10, 0x20, unwindInfoRva);
+  // Microsoft x64 exception-handling docs:
+  // when EHANDLER/UHANDLER is set, a 4-byte handler RVA follows the aligned UNWIND_CODE array.
+  bytes[unwindInfoRva] = 0x09; // version 1 | UNW_FLAG_EHANDLER
+
+  const parsed = await parseExceptionFixture(bytes, "exception-truncated-handler-tail.bin", exOff, 12);
+
+  assert.ok(parsed);
+  assert.strictEqual(parsed.handlerUnwindInfoCount, 1);
+  assert.deepEqual(parsed.handlerRvas, []);
+  assert.ok(parsed.issues.some(issue => /handler|truncated|unwind_info/i.test(issue)));
 });
 void test("parseExceptionDirectory does not decode x64 unwind records for unsupported machines", async () => {
   const bytes = new Uint8Array(0x400).fill(0);

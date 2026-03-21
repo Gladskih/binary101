@@ -228,3 +228,31 @@ void test("parseDebugDirectory warns when a CodeView entry is smaller than the m
     "Expected a warning for CodeView entries smaller than the RSDS minimum"
   );
 });
+
+void test("parseDebugDirectory warns when the RSDS path is not NUL-terminated within SizeOfData", async () => {
+  const bytes = new Uint8Array(256).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const debugRva = 0x20;
+  const dataRva = 0x80;
+  const pathBytes = encoder.encode("abc");
+
+  dv.setUint32(debugRva + 12, IMAGE_DEBUG_TYPE_CODEVIEW, true);
+  // PE/COFF CodeView RSDS records store a NUL-terminated PDB path after the fixed 24-byte header.
+  dv.setUint32(debugRva + 16, RSDS_HEADER_SIZE + pathBytes.length, true);
+  dv.setUint32(debugRva + 20, dataRva, true);
+  dv.setUint32(debugRva + 24, dataRva, true);
+  dv.setUint32(dataRva + 0, RSDS_SIGNATURE, true);
+  bytes.set(RSDS_TEST_GUID_BYTES, dataRva + 4);
+  dv.setUint32(dataRva + 20, 1, true);
+  bytes.set(pathBytes, dataRva + RSDS_HEADER_SIZE);
+
+  const result = await parseDebugDirectory(
+    new MockFile(bytes, "debug-rsds-missing-nul.bin"),
+    [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE }],
+    value => value,
+    () => {}
+  );
+
+  assert.equal(result.entry?.path, "abc");
+  assert.ok(result.warning && /path|string|terminat|truncated/i.test(result.warning));
+});

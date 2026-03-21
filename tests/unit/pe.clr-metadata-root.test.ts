@@ -11,8 +11,8 @@ const align4 = (value: number): number => (value + 3) & ~3;
 const CLR_METADATA_SIGNATURE_BSJB = 0x424a5342;
 // ECMA-335 II.24.2.2 ("Stream header"): "The name is limited to 32 characters."
 const CLR_STREAM_NAME_SPEC_LIMIT = 32;
-const CLR_V1_VERSION_BYTES = encoder.encode("v1.0");
-const CLR_V4_VERSION_BYTES = encoder.encode("v4.0");
+const CLR_V1_VERSION_BYTES = encoder.encode("v1.0\0");
+const CLR_V4_VERSION_BYTES = encoder.encode("v4.0\0");
 
 type MetadataStreamFixture = {
   offset: number;
@@ -219,4 +219,62 @@ void test("parseClrMetadataRoot reports duplicate metadata stream names", async 
 
   assert.ok(meta);
   assert.ok(hasIssueLike(issues, /duplicate/i));
+});
+
+void test("parseClrMetadataRoot preserves vendor-specific UTF-8 version strings", async () => {
+  const metaOffset = 0x20;
+  const versionBytes = encoder.encode("V\u00e9ndor CLR\0");
+  const metaSize = measureMetadataRootSize(versionBytes, []);
+  const { meta, issues } = await parseMetadataFixture(
+    "meta-vendor-utf8.bin",
+    metaOffset,
+    metaSize,
+    createMetadataRootBytes(metaOffset, metaSize, versionBytes, 0, [])
+  );
+
+  assert.ok(meta);
+  assert.strictEqual(meta.version, "V\u00e9ndor CLR");
+  assert.deepStrictEqual(issues, []);
+});
+
+void test("parseClrMetadataRoot reports version strings that are not null-terminated inside Length", async () => {
+  const metaOffset = 0x20;
+  const metaSize = 0x20;
+  const { meta, issues } = await parseMetadataFixture(
+    "meta-version-no-nul.bin",
+    metaOffset,
+    metaSize,
+    createMetadataRootBytes(metaOffset, metaSize, encoder.encode("ABCD"), 0, [])
+  );
+
+  assert.ok(meta);
+  assert.ok(hasIssueLike(issues, /null|terminator/i));
+});
+
+void test("parseClrMetadataRoot reports stream names missing a null terminator", async () => {
+  const metaOffset = 0x20;
+  const streams = [{ offset: 0x80, size: 4, name: "#~" }];
+  const metaSize = 0x100;
+  const bytes = createMetadataRootBytes(
+    metaOffset,
+    metaSize,
+    CLR_V4_VERSION_BYTES,
+    streams.length,
+    streams
+  );
+  const streamHeaderOffset = align4(16 + CLR_V4_VERSION_BYTES.length) + 4;
+  const streamNameOffset = metaOffset + streamHeaderOffset + 8;
+  bytes.fill(0x41, streamNameOffset, metaOffset + 0x80);
+  bytes.set(encoder.encode("#~AAAAAAAA"), streamNameOffset);
+  bytes[metaOffset + 0x80] = 0;
+
+  const { meta, issues } = await parseMetadataFixture(
+    "meta-stream-name-no-nul.bin",
+    metaOffset,
+    metaSize,
+    bytes
+  );
+
+  assert.ok(meta);
+  assert.ok(hasIssueLike(issues, /null|terminator/i));
 });

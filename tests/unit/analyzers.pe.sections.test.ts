@@ -98,3 +98,27 @@ void test("parseSectionHeaders does not map raw-file padding beyond VirtualSize 
     "RVA in raw padding beyond VirtualSize should not resolve inside the image"
   );
 });
+
+void test("parseSectionHeaders does not wrap section RVAs past 0xffffffff back to low addresses", async () => {
+  const table = createSectionTable([
+    { name: ".text", va: 0xfffffff0, vs: 0x40, rawSize: 0x40, rawOff: 0x200 }
+  ]);
+  const optionalHeaderOffset = 0x80;
+  const sizeOfOptionalHeader = 0xE0;
+  const fileBytes = new Uint8Array(0x280);
+  fileBytes.set(table, optionalHeaderOffset + sizeOfOptionalHeader);
+
+  const { rvaToOff } = await parseSectionHeaders(
+    new MockFile(fileBytes),
+    optionalHeaderOffset,
+    sizeOfOptionalHeader,
+    1,
+    optionalHeaderOffset + sizeOfOptionalHeader
+  );
+
+  // RVAs are 32-bit values; a section near the top of the address space must clamp at 0xffffffff instead of
+  // wrapping to 0x00000000 and becoming unmappable.
+  assert.strictEqual(rvaToOff(0xfffffff0), 0x200);
+  assert.strictEqual(rvaToOff(0xffffffff), 0x20f);
+  assert.strictEqual(rvaToOff(0), null);
+});

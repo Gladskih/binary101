@@ -156,6 +156,7 @@ void test("parseDelayImports stops when later thunk slots stop mapping", async (
 
   const entry = expectDefined(result.entries[0]);
   assert.deepEqual(entry.functions, [{ hint: mappedHint, name: mappedName }]);
+  assert.ok(result.warning?.toLowerCase().match(/truncated|unmapped|thunk/));
 });
 
 void test("parseDelayImports resolves later descriptors through rvaToOff", async () => {
@@ -204,6 +205,46 @@ void test("parseDelayImports resolves later descriptors through rvaToOff", async
   ));
 
   assert.deepEqual(result.entries.map(entry => entry.name), [firstName, secondName]);
+});
+
+void test("parseDelayImports warns when a later delay descriptor stops mapping before the null terminator", async () => {
+  const firstDescriptorRva = 0x1000;
+  const secondDescriptorRva = firstDescriptorRva + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE;
+  const firstNameRva = 0x1100;
+  const firstName = "first.dll";
+  const firstNameSize = cStringSize(firstName);
+  const bytes = new Uint8Array(0x60).fill(0);
+  const dv = new DataView(bytes.buffer);
+  writeDelayImportDescriptor(dv, 0x00, {
+    dllNameRva: firstNameRva,
+    importNameTableRva: 0
+  });
+  writeDelayImportDescriptor(dv, 0x20, {
+    dllNameRva: 0x1200,
+    importNameTableRva: 0
+  });
+  writeDelayImportName(bytes, 0x40, firstName);
+
+  const sparseRvaToOff = (rva: number): number | null => {
+    if (rva >= firstDescriptorRva && rva < firstDescriptorRva + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) {
+      return rva - firstDescriptorRva;
+    }
+    if (rva >= firstNameRva && rva < firstNameRva + firstNameSize) {
+      return 0x40 + (rva - firstNameRva);
+    }
+    if (rva === secondDescriptorRva) return null;
+    return null;
+  };
+
+  const result = expectDefined(await parseDelayImports32(
+    new MockFile(bytes, "delay-descriptor-unmapped.bin"),
+    [{ name: "DELAY_IMPORT", rva: firstDescriptorRva, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE * 2 }],
+    sparseRvaToOff,
+    () => {}
+  ));
+
+  assert.deepEqual(result.entries.map(entry => entry.name), [firstName]);
+  assert.ok(result.warning?.toLowerCase().match(/descriptor|truncated|unmapped/));
 });
 
 void test("parseDelayImports ignores partially non-zero descriptors as terminators", async () => {

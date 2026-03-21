@@ -196,3 +196,32 @@ void test("parseDynamicRelocationsFromLoadConfig preserves 64-bit V2 symbols for
   if (entry.kind !== "v2") throw new Error("Expected v2 entry.");
   assert.equal(entry.symbol, Number(0x0000000100000002n));
 });
+
+void test("parseDynamicRelocationsFromLoadConfig warns when a V2 entry header is smaller than the fixed structure size", async () => {
+  const tableOff = 0x80;
+  const bytes = new Uint8Array(0x200).fill(0);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(tableOff + 0x00, 2, true); // Version 2
+  // IMAGE_DYNAMIC_RELOCATION32_V2 has a fixed 0x14-byte header in winnt.h-compatible layouts.
+  dv.setUint32(tableOff + 0x04, 0x14, true);
+  // IMAGE_DYNAMIC_RELOCATION32_V2 has a fixed 20-byte header in winnt.h-compatible layouts.
+  dv.setUint32(tableOff + 0x08, 0, true);
+  dv.setUint32(tableOff + 0x0c, 0, true);
+  dv.setUint32(tableOff + 0x10, 7, true);
+  dv.setUint32(tableOff + 0x14, 1, true);
+  dv.setUint32(tableOff + 0x18, 0, true);
+
+  const lc = makeLoadConfig({ DynamicValueRelocTableSection: 1, DynamicValueRelocTableOffset: tableOff });
+  const parsed = expectDefined(
+    await parseDynamicRelocationsFromLoadConfig32(
+      new MockFile(bytes, "dynrel-v2-small-header.bin"),
+      makeSingleSection(),
+      rva => rva,
+      0x400000,
+      lc
+    )
+  );
+
+  assert.equal(parsed.version, 2);
+  assert.ok(parsed.warnings?.some(warning => /header|undersized|invalid/i.test(warning)));
+});

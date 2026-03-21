@@ -89,6 +89,22 @@ void test("parseBoundImports extracts bound import names", async () => {
   assert.equal(entry.TimeDateStamp, 0x01020304);
 });
 
+void test("parseBoundImports preserves a declared directory smaller than one descriptor with a warning", async () => {
+  const directoryOffset = 0x20;
+  const bytes = new Uint8Array(64).fill(0);
+
+  const result = await parseBoundImports(
+    new MockFile(bytes, "bound-imports-too-small.bin"),
+    [{ name: "BOUND_IMPORT", rva: directoryOffset, size: IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE - 1 }],
+    value => value,
+    () => {}
+  );
+
+  assert.ok(result);
+  assert.deepEqual(result.entries, []);
+  assert.ok(result.warning && /bound import|descriptor|truncated|8-byte/i.test(result.warning));
+});
+
 void test("parseBoundImports stops on truncated descriptor", async () => {
   const base = 16;
   const bytes = new Uint8Array(18).fill(0); // less than one full descriptor

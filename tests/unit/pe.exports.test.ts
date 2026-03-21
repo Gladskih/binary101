@@ -57,6 +57,15 @@ void test("parseExportDirectory extracts names and forwarders", async () => {
   assert.equal(expectDefined(result.entries[1]).name, "FuncB");
 });
 
+void test("parseExportDirectory preserves a declared export directory smaller than the fixed header", async () => {
+  const bytes = new Uint8Array(64).fill(0);
+  const result = await parseExportFixture(bytes, { rva: 0x10, size: IMAGE_EXPORT_DIRECTORY_SIZE - 1 });
+
+  assert.ok(result);
+  assert.equal(result.entries.length, 0);
+  assert.ok(result.issues.some(issue => /export|truncated|40/i.test(issue)));
+});
+
 void test("parseExportDirectory stops at available function table size", async () => {
   const bytes = new Uint8Array(128).fill(0);
   const dv = new DataView(bytes.buffer);
@@ -280,4 +289,22 @@ void test("parseExportDirectory reports truncated export strings that run to EOF
   const result = expectDefined(await parseExportFixture(bytes, { rva: directoryRva, size: 0x60 }));
   assert.equal(result.dllName, "A");
   assert.ok(result.issues.some(issue => /truncated|string/i.test(issue)));
+});
+
+void test("parseExportDirectory keeps the packed version field unsigned", async () => {
+  const bytes = new Uint8Array(0x80).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const directoryRva = 0x20;
+  const eatRva = 0x60;
+  dv.setUint16(directoryRva + 8, 0xffff, true);
+  dv.setUint16(directoryRva + 10, 0x0001, true);
+  dv.setUint32(directoryRva + 16, 1, true);
+  dv.setUint32(directoryRva + 20, 1, true);
+  dv.setUint32(directoryRva + 28, eatRva, true);
+  dv.setUint32(eatRva, 0x1000, true);
+
+  const result = expectDefined(await parseExportFixture(bytes, { rva: directoryRva, size: 40 }));
+
+  // MajorVersion and MinorVersion are unsigned 16-bit fields in IMAGE_EXPORT_DIRECTORY.
+  assert.equal(result.version, 0xffff0001);
 });

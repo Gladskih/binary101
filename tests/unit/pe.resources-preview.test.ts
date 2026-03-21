@@ -13,7 +13,9 @@ const IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE = 8; // IMAGE_RESOURCE_DIRECTORY_ENTRY
 const RESOURCE_DIRECTORY_SUBDIRECTORY_FLAG = 0x80000000;
 const RESOURCE_DIRECTORY_ID_COUNT_OFFSET = 14;
 const MESSAGE_RESOURCE_ENTRY_FLAG = { ansi: 0, unicode: 1 } as const;
+const UTF16LE_CODE_PAGE = 1200;
 const VERSION_INFO_FIXED_FILE_INFO_SIGNATURE = 0xfeef04bd;
+const VERSION_INFO_FIXED_FILE_INFO_SIZE = 52;
 
 type ResourceDetail = ResourceTree["detail"][number];
 type ResourceLang = ResourceDetail["entries"][number]["langs"][number];
@@ -118,7 +120,7 @@ const buildVersionResource = (): Uint8Array => {
   const view = new DataView(bytes.buffer);
   const key = "VS_VERSION_INFO";
   view.setUint16(0, bytes.length, true);
-  view.setUint16(2, 52, true);
+  view.setUint16(2, VERSION_INFO_FIXED_FILE_INFO_SIZE, true);
   writeUtf16(bytes, 6, key);
   const valueStart = (6 + key.length * 2 + 2 + 3) & ~3;
   view.setUint32(valueStart, VERSION_INFO_FIXED_FILE_INFO_SIGNATURE, true);
@@ -158,9 +160,9 @@ void test("enrichResourcePreviews builds STRING, MESSAGETABLE, and VERSION previ
   const messageTable = fixture.writeData(256, buildMessageTableResource());
   const version = fixture.writeData(512, buildVersionResource());
   const tree = createResourceTree([
-    createDetail("STRING", 1, createLang(stringTable.offset, stringTable.size, 1200, 1031)),
+    createDetail("STRING", 1, createLang(stringTable.offset, stringTable.size, UTF16LE_CODE_PAGE, 1031)),
     createDetail("MESSAGETABLE", 5, createLang(messageTable.offset, messageTable.size, 0, 2057)),
-    createDetail("VERSION", 6, createLang(version.offset, version.size, 1200, 3082))
+    createDetail("VERSION", 6, createLang(version.offset, version.size, UTF16LE_CODE_PAGE, 3082))
   ]);
 
   const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
@@ -207,4 +209,63 @@ void test("enrichResourcePreviews reports resource-directory mapping gaps", asyn
 
   const result = await enrichResourcePreviews(new MockFile(new Uint8Array(directoryBuffer)), tree);
   assert.match((result.issues || []).join(" "), /RT_ICON name directory/i);
+});
+
+void test("enrichResourcePreviews uses the resource code page to decode UTF-16LE HTML without a BOM", async () => {
+  const fixture = createResourcePreviewFixture(256);
+  const htmlBytes = new Uint8Array("<html>".length * 2);
+  writeUtf16(htmlBytes, 0, "<html>");
+  const html = fixture.writeData(64, htmlBytes);
+  const tree = createResourceTree([
+    createDetail("HTML", 7, createLang(html.offset, html.size, UTF16LE_CODE_PAGE, 1033))
+  ]);
+
+  const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
+  const htmlLang = getPreviewLang(result, "HTML");
+
+  assert.strictEqual(htmlLang.previewKind, "html");
+  assert.strictEqual(htmlLang.textPreview, "<html>");
+  assert.strictEqual(htmlLang.textEncoding, "UTF-16LE");
+});
+
+void test("enrichResourcePreviews warns when resource preview reads fewer bytes than the declared data size", async () => {
+  const fixture = createResourcePreviewFixture(96);
+  const manifest = fixture.writeData(64, encoder.encode("<assembly/>"));
+  const tree = createResourceTree([
+    createDetail("MANIFEST", 8, createLang(manifest.offset, manifest.size + 16, 65001, 1033))
+  ]);
+
+  const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
+  const manifestLang = getPreviewLang(result, "MANIFEST");
+
+  assert.strictEqual(manifestLang.previewKind, "text");
+  assert.ok((manifestLang.previewIssues || []).some(issue => /truncated|short|declared/i.test(issue)));
+});
+
+void test("enrichResourcePreviews does not read VS_FIXEDFILEINFO past the declared VS_VERSIONINFO length", async () => {
+  const fixture = createResourcePreviewFixture(256);
+  const versionBytes = new Uint8Array(96).fill(0);
+  const view = new DataView(versionBytes.buffer);
+  const key = "VS_VERSION_INFO";
+  // wLength intentionally ends before a full VS_FIXEDFILEINFO, while wValueLength still advertises sizeof(VS_FIXEDFILEINFO).
+  view.setUint16(0, 40, true);
+  view.setUint16(2, VERSION_INFO_FIXED_FILE_INFO_SIZE, true);
+  writeUtf16(versionBytes, 6, key);
+  const valueStart = (6 + key.length * 2 + 2 + 3) & ~3;
+  view.setUint32(valueStart, VERSION_INFO_FIXED_FILE_INFO_SIGNATURE, true);
+  view.setUint32(valueStart + 4, 0x00010000, true);
+  view.setUint32(valueStart + 8, 0x00090000, true);
+  view.setUint32(valueStart + 12, 0x521e0008, true);
+  view.setUint32(valueStart + 16, 0x00090000, true);
+  view.setUint32(valueStart + 20, 0x521e0008, true);
+  const version = fixture.writeData(128, versionBytes);
+  const tree = createResourceTree([
+    createDetail("VERSION", 9, createLang(version.offset, version.size, UTF16LE_CODE_PAGE, 1033))
+  ]);
+
+  const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
+  const versionLang = getPreviewLang(result, "VERSION");
+
+  assert.notStrictEqual(versionLang.previewKind, "version");
+  assert.ok((versionLang.previewIssues || []).some(issue => /too small|truncated|length/i.test(issue)));
 });

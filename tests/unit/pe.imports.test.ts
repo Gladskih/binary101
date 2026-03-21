@@ -79,6 +79,29 @@ void test("parseImportDirectory warns on unmapped name RVA", async () => {
   assert.ok(warning && /name rva/i.test(warning));
 });
 
+void test("parseImportDirectory warns when an import-by-name thunk points to an unmapped Hint/Name entry", async () => {
+  const bytes = new Uint8Array(128).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const impBase = 0x10;
+  const dllNameRva = 0x40;
+  const thunkRva = 0x60;
+  dv.setUint32(impBase + 0, thunkRva, true);
+  dv.setUint32(impBase + 12, dllNameRva, true);
+  encoder.encodeInto("KERNEL32.dll\0", new Uint8Array(bytes.buffer, dllNameRva));
+  dv.setUint32(thunkRva, 0x200, true);
+  dv.setUint32(thunkRva + 4, 0, true);
+
+  const { entries, warning } = await parseImportDirectory32(
+    new MockFile(bytes),
+    [{ name: "IMPORT", rva: impBase, size: 40 }],
+    value => (value < bytes.length ? value : null),
+    () => {}
+  );
+
+  assert.deepEqual(entries[0]?.functions, [{ name: "<bad RVA>" }]);
+  assert.ok(warning && /hint|name|rva/i.test(warning));
+});
+
 void test("parseImportDirectory warns when a mapped DLL name offset falls past EOF", async () => {
   const bytes = new Uint8Array(128).fill(0);
   const dv = new DataView(bytes.buffer);

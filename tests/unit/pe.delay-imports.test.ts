@@ -59,6 +59,21 @@ void test("parseDelayImports reads delay descriptors, names, and ordinals", asyn
   assert.deepEqual(entry.functions[1], { ordinal: 2 });
 });
 
+void test("parseDelayImports preserves a declared directory smaller than one delay descriptor with a warning", async () => {
+  const bytes = new Uint8Array(64).fill(0);
+
+  const result = await parseDelayImports32(
+    new MockFile(bytes, "delay-imports-too-small.bin"),
+    [{ name: "DELAY_IMPORT", rva: 0x10, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE - 1 }],
+    value => value,
+    () => {}
+  );
+
+  assert.ok(result);
+  assert.deepEqual(result.entries, []);
+  assert.ok(result.warning && /delay import|descriptor|truncated/i.test(result.warning));
+});
+
 void test("parseDelayImports warns when 32-bit thunk table truncates mid-entry", async () => {
   const bytes = new Uint8Array(0x54).fill(0);
   const dv = new DataView(bytes.buffer);

@@ -297,3 +297,10 @@ void test("decodePkcs7 warns when SignedData is missing sections", () => {
   assert.ok(decoded.warnings?.some(w => w.includes("encapContentInfo")));
   assert.ok(decoded.warnings?.some(w => w.includes("SignerInfos")));
 });
+
+void test("decodePkcs7 warns when non-zero bytes trail the DER ContentInfo payload", () => {
+  const wrapper = seq(oid("1.2.840.113549.1.7.2"), ctx0(buildSignedData()));
+  const decoded = decodePkcs7(concat(wrapper, new TextEncoder().encode("ABCD")));
+
+  assert.ok(decoded.warnings?.some(warning => /trailing|extra|padding/i.test(warning)));
+});
