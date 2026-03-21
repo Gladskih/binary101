@@ -5,11 +5,10 @@ import type { AnalyzePeInstructionSetOptions, PeInstructionSetProgress, PeInstru
 import { disassembleControlFlowForInstructionSets } from "../x86/disassembly-control-flow.js";
 import { isIcedX86Module } from "../x86/disassembly-iced.js";
 import { loadIcedX86 } from "#iced-x86-loader";
-const IMAGE_FILE_MACHINE_I386 = 0x014c;
-const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
-const IMAGE_SCN_CNT_CODE = 0x00000020;
-const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
-const HEADER_ENTRYPOINT_SAMPLE_MAX_BYTES = 256;
+const IMAGE_FILE_MACHINE_I386 = 0x014c; // Microsoft PE format: IMAGE_FILE_MACHINE_I386.
+const IMAGE_FILE_MACHINE_AMD64 = 0x8664; // Microsoft PE format: IMAGE_FILE_MACHINE_AMD64.
+const IMAGE_SCN_CNT_CODE = 0x00000020; // Microsoft PE format: IMAGE_SCN_CNT_CODE.
+const IMAGE_SCN_MEM_EXECUTE = 0x20000000; // Microsoft PE format: IMAGE_SCN_MEM_EXECUTE.
 const getMappedSectionSpan = (section: PeSection): number =>
   (section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0);
 const isExecutableSection = (section: PeSection): boolean =>
@@ -25,11 +24,10 @@ const findSectionContainingRva = (sections: PeSection[], rva: number): PeSection
   }
   return null;
 };
-const findBestCodeSection = (sections: PeSection[]): PeSection | null => {
-  const byName = sections.find(section => section.name.toLowerCase() === ".text");
-  if (byName) return byName;
-  return sections.find(isExecutableSection) || sections[0] || null;
-};
+const findBestCodeSection = (sections: PeSection[]): PeSection | null =>
+  sections.find(section => section.name.toLowerCase() === ".text") || sections.find(isExecutableSection)
+  || sections[0]
+  || null;
 const normalizeRvaList = (values: unknown): number[] =>
   uniqueU32s(
     (Array.isArray(values) ? values : []).filter(
@@ -49,9 +47,7 @@ const uniqueU32s = (values: number[]): number[] => {
 };
 const reportProgress = (opts: AnalyzePeInstructionSetOptions, progress: PeInstructionSetProgress): void => {
   if (!opts.onProgress) return;
-  try { opts.onProgress(progress); } catch {
-    // Progress callbacks are UI-facing; analysis should continue even if a consumer throws.
-  }
+  try { opts.onProgress(progress); } catch { /* UI callbacks must not abort analysis. */ }
 };
 const yieldToEventLoop = async (): Promise<void> => new Promise<void>(resolve => setTimeout(resolve, 0));
 export async function analyzePeInstructionSets(
@@ -110,7 +106,7 @@ export async function analyzePeInstructionSets(
   const resolvedEntrypoints: number[] = [];
   const resolvedEntrypointsSet = new Set<number>();
   const firstSectionRva =
-    opts.sections.reduce((min, section) => Math.min(min, section.virtualAddress >>> 0), 0xffffffff);
+    opts.sections.reduce((min, section) => Math.min(min, section.virtualAddress >>> 0), 0xffff_ffff);
   const addEntrypoint = (source: string, rva: number): void => {
     const normalized = rva >>> 0;
     if (resolvedEntrypointsSet.has(normalized)) return;
@@ -176,7 +172,11 @@ export async function analyzePeInstructionSets(
     if (findSectionContainingRva(opts.sections, rva)) return null;
     const start = opts.rvaToOff(rva);
     if (start == null || start < 0 || start >= file.size) return null;
-    const end = Math.min(file.size, start + HEADER_ENTRYPOINT_SAMPLE_MAX_BYTES);
+    // Microsoft PE format: header-resident entrypoints are only mapped through SizeOfHeaders.
+    const headerRvaLimit =
+      Number.isSafeInteger(opts.headerRvaLimit ?? Number.NaN) ? ((opts.headerRvaLimit ?? 0) >>> 0) : 0;
+    const headerMappedBytes = headerRvaLimit > rva ? headerRvaLimit - rva : file.size - start;
+    const end = Math.min(file.size, start + headerMappedBytes);
     if (end <= start) return null;
     return {
       rvaStart: rva >>> 0,

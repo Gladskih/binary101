@@ -2,7 +2,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseDelayImports } from "../../analyzers/pe/bound-delay.js";
+import {
+  parseDelayImports32,
+  parseDelayImports64
+} from "../../analyzers/pe/delay-imports.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
@@ -12,7 +15,6 @@ const IMAGE_THUNK_DATA32_SIZE = 4; // IMAGE_THUNK_DATA32
 const IMAGE_THUNK_DATA64_SIZE = 8; // IMAGE_THUNK_DATA64
 const IMAGE_IMPORT_BY_NAME_HINT_SIZE = 2; // Hint field before the import name string.
 const IMAGE_ORDINAL_FLAG64 = 0x8000000000000000n; // IMAGE_ORDINAL_FLAG64
-const TYPICAL_PE_IMAGE_BASE = 0x400000; // Conventional PE image base used only for RVA/VA interpretation.
 
 const createRvaLayout = (start = IMAGE_DELAYLOAD_DESCRIPTOR_SIZE): ((size: number) => number) => {
   let next = start;
@@ -40,13 +42,11 @@ void test("parseDelayImports warns when Delay Import Name Table RVA cannot be ma
   dv.setUint32(descriptorOffset + 16, intRva, true);
   encoder.encodeInto(`${dllName}\0`, new Uint8Array(bytes.buffer, dllNameRva));
 
-  const result = expectDefined(await parseDelayImports(
+  const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
     value => (value === intRva ? null : value),
-    () => {},
-    false,
-    TYPICAL_PE_IMAGE_BASE // Attributes=0 means the parser should treat descriptor fields as RVAs.
+    () => {}
   ));
 
   assert.ok(result.warning?.toLowerCase().includes("name"));
@@ -76,13 +76,11 @@ void test("parseDelayImports warns when PE32+ name thunks set reserved bits", as
     new Uint8Array(bytes.buffer, hintNameRva + IMAGE_IMPORT_BY_NAME_HINT_SIZE)
   );
 
-  const result = expectDefined(await parseDelayImports(
+  const result = expectDefined(await parseDelayImports64(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
     value => value,
-    () => {},
-    true,
-    TYPICAL_PE_IMAGE_BASE // Attributes=0 means the parser should treat descriptor fields as RVAs.
+    () => {}
   ));
 
   assert.ok(result.warning?.toLowerCase().includes("reserved"));
@@ -108,13 +106,11 @@ void test("parseDelayImports walks the full null-terminated PE32+ thunk array wi
   }
   dv.setBigUint64(intRva + importCount * IMAGE_THUNK_DATA64_SIZE, 0n, true);
 
-  const result = await parseDelayImports(
+  const result = await parseDelayImports64(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: base, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
     value => value,
-    () => {},
-    true,
-    TYPICAL_PE_IMAGE_BASE // Attributes=0 means the parser should treat descriptor fields as RVAs.
+    () => {}
   );
 
   const definedResult = expectDefined(result);
@@ -166,13 +162,11 @@ void test("parseDelayImports stops when later thunk slots no longer map through 
     return null;
   };
 
-  const result = expectDefined(await parseDelayImports(
+  const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
     sparseRvaToOff,
-    () => {},
-    false,
-    TYPICAL_PE_IMAGE_BASE // Attributes=0 means the parser should treat descriptor fields as RVAs.
+    () => {}
   ));
 
   const entry = expectDefined(result.entries[0]);

@@ -2,6 +2,10 @@
 
 import { readAsciiString, collectPrintableRuns } from "../../binary-utils.js";
 import { DD_NAMES } from "./constants.js";
+import {
+  parseOptionalHeaderTail32,
+  parseOptionalHeaderTail64
+} from "./optional-header-layouts.js";
 import { parseRichHeaderFromDosStub } from "./rich-header.js";
 import type { PeCoffHeader, PeDataDirectory, PeDosHeader, PeOptionalHeader } from "./types.js";
 
@@ -129,103 +133,23 @@ export async function parseOptionalHeaderAndDirectories(
   position += 4;
   const BaseOfCodeVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
   position += 4;
-  let BaseOfData: number | undefined;
-  if (is32) {
-    BaseOfData = read(4, () => optionalHeaderView.getUint32(position, true), 0);
-    position += 4;
-  }
-  const ImageBase = read(
-    isPlus ? 8 : 4,
-    () => isPlus
-      ? Number(optionalHeaderView.getBigUint64(position, true))
-      : optionalHeaderView.getUint32(position, true),
-    0
-  );
-  position += isPlus ? 8 : 4;
-  const SectionAlignmentVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
-  position += 4;
-  const FileAlignmentVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
-  position += 4;
-  const osVersion = read<[number, number]>(4, () => [
-    optionalHeaderView.getUint16(position, true),
-    optionalHeaderView.getUint16(position + 2, true)
-  ], [0, 0]);
-  const [OSVersionMajor, OSVersionMinor] = osVersion;
-  position += 4;
-  const imageVersion = read<[number, number]>(4, () => [
-    optionalHeaderView.getUint16(position, true),
-    optionalHeaderView.getUint16(position + 2, true)
-  ], [0, 0]);
-  const [ImageVersionMajor, ImageVersionMinor] = imageVersion;
-  position += 4;
-  const subsystemVersion = read<[number, number]>(4, () => [
-    optionalHeaderView.getUint16(position, true),
-    optionalHeaderView.getUint16(position + 2, true)
-  ], [0, 0]);
-  const [SubsystemVersionMajor, SubsystemVersionMinor] = subsystemVersion;
-  position += 4;
-  const Win32VersionValueVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
-  position += 4;
-  const SizeOfImageVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
-  position += 4;
-  const SizeOfHeadersVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
-  position += 4;
-  const CheckSumVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
-  position += 4;
-  const SubsystemVal = read(2, () => optionalHeaderView.getUint16(position, true), 0);
-  position += 2;
-  const DllCharacteristicsVal = read(2, () => optionalHeaderView.getUint16(position, true), 0);
-  position += 2;
-  const SizeOfStackReserve = read(
-    isPlus ? 8 : 4,
-    () => isPlus
-      ? Number(optionalHeaderView.getBigUint64(position, true))
-      : optionalHeaderView.getUint32(position, true),
-    0
-  );
-  position += isPlus ? 8 : 4;
-  const SizeOfStackCommit = read(
-    isPlus ? 8 : 4,
-    () => isPlus
-      ? Number(optionalHeaderView.getBigUint64(position, true))
-      : optionalHeaderView.getUint32(position, true),
-    0
-  );
-  position += isPlus ? 8 : 4;
-  const SizeOfHeapReserve = read(
-    isPlus ? 8 : 4,
-    () => isPlus
-      ? Number(optionalHeaderView.getBigUint64(position, true))
-      : optionalHeaderView.getUint32(position, true),
-    0
-  );
-  position += isPlus ? 8 : 4;
-  const SizeOfHeapCommit = read(
-    isPlus ? 8 : 4,
-    () => isPlus
-      ? Number(optionalHeaderView.getBigUint64(position, true))
-      : optionalHeaderView.getUint32(position, true),
-    0
-  );
-  position += isPlus ? 8 : 4;
-  const LoaderFlagsVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
-  position += 4;
-  const NumberOfRvaAndSizesVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
-  position += 4;
-  const ddStartRel = position;
+  const tail = isPlus
+    ? parseOptionalHeaderTail64(optionalHeaderView, position)
+    : parseOptionalHeaderTail32(optionalHeaderView, position);
+  const ddStartRel = tail.nextPosition;
   const ddCount = Math.min(
     16,
-    NumberOfRvaAndSizesVal,
-    Math.max(0, Math.floor((optionalHeaderView.byteLength - position) / 8))
+    tail.NumberOfRvaAndSizes,
+    Math.max(0, Math.floor((optionalHeaderView.byteLength - ddStartRel) / 8))
   );
   const dataDirs: PeDataDirectory[] = [];
   for (let index = 0; index < ddCount; index++) {
-    const entryOffset = position + index * 8;
+    const entryOffset = ddStartRel + index * 8;
     const rva = optionalHeaderView.getUint32(entryOffset, true);
     const size = optionalHeaderView.getUint32(entryOffset + 4, true);
     dataDirs.push({ index, name: DD_NAMES[index] || "", rva, size });
   }
-  const consumedSize = Math.min(optionalHeaderView.byteLength, position + ddCount * 8);
+  const consumedSize = Math.min(optionalHeaderView.byteLength, ddStartRel + ddCount * 8);
   const optSize = Math.max(consumedSize, declaredSize);
   const opt: PeOptionalHeader = {
     Magic,
@@ -238,28 +162,28 @@ export async function parseOptionalHeaderAndDirectories(
     SizeOfUninitializedData: SizeOfUninitializedDataVal,
     AddressOfEntryPoint: AddressOfEntryPointVal,
     BaseOfCode: BaseOfCodeVal,
-    ...(BaseOfData !== undefined ? { BaseOfData } : {}),
-    ImageBase,
-    SectionAlignment: SectionAlignmentVal,
-    FileAlignment: FileAlignmentVal,
-    OSVersionMajor,
-    OSVersionMinor,
-    ImageVersionMajor,
-    ImageVersionMinor,
-    SubsystemVersionMajor,
-    SubsystemVersionMinor,
-    Win32VersionValue: Win32VersionValueVal,
-    SizeOfImage: SizeOfImageVal,
-    SizeOfHeaders: SizeOfHeadersVal,
-    CheckSum: CheckSumVal,
-    Subsystem: SubsystemVal,
-    DllCharacteristics: DllCharacteristicsVal,
-    SizeOfStackReserve: SizeOfStackReserve as number,
-    SizeOfStackCommit: SizeOfStackCommit as number,
-    SizeOfHeapReserve: SizeOfHeapReserve as number,
-    SizeOfHeapCommit: SizeOfHeapCommit as number,
-    LoaderFlags: LoaderFlagsVal,
-    NumberOfRvaAndSizes: NumberOfRvaAndSizesVal
+    ...(tail.BaseOfData !== undefined ? { BaseOfData: tail.BaseOfData } : {}),
+    ImageBase: tail.ImageBase,
+    SectionAlignment: tail.SectionAlignment,
+    FileAlignment: tail.FileAlignment,
+    OSVersionMajor: tail.OSVersionMajor,
+    OSVersionMinor: tail.OSVersionMinor,
+    ImageVersionMajor: tail.ImageVersionMajor,
+    ImageVersionMinor: tail.ImageVersionMinor,
+    SubsystemVersionMajor: tail.SubsystemVersionMajor,
+    SubsystemVersionMinor: tail.SubsystemVersionMinor,
+    Win32VersionValue: tail.Win32VersionValue,
+    SizeOfImage: tail.SizeOfImage,
+    SizeOfHeaders: tail.SizeOfHeaders,
+    CheckSum: tail.CheckSum,
+    Subsystem: tail.Subsystem,
+    DllCharacteristics: tail.DllCharacteristics,
+    SizeOfStackReserve: tail.SizeOfStackReserve,
+    SizeOfStackCommit: tail.SizeOfStackCommit,
+    SizeOfHeapReserve: tail.SizeOfHeapReserve,
+    SizeOfHeapCommit: tail.SizeOfHeapCommit,
+    LoaderFlags: tail.LoaderFlags,
+    NumberOfRvaAndSizes: tail.NumberOfRvaAndSizes
   };
   return { optOff: optionalHeaderOffset, optSize, ddStartRel, ddCount, dataDirs, opt };
 }

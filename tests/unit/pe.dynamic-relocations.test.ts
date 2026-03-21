@@ -2,7 +2,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseDynamicRelocationsFromLoadConfig } from "../../analyzers/pe/dynamic-relocations.js";
+import {
+  parseDynamicRelocationsFromLoadConfig32,
+  parseDynamicRelocationsFromLoadConfig64
+} from "../../analyzers/pe/dynamic-relocations.js";
 import type { PeLoadConfig } from "../../analyzers/pe/load-config.js";
 import type { PeSection } from "../../analyzers/pe/types.js";
 import { MockFile } from "../helpers/mock-file.js";
@@ -78,25 +81,25 @@ void test("parseDynamicRelocationsFromLoadConfig parses a V1 table referenced by
   const bytes = new Uint8Array(0x200).fill(0);
   const dv = new DataView(bytes.buffer);
   dv.setUint32(tableOff + 0x00, 1, true); // Version
-  dv.setUint32(tableOff + 0x04, 0x50, true); // Size (bytes after header)
-  dv.setBigUint64(tableOff + 0x08, 7n, true); // Symbol/type
-  dv.setUint32(tableOff + 0x10, 0x44, true); // BaseRelocSize
-  bytes.fill(0xaa, tableOff + 0x14, tableOff + 0x14 + 0x44);
+  // Dynamic relocation V1 for PE32 uses 4-byte Symbol + 4-byte BaseRelocSize.
+  dv.setUint32(tableOff + 0x04, 0x4c, true); // Size (bytes after header)
+  dv.setUint32(tableOff + 0x08, 7, true); // Symbol/type
+  dv.setUint32(tableOff + 0x0c, 0x44, true); // BaseRelocSize
+  bytes.fill(0xaa, tableOff + 0x10, tableOff + 0x10 + 0x44);
 
   const lc = makeLoadConfig({ DynamicValueRelocTableSection: 1, DynamicValueRelocTableOffset: tableOff });
   const parsed = expectDefined(
-    await parseDynamicRelocationsFromLoadConfig(
+    await parseDynamicRelocationsFromLoadConfig32(
       new MockFile(bytes, "dynrel.bin"),
       makeSingleSection(),
       rva => rva,
-      0x140000000,
-      true,
+      0x400000,
       lc
     )
   );
 
   assert.equal(parsed.version, 1);
-  assert.equal(parsed.dataSize, 0x50);
+  assert.equal(parsed.dataSize, 0x4c);
   assert.equal(parsed.entries.length, 1);
   const entry = expectDefined(parsed.entries[0]);
   assert.equal(entry.kind, "v1");
@@ -118,12 +121,11 @@ void test("parseDynamicRelocationsFromLoadConfig warns when the declared V1 payl
 
   const lc = makeLoadConfig({ DynamicValueRelocTableSection: 1, DynamicValueRelocTableOffset: tableOff });
   const parsed = expectDefined(
-    await parseDynamicRelocationsFromLoadConfig(
+    await parseDynamicRelocationsFromLoadConfig64(
       new MockFile(bytes, "dynrel-trunc.bin"),
       makeSingleSection(),
       rva => rva,
       0x140000000,
-      true,
       lc
     )
   );
@@ -145,12 +147,11 @@ void test("parseDynamicRelocationsFromLoadConfig preserves 64-bit V1 symbols for
 
   const lc = makeLoadConfig({ DynamicValueRelocTableSection: 1, DynamicValueRelocTableOffset: tableOff });
   const parsed = expectDefined(
-    await parseDynamicRelocationsFromLoadConfig(
+    await parseDynamicRelocationsFromLoadConfig64(
       new MockFile(bytes, "dynrel-v1-pe32plus.bin"),
       makeSingleSection(),
       rva => rva,
       0x140000000,
-      true,
       lc
     )
   );
@@ -179,12 +180,11 @@ void test("parseDynamicRelocationsFromLoadConfig preserves 64-bit V2 symbols for
 
   const lc = makeLoadConfig({ DynamicValueRelocTableSection: 1, DynamicValueRelocTableOffset: tableOff });
   const parsed = expectDefined(
-    await parseDynamicRelocationsFromLoadConfig(
+    await parseDynamicRelocationsFromLoadConfig64(
       new MockFile(bytes, "dynrel-v2-pe32plus.bin"),
       makeSingleSection(),
       rva => rva,
       0x140000000,
-      true,
       lc
     )
   );

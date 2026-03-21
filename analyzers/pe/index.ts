@@ -1,9 +1,13 @@
 "use strict";
-
 import { parsePeHeaders } from "./core.js";
 import { verifyAuthenticodeFileDigest } from "./authenticode-verify.js";
 import { parseDebugDirectory } from "./debug-directory.js";
-import { parseLoadConfigDirectory, type PeLoadConfig, type PeLoadConfigTables } from "./load-config.js";
+import {
+  parseLoadConfigDirectory32,
+  parseLoadConfigDirectory64,
+  type PeLoadConfig,
+  type PeLoadConfigTables
+} from "./load-config.js";
 import {
   readGuardAddressTakenIatEntryTableRvas,
   readGuardCFFunctionTableRvas,
@@ -12,30 +16,29 @@ import {
   readSafeSehHandlerTableRvas
 } from "./load-config-tables.js";
 import { collectLoadConfigWarnings } from "./load-config-warnings.js";
-import { parseImportDirectory, type PeImportEntry } from "./imports.js";
+import { parseImportDirectory32, parseImportDirectory64, type PeImportEntry } from "./imports.js";
 import { parseExportDirectory } from "./exports.js";
-import { parseTlsDirectory } from "./tls.js";
+import { parseTlsDirectory32, parseTlsDirectory64 } from "./tls.js";
 import { parseResources } from "./resources.js";
 import { parseClrDirectory, type PeClrHeader } from "./clr.js";
 import { parseSecurityDirectory, type ParsedSecurityDirectory } from "./security.js";
 import { parseBaseRelocations } from "./reloc.js";
 import { parseExceptionDirectory } from "./exception.js";
-import { parseBoundImports, parseDelayImports } from "./bound-delay.js";
-import { parseDynamicRelocationsFromLoadConfig } from "./dynamic-relocations.js";
+import { parseBoundImports } from "./bound-imports.js";
+import { parseDelayImports32, parseDelayImports64 } from "./delay-imports.js";
+import {
+  parseDynamicRelocationsFromLoadConfig32,
+  parseDynamicRelocationsFromLoadConfig64
+} from "./dynamic-relocations.js";
+import { parseIatDirectory, type PeIatDirectory } from "./iat-directory.js";
 import type { PeInstructionSetReport } from "./disassembly.js";
 import type {
-  AddCoverageRegion,
   PeCore,
   PeCoverageEntry,
   PeDataDirectory,
   PeTlsDirectory,
   RvaToOffset
 } from "./types.js";
-
-interface PeIatDirectory {
-  rva: number;
-  size: number;
-}
 
 const appendUniqueWarnings = (
   existing: string[] | undefined,
@@ -71,7 +74,7 @@ export interface PeParseResult {
   reloc: Awaited<ReturnType<typeof parseBaseRelocations>>;
   exception: Awaited<ReturnType<typeof parseExceptionDirectory>>;
   boundImports: Awaited<ReturnType<typeof parseBoundImports>>;
-  delayImports: Awaited<ReturnType<typeof parseDelayImports>>;
+  delayImports: Awaited<ReturnType<typeof parseDelayImports32>>;
   clr: PeClrHeader | null;
   security: ParsedSecurityDirectory | null;
   iat: PeIatDirectory | null;
@@ -82,19 +85,6 @@ export interface PeParseResult {
   coverage: PeCoverageEntry[];
   hasCert: boolean;
   disassembly?: PeInstructionSetReport;
-}
-
-function parseIatDirectory(
-  dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion
-): PeIatDirectory | null {
-  const dir = dataDirs.find(d => d.name === "IAT");
-  if (!dir?.rva || !dir.size) return null;
-  const off = rvaToOff(dir.rva);
-  if (off == null) return null;
-  addCoverageRegion("IAT", off, dir.size);
-  return { rva: dir.rva, size: dir.size };
 }
 
 export async function parsePe(file: File): Promise<PeParseResult | null> {
@@ -115,11 +105,30 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     imageSizeMismatch
   } = core;
 
-  const { isPlus, ImageBase } = opt;
+  const { ImageBase } = opt;
+  const peVariant = opt.isPlus
+    ? {
+        parseLoadConfigDirectory: parseLoadConfigDirectory64,
+        parseImportDirectory: parseImportDirectory64,
+        parseTlsDirectory: parseTlsDirectory64,
+        parseDelayImports: parseDelayImports64,
+        parseDynamicRelocationsFromLoadConfig: parseDynamicRelocationsFromLoadConfig64,
+        readSafeSehHandlerTableRvas: null
+      }
+    : {
+        parseLoadConfigDirectory: parseLoadConfigDirectory32,
+        parseImportDirectory: parseImportDirectory32,
+        parseTlsDirectory: parseTlsDirectory32,
+        parseDelayImports: parseDelayImports32,
+        parseDynamicRelocationsFromLoadConfig: parseDynamicRelocationsFromLoadConfig32,
+        readSafeSehHandlerTableRvas:
+          // Microsoft PE format: SafeSEH applies only to IMAGE_FILE_MACHINE_I386 PE32 images.
+          coff.Machine === 0x014c ? readSafeSehHandlerTableRvas : null
+      };
 
   const { entry: rsds, warning: debugWarning } =
     (await parseDebugDirectory(file, dataDirs, rvaToOff, addCoverageRegion)) || {};
-  const loadcfg = await parseLoadConfigDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus);
+  const loadcfg = await peVariant.parseLoadConfigDirectory(file, dataDirs, rvaToOff, addCoverageRegion);
   if (loadcfg) {
     const warnings = collectLoadConfigWarnings(file.size, rvaToOff, ImageBase, opt.SizeOfImage, loadcfg);
     mergeLoadConfigWarnings(loadcfg, warnings);
@@ -191,13 +200,12 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     }
 
     if (
-      !isPlus &&
-      coff.Machine === 0x014c &&
+      peVariant.readSafeSehHandlerTableRvas &&
       Number.isSafeInteger(loadcfg.SEHandlerCount) &&
       loadcfg.SEHandlerCount > 0
     ) {
       try {
-        tables.safeSehHandlerRvas = await readSafeSehHandlerTableRvas(
+        tables.safeSehHandlerRvas = await peVariant.readSafeSehHandlerTableRvas(
           file,
           rvaToOff,
           ImageBase,
@@ -214,12 +222,11 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     }
 
     try {
-      loadcfg.dynamicRelocations = await parseDynamicRelocationsFromLoadConfig(
+      loadcfg.dynamicRelocations = await peVariant.parseDynamicRelocationsFromLoadConfig(
         file,
         sections,
         rvaToOff,
         ImageBase,
-        isPlus,
         loadcfg
       );
     } catch (error) {
@@ -227,14 +234,20 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
       loadcfg.dynamicRelocations = null;
     }
   }
-  const importResult = await parseImportDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus);
+  const importResult = await peVariant.parseImportDirectory(file, dataDirs, rvaToOff, addCoverageRegion);
   const exportsInfo = await parseExportDirectory(file, dataDirs, rvaToOff, addCoverageRegion);
-  const tls = await parseTlsDirectory(file, dataDirs, rvaToOff, addCoverageRegion, isPlus, ImageBase);
+  const tls = await peVariant.parseTlsDirectory(
+    file,
+    dataDirs,
+    rvaToOff,
+    addCoverageRegion,
+    ImageBase
+  );
   const resources = await parseResources(file, dataDirs, rvaToOff, addCoverageRegion);
   const reloc = await parseBaseRelocations(file, dataDirs, rvaToOff, addCoverageRegion);
   const exception = await parseExceptionDirectory(file, dataDirs, rvaToOff, addCoverageRegion, coff.Machine);
   const boundImports = await parseBoundImports(file, dataDirs, rvaToOff, addCoverageRegion);
-  const delayImports = await parseDelayImports(file, dataDirs, rvaToOff, addCoverageRegion, isPlus, ImageBase);
+  const delayImports = await peVariant.parseDelayImports(file, dataDirs, rvaToOff, addCoverageRegion);
   const clr = await parseClrDirectory(file, dataDirs, rvaToOff, addCoverageRegion);
   let security = await parseSecurityDirectory(file, dataDirs, addCoverageRegion);
   if (security?.certs?.length) {

@@ -2,7 +2,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseLoadConfigDirectory } from "../../analyzers/pe/load-config.js";
+import {
+  parseLoadConfigDirectory32,
+  parseLoadConfigDirectory64
+} from "../../analyzers/pe/load-config.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
@@ -46,12 +49,11 @@ void test("parseLoadConfigDirectory uses official field offsets (32-bit)", async
   dv.setUint32(lcRva + 0xc0, 0x01020304, true); // UmaFunctionPointers
 
   const lc = expectDefined(
-    await parseLoadConfigDirectory(
+    await parseLoadConfigDirectory32(
       new MockFile(bytes, "loadcfg32.bin"),
       [{ name: "LOAD_CONFIG", rva: lcRva, size: 0xc4 }],
       value => value,
-      () => {},
-      false
+      () => {}
     )
   );
 
@@ -95,12 +97,11 @@ void test("parseLoadConfigDirectory uses official field offsets (64-bit)", async
   dv.setBigUint64(0x140, 0x0102030405060708n, true); // UmaFunctionPointers
 
   const lc = expectDefined(
-    await parseLoadConfigDirectory(
+    await parseLoadConfigDirectory64(
       new MockFile(bytes, "loadcfg64.bin"),
       [{ name: "LOAD_CONFIG", rva: 0x10, size: 0x148 }],
       value => (value === 0x10 ? 0 : value),
-      () => {},
-      true
+      () => {}
     )
   );
 
@@ -130,12 +131,11 @@ void test("parseLoadConfigDirectory reads 32-bit and 64-bit fields", async () =>
   dv.setUint32(lcRva + 0x54, 2, true);
   dv.setUint32(lcRva + 0x58, 0x1111, true);
 
-  const lc = expectDefined(await parseLoadConfigDirectory(
+  const lc = expectDefined(await parseLoadConfigDirectory32(
     new MockFile(bytes, "loadcfg.bin"),
     [{ name: "LOAD_CONFIG", rva: lcRva, size: 0x5c }],
     value => value,
-    () => {},
-    false
+    () => {}
   ));
   assert.equal(lc.SecurityCookie, 0xcafebabe);
   assert.equal(lc.SEHandlerCount, 3);
@@ -155,12 +155,11 @@ void test("parseLoadConfigDirectory reads 32-bit and 64-bit fields", async () =>
   dv64.setBigUint64(0x88, 6n, true);
   dv64.setUint32(0x90, 0xbeef, true);
 
-  const lc64 = expectDefined(await parseLoadConfigDirectory(
+  const lc64 = expectDefined(await parseLoadConfigDirectory64(
     new MockFile(bytes64),
     [{ name: "LOAD_CONFIG", rva: 0x10, size: 0x140 }],
     value => (value === 0x10 ? 0 : value),
-    () => {},
-    true
+    () => {}
   ));
   assert.equal(lc64.SEHandlerCount, 5);
   assert.equal(lc64.GuardCFFunctionCount, 6);
@@ -178,12 +177,11 @@ void test("parseLoadConfigDirectory preserves representable 64-bit values instea
   dv.setBigUint64(0x140, exactJsU64, true); // UmaFunctionPointers
 
   const lc = expectDefined(
-    await parseLoadConfigDirectory(
+    await parseLoadConfigDirectory64(
       new MockFile(bytes, "loadcfg64-exact-u64.bin"),
       [{ name: "LOAD_CONFIG", rva: 0x10, size: 0x148 }],
       value => (value === 0x10 ? 0 : value),
-      () => {},
-      true
+      () => {}
     )
   );
 

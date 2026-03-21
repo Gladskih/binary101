@@ -1,7 +1,15 @@
 "use strict";
 
+import {
+  parseDynamicRelocationEntriesV132,
+  parseDynamicRelocationEntriesV164,
+  parseDynamicRelocationEntriesV232,
+  parseDynamicRelocationEntriesV264
+} from "./dynamic-relocation-entry-parsers.js";
 import { readLoadConfigPointerRva, type PeLoadConfig } from "./load-config.js";
 import type { PeSection, RvaToOffset } from "./types.js";
+
+const DYNAMIC_RELOCATION_TABLE_HEADER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 2;
 
 export type PeDynamicRelocationEntry =
   | { kind: "v1"; symbol: number; baseRelocSize: number; availableBytes: number }
@@ -22,35 +30,29 @@ export type PeDynamicRelocations = {
   warnings?: string[];
 };
 
-const toSafeU64 = (value: bigint): number => {
-  return Number(value);
-};
-
-const readU64Maybe = (view: DataView, offset: number): number => {
-  if (view.byteLength < offset + 8) return 0;
-  return toSafeU64(view.getBigUint64(offset, true));
-};
-
 const resolveDynamicRelocTableOffset = (
   fileSize: number,
   sections: PeSection[],
   rvaToOff: RvaToOffset,
   imageBase: number,
-  lc: PeLoadConfig,
+  loadConfig: PeLoadConfig,
   warnings: string[]
 ): number | null => {
   const pointerRva =
-    lc.DynamicValueRelocTable && Number.isSafeInteger(imageBase)
-      ? readLoadConfigPointerRva(imageBase, lc.DynamicValueRelocTable)
+    loadConfig.DynamicValueRelocTable && Number.isSafeInteger(imageBase)
+      ? readLoadConfigPointerRva(imageBase, loadConfig.DynamicValueRelocTable)
       : null;
   const pointerOff = pointerRva != null ? rvaToOff(pointerRva) : null;
 
-  const sectionIndex = Number.isSafeInteger(lc.DynamicValueRelocTableSection) ? lc.DynamicValueRelocTableSection : 0;
-  const sectionOffset = Number.isSafeInteger(lc.DynamicValueRelocTableOffset) ? lc.DynamicValueRelocTableOffset : 0;
-  const hasSectionRef = sectionIndex > 0;
+  const sectionIndex = Number.isSafeInteger(loadConfig.DynamicValueRelocTableSection)
+    ? loadConfig.DynamicValueRelocTableSection
+    : 0;
+  const sectionOffset = Number.isSafeInteger(loadConfig.DynamicValueRelocTableOffset)
+    ? loadConfig.DynamicValueRelocTableOffset
+    : 0;
 
   let sectionOff: number | null = null;
-  if (hasSectionRef) {
+  if (sectionIndex > 0) {
     if (sectionIndex > sections.length) {
       warnings.push(
         `DynamicRelocations: DynamicValueRelocTableSection=${sectionIndex} is out of range (sections=${sections.length}).`
@@ -62,17 +64,15 @@ const resolveDynamicRelocTableOffset = (
           `DynamicRelocations: DynamicValueRelocTableSection=${sectionIndex} does not map to a section header.`
         );
       } else {
-        const rva = (section.virtualAddress + sectionOffset) >>> 0;
-        sectionOff = rvaToOff(rva);
+        sectionOff = rvaToOff((section.virtualAddress + sectionOffset) >>> 0);
         if (sectionOff == null && Number.isSafeInteger(section.pointerToRawData)) {
-          const rawOff = (section.pointerToRawData + sectionOffset) >>> 0;
-          sectionOff = rawOff;
+          sectionOff = (section.pointerToRawData + sectionOffset) >>> 0;
         }
       }
     }
   }
 
-  const choose = (candidate: number | null, source: string): number | null => {
+  const chooseInFileOffset = (candidate: number | null, source: string): number | null => {
     if (candidate == null) return null;
     if (!Number.isSafeInteger(candidate) || candidate < 0 || candidate >= fileSize) {
       warnings.push(`DynamicRelocations: ${source} offset 0x${(candidate >>> 0).toString(16)} is not in file.`);
@@ -81,8 +81,8 @@ const resolveDynamicRelocTableOffset = (
     return candidate >>> 0;
   };
 
-  const pointerCandidate = choose(pointerOff, "DynamicValueRelocTable");
-  const sectionCandidate = choose(sectionOff, "DynamicValueRelocTableSection/Offset");
+  const pointerCandidate = chooseInFileOffset(pointerOff, "DynamicValueRelocTable");
+  const sectionCandidate = chooseInFileOffset(sectionOff, "DynamicValueRelocTableSection/Offset");
 
   if (pointerCandidate != null && sectionCandidate != null && pointerCandidate !== sectionCandidate) {
     warnings.push(
@@ -93,102 +93,75 @@ const resolveDynamicRelocTableOffset = (
   return pointerCandidate ?? sectionCandidate;
 };
 
-export async function parseDynamicRelocationsFromLoadConfig(
+const readDynamicRelocationTable = async (
+  file: File,
+  tableOffset: number,
+  warnings: string[]
+): Promise<{ version: number; dataSize: number; dataEnd: number; view: DataView }> => {
+  if (file.size - tableOffset < DYNAMIC_RELOCATION_TABLE_HEADER_SIZE) {
+    warnings.push("DynamicRelocations: truncated header.");
+    return { version: 0, dataSize: 0, dataEnd: 0, view: new DataView(new ArrayBuffer(0)) };
+  }
+
+  const header = new DataView(
+    await file.slice(tableOffset, tableOffset + DYNAMIC_RELOCATION_TABLE_HEADER_SIZE).arrayBuffer()
+  );
+  const version = header.getUint32(0, true);
+  const dataSize = header.getUint32(Uint32Array.BYTES_PER_ELEMENT, true);
+  const readableSize = Math.min(
+    DYNAMIC_RELOCATION_TABLE_HEADER_SIZE + dataSize,
+    Math.max(0, file.size - tableOffset)
+  );
+  const view = new DataView(await file.slice(tableOffset, tableOffset + readableSize).arrayBuffer());
+  const dataEnd = Math.min(view.byteLength, DYNAMIC_RELOCATION_TABLE_HEADER_SIZE + dataSize);
+
+  if (dataEnd < DYNAMIC_RELOCATION_TABLE_HEADER_SIZE + dataSize) {
+    warnings.push(`DynamicRelocations: declared size 0x${dataSize.toString(16)} is truncated by EOF.`);
+  }
+
+  return { version, dataSize, dataEnd, view };
+};
+
+const parseDynamicRelocationsWithVariant = async (
   file: File,
   sections: PeSection[],
   rvaToOff: RvaToOffset,
   imageBase: number,
-  isPlus: boolean,
-  lc: PeLoadConfig
-): Promise<PeDynamicRelocations | null> {
+  loadConfig: PeLoadConfig,
+  parseVersion1: (
+    view: DataView,
+    dataEnd: number,
+    warnings: string[]
+  ) => PeDynamicRelocationEntry[],
+  parseVersion2: (
+    view: DataView,
+    dataEnd: number,
+    warnings: string[]
+  ) => PeDynamicRelocationEntry[]
+): Promise<PeDynamicRelocations | null> => {
   const warnings: string[] = [];
-  const off = resolveDynamicRelocTableOffset(file.size, sections, rvaToOff, imageBase, lc, warnings);
-  if (off == null) return null;
-  if (file.size - off < 8) {
-    return { version: 0, dataSize: 0, entries: [], warnings: [...warnings, "DynamicRelocations: truncated header."] };
-  }
+  const tableOffset = resolveDynamicRelocTableOffset(
+    file.size,
+    sections,
+    rvaToOff,
+    imageBase,
+    loadConfig,
+    warnings
+  );
+  if (tableOffset == null) return null;
 
-  const header = new DataView(await file.slice(off, off + 8).arrayBuffer());
-  const version = header.getUint32(0, true);
-  const dataSize = header.getUint32(4, true);
+  const { version, dataSize, dataEnd, view } = await readDynamicRelocationTable(
+    file,
+    tableOffset,
+    warnings
+  );
 
-  const availableBytes = Math.max(0, file.size - off);
-  const totalSize = 8 + dataSize;
-  const toRead = Math.min(totalSize, availableBytes);
-  const view = new DataView(await file.slice(off, off + toRead).arrayBuffer());
-
-  const end = view.byteLength;
-  const entries: PeDynamicRelocationEntry[] = [];
-
-  const warn = (message: string): void => {
-    warnings.push(message);
-  };
-
-  let cursor = 8;
-  const dataEnd = Math.min(end, 8 + dataSize);
-  if (dataEnd < 8 + dataSize) {
-    warn(`DynamicRelocations: declared size 0x${dataSize.toString(16)} is truncated by EOF.`);
-  }
-
-  if (version === 1) {
-    const symbolBytes = isPlus ? 8 : 4;
-    const headerBytes = symbolBytes + 4;
-    while (cursor + headerBytes <= dataEnd) {
-      const symbol = isPlus ? readU64Maybe(view, cursor) : view.getUint32(cursor, true);
-      const baseRelocSize = view.getUint32(cursor + symbolBytes, true);
-      const relocStart = cursor + headerBytes;
-      const available = Math.max(0, dataEnd - relocStart);
-      const take = Math.min(baseRelocSize, available);
-      entries.push({ kind: "v1", symbol, baseRelocSize, availableBytes: take });
-      cursor = relocStart + take;
-      if (take < baseRelocSize) {
-        warn(
-          `DynamicRelocations: V1 entry with symbol=${symbol} has BaseRelocSize=0x${baseRelocSize.toString(16)} but only 0x${take.toString(16)} bytes are available.`
-        );
-        break;
-      }
-    }
-    if (cursor < dataEnd) {
-      warn(`DynamicRelocations: trailing ${dataEnd - cursor} bytes after last parsed V1 entry header/data.`);
-    }
-  } else if (version === 2) {
-    const minHeaderBytes = isPlus ? 24 : 20;
-    while (cursor + minHeaderBytes <= dataEnd) {
-      const headerSize = view.getUint32(cursor, true);
-      const fixupInfoSize = view.getUint32(cursor + 4, true);
-      const symbolOff = cursor + 8;
-      const symbol = isPlus ? readU64Maybe(view, symbolOff) : view.getUint32(symbolOff, true);
-      const afterSymbol = symbolOff + (isPlus ? 8 : 4);
-      const symbolGroup = view.getUint32(afterSymbol, true);
-      const flags = view.getUint32(afterSymbol + 4, true);
-
-      const headerSkip = Math.max(minHeaderBytes, headerSize >>> 0);
-      const fixupStart = cursor + headerSkip;
-      const available = Math.max(0, dataEnd - fixupStart);
-      const take = Math.min(fixupInfoSize, available);
-      entries.push({
-        kind: "v2",
-        headerSize: headerSize >>> 0,
-        fixupInfoSize,
-        symbol,
-        symbolGroup: symbolGroup >>> 0,
-        flags: flags >>> 0,
-        availableBytes: take
-      });
-      cursor = fixupStart + take;
-      if (take < fixupInfoSize) {
-        warn(
-          `DynamicRelocations: V2 entry with symbol=${symbol} has FixupInfoSize=0x${fixupInfoSize.toString(16)} but only 0x${take.toString(16)} bytes are available.`
-        );
-        break;
-      }
-    }
-    if (cursor < dataEnd) {
-      warn(`DynamicRelocations: trailing ${dataEnd - cursor} bytes after last parsed V2 entry header/data.`);
-    }
-  } else {
-    warn(`DynamicRelocations: unsupported version ${version}.`);
-  }
+  const entries =
+    version === 1
+      ? parseVersion1(view, dataEnd, warnings)
+      : version === 2
+        ? parseVersion2(view, dataEnd, warnings)
+        : (warnings.push(`DynamicRelocations: unsupported version ${version}.`), []);
 
   return {
     version,
@@ -196,4 +169,38 @@ export async function parseDynamicRelocationsFromLoadConfig(
     entries,
     ...(warnings.length ? { warnings } : {})
   };
-}
+};
+
+export const parseDynamicRelocationsFromLoadConfig32 = async (
+  file: File,
+  sections: PeSection[],
+  rvaToOff: RvaToOffset,
+  imageBase: number,
+  loadConfig: PeLoadConfig
+): Promise<PeDynamicRelocations | null> =>
+  parseDynamicRelocationsWithVariant(
+    file,
+    sections,
+    rvaToOff,
+    imageBase,
+    loadConfig,
+    parseDynamicRelocationEntriesV132,
+    parseDynamicRelocationEntriesV232
+  );
+
+export const parseDynamicRelocationsFromLoadConfig64 = async (
+  file: File,
+  sections: PeSection[],
+  rvaToOff: RvaToOffset,
+  imageBase: number,
+  loadConfig: PeLoadConfig
+): Promise<PeDynamicRelocations | null> =>
+  parseDynamicRelocationsWithVariant(
+    file,
+    sections,
+    rvaToOff,
+    imageBase,
+    loadConfig,
+    parseDynamicRelocationEntriesV164,
+    parseDynamicRelocationEntriesV264
+  );

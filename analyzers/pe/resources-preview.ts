@@ -12,9 +12,22 @@ import {
 import type { ResourceDetailGroup, ResourceLangWithPreview } from "./resources-preview-types.js";
 import type { ResourceTree } from "./resources-core.js";
 
+// Win32 STRINGTABLE resources pack 16 strings into each block.
 const STRING_TABLE_ENTRY_COUNT = 16;
+// winnt.h: IMAGE_RESOURCE_DIRECTORY is 16 bytes.
+const RESOURCE_DIRECTORY_HEADER_SIZE = 16;
+// winnt.h: IMAGE_RESOURCE_DIRECTORY_ENTRY is 8 bytes.
+const RESOURCE_DIRECTORY_ENTRY_SIZE = 8;
+// winnt.h: high bit marks a string name or subdirectory; low 31 bits store the directory-relative offset.
+const RESOURCE_DIRECTORY_FLAG_MASK = 0x80000000; // IMAGE_RESOURCE_NAME_IS_STRING / IMAGE_RESOURCE_DATA_IS_DIRECTORY.
+const RESOURCE_DIRECTORY_OFFSET_MASK = 0x7fffffff; // IMAGE_RESOURCE_* offset in the low 31 bits.
+const RESOURCE_INTEGER_ID_MASK = 0xffff; // Integer resource ids are 16-bit values.
+// winnt.h: MESSAGE_RESOURCE_BLOCK stores LowId, HighId, OffsetToEntries as three DWORDs.
 const MESSAGE_BLOCK_HEADER_SIZE = 12;
+// winnt.h: MESSAGE_RESOURCE_ENTRY starts with WORD Length and WORD Flags.
 const MESSAGE_ENTRY_HEADER_SIZE = 4;
+// winnt.h: MESSAGE_RESOURCE_UNICODE marks UTF-16LE entry text.
+const MESSAGE_RESOURCE_UNICODE_FLAG = 0x0001;
 
 const truncateStringTablePreview = (langEntry: ResourceLangWithPreview): void => {
   if (langEntry.previewKind !== "stringTable") return;
@@ -85,7 +98,7 @@ const decodeMessageTablePreview = (
         break;
       }
       const entryBytes = data.subarray(pos + MESSAGE_ENTRY_HEADER_SIZE, pos + length);
-      strings.push(decodeMessageEntryText(entryBytes, (flags & 0x0001) !== 0));
+      strings.push(decodeMessageEntryText(entryBytes, (flags & MESSAGE_RESOURCE_UNICODE_FLAG) !== 0));
       pos += length;
     }
     messages.push({ id: lowId, strings });
@@ -103,53 +116,62 @@ export async function enrichResourcePreviews(
     off >= base && len >= 0 && off + len <= limitEnd;
 
   const iconIndex = new Map<number, { rva: number; size: number }>();
-  const rootDirView = await view(base, 16);
-  if (rootDirView.byteLength < 16) return { top, detail };
-  const NamedRoot = rootDirView.getUint16(12, true);
-  const IdsRoot = rootDirView.getUint16(14, true);
+  const rootDirView = await view(base, RESOURCE_DIRECTORY_HEADER_SIZE);
+  if (rootDirView.byteLength < RESOURCE_DIRECTORY_HEADER_SIZE) return { top, detail };
+  const NamedRoot = rootDirView.getUint16(RESOURCE_DIRECTORY_HEADER_SIZE - 4, true);
+  const IdsRoot = rootDirView.getUint16(RESOURCE_DIRECTORY_HEADER_SIZE - 2, true);
   const countRoot = NamedRoot + IdsRoot;
   for (let index = 0; index < countRoot; index += 1) {
-    const e = await view(base + 16 + index * 8, 8);
-    if (e.byteLength < 8) break;
+    const e = await view(
+      base + RESOURCE_DIRECTORY_HEADER_SIZE + index * RESOURCE_DIRECTORY_ENTRY_SIZE,
+      RESOURCE_DIRECTORY_ENTRY_SIZE
+    );
+    if (e.byteLength < RESOURCE_DIRECTORY_ENTRY_SIZE) break;
     const Name = e.getUint32(0, true);
     const OffsetToData = e.getUint32(4, true);
-    const subdir = (OffsetToData & 0x80000000) !== 0;
-    const id = (Name & 0x80000000) ? null : (Name & 0xffff);
-    if (id !== 3 || !subdir) continue;
-    const nameDirRel = OffsetToData & 0x7fffffff;
+    const subdir = (OffsetToData & RESOURCE_DIRECTORY_FLAG_MASK) !== 0;
+    const id = (Name & RESOURCE_DIRECTORY_FLAG_MASK) ? null : (Name & RESOURCE_INTEGER_ID_MASK);
+    if (id !== 3 /* RT_ICON */ || !subdir) continue;
+    const nameDirRel = OffsetToData & RESOURCE_DIRECTORY_OFFSET_MASK;
     const nameDirOff = base + nameDirRel;
-    if (!isRangeInside(nameDirOff, 16)) continue;
-    const nameDirView = await view(nameDirOff, 16);
-    if (nameDirView.byteLength < 16) continue;
-    const Named = nameDirView.getUint16(12, true);
-    const Ids = nameDirView.getUint16(14, true);
+    if (!isRangeInside(nameDirOff, RESOURCE_DIRECTORY_HEADER_SIZE)) continue;
+    const nameDirView = await view(nameDirOff, RESOURCE_DIRECTORY_HEADER_SIZE);
+    if (nameDirView.byteLength < RESOURCE_DIRECTORY_HEADER_SIZE) continue;
+    const Named = nameDirView.getUint16(RESOURCE_DIRECTORY_HEADER_SIZE - 4, true);
+    const Ids = nameDirView.getUint16(RESOURCE_DIRECTORY_HEADER_SIZE - 2, true);
     const count = Named + Ids;
     for (let idx = 0; idx < count; idx += 1) {
-      const e2 = await view(nameDirOff + 16 + idx * 8, 8);
-      if (e2.byteLength < 8) break;
+      const e2 = await view(
+        nameDirOff + RESOURCE_DIRECTORY_HEADER_SIZE + idx * RESOURCE_DIRECTORY_ENTRY_SIZE,
+        RESOURCE_DIRECTORY_ENTRY_SIZE
+      );
+      if (e2.byteLength < RESOURCE_DIRECTORY_ENTRY_SIZE) break;
       const Name2 = e2.getUint32(0, true);
       const OffsetToData2 = e2.getUint32(4, true);
-      const subdir2 = (OffsetToData2 & 0x80000000) !== 0;
-      const id2 = (Name2 & 0x80000000) ? null : (Name2 & 0xffff);
+      const subdir2 = (OffsetToData2 & RESOURCE_DIRECTORY_FLAG_MASK) !== 0;
+      const id2 = (Name2 & RESOURCE_DIRECTORY_FLAG_MASK) ? null : (Name2 & RESOURCE_INTEGER_ID_MASK);
       if (!subdir2) continue;
-      const langDirRel = OffsetToData2 & 0x7fffffff;
+      const langDirRel = OffsetToData2 & RESOURCE_DIRECTORY_OFFSET_MASK;
       const langDirOff = base + langDirRel;
-      if (!isRangeInside(langDirOff, 16)) continue;
-      const langDirView = await view(langDirOff, 16);
-      if (langDirView.byteLength < 16) continue;
-      const NamedL = langDirView.getUint16(12, true);
-      const IdsL = langDirView.getUint16(14, true);
+      if (!isRangeInside(langDirOff, RESOURCE_DIRECTORY_HEADER_SIZE)) continue;
+      const langDirView = await view(langDirOff, RESOURCE_DIRECTORY_HEADER_SIZE);
+      if (langDirView.byteLength < RESOURCE_DIRECTORY_HEADER_SIZE) continue;
+      const NamedL = langDirView.getUint16(RESOURCE_DIRECTORY_HEADER_SIZE - 4, true);
+      const IdsL = langDirView.getUint16(RESOURCE_DIRECTORY_HEADER_SIZE - 2, true);
       const countL = NamedL + IdsL;
       for (let j = 0; j < countL; j += 1) {
-        const le = await view(langDirOff + 16 + j * 8, 8);
-        if (le.byteLength < 8) break;
+        const le = await view(
+          langDirOff + RESOURCE_DIRECTORY_HEADER_SIZE + j * RESOURCE_DIRECTORY_ENTRY_SIZE,
+          RESOURCE_DIRECTORY_ENTRY_SIZE
+        );
+        if (le.byteLength < RESOURCE_DIRECTORY_ENTRY_SIZE) break;
         const OffsetToDataL = le.getUint32(4, true);
-        const subdirL = (OffsetToDataL & 0x80000000) !== 0;
+        const subdirL = (OffsetToDataL & RESOURCE_DIRECTORY_FLAG_MASK) !== 0;
         if (subdirL) continue;
-        const dataRel = OffsetToDataL & 0x7fffffff;
+        const dataRel = OffsetToDataL & RESOURCE_DIRECTORY_OFFSET_MASK;
         const deo2 = base + dataRel;
-        if (!isRangeInside(deo2, 16)) continue;
-        const dv2 = await view(deo2, 16);
+        if (!isRangeInside(deo2, RESOURCE_DIRECTORY_HEADER_SIZE)) continue;
+        const dv2 = await view(deo2, RESOURCE_DIRECTORY_HEADER_SIZE);
         if (dv2.byteLength < 8) continue;
         const rva2 = dv2.getUint32(0, true);
         const sz2 = dv2.getUint32(4, true);
@@ -168,7 +190,11 @@ export async function enrichResourcePreviews(
           const dataOff = rvaToOff(langEntry.dataRVA);
           if (dataOff == null || langEntry.size <= 0) continue;
           const data = new Uint8Array(
-            await file.slice(dataOff, dataOff + Math.min(langEntry.size, 262144)).arrayBuffer()
+            await file
+              // Parser policy: cap preview reads at 256 KiB so malformed resources cannot force
+              // unbounded UI reads while still giving the preview code enough data to inspect.
+              .slice(dataOff, dataOff + Math.min(langEntry.size, 256 * 1024))
+              .arrayBuffer()
           );
           const safePreview = (fn: () => void): void => {
             try {

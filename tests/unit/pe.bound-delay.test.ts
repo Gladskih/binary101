@@ -2,7 +2,11 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseBoundImports, parseDelayImports } from "../../analyzers/pe/bound-delay.js";
+import { parseBoundImports } from "../../analyzers/pe/bound-imports.js";
+import {
+  parseDelayImports32,
+  parseDelayImports64
+} from "../../analyzers/pe/delay-imports.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
@@ -48,13 +52,11 @@ void test("parseDelayImports reads delay descriptors, names, and ordinals", asyn
 
   const file = new MockFile(bytes, "delay-imports.bin");
   const addCoverageRegions = [];
-  const result = await parseDelayImports(
+  const result = await parseDelayImports32(
     file,
     [{ name: "DELAY_IMPORT", rva: base, size: 32 }],
     value => value,
-    (label, start, size) => addCoverageRegions.push({ label, start, size }),
-    false,
-    0
+    (label, start, size) => addCoverageRegions.push({ label, start, size })
   );
 
   const definedResult = expectDefined(result);
@@ -78,13 +80,11 @@ void test("parseDelayImports warns when 32-bit thunk table truncates mid-entry",
   // First thunk is ordinal and fits; second thunk would be out of file.
   dv.setUint32(0x50, 0x80000002, true);
 
-  const result = await parseDelayImports(
+  const result = await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: base, size: 32 }],
     value => value,
-    () => {},
-    false,
-    0
+    () => {}
   );
   const definedResult = expectDefined(result);
   assert.equal(definedResult.entries.length, 1);
@@ -102,13 +102,11 @@ void test("parseDelayImports tolerates truncated INT in 64-bit path", async () =
   // Only 4 bytes available for a 64-bit thunk.
   dv.setUint32(0x50, 0xdeadbeef, true);
 
-  const result = await parseDelayImports(
+  const result = await parseDelayImports64(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: base, size: 32 }],
     value => value,
-    () => {},
-    true,
-    0
+    () => {}
   );
   const definedResult = expectDefined(result);
   assert.equal(definedResult.entries.length, 1);
@@ -127,13 +125,11 @@ void test("parseDelayImports handles an empty INT in the 32-bit path", async () 
   dv.setUint32(base + 16, 0x50, true); // INT RVA near end
   dv.setUint32(0x50, 0, true);
 
-  const result = await parseDelayImports(
+  const result = await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: base, size: 32 }],
     value => value,
-    () => {},
-    false,
-    0
+    () => {}
   );
   const definedResult = expectDefined(result);
   assert.equal(definedResult.entries.length, 1);
@@ -156,13 +152,11 @@ void test("parseDelayImports handles truncated hint/name strings", async () => {
   // Fill rest with non-zero bytes to avoid early NUL.
   bytes.fill(0x41, 0x7a);
 
-  const result = await parseDelayImports(
+  const result = await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: base, size: 32 }],
     value => value,
-    () => {},
-    false,
-    0
+    () => {}
   );
   const definedResult = expectDefined(result);
   assert.equal(definedResult.entries.length, 1);
@@ -288,13 +282,11 @@ void test("parseDelayImports treats descriptor fields as RVA when Attributes is 
   encoder.encodeInto("Func\0", new Uint8Array(bytes.buffer, hintNameRva + 2));
   encoder.encodeInto("kernel32.dll\0", new Uint8Array(bytes.buffer, dllNameRva));
 
-  const result = await parseDelayImports(
+  const result = await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: base, size: 32 }],
     value => value,
-    () => {},
-    false,
-    0x400000
+    () => {}
   );
 
   const definedResult = expectDefined(result);

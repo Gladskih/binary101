@@ -2,13 +2,13 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseTlsDirectory } from "../../analyzers/pe/tls.js";
+import { parseTlsDirectory32, parseTlsDirectory64 } from "../../analyzers/pe/tls.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
 const IMAGE_TLS_DIRECTORY32_SIZE = 0x18; // IMAGE_TLS_DIRECTORY32
 const IMAGE_TLS_DIRECTORY64_SIZE = 0x30; // IMAGE_TLS_DIRECTORY64
-const TLS_CALLBACK_ENTRY_SIZE32 = 4; // One 32-bit callback pointer
+const TLS_CALLBACK_ENTRY_SIZE32 = Uint32Array.BYTES_PER_ELEMENT; // One 32-bit callback pointer
 
 void test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
   const bytes = new Uint8Array(256).fill(0);
@@ -23,12 +23,11 @@ void test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
   dv.setUint32(0x40, 0x1111, true); // Callback VA/RVA chosen to be obviously non-zero and easy to assert.
   dv.setUint32(0x44, 0);
 
-  const tls = expectDefined(await parseTlsDirectory(
+  const tls = expectDefined(await parseTlsDirectory32(
     new MockFile(bytes),
     [{ name: "TLS", rva: tlsRva, size: 0x18 }],
     value => value,
     () => {},
-    false,
     0
   ));
   assert.equal(tls.CallbackCount, 1);
@@ -45,12 +44,11 @@ void test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
   dv64.setBigUint64(0x80, 0x7000n, true);
   dv64.setBigUint64(0x88, 0n, true);
 
-  const tls64 = expectDefined(await parseTlsDirectory(
+  const tls64 = expectDefined(await parseTlsDirectory64(
     new MockFile(bytes64),
     [{ name: "TLS", rva: 0x10, size: IMAGE_TLS_DIRECTORY64_SIZE }],
     value => (value === 0x10 ? 0 : value),
     () => {},
-    true,
     0
   ));
   assert.equal(tls64.CallbackCount, 1);
@@ -59,13 +57,12 @@ void test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
 
 void test("parseTlsDirectory returns null for missing or unmapped TLS directory", async () => {
   const file = new MockFile(new Uint8Array(16));
-  assert.equal(await parseTlsDirectory(file, [], value => value, () => {}, false, 0), null);
-  assert.equal(await parseTlsDirectory(
+  assert.equal(await parseTlsDirectory32(file, [], value => value, () => {}, 0), null);
+  assert.equal(await parseTlsDirectory32(
     file,
     [{ name: "TLS", rva: 0x20, size: 0x18 }],
     () => null,
     () => {},
-    false,
     0
   ), null);
 });
@@ -73,22 +70,20 @@ void test("parseTlsDirectory returns null for missing or unmapped TLS directory"
 void test("parseTlsDirectory returns null for truncated TLS directory headers", async () => {
   const tlsRva = 0x20;
   const truncated32 = new Uint8Array(tlsRva + 0x10).fill(0);
-  assert.equal(await parseTlsDirectory(
+  assert.equal(await parseTlsDirectory32(
     new MockFile(truncated32),
     [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY32_SIZE }],
     value => value,
     () => {},
-    false,
     0
   ), null);
 
   const truncated64 = new Uint8Array(tlsRva + 0x20).fill(0);
-  assert.equal(await parseTlsDirectory(
+  assert.equal(await parseTlsDirectory64(
     new MockFile(truncated64),
     [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY64_SIZE }],
     value => value,
     () => {},
-    true,
     0
   ), null);
 });
@@ -99,12 +94,11 @@ void test("parseTlsDirectory respects the declared data-directory size", async (
   const dv32 = new DataView(bytes32.buffer);
   // IMAGE_TLS_DIRECTORY32 is 0x18 bytes, so any smaller declared directory cannot describe a valid header.
   dv32.setUint32(tlsRva + 12, 0x40, true);
-  assert.equal(await parseTlsDirectory(
+  assert.equal(await parseTlsDirectory32(
     new MockFile(bytes32),
     [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY32_SIZE - 1 }],
     value => value,
     () => {},
-    false,
     0
   ), null);
 
@@ -112,12 +106,11 @@ void test("parseTlsDirectory respects the declared data-directory size", async (
   const dv64 = new DataView(bytes64.buffer);
   // IMAGE_TLS_DIRECTORY64 is 0x30 bytes, so any smaller declared directory cannot describe a valid header.
   dv64.setBigUint64(tlsRva + 24, 0x80n, true);
-  assert.equal(await parseTlsDirectory(
+  assert.equal(await parseTlsDirectory64(
     new MockFile(bytes64),
     [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY64_SIZE - 1 }],
     value => value,
     () => {},
-    true,
     0
   ), null);
 });
@@ -130,12 +123,11 @@ void test("parseTlsDirectory skips invalid callback pointers and tolerates out-o
   dv.setUint32(0x40, 0x1000, true);
   dv.setUint32(0x44, 0, true);
 
-  const tls = expectDefined(await parseTlsDirectory(
+  const tls = expectDefined(await parseTlsDirectory32(
     new MockFile(bytes),
     [{ name: "TLS", rva: tlsRva, size: 0x18 }],
     value => value,
     () => {},
-    false,
     0x2000
   ));
   assert.equal(tls.CallbackCount, 0);
@@ -145,12 +137,11 @@ void test("parseTlsDirectory skips invalid callback pointers and tolerates out-o
   const dvOutOfRange = new DataView(bytesOutOfRange.buffer);
   dvOutOfRange.setUint32(tlsRva + 12, 0x1000, true);
   const rvaToOff = (rva: number): number => (rva === tlsRva ? tlsRva : bytesOutOfRange.length + 4);
-  const tlsOutOfRange = expectDefined(await parseTlsDirectory(
+  const tlsOutOfRange = expectDefined(await parseTlsDirectory32(
     new MockFile(bytesOutOfRange),
     [{ name: "TLS", rva: tlsRva, size: 0x18 }],
     rvaToOff,
     () => {},
-    false,
     0
   ));
   assert.equal(tlsOutOfRange.CallbackCount, 0);
@@ -174,12 +165,11 @@ void test("parseTlsDirectory does not read callback slots past an rvaToOff gap",
     return null;
   };
 
-  const tls = expectDefined(await parseTlsDirectory(
+  const tls = expectDefined(await parseTlsDirectory32(
     new MockFile(bytes),
     [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY32_SIZE }],
     sparseRvaToOff,
     () => {},
-    false,
     0
   ));
 
@@ -208,12 +198,11 @@ void test("parseTlsDirectory walks the full null-terminated callback array witho
   }
   dv.setUint32(callbackTableRva + callbackCount * TLS_CALLBACK_ENTRY_SIZE32, 0, true);
 
-  const tls = expectDefined(await parseTlsDirectory(
+  const tls = expectDefined(await parseTlsDirectory32(
     new MockFile(bytes),
     [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY32_SIZE }],
     value => value,
     () => {},
-    false,
     0
   ));
 

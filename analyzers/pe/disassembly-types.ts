@@ -23,6 +23,7 @@ export interface AnalyzePeInstructionSetOptions {
   coffMachine: number;
   is64Bit: boolean;
   imageBase: number;
+  headerRvaLimit?: number;
   entrypointRva: number;
   exportRvas?: number[];
   unwindBeginRvas?: number[];
@@ -46,4 +47,3 @@ export interface PeInstructionSetProgress {
   invalidInstructionCount: number;
   knownFeatureCounts?: Record<string, number>;
 }
-

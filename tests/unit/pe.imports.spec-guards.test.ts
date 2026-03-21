@@ -2,7 +2,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseImportDirectory } from "../../analyzers/pe/imports.js";
+import {
+  parseImportDirectory32,
+  parseImportDirectory64
+} from "../../analyzers/pe/imports.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
@@ -51,12 +54,11 @@ void test("parseImportDirectory warns when PE32+ name thunks set high reserved b
     new Uint8Array(bytes.buffer, hintNameRva + IMAGE_IMPORT_BY_NAME_HINT_SIZE)
   );
 
-  const { entries, warning } = await parseImportDirectory(
+  const { entries, warning } = await parseImportDirectory64(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: impBase, size: IMPORT_DIRECTORY_SIZE }],
     value => value,
-    () => {},
-    true
+    () => {}
   );
 
   const firstImport = expectDefined(entries[0]);
@@ -106,12 +108,11 @@ void test("parseImportDirectory stops when later thunk slots no longer map throu
     return null;
   };
 
-  const { entries } = await parseImportDirectory(
+  const { entries } = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: impBase, size: IMPORT_DIRECTORY_SIZE }],
     sparseRvaToOff,
-    () => {},
-    false
+    () => {}
   );
 
   const firstImport = expectDefined(entries[0]);
@@ -136,12 +137,11 @@ void test("parseImportDirectory walks the full null-terminated PE32+ thunk array
   }
   dv.setBigUint64(thunkRva + importCount * IMAGE_THUNK_DATA64_SIZE, 0n, true);
 
-  const { entries } = await parseImportDirectory(
+  const { entries } = await parseImportDirectory64(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
     value => value,
-    () => {},
-    true
+    () => {}
   );
 
   const firstImport = expectDefined(entries[0]);

@@ -2,7 +2,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseLoadConfigDirectory } from "../../analyzers/pe/load-config.js";
+import {
+  parseLoadConfigDirectory32,
+  parseLoadConfigDirectory64
+} from "../../analyzers/pe/load-config.js";
 import { collectLoadConfigWarnings } from "../../analyzers/pe/load-config-warnings.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
@@ -15,12 +18,11 @@ void test("parseLoadConfigDirectory reads VolatileMetadataPointer for x64", asyn
   dv.setBigUint64(lcRva + 0x100, 0x14001ac34n, true);
 
   const lc = expectDefined(
-    await parseLoadConfigDirectory(
+    await parseLoadConfigDirectory64(
       new MockFile(bytes, "loadcfg-volatile64.bin"),
       [{ name: "LOAD_CONFIG", rva: lcRva, size: 0x148 }],
       value => value,
-      () => {},
-      true
+      () => {}
     )
   );
   assert.equal(lc.VolatileMetadataPointer, 0x14001ac34);
@@ -34,12 +36,11 @@ void test("parseLoadConfigDirectory reads VolatileMetadataPointer for x86", asyn
   dv.setUint32(lcRva + 0xa0, 0x12345678, true);
 
   const lc = expectDefined(
-    await parseLoadConfigDirectory(
+    await parseLoadConfigDirectory32(
       new MockFile(bytes, "loadcfg-volatile32.bin"),
       [{ name: "LOAD_CONFIG", rva: lcRva, size: 0xc4 }],
       value => value,
-      () => {},
-      false
+      () => {}
     )
   );
   assert.equal(lc.VolatileMetadataPointer, 0x12345678);
@@ -54,12 +55,11 @@ void test("collectLoadConfigWarnings warns when VolatileMetadataPointer does not
 
   const file = new MockFile(bytes, "loadcfg-volatile-warn.bin");
   const lc = expectDefined(
-    await parseLoadConfigDirectory(
+    await parseLoadConfigDirectory64(
       file,
       [{ name: "LOAD_CONFIG", rva: lcRva, size: 0x148 }],
       value => value,
-      () => {},
-      true
+      () => {}
     )
   );
 

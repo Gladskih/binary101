@@ -2,12 +2,14 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseBoundImports, parseDelayImports } from "../../analyzers/pe/bound-delay.js";
+import { parseBoundImports } from "../../analyzers/pe/bound-imports.js";
+import {
+  parseDelayImports32
+} from "../../analyzers/pe/delay-imports.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
 const encoder = new TextEncoder();
-
 void test("parseDelayImports warns when a mapped DLL name offset falls past EOF", async () => {
   const bytes = new Uint8Array(128).fill(0);
   const dv = new DataView(bytes.buffer);
@@ -15,13 +17,11 @@ void test("parseDelayImports warns when a mapped DLL name offset falls past EOF"
   dv.setUint32(descriptorOffset + 0, 0, true);
   dv.setUint32(descriptorOffset + 4, 0x40, true);
 
-  const result = expectDefined(await parseDelayImports(
+  const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: 32 }],
     value => (value === descriptorOffset ? descriptorOffset : value === 0 ? null : value + 0x200),
-    () => {},
-    false,
-    0x400000
+    () => {}
   ));
 
   assert.ok(result.warning?.toLowerCase().includes("name rva"));
@@ -42,13 +42,11 @@ void test("parseDelayImports warns when a hint/name entry is shorter than two by
   // must report truncation rather than silently succeed.
   dv.setUint32(thunkTableRva, truncatedHintNameRva, true);
 
-  const result = expectDefined(await parseDelayImports(
+  const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: 32 }],
     value => value,
-    () => {},
-    false,
-    0x400000
+    () => {}
   ));
 
   assert.ok(result.warning?.toLowerCase().includes("truncated"));
@@ -63,13 +61,11 @@ void test("parseDelayImports warns when file-form Attributes is non-zero", async
   dv.setUint32(descriptorOffset + 4, dllNameRva, true);
   encoder.encodeInto("delay.dll\0", new Uint8Array(bytes.buffer, dllNameRva));
 
-  const result = expectDefined(await parseDelayImports(
+  const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: 32 }],
     value => value,
-    () => {},
-    false,
-    0x400000
+    () => {}
   ));
 
   assert.ok(result.warning?.toLowerCase().includes("attribute"));

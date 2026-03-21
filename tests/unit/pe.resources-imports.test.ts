@@ -3,12 +3,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildResourceTree } from "../../analyzers/pe/resources-core.js";
-import { parseImportDirectory } from "../../analyzers/pe/imports.js";
+import { parseImportDirectory64 } from "../../analyzers/pe/imports.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
 const encoder = new TextEncoder();
-
 void test("buildResourceTree walks a small resource directory", async () => {
   const base = 0x10;
   const bytes = new Uint8Array(256).fill(0);
@@ -67,12 +66,11 @@ void test("parseImportDirectory supports 64-bit imports path", async () => {
   dv.setUint16(0x180, 0x0077, true);
   encoder.encodeInto("RegOpenKey\0", new Uint8Array(bytes.buffer, 0x182));
 
-  const { entries: imports } = await parseImportDirectory(
+  const { entries: imports } = await parseImportDirectory64(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: impBase, size: 40 }],
     value => value,
-    () => {},
-    true
+    () => {}
   );
   assert.equal(imports.length, 1);
   const firstImport = expectDefined(imports[0]);

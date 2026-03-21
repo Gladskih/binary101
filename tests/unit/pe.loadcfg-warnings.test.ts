@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseLoadConfigDirectory } from "../../analyzers/pe/load-config.js";
+import { parseLoadConfigDirectory32 } from "../../analyzers/pe/load-config.js";
 import { collectLoadConfigWarnings } from "../../analyzers/pe/load-config-warnings.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
@@ -18,12 +18,11 @@ void test("collectLoadConfigWarnings reports tables that do not fit in file/imag
 
   const file = new MockFile(bytes, "loadcfg-warn.bin");
   const lc = expectDefined(
-    await parseLoadConfigDirectory(
+    await parseLoadConfigDirectory32(
       file,
       [{ name: "LOAD_CONFIG", rva: lcRva, size: 0xc0 }],
       value => value,
-      () => {},
-      false
+      () => {}
     )
   );
 
@@ -43,12 +42,11 @@ void test("collectLoadConfigWarnings reports tables that start outside SizeOfIma
   dv.setUint32(lcRva + 0x54, 1, true);
 
   const lc = expectDefined(
-    await parseLoadConfigDirectory(
+    await parseLoadConfigDirectory32(
       new MockFile(bytes, "loadcfg-sizeofimage.bin"),
       [{ name: "LOAD_CONFIG", rva: lcRva, size: 0xc0 }],
       value => value,
-      () => {},
-      false
+      () => {}
     )
   );
 
