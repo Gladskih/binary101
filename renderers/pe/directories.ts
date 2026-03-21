@@ -73,7 +73,17 @@ export function renderExports(pe: PeParseResult, out: string[]): void {
 export function renderTls(pe: PeParseResult, out: string[]): void {
   if (!pe.tls) return;
   const t: PeTlsDirectory = pe.tls;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">TLS directory</h4><dl>`);
+  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">TLS directory</h4>`);
+  if (t.warnings?.length) {
+    out.push(`<ul class="smallNote">`);
+    t.warnings.forEach(warning => out.push(`<li>${safe(warning)}</li>`));
+    out.push(`</ul>`);
+  }
+  if (t.parsed === false) {
+    out.push(`</section>`);
+    return;
+  }
+  out.push(`<dl>`);
   out.push(dd("StartAddressOfRawData", "0x" + BigInt(t.StartAddressOfRawData).toString(16), "VA for beginning of TLS template data."));
   out.push(dd("EndAddressOfRawData", "0x" + BigInt(t.EndAddressOfRawData).toString(16), "VA for end of TLS template data."));
   out.push(dd("AddressOfIndex", "0x" + BigInt(t.AddressOfIndex).toString(16), "VA of TLS index used by the loader."));
@@ -183,7 +193,13 @@ export function renderSecurity(pe: PeParseResult, out: string[]): void {
 export function renderIat(pe: PeParseResult, out: string[]): void {
   if (!pe.iat) return;
   const t = pe.iat;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import Address Table (IAT)</h4><dl>`);
+  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import Address Table (IAT)</h4>`);
+  if (t.warnings?.length) {
+    out.push(`<ul class="smallNote">`);
+    t.warnings.forEach(warning => out.push(`<li>${safe(warning)}</li>`));
+    out.push(`</ul>`);
+  }
+  out.push(`<dl>`);
   out.push(dd("RVA", hex(t.rva, 8), "RVA of the runtime IAT used by the loader to place resolved addresses."));
   out.push(dd("Size", humanSize(t.size), "Total size of the IAT in bytes."));
   out.push(`</dl></section>`);

@@ -143,4 +143,6 @@ export interface PeTlsDirectory {
   Characteristics: number;
   CallbackCount: number;
   CallbackRvas?: number[];
+  warnings?: string[];
+  parsed?: boolean;
 }

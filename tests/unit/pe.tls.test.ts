@@ -32,6 +32,7 @@ void test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
   ));
   assert.equal(tls.CallbackCount, 1);
   assert.deepEqual(tls.CallbackRvas, [0x1111]);
+  assert.equal(tls.parsed, true);
 
   const bytes64 = new Uint8Array(512).fill(0);
   const dv64 = new DataView(bytes64.buffer);
@@ -53,66 +54,82 @@ void test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
   ));
   assert.equal(tls64.CallbackCount, 1);
   assert.deepEqual(tls64.CallbackRvas, [0x7000]);
+  assert.equal(tls64.parsed, true);
 });
 
-void test("parseTlsDirectory returns null for missing or unmapped TLS directory", async () => {
+void test("parseTlsDirectory returns null when the TLS data directory is absent", async () => {
   const file = new MockFile(new Uint8Array(16));
   assert.equal(await parseTlsDirectory32(file, [], value => value, () => {}, 0), null);
-  assert.equal(await parseTlsDirectory32(
+});
+
+void test("parseTlsDirectory preserves declared but unmapped TLS directories with warnings", async () => {
+  const file = new MockFile(new Uint8Array(16));
+  const tls = expectDefined(await parseTlsDirectory32(
     file,
     [{ name: "TLS", rva: 0x20, size: 0x18 }],
     () => null,
     () => {},
     0
-  ), null);
+  ));
+
+  assert.equal(tls.parsed, false);
+  assert.ok(tls.warnings?.some(warning => /could not be mapped/i.test(warning)));
 });
 
-void test("parseTlsDirectory returns null for truncated TLS directory headers", async () => {
+void test("parseTlsDirectory preserves truncated TLS directory headers with warnings", async () => {
   const tlsRva = 0x20;
   const truncated32 = new Uint8Array(tlsRva + 0x10).fill(0);
-  assert.equal(await parseTlsDirectory32(
+  const tls32 = expectDefined(await parseTlsDirectory32(
     new MockFile(truncated32),
     [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY32_SIZE }],
     value => value,
     () => {},
     0
-  ), null);
+  ));
+  assert.equal(tls32.parsed, false);
+  assert.ok(tls32.warnings?.some(warning => /truncated/i.test(warning)));
 
   const truncated64 = new Uint8Array(tlsRva + 0x20).fill(0);
-  assert.equal(await parseTlsDirectory64(
+  const tls64 = expectDefined(await parseTlsDirectory64(
     new MockFile(truncated64),
     [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY64_SIZE }],
     value => value,
     () => {},
     0
-  ), null);
+  ));
+  assert.equal(tls64.parsed, false);
+  assert.ok(tls64.warnings?.some(warning => /truncated/i.test(warning)));
 });
 
-void test("parseTlsDirectory respects the declared data-directory size", async () => {
+void test("parseTlsDirectory warns when the declared data-directory size is too small for a TLS header", async () => {
   const tlsRva = IMAGE_TLS_DIRECTORY32_SIZE;
   const bytes32 = new Uint8Array(tlsRva + IMAGE_TLS_DIRECTORY32_SIZE).fill(0);
   const dv32 = new DataView(bytes32.buffer);
   // IMAGE_TLS_DIRECTORY32 is 0x18 bytes, so any smaller declared directory cannot describe a valid header.
   dv32.setUint32(tlsRva + 12, 0x40, true);
-  assert.equal(await parseTlsDirectory32(
+  const tls32 = expectDefined(await parseTlsDirectory32(
     new MockFile(bytes32),
     [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY32_SIZE - 1 }],
     value => value,
     () => {},
     0
-  ), null);
+  ));
+  assert.equal(tls32.parsed, false);
+  assert.ok(tls32.warnings?.some(warning => /smaller than the 32-bit TLS header size/i.test(warning)));
 
   const bytes64 = new Uint8Array(tlsRva + IMAGE_TLS_DIRECTORY64_SIZE).fill(0);
   const dv64 = new DataView(bytes64.buffer);
   // IMAGE_TLS_DIRECTORY64 is 0x30 bytes, so any smaller declared directory cannot describe a valid header.
   dv64.setBigUint64(tlsRva + 24, 0x80n, true);
-  assert.equal(await parseTlsDirectory64(
+  const tls64 = expectDefined(await parseTlsDirectory64(
     new MockFile(bytes64),
     [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY64_SIZE - 1 }],
     value => value,
     () => {},
     0
-  ), null);
+  ));
+  assert.equal(tls64.parsed, false);
+  assert.ok(tls64.warnings?.some(warning => /smaller than the 64-bit TLS header size/i.test(warning)));
 });
 
 void test("parseTlsDirectory skips invalid callback pointers and tolerates out-of-range callback tables", async () => {
@@ -132,6 +149,7 @@ void test("parseTlsDirectory skips invalid callback pointers and tolerates out-o
   ));
   assert.equal(tls.CallbackCount, 0);
   assert.deepEqual(tls.CallbackRvas, []);
+  assert.ok(tls.warnings?.some(warning => /not a valid VA/i.test(warning)));
 
   const bytesOutOfRange = new Uint8Array(64).fill(0);
   const dvOutOfRange = new DataView(bytesOutOfRange.buffer);
@@ -146,6 +164,7 @@ void test("parseTlsDirectory skips invalid callback pointers and tolerates out-o
   ));
   assert.equal(tlsOutOfRange.CallbackCount, 0);
   assert.deepEqual(tlsOutOfRange.CallbackRvas, []);
+  assert.ok(tlsOutOfRange.warnings?.some(warning => /could not be mapped|truncated or unmapped/i.test(warning)));
 });
 
 void test("parseTlsDirectory does not read callback slots past an rvaToOff gap", async () => {
@@ -174,6 +193,7 @@ void test("parseTlsDirectory does not read callback slots past an rvaToOff gap",
   ));
 
   assert.deepEqual(tls.CallbackRvas, [firstCallbackRva]);
+  assert.ok(tls.warnings?.some(warning => /truncated or unmapped before the null terminator/i.test(warning)));
 });
 
 void test("parseTlsDirectory walks the full null-terminated callback array without a hard 1024-entry cap", async () => {

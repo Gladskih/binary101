@@ -5,6 +5,7 @@ import type { PeDataDirectory, RvaToOffset } from "./types.js";
 export interface PeIatDirectory {
   rva: number;
   size: number;
+  warnings?: string[];
 }
 
 export const parseIatDirectory = (
@@ -13,9 +14,23 @@ export const parseIatDirectory = (
   addCoverageRegion: (label: string, offset: number, size: number) => void
 ): PeIatDirectory | null => {
   const dir = dataDirs.find(directory => directory.name === "IAT");
-  if (!dir?.rva || !dir.size) return null;
+  if (!dir || (dir.rva === 0 && dir.size === 0)) return null;
+  if (!dir.size) return null;
+  if (!dir.rva) {
+    return {
+      rva: 0,
+      size: dir.size,
+      warnings: ["IAT directory has a non-zero size but RVA is 0."]
+    };
+  }
   const offset = rvaToOff(dir.rva);
-  if (offset == null) return null;
+  if (offset == null) {
+    return {
+      rva: dir.rva,
+      size: dir.size,
+      warnings: ["IAT directory RVA could not be mapped to a file offset."]
+    };
+  }
   addCoverageRegion("IAT", offset, dir.size);
   return { rva: dir.rva, size: dir.size };
 };
