@@ -10,10 +10,12 @@ import { installFakeDom, flushTimers } from "../helpers/fake-dom.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import { MockFile } from "../helpers/mock-file.js";
 
+const TEST_IMAGE_BASE = 0x400000;
+
 const createMinimalPe = (): PeParseResult =>
   ({
     coff: { Machine: 0x8664 },
-    opt: { isPlus: true, ImageBase: 0, AddressOfEntryPoint: 0x1000 },
+    opt: { isPlus: true, ImageBase: TEST_IMAGE_BASE, AddressOfEntryPoint: 0x1000 },
     rvaToOff: (rva: number) => rva,
     sections: []
   }) as unknown as PeParseResult;
@@ -37,7 +39,10 @@ void test("pe disassembly controller includes GuardCF function RVAs when availab
   const file = new MockFile(bytes, "guardcf.bin");
 
   const pe = createMinimalPe();
-  pe.loadcfg = { GuardCFFunctionTable: 0x40, GuardCFFunctionCount: 1 } as unknown as PeParseResult["loadcfg"];
+  pe.loadcfg = {
+    GuardCFFunctionTable: TEST_IMAGE_BASE + 0x40,
+    GuardCFFunctionCount: 1
+  } as unknown as PeParseResult["loadcfg"];
 
   const parseResult: ParseForUiResult = { analyzer: "pe", parsed: pe };
 
@@ -60,4 +65,3 @@ void test("pe disassembly controller includes GuardCF function RVAs when availab
 
   dom.restore();
 });
-

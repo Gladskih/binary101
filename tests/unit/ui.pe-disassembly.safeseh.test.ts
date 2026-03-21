@@ -10,10 +10,12 @@ import { installFakeDom, flushTimers } from "../helpers/fake-dom.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import { MockFile } from "../helpers/mock-file.js";
 
+const TEST_IMAGE_BASE = 0x400000;
+
 const createMinimalPe = (): PeParseResult =>
   ({
     coff: { Machine: 0x014c },
-    opt: { isPlus: false, ImageBase: 0, AddressOfEntryPoint: 0x1000 },
+    opt: { isPlus: false, ImageBase: TEST_IMAGE_BASE, AddressOfEntryPoint: 0x1000 },
     rvaToOff: (rva: number) => rva,
     sections: []
   }) as unknown as PeParseResult;
@@ -37,7 +39,10 @@ void test("pe disassembly controller includes SafeSEH handler RVAs when availabl
   const file = new MockFile(bytes, "safeseh.bin");
 
   const pe = createMinimalPe();
-  pe.loadcfg = { SEHandlerTable: 0x40, SEHandlerCount: 2 } as unknown as PeParseResult["loadcfg"];
+  pe.loadcfg = {
+    SEHandlerTable: TEST_IMAGE_BASE + 0x40,
+    SEHandlerCount: 2
+  } as unknown as PeParseResult["loadcfg"];
 
   const parseResult: ParseForUiResult = { analyzer: "pe", parsed: pe };
 

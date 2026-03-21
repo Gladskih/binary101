@@ -266,13 +266,17 @@ void test("parsePe returns coverage and mapping for PE32 with one section and IA
   assert.strictEqual(result.hasCert, false);
 });
 
-void test("parsePe ignores IAT directories that do not map to a file offset", async () => {
+void test("parsePe preserves unmapped IAT directories with warnings", async () => {
   const peBytes = createPeWithSectionAndIat(0x3000);
   const mockFile = new MockFile(peBytes, "unmapped-iat.exe");
 
   const result = await parsePe(mockFile);
   assert.ok(result, "parsePe should return a parsed object");
-  assert.strictEqual(result.iat, null, "Unmapped IAT should be reported as null");
+  assert.deepStrictEqual(result.iat, {
+    rva: 0x3000,
+    size: 0x40,
+    warnings: ["IAT directory RVA could not be mapped to a file offset."]
+  });
   assert.ok(!result.coverage.some(region => region.label === "IAT"), "Coverage should not include IAT region");
 });
 

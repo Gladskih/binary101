@@ -58,13 +58,14 @@ void test("readGuardCFFunctionTableRvas supports 5-byte GFIDS entries when Guard
 void test("readGuardCFFunctionTableRvas returns empty list for invalid or unmapped tables", async () => {
   const bytes = new Uint8Array(0x100).fill(0);
   const file = new MockFile(bytes, "guardcf-invalid.bin");
+  const tableVa = PE32_DEFAULT_IMAGE_BASE + LOAD_CONFIG_TEST_TABLE_RVA;
 
   assert.deepEqual(
     await readGuardCFFunctionTableRvas(file, rva => rva, 0x2000, 0x1000, 1),
     []
   );
   assert.deepEqual(
-    await readGuardCFFunctionTableRvas(file, () => null, 0, LOAD_CONFIG_TEST_TABLE_RVA, 1),
+    await readGuardCFFunctionTableRvas(file, () => null, PE32_DEFAULT_IMAGE_BASE, tableVa, 1),
     []
   );
 });
@@ -73,12 +74,13 @@ void test("readGuardCFFunctionTableRvas truncates reads when the table spills pa
   const bytes = new Uint8Array(LOAD_CONFIG_TEST_TABLE_RVA + Uint32Array.BYTES_PER_ELEMENT).fill(0);
   const dv = new DataView(bytes.buffer);
   dv.setUint32(LOAD_CONFIG_TEST_TABLE_RVA, 0x1000, true);
+  const tableVa = PE32_DEFAULT_IMAGE_BASE + LOAD_CONFIG_TEST_TABLE_RVA;
 
   const rvas = await readGuardCFFunctionTableRvas(
     new MockFile(bytes, "guardcf-truncated.bin"),
     rva => rva,
-    0,
-    LOAD_CONFIG_TEST_TABLE_RVA,
+    PE32_DEFAULT_IMAGE_BASE,
+    tableVa,
     3
   );
   assert.deepEqual(rvas, [0x1000]);

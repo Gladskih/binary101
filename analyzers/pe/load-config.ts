@@ -84,7 +84,7 @@ const MAX_RVA_BIGINT = 0xffff_ffffn;
 
 const toRvaFromVa = (virtualAddress: number, imageBase: number): number | null => {
   if (!Number.isSafeInteger(virtualAddress) || virtualAddress <= 0) return null;
-  if (!Number.isSafeInteger(imageBase) || imageBase < 0) return null;
+  if (!Number.isSafeInteger(imageBase) || imageBase <= 0) return null;
   const va = BigInt(virtualAddress);
   const base = BigInt(imageBase);
   if (va < base) return null;

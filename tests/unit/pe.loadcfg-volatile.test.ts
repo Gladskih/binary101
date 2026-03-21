@@ -50,8 +50,9 @@ void test("collectLoadConfigWarnings warns when VolatileMetadataPointer does not
   const lcRva = 0x20;
   const bytes = new Uint8Array(0x200).fill(0);
   const dv = new DataView(bytes.buffer);
+  const imageBase = 0x400000;
   dv.setUint32(lcRva + 0x00, 0x148, true); // Size
-  dv.setBigUint64(lcRva + 0x100, 0x500n, true);
+  dv.setBigUint64(lcRva + 0x100, BigInt(imageBase + 0x500), true);
 
   const file = new MockFile(bytes, "loadcfg-volatile-warn.bin");
   const lc = expectDefined(
@@ -63,7 +64,7 @@ void test("collectLoadConfigWarnings warns when VolatileMetadataPointer does not
     )
   );
 
-  const warnings = collectLoadConfigWarnings(file.size, value => value, 0, 0x1000, lc);
+  const warnings = collectLoadConfigWarnings(file.size, value => value, imageBase, 0x1000, lc);
   assert.ok(warnings.some(w => w.includes("VolatileMetadataPointer") && w.includes("does not map to file data")));
 });
 

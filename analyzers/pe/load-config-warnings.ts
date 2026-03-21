@@ -22,30 +22,22 @@ export function collectLoadConfigWarnings(
       return;
     }
     const tableRva = readLoadConfigPointerRva(imageBase, tableVa);
-    const fallbackRva = tableRva ?? (
-      Number.isSafeInteger(tableVa) && tableVa > 0 && tableVa <= 0xffff_ffff
-        ? (tableVa >>> 0)
-        : null
-    );
-    if (fallbackRva == null) {
-      warnings.push(`LOAD_CONFIG: ${name} pointer 0x${tableVa.toString(16)} is not a valid RVA/VA.`);
+    if (tableRva == null) {
+      warnings.push(`LOAD_CONFIG: ${name} pointer 0x${tableVa.toString(16)} is not a valid VA.`);
       return;
     }
-    if (tableRva == null) {
-      warnings.push(`LOAD_CONFIG: ${name} pointer 0x${tableVa.toString(16)} is not a valid VA; treating it as a raw RVA.`);
-    }
     if (Number.isFinite(sizeOfImage) && sizeOfImage > 0) {
-      if (fallbackRva >= sizeOfImage) {
-        warnings.push(`LOAD_CONFIG: ${name} RVA 0x${fallbackRva.toString(16)} is outside SizeOfImage.`);
+      if (tableRva >= sizeOfImage) {
+        warnings.push(`LOAD_CONFIG: ${name} RVA 0x${tableRva.toString(16)} is outside SizeOfImage.`);
       } else {
-        const maxImage = Math.floor((sizeOfImage - fallbackRva) / entrySize);
+        const maxImage = Math.floor((sizeOfImage - tableRva) / entrySize);
         if (count > maxImage) warnings.push(`LOAD_CONFIG: ${name} spills past SizeOfImage (${count} > ${maxImage}).`);
       }
     }
     if (!Number.isFinite(fileSize) || fileSize <= 0) return;
-    const off = rvaToOff(fallbackRva);
+    const off = rvaToOff(tableRva);
     if (off == null || off < 0 || off >= fileSize) {
-      warnings.push(`LOAD_CONFIG: ${name} RVA 0x${fallbackRva.toString(16)} does not map to file data.`);
+      warnings.push(`LOAD_CONFIG: ${name} RVA 0x${tableRva.toString(16)} does not map to file data.`);
       return;
     }
     const maxFile = Math.floor((fileSize - off) / entrySize);
@@ -55,26 +47,18 @@ export function collectLoadConfigWarnings(
   const checkPointer = (name: string, pointerVa: number): void => {
     if (!pointerVa) return;
     const rva = readLoadConfigPointerRva(imageBase, pointerVa);
-    const fallbackRva = rva ?? (
-      Number.isSafeInteger(pointerVa) && pointerVa > 0 && pointerVa <= 0xffff_ffff
-        ? (pointerVa >>> 0)
-        : null
-    );
-    if (fallbackRva == null) {
-      warnings.push(`LOAD_CONFIG: ${name} pointer 0x${pointerVa.toString(16)} is not a valid RVA/VA.`);
+    if (rva == null) {
+      warnings.push(`LOAD_CONFIG: ${name} pointer 0x${pointerVa.toString(16)} is not a valid VA.`);
       return;
     }
-    if (rva == null) {
-      warnings.push(`LOAD_CONFIG: ${name} pointer 0x${pointerVa.toString(16)} is not a valid VA; treating it as a raw RVA.`);
-    }
-    if (Number.isFinite(sizeOfImage) && sizeOfImage > 0 && fallbackRva >= sizeOfImage) {
-      warnings.push(`LOAD_CONFIG: ${name} RVA 0x${fallbackRva.toString(16)} is outside SizeOfImage.`);
+    if (Number.isFinite(sizeOfImage) && sizeOfImage > 0 && rva >= sizeOfImage) {
+      warnings.push(`LOAD_CONFIG: ${name} RVA 0x${rva.toString(16)} is outside SizeOfImage.`);
       return;
     }
     if (!Number.isFinite(fileSize) || fileSize <= 0) return;
-    const off = rvaToOff(fallbackRva);
+    const off = rvaToOff(rva);
     if (off == null || off < 0 || off >= fileSize) {
-      warnings.push(`LOAD_CONFIG: ${name} RVA 0x${fallbackRva.toString(16)} does not map to file data.`);
+      warnings.push(`LOAD_CONFIG: ${name} RVA 0x${rva.toString(16)} does not map to file data.`);
     }
   };
 

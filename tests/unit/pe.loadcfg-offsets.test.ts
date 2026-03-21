@@ -15,6 +15,7 @@ void test("readLoadConfigPointerRva converts VAs to RVAs and rejects non-VA valu
   // PE Load Config pointer fields are documented as VAs, so a raw RVA below ImageBase is malformed.
   assert.equal(readLoadConfigPointerRva(0x400000, 0x1234), null);
   assert.equal(readLoadConfigPointerRva(0x400000, 0), null);
+  assert.equal(readLoadConfigPointerRva(0, 0x401234), null);
   assert.equal(readLoadConfigPointerRva(-1, 0x401234), null);
 });
 

@@ -8,11 +8,6 @@ import type { RvaToOffset } from "./types.js";
 // Entry size is 4 + n, where n is the "stride" subfield encoded in GuardFlags.
 const IMAGE_GUARD_CF_FUNCTION_TABLE_SIZE_MASK = 0xf000_0000;
 const IMAGE_GUARD_CF_FUNCTION_TABLE_SIZE_SHIFT = 28;
-// Compatibility heuristic, not spec: some legacy samples encode absolute VAs instead of the
-// SafeSEH RVAs required by the PE format. Restrict VA reinterpretation to values clustered near
-// ImageBase so we do not corrupt legitimate large RVAs that merely compare above ImageBase.
-const SAFESEH_COMPAT_VA_WINDOW = 0x10_0000;
-
 export const getCfgTargetTableEntrySize = (guardFlags: number): number => {
   const flags = Number.isSafeInteger(guardFlags) ? (guardFlags >>> 0) : 0;
   const stride = ((flags & IMAGE_GUARD_CF_FUNCTION_TABLE_SIZE_MASK) >>> IMAGE_GUARD_CF_FUNCTION_TABLE_SIZE_SHIFT) >>> 0;
@@ -72,7 +67,7 @@ export async function readSafeSehHandlerTableRvas(
   seHandlerTableVa: number,
   seHandlerCount: number
 ): Promise<number[]> {
-  const rawValues = await readRvaTable(
+  return readRvaTable(
     file,
     rvaToOff,
     imageBase,
@@ -81,13 +76,6 @@ export async function readSafeSehHandlerTableRvas(
     4,
     (dv, entryOff) => dv.getUint32(entryOff, true)
   );
-
-  const allEntriesLookLikeAbsoluteVasNearImageBase =
-    rawValues.length > 1 &&
-    imageBase >= 0x400000 &&
-    rawValues.every(value => value >= imageBase && value - imageBase < SAFESEH_COMPAT_VA_WINDOW);
-  if (!allEntriesLookLikeAbsoluteVasNearImageBase) return rawValues.map(value => value >>> 0);
-  return rawValues.map(value => readLoadConfigPointerRva(imageBase, value) ?? (value >>> 0));
 }
 
 export async function readGuardEhContinuationTableRvas(
