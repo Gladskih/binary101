@@ -37,7 +37,7 @@ All contributions must adhere to the project's code quality metrics and best pra
 
 ### JavaScript Best Practices
 - Follow ESLint as the source of truth; keep `npm run lint` passing.
-- **Maximum file length**: Keep modules small; if a file grows large, prefer extracting cohesive helpers/modules.
+- **Maximum file length**: Keep modules small; if a file grows large, prefer extracting cohesive modules.
 - **Maximum line length**: Aim for 100 characters where practical.
 - **Maximum function length**: Aim for 20-30 lines; refactor functions over 50 lines.
 - **Cyclomatic complexity**: Keep below 10; use helper functions to reduce complexity.
@@ -60,7 +60,7 @@ All contributions must adhere to the project's code quality metrics and best pra
 
 - Prefer small, cohesive modules that have a single, clearly stated responsibility (“one reason to change”). 
 - Do **not** introduce new generically named modules such as `helpers`, `utils`, `extra`, `extensions`, or similar grab-bag names. If you feel tempted to add `helpers.ts`, it usually means there are at least two more meaningful modules hiding in that file.
-- When you need shared logic, group it by concept or section (for example `value-format`, `flags-view`, `semantics`, `signature`) rather than by the generic idea of “helping” another module.
+- When you need shared logic, group it by concept rather than by the generic idea of “helping” another module.
 
 ### Repository Conventions
 
