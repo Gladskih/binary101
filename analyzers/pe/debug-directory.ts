@@ -29,6 +29,10 @@ export async function parseDebugDirectory(
   rvaToOff: RvaToOffset,
   addCoverageRegion: AddCoverageRegion
 ): Promise<{ entry: { guid: string; age: number; path: string } | null; warning: string | null }> {
+  const warnings: string[] = [];
+  const addWarning = (message: string | null): void => {
+    if (message && !warnings.includes(message)) warnings.push(message);
+  };
   const debugDir = dataDirs.find(d => d.name === "DEBUG");
   if (!debugDir?.rva) return { entry: null, warning: null };
   const baseOffset = rvaToOff(debugDir.rva);
@@ -41,30 +45,30 @@ export async function parseDebugDirectory(
     return { entry: null, warning: "Debug directory is smaller than one entry; file may be truncated." };
   }
   const maxEntries = Math.floor(availableDirSize / IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE);
-  let warning =
+  addWarning(
     availableDirSize < debugDir.size
       ? "Debug directory is shorter than recorded size (possible truncation)."
-      : null;
+      : null
+  );
   if (availableDirSize % IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE !== 0) {
-    warning ??= "Debug directory size has trailing bytes after whole entries.";
+    addWarning("Debug directory size has trailing bytes after whole entries.");
   }
-  let codeViewMappingWarning: string | null = null;
   for (let index = 0; index < maxEntries; index++) {
     const entryRva = debugDir.rva + index * IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE;
     const entryOffset = rvaToOff(entryRva >>> 0);
     if (entryOffset == null) {
-      warning ??= "Debug directory no longer maps through rvaToOff.";
+      addWarning("Debug directory no longer maps through rvaToOff.");
       break;
     }
     if (entryOffset + IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE > fileSize) {
-      warning ??= "Debug directory extends beyond end of file (possible truncation).";
+      addWarning("Debug directory extends beyond end of file (possible truncation).");
       break;
     }
     const view = new DataView(
       await file.slice(entryOffset, entryOffset + IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE).arrayBuffer()
     );
     if (view.byteLength < IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE) {
-      warning ??= "Debug directory entry is truncated.";
+      addWarning("Debug directory entry is truncated.");
       break;
     }
 
@@ -75,7 +79,7 @@ export async function parseDebugDirectory(
 
     if (type !== IMAGE_DEBUG_TYPE_CODEVIEW) continue;
     if (dataSize < CODEVIEW_RSDS_MIN_SIZE) {
-      warning ??= "CodeView debug entry is smaller than the minimum RSDS header.";
+      addWarning("CodeView debug entry is smaller than the minimum RSDS header.");
       continue;
     }
 
@@ -85,15 +89,15 @@ export async function parseDebugDirectory(
         ? rvaToOff(addressOfRawDataRva)
         : null;
     if (dataOffset == null || dataOffset < 0) {
-      codeViewMappingWarning ??= pointerToRawDataOff || addressOfRawDataRva
+      addWarning(pointerToRawDataOff || addressOfRawDataRva
         ? "CodeView debug entry does not map to file data (check PointerToRawData/AddressOfRawData)."
-        : "CodeView debug entry has no PointerToRawData/AddressOfRawData.";
+        : "CodeView debug entry has no PointerToRawData/AddressOfRawData.");
       continue;
     }
 
     const dataEnd = dataOffset + dataSize;
     if (dataOffset >= fileSize || dataEnd > fileSize) {
-      warning ??= "Debug directory points outside file bounds; file may be malformed.";
+      addWarning("Debug directory points outside file bounds; file may be malformed.");
       continue;
     }
 
@@ -123,8 +127,13 @@ export async function parseDebugDirectory(
         break;
       }
     }
-    return { entry: { guid, age, path }, warning };
+    if (pos >= pathEnd) {
+      addWarning("CodeView RSDS path is not NUL-terminated within SizeOfData.");
+    }
+    return {
+      entry: { guid, age, path },
+      warning: warnings.length ? warnings.join(" | ") : null
+    };
   }
-  warning ??= codeViewMappingWarning;
-  return { entry: null, warning };
+  return { entry: null, warning: warnings.length ? warnings.join(" | ") : null };
 }

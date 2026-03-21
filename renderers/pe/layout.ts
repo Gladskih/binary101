@@ -32,6 +32,11 @@ export function renderReloc(pe: PeParseResult, out: string[]): void {
   const reloc = pe.reloc;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Base relocations</h4>`);
   out.push(`<div class="smallNote">Relocation blocks are used when the image cannot be loaded at its preferred base address.</div>`);
+  if (reloc.warnings?.length) {
+    out.push(`<ul class="smallNote">`);
+    reloc.warnings.forEach(warning => out.push(`<li>${safe(warning)}</li>`));
+    out.push(`</ul>`);
+  }
   out.push(`<dl>`);
   out.push(`<dt>Total entries</dt><dd>${reloc.totalEntries ?? 0}</dd>`);
   out.push(`</dl>`);

@@ -73,9 +73,13 @@ export const bufferToHex = (arrayBuffer: ArrayBuffer | ArrayBufferView): string 
     .join("");
 
 export const alignUpTo = (value: number, alignment: number): number => {
-  if (!alignment) return value >>> 0;
-  const mask = (alignment - 1) >>> 0;
-  return ((value + mask) & ~mask) >>> 0;
+  const normalizedAlignment = alignment >>> 0;
+  if (!normalizedAlignment) return value >>> 0;
+  const normalizedValue = value >>> 0;
+  const remainder = normalizedValue % normalizedAlignment;
+  return remainder === 0
+    ? normalizedValue
+    : ((normalizedValue + normalizedAlignment - remainder) >>> 0);
 };
 
 // Backwards-compatible aliases kept while refactoring callers.

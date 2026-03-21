@@ -21,12 +21,26 @@ export async function parseExportDirectory(
   issues: string[];
 } | null> {
   const dir = dataDirs.find(d => d.name === "EXPORT");
-  if (!dir?.rva || dir.size < 40) return null;
+  if (!dir?.rva) return null;
   const base = rvaToOff(dir.rva);
   if (base == null) return null;
   const availableDirSize = Math.max(0, Math.min(dir.size, file.size - base));
   addCoverageRegion("EXPORT directory", base, availableDirSize);
-  if (availableDirSize < 40) return null;
+  if (availableDirSize < 40) {
+    return {
+      flags: 0,
+      timestamp: 0,
+      version: 0,
+      dllName: "",
+      Base: 0,
+      NumberOfFunctions: 0,
+      NumberOfNames: 0,
+      namePointerTable: 0,
+      ordinalTable: 0,
+      entries: [],
+      issues: ["Export directory is smaller than the 40-byte IMAGE_EXPORT_DIRECTORY header."]
+    };
+  }
   const dv = new DataView(await file.slice(base, base + 40).arrayBuffer());
   const isReadableOffset = (offset: number | null): offset is number =>
     offset != null && offset >= 0 && offset < file.size;
@@ -164,7 +178,7 @@ export async function parseExportDirectory(
   return {
     flags: Characteristics,
     timestamp: TimeDateStamp,
-    version: (MajorVersion << 16) | MinorVersion,
+    version: ((MajorVersion << 16) | MinorVersion) >>> 0,
     dllName: name,
     Base: OrdinalBase,
     NumberOfFunctions,

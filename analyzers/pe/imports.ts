@@ -72,7 +72,10 @@ const readImportByName = async (
   isReadableOffset: (offset: number | null) => offset is number
 ): Promise<PeImportFunction> => {
   const hintNameOffset = rvaToOff(hintNameRva);
-  if (!isReadableOffset(hintNameOffset)) return { name: "<bad RVA>" };
+  if (!isReadableOffset(hintNameOffset)) {
+    addWarning("Import hint/name RVA does not map to file data.");
+    return { name: "<bad RVA>" };
+  }
   const hintView = new DataView(
     await file.slice(hintNameOffset, hintNameOffset + IMAGE_IMPORT_BY_NAME_HINT_SIZE).arrayBuffer()
   );
@@ -102,7 +105,7 @@ const readImportThunkFunctions32 = async (
     const thunkEntryRva = thunkRva + thunkIndex * IMAGE_THUNK_DATA32_SIZE;
     const thunkEntryOffset = rvaToOff(thunkEntryRva >>> 0);
     if (!isReadableOffset(thunkEntryOffset)) {
-      if (thunkIndex === 0) addWarning("Import thunk RVA does not map to file data.");
+      addWarning("Import thunk RVA does not map to file data.");
       break;
     }
     const dv = new DataView(
@@ -139,7 +142,7 @@ const readImportThunkFunctions64 = async (
     const thunkEntryRva = thunkRva + thunkIndex * IMAGE_THUNK_DATA64_SIZE;
     const thunkEntryOffset = rvaToOff(thunkEntryRva >>> 0);
     if (!isReadableOffset(thunkEntryOffset)) {
-      if (thunkIndex === 0) addWarning("Import thunk RVA does not map to file data.");
+      addWarning("Import thunk RVA does not map to file data.");
       break;
     }
     const dv = new DataView(

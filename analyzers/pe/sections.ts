@@ -17,12 +17,17 @@ const createRvaToOffsetMapper = (
     const mappedSpan = getMappedSectionSpan(section);
     const fileOffset = section.pointerToRawData >>> 0;
     const rawSize = section.sizeOfRawData >>> 0;
-    return { vaStart: virtualAddress, vaEnd: (virtualAddress + mappedSpan) >>> 0, fileOffset, rawSize };
+    return {
+      vaStart: virtualAddress,
+      vaEnd: Math.min(0x1_0000_0000, virtualAddress + mappedSpan),
+      fileOffset,
+      rawSize
+    };
   });
   return relativeVirtualAddress => {
     const normalized = relativeVirtualAddress >>> 0;
     const headerSpan = Math.max(0, Math.min(sizeOfHeaders >>> 0, fileSize >>> 0));
-    if (normalized < headerSpan) return normalized;
+    if (normalized > 0 && normalized < headerSpan) return normalized;
     for (const span of spans) {
       if (normalized >= span.vaStart && normalized < span.vaEnd) {
         const delta = normalized - span.vaStart;
@@ -40,7 +45,7 @@ const parseSectionHeaders = async (
   sizeOfOptionalHeader: number,
   numberOfSections: number,
   sizeOfHeaders: number
-): Promise<{ sections: PeSection[]; rvaToOff: RvaToOffset; sectOff: number }> => {
+): Promise<{ sections: PeSection[]; rvaToOff: RvaToOffset; sectOff: number; warnings?: string[] }> => {
   const sectionHeadersOffset = optionalHeaderOffset + sizeOfOptionalHeader;
   const safeSectionCount = numberOfSections >>> 0;
   const sectionHeadersView = new DataView(
@@ -52,6 +57,10 @@ const parseSectionHeaders = async (
       .arrayBuffer()
   );
   const sections: PeSection[] = [];
+  const warnings: string[] = [];
+  if (sectionHeadersView.byteLength < safeSectionCount * IMAGE_SECTION_HEADER_SIZE) {
+    warnings.push("Section header table is truncated by end of file.");
+  }
   for (let sectionIndex = 0; sectionIndex < safeSectionCount; sectionIndex += 1) {
     const baseOffset = sectionIndex * IMAGE_SECTION_HEADER_SIZE;
     if (sectionHeadersView.byteLength < baseOffset + IMAGE_SECTION_HEADER_SIZE) break;
@@ -76,7 +85,9 @@ const parseSectionHeaders = async (
     });
   }
   const rvaToOff = createRvaToOffsetMapper(sections, file.size, sizeOfHeaders);
-  return { sections, rvaToOff, sectOff: sectionHeadersOffset };
+  return warnings.length
+    ? { sections, rvaToOff, sectOff: sectionHeadersOffset, warnings }
+    : { sections, rvaToOff, sectOff: sectionHeadersOffset };
 };
 
 export { parseSectionHeaders };

@@ -47,7 +47,7 @@ export async function parseExceptionDirectory(
   issues: string[];
 } | null> {
   const dir = dataDirs.find(d => d.name === "EXCEPTION");
-  if (!dir?.rva || dir.size < RUNTIME_FUNCTION_ENTRY_SIZE) return null;
+  if (!dir?.rva) return null;
   const base = rvaToOff(dir.rva);
   if (base == null) return null;
 
@@ -56,6 +56,12 @@ export async function parseExceptionDirectory(
   if (machine !== IMAGE_FILE_MACHINE_AMD64) {
     return createEmptyExceptionDirectory([
       `Exception directory decoding is only implemented for AMD64; machine 0x${machine.toString(16)} uses a different format.`
+    ]);
+  }
+
+  if (dir.size < RUNTIME_FUNCTION_ENTRY_SIZE) {
+    return createEmptyExceptionDirectory([
+      `Exception directory size is smaller than one RUNTIME_FUNCTION entry (${RUNTIME_FUNCTION_ENTRY_SIZE} bytes).`
     ]);
   }
 
@@ -166,6 +172,11 @@ export async function parseExceptionDirectory(
     const b3 = bytes[3] ?? 0;
     return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0;
   };
+  const readTrailingU32 = async (off: number, issue: string): Promise<number | null> => {
+    const value = await readU32LE(off);
+    if (value == null) issues.push(issue);
+    return value;
+  };
 
   const unwindQueue = [...unwindRvas.values()];
   const unwindVisited = new Set<number>(unwindRvas);
@@ -206,7 +217,10 @@ export async function parseExceptionDirectory(
       handlerUnwindInfoCount += 1;
 
       const handlerOff = off + alignTo4(4 + countOfCodes * 2);
-      const handlerRva = await readU32LE(handlerOff);
+      const handlerRva = await readTrailingU32(
+        handlerOff,
+        "UNWIND_INFO declares EHANDLER/UHANDLER, but the trailing handler RVA is truncated."
+      );
       if (handlerRva && !handlerRvasSet.has(handlerRva)) {
         handlerRvasSet.add(handlerRva);
         handlerRvas.push(handlerRva);
@@ -216,7 +230,10 @@ export async function parseExceptionDirectory(
       chainedUnwindInfoCount += 1;
 
       const chainOff = off + alignTo4(4 + countOfCodes * 2);
-      const chainedUnwindInfoRva = await readU32LE(chainOff + 8);
+      const chainedUnwindInfoRva = await readTrailingU32(
+        chainOff + 8,
+        "UNWIND_INFO declares CHAININFO, but the trailing chained RUNTIME_FUNCTION is truncated."
+      );
       if (chainedUnwindInfoRva) enqueueUnwindRva(chainedUnwindInfoRva);
     }
   }

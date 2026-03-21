@@ -86,6 +86,12 @@ export const parseDynamicRelocationEntriesV232 = (
     const symbol = view.getUint32(cursor + Uint32Array.BYTES_PER_ELEMENT * 2, true);
     const symbolGroup = view.getUint32(cursor + Uint32Array.BYTES_PER_ELEMENT * 3, true) >>> 0;
     const flags = view.getUint32(cursor + Uint32Array.BYTES_PER_ELEMENT * 4, true) >>> 0;
+    const entryBodySize = Math.max(0, dataEnd - cursor);
+    if (entryBodySize <= DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE32) {
+      warnings.push(
+        "DynamicRelocations: V2 entry body is no larger than the fixed header, so fixup payload is missing or truncated."
+      );
+    }
     const fixupStart = cursor + Math.max(DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE32, headerSize);
     const availableBytes = Math.min(fixupInfoSize, Math.max(0, dataEnd - fixupStart));
 

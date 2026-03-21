@@ -8,8 +8,7 @@ export const CLR_METADATA_ROOT_MIN_BYTES = 0x20;
 const CLR_STREAM_NAME_SPEC_LIMIT = 32;
 // ECMA-335 II.24.2.1 ("Metadata root"): signature "BSJB" = 0x424A5342.
 const CLR_METADATA_SIGNATURE_BSJB = 0x424a5342;
-const ASCII_PRINTABLE_MIN = 0x20;
-const ASCII_PRINTABLE_MAX = 0x7e;
+const utf8Decoder = new TextDecoder("utf-8", { fatal: false });
 
 interface Cursor {
   offset: number;
@@ -24,15 +23,13 @@ const alignTo4 = (value: number): number => (value + 3) & ~3;
 const toHex = (value: number, width: number): string =>
   "0x" + value.toString(16).padStart(width, "0");
 
-const decodePrintableAscii = (bytes: Uint8Array): string => {
-  let result = "";
-  for (const byteValue of bytes) {
-    if (byteValue === 0) break;
-    if (byteValue >= ASCII_PRINTABLE_MIN && byteValue <= ASCII_PRINTABLE_MAX) {
-      result += String.fromCharCode(byteValue);
-    }
-  }
-  return result.trim();
+const decodeUtf8NullTerminated = (bytes: Uint8Array): { text: string; terminated: boolean } => {
+  const terminator = bytes.indexOf(0);
+  const textBytes = terminator === -1 ? bytes : bytes.subarray(0, terminator);
+  return {
+    text: utf8Decoder.decode(textBytes),
+    terminated: terminator !== -1
+  };
 };
 
 
@@ -71,20 +68,27 @@ const readStreamNameAt = async (
   reader: MetadataReader,
   cursor: Cursor,
   declaredMetaSize: number
-): Promise<string | null> => {
+): Promise<{ name: string; nullTerminatedWithinLimit: boolean } | null> => {
   if (cursor.offset >= declaredMetaSize) return null;
-  let name = "";
+  const bytes: number[] = [];
+  let terminated = false;
   const remainingBytes = declaredMetaSize - cursor.offset;
   for (let index = 0; index < remainingBytes; index += 1) {
     const byteView = await reader.readAt(cursor.offset, 1);
     if (!byteView) return null;
     cursor.offset += 1;
     const byteValue = byteView.getUint8(0);
-    if (byteValue === 0) break;
-    name += String.fromCharCode(byteValue);
+    if (byteValue === 0) {
+      terminated = true;
+      break;
+    }
+    bytes.push(byteValue);
   }
   cursor.offset = alignTo4(cursor.offset);
-  return name;
+  return {
+    name: utf8Decoder.decode(new Uint8Array(bytes)),
+    nullTerminatedWithinLimit: terminated && bytes.length <= CLR_STREAM_NAME_SPEC_LIMIT
+  };
 };
 
 const parseMetadataRootWithReader = async (
@@ -129,7 +133,11 @@ const parseMetadataRootWithReader = async (
       issues.push("Metadata root version string is truncated or out of bounds.");
       return null;
     }
-    version = decodePrintableAscii(versionBytes);
+    const decodedVersion = decodeUtf8NullTerminated(versionBytes);
+    version = decodedVersion.text;
+    if (!decodedVersion.terminated) {
+      issues.push("Metadata root version string is not null-terminated within the declared length.");
+    }
     cursor.offset = alignTo4(cursor.offset);
   }
   const flags = await readU16At(reader, cursor);
@@ -152,26 +160,31 @@ const parseMetadataRootWithReader = async (
       issues.push("Metadata stream headers are truncated; some stream names are missing.");
       break;
     }
-    if (name.length > CLR_STREAM_NAME_SPEC_LIMIT) {
+    if (!name.nullTerminatedWithinLimit) {
       issues.push(
-        `Metadata stream "${name}" exceeds the ECMA-335 32-character stream-name limit.`
+        "Metadata stream names must be null-terminated within the ECMA-335 32-character limit."
+      );
+    }
+    if (name.name.length > CLR_STREAM_NAME_SPEC_LIMIT) {
+      issues.push(
+        `Metadata stream "${name.name}" exceeds the ECMA-335 32-character stream-name limit.`
       );
     }
     if ((size & 3) !== 0) {
-      issues.push(`Metadata stream "${name}" size is not a multiple of 4 bytes.`);
+      issues.push(`Metadata stream "${name.name}" size is not a multiple of 4 bytes.`);
     }
     if (declaredMetaSize > 0 && offset + size > declaredMetaSize) {
       issues.push(
-        `Metadata stream "${name}" extends past declared metadata size ` +
+        `Metadata stream "${name.name}" extends past declared metadata size ` +
           `(${toHex(offset + size, 8)} > ${toHex(declaredMetaSize, 8)}).`
       );
     }
-    if (seenStreamNames.has(name)) {
-      issues.push(`Metadata stream "${name}" is duplicated.`);
+    if (seenStreamNames.has(name.name)) {
+      issues.push(`Metadata stream "${name.name}" is duplicated.`);
     } else {
-      seenStreamNames.add(name);
+      seenStreamNames.add(name.name);
     }
-    streams.push({ name, offset, size });
+    streams.push({ name: name.name, offset, size });
   }
   if (streams.length < streamCountRaw) {
     issues.push("Metadata stream list is incomplete; fewer streams were parsed than declared.");

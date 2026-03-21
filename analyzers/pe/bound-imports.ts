@@ -58,11 +58,18 @@ export async function parseBoundImports(
   addCoverageRegion: AddCoverageRegion
 ): Promise<{ entries: PeBoundImportEntry[]; warning?: string } | null> {
   const dir = dataDirs.find(d => d.name === "BOUND_IMPORT");
-  if (!dir?.rva || dir.size < IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE) return null;
+  if (!dir?.rva) return null;
   const base = rvaToOff(dir.rva);
   if (base == null) return null;
-  addCoverageRegion("BOUND_IMPORT", base, dir.size);
-  const end = base + dir.size;
+  const availableDirSize = Math.max(0, Math.min(dir.size, file.size - base));
+  addCoverageRegion("BOUND_IMPORT", base, availableDirSize);
+  if (availableDirSize < IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE) {
+    return {
+      entries: [],
+      warning: "Bound import directory is smaller than one descriptor; file may be truncated."
+    };
+  }
+  const end = base + availableDirSize;
   const entries: PeBoundImportEntry[] = [];
   const warnings = new Set<string>();
   let off = base;

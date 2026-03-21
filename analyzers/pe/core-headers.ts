@@ -143,6 +143,18 @@ export async function parseOptionalHeaderAndDirectories(
 }> {
   const optionalHeaderOffset = peHeaderOffset + 24;
   const warnings: string[] = [];
+  if (sizeOfOptionalHeader === 0) {
+    warnings.push("COFF SizeOfOptionalHeader is 0, so the optional header is absent.");
+    return {
+      optOff: optionalHeaderOffset,
+      optSize: 0,
+      ddStartRel: 0,
+      ddCount: 0,
+      dataDirs: [],
+      opt: createEmptyOptionalHeader(0, false, false),
+      warnings
+    };
+  }
   const maxReadable = Math.max(0, file.size - optionalHeaderOffset);
   if (sizeOfOptionalHeader > 0 && maxReadable < sizeOfOptionalHeader) {
     warnings.push("Optional header is truncated by end of file.");

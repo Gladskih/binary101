@@ -105,7 +105,10 @@ const readDelayThunkFunctions32 = async (
   for (let index = 0; index < maxThunkEntries(IMAGE_THUNK_DATA32_SIZE); index += 1) {
     const thunkEntryRva = intRva + index * IMAGE_THUNK_DATA32_SIZE;
     const thunkEntryOff = rvaToOff(thunkEntryRva >>> 0);
-    if (thunkEntryOff == null) break;
+    if (thunkEntryOff == null) {
+      warnings.add("Delay import thunk RVA does not map to file data.");
+      break;
+    }
     if (thunkEntryOff < 0 || thunkEntryOff + IMAGE_THUNK_DATA32_SIZE > file.size) {
       warnings.add("Delay import thunk table truncated (32-bit).");
       break;
@@ -142,7 +145,10 @@ const readDelayThunkFunctions64 = async (
   for (let index = 0; index < maxThunkEntries(IMAGE_THUNK_DATA64_SIZE); index += 1) {
     const thunkEntryRva = intRva + index * IMAGE_THUNK_DATA64_SIZE;
     const thunkEntryOff = rvaToOff(thunkEntryRva >>> 0);
-    if (thunkEntryOff == null) break;
+    if (thunkEntryOff == null) {
+      warnings.add("Delay import thunk RVA does not map to file data.");
+      break;
+    }
     if (thunkEntryOff < 0 || thunkEntryOff + IMAGE_THUNK_DATA64_SIZE > file.size) {
       warnings.add("Delay import thunk table truncated (64-bit).");
       break;
@@ -204,19 +210,28 @@ const parseDelayImportsWithThunkReader = async (
   ) => Promise<Array<{ ordinal?: number; hint?: number; name?: string }>>
 ): Promise<{ entries: PeDelayImportEntry[]; warning?: string } | null> => {
   const dir = dataDirs.find(d => d.name === "DELAY_IMPORT");
-  if (!dir?.rva || dir.size < IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) return null;
+  if (!dir?.rva) return null;
   const base = rvaToOff(dir.rva);
   if (base == null) return null;
-  addCoverageRegion("DELAY_IMPORT", base, Math.min(dir.size, Math.max(0, file.size - base)));
+  const availableDirSize = Math.max(0, Math.min(dir.size, Math.max(0, file.size - base)));
+  addCoverageRegion("DELAY_IMPORT", base, availableDirSize);
   const entries: PeDelayImportEntry[] = [];
   const warnings = new Set<string>();
+  if (dir.size < IMAGE_DELAYLOAD_DESCRIPTOR_SIZE || availableDirSize < IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) {
+    warnings.add("Delay import directory is smaller than one descriptor; file may be truncated.");
+    return { entries, warning: Array.from(warnings).join(" | ") };
+  }
   const maxThunkEntries = (entrySize: number): number => Math.floor(file.size / entrySize) + 1;
   const maxDescriptors = Math.ceil(dir.size / IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
   for (let index = 0; index < maxDescriptors; index += 1) {
     const descriptorRva = (dir.rva + index * IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) >>> 0;
     const descriptorOff = rvaToOff(descriptorRva);
     const remaining = dir.size - index * IMAGE_DELAYLOAD_DESCRIPTOR_SIZE;
-    if (descriptorOff == null || remaining <= 0) break;
+    if (descriptorOff == null) {
+      warnings.add("Delay import descriptor RVA does not map to file data.");
+      break;
+    }
+    if (remaining <= 0) break;
     const descriptorSize = Math.min(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE, remaining);
     const dv = new DataView(await file.slice(descriptorOff, descriptorOff + descriptorSize).arrayBuffer());
     if (dv.byteLength < IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) {

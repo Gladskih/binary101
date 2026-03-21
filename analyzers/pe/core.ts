@@ -12,6 +12,11 @@ import {
 import { parseSectionHeaders } from "./sections.js";
 import type { PeCore } from "./types.js";
 
+const mergeWarnings = (...groups: Array<string[] | undefined>): string[] | undefined => {
+  const merged = new Set(groups.flatMap(group => group ?? []));
+  return merged.size ? [...merged] : undefined;
+};
+
 export async function parsePeHeaders(file: File): Promise<PeCore | null> {
   const head = new DataView(await file.slice(0, Math.min(file.size, 0x400)).arrayBuffer());
   const probe = peProbe(head);
@@ -25,7 +30,7 @@ export async function parsePeHeaders(file: File): Promise<PeCore | null> {
 
   const optionalResult = await parseOptionalHeaderAndDirectories(file, e_lfanew, coff.SizeOfOptionalHeader);
   const { optOff, ddStartRel, ddCount, dataDirs, opt } = optionalResult;
-  const { sections, rvaToOff, sectOff } = await parseSectionHeaders(
+  const { sections, rvaToOff, sectOff, warnings: sectionWarnings } = await parseSectionHeaders(
     file,
     optOff,
     coff.SizeOfOptionalHeader,
@@ -49,12 +54,13 @@ export async function parsePeHeaders(file: File): Promise<PeCore | null> {
 
   await addSectionEntropies(file, sections);
   const entrySection = await computeEntrySection(opt, sections);
+  const warnings = mergeWarnings(optionalResult.warnings, sectionWarnings);
 
   return {
     dos,
     coff,
     opt,
-    ...(optionalResult.warnings?.length ? { warnings: optionalResult.warnings } : {}),
+    ...(warnings ? { warnings } : {}),
     optOff,
     ddStartRel,
     ddCount,

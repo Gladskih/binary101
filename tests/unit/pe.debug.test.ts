@@ -256,3 +256,31 @@ void test("parseDebugDirectory warns when the RSDS path is not NUL-terminated wi
   assert.equal(result.entry?.path, "abc");
   assert.ok(result.warning && /path|string|terminat|truncated/i.test(result.warning));
 });
+
+void test("parseDebugDirectory keeps later RSDS warnings instead of dropping them after an earlier directory warning", async () => {
+  const bytes = new Uint8Array(256).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const debugRva = 0x20;
+  const dataRva = 0x80;
+  const pathBytes = encoder.encode("abc");
+
+  dv.setUint32(debugRva + 12, IMAGE_DEBUG_TYPE_CODEVIEW, true);
+  dv.setUint32(debugRva + 16, RSDS_HEADER_SIZE + pathBytes.length, true);
+  dv.setUint32(debugRva + 20, dataRva, true);
+  dv.setUint32(debugRva + 24, dataRva, true);
+  dv.setUint32(dataRva + 0, RSDS_SIGNATURE, true);
+  bytes.set(RSDS_TEST_GUID_BYTES, dataRva + 4);
+  dv.setUint32(dataRva + 20, 1, true);
+  bytes.set(pathBytes, dataRva + RSDS_HEADER_SIZE);
+
+  const result = await parseDebugDirectory(
+    new MockFile(bytes, "debug-multi-warning.bin"),
+    [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE + 1 }],
+    value => value,
+    () => {}
+  );
+
+  assert.equal(result.entry?.path, "abc");
+  assert.ok(result.warning && /trailing/i.test(result.warning));
+  assert.ok(result.warning && /terminat/i.test(result.warning));
+});

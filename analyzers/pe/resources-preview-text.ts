@@ -8,59 +8,98 @@ export function addPreviewIssue(langEntry: ResourceLangWithPreview, message: unk
   langEntry.previewIssues.push(String(message));
 }
 
-function decodeTextResource(
+const decodeUtf16leText = (
   data: Uint8Array
-): { text: string; encoding: string; error?: unknown } {
-  if (!data?.length) return { text: "", encoding: "" };
+): { text: string; encoding: string; terminated: boolean } => {
+  let end = data.length - (data.length % 2);
+  let terminated = false;
+  for (let index = 0; index + 1 < end; index += 2) {
+    const codeUnit = data[index] | (data[index + 1] << 8);
+    if (codeUnit === 0) {
+      end = index;
+      terminated = true;
+      break;
+    }
+  }
+  return {
+    text: new TextDecoder("utf-16le", { fatal: false }).decode(data.subarray(0, end)),
+    encoding: "UTF-16LE",
+    terminated
+  };
+};
+
+const decodeUtf8Text = (data: Uint8Array): { text: string; encoding: string; terminated: boolean } => {
+  const terminator = data.indexOf(0);
+  const end = terminator === -1 ? data.length : terminator;
+  return {
+    text: new TextDecoder("utf-8", { fatal: false }).decode(data.subarray(0, end)),
+    encoding: "UTF-8",
+    terminated: terminator !== -1
+  };
+};
+
+function decodeTextResource(
+  data: Uint8Array,
+  codePage: number | undefined
+): { text: string; encoding: string; terminated: boolean; error?: unknown } {
+  if (!data?.length) return { text: "", encoding: "", terminated: false };
   if (data.length >= 2) {
     const bom0 = data[0];
     const bom1 = data[1];
     if (bom0 !== undefined && bom1 !== undefined && bom0 === 0xff && bom1 === 0xfe) {
-      let text = "";
-      for (let index = 2; index + 1 < data.length; index += 2) {
-        const first = data[index];
-        const second = data[index + 1];
-        if (first === undefined || second === undefined) break;
-        const ch = first | (second << 8);
-        if (ch === 0) break;
-        text += String.fromCharCode(ch);
-      }
-      return { text, encoding: "UTF-16LE" };
+      return decodeUtf16leText(data.subarray(2));
     }
   }
+  if (codePage === 1200) {
+    return decodeUtf16leText(data);
+  }
   try {
-    const text = new TextDecoder("utf-8", { fatal: false }).decode(data);
-    return { text, encoding: "UTF-8" };
+    if (codePage === 20127) {
+      const decoded = new TextDecoder("us-ascii", { fatal: false }).decode(
+        data.subarray(0, data.indexOf(0) === -1 ? data.length : data.indexOf(0))
+      );
+      return { text: decoded, encoding: "US-ASCII", terminated: data.indexOf(0) !== -1 };
+    }
+    const decoded = decodeUtf8Text(data);
+    return decoded;
   } catch (err) {
-    return { text: "", encoding: "", error: err };
+    return { text: "", encoding: "", terminated: false, error: err };
   }
 }
 
 export function addManifestPreview(
   langEntry: ResourceLangWithPreview,
   data: Uint8Array,
-  typeName: string
+  typeName: string,
+  codePage: number | undefined
 ): void {
   if (typeName !== "MANIFEST") return;
-  const { text, error } = decodeTextResource(data);
+  const { text, error, terminated } = decodeTextResource(data, codePage);
   if (error) addPreviewIssue(langEntry, "Manifest text could not be fully decoded.");
   if (!text) return;
   langEntry.previewKind = "text";
   langEntry.textPreview = text;
+  if (terminated) {
+    addPreviewIssue(langEntry, "Manifest preview stopped at a NUL terminator before the declared data size.");
+  }
 }
 
 export function addHtmlPreview(
   langEntry: ResourceLangWithPreview,
   data: Uint8Array,
-  typeName: string
+  typeName: string,
+  codePage: number | undefined
 ): void {
   if (typeName !== "HTML") return;
-  const { text, error, encoding } = decodeTextResource(data);
+  const { text, error, encoding, terminated } = decodeTextResource(data, codePage);
   if (error) addPreviewIssue(langEntry, "HTML resource text could not be decoded.");
   if (!text) return;
   langEntry.previewKind = "html";
   langEntry.textPreview = text;
   langEntry.textEncoding = encoding || null;
+  if (terminated) {
+    addPreviewIssue(langEntry, "HTML preview stopped at a NUL terminator before the declared data size.");
+  }
 }
 
 export function addStringTablePreview(
@@ -115,7 +154,8 @@ export function addVersionPreview(
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const headerSize = 6; // VS_VERSIONINFO header: wLength(2) + wValueLength(2) + wType(2)
   const dwordAlign = 4;
-  const fixedMinSize = 24; // VS_FIXEDFILEINFO size in bytes
+  // VS_FIXEDFILEINFO is 13 DWORDs.
+  const fixedMinSize = 13 * Uint32Array.BYTES_PER_ELEMENT;
   if (dv.byteLength < headerSize) return;
   const len = dv.getUint16(0, true);
   const valueLength = dv.getUint16(2, true);
@@ -152,14 +192,15 @@ export function addVersionPreview(
   }
   // Align start of VS_FIXEDFILEINFO to DWORD boundary after the UTF-16 key string.
   const valueStart = (headerSize + keyBytes + (dwordAlign - 1)) & ~(dwordAlign - 1);
-  if (valueLength < fixedMinSize || valueStart + fixedMinSize > data.length) {
+  const declaredLength = Math.min(len, dv.byteLength);
+  if (valueLength < fixedMinSize || valueStart + fixedMinSize > declaredLength) {
     addPreviewIssue(langEntry, "Version block is too small to read VS_FIXEDFILEINFO.");
     return;
   }
   const fixedView = new DataView(
     data.buffer,
     data.byteOffset + valueStart,
-    Math.min(valueLength, dv.byteLength - valueStart)
+    Math.min(valueLength, declaredLength - valueStart)
   );
   const signature = fixedView.getUint32(0, true);
   const structVersion = fixedView.getUint32(4, true);

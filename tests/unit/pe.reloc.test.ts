@@ -207,4 +207,5 @@ void test("parseBaseRelocations does not continue from a block size that breaks 
 
   assert.ok(parsed);
   assert.strictEqual(parsed.blocks.length, 1);
+  assert.ok(parsed.warnings?.some(warning => /alignment|boundary|misaligned/i.test(warning)));
 });

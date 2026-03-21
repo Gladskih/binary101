@@ -189,6 +189,12 @@ export async function enrichResourcePreviews(
               .slice(dataOff, dataOff + langEntry.size)
               .arrayBuffer()
           );
+          if (data.byteLength < langEntry.size) {
+            addPreviewIssue(
+              langEntry,
+              "Resource preview read fewer bytes than the declared data size."
+            );
+          }
           const safePreview = (fn: () => void): void => {
             try {
               fn();
@@ -198,8 +204,8 @@ export async function enrichResourcePreviews(
             }
           };
           safePreview(() => addIconPreview(langEntry, data, typeName));
-          safePreview(() => addManifestPreview(langEntry, data, typeName));
-          safePreview(() => addHtmlPreview(langEntry, data, typeName));
+          safePreview(() => addManifestPreview(langEntry, data, typeName, langEntry.codePage));
+          safePreview(() => addHtmlPreview(langEntry, data, typeName, langEntry.codePage));
           safePreview(() => addVersionPreview(langEntry, data, typeName));
           safePreview(() => addStringTablePreview(langEntry, data, typeName, entry.id));
           truncateStringTablePreview(langEntry);

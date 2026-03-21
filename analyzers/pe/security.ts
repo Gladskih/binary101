@@ -35,6 +35,9 @@ export async function parseSecurityDirectory(
   if (availableSize < dir.size) {
     warnings.push("Attribute certificate table is truncated by end of file.");
   }
+  if (end < file.size) {
+    warnings.push("Attribute certificate table has bytes after the declared table.");
+  }
   if (availableSize < 8) {
     warnings.push("Attribute certificate table is too small for a WIN_CERTIFICATE header.");
     return { count: 0, certs: [], warnings };

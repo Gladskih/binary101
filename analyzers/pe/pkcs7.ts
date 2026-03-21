@@ -147,6 +147,9 @@ export const decodePkcs7 = (payload: Uint8Array): AuthenticodeInfo => {
   if (!top || top.tag !== TAG_SEQUENCE) {
     return { format: "pkcs7", warnings: ["Certificate blob is not DER encoded."] };
   }
+  if (top.end < payload.length) {
+    warnings.push("Certificate blob has trailing bytes after the DER ContentInfo payload.");
+  }
   const { contentType, payload: inner } = parseContentInfo(payload, top, warnings);
   const info: AuthenticodeInfo = { format: "pkcs7" };
   if (contentType) {

@@ -12,6 +12,7 @@ const WINDOWS_CODE_PAGE_MAX = 1258;
 const getCodePageEncoding = (codePage: number): string | null => {
   if (codePage === 65001) return "utf-8";
   if (codePage === 20127) return "us-ascii";
+  if (codePage === 932) return "shift_jis";
   if (codePage >= WINDOWS_CODE_PAGE_MIN && codePage <= WINDOWS_CODE_PAGE_MAX) {
     return `windows-${codePage}`;
   }
@@ -42,14 +43,14 @@ const decodeMessageEntryText = (
       if (code === 0) break;
       text += String.fromCharCode(code);
     }
-    return { text: text.trim() };
+    return { text };
   }
   const zeroIndex = entryBytes.indexOf(0);
   const slice = zeroIndex === -1 ? entryBytes : entryBytes.slice(0, zeroIndex);
   const encoding = getCodePageEncoding(codePage);
   if (!encoding) {
     return {
-      text: decodeAsciiBestEffort(slice).trim(),
+      text: decodeAsciiBestEffort(slice),
       issue: codePage
         ? `ANSI message entry uses unsupported code page ${codePage}; `
           + "preview fell back to ASCII-only decoding."
@@ -58,10 +59,10 @@ const decodeMessageEntryText = (
     };
   }
   try {
-    return { text: new TextDecoder(encoding, { fatal: false }).decode(slice).trim() };
+    return { text: new TextDecoder(encoding, { fatal: false }).decode(slice) };
   } catch {
     return {
-      text: decodeAsciiBestEffort(slice).trim(),
+      text: decodeAsciiBestEffort(slice),
       issue: `ANSI message entry could not be decoded as ${encoding}; `
         + "preview fell back to ASCII-only decoding."
     };
