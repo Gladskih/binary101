@@ -13,8 +13,9 @@ const decodeUtf16leText = (
 ): { text: string; encoding: string; terminated: boolean } => {
   let end = data.length - (data.length % 2);
   let terminated = false;
-  for (let index = 0; index + 1 < end; index += 2) {
-    const codeUnit = data[index] | (data[index + 1] << 8);
+  const view = new DataView(data.buffer, data.byteOffset, end);
+  for (let index = 0; index + Uint16Array.BYTES_PER_ELEMENT <= end; index += 2) {
+    const codeUnit = view.getUint16(index, true);
     if (codeUnit === 0) {
       end = index;
       terminated = true;

@@ -24,6 +24,7 @@ type PreviewResourceLang = ResourceLang & {
   previewKind?: string;
   previewMime?: string;
   textPreview?: string;
+  textEncoding?: string | null;
   stringTable?: Array<{ id: number | null; text: string }>;
   messageTable?: { messages: Array<{ id: number; strings: string[] }>; truncated: boolean };
   previewIssues?: string[];
