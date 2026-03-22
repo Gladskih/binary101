@@ -3,6 +3,7 @@
   "packageManager": "npm",
   "reporters": [
     "html",
+    "json",
     "clear-text",
     "progress"
   ],
@@ -22,7 +23,7 @@
   ],
   "tsconfigFile": "tsconfig.json",
   "typescriptChecker": {
-    "prioritizePerformanceOverAccuracy": true
+    "prioritizePerformanceOverAccuracy": false
   },
   "tap": {
     "nodeArgs": [
