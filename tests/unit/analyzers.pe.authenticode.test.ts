@@ -3,7 +3,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { decodePkcs7, decodeWinCertificate } from "../../analyzers/pe/authenticode.js";
-
 const concat = (...parts: Uint8Array[]): Uint8Array => {
   const total = parts.reduce((sum, part) => sum + part.length, 0);
   const out = new Uint8Array(total);
@@ -14,7 +13,6 @@ const concat = (...parts: Uint8Array[]): Uint8Array => {
   }
   return out;
 };
-
 const encodeLength = (len: number): Uint8Array => {
   if (len < 0x80) return Uint8Array.of(len);
   const bytes: number[] = [];
@@ -25,14 +23,11 @@ const encodeLength = (len: number): Uint8Array => {
   }
   return Uint8Array.of(0x80 | bytes.length, ...bytes);
 };
-
 const tag = (tagByte: number, content: Uint8Array): Uint8Array =>
   concat(Uint8Array.of(tagByte), encodeLength(content.length), content);
-
 const seq = (...parts: Uint8Array[]): Uint8Array => tag(0x30, concat(...parts));
 const set = (...parts: Uint8Array[]): Uint8Array => tag(0x31, concat(...parts));
 const ctx0 = (content: Uint8Array): Uint8Array => tag(0xa0, content);
-
 const oid = (value: string): Uint8Array => {
   const parts = value.split(".").map(Number);
   const first = (parts[0] ?? 0) * 40 + (parts[1] ?? 0);
@@ -46,7 +41,6 @@ const oid = (value: string): Uint8Array => {
   }
   return tag(0x06, Uint8Array.from(body));
 };
-
 const int = (value: number): Uint8Array => {
   const bytes: number[] = [];
   let v = value;
@@ -58,10 +52,8 @@ const int = (value: number): Uint8Array => {
   if (firstByte & 0x80) bytes.unshift(0);
   return tag(0x02, Uint8Array.from(bytes));
 };
-
 const nul = (): Uint8Array => tag(0x05, new Uint8Array(0));
 const octet = (bytes: Uint8Array): Uint8Array => tag(0x04, bytes);
-
 const buildSignedData = (): Uint8Array => {
   const digestAlgorithm = seq(oid("2.16.840.1.101.3.4.2.1"), nul());
   const signedContent = seq(oid("1.3.6.1.4.1.311.2.1.4"), ctx0(octet(Uint8Array.of(0x00))));
@@ -77,7 +69,6 @@ const buildSignedData = (): Uint8Array => {
   const signerInfos = set(signerInfo);
   return seq(int(1), set(digestAlgorithm), signedContent, certificates, signerInfos);
 };
-
 const buildSignedDataCustom = (digestOid: string, contentOid: string, includeCrl = false): Uint8Array => {
   const digestAlgorithm = seq(oid(digestOid), nul());
   const signedContent = seq(oid(contentOid));
@@ -96,7 +87,6 @@ const buildSignedDataCustom = (digestOid: string, contentOid: string, includeCrl
   parts.push(set(signerInfo));
   return seq(...parts);
 };
-
 void test("decodeWinCertificate extracts SignedData algorithms and counts", () => {
   const signedData = buildSignedData();
   const contentInfo = seq(oid("1.2.840.113549.1.7.2"), ctx0(signedData));
@@ -120,7 +110,6 @@ void test("decodeWinCertificate extracts SignedData algorithms and counts", () =
   assert.strictEqual(auth?.certificateCount, 2);
   assert.ok(!decoded.warnings);
 });
-
 void test("decodeWinCertificate flags truncated signature payload", () => {
   const payload = Uint8Array.of(0, 1, 2, 3);
   const declaredLength = payload.length + 8 + 8;
@@ -136,7 +125,6 @@ void test("decodeWinCertificate flags truncated signature payload", () => {
   assert.ok(decoded.authenticode?.warnings?.length);
   assert.strictEqual(decoded.offset, 0x80);
 });
-
 void test("decodePkcs7 reports non-signed content types", () => {
   const dataContent = seq(oid("1.2.840.113549.1.7.1"), ctx0(octet(Uint8Array.of(1, 2))));
   const decoded = decodePkcs7(dataContent);
@@ -144,14 +132,12 @@ void test("decodePkcs7 reports non-signed content types", () => {
   assert.ok(decoded.warnings?.some(w => w.includes("not SignedData")));
   assert.strictEqual(decoded.signerCount, undefined);
 });
-
 void test("decodePkcs7 handles missing SignedData payload", () => {
   const missingPayload = seq(oid("1.2.840.113549.1.7.2"));
   const decoded = decodePkcs7(missingPayload);
   assert.ok(decoded.warnings?.some(w => w.includes("payload")));
   assert.strictEqual(decoded.digestAlgorithms, undefined);
 });
-
 void test("decodePkcs7 warns when digest algorithms set is empty", () => {
   const emptySignedData = seq(
     int(1),
@@ -164,7 +150,6 @@ void test("decodePkcs7 warns when digest algorithms set is empty", () => {
   assert.ok(decoded.warnings?.some(w => w.includes("digest")));
   assert.strictEqual(decoded.signerCount, 0);
 });
-
 void test("decodePkcs7 keeps unknown OIDs and optional CRLs", () => {
   const signedData = buildSignedDataCustom("1.2.3.4.5", "1.2.3.4.6", true);
   const wrapper = seq(oid("1.2.840.113549.1.7.2"), ctx0(signedData));
@@ -173,13 +158,11 @@ void test("decodePkcs7 keeps unknown OIDs and optional CRLs", () => {
   assert.strictEqual(decoded.payloadContentType, "1.2.3.4.6");
   assert.ok(decoded.signerCount);
 });
-
 void test("decodePkcs7 treats overlong lengths as malformed", () => {
   const overrun = Uint8Array.of(0x30, 0x10, 0x06, 0x01);
   const decoded = decodePkcs7(overrun);
   assert.ok(decoded.warnings?.some(w => w.includes("DER")));
 });
-
 void test("decodeWinCertificate surfaces length mismatches", () => {
   const headerOnly = new Uint8Array(12);
   const view = new DataView(headerOnly.buffer);
@@ -190,7 +173,6 @@ void test("decodeWinCertificate surfaces length mismatches", () => {
   assert.ok(decoded.warnings?.some(w => w.includes("Length field")));
   assert.strictEqual(decoded.typeName.includes("X.509"), true);
 });
-
 void test("decodeWinCertificate reports fallback names for unknown type and revision", () => {
   const data = new Uint8Array(12);
   const view = new DataView(data.buffer);
@@ -201,31 +183,26 @@ void test("decodeWinCertificate reports fallback names for unknown type and revi
   assert.ok(decoded.revisionName.includes("0x0301"));
   assert.ok(decoded.typeName.includes("0xf00d"));
 });
-
 void test("decodePkcs7 warns on empty blobs", () => {
   const decoded = decodePkcs7(new Uint8Array());
   assert.ok(decoded.warnings?.some(w => w.includes("DER encoded")));
 });
-
 void test("decodePkcs7 flags single-byte blobs missing a length", () => {
   const decoded = decodePkcs7(Uint8Array.of(0x30));
   assert.ok(decoded.warnings?.some(w => w.includes("DER encoded")));
 });
-
 void test("decodePkcs7 reports when ContentInfo is missing a contentType OID", () => {
   const missingOid = seq(int(5), ctx0(octet(Uint8Array.of(0xaa))));
   const decoded = decodePkcs7(missingOid);
   assert.ok(decoded.warnings?.some(w => w.includes("contentType")));
   assert.strictEqual(decoded.contentType, undefined);
 });
-
 void test("decodePkcs7 surfaces non-SEQUENCE SignedData payloads", () => {
   const wrapper = seq(oid("1.2.840.113549.1.7.2"), ctx0(Uint8Array.of(0x01, 0x02)));
   const decoded = decodePkcs7(wrapper);
   assert.ok(decoded.warnings?.some(w => w.includes("SignedData is not a DER SEQUENCE")));
   assert.strictEqual(decoded.signerCount, undefined);
 });
-
 void test("decodePkcs7 surfaces missing SignedData version fields", () => {
   const badSignedData = seq(
     oid("1.2.840.113549.1.1.1"),
@@ -238,7 +215,6 @@ void test("decodePkcs7 surfaces missing SignedData version fields", () => {
   assert.ok(decoded.warnings?.some(w => w.includes("missing version")));
   assert.strictEqual(decoded.digestAlgorithms, undefined);
 });
-
 void test("decodePkcs7 counts certificates even without a SET wrapper", () => {
   const digestAlgorithm = seq(oid("1.3.14.3.2.26"), nul());
   const digestSet = set(digestAlgorithm);
@@ -259,7 +235,6 @@ void test("decodePkcs7 counts certificates even without a SET wrapper", () => {
   assert.strictEqual(decoded.certificateCount, 2);
   assert.ok(!decoded.warnings?.length);
 });
-
 void test("decodePkcs7 does not truncate raw certificate contexts after sixteen entries", () => {
   const digestAlgorithm = seq(oid("1.3.14.3.2.26"), nul());
   const digestSet = set(digestAlgorithm);
@@ -277,18 +252,15 @@ void test("decodePkcs7 does not truncate raw certificate contexts after sixteen 
   const signedData = seq(int(1), digestSet, payloadInfo, rawCerts, signerInfos);
   const wrapper = seq(oid("1.2.840.113549.1.7.2"), ctx0(signedData));
   const decoded = decodePkcs7(wrapper);
-
   assert.strictEqual(decoded.certificateCount, 17);
   assert.strictEqual(decoded.certificates?.length, 17);
 });
-
 void test("decodePkcs7 treats malformed contentType OIDs as unknown", () => {
   const malformed = seq(tag(0x06, Uint8Array.of(0x81)));
   const decoded = decodePkcs7(malformed);
   assert.strictEqual(decoded.contentType, undefined);
   assert.ok(!decoded.warnings?.length);
 });
-
 void test("decodePkcs7 warns when SignedData is missing sections", () => {
   const signedData = seq(int(1));
   const wrapper = seq(oid("1.2.840.113549.1.7.2"), ctx0(signedData));
@@ -297,10 +269,8 @@ void test("decodePkcs7 warns when SignedData is missing sections", () => {
   assert.ok(decoded.warnings?.some(w => w.includes("encapContentInfo")));
   assert.ok(decoded.warnings?.some(w => w.includes("SignerInfos")));
 });
-
 void test("decodePkcs7 warns when non-zero bytes trail the DER ContentInfo payload", () => {
   const wrapper = seq(oid("1.2.840.113549.1.7.2"), ctx0(buildSignedData()));
   const decoded = decodePkcs7(concat(wrapper, new TextEncoder().encode("ABCD")));
-
   assert.ok(decoded.warnings?.some(warning => /trailing|extra|padding/i.test(warning)));
 });

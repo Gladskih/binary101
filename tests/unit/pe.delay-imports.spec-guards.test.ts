@@ -1,28 +1,10 @@
 "use strict";
-
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import {
-  parseDelayImports32,
-  parseDelayImports64
-} from "../../analyzers/pe/delay-imports.js";
+import { parseDelayImports32, parseDelayImports64 } from "../../analyzers/pe/delay-imports.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
-import {
-  IMAGE_DELAYLOAD_DESCRIPTOR_SIZE,
-  IMAGE_ORDINAL_FLAG64,
-  IMAGE_THUNK_DATA32_SIZE,
-  IMAGE_THUNK_DATA64_SIZE,
-  cStringSize,
-  createDelayImportLayout,
-  imageImportByNameSize,
-  writeDelayImportDescriptor,
-  writeDelayImportName,
-  writeImportByName,
-  writeThunkTable32,
-  writeThunkTable64
-} from "./pe.delay-import-layout.js";
-
+import { IMAGE_DELAYLOAD_DESCRIPTOR_SIZE, IMAGE_ORDINAL_FLAG64, IMAGE_THUNK_DATA32_SIZE, IMAGE_THUNK_DATA64_SIZE, cStringSize, createDelayImportLayout, imageImportByNameSize, writeDelayImportDescriptor, writeDelayImportName, writeImportByName, writeThunkTable32, writeThunkTable64 } from "./pe.delay-import-layout.js";
 void test("parseDelayImports warns when the Delay Import Name Table cannot be mapped", async () => {
   const dllName = "delay.dll";
   const layout = createDelayImportLayout();
@@ -36,17 +18,14 @@ void test("parseDelayImports warns when the Delay Import Name Table cannot be ma
     importNameTableRva: intRva
   });
   writeDelayImportName(bytes, dllNameRva, dllName);
-
   const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
     value => (value === intRva ? null : value),
     () => {}
   ));
-
   assert.ok(result.warning?.toLowerCase().includes("name"));
 });
-
 void test("parseDelayImports warns when PE32+ name thunks set reserved bits", async () => {
   const dllName = "delay64.dll";
   const importName = "DelayFunc";
@@ -66,17 +45,14 @@ void test("parseDelayImports warns when PE32+ name thunks set reserved bits", as
   // Delay import INT entries use IMAGE_THUNK_DATA, so PE32+ name imports reserve bits 62-31.
   writeThunkTable64(dv, intRva, [0x0000000100000000n | BigInt(hintNameRva), 0n]);
   writeImportByName(bytes, dv, hintNameRva, hint, importName);
-
   const result = expectDefined(await parseDelayImports64(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
     value => value,
     () => {}
   ));
-
   assert.ok(result.warning?.toLowerCase().includes("reserved"));
 });
-
 void test("parseDelayImports walks the full PE32+ thunk array to its terminator", async () => {
   // Delay-load thunk tables mirror IMAGE_THUNK_DATA and are terminated by a null entry.
   const importCount = 16385;
@@ -99,20 +75,17 @@ void test("parseDelayImports walks the full PE32+ thunk array to its terminator"
   );
   thunks.push(0n);
   writeThunkTable64(dv, intRva, thunks);
-
   const result = await parseDelayImports64(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
     value => value,
     () => {}
   );
-
   const definedResult = expectDefined(result);
   const entry = expectDefined(definedResult.entries[0]);
   assert.equal(entry.functions.length, importCount);
   assert.deepEqual(entry.functions.at(-1), { ordinal: importCount });
 });
-
 void test("parseDelayImports stops when later thunk slots stop mapping", async () => {
   const dllName = "delay.dll";
   const mappedHint = 0x11;
@@ -137,7 +110,6 @@ void test("parseDelayImports stops when later thunk slots stop mapping", async (
   writeThunkTable32(dv, thunkTableRva, [mappedHintNameRva, unmappedHintNameRva, 0]);
   writeImportByName(bytes, dv, mappedHintNameRva, mappedHint, mappedName);
   writeImportByName(bytes, dv, unmappedHintNameRva, unmappedHint, unmappedName);
-
   const sparseRvaToOff = (rva: number): number | null => {
     // Only the first thunk slot maps. A parser that assumes contiguous file
     // offsets will read the second thunk from raw bytes instead of the mapper.
@@ -146,19 +118,16 @@ void test("parseDelayImports stops when later thunk slots stop mapping", async (
     if (rva >= unmappedHintNameRva && rva < unmappedEnd) return rva;
     return null;
   };
-
   const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
     sparseRvaToOff,
     () => {}
   ));
-
   const entry = expectDefined(result.entries[0]);
   assert.deepEqual(entry.functions, [{ hint: mappedHint, name: mappedName }]);
   assert.ok(result.warning?.toLowerCase().match(/truncated|unmapped|thunk/));
 });
-
 void test("parseDelayImports resolves later descriptors through rvaToOff", async () => {
   const firstDescriptorRva = 0x1000;
   const secondDescriptorRva = firstDescriptorRva + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE;
@@ -180,7 +149,6 @@ void test("parseDelayImports resolves later descriptors through rvaToOff", async
   });
   writeDelayImportName(bytes, 0x20, firstName);
   writeDelayImportName(bytes, 0xa0, secondName);
-
   const sparseRvaToOff = (rva: number): number | null => {
     if (rva >= firstDescriptorRva && rva < firstDescriptorRva + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) {
       return rva - firstDescriptorRva;
@@ -196,17 +164,14 @@ void test("parseDelayImports resolves later descriptors through rvaToOff", async
     }
     return null;
   };
-
   const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes, "delay-descriptor-gap.bin"),
     [{ name: "DELAY_IMPORT", rva: firstDescriptorRva, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE * 2 }],
     sparseRvaToOff,
     () => {}
   ));
-
   assert.deepEqual(result.entries.map(entry => entry.name), [firstName, secondName]);
 });
-
 void test("parseDelayImports warns when a later delay descriptor stops mapping before the null terminator", async () => {
   const firstDescriptorRva = 0x1000;
   const secondDescriptorRva = firstDescriptorRva + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE;
@@ -224,7 +189,6 @@ void test("parseDelayImports warns when a later delay descriptor stops mapping b
     importNameTableRva: 0
   });
   writeDelayImportName(bytes, 0x40, firstName);
-
   const sparseRvaToOff = (rva: number): number | null => {
     if (rva >= firstDescriptorRva && rva < firstDescriptorRva + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) {
       return rva - firstDescriptorRva;
@@ -235,18 +199,15 @@ void test("parseDelayImports warns when a later delay descriptor stops mapping b
     if (rva === secondDescriptorRva) return null;
     return null;
   };
-
   const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes, "delay-descriptor-unmapped.bin"),
     [{ name: "DELAY_IMPORT", rva: firstDescriptorRva, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE * 2 }],
     sparseRvaToOff,
     () => {}
   ));
-
   assert.deepEqual(result.entries.map(entry => entry.name), [firstName]);
   assert.ok(result.warning?.toLowerCase().match(/descriptor|truncated|unmapped/));
 });
-
 void test("parseDelayImports ignores partially non-zero descriptors as terminators", async () => {
   const dllName = "delay.dll";
   const layout = createDelayImportLayout();
@@ -265,20 +226,17 @@ void test("parseDelayImports ignores partially non-zero descriptors as terminato
   });
   writeDelayImportName(bytes, dllNameRva, dllName);
   writeThunkTable32(dv, thunkTableRva, [0x80000002, 0]);
-
   const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE * 2 }],
     value => value,
     () => {}
   ));
-
   const entry = expectDefined(result.entries[0]);
   assert.equal(result.entries.length, 1);
   assert.equal(entry.name, dllName);
   assert.deepEqual(entry.functions, [{ ordinal: 2 }]);
 });
-
 void test("parseDelayImports warns when 32-bit ordinal thunks set reserved bits", async () => {
   const dllName = "delay32.dll";
   const layout = createDelayImportLayout();
@@ -295,17 +253,14 @@ void test("parseDelayImports warns when 32-bit ordinal thunks set reserved bits"
   // Microsoft PE format, Import Lookup Table:
   // for ordinal imports, bits 30-15 must be zero in PE32.
   writeThunkTable32(dv, thunkTableRva, [0xffff0002, 0]);
-
   const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
     value => value,
     () => {}
   ));
-
   assert.ok(result.warning?.toLowerCase().includes("reserved"));
 });
-
 void test("parseDelayImports warns when PE32+ ordinal thunks set reserved bits", async () => {
   const dllName = "delay64.dll";
   const layout = createDelayImportLayout();
@@ -322,13 +277,11 @@ void test("parseDelayImports warns when PE32+ ordinal thunks set reserved bits",
   // Microsoft PE format, Import Lookup Table:
   // for ordinal imports, bits 62-15 must be zero in PE32+.
   writeThunkTable64(dv, thunkTableRva, [0xffff000000000002n, 0n]);
-
   const result = expectDefined(await parseDelayImports64(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
     value => value,
     () => {}
   ));
-
   assert.ok(result.warning?.toLowerCase().includes("reserved"));
 });

@@ -1,10 +1,6 @@
 "use strict";
 
-import type {
-  AddCoverageRegion,
-  PeDataDirectory,
-  RvaToOffset
-} from "./types.js";
+import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
 
 // Microsoft PE format, Delay Import tables: IMAGE_DELAYLOAD_DESCRIPTOR is eight DWORDs.
 const IMAGE_DELAYLOAD_DESCRIPTOR_SIZE = 32;
@@ -25,10 +21,9 @@ const IMAGE_DELAYLOAD_ATTRIBUTES_RVA = 1; // delayimp.h: dlattrRva means descrip
 // Parser policy: read NUL-terminated strings incrementally instead of slicing the full tail of a malformed file.
 const NULL_TERMINATED_ASCII_READ_CHUNK_SIZE = 64;
 
-const readNullTerminatedAsciiString = async (
-  file: File,
-  offset: number
-): Promise<{ text: string; truncated: boolean } | null> => {
+const readNullTerminatedAsciiString = async (file: File, offset: number): Promise<{
+  text: string; truncated: boolean;
+} | null> => {
   if (offset < 0 || offset >= file.size) return null;
   let text = "";
   let position = offset;
@@ -47,11 +42,8 @@ const readNullTerminatedAsciiString = async (
   }
   return { text, truncated: true };
 };
-
 const readDelayImportName = async (
-  file: File,
-  nameOffset: number,
-  warnings: Set<string>
+  file: File, nameOffset: number, warnings: Set<string>
 ): Promise<string> => {
   if (nameOffset < 0 || nameOffset >= file.size) {
     warnings.add("Delay import name RVA does not map to file data.");
@@ -65,12 +57,8 @@ const readDelayImportName = async (
   if (result.truncated) warnings.add("Delay import name string truncated.");
   return result.text;
 };
-
 const readDelayImportHintName = async (
-  file: File,
-  rvaToOff: RvaToOffset,
-  hintNameRva: number,
-  warnings: Set<string>
+  file: File, rvaToOff: RvaToOffset, hintNameRva: number, warnings: Set<string>
 ): Promise<{ ordinal?: number; hint?: number; name?: string }> => {
   const hintNameOff = rvaToOff(hintNameRva);
   if (hintNameOff == null || hintNameOff < 0 || hintNameOff >= file.size) {
@@ -93,7 +81,6 @@ const readDelayImportHintName = async (
   if (result.truncated) warnings.add("Delay import name string truncated.");
   return { hint, name: result.text };
 };
-
 const readDelayThunkFunctions32 = async (
   file: File,
   rvaToOff: RvaToOffset,
@@ -133,7 +120,6 @@ const readDelayThunkFunctions32 = async (
   }
   return functions;
 };
-
 const readDelayThunkFunctions64 = async (
   file: File,
   rvaToOff: RvaToOffset,
@@ -183,7 +169,6 @@ const readDelayThunkFunctions64 = async (
   }
   return functions;
 };
-
 export interface PeDelayImportEntry {
   name: string;
   Attributes: number;
@@ -195,7 +180,6 @@ export interface PeDelayImportEntry {
   TimeDateStamp: number;
   functions: Array<{ ordinal?: number; hint?: number; name?: string }>;
 }
-
 const parseDelayImportsWithThunkReader = async (
   file: File,
   dataDirs: PeDataDirectory[],
@@ -289,31 +273,17 @@ const parseDelayImportsWithThunkReader = async (
   const warning = warnings.size ? Array.from(warnings).join(" | ") : undefined;
   return warning ? { entries, warning } : { entries };
 };
-
 export const parseDelayImports32 = async (
   file: File,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   addCoverageRegion: AddCoverageRegion
 ): Promise<{ entries: PeDelayImportEntry[]; warning?: string } | null> =>
-  parseDelayImportsWithThunkReader(
-    file,
-    dataDirs,
-    rvaToOff,
-    addCoverageRegion,
-    readDelayThunkFunctions32
-  );
-
+  parseDelayImportsWithThunkReader(file, dataDirs, rvaToOff, addCoverageRegion, readDelayThunkFunctions32);
 export const parseDelayImports64 = async (
   file: File,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   addCoverageRegion: AddCoverageRegion
 ): Promise<{ entries: PeDelayImportEntry[]; warning?: string } | null> =>
-  parseDelayImportsWithThunkReader(
-    file,
-    dataDirs,
-    rvaToOff,
-    addCoverageRegion,
-    readDelayThunkFunctions64
-  );
+  parseDelayImportsWithThunkReader(file, dataDirs, rvaToOff, addCoverageRegion, readDelayThunkFunctions64);
