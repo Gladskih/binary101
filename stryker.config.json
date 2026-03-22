@@ -1,0 +1,44 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "packageManager": "npm",
+  "reporters": [
+    "html",
+    "clear-text",
+    "progress"
+  ],
+  "cleanTempDir": "always",
+  "ignorePatterns": [
+    "coverage",
+    "dist",
+    "test-results"
+  ],
+  "testRunner": "tap",
+  "coverageAnalysis": "perTest",
+  "ignoreStatic": true,
+  "incremental": true,
+  "incrementalFile": "reports/mutation/stryker-incremental.pe.json",
+  "checkers": [
+    "typescript"
+  ],
+  "tsconfigFile": "tsconfig.json",
+  "typescriptChecker": {
+    "prioritizePerformanceOverAccuracy": true
+  },
+  "tap": {
+    "nodeArgs": [
+      "-r",
+      "{{hookFile}}",
+      "--test-reporter=tap",
+      "--import",
+      "tsx",
+      "{{testFile}}"
+    ]
+  },
+  "mutate": [
+    "analyzers/pe/**/*.ts"
+  ],
+  "testFiles": [
+    "tests/unit/pe*.test.ts",
+    "tests/unit/analyzers.pe*.test.ts"
+  ]
+}

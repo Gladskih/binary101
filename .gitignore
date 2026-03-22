@@ -15,3 +15,9 @@ public/vendor/iced-x86/
 
 # External binary fixtures
 external-pe-fixtures/
+
+# Stryker artifacts
+.stryker-tmp/
+reports/mutation/
+stryker.log
+stryker-output-*.json

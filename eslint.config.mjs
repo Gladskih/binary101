@@ -159,7 +159,13 @@ export default [
     rules: sharedRules
   },
   {
-    ignores: ["dist/**", "coverage/**", "test-results/**", "public/vendor/**"]
+    ignores: [
+      "dist/**",
+      "coverage/**",
+      "test-results/**",
+      ".stryker-tmp/**",
+      "public/vendor/**"
+    ]
   }
 ];
 
