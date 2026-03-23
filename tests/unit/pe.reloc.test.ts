@@ -94,6 +94,36 @@ void test("parseBaseRelocations accepts a relocation block for page RVA 0", asyn
   assert.strictEqual(parsed.totalEntries, 2);
 });
 
+void test("parseBaseRelocations does not expose the second HIGHADJ slot as an independent relocation", async () => {
+  const bytes = new Uint8Array(0x80).fill(0);
+  const directoryOffset = 0x20;
+  const view = new DataView(bytes.buffer);
+  const blockSize = writeBaseRelocationBlock(view, {
+    pageRva: 0x1000,
+    entries: [
+      0x4001,
+      0x1234
+    ],
+    fileOffset: directoryOffset
+  });
+
+  const parsed = await parseBaseRelocations(
+    new MockFile(bytes, "reloc-highadj.bin"),
+    [{ name: "BASERELOC", rva: directoryOffset, size: blockSize }],
+    rvaToOff,
+    () => {}
+  );
+
+  const defined = parsed;
+  assert.ok(defined);
+  // Microsoft PE format, Base Relocation Types:
+  // IMAGE_REL_BASED_HIGHADJ occupies two WORD slots, where the second WORD carries the low 16 bits of the value
+  // and is not a standalone relocation entry.
+  assert.strictEqual(defined.totalEntries, 1);
+  assert.strictEqual(defined.blocks[0]?.count, 1);
+  assert.deepStrictEqual(defined.blocks[0]?.entries, [{ type: 4, offset: 1 }]);
+});
+
 void test("parseBaseRelocations does not silently cap valid tables at 256 blocks", async () => {
   const blockCount = 257;
   const directoryOffset = 0x40;

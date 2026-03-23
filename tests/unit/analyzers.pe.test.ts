@@ -121,6 +121,8 @@ void test("parsePe includes the aligned headers in imageEnd for sectionless imag
     0x1000,
     "SizeOfImage includes all headers rounded to SectionAlignment even when the image has no sections"
   );
+  assert.strictEqual(result.overlaySize, 0);
+  assert.ok(!result.coverage.some(region => region.label.startsWith("Overlay")));
   assert.strictEqual(result.imageSizeMismatch, false);
 });
 

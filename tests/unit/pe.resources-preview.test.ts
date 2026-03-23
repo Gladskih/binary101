@@ -176,7 +176,10 @@ void test("enrichResourcePreviews builds STRING, MESSAGETABLE, and VERSION previ
   assert.ok((stringLang.previewIssues || []).length > 0);
   assert.strictEqual(messageLang.previewKind, "messageTable");
   assert.deepEqual(expectDefined(messageLang.messageTable), {
-    messages: [{ id: 10, strings: ["OK", "Hi"] }],
+    messages: [
+      { id: 10, strings: ["OK"] },
+      { id: 11, strings: ["Hi"] }
+    ],
     truncated: false
   });
   assert.match((messageLang.previewIssues || []).join(" "), /supported code page/i);

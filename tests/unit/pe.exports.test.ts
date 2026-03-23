@@ -50,6 +50,32 @@ void test("parseExportDirectory extracts names and forwarders", async () => {
   assert.equal(expectDefined(result.entries[1]).forwarder, "KERNEL32.Forward");
   assert.equal(expectDefined(result.entries[1]).name, "FuncB");
 });
+void test("parseExportDirectory does not read forwarder strings past the export-directory range", async () => {
+  const bytes = new Uint8Array(0x100).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const directoryRva = 0x20;
+  const directorySize = 0x40;
+  const eatRva = 0x70;
+  const forwarderRva = directoryRva + directorySize - 2;
+
+  dv.setUint32(directoryRva + 16, 1, true);
+  dv.setUint32(directoryRva + 20, 1, true);
+  dv.setUint32(directoryRva + 28, eatRva, true);
+  dv.setUint32(eatRva, forwarderRva, true);
+  bytes[forwarderRva] = 0x41; // "A" inside the export directory.
+  bytes[forwarderRva + 1] = 0x42; // "B" inside the export directory.
+  bytes[forwarderRva + 2] = 0x43; // "C" outside the export directory.
+  bytes[forwarderRva + 3] = 0x44; // "D" outside the export directory.
+  bytes[forwarderRva + 4] = 0x00; // Terminator also lies outside the export directory.
+
+  const result = expectDefined(await parseExportFixture(bytes, { rva: directoryRva, size: directorySize }));
+
+  // Microsoft PE format, Export Address Table:
+  // a forwarder RVA points to a null-terminated ASCII string that "must be within the range that is given by the
+  // export table data directory entry". Bytes that happen to follow the export directory are not part of the string.
+  assert.equal(result.entries[0]?.forwarder, "AB");
+  assert.ok(result.issues.some(issue => /forwarder|string|truncated/i.test(issue)));
+});
 void test("parseExportDirectory preserves a declared export directory smaller than the fixed header", async () => {
   const bytes = new Uint8Array(64).fill(0);
   const result = await parseExportFixture(bytes, { rva: 0x10, size: IMAGE_EXPORT_DIRECTORY_SIZE - 1 });

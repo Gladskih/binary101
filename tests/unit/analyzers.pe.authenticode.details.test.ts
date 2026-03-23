@@ -32,6 +32,7 @@ const tag = (tagByte: number, content: Uint8Array): Uint8Array =>
 const seq = (...parts: Uint8Array[]): Uint8Array => tag(0x30, concat(...parts));
 const set = (...parts: Uint8Array[]): Uint8Array => tag(0x31, concat(...parts));
 const ctx0 = (content: Uint8Array): Uint8Array => tag(0xa0, content);
+const ctx0Implicit = (content: Uint8Array): Uint8Array => tag(0x80, content);
 
 const oid = (value: string): Uint8Array => {
   const parts = value.split(".").map(Number);
@@ -130,4 +131,30 @@ void test("decodePkcs7 does not truncate certificate parsing after sixteen entri
 
   assert.strictEqual(decoded.certificateCount, 17);
   assert.strictEqual(decoded.certificates?.length, 17);
+});
+
+void test("decodePkcs7 preserves SignerIdentifier subjectKeyIdentifier values", () => {
+  const digestAlgorithm = seq(oid("2.16.840.1.101.3.4.2.1"), nul());
+  const signedContent = seq(
+    oid("1.3.6.1.4.1.311.2.1.4"),
+    ctx0(octet(buildSpcIndirectDataWithDigest()))
+  );
+  const subjectKeyIdentifier = Uint8Array.of(0xde, 0xad, 0xbe, 0xef);
+  // RFC 5652 section 5.3 encodes subjectKeyIdentifier as [0] IMPLICIT SubjectKeyIdentifier.
+  const signerInfo = seq(
+    int(3),
+    ctx0Implicit(subjectKeyIdentifier),
+    seq(oid("2.16.840.1.101.3.4.2.1"), nul()),
+    seq(oid("1.2.840.113549.1.1.1"), nul()),
+    octet(Uint8Array.of(0x00))
+  );
+  const signedData = seq(int(3), set(digestAlgorithm), signedContent, set(signerInfo));
+  const wrapper = seq(oid("1.2.840.113549.1.7.2"), ctx0(signedData));
+  const decoded = decodePkcs7(wrapper);
+
+  assert.strictEqual(decoded.signers?.length, 1);
+  assert.strictEqual(
+    Reflect.get(decoded.signers?.[0] ?? {}, "subjectKeyIdentifier"),
+    "deadbeef"
+  );
 });

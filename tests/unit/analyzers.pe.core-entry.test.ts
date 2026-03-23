@@ -7,10 +7,21 @@ import { computeEntrySection } from "../../analyzers/pe/core-entry.js";
 const SECTION_RVA = 0x1000;
 const SECTION_VIRTUAL_SIZE = 0x80;
 const SECTION_RAW_SIZE = 0x200;
+const SECTION_POINTER_TO_RAW_DATA = 0x200;
+// Microsoft PE format, section flags:
+// 0x60000020 is IMAGE_SCN_CNT_CODE | IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ.
+const TEXT_SECTION_CHARACTERISTICS = 0x60000020;
 const ENTRYPOINT_IN_RAW_TAIL = SECTION_RVA + 0x1f0;
+// Deliberately 16 bytes below the 32-bit RVA wrap boundary so adding the section span would overflow a u32.
+const HIGH_RVA_SECTION_START = 0xfffffff0;
+const HIGH_RVA_SECTION_SPAN = 0x40;
 const ENTRY_SECTION_BOUNDARY_CASES = [
   { label: "section start", entryRva: SECTION_RVA, expected: { name: ".text", index: 0 } },
-  { label: "virtual tail", entryRva: SECTION_RVA + SECTION_VIRTUAL_SIZE - 1, expected: { name: ".text", index: 0 } },
+  {
+    label: "virtual tail",
+    entryRva: SECTION_RVA + SECTION_VIRTUAL_SIZE - 1,
+    expected: { name: ".text", index: 0 }
+  },
   { label: "raw tail", entryRva: ENTRYPOINT_IN_RAW_TAIL, expected: null },
   { label: "raw end excluded", entryRva: SECTION_RVA + SECTION_RAW_SIZE, expected: null },
   { label: "before section", entryRva: SECTION_RVA - 1, expected: null },
@@ -28,8 +39,8 @@ void test("computeEntrySection uses the in-memory VirtualSize, not file-alignmen
       virtualSize: SECTION_VIRTUAL_SIZE,
       virtualAddress: SECTION_RVA,
       sizeOfRawData: SECTION_RAW_SIZE,
-      pointerToRawData: 0x200,
-      characteristics: 0x60000020
+      pointerToRawData: SECTION_POINTER_TO_RAW_DATA,
+      characteristics: TEXT_SECTION_CHARACTERISTICS
     }
   ];
 
@@ -43,8 +54,8 @@ void test("computeEntrySection respects the mapped section boundary instead of t
       virtualSize: SECTION_VIRTUAL_SIZE,
       virtualAddress: SECTION_RVA,
       sizeOfRawData: SECTION_RAW_SIZE,
-      pointerToRawData: 0x200,
-      characteristics: 0x60000020
+      pointerToRawData: SECTION_POINTER_TO_RAW_DATA,
+      characteristics: TEXT_SECTION_CHARACTERISTICS
     }
   ];
 
@@ -76,9 +87,27 @@ void test("computeEntrySection skips sparse section slots and returns null when 
     virtualSize: SECTION_VIRTUAL_SIZE,
     virtualAddress: SECTION_RVA,
     sizeOfRawData: SECTION_RAW_SIZE,
-    pointerToRawData: 0x200,
-    characteristics: 0x60000020
+    pointerToRawData: SECTION_POINTER_TO_RAW_DATA,
+    characteristics: TEXT_SECTION_CHARACTERISTICS
   };
 
   assert.strictEqual(computeEntrySection({ AddressOfEntryPoint: 0x3000 }, sections), null);
+});
+
+void test("computeEntrySection does not wrap high-RVA section spans back to low addresses", () => {
+  const sections = [
+    {
+      name: ".text",
+      virtualSize: HIGH_RVA_SECTION_SPAN,
+      virtualAddress: HIGH_RVA_SECTION_START,
+      sizeOfRawData: HIGH_RVA_SECTION_SPAN,
+      pointerToRawData: SECTION_POINTER_TO_RAW_DATA,
+      characteristics: TEXT_SECTION_CHARACTERISTICS
+    }
+  ];
+
+  assert.deepStrictEqual(
+    computeEntrySection({ AddressOfEntryPoint: HIGH_RVA_SECTION_START }, sections),
+    { name: ".text", index: 0 }
+  );
 });

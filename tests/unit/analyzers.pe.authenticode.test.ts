@@ -255,11 +255,11 @@ void test("decodePkcs7 does not truncate raw certificate contexts after sixteen 
   assert.strictEqual(decoded.certificateCount, 17);
   assert.strictEqual(decoded.certificates?.length, 17);
 });
-void test("decodePkcs7 treats malformed contentType OIDs as unknown", () => {
+void test("decodePkcs7 warns on malformed contentType OIDs", () => {
   const malformed = seq(tag(0x06, Uint8Array.of(0x81)));
   const decoded = decodePkcs7(malformed);
   assert.strictEqual(decoded.contentType, undefined);
-  assert.ok(!decoded.warnings?.length);
+  assert.ok(decoded.warnings?.some(warning => /contentType|OID/i.test(warning)));
 });
 void test("decodePkcs7 warns when SignedData is missing sections", () => {
   const signedData = seq(int(1));

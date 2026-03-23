@@ -59,6 +59,20 @@ void test("parseImportDirectory warns on unmapped name RVA", async () => {
   assert.ok(result.warning?.match(/name rva/i));
 });
 
+void test("parseImportDirectory warns when the root IMPORT directory does not map to file data", async () => {
+  const bytes = new Uint8Array(IMPORT_DIRECTORY_SIZE).fill(0);
+
+  const result = await parseImportDirectory32(
+    new MockFile(bytes),
+    [{ name: "IMPORT", rva: 0x1000, size: IMPORT_DIRECTORY_SIZE }],
+    () => null,
+    () => {}
+  );
+
+  assert.deepEqual(result.entries, []);
+  assert.ok(result.warning?.match(/import|directory|map|file data/i));
+});
+
 void test("parseImportDirectory warns on unmapped thunk RVA in PE32", async () => {
   const layout = createImportLayout();
   const descriptorOffset = layout.reserve(IMPORT_DIRECTORY_SIZE);

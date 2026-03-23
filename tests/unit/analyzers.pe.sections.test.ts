@@ -122,3 +122,27 @@ void test("parseSectionHeaders does not wrap section RVAs past 0xffffffff back t
   assert.strictEqual(rvaToOff(0xffffffff), 0x20f);
   assert.strictEqual(rvaToOff(0), null);
 });
+
+void test("parseSectionHeaders decodes short section names as UTF-8", async () => {
+  const table = new Uint8Array(40).fill(0);
+  const view = new DataView(table.buffer);
+  table.set([0x2e, 0xc2, 0xb5], 0); // ".µ" as UTF-8
+  view.setUint32(8, 0x40, true);
+  view.setUint32(12, 0x1000, true);
+  view.setUint32(16, 0x40, true);
+  view.setUint32(20, 0x200, true);
+  const optionalHeaderOffset = 0x80;
+  const sizeOfOptionalHeader = 0xE0;
+  const fileBytes = new Uint8Array(0x280);
+  fileBytes.set(table, optionalHeaderOffset + sizeOfOptionalHeader);
+
+  const { sections } = await parseSectionHeaders(
+    new MockFile(fileBytes),
+    optionalHeaderOffset,
+    sizeOfOptionalHeader,
+    1,
+    optionalHeaderOffset + sizeOfOptionalHeader
+  );
+
+  assert.strictEqual(sections[0]?.name, ".\u00b5");
+});

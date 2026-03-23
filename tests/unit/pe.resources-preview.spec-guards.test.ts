@@ -104,7 +104,10 @@ void test("enrichResourcePreviews decodes MESSAGE_RESOURCE_DATA blocks using blo
   const lang = expectDefined(entry.langs[0]);
   assert.strictEqual(lang.previewKind, "messageTable");
   assert.deepEqual(lang.messageTable, {
-    messages: [{ id: firstMessageId, strings: ["OK", "Hi"] }],
+    messages: [
+      { id: firstMessageId, strings: ["OK"] },
+      { id: firstMessageId + 1, strings: ["Hi"] }
+    ],
     truncated: false
   });
 });
@@ -134,4 +137,34 @@ void test("enrichResourcePreviews limits STRING resources to one 16-string block
   // each string resource block stores at most 16 counted strings.
   assert.equal(stringTable.length, STRING_TABLE_ENTRY_COUNT);
   assert.ok(stringTable.every(item => item.id == null || item.id < STRING_TABLE_ENTRY_COUNT));
+});
+
+void test("enrichResourcePreviews preserves embedded NUL code units in counted STRING entries", async () => {
+  const stringTableOffset = RESOURCE_DIRECTORY_HEADER_SIZE;
+  const stringTableBytes = new Uint8Array(8).fill(0);
+  const view = new DataView(stringTableBytes.buffer);
+  view.setUint16(0, 3, true);
+  // Win32 string-table entries are counted UTF-16 strings, not NUL-terminated strings.
+  writeUtf16(stringTableBytes, 2, "A\0B");
+  const fileBytes = new Uint8Array(stringTableOffset + stringTableBytes.length).fill(0);
+  fileBytes.set(stringTableBytes, stringTableOffset);
+  const tree = createIdentityResourceTree(
+    "STRING",
+    stringTableOffset,
+    stringTableBytes.length,
+    1033,
+    UTF16_CODE_PAGE
+  );
+
+  const result = await enrichResourcePreviews(new MockFile(fileBytes), tree);
+  const group = expectDefined(result.detail[0]);
+  const entry = expectDefined(group.entries[0]);
+  const lang = expectDefined(entry.langs[0]);
+  const stringTable = expectDefined(lang.stringTable);
+  const firstString = expectDefined(stringTable[0]);
+
+  assert.strictEqual(firstString.text.length, 3);
+  assert.strictEqual(firstString.text.charCodeAt(0), 0x41);
+  assert.strictEqual(firstString.text.charCodeAt(1), 0x0000);
+  assert.strictEqual(firstString.text.charCodeAt(2), 0x42);
 });

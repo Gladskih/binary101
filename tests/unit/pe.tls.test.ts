@@ -132,6 +132,37 @@ void test("parseTlsDirectory warns when the declared data-directory size is too 
   assert.ok(tls64.warnings?.some(warning => /smaller than the 64-bit TLS header size/i.test(warning)));
 });
 
+void test(
+  "parseTlsDirectory64 preserves 64-bit VA fields beyond Number.MAX_SAFE_INTEGER",
+  async () => {
+  const tlsRva = 0x20;
+  const bytes = new Uint8Array(tlsRva + IMAGE_TLS_DIRECTORY64_SIZE).fill(0);
+  const dv = new DataView(bytes.buffer);
+  // 0x0020000000000001n is 2^53 + 1.
+  // That is the first unsigned integer JS cannot represent exactly as Number.
+  const firstUnsafeU64 = 0x0020000000000001n;
+  const secondUnsafeU64 = 0x0020000000000003n;
+  const thirdUnsafeU64 = 0x0020000000000005n;
+  // PE format: IMAGE_TLS_DIRECTORY64 stores these fields as 64-bit VAs.
+  dv.setBigUint64(tlsRva + 0x00, firstUnsafeU64, true);
+  dv.setBigUint64(tlsRva + 0x08, secondUnsafeU64, true);
+  dv.setBigUint64(tlsRva + 0x10, thirdUnsafeU64, true);
+  dv.setBigUint64(tlsRva + 0x18, 0n, true);
+
+  const tls = expectDefined(await parseTlsDirectory64(
+    new MockFile(bytes),
+    [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY64_SIZE }],
+    value => value,
+    () => {},
+    0
+  ));
+
+  assert.equal(BigInt(tls.StartAddressOfRawData), firstUnsafeU64);
+  assert.equal(BigInt(tls.EndAddressOfRawData), secondUnsafeU64);
+  assert.equal(BigInt(tls.AddressOfIndex), thirdUnsafeU64);
+  }
+);
+
 void test("parseTlsDirectory skips invalid callback pointers and tolerates out-of-range callback tables", async () => {
   const bytes = new Uint8Array(256).fill(0);
   const dv = new DataView(bytes.buffer);

@@ -278,3 +278,22 @@ void test("parseClrMetadataRoot reports stream names missing a null terminator",
   assert.ok(meta);
   assert.ok(hasIssueLike(issues, /null|terminator/i));
 });
+
+void test("parseClrMetadataRoot accepts the ECMA-335 minimum metadata root size of 0x18 bytes", async () => {
+  const metaOffset = 0x20;
+  // ECMA-335 II.24.2.1: Length includes the terminating NUL and is rounded up to a 4-byte boundary.
+  // The smallest valid version string is therefore just "\0", which makes the zero-stream metadata root 0x18 bytes.
+  const versionBytes = new Uint8Array([0]);
+  const metaSize = measureMetadataRootSize(versionBytes, []);
+  const { meta, issues } = await parseMetadataFixture(
+    "meta-min-root.bin",
+    metaOffset,
+    metaSize,
+    createMetadataRootBytes(metaOffset, metaSize, versionBytes, 0, [])
+  );
+
+  assert.ok(meta);
+  assert.strictEqual(meta.version, "");
+  assert.strictEqual(meta.streamCount, 0);
+  assert.deepStrictEqual(issues, []);
+});

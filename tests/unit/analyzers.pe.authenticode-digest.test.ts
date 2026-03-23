@@ -109,15 +109,24 @@ void test("computePeAuthenticodeDigest uses SECURITY index from data directories
   assert.strictEqual(computed, expectedDigest);
 });
 
-void test("computePeAuthenticodeDigest falls back to default SECURITY index", async () => {
+void test(
+  "computePeAuthenticodeDigest does not exclude a phantom SECURITY entry when none is present",
+  async () => {
   const { bytes, file } = createBestEffortAuthenticodeFixture();
   const core = { optOff: 0, ddStartRel: 100, dataDirs: [] };
-  const expectedBytes = collectFixtureBytes(bytes, listLegacyBestEffortAuthenticodeHashRanges(bytes.length));
+  // PE format, Optional Header Data Directories:
+  // before probing a specific directory, consumers must check NumberOfRvaAndSizes.
+  // With no SECURITY entry, only the PE checksum field at bytes 64..67 is excluded here.
+  const expectedBytes = collectFixtureBytes(bytes, [
+    { start: 0, end: 64 },
+    { start: 68, end: bytes.length }
+  ]);
   const expectedDigest = toHex(await crypto.subtle.digest("SHA-256", expectedBytes));
 
   const computed = await computePeAuthenticodeDigest(file, core, undefined, "SHA-256");
   assert.strictEqual(computed, expectedDigest);
-});
+  }
+);
 
 void test("computePeAuthenticodeDigestBestEffort returns null when the checksum field is outside the file", async () => {
   const file = createBestEffortAuthenticodeFixture().file;

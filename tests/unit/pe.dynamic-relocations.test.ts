@@ -134,15 +134,20 @@ void test("parseDynamicRelocationsFromLoadConfig warns when the declared V1 payl
   assert.ok(parsed.warnings?.some(w => w.toLowerCase().includes("truncated")));
 });
 
-void test("parseDynamicRelocationsFromLoadConfig preserves 64-bit V1 symbols for PE32+", async () => {
+void test(
+  "parseDynamicRelocationsFromLoadConfig preserves 64-bit V1 symbols for PE32+",
+  async () => {
   const tableOff = 0x80;
   const bytes = new Uint8Array(0x200).fill(0);
   const dv = new DataView(bytes.buffer);
   dv.setUint32(tableOff + 0x00, 1, true); // Version
   // PE32+ V1 entry header is 8-byte symbol + 4-byte BaseRelocSize, so dataSize is 0x0c here.
   dv.setUint32(tableOff + 0x04, 0x0c, true);
-  // The high dword must survive parsing; truncation to 32 bits is the bug under test.
-  dv.setBigUint64(tableOff + 0x08, 0x0000000100000001n, true);
+  // 0x0020000000000001n is 2^53 + 1.
+  // That is the first unsigned integer JS cannot represent exactly as Number.
+  const firstUnsafeSymbol = 0x0020000000000001n;
+  // PE32+ stores Symbol as a 64-bit field; values above Number.MAX_SAFE_INTEGER must remain exact.
+  dv.setBigUint64(tableOff + 0x08, firstUnsafeSymbol, true);
   dv.setUint32(tableOff + 0x10, 0, true);
 
   const lc = makeLoadConfig({ DynamicValueRelocTableSection: 1, DynamicValueRelocTableOffset: tableOff });
@@ -161,10 +166,13 @@ void test("parseDynamicRelocationsFromLoadConfig preserves 64-bit V1 symbols for
   const entry = expectDefined(parsed.entries[0]);
   assert.equal(entry.kind, "v1");
   if (entry.kind !== "v1") throw new Error("Expected v1 entry.");
-  assert.equal(entry.symbol, Number(0x0000000100000001n));
-});
+  assert.equal(BigInt(entry.symbol), firstUnsafeSymbol);
+  }
+);
 
-void test("parseDynamicRelocationsFromLoadConfig preserves 64-bit V2 symbols for PE32+", async () => {
+void test(
+  "parseDynamicRelocationsFromLoadConfig preserves 64-bit V2 symbols for PE32+",
+  async () => {
   const tableOff = 0x80;
   const bytes = new Uint8Array(0x200).fill(0);
   const dv = new DataView(bytes.buffer);
@@ -173,8 +181,9 @@ void test("parseDynamicRelocationsFromLoadConfig preserves 64-bit V2 symbols for
   dv.setUint32(tableOff + 0x04, 0x18, true);
   dv.setUint32(tableOff + 0x08, 0x18, true); // HeaderSize
   dv.setUint32(tableOff + 0x0c, 0, true); // FixupInfoSize
-  // The high dword must survive parsing; truncation to 32 bits is the bug under test.
-  dv.setBigUint64(tableOff + 0x10, 0x0000000100000002n, true);
+  const secondUnsafeSymbol = 0x0020000000000003n;
+  // PE32+ stores Symbol as a 64-bit field; values above Number.MAX_SAFE_INTEGER must remain exact.
+  dv.setBigUint64(tableOff + 0x10, secondUnsafeSymbol, true);
   dv.setUint32(tableOff + 0x18, 7, true);
   dv.setUint32(tableOff + 0x1c, 0x55, true);
 
@@ -194,8 +203,9 @@ void test("parseDynamicRelocationsFromLoadConfig preserves 64-bit V2 symbols for
   const entry = expectDefined(parsed.entries[0]);
   assert.equal(entry.kind, "v2");
   if (entry.kind !== "v2") throw new Error("Expected v2 entry.");
-  assert.equal(entry.symbol, Number(0x0000000100000002n));
-});
+  assert.equal(BigInt(entry.symbol), secondUnsafeSymbol);
+  }
+);
 
 void test("parseDynamicRelocationsFromLoadConfig warns when a V2 entry header is smaller than the fixed structure size", async () => {
   const tableOff = 0x80;
@@ -225,3 +235,35 @@ void test("parseDynamicRelocationsFromLoadConfig warns when a V2 entry header is
   assert.equal(parsed.version, 2);
   assert.ok(parsed.warnings?.some(warning => /header|undersized|invalid/i.test(warning)));
 });
+
+void test(
+  "parseDynamicRelocationsFromLoadConfig warns on undersized V2 headers even with payload",
+  async () => {
+  const tableOff = 0x80;
+  const bytes = new Uint8Array(0x200).fill(0);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(tableOff + 0x00, 2, true); // Version 2
+  dv.setUint32(tableOff + 0x04, 0x18, true); // Fixed header plus 4-byte payload
+  // IMAGE_DYNAMIC_RELOCATION32_V2 has a fixed 0x14-byte header; smaller HeaderSize is malformed.
+  dv.setUint32(tableOff + 0x08, 4, true); // HeaderSize
+  dv.setUint32(tableOff + 0x0c, 4, true); // FixupInfoSize
+  dv.setUint32(tableOff + 0x10, 7, true); // Symbol
+  dv.setUint32(tableOff + 0x14, 1, true); // SymbolGroup
+  dv.setUint32(tableOff + 0x18, 0, true); // Flags
+  dv.setUint32(tableOff + 0x1c, 0x11223344, true); // Payload bytes
+
+  const lc = makeLoadConfig({ DynamicValueRelocTableSection: 1, DynamicValueRelocTableOffset: tableOff });
+  const parsed = expectDefined(
+    await parseDynamicRelocationsFromLoadConfig32(
+      new MockFile(bytes, "dynrel-v2-undersized-header-with-payload.bin"),
+      makeSingleSection(),
+      rva => rva,
+      0x400000,
+      lc
+    )
+  );
+
+  assert.equal(parsed.version, 2);
+  assert.ok(parsed.warnings?.some(warning => /header|undersized|invalid/i.test(warning)));
+  }
+);
