@@ -15,7 +15,7 @@ void test("analyzePeInstructionSets uses extra entrypoints when provided", async
   const report = await analyzePeInstructionSets(file, {
     coffMachine: 0x8664,
     is64Bit: true,
-    imageBase: 0x140000000,
+    imageBase: 0x140000000n,
     entrypointRva: 0,
     extraEntrypoints: [{ source: "Extra seed", rvas: [0x1003] }],
     rvaToOff: (rva: number) => (rva >= 0x1000 && rva < 0x1000 + bytes.length ? rva - 0x1000 : null),
@@ -43,7 +43,7 @@ void test("analyzePeInstructionSets rejects extra entrypoints that exist only in
   const report = await analyzePeInstructionSets(file, {
     coffMachine: 0x8664,
     is64Bit: true,
-    imageBase: 0x140000000,
+    imageBase: 0x140000000n,
     entrypointRva: 0,
     extraEntrypoints: [{ source: "Extra seed", rvas: [0x1002] }],
     rvaToOff: (rva: number) => (rva >= 0x1000 && rva < 0x1000 + bytes.length ? rva - 0x1000 : null),

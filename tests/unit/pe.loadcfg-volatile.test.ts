@@ -25,7 +25,7 @@ void test("parseLoadConfigDirectory reads VolatileMetadataPointer for x64", asyn
       () => {}
     )
   );
-  assert.equal(lc.VolatileMetadataPointer, 0x14001ac34);
+  assert.equal(lc.VolatileMetadataPointer, 0x14001ac34n);
 });
 
 void test("parseLoadConfigDirectory reads VolatileMetadataPointer for x86", async () => {
@@ -43,16 +43,16 @@ void test("parseLoadConfigDirectory reads VolatileMetadataPointer for x86", asyn
       () => {}
     )
   );
-  assert.equal(lc.VolatileMetadataPointer, 0x12345678);
+  assert.equal(lc.VolatileMetadataPointer, 0x12345678n);
 });
 
 void test("collectLoadConfigWarnings warns when VolatileMetadataPointer does not map to file data", async () => {
   const lcRva = 0x20;
   const bytes = new Uint8Array(0x200).fill(0);
   const dv = new DataView(bytes.buffer);
-  const imageBase = 0x400000;
+  const imageBase = 0x400000n;
   dv.setUint32(lcRva + 0x00, 0x148, true); // Size
-  dv.setBigUint64(lcRva + 0x100, BigInt(imageBase + 0x500), true);
+  dv.setBigUint64(lcRva + 0x100, imageBase + 0x500n, true);
 
   const file = new MockFile(bytes, "loadcfg-volatile-warn.bin");
   const lc = expectDefined(

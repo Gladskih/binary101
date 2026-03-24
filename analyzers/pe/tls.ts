@@ -9,10 +9,10 @@ const TLS_CALLBACK_ENTRY_SIZE32 = Uint32Array.BYTES_PER_ELEMENT;
 const TLS_CALLBACK_ENTRY_SIZE64 = BigUint64Array.BYTES_PER_ELEMENT;
 
 const createTlsWarningResult = (warnings: string[]): PeTlsDirectory => ({
-  StartAddressOfRawData: 0,
-  EndAddressOfRawData: 0,
-  AddressOfIndex: 0,
-  AddressOfCallBacks: 0,
+  StartAddressOfRawData: 0n,
+  EndAddressOfRawData: 0n,
+  AddressOfIndex: 0n,
+  AddressOfCallBacks: 0n,
   SizeOfZeroFill: 0,
   Characteristics: 0,
   CallbackCount: 0,
@@ -21,16 +21,7 @@ const createTlsWarningResult = (warnings: string[]): PeTlsDirectory => ({
   parsed: false
 });
 
-const toRvaFromVa32 = (virtualAddress: number, imageBase: number): number | null => {
-  if (!Number.isSafeInteger(virtualAddress) || virtualAddress <= 0) return null;
-  if (!Number.isSafeInteger(imageBase) || imageBase < 0) return null;
-  if (virtualAddress < imageBase) return null;
-  const delta = virtualAddress - imageBase;
-  if (!Number.isSafeInteger(delta) || delta < 0 || delta > 0xffff_ffff) return null;
-  return delta >>> 0;
-};
-
-const toRvaFromVa64 = (virtualAddress: bigint, imageBase: bigint): number | null => {
+const toRvaFromVa = (virtualAddress: bigint, imageBase: bigint): number | null => {
   if (virtualAddress === 0n) return null;
   if (virtualAddress < imageBase) return null;
   const delta = virtualAddress - imageBase;
@@ -42,7 +33,7 @@ const readTlsCallbackRvas32 = async (
   file: File,
   rvaToOff: RvaToOffset,
   tableRva: number,
-  imageBase: number,
+  imageBase: bigint,
   warnings: string[]
 ): Promise<{ rvas: number[]; tableBytes: number }> => {
   const callbacks: number[] = [];
@@ -60,9 +51,9 @@ const readTlsCallbackRvas32 = async (
       warnings.push("TLS callback table is truncated before a complete pointer entry.");
       return { rvas: callbacks, tableBytes: callbacks.length * TLS_CALLBACK_ENTRY_SIZE32 };
     }
-    const pointer = dv.getUint32(0, true);
-    if (pointer === 0) return { rvas: callbacks, tableBytes: (index + 1) * TLS_CALLBACK_ENTRY_SIZE32 };
-    const rva = toRvaFromVa32(pointer, imageBase);
+    const pointer = BigInt(dv.getUint32(0, true));
+    if (pointer === 0n) return { rvas: callbacks, tableBytes: (index + 1) * TLS_CALLBACK_ENTRY_SIZE32 };
+    const rva = toRvaFromVa(pointer, imageBase);
     if (rva != null) {
       callbacks.push(rva);
       continue;
@@ -95,7 +86,7 @@ const readTlsCallbackRvas64 = async (
     }
     const pointer = dv.getBigUint64(0, true);
     if (pointer === 0n) return { rvas: callbacks, tableBytes: (index + 1) * TLS_CALLBACK_ENTRY_SIZE64 };
-    const rva = toRvaFromVa64(pointer, imageBase);
+    const rva = toRvaFromVa(pointer, imageBase);
     if (rva != null) {
       callbacks.push(rva);
       continue;
@@ -109,7 +100,7 @@ export const parseTlsDirectory32 = async (
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   addCoverageRegion: AddCoverageRegion,
-  imageBase: number
+  imageBase: bigint
 ): Promise<PeTlsDirectory | null> => {
   const dir = dataDirs.find(entry => entry.name === "TLS");
   if (!dir || (dir.rva === 0 && dir.size === 0)) return null;
@@ -139,15 +130,15 @@ export const parseTlsDirectory32 = async (
     return createTlsWarningResult(warnings);
   }
   const dv = new DataView(buf);
-  const StartAddressOfRawData = dv.getUint32(0, true);
-  const EndAddressOfRawData = dv.getUint32(4, true);
-  const AddressOfIndex = dv.getUint32(8, true);
-  const AddressOfCallBacks = dv.getUint32(12, true);
+  const StartAddressOfRawData = BigInt(dv.getUint32(0, true));
+  const EndAddressOfRawData = BigInt(dv.getUint32(4, true));
+  const AddressOfIndex = BigInt(dv.getUint32(8, true));
+  const AddressOfCallBacks = BigInt(dv.getUint32(12, true));
   const SizeOfZeroFill = dv.getUint32(16, true);
   const Characteristics = dv.getUint32(20, true);
-  const callbackTableRva = toRvaFromVa32(AddressOfCallBacks, imageBase);
+  const callbackTableRva = toRvaFromVa(AddressOfCallBacks, imageBase);
   const callbackTableOff = callbackTableRva != null ? rvaToOff(callbackTableRva) : null;
-  if (AddressOfCallBacks !== 0 && callbackTableRva == null) {
+  if (AddressOfCallBacks !== 0n && callbackTableRva == null) {
     warnings.push(`TLS AddressOfCallBacks pointer 0x${AddressOfCallBacks.toString(16)} is not a valid VA.`);
   } else if (callbackTableRva != null && callbackTableOff == null) {
     warnings.push(`TLS callback table RVA 0x${callbackTableRva.toString(16)} could not be mapped to a file offset.`);
@@ -182,7 +173,7 @@ export const parseTlsDirectory64 = async (
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   addCoverageRegion: AddCoverageRegion,
-  imageBase: number
+  imageBase: bigint
 ): Promise<PeTlsDirectory | null> => {
   const dir = dataDirs.find(entry => entry.name === "TLS");
   if (!dir || (dir.rva === 0 && dir.size === 0)) return null;
@@ -219,8 +210,7 @@ export const parseTlsDirectory64 = async (
   const SizeOfZeroFill = dv.getUint32(32, true);
   const Characteristics = dv.getUint32(36, true);
 
-  const imageBaseBigint = Number.isSafeInteger(imageBase) && imageBase >= 0 ? BigInt(imageBase) : 0n;
-  const callbackTableRva = toRvaFromVa64(AddressOfCallBacksVa, imageBaseBigint);
+  const callbackTableRva = toRvaFromVa(AddressOfCallBacksVa, imageBase);
   const callbackTableOff = callbackTableRva != null ? rvaToOff(callbackTableRva) : null;
   if (AddressOfCallBacksVa !== 0n && callbackTableRva == null) {
     warnings.push(`TLS AddressOfCallBacks pointer 0x${AddressOfCallBacksVa.toString(16)} is not a valid VA.`);
@@ -228,7 +218,7 @@ export const parseTlsDirectory64 = async (
     warnings.push(`TLS callback table RVA 0x${callbackTableRva.toString(16)} could not be mapped to a file offset.`);
   }
   const callbackInfo = callbackTableRva != null
-    ? await readTlsCallbackRvas64(file, rvaToOff, callbackTableRva, imageBaseBigint, warnings)
+    ? await readTlsCallbackRvas64(file, rvaToOff, callbackTableRva, imageBase, warnings)
     : { rvas: [], tableBytes: 0 };
   if (
     callbackTableOff != null &&

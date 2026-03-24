@@ -7,14 +7,14 @@ import type { RvaToOffset } from "./types.js";
 export function collectLoadConfigWarnings(
   fileSize: number,
   rvaToOff: RvaToOffset,
-  imageBase: number,
+  imageBase: bigint,
   sizeOfImage: number,
   lc: PeLoadConfig
 ): string[] {
   const warnings: string[] = [];
   const cfgEntrySize = getCfgTargetTableEntrySize(lc.GuardFlags);
 
-  const checkTable = (name: string, tableVa: number, count: number, entrySize: number): void => {
+  const checkTable = (name: string, tableVa: bigint, count: number, entrySize: number): void => {
     if (!Number.isSafeInteger(count) || count <= 0) return;
     if (!Number.isSafeInteger(entrySize) || entrySize <= 0) return;
     if (!tableVa) {
@@ -44,8 +44,8 @@ export function collectLoadConfigWarnings(
     if (count > maxFile) warnings.push(`LOAD_CONFIG: ${name} spills past EOF (${count} > ${maxFile}).`);
   };
 
-  const checkPointer = (name: string, pointerVa: number): void => {
-    if (!pointerVa) return;
+  const checkPointer = (name: string, pointerVa: bigint): void => {
+    if (pointerVa === 0n) return;
     const rva = readLoadConfigPointerRva(imageBase, pointerVa);
     if (rva == null) {
       warnings.push(`LOAD_CONFIG: ${name} pointer 0x${pointerVa.toString(16)} is not a valid VA.`);

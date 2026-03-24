@@ -30,7 +30,7 @@ void test("collectLoadConfigWarnings reports tables that do not fit in file/imag
   );
 
   assert.equal(lc.GuardCFFunctionCount, 4);
-  const warnings = collectLoadConfigWarnings(file.size, value => value, 0x400000, 0x200, lc);
+  const warnings = collectLoadConfigWarnings(file.size, value => value, 0x400000n, 0x200, lc);
   assert.ok(warnings.some(w => w.includes("GuardCFFunctionTable")));
 });
 
@@ -38,12 +38,12 @@ void test("collectLoadConfigWarnings reports tables that start outside SizeOfIma
   const bytes = new Uint8Array(0x400).fill(0);
   const dv = new DataView(bytes.buffer);
   const lcRva = 0x80;
-  const imageBase = 0x400000;
+  const imageBase = 0x400000n;
 
   dv.setUint32(lcRva + 0x00, 0xc0, true);
   // GuardCFFunctionTable is a VA. This points at RVA 0x300, which is outside SizeOfImage=0x200 below
   // while still mapping to raw bytes in the file.
-  dv.setUint32(lcRva + 0x50, imageBase + 0x300, true);
+  dv.setUint32(lcRva + 0x50, Number(imageBase + 0x300n), true);
   dv.setUint32(lcRva + 0x54, 1, true);
 
   const lc = expectDefined(
@@ -81,7 +81,7 @@ void test("collectLoadConfigWarnings rejects raw RVAs in documented VA table-poi
   const warnings = collectLoadConfigWarnings(
     bytes.length,
     value => value,
-    0x400000,
+    0x400000n,
     bytes.length,
     lc
   );
@@ -110,7 +110,7 @@ void test("collectLoadConfigWarnings rejects raw RVAs in documented VA pointer f
   const warnings = collectLoadConfigWarnings(
     file.size,
     value => value,
-    0x400000,
+    0x400000n,
     file.size,
     lc
   );

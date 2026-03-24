@@ -5,80 +5,15 @@ import { test } from "node:test";
 import { buildResourceTree } from "../../analyzers/pe/resources-core.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
-
-const IMAGE_RESOURCE_DIRECTORY_SIZE = 16; // IMAGE_RESOURCE_DIRECTORY
-const IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE = 8; // IMAGE_RESOURCE_DIRECTORY_ENTRY
-const IMAGE_RESOURCE_DATA_ENTRY_SIZE = 16; // IMAGE_RESOURCE_DATA_ENTRY
-const RESOURCE_DIRECTORY_FLAG_MASK = 0x80000000;
-
-const resourceDataDirectory = (rva: number, size: number) => [{ name: "RESOURCE", rva, size }];
-const resourceNameString = (relativeOffset: number): number =>
-  RESOURCE_DIRECTORY_FLAG_MASK | relativeOffset;
-const resourceSubdirectory = (relativeOffset: number): number =>
-  RESOURCE_DIRECTORY_FLAG_MASK | relativeOffset;
-
-const writeUtf16Text = (bytes: Uint8Array, offset: number, text: string): void => {
-  for (let index = 0; index < text.length; index += 1) {
-    const codeUnit = text.charCodeAt(index);
-    bytes[offset + index * 2] = codeUnit & 0xff;
-    bytes[offset + index * 2 + 1] = codeUnit >>> 8;
-  }
-};
-const createResourceDirectoryFixture = (fileSize: number): {
-  bytes: Uint8Array;
-  writeDirectory: (offset: number, namedCount: number, idCount: number) => void;
-  writeDirectoryEntry: (offset: number, nameField: number, targetField: number) => void;
-  writeUtf16Label: (offset: number, text: string, declaredLength?: number) => void;
-  writeDataEntry: (
-    offset: number,
-    dataRva: number,
-    size: number,
-    codePage: number,
-    reserved?: number
-  ) => void;
-} => {
-  const bytes = new Uint8Array(fileSize).fill(0);
-  const view = new DataView(bytes.buffer);
-
-  const writeDirectory = (offset: number, namedCount: number, idCount: number): void => {
-    view.setUint16(offset + 12, namedCount, true);
-    view.setUint16(offset + 14, idCount, true);
-  };
-
-  const writeDirectoryEntry = (offset: number, nameField: number, targetField: number): void => {
-    view.setUint32(offset, nameField, true);
-    view.setUint32(offset + Uint32Array.BYTES_PER_ELEMENT, targetField, true);
-  };
-
-  const writeUtf16Label = (offset: number, text: string, declaredLength = text.length): void => {
-    view.setUint16(offset, declaredLength, true);
-    writeUtf16Text(bytes, offset + Uint16Array.BYTES_PER_ELEMENT, text);
-  };
-
-  const writeDataEntry = (
-    offset: number,
-    dataRva: number,
-    size: number,
-    codePage: number,
-    reserved = 0
-  ): void => {
-    view.setUint32(offset, dataRva, true);
-    view.setUint32(offset + 4, size, true);
-    view.setUint32(offset + 8, codePage, true);
-    view.setUint32(offset + 12, reserved, true);
-  };
-
-  return { bytes, writeDirectory, writeDirectoryEntry, writeUtf16Label, writeDataEntry };
-};
-const parseResourceTreeFixture = async (
-  bytes: Uint8Array,
-  resourceRva: number,
-  resourceSize: number,
-  rvaToOff: (value: number) => number | null,
-  fileName = "resource.bin",
-  addCoverageRegion: (label: string, start: number, size: number) => void = () => {}
-) => expectDefined(await buildResourceTree(new MockFile(bytes, fileName),
-  resourceDataDirectory(resourceRva, resourceSize), rvaToOff, addCoverageRegion));
+import {
+  createResourceDirectoryFixture,
+  IMAGE_RESOURCE_DATA_ENTRY_SIZE,
+  IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE,
+  IMAGE_RESOURCE_DIRECTORY_SIZE,
+  parseResourceTreeFixture,
+  resourceNameString,
+  resourceSubdirectory
+} from "../helpers/pe-resource-fixture.js";
 
 void test("buildResourceTree returns null for missing or unmapped resource trees", async () => {
   const file = new MockFile(new Uint8Array(0));
@@ -86,7 +21,7 @@ void test("buildResourceTree returns null for missing or unmapped resource trees
   assert.strictEqual(noDir, null);
   const unmapped = await buildResourceTree(
     file,
-    resourceDataDirectory(0x200, 32),
+    [{ name: "RESOURCE", rva: 0x200, size: 32 }],
     () => null,
     () => {}
   );

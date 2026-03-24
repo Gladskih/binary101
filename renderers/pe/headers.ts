@@ -18,6 +18,12 @@ const SECTION_HINTS: Record<string, string> = {
 };
 
 const knownSectionName = (name: string): string | null => SECTION_HINTS[name.toLowerCase()] || null;
+const formatPointerHex = (value: bigint, width: number): string =>
+  `0x${value.toString(16).padStart(width, "0")}`;
+const formatBigByteSize = (value: bigint): string =>
+  value <= BigInt(Number.MAX_SAFE_INTEGER)
+    ? humanSize(Number(value))
+    : `${value} bytes (0x${value.toString(16)})`;
 
 const linkerVersionHint = (major: number, minor: number): string => {
   const version = `${major}.${minor}`;
@@ -115,12 +121,12 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
   out.push(
     `<div class="smallNote">PE image: ${imageTypeText}. Headers describe layout and loader requirements; ${sectionCount} sections carry code, data, resources and relocation information.</div>`
   );
-  const entryVa = pe.opt.ImageBase + (pe.opt.AddressOfEntryPoint >>> 0);
+  const entryVa = pe.opt.ImageBase + BigInt(pe.opt.AddressOfEntryPoint >>> 0);
   out.push(
     `<div class="smallNote">Entry point RVA ${hex(
       pe.opt.AddressOfEntryPoint,
       8
-    )} (VA 0x${entryVa.toString(16)}). Imports, relocations, resources and security directories below show how this image integrates with the operating system.</div>`
+    )} (VA ${formatPointerHex(entryVa, pe.opt.isPlus ? 16 : 8)}). Imports, relocations, resources and security directories below show how this image integrates with the operating system.</div>`
   );
   out.push(`</section>`);
 
@@ -199,7 +205,7 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
     ? `Usually points into section ${pe.entrySection.name || "(unnamed)"} (index ${pe.entrySection.index}).`
     : "Should point into one of the code sections.";
   out.push(dd("EntrySection", pe.entrySection ? safe(pe.entrySection.name || "(unnamed)") : "-", entrySectionInfo));
-  out.push(dd("ImageBase", hex(oh.ImageBase, isPlus ? 16 : 8), "Preferred load address."));
+  out.push(dd("ImageBase", formatPointerHex(oh.ImageBase, isPlus ? 16 : 8), "Preferred load address."));
   out.push(dd("SectionAlignment", humanSize(oh.SectionAlignment), "Alignment of sections in memory."));
   out.push(dd("FileAlignment", humanSize(oh.FileAlignment), "Alignment of sections in the file."));
   out.push(dd("OperatingSystemVersion", winVersionName(oh.OSVersionMajor, oh.OSVersionMinor), "Minimum required OS version."));
@@ -218,10 +224,10 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
     `</div>`
   ].join("");
   out.push(dd("CheckSum", checksumHtml, "Image checksum (used by some system components)."));
-  out.push(dd("SizeOfStackReserve", humanSize(oh.SizeOfStackReserve), "Stack reservation size."));
-  out.push(dd("SizeOfStackCommit", humanSize(oh.SizeOfStackCommit), "Stack commit size."));
-  out.push(dd("SizeOfHeapReserve", humanSize(oh.SizeOfHeapReserve), "Heap reservation size."));
-  out.push(dd("SizeOfHeapCommit", humanSize(oh.SizeOfHeapCommit), "Heap commit size."));
+  out.push(dd("SizeOfStackReserve", formatBigByteSize(oh.SizeOfStackReserve), "Stack reservation size."));
+  out.push(dd("SizeOfStackCommit", formatBigByteSize(oh.SizeOfStackCommit), "Stack commit size."));
+  out.push(dd("SizeOfHeapReserve", formatBigByteSize(oh.SizeOfHeapReserve), "Heap reservation size."));
+  out.push(dd("SizeOfHeapCommit", formatBigByteSize(oh.SizeOfHeapCommit), "Heap commit size."));
   out.push(`</dl></section>`);
 
   renderDataDirectories(pe, out);

@@ -11,12 +11,12 @@ import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
 void test("readLoadConfigPointerRva converts VAs to RVAs and rejects non-VA values", () => {
-  assert.equal(readLoadConfigPointerRva(0x400000, 0x401234), 0x1234);
+  assert.equal(readLoadConfigPointerRva(0x400000n, 0x401234n), 0x1234);
   // PE Load Config pointer fields are documented as VAs, so a raw RVA below ImageBase is malformed.
-  assert.equal(readLoadConfigPointerRva(0x400000, 0x1234), null);
-  assert.equal(readLoadConfigPointerRva(0x400000, 0), null);
-  assert.equal(readLoadConfigPointerRva(0, 0x401234), null);
-  assert.equal(readLoadConfigPointerRva(-1, 0x401234), null);
+  assert.equal(readLoadConfigPointerRva(0x400000n, 0x1234n), null);
+  assert.equal(readLoadConfigPointerRva(0x400000n, 0n), null);
+  assert.equal(readLoadConfigPointerRva(0n, 0x401234n), null);
+  assert.equal(readLoadConfigPointerRva(-1n, 0x401234n), null);
 });
 
 void test("parseLoadConfigDirectory uses official field offsets (32-bit)", async () => {
@@ -71,16 +71,16 @@ void test("parseLoadConfigDirectory uses official field offsets (32-bit)", async
   assert.equal(lc.ProcessHeapFlags, 0x99999999);
   assert.equal(lc.CSDVersion, 0xbbbb);
   assert.equal(lc.DependentLoadFlags, 0xcccc);
-  assert.equal(lc.SecurityCookie, 0xcafebabe);
+  assert.equal(lc.SecurityCookie, 0xcafebaben);
   assert.equal(lc.SEHandlerCount, 3);
   assert.equal(lc.GuardCFFunctionCount, 2);
   assert.equal(lc.GuardFlags, 0x1111);
   assert.equal(lc.CodeIntegrity.Flags, 0x0102);
   assert.equal(lc.CodeIntegrity.Catalog, 0x0304);
-  assert.equal(lc.VolatileMetadataPointer, 0x13579bdf);
-  assert.equal(lc.CastGuardOsDeterminedFailureMode, 0x2468ace0);
-  assert.equal(lc.GuardMemcpyFunctionPointer, 0xdeadbeef);
-  assert.equal(lc.UmaFunctionPointers, 0x01020304);
+  assert.equal(lc.VolatileMetadataPointer, 0x13579bdfn);
+  assert.equal(lc.CastGuardOsDeterminedFailureMode, 0x2468ace0n);
+  assert.equal(lc.GuardMemcpyFunctionPointer, 0xdeadbeefn);
+  assert.equal(lc.UmaFunctionPointers, 0x01020304n);
 });
 
 void test("parseLoadConfigDirectory uses official field offsets (64-bit)", async () => {
@@ -116,14 +116,14 @@ void test("parseLoadConfigDirectory uses official field offsets (64-bit)", async
   );
 
   assert.equal(lc.GlobalFlagsClear, 0x11111111);
-  assert.equal(lc.DeCommitFreeBlockThreshold, 0x22222222);
+  assert.equal(lc.DeCommitFreeBlockThreshold, 0x22222222n);
   assert.equal(lc.SEHandlerCount, 5);
   assert.equal(lc.GuardCFFunctionCount, 6);
   assert.equal(lc.GuardFlags, 0xbeef);
   assert.equal(lc.CodeIntegrity.Flags, 0x0102);
-  assert.equal(lc.VolatileMetadataPointer, 0xabcdef);
-  assert.equal(lc.CastGuardOsDeterminedFailureMode, 0x13579bdf);
-  assert.equal(lc.UmaFunctionPointers, 0);
+  assert.equal(lc.VolatileMetadataPointer, 0xabcdefn);
+  assert.equal(lc.CastGuardOsDeterminedFailureMode, 0x13579bdfn);
+  assert.equal(lc.UmaFunctionPointers, 0x0102030405060708n);
 });
 
 void test("parseLoadConfigDirectory reads 32-bit and 64-bit fields", async () => {
@@ -147,7 +147,7 @@ void test("parseLoadConfigDirectory reads 32-bit and 64-bit fields", async () =>
     value => value,
     () => {}
   ));
-  assert.equal(lc.SecurityCookie, 0xcafebabe);
+  assert.equal(lc.SecurityCookie, 0xcafebaben);
   assert.equal(lc.SEHandlerCount, 3);
   assert.equal(lc.GuardCFFunctionCount, 2);
   assert.equal(lc.GuardFlags, 0x1111);
@@ -195,6 +195,6 @@ void test("parseLoadConfigDirectory preserves representable 64-bit values instea
     )
   );
 
-  assert.equal(lc.SecurityCookie, Number(exactJsU64));
-  assert.equal(lc.UmaFunctionPointers, Number(exactJsU64));
+  assert.equal(lc.SecurityCookie, exactJsU64);
+  assert.equal(lc.UmaFunctionPointers, exactJsU64);
 });

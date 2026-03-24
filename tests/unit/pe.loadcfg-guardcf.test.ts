@@ -6,7 +6,7 @@ import { readGuardCFFunctionTableRvas } from "../../analyzers/pe/load-config-tab
 import { MockFile } from "../helpers/mock-file.js";
 
 // Microsoft PE format documents 0x00400000 as the default ImageBase for Windows NT/2000/XP/95/98/Me EXE images.
-const PE32_DEFAULT_IMAGE_BASE = 0x400000;
+const PE32_DEFAULT_IMAGE_BASE = 0x400000n;
 // Small RVA used to place synthetic LOAD_CONFIG tables near the image start without overlapping test data.
 const LOAD_CONFIG_TEST_TABLE_RVA = 0x80;
 
@@ -16,7 +16,7 @@ const LOAD_CONFIG_TEST_TABLE_RVA = 0x80;
 const IMAGE_GUARD_CF_FUNCTION_TABLE_SIZE_5_BYTE_STRIDE = 0x10000000;
 
 void test("readGuardCFFunctionTableRvas reads RVAs from the CFG function table", async () => {
-  const tableVa = PE32_DEFAULT_IMAGE_BASE + LOAD_CONFIG_TEST_TABLE_RVA;
+  const tableVa = PE32_DEFAULT_IMAGE_BASE + BigInt(LOAD_CONFIG_TEST_TABLE_RVA);
 
   const bytes = new Uint8Array(0x200).fill(0);
   const dv = new DataView(bytes.buffer);
@@ -34,7 +34,7 @@ void test("readGuardCFFunctionTableRvas reads RVAs from the CFG function table",
 });
 
 void test("readGuardCFFunctionTableRvas supports 5-byte GFIDS entries when GuardFlags encodes a stride", async () => {
-  const tableVa = PE32_DEFAULT_IMAGE_BASE + LOAD_CONFIG_TEST_TABLE_RVA;
+  const tableVa = PE32_DEFAULT_IMAGE_BASE + BigInt(LOAD_CONFIG_TEST_TABLE_RVA);
   const guardFlags = IMAGE_GUARD_CF_FUNCTION_TABLE_SIZE_5_BYTE_STRIDE;
 
   const bytes = new Uint8Array(0x200).fill(0);
@@ -58,10 +58,10 @@ void test("readGuardCFFunctionTableRvas supports 5-byte GFIDS entries when Guard
 void test("readGuardCFFunctionTableRvas returns empty list for invalid or unmapped tables", async () => {
   const bytes = new Uint8Array(0x100).fill(0);
   const file = new MockFile(bytes, "guardcf-invalid.bin");
-  const tableVa = PE32_DEFAULT_IMAGE_BASE + LOAD_CONFIG_TEST_TABLE_RVA;
+  const tableVa = PE32_DEFAULT_IMAGE_BASE + BigInt(LOAD_CONFIG_TEST_TABLE_RVA);
 
   assert.deepEqual(
-    await readGuardCFFunctionTableRvas(file, rva => rva, 0x2000, 0x1000, 1),
+    await readGuardCFFunctionTableRvas(file, rva => rva, 0x2000n, 0x1000n, 1),
     []
   );
   assert.deepEqual(
@@ -74,7 +74,7 @@ void test("readGuardCFFunctionTableRvas truncates reads when the table spills pa
   const bytes = new Uint8Array(LOAD_CONFIG_TEST_TABLE_RVA + Uint32Array.BYTES_PER_ELEMENT).fill(0);
   const dv = new DataView(bytes.buffer);
   dv.setUint32(LOAD_CONFIG_TEST_TABLE_RVA, 0x1000, true);
-  const tableVa = PE32_DEFAULT_IMAGE_BASE + LOAD_CONFIG_TEST_TABLE_RVA;
+  const tableVa = PE32_DEFAULT_IMAGE_BASE + BigInt(LOAD_CONFIG_TEST_TABLE_RVA);
 
   const rvas = await readGuardCFFunctionTableRvas(
     new MockFile(bytes, "guardcf-truncated.bin"),

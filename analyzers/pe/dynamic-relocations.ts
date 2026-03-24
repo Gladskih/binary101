@@ -12,12 +12,12 @@ import type { PeSection, RvaToOffset } from "./types.js";
 const DYNAMIC_RELOCATION_TABLE_HEADER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 2;
 
 export type PeDynamicRelocationEntry =
-  | { kind: "v1"; symbol: number | bigint; baseRelocSize: number; availableBytes: number }
+  | { kind: "v1"; symbol: bigint; baseRelocSize: number; availableBytes: number }
   | {
       kind: "v2";
       headerSize: number;
       fixupInfoSize: number;
-      symbol: number | bigint;
+      symbol: bigint;
       symbolGroup: number;
       flags: number;
       availableBytes: number;
@@ -34,12 +34,12 @@ const resolveDynamicRelocTableOffset = (
   fileSize: number,
   sections: PeSection[],
   rvaToOff: RvaToOffset,
-  imageBase: number,
+  imageBase: bigint,
   loadConfig: PeLoadConfig,
   warnings: string[]
 ): number | null => {
   const pointerRva =
-    loadConfig.DynamicValueRelocTable && Number.isSafeInteger(imageBase)
+    loadConfig.DynamicValueRelocTable !== 0n
       ? readLoadConfigPointerRva(imageBase, loadConfig.DynamicValueRelocTable)
       : null;
   const pointerOff = pointerRva != null ? rvaToOff(pointerRva) : null;
@@ -126,7 +126,7 @@ const parseDynamicRelocationsWithVariant = async (
   file: File,
   sections: PeSection[],
   rvaToOff: RvaToOffset,
-  imageBase: number,
+  imageBase: bigint,
   loadConfig: PeLoadConfig,
   parseVersion1: (
     view: DataView,
@@ -175,7 +175,7 @@ export const parseDynamicRelocationsFromLoadConfig32 = async (
   file: File,
   sections: PeSection[],
   rvaToOff: RvaToOffset,
-  imageBase: number,
+  imageBase: bigint,
   loadConfig: PeLoadConfig
 ): Promise<PeDynamicRelocations | null> =>
   parseDynamicRelocationsWithVariant(
@@ -192,7 +192,7 @@ export const parseDynamicRelocationsFromLoadConfig64 = async (
   file: File,
   sections: PeSection[],
   rvaToOff: RvaToOffset,
-  imageBase: number,
+  imageBase: bigint,
   loadConfig: PeLoadConfig
 ): Promise<PeDynamicRelocations | null> =>
   parseDynamicRelocationsWithVariant(

@@ -32,48 +32,48 @@ export interface PeLoadConfig {
   GlobalFlagsClear: number;
   GlobalFlagsSet: number;
   CriticalSectionDefaultTimeout: number;
-  DeCommitFreeBlockThreshold: number;
-  DeCommitTotalFreeThreshold: number;
-  LockPrefixTable: number;
-  MaximumAllocationSize: number;
-  VirtualMemoryThreshold: number;
+  DeCommitFreeBlockThreshold: bigint;
+  DeCommitTotalFreeThreshold: bigint;
+  LockPrefixTable: bigint;
+  MaximumAllocationSize: bigint;
+  VirtualMemoryThreshold: bigint;
   ProcessHeapFlags: number;
-  ProcessAffinityMask: number;
+  ProcessAffinityMask: bigint;
   CSDVersion: number;
   DependentLoadFlags: number;
-  EditList: number;
-  SecurityCookie: number;
-  SEHandlerTable: number;
+  EditList: bigint;
+  SecurityCookie: bigint;
+  SEHandlerTable: bigint;
   SEHandlerCount: number;
-  GuardCFCheckFunctionPointer: number;
-  GuardCFDispatchFunctionPointer: number;
-  GuardCFFunctionTable: number;
+  GuardCFCheckFunctionPointer: bigint;
+  GuardCFDispatchFunctionPointer: bigint;
+  GuardCFFunctionTable: bigint;
   GuardCFFunctionCount: number;
   CodeIntegrity: PeLoadConfigCodeIntegrity;
-  GuardAddressTakenIatEntryTable: number;
+  GuardAddressTakenIatEntryTable: bigint;
   GuardAddressTakenIatEntryCount: number;
-  GuardLongJumpTargetTable: number;
+  GuardLongJumpTargetTable: bigint;
   GuardLongJumpTargetCount: number;
-  DynamicValueRelocTable: number;
-  CHPEMetadataPointer: number;
-  GuardRFFailureRoutine: number;
-  GuardRFFailureRoutineFunctionPointer: number;
+  DynamicValueRelocTable: bigint;
+  CHPEMetadataPointer: bigint;
+  GuardRFFailureRoutine: bigint;
+  GuardRFFailureRoutineFunctionPointer: bigint;
   DynamicValueRelocTableOffset: number;
   DynamicValueRelocTableSection: number;
   Reserved2: number;
-  GuardRFVerifyStackPointerFunctionPointer: number;
+  GuardRFVerifyStackPointerFunctionPointer: bigint;
   HotPatchTableOffset: number;
   Reserved3: number;
-  EnclaveConfigurationPointer: number;
-  VolatileMetadataPointer: number;
-  GuardEHContinuationTable: number;
+  EnclaveConfigurationPointer: bigint;
+  VolatileMetadataPointer: bigint;
+  GuardEHContinuationTable: bigint;
   GuardEHContinuationCount: number;
-  GuardXFGCheckFunctionPointer: number;
-  GuardXFGDispatchFunctionPointer: number;
-  GuardXFGTableDispatchFunctionPointer: number;
-  CastGuardOsDeterminedFailureMode: number;
-  GuardMemcpyFunctionPointer: number;
-  UmaFunctionPointers: number;
+  GuardXFGCheckFunctionPointer: bigint;
+  GuardXFGDispatchFunctionPointer: bigint;
+  GuardXFGTableDispatchFunctionPointer: bigint;
+  CastGuardOsDeterminedFailureMode: bigint;
+  GuardMemcpyFunctionPointer: bigint;
+  UmaFunctionPointers: bigint;
   GuardFlags: number;
   tables?: PeLoadConfigTables;
   dynamicRelocations?: PeDynamicRelocations | null;
@@ -82,25 +82,20 @@ export interface PeLoadConfig {
 
 const MAX_RVA_BIGINT = 0xffff_ffffn;
 
-const toRvaFromVa = (virtualAddress: number, imageBase: number): number | null => {
-  if (!Number.isSafeInteger(virtualAddress) || virtualAddress <= 0) return null;
-  if (!Number.isSafeInteger(imageBase) || imageBase <= 0) return null;
-  const va = BigInt(virtualAddress);
-  const base = BigInt(imageBase);
-  if (va < base) return null;
-  const delta = va - base;
+const toRvaFromVa = (virtualAddress: bigint, imageBase: bigint): number | null => {
+  if (virtualAddress === 0n || imageBase <= 0n) return null;
+  if (virtualAddress < imageBase) return null;
+  const delta = virtualAddress - imageBase;
   if (delta > MAX_RVA_BIGINT) return null;
   return Number(delta);
 };
 
-const toSafeU64 = (value: bigint): number => {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return 0;
-  try {
-    return BigInt(num) === value ? num : 0;
-  } catch {
-    return 0;
-  }
+const toSafeCount = (fieldName: string, value: bigint, warnings: string[]): number => {
+  if (value <= BigInt(Number.MAX_SAFE_INTEGER)) return Number(value);
+  warnings.push(
+    `LOAD_CONFIG: ${fieldName} exceeds Number.MAX_SAFE_INTEGER and cannot be represented exactly; using 0.`
+  );
+  return 0;
 };
 
 
@@ -167,8 +162,10 @@ const parseLoadConfigDirectoryWithBuilder = async (
     Minor,
     readU16: (offset: number): number => (has(offset, 2) ? view.getUint16(offset, true) : 0),
     readU32: (offset: number): number => (has(offset, 4) ? view.getUint32(offset, true) : 0),
-    readU64: (offset: number): number =>
-      (has(offset, 8) ? toSafeU64(view.getBigUint64(offset, true)) : 0)
+    readU32AsBigInt: (offset: number): bigint => (has(offset, 4) ? BigInt(view.getUint32(offset, true)) : 0n),
+    readU64: (offset: number): bigint => (has(offset, 8) ? view.getBigUint64(offset, true) : 0n),
+    readU64Count: (offset: number, fieldName: string): number =>
+      (has(offset, 8) ? toSafeCount(fieldName, view.getBigUint64(offset, true), warnings) : 0)
   };
   const result = buildLoadConfig(reader);
   if (warnings.length) result.warnings = warnings;
@@ -191,6 +188,6 @@ export const parseLoadConfigDirectory64 = async (
 ): Promise<PeLoadConfig | null> =>
   parseLoadConfigDirectoryWithBuilder(file, dataDirs, rvaToOff, addCoverageRegion, buildLoadConfig64);
 
-export function readLoadConfigPointerRva(imageBase: number, pointerVa: number): number | null {
+export function readLoadConfigPointerRva(imageBase: bigint, pointerVa: bigint): number | null {
   return toRvaFromVa(pointerVa, imageBase);
 }

@@ -145,8 +145,10 @@ export async function analyzePeInstructionSets(
     issues.push("Disassembly cancelled.");
     return emptyReport(0);
   }
-  const imageBase = Number.isSafeInteger(opts.imageBase) && opts.imageBase >= 0 ? BigInt(opts.imageBase) : 0n;
-  if (!Number.isSafeInteger(opts.imageBase)) issues.push("ImageBase is not a safe integer; instruction pointers may be approximate.");
+  const imageBase = opts.imageBase >= 0n ? opts.imageBase : 0n;
+  if (opts.imageBase < 0n) {
+    issues.push("ImageBase is negative; instruction pointers may be approximate.");
+  }
   const entrypointSections = resolvedEntrypoints
     .map(rva => findSectionContainingRva(opts.sections, rva))
     .filter((section): section is PeSection => section != null);
@@ -293,9 +295,7 @@ export async function analyzePeInstructionSets(
     bitness,
     bytesSampled,
     bytesDecoded,
-    instructionCount,
-    invalidInstructionCount,
-    instructionSets,
-    issues
+    instructionCount, invalidInstructionCount,
+    instructionSets, issues
   };
 }

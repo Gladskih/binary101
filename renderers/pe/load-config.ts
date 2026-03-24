@@ -5,18 +5,13 @@ import { dd, safe } from "../../html-utils.js";
 import { GUARD_FLAGS } from "../../analyzers/pe/constants.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 import type { PeLoadConfig } from "../../analyzers/pe/load-config.js";
-
-const formatVa = (value: number | bigint, isPlus: boolean): string => {
-  if (!value) return "-";
-  return isPlus ? `0x${BigInt(value).toString(16)}` : hex(Number(value), 8);
-};
-const compareWideInt = (left: number | bigint, right: number | bigint): number => {
-  const leftBigint = BigInt(left);
-  const rightBigint = BigInt(right);
-  if (leftBigint === rightBigint) return 0;
-  return leftBigint < rightBigint ? -1 : 1;
-};
-const formatWideHex = (value: number | bigint): string => `0x${BigInt(value).toString(16)}`;
+const formatPointerHex = (value: bigint, width: number): string =>
+  `0x${value.toString(16).padStart(width, "0")}`;
+const formatVa = (value: bigint, isPlus: boolean): string =>
+  value === 0n ? "-" : formatPointerHex(value, isPlus ? 16 : 8);
+const compareWideInt = (left: bigint, right: bigint): number =>
+  left === right ? 0 : left < right ? -1 : 1;
+const formatWideHex = (value: bigint): string => `0x${value.toString(16)}`;
 
 const renderGuardFlags = (lc: PeLoadConfig, out: string[]): void => {
   if (typeof lc.GuardFlags !== "number") return;
@@ -40,8 +35,7 @@ export function renderLoadConfig(pe: PeParseResult, out: string[]): void {
   const formatRvaAsVa = (rva: number): string => {
     if (!Number.isSafeInteger(rva) || rva <= 0) return "-";
     const base = pe.opt.ImageBase;
-    if (pe.opt.isPlus) return `0x${(BigInt(base) + BigInt(rva >>> 0)).toString(16)}`;
-    return hex((base + (rva >>> 0)) >>> 0, 8);
+    return formatPointerHex(base + BigInt(rva >>> 0), pe.opt.isPlus ? 16 : 8);
   };
 
   const renderAddressList = (title: string, rvas: number[], note?: string): void => {

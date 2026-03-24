@@ -95,7 +95,7 @@ void test("parsePe correctly parses a minimal PE header", async () => {
   assert.strictEqual(result.coff.NumberOfSections, 0, "COFF header should report 0 sections");
   assert.ok(result.opt, "Optional header should be parsed");
   assert.strictEqual(result.opt.Magic, IMAGE_NT_OPTIONAL_HDR32_MAGIC, "Optional header magic should be PE32");
-  assert.strictEqual(result.opt.ImageBase, 0x00400000, "Optional header ImageBase should be parsed correctly");
+  assert.strictEqual(result.opt.ImageBase, 0x00400000n, "Optional header ImageBase should be parsed correctly");
 });
 
 void test("parsePe does not treat a headers-only image as overlay data", async () => {

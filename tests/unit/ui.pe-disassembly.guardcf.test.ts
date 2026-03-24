@@ -10,7 +10,7 @@ import { installFakeDom, flushTimers } from "../helpers/fake-dom.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import { MockFile } from "../helpers/mock-file.js";
 
-const TEST_IMAGE_BASE = 0x400000;
+const TEST_IMAGE_BASE = 0x400000n;
 
 const createMinimalPe = (): PeParseResult =>
   ({
@@ -40,7 +40,7 @@ void test("pe disassembly controller includes GuardCF function RVAs when availab
 
   const pe = createMinimalPe();
   pe.loadcfg = {
-    GuardCFFunctionTable: TEST_IMAGE_BASE + 0x40,
+    GuardCFFunctionTable: TEST_IMAGE_BASE + 0x40n,
     GuardCFFunctionCount: 1
   } as unknown as PeParseResult["loadcfg"];
 

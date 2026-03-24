@@ -10,8 +10,6 @@ import { parseRichHeaderFromDosStub } from "./rich-header.js";
 import type { PeCoffHeader, PeDataDirectory, PeDosHeader, PeOptionalHeader } from "./types.js";
 
 const IMAGE_FILE_HEADER_SIZE = 20;
-const toOptionalHeaderNumber = (value: number | bigint): number =>
-  typeof value === "bigint" ? Number(value) : value;
 
 const createEmptyOptionalHeader = (
   magic: number,
@@ -29,7 +27,7 @@ const createEmptyOptionalHeader = (
   AddressOfEntryPoint: 0,
   BaseOfCode: 0,
   ...(is32 ? { BaseOfData: 0 } : {}),
-  ImageBase: 0,
+  ImageBase: 0n,
   SectionAlignment: 0,
   FileAlignment: 0,
   OSVersionMajor: 0,
@@ -44,10 +42,10 @@ const createEmptyOptionalHeader = (
   CheckSum: 0,
   Subsystem: 0,
   DllCharacteristics: 0,
-  SizeOfStackReserve: 0,
-  SizeOfStackCommit: 0,
-  SizeOfHeapReserve: 0,
-  SizeOfHeapCommit: 0,
+  SizeOfStackReserve: 0n,
+  SizeOfStackCommit: 0n,
+  SizeOfHeapReserve: 0n,
+  SizeOfHeapCommit: 0n,
   LoaderFlags: 0,
   NumberOfRvaAndSizes: 0
 });
@@ -233,7 +231,7 @@ export async function parseOptionalHeaderAndDirectories(
     AddressOfEntryPoint: AddressOfEntryPointVal,
     BaseOfCode: BaseOfCodeVal,
     ...(tail.BaseOfData !== undefined ? { BaseOfData: tail.BaseOfData } : {}),
-    ImageBase: toOptionalHeaderNumber(tail.ImageBase),
+    ImageBase: tail.ImageBase,
     SectionAlignment: tail.SectionAlignment,
     FileAlignment: tail.FileAlignment,
     OSVersionMajor: tail.OSVersionMajor,
@@ -248,10 +246,10 @@ export async function parseOptionalHeaderAndDirectories(
     CheckSum: tail.CheckSum,
     Subsystem: tail.Subsystem,
     DllCharacteristics: tail.DllCharacteristics,
-    SizeOfStackReserve: toOptionalHeaderNumber(tail.SizeOfStackReserve),
-    SizeOfStackCommit: toOptionalHeaderNumber(tail.SizeOfStackCommit),
-    SizeOfHeapReserve: toOptionalHeaderNumber(tail.SizeOfHeapReserve),
-    SizeOfHeapCommit: toOptionalHeaderNumber(tail.SizeOfHeapCommit),
+    SizeOfStackReserve: tail.SizeOfStackReserve,
+    SizeOfStackCommit: tail.SizeOfStackCommit,
+    SizeOfHeapReserve: tail.SizeOfHeapReserve,
+    SizeOfHeapCommit: tail.SizeOfHeapCommit,
     LoaderFlags: tail.LoaderFlags,
     NumberOfRvaAndSizes: tail.NumberOfRvaAndSizes
   };

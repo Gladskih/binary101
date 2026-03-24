@@ -17,7 +17,7 @@ void test("analyzePeInstructionSets reports AVX and AVX-512 requirements", async
   const report = await analyzePeInstructionSets(file, {
     coffMachine: 0x8664,
     is64Bit: true,
-    imageBase: 0x140000000,
+    imageBase: 0x140000000n,
     entrypointRva: 0x1000,
     rvaToOff: (rva: number) => (rva === 0x1000 ? 0 : null),
     sections: [
@@ -46,7 +46,7 @@ void test("analyzePeInstructionSets skips unsupported machines", async () => {
   const report = await analyzePeInstructionSets(file, {
     coffMachine: 0x01c0, // ARM
     is64Bit: false,
-    imageBase: 0,
+    imageBase: 0n,
     entrypointRva: 0x1000,
     rvaToOff: () => 0,
     sections: []
@@ -63,7 +63,7 @@ void test("analyzePeInstructionSets reports unmapped entrypoint RVAs", async () 
   const report = await analyzePeInstructionSets(file, {
     coffMachine: 0x14c,
     is64Bit: false,
-    imageBase: 0x400000,
+    imageBase: 0x400000n,
     entrypointRva: 0x1234,
     rvaToOff: () => null,
     sections: []
@@ -80,7 +80,7 @@ void test("analyzePeInstructionSets falls back to .text when entrypoint is zero"
   const report = await analyzePeInstructionSets(file, {
     coffMachine: 0x8664,
     is64Bit: true,
-    imageBase: 0x140000000,
+    imageBase: 0x140000000n,
     entrypointRva: 0,
     rvaToOff: () => null,
     sections: [
@@ -105,7 +105,7 @@ void test("analyzePeInstructionSets reports out-of-bounds start offsets", async 
   const report = await analyzePeInstructionSets(file, {
     coffMachine: 0x14c,
     is64Bit: false,
-    imageBase: 0x400000,
+    imageBase: 0x400000n,
     entrypointRva: 0x1000,
     rvaToOff: () => 10,
     sections: []
@@ -127,7 +127,7 @@ void test("analyzePeInstructionSets stops at the first invalid instruction", asy
   const report = await analyzePeInstructionSets(file, {
     coffMachine: 0x8664,
     is64Bit: true,
-    imageBase: 0x140000000,
+    imageBase: 0x140000000n,
     entrypointRva: 0x1000,
     rvaToOff: () => 0,
     sections: [
@@ -154,7 +154,7 @@ void test("analyzePeInstructionSets reports decoded bytes when returning early",
   const report = await analyzePeInstructionSets(file, {
     coffMachine: 0x8664,
     is64Bit: true,
-    imageBase: 0x140000000,
+    imageBase: 0x140000000n,
     entrypointRva: 0x1000,
     rvaToOff: () => 0,
     sections: [
@@ -182,7 +182,7 @@ void test("analyzePeInstructionSets accepts a header-resident entrypoint when rv
   const report = await analyzePeInstructionSets(file, {
     coffMachine: 0x8664, // IMAGE_FILE_MACHINE_AMD64
     is64Bit: true,
-    imageBase: 0x140000000, // Conventional PE32+ image base
+    imageBase: 0x140000000n, // Conventional PE32+ image base
     entrypointRva: 0x80, // Header RVA: below SizeOfHeaders in the companion parsePe fixture
     // PE headers are part of the loaded image; an RVA inside SizeOfHeaders is still a valid entrypoint.
     rvaToOff: (rva: number) => (rva === 0x80 ? 0 : null),
@@ -203,7 +203,7 @@ void test("analyzePeInstructionSets reports progress while decoding", async () =
   const report = await analyzePeInstructionSets(file, {
     coffMachine: 0x8664,
     is64Bit: true,
-    imageBase: 0x140000000,
+    imageBase: 0x140000000n,
     entrypointRva: 0x1000,
     rvaToOff: () => 0,
     sections: [
@@ -242,7 +242,7 @@ void test("analyzePeInstructionSets reports known feature counts in progress sna
   const report = await analyzePeInstructionSets(file, {
     coffMachine: 0x8664,
     is64Bit: true,
-    imageBase: 0x140000000,
+    imageBase: 0x140000000n,
     entrypointRva: 0x1000,
     rvaToOff: () => 0,
     sections: [
@@ -273,7 +273,7 @@ void test("analyzePeInstructionSets warns and skips entrypoints in non-executabl
   const report = await analyzePeInstructionSets(file, {
     coffMachine: 0x8664,
     is64Bit: true,
-    imageBase: 0x140000000,
+    imageBase: 0x140000000n,
     entrypointRva: 0x2000, // points into .data
     rvaToOff: () => 0,
     sections: [

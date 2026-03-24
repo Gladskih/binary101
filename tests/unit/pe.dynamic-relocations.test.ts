@@ -19,48 +19,48 @@ const makeLoadConfig = (overrides: Partial<PeLoadConfig>): PeLoadConfig => ({
   GlobalFlagsClear: 0,
   GlobalFlagsSet: 0,
   CriticalSectionDefaultTimeout: 0,
-  DeCommitFreeBlockThreshold: 0,
-  DeCommitTotalFreeThreshold: 0,
-  LockPrefixTable: 0,
-  MaximumAllocationSize: 0,
-  VirtualMemoryThreshold: 0,
+  DeCommitFreeBlockThreshold: 0n,
+  DeCommitTotalFreeThreshold: 0n,
+  LockPrefixTable: 0n,
+  MaximumAllocationSize: 0n,
+  VirtualMemoryThreshold: 0n,
   ProcessHeapFlags: 0,
-  ProcessAffinityMask: 0,
+  ProcessAffinityMask: 0n,
   CSDVersion: 0,
   DependentLoadFlags: 0,
-  EditList: 0,
-  SecurityCookie: 0,
-  SEHandlerTable: 0,
+  EditList: 0n,
+  SecurityCookie: 0n,
+  SEHandlerTable: 0n,
   SEHandlerCount: 0,
-  GuardCFCheckFunctionPointer: 0,
-  GuardCFDispatchFunctionPointer: 0,
-  GuardCFFunctionTable: 0,
+  GuardCFCheckFunctionPointer: 0n,
+  GuardCFDispatchFunctionPointer: 0n,
+  GuardCFFunctionTable: 0n,
   GuardCFFunctionCount: 0,
   CodeIntegrity: { Flags: 0, Catalog: 0, CatalogOffset: 0, Reserved: 0 },
-  GuardAddressTakenIatEntryTable: 0,
+  GuardAddressTakenIatEntryTable: 0n,
   GuardAddressTakenIatEntryCount: 0,
-  GuardLongJumpTargetTable: 0,
+  GuardLongJumpTargetTable: 0n,
   GuardLongJumpTargetCount: 0,
-  DynamicValueRelocTable: 0,
-  CHPEMetadataPointer: 0,
-  GuardRFFailureRoutine: 0,
-  GuardRFFailureRoutineFunctionPointer: 0,
+  DynamicValueRelocTable: 0n,
+  CHPEMetadataPointer: 0n,
+  GuardRFFailureRoutine: 0n,
+  GuardRFFailureRoutineFunctionPointer: 0n,
   DynamicValueRelocTableOffset: 0,
   DynamicValueRelocTableSection: 0,
   Reserved2: 0,
-  GuardRFVerifyStackPointerFunctionPointer: 0,
+  GuardRFVerifyStackPointerFunctionPointer: 0n,
   HotPatchTableOffset: 0,
   Reserved3: 0,
-  EnclaveConfigurationPointer: 0,
-  VolatileMetadataPointer: 0,
-  GuardEHContinuationTable: 0,
+  EnclaveConfigurationPointer: 0n,
+  VolatileMetadataPointer: 0n,
+  GuardEHContinuationTable: 0n,
   GuardEHContinuationCount: 0,
-  GuardXFGCheckFunctionPointer: 0,
-  GuardXFGDispatchFunctionPointer: 0,
-  GuardXFGTableDispatchFunctionPointer: 0,
-  CastGuardOsDeterminedFailureMode: 0,
-  GuardMemcpyFunctionPointer: 0,
-  UmaFunctionPointers: 0,
+  GuardXFGCheckFunctionPointer: 0n,
+  GuardXFGDispatchFunctionPointer: 0n,
+  GuardXFGTableDispatchFunctionPointer: 0n,
+  CastGuardOsDeterminedFailureMode: 0n,
+  GuardMemcpyFunctionPointer: 0n,
+  UmaFunctionPointers: 0n,
   GuardFlags: 0,
   ...overrides
 });
@@ -93,7 +93,7 @@ void test("parseDynamicRelocationsFromLoadConfig parses a V1 table referenced by
       new MockFile(bytes, "dynrel.bin"),
       makeSingleSection(),
       rva => rva,
-      0x400000,
+      0x400000n,
       lc
     )
   );
@@ -104,7 +104,7 @@ void test("parseDynamicRelocationsFromLoadConfig parses a V1 table referenced by
   const entry = expectDefined(parsed.entries[0]);
   assert.equal(entry.kind, "v1");
   if (entry.kind !== "v1") throw new Error("Expected v1 entry.");
-  assert.equal(entry.symbol, 7);
+  assert.equal(entry.symbol, 7n);
   assert.equal(entry.baseRelocSize, 0x44);
   assert.equal(entry.availableBytes, 0x44);
   assert.equal(parsed.warnings?.length ?? 0, 0);
@@ -125,7 +125,7 @@ void test("parseDynamicRelocationsFromLoadConfig warns when the declared V1 payl
       new MockFile(bytes, "dynrel-trunc.bin"),
       makeSingleSection(),
       rva => rva,
-      0x140000000,
+      0x140000000n,
       lc
     )
   );
@@ -156,7 +156,7 @@ void test(
       new MockFile(bytes, "dynrel-v1-pe32plus.bin"),
       makeSingleSection(),
       rva => rva,
-      0x140000000,
+      0x140000000n,
       lc
     )
   );
@@ -166,9 +166,8 @@ void test(
   const entry = expectDefined(parsed.entries[0]);
   assert.equal(entry.kind, "v1");
   if (entry.kind !== "v1") throw new Error("Expected v1 entry.");
-  assert.equal(BigInt(entry.symbol), firstUnsafeSymbol);
-  }
-);
+  assert.equal(entry.symbol, firstUnsafeSymbol);
+});
 
 void test(
   "parseDynamicRelocationsFromLoadConfig preserves 64-bit V2 symbols for PE32+",
@@ -193,7 +192,7 @@ void test(
       new MockFile(bytes, "dynrel-v2-pe32plus.bin"),
       makeSingleSection(),
       rva => rva,
-      0x140000000,
+      0x140000000n,
       lc
     )
   );
@@ -203,9 +202,8 @@ void test(
   const entry = expectDefined(parsed.entries[0]);
   assert.equal(entry.kind, "v2");
   if (entry.kind !== "v2") throw new Error("Expected v2 entry.");
-  assert.equal(BigInt(entry.symbol), secondUnsafeSymbol);
-  }
-);
+  assert.equal(entry.symbol, secondUnsafeSymbol);
+});
 
 void test("parseDynamicRelocationsFromLoadConfig warns when a V2 entry header is smaller than the fixed structure size", async () => {
   const tableOff = 0x80;
@@ -227,7 +225,7 @@ void test("parseDynamicRelocationsFromLoadConfig warns when a V2 entry header is
       new MockFile(bytes, "dynrel-v2-small-header.bin"),
       makeSingleSection(),
       rva => rva,
-      0x400000,
+      0x400000n,
       lc
     )
   );
@@ -258,12 +256,11 @@ void test(
       new MockFile(bytes, "dynrel-v2-undersized-header-with-payload.bin"),
       makeSingleSection(),
       rva => rva,
-      0x400000,
+      0x400000n,
       lc
     )
   );
 
   assert.equal(parsed.version, 2);
   assert.ok(parsed.warnings?.some(warning => /header|undersized|invalid/i.test(warning)));
-  }
-);
+});

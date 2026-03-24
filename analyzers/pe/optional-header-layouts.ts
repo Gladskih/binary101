@@ -3,7 +3,7 @@
 export type ParsedOptionalHeaderTail = {
   nextPosition: number;
   BaseOfData?: number;
-  ImageBase: number | bigint;
+  ImageBase: bigint;
   SectionAlignment: number;
   FileAlignment: number;
   OSVersionMajor: number;
@@ -18,10 +18,10 @@ export type ParsedOptionalHeaderTail = {
   CheckSum: number;
   Subsystem: number;
   DllCharacteristics: number;
-  SizeOfStackReserve: number | bigint;
-  SizeOfStackCommit: number | bigint;
-  SizeOfHeapReserve: number | bigint;
-  SizeOfHeapCommit: number | bigint;
+  SizeOfStackReserve: bigint;
+  SizeOfStackCommit: bigint;
+  SizeOfHeapReserve: bigint;
+  SizeOfHeapCommit: bigint;
   LoaderFlags: number;
   NumberOfRvaAndSizes: number;
 };
@@ -46,7 +46,7 @@ export const parseOptionalHeaderTail32 = (
     position + length <= optionalHeaderView.byteLength ? fn() : fallback;
   const BaseOfData = readAt(4, () => optionalHeaderView.getUint32(position, true), 0);
   position += 4;
-  const ImageBase = readAt(4, () => optionalHeaderView.getUint32(position, true), 0);
+  const ImageBase = readAt(4, () => BigInt(optionalHeaderView.getUint32(position, true)), 0n);
   position += 4;
   const SectionAlignment = readAt(4, () => optionalHeaderView.getUint32(position, true), 0);
   position += 4;
@@ -70,13 +70,13 @@ export const parseOptionalHeaderTail32 = (
   position += 2;
   const DllCharacteristics = readAt(2, () => optionalHeaderView.getUint16(position, true), 0);
   position += 2;
-  const SizeOfStackReserve = readAt(4, () => optionalHeaderView.getUint32(position, true), 0);
+  const SizeOfStackReserve = readAt(4, () => BigInt(optionalHeaderView.getUint32(position, true)), 0n);
   position += 4;
-  const SizeOfStackCommit = readAt(4, () => optionalHeaderView.getUint32(position, true), 0);
+  const SizeOfStackCommit = readAt(4, () => BigInt(optionalHeaderView.getUint32(position, true)), 0n);
   position += 4;
-  const SizeOfHeapReserve = readAt(4, () => optionalHeaderView.getUint32(position, true), 0);
+  const SizeOfHeapReserve = readAt(4, () => BigInt(optionalHeaderView.getUint32(position, true)), 0n);
   position += 4;
-  const SizeOfHeapCommit = readAt(4, () => optionalHeaderView.getUint32(position, true), 0);
+  const SizeOfHeapCommit = readAt(4, () => BigInt(optionalHeaderView.getUint32(position, true)), 0n);
   position += 4;
   const LoaderFlags = readAt(4, () => optionalHeaderView.getUint32(position, true), 0);
   position += 4;

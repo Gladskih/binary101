@@ -44,7 +44,7 @@ const createBasePe = (): PeParseResult =>
       SizeOfInitializedData: 0,
       SizeOfUninitializedData: 0,
       AddressOfEntryPoint: 0,
-      ImageBase: 0x400000,
+      ImageBase: 0x400000n,
       SectionAlignment: 0x1000,
       FileAlignment: 0x200,
       OSVersionMajor: 0,
@@ -58,10 +58,10 @@ const createBasePe = (): PeParseResult =>
       SizeOfImage: 0,
       SizeOfHeaders: 0,
       CheckSum: 0,
-      SizeOfStackReserve: 0,
-      SizeOfStackCommit: 0,
-      SizeOfHeapReserve: 0,
-      SizeOfHeapCommit: 0
+      SizeOfStackReserve: 0n,
+      SizeOfStackCommit: 0n,
+      SizeOfHeapReserve: 0n,
+      SizeOfHeapCommit: 0n
     },
     dirs: [],
     sections: [],

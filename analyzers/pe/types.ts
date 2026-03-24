@@ -92,7 +92,7 @@ export interface PeOptionalHeader {
   AddressOfEntryPoint: number;
   BaseOfCode: number;
   BaseOfData?: number;
-  ImageBase: number;
+  ImageBase: bigint;
   SectionAlignment: number;
   FileAlignment: number;
   OSVersionMajor: number;
@@ -107,10 +107,10 @@ export interface PeOptionalHeader {
   CheckSum: number;
   Subsystem: number;
   DllCharacteristics: number;
-  SizeOfStackReserve: number;
-  SizeOfStackCommit: number;
-  SizeOfHeapReserve: number;
-  SizeOfHeapCommit: number;
+  SizeOfStackReserve: bigint;
+  SizeOfStackCommit: bigint;
+  SizeOfHeapReserve: bigint;
+  SizeOfHeapCommit: bigint;
   LoaderFlags: number;
   NumberOfRvaAndSizes: number;
 }
@@ -135,10 +135,10 @@ export interface PeCore {
 }
 
 export interface PeTlsDirectory {
-  StartAddressOfRawData: number | bigint;
-  EndAddressOfRawData: number | bigint;
-  AddressOfIndex: number | bigint;
-  AddressOfCallBacks: number | bigint;
+  StartAddressOfRawData: bigint;
+  EndAddressOfRawData: bigint;
+  AddressOfIndex: bigint;
+  AddressOfCallBacks: bigint;
   SizeOfZeroFill: number;
   Characteristics: number;
   CallbackCount: number;

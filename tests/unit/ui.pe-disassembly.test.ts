@@ -10,7 +10,7 @@ import { MockFile } from "../helpers/mock-file.js";
 const createMinimalPe = (): PeParseResult =>
   ({
     coff: { Machine: 0x8664 },
-    opt: { isPlus: true, ImageBase: 0x140000000, AddressOfEntryPoint: 0x1000 },
+    opt: { isPlus: true, ImageBase: 0x140000000n, AddressOfEntryPoint: 0x1000 },
     rvaToOff: () => 0,
     sections: []
   }) as unknown as PeParseResult;

@@ -17,8 +17,8 @@ export const getCfgTargetTableEntrySize = (guardFlags: number): number => {
 const readRvaTable = async (
   file: File,
   rvaToOff: RvaToOffset,
-  imageBase: number,
-  tableVa: number,
+  imageBase: bigint,
+  tableVa: bigint,
   count: number,
   entrySize: number,
   readEntry: (view: DataView, entryOffset: number) => number
@@ -43,8 +43,8 @@ const readRvaTable = async (
 export async function readGuardCFFunctionTableRvas(
   file: File,
   rvaToOff: RvaToOffset,
-  imageBase: number,
-  guardCFFunctionTableVa: number,
+  imageBase: bigint,
+  guardCFFunctionTableVa: bigint,
   guardCFFunctionCount: number,
   guardFlags?: number
 ): Promise<number[]> {
@@ -63,8 +63,8 @@ export async function readGuardCFFunctionTableRvas(
 export async function readSafeSehHandlerTableRvas(
   file: File,
   rvaToOff: RvaToOffset,
-  imageBase: number,
-  seHandlerTableVa: number,
+  imageBase: bigint,
+  seHandlerTableVa: bigint,
   seHandlerCount: number
 ): Promise<number[]> {
   return readRvaTable(
@@ -81,8 +81,8 @@ export async function readSafeSehHandlerTableRvas(
 export async function readGuardEhContinuationTableRvas(
   file: File,
   rvaToOff: RvaToOffset,
-  imageBase: number,
-  guardEhContinuationTableVa: number,
+  imageBase: bigint,
+  guardEhContinuationTableVa: bigint,
   guardEhContinuationCount: number,
   guardFlags?: number
 ): Promise<number[]> {
@@ -101,8 +101,8 @@ export async function readGuardEhContinuationTableRvas(
 export async function readGuardLongJumpTargetTableRvas(
   file: File,
   rvaToOff: RvaToOffset,
-  imageBase: number,
-  guardLongJumpTargetTableVa: number,
+  imageBase: bigint,
+  guardLongJumpTargetTableVa: bigint,
   guardLongJumpTargetCount: number,
   guardFlags?: number
 ): Promise<number[]> {
@@ -121,8 +121,8 @@ export async function readGuardLongJumpTargetTableRvas(
 export async function readGuardAddressTakenIatEntryTableRvas(
   file: File,
   rvaToOff: RvaToOffset,
-  imageBase: number,
-  guardAddressTakenIatEntryTableVa: number,
+  imageBase: bigint,
+  guardAddressTakenIatEntryTableVa: bigint,
   guardAddressTakenIatEntryCount: number,
   guardFlags?: number
 ): Promise<number[]> {

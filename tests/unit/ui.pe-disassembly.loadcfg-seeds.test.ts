@@ -10,7 +10,7 @@ import { installFakeDom, flushTimers } from "../helpers/fake-dom.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import { MockFile } from "../helpers/mock-file.js";
 
-const TEST_IMAGE_BASE = 0x400000;
+const TEST_IMAGE_BASE = 0x400000n;
 
 const createMinimalPe = (): PeParseResult =>
   ({
@@ -48,11 +48,11 @@ void test("pe disassembly controller includes extra entrypoints from LOAD_CONFIG
   const file = new MockFile(bytes, "loadcfg-seeds.bin");
   const pe = createMinimalPe();
   pe.loadcfg = {
-    GuardCFCheckFunctionPointer: TEST_IMAGE_BASE + 0x2000,
-    GuardCFDispatchFunctionPointer: TEST_IMAGE_BASE + 0x3000,
-    GuardEHContinuationTable: TEST_IMAGE_BASE + 0x50,
+    GuardCFCheckFunctionPointer: TEST_IMAGE_BASE + 0x2000n,
+    GuardCFDispatchFunctionPointer: TEST_IMAGE_BASE + 0x3000n,
+    GuardEHContinuationTable: TEST_IMAGE_BASE + 0x50n,
     GuardEHContinuationCount: 2,
-    GuardLongJumpTargetTable: TEST_IMAGE_BASE + 0x60,
+    GuardLongJumpTargetTable: TEST_IMAGE_BASE + 0x60n,
     GuardLongJumpTargetCount: 1
   } as unknown as PeParseResult["loadcfg"];
 

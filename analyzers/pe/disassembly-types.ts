@@ -22,7 +22,7 @@ export interface PeInstructionSetReport {
 export interface AnalyzePeInstructionSetOptions {
   coffMachine: number;
   is64Bit: boolean;
-  imageBase: number;
+  imageBase: bigint;
   headerRvaLimit?: number;
   entrypointRva: number;
   exportRvas?: number[];

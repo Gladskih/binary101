@@ -188,9 +188,8 @@ export const createPeDisassemblyController = (
           : [];
 
       const extraEntrypoints: Array<{ source: string; rvas: number[] }> = [];
-      const addPointerSeed = (source: string, pointerVa: number | undefined): void => {
-        if (!Number.isSafeInteger(pe.opt.ImageBase)) return;
-        const rva = readLoadConfigPointerRva(pe.opt.ImageBase, pointerVa ?? 0);
+      const addPointerSeed = (source: string, pointerVa: bigint | undefined): void => {
+        const rva = readLoadConfigPointerRva(pe.opt.ImageBase, pointerVa ?? 0n);
         if (rva == null) return;
         extraEntrypoints.push({ source, rvas: [rva] });
       };
