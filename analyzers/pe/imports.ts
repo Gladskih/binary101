@@ -199,7 +199,9 @@ const parseImportDirectoryWithThunkReader = async (
   const maxThunkEntries = (entrySize: number): number => Math.floor(file.size / entrySize) + 1;
   if (!impDir?.rva) return { entries: imports };
   const start = rvaToOff(impDir.rva);
-  if (start == null || start >= file.size) return { entries: imports };
+  if (start == null || start < 0 || start >= file.size) {
+    return { entries: imports, warning: "Import directory RVA does not map to file data." };
+  }
   const availableDirSize = Math.max(0, Math.min(impDir.size, file.size - start));
   addCoverageRegion("IMPORT directory", start, availableDirSize);
   const maxDescriptors = Math.ceil(availableDirSize / IMAGE_IMPORT_DESCRIPTOR_SIZE);

@@ -54,7 +54,11 @@ const parseContentInfo = (
     warnings.push("ContentInfo is missing contentType OID.");
     return {};
   }
-  const contentType = decodeOid(bytes, oid.start + oid.header, oid.length) || undefined;
+  const decodedContentType = decodeOid(bytes, oid.start + oid.header, oid.length);
+  if (!decodedContentType) {
+    warnings.push("ContentInfo contentType OID is malformed.");
+  }
+  const contentType = decodedContentType || undefined;
   pos = oid.end;
   const payloadEl = pos < element.end ? readDerElement(bytes, pos) : null;
   if (payloadEl && payloadEl.cls === "context" && payloadEl.tag === 0 && payloadEl.constructed) {

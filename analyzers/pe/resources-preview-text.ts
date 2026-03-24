@@ -109,6 +109,7 @@ export function addStringTablePreview(
   typeName: string,
   entryId: number | null
 ): void {
+  const utf16Decoder = new TextDecoder("utf-16le", { fatal: false });
   if (typeName !== "STRING") return;
   if (data.length < 2) {
     addPreviewIssue(langEntry, "String table is too small to read.");
@@ -127,12 +128,7 @@ export function addStringTablePreview(
       addPreviewIssue(langEntry, "String table data ended unexpectedly.");
       break;
     }
-    let text = "";
-    for (let pos = 0; pos + 1 < byteLen; pos += 2) {
-      const ch = dv.getUint16(offset + pos, true);
-      if (ch === 0) break;
-      text += String.fromCharCode(ch);
-    }
+    const text = utf16Decoder.decode(data.subarray(offset, offset + byteLen));
     const id = baseId != null ? baseId + entries.length : null;
     entries.push({ id, text });
     offset += byteLen;

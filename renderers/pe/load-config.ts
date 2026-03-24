@@ -10,6 +10,13 @@ const formatVa = (value: number | bigint, isPlus: boolean): string => {
   if (!value) return "-";
   return isPlus ? `0x${BigInt(value).toString(16)}` : hex(Number(value), 8);
 };
+const compareWideInt = (left: number | bigint, right: number | bigint): number => {
+  const leftBigint = BigInt(left);
+  const rightBigint = BigInt(right);
+  if (leftBigint === rightBigint) return 0;
+  return leftBigint < rightBigint ? -1 : 1;
+};
+const formatWideHex = (value: number | bigint): string => `0x${BigInt(value).toString(16)}`;
 
 const renderGuardFlags = (lc: PeLoadConfig, out: string[]): void => {
   if (typeof lc.GuardFlags !== "number") return;
@@ -227,7 +234,7 @@ export function renderLoadConfig(pe: PeParseResult, out: string[]): void {
   if (lc.dynamicRelocations) {
     const dr = lc.dynamicRelocations;
     const typeList = dr.entries.map(e => (e.kind === "v1" ? e.symbol : e.symbol)).filter(v => v);
-    const types = [...new Set(typeList)].sort((a, b) => a - b);
+    const types = [...new Set(typeList)].sort(compareWideInt);
     out.push(
       `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">DynamicRelocations (v${dr.version}, ${dr.entries.length} entr${dr.entries.length === 1 ? "y" : "ies"})</summary>`
     );
@@ -240,7 +247,7 @@ export function renderLoadConfig(pe: PeParseResult, out: string[]): void {
     out.push(
       dd(
         "Types",
-        types.length ? safe(types.map(t => hex(t, 0)).join(", ")) : "-",
+        types.length ? safe(types.map(t => formatWideHex(t)).join(", ")) : "-",
         "Unique relocation symbol/type values present."
       )
     );
@@ -251,7 +258,7 @@ export function renderLoadConfig(pe: PeParseResult, out: string[]): void {
       );
       dr.entries.forEach((entry, index) => {
         const kind = entry.kind;
-        const symbol = entry.symbol ? hex(entry.symbol, 0) : "-";
+        const symbol = entry.symbol ? formatWideHex(entry.symbol) : "-";
         const size = entry.kind === "v1" ? hex(entry.baseRelocSize, 8) : hex(entry.fixupInfoSize, 8);
         const available = hex(entry.availableBytes, 8);
         out.push(`<tr><td>${index + 1}</td><td>${safe(kind)}</td><td>${safe(symbol)}</td><td>${safe(size)}</td><td>${safe(available)}</td></tr>`);

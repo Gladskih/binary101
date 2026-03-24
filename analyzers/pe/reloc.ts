@@ -2,6 +2,8 @@
 
 import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
 
+const IMAGE_REL_BASED_HIGHADJ = 4;
+
 export async function parseBaseRelocations(
   file: File,
   dataDirs: PeDataDirectory[],
@@ -54,7 +56,7 @@ export async function parseBaseRelocations(
     const availableBlockBytes = Math.min(blockSize, dir.size - rel);
     const availableEntries = Math.floor(Math.max(0, availableBlockBytes - 8) / 2);
     const entries: Array<{ type: number; offset: number }> = [];
-    for (let i = 0; i < availableEntries; i += 1) {
+    for (let i = 0; i < availableEntries;) {
       const entryRva = (blockRva + 8 + i * 2) >>> 0;
       const entryOff = rvaToOff(entryRva);
       if (entryOff == null || entryOff < 0 || entryOff + 2 > file.size) {
@@ -67,7 +69,16 @@ export async function parseBaseRelocations(
         break;
       }
       const raw = entryView.getUint16(0, true);
-      entries.push({ type: (raw >> 12) & 0xf, offset: raw & 0xfff });
+      const type = (raw >> 12) & 0xf;
+      entries.push({ type, offset: raw & 0xfff });
+      if (type === IMAGE_REL_BASED_HIGHADJ) {
+        if (i + 1 >= availableEntries) {
+          addWarning("Base relocation HIGHADJ entry is missing its second WORD payload.");
+        }
+        i += 2;
+        continue;
+      }
+      i += 1;
     }
     blocks.push({ pageRva, size: blockSize, count: entries.length, entries });
     totalEntries += entries.length;

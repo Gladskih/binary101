@@ -2,7 +2,7 @@
 
 import type { PeClrMeta, PeClrStreamInfo } from "./clr-types.js";
 
-export const CLR_METADATA_ROOT_MIN_BYTES = 0x20;
+export const CLR_METADATA_ROOT_MIN_BYTES = 0x18;
 
 // ECMA-335 II.24.2.2 ("Stream header"): "The name is limited to 32 characters."
 const CLR_STREAM_NAME_SPEC_LIMIT = 32;
@@ -216,7 +216,7 @@ export const parseClrMetadataRoot = async (
     issues.push("Metadata directory is truncated; some bytes are missing from the end of the region.");
   }
   if (availableSize < CLR_METADATA_ROOT_MIN_BYTES) {
-    issues.push("Metadata root is smaller than the minimum size (0x20 bytes); header is truncated.");
+    issues.push("Metadata root is smaller than the minimum size (0x18 bytes); header is truncated.");
     return null;
   }
 

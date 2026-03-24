@@ -49,7 +49,8 @@ export async function parsePeHeaders(file: File): Promise<PeCore | null> {
     sectOff,
     sections,
     opt.SectionAlignment,
-    opt.SizeOfImage
+    opt.SizeOfImage,
+    opt.SizeOfHeaders
   );
 
   await addSectionEntropies(file, sections);

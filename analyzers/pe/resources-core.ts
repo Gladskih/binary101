@@ -40,6 +40,7 @@ export async function buildResourceTree(
   rvaToOff: RvaToOffset,
   addCoverageRegion: AddCoverageRegion
 ): Promise<ResourceTree | null> {
+  const utf16Decoder = new TextDecoder("utf-16le", { fatal: false });
   const dir = dataDirs.find(d => d.name === "RESOURCE");
   if (!dir?.rva || dir.size < 16) return null;
   const base = rvaToOff(dir.rva);
@@ -162,16 +163,7 @@ export async function buildResourceTree(
       return "";
     }
     const bytes = new Uint8Array(await file.slice(textOff, textOff + bytesLength).arrayBuffer());
-    let s = "";
-    for (let index = 0; index + 1 < bytes.length; index += 2) {
-      const first = bytes[index];
-      const second = bytes[index + 1];
-      if (first === undefined || second === undefined) break;
-      const ch = first | (second << 8);
-      if (ch === 0) break;
-      s += String.fromCharCode(ch);
-    }
-    return s;
+    return utf16Decoder.decode(bytes.subarray(0, bytes.length - (bytes.length % 2)));
   };
 
   const root = await parseDir(0);
@@ -245,6 +237,9 @@ export async function buildResourceTree(
                 const Size = u32(dv, 4);
                 const CodePage = u32(dv, 8);
                 const Reserved = u32(dv, 12);
+                if (Reserved !== 0) {
+                  addIssue("IMAGE_RESOURCE_DATA_ENTRY.Reserved is non-zero; the field should be 0.");
+                }
                 const lang = langEnt.nameIsString ? null : (langEnt.nameOrId ?? null);
                 const langEntry = { lang, size: Size, codePage: CodePage, dataRVA: DataRVA, reserved: Reserved };
                 child.langs.push(langEntry);

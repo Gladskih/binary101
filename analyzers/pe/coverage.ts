@@ -1,12 +1,11 @@
 "use strict";
-
-import { alignUpTo } from "../../binary-utils.js";
 import type {
   AddCoverageRegion,
   PeCoffHeader,
   PeCoverageEntry,
   PeSection
 } from "./types.js";
+import { PE_RVA_EXCLUSIVE_LIMIT } from "./rva-limits.js";
 
 export function buildCoverage(
   fileSize: number,
@@ -19,7 +18,8 @@ export function buildCoverage(
   sectionHeadersOffset: number,
   sections: PeSection[],
   sectionAlignment: number,
-  sizeOfImage: number
+  sizeOfImage: number,
+  declaredSizeOfHeaders = 0
 ): {
   coverage: PeCoverageEntry[];
   addCov: AddCoverageRegion;
@@ -27,6 +27,14 @@ export function buildCoverage(
   imageEnd: number;
   imageSizeMismatch: boolean;
 } {
+  const alignUpClamped = (value: number, alignment: number): number => {
+    const normalizedValue = Math.max(0, value);
+    const normalizedAlignment = alignment >>> 0;
+    if (!normalizedAlignment) return Math.min(PE_RVA_EXCLUSIVE_LIMIT, normalizedValue);
+    const remainder = normalizedValue % normalizedAlignment;
+    const aligned = remainder === 0 ? normalizedValue : normalizedValue + normalizedAlignment - remainder;
+    return Math.min(PE_RVA_EXCLUSIVE_LIMIT, aligned);
+  };
   const coverage: PeCoverageEntry[] = [];
   const addCov: AddCoverageRegion = (label, off, size) => {
     if (!Number.isFinite(off) || !Number.isFinite(size) || off < 0 || size <= 0) return;
@@ -41,17 +49,23 @@ export function buildCoverage(
     optionalHeaderOffset + optionalHeaderSize,
     sectionHeadersOffset + coff.NumberOfSections * 40
   );
-  let rawEnd = headersEnd;
+  const normalizedSizeOfHeaders =
+    Number.isSafeInteger(declaredSizeOfHeaders) && declaredSizeOfHeaders > 0
+      ? Math.min(fileSize, declaredSizeOfHeaders >>> 0)
+      : headersEnd;
+  let rawEnd = Math.max(headersEnd, normalizedSizeOfHeaders);
   for (const section of sections) {
     const endOfSectionData = (section.pointerToRawData >>> 0) + (section.sizeOfRawData >>> 0);
     rawEnd = Math.max(rawEnd, endOfSectionData);
   }
   const overlaySize = fileSize > rawEnd ? fileSize - rawEnd : 0;
-  let imageEnd = alignUpTo(headersEnd, sectionAlignment >>> 0);
+  let imageEnd = alignUpClamped(Math.max(headersEnd, normalizedSizeOfHeaders), sectionAlignment);
   for (const section of sections) {
-    const endOfSectionImage =
-      (section.virtualAddress >>> 0) + ((section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0));
-    imageEnd = Math.max(imageEnd, alignUpTo(endOfSectionImage, sectionAlignment >>> 0));
+    const endOfSectionImage = Math.min(
+      PE_RVA_EXCLUSIVE_LIMIT,
+      (section.virtualAddress >>> 0) + ((section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0))
+    );
+    imageEnd = Math.max(imageEnd, alignUpClamped(endOfSectionImage, sectionAlignment));
   }
   const imageSizeMismatch = imageEnd !== (sizeOfImage >>> 0);
   if (overlaySize > 0) addCov("Overlay (data after last section)", rawEnd, overlaySize);

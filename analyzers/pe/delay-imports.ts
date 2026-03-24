@@ -17,7 +17,6 @@ const IMAGE_DELAY_IMPORT_ORDINAL_RESERVED_MASK32 = 0x7fff0000; // PE32 ordinal t
 const IMAGE_DELAY_IMPORT_NAME_MASK64 = 0x7fffffffn; // PE32+ keeps the import-by-name RVA in bits 30-0.
 const IMAGE_DELAY_IMPORT_NAME_RESERVED_MASK64 = 0x7fffffff80000000n; // PE32+ reserves bits 62-31.
 const IMAGE_DELAY_IMPORT_ORDINAL_RESERVED_MASK64 = 0x7fffffffffff0000n; // PE32+ ordinal thunks reserve bits 62-16.
-const IMAGE_DELAYLOAD_ATTRIBUTES_RVA = 1; // delayimp.h: dlattrRva means descriptor pointers are RVAs.
 // Parser policy: read NUL-terminated strings incrementally instead of slicing the full tail of a malformed file.
 const NULL_TERMINATED_ASCII_READ_CHUNK_SIZE = 64;
 
@@ -242,8 +241,8 @@ const parseDelayImportsWithThunkReader = async (
     ) {
       break;
     }
-    if (Attributes !== 0 && Attributes !== IMAGE_DELAYLOAD_ATTRIBUTES_RVA) {
-      warnings.add("Delay import descriptor has unsupported Attributes flags.");
+    if (Attributes !== 0) {
+      warnings.add("Delay import descriptor has non-zero Attributes.");
     }
     if (!DllNameRVA) {
       warnings.add("Delay import descriptor is missing the DLL name RVA.");

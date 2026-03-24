@@ -26,6 +26,7 @@ const describeRevision = (rev: number): string =>
 export interface AuthenticodeSignerInfo {
   issuer?: string;
   serialNumber?: string;
+  subjectKeyIdentifier?: string;
   digestAlgorithm?: string;
   digestAlgorithmName?: string;
   signatureAlgorithm?: string;

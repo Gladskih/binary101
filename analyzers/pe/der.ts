@@ -137,7 +137,7 @@ export const parseDerTime = (bytes: Uint8Array, element: DerElement): string | u
   ).trim();
   if (!rawText) return undefined;
   if (element.tag === TAG_UTC_TIME) {
-    const match = rawText.match(/^(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})?Z$/);
+    const match = rawText.match(/^(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})Z$/);
     if (match) {
       const yearPart = Number(match[1]);
       const year = yearPart < 50 ? 2000 + yearPart : 1900 + yearPart;
@@ -145,19 +145,19 @@ export const parseDerTime = (bytes: Uint8Array, element: DerElement): string | u
       const day = match[3];
       const hour = match[4];
       const minute = match[5];
-      const second = match[6] || "00";
+      const second = match[6];
       return `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
     }
   }
   if (element.tag === TAG_GENERALIZED_TIME) {
-    const match = rawText.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})?Z$/);
+    const match = rawText.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})Z$/);
     if (match) {
       const year = match[1];
       const month = match[2];
       const day = match[3];
       const hour = match[4];
       const minute = match[5];
-      const second = match[6] || "00";
+      const second = match[6];
       return `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
     }
   }

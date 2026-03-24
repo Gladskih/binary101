@@ -135,10 +135,10 @@ export interface PeCore {
 }
 
 export interface PeTlsDirectory {
-  StartAddressOfRawData: number;
-  EndAddressOfRawData: number;
-  AddressOfIndex: number;
-  AddressOfCallBacks: number;
+  StartAddressOfRawData: number | bigint;
+  EndAddressOfRawData: number | bigint;
+  AddressOfIndex: number | bigint;
+  AddressOfCallBacks: number | bigint;
   SizeOfZeroFill: number;
   Characteristics: number;
   CallbackCount: number;

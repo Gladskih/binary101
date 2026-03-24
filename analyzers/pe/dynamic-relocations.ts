@@ -12,12 +12,12 @@ import type { PeSection, RvaToOffset } from "./types.js";
 const DYNAMIC_RELOCATION_TABLE_HEADER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 2;
 
 export type PeDynamicRelocationEntry =
-  | { kind: "v1"; symbol: number; baseRelocSize: number; availableBytes: number }
+  | { kind: "v1"; symbol: number | bigint; baseRelocSize: number; availableBytes: number }
   | {
       kind: "v2";
       headerSize: number;
       fixupInfoSize: number;
-      symbol: number;
+      symbol: number | bigint;
       symbolGroup: number;
       flags: number;
       availableBytes: number;

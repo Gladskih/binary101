@@ -63,6 +63,45 @@ export async function parseExportDirectory(
     }
     return { text, truncated: true };
   };
+  const readForwarderStr = async (rva: number): Promise<{ text: string; issue?: string }> => {
+    if (rva < dir.rva || rva >= dir.rva + dir.size) {
+      return { text: "", issue: "Export forwarder RVA lies outside the export directory range." };
+    }
+    const startOff = rvaToOff(rva);
+    if (!isReadableOffset(startOff)) {
+      return { text: "", issue: "Export forwarder RVA does not map to file data." };
+    }
+
+    const maxBytes = dir.rva + dir.size - rva;
+    let contiguousByteCount = 0;
+    let mappingStoppedEarly = false;
+    while (contiguousByteCount < maxBytes) {
+      const mappedOff = rvaToOff((rva + contiguousByteCount) >>> 0);
+      if (!isReadableOffset(mappedOff) || mappedOff !== startOff + contiguousByteCount) {
+        mappingStoppedEarly = true;
+        break;
+      }
+      contiguousByteCount += 1;
+    }
+
+    const bytes = new Uint8Array(
+      await file.slice(startOff, startOff + contiguousByteCount).arrayBuffer()
+    );
+    const zeroIndex = bytes.indexOf(0);
+    const textBytes = zeroIndex === -1 ? bytes : bytes.subarray(0, zeroIndex);
+    const text = String.fromCharCode(...textBytes);
+    if (zeroIndex !== -1) return { text };
+    if (mappingStoppedEarly) {
+      return {
+        text,
+        issue: "Export forwarder string stops mapping before its NUL terminator within the export directory range."
+      };
+    }
+    return {
+      text,
+      issue: "Export forwarder string is not NUL-terminated within the export directory range."
+    };
+  };
   const readMappedU32 = async (tableRva: number, index: number): Promise<number | null> => {
     const entryRva = tableRva + index * 4;
     const entryOff = rvaToOff(entryRva >>> 0);
@@ -157,9 +196,9 @@ export async function parseExportDirectory(
       if (funcRva >= dir.rva && funcRva < dir.rva + dir.size) {
         const fwdOff = rvaToOff(funcRva);
         if (isReadableOffset(fwdOff)) {
-          const forwarderInfo = await readStr(fwdOff);
+          const forwarderInfo = await readForwarderStr(funcRva);
           forwarder = forwarderInfo.text;
-          if (forwarderInfo.truncated) issues.push("Export forwarder string truncated.");
+          if (forwarderInfo.issue) issues.push(forwarderInfo.issue);
         } else if (funcRva) {
           issues.push("Export forwarder RVA does not map to file data.");
         }

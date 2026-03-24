@@ -112,7 +112,6 @@ export const decodeMessageTablePreview = (
         )
       : data.byteLength;
     const entryCount = highId - lowId + 1;
-    const strings: string[] = [];
     let pos = entryOffset;
     for (let entryIndex = 0; entryIndex < entryCount; entryIndex += 1) {
       if (pos + MESSAGE_ENTRY_HEADER_SIZE > blockEnd) {
@@ -131,11 +130,10 @@ export const decodeMessageTablePreview = (
         (flags & MESSAGE_RESOURCE_UNICODE_FLAG) !== 0,
         codePage
       );
-      strings.push(decoded.text);
+      messages.push({ id: lowId + entryIndex, strings: [decoded.text] });
       if (decoded.issue) addIssue(decoded.issue);
       pos += length;
     }
-    messages.push({ id: lowId, strings });
   }
   return { messages, truncated, issues };
 };

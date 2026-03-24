@@ -172,6 +172,7 @@ const parseSignerInfo = (
   const sidEl = children[index++];
   let issuer: string | undefined;
   let serialNumber: string | undefined;
+  let subjectKeyIdentifier: string | undefined;
   if (sidEl) {
     if (sidEl.tag === TAG_SEQUENCE) {
       const sidChildren = readDerChildren(bytes, sidEl);
@@ -182,10 +183,7 @@ const parseSignerInfo = (
         serialNumber = bytesToHex(bytes.subarray(serialEl.start + serialEl.header, serialEl.end));
       }
     } else if (sidEl.cls === "context" && sidEl.tag === 0) {
-      const keyId = readDerElement(bytes, sidEl.start + sidEl.header);
-      if (keyId?.tag === TAG_OCTET_STRING) {
-        serialNumber = bytesToHex(bytes.subarray(keyId.start + keyId.header, keyId.end));
-      }
+      subjectKeyIdentifier = bytesToHex(bytes.subarray(sidEl.start + sidEl.header, sidEl.end));
     }
   }
   const digestAlg = parseAlgorithmIdentifier(bytes, children[index++], warnings, oid => describeOid(oid));
@@ -199,6 +197,7 @@ const parseSignerInfo = (
   const signer: AuthenticodeSignerInfo = {};
   if (issuer) signer.issuer = issuer;
   if (serialNumber) signer.serialNumber = serialNumber;
+  if (subjectKeyIdentifier) signer.subjectKeyIdentifier = subjectKeyIdentifier;
   if (digestAlg.oid) {
     signer.digestAlgorithm = digestAlg.oid;
     const digestName = digestAlg.name || describeOid(digestAlg.oid);

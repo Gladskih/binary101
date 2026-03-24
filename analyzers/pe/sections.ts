@@ -1,8 +1,10 @@
 "use strict";
 
 import type { PeSection, RvaToOffset } from "./types.js";
+import { PE_RVA_EXCLUSIVE_LIMIT } from "./rva-limits.js";
 
 const IMAGE_SECTION_HEADER_SIZE = 40;
+const sectionNameDecoder = new TextDecoder("utf-8", { fatal: false });
 
 const getMappedSectionSpan = (section: PeSection): number =>
   (section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0);
@@ -19,7 +21,7 @@ const createRvaToOffsetMapper = (
     const rawSize = section.sizeOfRawData >>> 0;
     return {
       vaStart: virtualAddress,
-      vaEnd: Math.min(0x1_0000_0000, virtualAddress + mappedSpan),
+      vaEnd: Math.min(PE_RVA_EXCLUSIVE_LIMIT, virtualAddress + mappedSpan),
       fileOffset,
       rawSize
     };
@@ -64,12 +66,13 @@ const parseSectionHeaders = async (
   for (let sectionIndex = 0; sectionIndex < safeSectionCount; sectionIndex += 1) {
     const baseOffset = sectionIndex * IMAGE_SECTION_HEADER_SIZE;
     if (sectionHeadersView.byteLength < baseOffset + IMAGE_SECTION_HEADER_SIZE) break;
-    let name = "";
-    for (let nameIndex = 0; nameIndex < 8; nameIndex += 1) {
-      const codePoint = sectionHeadersView.getUint8(baseOffset + nameIndex);
-      if (codePoint === 0) break;
-      name += String.fromCharCode(codePoint);
-    }
+    const nameBytes = new Uint8Array(
+      sectionHeadersView.buffer,
+      sectionHeadersView.byteOffset + baseOffset,
+      8
+    );
+    const zeroIndex = nameBytes.indexOf(0);
+    const name = sectionNameDecoder.decode(nameBytes.subarray(0, zeroIndex === -1 ? 8 : zeroIndex));
     const virtualSize = sectionHeadersView.getUint32(baseOffset + 8, true);
     const virtualAddress = sectionHeadersView.getUint32(baseOffset + 12, true);
     const sizeOfRawData = sectionHeadersView.getUint32(baseOffset + 16, true);

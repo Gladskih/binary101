@@ -3,7 +3,7 @@
 export type ParsedOptionalHeaderTail = {
   nextPosition: number;
   BaseOfData?: number;
-  ImageBase: number;
+  ImageBase: number | bigint;
   SectionAlignment: number;
   FileAlignment: number;
   OSVersionMajor: number;
@@ -18,10 +18,10 @@ export type ParsedOptionalHeaderTail = {
   CheckSum: number;
   Subsystem: number;
   DllCharacteristics: number;
-  SizeOfStackReserve: number;
-  SizeOfStackCommit: number;
-  SizeOfHeapReserve: number;
-  SizeOfHeapCommit: number;
+  SizeOfStackReserve: number | bigint;
+  SizeOfStackCommit: number | bigint;
+  SizeOfHeapReserve: number | bigint;
+  SizeOfHeapCommit: number | bigint;
   LoaderFlags: number;
   NumberOfRvaAndSizes: number;
 };
@@ -116,7 +116,7 @@ export const parseOptionalHeaderTail64 = (
   let position = start;
   const readAt = <T>(length: number, fn: () => T, fallback: T): T =>
     position + length <= optionalHeaderView.byteLength ? fn() : fallback;
-  const ImageBase = readAt(8, () => Number(optionalHeaderView.getBigUint64(position, true)), 0);
+  const ImageBase = readAt(8, () => optionalHeaderView.getBigUint64(position, true), 0n);
   position += 8;
   const SectionAlignment = readAt(4, () => optionalHeaderView.getUint32(position, true), 0);
   position += 4;
@@ -140,13 +140,13 @@ export const parseOptionalHeaderTail64 = (
   position += 2;
   const DllCharacteristics = readAt(2, () => optionalHeaderView.getUint16(position, true), 0);
   position += 2;
-  const SizeOfStackReserve = readAt(8, () => Number(optionalHeaderView.getBigUint64(position, true)), 0);
+  const SizeOfStackReserve = readAt(8, () => optionalHeaderView.getBigUint64(position, true), 0n);
   position += 8;
-  const SizeOfStackCommit = readAt(8, () => Number(optionalHeaderView.getBigUint64(position, true)), 0);
+  const SizeOfStackCommit = readAt(8, () => optionalHeaderView.getBigUint64(position, true), 0n);
   position += 8;
-  const SizeOfHeapReserve = readAt(8, () => Number(optionalHeaderView.getBigUint64(position, true)), 0);
+  const SizeOfHeapReserve = readAt(8, () => optionalHeaderView.getBigUint64(position, true), 0n);
   position += 8;
-  const SizeOfHeapCommit = readAt(8, () => Number(optionalHeaderView.getBigUint64(position, true)), 0);
+  const SizeOfHeapCommit = readAt(8, () => optionalHeaderView.getBigUint64(position, true), 0n);
   position += 8;
   const LoaderFlags = readAt(4, () => optionalHeaderView.getUint32(position, true), 0);
   position += 4;

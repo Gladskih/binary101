@@ -239,10 +239,10 @@ export const parseTlsDirectory64 = async (
     addCoverageRegion("TLS callbacks", callbackTableOff, callbackInfo.tableBytes);
   }
   return {
-    StartAddressOfRawData: Number(StartAddressOfRawDataVa),
-    EndAddressOfRawData: Number(EndAddressOfRawDataVa),
-    AddressOfIndex: Number(AddressOfIndexVa),
-    AddressOfCallBacks: Number(AddressOfCallBacksVa),
+    StartAddressOfRawData: StartAddressOfRawDataVa,
+    EndAddressOfRawData: EndAddressOfRawDataVa,
+    AddressOfIndex: AddressOfIndexVa,
+    AddressOfCallBacks: AddressOfCallBacksVa,
     SizeOfZeroFill,
     Characteristics,
     CallbackCount: callbackInfo.rvas.length,

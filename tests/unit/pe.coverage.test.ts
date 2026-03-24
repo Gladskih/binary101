@@ -31,7 +31,8 @@ void test("buildCoverage does not classify SizeOfHeaders padding as overlay data
     0x138,
     [],
     0x1000,
-    0x1000
+    0x1000,
+    0x200
   );
 
   assert.strictEqual(overlaySize, 0);
@@ -59,7 +60,8 @@ void test("buildCoverage treats high-RVA section spans past 0xffffffff as an ima
       }
     ],
     0x1000,
-    0x1000
+    0x1000,
+    0x200
   );
 
   assert.strictEqual(imageSizeMismatch, true);

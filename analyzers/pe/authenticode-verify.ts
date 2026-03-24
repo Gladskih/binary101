@@ -102,8 +102,11 @@ export const computePeAuthenticodeDigestBestEffort = async (
   digestFunction?: DigestFunction
 ): Promise<string | null> => {
   const checksumOff = core.optOff + 64;
-  const securityIndex = securityDir?.index ?? core.dataDirs.find(d => d.name === "SECURITY")?.index ?? 4;
-  const securityEntryOff = core.optOff + core.ddStartRel + securityIndex * 8;
+  const securityIndex = securityDir?.index ?? core.dataDirs.find(d => d.name === "SECURITY")?.index;
+  const securityEntryOff =
+    securityIndex == null
+      ? checksumOff + 4
+      : core.optOff + core.ddStartRel + securityIndex * 8;
   const certOff = securityDir?.rva ?? 0;
   const certSize = securityDir?.size ?? 0;
   const certEnd = certOff + certSize;
@@ -111,7 +114,7 @@ export const computePeAuthenticodeDigestBestEffort = async (
   if (checksumOff >= file.size) return null;
 
   const parts: Blob[] = [];
-  const afterSecurityEntry = securityEntryOff + 8;
+  const afterSecurityEntry = securityIndex == null ? securityEntryOff : securityEntryOff + 8;
   pushSlice(parts, file, 0, checksumOff);
   pushSlice(parts, file, checksumOff + 4, securityEntryOff);
   pushSlice(parts, file, afterSecurityEntry, certOff);
@@ -133,7 +136,10 @@ export const computePeAuthenticodeDigestFromParsedPe = async (
 ): Promise<string | null> => {
   const checksumOff = core.optOff + 64;
   const securityIndex = securityDir?.index ?? core.dataDirs.find(d => d.name === "SECURITY")?.index ?? 4;
-  const securityEntryOff = core.optOff + core.ddStartRel + securityIndex * 8;
+  const securityEntryOff =
+    securityIndex == null
+      ? checksumOff + 4
+      : core.optOff + core.ddStartRel + securityIndex * 8;
   const certOff = securityDir?.rva ?? 0;
   const certSize = securityDir?.size ?? 0;
   const certEnd = certOff + certSize;

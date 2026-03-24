@@ -12,9 +12,9 @@ const DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE32 = Uint32Array.BYTES_PER_ELEMENT 
 const DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE64 =
   Uint32Array.BYTES_PER_ELEMENT * 4 + BigUint64Array.BYTES_PER_ELEMENT;
 
-const readU64Maybe = (view: DataView, offset: number): number => {
-  if (view.byteLength < offset + BigUint64Array.BYTES_PER_ELEMENT) return 0;
-  return Number(view.getBigUint64(offset, true));
+const readU64Maybe = (view: DataView, offset: number): bigint => {
+  if (view.byteLength < offset + BigUint64Array.BYTES_PER_ELEMENT) return 0n;
+  return view.getBigUint64(offset, true);
 };
 
 export const parseDynamicRelocationEntriesV132 = (
@@ -87,6 +87,11 @@ export const parseDynamicRelocationEntriesV232 = (
     const symbolGroup = view.getUint32(cursor + Uint32Array.BYTES_PER_ELEMENT * 3, true) >>> 0;
     const flags = view.getUint32(cursor + Uint32Array.BYTES_PER_ELEMENT * 4, true) >>> 0;
     const entryBodySize = Math.max(0, dataEnd - cursor);
+    if (headerSize < DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE32) {
+      warnings.push(
+        `DynamicRelocations: V2 entry header size 0x${headerSize.toString(16)} is smaller than the fixed 0x${DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE32.toString(16)}-byte structure.`
+      );
+    }
     if (entryBodySize <= DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE32) {
       warnings.push(
         "DynamicRelocations: V2 entry body is no larger than the fixed header, so fixup payload is missing or truncated."
@@ -131,6 +136,17 @@ export const parseDynamicRelocationEntriesV264 = (
     const symbol = readU64Maybe(view, cursor + Uint32Array.BYTES_PER_ELEMENT * 2);
     const symbolGroup = view.getUint32(cursor + 16, true) >>> 0;
     const flags = view.getUint32(cursor + 20, true) >>> 0;
+    const entryBodySize = Math.max(0, dataEnd - cursor);
+    if (headerSize < DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE64) {
+      warnings.push(
+        `DynamicRelocations: V2 entry header size 0x${headerSize.toString(16)} is smaller than the fixed 0x${DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE64.toString(16)}-byte structure.`
+      );
+    }
+    if (entryBodySize <= DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE64) {
+      warnings.push(
+        "DynamicRelocations: V2 entry body is no larger than the fixed header, so fixup payload is missing or truncated."
+      );
+    }
     const fixupStart = cursor + Math.max(DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE64, headerSize);
     const availableBytes = Math.min(fixupInfoSize, Math.max(0, dataEnd - fixupStart));
 

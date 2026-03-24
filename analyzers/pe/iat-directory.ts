@@ -24,7 +24,7 @@ export const parseIatDirectory = (
     };
   }
   const offset = rvaToOff(dir.rva);
-  if (offset == null) {
+  if (offset == null || offset < 0) {
     return {
       rva: dir.rva,
       size: dir.size,
