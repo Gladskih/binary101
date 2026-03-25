@@ -34,6 +34,36 @@ export interface ResourceTree {
   rvaToOff: RvaToOffset;
 }
 
+type ResourceDirectoryEntry = {
+  nameIsString: boolean;
+  subdir: boolean;
+  nameOrId: number | null;
+  target: number;
+};
+
+const validateResourceDirectoryEntryKinds = (
+  rel: number,
+  namedCount: number,
+  entries: ResourceDirectoryEntry[],
+  addIssue: (message: string) => void
+): void => {
+  const availableNamedCount = Math.min(namedCount, entries.length);
+  for (let index = 0; index < availableNamedCount; index += 1) {
+    if (entries[index]?.nameIsString) continue;
+    addIssue(
+      `Resource directory at 0x${(rel >>> 0).toString(16)} has ID entries inside the name-entry range; named entries must appear before ID entries.`
+    );
+    break;
+  }
+  for (let index = availableNamedCount; index < entries.length; index += 1) {
+    if (!entries[index]?.nameIsString) continue;
+    addIssue(
+      `Resource directory at 0x${(rel >>> 0).toString(16)} has named entries after ID entries; named entries must appear before ID entries.`
+    );
+    break;
+  }
+};
+
 export async function buildResourceTree(
   file: File,
   dataDirs: PeDataDirectory[],
@@ -84,7 +114,7 @@ export async function buildResourceTree(
   ): Promise<{
     Named: number;
       Ids: number;
-      entries: Array<{ nameIsString: boolean; subdir: boolean; nameOrId: number | null; target: number }>;
+      entries: ResourceDirectoryEntry[];
   } | null> => {
     const off = resolveRelOffset(rel, 16);
     if (off == null) {
@@ -99,12 +129,7 @@ export async function buildResourceTree(
     const Named = u16(dv, 12);
     const Ids = u16(dv, 14);
     const count = Named + Ids;
-    const entries: Array<{
-      nameIsString: boolean;
-      subdir: boolean;
-      nameOrId: number | null;
-      target: number;
-    }> = [];
+    const entries: ResourceDirectoryEntry[] = [];
     for (let index = 0; index < count; index++) {
       const entryOff = resolveRelOffset(rel + 16 + index * 8, 8);
       if (entryOff == null) {
@@ -129,6 +154,7 @@ export async function buildResourceTree(
         target: OffsetToData & 0x7fffffff
       });
     }
+    validateResourceDirectoryEntryKinds(rel, Named, entries, addIssue);
     return { Named, Ids, entries };
   };
 
