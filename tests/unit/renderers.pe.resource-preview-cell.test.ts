@@ -58,6 +58,11 @@ void test("renderPreviewCell renders structured dialog, menu, accelerator and su
 
   assert.match(dialogHtml, /Settings/);
   assert.match(dialogHtml, /BUTTON/);
+  assert.match(dialogHtml, /background:var\(--card\)/);
+  assert.match(dialogHtml, /background:var\(--bg\)/);
+  assert.match(dialogHtml, /color:var\(--text\)/);
+  assert.doesNotMatch(dialogHtml, /rgba\(255,255,255/i);
+  assert.doesNotMatch(dialogHtml, /#f8fafc|#e5e7eb/i);
   assert.match(menuHtml, /File/);
   assert.match(menuHtml, /Open/);
   assert.match(acceleratorHtml, /Ctrl\+O/);

@@ -39,14 +39,14 @@ const renderDialogMockup = (dialog: ResourceDialogPreview): string => {
     const boxWidth = Math.max(8, Math.min(100 - left, (control.width / width) * 100));
     const boxHeight = Math.max(8, Math.min(100 - top, (control.height / height) * 100));
     const label = safe(control.title || control.kind);
-    return `<div style="position:absolute;left:${left}%;top:${top}%;width:${boxWidth}%;height:${boxHeight}%;border:1px solid var(--border2);border-radius:4px;background:rgba(255,255,255,.55);padding:.1rem .2rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</div>`;
+    return `<div style="position:absolute;left:${left}%;top:${top}%;width:${boxWidth}%;height:${boxHeight}%;border:1px solid var(--border2);border-radius:4px;background:var(--card);color:var(--text);padding:.1rem .2rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</div>`;
   }).join("");
   return [
     '<div style="margin-top:.25rem">',
     `<div class="smallNote"><b>${safe(dialog.title || "(untitled dialog)")}</b> · ${dialog.controls.length} controls</div>`,
-    `<div style="position:relative;margin-top:.25rem;width:220px;height:140px;border:1px solid var(--border2);border-radius:8px;background:linear-gradient(180deg,#f8fafc,#e5e7eb);overflow:hidden">`,
-    `<div style="padding:.2rem .4rem;border-bottom:1px solid var(--border2);background:rgba(255,255,255,.65)">${safe(dialog.title || "(untitled dialog)")}</div>`,
-    `<div style="position:absolute;left:0;right:0;top:1.75rem;bottom:0">${controls}</div>`,
+    `<div style="position:relative;margin-top:.25rem;width:220px;height:140px;border:1px solid var(--border2);border-radius:8px;background:var(--card);color:var(--text);overflow:hidden">`,
+    `<div style="padding:.2rem .4rem;border-bottom:1px solid var(--border2);background:var(--bg);color:var(--text)">${safe(dialog.title || "(untitled dialog)")}</div>`,
+    `<div style="position:absolute;left:0;right:0;top:1.75rem;bottom:0;background:var(--bg)">${controls}</div>`,
     "</div>",
     renderDialogControls(dialog.controls),
     "</div>"
