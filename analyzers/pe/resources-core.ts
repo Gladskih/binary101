@@ -2,43 +2,24 @@
 
 import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
 import {
+  validateResourceDirectoryDuplicates,
   validateResourceDirectoryEntryKinds,
   validateResourceDirectoryIdSort,
   validateResourceDirectoryNameSort
 } from "./resource-directory-rules.js";
 import type { ResourceDirectoryEntry } from "./resource-directory-rules.js";
+import {
+  updateDirectoryLayoutEnd,
+  validateResourceLayout
+} from "./resource-layout-rules.js";
+import type {
+  ResourceDataEntryLayout,
+  ResourceLayoutRange
+} from "./resource-layout-rules.js";
+import { knownResourceType } from "./resource-type-names.js";
+import type { ResourceDetailEntry, ResourceTree } from "./resource-tree-types.js";
 
-const knownResourceType = (id: number): string | null => ({
-  1: "CURSOR", 2: "BITMAP", 3: "ICON", 4: "MENU", 5: "DIALOG", 6: "STRING", 7: "FONTDIR", 8: "FONT", 9: "ACCELERATOR",
-  10: "RCDATA", 11: "MESSAGETABLE", 12: "GROUP_CURSOR", 14: "GROUP_ICON", 16: "VERSION", 17: "DLGINCLUDE", 19: "PLUGPLAY",
-  20: "VXD", 21: "ANICURSOR", 22: "ANIICON", 23: "HTML", 24: "MANIFEST"
-})[id] || null;
-
-export interface ResourceLangEntry {
-  lang: number | null;
-  size: number;
-  codePage: number;
-  dataRVA: number;
-  reserved: number;
-}
-
-export interface ResourceDetailEntry {
-  id: number | null;
-  name: string | null;
-  langs: ResourceLangEntry[];
-}
-
-export interface ResourceTree {
-  base: number;
-  limitEnd: number;
-  dirRva?: number;
-  dirSize?: number;
-  issues?: string[];
-  top: Array<{ typeName: string; kind: "name" | "id"; leafCount: number }>;
-  detail: Array<{ typeName: string; entries: ResourceDetailEntry[] }>;
-  view: (offset: number, length: number) => Promise<DataView>;
-  rvaToOff: RvaToOffset;
-}
+export type { ResourceLangEntry, ResourceDetailEntry, ResourceTree } from "./resource-tree-types.js";
 
 export async function buildResourceTree(
   file: File,
@@ -54,7 +35,10 @@ export async function buildResourceTree(
   addCoverageRegion("RESOURCE directory", base, dir.size);
   const limitEnd = base + dir.size;
   const issues: string[] = [];
+  let maxDirectoryEnd = 0;
   const resourceNameCache = new Map<number, Promise<string>>();
+  const resourceStringRanges: ResourceLayoutRange[] = [];
+  const resourceDataEntries: ResourceDataEntryLayout[] = [];
   const view = async (off: number, len: number): Promise<DataView> =>
     new DataView(await file.slice(off, off + len).arrayBuffer());
   const u16 = (dv: DataView, off: number): number => dv.getUint16(off, true);
@@ -136,9 +120,11 @@ export async function buildResourceTree(
         target: OffsetToData & 0x7fffffff
       });
     }
+    maxDirectoryEnd = updateDirectoryLayoutEnd(maxDirectoryEnd, rel, entries.length);
     validateResourceDirectoryEntryKinds(rel, Named, entries, addIssue);
     validateResourceDirectoryIdSort(rel, Named, entries, addIssue);
     await validateResourceDirectoryNameSort(rel, Named, entries, readUcs2Label, addIssue);
+    await validateResourceDirectoryDuplicates(rel, entries, readUcs2Label, addIssue);
     return { Named, Ids, entries };
   };
 
@@ -164,6 +150,7 @@ export async function buildResourceTree(
       const len = u16(dv, 0);
       const declaredBytesLength = len * 2;
       const bytesLength = Math.min(declaredBytesLength, Math.max(0, dir.size - (rel + 2)));
+      resourceStringRanges.push({ start: rel, end: rel + 2 + bytesLength });
       if (bytesLength < declaredBytesLength) {
         addIssue(`Resource string name at ${formatRelOffset(rel)} is truncated.`);
       }
@@ -264,6 +251,12 @@ export async function buildResourceTree(
                 const Size = u32(dv, 4);
                 const CodePage = u32(dv, 8);
                 const Reserved = u32(dv, 12);
+                resourceDataEntries.push({
+                  start: langEnt.target,
+                  end: langEnt.target + 16,
+                  dataRva: DataRVA,
+                  size: Size
+                });
                 if (Reserved !== 0) {
                   addIssue("IMAGE_RESOURCE_DATA_ENTRY.Reserved is non-zero; the field should be 0.");
                 }
@@ -283,6 +276,14 @@ export async function buildResourceTree(
     if (typeDetailEntries.length) detail.push({ typeName, entries: typeDetailEntries });
   }
 
+  validateResourceLayout(
+    maxDirectoryEnd,
+    resourceStringRanges,
+    resourceDataEntries,
+    rvaToOff,
+    file.size,
+    addIssue
+  );
   return {
     base,
     limitEnd,

@@ -6,6 +6,7 @@ import { buildResourceTree } from "../../analyzers/pe/resources-core.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import {
+  createSparseResourceRvaToOffset,
   createResourceDirectoryFixture,
   IMAGE_RESOURCE_DATA_ENTRY_SIZE,
   IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE,
@@ -224,24 +225,30 @@ void test("buildResourceTree walks a small resource directory", async () => {
 
 void test("buildResourceTree resolves directory-relative offsets through rvaToOff", async () => {
   const resourceRva = 0x1000;
-  const fixture = createResourceDirectoryFixture(0xd0);
+  const resourcePayloadRva = 0x2000;
+  const fixture = createResourceDirectoryFixture(0xe0);
   const sparseSegments = [
     {
       fileOffset: 0x00,
-      relativeOffset: 0x00,
+      rvaStart: resourceRva,
       length: IMAGE_RESOURCE_DIRECTORY_SIZE + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE
     },
     {
       fileOffset: 0x40,
-      relativeOffset: 0x20,
+      rvaStart: resourceRva + 0x20,
       length: IMAGE_RESOURCE_DIRECTORY_SIZE + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE
     },
     {
       fileOffset: 0x80,
-      relativeOffset: 0x40,
+      rvaStart: resourceRva + 0x40,
       length: IMAGE_RESOURCE_DIRECTORY_SIZE + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE
     },
-    { fileOffset: 0xc0, relativeOffset: 0x60, length: IMAGE_RESOURCE_DATA_ENTRY_SIZE }
+    {
+      fileOffset: 0xc0,
+      rvaStart: resourceRva + 0x60,
+      length: IMAGE_RESOURCE_DATA_ENTRY_SIZE
+    },
+    { fileOffset: 0xd0, rvaStart: resourcePayloadRva, length: 0x10 }
   ];
 
   fixture.writeDirectory(0x00, 0, 1);
@@ -250,32 +257,19 @@ void test("buildResourceTree resolves directory-relative offsets through rvaToOf
   fixture.writeDirectoryEntry(0x50, 1, resourceSubdirectory(0x40));
   fixture.writeDirectory(0x80, 0, 1);
   fixture.writeDirectoryEntry(0x90, 0x00000409, 0x00000060);
-  fixture.writeDataEntry(0xc0, 0x00002000, 0x10, 0x000004b0);
-
-  const sparseRvaToOff = (rva: number): number | null => {
-    const relativeOffset = rva - resourceRva;
-    for (const segment of sparseSegments) {
-      if (
-        relativeOffset >= segment.relativeOffset &&
-        relativeOffset < segment.relativeOffset + segment.length
-      ) {
-        return segment.fileOffset + (relativeOffset - segment.relativeOffset);
-      }
-    }
-    return null;
-  };
+  fixture.writeDataEntry(0xc0, resourcePayloadRva, 0x10, 0x000004b0);
 
   const tree = await parseResourceTreeFixture(
     fixture.bytes,
     resourceRva,
     0x70,
-    sparseRvaToOff,
+    createSparseResourceRvaToOffset(sparseSegments),
     "resource-sparse-layout.bin"
   );
 
   assert.deepStrictEqual(tree.top, [{ typeName: "ICON", kind: "id", leafCount: 1 }]);
   const iconDetail = expectDefined(tree.detail[0]);
   const iconEntry = expectDefined(iconDetail.entries[0]);
-  assert.strictEqual(expectDefined(iconEntry.langs[0]).dataRVA, 0x2000);
+  assert.strictEqual(expectDefined(iconEntry.langs[0]).dataRVA, resourcePayloadRva);
   assert.deepStrictEqual(tree.issues || [], []);
 });

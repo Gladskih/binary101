@@ -73,3 +73,34 @@ export const validateResourceDirectoryNameSort = async (
     previousName = currentName;
   }
 };
+
+export const validateResourceDirectoryDuplicates = async (
+  rel: number,
+  entries: ResourceDirectoryEntry[],
+  readLabel: (rel: number) => Promise<string>,
+  addIssue: (message: string) => void
+): Promise<void> => {
+  const seenIds = new Set<number>();
+  const seenNames = new Set<string>();
+  for (const entry of entries) {
+    if (entry.nameIsString && entry.nameOrId != null) {
+      const currentName = await readLabel(entry.nameOrId);
+      if (seenNames.has(currentName)) {
+        addIssue(
+          `Resource directory at ${formatRelOffset(rel)} has duplicate named entries for "${currentName}".`
+        );
+        return;
+      }
+      seenNames.add(currentName);
+      continue;
+    }
+    if (entry.nameOrId == null || !seenIds.has(entry.nameOrId)) {
+      if (entry.nameOrId != null) seenIds.add(entry.nameOrId);
+      continue;
+    }
+    addIssue(
+      `Resource directory at ${formatRelOffset(rel)} has duplicate ID entries for ${formatRelOffset(entry.nameOrId)}.`
+    );
+    return;
+  }
+};

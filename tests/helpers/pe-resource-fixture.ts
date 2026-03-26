@@ -65,6 +65,13 @@ export interface PeResourceDirectoryFixture {
   ) => void;
 }
 
+/** Sparse RVA-to-file mapping segment used by PE resource tests. */
+export interface SparseResourceSegment {
+  fileOffset: number;
+  rvaStart: number;
+  length: number;
+}
+
 /**
  * Builds a zero-filled `.rsrc` fixture buffer and returns writer functions for PE resource
  * directory structures used in tests.
@@ -97,6 +104,20 @@ export const createResourceDirectoryFixture = (fileSize: number): PeResourceDire
     view.setUint32(offset + 12, reserved, true);
   };
   return { bytes, writeDirectory, writeDirectoryEntry, writeUtf16Label, writeDataEntry };
+};
+
+/**
+ * Builds an `rvaToOff` mapper from sparse virtual/file segments for resource-parser tests.
+ */
+export const createSparseResourceRvaToOffset = (
+  segments: SparseResourceSegment[]
+): ((rva: number) => number | null) => (rva: number): number | null => {
+  for (const segment of segments) {
+    if (rva >= segment.rvaStart && rva < segment.rvaStart + segment.length) {
+      return segment.fileOffset + (rva - segment.rvaStart);
+    }
+  }
+  return null;
 };
 
 /**
