@@ -1,178 +1,65 @@
-# Contributing to Binary101
+# Code Quality Standards
 
-## Setting Up Your Development Environment
-
-### Prerequisites
-- Modern browser (Chrome, Firefox, Edge)
-- Node.js 24.x LTS and npm (for linting, tests, and the Vite build)
-
-### Getting Started
-1. Fork the repository.
-2. Clone your fork:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/binary101.git
-   cd binary101
-   ```
-3. Install dependencies:
-   ```bash
-   npm install
-   ```
-4. Start the development server:
-   ```bash
-   npm run dev
-   ```
-5. Build the static assets (outputs to the `dist/` directory):
-   ```bash
-   npm run build
-   ```
-6. Preview the production build locally:
-   ```bash
-   npm run preview
-   ```
-7. Open the app in your browser at the URL printed by Vite (`http://localhost:5173` for dev, `http://127.0.0.1:4173` for preview by default).
-
-## Code Quality Standards
-
-All contributions must adhere to the project's code quality metrics and best practices. These are enforced by `.editorconfig` and `eslint.config.mjs`.
-
-### JavaScript Best Practices
-- Follow ESLint as the source of truth; keep `npm run lint` passing.
-- **Maximum file length**: Keep modules small; if a file grows large, prefer extracting cohesive modules.
-- **Maximum line length**: Aim for 100 characters where practical.
-- **Maximum function length**: Aim for 20-30 lines; refactor functions over 50 lines.
-- **Cyclomatic complexity**: Keep below 10; use helper functions to reduce complexity.
+- Follow ESLint as the source of truth; keep `npm run lint` passing
+- **Maximum file length**: Keep modules small; if a file grows large, prefer extracting cohesive modules
+- **Maximum line length**: Aim for 100 characters where practical
+- **Maximum function length**: Aim for 20-30 lines; refactor functions over 50 lines
+- **Cyclomatic complexity**: Keep below 10
 - **No boolean control parameters**: Do not add boolean parameters that switch execution flow (`foo(..., true/false)` + `if`). Split behavior into separate functions and share common logic via composition.
 - **No derived fields in returned results**: Prefer a single source of truth in parsed objects. Do not return multiple representations of the same data.
 - **No argument-bag types**: Do not introduce a named `*Args`/`*Opts` type whose only purpose is to bundle positional parameters into an object. Prefer explicit parameters, or use an options object only when it models a real configuration surface.
 - **No repeated expensive work within the same parse**: Don't rescan/redecode/rehash the same bytes multiple times while processing one file. Compute once and reuse when the result is used more than once.
-- **Nested callbacks**: Maximum 3 levels.
 - **Variable declarations**: Use `const` by default, `let` only if reassignment is needed.
 - **String quotes**: Use double quotes (`"`).
-- **Semicolons**: Required at the end of statements.
-- **Minimize empty lines**: Excessive empty lines usually indicate a function is doing too much; prefer extracting a helper.
+- **No empty lines in a function except AAA test structure**: Excessive empty lines usually indicate a function is doing too much.
 - **No single-use constants**: Do not introduce a named `const` that is referenced only once.
 - **Prefer expressions directly**: If a value is used once, prefer an in-place expression/early return over introducing an intermediate variable.
-- **Magic values**: Explain non-obvious literals with a comment when practical, cites the authoritative source used (spec section, RFC section, or upstream source/header URL).
+- **Magic values**: Explain non-obvious literals with a comment, cites the authoritative source used (spec section, RFC section, or upstream source/header URL).
 - **Console usage**: Only `console.error()` and `console.warn()` are allowed in production code.
 - **Identifiers**: Minimum 2 characters (except `_`, `i`, `j`, `k`, `x`, `y`).
-
-### Module Design and Naming
-
 - Prefer small, cohesive modules that have a single, clearly stated responsibility (“one reason to change”). 
 - Do **not** introduce new generically named modules such as `helpers`, `utils`, `extra`, `extensions`, or similar grab-bag names. If you feel tempted to add `helpers.ts`, it usually means there are at least two more meaningful modules hiding in that file.
 - When you need shared logic, group it by concept rather than by the generic idea of “helping” another module.
-
-### Repository Conventions
-
-- Prefer small, focused changes over large refactors.
 - Keep code self-documenting:
-  - use clear, descriptive names for functions, variables, and modules,
-  - keep control flow straightforward; avoid clever tricks when a simple construct is enough.
+  - use descriptive names
+  - keep control flow straightforward;
 - Abbreviations:
   - avoid project-specific or obscure abbreviations,
-  - only use common ones that are widely understood (for example `id`, `url`, `crc`, `pe`, `mp3`).
+  - only use common ones that are widely understood
 - Keep analyzers and renderers separate:
-  - analyzers are pure parsing (no DOM, no direct UI code),
-  - renderers are pure HTML formatting (no file I/O).
+  - analyzers are pure parsing (no DOM, no direct UI code)
+  - renderers are pure HTML formatting (no file I/O)
 - Maintain the UI parse contract: `parseForUi(file)` must continue to return `{ analyzer, parsed }`.
 
-### HTML Guidelines
+## HTML
 - Use semantic elements (`<header>`, `<nav>`, `<main>`, `<article>`, `<footer>`).
 - Include `alt` attributes for images and proper `<label>` elements for form inputs.
 - Ensure HTML is valid.
 
-### CSS Guidelines
+## CSS
 - Maximum line length: 100 characters.
 - Avoid deep nesting (max 3 levels); use BEM naming convention.
 - Define colors and fonts as CSS variables for consistency.
 - Use mobile-first approach for responsive design.
 
-## Code Quality and Testing
+## Tests
 
-Before submitting a pull request, please ensure your code adheres to the project's standards and that all tests pass.
-
-### Linting
-
-To check the code for style and quality issues, run:
-
-```sh
-npm run lint
-```
-
-### Testing
-
-The project has both unit and end-to-end tests. To run all tests, use:
-
-```sh
-npm test
-```
-
-To generate a test coverage report for the unit tests, run:
-
-```sh
-npm run test:coverage
-```
-
-Run the coverage report before and after your change; coverage must not go down.
-
-#### Test Layout and Depth
-
+- Before submitting a pull request, ensure your code adheres to the project's standards and that all tests pass.
+- Run the coverage report before and after your change; coverage must not go down.
 - Use **one test file per production module** whenever practical. 
 - For every new public function or module:
   - write tests for the “happy paths” behavior, and
   - write tests for **all known unhappy paths and edge cases**: invalid inputs, truncated data, out-of-bounds offsets, negative or extreme values, and any other failure modes that are meaningful for that unit.
 - When adding tests, follow a red–green cycle: make sure each new test fails at least once for the intended reason before making it pass.
-
-#### Test Data Values
-
+- Keep individual tests flat: avoid branching and non-trivial control flow in the test body; if setup needs logic, move it into a small, domain-specific fixture builder so the test itself stays easy to scan.
+- use mutation testing to evaluate test quality
 - Do not scatter arbitrary literals through tests when the specific value is not important.
 - If a value is significant, add a short comment that explains why the exact literal matters and cite the authoritative source when relevant.
-- If a value is incidental, generate it through deterministic test helpers or fixture builders.
+- If a value is incidental, generate it by fixture builders.
 - Do not use neighboring production constants as the oracle in a unit test; encode the checked value in the test itself and comment any special literal.
-
-## Project Structure
-
-- `index.html`, `style.css`: Vite entry HTML and page styling.
-- `app.ts`: Handles UI interactions, file selection, hashing, and calls analyzers/renderers; bundled into `dist/assets/`.
-- `analyzers/`: Format-specific TypeScript parsers bundled by Vite.
-- `renderers/`: TypeScript renderers that turn parsed objects into HTML and are bundled by Vite.
-- `binary-utils.ts`, `html-utils.ts`: Shared helpers for hashing, byte/hex formatting and safe HTML generation.
-
-## Adding a New Analyzer
-
-To add support for a new binary format:
-
-1. Create a new file in the `analyzers/` directory (e.g., `analyzers/elf/index.ts`).
-2. Implement `probe` and `parse` functions:
-   - `probe(file)`: Returns `true` if the file matches the format.
-   - `parse(file)`: Returns a parsed object with format details.
-3. Update `analyzers/index.ts` to include your new analyzer.
-4. Create a renderer module (e.g. `renderers/elf/index.ts`) that converts your parsed object into HTML and wire it in `ui/render-analysis.ts`.
-
-### Important Patterns
 - **Memory efficiency**: Use `file.slice(...).arrayBuffer()` to read file segments; avoid loading entire files.
-- **Error handling**: Report anomalies visibly in the UI instead of silently failing.
+- **Error handling**: Report anomalies visibly in the UI instead of silently failing or bypassing.
 - **Return types**: Parsers should return plain JavaScript objects (no DOM).
-
-### Detection Pipeline Policy
-
 - Current default architecture is `probe+parse`: keep detection lightweight and run full parsing in `parseForUi`.
 - Existing legacy exceptions are tracked in `TODO.md`.
-
-## Git Conventions
-
-- **Commit messages**: Use present tense, imperative mood (e.g., "Add PE parser" not "Added PE parser").
-- **Branch names**: Use lowercase with hyphens (e.g., `pe-parser`, `hash-computation`).
-- **Pull requests**: Provide a clear description of your changes. Ensure ESLint passes before submitting.
-
-## Reporting Issues
-
-If you encounter bugs or have feature suggestions, please open an issue with:
-- A clear title and description.
-- Steps to reproduce (for bugs).
-- Expected vs. actual behavior.
-
-## Getting Help
-
-- Check existing issues and pull requests to avoid duplicates.
-- Ask questions in a new issue or discussion thread.
+- **Commit messages**: Use present tense, imperative mood
