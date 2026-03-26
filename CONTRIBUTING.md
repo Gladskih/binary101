@@ -20,6 +20,12 @@
 - Prefer small, cohesive modules that have a single, clearly stated responsibility (“one reason to change”). 
 - Do **not** introduce new generically named modules such as `helpers`, `utils`, `extra`, `extensions`, or similar grab-bag names. If you feel tempted to add `helpers.ts`, it usually means there are at least two more meaningful modules hiding in that file.
 - When you need shared logic, group it by concept rather than by the generic idea of “helping” another module.
+- Prefer immutable over mutable
+- Prefer stateless over stateful
+- Prefer explicit over implicit
+- Prefer declarative over imperative
+- Prefer types over conventions
+- If mutation is required for performance reasons, isolate it locally and document why (profiling).
 - Keep code self-documenting:
   - use descriptive names
   - keep control flow straightforward;

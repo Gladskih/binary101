@@ -1,17 +1,19 @@
 "use strict";
 import type { ProbeResult } from "./probe-types.js";
+import {
+  hasBmpSignature,
+  hasGifSignature,
+  hasJpegStartOfImage,
+  hasPngSignature,
+  hasRiffForm
+} from "./file-signatures.js";
 
 const detectPng = (dv: DataView): ProbeResult => {
-  if (dv.byteLength < 8) return null;
-  const sig0 = dv.getUint32(0, false);
-  const sig1 = dv.getUint32(4, false);
-  return sig0 === 0x89504e47 && sig1 === 0x0d0a1a0a ? "PNG image" : null;
+  return hasPngSignature(dv) ? "PNG image" : null;
 };
 
 const detectJpeg = (dv: DataView): ProbeResult => {
-  if (dv.byteLength < 4) return null;
-  const marker = dv.getUint16(0, false);
-  if (marker !== 0xffd8) return null;
+  if (!hasJpegStartOfImage(dv)) return null;
   const jfif = dv.byteLength >= 11 && dv.getUint32(2, false) === 0x4a464946; // "JFIF"
   const exif = dv.byteLength >= 11 && dv.getUint32(2, false) === 0x45786966; // "Exif"
   if (jfif) return "JPEG image (JFIF)";
@@ -20,22 +22,11 @@ const detectJpeg = (dv: DataView): ProbeResult => {
 };
 
 const detectGif = (dv: DataView): ProbeResult => {
-  if (dv.byteLength < 6) return null;
-  const sig =
-    String.fromCharCode(dv.getUint8(0)) +
-    String.fromCharCode(dv.getUint8(1)) +
-    String.fromCharCode(dv.getUint8(2)) +
-    String.fromCharCode(dv.getUint8(3)) +
-    String.fromCharCode(dv.getUint8(4)) +
-    String.fromCharCode(dv.getUint8(5));
-  if (sig === "GIF87a" || sig === "GIF89a") return "GIF image";
-  return null;
+  return hasGifSignature(dv) ? "GIF image" : null;
 };
 
 const detectBmp = (dv: DataView): ProbeResult => {
-  if (dv.byteLength < 2) return null;
-  const sig = dv.getUint16(0, false);
-  return sig === 0x424d ? "BMP bitmap image" : null;
+  return hasBmpSignature(dv) ? "BMP bitmap image" : null;
 };
 
 const detectTiff = (dv: DataView): ProbeResult => {
@@ -46,10 +37,7 @@ const detectTiff = (dv: DataView): ProbeResult => {
 };
 
 const detectWebp = (dv: DataView): ProbeResult => {
-  if (dv.byteLength < 12) return null;
-  const riff = dv.getUint32(0, false);
-  const webp = dv.getUint32(8, false);
-  return riff === 0x52494646 && webp === 0x57454250 ? "WebP image" : null;
+  return hasRiffForm(dv, "WEBP") ? "WebP image" : null;
 };
 
 const detectIco = (dv: DataView): ProbeResult => {
@@ -74,11 +62,7 @@ const detectIco = (dv: DataView): ProbeResult => {
 };
 
 const detectAni = (dv: DataView): ProbeResult => {
-  if (dv.byteLength < 12) return null;
-  const riff = dv.getUint32(0, false);
-  const acon = dv.getUint32(8, false);
-  if (riff === 0x52494646 && acon === 0x41434f4e) return "Windows animated cursor (ANI)";
-  return null;
+  return hasRiffForm(dv, "ACON") ? "Windows animated cursor (ANI)" : null;
 };
 
 const imageProbes: Array<(dv: DataView) => ProbeResult> = [

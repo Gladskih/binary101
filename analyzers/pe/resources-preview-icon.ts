@@ -1,119 +1,139 @@
 "use strict";
 
-import type { RvaToOffset } from "./types.js";
-import type { ResourceLangWithPreview } from "./resources-preview-types.js";
+import { makeDataUrl } from "./resource-preview-data-url.js";
+import { hasPngSignature } from "./resource-preview-signatures.js";
+import type {
+  ResourcePreviewData,
+  ResourcePreviewResult
+} from "./resources-preview-types.js";
 
-function base64FromU8(u8: Uint8Array): string {
-  let s = "";
-  const chunk = 0x8000;
-  for (let index = 0; index < u8.length; index += chunk) {
-    s += String.fromCharCode(...u8.subarray(index, Math.min(index + chunk, u8.length)));
+export type LoadedResourceLeaf = {
+  data: Uint8Array | null;
+  issues?: string[];
+};
+
+export type LoadResourceLeafData = (
+  id: number,
+  lang: number | null | undefined
+) => Promise<LoadedResourceLeaf>;
+
+const readIconImageSpec = (
+  data: Uint8Array,
+  halveHeight: boolean
+): { width: number; height: number; bitCount: number } | null => {
+  if (data.length < 40) return null;
+  const view = new DataView(data.buffer, data.byteOffset, Math.min(64, data.length));
+  const headerSize = view.getUint32(0, true);
+  // Icon/cursor DIB payloads commonly start with BITMAPINFOHEADER/BITMAPV4HEADER/BITMAPV5HEADER.
+  if (headerSize !== 40 && headerSize !== 108 && headerSize !== 124) return null;
+  const width = Math.max(1, Math.min(256, Math.abs(view.getInt32(4, true))));
+  const storedHeight = Math.abs(view.getInt32(8, true));
+  const height = Math.max(1, Math.min(256, halveHeight ? Math.floor(storedHeight / 2) : storedHeight));
+  return { width, height, bitCount: view.getUint16(14, true) };
+};
+
+const wrapAsIco = (
+  imageData: Uint8Array,
+  width: number,
+  height: number,
+  colorCount: number,
+  planes: number,
+  bitCount: number
+): Uint8Array => {
+  // ICO = ICONDIR (6 bytes) + one ICONDIRENTRY (16 bytes) + image payload.
+  const headerSize = 6 + 16;
+  const ico = new Uint8Array(headerSize + imageData.length);
+  const view = new DataView(ico.buffer);
+  view.setUint16(0, 0, true);
+  view.setUint16(2, 1, true);
+  view.setUint16(4, 1, true);
+  // ICONDIRENTRY encodes 256px as 0 for width/height. Source:
+  // Microsoft Learn, ICONRESDIR / https://learn.microsoft.com/en-us/windows/win32/menurc/iconresdir
+  view.setUint8(6, width === 256 ? 0 : width);
+  view.setUint8(7, height === 256 ? 0 : height);
+  view.setUint8(8, colorCount);
+  view.setUint8(9, 0);
+  view.setUint16(10, planes, true);
+  view.setUint16(12, bitCount, true);
+  view.setUint32(14, imageData.length >>> 0, true);
+  view.setUint32(18, headerSize >>> 0, true);
+  ico.set(imageData, headerSize);
+  return ico;
+};
+
+const buildIcoPreview = (
+  imageData: Uint8Array,
+  width: number,
+  height: number,
+  colorCount: number,
+  planes: number,
+  bitCount: number
+): ResourcePreviewData => ({
+  previewKind: "image",
+  previewMime: "image/x-icon",
+  previewDataUrl: makeDataUrl(
+    "image/x-icon",
+    wrapAsIco(imageData, width, height, colorCount, planes, bitCount)
+  )
+});
+
+export function addIconPreview(data: Uint8Array, typeName: string): ResourcePreviewResult | null {
+  if (typeName !== "ICON") return null;
+  if (hasPngSignature(data)) {
+    return {
+      preview: {
+        previewKind: "image",
+        previewMime: "image/png",
+        previewDataUrl: makeDataUrl("image/png", data)
+      }
+    };
   }
-  try {
-    return btoa(s);
-  } catch {
-    return "";
-  }
+  const spec = readIconImageSpec(data, true);
+  if (!spec) return null;
+  return { preview: buildIcoPreview(data, spec.width, spec.height, 0, 1, spec.bitCount) };
 }
 
-export function addIconPreview(langEntry: ResourceLangWithPreview, data: Uint8Array, typeName: string): void {
-  if (typeName !== "ICON") return;
-  if (data.length < 8) return;
-  const isPng =
-    data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47 &&
-    data[4] === 0x0d && data[5] === 0x0a && data[6] === 0x1a && data[7] === 0x0a;
-  if (isPng) {
-    langEntry.previewKind = "image";
-    langEntry.previewMime = "image/png";
-    langEntry.previewDataUrl = `data:image/png;base64,${base64FromU8(data)}`;
-    return;
+const pickBestGroupEntry = (groupData: DataView): number | null => {
+  const entryCount = groupData.getUint16(4, true);
+  // RT_GROUP_ICON starts with NEWHEADER (6 bytes), then fixed-size 14-byte RESDIR records.
+  if (!entryCount || 6 + entryCount * 14 > groupData.byteLength) return null;
+  let selectedIndex = 0;
+  let bestWidth = 0;
+  for (let index = 0; index < entryCount; index += 1) {
+    // UI heuristic: prefer a 32px icon preview when present; otherwise pick the largest width.
+    const width = groupData.getUint8(6 + index * 14) || 256;
+    if (width === 32) return index;
+    if (width > bestWidth) {
+      selectedIndex = index;
+      bestWidth = width;
+    }
   }
-  if (data.length < 40) return;
-  const dvb = new DataView(data.buffer, data.byteOffset, Math.min(64, data.length));
-  const hdrSize = dvb.getUint32(0, true);
-  if (hdrSize !== 40 && hdrSize !== 108 && hdrSize !== 124) return;
-  const w = dvb.getInt32(4, true);
-  const h2 = dvb.getInt32(8, true);
-  const bitCount = dvb.getUint16(14, true);
-  const outW = Math.max(1, Math.min(256, Math.abs(w)));
-  const outH = Math.max(1, Math.min(256, Math.abs(Math.floor(h2 / 2))));
-  const dirSize = 6 + 16;
-  const ico = new Uint8Array(dirSize + data.length);
-  const dvi = new DataView(ico.buffer);
-  dvi.setUint16(0, 0, true);
-  dvi.setUint16(2, 1, true);
-  dvi.setUint16(4, 1, true);
-  dvi.setUint8(6, outW === 256 ? 0 : outW);
-  dvi.setUint8(7, outH === 256 ? 0 : outH);
-  dvi.setUint8(8, 0);
-  dvi.setUint8(9, 0);
-  dvi.setUint16(10, 1, true);
-  dvi.setUint16(12, bitCount, true);
-  dvi.setUint32(14, data.length >>> 0, true);
-  dvi.setUint32(18, dirSize >>> 0, true);
-  ico.set(data, dirSize);
-  langEntry.previewKind = "image";
-  langEntry.previewMime = "image/x-icon";
-  langEntry.previewDataUrl = `data:image/x-icon;base64,${base64FromU8(ico)}`;
-}
+  return selectedIndex;
+};
 
 export async function addGroupIconPreview(
-  file: File,
-  langEntry: ResourceLangWithPreview,
+  data: Uint8Array,
   typeName: string,
-  dataRva: number,
-  size: number,
-  iconIndex: Map<number, { rva: number; size: number }>,
-  rvaToOff: RvaToOffset
-): Promise<void> {
-  if (typeName !== "GROUP_ICON") return;
-  const grpOff = rvaToOff(dataRva);
-  if (grpOff == null || size < 6) return;
-  const ab = await file.slice(grpOff, grpOff + size).arrayBuffer();
-  const g = new DataView(ab);
-  const idCount = g.getUint16(4, true);
-  if (!idCount || 6 + idCount * 14 > g.byteLength) return;
-  let pick = 0;
-  let bestW = 0;
-  for (let index = 0; index < idCount; index++) {
-    const w = g.getUint8(6 + index * 14 + 0) || 256;
-    if (w === 32) {
-      pick = index;
-      break;
-    }
-    if (w > bestW) {
-      pick = index;
-      bestW = w;
-    }
-  }
-  const eOff2 = 6 + pick * 14;
-  const bWidth = g.getUint8(eOff2 + 0) || 256;
-  const bHeight = g.getUint8(eOff2 + 1) || 256;
-  const bColorCount = g.getUint8(eOff2 + 2);
-  const wPlanes = g.getUint16(eOff2 + 4, true);
-  const wBitCount = g.getUint16(eOff2 + 6, true);
-  const nID = g.getUint16(eOff2 + 12, true);
-  const ic = iconIndex.get(nID);
-  if (!ic) return;
-  const imgOff = rvaToOff(ic.rva);
-  if (imgOff == null || ic.size <= 0) return;
-  const imageData = new Uint8Array(await file.slice(imgOff, imgOff + ic.size).arrayBuffer());
-  const dirSize = 6 + 16;
-  const ico = new Uint8Array(dirSize + imageData.length);
-  const dv3 = new DataView(ico.buffer);
-  dv3.setUint16(0, 0, true);
-  dv3.setUint16(2, 1, true);
-  dv3.setUint16(4, 1, true);
-  dv3.setUint8(6, bWidth === 256 ? 0 : bWidth);
-  dv3.setUint8(7, bHeight === 256 ? 0 : bHeight);
-  dv3.setUint8(8, bColorCount);
-  dv3.setUint8(9, 0);
-  dv3.setUint16(10, wPlanes, true);
-  dv3.setUint16(12, wBitCount, true);
-  dv3.setUint32(14, imageData.length >>> 0, true);
-  dv3.setUint32(18, dirSize >>> 0, true);
-  ico.set(imageData, dirSize);
-  langEntry.previewKind = "image";
-  langEntry.previewMime = "image/x-icon";
-  langEntry.previewDataUrl = `data:image/x-icon;base64,${base64FromU8(ico)}`;
+  loadLeafData: LoadResourceLeafData,
+  lang: number | null | undefined
+): Promise<ResourcePreviewResult | null> {
+  if (typeName !== "GROUP_ICON" || data.length < 6) return null;
+  const group = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const selectedIndex = pickBestGroupEntry(group);
+  if (selectedIndex == null) return null;
+  const entryOffset = 6 + selectedIndex * 14;
+  const iconId = group.getUint16(entryOffset + 12, true);
+  const leaf = await loadLeafData(iconId, lang);
+  if (!leaf.data?.length) return leaf.issues?.length ? { issues: leaf.issues } : null;
+  const width = group.getUint8(entryOffset) || 256;
+  const height = group.getUint8(entryOffset + 1) || 256;
+  const colorCount = group.getUint8(entryOffset + 2);
+  const planes = group.getUint16(entryOffset + 4, true);
+  const bitCount = group.getUint16(entryOffset + 6, true);
+  return {
+    preview: buildIcoPreview(leaf.data, width, height, colorCount, planes, bitCount),
+    ...(leaf.issues?.length ? { issues: leaf.issues } : {})
+  };
 }
+
+export { hasPngSignature, readIconImageSpec, wrapAsIco };

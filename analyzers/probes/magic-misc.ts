@@ -1,16 +1,10 @@
 "use strict";
 import { toAsciiPrefix } from "./text-heuristics.js";
 import type { ProbeResult } from "./probe-types.js";
+import { hasPdfHeader } from "./file-signatures.js";
 
 const detectPdf = (dv: DataView): ProbeResult => {
-  if (dv.byteLength < 5) return null;
-  const m =
-    String.fromCharCode(dv.getUint8(0)) +
-    String.fromCharCode(dv.getUint8(1)) +
-    String.fromCharCode(dv.getUint8(2)) +
-    String.fromCharCode(dv.getUint8(3)) +
-    String.fromCharCode(dv.getUint8(4));
-  return m === "%PDF-" ? "PDF document" : null;
+  return hasPdfHeader(dv) ? "PDF document" : null;
 };
 
 const detectCompoundFile = (dv: DataView): ProbeResult => {

@@ -1,19 +1,20 @@
 "use strict";
 
-// winnt.h: MESSAGE_RESOURCE_BLOCK stores LowId, HighId, OffsetToEntries as three DWORDs.
+// Microsoft Learn, MESSAGE_RESOURCE_BLOCK: LowId, HighId, OffsetToEntries are three DWORDs.
+// https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-message_resource_block
 const MESSAGE_BLOCK_HEADER_SIZE = 12;
-// winnt.h: MESSAGE_RESOURCE_ENTRY starts with WORD Length and WORD Flags.
+// Microsoft Learn, MESSAGE_RESOURCE_ENTRY: Length and Flags are the leading WORD fields.
+// https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-message_resource_entry
 const MESSAGE_ENTRY_HEADER_SIZE = 4;
-// winnt.h: MESSAGE_RESOURCE_UNICODE marks UTF-16LE entry text.
-const MESSAGE_RESOURCE_UNICODE_FLAG = 0x0001;
-const WINDOWS_CODE_PAGE_MIN = 1250;
-const WINDOWS_CODE_PAGE_MAX = 1258;
 
 const getCodePageEncoding = (codePage: number): string | null => {
+  // Microsoft Learn, Code Page Identifiers:
+  // 65001 = UTF-8, 20127 = US-ASCII, 932 = Shift-JIS, and 1250..1258 = Windows-1250..1258.
+  // https://learn.microsoft.com/en-us/windows/win32/intl/code-page-identifiers
   if (codePage === 65001) return "utf-8";
   if (codePage === 20127) return "us-ascii";
   if (codePage === 932) return "shift_jis";
-  if (codePage >= WINDOWS_CODE_PAGE_MIN && codePage <= WINDOWS_CODE_PAGE_MAX) {
+  if (codePage >= 1250 && codePage <= 1258) {
     return `windows-${codePage}`;
   }
   return null;
@@ -125,9 +126,11 @@ export const decodeMessageTablePreview = (
         break;
       }
       const entryBytes = data.subarray(pos + MESSAGE_ENTRY_HEADER_SIZE, pos + length);
+      // Microsoft Learn, MESSAGE_RESOURCE_ENTRY: Flags == 0x0001 means the text is Unicode.
+      // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-message_resource_entry
       const decoded = decodeMessageEntryText(
         entryBytes,
-        (flags & MESSAGE_RESOURCE_UNICODE_FLAG) !== 0,
+        (flags & 0x0001) !== 0,
         codePage
       );
       messages.push({ id: lowId + entryIndex, strings: [decoded.text] });

@@ -1,10 +1,9 @@
 "use strict";
 import type { ProbeResult } from "./probe-types.js";
+import { hasZipLocalFileHeader } from "./file-signatures.js";
 
 const detectZip = (dv: DataView): ProbeResult => {
-  if (dv.byteLength < 4) return null;
-  const sig = dv.getUint32(0, true);
-  return sig === 0x04034b50 ? "ZIP archive (PK-based, e.g. Office, JAR, APK)" : null;
+  return hasZipLocalFileHeader(dv) ? "ZIP archive (PK-based, e.g. Office, JAR, APK)" : null;
 };
 
 const detectGzip = (dv: DataView): ProbeResult => {

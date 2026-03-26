@@ -1,12 +1,6 @@
 "use strict";
 
-import type { ResourceLangWithPreview } from "./resources-preview-types.js";
-
-export function addPreviewIssue(langEntry: ResourceLangWithPreview, message: unknown): void {
-  if (!message) return;
-  langEntry.previewIssues = langEntry.previewIssues || [];
-  langEntry.previewIssues.push(String(message));
-}
+import type { ResourcePreviewResult } from "./resources-preview-types.js";
 
 const decodeUtf16leText = (
   data: Uint8Array
@@ -39,7 +33,7 @@ const decodeUtf8Text = (data: Uint8Array): { text: string; encoding: string; ter
   };
 };
 
-function decodeTextResource(
+export function decodeTextResource(
   data: Uint8Array,
   codePage: number | undefined
 ): { text: string; encoding: string; terminated: boolean; error?: unknown } {
@@ -47,14 +41,18 @@ function decodeTextResource(
   if (data.length >= 2) {
     const bom0 = data[0];
     const bom1 = data[1];
+    // UTF-16LE BOM bytes. Source:
+    // Unicode FAQ / UTF-16, UTF-8, and BOM / https://www.unicode.org/faq/utf_bom.html
     if (bom0 !== undefined && bom1 !== undefined && bom0 === 0xff && bom1 === 0xfe) {
       return decodeUtf16leText(data.subarray(2));
     }
   }
+  // Windows code page 1200 identifies UTF-16LE.
   if (codePage === 1200) {
     return decodeUtf16leText(data);
   }
   try {
+    // Windows code page 20127 identifies US-ASCII.
     if (codePage === 20127) {
       const decoded = new TextDecoder("us-ascii", { fatal: false }).decode(
         data.subarray(0, data.indexOf(0) === -1 ? data.length : data.indexOf(0))
@@ -69,63 +67,69 @@ function decodeTextResource(
 }
 
 export function addManifestPreview(
-  langEntry: ResourceLangWithPreview,
   data: Uint8Array,
   typeName: string,
   codePage: number | undefined
-): void {
-  if (typeName !== "MANIFEST") return;
+): ResourcePreviewResult | null {
+  if (typeName !== "MANIFEST") return null;
+  const issues: string[] = [];
   const { text, error, terminated } = decodeTextResource(data, codePage);
-  if (error) addPreviewIssue(langEntry, "Manifest text could not be fully decoded.");
-  if (!text) return;
-  langEntry.previewKind = "text";
-  langEntry.textPreview = text;
-  if (terminated) {
-    addPreviewIssue(langEntry, "Manifest preview stopped at a NUL terminator before the declared data size.");
-  }
+  if (error) issues.push("Manifest text could not be fully decoded.");
+  if (!text) return issues.length ? { issues } : null;
+  if (terminated) issues.push("Manifest preview stopped at a NUL terminator before the declared data size.");
+  return {
+    preview: {
+      previewKind: "text",
+      textPreview: text
+    },
+    ...(issues.length ? { issues } : {})
+  };
 }
 
 export function addHtmlPreview(
-  langEntry: ResourceLangWithPreview,
   data: Uint8Array,
   typeName: string,
   codePage: number | undefined
-): void {
-  if (typeName !== "HTML") return;
+): ResourcePreviewResult | null {
+  if (typeName !== "HTML") return null;
+  const issues: string[] = [];
   const { text, error, encoding, terminated } = decodeTextResource(data, codePage);
-  if (error) addPreviewIssue(langEntry, "HTML resource text could not be decoded.");
-  if (!text) return;
-  langEntry.previewKind = "html";
-  langEntry.textPreview = text;
-  langEntry.textEncoding = encoding || null;
-  if (terminated) {
-    addPreviewIssue(langEntry, "HTML preview stopped at a NUL terminator before the declared data size.");
-  }
+  if (error) issues.push("HTML resource text could not be decoded.");
+  if (!text) return issues.length ? { issues } : null;
+  if (terminated) issues.push("HTML preview stopped at a NUL terminator before the declared data size.");
+  return {
+    preview: {
+      previewKind: "html",
+      textPreview: text,
+      textEncoding: encoding || null
+    },
+    ...(issues.length ? { issues } : {})
+  };
 }
 
 export function addStringTablePreview(
-  langEntry: ResourceLangWithPreview,
   data: Uint8Array,
   typeName: string,
   entryId: number | null
-): void {
+): ResourcePreviewResult | null {
   const utf16Decoder = new TextDecoder("utf-16le", { fatal: false });
-  if (typeName !== "STRING") return;
+  if (typeName !== "STRING") return null;
   if (data.length < 2) {
-    addPreviewIssue(langEntry, "String table is too small to read.");
-    return;
+    return { issues: ["String table is too small to read."] };
   }
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const entries: Array<{ id: number | null; text: string }> = [];
+  const issues: string[] = [];
   let offset = 0;
+  // String-table block IDs are 1-based; each block covers exactly 16 string IDs. Source:
+  // Microsoft Learn, STRINGTABLE resource / LoadString.
   const baseId = entryId != null ? Math.max(0, entryId - 1) * 16 : null;
-  // Win32 STRINGTABLE blocks contain exactly 16 UTF-16 entries.
   while (offset + 2 <= data.length && entries.length < 16) {
     const len = dv.getUint16(offset, true);
     offset += 2;
     const byteLen = len * 2;
     if (offset + byteLen > data.length) {
-      addPreviewIssue(langEntry, "String table data ended unexpectedly.");
+      issues.push("String table data ended unexpectedly.");
       break;
     }
     const text = utf16Decoder.decode(data.subarray(offset, offset + byteLen));
@@ -134,98 +138,13 @@ export function addStringTablePreview(
     offset += byteLen;
   }
   if (!entries.length) {
-    addPreviewIssue(langEntry, "No strings could be read from table.");
-    return;
+    return { issues: [...issues, "No strings could be read from table."] };
   }
-  langEntry.previewKind = "stringTable";
-  langEntry.stringPreview = entries;
-  langEntry.stringTable = entries;
-}
-
-export function addVersionPreview(
-  langEntry: ResourceLangWithPreview,
-  data: Uint8Array,
-  typeName: string
-): void {
-  if (typeName !== "VERSION") return;
-  const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  const headerSize = 6; // VS_VERSIONINFO header: wLength(2) + wValueLength(2) + wType(2)
-  const dwordAlign = 4;
-  // VS_FIXEDFILEINFO is 13 DWORDs.
-  const fixedMinSize = 13 * Uint32Array.BYTES_PER_ELEMENT;
-  if (dv.byteLength < headerSize) return;
-  const len = dv.getUint16(0, true);
-  const valueLength = dv.getUint16(2, true);
-  let keyBytes = 0;
-  const keyLimit = Math.min(len, dv.byteLength);
-  const expectedKey = "VS_VERSION_INFO";
-  let pos = headerSize;
-  let validKey = true;
-  for (let idx = 0; idx < expectedKey.length; idx += 1) {
-    if (pos + 1 >= keyLimit) {
-      validKey = false;
-      break;
-    }
-    const code = dv.getUint16(pos, true);
-    keyBytes += 2;
-    if (code !== expectedKey.charCodeAt(idx)) {
-      validKey = false;
-      break;
-    }
-    pos += 2;
-  }
-  if (validKey) {
-    if (pos + 1 < keyLimit) {
-      const terminator = dv.getUint16(pos, true);
-      keyBytes += 2;
-      if (terminator !== 0) validKey = false;
-    } else {
-      validKey = false;
-    }
-  }
-  if (!validKey) {
-    addPreviewIssue(langEntry, "VERSION resource key is missing or invalid.");
-    return;
-  }
-  // Align start of VS_FIXEDFILEINFO to DWORD boundary after the UTF-16 key string.
-  const valueStart = (headerSize + keyBytes + (dwordAlign - 1)) & ~(dwordAlign - 1);
-  const declaredLength = Math.min(len, dv.byteLength);
-  if (valueLength < fixedMinSize || valueStart + fixedMinSize > declaredLength) {
-    addPreviewIssue(langEntry, "Version block is too small to read VS_FIXEDFILEINFO.");
-    return;
-  }
-  const fixedView = new DataView(
-    data.buffer,
-    data.byteOffset + valueStart,
-    Math.min(valueLength, declaredLength - valueStart)
-  );
-  const signature = fixedView.getUint32(0, true);
-  const structVersion = fixedView.getUint32(4, true);
-  if (signature !== 0xfEEF04BD) {
-    addPreviewIssue(langEntry, "VS_FIXEDFILEINFO signature is missing or invalid.");
-    return;
-  }
-  if (structVersion !== 0x00010000) {
-    addPreviewIssue(langEntry, "VS_FIXEDFILEINFO struct version is unexpected.");
-    return;
-  }
-  if (fixedView.byteLength < fixedMinSize) {
-    addPreviewIssue(langEntry, "VS_FIXEDFILEINFO is truncated.");
-    return;
-  }
-  const v0 = fixedView.getUint32(8, true);
-  const v1 = fixedView.getUint32(12, true);
-  const v2 = fixedView.getUint32(16, true);
-  const v3 = fixedView.getUint32(20, true);
-  const parsePair = (v: number) => ({
-    major: (v >>> 16) & 0xffff,
-    minor: v & 0xffff
-  });
-  const fileVer = { high: parsePair(v0), low: parsePair(v1) };
-  const prodVer = { high: parsePair(v2), low: parsePair(v3) };
-  langEntry.previewKind = "version";
-  langEntry.versionInfo = {
-    fileVersionString: `${fileVer.high.major}.${fileVer.high.minor}.${fileVer.low.major}.${fileVer.low.minor}`,
-    productVersionString: `${prodVer.high.major}.${prodVer.high.minor}.${prodVer.low.major}.${prodVer.low.minor}`
+  return {
+    preview: {
+      previewKind: "stringTable",
+      stringTable: entries
+    },
+    ...(issues.length ? { issues } : {})
   };
 }

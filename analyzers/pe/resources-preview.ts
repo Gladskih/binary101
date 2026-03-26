@@ -1,246 +1,293 @@
 "use strict";
 
-import { addIconPreview, addGroupIconPreview } from "./resources-preview-icon.js";
+import { addBitmapPreview } from "./resources-preview-bitmap.js";
+import { addCursorPreview, addGroupCursorPreview } from "./resources-preview-cursor.js";
+import { addDialogPreview } from "./resources-preview-dialog.js";
+import { addAcceleratorPreview } from "./resources-preview-accelerator.js";
+import { buildResourceLeafIndex, chooseResourceLeafRecord } from "./resource-preview-leaf-index.js";
+import {
+  addGroupIconPreview,
+  addIconPreview,
+  type LoadedResourceLeaf,
+  type LoadResourceLeafData
+} from "./resources-preview-icon.js";
+import { addMenuPreview } from "./resources-preview-menu.js";
+import { addHeuristicResourcePreview } from "./resources-preview-sniff.js";
 import {
   addHtmlPreview,
   addManifestPreview,
-  addPreviewIssue,
-  addStringTablePreview,
-  addVersionPreview
+  addStringTablePreview
 } from "./resources-preview-text.js";
+import { addVersionPreview } from "./resources-preview-version.js";
 import { decodeMessageTablePreview } from "./resources-preview-message-table.js";
-import type { ResourceDetailGroup, ResourceLangWithPreview } from "./resources-preview-types.js";
+import type {
+  ResourceDetailGroup,
+  ResourceLangWithPreview,
+  ResourcePreviewResult
+} from "./resources-preview-types.js";
 import type { ResourceTree } from "./resources-core.js";
+import type { ResourceLeafIndex } from "./resource-preview-leaf-index.js";
 
-// Win32 STRINGTABLE resources pack 16 strings into each block.
-const STRING_TABLE_ENTRY_COUNT = 16;
-// winnt.h: IMAGE_RESOURCE_DIRECTORY is 16 bytes.
-const RESOURCE_DIRECTORY_HEADER_SIZE = 16;
-// winnt.h: IMAGE_RESOURCE_DIRECTORY_ENTRY is 8 bytes.
-const RESOURCE_DIRECTORY_ENTRY_SIZE = 8;
-// winnt.h: high bit marks a string name or subdirectory; low 31 bits store the directory-relative offset.
-const RESOURCE_DIRECTORY_FLAG_MASK = 0x80000000; // IMAGE_RESOURCE_NAME_IS_STRING / IMAGE_RESOURCE_DATA_IS_DIRECTORY.
-const RESOURCE_DIRECTORY_OFFSET_MASK = 0x7fffffff; // IMAGE_RESOURCE_* offset in the low 31 bits.
-const RESOURCE_INTEGER_ID_MASK = 0xffff; // Integer resource ids are 16-bit values.
+type ResourceEntryPreviewDecode = ResourcePreviewResult[];
+type ResourceGroupPreviewDecode = ResourceEntryPreviewDecode[];
 
-const truncateStringTablePreview = (langEntry: ResourceLangWithPreview): void => {
-  if (langEntry.previewKind !== "stringTable") return;
-  if (langEntry.stringPreview?.length && langEntry.stringPreview.length > STRING_TABLE_ENTRY_COUNT) {
-    langEntry.stringPreview = langEntry.stringPreview.slice(0, STRING_TABLE_ENTRY_COUNT);
-  }
-  if (langEntry.stringTable?.length && langEntry.stringTable.length > STRING_TABLE_ENTRY_COUNT) {
-    langEntry.stringTable = langEntry.stringTable.slice(0, STRING_TABLE_ENTRY_COUNT);
+const combineIssues = (...lists: Array<string[] | undefined>): string[] | undefined => {
+  const issues = lists.flatMap(list => list || []);
+  return issues.length ? issues : undefined;
+};
+
+const addMessageTableResourcePreview = (
+  data: Uint8Array,
+  typeName: string,
+  codePage: number | undefined
+): ResourcePreviewResult | null => {
+  if (typeName !== "MESSAGETABLE") return null;
+  const messageTable = decodeMessageTablePreview(data, codePage || 0);
+  if (!messageTable) return null;
+  const issues = combineIssues(
+    messageTable.truncated ? ["Message table preview is truncated or malformed."] : undefined,
+    messageTable.issues
+  );
+  return {
+    preview: {
+      previewKind: "messageTable",
+      messageTable: {
+        messages: messageTable.messages,
+        truncated: messageTable.truncated
+      }
+    },
+    ...(issues ? { issues } : {})
+  };
+};
+
+const runSyncPreviewDecoder = (fn: () => ResourcePreviewResult | null): ResourcePreviewResult | null => {
+  try {
+    return fn();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { issues: [`Preview failed: ${message}`] };
   }
 };
+
+const runAsyncPreviewDecoder = async (
+  fn: () => Promise<ResourcePreviewResult | null>
+): Promise<ResourcePreviewResult | null> => {
+  try {
+    return await fn();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { issues: [`Preview failed: ${message}`] };
+  }
+};
+
+const createGroupLeafLoader = (
+  file: File,
+  tree: ResourceTree,
+  index: ResourceLeafIndex,
+  groupTypeName: "GROUP_ICON" | "GROUP_CURSOR",
+  leafTypeName: "ICON" | "CURSOR"
+): LoadResourceLeafData => async (
+  id: number,
+  lang: number | null | undefined
+): Promise<LoadedResourceLeaf> => {
+  const record = chooseResourceLeafRecord(index, id, lang);
+  if (!record) return { data: null };
+  const offset = tree.rvaToOff(record.dataRva);
+  if (offset == null || offset < 0) {
+    return {
+      data: null,
+      issues: [
+        `${groupTypeName} references ${leafTypeName} leaf ID ${id}, but its RVA could not be mapped to a file offset.`
+      ]
+    };
+  }
+  if (record.size <= 0) {
+    return {
+      data: null,
+      issues: [
+        `${groupTypeName} references ${leafTypeName} leaf ID ${id}, but the leaf payload size is zero.`
+      ]
+    };
+  }
+  const data = new Uint8Array(await file.slice(offset, offset + record.size).arrayBuffer());
+  const issues = data.byteLength < record.size
+    ? [`${groupTypeName} references ${leafTypeName} leaf ID ${id}, but the leaf payload is truncated.`]
+    : undefined;
+  return { data: data.byteLength ? data : null, ...(issues ? { issues } : {}) };
+};
+
+const readResourceLeafBytes = async (
+  file: File,
+  tree: ResourceTree,
+  langEntry: ResourceLangWithPreview
+): Promise<LoadedResourceLeaf> => {
+  const offset = tree.rvaToOff(langEntry.dataRVA);
+  if (offset == null) {
+    return {
+      data: null,
+      issues: ["Resource RVA could not be mapped to a file offset."]
+    };
+  }
+  const data = new Uint8Array(await file.slice(offset, offset + langEntry.size).arrayBuffer());
+  const issues = data.byteLength < langEntry.size
+    ? ["Resource preview read fewer bytes than the declared data size."]
+    : undefined;
+  return { data: data.byteLength ? data : null, ...(issues ? { issues } : {}) };
+};
+
+const decodeSpecificResourcePreview = async (
+  data: Uint8Array,
+  typeName: string,
+  entryId: number | null,
+  codePage: number | undefined,
+  lang: number | null | undefined,
+  loadIconLeafData: LoadResourceLeafData,
+  loadCursorLeafData: LoadResourceLeafData
+): Promise<ResourcePreviewResult | null> => {
+  switch (typeName) {
+    case "ICON":
+      return runSyncPreviewDecoder(() => addIconPreview(data, typeName));
+    case "GROUP_ICON":
+      return runAsyncPreviewDecoder(() => addGroupIconPreview(data, typeName, loadIconLeafData, lang));
+    case "CURSOR":
+      return runSyncPreviewDecoder(() => addCursorPreview(data, typeName));
+    case "GROUP_CURSOR":
+      return runAsyncPreviewDecoder(() => addGroupCursorPreview(data, typeName, loadCursorLeafData, lang));
+    case "BITMAP":
+      return runSyncPreviewDecoder(() => addBitmapPreview(data, typeName));
+    case "MANIFEST":
+      return runSyncPreviewDecoder(() => addManifestPreview(data, typeName, codePage));
+    case "HTML":
+      return runSyncPreviewDecoder(() => addHtmlPreview(data, typeName, codePage));
+    case "VERSION":
+      return runSyncPreviewDecoder(() => addVersionPreview(data, typeName));
+    case "STRING":
+      return runSyncPreviewDecoder(() => addStringTablePreview(data, typeName, entryId));
+    case "DIALOG":
+      return runSyncPreviewDecoder(() => addDialogPreview(data, typeName));
+    case "MENU":
+      return runSyncPreviewDecoder(() => addMenuPreview(data, typeName));
+    case "ACCELERATOR":
+      return runSyncPreviewDecoder(() => addAcceleratorPreview(data, typeName));
+    case "MESSAGETABLE":
+      return runSyncPreviewDecoder(() => addMessageTableResourcePreview(data, typeName, codePage));
+    default:
+      return null;
+  }
+};
+
+const decodeResourceLeafPreview = async (
+  file: File,
+  tree: ResourceTree,
+  groupTypeName: string,
+  entryId: number | null,
+  langEntry: ResourceLangWithPreview,
+  loadIconLeafData: LoadResourceLeafData,
+  loadCursorLeafData: LoadResourceLeafData
+): Promise<ResourcePreviewResult> => {
+  if (!langEntry.size || !langEntry.dataRVA) return {};
+  try {
+    const leaf = await readResourceLeafBytes(file, tree, langEntry);
+    if (!leaf.data?.length) return leaf.issues?.length ? { issues: leaf.issues } : {};
+    const leafData = leaf.data;
+    const typedPreview = await decodeSpecificResourcePreview(
+      leafData,
+      groupTypeName,
+      entryId,
+      langEntry.codePage,
+      langEntry.lang,
+      loadIconLeafData,
+      loadCursorLeafData
+    );
+    if (typedPreview?.preview) {
+      const issues = combineIssues(leaf.issues, typedPreview.issues);
+      return {
+        preview: typedPreview.preview,
+        ...(issues ? { issues } : {})
+      };
+    }
+    const heuristicPreview = await runAsyncPreviewDecoder(() =>
+      addHeuristicResourcePreview(leafData, langEntry.codePage)
+    );
+    const issues = combineIssues(leaf.issues, typedPreview?.issues, heuristicPreview?.issues);
+    return {
+      ...(heuristicPreview?.preview ? { preview: heuristicPreview.preview } : {}),
+      ...(issues ? { issues } : {})
+    };
+  } catch {
+    return { issues: ["Resource bytes could not be read for preview."] };
+  }
+};
+
+const decodeDetailPreviews = async (
+  file: File,
+  tree: ResourceTree,
+  detail: ResourceDetailGroup[],
+  loadIconLeafData: LoadResourceLeafData,
+  loadCursorLeafData: LoadResourceLeafData
+): Promise<ResourceGroupPreviewDecode[]> =>
+  Promise.all(detail.map(group =>
+    Promise.all(group.entries.map(entry =>
+      Promise.all(entry.langs.map(langEntry =>
+        decodeResourceLeafPreview(
+          file,
+          tree,
+          group.typeName,
+          entry.id,
+          langEntry as ResourceLangWithPreview,
+          loadIconLeafData,
+          loadCursorLeafData
+        )
+      ))
+    ))
+  ));
+
+const attachLangPreview = (
+  langEntry: ResourceLangWithPreview,
+  decoded: ResourcePreviewResult
+): ResourceLangWithPreview => ({
+  ...langEntry,
+  ...(decoded.preview || {}),
+  ...(decoded.issues?.length ? { previewIssues: decoded.issues } : {})
+});
+
+const attachDetailPreviews = (
+  detail: ResourceDetailGroup[],
+  decodedGroups: ResourceGroupPreviewDecode[]
+): ResourceDetailGroup[] =>
+  detail.map((group, groupIndex) => ({
+    ...group,
+    entries: group.entries.map((entry, entryIndex) => ({
+      ...entry,
+      langs: entry.langs.map((langEntry, langIndex) =>
+        attachLangPreview(
+          langEntry as ResourceLangWithPreview,
+          decodedGroups[groupIndex]?.[entryIndex]?.[langIndex] || {}
+        )
+      )
+    }))
+  }));
 
 export async function enrichResourcePreviews(
   file: File,
   tree: ResourceTree
 ): Promise<{ top: ResourceTree["top"]; detail: ResourceDetailGroup[]; issues?: string[] }> {
-  const { base, limitEnd, top, view, rvaToOff } = tree;
   const detail = tree.detail as ResourceDetailGroup[];
+  const iconIndex = buildResourceLeafIndex(detail, "ICON");
+  const cursorIndex = buildResourceLeafIndex(detail, "CURSOR");
+  const loadIconLeafData = createGroupLeafLoader(file, tree, iconIndex, "GROUP_ICON", "ICON");
+  const loadCursorLeafData = createGroupLeafLoader(file, tree, cursorIndex, "GROUP_CURSOR", "CURSOR");
+  const decodedGroups = await decodeDetailPreviews(
+    file,
+    tree,
+    detail,
+    loadIconLeafData,
+    loadCursorLeafData
+  );
   const issues = [...(tree.issues || [])];
-  const addIssue = (message: string): void => {
-    if (!issues.includes(message)) issues.push(message);
+  return {
+    top: tree.top,
+    detail: attachDetailPreviews(detail, decodedGroups),
+    ...(issues.length ? { issues } : {})
   };
-  const formatRelOffset = (rel: number): string => `0x${(rel >>> 0).toString(16)}`;
-  const resolveDirOffset = (rel: number, len: number): number | null => {
-    if (tree.dirRva != null && tree.dirSize != null) {
-      if (rel < 0 || len < 0 || rel + len > tree.dirSize) return null;
-      const off = rvaToOff((tree.dirRva + rel) >>> 0);
-      if (off == null || off < 0 || off + len > file.size) return null;
-      return off;
-    }
-    const off = base + rel;
-    if (off < base || len < 0 || off + len > limitEnd) return null;
-    return off;
-  };
-
-  const iconIndex = new Map<number, { rva: number; size: number }>();
-  const rootDirOff = resolveDirOffset(0, RESOURCE_DIRECTORY_HEADER_SIZE);
-  if (rootDirOff == null) {
-    addIssue("Resource preview could not read the root directory header.");
-    return { top, detail, ...(issues.length ? { issues } : {}) };
-  }
-  const rootDirView = await view(rootDirOff, RESOURCE_DIRECTORY_HEADER_SIZE);
-  if (rootDirView.byteLength < RESOURCE_DIRECTORY_HEADER_SIZE) {
-    addIssue("Resource preview encountered a truncated root directory header.");
-    return { top, detail, ...(issues.length ? { issues } : {}) };
-  }
-  const NamedRoot = rootDirView.getUint16(RESOURCE_DIRECTORY_HEADER_SIZE - 4, true);
-  const IdsRoot = rootDirView.getUint16(RESOURCE_DIRECTORY_HEADER_SIZE - 2, true);
-  const countRoot = NamedRoot + IdsRoot;
-  for (let index = 0; index < countRoot; index += 1) {
-    const entryOff = resolveDirOffset(
-      RESOURCE_DIRECTORY_HEADER_SIZE + index * RESOURCE_DIRECTORY_ENTRY_SIZE,
-      RESOURCE_DIRECTORY_ENTRY_SIZE
-    );
-    if (entryOff == null) {
-      addIssue("Resource preview found a root directory entry outside the declared resource span.");
-      break;
-    }
-    const e = await view(entryOff, RESOURCE_DIRECTORY_ENTRY_SIZE);
-    if (e.byteLength < RESOURCE_DIRECTORY_ENTRY_SIZE) {
-      addIssue("Resource preview encountered a truncated root directory entry.");
-      break;
-    }
-    const Name = e.getUint32(0, true);
-    const OffsetToData = e.getUint32(4, true);
-    const subdir = (OffsetToData & RESOURCE_DIRECTORY_FLAG_MASK) !== 0;
-    const id = (Name & RESOURCE_DIRECTORY_FLAG_MASK) ? null : (Name & RESOURCE_INTEGER_ID_MASK);
-    if (id !== 3 /* RT_ICON */ || !subdir) continue;
-    const nameDirRel = OffsetToData & RESOURCE_DIRECTORY_OFFSET_MASK;
-    const nameDirOff = resolveDirOffset(nameDirRel, RESOURCE_DIRECTORY_HEADER_SIZE);
-    if (nameDirOff == null) {
-      addIssue(`Resource preview could not map the RT_ICON name directory at ${formatRelOffset(nameDirRel)}.`);
-      continue;
-    }
-    const nameDirView = await view(nameDirOff, RESOURCE_DIRECTORY_HEADER_SIZE);
-    if (nameDirView.byteLength < RESOURCE_DIRECTORY_HEADER_SIZE) {
-      addIssue(`Resource preview found a truncated RT_ICON name directory at ${formatRelOffset(nameDirRel)}.`);
-      continue;
-    }
-    const Named = nameDirView.getUint16(RESOURCE_DIRECTORY_HEADER_SIZE - 4, true);
-    const Ids = nameDirView.getUint16(RESOURCE_DIRECTORY_HEADER_SIZE - 2, true);
-    const count = Named + Ids;
-    for (let idx = 0; idx < count; idx += 1) {
-      const entry2Off = resolveDirOffset(
-        nameDirRel + RESOURCE_DIRECTORY_HEADER_SIZE + idx * RESOURCE_DIRECTORY_ENTRY_SIZE,
-        RESOURCE_DIRECTORY_ENTRY_SIZE
-      );
-      if (entry2Off == null) {
-        addIssue(`Resource preview found an RT_ICON entry outside the declared span at ${formatRelOffset(nameDirRel)}.`);
-        break;
-      }
-      const e2 = await view(entry2Off, RESOURCE_DIRECTORY_ENTRY_SIZE);
-      if (e2.byteLength < RESOURCE_DIRECTORY_ENTRY_SIZE) {
-        addIssue(`Resource preview found a truncated RT_ICON entry at ${formatRelOffset(nameDirRel)}.`);
-        break;
-      }
-      const Name2 = e2.getUint32(0, true);
-      const OffsetToData2 = e2.getUint32(4, true);
-      const subdir2 = (OffsetToData2 & RESOURCE_DIRECTORY_FLAG_MASK) !== 0;
-      const id2 = (Name2 & RESOURCE_DIRECTORY_FLAG_MASK) ? null : (Name2 & RESOURCE_INTEGER_ID_MASK);
-      if (!subdir2) continue;
-      const langDirRel = OffsetToData2 & RESOURCE_DIRECTORY_OFFSET_MASK;
-      const langDirOff = resolveDirOffset(langDirRel, RESOURCE_DIRECTORY_HEADER_SIZE);
-      if (langDirOff == null) {
-        addIssue(`Resource preview could not map the RT_ICON language directory at ${formatRelOffset(langDirRel)}.`);
-        continue;
-      }
-      const langDirView = await view(langDirOff, RESOURCE_DIRECTORY_HEADER_SIZE);
-      if (langDirView.byteLength < RESOURCE_DIRECTORY_HEADER_SIZE) {
-        addIssue(`Resource preview found a truncated RT_ICON language directory at ${formatRelOffset(langDirRel)}.`);
-        continue;
-      }
-      const NamedL = langDirView.getUint16(RESOURCE_DIRECTORY_HEADER_SIZE - 4, true);
-      const IdsL = langDirView.getUint16(RESOURCE_DIRECTORY_HEADER_SIZE - 2, true);
-      const countL = NamedL + IdsL;
-      for (let j = 0; j < countL; j += 1) {
-        const langEntryOff = resolveDirOffset(
-          langDirRel + RESOURCE_DIRECTORY_HEADER_SIZE + j * RESOURCE_DIRECTORY_ENTRY_SIZE,
-          RESOURCE_DIRECTORY_ENTRY_SIZE
-        );
-        if (langEntryOff == null) {
-          addIssue(`Resource preview found an RT_ICON language entry outside the declared span at ${formatRelOffset(langDirRel)}.`);
-          break;
-        }
-        const le = await view(langEntryOff, RESOURCE_DIRECTORY_ENTRY_SIZE);
-        if (le.byteLength < RESOURCE_DIRECTORY_ENTRY_SIZE) {
-          addIssue(`Resource preview found a truncated RT_ICON language entry at ${formatRelOffset(langDirRel)}.`);
-          break;
-        }
-        const OffsetToDataL = le.getUint32(4, true);
-        const subdirL = (OffsetToDataL & RESOURCE_DIRECTORY_FLAG_MASK) !== 0;
-        if (subdirL) continue;
-        const dataRel = OffsetToDataL & RESOURCE_DIRECTORY_OFFSET_MASK;
-        const deo2 = resolveDirOffset(dataRel, RESOURCE_DIRECTORY_HEADER_SIZE);
-        if (deo2 == null) {
-          addIssue(`Resource preview could not map the RT_ICON data entry at ${formatRelOffset(dataRel)}.`);
-          continue;
-        }
-        const dv2 = await view(deo2, RESOURCE_DIRECTORY_HEADER_SIZE);
-        if (dv2.byteLength < 8) {
-          addIssue(`Resource preview found a truncated RT_ICON data entry at ${formatRelOffset(dataRel)}.`);
-          continue;
-        }
-        const rva2 = dv2.getUint32(0, true);
-        const sz2 = dv2.getUint32(4, true);
-        if (id2 != null) iconIndex.set(id2, { rva: rva2, size: sz2 });
-        break;
-      }
-    }
-  }
-
-  for (const group of detail) {
-    const typeName = group.typeName;
-    for (const entry of group.entries) {
-      for (const langEntry of entry.langs as ResourceLangWithPreview[]) {
-        if (!langEntry.size || !langEntry.dataRVA) continue;
-        try {
-          const dataOff = rvaToOff(langEntry.dataRVA);
-          if (dataOff == null) {
-            addPreviewIssue(langEntry, "Resource RVA could not be mapped to a file offset.");
-            continue;
-          }
-          if (langEntry.size <= 0) continue;
-          const data = new Uint8Array(
-            await file
-              .slice(dataOff, dataOff + langEntry.size)
-              .arrayBuffer()
-          );
-          if (data.byteLength < langEntry.size) {
-            addPreviewIssue(
-              langEntry,
-              "Resource preview read fewer bytes than the declared data size."
-            );
-          }
-          const safePreview = (fn: () => void): void => {
-            try {
-              fn();
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err);
-              addPreviewIssue(langEntry, `Preview failed: ${msg}`);
-            }
-          };
-          safePreview(() => addIconPreview(langEntry, data, typeName));
-          safePreview(() => addManifestPreview(langEntry, data, typeName, langEntry.codePage));
-          safePreview(() => addHtmlPreview(langEntry, data, typeName, langEntry.codePage));
-          safePreview(() => addVersionPreview(langEntry, data, typeName));
-          safePreview(() => addStringTablePreview(langEntry, data, typeName, entry.id));
-          truncateStringTablePreview(langEntry);
-          if (typeName === "MESSAGETABLE") {
-            const messageTable = decodeMessageTablePreview(data, langEntry.codePage);
-            if (messageTable) {
-              langEntry.previewKind = "messageTable";
-              langEntry.messageTable = {
-                messages: messageTable.messages,
-                truncated: messageTable.truncated
-              };
-              if (messageTable.truncated) {
-                addPreviewIssue(langEntry, "Message table preview is truncated or malformed.");
-              }
-              messageTable.issues.forEach(issue => addPreviewIssue(langEntry, issue));
-            }
-          }
-          await addGroupIconPreview(
-            file,
-            langEntry,
-            typeName,
-            langEntry.dataRVA,
-            langEntry.size,
-            iconIndex,
-            rvaToOff
-          ).catch(err => {
-            const msg = err instanceof Error ? err.message : String(err);
-            addPreviewIssue(langEntry, `Icon group preview failed: ${msg}`);
-          });
-        } catch {
-          addPreviewIssue(langEntry, "Resource bytes could not be read for preview.");
-        }
-      }
-    }
-  }
-
-  return { top, detail, ...(issues.length ? { issues } : {}) };
 }

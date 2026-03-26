@@ -1,5 +1,6 @@
 "use strict";
 import type { ProbeResult } from "./probe-types.js";
+import { hasRiffForm } from "./file-signatures.js";
 
 const detectFlac = (dv: DataView): ProbeResult => {
   if (dv.byteLength < 4) return null;
@@ -14,11 +15,7 @@ const detectOgg = (dv: DataView): ProbeResult => {
 };
 
 const detectWav = (dv: DataView): ProbeResult => {
-  if (dv.byteLength < 12) return null;
-  const riff = dv.getUint32(0, false);
-  const wave = dv.getUint32(8, false);
-  if (riff === 0x52494646 && wave === 0x57415645) return "WAVE audio (RIFF)";
-  return null;
+  return hasRiffForm(dv, "WAVE") ? "WAVE audio (RIFF)" : null;
 };
 
 const detectAiff = (dv: DataView): ProbeResult => {
@@ -97,11 +94,7 @@ const detectFlv = (dv: DataView): ProbeResult => {
 };
 
 const detectAvi = (dv: DataView): ProbeResult => {
-  if (dv.byteLength < 12) return null;
-  const riff = dv.getUint32(0, false);
-  const avi = dv.getUint32(8, false);
-  if (riff === 0x52494646 && avi === 0x41564920) return "AVI/DivX video (RIFF)";
-  return null;
+  return hasRiffForm(dv, "AVI ") ? "AVI/DivX video (RIFF)" : null;
 };
 
 const detectAsf = (dv: DataView): ProbeResult => {

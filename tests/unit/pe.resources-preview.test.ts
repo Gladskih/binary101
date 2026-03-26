@@ -4,23 +4,33 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { enrichResourcePreviews } from "../../analyzers/pe/resources-preview.js";
 import type { ResourceTree } from "../../analyzers/pe/resources-core.js";
+import { createPngFile } from "../fixtures/image-sample-files.js";
+import {
+  buildSingleEntryGroupCursorResource,
+  buildSingleEntryGroupIconResource,
+  createPreviewDetailGroup,
+  createPreviewFixture,
+  createPreviewLangEntry,
+  createPreviewTree
+} from "../helpers/pe-resource-preview-fixture.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
 const encoder = new TextEncoder();
-const IMAGE_RESOURCE_DIRECTORY_SIZE = 16; // IMAGE_RESOURCE_DIRECTORY
-const IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE = 8; // IMAGE_RESOURCE_DIRECTORY_ENTRY
-const RESOURCE_DIRECTORY_SUBDIRECTORY_FLAG = 0x80000000;
-const RESOURCE_DIRECTORY_ID_COUNT_OFFSET = 14;
+// MESSAGE_RESOURCE_ENTRY.Flags uses 0 for ANSI and 1 for Unicode strings. Source:
+// https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-message_resource_entry
 const MESSAGE_RESOURCE_ENTRY_FLAG = { ansi: 0, unicode: 1 } as const;
 const UTF16LE_CODE_PAGE = 1200;
+// VS_FIXEDFILEINFO.dwSignature is fixed at 0xFEEF04BD. Source:
+// https://learn.microsoft.com/en-us/windows/win32/menurc/vs-fixedfileinfo
 const VERSION_INFO_FIXED_FILE_INFO_SIGNATURE = 0xfeef04bd;
+// sizeof(VS_FIXEDFILEINFO) is 52 bytes. Source:
+// https://learn.microsoft.com/en-us/windows/win32/menurc/vs-fixedfileinfo
 const VERSION_INFO_FIXED_FILE_INFO_SIZE = 52;
 
 type ResourceDetail = ResourceTree["detail"][number];
-type ResourceLang = ResourceDetail["entries"][number]["langs"][number];
 type ResourcePreviewResult = Awaited<ReturnType<typeof enrichResourcePreviews>>;
-type PreviewResourceLang = ResourceLang & {
+type PreviewResourceLang = ResourceDetail["entries"][number]["langs"][number] & {
   previewKind?: string;
   previewMime?: string;
   textPreview?: string;
@@ -38,54 +48,6 @@ const writeUtf16 = (bytes: Uint8Array, offset: number, text: string): void => {
     bytes[offset + index * 2 + 1] = codeUnit >>> 8;
   }
 };
-
-const writeDirectoryEntry = (
-  view: DataView,
-  offset: number,
-  nameField: number,
-  targetField: number
-): void => {
-  view.setUint32(offset, nameField, true);
-  view.setUint32(offset + Uint32Array.BYTES_PER_ELEMENT, targetField, true);
-};
-
-const createResourcePreviewFixture = (fileSize: number): {
-  fileBytes: Uint8Array;
-  writeData: (offset: number, data: Uint8Array) => { offset: number; size: number };
-} => {
-  const fileBytes = new Uint8Array(fileSize).fill(0);
-  return {
-    fileBytes,
-    writeData: (offset, data) => {
-      fileBytes.set(data, offset);
-      return { offset, size: data.length };
-    }
-  };
-};
-
-const createLang = (
-  dataRva: number,
-  size: number,
-  codePage: number,
-  lang: number | null
-): ResourceLang => ({ lang, size, codePage, dataRVA: dataRva, reserved: 0 });
-
-const createDetail = (typeName: string, id: number, lang: ResourceLang): ResourceDetail => ({
-  typeName,
-  entries: [{ id, name: null, langs: [lang] }]
-});
-
-const createResourceTree = (
-  detail: ResourceDetail[],
-  directoryBuffer = new ArrayBuffer(IMAGE_RESOURCE_DIRECTORY_SIZE)
-): ResourceTree => ({
-  base: 0,
-  limitEnd: directoryBuffer.byteLength,
-  top: [],
-  detail,
-  view: async (off, len) => new DataView(directoryBuffer, off, len),
-  rvaToOff: value => value
-});
 
 const buildStringTableResource = (): Uint8Array => {
   const bytes = new Uint8Array(24).fill(0);
@@ -140,12 +102,12 @@ const getPreviewLang = (result: ResourcePreviewResult, typeName: string): Previe
 };
 
 void test("enrichResourcePreviews builds text previews for MANIFEST and HTML", async () => {
-  const fixture = createResourcePreviewFixture(256);
-  const manifest = fixture.writeData(64, encoder.encode('<?xml version="1.0"?><assembly/>'));
-  const html = fixture.writeData(128, encoder.encode("<html><body>hi</body></html>"));
-  const tree = createResourceTree([
-    createDetail("MANIFEST", 3, createLang(manifest.offset, manifest.size, 65001, null)),
-    createDetail("HTML", 4, createLang(html.offset, html.size, 65001, 1031))
+  const fixture = createPreviewFixture(256);
+  const manifest = fixture.appendData(encoder.encode('<?xml version="1.0"?><assembly/>'));
+  const html = fixture.appendData(encoder.encode("<html><body>hi</body></html>"));
+  const tree = createPreviewTree([
+    createPreviewDetailGroup("MANIFEST", 3, createPreviewLangEntry(manifest.offset, manifest.size, 65001, null)),
+    createPreviewDetailGroup("HTML", 4, createPreviewLangEntry(html.offset, html.size, 65001, 1031))
   ]);
 
   const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
@@ -156,14 +118,26 @@ void test("enrichResourcePreviews builds text previews for MANIFEST and HTML", a
 });
 
 void test("enrichResourcePreviews builds STRING, MESSAGETABLE, and VERSION previews", async () => {
-  const fixture = createResourcePreviewFixture(1024);
-  const stringTable = fixture.writeData(128, buildStringTableResource());
-  const messageTable = fixture.writeData(256, buildMessageTableResource());
-  const version = fixture.writeData(512, buildVersionResource());
-  const tree = createResourceTree([
-    createDetail("STRING", 1, createLang(stringTable.offset, stringTable.size, UTF16LE_CODE_PAGE, 1031)),
-    createDetail("MESSAGETABLE", 5, createLang(messageTable.offset, messageTable.size, 0, 2057)),
-    createDetail("VERSION", 6, createLang(version.offset, version.size, UTF16LE_CODE_PAGE, 3082))
+  const fixture = createPreviewFixture(1024);
+  const stringTable = fixture.appendData(buildStringTableResource());
+  const messageTable = fixture.appendData(buildMessageTableResource());
+  const version = fixture.appendData(buildVersionResource());
+  const tree = createPreviewTree([
+    createPreviewDetailGroup(
+      "STRING",
+      1,
+      createPreviewLangEntry(stringTable.offset, stringTable.size, UTF16LE_CODE_PAGE, 1031)
+    ),
+    createPreviewDetailGroup(
+      "MESSAGETABLE",
+      5,
+      createPreviewLangEntry(messageTable.offset, messageTable.size, 0, 2057)
+    ),
+    createPreviewDetailGroup(
+      "VERSION",
+      6,
+      createPreviewLangEntry(version.offset, version.size, UTF16LE_CODE_PAGE, 3082)
+    )
   ]);
 
   const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
@@ -188,40 +162,72 @@ void test("enrichResourcePreviews builds STRING, MESSAGETABLE, and VERSION previ
   assert.strictEqual(versionLang.versionInfo?.productVersionString, "9.0.21022.8");
 });
 
-void test("enrichResourcePreviews reports resource-directory mapping gaps", async () => {
-  const directoryBuffer = new ArrayBuffer(
-    IMAGE_RESOURCE_DIRECTORY_SIZE + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE
-  );
-  const directoryView = new DataView(directoryBuffer);
-  directoryView.setUint16(RESOURCE_DIRECTORY_ID_COUNT_OFFSET, 1, true);
-  writeDirectoryEntry(
-    directoryView,
-    IMAGE_RESOURCE_DIRECTORY_SIZE,
-    3,
-    RESOURCE_DIRECTORY_SUBDIRECTORY_FLAG | 0x20
-  );
-  const tree: ResourceTree = {
-    base: 0,
-    limitEnd: directoryBuffer.byteLength,
-    dirRva: 0x1000,
-    dirSize: 0x40,
-    top: [],
-    detail: [],
-    view: async (off, len) => new DataView(directoryBuffer, off, len),
-    rvaToOff: rva => (rva >= 0x1000 && rva < 0x1000 + directoryBuffer.byteLength ? rva - 0x1000 : null)
-  };
+void test("enrichResourcePreviews leaves GROUP_ICON entries without preview when the referenced ICON leaf is missing", async () => {
+  const fixture = createPreviewFixture(256);
+  const groupIcon = fixture.appendData(buildSingleEntryGroupIconResource(createPngFile().data.length, 99));
+  const tree = createPreviewTree([
+    createPreviewDetailGroup("GROUP_ICON", 12, createPreviewLangEntry(groupIcon.offset, groupIcon.size, 0, 1033))
+  ]);
 
-  const result = await enrichResourcePreviews(new MockFile(new Uint8Array(directoryBuffer)), tree);
-  assert.match((result.issues || []).join(" "), /RT_ICON name directory/i);
+  const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
+  const groupLang = getPreviewLang(result, "GROUP_ICON");
+
+  assert.notStrictEqual(groupLang.previewKind, "image");
+});
+
+void test("enrichResourcePreviews reports unmapped GROUP_ICON leaf payload RVAs", async () => {
+  const fixture = createPreviewFixture(256);
+  const groupIcon = fixture.appendData(buildSingleEntryGroupIconResource(createPngFile().data.length, 1));
+  const tree = createPreviewTree(
+    [
+      createPreviewDetailGroup("ICON", 1, createPreviewLangEntry(0x2000, createPngFile().data.length, 0, 1033)),
+      createPreviewDetailGroup(
+        "GROUP_ICON",
+        12,
+        createPreviewLangEntry(groupIcon.offset, groupIcon.size, 0, 1033)
+      )
+    ],
+    value => (value === groupIcon.offset ? groupIcon.offset : null)
+  );
+
+  const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
+  const groupLang = getPreviewLang(result, "GROUP_ICON");
+
+  assert.ok((groupLang.previewIssues || []).some(issue => /GROUP_ICON references ICON leaf ID 1/i.test(issue)));
+});
+
+void test("enrichResourcePreviews reports unmapped GROUP_CURSOR leaf payload RVAs", async () => {
+  const fixture = createPreviewFixture(256);
+  const groupCursor = fixture.appendData(buildSingleEntryGroupCursorResource(32, 4, 7, 9));
+  const tree = createPreviewTree(
+    [
+      createPreviewDetailGroup("CURSOR", 4, createPreviewLangEntry(0x2400, 32, 0, 1033)),
+      createPreviewDetailGroup(
+        "GROUP_CURSOR",
+        13,
+        createPreviewLangEntry(groupCursor.offset, groupCursor.size, 0, 1033)
+      )
+    ],
+    value => (value === groupCursor.offset ? groupCursor.offset : null)
+  );
+
+  const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
+  const groupLang = getPreviewLang(result, "GROUP_CURSOR");
+
+  assert.ok((groupLang.previewIssues || []).some(issue => /GROUP_CURSOR references CURSOR leaf ID 4/i.test(issue)));
 });
 
 void test("enrichResourcePreviews uses the resource code page to decode UTF-16LE HTML without a BOM", async () => {
-  const fixture = createResourcePreviewFixture(256);
+  const fixture = createPreviewFixture(256);
   const htmlBytes = new Uint8Array("<html>".length * 2);
   writeUtf16(htmlBytes, 0, "<html>");
-  const html = fixture.writeData(64, htmlBytes);
-  const tree = createResourceTree([
-    createDetail("HTML", 7, createLang(html.offset, html.size, UTF16LE_CODE_PAGE, 1033))
+  const html = fixture.appendData(htmlBytes);
+  const tree = createPreviewTree([
+    createPreviewDetailGroup(
+      "HTML",
+      7,
+      createPreviewLangEntry(html.offset, html.size, UTF16LE_CODE_PAGE, 1033)
+    )
   ]);
 
   const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
@@ -233,10 +239,14 @@ void test("enrichResourcePreviews uses the resource code page to decode UTF-16LE
 });
 
 void test("enrichResourcePreviews warns when resource preview reads fewer bytes than the declared data size", async () => {
-  const fixture = createResourcePreviewFixture(96);
-  const manifest = fixture.writeData(64, encoder.encode("<assembly/>"));
-  const tree = createResourceTree([
-    createDetail("MANIFEST", 8, createLang(manifest.offset, manifest.size + 16, 65001, 1033))
+  const fixture = createPreviewFixture(96);
+  const manifest = fixture.appendData(encoder.encode("<assembly/>"));
+  const tree = createPreviewTree([
+    createPreviewDetailGroup(
+      "MANIFEST",
+      8,
+      createPreviewLangEntry(manifest.offset, manifest.size + 16, 65001, 1033)
+    )
   ]);
 
   const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
@@ -247,7 +257,7 @@ void test("enrichResourcePreviews warns when resource preview reads fewer bytes 
 });
 
 void test("enrichResourcePreviews does not read VS_FIXEDFILEINFO past the declared VS_VERSIONINFO length", async () => {
-  const fixture = createResourcePreviewFixture(256);
+  const fixture = createPreviewFixture(256);
   const versionBytes = new Uint8Array(96).fill(0);
   const view = new DataView(versionBytes.buffer);
   const key = "VS_VERSION_INFO";
@@ -262,9 +272,13 @@ void test("enrichResourcePreviews does not read VS_FIXEDFILEINFO past the declar
   view.setUint32(valueStart + 12, 0x521e0008, true);
   view.setUint32(valueStart + 16, 0x00090000, true);
   view.setUint32(valueStart + 20, 0x521e0008, true);
-  const version = fixture.writeData(128, versionBytes);
-  const tree = createResourceTree([
-    createDetail("VERSION", 9, createLang(version.offset, version.size, UTF16LE_CODE_PAGE, 1033))
+  const version = fixture.appendData(versionBytes);
+  const tree = createPreviewTree([
+    createPreviewDetailGroup(
+      "VERSION",
+      9,
+      createPreviewLangEntry(version.offset, version.size, UTF16LE_CODE_PAGE, 1033)
+    )
   ]);
 
   const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
