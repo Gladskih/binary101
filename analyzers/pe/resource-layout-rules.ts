@@ -29,20 +29,16 @@ export const validateResourceLayout = (
   fileSize: number,
   addIssue: (message: string) => void
 ): void => {
+  const firstStringInDirectoryArea = resourceStringRanges.find(
+    resourceStringRange => resourceStringRange.start < maxDirectoryEnd
+  );
   const firstDataEntryStart = resourceDataEntries.length
     ? Math.min(...resourceDataEntries.map(entry => entry.start))
     : Number.POSITIVE_INFINITY;
-  for (const resourceStringRange of resourceStringRanges) {
-    if (resourceStringRange.start < maxDirectoryEnd) {
-      addIssue(
-        `Resource string name at ${formatRelOffset(resourceStringRange.start)} does not lie after the last resource directory entry.`
-      );
-    }
-    if (resourceStringRange.end > firstDataEntryStart) {
-      addIssue(
-        `Resource string name at ${formatRelOffset(resourceStringRange.start)} does not lie before the first resource data entry.`
-      );
-    }
+  if (firstStringInDirectoryArea) {
+    addIssue(
+      `Resource string area begins at ${formatRelOffset(firstStringInDirectoryArea.start)}, before the last resource directory entry ends at ${formatRelOffset(maxDirectoryEnd)}.`
+    );
   }
   const seenSubdirectoryTargets = new Set<number>();
   for (const resourceSubdirectoryTarget of resourceSubdirectoryTargets) {
@@ -58,17 +54,23 @@ export const validateResourceLayout = (
     (currentEnd, resourceStringRange) => Math.max(currentEnd, resourceStringRange.end),
     0
   );
+  const firstStringAfterDataEntry = resourceStringRanges.find(
+    resourceStringRange => resourceStringRange.end > firstDataEntryStart
+  );
+  const firstDataEntryInDirectoryArea = resourceDataEntries.find(
+    resourceDataEntry => resourceDataEntry.start < maxDirectoryEnd
+  );
+  if (firstDataEntryInDirectoryArea) {
+    addIssue(
+      `Resource data entry area begins at ${formatRelOffset(firstDataEntryInDirectoryArea.start)}, before the resource directory area ends at ${formatRelOffset(maxDirectoryEnd)}.`
+    );
+  }
+  if (firstStringAfterDataEntry) {
+    addIssue(
+      `Resource string area and Resource Data entry area are interleaved: first resource data entry at ${formatRelOffset(firstDataEntryStart)}, first late resource string at ${formatRelOffset(firstStringAfterDataEntry.start)}, and the string area ends at ${formatRelOffset(maxStringEnd)}.`
+    );
+  }
   for (const resourceDataEntry of resourceDataEntries) {
-    if (resourceDataEntry.start < maxDirectoryEnd) {
-      addIssue(
-        `Resource data entry at ${formatRelOffset(resourceDataEntry.start)} overlaps the resource directory area.`
-      );
-    }
-    if (resourceDataEntry.start < maxStringEnd) {
-      addIssue(
-        `Resource data entry at ${formatRelOffset(resourceDataEntry.start)} overlaps the resource string area; data entries must follow all resource strings.`
-      );
-    }
     if (resourceDataEntry.size === 0) continue;
     const mappedPayloadOffset = rvaToOff(resourceDataEntry.dataRva);
     if (mappedPayloadOffset == null) {
