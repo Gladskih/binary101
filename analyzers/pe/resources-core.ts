@@ -1,6 +1,12 @@
 "use strict";
 
 import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
+import {
+  validateResourceDirectoryEntryKinds,
+  validateResourceDirectoryIdSort,
+  validateResourceDirectoryNameSort
+} from "./resource-directory-rules.js";
+import type { ResourceDirectoryEntry } from "./resource-directory-rules.js";
 
 const knownResourceType = (id: number): string | null => ({
   1: "CURSOR", 2: "BITMAP", 3: "ICON", 4: "MENU", 5: "DIALOG", 6: "STRING", 7: "FONTDIR", 8: "FONT", 9: "ACCELERATOR",
@@ -34,36 +40,6 @@ export interface ResourceTree {
   rvaToOff: RvaToOffset;
 }
 
-type ResourceDirectoryEntry = {
-  nameIsString: boolean;
-  subdir: boolean;
-  nameOrId: number | null;
-  target: number;
-};
-
-const validateResourceDirectoryEntryKinds = (
-  rel: number,
-  namedCount: number,
-  entries: ResourceDirectoryEntry[],
-  addIssue: (message: string) => void
-): void => {
-  const availableNamedCount = Math.min(namedCount, entries.length);
-  for (let index = 0; index < availableNamedCount; index += 1) {
-    if (entries[index]?.nameIsString) continue;
-    addIssue(
-      `Resource directory at 0x${(rel >>> 0).toString(16)} has ID entries inside the name-entry range; named entries must appear before ID entries.`
-    );
-    break;
-  }
-  for (let index = availableNamedCount; index < entries.length; index += 1) {
-    if (!entries[index]?.nameIsString) continue;
-    addIssue(
-      `Resource directory at 0x${(rel >>> 0).toString(16)} has named entries after ID entries; named entries must appear before ID entries.`
-    );
-    break;
-  }
-};
-
 export async function buildResourceTree(
   file: File,
   dataDirs: PeDataDirectory[],
@@ -78,6 +54,7 @@ export async function buildResourceTree(
   addCoverageRegion("RESOURCE directory", base, dir.size);
   const limitEnd = base + dir.size;
   const issues: string[] = [];
+  const resourceNameCache = new Map<number, Promise<string>>();
   const view = async (off: number, len: number): Promise<DataView> =>
     new DataView(await file.slice(off, off + len).arrayBuffer());
   const u16 = (dv: DataView, off: number): number => dv.getUint16(off, true);
@@ -126,6 +103,11 @@ export async function buildResourceTree(
       addIssue(`Resource directory header at ${formatRelOffset(rel)} is truncated.`);
       return null;
     }
+    if (u32(dv, 0) !== 0) {
+      addIssue(
+        `IMAGE_RESOURCE_DIRECTORY.Characteristics at ${formatRelOffset(rel)} is non-zero; the field is reserved and should be 0.`
+      );
+    }
     const Named = u16(dv, 12);
     const Ids = u16(dv, 14);
     const count = Named + Ids;
@@ -155,41 +137,52 @@ export async function buildResourceTree(
       });
     }
     validateResourceDirectoryEntryKinds(rel, Named, entries, addIssue);
+    validateResourceDirectoryIdSort(rel, Named, entries, addIssue);
+    await validateResourceDirectoryNameSort(rel, Named, entries, readUcs2Label, addIssue);
     return { Named, Ids, entries };
   };
 
-  const readUcs2Label = async (rel: number): Promise<string> => {
-    const so = resolveRelOffset(rel, 2);
-    if (so == null) {
-      addIssue(
-        describeRelOffsetFailure(rel, 2, `Resource string name header at ${formatRelOffset(rel)}`)
-      );
-      return "";
-    }
-    const dv = await view(so, 2);
-    if (dv.byteLength < 2) {
-      addIssue(`Resource string name header at ${formatRelOffset(rel)} is truncated.`);
-      return "";
-    }
-    const len = u16(dv, 0);
-    const declaredBytesLength = len * 2;
-    const bytesLength = Math.min(declaredBytesLength, Math.max(0, dir.size - (rel + 2)));
-    if (bytesLength < declaredBytesLength) {
-      addIssue(`Resource string name at ${formatRelOffset(rel)} is truncated.`);
-    }
-    const textOff = resolveRelOffset(rel + 2, bytesLength);
-    if (textOff == null) {
-      addIssue(
-        describeRelOffsetFailure(
-          rel + 2,
-          bytesLength,
-          `Resource string name payload at ${formatRelOffset(rel + 2)}`
-        )
-      );
-      return "";
-    }
-    const bytes = new Uint8Array(await file.slice(textOff, textOff + bytesLength).arrayBuffer());
-    return utf16Decoder.decode(bytes.subarray(0, bytes.length - (bytes.length % 2)));
+  const readUcs2Label = (rel: number): Promise<string> => {
+    const cached = resourceNameCache.get(rel);
+    if (cached) return cached;
+    const pending = (async (): Promise<string> => {
+      if ((rel & 1) !== 0) {
+        addIssue(`Resource string name at ${formatRelOffset(rel)} is not word-aligned.`);
+      }
+      const so = resolveRelOffset(rel, 2);
+      if (so == null) {
+        addIssue(
+          describeRelOffsetFailure(rel, 2, `Resource string name header at ${formatRelOffset(rel)}`)
+        );
+        return "";
+      }
+      const dv = await view(so, 2);
+      if (dv.byteLength < 2) {
+        addIssue(`Resource string name header at ${formatRelOffset(rel)} is truncated.`);
+        return "";
+      }
+      const len = u16(dv, 0);
+      const declaredBytesLength = len * 2;
+      const bytesLength = Math.min(declaredBytesLength, Math.max(0, dir.size - (rel + 2)));
+      if (bytesLength < declaredBytesLength) {
+        addIssue(`Resource string name at ${formatRelOffset(rel)} is truncated.`);
+      }
+      const textOff = resolveRelOffset(rel + 2, bytesLength);
+      if (textOff == null) {
+        addIssue(
+          describeRelOffsetFailure(
+            rel + 2,
+            bytesLength,
+            `Resource string name payload at ${formatRelOffset(rel + 2)}`
+          )
+        );
+        return "";
+      }
+      const bytes = new Uint8Array(await file.slice(textOff, textOff + bytesLength).arrayBuffer());
+      return utf16Decoder.decode(bytes.subarray(0, bytes.length - (bytes.length % 2)));
+    })();
+    resourceNameCache.set(rel, pending);
+    return pending;
   };
 
   const root = await parseDir(0);
@@ -221,7 +214,11 @@ export async function buildResourceTree(
     let leafCount = 0;
     const typeDetailEntries: ResourceDetailEntry[] = [];
 
-    if (typeEntry.subdir) {
+    if (!typeEntry.subdir) {
+      addIssue(
+        `Top-level resource type entry ${typeName} points directly to data; type entries should point to second-level subdirectories.`
+      );
+    } else {
       const nameDir = await parseDir(typeEntry.target);
       if (nameDir) {
         for (const nameEntry of nameDir.entries) {
@@ -233,7 +230,11 @@ export async function buildResourceTree(
           if (nameEntry.nameIsString && nameEntry.nameOrId != null) {
             child.name = await readUcs2Label(nameEntry.nameOrId);
           }
-          if (nameEntry.subdir) {
+          if (!nameEntry.subdir) {
+            addIssue(
+              `Resource entry under type ${typeName} points directly to data; second-level entries should point to language subdirectories.`
+            );
+          } else {
             const langDir = await parseDir(nameEntry.target);
             if (langDir) {
               for (const langEnt of langDir.entries) {
