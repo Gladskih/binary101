@@ -20,8 +20,13 @@ type VersionNode = {
 };
 
 type FixedFileInfoResult =
-  | { fixedFileInfo: Pick<ResourceVersionPreview, "fileVersionString" | "productVersionString"> }
+  | {
+      fixedFileInfo: Pick<ResourceVersionPreview, "fileVersionString" | "productVersionString">;
+      issues?: string[];
+    }
   | { issues: string[] };
+
+const DWORD_SIZE = Uint32Array.BYTES_PER_ELEMENT;
 
 const alignDword = (offset: number): number => (offset + 3) & ~3;
 
@@ -74,14 +79,11 @@ const parseFixedFileInfo = (
   }
   // sizeof(VS_FIXEDFILEINFO) is 13 DWORDs = 52 bytes. Source:
   // Microsoft Learn, VS_FIXEDFILEINFO / https://learn.microsoft.com/en-us/windows/win32/menurc/vs-fixedfileinfo
-  if (
-    root.valueByteLength < 13 * Uint32Array.BYTES_PER_ELEMENT ||
-    root.valueOffset + 13 * Uint32Array.BYTES_PER_ELEMENT > root.end
-  ) {
+  if (root.valueByteLength < 13 * DWORD_SIZE || root.valueOffset + 13 * DWORD_SIZE > root.end) {
     return { issues: ["Version block is too small to read VS_FIXEDFILEINFO."] };
   }
   const signature = view.getUint32(root.valueOffset, true);
-  const structVersion = view.getUint32(root.valueOffset + 4, true);
+  const structVersion = view.getUint32(root.valueOffset + DWORD_SIZE, true);
   // VS_FIXEDFILEINFO.dwSignature is always 0xFEEF04BD. Source:
   // Microsoft Learn, VS_FIXEDFILEINFO / https://learn.microsoft.com/en-us/windows/win32/menurc/vs-fixedfileinfo
   if (signature !== 0xfeef04bd) {
@@ -89,20 +91,24 @@ const parseFixedFileInfo = (
   }
   // VS_FIXEDFILEINFO.dwStrucVersion is 0x00010000 for the current structure version. Source:
   // Microsoft Learn, VS_FIXEDFILEINFO / https://learn.microsoft.com/en-us/windows/win32/menurc/vs-fixedfileinfo
-  if (structVersion !== 0x00010000) {
-    return { issues: ["VS_FIXEDFILEINFO struct version is unexpected."] };
-  }
   return {
     fixedFileInfo: {
       fileVersionString: formatVersionPair(
-        view.getUint32(root.valueOffset + 8, true),
-        view.getUint32(root.valueOffset + 12, true)
+        view.getUint32(root.valueOffset + DWORD_SIZE * 2, true),
+        view.getUint32(root.valueOffset + DWORD_SIZE * 3, true)
       ),
       productVersionString: formatVersionPair(
-        view.getUint32(root.valueOffset + 16, true),
-        view.getUint32(root.valueOffset + 20, true)
+        view.getUint32(root.valueOffset + DWORD_SIZE * 4, true),
+        view.getUint32(root.valueOffset + DWORD_SIZE * 5, true)
       )
-    }
+    },
+    ...(structVersion !== 0x00010000
+      ? {
+          issues: [
+            `VS_FIXEDFILEINFO struct version is unexpected (expected 0x00010000, found 0x${structVersion.toString(16).padStart(8, "0")}).`
+          ]
+        }
+      : {})
   };
 };
 
@@ -169,7 +175,7 @@ export const addVersionPreview = (
     return { issues: ["VERSION resource header is truncated or malformed."] };
   }
   const fixed = parseFixedFileInfo(view, root);
-  if ("issues" in fixed) return fixed;
+  if (!("fixedFileInfo" in fixed)) return fixed;
   const versionInfo: ResourceVersionPreview = { ...fixed.fixedFileInfo };
   for (let pos = root.childrenOffset; pos + VERSION_HEADER_SIZE <= root.end;) {
     const child = parseVersionNode(view, pos, root.end);
@@ -187,6 +193,7 @@ export const addVersionPreview = (
     preview: {
       previewKind: "version",
       versionInfo
-    }
+    },
+    ...(fixed.issues?.length ? { issues: fixed.issues } : {})
   };
 };
