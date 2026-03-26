@@ -195,6 +195,7 @@ void test("renderResources renders preview cells for common resource types", () 
   const html = out.join("");
 
   assert.match(html, /Resources/);
+  assert.match(html, /directory entries → directory strings → data entries/);
   assert.match(html, /ICON/);
   assert.match(html, /RT_ICON name directory could not be mapped/);
   assert.match(html, /image\/png/);
