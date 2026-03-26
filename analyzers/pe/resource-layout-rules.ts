@@ -24,6 +24,7 @@ export const validateResourceLayout = (
   maxDirectoryEnd: number,
   resourceStringRanges: ResourceLayoutRange[],
   resourceDataEntries: ResourceDataEntryLayout[],
+  resourceSubdirectoryTargets: number[],
   rvaToOff: RvaToOffset,
   fileSize: number,
   addIssue: (message: string) => void
@@ -42,6 +43,16 @@ export const validateResourceLayout = (
         `Resource string name at ${formatRelOffset(resourceStringRange.start)} does not lie before the first resource data entry.`
       );
     }
+  }
+  const seenSubdirectoryTargets = new Set<number>();
+  for (const resourceSubdirectoryTarget of resourceSubdirectoryTargets) {
+    if (seenSubdirectoryTargets.has(resourceSubdirectoryTarget)) {
+      addIssue(
+        `Resource subdirectory at ${formatRelOffset(resourceSubdirectoryTarget)} is referenced by multiple parents.`
+      );
+      break;
+    }
+    seenSubdirectoryTargets.add(resourceSubdirectoryTarget);
   }
   const maxStringEnd = resourceStringRanges.reduce(
     (currentEnd, resourceStringRange) => Math.max(currentEnd, resourceStringRange.end),
@@ -71,5 +82,17 @@ export const validateResourceLayout = (
         `Resource data payload at RVA ${formatRelOffset(resourceDataEntry.dataRva)} is truncated by end of file.`
       );
     }
+  }
+  const sortedPayloadRanges = resourceDataEntries
+    .filter(resourceDataEntry => resourceDataEntry.size > 0)
+    .map(resourceDataEntry => ({
+      start: resourceDataEntry.dataRva,
+      end: resourceDataEntry.dataRva + resourceDataEntry.size
+    }))
+    .sort((leftRange, rightRange) => leftRange.start - rightRange.start);
+  for (let index = 1; index < sortedPayloadRanges.length; index += 1) {
+    if (sortedPayloadRanges[index - 1]!.end <= sortedPayloadRanges[index]!.start) continue;
+    addIssue("Resource data payload ranges overlap in the Resource Data area.");
+    break;
   }
 };

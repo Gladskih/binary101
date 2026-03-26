@@ -1,21 +1,10 @@
 "use strict";
 
 import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
-import {
-  validateResourceDirectoryDuplicates,
-  validateResourceDirectoryEntryKinds,
-  validateResourceDirectoryIdSort,
-  validateResourceDirectoryNameSort
-} from "./resource-directory-rules.js";
+import { validateResourceDirectoryDuplicates, validateResourceDirectoryEntryKinds, validateResourceDirectoryIdSort, validateResourceDirectoryNameSort } from "./resource-directory-rules.js";
 import type { ResourceDirectoryEntry } from "./resource-directory-rules.js";
-import {
-  updateDirectoryLayoutEnd,
-  validateResourceLayout
-} from "./resource-layout-rules.js";
-import type {
-  ResourceDataEntryLayout,
-  ResourceLayoutRange
-} from "./resource-layout-rules.js";
+import { updateDirectoryLayoutEnd, validateResourceLayout } from "./resource-layout-rules.js";
+import type { ResourceDataEntryLayout, ResourceLayoutRange } from "./resource-layout-rules.js";
 import { knownResourceType } from "./resource-type-names.js";
 import type { ResourceDetailEntry, ResourceTree } from "./resource-tree-types.js";
 
@@ -39,6 +28,7 @@ export async function buildResourceTree(
   const resourceNameCache = new Map<number, Promise<string>>();
   const resourceStringRanges: ResourceLayoutRange[] = [];
   const resourceDataEntries: ResourceDataEntryLayout[] = [];
+  const resourceSubdirectoryTargets: number[] = [];
   const view = async (off: number, len: number): Promise<DataView> =>
     new DataView(await file.slice(off, off + len).arrayBuffer());
   const u16 = (dv: DataView, off: number): number => dv.getUint16(off, true);
@@ -113,12 +103,16 @@ export async function buildResourceTree(
       const OffsetToData = u32(e, 4);
       const nameIsString = (Name & 0x80000000) !== 0;
       const subdir = (OffsetToData & 0x80000000) !== 0;
+      if (subdir && (OffsetToData & 0x7fffffff) === rel) {
+        addIssue(`Resource directory at ${formatRelOffset(rel)} has a subdirectory entry that points to itself.`);
+      }
       entries.push({
         nameIsString,
         subdir,
         nameOrId: nameIsString ? (Name & 0x7fffffff) : (Name >>> 0),
         target: OffsetToData & 0x7fffffff
       });
+      if (subdir) resourceSubdirectoryTargets.push(OffsetToData & 0x7fffffff);
     }
     maxDirectoryEnd = updateDirectoryLayoutEnd(maxDirectoryEnd, rel, entries.length);
     validateResourceDirectoryEntryKinds(rel, Named, entries, addIssue);
@@ -280,6 +274,7 @@ export async function buildResourceTree(
     maxDirectoryEnd,
     resourceStringRanges,
     resourceDataEntries,
+    resourceSubdirectoryTargets,
     rvaToOff,
     file.size,
     addIssue
