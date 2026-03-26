@@ -30,6 +30,12 @@
   - analyzers are pure parsing (no DOM, no direct UI code)
   - renderers are pure HTML formatting (no file I/O)
 - Maintain the UI parse contract: `parseForUi(file)` must continue to return `{ analyzer, parsed }`.
+- **Memory efficiency**: Use `file.slice(...).arrayBuffer()` to read file segments; avoid loading entire files.
+- **Error handling**: Report anomalies visibly in the UI instead of silently failing or bypassing.
+- **Return types**: Parsers should return plain JavaScript objects (no DOM).
+- Current default architecture is `probe+parse`: keep detection lightweight and run full parsing in `parseForUi`.
+- Existing legacy exceptions are tracked in `TODO.md`.
+- **Commit messages**: Use present tense, imperative mood
 
 ## HTML
 - Use semantic elements (`<header>`, `<nav>`, `<main>`, `<article>`, `<footer>`).
@@ -57,9 +63,3 @@
 - If a value is significant, add a short comment that explains why the exact literal matters and cite the authoritative source when relevant.
 - If a value is incidental, generate it by fixture builders.
 - Do not use neighboring production constants as the oracle in a unit test; encode the checked value in the test itself and comment any special literal.
-- **Memory efficiency**: Use `file.slice(...).arrayBuffer()` to read file segments; avoid loading entire files.
-- **Error handling**: Report anomalies visibly in the UI instead of silently failing or bypassing.
-- **Return types**: Parsers should return plain JavaScript objects (no DOM).
-- Current default architecture is `probe+parse`: keep detection lightweight and run full parsing in `parseForUi`.
-- Existing legacy exceptions are tracked in `TODO.md`.
-- **Commit messages**: Use present tense, imperative mood
