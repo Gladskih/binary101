@@ -17,7 +17,6 @@ const emptyView = new DataView(new ArrayBuffer(0));
 // 64 KiB is the smallest power-of-two window that reaches the flat part of the
 // curve; larger windows only shave off a couple of reads here while doubling
 // the cached bytes and over-read span.
-const peReaderWindowBytes = 64 * 1024;
 
 const clampRangeSize = (limit: number, offset: number, size: number): number => {
   if (offset < 0) return 0;
@@ -38,9 +37,13 @@ const isCachedWindowHit = (
 export const createPeRangeReader = (
   file: File,
   baseOffset: number,
-  limit: number
+  limit: number,
+  windowBytes = 64 * 1024
 ): PeRangeReader => {
   let cachedWindow: CachedWindow | null = null;
+  const cacheWindowBytes = Number.isFinite(windowBytes) && windowBytes > 0
+    ? Math.floor(windowBytes)
+    : 0;
 
   const read = async (offset: number, size: number): Promise<DataView> => {
     const availableSize = clampRangeSize(limit, offset, size);
@@ -50,11 +53,11 @@ export const createPeRangeReader = (
     }
     // Chromium profiling showed PE hot paths spending about 80 s in parsing
     // while more than 100k tiny File.slice().arrayBuffer() calls dominated the
-    // cost. Keep parsing on-demand and segment-based, but reuse a 64 KiB
-    // window when the caller walks nearby file offsets.
-    const shouldCache = availableSize <= peReaderWindowBytes;
+    // cost. Keep parsing on-demand and segment-based, but reuse the configured
+    // cache window when the caller walks nearby file offsets.
+    const shouldCache = cacheWindowBytes > 0 && availableSize <= cacheWindowBytes;
     const readSize = shouldCache
-      ? clampRangeSize(limit, offset, peReaderWindowBytes)
+      ? clampRangeSize(limit, offset, cacheWindowBytes)
       : availableSize;
     const view = new DataView(
       await file
@@ -67,4 +70,3 @@ export const createPeRangeReader = (
 
   return { read };
 };
-

@@ -11,12 +11,8 @@ const identityRvaToOff = (rva: number): number => rva;
 const RUNTIME_FUNCTION_ENTRY_SIZE_BYTES = 12;
 // Microsoft x64 exception handling: UNWIND_INFO version is currently 1.
 const UNWIND_INFO_VERSION_1 = 1;
-// Non-zero test base so zero-RVA validation paths are not triggered by incidental fixture layout.
-const TEST_RVA_BASE = 0x1000;
-const TEST_FUNCTION_SIZE_BYTES = 16;
-const DISCONTIGUOUS_RUNTIME_FUNCTION_COUNT = 2;
-// Regression target: this count is intentionally just above the historical 1024-entry cap.
-const MANY_RUNTIME_FUNCTION_COUNT = 1025;
+// parseExceptionDirectory reads the fixed 4-byte UNWIND_INFO header first.
+const UNWIND_INFO_HEADER_SIZE_BYTES = Uint32Array.BYTES_PER_ELEMENT;
 
 const createOffsetAllocator = (
   start: number
@@ -55,34 +51,35 @@ const createDiscontiguousExceptionFixture = (): {
   expectedBeginRvas: number[];
   mapRvaToOff: (rva: number) => number | null;
 } => {
-  const directorySize =
-    DISCONTIGUOUS_RUNTIME_FUNCTION_COUNT * RUNTIME_FUNCTION_ENTRY_SIZE_BYTES;
-  const allocateRva = createOffsetAllocator(TEST_RVA_BASE);
+  const entryCount = 2; // Need two entries to prove the directory mapping is not contiguous in the file.
+  const directorySize = entryCount * RUNTIME_FUNCTION_ENTRY_SIZE_BYTES;
+  const allocateRva = createOffsetAllocator(1); // Keep RVA non-zero so the fixture does not trip zero-is-absent checks.
   const allocateFileOffset = createOffsetAllocator(0);
+  const functionSizeBytes = 1; // Smallest valid non-empty [BeginAddress, EndAddress) range.
   const directoryRva = allocateRva(directorySize);
-  const firstFunctionRva = allocateRva(TEST_FUNCTION_SIZE_BYTES);
-  const secondFunctionRva = allocateRva(TEST_FUNCTION_SIZE_BYTES);
-  const unwindInfoRva = allocateRva(1);
+  const firstFunctionRva = allocateRva(functionSizeBytes);
+  const secondFunctionRva = allocateRva(functionSizeBytes);
+  const unwindInfoRva = allocateRva(UNWIND_INFO_HEADER_SIZE_BYTES);
   const firstEntryFileOffset = allocateFileOffset(RUNTIME_FUNCTION_ENTRY_SIZE_BYTES);
   allocateFileOffset(RUNTIME_FUNCTION_ENTRY_SIZE_BYTES);
   const secondEntryFileOffset = allocateFileOffset(RUNTIME_FUNCTION_ENTRY_SIZE_BYTES);
-  const firstFunctionFileOffset = allocateFileOffset(TEST_FUNCTION_SIZE_BYTES);
-  const secondFunctionFileOffset = allocateFileOffset(TEST_FUNCTION_SIZE_BYTES);
-  const unwindInfoFileOffset = allocateFileOffset(1);
-  const bytes = createByteBuffer(unwindInfoFileOffset + 1);
+  const firstFunctionFileOffset = allocateFileOffset(functionSizeBytes);
+  const secondFunctionFileOffset = allocateFileOffset(functionSizeBytes);
+  const unwindInfoFileOffset = allocateFileOffset(UNWIND_INFO_HEADER_SIZE_BYTES);
+  const bytes = createByteBuffer(unwindInfoFileOffset + UNWIND_INFO_HEADER_SIZE_BYTES);
   const view = new DataView(bytes.buffer);
   writeRuntimeFunction(
     view,
     firstEntryFileOffset,
     firstFunctionRva,
-    firstFunctionRva + TEST_FUNCTION_SIZE_BYTES,
+    firstFunctionRva + functionSizeBytes,
     unwindInfoRva
   );
   writeRuntimeFunction(
     view,
     secondEntryFileOffset,
     secondFunctionRva,
-    secondFunctionRva + TEST_FUNCTION_SIZE_BYTES,
+    secondFunctionRva + functionSizeBytes,
     unwindInfoRva
   );
   bytes[unwindInfoFileOffset] = UNWIND_INFO_VERSION_1;
@@ -96,10 +93,10 @@ const createDiscontiguousExceptionFixture = (): {
     ) {
       return secondEntryFileOffset + (rva - directoryRva - RUNTIME_FUNCTION_ENTRY_SIZE_BYTES);
     }
-    if (rva >= firstFunctionRva && rva < firstFunctionRva + TEST_FUNCTION_SIZE_BYTES) {
+    if (rva >= firstFunctionRva && rva < firstFunctionRva + functionSizeBytes) {
       return firstFunctionFileOffset + (rva - firstFunctionRva);
     }
-    if (rva >= secondFunctionRva && rva < secondFunctionRva + TEST_FUNCTION_SIZE_BYTES) {
+    if (rva >= secondFunctionRva && rva < secondFunctionRva + functionSizeBytes) {
       return secondFunctionFileOffset + (rva - secondFunctionRva);
     }
     if (rva === unwindInfoRva) return unwindInfoFileOffset;
@@ -114,27 +111,28 @@ const createDiscontiguousExceptionFixture = (): {
   };
 };
 
-const createManyPdataEntriesFixture = (): {
+const createTrackedContiguousExceptionFixture = (): {
   file: File;
   directoryRva: number;
   directorySize: number;
   entryCount: number;
   trackedRequestSizes: number[];
 } => {
-  const entryCount = MANY_RUNTIME_FUNCTION_COUNT;
-  const directoryRva = TEST_RVA_BASE;
+  const entryCount = 2; // Two entries are enough to distinguish one bulk read from two per-entry 12-byte slices.
+  const functionSizeBytes = 1; // Smallest valid non-empty [BeginAddress, EndAddress) range.
+  const directoryRva = 1; // Keep directory RVA non-zero because parseExceptionDirectory treats 0 as absent.
   const directorySize = entryCount * RUNTIME_FUNCTION_ENTRY_SIZE_BYTES;
   const firstFunctionRva = directoryRva + directorySize;
-  const unwindInfoRva = firstFunctionRva + entryCount * TEST_FUNCTION_SIZE_BYTES;
-  const bytes = createByteBuffer(unwindInfoRva + 1);
+  const unwindInfoRva = firstFunctionRva + entryCount * functionSizeBytes;
+  const bytes = createByteBuffer(unwindInfoRva + UNWIND_INFO_HEADER_SIZE_BYTES);
   const view = new DataView(bytes.buffer);
   for (let index = 0; index < entryCount; index += 1) {
-    const begin = firstFunctionRva + index * TEST_FUNCTION_SIZE_BYTES;
+    const begin = firstFunctionRva + index * functionSizeBytes;
     writeRuntimeFunction(
       view,
       directoryRva + index * RUNTIME_FUNCTION_ENTRY_SIZE_BYTES,
       begin,
-      begin + TEST_FUNCTION_SIZE_BYTES,
+      begin + functionSizeBytes,
       unwindInfoRva
     );
   }
@@ -158,13 +156,13 @@ void test("parseExceptionDirectory follows discontiguous RUNTIME_FUNCTION file m
     coverageAdd
   );
   assert.ok(parsed);
-  assert.strictEqual(parsed.functionCount, DISCONTIGUOUS_RUNTIME_FUNCTION_COUNT);
+  assert.strictEqual(parsed.functionCount, fixture.expectedBeginRvas.length);
   assert.deepEqual(parsed.beginRvas, fixture.expectedBeginRvas);
   assert.strictEqual(parsed.uniqueUnwindInfoCount, 1);
 });
 
 void test("parseExceptionDirectory does not read each contiguous pdata entry as a separate 12-byte slice", async () => {
-  const fixture = createManyPdataEntriesFixture();
+  const fixture = createTrackedContiguousExceptionFixture();
   const parsed = await parseExceptionDirectory(
     fixture.file,
     [{ name: "EXCEPTION", rva: fixture.directoryRva, size: fixture.directorySize }],

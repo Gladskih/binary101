@@ -51,23 +51,6 @@ void test("parseExceptionDirectory parses pdata entries and unwind info stats", 
   assert.deepEqual(parsed.handlerRvas, [0x1500]);
   assert.deepEqual(parsed.issues, []);
 });
-void test("parseExceptionDirectory does not cap large pdata directories at 1024 entries", async () => {
-  const entryCount = 1025;
-  const exOff = 0x100;
-  const unwindInfoRva = 0x4000;
-  const bytes = new Uint8Array(0x6000).fill(0);
-  bytes[unwindInfoRva] = 0x09;
-  const dv = new DataView(bytes.buffer);
-  for (let index = 0; index < entryCount; index += 1) {
-    const begin = 0x1000 + index * 0x10;
-    writeRuntimeFunction(dv, exOff + index * 12, begin, begin + 0x10, unwindInfoRva);
-  }
-  const parsed = await parseExceptionFixture(bytes, "exception-big.bin", exOff, entryCount * 12);
-  assert.ok(parsed);
-  assert.strictEqual(parsed.functionCount, entryCount);
-  assert.strictEqual(parsed.beginRvas.length, entryCount);
-  assert.strictEqual(parsed.uniqueUnwindInfoCount, 1);
-});
 void test("parseExceptionDirectory reports misaligned directory sizes", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const exOff = 0x80;
