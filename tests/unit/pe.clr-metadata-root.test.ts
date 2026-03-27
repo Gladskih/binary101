@@ -55,7 +55,8 @@ const createMetadataRootBytes = (
   cursor += 2;
   view.setUint32(cursor, 0, true);
   cursor += 4;
-  view.setUint32(cursor, versionBytes.length, true);
+  // ECMA-335 II.24.2.1: Length stores x, the null-terminated version string rounded up to 4 bytes.
+  view.setUint32(cursor, align4(versionBytes.length), true);
   cursor += 4;
   bytes.set(versionBytes, metaOffset + cursor);
   cursor = align4(cursor + versionBytes.length);
@@ -101,6 +102,22 @@ const parseMetadataFixture = async (
 
 const hasIssueLike = (issues: string[], pattern: RegExp): boolean =>
   issues.some(issue => pattern.test(issue));
+
+const metadataVersionLengthFieldOffset = 12;
+const metadataVersionStringFieldOffset = 16;
+
+const createVersionLengthFixture = (
+  metaOffset: number,
+  versionBytes: Uint8Array,
+  declaredLength: number
+): Uint8Array => {
+  const metaSize = align4(metadataVersionStringFieldOffset + versionBytes.length) + 4;
+  const bytes = createMetadataRootBytes(metaOffset, metaSize, versionBytes, 0, []);
+  const view = new DataView(bytes.buffer, metaOffset, metaSize);
+  view.setUint32(metadataVersionLengthFieldOffset, declaredLength, true);
+  bytes.set(versionBytes, metaOffset + metadataVersionStringFieldOffset);
+  return bytes;
+};
 
 void test("parseClrMetadataRoot reports unexpected metadata root signatures", async () => {
   const metaOffset = 0x20;
@@ -296,4 +313,66 @@ void test("parseClrMetadataRoot accepts the ECMA-335 minimum metadata root size 
   assert.strictEqual(meta.version, "");
   assert.strictEqual(meta.streamCount, 0);
   assert.deepStrictEqual(issues, []);
+});
+
+void test("parseClrMetadataRoot reports version Length fields of zero", async () => {
+  const metaOffset = 0x20;
+  // ECMA-335 II.24.2.1: Length stores the allocated byte count for the version string and cannot be zero.
+  const bytes = createVersionLengthFixture(metaOffset, Uint8Array.of(0), 0);
+  const metaSize = bytes.length - metaOffset;
+
+  const { meta, issues } = await parseMetadataFixture(
+    "meta-version-length-zero.bin",
+    metaOffset,
+    metaSize,
+    bytes
+  );
+
+  assert.ok(meta);
+  assert.ok(hasIssueLike(issues, /version|length/i));
+});
+
+void test("parseClrMetadataRoot reports version Length fields that are not 4-byte aligned", async () => {
+  const metaOffset = 0x20;
+  const versionBytes = encoder.encode("v4.0\0");
+  // ECMA-335 II.24.2.1: Length is rounded up to a 4-byte boundary, so a 5-byte declaration is invalid.
+  const declaredLength = versionBytes.length;
+  const bytes = createVersionLengthFixture(metaOffset, versionBytes, declaredLength);
+  const metaSize = bytes.length - metaOffset;
+
+  const { meta, issues } = await parseMetadataFixture(
+    "meta-version-length-misaligned.bin",
+    metaOffset,
+    metaSize,
+    bytes
+  );
+
+  assert.ok(meta);
+  assert.ok(hasIssueLike(issues, /version|length|multiple of 4|aligned/i));
+});
+
+void test("parseClrMetadataRoot reports non-ASCII metadata stream names", async () => {
+  const metaOffset = 0x20;
+  const streams = [{ offset: 0x20, size: Uint32Array.BYTES_PER_ELEMENT, name: "#A" }];
+  const metaSize = measureMetadataRootSize(CLR_V4_VERSION_BYTES, streams);
+  const bytes = createMetadataRootBytes(
+    metaOffset,
+    metaSize,
+    CLR_V4_VERSION_BYTES,
+    streams.length,
+    streams
+  );
+  const firstStreamHeaderOffset = align4(metadataVersionStringFieldOffset + CLR_V4_VERSION_BYTES.length) + 4;
+  // ECMA-335 II.24.2.2: stream names are null-terminated ASCII, so 0xe9 must be rejected.
+  bytes[metaOffset + firstStreamHeaderOffset + 8 + 1] = 0xe9;
+
+  const { meta, issues } = await parseMetadataFixture(
+    "meta-stream-name-non-ascii.bin",
+    metaOffset,
+    metaSize,
+    bytes
+  );
+
+  assert.ok(meta);
+  assert.ok(hasIssueLike(issues, /ascii|stream name/i));
 });

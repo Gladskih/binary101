@@ -6,16 +6,38 @@ import { parseClrDirectory } from "../../analyzers/pe/clr/index.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
+// ECMA-335 II.25.3.3: IMAGE_COR20_HEADER is 0x48 bytes.
+const IMAGE_COR20_HEADER_SIZE = 0x48;
+// Synthetic test RVA used only so the CLR directory is treated as present.
+const CLR_DIRECTORY_RVA = 0x100;
+// ECMA-335 II.24.2.1: metadata root signature "BSJB" = 0x424A5342.
+const CLR_METADATA_ROOT_SIGNATURE = 0x424a5342;
+// ECMA-335 II.24.2.6: managed EntryPointToken may encode only MethodDef (0x06) or File (0x26).
+const CLR_ENTRY_POINT_TOKEN_TYPE_REF = 0x02000001; // TypeRef is intentionally invalid here.
+// COMIMAGE_FLAGS define only documented low bits; this high bit is intentionally outside the spec.
+const CLR_UNKNOWN_FLAG_BIT = 0x80000000;
+
 const rvaToOff = (rva: number): number => rva;
+
+const createClrHeaderFile = (flags: number, entryPointToken: number): MockFile => {
+  const bytes = new Uint8Array(0x200).fill(0);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x00, IMAGE_COR20_HEADER_SIZE, true);
+  dv.setUint16(CLR_DIRECTORY_RVA + 0x04, 4, true);
+  dv.setUint16(CLR_DIRECTORY_RVA + 0x06, 0, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x10, flags, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x14, entryPointToken, true);
+  return new MockFile(bytes, "clr-header.bin");
+};
 
 void test("parseClrDirectory parses metadata header and streams", async () => {
   const encoder = new TextEncoder();
   const fileBytes = new Uint8Array(0x400).fill(0);
-  const clrOffset = 0x100;
+  const clrOffset = CLR_DIRECTORY_RVA;
   const metaOffset = 0x200;
   const metaSize = 0x80;
   const clrView = new DataView(fileBytes.buffer);
-  clrView.setUint32(clrOffset + 0, 0x48, true);
+  clrView.setUint32(clrOffset + 0, IMAGE_COR20_HEADER_SIZE, true);
   clrView.setUint16(clrOffset + 4, 4, true);
   clrView.setUint16(clrOffset + 6, 0, true);
   clrView.setUint32(clrOffset + 8, metaOffset, true);
@@ -25,7 +47,7 @@ void test("parseClrDirectory parses metadata header and streams", async () => {
 
   const metaView = new DataView(fileBytes.buffer, metaOffset, metaSize);
   let cursor = 0;
-  metaView.setUint32(cursor, 0x424a5342, true);
+  metaView.setUint32(cursor, CLR_METADATA_ROOT_SIGNATURE, true);
   cursor += 4;
   metaView.setUint16(cursor, 1, true);
   cursor += 2;
@@ -33,8 +55,9 @@ void test("parseClrDirectory parses metadata header and streams", async () => {
   cursor += 2;
   metaView.setUint32(cursor, 0, true);
   cursor += 4;
-  const versionBytes = encoder.encode("v4.0.30319");
-  metaView.setUint32(cursor, versionBytes.length, true);
+  const versionBytes = encoder.encode("v4.0.30319\0");
+  // ECMA-335 II.24.2.1: Length stores x, the null-terminated version string rounded up to 4 bytes.
+  metaView.setUint32(cursor, (versionBytes.length + 3) & ~3, true);
   cursor += 4;
   fileBytes.set(versionBytes, metaOffset + cursor);
   cursor = (cursor + versionBytes.length + 3) & ~3;
@@ -70,11 +93,11 @@ void test("parseClrDirectory parses metadata header and streams", async () => {
 
 void test("parseClrDirectory parses full IMAGE_COR20_HEADER directory fields", async () => {
   const bytes = new Uint8Array(0x600).fill(0);
-  const clrOffset = 0x100;
+  const clrOffset = CLR_DIRECTORY_RVA;
   const metaOffset = 0x200;
   const dv = new DataView(bytes.buffer);
 
-  dv.setUint32(clrOffset + 0x00, 0x48, true);
+  dv.setUint32(clrOffset + 0x00, IMAGE_COR20_HEADER_SIZE, true);
   dv.setUint16(clrOffset + 0x04, 4, true);
   dv.setUint16(clrOffset + 0x06, 0, true);
   dv.setUint32(clrOffset + 0x08, metaOffset, true);
@@ -95,7 +118,7 @@ void test("parseClrDirectory parses full IMAGE_COR20_HEADER directory fields", a
   dv.setUint32(clrOffset + 0x40, 0x3a8, true);
   dv.setUint32(clrOffset + 0x44, 0x18, true);
 
-  const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: 0x48 }];
+  const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: IMAGE_COR20_HEADER_SIZE }];
   const clr = await parseClrDirectory(new MockFile(bytes, "clr-full.bin"), dirs, rvaToOff);
   const definedClr = expectDefined(clr);
 
@@ -115,11 +138,11 @@ void test("parseClrDirectory parses full IMAGE_COR20_HEADER directory fields", a
 
 void test("parseClrDirectory parses VTableFixups entries", async () => {
   const bytes = new Uint8Array(0x500).fill(0);
-  const clrOffset = 0x100;
+  const clrOffset = CLR_DIRECTORY_RVA;
   const vtOff = 0x200;
   const dv = new DataView(bytes.buffer);
 
-  dv.setUint32(clrOffset + 0x00, 0x48, true);
+  dv.setUint32(clrOffset + 0x00, IMAGE_COR20_HEADER_SIZE, true);
   dv.setUint16(clrOffset + 0x04, 4, true);
   dv.setUint16(clrOffset + 0x06, 0, true);
   dv.setUint32(clrOffset + 0x08, 0, true);
@@ -137,7 +160,7 @@ void test("parseClrDirectory parses VTableFixups entries", async () => {
   dv.setUint16(vtOff + 0x0c, 1, true);
   dv.setUint16(vtOff + 0x0e, 0x04, true);
 
-  const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: 0x48 }];
+  const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: IMAGE_COR20_HEADER_SIZE }];
   const clr = await parseClrDirectory(new MockFile(bytes, "clr-vt.bin"), dirs, rvaToOff);
   const definedClr = expectDefined(clr);
 
@@ -149,10 +172,10 @@ void test("parseClrDirectory parses VTableFixups entries", async () => {
 
 void test("parseClrDirectory returns issues when the CLR directory is truncated", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
-  const clrOffset = 0x100;
+  const clrOffset = CLR_DIRECTORY_RVA;
   const dv = new DataView(bytes.buffer);
 
-  dv.setUint32(clrOffset + 0x00, 0x48, true);
+  dv.setUint32(clrOffset + 0x00, IMAGE_COR20_HEADER_SIZE, true);
   dv.setUint16(clrOffset + 0x04, 4, true);
   dv.setUint16(clrOffset + 0x06, 0, true);
   dv.setUint32(clrOffset + 0x08, 0, true);
@@ -183,16 +206,44 @@ void test("parseClrDirectory returns partial header info even when the directory
 
 void test("parseClrDirectory reports metadata RVAs that cannot be mapped", async () => {
   const bytes = new Uint8Array(0x300).fill(0);
-  const clrOffset = 0x100;
+  const clrOffset = CLR_DIRECTORY_RVA;
   const metaRva = 0x200;
   const dv = new DataView(bytes.buffer);
-  dv.setUint32(clrOffset + 0x00, 0x48, true);
+  dv.setUint32(clrOffset + 0x00, IMAGE_COR20_HEADER_SIZE, true);
   dv.setUint16(clrOffset + 0x04, 2, true);
   dv.setUint16(clrOffset + 0x06, 5, true);
   dv.setUint32(clrOffset + 0x08, metaRva, true);
   dv.setUint32(clrOffset + 0x0c, 0x80, true);
-  const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: 0x48 }];
+  const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: IMAGE_COR20_HEADER_SIZE }];
   const mapWithHole = (rva: number): number | null => (rva === metaRva ? null : rva);
   const clr = await parseClrDirectory(new MockFile(bytes, "clr-meta-hole.bin"), dirs, mapWithHole);
   assert.ok(expectDefined(expectDefined(clr).issues).some(issue => issue.toLowerCase().includes("metadata rva")));
+});
+
+void test("parseClrDirectory reports managed entrypoint tokens outside MethodDef/File", async () => {
+  const clr = await parseClrDirectory(
+    createClrHeaderFile(0, CLR_ENTRY_POINT_TOKEN_TYPE_REF),
+    [{ name: "CLR_RUNTIME", rva: CLR_DIRECTORY_RVA, size: IMAGE_COR20_HEADER_SIZE }],
+    rvaToOff
+  );
+
+  assert.ok(
+    expectDefined(expectDefined(clr).issues).some(
+      issue => /entry.?point|methoddef|file token/i.test(issue)
+    )
+  );
+});
+
+void test("parseClrDirectory reports unknown CLR flag bits", async () => {
+  const clr = await parseClrDirectory(
+    createClrHeaderFile(CLR_UNKNOWN_FLAG_BIT, 0),
+    [{ name: "CLR_RUNTIME", rva: CLR_DIRECTORY_RVA, size: IMAGE_COR20_HEADER_SIZE }],
+    rvaToOff
+  );
+
+  assert.ok(
+    expectDefined(expectDefined(clr).issues).some(
+      issue => /flag|bit|unspecified|unknown/i.test(issue)
+    )
+  );
 });

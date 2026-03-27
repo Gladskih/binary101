@@ -103,6 +103,18 @@ void test("parseBoundImports preserves a declared directory smaller than one des
   assert.ok(result.warning && /bound import|descriptor|truncated|8-byte/i.test(result.warning));
 });
 
+void test("parseBoundImports reports an unmappable directory base instead of silently returning null", async () => {
+  const result = await parseBoundImports(
+    new MockFile(new Uint8Array(0x40).fill(0), "bound-imports-unmapped.bin"),
+    [{ name: "BOUND_IMPORT", rva: 0x20, size: IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE }],
+    () => null
+  );
+
+  assert.ok(result);
+  assert.deepEqual(result?.entries, []);
+  assert.ok(result?.warning?.toLowerCase().match(/map|offset|rva/));
+});
+
 void test("parseBoundImports stops on truncated descriptor", async () => {
   const base = 16;
   const bytes = new Uint8Array(18).fill(0); // less than one full descriptor

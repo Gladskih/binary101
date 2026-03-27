@@ -25,6 +25,19 @@ void test("parseDelayImports warns when the Delay Import Name Table cannot be ma
   ));
   assert.ok(result.warning?.toLowerCase().includes("name"));
 });
+
+void test("parseDelayImports reports an unmappable directory base instead of silently returning null", async () => {
+  const result = await parseDelayImports32(
+    new MockFile(new Uint8Array(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE).fill(0)),
+    [{ name: "DELAY_IMPORT", rva: 0x20, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
+    () => null
+  );
+
+  assert.ok(result);
+  assert.deepEqual(result?.entries, []);
+  assert.ok(result?.warning?.toLowerCase().match(/map|offset|rva/));
+});
+
 void test("parseDelayImports warns when PE32+ name thunks set reserved bits", async () => {
   const dllName = "delay64.dll";
   const importName = "DelayFunc";
@@ -51,6 +64,94 @@ void test("parseDelayImports warns when PE32+ name thunks set reserved bits", as
   ));
   assert.ok(result.warning?.toLowerCase().includes("reserved"));
 });
+
+void test("parseDelayImports warns when the DLL name stops mapping before its null terminator", async () => {
+  const dllName = "AB";
+  const rvaLayout = createDelayImportLayout();
+  const fileLayout = createDelayImportLayout(0);
+  const descriptorRva = rvaLayout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
+  const dllNameRva = rvaLayout.reserve(cStringSize(dllName));
+  const descriptorOffset = fileLayout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
+  const dllNameOffset = fileLayout.reserve(cStringSize(dllName));
+  const bytes = new Uint8Array(fileLayout.size()).fill(0);
+  const dv = new DataView(bytes.buffer);
+
+  writeDelayImportDescriptor(dv, descriptorOffset, {
+    dllNameRva,
+    importNameTableRva: 0
+  });
+  writeDelayImportName(bytes, dllNameOffset, dllName);
+
+  const sparseRvaToOff = (rva: number): number | null => {
+    if (rva >= descriptorRva && rva < descriptorRva + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) {
+      return rva - descriptorRva;
+    }
+    if (rva === dllNameRva) return dllNameOffset;
+    if (rva === dllNameRva + 1) return dllNameOffset + 1;
+    return null;
+  };
+
+  const result = expectDefined(await parseDelayImports32(
+    new MockFile(bytes),
+    [{ name: "DELAY_IMPORT", rva: descriptorRva, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
+    sparseRvaToOff
+  ));
+
+  assert.equal(result.entries[0]?.name, dllName);
+  assert.ok(result.warning?.toLowerCase().match(/truncated|name/));
+});
+
+void test("parseDelayImports warns when an import-by-name string stops mapping before its null terminator", async () => {
+  const dllName = "delay.dll";
+  const importName = "AB";
+  const rvaLayout = createDelayImportLayout();
+  const fileLayout = createDelayImportLayout(0);
+  const descriptorRva = rvaLayout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
+  const dllNameRva = rvaLayout.reserve(cStringSize(dllName));
+  const intRva = rvaLayout.reserve(IMAGE_THUNK_DATA32_SIZE * 2);
+  const hintNameRva = rvaLayout.reserve(imageImportByNameSize(importName));
+  const descriptorOffset = fileLayout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
+  const dllNameOffset = fileLayout.reserve(cStringSize(dllName));
+  const thunkOffset = fileLayout.reserve(IMAGE_THUNK_DATA32_SIZE * 2);
+  const hintNameOffset = fileLayout.reserve(imageImportByNameSize(importName));
+  const bytes = new Uint8Array(fileLayout.size()).fill(0);
+  const dv = new DataView(bytes.buffer);
+
+  writeDelayImportDescriptor(dv, descriptorOffset, {
+    dllNameRva,
+    importNameTableRva: intRva
+  });
+  writeDelayImportName(bytes, dllNameOffset, dllName);
+  writeThunkTable32(dv, thunkOffset, [hintNameRva, 0]);
+  writeImportByName(bytes, dv, hintNameOffset, 0x44, importName);
+
+  const sparseRvaToOff = (rva: number): number | null => {
+    if (rva >= descriptorRva && rva < descriptorRva + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) {
+      return rva - descriptorRva;
+    }
+    if (rva >= dllNameRva && rva < dllNameRva + cStringSize(dllName)) {
+      return dllNameOffset + (rva - dllNameRva);
+    }
+    if (rva >= intRva && rva < intRva + IMAGE_THUNK_DATA32_SIZE * 2) {
+      return thunkOffset + (rva - intRva);
+    }
+    if (rva === hintNameRva || rva === hintNameRva + 2 || rva === hintNameRva + 3) {
+      // Hint bytes map, and only the first two name bytes map. The trailing NUL does not.
+      return hintNameOffset + (rva - hintNameRva);
+    }
+    return null;
+  };
+
+  const result = expectDefined(await parseDelayImports32(
+    new MockFile(bytes),
+    [{ name: "DELAY_IMPORT", rva: descriptorRva, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
+    sparseRvaToOff
+  ));
+
+  assert.deepEqual(result.entries[0]?.functions, [{ hint: 0x44, name: importName }]);
+  assert.ok(result.warning?.toLowerCase().match(/truncated|name/));
+});
+
 void test("parseDelayImports walks the full PE32+ thunk array to its terminator", async () => {
   // Delay-load thunk tables mirror IMAGE_THUNK_DATA and are terminated by a null entry.
   const importCount = 16385;
@@ -125,38 +226,44 @@ void test("parseDelayImports stops when later thunk slots stop mapping", async (
   assert.ok(result.warning?.toLowerCase().match(/truncated|unmapped|thunk/));
 });
 void test("parseDelayImports resolves later descriptors through rvaToOff", async () => {
-  const firstDescriptorRva = 0x1000;
-  const secondDescriptorRva = firstDescriptorRva + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE;
-  const firstNameRva = 0x1100;
-  const secondNameRva = 0x1120;
   const firstName = "first.dll";
   const secondName = "second.dll";
+  const rvaLayout = createDelayImportLayout();
+  const fileLayout = createDelayImportLayout(0);
+  const firstDescriptorRva = rvaLayout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
+  const secondDescriptorRva = rvaLayout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
+  const firstNameRva = rvaLayout.reserve(cStringSize(firstName));
+  const secondNameRva = rvaLayout.reserve(cStringSize(secondName));
   const firstNameSize = cStringSize(firstName);
   const secondNameSize = cStringSize(secondName);
-  const bytes = new Uint8Array(0xb0).fill(0);
+  const firstDescriptorOffset = fileLayout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
+  const firstNameOffset = fileLayout.reserve(firstNameSize);
+  const secondDescriptorOffset = fileLayout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
+  const secondNameOffset = fileLayout.reserve(secondNameSize);
+  const bytes = new Uint8Array(fileLayout.size()).fill(0);
   const dv = new DataView(bytes.buffer);
-  writeDelayImportDescriptor(dv, 0x00, {
+  writeDelayImportDescriptor(dv, firstDescriptorOffset, {
     dllNameRva: firstNameRva,
     importNameTableRva: 0
   });
-  writeDelayImportDescriptor(dv, 0x80, {
+  writeDelayImportDescriptor(dv, secondDescriptorOffset, {
     dllNameRva: secondNameRva,
     importNameTableRva: 0
   });
-  writeDelayImportName(bytes, 0x20, firstName);
-  writeDelayImportName(bytes, 0xa0, secondName);
+  writeDelayImportName(bytes, firstNameOffset, firstName);
+  writeDelayImportName(bytes, secondNameOffset, secondName);
   const sparseRvaToOff = (rva: number): number | null => {
     if (rva >= firstDescriptorRva && rva < firstDescriptorRva + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) {
       return rva - firstDescriptorRva;
     }
     if (rva >= secondDescriptorRva && rva < secondDescriptorRva + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) {
-      return 0x80 + (rva - secondDescriptorRva);
+      return secondDescriptorOffset + (rva - secondDescriptorRva);
     }
     if (rva >= firstNameRva && rva < firstNameRva + firstNameSize) {
-      return 0x20 + (rva - firstNameRva);
+      return firstNameOffset + (rva - firstNameRva);
     }
     if (rva >= secondNameRva && rva < secondNameRva + secondNameSize) {
-      return 0xa0 + (rva - secondNameRva);
+      return secondNameOffset + (rva - secondNameRva);
     }
     return null;
   };
@@ -168,28 +275,34 @@ void test("parseDelayImports resolves later descriptors through rvaToOff", async
   assert.deepEqual(result.entries.map(entry => entry.name), [firstName, secondName]);
 });
 void test("parseDelayImports warns when a later delay descriptor stops mapping before the null terminator", async () => {
-  const firstDescriptorRva = 0x1000;
-  const secondDescriptorRva = firstDescriptorRva + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE;
-  const firstNameRva = 0x1100;
   const firstName = "first.dll";
+  const rvaLayout = createDelayImportLayout();
+  const fileLayout = createDelayImportLayout(0);
+  const firstDescriptorRva = rvaLayout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
+  const secondDescriptorRva = rvaLayout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
+  const firstNameRva = rvaLayout.reserve(cStringSize(firstName));
+  const secondNameRva = rvaLayout.reserve(cStringSize("second.dll"));
   const firstNameSize = cStringSize(firstName);
-  const bytes = new Uint8Array(0x60).fill(0);
+  const firstDescriptorOffset = fileLayout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
+  const secondDescriptorOffset = fileLayout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
+  const firstNameOffset = fileLayout.reserve(firstNameSize);
+  const bytes = new Uint8Array(fileLayout.size()).fill(0);
   const dv = new DataView(bytes.buffer);
-  writeDelayImportDescriptor(dv, 0x00, {
+  writeDelayImportDescriptor(dv, firstDescriptorOffset, {
     dllNameRva: firstNameRva,
     importNameTableRva: 0
   });
-  writeDelayImportDescriptor(dv, 0x20, {
-    dllNameRva: 0x1200,
+  writeDelayImportDescriptor(dv, secondDescriptorOffset, {
+    dllNameRva: secondNameRva,
     importNameTableRva: 0
   });
-  writeDelayImportName(bytes, 0x40, firstName);
+  writeDelayImportName(bytes, firstNameOffset, firstName);
   const sparseRvaToOff = (rva: number): number | null => {
     if (rva >= firstDescriptorRva && rva < firstDescriptorRva + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) {
       return rva - firstDescriptorRva;
     }
     if (rva >= firstNameRva && rva < firstNameRva + firstNameSize) {
-      return 0x40 + (rva - firstNameRva);
+      return firstNameOffset + (rva - firstNameRva);
     }
     if (rva === secondDescriptorRva) return null;
     return null;

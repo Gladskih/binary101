@@ -59,6 +59,21 @@ void test("parseExceptionDirectory reports misaligned directory sizes", async ()
   assert.strictEqual(parsed.functionCount, 1);
   assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("not a multiple")));
 });
+
+void test("parseExceptionDirectory reports an unmappable directory base instead of silently returning null", async () => {
+  const parsed = await parseExceptionFixture(
+    new Uint8Array(0x40).fill(0),
+    "exception-unmapped.bin",
+    0x20,
+    12,
+    () => null
+  );
+
+  assert.ok(parsed);
+  assert.strictEqual(parsed?.functionCount, 0);
+  assert.ok(parsed?.issues.some(issue => /map|offset|rva/i.test(issue)));
+});
+
 void test("parseExceptionDirectory reports unsorted RUNTIME_FUNCTION entries", async () => {
   const bytes = new Uint8Array(0x400).fill(0);
   const exOff = 0x80;

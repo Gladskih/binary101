@@ -11,8 +11,10 @@ import {
   collectFixtureBytes,
   createBestEffortAuthenticodeFixture,
   createStrictAuthenticodeFixture,
+  listBestEffortAuthenticodeHashRangesWithoutSecurityEntry,
   listBestEffortAuthenticodeHashRanges,
   listLegacyBestEffortAuthenticodeHashRanges,
+  listStrictAuthenticodeHashRangesWithoutSecurityEntry,
   listStrictAuthenticodeHashRanges
 } from "../fixtures/pe-authenticode-fixtures.js";
 
@@ -25,6 +27,27 @@ void test("computePeAuthenticodeDigest hashes PE with checksum and security excl
   const expectedDigest = toHex(await crypto.subtle.digest("SHA-256", expectedBytes));
 
   const computed = await computePeAuthenticodeDigestBestEffort(file, core, securityDir, "SHA-256");
+  assert.strictEqual(computed, expectedDigest);
+});
+
+void test("computePeAuthenticodeDigestBestEffort still excludes the SECURITY directory entry when the supplied certificate descriptor has no index metadata", async () => {
+  const { bytes, core, file, securityDir } = createBestEffortAuthenticodeFixture();
+  const securityDirWithoutIndex = {
+    name: securityDir.name,
+    rva: securityDir.rva,
+    size: securityDir.size
+  };
+  const expectedBytes = collectFixtureBytes(bytes, listBestEffortAuthenticodeHashRanges(bytes.length));
+  const expectedDigest = toHex(await crypto.subtle.digest("SHA-256", expectedBytes));
+
+  // Microsoft PE format: the Certificate Table always occupies data-directory slot 4 when present.
+  const computed = await computePeAuthenticodeDigestBestEffort(
+    file,
+    { ...core, dataDirs: [] },
+    securityDirWithoutIndex,
+    "SHA-256"
+  );
+
   assert.strictEqual(computed, expectedDigest);
 });
 
@@ -116,11 +139,11 @@ void test(
   const core = { optOff: 0, ddStartRel: 100, dataDirs: [] };
   // PE format, Optional Header Data Directories:
   // before probing a specific directory, consumers must check NumberOfRvaAndSizes.
-  // With no SECURITY entry, only the PE checksum field at bytes 64..67 is excluded here.
-  const expectedBytes = collectFixtureBytes(bytes, [
-    { start: 0, end: 64 },
-    { start: 68, end: bytes.length }
-  ]);
+  // With no SECURITY entry, only the PE checksum field is excluded here.
+  const expectedBytes = collectFixtureBytes(
+    bytes,
+    listBestEffortAuthenticodeHashRangesWithoutSecurityEntry(bytes.length)
+  );
   const expectedDigest = toHex(await crypto.subtle.digest("SHA-256", expectedBytes));
 
   const computed = await computePeAuthenticodeDigest(file, core, undefined, "SHA-256");
@@ -151,12 +174,59 @@ void test("computePeAuthenticodeDigestFromParsedPe returns null when the checksu
   assert.strictEqual(computed, null);
 });
 
+void test(
+  "computePeAuthenticodeDigestFromParsedPe does not exclude a phantom SECURITY entry when parsed headers do not declare one",
+  async () => {
+    const { bytes, file } = createBestEffortAuthenticodeFixture();
+    const core = {
+      optOff: 0,
+      ddStartRel: 100,
+      dataDirs: [],
+      opt: { SizeOfHeaders: bytes.length },
+      sections: []
+    };
+    // Microsoft PE format, Authenticode image hash:
+    // exclude the Certificate Table data-directory field only when that entry is actually present.
+    const expectedBytes = collectFixtureBytes(
+      bytes,
+      listBestEffortAuthenticodeHashRangesWithoutSecurityEntry(bytes.length)
+    );
+    const expectedDigest = toHex(await crypto.subtle.digest("SHA-256", expectedBytes));
+
+    const computed = await computePeAuthenticodeDigestFromParsedPe(file, core, undefined, "SHA-256");
+    assert.strictEqual(computed, expectedDigest);
+  }
+);
+
 void test("computePeAuthenticodeDigest dispatches to the strict parsed-PE path when section context is available", async () => {
   const { core, file, securityDir } = createStrictAuthenticodeFixture();
   const strictDigest = await computePeAuthenticodeDigestFromParsedPe(file, core, securityDir, "SHA-256");
   const dispatchedDigest = await computePeAuthenticodeDigest(file, core, securityDir, "SHA-256");
 
   assert.strictEqual(dispatchedDigest, strictDigest);
+});
+
+void test("computePeAuthenticodeDigestFromParsedPe does not exclude a phantom SECURITY entry when NumberOfRvaAndSizes stops earlier", async () => {
+  const { bytes, core, file } = createStrictAuthenticodeFixture();
+  const strictCoreWithoutSecurity = {
+    ...core,
+    dataDirs: []
+  };
+  // Microsoft PE format, Optional Header Data Directories:
+  // consumers must not probe directory entry 4 unless NumberOfRvaAndSizes reaches SECURITY.
+  // With no SECURITY entry present, the strict Authenticode path must exclude only CheckSum and
+  // then hash the remaining headers plus the section data.
+  const expectedBytes = collectFixtureBytes(bytes, listStrictAuthenticodeHashRangesWithoutSecurityEntry());
+  const expectedDigest = toHex(await crypto.subtle.digest("SHA-256", expectedBytes));
+
+  const computed = await computePeAuthenticodeDigestFromParsedPe(
+    file,
+    strictCoreWithoutSecurity,
+    undefined,
+    "SHA-256"
+  );
+
+  assert.strictEqual(computed, expectedDigest);
 });
 
 void test("computePeAuthenticodeDigestFromParsedPe orders sections by RVA before hashing", async () => {

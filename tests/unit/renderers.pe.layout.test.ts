@@ -149,6 +149,37 @@ void test("renderSanity reports suspicious entrypoint sections", () => {
   assert.ok(outNonExecutable.join("").includes("missing IMAGE_SCN_MEM_EXECUTE"));
 });
 
+void test("renderSanity treats raw padding beyond VirtualSize as outside the mapped section", () => {
+  const sectionVirtualAddress = 0x1000;
+  const sectionVirtualSize = 0x100;
+  const sectionRawSize = 0x200;
+  const pe = {
+    overlaySize: 0,
+    imageSizeMismatch: false,
+    debug: null,
+    // Place the entrypoint inside the on-disk raw padding, halfway between VirtualSize and SizeOfRawData.
+    opt: {
+      AddressOfEntryPoint:
+        sectionVirtualAddress + sectionVirtualSize + (sectionRawSize - sectionVirtualSize) / 2
+    },
+    sections: [
+      {
+        name: ".text",
+        // Microsoft PE format: if SizeOfRawData exceeds VirtualSize, the extra on-disk bytes are not mapped.
+        virtualSize: sectionVirtualSize,
+        virtualAddress: sectionVirtualAddress,
+        sizeOfRawData: sectionRawSize,
+        pointerToRawData: 0x200,
+        characteristics: 0x60000020
+      }
+    ]
+  } as unknown as PeParseResult;
+
+  const out: string[] = [];
+  renderSanity(pe, out);
+  assert.ok(out.join("").includes("AddressOfEntryPoint points outside any section"));
+});
+
 void test("renderSanity does not flag certificate table bytes as suspicious overlay", () => {
   const pe = {
     overlaySize: 0x20,

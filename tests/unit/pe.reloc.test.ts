@@ -76,6 +76,55 @@ void test("parseBaseRelocations accepts a relocation block for page RVA 0", asyn
   assert.strictEqual(parsed.totalEntries, 2);
 });
 
+void test("parseBaseRelocations reports an unmappable directory base instead of silently returning null", async () => {
+  const parsed = await parseBaseRelocations(
+    new MockFile(new Uint8Array(0x40).fill(0), "reloc-unmapped.bin"),
+    [{ name: "BASERELOC", rva: 0x20, size: IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE }],
+    () => null
+  );
+
+  assert.ok(parsed);
+  assert.deepStrictEqual(parsed?.blocks, []);
+  assert.strictEqual(parsed?.totalEntries, 0);
+  assert.ok(parsed?.warnings?.some(warning => /map|offset|rva/i.test(warning)));
+});
+
+void test("parseBaseRelocations preserves a non-zero directory that is smaller than one block header", async () => {
+  const parsed = await parseBaseRelocations(
+    new MockFile(new Uint8Array(0x40).fill(0), "reloc-too-small.bin"),
+    [{ name: "BASERELOC", rva: 0x20, size: IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE - 1 }],
+    rvaToOff
+  );
+
+  assert.ok(parsed);
+  assert.deepStrictEqual(parsed?.blocks, []);
+  assert.strictEqual(parsed?.totalEntries, 0);
+  assert.ok(parsed?.warnings?.some(warning => /smaller|header|8-byte|truncated/i.test(warning)));
+});
+
+void test("parseBaseRelocations warns when a relocation block size runs past the declared directory span", async () => {
+  const bytes = new Uint8Array(0x100).fill(0);
+  const directoryOffset = 0x20;
+  const view = new DataView(bytes.buffer);
+  const blockSize = writeBaseRelocationBlock(view, {
+    pageRva: 0x1000,
+    entries: [IMAGE_REL_BASED_HIGHLOW_OFFSET_1, 0x3002],
+    fileOffset: directoryOffset
+  });
+
+  const parsed = await parseBaseRelocations(
+    new MockFile(bytes, "reloc-truncated-block.bin"),
+    // Microsoft PE format: Block Size is the total byte size of the relocation block.
+    // A block whose own header overruns the relocation directory should stay visible but emit a warning.
+    [{ name: "BASERELOC", rva: directoryOffset, size: blockSize - Uint16Array.BYTES_PER_ELEMENT }],
+    rvaToOff
+  );
+
+  assert.ok(parsed);
+  assert.strictEqual(parsed.blocks.length, 1);
+  assert.ok(parsed.warnings?.some(warning => /trunc/i.test(warning)));
+});
+
 void test("parseBaseRelocations does not expose the second HIGHADJ slot as an independent relocation", async () => {
   const bytes = new Uint8Array(0x80).fill(0);
   const directoryOffset = 0x20;

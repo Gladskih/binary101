@@ -29,6 +29,18 @@ void test("decodeOid decodes a first subidentifier that spans multiple octets", 
   assert.strictEqual(decodeOid(Uint8Array.of(0x81, 0x34, 0x03), 0, 3), "2.100.3");
 });
 
+void test("readDerElement rejects non-minimal long-form lengths in DER", () => {
+  // ITU-T X.690 DER requires the length to use the fewest possible octets.
+  // Length 1 must use the short form, not 0x81 0x01.
+  const element = readDerElement(Uint8Array.of(0x04, 0x81, 0x01, 0x00), 0);
+  assert.strictEqual(element, null);
+});
+
+void test("decodeOid rejects non-minimal base-128 encodings in DER", () => {
+  // ITU-T X.690 DER requires each subidentifier to use the fewest possible octets.
+  assert.strictEqual(decodeOid(Uint8Array.of(0x2a, 0x80, 0x03), 0, 3), null);
+});
+
 void test(
   "parseDerTime does not invent missing seconds for X.509 UTCTime or GeneralizedTime",
   () => {

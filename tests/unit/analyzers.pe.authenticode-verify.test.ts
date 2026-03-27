@@ -77,6 +77,26 @@ void test("verifyAuthenticodeFileDigest accepts digestAlgorithms list", async ()
   assert.strictEqual(verified.fileDigestMatches, true);
 });
 
+void test(
+  "verifyAuthenticodeFileDigest does not guess the file-digest algorithm from digestAlgorithms ordering",
+  async () => {
+    const { core, file, securityDir } = createStrictAuthenticodeFixture();
+    const computed = await computePeAuthenticodeDigest(file, core, securityDir, "SHA-256");
+    assert.ok(computed);
+
+    const auth: AuthenticodeInfo = {
+      format: "pkcs7",
+      digestAlgorithms: ["sha1", "sha256"],
+      fileDigest: computed
+    };
+    const verified = await verifyAuthenticodeFileDigest(file, core, securityDir, auth);
+
+    assert.strictEqual(verified.fileDigestMatches, undefined);
+    assert.strictEqual(verified.computedFileDigest, undefined);
+    assert.ok(verified.warnings?.some(warning => /algorithm/i.test(warning)));
+  }
+);
+
 void test("verifyAuthenticodeFileDigest supports canonical and punctuated names for all Web Crypto digest algorithms", async () => {
   const { bytes, core, file, securityDir } = createStrictAuthenticodeFixture();
   const expectedHashedBytes = collectFixtureBytes(bytes, listStrictAuthenticodeHashRanges());

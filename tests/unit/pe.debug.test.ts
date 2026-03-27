@@ -20,6 +20,19 @@ const RSDS_TEST_GUID_BYTES = Uint8Array.from([
 ]);
 const RSDS_TEST_GUID_TEXT = "04030201-0605-0807-090a-0b0c0d0e0f10";
 const rsdsRecordSize = (path: string): number => RSDS_HEADER_SIZE + encoder.encode(`${path}\0`).length;
+const createDebugLayout = (
+  start = IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE
+): { reserve: (size: number) => number; size: () => number } => {
+  let next = start;
+  return {
+    reserve: (size: number): number => {
+      const offset = next;
+      next += size;
+      return offset;
+    },
+    size: (): number => next
+  };
+};
 
 const writeRsdsRecord = (
   view: DataView,
@@ -244,6 +257,45 @@ void test("parseDebugDirectory warns when the RSDS path is not NUL-terminated wi
   );
 
   assert.equal(result.entry?.path, "abc");
+  assert.ok(result.warning && /path|string|terminat|truncated/i.test(result.warning));
+});
+
+void test("parseDebugDirectory warns when the RSDS path stops mapping before its null terminator", async () => {
+  const path = "AB";
+  const rvaLayout = createDebugLayout();
+  const fileLayout = createDebugLayout(0);
+  const debugRva = rvaLayout.reserve(IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE);
+  const dataRva = rvaLayout.reserve(rsdsRecordSize(path));
+  const debugOffset = fileLayout.reserve(IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE);
+  const dataOffset = fileLayout.reserve(rsdsRecordSize(path));
+  const bytes = new Uint8Array(fileLayout.size()).fill(0);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(debugOffset + 12, IMAGE_DEBUG_TYPE_CODEVIEW, true);
+  dv.setUint32(debugOffset + 16, rsdsRecordSize(path), true);
+  dv.setUint32(debugOffset + 20, dataRva, true);
+  dv.setUint32(debugOffset + 24, 0, true);
+  dv.setUint32(dataOffset + 0, RSDS_SIGNATURE, true);
+  bytes.set(RSDS_TEST_GUID_BYTES, dataOffset + 4);
+  dv.setUint32(dataOffset + 20, 1, true);
+  encoder.encodeInto(`${path}\0`, new Uint8Array(bytes.buffer, dataOffset + RSDS_HEADER_SIZE));
+
+  const sparseRvaToOff = (rva: number): number | null => {
+    if (rva >= debugRva && rva < debugRva + IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE) {
+      return debugOffset + (rva - debugRva);
+    }
+    if (rva >= dataRva && rva < dataRva + RSDS_HEADER_SIZE + 2) {
+      return dataOffset + (rva - dataRva);
+    }
+    return null;
+  };
+
+  const result = await parseDebugDirectory(
+    new MockFile(bytes, "debug-rsds-gap.bin"),
+    [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE }],
+    sparseRvaToOff
+  );
+
+  assert.equal(result.entry?.path, path);
   assert.ok(result.warning && /path|string|terminat|truncated/i.test(result.warning));
 });
 

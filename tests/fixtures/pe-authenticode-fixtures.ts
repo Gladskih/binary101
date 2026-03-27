@@ -66,10 +66,25 @@ export const listLegacyBestEffortAuthenticodeHashRanges = (byteLength: number): 
   { start: AFTER_SECURITY_ENTRY, end: byteLength }
 ];
 
+export const listBestEffortAuthenticodeHashRangesWithoutSecurityEntry = (
+  byteLength: number
+): ByteRange[] => [
+  { start: 0, end: PE32_CHECKSUM_FIELD_OFFSET },
+  // With no SECURITY directory entry present, Authenticode excludes only the PE checksum field.
+  { start: PE32_CHECKSUM_FIELD_OFFSET + PE32_CHECKSUM_FIELD_SIZE, end: byteLength }
+];
+
 export const listStrictAuthenticodeHashRanges = (): ByteRange[] => [
   { start: 0, end: PE32_CHECKSUM_FIELD_OFFSET },
   { start: PE32_CHECKSUM_FIELD_OFFSET + PE32_CHECKSUM_FIELD_SIZE, end: SECURITY_ENTRY_OFFSET },
   { start: AFTER_SECURITY_ENTRY, end: STRICT_HEADERS_END },
+  { start: STRICT_SECTION_RAW_OFFSET, end: STRICT_CERT_OFFSET }
+];
+
+export const listStrictAuthenticodeHashRangesWithoutSecurityEntry = (): ByteRange[] => [
+  { start: 0, end: PE32_CHECKSUM_FIELD_OFFSET },
+  // With no SECURITY directory entry present, the strict path hashes the full validated header span.
+  { start: PE32_CHECKSUM_FIELD_OFFSET + PE32_CHECKSUM_FIELD_SIZE, end: STRICT_HEADERS_END },
   { start: STRICT_SECTION_RAW_OFFSET, end: STRICT_CERT_OFFSET }
 ];
 

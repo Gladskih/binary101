@@ -77,6 +77,32 @@ void test("buildResourceTree warns when a named resource entry appears after an 
   );
 });
 
+void test("buildResourceTree reports an unmappable resource directory base instead of silently returning null", async () => {
+  const tree = await buildResourceTree(
+    new MockFile(new Uint8Array(IMAGE_RESOURCE_DIRECTORY_SIZE).fill(0)),
+    buildFixtureResourceDirectory(IMAGE_RESOURCE_DIRECTORY_SIZE),
+    () => null
+  );
+
+  assert.ok(tree);
+  assert.deepStrictEqual(tree?.top, []);
+  assert.deepStrictEqual(tree?.detail, []);
+  assert.match((tree?.issues || []).join(" "), /map|offset|rva/i);
+});
+
+void test("buildResourceTree preserves a non-zero directory that is smaller than IMAGE_RESOURCE_DIRECTORY", async () => {
+  const tree = await buildResourceTree(
+    new MockFile(new Uint8Array(IMAGE_RESOURCE_DIRECTORY_SIZE - 1).fill(0)),
+    buildFixtureResourceDirectory(IMAGE_RESOURCE_DIRECTORY_SIZE - 1),
+    mapFixtureRvaToStart
+  );
+
+  assert.ok(tree);
+  assert.deepStrictEqual(tree?.top, []);
+  assert.deepStrictEqual(tree?.detail, []);
+  assert.match((tree?.issues || []).join(" "), /smaller|directory|16/i);
+});
+
 void test("buildResourceTree warns when ID entries are not sorted in ascending order", async () => {
   const firstRootEntryOffset = IMAGE_RESOURCE_DIRECTORY_SIZE;
   const fixture = createResourceDirectoryFixture(

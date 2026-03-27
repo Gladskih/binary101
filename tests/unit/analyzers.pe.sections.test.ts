@@ -123,6 +123,23 @@ void test("parseSectionHeaders does not wrap section RVAs past 0xffffffff back t
   assert.strictEqual(rvaToOff(0), null);
 });
 
+void test("parseSectionHeaders maps header RVA 0 to file offset 0 when SizeOfHeaders covers the image headers", async () => {
+  const optionalHeaderOffset = 0x80; // Synthetic file layout: any in-file offset would work here.
+  const sizeOfOptionalHeader = 0xE0; // Standard PE32 SizeOfOptionalHeader for IMAGE_OPTIONAL_HEADER32.
+  const fileBytes = new Uint8Array(0x200).fill(0); // SizeOfHeaders/file size chosen only to cover RVA 0.
+
+  const { rvaToOff } = await parseSectionHeaders(
+    new MockFile(fileBytes),
+    optionalHeaderOffset,
+    sizeOfOptionalHeader,
+    0,
+    0x200
+  );
+
+  // Microsoft PE format: the image headers are mapped at the image base, so the first header byte lives at RVA 0.
+  assert.strictEqual(rvaToOff(0), 0);
+});
+
 void test("parseSectionHeaders decodes short section names as UTF-8", async () => {
   const table = new Uint8Array(40).fill(0);
   const view = new DataView(table.buffer);

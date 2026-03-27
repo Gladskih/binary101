@@ -11,6 +11,32 @@ const WIN_CERT_REVISION_2_0 = 0x0200;
 const WIN_CERT_TYPE_X509 = 0x0001;
 const WIN_CERT_TYPE_PKCS_SIGNED_DATA = 0x0002;
 
+class RejectNegativeSliceFile extends MockFile {
+  override slice(start?: number, end?: number, contentType?: string): Blob {
+    if ((start ?? 0) < 0 || (end ?? 0) < 0) {
+      throw new Error("negative slice");
+    }
+    return super.slice(start, end, contentType);
+  }
+}
+
+class GuardedMockFile extends MockFile {
+  readonly sliceCalls: Array<{ start: number; end: number }> = [];
+
+  override slice(start?: number, end?: number, contentType?: string): Blob {
+    const normalizedStart = start ?? 0;
+    const normalizedEnd = end ?? this.size;
+    this.sliceCalls.push({ start: normalizedStart, end: normalizedEnd });
+    if (normalizedStart < 0 || normalizedEnd < 0) {
+      throw new Error("negative slice offset");
+    }
+    if (this.sliceCalls.length > 8) {
+      throw new Error("possible infinite WIN_CERTIFICATE walk");
+    }
+    return super.slice(start, end, contentType);
+  }
+}
+
 const writeWinCertificateHeader = (
   view: DataView,
   off: number,
@@ -131,6 +157,25 @@ void test("parseSecurityDirectory warns when WIN_CERTIFICATE.dwLength is not qua
   assert.ok(sec.warnings?.some(warning => /length|align/i.test(warning)));
 });
 
+void test("parseSecurityDirectory treats oversized WIN_CERTIFICATE lengths as invalid instead of walking backwards", async () => {
+  const secOff = 0x40;
+  const bytes = new Uint8Array(0x100).fill(0);
+  const dv = new DataView(bytes.buffer);
+  // Microsoft PE format: WIN_CERTIFICATE.dwLength is an unsigned 32-bit length rounded up to 8-byte alignment.
+  dv.setUint32(secOff + 0, 0xfffffff8, true);
+  dv.setUint16(secOff + 4, WIN_CERT_REVISION_2_0, true);
+  dv.setUint16(secOff + 6, WIN_CERT_TYPE_X509, true);
+
+  const file = new GuardedMockFile(bytes, "sec-overflow.bin");
+  const parsed = await parseSecurityDirectory(file, [
+    { name: "SECURITY", rva: secOff, size: WIN_CERTIFICATE_HEADER_SIZE }
+  ]);
+
+  const sec = expectDefined(parsed);
+  assert.ok(sec.warnings?.some(warning => /length|truncated|corrupt|align/i.test(warning)));
+  assert.ok(file.sliceCalls.every(call => call.start >= 0 && call.end >= 0));
+});
+
 void test("parseSecurityDirectory warns when the attribute certificate table is not at the end of the file", async () => {
   const secOff = 0x40;
   const bytes = new Uint8Array(secOff + WIN_CERTIFICATE_HEADER_SIZE + 8).fill(0);
@@ -145,4 +190,42 @@ void test("parseSecurityDirectory warns when the attribute certificate table is 
   const sec = expectDefined(parsed);
   assert.strictEqual(sec.count, 1);
   assert.ok(sec.warnings?.some(warning => /end of file|last thing|after/i.test(warning)));
+});
+
+void test("parseSecurityDirectory does not treat debug bytes after certificates as a generic layout warning", async () => {
+  const secOff = 0x40;
+  const debugOff = secOff + WIN_CERTIFICATE_HEADER_SIZE;
+  const bytes = new Uint8Array(debugOff + 8).fill(0);
+  const dv = new DataView(bytes.buffer);
+  writeWinCertificateHeader(dv, secOff, WIN_CERTIFICATE_HEADER_SIZE, WIN_CERT_TYPE_X509);
+
+  const parsed = await parseSecurityDirectory(
+    new MockFile(bytes, "sec-before-debug.bin"),
+    [
+      { name: "SECURITY", rva: secOff, size: WIN_CERTIFICATE_HEADER_SIZE },
+      { name: "DEBUG", rva: debugOff, size: 8 }
+    ]
+  );
+
+  const sec = expectDefined(parsed);
+  assert.strictEqual(sec.count, 1);
+  assert.ok(!sec.warnings?.some(warning => /bytes after the declared table/i.test(warning)));
+});
+
+void test("parseSecurityDirectory does not walk backwards when WIN_CERTIFICATE length overflows signed rounding", async () => {
+  const secOff = 1;
+  const bytes = new Uint8Array(0x40).fill(0);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(secOff + 0, 0xfffffff8, true);
+  dv.setUint16(secOff + 4, WIN_CERT_REVISION_2_0, true);
+  dv.setUint16(secOff + 6, WIN_CERT_TYPE_X509, true);
+
+  await assert.doesNotReject(async () => {
+    const parsed = await parseSecurityDirectory(
+      new RejectNegativeSliceFile(bytes, "sec-overflow-length.bin"),
+      [{ name: "SECURITY", rva: secOff, size: 0x10 }]
+    );
+    assert.ok(parsed);
+    assert.ok(expectDefined(parsed).warnings?.length);
+  });
 });
