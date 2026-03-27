@@ -81,10 +81,7 @@ export function addManifestPreview(
     preview: {
       previewKind: "text",
       textPreview: text,
-      previewFields: [
-        { label: "Type", value: "MANIFEST" },
-        { label: "Safety", value: "Shown as text source; XML is not executed." }
-      ]
+      previewFields: [{ label: "Type", value: "MANIFEST" }]
     },
     ...(issues.length ? { issues } : {})
   };

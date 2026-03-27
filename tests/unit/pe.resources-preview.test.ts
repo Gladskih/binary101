@@ -35,6 +35,7 @@ type PreviewResourceLang = ResourceDetail["entries"][number]["langs"][number] & 
   previewMime?: string;
   textPreview?: string;
   textEncoding?: string | null;
+  previewFields?: Array<{ label: string; value: string }>;
   stringTable?: Array<{ id: number | null; text: string }>;
   messageTable?: { messages: Array<{ id: number; strings: string[] }>; truncated: boolean };
   previewIssues?: string[];
@@ -113,6 +114,7 @@ void test("enrichResourcePreviews builds text previews for MANIFEST and HTML", a
   const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
   assert.strictEqual(getPreviewLang(result, "MANIFEST").previewKind, "text");
   assert.match(expectDefined(getPreviewLang(result, "MANIFEST").textPreview), /assembly/);
+  assert.deepEqual(getPreviewLang(result, "MANIFEST").previewFields, [{ label: "Type", value: "MANIFEST" }]);
   assert.strictEqual(getPreviewLang(result, "HTML").previewKind, "html");
   assert.match(expectDefined(getPreviewLang(result, "HTML").textPreview), /<body>hi/);
 });
