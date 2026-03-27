@@ -55,7 +55,12 @@ export async function parseBoundImports(
   const dir = dataDirs.find(d => d.name === "BOUND_IMPORT");
   if (!dir?.rva) return null;
   const base = rvaToOff(dir.rva);
-  if (base == null) return null;
+  if (base == null) {
+    return { entries: [], warning: "Bound import directory RVA does not map to file data." };
+  }
+  if (base < 0 || base >= file.size) {
+    return { entries: [], warning: "Bound import directory starts outside file data." };
+  }
   const availableDirSize = Math.max(0, Math.min(dir.size, file.size - base));
   if (availableDirSize < IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE) {
     return {

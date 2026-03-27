@@ -12,14 +12,15 @@ const getMappedSectionSpan = (section: PeSection): number =>
 const createRvaToOffsetMapper = (
   sections: PeSection[],
   fileSize: number,
-  sizeOfHeaders: number
+  sizeOfHeaders: number,
+  minimumHeaderSpan: number
 ): RvaToOffset => {
   const spans = sections.map(section => {
     const virtualAddress = section.virtualAddress >>> 0;
     const mappedSpan = getMappedSectionSpan(section);
     const fileOffset = section.pointerToRawData >>> 0;
     const rawSize = section.sizeOfRawData >>> 0;
-    return {
+  return {
       vaStart: virtualAddress,
       vaEnd: Math.min(PE_RVA_EXCLUSIVE_LIMIT, virtualAddress + mappedSpan),
       fileOffset,
@@ -27,9 +28,19 @@ const createRvaToOffsetMapper = (
     };
   });
   return relativeVirtualAddress => {
+    if (
+      !Number.isInteger(relativeVirtualAddress) ||
+      relativeVirtualAddress < 0 ||
+      relativeVirtualAddress >= PE_RVA_EXCLUSIVE_LIMIT
+    ) {
+      return null;
+    }
     const normalized = relativeVirtualAddress >>> 0;
-    const headerSpan = Math.max(0, Math.min(sizeOfHeaders >>> 0, fileSize >>> 0));
-    if (normalized > 0 && normalized < headerSpan) return normalized;
+    const headerSpan =
+      (sizeOfHeaders >>> 0) >= (minimumHeaderSpan >>> 0)
+        ? Math.max(0, Math.min(sizeOfHeaders >>> 0, fileSize >>> 0))
+        : 0;
+    if (normalized < headerSpan) return normalized;
     for (const span of spans) {
       if (normalized >= span.vaStart && normalized < span.vaEnd) {
         const delta = normalized - span.vaStart;
@@ -87,7 +98,12 @@ const parseSectionHeaders = async (
       characteristics
     });
   }
-  const rvaToOff = createRvaToOffsetMapper(sections, file.size, sizeOfHeaders);
+  const rvaToOff = createRvaToOffsetMapper(
+    sections,
+    file.size,
+    sizeOfHeaders,
+    sectionHeadersOffset + safeSectionCount * IMAGE_SECTION_HEADER_SIZE
+  );
   return warnings.length
     ? { sections, rvaToOff, sectOff: sectionHeadersOffset, warnings }
     : { sections, rvaToOff, sectOff: sectionHeadersOffset };

@@ -22,6 +22,7 @@ import { parseTlsDirectory32, parseTlsDirectory64 } from "./tls.js";
 import { parseResources, type PeResources } from "./resources/index.js";
 import { parseClrDirectory, type PeClrHeader } from "./clr/index.js";
 import { parseSecurityDirectory, type ParsedSecurityDirectory } from "./security.js";
+import { addSecurityTailWarning } from "./security-tail-warning.js";
 import { parseBaseRelocations } from "./reloc.js";
 import { parseExceptionDirectory } from "./exception.js";
 import { parseBoundImports } from "./bound-imports.js";
@@ -52,6 +53,7 @@ const mergeLoadConfigWarnings = (loadcfg: PeLoadConfig, messages: string[]): voi
 export interface PeDebugSection {
   entry: { guid: string; age: number; path: string } | null;
   warning?: string;
+  rawDataRanges?: Array<{ start: number; end: number }>;
 }
 
 export interface PeParseResult {
@@ -237,6 +239,7 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
   const delayImports = await peVariant.parseDelayImports(file, dataDirs, rvaToOff);
   const clr = await parseClrDirectory(file, dataDirs, rvaToOff);
   let security = await parseSecurityDirectory(file, dataDirs);
+  security = addSecurityTailWarning(file.size, security, dataDirs.find(d => d.name === "SECURITY"), debugResult.rawDataRanges);
   if (security?.certs?.length) {
     const securityDir = dataDirs.find(d => d.name === "SECURITY");
     const certs = await Promise.all(
@@ -257,6 +260,7 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
       debugResult.entry || debugResult.warning
         ? {
             entry: debugResult.entry,
+            ...(debugResult.rawDataRanges.length ? { rawDataRanges: debugResult.rawDataRanges } : {}),
             ...(debugResult.warning ? { warning: debugResult.warning } : {})
           }
         : null,

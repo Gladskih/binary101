@@ -14,6 +14,37 @@ import type { PeClrHeader } from "./types.js";
 
 export type { PeClrHeader, PeClrMeta, PeClrStreamInfo, PeClrVTableFixup } from "./types.js";
 
+// ECMA-335 II.25.3.3.1 ("Runtime flags"):
+// https://carlwa.com/ecma-335/#ii.25.3.3.1-runtime-flags
+const COMIMAGE_FLAGS_ILONLY = 0x00000001;
+const COMIMAGE_FLAGS_32BITREQUIRED = 0x00000002;
+// Modern .NET CorFlags includes ILLibrary=0x00000004 even though older ECMA-335 tables omit it:
+// https://source.dot.net/System.Reflection.Metadata/System/Reflection/PortableExecutable/CorFlags.cs.html
+// https://learn.microsoft.com/en-us/dotnet/api/system.reflection.portableexecutable.corflags
+const COMIMAGE_FLAGS_IL_LIBRARY = 0x00000004;
+// ECMA-335 II.25.3.3.1 ("Runtime flags"):
+// https://carlwa.com/ecma-335/#ii.25.3.3.1-runtime-flags
+const COMIMAGE_FLAGS_STRONGNAMESIGNED = 0x00000008;
+const COMIMAGE_FLAGS_NATIVE_ENTRYPOINT = 0x00000010;
+const COMIMAGE_FLAGS_TRACKDEBUGDATA = 0x00010000;
+// Modern .NET CorFlags includes Prefers32Bit=0x00020000:
+// https://source.dot.net/System.Reflection.Metadata/System/Reflection/PortableExecutable/CorFlags.cs.html
+// https://learn.microsoft.com/en-us/dotnet/api/system.reflection.portableexecutable.corflags
+const COMIMAGE_FLAGS_32BITPREFERRED = 0x00020000;
+const KNOWN_COMIMAGE_FLAGS =
+  COMIMAGE_FLAGS_ILONLY |
+  COMIMAGE_FLAGS_32BITREQUIRED |
+  COMIMAGE_FLAGS_IL_LIBRARY |
+  COMIMAGE_FLAGS_STRONGNAMESIGNED |
+  COMIMAGE_FLAGS_NATIVE_ENTRYPOINT |
+  COMIMAGE_FLAGS_TRACKDEBUGDATA |
+  COMIMAGE_FLAGS_32BITPREFERRED;
+// ECMA-335 II.25.3.3.2 says the managed entry point metadata token is always MethodDef or File.
+// Table ids come from II.22.26 MethodDef: 0x06 and II.22.19 File: 0x26:
+// https://carlwa.com/ecma-335/#ii.25.3.3.2-entry-point-metadata-token
+const TOKEN_TABLE_METHODDEF = 0x06;
+const TOKEN_TABLE_FILE = 0x26;
+
 const addOptionalDirIssues = (
   name: string,
   rva: number,
@@ -92,6 +123,18 @@ export async function parseClrDirectory(
   }
   if (clr.cb !== 0 && dir.size !== 0 && dir.size < clr.cb) {
     issues.push("CLR directory size is smaller than the header cb field; header appears truncated.");
+  }
+  const unknownFlagBits = clr.Flags & ~KNOWN_COMIMAGE_FLAGS;
+  if (unknownFlagBits !== 0) {
+    issues.push(
+      `CLR header Flags contains unknown bits (0x${unknownFlagBits.toString(16).padStart(8, "0")}).`
+    );
+  }
+  if ((clr.Flags & COMIMAGE_FLAGS_NATIVE_ENTRYPOINT) === 0 && clr.EntryPointToken !== 0) {
+    const tokenTable = (clr.EntryPointToken >>> 24) & 0xff;
+    if (tokenTable !== TOKEN_TABLE_METHODDEF && tokenTable !== TOKEN_TABLE_FILE) {
+      issues.push("Managed EntryPointToken must reference a MethodDef or File token.");
+    }
   }
   if (clr.MetaDataRVA === 0 && clr.MetaDataSize !== 0) {
     issues.push("Metadata has a non-zero size but RVA is 0.");

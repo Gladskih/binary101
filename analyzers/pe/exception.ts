@@ -101,7 +101,16 @@ export async function parseExceptionDirectory(
   const dir = dataDirs.find(d => d.name === "EXCEPTION");
   if (!dir?.rva) return null;
   const base = rvaToOff(dir.rva);
-  if (base == null) return null;
+  if (base == null) {
+    return createEmptyExceptionDirectory([
+      "Exception directory RVA could not be mapped to a file offset."
+    ]);
+  }
+  if (base < 0 || base >= file.size) {
+    return createEmptyExceptionDirectory([
+      "Exception directory location is outside the file."
+    ]);
+  }
   if (machine !== IMAGE_FILE_MACHINE_AMD64) {
     return createEmptyExceptionDirectory([
       `Exception directory decoding is only implemented for AMD64; machine 0x${machine.toString(16)} uses a different format.`

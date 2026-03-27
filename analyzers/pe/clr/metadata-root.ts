@@ -68,7 +68,7 @@ const readStreamNameAt = async (
   reader: MetadataReader,
   cursor: Cursor,
   declaredMetaSize: number
-): Promise<{ name: string; nullTerminatedWithinLimit: boolean } | null> => {
+): Promise<{ name: string; nullTerminatedWithinLimit: boolean; asciiOnly: boolean } | null> => {
   if (cursor.offset >= declaredMetaSize) return null;
   const bytes: number[] = [];
   let terminated = false;
@@ -87,7 +87,8 @@ const readStreamNameAt = async (
   cursor.offset = alignTo4(cursor.offset);
   return {
     name: utf8Decoder.decode(new Uint8Array(bytes)),
-    nullTerminatedWithinLimit: terminated && bytes.length <= CLR_STREAM_NAME_SPEC_LIMIT
+    nullTerminatedWithinLimit: terminated && bytes.length <= CLR_STREAM_NAME_SPEC_LIMIT,
+    asciiOnly: bytes.every(byteValue => byteValue <= 0x7f)
   };
 };
 
@@ -125,6 +126,12 @@ const parseMetadataRootWithReader = async (
   if (versionLength > declaredMetaSize - cursor.offset) {
     issues.push("Metadata root version string is truncated or out of bounds.");
     return null;
+  }
+  if (versionLength === 0) {
+    issues.push("Metadata root version Length field is 0.");
+  }
+  if ((versionLength & 3) !== 0) {
+    issues.push("Metadata root version Length field is not a multiple of 4 bytes.");
   }
   let version = "";
   if (versionLength > 0) {
@@ -164,6 +171,9 @@ const parseMetadataRootWithReader = async (
       issues.push(
         "Metadata stream names must be null-terminated within the ECMA-335 32-character limit."
       );
+    }
+    if (!name.asciiOnly) {
+      issues.push("Metadata stream names must use ASCII characters only.");
     }
     if (name.name.length > CLR_STREAM_NAME_SPEC_LIMIT) {
       issues.push(

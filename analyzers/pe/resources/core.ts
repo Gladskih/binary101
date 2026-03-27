@@ -12,8 +12,10 @@ import type { ResourceDataEntryLayout, ResourceLayoutRange } from "./layout-rule
 import { createResourceSpanResolver } from "./relative-offsets.js";
 import { knownResourceType } from "./type-names.js";
 import type { ResourceDetailEntry, ResourceDirectoryInfo, ResourceTree } from "./tree-types.js";
+import { createEmptyResourceTree, createResourceTreeResult } from "./tree-result.js";
 import { createPeRangeReader } from "../range-reader.js";
 export type { ResourceLangEntry, ResourceDetailEntry, ResourceTree } from "./tree-types.js";
+
 export async function buildResourceTree(
   file: File,
   dataDirs: PeDataDirectory[],
@@ -21,9 +23,32 @@ export async function buildResourceTree(
 ): Promise<ResourceTree | null> {
   const utf16Decoder = new TextDecoder("utf-16le", { fatal: false });
   const dir = dataDirs.find(d => d.name === "RESOURCE");
-  if (!dir?.rva || dir.size < 16) return null;
+  if (!dir?.rva) return null;
+  if (dir.size < 16) {
+    return createEmptyResourceTree(
+      dir,
+      rvaToOff(dir.rva),
+      ["Resource directory is smaller than IMAGE_RESOURCE_DIRECTORY (16 bytes)."],
+      rvaToOff
+    );
+  }
   const base = rvaToOff(dir.rva);
-  if (base == null) return null;
+  if (base == null) {
+    return createEmptyResourceTree(
+      dir,
+      null,
+      ["Resource directory RVA does not map to file data."],
+      rvaToOff
+    );
+  }
+  if (base < 0 || base >= file.size) {
+    return createEmptyResourceTree(
+      dir,
+      base,
+      ["Resource directory starts outside file data."],
+      rvaToOff
+    );
+  }
   const limitEnd = base + dir.size;
   const issues: string[] = [];
   let maxDirectoryEnd = 0;
@@ -171,18 +196,7 @@ export async function buildResourceTree(
   };
   const root = await parseDir(0);
   if (!root) {
-    return {
-      base,
-      limitEnd,
-      dirRva: dir.rva,
-      dirSize: dir.size,
-      ...(issues.length ? { issues } : {}),
-      ...(directories.length ? { directories } : {}),
-      top: [],
-      detail: [],
-      view,
-      rvaToOff
-    };
+    return createResourceTreeResult(dir, base, limitEnd, issues, directories, [], [], view, rvaToOff);
   }
   const top: Array<{ typeName: string; kind: "name" | "id"; leafCount: number }> = [];
   const detail: Array<{ typeName: string; entries: ResourceDetailEntry[] }> = [];
@@ -281,16 +295,5 @@ export async function buildResourceTree(
     file.size,
     addIssue
   );
-  return {
-    base,
-    limitEnd,
-    dirRva: dir.rva,
-    dirSize: dir.size,
-    ...(issues.length ? { issues } : {}),
-    ...(directories.length ? { directories } : {}),
-    top,
-    detail,
-    view,
-    rvaToOff
-  };
+  return createResourceTreeResult(dir, base, limitEnd, issues, directories, top, detail, view, rvaToOff);
 }

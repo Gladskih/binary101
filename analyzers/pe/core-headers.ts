@@ -172,7 +172,21 @@ export async function parseOptionalHeaderAndDirectories(
   };
 
   const Magic = read(2, () => optionalHeaderView.getUint16(position, true), 0); position += 2;
-  const isPlus = Magic === 0x20b, is32 = Magic === 0x10b || Magic === 0x107;
+  const isPlus = Magic === 0x20b;
+  const is32 = Magic === 0x10b;
+  const isRom = Magic === 0x107;
+  if (isRom) {
+    warnings.push("ROM optional headers are not decoded as PE32 or PE32+.");
+    return {
+      optOff: optionalHeaderOffset,
+      optSize: declaredSize,
+      ddStartRel: 0,
+      ddCount: 0,
+      dataDirs: [],
+      opt: createEmptyOptionalHeader(Magic, false, false),
+      ...(warnings.length ? { warnings } : {})
+    };
+  }
   if (sizeOfOptionalHeader > 0 && !isPlus && !is32) {
     warnings.push(
       `Optional header Magic ${`0x${(Magic >>> 0).toString(16)}`} is not PE32, PE32+, or ROM.`

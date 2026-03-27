@@ -1,6 +1,8 @@
 "use strict";
 
 import type { PeDataDirectory, RvaToOffset } from "./types.js";
+import { createPeRangeReader, type PeRangeReader } from "./range-reader.js";
+import { readMappedNullTerminatedAsciiString } from "./mapped-ascii-string.js";
 
 // Microsoft PE format, Delay Import tables: IMAGE_DELAYLOAD_DESCRIPTOR is eight DWORDs.
 const IMAGE_DELAYLOAD_DESCRIPTOR_SIZE = 32;
@@ -17,47 +19,33 @@ const IMAGE_DELAY_IMPORT_ORDINAL_RESERVED_MASK32 = 0x7fff0000; // PE32 ordinal t
 const IMAGE_DELAY_IMPORT_NAME_MASK64 = 0x7fffffffn; // PE32+ keeps the import-by-name RVA in bits 30-0.
 const IMAGE_DELAY_IMPORT_NAME_RESERVED_MASK64 = 0x7fffffff80000000n; // PE32+ reserves bits 62-31.
 const IMAGE_DELAY_IMPORT_ORDINAL_RESERVED_MASK64 = 0x7fffffffffff0000n; // PE32+ ordinal thunks reserve bits 62-16.
-// Parser policy: read NUL-terminated strings incrementally instead of slicing the full tail of a malformed file.
-const NULL_TERMINATED_ASCII_READ_CHUNK_SIZE = 64;
-
-const readNullTerminatedAsciiString = async (file: File, offset: number): Promise<{
-  text: string; truncated: boolean;
-} | null> => {
-  if (offset < 0 || offset >= file.size) return null;
-  let text = "";
-  let position = offset;
-  while (position < file.size) {
-    const chunk = new Uint8Array(
-      await file.slice(position, position + NULL_TERMINATED_ASCII_READ_CHUNK_SIZE).arrayBuffer()
-    );
-    if (chunk.byteLength === 0) break;
-    const zeroIndex = chunk.indexOf(0);
-    if (zeroIndex !== -1) {
-      if (zeroIndex > 0) text += String.fromCharCode(...chunk.slice(0, zeroIndex));
-      return { text, truncated: false };
-    }
-    text += String.fromCharCode(...chunk);
-    position += chunk.byteLength;
-  }
-  return { text, truncated: true };
-};
 const readDelayImportName = async (
-  file: File, nameOffset: number, warnings: Set<string>
+  reader: PeRangeReader,
+  file: File,
+  rvaToOff: RvaToOffset,
+  nameRva: number,
+  warnings: Set<string>
 ): Promise<string> => {
-  if (nameOffset < 0 || nameOffset >= file.size) {
-    warnings.add("Delay import name RVA does not map to file data.");
-    return "";
-  }
-  const result = await readNullTerminatedAsciiString(file, nameOffset);
+  const result = await readMappedNullTerminatedAsciiString(
+    reader,
+    file.size,
+    rvaToOff,
+    nameRva >>> 0,
+    file.size
+  );
   if (!result) {
     warnings.add("Delay import name RVA does not map to file data.");
     return "";
   }
-  if (result.truncated) warnings.add("Delay import name string truncated.");
+  if (!result.terminated) warnings.add("Delay import name string truncated.");
   return result.text;
 };
 const readDelayImportHintName = async (
-  file: File, rvaToOff: RvaToOffset, hintNameRva: number, warnings: Set<string>
+  reader: PeRangeReader,
+  file: File,
+  rvaToOff: RvaToOffset,
+  hintNameRva: number,
+  warnings: Set<string>
 ): Promise<{ ordinal?: number; hint?: number; name?: string }> => {
   const hintNameOff = rvaToOff(hintNameRva);
   if (hintNameOff == null || hintNameOff < 0 || hintNameOff >= file.size) {
@@ -72,15 +60,22 @@ const readDelayImportHintName = async (
     return { name: "" };
   }
   const hint = hintView.getUint16(0, true);
-  const result = await readNullTerminatedAsciiString(file, hintNameOff + IMAGE_IMPORT_BY_NAME_HINT_SIZE);
+  const result = await readMappedNullTerminatedAsciiString(
+    reader,
+    file.size,
+    rvaToOff,
+    (hintNameRva + IMAGE_IMPORT_BY_NAME_HINT_SIZE) >>> 0,
+    file.size
+  );
   if (!result) {
-    warnings.add("Delay import name string does not map to file data.");
+    warnings.add("Delay import hint/name RVA does not map to file data.");
     return { hint, name: "" };
   }
-  if (result.truncated) warnings.add("Delay import name string truncated.");
+  if (!result.terminated) warnings.add("Delay import name string truncated.");
   return { hint, name: result.text };
 };
 const readDelayThunkFunctions32 = async (
+  reader: PeRangeReader,
   file: File,
   rvaToOff: RvaToOffset,
   intRva: number,
@@ -115,11 +110,12 @@ const readDelayThunkFunctions32 = async (
       functions.push({ ordinal: value & IMAGE_ORDINAL_MASK32 });
       continue;
     }
-    functions.push(await readDelayImportHintName(file, rvaToOff, value, warnings));
+    functions.push(await readDelayImportHintName(reader, file, rvaToOff, value, warnings));
   }
   return functions;
 };
 const readDelayThunkFunctions64 = async (
+  reader: PeRangeReader,
   file: File,
   rvaToOff: RvaToOffset,
   intRva: number,
@@ -159,6 +155,7 @@ const readDelayThunkFunctions64 = async (
     }
     functions.push(
       await readDelayImportHintName(
+        reader,
         file,
         rvaToOff,
         Number(value & IMAGE_DELAY_IMPORT_NAME_MASK64),
@@ -184,6 +181,7 @@ const parseDelayImportsWithThunkReader = async (
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   readDelayThunkFunctions: (
+    reader: PeRangeReader,
     file: File,
     rvaToOff: RvaToOffset,
     intRva: number,
@@ -194,10 +192,16 @@ const parseDelayImportsWithThunkReader = async (
   const dir = dataDirs.find(d => d.name === "DELAY_IMPORT");
   if (!dir?.rva) return null;
   const base = rvaToOff(dir.rva);
-  if (base == null) return null;
+  if (base == null) {
+    return { entries: [], warning: "Delay import directory RVA does not map to file data." };
+  }
+  if (base < 0 || base >= file.size) {
+    return { entries: [], warning: "Delay import directory starts outside file data." };
+  }
   const availableDirSize = Math.max(0, Math.min(dir.size, Math.max(0, file.size - base)));
   const entries: PeDelayImportEntry[] = [];
   const warnings = new Set<string>();
+  const reader = createPeRangeReader(file, 0, file.size);
   if (dir.size < IMAGE_DELAYLOAD_DESCRIPTOR_SIZE || availableDirSize < IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) {
     warnings.add("Delay import directory is smaller than one descriptor; file may be truncated.");
     return { entries, warning: Array.from(warnings).join(" | ") };
@@ -208,7 +212,7 @@ const parseDelayImportsWithThunkReader = async (
     const descriptorRva = (dir.rva + index * IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) >>> 0;
     const descriptorOff = rvaToOff(descriptorRva);
     const remaining = dir.size - index * IMAGE_DELAYLOAD_DESCRIPTOR_SIZE;
-    if (descriptorOff == null) {
+    if (descriptorOff == null || descriptorOff < 0) {
       warnings.add("Delay import descriptor RVA does not map to file data.");
       break;
     }
@@ -254,9 +258,19 @@ const parseDelayImportsWithThunkReader = async (
       ? []
       : intOff == null
         ? (warnings.add("Delay Import Name Table RVA does not map to file data."), [])
-        : await readDelayThunkFunctions(file, rvaToOff, intRva, warnings, maxThunkEntries);
+        : await readDelayThunkFunctions(
+            reader,
+            file,
+            rvaToOff,
+            intRva,
+            warnings,
+            maxThunkEntries
+          );
     entries.push({
-      name: nameOff != null ? await readDelayImportName(file, nameOff, warnings) : "",
+      name:
+        nameOff != null
+          ? await readDelayImportName(reader, file, rvaToOff, DllNameRVA, warnings)
+          : "",
       Attributes,
       ModuleHandleRVA,
       ImportAddressTableRVA,

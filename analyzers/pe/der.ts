@@ -46,11 +46,14 @@ export const readDerElement = (bytes: Uint8Array, offset: number): DerElement | 
     const lenCount = lenByte & 0x7f;
     // DER definite lengths can use four octets here so 32-bit-sized payloads remain representable.
     if (lenCount === 0 || lenCount > 4 || offset + 2 + lenCount > bytes.length) return null;
+    const firstLengthOctet = bytes.at(offset + 2);
+    if (firstLengthOctet === undefined || firstLengthOctet === 0) return null;
     for (let index = 0; index < lenCount; index++) {
       const lenVal = bytes.at(offset + 2 + index);
       if (lenVal === undefined) return null;
       length = length * 256 + lenVal;
     }
+    if (length < 0x80) return null;
     header += lenCount;
   }
   if (offset + header + length > bytes.length) return null;
@@ -65,6 +68,7 @@ const readBase128Value = (
   for (let index = offset; index < bytes.length; index += 1) {
     const byte = bytes.at(index);
     if (byte === undefined) return null;
+    if (index === offset && (byte & 0x80) !== 0 && (byte & 0x7f) === 0) return null;
     value = value * 128 + (byte & 0x7f);
     if ((byte & 0x80) === 0) return { value, length: index - offset + 1 };
   }

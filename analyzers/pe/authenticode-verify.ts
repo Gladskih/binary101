@@ -23,7 +23,10 @@ const normalizeAlgName = (name: string): string =>
   name.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 const resolveWebCryptoHash = (auth: AuthenticodeInfo): AlgorithmIdentifier | null => {
-  const raw = auth.fileDigestAlgorithmName || auth.fileDigestAlgorithm || auth.digestAlgorithms?.[0];
+  const raw =
+    auth.fileDigestAlgorithmName ||
+    auth.fileDigestAlgorithm ||
+    (auth.digestAlgorithms?.length === 1 ? auth.digestAlgorithms[0] : undefined);
   if (!raw) return null;
   const normalized = normalizeAlgName(raw);
   return WEB_CRYPTO_HASHES[normalized] || null;
@@ -102,7 +105,10 @@ export const computePeAuthenticodeDigestBestEffort = async (
   digestFunction?: DigestFunction
 ): Promise<string | null> => {
   const checksumOff = core.optOff + 64;
-  const securityIndex = securityDir?.index ?? core.dataDirs.find(d => d.name === "SECURITY")?.index;
+  const securityIndex =
+    securityDir != null
+      ? securityDir.index ?? 4
+      : core.dataDirs.find(d => d.name === "SECURITY")?.index;
   const securityEntryOff =
     securityIndex == null
       ? checksumOff + 4
@@ -135,7 +141,7 @@ export const computePeAuthenticodeDigestFromParsedPe = async (
   digestFunction?: DigestFunction
 ): Promise<string | null> => {
   const checksumOff = core.optOff + 64;
-  const securityIndex = securityDir?.index ?? core.dataDirs.find(d => d.name === "SECURITY")?.index ?? 4;
+  const securityIndex = securityDir?.index ?? core.dataDirs.find(d => d.name === "SECURITY")?.index;
   const securityEntryOff =
     securityIndex == null
       ? checksumOff + 4
@@ -147,7 +153,7 @@ export const computePeAuthenticodeDigestFromParsedPe = async (
   if (checksumOff >= file.size) return null;
 
   const parts: Blob[] = [];
-  const afterSecurityEntry = securityEntryOff + 8;
+  const afterSecurityEntry = securityIndex == null ? securityEntryOff : securityEntryOff + 8;
   const headerHashEnd = computeHeaderHashEnd(file.size, core.opt.SizeOfHeaders, afterSecurityEntry, core.sections);
   pushSlice(parts, file, 0, checksumOff);
   pushSlice(parts, file, checksumOff + 4, securityEntryOff);

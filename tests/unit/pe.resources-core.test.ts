@@ -16,7 +16,7 @@ import {
   resourceSubdirectory
 } from "../helpers/pe-resource-fixture.js";
 
-void test("buildResourceTree returns null for missing or unmapped resource trees", async () => {
+void test("buildResourceTree returns null for missing resource trees and preserves unmapped ones", async () => {
   const file = new MockFile(new Uint8Array(0));
   const noDir = await buildResourceTree(file, [], () => 0);
   assert.strictEqual(noDir, null);
@@ -25,7 +25,10 @@ void test("buildResourceTree returns null for missing or unmapped resource trees
     [{ name: "RESOURCE", rva: 0x200, size: 32 }],
     () => null
   );
-  assert.strictEqual(unmapped, null);
+  assert.ok(unmapped);
+  assert.deepStrictEqual(unmapped.top, []);
+  assert.deepStrictEqual(unmapped.detail, []);
+  assert.match((unmapped.issues || []).join(" "), /does not map to file data/i);
 });
 void test("buildResourceTree reports a truncated root directory header at EOF", async () => {
   const bytes = new Uint8Array(IMAGE_RESOURCE_DIRECTORY_SIZE / 2).fill(0);

@@ -124,9 +124,31 @@ export async function parseBaseRelocations(
   warnings?: string[];
 } | null> {
   const dir = dataDirs.find(d => d.name === "BASERELOC");
-  if (!dir?.rva || dir.size < 8) return null;
+  if (!dir?.rva) return null;
+  if (dir.size < IMAGE_BASE_RELOCATION_HEADER_SIZE) {
+    return {
+      blocks: [],
+      totalEntries: 0,
+      warnings: [
+        "Base relocation directory is smaller than the 8-byte IMAGE_BASE_RELOCATION header."
+      ]
+    };
+  }
   const base = rvaToOff(dir.rva);
-  if (base == null) return null;
+  if (base == null) {
+    return {
+      blocks: [],
+      totalEntries: 0,
+      warnings: ["Base relocation directory RVA does not map to file data."]
+    };
+  }
+  if (base < 0 || base >= file.size) {
+    return {
+      blocks: [],
+      totalEntries: 0,
+      warnings: ["Base relocation directory starts outside file data."]
+    };
+  }
   const blocks: Array<{
     pageRva: number;
     size: number;
@@ -161,6 +183,9 @@ export async function parseBaseRelocations(
     if (blockSize < IMAGE_BASE_RELOCATION_HEADER_SIZE) {
       addWarning("Base relocation block size is smaller than the 8-byte IMAGE_BASE_RELOCATION header.");
       break;
+    }
+    if (blockSize > dir.size - rel) {
+      addWarning("Base relocation block is truncated by the declared relocation directory size.");
     }
     const availableBlockBytes = Math.min(blockSize, dir.size - rel);
     const availableEntries = Math.floor(

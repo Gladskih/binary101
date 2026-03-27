@@ -17,19 +17,51 @@ const computeRawImageEnd = (pe: PeParseResult): number =>
     return Math.max(maxEnd, end);
   }, 0);
 
-const computeSecurityOverlayCoverage = (pe: PeParseResult): number => {
-  if (!Number.isFinite(pe.overlaySize) || pe.overlaySize <= 0) return 0;
-  const securityDir = Array.isArray(pe.dirs) ? pe.dirs.find(dir => dir.name === "SECURITY") : null;
-  if (!securityDir || !securityDir.size) return 0;
+const clipOverlayRange = (
+  overlayStart: number,
+  overlayEnd: number,
+  start: number,
+  end: number
+): { start: number; end: number } | null => {
+  const clippedStart = Math.max(overlayStart, start);
+  const clippedEnd = Math.min(overlayEnd, end);
+  return clippedEnd > clippedStart ? { start: clippedStart, end: clippedEnd } : null;
+};
 
+const computeKnownOverlayCoverage = (pe: PeParseResult): number => {
+  if (!Number.isFinite(pe.overlaySize) || pe.overlaySize <= 0) return 0;
   const overlayStart = computeRawImageEnd(pe);
   const overlayEnd = overlayStart + (pe.overlaySize >>> 0);
-  const certStart = securityDir.rva >>> 0;
-  const certEnd = certStart + (securityDir.size >>> 0);
-  const coveredStart = Math.max(overlayStart, certStart);
-  const coveredEnd = Math.min(overlayEnd, certEnd);
-
-  return coveredEnd > coveredStart ? coveredEnd - coveredStart : 0;
+  const coveredRanges: Array<{ start: number; end: number }> = [];
+  const securityDir = Array.isArray(pe.dirs) ? pe.dirs.find(dir => dir.name === "SECURITY") : null;
+  if (securityDir?.size) {
+    const clippedSecurityRange = clipOverlayRange(
+      overlayStart,
+      overlayEnd,
+      securityDir.rva >>> 0,
+      (securityDir.rva >>> 0) + (securityDir.size >>> 0)
+    );
+    if (clippedSecurityRange) coveredRanges.push(clippedSecurityRange);
+  }
+  for (const range of pe.debug?.rawDataRanges ?? []) {
+    const clippedDebugRange = clipOverlayRange(overlayStart, overlayEnd, range.start, range.end);
+    if (clippedDebugRange) coveredRanges.push(clippedDebugRange);
+  }
+  const mergedRanges = coveredRanges.sort((left, right) => left.start - right.start || left.end - right.end);
+  let coveredBytes = 0;
+  let currentStart = -1;
+  let currentEnd = -1;
+  for (const range of mergedRanges) {
+    if (currentEnd < range.start) {
+      coveredBytes += currentEnd > currentStart ? currentEnd - currentStart : 0;
+      currentStart = range.start;
+      currentEnd = range.end;
+      continue;
+    }
+    currentEnd = Math.max(currentEnd, range.end);
+  }
+  coveredBytes += currentEnd > currentStart ? currentEnd - currentStart : 0;
+  return coveredBytes;
 };
 
 export function renderReloc(reloc: PeRelocSection, out: string[]): void {
@@ -126,7 +158,7 @@ export function renderDelayImports(di: PeDelayImportsSection, out: string[]): vo
 
 export function renderSanity(pe: PeParseResult, out: string[]): void {
   const issues = [...(pe.warnings || [])];
-  const unexplainedOverlaySize = Math.max(0, (pe.overlaySize >>> 0) - computeSecurityOverlayCoverage(pe));
+  const unexplainedOverlaySize = Math.max(0, (pe.overlaySize >>> 0) - computeKnownOverlayCoverage(pe));
   if (unexplainedOverlaySize > 0) {
     issues.push(`Overlay after last section: ${humanSize(unexplainedOverlaySize)}.`);
   }
@@ -141,7 +173,7 @@ export function renderSanity(pe: PeParseResult, out: string[]): void {
   if (entrypointRva && sections.length) {
     const entrySection = sections.find(section => {
       const start = section.virtualAddress >>> 0;
-      const size = Math.max(section.virtualSize >>> 0, section.sizeOfRawData >>> 0);
+      const size = (section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0);
       const end = start + size;
       return entrypointRva >= start && entrypointRva < end;
     });

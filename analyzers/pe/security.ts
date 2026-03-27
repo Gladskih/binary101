@@ -33,9 +33,6 @@ export async function parseSecurityDirectory(
   if (availableSize < dir.size) {
     warnings.push("Attribute certificate table is truncated by end of file.");
   }
-  if (end < file.size) {
-    warnings.push("Attribute certificate table has bytes after the declared table.");
-  }
   if (availableSize < 8) {
     warnings.push("Attribute certificate table is too small for a WIN_CERTIFICATE header.");
     return { count: 0, certs: [], warnings };
@@ -55,9 +52,11 @@ export async function parseSecurityDirectory(
     const available = Math.min(Length, end - pos);
     const blob = new Uint8Array(await file.slice(pos, pos + available).arrayBuffer());
     certs.push(decodeWinCertificate(blob, Length, pos));
-    const roundedLength = (Length + 7) & ~7;
+    const roundedLength = Math.ceil(Length / 8) * 8;
     if (pos + roundedLength > end) {
       warnings.push("WIN_CERTIFICATE data is truncated before the rounded entry length ends.");
+      pos = end;
+      break;
     }
     pos += roundedLength;
   }

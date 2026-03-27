@@ -178,42 +178,6 @@ void test("parseSecurityDirectory treats oversized WIN_CERTIFICATE lengths as in
   assert.ok(file.sliceCalls.every(call => call.start >= 0 && call.end >= 0));
 });
 
-void test("parseSecurityDirectory warns when the attribute certificate table is not at the end of the file", async () => {
-  const secOff = 0x40;
-  const bytes = new Uint8Array(secOff + WIN_CERTIFICATE_HEADER_SIZE + 8).fill(0);
-  const dv = new DataView(bytes.buffer);
-  writeWinCertificateHeader(dv, secOff, WIN_CERTIFICATE_HEADER_SIZE, WIN_CERT_TYPE_X509);
-
-  const parsed = await parseSecurityDirectory(
-    new MockFile(bytes, "sec-not-last.bin"),
-    [{ name: "SECURITY", rva: secOff, size: WIN_CERTIFICATE_HEADER_SIZE }]
-  );
-
-  const sec = expectDefined(parsed);
-  assert.strictEqual(sec.count, 1);
-  assert.ok(sec.warnings?.some(warning => /end of file|last thing|after/i.test(warning)));
-});
-
-void test("parseSecurityDirectory does not treat debug bytes after certificates as a generic layout warning", async () => {
-  const secOff = 0x40;
-  const debugOff = secOff + WIN_CERTIFICATE_HEADER_SIZE;
-  const bytes = new Uint8Array(debugOff + 8).fill(0);
-  const dv = new DataView(bytes.buffer);
-  writeWinCertificateHeader(dv, secOff, WIN_CERTIFICATE_HEADER_SIZE, WIN_CERT_TYPE_X509);
-
-  const parsed = await parseSecurityDirectory(
-    new MockFile(bytes, "sec-before-debug.bin"),
-    [
-      { name: "SECURITY", rva: secOff, size: WIN_CERTIFICATE_HEADER_SIZE },
-      { name: "DEBUG", rva: debugOff, size: 8 }
-    ]
-  );
-
-  const sec = expectDefined(parsed);
-  assert.strictEqual(sec.count, 1);
-  assert.ok(!sec.warnings?.some(warning => /bytes after the declared table/i.test(warning)));
-});
-
 void test("parseSecurityDirectory does not walk backwards when WIN_CERTIFICATE length overflows signed rounding", async () => {
   const secOff = 1;
   const bytes = new Uint8Array(0x40).fill(0);

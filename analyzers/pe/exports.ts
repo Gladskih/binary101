@@ -1,6 +1,8 @@
 "use strict";
 
 import type { PeDataDirectory, RvaToOffset } from "./types.js";
+import { createPeRangeReader } from "./range-reader.js";
+import { readMappedNullTerminatedAsciiString } from "./mapped-ascii-string.js";
 
 export async function parseExportDirectory(
   file: File,
@@ -22,7 +24,36 @@ export async function parseExportDirectory(
   const dir = dataDirs.find(d => d.name === "EXPORT");
   if (!dir?.rva) return null;
   const base = rvaToOff(dir.rva);
-  if (base == null) return null;
+  if (base == null) {
+    return {
+      flags: 0,
+      timestamp: 0,
+      version: 0,
+      dllName: "",
+      Base: 0,
+      NumberOfFunctions: 0,
+      NumberOfNames: 0,
+      namePointerTable: 0,
+      ordinalTable: 0,
+      entries: [],
+      issues: ["Export directory RVA does not map to file data."]
+    };
+  }
+  if (base < 0 || base >= file.size) {
+    return {
+      flags: 0,
+      timestamp: 0,
+      version: 0,
+      dllName: "",
+      Base: 0,
+      NumberOfFunctions: 0,
+      NumberOfNames: 0,
+      namePointerTable: 0,
+      ordinalTable: 0,
+      entries: [],
+      issues: ["Export directory starts outside file data."]
+    };
+  }
   const availableDirSize = Math.max(0, Math.min(dir.size, file.size - base));
   if (availableDirSize < 40) {
     return {
@@ -42,61 +73,30 @@ export async function parseExportDirectory(
   const dv = new DataView(await file.slice(base, base + 40).arrayBuffer());
   const isReadableOffset = (offset: number | null): offset is number =>
     offset != null && offset >= 0 && offset < file.size;
-  const readStr = async (offset: number): Promise<{ text: string; truncated: boolean }> => {
-    if (offset < 0 || offset >= file.size) return { text: "", truncated: false };
-    let text = "";
-    let pos = offset;
-    while (pos < file.size) {
-      const chunk = new Uint8Array(await file.slice(pos, pos + 64).arrayBuffer());
-      if (chunk.byteLength === 0) return { text, truncated: true };
-      const zeroIndex = chunk.indexOf(0);
-      if (zeroIndex === -1) {
-        text += String.fromCharCode(...chunk);
-        if (pos + chunk.byteLength >= file.size) return { text, truncated: true };
-        pos += 64;
-      } else {
-        if (zeroIndex > 0) text += String.fromCharCode(...chunk.slice(0, zeroIndex));
-        return { text, truncated: false };
-      }
-    }
-    return { text, truncated: true };
-  };
+  const reader = createPeRangeReader(file, 0, file.size);
   const readForwarderStr = async (rva: number): Promise<{ text: string; issue?: string }> => {
     if (rva < dir.rva || rva >= dir.rva + dir.size) {
       return { text: "", issue: "Export forwarder RVA lies outside the export directory range." };
     }
-    const startOff = rvaToOff(rva);
-    if (!isReadableOffset(startOff)) {
+    const forwarderInfo = await readMappedNullTerminatedAsciiString(
+      reader,
+      file.size,
+      rvaToOff,
+      rva >>> 0,
+      dir.rva + dir.size - rva
+    );
+    if (!forwarderInfo) {
       return { text: "", issue: "Export forwarder RVA does not map to file data." };
     }
-
-    const maxBytes = dir.rva + dir.size - rva;
-    let contiguousByteCount = 0;
-    let mappingStoppedEarly = false;
-    while (contiguousByteCount < maxBytes) {
-      const mappedOff = rvaToOff((rva + contiguousByteCount) >>> 0);
-      if (!isReadableOffset(mappedOff) || mappedOff !== startOff + contiguousByteCount) {
-        mappingStoppedEarly = true;
-        break;
-      }
-      contiguousByteCount += 1;
-    }
-
-    const bytes = new Uint8Array(
-      await file.slice(startOff, startOff + contiguousByteCount).arrayBuffer()
-    );
-    const zeroIndex = bytes.indexOf(0);
-    const textBytes = zeroIndex === -1 ? bytes : bytes.subarray(0, zeroIndex);
-    const text = String.fromCharCode(...textBytes);
-    if (zeroIndex !== -1) return { text };
-    if (mappingStoppedEarly) {
+    if (forwarderInfo.terminated) return { text: forwarderInfo.text };
+    if (forwarderInfo.mappingStopped) {
       return {
-        text,
+        text: forwarderInfo.text,
         issue: "Export forwarder string stops mapping before its NUL terminator within the export directory range."
       };
     }
     return {
-      text,
+      text: forwarderInfo.text,
       issue: "Export forwarder string is not NUL-terminated within the export directory range."
     };
   };
@@ -135,9 +135,17 @@ export async function parseExportDirectory(
   let name = "";
   if (NameRva) {
     if (isReadableOffset(namePtr)) {
-      const nameInfo = await readStr(namePtr);
-      name = nameInfo.text;
-      if (nameInfo.truncated) issues.push("Export DLL name string truncated.");
+      const nameInfo = await readMappedNullTerminatedAsciiString(
+        reader,
+        file.size,
+        rvaToOff,
+        NameRva >>> 0,
+        file.size
+      );
+      if (nameInfo) {
+        name = nameInfo.text;
+        if (!nameInfo.terminated) issues.push("Export DLL name string truncated.");
+      }
     } else {
       issues.push("Export DLL name RVA does not map to file data.");
     }
@@ -173,9 +181,17 @@ export async function parseExportDirectory(
         }
         const nameOffset = rvaToOff(nameRva);
         if (isReadableOffset(nameOffset)) {
-          const nameInfo = await readStr(nameOffset);
-          functionNames.set(funcIndex, nameInfo.text);
-          if (nameInfo.truncated) issues.push("Export name string truncated.");
+          const nameInfo = await readMappedNullTerminatedAsciiString(
+            reader,
+            file.size,
+            rvaToOff,
+            nameRva >>> 0,
+            file.size
+          );
+          if (nameInfo) {
+            functionNames.set(funcIndex, nameInfo.text);
+            if (!nameInfo.terminated) issues.push("Export name string truncated.");
+          }
         } else if (nameRva) {
           issues.push("Export name RVA does not map to file data.");
         }

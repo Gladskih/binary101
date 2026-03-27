@@ -229,3 +229,30 @@ void test("renderSanity still reports unexplained overlay after certificate tabl
   renderSanity(pe, out);
   assert.ok(out.join("").includes("Overlay after last section"));
 });
+
+void test("renderSanity does not flag debug raw data after certificates as unexplained overlay", () => {
+  const pe = {
+    overlaySize: 0x3a,
+    imageSizeMismatch: false,
+    debug: {
+      entry: { guid: "g", age: 1, path: "a.pdb" },
+      rawDataRanges: [{ start: 0x420, end: 0x43a }]
+    },
+    dirs: [{ name: "SECURITY", rva: 0x400, size: 0x20 }],
+    sections: [
+      {
+        name: ".text",
+        virtualSize: 0x200,
+        virtualAddress: 0x1000,
+        sizeOfRawData: 0x200,
+        pointerToRawData: 0x200,
+        characteristics: 0x60000020
+      }
+    ],
+    opt: { AddressOfEntryPoint: 0x1000 }
+  } as unknown as PeParseResult;
+
+  const out: string[] = [];
+  renderSanity(pe, out);
+  assert.ok(!out.join("").includes("Overlay after last section"));
+});

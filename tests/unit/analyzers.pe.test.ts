@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parsePe } from "../../analyzers/pe/index.js";
+import { createPeWithSectionAndIat as createSamplePeWithSectionAndIat } from "../fixtures/sample-files-pe.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const DOS_SIGNATURE = 0x5a4d;
@@ -8,6 +9,12 @@ const PE_SIGNATURE = 0x00004550;
 const IMAGE_FILE_MACHINE_I386 = 0x014c;
 const IMAGE_FILE_EXECUTABLE_IMAGE = 0x0002;
 const IMAGE_NT_OPTIONAL_HDR32_MAGIC = 0x10b;
+// Microsoft PE/COFF: IMAGE_OPTIONAL_HEADER32.DataDirectory begins 96 bytes into the optional header.
+const PE32_DATA_DIRECTORIES_OFFSET = 0x60;
+// Microsoft PE format: data-directory indices for SECURITY, DEBUG, and IAT.
+const IMAGE_DIRECTORY_ENTRY_SECURITY = 4;
+const IMAGE_DIRECTORY_ENTRY_DEBUG = 6;
+const IMAGE_DIRECTORY_ENTRY_IAT = 12;
 
 /**
  * Creates a byte array for a minimal valid PE32 header.
@@ -144,94 +151,20 @@ void test("parsePe returns null for a non-PE file", async () => {
   assert.strictEqual(result, null, "parsePe should return null for a file that is not a PE");
 });
 
+const getPeView = (bytes: Uint8Array): DataView => new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+const getDataDirectoryEntryOffset = (bytes: Uint8Array, index: number): number => {
+  const view = getPeView(bytes);
+  const peHeaderOffset = view.getUint32(0x3c, true);
+  return peHeaderOffset + 4 + 20 + PE32_DATA_DIRECTORIES_OFFSET + index * 8;
+};
+
 function createPeWithSectionAndIat(iatRvaOverride = 0x1100) {
-  const peHeaderOffset = 0x80;
-  const coffHeaderSize = 20;
-  const optionalHeaderSize = 0xe0;
-  const numberOfSections = 1;
-  const fileAlignment = 0x200;
-  const sectionAlignment = 0x1000;
-  const sectionVirtualAddress = 0x1000;
-  const sectionVirtualSize = 0x200;
-  const sizeOfRawData = fileAlignment;
-  const pointerToRawData = fileAlignment;
-  const addressOfEntryPoint = 0x1100;
-  const iatRva = iatRvaOverride;
-  const iatSize = 0x40;
-  const sizeOfImage = 0x2000;
-  const overlaySize = 0x20;
-  const fileSize = pointerToRawData + sizeOfRawData + overlaySize;
-
-  const buffer = new ArrayBuffer(fileSize);
-  const view = new DataView(buffer);
-
-  view.setUint16(0x00, DOS_SIGNATURE, true);
-  view.setUint32(0x3c, peHeaderOffset, true);
-
-  const peSignatureOffset = peHeaderOffset;
-  view.setUint32(peSignatureOffset, PE_SIGNATURE, true);
-
-  const coffOffset = peSignatureOffset + 4;
-  view.setUint16(coffOffset, IMAGE_FILE_MACHINE_I386, true);
-  view.setUint16(coffOffset + 2, numberOfSections, true);
-  view.setUint32(coffOffset + 4, 0, true);
-  view.setUint32(coffOffset + 8, 0, true);
-  view.setUint32(coffOffset + 12, 0, true);
-  view.setUint16(coffOffset + 16, optionalHeaderSize, true);
-  view.setUint16(coffOffset + 18, IMAGE_FILE_EXECUTABLE_IMAGE, true);
-
-  const optionalOffset = coffOffset + coffHeaderSize;
-  let optPos = optionalOffset;
-  view.setUint16(optPos, IMAGE_NT_OPTIONAL_HDR32_MAGIC, true); optPos += 2;
-  view.setUint8(optPos, 14); optPos += 1;
-  view.setUint8(optPos, 0); optPos += 1;
-  view.setUint32(optPos, sizeOfRawData, true); optPos += 4;
-  view.setUint32(optPos, sizeOfRawData, true); optPos += 4;
-  view.setUint32(optPos, 0, true); optPos += 4;
-  view.setUint32(optPos, addressOfEntryPoint, true); optPos += 4;
-  view.setUint32(optPos, sectionVirtualAddress, true); optPos += 4;
-  view.setUint32(optPos, sectionVirtualAddress, true); optPos += 4;
-  view.setUint32(optPos, 0x00400000, true); optPos += 4;
-  view.setUint32(optPos, sectionAlignment, true); optPos += 4;
-  view.setUint32(optPos, fileAlignment, true); optPos += 4;
-  view.setUint16(optPos, 6, true);
-  view.setUint16(optPos + 2, 0, true);
-  optPos += 4;
-  view.setUint16(optPos, 1, true);
-  view.setUint16(optPos + 2, 0, true);
-  optPos += 4;
-  view.setUint16(optPos, 5, true);
-  view.setUint16(optPos + 2, 1, true);
-  optPos += 4;
-  view.setUint32(optPos, 0, true); optPos += 4;
-  view.setUint32(optPos, sizeOfImage, true); optPos += 4;
-  view.setUint32(optPos, fileAlignment, true); optPos += 4;
-  view.setUint32(optPos, 0, true); optPos += 4;
-  view.setUint16(optPos, 2, true); optPos += 2;
-  view.setUint16(optPos, 0, true); optPos += 2;
-  view.setUint32(optPos, 0x100000, true); optPos += 4;
-  view.setUint32(optPos, 0x1000, true); optPos += 4;
-  view.setUint32(optPos, 0x100000, true); optPos += 4;
-  view.setUint32(optPos, 0x1000, true); optPos += 4;
-  view.setUint32(optPos, 0, true); optPos += 4;
-  view.setUint32(optPos, 16, true); optPos += 4;
-
-  const dataDirectoryOffset = optPos + 12 * 8;
-  view.setUint32(dataDirectoryOffset, iatRva, true);
-  view.setUint32(dataDirectoryOffset + 4, iatSize, true);
-
-  const sectionHeaderOffset = optionalOffset + optionalHeaderSize;
-  const nameBytes = [0x2e, 0x74, 0x65, 0x78, 0x74];
-  nameBytes.forEach((byte, index) => {
-    view.setUint8(sectionHeaderOffset + index, byte);
-  });
-  view.setUint32(sectionHeaderOffset + 8, sectionVirtualSize, true);
-  view.setUint32(sectionHeaderOffset + 12, sectionVirtualAddress, true);
-  view.setUint32(sectionHeaderOffset + 16, sizeOfRawData, true);
-  view.setUint32(sectionHeaderOffset + 20, pointerToRawData, true);
-  view.setUint32(sectionHeaderOffset + 36, 0x60000020, true);
-
-  return new Uint8Array(buffer);
+  const bytes = createSamplePeWithSectionAndIat();
+  if (iatRvaOverride === 0x1100) return bytes;
+  const view = getPeView(bytes);
+  view.setUint32(getDataDirectoryEntryOffset(bytes, IMAGE_DIRECTORY_ENTRY_IAT), iatRvaOverride, true);
+  return bytes;
 }
 
 void test("parsePe returns mapping and overlay info for PE32 with one section and IAT", async () => {
@@ -268,12 +201,8 @@ void test("parsePe preserves unmapped IAT directories with warnings", async () =
 
 void test("parsePe attaches Authenticode verification when security directory exists", async () => {
   const peBytes = createPeWithSectionAndIat();
-  const view = new DataView(peBytes.buffer, peBytes.byteOffset, peBytes.byteLength);
-  const peHeaderOffset = 0x80;
-  const coffOffset = peHeaderOffset + 4;
-  const optionalOffset = coffOffset + 20;
-  const dataDirStart = optionalOffset + 0x60;
-  const securityEntryOffset = dataDirStart + 4 * 8;
+  const view = getPeView(peBytes);
+  const securityEntryOffset = getDataDirectoryEntryOffset(peBytes, IMAGE_DIRECTORY_ENTRY_SECURITY);
   const certOff = peBytes.length - 0x20;
   const certSize = 0x20;
 
@@ -290,4 +219,68 @@ void test("parsePe attaches Authenticode verification when security directory ex
   const cert = result.security.certs[0];
   assert.ok(cert?.authenticode?.verification);
   assert.ok(cert.authenticode.verification?.warnings?.length);
+});
+
+void test("parsePe omits the generic SECURITY tail warning when parsed debug raw data explains the file tail", async () => {
+  const baseBytes = createPeWithSectionAndIat();
+  const certOff = baseBytes.length - 0x20;
+  // RSDS record uses a 24-byte fixed header plus a NUL-terminated path.
+  const debugPayloadSize = 26;
+  const bytes = new Uint8Array(certOff + 8 + debugPayloadSize);
+  bytes.set(baseBytes);
+  const view = getPeView(bytes);
+  const securityEntryOffset = getDataDirectoryEntryOffset(bytes, IMAGE_DIRECTORY_ENTRY_SECURITY);
+  const debugEntryOffset = getDataDirectoryEntryOffset(bytes, IMAGE_DIRECTORY_ENTRY_DEBUG);
+  const debugDirectoryRva = 0x1000;
+  const debugDirectoryOff = 0x200;
+  const debugPayloadOff = certOff + 8;
+  const rsdsSignature = 0x53445352;
+
+  // Microsoft PE format: Certificate Table is data-directory entry 4 and stores a file pointer.
+  view.setUint32(securityEntryOffset, certOff, true);
+  view.setUint32(securityEntryOffset + 4, 8, true);
+  view.setUint32(certOff, 8, true);
+  view.setUint16(certOff + 4, 0x0200, true);
+  view.setUint16(certOff + 6, 0x0001, true);
+
+  // Microsoft PE format: DEBUG directory entry points to raw debug data via PointerToRawData.
+  view.setUint32(debugEntryOffset, debugDirectoryRva, true);
+  view.setUint32(debugEntryOffset + 4, 28, true);
+  view.setUint32(debugDirectoryOff + 12, 2, true);
+  view.setUint32(debugDirectoryOff + 16, debugPayloadSize, true);
+  view.setUint32(debugDirectoryOff + 20, 0, true);
+  view.setUint32(debugDirectoryOff + 24, debugPayloadOff, true);
+
+  view.setUint32(debugPayloadOff + 0, rsdsSignature, true);
+  view.setUint32(debugPayloadOff + 20, 1, true);
+  bytes[debugPayloadOff + 24] = 0x61; // "a"
+  bytes[debugPayloadOff + 25] = 0x00;
+
+  const result = await parsePe(new MockFile(bytes, "cert-followed-by-debug.exe"));
+
+  assert.ok(result);
+  assert.ok(result.debug?.entry);
+  assert.ok(!result.security?.warnings?.some(warning => /bytes after the declared table/i.test(warning)));
+});
+
+void test("parsePe keeps the generic SECURITY tail warning when no proven file span explains the tail", async () => {
+  const baseBytes = createPeWithSectionAndIat();
+  const trailingByteCount = 8;
+  const certOff = baseBytes.length - (8 + trailingByteCount);
+  const bytes = new Uint8Array(baseBytes.length);
+  bytes.set(baseBytes);
+  const view = getPeView(bytes);
+  const securityEntryOffset = getDataDirectoryEntryOffset(bytes, IMAGE_DIRECTORY_ENTRY_SECURITY);
+
+  // Microsoft PE format: the Certificate Table directory entry stores a file pointer and byte size.
+  view.setUint32(securityEntryOffset, certOff, true);
+  view.setUint32(securityEntryOffset + 4, 8, true);
+  view.setUint32(certOff, 8, true);
+  view.setUint16(certOff + 4, 0x0200, true);
+  view.setUint16(certOff + 6, 0x0001, true);
+
+  const result = await parsePe(new MockFile(bytes, "cert-with-unexplained-tail.exe"));
+
+  assert.ok(result);
+  assert.ok(result.security?.warnings?.some(warning => /bytes after the declared table/i.test(warning)));
 });

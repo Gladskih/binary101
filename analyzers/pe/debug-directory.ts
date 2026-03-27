@@ -2,6 +2,8 @@
 
 import { toHex32 } from "../../binary-utils.js";
 import type { PeDataDirectory, RvaToOffset } from "./types.js";
+import { createPeRangeReader } from "./range-reader.js";
+import { readMappedNullTerminatedAsciiString } from "./mapped-ascii-string.js";
 
 // PE/COFF: IMAGE_DEBUG_DIRECTORY entry layout (28 bytes, file form):
 // - Type (DWORD) at +0x0c
@@ -23,26 +25,74 @@ const CODEVIEW_SIGNATURE_RSDS = 0x53445352; // "RSDS" as a little-endian uint32
 
 const CODEVIEW_PATH_READ_CHUNK_SIZE = 64;
 
+type FileRange = { start: number; end: number };
+
+const appendFileRange = (ranges: FileRange[], start: number, end: number, fileSize: number): void => {
+  const safeStart = Math.max(0, Math.min(start, fileSize));
+  const safeEnd = Math.max(0, Math.min(end, fileSize));
+  if (safeEnd <= safeStart) return;
+  const previous = ranges[ranges.length - 1];
+  if (previous && previous.end >= safeStart) {
+    previous.end = Math.max(previous.end, safeEnd);
+    return;
+  }
+  ranges.push({ start: safeStart, end: safeEnd });
+};
+
+const resolveDebugRawSpan = (
+  fileSize: number,
+  rvaToOff: RvaToOffset,
+  addressOfRawDataRva: number,
+  pointerToRawDataOff: number,
+  dataSize: number
+): FileRange | null => {
+  if (dataSize <= 0) return null;
+  const start = pointerToRawDataOff || (addressOfRawDataRva ? rvaToOff(addressOfRawDataRva) : null);
+  if (start == null || start < 0 || start >= fileSize) return null;
+  const end = start + dataSize;
+  if (end > fileSize) return null;
+  return { start, end };
+};
+
 export async function parseDebugDirectory(
   file: File,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset
-): Promise<{ entry: { guid: string; age: number; path: string } | null; warning: string | null }> {
+): Promise<{
+  entry: { guid: string; age: number; path: string } | null;
+  warning: string | null;
+  rawDataRanges: FileRange[];
+}> {
   const warnings: string[] = [];
   const addWarning = (message: string | null): void => {
     if (message && !warnings.includes(message)) warnings.push(message);
   };
   const debugDir = dataDirs.find(d => d.name === "DEBUG");
-  if (!debugDir?.rva) return { entry: null, warning: null };
+  if (!debugDir?.rva) return { entry: null, warning: null, rawDataRanges: [] };
   const baseOffset = rvaToOff(debugDir.rva);
-  if (baseOffset == null) return { entry: null, warning: "Debug directory RVA does not map to a file offset." };
+  if (baseOffset == null || baseOffset < 0) {
+    return {
+      entry: null,
+      warning: "Debug directory RVA does not map to a file offset.",
+      rawDataRanges: []
+    };
+  }
   const fileSize = typeof file.size === "number" ? file.size : Infinity;
-  if (baseOffset >= fileSize) return { entry: null, warning: "Debug directory starts past end of file." };
+  if (baseOffset >= fileSize) {
+    return { entry: null, warning: "Debug directory starts past end of file.", rawDataRanges: [] };
+  }
   const availableDirSize = Math.min(debugDir.size, Math.max(0, fileSize - baseOffset));
+  const reader = createPeRangeReader(file, 0, file.size);
   if (availableDirSize < IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE) {
-    return { entry: null, warning: "Debug directory is smaller than one entry; file may be truncated." };
+    return {
+      entry: null,
+      warning: "Debug directory is smaller than one entry; file may be truncated.",
+      rawDataRanges: []
+    };
   }
   const maxEntries = Math.floor(availableDirSize / IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE);
+  const rawDataRanges: FileRange[] = [];
+  let entry: { guid: string; age: number; path: string } | null = null;
   addWarning(
     availableDirSize < debugDir.size
       ? "Debug directory is shorter than recorded size (possible truncation)."
@@ -54,7 +104,7 @@ export async function parseDebugDirectory(
   for (let index = 0; index < maxEntries; index++) {
     const entryRva = debugDir.rva + index * IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE;
     const entryOffset = rvaToOff(entryRva >>> 0);
-    if (entryOffset == null) {
+    if (entryOffset == null || entryOffset < 0) {
       addWarning("Debug directory no longer maps through rvaToOff.");
       break;
     }
@@ -74,8 +124,18 @@ export async function parseDebugDirectory(
     const dataSize = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_SIZE_OF_DATA, true);
     const addressOfRawDataRva = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_ADDRESS_OF_RAW_DATA, true);
     const pointerToRawDataOff = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_POINTER_TO_RAW_DATA, true);
+    const rawDataRange = resolveDebugRawSpan(
+      fileSize,
+      rvaToOff,
+      addressOfRawDataRva,
+      pointerToRawDataOff,
+      dataSize
+    );
+    if (rawDataRange) {
+      appendFileRange(rawDataRanges, rawDataRange.start, rawDataRange.end, fileSize);
+    }
 
-    if (type !== IMAGE_DEBUG_TYPE_CODEVIEW) continue;
+    if (type !== IMAGE_DEBUG_TYPE_CODEVIEW || entry) continue;
     if (dataSize < CODEVIEW_RSDS_MIN_SIZE) {
       addWarning("CodeView debug entry is smaller than the minimum RSDS header.");
       continue;
@@ -111,27 +171,44 @@ export async function parseDebugDirectory(
       `${[...sigTail.slice(2)].map(b => b.toString(16).padStart(2, "0")).join("")}`.toLowerCase();
     const age = header.getUint32(20, true);
     let path = "";
-    let pos = dataOffset + CODEVIEW_RSDS_MIN_SIZE;
-    const pathEnd = dataOffset + dataSize;
-    while (pos < pathEnd) {
-      const chunkLength = Math.min(CODEVIEW_PATH_READ_CHUNK_SIZE, pathEnd - pos);
-      const chunk = new Uint8Array(await file.slice(pos, pos + chunkLength).arrayBuffer());
-      const zeroIndex = chunk.indexOf(0);
-      if (zeroIndex === -1) {
-        path += String.fromCharCode(...chunk);
-        pos += chunkLength;
+    const pathByteLength = dataSize - CODEVIEW_RSDS_MIN_SIZE;
+    if (pointerToRawDataOff === 0 && addressOfRawDataRva !== 0) {
+      const pathInfo = await readMappedNullTerminatedAsciiString(
+        reader,
+        fileSize,
+        rvaToOff,
+        (addressOfRawDataRva + CODEVIEW_RSDS_MIN_SIZE) >>> 0,
+        pathByteLength,
+        CODEVIEW_PATH_READ_CHUNK_SIZE
+      );
+      if (pathInfo) {
+        path = pathInfo.text;
+        if (!pathInfo.terminated) {
+          addWarning("CodeView RSDS path is not NUL-terminated within SizeOfData.");
+        }
       } else {
-        if (zeroIndex > 0) path += String.fromCharCode(...chunk.slice(0, zeroIndex));
-        break;
+        addWarning("CodeView RSDS path does not map to file data.");
+      }
+    } else {
+      let pos = dataOffset + CODEVIEW_RSDS_MIN_SIZE;
+      const pathEnd = dataOffset + dataSize;
+      while (pos < pathEnd) {
+        const chunkLength = Math.min(CODEVIEW_PATH_READ_CHUNK_SIZE, pathEnd - pos);
+        const chunk = new Uint8Array(await file.slice(pos, pos + chunkLength).arrayBuffer());
+        const zeroIndex = chunk.indexOf(0);
+        if (zeroIndex === -1) {
+          path += String.fromCharCode(...chunk);
+          pos += chunkLength;
+        } else {
+          if (zeroIndex > 0) path += String.fromCharCode(...chunk.slice(0, zeroIndex));
+          break;
+        }
+      }
+      if (pos >= pathEnd) {
+        addWarning("CodeView RSDS path is not NUL-terminated within SizeOfData.");
       }
     }
-    if (pos >= pathEnd) {
-      addWarning("CodeView RSDS path is not NUL-terminated within SizeOfData.");
-    }
-    return {
-      entry: { guid, age, path },
-      warning: warnings.length ? warnings.join(" | ") : null
-    };
+    entry = { guid, age, path };
   }
-  return { entry: null, warning: warnings.length ? warnings.join(" | ") : null };
+  return { entry, warning: warnings.length ? warnings.join(" | ") : null, rawDataRanges };
 }

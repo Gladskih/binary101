@@ -5,6 +5,7 @@ import type {
   RvaToOffset
 } from "./types.js";
 import { createPeRangeReader, type PeRangeReader } from "./range-reader.js";
+import { readMappedNullTerminatedAsciiString } from "./mapped-ascii-string.js";
 
 // Microsoft PE format, Import Directory Table: IMAGE_IMPORT_DESCRIPTOR is five DWORDs.
 const IMAGE_IMPORT_DESCRIPTOR_SIZE = 20;
@@ -22,8 +23,6 @@ const IMAGE_IMPORT_ORDINAL_RESERVED_MASK32 = 0x7fff0000; // PE32 ordinal thunks 
 const IMAGE_IMPORT_NAME_MASK64 = 0x7fffffffn; // PE32+ keeps the import-by-name RVA in bits 30-0.
 const IMAGE_IMPORT_NAME_RESERVED_MASK64 = 0x7fffffff80000000n; // PE32+ reserves bits 62-31.
 const IMAGE_IMPORT_ORDINAL_RESERVED_MASK64 = 0x7fffffffffff0000n; // PE32+ ordinal thunks reserve bits 62-16.
-// Parser policy: read NUL-terminated strings incrementally instead of slicing the full tail of a malformed file.
-const NULL_TERMINATED_ASCII_READ_CHUNK_SIZE = 64;
 
 export interface PeImportFunction {
   ordinal?: number;
@@ -40,33 +39,6 @@ export interface PeImportParseResult {
   entries: PeImportEntry[];
   warning?: string;
 }
-
-const readNullTerminatedAsciiString = async (
-  reader: PeRangeReader,
-  fileSize: number,
-  offset: number
-): Promise<{ text: string; truncated: boolean } | null> => {
-  if (offset < 0 || offset >= fileSize) return null;
-  let text = "";
-  let position = offset;
-  while (position < fileSize) {
-    const chunkView = await reader.read(position, NULL_TERMINATED_ASCII_READ_CHUNK_SIZE);
-    const chunk = new Uint8Array(
-      chunkView.buffer,
-      chunkView.byteOffset,
-      chunkView.byteLength
-    );
-    if (chunk.byteLength === 0) break;
-    const zeroIndex = chunk.indexOf(0);
-    if (zeroIndex !== -1) {
-      if (zeroIndex > 0) text += String.fromCharCode(...chunk.slice(0, zeroIndex));
-      return { text, truncated: false };
-    }
-    text += String.fromCharCode(...chunk);
-    position += chunk.byteLength;
-  }
-  return { text, truncated: true };
-};
 
 const readImportByName = async (
   reader: PeRangeReader,
@@ -87,12 +59,14 @@ const readImportByName = async (
     return { name: "" };
   }
   const hint = hintView.getUint16(0, true);
-  const hintName = await readNullTerminatedAsciiString(
+  const hintName = await readMappedNullTerminatedAsciiString(
     reader,
     fileSize,
-    hintNameOffset + IMAGE_IMPORT_BY_NAME_HINT_SIZE
+    rvaToOff,
+    (hintNameRva + IMAGE_IMPORT_BY_NAME_HINT_SIZE) >>> 0,
+    fileSize
   );
-  if (hintName?.truncated) addWarning("Import name string truncated.");
+  if (hintName && !hintName.terminated) addWarning("Import name string truncated.");
   return { hint, name: hintName?.text ?? "" };
 };
 
@@ -214,12 +188,17 @@ const parseImportDirectoryWithThunkReader = async (
     warnings.add(msg);
   };
   for (let index = 0; index < maxDescriptors; index += 1) {
-    const offset = start + index * IMAGE_IMPORT_DESCRIPTOR_SIZE;
+    const descriptorRva = (impDir.rva + index * IMAGE_IMPORT_DESCRIPTOR_SIZE) >>> 0;
+    const offset = rvaToOff(descriptorRva);
     const descriptorSize = Math.min(
       IMAGE_IMPORT_DESCRIPTOR_SIZE,
       Math.max(0, availableDirSize - index * IMAGE_IMPORT_DESCRIPTOR_SIZE)
     );
     if (descriptorSize <= 0) break;
+    if (!isReadableOffset(offset)) {
+      addWarning("Import descriptor RVA does not map to file data.");
+      break;
+    }
     const descriptorTruncated = descriptorSize < IMAGE_IMPORT_DESCRIPTOR_SIZE;
     const desc = await reader.read(offset, descriptorSize);
     const readDescriptorField = (fieldOffset: number, fieldName: string): number | null => {
@@ -243,10 +222,16 @@ const parseImportDirectoryWithThunkReader = async (
     const nameOffset = rvaToOff(nameRva);
     let dllName = "";
     if (isReadableOffset(nameOffset)) {
-      const dllNameText = await readNullTerminatedAsciiString(reader, file.size, nameOffset);
+      const dllNameText = await readMappedNullTerminatedAsciiString(
+        reader,
+        file.size,
+        rvaToOff,
+        nameRva >>> 0,
+        file.size
+      );
       if (dllNameText) {
         dllName = dllNameText.text;
-        if (dllNameText.truncated) addWarning("Import DLL name string truncated.");
+        if (!dllNameText.terminated) addWarning("Import DLL name string truncated.");
       }
     } else if (nameRva) {
       addWarning("Import name RVA does not map to file data.");
