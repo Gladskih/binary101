@@ -16,7 +16,7 @@ import {
   readSafeSehHandlerTableRvas
 } from "./load-config/tables.js";
 import { collectLoadConfigWarnings } from "./load-config/warnings.js";
-import { parseImportDirectory32, parseImportDirectory64, type PeImportEntry } from "./imports.js";
+import { parseImportDirectory32, parseImportDirectory64, type PeImportParseResult } from "./imports.js";
 import { parseExportDirectory } from "./exports.js";
 import { parseTlsDirectory32, parseTlsDirectory64 } from "./tls.js";
 import { parseResources, type PeResources } from "./resources/index.js";
@@ -32,13 +32,7 @@ import {
 } from "./dynamic-relocations.js";
 import { parseIatDirectory, type PeIatDirectory } from "./iat-directory.js";
 import type { PeInstructionSetReport } from "./disassembly.js";
-import type {
-  PeCore,
-  PeCoverageEntry,
-  PeDataDirectory,
-  PeTlsDirectory,
-  RvaToOffset
-} from "./types.js";
+import type { PeCore, PeCoverageEntry, PeDataDirectory, PeTlsDirectory, RvaToOffset } from "./types.js";
 
 const appendUniqueWarnings = (
   existing: string[] | undefined,
@@ -55,7 +49,13 @@ const mergeLoadConfigWarnings = (loadcfg: PeLoadConfig, messages: string[]): voi
   if (merged?.length) loadcfg.warnings = merged;
 };
 
+export interface PeDebugSection {
+  entry: { guid: string; age: number; path: string } | null;
+  warning?: string;
+}
+
 export interface PeParseResult {
+  debug: PeDebugSection | null;
   dos: PeCore["dos"];
   signature: "PE";
   coff: PeCore["coff"];
@@ -65,10 +65,7 @@ export interface PeParseResult {
   sections: PeCore["sections"];
   entrySection: PeCore["entrySection"];
   rvaToOff: RvaToOffset;
-  imports: PeImportEntry[];
-  importsWarning?: string;
-  rsds: { guid: string; age: number; path: string } | null | undefined;
-  debugWarning: string | null | undefined;
+  imports: PeImportParseResult;
   loadcfg: PeLoadConfig | null;
   exports: Awaited<ReturnType<typeof parseExportDirectory>>;
   tls: PeTlsDirectory | null;
@@ -127,8 +124,7 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
           coff.Machine === 0x014c ? readSafeSehHandlerTableRvas : null
       };
 
-  const { entry: rsds, warning: debugWarning } =
-    (await parseDebugDirectory(file, dataDirs, rvaToOff, addCoverageRegion)) || {};
+  const debugResult = await parseDebugDirectory(file, dataDirs, rvaToOff, addCoverageRegion);
   const loadcfg = await peVariant.parseLoadConfigDirectory(file, dataDirs, rvaToOff, addCoverageRegion);
   if (loadcfg) {
     const warnings = collectLoadConfigWarnings(file.size, rvaToOff, ImageBase, opt.SizeOfImage, loadcfg);
@@ -267,6 +263,13 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
   }
   const iat = parseIatDirectory(dataDirs, rvaToOff, addCoverageRegion);
   return {
+    debug:
+      debugResult.entry || debugResult.warning
+        ? {
+            entry: debugResult.entry,
+            ...(debugResult.warning ? { warning: debugResult.warning } : {})
+          }
+        : null,
     dos,
     signature: "PE",
     coff,
@@ -276,10 +279,7 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     sections,
     entrySection,
     rvaToOff,
-    imports: importResult.entries,
-    ...(importResult.warning ? { importsWarning: importResult.warning } : {}),
-    rsds,
-    debugWarning,
+    imports: importResult,
     loadcfg,
     exports: exportsInfo,
     tls,

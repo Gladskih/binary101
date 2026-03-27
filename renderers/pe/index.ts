@@ -37,8 +37,8 @@ export function renderPe(pe: PeParseResult | null | undefined): string {
   renderHeaders(pe, out);
   renderInstructionSets(pe.disassembly, out);
   renderLoadConfig(pe, out);
-  renderDebug(pe, out);
-  renderImports(pe, out);
+  renderIfPresent(pe.debug, renderDebug, out);
+  renderImports(pe.imports, out);
   renderIfPresent(pe.resources, renderResources, out);
   renderIfPresent(pe.exports, renderExports, out);
   renderIfPresent(pe.tls, renderTls, out);

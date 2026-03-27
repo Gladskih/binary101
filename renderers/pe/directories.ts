@@ -2,37 +2,37 @@
 
 import { humanSize, hex } from "../../binary-utils.js";
 import { dd, safe } from "../../html-utils.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
+import type { PeDebugSection, PeParseResult } from "../../analyzers/pe/index.js";
 
+type PeImportsSection = PeParseResult["imports"];
 type PeExportSection = NonNullable<PeParseResult["exports"]>;
 type PeTlsSection = NonNullable<PeParseResult["tls"]>;
 type PeSecuritySection = NonNullable<PeParseResult["security"]>;
 type PeIatSection = NonNullable<PeParseResult["iat"]>;
 
-export function renderDebug(pe: PeParseResult, out: string[]): void {
-  if (!pe.rsds && !pe.debugWarning) return;
+export function renderDebug(debug: PeDebugSection, out: string[]): void {
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Debug (PDB)</h4>`);
-  if (pe.rsds) {
+  if (debug.entry) {
     out.push(`<dl>`);
     out.push(dd("CodeView", "RSDS", "CodeView debug directory entry with RSDS signature."));
-    out.push(dd("GUID", (pe.rsds.guid || "").toUpperCase(), "PDB signature GUID used to match correct PDB file."));
-    out.push(dd("Age", String(pe.rsds.age), "PDB age; increments on certain rebuilds."));
-    out.push(dd("Path", pe.rsds.path, "Path to PDB as recorded at link time (can be absolute)."));
+    out.push(dd("GUID", (debug.entry.guid || "").toUpperCase(), "PDB signature GUID used to match correct PDB file."));
+    out.push(dd("Age", String(debug.entry.age), "PDB age; increments on certain rebuilds."));
+    out.push(dd("Path", debug.entry.path, "Path to PDB as recorded at link time (can be absolute)."));
     out.push(`</dl>`);
   }
-  if (pe.debugWarning) {
-    out.push(`<div class="smallNote">${safe(pe.debugWarning)}</div>`);
+  if (debug.warning) {
+    out.push(`<div class="smallNote">${safe(debug.warning)}</div>`);
   }
   out.push(`</section>`);
 }
 
-export function renderImports(pe: PeParseResult, out: string[]): void {
-  if (!pe.imports?.length && !pe.importsWarning) return;
+export function renderImports(imports: PeImportsSection, out: string[]): void {
+  if (!imports.entries.length && !imports.warning) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import table</h4><div class="smallNote">Imports list functions this file expects other modules to provide. Hint index speeds up runtime name lookup, and ordinal-only imports often point to more special or low-level routines.</div>`);
-  if (pe.importsWarning) {
-    out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(pe.importsWarning)}</div>`);
+  if (imports.warning) {
+    out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(imports.warning)}</div>`);
   }
-  for (const mod of pe.imports) {
+  for (const mod of imports.entries) {
     const dll = safe(mod.dll || "(unknown DLL)");
     out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${dll}</b> \u2014 ${mod.functions?.length || 0} function(s)</summary>`);
     if (mod.functions?.length) {
@@ -61,13 +61,13 @@ export function renderExports(ex: PeExportSection, out: string[]): void {
     ex.issues.forEach(issue => out.push(`<li>${safe(issue)}</li>`));
     out.push(`</ul>`);
   }
-    if (ex.entries?.length) {
-      out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show entries (${ex.entries.length})</summary>`);
-      out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Ordinal</th><th>Name</th><th>RVA</th><th>Forwarder</th></tr></thead><tbody>`);
-      ex.entries.forEach((e, index) => {
-        out.push(`<tr><td>${index + 1}</td><td>${e.ordinal}</td><td>${e.name ? safe(e.name) : "-"}</td><td>${hex(e.rva, 8)}</td><td>${e.forwarder ? safe(e.forwarder) : "-"}</td></tr>`);
-      });
-      out.push(`</tbody></table></details>`);
+  if (ex.entries?.length) {
+    out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show entries (${ex.entries.length})</summary>`);
+    out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Ordinal</th><th>Name</th><th>RVA</th><th>Forwarder</th></tr></thead><tbody>`);
+    ex.entries.forEach((e, index) => {
+      out.push(`<tr><td>${index + 1}</td><td>${e.ordinal}</td><td>${e.name ? safe(e.name) : "-"}</td><td>${hex(e.rva, 8)}</td><td>${e.forwarder ? safe(e.forwarder) : "-"}</td></tr>`);
+    });
+    out.push(`</tbody></table></details>`);
   }
   out.push(`</section>`);
 }

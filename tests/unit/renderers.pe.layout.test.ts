@@ -101,7 +101,7 @@ void test("renderSanity renders issues and clean state", () => {
   const withIssues = {
     overlaySize: 100,
     imageSizeMismatch: true,
-    debugWarning: "bad debug"
+    debug: { entry: null, warning: "bad debug" }
   } as unknown as PeParseResult;
   const outIssues: string[] = [];
   renderSanity(withIssues, outIssues);
@@ -113,7 +113,7 @@ void test("renderSanity renders issues and clean state", () => {
   const clean = {
     overlaySize: 0,
     imageSizeMismatch: false,
-    debugWarning: null
+    debug: null
   } as unknown as PeParseResult;
   const outClean: string[] = [];
   renderSanity(clean, outClean);
@@ -124,7 +124,7 @@ void test("renderSanity reports suspicious entrypoint sections", () => {
   const outside = {
     overlaySize: 0,
     imageSizeMismatch: false,
-    debugWarning: null,
+    debug: null,
     opt: { AddressOfEntryPoint: 0x3000 },
     sections: [
       {
@@ -145,7 +145,7 @@ void test("renderSanity reports suspicious entrypoint sections", () => {
   const nonExecutable = {
     overlaySize: 0,
     imageSizeMismatch: false,
-    debugWarning: null,
+    debug: null,
     opt: { AddressOfEntryPoint: 0x2000 },
     sections: [
       {
@@ -168,7 +168,7 @@ void test("renderSanity does not flag certificate table bytes as suspicious over
   const pe = {
     overlaySize: 0x20,
     imageSizeMismatch: false,
-    debugWarning: null,
+    debug: null,
     dirs: [{ name: "SECURITY", rva: 0x400, size: 0x20 }],
     sections: [
       {
@@ -194,7 +194,7 @@ void test("renderSanity still reports unexplained overlay after certificate tabl
   const pe = {
     overlaySize: 0x40,
     imageSizeMismatch: false,
-    debugWarning: null,
+    debug: null,
     dirs: [{ name: "SECURITY", rva: 0x420, size: 0x20 }],
     sections: [
       {

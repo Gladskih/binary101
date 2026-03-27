@@ -147,8 +147,8 @@ export function renderSanity(pe: PeParseResult, out: string[]): void {
   if (pe.imageSizeMismatch) {
     issues.push("SizeOfImage does not match section layout.");
   }
-  if (pe.debugWarning) {
-    issues.push(pe.debugWarning);
+  if (pe.debug?.warning) {
+    issues.push(pe.debug.warning);
   }
   const entrypointRva = pe.opt?.AddressOfEntryPoint ? (pe.opt.AddressOfEntryPoint >>> 0) : 0;
   const sections = Array.isArray(pe.sections) ? pe.sections : [];
