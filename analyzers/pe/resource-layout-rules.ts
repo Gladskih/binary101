@@ -25,6 +25,10 @@ export const validateResourceLayout = (
   resourceStringRanges: ResourceLayoutRange[],
   resourceDataEntries: ResourceDataEntryLayout[],
   resourceSubdirectoryTargets: number[],
+  resourceRva: number,
+  resourceSize: number,
+  resourceBase: number,
+  resourceLimitEnd: number,
   rvaToOff: RvaToOffset,
   fileSize: number,
   addIssue: (message: string) => void
@@ -34,6 +38,9 @@ export const validateResourceLayout = (
   );
   const firstDataEntryStart = resourceDataEntries.length
     ? Math.min(...resourceDataEntries.map(entry => entry.start))
+    : Number.POSITIVE_INFINITY;
+  const firstStringStart = resourceStringRanges.length
+    ? Math.min(...resourceStringRanges.map(resourceStringRange => resourceStringRange.start))
     : Number.POSITIVE_INFINITY;
   if (firstStringInDirectoryArea) {
     addIssue(
@@ -49,6 +56,13 @@ export const validateResourceLayout = (
       break;
     }
     seenSubdirectoryTargets.add(resourceSubdirectoryTarget);
+    if (
+      resourceSubdirectoryTarget >= Math.min(firstStringStart, firstDataEntryStart)
+    ) {
+      addIssue(
+        `Resource subdirectory at ${formatRelOffset(resourceSubdirectoryTarget)} points outside the Resource Directory area and into the later string or data-entry region.`
+      );
+    }
   }
   const maxStringEnd = resourceStringRanges.reduce(
     (currentEnd, resourceStringRange) => Math.max(currentEnd, resourceStringRange.end),
@@ -72,6 +86,14 @@ export const validateResourceLayout = (
   }
   for (const resourceDataEntry of resourceDataEntries) {
     if (resourceDataEntry.size === 0) continue;
+    if (
+      resourceDataEntry.dataRva < resourceRva ||
+      resourceDataEntry.dataRva + resourceDataEntry.size > resourceRva + resourceSize
+    ) {
+      addIssue(
+        `Resource data payload at RVA ${formatRelOffset(resourceDataEntry.dataRva)} lies outside the declared .rsrc RVA span.`
+      );
+    }
     const mappedPayloadOffset = rvaToOff(resourceDataEntry.dataRva);
     if (mappedPayloadOffset == null) {
       addIssue(
@@ -82,6 +104,15 @@ export const validateResourceLayout = (
     if (mappedPayloadOffset < 0 || mappedPayloadOffset + resourceDataEntry.size > fileSize) {
       addIssue(
         `Resource data payload at RVA ${formatRelOffset(resourceDataEntry.dataRva)} is truncated by end of file.`
+      );
+      continue;
+    }
+    if (
+      mappedPayloadOffset < resourceBase ||
+      mappedPayloadOffset + resourceDataEntry.size > resourceLimitEnd
+    ) {
+      addIssue(
+        `Resource data payload at RVA ${formatRelOffset(resourceDataEntry.dataRva)} maps outside the .rsrc file span.`
       );
     }
   }

@@ -4,11 +4,11 @@ import { addBitmapPreview } from "./resources-preview-bitmap.js";
 import { addCursorPreview, addGroupCursorPreview } from "./resources-preview-cursor.js";
 import { addDialogPreview } from "./resources-preview-dialog.js";
 import { addAcceleratorPreview } from "./resources-preview-accelerator.js";
-import { buildResourceLeafIndex, chooseResourceLeafRecord } from "./resource-preview-leaf-index.js";
+import { buildResourceLeafIndex } from "./resource-preview-leaf-index.js";
+import { createGroupLeafLoader, readResourceLeafBytes } from "./resource-preview-leaf-data.js";
 import {
   addGroupIconPreview,
   addIconPreview,
-  type LoadedResourceLeaf,
   type LoadResourceLeafData
 } from "./resources-preview-icon.js";
 import { addMenuPreview } from "./resources-preview-menu.js";
@@ -18,6 +18,15 @@ import {
   addManifestPreview,
   addStringTablePreview
 } from "./resources-preview-text.js";
+import {
+  addDialogIncludePreview,
+  addFontDirectoryPreview,
+  addFontPreview,
+  addPlugPlayPreview,
+  addRcDataPreview,
+  addVxdPreview
+} from "./resources-preview-standard-types.js";
+import { addAniCursorPreview, addAniIconPreview } from "./resources-preview-ani.js";
 import { addVersionPreview } from "./resources-preview-version.js";
 import { decodeMessageTablePreview } from "./resources-preview-message-table.js";
 import type {
@@ -26,7 +35,6 @@ import type {
   ResourcePreviewResult
 } from "./resources-preview-types.js";
 import type { ResourceTree } from "./resources-core.js";
-import type { ResourceLeafIndex } from "./resource-preview-leaf-index.js";
 
 type ResourceEntryPreviewDecode = ResourcePreviewResult[];
 type ResourceGroupPreviewDecode = ResourceEntryPreviewDecode[];
@@ -80,61 +88,6 @@ const runAsyncPreviewDecoder = async (
   }
 };
 
-const createGroupLeafLoader = (
-  file: File,
-  tree: ResourceTree,
-  index: ResourceLeafIndex,
-  groupTypeName: "GROUP_ICON" | "GROUP_CURSOR",
-  leafTypeName: "ICON" | "CURSOR"
-): LoadResourceLeafData => async (
-  id: number,
-  lang: number | null | undefined
-): Promise<LoadedResourceLeaf> => {
-  const record = chooseResourceLeafRecord(index, id, lang);
-  if (!record) return { data: null };
-  const offset = tree.rvaToOff(record.dataRva);
-  if (offset == null || offset < 0) {
-    return {
-      data: null,
-      issues: [
-        `${groupTypeName} references ${leafTypeName} leaf ID ${id}, but its RVA could not be mapped to a file offset.`
-      ]
-    };
-  }
-  if (record.size <= 0) {
-    return {
-      data: null,
-      issues: [
-        `${groupTypeName} references ${leafTypeName} leaf ID ${id}, but the leaf payload size is zero.`
-      ]
-    };
-  }
-  const data = new Uint8Array(await file.slice(offset, offset + record.size).arrayBuffer());
-  const issues = data.byteLength < record.size
-    ? [`${groupTypeName} references ${leafTypeName} leaf ID ${id}, but the leaf payload is truncated.`]
-    : undefined;
-  return { data: data.byteLength ? data : null, ...(issues ? { issues } : {}) };
-};
-
-const readResourceLeafBytes = async (
-  file: File,
-  tree: ResourceTree,
-  langEntry: ResourceLangWithPreview
-): Promise<LoadedResourceLeaf> => {
-  const offset = tree.rvaToOff(langEntry.dataRVA);
-  if (offset == null) {
-    return {
-      data: null,
-      issues: ["Resource RVA could not be mapped to a file offset."]
-    };
-  }
-  const data = new Uint8Array(await file.slice(offset, offset + langEntry.size).arrayBuffer());
-  const issues = data.byteLength < langEntry.size
-    ? ["Resource preview read fewer bytes than the declared data size."]
-    : undefined;
-  return { data: data.byteLength ? data : null, ...(issues ? { issues } : {}) };
-};
-
 const decodeSpecificResourcePreview = async (
   data: Uint8Array,
   typeName: string,
@@ -159,18 +112,34 @@ const decodeSpecificResourcePreview = async (
       return runSyncPreviewDecoder(() => addManifestPreview(data, typeName, codePage));
     case "HTML":
       return runSyncPreviewDecoder(() => addHtmlPreview(data, typeName, codePage));
+    case "RCDATA":
+      return runAsyncPreviewDecoder(() => addRcDataPreview(data, typeName, codePage));
     case "VERSION":
       return runSyncPreviewDecoder(() => addVersionPreview(data, typeName));
     case "STRING":
       return runSyncPreviewDecoder(() => addStringTablePreview(data, typeName, entryId));
     case "DIALOG":
       return runSyncPreviewDecoder(() => addDialogPreview(data, typeName));
+    case "FONTDIR":
+      return runSyncPreviewDecoder(() => addFontDirectoryPreview(data, typeName));
+    case "FONT":
+      return runAsyncPreviewDecoder(() => addFontPreview(data, typeName));
     case "MENU":
       return runSyncPreviewDecoder(() => addMenuPreview(data, typeName));
     case "ACCELERATOR":
       return runSyncPreviewDecoder(() => addAcceleratorPreview(data, typeName));
     case "MESSAGETABLE":
       return runSyncPreviewDecoder(() => addMessageTableResourcePreview(data, typeName, codePage));
+    case "DLGINCLUDE":
+      return runSyncPreviewDecoder(() => addDialogIncludePreview(data, typeName, codePage));
+    case "PLUGPLAY":
+      return runSyncPreviewDecoder(() => addPlugPlayPreview(data, typeName));
+    case "VXD":
+      return runSyncPreviewDecoder(() => addVxdPreview(data, typeName));
+    case "ANICURSOR":
+      return runAsyncPreviewDecoder(() => addAniCursorPreview(data, typeName));
+    case "ANIICON":
+      return runAsyncPreviewDecoder(() => addAniIconPreview(data, typeName));
     default:
       return null;
   }
@@ -271,7 +240,12 @@ const attachDetailPreviews = (
 export async function enrichResourcePreviews(
   file: File,
   tree: ResourceTree
-): Promise<{ top: ResourceTree["top"]; detail: ResourceDetailGroup[]; issues?: string[] }> {
+): Promise<{
+  top: ResourceTree["top"];
+  detail: ResourceDetailGroup[];
+  directories?: ResourceTree["directories"];
+  issues?: string[];
+}> {
   const detail = tree.detail as ResourceDetailGroup[];
   const iconIndex = buildResourceLeafIndex(detail, "ICON");
   const cursorIndex = buildResourceLeafIndex(detail, "CURSOR");
@@ -288,6 +262,7 @@ export async function enrichResourcePreviews(
   return {
     top: tree.top,
     detail: attachDetailPreviews(detail, decodedGroups),
+    ...(tree.directories?.length ? { directories: tree.directories } : {}),
     ...(issues.length ? { issues } : {})
   };
 }

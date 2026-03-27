@@ -18,17 +18,23 @@ void test("renderPreviewCell renders structured dialog, menu, accelerator and su
     ...createBaseLang(),
     previewKind: "dialog",
     dialogPreview: {
-      templateKind: "standard",
+      templateKind: "extended",
       title: "Settings",
-      menu: null,
-      className: null,
+      menu: "&File",
+      className: "CustomDialog",
       x: 0,
       y: 0,
       width: 100,
       height: 80,
       style: 0,
       exStyle: 0,
-      font: null,
+      font: {
+        pointSize: 9,
+        weight: 400,
+        italic: false,
+        charset: 1,
+        typeface: "MS Shell Dlg"
+      },
       controls: [
         { id: 100, kind: "BUTTON", title: "OK", x: 10, y: 10, width: 30, height: 12, style: 0, exStyle: 0 }
       ]
@@ -58,6 +64,10 @@ void test("renderPreviewCell renders structured dialog, menu, accelerator and su
 
   assert.match(dialogHtml, /Settings/);
   assert.match(dialogHtml, /BUTTON/);
+  assert.match(dialogHtml, /DLGTEMPLATEEX/);
+  assert.match(dialogHtml, /Menu: &File/);
+  assert.match(dialogHtml, /Class: CustomDialog/);
+  assert.match(dialogHtml, /Font: 9pt MS Shell Dlg/);
   assert.match(dialogHtml, /background:var\(--card\)/);
   assert.match(dialogHtml, /background:var\(--bg\)/);
   assert.match(dialogHtml, /color:var\(--text\)/);
@@ -87,4 +97,26 @@ void test("renderPreviewCell renders audio and font inline previews", () => {
   assert.match(audioHtml, /<audio controls/);
   assert.match(fontHtml, /@font-face/);
   assert.match(fontHtml, /TrueType font \(heuristic\)/);
+});
+
+void test("renderPreviewCell renders grouped VERSION details with human-readable translations", () => {
+  const versionHtml = renderPreviewCell({
+    ...createBaseLang(),
+    previewKind: "version",
+    versionInfo: {
+      fileVersionString: "1.2.3.4",
+      productVersionString: "5.6.7.8",
+      translations: [{ languageId: 1033, codePage: 1200 }],
+      stringValues: [
+        { table: "040904B0", key: "CompanyName", value: "Binary101" },
+        { table: "040904B0", key: "FileDescription", value: "PE resource showcase" }
+      ]
+    }
+  });
+
+  assert.match(versionHtml, /FileVersion/);
+  assert.match(versionHtml, /ProductVersion/);
+  assert.match(versionHtml, /English \(United States\)/);
+  assert.match(versionHtml, /CompanyName/);
+  assert.match(versionHtml, /Binary101/);
 });

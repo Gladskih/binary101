@@ -96,6 +96,11 @@ void test("enrichResourcePreviews wires standard and heuristic preview modules t
   const menu = fixture.appendData(buildStandardMenuTemplate());
   const accelerator = fixture.appendData(buildAcceleratorTable());
   const rcdata = fixture.appendData(png);
+  const fontDir = fixture.appendData(new Uint8Array([1, 0, 0, 0]));
+  const font = fixture.appendData(new Uint8Array([0x00, 0x01, 0x00, 0x00]));
+  const dlgInclude = fixture.appendData(new TextEncoder().encode("#include \"preview-dialog.h\"\n"));
+  const plugPlay = fixture.appendData(new Uint8Array([0x50, 0x4e, 0x50, 0x00]));
+  const vxd = fixture.appendData(new Uint8Array([0x56, 0x58, 0x44, 0x00]));
   const tree = createPreviewTree([
     createPreviewDetailGroup("ICON", 1, createPreviewLangEntry(icon.offset, icon.size, 0, 1033)),
     createPreviewDetailGroup("GROUP_ICON", 2, createPreviewLangEntry(groupIcon.offset, groupIcon.size, 0, 1033)),
@@ -108,12 +113,21 @@ void test("enrichResourcePreviews wires standard and heuristic preview modules t
     createPreviewDetailGroup("BITMAP", 6, createPreviewLangEntry(bitmap.offset, bitmap.size, 0, 1033)),
     createPreviewDetailGroup("DIALOG", 7, createPreviewLangEntry(dialog.offset, dialog.size, 0, 1033)),
     createPreviewDetailGroup("MENU", 8, createPreviewLangEntry(menu.offset, menu.size, 0, 1033)),
+    createPreviewDetailGroup("FONTDIR", 8, createPreviewLangEntry(fontDir.offset, fontDir.size, 0, 1033)),
+    createPreviewDetailGroup("FONT", 8, createPreviewLangEntry(font.offset, font.size, 0, 1033)),
     createPreviewDetailGroup(
       "ACCELERATOR",
       9,
       createPreviewLangEntry(accelerator.offset, accelerator.size, 0, 1033)
     ),
-    createPreviewDetailGroup("RCDATA", 10, createPreviewLangEntry(rcdata.offset, rcdata.size, 0, 1033))
+    createPreviewDetailGroup("RCDATA", 10, createPreviewLangEntry(rcdata.offset, rcdata.size, 0, 1033)),
+    createPreviewDetailGroup(
+      "DLGINCLUDE",
+      17,
+      createPreviewLangEntry(dlgInclude.offset, dlgInclude.size, 65001, 1033)
+    ),
+    createPreviewDetailGroup("PLUGPLAY", 19, createPreviewLangEntry(plugPlay.offset, plugPlay.size, 0, 1033)),
+    createPreviewDetailGroup("VXD", 20, createPreviewLangEntry(vxd.offset, vxd.size, 0, 1033))
   ]);
 
   const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
@@ -123,7 +137,12 @@ void test("enrichResourcePreviews wires standard and heuristic preview modules t
   assert.strictEqual(getPreviewLang(result, "BITMAP").previewKind, "image");
   assert.strictEqual(getPreviewLang(result, "DIALOG").previewKind, "dialog");
   assert.strictEqual(getPreviewLang(result, "MENU").previewKind, "menu");
+  assert.strictEqual(getPreviewLang(result, "FONTDIR").previewKind, "summary");
+  assert.strictEqual(getPreviewLang(result, "FONT").previewKind, "font");
   assert.strictEqual(getPreviewLang(result, "ACCELERATOR").previewKind, "accelerator");
   assert.strictEqual(getPreviewLang(result, "RCDATA").previewKind, "image");
+  assert.strictEqual(getPreviewLang(result, "DLGINCLUDE").previewKind, "text");
+  assert.strictEqual(getPreviewLang(result, "PLUGPLAY").previewKind, "summary");
+  assert.strictEqual(getPreviewLang(result, "VXD").previewKind, "summary");
   assert.deepEqual(getPreviewLang(result, "GROUP_CURSOR").previewFields, [{ label: "Hotspot", value: "7, 9" }]);
 });

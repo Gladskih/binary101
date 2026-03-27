@@ -1,6 +1,11 @@
 "use strict";
 
 import { createBmpFile, createPngFile } from "./image-sample-files.js";
+import {
+  buildMessageTableResource,
+  buildStringTableResource,
+  buildVersionResource
+} from "./pe-resource-metadata-payloads.js";
 import { createAniFile } from "./riff-sample-files.js";
 
 const DS_SETFONT = 0x00000040;
@@ -10,13 +15,19 @@ const RESOURCE_TYPE_ICON = 3;
 const RESOURCE_TYPE_MENU = 4;
 const RESOURCE_TYPE_DIALOG = 5;
 const RESOURCE_TYPE_STRING = 6;
+const RESOURCE_TYPE_FONTDIR = 7;
+const RESOURCE_TYPE_FONT = 8;
 const RESOURCE_TYPE_ACCELERATOR = 9;
 const RESOURCE_TYPE_RCDATA = 10;
 const RESOURCE_TYPE_MESSAGETABLE = 11;
 const RESOURCE_TYPE_GROUP_CURSOR = 12;
 const RESOURCE_TYPE_GROUP_ICON = 14;
 const RESOURCE_TYPE_VERSION = 16;
+const RESOURCE_TYPE_DLGINCLUDE = 17;
+const RESOURCE_TYPE_PLUGPLAY = 19;
+const RESOURCE_TYPE_VXD = 20;
 const RESOURCE_TYPE_ANICURSOR = 21;
+const RESOURCE_TYPE_ANIICON = 22;
 const RESOURCE_TYPE_HTML = 23;
 const RESOURCE_TYPE_MANIFEST = 24;
 
@@ -38,107 +49,6 @@ const writeUtf16Z = (bytes: Uint8Array, offset: number, text: string): number =>
   }
   view.setUint16(offset + text.length * 2, 0, true);
   return offset + text.length * 2 + 2;
-};
-
-const encodeUtf16Z = (text: string): Uint8Array => {
-  const bytes = new Uint8Array((text.length + 1) * 2);
-  writeUtf16Z(bytes, 0, text);
-  return bytes;
-};
-
-const concatBytes = (parts: Uint8Array[]): Uint8Array => {
-  const total = parts.reduce((sum, part) => sum + part.length, 0);
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const part of parts) {
-    bytes.set(part, offset);
-    offset += part.length;
-  }
-  return bytes;
-};
-
-const buildVersionNode = (
-  key: string,
-  valueBytes: Uint8Array,
-  valueType: 0 | 1,
-  children: Uint8Array[]
-): Uint8Array => {
-  const keyBytes = encodeUtf16Z(key);
-  const valueOffset = align(6 + keyBytes.length, 4);
-  const valueLength = valueType === 1 ? valueBytes.length / 2 : valueBytes.length;
-  const paddedChildren = children.map(child => {
-    const padding = align(child.length, 4) - child.length;
-    return padding > 0 ? concatBytes([child, new Uint8Array(padding)]) : child;
-  });
-  const totalLength = valueOffset + valueBytes.length + paddedChildren.reduce((sum, child) => sum + child.length, 0);
-  const bytes = new Uint8Array(totalLength).fill(0);
-  const view = new DataView(bytes.buffer);
-  view.setUint16(0, totalLength, true);
-  view.setUint16(2, valueLength, true);
-  view.setUint16(4, valueType, true);
-  bytes.set(keyBytes, 6);
-  bytes.set(valueBytes, valueOffset);
-  let offset = valueOffset + valueBytes.length;
-  for (const child of paddedChildren) {
-    bytes.set(child, offset);
-    offset += child.length;
-  }
-  return bytes;
-};
-
-const buildVersionResource = (): Uint8Array => {
-  const fixed = new Uint8Array(52).fill(0);
-  const view = new DataView(fixed.buffer);
-  view.setUint32(0, 0xfeef04bd, true);
-  view.setUint32(4, 0x00010000, true);
-  view.setUint32(8, 0x00010002, true);
-  view.setUint32(12, 0x00030004, true);
-  view.setUint32(16, 0x00010002, true);
-  view.setUint32(20, 0x00030004, true);
-  const stringTable = buildVersionNode("040904B0", new Uint8Array(), 1, [
-    buildVersionNode("CompanyName", encodeUtf16Z("Binary101"), 1, []),
-    buildVersionNode("FileDescription", encodeUtf16Z("PE resource showcase"), 1, [])
-  ]);
-  const translation = (() => {
-    const bytes = new Uint8Array(4);
-    const translationView = new DataView(bytes.buffer);
-    translationView.setUint16(0, 0x0409, true);
-    translationView.setUint16(2, 1200, true);
-    return buildVersionNode("Translation", bytes, 0, []);
-  })();
-  return buildVersionNode("VS_VERSION_INFO", fixed, 0, [
-    buildVersionNode("StringFileInfo", new Uint8Array(), 1, [stringTable]),
-    buildVersionNode("VarFileInfo", new Uint8Array(), 1, [translation])
-  ]);
-};
-
-const buildStringTableResource = (): Uint8Array => {
-  const bytes = new Uint8Array(48).fill(0);
-  const view = new DataView(bytes.buffer);
-  view.setUint16(0, 5, true);
-  writeUtf16Z(bytes, 2, "Hello");
-  view.setUint16(14, 5, true);
-  writeUtf16Z(bytes, 16, "World");
-  return bytes;
-};
-
-const buildMessageTableResource = (): Uint8Array => {
-  const bytes = new Uint8Array(80).fill(0);
-  const view = new DataView(bytes.buffer);
-  const firstEntryOffset = 32;
-  const secondEntryOffset = firstEntryOffset + 6;
-  view.setUint32(0, 1, true);
-  view.setUint32(4, 10, true);
-  view.setUint32(8, 11, true);
-  view.setUint32(12, firstEntryOffset, true);
-  view.setUint16(firstEntryOffset, 6, true);
-  view.setUint16(firstEntryOffset + 2, 0, true);
-  bytes[firstEntryOffset + 4] = "O".charCodeAt(0);
-  bytes[firstEntryOffset + 5] = "K".charCodeAt(0);
-  view.setUint16(secondEntryOffset, 8, true);
-  view.setUint16(secondEntryOffset + 2, 1, true);
-  writeUtf16Z(bytes, secondEntryOffset + 4, "Hi");
-  return bytes;
 };
 
 const buildCursorResource = (hotspotX: number, hotspotY: number, payload: Uint8Array): Uint8Array => {
@@ -184,6 +94,15 @@ const buildAcceleratorTable = (): Uint8Array => {
   view.setUint16(4, 100, true);
   return bytes;
 };
+
+const buildFontDirectoryResource = (): Uint8Array => {
+  const bytes = new Uint8Array(8).fill(0);
+  new DataView(bytes.buffer).setUint16(0, 1, true);
+  return bytes;
+};
+
+const buildTrueTypeSignatureResource = (): Uint8Array =>
+  new Uint8Array([0x00, 0x01, 0x00, 0x00, 0x00, 0x10, 0x00, 0x80]);
 
 const buildStandardMenuTemplate = (): Uint8Array => {
   const bytes = new Uint8Array(64).fill(0);
@@ -239,6 +158,8 @@ export const createPeResourceSpecs = (): ResourceSpec[] => {
     { typeId: RESOURCE_TYPE_MENU, entryId: 1, langId: 1033, codePage: 0, data: buildStandardMenuTemplate() },
     { typeId: RESOURCE_TYPE_DIALOG, entryId: 1, langId: 1033, codePage: 0, data: buildStandardDialogTemplate() },
     { typeId: RESOURCE_TYPE_STRING, entryId: 1, langId: 1033, codePage: 1200, data: buildStringTableResource() },
+    { typeId: RESOURCE_TYPE_FONTDIR, entryId: 1, langId: 1033, codePage: 0, data: buildFontDirectoryResource() },
+    { typeId: RESOURCE_TYPE_FONT, entryId: 1, langId: 1033, codePage: 0, data: buildTrueTypeSignatureResource() },
     { typeId: RESOURCE_TYPE_ACCELERATOR, entryId: 1, langId: 1033, codePage: 0, data: buildAcceleratorTable() },
     {
       typeId: RESOURCE_TYPE_RCDATA,
@@ -269,7 +190,29 @@ export const createPeResourceSpecs = (): ResourceSpec[] => {
       data: buildGroupIconResource(png.length, 1)
     },
     { typeId: RESOURCE_TYPE_VERSION, entryId: 1, langId: 1033, codePage: 1200, data: buildVersionResource() },
+    {
+      typeId: RESOURCE_TYPE_DLGINCLUDE,
+      entryId: 1,
+      langId: 1033,
+      codePage: 65001,
+      data: new TextEncoder().encode("#include \"preview-dialog.h\"\n")
+    },
+    {
+      typeId: RESOURCE_TYPE_PLUGPLAY,
+      entryId: 1,
+      langId: 1033,
+      codePage: 0,
+      data: new Uint8Array([0x50, 0x4e, 0x50, 0x00])
+    },
+    {
+      typeId: RESOURCE_TYPE_VXD,
+      entryId: 1,
+      langId: 1033,
+      codePage: 0,
+      data: new Uint8Array([0x56, 0x58, 0x44, 0x00])
+    },
     { typeId: RESOURCE_TYPE_ANICURSOR, entryId: 1, langId: 1033, codePage: 0, data: createAniFile().data },
+    { typeId: RESOURCE_TYPE_ANIICON, entryId: 1, langId: 1033, codePage: 0, data: createAniFile().data },
     {
       typeId: RESOURCE_TYPE_HTML,
       entryId: 1,

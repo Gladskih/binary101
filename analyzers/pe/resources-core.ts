@@ -5,8 +5,9 @@ import { validateResourceDirectoryDuplicates, validateResourceDirectoryEntryKind
 import type { ResourceDirectoryEntry } from "./resource-directory-rules.js";
 import { updateDirectoryLayoutEnd, validateResourceLayout } from "./resource-layout-rules.js";
 import type { ResourceDataEntryLayout, ResourceLayoutRange } from "./resource-layout-rules.js";
+import { createResourceSpanResolver } from "./resource-relative-offsets.js";
 import { knownResourceType } from "./resource-type-names.js";
-import type { ResourceDetailEntry, ResourceTree } from "./resource-tree-types.js";
+import type { ResourceDetailEntry, ResourceDirectoryInfo, ResourceTree } from "./resource-tree-types.js";
 
 export type { ResourceLangEntry, ResourceDetailEntry, ResourceTree } from "./resource-tree-types.js";
 
@@ -26,9 +27,13 @@ export async function buildResourceTree(
   const issues: string[] = [];
   let maxDirectoryEnd = 0;
   const resourceNameCache = new Map<number, Promise<string>>();
+  const resourceDirectoryCache =
+    new Map<number, Promise<{ Named: number; Ids: number; entries: ResourceDirectoryEntry[] } | null>>();
   const resourceStringRanges: ResourceLayoutRange[] = [];
   const resourceDataEntries: ResourceDataEntryLayout[] = [];
   const resourceSubdirectoryTargets: number[] = [];
+  const directories: ResourceDirectoryInfo[] = [];
+  const seenDirectoryOffsets = new Set<number>();
   const view = async (off: number, len: number): Promise<DataView> =>
     new DataView(await file.slice(off, off + len).arrayBuffer());
   const u16 = (dv: DataView, off: number): number => dv.getUint16(off, true);
@@ -36,92 +41,91 @@ export async function buildResourceTree(
   const addIssue = (message: string): void => {
     if (!issues.includes(message)) issues.push(message);
   };
-  const formatRelOffset = (rel: number): string => `0x${(rel >>> 0).toString(16)}`;
-  const describeRelOffsetFailure = (rel: number, len: number, subject: string): string => {
-    if (rel < 0 || len < 0 || rel + len > dir.size) return `${subject} lies outside the declared span.`;
-    const mappedOff = rvaToOff((dir.rva + rel) >>> 0);
-    if (mappedOff != null && mappedOff >= 0 && mappedOff < file.size && mappedOff + len > file.size) {
-      return `${subject} is truncated by end of file.`;
-    }
-    const fallbackOff = base + rel;
-    if (fallbackOff >= base && fallbackOff < file.size && fallbackOff + len > file.size) {
-      return `${subject} is truncated by end of file.`;
-    }
-    return `${subject} could not be mapped within the declared resource span.`;
-  };
-  const resolveRelOffset = (rel: number, len: number): number | null => {
-    if (rel < 0 || len < 0 || rel + len > dir.size) return null;
-    const mappedOff = rvaToOff((dir.rva + rel) >>> 0);
-    if (mappedOff != null && mappedOff >= 0 && mappedOff + len <= file.size) {
-      if (rel === 0 || mappedOff !== base) return mappedOff;
-    }
-    const fallbackOff = base + rel;
-    if (fallbackOff < base || fallbackOff + len > limitEnd || fallbackOff + len > file.size) return null;
-    return fallbackOff;
-  };
-
-  const parseDir = async (
+  const { formatRelOffset, describeRelOffsetFailure, resolveRelOffset } =
+    createResourceSpanResolver(dir.rva, dir.size, base, limitEnd, file.size, rvaToOff);
+  const parseDir = (
     rel: number
   ): Promise<{
     Named: number;
-      Ids: number;
-      entries: ResourceDirectoryEntry[];
+    Ids: number;
+    entries: ResourceDirectoryEntry[];
   } | null> => {
-    const off = resolveRelOffset(rel, 16);
-    if (off == null) {
-      addIssue(describeRelOffsetFailure(rel, 16, `Resource directory at ${formatRelOffset(rel)}`));
-      return null;
-    }
-    const dv = await view(off, 16);
-    if (dv.byteLength < 16) {
-      addIssue(`Resource directory header at ${formatRelOffset(rel)} is truncated.`);
-      return null;
-    }
-    if (u32(dv, 0) !== 0) {
-      addIssue(
-        `IMAGE_RESOURCE_DIRECTORY.Characteristics at ${formatRelOffset(rel)} is non-zero; the field is reserved and should be 0.`
-      );
-    }
-    const Named = u16(dv, 12);
-    const Ids = u16(dv, 14);
-    const count = Named + Ids;
-    const entries: ResourceDirectoryEntry[] = [];
-    for (let index = 0; index < count; index++) {
-      const entryOff = resolveRelOffset(rel + 16 + index * 8, 8);
-      if (entryOff == null) {
+    const cached = resourceDirectoryCache.get(rel);
+    if (cached) return cached;
+    const pending = (async () => {
+      const off = resolveRelOffset(rel, 16);
+      if (off == null) {
+        addIssue(describeRelOffsetFailure(rel, 16, `Resource directory at ${formatRelOffset(rel)}`));
+        return null;
+      }
+      const dv = await view(off, 16);
+      if (dv.byteLength < 16) {
+        addIssue(`Resource directory header at ${formatRelOffset(rel)} is truncated.`);
+        return null;
+      }
+      const characteristics = u32(dv, 0);
+      if (characteristics !== 0) {
         addIssue(
-          `Resource directory entries for ${formatRelOffset(rel)} extend past the declared span.`
+          `IMAGE_RESOURCE_DIRECTORY.Characteristics at ${formatRelOffset(rel)} is non-zero; the field is reserved and should be 0.`
         );
-        break;
       }
-      const e = await view(entryOff, 8);
-      if (e.byteLength < 8) {
-        addIssue(`Resource directory entry at ${formatRelOffset(rel + 16 + index * 8)} is truncated.`);
-        break;
+      const timeDateStamp = u32(dv, 4);
+      const majorVersion = u16(dv, 8);
+      const minorVersion = u16(dv, 10);
+      const Named = u16(dv, 12);
+      const Ids = u16(dv, 14);
+      if (!seenDirectoryOffsets.has(rel)) {
+        directories.push({
+          offset: rel,
+          characteristics,
+          timeDateStamp,
+          majorVersion,
+          minorVersion,
+          namedEntries: Named,
+          idEntries: Ids
+        });
+        seenDirectoryOffsets.add(rel);
       }
-      const Name = u32(e, 0);
-      const OffsetToData = u32(e, 4);
-      const nameIsString = (Name & 0x80000000) !== 0;
-      const subdir = (OffsetToData & 0x80000000) !== 0;
-      if (subdir && (OffsetToData & 0x7fffffff) === rel) {
-        addIssue(`Resource directory at ${formatRelOffset(rel)} has a subdirectory entry that points to itself.`);
+      const count = Named + Ids;
+      const entries: ResourceDirectoryEntry[] = [];
+      for (let index = 0; index < count; index++) {
+        const entryOff = resolveRelOffset(rel + 16 + index * 8, 8);
+        if (entryOff == null) {
+          addIssue(
+            `Resource directory entries for ${formatRelOffset(rel)} extend past the declared span.`
+          );
+          break;
+        }
+        const e = await view(entryOff, 8);
+        if (e.byteLength < 8) {
+          addIssue(`Resource directory entry at ${formatRelOffset(rel + 16 + index * 8)} is truncated.`);
+          break;
+        }
+        const Name = u32(e, 0);
+        const OffsetToData = u32(e, 4);
+        const nameIsString = (Name & 0x80000000) !== 0;
+        const subdir = (OffsetToData & 0x80000000) !== 0;
+        if (subdir && (OffsetToData & 0x7fffffff) === rel) {
+          addIssue(`Resource directory at ${formatRelOffset(rel)} has a subdirectory entry that points to itself.`);
+        }
+        entries.push({
+          nameIsString,
+          subdir,
+          nameOrId: nameIsString ? (Name & 0x7fffffff) : (Name >>> 0),
+          target: OffsetToData & 0x7fffffff
+        });
+        if (subdir) resourceSubdirectoryTargets.push(OffsetToData & 0x7fffffff);
       }
-      entries.push({
-        nameIsString,
-        subdir,
-        nameOrId: nameIsString ? (Name & 0x7fffffff) : (Name >>> 0),
-        target: OffsetToData & 0x7fffffff
-      });
-      if (subdir) resourceSubdirectoryTargets.push(OffsetToData & 0x7fffffff);
-    }
-    maxDirectoryEnd = updateDirectoryLayoutEnd(maxDirectoryEnd, rel, entries.length);
-    validateResourceDirectoryEntryKinds(rel, Named, entries, addIssue);
-    validateResourceDirectoryIdSort(rel, Named, entries, addIssue);
-    await validateResourceDirectoryNameSort(rel, Named, entries, readUcs2Label, addIssue);
-    await validateResourceDirectoryDuplicates(rel, entries, readUcs2Label, addIssue);
-    return { Named, Ids, entries };
+      maxDirectoryEnd = updateDirectoryLayoutEnd(maxDirectoryEnd, rel, entries.length);
+      validateResourceDirectoryEntryKinds(rel, Named, entries, addIssue);
+      validateResourceDirectoryIdSort(rel, Named, entries, addIssue);
+      await validateResourceDirectoryNameSort(rel, Named, entries, readUcs2Label, addIssue);
+      await validateResourceDirectoryDuplicates(rel, entries, readUcs2Label, addIssue);
+      return { Named, Ids, entries };
+    })();
+    resourceDirectoryCache.set(rel, pending);
+    return pending;
   };
-
   const readUcs2Label = (rel: number): Promise<string> => {
     const cached = resourceNameCache.get(rel);
     if (cached) return cached;
@@ -165,7 +169,6 @@ export async function buildResourceTree(
     resourceNameCache.set(rel, pending);
     return pending;
   };
-
   const root = await parseDir(0);
   if (!root) {
     return {
@@ -174,16 +177,15 @@ export async function buildResourceTree(
       dirRva: dir.rva,
       dirSize: dir.size,
       ...(issues.length ? { issues } : {}),
+      ...(directories.length ? { directories } : {}),
       top: [],
       detail: [],
       view,
       rvaToOff
     };
   }
-
   const top: Array<{ typeName: string; kind: "name" | "id"; leafCount: number }> = [];
   const detail: Array<{ typeName: string; entries: ResourceDetailEntry[] }> = [];
-
   for (const typeEntry of root.entries) {
     let typeName = "(named)";
     if (!typeEntry.nameIsString && typeEntry.nameOrId != null) {
@@ -269,12 +271,15 @@ export async function buildResourceTree(
     top.push({ typeName, kind: typeEntry.nameIsString ? "name" : "id", leafCount });
     if (typeDetailEntries.length) detail.push({ typeName, entries: typeDetailEntries });
   }
-
   validateResourceLayout(
     maxDirectoryEnd,
     resourceStringRanges,
     resourceDataEntries,
     resourceSubdirectoryTargets,
+    dir.rva,
+    dir.size,
+    base,
+    limitEnd,
     rvaToOff,
     file.size,
     addIssue
@@ -285,6 +290,7 @@ export async function buildResourceTree(
     dirRva: dir.rva,
     dirSize: dir.size,
     ...(issues.length ? { issues } : {}),
+    ...(directories.length ? { directories } : {}),
     top,
     detail,
     view,

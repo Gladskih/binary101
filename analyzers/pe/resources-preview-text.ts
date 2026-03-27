@@ -80,7 +80,11 @@ export function addManifestPreview(
   return {
     preview: {
       previewKind: "text",
-      textPreview: text
+      textPreview: text,
+      previewFields: [
+        { label: "Type", value: "MANIFEST" },
+        { label: "Safety", value: "Shown as text source; XML is not executed." }
+      ]
     },
     ...(issues.length ? { issues } : {})
   };
@@ -101,7 +105,11 @@ export function addHtmlPreview(
     preview: {
       previewKind: "html",
       textPreview: text,
-      textEncoding: encoding || null
+      textEncoding: encoding || null,
+      previewFields: [
+        { label: "Type", value: "HTML" },
+        { label: "Safety", value: "Shown as escaped source; HTML is not executed." }
+      ]
     },
     ...(issues.length ? { issues } : {})
   };

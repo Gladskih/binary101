@@ -19,7 +19,9 @@ const expectBaseDetails = async (page: Page, fileName: string, expectedKind: str
 };
 
 const openResourceGroup = async (page: Page, typeName: string) => {
-  const details = page.locator("#peDetailsValue details").filter({ hasText: typeName }).first();
+  const details = page.locator("#peDetailsValue details").filter({
+    has: page.locator("summary", { hasText: new RegExp(`^${typeName}\\b`) })
+  }).first();
   await details.locator("summary").click();
   return details;
 };
@@ -60,6 +62,12 @@ test.describe("PE resource previews", () => {
     const accelerator = await openResourceGroup(page, "ACCELERATOR");
     await expect(accelerator).toContainText("Ctrl+O");
 
+    const fontDir = await openResourceGroup(page, "FONTDIR");
+    expect(await fontDir.innerHTML()).toContain("Font-directory resource table.");
+
+    const font = await openResourceGroup(page, "FONT");
+    expect(await font.innerHTML()).toContain("TrueType font (heuristic)");
+
     const version = await openResourceGroup(page, "VERSION");
     await expect(version).toContainText("CompanyName");
     await expect(version).toContainText("Binary101");
@@ -68,8 +76,26 @@ test.describe("PE resource previews", () => {
     await expect(rcdata).toContainText("JSON/Text (heuristic)");
     await expect(rcdata).toContainText("{\"kind\":\"rcdata\"}");
 
+    const dlgInclude = await openResourceGroup(page, "DLGINCLUDE");
+    await expect(dlgInclude).toContainText("preview-dialog.h");
+
+    const plugPlay = await openResourceGroup(page, "PLUGPLAY");
+    expect(await plugPlay.innerHTML()).toContain("Legacy Plug and Play resource.");
+
+    const vxd = await openResourceGroup(page, "VXD");
+    expect(await vxd.innerHTML()).toContain("Legacy virtual-device resource.");
+
     const ani = await openResourceGroup(page, "ANICURSOR");
-    await expect(ani).toContainText("Animated cursor/icon (ANI, heuristic)");
+    expect(await ani.innerHTML()).toContain("Animated cursor (ANI)");
+
+    const aniIcon = await openResourceGroup(page, "ANIICON");
+    expect(await aniIcon.innerHTML()).toContain("Animated icon (ANI)");
+
+    const html = await openResourceGroup(page, "HTML");
+    expect(await html.innerHTML()).toContain("HTML is not executed");
+
+    const manifest = await openResourceGroup(page, "MANIFEST");
+    expect(await manifest.innerHTML()).toContain("XML is not executed");
 
     const messageTable = await openResourceGroup(page, "MESSAGETABLE");
     await expect(messageTable).toContainText("OK");

@@ -6,20 +6,31 @@ import type { PeParseResult } from "../../analyzers/pe/index.js";
 import type { ResourceTree } from "../../analyzers/pe/resources-core.js";
 import type { ResourceDetailGroup } from "../../analyzers/pe/resources-preview-types.js";
 import { renderPreviewCell } from "./resource-preview-cell.js";
+import { formatWindowsLanguageName } from "./windows-language-names.js";
 
 const formatLang = (lang: number | null | undefined): string => {
-  if (lang == null) return "-";
-  return "0x" + (Number(lang) >>> 0).toString(16).padStart(4, "0");
+  return formatWindowsLanguageName(lang);
 };
 
 const formatCodePage = (codePage: number | null | undefined): string =>
   codePage ? String(codePage) : "-";
 
+const formatDirectoryVersion = (majorVersion: number, minorVersion: number): string =>
+  majorVersion || minorVersion ? `${majorVersion}.${minorVersion}` : "-";
+
+const formatDirectoryTimestamp = (timeDateStamp: number): string =>
+  timeDateStamp ? `0x${timeDateStamp.toString(16).padStart(8, "0")}` : "-";
+
 type PeWithResources = Pick<PeParseResult, "resources">;
 
 export function renderResources(pe: PeParseResult | PeWithResources, out: string[]): void {
   const resources = (pe as PeWithResources).resources as
-    | { top?: ResourceTree["top"]; detail?: ResourceDetailGroup[]; issues?: string[] }
+    | {
+        top?: ResourceTree["top"];
+        detail?: ResourceDetailGroup[];
+        directories?: ResourceTree["directories"];
+        issues?: string[];
+      }
     | null;
   if (!resources) return;
   const issues = (resources.issues || []).filter((issue): issue is string => Boolean(issue));
@@ -50,6 +61,21 @@ export function renderResources(pe: PeParseResult | PeWithResources, out: string
       out.push(`<tr><td>${typeName}</td><td>${kind}</td><td>${row.leafCount ?? 0}</td></tr>`);
     }
     out.push(`</tbody></table>`);
+  }
+
+  if (resources.directories?.length) {
+    out.push(
+      `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>IMAGE_RESOURCE_DIRECTORY</b> - ${resources.directories.length} table${resources.directories.length === 1 ? "" : "s"}</summary>`
+    );
+    out.push(
+      `<table class="table" style="margin-top:.35rem"><thead><tr><th>Offset</th><th>Timestamp</th><th>Version</th><th>Named</th><th>ID</th></tr></thead><tbody>`
+    );
+    for (const directory of resources.directories) {
+      out.push(
+        `<tr><td class="mono">0x${directory.offset.toString(16)}</td><td class="mono">${formatDirectoryTimestamp(directory.timeDateStamp)}</td><td>${formatDirectoryVersion(directory.majorVersion, directory.minorVersion)}</td><td>${directory.namedEntries}</td><td>${directory.idEntries}</td></tr>`
+      );
+    }
+    out.push(`</tbody></table></details>`);
   }
 
   if (resources.detail?.length) {
