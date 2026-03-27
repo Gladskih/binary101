@@ -116,41 +116,103 @@ const renderAcceleratorEntries = (entries: ResourceAcceleratorEntryPreview[]): s
   return `<ul class="smallNote" style="padding-left:1.1rem;margin:0">${rows}</ul>`;
 };
 
-const renderVersionTranslations = (info: ResourceVersionPreview): string => {
-  if (!info.translations?.length) return "";
-  const rows = info.translations
-    .map(entry => `${safe(formatWindowsLanguageName(entry.languageId))} / CP${safe(entry.codePage)}`)
-    .join("<br>");
-  return `<div class="smallNote" style="margin-top:.25rem"><b>Translations</b><br>${rows}</div>`;
+const renderDefinitionRows = (rows: Array<{ label: string; value: string }>): string => {
+  if (!rows.length) return "";
+  const cells = rows
+    .map(row =>
+      `<div><span class="mono">${safe(row.label)}</span></div><div>${safe(row.value)}</div>`
+    )
+    .join("");
+  return `<div class="smallNote" style="display:grid;grid-template-columns:max-content 1fr;gap:.15rem .55rem;margin-top:.2rem">${cells}</div>`;
+};
+
+const parseVersionTableTranslation = (
+  table: string
+): { languageId: number; codePage: number } | null => {
+  // StringFileInfo table names encode LANGID and code page as 8 hex digits, e.g. 040904E4.
+  // Source: https://learn.microsoft.com/en-us/windows/win32/menurc/versioninfo-resource
+  if (!/^[0-9a-fA-F]{8}$/.test(table)) return null;
+  return {
+    languageId: Number.parseInt(table.slice(0, 4), 16),
+    codePage: Number.parseInt(table.slice(4), 16)
+  };
+};
+
+const formatVersionTranslation = (languageId: number, codePage: number): string =>
+  `${formatWindowsLanguageName(languageId)} / CP${codePage}`;
+
+const formatVersionTableName = (table: string): string => {
+  const translation = parseVersionTableTranslation(table);
+  return translation
+    ? formatVersionTranslation(translation.languageId, translation.codePage)
+    : table;
+};
+
+const createTranslationKey = (languageId: number, codePage: number): string =>
+  `${languageId}:${codePage}`;
+
+const collectVersionTableTranslations = (info: ResourceVersionPreview): Set<string> => {
+  const translations = new Set<string>();
+  for (const entry of info.stringValues || []) {
+    const translation = parseVersionTableTranslation(entry.table);
+    if (!translation) continue;
+    translations.add(createTranslationKey(translation.languageId, translation.codePage));
+  }
+  return translations;
+};
+
+const renderVersionTranslations = (
+  info: ResourceVersionPreview,
+  tableTranslations: Set<string>
+): string => {
+  const translations = (info.translations || []).filter(entry =>
+    !tableTranslations.has(createTranslationKey(entry.languageId, entry.codePage))
+  );
+  if (!translations.length) return "";
+  const rows = translations
+    .map(entry => `<li>${safe(formatVersionTranslation(entry.languageId, entry.codePage))}</li>`)
+    .join("");
+  return `<div class="smallNote" style="margin-top:.35rem"><b>Declared translations</b><ul style="padding-left:1.1rem;margin:.2rem 0 0 0">${rows}</ul></div>`;
+};
+
+const renderVersionFixedInfo = (info: ResourceVersionPreview): string => {
+  const rows = [
+    info.fileVersionString
+      ? { label: "FileVersion", value: info.fileVersionString }
+      : null,
+    info.productVersionString
+      ? { label: "ProductVersion", value: info.productVersionString }
+      : null
+  ].filter((row): row is { label: string; value: string } => Boolean(row));
+  return rows.length
+    ? `<div class="smallNote"><b>Fixed version info</b>${renderDefinitionRows(rows)}</div>`
+    : "";
 };
 
 const renderVersionStringTables = (info: ResourceVersionPreview): string => {
   if (!info.stringValues?.length) return "";
   const stringsByTable = new Map<string, Array<{ key: string; value: string }>>();
   for (const entry of info.stringValues) {
+    if (entry.key === "FileVersion" && entry.value === info.fileVersionString) continue;
+    if (entry.key === "ProductVersion" && entry.value === info.productVersionString) continue;
     const tableEntries = stringsByTable.get(entry.table) || [];
     tableEntries.push({ key: entry.key, value: entry.value });
     stringsByTable.set(entry.table, tableEntries);
   }
   return [...stringsByTable.entries()].map(([table, values]) =>
-    `<div class="smallNote" style="margin-top:.35rem"><b>${safe(table)}</b><ul style="padding-left:1.1rem;margin:.2rem 0 0 0">${values.map(value => `<li><span class="mono">${safe(value.key)}</span>: ${safe(value.value)}</li>`).join("")}</ul></div>`
+    values.length
+      ? `<div class="smallNote" style="margin-top:.35rem"><b>${safe(formatVersionTableName(table))}</b>${renderDefinitionRows(values.map(value => ({ label: value.key, value: value.value })))}</div>`
+      : ""
   ).join("");
 };
 
 const renderVersionPreview = (langEntry: ResourceLangWithPreview): string => {
   const info = langEntry.versionInfo;
   if (!info) return "-";
-  const versions = [
-    info.fileVersionString
-      ? `<li><span class="mono">FileVersion</span>: ${safe(info.fileVersionString)}</li>`
-      : "",
-    info.productVersionString
-      ? `<li><span class="mono">ProductVersion</span>: ${safe(info.productVersionString)}</li>`
-      : ""
-  ].filter(Boolean).join("");
+  const tableTranslations = collectVersionTableTranslations(info);
   return [
-    versions ? `<ul class="smallNote" style="padding-left:1.1rem;margin:0">${versions}</ul>` : "",
-    renderVersionTranslations(info),
+    renderVersionFixedInfo(info),
+    renderVersionTranslations(info, tableTranslations),
     renderVersionStringTables(info),
     renderFields(langEntry),
     renderIssues(langEntry)

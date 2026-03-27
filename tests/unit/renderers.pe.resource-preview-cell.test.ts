@@ -106,17 +106,26 @@ void test("renderPreviewCell renders grouped VERSION details with human-readable
     versionInfo: {
       fileVersionString: "1.2.3.4",
       productVersionString: "5.6.7.8",
-      translations: [{ languageId: 1033, codePage: 1200 }],
+      translations: [
+        { languageId: 1033, codePage: 1200 },
+        { languageId: 1031, codePage: 1200 }
+      ],
       stringValues: [
         { table: "040904B0", key: "CompanyName", value: "Binary101" },
-        { table: "040904B0", key: "FileDescription", value: "PE resource showcase" }
+        { table: "040904B0", key: "FileDescription", value: "PE resource showcase" },
+        { table: "040904B0", key: "FileVersion", value: "1.2.3.4" },
+        { table: "040904B0", key: "ProductVersion", value: "5.6.7.8" }
       ]
     }
   });
 
-  assert.match(versionHtml, /FileVersion/);
-  assert.match(versionHtml, /ProductVersion/);
+  assert.match(versionHtml, /Fixed version info/);
+  assert.strictEqual(versionHtml.match(/FileVersion/g)?.length, 1);
+  assert.strictEqual(versionHtml.match(/ProductVersion/g)?.length, 1);
   assert.match(versionHtml, /English \(United States\)/);
+  assert.match(versionHtml, /German \(Germany\)/);
+  assert.match(versionHtml, /Declared translations/);
   assert.match(versionHtml, /CompanyName/);
   assert.match(versionHtml, /Binary101/);
+  assert.doesNotMatch(versionHtml, /040904B0/);
 });
