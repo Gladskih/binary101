@@ -71,9 +71,9 @@ const formatVTableFixupType = (value: number): string => {
 const describeMetadataStreamType = (name: string): string =>
   KNOWN_METADATA_STREAM_TYPES[name] || "Unknown stream type";
 
-const renderClrSubdirectories = (pe: PeParseResult, out: string[]): void => {
-  const clrHeader = pe.clr;
-  if (!clrHeader) return;
+type PeClrSection = NonNullable<PeParseResult["clr"]>;
+
+const renderClrSubdirectories = (clrHeader: PeClrSection, out: string[]): void => {
   const subdirectories: Array<[string, number, number, string]> = [
     [
       "Resources",
@@ -148,9 +148,8 @@ const renderClrSubdirectories = (pe: PeParseResult, out: string[]): void => {
   out.push(`</details>`);
 };
 
-const renderClrMetadata = (pe: PeParseResult, out: string[]): void => {
-  const clrHeader = pe.clr;
-  if (!clrHeader?.meta) return;
+const renderClrMetadata = (clrHeader: PeClrSection, out: string[]): void => {
+  if (!clrHeader.meta) return;
   const meta = clrHeader.meta;
   out.push(`<details style="margin-top:.35rem" open><summary>Metadata root</summary><dl>`);
   if (meta.version) {
@@ -205,9 +204,7 @@ const renderClrMetadata = (pe: PeParseResult, out: string[]): void => {
   out.push(`</tbody></table></details>`);
 };
 
-export function renderClr(pe: PeParseResult, out: string[]): void {
-  if (!pe.clr) return;
-  const clrHeader = pe.clr;
+export function renderClr(clrHeader: PeClrSection, out: string[]): void {
   out.push(
     `<section>` +
       `<h4 style="margin:0 0 .5rem 0;font-size:.9rem">CLR (.NET) header</h4>` +
@@ -254,12 +251,12 @@ export function renderClr(pe: PeParseResult, out: string[]): void {
     );
   }
   out.push(`</dl>`);
-  renderClrSubdirectories(pe, out);
+  renderClrSubdirectories(clrHeader, out);
   if (clrHeader.issues?.length) {
     out.push(`<ul class="smallNote" style="color:var(--warn-fg)">`);
     clrHeader.issues.forEach(issue => out.push(`<li>${safe(issue)}</li>`));
     out.push(`</ul>`);
   }
-  renderClrMetadata(pe, out);
+  renderClrMetadata(clrHeader, out);
   out.push(`</section>`);
 }

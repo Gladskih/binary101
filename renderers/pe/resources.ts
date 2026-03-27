@@ -19,10 +19,8 @@ const formatDirectoryVersion = (majorVersion: number, minorVersion: number): str
 const formatDirectoryTimestamp = (timeDateStamp: number): string =>
   timeDateStamp ? `0x${timeDateStamp.toString(16).padStart(8, "0")}` : "-";
 
-export function renderResources(resources: PeResources | null, out: string[]): void {
-  if (!resources) return;
+export function renderResources(resources: PeResources, out: string[]): void {
   const issues = (resources.issues || []).filter((issue): issue is string => Boolean(issue));
-
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Resources</h4>`);
   out.push(
     `<div class="smallNote">Windows resources are organized as a three-level tree: ` +
@@ -38,7 +36,6 @@ export function renderResources(resources: PeResources | null, out: string[]): v
         `${issues.map(safe).join(" · ")}</div>`
     );
   }
-
   if (resources.top?.length) {
     out.push(
       `<table class="table" style="margin-top:.5rem"><thead><tr><th>Type</th><th>Key kind</th><th>Leaf entries</th></tr></thead><tbody>`
@@ -50,7 +47,6 @@ export function renderResources(resources: PeResources | null, out: string[]): v
     }
     out.push(`</tbody></table>`);
   }
-
   if (resources.directories?.length) {
     out.push(
       `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>IMAGE_RESOURCE_DIRECTORY</b> - ${resources.directories.length} table${resources.directories.length === 1 ? "" : "s"}</summary>`
@@ -65,7 +61,6 @@ export function renderResources(resources: PeResources | null, out: string[]): v
     }
     out.push(`</tbody></table></details>`);
   }
-
   if (resources.detail?.length) {
     for (const group of resources.detail) {
       const typeName = safe(group.typeName || "(unknown)");
@@ -96,6 +91,5 @@ export function renderResources(resources: PeResources | null, out: string[]): v
       out.push(`</details>`);
     }
   }
-
   out.push(`</section>`);
 }

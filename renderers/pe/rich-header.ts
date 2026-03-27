@@ -2,8 +2,7 @@
 
 import { hex } from "../../binary-utils.js";
 import { dd, safe } from "../../html-utils.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
-import type { PeRichHeaderEntry } from "../../analyzers/pe/types.js";
+import type { PeRichHeader, PeRichHeaderEntry } from "../../analyzers/pe/types.js";
 
 const formatCompId = (entry: PeRichHeaderEntry): number =>
   (((entry.productId & 0xffff) << 16) | (entry.buildNumber & 0xffff)) >>> 0;
@@ -203,9 +202,7 @@ const renderCountCell = (count: number, maxCount: number, totalCount: number): s
   </div>`;
 };
 
-export function renderRichHeader(pe: PeParseResult, out: string[]): void {
-  const rich = pe.dos.rich;
-  if (!rich) return;
+export function renderRichHeader(rich: PeRichHeader, out: string[]): void {
   const entries = [...rich.entries].sort((a, b) => b.count - a.count);
   const totalCount = entries.reduce((sum, entry) => sum + entry.count, 0);
   const maxCount = entries.reduce((max, entry) => Math.max(max, entry.count), 0);
@@ -263,4 +260,3 @@ export function renderRichHeader(pe: PeParseResult, out: string[]): void {
 
   out.push(`</section>`);
 }
-

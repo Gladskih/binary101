@@ -1,7 +1,7 @@
 "use strict";
 
 import { escapeHtml } from "../../html-utils.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
+import type { PeInstructionSetReport } from "../../analyzers/pe/disassembly.js";
 import {
   KNOWN_CPUID_FEATURES,
   describeCpuidFeature,
@@ -15,9 +15,7 @@ const PROGRESS_BAR_ID = "peInstructionSetsProgress";
 const CHIP_ID_PREFIX = "peInstructionSetChip_";
 const COUNT_ID_PREFIX = "peInstructionSetCount_";
 
-export function renderInstructionSets(pe: PeParseResult, out: string[]): void {
-  const disasm = pe.disassembly;
-
+export function renderInstructionSets(disasm: PeInstructionSetReport | undefined, out: string[]): void {
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Instruction sets</h4>`);
   const analyzeLabel = disasm ? "Re-analyze instruction sets" : "Analyze instruction sets";
   out.push(`<div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">`);

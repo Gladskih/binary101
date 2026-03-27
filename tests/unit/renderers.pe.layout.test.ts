@@ -12,42 +12,36 @@ import {
 } from "../../renderers/pe/layout.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 
-const emptyPe = {} as PeParseResult;
-
 void test("layout renderers skip when data is missing", () => {
   const out: string[] = [];
-  renderReloc(emptyPe, out);
-  renderException(emptyPe, out);
-  renderBoundImports(emptyPe, out);
-  renderDelayImports(emptyPe, out);
-  renderCoverage(emptyPe, out);
+  renderCoverage([], out);
   assert.strictEqual(out.length, 0);
 });
 
 void test("renderReloc wraps relocation table in details", () => {
-  const pe = {
-    reloc: { totalEntries: 3, blocks: [{ pageRva: 0x1000, size: 12, count: 1 }] }
-  } as unknown as PeParseResult;
+  const reloc: Parameters<typeof renderReloc>[0] = {
+    totalEntries: 3,
+    blocks: [{ pageRva: 0x1000, size: 12, count: 1, entries: [] }]
+  };
   const out: string[] = [];
-  renderReloc(pe, out);
+  renderReloc(reloc, out);
   const html = out.join("");
   assert.ok(html.includes("Show blocks (1)"));
 });
 
 void test("renderException renders pdata stats", () => {
-  const pe = {
-    exception: {
-      functionCount: 1,
-      beginRvas: [0x1000],
-      uniqueUnwindInfoCount: 1,
-      handlerUnwindInfoCount: 1,
-      chainedUnwindInfoCount: 0,
-      invalidEntryCount: 0,
-      issues: []
-    }
-  } as unknown as PeParseResult;
+  const exception: Parameters<typeof renderException>[0] = {
+    functionCount: 1,
+    beginRvas: [0x1000],
+    handlerRvas: [],
+    uniqueUnwindInfoCount: 1,
+    handlerUnwindInfoCount: 1,
+    chainedUnwindInfoCount: 0,
+    invalidEntryCount: 0,
+    issues: []
+  };
   const out: string[] = [];
-  renderException(pe, out);
+  renderException(exception, out);
   const html = out.join("");
   assert.ok(html.includes("Functions (RUNTIME_FUNCTION entries)"));
   assert.ok(html.includes("<dd>1</dd>"));
@@ -59,40 +53,36 @@ void test("renderException renders pdata stats", () => {
 });
 
 void test("renderBoundImports renders warning and details table", () => {
-  const pe = {
-    boundImports: {
-      warning: "synthetic warning",
-      entries: [{ name: "a.dll", TimeDateStamp: 0, NumberOfModuleForwarderRefs: 0 }]
-    }
-  } as unknown as PeParseResult;
+  const boundImports: Parameters<typeof renderBoundImports>[0] = {
+    warning: "synthetic warning",
+    entries: [{ name: "a.dll", TimeDateStamp: 0, NumberOfModuleForwarderRefs: 0 }]
+  };
   const out: string[] = [];
-  renderBoundImports(pe, out);
+  renderBoundImports(boundImports, out);
   const html = out.join("");
   assert.ok(html.includes("synthetic warning"));
   assert.ok(html.includes("Show bound imports (1)"));
 });
 
 void test("renderDelayImports renders function names and ordinals", () => {
-  const pe = {
-    delayImports: {
-      warning: "delay warning",
-      entries: [
-        {
-          name: "KERNEL32.dll",
-          Attributes: 1,
-          ModuleHandleRVA: 0,
-          ImportAddressTableRVA: 0,
-          ImportNameTableRVA: 0,
-          BoundImportAddressTableRVA: 0,
-          UnloadInformationTableRVA: 0,
-          TimeDateStamp: 0,
-          functions: [{ hint: 0, name: "Foo" }, { hint: 1, ordinal: 5 }, {}]
-        }
-      ]
-    }
-  } as unknown as PeParseResult;
+  const delayImports: Parameters<typeof renderDelayImports>[0] = {
+    warning: "delay warning",
+    entries: [
+      {
+        name: "KERNEL32.dll",
+        Attributes: 1,
+        ModuleHandleRVA: 0,
+        ImportAddressTableRVA: 0,
+        ImportNameTableRVA: 0,
+        BoundImportAddressTableRVA: 0,
+        UnloadInformationTableRVA: 0,
+        TimeDateStamp: 0,
+        functions: [{ hint: 0, name: "Foo" }, { hint: 1, ordinal: 5 }, {}]
+      }
+    ]
+  };
   const out: string[] = [];
-  renderDelayImports(pe, out);
+  renderDelayImports(delayImports, out);
   const html = out.join("");
   assert.ok(html.includes("delay warning"));
   assert.ok(html.includes("Foo"));
@@ -100,11 +90,9 @@ void test("renderDelayImports renders function names and ordinals", () => {
 });
 
 void test("renderCoverage wraps coverage table in details", () => {
-  const pe = {
-    coverage: [{ label: "Headers", off: 0, size: 64 }]
-  } as unknown as PeParseResult;
+  const coverage: Parameters<typeof renderCoverage>[0] = [{ label: "Headers", off: 0, end: 64, size: 64 }];
   const out: string[] = [];
-  renderCoverage(pe, out);
+  renderCoverage(coverage, out);
   const html = out.join("");
   assert.ok(html.includes("Show coverage segments (1)"));
 });

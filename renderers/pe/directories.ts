@@ -3,7 +3,11 @@
 import { humanSize, hex } from "../../binary-utils.js";
 import { dd, safe } from "../../html-utils.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
-import type { PeTlsDirectory } from "../../analyzers/pe/types.js";
+
+type PeExportSection = NonNullable<PeParseResult["exports"]>;
+type PeTlsSection = NonNullable<PeParseResult["tls"]>;
+type PeSecuritySection = NonNullable<PeParseResult["security"]>;
+type PeIatSection = NonNullable<PeParseResult["iat"]>;
 
 export function renderDebug(pe: PeParseResult, out: string[]): void {
   if (!pe.rsds && !pe.debugWarning) return;
@@ -45,9 +49,7 @@ export function renderImports(pe: PeParseResult, out: string[]): void {
   out.push(`</section>`);
 }
 
-export function renderExports(pe: PeParseResult, out: string[]): void {
-  if (!pe.exports) return;
-  const ex = pe.exports;
+export function renderExports(ex: PeExportSection, out: string[]): void {
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Export directory</h4><dl>`);
   out.push(dd("Name", safe(ex.dllName || ""), "Exported DLL name recorded by the linker."));
   out.push(dd("OrdinalBase", String(ex.Base), "Base value added to function indices to form ordinals."));
@@ -70,9 +72,7 @@ export function renderExports(pe: PeParseResult, out: string[]): void {
   out.push(`</section>`);
 }
 
-export function renderTls(pe: PeParseResult, out: string[]): void {
-  if (!pe.tls) return;
-  const t: PeTlsDirectory = pe.tls;
+export function renderTls(t: PeTlsSection, out: string[]): void {
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">TLS directory</h4>`);
   if (t.warnings?.length) {
     out.push(`<ul class="smallNote">`);
@@ -96,9 +96,7 @@ export function renderTls(pe: PeParseResult, out: string[]): void {
 
 export { renderClr } from "./clr.js";
 
-export function renderSecurity(pe: PeParseResult, out: string[]): void {
-  if (!pe.security) return;
-  const s = pe.security;
+export function renderSecurity(s: PeSecuritySection, out: string[]): void {
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Security (WIN_CERTIFICATE)</h4><dl>`);
   out.push(dd("Certificate records", String(s.count ?? 0), "Number of certificate blobs present (Authenticode)."));
   out.push(`</dl>`);
@@ -190,9 +188,7 @@ export function renderSecurity(pe: PeParseResult, out: string[]): void {
   out.push(`</section>`);
 }
 
-export function renderIat(pe: PeParseResult, out: string[]): void {
-  if (!pe.iat) return;
-  const t = pe.iat;
+export function renderIat(t: PeIatSection, out: string[]): void {
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import Address Table (IAT)</h4>`);
   if (t.warnings?.length) {
     out.push(`<ul class="smallNote">`);

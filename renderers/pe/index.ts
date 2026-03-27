@@ -23,25 +23,33 @@ import {
   renderSanity
 } from "./layout.js";
 
+const renderIfPresent = <T>(
+  value: T | null | undefined,
+  render: (value: T, out: string[]) => void,
+  out: string[]
+): void => {
+  if (value != null) render(value, out);
+};
+
 export function renderPe(pe: PeParseResult | null | undefined): string {
   if (!pe) return "";
   const out: string[] = [];
   renderHeaders(pe, out);
-  renderInstructionSets(pe, out);
+  renderInstructionSets(pe.disassembly, out);
   renderLoadConfig(pe, out);
   renderDebug(pe, out);
   renderImports(pe, out);
-  renderResources(pe.resources, out);
-  renderExports(pe, out);
-  renderTls(pe, out);
-  renderReloc(pe, out);
-  renderException(pe, out);
-  renderBoundImports(pe, out);
-  renderDelayImports(pe, out);
-  renderClr(pe, out);
-  renderSecurity(pe, out);
-  renderCoverage(pe, out);
-  renderIat(pe, out);
+  renderIfPresent(pe.resources, renderResources, out);
+  renderIfPresent(pe.exports, renderExports, out);
+  renderIfPresent(pe.tls, renderTls, out);
+  renderIfPresent(pe.reloc, renderReloc, out);
+  renderIfPresent(pe.exception, renderException, out);
+  renderIfPresent(pe.boundImports, renderBoundImports, out);
+  renderIfPresent(pe.delayImports, renderDelayImports, out);
+  renderIfPresent(pe.clr, renderClr, out);
+  renderIfPresent(pe.security, renderSecurity, out);
+  renderCoverage(pe.coverage, out);
+  renderIfPresent(pe.iat, renderIat, out);
   renderSanity(pe, out);
   return out.join("");
 }

@@ -171,7 +171,7 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
   }
   if (pe.dos.rich) {
     out.push(`<div style="margin-top:.75rem">`);
-    renderRichHeader(pe, out);
+    renderRichHeader(pe.dos.rich, out);
     out.push(`</div>`);
   } else {
     out.push(

@@ -4,6 +4,11 @@ import { humanSize, hex } from "../../binary-utils.js";
 import { safe } from "../../html-utils.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 
+type PeRelocSection = NonNullable<PeParseResult["reloc"]>;
+type PeExceptionSection = NonNullable<PeParseResult["exception"]>;
+type PeBoundImportsSection = NonNullable<PeParseResult["boundImports"]>;
+type PeDelayImportsSection = NonNullable<PeParseResult["delayImports"]>;
+
 const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
 
 const computeRawImageEnd = (pe: PeParseResult): number =>
@@ -27,9 +32,7 @@ const computeSecurityOverlayCoverage = (pe: PeParseResult): number => {
   return coveredEnd > coveredStart ? coveredEnd - coveredStart : 0;
 };
 
-export function renderReloc(pe: PeParseResult, out: string[]): void {
-  if (!pe.reloc) return;
-  const reloc = pe.reloc;
+export function renderReloc(reloc: PeRelocSection, out: string[]): void {
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Base relocations</h4>`);
   out.push(`<div class="smallNote">Relocation blocks are used when the image cannot be loaded at its preferred base address.</div>`);
   if (reloc.warnings?.length) {
@@ -53,9 +56,7 @@ export function renderReloc(pe: PeParseResult, out: string[]): void {
   out.push(`</section>`);
 }
 
-export function renderException(pe: PeParseResult, out: string[]): void {
-  if (!pe.exception) return;
-  const ex = pe.exception;
+export function renderException(ex: PeExceptionSection, out: string[]): void {
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Exception directory (.pdata)</h4>`);
   out.push(`<dl>`);
   out.push(`<dt>Functions (RUNTIME_FUNCTION entries)</dt><dd>${ex.functionCount ?? 0}</dd>`);
@@ -74,9 +75,7 @@ export function renderException(pe: PeParseResult, out: string[]): void {
   out.push(`</section>`);
 }
 
-export function renderBoundImports(pe: PeParseResult, out: string[]): void {
-  if (!pe.boundImports) return;
-  const bi = pe.boundImports;
+export function renderBoundImports(bi: PeBoundImportsSection, out: string[]): void {
   if (!bi.entries?.length) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Bound imports</h4>`);
   if (bi.warning) {
@@ -92,9 +91,7 @@ export function renderBoundImports(pe: PeParseResult, out: string[]): void {
   out.push(`</tbody></table></details></section>`);
 }
 
-export function renderDelayImports(pe: PeParseResult, out: string[]): void {
-  if (!pe.delayImports) return;
-  const di = pe.delayImports;
+export function renderDelayImports(di: PeDelayImportsSection, out: string[]): void {
   if (!di.entries?.length) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Delay-load imports</h4>`);
   if (di.warning) {
@@ -127,9 +124,7 @@ export function renderDelayImports(pe: PeParseResult, out: string[]): void {
   out.push(`</section>`);
 }
 
-export function renderCoverage(pe: PeParseResult, out: string[]): void {
-  if (!pe.coverage) return;
-  const cov = pe.coverage;
+export function renderCoverage(cov: PeParseResult["coverage"], out: string[]): void {
   if (!cov.length) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Coverage map (file offsets)</h4>`);
   out.push(`<div class="smallNote">Shows which parts of the file were recognized as headers, directories and section data. Gaps may indicate overlays or unknown data.</div>`);

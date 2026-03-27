@@ -3,13 +3,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderSecurity } from "../../renderers/pe/directories.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
 
-void test("renderSecurity skips when security block is missing and renders details when present", () => {
-  const emptyOut: string[] = [];
-  renderSecurity({} as PeParseResult, emptyOut);
-  assert.strictEqual(emptyOut.length, 0);
-
+void test("renderSecurity renders details when present", () => {
   const cert = {
     offset: 0,
     length: 32,
@@ -28,9 +23,9 @@ void test("renderSecurity skips when security block is missing and renders detai
     },
     warnings: ["Length field does not match directory entry size."]
   };
-  const pe = { security: { count: 1, certs: [cert] } } as unknown as PeParseResult;
+  const security: Parameters<typeof renderSecurity>[0] = { count: 1, certs: [cert] };
   const out: string[] = [];
-  renderSecurity(pe, out);
+  renderSecurity(security, out);
   const html = out.join("");
   assert.ok(html.includes("Certificate records"));
   assert.ok(html.includes("Type 0xf00d"));
@@ -83,9 +78,9 @@ void test("renderSecurity includes expanded Authenticode details", () => {
       ]
     }
   };
-  const pe = { security: { count: 1, certs: [cert] } } as unknown as PeParseResult;
+  const security: Parameters<typeof renderSecurity>[0] = { count: 1, certs: [cert] };
   const out: string[] = [];
-  renderSecurity(pe, out);
+  renderSecurity(security, out);
   const html = out.join("");
   assert.ok(html.includes("File digest (sha256): deadbeef"));
   assert.ok(html.includes("Computed digest: deadbeef"));
@@ -98,24 +93,22 @@ void test("renderSecurity includes expanded Authenticode details", () => {
 });
 
 void test("renderSecurity renders count without certificate table", () => {
-  const pe = { security: { count: 0, certs: [] } } as unknown as PeParseResult;
+  const security: Parameters<typeof renderSecurity>[0] = { count: 0, certs: [] };
   const out: string[] = [];
-  renderSecurity(pe, out);
+  renderSecurity(security, out);
   const html = out.join("");
   assert.ok(html.includes("Certificate records"));
   assert.ok(!html.includes("<table"));
 });
 
 void test("renderSecurity renders top-level directory warnings", () => {
-  const pe = {
-    security: {
-      count: 0,
-      certs: [],
-      warnings: ["Attribute certificate table is truncated by end of file."]
-    }
-  } as unknown as PeParseResult;
+  const security: Parameters<typeof renderSecurity>[0] = {
+    count: 0,
+    certs: [],
+    warnings: ["Attribute certificate table is truncated by end of file."]
+  };
   const out: string[] = [];
-  renderSecurity(pe, out);
+  renderSecurity(security, out);
   const html = out.join("");
   assert.ok(html.includes("Attribute certificate table is truncated by end of file."));
   assert.ok(html.includes("<ul"));
@@ -127,7 +120,9 @@ void test("renderSecurity tolerates missing fields and renders negative matches"
     length: 32,
     availableBytes: 32,
     revision: 0x0200,
+    revisionName: "Revision 2.0",
     certificateType: 0x0002,
+    typeName: "PKCS#7 SignedData (Authenticode)",
     authenticode: {
       format: "pkcs7" as const,
       fileDigestAlgorithm: "sha256",
@@ -142,11 +137,13 @@ void test("renderSecurity tolerates missing fields and renders negative matches"
     length: 8,
     availableBytes: 8,
     revision: 0,
-    certificateType: 0
+    revisionName: "Revision 0x0000",
+    certificateType: 0,
+    typeName: "Type 0x0000"
   };
-  const pe = { security: { certs: [certWithGaps, bareCert] } } as unknown as PeParseResult;
+  const security: Parameters<typeof renderSecurity>[0] = { count: 2, certs: [certWithGaps, bareCert] };
   const out: string[] = [];
-  renderSecurity(pe, out);
+  renderSecurity(security, out);
   const html = out.join("");
   assert.ok(html.includes("Digest matches file: no"));
 });
