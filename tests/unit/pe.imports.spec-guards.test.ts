@@ -45,8 +45,7 @@ void test("parseImportDirectory warns when PE32+ name thunks set high reserved b
   const result = await parseImportDirectory64(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   const entry = expectDefined(result.entries[0]);
@@ -75,8 +74,7 @@ void test("parseImportDirectory warns when an import name runs to EOF without a 
   const result = await parseImportDirectory64(
     createLimitedImportSliceFile(bytes, 8, "imports-eof-name.bin"),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   const entry = expectDefined(result.entries[0]);
@@ -107,8 +105,7 @@ void test("parseImportDirectory clamps the descriptor walk to the declared impor
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMAGE_IMPORT_DESCRIPTOR_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.deepEqual(result.entries.map(entry => entry.dll), ["first.dll"]);
@@ -133,8 +130,7 @@ void test("parseImportDirectory drops a truncated live descriptor instead of inv
       rva: descriptorOffset,
       size: IMAGE_IMPORT_DESCRIPTOR_SIZE - IMAGE_IMPORT_BY_NAME_HINT_SIZE
     }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.deepEqual(result.entries, []);
@@ -162,8 +158,7 @@ void test("parseImportDirectory keeps an empty import name when hint bytes reach
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.deepEqual(result.entries[0]?.functions, [{ hint: importHint, name: "" }]);
@@ -191,8 +186,7 @@ void test("parseImportDirectory walks the full null-terminated PE32+ thunk array
   const result = await parseImportDirectory64(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   const entry = expectDefined(result.entries[0]);
@@ -242,8 +236,7 @@ void test(
     const result = await parseImportDirectory32(
       new MockFile(bytes),
       [{ name: "IMPORT", rva: descriptorOffset, size: IMAGE_IMPORT_DESCRIPTOR_SIZE * 5 }],
-      value => value,
-      () => {}
+      value => value
     );
 
     assert.deepEqual(result.entries.map(entry => entry.dll), [
@@ -270,8 +263,7 @@ for (const [availableDirSize, fieldName] of [
       const result = await parseImportDirectory32(
         new MockFile(bytes),
         [{ name: "IMPORT", rva: descriptorOffset, size: availableDirSize }],
-        value => value,
-        () => {}
+        value => value
       );
 
       assert.ok(result.warning?.includes(fieldName));

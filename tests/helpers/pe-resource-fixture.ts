@@ -122,20 +122,18 @@ export const createSparseResourceRvaToOffset = (
 
 /**
  * Parses a resource tree from raw fixture bytes using a synthetic `RESOURCE` data-directory entry.
- * Tests can override the file name, RVA mapper, and coverage collector without building a full PE.
+ * Tests can override the file name and RVA mapper without building a full PE.
  */
 export const parseResourceTreeFixture = async (
   bytes: Uint8Array,
   resourceRva: number,
   resourceSize: number,
   rvaToOff: (value: number) => number | null,
-  fileName = "resource.bin",
-  addCoverageRegion: (label: string, start: number, size: number) => void = () => {}
+  fileName = "resource.bin"
 ) => expectDefined(
   await buildResourceTree(
     new MockFile(bytes, fileName),
     resourceDataDirectory(resourceRva, resourceSize),
-    rvaToOff,
-    addCoverageRegion
+    rvaToOff
   )
 );

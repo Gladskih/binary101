@@ -16,8 +16,6 @@ const FIXTURE_RESOURCE_RVA = 1;
 
 const buildFixtureResourceDirectory = (size: number) => [{ name: "RESOURCE", rva: FIXTURE_RESOURCE_RVA, size }];
 
-function ignoreCoverage(_label: string, _start: number, _size: number): void {}
-
 const createLocalityFixture = (fileSize = 0x100) => {
   const fixture = createResourceDirectoryFixture(fileSize);
   let nextOffset = 0;
@@ -59,8 +57,7 @@ void test("buildResourceTree exposes IMAGE_RESOURCE_DIRECTORY headers", async ()
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    value => value - FIXTURE_RESOURCE_RVA,
-    ignoreCoverage
+    value => value - FIXTURE_RESOURCE_RVA
   );
   assert.ok(tree);
 
@@ -97,8 +94,7 @@ void test("buildResourceTree warns when a subdirectory target points into the Re
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    value => value - FIXTURE_RESOURCE_RVA,
-    ignoreCoverage
+    value => value - FIXTURE_RESOURCE_RVA
   );
   assert.ok(tree);
 
@@ -120,8 +116,7 @@ void test("buildResourceTree warns when a resource payload RVA lies outside the 
   const tree = await buildResourceTree(
     new MockFile(fileBytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    value => value - FIXTURE_RESOURCE_RVA,
-    ignoreCoverage
+    value => value - FIXTURE_RESOURCE_RVA
   );
   assert.ok(tree);
 
@@ -145,8 +140,7 @@ void test("buildResourceTree warns when a resource payload maps outside the .rsr
     buildFixtureResourceDirectory(fixture.bytes.length),
     value => value === FIXTURE_RESOURCE_RVA + 0x90
       ? fixture.bytes.length + 0x20
-      : value - FIXTURE_RESOURCE_RVA,
-    ignoreCoverage
+      : value - FIXTURE_RESOURCE_RVA
   );
   assert.ok(tree);
 

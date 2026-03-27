@@ -8,19 +8,6 @@ import { expectDefined } from "../helpers/expect-defined.js";
 
 const rvaToOff = (rva: number): number => rva;
 
-type CoverageEntry = { label: string; start: number; size: number };
-
-const collectCoverage = (): {
-  regions: CoverageEntry[];
-  add: (label: string, start: number, size: number) => void;
-} => {
-  const regions: CoverageEntry[] = [];
-  const add = (label: string, start: number, size: number) => {
-    regions.push({ label, start, size });
-  };
-  return { regions, add };
-};
-
 void test("parseClrDirectory parses metadata header and streams", async () => {
   const encoder = new TextEncoder();
   const fileBytes = new Uint8Array(0x400).fill(0);
@@ -71,13 +58,7 @@ void test("parseClrDirectory parses metadata header and streams", async () => {
   fileBytes.set(nameBytes, metaOffset + cursor);
 
   const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: 0x60 }];
-  const { regions, add } = collectCoverage();
-  const clr = await parseClrDirectory(
-    new MockFile(fileBytes, "clr.bin"),
-    dirs,
-    rvaToOff,
-    add
-  );
+  const clr = await parseClrDirectory(new MockFile(fileBytes, "clr.bin"), dirs, rvaToOff);
 
   const definedClr = expectDefined(clr);
   const meta = expectDefined(definedClr.meta);
@@ -85,7 +66,6 @@ void test("parseClrDirectory parses metadata header and streams", async () => {
   assert.strictEqual(definedClr.MajorRuntimeVersion, 4);
   assert.strictEqual(meta.version, "v4.0.30319");
   assert.strictEqual(meta.streams.length, 2);
-  assert.ok(regions.some(r => r.label.includes("CLR (.NET) header")));
 });
 
 void test("parseClrDirectory parses full IMAGE_COR20_HEADER directory fields", async () => {
@@ -116,8 +96,7 @@ void test("parseClrDirectory parses full IMAGE_COR20_HEADER directory fields", a
   dv.setUint32(clrOffset + 0x44, 0x18, true);
 
   const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: 0x48 }];
-  const { add } = collectCoverage();
-  const clr = await parseClrDirectory(new MockFile(bytes, "clr-full.bin"), dirs, rvaToOff, add);
+  const clr = await parseClrDirectory(new MockFile(bytes, "clr-full.bin"), dirs, rvaToOff);
   const definedClr = expectDefined(clr);
 
   assert.strictEqual(definedClr.ResourcesRVA, 0x300);
@@ -159,8 +138,7 @@ void test("parseClrDirectory parses VTableFixups entries", async () => {
   dv.setUint16(vtOff + 0x0e, 0x04, true);
 
   const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: 0x48 }];
-  const { add } = collectCoverage();
-  const clr = await parseClrDirectory(new MockFile(bytes, "clr-vt.bin"), dirs, rvaToOff, add);
+  const clr = await parseClrDirectory(new MockFile(bytes, "clr-vt.bin"), dirs, rvaToOff);
   const definedClr = expectDefined(clr);
 
   const entries = expectDefined(definedClr.vtableFixups);
@@ -183,13 +161,7 @@ void test("parseClrDirectory returns issues when the CLR directory is truncated"
   dv.setUint32(clrOffset + 0x14, 0, true);
 
   const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: 0x18 }];
-  const { add } = collectCoverage();
-  const clr = await parseClrDirectory(
-    new MockFile(bytes, "clr-truncated.bin"),
-    dirs,
-    rvaToOff,
-    add
-  );
+  const clr = await parseClrDirectory(new MockFile(bytes, "clr-truncated.bin"), dirs, rvaToOff);
   const definedClr = expectDefined(clr);
   const issues = expectDefined(definedClr.issues);
   assert.ok(issues.some(issue => issue.toLowerCase().includes("truncated")));
@@ -203,8 +175,7 @@ void test("parseClrDirectory returns partial header info even when the directory
   dv.setUint16(clrOffset + 0x04, 2, true);
   dv.setUint16(clrOffset + 0x06, 5, true);
   const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: 0x10 }];
-  const { add } = collectCoverage();
-  const clr = await parseClrDirectory(new MockFile(bytes, "clr-too-small.bin"), dirs, rvaToOff, add);
+  const clr = await parseClrDirectory(new MockFile(bytes, "clr-too-small.bin"), dirs, rvaToOff);
   const definedClr = expectDefined(clr);
   assert.strictEqual(definedClr.MajorRuntimeVersion, 2);
   assert.ok(expectDefined(definedClr.issues).some(issue => issue.toLowerCase().includes("minimum")));
@@ -221,8 +192,7 @@ void test("parseClrDirectory reports metadata RVAs that cannot be mapped", async
   dv.setUint32(clrOffset + 0x08, metaRva, true);
   dv.setUint32(clrOffset + 0x0c, 0x80, true);
   const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: 0x48 }];
-  const { add } = collectCoverage();
   const mapWithHole = (rva: number): number | null => (rva === metaRva ? null : rva);
-  const clr = await parseClrDirectory(new MockFile(bytes, "clr-meta-hole.bin"), dirs, mapWithHole, add);
+  const clr = await parseClrDirectory(new MockFile(bytes, "clr-meta-hole.bin"), dirs, mapWithHole);
   assert.ok(expectDefined(expectDefined(clr).issues).some(issue => issue.toLowerCase().includes("metadata rva")));
 });

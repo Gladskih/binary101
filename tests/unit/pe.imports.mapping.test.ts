@@ -32,8 +32,7 @@ void test("parseImportDirectory warns when a mapped DLL name offset falls past E
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => (value === dllNameRva ? mappedPastEofOffset : value),
-    () => {}
+    value => (value === dllNameRva ? mappedPastEofOffset : value)
   );
 
   assert.equal(result.entries[0]?.dll, "");
@@ -52,8 +51,7 @@ void test("parseImportDirectory warns on unmapped name RVA", async () => {
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => (value < bytes.length ? value : null),
-    () => {}
+    value => (value < bytes.length ? value : null)
   );
 
   assert.ok(result.warning?.match(/name rva/i));
@@ -65,8 +63,7 @@ void test("parseImportDirectory warns when the root IMPORT directory does not ma
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: 0x1000, size: IMPORT_DIRECTORY_SIZE }],
-    () => null,
-    () => {}
+    () => null
   );
 
   assert.deepEqual(result.entries, []);
@@ -87,8 +84,7 @@ void test("parseImportDirectory warns on unmapped thunk RVA in PE32", async () =
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => (value < bytes.length ? value : null),
-    () => {}
+    value => (value < bytes.length ? value : null)
   );
 
   assert.ok(result.warning?.match(/thunk rva/i));
@@ -108,8 +104,7 @@ void test("parseImportDirectory warns on unmapped thunk RVAs in PE32+", async ()
   const result = await parseImportDirectory64(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => (value < bytes.length ? value : null),
-    () => {}
+    value => (value < bytes.length ? value : null)
   );
 
   assert.ok(result.warning?.match(/thunk rva/i));
@@ -131,8 +126,7 @@ void test("parseImportDirectory aggregates multiple warnings with the expected s
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMAGE_IMPORT_DESCRIPTOR_SIZE - 4 }],
-    value => (value < bytes.length ? value : null),
-    () => {}
+    value => (value < bytes.length ? value : null)
   );
 
   assert.ok(result.warning?.includes(" | "));
@@ -140,13 +134,12 @@ void test("parseImportDirectory aggregates multiple warnings with the expected s
   assert.ok(result.warning?.match(/thunk rva/i));
 });
 
-void test("parseImportDirectory uses the IMPORT data directory and reports its coverage region", async () => {
+void test("parseImportDirectory uses the IMPORT data directory even when other directories exist", async () => {
   const layout = createImportLayout();
   const descriptorOffset = layout.reserve(IMPORT_DIRECTORY_SIZE);
   const dllNameRva = layout.reserve(cStringSize("USER32.dll"));
   const bytes = new Uint8Array(layout.size() + IMPORT_DIRECTORY_SIZE).fill(0);
   const view = new DataView(bytes.buffer);
-  const coverageRegions: Array<{ name: string; start: number; size: number }> = [];
   const exportDirectoryRva = IMAGE_IMPORT_DESCRIPTOR_SIZE + IMAGE_THUNK_DATA32_SIZE;
 
   writeImportDescriptor(view, descriptorOffset, { dllNameRva });
@@ -158,17 +151,11 @@ void test("parseImportDirectory uses the IMPORT data directory and reports its c
       { name: "EXPORT", rva: exportDirectoryRva, size: IMPORT_DIRECTORY_SIZE },
       { name: "IMPORT", rva: descriptorOffset, size: bytes.length - descriptorOffset }
     ],
-    value => value,
-    (name, start, size) => {
-      coverageRegions.push({ name, start, size });
-    }
+    value => value
   );
 
   assert.equal(result.warning, undefined);
   assert.deepEqual(result.entries.map(entry => entry.dll), ["USER32.dll"]);
-  assert.deepEqual(coverageRegions, [
-    { name: "IMPORT directory", start: descriptorOffset, size: bytes.length - descriptorOffset }
-  ]);
 });
 
 void test("parseImportDirectory accepts a mapped DLL name at file offset zero", async () => {
@@ -184,8 +171,7 @@ void test("parseImportDirectory accepts a mapped DLL name at file offset zero", 
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => (value === dllNameRva ? 0 : value),
-    () => {}
+    value => (value === dllNameRva ? 0 : value)
   );
 
   assert.equal(result.entries[0]?.dll, "ZERO.dll");
@@ -204,8 +190,7 @@ void test("parseImportDirectory rejects mapped DLL names that start exactly at E
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => (value === dllNameRva ? bytes.length : value),
-    () => {}
+    value => (value === dllNameRva ? bytes.length : value)
   );
 
   assert.ok(result.warning?.match(/name rva/i));
@@ -242,8 +227,7 @@ void test("parseImportDirectory stops when later thunk slots no longer map throu
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    sparseRvaToOff,
-    () => {}
+    sparseRvaToOff
   );
 
   const entry = expectDefined(result.entries[0]);

@@ -6,22 +6,10 @@ import { parseSecurityDirectory } from "../../analyzers/pe/security.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
-type CoverageEntry = { label: string; start: number; size: number };
 const WIN_CERTIFICATE_HEADER_SIZE = 8;
 const WIN_CERT_REVISION_2_0 = 0x0200;
 const WIN_CERT_TYPE_X509 = 0x0001;
 const WIN_CERT_TYPE_PKCS_SIGNED_DATA = 0x0002;
-
-const collectCoverage = (): {
-  regions: CoverageEntry[];
-  add: (label: string, start: number, size: number) => void;
-} => {
-  const regions: CoverageEntry[] = [];
-  const add = (label: string, start: number, size: number) => {
-    regions.push({ label, start, size });
-  };
-  return { regions, add };
-};
 
 const writeWinCertificateHeader = (
   view: DataView,
@@ -43,8 +31,7 @@ void test("parseSecurityDirectory walks WIN_CERTIFICATE entries", async () => {
   writeWinCertificateHeader(dv, second, 16, WIN_CERT_TYPE_PKCS_SIGNED_DATA);
 
   const dirs = [{ name: "SECURITY", rva: secOff, size: 40 }];
-  const { regions, add } = collectCoverage();
-  const parsed = await parseSecurityDirectory(new MockFile(bytes, "sec.bin"), dirs, add);
+  const parsed = await parseSecurityDirectory(new MockFile(bytes, "sec.bin"), dirs);
   const sec = expectDefined(parsed);
   const firstCert = expectDefined(sec.certs[0]);
 
@@ -53,7 +40,6 @@ void test("parseSecurityDirectory walks WIN_CERTIFICATE entries", async () => {
   assert.strictEqual(firstCert.certificateType, WIN_CERT_TYPE_PKCS_SIGNED_DATA);
   assert.strictEqual(firstCert.typeName.includes("PKCS#7"), true);
   assert.ok(firstCert.authenticode);
-  assert.ok(regions.some(r => r.label.includes("SECURITY")));
 });
 
 void test("parseSecurityDirectory walks all certificates in the declared table", async () => {
@@ -68,8 +54,7 @@ void test("parseSecurityDirectory walks all certificates in the declared table",
 
   const parsed = await parseSecurityDirectory(
     new MockFile(bytes, "sec-many.bin"),
-    [{ name: "SECURITY", rva: secOff, size: certCount * WIN_CERTIFICATE_HEADER_SIZE }],
-    () => {}
+    [{ name: "SECURITY", rva: secOff, size: certCount * WIN_CERTIFICATE_HEADER_SIZE }]
   );
 
   const sec = expectDefined(parsed);
@@ -87,8 +72,7 @@ void test("parseSecurityDirectory reports corruption when rounded certificate si
 
   const parsed = await parseSecurityDirectory(
     new MockFile(bytes, "sec-gap.bin"),
-    [{ name: "SECURITY", rva: secOff, size: 40 }],
-    () => {}
+    [{ name: "SECURITY", rva: secOff, size: 40 }]
   );
 
   const sec = expectDefined(parsed);
@@ -103,8 +87,7 @@ void test("parseSecurityDirectory preserves truncated directories as warnings in
 
   const parsed = await parseSecurityDirectory(
     new MockFile(bytes, "sec-truncated.bin"),
-    [{ name: "SECURITY", rva: secOff, size: WIN_CERTIFICATE_HEADER_SIZE }],
-    () => {}
+    [{ name: "SECURITY", rva: secOff, size: WIN_CERTIFICATE_HEADER_SIZE }]
   );
 
   const sec = expectDefined(parsed);
@@ -122,8 +105,7 @@ void test("parseSecurityDirectory warns when the certificate table offset is not
 
   const parsed = await parseSecurityDirectory(
     new MockFile(bytes, "sec-unaligned.bin"),
-    [{ name: "SECURITY", rva: secOff, size: WIN_CERTIFICATE_HEADER_SIZE }],
-    () => {}
+    [{ name: "SECURITY", rva: secOff, size: WIN_CERTIFICATE_HEADER_SIZE }]
   );
 
   const sec = expectDefined(parsed);
@@ -141,8 +123,7 @@ void test("parseSecurityDirectory warns when WIN_CERTIFICATE.dwLength is not qua
 
   const parsed = await parseSecurityDirectory(
     new MockFile(bytes, "sec-length-not-aligned.bin"),
-    [{ name: "SECURITY", rva: secOff, size: 16 }],
-    () => {}
+    [{ name: "SECURITY", rva: secOff, size: 16 }]
   );
 
   const sec = expectDefined(parsed);
@@ -158,8 +139,7 @@ void test("parseSecurityDirectory warns when the attribute certificate table is 
 
   const parsed = await parseSecurityDirectory(
     new MockFile(bytes, "sec-not-last.bin"),
-    [{ name: "SECURITY", rva: secOff, size: WIN_CERTIFICATE_HEADER_SIZE }],
-    () => {}
+    [{ name: "SECURITY", rva: secOff, size: WIN_CERTIFICATE_HEADER_SIZE }]
   );
 
   const sec = expectDefined(parsed);

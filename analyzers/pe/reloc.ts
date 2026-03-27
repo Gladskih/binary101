@@ -1,6 +1,6 @@
 "use strict";
 
-import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
+import type { PeDataDirectory, RvaToOffset } from "./types.js";
 import { createPeRangeReader, type PeRangeReader } from "./range-reader.js";
 
 const IMAGE_REL_BASED_HIGHADJ = 4;
@@ -117,8 +117,7 @@ const parseRelocationEntries = (
 export async function parseBaseRelocations(
   file: File,
   dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion
+  rvaToOff: RvaToOffset
 ): Promise<{
   blocks: Array<{ pageRva: number; size: number; count: number; entries: Array<{ type: number; offset: number }> }>;
   totalEntries: number;
@@ -128,7 +127,6 @@ export async function parseBaseRelocations(
   if (!dir?.rva || dir.size < 8) return null;
   const base = rvaToOff(dir.rva);
   if (base == null) return null;
-  addCoverageRegion("BASERELOC directory", base, Math.min(dir.size, Math.max(0, file.size - base)));
   const blocks: Array<{
     pageRva: number;
     size: number;

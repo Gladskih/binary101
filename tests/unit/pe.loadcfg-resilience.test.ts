@@ -18,8 +18,7 @@ void test("parseLoadConfigDirectory returns a partial result with warnings on a 
     parseLoadConfigDirectory32(
       new MockFile(bytes, "loadcfg-truncated.bin"),
       [{ name: "LOAD_CONFIG", rva: loadConfigRva, size: 0x40 }],
-      value => value,
-      () => {}
+      value => value
     );
 
   await assert.doesNotReject(parse);

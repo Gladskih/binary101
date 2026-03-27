@@ -29,8 +29,6 @@ function mapFixtureRvaToStart(_value: number): number {
   return 0;
 }
 
-function ignoreCoverage(_label: string, _start: number, _size: number): void {}
-
 // 512 bytes is enough for the synthetic `.rsrc` trees in this file because offsets are
 // allocated sequentially and the fixtures only model metadata, not large raw payloads.
 const createLayoutGuardFixture = (fileSize = 0x200) => {
@@ -100,8 +98,7 @@ void test("buildResourceTree warns when a resource string appears before the las
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    mapFixtureRvaToStart,
-    ignoreCoverage
+    mapFixtureRvaToStart
   );
   assert.ok(tree);
 
@@ -135,8 +132,7 @@ void test("buildResourceTree warns when a resource data entry appears before the
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    mapFixtureRvaToStart,
-    ignoreCoverage
+    mapFixtureRvaToStart
   );
   assert.ok(tree);
 
@@ -179,8 +175,7 @@ void test("buildResourceTree summarizes interleaved resource strings and data en
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    mapFixtureRvaToStart,
-    ignoreCoverage
+    mapFixtureRvaToStart
   );
   assert.ok(tree);
 
@@ -209,8 +204,7 @@ void test("buildResourceTree warns when a resource data payload RVA cannot be ma
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    value => value === FIXTURE_RESOURCE_RVA ? 0 : null,
-    ignoreCoverage
+    value => value === FIXTURE_RESOURCE_RVA ? 0 : null
   );
   assert.ok(tree);
 
@@ -254,8 +248,7 @@ void test("buildResourceTree warns when sibling resource names are duplicated", 
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    mapFixtureRvaToStart,
-    ignoreCoverage
+    mapFixtureRvaToStart
   );
   assert.ok(tree);
 
@@ -285,8 +278,7 @@ void test("buildResourceTree warns when sibling language IDs are duplicated", as
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    mapFixtureRvaToStart,
-    ignoreCoverage
+    mapFixtureRvaToStart
   );
   assert.ok(tree);
 

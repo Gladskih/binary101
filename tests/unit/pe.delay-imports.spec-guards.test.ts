@@ -21,8 +21,7 @@ void test("parseDelayImports warns when the Delay Import Name Table cannot be ma
   const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
-    value => (value === intRva ? null : value),
-    () => {}
+    value => (value === intRva ? null : value)
   ));
   assert.ok(result.warning?.toLowerCase().includes("name"));
 });
@@ -48,8 +47,7 @@ void test("parseDelayImports warns when PE32+ name thunks set reserved bits", as
   const result = expectDefined(await parseDelayImports64(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
-    value => value,
-    () => {}
+    value => value
   ));
   assert.ok(result.warning?.toLowerCase().includes("reserved"));
 });
@@ -78,8 +76,7 @@ void test("parseDelayImports walks the full PE32+ thunk array to its terminator"
   const result = await parseDelayImports64(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
   const definedResult = expectDefined(result);
   const entry = expectDefined(definedResult.entries[0]);
@@ -121,8 +118,7 @@ void test("parseDelayImports stops when later thunk slots stop mapping", async (
   const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
-    sparseRvaToOff,
-    () => {}
+    sparseRvaToOff
   ));
   const entry = expectDefined(result.entries[0]);
   assert.deepEqual(entry.functions, [{ hint: mappedHint, name: mappedName }]);
@@ -167,8 +163,7 @@ void test("parseDelayImports resolves later descriptors through rvaToOff", async
   const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes, "delay-descriptor-gap.bin"),
     [{ name: "DELAY_IMPORT", rva: firstDescriptorRva, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE * 2 }],
-    sparseRvaToOff,
-    () => {}
+    sparseRvaToOff
   ));
   assert.deepEqual(result.entries.map(entry => entry.name), [firstName, secondName]);
 });
@@ -202,8 +197,7 @@ void test("parseDelayImports warns when a later delay descriptor stops mapping b
   const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes, "delay-descriptor-unmapped.bin"),
     [{ name: "DELAY_IMPORT", rva: firstDescriptorRva, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE * 2 }],
-    sparseRvaToOff,
-    () => {}
+    sparseRvaToOff
   ));
   assert.deepEqual(result.entries.map(entry => entry.name), [firstName]);
   assert.ok(result.warning?.toLowerCase().match(/descriptor|truncated|unmapped/));
@@ -229,8 +223,7 @@ void test("parseDelayImports ignores partially non-zero descriptors as terminato
   const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE * 2 }],
-    value => value,
-    () => {}
+    value => value
   ));
   const entry = expectDefined(result.entries[0]);
   assert.equal(result.entries.length, 1);
@@ -256,8 +249,7 @@ void test("parseDelayImports warns when 32-bit ordinal thunks set reserved bits"
   const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
-    value => value,
-    () => {}
+    value => value
   ));
   assert.ok(result.warning?.toLowerCase().includes("reserved"));
 });
@@ -280,8 +272,7 @@ void test("parseDelayImports warns when PE32+ ordinal thunks set reserved bits",
   const result = expectDefined(await parseDelayImports64(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
-    value => value,
-    () => {}
+    value => value
   ));
   assert.ok(result.warning?.toLowerCase().includes("reserved"));
 });

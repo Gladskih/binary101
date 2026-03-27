@@ -1,6 +1,6 @@
 "use strict";
 
-import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
+import type { PeDataDirectory, RvaToOffset } from "./types.js";
 
 // Microsoft PE format, Delay Import tables: IMAGE_DELAYLOAD_DESCRIPTOR is eight DWORDs.
 const IMAGE_DELAYLOAD_DESCRIPTOR_SIZE = 32;
@@ -183,7 +183,6 @@ const parseDelayImportsWithThunkReader = async (
   file: File,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion,
   readDelayThunkFunctions: (
     file: File,
     rvaToOff: RvaToOffset,
@@ -197,7 +196,6 @@ const parseDelayImportsWithThunkReader = async (
   const base = rvaToOff(dir.rva);
   if (base == null) return null;
   const availableDirSize = Math.max(0, Math.min(dir.size, Math.max(0, file.size - base)));
-  addCoverageRegion("DELAY_IMPORT", base, availableDirSize);
   const entries: PeDelayImportEntry[] = [];
   const warnings = new Set<string>();
   if (dir.size < IMAGE_DELAYLOAD_DESCRIPTOR_SIZE || availableDirSize < IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) {
@@ -275,14 +273,12 @@ const parseDelayImportsWithThunkReader = async (
 export const parseDelayImports32 = async (
   file: File,
   dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion
+  rvaToOff: RvaToOffset
 ): Promise<{ entries: PeDelayImportEntry[]; warning?: string } | null> =>
-  parseDelayImportsWithThunkReader(file, dataDirs, rvaToOff, addCoverageRegion, readDelayThunkFunctions32);
+  parseDelayImportsWithThunkReader(file, dataDirs, rvaToOff, readDelayThunkFunctions32);
 export const parseDelayImports64 = async (
   file: File,
   dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion
+  rvaToOff: RvaToOffset
 ): Promise<{ entries: PeDelayImportEntry[]; warning?: string } | null> =>
-  parseDelayImportsWithThunkReader(file, dataDirs, rvaToOff, addCoverageRegion, readDelayThunkFunctions64);
+  parseDelayImportsWithThunkReader(file, dataDirs, rvaToOff, readDelayThunkFunctions64);

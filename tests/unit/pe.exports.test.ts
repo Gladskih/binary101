@@ -10,13 +10,11 @@ const IMAGE_EXPORT_DIRECTORY_SIZE = 40; // IMAGE_EXPORT_DIRECTORY
 const parseExportFixture = (
   bytes: Uint8Array | File,
   directory: { rva: number; size: number },
-  rvaToOff: (rva: number) => number | null = value => value,
-  addCoverageRegion: (label: string, start: number, size: number) => void = () => {}
+  rvaToOff: (rva: number) => number | null = value => value
 ) => parseExportDirectory(
   bytes instanceof Uint8Array ? new MockFile(bytes) : bytes,
   [{ name: "EXPORT", ...directory }],
-  rvaToOff,
-  addCoverageRegion
+  rvaToOff
 );
 void test("parseExportDirectory extracts names and forwarders", async () => {
   const bytes = new Uint8Array(1024).fill(0);

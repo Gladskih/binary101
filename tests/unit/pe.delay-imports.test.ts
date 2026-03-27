@@ -41,16 +41,13 @@ void test("parseDelayImports reads delay descriptors, names, and ordinals", asyn
   writeImportByName(bytes, dv, hintNameRva, importHint, "Func");
   writeDelayImportName(bytes, dllNameRva, delayImportName);
 
-  const coverageRegions: Array<{ label: string; start: number; size: number }> = [];
   const result = await parseDelayImports32(
     new MockFile(bytes, "delay-imports.bin"),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
-    value => value,
-    (label, start, size) => coverageRegions.push({ label, start, size })
+    value => value
   );
 
   const definedResult = expectDefined(result);
-  assert.equal(coverageRegions.length, 1);
   const entry = expectDefined(definedResult.entries[0]);
   assert.equal(entry.name, delayImportName);
   assert.equal(entry.TimeDateStamp, timeDateStamp);
@@ -65,8 +62,7 @@ void test("parseDelayImports preserves a declared directory smaller than one del
   const result = await parseDelayImports32(
     new MockFile(bytes, "delay-imports-too-small.bin"),
     [{ name: "DELAY_IMPORT", rva: 0x10, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE - 1 }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.ok(result);
@@ -90,8 +86,7 @@ void test("parseDelayImports warns when 32-bit thunk table truncates mid-entry",
   const result = await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   const definedResult = expectDefined(result);
@@ -115,8 +110,7 @@ void test("parseDelayImports tolerates truncated INT in 64-bit path", async () =
   const result = await parseDelayImports64(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   const definedResult = expectDefined(result);
@@ -142,8 +136,7 @@ void test("parseDelayImports handles an empty INT in the 32-bit path", async () 
   const result = await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   const definedResult = expectDefined(result);
@@ -172,8 +165,7 @@ void test("parseDelayImports handles truncated hint/name strings", async () => {
   const result = await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   const definedResult = expectDefined(result);
@@ -204,8 +196,7 @@ void test("parseDelayImports treats descriptor fields as RVA when Attributes is 
   const result = await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   const definedResult = expectDefined(result);
@@ -225,8 +216,7 @@ void test("parseDelayImports warns when a mapped DLL name offset falls past EOF"
   const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
-    value => (value === descriptorOffset ? descriptorOffset : value === 0 ? null : value + 0x200),
-    () => {}
+    value => (value === descriptorOffset ? descriptorOffset : value === 0 ? null : value + 0x200)
   ));
 
   assert.ok(result.warning?.toLowerCase().includes("name rva"));
@@ -249,8 +239,7 @@ void test("parseDelayImports warns when a hint/name entry is shorter than two by
   const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
-    value => value,
-    () => {}
+    value => value
   ));
 
   assert.ok(result.warning?.toLowerCase().includes("truncated"));
@@ -274,8 +263,7 @@ void test("parseDelayImports warns when Delay-Load Attributes is non-zero", asyn
   const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
-    value => value,
-    () => {}
+    value => value
   ));
 
   assert.equal(result.entries[0]?.name, "delay.dll");

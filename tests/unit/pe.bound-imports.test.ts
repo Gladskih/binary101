@@ -78,8 +78,7 @@ void test("parseBoundImports extracts bound import names", async () => {
   const result = await parseBoundImports(
     new MockFile(bytes, "bound-imports.bin"),
     [{ name: "BOUND_IMPORT", rva: directoryOffset, size: 0x40 }],
-    value => value,
-    () => {}
+    value => value
   );
 
   const definedResult = expectDefined(result);
@@ -96,8 +95,7 @@ void test("parseBoundImports preserves a declared directory smaller than one des
   const result = await parseBoundImports(
     new MockFile(bytes, "bound-imports-too-small.bin"),
     [{ name: "BOUND_IMPORT", rva: directoryOffset, size: IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE - 1 }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.ok(result);
@@ -111,8 +109,7 @@ void test("parseBoundImports stops on truncated descriptor", async () => {
   const result = await parseBoundImports(
     new MockFile(bytes),
     [{ name: "BOUND_IMPORT", rva: base, size: 8 }],
-    value => value,
-    () => {}
+    value => value
   );
 
   const definedResult = expectDefined(result);
@@ -131,8 +128,7 @@ void test("parseBoundImports handles name offset outside directory", async () =>
   const result = await parseBoundImports(
     new MockFile(bytes),
     [{ name: "BOUND_IMPORT", rva: directoryOffset, size: 0x10 }],
-    value => value,
-    () => {}
+    value => value
   );
 
   const definedResult = expectDefined(result);
@@ -156,8 +152,7 @@ void test("parseBoundImports skips over forwarder refs before the next descripto
   const result = await parseBoundImports(
     new MockFile(bytes),
     [{ name: "BOUND_IMPORT", rva: directoryOffset, size: 0x60 }],
-    value => value,
-    () => {}
+    value => value
   );
 
   const definedResult = expectDefined(result);
@@ -180,8 +175,7 @@ void test("parseBoundImports clamps module names to the declared directory span"
   const result = await parseBoundImports(
     new MockFile(bytes),
     [{ name: "BOUND_IMPORT", rva: directoryOffset, size: directorySize }],
-    value => value,
-    () => {}
+    value => value
   );
 
   const definedResult = expectDefined(result);

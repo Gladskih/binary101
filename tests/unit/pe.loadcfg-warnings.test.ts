@@ -24,8 +24,7 @@ void test("collectLoadConfigWarnings reports tables that do not fit in file/imag
     await parseLoadConfigDirectory32(
       file,
       [{ name: "LOAD_CONFIG", rva: lcRva, size: 0xc0 }],
-      value => value,
-      () => {}
+      value => value
     )
   );
 
@@ -50,8 +49,7 @@ void test("collectLoadConfigWarnings reports tables that start outside SizeOfIma
     await parseLoadConfigDirectory32(
       new MockFile(bytes, "loadcfg-sizeofimage.bin"),
       [{ name: "LOAD_CONFIG", rva: lcRva, size: 0xc0 }],
-      value => value,
-      () => {}
+      value => value
     )
   );
 
@@ -73,8 +71,7 @@ void test("collectLoadConfigWarnings rejects raw RVAs in documented VA table-poi
     await parseLoadConfigDirectory32(
       new MockFile(bytes, "loadcfg-raw-rva-pointer.bin"),
       [{ name: "LOAD_CONFIG", rva: lcRva, size: 0xc0 }],
-      value => value,
-      () => {}
+      value => value
     )
   );
 
@@ -102,8 +99,7 @@ void test("collectLoadConfigWarnings rejects raw RVAs in documented VA pointer f
     await parseLoadConfigDirectory64(
       file,
       [{ name: "LOAD_CONFIG", rva: lcRva, size: 0x148 }],
-      value => value,
-      () => {}
+      value => value
     )
   );
 

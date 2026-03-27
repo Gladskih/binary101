@@ -19,7 +19,6 @@ import {
   renderException,
   renderBoundImports,
   renderDelayImports,
-  renderCoverage,
   renderSanity
 } from "./layout.js";
 
@@ -48,7 +47,6 @@ export function renderPe(pe: PeParseResult | null | undefined): string {
   renderIfPresent(pe.delayImports, renderDelayImports, out);
   renderIfPresent(pe.clr, renderClr, out);
   renderIfPresent(pe.security, renderSecurity, out);
-  renderCoverage(pe.coverage, out);
   renderIfPresent(pe.iat, renderIat, out);
   renderSanity(pe, out);
   return out.join("");

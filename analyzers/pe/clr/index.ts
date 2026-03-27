@@ -1,6 +1,6 @@
 "use strict";
 
-import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "../types.js";
+import type { PeDataDirectory, RvaToOffset } from "../types.js";
 
 import {
   buildCor20Issues,
@@ -48,8 +48,7 @@ const addOptionalDirIssues = (
 export async function parseClrDirectory(
   file: File,
   dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion
+  rvaToOff: RvaToOffset
 ): Promise<PeClrHeader | null> {
   const dir = dataDirs.find(d => d.name === "CLR_RUNTIME");
   if (!dir) return null;
@@ -77,7 +76,6 @@ export async function parseClrDirectory(
     return empty;
   }
   const availableSize = Math.min(dir.size, Math.max(0, fileSize - base));
-  if (availableSize > 0) addCoverageRegion("CLR (.NET) header", base, availableSize);
   issues.push(...buildCor20Issues(dir.size, availableSize));
   const clr = readCor20Header(
     new DataView(

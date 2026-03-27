@@ -1,7 +1,6 @@
 "use strict";
 
 export type RvaToOffset = (rva: number) => number | null;
-export type AddCoverageRegion = (label: string, offset: number, size: number) => void;
 
 export interface PeDataDirectory {
   index?: number;
@@ -18,13 +17,6 @@ export interface PeSection {
   pointerToRawData: number;
   characteristics: number;
   entropy?: number | null;
-}
-
-export interface PeCoverageEntry {
-  label: string;
-  off: number;
-  end: number;
-  size: number;
 }
 
 export interface PeDosStub {
@@ -127,8 +119,6 @@ export interface PeCore {
   sections: PeSection[];
   entrySection: { name: string; index: number } | null;
   rvaToOff: RvaToOffset;
-  coverage: PeCoverageEntry[];
-  addCoverageRegion: AddCoverageRegion;
   overlaySize: number;
   imageEnd: number;
   imageSizeMismatch: boolean;

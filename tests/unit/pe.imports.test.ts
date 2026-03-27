@@ -47,8 +47,7 @@ void test("parseImportDirectory reads import descriptors with names and ordinals
   const result = await parseImportDirectory32(
     new MockFile(bytes, "imports.bin"),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.equal(result.warning, undefined);
@@ -79,8 +78,7 @@ void test(
     const result = await parseImportDirectory32(
       new MockFile(bytes),
       [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-      value => (value < bytes.length ? value : null),
-      () => {}
+      value => (value < bytes.length ? value : null)
     );
 
     assert.deepEqual(result.entries[0]?.functions, [{ name: "<bad RVA>" }]);
@@ -111,8 +109,7 @@ void test("parseImportDirectory does not decode a descriptor past the declared d
       rva: descriptorOffset,
       size: IMAGE_IMPORT_DESCRIPTOR_SIZE - IMAGE_THUNK_DATA32_SIZE
     }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.equal(result.entries.length, 0);
@@ -136,8 +133,7 @@ void test("parseImportDirectory supports the 64-bit imports path", async () => {
   const result = await parseImportDirectory64(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.equal(result.warning, undefined);
@@ -161,8 +157,7 @@ void test("parseImportDirectory warns when PE32 ordinal thunks set reserved bits
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.ok(result.warning?.match(/ordinal/i));
@@ -183,8 +178,7 @@ void test("parseImportDirectory warns when the Hint/Name table is truncated", as
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.deepEqual(result.entries[0]?.functions, [{ name: "" }]);
@@ -204,8 +198,7 @@ void test("parseImportDirectory warns when DLL names run to EOF without terminat
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.equal(result.entries[0]?.dll, "FirstDLL");
@@ -232,8 +225,7 @@ void test("parseImportDirectory warns when import names run to EOF without termi
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.deepEqual(result.entries[0]?.functions, [{ hint: importHint, name: importName }]);
@@ -254,8 +246,7 @@ void test("parseImportDirectory warns when a PE32 thunk table is physically trun
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.equal(result.entries[0]?.functions.length, 0);
@@ -277,8 +268,7 @@ void test("parseImportDirectory warns when PE32+ ordinal thunks set reserved bit
   const result = await parseImportDirectory64(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.deepEqual(result.entries[0]?.functions, [{ ordinal: 2 }]);

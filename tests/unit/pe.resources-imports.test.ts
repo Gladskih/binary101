@@ -39,8 +39,7 @@ void test("buildResourceTree walks a small resource directory", async () => {
   const tree = expectDefined(await buildResourceTree(
     new MockFile(bytes),
     [{ name: "RESOURCE", rva: base, size: 0x80 }],
-    value => value,
-    () => {}
+    value => value
   ));
 
   assert.equal(tree.top.length, 1);
@@ -69,8 +68,7 @@ void test("parseImportDirectory supports 64-bit imports path", async () => {
   const { entries: imports } = await parseImportDirectory64(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: impBase, size: 40 }],
-    value => value,
-    () => {}
+    value => value
   );
   assert.equal(imports.length, 1);
   const firstImport = expectDefined(imports[0]);

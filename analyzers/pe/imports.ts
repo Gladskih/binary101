@@ -1,7 +1,6 @@
 "use strict";
 
 import type {
-  AddCoverageRegion,
   PeDataDirectory,
   RvaToOffset
 } from "./types.js";
@@ -187,7 +186,6 @@ const parseImportDirectoryWithThunkReader = async (
   file: File,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion,
   readThunkFunctions: (
     reader: PeRangeReader,
     fileSize: number,
@@ -211,7 +209,6 @@ const parseImportDirectoryWithThunkReader = async (
     return { entries: imports, warning: "Import directory RVA does not map to file data." };
   }
   const availableDirSize = Math.max(0, Math.min(impDir.size, file.size - start));
-  addCoverageRegion("IMPORT directory", start, availableDirSize);
   const maxDescriptors = Math.ceil(availableDirSize / IMAGE_IMPORT_DESCRIPTOR_SIZE);
   const addWarning = (msg: string): void => {
     warnings.add(msg);
@@ -276,27 +273,13 @@ const parseImportDirectoryWithThunkReader = async (
 export const parseImportDirectory32 = async (
   file: File,
   dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion
+  rvaToOff: RvaToOffset
 ): Promise<PeImportParseResult> =>
-  parseImportDirectoryWithThunkReader(
-    file,
-    dataDirs,
-    rvaToOff,
-    addCoverageRegion,
-    readImportThunkFunctions32
-  );
+  parseImportDirectoryWithThunkReader(file, dataDirs, rvaToOff, readImportThunkFunctions32);
 
 export const parseImportDirectory64 = async (
   file: File,
   dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion
+  rvaToOff: RvaToOffset
 ): Promise<PeImportParseResult> =>
-  parseImportDirectoryWithThunkReader(
-    file,
-    dataDirs,
-    rvaToOff,
-    addCoverageRegion,
-    readImportThunkFunctions64
-  );
+  parseImportDirectoryWithThunkReader(file, dataDirs, rvaToOff, readImportThunkFunctions64);

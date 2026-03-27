@@ -1,12 +1,11 @@
 "use strict";
 
-import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
+import type { PeDataDirectory, RvaToOffset } from "./types.js";
 
 export async function parseExportDirectory(
   file: File,
   dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion
+  rvaToOff: RvaToOffset
 ): Promise<{
   flags: number;
   timestamp: number;
@@ -25,7 +24,6 @@ export async function parseExportDirectory(
   const base = rvaToOff(dir.rva);
   if (base == null) return null;
   const availableDirSize = Math.max(0, Math.min(dir.size, file.size - base));
-  addCoverageRegion("EXPORT directory", base, availableDirSize);
   if (availableDirSize < 40) {
     return {
       flags: 0,

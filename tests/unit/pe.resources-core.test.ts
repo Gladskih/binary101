@@ -18,13 +18,12 @@ import {
 
 void test("buildResourceTree returns null for missing or unmapped resource trees", async () => {
   const file = new MockFile(new Uint8Array(0));
-  const noDir = await buildResourceTree(file, [], () => 0, () => {});
+  const noDir = await buildResourceTree(file, [], () => 0);
   assert.strictEqual(noDir, null);
   const unmapped = await buildResourceTree(
     file,
     [{ name: "RESOURCE", rva: 0x200, size: 32 }],
-    () => null,
-    () => {}
+    () => null
   );
   assert.strictEqual(unmapped, null);
 });
@@ -114,14 +113,12 @@ void test("buildResourceTree parses nested directories and skips truncated label
   fixture.writeDirectoryEntry(0x70, 0x00000409, 0x00000080);
   fixture.writeDataEntry(0x80, 0x00002000, 0x10, 0x000004b0);
 
-  const coverage: Array<{ label: string; start: number; size: number }> = [];
   const tree = await parseResourceTreeFixture(
     fixture.bytes,
     1,
     0x120,
     () => 0,
-    "pe-resources.bin",
-    (label, start, size) => coverage.push({ label, start, size })
+    "pe-resources.bin"
   );
 
   assert.strictEqual(tree.top.length, 2);
@@ -139,7 +136,6 @@ void test("buildResourceTree parses nested directories and skips truncated label
     dataRVA: 0x2000,
     reserved: 0
   });
-  assert.strictEqual(expectDefined(coverage[0]).label, "RESOURCE directory");
   assert.match((tree.issues || []).join(" "), /string name/i);
 });
 

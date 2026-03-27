@@ -86,7 +86,6 @@ void test("parseForUi parses PE headers and sections", async () => {
   await assertParsed(createPeFile(), "pe", pe => {
     assert.strictEqual(pe.coff.NumberOfSections, 1);
     assert.ok(pe.sections);
-    assert.ok(pe.coverage);
   });
 });
 void test("parseForUi parses GIF frames and trailer", async () => {

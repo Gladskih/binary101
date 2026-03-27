@@ -1,6 +1,6 @@
 "use strict";
 
-import type { AddCoverageRegion, PeDataDirectory, PeTlsDirectory, RvaToOffset } from "./types.js";
+import type { PeDataDirectory, PeTlsDirectory, RvaToOffset } from "./types.js";
 
 const MAX_RVA_BIGINT = 0xffff_ffffn;
 const IMAGE_TLS_DIRECTORY32_SIZE = 0x18; // Microsoft PE format: IMAGE_TLS_DIRECTORY32 is six DWORDs.
@@ -99,7 +99,6 @@ export const parseTlsDirectory32 = async (
   file: File,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion,
   imageBase: bigint
 ): Promise<PeTlsDirectory | null> => {
   const dir = dataDirs.find(entry => entry.name === "TLS");
@@ -119,7 +118,6 @@ export const parseTlsDirectory32 = async (
     return createTlsWarningResult(warnings);
   }
   const readableSize = Math.max(0, Math.min(dir.size, file.size - base));
-  addCoverageRegion("TLS directory", base, readableSize);
   if (readableSize < IMAGE_TLS_DIRECTORY32_SIZE) {
     warnings.push("TLS directory is truncated by end of file.");
     return createTlsWarningResult(warnings);
@@ -146,14 +144,6 @@ export const parseTlsDirectory32 = async (
   const callbackInfo = callbackTableRva != null
     ? await readTlsCallbackRvas32(file, rvaToOff, callbackTableRva, imageBase, warnings)
     : { rvas: [], tableBytes: 0 };
-  if (
-    callbackTableOff != null &&
-    callbackTableOff >= 0 &&
-    callbackTableOff < file.size &&
-    callbackInfo.tableBytes > 0
-  ) {
-    addCoverageRegion("TLS callbacks", callbackTableOff, callbackInfo.tableBytes);
-  }
   return {
     StartAddressOfRawData,
     EndAddressOfRawData,
@@ -172,7 +162,6 @@ export const parseTlsDirectory64 = async (
   file: File,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion,
   imageBase: bigint
 ): Promise<PeTlsDirectory | null> => {
   const dir = dataDirs.find(entry => entry.name === "TLS");
@@ -192,7 +181,6 @@ export const parseTlsDirectory64 = async (
     return createTlsWarningResult(warnings);
   }
   const readableSize = Math.max(0, Math.min(dir.size, file.size - base));
-  addCoverageRegion("TLS directory", base, readableSize);
   if (readableSize < IMAGE_TLS_DIRECTORY64_SIZE) {
     warnings.push("TLS directory is truncated by end of file.");
     return createTlsWarningResult(warnings);
@@ -220,14 +208,6 @@ export const parseTlsDirectory64 = async (
   const callbackInfo = callbackTableRva != null
     ? await readTlsCallbackRvas64(file, rvaToOff, callbackTableRva, imageBase, warnings)
     : { rvas: [], tableBytes: 0 };
-  if (
-    callbackTableOff != null &&
-    callbackTableOff >= 0 &&
-    callbackTableOff < file.size &&
-    callbackInfo.tableBytes > 0
-  ) {
-    addCoverageRegion("TLS callbacks", callbackTableOff, callbackInfo.tableBytes);
-  }
   return {
     StartAddressOfRawData: StartAddressOfRawDataVa,
     EndAddressOfRawData: EndAddressOfRawDataVa,

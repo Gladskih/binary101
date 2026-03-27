@@ -27,7 +27,6 @@ void test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
     new MockFile(bytes),
     [{ name: "TLS", rva: tlsRva, size: 0x18 }],
     value => value,
-    () => {},
     0n
   ));
   assert.equal(tls.CallbackCount, 1);
@@ -49,7 +48,6 @@ void test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
     new MockFile(bytes64),
     [{ name: "TLS", rva: 0x10, size: IMAGE_TLS_DIRECTORY64_SIZE }],
     value => (value === 0x10 ? 0 : value),
-    () => {},
     0n
   ));
   assert.equal(tls64.CallbackCount, 1);
@@ -59,7 +57,7 @@ void test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
 
 void test("parseTlsDirectory returns null when the TLS data directory is absent", async () => {
   const file = new MockFile(new Uint8Array(16));
-  assert.equal(await parseTlsDirectory32(file, [], value => value, () => {}, 0n), null);
+  assert.equal(await parseTlsDirectory32(file, [], value => value, 0n), null);
 });
 
 void test("parseTlsDirectory preserves declared but unmapped TLS directories with warnings", async () => {
@@ -68,7 +66,6 @@ void test("parseTlsDirectory preserves declared but unmapped TLS directories wit
     file,
     [{ name: "TLS", rva: 0x20, size: 0x18 }],
     () => null,
-    () => {},
     0n
   ));
 
@@ -83,7 +80,6 @@ void test("parseTlsDirectory preserves truncated TLS directory headers with warn
     new MockFile(truncated32),
     [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY32_SIZE }],
     value => value,
-    () => {},
     0n
   ));
   assert.equal(tls32.parsed, false);
@@ -94,7 +90,6 @@ void test("parseTlsDirectory preserves truncated TLS directory headers with warn
     new MockFile(truncated64),
     [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY64_SIZE }],
     value => value,
-    () => {},
     0n
   ));
   assert.equal(tls64.parsed, false);
@@ -111,7 +106,6 @@ void test("parseTlsDirectory warns when the declared data-directory size is too 
     new MockFile(bytes32),
     [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY32_SIZE - 1 }],
     value => value,
-    () => {},
     0n
   ));
   assert.equal(tls32.parsed, false);
@@ -125,7 +119,6 @@ void test("parseTlsDirectory warns when the declared data-directory size is too 
     new MockFile(bytes64),
     [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY64_SIZE - 1 }],
     value => value,
-    () => {},
     0n
   ));
   assert.equal(tls64.parsed, false);
@@ -153,7 +146,6 @@ void test(
     new MockFile(bytes),
     [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY64_SIZE }],
     value => value,
-    () => {},
     0n
   ));
 
@@ -175,7 +167,6 @@ void test("parseTlsDirectory skips invalid callback pointers and tolerates out-o
     new MockFile(bytes),
     [{ name: "TLS", rva: tlsRva, size: 0x18 }],
     value => value,
-    () => {},
     0x2000n
   ));
   assert.equal(tls.CallbackCount, 0);
@@ -190,7 +181,6 @@ void test("parseTlsDirectory skips invalid callback pointers and tolerates out-o
     new MockFile(bytesOutOfRange),
     [{ name: "TLS", rva: tlsRva, size: 0x18 }],
     rvaToOff,
-    () => {},
     0n
   ));
   assert.equal(tlsOutOfRange.CallbackCount, 0);
@@ -219,7 +209,6 @@ void test("parseTlsDirectory does not read callback slots past an rvaToOff gap",
     new MockFile(bytes),
     [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY32_SIZE }],
     sparseRvaToOff,
-    () => {},
     0n
   ));
 
@@ -253,7 +242,6 @@ void test("parseTlsDirectory walks the full null-terminated callback array witho
     new MockFile(bytes),
     [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY32_SIZE }],
     value => value,
-    () => {},
     0n
   ));
 
@@ -264,12 +252,11 @@ void test("parseTlsDirectory walks the full null-terminated callback array witho
   );
 });
 
-void test("parseTlsDirectory reports TLS callback coverage only through the null terminator", async () => {
+void test("parseTlsDirectory counts callbacks through the null terminator", async () => {
   const tlsRva = IMAGE_TLS_DIRECTORY32_SIZE;
   const callbackTableRva = tlsRva + IMAGE_TLS_DIRECTORY32_SIZE;
   const bytes = new Uint8Array(256).fill(0);
   const dv = new DataView(bytes.buffer);
-  const coverage: Array<{ label: string; start: number; size: number }> = [];
   dv.setUint32(tlsRva + 12, callbackTableRva, true);
   dv.setUint32(callbackTableRva, 0x2000, true);
   dv.setUint32(callbackTableRva + TLS_CALLBACK_ENTRY_SIZE32, 0, true);
@@ -278,15 +265,9 @@ void test("parseTlsDirectory reports TLS callback coverage only through the null
     new MockFile(bytes),
     [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY32_SIZE }],
     value => value,
-    (label, start, size) => coverage.push({ label, start, size }),
     0n
   ));
 
   assert.equal(tls.CallbackCount, 1);
-  const callbackCoverage = expectDefined(coverage.find(entry => entry.label === "TLS callbacks"));
-  assert.deepEqual(callbackCoverage, {
-    label: "TLS callbacks",
-    start: callbackTableRva,
-    size: TLS_CALLBACK_ENTRY_SIZE32 * 2
-  });
+  assert.deepEqual(tls.CallbackRvas, [0x2000]);
 });

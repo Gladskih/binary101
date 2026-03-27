@@ -7,7 +7,7 @@ import {
   type LoadConfigFieldReader
 } from "./layouts.js";
 import { createPeLoadConfigResult } from "./result.js";
-import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "../types.js";
+import type { PeDataDirectory, RvaToOffset } from "../types.js";
 
 export type PeLoadConfigCodeIntegrity = {
   Flags: number;
@@ -103,7 +103,6 @@ const parseLoadConfigDirectoryWithBuilder = async (
   file: File,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion,
   buildLoadConfig: (reader: LoadConfigFieldReader) => PeLoadConfig
 ): Promise<PeLoadConfig | null> => {
   const lcDir = dataDirs.find(d => d.name === "LOAD_CONFIG");
@@ -132,7 +131,6 @@ const parseLoadConfigDirectoryWithBuilder = async (
     warnings.push("LOAD_CONFIG does not contain any readable bytes.");
     return createPeLoadConfigResult(warnings);
   }
-  addCoverageRegion("LOAD_CONFIG", base, availableSize);
   const view = new DataView(await file.slice(base, base + availableSize).arrayBuffer());
   if (view.byteLength < 4) {
     warnings.push("LOAD_CONFIG is truncated before the Size field.");
@@ -175,18 +173,16 @@ const parseLoadConfigDirectoryWithBuilder = async (
 export const parseLoadConfigDirectory32 = async (
   file: File,
   dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion
+  rvaToOff: RvaToOffset
 ): Promise<PeLoadConfig | null> =>
-  parseLoadConfigDirectoryWithBuilder(file, dataDirs, rvaToOff, addCoverageRegion, buildLoadConfig32);
+  parseLoadConfigDirectoryWithBuilder(file, dataDirs, rvaToOff, buildLoadConfig32);
 
 export const parseLoadConfigDirectory64 = async (
   file: File,
   dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion
+  rvaToOff: RvaToOffset
 ): Promise<PeLoadConfig | null> =>
-  parseLoadConfigDirectoryWithBuilder(file, dataDirs, rvaToOff, addCoverageRegion, buildLoadConfig64);
+  parseLoadConfigDirectoryWithBuilder(file, dataDirs, rvaToOff, buildLoadConfig64);
 
 export function readLoadConfigPointerRva(imageBase: bigint, pointerVa: bigint): number | null {
   return toRvaFromVa(pointerVa, imageBase);

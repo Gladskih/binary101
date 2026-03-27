@@ -10,8 +10,7 @@ export interface PeIatDirectory {
 
 export const parseIatDirectory = (
   dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset,
-  addCoverageRegion: (label: string, offset: number, size: number) => void
+  rvaToOff: RvaToOffset
 ): PeIatDirectory | null => {
   const dir = dataDirs.find(directory => directory.name === "IAT");
   if (!dir || (dir.rva === 0 && dir.size === 0)) return null;
@@ -31,6 +30,5 @@ export const parseIatDirectory = (
       warnings: ["IAT directory RVA could not be mapped to a file offset."]
     };
   }
-  addCoverageRegion("IAT", offset, dir.size);
   return { rva: dir.rva, size: dir.size };
 };

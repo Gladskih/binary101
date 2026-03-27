@@ -32,7 +32,7 @@ import {
 } from "./dynamic-relocations.js";
 import { parseIatDirectory, type PeIatDirectory } from "./iat-directory.js";
 import type { PeInstructionSetReport } from "./disassembly.js";
-import type { PeCore, PeCoverageEntry, PeDataDirectory, PeTlsDirectory, RvaToOffset } from "./types.js";
+import type { PeCore, PeDataDirectory, PeTlsDirectory, RvaToOffset } from "./types.js";
 
 const appendUniqueWarnings = (
   existing: string[] | undefined,
@@ -80,7 +80,6 @@ export interface PeParseResult {
   overlaySize: number;
   imageEnd: number;
   imageSizeMismatch: boolean;
-  coverage: PeCoverageEntry[];
   hasCert: boolean;
   disassembly?: PeInstructionSetReport;
 }
@@ -96,13 +95,10 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     sections,
     entrySection,
     rvaToOff,
-    coverage,
-    addCoverageRegion,
     overlaySize,
     imageEnd,
     imageSizeMismatch
   } = core;
-
   const { ImageBase } = opt;
   const peVariant = opt.isPlus
     ? {
@@ -124,8 +120,8 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
           coff.Machine === 0x014c ? readSafeSehHandlerTableRvas : null
       };
 
-  const debugResult = await parseDebugDirectory(file, dataDirs, rvaToOff, addCoverageRegion);
-  const loadcfg = await peVariant.parseLoadConfigDirectory(file, dataDirs, rvaToOff, addCoverageRegion);
+  const debugResult = await parseDebugDirectory(file, dataDirs, rvaToOff);
+  const loadcfg = await peVariant.parseLoadConfigDirectory(file, dataDirs, rvaToOff);
   if (loadcfg) {
     const warnings = collectLoadConfigWarnings(file.size, rvaToOff, ImageBase, opt.SizeOfImage, loadcfg);
     mergeLoadConfigWarnings(loadcfg, warnings);
@@ -231,22 +227,16 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
       loadcfg.dynamicRelocations = null;
     }
   }
-  const importResult = await peVariant.parseImportDirectory(file, dataDirs, rvaToOff, addCoverageRegion);
-  const exportsInfo = await parseExportDirectory(file, dataDirs, rvaToOff, addCoverageRegion);
-  const tls = await peVariant.parseTlsDirectory(
-    file,
-    dataDirs,
-    rvaToOff,
-    addCoverageRegion,
-    ImageBase
-  );
-  const resources = await parseResources(file, dataDirs, rvaToOff, addCoverageRegion);
-  const reloc = await parseBaseRelocations(file, dataDirs, rvaToOff, addCoverageRegion);
-  const exception = await parseExceptionDirectory(file, dataDirs, rvaToOff, addCoverageRegion, coff.Machine);
-  const boundImports = await parseBoundImports(file, dataDirs, rvaToOff, addCoverageRegion);
-  const delayImports = await peVariant.parseDelayImports(file, dataDirs, rvaToOff, addCoverageRegion);
-  const clr = await parseClrDirectory(file, dataDirs, rvaToOff, addCoverageRegion);
-  let security = await parseSecurityDirectory(file, dataDirs, addCoverageRegion);
+  const importResult = await peVariant.parseImportDirectory(file, dataDirs, rvaToOff);
+  const exportsInfo = await parseExportDirectory(file, dataDirs, rvaToOff);
+  const tls = await peVariant.parseTlsDirectory(file, dataDirs, rvaToOff, ImageBase);
+  const resources = await parseResources(file, dataDirs, rvaToOff);
+  const reloc = await parseBaseRelocations(file, dataDirs, rvaToOff);
+  const exception = await parseExceptionDirectory(file, dataDirs, rvaToOff, coff.Machine);
+  const boundImports = await parseBoundImports(file, dataDirs, rvaToOff);
+  const delayImports = await peVariant.parseDelayImports(file, dataDirs, rvaToOff);
+  const clr = await parseClrDirectory(file, dataDirs, rvaToOff);
+  let security = await parseSecurityDirectory(file, dataDirs);
   if (security?.certs?.length) {
     const securityDir = dataDirs.find(d => d.name === "SECURITY");
     const certs = await Promise.all(
@@ -261,7 +251,7 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     );
     security = { ...security, certs };
   }
-  const iat = parseIatDirectory(dataDirs, rvaToOff, addCoverageRegion);
+  const iat = parseIatDirectory(dataDirs, rvaToOff);
   return {
     debug:
       debugResult.entry || debugResult.warning
@@ -294,7 +284,6 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     overlaySize,
     imageEnd,
     imageSizeMismatch,
-    coverage,
     hasCert: !!security?.count,
   };
 }

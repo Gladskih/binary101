@@ -1,5 +1,5 @@
 "use strict";
-import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "../types.js";
+import type { PeDataDirectory, RvaToOffset } from "../types.js";
 import {
   validateResourceDirectoryDuplicates,
   validateResourceDirectoryEntryKinds,
@@ -17,15 +17,13 @@ export type { ResourceLangEntry, ResourceDetailEntry, ResourceTree } from "./tre
 export async function buildResourceTree(
   file: File,
   dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion
+  rvaToOff: RvaToOffset
 ): Promise<ResourceTree | null> {
   const utf16Decoder = new TextDecoder("utf-16le", { fatal: false });
   const dir = dataDirs.find(d => d.name === "RESOURCE");
   if (!dir?.rva || dir.size < 16) return null;
   const base = rvaToOff(dir.rva);
   if (base == null) return null;
-  addCoverageRegion("RESOURCE directory", base, dir.size);
   const limitEnd = base + dir.size;
   const issues: string[] = [];
   let maxDirectoryEnd = 0;

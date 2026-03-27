@@ -7,16 +7,9 @@ import {
   renderException,
   renderBoundImports,
   renderDelayImports,
-  renderCoverage,
   renderSanity
 } from "../../renderers/pe/layout.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
-
-void test("layout renderers skip when data is missing", () => {
-  const out: string[] = [];
-  renderCoverage([], out);
-  assert.strictEqual(out.length, 0);
-});
 
 void test("renderReloc wraps relocation table in details", () => {
   const reloc: Parameters<typeof renderReloc>[0] = {
@@ -87,14 +80,6 @@ void test("renderDelayImports renders function names and ordinals", () => {
   assert.ok(html.includes("delay warning"));
   assert.ok(html.includes("Foo"));
   assert.ok(html.includes("ORD 5"));
-});
-
-void test("renderCoverage wraps coverage table in details", () => {
-  const coverage: Parameters<typeof renderCoverage>[0] = [{ label: "Headers", off: 0, end: 64, size: 64 }];
-  const out: string[] = [];
-  renderCoverage(coverage, out);
-  const html = out.join("");
-  assert.ok(html.includes("Show coverage segments (1)"));
 });
 
 void test("renderSanity renders issues and clean state", () => {

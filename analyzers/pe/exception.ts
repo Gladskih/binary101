@@ -1,7 +1,7 @@
 "use strict";
 
 import { createPeRangeReader, type PeRangeReader } from "./range-reader.js";
-import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
+import type { PeDataDirectory, RvaToOffset } from "./types.js";
 const RUNTIME_FUNCTION_ENTRY_SIZE = 12;
 const UNW_FLAG_EHANDLER = 0x01;
 const UNW_FLAG_UHANDLER = 0x02;
@@ -87,7 +87,6 @@ export async function parseExceptionDirectory(
   file: File,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion,
   machine = IMAGE_FILE_MACHINE_AMD64
 ): Promise<{
   functionCount: number;
@@ -103,8 +102,6 @@ export async function parseExceptionDirectory(
   if (!dir?.rva) return null;
   const base = rvaToOff(dir.rva);
   if (base == null) return null;
-  const maxBytes = Math.max(0, Math.min(dir.size, file.size - base));
-  addCoverageRegion("EXCEPTION directory", base, maxBytes);
   if (machine !== IMAGE_FILE_MACHINE_AMD64) {
     return createEmptyExceptionDirectory([
       `Exception directory decoding is only implemented for AMD64; machine 0x${machine.toString(16)} uses a different format.`

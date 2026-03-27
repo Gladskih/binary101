@@ -21,8 +21,7 @@ void test("parseLoadConfigDirectory reads VolatileMetadataPointer for x64", asyn
     await parseLoadConfigDirectory64(
       new MockFile(bytes, "loadcfg-volatile64.bin"),
       [{ name: "LOAD_CONFIG", rva: lcRva, size: 0x148 }],
-      value => value,
-      () => {}
+      value => value
     )
   );
   assert.equal(lc.VolatileMetadataPointer, 0x14001ac34n);
@@ -39,8 +38,7 @@ void test("parseLoadConfigDirectory reads VolatileMetadataPointer for x86", asyn
     await parseLoadConfigDirectory32(
       new MockFile(bytes, "loadcfg-volatile32.bin"),
       [{ name: "LOAD_CONFIG", rva: lcRva, size: 0xc4 }],
-      value => value,
-      () => {}
+      value => value
     )
   );
   assert.equal(lc.VolatileMetadataPointer, 0x12345678n);
@@ -59,8 +57,7 @@ void test("collectLoadConfigWarnings warns when VolatileMetadataPointer does not
     await parseLoadConfigDirectory64(
       file,
       [{ name: "LOAD_CONFIG", rva: lcRva, size: 0x148 }],
-      value => value,
-      () => {}
+      value => value
     )
   );
 

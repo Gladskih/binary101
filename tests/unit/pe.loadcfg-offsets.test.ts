@@ -62,8 +62,7 @@ void test("parseLoadConfigDirectory uses official field offsets (32-bit)", async
     await parseLoadConfigDirectory32(
       new MockFile(bytes, "loadcfg32.bin"),
       [{ name: "LOAD_CONFIG", rva: lcRva, size: 0xc4 }],
-      value => value,
-      () => {}
+      value => value
     )
   );
 
@@ -110,8 +109,7 @@ void test("parseLoadConfigDirectory uses official field offsets (64-bit)", async
     await parseLoadConfigDirectory64(
       new MockFile(bytes, "loadcfg64.bin"),
       [{ name: "LOAD_CONFIG", rva: 0x10, size: 0x148 }],
-      value => (value === 0x10 ? 0 : value),
-      () => {}
+      value => (value === 0x10 ? 0 : value)
     )
   );
 
@@ -144,8 +142,7 @@ void test("parseLoadConfigDirectory reads 32-bit and 64-bit fields", async () =>
   const lc = expectDefined(await parseLoadConfigDirectory32(
     new MockFile(bytes, "loadcfg.bin"),
     [{ name: "LOAD_CONFIG", rva: lcRva, size: 0x5c }],
-    value => value,
-    () => {}
+    value => value
   ));
   assert.equal(lc.SecurityCookie, 0xcafebaben);
   assert.equal(lc.SEHandlerCount, 3);
@@ -168,8 +165,7 @@ void test("parseLoadConfigDirectory reads 32-bit and 64-bit fields", async () =>
   const lc64 = expectDefined(await parseLoadConfigDirectory64(
     new MockFile(bytes64),
     [{ name: "LOAD_CONFIG", rva: 0x10, size: 0x140 }],
-    value => (value === 0x10 ? 0 : value),
-    () => {}
+    value => (value === 0x10 ? 0 : value)
   ));
   assert.equal(lc64.SEHandlerCount, 5);
   assert.equal(lc64.GuardCFFunctionCount, 6);
@@ -190,8 +186,7 @@ void test("parseLoadConfigDirectory preserves representable 64-bit values instea
     await parseLoadConfigDirectory64(
       new MockFile(bytes, "loadcfg64-exact-u64.bin"),
       [{ name: "LOAD_CONFIG", rva: 0x10, size: 0x148 }],
-      value => (value === 0x10 ? 0 : value),
-      () => {}
+      value => (value === 0x10 ? 0 : value)
     )
   );
 

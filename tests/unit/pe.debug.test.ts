@@ -52,8 +52,7 @@ void test("parseDebugDirectory reads CodeView RSDS entry", async () => {
   const result = await parseDebugDirectory(
     new MockFile(bytes, "debug.bin"),
     [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   const entry = expectDefined(result.entry);
@@ -73,8 +72,7 @@ void test("parseDebugDirectory bounds CodeView reads to header and path chunks",
   const result = await parseDebugDirectory(
     tracked.file,
     [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.equal(result.entry?.age, 7);
@@ -95,8 +93,7 @@ void test("parseDebugDirectory reads CodeView paths beyond the old 1024-byte par
   const result = await parseDebugDirectory(
     new MockFile(bytes, "debug-long-path.bin"),
     [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.equal(expectDefined(result.entry).path, longPath);
@@ -113,8 +110,7 @@ void test("parseDebugDirectory clamps the CodeView path to SizeOfData", async ()
   const result = await parseDebugDirectory(
     new MockFile(bytes, "debug-sizeofdata.bin"),
     [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   const entry = expectDefined(result.entry);
@@ -125,8 +121,7 @@ void test("parseDebugDirectory warns when the declared directory is smaller than
   const result = await parseDebugDirectory(
     new MockFile(new Uint8Array(64).fill(0), "debug-short.bin"),
     [{ name: "DEBUG", rva: 0x20, size: 16 }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.equal(result.entry, null);
@@ -142,8 +137,7 @@ void test("parseDebugDirectory warns when the directory size leaves trailing byt
   const result = await parseDebugDirectory(
     new MockFile(bytes, "debug-misaligned.bin"),
     [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE + 1 }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.equal(result.entry, null);
@@ -169,8 +163,7 @@ void test("parseDebugDirectory does not decode entries past an rvaToOff gap", as
   const result = await parseDebugDirectory(
     new MockFile(bytes, "debug-gap.bin"),
     [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE * 2 }],
-    value => (value === debugRva ? debugRva : null),
-    () => {}
+    value => (value === debugRva ? debugRva : null)
   );
 
   assert.equal(result.entry, null);
@@ -195,8 +188,7 @@ void test("parseDebugDirectory continues past the first 16 entries to find later
   const result = await parseDebugDirectory(
     new MockFile(bytes, "debug-late-codeview.bin"),
     [{ name: "DEBUG", rva: debugRva, size: entryCount * IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   const entry = expectDefined(result.entry);
@@ -218,8 +210,7 @@ void test("parseDebugDirectory warns when a CodeView entry is smaller than the m
   const result = await parseDebugDirectory(
     new MockFile(bytes, "debug-short-rsds.bin"),
     [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.equal(result.entry, null);
@@ -249,8 +240,7 @@ void test("parseDebugDirectory warns when the RSDS path is not NUL-terminated wi
   const result = await parseDebugDirectory(
     new MockFile(bytes, "debug-rsds-missing-nul.bin"),
     [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.equal(result.entry?.path, "abc");
@@ -276,8 +266,7 @@ void test("parseDebugDirectory keeps later RSDS warnings instead of dropping the
   const result = await parseDebugDirectory(
     new MockFile(bytes, "debug-multi-warning.bin"),
     [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE + 1 }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.equal(result.entry?.path, "abc");

@@ -35,8 +35,7 @@ void test("parseImportDirectory reads DLL names beyond one incremental string-re
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.equal(result.entries[0]?.dll, longDllName);
@@ -49,28 +48,22 @@ void test("parseImportDirectory returns no entries when the IMPORT directory sta
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: bytes.length, size: IMPORT_DIRECTORY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.deepEqual(result.entries, []);
 });
 
-void test("parseImportDirectory skips coverage when the IMPORT directory starts at EOF", async () => {
+void test("parseImportDirectory keeps returning no entries when the IMPORT directory starts at EOF", async () => {
   const bytes = new Uint8Array(64).fill(0);
-  const coverageRegions: Array<{ name: string; start: number; size: number }> = [];
 
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: bytes.length, size: IMPORT_DIRECTORY_SIZE }],
-    value => value,
-    (name, start, size) => {
-      coverageRegions.push({ name, start, size });
-    }
+    value => value
   );
 
   assert.deepEqual(result.entries, []);
-  assert.deepEqual(coverageRegions, []);
 });
 
 void test("parseImportDirectory keeps scanning after nameless live descriptors", async () => {
@@ -92,8 +85,7 @@ void test("parseImportDirectory keeps scanning after nameless live descriptors",
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE * 2 }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.deepEqual(result.entries.map(entry => entry.dll), ["LATE.dll"]);
@@ -115,8 +107,7 @@ void test("parseImportDirectory reports truncated 64-bit thunk tables", async ()
   const result = await parseImportDirectory64(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.ok(result.warning?.match(/truncated/i));
@@ -138,8 +129,7 @@ void test("parseImportDirectory warns when the Hint/Name table is truncated afte
   const result = await parseImportDirectory32(
     new MockFile(bytes),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   assert.deepEqual(result.entries[0]?.functions, [{ hint: 0, name: "" }]);
@@ -167,8 +157,7 @@ void test("parseImportDirectory reads bounded import strings without over-readin
   const result = await parseImportDirectory32(
     createLimitedImportSliceFile(bytes, 8, "imports-bounded.bin"),
     [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => value,
-    () => {}
+    value => value
   );
 
   const entry = expectDefined(result.entries[0]);

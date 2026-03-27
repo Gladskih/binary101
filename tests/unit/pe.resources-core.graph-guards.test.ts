@@ -24,8 +24,6 @@ function mapFixtureRvaToStart(_value: number): number {
   return 0;
 }
 
-function ignoreCoverage(_label: string, _start: number, _size: number): void {}
-
 void test("buildResourceTree warns when a subdirectory target points into the string area", async () => {
   const generatedName = generatedResourceLabel(0);
   const fixture = createResourceDirectoryFixture(0x60);
@@ -51,8 +49,7 @@ void test("buildResourceTree warns when a subdirectory target points into the st
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    mapFixtureRvaToStart,
-    ignoreCoverage
+    mapFixtureRvaToStart
   );
   assert.ok(tree);
 
@@ -77,8 +74,7 @@ void test("buildResourceTree warns when multiple parents reference the same subd
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    mapFixtureRvaToStart,
-    ignoreCoverage
+    mapFixtureRvaToStart
   );
   assert.ok(tree);
 
@@ -96,8 +92,7 @@ void test("buildResourceTree warns when a subdirectory entry points to its own t
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    mapFixtureRvaToStart,
-    ignoreCoverage
+    mapFixtureRvaToStart
   );
   assert.ok(tree);
 
@@ -124,8 +119,7 @@ void test("buildResourceTree warns when a subdirectory target points into a reso
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    mapFixtureRvaToStart,
-    ignoreCoverage
+    mapFixtureRvaToStart
   );
   assert.ok(tree);
 
@@ -153,8 +147,7 @@ void test("buildResourceTree warns when resource data payload ranges overlap", a
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    mapFixtureRvaToStart,
-    ignoreCoverage
+    mapFixtureRvaToStart
   );
   assert.ok(tree);
 

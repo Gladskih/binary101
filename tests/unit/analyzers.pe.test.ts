@@ -104,10 +104,6 @@ void test("parsePe does not treat a headers-only image as overlay data", async (
 
   assert.ok(result, "parsePe should return a parsed object for a valid PE file");
   assert.strictEqual(result.overlaySize, 0, "Header bytes are not overlay when the image has no sections");
-  assert.ok(
-    !result.coverage.some(region => region.label.startsWith("Overlay")),
-    "Coverage should not report an overlay region when no bytes exist past the headers"
-  );
 });
 
 void test("parsePe includes the aligned headers in imageEnd for sectionless images", async () => {
@@ -122,7 +118,6 @@ void test("parsePe includes the aligned headers in imageEnd for sectionless imag
     "SizeOfImage includes all headers rounded to SectionAlignment even when the image has no sections"
   );
   assert.strictEqual(result.overlaySize, 0);
-  assert.ok(!result.coverage.some(region => region.label.startsWith("Overlay")));
   assert.strictEqual(result.imageSizeMismatch, false);
 });
 
@@ -239,7 +234,7 @@ function createPeWithSectionAndIat(iatRvaOverride = 0x1100) {
   return new Uint8Array(buffer);
 }
 
-void test("parsePe returns coverage and mapping for PE32 with one section and IAT", async () => {
+void test("parsePe returns mapping and overlay info for PE32 with one section and IAT", async () => {
   const peBytes = createPeWithSectionAndIat();
   const mockFile = new MockFile(peBytes, "section.exe");
 
@@ -251,16 +246,6 @@ void test("parsePe returns coverage and mapping for PE32 with one section and IA
   assert.ok(result.iat, "IAT data directory should be recognized");
   assert.strictEqual(result.iat.rva, 0x1100);
   assert.strictEqual(result.iat.size, 0x40);
-
-  const iatCoverage = result.coverage.find(region => region.label === "IAT");
-  assert.ok(iatCoverage, "Coverage should include IAT region");
-  assert.strictEqual(iatCoverage.off, 0x300);
-  assert.strictEqual(iatCoverage.size, 0x40);
-
-  const overlayCoverage = result.coverage.find(region => region.label.startsWith("Overlay"));
-  assert.ok(overlayCoverage, "Overlay region should be tracked");
-  assert.strictEqual(overlayCoverage.off, 0x400);
-  assert.strictEqual(overlayCoverage.size, 0x20);
 
   assert.strictEqual(result.overlaySize, 0x20);
   assert.strictEqual(result.imageEnd, 0x2000);
@@ -279,7 +264,6 @@ void test("parsePe preserves unmapped IAT directories with warnings", async () =
     size: 0x40,
     warnings: ["IAT directory RVA could not be mapped to a file offset."]
   });
-  assert.ok(!result.coverage.some(region => region.label === "IAT"), "Coverage should not include IAT region");
 });
 
 void test("parsePe attaches Authenticode verification when security directory exists", async () => {

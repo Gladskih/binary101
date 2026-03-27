@@ -1,7 +1,7 @@
 "use strict";
 
 import { decodeWinCertificate, type ParsedWinCertificate } from "./authenticode.js";
-import type { AddCoverageRegion, PeDataDirectory } from "./types.js";
+import type { PeDataDirectory } from "./types.js";
 
 export interface ParsedSecurityDirectory {
   count: number;
@@ -11,8 +11,7 @@ export interface ParsedSecurityDirectory {
 
 export async function parseSecurityDirectory(
   file: File,
-  dataDirs: PeDataDirectory[],
-  addCoverageRegion: AddCoverageRegion
+  dataDirs: PeDataDirectory[]
 ): Promise<ParsedSecurityDirectory | null> {
   const dir = dataDirs.find(d => d.name === "SECURITY");
   if (!dir || (dir.rva === 0 && dir.size === 0)) return null;
@@ -31,7 +30,6 @@ export async function parseSecurityDirectory(
   }
   const end = Math.min(file.size, off + dir.size);
   const availableSize = Math.max(0, end - off);
-  addCoverageRegion("SECURITY (WIN_CERTIFICATE)", off, availableSize);
   if (availableSize < dir.size) {
     warnings.push("Attribute certificate table is truncated by end of file.");
   }
@@ -68,4 +66,3 @@ export async function parseSecurityDirectory(
   }
   return warnings.length ? { count: certs.length, certs, warnings } : { count: certs.length, certs };
 }
-

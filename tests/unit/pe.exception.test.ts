@@ -4,7 +4,6 @@ import { test } from "node:test";
 import { parseExceptionDirectory } from "../../analyzers/pe/exception.js";
 import { MockFile } from "../helpers/mock-file.js";
 const rvaToOff = (rva: number): number => rva;
-const coverageAdd = (_label: string, _start: number, _size: number): void => {};
 const IMAGE_FILE_MACHINE_I386 = 0x014c;
 const writeRuntimeFunction = (
   view: DataView,
@@ -28,7 +27,6 @@ const parseExceptionFixture = (
   new MockFile(bytes, fileName),
   [{ name: "EXCEPTION", rva: directoryRva, size: directorySize }],
   mapping,
-  coverageAdd,
   machine
 );
 void test("parseExceptionDirectory parses pdata entries and unwind info stats", async () => {

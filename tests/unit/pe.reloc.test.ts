@@ -5,26 +5,12 @@ import { test } from "node:test";
 import { parseBaseRelocations } from "../../analyzers/pe/reloc.js";
 import { MockFile } from "../helpers/mock-file.js";
 
-type CoverageEntry = { label: string; start: number; size: number };
 type BaseRelocationBlockFixture = { pageRva: number; entries: number[]; fileOffset: number };
 
 const rvaToOff = (rva: number): number => rva;
 const IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE = 8;
 // Microsoft PE format: a relocation entry packs type 3 (HIGHLOW) in the high nibble and offset 1 in the low 12 bits.
 const IMAGE_REL_BASED_HIGHLOW_OFFSET_1 = 0x3001;
-
-const collectCoverage = (): {
-  regions: CoverageEntry[];
-  add: (label: string, start: number, size: number) => void;
-} => {
-  const regions: CoverageEntry[] = [];
-  return {
-    regions,
-    add: (label, start, size) => {
-      regions.push({ label, start, size });
-    }
-  };
-};
 
 const writeBaseRelocationBlock = (
   view: DataView,
@@ -57,18 +43,15 @@ void test("parseBaseRelocations counts entries and stops on invalid blocks", asy
   view.setUint32(invalidBlockOffset + 0, 0x2000, true);
   view.setUint32(invalidBlockOffset + 4, 0, true);
 
-  const { regions, add } = collectCoverage();
   const parsed = await parseBaseRelocations(
     new MockFile(bytes, "reloc.bin"),
     [{ name: "BASERELOC", rva: directoryOffset, size: firstBlockSize + 8 }],
-    rvaToOff,
-    add
+    rvaToOff
   );
 
   assert.ok(parsed);
   assert.strictEqual(parsed.blocks.length, 1);
   assert.strictEqual(parsed.totalEntries, 4);
-  assert.ok(regions.some(region => region.label.includes("BASERELOC")));
 });
 
 void test("parseBaseRelocations accepts a relocation block for page RVA 0", async () => {
@@ -84,8 +67,7 @@ void test("parseBaseRelocations accepts a relocation block for page RVA 0", asyn
   const parsed = await parseBaseRelocations(
     new MockFile(bytes, "reloc-page-zero.bin"),
     [{ name: "BASERELOC", rva: directoryOffset, size: blockSize }],
-    rvaToOff,
-    () => {}
+    rvaToOff
   );
 
   assert.ok(parsed);
@@ -110,8 +92,7 @@ void test("parseBaseRelocations does not expose the second HIGHADJ slot as an in
   const parsed = await parseBaseRelocations(
     new MockFile(bytes, "reloc-highadj.bin"),
     [{ name: "BASERELOC", rva: directoryOffset, size: blockSize }],
-    rvaToOff,
-    () => {}
+    rvaToOff
   );
 
   const defined = parsed;
@@ -140,8 +121,7 @@ void test("parseBaseRelocations does not silently cap valid tables at 256 blocks
   const parsed = await parseBaseRelocations(
     new MockFile(bytes, "reloc-many-blocks.bin"),
     [{ name: "BASERELOC", rva: directoryOffset, size: blockCount * IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE }],
-    rvaToOff,
-    () => {}
+    rvaToOff
   );
 
   assert.ok(parsed);
@@ -167,8 +147,7 @@ void test("parseBaseRelocations stops when later blocks no longer map through rv
   const parsed = await parseBaseRelocations(
     new MockFile(bytes, "reloc-gap.bin"),
     [{ name: "BASERELOC", rva: directoryRva, size: firstBlockSize * 2 }],
-    mapOnlyFirstBlock,
-    () => {}
+    mapOnlyFirstBlock
   );
 
   assert.ok(parsed);
@@ -206,8 +185,7 @@ void test("parseBaseRelocations follows sparse block mappings", async () => {
   const parsed = await parseBaseRelocations(
     new MockFile(bytes, "reloc-sparse-layout.bin"),
     [{ name: "BASERELOC", rva: directoryRva, size: firstBlockSize + secondBlockSize }],
-    mapSparseBaseRelocationRva,
-    () => {}
+    mapSparseBaseRelocationRva
   );
 
   assert.ok(parsed);
@@ -259,8 +237,7 @@ void test("parseBaseRelocations does not assume each block maps to one contiguou
         size: IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE + Uint16Array.BYTES_PER_ELEMENT * 2
       }
     ],
-    mapDiscontiguousRelocationRva,
-    () => {}
+    mapDiscontiguousRelocationRva
   );
 
   assert.ok(parsed);
@@ -287,8 +264,7 @@ void test("parseBaseRelocations does not continue from a block size that breaks 
   const parsed = await parseBaseRelocations(
     new MockFile(bytes, "reloc-misaligned-block.bin"),
     [{ name: "BASERELOC", rva: directoryOffset, size: misalignedBlockSize + IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE }],
-    rvaToOff,
-    () => {}
+    rvaToOff
   );
 
   assert.ok(parsed);

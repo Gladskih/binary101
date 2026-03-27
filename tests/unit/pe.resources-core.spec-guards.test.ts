@@ -27,8 +27,6 @@ function mapFixtureRvaToStart(_value: number): number {
   return 0;
 }
 
-function ignoreCoverage(_label: string, _start: number, _size: number): void {}
-
 void test("buildResourceTree warns when a named resource entry appears after an ID entry", async () => {
   const firstRootEntryOffset = IMAGE_RESOURCE_DIRECTORY_SIZE;
   const generatedName = generatedResourceLabel(0);
@@ -65,8 +63,7 @@ void test("buildResourceTree warns when a named resource entry appears after an 
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    mapFixtureRvaToStart,
-    ignoreCoverage
+    mapFixtureRvaToStart
   );
   assert.ok(tree);
 
@@ -97,8 +94,7 @@ void test("buildResourceTree warns when ID entries are not sorted in ascending o
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    mapFixtureRvaToStart,
-    ignoreCoverage
+    mapFixtureRvaToStart
   );
   assert.ok(tree);
 
@@ -129,8 +125,7 @@ void test("buildResourceTree warns when named entries are not sorted by string v
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    mapFixtureRvaToStart,
-    ignoreCoverage
+    mapFixtureRvaToStart
   );
   assert.ok(tree);
 
@@ -157,8 +152,7 @@ void test("buildResourceTree warns when resource directory Characteristics is no
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    mapFixtureRvaToStart,
-    ignoreCoverage
+    mapFixtureRvaToStart
   );
   assert.ok(tree);
 
@@ -179,8 +173,7 @@ void test("buildResourceTree warns when a top-level type entry points directly t
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    mapFixtureRvaToStart,
-    ignoreCoverage
+    mapFixtureRvaToStart
   );
   assert.ok(tree);
 
@@ -204,8 +197,7 @@ void test("buildResourceTree warns when a resource name string offset is not wor
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    mapFixtureRvaToStart,
-    ignoreCoverage
+    mapFixtureRvaToStart
   );
   assert.ok(tree);
 

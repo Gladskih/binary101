@@ -83,7 +83,6 @@ const createBasePe = (): PeParseResult =>
     overlaySize: 0,
     imageEnd: 0,
     imageSizeMismatch: false,
-    coverage: [],
     hasCert: false,
     signature: "PE"
   }) as unknown as PeParseResult;

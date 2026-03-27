@@ -1,11 +1,7 @@
 "use strict";
 
 import { readAsciiString } from "../../binary-utils.js";
-import type {
-  AddCoverageRegion,
-  PeDataDirectory,
-  RvaToOffset
-} from "./types.js";
+import type { PeDataDirectory, RvaToOffset } from "./types.js";
 
 const IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE = 8; // winnt.h: IMAGE_BOUND_IMPORT_DESCRIPTOR is 8 bytes.
 
@@ -54,15 +50,13 @@ export interface PeBoundImportEntry {
 export async function parseBoundImports(
   file: File,
   dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion
+  rvaToOff: RvaToOffset
 ): Promise<{ entries: PeBoundImportEntry[]; warning?: string } | null> {
   const dir = dataDirs.find(d => d.name === "BOUND_IMPORT");
   if (!dir?.rva) return null;
   const base = rvaToOff(dir.rva);
   if (base == null) return null;
   const availableDirSize = Math.max(0, Math.min(dir.size, file.size - base));
-  addCoverageRegion("BOUND_IMPORT", base, availableDirSize);
   if (availableDirSize < IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE) {
     return {
       entries: [],

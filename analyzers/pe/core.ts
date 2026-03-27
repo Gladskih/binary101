@@ -1,9 +1,9 @@
 "use strict";
 
 import { addSectionEntropies } from "./entropy.js";
-import { buildCoverage } from "./coverage.js";
 import { peProbe } from "./signature.js";
 import { computeEntrySection } from "./core-entry.js";
+import { PE_RVA_EXCLUSIVE_LIMIT } from "./rva-limits.js";
 import {
   parseCoffHeader,
   parseDosHeaderAndStub,
@@ -15,6 +15,59 @@ import type { PeCore } from "./types.js";
 const mergeWarnings = (...groups: Array<string[] | undefined>): string[] | undefined => {
   const merged = new Set(groups.flatMap(group => group ?? []));
   return merged.size ? [...merged] : undefined;
+};
+
+const alignUpClamped = (value: number, alignment: number): number => {
+  const normalizedValue = Math.max(0, value);
+  const normalizedAlignment = alignment >>> 0;
+  if (!normalizedAlignment) return Math.min(PE_RVA_EXCLUSIVE_LIMIT, normalizedValue);
+  const remainder = normalizedValue % normalizedAlignment;
+  const aligned = remainder === 0 ? normalizedValue : normalizedValue + normalizedAlignment - remainder;
+  return Math.min(PE_RVA_EXCLUSIVE_LIMIT, aligned);
+};
+
+const computePeImageLayout = (
+  fileSize: number,
+  optionalHeaderOffset: number,
+  optionalHeaderSize: number,
+  sectionHeadersOffset: number,
+  sectionCount: number,
+  sections: PeCore["sections"],
+  sectionAlignment: number,
+  sizeOfImage: number,
+  declaredSizeOfHeaders: number
+): {
+  overlaySize: number;
+  imageEnd: number;
+  imageSizeMismatch: boolean;
+} => {
+  const headersEnd = Math.max(
+    optionalHeaderOffset + optionalHeaderSize,
+    sectionHeadersOffset + sectionCount * 40
+  );
+  const normalizedSizeOfHeaders =
+    Number.isSafeInteger(declaredSizeOfHeaders) && declaredSizeOfHeaders > 0
+      ? Math.min(fileSize, declaredSizeOfHeaders >>> 0)
+      : headersEnd;
+  let rawEnd = Math.max(headersEnd, normalizedSizeOfHeaders);
+  for (const section of sections) {
+    const endOfSectionData = (section.pointerToRawData >>> 0) + (section.sizeOfRawData >>> 0);
+    rawEnd = Math.max(rawEnd, endOfSectionData);
+  }
+  const overlaySize = fileSize > rawEnd ? fileSize - rawEnd : 0;
+  let imageEnd = alignUpClamped(Math.max(headersEnd, normalizedSizeOfHeaders), sectionAlignment);
+  for (const section of sections) {
+    const endOfSectionImage = Math.min(
+      PE_RVA_EXCLUSIVE_LIMIT,
+      (section.virtualAddress >>> 0) + ((section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0))
+    );
+    imageEnd = Math.max(imageEnd, alignUpClamped(endOfSectionImage, sectionAlignment));
+  }
+  return {
+    overlaySize,
+    imageEnd,
+    imageSizeMismatch: imageEnd !== (sizeOfImage >>> 0)
+  };
 };
 
 export async function parsePeHeaders(file: File): Promise<PeCore | null> {
@@ -37,16 +90,12 @@ export async function parsePeHeaders(file: File): Promise<PeCore | null> {
     coff.NumberOfSections,
     opt.SizeOfHeaders
   );
-
-  const { coverage, addCov, overlaySize, imageEnd, imageSizeMismatch } = buildCoverage(
+  const { overlaySize, imageEnd, imageSizeMismatch } = computePeImageLayout(
     file.size,
-    e_lfanew,
-    coff,
     optOff,
     coff.SizeOfOptionalHeader,
-    ddStartRel,
-    ddCount,
     sectOff,
+    coff.NumberOfSections,
     sections,
     opt.SectionAlignment,
     opt.SizeOfImage,
@@ -69,8 +118,6 @@ export async function parsePeHeaders(file: File): Promise<PeCore | null> {
     sections,
     entrySection,
     rvaToOff,
-    coverage,
-    addCoverageRegion: addCov,
     overlaySize,
     imageEnd,
     imageSizeMismatch

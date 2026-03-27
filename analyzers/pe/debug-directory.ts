@@ -1,7 +1,7 @@
 "use strict";
 
 import { toHex32 } from "../../binary-utils.js";
-import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
+import type { PeDataDirectory, RvaToOffset } from "./types.js";
 
 // PE/COFF: IMAGE_DEBUG_DIRECTORY entry layout (28 bytes, file form):
 // - Type (DWORD) at +0x0c
@@ -26,8 +26,7 @@ const CODEVIEW_PATH_READ_CHUNK_SIZE = 64;
 export async function parseDebugDirectory(
   file: File,
   dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset,
-  addCoverageRegion: AddCoverageRegion
+  rvaToOff: RvaToOffset
 ): Promise<{ entry: { guid: string; age: number; path: string } | null; warning: string | null }> {
   const warnings: string[] = [];
   const addWarning = (message: string | null): void => {
@@ -40,7 +39,6 @@ export async function parseDebugDirectory(
   const fileSize = typeof file.size === "number" ? file.size : Infinity;
   if (baseOffset >= fileSize) return { entry: null, warning: "Debug directory starts past end of file." };
   const availableDirSize = Math.min(debugDir.size, Math.max(0, fileSize - baseOffset));
-  addCoverageRegion("DEBUG directory", baseOffset, availableDirSize);
   if (availableDirSize < IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE) {
     return { entry: null, warning: "Debug directory is smaller than one entry; file may be truncated." };
   }

@@ -124,20 +124,6 @@ export function renderDelayImports(di: PeDelayImportsSection, out: string[]): vo
   out.push(`</section>`);
 }
 
-export function renderCoverage(cov: PeParseResult["coverage"], out: string[]): void {
-  if (!cov.length) return;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Coverage map (file offsets)</h4>`);
-  out.push(`<div class="smallNote">Shows which parts of the file were recognized as headers, directories and section data. Gaps may indicate overlays or unknown data.</div>`);
-  out.push(
-    `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show coverage segments (${cov.length})</summary>`
-  );
-  out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Label</th><th>Offset</th><th>Size</th></tr></thead><tbody>`);
-  cov.forEach((seg, index) => {
-    out.push(`<tr><td>${index + 1}</td><td>${safe(seg.label)}</td><td>${hex(seg.off, 8)}</td><td>${humanSize(seg.size)}</td></tr>`);
-  });
-  out.push(`</tbody></table></details></section>`);
-}
-
 export function renderSanity(pe: PeParseResult, out: string[]): void {
   const issues = [...(pe.warnings || [])];
   const unexplainedOverlaySize = Math.max(0, (pe.overlaySize >>> 0) - computeSecurityOverlayCoverage(pe));

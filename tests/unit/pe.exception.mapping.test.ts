@@ -4,8 +4,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseExceptionDirectory } from "../../analyzers/pe/exception.js";
 import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
-
-const coverageAdd = (_label: string, _start: number, _size: number): void => {};
 const identityRvaToOff = (rva: number): number => rva;
 // Microsoft x64 exception handling: RUNTIME_FUNCTION is three ULONG values in .pdata.
 const RUNTIME_FUNCTION_ENTRY_SIZE_BYTES = 12;
@@ -152,8 +150,7 @@ void test("parseExceptionDirectory follows discontiguous RUNTIME_FUNCTION file m
   const parsed = await parseExceptionDirectory(
     new File([copyToArrayBuffer(fixture.bytes)], "exception-discontiguous-pdata.bin"),
     [{ name: "EXCEPTION", rva: fixture.directoryRva, size: fixture.directorySize }],
-    fixture.mapRvaToOff,
-    coverageAdd
+    fixture.mapRvaToOff
   );
   assert.ok(parsed);
   assert.strictEqual(parsed.functionCount, fixture.expectedBeginRvas.length);
@@ -166,8 +163,7 @@ void test("parseExceptionDirectory does not read each contiguous pdata entry as 
   const parsed = await parseExceptionDirectory(
     fixture.file,
     [{ name: "EXCEPTION", rva: fixture.directoryRva, size: fixture.directorySize }],
-    identityRvaToOff,
-    coverageAdd
+    identityRvaToOff
   );
   assert.ok(parsed);
   assert.strictEqual(parsed.functionCount, fixture.entryCount);
