@@ -69,9 +69,12 @@ void test("computePeAuthenticodeDigestFromParsedPe falls back to hashing through
     opt: { SizeOfHeaders: 0 },
     sections: []
   };
-  // With no sections and an invalid SizeOfHeaders, the strict helper can only hash the available bytes after the
-  // checksum/security fields. Because no explicit SECURITY directory was supplied, this matches the legacy tail path.
-  const expectedBytes = collectFixtureBytes(bytes, listLegacyBestEffortAuthenticodeHashRanges(bytes.length));
+  // With no declared SECURITY entry, Authenticode still excludes only the 4-byte CheckSum field even if the strict
+  // helper falls back to hashing through EOF because SizeOfHeaders is invalid.
+  const expectedBytes = collectFixtureBytes(
+    bytes,
+    listBestEffortAuthenticodeHashRangesWithoutSecurityEntry(bytes.length)
+  );
   const expectedDigest = toHex(await crypto.subtle.digest("SHA-256", expectedBytes));
 
   const computed = await computePeAuthenticodeDigestFromParsedPe(file, core, undefined, "SHA-256");
@@ -259,7 +262,7 @@ void test("computePeAuthenticodeDigestFromParsedPe orders sections by RVA before
   };
   // Authenticode orders sections by address range before hashing, even if raw file offsets are out of order.
   const expectedBytes = collectFixtureBytes(bytes, [
-    ...listLegacyBestEffortAuthenticodeHashRanges(reorderedCore.opt.SizeOfHeaders),
+    ...listBestEffortAuthenticodeHashRangesWithoutSecurityEntry(reorderedCore.opt.SizeOfHeaders),
     { start: earlierRvaRawOffset, end: earlierRvaRawOffset + splitRawSize },
     { start: laterRvaRawOffset, end: laterRvaRawOffset + splitRawSize }
   ]);
