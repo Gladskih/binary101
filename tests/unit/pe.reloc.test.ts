@@ -78,8 +78,11 @@ void test("parseBaseRelocations accepts a relocation block for page RVA 0", asyn
 
 void test("parseBaseRelocations reports an unmappable directory base instead of silently returning null", async () => {
   const parsed = await parseBaseRelocations(
-    new MockFile(new Uint8Array(0x40).fill(0), "reloc-unmapped.bin"),
-    [{ name: "BASERELOC", rva: 0x20, size: IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE }],
+    new MockFile(
+      new Uint8Array(IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE).fill(0),
+      "reloc-unmapped.bin"
+    ),
+    [{ name: "BASERELOC", rva: 1, size: IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE }],
     () => null
   );
 
@@ -91,8 +94,11 @@ void test("parseBaseRelocations reports an unmappable directory base instead of 
 
 void test("parseBaseRelocations preserves a non-zero directory that is smaller than one block header", async () => {
   const parsed = await parseBaseRelocations(
-    new MockFile(new Uint8Array(0x40).fill(0), "reloc-too-small.bin"),
-    [{ name: "BASERELOC", rva: 0x20, size: IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE - 1 }],
+    new MockFile(
+      new Uint8Array(IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE - 1).fill(0),
+      "reloc-too-small.bin"
+    ),
+    [{ name: "BASERELOC", rva: 1, size: IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE - 1 }],
     rvaToOff
   );
 

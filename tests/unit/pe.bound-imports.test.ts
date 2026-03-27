@@ -105,8 +105,8 @@ void test("parseBoundImports preserves a declared directory smaller than one des
 
 void test("parseBoundImports reports an unmappable directory base instead of silently returning null", async () => {
   const result = await parseBoundImports(
-    new MockFile(new Uint8Array(0x40).fill(0), "bound-imports-unmapped.bin"),
-    [{ name: "BOUND_IMPORT", rva: 0x20, size: IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE }],
+    new MockFile(new Uint8Array(IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE).fill(0), "bound-imports-unmapped.bin"),
+    [{ name: "BOUND_IMPORT", rva: 1, size: IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE }],
     () => null
   );
 

@@ -103,7 +103,9 @@ const parseMetadataFixture = async (
 const hasIssueLike = (issues: string[], pattern: RegExp): boolean =>
   issues.some(issue => pattern.test(issue));
 
+// ECMA-335 II.24.2.1: after Signature/Major/Minor/Reserved, the Length field starts at byte 12.
 const metadataVersionLengthFieldOffset = 12;
+// ECMA-335 II.24.2.1: the version string payload starts immediately after Length, at byte 16.
 const metadataVersionStringFieldOffset = 16;
 
 const createVersionLengthFixture = (

@@ -62,10 +62,10 @@ void test("parseExceptionDirectory reports misaligned directory sizes", async ()
 
 void test("parseExceptionDirectory reports an unmappable directory base instead of silently returning null", async () => {
   const parsed = await parseExceptionFixture(
-    new Uint8Array(0x40).fill(0),
+    new Uint8Array(Uint32Array.BYTES_PER_ELEMENT * 3).fill(0),
     "exception-unmapped.bin",
-    0x20,
-    12,
+    1,
+    Uint32Array.BYTES_PER_ELEMENT * 3,
     () => null
   );
 

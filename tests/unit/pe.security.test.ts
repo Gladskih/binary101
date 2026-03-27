@@ -30,7 +30,9 @@ class GuardedMockFile extends MockFile {
     if (normalizedStart < 0 || normalizedEnd < 0) {
       throw new Error("negative slice offset");
     }
-    if (this.sliceCalls.length > 8) {
+    // Each WIN_CERTIFICATE entry is at least the fixed 8-byte header, so a valid walk cannot need
+    // more than file.size / 8 entry reads before terminating.
+    if (this.sliceCalls.length > Math.ceil(this.size / WIN_CERTIFICATE_HEADER_SIZE) + 1) {
       throw new Error("possible infinite WIN_CERTIFICATE walk");
     }
     return super.slice(start, end, contentType);
@@ -223,7 +225,7 @@ void test("parseSecurityDirectory does not walk backwards when WIN_CERTIFICATE l
   await assert.doesNotReject(async () => {
     const parsed = await parseSecurityDirectory(
       new RejectNegativeSliceFile(bytes, "sec-overflow-length.bin"),
-      [{ name: "SECURITY", rva: secOff, size: 0x10 }]
+      [{ name: "SECURITY", rva: secOff, size: WIN_CERTIFICATE_HEADER_SIZE * 2 }]
     );
     assert.ok(parsed);
     assert.ok(expectDefined(parsed).warnings?.length);

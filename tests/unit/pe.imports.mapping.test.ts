@@ -319,6 +319,7 @@ void test("parseImportDirectory warns when a DLL name stops mapping before its n
 void test("parseImportDirectory warns when an import-by-name string stops mapping before its null terminator", async () => {
   const dllName = "KERNEL32.dll";
   const importName = "AB";
+  const hint = dllName.length + importName.length;
   const rvaLayout = createImportLayout();
   const fileLayout = createImportLayout(0);
   const descriptorRva = rvaLayout.reserve(IMAGE_IMPORT_DESCRIPTOR_SIZE);
@@ -338,7 +339,7 @@ void test("parseImportDirectory warns when an import-by-name string stops mappin
   });
   writeImportName(bytes, dllNameOffset, dllName);
   writeThunkTable32(view, thunkOffset, [hintNameRva, 0]);
-  writeImportByName(bytes, view, hintNameOffset, 0x33, importName);
+  writeImportByName(bytes, view, hintNameOffset, hint, importName);
 
   const sparseRvaToOff = (rva: number): number | null => {
     if (rva >= descriptorRva && rva < descriptorRva + IMAGE_IMPORT_DESCRIPTOR_SIZE) {
@@ -363,6 +364,6 @@ void test("parseImportDirectory warns when an import-by-name string stops mappin
     sparseRvaToOff
   );
 
-  assert.deepEqual(result.entries[0]?.functions, [{ hint: 0x33, name: importName }]);
+  assert.deepEqual(result.entries[0]?.functions, [{ hint, name: importName }]);
   assert.ok(result.warning?.match(/truncated|name/i));
 });

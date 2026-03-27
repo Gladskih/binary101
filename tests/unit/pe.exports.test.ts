@@ -7,6 +7,7 @@ import { expectDefined } from "../helpers/expect-defined.js";
 import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
 const encoder = new TextEncoder();
 const IMAGE_EXPORT_DIRECTORY_SIZE = 40; // IMAGE_EXPORT_DIRECTORY
+const cStringSize = (text: string): number => encoder.encode(`${text}\0`).length;
 const createExportLayout = (
   start = IMAGE_EXPORT_DIRECTORY_SIZE
 ): { reserve: (size: number) => number; size: () => number } => {
@@ -98,7 +99,7 @@ void test("parseExportDirectory preserves a declared export directory smaller th
 void test("parseExportDirectory reports an unmappable export directory instead of silently returning null", async () => {
   const result = await parseExportFixture(
     new Uint8Array(IMAGE_EXPORT_DIRECTORY_SIZE).fill(0),
-    { rva: 0x20, size: IMAGE_EXPORT_DIRECTORY_SIZE },
+    { rva: 1, size: IMAGE_EXPORT_DIRECTORY_SIZE },
     () => null
   );
 
@@ -259,11 +260,11 @@ void test("parseExportDirectory warns when the DLL name stops mapping before its
   const rvaLayout = createExportLayout();
   const fileLayout = createExportLayout(0);
   const directoryRva = rvaLayout.reserve(IMAGE_EXPORT_DIRECTORY_SIZE);
-  const dllNameRva = rvaLayout.reserve(dllName.length + 1);
+  const dllNameRva = rvaLayout.reserve(cStringSize(dllName));
   const eatRva = rvaLayout.reserve(Uint32Array.BYTES_PER_ELEMENT);
   const directoryOffset = fileLayout.reserve(IMAGE_EXPORT_DIRECTORY_SIZE);
   const eatOffset = fileLayout.reserve(Uint32Array.BYTES_PER_ELEMENT);
-  const dllNameOffset = fileLayout.reserve(dllName.length + 1);
+  const dllNameOffset = fileLayout.reserve(cStringSize(dllName));
   const bytes = new Uint8Array(fileLayout.size()).fill(0);
   const dv = new DataView(bytes.buffer);
 
@@ -302,17 +303,17 @@ void test("parseExportDirectory warns when an exported name stops mapping before
   const rvaLayout = createExportLayout();
   const fileLayout = createExportLayout(0);
   const directoryRva = rvaLayout.reserve(IMAGE_EXPORT_DIRECTORY_SIZE);
-  const dllNameRva = rvaLayout.reserve(dllName.length + 1);
+  const dllNameRva = rvaLayout.reserve(cStringSize(dllName));
   const eatRva = rvaLayout.reserve(Uint32Array.BYTES_PER_ELEMENT);
   const nameTableRva = rvaLayout.reserve(Uint32Array.BYTES_PER_ELEMENT);
   const ordinalTableRva = rvaLayout.reserve(Uint16Array.BYTES_PER_ELEMENT);
-  const exportedNameRva = rvaLayout.reserve(exportedName.length + 1);
+  const exportedNameRva = rvaLayout.reserve(cStringSize(exportedName));
   const directoryOffset = fileLayout.reserve(IMAGE_EXPORT_DIRECTORY_SIZE);
   const eatOffset = fileLayout.reserve(Uint32Array.BYTES_PER_ELEMENT);
   const nameTableOffset = fileLayout.reserve(Uint32Array.BYTES_PER_ELEMENT);
   const ordinalTableOffset = fileLayout.reserve(Uint16Array.BYTES_PER_ELEMENT);
-  const dllNameOffset = fileLayout.reserve(dllName.length + 1);
-  const exportedNameOffset = fileLayout.reserve(exportedName.length + 1);
+  const dllNameOffset = fileLayout.reserve(cStringSize(dllName));
+  const exportedNameOffset = fileLayout.reserve(cStringSize(exportedName));
   const bytes = new Uint8Array(fileLayout.size()).fill(0);
   const dv = new DataView(bytes.buffer);
 
@@ -342,7 +343,7 @@ void test("parseExportDirectory warns when an exported name stops mapping before
     if (rva >= ordinalTableRva && rva < ordinalTableRva + Uint16Array.BYTES_PER_ELEMENT) {
       return ordinalTableOffset + (rva - ordinalTableRva);
     }
-    if (rva >= dllNameRva && rva < dllNameRva + dllName.length + 1) {
+    if (rva >= dllNameRva && rva < dllNameRva + cStringSize(dllName)) {
       return dllNameOffset + (rva - dllNameRva);
     }
     if (rva === exportedNameRva || rva === exportedNameRva + 1) {

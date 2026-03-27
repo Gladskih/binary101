@@ -29,7 +29,7 @@ void test("parseDelayImports warns when the Delay Import Name Table cannot be ma
 void test("parseDelayImports reports an unmappable directory base instead of silently returning null", async () => {
   const result = await parseDelayImports32(
     new MockFile(new Uint8Array(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE).fill(0)),
-    [{ name: "DELAY_IMPORT", rva: 0x20, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
+    [{ name: "DELAY_IMPORT", rva: 1, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
     () => null
   );
 
@@ -104,6 +104,7 @@ void test("parseDelayImports warns when the DLL name stops mapping before its nu
 void test("parseDelayImports warns when an import-by-name string stops mapping before its null terminator", async () => {
   const dllName = "delay.dll";
   const importName = "AB";
+  const hint = dllName.length + importName.length;
   const rvaLayout = createDelayImportLayout();
   const fileLayout = createDelayImportLayout(0);
   const descriptorRva = rvaLayout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
@@ -123,7 +124,7 @@ void test("parseDelayImports warns when an import-by-name string stops mapping b
   });
   writeDelayImportName(bytes, dllNameOffset, dllName);
   writeThunkTable32(dv, thunkOffset, [hintNameRva, 0]);
-  writeImportByName(bytes, dv, hintNameOffset, 0x44, importName);
+  writeImportByName(bytes, dv, hintNameOffset, hint, importName);
 
   const sparseRvaToOff = (rva: number): number | null => {
     if (rva >= descriptorRva && rva < descriptorRva + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) {
@@ -148,7 +149,7 @@ void test("parseDelayImports warns when an import-by-name string stops mapping b
     sparseRvaToOff
   ));
 
-  assert.deepEqual(result.entries[0]?.functions, [{ hint: 0x44, name: importName }]);
+  assert.deepEqual(result.entries[0]?.functions, [{ hint, name: importName }]);
   assert.ok(result.warning?.toLowerCase().match(/truncated|name/));
 });
 
