@@ -2,61 +2,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { PeResources } from "../../analyzers/pe/resources/index.js";
 import { renderResources } from "../../renderers/pe/resources.js";
 
-type ResourceLangPreview = {
-  lang: number | null;
-  size: number;
-  codePage?: number;
-  previewKind: string;
-  previewMime?: string;
-  previewDataUrl?: string;
-  previewIssues?: string[];
-  previewFields?: Array<{ label: string; value: string }>;
-  textPreview?: string;
-  textEncoding?: string;
-  stringTable?: Array<{ id: number; text: string }>;
-  messageTable?: { messages: Array<{ id: number; strings: string[] }>; truncated: boolean };
-  versionInfo?: {
-    fileVersionString?: string;
-    productVersionString?: string;
-    translations?: Array<{ languageId: number; codePage: number }>;
-    stringValues?: Array<{ table: string; key: string; value: string }>;
-  };
-};
-
-type ResourceEntry = {
-  id?: number;
-  name?: string;
-  langs: ResourceLangPreview[];
-};
-
-type ResourceDetail = {
-  typeName: string;
-  entries: ResourceEntry[];
-};
-
-type ResourceSummary = {
-  typeName: string;
-  kind: string;
-  leafCount: number;
-};
-
-type ResourceTreeMock = {
-  top: ResourceSummary[];
-  detail: ResourceDetail[];
-  directories?: Array<{
-    offset: number;
-    timeDateStamp: number;
-    majorVersion: number;
-    minorVersion: number;
-    namedEntries: number;
-    idEntries: number;
-  }>;
-  issues?: string[];
-};
-
-const createPeResources = (): ResourceTreeMock => ({
+const createPeResources = (): PeResources => ({
   top: [
     { typeName: "ICON", kind: "id", leafCount: 2 },
     { typeName: "HTML", kind: "name", leafCount: 1 }
@@ -64,6 +13,7 @@ const createPeResources = (): ResourceTreeMock => ({
   directories: [
     {
       offset: 0,
+      characteristics: 0,
       timeDateStamp: 0x2a,
       majorVersion: 1,
       minorVersion: 0,
@@ -77,12 +27,15 @@ const createPeResources = (): ResourceTreeMock => ({
       typeName: "ICON",
       entries: [
         {
+          id: null,
           name: "app",
           langs: [
             {
               lang: 1033,
               size: 2048,
               codePage: 1252,
+              dataRVA: 0,
+              reserved: 0,
               previewMime: "image/png",
               previewKind: "image",
               previewDataUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB",
@@ -97,11 +50,14 @@ const createPeResources = (): ResourceTreeMock => ({
       entries: [
         {
           id: 2,
+          name: null,
           langs: [
             {
               lang: null,
               size: 96,
               codePage: 0,
+              dataRVA: 0,
+              reserved: 0,
               previewKind: "text",
               textPreview: "<assembly></assembly>",
               previewIssues: ["invalid schema"]
@@ -115,11 +71,14 @@ const createPeResources = (): ResourceTreeMock => ({
       entries: [
         {
           id: 9,
+          name: null,
           langs: [
             {
               lang: 1033,
               size: 128,
               codePage: 65001,
+              dataRVA: 0,
+              reserved: 0,
               previewKind: "html",
               textPreview: "<b>hello</b>",
               textEncoding: "UTF-8",
@@ -136,11 +95,14 @@ const createPeResources = (): ResourceTreeMock => ({
       entries: [
         {
           id: 3,
+          name: null,
           langs: [
             {
               lang: 1031,
               size: 512,
               codePage: 1200,
+              dataRVA: 0,
+              reserved: 0,
               previewKind: "stringTable",
               stringTable: Array.from({ length: 10 }, (_, idx) => ({ id: 32 + idx, text: `s${idx}` })),
               previewIssues: ["String table data ended unexpectedly."]
@@ -153,11 +115,15 @@ const createPeResources = (): ResourceTreeMock => ({
       typeName: "MESSAGETABLE",
       entries: [
         {
+          id: null,
           name: "msgs",
           langs: [
             {
               lang: 2057,
               size: 640,
+              codePage: 0,
+              dataRVA: 0,
+              reserved: 0,
               previewKind: "messageTable",
               messageTable: {
                 messages: [
@@ -176,11 +142,14 @@ const createPeResources = (): ResourceTreeMock => ({
       entries: [
         {
           id: 4,
+          name: null,
           langs: [
             {
               lang: 3082,
               size: 192,
               codePage: 1252,
+              dataRVA: 0,
+              reserved: 0,
               previewKind: "version",
               versionInfo: {
                 fileVersionString: "1.2.3.4",
@@ -198,10 +167,14 @@ const createPeResources = (): ResourceTreeMock => ({
       entries: [
         {
           id: 5,
+          name: null,
           langs: [
             {
               lang: 0,
               size: 0,
+              codePage: 0,
+              dataRVA: 0,
+              reserved: 0,
               previewKind: "",
               previewIssues: ["Resource bytes could not be read for preview."]
             }
@@ -213,10 +186,10 @@ const createPeResources = (): ResourceTreeMock => ({
 });
 
 void test("renderResources renders preview cells for common resource types", () => {
-  const pe = { resources: createPeResources() };
+  const resources = createPeResources();
   const out: string[] = [];
 
-  renderResources(pe, out);
+  renderResources(resources, out);
   const html = out.join("");
 
   assert.match(html, /Resources/);

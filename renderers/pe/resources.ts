@@ -1,10 +1,8 @@
 "use strict";
 
 import { humanSize } from "../../binary-utils.js";
+import type { PeResources } from "../../analyzers/pe/resources/index.js";
 import { safe } from "../../html-utils.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
-import type { ResourceTree } from "../../analyzers/pe/resources/core.js";
-import type { ResourceDetailGroup } from "../../analyzers/pe/resources/preview/types.js";
 import { renderPreviewCell } from "./resource-preview-cell.js";
 import { formatWindowsLanguageName } from "./windows-language-names.js";
 
@@ -21,17 +19,7 @@ const formatDirectoryVersion = (majorVersion: number, minorVersion: number): str
 const formatDirectoryTimestamp = (timeDateStamp: number): string =>
   timeDateStamp ? `0x${timeDateStamp.toString(16).padStart(8, "0")}` : "-";
 
-type PeWithResources = Pick<PeParseResult, "resources">;
-
-export function renderResources(pe: PeParseResult | PeWithResources, out: string[]): void {
-  const resources = (pe as PeWithResources).resources as
-    | {
-        top?: ResourceTree["top"];
-        detail?: ResourceDetailGroup[];
-        directories?: ResourceTree["directories"];
-        issues?: string[];
-      }
-    | null;
+export function renderResources(resources: PeResources | null, out: string[]): void {
   if (!resources) return;
   const issues = (resources.issues || []).filter((issue): issue is string => Boolean(issue));
 

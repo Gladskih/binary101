@@ -31,7 +31,7 @@ export function renderPe(pe: PeParseResult | null | undefined): string {
   renderLoadConfig(pe, out);
   renderDebug(pe, out);
   renderImports(pe, out);
-  renderResources(pe, out);
+  renderResources(pe.resources, out);
   renderExports(pe, out);
   renderTls(pe, out);
   renderReloc(pe, out);

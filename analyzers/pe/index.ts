@@ -19,7 +19,7 @@ import { collectLoadConfigWarnings } from "./load-config/warnings.js";
 import { parseImportDirectory32, parseImportDirectory64, type PeImportEntry } from "./imports.js";
 import { parseExportDirectory } from "./exports.js";
 import { parseTlsDirectory32, parseTlsDirectory64 } from "./tls.js";
-import { parseResources } from "./resources/index.js";
+import { parseResources, type PeResources } from "./resources/index.js";
 import { parseClrDirectory, type PeClrHeader } from "./clr/index.js";
 import { parseSecurityDirectory, type ParsedSecurityDirectory } from "./security.js";
 import { parseBaseRelocations } from "./reloc.js";
@@ -79,7 +79,7 @@ export interface PeParseResult {
   clr: PeClrHeader | null;
   security: ParsedSecurityDirectory | null;
   iat: PeIatDirectory | null;
-  resources: unknown;
+  resources: PeResources | null;
   overlaySize: number;
   imageEnd: number;
   imageSizeMismatch: boolean;
