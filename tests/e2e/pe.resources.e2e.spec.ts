@@ -95,7 +95,9 @@ test.describe("PE resource previews", () => {
     expect(await html.innerHTML()).toContain("HTML is not executed");
 
     const manifest = await openResourceGroup(page, "MANIFEST");
-    expect(await manifest.innerHTML()).toContain("XML is not executed");
+    await expect(manifest).toContainText('<?xml version="1.0"?>');
+    await expect(manifest).toContainText("Type");
+    await expect(manifest).toContainText("MANIFEST");
 
     const messageTable = await openResourceGroup(page, "MESSAGETABLE");
     await expect(messageTable).toContainText("OK");

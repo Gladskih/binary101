@@ -1,5 +1,4 @@
 "use strict";
-
 import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
 import { validateResourceDirectoryDuplicates, validateResourceDirectoryEntryKinds, validateResourceDirectoryIdSort, validateResourceDirectoryNameSort } from "./resource-directory-rules.js";
 import type { ResourceDirectoryEntry } from "./resource-directory-rules.js";
@@ -8,9 +7,8 @@ import type { ResourceDataEntryLayout, ResourceLayoutRange } from "./resource-la
 import { createResourceSpanResolver } from "./resource-relative-offsets.js";
 import { knownResourceType } from "./resource-type-names.js";
 import type { ResourceDetailEntry, ResourceDirectoryInfo, ResourceTree } from "./resource-tree-types.js";
-
+import { createPeRangeReader } from "./range-reader.js";
 export type { ResourceLangEntry, ResourceDetailEntry, ResourceTree } from "./resource-tree-types.js";
-
 export async function buildResourceTree(
   file: File,
   dataDirs: PeDataDirectory[],
@@ -34,8 +32,8 @@ export async function buildResourceTree(
   const resourceSubdirectoryTargets: number[] = [];
   const directories: ResourceDirectoryInfo[] = [];
   const seenDirectoryOffsets = new Set<number>();
-  const view = async (off: number, len: number): Promise<DataView> =>
-    new DataView(await file.slice(off, off + len).arrayBuffer());
+  const reader = createPeRangeReader(file, 0, file.size);
+  const view = async (off: number, len: number): Promise<DataView> => reader.read(off, len);
   const u16 = (dv: DataView, off: number): number => dv.getUint16(off, true);
   const u32 = (dv: DataView, off: number): number => dv.getUint32(off, true);
   const addIssue = (message: string): void => {
@@ -163,7 +161,12 @@ export async function buildResourceTree(
         );
         return "";
       }
-      const bytes = new Uint8Array(await file.slice(textOff, textOff + bytesLength).arrayBuffer());
+      const bytesView = await reader.read(textOff, bytesLength);
+      const bytes = new Uint8Array(
+        bytesView.buffer,
+        bytesView.byteOffset,
+        bytesView.byteLength
+      );
       return utf16Decoder.decode(bytes.subarray(0, bytes.length - (bytes.length % 2)));
     })();
     resourceNameCache.set(rel, pending);
@@ -193,10 +196,8 @@ export async function buildResourceTree(
     } else if (typeEntry.nameIsString && typeEntry.nameOrId != null) {
       typeName = await readUcs2Label(typeEntry.nameOrId);
     }
-
     let leafCount = 0;
     const typeDetailEntries: ResourceDetailEntry[] = [];
-
     if (!typeEntry.subdir) {
       addIssue(
         `Top-level resource type entry ${typeName} points directly to data; type entries should point to second-level subdirectories.`
@@ -267,7 +268,6 @@ export async function buildResourceTree(
         }
       }
     }
-
     top.push({ typeName, kind: typeEntry.nameIsString ? "name" : "id", leafCount });
     if (typeDetailEntries.length) detail.push({ typeName, entries: typeDetailEntries });
   }

@@ -1,8 +1,118 @@
 "use strict";
 
 import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
+import { createPeRangeReader, type PeRangeReader } from "./range-reader.js";
 
 const IMAGE_REL_BASED_HIGHADJ = 4;
+// Microsoft PE/COFF: IMAGE_BASE_RELOCATION consists of an 8-byte header followed by WORD entries.
+const IMAGE_BASE_RELOCATION_HEADER_SIZE = 8;
+const IMAGE_BASE_RELOCATION_ENTRY_SIZE = Uint16Array.BYTES_PER_ELEMENT;
+
+type RelocationEntrySpan = {
+  firstEntryIndex: number;
+  fileOffset: number;
+  wordCount: number;
+};
+
+type RelocationEntrySpanView = RelocationEntrySpan & {
+  view: DataView;
+};
+
+const collectRelocationEntrySpans = (
+  availableEntries: number,
+  blockRva: number,
+  rvaToOff: RvaToOffset,
+  fileSize: number,
+  addWarning: (message: string) => void
+): RelocationEntrySpan[] | null => {
+  const spans: RelocationEntrySpan[] = [];
+  for (let entryIndex = 0; entryIndex < availableEntries; entryIndex += 1) {
+    // Chromium profiling showed that reading each WORD relocation entry
+    // separately made `.reloc` alone issue 132,746 tiny
+    // File.slice().arrayBuffer() calls. Keep per-entry RVA validation, but
+    // collapse contiguous file offsets into spans and read each span once.
+    const entryRva =
+      (blockRva +
+        IMAGE_BASE_RELOCATION_HEADER_SIZE +
+        entryIndex * IMAGE_BASE_RELOCATION_ENTRY_SIZE) >>>
+      0;
+    const entryOffset = rvaToOff(entryRva);
+    if (entryOffset == null || entryOffset < 0 || entryOffset + IMAGE_BASE_RELOCATION_ENTRY_SIZE > fileSize) {
+      addWarning("Base relocation entries are truncated or no longer map to file data.");
+      return null;
+    }
+    const previousSpan = spans[spans.length - 1];
+    if (
+      previousSpan &&
+      entryOffset === previousSpan.fileOffset + previousSpan.wordCount * IMAGE_BASE_RELOCATION_ENTRY_SIZE
+    ) {
+      previousSpan.wordCount += 1;
+      continue;
+    }
+    spans.push({
+      firstEntryIndex: entryIndex,
+      fileOffset: entryOffset,
+      wordCount: 1
+    });
+  }
+  return spans;
+};
+
+const readRelocationEntrySpans = async (
+  reader: PeRangeReader,
+  spans: RelocationEntrySpan[],
+  addWarning: (message: string) => void
+): Promise<RelocationEntrySpanView[] | null> => {
+  const spanViews: RelocationEntrySpanView[] = [];
+  for (const span of spans) {
+    const byteLength = span.wordCount * IMAGE_BASE_RELOCATION_ENTRY_SIZE;
+    const view = await reader.read(span.fileOffset, byteLength);
+    if (view.byteLength < byteLength) {
+      addWarning("Base relocation entry is truncated.");
+      return null;
+    }
+    spanViews.push({ ...span, view });
+  }
+  return spanViews;
+};
+
+const parseRelocationEntries = (
+  availableEntries: number,
+  spanViews: RelocationEntrySpanView[],
+  addWarning: (message: string) => void
+): Array<{ type: number; offset: number }> => {
+  const entries: Array<{ type: number; offset: number }> = [];
+  let spanIndex = 0;
+  let spanView = spanViews[spanIndex];
+  for (let entryIndex = 0; entryIndex < availableEntries;) {
+    while (
+      spanView &&
+      entryIndex >= spanView.firstEntryIndex + spanView.wordCount
+    ) {
+      spanIndex += 1;
+      spanView = spanViews[spanIndex];
+    }
+    if (!spanView) {
+      addWarning("Base relocation entries are truncated or no longer map to file data.");
+      break;
+    }
+    const raw = spanView.view.getUint16(
+      (entryIndex - spanView.firstEntryIndex) * IMAGE_BASE_RELOCATION_ENTRY_SIZE,
+      true
+    );
+    const type = (raw >> 12) & 0xf;
+    entries.push({ type, offset: raw & 0xfff });
+    if (type === IMAGE_REL_BASED_HIGHADJ) {
+      if (entryIndex + 1 >= availableEntries) {
+        addWarning("Base relocation HIGHADJ entry is missing its second WORD payload.");
+      }
+      entryIndex += 2;
+      continue;
+    }
+    entryIndex += 1;
+  }
+  return entries;
+};
 
 export async function parseBaseRelocations(
   file: File,
@@ -29,17 +139,18 @@ export async function parseBaseRelocations(
   const addWarning = (message: string): void => {
     if (!warnings.includes(message)) warnings.push(message);
   };
+  const reader = createPeRangeReader(file, 0, file.size);
   let rel = 0;
   let totalEntries = 0;
-  while (rel + 8 <= dir.size) {
+  while (rel + IMAGE_BASE_RELOCATION_HEADER_SIZE <= dir.size) {
     const blockRva = (dir.rva + rel) >>> 0;
     const blockOff = rvaToOff(blockRva >>> 0);
     if (blockOff == null) {
       addWarning("Base relocation block RVA does not map to file data.");
       break;
     }
-    const dv = new DataView(await file.slice(blockOff, blockOff + 8).arrayBuffer());
-    if (dv.byteLength < 8) {
+    const dv = await reader.read(blockOff, IMAGE_BASE_RELOCATION_HEADER_SIZE);
+    if (dv.byteLength < IMAGE_BASE_RELOCATION_HEADER_SIZE) {
       addWarning("Base relocation block header is truncated.");
       break;
     }
@@ -49,37 +160,28 @@ export async function parseBaseRelocations(
       addWarning("Base relocation block size is 0, so parsing stops at an invalid terminator.");
       break;
     }
-    if (blockSize < 8) {
+    if (blockSize < IMAGE_BASE_RELOCATION_HEADER_SIZE) {
       addWarning("Base relocation block size is smaller than the 8-byte IMAGE_BASE_RELOCATION header.");
       break;
     }
     const availableBlockBytes = Math.min(blockSize, dir.size - rel);
-    const availableEntries = Math.floor(Math.max(0, availableBlockBytes - 8) / 2);
-    const entries: Array<{ type: number; offset: number }> = [];
-    for (let i = 0; i < availableEntries;) {
-      const entryRva = (blockRva + 8 + i * 2) >>> 0;
-      const entryOff = rvaToOff(entryRva);
-      if (entryOff == null || entryOff < 0 || entryOff + 2 > file.size) {
-        addWarning("Base relocation entries are truncated or no longer map to file data.");
-        break;
-      }
-      const entryView = new DataView(await file.slice(entryOff, entryOff + 2).arrayBuffer());
-      if (entryView.byteLength < 2) {
-        addWarning("Base relocation entry is truncated.");
-        break;
-      }
-      const raw = entryView.getUint16(0, true);
-      const type = (raw >> 12) & 0xf;
-      entries.push({ type, offset: raw & 0xfff });
-      if (type === IMAGE_REL_BASED_HIGHADJ) {
-        if (i + 1 >= availableEntries) {
-          addWarning("Base relocation HIGHADJ entry is missing its second WORD payload.");
-        }
-        i += 2;
-        continue;
-      }
-      i += 1;
-    }
+    const availableEntries = Math.floor(
+      Math.max(0, availableBlockBytes - IMAGE_BASE_RELOCATION_HEADER_SIZE) /
+        IMAGE_BASE_RELOCATION_ENTRY_SIZE
+    );
+    const entrySpans = collectRelocationEntrySpans(
+      availableEntries,
+      blockRva,
+      rvaToOff,
+      file.size,
+      addWarning
+    );
+    const spanViews = entrySpans
+      ? await readRelocationEntrySpans(reader, entrySpans, addWarning)
+      : null;
+    const entries = spanViews
+      ? parseRelocationEntries(availableEntries, spanViews, addWarning)
+      : [];
     blocks.push({ pageRva, size: blockSize, count: entries.length, entries });
     totalEntries += entries.length;
     const nextRel = rel + blockSize;

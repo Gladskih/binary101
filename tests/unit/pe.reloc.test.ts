@@ -216,6 +216,62 @@ void test("parseBaseRelocations follows sparse block mappings", async () => {
   assert.deepStrictEqual(parsed.blocks[1]?.entries, [{ type: 3, offset: 1 }]);
 });
 
+void test("parseBaseRelocations does not assume each block maps to one contiguous file span", async () => {
+  const directoryRva = 0x1000;
+  const headerFileOffset = 0x10;
+  const firstEntryFileOffset = 0x20;
+  const secondEntryFileOffset = 0x30;
+  const firstEntryRva = directoryRva + IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE;
+  const secondEntryRva = firstEntryRva + Uint16Array.BYTES_PER_ELEMENT;
+  const bytes = new Uint8Array(0x40).fill(0);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(headerFileOffset + 0, 0x2000, true);
+  view.setUint32(
+    headerFileOffset + 4,
+    IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE + Uint16Array.BYTES_PER_ELEMENT * 2,
+    true
+  );
+  view.setUint16(firstEntryFileOffset, IMAGE_REL_BASED_HIGHLOW_OFFSET_1, true);
+  view.setUint16(secondEntryFileOffset, 0x3002, true);
+
+  const mapDiscontiguousRelocationRva = (rva: number): number | null => {
+    if (rva >= directoryRva && rva < directoryRva + IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE) {
+      return headerFileOffset + (rva - directoryRva);
+    }
+    if (
+      rva >= firstEntryRva &&
+      rva < firstEntryRva + Uint16Array.BYTES_PER_ELEMENT
+    ) {
+      return firstEntryFileOffset + (rva - firstEntryRva);
+    }
+    if (rva >= secondEntryRva && rva < secondEntryRva + Uint16Array.BYTES_PER_ELEMENT) {
+      return secondEntryFileOffset + (rva - secondEntryRva);
+    }
+    return null;
+  };
+
+  const parsed = await parseBaseRelocations(
+    new MockFile(bytes, "reloc-discontiguous-block.bin"),
+    [
+      {
+        name: "BASERELOC",
+        rva: directoryRva,
+        size: IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE + Uint16Array.BYTES_PER_ELEMENT * 2
+      }
+    ],
+    mapDiscontiguousRelocationRva,
+    () => {}
+  );
+
+  assert.ok(parsed);
+  assert.strictEqual(parsed.blocks.length, 1);
+  assert.strictEqual(parsed.totalEntries, 2);
+  assert.deepStrictEqual(parsed.blocks[0]?.entries, [
+    { type: 3, offset: 1 },
+    { type: 3, offset: 2 }
+  ]);
+});
+
 void test("parseBaseRelocations does not continue from a block size that breaks 32-bit block alignment", async () => {
   const directoryOffset = 0x10;
   const misalignedBlockSize = IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE + Uint16Array.BYTES_PER_ELEMENT;

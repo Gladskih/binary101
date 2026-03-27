@@ -5,6 +5,7 @@ import type {
   PeDataDirectory,
   RvaToOffset
 } from "./types.js";
+import { createPeRangeReader, type PeRangeReader } from "./range-reader.js";
 
 // Microsoft PE format, Import Directory Table: IMAGE_IMPORT_DESCRIPTOR is five DWORDs.
 const IMAGE_IMPORT_DESCRIPTOR_SIZE = 20;
@@ -42,15 +43,19 @@ export interface PeImportParseResult {
 }
 
 const readNullTerminatedAsciiString = async (
-  file: File,
+  reader: PeRangeReader,
+  fileSize: number,
   offset: number
 ): Promise<{ text: string; truncated: boolean } | null> => {
-  if (offset < 0 || offset >= file.size) return null;
+  if (offset < 0 || offset >= fileSize) return null;
   let text = "";
   let position = offset;
-  while (position < file.size) {
+  while (position < fileSize) {
+    const chunkView = await reader.read(position, NULL_TERMINATED_ASCII_READ_CHUNK_SIZE);
     const chunk = new Uint8Array(
-      await file.slice(position, position + NULL_TERMINATED_ASCII_READ_CHUNK_SIZE).arrayBuffer()
+      chunkView.buffer,
+      chunkView.byteOffset,
+      chunkView.byteLength
     );
     if (chunk.byteLength === 0) break;
     const zeroIndex = chunk.indexOf(0);
@@ -65,7 +70,8 @@ const readNullTerminatedAsciiString = async (
 };
 
 const readImportByName = async (
-  file: File,
+  reader: PeRangeReader,
+  fileSize: number,
   rvaToOff: RvaToOffset,
   hintNameRva: number,
   addWarning: (msg: string) => void,
@@ -76,16 +82,15 @@ const readImportByName = async (
     addWarning("Import hint/name RVA does not map to file data.");
     return { name: "<bad RVA>" };
   }
-  const hintView = new DataView(
-    await file.slice(hintNameOffset, hintNameOffset + IMAGE_IMPORT_BY_NAME_HINT_SIZE).arrayBuffer()
-  );
+  const hintView = await reader.read(hintNameOffset, IMAGE_IMPORT_BY_NAME_HINT_SIZE);
   if (hintView.byteLength < IMAGE_IMPORT_BY_NAME_HINT_SIZE) {
     addWarning("Import hint/name table truncated.");
     return { name: "" };
   }
   const hint = hintView.getUint16(0, true);
   const hintName = await readNullTerminatedAsciiString(
-    file,
+    reader,
+    fileSize,
     hintNameOffset + IMAGE_IMPORT_BY_NAME_HINT_SIZE
   );
   if (hintName?.truncated) addWarning("Import name string truncated.");
@@ -93,7 +98,8 @@ const readImportByName = async (
 };
 
 const readImportThunkFunctions32 = async (
-  file: File,
+  reader: PeRangeReader,
+  fileSize: number,
   rvaToOff: RvaToOffset,
   thunkRva: number,
   addWarning: (msg: string) => void,
@@ -108,9 +114,7 @@ const readImportThunkFunctions32 = async (
       addWarning("Import thunk RVA does not map to file data.");
       break;
     }
-    const dv = new DataView(
-      await file.slice(thunkEntryOffset, thunkEntryOffset + IMAGE_THUNK_DATA32_SIZE).arrayBuffer()
-    );
+    const dv = await reader.read(thunkEntryOffset, IMAGE_THUNK_DATA32_SIZE);
     if (dv.byteLength < IMAGE_THUNK_DATA32_SIZE) {
       addWarning("Import thunks truncated (32-bit).");
       break;
@@ -124,13 +128,16 @@ const readImportThunkFunctions32 = async (
       functions.push({ ordinal: value & IMAGE_ORDINAL_MASK32 });
       continue;
     }
-    functions.push(await readImportByName(file, rvaToOff, value, addWarning, isReadableOffset));
+    functions.push(
+      await readImportByName(reader, fileSize, rvaToOff, value, addWarning, isReadableOffset)
+    );
   }
   return functions;
 };
 
 const readImportThunkFunctions64 = async (
-  file: File,
+  reader: PeRangeReader,
+  fileSize: number,
   rvaToOff: RvaToOffset,
   thunkRva: number,
   addWarning: (msg: string) => void,
@@ -145,9 +152,7 @@ const readImportThunkFunctions64 = async (
       addWarning("Import thunk RVA does not map to file data.");
       break;
     }
-    const dv = new DataView(
-      await file.slice(thunkEntryOffset, thunkEntryOffset + IMAGE_THUNK_DATA64_SIZE).arrayBuffer()
-    );
+    const dv = await reader.read(thunkEntryOffset, IMAGE_THUNK_DATA64_SIZE);
     if (dv.byteLength < IMAGE_THUNK_DATA64_SIZE) {
       addWarning("Import thunks truncated (64-bit).");
       break;
@@ -166,7 +171,8 @@ const readImportThunkFunctions64 = async (
     }
     functions.push(
       await readImportByName(
-        file,
+        reader,
+        fileSize,
         rvaToOff,
         Number(value & IMAGE_IMPORT_NAME_MASK64),
         addWarning,
@@ -183,7 +189,8 @@ const parseImportDirectoryWithThunkReader = async (
   rvaToOff: RvaToOffset,
   addCoverageRegion: AddCoverageRegion,
   readThunkFunctions: (
-    file: File,
+    reader: PeRangeReader,
+    fileSize: number,
     rvaToOff: RvaToOffset,
     thunkRva: number,
     addWarning: (msg: string) => void,
@@ -196,6 +203,7 @@ const parseImportDirectoryWithThunkReader = async (
   const warnings = new Set<string>();
   const isReadableOffset = (offset: number | null): offset is number =>
     offset != null && offset >= 0 && offset < file.size;
+  const reader = createPeRangeReader(file, 0, file.size);
   const maxThunkEntries = (entrySize: number): number => Math.floor(file.size / entrySize) + 1;
   if (!impDir?.rva) return { entries: imports };
   const start = rvaToOff(impDir.rva);
@@ -216,7 +224,7 @@ const parseImportDirectoryWithThunkReader = async (
     );
     if (descriptorSize <= 0) break;
     const descriptorTruncated = descriptorSize < IMAGE_IMPORT_DESCRIPTOR_SIZE;
-    const desc = new DataView(await file.slice(offset, offset + descriptorSize).arrayBuffer());
+    const desc = await reader.read(offset, descriptorSize);
     const readDescriptorField = (fieldOffset: number, fieldName: string): number | null => {
       if (desc.byteLength < fieldOffset + 4) {
         addWarning(`Import descriptor is truncated before the ${fieldName} field.`);
@@ -238,7 +246,7 @@ const parseImportDirectoryWithThunkReader = async (
     const nameOffset = rvaToOff(nameRva);
     let dllName = "";
     if (isReadableOffset(nameOffset)) {
-      const dllNameText = await readNullTerminatedAsciiString(file, nameOffset);
+      const dllNameText = await readNullTerminatedAsciiString(reader, file.size, nameOffset);
       if (dllNameText) {
         dllName = dllNameText.text;
         if (dllNameText.truncated) addWarning("Import DLL name string truncated.");
@@ -249,7 +257,15 @@ const parseImportDirectoryWithThunkReader = async (
     if (descriptorTruncated) break;
     const thunkRva = originalFirstThunk || firstThunk;
     const functions = thunkRva
-      ? await readThunkFunctions(file, rvaToOff, thunkRva, addWarning, isReadableOffset, maxThunkEntries)
+      ? await readThunkFunctions(
+          reader,
+          file.size,
+          rvaToOff,
+          thunkRva,
+          addWarning,
+          isReadableOffset,
+          maxThunkEntries
+        )
       : [];
     imports.push({ dll: dllName, functions });
   }
