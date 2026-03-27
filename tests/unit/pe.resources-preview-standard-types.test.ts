@@ -9,7 +9,7 @@ import {
   addPlugPlayPreview,
   addRcDataPreview,
   addVxdPreview
-} from "../../analyzers/pe/resources-preview-standard-types.js";
+} from "../../analyzers/pe/resources/preview/standard-types.js";
 
 const encoder = new TextEncoder();
 

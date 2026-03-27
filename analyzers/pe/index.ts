@@ -7,20 +7,20 @@ import {
   parseLoadConfigDirectory64,
   type PeLoadConfig,
   type PeLoadConfigTables
-} from "./load-config.js";
+} from "./load-config/index.js";
 import {
   readGuardAddressTakenIatEntryTableRvas,
   readGuardCFFunctionTableRvas,
   readGuardEhContinuationTableRvas,
   readGuardLongJumpTargetTableRvas,
   readSafeSehHandlerTableRvas
-} from "./load-config-tables.js";
-import { collectLoadConfigWarnings } from "./load-config-warnings.js";
+} from "./load-config/tables.js";
+import { collectLoadConfigWarnings } from "./load-config/warnings.js";
 import { parseImportDirectory32, parseImportDirectory64, type PeImportEntry } from "./imports.js";
 import { parseExportDirectory } from "./exports.js";
 import { parseTlsDirectory32, parseTlsDirectory64 } from "./tls.js";
-import { parseResources } from "./resources.js";
-import { parseClrDirectory, type PeClrHeader } from "./clr.js";
+import { parseResources } from "./resources/index.js";
+import { parseClrDirectory, type PeClrHeader } from "./clr/index.js";
 import { parseSecurityDirectory, type ParsedSecurityDirectory } from "./security.js";
 import { parseBaseRelocations } from "./reloc.js";
 import { parseExceptionDirectory } from "./exception.js";

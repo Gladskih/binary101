@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readSafeSehHandlerTableRvas } from "../../analyzers/pe/load-config-tables.js";
+import { readSafeSehHandlerTableRvas } from "../../analyzers/pe/load-config/tables.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 // Microsoft PE format documents 0x00400000 as the default ImageBase for Windows NT/2000/XP/95/98/Me EXE images.

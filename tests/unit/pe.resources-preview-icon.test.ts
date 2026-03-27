@@ -5,7 +5,7 @@ import { test } from "node:test";
 import {
   addGroupIconPreview,
   addIconPreview
-} from "../../analyzers/pe/resources-preview-icon.js";
+} from "../../analyzers/pe/resources/preview/icon.js";
 import { createPngFile } from "../fixtures/image-sample-files.js";
 import {
   buildLargeGroupIconResource,

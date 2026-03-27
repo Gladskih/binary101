@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addMenuPreview } from "../../analyzers/pe/resources-preview-menu.js";
+import { addMenuPreview } from "../../analyzers/pe/resources/preview/menu.js";
 import {
   alignDword,
   writeUtf16Z

@@ -3,8 +3,8 @@
 import { humanSize } from "../../binary-utils.js";
 import { safe } from "../../html-utils.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
-import type { ResourceTree } from "../../analyzers/pe/resources-core.js";
-import type { ResourceDetailGroup } from "../../analyzers/pe/resources-preview-types.js";
+import type { ResourceTree } from "../../analyzers/pe/resources/core.js";
+import type { ResourceDetailGroup } from "../../analyzers/pe/resources/preview/types.js";
 import { renderPreviewCell } from "./resource-preview-cell.js";
 import { formatWindowsLanguageName } from "./windows-language-names.js";
 

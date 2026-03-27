@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildResourceTree } from "../../analyzers/pe/resources-core.js";
+import { buildResourceTree } from "../../analyzers/pe/resources/core.js";
 import { MockFile } from "../helpers/mock-file.js";
 import {
   createResourceDirectoryFixture,

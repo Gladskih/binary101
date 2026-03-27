@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addBitmapPreview } from "../../analyzers/pe/resources-preview-bitmap.js";
+import { addBitmapPreview } from "../../analyzers/pe/resources/preview/bitmap.js";
 import { createBmpFile } from "../fixtures/image-sample-files.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 

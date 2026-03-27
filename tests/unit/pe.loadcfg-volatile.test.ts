@@ -5,8 +5,8 @@ import { test } from "node:test";
 import {
   parseLoadConfigDirectory32,
   parseLoadConfigDirectory64
-} from "../../analyzers/pe/load-config.js";
-import { collectLoadConfigWarnings } from "../../analyzers/pe/load-config-warnings.js";
+} from "../../analyzers/pe/load-config/index.js";
+import { collectLoadConfigWarnings } from "../../analyzers/pe/load-config/warnings.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
@@ -67,4 +67,3 @@ void test("collectLoadConfigWarnings warns when VolatileMetadataPointer does not
   const warnings = collectLoadConfigWarnings(file.size, value => value, imageBase, 0x1000, lc);
   assert.ok(warnings.some(w => w.includes("VolatileMetadataPointer") && w.includes("does not map to file data")));
 });
-

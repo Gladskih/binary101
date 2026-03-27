@@ -5,7 +5,7 @@ import { test } from "node:test";
 import {
   addCursorPreview,
   addGroupCursorPreview
-} from "../../analyzers/pe/resources-preview-cursor.js";
+} from "../../analyzers/pe/resources/preview/cursor.js";
 import { createPngFile } from "../fixtures/image-sample-files.js";
 import {
   buildCursorResource,

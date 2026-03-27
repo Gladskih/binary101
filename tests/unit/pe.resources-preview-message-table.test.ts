@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decodeMessageTablePreview } from "../../analyzers/pe/resources-preview-message-table.js";
+import { decodeMessageTablePreview } from "../../analyzers/pe/resources/preview/message-table.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
 // MESSAGE_RESOURCE_DATA stores a DWORD block count before the first MESSAGE_RESOURCE_BLOCK.

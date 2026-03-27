@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addVersionPreview } from "../../analyzers/pe/resources-preview-version.js";
+import { addVersionPreview } from "../../analyzers/pe/resources/preview/version.js";
 
 const DWORD_SIZE = Uint32Array.BYTES_PER_ELEMENT;
 const alignDword = (offset: number): number => (offset + DWORD_SIZE - 1) & ~(DWORD_SIZE - 1);

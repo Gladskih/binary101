@@ -7,7 +7,7 @@ import {
   readGuardAddressTakenIatEntryTableRvas,
   readGuardEhContinuationTableRvas,
   readGuardLongJumpTargetTableRvas
-} from "../../analyzers/pe/load-config-tables.js";
+} from "../../analyzers/pe/load-config/tables.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 // Microsoft PE format documents 0x00400000 as the default ImageBase for Windows NT/2000/XP/95/98/Me EXE images.

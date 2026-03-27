@@ -7,13 +7,13 @@ import {
   type PeInstructionSetProgress,
   type PeInstructionSetReport
 } from "../analyzers/pe/disassembly.js";
-import { readLoadConfigPointerRva } from "../analyzers/pe/load-config.js";
+import { readLoadConfigPointerRva } from "../analyzers/pe/load-config/index.js";
 import {
   readGuardCFFunctionTableRvas,
   readGuardEhContinuationTableRvas,
   readGuardLongJumpTargetTableRvas,
   readSafeSehHandlerTableRvas
-} from "../analyzers/pe/load-config-tables.js";
+} from "../analyzers/pe/load-config/tables.js";
 
 const IMAGE_FILE_MACHINE_I386 = 0x014c;
 

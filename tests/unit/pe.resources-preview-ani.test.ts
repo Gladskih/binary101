@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addAniCursorPreview, addAniIconPreview } from "../../analyzers/pe/resources-preview-ani.js";
+import { addAniCursorPreview, addAniIconPreview } from "../../analyzers/pe/resources/preview/ani.js";
 import { createAniFile } from "../fixtures/riff-sample-files.js";
 
 void test("ANI standard resource decoders expose animated cursor and icon summaries", async () => {

@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderPreviewCell } from "../../renderers/pe/resource-preview-cell.js";
-import type { ResourceLangWithPreview } from "../../analyzers/pe/resources-preview-types.js";
+import type { ResourceLangWithPreview } from "../../analyzers/pe/resources/preview/types.js";
 
 const createBaseLang = (): ResourceLangWithPreview => ({
   lang: 1033,

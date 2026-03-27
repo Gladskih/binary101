@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseLoadConfigDirectory32 } from "../../analyzers/pe/load-config.js";
+import { parseLoadConfigDirectory32 } from "../../analyzers/pe/load-config/index.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 void test("parseLoadConfigDirectory returns a partial result with warnings on a truncated mapped header", async () => {

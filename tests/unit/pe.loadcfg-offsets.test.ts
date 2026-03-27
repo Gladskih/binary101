@@ -6,7 +6,7 @@ import {
   parseLoadConfigDirectory32,
   parseLoadConfigDirectory64,
   readLoadConfigPointerRva
-} from "../../analyzers/pe/load-config.js";
+} from "../../analyzers/pe/load-config/index.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 

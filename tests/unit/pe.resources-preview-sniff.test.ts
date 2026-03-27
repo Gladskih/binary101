@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addHeuristicResourcePreview } from "../../analyzers/pe/resources-preview-sniff.js";
+import { addHeuristicResourcePreview } from "../../analyzers/pe/resources/preview/sniff.js";
 import { createPngFile } from "../fixtures/image-sample-files.js";
 import { createAniFile, createWavFile } from "../fixtures/riff-sample-files.js";
 import { expectDefined } from "../helpers/expect-defined.js";

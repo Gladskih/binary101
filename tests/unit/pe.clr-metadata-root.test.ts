@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseClrMetadataRoot } from "../../analyzers/pe/clr-metadata-root.js";
+import { parseClrMetadataRoot } from "../../analyzers/pe/clr/metadata-root.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const encoder = new TextEncoder();

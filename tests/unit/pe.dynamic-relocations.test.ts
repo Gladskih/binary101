@@ -6,7 +6,7 @@ import {
   parseDynamicRelocationsFromLoadConfig32,
   parseDynamicRelocationsFromLoadConfig64
 } from "../../analyzers/pe/dynamic-relocations.js";
-import type { PeLoadConfig } from "../../analyzers/pe/load-config.js";
+import type { PeLoadConfig } from "../../analyzers/pe/load-config/index.js";
 import type { PeSection } from "../../analyzers/pe/types.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";

@@ -5,8 +5,8 @@ import { test } from "node:test";
 import {
   parseLoadConfigDirectory32,
   parseLoadConfigDirectory64
-} from "../../analyzers/pe/load-config.js";
-import { collectLoadConfigWarnings } from "../../analyzers/pe/load-config-warnings.js";
+} from "../../analyzers/pe/load-config/index.js";
+import { collectLoadConfigWarnings } from "../../analyzers/pe/load-config/warnings.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 

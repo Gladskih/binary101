@@ -2,8 +2,8 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { enrichResourcePreviews } from "../../analyzers/pe/resources-preview.js";
-import type { ResourceTree } from "../../analyzers/pe/resources-core.js";
+import { enrichResourcePreviews } from "../../analyzers/pe/resources/preview/index.js";
+import type { ResourceTree } from "../../analyzers/pe/resources/core.js";
 import { createPngFile } from "../fixtures/image-sample-files.js";
 import {
   buildSingleEntryGroupCursorResource,

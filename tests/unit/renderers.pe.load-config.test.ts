@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderLoadConfig } from "../../renderers/pe/load-config.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
-import type { PeLoadConfig } from "../../analyzers/pe/load-config.js";
+import type { PeLoadConfig } from "../../analyzers/pe/load-config/index.js";
 
 const createLoadConfig = (): PeLoadConfig => ({
   Size: 0,

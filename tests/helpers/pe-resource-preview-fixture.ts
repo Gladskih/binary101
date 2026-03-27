@@ -1,7 +1,7 @@
 "use strict";
 
-import type { ResourceTree } from "../../analyzers/pe/resources-core.js";
-import type { ResourceLangWithPreview } from "../../analyzers/pe/resources-preview-types.js";
+import type { ResourceTree } from "../../analyzers/pe/resources/core.js";
+import type { ResourceLangWithPreview } from "../../analyzers/pe/resources/preview/types.js";
 
 // IMAGE_RESOURCE_DIRECTORY is 16 bytes. Source:
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#resource-directory-table

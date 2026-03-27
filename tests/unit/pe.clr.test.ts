@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseClrDirectory } from "../../analyzers/pe/clr.js";
+import { parseClrDirectory } from "../../analyzers/pe/clr/index.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
@@ -226,4 +226,3 @@ void test("parseClrDirectory reports metadata RVAs that cannot be mapped", async
   const clr = await parseClrDirectory(new MockFile(bytes, "clr-meta-hole.bin"), dirs, mapWithHole, add);
   assert.ok(expectDefined(expectDefined(clr).issues).some(issue => issue.toLowerCase().includes("metadata rva")));
 });
-

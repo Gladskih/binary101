@@ -4,7 +4,7 @@ import { hex, isoOrDash } from "../../binary-utils.js";
 import { dd, safe } from "../../html-utils.js";
 import { GUARD_FLAGS } from "../../analyzers/pe/constants.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
-import type { PeLoadConfig } from "../../analyzers/pe/load-config.js";
+import type { PeLoadConfig } from "../../analyzers/pe/load-config/index.js";
 const formatPointerHex = (value: bigint, width: number): string =>
   `0x${value.toString(16).padStart(width, "0")}`;
 const formatVa = (value: bigint, isPlus: boolean): string =>

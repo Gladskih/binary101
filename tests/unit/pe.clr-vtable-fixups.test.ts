@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseVTableFixups } from "../../analyzers/pe/clr-vtable-fixups.js";
+import { parseVTableFixups } from "../../analyzers/pe/clr/vtable-fixups.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const rvaToOff = (rva: number): number => rva;

@@ -8,7 +8,7 @@ import type {
   ResourceLangWithPreview,
   ResourceMenuItemPreview,
   ResourceVersionPreview
-} from "../../analyzers/pe/resources-preview-types.js";
+} from "../../analyzers/pe/resources/preview/types.js";
 import { formatWindowsLanguageName } from "./windows-language-names.js";
 
 const renderIssues = (langEntry: ResourceLangWithPreview): string => {

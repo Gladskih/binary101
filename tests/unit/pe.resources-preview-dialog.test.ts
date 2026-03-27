@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addDialogPreview } from "../../analyzers/pe/resources-preview-dialog.js";
+import { addDialogPreview } from "../../analyzers/pe/resources/preview/dialog.js";
 import {
   alignDword,
   writeUtf16Z

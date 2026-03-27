@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addAcceleratorPreview } from "../../analyzers/pe/resources-preview-accelerator.js";
+import { addAcceleratorPreview } from "../../analyzers/pe/resources/preview/accelerator.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
 // fVirt flags for ACCELTABLEENTRY come from the accelerator-table resource format. Source:

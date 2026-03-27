@@ -6,7 +6,7 @@ import {
   parseDynamicRelocationEntriesV232,
   parseDynamicRelocationEntriesV264
 } from "./dynamic-relocation-entry-parsers.js";
-import { readLoadConfigPointerRva, type PeLoadConfig } from "./load-config.js";
+import { readLoadConfigPointerRva, type PeLoadConfig } from "./load-config/index.js";
 import type { PeSection, RvaToOffset } from "./types.js";
 
 const DYNAMIC_RELOCATION_TABLE_HEADER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 2;

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildCor20Issues, readCor20Header } from "../../analyzers/pe/clr-cor20-header.js";
+import { buildCor20Issues, readCor20Header } from "../../analyzers/pe/clr/cor20-header.js";
 
 void test("readCor20Header reads IMAGE_COR20_HEADER fields from a full header view", () => {
   const bytes = new Uint8Array(0x48).fill(0);

@@ -1,6 +1,6 @@
 "use strict";
 
-import { buildResourceTree } from "../../analyzers/pe/resources-core.js";
+import { buildResourceTree } from "../../analyzers/pe/resources/core.js";
 import { MockFile } from "./mock-file.js";
 import { expectDefined } from "./expect-defined.js";
 
