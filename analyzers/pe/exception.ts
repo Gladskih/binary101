@@ -1,15 +1,69 @@
 "use strict";
 
+import { createPeRangeReader, type PeRangeReader } from "./range-reader.js";
 import type { AddCoverageRegion, PeDataDirectory, RvaToOffset } from "./types.js";
-
 const RUNTIME_FUNCTION_ENTRY_SIZE = 12;
 const UNW_FLAG_EHANDLER = 0x01;
 const UNW_FLAG_UHANDLER = 0x02;
 const UNW_FLAG_CHAININFO = 0x04;
 const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
-
+type RuntimeFunctionSpan = {
+  firstEntryIndex: number;
+  fileOffset: number;
+  entryCount: number;
+};
 const alignTo4 = (value: number): number => (value + 3) & ~3;
-
+const collectRuntimeFunctionSpans = (
+  declaredCount: number,
+  directoryRva: number,
+  rvaToOff: RvaToOffset,
+  fileSize: number,
+  issues: string[]
+): RuntimeFunctionSpan[] => {
+  const spans: RuntimeFunctionSpan[] = [];
+  for (let index = 0; index < declaredCount; index += 1) {
+    const entryRva = (directoryRva + index * RUNTIME_FUNCTION_ENTRY_SIZE) >>> 0;
+    const entryOff = rvaToOff(entryRva);
+    if (entryOff == null || entryOff < 0 || entryOff + RUNTIME_FUNCTION_ENTRY_SIZE > fileSize) {
+      issues.push("Exception directory is truncated; some RUNTIME_FUNCTION entries are missing.");
+      break;
+    }
+    const previousSpan = spans[spans.length - 1];
+    if (
+      previousSpan &&
+      entryOff === previousSpan.fileOffset + previousSpan.entryCount * RUNTIME_FUNCTION_ENTRY_SIZE
+    ) {
+      previousSpan.entryCount += 1;
+      continue;
+    }
+    spans.push({
+      firstEntryIndex: index,
+      fileOffset: entryOff,
+      entryCount: 1
+    });
+  }
+  return spans;
+};
+const readRuntimeFunctionSpan = async (
+  reader: PeRangeReader,
+  span: RuntimeFunctionSpan,
+  issues: string[]
+): Promise<DataView | null> => {
+  const byteLength = span.entryCount * RUNTIME_FUNCTION_ENTRY_SIZE;
+  const view = await reader.read(span.fileOffset, byteLength);
+  const availableEntries = Math.floor(view.byteLength / RUNTIME_FUNCTION_ENTRY_SIZE);
+  if (availableEntries < span.entryCount) {
+    issues.push("Exception directory is truncated; some RUNTIME_FUNCTION entries are missing.");
+    return availableEntries > 0
+      ? new DataView(
+          view.buffer,
+          view.byteOffset,
+          availableEntries * RUNTIME_FUNCTION_ENTRY_SIZE
+        )
+      : null;
+  }
+  return view;
+};
 const createEmptyExceptionDirectory = (issues: string[]): {
   functionCount: number;
   beginRvas: number[];
@@ -29,7 +83,6 @@ const createEmptyExceptionDirectory = (issues: string[]): {
   invalidEntryCount: 0,
   issues
 });
-
 export async function parseExceptionDirectory(
   file: File,
   dataDirs: PeDataDirectory[],
@@ -50,7 +103,6 @@ export async function parseExceptionDirectory(
   if (!dir?.rva) return null;
   const base = rvaToOff(dir.rva);
   if (base == null) return null;
-
   const maxBytes = Math.max(0, Math.min(dir.size, file.size - base));
   addCoverageRegion("EXCEPTION directory", base, maxBytes);
   if (machine !== IMAGE_FILE_MACHINE_AMD64) {
@@ -64,10 +116,8 @@ export async function parseExceptionDirectory(
       `Exception directory size is smaller than one RUNTIME_FUNCTION entry (${RUNTIME_FUNCTION_ENTRY_SIZE} bytes).`
     ]);
   }
-
   const declaredCount = Math.floor(dir.size / RUNTIME_FUNCTION_ENTRY_SIZE);
   const issues: string[] = [];
-
   if (dir.size % RUNTIME_FUNCTION_ENTRY_SIZE !== 0) {
     issues.push("Exception directory size is not a multiple of RUNTIME_FUNCTION entry size (12 bytes).");
   }
@@ -79,62 +129,51 @@ export async function parseExceptionDirectory(
   let parsedCount = 0;
   let previousBegin: number | null = null;
   let reportedUnsortedEntries = false;
-
-  for (let index = 0; index < declaredCount; index += 1) {
-    const entryRva = (dir.rva + index * RUNTIME_FUNCTION_ENTRY_SIZE) >>> 0;
-    const entryOff = rvaToOff(entryRva);
-    if (entryOff == null || entryOff < 0 || entryOff + RUNTIME_FUNCTION_ENTRY_SIZE > file.size) {
-      issues.push("Exception directory is truncated; some RUNTIME_FUNCTION entries are missing.");
+  const reader = createPeRangeReader(file, 0, file.size);
+  const spans = collectRuntimeFunctionSpans(declaredCount, dir.rva, rvaToOff, file.size, issues);
+  for (const span of spans) {
+    const spanView = await readRuntimeFunctionSpan(reader, span, issues);
+    if (!spanView) {
       break;
     }
-
-    const entryView = new DataView(
-      await file.slice(entryOff, entryOff + RUNTIME_FUNCTION_ENTRY_SIZE).arrayBuffer()
-    );
-    if (entryView.byteLength < RUNTIME_FUNCTION_ENTRY_SIZE) {
-      issues.push("Exception directory is truncated; some RUNTIME_FUNCTION entries are missing.");
-      break;
-    }
-
-    const begin = entryView.getUint32(0, true) >>> 0;
-    const end = entryView.getUint32(4, true) >>> 0;
-    const unwindInfoRva = entryView.getUint32(8, true) >>> 0;
-    parsedCount += 1;
-
-    let invalid = false;
-    if (!begin || !end || begin >= end) invalid = true;
-
-    if (begin) {
-      const beginOff = rvaToOff(begin);
-      if (beginOff == null || beginOff < 0 || beginOff >= file.size) invalid = true;
-    }
-
-    if (end) {
-      const endOff = end > 0 ? rvaToOff((end - 1) >>> 0) : null;
-      if (endOff == null || endOff < 0 || endOff >= file.size) invalid = true;
-    }
-
-    if (unwindInfoRva) {
-      const unwindOff = rvaToOff(unwindInfoRva);
-      if (unwindOff == null || unwindOff < 0 || unwindOff >= file.size) invalid = true;
-    }
-
-    if (!invalid && begin) {
-      if (previousBegin != null && begin < previousBegin && !reportedUnsortedEntries) {
-        issues.push("RUNTIME_FUNCTION entries are not sorted by BeginAddress.");
-        reportedUnsortedEntries = true;
+    const spanEntries = Math.floor(spanView.byteLength / RUNTIME_FUNCTION_ENTRY_SIZE);
+    for (let localIndex = 0; localIndex < spanEntries; localIndex += 1) {
+      const entryOffset = localIndex * RUNTIME_FUNCTION_ENTRY_SIZE;
+      const begin = spanView.getUint32(entryOffset, true) >>> 0;
+      const end = spanView.getUint32(entryOffset + 4, true) >>> 0;
+      const unwindInfoRva = spanView.getUint32(entryOffset + 8, true) >>> 0;
+      parsedCount += 1;
+      let invalid = false;
+      if (!begin || !end || begin >= end) invalid = true;
+      if (begin) {
+        const beginOff = rvaToOff(begin);
+        if (beginOff == null || beginOff < 0 || beginOff >= file.size) invalid = true;
       }
-      previousBegin = begin;
-      beginRvas.push(begin);
+      if (end) {
+        const endOff = end > 0 ? rvaToOff((end - 1) >>> 0) : null;
+        if (endOff == null || endOff < 0 || endOff >= file.size) invalid = true;
+      }
+      if (unwindInfoRva) {
+        const unwindOff = rvaToOff(unwindInfoRva);
+        if (unwindOff == null || unwindOff < 0 || unwindOff >= file.size) invalid = true;
+      }
+
+      if (!invalid && begin) {
+        if (previousBegin != null && begin < previousBegin && !reportedUnsortedEntries) {
+          issues.push("RUNTIME_FUNCTION entries are not sorted by BeginAddress.");
+          reportedUnsortedEntries = true;
+        }
+        previousBegin = begin;
+        beginRvas.push(begin);
+      }
+      if (unwindInfoRva) unwindRvas.add(unwindInfoRva);
+      if (invalid) invalidEntryCount += 1;
     }
-    if (unwindInfoRva) unwindRvas.add(unwindInfoRva);
-    if (invalid) invalidEntryCount += 1;
   }
   if (parsedCount === 0) {
     issues.push("Exception directory does not contain a complete RUNTIME_FUNCTION entry.");
     return createEmptyExceptionDirectory(issues);
   }
-
   let unreadableUnwindCount = 0;
   let unexpectedUnwindVersionCount = 0;
   let handlerUnwindInfoCount = 0;
@@ -177,7 +216,6 @@ export async function parseExceptionDirectory(
     if (value == null) issues.push(issue);
     return value;
   };
-
   const unwindQueue = [...unwindRvas.values()];
   const unwindVisited = new Set<number>(unwindRvas);
   const enqueueUnwindRva = (rva: number): void => {
@@ -187,23 +225,19 @@ export async function parseExceptionDirectory(
     unwindVisited.add(normalized);
     unwindQueue.push(normalized);
   };
-
   while (unwindQueue.length > 0) {
     const unwindInfoRva = unwindQueue.pop();
     if (unwindInfoRva == null) break;
-
     const off = rvaToOff(unwindInfoRva);
     if (off == null || off < 0 || off >= file.size) {
       unreadableUnwindCount += 1;
       continue;
     }
-
     const headerBytes = await readBytes(off, 4);
     if (!headerBytes || headerBytes.length < 4) {
       unreadableUnwindCount += 1;
       continue;
     }
-
     const b0 = headerBytes[0] ?? 0;
     const countOfCodes = headerBytes[2] ?? 0;
     const version = b0 & 0x07;
@@ -215,7 +249,6 @@ export async function parseExceptionDirectory(
 
     if ((flags & UNW_FLAG_CHAININFO) === 0 && (flags & (UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER)) !== 0) {
       handlerUnwindInfoCount += 1;
-
       const handlerOff = off + alignTo4(4 + countOfCodes * 2);
       const handlerRva = await readTrailingU32(
         handlerOff,
@@ -228,7 +261,6 @@ export async function parseExceptionDirectory(
     }
     if ((flags & UNW_FLAG_CHAININFO) !== 0) {
       chainedUnwindInfoCount += 1;
-
       const chainOff = off + alignTo4(4 + countOfCodes * 2);
       const chainedUnwindInfoRva = await readTrailingU32(
         chainOff + 8,
@@ -237,14 +269,12 @@ export async function parseExceptionDirectory(
       if (chainedUnwindInfoRva) enqueueUnwindRva(chainedUnwindInfoRva);
     }
   }
-
   if (unreadableUnwindCount > 0) {
     issues.push(`${unreadableUnwindCount} UNWIND_INFO block(s) could not be read.`);
   }
   if (unexpectedUnwindVersionCount > 0) {
     issues.push(`${unexpectedUnwindVersionCount} UNWIND_INFO block(s) have an unexpected version.`);
   }
-
   return {
     functionCount: parsedCount,
     beginRvas,
