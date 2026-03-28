@@ -174,6 +174,37 @@ void test("parseBoundImports skips over forwarder refs before the next descripto
   );
 });
 
+void test("parseBoundImports decodes bound forwarder refs instead of only skipping over them", async () => {
+  const directoryOffset = 0x40;
+  const bytes = createBoundImportDirectory(
+    [
+      { timeDateStamp: 0x01020304, moduleName: "KERNEL32.dll", forwarderRefCount: 2 },
+      { timeDateStamp: 0x11121314, moduleName: "NTDLL.dll" },
+      { timeDateStamp: 0x21222324, moduleName: "ADVAPI32.dll" },
+      { timeDateStamp: 0x31323334, moduleName: "USER32.dll" }
+    ],
+    directoryOffset,
+    0x80
+  );
+
+  const result = await parseBoundImports(
+    new MockFile(bytes, "bound-imports-forwarders.bin"),
+    [{ name: "BOUND_IMPORT", rva: directoryOffset, size: 0x80 }],
+    value => value
+  );
+
+  const definedResult = expectDefined(result);
+  const entry = expectDefined(definedResult.entries[0]);
+  assert.equal(entry.name, "KERNEL32.dll");
+  // IMAGE_BOUND_FORWARDER_REF uses the same 8-byte layout as IMAGE_BOUND_IMPORT_DESCRIPTOR;
+  // the descriptor's count tells the parser how many immediately following forwarder refs belong to it.
+  assert.deepEqual(entry.forwarderRefs, [
+    { name: "NTDLL.dll", TimeDateStamp: 0x11121314 },
+    { name: "ADVAPI32.dll", TimeDateStamp: 0x21222324 }
+  ]);
+  assert.equal(definedResult.entries[1]?.name, "USER32.dll");
+});
+
 void test("parseBoundImports clamps module names to the declared directory span", async () => {
   const directoryOffset = 0x20;
   // 20 bytes = 8-byte descriptor + 8-byte zero terminator + 4 bytes left for the name payload.

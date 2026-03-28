@@ -10,6 +10,7 @@ import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
 const encoder = new TextEncoder();
 const IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE = 28;
 const IMAGE_DEBUG_TYPE_CODEVIEW = 2;
+const IMAGE_DEBUG_TYPE_MISC = 4;
 const RSDS_SIGNATURE = 0x53445352;
 const RSDS_HEADER_SIZE = 24;
 const RSDS_TEST_GUID_BYTES = Uint8Array.from([
@@ -193,4 +194,54 @@ void test("parseDebugDirectory continues past the first 16 entries to find later
   const entry = expectDefined(result.entry);
   assert.equal(entry.age, 11);
   assert.match(entry.path, /late-entry\.pdb/);
+});
+
+void test("parseDebugDirectory preserves every debug-directory entry instead of only the first CodeView record", async () => {
+  const bytes = new Uint8Array(512).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const debugRva = 0x40;
+  const miscDataRva = 0x100;
+  const rsdsDataRva = 0x140;
+  const miscSize = 0x18;
+
+  // Microsoft PE/COFF specification, "Debug Directory (Image Only)":
+  // the debug directory is an array of entries whose full extent is given by the directory size.
+  // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
+  dv.setUint32(debugRva + 12, IMAGE_DEBUG_TYPE_MISC, true);
+  dv.setUint32(debugRva + 16, miscSize, true);
+  dv.setUint32(debugRva + 20, miscDataRva, true);
+  dv.setUint32(debugRva + 24, miscDataRva, true);
+  writeRsdsRecord(
+    dv,
+    bytes,
+    debugRva + IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE,
+    rsdsDataRva,
+    19,
+    "C:\\symbols\\all-entries.pdb"
+  );
+
+  const result = await parseDebugDirectory(
+    new MockFile(bytes, "debug-all-entries.bin"),
+    [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE * 2 }],
+    value => value
+  );
+
+  assert.equal(result.entries?.length, 2);
+  assert.deepEqual(
+    result.entries?.map(entry => ({
+      type: entry.type,
+      sizeOfData: entry.sizeOfData,
+      pointerToRawData: entry.pointerToRawData
+    })),
+    [
+      { type: IMAGE_DEBUG_TYPE_MISC, sizeOfData: miscSize, pointerToRawData: miscDataRva },
+      {
+        type: IMAGE_DEBUG_TYPE_CODEVIEW,
+        sizeOfData: rsdsRecordSize("C:\\symbols\\all-entries.pdb"),
+        pointerToRawData: rsdsDataRva
+      }
+    ]
+  );
+  assert.equal(expectDefined(result.entries?.[1]).codeView?.path, "C:\\symbols\\all-entries.pdb");
+  assert.equal(expectDefined(result.entry).path, "C:\\symbols\\all-entries.pdb");
 });

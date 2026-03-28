@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { buildResourceTree } from "../../analyzers/pe/resources/core.js";
 import { MockFile } from "../helpers/mock-file.js";
 import {
+  IMAGE_RESOURCE_DATA_ENTRY_SIZE,
   createResourceDirectoryFixture,
   IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE,
   IMAGE_RESOURCE_DIRECTORY_SIZE,
@@ -152,4 +153,57 @@ void test("buildResourceTree warns when resource data payload ranges overlap", a
   assert.ok(tree);
 
   assert.match((tree.issues || []).join(" "), /payload.*overlap|resource data.*overlap/i);
+});
+
+void test("buildResourceTree preserves valid resource paths deeper than the Windows three-level convention", async () => {
+  const rootDirectoryOffset = 0;
+  const rootEntryOffset = rootDirectoryOffset + IMAGE_RESOURCE_DIRECTORY_SIZE;
+  const nameDirectoryOffset = rootEntryOffset + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE;
+  const nameEntryOffset = nameDirectoryOffset + IMAGE_RESOURCE_DIRECTORY_SIZE;
+  const languageDirectoryOffset = nameEntryOffset + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE;
+  const languageEntryOffset = languageDirectoryOffset + IMAGE_RESOURCE_DIRECTORY_SIZE;
+  const extraDirectoryOffset = languageEntryOffset + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE;
+  const extraEntryOffset = extraDirectoryOffset + IMAGE_RESOURCE_DIRECTORY_SIZE;
+  const dataEntryOffset = extraEntryOffset + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE;
+  const fixture = createResourceDirectoryFixture(dataEntryOffset + IMAGE_RESOURCE_DATA_ENTRY_SIZE);
+
+  fixture.writeDirectory(rootDirectoryOffset, 0, 1);
+  fixture.writeDirectoryEntry(rootEntryOffset, 3, resourceSubdirectory(nameDirectoryOffset));
+  fixture.writeDirectory(nameDirectoryOffset, 0, 1);
+  fixture.writeDirectoryEntry(nameEntryOffset, 7, resourceSubdirectory(languageDirectoryOffset));
+  fixture.writeDirectory(languageDirectoryOffset, 0, 1);
+  // Microsoft PE/COFF specification, ".rsrc Section":
+  // the general design can incorporate 2**31 levels; Type/Name/Language is the Windows convention,
+  // not a hard format limit.
+  // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#the-rsrc-section
+  fixture.writeDirectoryEntry(languageEntryOffset, 0x00000409, resourceSubdirectory(extraDirectoryOffset));
+  fixture.writeDirectory(extraDirectoryOffset, 0, 1);
+  fixture.writeDirectoryEntry(extraEntryOffset, 0x200, dataEntryOffset);
+  fixture.writeDataEntry(dataEntryOffset, 0x00002000, 0x10, 0x000004b0);
+
+  const tree = await buildResourceTree(
+    new MockFile(fixture.bytes),
+    buildFixtureResourceDirectory(fixture.bytes.length),
+    mapFixtureRvaToStart
+  );
+  assert.ok(tree);
+
+  assert.deepEqual(tree.paths, [
+    {
+      nodes: [
+        { id: 3, name: null },
+        { id: 7, name: null },
+        { id: 0x00000409, name: null },
+        { id: 0x200, name: null }
+      ],
+      dataRVA: 0x00002000,
+      size: 0x10,
+      codePage: 0x000004b0,
+      reserved: 0
+    }
+  ]);
+  assert.equal(
+    (tree.issues || []).some(issue => /language entry.*subdirectory/i.test(issue)),
+    false
+  );
 });
