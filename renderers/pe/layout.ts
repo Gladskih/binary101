@@ -9,6 +9,9 @@ type PeExceptionSection = NonNullable<PeParseResult["exception"]>;
 type PeBoundImportsSection = NonNullable<PeParseResult["boundImports"]>;
 type PeDelayImportsSection = NonNullable<PeParseResult["delayImports"]>;
 
+// Microsoft PE format, "Section Flags":
+// IMAGE_SCN_MEM_EXECUTE marks executable section contents.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
 const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
 
 const computeRawImageEnd = (pe: PeParseResult): number =>

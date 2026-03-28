@@ -88,12 +88,19 @@ const collectLeafPaths = async (
       continue;
     }
     leaves.push(leaf);
+    // Microsoft PE format, ".rsrc Section":
+    // Windows convention is type -> name/ID -> language, so a leaf directly below the type
+    // directory means the second-level name/ID directory is missing.
+    // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#the-rsrc-section
     if (nodes.length === 1) {
       addIssue(
         `Resource entry under type ${typeName} points directly to data; second-level entries should point to language subdirectories.`
       );
       continue;
     }
+    // Microsoft PE format, ".rsrc Section":
+    // the canonical Windows leaf depth is three nodes: type -> name/ID -> language.
+    // Deeper valid paths are preserved in `paths`, but only canonical leaves populate `detail`.
     if (nextNodes.length === 3) {
       ensureDetailEntry(detailGroups, typeName, nextNodes[1]!).langs.push({
         lang: nextNodes[2]?.id ?? null,
@@ -153,6 +160,9 @@ export const buildResourcePathCollections = async (
     top.push({
       typeName,
       kind: typeEntry.nameIsString ? "name" : "id",
+      // Microsoft PE format, ".rsrc Section":
+      // `top[].leafCount` intentionally reports only canonical Windows leaves
+      // (type -> name/ID -> language), not deeper valid paths.
       leafCount: typePaths.filter(path => path.nodes.length === 3).length
     });
   }

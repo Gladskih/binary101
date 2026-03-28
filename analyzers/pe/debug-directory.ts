@@ -6,7 +6,9 @@ import { parseCodeViewEntry, type PeCodeViewEntry } from "./debug-codeview.js";
 
 export type { PeCodeViewEntry } from "./debug-codeview.js";
 
-// PE/COFF: IMAGE_DEBUG_DIRECTORY entry layout (28 bytes, file form):
+// Microsoft PE format, "Debug Directory (Image Only)":
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
+// IMAGE_DEBUG_DIRECTORY entry layout (28 bytes, file form):
 // - Type (DWORD) at +0x0c
 // - SizeOfData (DWORD) at +0x10
 // - AddressOfRawData (DWORD, RVA) at +0x14

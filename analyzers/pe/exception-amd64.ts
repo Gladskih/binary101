@@ -5,10 +5,19 @@ import { collectRuntimeFunctionSpans, readRuntimeFunctionSpan } from "./exceptio
 import type { PeDataDirectory, RvaToOffset } from "./types.js";
 import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./exception-types.js";
 
+// Microsoft PE format, ".pdata (Exception Information)":
+// each x64 RUNTIME_FUNCTION entry is 12 bytes.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#the-pdata-section
 const RUNTIME_FUNCTION_ENTRY_SIZE = 12;
+// Microsoft x64 exception handling:
+// UNW_FLAG_EHANDLER, UNW_FLAG_UHANDLER, and UNW_FLAG_CHAININFO are the public UNWIND_INFO flags.
+// https://learn.microsoft.com/en-us/cpp/build/exception-handling-x64
 const UNW_FLAG_EHANDLER = 0x01;
 const UNW_FLAG_UHANDLER = 0x02;
 const UNW_FLAG_CHAININFO = 0x04;
+// Implementation detail: keep UNWIND_INFO scans bounded to 256 KiB slices while still
+// amortizing file.slice reads across neighboring unwind records.
+const UNWIND_SCAN_CHUNK_SIZE_BYTES = 256 * 1024;
 
 const alignTo4 = (value: number): number => (value + 3) & ~3;
 
@@ -145,7 +154,7 @@ export const parseAmd64ExceptionDirectory = async (
     if (cached) {
       return cached;
     }
-    const chunkEnd = Math.min(file.size, normalizedStart + 262144);
+    const chunkEnd = Math.min(file.size, normalizedStart + UNWIND_SCAN_CHUNK_SIZE_BYTES);
     const bytes = new Uint8Array(await file.slice(normalizedStart, chunkEnd).arrayBuffer());
     chunkCache.set(normalizedStart, bytes);
     return bytes;
@@ -157,7 +166,7 @@ export const parseAmd64ExceptionDirectory = async (
     if (offset < 0 || offset >= file.size || offset + length > file.size) {
       return null;
     }
-    const chunkStart = offset - (offset % 262144);
+    const chunkStart = offset - (offset % UNWIND_SCAN_CHUNK_SIZE_BYTES);
     const chunk = await readChunk(chunkStart);
     const relativeOffset = offset - chunkStart;
     if (relativeOffset >= 0 && relativeOffset + length <= chunk.length) {

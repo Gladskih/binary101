@@ -5,7 +5,11 @@ import { test } from "node:test";
 import { parseExceptionDirectory } from "../../analyzers/pe/exception.js";
 import { MockFile } from "../helpers/mock-file.js";
 
+// Microsoft PE format, "Machine Types":
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types
 const IMAGE_FILE_MACHINE_ARM64 = 0xaa64;
+// Microsoft ARM64 exception-handling docs, ".pdata records":
+// https://learn.microsoft.com/en-us/cpp/build/arm64-exception-handling
 const ARM64_RUNTIME_FUNCTION_ENTRY_SIZE = 8;
 const ARM64_XDATA_HEADER_HAS_EXCEPTION_HANDLER = 1 << 20;
 const ARM64_XDATA_HEADER_SINGLE_EPILOG = 1 << 21;

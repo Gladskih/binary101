@@ -11,16 +11,23 @@ import { updateDirectoryLayoutEnd, validateResourceLayout } from "./layout-rules
 import type { ResourceDataEntryLayout, ResourceLayoutRange } from "./layout-rules.js";
 import { createResourceSpanResolver } from "./relative-offsets.js";
 import { knownResourceType } from "./type-names.js";
-import type {
-  ResourceDirectoryInfo,
-  ResourceLeafPath,
-  ResourcePathNode,
-  ResourceTree
-} from "./tree-types.js";
+import type { ResourceDirectoryInfo, ResourceLeafPath, ResourcePathNode, ResourceTree } from "./tree-types.js";
 import { createEmptyResourceTree, createResourceTreeResult } from "./tree-result.js";
 import { buildResourcePathCollections } from "./tree-paths.js";
 import { createPeRangeReader } from "../range-reader.js";
 export type { ResourceLangEntry, ResourceDetailEntry, ResourceTree } from "./tree-types.js";
+
+// Microsoft PE format, ".rsrc Section":
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#the-rsrc-section
+// IMAGE_RESOURCE_DIRECTORY and IMAGE_RESOURCE_DATA_ENTRY are 16 bytes; IMAGE_RESOURCE_DIRECTORY_ENTRY is 8 bytes.
+const IMAGE_RESOURCE_DIRECTORY_SIZE = 16;
+const IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE = 8;
+const IMAGE_RESOURCE_DATA_ENTRY_SIZE = 16;
+// Microsoft PE format, "Resource Directory Entries": the high bit distinguishes string-vs-ID
+// names and subdirectory-vs-data targets.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#resource-directory-entries
+const RESOURCE_DIRECTORY_HIGH_BIT = 0x80000000;
+const RESOURCE_DIRECTORY_OFFSET_MASK = 0x7fffffff;
 
 export async function buildResourceTree(
   file: File,
@@ -30,11 +37,11 @@ export async function buildResourceTree(
   const utf16Decoder = new TextDecoder("utf-16le", { fatal: false });
   const dir = dataDirs.find(d => d.name === "RESOURCE");
   if (!dir?.rva) return null;
-  if (dir.size < 16) {
+  if (dir.size < IMAGE_RESOURCE_DIRECTORY_SIZE) {
     return createEmptyResourceTree(
       dir,
       rvaToOff(dir.rva),
-      ["Resource directory is smaller than IMAGE_RESOURCE_DIRECTORY (16 bytes)."],
+      [`Resource directory is smaller than IMAGE_RESOURCE_DIRECTORY (${IMAGE_RESOURCE_DIRECTORY_SIZE} bytes).`],
       rvaToOff
     );
   }
@@ -59,8 +66,10 @@ export async function buildResourceTree(
   const issues: string[] = [];
   let maxDirectoryEnd = 0;
   const resourceNameCache = new Map<number, Promise<string>>();
-  const resourceDirectoryCache = new Map<number,
-    Promise<{ Named: number; Ids: number; entries: ResourceDirectoryEntry[] } | null>>();
+  const resourceDirectoryCache = new Map<
+    number,
+    Promise<{ Named: number; Ids: number; entries: ResourceDirectoryEntry[] } | null>
+  >();
   const resourceStringRanges: ResourceLayoutRange[] = [];
   const resourceDataEntries: ResourceDataEntryLayout[] = [];
   const resourceSubdirectoryTargets: number[] = [];
@@ -79,13 +88,15 @@ export async function buildResourceTree(
     const cached = resourceDirectoryCache.get(rel);
     if (cached) return cached;
     const pending = (async () => {
-      const off = resolveRelOffset(rel, 16);
+      const off = resolveRelOffset(rel, IMAGE_RESOURCE_DIRECTORY_SIZE);
       if (off == null) {
-        addIssue(describeRelOffsetFailure(rel, 16, `Resource directory at ${formatRelOffset(rel)}`));
+        addIssue(describeRelOffsetFailure(rel, IMAGE_RESOURCE_DIRECTORY_SIZE, `Resource directory at ${formatRelOffset(rel)}`));
         return null;
       }
-      const dv = await view(off, 16);
-      if (dv.byteLength < 16) {
+      const dv = await view(off, IMAGE_RESOURCE_DIRECTORY_SIZE);
+      // IMAGE_RESOURCE_DIRECTORY field offsets are Characteristics +0x00, TimeDateStamp +0x04,
+      // MajorVersion +0x08, MinorVersion +0x0A, NumberOfNamedEntries +0x0C, NumberOfIdEntries +0x0E.
+      if (dv.byteLength < IMAGE_RESOURCE_DIRECTORY_SIZE) {
         addIssue(`Resource directory header at ${formatRelOffset(rel)} is truncated.`);
         return null;
       }
@@ -115,32 +126,33 @@ export async function buildResourceTree(
       const count = Named + Ids;
       const entries: ResourceDirectoryEntry[] = [];
       for (let index = 0; index < count; index++) {
-        const entryOff = resolveRelOffset(rel + 16 + index * 8, 8);
+        const entryRel = rel + IMAGE_RESOURCE_DIRECTORY_SIZE + index * IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE;
+        const entryOff = resolveRelOffset(entryRel, IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE);
         if (entryOff == null) {
           addIssue(
             `Resource directory entries for ${formatRelOffset(rel)} extend past the declared span.`
           );
           break;
         }
-        const e = await view(entryOff, 8);
-        if (e.byteLength < 8) {
-          addIssue(`Resource directory entry at ${formatRelOffset(rel + 16 + index * 8)} is truncated.`);
+        const e = await view(entryOff, IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE);
+        if (e.byteLength < IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE) {
+          addIssue(`Resource directory entry at ${formatRelOffset(entryRel)} is truncated.`);
           break;
         }
         const Name = u32(e, 0);
         const OffsetToData = u32(e, 4);
-        const nameIsString = (Name & 0x80000000) !== 0;
-        const subdir = (OffsetToData & 0x80000000) !== 0;
-        if (subdir && (OffsetToData & 0x7fffffff) === rel) {
+        const nameIsString = (Name & RESOURCE_DIRECTORY_HIGH_BIT) !== 0;
+        const subdir = (OffsetToData & RESOURCE_DIRECTORY_HIGH_BIT) !== 0;
+        if (subdir && (OffsetToData & RESOURCE_DIRECTORY_OFFSET_MASK) === rel) {
           addIssue(`Resource directory at ${formatRelOffset(rel)} has a subdirectory entry that points to itself.`);
         }
         entries.push({
           nameIsString,
           subdir,
-          nameOrId: nameIsString ? (Name & 0x7fffffff) : (Name >>> 0),
-          target: OffsetToData & 0x7fffffff
+          nameOrId: nameIsString ? (Name & RESOURCE_DIRECTORY_OFFSET_MASK) : (Name >>> 0),
+          target: OffsetToData & RESOURCE_DIRECTORY_OFFSET_MASK
         });
-        if (subdir) resourceSubdirectoryTargets.push(OffsetToData & 0x7fffffff);
+        if (subdir) resourceSubdirectoryTargets.push(OffsetToData & RESOURCE_DIRECTORY_OFFSET_MASK);
       }
       maxDirectoryEnd = updateDirectoryLayoutEnd(maxDirectoryEnd, rel, entries.length);
       validateResourceDirectoryEntryKinds(rel, Named, entries, addIssue);
@@ -206,12 +218,8 @@ export async function buildResourceTree(
   }
   const readPathNode = async (entry: ResourceDirectoryEntry): Promise<ResourcePathNode> => ({
     id: entry.nameIsString ? null : (entry.nameOrId ?? null),
-    name:
-      entry.nameIsString && entry.nameOrId != null
-        ? await readUcs2Label(entry.nameOrId)
-        : null
+    name: entry.nameIsString && entry.nameOrId != null ? await readUcs2Label(entry.nameOrId) : null
   });
-
   const readTypeName = async (entry: ResourceDirectoryEntry): Promise<string> => {
     if (!entry.nameIsString && entry.nameOrId != null) {
       return knownResourceType(entry.nameOrId) || `TYPE_${entry.nameOrId}`;
@@ -222,15 +230,15 @@ export async function buildResourceTree(
     target: number,
     nodes: ResourcePathNode[]
   ): Promise<ResourceLeafPath | null> => {
-    const dataEntryOff = resolveRelOffset(target, 16);
+    const dataEntryOff = resolveRelOffset(target, IMAGE_RESOURCE_DATA_ENTRY_SIZE);
     if (dataEntryOff == null) {
-      addIssue(
-        describeRelOffsetFailure(target, 16, `Resource data entry at ${formatRelOffset(target)}`)
-      );
+      addIssue(describeRelOffsetFailure(target, IMAGE_RESOURCE_DATA_ENTRY_SIZE, `Resource data entry at ${formatRelOffset(target)}`));
       return null;
     }
-    const dv = await view(dataEntryOff, 16);
-    if (dv.byteLength < 16) {
+    const dv = await view(dataEntryOff, IMAGE_RESOURCE_DATA_ENTRY_SIZE);
+    // IMAGE_RESOURCE_DATA_ENTRY field offsets are OffsetToData +0x00, Size +0x04,
+    // CodePage +0x08, Reserved +0x0C.
+    if (dv.byteLength < IMAGE_RESOURCE_DATA_ENTRY_SIZE) {
       addIssue(`Resource data entry at ${formatRelOffset(target)} is truncated.`);
       return null;
     }
@@ -240,7 +248,7 @@ export async function buildResourceTree(
     const reserved = u32(dv, 12);
     resourceDataEntries.push({
       start: target,
-      end: target + 16,
+      end: target + IMAGE_RESOURCE_DATA_ENTRY_SIZE,
       dataRva: dataRVA,
       size
     });

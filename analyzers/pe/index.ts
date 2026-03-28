@@ -35,6 +35,11 @@ import { parseIatDirectory, type PeIatDirectory } from "./iat-directory.js";
 import type { PeInstructionSetReport } from "./disassembly.js";
 import type { PeCore, PeDataDirectory, PeTlsDirectory, RvaToOffset } from "./types.js";
 
+// Microsoft PE format, "Machine Types":
+// IMAGE_FILE_MACHINE_I386 is the only PE32 machine where SafeSEH applies.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types
+const IMAGE_FILE_MACHINE_I386 = 0x014c;
+
 const appendUniqueWarnings = (
   existing: string[] | undefined,
   messages: string[]
@@ -120,7 +125,7 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
         parseDynamicRelocationsFromLoadConfig: parseDynamicRelocationsFromLoadConfig32,
         readSafeSehHandlerTableRvas:
           // Microsoft PE format: SafeSEH applies only to IMAGE_FILE_MACHINE_I386 PE32 images.
-          coff.Machine === 0x014c ? readSafeSehHandlerTableRvas : null
+          coff.Machine === IMAGE_FILE_MACHINE_I386 ? readSafeSehHandlerTableRvas : null
       };
 
   const debugResult = await parseDebugDirectory(file, dataDirs, rvaToOff);

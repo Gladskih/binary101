@@ -9,14 +9,21 @@ import type { PeDataDirectory, RvaToOffset } from "./types.js";
 // https://learn.microsoft.com/en-us/cpp/build/arm64-exception-handling
 // ARM64 .pdata entries are 8 bytes, and the low 2 bits of word 2 are the Flag field.
 const ARM64_RUNTIME_FUNCTION_ENTRY_SIZE = 8;
+// Microsoft ARM64 exception-handling docs, ".pdata records":
+// Flag is the low 2 bits of word 2, and the remaining 30 bits hold either an .xdata RVA
+// or packed unwind data, depending on Flag.
 const ARM64_PDATA_FLAG_MASK = 0x3;
 const ARM64_PDATA_FLAG_XDATA = 0;
 const ARM64_PDATA_FLAG_RESERVED = 0x3;
+// Microsoft ARM64 exception-handling docs, ".xdata records":
+// Function Length is 18 bits, Vers is 2 bits, and the X/E bits live at bit positions 20/21.
 const ARM64_XDATA_FUNCTION_LENGTH_MASK = 0x3ffff;
 const ARM64_XDATA_VERSION_SHIFT = 18;
 const ARM64_XDATA_VERSION_MASK = 0x3;
 const ARM64_XDATA_HAS_EXCEPTION_DATA = 1 << 20;
 const ARM64_XDATA_SINGLE_EPILOG = 1 << 21;
+// Microsoft ARM64 exception-handling docs, "Packed unwind data":
+// packed records use bits 2-12 for Function Length.
 const ARM64_PACKED_FUNCTION_LENGTH_SHIFT = 2;
 const ARM64_PACKED_FUNCTION_LENGTH_MASK = 0x7ff;
 
@@ -73,6 +80,10 @@ const readXdataUnwindInfo = async (
     issues.push("ARM64 .xdata header is truncated.");
     return null;
   }
+  // Microsoft ARM64 exception-handling docs, ComputeXdataSize sample:
+  // `(Xdata[0] >> 22) == 0` means Epilog Count and Code Words are both zero, so the
+  // record carries the extra extension word with 16-bit Extended Epilog Count and 8-bit
+  // Extended Code Words fields.
   const usesExtendedHeader = (headerWord >>> 22) === 0;
   const extendedHeader = usesExtendedHeader
     ? await readUint32(file, xdataOff + Uint32Array.BYTES_PER_ELEMENT)
