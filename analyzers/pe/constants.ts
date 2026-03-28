@@ -106,6 +106,8 @@ export const DD_TIPS = {
   SECURITY: "Security directory: WIN_CERTIFICATE / Authenticode signatures (not mapped into memory).",
   BASERELOC: "Base relocation directory (.reloc): fixups applied when image is not loaded at preferred base.",
   DEBUG: "Debug directory: CodeView/RSDS pointers to PDBs, misc debug info.",
+  ARCHITECTURE: "Reserved data-directory slot. The PE specification says this entry must be zero.",
+  GLOBALPTR: "Global pointer register support: RVA of the value to be stored in GP; Size must be zero.",
   TLS: "Thread Local Storage: per-thread data and optional TLS callbacks.",
   LOAD_CONFIG: "Load Configuration: security hardening structures (CFG, SEH tables, GS cookie).",
   IAT: "Import Address Table: resolved addresses loaded by the loader (runtime).",

@@ -14,7 +14,21 @@ const PE32_DATA_DIRECTORIES_OFFSET = 0x60;
 // Microsoft PE format: data-directory indices for SECURITY, DEBUG, and IAT.
 const IMAGE_DIRECTORY_ENTRY_SECURITY = 4;
 const IMAGE_DIRECTORY_ENTRY_DEBUG = 6;
+const IMAGE_DIRECTORY_ENTRY_ARCHITECTURE = 7;
+const IMAGE_DIRECTORY_ENTRY_GLOBALPTR = 8;
 const IMAGE_DIRECTORY_ENTRY_IAT = 12;
+// tests/fixtures/sample-files-pe.ts builds a PE with a single .text section at RVA 0x1000/raw 0x200.
+// In that fixture, the IAT is placed at RVA 0x1100 with size 0x40, which maps to file offset 0x300.
+const SAMPLE_MAPPED_IAT_RVA = 0x1100;
+const SAMPLE_IAT_SIZE = 0x40;
+// Any RVA beyond the only mapped sample section is sufficient; 0x3000 lies outside the fixture image data.
+const SAMPLE_UNMAPPED_IAT_RVA = 0x3000;
+// Any non-zero pair is enough to trigger the reserved ARCHITECTURE anomaly path; exact values are incidental.
+const RESERVED_DIRECTORY_TEST_RVA = 0x1200;
+const RESERVED_DIRECTORY_TEST_SIZE = 0x10;
+// Microsoft PE format, "Optional Header Data Directories":
+// GLOBALPTR.Size must be zero, so this non-zero size intentionally exercises the warning path.
+const INVALID_GLOBALPTR_SIZE = 4;
 
 /**
  * Creates a byte array for a minimal valid PE32 header.
@@ -159,13 +173,25 @@ const getDataDirectoryEntryOffset = (bytes: Uint8Array, index: number): number =
   return peHeaderOffset + 4 + 20 + PE32_DATA_DIRECTORIES_OFFSET + index * 8;
 };
 
-function createPeWithSectionAndIat(iatRvaOverride = 0x1100) {
+function createPeWithSectionAndIat(iatRvaOverride = SAMPLE_MAPPED_IAT_RVA) {
   const bytes = createSamplePeWithSectionAndIat();
-  if (iatRvaOverride === 0x1100) return bytes;
+  if (iatRvaOverride === SAMPLE_MAPPED_IAT_RVA) return bytes;
   const view = getPeView(bytes);
   view.setUint32(getDataDirectoryEntryOffset(bytes, IMAGE_DIRECTORY_ENTRY_IAT), iatRvaOverride, true);
   return bytes;
 }
+
+const writeDataDirectoryEntry = (
+  view: DataView,
+  bytes: Uint8Array,
+  index: number,
+  rva: number,
+  size: number
+): void => {
+  const entryOffset = getDataDirectoryEntryOffset(bytes, index);
+  view.setUint32(entryOffset, rva, true);
+  view.setUint32(entryOffset + 4, size, true);
+};
 
 void test("parsePe returns mapping and overlay info for PE32 with one section and IAT", async () => {
   const peBytes = createPeWithSectionAndIat();
@@ -175,10 +201,14 @@ void test("parsePe returns mapping and overlay info for PE32 with one section an
   assert.ok(result, "parsePe should return a parsed object");
 
   assert.deepStrictEqual(result.entrySection, { name: ".text", index: 0 }, "Entry point should map to .text");
-  assert.strictEqual(result.rvaToOff(0x1100), 0x300, "IAT RVA should resolve to file offset");
+  assert.strictEqual(
+    result.rvaToOff(SAMPLE_MAPPED_IAT_RVA),
+    0x300,
+    "IAT RVA should resolve to the raw .text offset defined by createSamplePeWithSectionAndIat()."
+  );
   assert.ok(result.iat, "IAT data directory should be recognized");
-  assert.strictEqual(result.iat.rva, 0x1100);
-  assert.strictEqual(result.iat.size, 0x40);
+  assert.strictEqual(result.iat.rva, SAMPLE_MAPPED_IAT_RVA);
+  assert.strictEqual(result.iat.size, SAMPLE_IAT_SIZE);
 
   assert.strictEqual(result.overlaySize, 0x20);
   assert.strictEqual(result.imageEnd, 0x2000);
@@ -187,16 +217,47 @@ void test("parsePe returns mapping and overlay info for PE32 with one section an
 });
 
 void test("parsePe preserves unmapped IAT directories with warnings", async () => {
-  const peBytes = createPeWithSectionAndIat(0x3000);
+  const peBytes = createPeWithSectionAndIat(SAMPLE_UNMAPPED_IAT_RVA);
   const mockFile = new MockFile(peBytes, "unmapped-iat.exe");
 
   const result = await parsePe(mockFile);
   assert.ok(result, "parsePe should return a parsed object");
   assert.deepStrictEqual(result.iat, {
-    rva: 0x3000,
-    size: 0x40,
+    rva: SAMPLE_UNMAPPED_IAT_RVA,
+    size: SAMPLE_IAT_SIZE,
     warnings: ["IAT directory RVA could not be mapped to a file offset."]
   });
+});
+
+void test("parsePe exposes ARCHITECTURE and GLOBALPTR directory details", async () => {
+  const peBytes = createPeWithSectionAndIat();
+  const view = getPeView(peBytes);
+  writeDataDirectoryEntry(
+    view,
+    peBytes,
+    IMAGE_DIRECTORY_ENTRY_ARCHITECTURE,
+    RESERVED_DIRECTORY_TEST_RVA,
+    RESERVED_DIRECTORY_TEST_SIZE
+  );
+  writeDataDirectoryEntry(
+    view,
+    peBytes,
+    IMAGE_DIRECTORY_ENTRY_GLOBALPTR,
+    SAMPLE_MAPPED_IAT_RVA,
+    INVALID_GLOBALPTR_SIZE
+  );
+
+  const result = await parsePe(new MockFile(peBytes, "processor-specific-dirs.exe"));
+
+  assert.ok(result);
+  assert.ok(result.architecture);
+  assert.equal(result.architecture.rva, RESERVED_DIRECTORY_TEST_RVA);
+  assert.equal(result.architecture.size, RESERVED_DIRECTORY_TEST_SIZE);
+  assert.ok(result.architecture.warnings?.some(warning => /reserved/i.test(warning)));
+  assert.ok(result.globalPtr);
+  assert.equal(result.globalPtr.rva, SAMPLE_MAPPED_IAT_RVA);
+  assert.equal(result.globalPtr.size, INVALID_GLOBALPTR_SIZE);
+  assert.ok(result.globalPtr.warnings?.some(warning => /size must be 0/i.test(warning)));
 });
 
 void test("parsePe attaches Authenticode verification when security directory exists", async () => {

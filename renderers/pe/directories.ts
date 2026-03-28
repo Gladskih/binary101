@@ -9,6 +9,10 @@ type PeExportSection = NonNullable<PeParseResult["exports"]>;
 type PeTlsSection = NonNullable<PeParseResult["tls"]>;
 type PeSecuritySection = NonNullable<PeParseResult["security"]>;
 type PeIatSection = NonNullable<PeParseResult["iat"]>;
+// Microsoft PE format, "Section Flags":
+// IMAGE_SCN_GPREL marks sections whose data is referenced through the global pointer (GP).
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
+const IMAGE_SCN_GPREL = 0x00008000;
 
 export function renderDebug(debug: PeDebugSection, out: string[]): void {
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Debug (PDB)</h4>`);
@@ -216,4 +220,52 @@ export function renderIat(t: PeIatSection, out: string[]): void {
   out.push(dd("RVA", hex(t.rva, 8), "RVA of the runtime IAT used by the loader to place resolved addresses."));
   out.push(dd("Size", humanSize(t.size), "Total size of the IAT in bytes."));
   out.push(`</dl></section>`);
+}
+
+export function renderArchitectureDirectory(pe: PeParseResult, out: string[]): void {
+  if (!pe.architecture) return;
+  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Architecture directory</h4>`);
+  if (pe.architecture.warnings?.length) {
+    out.push(`<ul class="smallNote">`);
+    pe.architecture.warnings.forEach(warning => out.push(`<li>${safe(warning)}</li>`));
+    out.push(`</ul>`);
+  }
+  out.push(`<dl>`);
+  out.push(dd("RVA", hex(pe.architecture.rva, 8), "Reserved directory entry. The PE specification says this field must be zero."));
+  out.push(dd("Size", humanSize(pe.architecture.size), "Reserved directory entry. The PE specification says this field must be zero."));
+  out.push(`</dl>`);
+  out.push(
+    `<div class="smallNote">This slot is reserved in the PE data-directory table. Non-zero values are mainly useful as anomaly indicators or signs of a non-standard producer.</div>`
+  );
+  out.push(`</section>`);
+}
+
+export function renderGlobalPtrDirectory(pe: PeParseResult, out: string[]): void {
+  if (!pe.globalPtr) return;
+  const gpRelSections = (pe.sections ?? []).filter(
+    section => (section.characteristics & IMAGE_SCN_GPREL) !== 0
+  );
+  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Global pointer (GP)</h4>`);
+  if (pe.globalPtr.warnings?.length) {
+    out.push(`<ul class="smallNote">`);
+    pe.globalPtr.warnings.forEach(warning => out.push(`<li>${safe(warning)}</li>`));
+    out.push(`</ul>`);
+  }
+  out.push(`<dl>`);
+  out.push(dd("Value RVA", hex(pe.globalPtr.rva, 8), "RVA of the value to be stored in the global pointer register."));
+  out.push(dd("Size", humanSize(pe.globalPtr.size), "The PE specification says the Size member of GLOBALPTR must be zero."));
+  out.push(
+    dd(
+      "GP-relative sections",
+      gpRelSections.length
+        ? safe(gpRelSections.map(section => section.name || "(unnamed)").join(", "))
+        : "-",
+      "Sections flagged IMAGE_SCN_GPREL contain data referenced through the global pointer (GP)."
+    )
+  );
+  out.push(`</dl>`);
+  out.push(
+    `<div class="smallNote">GLOBALPTR is machine-specific and the spec defines only the RVA field here; it does not define a separate variable-size table to decode.</div>`
+  );
+  out.push(`</section>`);
 }

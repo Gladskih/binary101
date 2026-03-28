@@ -11,7 +11,9 @@ import {
   renderTls,
   renderClr,
   renderSecurity,
-  renderIat
+  renderIat,
+  renderArchitectureDirectory,
+  renderGlobalPtrDirectory
 } from "./directories.js";
 import { renderResources } from "./resources.js";
 import {
@@ -48,6 +50,8 @@ export function renderPe(pe: PeParseResult | null | undefined): string {
   renderIfPresent(pe.clr, renderClr, out);
   renderIfPresent(pe.security, renderSecurity, out);
   renderIfPresent(pe.iat, renderIat, out);
+  renderArchitectureDirectory(pe, out);
+  renderGlobalPtrDirectory(pe, out);
   renderSanity(pe, out);
   return out.join("");
 }

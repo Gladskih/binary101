@@ -32,6 +32,11 @@ import {
   parseDynamicRelocationsFromLoadConfig64
 } from "./dynamic-relocations.js";
 import { parseIatDirectory, type PeIatDirectory } from "./iat-directory.js";
+import {
+  parseArchitectureDirectory,
+  type PeArchitectureDirectory
+} from "./architecture-directory.js";
+import { parseGlobalPtrDirectory, type PeGlobalPtrDirectory } from "./globalptr-directory.js";
 import type { PeInstructionSetReport } from "./disassembly.js";
 import type { PeCore, PeDataDirectory, PeTlsDirectory, RvaToOffset } from "./types.js";
 
@@ -84,6 +89,8 @@ export interface PeParseResult {
   clr: PeClrHeader | null;
   security: ParsedSecurityDirectory | null;
   iat: PeIatDirectory | null;
+  architecture?: PeArchitectureDirectory | null;
+  globalPtr?: PeGlobalPtrDirectory | null;
   resources: PeResources | null;
   overlaySize: number;
   imageEnd: number;
@@ -261,6 +268,8 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     security = { ...security, certs };
   }
   const iat = parseIatDirectory(dataDirs, rvaToOff);
+  const architecture = parseArchitectureDirectory(dataDirs);
+  const globalPtr = parseGlobalPtrDirectory(dataDirs, rvaToOff);
   return {
     debug:
       debugResult.entry || debugResult.warning || debugResult.entries.length
@@ -291,6 +300,8 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     clr,
     security,
     iat,
+    architecture,
+    globalPtr,
     resources,
     overlaySize,
     imageEnd,
