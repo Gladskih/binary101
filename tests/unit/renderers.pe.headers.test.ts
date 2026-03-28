@@ -170,3 +170,45 @@ void test("renderHeaders maps COFF characteristic bits to the correct semantic l
   assert.match(html, /<span class="opt dim"[^>]*>DLL<\/span>/);
   assert.match(html, /<span class="opt sel"[^>]*>UP_SYSTEM_ONLY<\/span>/);
 });
+
+void test("renderHeaders uses the official Microsoft subsystem labels", () => {
+  const pe = createBasePe();
+  // Microsoft PE format, "Windows Subsystem": 8 = IMAGE_SUBSYSTEM_NATIVE_WINDOWS.
+  pe.opt.Subsystem = 8;
+
+  const out: string[] = [];
+  renderHeaders(pe, out);
+  const html = out.join("");
+
+  assert.match(html, /<span class="opt sel"[^>]*>Native Windows<\/span>/);
+  assert.match(html, /Native Windows - Native Win9x driver \(0x0008\)/);
+});
+
+void test("renderHeaders surfaces clearer official labels where they help a learner", () => {
+  const pe = createBasePe();
+  // Microsoft PE format, "Machine Types": 0x0200 = Intel Itanium processor family.
+  pe.coff.Machine = 0x0200;
+  // Microsoft PE format, "Windows Subsystem": 9 = IMAGE_SUBSYSTEM_WINDOWS_CE_GUI.
+  pe.opt.Subsystem = 9;
+
+  const out: string[] = [];
+  renderHeaders(pe, out);
+  const html = out.join("");
+
+  assert.match(html, /<span class="opt sel"[^>]*>Intel Itanium \(IA-64\)<\/span>/);
+  assert.match(html, /<span class="opt sel"[^>]*>Windows CE GUI<\/span>/);
+  assert.match(html, /Intel Itanium \(IA-64\) - Intel Itanium processor family \(0x0200\)/);
+});
+
+void test("renderHeaders explains cryptic machine names such as Thumb", () => {
+  const pe = createBasePe();
+  // Microsoft PE format, "Machine Types": 0x01C2 = IMAGE_FILE_MACHINE_THUMB.
+  pe.coff.Machine = 0x01c2;
+
+  const out: string[] = [];
+  renderHeaders(pe, out);
+  const html = out.join("");
+
+  assert.match(html, /<span class="opt sel"[^>]*>Thumb<\/span>/);
+  assert.match(html, /Thumb - ARM Thumb code: compact instructions often used to save space \(0x01c2\)/);
+});

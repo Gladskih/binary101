@@ -17,6 +17,24 @@ import { createPeFile, createPePlusFile } from "../fixtures/sample-files-pe.js";
 
 const fromAscii = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "ascii"));
 
+const createMinimalPeLabelProbe = (machine: number): MockFile => {
+  const peHeaderOffset = 0x40;
+  const coffHeaderSize = 20;
+  const optionalHeaderSize = 0xe0;
+  const bytes = new Uint8Array(peHeaderOffset + 4 + coffHeaderSize + optionalHeaderSize).fill(0);
+  const view = new DataView(bytes.buffer);
+  bytes[0] = 0x4d;
+  bytes[1] = 0x5a;
+  view.setUint32(0x3c, peHeaderOffset, true);
+  bytes.set([0x50, 0x45, 0x00, 0x00], peHeaderOffset);
+  view.setUint16(peHeaderOffset + 4, machine, true);
+  view.setUint16(peHeaderOffset + 4 + 16, optionalHeaderSize, true);
+  view.setUint16(peHeaderOffset + 4 + 18, 0x0002, true);
+  // Microsoft PE format, Optional Header Magic: 0x10B identifies a PE32 image.
+  view.setUint16(peHeaderOffset + 4 + coffHeaderSize, 0x10b, true);
+  return new MockFile(bytes, `machine-${machine.toString(16)}.exe`);
+};
+
 void test("detectBinaryType refines ZIP-based document labels", async () => {
   const zipSignature = [0x50, 0x4b, 0x03, 0x04];
   const docxPayload = "[Content_Types].xml word/document.xml";
@@ -218,6 +236,22 @@ void test("detectBinaryType reports PE32 and PE32+ labels without full parsing",
 
   const pe64Label = await detectBinaryType(createPePlusFile());
   assert.strictEqual(pe64Label, "PE32+ executable for x86-64 (AMD64)");
+});
+
+void test("detectBinaryType uses the official Microsoft machine names for PE labels", async () => {
+  const cases = [
+    // Microsoft PE format, "Machine Types": 0x0168 = IMAGE_FILE_MACHINE_R10000.
+    { machine: 0x0168, expected: "PE32 executable for MIPS R10000" },
+    // Microsoft PE format, "Machine Types": 0x01C2 = IMAGE_FILE_MACHINE_THUMB.
+    { machine: 0x01c2, expected: "PE32 executable for Thumb" },
+    // Microsoft PE format, "Machine Types": 0x6264 = IMAGE_FILE_MACHINE_LOONGARCH64.
+    { machine: 0x6264, expected: "PE32 executable for LoongArch 64-bit" }
+  ];
+
+  for (const { machine, expected } of cases) {
+    const label = await detectBinaryType(createMinimalPeLabelProbe(machine));
+    assert.strictEqual(label, expected);
+  }
 });
 
 void test("detectBinaryType tolerates truncated optional headers for PE labels", async () => {
