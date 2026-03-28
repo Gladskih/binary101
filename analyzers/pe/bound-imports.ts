@@ -45,7 +45,36 @@ export interface PeBoundImportEntry {
   name: string;
   TimeDateStamp: number;
   NumberOfModuleForwarderRefs: number;
+  forwarderRefs?: PeBoundForwarderRef[];
 }
+
+export interface PeBoundForwarderRef {
+  name: string;
+  TimeDateStamp: number;
+}
+
+type BoundImportRecord = {
+  TimeDateStamp: number;
+  OffsetModuleName: number;
+  reservedOrForwarderRefCount: number;
+};
+
+const readBoundImportRecord = async (
+  file: File,
+  offset: number
+): Promise<BoundImportRecord | null> => {
+  const dv = new DataView(
+    await file.slice(offset, offset + IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE).arrayBuffer()
+  );
+  if (dv.byteLength < IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE) {
+    return null;
+  }
+  return {
+    TimeDateStamp: dv.getUint32(0, true),
+    OffsetModuleName: dv.getUint16(4, true),
+    reservedOrForwarderRefCount: dv.getUint16(6, true)
+  };
+};
 
 export async function parseBoundImports(
   file: File,
@@ -73,23 +102,47 @@ export async function parseBoundImports(
   const warnings = new Set<string>();
   let off = base;
   while (off + IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE <= end) {
-    const dv = new DataView(
-      await file.slice(off, off + IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE).arrayBuffer()
-    );
-    if (dv.byteLength < IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE) {
+    const record = await readBoundImportRecord(file, off);
+    if (!record) {
       warnings.add("Bound import descriptor truncated.");
       break;
     }
-    const TimeDateStamp = dv.getUint32(0, true);
-    const OffsetModuleName = dv.getUint16(4, true);
-    const NumberOfModuleForwarderRefs = dv.getUint16(6, true);
+    const {
+      TimeDateStamp,
+      OffsetModuleName,
+      reservedOrForwarderRefCount: NumberOfModuleForwarderRefs
+    } = record;
     if (!TimeDateStamp && !OffsetModuleName && !NumberOfModuleForwarderRefs) break;
+    const forwarderRefs: PeBoundForwarderRef[] = [];
+    const availableForwarderRefCount = Math.floor(
+      Math.max(0, end - (off + IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE)) / IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE
+    );
+    const readableForwarderRefCount = Math.min(NumberOfModuleForwarderRefs, availableForwarderRefCount);
+    if (readableForwarderRefCount < NumberOfModuleForwarderRefs) {
+      warnings.add("Bound import forwarder refs extend past directory.");
+    }
+    for (let forwarderIndex = 0; forwarderIndex < readableForwarderRefCount; forwarderIndex += 1) {
+      const forwarderOffset =
+        off + IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE + forwarderIndex * IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE;
+      const forwarderRef = await readBoundImportRecord(file, forwarderOffset);
+      if (!forwarderRef) {
+        warnings.add("Bound import forwarder ref truncated.");
+        break;
+      }
+      forwarderRefs.push({
+        name: forwarderRef.OffsetModuleName
+          ? await readBoundImportName(file, base + forwarderRef.OffsetModuleName, base, end, warnings)
+          : "",
+        TimeDateStamp: forwarderRef.TimeDateStamp
+      });
+    }
     entries.push({
       name: OffsetModuleName
         ? await readBoundImportName(file, base + OffsetModuleName, base, end, warnings)
         : "",
       TimeDateStamp,
-      NumberOfModuleForwarderRefs
+      NumberOfModuleForwarderRefs,
+      ...(forwarderRefs.length ? { forwarderRefs } : {})
     });
     const nextOff =
       off + IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE + NumberOfModuleForwarderRefs * IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE;

@@ -1,7 +1,7 @@
 "use strict";
 import { parsePeHeaders } from "./core.js";
 import { verifyAuthenticodeFileDigest } from "./authenticode-verify.js";
-import { parseDebugDirectory } from "./debug-directory.js";
+import { parseDebugDirectory, type PeCodeViewEntry, type PeDebugDirectoryEntry } from "./debug-directory.js";
 import {
   parseLoadConfigDirectory32,
   parseLoadConfigDirectory64,
@@ -51,7 +51,8 @@ const mergeLoadConfigWarnings = (loadcfg: PeLoadConfig, messages: string[]): voi
 };
 
 export interface PeDebugSection {
-  entry: { guid: string; age: number; path: string } | null;
+  entry: PeCodeViewEntry | null;
+  entries?: PeDebugDirectoryEntry[];
   warning?: string;
   rawDataRanges?: Array<{ start: number; end: number }>;
 }
@@ -257,9 +258,10 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
   const iat = parseIatDirectory(dataDirs, rvaToOff);
   return {
     debug:
-      debugResult.entry || debugResult.warning
+      debugResult.entry || debugResult.warning || debugResult.entries.length
         ? {
             entry: debugResult.entry,
+            ...(debugResult.entries.length ? { entries: debugResult.entries } : {}),
             ...(debugResult.rawDataRanges.length ? { rawDataRanges: debugResult.rawDataRanges } : {}),
             ...(debugResult.warning ? { warning: debugResult.warning } : {})
           }

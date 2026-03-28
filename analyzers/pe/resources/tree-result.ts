@@ -16,6 +16,7 @@ export const createEmptyResourceTree = (
   ...(issues.length ? { issues } : {}),
   top: [],
   detail: [],
+  paths: [],
   view: async () => new DataView(new ArrayBuffer(0)),
   rvaToOff
 });
@@ -28,6 +29,7 @@ export const createResourceTreeResult = (
   directories: ResourceDirectoryInfo[],
   top: ResourceTree["top"],
   detail: ResourceTree["detail"],
+  paths: ResourceTree["paths"],
   view: ResourceTree["view"],
   rvaToOff: RvaToOffset
 ): ResourceTree => ({
@@ -39,6 +41,7 @@ export const createResourceTreeResult = (
   ...(directories.length ? { directories } : {}),
   top,
   detail,
+  ...(paths?.length ? { paths } : {}),
   view,
   rvaToOff
 });

@@ -89,12 +89,21 @@ export function renderReloc(reloc: PeRelocSection, out: string[]): void {
 }
 
 export function renderException(ex: PeExceptionSection, out: string[]): void {
+  const unwindLabel =
+    ex.format === "arm64"
+      ? "Unique unwind descriptions (.xdata or packed .pdata)"
+      : "Unique UNWIND_INFO blocks";
+  const handlerLabel =
+    ex.format === "arm64"
+      ? "Handlers present (ARM64 X bit)"
+      : "Handlers present (EHANDLER/UHANDLER)";
+  const chainedLabel = ex.format === "arm64" ? "Chained entries" : "Chained (CHAININFO)";
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Exception directory (.pdata)</h4>`);
   out.push(`<dl>`);
   out.push(`<dt>Functions (RUNTIME_FUNCTION entries)</dt><dd>${ex.functionCount ?? 0}</dd>`);
-  out.push(`<dt>Unique UNWIND_INFO blocks</dt><dd>${ex.uniqueUnwindInfoCount ?? 0}</dd>`);
-  out.push(`<dt>Handlers present (EHANDLER/UHANDLER)</dt><dd>${ex.handlerUnwindInfoCount ?? 0}</dd>`);
-  out.push(`<dt>Chained (CHAININFO)</dt><dd>${ex.chainedUnwindInfoCount ?? 0}</dd>`);
+  out.push(`<dt>${unwindLabel}</dt><dd>${ex.uniqueUnwindInfoCount ?? 0}</dd>`);
+  out.push(`<dt>${handlerLabel}</dt><dd>${ex.handlerUnwindInfoCount ?? 0}</dd>`);
+  out.push(`<dt>${chainedLabel}</dt><dd>${ex.chainedUnwindInfoCount ?? 0}</dd>`);
   out.push(`<dt>Missing/invalid ranges</dt><dd>${ex.invalidEntryCount ?? 0}</dd>`);
   out.push(`</dl>`);
   if (ex.issues?.length) {
@@ -118,7 +127,12 @@ export function renderBoundImports(bi: PeBoundImportsSection, out: string[]): vo
   );
   out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Module</th><th>TimeDateStamp</th><th>ForwarderRefs</th></tr></thead><tbody>`);
   bi.entries.forEach((e, index) => {
-    out.push(`<tr><td>${index + 1}</td><td>${safe(e.name || "")}</td><td>${hex(e.TimeDateStamp, 8)}</td><td>${e.NumberOfModuleForwarderRefs}</td></tr>`);
+    const forwarderLabel = e.forwarderRefs?.length
+      ? `${e.NumberOfModuleForwarderRefs}: ${safe(e.forwarderRefs.map(ref => ref.name || "(unnamed)").join(", "))}`
+      : String(e.NumberOfModuleForwarderRefs);
+    out.push(
+      `<tr><td>${index + 1}</td><td>${safe(e.name || "")}</td><td>${hex(e.TimeDateStamp, 8)}</td><td>${forwarderLabel}</td></tr>`
+    );
   });
   out.push(`</tbody></table></details></section>`);
 }

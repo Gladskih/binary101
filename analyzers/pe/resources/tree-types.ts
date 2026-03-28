@@ -16,6 +16,19 @@ export interface ResourceDetailEntry {
   langs: ResourceLangEntry[];
 }
 
+export interface ResourcePathNode {
+  id: number | null;
+  name: string | null;
+}
+
+export interface ResourceLeafPath {
+  nodes: ResourcePathNode[];
+  size: number;
+  codePage: number;
+  dataRVA: number;
+  reserved: number;
+}
+
 export interface ResourceDirectoryInfo {
   offset: number;
   characteristics: number;
@@ -33,6 +46,7 @@ export interface ResourceTree {
   dirSize?: number;
   issues?: string[];
   directories?: ResourceDirectoryInfo[];
+  paths?: ResourceLeafPath[];
   top: Array<{ typeName: string; kind: "name" | "id"; leafCount: number }>;
   detail: Array<{ typeName: string; entries: ResourceDetailEntry[] }>;
   view: (offset: number, length: number) => Promise<DataView>;

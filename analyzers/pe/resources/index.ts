@@ -10,6 +10,7 @@ export interface PeResources {
   top: ResourceTree["top"];
   detail: ResourceDetailGroup[];
   directories?: ResourceTree["directories"];
+  paths?: ResourceTree["paths"];
   issues?: string[];
 }
 

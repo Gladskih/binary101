@@ -11,8 +11,14 @@ import { updateDirectoryLayoutEnd, validateResourceLayout } from "./layout-rules
 import type { ResourceDataEntryLayout, ResourceLayoutRange } from "./layout-rules.js";
 import { createResourceSpanResolver } from "./relative-offsets.js";
 import { knownResourceType } from "./type-names.js";
-import type { ResourceDetailEntry, ResourceDirectoryInfo, ResourceTree } from "./tree-types.js";
+import type {
+  ResourceDirectoryInfo,
+  ResourceLeafPath,
+  ResourcePathNode,
+  ResourceTree
+} from "./tree-types.js";
 import { createEmptyResourceTree, createResourceTreeResult } from "./tree-result.js";
+import { buildResourcePathCollections } from "./tree-paths.js";
 import { createPeRangeReader } from "../range-reader.js";
 export type { ResourceLangEntry, ResourceDetailEntry, ResourceTree } from "./tree-types.js";
 
@@ -196,92 +202,68 @@ export async function buildResourceTree(
   };
   const root = await parseDir(0);
   if (!root) {
-    return createResourceTreeResult(dir, base, limitEnd, issues, directories, [], [], view, rvaToOff);
+    return createResourceTreeResult(dir, base, limitEnd, issues, directories, [], [], [], view, rvaToOff);
   }
-  const top: Array<{ typeName: string; kind: "name" | "id"; leafCount: number }> = [];
-  const detail: Array<{ typeName: string; entries: ResourceDetailEntry[] }> = [];
-  for (const typeEntry of root.entries) {
-    let typeName = "(named)";
-    if (!typeEntry.nameIsString && typeEntry.nameOrId != null) {
-      typeName = knownResourceType(typeEntry.nameOrId) || `TYPE_${typeEntry.nameOrId}`;
-    } else if (typeEntry.nameIsString && typeEntry.nameOrId != null) {
-      typeName = await readUcs2Label(typeEntry.nameOrId);
+  const readPathNode = async (entry: ResourceDirectoryEntry): Promise<ResourcePathNode> => ({
+    id: entry.nameIsString ? null : (entry.nameOrId ?? null),
+    name:
+      entry.nameIsString && entry.nameOrId != null
+        ? await readUcs2Label(entry.nameOrId)
+        : null
+  });
+
+  const readTypeName = async (entry: ResourceDirectoryEntry): Promise<string> => {
+    if (!entry.nameIsString && entry.nameOrId != null) {
+      return knownResourceType(entry.nameOrId) || `TYPE_${entry.nameOrId}`;
     }
-    let leafCount = 0;
-    const typeDetailEntries: ResourceDetailEntry[] = [];
-    if (!typeEntry.subdir) {
+    return entry.nameIsString && entry.nameOrId != null ? readUcs2Label(entry.nameOrId) : "(named)";
+  };
+  const readLeafPath = async (
+    target: number,
+    nodes: ResourcePathNode[]
+  ): Promise<ResourceLeafPath | null> => {
+    const dataEntryOff = resolveRelOffset(target, 16);
+    if (dataEntryOff == null) {
       addIssue(
-        `Top-level resource type entry ${typeName} points directly to data; type entries should point to second-level subdirectories.`
+        describeRelOffsetFailure(target, 16, `Resource data entry at ${formatRelOffset(target)}`)
       );
-    } else {
-      const nameDir = await parseDir(typeEntry.target);
-      if (nameDir) {
-        for (const nameEntry of nameDir.entries) {
-          const child: ResourceDetailEntry = {
-            id: nameEntry.nameIsString ? null : nameEntry.nameOrId ?? null,
-            name: null,
-            langs: []
-          };
-          if (nameEntry.nameIsString && nameEntry.nameOrId != null) {
-            child.name = await readUcs2Label(nameEntry.nameOrId);
-          }
-          if (!nameEntry.subdir) {
-            addIssue(
-              `Resource entry under type ${typeName} points directly to data; second-level entries should point to language subdirectories.`
-            );
-          } else {
-            const langDir = await parseDir(nameEntry.target);
-            if (langDir) {
-              for (const langEnt of langDir.entries) {
-                if (langEnt.subdir) {
-                  addIssue(
-                    `Resource language entry at ${formatRelOffset(langEnt.target)} points to a subdirectory.`
-                  );
-                  continue;
-                }
-                const dataEntryOff = resolveRelOffset(langEnt.target, 16);
-                if (dataEntryOff == null) {
-                  addIssue(
-                    describeRelOffsetFailure(
-                      langEnt.target,
-                      16,
-                      `Resource data entry at ${formatRelOffset(langEnt.target)}`
-                    )
-                  );
-                  continue;
-                }
-                const dv = await view(dataEntryOff, 16);
-                if (dv.byteLength < 16) {
-                  addIssue(`Resource data entry at ${formatRelOffset(langEnt.target)} is truncated.`);
-                  continue;
-                }
-                const DataRVA = u32(dv, 0);
-                const Size = u32(dv, 4);
-                const CodePage = u32(dv, 8);
-                const Reserved = u32(dv, 12);
-                resourceDataEntries.push({
-                  start: langEnt.target,
-                  end: langEnt.target + 16,
-                  dataRva: DataRVA,
-                  size: Size
-                });
-                if (Reserved !== 0) {
-                  addIssue("IMAGE_RESOURCE_DATA_ENTRY.Reserved is non-zero; the field should be 0.");
-                }
-                const lang = langEnt.nameIsString ? null : (langEnt.nameOrId ?? null);
-                const langEntry = { lang, size: Size, codePage: CodePage, dataRVA: DataRVA, reserved: Reserved };
-                child.langs.push(langEntry);
-                leafCount++;
-              }
-            }
-          }
-          if (child.langs.length) typeDetailEntries.push(child);
-        }
-      }
+      return null;
     }
-    top.push({ typeName, kind: typeEntry.nameIsString ? "name" : "id", leafCount });
-    if (typeDetailEntries.length) detail.push({ typeName, entries: typeDetailEntries });
-  }
+    const dv = await view(dataEntryOff, 16);
+    if (dv.byteLength < 16) {
+      addIssue(`Resource data entry at ${formatRelOffset(target)} is truncated.`);
+      return null;
+    }
+    const dataRVA = u32(dv, 0);
+    const size = u32(dv, 4);
+    const codePage = u32(dv, 8);
+    const reserved = u32(dv, 12);
+    resourceDataEntries.push({
+      start: target,
+      end: target + 16,
+      dataRva: dataRVA,
+      size
+    });
+    if (reserved !== 0) {
+      addIssue("IMAGE_RESOURCE_DATA_ENTRY.Reserved is non-zero; the field should be 0.");
+    }
+    return {
+      nodes,
+      dataRVA,
+      size,
+      codePage,
+      reserved
+    };
+  };
+  const { top, detail, paths } = await buildResourcePathCollections(
+    root.entries,
+    parseDir,
+    readPathNode,
+    readTypeName,
+    readLeafPath,
+    formatRelOffset,
+    addIssue
+  );
   validateResourceLayout(
     maxDirectoryEnd,
     resourceStringRanges,
@@ -295,5 +277,16 @@ export async function buildResourceTree(
     file.size,
     addIssue
   );
-  return createResourceTreeResult(dir, base, limitEnd, issues, directories, top, detail, view, rvaToOff);
+  return createResourceTreeResult(
+    dir,
+    base,
+    limitEnd,
+    issues,
+    directories,
+    top,
+    detail,
+    paths,
+    view,
+    rvaToOff
+  );
 }

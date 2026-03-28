@@ -244,6 +244,7 @@ export async function enrichResourcePreviews(
   top: ResourceTree["top"];
   detail: ResourceDetailGroup[];
   directories?: ResourceTree["directories"];
+  paths?: ResourceTree["paths"];
   issues?: string[];
 }> {
   const detail = tree.detail as ResourceDetailGroup[];
@@ -263,6 +264,7 @@ export async function enrichResourcePreviews(
     top: tree.top,
     detail: attachDetailPreviews(detail, decodedGroups),
     ...(tree.directories?.length ? { directories: tree.directories } : {}),
+    ...(tree.paths?.length ? { paths: tree.paths } : {}),
     ...(issues.length ? { issues } : {})
   };
 }

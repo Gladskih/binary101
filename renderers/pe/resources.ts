@@ -19,11 +19,15 @@ const formatDirectoryVersion = (majorVersion: number, minorVersion: number): str
 const formatDirectoryTimestamp = (timeDateStamp: number): string =>
   timeDateStamp ? `0x${timeDateStamp.toString(16).padStart(8, "0")}` : "-";
 
+const formatResourcePathNode = (node: { id: number | null; name: string | null }): string =>
+  node.name != null ? safe(node.name) : node.id != null ? `ID ${node.id}` : "(unnamed)";
+
 export function renderResources(resources: PeResources, out: string[]): void {
   const issues = (resources.issues || []).filter((issue): issue is string => Boolean(issue));
+  const extraPaths = (resources.paths || []).filter(path => path.nodes.length !== 3);
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Resources</h4>`);
   out.push(
-    `<div class="smallNote">Windows resources are organized as a three-level tree: ` +
+    `<div class="smallNote">Windows resources usually follow a three-level tree: ` +
       `type → name/ID → language. Canonical .rsrc layout is directory entries → ` +
       `directory strings → data entries. This view previews common standard ` +
       `resources such as icons, cursors, bitmaps, dialogs, menus, accelerators, ` +
@@ -90,6 +94,20 @@ export function renderResources(resources: PeResources, out: string[]): void {
       }
       out.push(`</details>`);
     }
+  }
+  if (extraPaths.length) {
+    out.push(
+      `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>Additional resource paths</b> - ${extraPaths.length}</summary>`
+    );
+    out.push(
+      `<table class="table" style="margin-top:.35rem"><thead><tr><th>Path</th><th>Size</th><th>CodePage</th><th>Data RVA</th></tr></thead><tbody>`
+    );
+    for (const path of extraPaths) {
+      out.push(
+        `<tr><td>${path.nodes.map(formatResourcePathNode).join(" / ")}</td><td>${humanSize(path.size)}</td><td>${formatCodePage(path.codePage)}</td><td class="mono">0x${path.dataRVA.toString(16)}</td></tr>`
+      );
+    }
+    out.push(`</tbody></table></details>`);
   }
   out.push(`</section>`);
 }

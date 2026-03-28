@@ -20,6 +20,23 @@ export function renderDebug(debug: PeDebugSection, out: string[]): void {
     out.push(dd("Path", debug.entry.path, "Path to PDB as recorded at link time (can be absolute)."));
     out.push(`</dl>`);
   }
+  if (debug.entries?.length) {
+    out.push(
+      `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show debug directory entries (${debug.entries.length})</summary>`
+    );
+    out.push(
+      `<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Type</th><th>Size</th><th>Raw RVA</th><th>Raw file ptr</th><th>Details</th></tr></thead><tbody>`
+    );
+    debug.entries.forEach((entry, index) => {
+      const detail = entry.codeView
+        ? `RSDS ${safe(entry.codeView.path || "(no path)")}`
+        : "-";
+      out.push(
+        `<tr><td>${index + 1}</td><td>${safe(entry.typeName)}</td><td>${humanSize(entry.sizeOfData)}</td><td>${hex(entry.addressOfRawData, 8)}</td><td>${hex(entry.pointerToRawData, 8)}</td><td>${detail}</td></tr>`
+      );
+    });
+    out.push(`</tbody></table></details>`);
+  }
   if (debug.warning) {
     out.push(`<div class="smallNote">${safe(debug.warning)}</div>`);
   }
