@@ -80,6 +80,9 @@ void test("renderDelayImports renders function names and ordinals", () => {
   assert.ok(html.includes("delay warning"));
   assert.ok(html.includes("Foo"));
   assert.ok(html.includes("ORD 5"));
+  assert.ok(html.includes("dlattrRva"));
+  assert.ok(html.includes("PE format page"));
+  assert.ok(html.includes("delayimp.h"));
 });
 
 void test("renderSanity renders issues and clean state", () => {

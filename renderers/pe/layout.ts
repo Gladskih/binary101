@@ -13,6 +13,10 @@ type PeDelayImportsSection = NonNullable<PeParseResult["delayImports"]>;
 // IMAGE_SCN_MEM_EXECUTE marks executable section contents.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
 const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
+// MSVC delayimp.h / "Understand the delay load helper function":
+// dlattrRva marks VC7+ delay descriptors whose fields are RVAs.
+// https://learn.microsoft.com/en-us/cpp/build/reference/understanding-the-helper-function
+const DELAY_IMPORT_ATTRIBUTE_DLATTR_RVA = 0x1;
 
 const computeRawImageEnd = (pe: PeParseResult): number =>
   (Array.isArray(pe.sections) ? pe.sections : []).reduce((maxEnd, section) => {
@@ -65,6 +69,29 @@ const computeKnownOverlayCoverage = (pe: PeParseResult): number => {
   }
   coveredBytes += currentEnd > currentStart ? currentEnd - currentStart : 0;
   return coveredBytes;
+};
+
+const renderDelayImportAttributes = (attributes: number): string => {
+  const normalized = attributes >>> 0;
+  const unknownBits = normalized & ~DELAY_IMPORT_ATTRIBUTE_DLATTR_RVA;
+  const notes = (normalized & DELAY_IMPORT_ATTRIBUTE_DLATTR_RVA) !== 0
+    ? [
+        "dlattrRva set: MSVC delayimp.h / \"Understand the delay load helper function\" say this marks VC7+ delay descriptors whose fields are RVAs.",
+        "Microsoft's PE format page separately says the Delay-Load Attributes field must be zero, so the official docs conflict."
+      ]
+    : normalized === 0
+      ? [
+          "Value 0 matches the PE format page, which says the Delay-Load Attributes field must be zero.",
+          "MSVC delayimp.h / \"Understand the delay load helper function\" also define bit 0 as dlattrRva for VC7+ RVA-based descriptors, so Microsoft's own sources disagree here."
+        ]
+    : [
+        "dlattrRva is clear, but the value is not zero.",
+        "The PE format page says this field should be zero, while MSVC delayimp.h / \"Understand the delay load helper function\" reserve bit 0 for dlattrRva."
+      ];
+  if (unknownBits !== 0) {
+    notes.push(`Unknown or undocumented attribute bits remain set: ${hex(unknownBits, 8)}.`);
+  }
+  return `${hex(normalized, 8)}<div class="smallNote">${notes.map(safe).join("<br/>")}</div>`;
 };
 
 export function renderReloc(reloc: PeRelocSection, out: string[]): void {
@@ -151,7 +178,7 @@ export function renderDelayImports(di: PeDelayImportsSection, out: string[]): vo
     const fnCount = entry.functions?.length || 0;
     out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${dll}</b> \u2014 ${fnCount} function(s)</summary>`);
     out.push(`<dl style="margin-top:.35rem">`);
-    out.push(`<dt>Attributes</dt><dd>${hex(entry.Attributes >>> 0, 8)}</dd>`);
+    out.push(`<dt>Attributes</dt><dd>${renderDelayImportAttributes(entry.Attributes)}</dd>`);
     out.push(`<dt>ModuleHandleRVA</dt><dd>${hex(entry.ModuleHandleRVA >>> 0, 8)}</dd>`);
     out.push(`<dt>ImportAddressTableRVA</dt><dd>${hex(entry.ImportAddressTableRVA >>> 0, 8)}</dd>`);
     out.push(`<dt>ImportNameTableRVA</dt><dd>${hex(entry.ImportNameTableRVA >>> 0, 8)}</dd>`);

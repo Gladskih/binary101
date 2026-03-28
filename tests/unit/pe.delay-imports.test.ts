@@ -245,13 +245,13 @@ void test("parseDelayImports warns when a hint/name entry is shorter than two by
   assert.ok(result.warning?.toLowerCase().includes("truncated"));
 });
 
-void test("parseDelayImports warns when Delay-Load Attributes is non-zero", async () => {
+void test("parseDelayImports accepts dlattrRva without warning", async () => {
   const bytes = new Uint8Array(128).fill(0);
   const dv = new DataView(bytes.buffer);
   const descriptorOffset = 0x20;
   const dllNameRva = 0x60;
   const thunkTableRva = 0x70;
-  // Microsoft PE Format, "The Delay-Load Directory Table": Attributes must be zero in the image.
+  // MSVC delayimp.h documents dlattrRva = 0x1 for VC7+ RVA-based descriptors.
   writeDelayImportDescriptor(dv, descriptorOffset, {
     attributes: 1,
     dllNameRva,
@@ -267,5 +267,29 @@ void test("parseDelayImports warns when Delay-Load Attributes is non-zero", asyn
   ));
 
   assert.equal(result.entries[0]?.name, "delay.dll");
-  assert.ok(result.warning?.toLowerCase().includes("attributes"));
+  assert.equal(result.warning, undefined);
+});
+
+void test("parseDelayImports warns when Delay-Load Attributes set unknown bits", async () => {
+  const bytes = new Uint8Array(128).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const descriptorOffset = 0x20;
+  const dllNameRva = 0x60;
+  const thunkTableRva = 0x70;
+  writeDelayImportDescriptor(dv, descriptorOffset, {
+    attributes: 0x2,
+    dllNameRva,
+    importNameTableRva: thunkTableRva
+  });
+  writeDelayImportName(bytes, dllNameRva, "delay.dll");
+  writeThunkTable32(dv, thunkTableRva, [0]);
+
+  const result = expectDefined(await parseDelayImports32(
+    new MockFile(bytes),
+    [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
+    value => value
+  ));
+
+  assert.equal(result.entries[0]?.name, "delay.dll");
+  assert.ok(result.warning?.toLowerCase().includes("unknown"));
 });
