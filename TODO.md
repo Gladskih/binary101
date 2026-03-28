@@ -57,5 +57,6 @@ Current status notes:
 
 ## P3 - Quality And Validation
 
-- Raise branch coverage in weak spots, especially UI glue and uncommon unhappy paths.
+- Raise branch coverage.
+- Increase mutation score.
 - Add more external fixture corpora and differential tests for flagship analyzers and tricky formats.
