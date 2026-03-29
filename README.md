@@ -9,12 +9,12 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
 - **Deep analyzers**: Detailed views for PE/COFF (PE32/PE32+), MS-DOS MZ,
   ELF 32/64, Mach-O (32/64/FAT), PNG, BMP, TGA, JPEG, GIF, WebP (RIFF),
   WAV (RIFF), AVI (RIFF), ANI (RIFF), ASF (WMV/WMA), WebM/Matroska,
-  MP4/QuickTime/3GP (ISO-BMFF), MPEG Program Stream (MPEG-PS), PCAP capture
-  files, PCAP-NG capture files, gzip compressed data, PDF, TAR, ISO-9660, ZIP
+  MP4/QuickTime/3GP (ISO-BMFF), MPEG Program Stream (MPEG-PS), PCAP, PCAP-NG, gzip, PDF, TAR, ISO-9660, ZIP
   (DOCX/XLSX/PPTX/OpenXML), 7z, RAR v4/v5, MP3, FLAC, FB2, SQLite, LNK.
-- **PE limitations**: the ROM optional-header variant is not supported.
-  Missing `.pdata` formats include 32-bit MIPS, Windows CE ARM/PowerPC/SH3/
-  SH4, and Itanium.
+- **PE limitations**: CodeView/PDB extraction is currently RSDS-only; `NB10`
+  and other legacy `NBxx` CodeView records are not decoded yet. Missing
+  `.pdata` formats include 32-bit MIPS, Windows CE ARM/PowerPC/SH3/SH4, and
+  Itanium.
 - **Instruction-set detection**: for ELF and PE on x86/x86-64, the app can
   analyze sampled reachable code and report the instruction-set extensions it
   uses.
@@ -43,7 +43,8 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
 - `analyzers/` &mdash; TypeScript binary format detection and parsers. PE/COFF logic
   lives under `analyzers/pe/` and is split into small modules (headers,
   imports/exports, resources, TLS, CLR, relocations, Authenticode, exception
-  data, etc.); ROM PE and some `.pdata` variants are still not implemented.
+  data, etc.); CodeView debug parsing is currently RSDS-only, and some
+  `.pdata` variants are still not implemented.
 - `renderers/` &mdash; TypeScript HTML renderers for parsed structures. The PE renderer lives under `renderers/pe/` and is split into headers, directory views, resources, and layout/sanity views.
 - `binary-utils.ts`, `html-utils.ts` &mdash; shared helpers for hashing, byte/hex formatting and safe HTML generation.
 
