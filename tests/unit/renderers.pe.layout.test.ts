@@ -209,6 +209,20 @@ void test("renderSanity does not flag certificate table bytes as suspicious over
   assert.ok(html.includes("No obvious structural issues"));
 });
 
+void test("renderSanity skips SizeOfImage mismatch warnings for ROM images", () => {
+  const pe = {
+    overlaySize: 0,
+    imageSizeMismatch: true,
+    debug: null,
+    opt: { Magic: 0x107 }
+  } as unknown as PeParseResult;
+
+  const out: string[] = [];
+  renderSanity(pe, out);
+
+  assert.ok(!out.join("").includes("SizeOfImage does not match"));
+});
+
 void test("renderSanity still reports unexplained overlay after certificate table", () => {
   const pe = {
     overlaySize: 0x40,

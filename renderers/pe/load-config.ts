@@ -3,12 +3,14 @@
 import { hex, isoOrDash } from "../../binary-utils.js";
 import { dd, safe } from "../../html-utils.js";
 import { GUARD_FLAGS } from "../../analyzers/pe/constants.js";
+import {
+  isPePlusOptionalHeader,
+  isPeWindowsOptionalHeader
+} from "../../analyzers/pe/optional-header-kind.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 import type { PeLoadConfig } from "../../analyzers/pe/load-config/index.js";
 const formatPointerHex = (value: bigint, width: number): string =>
   `0x${value.toString(16).padStart(width, "0")}`;
-const formatVa = (value: bigint, isPlus: boolean): string =>
-  value === 0n ? "-" : formatPointerHex(value, isPlus ? 16 : 8);
 const compareWideInt = (left: bigint, right: bigint): number =>
   left === right ? 0 : left < right ? -1 : 1;
 const formatWideHex = (value: bigint): string => `0x${value.toString(16)}`;
@@ -31,11 +33,15 @@ const renderGuardFlags = (lc: PeLoadConfig, out: string[]): void => {
 export function renderLoadConfig(pe: PeParseResult, out: string[]): void {
   if (!pe.loadcfg) return;
   const lc = pe.loadcfg;
+  const windowsOpt = isPeWindowsOptionalHeader(pe.opt) ? pe.opt : null;
+  const imageBase = windowsOpt?.ImageBase ?? 0n;
+  const pointerWidth = windowsOpt && isPePlusOptionalHeader(windowsOpt) ? 16 : 8;
+  const formatVa = (value: bigint): string =>
+    value === 0n ? "-" : formatPointerHex(value, pointerWidth);
 
   const formatRvaAsVa = (rva: number): string => {
     if (!Number.isSafeInteger(rva) || rva <= 0) return "-";
-    const base = pe.opt.ImageBase;
-    return formatPointerHex(base + BigInt(rva >>> 0), pe.opt.isPlus ? 16 : 8);
+    return formatPointerHex(imageBase + BigInt(rva >>> 0), pointerWidth);
   };
 
   const renderAddressList = (title: string, rvas: number[], note?: string): void => {
@@ -76,57 +82,57 @@ export function renderLoadConfig(pe: PeParseResult, out: string[]): void {
   out.push(
     dd(
       "DeCommitFreeBlockThreshold",
-      formatVa(lc.DeCommitFreeBlockThreshold, pe.opt.isPlus),
+      formatVa(lc.DeCommitFreeBlockThreshold),
       "Heap free-block threshold for decommit (legacy)."
     )
   );
   out.push(
     dd(
       "DeCommitTotalFreeThreshold",
-      formatVa(lc.DeCommitTotalFreeThreshold, pe.opt.isPlus),
+      formatVa(lc.DeCommitTotalFreeThreshold),
       "Heap total-free threshold for decommit (legacy)."
     )
   );
-  out.push(dd("LockPrefixTable", formatVa(lc.LockPrefixTable, pe.opt.isPlus), "Pointer to the lock prefix table (legacy)."));
+  out.push(dd("LockPrefixTable", formatVa(lc.LockPrefixTable), "Pointer to the lock prefix table (legacy)."));
   out.push(
     dd(
       "MaximumAllocationSize",
-      formatVa(lc.MaximumAllocationSize, pe.opt.isPlus),
+      formatVa(lc.MaximumAllocationSize),
       "Maximum allocation size used by the heap/loader (legacy)."
     )
   );
   out.push(
     dd(
       "VirtualMemoryThreshold",
-      formatVa(lc.VirtualMemoryThreshold, pe.opt.isPlus),
+      formatVa(lc.VirtualMemoryThreshold),
       "Virtual memory threshold used by the heap/loader (legacy)."
     )
   );
   out.push(dd("ProcessHeapFlags", hex(lc.ProcessHeapFlags, 8), "Flags used when creating the default process heap."));
   out.push(
-    dd("ProcessAffinityMask", formatVa(lc.ProcessAffinityMask, pe.opt.isPlus), "Preferred processor affinity mask (legacy).")
+    dd("ProcessAffinityMask", formatVa(lc.ProcessAffinityMask), "Preferred processor affinity mask (legacy).")
   );
   out.push(dd("CSDVersion", hex(lc.CSDVersion, 4), "CSD (Service Pack) version field (legacy)."));
   out.push(dd("DependentLoadFlags", hex(lc.DependentLoadFlags, 4), "Flags affecting how dependent DLLs are loaded."));
-  out.push(dd("EditList", formatVa(lc.EditList, pe.opt.isPlus), "Pointer to an edit list (hotpatch/legacy)."));
-  out.push(dd("SecurityCookie", formatVa(lc.SecurityCookie, pe.opt.isPlus), "Address of the GS cookie (stack guard)."));
-  out.push(dd("SEHandlerTable", formatVa(lc.SEHandlerTable, pe.opt.isPlus), "SafeSEH handler table (x86 only)."));
+  out.push(dd("EditList", formatVa(lc.EditList), "Pointer to an edit list (hotpatch/legacy)."));
+  out.push(dd("SecurityCookie", formatVa(lc.SecurityCookie), "Address of the GS cookie (stack guard)."));
+  out.push(dd("SEHandlerTable", formatVa(lc.SEHandlerTable), "SafeSEH handler table (x86 only)."));
   out.push(dd("SEHandlerCount", String(lc.SEHandlerCount ?? "-"), "Number of SafeSEH handlers (x86)."));
   out.push(
     dd(
       "GuardCFCheckFunctionPointer",
-      formatVa(lc.GuardCFCheckFunctionPointer, pe.opt.isPlus),
+      formatVa(lc.GuardCFCheckFunctionPointer),
       "CFG: guard check function pointer used to validate indirect call/jump targets."
     )
   );
   out.push(
     dd(
       "GuardCFDispatchFunctionPointer",
-      formatVa(lc.GuardCFDispatchFunctionPointer, pe.opt.isPlus),
+      formatVa(lc.GuardCFDispatchFunctionPointer),
       "CFG: guard dispatch function pointer used for certain indirect control transfers."
     )
   );
-  out.push(dd("GuardCFFunctionTable", formatVa(lc.GuardCFFunctionTable, pe.opt.isPlus), "CFG function table VA."));
+  out.push(dd("GuardCFFunctionTable", formatVa(lc.GuardCFFunctionTable), "CFG function table VA."));
   out.push(dd("GuardCFFunctionCount", String(lc.GuardCFFunctionCount ?? "-"), "Number of CFG functions listed."));
   out.push(dd("CodeIntegrity.Flags", hex(lc.CodeIntegrity.Flags, 4), "IMAGE_LOAD_CONFIG_CODE_INTEGRITY flags."));
   out.push(dd("CodeIntegrity.Catalog", hex(lc.CodeIntegrity.Catalog, 4), "Catalog identifier used by code integrity."));
@@ -135,14 +141,14 @@ export function renderLoadConfig(pe: PeParseResult, out: string[]): void {
   out.push(
     dd(
       "VolatileMetadataPointer",
-      formatVa(lc.VolatileMetadataPointer, pe.opt.isPlus),
+      formatVa(lc.VolatileMetadataPointer),
       "Pointer to optional 'volatile metadata' referenced from the load config (format is not documented in Win32 API docs)."
     )
   );
   out.push(
     dd(
       "GuardEHContinuationTable",
-      formatVa(lc.GuardEHContinuationTable, pe.opt.isPlus),
+      formatVa(lc.GuardEHContinuationTable),
       "CFG: VA of EH continuation table (valid exception-handling continuation targets)."
     )
   );
@@ -150,7 +156,7 @@ export function renderLoadConfig(pe: PeParseResult, out: string[]): void {
   out.push(
     dd(
       "GuardLongJumpTargetTable",
-      formatVa(lc.GuardLongJumpTargetTable, pe.opt.isPlus),
+      formatVa(lc.GuardLongJumpTargetTable),
       "CFG: VA of longjmp target table (valid longjmp destinations)."
     )
   );
@@ -158,7 +164,7 @@ export function renderLoadConfig(pe: PeParseResult, out: string[]): void {
   out.push(
     dd(
       "GuardAddressTakenIatEntryTable",
-      formatVa(lc.GuardAddressTakenIatEntryTable, pe.opt.isPlus),
+      formatVa(lc.GuardAddressTakenIatEntryTable),
       "CFG: VA of the address-taken IAT entry table (IAT slots whose imported addresses may be used as function-pointer values, so they remain valid indirect-call targets)."
     )
   );
@@ -169,13 +175,13 @@ export function renderLoadConfig(pe: PeParseResult, out: string[]): void {
       "Number of entries in GuardAddressTakenIatEntryTable."
     )
   );
-  out.push(dd("DynamicValueRelocTable", formatVa(lc.DynamicValueRelocTable, pe.opt.isPlus), "Pointer to the dynamic relocations table (if used)."));
-  out.push(dd("CHPEMetadataPointer", formatVa(lc.CHPEMetadataPointer, pe.opt.isPlus), "Pointer to CHPE metadata (used by ARM64EC/CHPE images)."));
-  out.push(dd("GuardRFFailureRoutine", formatVa(lc.GuardRFFailureRoutine, pe.opt.isPlus), "GuardRF failure routine pointer (if present)."));
+  out.push(dd("DynamicValueRelocTable", formatVa(lc.DynamicValueRelocTable), "Pointer to the dynamic relocations table (if used)."));
+  out.push(dd("CHPEMetadataPointer", formatVa(lc.CHPEMetadataPointer), "Pointer to CHPE metadata (used by ARM64EC/CHPE images)."));
+  out.push(dd("GuardRFFailureRoutine", formatVa(lc.GuardRFFailureRoutine), "GuardRF failure routine pointer (if present)."));
   out.push(
     dd(
       "GuardRFFailureRoutineFunctionPointer",
-      formatVa(lc.GuardRFFailureRoutineFunctionPointer, pe.opt.isPlus),
+      formatVa(lc.GuardRFFailureRoutineFunctionPointer),
       "Pointer to GuardRF failure routine function pointer."
     )
   );
@@ -197,7 +203,7 @@ export function renderLoadConfig(pe: PeParseResult, out: string[]): void {
   out.push(
     dd(
       "GuardRFVerifyStackPointerFunctionPointer",
-      formatVa(lc.GuardRFVerifyStackPointerFunctionPointer, pe.opt.isPlus),
+      formatVa(lc.GuardRFVerifyStackPointerFunctionPointer),
       "GuardRF verify stack pointer function pointer."
     )
   );
@@ -206,22 +212,22 @@ export function renderLoadConfig(pe: PeParseResult, out: string[]): void {
   out.push(
     dd(
       "EnclaveConfigurationPointer",
-      formatVa(lc.EnclaveConfigurationPointer, pe.opt.isPlus),
+      formatVa(lc.EnclaveConfigurationPointer),
       "Pointer to enclave configuration (if present)."
     )
   );
-  out.push(dd("GuardXFGCheckFunctionPointer", formatVa(lc.GuardXFGCheckFunctionPointer, pe.opt.isPlus), "XFG: extended-flow-guard check function pointer."));
-  out.push(dd("GuardXFGDispatchFunctionPointer", formatVa(lc.GuardXFGDispatchFunctionPointer, pe.opt.isPlus), "XFG: extended-flow-guard dispatch function pointer."));
-  out.push(dd("GuardXFGTableDispatchFunctionPointer", formatVa(lc.GuardXFGTableDispatchFunctionPointer, pe.opt.isPlus), "XFG: table dispatch function pointer."));
+  out.push(dd("GuardXFGCheckFunctionPointer", formatVa(lc.GuardXFGCheckFunctionPointer), "XFG: extended-flow-guard check function pointer."));
+  out.push(dd("GuardXFGDispatchFunctionPointer", formatVa(lc.GuardXFGDispatchFunctionPointer), "XFG: extended-flow-guard dispatch function pointer."));
+  out.push(dd("GuardXFGTableDispatchFunctionPointer", formatVa(lc.GuardXFGTableDispatchFunctionPointer), "XFG: table dispatch function pointer."));
   out.push(
     dd(
       "CastGuardOsDeterminedFailureMode",
-      formatVa(lc.CastGuardOsDeterminedFailureMode, pe.opt.isPlus),
+      formatVa(lc.CastGuardOsDeterminedFailureMode),
       "CASTGuard OS-determined failure mode value/pointer (undocumented)."
     )
   );
-  out.push(dd("GuardMemcpyFunctionPointer", formatVa(lc.GuardMemcpyFunctionPointer, pe.opt.isPlus), "CFG: guard memcpy function pointer used by some toolchains/runtime checks."));
-  out.push(dd("UmaFunctionPointers", formatVa(lc.UmaFunctionPointers, pe.opt.isPlus), "Pointer to UMA function pointers (undocumented)."));
+  out.push(dd("GuardMemcpyFunctionPointer", formatVa(lc.GuardMemcpyFunctionPointer), "CFG: guard memcpy function pointer used by some toolchains/runtime checks."));
+  out.push(dd("UmaFunctionPointers", formatVa(lc.UmaFunctionPointers), "Pointer to UMA function pointers (undocumented)."));
   renderGuardFlags(lc, out);
   out.push(`</dl>`);
 

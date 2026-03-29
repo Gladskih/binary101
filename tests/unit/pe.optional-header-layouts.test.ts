@@ -2,7 +2,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseOptionalHeaderTail64 } from "../../analyzers/pe/optional-header-layouts.js";
+import {
+  parseOptionalHeaderTail64,
+  parseOptionalHeaderTailRom
+} from "../../analyzers/pe/optional-header-layouts.js";
 
 // 2^53 + 1 is the first unsigned integer JS cannot represent exactly as Number.
 const FIRST_UNSAFE_U64 = (1n << 53n) + 1n;
@@ -36,4 +39,26 @@ void test("parseOptionalHeaderTail64 preserves 64-bit values beyond Number.MAX_S
   assert.strictEqual(BigInt(parsed.SizeOfStackCommit), unsafeU64At(2n), "SizeOfStackCommit");
   assert.strictEqual(BigInt(parsed.SizeOfHeapReserve), unsafeU64At(3n), "SizeOfHeapReserve");
   assert.strictEqual(BigInt(parsed.SizeOfHeapCommit), unsafeU64At(4n), "SizeOfHeapCommit");
+});
+
+void test("parseOptionalHeaderTailRom reads BaseOfData, BaseOfBss, register masks, and GpValue", () => {
+  const bytes = new Uint8Array(0x20);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0x00, 0x1000, true);
+  view.setUint32(0x04, 0x2000, true);
+  view.setUint32(0x08, 0x00000003, true);
+  view.setUint32(0x0c, 0x11111111, true);
+  view.setUint32(0x10, 0x22222222, true);
+  view.setUint32(0x14, 0x33333333, true);
+  view.setUint32(0x18, 0x44444444, true);
+  view.setUint32(0x1c, 0x12345678, true);
+
+  const parsed = parseOptionalHeaderTailRom(view, 0);
+
+  assert.strictEqual(parsed.BaseOfData, 0x1000);
+  assert.strictEqual(parsed.BaseOfBss, 0x2000);
+  assert.strictEqual(parsed.GprMask, 0x00000003);
+  assert.deepStrictEqual(parsed.CprMask, [0x11111111, 0x22222222, 0x33333333, 0x44444444]);
+  assert.strictEqual(parsed.GpValue, 0x12345678);
+  assert.strictEqual(parsed.nextPosition, 0x20);
 });

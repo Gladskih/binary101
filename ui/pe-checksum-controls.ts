@@ -3,6 +3,7 @@
 import { hex } from "../binary-utils.js";
 import type { ParseForUiResult } from "../analyzers/index.js";
 import type { PeParseResult } from "../analyzers/pe/index.js";
+import { isPeWindowsOptionalHeader } from "../analyzers/pe/optional-header-kind.js";
 
 const PE_SIGNATURE_SIZE = 4;
 const COFF_HEADER_SIZE = 20;
@@ -89,6 +90,10 @@ const createPeChecksumClickHandler =
     const parseResult = getParseResult();
     if (parseResult.analyzer !== "pe" || !parseResult.parsed) {
       setStatusMessage("Not a PE file.");
+      return;
+    }
+    if (!isPeWindowsOptionalHeader(parseResult.parsed.opt)) {
+      setStatusMessage("PE CheckSum is not defined for this optional-header variant.");
       return;
     }
     const statusElement = document.getElementById(CHECKSUM_STATUS_ID);

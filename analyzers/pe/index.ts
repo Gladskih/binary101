@@ -25,6 +25,8 @@ import { parseDynamicRelocationsFromLoadConfig32, parseDynamicRelocationsFromLoa
 import { parseIatDirectory, type PeIatDirectory } from "./iat-directory.js";
 import { parseArchitectureDirectory, type PeArchitectureDirectory } from "./architecture-directory.js";
 import { parseGlobalPtrDirectory, type PeGlobalPtrDirectory } from "./globalptr-directory.js";
+import { buildHeaderOnlyPeParseResult } from "./header-only-result.js";
+import { isPePlusOptionalHeader, isPeWindowsOptionalHeader } from "./optional-header-kind.js";
 import type { PeInstructionSetReport } from "./disassembly.js";
 import type { PeCore, PeDataDirectory, PeTlsDirectory, RvaToOffset } from "./types.js";
 
@@ -90,20 +92,10 @@ export interface PeParseResult {
 export async function parsePe(file: File): Promise<PeParseResult | null> {
   const core = await parsePeHeaders(file);
   if (!core) return null;
-  const {
-    dos,
-    coff,
-    opt,
-    dataDirs,
-    sections,
-    entrySection,
-    rvaToOff,
-    overlaySize,
-    imageEnd,
-    imageSizeMismatch
-  } = core;
+  const { dos, coff, opt, dataDirs, sections, entrySection, rvaToOff, overlaySize, imageEnd, imageSizeMismatch } = core;
+  if (!isPeWindowsOptionalHeader(opt)) return buildHeaderOnlyPeParseResult(core);
   const { ImageBase } = opt;
-  const peVariant = opt.isPlus
+  const peVariant = isPePlusOptionalHeader(opt)
     ? {
         parseLoadConfigDirectory: parseLoadConfigDirectory64,
         parseImportDirectory: parseImportDirectory64,

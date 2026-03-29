@@ -13,11 +13,11 @@ import { createFlacFile } from "../fixtures/flac-fixtures.js";
 import { createSqliteFile } from "../fixtures/sqlite-fixtures.js";
 import { createSampleAsfFile } from "../fixtures/asf-fixtures.js";
 import { createMachOFile, createMachOUniversalFile } from "../fixtures/macho-fixtures.js";
-import { createPeFile, createPePlusFile } from "../fixtures/sample-files-pe.js";
+import { createPeFile, createPePlusFile, createPeRomFile } from "../fixtures/sample-files-pe.js";
 
 const fromAscii = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "ascii"));
 
-const createMinimalPeLabelProbe = (machine: number): MockFile => {
+const createMinimalPeLabelProbe = (machine: number, optionalHeaderMagic = 0x10b): MockFile => {
   const peHeaderOffset = 0x40;
   const coffHeaderSize = 20;
   const optionalHeaderSize = 0xe0;
@@ -30,8 +30,7 @@ const createMinimalPeLabelProbe = (machine: number): MockFile => {
   view.setUint16(peHeaderOffset + 4, machine, true);
   view.setUint16(peHeaderOffset + 4 + 16, optionalHeaderSize, true);
   view.setUint16(peHeaderOffset + 4 + 18, 0x0002, true);
-  // Microsoft PE format, Optional Header Magic: 0x10B identifies a PE32 image.
-  view.setUint16(peHeaderOffset + 4 + coffHeaderSize, 0x10b, true);
+  view.setUint16(peHeaderOffset + 4 + coffHeaderSize, optionalHeaderMagic, true);
   return new MockFile(bytes, `machine-${machine.toString(16)}.exe`);
 };
 
@@ -230,12 +229,15 @@ void test("detectBinaryType refines SQLite labels with page and encoding info", 
   assert.match(label, /UTF-8/);
 });
 
-void test("detectBinaryType reports PE32 and PE32+ labels without full parsing", async () => {
+void test("detectBinaryType reports PE32, PE32+, and ROM labels without full parsing", async () => {
   const pe32Label = await detectBinaryType(createPeFile());
   assert.strictEqual(pe32Label, "PE32 executable for x86 (I386)");
 
   const pe64Label = await detectBinaryType(createPePlusFile());
   assert.strictEqual(pe64Label, "PE32+ executable for x86-64 (AMD64)");
+
+  const peRomLabel = await detectBinaryType(createPeRomFile());
+  assert.strictEqual(peRomLabel, "PE ROM image for MIPS R4000");
 });
 
 void test("detectBinaryType uses the official Microsoft machine names for PE labels", async () => {
@@ -252,6 +254,12 @@ void test("detectBinaryType uses the official Microsoft machine names for PE lab
     const label = await detectBinaryType(createMinimalPeLabelProbe(machine));
     assert.strictEqual(label, expected);
   }
+});
+
+void test("detectBinaryType labels ROM optional headers as PE ROM images", async () => {
+  // Microsoft PE/COFF: 0x107 identifies IMAGE_ROM_OPTIONAL_HEADER.
+  const label = await detectBinaryType(createMinimalPeLabelProbe(0x0166, 0x107));
+  assert.strictEqual(label, "PE ROM image for MIPS R4000");
 });
 
 void test("detectBinaryType tolerates truncated optional headers for PE labels", async () => {

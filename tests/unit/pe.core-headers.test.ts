@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseOptionalHeaderAndDirectories } from "../../analyzers/pe/core-headers.js";
+import { isPeRomOptionalHeader } from "../../analyzers/pe/optional-header-kind.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const PE32_OPTIONAL_HEADER_MAGIC = 0x10b;
@@ -43,23 +44,31 @@ void test("parseOptionalHeaderAndDirectories preserves data directories beyond i
   });
 });
 
-void test("parseOptionalHeaderAndDirectories does not treat ROM optional headers as PE32", async () => {
-  const optionalHeaderSize = 0x60;
+void test("parseOptionalHeaderAndDirectories decodes IMAGE_ROM_OPTIONAL_HEADER without inventing data directories", async () => {
+  const optionalHeaderSize = 0x38;
   const fileBytes = new Uint8Array(24 + optionalHeaderSize).fill(0);
   const view = new DataView(fileBytes.buffer);
   const optionalHeaderOffset = 24;
 
   // Microsoft PE/COFF spec: 0x10b is PE32, 0x20b is PE32+, and 0x107 identifies a ROM image.
-  // A ROM optional header is not format-compatible with IMAGE_OPTIONAL_HEADER32.
+  // IMAGE_ROM_OPTIONAL_HEADER layout comes from ntimage.h:
+  // https://doxygen.reactos.org/d5/d44/ntimage_8h_source.html#l627
   view.setUint16(optionalHeaderOffset, ROM_OPTIONAL_HEADER_MAGIC, true);
-  // Patterned non-zero words make accidental PE32 decoding obvious without pretending these values are meaningful.
-  view.setUint32(optionalHeaderOffset + 28, patternedSentinelWord(0), true);
-  view.setUint32(optionalHeaderOffset + 32, patternedSentinelWord(1), true);
-  view.setUint32(optionalHeaderOffset + 36, patternedSentinelWord(2), true);
-  view.setUint32(optionalHeaderOffset + 56, patternedSentinelWord(3), true);
-  view.setUint32(optionalHeaderOffset + 60, patternedSentinelWord(4), true);
-  // Any non-zero count is enough here; the regression checks that ROM headers do not decode PE32 data directories at all.
-  view.setUint32(optionalHeaderOffset + 92, 7, true);
+  view.setUint8(optionalHeaderOffset + 2, 2);
+  view.setUint8(optionalHeaderOffset + 3, 7);
+  view.setUint32(optionalHeaderOffset + 4, patternedSentinelWord(0), true);
+  view.setUint32(optionalHeaderOffset + 8, patternedSentinelWord(1), true);
+  view.setUint32(optionalHeaderOffset + 12, patternedSentinelWord(2), true);
+  view.setUint32(optionalHeaderOffset + 16, patternedSentinelWord(3), true);
+  view.setUint32(optionalHeaderOffset + 20, patternedSentinelWord(4), true);
+  view.setUint32(optionalHeaderOffset + 24, patternedSentinelWord(5), true);
+  view.setUint32(optionalHeaderOffset + 28, patternedSentinelWord(6), true);
+  view.setUint32(optionalHeaderOffset + 32, patternedSentinelWord(7), true);
+  view.setUint32(optionalHeaderOffset + 36, patternedSentinelWord(8), true);
+  view.setUint32(optionalHeaderOffset + 40, patternedSentinelWord(9), true);
+  view.setUint32(optionalHeaderOffset + 44, patternedSentinelWord(10), true);
+  view.setUint32(optionalHeaderOffset + 48, patternedSentinelWord(11), true);
+  view.setUint32(optionalHeaderOffset + 52, patternedSentinelWord(12), true);
 
   const parsed = await parseOptionalHeaderAndDirectories(
     new MockFile(fileBytes, "rom-optional-header.bin"),
@@ -68,10 +77,26 @@ void test("parseOptionalHeaderAndDirectories does not treat ROM optional headers
   );
 
   assert.strictEqual(parsed.opt.Magic, ROM_OPTIONAL_HEADER_MAGIC);
-  assert.strictEqual(parsed.opt.is32, false);
-  assert.strictEqual(parsed.opt.isPlus, false);
-  assert.strictEqual(parsed.opt.ImageBase, 0n);
-  assert.strictEqual(parsed.opt.NumberOfRvaAndSizes, 0);
+  assert.ok(isPeRomOptionalHeader(parsed.opt));
+  assert.strictEqual(parsed.opt.LinkerMajor, 2);
+  assert.strictEqual(parsed.opt.LinkerMinor, 7);
+  assert.strictEqual(parsed.opt.SizeOfCode, patternedSentinelWord(0));
+  assert.strictEqual(parsed.opt.SizeOfInitializedData, patternedSentinelWord(1));
+  assert.strictEqual(parsed.opt.SizeOfUninitializedData, patternedSentinelWord(2));
+  assert.strictEqual(parsed.opt.AddressOfEntryPoint, patternedSentinelWord(3));
+  assert.strictEqual(parsed.opt.BaseOfCode, patternedSentinelWord(4));
+  assert.strictEqual(parsed.opt.BaseOfData, patternedSentinelWord(5));
+  assert.deepStrictEqual(parsed.opt.rom, {
+    BaseOfBss: patternedSentinelWord(6),
+    GprMask: patternedSentinelWord(7),
+    CprMask: [
+      patternedSentinelWord(8),
+      patternedSentinelWord(9),
+      patternedSentinelWord(10),
+      patternedSentinelWord(11)
+    ],
+    GpValue: patternedSentinelWord(12)
+  });
   assert.deepStrictEqual(parsed.dataDirs, []);
-  assert.ok(parsed.warnings?.some(warning => /rom|pe32|pe32\+/i.test(warning)));
+  assert.deepStrictEqual(parsed.warnings ?? [], []);
 });

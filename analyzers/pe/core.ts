@@ -1,6 +1,7 @@
 "use strict";
 
 import { addSectionEntropies } from "./entropy.js";
+import { isPeWindowsOptionalHeader } from "./optional-header-kind.js";
 import { peProbe } from "./signature.js";
 import { computeEntrySection } from "./core-entry.js";
 import { PE_RVA_EXCLUSIVE_LIMIT } from "./rva-limits.js";
@@ -35,7 +36,8 @@ const computePeImageLayout = (
   sections: PeCore["sections"],
   sectionAlignment: number,
   sizeOfImage: number,
-  declaredSizeOfHeaders: number
+  declaredSizeOfHeaders: number,
+  hasDeclaredSizeOfImage: boolean
 ): {
   overlaySize: number;
   imageEnd: number;
@@ -66,7 +68,7 @@ const computePeImageLayout = (
   return {
     overlaySize,
     imageEnd,
-    imageSizeMismatch: imageEnd !== (sizeOfImage >>> 0)
+    imageSizeMismatch: hasDeclaredSizeOfImage && imageEnd !== (sizeOfImage >>> 0)
   };
 };
 
@@ -83,12 +85,13 @@ export async function parsePeHeaders(file: File): Promise<PeCore | null> {
 
   const optionalResult = await parseOptionalHeaderAndDirectories(file, e_lfanew, coff.SizeOfOptionalHeader);
   const { optOff, ddStartRel, ddCount, dataDirs, opt } = optionalResult;
+  const windowsOpt = isPeWindowsOptionalHeader(opt) ? opt : null;
   const { sections, rvaToOff, sectOff, warnings: sectionWarnings } = await parseSectionHeaders(
     file,
     optOff,
     coff.SizeOfOptionalHeader,
     coff.NumberOfSections,
-    opt.SizeOfHeaders
+    windowsOpt?.SizeOfHeaders ?? 0
   );
   const { overlaySize, imageEnd, imageSizeMismatch } = computePeImageLayout(
     file.size,
@@ -97,9 +100,10 @@ export async function parsePeHeaders(file: File): Promise<PeCore | null> {
     sectOff,
     coff.NumberOfSections,
     sections,
-    opt.SectionAlignment,
-    opt.SizeOfImage,
-    opt.SizeOfHeaders
+    windowsOpt?.SectionAlignment ?? 0,
+    windowsOpt?.SizeOfImage ?? 0,
+    windowsOpt?.SizeOfHeaders ?? 0,
+    !!windowsOpt
   );
 
   await addSectionEntropies(file, sections);

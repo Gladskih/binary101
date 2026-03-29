@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parsePe } from "../../analyzers/pe/index.js";
+import { isPeWindowsOptionalHeader } from "../../analyzers/pe/optional-header-kind.js";
 import { createPeWithSectionAndIat as createSamplePeWithSectionAndIat } from "../fixtures/sample-files-pe.js";
 import { MockFile } from "../helpers/mock-file.js";
 
@@ -115,6 +116,7 @@ void test("parsePe correctly parses a minimal PE header", async () => {
   assert.strictEqual(result.coff.NumberOfSections, 0, "COFF header should report 0 sections");
   assert.ok(result.opt, "Optional header should be parsed");
   assert.strictEqual(result.opt.Magic, IMAGE_NT_OPTIONAL_HDR32_MAGIC, "Optional header magic should be PE32");
+  assert.ok(isPeWindowsOptionalHeader(result.opt));
   assert.strictEqual(result.opt.ImageBase, 0x00400000n, "Optional header ImageBase should be parsed correctly");
 });
 

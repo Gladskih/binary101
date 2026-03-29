@@ -3,6 +3,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parsePeHeaders } from "../../analyzers/pe/core.js";
+import {
+  isPeRomOptionalHeader,
+  isPeWindowsOptionalHeader
+} from "../../analyzers/pe/optional-header-kind.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
 
@@ -125,6 +129,7 @@ void test("parsePeHeaders does not read optional-header fields from section-head
   const parsed = await parsePeHeaders(new MockFile(bytes, "short-opt.exe"));
 
   assert.ok(parsed);
+  assert.ok(isPeWindowsOptionalHeader(parsed.opt));
   assert.strictEqual(parsed.opt.SectionAlignment, 0);
   assert.strictEqual(parsed.opt.SizeOfImage, 0);
   assert.strictEqual(parsed.opt.NumberOfRvaAndSizes, 0);
@@ -171,8 +176,8 @@ void test("parsePeHeaders keeps images with unknown OptionalHeader.Magic visible
 
   assert.ok(parsed);
   assert.strictEqual(parsed.opt.Magic, 0x1337);
-  assert.strictEqual(parsed.opt.is32, false);
-  assert.strictEqual(parsed.opt.isPlus, false);
+  assert.ok(!isPeWindowsOptionalHeader(parsed.opt));
+  assert.ok(!isPeRomOptionalHeader(parsed.opt));
   assert.deepStrictEqual(parsed.dataDirs, []);
   assert.ok(parsed.warnings?.some(warning => /magic/i.test(warning)));
 });

@@ -26,6 +26,15 @@ export type ParsedOptionalHeaderTail = {
   NumberOfRvaAndSizes: number;
 };
 
+export type ParsedRomOptionalHeaderTail = {
+  nextPosition: number;
+  BaseOfData: number;
+  BaseOfBss: number;
+  GprMask: number;
+  CprMask: [number, number, number, number];
+  GpValue: number;
+};
+
 const readVersionPair = (
   optionalHeaderView: DataView,
   position: number
@@ -106,6 +115,37 @@ export const parseOptionalHeaderTail32 = (
     SizeOfHeapCommit,
     LoaderFlags,
     NumberOfRvaAndSizes
+  };
+};
+
+export const parseOptionalHeaderTailRom = (
+  optionalHeaderView: DataView,
+  start: number
+): ParsedRomOptionalHeaderTail => {
+  let position = start;
+  const readAt = <T>(length: number, fn: () => T, fallback: T): T =>
+    position + length <= optionalHeaderView.byteLength ? fn() : fallback;
+  const readU32 = (): number => readAt(4, () => optionalHeaderView.getUint32(position, true), 0);
+  const BaseOfData = readU32();
+  position += 4;
+  const BaseOfBss = readU32();
+  position += 4;
+  const GprMask = readU32();
+  position += 4;
+  const cprMask = Array.from({ length: 4 }, () => {
+    const value = readU32();
+    position += 4;
+    return value;
+  }) as ParsedRomOptionalHeaderTail["CprMask"];
+  const GpValue = readU32();
+  position += 4;
+  return {
+    nextPosition: position,
+    BaseOfData,
+    BaseOfBss,
+    GprMask,
+    CprMask: cprMask,
+    GpValue
   };
 };
 

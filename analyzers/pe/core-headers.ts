@@ -3,52 +3,21 @@
 import { readAsciiString, collectPrintableRuns } from "../../binary-utils.js";
 import { DD_NAMES } from "./constants.js";
 import {
+  parseOptionalHeaderTailRom,
   parseOptionalHeaderTail32,
   parseOptionalHeaderTail64
 } from "./optional-header-layouts.js";
+import {
+  getOptionalHeaderKind,
+  PE32_OPTIONAL_HEADER_MAGIC,
+  PE32_PLUS_OPTIONAL_HEADER_MAGIC,
+  ROM_OPTIONAL_HEADER_MAGIC
+} from "./optional-header-kind.js";
+import { createEmptyOptionalHeader } from "./optional-header-defaults.js";
 import { parseRichHeaderFromDosStub } from "./rich-header.js";
 import type { PeCoffHeader, PeDataDirectory, PeDosHeader, PeOptionalHeader } from "./types.js";
 
 const IMAGE_FILE_HEADER_SIZE = 20;
-
-const createEmptyOptionalHeader = (
-  magic: number,
-  isPlus: boolean,
-  is32: boolean
-): PeOptionalHeader => ({
-  Magic: magic,
-  isPlus,
-  is32,
-  LinkerMajor: 0,
-  LinkerMinor: 0,
-  SizeOfCode: 0,
-  SizeOfInitializedData: 0,
-  SizeOfUninitializedData: 0,
-  AddressOfEntryPoint: 0,
-  BaseOfCode: 0,
-  ...(is32 ? { BaseOfData: 0 } : {}),
-  ImageBase: 0n,
-  SectionAlignment: 0,
-  FileAlignment: 0,
-  OSVersionMajor: 0,
-  OSVersionMinor: 0,
-  ImageVersionMajor: 0,
-  ImageVersionMinor: 0,
-  SubsystemVersionMajor: 0,
-  SubsystemVersionMinor: 0,
-  Win32VersionValue: 0,
-  SizeOfImage: 0,
-  SizeOfHeaders: 0,
-  CheckSum: 0,
-  Subsystem: 0,
-  DllCharacteristics: 0,
-  SizeOfStackReserve: 0n,
-  SizeOfStackCommit: 0n,
-  SizeOfHeapReserve: 0n,
-  SizeOfHeapCommit: 0n,
-  LoaderFlags: 0,
-  NumberOfRvaAndSizes: 0
-});
 
 export async function parseDosHeaderAndStub(
   file: File,
@@ -150,7 +119,7 @@ export async function parseOptionalHeaderAndDirectories(
       ddStartRel: 0,
       ddCount: 0,
       dataDirs: [],
-      opt: createEmptyOptionalHeader(0, false, false),
+      opt: createEmptyOptionalHeader(0),
       warnings
     };
   }
@@ -172,22 +141,8 @@ export async function parseOptionalHeaderAndDirectories(
   };
 
   const Magic = read(2, () => optionalHeaderView.getUint16(position, true), 0); position += 2;
-  const isPlus = Magic === 0x20b;
-  const is32 = Magic === 0x10b;
-  const isRom = Magic === 0x107;
-  if (isRom) {
-    warnings.push("ROM optional headers are not decoded as PE32 or PE32+.");
-    return {
-      optOff: optionalHeaderOffset,
-      optSize: declaredSize,
-      ddStartRel: 0,
-      ddCount: 0,
-      dataDirs: [],
-      opt: createEmptyOptionalHeader(Magic, false, false),
-      ...(warnings.length ? { warnings } : {})
-    };
-  }
-  if (sizeOfOptionalHeader > 0 && !isPlus && !is32) {
+  const kind = getOptionalHeaderKind(Magic);
+  if (sizeOfOptionalHeader > 0 && kind === "unknown") {
     warnings.push(
       `Optional header Magic ${`0x${(Magic >>> 0).toString(16)}`} is not PE32, PE32+, or ROM.`
     );
@@ -197,7 +152,7 @@ export async function parseOptionalHeaderAndDirectories(
       ddStartRel: 0,
       ddCount: 0,
       dataDirs: [],
-      opt: createEmptyOptionalHeader(Magic, false, false),
+      opt: createEmptyOptionalHeader(Magic),
       ...(warnings.length ? { warnings } : {})
     };
   }
@@ -216,7 +171,38 @@ export async function parseOptionalHeaderAndDirectories(
   position += 4;
   const BaseOfCodeVal = read(4, () => optionalHeaderView.getUint32(position, true), 0);
   position += 4;
-  const tail = isPlus
+  if (kind === "rom") {
+    const rom = parseOptionalHeaderTailRom(optionalHeaderView, position);
+    return {
+      optOff: optionalHeaderOffset,
+      optSize: Math.max(
+        declaredSize,
+        Math.min(optionalHeaderView.byteLength, rom.nextPosition)
+      ),
+      ddStartRel: 0,
+      ddCount: 0,
+      dataDirs: [],
+      opt: {
+        Magic: ROM_OPTIONAL_HEADER_MAGIC,
+        LinkerMajor,
+        LinkerMinor,
+        SizeOfCode: SizeOfCodeVal,
+        SizeOfInitializedData: SizeOfInitializedDataVal,
+        SizeOfUninitializedData: SizeOfUninitializedDataVal,
+        AddressOfEntryPoint: AddressOfEntryPointVal,
+        BaseOfCode: BaseOfCodeVal,
+        BaseOfData: rom.BaseOfData,
+        rom: {
+          BaseOfBss: rom.BaseOfBss,
+          GprMask: rom.GprMask,
+          CprMask: rom.CprMask,
+          GpValue: rom.GpValue
+        }
+      },
+      ...(warnings.length ? { warnings } : {})
+    };
+  }
+  const tail = kind === "pe32+"
     ? parseOptionalHeaderTail64(optionalHeaderView, position)
     : parseOptionalHeaderTail32(optionalHeaderView, position);
   const ddStartRel = tail.nextPosition;
@@ -233,40 +219,71 @@ export async function parseOptionalHeaderAndDirectories(
   }
   const consumedSize = Math.min(optionalHeaderView.byteLength, ddStartRel + ddCount * 8);
   const optSize = Math.max(consumedSize, declaredSize);
-  const opt: PeOptionalHeader = {
-    Magic,
-    isPlus,
-    is32,
-    LinkerMajor,
-    LinkerMinor,
-    SizeOfCode: SizeOfCodeVal,
-    SizeOfInitializedData: SizeOfInitializedDataVal,
-    SizeOfUninitializedData: SizeOfUninitializedDataVal,
-    AddressOfEntryPoint: AddressOfEntryPointVal,
-    BaseOfCode: BaseOfCodeVal,
-    ...(tail.BaseOfData !== undefined ? { BaseOfData: tail.BaseOfData } : {}),
-    ImageBase: tail.ImageBase,
-    SectionAlignment: tail.SectionAlignment,
-    FileAlignment: tail.FileAlignment,
-    OSVersionMajor: tail.OSVersionMajor,
-    OSVersionMinor: tail.OSVersionMinor,
-    ImageVersionMajor: tail.ImageVersionMajor,
-    ImageVersionMinor: tail.ImageVersionMinor,
-    SubsystemVersionMajor: tail.SubsystemVersionMajor,
-    SubsystemVersionMinor: tail.SubsystemVersionMinor,
-    Win32VersionValue: tail.Win32VersionValue,
-    SizeOfImage: tail.SizeOfImage,
-    SizeOfHeaders: tail.SizeOfHeaders,
-    CheckSum: tail.CheckSum,
-    Subsystem: tail.Subsystem,
-    DllCharacteristics: tail.DllCharacteristics,
-    SizeOfStackReserve: tail.SizeOfStackReserve,
-    SizeOfStackCommit: tail.SizeOfStackCommit,
-    SizeOfHeapReserve: tail.SizeOfHeapReserve,
-    SizeOfHeapCommit: tail.SizeOfHeapCommit,
-    LoaderFlags: tail.LoaderFlags,
-    NumberOfRvaAndSizes: tail.NumberOfRvaAndSizes
-  };
+  const opt: PeOptionalHeader =
+    kind === "pe32+"
+      ? {
+          Magic: PE32_PLUS_OPTIONAL_HEADER_MAGIC,
+          LinkerMajor,
+          LinkerMinor,
+          SizeOfCode: SizeOfCodeVal,
+          SizeOfInitializedData: SizeOfInitializedDataVal,
+          SizeOfUninitializedData: SizeOfUninitializedDataVal,
+          AddressOfEntryPoint: AddressOfEntryPointVal,
+          BaseOfCode: BaseOfCodeVal,
+          ImageBase: tail.ImageBase,
+          SectionAlignment: tail.SectionAlignment,
+          FileAlignment: tail.FileAlignment,
+          OSVersionMajor: tail.OSVersionMajor,
+          OSVersionMinor: tail.OSVersionMinor,
+          ImageVersionMajor: tail.ImageVersionMajor,
+          ImageVersionMinor: tail.ImageVersionMinor,
+          SubsystemVersionMajor: tail.SubsystemVersionMajor,
+          SubsystemVersionMinor: tail.SubsystemVersionMinor,
+          Win32VersionValue: tail.Win32VersionValue,
+          SizeOfImage: tail.SizeOfImage,
+          SizeOfHeaders: tail.SizeOfHeaders,
+          CheckSum: tail.CheckSum,
+          Subsystem: tail.Subsystem,
+          DllCharacteristics: tail.DllCharacteristics,
+          SizeOfStackReserve: tail.SizeOfStackReserve,
+          SizeOfStackCommit: tail.SizeOfStackCommit,
+          SizeOfHeapReserve: tail.SizeOfHeapReserve,
+          SizeOfHeapCommit: tail.SizeOfHeapCommit,
+          LoaderFlags: tail.LoaderFlags,
+          NumberOfRvaAndSizes: tail.NumberOfRvaAndSizes
+        }
+      : {
+          Magic: PE32_OPTIONAL_HEADER_MAGIC,
+          LinkerMajor,
+          LinkerMinor,
+          SizeOfCode: SizeOfCodeVal,
+          SizeOfInitializedData: SizeOfInitializedDataVal,
+          SizeOfUninitializedData: SizeOfUninitializedDataVal,
+          AddressOfEntryPoint: AddressOfEntryPointVal,
+          BaseOfCode: BaseOfCodeVal,
+          BaseOfData: tail.BaseOfData ?? 0,
+          ImageBase: tail.ImageBase,
+          SectionAlignment: tail.SectionAlignment,
+          FileAlignment: tail.FileAlignment,
+          OSVersionMajor: tail.OSVersionMajor,
+          OSVersionMinor: tail.OSVersionMinor,
+          ImageVersionMajor: tail.ImageVersionMajor,
+          ImageVersionMinor: tail.ImageVersionMinor,
+          SubsystemVersionMajor: tail.SubsystemVersionMajor,
+          SubsystemVersionMinor: tail.SubsystemVersionMinor,
+          Win32VersionValue: tail.Win32VersionValue,
+          SizeOfImage: tail.SizeOfImage,
+          SizeOfHeaders: tail.SizeOfHeaders,
+          CheckSum: tail.CheckSum,
+          Subsystem: tail.Subsystem,
+          DllCharacteristics: tail.DllCharacteristics,
+          SizeOfStackReserve: tail.SizeOfStackReserve,
+          SizeOfStackCommit: tail.SizeOfStackCommit,
+          SizeOfHeapReserve: tail.SizeOfHeapReserve,
+          SizeOfHeapCommit: tail.SizeOfHeapCommit,
+          LoaderFlags: tail.LoaderFlags,
+          NumberOfRvaAndSizes: tail.NumberOfRvaAndSizes
+        };
   return {
     optOff: optionalHeaderOffset,
     optSize,

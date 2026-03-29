@@ -2,6 +2,7 @@
 
 import { humanSize, hex } from "../../binary-utils.js";
 import { safe } from "../../html-utils.js";
+import { isPeRomOptionalHeader } from "../../analyzers/pe/optional-header-kind.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 
 type PeRelocSection = NonNullable<PeParseResult["reloc"]>;
@@ -206,7 +207,7 @@ export function renderSanity(pe: PeParseResult, out: string[]): void {
   if (unexplainedOverlaySize > 0) {
     issues.push(`Overlay after last section: ${humanSize(unexplainedOverlaySize)}.`);
   }
-  if (pe.imageSizeMismatch) {
+  if (pe.imageSizeMismatch && !(pe.opt && isPeRomOptionalHeader(pe.opt))) {
     issues.push("SizeOfImage does not match section layout.");
   }
   if (pe.debug?.warning) {

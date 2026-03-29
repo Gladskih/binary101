@@ -15,7 +15,7 @@ const TEST_IMAGE_BASE = 0x400000n;
 const createMinimalPe = (): PeParseResult =>
   ({
     coff: { Machine: 0x014c },
-    opt: { isPlus: false, ImageBase: TEST_IMAGE_BASE, AddressOfEntryPoint: 0x1000 },
+    opt: { Magic: 0x10b, ImageBase: TEST_IMAGE_BASE, AddressOfEntryPoint: 0x1000 },
     rvaToOff: (rva: number) => rva,
     sections: []
   }) as unknown as PeParseResult;

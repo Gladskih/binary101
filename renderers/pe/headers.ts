@@ -3,6 +3,11 @@
 import { humanSize, hex, isoOrDash } from "../../binary-utils.js";
 import { dd, rowOpts, rowFlags, safe } from "../../html-utils.js";
 import { MACHINE, SUBSYSTEMS, CHAR_FLAGS, DLL_FLAGS, SEC_FLAG_TEXTS, DD_TIPS } from "../../analyzers/pe/constants.js";
+import {
+  isPePlusOptionalHeader,
+  isPeRomOptionalHeader,
+  isPeWindowsOptionalHeader
+} from "../../analyzers/pe/optional-header-kind.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 import { renderRichHeader } from "./rich-header.js";
 
@@ -24,6 +29,7 @@ const formatBigByteSize = (value: bigint): string =>
   value <= BigInt(Number.MAX_SAFE_INTEGER)
     ? humanSize(Number(value))
     : `${value} bytes (0x${value.toString(16)})`;
+const formatWordListHex = (values: number[]): string => values.map(value => hex(value >>> 0, 8)).join(", ");
 
 const linkerVersionHint = (major: number, minor: number): string => {
   const version = `${major}.${minor}`;
@@ -111,23 +117,32 @@ const renderSections = (pe: PeParseResult, out: string[]): void => {
 export function renderHeaders(pe: PeParseResult, out: string[]): void {
   const isDll = (pe.coff.Characteristics & 0x2000) !== 0;
   const roleText = isDll ? "dynamic-link library (DLL)" : "executable image";
-  const imageTypeText = pe.opt.isPlus
-    ? `64-bit Windows ${roleText}`
-    : pe.opt.is32
-      ? `32-bit Windows ${roleText}`
-      : `Windows ${roleText} with an unrecognized optional-header magic`;
+  const imageTypeText = isPeRomOptionalHeader(pe.opt)
+    ? "firmware or option ROM image"
+    : isPePlusOptionalHeader(pe.opt)
+      ? `64-bit Windows ${roleText}`
+      : isPeWindowsOptionalHeader(pe.opt)
+        ? `32-bit Windows ${roleText}`
+        : "PE image with an unrecognized optional-header magic";
   const sectionCount = Array.isArray(pe.sections) ? pe.sections.length : pe.coff.NumberOfSections;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Big picture</h4>`);
-  out.push(
-    `<div class="smallNote">PE image: ${imageTypeText}. Headers describe layout and loader requirements; ${sectionCount} sections carry code, data, resources and relocation information.</div>`
-  );
-  const entryVa = pe.opt.ImageBase + BigInt(pe.opt.AddressOfEntryPoint >>> 0);
-  out.push(
-    `<div class="smallNote">Entry point RVA ${hex(
-      pe.opt.AddressOfEntryPoint,
-      8
-    )} (VA ${formatPointerHex(entryVa, pe.opt.isPlus ? 16 : 8)}). Imports, relocations, resources and security directories below show how this image integrates with the operating system.</div>`
-  );
+  if (isPeRomOptionalHeader(pe.opt)) {
+    out.push(
+      `<div class="smallNote">PE image: ${imageTypeText}. This file uses IMAGE_ROM_OPTIONAL_HEADER, so it does not carry the normal Windows loader fields such as ImageBase, Subsystem, stack/heap sizes, or PE data directories. ${sectionCount} sections still describe where ROM code and data live in the file.</div>`
+    );
+    out.push(`<div class="smallNote">Entry point address ${hex(pe.opt.AddressOfEntryPoint, 8)}. Section headers below show how that address maps back into on-disk section data.</div>`);
+  } else if (!isPeWindowsOptionalHeader(pe.opt)) {
+    out.push(
+      `<div class="smallNote">PE image: ${imageTypeText}. The optional-header magic is not one of the standard PE32, PE32+, or ROM layouts, so this view only shows the fields that were safely decoded before the format became ambiguous.</div>`
+    );
+    out.push(`<div class="smallNote">Entry point address ${hex(pe.opt.AddressOfEntryPoint, 8)}. Section headers below may still help map that address back into file data.</div>`);
+  } else {
+    out.push(
+      `<div class="smallNote">PE image: ${imageTypeText}. Headers describe layout and loader requirements; ${sectionCount} sections carry code, data, resources and relocation information.</div>`
+    );
+    const entryVa = pe.opt.ImageBase + BigInt(pe.opt.AddressOfEntryPoint >>> 0);
+    out.push(`<div class="smallNote">Entry point RVA ${hex(pe.opt.AddressOfEntryPoint, 8)} (VA ${formatPointerHex(entryVa, isPePlusOptionalHeader(pe.opt) ? 16 : 8)}). Imports, relocations, resources and security directories below show how this image integrates with the operating system.</div>`);
+  }
   out.push(`</section>`);
 
   out.push(`<section>`);
@@ -193,42 +208,90 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
   out.push(`</dl></section>`);
 
   const oh = pe.opt;
-  const isPlus = oh.isPlus;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Optional header</h4><dl>`);
-  out.push(dd("Magic", rowOpts(oh.Magic, [[0x010b, "PE32"], [0x020b, "PE32+"], [0x0107, "ROM"]]), "Identifies PE32 (32-bit) or PE32+ (64-bit)."));
-  out.push(dd("LinkerVersion", linkerVersionHint(oh.LinkerMajor, oh.LinkerMinor), "Linker that produced this image (MSVC or lld-link version family)."));
-  out.push(dd("SizeOfCode", humanSize(oh.SizeOfCode), "Size of code (text) section(s)."));
-  out.push(dd("SizeOfInitializedData", humanSize(oh.SizeOfInitializedData), "Size of initialized data section(s)."));
-  out.push(dd("SizeOfUninitializedData", humanSize(oh.SizeOfUninitializedData), "Size of uninitialized data section(s) (BSS)."));
-  out.push(dd("AddressOfEntryPoint", hex(oh.AddressOfEntryPoint, 8), "RVA of entry point. Zero for DLLs without a preferred entry."));
   const entrySectionInfo = pe.entrySection
     ? `Usually points into section ${pe.entrySection.name || "(unnamed)"} (index ${pe.entrySection.index}).`
-    : "Should point into one of the code sections.";
+    : "Should point into one of the mapped code sections.";
+  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Optional header</h4><dl>`);
+  out.push(
+    dd(
+      "Magic",
+      rowOpts(oh.Magic, [[0x010b, "PE32"], [0x020b, "PE32+"], [0x0107, "ROM"]]),
+      "Identifies PE32 (32-bit), PE32+ (64-bit), or IMAGE_ROM_OPTIONAL_HEADER."
+    )
+  );
+  out.push(
+    dd(
+      "LinkerVersion",
+      linkerVersionHint(oh.LinkerMajor, oh.LinkerMinor),
+      "Linker that produced this image (MSVC or lld-link version family)."
+    )
+  );
+  out.push(dd("SizeOfCode", humanSize(oh.SizeOfCode), "Size of code section bytes."));
+  out.push(
+    dd(
+      "SizeOfInitializedData",
+      humanSize(oh.SizeOfInitializedData),
+      "Size of initialized data section bytes."
+    )
+  );
+  out.push(
+    dd(
+      "SizeOfUninitializedData",
+      humanSize(oh.SizeOfUninitializedData),
+      "Size of uninitialized data bytes (BSS)."
+    )
+  );
+  out.push(
+    dd(
+      "AddressOfEntryPoint",
+      hex(oh.AddressOfEntryPoint, 8),
+      isPeRomOptionalHeader(oh)
+        ? "Entry-point address stored in IMAGE_ROM_OPTIONAL_HEADER."
+        : "RVA of entry point. Zero for DLLs without a preferred entry."
+    )
+  );
   out.push(dd("EntrySection", pe.entrySection ? safe(pe.entrySection.name || "(unnamed)") : "-", entrySectionInfo));
-  out.push(dd("ImageBase", formatPointerHex(oh.ImageBase, isPlus ? 16 : 8), "Preferred load address."));
-  out.push(dd("SectionAlignment", humanSize(oh.SectionAlignment), "Alignment of sections in memory."));
-  out.push(dd("FileAlignment", humanSize(oh.FileAlignment), "Alignment of sections in the file."));
-  out.push(dd("OperatingSystemVersion", winVersionName(oh.OSVersionMajor, oh.OSVersionMinor), "Minimum required OS version."));
-  out.push(dd("ImageVersion", `${oh.ImageVersionMajor}.${oh.ImageVersionMinor}`, "Image version (informational)."));
-  out.push(dd("SubsystemVersion", `${oh.SubsystemVersionMajor}.${oh.SubsystemVersionMinor}`, "Minimum subsystem version."));
-  out.push(dd("Subsystem", rowOpts(oh.Subsystem, SUBSYSTEMS), "Required subsystem (GUI, CUI, etc.)."));
-  out.push(dd("DllCharacteristics", rowFlags(oh.DllCharacteristics, DLL_FLAGS), "DLL characteristics (ASLR, DEP, etc.)."));
-  out.push(dd("SizeOfImage", humanSize(oh.SizeOfImage), "Size of image in memory, including all headers and sections."));
-  out.push(dd("SizeOfHeaders", humanSize(oh.SizeOfHeaders), "Combined size of DOS stub, PE header, and section headers."));
-  const checksumHtml = [
-    `<div style="display:flex;flex-direction:column;gap:.35rem">`,
-    `<div class="mono">${safe(hex(oh.CheckSum, 8))}</div>`,
-    `<div class="smallNote">Validation: <span id="peChecksumStatus">Not validated yet.</span></div>`,
-    `<div class="smallNote">Computed: <span class="mono" id="peChecksumComputed">-</span></div>`,
-    `<div><button type="button" class="actionButton" id="peChecksumValidateButton">Validate CheckSum</button></div>`,
-    `</div>`
-  ].join("");
-  out.push(dd("CheckSum", checksumHtml, "Image checksum (used by some system components)."));
-  out.push(dd("SizeOfStackReserve", formatBigByteSize(oh.SizeOfStackReserve), "Stack reservation size."));
-  out.push(dd("SizeOfStackCommit", formatBigByteSize(oh.SizeOfStackCommit), "Stack commit size."));
-  out.push(dd("SizeOfHeapReserve", formatBigByteSize(oh.SizeOfHeapReserve), "Heap reservation size."));
-  out.push(dd("SizeOfHeapCommit", formatBigByteSize(oh.SizeOfHeapCommit), "Heap commit size."));
-  out.push(`</dl></section>`);
+  if (isPeRomOptionalHeader(oh)) {
+    out.push(dd("BaseOfCode", hex(oh.BaseOfCode, 8), "Base address of code within the ROM image."));
+    out.push(dd("BaseOfData", hex(oh.BaseOfData, 8), "Base address of initialized data within the ROM image."));
+    out.push(dd("BaseOfBss", hex(oh.rom.BaseOfBss, 8), "Base address of uninitialized data within the ROM image."));
+    out.push(dd("GprMask", hex(oh.rom.GprMask, 8), "General-purpose register mask recorded by the ROM toolchain."));
+    out.push(dd("CprMask", safe(formatWordListHex(oh.rom.CprMask)), "Coprocessor register masks recorded by the ROM toolchain."));
+    out.push(dd("GpValue", hex(oh.rom.GpValue, 8), "Global-pointer seed value recorded in IMAGE_ROM_OPTIONAL_HEADER."));
+    out.push(
+      `</dl><div class="smallNote">ROM optional headers stop here: Windows-only fields such as ImageBase, SectionAlignment, Subsystem, CheckSum, stack/heap sizes, and the PE data-directory array are not part of IMAGE_ROM_OPTIONAL_HEADER.</div></section>`
+    );
+  } else if (!isPeWindowsOptionalHeader(oh)) {
+    out.push(
+      `</dl><div class="smallNote">Variant-specific fields stop here because the optional-header magic is not recognized as PE32, PE32+, or ROM. The parser keeps the image visible, but avoids inventing Windows-only fields.</div></section>`
+    );
+  } else {
+    const pointerWidth = isPePlusOptionalHeader(oh) ? 16 : 8;
+    out.push(dd("ImageBase", formatPointerHex(oh.ImageBase, pointerWidth), "Preferred load address."));
+    out.push(dd("SectionAlignment", humanSize(oh.SectionAlignment), "Alignment of sections in memory."));
+    out.push(dd("FileAlignment", humanSize(oh.FileAlignment), "Alignment of sections in the file."));
+    out.push(dd("OperatingSystemVersion", winVersionName(oh.OSVersionMajor, oh.OSVersionMinor), "Minimum required OS version."));
+    out.push(dd("ImageVersion", `${oh.ImageVersionMajor}.${oh.ImageVersionMinor}`, "Image version (informational)."));
+    out.push(dd("SubsystemVersion", `${oh.SubsystemVersionMajor}.${oh.SubsystemVersionMinor}`, "Minimum subsystem version."));
+    out.push(dd("Subsystem", rowOpts(oh.Subsystem, SUBSYSTEMS), "Required subsystem (GUI, CUI, etc.)."));
+    out.push(dd("DllCharacteristics", rowFlags(oh.DllCharacteristics, DLL_FLAGS), "DLL characteristics (ASLR, DEP, etc.)."));
+    out.push(dd("SizeOfImage", humanSize(oh.SizeOfImage), "Size of image in memory, including all headers and sections."));
+    out.push(dd("SizeOfHeaders", humanSize(oh.SizeOfHeaders), "Combined size of DOS stub, PE header, and section headers."));
+    const checksumHtml = [
+      `<div style="display:flex;flex-direction:column;gap:.35rem">`,
+      `<div class="mono">${safe(hex(oh.CheckSum, 8))}</div>`,
+      `<div class="smallNote">Validation: <span id="peChecksumStatus">Not validated yet.</span></div>`,
+      `<div class="smallNote">Computed: <span class="mono" id="peChecksumComputed">-</span></div>`,
+      `<div><button type="button" class="actionButton" id="peChecksumValidateButton">Validate CheckSum</button></div>`,
+      `</div>`
+    ].join("");
+    out.push(dd("CheckSum", checksumHtml, "Image checksum (used by some system components)."));
+    out.push(dd("SizeOfStackReserve", formatBigByteSize(oh.SizeOfStackReserve), "Stack reservation size."));
+    out.push(dd("SizeOfStackCommit", formatBigByteSize(oh.SizeOfStackCommit), "Stack commit size."));
+    out.push(dd("SizeOfHeapReserve", formatBigByteSize(oh.SizeOfHeapReserve), "Heap reservation size."));
+    out.push(dd("SizeOfHeapCommit", formatBigByteSize(oh.SizeOfHeapCommit), "Heap commit size."));
+    out.push(`</dl></section>`);
+  }
 
   renderDataDirectories(pe, out);
   renderSections(pe, out);

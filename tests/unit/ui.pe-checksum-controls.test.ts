@@ -12,7 +12,7 @@ import { MockFile } from "../helpers/mock-file.js";
 const createMinimalPe = (checksum: number, e_lfanew = 0, hasCert = false): PeParseResult =>
   ({
     dos: { e_lfanew },
-    opt: { CheckSum: checksum },
+    opt: { Magic: 0x10b, CheckSum: checksum },
     hasCert
   }) as unknown as PeParseResult;
 

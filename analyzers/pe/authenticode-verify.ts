@@ -2,12 +2,12 @@
 
 import { bufferToHex } from "../../binary-utils.js";
 import type { AuthenticodeInfo } from "./authenticode.js";
-import type { PeCore, PeDataDirectory, PeSection } from "./types.js";
+import type { PeCore, PeDataDirectory, PeSection, PeWindowsOptionalHeader } from "./types.js";
 
 type DigestFunction = (algorithm: AlgorithmIdentifier, data: ArrayBuffer) => Promise<ArrayBuffer>;
 export type PeAuthenticodeBestEffortCore = Pick<PeCore, "optOff" | "ddStartRel" | "dataDirs">;
 export type PeAuthenticodeParsedCore = PeAuthenticodeBestEffortCore & {
-  opt: Pick<PeCore["opt"], "SizeOfHeaders">;
+  opt: Pick<PeWindowsOptionalHeader, "SizeOfHeaders">;
   sections: PeSection[];
 };
 

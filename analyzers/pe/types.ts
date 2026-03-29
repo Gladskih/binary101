@@ -72,10 +72,17 @@ export interface PeCoffHeader {
   Characteristics: number;
 }
 
-export interface PeOptionalHeader {
+export interface PeRomOptionalFields {
+  BaseOfBss: number;
+  GprMask: number;
+  CprMask: [number, number, number, number];
+  GpValue: number;
+}
+
+export type PeOptionalHeaderKind = "pe32" | "pe32+" | "rom" | "unknown";
+
+interface PeOptionalHeaderBase {
   Magic: number;
-  isPlus: boolean;
-  is32: boolean;
   LinkerMajor: number;
   LinkerMinor: number;
   SizeOfCode: number;
@@ -83,7 +90,9 @@ export interface PeOptionalHeader {
   SizeOfUninitializedData: number;
   AddressOfEntryPoint: number;
   BaseOfCode: number;
-  BaseOfData?: number;
+}
+
+interface PeWindowsOptionalHeaderBase extends PeOptionalHeaderBase {
   ImageBase: bigint;
   SectionAlignment: number;
   FileAlignment: number;
@@ -106,6 +115,31 @@ export interface PeOptionalHeader {
   LoaderFlags: number;
   NumberOfRvaAndSizes: number;
 }
+
+export interface Pe32OptionalHeader extends PeWindowsOptionalHeaderBase {
+  Magic: 0x10b;
+  BaseOfData: number;
+}
+
+export interface PePlusOptionalHeader extends PeWindowsOptionalHeaderBase {
+  Magic: 0x20b;
+}
+
+export type PeWindowsOptionalHeader = Pe32OptionalHeader | PePlusOptionalHeader;
+
+export interface PeRomOptionalHeader extends PeOptionalHeaderBase {
+  Magic: 0x107;
+  BaseOfData: number;
+  rom: PeRomOptionalFields;
+}
+
+export interface PeUnknownOptionalHeader extends PeOptionalHeaderBase {}
+
+export type PeOptionalHeader =
+  | Pe32OptionalHeader
+  | PePlusOptionalHeader
+  | PeRomOptionalHeader
+  | PeUnknownOptionalHeader;
 
 export interface PeCore {
   dos: PeDosHeader;

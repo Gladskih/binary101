@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderHeaders } from "../../renderers/pe/headers.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
+import type { PeWindowsOptionalHeader } from "../../analyzers/pe/types.js";
 
 const createBasePe = (): PeParseResult =>
   ({
@@ -36,7 +37,6 @@ const createBasePe = (): PeParseResult =>
       Characteristics: 0
     },
     opt: {
-      isPlus: false,
       Magic: 0x10b,
       LinkerMajor: 0,
       LinkerMinor: 0,
@@ -44,6 +44,8 @@ const createBasePe = (): PeParseResult =>
       SizeOfInitializedData: 0,
       SizeOfUninitializedData: 0,
       AddressOfEntryPoint: 0,
+      BaseOfCode: 0x1000,
+      BaseOfData: 0x2000,
       ImageBase: 0x400000n,
       SectionAlignment: 0x1000,
       FileAlignment: 0x200,
@@ -55,13 +57,16 @@ const createBasePe = (): PeParseResult =>
       SubsystemVersionMinor: 0,
       Subsystem: 2,
       DllCharacteristics: 0,
+      Win32VersionValue: 0,
       SizeOfImage: 0,
       SizeOfHeaders: 0,
       CheckSum: 0,
       SizeOfStackReserve: 0n,
       SizeOfStackCommit: 0n,
       SizeOfHeapReserve: 0n,
-      SizeOfHeapCommit: 0n
+      SizeOfHeapCommit: 0n,
+      LoaderFlags: 0,
+      NumberOfRvaAndSizes: 0
     },
     dirs: [],
     sections: [],
@@ -89,11 +94,12 @@ const createBasePe = (): PeParseResult =>
 
 void test("renderHeaders covers known/unknown branches and exact linker versions", () => {
   const pe = createBasePe();
-  pe.opt.isPlus = true;
-  pe.opt.LinkerMajor = 14;
-  pe.opt.LinkerMinor = 2;
-  pe.opt.OSVersionMajor = 6;
-  pe.opt.OSVersionMinor = 1;
+  pe.opt = { ...pe.opt, Magic: 0x20b } as PeParseResult["opt"];
+  const windowsOpt = pe.opt as PeWindowsOptionalHeader;
+  windowsOpt.LinkerMajor = 14;
+  windowsOpt.LinkerMinor = 2;
+  windowsOpt.OSVersionMajor = 6;
+  windowsOpt.OSVersionMinor = 1;
   pe.coff.Characteristics = 0x2000;
   pe.dirs = [{ index: 1, name: "IMPORT", rva: 0x1000, size: 0x10 }];
   pe.sections = [
@@ -141,10 +147,11 @@ void test("renderHeaders covers known/unknown branches and exact linker versions
 
 void test("renderHeaders handles fallbacks and missing optional parts", () => {
   const pe = createBasePe();
-  pe.opt.LinkerMajor = 13;
-  pe.opt.LinkerMinor = 0;
-  pe.opt.OSVersionMajor = 11;
-  pe.opt.OSVersionMinor = 0;
+  const windowsOpt = pe.opt as PeWindowsOptionalHeader;
+  windowsOpt.LinkerMajor = 13;
+  windowsOpt.LinkerMinor = 0;
+  windowsOpt.OSVersionMajor = 11;
+  windowsOpt.OSVersionMinor = 0;
   pe.entrySection = null;
 
   const out: string[] = [];
@@ -156,6 +163,86 @@ void test("renderHeaders handles fallbacks and missing optional parts", () => {
   assert.ok(html.includes("13.0 - MSVC (pre-VS2015)"));
   assert.ok(html.includes("11.0 (11.0)"));
   assert.ok(html.includes("Rich header: not present"));
+});
+
+void test("renderHeaders renders ROM-specific optional fields and omits Windows-only controls", () => {
+  const pe = createBasePe();
+  pe.coff.Machine = 0x0166;
+  pe.opt = {
+    Magic: 0x107,
+    LinkerMajor: 2,
+    LinkerMinor: 7,
+    SizeOfCode: 0,
+    SizeOfInitializedData: 0,
+    SizeOfUninitializedData: 0,
+    AddressOfEntryPoint: 0x1000,
+    BaseOfCode: 0x1000,
+    BaseOfData: 0x1100,
+    rom: {
+      BaseOfBss: 0x2000,
+      GprMask: 0x00000003,
+      CprMask: [0x11111111, 0x22222222, 0x33333333, 0x44444444],
+      GpValue: 0x12345678
+    }
+  };
+  pe.entrySection = { name: ".text", index: 0 };
+  pe.sections = [
+    {
+      name: ".text",
+      virtualSize: 0x200,
+      virtualAddress: 0x1000,
+      sizeOfRawData: 0x200,
+      pointerToRawData: 0x200,
+      characteristics: 0x60000020
+    }
+  ];
+
+  const out: string[] = [];
+  renderHeaders(pe, out);
+  const html = out.join("");
+
+  assert.ok(html.includes("firmware or option ROM image"));
+  assert.ok(html.includes("IMAGE_ROM_OPTIONAL_HEADER"));
+  assert.ok(html.includes("BaseOfBss"));
+  assert.ok(html.includes("GprMask"));
+  assert.ok(html.includes("CprMask"));
+  assert.ok(html.includes("GpValue"));
+  assert.ok(!html.includes("peChecksumValidateButton"));
+  assert.ok(!html.includes("OperatingSystemVersion"));
+  assert.ok(!html.includes("SizeOfImage"));
+});
+
+void test("renderHeaders keeps unknown optional-header magic in a generic header-only view", () => {
+  const pe = createBasePe();
+  pe.opt = {
+    Magic: 0x999,
+    LinkerMajor: 1,
+    LinkerMinor: 0,
+    SizeOfCode: 0,
+    SizeOfInitializedData: 0,
+    SizeOfUninitializedData: 0,
+    AddressOfEntryPoint: 0x1000,
+    BaseOfCode: 0x1000
+  };
+  pe.sections = [
+    {
+      name: ".text",
+      virtualSize: 0x100,
+      virtualAddress: 0x1000,
+      sizeOfRawData: 0x100,
+      pointerToRawData: 0x200,
+      characteristics: 0x60000020
+    }
+  ];
+
+  const out: string[] = [];
+  renderHeaders(pe, out);
+  const html = out.join("");
+
+  assert.ok(html.includes("unrecognized optional-header magic"));
+  assert.ok(html.includes("optional-header magic is not one of the standard PE32, PE32+, or ROM layouts"));
+  assert.ok(html.includes("Variant-specific fields stop here"));
+  assert.ok(!html.includes("peChecksumValidateButton"));
 });
 
 void test("renderHeaders maps COFF characteristic bits to the correct semantic labels", () => {
@@ -174,7 +261,7 @@ void test("renderHeaders maps COFF characteristic bits to the correct semantic l
 void test("renderHeaders uses the official Microsoft subsystem labels", () => {
   const pe = createBasePe();
   // Microsoft PE format, "Windows Subsystem": 8 = IMAGE_SUBSYSTEM_NATIVE_WINDOWS.
-  pe.opt.Subsystem = 8;
+  (pe.opt as PeWindowsOptionalHeader).Subsystem = 8;
 
   const out: string[] = [];
   renderHeaders(pe, out);
@@ -189,7 +276,7 @@ void test("renderHeaders surfaces clearer official labels where they help a lear
   // Microsoft PE format, "Machine Types": 0x0200 = Intel Itanium processor family.
   pe.coff.Machine = 0x0200;
   // Microsoft PE format, "Windows Subsystem": 9 = IMAGE_SUBSYSTEM_WINDOWS_CE_GUI.
-  pe.opt.Subsystem = 9;
+  (pe.opt as PeWindowsOptionalHeader).Subsystem = 9;
 
   const out: string[] = [];
   renderHeaders(pe, out);

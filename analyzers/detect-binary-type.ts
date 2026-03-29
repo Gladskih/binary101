@@ -31,7 +31,6 @@ import type { AniParseResult } from "./ani/types.js";
 import type { FlacParseResult } from "./flac/types.js";
 import { buildSqliteLabel, parseSqlite } from "./sqlite/index.js";
 import { isTgaFileName } from "./tga/index.js";
-
 const buildWavLabel = (wav: WavParseResult | null): string | null => {
   if (!wav) return null;
   const parts: string[] = [];
@@ -248,6 +247,9 @@ const detectBinaryType = async (file: File): Promise<string> => {
       const optionalHeaderOffset = peHeaderOffset + 24;
       const magicView = new DataView(await file.slice(optionalHeaderOffset, optionalHeaderOffset + 2).arrayBuffer());
       const magic = magicView.byteLength >= 2 ? magicView.getUint16(0, true) : 0;
+      // IMAGE_ROM_OPTIONAL_HDR_MAGIC from ntimage.h / IMAGE_ROM_OPTIONAL_HEADER:
+      // https://doxygen.reactos.org/d5/d44/ntimage_8h_source.html#l730
+      if (magic === 0x107) return `PE ROM image for ${mapMachine(machine)}`;
       const sig = magic === 0x20b ? "PE32+" : "PE32";
       const isDll = (characteristics & 0x2000) !== 0 ? "DLL" : "executable";
       return `${sig} ${isDll} for ${mapMachine(machine)}`;

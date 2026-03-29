@@ -61,7 +61,7 @@ const createLoadConfig = (): PeLoadConfig => ({
 
 void test("renderLoadConfig renders GuardFlags names and CFG function-table entry size", () => {
   const pe = {
-    opt: { isPlus: false, ImageBase: 0x400000n },
+    opt: { Magic: 0x10b, ImageBase: 0x400000n },
     loadcfg: {
       ...createLoadConfig(),
       GuardFlags: 0x30417500,

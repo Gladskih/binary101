@@ -7,6 +7,11 @@ import {
   type PeInstructionSetProgress,
   type PeInstructionSetReport
 } from "../analyzers/pe/disassembly.js";
+import {
+  isPe32OptionalHeader,
+  isPePlusOptionalHeader,
+  isPeWindowsOptionalHeader
+} from "../analyzers/pe/optional-header-kind.js";
 import { readLoadConfigPointerRva } from "../analyzers/pe/load-config/index.js";
 import {
   readGuardCFFunctionTableRvas,
@@ -41,20 +46,21 @@ const PROGRESS_BAR_ID = "peInstructionSetsProgress";
 const CHIP_ID_PREFIX = "peInstructionSetChip_";
 const COUNT_ID_PREFIX = "peInstructionSetCount_";
 
-const setDisassemblyUiRunning = (running: boolean): void => {
+const setDisassemblyUiState = (state: "busy" | "idle"): void => {
+  const isBusy = state === "busy";
   const analyzeButton = document.getElementById(ANALYZE_BUTTON_ID);
   if (analyzeButton && "disabled" in analyzeButton) {
-    (analyzeButton as HTMLButtonElement).disabled = running;
+    (analyzeButton as HTMLButtonElement).disabled = isBusy;
   }
 
   const cancelButton = document.getElementById(CANCEL_BUTTON_ID);
   if (cancelButton && "hidden" in cancelButton) {
-    (cancelButton as HTMLElement).hidden = !running;
+    (cancelButton as HTMLElement).hidden = !isBusy;
   }
 
   const bar = document.getElementById(PROGRESS_BAR_ID);
   if (bar instanceof HTMLProgressElement) {
-    bar.hidden = !running;
+    bar.hidden = !isBusy;
   }
 };
 
@@ -104,7 +110,7 @@ const updatePeDisassemblyProgress = (progress: PeInstructionSetProgress): void =
 };
 
 const setCancelled = (): void => {
-  setDisassemblyUiRunning(false);
+  setDisassemblyUiState("idle");
   const progressText = document.getElementById(PROGRESS_TEXT_ID);
   if (progressText instanceof HTMLElement) {
     progressText.textContent = "Cancelled.";
@@ -128,7 +134,7 @@ export const createPeDisassemblyController = (
 
   const start = (file: File, pe: PeParseResult): void => {
     cancel();
-    setDisassemblyUiRunning(true);
+    setDisassemblyUiState("busy");
     const localRunId = ++runId;
     const localAbortController = new AbortController();
     abortController = localAbortController;
@@ -142,20 +148,21 @@ export const createPeDisassemblyController = (
     });
 
     void (async () => {
+      const windowsOpt = isPeWindowsOptionalHeader(pe.opt) ? pe.opt : null;
       const exportRvas =
         pe.exports?.entries
           ?.filter(entry => entry.rva && !entry.forwarder)
           .map(entry => entry.rva >>> 0) ?? [];
 
       const unwindBeginRvas =
-        pe.opt.isPlus && Array.isArray(pe.exception?.beginRvas)
+        isPePlusOptionalHeader(pe.opt) && Array.isArray(pe.exception?.beginRvas)
           ? pe.exception.beginRvas
               .filter(rva => Number.isSafeInteger(rva) && rva > 0)
               .map(rva => rva >>> 0)
           : [];
 
       const unwindHandlerRvas =
-        pe.opt.isPlus && Array.isArray(pe.exception?.handlerRvas)
+        isPePlusOptionalHeader(pe.opt) && Array.isArray(pe.exception?.handlerRvas)
           ? pe.exception.handlerRvas
               .filter(rva => Number.isSafeInteger(rva) && rva > 0)
               .map(rva => rva >>> 0)
@@ -169,7 +176,7 @@ export const createPeDisassemblyController = (
         ? await readGuardCFFunctionTableRvas(
             file,
             pe.rvaToOff,
-            pe.opt.ImageBase,
+            windowsOpt?.ImageBase ?? 0n,
             pe.loadcfg.GuardCFFunctionTable,
             pe.loadcfg.GuardCFFunctionCount,
             pe.loadcfg.GuardFlags
@@ -177,7 +184,7 @@ export const createPeDisassemblyController = (
         : [];
 
       const safeSehHandlerRvas =
-        pe.coff.Machine === IMAGE_FILE_MACHINE_I386 && !pe.opt.isPlus && pe.loadcfg
+        pe.coff.Machine === IMAGE_FILE_MACHINE_I386 && isPe32OptionalHeader(pe.opt) && pe.loadcfg
           ? await readSafeSehHandlerTableRvas(
               file,
               pe.rvaToOff,
@@ -189,7 +196,7 @@ export const createPeDisassemblyController = (
 
       const extraEntrypoints: Array<{ source: string; rvas: number[] }> = [];
       const addPointerSeed = (source: string, pointerVa: bigint | undefined): void => {
-        const rva = readLoadConfigPointerRva(pe.opt.ImageBase, pointerVa ?? 0n);
+        const rva = readLoadConfigPointerRva(windowsOpt?.ImageBase ?? 0n, pointerVa ?? 0n);
         if (rva == null) return;
         extraEntrypoints.push({ source, rvas: [rva] });
       };
@@ -207,7 +214,7 @@ export const createPeDisassemblyController = (
         ? await readGuardEhContinuationTableRvas(
             file,
             pe.rvaToOff,
-            pe.opt.ImageBase,
+            windowsOpt?.ImageBase ?? 0n,
             pe.loadcfg.GuardEHContinuationTable,
             pe.loadcfg.GuardEHContinuationCount,
             pe.loadcfg.GuardFlags
@@ -221,7 +228,7 @@ export const createPeDisassemblyController = (
         ? await readGuardLongJumpTargetTableRvas(
             file,
             pe.rvaToOff,
-            pe.opt.ImageBase,
+            windowsOpt?.ImageBase ?? 0n,
             pe.loadcfg.GuardLongJumpTargetTable,
             pe.loadcfg.GuardLongJumpTargetCount,
             pe.loadcfg.GuardFlags
@@ -233,9 +240,8 @@ export const createPeDisassemblyController = (
 
       const report = await analyze(file, {
         coffMachine: pe.coff.Machine,
-        is64Bit: pe.opt.isPlus,
-        imageBase: pe.opt.ImageBase,
-        headerRvaLimit: pe.opt.SizeOfHeaders,
+        is64Bit: isPePlusOptionalHeader(pe.opt),
+        imageBase: windowsOpt?.ImageBase ?? 0n,
         entrypointRva: pe.opt.AddressOfEntryPoint,
         exportRvas,
         unwindBeginRvas,
@@ -244,6 +250,7 @@ export const createPeDisassemblyController = (
         safeSehHandlerRvas,
         tlsCallbackRvas,
         ...(extraEntrypoints.length ? { extraEntrypoints } : {}),
+        ...(windowsOpt ? { headerRvaLimit: windowsOpt.SizeOfHeaders } : {}),
         rvaToOff: pe.rvaToOff,
         sections: pe.sections,
         yieldEveryInstructions: 1024,
@@ -261,7 +268,7 @@ export const createPeDisassemblyController = (
       const current = opts.getCurrentParseResult();
       if (current.analyzer !== "pe" || !current.parsed) return;
       current.parsed.disassembly = report;
-      setDisassemblyUiRunning(false);
+      setDisassemblyUiState("idle");
       abortController = null;
       opts.renderResult(current);
     })();
