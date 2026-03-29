@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { parsePcap } from "../../analyzers/pcap/index.js";
+import type { PcapClassicParseResult } from "../../analyzers/pcap/types.js";
 import { createPcapBigEndianFile, createPcapFile } from "../fixtures/pcap-fixtures.js";
 import { MockFile } from "../helpers/mock-file.js";
 
@@ -56,13 +57,17 @@ const makeRecord = (opts: {
   return concatParts([header, opts.payload]);
 };
 
-void test("parsePcap parses global header, packet stats, and protocol breakdown", async () => {
-  const file = createPcapFile();
-  const parsed = await parsePcap(file);
+const expectClassicPcap = (parsed: PcapClassicParseResult | null): PcapClassicParseResult => {
   assert.ok(parsed);
+  assert.strictEqual(parsed.format, "pcap");
+  return parsed;
+};
+
+void test("parsePcap parses global header, packet stats, and protocol breakdown", async () => {
+  const parsed = expectClassicPcap(await parsePcap(createPcapFile()));
 
   assert.strictEqual(parsed.isPcap, true);
-  assert.strictEqual(parsed.fileSize, file.size);
+  assert.strictEqual(parsed.fileSize, createPcapFile().size);
   assert.strictEqual(parsed.header.littleEndian, true);
   assert.strictEqual(parsed.header.timestampResolution, "microseconds");
   assert.strictEqual(parsed.header.network, 1);
@@ -83,9 +88,7 @@ void test("parsePcap parses global header, packet stats, and protocol breakdown"
 });
 
 void test("parsePcap supports big-endian PCAP files", async () => {
-  const file = createPcapBigEndianFile();
-  const parsed = await parsePcap(file);
-  assert.ok(parsed);
+  const parsed = expectClassicPcap(await parsePcap(createPcapBigEndianFile()));
   assert.strictEqual(parsed.header.littleEndian, false);
   assert.strictEqual(parsed.packets.totalPackets, 1);
 });
@@ -123,8 +126,7 @@ void test("parsePcap supports nanosecond timestamps and unknown link types", asy
     network: 999
   });
   const file = new MockFile(global, "nano.pcap");
-  const parsed = await parsePcap(file);
-  assert.ok(parsed);
+  const parsed = expectClassicPcap(await parsePcap(file));
   assert.strictEqual(parsed.header.littleEndian, false);
   assert.strictEqual(parsed.header.timestampResolution, "nanoseconds");
   assert.strictEqual(parsed.header.network, 999);
@@ -159,8 +161,7 @@ void test("parsePcap parses VLAN-tagged Ethernet frames", async () => {
   });
 
   const file = new MockFile(concatParts([global, record]), "vlan.pcap");
-  const parsed = await parsePcap(file);
-  assert.ok(parsed);
+  const parsed = expectClassicPcap(await parsePcap(file));
   const eth = parsed.linkLayer?.ethernet;
   assert.ok(eth);
   assert.strictEqual(eth.vlanTaggedFrames, 1);
@@ -182,8 +183,7 @@ void test("parsePcap counts short Ethernet frames", async () => {
     payload
   });
   const file = new MockFile(concatParts([global, record]), "short-ethernet.pcap");
-  const parsed = await parsePcap(file);
-  assert.ok(parsed);
+  const parsed = expectClassicPcap(await parsePcap(file));
   const eth = parsed.linkLayer?.ethernet;
   assert.ok(eth);
   assert.strictEqual(eth.shortFrames, 1);
@@ -205,8 +205,7 @@ void test("parsePcap warns when captured length exceeds snaplen", async () => {
     payload
   });
   const file = new MockFile(concatParts([global, record]), "snaplen.pcap");
-  const parsed = await parsePcap(file);
-  assert.ok(parsed);
+  const parsed = expectClassicPcap(await parsePcap(file));
   assert.ok(parsed.issues.some(issue => issue.includes("exceeds snaplen")));
 });
 
@@ -225,8 +224,7 @@ void test("parsePcap warns when captured length exceeds original length", async 
     payload
   });
   const file = new MockFile(concatParts([global, record]), "bad-len.pcap");
-  const parsed = await parsePcap(file);
-  assert.ok(parsed);
+  const parsed = expectClassicPcap(await parsePcap(file));
   assert.ok(parsed.issues.some(issue => issue.includes("larger than original length")));
 });
 
@@ -259,8 +257,7 @@ void test("parsePcap counts out-of-order timestamps", async () => {
   });
 
   const file = new MockFile(concatParts([global, record1, record2]), "timestamps.pcap");
-  const parsed = await parsePcap(file);
-  assert.ok(parsed);
+  const parsed = expectClassicPcap(await parsePcap(file));
   assert.strictEqual(parsed.packets.outOfOrderTimestamps, 1);
 
   const eth = parsed.linkLayer?.ethernet;
@@ -284,8 +281,7 @@ void test("parsePcap reports truncation when trailing bytes remain after the las
     concatParts([global, record, new Uint8Array([0x01, 0x02, 0x03, 0x04, 0x05])]),
     "trailing.pcap"
   );
-  const parsed = await parsePcap(file);
-  assert.ok(parsed);
+  const parsed = expectClassicPcap(await parsePcap(file));
   assert.strictEqual(parsed.packets.truncatedFile, true);
   assert.ok(parsed.issues.some(issue => issue.includes("trailing bytes")));
 });

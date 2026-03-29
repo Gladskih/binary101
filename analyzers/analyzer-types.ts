@@ -28,7 +28,8 @@ import type { AniParseResult } from "./ani/types.js";
 import type { SqliteParseResult } from "./sqlite/types.js";
 import type { AsfParseResult } from "./asf/types.js";
 import type { MpegPsParseResult } from "./mpegps/types.js";
-import type { PcapParseResult } from "./pcap/types.js";
+import type { PcapClassicParseResult } from "./pcap/types.js";
+import type { PcapNgParseResult } from "./pcapng/types.js";
 import type { Iso9660ParseResult } from "./iso9660/types.js";
 
 export type AnalyzerName =
@@ -59,6 +60,7 @@ export type AnalyzerName =
   | "mp4"
   | "mpegps"
   | "pcap"
+  | "pcapng"
   | "wav"
   | "avi"
   | "ani"
@@ -91,7 +93,8 @@ type AnalyzerParseMap = {
   flac: FlacParseResult;
   mp4: Mp4ParseResult;
   mpegps: MpegPsParseResult;
-  pcap: PcapParseResult;
+  pcap: PcapClassicParseResult;
+  pcapng: PcapNgParseResult;
   wav: WavParseResult;
   avi: AviParseResult;
   ani: AniParseResult;

@@ -32,7 +32,8 @@ import {
   renderSqlite,
   renderAsf,
   renderMpegPs,
-  renderPcap
+  renderPcap,
+  renderPcapNg
 } from "../renderers/index.js";
 import type { PreviewRender } from "./preview.js";
 
@@ -146,6 +147,9 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
       return;
     case "pcap":
       show("PCAP details", renderPcap(result.parsed));
+      return;
+    case "pcapng":
+      show("PCAP-NG details", renderPcapNg(result.parsed));
       return;
     case "pdf":
       show("PDF details", renderPdf(result.parsed));

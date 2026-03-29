@@ -220,6 +220,7 @@ void test("parseForUi parses MPEG Program Streams (MPEG-PS)", async () => {
 
 void test("parseForUi parses PCAP capture files", async () => {
   await assertParsed(createPcapFile(), "pcap", pcap => {
+    assert.strictEqual(pcap.format, "pcap");
     assert.strictEqual(pcap.header.network, 1);
     assert.strictEqual(pcap.packets.totalPackets >= 1, true);
   });

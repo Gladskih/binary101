@@ -10,7 +10,7 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
   ELF 32/64, Mach-O (32/64/FAT), PNG, BMP, TGA, JPEG, GIF, WebP (RIFF),
   WAV (RIFF), AVI (RIFF), ANI (RIFF), ASF (WMV/WMA), WebM/Matroska,
   MP4/QuickTime/3GP (ISO-BMFF), MPEG Program Stream (MPEG-PS), PCAP capture
-  files, gzip compressed data, PDF, TAR, ISO-9660, ZIP
+  files, PCAP-NG capture files, gzip compressed data, PDF, TAR, ISO-9660, ZIP
   (DOCX/XLSX/PPTX/OpenXML), 7z, RAR v4/v5, MP3, FLAC, FB2, SQLite, LNK.
 - **PE limitations**: the ROM optional-header variant is not supported.
   Missing `.pdata` formats include 32-bit MIPS, Windows CE ARM/PowerPC/SH3/
@@ -21,7 +21,7 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
 - **Detected/labelled**: text/HTML/XML/SVG/JSON/RTF/shebang, TIFF, ICO/CUR,
   bzip2/XZ/LZ4/Zstandard, CAB, OGG/AIFF/MIDI/AMR/AC3/DTS, FLV, MPEG-TS,
   RealMedia, Java class, Android DEX, WebAssembly, Windows Help (HLP), PDB,
-  PCAP-NG, DjVu, Microsoft Compound File (DOC/XLS/PPT/MSI/CHM), HEIF/HEIC,
+  DjVu, Microsoft Compound File (DOC/XLS/PPT/MSI/CHM), HEIF/HEIC,
   and ZIP-based labels for FB2, ODT/ODS/ODP, EPUB, DOCX/XLSX/PPTX/OpenXML,
   APK, VSIX, JAR/WAR/EAR/JMOD, and XPS.
 - **Rendering**: previews for supported audio/video/image types.

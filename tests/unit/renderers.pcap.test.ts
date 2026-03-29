@@ -15,7 +15,7 @@ void test("renderPcap renders global header and packet summary", async () => {
   assert.match(html, /PCAP/i);
   assert.match(html, /Global header/i);
   assert.match(html, /Packets/i);
-  assert.match(html, /Ethernet/i);
+  assert.match(html, /Payload-Derived Ethernet Summary/i);
 });
 
 void test("renderPcap renders issues and omits Ethernet when link type is unknown", async () => {

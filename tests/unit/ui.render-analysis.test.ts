@@ -12,6 +12,7 @@ import { renderAnalysisIntoUi } from "../../ui/render-analysis.js";
 import { createIso9660PrimaryFile } from "../fixtures/iso9660-fixtures.js";
 import { createMachOFile } from "../fixtures/macho-fixtures.js";
 import { createMkvFile } from "../fixtures/mkv-base-fixtures.js";
+import { createPcapNgFile } from "../fixtures/pcapng-fixtures.js";
 
 void test("renderAnalysisIntoUi renders ELF output and updates visibility flags", () => {
   const elf = {
@@ -245,4 +246,25 @@ void test("renderAnalysisIntoUi renders Mach-O output", async () => {
   assert.equal(valueElement.hidden, false);
   assert.ok(valueElement.innerHTML.includes("Mach-O header"));
   assert.ok(valueElement.innerHTML.includes("Code signing"));
+});
+
+void test("renderAnalysisIntoUi renders PCAP-NG output", async () => {
+  const parsed = await parseForUi(createPcapNgFile());
+  assert.equal(parsed.analyzer, "pcapng");
+
+  const termElement = { textContent: "", hidden: true } as unknown as HTMLElement;
+  const valueElement = { innerHTML: "", hidden: true } as unknown as HTMLElement;
+
+  renderAnalysisIntoUi(parsed, {
+    buildPreview: () => null,
+    attachGuards: () => {},
+    termElement,
+    valueElement
+  });
+
+  assert.equal(termElement.hidden, false);
+  assert.equal(termElement.textContent, "PCAP-NG details");
+  assert.equal(valueElement.hidden, false);
+  assert.ok(valueElement.innerHTML.includes("Sections"));
+  assert.ok(valueElement.innerHTML.includes("Interfaces"));
 });

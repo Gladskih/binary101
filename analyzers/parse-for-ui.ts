@@ -38,6 +38,7 @@ import { probeMzFormat } from "./mz-probe.js";
 import { hasSqliteSignature, parseSqlite } from "./sqlite/index.js";
 import { parseMpegPs } from "./mpegps/index.js";
 import { parsePcap } from "./pcap/index.js";
+import { parsePcapNg } from "./pcapng/index.js";
 import { parseGzip } from "./gzip/index.js";
 
 const parseForUi = async (file: File): Promise<ParseForUiResult> => {
@@ -165,7 +166,15 @@ const parseForUi = async (file: File): Promise<ParseForUiResult> => {
   }
   if (dv.byteLength >= 4) {
     const sig = dv.getUint32(0, false);
-    if (sig === 0xa1b2c3d4 || sig === 0xa1b23c4d || sig === 0xd4c3b2a1 || sig === 0x4d3cb2a1) {
+    if (sig === 0x0a0d0d0a) {
+      const pcapng = await parsePcapNg(file);
+      if (pcapng) return { analyzer: "pcapng", parsed: pcapng };
+    } else if (
+      sig === 0xa1b2c3d4 ||
+      sig === 0xa1b23c4d ||
+      sig === 0xd4c3b2a1 ||
+      sig === 0x4d3cb2a1
+    ) {
       const pcap = await parsePcap(file);
       if (pcap) return { analyzer: "pcap", parsed: pcap };
     }

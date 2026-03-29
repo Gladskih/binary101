@@ -15,6 +15,7 @@ import {
   renderMp4,
   renderGzip,
   renderPcap,
+  renderPcapNg,
   renderPdf,
   renderPe,
   renderMz,
@@ -49,6 +50,7 @@ import { createWebmWithVariableVp8FrameSizes } from "../fixtures/webm-vp8-frame-
 import { createAniFile, createAviFile, createWavFile } from "../fixtures/riff-sample-files.js";
 import { createSqliteFile } from "../fixtures/sqlite-fixtures.js";
 import { createPcapFile } from "../fixtures/pcap-fixtures.js";
+import { createPcapNgFile } from "../fixtures/pcapng-fixtures.js";
 import { createGzipFile } from "../fixtures/gzip-fixtures.js";
 import { encoder } from "../fixtures/archive-fixture-helpers.js";
 
@@ -83,13 +85,11 @@ void test("renderers produce readable HTML output", async () => {
   const pngHtml = renderPng(png);
   assert.match(pngHtml, /PNG/);
   assert.match(pngHtml, /synthetic PNG warning/);
-
   const gif = await parseOnly(createGifFile(), "gif");
   gif.comments = [{ text: "hi there", truncated: false }];
   const gifHtml = renderGif(gif);
   assert.match(gifHtml, /GIF/);
   assert.match(gifHtml, /hi there/);
-
   const jpeg = await parseOnly(createJpegFile(), "jpeg");
   const jpegHtml = renderJpeg(jpeg);
   assert.match(jpegHtml, /JPEG/);
@@ -140,6 +140,9 @@ void test("renderers produce readable HTML output", async () => {
   const pcapHtml = renderPcap(pcap);
   assert.match(pcapHtml, /PCAP/i);
 
+  const pcapng = await parseOnly(createPcapNgFile(), "pcapng");
+  const pcapngHtml = renderPcapNg(pcapng);
+  assert.match(pcapngHtml, /PCAP-NG/i);
   const avi = await parseOnly(createAviFile(), "avi");
   const aviHtml = renderAvi(avi);
   assert.match(aviHtml, /AVI/);
