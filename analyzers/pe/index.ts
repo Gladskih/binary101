@@ -2,18 +2,12 @@
 import { parsePeHeaders } from "./core.js";
 import { verifyAuthenticodeFileDigest } from "./authenticode-verify.js";
 import { parseDebugDirectory, type PeCodeViewEntry, type PeDebugDirectoryEntry } from "./debug-directory.js";
-import {
-  parseLoadConfigDirectory32,
-  parseLoadConfigDirectory64,
-  type PeLoadConfig,
-  type PeLoadConfigTables
-} from "./load-config/index.js";
+import { parseLoadConfigDirectory32, parseLoadConfigDirectory64, type PeLoadConfig, type PeLoadConfigTables } from "./load-config/index.js";
 import {
   readGuardAddressTakenIatEntryTableRvas,
   readGuardCFFunctionTableRvas,
   readGuardEhContinuationTableRvas,
-  readGuardLongJumpTargetTableRvas,
-  readSafeSehHandlerTableRvas
+  readGuardLongJumpTargetTableRvas, readSafeSehHandlerTableRvas
 } from "./load-config/tables.js";
 import { collectLoadConfigWarnings } from "./load-config/warnings.js";
 import { parseImportDirectory32, parseImportDirectory64, type PeImportParseResult } from "./imports.js";
@@ -27,15 +21,9 @@ import { parseBaseRelocations } from "./reloc.js";
 import { parseExceptionDirectory } from "./exception.js";
 import { parseBoundImports } from "./bound-imports.js";
 import { parseDelayImports32, parseDelayImports64 } from "./delay-imports.js";
-import {
-  parseDynamicRelocationsFromLoadConfig32,
-  parseDynamicRelocationsFromLoadConfig64
-} from "./dynamic-relocations.js";
+import { parseDynamicRelocationsFromLoadConfig32, parseDynamicRelocationsFromLoadConfig64 } from "./dynamic-relocations.js";
 import { parseIatDirectory, type PeIatDirectory } from "./iat-directory.js";
-import {
-  parseArchitectureDirectory,
-  type PeArchitectureDirectory
-} from "./architecture-directory.js";
+import { parseArchitectureDirectory, type PeArchitectureDirectory } from "./architecture-directory.js";
 import { parseGlobalPtrDirectory, type PeGlobalPtrDirectory } from "./globalptr-directory.js";
 import type { PeInstructionSetReport } from "./disassembly.js";
 import type { PeCore, PeDataDirectory, PeTlsDirectory, RvaToOffset } from "./types.js";

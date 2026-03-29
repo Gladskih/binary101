@@ -1,6 +1,6 @@
 "use strict";
 
-import type { PeRangeReader } from "./range-reader.js";
+import type { FileRangeReader } from "../file-range-reader.js";
 import type { RvaToOffset } from "./types.js";
 
 export type MappedAsciiString = {
@@ -10,7 +10,7 @@ export type MappedAsciiString = {
 };
 
 export const readMappedNullTerminatedAsciiString = async (
-  reader: PeRangeReader,
+  reader: FileRangeReader,
   fileSize: number,
   rvaToOff: RvaToOffset,
   startRva: number,

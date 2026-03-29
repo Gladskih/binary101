@@ -14,7 +14,7 @@ import { knownResourceType } from "./type-names.js";
 import type { ResourceDirectoryInfo, ResourceLeafPath, ResourcePathNode, ResourceTree } from "./tree-types.js";
 import { createEmptyResourceTree, createResourceTreeResult } from "./tree-result.js";
 import { buildResourcePathCollections } from "./tree-paths.js";
-import { createPeRangeReader } from "../range-reader.js";
+import { createFileRangeReader } from "../../file-range-reader.js";
 export type { ResourceLangEntry, ResourceDetailEntry, ResourceTree } from "./tree-types.js";
 
 // Microsoft PE format, ".rsrc Section":
@@ -75,7 +75,7 @@ export async function buildResourceTree(
   const resourceSubdirectoryTargets: number[] = [];
   const directories: ResourceDirectoryInfo[] = [];
   const seenDirectoryOffsets = new Set<number>();
-  const reader = createPeRangeReader(file, 0, file.size);
+  const reader = createFileRangeReader(file, 0, file.size);
   const view = async (off: number, len: number): Promise<DataView> => reader.read(off, len);
   const u16 = (dv: DataView, off: number): number => dv.getUint16(off, true);
   const u32 = (dv: DataView, off: number): number => dv.getUint32(off, true);

@@ -1,6 +1,6 @@
 "use strict";
 
-import type { PeRangeReader } from "./range-reader.js";
+import type { FileRangeReader } from "../file-range-reader.js";
 import type { RvaToOffset } from "./types.js";
 
 export interface RuntimeFunctionSpan {
@@ -36,7 +36,7 @@ export const collectRuntimeFunctionSpans = (
 };
 
 export const readRuntimeFunctionSpan = async (
-  reader: PeRangeReader,
+  reader: FileRangeReader,
   span: RuntimeFunctionSpan,
   entrySize: number,
   truncatedIssue: string,

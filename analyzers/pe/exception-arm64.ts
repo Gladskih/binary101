@@ -1,6 +1,6 @@
 "use strict";
 
-import { createPeRangeReader } from "./range-reader.js";
+import { createFileRangeReader } from "../file-range-reader.js";
 import { collectRuntimeFunctionSpans, readRuntimeFunctionSpan } from "./exception-runtime-spans.js";
 import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./exception-types.js";
 import type { PeDataDirectory, RvaToOffset } from "./types.js";
@@ -202,7 +202,7 @@ export async function parseArm64ExceptionDirectory(
   let previousBegin: number | null = null;
   let reportedUnsortedEntries = false;
 
-  const reader = createPeRangeReader(file, 0, file.size);
+  const reader = createFileRangeReader(file, 0, file.size);
   const spans = collectRuntimeFunctionSpans(
     dir.rva,
     Math.floor(dir.size / ARM64_RUNTIME_FUNCTION_ENTRY_SIZE),

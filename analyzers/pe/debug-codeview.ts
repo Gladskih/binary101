@@ -1,8 +1,8 @@
 "use strict";
 
 import { toHex32 } from "../../binary-utils.js";
+import type { FileRangeReader } from "../file-range-reader.js";
 import { readMappedNullTerminatedAsciiString } from "./mapped-ascii-string.js";
-import type { PeRangeReader } from "./range-reader.js";
 import type { RvaToOffset } from "./types.js";
 
 // Microsoft PE/COFF debug data:
@@ -28,7 +28,7 @@ export interface PeCodeViewEntry {
 }
 
 const readCodeViewPathFromMappedData = async (
-  reader: PeRangeReader,
+  reader: FileRangeReader,
   fileSize: number,
   rvaToOff: RvaToOffset,
   addressOfRawDataRva: number,
@@ -82,7 +82,7 @@ const readCodeViewPathFromFilePointer = async (
 
 export const parseCodeViewEntry = async (
   file: File,
-  reader: PeRangeReader,
+  reader: FileRangeReader,
   fileSize: number,
   rvaToOff: RvaToOffset,
   addressOfRawDataRva: number,

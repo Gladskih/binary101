@@ -1,9 +1,9 @@
 "use strict";
 
 import { toHex32 } from "../../binary-utils.js";
-import type { PeDataDirectory, RvaToOffset } from "./types.js";
-import { createPeRangeReader, type PeRangeReader } from "./range-reader.js";
+import { createFileRangeReader, type FileRangeReader } from "../file-range-reader.js";
 import { readMappedNullTerminatedAsciiString } from "./mapped-ascii-string.js";
+import type { PeDataDirectory, RvaToOffset } from "./types.js";
 
 const IMAGE_DELAYLOAD_DESCRIPTOR_SIZE = 32; // Microsoft PE format: IMAGE_DELAYLOAD_DESCRIPTOR is eight DWORDs.
 const IMAGE_THUNK_DATA32_SIZE = Uint32Array.BYTES_PER_ELEMENT;
@@ -21,7 +21,7 @@ const IMAGE_DELAY_IMPORT_ORDINAL_RESERVED_MASK64 = 0x7fffffffffff0000n; // PE32+
 // https://learn.microsoft.com/en-us/cpp/build/reference/understanding-the-helper-function
 const DELAY_IMPORT_ATTRIBUTE_DLATTR_RVA = 0x1;
 const readDelayImportName = async (
-  reader: PeRangeReader,
+  reader: FileRangeReader,
   file: File,
   rvaToOff: RvaToOffset,
   nameRva: number,
@@ -42,7 +42,7 @@ const readDelayImportName = async (
   return result.text;
 };
 const readDelayImportHintName = async (
-  reader: PeRangeReader,
+  reader: FileRangeReader,
   file: File,
   rvaToOff: RvaToOffset,
   hintNameRva: number,
@@ -76,7 +76,7 @@ const readDelayImportHintName = async (
   return { hint, name: result.text };
 };
 const readDelayThunkFunctions32 = async (
-  reader: PeRangeReader,
+  reader: FileRangeReader,
   file: File,
   rvaToOff: RvaToOffset,
   intRva: number,
@@ -116,7 +116,7 @@ const readDelayThunkFunctions32 = async (
   return functions;
 };
 const readDelayThunkFunctions64 = async (
-  reader: PeRangeReader,
+  reader: FileRangeReader,
   file: File,
   rvaToOff: RvaToOffset,
   intRva: number,
@@ -182,7 +182,7 @@ const parseDelayImportsWithThunkReader = async (
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   readDelayThunkFunctions: (
-    reader: PeRangeReader,
+    reader: FileRangeReader,
     file: File,
     rvaToOff: RvaToOffset,
     intRva: number,
@@ -202,7 +202,7 @@ const parseDelayImportsWithThunkReader = async (
   const availableDirSize = Math.max(0, Math.min(dir.size, Math.max(0, file.size - base)));
   const entries: PeDelayImportEntry[] = [];
   const warnings = new Set<string>();
-  const reader = createPeRangeReader(file, 0, file.size);
+  const reader = createFileRangeReader(file, 0, file.size);
   if (dir.size < IMAGE_DELAYLOAD_DESCRIPTOR_SIZE || availableDirSize < IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) {
     warnings.add("Delay import directory is smaller than one descriptor; file may be truncated.");
     return { entries, warning: Array.from(warnings).join(" | ") };

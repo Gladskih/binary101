@@ -1,8 +1,8 @@
 "use strict";
 
-import type { PeDataDirectory, RvaToOffset } from "./types.js";
-import { createPeRangeReader } from "./range-reader.js";
+import { createFileRangeReader } from "../file-range-reader.js";
 import { parseCodeViewEntry, type PeCodeViewEntry } from "./debug-codeview.js";
+import type { PeDataDirectory, RvaToOffset } from "./types.js";
 
 export type { PeCodeViewEntry } from "./debug-codeview.js";
 
@@ -101,7 +101,7 @@ export async function parseDebugDirectory(
     return { entry: null, entries: [], warning: "Debug directory starts past end of file.", rawDataRanges: [] };
   }
   const availableDirSize = Math.min(debugDir.size, Math.max(0, fileSize - baseOffset));
-  const reader = createPeRangeReader(file, 0, file.size);
+  const reader = createFileRangeReader(file, 0, file.size);
   if (availableDirSize < IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE) {
     return {
       entry: null,

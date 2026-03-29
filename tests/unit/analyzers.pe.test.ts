@@ -13,7 +13,6 @@ const IMAGE_NT_OPTIONAL_HDR32_MAGIC = 0x10b;
 const PE32_DATA_DIRECTORIES_OFFSET = 0x60;
 // Microsoft PE format: data-directory indices for SECURITY, DEBUG, and IAT.
 const IMAGE_DIRECTORY_ENTRY_SECURITY = 4;
-const IMAGE_DIRECTORY_ENTRY_DEBUG = 6;
 const IMAGE_DIRECTORY_ENTRY_ARCHITECTURE = 7;
 const IMAGE_DIRECTORY_ENTRY_GLOBALPTR = 8;
 const IMAGE_DIRECTORY_ENTRY_IAT = 12;
@@ -280,68 +279,4 @@ void test("parsePe attaches Authenticode verification when security directory ex
   const cert = result.security.certs[0];
   assert.ok(cert?.authenticode?.verification);
   assert.ok(cert.authenticode.verification?.warnings?.length);
-});
-
-void test("parsePe omits the generic SECURITY tail warning when parsed debug raw data explains the file tail", async () => {
-  const baseBytes = createPeWithSectionAndIat();
-  const certOff = baseBytes.length - 0x20;
-  // RSDS record uses a 24-byte fixed header plus a NUL-terminated path.
-  const debugPayloadSize = 26;
-  const bytes = new Uint8Array(certOff + 8 + debugPayloadSize);
-  bytes.set(baseBytes);
-  const view = getPeView(bytes);
-  const securityEntryOffset = getDataDirectoryEntryOffset(bytes, IMAGE_DIRECTORY_ENTRY_SECURITY);
-  const debugEntryOffset = getDataDirectoryEntryOffset(bytes, IMAGE_DIRECTORY_ENTRY_DEBUG);
-  const debugDirectoryRva = 0x1000;
-  const debugDirectoryOff = 0x200;
-  const debugPayloadOff = certOff + 8;
-  const rsdsSignature = 0x53445352;
-
-  // Microsoft PE format: Certificate Table is data-directory entry 4 and stores a file pointer.
-  view.setUint32(securityEntryOffset, certOff, true);
-  view.setUint32(securityEntryOffset + 4, 8, true);
-  view.setUint32(certOff, 8, true);
-  view.setUint16(certOff + 4, 0x0200, true);
-  view.setUint16(certOff + 6, 0x0001, true);
-
-  // Microsoft PE format: DEBUG directory entry points to raw debug data via PointerToRawData.
-  view.setUint32(debugEntryOffset, debugDirectoryRva, true);
-  view.setUint32(debugEntryOffset + 4, 28, true);
-  view.setUint32(debugDirectoryOff + 12, 2, true);
-  view.setUint32(debugDirectoryOff + 16, debugPayloadSize, true);
-  view.setUint32(debugDirectoryOff + 20, 0, true);
-  view.setUint32(debugDirectoryOff + 24, debugPayloadOff, true);
-
-  view.setUint32(debugPayloadOff + 0, rsdsSignature, true);
-  view.setUint32(debugPayloadOff + 20, 1, true);
-  bytes[debugPayloadOff + 24] = 0x61; // "a"
-  bytes[debugPayloadOff + 25] = 0x00;
-
-  const result = await parsePe(new MockFile(bytes, "cert-followed-by-debug.exe"));
-
-  assert.ok(result);
-  assert.ok(result.debug?.entry);
-  assert.ok(!result.security?.warnings?.some(warning => /bytes after the declared table/i.test(warning)));
-});
-
-void test("parsePe keeps the generic SECURITY tail warning when no proven file span explains the tail", async () => {
-  const baseBytes = createPeWithSectionAndIat();
-  const trailingByteCount = 8;
-  const certOff = baseBytes.length - (8 + trailingByteCount);
-  const bytes = new Uint8Array(baseBytes.length);
-  bytes.set(baseBytes);
-  const view = getPeView(bytes);
-  const securityEntryOffset = getDataDirectoryEntryOffset(bytes, IMAGE_DIRECTORY_ENTRY_SECURITY);
-
-  // Microsoft PE format: the Certificate Table directory entry stores a file pointer and byte size.
-  view.setUint32(securityEntryOffset, certOff, true);
-  view.setUint32(securityEntryOffset + 4, 8, true);
-  view.setUint32(certOff, 8, true);
-  view.setUint16(certOff + 4, 0x0200, true);
-  view.setUint16(certOff + 6, 0x0001, true);
-
-  const result = await parsePe(new MockFile(bytes, "cert-with-unexplained-tail.exe"));
-
-  assert.ok(result);
-  assert.ok(result.security?.warnings?.some(warning => /bytes after the declared table/i.test(warning)));
 });

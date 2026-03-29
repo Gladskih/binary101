@@ -1,7 +1,7 @@
 "use strict";
 
+import { createFileRangeReader, type FileRangeReader } from "../file-range-reader.js";
 import type { PeDataDirectory, RvaToOffset } from "./types.js";
-import { createPeRangeReader, type PeRangeReader } from "./range-reader.js";
 
 const IMAGE_REL_BASED_HIGHADJ = 4;
 // Microsoft PE/COFF: IMAGE_BASE_RELOCATION consists of an 8-byte header followed by WORD entries.
@@ -59,7 +59,7 @@ const collectRelocationEntrySpans = (
 };
 
 const readRelocationEntrySpans = async (
-  reader: PeRangeReader,
+  reader: FileRangeReader,
   spans: RelocationEntrySpan[],
   addWarning: (message: string) => void
 ): Promise<RelocationEntrySpanView[] | null> => {
@@ -159,7 +159,7 @@ export async function parseBaseRelocations(
   const addWarning = (message: string): void => {
     if (!warnings.includes(message)) warnings.push(message);
   };
-  const reader = createPeRangeReader(file, 0, file.size);
+  const reader = createFileRangeReader(file, 0, file.size);
   let rel = 0;
   let totalEntries = 0;
   while (rel + IMAGE_BASE_RELOCATION_HEADER_SIZE <= dir.size) {

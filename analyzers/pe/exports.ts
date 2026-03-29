@@ -1,8 +1,8 @@
 "use strict";
 
-import type { PeDataDirectory, RvaToOffset } from "./types.js";
-import { createPeRangeReader } from "./range-reader.js";
+import { createFileRangeReader } from "../file-range-reader.js";
 import { readMappedNullTerminatedAsciiString } from "./mapped-ascii-string.js";
+import type { PeDataDirectory, RvaToOffset } from "./types.js";
 
 export async function parseExportDirectory(
   file: File,
@@ -73,7 +73,7 @@ export async function parseExportDirectory(
   const dv = new DataView(await file.slice(base, base + 40).arrayBuffer());
   const isReadableOffset = (offset: number | null): offset is number =>
     offset != null && offset >= 0 && offset < file.size;
-  const reader = createPeRangeReader(file, 0, file.size);
+  const reader = createFileRangeReader(file, 0, file.size);
   const readForwarderStr = async (rva: number): Promise<{ text: string; issue?: string }> => {
     if (rva < dir.rva || rva >= dir.rva + dir.size) {
       return { text: "", issue: "Export forwarder RVA lies outside the export directory range." };
