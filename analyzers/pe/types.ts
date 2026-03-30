@@ -1,5 +1,7 @@
 "use strict";
 
+import type { PeSectionName } from "./section-name.js";
+
 export type RvaToOffset = (rva: number) => number | null;
 
 export interface PeDataDirectory {
@@ -10,7 +12,7 @@ export interface PeDataDirectory {
 }
 
 export interface PeSection {
-  name: string;
+  name: PeSectionName;
   virtualSize: number;
   virtualAddress: number;
   sizeOfRawData: number;

@@ -7,6 +7,7 @@ import {
   parseDynamicRelocationsFromLoadConfig64
 } from "../../analyzers/pe/dynamic-relocations.js";
 import type { PeLoadConfig } from "../../analyzers/pe/load-config/index.js";
+import { inlinePeSectionName } from "../../analyzers/pe/section-name.js";
 import type { PeSection } from "../../analyzers/pe/types.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
@@ -67,7 +68,7 @@ const makeLoadConfig = (overrides: Partial<PeLoadConfig>): PeLoadConfig => ({
 
 const makeSingleSection = (): PeSection[] => [
   {
-    name: ".reloc",
+    name: inlinePeSectionName(".reloc"),
     virtualSize: 0x1000,
     virtualAddress: 0,
     sizeOfRawData: 0x1000,

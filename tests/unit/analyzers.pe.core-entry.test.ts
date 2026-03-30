@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { computeEntrySection } from "../../analyzers/pe/core-entry.js";
+import { inlinePeSectionName } from "../../analyzers/pe/section-name.js";
 
 const SECTION_RVA = 0x1000;
 const SECTION_VIRTUAL_SIZE = 0x80;
@@ -35,7 +36,7 @@ void test("computeEntrySection uses the in-memory VirtualSize, not file-alignmen
   const opt = { AddressOfEntryPoint: ENTRYPOINT_IN_RAW_TAIL } as const;
   const sections = [
     {
-      name: ".text",
+      name: inlinePeSectionName(".text"),
       virtualSize: SECTION_VIRTUAL_SIZE,
       virtualAddress: SECTION_RVA,
       sizeOfRawData: SECTION_RAW_SIZE,
@@ -50,7 +51,7 @@ void test("computeEntrySection uses the in-memory VirtualSize, not file-alignmen
 void test("computeEntrySection respects the mapped section boundary instead of the raw-file tail", () => {
   const sections = [
     {
-      name: ".text",
+      name: inlinePeSectionName(".text"),
       virtualSize: SECTION_VIRTUAL_SIZE,
       virtualAddress: SECTION_RVA,
       sizeOfRawData: SECTION_RAW_SIZE,
@@ -75,7 +76,7 @@ void test("computeEntrySection returns null for a missing entrypoint RVA", () =>
 void test("computeEntrySection skips sparse section slots and returns null when no section matches", () => {
   // The analyzer should remain defensive even if an upstream caller hands it a sparse array.
   const sections = [] as Array<{
-    name: string;
+    name: ReturnType<typeof inlinePeSectionName>;
     virtualSize: number;
     virtualAddress: number;
     sizeOfRawData: number;
@@ -83,7 +84,7 @@ void test("computeEntrySection skips sparse section slots and returns null when 
     characteristics: number;
   }>;
   sections[1] = {
-    name: ".text",
+    name: inlinePeSectionName(".text"),
     virtualSize: SECTION_VIRTUAL_SIZE,
     virtualAddress: SECTION_RVA,
     sizeOfRawData: SECTION_RAW_SIZE,
@@ -97,7 +98,7 @@ void test("computeEntrySection skips sparse section slots and returns null when 
 void test("computeEntrySection does not wrap high-RVA section spans back to low addresses", () => {
   const sections = [
     {
-      name: ".text",
+      name: inlinePeSectionName(".text"),
       virtualSize: HIGH_RVA_SECTION_SPAN,
       virtualAddress: HIGH_RVA_SECTION_START,
       sizeOfRawData: HIGH_RVA_SECTION_SPAN,

@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { addSectionEntropies } from "../../analyzers/pe/entropy.js";
+import { inlinePeSectionName } from "../../analyzers/pe/section-name.js";
 import type { PeSection } from "../../analyzers/pe/types.js";
 import { MockFile } from "../helpers/mock-file.js";
 
@@ -14,7 +15,7 @@ void test("addSectionEntropies scans full sections", async () => {
 
   const file = new MockFile(bytes, "entropy.bin");
   const section: PeSection = {
-    name: ".text",
+    name: inlinePeSectionName(".text"),
     virtualSize: sizeOfRawData,
     virtualAddress: 0x1000,
     sizeOfRawData,
@@ -29,7 +30,7 @@ void test("addSectionEntropies scans full sections", async () => {
 void test("addSectionEntropies reports 0 when no raw data is present", async () => {
   const file = new MockFile(new Uint8Array([0]), "empty.bin");
   const section: PeSection = {
-    name: ".bss",
+    name: inlinePeSectionName(".bss"),
     virtualSize: 0x100,
     virtualAddress: 0x1000,
     sizeOfRawData: 0,
@@ -47,7 +48,7 @@ void test("addSectionEntropies handles 1-byte sections", async () => {
   const bytes = new Uint8Array([0, 0xff]);
   const file = new MockFile(bytes, "tiny.bin");
   const section: PeSection = {
-    name: ".tiny",
+    name: inlinePeSectionName(".tiny"),
     virtualSize: 1,
     virtualAddress: 0x1000,
     sizeOfRawData,

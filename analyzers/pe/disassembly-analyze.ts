@@ -5,6 +5,7 @@ import type { AnalyzePeInstructionSetOptions, PeInstructionSetProgress, PeInstru
 import { disassembleControlFlowForInstructionSets } from "../x86/disassembly-control-flow.js";
 import { isIcedX86Module } from "../x86/disassembly-iced.js";
 import { loadIcedX86 } from "#iced-x86-loader";
+import { peSectionNameValue } from "./section-name.js";
 const IMAGE_FILE_MACHINE_I386 = 0x014c; // Microsoft PE format: IMAGE_FILE_MACHINE_I386.
 const IMAGE_FILE_MACHINE_AMD64 = 0x8664; // Microsoft PE format: IMAGE_FILE_MACHINE_AMD64.
 const IMAGE_SCN_CNT_CODE = 0x00000020; // Microsoft PE format: IMAGE_SCN_CNT_CODE.
@@ -25,7 +26,8 @@ const findSectionContainingRva = (sections: PeSection[], rva: number): PeSection
   return null;
 };
 const findBestCodeSection = (sections: PeSection[]): PeSection | null =>
-  sections.find(section => section.name.toLowerCase() === ".text") || sections.find(isExecutableSection)
+  sections.find(section => peSectionNameValue(section.name).toLowerCase() === ".text")
+  || sections.find(isExecutableSection)
   || sections[0]
   || null;
 const normalizeRvaList = (values: unknown): number[] =>
@@ -103,8 +105,7 @@ export async function analyzePeInstructionSets(
     if (!rvas.length) continue;
     entrypointGroups.push({ source: entry.source, rvas });
   }
-  const resolvedEntrypoints: number[] = [];
-  const resolvedEntrypointsSet = new Set<number>();
+  const resolvedEntrypoints: number[] = []; const resolvedEntrypointsSet = new Set<number>();
   const firstSectionRva =
     opts.sections.reduce((min, section) => Math.min(min, section.virtualAddress >>> 0), 0xffff_ffff);
   const addEntrypoint = (source: string, rva: number): void => {
@@ -118,7 +119,7 @@ export async function analyzePeInstructionSets(
     const containing = findSectionContainingRva(opts.sections, normalized);
     if (containing && !isMemoryExecutableSection(containing)) {
       issues.push(
-        `${source} RVA 0x${normalized.toString(16)} points into a non-executable section (${containing.name}; missing IMAGE_SCN_MEM_EXECUTE).`
+        `${source} RVA 0x${normalized.toString(16)} points into a non-executable section (${peSectionNameValue(containing.name)}; missing IMAGE_SCN_MEM_EXECUTE).`
       );
       return;
     }
@@ -139,7 +140,7 @@ export async function analyzePeInstructionSets(
       return emptyReport(0);
     }
     resolvedEntrypoints.push(fallback.virtualAddress >>> 0);
-    issues.push(`Falling back to section ${fallback.name || "(unnamed)"} for disassembly sample.`);
+    issues.push(`Falling back to section ${peSectionNameValue(fallback.name) || "(unnamed)"} for disassembly sample.`);
   }
   if (opts.signal?.aborted) {
     issues.push("Disassembly cancelled.");
@@ -229,9 +230,7 @@ export async function analyzePeInstructionSets(
     }
     return out;
   };
-  let bytesDecoded = 0;
-  let instructionCount = 0;
-  let invalidInstructionCount = 0;
+  let bytesDecoded = 0; let instructionCount = 0; let invalidInstructionCount = 0;
   reportProgress(opts, {
     stage: "decoding",
     bytesSampled,

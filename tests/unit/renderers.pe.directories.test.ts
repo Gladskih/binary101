@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { inlinePeSectionName } from "../../analyzers/pe/section-name.js";
 import {
   renderTls,
   renderIat,
@@ -56,7 +57,7 @@ void test("renderArchitectureDirectory and renderGlobalPtrDirectory explain thei
       warnings: []
     },
     // Microsoft PE format, "Section Flags": IMAGE_SCN_GPREL (0x00008000).
-    sections: [{ name: GP_REL_TEST_SECTION_NAME, characteristics: 0x00008000 }]
+    sections: [{ name: inlinePeSectionName(GP_REL_TEST_SECTION_NAME), characteristics: 0x00008000 }]
   } as unknown as Parameters<typeof renderArchitectureDirectory>[0];
   const out: string[] = [];
   renderArchitectureDirectory(pe, out);

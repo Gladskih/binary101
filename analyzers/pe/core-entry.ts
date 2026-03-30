@@ -2,6 +2,7 @@
 
 import type { PeOptionalHeader, PeSection } from "./types.js";
 import { PE_RVA_EXCLUSIVE_LIMIT } from "./rva-limits.js";
+import { peSectionNameValue } from "./section-name.js";
 
 const getMappedSectionSpan = (section: PeSection): number =>
   (section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0);
@@ -19,7 +20,7 @@ export function computeEntrySection(
     const span = getMappedSectionSpan(section);
     const end = Math.min(PE_RVA_EXCLUSIVE_LIMIT, start + span);
     if (entryRva >= start && entryRva < end) {
-      return { name: section.name, index };
+      return { name: peSectionNameValue(section.name), index };
     }
   }
   return null;

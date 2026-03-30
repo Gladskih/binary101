@@ -1,5 +1,4 @@
 "use strict";
-
 import { humanSize, hex, isoOrDash } from "../../binary-utils.js";
 import { dd, rowOpts, rowFlags, safe } from "../../html-utils.js";
 import { MACHINE, SUBSYSTEMS, CHAR_FLAGS, DLL_FLAGS, SEC_FLAG_TEXTS, DD_TIPS } from "../../analyzers/pe/constants.js";
@@ -9,6 +8,7 @@ import {
   isPeWindowsOptionalHeader
 } from "../../analyzers/pe/optional-header-kind.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
+import { peSectionNameOffset, peSectionNameValue } from "../../analyzers/pe/section-name.js";
 import { renderRichHeader } from "./rich-header.js";
 
 const SECTION_HINTS: Record<string, string> = {
@@ -21,14 +21,11 @@ const SECTION_HINTS: Record<string, string> = {
   ".tls": "Thread Local Storage",
   ".pdata": "Exception pdata (x64 unwind info)"
 };
-
 const knownSectionName = (name: string): string | null => SECTION_HINTS[name.toLowerCase()] || null;
-const formatPointerHex = (value: bigint, width: number): string =>
-  `0x${value.toString(16).padStart(width, "0")}`;
-const formatBigByteSize = (value: bigint): string =>
-  value <= BigInt(Number.MAX_SAFE_INTEGER)
-    ? humanSize(Number(value))
-    : `${value} bytes (0x${value.toString(16)})`;
+const formatPointerHex = (value: bigint, width: number): string => `0x${value.toString(16).padStart(width, "0")}`;
+const formatBigByteSize = (value: bigint): string => value <= BigInt(Number.MAX_SAFE_INTEGER)
+  ? humanSize(Number(value))
+  : `${value} bytes (0x${value.toString(16)})`;
 const formatWordListHex = (values: number[]): string => values.map(value => hex(value >>> 0, 8)).join(", ");
 
 const linkerVersionHint = (major: number, minor: number): string => {
@@ -97,10 +94,16 @@ const renderSections = (pe: PeParseResult, out: string[]): void => {
   );
   sections.forEach(section => {
     const flags = SEC_FLAG_TEXTS.filter(([bit]) => (section.characteristics & bit) !== 0).map(([, text]) => text);
-    const hint = knownSectionName(section.name);
-    const nameCell = hint
-      ? `<span title="${safe(hint)}"><b>${safe(section.name)}</b></span>`
-      : `<span title="User-defined">${safe(section.name)}</span>`;
+    const sectionName = peSectionNameValue(section.name);
+    const coffStringTableOffset = peSectionNameOffset(section.name);
+    const hint = knownSectionName(sectionName);
+    const baseNameCell = hint
+      ? `<span title="${safe(hint)}"><b>${safe(sectionName || "(unnamed)")}</b></span>`
+      : `<span title="User-defined">${safe(sectionName || "(unnamed)")}</span>`;
+    const nameCell =
+      coffStringTableOffset != null && sectionName !== `/${coffStringTableOffset}`
+        ? `${baseNameCell}<div class="smallNote dim">COFF name /${coffStringTableOffset}</div>`
+        : baseNameCell;
     out.push(`<tr>
         <td>${nameCell}</td>
         <td>${humanSize(section.virtualSize)}</td>
@@ -292,7 +295,6 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
     out.push(dd("SizeOfHeapCommit", formatBigByteSize(oh.SizeOfHeapCommit), "Heap commit size."));
     out.push(`</dl></section>`);
   }
-
   renderDataDirectories(pe, out);
   renderSections(pe, out);
 }

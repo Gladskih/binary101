@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { analyzePeInstructionSets } from "../../analyzers/pe/disassembly.js";
+import { inlinePeSectionName } from "../../analyzers/pe/section-name.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 void test("analyzePeInstructionSets uses extra entrypoints when provided", async () => {
@@ -21,7 +22,7 @@ void test("analyzePeInstructionSets uses extra entrypoints when provided", async
     rvaToOff: (rva: number) => (rva >= 0x1000 && rva < 0x1000 + bytes.length ? rva - 0x1000 : null),
     sections: [
       {
-        name: ".text",
+        name: inlinePeSectionName(".text"),
         virtualSize: bytes.length,
         virtualAddress: 0x1000,
         sizeOfRawData: bytes.length,
@@ -49,7 +50,7 @@ void test("analyzePeInstructionSets rejects extra entrypoints that exist only in
     rvaToOff: (rva: number) => (rva >= 0x1000 && rva < 0x1000 + bytes.length ? rva - 0x1000 : null),
     sections: [
       {
-        name: ".text",
+        name: inlinePeSectionName(".text"),
         virtualSize: 1,
         virtualAddress: 0x1000,
         sizeOfRawData: bytes.length,

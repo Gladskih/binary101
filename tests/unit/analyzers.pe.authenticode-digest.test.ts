@@ -7,6 +7,7 @@ import {
   computePeAuthenticodeDigestBestEffort,
   computePeAuthenticodeDigestFromParsedPe
 } from "../../analyzers/pe/authenticode-verify.js";
+import { inlinePeSectionName } from "../../analyzers/pe/section-name.js";
 import {
   collectFixtureBytes,
   createBestEffortAuthenticodeFixture,
@@ -245,7 +246,7 @@ void test("computePeAuthenticodeDigestFromParsedPe orders sections by RVA before
     sections: [
       {
         ...originalSection,
-        name: ".late",
+        name: inlinePeSectionName(".late"),
         virtualSize: splitRawSize,
         virtualAddress: originalSection.virtualAddress + splitRawSize,
         sizeOfRawData: splitRawSize,
@@ -253,7 +254,7 @@ void test("computePeAuthenticodeDigestFromParsedPe orders sections by RVA before
       },
       {
         ...originalSection,
-        name: ".early",
+        name: inlinePeSectionName(".early"),
         virtualSize: splitRawSize,
         sizeOfRawData: splitRawSize,
         pointerToRawData: earlierRvaRawOffset

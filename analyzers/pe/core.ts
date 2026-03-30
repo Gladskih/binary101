@@ -91,7 +91,9 @@ export async function parsePeHeaders(file: File): Promise<PeCore | null> {
     optOff,
     coff.SizeOfOptionalHeader,
     coff.NumberOfSections,
-    windowsOpt?.SizeOfHeaders ?? 0
+    windowsOpt?.SizeOfHeaders ?? 0,
+    coff.PointerToSymbolTable,
+    coff.NumberOfSymbols
   );
   const { overlaySize, imageEnd, imageSizeMismatch } = computePeImageLayout(
     file.size,

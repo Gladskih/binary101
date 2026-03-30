@@ -3,123 +3,34 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderHeaders } from "../../renderers/pe/headers.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
 import type { PeWindowsOptionalHeader } from "../../analyzers/pe/types.js";
-
-const createBasePe = (): PeParseResult =>
-  ({
-    dos: {
-      e_magic: "MZ",
-      e_cblp: 0,
-      e_cp: 0,
-      e_crlc: 0,
-      e_cparhdr: 0,
-      e_minalloc: 0,
-      e_maxalloc: 0,
-      e_ss: 0,
-      e_sp: 0,
-      e_csum: 0,
-      e_ip: 0,
-      e_cs: 0,
-      e_lfarlc: 0,
-      e_oemid: 0,
-      e_oeminfo: 0,
-      e_lfanew: 0x80,
-      stub: { kind: "stub", note: "" }
-    },
-    coff: {
-      Machine: 0x14c,
-      NumberOfSections: 0,
-      TimeDateStamp: 0,
-      PointerToSymbolTable: 0,
-      NumberOfSymbols: 0,
-      SizeOfOptionalHeader: 0,
-      Characteristics: 0
-    },
-    opt: {
-      Magic: 0x10b,
-      LinkerMajor: 0,
-      LinkerMinor: 0,
-      SizeOfCode: 0,
-      SizeOfInitializedData: 0,
-      SizeOfUninitializedData: 0,
-      AddressOfEntryPoint: 0,
-      BaseOfCode: 0x1000,
-      BaseOfData: 0x2000,
-      ImageBase: 0x400000n,
-      SectionAlignment: 0x1000,
-      FileAlignment: 0x200,
-      OSVersionMajor: 0,
-      OSVersionMinor: 0,
-      ImageVersionMajor: 0,
-      ImageVersionMinor: 0,
-      SubsystemVersionMajor: 0,
-      SubsystemVersionMinor: 0,
-      Subsystem: 2,
-      DllCharacteristics: 0,
-      Win32VersionValue: 0,
-      SizeOfImage: 0,
-      SizeOfHeaders: 0,
-      CheckSum: 0,
-      SizeOfStackReserve: 0n,
-      SizeOfStackCommit: 0n,
-      SizeOfHeapReserve: 0n,
-      SizeOfHeapCommit: 0n,
-      LoaderFlags: 0,
-      NumberOfRvaAndSizes: 0
-    },
-    dirs: [],
-    sections: [],
-    entrySection: null,
-    rvaToOff: (() => null) as unknown,
-    debug: null,
-    imports: { entries: [] },
-    loadcfg: null,
-    exports: null as unknown,
-    tls: null,
-    reloc: null as unknown,
-    exception: null as unknown,
-    boundImports: null as unknown,
-    delayImports: null as unknown,
-    clr: null,
-    security: null,
-    iat: null,
-    resources: null,
-    overlaySize: 0,
-    imageEnd: 0,
-    imageSizeMismatch: false,
-    hasCert: false,
-    signature: "PE"
-  }) as unknown as PeParseResult;
+import { createBasePe, createPeSection } from "../fixtures/pe-renderer-headers-fixture.js";
 
 void test("renderHeaders covers known/unknown branches and exact linker versions", () => {
   const pe = createBasePe();
-  pe.opt = { ...pe.opt, Magic: 0x20b } as PeParseResult["opt"];
+  // Microsoft PE/COFF: 0x20b identifies IMAGE_OPTIONAL_HEADER64 (PE32+).
+  pe.opt = { ...pe.opt, Magic: 0x20b } as PeWindowsOptionalHeader;
   const windowsOpt = pe.opt as PeWindowsOptionalHeader;
   windowsOpt.LinkerMajor = 14;
   windowsOpt.LinkerMinor = 2;
   windowsOpt.OSVersionMajor = 6;
   windowsOpt.OSVersionMinor = 1;
+  // Microsoft PE/COFF: IMAGE_FILE_DLL marks a DLL image.
   pe.coff.Characteristics = 0x2000;
   pe.dirs = [{ index: 1, name: "IMPORT", rva: 0x1000, size: 0x10 }];
   pe.sections = [
-    {
-      name: ".text",
+    createPeSection(".text", {
       virtualSize: 0x100,
-      virtualAddress: 0x1000,
-      sizeOfRawData: 0x200,
-      pointerToRawData: 0x400,
       entropy: 6.5,
       characteristics: 0x60000020
-    },
-    {
-      name: ".weird",
+    }),
+    createPeSection(".weird", {
       virtualSize: 0x20,
       virtualAddress: 0x2000,
       sizeOfRawData: 0x20,
       pointerToRawData: 0x600,
       characteristics: 0
-    }
+    })
   ];
   pe.entrySection = { name: ".text", index: 0 };
   pe.dos.stub = { kind: "stub", note: "hello", strings: ["hi"] };
@@ -168,6 +79,7 @@ void test("renderHeaders handles fallbacks and missing optional parts", () => {
 void test("renderHeaders renders ROM-specific optional fields and omits Windows-only controls", () => {
   const pe = createBasePe();
   pe.coff.Machine = 0x0166;
+  // Microsoft PE/COFF: 0x107 identifies IMAGE_ROM_OPTIONAL_HEADER.
   pe.opt = {
     Magic: 0x107,
     LinkerMajor: 2,
@@ -186,16 +98,7 @@ void test("renderHeaders renders ROM-specific optional fields and omits Windows-
     }
   };
   pe.entrySection = { name: ".text", index: 0 };
-  pe.sections = [
-    {
-      name: ".text",
-      virtualSize: 0x200,
-      virtualAddress: 0x1000,
-      sizeOfRawData: 0x200,
-      pointerToRawData: 0x200,
-      characteristics: 0x60000020
-    }
-  ];
+  pe.sections = [createPeSection(".text", { virtualSize: 0x200, pointerToRawData: 0x200 })];
 
   const out: string[] = [];
   renderHeaders(pe, out);
@@ -214,6 +117,7 @@ void test("renderHeaders renders ROM-specific optional fields and omits Windows-
 
 void test("renderHeaders keeps unknown optional-header magic in a generic header-only view", () => {
   const pe = createBasePe();
+  // Deliberately non-standard optional-header magic to exercise the generic fallback path.
   pe.opt = {
     Magic: 0x999,
     LinkerMajor: 1,
@@ -224,16 +128,7 @@ void test("renderHeaders keeps unknown optional-header magic in a generic header
     AddressOfEntryPoint: 0x1000,
     BaseOfCode: 0x1000
   };
-  pe.sections = [
-    {
-      name: ".text",
-      virtualSize: 0x100,
-      virtualAddress: 0x1000,
-      sizeOfRawData: 0x100,
-      pointerToRawData: 0x200,
-      characteristics: 0x60000020
-    }
-  ];
+  pe.sections = [createPeSection(".text", { sizeOfRawData: 0x100, pointerToRawData: 0x200 })];
 
   const out: string[] = [];
   renderHeaders(pe, out);

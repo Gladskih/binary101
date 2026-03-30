@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { analyzePeInstructionSets } from "../../analyzers/pe/disassembly.js";
+import { inlinePeSectionName } from "../../analyzers/pe/section-name.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const IMAGE_FILE_MACHINE_I386 = 0x014c;
@@ -14,7 +15,7 @@ const TEXT_SECTION_CHARACTERISTICS = 0x60000020;
 
 const createTextSection = (rawSize: number, virtualSize = rawSize) => [
   {
-    name: ".text",
+    name: inlinePeSectionName(".text"),
     virtualSize,
     virtualAddress: TEXT_SECTION_RVA,
     sizeOfRawData: rawSize,

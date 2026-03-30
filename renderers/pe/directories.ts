@@ -3,6 +3,7 @@
 import { humanSize, hex } from "../../binary-utils.js";
 import { dd, safe } from "../../html-utils.js";
 import type { PeDebugSection, PeParseResult } from "../../analyzers/pe/index.js";
+import { peSectionNameValue } from "../../analyzers/pe/section-name.js";
 
 type PeImportsSection = PeParseResult["imports"];
 type PeExportSection = NonNullable<PeParseResult["exports"]>;
@@ -258,7 +259,7 @@ export function renderGlobalPtrDirectory(pe: PeParseResult, out: string[]): void
     dd(
       "GP-relative sections",
       gpRelSections.length
-        ? safe(gpRelSections.map(section => section.name || "(unnamed)").join(", "))
+        ? safe(gpRelSections.map(section => peSectionNameValue(section.name) || "(unnamed)").join(", "))
         : "-",
       "Sections flagged IMAGE_SCN_GPREL contain data referenced through the global pointer (GP)."
     )

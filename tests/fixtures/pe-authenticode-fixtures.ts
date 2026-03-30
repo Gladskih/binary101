@@ -5,6 +5,7 @@ import type {
   PeAuthenticodeBestEffortCore,
   PeAuthenticodeParsedCore
 } from "../../analyzers/pe/authenticode-verify.js";
+import { inlinePeSectionName } from "../../analyzers/pe/section-name.js";
 
 // Microsoft PE format spec:
 // - PE32 Optional Header CheckSum field is at offset 0x40 from the optional header start.
@@ -134,7 +135,7 @@ export const createStrictAuthenticodeFixture = (): {
       opt: { SizeOfHeaders: STRICT_HEADERS_END },
       sections: [
         {
-          name: ".text",
+          name: inlinePeSectionName(".text"),
           virtualSize: STRICT_SECTION_RAW_SIZE,
           virtualAddress: 0x1000,
           sizeOfRawData: STRICT_SECTION_RAW_SIZE,

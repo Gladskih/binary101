@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { analyzePeInstructionSets } from "../../analyzers/pe/disassembly.js";
+import { inlinePeSectionName } from "../../analyzers/pe/section-name.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 void test("analyzePeInstructionSets reports AVX and AVX-512 requirements", async () => {
@@ -22,7 +23,7 @@ void test("analyzePeInstructionSets reports AVX and AVX-512 requirements", async
     rvaToOff: (rva: number) => (rva === 0x1000 ? 0 : null),
     sections: [
       {
-        name: ".text",
+        name: inlinePeSectionName(".text"),
         virtualSize: bytes.length,
         virtualAddress: 0x1000,
         sizeOfRawData: bytes.length,
@@ -85,7 +86,7 @@ void test("analyzePeInstructionSets falls back to .text when entrypoint is zero"
     rvaToOff: () => null,
     sections: [
       {
-        name: ".text",
+        name: inlinePeSectionName(".text"),
         virtualSize: 2,
         virtualAddress: 0x1000,
         sizeOfRawData: 2,
@@ -132,7 +133,7 @@ void test("analyzePeInstructionSets stops at the first invalid instruction", asy
     rvaToOff: () => 0,
     sections: [
       {
-        name: ".text",
+        name: inlinePeSectionName(".text"),
         virtualSize: bytes.length,
         virtualAddress: 0x1000,
         sizeOfRawData: bytes.length,
@@ -159,7 +160,7 @@ void test("analyzePeInstructionSets reports decoded bytes when returning early",
     rvaToOff: () => 0,
     sections: [
       {
-        name: ".text",
+        name: inlinePeSectionName(".text"),
         virtualSize: bytes.length,
         virtualAddress: 0x1000,
         sizeOfRawData: bytes.length,
@@ -208,7 +209,7 @@ void test("analyzePeInstructionSets reports progress while decoding", async () =
     rvaToOff: () => 0,
     sections: [
       {
-        name: ".text",
+        name: inlinePeSectionName(".text"),
         virtualSize: bytes.length,
         virtualAddress: 0x1000,
         sizeOfRawData: bytes.length,
@@ -247,7 +248,7 @@ void test("analyzePeInstructionSets reports known feature counts in progress sna
     rvaToOff: () => 0,
     sections: [
       {
-        name: ".text",
+        name: inlinePeSectionName(".text"),
         virtualSize: bytes.length,
         virtualAddress: 0x1000,
         sizeOfRawData: bytes.length,
@@ -278,7 +279,7 @@ void test("analyzePeInstructionSets warns and skips entrypoints in non-executabl
     rvaToOff: () => 0,
     sections: [
       {
-        name: ".text",
+        name: inlinePeSectionName(".text"),
         virtualSize: bytes.length,
         virtualAddress: 0x1000,
         sizeOfRawData: bytes.length,
@@ -286,7 +287,7 @@ void test("analyzePeInstructionSets warns and skips entrypoints in non-executabl
         characteristics: 0x60000020
       },
       {
-        name: ".data",
+        name: inlinePeSectionName(".data"),
         virtualSize: 4,
         virtualAddress: 0x2000,
         sizeOfRawData: 4,
