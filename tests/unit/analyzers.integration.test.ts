@@ -1,8 +1,7 @@
 "use strict";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseForUi } from "../../analyzers/index.js";
-import { DOMParser as XmlDomParser } from "@xmldom/xmldom";
+import { createParseForUi } from "../../analyzers/index.js";
 import { createElfFile } from "../fixtures/elf-sample-file.js";
 import { createFb2File, createPdfFile } from "../fixtures/document-sample-files.js";
 import {
@@ -32,25 +31,12 @@ import { createMachOFile, createMachOUniversalFile } from "../fixtures/macho-fix
 import { createPcapFile } from "../fixtures/pcap-fixtures.js";
 import { createGzipFile } from "../fixtures/gzip-fixtures.js";
 import { createMinimalJavaClassBytes } from "../fixtures/java-class-fixtures.js";
+import { parseFb2ForTests } from "../helpers/fb2-test-parser.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import type { FlacMetadataBlockDetail } from "../../analyzers/flac/types.js";
 const textEncoder = new TextEncoder();
-class TestDomParser extends XmlDomParser {
-  override parseFromString(text: string, type: string) {
-    const doc = super.parseFromString(text, type);
-    if (!doc.querySelector) {
-      doc.querySelector = (selector: string) => {
-        const tagName = selector.replace(/[^a-zA-Z0-9:-]/g, "");
-        const matches = doc.getElementsByTagName(tagName);
-        return matches && matches.length ? matches[0] : null;
-      };
-    }
-    return doc;
-  }
-}
-
-global.DOMParser = TestDomParser;
+const parseForUi = createParseForUi(parseFb2ForTests);
 
 const assertParsed = async <TParsed = unknown>(
   file: MockFile | File,
@@ -136,6 +122,19 @@ void test("parseForUi parses FB2 XML", async () => {
     assert.ok(fb2.title);
     assert.ok(fb2.bodyCount >= 0);
   });
+});
+
+void test("parseForUi keeps malformed FB2 files visible with warnings", async () => {
+  const malformed = new MockFile(
+    textEncoder.encode("<FictionBook><description></FictionBook>"),
+    "broken.fb2",
+    "text/xml"
+  );
+  const parsed = await parseForUi(malformed);
+  assert.strictEqual(parsed.analyzer, "fb2");
+  assert.ok(parsed.parsed);
+  assert.strictEqual(parsed.parsed.parseError, true);
+  assert.ok(parsed.parsed.issues.some(issue => issue.includes("XML parser threw")));
 });
 void test("parseForUi parses PDF cross-reference data", async () => {
   await assertParsed(createPdfFile(), "pdf", pdf => {

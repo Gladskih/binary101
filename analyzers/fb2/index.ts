@@ -1,8 +1,17 @@
 "use strict";
 
+import {
+  describeXmlParserThrow,
+  parseBrowserFb2XmlDocument,
+  readParserIssue,
+  type Fb2XmlDocument,
+  type Fb2XmlDocumentParser,
+  type Fb2XmlElement
+} from "./xml.js";
+
 const MAX_PARSE_BYTES = 1024 * 512;
 
-type NodeWithChildren = Element | Document | null;
+type NodeWithChildren = Fb2XmlElement | Fb2XmlDocument | null;
 
 interface Fb2Sequence {
   name: string;
@@ -35,6 +44,7 @@ export interface Fb2ParseResult {
   size: number;
   bytesInspected: number;
   parseError: boolean;
+  issues: string[];
   title: string;
   genres: string[];
   keywords: string[];
@@ -50,13 +60,53 @@ export interface Fb2ParseResult {
   publishInfo: Fb2PublishInfo;
 }
 
-function firstByTag(parent: NodeWithChildren, tagName: string): Element | null {
+function createEmptyFb2ParseResult(
+  fileSize: number,
+  bytesInspected: number,
+  parseError: boolean,
+  issues: string[]
+): Fb2ParseResult {
+  return {
+    size: fileSize,
+    bytesInspected,
+    parseError,
+    issues,
+    title: "",
+    genres: [],
+    keywords: [],
+    languages: { lang: "", srcLang: "" },
+    annotation: null,
+    sequence: null,
+    coverImage: null,
+    titleAuthors: [],
+    bodyCount: 0,
+    sectionCount: 0,
+    binaryCount: 0,
+    documentInfo: {
+      authors: [],
+      programUsed: "",
+      documentId: "",
+      documentVersion: "",
+      documentDate: null,
+      sourceUrls: [],
+      sourceOcr: ""
+    },
+    publishInfo: {
+      publisher: "",
+      isbn: "",
+      year: "",
+      city: ""
+    }
+  };
+}
+
+function firstByTag(parent: NodeWithChildren, tagName: string): Fb2XmlElement | null {
   if (!parent) return null;
   const els = parent.getElementsByTagName(tagName);
   return els && els.length ? els.item(0) : null;
 }
 
-function allByTag(parent: NodeWithChildren, tagName: string): Element[] {
+function allByTag(parent: NodeWithChildren, tagName: string): Fb2XmlElement[] {
   if (!parent) return [];
   const els = parent.getElementsByTagName(tagName);
   return els && els.length ? Array.from(els) : [];
@@ -75,7 +125,7 @@ function collectTexts(parent: NodeWithChildren, tagName: string): string[] {
     .filter(Boolean);
 }
 
-function pickImageHref(imageEl: Element | null): string | null {
+function pickImageHref(imageEl: Fb2XmlElement | null): string | null {
   if (!imageEl) return null;
   return (
     imageEl.getAttribute("href") ||
@@ -84,7 +134,7 @@ function pickImageHref(imageEl: Element | null): string | null {
   );
 }
 
-function formatAuthor(authorEl: Element | null): string | null {
+function formatAuthor(authorEl: Fb2XmlElement | null): string | null {
   if (!authorEl) return null;
   const parts = [
     textFromElement(authorEl, "first-name"),
@@ -101,7 +151,7 @@ function collectAuthors(parent: NodeWithChildren, tagName = "author"): string[] 
   return allByTag(parent, tagName).map(formatAuthor).filter(Boolean) as string[];
 }
 
-function summarizeAnnotation(titleInfo: Element | null): string | null {
+function summarizeAnnotation(titleInfo: Fb2XmlElement | null): string | null {
   if (!titleInfo) return null;
   const annotationEl = firstByTag(titleInfo, "annotation");
   if (!annotationEl) return null;
@@ -111,17 +161,7 @@ function summarizeAnnotation(titleInfo: Element | null): string | null {
   return text.length > limit ? `${text.slice(0, limit)}...` : text;
 }
 
-function parseSequence(titleInfo: Element | null): Fb2Sequence | null {
-  if (!titleInfo) return null;
-  const seq = firstByTag(titleInfo, "sequence");
-  if (!seq) return null;
-  const name = seq.getAttribute("name") || "";
-  const number = seq.getAttribute("number") || "";
-  if (!name && !number) return null;
-  return { name, number };
-}
-
-function parseDateWithValue(el: Element | null): string | null {
+function parseDateWithValue(el: Fb2XmlElement | null): string | null {
   if (!el) return null;
   const valueAttr = el.getAttribute("value");
   const text = (el.textContent || "").trim();
@@ -131,7 +171,20 @@ function parseDateWithValue(el: Element | null): string | null {
   return valueAttr || text || null;
 }
 
-export async function parseFb2(file: File): Promise<Fb2ParseResult | null> {
+function parseSequence(titleInfo: Fb2XmlElement | null): Fb2Sequence | null {
+  if (!titleInfo) return null;
+  const seq = firstByTag(titleInfo, "sequence");
+  if (!seq) return null;
+  const name = seq.getAttribute("name") || "";
+  const number = seq.getAttribute("number") || "";
+  if (!name && !number) return null;
+  return { name, number };
+}
+
+export async function parseFb2WithXmlParser(
+  file: File,
+  parseXmlDocument: Fb2XmlDocumentParser
+): Promise<Fb2ParseResult | null> {
   const readBytes = Math.min(file.size || 0, MAX_PARSE_BYTES);
   const buffer = await file.slice(0, readBytes).arrayBuffer();
   const decoder = new TextDecoder("utf-8", { fatal: false });
@@ -139,16 +192,28 @@ export async function parseFb2(file: File): Promise<Fb2ParseResult | null> {
   const lower = text.toLowerCase();
   if (!lower.includes("<fictionbook")) return null;
 
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(text, "application/xml");
-  const parseError = doc.querySelector("parsererror");
+  let doc: Fb2XmlDocument | null = null;
+  const issues: string[] = [];
+  try {
+    doc = parseXmlDocument(text);
+  } catch (error) {
+    issues.push(describeXmlParserThrow(error));
+  }
+  if (!doc) return createEmptyFb2ParseResult(file.size || 0, readBytes, true, issues);
+  const parserIssue = readParserIssue(doc);
+  if (parserIssue) issues.push(parserIssue);
+  const parseError = parserIssue != null;
 
   // Root tag is typically written as <FictionBook>, so match both cases
   // to avoid rejecting valid documents due to case sensitivity in XML.
   const root =
     doc.getElementsByTagName("FictionBook")[0] ||
     doc.getElementsByTagName("fictionbook")[0];
-  if (!root) return null;
+  if (!root) {
+    if (!parseError) return null;
+    issues.push("FB2 root element was not available after XML parsing.");
+    return createEmptyFb2ParseResult(file.size || 0, readBytes, true, issues);
+  }
 
   const description = firstByTag(root, "description");
   const titleInfo = firstByTag(description, "title-info");
@@ -187,7 +252,8 @@ export async function parseFb2(file: File): Promise<Fb2ParseResult | null> {
   return {
     size: file.size || 0,
     bytesInspected: readBytes,
-    parseError: Boolean(parseError),
+    parseError,
+    issues,
     title,
     genres,
     keywords,
@@ -210,4 +276,8 @@ export async function parseFb2(file: File): Promise<Fb2ParseResult | null> {
     },
     publishInfo: { publisher, isbn, year, city }
   };
+}
+
+export async function parseFb2(file: File): Promise<Fb2ParseResult | null> {
+  return parseFb2WithXmlParser(file, parseBrowserFb2XmlDocument);
 }

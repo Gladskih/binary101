@@ -2,41 +2,25 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DOMParser as XmlDomParser } from "@xmldom/xmldom";
-import { parseFb2 } from "../../analyzers/fb2/index.js";
 import { createFb2File } from "../fixtures/document-sample-files.js";
+import { parseFb2ForTests } from "../helpers/fb2-test-parser.js";
 import { MockFile } from "../helpers/mock-file.js";
-
-class TestDomParser extends XmlDomParser {
-  override parseFromString(text: string, type: string) {
-    const doc = super.parseFromString(text, type);
-    if (!doc.querySelector) {
-      doc.querySelector = (selector: string) => {
-        const tagName = selector.replace(/[^a-zA-Z0-9:-]/g, "");
-        const matches = doc.getElementsByTagName(tagName);
-        return matches && matches.length ? matches[0] : null;
-      };
-    }
-    return doc;
-  }
-}
-
-global.DOMParser = TestDomParser;
 
 const encoder = new TextEncoder();
 
 void test("parseFb2 skips files without FictionBook root", async () => {
   const file = new MockFile(encoder.encode("<root></root>"), "note.xml", "text/xml");
-  const result = await parseFb2(file);
+  const result = await parseFb2ForTests(file);
   assert.strictEqual(result, null);
 });
 
 void test("parseFb2 returns structured metadata for valid FB2", async () => {
-  const fb2 = await parseFb2(createFb2File());
+  const fb2 = await parseFb2ForTests(createFb2File());
   assert.ok(fb2);
   assert.strictEqual(fb2?.title, "Example");
   assert.strictEqual(fb2?.publishInfo.publisher, "");
   assert.strictEqual(fb2?.parseError, false);
+  assert.deepStrictEqual(fb2?.issues, []);
   assert.ok(fb2?.bodyCount >= 1);
 });
 
@@ -54,10 +38,23 @@ void test("parseFb2 truncates long annotations and reads sequence", async () => 
     "<body><section><p>Content</p></section></body>",
     "</FictionBook>"
   ].join("");
-  const fb2 = await parseFb2(new MockFile(encoder.encode(xml), "annotated.fb2", "text/xml"));
+  const fb2 = await parseFb2ForTests(new MockFile(encoder.encode(xml), "annotated.fb2", "text/xml"));
   assert.ok(fb2);
   assert.strictEqual(fb2?.title, "Annotated");
   assert.ok(fb2?.annotation);
   assert.ok(fb2?.annotation?.endsWith("..."));
   assert.deepStrictEqual(fb2?.sequence, { name: "Saga", number: "2" });
+});
+
+void test("parseFb2 keeps malformed FB2 visible with parser issues", async () => {
+  const malformed = new MockFile(
+    encoder.encode("<FictionBook><description></FictionBook>"),
+    "broken.fb2",
+    "text/xml"
+  );
+  const result = await parseFb2ForTests(malformed);
+  assert.ok(result);
+  assert.strictEqual(result?.parseError, true);
+  assert.ok(result?.issues.some(issue => issue.includes("XML parser threw")));
+  assert.strictEqual(result?.title, "");
 });

@@ -2,9 +2,8 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseForUi } from "../../analyzers/index.js";
+import { createParseForUi } from "../../analyzers/index.js";
 import type { AnalyzerName, ParsedByAnalyzer } from "../../analyzers/index.js";
-import { DOMParser as XmlDomParser } from "@xmldom/xmldom";
 import { renderMachO } from "../../renderers/macho/index.js";
 import {
   renderElf,
@@ -53,22 +52,10 @@ import { createPcapFile } from "../fixtures/pcap-fixtures.js";
 import { createPcapNgFile } from "../fixtures/pcapng-fixtures.js";
 import { createGzipFile } from "../fixtures/gzip-fixtures.js";
 import { encoder } from "../fixtures/archive-fixture-helpers.js";
+import { parseFb2ForTests } from "../helpers/fb2-test-parser.js";
+import { MockFile } from "../helpers/mock-file.js";
 
-class TestDomParser extends XmlDomParser {
-  override parseFromString(text: string, type: string) {
-    const doc = super.parseFromString(text, type);
-    if (!doc.querySelector) {
-      doc.querySelector = (selector: string) => {
-        const tagName = selector.replace(/[^a-zA-Z0-9:-]/g, "");
-        const matches = doc.getElementsByTagName(tagName);
-        return matches && matches.length ? matches[0] : null;
-      };
-    }
-    return doc;
-  }
-}
-
-global.DOMParser = TestDomParser;
+const parseForUi = createParseForUi(parseFb2ForTests);
 
 const parseOnly = async <Name extends AnalyzerName>(
   file: File,
@@ -150,6 +137,18 @@ void test("renderers produce readable HTML output", async () => {
   const fb2 = await parseOnly(createFb2File(), "fb2");
   const fb2Html = renderFb2(fb2);
   assert.match(fb2Html, /Example/);
+  assert.doesNotMatch(fb2Html, /Warnings/);
+  const malformedFb2 = await parseOnly(
+    new MockFile(
+      encoder.encode("<FictionBook><description></FictionBook>"),
+      "broken.fb2",
+      "text/xml"
+    ),
+    "fb2"
+  );
+  const malformedFb2Html = renderFb2(malformedFb2);
+  assert.match(malformedFb2Html, /Warnings/);
+  assert.match(malformedFb2Html, /XML parser threw/);
 
   const pdf = await parseOnly(createPdfFile(), "pdf");
   const pdfHtml = renderPdf(pdf);
