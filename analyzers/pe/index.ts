@@ -62,6 +62,8 @@ export interface PeParseResult {
   dos: PeCore["dos"];
   signature: "PE";
   coff: PeCore["coff"];
+  coffStringTableSize?: number;
+  trailingAlignmentPaddingSize?: number;
   opt: PeCore["opt"];
   warnings?: string[];
   dirs: PeDataDirectory[];
@@ -263,6 +265,10 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     dos,
     signature: "PE",
     coff,
+    ...(core.coffStringTableSize != null ? { coffStringTableSize: core.coffStringTableSize } : {}),
+    ...(core.trailingAlignmentPaddingSize
+      ? { trailingAlignmentPaddingSize: core.trailingAlignmentPaddingSize }
+      : {}),
     opt,
     ...(core.warnings?.length ? { warnings: core.warnings } : {}),
     dirs: dataDirs,

@@ -92,7 +92,13 @@ const parseSectionHeaders = async (
   sizeOfHeaders: number,
   pointerToSymbolTable = 0,
   numberOfSymbols = 0
-): Promise<{ sections: PeSection[]; rvaToOff: RvaToOffset; sectOff: number; warnings?: string[] }> => {
+): Promise<{
+  sections: PeSection[];
+  rvaToOff: RvaToOffset;
+  sectOff: number;
+  coffStringTableSize?: number;
+  warnings?: string[];
+}> => {
   const sectionHeadersOffset = optionalHeaderOffset + sizeOfOptionalHeader;
   const safeSectionCount = numberOfSections >>> 0;
   const coffStringTable = await createCoffStringTableResolver(
@@ -145,8 +151,19 @@ const parseSectionHeaders = async (
     sectionHeadersOffset + safeSectionCount * IMAGE_SECTION_HEADER_SIZE
   );
   return warnings.length
-    ? { sections, rvaToOff, sectOff: sectionHeadersOffset, warnings }
-    : { sections, rvaToOff, sectOff: sectionHeadersOffset };
+    ? {
+        sections,
+        rvaToOff,
+        sectOff: sectionHeadersOffset,
+        ...(coffStringTable.readableSize != null ? { coffStringTableSize: coffStringTable.readableSize } : {}),
+        warnings
+      }
+    : {
+        sections,
+        rvaToOff,
+        sectOff: sectionHeadersOffset,
+        ...(coffStringTable.readableSize != null ? { coffStringTableSize: coffStringTable.readableSize } : {})
+      };
 };
 
 export { parseSectionHeaders };

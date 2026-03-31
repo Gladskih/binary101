@@ -146,6 +146,8 @@ export type PeOptionalHeader =
 export interface PeCore {
   dos: PeDosHeader;
   coff: PeCoffHeader;
+  coffStringTableSize?: number;
+  trailingAlignmentPaddingSize?: number;
   opt: PeOptionalHeader;
   warnings?: string[];
   optOff: number;

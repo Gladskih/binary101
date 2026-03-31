@@ -8,6 +8,10 @@ export const buildHeaderOnlyPeParseResult = (core: PeCore): PeParseResult => ({
   dos: core.dos,
   signature: "PE",
   coff: core.coff,
+  ...(core.coffStringTableSize != null ? { coffStringTableSize: core.coffStringTableSize } : {}),
+  ...(core.trailingAlignmentPaddingSize
+    ? { trailingAlignmentPaddingSize: core.trailingAlignmentPaddingSize }
+    : {}),
   opt: core.opt,
   ...(core.warnings?.length ? { warnings: core.warnings } : {}),
   dirs: core.dataDirs,

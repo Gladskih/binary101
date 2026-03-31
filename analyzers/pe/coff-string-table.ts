@@ -22,6 +22,12 @@ export interface CoffStringTableResolver {
   resolveOffset(stringTableOffset: number): Promise<{ value: string; warning?: string }>;
 }
 
+export interface CoffStringTableResolution {
+  resolver: CoffStringTableResolver | null;
+  readableSize?: number;
+  warning?: string;
+}
+
 const getStringTableOffset = (
   fileSize: number,
   pointerToSymbolTable: number,
@@ -116,7 +122,7 @@ export const createCoffStringTableResolver = async (
   file: File,
   pointerToSymbolTable: number,
   numberOfSymbols: number
-): Promise<{ resolver: CoffStringTableResolver | null; warning?: string }> => {
+): Promise<CoffStringTableResolution> => {
   const stringTableOffset = getStringTableOffset(file.size, pointerToSymbolTable, numberOfSymbols);
   if (stringTableOffset == null) {
     return pointerToSymbolTable && numberOfSymbols
@@ -139,6 +145,7 @@ export const createCoffStringTableResolver = async (
     : {};
   const entryCache = new Map<number, Promise<{ value: string; warning?: string }>>();
   return {
+    readableSize: stringTableEnd - stringTableOffset,
     resolver: {
       resolveOffset: stringTableEntryOffset => {
         const cached = entryCache.get(stringTableEntryOffset);

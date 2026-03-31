@@ -2,15 +2,11 @@
 import { humanSize, hex, isoOrDash } from "../../binary-utils.js";
 import { dd, rowOpts, rowFlags, safe } from "../../html-utils.js";
 import { MACHINE, SUBSYSTEMS, CHAR_FLAGS, DLL_FLAGS, SEC_FLAG_TEXTS, DD_TIPS } from "../../analyzers/pe/constants.js";
-import {
-  isPePlusOptionalHeader,
-  isPeRomOptionalHeader,
-  isPeWindowsOptionalHeader
-} from "../../analyzers/pe/optional-header-kind.js";
+import { isPePlusOptionalHeader, isPeRomOptionalHeader, isPeWindowsOptionalHeader } from "../../analyzers/pe/optional-header-kind.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 import { peSectionNameOffset, peSectionNameValue } from "../../analyzers/pe/section-name.js";
 import { renderRichHeader } from "./rich-header.js";
-
+import { renderCoffTailSummary } from "./coff-tail-summary.js";
 const SECTION_HINTS: Record<string, string> = {
   ".text": "Code (executable instructions)",
   ".rdata": "Read-only data (constants, import name table)",
@@ -297,4 +293,6 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
   }
   renderDataDirectories(pe, out);
   renderSections(pe, out);
+  const coffTailSummary = renderCoffTailSummary(pe);
+  if (coffTailSummary) out.push(coffTailSummary);
 }

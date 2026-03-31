@@ -14,6 +14,9 @@ type PeDelayImportsSection = NonNullable<PeParseResult["delayImports"]>;
 // IMAGE_SCN_MEM_EXECUTE marks executable section contents.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
 const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
+// Microsoft PE/COFF: each symbol-table record is 18 bytes.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#coff-symbol-table
+const IMAGE_SYMBOL_SIZE = 18;
 // MSVC delayimp.h / "Understand the delay load helper function":
 // dlattrRva marks VC7+ delay descriptors whose fields are RVAs.
 // https://learn.microsoft.com/en-us/cpp/build/reference/understanding-the-helper-function
@@ -36,6 +39,25 @@ const clipOverlayRange = (
   return clippedEnd > clippedStart ? { start: clippedStart, end: clippedEnd } : null;
 };
 
+const addKnownOverlayRange = (
+  coveredRanges: Array<{ start: number; end: number }>,
+  overlayStart: number,
+  overlayEnd: number,
+  start: number,
+  end: number
+): void => {
+  const clippedRange = clipOverlayRange(overlayStart, overlayEnd, start, end);
+  if (clippedRange) coveredRanges.push(clippedRange);
+};
+
+const getCoffStringTableOffset = (pe: PeParseResult): number | null => {
+  const pointerToSymbolTable = pe.coff?.PointerToSymbolTable >>> 0;
+  const numberOfSymbols = pe.coff?.NumberOfSymbols >>> 0;
+  if (!pointerToSymbolTable || !numberOfSymbols) return null;
+  const symbolTableEnd = pointerToSymbolTable + numberOfSymbols * IMAGE_SYMBOL_SIZE;
+  return Number.isSafeInteger(symbolTableEnd) ? symbolTableEnd : null;
+};
+
 const computeKnownOverlayCoverage = (pe: PeParseResult): number => {
   if (!Number.isFinite(pe.overlaySize) || pe.overlaySize <= 0) return 0;
   const overlayStart = computeRawImageEnd(pe);
@@ -43,17 +65,36 @@ const computeKnownOverlayCoverage = (pe: PeParseResult): number => {
   const coveredRanges: Array<{ start: number; end: number }> = [];
   const securityDir = Array.isArray(pe.dirs) ? pe.dirs.find(dir => dir.name === "SECURITY") : null;
   if (securityDir?.size) {
-    const clippedSecurityRange = clipOverlayRange(
+    addKnownOverlayRange(
+      coveredRanges,
       overlayStart,
       overlayEnd,
       securityDir.rva >>> 0,
       (securityDir.rva >>> 0) + (securityDir.size >>> 0)
     );
-    if (clippedSecurityRange) coveredRanges.push(clippedSecurityRange);
   }
   for (const range of pe.debug?.rawDataRanges ?? []) {
-    const clippedDebugRange = clipOverlayRange(overlayStart, overlayEnd, range.start, range.end);
-    if (clippedDebugRange) coveredRanges.push(clippedDebugRange);
+    addKnownOverlayRange(coveredRanges, overlayStart, overlayEnd, range.start, range.end);
+  }
+  const pointerToSymbolTable = pe.coff?.PointerToSymbolTable >>> 0;
+  if (pointerToSymbolTable) {
+    addKnownOverlayRange(
+      coveredRanges,
+      overlayStart,
+      overlayEnd,
+      pointerToSymbolTable,
+      pointerToSymbolTable + (pe.coff.NumberOfSymbols >>> 0) * IMAGE_SYMBOL_SIZE
+    );
+  }
+  const coffStringTableOffset = getCoffStringTableOffset(pe);
+  if (coffStringTableOffset != null && pe.coffStringTableSize != null) {
+    addKnownOverlayRange(
+      coveredRanges,
+      overlayStart,
+      overlayEnd,
+      coffStringTableOffset,
+      coffStringTableOffset + (pe.coffStringTableSize >>> 0)
+    );
   }
   const mergedRanges = coveredRanges.sort((left, right) => left.start - right.start || left.end - right.end);
   let coveredBytes = 0;
@@ -203,7 +244,12 @@ export function renderDelayImports(di: PeDelayImportsSection, out: string[]): vo
 
 export function renderSanity(pe: PeParseResult, out: string[]): void {
   const issues = [...(pe.warnings || [])];
-  const unexplainedOverlaySize = Math.max(0, (pe.overlaySize >>> 0) - computeKnownOverlayCoverage(pe));
+  const unexplainedOverlaySize = Math.max(
+    0,
+    (pe.overlaySize >>> 0) -
+      computeKnownOverlayCoverage(pe) -
+      Math.min(pe.overlaySize >>> 0, pe.trailingAlignmentPaddingSize ?? 0)
+  );
   if (unexplainedOverlaySize > 0) {
     issues.push(`Overlay after last section: ${humanSize(unexplainedOverlaySize)}.`);
   }

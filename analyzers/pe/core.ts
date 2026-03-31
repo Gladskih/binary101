@@ -27,6 +27,40 @@ const alignUpClamped = (value: number, alignment: number): number => {
   return Math.min(PE_RVA_EXCLUSIVE_LIMIT, aligned);
 };
 
+const ZERO_SCAN_CHUNK_SIZE = 4096;
+
+const countTrailingZeroBytes = async (file: File): Promise<number> => {
+  let zeroCount = 0;
+  let end = file.size;
+  while (end > 0) {
+    const start = Math.max(0, end - ZERO_SCAN_CHUNK_SIZE);
+    const chunk = new Uint8Array(await file.slice(start, end).arrayBuffer());
+    if (!chunk.length) break;
+    for (let index = chunk.length - 1; index >= 0; index -= 1) {
+      if (chunk[index] !== 0) {
+        return zeroCount + (chunk.length - 1 - index);
+      }
+    }
+    zeroCount += chunk.length;
+    end = start;
+  }
+  return zeroCount;
+};
+
+const computeTrailingAlignmentPaddingSize = async (
+  file: File,
+  fileAlignment: number
+): Promise<number> => {
+  const normalizedAlignment = fileAlignment >>> 0;
+  if (!normalizedAlignment) return 0;
+  const trailingZeroBytes = await countTrailingZeroBytes(file);
+  if (!trailingZeroBytes) return 0;
+  const dataEnd = file.size - trailingZeroBytes;
+  const remainder = dataEnd % normalizedAlignment;
+  const expectedPadding = remainder === 0 ? 0 : normalizedAlignment - remainder;
+  return expectedPadding === trailingZeroBytes ? expectedPadding : 0;
+};
+
 const computePeImageLayout = (
   fileSize: number,
   optionalHeaderOffset: number,
@@ -86,7 +120,13 @@ export async function parsePeHeaders(file: File): Promise<PeCore | null> {
   const optionalResult = await parseOptionalHeaderAndDirectories(file, e_lfanew, coff.SizeOfOptionalHeader);
   const { optOff, ddStartRel, ddCount, dataDirs, opt } = optionalResult;
   const windowsOpt = isPeWindowsOptionalHeader(opt) ? opt : null;
-  const { sections, rvaToOff, sectOff, warnings: sectionWarnings } = await parseSectionHeaders(
+  const {
+    sections,
+    rvaToOff,
+    sectOff,
+    coffStringTableSize,
+    warnings: sectionWarnings
+  } = await parseSectionHeaders(
     file,
     optOff,
     coff.SizeOfOptionalHeader,
@@ -107,6 +147,9 @@ export async function parsePeHeaders(file: File): Promise<PeCore | null> {
     windowsOpt?.SizeOfHeaders ?? 0,
     !!windowsOpt
   );
+  const trailingAlignmentPaddingSize = windowsOpt
+    ? await computeTrailingAlignmentPaddingSize(file, windowsOpt.FileAlignment)
+    : 0;
 
   await addSectionEntropies(file, sections);
   const entrySection = await computeEntrySection(opt, sections);
@@ -115,6 +158,8 @@ export async function parsePeHeaders(file: File): Promise<PeCore | null> {
   return {
     dos,
     coff,
+    ...(coffStringTableSize != null ? { coffStringTableSize } : {}),
+    ...(trailingAlignmentPaddingSize ? { trailingAlignmentPaddingSize } : {}),
     opt,
     ...(warnings ? { warnings } : {}),
     optOff,

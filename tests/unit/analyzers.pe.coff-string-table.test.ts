@@ -65,6 +65,7 @@ void test("createCoffStringTableResolver reads only the string-table size before
   const resolved = await resolveSectionName("/4", result.resolver);
 
   assert.equal(peSectionNameValue(resolved.name), ".debug_line");
+  assert.equal(result.readableSize, stringTable.length);
   assert.equal(result.warning, undefined);
   assert.equal(trackingFile.sliceSpans[0], COFF_STRING_TABLE_SIZE_FIELD);
   assert.ok(
@@ -83,6 +84,7 @@ void test("createCoffStringTableResolver warns when the declared string table do
     fixture.numberOfSymbols
   );
 
+  assert.equal(result.readableSize, bytes.length);
   assert.strictEqual(
     result.warning,
     "COFF string table does not fit within the file; long section names may stay unresolved."
