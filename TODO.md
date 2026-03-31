@@ -24,7 +24,6 @@ Current status notes:
 - Deepen Mach-O load-command coverage: replace more "listed only" commands with command-specific parsing and explanations where the format is well-specified.
 - Extend Mach-O loader/linkedit analysis: exports trie, chained fixups, relocations, and richer dyld binding/rebasing semantics.
 - Expand Mach-O code-signing analysis beyond blob metadata: parse more embedded payloads and separate structural validity from trust/policy where practical.
-- Add a real PCAP-NG analyzer and renderer instead of detection-only labeling.
 
 ## P2 - Depth For Supported Formats
 
