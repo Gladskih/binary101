@@ -7,7 +7,7 @@ import { MockFile } from "../helpers/mock-file.js";
 const IMAGE_FILE_MACHINE_R4000 = 0x0166;
 const IMAGE_ROM_OPTIONAL_HDR_MAGIC = 0x107;
 
-export const createPeWithSectionAndIat = () => {
+export const createPeWithSectionAndIatFixture = () => {
   const peHeaderOffset = 0x40;
   const coffHeaderSize = 20;
   const optionalHeaderSize = 224;
@@ -95,8 +95,15 @@ export const createPeWithSectionAndIat = () => {
   view.setUint32(sectionHeaderOffset + 20, pointerToRawData, true);
   view.setUint32(sectionHeaderOffset + 36, 0x60000020, true);
 
-  return new Uint8Array(buffer);
+  return {
+    bytes: new Uint8Array(buffer),
+    fileAlignment,
+    rawImageEnd: pointerToRawData + sizeOfRawData,
+    overlaySize
+  };
 };
+
+export const createPeWithSectionAndIat = () => createPeWithSectionAndIatFixture().bytes;
 
 export const createPeFile = () =>
   new MockFile(createPeWithSectionAndIat(), "sample.exe", "application/vnd.microsoft.portable-executable");

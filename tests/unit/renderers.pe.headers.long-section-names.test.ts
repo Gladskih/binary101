@@ -4,21 +4,27 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderHeaders } from "../../renderers/pe/headers.js";
 import { createPeSection, createPeWithSections } from "../fixtures/pe-renderer-headers-fixture.js";
+import { createSyntheticLegacyCoffStringTableFixture } from "../fixtures/pe-coff-tail-fixture.js";
 
-const createPeWithLongSectionName = (): { nameStringTableOffset: number; html: string } => {
-  // COFF string-table entries start after the 4-byte size field, so /4 is the first valid offset.
-  const nameStringTableOffset = 4;
+const createPeWithLongSectionName = (): { longSectionName: string; nameStringTableOffset: number; html: string } => {
+  const stringTable = createSyntheticLegacyCoffStringTableFixture(1);
+  const firstLongSection = stringTable.entries[0];
+  if (!firstLongSection) assert.fail("expected synthetic COFF string-table entry");
   const pe = createPeWithSections(
-    createPeSection(".debug_line", { coffStringTableOffset: nameStringTableOffset, characteristics: 0x42000040 })
+    createPeSection(firstLongSection.name, { coffStringTableOffset: firstLongSection.offset })
   );
   const out: string[] = [];
   renderHeaders(pe, out);
-  return { nameStringTableOffset, html: out.join("") };
+  return {
+    longSectionName: firstLongSection.name,
+    nameStringTableOffset: firstLongSection.offset,
+    html: out.join("")
+  };
 };
 
 void test("renderHeaders shows both the resolved long section name and its COFF string-table offset", () => {
-  const { nameStringTableOffset, html } = createPeWithLongSectionName();
+  const { longSectionName, nameStringTableOffset, html } = createPeWithLongSectionName();
 
-  assert.match(html, /\.debug_line/);
+  assert.match(html, new RegExp(longSectionName));
   assert.match(html, new RegExp(`COFF name /${nameStringTableOffset}`));
 });
