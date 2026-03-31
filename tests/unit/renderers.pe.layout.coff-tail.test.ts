@@ -10,10 +10,16 @@ import {
   createSyntheticLegacyCoffStringTableFixture
 } from "../fixtures/pe-coff-tail-fixture.js";
 
-const createPeWithCoffTailFixture = (): { pe: PeParseResult; knownCoffTailSize: number } => {
+const createPeWithCoffTailFixture = (): {
+  pe: PeParseResult;
+  knownCoffTailSize: number;
+  firstLongSectionOffset: number;
+} => {
   const pe = createPeWithSections(createPeSection(""));
   const stringTable = createSyntheticLegacyCoffStringTableFixture(2);
+  const firstLongSection = stringTable.entries[0];
   const firstSection = pe.sections[0];
+  if (!firstLongSection) assert.fail("expected synthetic COFF string-table entry");
   if (!firstSection) assert.fail("expected PE section fixture");
   pe.imageSizeMismatch = false;
   pe.debug = null;
@@ -24,7 +30,8 @@ const createPeWithCoffTailFixture = (): { pe: PeParseResult; knownCoffTailSize: 
   pe.opt.AddressOfEntryPoint = firstSection.virtualAddress;
   return {
     pe,
-    knownCoffTailSize: pe.coff.NumberOfSymbols * COFF_SYMBOL_RECORD_SIZE + pe.coffStringTableSize
+    knownCoffTailSize: pe.coff.NumberOfSymbols * COFF_SYMBOL_RECORD_SIZE + pe.coffStringTableSize,
+    firstLongSectionOffset: firstLongSection.offset
   };
 };
 
@@ -42,25 +49,29 @@ void test("renderSanity does not flag COFF symbol and string tables after the la
 void test("renderSanity still reports bytes that remain after the known COFF tail", () => {
   const out: string[] = [];
   const fixture = createPeWithCoffTailFixture();
+  const unexplainedOverlayBytes = fixture.firstLongSectionOffset;
 
   renderSanity(
-    { ...fixture.pe, overlaySize: fixture.knownCoffTailSize + 16 } as PeParseResult,
+    { ...fixture.pe, overlaySize: fixture.knownCoffTailSize + unexplainedOverlayBytes } as PeParseResult,
     out
   );
 
-  assert.ok(out.join("").includes("Overlay after last section: 16 B (16 bytes)."));
+  assert.ok(
+    out.join("").includes(`Overlay after last section: ${unexplainedOverlayBytes} B (${unexplainedOverlayBytes} bytes).`)
+  );
 });
 
 void test("renderSanity does not flag explicit trailing alignment padding after the known COFF tail", () => {
   const out: string[] = [];
   const fixture = createPeWithCoffTailFixture();
-  const trailingAlignmentPaddingSize = 0x20;
+  const trailingAlignmentPaddingSize = fixture.pe.coffStringTableSize;
+  if (trailingAlignmentPaddingSize == null) assert.fail("expected synthetic COFF string-table size");
 
   renderSanity(
     {
       ...fixture.pe,
-      // Keep overlay 4 bytes shorter than known COFF tail + zero padding to prove clipping works.
-      overlaySize: fixture.knownCoffTailSize + trailingAlignmentPaddingSize - 4,
+      // Keep overlay shorter than known COFF tail + zero padding to prove clipping works.
+      overlaySize: fixture.knownCoffTailSize + trailingAlignmentPaddingSize - fixture.firstLongSectionOffset,
       trailingAlignmentPaddingSize
     } as PeParseResult,
     out
