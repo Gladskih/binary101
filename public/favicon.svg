@@ -1,0 +1,43 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 64 64"
+  role="img"
+  aria-label="Favicon"
+>
+  <style>
+    .favicon-bg {
+      fill: #f6f7f9;
+      stroke: #d4d7de;
+    }
+    .favicon-mark {
+      fill: #4f46e5;
+    }
+    @media (prefers-color-scheme: dark) {
+      .favicon-bg {
+        fill: #141418;
+        stroke: #31313a;
+      }
+      .favicon-mark {
+        fill: #818cf8;
+      }
+    }
+  </style>
+  <rect class="favicon-bg" x="0.5" y="0.5" width="63" height="63" rx="14" />
+  <path
+    class="favicon-mark"
+    d="
+      M196 246V279Q196 312 205 337.5Q214 363 234.5 388Q255 413 288 442
+      Q306 458 319 472Q332 486 338.5 501Q345 516 345 535
+      Q345 565 322.5 587Q300 609 261 609Q233 609 212.5 597
+      Q192 585 179 566.5Q166 548 159 527L44 575Q55 613 82.5 649
+      Q110 685 154 708.5Q198 732 258 732Q322 732 370.5 707
+      Q419 682 446.5 639Q474 596 474 542Q474 504 462.5 475
+      Q451 446 431 422Q411 398 387 375Q365 354 352 337.5
+      Q339 321 333.5 303.5Q328 286 328 262V246Z
+      M261 -6Q225 -6 199.5 19.5Q174 45 174 81Q174 117 199.5 142
+      Q225 167 261 167Q297 167 322 142Q347 117 347 81
+      Q347 45 322 19.5Q297 -6 261 -6Z
+    "
+    transform="translate(17.260 51.659) scale(0.056911 -0.056911)"
+  />
+</svg>
