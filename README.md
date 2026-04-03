@@ -36,6 +36,11 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
 - `npm run dev` &mdash; start the Vite dev server.
 - `npm run build` &mdash; create the production build in `dist/`.
 - `npm run preview` &mdash; serve the built site locally on `http://127.0.0.1:4173`.
+- `npx tsx scripts/rustPeMatrix.ts` &mdash; build a Rust PE matrix with the local
+  `rustc` toolchain and run each output through the PE analyzer/renderer.
+  Results are written to
+  `%TEMP%\binary101-rust-hello-bin\matrix\` (`commands.txt`, `summary.md`,
+  and per-variant `parse.json` / `rendered.html`).
 
 ## Project Structure (high level)
 - `index.html` & `style.css` &mdash; Vite HTML entry and page styling.
