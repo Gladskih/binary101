@@ -85,6 +85,7 @@ export const createBasePe = (): PeParseResult =>
     clr: null,
     security: null,
     iat: null,
+    importLinking: null,
     resources: null,
     overlaySize: 0,
     imageEnd: 0,

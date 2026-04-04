@@ -29,6 +29,7 @@ export const buildHeaderOnlyPeParseResult = (core: PeCore): PeParseResult => ({
   clr: null,
   security: null,
   iat: null,
+  importLinking: null,
   architecture: null,
   globalPtr: null,
   resources: null,

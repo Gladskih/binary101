@@ -3,12 +3,7 @@ import { parsePeHeaders } from "./core.js";
 import { verifyAuthenticodeFileDigest } from "./authenticode-verify.js";
 import { parseDebugDirectory, type PeCodeViewEntry, type PeDebugDirectoryEntry } from "./debug-directory.js";
 import { parseLoadConfigDirectory32, parseLoadConfigDirectory64, type PeLoadConfig, type PeLoadConfigTables } from "./load-config/index.js";
-import {
-  readGuardAddressTakenIatEntryTableRvas,
-  readGuardCFFunctionTableRvas,
-  readGuardEhContinuationTableRvas,
-  readGuardLongJumpTargetTableRvas, readSafeSehHandlerTableRvas
-} from "./load-config/tables.js";
+import { readGuardAddressTakenIatEntryTableRvas, readGuardCFFunctionTableRvas, readGuardEhContinuationTableRvas, readGuardLongJumpTargetTableRvas, readSafeSehHandlerTableRvas } from "./load-config/tables.js";
 import { collectLoadConfigWarnings } from "./load-config/warnings.js";
 import { parseImportDirectory32, parseImportDirectory64, type PeImportParseResult } from "./imports.js";
 import { parseExportDirectory } from "./exports.js";
@@ -25,6 +20,7 @@ import { parseDynamicRelocationsFromLoadConfig32, parseDynamicRelocationsFromLoa
 import { parseIatDirectory, type PeIatDirectory } from "./iat-directory.js";
 import { parseArchitectureDirectory, type PeArchitectureDirectory } from "./architecture-directory.js";
 import { parseGlobalPtrDirectory, type PeGlobalPtrDirectory } from "./globalptr-directory.js";
+import { analyzeImportLinking, type PeImportLinkingResult } from "./import-linking.js";
 import { buildHeaderOnlyPeParseResult } from "./header-only-result.js";
 import { isPePlusOptionalHeader, isPeWindowsOptionalHeader } from "./optional-header-kind.js";
 import type { PeInstructionSetReport } from "./disassembly.js";
@@ -35,15 +31,8 @@ import type { PeCore, PeDataDirectory, PeTlsDirectory, RvaToOffset } from "./typ
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types
 const IMAGE_FILE_MACHINE_I386 = 0x014c;
 
-const appendUniqueWarnings = (
-  existing: string[] | undefined,
-  messages: string[]
-): string[] | undefined => {
-  if (!messages.length) return existing;
-  const merged = new Set(existing ?? []);
-  messages.forEach(message => merged.add(message));
-  return [...merged];
-};
+const appendUniqueWarnings = (existing: string[] | undefined, messages: string[]): string[] | undefined =>
+  messages.length ? [...new Set([...(existing ?? []), ...messages])] : existing;
 
 const mergeLoadConfigWarnings = (loadcfg: PeLoadConfig, messages: string[]): void => {
   const merged = appendUniqueWarnings(loadcfg.warnings, messages);
@@ -81,6 +70,7 @@ export interface PeParseResult {
   clr: PeClrHeader | null;
   security: ParsedSecurityDirectory | null;
   iat: PeIatDirectory | null;
+  importLinking: PeImportLinkingResult | null;
   architecture?: PeArchitectureDirectory | null;
   globalPtr?: PeGlobalPtrDirectory | null;
   resources: PeResources | null;
@@ -250,6 +240,14 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     security = { ...security, certs };
   }
   const iat = parseIatDirectory(dataDirs, rvaToOff);
+  const importLinking = analyzeImportLinking(
+    importResult,
+    boundImports,
+    delayImports,
+    iat,
+    loadcfg,
+    sections
+  );
   const architecture = parseArchitectureDirectory(dataDirs);
   const globalPtr = parseGlobalPtrDirectory(dataDirs, rvaToOff);
   return {
@@ -266,9 +264,7 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     signature: "PE",
     coff,
     ...(core.coffStringTableSize != null ? { coffStringTableSize: core.coffStringTableSize } : {}),
-    ...(core.trailingAlignmentPaddingSize
-      ? { trailingAlignmentPaddingSize: core.trailingAlignmentPaddingSize }
-      : {}),
+    ...(core.trailingAlignmentPaddingSize ? { trailingAlignmentPaddingSize: core.trailingAlignmentPaddingSize } : {}),
     opt,
     ...(core.warnings?.length ? { warnings: core.warnings } : {}),
     dirs: dataDirs,
@@ -286,6 +282,7 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     clr,
     security,
     iat,
+    importLinking,
     architecture,
     globalPtr,
     resources,

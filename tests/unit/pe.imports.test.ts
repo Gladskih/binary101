@@ -54,6 +54,9 @@ void test("parseImportDirectory reads import descriptors with names and ordinals
   assert.equal(result.entries.length, 1);
   const entry = expectDefined(result.entries[0]);
   assert.equal(entry.dll, "SHELL32.dll");
+  assert.equal(entry.originalFirstThunkRva, thunkTableRva);
+  assert.equal(entry.firstThunkRva, 0);
+  assert.equal(entry.lookupSource, "import-lookup-table");
   assert.deepEqual(entry.functions, [{ hint: importHint, name: "ImportX" }, { ordinal: 3 }]);
 });
 
@@ -139,6 +142,9 @@ void test("parseImportDirectory supports the 64-bit imports path", async () => {
   assert.equal(result.warning, undefined);
   assert.equal(result.entries.length, 1);
   const entry = expectDefined(result.entries[0]);
+  assert.equal(entry.originalFirstThunkRva, 0);
+  assert.equal(entry.firstThunkRva, thunkTableRva);
+  assert.equal(entry.lookupSource, "iat-fallback");
   assert.deepEqual(entry.functions, [{ hint: importHint, name: "RegOpenKey" }, { ordinal: 5 }]);
 });
 

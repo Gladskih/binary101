@@ -30,8 +30,15 @@ export interface PeImportFunction {
   name?: string;
 }
 
+export type PeImportLookupSource = "import-lookup-table" | "iat-fallback" | "missing";
+
 export interface PeImportEntry {
   dll: string;
+  originalFirstThunkRva: number;
+  timeDateStamp: number;
+  forwarderChain: number;
+  firstThunkRva: number;
+  lookupSource: PeImportLookupSource;
   functions: PeImportFunction[];
 }
 
@@ -237,6 +244,14 @@ const parseImportDirectoryWithThunkReader = async (
       addWarning("Import name RVA does not map to file data.");
     }
     if (descriptorTruncated) break;
+    // Microsoft PE format: OriginalFirstThunk points to the Import Lookup Table,
+    // while FirstThunk points to the Import Address Table that the loader patches.
+    // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#import-directory-table
+    const lookupSource: PeImportLookupSource = originalFirstThunk
+      ? "import-lookup-table"
+      : firstThunk
+        ? "iat-fallback"
+        : "missing";
     const thunkRva = originalFirstThunk || firstThunk;
     const functions = thunkRva
       ? await readThunkFunctions(
@@ -249,7 +264,15 @@ const parseImportDirectoryWithThunkReader = async (
           maxThunkEntries
         )
       : [];
-    imports.push({ dll: dllName, functions });
+    imports.push({
+      dll: dllName,
+      originalFirstThunkRva: originalFirstThunk,
+      timeDateStamp,
+      forwarderChain,
+      firstThunkRva: firstThunk,
+      lookupSource,
+      functions
+    });
   }
   const warning = warnings.size ? Array.from(warnings).join(" | ") : undefined;
   return warning ? { entries: imports, warning } : { entries: imports };

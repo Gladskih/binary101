@@ -6,21 +6,24 @@ import { renderInstructionSets } from "./disassembly.js";
 import { renderLoadConfig } from "./load-config.js";
 import {
   renderDebug,
-  renderImports,
   renderExports,
   renderTls,
   renderClr,
   renderSecurity,
-  renderIat,
   renderArchitectureDirectory,
   renderGlobalPtrDirectory
 } from "./directories.js";
+import {
+  renderImportLinking,
+  renderImports,
+  renderBoundImports,
+  renderDelayImports,
+  renderIat
+} from "./import-sections.js";
 import { renderResources } from "./resources.js";
 import {
   renderReloc,
   renderException,
-  renderBoundImports,
-  renderDelayImports,
   renderSanity
 } from "./layout.js";
 
@@ -39,17 +42,18 @@ export function renderPe(pe: PeParseResult | null | undefined): string {
   renderInstructionSets(pe.disassembly, out);
   renderLoadConfig(pe, out);
   renderIfPresent(pe.debug, renderDebug, out);
-  renderImports(pe.imports, out);
+  renderImportLinking(pe, out);
+  renderImports(pe, out);
   renderIfPresent(pe.resources, renderResources, out);
   renderIfPresent(pe.exports, renderExports, out);
   renderIfPresent(pe.tls, renderTls, out);
   renderIfPresent(pe.reloc, renderReloc, out);
   renderIfPresent(pe.exception, renderException, out);
-  renderIfPresent(pe.boundImports, renderBoundImports, out);
-  renderIfPresent(pe.delayImports, renderDelayImports, out);
+  renderBoundImports(pe, out);
+  renderDelayImports(pe, out);
   renderIfPresent(pe.clr, renderClr, out);
   renderIfPresent(pe.security, renderSecurity, out);
-  renderIfPresent(pe.iat, renderIat, out);
+  renderIat(pe, out);
   renderArchitectureDirectory(pe, out);
   renderGlobalPtrDirectory(pe, out);
   renderSanity(pe, out);
