@@ -8,16 +8,19 @@ import {
   countRelation,
   describeSectionForRva,
   filterFindings,
+  filterStandaloneFindings,
   findLinkedDelayImportDescriptor,
   findLinkedModuleForBoundImport,
   findLinkedModuleForDelayImport,
   findLinkedModuleForImport,
   findLinkedImportDescriptor,
+  renderDeclaredIatRelation,
   renderBinding,
   renderDelayGuardContext,
   renderDelaySectionContext,
   renderFindingRows,
   renderFindingSummary,
+  renderImportNamesForIndices,
   renderIatRelation
   ,
   renderLookupSource
@@ -141,28 +144,53 @@ export function renderDelayImports(pe: PeParseResult, out: string[]): void {
 }
 
 export function renderIat(pe: PeParseResult, out: string[]): void {
-  if (!pe.iat) return;
+  const inferredEagerIat = pe.importLinking?.inferredEagerIat ?? null;
+  if (!pe.iat && !inferredEagerIat) return;
   const eagerRelations = pe.importLinking?.modules.flatMap(module =>
     module.imports.map(linkedImport => linkedImport.iatDirectoryRelation)
   ) ?? [];
   const delayRelations = pe.importLinking?.modules.flatMap(module =>
     module.delayImports.map(linkedImport => linkedImport.iatDirectoryRelation)
   ) ?? [];
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import Address Table (IAT)</h4><div class="smallNote">IMAGE_DIRECTORY_ENTRY_IAT gives one RVA/size range for the main runtime import-address slots. Delay-load descriptors may legally keep their own IAT ranges elsewhere when the producer uses a protected delay-load layout documented by Microsoft.</div>`);
-  if (pe.iat.warnings?.length) {
+  const declaredVsInferredFindings = filterStandaloneFindings(pe.importLinking?.findings, [
+    "declared-iat-absent-inferred-eager",
+    "declared-iat-exact-match",
+    "declared-iat-covers-inferred-eager",
+    "declared-iat-misses-inferred-eager"
+  ]);
+  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import Address Tables (IAT)</h4><div class="smallNote">The PE optional header can declare one main IMAGE_DIRECTORY_ENTRY_IAT range, while each eager import descriptor also carries its own FirstThunk RVA. This view keeps those two ideas separate: the declared main IAT range from the optional header, and best-effort eager IAT ranges inferred from FirstThunk values.</div>`);
+  if (pe.iat?.warnings?.length) {
     out.push(`<ul class="smallNote">`);
     pe.iat.warnings.forEach(warning => out.push(`<li>${safe(warning)}</li>`));
     out.push(`</ul>`);
   }
   out.push(`<dl>`);
-  out.push(dd("RVA", hex(pe.iat.rva, 8), "RVA of the main IAT directory."));
-  out.push(dd("Size", humanSize(pe.iat.size), "Total size of the main IAT directory in bytes."));
-  out.push(dd("Range", `${hex(pe.iat.rva, 8)} - ${hex((pe.iat.rva + pe.iat.size) >>> 0, 8)}`, "Half-open RVA range covered by IMAGE_DIRECTORY_ENTRY_IAT."));
-  out.push(dd("Main IAT section", describeSectionForRva(pe, pe.iat.rva), "Section containing the main IMAGE_DIRECTORY_ENTRY_IAT RVA."));
+  out.push(dd("Declared IAT directory", pe.iat ? "Present" : "Absent", "Whether the optional header includes IMAGE_DIRECTORY_ENTRY_IAT."));
+  out.push(dd("Declared main IAT RVA", pe.iat ? hex(pe.iat.rva, 8) : "-", "RVA from IMAGE_DIRECTORY_ENTRY_IAT in the optional header."));
+  out.push(dd("Declared main IAT size", pe.iat ? humanSize(pe.iat.size) : "-", "Size from IMAGE_DIRECTORY_ENTRY_IAT in the optional header."));
+  out.push(dd("Declared main IAT range", pe.iat ? `${hex(pe.iat.rva, 8)} - ${hex((pe.iat.rva + pe.iat.size) >>> 0, 8)}` : "-", "Half-open RVA range declared by IMAGE_DIRECTORY_ENTRY_IAT."));
+  out.push(dd("Declared main IAT section", pe.iat ? describeSectionForRva(pe, pe.iat.rva) : "-", "Section containing the declared IMAGE_DIRECTORY_ENTRY_IAT RVA."));
+  out.push(dd("Inferred eager IAT ranges", inferredEagerIat ? String(inferredEagerIat.ranges.length) : "0", "Best-effort eager IAT ranges inferred from FirstThunk values in the normal import descriptors."));
+  out.push(dd("Inferred eager IAT aggregate", inferredEagerIat ? `${hex(inferredEagerIat.aggregateStartRva, 8)} - ${hex(inferredEagerIat.aggregateEndRva, 8)}` : "-", "Half-open aggregate span that covers all inferred eager IAT ranges."));
+  out.push(dd("Inferred eager IAT size", inferredEagerIat ? humanSize(inferredEagerIat.aggregateSize) : "-", "Aggregate size covered by inferred eager IAT ranges."));
+  out.push(dd("Inferred thunk entry size", inferredEagerIat ? `${inferredEagerIat.thunkEntrySize} bytes` : "-", "PE32 eager IAT thunks are 4 bytes; PE32+ eager IAT thunks are 8 bytes."));
+  out.push(dd("Declared vs inferred eager IAT", inferredEagerIat ? renderDeclaredIatRelation(inferredEagerIat.relationToDeclared) : "-", "Compares IMAGE_DIRECTORY_ENTRY_IAT from the optional header against eager IAT ranges inferred from FirstThunk values."));
+  out.push(renderFindingRows(declaredVsInferredFindings));
   out.push(dd("Eager imports inside", String(countRelation(eagerRelations, "covered")), "Normal import descriptors whose FirstThunk starts inside IMAGE_DIRECTORY_ENTRY_IAT."));
   out.push(dd("Eager imports outside", String(countRelation(eagerRelations, "outside-directory")), "Normal import descriptors whose FirstThunk starts outside IMAGE_DIRECTORY_ENTRY_IAT."));
+  out.push(dd("Eager imports with no declared IAT", String(countRelation(eagerRelations, "missing-directory")), "Normal import descriptors whose FirstThunk exists but IMAGE_DIRECTORY_ENTRY_IAT is absent."));
   out.push(dd("Delay-load IATs inside", String(countRelation(delayRelations, "covered")), "Delay-load descriptors whose ImportAddressTableRVA starts inside IMAGE_DIRECTORY_ENTRY_IAT."));
   out.push(dd("Delay-load IATs outside", String(countRelation(delayRelations, "outside-directory")), "Delay-load descriptors whose ImportAddressTableRVA starts outside IMAGE_DIRECTORY_ENTRY_IAT."));
+  out.push(dd("Delay-load IATs with no declared IAT", String(countRelation(delayRelations, "missing-directory")), "Delay-load descriptors whose ImportAddressTableRVA exists but IMAGE_DIRECTORY_ENTRY_IAT is absent."));
   out.push(dd("Protected delay-load modules", String(countModulesWithFindingCodes(pe.importLinking?.modules ?? [], ["protected-delay-iat-own-section", "protected-delay-iat-separate-section"])), "Modules whose outside-main-IAT delay-load layout was confirmed by Load Config GuardFlags and section placement."));
-  out.push(`</dl></section>`);
+  out.push(`</dl>`);
+  if (inferredEagerIat) {
+    out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show inferred eager IAT ranges (${inferredEagerIat.ranges.length})</summary>`);
+    out.push(`<div class="tableWrap"><table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Range</th><th>Size</th><th>Section</th><th>Descriptors</th><th>Modules</th></tr></thead><tbody>`);
+    inferredEagerIat.ranges.forEach((range, rangeIndex) => {
+      out.push(`<tr><td>${rangeIndex + 1}</td><td>${hex(range.startRva, 8)} - ${hex(range.endRva, 8)}</td><td>${humanSize(range.size)}</td><td>${describeSectionForRva(pe, range.startRva)}</td><td>${range.descriptorCount}</td><td>${renderImportNamesForIndices(pe, range.importIndices)}</td></tr>`);
+    });
+    out.push(`</tbody></table></div></details>`);
+  }
+  out.push(`</section>`);
 }

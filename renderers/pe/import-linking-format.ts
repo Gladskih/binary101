@@ -3,6 +3,7 @@
 import { dd, safe } from "../../html-utils.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 import type {
+  PeDeclaredIatRelation,
   PeImportBindingRelation,
   PeImportLinkingFinding,
   PeImportLinkingModule,
@@ -168,11 +169,21 @@ export const countFindings = (
     0
   );
 
+export const countStandaloneFindings = (
+  findings: PeImportLinkingFinding[] | undefined,
+  severity: PeFindingSeverity
+): number => findings?.filter(finding => finding.severity === severity).length ?? 0;
+
 export const countModulesWithFindingCodes = (
   modules: PeImportLinkingModule[],
   codes: string[]
 ): number =>
   modules.filter(module => module.findings?.some(finding => codes.includes(finding.code))).length;
+
+export const filterStandaloneFindings = (
+  findings: PeImportLinkingFinding[] | undefined,
+  codes: string[]
+): PeImportLinkingFinding[] => findings?.filter(finding => codes.includes(finding.code)) ?? [];
 
 export const renderLookupSourceLabel = (
   lookupSource: PeImportLookupSource | undefined
@@ -215,6 +226,19 @@ export const renderIatRelation = (
   if (relation === "outside-directory") return "Starts outside IMAGE_DIRECTORY_ENTRY_IAT";
   if (relation === "missing-directory") return "IMAGE_DIRECTORY_ENTRY_IAT is absent";
   return "No table RVA";
+};
+
+export const renderDeclaredIatRelation = (
+  relation: PeDeclaredIatRelation | undefined
+): string => {
+  if (relation === "exact-match") return "Exact match";
+  if (relation === "declared-covers-inferred") {
+    return "Declared IAT covers all inferred eager IAT ranges";
+  }
+  if (relation === "declared-misses-inferred") {
+    return "Declared IAT misses inferred eager IAT ranges";
+  }
+  return "Declared IAT absent";
 };
 
 export const summarizeLookupSources = (
@@ -265,4 +289,15 @@ export const renderDelaySectionContext = (
   return sectionName.toLowerCase() === CANONICAL_DELAYLOAD_IAT_SECTION_NAME
     ? `${safe(sectionName)}<div class="smallNote">Microsoft documents .didat as the canonical section for protected delay-load IATs.</div>`
     : safe(sectionName);
+};
+
+export const renderImportNamesForIndices = (
+  pe: PeParseResult,
+  importIndices: number[]
+): string => {
+  const names = [...new Set(importIndices
+    .map(importIndex => pe.imports.entries[importIndex]?.dll)
+    .filter((value): value is string => !!value))];
+  if (!names.length) return "-";
+  return safe(names.join(", "));
 };

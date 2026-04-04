@@ -11,6 +11,12 @@ export type PeImportBindingRelation =
   | "timestamp-only"
   | "bound-directory-match";
 
+export type PeDeclaredIatRelation =
+  | "declared-absent"
+  | "exact-match"
+  | "declared-covers-inferred"
+  | "declared-misses-inferred";
+
 export interface PeImportLinkingFinding {
   code: string;
   severity: "confirmed" | "info" | "warning";
@@ -32,6 +38,23 @@ export interface PeLinkedDelayImportDescriptor {
   iatDirectoryRelation: PeIatDirectoryRelation;
 }
 
+export interface PeInferredEagerIatRange {
+  startRva: number;
+  endRva: number;
+  size: number;
+  importIndices: number[];
+  descriptorCount: number;
+}
+
+export interface PeInferredEagerIat {
+  ranges: PeInferredEagerIatRange[];
+  aggregateStartRva: number;
+  aggregateEndRva: number;
+  aggregateSize: number;
+  thunkEntrySize: number;
+  relationToDeclared: PeDeclaredIatRelation;
+}
+
 export interface PeImportLinkingModule {
   moduleKey: string;
   imports: PeLinkedImportDescriptor[];
@@ -42,4 +65,6 @@ export interface PeImportLinkingModule {
 
 export interface PeImportLinkingResult {
   modules: PeImportLinkingModule[];
+  inferredEagerIat: PeInferredEagerIat | null;
+  findings?: PeImportLinkingFinding[];
 }

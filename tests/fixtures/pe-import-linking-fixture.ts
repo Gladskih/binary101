@@ -77,6 +77,7 @@ const createLoadConfig = (guardFlags: number): PeLoadConfig => ({
 });
 
 const createLinkedImports = (): PeImportParseResult => ({
+  thunkEntrySize: Uint32Array.BYTES_PER_ELEMENT,
   entries: [
     {
       dll: "KERNEL32.dll",
@@ -85,6 +86,7 @@ const createLinkedImports = (): PeImportParseResult => ({
       forwarderChain: 0,
       firstThunkRva: 0x2000,
       lookupSource: "import-lookup-table",
+      thunkTableTerminated: true,
       functions: [{ hint: 1, name: "Sleep" }]
     },
     {
@@ -95,6 +97,7 @@ const createLinkedImports = (): PeImportParseResult => ({
       forwarderChain: 0,
       firstThunkRva: 0x2100,
       lookupSource: "iat-fallback",
+      thunkTableTerminated: true,
       functions: [{ hint: 2, name: "MessageBoxW" }]
     }
   ]
@@ -233,6 +236,27 @@ export const createPeWithImportLinking = (): PeParseResult => {
   pe.boundImports = boundImports;
   pe.delayImports = delayImports;
   pe.iat = iat;
+  pe.loadcfg = loadcfg;
+  pe.importLinking = importLinking as PeImportLinkingResult;
+  return pe;
+};
+
+export const createPeWithInferredEagerIatOnly = (): PeParseResult => {
+  const pe = createBasePe();
+  const { imports, boundImports, delayImports, loadcfg } = createImportLinkingInputs();
+  pe.sections = createImportLinkingSections();
+  const importLinking = analyzeImportLinking(
+    imports,
+    boundImports,
+    delayImports,
+    null,
+    loadcfg,
+    pe.sections
+  );
+  pe.imports = imports;
+  pe.boundImports = boundImports;
+  pe.delayImports = delayImports;
+  pe.iat = null;
   pe.loadcfg = loadcfg;
   pe.importLinking = importLinking as PeImportLinkingResult;
   return pe;

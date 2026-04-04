@@ -1,9 +1,6 @@
 "use strict";
 
-import type {
-  PeDataDirectory,
-  RvaToOffset
-} from "./types.js";
+import type { PeDataDirectory, RvaToOffset } from "./types.js";
 import { createFileRangeReader, type FileRangeReader } from "../file-range-reader.js";
 import { readMappedNullTerminatedAsciiString } from "./mapped-ascii-string.js";
 
@@ -39,13 +36,17 @@ export interface PeImportEntry {
   forwarderChain: number;
   firstThunkRva: number;
   lookupSource: PeImportLookupSource;
+  thunkTableTerminated: boolean;
   functions: PeImportFunction[];
 }
 
 export interface PeImportParseResult {
   entries: PeImportEntry[];
+  thunkEntrySize: number;
   warning?: string;
 }
+
+type PeParsedThunkTable = { functions: PeImportFunction[]; terminated: boolean };
 
 const readImportByName = async (
   reader: FileRangeReader,
@@ -85,7 +86,7 @@ const readImportThunkFunctions32 = async (
   addWarning: (msg: string) => void,
   isReadableOffset: (offset: number | null) => offset is number,
   maxThunkEntries: (entrySize: number) => number
-): Promise<PeImportFunction[]> => {
+): Promise<PeParsedThunkTable> => {
   const functions: PeImportFunction[] = [];
   for (let thunkIndex = 0; thunkIndex < maxThunkEntries(IMAGE_THUNK_DATA32_SIZE); thunkIndex += 1) {
     const thunkEntryRva = thunkRva + thunkIndex * IMAGE_THUNK_DATA32_SIZE;
@@ -100,7 +101,9 @@ const readImportThunkFunctions32 = async (
       break;
     }
     const value = dv.getUint32(0, true);
-    if (value === 0) break;
+    if (value === 0) {
+      return { functions, terminated: true };
+    }
     if ((value & IMAGE_ORDINAL_FLAG32) !== 0) {
       if ((value & IMAGE_IMPORT_ORDINAL_RESERVED_MASK32) !== 0) {
         addWarning("Import ordinal thunk has reserved bits set.");
@@ -112,7 +115,7 @@ const readImportThunkFunctions32 = async (
       await readImportByName(reader, fileSize, rvaToOff, value, addWarning, isReadableOffset)
     );
   }
-  return functions;
+  return { functions, terminated: false };
 };
 
 const readImportThunkFunctions64 = async (
@@ -123,7 +126,7 @@ const readImportThunkFunctions64 = async (
   addWarning: (msg: string) => void,
   isReadableOffset: (offset: number | null) => offset is number,
   maxThunkEntries: (entrySize: number) => number
-): Promise<PeImportFunction[]> => {
+): Promise<PeParsedThunkTable> => {
   const functions: PeImportFunction[] = [];
   for (let thunkIndex = 0; thunkIndex < maxThunkEntries(IMAGE_THUNK_DATA64_SIZE); thunkIndex += 1) {
     const thunkEntryRva = thunkRva + thunkIndex * IMAGE_THUNK_DATA64_SIZE;
@@ -138,7 +141,9 @@ const readImportThunkFunctions64 = async (
       break;
     }
     const value = dv.getBigUint64(0, true);
-    if (value === 0n) break;
+    if (value === 0n) {
+      return { functions, terminated: true };
+    }
     if ((value & IMAGE_ORDINAL_FLAG64) !== 0n) {
       if ((value & IMAGE_IMPORT_ORDINAL_RESERVED_MASK64) !== 0n) {
         addWarning("Import ordinal thunk has reserved bits set.");
@@ -160,7 +165,7 @@ const readImportThunkFunctions64 = async (
       )
     );
   }
-  return functions;
+  return { functions, terminated: false };
 };
 
 const parseImportDirectoryWithThunkReader = async (
@@ -175,7 +180,8 @@ const parseImportDirectoryWithThunkReader = async (
     addWarning: (msg: string) => void,
     isReadableOffset: (offset: number | null) => offset is number,
     maxThunkEntries: (entrySize: number) => number
-  ) => Promise<PeImportFunction[]>
+  ) => Promise<PeParsedThunkTable>,
+  thunkEntrySize: number
 ): Promise<PeImportParseResult> => {
   const impDir = dataDirs.find(d => d.name === "IMPORT");
   const imports: PeImportEntry[] = [];
@@ -184,10 +190,10 @@ const parseImportDirectoryWithThunkReader = async (
     offset != null && offset >= 0 && offset < file.size;
   const reader = createFileRangeReader(file, 0, file.size);
   const maxThunkEntries = (entrySize: number): number => Math.floor(file.size / entrySize) + 1;
-  if (!impDir?.rva) return { entries: imports };
+  if (!impDir?.rva) return { entries: imports, thunkEntrySize };
   const start = rvaToOff(impDir.rva);
   if (start == null || start < 0 || start >= file.size) {
-    return { entries: imports, warning: "Import directory RVA does not map to file data." };
+    return { entries: imports, thunkEntrySize, warning: "Import directory RVA does not map to file data." };
   }
   const availableDirSize = Math.max(0, Math.min(impDir.size, file.size - start));
   const maxDescriptors = Math.ceil(availableDirSize / IMAGE_IMPORT_DESCRIPTOR_SIZE);
@@ -244,8 +250,7 @@ const parseImportDirectoryWithThunkReader = async (
       addWarning("Import name RVA does not map to file data.");
     }
     if (descriptorTruncated) break;
-    // Microsoft PE format: OriginalFirstThunk points to the Import Lookup Table,
-    // while FirstThunk points to the Import Address Table that the loader patches.
+    // Microsoft PE format: OriginalFirstThunk points to the Import Lookup Table, while FirstThunk points to the Import Address Table that the loader patches.
     // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#import-directory-table
     const lookupSource: PeImportLookupSource = originalFirstThunk
       ? "import-lookup-table"
@@ -253,7 +258,7 @@ const parseImportDirectoryWithThunkReader = async (
         ? "iat-fallback"
         : "missing";
     const thunkRva = originalFirstThunk || firstThunk;
-    const functions = thunkRva
+    const thunkTable = thunkRva
       ? await readThunkFunctions(
           reader,
           file.size,
@@ -263,7 +268,7 @@ const parseImportDirectoryWithThunkReader = async (
           isReadableOffset,
           maxThunkEntries
         )
-      : [];
+      : { functions: [], terminated: false };
     imports.push({
       dll: dllName,
       originalFirstThunkRva: originalFirstThunk,
@@ -271,11 +276,12 @@ const parseImportDirectoryWithThunkReader = async (
       forwarderChain,
       firstThunkRva: firstThunk,
       lookupSource,
-      functions
+      thunkTableTerminated: thunkTable.terminated,
+      functions: thunkTable.functions
     });
   }
   const warning = warnings.size ? Array.from(warnings).join(" | ") : undefined;
-  return warning ? { entries: imports, warning } : { entries: imports };
+  return warning ? { entries: imports, thunkEntrySize, warning } : { entries: imports, thunkEntrySize };
 };
 
 export const parseImportDirectory32 = async (
@@ -283,11 +289,11 @@ export const parseImportDirectory32 = async (
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset
 ): Promise<PeImportParseResult> =>
-  parseImportDirectoryWithThunkReader(file, dataDirs, rvaToOff, readImportThunkFunctions32);
+  parseImportDirectoryWithThunkReader(file, dataDirs, rvaToOff, readImportThunkFunctions32, IMAGE_THUNK_DATA32_SIZE);
 
 export const parseImportDirectory64 = async (
   file: File,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset
 ): Promise<PeImportParseResult> =>
-  parseImportDirectoryWithThunkReader(file, dataDirs, rvaToOff, readImportThunkFunctions64);
+  parseImportDirectoryWithThunkReader(file, dataDirs, rvaToOff, readImportThunkFunctions64, IMAGE_THUNK_DATA64_SIZE);

@@ -18,7 +18,7 @@ export const buildHeaderOnlyPeParseResult = (core: PeCore): PeParseResult => ({
   sections: core.sections,
   entrySection: core.entrySection,
   rvaToOff: core.rvaToOff,
-  imports: { entries: [] },
+  imports: { entries: [], thunkEntrySize: Uint32Array.BYTES_PER_ELEMENT },
   loadcfg: null,
   exports: null,
   tls: null,

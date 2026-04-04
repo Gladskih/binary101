@@ -28,6 +28,10 @@ void test("analyzeImportLinking correlates eager, bound, delay, IAT, sections, a
   );
 
   assert.equal(result.modules.length, 3);
+  assert.equal(result.inferredEagerIat?.relationToDeclared, "declared-covers-inferred");
+  assert.ok(
+    result.findings?.some(finding => finding.code === "declared-iat-covers-inferred-eager")
+  );
 
   const kernelModule = expectDefined(result.modules.find(module => module.moduleKey === "kernel32.dll"));
   assert.equal(kernelModule.imports.length, 1);
@@ -160,7 +164,10 @@ void test("analyzeImportLinking warns when GuardFlags advertise an own-section d
 });
 
 void test("analyzeImportLinking returns null when no import-related structures are present", () => {
-  assert.equal(analyzeImportLinking({ entries: [] }, null, null, null, null, []), null);
+  assert.equal(
+    analyzeImportLinking({ entries: [], thunkEntrySize: Uint32Array.BYTES_PER_ELEMENT }, null, null, null, null, []),
+    null
+  );
 });
 
 void test("analyzeImportLinking normalizes module keys case-insensitively and trims whitespace", () => {
@@ -199,4 +206,5 @@ void test("analyzeImportLinking records missing-directory and missing-table-rva 
   assert.equal(kernelModule.imports[0]?.iatDirectoryRelation, "missing-table-rva");
   assert.equal(userModule.imports[0]?.iatDirectoryRelation, "missing-directory");
   assert.equal(userModule.delayImports[0]?.iatDirectoryRelation, "missing-directory");
+  assert.equal(result.inferredEagerIat?.relationToDeclared, "declared-absent");
 });

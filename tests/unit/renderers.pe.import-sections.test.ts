@@ -9,7 +9,10 @@ import {
   renderDelayImports,
   renderIat
 } from "../../renderers/pe/import-sections.js";
-import { createPeWithImportLinking } from "../fixtures/pe-import-linking-fixture.js";
+import {
+  createPeWithImportLinking,
+  createPeWithInferredEagerIatOnly
+} from "../fixtures/pe-import-linking-fixture.js";
 
 void test("renderImportLinking and related sections surface confirmed and non-canonical import relationships", () => {
   const pe = createPeWithImportLinking();
@@ -37,4 +40,25 @@ void test("renderImportLinking and related sections surface confirmed and non-ca
   assert.ok(html.includes("Load Config delay-IAT flags"));
   assert.ok(html.includes("Protected delay-load modules"));
   assert.ok(html.includes("Bound import entry without a matching eager import descriptor."));
+  assert.ok(html.includes("Declared vs inferred eager IAT"));
+  assert.ok(html.includes("Declared IAT covers all inferred eager IAT ranges"));
+  assert.ok(html.includes("Show inferred eager IAT ranges"));
+});
+
+void test("renderIat shows inferred eager IAT ranges even when IMAGE_DIRECTORY_ENTRY_IAT is absent", () => {
+  const pe = createPeWithInferredEagerIatOnly();
+  const out: string[] = [];
+
+  renderIat(pe, out);
+
+  const html = out.join("");
+  assert.ok(html.includes("Import Address Tables (IAT)"));
+  assert.ok(html.includes("Declared IAT directory"));
+  assert.ok(html.includes("Absent"));
+  assert.ok(html.includes("Inferred eager IAT ranges"));
+  assert.ok(
+    html.includes(
+      "IMAGE_DIRECTORY_ENTRY_IAT is absent, but eager IAT ranges were inferred from FirstThunk values in the import descriptors."
+    )
+  );
 });

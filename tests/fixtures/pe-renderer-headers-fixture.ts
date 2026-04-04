@@ -74,7 +74,7 @@ export const createBasePe = (): PeParseResult =>
     entrySection: null,
     rvaToOff: (() => null) as unknown,
     debug: null,
-    imports: { entries: [] },
+    imports: { entries: [], thunkEntrySize: Uint32Array.BYTES_PER_ELEMENT },
     loadcfg: null,
     exports: null as unknown,
     tls: null,

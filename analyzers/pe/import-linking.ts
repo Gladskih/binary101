@@ -6,6 +6,7 @@ import type { PeIatDirectory } from "./iat-directory.js";
 import type { PeImportParseResult } from "./imports.js";
 import type { PeLoadConfig } from "./load-config/index.js";
 import type { PeSection } from "./types.js";
+import { analyzeInferredEagerIat } from "./inferred-eager-iat.js";
 import {
   analyzeLinkedModule,
   resolveIatDirectoryRelation
@@ -17,11 +18,13 @@ import type {
 
 export type {
   PeIatDirectoryRelation,
+  PeDeclaredIatRelation,
   PeImportBindingRelation,
   PeImportLinkingFinding,
   PeLinkedImportDescriptor,
   PeLinkedBoundImportDescriptor,
   PeLinkedDelayImportDescriptor,
+  PeInferredEagerIat,
   PeImportLinkingModule,
   PeImportLinkingResult
 } from "./import-linking-model.js";
@@ -103,11 +106,14 @@ export const analyzeImportLinking = (
   if (!imports.entries.length && !boundImports?.entries.length && !delayImports?.entries.length) {
     return null;
   }
+  const { inferredEagerIat, findings } = analyzeInferredEagerIat(imports, iat);
   const modulesByKey = new Map<string, PeImportLinkingModule>();
   addImportDescriptors(modulesByKey, imports, iat);
   addBoundImportDescriptors(modulesByKey, boundImports);
   addDelayImportDescriptors(modulesByKey, delayImports, iat);
   return {
+    inferredEagerIat,
+    ...(findings.length ? { findings } : {}),
     modules: [...modulesByKey.values()]
       .map(linkedModule =>
         analyzeLinkedModule(linkedModule, imports, delayImports, iat, loadcfg, sections)

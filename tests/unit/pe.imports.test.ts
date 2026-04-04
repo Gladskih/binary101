@@ -57,6 +57,8 @@ void test("parseImportDirectory reads import descriptors with names and ordinals
   assert.equal(entry.originalFirstThunkRva, thunkTableRva);
   assert.equal(entry.firstThunkRva, 0);
   assert.equal(entry.lookupSource, "import-lookup-table");
+  assert.equal(entry.thunkTableTerminated, true);
+  assert.equal(result.thunkEntrySize, IMAGE_THUNK_DATA32_SIZE);
   assert.deepEqual(entry.functions, [{ hint: importHint, name: "ImportX" }, { ordinal: 3 }]);
 });
 
@@ -145,6 +147,8 @@ void test("parseImportDirectory supports the 64-bit imports path", async () => {
   assert.equal(entry.originalFirstThunkRva, 0);
   assert.equal(entry.firstThunkRva, thunkTableRva);
   assert.equal(entry.lookupSource, "iat-fallback");
+  assert.equal(entry.thunkTableTerminated, true);
+  assert.equal(result.thunkEntrySize, IMAGE_THUNK_DATA64_SIZE);
   assert.deepEqual(entry.functions, [{ hint: importHint, name: "RegOpenKey" }, { ordinal: 5 }]);
 });
 
@@ -256,6 +260,7 @@ void test("parseImportDirectory warns when a PE32 thunk table is physically trun
   );
 
   assert.equal(result.entries[0]?.functions.length, 0);
+  assert.equal(result.entries[0]?.thunkTableTerminated, false);
   assert.ok(result.warning?.match(/truncated/i));
 });
 
