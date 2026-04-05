@@ -63,6 +63,22 @@ export const createSection = (
   characteristics
 });
 
+export const createIndexedSection = (
+  index: number,
+  virtualAddress: number,
+  pointerToRawData: number,
+  virtualSize = DEFAULT_FILE_ALIGNMENT,
+  sizeOfRawData = DEFAULT_FILE_ALIGNMENT,
+  characteristics = 0
+): PeSection => createSection(
+  `S${index}`,
+  virtualAddress,
+  pointerToRawData,
+  virtualSize,
+  sizeOfRawData,
+  characteristics
+);
+
 export const getDeclaredHeaderSpan = (sectionCount: number): number =>
   DEFAULT_PE_HEADER_OFFSET +
   PE_SIGNATURE_SIZE +

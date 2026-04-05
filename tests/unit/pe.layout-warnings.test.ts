@@ -6,8 +6,8 @@ import { collectPeLayoutWarnings } from "../../analyzers/pe/layout-warnings.js";
 import {
   createDebugSection,
   createHeaderOnlyLayoutSubject,
+  createIndexedSection,
   createMappedDebugEntry,
-  createSection,
   createUnmappedDebugEntry,
   createWindowsLayoutSubject,
   DEFAULT_FILE_ALIGNMENT,
@@ -21,8 +21,8 @@ import {
 void test("collectPeLayoutWarnings returns no warnings for a canonical adjacent PE32 layout", () => {
   const warnings = collectPeLayoutWarnings(
     createWindowsLayoutSubject(
-      createSection(".text", DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT),
-      createSection(".rdata", DEFAULT_SECTION_ALIGNMENT * 2, DEFAULT_FILE_ALIGNMENT * 2)
+      createIndexedSection(0, DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT),
+      createIndexedSection(1, DEFAULT_SECTION_ALIGNMENT * 2, DEFAULT_FILE_ALIGNMENT * 2)
     )
   );
   assert.deepStrictEqual(warnings, []);
@@ -32,15 +32,15 @@ void test("collectPeLayoutWarnings reports header-only PE header alignment anoma
     // PE headers are expected to be 8-byte aligned.
     createHeaderOnlyLayoutSubject(
       DEFAULT_PE_HEADER_OFFSET + 2,
-      createSection(".text", DEFAULT_SECTION_ALIGNMENT, 0)
+      createIndexedSection(0, DEFAULT_SECTION_ALIGNMENT, 0)
     )
   );
   assert.ok(warnings.some(warning => /e_lfanew .* is not 8-byte aligned/i.test(warning)));
 });
 void test("collectPeLayoutWarnings reports header span and raw alignment anomalies", () => {
   const pe = createWindowsLayoutSubject(
-    createSection(
-      ".text",
+    createIndexedSection(
+      0,
       DEFAULT_SECTION_ALIGNMENT,
       getHeaderSpanSmallerThanDeclared(1),
       DEFAULT_FILE_ALIGNMENT,
@@ -59,15 +59,15 @@ void test("collectPeLayoutWarnings reports header span and raw alignment anomali
 void test("collectPeLayoutWarnings reports virtual layout ordering, overlap, and adjacency issues", () => {
   const warnings = collectPeLayoutWarnings(
     createWindowsLayoutSubject(
-      createSection(".late", DEFAULT_SECTION_ALIGNMENT * 3, DEFAULT_FILE_ALIGNMENT * 3),
-      createSection(
-        ".text",
+      createIndexedSection(0, DEFAULT_SECTION_ALIGNMENT * 3, DEFAULT_FILE_ALIGNMENT * 3),
+      createIndexedSection(
+        1,
         DEFAULT_SECTION_ALIGNMENT,
         DEFAULT_FILE_ALIGNMENT,
         DEFAULT_SECTION_ALIGNMENT
       ),
-      createSection(
-        ".ovr",
+      createIndexedSection(
+        2,
         DEFAULT_SECTION_ALIGNMENT + (DEFAULT_SECTION_ALIGNMENT >>> 1),
         DEFAULT_FILE_ALIGNMENT * 2,
         DEFAULT_FILE_ALIGNMENT >>> 1
@@ -82,9 +82,9 @@ void test("collectPeLayoutWarnings reports virtual layout ordering, overlap, and
 void test("collectPeLayoutWarnings reports raw layout order and overlap issues", () => {
   const warnings = collectPeLayoutWarnings(
     createWindowsLayoutSubject(
-      createSection(".text", DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT * 3),
-      createSection(
-        ".rdata",
+      createIndexedSection(0, DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT * 3),
+      createIndexedSection(
+        1,
         DEFAULT_SECTION_ALIGNMENT * 2,
         DEFAULT_FILE_ALIGNMENT * 2 + (DEFAULT_FILE_ALIGNMENT >>> 1)
       )
@@ -95,8 +95,8 @@ void test("collectPeLayoutWarnings reports raw layout order and overlap issues",
 });
 void test("collectPeLayoutWarnings reports sub-page section alignment layout mismatches", () => {
   const pe = createWindowsLayoutSubject(
-    createSection(
-      ".text",
+    createIndexedSection(
+      0,
       DEFAULT_FILE_ALIGNMENT,
       DEFAULT_FILE_ALIGNMENT * 2,
       DEFAULT_FILE_ALIGNMENT * 2,
@@ -112,8 +112,8 @@ void test("collectPeLayoutWarnings reports sub-page section alignment layout mis
 void test("collectPeLayoutWarnings reports raw bytes in uninitialized-only sections", () => {
   const warnings = collectPeLayoutWarnings(
     createWindowsLayoutSubject(
-      createSection(
-        ".bss",
+      createIndexedSection(
+        0,
         DEFAULT_SECTION_ALIGNMENT * 2,
         DEFAULT_FILE_ALIGNMENT,
         DEFAULT_FILE_ALIGNMENT,
@@ -127,7 +127,7 @@ void test("collectPeLayoutWarnings reports raw bytes in uninitialized-only secti
 });
 void test("collectPeLayoutWarnings uses declared NumberOfSections for the header span check", () => {
   const pe = createWindowsLayoutSubject(
-    createSection(".text", DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT)
+    createIndexedSection(0, DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT)
   );
   pe.coff.NumberOfSections = 2;
   pe.opt.SizeOfHeaders = getDeclaredHeaderSpan(1);
@@ -137,7 +137,7 @@ void test("collectPeLayoutWarnings uses declared NumberOfSections for the header
 
 void test("collectPeLayoutWarnings reports security and debug tail anomalies", () => {
   const pe = createWindowsLayoutSubject(
-    createSection(".text", DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT)
+    createIndexedSection(0, DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT)
   );
   pe.overlaySize = DEFAULT_FILE_ALIGNMENT >>> 2;
   const securitySize = DEFAULT_FILE_ALIGNMENT >>> 3;
@@ -162,7 +162,7 @@ void test("collectPeLayoutWarnings reports security and debug tail anomalies", (
 
 void test("collectPeLayoutWarnings requires a certificate-only tail to reach EOF", () => {
   const pe = createWindowsLayoutSubject(
-    createSection(".text", DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT)
+    createIndexedSection(0, DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT)
   );
   const fileSize = getSectionRawEnd(pe.sections[0]!) + DEFAULT_FILE_ALIGNMENT;
   pe.dirs = [{
@@ -178,7 +178,7 @@ void test("collectPeLayoutWarnings requires a certificate-only tail to reach EOF
 
 void test("collectPeLayoutWarnings reports gaps between debug raw ranges in the file tail", () => {
   const pe = createWindowsLayoutSubject(
-    createSection(".text", DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT)
+    createIndexedSection(0, DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT)
   );
   const mappedImageEnd = getSectionRawEnd(pe.sections[0]!);
   pe.debug = createDebugSection(
@@ -197,8 +197,8 @@ void test("collectPeLayoutWarnings reports gaps between debug raw ranges in the 
 });
 void test("collectPeLayoutWarnings clamps debug tail end checks to the real file size", () => {
   const pe = createWindowsLayoutSubject(
-    createSection(
-      ".text",
+    createIndexedSection(
+      0,
       DEFAULT_SECTION_ALIGNMENT,
       DEFAULT_FILE_ALIGNMENT,
       DEFAULT_FILE_ALIGNMENT,
@@ -218,8 +218,8 @@ void test("collectPeLayoutWarnings clamps debug tail end checks to the real file
 });
 void test("collectPeLayoutWarnings ignores mapped debug bytes inside a section for tail checks", () => {
   const pe = createWindowsLayoutSubject(
-    createSection(
-      ".rdata",
+    createIndexedSection(
+      0,
       DEFAULT_SECTION_ALIGNMENT,
       DEFAULT_FILE_ALIGNMENT,
       DEFAULT_SECTION_ALIGNMENT,
@@ -238,8 +238,8 @@ void test("collectPeLayoutWarnings ignores mapped debug bytes inside a section f
 });
 void test("collectPeLayoutWarnings treats debug bytes covering an entire section raw span as mapped", () => {
   const pe = createWindowsLayoutSubject(
-    createSection(
-      ".rdata",
+    createIndexedSection(
+      0,
       DEFAULT_SECTION_ALIGNMENT,
       DEFAULT_FILE_ALIGNMENT,
       DEFAULT_SECTION_ALIGNMENT,
@@ -254,7 +254,7 @@ void test("collectPeLayoutWarnings treats debug bytes covering an entire section
 });
 void test("collectPeLayoutWarnings normalizes unsorted adjacent debug tail ranges", () => {
   const pe = createWindowsLayoutSubject(
-    createSection(".text", DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT)
+    createIndexedSection(0, DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT)
   );
   const mappedImageEnd = getSectionRawEnd(pe.sections[0]!);
   pe.debug = createDebugSection(
@@ -268,8 +268,8 @@ void test("collectPeLayoutWarnings normalizes unsorted adjacent debug tail range
 });
 void test("collectPeLayoutWarnings does not require certificates to precede mapped debug bytes", () => {
   const pe = createWindowsLayoutSubject(
-    createSection(
-      ".rdata",
+    createIndexedSection(
+      0,
       DEFAULT_SECTION_ALIGNMENT,
       DEFAULT_FILE_ALIGNMENT,
       DEFAULT_SECTION_ALIGNMENT,
