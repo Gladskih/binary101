@@ -11,7 +11,6 @@ import type { PeDebugDirectoryEntry } from "../../analyzers/pe/debug-directory.j
 type DebugTypeInfo = { label: string; description: string };
 type DebugStorageInfo = { label: string; description: string };
 type FileRange = { start: number; end: number };
-type CountedChip = { count: number; label: string; description: string };
 
 // Microsoft PE format, "Debug Type":
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
@@ -74,19 +73,6 @@ const DEBUG_TYPE_INFOS: Record<number, DebugTypeInfo> = {
   }
 };
 
-const renderChip = (label: string, description: string): string =>
-  `<span class="opt sel" title="${safe(description)}">${safe(label)}</span>`;
-
-const renderCountedChips = (chips: CountedChip[]): string =>
-  `<div class="optionsRow">${chips
-    .map(chip =>
-      renderChip(
-        chip.count === 1 ? chip.label : `${chip.label} x${chip.count}`,
-        chip.description
-      )
-    )
-    .join("")}</div>`;
-
 const getDebugTypeInfo = (type: number): DebugTypeInfo =>
   DEBUG_TYPE_INFOS[type] ?? {
     label: `TYPE_${type}`,
@@ -146,33 +132,15 @@ const getDebugStorageInfo = (
   };
 };
 
-const countByLabel = <T extends { label: string; description: string }>(
-  items: T[]
-): CountedChip[] => {
-  const counts = new Map<string, CountedChip>();
-  for (const item of items) {
-    const previous = counts.get(item.label);
-    counts.set(item.label, {
-      count: (previous?.count ?? 0) + 1,
-      label: item.label,
-      description: item.description
-    });
-  }
-  return [...counts.values()];
-};
-
-const renderEntryType = (entry: PeDebugDirectoryEntry): string => {
+const formatEntryType = (entry: PeDebugDirectoryEntry): string => {
   const typeInfo = getDebugTypeInfo(entry.type >>> 0);
-  return `${renderChip(typeInfo.label, typeInfo.description)}<div class="valueHint">${hex(entry.type, 8)}</div>`;
+  return `${safe(typeInfo.label)}<div class="valueHint">${hex(entry.type, 8)}</div>`;
 };
 
-const renderEntryStorage = (
+const formatEntryStorage = (
   pe: PeWindowsParseResult,
   entry: PeDebugDirectoryEntry
-): string => {
-  const storage = getDebugStorageInfo(pe, entry);
-  return renderChip(storage.label, storage.description);
-};
+): string => safe(getDebugStorageInfo(pe, entry).label);
 
 const renderEntryDetails = (entry: PeDebugDirectoryEntry): string => {
   if (entry.codeView) return `RSDS ${safe(entry.codeView.path || "(no path)")}`;
@@ -189,37 +157,14 @@ const renderCodeViewSummary = (debug: PeDebugSection, out: string[]): void => {
   out.push(`</dl>`);
 };
 
-const renderEntrySummary = (
-  pe: PeWindowsParseResult,
-  debug: PeDebugSection,
-  out: string[]
-): void => {
-  if (!debug.entries?.length) return;
-  out.push(`<dl>`);
-  out.push(dd("Directory entries", String(debug.entries.length), "Number of IMAGE_DEBUG_DIRECTORY records."));
-  out.push(
-    dd(
-      "Types present",
-      renderCountedChips(countByLabel(debug.entries.map(entry => getDebugTypeInfo(entry.type >>> 0))))
-    )
-  );
-  out.push(dd(
-    "Storage",
-    renderCountedChips(countByLabel(debug.entries.map(entry => getDebugStorageInfo(pe, entry)))),
-    "Mapped debug is section-backed with a non-zero RVA; unmapped debug is raw file data outside section coverage."
-  ));
-  out.push(`</dl>`);
-};
-
 export function renderDebug(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.debug) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Debug directory</h4>`);
   out.push(
     `<div class="smallNote">IMAGE_DEBUG_DIRECTORY entries can point to different debug formats. ` +
-      `The storage chip shows whether the payload is mapped into the image or lives only in raw file layout.</div>`
+      `The Storage column shows whether the payload is mapped into the image or lives only in raw file layout.</div>`
   );
   renderCodeViewSummary(pe.debug, out);
-  renderEntrySummary(pe, pe.debug, out);
   if (pe.debug.entries?.length) {
     out.push(
       `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show debug directory entries (${pe.debug.entries.length})</summary>`
@@ -229,7 +174,7 @@ export function renderDebug(pe: PeWindowsParseResult, out: string[]): void {
     );
     pe.debug.entries.forEach((entry, index) => {
       out.push(
-        `<tr><td>${index + 1}</td><td>${renderEntryType(entry)}</td><td>${renderEntryStorage(pe, entry)}</td><td>${humanSize(entry.sizeOfData)}</td><td>${hex(entry.addressOfRawData, 8)}</td><td>${hex(entry.pointerToRawData, 8)}</td><td>${renderEntryDetails(entry)}</td></tr>`
+        `<tr><td>${index + 1}</td><td>${formatEntryType(entry)}</td><td>${formatEntryStorage(pe, entry)}</td><td>${humanSize(entry.sizeOfData)}</td><td>${hex(entry.addressOfRawData, 8)}</td><td>${hex(entry.pointerToRawData, 8)}</td><td>${renderEntryDetails(entry)}</td></tr>`
       );
     });
     out.push(`</tbody></table></details>`);

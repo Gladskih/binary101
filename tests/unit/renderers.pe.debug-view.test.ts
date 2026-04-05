@@ -2,44 +2,18 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { PeDebugDirectoryEntry } from "../../analyzers/pe/debug-directory.js";
 import { renderDebug } from "../../renderers/pe/debug-view.js";
 import {
-  createBasePe,
-  createPeSection
-} from "../fixtures/pe-renderer-headers-fixture.js";
-
-const createDebugEntry = (
-  type: number,
-  addressOfRawData: number,
-  pointerToRawData: number,
-  sizeOfData = 0x20
-): PeDebugDirectoryEntry => ({
-  type,
-  typeName: `TYPE_${type}`,
-  sizeOfData,
-  addressOfRawData,
-  pointerToRawData
-});
-
-const createCodeViewEntry = (path: string) => ({
-  guid: "04030201-0605-0807-090a-0b0c0d0e0f10",
-  age: 7,
-  path
-});
-
-const createPeWithMappedDebugSection = () => {
-  const pe = createBasePe();
-  pe.sections = [
-    createPeSection(".rdata", {
-      virtualAddress: 0x1000,
-      pointerToRawData: 0x400,
-      sizeOfRawData: 0x200
-    })
-  ];
-  pe.coff.NumberOfSections = pe.sections.length;
-  return pe;
-};
+  createDebugViewCodeView,
+  createRepeatedDebugViewSection,
+  createSectionCoveredRawOnlyDebugViewEntry,
+  createDebugViewSection,
+  createMappedDebugViewEntry,
+  createPeWithDebugViewSection,
+  createSequentialDebugViewSection,
+  createDebugViewEntry
+} from "../fixtures/pe-debug-view-subject.js";
+import { createBasePe } from "../fixtures/pe-renderer-headers-fixture.js";
 
 const renderDebugHtml = (pe: ReturnType<typeof createBasePe>): string => {
   const out: string[] = [];
@@ -47,107 +21,79 @@ const renderDebugHtml = (pe: ReturnType<typeof createBasePe>): string => {
   return out.join("");
 };
 
-const createSequentialDebugEntries = (types: number[]) => ({
-  entries: types.map((type, index) => createDebugEntry(type, 0, 0x200 + index * 0x20)),
-  rawDataRanges: types.map((_, index) => ({
-    start: 0x200 + index * 0x20,
-    end: 0x220 + index * 0x20
-  }))
-});
-
-const assertChip = (html: string, label: string): void => {
-  assert.match(html, new RegExp(`<span class="opt sel"[^>]*>${label}</span>`));
-};
-
-const assertChips = (html: string, labels: string[]): void => {
-  labels.forEach(label => assertChip(html, label));
-};
-
 const assertIncludesAll = (html: string, snippets: string[]): void => {
   snippets.forEach(snippet => assert.match(html, new RegExp(snippet)));
 };
 
-void test("renderDebug renders CodeView summary, chip markup, and entry table", () => {
-  const pe = createPeWithMappedDebugSection();
-  pe.debug = {
-    entry: createCodeViewEntry("C:\\symbols\\mapped.pdb"),
-    entries: [{
-      ...createDebugEntry(2, 0x1040, 0x440, 0x30),
-      codeView: createCodeViewEntry("C:\\symbols\\mapped.pdb")
-    }],
-    rawDataRanges: [{ start: 0x440, end: 0x470 }],
-    warning: "Debug directory parsed from IMAGE_DEBUG_DIRECTORY."
-  };
+const countMatches = (html: string, pattern: RegExp): number => [...html.matchAll(pattern)].length;
+
+void test("renderDebug renders CodeView summary and plain entry values", () => {
+  const pe = createPeWithDebugViewSection();
+  const section = pe.sections[0]!;
+  const codeView = createDebugViewCodeView(1);
+  pe.debug = createDebugViewSection([{
+    ...createMappedDebugViewEntry(section, 2, 0),
+    codeView
+  }], codeView, "fixture-warning");
 
   const html = renderDebugHtml(pe);
 
-  assertChip(html, "CODEVIEW");
-  assertChip(html, "MAPPED");
   assertIncludesAll(html, [
     "Debug directory",
-    "storage chip shows whether the payload is mapped into the image",
+    "Storage column shows whether the payload is mapped into the image",
     "CodeView",
     "GUID",
     "Age",
     "Path",
-    "Directory entries",
-    "Types present",
     "Storage",
     "Show debug directory entries \\(1\\)",
     "Raw RVA",
     "Raw file ptr",
-    "RSDS C:\\\\symbols\\\\mapped\\.pdb",
-    "mapped\\.pdb",
-    "Debug directory parsed from IMAGE_DEBUG_DIRECTORY"
+    "CODEVIEW",
+    "MAPPED",
+    "RSDS fixture-1\\.pdb",
+    "fixture-1\\.pdb",
+    "fixture-warning"
   ]);
+  assert.doesNotMatch(html, /Types present/);
+  assert.doesNotMatch(html, /<span class="opt sel"[^>]*>CODEVIEW<\/span>/);
+  assert.doesNotMatch(html, /<span class="opt sel"[^>]*>MAPPED<\/span>/);
 });
 
-void test("renderDebug renders counted chips for repeated linker metadata entries", () => {
+void test("renderDebug keeps repeated types in the table instead of a counted summary", () => {
   const pe = createBasePe();
-  pe.debug = {
-    entry: null,
-    entries: [
-      createDebugEntry(13, 0, 0x900),
-      createDebugEntry(13, 0, 0x940)
-    ],
-    rawDataRanges: [
-      { start: 0x900, end: 0x920 },
-      { start: 0x940, end: 0x960 }
-    ]
-  };
+  pe.debug = createRepeatedDebugViewSection(13, 2);
 
   const html = renderDebugHtml(pe);
 
-  assertChip(html, "POGO x2");
-  assertChip(html, "UNMAPPED x2");
+  assert.equal(countMatches(html, />POGO<div class="valueHint">/g), 2);
+  assert.equal(countMatches(html, />UNMAPPED</g), 2);
+  assert.doesNotMatch(html, /POGO x2/);
+  assert.doesNotMatch(html, /UNMAPPED x2/);
   assert.doesNotMatch(html, /TYPE_13/);
 });
 
 void test("renderDebug marks contradictory RVA and section coverage as inconsistent", () => {
-  const pe = createPeWithMappedDebugSection();
-  pe.debug = {
-    entry: null,
-    entries: [createDebugEntry(17, 0, 0x440)],
-    rawDataRanges: [{ start: 0x440, end: 0x460 }]
-  };
+  const pe = createPeWithDebugViewSection();
+  pe.debug = createDebugViewSection([
+    createSectionCoveredRawOnlyDebugViewEntry(pe.sections[0]!, 17, 0)
+  ]);
 
   const html = renderDebugHtml(pe);
 
-  assertChip(html, "EMBEDDED DEBUG");
-  assertChip(html, "INCONSISTENT");
+  assert.match(html, />EMBEDDED DEBUG<div class="valueHint">/);
+  assert.match(html, />INCONSISTENT</);
+  assert.doesNotMatch(html, /<span class="opt sel"[^>]*>EMBEDDED DEBUG<\/span>/);
 });
 
 void test("renderDebug renders supported debug-format labels and descriptions", () => {
   const pe = createBasePe();
   const supportedTypes = [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20];
-  pe.debug = {
-    entry: null,
-    ...createSequentialDebugEntries(supportedTypes)
-  };
+  pe.debug = createSequentialDebugViewSection(supportedTypes);
 
   const html = renderDebugHtml(pe);
 
-  assertChips(html, [
+  assertIncludesAll(html, [
     "UNKNOWN",
     "COFF",
     "FPO",
@@ -184,19 +130,16 @@ void test("renderDebug renders supported debug-format labels and descriptions", 
     "Crypto hash of the symbol file content used to build the PE/COFF file\\.",
     "Extended DLL characteristics bits beyond the optional-header field\\."
   ]);
+  assert.doesNotMatch(html, /<span class="opt sel"/);
 });
 
 void test("renderDebug shows fallback types and unresolved storage when payload location is missing", () => {
   const pe = createBasePe();
-  pe.debug = {
-    entry: null,
-    entries: [createDebugEntry(255, 0, 0, 0)],
-    rawDataRanges: []
-  };
+  pe.debug = createDebugViewSection([createDebugViewEntry(255, 0, 0, 0)]);
 
   const html = renderDebugHtml(pe);
 
-  assertChip(html, "TYPE_255");
-  assertChip(html, "UNRESOLVED");
+  assert.match(html, />TYPE_255<div class="valueHint">0x000000ff<\/div>/);
+  assert.match(html, />UNRESOLVED</);
   assert.match(html, /Undocumented or unsupported IMAGE_DEBUG_DIRECTORY\.Type 0x000000ff\./);
 });
