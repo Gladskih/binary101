@@ -3,7 +3,6 @@
 import { humanSize, hex } from "../../binary-utils.js";
 import { dd, safe } from "../../html-utils.js";
 import type {
-  PeDebugSection,
   PeWindowsParseResult
 } from "../../analyzers/pe/index.js";
 import type { PeImportParseResult } from "../../analyzers/pe/imports.js";
@@ -18,39 +17,6 @@ type PeIatSection = NonNullable<PeWindowsParseResult["iat"]>;
 // IMAGE_SCN_GPREL marks sections whose data is referenced through the global pointer (GP).
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
 const IMAGE_SCN_GPREL = 0x00008000;
-
-export function renderDebug(debug: PeDebugSection, out: string[]): void {
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Debug (PDB)</h4>`);
-  if (debug.entry) {
-    out.push(`<dl>`);
-    out.push(dd("CodeView", "RSDS", "CodeView debug directory entry with RSDS signature."));
-    out.push(dd("GUID", (debug.entry.guid || "").toUpperCase(), "PDB signature GUID used to match correct PDB file."));
-    out.push(dd("Age", String(debug.entry.age), "PDB age; increments on certain rebuilds."));
-    out.push(dd("Path", debug.entry.path, "Path to PDB as recorded at link time (can be absolute)."));
-    out.push(`</dl>`);
-  }
-  if (debug.entries?.length) {
-    out.push(
-      `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show debug directory entries (${debug.entries.length})</summary>`
-    );
-    out.push(
-      `<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Type</th><th>Size</th><th>Raw RVA</th><th>Raw file ptr</th><th>Details</th></tr></thead><tbody>`
-    );
-    debug.entries.forEach((entry, index) => {
-      const detail = entry.codeView
-        ? `RSDS ${safe(entry.codeView.path || "(no path)")}`
-        : "-";
-      out.push(
-        `<tr><td>${index + 1}</td><td>${safe(entry.typeName)}</td><td>${humanSize(entry.sizeOfData)}</td><td>${hex(entry.addressOfRawData, 8)}</td><td>${hex(entry.pointerToRawData, 8)}</td><td>${detail}</td></tr>`
-      );
-    });
-    out.push(`</tbody></table></details>`);
-  }
-  if (debug.warning) {
-    out.push(`<div class="smallNote">${safe(debug.warning)}</div>`);
-  }
-  out.push(`</section>`);
-}
 
 export function renderImports(imports: PeImportsSection, out: string[]): void {
   if (!imports.entries.length && !imports.warning) return;

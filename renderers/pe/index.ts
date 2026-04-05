@@ -8,7 +8,6 @@ import { renderHeaders } from "./headers.js";
 import { renderInstructionSets } from "./disassembly.js";
 import { renderLoadConfig } from "./load-config.js";
 import {
-  renderDebug,
   renderExports,
   renderTls,
   renderClr,
@@ -16,6 +15,7 @@ import {
   renderArchitectureDirectory,
   renderGlobalPtrDirectory
 } from "./directories.js";
+import { renderDebug } from "./debug-view.js";
 import {
   renderImportLinking,
   renderImports,
@@ -45,7 +45,7 @@ export function renderPe(pe: PeParseResult | null | undefined): string {
   if (isPeWindowsParseResult(pe)) {
     renderInstructionSets(pe.disassembly, out);
     renderLoadConfig(pe, out);
-    renderIfPresent(pe.debug, renderDebug, out);
+    renderDebug(pe, out);
     renderImportLinking(pe, out);
     renderImports(pe, out);
     renderIfPresent(pe.resources, renderResources, out);
