@@ -22,6 +22,7 @@ import { parseArchitectureDirectory } from "./architecture-directory.js";
 import { parseGlobalPtrDirectory } from "./globalptr-directory.js";
 import { analyzeImportLinking } from "./import-linking.js";
 import { buildHeaderOnlyPeParseResult } from "./header-only-result.js";
+import { collectPeLayoutWarnings } from "./layout-warnings.js";
 export {
   isPeRomParseResult,
   isPeWindowsParseResult
@@ -50,11 +51,16 @@ const mergeLoadConfigWarnings = (loadcfg: PeLoadConfig, messages: string[]): voi
   if (merged?.length) loadcfg.warnings = merged;
 };
 
+const withLayoutWarnings = <T extends PeParseResult>(result: T, fileSize: number): T => {
+  const mergedWarnings = appendUniqueWarnings(result.warnings, collectPeLayoutWarnings(result, fileSize));
+  return mergedWarnings?.length ? { ...result, warnings: mergedWarnings } : result;
+};
+
 export async function parsePe(file: File): Promise<PeParseResult | null> {
   const core = await parsePeHeaders(file);
   if (!core) return null;
   if (!isPeWindowsCore(core)) {
-    return buildHeaderOnlyPeParseResult(core);
+    return withLayoutWarnings(buildHeaderOnlyPeParseResult(core), file.size);
   }
   const { dos, coff, opt, dataDirs, sections, entrySection, rvaToOff, overlaySize, imageEnd, imageSizeMismatch } = core;
   const { ImageBase } = opt;
@@ -221,7 +227,7 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
   );
   const architecture = parseArchitectureDirectory(dataDirs);
   const globalPtr = parseGlobalPtrDirectory(dataDirs, rvaToOff);
-  return {
+  return withLayoutWarnings({
     debug:
       debugResult.entry || debugResult.warning || debugResult.entries.length
         ? {
@@ -261,5 +267,5 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     imageEnd,
     imageSizeMismatch,
     hasCert: !!security?.count,
-  };
+  }, file.size);
 }
