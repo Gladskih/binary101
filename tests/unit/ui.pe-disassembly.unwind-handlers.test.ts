@@ -4,19 +4,19 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createPeDisassemblyController } from "../../ui/pe-disassembly.js";
 import type { ParseForUiResult } from "../../analyzers/index.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
+import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type { AnalyzePeInstructionSetOptions, PeInstructionSetReport } from "../../analyzers/pe/disassembly.js";
 import { installFakeDom, flushTimers } from "../helpers/fake-dom.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import { MockFile } from "../helpers/mock-file.js";
 
-const createMinimalPe = (): PeParseResult =>
+const createMinimalPe = (): PeWindowsParseResult =>
   ({
     coff: { Machine: 0x8664 },
     opt: { Magic: 0x20b, ImageBase: 0x140000000n, AddressOfEntryPoint: 0x1000 },
     rvaToOff: () => 0,
     sections: []
-  }) as unknown as PeParseResult;
+  }) as unknown as PeWindowsParseResult;
 
 const createFakeReport = (): PeInstructionSetReport => ({
   bitness: 64,
@@ -31,7 +31,7 @@ const createFakeReport = (): PeInstructionSetReport => ({
 void test("pe disassembly controller includes unwind handler RVAs when available", async () => {
   const dom = installFakeDom();
   const pe = createMinimalPe();
-  pe.exception = { handlerRvas: [0x1337] } as unknown as PeParseResult["exception"];
+  pe.exception = { handlerRvas: [0x1337] } as unknown as PeWindowsParseResult["exception"];
   const file = new MockFile(new Uint8Array([0x90]), "pe.bin");
   const parseResult: ParseForUiResult = { analyzer: "pe", parsed: pe };
 

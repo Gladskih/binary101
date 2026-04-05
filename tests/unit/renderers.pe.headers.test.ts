@@ -3,11 +3,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderHeaders } from "../../renderers/pe/headers.js";
+import type { PeParseResult } from "../../analyzers/pe/index.js";
 import type { PeWindowsOptionalHeader } from "../../analyzers/pe/types.js";
 import { createBasePe, createPeSection } from "../fixtures/pe-renderer-headers-fixture.js";
 
 void test("renderHeaders covers known/unknown branches and exact linker versions", () => {
-  const pe = createBasePe();
+  const pe: PeParseResult = createBasePe();
   // Microsoft PE/COFF: 0x20b identifies IMAGE_OPTIONAL_HEADER64 (PE32+).
   pe.opt = { ...pe.opt, Magic: 0x20b } as PeWindowsOptionalHeader;
   const windowsOpt = pe.opt as PeWindowsOptionalHeader;
@@ -57,7 +58,7 @@ void test("renderHeaders covers known/unknown branches and exact linker versions
 });
 
 void test("renderHeaders handles fallbacks and missing optional parts", () => {
-  const pe = createBasePe();
+  const pe: PeParseResult = createBasePe();
   const windowsOpt = pe.opt as PeWindowsOptionalHeader;
   windowsOpt.LinkerMajor = 13;
   windowsOpt.LinkerMinor = 0;
@@ -77,24 +78,27 @@ void test("renderHeaders handles fallbacks and missing optional parts", () => {
 });
 
 void test("renderHeaders renders ROM-specific optional fields and omits Windows-only controls", () => {
-  const pe = createBasePe();
-  pe.coff.Machine = 0x0166;
-  // Microsoft PE/COFF: 0x107 identifies IMAGE_ROM_OPTIONAL_HEADER.
-  pe.opt = {
-    Magic: 0x107,
-    LinkerMajor: 2,
-    LinkerMinor: 7,
-    SizeOfCode: 0,
-    SizeOfInitializedData: 0,
-    SizeOfUninitializedData: 0,
-    AddressOfEntryPoint: 0x1000,
-    BaseOfCode: 0x1000,
-    BaseOfData: 0x1100,
-    rom: {
-      BaseOfBss: 0x2000,
-      GprMask: 0x00000003,
-      CprMask: [0x11111111, 0x22222222, 0x33333333, 0x44444444],
-      GpValue: 0x12345678
+  const basePe = createBasePe();
+  const pe: PeParseResult = {
+    ...basePe,
+    coff: { ...basePe.coff, Machine: 0x0166 },
+    // Microsoft PE/COFF: 0x107 identifies IMAGE_ROM_OPTIONAL_HEADER.
+    opt: {
+      Magic: 0x107,
+      LinkerMajor: 2,
+      LinkerMinor: 7,
+      SizeOfCode: 0,
+      SizeOfInitializedData: 0,
+      SizeOfUninitializedData: 0,
+      AddressOfEntryPoint: 0x1000,
+      BaseOfCode: 0x1000,
+      BaseOfData: 0x1100,
+      rom: {
+        BaseOfBss: 0x2000,
+        GprMask: 0x00000003,
+        CprMask: [0x11111111, 0x22222222, 0x33333333, 0x44444444],
+        GpValue: 0x12345678
+      }
     }
   };
   pe.entrySection = { name: ".text", index: 0 };
@@ -115,33 +119,27 @@ void test("renderHeaders renders ROM-specific optional fields and omits Windows-
   assert.ok(!html.includes("SizeOfImage"));
 });
 
-void test("renderHeaders keeps unknown optional-header magic in a generic header-only view", () => {
-  const pe = createBasePe();
-  // Deliberately non-standard optional-header magic to exercise the generic fallback path.
-  pe.opt = {
-    Magic: 0x999,
-    LinkerMajor: 1,
-    LinkerMinor: 0,
-    SizeOfCode: 0,
-    SizeOfInitializedData: 0,
-    SizeOfUninitializedData: 0,
-    AddressOfEntryPoint: 0x1000,
-    BaseOfCode: 0x1000
+void test("renderHeaders keeps unrecognized or absent optional headers in a generic header-only view", () => {
+  const basePe = createBasePe();
+  const pe: PeParseResult = {
+    ...basePe,
+    opt: null,
+    warnings: ["Optional header Magic 0x999 is not PE32, PE32+, or ROM."],
+    sections: [createPeSection(".text", { sizeOfRawData: 0x100, pointerToRawData: 0x200 })]
   };
-  pe.sections = [createPeSection(".text", { sizeOfRawData: 0x100, pointerToRawData: 0x200 })];
 
   const out: string[] = [];
   renderHeaders(pe, out);
   const html = out.join("");
 
-  assert.ok(html.includes("unrecognized optional-header magic"));
-  assert.ok(html.includes("optional-header magic is not one of the standard PE32, PE32+, or ROM layouts"));
-  assert.ok(html.includes("Variant-specific fields stop here"));
+  assert.ok(html.includes("without a recognized optional header"));
+  assert.ok(html.includes("optional header is absent or uses an unrecognized magic value"));
+  assert.ok(html.includes("Optional header fields are unavailable"));
   assert.ok(!html.includes("peChecksumValidateButton"));
 });
 
 void test("renderHeaders maps COFF characteristic bits to the correct semantic labels", () => {
-  const pe = createBasePe();
+  const pe: PeParseResult = createBasePe();
   pe.coff.Characteristics = 0x5000; // SYSTEM | UP_SYSTEM_ONLY
 
   const out: string[] = [];
@@ -154,7 +152,7 @@ void test("renderHeaders maps COFF characteristic bits to the correct semantic l
 });
 
 void test("renderHeaders uses the official Microsoft subsystem labels", () => {
-  const pe = createBasePe();
+  const pe: PeParseResult = createBasePe();
   // Microsoft PE format, "Windows Subsystem": 8 = IMAGE_SUBSYSTEM_NATIVE_WINDOWS.
   (pe.opt as PeWindowsOptionalHeader).Subsystem = 8;
 
@@ -167,7 +165,7 @@ void test("renderHeaders uses the official Microsoft subsystem labels", () => {
 });
 
 void test("renderHeaders surfaces clearer official labels where they help a learner", () => {
-  const pe = createBasePe();
+  const pe: PeParseResult = createBasePe();
   // Microsoft PE format, "Machine Types": 0x0200 = Intel Itanium processor family.
   pe.coff.Machine = 0x0200;
   // Microsoft PE format, "Windows Subsystem": 9 = IMAGE_SUBSYSTEM_WINDOWS_CE_GUI.
@@ -183,7 +181,7 @@ void test("renderHeaders surfaces clearer official labels where they help a lear
 });
 
 void test("renderHeaders explains cryptic machine names such as Thumb", () => {
-  const pe = createBasePe();
+  const pe: PeParseResult = createBasePe();
   // Microsoft PE format, "Machine Types": 0x01C2 = IMAGE_FILE_MACHINE_THUMB.
   pe.coff.Machine = 0x01c2;
 

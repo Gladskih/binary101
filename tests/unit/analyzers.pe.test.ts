@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parsePe } from "../../analyzers/pe/index.js";
-import { isPeWindowsOptionalHeader } from "../../analyzers/pe/optional-header-kind.js";
+import { isPeWindowsParseResult, parsePe } from "../../analyzers/pe/index.js";
 import { createPeWithSectionAndIat as createSamplePeWithSectionAndIat } from "../fixtures/sample-files-pe.js";
 import { MockFile } from "../helpers/mock-file.js";
 
@@ -114,9 +113,8 @@ void test("parsePe correctly parses a minimal PE header", async () => {
   assert.strictEqual(result.dos.e_lfanew, 64, "DOS header should point to the PE signature");
   assert.strictEqual(result.coff.Machine, IMAGE_FILE_MACHINE_I386, "COFF header Machine should be x86");
   assert.strictEqual(result.coff.NumberOfSections, 0, "COFF header should report 0 sections");
-  assert.ok(result.opt, "Optional header should be parsed");
+  assert.ok(isPeWindowsParseResult(result));
   assert.strictEqual(result.opt.Magic, IMAGE_NT_OPTIONAL_HDR32_MAGIC, "Optional header magic should be PE32");
-  assert.ok(isPeWindowsOptionalHeader(result.opt));
   assert.strictEqual(result.opt.ImageBase, 0x00400000n, "Optional header ImageBase should be parsed correctly");
 });
 
@@ -200,6 +198,7 @@ void test("parsePe returns mapping and overlay info for PE32 with one section an
 
   const result = await parsePe(mockFile);
   assert.ok(result, "parsePe should return a parsed object");
+  assert.ok(isPeWindowsParseResult(result));
 
   assert.deepStrictEqual(result.entrySection, { name: ".text", index: 0 }, "Entry point should map to .text");
   assert.strictEqual(
@@ -223,6 +222,7 @@ void test("parsePe preserves unmapped IAT directories with warnings", async () =
 
   const result = await parsePe(mockFile);
   assert.ok(result, "parsePe should return a parsed object");
+  assert.ok(isPeWindowsParseResult(result));
   assert.deepStrictEqual(result.iat, {
     rva: SAMPLE_UNMAPPED_IAT_RVA,
     size: SAMPLE_IAT_SIZE,
@@ -251,6 +251,7 @@ void test("parsePe exposes ARCHITECTURE and GLOBALPTR directory details", async 
   const result = await parsePe(new MockFile(peBytes, "processor-specific-dirs.exe"));
 
   assert.ok(result);
+  assert.ok(isPeWindowsParseResult(result));
   assert.ok(result.architecture);
   assert.equal(result.architecture.rva, RESERVED_DIRECTORY_TEST_RVA);
   assert.equal(result.architecture.size, RESERVED_DIRECTORY_TEST_SIZE);
@@ -277,6 +278,7 @@ void test("parsePe attaches Authenticode verification when security directory ex
 
   const result = await parsePe(new MockFile(peBytes, "signed.exe"));
   assert.ok(result);
+  assert.ok(isPeWindowsParseResult(result));
   assert.ok(result.security);
   const cert = result.security.certs[0];
   assert.ok(cert?.authenticode?.verification);

@@ -2,65 +2,27 @@
 import { humanSize, hex, isoOrDash } from "../../binary-utils.js";
 import { dd, rowOpts, rowFlags, safe } from "../../html-utils.js";
 import { MACHINE, SUBSYSTEMS, CHAR_FLAGS, DLL_FLAGS, SEC_FLAG_TEXTS, DD_TIPS } from "../../analyzers/pe/constants.js";
-import { isPePlusOptionalHeader, isPeRomOptionalHeader, isPeWindowsOptionalHeader } from "../../analyzers/pe/optional-header-kind.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
+import {
+  isPeRomParseResult,
+  isPeWindowsParseResult,
+  type PeParseResult
+} from "../../analyzers/pe/index.js";
+import {
+  PE32_OPTIONAL_HEADER_MAGIC,
+  PE32_PLUS_OPTIONAL_HEADER_MAGIC,
+  ROM_OPTIONAL_HEADER_MAGIC
+} from "../../analyzers/pe/optional-header-magic.js";
 import { peSectionNameOffset, peSectionNameValue } from "../../analyzers/pe/section-name.js";
+import {
+  formatBigByteSize,
+  formatPointerHex,
+  formatWordListHex,
+  knownSectionName,
+  linkerVersionHint,
+  winVersionName
+} from "./header-format.js";
 import { renderRichHeader } from "./rich-header.js";
 import { renderCoffTailSummary } from "./coff-tail-summary.js";
-const SECTION_HINTS: Record<string, string> = {
-  ".text": "Code (executable instructions)",
-  ".rdata": "Read-only data (constants, import name table)",
-  ".data": "Initialized writable data",
-  ".bss": "Uninitialized data (zero-initialized at load)",
-  ".rsrc": "Resource tree (icons, dialogs, manifests)",
-  ".reloc": "Base relocations",
-  ".tls": "Thread Local Storage",
-  ".pdata": "Exception pdata (x64 unwind info)"
-};
-const knownSectionName = (name: string): string | null => SECTION_HINTS[name.toLowerCase()] || null;
-const formatPointerHex = (value: bigint, width: number): string => `0x${value.toString(16).padStart(width, "0")}`;
-const formatBigByteSize = (value: bigint): string => value <= BigInt(Number.MAX_SAFE_INTEGER)
-  ? humanSize(Number(value))
-  : `${value} bytes (0x${value.toString(16)})`;
-const formatWordListHex = (values: number[]): string => values.map(value => hex(value >>> 0, 8)).join(", ");
-
-const linkerVersionHint = (major: number, minor: number): string => {
-  const version = `${major}.${minor}`;
-  const map: Record<string, string> = {
-    "6.0": "VS6 (VC++ 6.0)",
-    "7.0": "VS2002",
-    "7.1": "VS2003",
-    "8.0": "VS2005",
-    "9.0": "VS2008",
-    "10.0": "VS2010",
-    "11.0": "VS2012",
-    "12.0": "VS2013",
-    "14.0": "VS2015 era",
-    "14.1": "VS2017 era",
-    "14.2": "VS2019 era",
-    "14.3": "VS2022 era"
-  };
-  const hint =
-    map[version] ||
-    map[`${major}.0`] ||
-    (major >= 14 ? "MSVC (VS2015+ era or lld-link)" : "MSVC (pre-VS2015)");
-  return `${version} - ${hint}`;
-};
-
-const winVersionName = (major: number, minor: number): string => {
-  const key = `${major}.${minor}`;
-  const names: Record<string, string> = {
-    "5.1": "Windows XP",
-    "5.2": "Windows Server 2003",
-    "6.0": "Windows Vista",
-    "6.1": "Windows 7",
-    "6.2": "Windows 8",
-    "6.3": "Windows 8.1",
-    "10.0": "Windows 10+"
-  };
-  const label = names[key] || key;
-  return `${label} (${key})`;
-};
 
 const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
   if (!pe.dirs?.length) return;
@@ -116,31 +78,33 @@ const renderSections = (pe: PeParseResult, out: string[]): void => {
 export function renderHeaders(pe: PeParseResult, out: string[]): void {
   const isDll = (pe.coff.Characteristics & 0x2000) !== 0;
   const roleText = isDll ? "dynamic-link library (DLL)" : "executable image";
-  const imageTypeText = isPeRomOptionalHeader(pe.opt)
+  const imageTypeText = pe.opt == null
+    ? "PE image without a recognized optional header"
+    : pe.opt.Magic === ROM_OPTIONAL_HEADER_MAGIC
     ? "firmware or option ROM image"
-    : isPePlusOptionalHeader(pe.opt)
+    : pe.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC
       ? `64-bit Windows ${roleText}`
-      : isPeWindowsOptionalHeader(pe.opt)
+      : pe.opt.Magic === PE32_OPTIONAL_HEADER_MAGIC
         ? `32-bit Windows ${roleText}`
         : "PE image with an unrecognized optional-header magic";
   const sectionCount = Array.isArray(pe.sections) ? pe.sections.length : pe.coff.NumberOfSections;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Big picture</h4>`);
-  if (isPeRomOptionalHeader(pe.opt)) {
+  if (pe.opt == null) {
+    out.push(
+      `<div class="smallNote">PE image: ${imageTypeText}. The file has a PE signature and COFF header, but the optional header is absent or uses an unrecognized magic value, so Windows-specific loader fields are not decoded.</div>`
+    );
+    out.push(`<div class="smallNote">Section headers below may still help map file layout and any raw entry-point-like address information from warnings.</div>`);
+  } else if (isPeRomParseResult(pe)) {
     out.push(
       `<div class="smallNote">PE image: ${imageTypeText}. This file uses IMAGE_ROM_OPTIONAL_HEADER, so it does not carry the normal Windows loader fields such as ImageBase, Subsystem, stack/heap sizes, or PE data directories. ${sectionCount} sections still describe where ROM code and data live in the file.</div>`
     );
     out.push(`<div class="smallNote">Entry point address ${hex(pe.opt.AddressOfEntryPoint, 8)}. Section headers below show how that address maps back into on-disk section data.</div>`);
-  } else if (!isPeWindowsOptionalHeader(pe.opt)) {
-    out.push(
-      `<div class="smallNote">PE image: ${imageTypeText}. The optional-header magic is not one of the standard PE32, PE32+, or ROM layouts, so this view only shows the fields that were safely decoded before the format became ambiguous.</div>`
-    );
-    out.push(`<div class="smallNote">Entry point address ${hex(pe.opt.AddressOfEntryPoint, 8)}. Section headers below may still help map that address back into file data.</div>`);
-  } else {
+  } else if (isPeWindowsParseResult(pe)) {
     out.push(
       `<div class="smallNote">PE image: ${imageTypeText}. Headers describe layout and loader requirements; ${sectionCount} sections carry code, data, resources and relocation information.</div>`
     );
     const entryVa = pe.opt.ImageBase + BigInt(pe.opt.AddressOfEntryPoint >>> 0);
-    out.push(`<div class="smallNote">Entry point RVA ${hex(pe.opt.AddressOfEntryPoint, 8)} (VA ${formatPointerHex(entryVa, isPePlusOptionalHeader(pe.opt) ? 16 : 8)}). Imports, relocations, resources and security directories below show how this image integrates with the operating system.</div>`);
+    out.push(`<div class="smallNote">Entry point RVA ${hex(pe.opt.AddressOfEntryPoint, 8)} (VA ${formatPointerHex(entryVa, pe.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC ? 16 : 8)}). Imports, relocations, resources and security directories below show how this image integrates with the operating system.</div>`);
   }
   out.push(`</section>`);
 
@@ -211,10 +175,18 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
     ? `Usually points into section ${pe.entrySection.name || "(unnamed)"} (index ${pe.entrySection.index}).`
     : "Should point into one of the mapped code sections.";
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Optional header</h4><dl>`);
+  if (!oh) {
+    out.push(`</dl><div class="smallNote">Optional header fields are unavailable because the file did not declare a recognized PE32, PE32+, or ROM optional header.</div></section>`);
+    renderDataDirectories(pe, out);
+    renderSections(pe, out);
+    const coffTailSummary = renderCoffTailSummary(pe);
+    if (coffTailSummary) out.push(coffTailSummary);
+    return;
+  }
   out.push(
     dd(
       "Magic",
-      rowOpts(oh.Magic, [[0x010b, "PE32"], [0x020b, "PE32+"], [0x0107, "ROM"]]),
+      rowOpts(oh.Magic, [[PE32_OPTIONAL_HEADER_MAGIC, "PE32"], [PE32_PLUS_OPTIONAL_HEADER_MAGIC, "PE32+"], [ROM_OPTIONAL_HEADER_MAGIC, "ROM"]]),
       "Identifies PE32 (32-bit), PE32+ (64-bit), or IMAGE_ROM_OPTIONAL_HEADER."
     )
   );
@@ -244,13 +216,13 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
     dd(
       "AddressOfEntryPoint",
       hex(oh.AddressOfEntryPoint, 8),
-      isPeRomOptionalHeader(oh)
+      oh.Magic === ROM_OPTIONAL_HEADER_MAGIC
         ? "Entry-point address stored in IMAGE_ROM_OPTIONAL_HEADER."
         : "RVA of entry point. Zero for DLLs without a preferred entry."
     )
   );
   out.push(dd("EntrySection", pe.entrySection ? safe(pe.entrySection.name || "(unnamed)") : "-", entrySectionInfo));
-  if (isPeRomOptionalHeader(oh)) {
+  if (oh.Magic === ROM_OPTIONAL_HEADER_MAGIC) {
     out.push(dd("BaseOfCode", hex(oh.BaseOfCode, 8), "Base address of code within the ROM image."));
     out.push(dd("BaseOfData", hex(oh.BaseOfData, 8), "Base address of initialized data within the ROM image."));
     out.push(dd("BaseOfBss", hex(oh.rom.BaseOfBss, 8), "Base address of uninitialized data within the ROM image."));
@@ -260,12 +232,8 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
     out.push(
       `</dl><div class="smallNote">ROM optional headers stop here: Windows-only fields such as ImageBase, SectionAlignment, Subsystem, CheckSum, stack/heap sizes, and the PE data-directory array are not part of IMAGE_ROM_OPTIONAL_HEADER.</div></section>`
     );
-  } else if (!isPeWindowsOptionalHeader(oh)) {
-    out.push(
-      `</dl><div class="smallNote">Variant-specific fields stop here because the optional-header magic is not recognized as PE32, PE32+, or ROM. The parser keeps the image visible, but avoids inventing Windows-only fields.</div></section>`
-    );
   } else {
-    const pointerWidth = isPePlusOptionalHeader(oh) ? 16 : 8;
+    const pointerWidth = oh.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC ? 16 : 8;
     out.push(dd("ImageBase", formatPointerHex(oh.ImageBase, pointerWidth), "Preferred load address."));
     out.push(dd("SectionAlignment", humanSize(oh.SectionAlignment), "Alignment of sections in memory."));
     out.push(dd("FileAlignment", humanSize(oh.FileAlignment), "Alignment of sections in the file."));

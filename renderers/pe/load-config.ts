@@ -4,10 +4,9 @@ import { hex, isoOrDash } from "../../binary-utils.js";
 import { dd, safe } from "../../html-utils.js";
 import { GUARD_FLAGS } from "../../analyzers/pe/constants.js";
 import {
-  isPePlusOptionalHeader,
-  isPeWindowsOptionalHeader
-} from "../../analyzers/pe/optional-header-kind.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
+  PE32_PLUS_OPTIONAL_HEADER_MAGIC
+} from "../../analyzers/pe/optional-header-magic.js";
+import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type { PeLoadConfig } from "../../analyzers/pe/load-config/index.js";
 const formatPointerHex = (value: bigint, width: number): string =>
   `0x${value.toString(16).padStart(width, "0")}`;
@@ -30,12 +29,11 @@ const renderGuardFlags = (lc: PeLoadConfig, out: string[]): void => {
   );
 };
 
-export function renderLoadConfig(pe: PeParseResult, out: string[]): void {
+export function renderLoadConfig(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.loadcfg) return;
   const lc = pe.loadcfg;
-  const windowsOpt = isPeWindowsOptionalHeader(pe.opt) ? pe.opt : null;
-  const imageBase = windowsOpt?.ImageBase ?? 0n;
-  const pointerWidth = windowsOpt && isPePlusOptionalHeader(windowsOpt) ? 16 : 8;
+  const imageBase = pe.opt.ImageBase;
+  const pointerWidth = pe.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC ? 16 : 8;
   const formatVa = (value: bigint): string =>
     value === 0n ? "-" : formatPointerHex(value, pointerWidth);
 

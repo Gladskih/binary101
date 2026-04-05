@@ -2,7 +2,7 @@
 
 import { humanSize, hex } from "../../binary-utils.js";
 import { dd, rowFlags, safe } from "../../html-utils.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
+import type { PeClrHeader } from "../../analyzers/pe/clr/index.js";
 
 const COMIMAGE_FLAGS_NATIVE_ENTRYPOINT = 0x00000010;
 
@@ -71,9 +71,7 @@ const formatVTableFixupType = (value: number): string => {
 const describeMetadataStreamType = (name: string): string =>
   KNOWN_METADATA_STREAM_TYPES[name] || "Unknown stream type";
 
-type PeClrSection = NonNullable<PeParseResult["clr"]>;
-
-const renderClrSubdirectories = (clrHeader: PeClrSection, out: string[]): void => {
+const renderClrSubdirectories = (clrHeader: PeClrHeader, out: string[]): void => {
   const subdirectories: Array<[string, number, number, string]> = [
     [
       "Resources",
@@ -148,7 +146,7 @@ const renderClrSubdirectories = (clrHeader: PeClrSection, out: string[]): void =
   out.push(`</details>`);
 };
 
-const renderClrMetadata = (clrHeader: PeClrSection, out: string[]): void => {
+const renderClrMetadata = (clrHeader: PeClrHeader, out: string[]): void => {
   if (!clrHeader.meta) return;
   const meta = clrHeader.meta;
   out.push(`<details style="margin-top:.35rem" open><summary>Metadata root</summary><dl>`);
@@ -204,7 +202,7 @@ const renderClrMetadata = (clrHeader: PeClrSection, out: string[]): void => {
   out.push(`</tbody></table></details>`);
 };
 
-export function renderClr(clrHeader: PeClrSection, out: string[]): void {
+export function renderClr(clrHeader: PeClrHeader, out: string[]): void {
   out.push(
     `<section>` +
       `<h4 style="margin:0 0 .5rem 0;font-size:.9rem">CLR (.NET) header</h4>` +

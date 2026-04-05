@@ -2,7 +2,12 @@
 
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { parsePe, type PeParseResult } from "../analyzers/pe/index.js";
+import {
+  isPeWindowsParseResult,
+  parsePe,
+  type PeParseResult,
+  type PeWindowsParseResult
+} from "../analyzers/pe/index.js";
 import { peSectionNameValue } from "../analyzers/pe/section-name.js";
 import { renderPe } from "../renderers/pe/index.js";
 import type { AnalyzerSummary, SuccessfulVariantResult } from "./rustPeMatrix-model.js";
@@ -21,7 +26,7 @@ const collectDataDirectoryNames = (pe: PeParseResult): string[] =>
     .filter(directory => directory.rva !== 0 || directory.size !== 0)
     .map(directory => directory.name);
 
-const collectImportFunctionNames = (pe: PeParseResult): string[] =>
+const collectImportFunctionNames = (pe: PeWindowsParseResult): string[] =>
   pe.imports.entries
     .flatMap(entry =>
       entry.functions.map(fn => {
@@ -31,7 +36,7 @@ const collectImportFunctionNames = (pe: PeParseResult): string[] =>
     )
     .sort();
 
-const summarizeAnalyzerResult = (pe: PeParseResult, html: string): AnalyzerSummary => ({
+const summarizeAnalyzerResult = (pe: PeWindowsParseResult, html: string): AnalyzerSummary => ({
   machine: pe.coff.Machine,
   optionalMagic: pe.opt.Magic,
   subsystem: "Subsystem" in pe.opt ? pe.opt.Subsystem : null,
@@ -76,6 +81,9 @@ export const analyzeSuccessfulBuild = async (
   });
   const pe = await parsePe(file);
   if (!pe) throw new Error("parsePe returned null for a freshly built .exe.");
+  if (!isPeWindowsParseResult(pe)) {
+    throw new Error("parsePe returned a non-Windows PE result for a freshly built .exe.");
+  }
   const html = renderPe(pe);
   await writeFile(join(variantDir, "parse.json"), `${JSON.stringify(sanitizeParseResult(pe), null, 2)}\n`, "utf8");
   await writeFile(join(variantDir, "rendered.html"), html, "utf8");

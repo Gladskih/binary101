@@ -81,7 +81,7 @@ void test("parsePe stays stable on external PE corpora", async () => {
         continue;
       }
       parsedCount += 1;
-      if (parsed.signature !== "PE" || !isKnownMagic(parsed.opt.Magic)) {
+      if (parsed.signature !== "PE" || !parsed.opt || !isKnownMagic(parsed.opt.Magic)) {
         invalidResults.push(label);
       }
     } catch (error) {

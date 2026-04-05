@@ -1,7 +1,7 @@
 "use strict";
 
 import { dd, safe } from "../../html-utils.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
+import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type {
   PeDeclaredIatRelation,
   PeImportBindingRelation,
@@ -35,7 +35,7 @@ const findSectionContainingRva = (sections: PeSection[], rva: number): PeSection
   return null;
 };
 
-const hasGuardFlag = (pe: PeParseResult, flag: number): boolean =>
+const hasGuardFlag = (pe: PeWindowsParseResult, flag: number): boolean =>
   ((pe.loadcfg?.GuardFlags ?? 0) & flag) !== 0;
 
 const getSectionDisplayName = (section: PeSection | null): string => {
@@ -44,13 +44,13 @@ const getSectionDisplayName = (section: PeSection | null): string => {
   return name || "(unnamed)";
 };
 
-export const describeSectionForRva = (pe: PeParseResult, rva: number): string => {
+export const describeSectionForRva = (pe: PeWindowsParseResult, rva: number): string => {
   if (!rva) return "-";
   return safe(getSectionDisplayName(findSectionContainingRva(pe.sections, rva)));
 };
 
 export const findLinkedModuleForImport = (
-  pe: PeParseResult,
+  pe: PeWindowsParseResult,
   importIndex: number
 ): PeImportLinkingModule | null =>
   pe.importLinking?.modules.find(module =>
@@ -58,7 +58,7 @@ export const findLinkedModuleForImport = (
   ) ?? null;
 
 export const findLinkedModuleForBoundImport = (
-  pe: PeParseResult,
+  pe: PeWindowsParseResult,
   boundImportIndex: number
 ): PeImportLinkingModule | null =>
   pe.importLinking?.modules.find(module =>
@@ -66,7 +66,7 @@ export const findLinkedModuleForBoundImport = (
   ) ?? null;
 
 export const findLinkedModuleForDelayImport = (
-  pe: PeParseResult,
+  pe: PeWindowsParseResult,
   delayImportIndex: number
 ): PeImportLinkingModule | null =>
   pe.importLinking?.modules.find(module =>
@@ -84,7 +84,7 @@ export const findLinkedDelayImportDescriptor = (
 ) => linkedModule?.delayImports.find(linkedImport => linkedImport.delayImportIndex === delayImportIndex) ?? null;
 
 export const getModuleDisplayName = (
-  pe: PeParseResult,
+  pe: PeWindowsParseResult,
   linkedModule: PeImportLinkingModule
 ): string => {
   const importIndex = linkedModule.imports[0]?.importIndex;
@@ -242,7 +242,7 @@ export const renderDeclaredIatRelation = (
 };
 
 export const summarizeLookupSources = (
-  pe: PeParseResult,
+  pe: PeWindowsParseResult,
   linkedModule: PeImportLinkingModule
 ): string => {
   const sources = linkedModule.imports.map(linkedImport =>
@@ -268,7 +268,7 @@ export const countRelation = (
   targetRelation: PeIatDirectoryRelation
 ): number => relations.filter(relation => relation === targetRelation).length;
 
-export const renderDelayGuardContext = (pe: PeParseResult): string => {
+export const renderDelayGuardContext = (pe: PeWindowsParseResult): string => {
   if (!pe.loadcfg) return "No LOAD_CONFIG";
   const protectsDelayLoadIat = hasGuardFlag(pe, IMAGE_GUARD_PROTECT_DELAYLOAD_IAT);
   const advertisesOwnSection = hasGuardFlag(pe, IMAGE_GUARD_DELAYLOAD_IAT_IN_ITS_OWN_SECTION);
@@ -281,7 +281,7 @@ export const renderDelayGuardContext = (pe: PeParseResult): string => {
 };
 
 export const renderDelaySectionContext = (
-  pe: PeParseResult,
+  pe: PeWindowsParseResult,
   iatRva: number
 ): string => {
   const section = findSectionContainingRva(pe.sections, iatRva >>> 0);
@@ -292,7 +292,7 @@ export const renderDelaySectionContext = (
 };
 
 export const renderImportNamesForIndices = (
-  pe: PeParseResult,
+  pe: PeWindowsParseResult,
   importIndices: number[]
 ): string => {
   const names = [...new Set(importIndices

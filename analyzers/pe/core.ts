@@ -1,7 +1,9 @@
 "use strict";
 
 import { addSectionEntropies } from "./entropy.js";
-import { isPeWindowsOptionalHeader } from "./optional-header-kind.js";
+import {
+  ROM_OPTIONAL_HEADER_MAGIC
+} from "./optional-header-magic.js";
 import { peProbe } from "./signature.js";
 import { computeEntrySection } from "./core-entry.js";
 import { PE_RVA_EXCLUSIVE_LIMIT } from "./rva-limits.js";
@@ -11,7 +13,7 @@ import {
   parseOptionalHeaderAndDirectories
 } from "./core-headers.js";
 import { parseSectionHeaders } from "./sections.js";
-import type { PeCore } from "./types.js";
+import type { PeCore, PeHeaderCore, PeWindowsCore, PeWindowsOptionalHeader } from "./types.js";
 
 const mergeWarnings = (...groups: Array<string[] | undefined>): string[] | undefined => {
   const merged = new Set(groups.flatMap(group => group ?? []));
@@ -69,9 +71,8 @@ const computePeImageLayout = (
   sectionCount: number,
   sections: PeCore["sections"],
   sectionAlignment: number,
-  sizeOfImage: number,
-  declaredSizeOfHeaders: number,
-  hasDeclaredSizeOfImage: boolean
+  declaredSizeOfImage: number | null,
+  declaredSizeOfHeaders: number
 ): {
   overlaySize: number;
   imageEnd: number;
@@ -102,7 +103,117 @@ const computePeImageLayout = (
   return {
     overlaySize,
     imageEnd,
-    imageSizeMismatch: hasDeclaredSizeOfImage && imageEnd !== (sizeOfImage >>> 0)
+    imageSizeMismatch: declaredSizeOfImage != null && imageEnd !== (declaredSizeOfImage >>> 0)
+  };
+};
+
+const buildCoreWarnings = (
+  optionalHeaderWarnings: string[] | undefined,
+  sectionWarnings: string[] | undefined
+): string[] | undefined => mergeWarnings(optionalHeaderWarnings, sectionWarnings);
+
+export const isPeWindowsCore = (core: PeCore): core is PeWindowsCore =>
+  core.opt != null && core.opt.Magic !== ROM_OPTIONAL_HEADER_MAGIC;
+
+const buildHeaderCore = async (
+  file: File,
+  dos: PeCore["dos"],
+  coff: PeCore["coff"],
+  optionalHeaderResult: Awaited<ReturnType<typeof parseOptionalHeaderAndDirectories>>,
+  opt: PeHeaderCore["opt"]
+): Promise<PeHeaderCore> => {
+  const parsedSections = await parseSectionHeaders(
+    file,
+    optionalHeaderResult.optOff,
+    coff.SizeOfOptionalHeader,
+    coff.NumberOfSections,
+    0,
+    coff.PointerToSymbolTable,
+    coff.NumberOfSymbols
+  );
+  const { overlaySize, imageEnd, imageSizeMismatch } = computePeImageLayout(
+    file.size,
+    optionalHeaderResult.optOff,
+    coff.SizeOfOptionalHeader,
+    parsedSections.sectOff,
+    coff.NumberOfSections,
+    parsedSections.sections,
+    0,
+    null,
+    0
+  );
+  await addSectionEntropies(file, parsedSections.sections);
+  const warnings = buildCoreWarnings(optionalHeaderResult.warnings, parsedSections.warnings);
+  return {
+    dos,
+    coff,
+    ...(parsedSections.coffStringTableSize != null
+      ? { coffStringTableSize: parsedSections.coffStringTableSize }
+      : {}),
+    opt,
+    ...(warnings ? { warnings } : {}),
+    optOff: optionalHeaderResult.optOff,
+    ddStartRel: optionalHeaderResult.ddStartRel,
+    ddCount: optionalHeaderResult.ddCount,
+    dataDirs: [],
+    sections: parsedSections.sections,
+    entrySection: await computeEntrySection(optionalHeaderResult.opt, parsedSections.sections),
+    rvaToOff: parsedSections.rvaToOff,
+    overlaySize,
+    imageEnd,
+    imageSizeMismatch
+  };
+};
+
+const buildWindowsCore = async (
+  file: File,
+  dos: PeCore["dos"],
+  coff: PeCore["coff"],
+  optionalHeaderResult: Awaited<ReturnType<typeof parseOptionalHeaderAndDirectories>>,
+  opt: PeWindowsOptionalHeader
+): Promise<PeWindowsCore> => {
+  const parsedSections = await parseSectionHeaders(
+    file,
+    optionalHeaderResult.optOff,
+    coff.SizeOfOptionalHeader,
+    coff.NumberOfSections,
+    opt.SizeOfHeaders,
+    coff.PointerToSymbolTable,
+    coff.NumberOfSymbols
+  );
+  const { overlaySize, imageEnd, imageSizeMismatch } = computePeImageLayout(
+    file.size,
+    optionalHeaderResult.optOff,
+    coff.SizeOfOptionalHeader,
+    parsedSections.sectOff,
+    coff.NumberOfSections,
+    parsedSections.sections,
+    opt.SectionAlignment,
+    opt.SizeOfImage,
+    opt.SizeOfHeaders
+  );
+  await addSectionEntropies(file, parsedSections.sections);
+  const trailingAlignmentPaddingSize = await computeTrailingAlignmentPaddingSize(file, opt.FileAlignment);
+  const warnings = buildCoreWarnings(optionalHeaderResult.warnings, parsedSections.warnings);
+  return {
+    dos,
+    coff,
+    ...(parsedSections.coffStringTableSize != null
+      ? { coffStringTableSize: parsedSections.coffStringTableSize }
+      : {}),
+    ...(trailingAlignmentPaddingSize ? { trailingAlignmentPaddingSize } : {}),
+    opt,
+    ...(warnings ? { warnings } : {}),
+    optOff: optionalHeaderResult.optOff,
+    ddStartRel: optionalHeaderResult.ddStartRel,
+    ddCount: optionalHeaderResult.ddCount,
+    dataDirs: optionalHeaderResult.dataDirs,
+    sections: parsedSections.sections,
+    entrySection: await computeEntrySection(opt, parsedSections.sections),
+    rvaToOff: parsedSections.rvaToOff,
+    overlaySize,
+    imageEnd,
+    imageSizeMismatch
   };
 };
 
@@ -118,59 +229,7 @@ export async function parsePeHeaders(file: File): Promise<PeCore | null> {
   if (!coff) return null;
 
   const optionalResult = await parseOptionalHeaderAndDirectories(file, e_lfanew, coff.SizeOfOptionalHeader);
-  const { optOff, ddStartRel, ddCount, dataDirs, opt } = optionalResult;
-  const windowsOpt = isPeWindowsOptionalHeader(opt) ? opt : null;
-  const {
-    sections,
-    rvaToOff,
-    sectOff,
-    coffStringTableSize,
-    warnings: sectionWarnings
-  } = await parseSectionHeaders(
-    file,
-    optOff,
-    coff.SizeOfOptionalHeader,
-    coff.NumberOfSections,
-    windowsOpt?.SizeOfHeaders ?? 0,
-    coff.PointerToSymbolTable,
-    coff.NumberOfSymbols
-  );
-  const { overlaySize, imageEnd, imageSizeMismatch } = computePeImageLayout(
-    file.size,
-    optOff,
-    coff.SizeOfOptionalHeader,
-    sectOff,
-    coff.NumberOfSections,
-    sections,
-    windowsOpt?.SectionAlignment ?? 0,
-    windowsOpt?.SizeOfImage ?? 0,
-    windowsOpt?.SizeOfHeaders ?? 0,
-    !!windowsOpt
-  );
-  const trailingAlignmentPaddingSize = windowsOpt
-    ? await computeTrailingAlignmentPaddingSize(file, windowsOpt.FileAlignment)
-    : 0;
-
-  await addSectionEntropies(file, sections);
-  const entrySection = await computeEntrySection(opt, sections);
-  const warnings = mergeWarnings(optionalResult.warnings, sectionWarnings);
-
-  return {
-    dos,
-    coff,
-    ...(coffStringTableSize != null ? { coffStringTableSize } : {}),
-    ...(trailingAlignmentPaddingSize ? { trailingAlignmentPaddingSize } : {}),
-    opt,
-    ...(warnings ? { warnings } : {}),
-    optOff,
-    ddStartRel,
-    ddCount,
-    dataDirs,
-    sections,
-    entrySection,
-    rvaToOff,
-    overlaySize,
-    imageEnd,
-    imageSizeMismatch
-  };
+  return optionalResult.opt && optionalResult.opt.Magic !== ROM_OPTIONAL_HEADER_MAGIC
+    ? buildWindowsCore(file, dos, coff, optionalResult, optionalResult.opt)
+    : buildHeaderCore(file, dos, coff, optionalResult, optionalResult.opt);
 }

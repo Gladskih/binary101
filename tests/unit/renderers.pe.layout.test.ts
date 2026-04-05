@@ -89,6 +89,7 @@ void test("renderSanity renders issues and clean state", () => {
   const withIssues = {
     overlaySize: 100,
     imageSizeMismatch: true,
+    opt: { Magic: 0x10b },
     debug: { entry: null, warning: "bad debug" }
   } as unknown as PeParseResult;
   const outIssues: string[] = [];
@@ -101,6 +102,7 @@ void test("renderSanity renders issues and clean state", () => {
   const clean = {
     overlaySize: 0,
     imageSizeMismatch: false,
+    opt: { Magic: 0x10b },
     debug: null
   } as unknown as PeParseResult;
   const outClean: string[] = [];

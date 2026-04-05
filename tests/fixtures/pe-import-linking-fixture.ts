@@ -5,7 +5,7 @@ import type { PeImportParseResult } from "../../analyzers/pe/imports.js";
 import type { PeIatDirectory } from "../../analyzers/pe/iat-directory.js";
 import type { PeDelayImportEntry } from "../../analyzers/pe/delay-imports.js";
 import type { PeBoundImportEntry } from "../../analyzers/pe/bound-imports.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
+import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type { PeLoadConfig } from "../../analyzers/pe/load-config/index.js";
 import { analyzeImportLinking } from "../../analyzers/pe/import-linking.js";
 import { createBasePe, createPeSection } from "./pe-renderer-headers-fixture.js";
@@ -220,7 +220,7 @@ export const createImportLinkingMainSectionOnly = () => [
   createWritableDataSection("", 0x2000, 0x400)
 ];
 
-export const createPeWithImportLinking = (): PeParseResult => {
+export const createPeWithImportLinking = (): PeWindowsParseResult => {
   const pe = createBasePe();
   const { imports, boundImports, delayImports, iat, loadcfg } = createImportLinkingInputs();
   pe.sections = createImportLinkingSections();
@@ -241,7 +241,7 @@ export const createPeWithImportLinking = (): PeParseResult => {
   return pe;
 };
 
-export const createPeWithInferredEagerIatOnly = (): PeParseResult => {
+export const createPeWithInferredEagerIatOnly = (): PeWindowsParseResult => {
   const pe = createBasePe();
   const { imports, boundImports, delayImports, loadcfg } = createImportLinkingInputs();
   pe.sections = createImportLinkingSections();

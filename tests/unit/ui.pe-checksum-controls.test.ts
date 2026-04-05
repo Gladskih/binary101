@@ -3,18 +3,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ParseForUiResult } from "../../analyzers/index.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
+import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import { hex } from "../../binary-utils.js";
 import { computePeChecksum, createPeChecksumClickHandler } from "../../ui/pe-checksum-controls.js";
 import { FakeHTMLElement, installFakeDom } from "../helpers/fake-dom.js";
 import { MockFile } from "../helpers/mock-file.js";
 
-const createMinimalPe = (checksum: number, e_lfanew = 0, hasCert = false): PeParseResult =>
+const createMinimalPe = (
+  checksum: number,
+  e_lfanew = 0,
+  hasCert = false
+): PeWindowsParseResult =>
   ({
     dos: { e_lfanew },
     opt: { Magic: 0x10b, CheckSum: checksum },
     hasCert
-  }) as unknown as PeParseResult;
+  }) as unknown as PeWindowsParseResult;
 
 void test("computePeChecksum skips checksum dword and folds the sum", async () => {
   const bytes = new Uint8Array([

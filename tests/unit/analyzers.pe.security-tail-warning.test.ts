@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { parsePe } from "../../analyzers/pe/index.js";
+import { isPeWindowsParseResult, parsePe } from "../../analyzers/pe/index.js";
 import { createPeWithSectionAndIat } from "../fixtures/sample-files-pe.js";
 import { MockFile } from "../helpers/mock-file.js";
 
@@ -50,6 +50,7 @@ void test("parsePe omits the generic SECURITY tail warning when parsed debug raw
   const result = await parsePe(new MockFile(bytes, "cert-followed-by-debug.exe"));
 
   assert.ok(result);
+  assert.ok(isPeWindowsParseResult(result));
   assert.ok(result.debug?.entry);
   assert.ok(!result.security?.warnings?.some(warning => /bytes after the declared table/i.test(warning)));
 });
@@ -72,5 +73,6 @@ void test("parsePe keeps the generic SECURITY tail warning when no proven file s
   const result = await parsePe(new MockFile(bytes, "cert-with-unexplained-tail.exe"));
 
   assert.ok(result);
+  assert.ok(isPeWindowsParseResult(result));
   assert.ok(result.security?.warnings?.some(warning => /bytes after the declared table/i.test(warning)));
 });

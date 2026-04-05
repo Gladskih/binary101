@@ -1,7 +1,7 @@
 "use strict";
 
 import { dd, safe } from "../../html-utils.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
+import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import {
   countFindings,
   countStandaloneFindings,
@@ -12,7 +12,7 @@ import {
   summarizeRelations
 } from "./import-linking-format.js";
 
-export function renderImportLinking(pe: PeParseResult, out: string[]): void {
+export function renderImportLinking(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.importLinking?.modules.length) return;
   const linkedModules = pe.importLinking.modules;
   const eagerImportCount = linkedModules.reduce((count, module) => count + module.imports.length, 0);

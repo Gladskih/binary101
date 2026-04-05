@@ -8,9 +8,10 @@ const getMappedSectionSpan = (section: PeSection): number =>
   (section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0);
 
 export function computeEntrySection(
-  opt: Pick<PeOptionalHeader, "AddressOfEntryPoint">,
+  opt: Pick<PeOptionalHeader, "AddressOfEntryPoint"> | null,
   sections: PeSection[]
 ): { name: string; index: number } | null {
+  if (!opt) return null;
   if (!opt.AddressOfEntryPoint) return null;
   const entryRva = opt.AddressOfEntryPoint >>> 0;
   for (let index = 0; index < sections.length; index += 1) {

@@ -2,13 +2,17 @@
 
 import { humanSize, hex } from "../../binary-utils.js";
 import { safe } from "../../html-utils.js";
-import { isPeRomOptionalHeader } from "../../analyzers/pe/optional-header-kind.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
+import {
+  isPeRomParseResult,
+  isPeWindowsParseResult,
+  type PeParseResult,
+  type PeWindowsParseResult
+} from "../../analyzers/pe/index.js";
 
-type PeRelocSection = NonNullable<PeParseResult["reloc"]>;
-type PeExceptionSection = NonNullable<PeParseResult["exception"]>;
-type PeBoundImportsSection = NonNullable<PeParseResult["boundImports"]>;
-type PeDelayImportsSection = NonNullable<PeParseResult["delayImports"]>;
+type PeRelocSection = NonNullable<PeWindowsParseResult["reloc"]>;
+type PeExceptionSection = NonNullable<PeWindowsParseResult["exception"]>;
+type PeBoundImportsSection = NonNullable<PeWindowsParseResult["boundImports"]>;
+type PeDelayImportsSection = NonNullable<PeWindowsParseResult["delayImports"]>;
 
 // Microsoft PE format, "Section Flags":
 // IMAGE_SCN_MEM_EXECUTE marks executable section contents.
@@ -73,7 +77,7 @@ const computeKnownOverlayCoverage = (pe: PeParseResult): number => {
       (securityDir.rva >>> 0) + (securityDir.size >>> 0)
     );
   }
-  for (const range of pe.debug?.rawDataRanges ?? []) {
+  for (const range of isPeWindowsParseResult(pe) ? pe.debug?.rawDataRanges ?? [] : []) {
     addKnownOverlayRange(coveredRanges, overlayStart, overlayEnd, range.start, range.end);
   }
   const pointerToSymbolTable = pe.coff?.PointerToSymbolTable >>> 0;
@@ -253,10 +257,10 @@ export function renderSanity(pe: PeParseResult, out: string[]): void {
   if (unexplainedOverlaySize > 0) {
     issues.push(`Overlay after last section: ${humanSize(unexplainedOverlaySize)}.`);
   }
-  if (pe.imageSizeMismatch && !(pe.opt && isPeRomOptionalHeader(pe.opt))) {
+  if (pe.imageSizeMismatch && !isPeRomParseResult(pe)) {
     issues.push("SizeOfImage does not match section layout.");
   }
-  if (pe.debug?.warning) {
+  if (isPeWindowsParseResult(pe) && pe.debug?.warning) {
     issues.push(pe.debug.warning);
   }
   const entrypointRva = pe.opt?.AddressOfEntryPoint ? (pe.opt.AddressOfEntryPoint >>> 0) : 0;

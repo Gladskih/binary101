@@ -1,13 +1,13 @@
 "use strict";
 
-import type { PeParseResult } from "../../analyzers/pe/index.js";
+import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type { PeSection } from "../../analyzers/pe/types.js";
 import {
   coffStringTablePeSectionName,
   inlinePeSectionName
 } from "../../analyzers/pe/section-name.js";
 
-export const createBasePe = (): PeParseResult =>
+export const createBasePe = (): PeWindowsParseResult =>
   ({
     dos: {
       e_magic: "MZ",
@@ -23,8 +23,11 @@ export const createBasePe = (): PeParseResult =>
       e_ip: 0,
       e_cs: 0,
       e_lfarlc: 0,
+      e_ovno: 0,
+      e_res: [0, 0, 0, 0],
       e_oemid: 0,
       e_oeminfo: 0,
+      e_res2: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
       e_lfanew: 0x80,
       stub: { kind: "stub", note: "" }
     },
@@ -92,7 +95,7 @@ export const createBasePe = (): PeParseResult =>
     imageSizeMismatch: false,
     hasCert: false,
     signature: "PE"
-  }) as unknown as PeParseResult;
+  }) as PeWindowsParseResult;
 
 export const createPeSection = (
   name: string,
@@ -113,7 +116,7 @@ export const createPeSection = (
   };
 };
 
-export const createPeWithSections = (...sections: PeSection[]): PeParseResult => {
+export const createPeWithSections = (...sections: PeSection[]): PeWindowsParseResult => {
   const pe = createBasePe();
   pe.sections = sections;
   pe.coff.NumberOfSections = sections.length;

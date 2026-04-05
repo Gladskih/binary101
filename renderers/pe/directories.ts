@@ -2,14 +2,18 @@
 
 import { humanSize, hex } from "../../binary-utils.js";
 import { dd, safe } from "../../html-utils.js";
-import type { PeDebugSection, PeParseResult } from "../../analyzers/pe/index.js";
+import type {
+  PeDebugSection,
+  PeWindowsParseResult
+} from "../../analyzers/pe/index.js";
+import type { PeImportParseResult } from "../../analyzers/pe/imports.js";
 import { peSectionNameValue } from "../../analyzers/pe/section-name.js";
 
-type PeImportsSection = PeParseResult["imports"];
-type PeExportSection = NonNullable<PeParseResult["exports"]>;
-type PeTlsSection = NonNullable<PeParseResult["tls"]>;
-type PeSecuritySection = NonNullable<PeParseResult["security"]>;
-type PeIatSection = NonNullable<PeParseResult["iat"]>;
+type PeImportsSection = PeImportParseResult;
+type PeExportSection = NonNullable<PeWindowsParseResult["exports"]>;
+type PeTlsSection = NonNullable<PeWindowsParseResult["tls"]>;
+type PeSecuritySection = NonNullable<PeWindowsParseResult["security"]>;
+type PeIatSection = NonNullable<PeWindowsParseResult["iat"]>;
 // Microsoft PE format, "Section Flags":
 // IMAGE_SCN_GPREL marks sections whose data is referenced through the global pointer (GP).
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
@@ -223,7 +227,7 @@ export function renderIat(t: PeIatSection, out: string[]): void {
   out.push(`</dl></section>`);
 }
 
-export function renderArchitectureDirectory(pe: PeParseResult, out: string[]): void {
+export function renderArchitectureDirectory(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.architecture) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Architecture directory</h4>`);
   if (pe.architecture.warnings?.length) {
@@ -241,7 +245,7 @@ export function renderArchitectureDirectory(pe: PeParseResult, out: string[]): v
   out.push(`</section>`);
 }
 
-export function renderGlobalPtrDirectory(pe: PeParseResult, out: string[]): void {
+export function renderGlobalPtrDirectory(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.globalPtr) return;
   const gpRelSections = (pe.sections ?? []).filter(
     section => (section.characteristics & IMAGE_SCN_GPREL) !== 0

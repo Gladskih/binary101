@@ -1,10 +1,11 @@
 "use strict";
 
-import type { PeParseResult } from "./index.js";
-import type { PeCore } from "./types.js";
+import type { PeHeaderParseResult } from "./index.js";
+import type { PeHeaderCore } from "./types.js";
 
-export const buildHeaderOnlyPeParseResult = (core: PeCore): PeParseResult => ({
-  debug: null,
+export const buildHeaderOnlyPeParseResult = (
+  core: PeHeaderCore
+): PeHeaderParseResult => ({
   dos: core.dos,
   signature: "PE",
   coff: core.coff,
@@ -18,21 +19,6 @@ export const buildHeaderOnlyPeParseResult = (core: PeCore): PeParseResult => ({
   sections: core.sections,
   entrySection: core.entrySection,
   rvaToOff: core.rvaToOff,
-  imports: { entries: [], thunkEntrySize: Uint32Array.BYTES_PER_ELEMENT },
-  loadcfg: null,
-  exports: null,
-  tls: null,
-  reloc: null,
-  exception: null,
-  boundImports: null,
-  delayImports: null,
-  clr: null,
-  security: null,
-  iat: null,
-  importLinking: null,
-  architecture: null,
-  globalPtr: null,
-  resources: null,
   overlaySize: core.overlaySize,
   imageEnd: core.imageEnd,
   imageSizeMismatch: core.imageSizeMismatch,

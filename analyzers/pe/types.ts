@@ -81,8 +81,6 @@ export interface PeRomOptionalFields {
   GpValue: number;
 }
 
-export type PeOptionalHeaderKind = "pe32" | "pe32+" | "rom" | "unknown";
-
 interface PeOptionalHeaderBase {
   Magic: number;
   LinkerMajor: number;
@@ -135,25 +133,17 @@ export interface PeRomOptionalHeader extends PeOptionalHeaderBase {
   rom: PeRomOptionalFields;
 }
 
-export interface PeUnknownOptionalHeader extends PeOptionalHeaderBase {}
+export type PeOptionalHeader = Pe32OptionalHeader | PePlusOptionalHeader | PeRomOptionalHeader;
 
-export type PeOptionalHeader =
-  | Pe32OptionalHeader
-  | PePlusOptionalHeader
-  | PeRomOptionalHeader
-  | PeUnknownOptionalHeader;
-
-export interface PeCore {
+interface PeCoreBase {
   dos: PeDosHeader;
   coff: PeCoffHeader;
   coffStringTableSize?: number;
   trailingAlignmentPaddingSize?: number;
-  opt: PeOptionalHeader;
   warnings?: string[];
   optOff: number;
   ddStartRel: number;
   ddCount: number;
-  dataDirs: PeDataDirectory[];
   sections: PeSection[];
   entrySection: { name: string; index: number } | null;
   rvaToOff: RvaToOffset;
@@ -161,6 +151,18 @@ export interface PeCore {
   imageEnd: number;
   imageSizeMismatch: boolean;
 }
+
+export interface PeWindowsCore extends PeCoreBase {
+  opt: PeWindowsOptionalHeader;
+  dataDirs: PeDataDirectory[];
+}
+
+export interface PeHeaderCore extends PeCoreBase {
+  opt: PeRomOptionalHeader | null;
+  dataDirs: [];
+}
+
+export type PeCore = PeWindowsCore | PeHeaderCore;
 
 export interface PeTlsDirectory {
   StartAddressOfRawData: bigint;

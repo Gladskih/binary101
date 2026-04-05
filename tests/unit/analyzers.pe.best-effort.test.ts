@@ -35,7 +35,7 @@ void test("parsePe does not invent an optional header when SizeOfOptionalHeader 
   const parsed = await parsePe(new MockFile(buffer, "tiny-pe.exe"));
   assert.ok(parsed, "Expected parsePe to return result for tiny PE");
   assert.strictEqual(parsed.signature, "PE");
-  assert.strictEqual(parsed.opt.Magic, 0);
+  assert.strictEqual(parsed.opt, null);
   assert.strictEqual(parsed.sections.length, 0);
   assert.ok(parsed.warnings?.some(warning => /optional header|size/i.test(warning)));
 });

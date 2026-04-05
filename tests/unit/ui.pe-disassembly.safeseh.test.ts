@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createPeDisassemblyController } from "../../ui/pe-disassembly.js";
 import type { ParseForUiResult } from "../../analyzers/index.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
+import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type { AnalyzePeInstructionSetOptions, PeInstructionSetReport } from "../../analyzers/pe/disassembly.js";
 import { installFakeDom, flushTimers } from "../helpers/fake-dom.js";
 import { expectDefined } from "../helpers/expect-defined.js";
@@ -12,13 +12,13 @@ import { MockFile } from "../helpers/mock-file.js";
 
 const TEST_IMAGE_BASE = 0x400000n;
 
-const createMinimalPe = (): PeParseResult =>
+const createMinimalPe = (): PeWindowsParseResult =>
   ({
     coff: { Machine: 0x014c },
     opt: { Magic: 0x10b, ImageBase: TEST_IMAGE_BASE, AddressOfEntryPoint: 0x1000 },
     rvaToOff: (rva: number) => rva,
     sections: []
-  }) as unknown as PeParseResult;
+  }) as unknown as PeWindowsParseResult;
 
 const createFakeReport = (): PeInstructionSetReport => ({
   bitness: 32,
@@ -42,7 +42,7 @@ void test("pe disassembly controller includes SafeSEH handler RVAs when availabl
   pe.loadcfg = {
     SEHandlerTable: TEST_IMAGE_BASE + 0x40n,
     SEHandlerCount: 2
-  } as unknown as PeParseResult["loadcfg"];
+  } as unknown as PeWindowsParseResult["loadcfg"];
 
   const parseResult: ParseForUiResult = { analyzer: "pe", parsed: pe };
 

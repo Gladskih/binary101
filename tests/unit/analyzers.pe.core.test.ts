@@ -4,9 +4,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parsePeHeaders } from "../../analyzers/pe/core.js";
 import {
-  isPeRomOptionalHeader,
-  isPeWindowsOptionalHeader
-} from "../../analyzers/pe/optional-header-kind.js";
+  PE32_OPTIONAL_HEADER_MAGIC,
+  ROM_OPTIONAL_HEADER_MAGIC
+} from "../../analyzers/pe/optional-header-magic.js";
+import type { PeOptionalHeader, PeWindowsOptionalHeader } from "../../analyzers/pe/types.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
 
@@ -14,8 +15,13 @@ const DOS_SIGNATURE_MZ = 0x5a4d;
 const DOS_E_LFANEW_OFFSET = 0x3c;
 const PE_SIGNATURE_OFFSET = 0x80;
 const IMAGE_FILE_MACHINE_I386 = 0x014c;
-const PE32_OPTIONAL_HEADER_MAGIC = 0x10b;
 
+const getWindowsOptionalHeader = (opt: PeOptionalHeader | null): PeWindowsOptionalHeader => {
+  if (!opt || opt.Magic === ROM_OPTIONAL_HEADER_MAGIC) {
+    throw new Error("Expected a Windows optional header.");
+  }
+  return opt;
+};
 void test("parsePeHeaders returns null when e_lfanew points past file end", async () => {
   const bytes = new Uint8Array(128).fill(0);
   const view = new DataView(bytes.buffer);
@@ -129,10 +135,10 @@ void test("parsePeHeaders does not read optional-header fields from section-head
   const parsed = await parsePeHeaders(new MockFile(bytes, "short-opt.exe"));
 
   assert.ok(parsed);
-  assert.ok(isPeWindowsOptionalHeader(parsed.opt));
-  assert.strictEqual(parsed.opt.SectionAlignment, 0);
-  assert.strictEqual(parsed.opt.SizeOfImage, 0);
-  assert.strictEqual(parsed.opt.NumberOfRvaAndSizes, 0);
+  const opt = getWindowsOptionalHeader(parsed.opt);
+  assert.strictEqual(opt.SectionAlignment, 0);
+  assert.strictEqual(opt.SizeOfImage, 0);
+  assert.strictEqual(opt.NumberOfRvaAndSizes, 0);
   assert.deepStrictEqual(parsed.dataDirs, []);
 });
 
@@ -153,11 +159,12 @@ void test("parsePeHeaders keeps truncated optional headers visible with warnings
   const parsed = await parsePeHeaders(new MockFile(bytes, "truncated-optional-header.exe"));
 
   assert.ok(parsed);
+  assert.ok(parsed.opt);
   assert.strictEqual(parsed.opt.Magic, PE32_OPTIONAL_HEADER_MAGIC);
   assert.ok(parsed.warnings?.some(warning => /optional header|truncated/i.test(warning)));
 });
 
-void test("parsePeHeaders keeps images with unknown OptionalHeader.Magic visible with warnings", async () => {
+void test("parsePeHeaders keeps images with unrecognized OptionalHeader.Magic visible with warnings", async () => {
   const coffOffset = PE_SIGNATURE_OFFSET + 4;
   const optionalHeaderSize = 0xe0;
   const bytes = new Uint8Array(coffOffset + 20 + optionalHeaderSize).fill(0);
@@ -175,9 +182,7 @@ void test("parsePeHeaders keeps images with unknown OptionalHeader.Magic visible
   const parsed = await parsePeHeaders(new MockFile(bytes, "unknown-optional-magic.exe"));
 
   assert.ok(parsed);
-  assert.strictEqual(parsed.opt.Magic, 0x1337);
-  assert.ok(!isPeWindowsOptionalHeader(parsed.opt));
-  assert.ok(!isPeRomOptionalHeader(parsed.opt));
+  assert.strictEqual(parsed.opt, null);
   assert.deepStrictEqual(parsed.dataDirs, []);
   assert.ok(parsed.warnings?.some(warning => /magic/i.test(warning)));
 });
@@ -199,6 +204,7 @@ void test("parsePeHeaders honors declared optional headers larger than the old p
   const parsed = await parsePeHeaders(new MockFile(bytes, "large-optional-header.exe"));
 
   assert.ok(parsed);
+  assert.ok(parsed.opt);
   assert.strictEqual(parsed.opt.Magic, PE32_OPTIONAL_HEADER_MAGIC);
   assert.deepStrictEqual(parsed.warnings ?? [], []);
 });

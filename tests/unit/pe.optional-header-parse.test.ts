@@ -2,8 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseOptionalHeaderAndDirectories } from "../../analyzers/pe/core-headers.js";
-import { isPeRomOptionalHeader } from "../../analyzers/pe/optional-header-kind.js";
+import { parseOptionalHeaderAndDirectories } from "../../analyzers/pe/optional-header-parse.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const PE32_OPTIONAL_HEADER_MAGIC = 0x10b;
@@ -76,8 +75,8 @@ void test("parseOptionalHeaderAndDirectories decodes IMAGE_ROM_OPTIONAL_HEADER w
     optionalHeaderSize
   );
 
+  assert.ok(parsed.opt);
   assert.strictEqual(parsed.opt.Magic, ROM_OPTIONAL_HEADER_MAGIC);
-  assert.ok(isPeRomOptionalHeader(parsed.opt));
   assert.strictEqual(parsed.opt.LinkerMajor, 2);
   assert.strictEqual(parsed.opt.LinkerMinor, 7);
   assert.strictEqual(parsed.opt.SizeOfCode, patternedSentinelWord(0));

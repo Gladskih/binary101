@@ -2,7 +2,7 @@
 
 import { humanSize, hex } from "../../binary-utils.js";
 import { dd, safe } from "../../html-utils.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
+import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import {
   countModulesWithFindingCodes,
   countRelation,
@@ -28,7 +28,7 @@ import {
 
 export { renderImportLinking } from "./import-linking-section.js";
 
-export function renderImports(pe: PeParseResult, out: string[]): void {
+export function renderImports(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.imports.entries.length && !pe.imports.warning) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import table</h4><div class="smallNote">Each IMAGE_IMPORT_DESCRIPTOR names one DLL and points to two tables: OriginalFirstThunk normally gives the lookup names, while FirstThunk gives the runtime IAT slots that the loader patches.</div>`);
   if (pe.imports.warning) {
@@ -74,7 +74,7 @@ export function renderImports(pe: PeParseResult, out: string[]): void {
   out.push(`</section>`);
 }
 
-export function renderBoundImports(pe: PeParseResult, out: string[]): void {
+export function renderBoundImports(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.boundImports?.entries.length) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Bound imports</h4><div class="smallNote">BOUND_IMPORT is optional prebinding metadata. It does not replace the normal import table; it supplements it with imported-module timestamps and optional forwarder references.</div>`);
   if (pe.boundImports.warning) {
@@ -93,7 +93,7 @@ export function renderBoundImports(pe: PeParseResult, out: string[]): void {
   out.push(`</tbody></table></div></details></section>`);
 }
 
-export function renderDelayImports(pe: PeParseResult, out: string[]): void {
+export function renderDelayImports(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.delayImports?.entries.length) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Delay-load imports</h4><div class="smallNote">Delay-load descriptors describe imports that are resolved on first use instead of during process startup. Modern Windows images sometimes protect delay-load IATs with Load Config GuardFlags and a dedicated .didat section.</div>`);
   if (pe.delayImports.warning) {
@@ -143,7 +143,7 @@ export function renderDelayImports(pe: PeParseResult, out: string[]): void {
   out.push(`</section>`);
 }
 
-export function renderIat(pe: PeParseResult, out: string[]): void {
+export function renderIat(pe: PeWindowsParseResult, out: string[]): void {
   const inferredEagerIat = pe.importLinking?.inferredEagerIat ?? null;
   if (!pe.iat && !inferredEagerIat) return;
   const eagerRelations = pe.importLinking?.modules.flatMap(module =>

@@ -7,6 +7,7 @@ import { computeAndDisplayHash, copyHashToClipboard, resetHashDisplay } from "./
 import { createZipEntryClickHandler } from "./ui/zip-actions.js";
 import { createGzipClickHandler } from "./ui/gzip-actions.js";
 import { createIso9660EntryClickHandler } from "./ui/iso9660-actions.js";
+import { isPeWindowsParseResult } from "./analyzers/pe/index.js";
 import { createPeDisassemblyController } from "./ui/pe-disassembly.js";
 import { createElfDisassemblyController } from "./ui/elf-disassembly.js";
 import { createPeChecksumClickHandler } from "./ui/pe-checksum-controls.js";
@@ -110,7 +111,13 @@ peDetailsValueElement.addEventListener("click", event => {
   if (peAnalyzeButton) {
     event.preventDefault();
     if (!currentFile) return;
-    if (currentParseResult.analyzer !== "pe" || !currentParseResult.parsed) return;
+    if (
+      currentParseResult.analyzer !== "pe" ||
+      !currentParseResult.parsed ||
+      !isPeWindowsParseResult(currentParseResult.parsed)
+    ) {
+      return;
+    }
     delete currentParseResult.parsed.disassembly;
     renderResult(currentParseResult);
     peDisassembly.start(currentFile, currentParseResult.parsed);
@@ -174,7 +181,6 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     const parsedResult = await parseForUi(file);
     currentParseResult = parsedResult;
     renderResult(parsedResult);
-
     resetHashDisplay(sha256Controls, sha512Controls);
     clearStatusMessage();
   } catch (error) {
@@ -237,7 +243,6 @@ fileInputElement.addEventListener("change", event => {
   handleSelectedFiles(input.files);
   input.value = "";
 });
-
 const handlePaste = async (event: ClipboardEvent): Promise<void> => {
   const clipboardData = event.clipboardData;
   if (!clipboardData) {
@@ -274,25 +279,20 @@ const handlePaste = async (event: ClipboardEvent): Promise<void> => {
   });
   await showFileInfo(syntheticFile, "Paste (clipboard data)");
 };
-
 window.addEventListener("paste", event => {
   void handlePaste(event as ClipboardEvent);
 });
-
 sha256ButtonElement.addEventListener("click", () => {
   void computeAndDisplayHash("SHA-256", currentFile, sha256Controls);
 });
-
 sha512ButtonElement.addEventListener("click", () => {
   void computeAndDisplayHash("SHA-512", currentFile, sha512Controls);
 });
-
 sha256CopyButtonElement.addEventListener("click", () => {
   void copyHashToClipboard(sha256ValueElement).then(status => {
     setStatusMessage(status === "copied" ? "SHA-256 copied." : "Clipboard copy failed.");
   });
 });
-
 sha512CopyButtonElement.addEventListener("click", () => {
   void copyHashToClipboard(sha512ValueElement).then(status => {
     setStatusMessage(status === "copied" ? "SHA-512 copied." : "Clipboard copy failed.");

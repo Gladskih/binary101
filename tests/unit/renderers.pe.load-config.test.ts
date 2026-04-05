@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderLoadConfig } from "../../renderers/pe/load-config.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
+import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type { PeLoadConfig } from "../../analyzers/pe/load-config/index.js";
 
 const createLoadConfig = (): PeLoadConfig => ({
@@ -67,7 +67,7 @@ void test("renderLoadConfig renders GuardFlags names and CFG function-table entr
       GuardFlags: 0x30417500,
       CodeIntegrity: { Flags: 0, Catalog: 0, CatalogOffset: 0, Reserved: 0 }
     }
-  } as unknown as PeParseResult;
+  } as unknown as PeWindowsParseResult;
 
   const out: string[] = [];
   renderLoadConfig(pe, out);
