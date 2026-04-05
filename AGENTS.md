@@ -1,5 +1,5 @@
 - Follow `CONTRIBUTING.md` as the authoritative source for coding, testing, and verification rules and consider it a strict quality gate.
-- After completing any task and before reporting success, explicitly audit the final changes against all applicable `CONTRIBUTING.md` rules.
+- After completing any coding task and before reporting success, explicitly audit the final changes against all applicable `CONTRIBUTING.md` rules.
 - Reuse existing analyzers as reference for structure, warnings, and error handling.
 - All parsing must be resilient to malformed or truncated files:
   - always bounds-check offsets and sizes,
@@ -15,3 +15,5 @@
   - clearly separate what is known from what is guessed,
   - ask the user for clarification, references, or sample files when that can change the answer.
 - Prefer a clearly documented "I am not sure because X" over a confident but incorrect guess.
+- Never run `npm run test:unit` and `npm run test:coverage` in parallel.
+- Tokens and your context are not infinite, limit wordy output of tools. 
