@@ -66,27 +66,6 @@ export function decodeTextResource(
   }
 }
 
-export function addManifestPreview(
-  data: Uint8Array,
-  typeName: string,
-  codePage: number | undefined
-): ResourcePreviewResult | null {
-  if (typeName !== "MANIFEST") return null;
-  const issues: string[] = [];
-  const { text, error, terminated } = decodeTextResource(data, codePage);
-  if (error) issues.push("Manifest text could not be fully decoded.");
-  if (!text) return issues.length ? { issues } : null;
-  if (terminated) issues.push("Manifest preview stopped at a NUL terminator before the declared data size.");
-  return {
-    preview: {
-      previewKind: "text",
-      textPreview: text,
-      previewFields: [{ label: "Type", value: "MANIFEST" }]
-    },
-    ...(issues.length ? { issues } : {})
-  };
-}
-
 export function addHtmlPreview(
   data: Uint8Array,
   typeName: string,

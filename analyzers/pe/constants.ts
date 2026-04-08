@@ -42,6 +42,20 @@ export const MACHINE: OptionEntry[] = [
   [0x0169, "MIPS little-endian WCE v2", "Older Windows CE target for little-endian MIPS systems"]
 ];
 
+// Microsoft Learn, "Application manifests":
+// https://learn.microsoft.com/en-us/windows/win32/sbscs/application-manifests
+// Only a documented subset of PE machine types maps to assemblyIdentity.processorArchitecture.
+const manifestArchitectureByMachine = new Map<number, string>([
+  [0x014c, "x86"],
+  [0x8664, "amd64"],
+  [0x01c0, "arm"],
+  [0x01c4, "arm"],
+  [0xaa64, "arm64"]
+]);
+
+export const getManifestProcessorArchitectureForMachine = (machine: number): string | null =>
+  manifestArchitectureByMachine.get(machine >>> 0) || null;
+
 // Microsoft PE format, "Windows Subsystem":
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#windows-subsystem
 export const SUBSYSTEMS: OptionEntry[] = [

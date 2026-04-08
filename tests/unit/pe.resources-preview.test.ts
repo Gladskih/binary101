@@ -13,6 +13,7 @@ import {
   createPreviewLangEntry,
   createPreviewTree
 } from "../helpers/pe-resource-preview-fixture.js";
+import { parseManifestTestXmlDocument } from "../helpers/manifest-test-parser.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
@@ -111,10 +112,13 @@ void test("enrichResourcePreviews builds text previews for MANIFEST and HTML", a
     createPreviewDetailGroup("HTML", 4, createPreviewLangEntry(html.offset, html.size, 65001, 1031))
   ]);
 
-  const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
+  const result = await enrichResourcePreviews(
+    new MockFile(fixture.fileBytes),
+    tree,
+    parseManifestTestXmlDocument
+  );
   assert.strictEqual(getPreviewLang(result, "MANIFEST").previewKind, "text");
   assert.match(expectDefined(getPreviewLang(result, "MANIFEST").textPreview), /assembly/);
-  assert.deepEqual(getPreviewLang(result, "MANIFEST").previewFields, [{ label: "Type", value: "MANIFEST" }]);
   assert.strictEqual(getPreviewLang(result, "HTML").previewKind, "html");
   assert.match(expectDefined(getPreviewLang(result, "HTML").textPreview), /<body>hi/);
 });
@@ -142,7 +146,11 @@ void test("enrichResourcePreviews builds STRING, MESSAGETABLE, and VERSION previ
     )
   ]);
 
-  const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
+  const result = await enrichResourcePreviews(
+    new MockFile(fixture.fileBytes),
+    tree,
+    parseManifestTestXmlDocument
+  );
   const stringLang = getPreviewLang(result, "STRING");
   const messageLang = getPreviewLang(result, "MESSAGETABLE");
   const versionLang = getPreviewLang(result, "VERSION");

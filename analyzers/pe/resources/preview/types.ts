@@ -7,6 +7,36 @@ export interface ResourcePreviewField {
   value: string;
 }
 
+export interface ResourceManifestPreview {
+  manifestVersion: string | null;
+  assemblyType: string | null;
+  assemblyName: string | null;
+  assemblyVersion: string | null;
+  processorArchitecture: string | null;
+  requestedExecutionLevel: string | null;
+  requestedUiAccess: boolean | null;
+  supportedArchitectures: string[];
+}
+
+export interface ResourceManifestValidation {
+  status: "consistent" | "warnings";
+  checkedCount: number;
+  validated: string[];
+  warnings: string[];
+}
+
+export interface ResourceManifestTreeAttribute {
+  name: string;
+  value: string;
+}
+
+export interface ResourceManifestTreeNode {
+  name: string;
+  attributes: ResourceManifestTreeAttribute[];
+  text: string | null;
+  children: ResourceManifestTreeNode[];
+}
+
 export interface ResourceVersionPreview {
   fileVersionString?: string;
   productVersionString?: string;
@@ -79,6 +109,9 @@ export interface ResourcePreviewData {
   previewKind: string;
   textPreview?: string;
   textEncoding?: string | null;
+  manifestInfo?: ResourceManifestPreview;
+  manifestTree?: ResourceManifestTreeNode;
+  manifestValidation?: ResourceManifestValidation;
   stringTable?: Array<{ id: number | null; text: string }>;
   messageTable?: { messages: Array<{ id: number; strings: string[] }>; truncated: boolean };
   versionInfo?: ResourceVersionPreview;

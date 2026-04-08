@@ -11,6 +11,8 @@ import { isPeWindowsParseResult } from "./analyzers/pe/index.js";
 import { createPeDisassemblyController } from "./ui/pe-disassembly.js";
 import { createElfDisassemblyController } from "./ui/elf-disassembly.js";
 import { createPeChecksumClickHandler } from "./ui/pe-checksum-controls.js";
+import { copyManifestPreviewToClipboard } from "./ui/manifest-preview-copy.js";
+import { handleManifestTreeActionClick, syncManifestTreeControls } from "./ui/manifest-tree-controls.js";
 const getElement = (id: string) => document.getElementById(id)!;
 const dropZoneElement = getElement("dropZone") as HTMLElement;
 const fileInputElement = getElement("fileInput") as HTMLInputElement;
@@ -34,13 +36,11 @@ const sha512ButtonElement = getElement("sha512ComputeButton") as HTMLButtonEleme
 const sha256CopyButtonElement = getElement("sha256CopyButton") as HTMLButtonElement;
 const sha512CopyButtonElement = getElement("sha512CopyButton") as HTMLButtonElement;
 const sha256Controls = {
-  valueElement: sha256ValueElement,
-  buttonElement: sha256ButtonElement,
+  valueElement: sha256ValueElement, buttonElement: sha256ButtonElement,
   copyButtonElement: sha256CopyButtonElement
 };
 const sha512Controls = {
-  valueElement: sha512ValueElement,
-  buttonElement: sha512ButtonElement,
+  valueElement: sha512ValueElement, buttonElement: sha512ButtonElement,
   copyButtonElement: sha512CopyButtonElement
 };
 let currentFile: File | null = null;
@@ -48,20 +48,12 @@ let currentPreviewUrl: string | null = null;
 let currentTypeLabel = "";
 let currentParseResult: ParseForUiResult = { analyzer: null, parsed: null };
 const setPreviewUrl = (url: string | null): void => {
-  if (currentPreviewUrl) {
-    URL.revokeObjectURL(currentPreviewUrl);
-  }
+  if (currentPreviewUrl) URL.revokeObjectURL(currentPreviewUrl);
   currentPreviewUrl = url;
 };
-const setStatusMessage = (message: string | null | undefined): void => {
-  statusMessageElement.textContent = message || "";
-};
-const clearStatusMessage = () => {
-  statusMessageElement.textContent = "";
-};
-const clearPreviewUrl = (): void => {
-  setPreviewUrl(null);
-};
+const setStatusMessage = (message: string | null | undefined): void => { statusMessageElement.textContent = message || ""; };
+const clearStatusMessage = (): void => { statusMessageElement.textContent = ""; };
+const clearPreviewUrl = (): void => { setPreviewUrl(null); };
 const renderResult = (result: ParseForUiResult): void => {
   renderParsedResult(result, {
     buildPreview: () =>
@@ -82,28 +74,31 @@ const elfDisassembly = createElfDisassemblyController({
   renderResult
 });
 const zipClickHandler = createZipEntryClickHandler({
-  getParseResult: () => currentParseResult,
-  getFile: () => currentFile,
-  setStatusMessage
+  getParseResult: () => currentParseResult, getFile: () => currentFile, setStatusMessage
 });
 const gzipClickHandler = createGzipClickHandler({
-  getParseResult: () => currentParseResult,
-  getFile: () => currentFile,
-  setStatusMessage
+  getParseResult: () => currentParseResult, getFile: () => currentFile, setStatusMessage
 });
 const isoClickHandler = createIso9660EntryClickHandler({
-  getParseResult: () => currentParseResult,
-  getFile: () => currentFile,
-  setStatusMessage
+  getParseResult: () => currentParseResult, getFile: () => currentFile, setStatusMessage
 });
 const peChecksumClickHandler = createPeChecksumClickHandler({
-  getParseResult: () => currentParseResult,
-  getFile: () => currentFile,
-  setStatusMessage
+  getParseResult: () => currentParseResult, getFile: () => currentFile, setStatusMessage
 });
 peDetailsValueElement.addEventListener("click", event => {
   const targetNode = event.target as Node | null;
   const targetElement = targetNode instanceof Element ? targetNode : targetNode?.parentElement ?? null;
+  if (targetElement?.closest("[data-manifest-copy-button]")) {
+    event.preventDefault();
+    void copyManifestPreviewToClipboard(targetElement).then(status => {
+      setStatusMessage(status === "copied" ? "Manifest XML copied." : "Clipboard copy failed.");
+    });
+    return;
+  }
+  if (handleManifestTreeActionClick(targetElement)) {
+    event.preventDefault();
+    return;
+  }
   const peAnalyzeButton = targetElement?.closest("#peInstructionSetsAnalyzeButton");
   const peCancelButton = targetElement?.closest("#peInstructionSetsCancelButton");
   const elfAnalyzeButton = targetElement?.closest("#elfInstructionSetsAnalyzeButton");
@@ -147,6 +142,7 @@ peDetailsValueElement.addEventListener("click", event => {
   void gzipClickHandler(event);
   void zipClickHandler(event);
 });
+peDetailsValueElement.addEventListener("toggle", event => syncManifestTreeControls(event.target as Element | null), true);
 async function showFileInfo(file: File, sourceDescription: string): Promise<void> {
   peDisassembly.cancel();
   elfDisassembly.cancel();

@@ -6,6 +6,10 @@ import {
   buildStringTableResource,
   buildVersionResource
 } from "./pe-resource-metadata-payloads.js";
+import {
+  createManifestIncidentalValues,
+  createManifestXmlFixture
+} from "./pe-manifest-preview-fixture.js";
 import { createAniFile } from "./riff-sample-files.js";
 
 const DS_SETFONT = 0x00000040;
@@ -30,6 +34,15 @@ const RESOURCE_TYPE_ANICURSOR = 21;
 const RESOURCE_TYPE_ANIICON = 22;
 const RESOURCE_TYPE_HTML = 23;
 const RESOURCE_TYPE_MANIFEST = 24;
+// These supportedOS GUIDs are the exact subject of the renderer annotation test.
+// Source: Microsoft Learn, "Application manifests".
+const WELL_KNOWN_SUPPORTED_OS_IDS = [
+  "{e2011457-1546-43c5-a5fe-008deee3d3f0}",
+  "{35138b9a-5d96-4fbd-8e2d-a2440225f93a}",
+  "{4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38}",
+  "{1f676c76-80e1-4239-95bb-83d0f6d0da78}",
+  "{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"
+];
 
 export type ResourceSpec = {
   typeId: number;
@@ -145,6 +158,14 @@ const buildStandardDialogTemplate = (): Uint8Array => {
 export const createPeResourceSpecs = (): ResourceSpec[] => {
   const png = createPngFile().data;
   const cursorLeaf = buildCursorResource(7, 9, png);
+  const manifest = createManifestXmlFixture(
+    {
+      processorArchitecture: "amd64",
+      requestedExecutionLevel: "asInvoker",
+      supportedOsIds: WELL_KNOWN_SUPPORTED_OS_IDS
+    },
+    createManifestIncidentalValues()
+  );
   return [
     { typeId: RESOURCE_TYPE_CURSOR, entryId: 4, langId: 1033, codePage: 0, data: cursorLeaf },
     {
@@ -225,7 +246,7 @@ export const createPeResourceSpecs = (): ResourceSpec[] => {
       entryId: 1,
       langId: 1033,
       codePage: 65001,
-      data: new TextEncoder().encode("<?xml version=\"1.0\"?><assembly/>")
+      data: new TextEncoder().encode(manifest.xml)
     }
   ].sort((left, right) => left.typeId - right.typeId);
 };

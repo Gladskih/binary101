@@ -1,5 +1,4 @@
 "use strict";
-
 import { safe } from "../../html-utils.js";
 import type {
   ResourceAcceleratorEntryPreview,
@@ -10,30 +9,25 @@ import type {
   ResourceVersionPreview
 } from "../../analyzers/pe/resources/preview/types.js";
 import { formatWindowsLanguageName } from "./windows-language-names.js";
-
+import { renderManifestPreview, renderManifestTree } from "./resource-preview-manifest.js";
 const renderIssues = (langEntry: ResourceLangWithPreview): string => {
   const issues = (langEntry.previewIssues || []).filter((issue): issue is string => Boolean(issue));
   return issues.length
     ? `<div class="smallNote" style="color:var(--warning-text,#b45309)">WARNING: ${issues.map(safe).join(" · ")}</div>`
     : "";
 };
-
 const renderFields = (langEntry: ResourceLangWithPreview): string => {
   const fields = langEntry.previewFields || [];
   if (!fields.length) return "";
-  const rows = fields
-    .map(field => `<li><span class="mono">${safe(field.label)}</span>: ${safe(field.value)}</li>`)
-    .join("");
+  const rows = fields.map(field => `<li><span class="mono">${safe(field.label)}</span>: ${safe(field.value)}</li>`).join("");
   return `<ul class="smallNote" style="padding-left:1.1rem;margin:.25rem 0 0 0">${rows}</ul>`;
 };
-
 const renderDialogControls = (controls: ResourceDialogControlPreview[]): string => {
   const rows = controls.map(control =>
     `<tr><td>${safe(control.kind)}</td><td>${safe(control.title || "")}</td><td class="mono">${control.id != null ? safe(control.id) : "-"}</td><td class="mono">${control.x},${control.y} ${control.width}x${control.height}</td></tr>`
   ).join("");
   return `<table class="table" style="margin-top:.35rem"><thead><tr><th>Kind</th><th>Title</th><th>ID</th><th>Bounds</th></tr></thead><tbody>${rows}</tbody></table>`;
 };
-
 const renderDialogFont = (dialog: ResourceDialogPreview): string => {
   if (!dialog.font) return "";
   const parts = [`${dialog.font.pointSize}pt ${dialog.font.typeface}`];
@@ -41,7 +35,6 @@ const renderDialogFont = (dialog: ResourceDialogPreview): string => {
   if (dialog.font.italic) parts.push("italic");
   return `<div class="smallNote">Font: ${safe(parts.join(", "))}</div>`;
 };
-
 const renderDialogControlBox = (
   control: ResourceDialogControlPreview,
   dialog: ResourceDialogPreview
@@ -69,7 +62,6 @@ const renderDialogControlBox = (
   }
   return `<div style="${shared};padding:.1rem .2rem;border:1px solid var(--border2);border-radius:4px;background:var(--card);display:flex;align-items:center;justify-content:center">${label}</div>`;
 };
-
 const renderDialogMockup = (dialog: ResourceDialogPreview): string => {
   const meta = [
     `<b>${safe(dialog.title || "(untitled dialog)")}</b>`,
@@ -108,14 +100,12 @@ const renderMenuItems = (items: ResourceMenuItemPreview[]): string => {
   }).join("");
   return `<ul class="smallNote" style="padding-left:1.1rem;margin:.25rem 0 0 0">${rows}</ul>`;
 };
-
 const renderAcceleratorEntries = (entries: ResourceAcceleratorEntryPreview[]): string => {
   const rows = entries.map(entry =>
     `<li><span class="mono">${safe([...entry.modifiers, entry.key].join("+"))}</span> -> <span class="mono">#${safe(entry.id)}</span></li>`
   ).join("");
   return `<ul class="smallNote" style="padding-left:1.1rem;margin:0">${rows}</ul>`;
 };
-
 const renderDefinitionRows = (rows: Array<{ label: string; value: string }>): string => {
   if (!rows.length) return "";
   const cells = rows
@@ -125,7 +115,6 @@ const renderDefinitionRows = (rows: Array<{ label: string; value: string }>): st
     .join("");
   return `<div class="smallNote" style="display:grid;grid-template-columns:max-content 1fr;gap:.15rem .55rem;margin-top:.2rem">${cells}</div>`;
 };
-
 const parseVersionTableTranslation = (
   table: string
 ): { languageId: number; codePage: number } | null => {
@@ -231,6 +220,21 @@ const renderFontPreview = (langEntry: ResourceLangWithPreview): string => {
     renderIssues(langEntry)
   ].join("");
 };
+const renderTailPreview = (langEntry: ResourceLangWithPreview): string | null => {
+  if (langEntry.previewKind === "dialog" && langEntry.dialogPreview) {
+    return renderDialogMockup(langEntry.dialogPreview) + renderFields(langEntry) + renderIssues(langEntry);
+  }
+  if (langEntry.previewKind === "menu" && langEntry.menuPreview) {
+    return renderMenuItems(langEntry.menuPreview.items) + renderFields(langEntry) + renderIssues(langEntry);
+  }
+  if (langEntry.previewKind === "accelerator" && langEntry.acceleratorPreview) {
+    return renderAcceleratorEntries(langEntry.acceleratorPreview.entries) +
+      renderFields(langEntry) +
+      renderIssues(langEntry);
+  }
+  if (langEntry.previewKind === "summary") return renderFields(langEntry) + renderIssues(langEntry) || "-";
+  return null;
+};
 
 export const renderPreviewCell = (langEntry: ResourceLangWithPreview | null | undefined): string => {
   if (!langEntry) return "-";
@@ -250,6 +254,14 @@ export const renderPreviewCell = (langEntry: ResourceLangWithPreview | null | un
   }
   if (langEntry.previewKind === "font") return renderFontPreview(langEntry);
   if (langEntry.previewKind === "text" && langEntry.textPreview) {
+    if (langEntry.manifestInfo || langEntry.manifestTree) {
+      return renderManifestPreview(
+        String(langEntry.textPreview),
+        langEntry.manifestInfo,
+        langEntry.manifestTree,
+        langEntry.manifestValidation
+      ) + renderFields(langEntry) + renderIssues(langEntry);
+    }
     return [
       `<div class="mono smallNote" style="white-space:pre-wrap;word-break:break-word">${safe(String(langEntry.textPreview))}</div>`,
       renderFields(langEntry),
@@ -282,20 +294,7 @@ export const renderPreviewCell = (langEntry: ResourceLangWithPreview | null | un
       .join("");
     return `<ol class="smallNote" style="padding-left:1.25rem;margin:0">${list}</ol>${renderFields(langEntry)}${renderIssues(langEntry)}`;
   }
-  if (langEntry.previewKind === "dialog" && langEntry.dialogPreview) {
-    return renderDialogMockup(langEntry.dialogPreview) + renderFields(langEntry) + renderIssues(langEntry);
-  }
-  if (langEntry.previewKind === "menu" && langEntry.menuPreview) {
-    return renderMenuItems(langEntry.menuPreview.items) + renderFields(langEntry) + renderIssues(langEntry);
-  }
-  if (langEntry.previewKind === "accelerator" && langEntry.acceleratorPreview) {
-    return renderAcceleratorEntries(langEntry.acceleratorPreview.entries) +
-      renderFields(langEntry) +
-      renderIssues(langEntry);
-  }
-  if (langEntry.previewKind === "summary") {
-    const rendered = renderFields(langEntry) + renderIssues(langEntry);
-    return rendered || "-";
-  }
-  return renderIssues(langEntry) || renderFields(langEntry) || "-";
+  const tailPreview = renderTailPreview(langEntry);
+  if (tailPreview) return tailPreview;
+  return renderIssues(langEntry) || renderManifestTree(langEntry.manifestInfo, langEntry.manifestTree) || renderFields(langEntry) || "-";
 };

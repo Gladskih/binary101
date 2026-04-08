@@ -4,6 +4,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderPreviewCell } from "../../renderers/pe/resource-preview-cell.js";
 import type { ResourceLangWithPreview } from "../../analyzers/pe/resources/preview/types.js";
+import {
+  createManifestInfoFixture,
+  createManifestValidationFixture,
+  createManifestTextFixture
+} from "../fixtures/pe-manifest-preview-fixture.js";
+
+// IMAGE_FILE_HEADER.Machine values are defined by the PE/COFF spec and winnt.h.
+const AMD64_MACHINE = 0x8664;
 
 const createBaseLang = (): ResourceLangWithPreview => ({
   lang: 1033,
@@ -128,4 +136,33 @@ void test("renderPreviewCell renders grouped VERSION details with human-readable
   assert.match(versionHtml, /CompanyName/);
   assert.match(versionHtml, /Binary101/);
   assert.doesNotMatch(versionHtml, /040904B0/);
+});
+
+void test("renderPreviewCell renders parsed manifest metadata alongside text previews", () => {
+  const manifestInfo = createManifestInfoFixture({
+    processorArchitecture: "amd64",
+    requestedExecutionLevel: "requireAdministrator",
+    supportedArchitectures: ["amd64", "arm64"]
+  });
+  const manifestHtml = renderPreviewCell({
+    ...createBaseLang(),
+    previewKind: "text",
+    textPreview: createManifestTextFixture(),
+    manifestInfo,
+    manifestValidation: createManifestValidationFixture(
+      AMD64_MACHINE,
+      { processorArchitecture: "amd64" }
+    )
+  });
+
+  assert.match(manifestHtml, /Manifest cross-check/);
+  assert.match(manifestHtml, /Consistent/);
+  assert.match(manifestHtml, /Parsed tree/);
+  assert.match(manifestHtml, /Expand all/);
+  assert.match(manifestHtml, /Copy manifest XML/);
+  assert.match(manifestHtml, new RegExp(String(manifestInfo.assemblyName)));
+  assert.match(manifestHtml, /supportedArchitectures/);
+  assert.match(manifestHtml, /amd64 arm64/);
+  assert.match(manifestHtml, /requireAdministrator/);
+  assert.match(manifestHtml, /uiAccess/);
 });

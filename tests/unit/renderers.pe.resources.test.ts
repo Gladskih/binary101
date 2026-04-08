@@ -4,6 +4,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PeResources } from "../../analyzers/pe/resources/index.js";
 import { renderResources } from "../../renderers/pe/resources.js";
+import {
+  createManifestIncidentalValues,
+  createManifestInfoFixture,
+  createManifestValidationFixture,
+  createManifestValidationMessageFixture,
+  createManifestTextFixture
+} from "../fixtures/pe-manifest-preview-fixture.js";
+
+// IMAGE_FILE_HEADER.Machine values are defined by the PE/COFF spec and winnt.h.
+const AMD64_MACHINE = 0x8664;
 
 const createPeResources = (): PeResources => ({
   top: [
@@ -59,7 +69,36 @@ const createPeResources = (): PeResources => ({
               dataRVA: 0,
               reserved: 0,
               previewKind: "text",
-              textPreview: "<assembly></assembly>",
+              textPreview: createManifestTextFixture(),
+              manifestInfo: (() => {
+                const incidental = createManifestIncidentalValues();
+                return createManifestInfoFixture(
+                  {
+                    processorArchitecture: "amd64",
+                    requestedExecutionLevel: "asInvoker",
+                    supportedArchitectures: ["amd64", "arm64"]
+                  },
+                  incidental
+                );
+              })(),
+              manifestValidation: (() => {
+                const incidental = createManifestIncidentalValues();
+                return {
+                  ...createManifestValidationFixture(
+                    AMD64_MACHINE,
+                    { lang: null, processorArchitecture: "amd64", resourceId: 2 },
+                    [],
+                    incidental
+                  ),
+                  validated: [
+                    createManifestValidationMessageFixture(
+                      AMD64_MACHINE,
+                      { lang: null, processorArchitecture: "amd64", resourceId: 2 },
+                      incidental
+                    )
+                  ]
+                };
+              })(),
               previewIssues: ["invalid schema"]
             }
           ]
@@ -187,6 +226,7 @@ const createPeResources = (): PeResources => ({
 
 void test("renderResources renders preview cells for common resource types", () => {
   const resources = createPeResources();
+  const manifestName = resources.detail[1]?.entries[0]?.langs[0]?.manifestInfo?.assemblyName;
   const out: string[] = [];
 
   renderResources(resources, out);
@@ -201,6 +241,12 @@ void test("renderResources renders preview cells for common resource types", () 
   assert.match(html, /image\/png/);
   assert.match(html, /opaque background/);
   assert.match(html, /assembly/);
+  assert.match(html, new RegExp(String(manifestName)));
+  assert.match(html, /Manifest cross-check/);
+  assert.match(html, /Consistent/);
+  assert.match(html, /Parsed tree/);
+  assert.match(html, /Copy manifest XML/);
+  assert.match(html, /processorArchitecture/);
   assert.match(html, /Encoding: UTF-8/);
   assert.match(html, /HTML is not executed/);
   assert.match(html, /English \(United States\)/);

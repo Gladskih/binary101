@@ -15,9 +15,15 @@ import { addMenuPreview } from "./menu.js";
 import { addHeuristicResourcePreview } from "./sniff.js";
 import {
   addHtmlPreview,
-  addManifestPreview,
   addStringTablePreview
 } from "./text.js";
+import {
+  addManifestPreviewWithXmlParser
+} from "./manifest.js";
+import {
+  parseBrowserManifestXmlDocument,
+  type ManifestXmlDocumentParser
+} from "./manifest-xml.js";
 import {
   addDialogIncludePreview,
   addFontDirectoryPreview,
@@ -95,7 +101,8 @@ const decodeSpecificResourcePreview = async (
   codePage: number | undefined,
   lang: number | null | undefined,
   loadIconLeafData: LoadResourceLeafData,
-  loadCursorLeafData: LoadResourceLeafData
+  loadCursorLeafData: LoadResourceLeafData,
+  parseManifestXmlDocument: ManifestXmlDocumentParser
 ): Promise<ResourcePreviewResult | null> => {
   switch (typeName) {
     case "ICON":
@@ -109,7 +116,14 @@ const decodeSpecificResourcePreview = async (
     case "BITMAP":
       return runSyncPreviewDecoder(() => addBitmapPreview(data, typeName));
     case "MANIFEST":
-      return runSyncPreviewDecoder(() => addManifestPreview(data, typeName, codePage));
+      return runSyncPreviewDecoder(() =>
+        addManifestPreviewWithXmlParser(
+          data,
+          typeName,
+          codePage,
+          parseManifestXmlDocument
+        )
+      );
     case "HTML":
       return runSyncPreviewDecoder(() => addHtmlPreview(data, typeName, codePage));
     case "RCDATA":
@@ -152,7 +166,8 @@ const decodeResourceLeafPreview = async (
   entryId: number | null,
   langEntry: ResourceLangWithPreview,
   loadIconLeafData: LoadResourceLeafData,
-  loadCursorLeafData: LoadResourceLeafData
+  loadCursorLeafData: LoadResourceLeafData,
+  parseManifestXmlDocument: ManifestXmlDocumentParser
 ): Promise<ResourcePreviewResult> => {
   if (!langEntry.size || !langEntry.dataRVA) return {};
   try {
@@ -166,7 +181,8 @@ const decodeResourceLeafPreview = async (
       langEntry.codePage,
       langEntry.lang,
       loadIconLeafData,
-      loadCursorLeafData
+      loadCursorLeafData,
+      parseManifestXmlDocument
     );
     if (typedPreview?.preview) {
       const issues = combineIssues(leaf.issues, typedPreview.issues);
@@ -193,7 +209,8 @@ const decodeDetailPreviews = async (
   tree: ResourceTree,
   detail: ResourceDetailGroup[],
   loadIconLeafData: LoadResourceLeafData,
-  loadCursorLeafData: LoadResourceLeafData
+  loadCursorLeafData: LoadResourceLeafData,
+  parseManifestXmlDocument: ManifestXmlDocumentParser
 ): Promise<ResourceGroupPreviewDecode[]> =>
   Promise.all(detail.map(group =>
     Promise.all(group.entries.map(entry =>
@@ -205,7 +222,8 @@ const decodeDetailPreviews = async (
           entry.id,
           langEntry as ResourceLangWithPreview,
           loadIconLeafData,
-          loadCursorLeafData
+          loadCursorLeafData,
+          parseManifestXmlDocument
         )
       ))
     ))
@@ -239,7 +257,8 @@ const attachDetailPreviews = (
 
 export async function enrichResourcePreviews(
   file: File,
-  tree: ResourceTree
+  tree: ResourceTree,
+  parseManifestXmlDocument: ManifestXmlDocumentParser = parseBrowserManifestXmlDocument
 ): Promise<{
   top: ResourceTree["top"];
   detail: ResourceDetailGroup[];
@@ -257,7 +276,8 @@ export async function enrichResourcePreviews(
     tree,
     detail,
     loadIconLeafData,
-    loadCursorLeafData
+    loadCursorLeafData,
+    parseManifestXmlDocument
   );
   const issues = [...(tree.issues || [])];
   return {

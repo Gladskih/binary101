@@ -22,7 +22,7 @@ const openResourceGroup = async (page: Page, typeName: string) => {
   const details = page.locator("#peDetailsValue details").filter({
     has: page.locator("summary", { hasText: new RegExp(`^${typeName}\\b`) })
   }).first();
-  await details.locator("summary").click();
+  await details.locator(":scope > summary").click();
   return details;
 };
 
@@ -95,12 +95,83 @@ test.describe("PE resource previews", () => {
     expect(await html.innerHTML()).toContain("HTML is not executed");
 
     const manifest = await openResourceGroup(page, "MANIFEST");
-    await expect(manifest).toContainText('<?xml version="1.0"?>');
-    await expect(manifest).toContainText("Type");
+    await expect(manifest).toContainText('<?xml version="1.0" encoding="UTF-8"?>');
+    await expect(manifest).toContainText("Manifest cross-check");
+    await expect(manifest).toContainText("Consistent");
+    await expect(manifest).toContainText("Parsed tree");
+    await expect(manifest).toContainText("Windows 10 / 11");
     await expect(manifest).toContainText("MANIFEST");
+    await expect(manifest.getByRole("button", { name: "Copy manifest XML" })).toBeVisible();
 
     const messageTable = await openResourceGroup(page, "MESSAGETABLE");
     await expect(messageTable).toContainText("OK");
     await expect(messageTable).toContainText("Hi");
+  });
+
+  void test("manifest tree controls enable only the action that can still change the XML tree", async ({ page }) => {
+    const file = createPeResourcePreviewFile();
+    await page.setInputFiles("#fileInput", toUpload(file));
+
+    const manifest = await openResourceGroup(page, "MANIFEST");
+    const viewer = manifest.locator("[data-manifest-tree-viewer]");
+    const treeDetails = viewer.locator("[data-manifest-tree] details");
+    const expandButton = viewer.getByRole("button", { name: "Expand all" });
+    const collapseButton = viewer.getByRole("button", { name: "Collapse all" });
+
+    expect(await treeDetails.count()).toBeGreaterThan(1);
+    await expect(treeDetails.nth(0)).toHaveJSProperty("open", true);
+    await expect(treeDetails.nth(1)).toHaveJSProperty("open", false);
+    await expect(expandButton).toBeEnabled();
+    await expect(collapseButton).toBeEnabled();
+
+    await expandButton.click();
+    await expect.poll(async () => await treeDetails.evaluateAll(
+      nodes => nodes.every(node => (node as HTMLDetailsElement).open)
+    )).toBe(true);
+    await expect(expandButton).toBeDisabled();
+    await expect(collapseButton).toBeEnabled();
+
+    await collapseButton.click();
+    await expect.poll(async () => await treeDetails.evaluateAll(
+      nodes => nodes.every(node => !(node as HTMLDetailsElement).open)
+    )).toBe(true);
+    await expect(expandButton).toBeEnabled();
+    await expect(collapseButton).toBeDisabled();
+
+    await treeDetails.nth(0).locator(":scope > summary").click();
+    await expect(expandButton).toBeEnabled();
+    await expect(collapseButton).toBeEnabled();
+  });
+
+  void test("manifest preview copy button copies the full XML text", async ({ page }) => {
+    await page.evaluate(() => {
+      const writes: string[] = [];
+      Object.defineProperty(globalThis, "__manifestClipboardWrites", {
+        configurable: true,
+        value: writes
+      });
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (text: string) => {
+            writes.push(text);
+          }
+        }
+      });
+    });
+    const file = createPeResourcePreviewFile();
+    await page.setInputFiles("#fileInput", toUpload(file));
+
+    const manifest = await openResourceGroup(page, "MANIFEST");
+    const copyButton = manifest.getByRole("button", { name: "Copy manifest XML" });
+    await copyButton.click();
+
+    await expect(page.locator("#statusMessage")).toHaveText("Manifest XML copied.");
+    const clipboardWrites = await page.evaluate(
+      () => (globalThis as { __manifestClipboardWrites?: string[] }).__manifestClipboardWrites || []
+    );
+    expect(clipboardWrites).toHaveLength(1);
+    expect(clipboardWrites[0]).toContain("requestedExecutionLevel");
+    expect(clipboardWrites[0]).toContain("supportedOS");
   });
 });

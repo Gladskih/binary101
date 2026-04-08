@@ -21,6 +21,14 @@ import { parseIatDirectory } from "./iat-directory.js";
 import { parseArchitectureDirectory } from "./architecture-directory.js";
 import { parseGlobalPtrDirectory } from "./globalptr-directory.js";
 import { analyzeImportLinking } from "./import-linking.js";
+import {
+  analyzeManifestConsistency,
+  attachManifestValidation
+} from "./manifest-consistency.js";
+import {
+  parseBrowserManifestXmlDocument,
+  type ManifestXmlDocumentParser
+} from "./resources/preview/manifest-xml.js";
 import { buildHeaderOnlyPeParseResult } from "./header-only-result.js";
 import { collectPeLayoutWarnings } from "./layout-warnings.js";
 export {
@@ -56,7 +64,10 @@ const withLayoutWarnings = <T extends PeParseResult>(result: T, fileSize: number
   return mergedWarnings?.length ? { ...result, warnings: mergedWarnings } : result;
 };
 
-export async function parsePe(file: File): Promise<PeParseResult | null> {
+export async function parsePe(
+  file: File,
+  parseManifestXmlDocument: ManifestXmlDocumentParser = parseBrowserManifestXmlDocument
+): Promise<PeParseResult | null> {
   const core = await parsePeHeaders(file);
   if (!core) return null;
   if (!isPeWindowsCore(core)) {
@@ -194,7 +205,7 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
   const importResult = await peVariant.parseImportDirectory(file, dataDirs, rvaToOff);
   const exportsInfo = await parseExportDirectory(file, dataDirs, rvaToOff);
   const tls = await peVariant.parseTlsDirectory(file, dataDirs, rvaToOff, ImageBase);
-  const resources = await parseResources(file, dataDirs, rvaToOff);
+  const resources = await parseResources(file, dataDirs, rvaToOff, parseManifestXmlDocument);
   const reloc = await parseBaseRelocations(file, dataDirs, rvaToOff);
   const exception = await parseExceptionDirectory(file, dataDirs, rvaToOff, coff.Machine);
   const boundImports = await parseBoundImports(file, dataDirs, rvaToOff);
@@ -227,6 +238,11 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
   );
   const architecture = parseArchitectureDirectory(dataDirs);
   const globalPtr = parseGlobalPtrDirectory(dataDirs, rvaToOff);
+  const manifestValidation = analyzeManifestConsistency(resources, coff.Machine, clr);
+  const warnings = appendUniqueWarnings(
+    core.warnings,
+    manifestValidation?.warnings ?? []
+  );
   return withLayoutWarnings({
     debug:
       debugResult.entry || debugResult.warning || debugResult.entries.length
@@ -243,7 +259,7 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     ...(core.coffStringTableSize != null ? { coffStringTableSize: core.coffStringTableSize } : {}),
     ...(core.trailingAlignmentPaddingSize ? { trailingAlignmentPaddingSize: core.trailingAlignmentPaddingSize } : {}),
     opt,
-    ...(core.warnings?.length ? { warnings: core.warnings } : {}),
+    ...(warnings?.length ? { warnings } : {}),
     dirs: dataDirs,
     sections,
     entrySection,
@@ -262,7 +278,7 @@ export async function parsePe(file: File): Promise<PeParseResult | null> {
     importLinking,
     architecture,
     globalPtr,
-    resources,
+    resources: attachManifestValidation(resources, manifestValidation),
     overlaySize,
     imageEnd,
     imageSizeMismatch,
