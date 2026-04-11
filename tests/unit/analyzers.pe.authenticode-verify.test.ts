@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   computePeAuthenticodeDigest,
+  verifyAuthenticode,
   verifyAuthenticodeFileDigest
 } from "../../analyzers/pe/authenticode-verify.js";
 import type { AuthenticodeInfo } from "../../analyzers/pe/authenticode.js";
@@ -13,6 +14,7 @@ import {
   createStrictAuthenticodeFixture,
   listStrictAuthenticodeHashRanges
 } from "../fixtures/pe-authenticode-fixtures.js";
+import { createSignedAuthenticodeCmsFixture } from "../fixtures/pe-authenticode-signed-cms-fixtures.js";
 
 const toHex = (buffer: ArrayBuffer): string =>
   [...new Uint8Array(buffer)].map(b => b.toString(16).padStart(2, "0")).join("");
@@ -202,6 +204,50 @@ void test("verifyAuthenticodeFileDigest catches digest errors", async () => {
 
   const verified = await verifyAuthenticodeFileDigest(file, core, securityDir, auth, failingDigest);
   assert.ok(verified.warnings?.some(w => w.includes("Digest verification failed")));
+});
+
+void test("verifyAuthenticodeFileDigest reuses a supplied cached digest lookup", async () => {
+  const file = createBestEffortAuthenticodeFixture().file;
+  const securityDir = { name: "SECURITY", index: 4, rva: 0, size: 0 };
+  const core = { optOff: 0, ddStartRel: 0, dataDirs: [securityDir] };
+  const auth: AuthenticodeInfo = {
+    format: "pkcs7",
+    fileDigestAlgorithmName: "sha256",
+    fileDigest: "deadbeef"
+  };
+  let seenAlgorithm: AlgorithmIdentifier | undefined;
+
+  const verified = await verifyAuthenticodeFileDigest(
+    file,
+    core,
+    securityDir,
+    auth,
+    undefined,
+    async (algorithm: AlgorithmIdentifier): Promise<string | null> => {
+      seenAlgorithm = algorithm;
+      return "deadbeef";
+    }
+  );
+
+  assert.strictEqual(verified.fileDigestMatches, true);
+  assert.strictEqual(verified.computedFileDigest, "deadbeef");
+  assert.strictEqual(seenAlgorithm, "SHA-256");
+});
+
+void test("verifyAuthenticode combines CMS signer verification with PE file digest verification", async () => {
+  const { core, digestHex, file, payload, securityDir } = await createSignedAuthenticodeCmsFixture();
+  const auth: AuthenticodeInfo = {
+    format: "pkcs7",
+    fileDigestAlgorithmName: "sha256",
+    fileDigest: digestHex
+  };
+
+  const verified = await verifyAuthenticode(file, core, securityDir, auth, payload);
+
+  assert.strictEqual(verified.fileDigestMatches, true);
+  assert.ok(verified.computedFileDigest);
+  assert.strictEqual(verified.signerVerifications?.[0]?.signatureVerified, true);
+  assert.strictEqual(verified.warnings, undefined);
 });
 
 void test("verifyAuthenticodeFileDigest warns when strict digest computation cannot read the checksum field", async () => {

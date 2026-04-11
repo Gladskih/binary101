@@ -90,6 +90,50 @@ void test("parseSecurityDirectory walks all certificates in the declared table",
   assert.strictEqual(sec.certs.length, certCount);
 });
 
+void test("parseSecurityDirectory attaches verifier output to Authenticode entries", async () => {
+  const secOff = 0x40;
+  const bytes = new Uint8Array(0x80).fill(0);
+  const dv = new DataView(bytes.buffer);
+  writeWinCertificateHeader(dv, secOff, 12, WIN_CERT_TYPE_PKCS_SIGNED_DATA);
+  bytes[secOff + WIN_CERTIFICATE_HEADER_SIZE] = 0x30;
+
+  const parsed = await parseSecurityDirectory(
+    new MockFile(bytes, "sec-verifier.bin"),
+    [{ name: "SECURITY", rva: secOff, size: 16 }],
+    async (payload, certificate) => {
+      assert.strictEqual(payload.length, 4);
+      assert.ok(certificate.authenticode);
+      return {
+        signerVerifications: [{ index: 0, signatureVerified: true }],
+        warnings: ["hook warning"]
+      };
+    }
+  );
+
+  const cert = expectDefined(expectDefined(parsed).certs[0]);
+  assert.strictEqual(cert.authenticode?.verification?.signerVerifications?.[0]?.signatureVerified, true);
+  assert.ok(cert.authenticode?.verification?.warnings?.includes("hook warning"));
+});
+
+void test("parseSecurityDirectory keeps verifier exceptions as warnings", async () => {
+  const secOff = 0x40;
+  const bytes = new Uint8Array(0x80).fill(0);
+  const dv = new DataView(bytes.buffer);
+  writeWinCertificateHeader(dv, secOff, 12, WIN_CERT_TYPE_PKCS_SIGNED_DATA);
+  bytes[secOff + WIN_CERTIFICATE_HEADER_SIZE] = 0x30;
+
+  const parsed = await parseSecurityDirectory(
+    new MockFile(bytes, "sec-verifier-error.bin"),
+    [{ name: "SECURITY", rva: secOff, size: 16 }],
+    async () => {
+      throw new Error("boom");
+    }
+  );
+
+  const cert = expectDefined(expectDefined(parsed).certs[0]);
+  assert.ok(cert.authenticode?.verification?.warnings?.some(warning => warning.includes("boom")));
+});
+
 void test("parseSecurityDirectory reports corruption when rounded certificate sizes do not cover the table", async () => {
   const secOff = 0x80;
   const bytes = new Uint8Array(0x200).fill(0);

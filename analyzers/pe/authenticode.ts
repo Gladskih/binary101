@@ -42,9 +42,18 @@ export interface X509CertificateInfo {
   notAfter?: string;
 }
 
+export interface AuthenticodeSignerVerificationInfo {
+  index: number;
+  code?: number;
+  message?: string;
+  signatureVerified?: boolean;
+  signerCertificateVerified?: boolean;
+}
+
 export interface AuthenticodeVerificationInfo {
   computedFileDigest?: string;
   fileDigestMatches?: boolean;
+  signerVerifications?: AuthenticodeSignerVerificationInfo[];
   warnings?: string[];
 }
 

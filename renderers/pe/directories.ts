@@ -11,7 +11,6 @@ import { peSectionNameValue } from "../../analyzers/pe/section-name.js";
 type PeImportsSection = PeImportParseResult;
 type PeExportSection = NonNullable<PeWindowsParseResult["exports"]>;
 type PeTlsSection = NonNullable<PeWindowsParseResult["tls"]>;
-type PeSecuritySection = NonNullable<PeWindowsParseResult["security"]>;
 type PeIatSection = NonNullable<PeWindowsParseResult["iat"]>;
 // Microsoft PE format, "Section Flags":
 // IMAGE_SCN_GPREL marks sections whose data is referenced through the global pointer (GP).
@@ -87,98 +86,7 @@ export function renderTls(t: PeTlsSection, out: string[]): void {
 }
 
 export { renderClr } from "./clr.js";
-
-export function renderSecurity(s: PeSecuritySection, out: string[]): void {
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Security (WIN_CERTIFICATE)</h4><dl>`);
-  out.push(dd("Certificate records", String(s.count ?? 0), "Number of certificate blobs present (Authenticode)."));
-  out.push(`</dl>`);
-  if (s.warnings?.length) {
-    out.push(`<ul class="smallNote">`);
-    s.warnings.forEach(warning => out.push(`<li>${safe(warning)}</li>`));
-    out.push(`</ul>`);
-  }
-  if (s.certs?.length) {
-    out.push(
-      `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show certificates (${s.certs.length})</summary>`
-    );
-    out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Length</th><th>Revision</th><th>Type</th><th>Details</th></tr></thead><tbody>`);
-    s.certs.forEach((cert, index) => {
-      const lengthLabel = `${humanSize(cert.length)}${cert.availableBytes < cert.length ? " (truncated)" : ""}`;
-      const revLabel = `${hex(cert.revision, 4)}${cert.revisionName ? ` (${safe(cert.revisionName)})` : ""}`;
-      const typeLabel = `${hex(cert.certificateType, 4)}${cert.typeName ? ` (${safe(cert.typeName)})` : ""}`;
-      const detailParts: string[] = [];
-      const auth = cert.authenticode;
-      if (auth) {
-        if (auth.contentTypeName) {
-          detailParts.push(`Content: ${auth.contentTypeName}`);
-        }
-        if (auth.payloadContentTypeName) {
-          detailParts.push(`Payload: ${auth.payloadContentTypeName}`);
-        }
-        if (auth.digestAlgorithms?.length) {
-          detailParts.push(`Digest: ${auth.digestAlgorithms.join(", ")}`);
-        }
-        if (auth.fileDigest) {
-          const alg = auth.fileDigestAlgorithmName || auth.fileDigestAlgorithm || "unknown";
-          detailParts.push(`File digest (${alg}): ${auth.fileDigest}`);
-        }
-        if (auth.verification?.computedFileDigest) {
-          detailParts.push(`Computed digest: ${auth.verification.computedFileDigest}`);
-        }
-        if (auth.verification?.fileDigestMatches != null) {
-          detailParts.push(`Digest matches file: ${auth.verification.fileDigestMatches ? "yes" : "no"}`);
-        }
-        if (auth.signerCount != null) {
-          detailParts.push(`Signers: ${auth.signerCount}`);
-        }
-        if (auth.signers?.length) {
-          auth.signers.forEach((signer, signerIndex) => {
-            const signerParts: string[] = [];
-            if (signer.issuer) signerParts.push(`Issuer ${signer.issuer}`);
-            if (signer.serialNumber) signerParts.push(`Serial ${signer.serialNumber}`);
-            if (signer.digestAlgorithmName || signer.digestAlgorithm) {
-              signerParts.push(`DigestAlg ${signer.digestAlgorithmName || signer.digestAlgorithm}`);
-            }
-            if (signer.signatureAlgorithmName || signer.signatureAlgorithm) {
-              signerParts.push(`SigAlg ${signer.signatureAlgorithmName || signer.signatureAlgorithm}`);
-            }
-            if (signer.signingTime) signerParts.push(`Time ${signer.signingTime}`);
-            if (signerParts.length) {
-              detailParts.push(`Signer ${signerIndex + 1}: ${signerParts.join(", ")}`);
-            }
-          });
-        }
-        if (auth.certificateCount != null) {
-          detailParts.push(`Certificates: ${auth.certificateCount}`);
-        }
-        if (auth.certificates?.length) {
-          auth.certificates.forEach((certificate, certIndex) => {
-            const certParts: string[] = [];
-            if (certificate.subject) certParts.push(`Subject ${certificate.subject}`);
-            if (certificate.issuer) certParts.push(`Issuer ${certificate.issuer}`);
-            if (certificate.serialNumber) certParts.push(`Serial ${certificate.serialNumber}`);
-            if (certificate.notBefore || certificate.notAfter) {
-              certParts.push(`Validity ${certificate.notBefore || "?"} \u2192 ${certificate.notAfter || "?"}`);
-            }
-            if (certParts.length) {
-              detailParts.push(`Certificate ${certIndex + 1}: ${certParts.join(", ")}`);
-            }
-          });
-        }
-        if (auth.verification?.warnings?.length) {
-          auth.verification.warnings.forEach(w => detailParts.push(`ƒsÿ ${w}`));
-        }
-      }
-      if (cert.warnings?.length) {
-        cert.warnings.forEach(w => detailParts.push(`⚠ ${w}`));
-      }
-      const detailHtml = detailParts.length ? detailParts.map(p => safe(p)).join("<br/>") : "-";
-      out.push(`<tr><td>${index + 1}</td><td>${lengthLabel}</td><td>${revLabel}</td><td>${typeLabel}</td><td>${detailHtml}</td></tr>`);
-    });
-    out.push(`</tbody></table></details>`);
-  }
-  out.push(`</section>`);
-}
+export { renderSecurity } from "./security-view.js";
 
 export function renderIat(t: PeIatSection, out: string[]): void {
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import Address Table (IAT)</h4>`);

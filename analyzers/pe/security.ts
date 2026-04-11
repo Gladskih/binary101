@@ -1,6 +1,10 @@
 "use strict";
 
-import { decodeWinCertificate, type ParsedWinCertificate } from "./authenticode.js";
+import {
+  decodeWinCertificate,
+  type AuthenticodeVerificationInfo,
+  type ParsedWinCertificate
+} from "./authenticode.js";
 import type { PeDataDirectory } from "./types.js";
 
 export interface ParsedSecurityDirectory {
@@ -9,9 +13,55 @@ export interface ParsedSecurityDirectory {
   warnings?: string[];
 }
 
+const WIN_CERTIFICATE_HEADER_SIZE = 8;
+
+export type PeAuthenticodeVerifier = (
+  payload: Uint8Array,
+  certificate: ParsedWinCertificate
+) => Promise<AuthenticodeVerificationInfo | undefined>;
+
+const hasVerificationData = (
+  verification: AuthenticodeVerificationInfo | undefined
+): verification is AuthenticodeVerificationInfo =>
+  !!verification &&
+  (verification.computedFileDigest !== undefined ||
+    verification.fileDigestMatches !== undefined ||
+    !!verification.signerVerifications?.length ||
+    !!verification.warnings?.length);
+
+const attachVerification = (
+  certificate: ParsedWinCertificate,
+  verification: AuthenticodeVerificationInfo
+): ParsedWinCertificate =>
+  certificate.authenticode
+    ? {
+        ...certificate,
+        authenticode: { ...certificate.authenticode, verification }
+      }
+    : certificate;
+
+const attachVerificationWarning = (
+  certificate: ParsedWinCertificate,
+  message: string
+): ParsedWinCertificate => {
+  if (!certificate.authenticode) return certificate;
+  const warnings = [...new Set([...(certificate.authenticode.verification?.warnings ?? []), message])];
+  return {
+    ...certificate,
+    authenticode: {
+      ...certificate.authenticode,
+      verification: {
+        ...(certificate.authenticode.verification ?? {}),
+        warnings
+      }
+    }
+  };
+};
+
 export async function parseSecurityDirectory(
   file: File,
-  dataDirs: PeDataDirectory[]
+  dataDirs: PeDataDirectory[],
+  verifyAuthenticode?: PeAuthenticodeVerifier
 ): Promise<ParsedSecurityDirectory | null> {
   const dir = dataDirs.find(d => d.name === "SECURITY");
   if (!dir || (dir.rva === 0 && dir.size === 0)) return null;
@@ -39,8 +89,10 @@ export async function parseSecurityDirectory(
   }
   let pos = off;
   const certs: ParsedWinCertificate[] = [];
-  while (pos + 8 <= end) {
-    const head = new DataView(await file.slice(pos, pos + 8).arrayBuffer());
+  while (pos + WIN_CERTIFICATE_HEADER_SIZE <= end) {
+    const head = new DataView(
+      await file.slice(pos, pos + WIN_CERTIFICATE_HEADER_SIZE).arrayBuffer()
+    );
     const Length = head.getUint32(0, true);
     if (Length < 8) {
       warnings.push("WIN_CERTIFICATE length is smaller than the 8-byte header.");
@@ -51,7 +103,24 @@ export async function parseSecurityDirectory(
     }
     const available = Math.min(Length, end - pos);
     const blob = new Uint8Array(await file.slice(pos, pos + available).arrayBuffer());
-    certs.push(decodeWinCertificate(blob, Length, pos));
+    let certificate = decodeWinCertificate(blob, Length, pos);
+    if (verifyAuthenticode && certificate.authenticode) {
+      try {
+        const verification = await verifyAuthenticode(
+          blob.subarray(Math.min(WIN_CERTIFICATE_HEADER_SIZE, blob.length)),
+          certificate
+        );
+        if (hasVerificationData(verification)) {
+          certificate = attachVerification(certificate, verification);
+        }
+      } catch (error) {
+        certificate = attachVerificationWarning(
+          certificate,
+          `Authenticode verification failed: ${String(error)}`
+        );
+      }
+    }
+    certs.push(certificate);
     const roundedLength = Math.ceil(Length / 8) * 8;
     if (pos + roundedLength > end) {
       warnings.push("WIN_CERTIFICATE data is truncated before the rounded entry length ends.");

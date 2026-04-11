@@ -1,6 +1,6 @@
 "use strict";
 import { isPeWindowsCore, parsePeHeaders } from "./core.js";
-import { verifyAuthenticodeFileDigest } from "./authenticode-verify.js";
+import { computePeAuthenticodeDigest, verifyAuthenticode } from "./authenticode-verify.js";
 import { parseDebugDirectory } from "./debug-directory.js";
 import { parseLoadConfigDirectory32, parseLoadConfigDirectory64, type PeLoadConfig, type PeLoadConfigTables } from "./load-config/index.js";
 import { readGuardAddressTakenIatEntryTableRvas, readGuardCFFunctionTableRvas, readGuardEhContinuationTableRvas, readGuardLongJumpTargetTableRvas, readSafeSehHandlerTableRvas } from "./load-config/tables.js";
@@ -53,6 +53,9 @@ const IMAGE_FILE_MACHINE_I386 = 0x014c;
 
 const appendUniqueWarnings = (existing: string[] | undefined, messages: string[]): string[] | undefined =>
   messages.length ? [...new Set([...(existing ?? []), ...messages])] : existing;
+
+const digestCacheKey = (algorithm: AlgorithmIdentifier): string =>
+  typeof algorithm === "string" ? algorithm : JSON.stringify(algorithm);
 
 const mergeLoadConfigWarnings = (loadcfg: PeLoadConfig, messages: string[]): void => {
   const merged = appendUniqueWarnings(loadcfg.warnings, messages);
@@ -211,22 +214,30 @@ export async function parsePe(
   const boundImports = await parseBoundImports(file, dataDirs, rvaToOff);
   const delayImports = await peVariant.parseDelayImports(file, dataDirs, rvaToOff);
   const clr = await parseClrDirectory(file, dataDirs, rvaToOff);
-  let security = await parseSecurityDirectory(file, dataDirs);
+  const securityDir = dataDirs.find(d => d.name === "SECURITY");
+  const authenticodeDigestCache = new Map<string, Promise<string | null>>();
+  const getCachedAuthenticodeDigest = (algorithm: AlgorithmIdentifier): Promise<string | null> => {
+    const cacheKey = digestCacheKey(algorithm);
+    const cached = authenticodeDigestCache.get(cacheKey);
+    if (cached) return cached;
+    const computed = computePeAuthenticodeDigest(file, core, securityDir, algorithm);
+    authenticodeDigestCache.set(cacheKey, computed);
+    return computed;
+  };
+  let security = await parseSecurityDirectory(file, dataDirs, async (payload, certificate) =>
+    certificate.authenticode
+      ? verifyAuthenticode(
+          file,
+          core,
+          securityDir,
+          certificate.authenticode,
+          payload,
+          undefined,
+          getCachedAuthenticodeDigest
+        )
+      : undefined
+  );
   security = addSecurityTailWarning(file.size, security, dataDirs.find(d => d.name === "SECURITY"), debugResult.rawDataRanges);
-  if (security?.certs?.length) {
-    const securityDir = dataDirs.find(d => d.name === "SECURITY");
-    const certs = await Promise.all(
-      security.certs.map(async cert => {
-        if (!cert.authenticode) return cert;
-        const verification = await verifyAuthenticodeFileDigest(file, core, securityDir, cert.authenticode);
-        return {
-          ...cert,
-          authenticode: { ...cert.authenticode, verification }
-        };
-      })
-    );
-    security = { ...security, certs };
-  }
   const iat = parseIatDirectory(dataDirs, rvaToOff);
   const importLinking = analyzeImportLinking(
     importResult,

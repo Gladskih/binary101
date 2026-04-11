@@ -2,9 +2,11 @@
 
 import { bufferToHex } from "../../binary-utils.js";
 import type { AuthenticodeInfo } from "./authenticode.js";
+import { verifyPkcs7Signatures } from "./authenticode-pkijs.js";
 import type { PeCore, PeDataDirectory, PeSection, PeWindowsOptionalHeader } from "./types.js";
 
 type DigestFunction = (algorithm: AlgorithmIdentifier, data: ArrayBuffer) => Promise<ArrayBuffer>;
+type DigestLookup = (algorithm: AlgorithmIdentifier) => Promise<string | null>;
 export type PeAuthenticodeBestEffortCore = Pick<PeCore, "optOff" | "ddStartRel" | "dataDirs">;
 export type PeAuthenticodeParsedCore = PeAuthenticodeBestEffortCore & {
   opt: Pick<PeWindowsOptionalHeader, "SizeOfHeaders">;
@@ -184,7 +186,8 @@ export const verifyAuthenticodeFileDigest = async (
   core: PeAuthenticodeBestEffortCore | PeAuthenticodeParsedCore,
   securityDir: PeDataDirectory | undefined,
   auth: AuthenticodeInfo,
-  digestFunction?: DigestFunction
+  digestFunction?: DigestFunction,
+  getComputedDigest?: DigestLookup
 ): Promise<{ computedFileDigest?: string; fileDigestMatches?: boolean; warnings?: string[] }> => {
   const warnings: string[] = [];
   if (!auth.fileDigest) {
@@ -197,7 +200,9 @@ export const verifyAuthenticodeFileDigest = async (
     return { warnings };
   }
   try {
-    const computed = await computePeAuthenticodeDigest(file, core, securityDir, algo, digestFunction);
+    const computed = getComputedDigest
+      ? await getComputedDigest(algo)
+      : await computePeAuthenticodeDigest(file, core, securityDir, algo, digestFunction);
     if (!computed) {
       warnings.push("Unable to compute Authenticode digest for this file.");
       return { warnings };
@@ -208,4 +213,44 @@ export const verifyAuthenticodeFileDigest = async (
     warnings.push(`Digest verification failed: ${String(error)}`);
     return { warnings };
   }
+};
+
+const mergeWarnings = (warnings: string[]): string[] | undefined => {
+  const merged = [...new Set(warnings)];
+  return merged.length ? merged : undefined;
+};
+
+export const verifyAuthenticode = async (
+  file: File,
+  core: PeAuthenticodeBestEffortCore | PeAuthenticodeParsedCore,
+  securityDir: PeDataDirectory | undefined,
+  auth: AuthenticodeInfo,
+  payload: Uint8Array,
+  digestFunction?: DigestFunction,
+  getComputedDigest?: DigestLookup
+): Promise<NonNullable<AuthenticodeInfo["verification"]>> => {
+  const warnings: string[] = [];
+  const verification: NonNullable<AuthenticodeInfo["verification"]> = {};
+  const signatureVerification = await verifyPkcs7Signatures(payload);
+  if (signatureVerification.signerVerifications?.length) {
+    verification.signerVerifications = signatureVerification.signerVerifications;
+  }
+  if (signatureVerification.warnings?.length) warnings.push(...signatureVerification.warnings);
+  const digestVerification = await verifyAuthenticodeFileDigest(
+    file,
+    core,
+    securityDir,
+    auth,
+    digestFunction,
+    getComputedDigest
+  );
+  if (digestVerification.computedFileDigest) {
+    verification.computedFileDigest = digestVerification.computedFileDigest;
+  }
+  if (digestVerification.fileDigestMatches != null) {
+    verification.fileDigestMatches = digestVerification.fileDigestMatches;
+  }
+  if (digestVerification.warnings?.length) warnings.push(...digestVerification.warnings);
+  const mergedWarnings = mergeWarnings(warnings);
+  return mergedWarnings ? { ...verification, warnings: mergedWarnings } : verification;
 };

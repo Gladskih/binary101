@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { renderSecurity } from "../../renderers/pe/directories.js";
+import { renderSecurity } from "../../renderers/pe/security-view.js";
 
 void test("renderSecurity renders details when present", () => {
   const cert = {
@@ -28,11 +28,16 @@ void test("renderSecurity renders details when present", () => {
   renderSecurity(security, out);
   const html = out.join("");
   assert.ok(html.includes("Certificate records"));
+  assert.ok(html.includes("Certificate #1"));
   assert.ok(html.includes("Type 0xf00d"));
-  assert.ok(html.includes("Signers: 2"));
-  assert.ok(html.includes("Certificates: 3"));
+  assert.ok(html.includes("1.2.3.4"));
+  assert.ok(html.includes("sha256"));
+  assert.ok(html.includes("md5"));
   assert.ok(html.includes("truncated"));
-  assert.ok(html.includes("⚠"));
+  assert.ok(html.includes("Signature integrity check unavailable"));
+  assert.ok(html.includes("No cryptographic verification result is attached"));
+  assert.ok(html.includes("Structural warnings"));
+  assert.ok(html.includes("Length field does not match directory entry size."));
 });
 
 void test("renderSecurity includes expanded Authenticode details", () => {
@@ -54,6 +59,7 @@ void test("renderSecurity includes expanded Authenticode details", () => {
       verification: {
         computedFileDigest: "deadbeef",
         fileDigestMatches: true,
+        signerVerifications: [{ index: 0, signatureVerified: true, code: 14 }],
         warnings: ["synthetic verification warning"]
       },
       signerCount: 1,
@@ -82,14 +88,28 @@ void test("renderSecurity includes expanded Authenticode details", () => {
   const out: string[] = [];
   renderSecurity(security, out);
   const html = out.join("");
-  assert.ok(html.includes("File digest (sha256): deadbeef"));
-  assert.ok(html.includes("Computed digest: deadbeef"));
-  assert.ok(html.includes("Digest matches file: yes"));
-  assert.ok(html.includes("Signer 1:"));
+  assert.ok(html.includes("peSecurityValidation--ok"));
+  assert.ok(html.includes("Signature integrity check passed"));
+  assert.ok(html.includes("Embedded file digest matches this file"));
+  assert.ok(html.includes("all CMS signer signatures verified"));
+  assert.ok(html.includes("This checks signature integrity only."));
+  assert.ok(
+    html.includes("Certificate-chain trust, revocation, EKU, and local platform trust")
+  );
+  assert.ok(html.includes("Embedded file digest (sha256)"));
+  assert.ok(html.includes("Computed file digest (sha256)"));
+  assert.ok(html.includes("Digest match"));
+  assert.ok(html.includes("PKCS#7"));
+  assert.ok(html.includes("SPC_INDIRECT_DATA"));
+  assert.ok(html.includes("sha256"));
+  assert.ok(html.includes("opt sel"));
+  assert.ok(html.includes("Signer 1: signature verified."));
+  assert.ok(html.includes("<b>Signer 1</b>:"));
   assert.ok(html.includes("Issuer CN=Test Issuer"));
-  assert.ok(html.includes("Certificate 1:"));
+  assert.ok(html.includes("<b>Certificate 1</b>:"));
   assert.ok(html.includes("Subject CN=Test Subject"));
   assert.ok(html.includes("synthetic verification warning"));
+  assert.ok(!html.includes("PKI.js code 14"));
 });
 
 void test("renderSecurity renders count without certificate table", () => {
@@ -141,9 +161,15 @@ void test("renderSecurity tolerates missing fields and renders negative matches"
     certificateType: 0,
     typeName: "Type 0x0000"
   };
-  const security: Parameters<typeof renderSecurity>[0] = { count: 2, certs: [certWithGaps, bareCert] };
+  const security: Parameters<typeof renderSecurity>[0] = {
+    count: 2,
+    certs: [certWithGaps, bareCert]
+  };
   const out: string[] = [];
   renderSecurity(security, out);
   const html = out.join("");
-  assert.ok(html.includes("Digest matches file: no"));
+  assert.ok(html.includes("peSecurityValidation--warn"));
+  assert.ok(html.includes("Signature integrity check failed"));
+  assert.ok(html.includes("embedded file digest does not match this file"));
+  assert.ok(html.includes("Digest match"));
 });
