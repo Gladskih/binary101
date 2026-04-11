@@ -7,77 +7,10 @@ import type {
   PeWindowsParseResult
 } from "../../analyzers/pe/index.js";
 import type { PeDebugDirectoryEntry } from "../../analyzers/pe/debug-directory.js";
+import { getDebugTypeInfo } from "./debug-type-info.js";
 
-type DebugTypeInfo = { label: string; description: string };
 type DebugStorageInfo = { label: string; description: string };
 type FileRange = { start: number; end: number };
-
-// Microsoft PE format, "Debug Type":
-// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
-// LLVM COFF DebugType enum fills in additional toolchain-defined names such as
-// VC_FEATURE / POGO / ILTCG / MPX:
-// https://llvm.org/doxygen/namespacellvm_1_1COFF.html
-const DEBUG_TYPE_INFOS: Record<number, DebugTypeInfo> = {
-  0: { label: "UNKNOWN", description: "Unknown debug format ignored by tools." },
-  1: {
-    label: "COFF",
-    description: "COFF line numbers, symbol table, and string table."
-  },
-  2: {
-    label: "CODEVIEW",
-    description: "Visual C++ debug information such as RSDS / PDB pointers."
-  },
-  3: {
-    label: "FPO",
-    description: "Frame-pointer omission metadata for nonstandard stack frames."
-  },
-  4: { label: "MISC", description: "Legacy location of a DBG file." },
-  5: { label: "EXCEPTION", description: "Copy of the .pdata exception data." },
-  6: { label: "FIXUP", description: "Reserved FIXUP debug type." },
-  7: {
-    label: "OMAP_TO_SRC",
-    description: "Mapping from an RVA in the image to an RVA in the source image."
-  },
-  8: {
-    label: "OMAP_FROM_SRC",
-    description: "Mapping from an RVA in the source image to an RVA in the image."
-  },
-  9: { label: "BORLAND", description: "Reserved for Borland." },
-  10: { label: "RESERVED10", description: "Reserved IMAGE_DEBUG_TYPE_RESERVED10 debug type." },
-  11: { label: "CLSID", description: "Reserved CLSID debug type." },
-  12: {
-    label: "VC_FEATURE",
-    description: "Visual C++ feature metadata emitted by the toolchain."
-  },
-  13: {
-    label: "POGO",
-    description: "Profile-guided optimization metadata emitted by the linker."
-  },
-  14: {
-    label: "ILTCG",
-    description: "Link-time code generation metadata emitted by the toolchain."
-  },
-  15: { label: "MPX", description: "Intel MPX metadata emitted by the toolchain." },
-  16: { label: "REPRO", description: "PE determinism or reproducibility metadata." },
-  17: {
-    label: "EMBEDDED DEBUG",
-    description: "Debugging information embedded in the PE file at PointerToRawData."
-  },
-  19: {
-    label: "SYMBOL HASH",
-    description: "Crypto hash of the symbol file content used to build the PE/COFF file."
-  },
-  20: {
-    label: "EX_DLLCHARACTERISTICS",
-    description: "Extended DLL characteristics bits beyond the optional-header field."
-  }
-};
-
-const getDebugTypeInfo = (type: number): DebugTypeInfo =>
-  DEBUG_TYPE_INFOS[type] ?? {
-    label: `TYPE_${type}`,
-    description: `Undocumented or unsupported IMAGE_DEBUG_DIRECTORY.Type ${hex(type, 8)}.`
-  };
 
 const getDebugRawRange = (
   pe: PeWindowsParseResult,
@@ -132,6 +65,9 @@ const getDebugStorageInfo = (
   };
 };
 
+const hasDecodedPayload = (entry: PeDebugDirectoryEntry): boolean =>
+  !!(entry.codeView || entry.vcFeature || entry.pogo);
+
 const formatEntryType = (entry: PeDebugDirectoryEntry): string => {
   const typeInfo = getDebugTypeInfo(entry.type >>> 0);
   return `${safe(typeInfo.label)}<div class="valueHint">${hex(entry.type, 8)}</div>`;
@@ -142,43 +78,189 @@ const formatEntryStorage = (
   entry: PeDebugDirectoryEntry
 ): string => safe(getDebugStorageInfo(pe, entry).label);
 
-const renderEntryDetails = (entry: PeDebugDirectoryEntry): string => {
-  if (entry.codeView) return `RSDS ${safe(entry.codeView.path || "(no path)")}`;
-  return safe(getDebugTypeInfo(entry.type >>> 0).description);
+const formatPogoRecordCount = (count: number): string =>
+  `${count} record${count === 1 ? "" : "s"}`;
+
+const getEntrySummary = (entry: PeDebugDirectoryEntry): string => {
+  if (entry.codeView) return "CodeView RSDS record with PDB identity and path.";
+  if (entry.vcFeature) return "MSVC toolchain counters such as /GS, /sdl, and guardN.";
+  if (entry.pogo) {
+    return `${entry.pogo.signatureName} profile-guided optimization map with ` +
+      `${formatPogoRecordCount(entry.pogo.entries.length)}.`;
+  }
+  return getDebugTypeInfo(entry.type >>> 0).description;
 };
 
-const renderCodeViewSummary = (debug: PeDebugSection, out: string[]): void => {
-  if (!debug.entry) return;
+const renderEntryCommonFields = (
+  pe: PeWindowsParseResult,
+  entry: PeDebugDirectoryEntry,
+  out: string[]
+): void => {
+  const typeInfo = getDebugTypeInfo(entry.type >>> 0);
+  const storageInfo = getDebugStorageInfo(pe, entry);
   out.push(`<dl>`);
-  out.push(dd("CodeView", "RSDS", "CodeView debug directory entry with RSDS signature."));
-  out.push(dd("GUID", (debug.entry.guid || "").toUpperCase(), "PDB signature GUID used to match the correct PDB file."));
-  out.push(dd("Age", String(debug.entry.age), "PDB age; increments on certain rebuilds."));
-  out.push(dd("Path", debug.entry.path, "Path to the PDB as recorded at link time; it can be absolute."));
+  out.push(dd("Type", `${safe(typeInfo.label)} (${hex(entry.type, 8)})`, typeInfo.description));
+  out.push(dd("Storage", safe(storageInfo.label), storageInfo.description));
+  out.push(dd("Payload size", safe(humanSize(entry.sizeOfData))));
+  out.push(dd("Raw RVA", safe(hex(entry.addressOfRawData, 8))));
+  out.push(dd("Raw file ptr", safe(hex(entry.pointerToRawData, 8))));
+  out.push(dd("What it contains", safe(getEntrySummary(entry))));
   out.push(`</dl>`);
+};
+
+const renderCodeViewFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
+  if (!entry.codeView) return;
+  out.push(
+    `<div class="smallNote">CodeView RSDS records identify the PDB that matches this build. ` +
+      `The debugger uses the GUID and Age to verify it loaded the right symbol file.</div>`
+  );
+  out.push(`<dl>`);
+  out.push(dd("Signature", "RSDS", "Modern CodeView/PDB record format used by Microsoft tools."));
+  out.push(
+    dd(
+      "GUID",
+      safe((entry.codeView.guid || "").toUpperCase()),
+      "PDB identity GUID used to match the correct PDB file."
+    )
+  );
+  out.push(
+    dd(
+      "Age",
+      safe(String(entry.codeView.age)),
+      "PDB age; increments when the PDB is updated without a full rewrite."
+    )
+  );
+  out.push(
+    dd(
+      "Path",
+      safe(entry.codeView.path || "(no path)"),
+      "Path recorded by the linker. It can be absolute and build-machine specific."
+    )
+  );
+  out.push(`</dl>`);
+};
+
+const renderVcFeatureFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
+  if (!entry.vcFeature) return;
+  out.push(
+    `<div class="smallNote">VC_FEATURE is MSVC toolchain metadata. Microsoft does not fully ` +
+      `document these counters in the PE spec, so treat them as build telemetry rather than strict semantic flags.</div>`
+  );
+  out.push(
+    `<table class="table" style="margin-top:.35rem"><thead><tr><th>Counter</th><th>Value</th><th>Meaning</th></tr></thead><tbody>`
+  );
+  out.push(
+    `<tr><td>Pre-VC++ 11.00</td><td>${entry.vcFeature.preVc11}</td><td>Objects produced by older pre-VC++ 11 toolchains.</td></tr>`
+  );
+  out.push(
+    `<tr><td>C/C++</td><td>${entry.vcFeature.cAndCpp}</td><td>Objects built from C or C++ compilation units.</td></tr>`
+  );
+  out.push(
+    `<tr><td>/GS</td><td>${entry.vcFeature.gs}</td><td>Objects that use MSVC stack-cookie protection.</td></tr>`
+  );
+  out.push(
+    `<tr><td>/sdl</td><td>${entry.vcFeature.sdl}</td><td>Objects built with additional Security Development Lifecycle checks.</td></tr>`
+  );
+  out.push(
+    `<tr><td>guardN</td><td>${entry.vcFeature.guardN}</td><td>Toolchain-defined guard counter emitted by MSVC.</td></tr>`
+  );
+  out.push(`</tbody></table>`);
+};
+
+const renderPogoFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
+  if (!entry.pogo) return;
+  out.push(
+    `<div class="smallNote">POGO records describe linker chunks used by profile-guided optimization ` +
+      `or link-time code generation. The Name column usually contains linker section-group labels, not source-level function names.</div>`
+  );
+  out.push(`<dl>`);
+  out.push(
+    dd(
+      "Signature",
+      `${safe(entry.pogo.signatureName)} (${hex(entry.pogo.signature, 8)})`,
+      "POGO payload flavor emitted by the linker."
+    )
+  );
+  out.push(
+    dd(
+      "Entry count",
+      safe(String(entry.pogo.entries.length)),
+      "Number of chunk records stored in this POGO payload."
+    )
+  );
+  out.push(`</dl>`);
+  if (!entry.pogo.entries.length) return;
+  out.push(
+    `<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Start RVA</th><th>Size</th><th>Name</th></tr></thead><tbody>`
+  );
+  entry.pogo.entries.forEach((pogoEntry, index) => {
+    out.push(
+      `<tr><td>${index + 1}</td><td>${hex(pogoEntry.startRva, 8)}</td><td>${humanSize(pogoEntry.size)}</td><td>${safe(pogoEntry.name || "(empty)")}</td></tr>`
+    );
+  });
+  out.push(`</tbody></table>`);
+};
+
+const renderDecodedEntryDetails = (
+  pe: PeWindowsParseResult,
+  debug: PeDebugSection,
+  out: string[]
+): void => {
+  const decodedEntries = debug.entries?.filter(hasDecodedPayload) ?? [];
+  if (!decodedEntries.length) return;
+  out.push(
+    `<div class="smallNote" style="margin-top:.5rem">Decoded entry details explain the fields for ` +
+      `recognized payload formats. The table above stays as a compact index; the sections below explain each decoded payload in full.</div>`
+  );
+  decodedEntries.forEach(entry => {
+    const entryIndex = debug.entries?.indexOf(entry) ?? -1;
+    const typeInfo = getDebugTypeInfo(entry.type >>> 0);
+    const storageInfo = getDebugStorageInfo(pe, entry);
+    out.push(
+      `<details style="margin-top:.5rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Entry #${entryIndex + 1}: ${safe(typeInfo.label)} (${safe(storageInfo.label)})</summary>`
+    );
+    renderEntryCommonFields(pe, entry, out);
+    renderCodeViewFields(entry, out);
+    renderVcFeatureFields(entry, out);
+    renderPogoFields(entry, out);
+    out.push(`</details>`);
+  });
+};
+
+const renderEntryTable = (
+  pe: PeWindowsParseResult,
+  debug: PeDebugSection,
+  out: string[]
+): void => {
+  if (!debug.entries?.length) return;
+  out.push(
+    `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show debug directory entries (${debug.entries.length})</summary>`
+  );
+  out.push(
+    `<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Type</th><th>Storage</th><th>Payload</th><th>Raw RVA</th><th>Raw file ptr</th><th>What it contains</th></tr></thead><tbody>`
+  );
+  debug.entries.forEach((entry, index) => {
+    out.push(
+      `<tr><td>${index + 1}</td><td>${formatEntryType(entry)}</td><td title="${safe(getDebugStorageInfo(pe, entry).description)}">${formatEntryStorage(pe, entry)}</td><td>${humanSize(entry.sizeOfData)}</td><td>${hex(entry.addressOfRawData, 8)}</td><td>${hex(entry.pointerToRawData, 8)}</td><td>${safe(getEntrySummary(entry))}</td></tr>`
+    );
+  });
+  out.push(`</tbody></table></details>`);
+};
+
+const renderDebugIntro = (out: string[]): void => {
+  out.push(
+    `<div class="smallNote">IMAGE_DEBUG_DIRECTORY is an index of debug payloads. Each entry says ` +
+      `what format is present, how large it is, and where the payload lives in the file. ` +
+      `Storage tells you whether the payload is mapped through a section or only exists in raw file layout.</div>`
+  );
 };
 
 export function renderDebug(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.debug) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Debug directory</h4>`);
-  out.push(
-    `<div class="smallNote">IMAGE_DEBUG_DIRECTORY entries can point to different debug formats. ` +
-      `The Storage column shows whether the payload is mapped into the image or lives only in raw file layout.</div>`
-  );
-  renderCodeViewSummary(pe.debug, out);
-  if (pe.debug.entries?.length) {
-    out.push(
-      `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show debug directory entries (${pe.debug.entries.length})</summary>`
-    );
-    out.push(
-      `<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Type</th><th>Storage</th><th>Size</th><th>Raw RVA</th><th>Raw file ptr</th><th>Details</th></tr></thead><tbody>`
-    );
-    pe.debug.entries.forEach((entry, index) => {
-      out.push(
-        `<tr><td>${index + 1}</td><td>${formatEntryType(entry)}</td><td>${formatEntryStorage(pe, entry)}</td><td>${humanSize(entry.sizeOfData)}</td><td>${hex(entry.addressOfRawData, 8)}</td><td>${hex(entry.pointerToRawData, 8)}</td><td>${renderEntryDetails(entry)}</td></tr>`
-      );
-    });
-    out.push(`</tbody></table></details>`);
-  }
+  renderDebugIntro(out);
+  renderEntryTable(pe, pe.debug, out);
+  renderDecodedEntryDetails(pe, pe.debug, out);
   if (pe.debug.warning) out.push(`<div class="smallNote">${safe(pe.debug.warning)}</div>`);
   out.push(`</section>`);
 }

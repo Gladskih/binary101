@@ -4,14 +4,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderDebug } from "../../renderers/pe/debug-view.js";
 import {
+  createSyntheticWarning,
   createDebugViewCodeView,
-  createRepeatedDebugViewSection,
-  createSectionCoveredRawOnlyDebugViewEntry,
-  createDebugViewSection,
-  createMappedDebugViewEntry,
   createPeWithDebugViewSection,
-  createSequentialDebugViewSection,
-  createDebugViewEntry
+  createRepeatedPogoDebugViewSection,
+  createInconsistentEmbeddedDebugViewSection,
+  createSupportedDebugViewSection,
+  createDecodedDebugViewSection,
+  createMappedCodeViewDebugViewSection,
+  createUnresolvedDebugViewSection
 } from "../fixtures/pe-debug-view-subject.js";
 import { createBasePe } from "../fixtures/pe-renderer-headers-fixture.js";
 
@@ -25,23 +26,26 @@ const assertIncludesAll = (html: string, snippets: string[]): void => {
   snippets.forEach(snippet => assert.match(html, new RegExp(snippet)));
 };
 
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const countMatches = (html: string, pattern: RegExp): number => [...html.matchAll(pattern)].length;
 
 void test("renderDebug renders CodeView summary and plain entry values", () => {
   const pe = createPeWithDebugViewSection();
   const section = pe.sections[0]!;
-  const codeView = createDebugViewCodeView(1);
-  pe.debug = createDebugViewSection([{
-    ...createMappedDebugViewEntry(section, 2, 0),
-    codeView
-  }], codeView, "fixture-warning");
+  const codeView = createDebugViewCodeView();
+  const warning = createSyntheticWarning();
+  pe.debug = createMappedCodeViewDebugViewSection(section, codeView, warning);
 
   const html = renderDebugHtml(pe);
 
   assertIncludesAll(html, [
     "Debug directory",
-    "Storage column shows whether the payload is mapped into the image",
-    "CodeView",
+    "IMAGE_DEBUG_DIRECTORY is an index of debug payloads",
+    "Entry #1: CODEVIEW \\(MAPPED\\)",
+    "Type",
+    "What it contains",
+    "Signature",
     "GUID",
     "Age",
     "Path",
@@ -51,18 +55,20 @@ void test("renderDebug renders CodeView summary and plain entry values", () => {
     "Raw file ptr",
     "CODEVIEW",
     "MAPPED",
-    "RSDS fixture-1\\.pdb",
-    "fixture-1\\.pdb",
-    "fixture-warning"
+    "CodeView RSDS record with PDB identity and path",
+    "RSDS",
+    escapeRegExp(codeView.path),
+    escapeRegExp(warning)
   ]);
   assert.doesNotMatch(html, /Types present/);
   assert.doesNotMatch(html, /<span class="opt sel"[^>]*>CODEVIEW<\/span>/);
   assert.doesNotMatch(html, /<span class="opt sel"[^>]*>MAPPED<\/span>/);
+  assert.doesNotMatch(html, /<dt[^>]*>CodeView<\/dt><dd>RSDS<\/dd>/);
 });
 
 void test("renderDebug keeps repeated types in the table instead of a counted summary", () => {
   const pe = createBasePe();
-  pe.debug = createRepeatedDebugViewSection(13, 2);
+  pe.debug = createRepeatedPogoDebugViewSection();
 
   const html = renderDebugHtml(pe);
 
@@ -75,9 +81,7 @@ void test("renderDebug keeps repeated types in the table instead of a counted su
 
 void test("renderDebug marks contradictory RVA and section coverage as inconsistent", () => {
   const pe = createPeWithDebugViewSection();
-  pe.debug = createDebugViewSection([
-    createSectionCoveredRawOnlyDebugViewEntry(pe.sections[0]!, 17, 0)
-  ]);
+  pe.debug = createInconsistentEmbeddedDebugViewSection(pe.sections[0]!);
 
   const html = renderDebugHtml(pe);
 
@@ -88,8 +92,7 @@ void test("renderDebug marks contradictory RVA and section coverage as inconsist
 
 void test("renderDebug renders supported debug-format labels and descriptions", () => {
   const pe = createBasePe();
-  const supportedTypes = [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20];
-  pe.debug = createSequentialDebugViewSection(supportedTypes);
+  pe.debug = createSupportedDebugViewSection();
 
   const html = renderDebugHtml(pe);
 
@@ -135,11 +138,36 @@ void test("renderDebug renders supported debug-format labels and descriptions", 
 
 void test("renderDebug shows fallback types and unresolved storage when payload location is missing", () => {
   const pe = createBasePe();
-  pe.debug = createDebugViewSection([createDebugViewEntry(255, 0, 0, 0)]);
+  pe.debug = createUnresolvedDebugViewSection();
 
   const html = renderDebugHtml(pe);
 
   assert.match(html, />TYPE_255<div class="valueHint">0x000000ff<\/div>/);
   assert.match(html, />UNRESOLVED</);
   assert.match(html, /Undocumented or unsupported IMAGE_DEBUG_DIRECTORY\.Type 0x000000ff\./);
+});
+
+void test("renderDebug renders decoded VC_FEATURE and POGO payload details", () => {
+  const pe = createBasePe();
+  const { pogo, debug } = createDecodedDebugViewSection();
+  pe.debug = debug;
+
+  const html = renderDebugHtml(pe);
+
+  assertIncludesAll(html, [
+    "Entry #1: VC_FEATURE \\(UNMAPPED\\)",
+    "MSVC toolchain counters such as /GS, /sdl, and guardN",
+    "Pre-VC\\+\\+ 11\\.00",
+    "C/C\\+\\+",
+    "guardN",
+    "Entry #2: POGO \\(UNMAPPED\\)",
+    "The table above stays as a compact index",
+    "POGO records describe linker chunks used by profile-guided optimization",
+    `${pogo.signatureName} \\(${escapeRegExp(`0x${pogo.signature.toString(16).padStart(8, "0")}`)}\\)`,
+    String(pogo.entries.length),
+    "Start RVA",
+    escapeRegExp(pogo.entries[0]!.name),
+    escapeRegExp(pogo.entries[1]!.name)
+  ]);
+  assert.doesNotMatch(html, /Types present/);
 });

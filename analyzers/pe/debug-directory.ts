@@ -2,9 +2,13 @@
 
 import { createFileRangeReader } from "../file-range-reader.js";
 import { parseCodeViewEntry, type PeCodeViewEntry } from "./debug-codeview.js";
+import { parsePogoInfo, type PePogoInfo } from "./debug-pogo.js";
+import { parseVcFeatureInfo, type PeVcFeatureInfo } from "./debug-vc-feature.js";
 import type { PeDataDirectory, RvaToOffset } from "./types.js";
 
 export type { PeCodeViewEntry } from "./debug-codeview.js";
+export type { PePogoEntry, PePogoInfo } from "./debug-pogo.js";
+export type { PeVcFeatureInfo } from "./debug-vc-feature.js";
 
 // Microsoft PE format, "Debug Directory (Image Only)":
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
@@ -21,6 +25,8 @@ const IMAGE_DEBUG_DIRECTORY_OFF_POINTER_TO_RAW_DATA = 0x18;
 
 // PE/COFF: IMAGE_DEBUG_TYPE_CODEVIEW
 const IMAGE_DEBUG_TYPE_CODEVIEW = 2;
+const IMAGE_DEBUG_TYPE_VC_FEATURE = 12;
+const IMAGE_DEBUG_TYPE_POGO = 13;
 
 const DEBUG_TYPE_NAMES: Record<number, string> = {
   0: "UNKNOWN",
@@ -30,7 +36,19 @@ const DEBUG_TYPE_NAMES: Record<number, string> = {
   4: "MISC",
   5: "EXCEPTION",
   6: "FIXUP",
-  7: "OMAP_TO_SRC"
+  7: "OMAP_TO_SRC",
+  8: "OMAP_FROM_SRC",
+  9: "BORLAND",
+  10: "RESERVED10",
+  11: "CLSID",
+  12: "VC_FEATURE",
+  13: "POGO",
+  14: "ILTCG",
+  15: "MPX",
+  16: "REPRO",
+  17: "EMBEDDED DEBUG",
+  19: "SYMBOL HASH",
+  20: "EX_DLLCHARACTERISTICS"
 };
 
 type FileRange = { start: number; end: number };
@@ -42,6 +60,8 @@ export interface PeDebugDirectoryEntry {
   addressOfRawData: number;
   pointerToRawData: number;
   codeView?: PeCodeViewEntry;
+  vcFeature?: PeVcFeatureInfo;
+  pogo?: PePogoInfo;
 }
 
 const appendFileRange = (ranges: FileRange[], start: number, end: number, fileSize: number): void => {
@@ -178,6 +198,30 @@ export async function parseDebugDirectory(
         currentEntry.codeView = codeView;
         if (!entry) entry = codeView;
       }
+    }
+    if (type === IMAGE_DEBUG_TYPE_VC_FEATURE) {
+      const vcFeature = await parseVcFeatureInfo(
+        file,
+        fileSize,
+        rvaToOff,
+        addressOfRawDataRva,
+        pointerToRawDataOff,
+        dataSize,
+        addWarning
+      );
+      if (vcFeature) currentEntry.vcFeature = vcFeature;
+    }
+    if (type === IMAGE_DEBUG_TYPE_POGO) {
+      const pogo = await parsePogoInfo(
+        file,
+        fileSize,
+        rvaToOff,
+        addressOfRawDataRva,
+        pointerToRawDataOff,
+        dataSize,
+        addWarning
+      );
+      if (pogo) currentEntry.pogo = pogo;
     }
     entries.push(currentEntry);
   }
