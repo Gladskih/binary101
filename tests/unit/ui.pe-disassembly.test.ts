@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { FileRangeReader } from "../../analyzers/file-range-reader.js";
 import { createPeDisassemblyController } from "../../ui/pe-disassembly.js";
 import type { ParseForUiResult } from "../../analyzers/index.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
@@ -29,7 +30,10 @@ void test("pe disassembly controller updates progress and renders when complete"
   const file = new MockFile(new Uint8Array([0x90]), "pe.bin");
   const parseResult: ParseForUiResult = { analyzer: "pe", parsed: pe };
   const renders: ParseForUiResult[] = [];
-  const analyze = async (_file: File, opts: AnalyzePeInstructionSetOptions): Promise<PeInstructionSetReport> => {
+  const analyze = async (
+    _reader: FileRangeReader,
+    opts: AnalyzePeInstructionSetOptions
+  ): Promise<PeInstructionSetReport> => {
     opts.onProgress?.({
       stage: "loading",
       bytesSampled: 10,
@@ -155,7 +159,7 @@ void test("pe disassembly controller updates instruction-set chip table while de
     getCurrentFile: () => file,
     getCurrentParseResult: () => parseResult,
     renderResult: () => {},
-    analyze: async (_file: File, opts: AnalyzePeInstructionSetOptions): Promise<PeInstructionSetReport> => {
+    analyze: async (_reader, opts: AnalyzePeInstructionSetOptions): Promise<PeInstructionSetReport> => {
       opts.onProgress?.({
         stage: "decoding",
         bytesSampled: 10,
@@ -197,7 +201,7 @@ void test("pe disassembly controller toggles analyze/cancel buttons and renders 
     getCurrentFile: () => file,
     getCurrentParseResult: () => parseResult,
     renderResult: () => {},
-    analyze: async (_file: File, opts: AnalyzePeInstructionSetOptions): Promise<PeInstructionSetReport> => {
+    analyze: async (_reader, opts: AnalyzePeInstructionSetOptions): Promise<PeInstructionSetReport> => {
       opts.onProgress?.({
         stage: "loading",
         bytesSampled: 0,
@@ -235,7 +239,7 @@ void test("pe disassembly controller always includes AddressOfEntryPoint alongsi
     getCurrentFile: () => file,
     getCurrentParseResult: () => parseResult,
     renderResult: () => {},
-    analyze: async (_file: File, opts: AnalyzePeInstructionSetOptions): Promise<PeInstructionSetReport> => {
+    analyze: async (_reader, opts: AnalyzePeInstructionSetOptions): Promise<PeInstructionSetReport> => {
       captured = opts;
       return createFakeReport();
     }
@@ -266,7 +270,7 @@ void test("pe disassembly controller includes unwind begin RVAs when available",
     getCurrentFile: () => file,
     getCurrentParseResult: () => parseResult,
     renderResult: () => {},
-    analyze: async (_file: File, opts: AnalyzePeInstructionSetOptions): Promise<PeInstructionSetReport> => {
+    analyze: async (_reader, opts: AnalyzePeInstructionSetOptions): Promise<PeInstructionSetReport> => {
       captured = opts;
       return createFakeReport();
     }

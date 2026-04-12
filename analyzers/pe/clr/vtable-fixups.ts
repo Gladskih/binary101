@@ -1,12 +1,13 @@
 "use strict";
 
+import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeClrVTableFixup } from "./types.js";
 import type { RvaToOffset } from "../types.js";
 
 const VTABLE_FIXUP_ENTRY_SIZE_BYTES = 8;
 
 export const parseVTableFixups = async (
-  file: File,
+  reader: FileRangeReader,
   rvaToOff: RvaToOffset,
   fileSize: number,
   rva: number,
@@ -47,11 +48,7 @@ export const parseVTableFixups = async (
   }
   const entryCount = parsedCount;
   if (entryCount === 0) return null;
-  const fixupView = new DataView(
-    await file
-      .slice(fileOffset, fileOffset + entryCount * VTABLE_FIXUP_ENTRY_SIZE_BYTES)
-      .arrayBuffer()
-  );
+  const fixupView = await reader.read(fileOffset, entryCount * VTABLE_FIXUP_ENTRY_SIZE_BYTES);
   const entries: PeClrVTableFixup[] = [];
   for (let index = 0; index < entryCount; index += 1) {
     const entryOffset = index * VTABLE_FIXUP_ENTRY_SIZE_BYTES;

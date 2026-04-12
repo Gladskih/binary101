@@ -1,5 +1,6 @@
 "use strict";
 
+import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 
 import {
@@ -77,14 +78,14 @@ const addOptionalDirIssues = (
 };
 
 export async function parseClrDirectory(
-  file: File,
+  reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset
 ): Promise<PeClrHeader | null> {
   const dir = dataDirs.find(d => d.name === "CLR_RUNTIME");
   if (!dir) return null;
   if (dir.rva === 0 && dir.size === 0) return null;
-  const fileSize = file.size;
+  const fileSize = reader.size;
   const issues: string[] = [];
   if (dir.rva === 0 && dir.size !== 0) issues.push("CLR directory has a non-zero size but RVA is 0.");
   if (dir.rva !== 0 && dir.size === 0) issues.push("CLR directory has an RVA but size is 0.");
@@ -109,11 +110,7 @@ export async function parseClrDirectory(
   const availableSize = Math.min(dir.size, Math.max(0, fileSize - base));
   issues.push(...buildCor20Issues(dir.size, availableSize));
   const clr = readCor20Header(
-    new DataView(
-      await file
-        .slice(base, base + Math.min(availableSize, COR20_HEADER_SIZE_BYTES))
-        .arrayBuffer()
-    )
+    await reader.read(base, Math.min(availableSize, COR20_HEADER_SIZE_BYTES))
   );
   if (clr.cb !== 0 && clr.cb !== COR20_HEADER_SIZE_BYTES) {
     issues.push(`CLR header cb is ${clr.cb} bytes; expected ${COR20_HEADER_SIZE_BYTES} (0x48).`);
@@ -147,7 +144,7 @@ export async function parseClrDirectory(
     if (metaOffset == null) {
       issues.push("Metadata RVA could not be mapped to a file offset.");
     } else {
-      const meta = await parseClrMetadataRoot(file, metaOffset, clr.MetaDataSize, issues);
+      const meta = await parseClrMetadataRoot(reader, metaOffset, clr.MetaDataSize, issues);
       if (meta) clr.meta = meta;
     }
   }
@@ -185,7 +182,7 @@ export async function parseClrDirectory(
     issues
   );
   const fixups = await parseVTableFixups(
-    file,
+    reader,
     rvaToOff,
     fileSize,
     clr.VTableFixupsRVA,

@@ -1,5 +1,6 @@
 "use strict";
 
+import type { FileRangeReader } from "../file-range-reader.js";
 import {
   decodeWinCertificate,
   type AuthenticodeVerificationInfo,
@@ -59,7 +60,7 @@ const attachVerificationWarning = (
 };
 
 export async function parseSecurityDirectory(
-  file: File,
+  reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   verifyAuthenticode?: PeAuthenticodeVerifier
 ): Promise<ParsedSecurityDirectory | null> {
@@ -71,14 +72,14 @@ export async function parseSecurityDirectory(
     return { count: 0, certs: [], warnings };
   }
   const off = dir.rva;
-  if (off >= file.size) {
+  if (off >= reader.size) {
     warnings.push("Attribute certificate table starts past end of file.");
     return { count: 0, certs: [], warnings };
   }
   if ((off & 7) !== 0) {
     warnings.push("Attribute certificate table offset is not quadword aligned.");
   }
-  const end = Math.min(file.size, off + dir.size);
+  const end = Math.min(reader.size, off + dir.size);
   const availableSize = Math.max(0, end - off);
   if (availableSize < dir.size) {
     warnings.push("Attribute certificate table is truncated by end of file.");
@@ -90,9 +91,7 @@ export async function parseSecurityDirectory(
   let pos = off;
   const certs: ParsedWinCertificate[] = [];
   while (pos + WIN_CERTIFICATE_HEADER_SIZE <= end) {
-    const head = new DataView(
-      await file.slice(pos, pos + WIN_CERTIFICATE_HEADER_SIZE).arrayBuffer()
-    );
+    const head = await reader.read(pos, WIN_CERTIFICATE_HEADER_SIZE);
     const Length = head.getUint32(0, true);
     if (Length < 8) {
       warnings.push("WIN_CERTIFICATE length is smaller than the 8-byte header.");
@@ -102,7 +101,7 @@ export async function parseSecurityDirectory(
       warnings.push("WIN_CERTIFICATE length is not quadword aligned.");
     }
     const available = Math.min(Length, end - pos);
-    const blob = new Uint8Array(await file.slice(pos, pos + available).arrayBuffer());
+    const blob = await reader.readBytes(pos, available);
     let certificate = decodeWinCertificate(blob, Length, pos);
     if (verifyAuthenticode && certificate.authenticode) {
       try {

@@ -1,5 +1,6 @@
 "use strict";
 
+import type { FileRangeReader } from "../../file-range-reader.js";
 import { buildResourceTree } from "./core.js";
 import { enrichResourcePreviews } from "./preview/index.js";
 import {
@@ -19,12 +20,12 @@ export interface PeResources {
 }
 
 export async function parseResources(
-  file: File,
+  reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   parseManifestXmlDocument: ManifestXmlDocumentParser = parseBrowserManifestXmlDocument
 ): Promise<PeResources | null> {
-  const tree = await buildResourceTree(file, dataDirs, rvaToOff);
+  const tree = await buildResourceTree(reader, dataDirs, rvaToOff);
   if (!tree) return null;
-  return enrichResourcePreviews(file, tree, parseManifestXmlDocument);
+  return enrichResourcePreviews(reader, tree, parseManifestXmlDocument);
 }

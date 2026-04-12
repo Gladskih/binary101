@@ -1,5 +1,6 @@
 "use strict";
 
+import type { FileRangeReader } from "../../../file-range-reader.js";
 import { chooseResourceLeafRecord } from "./leaf-index.js";
 import type { ResourceLeafIndex } from "./leaf-index.js";
 import type { ResourceLangWithPreview } from "./types.js";
@@ -7,7 +8,7 @@ import type { ResourceTree } from "../core.js";
 import type { LoadedResourceLeaf, LoadResourceLeafData } from "./icon.js";
 
 export const createGroupLeafLoader = (
-  file: File,
+  reader: FileRangeReader,
   tree: ResourceTree,
   index: ResourceLeafIndex,
   groupTypeName: "GROUP_ICON" | "GROUP_CURSOR",
@@ -35,7 +36,7 @@ export const createGroupLeafLoader = (
       ]
     };
   }
-  const data = new Uint8Array(await file.slice(offset, offset + record.size).arrayBuffer());
+  const data = await reader.readBytes(offset, record.size);
   return {
     data: data.byteLength ? data : null,
     ...(data.byteLength < record.size
@@ -49,7 +50,7 @@ export const createGroupLeafLoader = (
 };
 
 export const readResourceLeafBytes = async (
-  file: File,
+  reader: FileRangeReader,
   tree: ResourceTree,
   langEntry: ResourceLangWithPreview
 ): Promise<LoadedResourceLeaf> => {
@@ -60,7 +61,7 @@ export const readResourceLeafBytes = async (
       issues: ["Resource RVA could not be mapped to a file offset."]
     };
   }
-  const data = new Uint8Array(await file.slice(offset, offset + langEntry.size).arrayBuffer());
+  const data = await reader.readBytes(offset, langEntry.size);
   return {
     data: data.byteLength ? data : null,
     ...(data.byteLength < langEntry.size

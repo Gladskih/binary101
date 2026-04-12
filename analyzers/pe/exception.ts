@@ -1,5 +1,6 @@
 "use strict";
 
+import type { FileRangeReader } from "../file-range-reader.js";
 import { parseAmd64ExceptionDirectory } from "./exception-amd64.js";
 import { parseArm64ExceptionDirectory } from "./exception-arm64.js";
 import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./exception-types.js";
@@ -22,16 +23,16 @@ const isArm64ExceptionMachine = (machine: number): boolean =>
 export { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./exception-types.js";
 
 export async function parseExceptionDirectory(
-  file: File,
+  reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   machine = IMAGE_FILE_MACHINE_AMD64
 ): Promise<PeExceptionDirectory | null> {
   if (machine === IMAGE_FILE_MACHINE_AMD64) {
-    return parseAmd64ExceptionDirectory(file, dataDirs, rvaToOff);
+    return parseAmd64ExceptionDirectory(reader, dataDirs, rvaToOff);
   }
   if (isArm64ExceptionMachine(machine)) {
-    return parseArm64ExceptionDirectory(file, dataDirs, rvaToOff);
+    return parseArm64ExceptionDirectory(reader, dataDirs, rvaToOff);
   }
   const dir = dataDirs.find(directory => directory.name === "EXCEPTION");
   if (!dir?.rva) {

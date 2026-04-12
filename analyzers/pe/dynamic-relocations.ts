@@ -1,5 +1,6 @@
 "use strict";
 
+import type { FileRangeReader } from "../file-range-reader.js";
 import {
   parseDynamicRelocationEntriesV132,
   parseDynamicRelocationEntriesV164,
@@ -94,25 +95,23 @@ const resolveDynamicRelocTableOffset = (
 };
 
 const readDynamicRelocationTable = async (
-  file: File,
+  reader: FileRangeReader,
   tableOffset: number,
   warnings: string[]
 ): Promise<{ version: number; dataSize: number; dataEnd: number; view: DataView }> => {
-  if (file.size - tableOffset < DYNAMIC_RELOCATION_TABLE_HEADER_SIZE) {
+  if (reader.size - tableOffset < DYNAMIC_RELOCATION_TABLE_HEADER_SIZE) {
     warnings.push("DynamicRelocations: truncated header.");
     return { version: 0, dataSize: 0, dataEnd: 0, view: new DataView(new ArrayBuffer(0)) };
   }
 
-  const header = new DataView(
-    await file.slice(tableOffset, tableOffset + DYNAMIC_RELOCATION_TABLE_HEADER_SIZE).arrayBuffer()
-  );
+  const header = await reader.read(tableOffset, DYNAMIC_RELOCATION_TABLE_HEADER_SIZE);
   const version = header.getUint32(0, true);
   const dataSize = header.getUint32(Uint32Array.BYTES_PER_ELEMENT, true);
   const readableSize = Math.min(
     DYNAMIC_RELOCATION_TABLE_HEADER_SIZE + dataSize,
-    Math.max(0, file.size - tableOffset)
+    Math.max(0, reader.size - tableOffset)
   );
-  const view = new DataView(await file.slice(tableOffset, tableOffset + readableSize).arrayBuffer());
+  const view = await reader.read(tableOffset, readableSize);
   const dataEnd = Math.min(view.byteLength, DYNAMIC_RELOCATION_TABLE_HEADER_SIZE + dataSize);
 
   if (dataEnd < DYNAMIC_RELOCATION_TABLE_HEADER_SIZE + dataSize) {
@@ -123,7 +122,7 @@ const readDynamicRelocationTable = async (
 };
 
 const parseDynamicRelocationsWithVariant = async (
-  file: File,
+  reader: FileRangeReader,
   sections: PeSection[],
   rvaToOff: RvaToOffset,
   imageBase: bigint,
@@ -141,7 +140,7 @@ const parseDynamicRelocationsWithVariant = async (
 ): Promise<PeDynamicRelocations | null> => {
   const warnings: string[] = [];
   const tableOffset = resolveDynamicRelocTableOffset(
-    file.size,
+    reader.size,
     sections,
     rvaToOff,
     imageBase,
@@ -151,7 +150,7 @@ const parseDynamicRelocationsWithVariant = async (
   if (tableOffset == null) return null;
 
   const { version, dataSize, dataEnd, view } = await readDynamicRelocationTable(
-    file,
+    reader,
     tableOffset,
     warnings
   );
@@ -172,14 +171,14 @@ const parseDynamicRelocationsWithVariant = async (
 };
 
 export const parseDynamicRelocationsFromLoadConfig32 = async (
-  file: File,
+  reader: FileRangeReader,
   sections: PeSection[],
   rvaToOff: RvaToOffset,
   imageBase: bigint,
   loadConfig: PeLoadConfig
 ): Promise<PeDynamicRelocations | null> =>
   parseDynamicRelocationsWithVariant(
-    file,
+    reader,
     sections,
     rvaToOff,
     imageBase,
@@ -189,14 +188,14 @@ export const parseDynamicRelocationsFromLoadConfig32 = async (
   );
 
 export const parseDynamicRelocationsFromLoadConfig64 = async (
-  file: File,
+  reader: FileRangeReader,
   sections: PeSection[],
   rvaToOff: RvaToOffset,
   imageBase: bigint,
   loadConfig: PeLoadConfig
 ): Promise<PeDynamicRelocations | null> =>
   parseDynamicRelocationsWithVariant(
-    file,
+    reader,
     sections,
     rvaToOff,
     imageBase,

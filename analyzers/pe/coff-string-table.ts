@@ -1,5 +1,6 @@
 "use strict";
 
+import type { FileRangeReader } from "../file-range-reader.js";
 import {
   coffStringTablePeSectionName,
   inlinePeSectionName,
@@ -45,10 +46,11 @@ const getStringTableOffset = (
   return symbolTableEnd;
 };
 
-const readStringTableSize = async (file: File, stringTableOffset: number): Promise<number | null> => {
-  const sizeView = new DataView(
-    await file.slice(stringTableOffset, stringTableOffset + COFF_STRING_TABLE_MIN_SIZE).arrayBuffer()
-  );
+const readStringTableSize = async (
+  reader: FileRangeReader,
+  stringTableOffset: number
+): Promise<number | null> => {
+  const sizeView = await reader.read(stringTableOffset, COFF_STRING_TABLE_MIN_SIZE);
   return sizeView.byteLength < COFF_STRING_TABLE_MIN_SIZE ? null : sizeView.getUint32(0, true);
 };
 
@@ -63,7 +65,7 @@ const decodeChunks = (chunks: Uint8Array[], totalLength: number): string => {
 };
 
 const readNullTerminatedUtf8 = async (
-  file: File,
+  reader: FileRangeReader,
   start: number,
   endExclusive: number
 ): Promise<{ value: string; terminated: boolean }> => {
@@ -72,9 +74,7 @@ const readNullTerminatedUtf8 = async (
   let offset = start;
   while (offset < endExclusive) {
     // Read bounded chunks so malformed images do not force the parser to materialize the whole table.
-    const chunk = new Uint8Array(
-      await file.slice(offset, Math.min(endExclusive, offset + 256)).arrayBuffer()
-    );
+    const chunk = await reader.readBytes(offset, Math.min(endExclusive, offset + 256) - offset);
     if (!chunk.length) break;
     const zeroIndex = chunk.indexOf(0);
     if (zeroIndex !== -1) {
@@ -91,7 +91,7 @@ const readNullTerminatedUtf8 = async (
 };
 
 const readStringTableEntry = async (
-  file: File,
+  reader: FileRangeReader,
   stringTableOffset: number,
   stringTableEnd: number,
   stringTableEntryOffset: number
@@ -106,7 +106,7 @@ const readStringTableEntry = async (
     };
   }
   const entry = await readNullTerminatedUtf8(
-    file,
+    reader,
     stringTableOffset + stringTableEntryOffset,
     stringTableEnd
   );
@@ -119,17 +119,17 @@ const readStringTableEntry = async (
 };
 
 export const createCoffStringTableResolver = async (
-  file: File,
+  reader: FileRangeReader,
   pointerToSymbolTable: number,
   numberOfSymbols: number
 ): Promise<CoffStringTableResolution> => {
-  const stringTableOffset = getStringTableOffset(file.size, pointerToSymbolTable, numberOfSymbols);
+  const stringTableOffset = getStringTableOffset(reader.size, pointerToSymbolTable, numberOfSymbols);
   if (stringTableOffset == null) {
     return pointerToSymbolTable && numberOfSymbols
       ? { resolver: null, warning: LONG_SECTION_NAME_TRUNCATED_WARNING }
       : { resolver: null };
   }
-  const declaredSize = await readStringTableSize(file, stringTableOffset);
+  const declaredSize = await readStringTableSize(reader, stringTableOffset);
   if (declaredSize == null) {
     return { resolver: null, warning: LONG_SECTION_NAME_TRUNCATED_WARNING };
   }
@@ -138,7 +138,7 @@ export const createCoffStringTableResolver = async (
   }
   const stringTableEnd = Math.max(
     stringTableOffset,
-    Math.min(file.size, stringTableOffset + declaredSize)
+    Math.min(reader.size, stringTableOffset + declaredSize)
   );
   const warnings = stringTableEnd < stringTableOffset + declaredSize
     ? { warning: LONG_SECTION_NAME_TRUNCATED_WARNING }
@@ -151,7 +151,7 @@ export const createCoffStringTableResolver = async (
         const cached = entryCache.get(stringTableEntryOffset);
         if (cached) return cached;
         const pending = readStringTableEntry(
-          file,
+          reader,
           stringTableOffset,
           stringTableEnd,
           stringTableEntryOffset

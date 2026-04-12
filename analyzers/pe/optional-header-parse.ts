@@ -1,6 +1,7 @@
 "use strict";
 
 import { DD_NAMES } from "./constants.js";
+import type { FileRangeReader } from "../file-range-reader.js";
 import {
   parseOptionalHeaderTailRom,
   parseOptionalHeaderTail32,
@@ -44,13 +45,18 @@ type ParsedOptionalHeaderStandardFields = {
 };
 
 export async function parseOptionalHeaderAndDirectories(
-  file: File,
+  reader: FileRangeReader,
   peHeaderOffset: number,
   sizeOfOptionalHeader: number
 ): Promise<OptionalHeaderParseResult> {
   const warnings: string[] = [];
   if (sizeOfOptionalHeader === 0) return createAbsentOptionalHeaderResult(peHeaderOffset + 24);
-  const viewInfo = await readOptionalHeaderView(file, peHeaderOffset + 24, sizeOfOptionalHeader, warnings);
+  const viewInfo = await readOptionalHeaderView(
+    reader,
+    peHeaderOffset + 24,
+    sizeOfOptionalHeader,
+    warnings
+  );
   const standardFields = parseOptionalHeaderStandardFields(viewInfo.optionalHeaderView);
   if (!isKnownOptionalHeaderMagic(standardFields.Magic)) {
     return createUnrecognizedOptionalHeaderResult(
@@ -78,21 +84,19 @@ function createAbsentOptionalHeaderResult(optionalHeaderOffset: number): Optiona
 }
 
 async function readOptionalHeaderView(
-  file: File,
+  reader: FileRangeReader,
   optionalHeaderOffset: number,
   sizeOfOptionalHeader: number,
   warnings: string[]
 ): Promise<OptionalHeaderViewInfo> {
-  const maxReadable = Math.max(0, file.size - optionalHeaderOffset);
+  const maxReadable = Math.max(0, reader.size - optionalHeaderOffset);
   if (maxReadable < sizeOfOptionalHeader) warnings.push("Optional header is truncated by end of file.");
   const declaredSize = Math.min(sizeOfOptionalHeader, maxReadable);
   const viewSize = declaredSize || Math.min(MINIMUM_OPTIONAL_HEADER_PROBE_SIZE, maxReadable);
   return {
     optionalHeaderOffset,
     declaredSize,
-    optionalHeaderView: new DataView(
-      await file.slice(optionalHeaderOffset, optionalHeaderOffset + viewSize).arrayBuffer()
-    )
+    optionalHeaderView: await reader.read(optionalHeaderOffset, viewSize)
   };
 }
 

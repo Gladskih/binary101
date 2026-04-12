@@ -1,6 +1,12 @@
 "use strict";
 
-export class MockFile extends Blob implements File {
+import {
+  createFileRangeReader,
+  type FileRangeReader
+} from "../../analyzers/file-range-reader.js";
+
+export class MockFile extends Blob implements File, FileRangeReader {
+  #reader: FileRangeReader | null = null;
   readonly data: Uint8Array;
   readonly name: string;
   readonly lastModified: number;
@@ -17,6 +23,16 @@ export class MockFile extends Blob implements File {
 
   get [Symbol.toStringTag](): string {
     return "File";
+  }
+
+  read(offset: number, size: number): Promise<DataView> {
+    this.#reader ??= createFileRangeReader(this, 0, this.size, 0);
+    return this.#reader.read(offset, size);
+  }
+
+  readBytes(offset: number, size: number): Promise<Uint8Array> {
+    this.#reader ??= createFileRangeReader(this, 0, this.size, 0);
+    return this.#reader.readBytes(offset, size);
   }
 }
 

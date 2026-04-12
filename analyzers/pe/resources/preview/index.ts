@@ -1,5 +1,6 @@
 "use strict";
 
+import type { FileRangeReader } from "../../../file-range-reader.js";
 import { addBitmapPreview } from "./bitmap.js";
 import { addCursorPreview, addGroupCursorPreview } from "./cursor.js";
 import { addDialogPreview } from "./dialog.js";
@@ -160,7 +161,7 @@ const decodeSpecificResourcePreview = async (
 };
 
 const decodeResourceLeafPreview = async (
-  file: File,
+  reader: FileRangeReader,
   tree: ResourceTree,
   groupTypeName: string,
   entryId: number | null,
@@ -171,7 +172,7 @@ const decodeResourceLeafPreview = async (
 ): Promise<ResourcePreviewResult> => {
   if (!langEntry.size || !langEntry.dataRVA) return {};
   try {
-    const leaf = await readResourceLeafBytes(file, tree, langEntry);
+    const leaf = await readResourceLeafBytes(reader, tree, langEntry);
     if (!leaf.data?.length) return leaf.issues?.length ? { issues: leaf.issues } : {};
     const leafData = leaf.data;
     const typedPreview = await decodeSpecificResourcePreview(
@@ -205,7 +206,7 @@ const decodeResourceLeafPreview = async (
 };
 
 const decodeDetailPreviews = async (
-  file: File,
+  reader: FileRangeReader,
   tree: ResourceTree,
   detail: ResourceDetailGroup[],
   loadIconLeafData: LoadResourceLeafData,
@@ -216,7 +217,7 @@ const decodeDetailPreviews = async (
     Promise.all(group.entries.map(entry =>
       Promise.all(entry.langs.map(langEntry =>
         decodeResourceLeafPreview(
-          file,
+          reader,
           tree,
           group.typeName,
           entry.id,
@@ -256,7 +257,7 @@ const attachDetailPreviews = (
   }));
 
 export async function enrichResourcePreviews(
-  file: File,
+  reader: FileRangeReader,
   tree: ResourceTree,
   parseManifestXmlDocument: ManifestXmlDocumentParser = parseBrowserManifestXmlDocument
 ): Promise<{
@@ -269,10 +270,16 @@ export async function enrichResourcePreviews(
   const detail = tree.detail as ResourceDetailGroup[];
   const iconIndex = buildResourceLeafIndex(detail, "ICON");
   const cursorIndex = buildResourceLeafIndex(detail, "CURSOR");
-  const loadIconLeafData = createGroupLeafLoader(file, tree, iconIndex, "GROUP_ICON", "ICON");
-  const loadCursorLeafData = createGroupLeafLoader(file, tree, cursorIndex, "GROUP_CURSOR", "CURSOR");
+  const loadIconLeafData = createGroupLeafLoader(reader, tree, iconIndex, "GROUP_ICON", "ICON");
+  const loadCursorLeafData = createGroupLeafLoader(
+    reader,
+    tree,
+    cursorIndex,
+    "GROUP_CURSOR",
+    "CURSOR"
+  );
   const decodedGroups = await decodeDetailPreviews(
-    file,
+    reader,
     tree,
     detail,
     loadIconLeafData,

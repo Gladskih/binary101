@@ -63,7 +63,7 @@ void test("pe disassembly controller includes extra entrypoints from LOAD_CONFIG
     getCurrentFile: () => file,
     getCurrentParseResult: () => parseResult,
     renderResult: () => {},
-    analyze: async (_file: File, opts: AnalyzePeInstructionSetOptions): Promise<PeInstructionSetReport> => {
+    analyze: async (_reader, opts: AnalyzePeInstructionSetOptions): Promise<PeInstructionSetReport> => {
       captured = opts;
       return createFakeReport();
     }

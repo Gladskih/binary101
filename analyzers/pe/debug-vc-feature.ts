@@ -1,5 +1,6 @@
 "use strict";
 
+import type { FileRangeReader } from "../file-range-reader.js";
 import type { RvaToOffset } from "./types.js";
 
 export interface PeVcFeatureInfo {
@@ -50,7 +51,7 @@ const getReadableDebugData = (
 };
 
 export const parseVcFeatureInfo = async (
-  file: File,
+  reader: FileRangeReader,
   fileSize: number,
   rvaToOff: RvaToOffset,
   addressOfRawDataRva: number,
@@ -71,9 +72,7 @@ export const parseVcFeatureInfo = async (
     addWarning("VC_FEATURE debug entry is smaller than the fixed five-counter layout.");
     return null;
   }
-  const view = new DataView(
-    await file.slice(dataInfo.offset, dataInfo.offset + VC_FEATURE_FIXED_SIZE).arrayBuffer()
-  );
+  const view = await reader.read(dataInfo.offset, VC_FEATURE_FIXED_SIZE);
   if (view.byteLength < VC_FEATURE_FIXED_SIZE) {
     addWarning("VC_FEATURE debug entry is truncated.");
     return null;

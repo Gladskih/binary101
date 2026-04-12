@@ -1,6 +1,6 @@
 "use strict";
 
-import { createFileRangeReader, type FileRangeReader } from "../file-range-reader.js";
+import type { FileRangeReader } from "../file-range-reader.js";
 import type { PeDataDirectory, RvaToOffset } from "./types.js";
 
 const IMAGE_REL_BASED_HIGHADJ = 4;
@@ -115,7 +115,7 @@ const parseRelocationEntries = (
 };
 
 export async function parseBaseRelocations(
-  file: File,
+  reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset
 ): Promise<{
@@ -142,7 +142,7 @@ export async function parseBaseRelocations(
       warnings: ["Base relocation directory RVA does not map to file data."]
     };
   }
-  if (base < 0 || base >= file.size) {
+  if (base < 0 || base >= reader.size) {
     return {
       blocks: [],
       totalEntries: 0,
@@ -159,7 +159,6 @@ export async function parseBaseRelocations(
   const addWarning = (message: string): void => {
     if (!warnings.includes(message)) warnings.push(message);
   };
-  const reader = createFileRangeReader(file, 0, file.size);
   let rel = 0;
   let totalEntries = 0;
   while (rel + IMAGE_BASE_RELOCATION_HEADER_SIZE <= dir.size) {
@@ -196,7 +195,7 @@ export async function parseBaseRelocations(
       availableEntries,
       blockRva,
       rvaToOff,
-      file.size,
+      reader.size,
       addWarning
     );
     const spanViews = entrySpans

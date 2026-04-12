@@ -1,4 +1,5 @@
 "use strict";
+import { createFileRangeReader } from "../file-range-reader.js";
 import { isPeWindowsCore, parsePeHeaders } from "./core.js";
 import { computePeAuthenticodeDigest, verifyAuthenticode } from "./authenticode-verify.js";
 import { parseDebugDirectory } from "./debug-directory.js";
@@ -71,7 +72,8 @@ export async function parsePe(
   file: File,
   parseManifestXmlDocument: ManifestXmlDocumentParser = parseBrowserManifestXmlDocument
 ): Promise<PeParseResult | null> {
-  const core = await parsePeHeaders(file);
+  const reader = createFileRangeReader(file, 0, file.size);
+  const core = await parsePeHeaders(reader);
   if (!core) return null;
   if (!isPeWindowsCore(core)) {
     return withLayoutWarnings(buildHeaderOnlyPeParseResult(core), file.size);
@@ -98,8 +100,8 @@ export async function parsePe(
           coff.Machine === IMAGE_FILE_MACHINE_I386 ? readSafeSehHandlerTableRvas : null
       };
 
-  const debugResult = await parseDebugDirectory(file, dataDirs, rvaToOff);
-  const loadcfg = await peVariant.parseLoadConfigDirectory(file, dataDirs, rvaToOff);
+  const debugResult = await parseDebugDirectory(reader, dataDirs, rvaToOff);
+  const loadcfg = await peVariant.parseLoadConfigDirectory(reader, dataDirs, rvaToOff);
   if (loadcfg) {
     const warnings = collectLoadConfigWarnings(file.size, rvaToOff, ImageBase, opt.SizeOfImage, loadcfg);
     mergeLoadConfigWarnings(loadcfg, warnings);
@@ -113,7 +115,7 @@ export async function parsePe(
     if (Number.isSafeInteger(loadcfg.GuardCFFunctionCount) && loadcfg.GuardCFFunctionCount > 0) {
       try {
         tables.guardFidRvas = await readGuardCFFunctionTableRvas(
-          file,
+          reader,
           rvaToOff,
           ImageBase,
           loadcfg.GuardCFFunctionTable,
@@ -128,7 +130,7 @@ export async function parsePe(
     if (Number.isSafeInteger(loadcfg.GuardEHContinuationCount) && loadcfg.GuardEHContinuationCount > 0) {
       try {
         tables.guardEhContinuationRvas = await readGuardEhContinuationTableRvas(
-          file,
+          reader,
           rvaToOff,
           ImageBase,
           loadcfg.GuardEHContinuationTable,
@@ -143,7 +145,7 @@ export async function parsePe(
     if (Number.isSafeInteger(loadcfg.GuardLongJumpTargetCount) && loadcfg.GuardLongJumpTargetCount > 0) {
       try {
         tables.guardLongJumpTargetRvas = await readGuardLongJumpTargetTableRvas(
-          file,
+          reader,
           rvaToOff,
           ImageBase,
           loadcfg.GuardLongJumpTargetTable,
@@ -158,7 +160,7 @@ export async function parsePe(
     if (Number.isSafeInteger(loadcfg.GuardAddressTakenIatEntryCount) && loadcfg.GuardAddressTakenIatEntryCount > 0) {
       try {
         tables.guardIatRvas = await readGuardAddressTakenIatEntryTableRvas(
-          file,
+          reader,
           rvaToOff,
           ImageBase,
           loadcfg.GuardAddressTakenIatEntryTable,
@@ -177,7 +179,7 @@ export async function parsePe(
     ) {
       try {
         tables.safeSehHandlerRvas = await peVariant.readSafeSehHandlerTableRvas(
-          file,
+          reader,
           rvaToOff,
           ImageBase,
           loadcfg.SEHandlerTable,
@@ -194,7 +196,7 @@ export async function parsePe(
 
     try {
       loadcfg.dynamicRelocations = await peVariant.parseDynamicRelocationsFromLoadConfig(
-        file,
+        reader,
         sections,
         rvaToOff,
         ImageBase,
@@ -205,29 +207,29 @@ export async function parsePe(
       loadcfg.dynamicRelocations = null;
     }
   }
-  const importResult = await peVariant.parseImportDirectory(file, dataDirs, rvaToOff);
-  const exportsInfo = await parseExportDirectory(file, dataDirs, rvaToOff);
-  const tls = await peVariant.parseTlsDirectory(file, dataDirs, rvaToOff, ImageBase);
-  const resources = await parseResources(file, dataDirs, rvaToOff, parseManifestXmlDocument);
-  const reloc = await parseBaseRelocations(file, dataDirs, rvaToOff);
-  const exception = await parseExceptionDirectory(file, dataDirs, rvaToOff, coff.Machine);
-  const boundImports = await parseBoundImports(file, dataDirs, rvaToOff);
-  const delayImports = await peVariant.parseDelayImports(file, dataDirs, rvaToOff);
-  const clr = await parseClrDirectory(file, dataDirs, rvaToOff);
+  const importResult = await peVariant.parseImportDirectory(reader, dataDirs, rvaToOff);
+  const exportsInfo = await parseExportDirectory(reader, dataDirs, rvaToOff);
+  const tls = await peVariant.parseTlsDirectory(reader, dataDirs, rvaToOff, ImageBase);
+  const resources = await parseResources(reader, dataDirs, rvaToOff, parseManifestXmlDocument);
+  const reloc = await parseBaseRelocations(reader, dataDirs, rvaToOff);
+  const exception = await parseExceptionDirectory(reader, dataDirs, rvaToOff, coff.Machine);
+  const boundImports = await parseBoundImports(reader, dataDirs, rvaToOff);
+  const delayImports = await peVariant.parseDelayImports(reader, dataDirs, rvaToOff);
+  const clr = await parseClrDirectory(reader, dataDirs, rvaToOff);
   const securityDir = dataDirs.find(d => d.name === "SECURITY");
   const authenticodeDigestCache = new Map<string, Promise<string | null>>();
   const getCachedAuthenticodeDigest = (algorithm: AlgorithmIdentifier): Promise<string | null> => {
     const cacheKey = digestCacheKey(algorithm);
     const cached = authenticodeDigestCache.get(cacheKey);
     if (cached) return cached;
-    const computed = computePeAuthenticodeDigest(file, core, securityDir, algorithm);
+    const computed = computePeAuthenticodeDigest(reader, core, securityDir, algorithm);
     authenticodeDigestCache.set(cacheKey, computed);
     return computed;
   };
-  let security = await parseSecurityDirectory(file, dataDirs, async (payload, certificate) =>
+  let security = await parseSecurityDirectory(reader, dataDirs, async (payload, certificate) =>
     certificate.authenticode
       ? verifyAuthenticode(
-          file,
+          reader,
           core,
           securityDir,
           certificate.authenticode,

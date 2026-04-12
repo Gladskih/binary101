@@ -1,5 +1,6 @@
 "use strict";
 
+import type { FileRangeReader } from "../../file-range-reader.js";
 import { readLoadConfigPointerRva } from "./index.js";
 import type { RvaToOffset } from "../types.js";
 
@@ -15,7 +16,7 @@ export const getCfgTargetTableEntrySize = (guardFlags: number): number => {
 };
 
 const readRvaTable = async (
-  file: File,
+  reader: FileRangeReader,
   rvaToOff: RvaToOffset,
   imageBase: bigint,
   tableVa: bigint,
@@ -31,8 +32,8 @@ const readRvaTable = async (
   for (let index = 0; index < count; index += 1) {
     const entryRva = (tableRva + index * entrySize) >>> 0;
     const entryOff = rvaToOff(entryRva);
-    if (entryOff == null || entryOff < 0 || entryOff + entrySize > file.size) break;
-    const dv = new DataView(await file.slice(entryOff, entryOff + entrySize).arrayBuffer());
+    if (entryOff == null || entryOff < 0 || entryOff + entrySize > reader.size) break;
+    const dv = await reader.read(entryOff, entrySize);
     if (dv.byteLength < entrySize) break;
     const rva = readEntry(dv, 0) >>> 0;
     if (rva) rvas.push(rva);
@@ -41,7 +42,7 @@ const readRvaTable = async (
 };
 
 export async function readGuardCFFunctionTableRvas(
-  file: File,
+  reader: FileRangeReader,
   rvaToOff: RvaToOffset,
   imageBase: bigint,
   guardCFFunctionTableVa: bigint,
@@ -50,7 +51,7 @@ export async function readGuardCFFunctionTableRvas(
 ): Promise<number[]> {
   const entrySize = getCfgTargetTableEntrySize(guardFlags ?? 0);
   return readRvaTable(
-    file,
+    reader,
     rvaToOff,
     imageBase,
     guardCFFunctionTableVa,
@@ -61,14 +62,14 @@ export async function readGuardCFFunctionTableRvas(
 }
 
 export async function readSafeSehHandlerTableRvas(
-  file: File,
+  reader: FileRangeReader,
   rvaToOff: RvaToOffset,
   imageBase: bigint,
   seHandlerTableVa: bigint,
   seHandlerCount: number
 ): Promise<number[]> {
   return readRvaTable(
-    file,
+    reader,
     rvaToOff,
     imageBase,
     seHandlerTableVa,
@@ -79,7 +80,7 @@ export async function readSafeSehHandlerTableRvas(
 }
 
 export async function readGuardEhContinuationTableRvas(
-  file: File,
+  reader: FileRangeReader,
   rvaToOff: RvaToOffset,
   imageBase: bigint,
   guardEhContinuationTableVa: bigint,
@@ -88,7 +89,7 @@ export async function readGuardEhContinuationTableRvas(
 ): Promise<number[]> {
   const entrySize = getCfgTargetTableEntrySize(guardFlags ?? 0);
   return readRvaTable(
-    file,
+    reader,
     rvaToOff,
     imageBase,
     guardEhContinuationTableVa,
@@ -99,7 +100,7 @@ export async function readGuardEhContinuationTableRvas(
 }
 
 export async function readGuardLongJumpTargetTableRvas(
-  file: File,
+  reader: FileRangeReader,
   rvaToOff: RvaToOffset,
   imageBase: bigint,
   guardLongJumpTargetTableVa: bigint,
@@ -108,7 +109,7 @@ export async function readGuardLongJumpTargetTableRvas(
 ): Promise<number[]> {
   const entrySize = getCfgTargetTableEntrySize(guardFlags ?? 0);
   return readRvaTable(
-    file,
+    reader,
     rvaToOff,
     imageBase,
     guardLongJumpTargetTableVa,
@@ -119,7 +120,7 @@ export async function readGuardLongJumpTargetTableRvas(
 }
 
 export async function readGuardAddressTakenIatEntryTableRvas(
-  file: File,
+  reader: FileRangeReader,
   rvaToOff: RvaToOffset,
   imageBase: bigint,
   guardAddressTakenIatEntryTableVa: bigint,
@@ -128,7 +129,7 @@ export async function readGuardAddressTakenIatEntryTableRvas(
 ): Promise<number[]> {
   const entrySize = getCfgTargetTableEntrySize(guardFlags ?? 0);
   return readRvaTable(
-    file,
+    reader,
     rvaToOff,
     imageBase,
     guardAddressTakenIatEntryTableVa,

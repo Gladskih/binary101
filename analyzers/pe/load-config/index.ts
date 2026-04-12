@@ -1,5 +1,6 @@
 "use strict";
 
+import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeDynamicRelocations } from "../dynamic-relocations.js";
 import {
   buildLoadConfig32,
@@ -98,9 +99,8 @@ const toSafeCount = (fieldName: string, value: bigint, warnings: string[]): numb
   return 0;
 };
 
-
 const parseLoadConfigDirectoryWithBuilder = async (
-  file: File,
+  reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   buildLoadConfig: (reader: LoadConfigFieldReader) => PeLoadConfig
@@ -117,7 +117,7 @@ const parseLoadConfigDirectoryWithBuilder = async (
     warnings.push("LOAD_CONFIG RVA could not be mapped to a file offset.");
     return createPeLoadConfigResult(warnings);
   }
-  const fileSize = typeof file.size === "number" ? file.size : Infinity;
+  const fileSize = reader.size;
   if (base >= fileSize) {
     warnings.push("LOAD_CONFIG starts past end of file.");
     return createPeLoadConfigResult(warnings);
@@ -131,7 +131,7 @@ const parseLoadConfigDirectoryWithBuilder = async (
     warnings.push("LOAD_CONFIG does not contain any readable bytes.");
     return createPeLoadConfigResult(warnings);
   }
-  const view = new DataView(await file.slice(base, base + availableSize).arrayBuffer());
+  const view = await reader.read(base, availableSize);
   if (view.byteLength < 4) {
     warnings.push("LOAD_CONFIG is truncated before the Size field.");
     return createPeLoadConfigResult(warnings);
@@ -153,7 +153,7 @@ const parseLoadConfigDirectoryWithBuilder = async (
   const withinDeclared = (endExclusive: number): boolean => !declaredSize || declaredSize >= endExclusive;
   const has = (offset: number, byteLength: number): boolean =>
     view.byteLength >= offset + byteLength && withinDeclared(offset + byteLength);
-  const reader: LoadConfigFieldReader = {
+  const fieldReader: LoadConfigFieldReader = {
     Size,
     TimeDateStamp,
     Major,
@@ -165,24 +165,24 @@ const parseLoadConfigDirectoryWithBuilder = async (
     readU64Count: (offset: number, fieldName: string): number =>
       (has(offset, 8) ? toSafeCount(fieldName, view.getBigUint64(offset, true), warnings) : 0)
   };
-  const result = buildLoadConfig(reader);
+  const result = buildLoadConfig(fieldReader);
   if (warnings.length) result.warnings = warnings;
   return result;
 };
 
 export const parseLoadConfigDirectory32 = async (
-  file: File,
+  reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset
 ): Promise<PeLoadConfig | null> =>
-  parseLoadConfigDirectoryWithBuilder(file, dataDirs, rvaToOff, buildLoadConfig32);
+  parseLoadConfigDirectoryWithBuilder(reader, dataDirs, rvaToOff, buildLoadConfig32);
 
 export const parseLoadConfigDirectory64 = async (
-  file: File,
+  reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset
 ): Promise<PeLoadConfig | null> =>
-  parseLoadConfigDirectoryWithBuilder(file, dataDirs, rvaToOff, buildLoadConfig64);
+  parseLoadConfigDirectoryWithBuilder(reader, dataDirs, rvaToOff, buildLoadConfig64);
 
 export function readLoadConfigPointerRva(imageBase: bigint, pointerVa: bigint): number | null {
   return toRvaFromVa(pointerVa, imageBase);

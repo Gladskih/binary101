@@ -1,24 +1,25 @@
 "use strict";
 
 import { readAsciiString } from "../../binary-utils.js";
+import type { FileRangeReader } from "../file-range-reader.js";
 import type { PeDataDirectory, RvaToOffset } from "./types.js";
 
 const IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE = 8; // winnt.h: IMAGE_BOUND_IMPORT_DESCRIPTOR is 8 bytes.
 
 const readBoundedAsciiString = async (
-  file: File,
+  reader: FileRangeReader,
   offset: number,
   limit: number
 ): Promise<{ text: string; truncated: boolean } | null> => {
-  if (offset < 0 || offset >= file.size || limit <= 0) return null;
-  const readLength = Math.min(limit, file.size - offset);
-  const view = new DataView(await file.slice(offset, offset + readLength).arrayBuffer());
+  if (offset < 0 || offset >= reader.size || limit <= 0) return null;
+  const readLength = Math.min(limit, reader.size - offset);
+  const view = await reader.read(offset, readLength);
   const text = readAsciiString(view, 0, readLength);
   return { text, truncated: text.length === readLength };
 };
 
 const readBoundImportName = async (
-  file: File,
+  reader: FileRangeReader,
   nameOffset: number,
   directoryStart: number,
   directoryEnd: number,
@@ -28,11 +29,11 @@ const readBoundImportName = async (
     warnings.add("Bound import name offset points outside directory.");
     return "";
   }
-  if (nameOffset >= file.size) {
+  if (nameOffset >= reader.size) {
     warnings.add("Bound import name offset points outside file data.");
     return "";
   }
-  const result = await readBoundedAsciiString(file, nameOffset, directoryEnd - nameOffset);
+  const result = await readBoundedAsciiString(reader, nameOffset, directoryEnd - nameOffset);
   if (!result) {
     warnings.add("Bound import name offset points outside file data.");
     return "";
@@ -60,12 +61,10 @@ type BoundImportRecord = {
 };
 
 const readBoundImportRecord = async (
-  file: File,
+  reader: FileRangeReader,
   offset: number
 ): Promise<BoundImportRecord | null> => {
-  const dv = new DataView(
-    await file.slice(offset, offset + IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE).arrayBuffer()
-  );
+  const dv = await reader.read(offset, IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE);
   if (dv.byteLength < IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE) {
     return null;
   }
@@ -77,7 +76,7 @@ const readBoundImportRecord = async (
 };
 
 export async function parseBoundImports(
-  file: File,
+  reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset
 ): Promise<{ entries: PeBoundImportEntry[]; warning?: string } | null> {
@@ -87,10 +86,10 @@ export async function parseBoundImports(
   if (base == null) {
     return { entries: [], warning: "Bound import directory RVA does not map to file data." };
   }
-  if (base < 0 || base >= file.size) {
+  if (base < 0 || base >= reader.size) {
     return { entries: [], warning: "Bound import directory starts outside file data." };
   }
-  const availableDirSize = Math.max(0, Math.min(dir.size, file.size - base));
+  const availableDirSize = Math.max(0, Math.min(dir.size, reader.size - base));
   if (availableDirSize < IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE) {
     return {
       entries: [],
@@ -102,7 +101,7 @@ export async function parseBoundImports(
   const warnings = new Set<string>();
   let off = base;
   while (off + IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE <= end) {
-    const record = await readBoundImportRecord(file, off);
+    const record = await readBoundImportRecord(reader, off);
     if (!record) {
       warnings.add("Bound import descriptor truncated.");
       break;
@@ -124,21 +123,27 @@ export async function parseBoundImports(
     for (let forwarderIndex = 0; forwarderIndex < readableForwarderRefCount; forwarderIndex += 1) {
       const forwarderOffset =
         off + IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE + forwarderIndex * IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE;
-      const forwarderRef = await readBoundImportRecord(file, forwarderOffset);
+      const forwarderRef = await readBoundImportRecord(reader, forwarderOffset);
       if (!forwarderRef) {
         warnings.add("Bound import forwarder ref truncated.");
         break;
       }
       forwarderRefs.push({
         name: forwarderRef.OffsetModuleName
-          ? await readBoundImportName(file, base + forwarderRef.OffsetModuleName, base, end, warnings)
+          ? await readBoundImportName(
+              reader,
+              base + forwarderRef.OffsetModuleName,
+              base,
+              end,
+              warnings
+            )
           : "",
         TimeDateStamp: forwarderRef.TimeDateStamp
       });
     }
     entries.push({
       name: OffsetModuleName
-        ? await readBoundImportName(file, base + OffsetModuleName, base, end, warnings)
+        ? await readBoundImportName(reader, base + OffsetModuleName, base, end, warnings)
         : "",
       TimeDateStamp,
       NumberOfModuleForwarderRefs,

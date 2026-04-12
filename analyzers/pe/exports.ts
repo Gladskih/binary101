@@ -1,11 +1,11 @@
 "use strict";
 
-import { createFileRangeReader } from "../file-range-reader.js";
+import type { FileRangeReader } from "../file-range-reader.js";
 import { readMappedNullTerminatedAsciiString } from "./mapped-ascii-string.js";
 import type { PeDataDirectory, RvaToOffset } from "./types.js";
 
 export async function parseExportDirectory(
-  file: File,
+  reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset
 ): Promise<{
@@ -39,7 +39,7 @@ export async function parseExportDirectory(
       issues: ["Export directory RVA does not map to file data."]
     };
   }
-  if (base < 0 || base >= file.size) {
+  if (base < 0 || base >= reader.size) {
     return {
       flags: 0,
       timestamp: 0,
@@ -54,7 +54,7 @@ export async function parseExportDirectory(
       issues: ["Export directory starts outside file data."]
     };
   }
-  const availableDirSize = Math.max(0, Math.min(dir.size, file.size - base));
+  const availableDirSize = Math.max(0, Math.min(dir.size, reader.size - base));
   if (availableDirSize < 40) {
     return {
       flags: 0,
@@ -70,17 +70,16 @@ export async function parseExportDirectory(
       issues: ["Export directory is smaller than the 40-byte IMAGE_EXPORT_DIRECTORY header."]
     };
   }
-  const dv = new DataView(await file.slice(base, base + 40).arrayBuffer());
+  const dv = await reader.read(base, 40);
   const isReadableOffset = (offset: number | null): offset is number =>
-    offset != null && offset >= 0 && offset < file.size;
-  const reader = createFileRangeReader(file, 0, file.size);
+    offset != null && offset >= 0 && offset < reader.size;
   const readForwarderStr = async (rva: number): Promise<{ text: string; issue?: string }> => {
     if (rva < dir.rva || rva >= dir.rva + dir.size) {
       return { text: "", issue: "Export forwarder RVA lies outside the export directory range." };
     }
     const forwarderInfo = await readMappedNullTerminatedAsciiString(
       reader,
-      file.size,
+      reader.size,
       rvaToOff,
       rva >>> 0,
       dir.rva + dir.size - rva
@@ -103,16 +102,16 @@ export async function parseExportDirectory(
   const readMappedU32 = async (tableRva: number, index: number): Promise<number | null> => {
     const entryRva = tableRva + index * 4;
     const entryOff = rvaToOff(entryRva >>> 0);
-    if (!isReadableOffset(entryOff) || entryOff + 4 > file.size) return null;
-    const entryView = new DataView(await file.slice(entryOff, entryOff + 4).arrayBuffer());
+    if (!isReadableOffset(entryOff) || entryOff + 4 > reader.size) return null;
+    const entryView = await reader.read(entryOff, 4);
     if (entryView.byteLength < 4) return null;
     return entryView.getUint32(0, true);
   };
   const readMappedU16 = async (tableRva: number, index: number): Promise<number | null> => {
     const entryRva = tableRva + index * 2;
     const entryOff = rvaToOff(entryRva >>> 0);
-    if (!isReadableOffset(entryOff) || entryOff + 2 > file.size) return null;
-    const entryView = new DataView(await file.slice(entryOff, entryOff + 2).arrayBuffer());
+    if (!isReadableOffset(entryOff) || entryOff + 2 > reader.size) return null;
+    const entryView = await reader.read(entryOff, 2);
     if (entryView.byteLength < 2) return null;
     return entryView.getUint16(0, true);
   };
@@ -137,10 +136,10 @@ export async function parseExportDirectory(
     if (isReadableOffset(namePtr)) {
       const nameInfo = await readMappedNullTerminatedAsciiString(
         reader,
-        file.size,
+        reader.size,
         rvaToOff,
         NameRva >>> 0,
-        file.size
+        reader.size
       );
       if (nameInfo) {
         name = nameInfo.text;
@@ -183,10 +182,10 @@ export async function parseExportDirectory(
         if (isReadableOffset(nameOffset)) {
           const nameInfo = await readMappedNullTerminatedAsciiString(
             reader,
-            file.size,
+            reader.size,
             rvaToOff,
             nameRva >>> 0,
-            file.size
+            reader.size
           );
           if (nameInfo) {
             functionNames.set(funcIndex, nameInfo.text);

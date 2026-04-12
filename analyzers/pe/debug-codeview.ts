@@ -54,7 +54,7 @@ const readCodeViewPathFromMappedData = async (
 };
 
 const readCodeViewPathFromFilePointer = async (
-  file: File,
+  reader: FileRangeReader,
   dataOffset: number,
   dataSize: number,
   addWarning: (message: string) => void
@@ -64,7 +64,7 @@ const readCodeViewPathFromFilePointer = async (
   const pathEnd = dataOffset + dataSize;
   while (pos < pathEnd) {
     const chunkLength = Math.min(CODEVIEW_PATH_READ_CHUNK_SIZE, pathEnd - pos);
-    const chunk = new Uint8Array(await file.slice(pos, pos + chunkLength).arrayBuffer());
+    const chunk = await reader.readBytes(pos, chunkLength);
     const zeroIndex = chunk.indexOf(0);
     if (zeroIndex === -1) {
       path += String.fromCharCode(...chunk);
@@ -81,7 +81,6 @@ const readCodeViewPathFromFilePointer = async (
 };
 
 export const parseCodeViewEntry = async (
-  file: File,
   reader: FileRangeReader,
   fileSize: number,
   rvaToOff: RvaToOffset,
@@ -111,9 +110,7 @@ export const parseCodeViewEntry = async (
     addWarning("Debug directory points outside file bounds; file may be malformed.");
     return null;
   }
-  const header = new DataView(
-    await file.slice(dataOffset, dataOffset + CODEVIEW_RSDS_MIN_SIZE).arrayBuffer()
-  );
+  const header = await reader.read(dataOffset, CODEVIEW_RSDS_MIN_SIZE);
   if (header.byteLength < CODEVIEW_RSDS_MIN_SIZE) {
     addWarning("CodeView debug entry is truncated before the full RSDS header.");
     return null;
@@ -124,11 +121,9 @@ export const parseCodeViewEntry = async (
   const sig0 = header.getUint32(CODEVIEW_RSDS_OFF_GUID_DATA1, true);
   const sig1 = header.getUint16(CODEVIEW_RSDS_OFF_GUID_DATA2, true);
   const sig2 = header.getUint16(CODEVIEW_RSDS_OFF_GUID_DATA3, true);
-  const sigTail = new Uint8Array(
-    await file.slice(
-      dataOffset + CODEVIEW_RSDS_OFF_GUID_DATA4,
-      dataOffset + CODEVIEW_RSDS_OFF_GUID_DATA4 + CODEVIEW_RSDS_GUID_DATA4_LENGTH
-    ).arrayBuffer()
+  const sigTail = await reader.readBytes(
+    dataOffset + CODEVIEW_RSDS_OFF_GUID_DATA4,
+    CODEVIEW_RSDS_GUID_DATA4_LENGTH
   );
   const guid =
     `${toHex32(sig0, 8).slice(2)}-${sig1.toString(16).padStart(4, "0")}-${sig2.toString(16).padStart(4, "0")}-` +
@@ -146,6 +141,6 @@ export const parseCodeViewEntry = async (
           pathByteLength,
           addWarning
         )
-      : await readCodeViewPathFromFilePointer(file, dataOffset, dataSize, addWarning);
+      : await readCodeViewPathFromFilePointer(reader, dataOffset, dataSize, addWarning);
   return { guid, age, path };
 };

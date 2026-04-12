@@ -1,7 +1,7 @@
 "use strict";
 
 import type { PeDataDirectory, RvaToOffset } from "./types.js";
-import { createFileRangeReader, type FileRangeReader } from "../file-range-reader.js";
+import type { FileRangeReader } from "../file-range-reader.js";
 import { readMappedNullTerminatedAsciiString } from "./mapped-ascii-string.js";
 
 // Microsoft PE format, Import Directory Table: IMAGE_IMPORT_DESCRIPTOR is five DWORDs.
@@ -45,7 +45,6 @@ export interface PeImportParseResult {
   thunkEntrySize: number;
   warning?: string;
 }
-
 type PeParsedThunkTable = { functions: PeImportFunction[]; terminated: boolean };
 
 const readImportByName = async (
@@ -169,7 +168,7 @@ const readImportThunkFunctions64 = async (
 };
 
 const parseImportDirectoryWithThunkReader = async (
-  file: File,
+  reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   readThunkFunctions: (
@@ -187,15 +186,14 @@ const parseImportDirectoryWithThunkReader = async (
   const imports: PeImportEntry[] = [];
   const warnings = new Set<string>();
   const isReadableOffset = (offset: number | null): offset is number =>
-    offset != null && offset >= 0 && offset < file.size;
-  const reader = createFileRangeReader(file, 0, file.size);
-  const maxThunkEntries = (entrySize: number): number => Math.floor(file.size / entrySize) + 1;
+    offset != null && offset >= 0 && offset < reader.size;
+  const maxThunkEntries = (entrySize: number): number => Math.floor(reader.size / entrySize) + 1;
   if (!impDir?.rva) return { entries: imports, thunkEntrySize };
   const start = rvaToOff(impDir.rva);
-  if (start == null || start < 0 || start >= file.size) {
+  if (start == null || start < 0 || start >= reader.size) {
     return { entries: imports, thunkEntrySize, warning: "Import directory RVA does not map to file data." };
   }
-  const availableDirSize = Math.max(0, Math.min(impDir.size, file.size - start));
+  const availableDirSize = Math.max(0, Math.min(impDir.size, reader.size - start));
   const maxDescriptors = Math.ceil(availableDirSize / IMAGE_IMPORT_DESCRIPTOR_SIZE);
   const addWarning = (msg: string): void => {
     warnings.add(msg);
@@ -237,10 +235,10 @@ const parseImportDirectoryWithThunkReader = async (
     if (isReadableOffset(nameOffset)) {
       const dllNameText = await readMappedNullTerminatedAsciiString(
         reader,
-        file.size,
+        reader.size,
         rvaToOff,
         nameRva >>> 0,
-        file.size
+        reader.size
       );
       if (dllNameText) {
         dllName = dllNameText.text;
@@ -261,7 +259,7 @@ const parseImportDirectoryWithThunkReader = async (
     const thunkTable = thunkRva
       ? await readThunkFunctions(
           reader,
-          file.size,
+          reader.size,
           rvaToOff,
           thunkRva,
           addWarning,
@@ -285,15 +283,21 @@ const parseImportDirectoryWithThunkReader = async (
 };
 
 export const parseImportDirectory32 = async (
-  file: File,
-  dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset
-): Promise<PeImportParseResult> =>
-  parseImportDirectoryWithThunkReader(file, dataDirs, rvaToOff, readImportThunkFunctions32, IMAGE_THUNK_DATA32_SIZE);
+  reader: FileRangeReader, dataDirs: PeDataDirectory[], rvaToOff: RvaToOffset
+): Promise<PeImportParseResult> => parseImportDirectoryWithThunkReader(
+  reader,
+  dataDirs,
+  rvaToOff,
+  readImportThunkFunctions32,
+  IMAGE_THUNK_DATA32_SIZE
+);
 
 export const parseImportDirectory64 = async (
-  file: File,
-  dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset
-): Promise<PeImportParseResult> =>
-  parseImportDirectoryWithThunkReader(file, dataDirs, rvaToOff, readImportThunkFunctions64, IMAGE_THUNK_DATA64_SIZE);
+  reader: FileRangeReader, dataDirs: PeDataDirectory[], rvaToOff: RvaToOffset
+): Promise<PeImportParseResult> => parseImportDirectoryWithThunkReader(
+  reader,
+  dataDirs,
+  rvaToOff,
+  readImportThunkFunctions64,
+  IMAGE_THUNK_DATA64_SIZE
+);

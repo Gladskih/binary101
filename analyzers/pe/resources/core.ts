@@ -1,4 +1,5 @@
 "use strict";
+import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 import {
   validateResourceDirectoryDuplicates,
@@ -14,7 +15,6 @@ import { knownResourceType } from "./type-names.js";
 import type { ResourceDirectoryInfo, ResourceLeafPath, ResourcePathNode, ResourceTree } from "./tree-types.js";
 import { createEmptyResourceTree, createResourceTreeResult } from "./tree-result.js";
 import { buildResourcePathCollections } from "./tree-paths.js";
-import { createFileRangeReader } from "../../file-range-reader.js";
 export type { ResourceLangEntry, ResourceDetailEntry, ResourceTree } from "./tree-types.js";
 
 // Microsoft PE format, ".rsrc Section":
@@ -30,7 +30,7 @@ const RESOURCE_DIRECTORY_HIGH_BIT = 0x80000000;
 const RESOURCE_DIRECTORY_OFFSET_MASK = 0x7fffffff;
 
 export async function buildResourceTree(
-  file: File,
+  reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset
 ): Promise<ResourceTree | null> {
@@ -54,7 +54,7 @@ export async function buildResourceTree(
       rvaToOff
     );
   }
-  if (base < 0 || base >= file.size) {
+  if (base < 0 || base >= reader.size) {
     return createEmptyResourceTree(
       dir,
       base,
@@ -75,7 +75,6 @@ export async function buildResourceTree(
   const resourceSubdirectoryTargets: number[] = [];
   const directories: ResourceDirectoryInfo[] = [];
   const seenDirectoryOffsets = new Set<number>();
-  const reader = createFileRangeReader(file, 0, file.size);
   const view = async (off: number, len: number): Promise<DataView> => reader.read(off, len);
   const u16 = (dv: DataView, off: number): number => dv.getUint16(off, true);
   const u32 = (dv: DataView, off: number): number => dv.getUint32(off, true);
@@ -83,7 +82,7 @@ export async function buildResourceTree(
     if (!issues.includes(message)) issues.push(message);
   };
   const { formatRelOffset, describeRelOffsetFailure, resolveRelOffset } =
-    createResourceSpanResolver(dir.rva, dir.size, base, limitEnd, file.size, rvaToOff);
+    createResourceSpanResolver(dir.rva, dir.size, base, limitEnd, reader.size, rvaToOff);
   const parseDir = (rel: number): Promise<{ Named: number; Ids: number; entries: ResourceDirectoryEntry[] } | null> => {
     const cached = resourceDirectoryCache.get(rel);
     if (cached) return cached;
@@ -282,7 +281,7 @@ export async function buildResourceTree(
     base,
     limitEnd,
     rvaToOff,
-    file.size,
+    reader.size,
     addIssue
   );
   return createResourceTreeResult(

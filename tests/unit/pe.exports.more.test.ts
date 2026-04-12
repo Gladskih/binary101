@@ -2,6 +2,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import {
+  createFileRangeReader,
+  type FileRangeReader
+} from "../../analyzers/file-range-reader.js";
 import { parseExportDirectory } from "../../analyzers/pe/exports.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
@@ -23,11 +27,15 @@ const createExportLayout = (
   };
 };
 const parseExportFixture = (
-  bytes: Uint8Array | File,
+  bytes: Uint8Array | File | FileRangeReader,
   directory: { rva: number; size: number },
   rvaToOff: (rva: number) => number | null = value => value
 ) => parseExportDirectory(
-  bytes instanceof Uint8Array ? new MockFile(bytes) : bytes,
+  bytes instanceof Uint8Array
+    ? new MockFile(bytes)
+    : "read" in bytes
+      ? bytes
+      : createFileRangeReader(bytes, 0, bytes.size, 0),
   [{ name: "EXPORT", ...directory }],
   rvaToOff
 );

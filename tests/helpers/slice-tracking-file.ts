@@ -1,10 +1,15 @@
 "use strict";
 
+import {
+  createFileRangeReader,
+  type FileRangeReader
+} from "../../analyzers/file-range-reader.js";
+
 const createSliceTrackingFile = (
   bytes: Uint8Array,
   size: number,
   name = "tracked.bin"
-): { file: File; requests: number[] } => {
+): { file: File & FileRangeReader; requests: number[] } => {
   const requests: number[] = [];
   const file = {
     lastModified: 0,
@@ -23,7 +28,12 @@ const createSliceTrackingFile = (
       });
     }
   } as File;
-  return { file, requests };
+  const reader = createFileRangeReader(file, 0, size, 0);
+  const trackedFile = Object.assign(file, {
+    read: reader.read,
+    readBytes: reader.readBytes
+  }) as File & FileRangeReader;
+  return { file: trackedFile, requests };
 };
 
 export { createSliceTrackingFile };

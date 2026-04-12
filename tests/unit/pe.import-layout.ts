@@ -1,5 +1,10 @@
 "use strict";
 
+import {
+  createFileRangeReader,
+  type FileRangeReader
+} from "../../analyzers/file-range-reader.js";
+
 const encoder = new TextEncoder();
 
 // Microsoft PE format, Import Directory Table / Import Lookup Table / Hint-Name Table:
@@ -146,9 +151,9 @@ export const createLimitedImportSliceFile = (
   bytes: Uint8Array,
   maxSlices: number,
   name = "tracked.bin"
-): File => {
+): File & FileRangeReader => {
   let sliceCount = 0;
-  return {
+  const file = {
     lastModified: 0,
     name,
     size: bytes.length,
@@ -164,4 +169,9 @@ export const createLimitedImportSliceFile = (
       });
     }
   } as File;
+  const reader = createFileRangeReader(file, 0, bytes.length, 0);
+  return Object.assign(file, {
+    read: reader.read,
+    readBytes: reader.readBytes
+  }) as File & FileRangeReader;
 };

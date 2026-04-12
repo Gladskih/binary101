@@ -1,5 +1,6 @@
 "use strict";
 
+import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeClrMeta, PeClrStreamInfo } from "./types.js";
 
 export const CLR_METADATA_ROOT_MIN_BYTES = 0x18;
@@ -212,16 +213,16 @@ const parseMetadataRootWithReader = async (
 };
 
 export const parseClrMetadataRoot = async (
-  file: File,
+  fileReader: FileRangeReader,
   metaOffset: number,
   metaSize: number,
   issues: string[]
 ): Promise<PeClrMeta | null> => {
-  if (metaOffset < 0 || metaOffset >= file.size) {
+  if (metaOffset < 0 || metaOffset >= fileReader.size) {
     issues.push("Metadata root location is outside the file.");
     return null;
   }
-  const availableSize = Math.min(metaSize, Math.max(0, file.size - metaOffset));
+  const availableSize = Math.min(metaSize, Math.max(0, fileReader.size - metaOffset));
   if (availableSize < metaSize) {
     issues.push("Metadata directory is truncated; some bytes are missing from the end of the region.");
   }
@@ -234,10 +235,8 @@ export const parseClrMetadataRoot = async (
     readAt: async (relativeOffset, byteLength) => {
       if (relativeOffset < 0 || byteLength < 0) return null;
       if (relativeOffset + byteLength > availableSize) return null;
-      const slice = await file
-        .slice(metaOffset + relativeOffset, metaOffset + relativeOffset + byteLength)
-        .arrayBuffer();
-      return new DataView(slice);
+      const view = await fileReader.read(metaOffset + relativeOffset, byteLength);
+      return view.byteLength < byteLength ? null : view;
     }
   };
 

@@ -1,6 +1,7 @@
 "use strict";
 
 import { alignUpTo, readAsciiString, toHex32 } from "../../binary-utils.js";
+import type { FileRangeReader } from "../file-range-reader.js";
 import type { RvaToOffset } from "./types.js";
 
 export interface PePogoEntry {
@@ -70,7 +71,7 @@ const getPogoSignatureName = (signature: number): string =>
   POGO_SIGNATURE_NAMES[signature >>> 0] ?? `UNKNOWN_${toHex32(signature, 8)}`;
 
 export const parsePogoInfo = async (
-  file: File,
+  reader: FileRangeReader,
   fileSize: number,
   rvaToOff: RvaToOffset,
   addressOfRawDataRva: number,
@@ -91,9 +92,7 @@ export const parsePogoInfo = async (
     addWarning("POGO debug entry is smaller than the signature header.");
     return null;
   }
-  const payload = new Uint8Array(
-    await file.slice(dataInfo.offset, dataInfo.offset + dataInfo.size).arrayBuffer()
-  );
+  const payload = await reader.readBytes(dataInfo.offset, dataInfo.size);
   const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
   const signature = view.getUint32(POGO_OFF_SIGNATURE, true);
   const signatureName = getPogoSignatureName(signature);

@@ -1,6 +1,7 @@
 "use strict";
 
 import { readAsciiString, collectPrintableRuns } from "../../binary-utils.js";
+import type { FileRangeReader } from "../file-range-reader.js";
 export { parseOptionalHeaderAndDirectories } from "./optional-header-parse.js";
 import { parseRichHeaderFromDosStub } from "./rich-header.js";
 import type { PeCoffHeader, PeDosHeader } from "./types.js";
@@ -8,7 +9,7 @@ import type { PeCoffHeader, PeDosHeader } from "./types.js";
 const IMAGE_FILE_HEADER_SIZE = 20;
 
 export async function parseDosHeaderAndStub(
-  file: File,
+  reader: FileRangeReader,
   headView: DataView,
   peHeaderOffset: number
 ): Promise<PeDosHeader> {
@@ -41,7 +42,7 @@ export async function parseDosHeaderAndStub(
   };
   if (peHeaderOffset > 0x40) {
     const stubLength = peHeaderOffset - 0x40;
-    const stubBytes = new Uint8Array(await file.slice(0x40, 0x40 + stubLength).arrayBuffer());
+    const stubBytes = await reader.readBytes(0x40, stubLength);
     dos.rich = parseRichHeaderFromDosStub(stubBytes);
     const printableRuns = collectPrintableRuns(stubBytes, 12);
     const classicMessage = printableRuns.find(text => /this program cannot be run in dos mode/i.test(text));
@@ -53,8 +54,11 @@ export async function parseDosHeaderAndStub(
   return dos;
 }
 
-export async function parseCoffHeader(file: File, peHeaderOffset: number): Promise<PeCoffHeader | null> {
-  const headerView = new DataView(await file.slice(peHeaderOffset, peHeaderOffset + 24).arrayBuffer());
+export async function parseCoffHeader(
+  reader: FileRangeReader,
+  peHeaderOffset: number
+): Promise<PeCoffHeader | null> {
+  const headerView = await reader.read(peHeaderOffset, 24);
   if (headerView.byteLength < 4) return null;
   const signature =
     String.fromCharCode(headerView.getUint8(0)) +

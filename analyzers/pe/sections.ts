@@ -1,5 +1,6 @@
 "use strict";
 
+import type { FileRangeReader } from "../file-range-reader.js";
 import type { PeSection, RvaToOffset } from "./types.js";
 import { createCoffStringTableResolver, resolveSectionName } from "./coff-string-table.js";
 import { PE_RVA_EXCLUSIVE_LIMIT } from "./rva-limits.js";
@@ -85,7 +86,7 @@ const readSectionHeader = (
 };
 
 const parseSectionHeaders = async (
-  file: File,
+  reader: FileRangeReader,
   optionalHeaderOffset: number,
   sizeOfOptionalHeader: number,
   numberOfSections: number,
@@ -102,17 +103,13 @@ const parseSectionHeaders = async (
   const sectionHeadersOffset = optionalHeaderOffset + sizeOfOptionalHeader;
   const safeSectionCount = numberOfSections >>> 0;
   const coffStringTable = await createCoffStringTableResolver(
-    file,
+    reader,
     pointerToSymbolTable,
     numberOfSymbols
   );
-  const sectionHeadersView = new DataView(
-    await file
-      .slice(
-        sectionHeadersOffset,
-        sectionHeadersOffset + safeSectionCount * IMAGE_SECTION_HEADER_SIZE
-      )
-      .arrayBuffer()
+  const sectionHeadersView = await reader.read(
+    sectionHeadersOffset,
+    safeSectionCount * IMAGE_SECTION_HEADER_SIZE
   );
   const sections: PeSection[] = [];
   const warnings = coffStringTable?.warning ? [coffStringTable.warning] : [];
@@ -146,7 +143,7 @@ const parseSectionHeaders = async (
   }
   const rvaToOff = createRvaToOffsetMapper(
     sections,
-    file.size,
+    reader.size,
     sizeOfHeaders,
     sectionHeadersOffset + safeSectionCount * IMAGE_SECTION_HEADER_SIZE
   );

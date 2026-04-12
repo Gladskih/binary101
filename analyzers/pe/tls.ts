@@ -1,5 +1,6 @@
 "use strict";
 
+import type { FileRangeReader } from "../file-range-reader.js";
 import type { PeDataDirectory, PeTlsDirectory, RvaToOffset } from "./types.js";
 
 const MAX_RVA_BIGINT = 0xffff_ffffn;
@@ -30,7 +31,7 @@ const toRvaFromVa = (virtualAddress: bigint, imageBase: bigint): number | null =
 };
 
 const readTlsCallbackRvas32 = async (
-  file: File,
+  reader: FileRangeReader,
   rvaToOff: RvaToOffset,
   tableRva: number,
   imageBase: bigint,
@@ -40,13 +41,11 @@ const readTlsCallbackRvas32 = async (
   for (let index = 0; ; index += 1) {
     const entryRva = (tableRva + index * TLS_CALLBACK_ENTRY_SIZE32) >>> 0;
     const entryOff = rvaToOff(entryRva);
-    if (entryOff == null || entryOff < 0 || entryOff + TLS_CALLBACK_ENTRY_SIZE32 > file.size) {
+    if (entryOff == null || entryOff < 0 || entryOff + TLS_CALLBACK_ENTRY_SIZE32 > reader.size) {
       warnings.push("TLS callback table is truncated or unmapped before the null terminator.");
       return { rvas: callbacks, tableBytes: callbacks.length * TLS_CALLBACK_ENTRY_SIZE32 };
     }
-    const dv = new DataView(
-      await file.slice(entryOff, entryOff + TLS_CALLBACK_ENTRY_SIZE32).arrayBuffer()
-    );
+    const dv = await reader.read(entryOff, TLS_CALLBACK_ENTRY_SIZE32);
     if (dv.byteLength < TLS_CALLBACK_ENTRY_SIZE32) {
       warnings.push("TLS callback table is truncated before a complete pointer entry.");
       return { rvas: callbacks, tableBytes: callbacks.length * TLS_CALLBACK_ENTRY_SIZE32 };
@@ -63,7 +62,7 @@ const readTlsCallbackRvas32 = async (
 };
 
 const readTlsCallbackRvas64 = async (
-  file: File,
+  reader: FileRangeReader,
   rvaToOff: RvaToOffset,
   tableRva: number,
   imageBase: bigint,
@@ -73,13 +72,11 @@ const readTlsCallbackRvas64 = async (
   for (let index = 0; ; index += 1) {
     const entryRva = (tableRva + index * TLS_CALLBACK_ENTRY_SIZE64) >>> 0;
     const entryOff = rvaToOff(entryRva);
-    if (entryOff == null || entryOff < 0 || entryOff + TLS_CALLBACK_ENTRY_SIZE64 > file.size) {
+    if (entryOff == null || entryOff < 0 || entryOff + TLS_CALLBACK_ENTRY_SIZE64 > reader.size) {
       warnings.push("TLS callback table is truncated or unmapped before the null terminator.");
       return { rvas: callbacks, tableBytes: callbacks.length * TLS_CALLBACK_ENTRY_SIZE64 };
     }
-    const dv = new DataView(
-      await file.slice(entryOff, entryOff + TLS_CALLBACK_ENTRY_SIZE64).arrayBuffer()
-    );
+    const dv = await reader.read(entryOff, TLS_CALLBACK_ENTRY_SIZE64);
     if (dv.byteLength < TLS_CALLBACK_ENTRY_SIZE64) {
       warnings.push("TLS callback table is truncated before a complete pointer entry.");
       return { rvas: callbacks, tableBytes: callbacks.length * TLS_CALLBACK_ENTRY_SIZE64 };
@@ -96,7 +93,7 @@ const readTlsCallbackRvas64 = async (
 };
 
 export const parseTlsDirectory32 = async (
-  file: File,
+  reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   imageBase: bigint
@@ -117,17 +114,16 @@ export const parseTlsDirectory32 = async (
     warnings.push("TLS directory RVA could not be mapped to a file offset.");
     return createTlsWarningResult(warnings);
   }
-  const readableSize = Math.max(0, Math.min(dir.size, file.size - base));
+  const readableSize = Math.max(0, Math.min(dir.size, reader.size - base));
   if (readableSize < IMAGE_TLS_DIRECTORY32_SIZE) {
     warnings.push("TLS directory is truncated by end of file.");
     return createTlsWarningResult(warnings);
   }
-  const buf = await file.slice(base, base + IMAGE_TLS_DIRECTORY32_SIZE).arrayBuffer();
-  if (buf.byteLength < IMAGE_TLS_DIRECTORY32_SIZE) {
+  const dv = await reader.read(base, IMAGE_TLS_DIRECTORY32_SIZE);
+  if (dv.byteLength < IMAGE_TLS_DIRECTORY32_SIZE) {
     warnings.push("TLS directory is truncated before the full 32-bit header could be read.");
     return createTlsWarningResult(warnings);
   }
-  const dv = new DataView(buf);
   const StartAddressOfRawData = BigInt(dv.getUint32(0, true));
   const EndAddressOfRawData = BigInt(dv.getUint32(4, true));
   const AddressOfIndex = BigInt(dv.getUint32(8, true));
@@ -142,7 +138,7 @@ export const parseTlsDirectory32 = async (
     warnings.push(`TLS callback table RVA 0x${callbackTableRva.toString(16)} could not be mapped to a file offset.`);
   }
   const callbackInfo = callbackTableRva != null
-    ? await readTlsCallbackRvas32(file, rvaToOff, callbackTableRva, imageBase, warnings)
+    ? await readTlsCallbackRvas32(reader, rvaToOff, callbackTableRva, imageBase, warnings)
     : { rvas: [], tableBytes: 0 };
   return {
     StartAddressOfRawData,
@@ -159,7 +155,7 @@ export const parseTlsDirectory32 = async (
 };
 
 export const parseTlsDirectory64 = async (
-  file: File,
+  reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   imageBase: bigint
@@ -180,17 +176,16 @@ export const parseTlsDirectory64 = async (
     warnings.push("TLS directory RVA could not be mapped to a file offset.");
     return createTlsWarningResult(warnings);
   }
-  const readableSize = Math.max(0, Math.min(dir.size, file.size - base));
+  const readableSize = Math.max(0, Math.min(dir.size, reader.size - base));
   if (readableSize < IMAGE_TLS_DIRECTORY64_SIZE) {
     warnings.push("TLS directory is truncated by end of file.");
     return createTlsWarningResult(warnings);
   }
-  const buf = await file.slice(base, base + IMAGE_TLS_DIRECTORY64_SIZE).arrayBuffer();
-  if (buf.byteLength < IMAGE_TLS_DIRECTORY64_SIZE) {
+  const dv = await reader.read(base, IMAGE_TLS_DIRECTORY64_SIZE);
+  if (dv.byteLength < IMAGE_TLS_DIRECTORY64_SIZE) {
     warnings.push("TLS directory is truncated before the full 64-bit header could be read.");
     return createTlsWarningResult(warnings);
   }
-  const dv = new DataView(buf);
   const StartAddressOfRawDataVa = dv.getBigUint64(0, true);
   const EndAddressOfRawDataVa = dv.getBigUint64(8, true);
   const AddressOfIndexVa = dv.getBigUint64(16, true);
@@ -206,7 +201,7 @@ export const parseTlsDirectory64 = async (
     warnings.push(`TLS callback table RVA 0x${callbackTableRva.toString(16)} could not be mapped to a file offset.`);
   }
   const callbackInfo = callbackTableRva != null
-    ? await readTlsCallbackRvas64(file, rvaToOff, callbackTableRva, imageBase, warnings)
+    ? await readTlsCallbackRvas64(reader, rvaToOff, callbackTableRva, imageBase, warnings)
     : { rvas: [], tableBytes: 0 };
   return {
     StartAddressOfRawData: StartAddressOfRawDataVa,

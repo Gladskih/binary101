@@ -1,6 +1,7 @@
 "use strict";
 
 import { bufferToHex } from "../../binary-utils.js";
+import type { FileRangeReader } from "../file-range-reader.js";
 import type { AuthenticodeInfo } from "./authenticode.js";
 import { verifyPkcs7Signatures } from "./authenticode-pkijs.js";
 import type { PeCore, PeDataDirectory, PeSection, PeWindowsOptionalHeader } from "./types.js";
@@ -34,31 +35,33 @@ const resolveWebCryptoHash = (auth: AuthenticodeInfo): AlgorithmIdentifier | nul
   return WEB_CRYPTO_HASHES[normalized] || null;
 };
 
-const pushSlice = (parts: Blob[], file: File, start: number, end: number): void => {
-  const safeStart = Math.max(0, Math.min(start, file.size));
-  const safeEnd = Math.max(0, Math.min(end, file.size));
+type FileByteRange = { start: number; end: number };
+
+const pushRange = (ranges: FileByteRange[], reader: FileRangeReader, start: number, end: number): void => {
+  const safeStart = Math.max(0, Math.min(start, reader.size));
+  const safeEnd = Math.max(0, Math.min(end, reader.size));
   if (safeEnd > safeStart) {
-    parts.push(file.slice(safeStart, safeEnd));
+    ranges.push({ start: safeStart, end: safeEnd });
   }
 };
 
-const pushSliceExcludingRange = (
-  parts: Blob[],
-  file: File,
+const pushRangeExcludingRange = (
+  ranges: FileByteRange[],
+  reader: FileRangeReader,
   start: number,
   end: number,
   excludedStart: number,
   excludedEnd: number
 ): void => {
-  const safeStart = Math.max(0, Math.min(start, file.size));
-  const safeEnd = Math.max(0, Math.min(end, file.size));
+  const safeStart = Math.max(0, Math.min(start, reader.size));
+  const safeEnd = Math.max(0, Math.min(end, reader.size));
   if (safeEnd <= safeStart) return;
   if (excludedEnd <= safeStart || excludedStart >= safeEnd) {
-    pushSlice(parts, file, safeStart, safeEnd);
+    pushRange(ranges, reader, safeStart, safeEnd);
     return;
   }
-  pushSlice(parts, file, safeStart, Math.max(safeStart, excludedStart));
-  pushSlice(parts, file, Math.min(safeEnd, excludedEnd), safeEnd);
+  pushRange(ranges, reader, safeStart, Math.max(safeStart, excludedStart));
+  pushRange(ranges, reader, Math.min(safeEnd, excludedEnd), safeEnd);
 };
 
 const compareSectionHashOrder = (left: PeSection, right: PeSection): number =>
@@ -99,8 +102,29 @@ const hasParsedPeHashContext = (
   Array.isArray((core as Partial<PeAuthenticodeParsedCore>).sections) &&
   typeof (core as Partial<PeAuthenticodeParsedCore>).opt?.SizeOfHeaders === "number";
 
+const readRanges = async (
+  reader: FileRangeReader,
+  ranges: FileByteRange[]
+): Promise<ArrayBuffer> => {
+  const chunks: Uint8Array[] = [];
+  let totalLength = 0;
+  for (const range of ranges) {
+    const chunk = await reader.readBytes(range.start, range.end - range.start);
+    if (!chunk.length) continue;
+    chunks.push(chunk);
+    totalLength += chunk.length;
+  }
+  const out = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out.buffer;
+};
+
 export const computePeAuthenticodeDigestBestEffort = async (
-  file: File,
+  reader: FileRangeReader,
   core: PeAuthenticodeBestEffortCore,
   securityDir: PeDataDirectory | undefined,
   algorithm: AlgorithmIdentifier,
@@ -119,24 +143,24 @@ export const computePeAuthenticodeDigestBestEffort = async (
   const certSize = securityDir?.size ?? 0;
   const certEnd = certOff + certSize;
 
-  if (checksumOff >= file.size) return null;
+  if (checksumOff >= reader.size) return null;
 
-  const parts: Blob[] = [];
+  const ranges: FileByteRange[] = [];
   const afterSecurityEntry = securityIndex == null ? securityEntryOff : securityEntryOff + 8;
-  pushSlice(parts, file, 0, checksumOff);
-  pushSlice(parts, file, checksumOff + 4, securityEntryOff);
-  pushSlice(parts, file, afterSecurityEntry, certOff);
+  pushRange(ranges, reader, 0, checksumOff);
+  pushRange(ranges, reader, checksumOff + 4, securityEntryOff);
+  pushRange(ranges, reader, afterSecurityEntry, certOff);
   const tailStart = certEnd > afterSecurityEntry ? certEnd : afterSecurityEntry;
-  pushSlice(parts, file, tailStart, file.size);
+  pushRange(ranges, reader, tailStart, reader.size);
 
-  const data = await new Blob(parts).arrayBuffer();
+  const data = await readRanges(reader, ranges);
   const digest = digestFunction ?? ((a: AlgorithmIdentifier, d: ArrayBuffer) => crypto.subtle.digest(a, d));
   const digestBuffer = await digest(algorithm, data);
   return bufferToHex(digestBuffer);
 };
 
 export const computePeAuthenticodeDigestFromParsedPe = async (
-  file: File,
+  reader: FileRangeReader,
   core: PeAuthenticodeParsedCore,
   securityDir: PeDataDirectory | undefined,
   algorithm: AlgorithmIdentifier,
@@ -152,37 +176,42 @@ export const computePeAuthenticodeDigestFromParsedPe = async (
   const certSize = securityDir?.size ?? 0;
   const certEnd = certOff + certSize;
 
-  if (checksumOff >= file.size) return null;
+  if (checksumOff >= reader.size) return null;
 
-  const parts: Blob[] = [];
+  const ranges: FileByteRange[] = [];
   const afterSecurityEntry = securityIndex == null ? securityEntryOff : securityEntryOff + 8;
-  const headerHashEnd = computeHeaderHashEnd(file.size, core.opt.SizeOfHeaders, afterSecurityEntry, core.sections);
-  pushSlice(parts, file, 0, checksumOff);
-  pushSlice(parts, file, checksumOff + 4, securityEntryOff);
-  pushSliceExcludingRange(parts, file, afterSecurityEntry, headerHashEnd, certOff, certEnd);
-  for (const sectionRegion of listSectionHashRegions(file.size, core.sections)) {
-    pushSliceExcludingRange(parts, file, sectionRegion.start, sectionRegion.end, certOff, certEnd);
+  const headerHashEnd = computeHeaderHashEnd(
+    reader.size,
+    core.opt.SizeOfHeaders,
+    afterSecurityEntry,
+    core.sections
+  );
+  pushRange(ranges, reader, 0, checksumOff);
+  pushRange(ranges, reader, checksumOff + 4, securityEntryOff);
+  pushRangeExcludingRange(ranges, reader, afterSecurityEntry, headerHashEnd, certOff, certEnd);
+  for (const sectionRegion of listSectionHashRegions(reader.size, core.sections)) {
+    pushRangeExcludingRange(ranges, reader, sectionRegion.start, sectionRegion.end, certOff, certEnd);
   }
 
-  const data = await new Blob(parts).arrayBuffer();
+  const data = await readRanges(reader, ranges);
   const digest = digestFunction ?? ((a: AlgorithmIdentifier, d: ArrayBuffer) => crypto.subtle.digest(a, d));
   const digestBuffer = await digest(algorithm, data);
   return bufferToHex(digestBuffer);
 };
 
 export const computePeAuthenticodeDigest = async (
-  file: File,
+  reader: FileRangeReader,
   core: PeAuthenticodeBestEffortCore | PeAuthenticodeParsedCore,
   securityDir: PeDataDirectory | undefined,
   algorithm: AlgorithmIdentifier,
   digestFunction?: DigestFunction
 ): Promise<string | null> =>
   hasParsedPeHashContext(core)
-    ? computePeAuthenticodeDigestFromParsedPe(file, core, securityDir, algorithm, digestFunction)
-    : computePeAuthenticodeDigestBestEffort(file, core, securityDir, algorithm, digestFunction);
+    ? computePeAuthenticodeDigestFromParsedPe(reader, core, securityDir, algorithm, digestFunction)
+    : computePeAuthenticodeDigestBestEffort(reader, core, securityDir, algorithm, digestFunction);
 
 export const verifyAuthenticodeFileDigest = async (
-  file: File,
+  reader: FileRangeReader,
   core: PeAuthenticodeBestEffortCore | PeAuthenticodeParsedCore,
   securityDir: PeDataDirectory | undefined,
   auth: AuthenticodeInfo,
@@ -202,7 +231,7 @@ export const verifyAuthenticodeFileDigest = async (
   try {
     const computed = getComputedDigest
       ? await getComputedDigest(algo)
-      : await computePeAuthenticodeDigest(file, core, securityDir, algo, digestFunction);
+      : await computePeAuthenticodeDigest(reader, core, securityDir, algo, digestFunction);
     if (!computed) {
       warnings.push("Unable to compute Authenticode digest for this file.");
       return { warnings };
@@ -221,7 +250,7 @@ const mergeWarnings = (warnings: string[]): string[] | undefined => {
 };
 
 export const verifyAuthenticode = async (
-  file: File,
+  reader: FileRangeReader,
   core: PeAuthenticodeBestEffortCore | PeAuthenticodeParsedCore,
   securityDir: PeDataDirectory | undefined,
   auth: AuthenticodeInfo,
@@ -237,7 +266,7 @@ export const verifyAuthenticode = async (
   }
   if (signatureVerification.warnings?.length) warnings.push(...signatureVerification.warnings);
   const digestVerification = await verifyAuthenticodeFileDigest(
-    file,
+    reader,
     core,
     securityDir,
     auth,

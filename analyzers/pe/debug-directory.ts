@@ -1,6 +1,6 @@
 "use strict";
 
-import { createFileRangeReader } from "../file-range-reader.js";
+import type { FileRangeReader } from "../file-range-reader.js";
 import { parseCodeViewEntry, type PeCodeViewEntry } from "./debug-codeview.js";
 import { parsePogoInfo, type PePogoInfo } from "./debug-pogo.js";
 import { parseVcFeatureInfo, type PeVcFeatureInfo } from "./debug-vc-feature.js";
@@ -92,7 +92,7 @@ const resolveDebugRawSpan = (
 };
 
 export async function parseDebugDirectory(
-  file: File,
+  reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset
 ): Promise<{
@@ -116,12 +116,11 @@ export async function parseDebugDirectory(
       rawDataRanges: []
     };
   }
-  const fileSize = typeof file.size === "number" ? file.size : Infinity;
+  const fileSize = reader.size;
   if (baseOffset >= fileSize) {
     return { entry: null, entries: [], warning: "Debug directory starts past end of file.", rawDataRanges: [] };
   }
   const availableDirSize = Math.min(debugDir.size, Math.max(0, fileSize - baseOffset));
-  const reader = createFileRangeReader(file, 0, file.size);
   if (availableDirSize < IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE) {
     return {
       entry: null,
@@ -153,9 +152,7 @@ export async function parseDebugDirectory(
       addWarning("Debug directory extends beyond end of file (possible truncation).");
       break;
     }
-    const view = new DataView(
-      await file.slice(entryOffset, entryOffset + IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE).arrayBuffer()
-    );
+    const view = await reader.read(entryOffset, IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE);
     if (view.byteLength < IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE) {
       addWarning("Debug directory entry is truncated.");
       break;
@@ -185,7 +182,6 @@ export async function parseDebugDirectory(
     };
     if (type === IMAGE_DEBUG_TYPE_CODEVIEW) {
       const codeView = await parseCodeViewEntry(
-        file,
         reader,
         fileSize,
         rvaToOff,
@@ -201,7 +197,7 @@ export async function parseDebugDirectory(
     }
     if (type === IMAGE_DEBUG_TYPE_VC_FEATURE) {
       const vcFeature = await parseVcFeatureInfo(
-        file,
+        reader,
         fileSize,
         rvaToOff,
         addressOfRawDataRva,
@@ -213,7 +209,7 @@ export async function parseDebugDirectory(
     }
     if (type === IMAGE_DEBUG_TYPE_POGO) {
       const pogo = await parsePogoInfo(
-        file,
+        reader,
         fileSize,
         rvaToOff,
         addressOfRawDataRva,

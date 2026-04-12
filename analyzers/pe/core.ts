@@ -1,5 +1,6 @@
 "use strict";
 
+import type { FileRangeReader } from "../file-range-reader.js";
 import { addSectionEntropies } from "./entropy.js";
 import {
   ROM_OPTIONAL_HEADER_MAGIC
@@ -31,12 +32,12 @@ const alignUpClamped = (value: number, alignment: number): number => {
 
 const ZERO_SCAN_CHUNK_SIZE = 4096;
 
-const countTrailingZeroBytes = async (file: File): Promise<number> => {
+const countTrailingZeroBytes = async (reader: FileRangeReader): Promise<number> => {
   let zeroCount = 0;
-  let end = file.size;
+  let end = reader.size;
   while (end > 0) {
     const start = Math.max(0, end - ZERO_SCAN_CHUNK_SIZE);
-    const chunk = new Uint8Array(await file.slice(start, end).arrayBuffer());
+    const chunk = await reader.readBytes(start, end - start);
     if (!chunk.length) break;
     for (let index = chunk.length - 1; index >= 0; index -= 1) {
       if (chunk[index] !== 0) {
@@ -50,14 +51,14 @@ const countTrailingZeroBytes = async (file: File): Promise<number> => {
 };
 
 const computeTrailingAlignmentPaddingSize = async (
-  file: File,
+  reader: FileRangeReader,
   fileAlignment: number
 ): Promise<number> => {
   const normalizedAlignment = fileAlignment >>> 0;
   if (!normalizedAlignment) return 0;
-  const trailingZeroBytes = await countTrailingZeroBytes(file);
+  const trailingZeroBytes = await countTrailingZeroBytes(reader);
   if (!trailingZeroBytes) return 0;
-  const dataEnd = file.size - trailingZeroBytes;
+  const dataEnd = reader.size - trailingZeroBytes;
   const remainder = dataEnd % normalizedAlignment;
   const expectedPadding = remainder === 0 ? 0 : normalizedAlignment - remainder;
   return expectedPadding === trailingZeroBytes ? expectedPadding : 0;
@@ -116,14 +117,14 @@ export const isPeWindowsCore = (core: PeCore): core is PeWindowsCore =>
   core.opt != null && core.opt.Magic !== ROM_OPTIONAL_HEADER_MAGIC;
 
 const buildHeaderCore = async (
-  file: File,
+  reader: FileRangeReader,
   dos: PeCore["dos"],
   coff: PeCore["coff"],
   optionalHeaderResult: Awaited<ReturnType<typeof parseOptionalHeaderAndDirectories>>,
   opt: PeHeaderCore["opt"]
 ): Promise<PeHeaderCore> => {
   const parsedSections = await parseSectionHeaders(
-    file,
+    reader,
     optionalHeaderResult.optOff,
     coff.SizeOfOptionalHeader,
     coff.NumberOfSections,
@@ -132,7 +133,7 @@ const buildHeaderCore = async (
     coff.NumberOfSymbols
   );
   const { overlaySize, imageEnd, imageSizeMismatch } = computePeImageLayout(
-    file.size,
+    reader.size,
     optionalHeaderResult.optOff,
     coff.SizeOfOptionalHeader,
     parsedSections.sectOff,
@@ -142,7 +143,7 @@ const buildHeaderCore = async (
     null,
     0
   );
-  await addSectionEntropies(file, parsedSections.sections);
+  await addSectionEntropies(reader, parsedSections.sections);
   const warnings = buildCoreWarnings(optionalHeaderResult.warnings, parsedSections.warnings);
   return {
     dos,
@@ -166,14 +167,14 @@ const buildHeaderCore = async (
 };
 
 const buildWindowsCore = async (
-  file: File,
+  reader: FileRangeReader,
   dos: PeCore["dos"],
   coff: PeCore["coff"],
   optionalHeaderResult: Awaited<ReturnType<typeof parseOptionalHeaderAndDirectories>>,
   opt: PeWindowsOptionalHeader
 ): Promise<PeWindowsCore> => {
   const parsedSections = await parseSectionHeaders(
-    file,
+    reader,
     optionalHeaderResult.optOff,
     coff.SizeOfOptionalHeader,
     coff.NumberOfSections,
@@ -182,7 +183,7 @@ const buildWindowsCore = async (
     coff.NumberOfSymbols
   );
   const { overlaySize, imageEnd, imageSizeMismatch } = computePeImageLayout(
-    file.size,
+    reader.size,
     optionalHeaderResult.optOff,
     coff.SizeOfOptionalHeader,
     parsedSections.sectOff,
@@ -192,8 +193,8 @@ const buildWindowsCore = async (
     opt.SizeOfImage,
     opt.SizeOfHeaders
   );
-  await addSectionEntropies(file, parsedSections.sections);
-  const trailingAlignmentPaddingSize = await computeTrailingAlignmentPaddingSize(file, opt.FileAlignment);
+  await addSectionEntropies(reader, parsedSections.sections);
+  const trailingAlignmentPaddingSize = await computeTrailingAlignmentPaddingSize(reader, opt.FileAlignment);
   const warnings = buildCoreWarnings(optionalHeaderResult.warnings, parsedSections.warnings);
   return {
     dos,
@@ -217,19 +218,23 @@ const buildWindowsCore = async (
   };
 };
 
-export async function parsePeHeaders(file: File): Promise<PeCore | null> {
-  const head = new DataView(await file.slice(0, Math.min(file.size, 0x400)).arrayBuffer());
+export async function parsePeHeaders(reader: FileRangeReader): Promise<PeCore | null> {
+  const head = await reader.read(0, Math.min(reader.size, 0x400));
   const probe = peProbe(head);
   if (!probe) return null;
   const e_lfanew = probe.e_lfanew;
-  if (e_lfanew == null || e_lfanew + 4 > file.size) return null;
+  if (e_lfanew == null || e_lfanew + 4 > reader.size) return null;
 
-  const dos = await parseDosHeaderAndStub(file, head, e_lfanew);
-  const coff = await parseCoffHeader(file, e_lfanew);
+  const dos = await parseDosHeaderAndStub(reader, head, e_lfanew);
+  const coff = await parseCoffHeader(reader, e_lfanew);
   if (!coff) return null;
 
-  const optionalResult = await parseOptionalHeaderAndDirectories(file, e_lfanew, coff.SizeOfOptionalHeader);
+  const optionalResult = await parseOptionalHeaderAndDirectories(
+    reader,
+    e_lfanew,
+    coff.SizeOfOptionalHeader
+  );
   return optionalResult.opt && optionalResult.opt.Magic !== ROM_OPTIONAL_HEADER_MAGIC
-    ? buildWindowsCore(file, dos, coff, optionalResult, optionalResult.opt)
-    : buildHeaderCore(file, dos, coff, optionalResult, optionalResult.opt);
+    ? buildWindowsCore(reader, dos, coff, optionalResult, optionalResult.opt)
+    : buildHeaderCore(reader, dos, coff, optionalResult, optionalResult.opt);
 }

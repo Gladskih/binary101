@@ -2,8 +2,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { FileRangeReader } from "../../analyzers/file-range-reader.js";
 import { parseExceptionDirectory } from "../../analyzers/pe/exception.js";
 import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
+import { MockFile } from "../helpers/mock-file.js";
 const identityRvaToOff = (rva: number): number => rva;
 // Microsoft x64 exception handling: RUNTIME_FUNCTION is three ULONG values in .pdata.
 const RUNTIME_FUNCTION_ENTRY_SIZE_BYTES = 12;
@@ -24,12 +26,6 @@ const createOffsetAllocator = (
 };
 
 const createByteBuffer = (size: number): Uint8Array => new Uint8Array(size).fill(0);
-const copyToArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
-  const copy = new Uint8Array(bytes.byteLength);
-  copy.set(bytes);
-  return copy.buffer;
-};
-
 const writeRuntimeFunction = (
   view: DataView,
   offset: number,
@@ -110,7 +106,7 @@ const createDiscontiguousExceptionFixture = (): {
 };
 
 const createTrackedContiguousExceptionFixture = (): {
-  file: File;
+  file: File & FileRangeReader;
   directoryRva: number;
   directorySize: number;
   entryCount: number;
@@ -148,7 +144,7 @@ const createTrackedContiguousExceptionFixture = (): {
 void test("parseExceptionDirectory follows discontiguous RUNTIME_FUNCTION file mappings", async () => {
   const fixture = createDiscontiguousExceptionFixture();
   const parsed = await parseExceptionDirectory(
-    new File([copyToArrayBuffer(fixture.bytes)], "exception-discontiguous-pdata.bin"),
+    new MockFile(fixture.bytes, "exception-discontiguous-pdata.bin"),
     [{ name: "EXCEPTION", rva: fixture.directoryRva, size: fixture.directorySize }],
     fixture.mapRvaToOff
   );

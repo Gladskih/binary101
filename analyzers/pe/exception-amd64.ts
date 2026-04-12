@@ -1,6 +1,6 @@
 "use strict";
 
-import { createFileRangeReader } from "../file-range-reader.js";
+import type { FileRangeReader } from "../file-range-reader.js";
 import { collectRuntimeFunctionSpans, readRuntimeFunctionSpan } from "./exception-runtime-spans.js";
 import type { PeDataDirectory, RvaToOffset } from "./types.js";
 import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./exception-types.js";
@@ -15,10 +15,6 @@ const RUNTIME_FUNCTION_ENTRY_SIZE = 12;
 const UNW_FLAG_EHANDLER = 0x01;
 const UNW_FLAG_UHANDLER = 0x02;
 const UNW_FLAG_CHAININFO = 0x04;
-// Implementation detail: keep UNWIND_INFO scans bounded to 256 KiB slices while still
-// amortizing file.slice reads across neighboring unwind records.
-const UNWIND_SCAN_CHUNK_SIZE_BYTES = 256 * 1024;
-
 const alignTo4 = (value: number): number => (value + 3) & ~3;
 
 const readTrailingUint32 = async (
@@ -35,7 +31,7 @@ const readTrailingUint32 = async (
 };
 
 export const parseAmd64ExceptionDirectory = async (
-  file: File,
+  reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset
 ): Promise<PeExceptionDirectory | null> => {
@@ -50,7 +46,7 @@ export const parseAmd64ExceptionDirectory = async (
       "amd64"
     );
   }
-  if (base < 0 || base >= file.size) {
+  if (base < 0 || base >= reader.size) {
     return createEmptyExceptionDirectory(
       ["Exception directory location is outside the file."],
       "amd64"
@@ -78,13 +74,12 @@ export const parseAmd64ExceptionDirectory = async (
   let previousBegin: number | null = null;
   let reportedUnsortedEntries = false;
 
-  const reader = createFileRangeReader(file, 0, file.size);
   const spans = collectRuntimeFunctionSpans(
     dir.rva,
     Math.floor(dir.size / RUNTIME_FUNCTION_ENTRY_SIZE),
     RUNTIME_FUNCTION_ENTRY_SIZE,
     rvaToOff,
-    file.size,
+    reader.size,
     "Exception directory is truncated; some RUNTIME_FUNCTION entries are missing.",
     issues
   );
@@ -110,19 +105,19 @@ export const parseAmd64ExceptionDirectory = async (
       let invalid = !begin || !end || begin >= end;
       if (begin) {
         const beginOff = rvaToOff(begin);
-        if (beginOff == null || beginOff < 0 || beginOff >= file.size) {
+        if (beginOff == null || beginOff < 0 || beginOff >= reader.size) {
           invalid = true;
         }
       }
       if (end) {
         const endOff = rvaToOff((end - 1) >>> 0);
-        if (endOff == null || endOff < 0 || endOff >= file.size) {
+        if (endOff == null || endOff < 0 || endOff >= reader.size) {
           invalid = true;
         }
       }
       if (unwindInfoRva) {
         const unwindOff = rvaToOff(unwindInfoRva);
-        if (unwindOff == null || unwindOff < 0 || unwindOff >= file.size) {
+        if (unwindOff == null || unwindOff < 0 || unwindOff >= reader.size) {
           invalid = true;
         }
       }
@@ -147,33 +142,15 @@ export const parseAmd64ExceptionDirectory = async (
     return createEmptyExceptionDirectory(issues, "amd64");
   }
 
-  const chunkCache = new Map<number, Uint8Array>();
-  const readChunk = async (chunkStartOff: number): Promise<Uint8Array> => {
-    const normalizedStart = Math.max(0, Math.min(chunkStartOff, file.size));
-    const cached = chunkCache.get(normalizedStart);
-    if (cached) {
-      return cached;
-    }
-    const chunkEnd = Math.min(file.size, normalizedStart + UNWIND_SCAN_CHUNK_SIZE_BYTES);
-    const bytes = new Uint8Array(await file.slice(normalizedStart, chunkEnd).arrayBuffer());
-    chunkCache.set(normalizedStart, bytes);
-    return bytes;
-  };
   const readBytes = async (offset: number, length: number): Promise<Uint8Array | null> => {
     if (length <= 0) {
       return new Uint8Array();
     }
-    if (offset < 0 || offset >= file.size || offset + length > file.size) {
+    if (offset < 0 || offset >= reader.size || offset + length > reader.size) {
       return null;
     }
-    const chunkStart = offset - (offset % UNWIND_SCAN_CHUNK_SIZE_BYTES);
-    const chunk = await readChunk(chunkStart);
-    const relativeOffset = offset - chunkStart;
-    if (relativeOffset >= 0 && relativeOffset + length <= chunk.length) {
-      return chunk.subarray(relativeOffset, relativeOffset + length);
-    }
-    const buffer = await file.slice(offset, offset + length).arrayBuffer();
-    return buffer.byteLength < length ? null : new Uint8Array(buffer);
+    const bytes = await reader.readBytes(offset, length);
+    return bytes.length < length ? null : bytes;
   };
   const readUint32 = async (offset: number): Promise<number | null> => {
     const bytes = await readBytes(offset, 4);
@@ -203,7 +180,7 @@ export const parseAmd64ExceptionDirectory = async (
       break;
     }
     const offset = rvaToOff(unwindInfoRva);
-    if (offset == null || offset < 0 || offset >= file.size) {
+    if (offset == null || offset < 0 || offset >= reader.size) {
       unreadableUnwindCount += 1;
       continue;
     }

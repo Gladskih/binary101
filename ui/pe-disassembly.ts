@@ -1,4 +1,5 @@
 import { formatHumanSize } from "../binary-utils.js";
+import { createFileRangeReader, type FileRangeReader } from "../analyzers/file-range-reader.js";
 import type { ParseForUiResult } from "../analyzers/index.js";
 import {
   isPeWindowsParseResult,
@@ -25,7 +26,7 @@ import {
 const IMAGE_FILE_MACHINE_I386 = 0x014c;
 
 type AnalyzePeInstructionSets = (
-  file: File,
+  reader: FileRangeReader,
   opts: AnalyzePeInstructionSetOptions
 ) => Promise<PeInstructionSetReport>;
 
@@ -150,6 +151,7 @@ export const createPeDisassemblyController = (
     });
 
     void (async () => {
+      const reader = createFileRangeReader(file, 0, file.size);
       const windowsPe = isPeWindowsParseResult(pe) ? pe : null;
       const windowsOpt = windowsPe?.opt ?? null;
       const entrypointRva = pe.opt?.AddressOfEntryPoint ?? 0;
@@ -180,7 +182,7 @@ export const createPeDisassemblyController = (
 
       const guardCFFunctionRvas = windowsPe?.loadcfg
         ? await readGuardCFFunctionTableRvas(
-            file,
+            reader,
             pe.rvaToOff,
             windowsPe.opt.ImageBase,
             windowsPe.loadcfg.GuardCFFunctionTable,
@@ -194,7 +196,7 @@ export const createPeDisassemblyController = (
         windowsOpt?.Magic === PE32_OPTIONAL_HEADER_MAGIC &&
         windowsPe?.loadcfg
           ? await readSafeSehHandlerTableRvas(
-              file,
+              reader,
               pe.rvaToOff,
               windowsPe.opt.ImageBase,
               windowsPe.loadcfg.SEHandlerTable,
@@ -220,7 +222,7 @@ export const createPeDisassemblyController = (
 
       const guardEhContinuationRvas = windowsPe?.loadcfg
         ? await readGuardEhContinuationTableRvas(
-            file,
+            reader,
             pe.rvaToOff,
             windowsPe.opt.ImageBase,
             windowsPe.loadcfg.GuardEHContinuationTable,
@@ -234,7 +236,7 @@ export const createPeDisassemblyController = (
 
       const guardLongJumpTargetRvas = windowsPe?.loadcfg
         ? await readGuardLongJumpTargetTableRvas(
-            file,
+            reader,
             pe.rvaToOff,
             windowsPe.opt.ImageBase,
             windowsPe.loadcfg.GuardLongJumpTargetTable,
@@ -246,7 +248,7 @@ export const createPeDisassemblyController = (
         extraEntrypoints.push({ source: "Guard longjmp target", rvas: guardLongJumpTargetRvas });
       }
 
-      const report = await analyze(file, {
+      const report = await analyze(reader, {
         coffMachine: pe.coff.Machine,
         is64Bit: windowsOpt?.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC,
         imageBase: windowsOpt?.ImageBase ?? 0n,

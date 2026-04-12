@@ -40,7 +40,7 @@ void test("pe disassembly controller includes unwind handler RVAs when available
     getCurrentFile: () => file,
     getCurrentParseResult: () => parseResult,
     renderResult: () => {},
-    analyze: async (_file: File, opts: AnalyzePeInstructionSetOptions): Promise<PeInstructionSetReport> => {
+    analyze: async (_reader, opts: AnalyzePeInstructionSetOptions): Promise<PeInstructionSetReport> => {
       captured = opts;
       return createFakeReport();
     }

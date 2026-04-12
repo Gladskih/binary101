@@ -1,4 +1,5 @@
 "use strict";
+import type { FileRangeReader } from "../file-range-reader.js";
 import type { PeSection } from "./types.js";
 import { KNOWN_CPUID_FEATURES, describeCpuidFeature, formatCpuidLabel } from "../x86/cpuid-features.js";
 import type { AnalyzePeInstructionSetOptions, PeInstructionSetProgress, PeInstructionSetReport } from "./disassembly-types.js";
@@ -53,7 +54,7 @@ const reportProgress = (opts: AnalyzePeInstructionSetOptions, progress: PeInstru
 };
 const yieldToEventLoop = async (): Promise<void> => new Promise<void>(resolve => setTimeout(resolve, 0));
 export async function analyzePeInstructionSets(
-  file: File,
+  reader: FileRangeReader,
   opts: AnalyzePeInstructionSetOptions
 ): Promise<PeInstructionSetReport> {
   const issues: string[] = [];
@@ -167,23 +168,23 @@ export async function analyzePeInstructionSets(
     const start = section.pointerToRawData >>> 0;
     const size = Math.min(section.sizeOfRawData >>> 0, getMappedSectionSpan(section));
     if (!size) return new Uint8Array();
-    const end = Math.min(file.size, start + size);
-    if (start >= file.size || end <= start) return new Uint8Array();
-    return new Uint8Array(await file.slice(start, end).arrayBuffer());
+    const end = Math.min(reader.size, start + size);
+    if (start >= reader.size || end <= start) return new Uint8Array();
+    return reader.readBytes(start, end - start);
   };
   const loadMappedEntrypointBytes = async (rva: number): Promise<{ rvaStart: number; data: Uint8Array } | null> => {
     if (findSectionContainingRva(opts.sections, rva)) return null;
     const start = opts.rvaToOff(rva);
-    if (start == null || start < 0 || start >= file.size) return null;
+    if (start == null || start < 0 || start >= reader.size) return null;
     // Microsoft PE format: header-resident entrypoints are only mapped through SizeOfHeaders.
     const headerRvaLimit =
       Number.isSafeInteger(opts.headerRvaLimit ?? Number.NaN) ? ((opts.headerRvaLimit ?? 0) >>> 0) : 0;
-    const headerMappedBytes = headerRvaLimit > rva ? headerRvaLimit - rva : file.size - start;
-    const end = Math.min(file.size, start + headerMappedBytes);
+    const headerMappedBytes = headerRvaLimit > rva ? headerRvaLimit - rva : reader.size - start;
+    const end = Math.min(reader.size, start + headerMappedBytes);
     if (end <= start) return null;
     return {
       rvaStart: rva >>> 0,
-      data: new Uint8Array(await file.slice(start, end).arrayBuffer())
+      data: await reader.readBytes(start, end - start)
     };
   };
   const sampledSections = (await Promise.all([
