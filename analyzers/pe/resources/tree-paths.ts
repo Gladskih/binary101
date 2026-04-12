@@ -13,6 +13,16 @@ type ResourceDetailGroupState = {
   entryByKey: Map<string, ResourceDetailEntry>;
 };
 
+type ResourceDirectoryTraversalFrame = {
+  ancestors: Set<number>;
+  entries?: ResourceDirectoryEntry[];
+  index: number;
+  localDirectoryEnd?: number;
+  nextAncestors?: Set<number>;
+  nodes: ResourcePathNode[];
+  rel: number;
+};
+
 const ensureDetailEntry = (
   groups: Map<string, ResourceDetailGroupState>,
   typeName: string,
@@ -45,6 +55,7 @@ const collectLeafPaths = async (
   rel: number,
   nodes: ResourcePathNode[],
   ancestors: Set<number>,
+  expandedDirectories: Set<number>,
   parseDir: (rel: number) => Promise<{ entries: ResourceDirectoryEntry[] } | null>,
   readPathNode: (entry: ResourceDirectoryEntry) => Promise<ResourcePathNode>,
   readLeafPath: (target: number, nodes: ResourcePathNode[]) => Promise<ResourceLeafPath | null>,
@@ -52,34 +63,64 @@ const collectLeafPaths = async (
   detailGroups: Map<string, ResourceDetailGroupState>,
   addIssue: (message: string) => void
 ): Promise<ResourceLeafPath[]> => {
-  if (ancestors.has(rel)) {
-    addIssue(`Resource directory graph contains a cycle at ${formatRelOffset(rel)}.`);
-    return [];
-  }
-  const directory = await parseDir(rel);
-  if (!directory) {
-    return [];
-  }
-  const nextAncestors = new Set(ancestors);
-  nextAncestors.add(rel);
   const leaves: ResourceLeafPath[] = [];
-  for (const entry of directory.entries) {
+  const frames: ResourceDirectoryTraversalFrame[] = [{ ancestors, index: 0, nodes, rel }];
+  while (frames.length) {
+    const frame = frames[frames.length - 1]!;
+    if (!frame.entries) {
+      if (frame.ancestors.has(frame.rel)) {
+        addIssue(`Resource directory graph contains a cycle at ${formatRelOffset(frame.rel)}.`);
+        frames.pop();
+        continue;
+      }
+      if (expandedDirectories.has(frame.rel)) {
+        addIssue(
+          `Resource directory graph re-enters ${formatRelOffset(frame.rel)} from multiple parent paths; `
+            + "skipping repeated traversal."
+        );
+        frames.pop();
+        continue;
+      }
+      expandedDirectories.add(frame.rel);
+      const directory = await parseDir(frame.rel);
+      if (!directory) {
+        frames.pop();
+        continue;
+      }
+      frame.entries = directory.entries;
+      frame.localDirectoryEnd =
+        frame.rel + 16 + directory.entries.length * 8;
+      frame.nextAncestors = new Set(frame.ancestors);
+      frame.nextAncestors.add(frame.rel);
+    }
+    const entry = frame.entries[frame.index];
+    if (!entry) {
+      frames.pop();
+      continue;
+    }
+    frame.index += 1;
     const node = await readPathNode(entry);
-    const nextNodes = [...nodes, node];
+    const nextNodes = [...frame.nodes, node];
     if (entry.subdir) {
-      leaves.push(
-        ...await collectLeafPaths(
-          typeName,
-          entry.target,
-          nextNodes,
-          nextAncestors,
-          parseDir,
-          readPathNode,
-          readLeafPath,
-          formatRelOffset,
-          detailGroups,
-          addIssue
-        )
+      if (entry.target < (frame.localDirectoryEnd ?? frame.rel + 16)) {
+        addIssue(
+          `Resource subdirectory at ${formatRelOffset(entry.target)} points into the current `
+            + `directory-entry area at ${formatRelOffset(frame.rel)}.`
+        );
+        continue;
+      }
+      frames.push({
+        ancestors: frame.nextAncestors!,
+        index: 0,
+        nodes: nextNodes,
+        rel: entry.target
+      });
+      continue;
+    }
+    if (entry.target < (frame.localDirectoryEnd ?? frame.rel + 16)) {
+      addIssue(
+        `Resource data entry at ${formatRelOffset(entry.target)} points into the current `
+          + `directory-entry area at ${formatRelOffset(frame.rel)}.`
       );
       continue;
     }
@@ -92,7 +133,7 @@ const collectLeafPaths = async (
     // Windows convention is type -> name/ID -> language, so a leaf directly below the type
     // directory means the second-level name/ID directory is missing.
     // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#the-rsrc-section
-    if (nodes.length === 1) {
+    if (frame.nodes.length === 1) {
       addIssue(
         `Resource entry under type ${typeName} points directly to data; second-level entries should point to language subdirectories.`
       );
@@ -130,6 +171,7 @@ export const buildResourcePathCollections = async (
   const top: ResourceTree["top"] = [];
   const paths: ResourceLeafPath[] = [];
   const detailGroups = new Map<string, ResourceDetailGroupState>();
+  const expandedDirectories = new Set<number>();
   for (const typeEntry of rootEntries) {
     const typeName = await readTypeName(typeEntry);
     const typeNode = await readPathNode(typeEntry);
@@ -149,6 +191,7 @@ export const buildResourcePathCollections = async (
       typeEntry.target,
       [typeNode],
       new Set<number>(),
+      expandedDirectories,
       parseDir,
       readPathNode,
       readLeafPath,

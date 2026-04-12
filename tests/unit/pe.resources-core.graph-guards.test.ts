@@ -82,6 +82,44 @@ void test("buildResourceTree warns when multiple parents reference the same subd
   assert.match((tree.issues || []).join(" "), /subdirectory.*multiple|shared subdirectory/i);
 });
 
+void test("buildResourceTree skips repeated traversal when multiple parents re-enter one subdirectory", async () => {
+  const fixture = createResourceDirectoryFixture(0x90);
+  fixture.writeDirectory(0, 0, 2);
+  fixture.writeDirectoryEntry(0x10, 3, resourceSubdirectory(0x20));
+  fixture.writeDirectoryEntry(0x18, 5, resourceSubdirectory(0x20));
+  fixture.writeDirectory(0x20, 0, 1);
+  fixture.writeDirectoryEntry(0x30, 1, resourceSubdirectory(0x40));
+  fixture.writeDirectory(0x40, 0, 1);
+  fixture.writeDirectoryEntry(0x50, 0x00000409, 0x00000060);
+  fixture.writeDataEntry(0x60, 0x00002000, 0x10, 0x000004b0);
+
+  const tree = await buildResourceTree(
+    new MockFile(fixture.bytes),
+    buildFixtureResourceDirectory(fixture.bytes.length),
+    mapFixtureRvaToStart
+  );
+  assert.ok(tree);
+
+  assert.deepStrictEqual(tree.top, [
+    { typeName: "ICON", kind: "id", leafCount: 1 },
+    { typeName: "DIALOG", kind: "id", leafCount: 0 }
+  ]);
+  assert.deepStrictEqual(tree.paths, [
+    {
+      nodes: [
+        { id: 3, name: null },
+        { id: 1, name: null },
+        { id: 0x00000409, name: null }
+      ],
+      dataRVA: 0x00002000,
+      size: 0x10,
+      codePage: 0x000004b0,
+      reserved: 0
+    }
+  ]);
+  assert.match((tree.issues || []).join(" "), /re-enters|multiple parent paths|multiple parents/i);
+});
+
 void test("buildResourceTree warns when a subdirectory entry points to its own table", async () => {
   const fixture = createResourceDirectoryFixture(0x40);
   fixture.writeDirectory(0, 0, 1);
