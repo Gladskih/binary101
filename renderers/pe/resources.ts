@@ -3,6 +3,7 @@
 import { humanSize } from "../../binary-utils.js";
 import type { PeResources } from "../../analyzers/pe/resources/index.js";
 import { safe } from "../../html-utils.js";
+import { renderPeDiagnostics } from "./diagnostics.js";
 import { renderPreviewCell } from "./resource-preview-cell.js";
 import { formatWindowsLanguageName } from "./windows-language-names.js";
 
@@ -25,6 +26,7 @@ const formatResourcePathNode = (node: { id: number | null; name: string | null }
 export function renderResources(resources: PeResources, out: string[]): void {
   const issues = (resources.issues || []).filter((issue): issue is string => Boolean(issue));
   const extraPaths = (resources.paths || []).filter(path => path.nodes.length !== 3);
+  const topRows = resources.top || [];
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Resources</h4>`);
   out.push(
     `<div class="smallNote">Windows resources usually follow a three-level tree: ` +
@@ -35,21 +37,26 @@ export function renderResources(resources: PeResources, out: string[]): void {
       `custom types.</div>`
   );
   if (issues.length) {
-    out.push(
-      `<div class="smallNote" style="color:var(--warning-text,#b45309)">WARNING: ` +
-        `${issues.map(safe).join(" · ")}</div>`
-    );
+    out.push(renderPeDiagnostics("Resource warnings", issues));
   }
-  if (resources.top?.length) {
+  if (topRows.length) {
+    if (topRows.length > 12) {
+      out.push(
+        `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>Top-level resource kinds</b> - ${topRows.length} type bucket${topRows.length === 1 ? "" : "s"}</summary>`
+      );
+    }
     out.push(
       `<table class="table" style="margin-top:.5rem"><thead><tr><th>Type</th><th>Key kind</th><th>Leaf entries</th></tr></thead><tbody>`
     );
-    for (const row of resources.top) {
+    for (const row of topRows) {
       const typeName = safe(row.typeName || "(unknown)");
       const kind = row.kind === "name" ? "string name" : "numeric ID";
       out.push(`<tr><td>${typeName}</td><td>${kind}</td><td>${row.leafCount ?? 0}</td></tr>`);
     }
     out.push(`</tbody></table>`);
+    if (topRows.length > 12) {
+      out.push(`</details>`);
+    }
   }
   if (resources.directories?.length) {
     out.push(

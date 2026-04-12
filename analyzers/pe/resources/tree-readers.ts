@@ -82,7 +82,7 @@ export const createResourcePathNodeReader = (
     id: entry.nameIsString ? null : (entry.nameOrId ?? null),
     name:
       entry.nameIsString && entry.nameOrId != null
-        ? (await readUcs2Label(entry.nameOrId)) || null
+        ? await readUcs2Label(entry.nameOrId)
         : null
   });
 
@@ -96,7 +96,7 @@ export const createResourceTypeNameReader = (
     if (!entry.nameIsString || entry.nameOrId == null) {
       return "(named)";
     }
-    return (await readUcs2Label(entry.nameOrId)) || "(named)";
+    return await readUcs2Label(entry.nameOrId);
   };
 
 export const createResourceLeafPathReader = (

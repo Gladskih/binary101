@@ -17,6 +17,55 @@ const UNW_FLAG_UHANDLER = 0x02;
 const UNW_FLAG_CHAININFO = 0x04;
 const alignTo4 = (value: number): number => (value + 3) & ~3;
 
+const createCachedRvaOffsetReader = (
+  rvaToOff: RvaToOffset
+): ((rva: number) => number | null) => {
+  const offsets = new Map<number, number | null>();
+  return (rva: number): number | null => {
+    if (offsets.has(rva)) {
+      return offsets.get(rva) ?? null;
+    }
+    const offset = rvaToOff(rva);
+    const mappedOffset = offset == null ? null : offset;
+    offsets.set(rva, mappedOffset);
+    return mappedOffset;
+  };
+};
+
+const createRvaFileOffsetComparer = (
+  getOffset: (rva: number) => number | null
+): ((left: number, right: number) => number) =>
+  (left: number, right: number): number => {
+    const leftOffset = getOffset(left);
+    const rightOffset = getOffset(right);
+    if (leftOffset == null) {
+      return rightOffset == null ? left - right : 1;
+    }
+    if (rightOffset == null) {
+      return -1;
+    }
+    return leftOffset - rightOffset || left - right;
+  };
+
+const insertPendingUnwindRva = (
+  pendingUnwindRvas: number[],
+  firstPendingIndex: number,
+  unwindInfoRva: number,
+  compareRvas: (left: number, right: number) => number
+): void => {
+  let low = firstPendingIndex;
+  let high = pendingUnwindRvas.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (compareRvas(pendingUnwindRvas[mid]!, unwindInfoRva) <= 0) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  pendingUnwindRvas.splice(low, 0, unwindInfoRva);
+};
+
 const readTrailingUint32 = async (
   readUint32: (offset: number) => Promise<number | null>,
   offset: number,
@@ -142,56 +191,48 @@ export const parseAmd64ExceptionDirectory = async (
     return createEmptyExceptionDirectory(issues, "amd64");
   }
 
-  const readBytes = async (offset: number, length: number): Promise<Uint8Array | null> => {
-    if (length <= 0) {
-      return new Uint8Array();
-    }
-    if (offset < 0 || offset >= reader.size || offset + length > reader.size) {
-      return null;
-    }
-    const bytes = await reader.readBytes(offset, length);
-    return bytes.length < length ? null : bytes;
-  };
+  const getUnwindOffset = createCachedRvaOffsetReader(rvaToOff);
   const readUint32 = async (offset: number): Promise<number | null> => {
-    const bytes = await readBytes(offset, 4);
-    if (!bytes || bytes.length < 4) {
+    if (offset < 0 || offset + Uint32Array.BYTES_PER_ELEMENT > reader.size) {
       return null;
     }
-    return (bytes[0]! | (bytes[1]! << 8) | (bytes[2]! << 16) | (bytes[3]! << 24)) >>> 0;
+    const view = await reader.read(offset, Uint32Array.BYTES_PER_ELEMENT);
+    return view.byteLength === Uint32Array.BYTES_PER_ELEMENT ? view.getUint32(0, true) >>> 0 : null;
   };
+  const compareUnwindRvas = createRvaFileOffsetComparer(getUnwindOffset);
 
-  const unwindQueue = [...unwindRvas.values()];
+  const unwindQueue = [...unwindRvas.values()].sort(compareUnwindRvas);
   const visitedUnwindRvas = new Set<number>(unwindRvas);
+  let unwindQueueIndex = 0;
   const enqueueUnwindRva = (rva: number): void => {
     if (!rva || visitedUnwindRvas.has(rva)) {
       return;
     }
     visitedUnwindRvas.add(rva);
-    unwindQueue.push(rva);
+    insertPendingUnwindRva(unwindQueue, unwindQueueIndex, rva, compareUnwindRvas);
   };
 
   let unreadableUnwindCount = 0;
   let unexpectedUnwindVersionCount = 0;
   let handlerUnwindInfoCount = 0;
   let chainedUnwindInfoCount = 0;
-  while (unwindQueue.length > 0) {
-    const unwindInfoRva = unwindQueue.pop();
-    if (unwindInfoRva == null) {
-      break;
-    }
-    const offset = rvaToOff(unwindInfoRva);
+  while (unwindQueueIndex < unwindQueue.length) {
+    const unwindInfoRva = unwindQueue[unwindQueueIndex]!;
+    unwindQueueIndex += 1;
+    const offset = getUnwindOffset(unwindInfoRva);
     if (offset == null || offset < 0 || offset >= reader.size) {
       unreadableUnwindCount += 1;
       continue;
     }
-    const headerBytes = await readBytes(offset, 4);
-    if (!headerBytes || headerBytes.length < 4) {
+    const headerView = await reader.read(offset, Uint32Array.BYTES_PER_ELEMENT);
+    if (headerView.byteLength < Uint32Array.BYTES_PER_ELEMENT) {
       unreadableUnwindCount += 1;
       continue;
     }
-    const countOfCodes = headerBytes[2] ?? 0;
-    const version = (headerBytes[0] ?? 0) & 0x07;
-    const flags = (headerBytes[0] ?? 0) >> 3;
+    const countOfCodes = headerView.getUint8(2);
+    const headerByte0 = headerView.getUint8(0);
+    const version = headerByte0 & 0x07;
+    const flags = headerByte0 >> 3;
     if (version !== 1) {
       unexpectedUnwindVersionCount += 1;
     }

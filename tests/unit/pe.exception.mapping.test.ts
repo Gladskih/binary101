@@ -2,7 +2,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { FileRangeReader } from "../../analyzers/file-range-reader.js";
+import {
+  createFileRangeReader,
+  type FileRangeReader
+} from "../../analyzers/file-range-reader.js";
 import { parseExceptionDirectory } from "../../analyzers/pe/exception.js";
 import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
 import { MockFile } from "../helpers/mock-file.js";
@@ -141,6 +144,47 @@ const createTrackedContiguousExceptionFixture = (): {
   };
 };
 
+const createTrackedDenseUnwindInfoFixture = (): {
+  file: File & FileRangeReader;
+  directoryRva: number;
+  directorySize: number;
+  entryCount: number;
+  trackedRequestSizes: number[];
+} => {
+  const entryCount = 256; // Enough unique UNWIND_INFO headers to expose one-slice-per-header regressions.
+  const directoryRva = 1; // Keep RVA non-zero because parseExceptionDirectory treats 0 as absent.
+  const directorySize = entryCount * RUNTIME_FUNCTION_ENTRY_SIZE_BYTES;
+  // Place function RVAs and dense UNWIND_INFO headers far enough apart that the initial
+  // .pdata bulk read cannot accidentally cache the unwind region too.
+  const firstFunctionRva = 0x00010000;
+  const firstUnwindInfoRva = 0x00020000;
+  const bytes = createByteBuffer(firstUnwindInfoRva + entryCount * UNWIND_INFO_HEADER_SIZE_BYTES);
+  const view = new DataView(bytes.buffer);
+  for (let index = 0; index < entryCount; index += 1) {
+    const begin = firstFunctionRva + index;
+    writeRuntimeFunction(
+      view,
+      directoryRva + index * RUNTIME_FUNCTION_ENTRY_SIZE_BYTES,
+      begin,
+      begin + 1,
+      firstUnwindInfoRva + index * UNWIND_INFO_HEADER_SIZE_BYTES
+    );
+    bytes[firstUnwindInfoRva + index * UNWIND_INFO_HEADER_SIZE_BYTES] = UNWIND_INFO_VERSION_1;
+  }
+  const tracked = createSliceTrackingFile(bytes, bytes.length, "exception-dense-unwind.bin");
+  const reader = createFileRangeReader(tracked.file, 0, bytes.length);
+  return {
+    file: Object.assign(tracked.file, {
+      read: reader.read,
+      readBytes: reader.readBytes
+    }) as File & FileRangeReader,
+    directoryRva,
+    directorySize,
+    entryCount,
+    trackedRequestSizes: tracked.requests
+  };
+};
+
 void test("parseExceptionDirectory follows discontiguous RUNTIME_FUNCTION file mappings", async () => {
   const fixture = createDiscontiguousExceptionFixture();
   const parsed = await parseExceptionDirectory(
@@ -168,4 +212,21 @@ void test("parseExceptionDirectory does not read each contiguous pdata entry as 
     0
   );
   assert.ok(fixture.trackedRequestSizes.some(size => size >= fixture.directorySize));
+});
+
+void test("parseExceptionDirectory keeps dense UNWIND_INFO scans cache-friendly", async () => {
+  const fixture = createTrackedDenseUnwindInfoFixture();
+  const parsed = await parseExceptionDirectory(
+    fixture.file,
+    [{ name: "EXCEPTION", rva: fixture.directoryRva, size: fixture.directorySize }],
+    identityRvaToOff
+  );
+  assert.ok(parsed);
+  assert.strictEqual(parsed.functionCount, fixture.entryCount);
+  assert.strictEqual(parsed.uniqueUnwindInfoCount, fixture.entryCount);
+  // The 1 KiB UNWIND_INFO run fits comfortably inside one cache window, so the parser
+  // should not come close to one tracked slice per header.
+  assert.ok(
+    fixture.trackedRequestSizes.length < Math.floor(fixture.entryCount / 8)
+  );
 });

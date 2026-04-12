@@ -8,6 +8,7 @@ import {
   type PeParseResult,
   type PeWindowsParseResult
 } from "../../analyzers/pe/index.js";
+import { renderPeDiagnostics } from "./diagnostics.js";
 
 type PeRelocSection = NonNullable<PeWindowsParseResult["reloc"]>;
 type PeExceptionSection = NonNullable<PeWindowsParseResult["exception"]>;
@@ -144,9 +145,7 @@ export function renderReloc(reloc: PeRelocSection, out: string[]): void {
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Base relocations</h4>`);
   out.push(`<div class="smallNote">Relocation blocks are used when the image cannot be loaded at its preferred base address.</div>`);
   if (reloc.warnings?.length) {
-    out.push(`<ul class="smallNote">`);
-    reloc.warnings.forEach(warning => out.push(`<li>${safe(warning)}</li>`));
-    out.push(`</ul>`);
+    out.push(renderPeDiagnostics("Base relocation warnings", reloc.warnings));
   }
   out.push(`<dl>`);
   out.push(`<dt>Total entries</dt><dd>${reloc.totalEntries ?? 0}</dd>`);
@@ -183,11 +182,7 @@ export function renderException(ex: PeExceptionSection, out: string[]): void {
   out.push(`<dt>Missing/invalid ranges</dt><dd>${ex.invalidEntryCount ?? 0}</dd>`);
   out.push(`</dl>`);
   if (ex.issues?.length) {
-    out.push(`<ul class="smallNote">`);
-    for (const issue of ex.issues) {
-      out.push(`<li>${safe(issue)}</li>`);
-    }
-    out.push(`</ul>`);
+    out.push(renderPeDiagnostics("Exception directory warnings", ex.issues));
   }
   out.push(`</section>`);
 }
@@ -284,11 +279,7 @@ export function renderSanity(pe: PeParseResult, out: string[]): void {
   if (!issues.length) {
     out.push(`<div class="smallNote">No obvious structural issues detected.</div>`);
   } else {
-    out.push(`<ul class="smallNote">`);
-    for (const text of issues) {
-      out.push(`<li>${safe(text)}</li>`);
-    }
-    out.push(`</ul>`);
+    out.push(renderPeDiagnostics("Sanity findings", issues));
   }
   out.push(`</section>`);
 }
