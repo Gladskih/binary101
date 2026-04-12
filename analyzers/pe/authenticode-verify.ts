@@ -180,6 +180,7 @@ export const computePeAuthenticodeDigestFromParsedPe = async (
 
   const ranges: FileByteRange[] = [];
   const afterSecurityEntry = securityIndex == null ? securityEntryOff : securityEntryOff + 8;
+  const sectionHashRegions = listSectionHashRegions(reader.size, core.sections);
   const headerHashEnd = computeHeaderHashEnd(
     reader.size,
     core.opt.SizeOfHeaders,
@@ -189,9 +190,14 @@ export const computePeAuthenticodeDigestFromParsedPe = async (
   pushRange(ranges, reader, 0, checksumOff);
   pushRange(ranges, reader, checksumOff + 4, securityEntryOff);
   pushRangeExcludingRange(ranges, reader, afterSecurityEntry, headerHashEnd, certOff, certEnd);
-  for (const sectionRegion of listSectionHashRegions(reader.size, core.sections)) {
+  for (const sectionRegion of sectionHashRegions) {
     pushRangeExcludingRange(ranges, reader, sectionRegion.start, sectionRegion.end, certOff, certEnd);
   }
+  const trailingStart = sectionHashRegions.reduce(
+    (maxEnd, region) => Math.max(maxEnd, region.end),
+    headerHashEnd
+  );
+  pushRangeExcludingRange(ranges, reader, trailingStart, reader.size, certOff, certEnd);
 
   const data = await readRanges(reader, ranges);
   const digest = digestFunction ?? ((a: AlgorithmIdentifier, d: ArrayBuffer) => crypto.subtle.digest(a, d));

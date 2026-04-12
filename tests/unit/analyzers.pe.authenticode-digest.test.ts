@@ -52,7 +52,7 @@ void test("computePeAuthenticodeDigestBestEffort still excludes the SECURITY dir
   assert.strictEqual(computed, expectedDigest);
 });
 
-void test("computePeAuthenticodeDigest excludes overlay bytes beyond the last section", async () => {
+void test("computePeAuthenticodeDigest includes trailing bytes beyond the last section while excluding certificate bytes", async () => {
   const { bytes, core, file, securityDir } = createStrictAuthenticodeFixture();
   const expectedBytes = collectFixtureBytes(bytes, listStrictAuthenticodeHashRanges());
   const expectedDigest = toHex(await crypto.subtle.digest("SHA-256", expectedBytes));
@@ -93,10 +93,12 @@ void test("computePeAuthenticodeDigestFromParsedPe tolerates empty header hash r
     sections: []
   };
   // SizeOfHeaders=1 collapses the strict header range to the first byte, so the post-directory header hash range
-  // becomes empty after clamping and must not produce a bogus slice.
+  // becomes empty after clamping and must not produce a bogus slice. The strict path still has to hash the
+  // remaining trailing file bytes after the certificate table.
   const expectedBytes = collectFixtureBytes(bytes, [
     { start: 0, end: 64 },
-    { start: 68, end: 132 }
+    { start: 68, end: 132 },
+    { start: 160, end: bytes.length }
   ]);
   const expectedDigest = toHex(await crypto.subtle.digest("SHA-256", expectedBytes));
 
@@ -219,7 +221,7 @@ void test("computePeAuthenticodeDigestFromParsedPe does not exclude a phantom SE
   // Microsoft PE format, Optional Header Data Directories:
   // consumers must not probe directory entry 4 unless NumberOfRvaAndSizes reaches SECURITY.
   // With no SECURITY entry present, the strict Authenticode path must exclude only CheckSum and
-  // then hash the remaining headers plus the section data.
+  // then hash the remaining headers, section data, and trailing file bytes.
   const expectedBytes = collectFixtureBytes(bytes, listStrictAuthenticodeHashRangesWithoutSecurityEntry());
   const expectedDigest = toHex(await crypto.subtle.digest("SHA-256", expectedBytes));
 
@@ -261,11 +263,13 @@ void test("computePeAuthenticodeDigestFromParsedPe orders sections by RVA before
       }
     ]
   };
-  // Authenticode orders sections by address range before hashing, even if raw file offsets are out of order.
+  // Authenticode orders sections by address range before hashing, even if raw file offsets are out of order,
+  // and still includes trailing file bytes after the last section when no certificate is declared.
   const expectedBytes = collectFixtureBytes(bytes, [
     ...listBestEffortAuthenticodeHashRangesWithoutSecurityEntry(reorderedCore.opt.SizeOfHeaders),
     { start: earlierRvaRawOffset, end: earlierRvaRawOffset + splitRawSize },
-    { start: laterRvaRawOffset, end: laterRvaRawOffset + splitRawSize }
+    { start: laterRvaRawOffset, end: laterRvaRawOffset + splitRawSize },
+    { start: originalSection.pointerToRawData + originalSection.sizeOfRawData, end: bytes.length }
   ]);
   const expectedDigest = toHex(await crypto.subtle.digest("SHA-256", expectedBytes));
 

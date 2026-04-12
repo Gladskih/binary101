@@ -22,6 +22,7 @@ const BEST_EFFORT_CERT_SIZE = 20;
 const STRICT_HEADERS_END = 160;
 const STRICT_SECTION_RAW_OFFSET = 160;
 const STRICT_SECTION_RAW_SIZE = 32;
+const STRICT_FILE_SIZE = 256;
 const STRICT_CERT_OFFSET = 192;
 const STRICT_CERT_SIZE = 16;
 const STRICT_OVERLAY_OFFSET = 224;
@@ -79,14 +80,15 @@ export const listStrictAuthenticodeHashRanges = (): ByteRange[] => [
   { start: 0, end: PE32_CHECKSUM_FIELD_OFFSET },
   { start: PE32_CHECKSUM_FIELD_OFFSET + PE32_CHECKSUM_FIELD_SIZE, end: SECURITY_ENTRY_OFFSET },
   { start: AFTER_SECURITY_ENTRY, end: STRICT_HEADERS_END },
-  { start: STRICT_SECTION_RAW_OFFSET, end: STRICT_CERT_OFFSET }
+  { start: STRICT_SECTION_RAW_OFFSET, end: STRICT_CERT_OFFSET },
+  { start: STRICT_CERT_OFFSET + STRICT_CERT_SIZE, end: STRICT_FILE_SIZE }
 ];
 
 export const listStrictAuthenticodeHashRangesWithoutSecurityEntry = (): ByteRange[] => [
   { start: 0, end: PE32_CHECKSUM_FIELD_OFFSET },
   // With no SECURITY directory entry present, the strict path hashes the full validated header span.
   { start: PE32_CHECKSUM_FIELD_OFFSET + PE32_CHECKSUM_FIELD_SIZE, end: STRICT_HEADERS_END },
-  { start: STRICT_SECTION_RAW_OFFSET, end: STRICT_CERT_OFFSET }
+  { start: STRICT_SECTION_RAW_OFFSET, end: STRICT_FILE_SIZE }
 ];
 
 export const createBestEffortAuthenticodeFixture = (): {
@@ -120,8 +122,9 @@ export const createStrictAuthenticodeFixture = (): {
 } => {
   // Microsoft PE format spec, section table:
   // SizeOfRawData is file-aligned and may exceed the section's in-memory VirtualSize.
-  // This fixture keeps them equal so the strict Authenticode path hashes headers plus one section only.
-  const bytes = createNumberedBytes(256);
+  // This fixture keeps them equal so the strict Authenticode path hashes headers, one section,
+  // and trailing content beyond the certificate table.
+  const bytes = createNumberedBytes(STRICT_FILE_SIZE);
   bytes.fill(0xa5, STRICT_OVERLAY_OFFSET);
   const securityDir = createSecurityDirectory(STRICT_CERT_OFFSET, STRICT_CERT_SIZE);
   return {
