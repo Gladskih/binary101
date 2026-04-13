@@ -3,8 +3,6 @@ import { humanSize, hex, isoOrDash } from "../../binary-utils.js";
 import { dd, rowOpts, rowFlags, safe } from "../../html-utils.js";
 import { MACHINE, SUBSYSTEMS, CHAR_FLAGS, DLL_FLAGS, SEC_FLAG_TEXTS, DD_TIPS } from "../../analyzers/pe/constants.js";
 import {
-  isPeRomParseResult,
-  isPeWindowsParseResult,
   type PeParseResult
 } from "../../analyzers/pe/index.js";
 import {
@@ -25,12 +23,19 @@ import { renderRichHeader } from "./rich-header.js";
 import { renderCoffTailSummary } from "./coff-tail-summary.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
+const renderPeFormatNote = (out: string[]): void => {
+  out.push(
+    `<section><div class="smallNote">Portable Executable (PE) / COFF is the executable and object-file format used by Windows toolchains. The structural file-format pieces below are separate from any derived analysis panels.</div></section>`
+  );
+};
+
 const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
   if (!pe.dirs?.length) return;
+  const presentCount = pe.dirs.filter(directory => directory.rva !== 0 || directory.size !== 0).length;
   out.push(
     renderPeSectionStart(
       "Data directories",
-      `${pe.dirs.length} entr${pe.dirs.length === 1 ? "y" : "ies"}`
+      `${presentCount} present, ${pe.dirs.length} entr${pe.dirs.length === 1 ? "y" : "ies"}`
     )
   );
   out.push(`<dl>`);
@@ -90,37 +95,7 @@ const renderInlineHeaderTitle = (title: string): string =>
   `<h4 style="margin:0 0 .5rem 0;font-size:.9rem">${safe(title)}</h4>`;
 
 export function renderHeaders(pe: PeParseResult, out: string[]): void {
-  const isDll = (pe.coff.Characteristics & 0x2000) !== 0;
-  const roleText = isDll ? "dynamic-link library (DLL)" : "executable image";
-  const imageTypeText = pe.opt == null
-    ? "PE image without a recognized optional header"
-    : pe.opt.Magic === ROM_OPTIONAL_HEADER_MAGIC
-    ? "firmware or option ROM image"
-    : pe.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC
-      ? `64-bit Windows ${roleText}`
-      : pe.opt.Magic === PE32_OPTIONAL_HEADER_MAGIC
-        ? `32-bit Windows ${roleText}`
-        : "PE image with an unrecognized optional-header magic";
-  const sectionCount = Array.isArray(pe.sections) ? pe.sections.length : pe.coff.NumberOfSections;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Big picture</h4>`);
-  if (pe.opt == null) {
-    out.push(
-      `<div class="smallNote">PE image: ${imageTypeText}. The file has a PE signature and COFF header, but the optional header is absent or uses an unrecognized magic value, so Windows-specific loader fields are not decoded.</div>`
-    );
-    out.push(`<div class="smallNote">Section headers below may still help map file layout and any raw entry-point-like address information from warnings.</div>`);
-  } else if (isPeRomParseResult(pe)) {
-    out.push(
-      `<div class="smallNote">PE image: ${imageTypeText}. This file uses IMAGE_ROM_OPTIONAL_HEADER, so it does not carry the normal Windows loader fields such as ImageBase, Subsystem, stack/heap sizes, or PE data directories. ${sectionCount} sections still describe where ROM code and data live in the file.</div>`
-    );
-    out.push(`<div class="smallNote">Entry point address ${hex(pe.opt.AddressOfEntryPoint, 8)}. Section headers below show how that address maps back into on-disk section data.</div>`);
-  } else if (isPeWindowsParseResult(pe)) {
-    out.push(
-      `<div class="smallNote">PE image: ${imageTypeText}. Headers describe layout and loader requirements; ${sectionCount} sections carry code, data, resources and relocation information.</div>`
-    );
-    const entryVa = pe.opt.ImageBase + BigInt(pe.opt.AddressOfEntryPoint >>> 0);
-    out.push(`<div class="smallNote">Entry point RVA ${hex(pe.opt.AddressOfEntryPoint, 8)} (VA ${formatPointerHex(entryVa, pe.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC ? 16 : 8)}). Imports, relocations, resources and security directories below show how this image integrates with the operating system.</div>`);
-  }
-  out.push(`</section>`);
+  renderPeFormatNote(out);
 
   out.push(`<section>`);
   out.push(

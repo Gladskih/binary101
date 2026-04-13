@@ -14,8 +14,7 @@ const toUpload = (file: MockFile) => ({
 
 const expectBaseDetails = async (page: Page, fileName: string, expectedKind: string): Promise<void> => {
   await expect(page.locator("#fileInfoCard")).toBeVisible();
-  await expect(page.locator("#fileOriginalName")).toHaveText(fileName);
-  await expect(page.locator("#fileKindDisplay")).toHaveText(expectedKind);
+  await expect(page.locator("#fileNameDetail")).toHaveText(fileName);
   await expect(page.locator("#fileBinaryTypeDetail")).toHaveText(expectedKind);
 };
 
@@ -79,7 +78,7 @@ test.describe("download actions", () => {
     await page.setInputFiles("#fileInput", toUpload(gzip));
 
     await expectBaseDetails(page, gzip.name, "gzip compressed data");
-    await expect(page.locator("#peDetailsTerm")).toHaveText("gzip details");
+    await expect(page.locator("#peDetailsValue")).toContainText("gzip compressed data");
 
     const button = page.locator("button.gzipDecompressButton");
     await expect(button).toHaveCount(1);
@@ -99,7 +98,7 @@ test.describe("download actions", () => {
     await page.setInputFiles("#fileInput", toUpload(iso));
 
     await expectBaseDetails(page, iso.name, "ISO-9660 CD/DVD image (ISO)");
-    await expect(page.locator("#peDetailsTerm")).toHaveText("ISO-9660 details");
+    await expect(page.locator("#peDetailsValue")).toContainText("ISO-9660 overview");
 
     const button = page.locator("button.isoExtractButton");
     await expect(button).toHaveCount(1);
@@ -120,7 +119,7 @@ test.describe("download actions", () => {
     await page.setInputFiles("#fileInput", toUpload(iso));
 
     await expectBaseDetails(page, iso.name, "ISO-9660 CD/DVD image (ISO)");
-    await expect(page.locator("#peDetailsTerm")).toHaveText("ISO-9660 details");
+    await expect(page.locator("#peDetailsValue")).toContainText("ISO-9660 overview");
 
     const expand = page.locator("button.isoDirToggleButton");
     await expect(expand).toHaveCount(1);
@@ -146,11 +145,18 @@ test.describe("download actions", () => {
     await expectBaseDetails(page, mockFile.name, "PE32+ executable for x86-64 (AMD64)");
 
     const detailsValue = page.locator("#peDetailsValue");
-    await expect(detailsValue).toContainText("Instruction sets");
+    const instructionSection = detailsValue.locator("details.analysisPanel").filter({
+      has: page.locator("summary", { hasText: /^Instruction-set analysis\b/ })
+    }).first();
+    await instructionSection.locator(":scope > summary").click();
+    await expect(instructionSection).toHaveJSProperty("open", true);
+    await expect(detailsValue).toContainText("Instruction-set analysis");
     await expect(detailsValue.locator("#peInstructionSetsAnalyzeButton")).toBeVisible();
 
     await detailsValue.locator("#peInstructionSetsAnalyzeButton").click();
+    await expect(instructionSection).toHaveJSProperty("open", true);
     await expect(detailsValue).toContainText("Disassembly sample");
+    await expect(instructionSection).toHaveJSProperty("open", true);
     await expect(detailsValue).not.toContainText("Failed to load iced-x86 disassembler");
     await expect(detailsValue).not.toContainText("Disassembly failed");
   });

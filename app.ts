@@ -13,17 +13,16 @@ import { createElfDisassemblyController } from "./ui/elf-disassembly.js";
 import { createPeChecksumClickHandler } from "./ui/pe-checksum-controls.js";
 import { copyManifestPreviewToClipboard } from "./ui/manifest-preview-copy.js";
 import { handleManifestTreeActionClick, syncManifestTreeControls } from "./ui/manifest-tree-controls.js";
+import { captureOpenDetails, restoreOpenDetails } from "./ui/details-open-state.js";
 const getElement = (id: string) => document.getElementById(id)!;
 const dropZoneElement = getElement("dropZone") as HTMLElement;
 const fileInputElement = getElement("fileInput") as HTMLInputElement;
 const statusMessageElement = getElement("statusMessage") as HTMLElement;
 const fileInfoCardElement = getElement("fileInfoCard") as HTMLElement;
-const fileNameTopElement = getElement("fileOriginalName") as HTMLElement;
-const fileSizeTopElement = getElement("fileSizeDisplay") as HTMLElement;
-const fileKindTopElement = getElement("fileKindDisplay") as HTMLElement;
 const fileNameDetailElement = getElement("fileNameDetail") as HTMLElement;
 const fileSizeDetailElement = getElement("fileSizeDetail") as HTMLElement;
 const fileTimestampDetailElement = getElement("fileTimestampDetail") as HTMLElement;
+const fileAnalysisDurationDetailElement = getElement("fileAnalysisDurationDetail") as HTMLElement;
 const fileSourceDetailElement = getElement("fileSourceDetail") as HTMLElement;
 const fileBinaryTypeDetailElement = getElement("fileBinaryTypeDetail") as HTMLElement;
 const fileMimeTypeDetailElement = getElement("fileMimeTypeDetail") as HTMLElement;
@@ -36,12 +35,10 @@ const sha512ButtonElement = getElement("sha512ComputeButton") as HTMLButtonEleme
 const sha256CopyButtonElement = getElement("sha256CopyButton") as HTMLButtonElement;
 const sha512CopyButtonElement = getElement("sha512CopyButton") as HTMLButtonElement;
 const sha256Controls = {
-  valueElement: sha256ValueElement, buttonElement: sha256ButtonElement,
-  copyButtonElement: sha256CopyButtonElement
+  valueElement: sha256ValueElement, buttonElement: sha256ButtonElement, copyButtonElement: sha256CopyButtonElement
 };
 const sha512Controls = {
-  valueElement: sha512ValueElement, buttonElement: sha512ButtonElement,
-  copyButtonElement: sha512CopyButtonElement
+  valueElement: sha512ValueElement, buttonElement: sha512ButtonElement, copyButtonElement: sha512CopyButtonElement
 };
 let currentFile: File | null = null;
 let currentPreviewUrl: string | null = null;
@@ -54,7 +51,10 @@ const setPreviewUrl = (url: string | null): void => {
 const setStatusMessage = (message: string | null | undefined): void => { statusMessageElement.textContent = message || ""; };
 const clearStatusMessage = (): void => { statusMessageElement.textContent = ""; };
 const clearPreviewUrl = (): void => { setPreviewUrl(null); };
+const formatAnalysisDuration = (durationMs: number): string =>
+  durationMs < 1000 ? `${Math.max(0, Math.round(durationMs))} ms` : `${(durationMs / 1000).toFixed(2)} s`;
 const renderResult = (result: ParseForUiResult): void => {
+  const openDetails = captureOpenDetails(peDetailsValueElement);
   renderParsedResult(result, {
     buildPreview: () =>
       buildPreviewHtml({ file: currentFile, typeLabel: currentTypeLabel, setPreviewUrl }),
@@ -62,6 +62,7 @@ const renderResult = (result: ParseForUiResult): void => {
     termElement: peDetailsTermElement,
     valueElement: peDetailsValueElement
   });
+  restoreOpenDetails(peDetailsValueElement, openDetails, viewer => syncManifestTreeControls(viewer as Element));
 };
 const peDisassembly = createPeDisassemblyController({
   getCurrentFile: () => currentFile,
@@ -163,9 +164,6 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
       typeof file.type === "string" && file.type.length > 0
         ? file.type
         : "Not provided by browser";
-    fileNameTopElement.textContent = file.name || "";
-    fileSizeTopElement.textContent = sizeText;
-    fileKindTopElement.textContent = typeLabel;
     fileNameDetailElement.textContent = file.name || "";
     fileSizeDetailElement.textContent = sizeText;
     fileTimestampDetailElement.textContent = timestampIso;
@@ -174,7 +172,11 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     fileMimeTypeDetailElement.textContent = mimeType;
     fileInfoCardElement.hidden = false;
     setStatusMessage("Parsing file details...");
+    const analysisStart = performance.now();
     const parsedResult = await parseForUi(file);
+    fileAnalysisDurationDetailElement.textContent = formatAnalysisDuration(
+      performance.now() - analysisStart
+    );
     currentParseResult = parsedResult;
     renderResult(parsedResult);
     resetHashDisplay(sha256Controls, sha512Controls);
@@ -185,6 +187,7 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     setStatusMessage(
       `Unable to read file: ${error instanceof Error && error.message ? error.message : String(error)}`
     );
+    fileAnalysisDurationDetailElement.textContent = "";
     peDetailsTermElement.hidden = true;
     peDetailsValueElement.hidden = true;
     peDetailsValueElement.innerHTML = "";

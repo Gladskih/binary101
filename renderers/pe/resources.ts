@@ -28,7 +28,12 @@ export function renderResources(resources: PeResources, out: string[]): void {
   const issues = (resources.issues || []).filter((issue): issue is string => Boolean(issue));
   const extraPaths = (resources.paths || []).filter(path => path.nodes.length !== 3);
   const topRows = resources.top || [];
-  out.push(renderPeSectionStart("Resources"));
+  out.push(
+    renderPeSectionStart(
+      "Resources",
+      `${topRows.length} kind${topRows.length === 1 ? "" : "s"}`
+    )
+  );
   out.push(
     `<div class="smallNote">Windows resources usually follow a three-level tree: ` +
       `type → name/ID → language. Canonical .rsrc layout is directory entries → ` +

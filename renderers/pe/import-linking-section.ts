@@ -24,7 +24,12 @@ export function renderImportLinking(pe: PeWindowsParseResult, out: string[]): vo
   const confirmedCount = countFindings(linkedModules, "confirmed") + countStandaloneFindings(standaloneFindings, "confirmed");
   const warningCount = countFindings(linkedModules, "warning") + countStandaloneFindings(standaloneFindings, "warning");
   const noteCount = countFindings(linkedModules, "info") + countStandaloneFindings(standaloneFindings, "info");
-  out.push(renderPeSectionStart("Import linkage"));
+  out.push(
+    renderPeSectionStart(
+      "Import linkage",
+      `${linkedModules.length} module${linkedModules.length === 1 ? "" : "s"}`
+    )
+  );
   out.push(`<div class="smallNote">This view cross-matches the normal import table, BOUND_IMPORT, DELAY_IMPORT, IMAGE_DIRECTORY_ENTRY_IAT, relevant section layout, and Load Config GuardFlags. It shows both documented relationships that were confirmed and non-canonical layouts that still decode cleanly.</div>`);
   out.push(`<dl>`);
   out.push(dd("Modules", String(linkedModules.length), "Unique module names after case-insensitive cross-matching."));

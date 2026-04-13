@@ -28,8 +28,7 @@ const toUpload = (file: MockFile) => ({
 
 const expectBaseDetails = async (page: Page, fileName: string, expectedKind: string): Promise<void> => {
   await expect(page.locator("#fileInfoCard")).toBeVisible();
-  await expect(page.locator("#fileOriginalName")).toHaveText(fileName);
-  await expect(page.locator("#fileKindDisplay")).toHaveText(expectedKind);
+  await expect(page.locator("#fileNameDetail")).toHaveText(fileName);
   await expect(page.locator("#fileBinaryTypeDetail")).toHaveText(expectedKind);
 };
 
@@ -48,7 +47,7 @@ test.describe("file type detection", () => {
     });
 
     await expectBaseDetails(page, "sample.txt", "Text file");
-    await expect(page.locator("#peDetailsTerm")).toBeHidden();
+    await expect(page.locator("#peDetailsValue")).toBeHidden();
 
     await page.getByRole("button", { name: "Compute SHA-256" }).click();
     await expect(page.locator("#sha256Value")).toHaveText(/^[0-9a-f]{64}$/);
@@ -157,38 +156,30 @@ test.describe("file type detection", () => {
       name: "PE32 (x86)",
       file: createPeFile,
       expectedKind: "PE32 executable for x86 (I386)",
-      term: "PE/COFF details",
-      detailText: "PE signature",
-      extraDetailText: "Instruction sets"
+      detailText: "PE/COFF headers",
+      extraDetailText: "Instruction-set analysis"
     },
     {
       name: "PE32+ (x86-64)",
       file: createPePlusFile,
       expectedKind: "PE32+ executable for x86-64 (AMD64)",
-      term: "PE/COFF details",
-      detailText: "PE signature",
-      extraDetailText: "Instruction sets"
+      detailText: "PE/COFF headers",
+      extraDetailText: "Instruction-set analysis"
     }
   ];
 
-  for (const { name, file, expectedKind, term, detailText, extraDetailText } of happyCases) {
+  for (const { name, file, expectedKind, detailText, extraDetailText } of happyCases) {
     void test(`recognises ${name} files`, async ({ page }) => {
       const mockFile = file();
       await page.setInputFiles("#fileInput", toUpload(mockFile));
       await expectBaseDetails(page, mockFile.name, expectedKind);
 
-      const detailsTerm = page.locator("#peDetailsTerm");
       const detailsValue = page.locator("#peDetailsValue");
-      if (term) {
-        await expect(detailsTerm).toHaveText(term);
-        await expect(detailsValue).toBeVisible();
-        await expect(detailsValue).toContainText(detailText);
-        if (extraDetailText) {
-          await expect(detailsValue).toContainText(extraDetailText);
-          await expect(detailsValue).not.toContainText("Failed to load iced-x86 disassembler");
-        }
-      } else {
-        await expect(detailsTerm).toBeHidden();
+      await expect(detailsValue).toBeVisible();
+      await expect(detailsValue).toContainText(detailText);
+      if (extraDetailText) {
+        await expect(detailsValue).toContainText(extraDetailText);
+        await expect(detailsValue).not.toContainText("Failed to load iced-x86 disassembler");
       }
     });
   }
@@ -197,7 +188,6 @@ test.describe("file type detection", () => {
     const mockFile = createLnkFile();
     await page.setInputFiles("#fileInput", toUpload(mockFile));
     await expectBaseDetails(page, mockFile.name, "Windows shortcut (.lnk)");
-    await expect(page.locator("#peDetailsTerm")).toHaveText("Windows shortcut details");
     await expect(page.locator("#peDetailsValue")).toContainText("System.Link.TargetParsingPath");
     await expect(page.locator("#peDetailsValue")).toContainText("C:\\Program Files\\Example\\app.exe");
     await expect(page.locator("#peDetailsValue")).toContainText("System.VolumeId");
@@ -208,7 +198,6 @@ test.describe("file type detection", () => {
     await page.setInputFiles("#fileInput", toUpload(file));
 
     await expectBaseDetails(page, file.name, "Mach-O 64-bit");
-    await expect(page.locator("#peDetailsTerm")).toHaveText("Mach-O details");
     await expect(page.locator("#peDetailsValue")).toContainText("Mach-O header");
     await expect(page.locator("#peDetailsValue")).toContainText("Code signing");
   });
@@ -218,7 +207,6 @@ test.describe("file type detection", () => {
     await page.setInputFiles("#fileInput", toUpload(file));
 
     await expectBaseDetails(page, file.name, "MPEG Version 1, Layer III, 128 kbps, 44100 Hz, Stereo");
-    await expect(page.locator("#peDetailsTerm")).toHaveText("MP3 details");
     await expect(page.locator("#peDetailsValue")).toContainText("MPEG audio stream");
     await expect(page.locator("#peDetailsValue")).toContainText("Summary");
     await expect(page.locator(".audioPreview audio")).toBeVisible();
@@ -233,7 +221,7 @@ test.describe("file type detection", () => {
       videoFile.name,
       "isom MP4 (video: avc1.42001e, 320x180; audio: mp4a.40.2, 48000 Hz, 2 ch; 2.000 s)"
     );
-    await expect(page.locator("#peDetailsTerm")).toHaveText("MP4 details");
+    await expect(page.locator("#peDetailsValue")).toContainText("MP4 / ISO-BMFF container");
     await expect(page.locator(".videoPreview video")).toHaveCount(0);
   });
 
@@ -246,7 +234,7 @@ test.describe("file type detection", () => {
     });
 
     await expectBaseDetails(page, "unknown.bin", "Unknown binary type");
-    await expect(page.locator("#peDetailsTerm")).toBeHidden();
+    await expect(page.locator("#peDetailsValue")).toBeHidden();
   });
 
 });

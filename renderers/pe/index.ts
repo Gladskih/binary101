@@ -41,9 +41,11 @@ const renderIfPresent = <T>(
 export function renderPe(pe: PeParseResult | null | undefined): string {
   if (!pe) return "";
   const out: string[] = [];
-  renderHeaders(pe, out);
   if (isPeWindowsParseResult(pe)) {
     renderInstructionSets(pe.disassembly, out);
+  }
+  renderHeaders(pe, out);
+  if (isPeWindowsParseResult(pe)) {
     renderLoadConfig(pe, out);
     renderDebug(pe, out);
     renderImportLinking(pe, out);

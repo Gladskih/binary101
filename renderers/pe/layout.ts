@@ -143,7 +143,12 @@ const renderDelayImportAttributes = (attributes: number): string => {
 };
 
 export function renderReloc(reloc: PeRelocSection, out: string[]): void {
-  out.push(renderPeSectionStart("Base relocations"));
+  out.push(
+    renderPeSectionStart(
+      "Base relocations",
+      `${reloc.totalEntries ?? 0} entr${(reloc.totalEntries ?? 0) === 1 ? "y" : "ies"}`
+    )
+  );
   out.push(`<div class="smallNote">Relocation blocks are used when the image cannot be loaded at its preferred base address.</div>`);
   if (reloc.warnings?.length) {
     out.push(renderPeDiagnostics("Base relocation warnings", reloc.warnings));
@@ -174,7 +179,12 @@ export function renderException(ex: PeExceptionSection, out: string[]): void {
       ? "Handlers present (ARM64 X bit)"
       : "Handlers present (EHANDLER/UHANDLER)";
   const chainedLabel = ex.format === "arm64" ? "Chained entries" : "Chained (CHAININFO)";
-  out.push(renderPeSectionStart("Exception directory (.pdata)"));
+  out.push(
+    renderPeSectionStart(
+      "Exception directory (.pdata)",
+      `${ex.functionCount ?? 0} function${(ex.functionCount ?? 0) === 1 ? "" : "s"}`
+    )
+  );
   out.push(`<dl>`);
   out.push(`<dt>Functions (RUNTIME_FUNCTION entries)</dt><dd>${ex.functionCount ?? 0}</dd>`);
   out.push(`<dt>${unwindLabel}</dt><dd>${ex.uniqueUnwindInfoCount ?? 0}</dd>`);

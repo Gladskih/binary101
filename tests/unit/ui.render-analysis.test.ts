@@ -59,7 +59,7 @@ void test("renderAnalysisIntoUi renders ELF output and updates visibility flags"
     valueElement
   });
 
-  assert.equal(termElement.hidden, false);
+  assert.equal(termElement.hidden, true);
   assert.equal(termElement.textContent, "ELF details");
   assert.equal(valueElement.hidden, false);
   assert.ok(valueElement.innerHTML.includes("Instruction sets"));
@@ -119,7 +119,7 @@ void test("renderAnalysisIntoUi renders BMP output", () => {
     valueElement
   });
 
-  assert.equal(termElement.hidden, false);
+  assert.equal(termElement.hidden, true);
   assert.equal(termElement.textContent, "BMP details");
   assert.equal(valueElement.hidden, false);
   assert.ok(valueElement.innerHTML.includes("BMP structure"));
@@ -177,7 +177,7 @@ void test("renderAnalysisIntoUi renders TGA output", () => {
     valueElement
   });
 
-  assert.equal(termElement.hidden, false);
+  assert.equal(termElement.hidden, true);
   assert.equal(termElement.textContent, "TGA details");
   assert.equal(valueElement.hidden, false);
   assert.ok(valueElement.innerHTML.includes("TGA structure"));
@@ -199,7 +199,7 @@ void test("renderAnalysisIntoUi renders ISO-9660 output", async () => {
     valueElement
   });
 
-  assert.equal(termElement.hidden, false);
+  assert.equal(termElement.hidden, true);
   assert.equal(termElement.textContent, "ISO-9660 details");
   assert.equal(valueElement.hidden, false);
   assert.ok(valueElement.innerHTML.includes("ISO-9660 overview"));
@@ -220,7 +220,7 @@ void test("renderAnalysisIntoUi renders MKV output and video preview", async () 
     valueElement
   });
 
-  assert.equal(termElement.hidden, false);
+  assert.equal(termElement.hidden, true);
   assert.equal(termElement.textContent, "Matroska (MKV) details");
   assert.equal(valueElement.hidden, false);
   assert.ok(valueElement.innerHTML.includes(previewHtml));
@@ -241,7 +241,7 @@ void test("renderAnalysisIntoUi renders Mach-O output", async () => {
     valueElement
   });
 
-  assert.equal(termElement.hidden, false);
+  assert.equal(termElement.hidden, true);
   assert.equal(termElement.textContent, "Mach-O details");
   assert.equal(valueElement.hidden, false);
   assert.ok(valueElement.innerHTML.includes("Mach-O header"));
@@ -262,7 +262,7 @@ void test("renderAnalysisIntoUi renders PCAP-NG output", async () => {
     valueElement
   });
 
-  assert.equal(termElement.hidden, false);
+  assert.equal(termElement.hidden, true);
   assert.equal(termElement.textContent, "PCAP-NG details");
   assert.equal(valueElement.hidden, false);
   assert.ok(valueElement.innerHTML.includes("Sections"));

@@ -61,7 +61,7 @@ export function renderLoadConfig(pe: PeWindowsParseResult, out: string[]): void 
     );
   };
 
-  out.push(renderPeSectionStart("Load Config"));
+  out.push(renderPeSectionStart("Load Config", `v${lc.Major}.${lc.Minor}`));
   if (lc.warnings?.length) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(lc.warnings.join("; "))}</div>`);
   }

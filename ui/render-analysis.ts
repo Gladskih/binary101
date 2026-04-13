@@ -54,7 +54,7 @@ const renderAnalysisIntoUi = (result: ParseForUiResult, ctx: RenderContext): voi
 
   const show = (term: string, valueHtml: string, guardPreview?: PreviewRender | null): void => {
     ctx.termElement.textContent = term;
-    ctx.termElement.hidden = false;
+    ctx.termElement.hidden = true;
     ctx.valueElement.hidden = false;
     ctx.valueElement.innerHTML = valueHtml;
     if (guardPreview) ctx.attachGuards(guardPreview);

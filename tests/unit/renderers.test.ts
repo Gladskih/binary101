@@ -200,7 +200,8 @@ void test("renderers produce readable HTML output", async () => {
 
   const pe = await parseOnly(createPeFile(), "pe");
   const peHtml = renderPe(pe);
-  assert.match(peHtml, /PE image/);
+  assert.match(peHtml, /Portable Executable \(PE\) \/ COFF/);
+  assert.match(peHtml, /Instruction-set analysis/);
 
   const mz = await parseOnly(createDosMzExe(), "mz");
   const mzHtml = renderMz(mz);

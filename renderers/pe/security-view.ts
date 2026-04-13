@@ -266,7 +266,12 @@ const renderCertificateCard = (certificate: ParsedWinCertificate, index: number)
 };
 
 export function renderSecurity(security: PeSecuritySection, out: string[]): void {
-  out.push(renderPeSectionStart("Security (WIN_CERTIFICATE)"));
+  out.push(
+    renderPeSectionStart(
+      "Security (WIN_CERTIFICATE)",
+      `${security.count ?? 0} record${(security.count ?? 0) === 1 ? "" : "s"}`
+    )
+  );
   out.push(`<dl>`);
   out.push(
     dd(

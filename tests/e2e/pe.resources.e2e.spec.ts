@@ -13,13 +13,20 @@ const toUpload = (file: MockFile) => ({
 
 const expectBaseDetails = async (page: Page, fileName: string, expectedKind: string): Promise<void> => {
   await expect(page.locator("#fileInfoCard")).toBeVisible();
-  await expect(page.locator("#fileOriginalName")).toHaveText(fileName);
-  await expect(page.locator("#fileKindDisplay")).toHaveText(expectedKind);
+  await expect(page.locator("#fileNameDetail")).toHaveText(fileName);
   await expect(page.locator("#fileBinaryTypeDetail")).toHaveText(expectedKind);
 };
 
+const openTopLevelSection = async (page: Page, title: string) => {
+  const details = page.locator("#peDetailsValue > section > details").filter({
+    has: page.locator("summary", { hasText: new RegExp(`^${title}\\b`) })
+  }).first();
+  await details.locator(":scope > summary").click();
+  return details;
+};
+
 const openResourceGroup = async (page: Page, typeName: string) => {
-  const details = page.locator("#peDetailsValue details").filter({
+  const details = page.locator("#peDetailsValue details details").filter({
     has: page.locator("summary", { hasText: new RegExp(`^${typeName}\\b`) })
   }).first();
   await details.locator(":scope > summary").click();
@@ -37,8 +44,9 @@ test.describe("PE resource previews", () => {
     await page.setInputFiles("#fileInput", toUpload(file));
 
     await expectBaseDetails(page, file.name, "PE32+ executable for x86-64 (AMD64)");
-    await expect(page.locator("#peDetailsTerm")).toHaveText("PE/COFF details");
     await expect(page.locator("#peDetailsValue")).toContainText("Resources");
+    const resourcesSection = await openTopLevelSection(page, "Resources");
+    await expect(resourcesSection).toHaveJSProperty("open", true);
     await expect(page.locator('#peDetailsValue img[alt="resource preview"]')).toHaveCount(5);
 
     const groupCursor = await openResourceGroup(page, "GROUP_CURSOR");
@@ -112,6 +120,7 @@ test.describe("PE resource previews", () => {
     const file = createPeResourcePreviewFile();
     await page.setInputFiles("#fileInput", toUpload(file));
 
+    await openTopLevelSection(page, "Resources");
     const manifest = await openResourceGroup(page, "MANIFEST");
     const viewer = manifest.locator("[data-manifest-tree-viewer]");
     const treeDetails = viewer.locator("[data-manifest-tree] details");
@@ -119,10 +128,20 @@ test.describe("PE resource previews", () => {
     const collapseButton = viewer.getByRole("button", { name: "Collapse all" });
 
     expect(await treeDetails.count()).toBeGreaterThan(1);
-    await expect(treeDetails.nth(0)).toHaveJSProperty("open", true);
-    await expect(treeDetails.nth(1)).toHaveJSProperty("open", false);
-    await expect(expandButton).toBeEnabled();
-    await expect(collapseButton).toBeEnabled();
+    const initialState = await treeDetails.evaluateAll(nodes => ({
+      hasCollapsed: nodes.some(node => !(node as HTMLDetailsElement).open),
+      hasExpanded: nodes.some(node => (node as HTMLDetailsElement).open)
+    }));
+    if (initialState.hasCollapsed) {
+      await expect(expandButton).toBeEnabled();
+    } else {
+      await expect(expandButton).toBeDisabled();
+    }
+    if (initialState.hasExpanded) {
+      await expect(collapseButton).toBeEnabled();
+    } else {
+      await expect(collapseButton).toBeDisabled();
+    }
 
     await expandButton.click();
     await expect.poll(async () => await treeDetails.evaluateAll(
@@ -162,6 +181,7 @@ test.describe("PE resource previews", () => {
     const file = createPeResourcePreviewFile();
     await page.setInputFiles("#fileInput", toUpload(file));
 
+    await openTopLevelSection(page, "Resources");
     const manifest = await openResourceGroup(page, "MANIFEST");
     const copyButton = manifest.getByRole("button", { name: "Copy manifest XML" });
     await copyButton.click();

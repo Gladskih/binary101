@@ -204,7 +204,12 @@ const renderClrMetadata = (clrHeader: PeClrHeader, out: string[]): void => {
 };
 
 export function renderClr(clrHeader: PeClrHeader, out: string[]): void {
-  out.push(renderPeSectionStart("CLR (.NET) header"));
+  out.push(
+    renderPeSectionStart(
+      "CLR (.NET) header",
+      `runtime v${clrHeader.MajorRuntimeVersion}.${clrHeader.MinorRuntimeVersion}`
+    )
+  );
   out.push(`<dl>`);
   out.push(dd("Size", String(clrHeader.cb), "Size of IMAGE_COR20_HEADER in bytes."));
   out.push(

@@ -38,7 +38,7 @@ void test("renderTls and renderIat display local directory warnings", () => {
   renderIat(iat, out);
   const html = out.join("");
 
-  assert.match(html, /<summary[^>]*><b>TLS directory<\/b><\/summary>/);
+  assert.match(html, /<summary[^>]*><b>TLS directory<\/b> - unparsed<\/summary>/);
   assert.match(html, /<summary[^>]*><b>Import Address Table \(IAT\)<\/b><\/summary>/);
   assert.ok(html.includes("TLS directory RVA could not be mapped to a file offset."));
   assert.ok(html.includes("IAT directory RVA could not be mapped to a file offset."));
@@ -66,9 +66,9 @@ void test("renderArchitectureDirectory and renderGlobalPtrDirectory explain thei
   renderGlobalPtrDirectory(pe, out);
   const html = out.join("");
 
-  assert.match(html, /<summary[^>]*><b>Architecture directory<\/b><\/summary>/);
+  assert.match(html, /<summary[^>]*><b>Architecture directory<\/b> - reserved slot<\/summary>/);
   assert.ok(html.includes("reserved by the PE specification"));
-  assert.match(html, /<summary[^>]*><b>Global pointer \(GP\)<\/b><\/summary>/);
+  assert.match(html, /<summary[^>]*><b>Global pointer \(GP\)<\/b> - 1 GP-relative section<\/summary>/);
   assert.ok(html.includes("Value RVA"));
   assert.ok(html.includes(GP_REL_TEST_SECTION_NAME));
   assert.ok(html.includes("IMAGE_SCN_GPREL"));

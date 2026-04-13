@@ -258,7 +258,12 @@ const renderDebugIntro = (out: string[]): void => {
 
 export function renderDebug(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.debug) return;
-  out.push(renderPeSectionStart("Debug directory"));
+  out.push(
+    renderPeSectionStart(
+      "Debug directory",
+      `${pe.debug.entries?.length ?? 0} entr${(pe.debug.entries?.length ?? 0) === 1 ? "y" : "ies"}`
+    )
+  );
   renderDebugIntro(out);
   renderEntryTable(pe, pe.debug, out);
   renderDecodedEntryDetails(pe, pe.debug, out);

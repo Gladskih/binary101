@@ -21,8 +21,10 @@ void test("renderInstructionSets renders a chip table", () => {
   renderInstructionSets(disassembly, out);
   const html = out.join("");
 
-  assert.ok(html.includes("Instruction sets"));
-  assert.match(html, /<summary[^>]*><b>Instruction sets<\/b><\/summary>/);
+  assert.ok(html.includes("Instruction-set analysis"));
+  assert.ok(html.includes(`class="analysisPanel"`));
+  assert.ok(html.includes(`class="analysisPanelSummary"`));
+  assert.ok(html.includes("not a PE file section"));
   assert.ok(html.includes("not a full disassembly"));
   assert.ok(html.includes("CpuidFeature.AVX"));
   assert.ok(html.includes(">AVX<"));

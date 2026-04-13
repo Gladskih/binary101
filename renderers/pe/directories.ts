@@ -43,7 +43,12 @@ export function renderImports(imports: PeImportsSection, out: string[]): void {
 }
 
 export function renderExports(ex: PeExportSection, out: string[]): void {
-  out.push(renderPeSectionStart("Export directory"));
+  out.push(
+    renderPeSectionStart(
+      "Export directory",
+      `${ex.entries?.length ?? 0} entr${(ex.entries?.length ?? 0) === 1 ? "y" : "ies"}`
+    )
+  );
   out.push(`<dl>`);
   out.push(dd("Name", safe(ex.dllName || ""), "Exported DLL name recorded by the linker."));
   out.push(dd("OrdinalBase", String(ex.Base), "Base value added to function indices to form ordinals."));
@@ -67,7 +72,14 @@ export function renderExports(ex: PeExportSection, out: string[]): void {
 }
 
 export function renderTls(t: PeTlsSection, out: string[]): void {
-  out.push(renderPeSectionStart("TLS directory"));
+  out.push(
+    renderPeSectionStart(
+      "TLS directory",
+      t.parsed === false
+        ? "unparsed"
+        : `${t.CallbackCount ?? 0} callback${(t.CallbackCount ?? 0) === 1 ? "" : "s"}`
+    )
+  );
   if (t.warnings?.length) {
     out.push(`<ul class="smallNote">`);
     t.warnings.forEach(warning => out.push(`<li>${safe(warning)}</li>`));
@@ -108,7 +120,7 @@ export function renderIat(t: PeIatSection, out: string[]): void {
 
 export function renderArchitectureDirectory(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.architecture) return;
-  out.push(renderPeSectionStart("Architecture directory"));
+  out.push(renderPeSectionStart("Architecture directory", "reserved slot"));
   if (pe.architecture.warnings?.length) {
     out.push(`<ul class="smallNote">`);
     pe.architecture.warnings.forEach(warning => out.push(`<li>${safe(warning)}</li>`));
@@ -129,7 +141,12 @@ export function renderGlobalPtrDirectory(pe: PeWindowsParseResult, out: string[]
   const gpRelSections = (pe.sections ?? []).filter(
     section => (section.characteristics & IMAGE_SCN_GPREL) !== 0
   );
-  out.push(renderPeSectionStart("Global pointer (GP)"));
+  out.push(
+    renderPeSectionStart(
+      "Global pointer (GP)",
+      `${gpRelSections.length} GP-relative section${gpRelSections.length === 1 ? "" : "s"}`
+    )
+  );
   if (pe.globalPtr.warnings?.length) {
     out.push(`<ul class="smallNote">`);
     pe.globalPtr.warnings.forEach(warning => out.push(`<li>${safe(warning)}</li>`));

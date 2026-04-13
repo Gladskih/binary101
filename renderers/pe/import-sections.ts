@@ -31,7 +31,12 @@ export { renderImportLinking } from "./import-linking-section.js";
 
 export function renderImports(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.imports.entries.length && !pe.imports.warning) return;
-  out.push(renderPeSectionStart("Import table"));
+  out.push(
+    renderPeSectionStart(
+      "Import table",
+      `${pe.imports.entries.length} module${pe.imports.entries.length === 1 ? "" : "s"}`
+    )
+  );
   out.push(`<div class="smallNote">Each IMAGE_IMPORT_DESCRIPTOR names one DLL and points to two tables: OriginalFirstThunk normally gives the lookup names, while FirstThunk gives the runtime IAT slots that the loader patches.</div>`);
   if (pe.imports.warning) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(pe.imports.warning)}</div>`);
@@ -78,7 +83,12 @@ export function renderImports(pe: PeWindowsParseResult, out: string[]): void {
 
 export function renderBoundImports(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.boundImports?.entries.length) return;
-  out.push(renderPeSectionStart("Bound imports"));
+  out.push(
+    renderPeSectionStart(
+      "Bound imports",
+      `${pe.boundImports.entries.length} module${pe.boundImports.entries.length === 1 ? "" : "s"}`
+    )
+  );
   out.push(`<div class="smallNote">BOUND_IMPORT is optional prebinding metadata. It does not replace the normal import table; it supplements it with imported-module timestamps and optional forwarder references.</div>`);
   if (pe.boundImports.warning) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(pe.boundImports.warning)}</div>`);
@@ -99,7 +109,12 @@ export function renderBoundImports(pe: PeWindowsParseResult, out: string[]): voi
 
 export function renderDelayImports(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.delayImports?.entries.length) return;
-  out.push(renderPeSectionStart("Delay-load imports"));
+  out.push(
+    renderPeSectionStart(
+      "Delay-load imports",
+      `${pe.delayImports.entries.length} module${pe.delayImports.entries.length === 1 ? "" : "s"}`
+    )
+  );
   out.push(`<div class="smallNote">Delay-load descriptors describe imports that are resolved on first use instead of during process startup. Modern Windows images sometimes protect delay-load IATs with Load Config GuardFlags and a dedicated .didat section.</div>`);
   if (pe.delayImports.warning) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(pe.delayImports.warning)}</div>`);
@@ -163,7 +178,12 @@ export function renderIat(pe: PeWindowsParseResult, out: string[]): void {
     "declared-iat-covers-inferred-eager",
     "declared-iat-misses-inferred-eager"
   ]);
-  out.push(renderPeSectionStart("Import Address Tables (IAT)"));
+  out.push(
+    renderPeSectionStart(
+      "Import Address Tables (IAT)",
+      `${pe.iat ? "declared" : "undeclared"}, ${inferredEagerIat?.ranges.length ?? 0} inferred range${(inferredEagerIat?.ranges.length ?? 0) === 1 ? "" : "s"}`
+    )
+  );
   out.push(`<div class="smallNote">The PE optional header can declare one main IMAGE_DIRECTORY_ENTRY_IAT range, while each eager import descriptor also carries its own FirstThunk RVA. This view keeps those two ideas separate: the declared main IAT range from the optional header, and best-effort eager IAT ranges inferred from FirstThunk values.</div>`);
   if (pe.iat?.warnings?.length) {
     out.push(`<ul class="smallNote">`);

@@ -7,7 +7,6 @@ import {
   describeCpuidFeature,
   formatCpuidLabel
 } from "../../analyzers/x86/cpuid-features.js";
-import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 const ANALYZE_BUTTON_ID = "peInstructionSetsAnalyzeButton";
 const CANCEL_BUTTON_ID = "peInstructionSetsCancelButton";
@@ -16,19 +15,28 @@ const PROGRESS_BAR_ID = "peInstructionSetsProgress";
 const CHIP_ID_PREFIX = "peInstructionSetChip_";
 const COUNT_ID_PREFIX = "peInstructionSetCount_";
 
+const renderInstructionPanelStart = (): string =>
+  `<details class="analysisPanel"><summary class="analysisPanelSummary">` +
+  `<span class="analysisPanelTitle">Instruction-set analysis</span></summary>` +
+  `<div class="analysisPanelBody"><div class="analysisPanelActions">`;
+
+const renderInstructionPanelEnd = (): string => "</div></details>";
+
 export function renderInstructionSets(disasm: PeInstructionSetReport | undefined, out: string[]): void {
-  out.push(renderPeSectionStart("Instruction sets"));
+  out.push(renderInstructionPanelStart());
   const analyzeLabel = disasm ? "Re-analyze instruction sets" : "Analyze instruction sets";
-  out.push(`<div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">`);
   out.push(
     `<button type="button" class="actionButton" id="${ANALYZE_BUTTON_ID}">${escapeHtml(analyzeLabel)}</button>`
   );
   out.push(`<button type="button" class="actionButton" id="${CANCEL_BUTTON_ID}" hidden>Cancel</button>`);
   out.push(`</div>`);
+  out.push(
+    `<div class="smallNote">Static code sampling of reachable instructions. This is derived behavior, not a PE file section or header field.</div>`
+  );
 
   if (!disasm) {
     out.push(
-      `<div class="smallNote dim" id="${PROGRESS_TEXT_ID}">Not analyzed yet. Click the button above to start (may use CPU).</div>` +
+      `<div class="smallNote dim" id="${PROGRESS_TEXT_ID}">Not analyzed yet. Start analysis to highlight CPU feature usage as instructions are decoded.</div>` +
         `<progress id="${PROGRESS_BAR_ID}" style="width:100%" hidden></progress>`
     );
     out.push(
@@ -45,7 +53,7 @@ export function renderInstructionSets(disasm: PeInstructionSetReport | undefined
       );
     }
     out.push(`</tbody></table>`);
-    out.push(renderPeSectionEnd());
+    out.push(renderInstructionPanelEnd());
     return;
   }
 
@@ -110,5 +118,5 @@ export function renderInstructionSets(disasm: PeInstructionSetReport | undefined
     out.push(`</tbody></table></details>`);
   }
 
-  out.push(renderPeSectionEnd());
+  out.push(renderInstructionPanelEnd());
 }
