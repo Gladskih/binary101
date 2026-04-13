@@ -274,3 +274,18 @@ void test("decodePkcs7 warns when non-zero bytes trail the DER ContentInfo paylo
   const decoded = decodePkcs7(concat(wrapper, new TextEncoder().encode("ABCD")));
   assert.ok(decoded.warnings?.some(warning => /trailing|extra|padding/i.test(warning)));
 });
+
+void test("decodeWinCertificate ignores quadword zero padding after Authenticode CMS", () => {
+  const contentInfo = seq(oid("1.2.840.113549.1.7.2"), ctx0(buildSignedData()));
+  const declaredLength = contentInfo.length + 8 + 3;
+  const certBytes = new Uint8Array(declaredLength);
+  const header = new DataView(certBytes.buffer, certBytes.byteOffset, certBytes.byteLength);
+  header.setUint32(0, declaredLength, true);
+  header.setUint16(4, 0x0200, true);
+  header.setUint16(6, 0x0002, true);
+  certBytes.set(contentInfo, 8);
+
+  const decoded = decodeWinCertificate(certBytes, declaredLength, 0);
+
+  assert.ok(!decoded.warnings?.some(warning => /trailing bytes/i.test(warning)));
+});

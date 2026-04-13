@@ -1,6 +1,7 @@
 "use strict";
 
 import { decodePkcs7 } from "./pkcs7.js";
+import { readDerElement, TAG_SEQUENCE } from "./der.js";
 
 const CERT_TYPE_NAMES: Record<number, string> = {
   0x0001: "X.509 (individual)",
@@ -89,6 +90,19 @@ export interface ParsedWinCertificate {
 
 export { decodePkcs7 };
 
+export const normalizeAuthenticodePayload = (payload: Uint8Array): Uint8Array => {
+  const top = readDerElement(payload, 0);
+  if (!top || top.tag !== TAG_SEQUENCE || top.end >= payload.length) {
+    return payload;
+  }
+  for (let index = top.end; index < payload.length; index += 1) {
+    if (payload[index] !== 0) {
+      return payload;
+    }
+  }
+  return payload.subarray(0, top.end);
+};
+
 export const decodeWinCertificate = (
   data: Uint8Array,
   declaredLength: number,
@@ -109,7 +123,7 @@ export const decodeWinCertificate = (
   }
   let authenticode: AuthenticodeInfo | undefined;
   if (certificateType === 0x0002 && payload.length) {
-    authenticode = decodePkcs7(payload);
+    authenticode = decodePkcs7(normalizeAuthenticodePayload(payload));
     if (authenticode.warnings?.length) warnings.push(...authenticode.warnings);
   }
   const entry: ParsedWinCertificate = {

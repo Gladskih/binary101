@@ -94,14 +94,14 @@ void test("parseSecurityDirectory attaches verifier output to Authenticode entri
   const secOff = 0x40;
   const bytes = new Uint8Array(0x80).fill(0);
   const dv = new DataView(bytes.buffer);
-  writeWinCertificateHeader(dv, secOff, 12, WIN_CERT_TYPE_PKCS_SIGNED_DATA);
-  bytes[secOff + WIN_CERTIFICATE_HEADER_SIZE] = 0x30;
+  writeWinCertificateHeader(dv, secOff, 16, WIN_CERT_TYPE_PKCS_SIGNED_DATA);
+  bytes.set([0x30, 0x03, 0x06, 0x01, 0x00], secOff + WIN_CERTIFICATE_HEADER_SIZE);
 
   const parsed = await parseSecurityDirectory(
     new MockFile(bytes, "sec-verifier.bin"),
     [{ name: "SECURITY", rva: secOff, size: 16 }],
     async (payload, certificate) => {
-      assert.strictEqual(payload.length, 4);
+      assert.deepStrictEqual(payload, Uint8Array.of(0x30, 0x03, 0x06, 0x01, 0x00));
       assert.ok(certificate.authenticode);
       return {
         signerVerifications: [{ index: 0, signatureVerified: true }],
@@ -113,6 +113,23 @@ void test("parseSecurityDirectory attaches verifier output to Authenticode entri
   const cert = expectDefined(expectDefined(parsed).certs[0]);
   assert.strictEqual(cert.authenticode?.verification?.signerVerifications?.[0]?.signatureVerified, true);
   assert.ok(cert.authenticode?.verification?.warnings?.includes("hook warning"));
+});
+
+void test("parseSecurityDirectory trims zero padding before Authenticode verification", async () => {
+  const secOff = 0x40;
+  const bytes = new Uint8Array(0x80).fill(0);
+  const dv = new DataView(bytes.buffer);
+  writeWinCertificateHeader(dv, secOff, 16, WIN_CERT_TYPE_PKCS_SIGNED_DATA);
+  bytes.set([0x30, 0x03, 0x06, 0x01, 0x00], secOff + WIN_CERTIFICATE_HEADER_SIZE);
+
+  await parseSecurityDirectory(
+    new MockFile(bytes, "sec-verifier-padding.bin"),
+    [{ name: "SECURITY", rva: secOff, size: 16 }],
+    async payload => {
+      assert.deepStrictEqual(payload, Uint8Array.of(0x30, 0x03, 0x06, 0x01, 0x00));
+      return {};
+    }
+  );
 });
 
 void test("parseSecurityDirectory keeps verifier exceptions as warnings", async () => {

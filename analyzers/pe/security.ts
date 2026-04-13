@@ -3,6 +3,7 @@
 import type { FileRangeReader } from "../file-range-reader.js";
 import {
   decodeWinCertificate,
+  normalizeAuthenticodePayload,
   type AuthenticodeVerificationInfo,
   type ParsedWinCertificate
 } from "./authenticode.js";
@@ -106,7 +107,9 @@ export async function parseSecurityDirectory(
     if (verifyAuthenticode && certificate.authenticode) {
       try {
         const verification = await verifyAuthenticode(
-          blob.subarray(Math.min(WIN_CERTIFICATE_HEADER_SIZE, blob.length)),
+          normalizeAuthenticodePayload(
+            blob.subarray(Math.min(WIN_CERTIFICATE_HEADER_SIZE, blob.length))
+          ),
           certificate
         );
         if (hasVerificationData(verification)) {
