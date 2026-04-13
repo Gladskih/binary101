@@ -26,6 +26,7 @@ void test("renderInstructionSets renders a chip table", () => {
   assert.ok(html.includes(`class="analysisPanelSummary"`));
   assert.ok(html.includes("not a PE file section"));
   assert.ok(html.includes("not a full disassembly"));
+  assert.ok(html.includes("6 B (6 bytes) / 10 B (10 bytes)"));
   assert.ok(html.includes("CpuidFeature.AVX"));
   assert.ok(html.includes(">AVX<"));
   assert.ok(html.includes("CpuidFeature.SSE2"));

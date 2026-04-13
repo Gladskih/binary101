@@ -1,5 +1,6 @@
 "use strict";
 
+import { formatHumanSize } from "../../binary-utils.js";
 import { escapeHtml } from "../../html-utils.js";
 import type { ElfParseResult } from "../../analyzers/elf/types.js";
 import {
@@ -51,7 +52,7 @@ export function renderInstructionSets(elf: ElfParseResult, out: string[]): void 
 
   const mode = disasm.bitness === 64 ? "64-bit" : "32-bit";
   out.push(
-    `<div class="smallNote">Disassembly sample (${mode}): ${disasm.instructionCount} instruction(s) decoded from ${disasm.bytesDecoded} / ${disasm.bytesSampled} byte(s). Invalid decodes: ${disasm.invalidInstructionCount}.</div>`
+    `<div class="smallNote">Disassembly sample (${mode}): ${disasm.instructionCount} instruction(s) decoded from ${formatHumanSize(disasm.bytesDecoded)} / ${formatHumanSize(disasm.bytesSampled)}. Invalid decodes: ${disasm.invalidInstructionCount}.</div>`
   );
   out.push(
     `<div class="smallNote dim">Note: this is a static, control-flow guided sample of reachable code paths; it is not a full disassembly and may miss code behind indirect jumps/calls, self-modifying code, unpacking, or runtime generation.</div>`
