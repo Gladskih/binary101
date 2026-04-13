@@ -44,11 +44,12 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
   const reader = new ChunkedFileReader(file, CHUNK_SIZE, CHUNK_OVERLAP);
   const ensureBytes = async (offset: number, requiredBytes: number): Promise<boolean> =>
     reader.ensureBytes(offset, requiredBytes);
+  const hasBytes = (offset: number, requiredBytes: number): boolean =>
+    reader.hasBytes(offset, requiredBytes);
   const findNextStartCode = async (offset: number): Promise<number | null> => {
     let cursor = offset;
     while (cursor + 4 <= file.size) {
-      const ok = await ensureBytes(cursor, 4);
-      if (!ok) return null;
+      if (!hasBytes(cursor, 4) && !(await ensureBytes(cursor, 4))) return null;
       const local = cursor - reader.chunkBase;
       const bytes = reader.chunkBytes;
       for (let i = local; i + 4 <= bytes.length; i += 1) {
@@ -68,8 +69,7 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
   let offset = 0;
   let lastScrSeconds: number | null = null;
   while (offset + 4 <= file.size) {
-    const ok = await ensureBytes(offset, 4);
-    if (!ok) break;
+    if (!hasBytes(offset, 4) && !(await ensureBytes(offset, 4))) break;
     let local = offset - reader.chunkBase;
     const b0 = reader.chunkBytes[local] ?? 0;
     const b1 = reader.chunkBytes[local + 1] ?? 0;
@@ -86,8 +86,7 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
     const code = reader.chunkBytes[local + 3] ?? 0;
     const startCode = ((b0 << 24) | (b1 << 16) | (b2 << 8) | code) >>> 0;
     if (startCode === PACK_START_CODE) {
-      const hdrOk = await ensureBytes(offset, 14);
-      if (!hdrOk) {
+      if (!hasBytes(offset, 14) && !(await ensureBytes(offset, 14))) {
         pushIssue(`Truncated pack header at ${formatOffsetHex(offset)}.`);
         break;
       }
@@ -137,15 +136,13 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
       if ((b4 & 0xf0) === 0x20) {
         state.packHeaders.mpeg1Count += 1;
         const hdrSize = 12;
-        const ok12 = await ensureBytes(offset, hdrSize);
-        if (!ok12) {
+        if (!hasBytes(offset, hdrSize) && !(await ensureBytes(offset, hdrSize))) {
           pushIssue(`Truncated MPEG-1 pack header at ${formatOffsetHex(offset)}.`);
           break;
         }
         offset += hdrSize;
         while (offset < file.size) {
-          const okStuffing = await ensureBytes(offset, 1);
-          if (!okStuffing) break;
+          if (!hasBytes(offset, 1) && !(await ensureBytes(offset, 1))) break;
           const value = reader.chunkBytes[offset - reader.chunkBase] ?? 0;
           if (value !== 0xff) break;
           state.packHeaders.stuffingBytesTotal += 1;
@@ -161,8 +158,7 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
       continue;
     }
     if (startCode === SYSTEM_HEADER_START_CODE) {
-      const okLen = await ensureBytes(offset, 6);
-      if (!okLen) {
+      if (!hasBytes(offset, 6) && !(await ensureBytes(offset, 6))) {
         pushIssue(`Truncated system header length at ${formatOffsetHex(offset)}.`);
         break;
       }
@@ -175,8 +171,7 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
         pushIssue(`Truncated system header at ${formatOffsetHex(offset)} (declared length ${headerLength}).`);
         break;
       }
-      const okPayload = await ensureBytes(offset, totalSize);
-      if (!okPayload) {
+      if (!hasBytes(offset, totalSize) && !(await ensureBytes(offset, totalSize))) {
         pushIssue(`Unable to read full system header at ${formatOffsetHex(offset)}.`);
         break;
       }
@@ -196,8 +191,7 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
     }
 
     if (startCode === PROGRAM_STREAM_MAP_START_CODE) {
-      const okLen = await ensureBytes(offset, 6);
-      if (!okLen) {
+      if (!hasBytes(offset, 6) && !(await ensureBytes(offset, 6))) {
         pushIssue(`Truncated Program Stream Map length at ${formatOffsetHex(offset)}.`);
         break;
       }
@@ -210,8 +204,7 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
         pushIssue(`Truncated Program Stream Map at ${formatOffsetHex(offset)} (declared length ${mapLength}).`);
         break;
       }
-      const okPayload = await ensureBytes(offset, totalSize);
-      if (!okPayload) {
+      if (!hasBytes(offset, totalSize) && !(await ensureBytes(offset, totalSize))) {
         pushIssue(`Unable to read full Program Stream Map at ${formatOffsetHex(offset)}.`);
         break;
       }
@@ -235,8 +228,7 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
       break;
     }
 
-    const okPes = await ensureBytes(offset, 6);
-    if (!okPes) {
+    if (!hasBytes(offset, 6) && !(await ensureBytes(offset, 6))) {
       pushIssue(`Truncated packet header at ${formatOffsetHex(offset)}.`);
       break;
     }
@@ -264,8 +256,12 @@ export async function parseMpegPs(file: File): Promise<MpegPsParseResult | null>
     stream.declaredBytesTotal += totalSize;
     state.pesTotalDeclaredBytes += totalSize;
 
-    const headerOk = await ensureBytes(offset, Math.min(totalSize, 64));
-    if (headerOk && packetLength >= 3) {
+    if (packetLength >= 3) {
+      const headerBytes = Math.min(totalSize, 64);
+      if (!hasBytes(offset, headerBytes) && !(await ensureBytes(offset, headerBytes))) {
+        offset += totalSize;
+        continue;
+      }
       local = offset - reader.chunkBase;
       const flags0 = reader.chunkBytes[local + 6] ?? 0;
       const flags1 = reader.chunkBytes[local + 7] ?? 0;
