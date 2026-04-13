@@ -3,6 +3,7 @@
 import { humanSize, hex } from "../../binary-utils.js";
 import { dd, rowFlags, safe } from "../../html-utils.js";
 import type { PeClrHeader } from "../../analyzers/pe/clr/index.js";
+import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 const COMIMAGE_FLAGS_NATIVE_ENTRYPOINT = 0x00000010;
 
@@ -203,11 +204,8 @@ const renderClrMetadata = (clrHeader: PeClrHeader, out: string[]): void => {
 };
 
 export function renderClr(clrHeader: PeClrHeader, out: string[]): void {
-  out.push(
-    `<section>` +
-      `<h4 style="margin:0 0 .5rem 0;font-size:.9rem">CLR (.NET) header</h4>` +
-      `<dl>`
-  );
+  out.push(renderPeSectionStart("CLR (.NET) header"));
+  out.push(`<dl>`);
   out.push(dd("Size", String(clrHeader.cb), "Size of IMAGE_COR20_HEADER in bytes."));
   out.push(
     dd(
@@ -256,5 +254,5 @@ export function renderClr(clrHeader: PeClrHeader, out: string[]): void {
     out.push(`</ul>`);
   }
   renderClrMetadata(clrHeader, out);
-  out.push(`</section>`);
+  out.push(renderPeSectionEnd());
 }

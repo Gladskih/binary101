@@ -8,6 +8,7 @@ import type {
 } from "../../analyzers/pe/index.js";
 import type { PeDebugDirectoryEntry } from "../../analyzers/pe/debug-directory.js";
 import { getDebugTypeInfo } from "./debug-type-info.js";
+import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 type DebugStorageInfo = { label: string; description: string };
 type FileRange = { start: number; end: number };
@@ -257,10 +258,10 @@ const renderDebugIntro = (out: string[]): void => {
 
 export function renderDebug(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.debug) return;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Debug directory</h4>`);
+  out.push(renderPeSectionStart("Debug directory"));
   renderDebugIntro(out);
   renderEntryTable(pe, pe.debug, out);
   renderDecodedEntryDetails(pe, pe.debug, out);
   if (pe.debug.warning) out.push(`<div class="smallNote">${safe(pe.debug.warning)}</div>`);
-  out.push(`</section>`);
+  out.push(renderPeSectionEnd());
 }

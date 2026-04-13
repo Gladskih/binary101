@@ -7,6 +7,7 @@ import type {
 } from "../../analyzers/pe/index.js";
 import type { PeImportParseResult } from "../../analyzers/pe/imports.js";
 import { peSectionNameValue } from "../../analyzers/pe/section-name.js";
+import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 type PeImportsSection = PeImportParseResult;
 type PeExportSection = NonNullable<PeWindowsParseResult["exports"]>;
@@ -19,7 +20,8 @@ const IMAGE_SCN_GPREL = 0x00008000;
 
 export function renderImports(imports: PeImportsSection, out: string[]): void {
   if (!imports.entries.length && !imports.warning) return;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import table</h4><div class="smallNote">Imports list functions this file expects other modules to provide. Hint index speeds up runtime name lookup, and ordinal-only imports often point to more special or low-level routines.</div>`);
+  out.push(renderPeSectionStart("Import table"));
+  out.push(`<div class="smallNote">Imports list functions this file expects other modules to provide. Hint index speeds up runtime name lookup, and ordinal-only imports often point to more special or low-level routines.</div>`);
   if (imports.warning) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(imports.warning)}</div>`);
   }
@@ -37,11 +39,12 @@ export function renderImports(imports: PeImportsSection, out: string[]): void {
     }
     out.push(`</details>`);
   }
-  out.push(`</section>`);
+  out.push(renderPeSectionEnd());
 }
 
 export function renderExports(ex: PeExportSection, out: string[]): void {
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Export directory</h4><dl>`);
+  out.push(renderPeSectionStart("Export directory"));
+  out.push(`<dl>`);
   out.push(dd("Name", safe(ex.dllName || ""), "Exported DLL name recorded by the linker."));
   out.push(dd("OrdinalBase", String(ex.Base), "Base value added to function indices to form ordinals."));
   out.push(dd("Functions", String(ex.NumberOfFunctions), "Total entries in Export Address Table (including unnamed)."));
@@ -60,18 +63,18 @@ export function renderExports(ex: PeExportSection, out: string[]): void {
     });
     out.push(`</tbody></table></details>`);
   }
-  out.push(`</section>`);
+  out.push(renderPeSectionEnd());
 }
 
 export function renderTls(t: PeTlsSection, out: string[]): void {
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">TLS directory</h4>`);
+  out.push(renderPeSectionStart("TLS directory"));
   if (t.warnings?.length) {
     out.push(`<ul class="smallNote">`);
     t.warnings.forEach(warning => out.push(`<li>${safe(warning)}</li>`));
     out.push(`</ul>`);
   }
   if (t.parsed === false) {
-    out.push(`</section>`);
+    out.push(renderPeSectionEnd());
     return;
   }
   out.push(`<dl>`);
@@ -82,14 +85,15 @@ export function renderTls(t: PeTlsSection, out: string[]): void {
   out.push(dd("CallbackCount", String(t.CallbackCount ?? 0), "Number of TLS callbacks determined by scanning callback pointer array until NULL."));
   out.push(dd("SizeOfZeroFill", String(t.SizeOfZeroFill ?? 0), "Bytes of zero-fill padding (TLS)."));
   out.push(dd("Characteristics", hex(t.Characteristics || 0, 8), "Reserved (should be 0)."));
-  out.push(`</dl></section>`);
+  out.push(`</dl>`);
+  out.push(renderPeSectionEnd());
 }
 
 export { renderClr } from "./clr.js";
 export { renderSecurity } from "./security-view.js";
 
 export function renderIat(t: PeIatSection, out: string[]): void {
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import Address Table (IAT)</h4>`);
+  out.push(renderPeSectionStart("Import Address Table (IAT)"));
   if (t.warnings?.length) {
     out.push(`<ul class="smallNote">`);
     t.warnings.forEach(warning => out.push(`<li>${safe(warning)}</li>`));
@@ -98,12 +102,13 @@ export function renderIat(t: PeIatSection, out: string[]): void {
   out.push(`<dl>`);
   out.push(dd("RVA", hex(t.rva, 8), "RVA of the runtime IAT used by the loader to place resolved addresses."));
   out.push(dd("Size", humanSize(t.size), "Total size of the IAT in bytes."));
-  out.push(`</dl></section>`);
+  out.push(`</dl>`);
+  out.push(renderPeSectionEnd());
 }
 
 export function renderArchitectureDirectory(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.architecture) return;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Architecture directory</h4>`);
+  out.push(renderPeSectionStart("Architecture directory"));
   if (pe.architecture.warnings?.length) {
     out.push(`<ul class="smallNote">`);
     pe.architecture.warnings.forEach(warning => out.push(`<li>${safe(warning)}</li>`));
@@ -116,7 +121,7 @@ export function renderArchitectureDirectory(pe: PeWindowsParseResult, out: strin
   out.push(
     `<div class="smallNote">This slot is reserved in the PE data-directory table. Non-zero values are mainly useful as anomaly indicators or signs of a non-standard producer.</div>`
   );
-  out.push(`</section>`);
+  out.push(renderPeSectionEnd());
 }
 
 export function renderGlobalPtrDirectory(pe: PeWindowsParseResult, out: string[]): void {
@@ -124,7 +129,7 @@ export function renderGlobalPtrDirectory(pe: PeWindowsParseResult, out: string[]
   const gpRelSections = (pe.sections ?? []).filter(
     section => (section.characteristics & IMAGE_SCN_GPREL) !== 0
   );
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Global pointer (GP)</h4>`);
+  out.push(renderPeSectionStart("Global pointer (GP)"));
   if (pe.globalPtr.warnings?.length) {
     out.push(`<ul class="smallNote">`);
     pe.globalPtr.warnings.forEach(warning => out.push(`<li>${safe(warning)}</li>`));
@@ -146,5 +151,5 @@ export function renderGlobalPtrDirectory(pe: PeWindowsParseResult, out: string[]
   out.push(
     `<div class="smallNote">GLOBALPTR is machine-specific and the spec defines only the RVA field here; it does not define a separate variable-size table to decode.</div>`
   );
-  out.push(`</section>`);
+  out.push(renderPeSectionEnd());
 }

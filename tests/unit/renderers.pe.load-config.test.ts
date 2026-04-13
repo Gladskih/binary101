@@ -73,6 +73,7 @@ void test("renderLoadConfig renders GuardFlags names and CFG function-table entr
   renderLoadConfig(pe, out);
   const html = out.join("");
 
+  assert.match(html, /<summary[^>]*><b>Load Config<\/b><\/summary>/);
   assert.ok(html.includes("CF_INSTRUMENTED"));
   assert.ok(html.includes("CF_FUNCTION_TABLE_PRESENT"));
   assert.ok(html.includes("CF_EXPORT_SUPPRESSION_INFO_PRESENT"));

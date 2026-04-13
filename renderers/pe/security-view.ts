@@ -15,6 +15,7 @@ import {
   DIGEST_ALGORITHM_TYPES,
   renderNamedOptionChips
 } from "./security-chips.js";
+import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 type PeSecuritySection = NonNullable<PeWindowsParseResult["security"]>;
 type ValidationTone = "ok" | "warn" | "dim";
@@ -265,9 +266,8 @@ const renderCertificateCard = (certificate: ParsedWinCertificate, index: number)
 };
 
 export function renderSecurity(security: PeSecuritySection, out: string[]): void {
-  out.push(
-    `<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Security (WIN_CERTIFICATE)</h4><dl>`
-  );
+  out.push(renderPeSectionStart("Security (WIN_CERTIFICATE)"));
+  out.push(`<dl>`);
   out.push(
     dd(
       "Certificate records",
@@ -289,5 +289,5 @@ export function renderSecurity(security: PeSecuritySection, out: string[]): void
     security.certs.forEach((certificate, index) => out.push(renderCertificateCard(certificate, index)));
     out.push(`</div></details>`);
   }
-  out.push(`</section>`);
+  out.push(renderPeSectionEnd());
 }

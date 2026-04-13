@@ -26,6 +26,7 @@ void test("renderImportLinking and related sections surface confirmed and non-ca
 
   const html = out.join("");
   assert.ok(html.includes("Import linkage"));
+  assert.match(html, /<summary[^>]*><b>Import linkage<\/b><\/summary>/);
   assert.ok(html.includes("Validated checks"));
   assert.ok(html.includes("Warnings"));
   assert.ok(html.includes("IAT fallback / FirstThunk"));
@@ -42,6 +43,7 @@ void test("renderImportLinking and related sections surface confirmed and non-ca
   assert.ok(html.includes("Bound import entry without a matching eager import descriptor."));
   assert.ok(html.includes("Declared vs inferred eager IAT"));
   assert.ok(html.includes("Declared IAT covers all inferred eager IAT ranges"));
+  assert.match(html, /<summary[^>]*><b>Import Address Tables \(IAT\)<\/b><\/summary>/);
   assert.ok(html.includes("Show inferred eager IAT ranges"));
 });
 

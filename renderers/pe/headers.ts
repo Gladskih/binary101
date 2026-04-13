@@ -23,10 +23,17 @@ import {
 } from "./header-format.js";
 import { renderRichHeader } from "./rich-header.js";
 import { renderCoffTailSummary } from "./coff-tail-summary.js";
+import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
   if (!pe.dirs?.length) return;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Data directories</h4><dl>`);
+  out.push(
+    renderPeSectionStart(
+      "Data directories",
+      `${pe.dirs.length} entr${pe.dirs.length === 1 ? "y" : "ies"}`
+    )
+  );
+  out.push(`<dl>`);
   pe.dirs.forEach(d => {
     const tip = (DD_TIPS as Record<string, string | undefined>)[d.name] || "Directory";
     out.push(
@@ -37,15 +44,18 @@ const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
       )
     );
   });
-  out.push(`</dl></section>`);
+  out.push(`</dl>`);
+  out.push(renderPeSectionEnd());
 };
 
 const renderSections = (pe: PeParseResult, out: string[]): void => {
   const sections = pe.sections || [];
   if (!sections.length) return;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Section headers</h4>`);
   out.push(
-    `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show sections (${sections.length})</summary>`
+    renderPeSectionStart(
+      "Section headers",
+      `${sections.length} section${sections.length === 1 ? "" : "s"}`
+    )
   );
   out.push(
     `<table class="table" style="margin-top:.35rem"><thead><tr><th>Name</th><th>VirtualSize</th><th>RVA</th><th>RawSize</th><th>FilePtr</th><th>Entropy</th><th>Flags</th></tr></thead><tbody>`
@@ -72,8 +82,12 @@ const renderSections = (pe: PeParseResult, out: string[]): void => {
         <td>${flags.join(" &middot; ")}</td>
       </tr>`);
   });
-  out.push(`</tbody></table></details></section>`);
+  out.push(`</tbody></table>`);
+  out.push(renderPeSectionEnd());
 };
+
+const renderInlineHeaderTitle = (title: string): string =>
+  `<h4 style="margin:0 0 .5rem 0;font-size:.9rem">${safe(title)}</h4>`;
 
 export function renderHeaders(pe: PeParseResult, out: string[]): void {
   const isDll = (pe.coff.Characteristics & 0x2000) !== 0;
@@ -158,9 +172,13 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
   }
   out.push(`</div></details></section>`);
 
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">PE signature</h4><dl>${dd("Signature", "PE", "The PE\\0\\0 signature follows the DOS header.")}</dl></section>`);
-
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">COFF header</h4><dl>`);
+  out.push(renderPeSectionStart("PE/COFF headers"));
+  out.push(renderInlineHeaderTitle("PE signature"));
+  out.push(`<dl>`);
+  out.push(dd("Signature", "PE", "The PE\\0\\0 signature precedes the COFF file header and identifies the image as PE/COFF."));
+  out.push(`</dl>`);
+  out.push(renderInlineHeaderTitle("COFF file header"));
+  out.push(`<dl>`);
   out.push(dd("Machine", rowOpts(pe.coff.Machine, MACHINE), "Target CPU architecture. The highlighted chip indicates the Machine field value."));
   out.push(dd("NumberOfSections", `${pe.coff.NumberOfSections}`, "Number of section headers that immediately follow the optional header."));
   out.push(dd("TimeDateStamp", isoOrDash(pe.coff.TimeDateStamp), "Link time as Unix epoch. Toolchains sometimes set this to reproducible values."));
@@ -168,15 +186,18 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
   out.push(dd("NumberOfSymbols", String(pe.coff.NumberOfSymbols), "COFF symbol count (deprecated)."));
   out.push(dd("SizeOfOptionalHeader", `${pe.coff.SizeOfOptionalHeader} bytes`, "Size of the optional header (standard + Windows-specific)."));
   out.push(dd("Characteristics", rowFlags(pe.coff.Characteristics, CHAR_FLAGS), "Flags describing image traits (DLL, system file, etc.)."));
-  out.push(`</dl></section>`);
+  out.push(`</dl>`);
 
   const oh = pe.opt;
   const entrySectionInfo = pe.entrySection
     ? `Usually points into section ${pe.entrySection.name || "(unnamed)"} (index ${pe.entrySection.index}).`
     : "Should point into one of the mapped code sections.";
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Optional header</h4><dl>`);
+  out.push(renderInlineHeaderTitle("Optional header"));
+  out.push(`<dl>`);
   if (!oh) {
-    out.push(`</dl><div class="smallNote">Optional header fields are unavailable because the file did not declare a recognized PE32, PE32+, or ROM optional header.</div></section>`);
+    out.push(`</dl>`);
+    out.push(`<div class="smallNote">Optional header fields are unavailable because the file did not declare a recognized PE32, PE32+, or ROM optional header.</div>`);
+    out.push(renderPeSectionEnd());
     renderDataDirectories(pe, out);
     renderSections(pe, out);
     const coffTailSummary = renderCoffTailSummary(pe);
@@ -229,9 +250,9 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
     out.push(dd("GprMask", hex(oh.rom.GprMask, 8), "General-purpose register mask recorded by the ROM toolchain."));
     out.push(dd("CprMask", safe(formatWordListHex(oh.rom.CprMask)), "Coprocessor register masks recorded by the ROM toolchain."));
     out.push(dd("GpValue", hex(oh.rom.GpValue, 8), "Global-pointer seed value recorded in IMAGE_ROM_OPTIONAL_HEADER."));
-    out.push(
-      `</dl><div class="smallNote">ROM optional headers stop here: Windows-only fields such as ImageBase, SectionAlignment, Subsystem, CheckSum, stack/heap sizes, and the PE data-directory array are not part of IMAGE_ROM_OPTIONAL_HEADER.</div></section>`
-    );
+    out.push(`</dl>`);
+    out.push(`<div class="smallNote">ROM optional headers stop here: Windows-only fields such as ImageBase, SectionAlignment, Subsystem, CheckSum, stack/heap sizes, and the PE data-directory array are not part of IMAGE_ROM_OPTIONAL_HEADER.</div>`);
+    out.push(renderPeSectionEnd());
   } else {
     const pointerWidth = oh.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC ? 16 : 8;
     out.push(dd("ImageBase", formatPointerHex(oh.ImageBase, pointerWidth), "Preferred load address."));
@@ -257,7 +278,8 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
     out.push(dd("SizeOfStackCommit", formatBigByteSize(oh.SizeOfStackCommit), "Stack commit size."));
     out.push(dd("SizeOfHeapReserve", formatBigByteSize(oh.SizeOfHeapReserve), "Heap reservation size."));
     out.push(dd("SizeOfHeapCommit", formatBigByteSize(oh.SizeOfHeapCommit), "Heap commit size."));
-    out.push(`</dl></section>`);
+    out.push(`</dl>`);
+    out.push(renderPeSectionEnd());
   }
   renderDataDirectories(pe, out);
   renderSections(pe, out);

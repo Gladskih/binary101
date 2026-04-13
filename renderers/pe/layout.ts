@@ -9,6 +9,7 @@ import {
   type PeWindowsParseResult
 } from "../../analyzers/pe/index.js";
 import { renderPeDiagnostics } from "./diagnostics.js";
+import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 type PeRelocSection = NonNullable<PeWindowsParseResult["reloc"]>;
 type PeExceptionSection = NonNullable<PeWindowsParseResult["exception"]>;
@@ -142,7 +143,7 @@ const renderDelayImportAttributes = (attributes: number): string => {
 };
 
 export function renderReloc(reloc: PeRelocSection, out: string[]): void {
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Base relocations</h4>`);
+  out.push(renderPeSectionStart("Base relocations"));
   out.push(`<div class="smallNote">Relocation blocks are used when the image cannot be loaded at its preferred base address.</div>`);
   if (reloc.warnings?.length) {
     out.push(renderPeDiagnostics("Base relocation warnings", reloc.warnings));
@@ -160,7 +161,7 @@ export function renderReloc(reloc: PeRelocSection, out: string[]): void {
     });
     out.push(`</tbody></table></details>`);
   }
-  out.push(`</section>`);
+  out.push(renderPeSectionEnd());
 }
 
 export function renderException(ex: PeExceptionSection, out: string[]): void {
@@ -173,7 +174,7 @@ export function renderException(ex: PeExceptionSection, out: string[]): void {
       ? "Handlers present (ARM64 X bit)"
       : "Handlers present (EHANDLER/UHANDLER)";
   const chainedLabel = ex.format === "arm64" ? "Chained entries" : "Chained (CHAININFO)";
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Exception directory (.pdata)</h4>`);
+  out.push(renderPeSectionStart("Exception directory (.pdata)"));
   out.push(`<dl>`);
   out.push(`<dt>Functions (RUNTIME_FUNCTION entries)</dt><dd>${ex.functionCount ?? 0}</dd>`);
   out.push(`<dt>${unwindLabel}</dt><dd>${ex.uniqueUnwindInfoCount ?? 0}</dd>`);
@@ -184,12 +185,12 @@ export function renderException(ex: PeExceptionSection, out: string[]): void {
   if (ex.issues?.length) {
     out.push(renderPeDiagnostics("Exception directory warnings", ex.issues));
   }
-  out.push(`</section>`);
+  out.push(renderPeSectionEnd());
 }
 
 export function renderBoundImports(bi: PeBoundImportsSection, out: string[]): void {
   if (!bi.entries?.length) return;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Bound imports</h4>`);
+  out.push(renderPeSectionStart("Bound imports"));
   if (bi.warning) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(bi.warning)}</div>`);
   }
@@ -205,12 +206,13 @@ export function renderBoundImports(bi: PeBoundImportsSection, out: string[]): vo
       `<tr><td>${index + 1}</td><td>${safe(e.name || "")}</td><td>${hex(e.TimeDateStamp, 8)}</td><td>${forwarderLabel}</td></tr>`
     );
   });
-  out.push(`</tbody></table></details></section>`);
+  out.push(`</tbody></table></details>`);
+  out.push(renderPeSectionEnd());
 }
 
 export function renderDelayImports(di: PeDelayImportsSection, out: string[]): void {
   if (!di.entries?.length) return;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Delay-load imports</h4>`);
+  out.push(renderPeSectionStart("Delay-load imports"));
   if (di.warning) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(di.warning)}</div>`);
   }
@@ -238,7 +240,7 @@ export function renderDelayImports(di: PeDelayImportsSection, out: string[]): vo
     }
     out.push(`</details>`);
   }
-  out.push(`</section>`);
+  out.push(renderPeSectionEnd());
 }
 
 export function renderSanity(pe: PeParseResult, out: string[]): void {
@@ -275,11 +277,11 @@ export function renderSanity(pe: PeParseResult, out: string[]): void {
       );
     }
   }
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Sanity</h4>`);
+  out.push(renderPeSectionStart("Sanity"));
   if (!issues.length) {
     out.push(`<div class="smallNote">No obvious structural issues detected.</div>`);
   } else {
     out.push(renderPeDiagnostics("Sanity findings", issues));
   }
-  out.push(`</section>`);
+  out.push(renderPeSectionEnd());
 }

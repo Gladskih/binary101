@@ -25,12 +25,14 @@ import {
   ,
   renderLookupSource
 } from "./import-linking-format.js";
+import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 export { renderImportLinking } from "./import-linking-section.js";
 
 export function renderImports(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.imports.entries.length && !pe.imports.warning) return;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import table</h4><div class="smallNote">Each IMAGE_IMPORT_DESCRIPTOR names one DLL and points to two tables: OriginalFirstThunk normally gives the lookup names, while FirstThunk gives the runtime IAT slots that the loader patches.</div>`);
+  out.push(renderPeSectionStart("Import table"));
+  out.push(`<div class="smallNote">Each IMAGE_IMPORT_DESCRIPTOR names one DLL and points to two tables: OriginalFirstThunk normally gives the lookup names, while FirstThunk gives the runtime IAT slots that the loader patches.</div>`);
   if (pe.imports.warning) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(pe.imports.warning)}</div>`);
   }
@@ -71,12 +73,13 @@ export function renderImports(pe: PeWindowsParseResult, out: string[]): void {
     }
     out.push(`</details>`);
   });
-  out.push(`</section>`);
+  out.push(renderPeSectionEnd());
 }
 
 export function renderBoundImports(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.boundImports?.entries.length) return;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Bound imports</h4><div class="smallNote">BOUND_IMPORT is optional prebinding metadata. It does not replace the normal import table; it supplements it with imported-module timestamps and optional forwarder references.</div>`);
+  out.push(renderPeSectionStart("Bound imports"));
+  out.push(`<div class="smallNote">BOUND_IMPORT is optional prebinding metadata. It does not replace the normal import table; it supplements it with imported-module timestamps and optional forwarder references.</div>`);
   if (pe.boundImports.warning) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(pe.boundImports.warning)}</div>`);
   }
@@ -90,12 +93,14 @@ export function renderBoundImports(pe: PeWindowsParseResult, out: string[]): voi
     const findings = filterFindings(linkedModule, ["bound-match", "bound-without-import"]);
     out.push(`<tr><td>${index + 1}</td><td>${safe(entry.name || "")}</td><td>${hex(entry.TimeDateStamp >>> 0, 8)}</td><td>${forwarderLabel}</td><td>${renderFindingSummary(findings, "confirmed")}</td><td>${renderFindingSummary(findings, "warning")}${renderFindingSummary(findings, "info")}</td></tr>`);
   });
-  out.push(`</tbody></table></div></details></section>`);
+  out.push(`</tbody></table></div></details>`);
+  out.push(renderPeSectionEnd());
 }
 
 export function renderDelayImports(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.delayImports?.entries.length) return;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Delay-load imports</h4><div class="smallNote">Delay-load descriptors describe imports that are resolved on first use instead of during process startup. Modern Windows images sometimes protect delay-load IATs with Load Config GuardFlags and a dedicated .didat section.</div>`);
+  out.push(renderPeSectionStart("Delay-load imports"));
+  out.push(`<div class="smallNote">Delay-load descriptors describe imports that are resolved on first use instead of during process startup. Modern Windows images sometimes protect delay-load IATs with Load Config GuardFlags and a dedicated .didat section.</div>`);
   if (pe.delayImports.warning) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(pe.delayImports.warning)}</div>`);
   }
@@ -140,7 +145,7 @@ export function renderDelayImports(pe: PeWindowsParseResult, out: string[]): voi
     }
     out.push(`</details>`);
   });
-  out.push(`</section>`);
+  out.push(renderPeSectionEnd());
 }
 
 export function renderIat(pe: PeWindowsParseResult, out: string[]): void {
@@ -158,7 +163,8 @@ export function renderIat(pe: PeWindowsParseResult, out: string[]): void {
     "declared-iat-covers-inferred-eager",
     "declared-iat-misses-inferred-eager"
   ]);
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Import Address Tables (IAT)</h4><div class="smallNote">The PE optional header can declare one main IMAGE_DIRECTORY_ENTRY_IAT range, while each eager import descriptor also carries its own FirstThunk RVA. This view keeps those two ideas separate: the declared main IAT range from the optional header, and best-effort eager IAT ranges inferred from FirstThunk values.</div>`);
+  out.push(renderPeSectionStart("Import Address Tables (IAT)"));
+  out.push(`<div class="smallNote">The PE optional header can declare one main IMAGE_DIRECTORY_ENTRY_IAT range, while each eager import descriptor also carries its own FirstThunk RVA. This view keeps those two ideas separate: the declared main IAT range from the optional header, and best-effort eager IAT ranges inferred from FirstThunk values.</div>`);
   if (pe.iat?.warnings?.length) {
     out.push(`<ul class="smallNote">`);
     pe.iat.warnings.forEach(warning => out.push(`<li>${safe(warning)}</li>`));
@@ -192,5 +198,5 @@ export function renderIat(pe: PeWindowsParseResult, out: string[]): void {
     });
     out.push(`</tbody></table></div></details>`);
   }
-  out.push(`</section>`);
+  out.push(renderPeSectionEnd());
 }

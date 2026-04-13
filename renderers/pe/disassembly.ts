@@ -7,6 +7,7 @@ import {
   describeCpuidFeature,
   formatCpuidLabel
 } from "../../analyzers/x86/cpuid-features.js";
+import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 const ANALYZE_BUTTON_ID = "peInstructionSetsAnalyzeButton";
 const CANCEL_BUTTON_ID = "peInstructionSetsCancelButton";
@@ -16,7 +17,7 @@ const CHIP_ID_PREFIX = "peInstructionSetChip_";
 const COUNT_ID_PREFIX = "peInstructionSetCount_";
 
 export function renderInstructionSets(disasm: PeInstructionSetReport | undefined, out: string[]): void {
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Instruction sets</h4>`);
+  out.push(renderPeSectionStart("Instruction sets"));
   const analyzeLabel = disasm ? "Re-analyze instruction sets" : "Analyze instruction sets";
   out.push(`<div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">`);
   out.push(
@@ -43,7 +44,8 @@ export function renderInstructionSets(disasm: PeInstructionSetReport | undefined
         `<tr><td><span class="opt dim" id="${chipId}" title="${title}">${label}</span></td><td class="dim" id="${countId}">0</td><td>${description}</td></tr>`
       );
     }
-    out.push(`</tbody></table></section>`);
+    out.push(`</tbody></table>`);
+    out.push(renderPeSectionEnd());
     return;
   }
 
@@ -108,5 +110,5 @@ export function renderInstructionSets(disasm: PeInstructionSetReport | undefined
     out.push(`</tbody></table></details>`);
   }
 
-  out.push(`</section>`);
+  out.push(renderPeSectionEnd());
 }

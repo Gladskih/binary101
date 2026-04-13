@@ -22,6 +22,7 @@ void test("renderInstructionSets renders a chip table", () => {
   const html = out.join("");
 
   assert.ok(html.includes("Instruction sets"));
+  assert.match(html, /<summary[^>]*><b>Instruction sets<\/b><\/summary>/);
   assert.ok(html.includes("not a full disassembly"));
   assert.ok(html.includes("CpuidFeature.AVX"));
   assert.ok(html.includes(">AVX<"));

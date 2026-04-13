@@ -6,6 +6,7 @@ import { safe } from "../../html-utils.js";
 import { renderPeDiagnostics } from "./diagnostics.js";
 import { renderPreviewCell } from "./resource-preview-cell.js";
 import { formatWindowsLanguageName } from "./windows-language-names.js";
+import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 const formatLang = (lang: number | null | undefined): string => {
   return formatWindowsLanguageName(lang);
@@ -27,7 +28,7 @@ export function renderResources(resources: PeResources, out: string[]): void {
   const issues = (resources.issues || []).filter((issue): issue is string => Boolean(issue));
   const extraPaths = (resources.paths || []).filter(path => path.nodes.length !== 3);
   const topRows = resources.top || [];
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Resources</h4>`);
+  out.push(renderPeSectionStart("Resources"));
   out.push(
     `<div class="smallNote">Windows resources usually follow a three-level tree: ` +
       `type → name/ID → language. Canonical .rsrc layout is directory entries → ` +
@@ -116,5 +117,5 @@ export function renderResources(resources: PeResources, out: string[]): void {
     }
     out.push(`</tbody></table></details>`);
   }
-  out.push(`</section>`);
+  out.push(renderPeSectionEnd());
 }

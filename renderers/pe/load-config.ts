@@ -8,6 +8,7 @@ import {
 } from "../../analyzers/pe/optional-header-magic.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type { PeLoadConfig } from "../../analyzers/pe/load-config/index.js";
+import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 const formatPointerHex = (value: bigint, width: number): string =>
   `0x${value.toString(16).padStart(width, "0")}`;
 const compareWideInt = (left: bigint, right: bigint): number =>
@@ -60,7 +61,7 @@ export function renderLoadConfig(pe: PeWindowsParseResult, out: string[]): void 
     );
   };
 
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Load Config</h4>`);
+  out.push(renderPeSectionStart("Load Config"));
   if (lc.warnings?.length) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(lc.warnings.join("; "))}</div>`);
   }
@@ -285,6 +286,5 @@ export function renderLoadConfig(pe: PeWindowsParseResult, out: string[]): void 
   if (lc.tables?.guardEhContinuationRvas?.length) {
     renderAddressList("GuardEHContTable", lc.tables.guardEhContinuationRvas, "Valid exception continuation targets under CFG.");
   }
-
-  out.push(`</section>`);
+  out.push(renderPeSectionEnd());
 }

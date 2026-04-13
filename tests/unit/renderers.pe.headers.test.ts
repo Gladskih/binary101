@@ -52,7 +52,13 @@ void test("renderHeaders covers known/unknown branches and exact linker versions
   assert.ok(html.includes("DOS stub: stub - hello"));
   assert.ok(html.includes("Rich header"));
   assert.ok(html.includes("Tool and build names"));
-  assert.ok(html.includes("Show sections (2)"));
+  assert.match(html, /<summary[^>]*><b>PE\/COFF headers<\/b><\/summary>/);
+  assert.match(html, /<h4[^>]*>PE signature<\/h4>/);
+  assert.match(html, /<h4[^>]*>COFF file header<\/h4>/);
+  assert.match(html, /<h4[^>]*>Optional header<\/h4>/);
+  assert.match(html, /<summary[^>]*><b>Data directories<\/b> - 1 entry<\/summary>/);
+  assert.match(html, /<summary[^>]*><b>Section headers<\/b> - 2 sections<\/summary>/);
+  assert.ok(html.includes("Signature"));
   assert.ok(html.includes("peChecksumValidateButton"));
   assert.ok(html.includes("peChecksumStatus"));
 });
