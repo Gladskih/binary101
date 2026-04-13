@@ -235,9 +235,6 @@ const renderEntryTable = (
 ): void => {
   if (!debug.entries?.length) return;
   out.push(
-    `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show debug directory entries (${debug.entries.length})</summary>`
-  );
-  out.push(
     `<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Type</th><th>Storage</th><th>Payload</th><th>Raw RVA</th><th>Raw file ptr</th><th>What it contains</th></tr></thead><tbody>`
   );
   debug.entries.forEach((entry, index) => {
@@ -245,7 +242,7 @@ const renderEntryTable = (
       `<tr><td>${index + 1}</td><td>${formatEntryType(entry)}</td><td title="${safe(getDebugStorageInfo(pe, entry).description)}">${formatEntryStorage(pe, entry)}</td><td>${humanSize(entry.sizeOfData)}</td><td>${hex(entry.addressOfRawData, 8)}</td><td>${hex(entry.pointerToRawData, 8)}</td><td>${safe(getEntrySummary(entry))}</td></tr>`
     );
   });
-  out.push(`</tbody></table></details>`);
+  out.push(`</tbody></table>`);
 };
 
 const renderDebugIntro = (out: string[]): void => {

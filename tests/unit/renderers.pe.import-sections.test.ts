@@ -44,7 +44,10 @@ void test("renderImportLinking and related sections surface confirmed and non-ca
   assert.ok(html.includes("Declared vs inferred eager IAT"));
   assert.ok(html.includes("Declared IAT covers all inferred eager IAT ranges"));
   assert.match(html, /<summary[^>]*><b>Import Address Tables \(IAT\)<\/b> - [^<]+<\/summary>/);
-  assert.ok(html.includes("Show inferred eager IAT ranges"));
+  assert.ok(html.includes("Descriptors"));
+  assert.ok(!html.includes("Show linked modules"));
+  assert.ok(!html.includes("Show bound imports"));
+  assert.ok(!html.includes("Show inferred eager IAT ranges"));
 });
 
 void test("renderIat shows inferred eager IAT ranges even when IMAGE_DIRECTORY_ENTRY_IAT is absent", () => {

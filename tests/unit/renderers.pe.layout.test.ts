@@ -19,7 +19,8 @@ void test("renderReloc wraps relocation table in details", () => {
   const out: string[] = [];
   renderReloc(reloc, out);
   const html = out.join("");
-  assert.ok(html.includes("Show blocks (1)"));
+  assert.ok(html.includes("Page RVA"));
+  assert.ok(!html.includes("Show blocks"));
 });
 
 void test("renderException renders pdata stats", () => {

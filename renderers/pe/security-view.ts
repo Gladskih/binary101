@@ -287,12 +287,9 @@ export function renderSecurity(security: PeSecuritySection, out: string[]): void
     out.push(`</ul>`);
   }
   if (security.certs?.length) {
-    out.push(
-      `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show certificates (${security.certs.length})</summary>`
-    );
     out.push(`<div class="peSecurityCertList">`);
     security.certs.forEach((certificate, index) => out.push(renderCertificateCard(certificate, index)));
-    out.push(`</div></details>`);
+    out.push(`</div>`);
   }
   out.push(renderPeSectionEnd());
 }

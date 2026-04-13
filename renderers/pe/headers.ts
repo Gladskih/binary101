@@ -25,7 +25,7 @@ import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.
 
 const renderPeFormatNote = (out: string[]): void => {
   out.push(
-    `<section><div class="smallNote">Portable Executable (PE) / COFF is the executable and object-file format used by Windows toolchains. The structural file-format pieces below are separate from any derived analysis panels.</div></section>`
+    `<section><div class="smallNote">Portable Executable (PE) / COFF is the executable and object-file format used by Windows toolchains.</div></section>`
   );
 };
 

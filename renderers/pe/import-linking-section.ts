@@ -42,7 +42,6 @@ export function renderImportLinking(pe: PeWindowsParseResult, out: string[]): vo
   out.push(dd("Notes", String(noteCount), "Cross-checks that are informative but not automatically invalid."));
   out.push(dd("Protected delay-load modules", String(countModulesWithFindingCodes(linkedModules, ["protected-delay-iat-own-section", "protected-delay-iat-separate-section"])), "Modules whose delay-load IAT layout was confirmed against Load Config GuardFlags and section placement."));
   out.push(`</dl>`);
-  out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show linked modules (${linkedModules.length})</summary>`);
   out.push(`<div class="tableWrap"><table class="table" style="margin-top:.35rem"><thead><tr><th>Module</th><th>Eager</th><th>Bound</th><th>Delay</th><th>Eager lookup</th><th>Eager IAT</th><th>Delay IAT</th><th>Validated</th><th>Warnings / notes</th></tr></thead><tbody>`);
   linkedModules.forEach(linkedModule => {
     const eagerRelations = linkedModule.imports.map(linkedImport => linkedImport.iatDirectoryRelation);
@@ -50,6 +49,6 @@ export function renderImportLinking(pe: PeWindowsParseResult, out: string[]): vo
     const findings = linkedModule.findings ?? [];
     out.push(`<tr><td>${safe(getModuleDisplayName(pe, linkedModule))}</td><td>${linkedModule.imports.length || "-"}</td><td>${linkedModule.boundImports.length || "-"}</td><td>${linkedModule.delayImports.length || "-"}</td><td>${summarizeLookupSources(pe, linkedModule)}</td><td>${summarizeRelations(eagerRelations)}</td><td>${summarizeRelations(delayRelations)}</td><td>${renderFindingSummary(findings, "confirmed")}</td><td>${renderFindingSummary(findings, "warning")}${renderFindingSummary(findings, "info")}</td></tr>`);
   });
-  out.push(`</tbody></table></div></details>`);
+  out.push(`</tbody></table></div>`);
   out.push(renderPeSectionEnd());
 }

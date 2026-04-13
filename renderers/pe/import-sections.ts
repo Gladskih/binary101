@@ -93,7 +93,6 @@ export function renderBoundImports(pe: PeWindowsParseResult, out: string[]): voi
   if (pe.boundImports.warning) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(pe.boundImports.warning)}</div>`);
   }
-  out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show bound imports (${pe.boundImports.entries.length})</summary>`);
   out.push(`<div class="tableWrap"><table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Module</th><th>TimeDateStamp</th><th>ForwarderRefs</th><th>Validated</th><th>Warnings / notes</th></tr></thead><tbody>`);
   pe.boundImports.entries.forEach((entry, index) => {
     const linkedModule = findLinkedModuleForBoundImport(pe, index);
@@ -103,7 +102,7 @@ export function renderBoundImports(pe: PeWindowsParseResult, out: string[]): voi
     const findings = filterFindings(linkedModule, ["bound-match", "bound-without-import"]);
     out.push(`<tr><td>${index + 1}</td><td>${safe(entry.name || "")}</td><td>${hex(entry.TimeDateStamp >>> 0, 8)}</td><td>${forwarderLabel}</td><td>${renderFindingSummary(findings, "confirmed")}</td><td>${renderFindingSummary(findings, "warning")}${renderFindingSummary(findings, "info")}</td></tr>`);
   });
-  out.push(`</tbody></table></div></details>`);
+  out.push(`</tbody></table></div>`);
   out.push(renderPeSectionEnd());
 }
 
@@ -211,12 +210,11 @@ export function renderIat(pe: PeWindowsParseResult, out: string[]): void {
   out.push(dd("Protected delay-load modules", String(countModulesWithFindingCodes(pe.importLinking?.modules ?? [], ["protected-delay-iat-own-section", "protected-delay-iat-separate-section"])), "Modules whose outside-main-IAT delay-load layout was confirmed by Load Config GuardFlags and section placement."));
   out.push(`</dl>`);
   if (inferredEagerIat) {
-    out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show inferred eager IAT ranges (${inferredEagerIat.ranges.length})</summary>`);
     out.push(`<div class="tableWrap"><table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Range</th><th>Size</th><th>Section</th><th>Descriptors</th><th>Modules</th></tr></thead><tbody>`);
     inferredEagerIat.ranges.forEach((range, rangeIndex) => {
       out.push(`<tr><td>${rangeIndex + 1}</td><td>${hex(range.startRva, 8)} - ${hex(range.endRva, 8)}</td><td>${humanSize(range.size)}</td><td>${describeSectionForRva(pe, range.startRva)}</td><td>${range.descriptorCount}</td><td>${renderImportNamesForIndices(pe, range.importIndices)}</td></tr>`);
     });
-    out.push(`</tbody></table></div></details>`);
+    out.push(`</tbody></table></div>`);
   }
   out.push(renderPeSectionEnd());
 }

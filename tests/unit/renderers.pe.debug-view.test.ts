@@ -47,19 +47,19 @@ void test("renderDebug renders CodeView summary and plain entry values", () => {
     "What it contains",
     "Signature",
     "GUID",
-    "Age",
-    "Path",
-    "Storage",
-    "Show debug directory entries \\(1\\)",
-    "Raw RVA",
-    "Raw file ptr",
-    "CODEVIEW",
+      "Age",
+      "Path",
+      "Storage",
+      "Raw RVA",
+      "Raw file ptr",
+      "CODEVIEW",
     "MAPPED",
     "CodeView RSDS record with PDB identity and path",
     "RSDS",
-    escapeRegExp(codeView.path),
-    escapeRegExp(warning)
+      escapeRegExp(codeView.path),
+      escapeRegExp(warning)
   ]);
+  assert.doesNotMatch(html, /Show debug directory entries/);
   assert.doesNotMatch(html, /Types present/);
   assert.doesNotMatch(html, /<span class="opt sel"[^>]*>CODEVIEW<\/span>/);
   assert.doesNotMatch(html, /<span class="opt sel"[^>]*>MAPPED<\/span>/);

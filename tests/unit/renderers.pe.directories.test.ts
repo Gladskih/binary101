@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { inlinePeSectionName } from "../../analyzers/pe/section-name.js";
 import {
+  renderExports,
   renderTls,
   renderIat,
   renderArchitectureDirectory,
@@ -42,6 +43,29 @@ void test("renderTls and renderIat display local directory warnings", () => {
   assert.match(html, /<summary[^>]*><b>Import Address Table \(IAT\)<\/b><\/summary>/);
   assert.ok(html.includes("TLS directory RVA could not be mapped to a file offset."));
   assert.ok(html.includes("IAT directory RVA could not be mapped to a file offset."));
+});
+
+void test("renderExports renders entries directly without a nested show wrapper", () => {
+  const exportsSection: Parameters<typeof renderExports>[0] = {
+    flags: 0,
+    timestamp: 0,
+    version: 0,
+    dllName: "demo.dll",
+    Base: 1,
+    NumberOfFunctions: 1,
+    NumberOfNames: 1,
+    namePointerTable: 0,
+    ordinalTable: 0,
+    entries: [{ ordinal: 1, name: "Demo", rva: 0x1234, forwarder: null }],
+    issues: []
+  };
+  const out: string[] = [];
+  renderExports(exportsSection, out);
+  const html = out.join("");
+
+  assert.ok(html.includes("Export directory"));
+  assert.ok(html.includes("Demo"));
+  assert.ok(!html.includes("Show entries"));
 });
 
 void test("renderArchitectureDirectory and renderGlobalPtrDirectory explain their own directories", () => {

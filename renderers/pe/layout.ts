@@ -157,14 +157,11 @@ export function renderReloc(reloc: PeRelocSection, out: string[]): void {
   out.push(`<dt>Total entries</dt><dd>${reloc.totalEntries ?? 0}</dd>`);
   out.push(`</dl>`);
   if (reloc.blocks?.length) {
-    out.push(
-      `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show blocks (${reloc.blocks.length})</summary>`
-    );
     out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Page RVA</th><th>Block size</th><th>Entries</th></tr></thead><tbody>`);
     reloc.blocks.forEach((block, index) => {
       out.push(`<tr><td>${index + 1}</td><td>${hex(block.pageRva, 8)}</td><td>${humanSize(block.size)}</td><td>${block.count}</td></tr>`);
     });
-    out.push(`</tbody></table></details>`);
+    out.push(`</tbody></table>`);
   }
   out.push(renderPeSectionEnd());
 }
