@@ -4,8 +4,8 @@ import { MockFile } from "../helpers/mock-file.js";
 import type {
   PeAuthenticodeBestEffortCore,
   PeAuthenticodeParsedCore
-} from "../../analyzers/pe/authenticode-verify.js";
-import { inlinePeSectionName } from "../../analyzers/pe/section-name.js";
+} from "../../analyzers/pe/authenticode/verify.js";
+import { inlinePeSectionName } from "../../analyzers/pe/sections/name.js";
 
 // Microsoft PE format spec:
 // - PE32 Optional Header CheckSum field is at offset 0x40 from the optional header start.

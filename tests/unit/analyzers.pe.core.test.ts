@@ -2,11 +2,11 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parsePeHeaders } from "../../analyzers/pe/core.js";
+import { parsePeHeaders } from "../../analyzers/pe/core/index.js";
 import {
   PE32_OPTIONAL_HEADER_MAGIC,
   ROM_OPTIONAL_HEADER_MAGIC
-} from "../../analyzers/pe/optional-header-magic.js";
+} from "../../analyzers/pe/optional-header/magic.js";
 import type { PeOptionalHeader, PeWindowsOptionalHeader } from "../../analyzers/pe/types.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";

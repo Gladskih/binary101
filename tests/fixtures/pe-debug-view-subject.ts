@@ -5,7 +5,7 @@ import type {
   PeDebugDirectoryEntry,
   PePogoInfo,
   PeVcFeatureInfo
-} from "../../analyzers/pe/debug-directory.js";
+} from "../../analyzers/pe/debug/directory.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type { PeSection } from "../../analyzers/pe/types.js";
 import {

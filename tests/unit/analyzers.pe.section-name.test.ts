@@ -7,7 +7,7 @@ import {
   inlinePeSectionName,
   peSectionNameOffset,
   peSectionNameValue
-} from "../../analyzers/pe/section-name.js";
+} from "../../analyzers/pe/sections/name.js";
 
 void test("inlinePeSectionName stores the section text without a COFF string-table offset", () => {
   const name = inlinePeSectionName(".text");

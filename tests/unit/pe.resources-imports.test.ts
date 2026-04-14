@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildResourceTree } from "../../analyzers/pe/resources/core.js";
-import { parseImportDirectory64 } from "../../analyzers/pe/imports.js";
+import { parseImportDirectory64 } from "../../analyzers/pe/imports/index.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 

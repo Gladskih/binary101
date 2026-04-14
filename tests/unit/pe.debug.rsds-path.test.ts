@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseDebugDirectory } from "../../analyzers/pe/debug-directory.js";
+import { parseDebugDirectory } from "../../analyzers/pe/debug/directory.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const encoder = new TextEncoder();

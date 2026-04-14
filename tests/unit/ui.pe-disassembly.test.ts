@@ -4,7 +4,7 @@ import type { FileRangeReader } from "../../analyzers/file-range-reader.js";
 import { createPeDisassemblyController } from "../../ui/pe-disassembly.js";
 import type { ParseForUiResult } from "../../analyzers/index.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
-import type { AnalyzePeInstructionSetOptions, PeInstructionSetReport } from "../../analyzers/pe/disassembly.js";
+import type { AnalyzePeInstructionSetOptions, PeInstructionSetReport } from "../../analyzers/pe/disassembly/index.js";
 import { FakeHTMLElement, installFakeDom, flushTimers } from "../helpers/fake-dom.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import { MockFile } from "../helpers/mock-file.js";

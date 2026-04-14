@@ -6,8 +6,8 @@ import {
   computePeAuthenticodeDigest,
   computePeAuthenticodeDigestBestEffort,
   computePeAuthenticodeDigestFromParsedPe
-} from "../../analyzers/pe/authenticode-verify.js";
-import { inlinePeSectionName } from "../../analyzers/pe/section-name.js";
+} from "../../analyzers/pe/authenticode/verify.js";
+import { inlinePeSectionName } from "../../analyzers/pe/sections/name.js";
 import {
   collectFixtureBytes,
   createBestEffortAuthenticodeFixture,

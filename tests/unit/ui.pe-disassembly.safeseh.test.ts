@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { createPeDisassemblyController } from "../../ui/pe-disassembly.js";
 import type { ParseForUiResult } from "../../analyzers/index.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
-import type { AnalyzePeInstructionSetOptions, PeInstructionSetReport } from "../../analyzers/pe/disassembly.js";
+import type { AnalyzePeInstructionSetOptions, PeInstructionSetReport } from "../../analyzers/pe/disassembly/index.js";
 import { installFakeDom, flushTimers } from "../helpers/fake-dom.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import { MockFile } from "../helpers/mock-file.js";

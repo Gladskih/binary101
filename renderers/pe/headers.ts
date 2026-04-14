@@ -9,8 +9,8 @@ import {
   PE32_OPTIONAL_HEADER_MAGIC,
   PE32_PLUS_OPTIONAL_HEADER_MAGIC,
   ROM_OPTIONAL_HEADER_MAGIC
-} from "../../analyzers/pe/optional-header-magic.js";
-import { peSectionNameOffset, peSectionNameValue } from "../../analyzers/pe/section-name.js";
+} from "../../analyzers/pe/optional-header/magic.js";
+import { peSectionNameOffset, peSectionNameValue } from "../../analyzers/pe/sections/name.js";
 import {
   formatBigByteSize,
   formatPointerHex,

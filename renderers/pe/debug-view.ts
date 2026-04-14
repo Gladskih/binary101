@@ -6,7 +6,7 @@ import type {
   PeDebugSection,
   PeWindowsParseResult
 } from "../../analyzers/pe/index.js";
-import type { PeDebugDirectoryEntry } from "../../analyzers/pe/debug-directory.js";
+import type { PeDebugDirectoryEntry } from "../../analyzers/pe/debug/directory.js";
 import { getDebugTypeInfo } from "./debug-type-info.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 

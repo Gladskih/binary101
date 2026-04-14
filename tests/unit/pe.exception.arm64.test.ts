@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseExceptionDirectory } from "../../analyzers/pe/exception.js";
+import { parseExceptionDirectory } from "../../analyzers/pe/exception/index.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 // Microsoft PE format, "Machine Types":

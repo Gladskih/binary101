@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decodeOid, parseDerTime, readDerElement } from "../../analyzers/pe/der.js";
+import { decodeOid, parseDerTime, readDerElement } from "../../analyzers/pe/authenticode/der.js";
 
 void test("readDerElement accepts valid long-form lengths that require four subsequent octets", () => {
   // ITU-T X.690 8.1.3.5 allows one or more subsequent length octets.

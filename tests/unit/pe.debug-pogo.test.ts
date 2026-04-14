@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parsePogoInfo } from "../../analyzers/pe/debug-pogo.js";
+import { parsePogoInfo } from "../../analyzers/pe/debug/pogo.js";
 import {
   createOffsetPayloadSubject,
   createPogoSubjectInfo,

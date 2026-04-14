@@ -5,7 +5,7 @@ import type { PeSection } from "../../analyzers/pe/types.js";
 import {
   coffStringTablePeSectionName,
   inlinePeSectionName
-} from "../../analyzers/pe/section-name.js";
+} from "../../analyzers/pe/sections/name.js";
 
 export const createBasePe = (): PeWindowsParseResult =>
   ({

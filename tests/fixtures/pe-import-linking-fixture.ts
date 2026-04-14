@@ -1,13 +1,13 @@
 "use strict";
 
-import type { PeImportLinkingResult } from "../../analyzers/pe/import-linking.js";
-import type { PeImportParseResult } from "../../analyzers/pe/imports.js";
-import type { PeIatDirectory } from "../../analyzers/pe/iat-directory.js";
-import type { PeDelayImportEntry } from "../../analyzers/pe/delay-imports.js";
-import type { PeBoundImportEntry } from "../../analyzers/pe/bound-imports.js";
+import type { PeImportLinkingResult } from "../../analyzers/pe/imports/linking.js";
+import type { PeImportParseResult } from "../../analyzers/pe/imports/index.js";
+import type { PeIatDirectory } from "../../analyzers/pe/imports/iat.js";
+import type { PeDelayImportEntry } from "../../analyzers/pe/imports/delay.js";
+import type { PeBoundImportEntry } from "../../analyzers/pe/imports/bound.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type { PeLoadConfig } from "../../analyzers/pe/load-config/index.js";
-import { analyzeImportLinking } from "../../analyzers/pe/import-linking.js";
+import { analyzeImportLinking } from "../../analyzers/pe/imports/linking.js";
 import { createBasePe, createPeSection } from "./pe-renderer-headers-fixture.js";
 
 export const createWritableDataSection = (

@@ -2,7 +2,7 @@
 
 import { formatHumanSize } from "../../binary-utils.js";
 import { escapeHtml } from "../../html-utils.js";
-import type { PeInstructionSetReport } from "../../analyzers/pe/disassembly.js";
+import type { PeInstructionSetReport } from "../../analyzers/pe/disassembly/index.js";
 import {
   KNOWN_CPUID_FEATURES,
   describeCpuidFeature,

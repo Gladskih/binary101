@@ -10,11 +10,11 @@ import {
   type AnalyzePeInstructionSetOptions,
   type PeInstructionSetProgress,
   type PeInstructionSetReport
-} from "../analyzers/pe/disassembly.js";
+} from "../analyzers/pe/disassembly/index.js";
 import {
   PE32_OPTIONAL_HEADER_MAGIC,
   PE32_PLUS_OPTIONAL_HEADER_MAGIC
-} from "../analyzers/pe/optional-header-magic.js";
+} from "../analyzers/pe/optional-header/magic.js";
 import { readLoadConfigPointerRva } from "../analyzers/pe/load-config/index.js";
 import {
   readGuardCFFunctionTableRvas,

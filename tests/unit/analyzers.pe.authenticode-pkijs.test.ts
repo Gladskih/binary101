@@ -2,8 +2,8 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ContentInfo, SignedData } from "../../analyzers/pe/pkijs-runtime.js";
-import { verifyPkcs7Signatures } from "../../analyzers/pe/authenticode-pkijs.js";
+import { ContentInfo, SignedData } from "../../analyzers/pe/authenticode/pkijs-runtime.js";
+import { verifyPkcs7Signatures } from "../../analyzers/pe/authenticode/pkijs.js";
 import { createSignedAuthenticodeCmsFixture } from "../fixtures/pe-authenticode-signed-cms-fixtures.js";
 
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {

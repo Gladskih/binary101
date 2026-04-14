@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decodePkcs7, decodeWinCertificate } from "../../analyzers/pe/authenticode.js";
+import { decodePkcs7, decodeWinCertificate } from "../../analyzers/pe/authenticode/index.js";
 const concat = (...parts: Uint8Array[]): Uint8Array => {
   const total = parts.reduce((sum, part) => sum + part.length, 0);
   const out = new Uint8Array(total);

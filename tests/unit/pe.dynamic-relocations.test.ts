@@ -5,9 +5,9 @@ import { test } from "node:test";
 import {
   parseDynamicRelocationsFromLoadConfig32,
   parseDynamicRelocationsFromLoadConfig64
-} from "../../analyzers/pe/dynamic-relocations.js";
+} from "../../analyzers/pe/dynamic-relocations/index.js";
 import type { PeLoadConfig } from "../../analyzers/pe/load-config/index.js";
-import { inlinePeSectionName } from "../../analyzers/pe/section-name.js";
+import { inlinePeSectionName } from "../../analyzers/pe/sections/name.js";
 import type { PeSection } from "../../analyzers/pe/types.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";

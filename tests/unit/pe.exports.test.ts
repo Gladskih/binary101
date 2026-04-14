@@ -5,7 +5,7 @@ import {
   createFileRangeReader,
   type FileRangeReader
 } from "../../analyzers/file-range-reader.js";
-import { parseExportDirectory } from "../../analyzers/pe/exports.js";
+import { parseExportDirectory } from "../../analyzers/pe/directories/exports.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";

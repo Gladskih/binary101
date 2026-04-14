@@ -5,7 +5,7 @@ import { test } from "node:test";
 import {
   parseOptionalHeaderTail64,
   parseOptionalHeaderTailRom
-} from "../../analyzers/pe/optional-header-layouts.js";
+} from "../../analyzers/pe/optional-header/layouts.js";
 
 // 2^53 + 1 is the first unsigned integer JS cannot represent exactly as Number.
 const FIRST_UNSAFE_U64 = (1n << 53n) + 1n;

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseBaseRelocations } from "../../analyzers/pe/reloc.js";
+import { parseBaseRelocations } from "../../analyzers/pe/directories/reloc.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 type BaseRelocationBlockFixture = { pageRva: number; entries: number[]; fileOffset: number };

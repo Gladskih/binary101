@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { analyzeImportLinking } from "../../analyzers/pe/import-linking.js";
+import { analyzeImportLinking } from "../../analyzers/pe/imports/linking.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import {
   createImportLinkingInputs,

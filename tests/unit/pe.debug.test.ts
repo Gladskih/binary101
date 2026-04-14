@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseDebugDirectory } from "../../analyzers/pe/debug-directory.js";
+import { parseDebugDirectory } from "../../analyzers/pe/debug/directory.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
 import {

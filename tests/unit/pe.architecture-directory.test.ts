@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseArchitectureDirectory } from "../../analyzers/pe/architecture-directory.js";
+import { parseArchitectureDirectory } from "../../analyzers/pe/directories/architecture-directory.js";
 
 const directory = (rva: number, size: number) => [{ name: "ARCHITECTURE", rva, size }];
 

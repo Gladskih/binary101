@@ -1,51 +1,51 @@
 "use strict";
 import { createFileRangeReader } from "../file-range-reader.js";
-import { isPeWindowsCore, parsePeHeaders } from "./core.js";
-import { computePeAuthenticodeDigest, verifyAuthenticode } from "./authenticode-verify.js";
-import { parseDebugDirectory } from "./debug-directory.js";
+import { isPeWindowsCore, parsePeHeaders } from "./core/index.js";
+import { computePeAuthenticodeDigest, verifyAuthenticode } from "./authenticode/verify.js";
+import { parseDebugDirectory } from "./debug/directory.js";
 import { parseLoadConfigDirectory32, parseLoadConfigDirectory64, type PeLoadConfig, type PeLoadConfigTables } from "./load-config/index.js";
 import { readGuardAddressTakenIatEntryTableRvas, readGuardCFFunctionTableRvas, readGuardEhContinuationTableRvas, readGuardLongJumpTargetTableRvas, readSafeSehHandlerTableRvas } from "./load-config/tables.js";
 import { collectLoadConfigWarnings } from "./load-config/warnings.js";
-import { parseImportDirectory32, parseImportDirectory64 } from "./imports.js";
-import { parseExportDirectory } from "./exports.js";
-import { parseTlsDirectory32, parseTlsDirectory64 } from "./tls.js";
+import { parseImportDirectory32, parseImportDirectory64 } from "./imports/index.js";
+import { parseExportDirectory } from "./directories/exports.js";
+import { parseTlsDirectory32, parseTlsDirectory64 } from "./directories/tls.js";
 import { parseResources } from "./resources/index.js";
 import { parseClrDirectory } from "./clr/index.js";
-import { parseSecurityDirectory } from "./security.js";
-import { addSecurityTailWarning } from "./security-tail-warning.js";
-import { parseBaseRelocations } from "./reloc.js";
-import { parseExceptionDirectory } from "./exception.js";
-import { parseBoundImports } from "./bound-imports.js";
-import { parseDelayImports32, parseDelayImports64 } from "./delay-imports.js";
-import { parseDynamicRelocationsFromLoadConfig32, parseDynamicRelocationsFromLoadConfig64 } from "./dynamic-relocations.js";
-import { parseIatDirectory } from "./iat-directory.js";
-import { parseArchitectureDirectory } from "./architecture-directory.js";
-import { parseGlobalPtrDirectory } from "./globalptr-directory.js";
-import { analyzeImportLinking } from "./import-linking.js";
+import { parseSecurityDirectory } from "./security/index.js";
+import { addSecurityTailWarning } from "./security/tail-warning.js";
+import { parseBaseRelocations } from "./directories/reloc.js";
+import { parseExceptionDirectory } from "./exception/index.js";
+import { parseBoundImports } from "./imports/bound.js";
+import { parseDelayImports32, parseDelayImports64 } from "./imports/delay.js";
+import { parseDynamicRelocationsFromLoadConfig32, parseDynamicRelocationsFromLoadConfig64 } from "./dynamic-relocations/index.js";
+import { parseIatDirectory } from "./imports/iat.js";
+import { parseArchitectureDirectory } from "./directories/architecture-directory.js";
+import { parseGlobalPtrDirectory } from "./directories/globalptr-directory.js";
+import { analyzeImportLinking } from "./imports/linking.js";
 import {
   analyzeManifestConsistency,
   attachManifestValidation
-} from "./manifest-consistency.js";
+} from "./resources/manifest-consistency.js";
 import {
   parseBrowserManifestXmlDocument,
   type ManifestXmlDocumentParser
 } from "./resources/preview/manifest-xml.js";
-import { buildHeaderOnlyPeParseResult } from "./header-only-result.js";
-import { collectPeLayoutWarnings } from "./layout-warnings.js";
+import { buildHeaderOnlyPeParseResult } from "./core/header-only-result.js";
+import { collectPeLayoutWarnings } from "./layout/warnings.js";
 export {
   isPeRomParseResult,
   isPeWindowsParseResult
-} from "./parse-result.js";
+} from "./core/parse-result.js";
 export type {
   PeDebugSection,
   PeHeaderParseResult,
   PeParseResult,
   PeWindowsParseResult
-} from "./parse-result.js";
+} from "./core/parse-result.js";
 import {
   PE32_PLUS_OPTIONAL_HEADER_MAGIC
-} from "./optional-header-magic.js";
-import type { PeParseResult } from "./parse-result.js";
+} from "./optional-header/magic.js";
+import type { PeParseResult } from "./core/parse-result.js";
 
 // Microsoft PE format, "Machine Types":
 // IMAGE_FILE_MACHINE_I386 is the only PE32 machine where SafeSEH applies.

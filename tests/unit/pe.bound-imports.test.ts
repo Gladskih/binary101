@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseBoundImports } from "../../analyzers/pe/bound-imports.js";
+import { parseBoundImports } from "../../analyzers/pe/imports/bound.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 

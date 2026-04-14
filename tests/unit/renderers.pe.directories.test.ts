@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { inlinePeSectionName } from "../../analyzers/pe/section-name.js";
+import { inlinePeSectionName } from "../../analyzers/pe/sections/name.js";
 import {
   renderExports,
   renderTls,

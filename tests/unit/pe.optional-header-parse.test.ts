@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseOptionalHeaderAndDirectories } from "../../analyzers/pe/optional-header-parse.js";
+import { parseOptionalHeaderAndDirectories } from "../../analyzers/pe/optional-header/parse.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const PE32_OPTIONAL_HEADER_MAGIC = 0x10b;

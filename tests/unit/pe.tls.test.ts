@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseTlsDirectory32, parseTlsDirectory64 } from "../../analyzers/pe/tls.js";
+import { parseTlsDirectory32, parseTlsDirectory64 } from "../../analyzers/pe/directories/tls.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 

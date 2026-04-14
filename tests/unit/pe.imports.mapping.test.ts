@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseImportDirectory32, parseImportDirectory64 } from "../../analyzers/pe/imports.js";
+import { parseImportDirectory32, parseImportDirectory64 } from "../../analyzers/pe/imports/index.js";
 import { MockFile } from "../helpers/mock-file.js";
 import {
   IMAGE_IMPORT_DESCRIPTOR_SIZE,

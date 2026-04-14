@@ -5,8 +5,8 @@ import { test } from "node:test";
 import {
   createCoffStringTableResolver,
   resolveSectionName
-} from "../../analyzers/pe/coff-string-table.js";
-import { peSectionNameOffset, peSectionNameValue } from "../../analyzers/pe/section-name.js";
+} from "../../analyzers/pe/sections/coff-string-table.js";
+import { peSectionNameOffset, peSectionNameValue } from "../../analyzers/pe/sections/name.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 // Microsoft PE/COFF: each COFF symbol-table record is 18 bytes.

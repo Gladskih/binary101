@@ -8,9 +8,9 @@ import type {
   PeImportLinkingFinding,
   PeImportLinkingModule,
   PeIatDirectoryRelation
-} from "../../analyzers/pe/import-linking.js";
-import type { PeImportLookupSource } from "../../analyzers/pe/imports.js";
-import { peSectionNameValue } from "../../analyzers/pe/section-name.js";
+} from "../../analyzers/pe/imports/linking.js";
+import type { PeImportLookupSource } from "../../analyzers/pe/imports/index.js";
+import { peSectionNameValue } from "../../analyzers/pe/sections/name.js";
 import type { PeSection } from "../../analyzers/pe/types.js";
 
 type PeFindingSeverity = PeImportLinkingFinding["severity"];

@@ -1,6 +1,6 @@
 "use strict";
 
-import { peProbe } from "./pe/signature.js";
+import { peProbe } from "./pe/security/signature.js";
 
 export type MzProbeKind = "mz" | "pe" | "ne" | "le" | "lx";
 

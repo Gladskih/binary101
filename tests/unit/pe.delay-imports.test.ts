@@ -5,7 +5,7 @@ import { test } from "node:test";
 import {
   parseDelayImports32,
   parseDelayImports64
-} from "../../analyzers/pe/delay-imports.js";
+} from "../../analyzers/pe/imports/delay.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import {

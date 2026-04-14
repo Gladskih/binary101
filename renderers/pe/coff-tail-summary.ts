@@ -3,7 +3,7 @@
 import { humanSize, hex } from "../../binary-utils.js";
 import { dd, safe } from "../../html-utils.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
-import { peSectionNameOffset, peSectionNameValue } from "../../analyzers/pe/section-name.js";
+import { peSectionNameOffset, peSectionNameValue } from "../../analyzers/pe/sections/name.js";
 
 const IMAGE_SYMBOL_SIZE = 18n;
 

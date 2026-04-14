@@ -2,8 +2,8 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { computeEntrySection } from "../../analyzers/pe/core-entry.js";
-import { inlinePeSectionName } from "../../analyzers/pe/section-name.js";
+import { computeEntrySection } from "../../analyzers/pe/core/entry.js";
+import { inlinePeSectionName } from "../../analyzers/pe/sections/name.js";
 
 const SECTION_RVA = 0x1000;
 const SECTION_VIRTUAL_SIZE = 0x80;

@@ -5,8 +5,8 @@ import { dd, safe } from "../../html-utils.js";
 import type {
   PeWindowsParseResult
 } from "../../analyzers/pe/index.js";
-import type { PeImportParseResult } from "../../analyzers/pe/imports.js";
-import { peSectionNameValue } from "../../analyzers/pe/section-name.js";
+import type { PeImportParseResult } from "../../analyzers/pe/imports/index.js";
+import { peSectionNameValue } from "../../analyzers/pe/sections/name.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 type PeImportsSection = PeImportParseResult;

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseIatDirectory } from "../../analyzers/pe/iat-directory.js";
+import { parseIatDirectory } from "../../analyzers/pe/imports/iat.js";
 
 void test("parseIatDirectory returns null when the IAT data directory is absent", () => {
   assert.equal(parseIatDirectory([], value => value), null);

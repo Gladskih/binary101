@@ -6,7 +6,7 @@ import {
   createFileRangeReader,
   type FileRangeReader
 } from "../../analyzers/file-range-reader.js";
-import { parseExceptionDirectory } from "../../analyzers/pe/exception.js";
+import { parseExceptionDirectory } from "../../analyzers/pe/exception/index.js";
 import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
 import { MockFile } from "../helpers/mock-file.js";
 const identityRvaToOff = (rva: number): number => rva;

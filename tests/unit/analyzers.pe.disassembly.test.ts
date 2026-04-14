@@ -2,8 +2,8 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { analyzePeInstructionSets } from "../../analyzers/pe/disassembly.js";
-import { inlinePeSectionName } from "../../analyzers/pe/section-name.js";
+import { analyzePeInstructionSets } from "../../analyzers/pe/disassembly/index.js";
+import { inlinePeSectionName } from "../../analyzers/pe/sections/name.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 void test("analyzePeInstructionSets reports AVX and AVX-512 requirements", async () => {

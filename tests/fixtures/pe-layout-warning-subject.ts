@@ -4,7 +4,7 @@ import type {
   PeHeaderParseResult,
   PeWindowsParseResult
 } from "../../analyzers/pe/index.js";
-import { inlinePeSectionName } from "../../analyzers/pe/section-name.js";
+import { inlinePeSectionName } from "../../analyzers/pe/sections/name.js";
 import type { PeSection } from "../../analyzers/pe/types.js";
 
 // Microsoft PE/COFF: the PE signature occupies 4 bytes and IMAGE_FILE_HEADER is 20 bytes.

@@ -13,8 +13,8 @@ import {
   SignedData,
   SignerInfo,
   Time
-} from "../../analyzers/pe/pkijs-runtime.js";
-import { computePeAuthenticodeDigest } from "../../analyzers/pe/authenticode-verify.js";
+} from "../../analyzers/pe/authenticode/pkijs-runtime.js";
+import { computePeAuthenticodeDigest } from "../../analyzers/pe/authenticode/verify.js";
 import { createStrictAuthenticodeFixture } from "./pe-authenticode-fixtures.js";
 
 const SHA256_OID = "2.16.840.1.101.3.4.2.1";

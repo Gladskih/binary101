@@ -1,7 +1,7 @@
 "use strict";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseExceptionDirectory } from "../../analyzers/pe/exception.js";
+import { parseExceptionDirectory } from "../../analyzers/pe/exception/index.js";
 import { MockFile } from "../helpers/mock-file.js";
 const rvaToOff = (rva: number): number => rva;
 const IMAGE_FILE_MACHINE_I386 = 0x014c;

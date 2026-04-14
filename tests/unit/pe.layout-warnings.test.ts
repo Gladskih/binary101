@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { collectPeLayoutWarnings } from "../../analyzers/pe/layout-warnings.js";
+import { collectPeLayoutWarnings } from "../../analyzers/pe/layout/warnings.js";
 import {
   createDebugSection,
   createHeaderOnlyLayoutSubject,

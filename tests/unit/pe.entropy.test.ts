@@ -2,8 +2,8 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addSectionEntropies } from "../../analyzers/pe/entropy.js";
-import { inlinePeSectionName } from "../../analyzers/pe/section-name.js";
+import { addSectionEntropies } from "../../analyzers/pe/sections/entropy.js";
+import { inlinePeSectionName } from "../../analyzers/pe/sections/name.js";
 import type { PeSection } from "../../analyzers/pe/types.js";
 import { MockFile } from "../helpers/mock-file.js";
 

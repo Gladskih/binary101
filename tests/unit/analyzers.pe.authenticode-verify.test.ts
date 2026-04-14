@@ -6,8 +6,8 @@ import {
   computePeAuthenticodeDigest,
   verifyAuthenticode,
   verifyAuthenticodeFileDigest
-} from "../../analyzers/pe/authenticode-verify.js";
-import type { AuthenticodeInfo } from "../../analyzers/pe/authenticode.js";
+} from "../../analyzers/pe/authenticode/verify.js";
+import type { AuthenticodeInfo } from "../../analyzers/pe/authenticode/index.js";
 import {
   collectFixtureBytes,
   createBestEffortAuthenticodeFixture,

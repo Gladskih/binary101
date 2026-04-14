@@ -1,7 +1,7 @@
 "use strict";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseDelayImports32, parseDelayImports64 } from "../../analyzers/pe/delay-imports.js";
+import { parseDelayImports32, parseDelayImports64 } from "../../analyzers/pe/imports/delay.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import { IMAGE_DELAYLOAD_DESCRIPTOR_SIZE, IMAGE_ORDINAL_FLAG64, IMAGE_THUNK_DATA32_SIZE, IMAGE_THUNK_DATA64_SIZE, cStringSize, createDelayImportLayout, imageImportByNameSize, writeDelayImportDescriptor, writeDelayImportName, writeImportByName, writeThunkTable32, writeThunkTable64 } from "./pe.delay-import-layout.js";

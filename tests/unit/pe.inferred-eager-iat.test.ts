@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { analyzeInferredEagerIat } from "../../analyzers/pe/inferred-eager-iat.js";
+import { analyzeInferredEagerIat } from "../../analyzers/pe/imports/inferred-eager.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import { createImportLinkingInputs } from "../fixtures/pe-import-linking-fixture.js";
 

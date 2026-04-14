@@ -8,7 +8,7 @@ import {
   type PeParseResult,
   type PeWindowsParseResult
 } from "../analyzers/pe/index.js";
-import { peSectionNameValue } from "../analyzers/pe/section-name.js";
+import { peSectionNameValue } from "../analyzers/pe/sections/name.js";
 import { renderPe } from "../renderers/pe/index.js";
 import type { AnalyzerSummary, SuccessfulVariantResult } from "./rustPeMatrix-model.js";
 

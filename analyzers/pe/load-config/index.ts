@@ -1,7 +1,7 @@
 "use strict";
 
 import type { FileRangeReader } from "../../file-range-reader.js";
-import type { PeDynamicRelocations } from "../dynamic-relocations.js";
+import type { PeDynamicRelocations } from "../dynamic-relocations/index.js";
 import {
   buildLoadConfig32,
   buildLoadConfig64,

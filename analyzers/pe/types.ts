@@ -1,6 +1,6 @@
 "use strict";
 
-import type { PeSectionName } from "./section-name.js";
+import type { PeSectionName } from "./sections/name.js";
 
 export type RvaToOffset = (rva: number) => number | null;
 

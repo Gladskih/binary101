@@ -6,7 +6,7 @@ import {
   analyzeManifestConsistency,
   attachManifestValidation,
   collectManifestWarnings
-} from "../../analyzers/pe/manifest-consistency.js";
+} from "../../analyzers/pe/resources/manifest-consistency.js";
 import {
   createClrHeaderFixture,
   createManifestResourcesFixture

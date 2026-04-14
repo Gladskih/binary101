@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parsePe } from "../../analyzers/pe/index.js";
-import { parseRichHeaderFromDosStub } from "../../analyzers/pe/rich-header.js";
+import { parseRichHeaderFromDosStub } from "../../analyzers/pe/core/rich-header.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const writeAscii = (view: DataView, offset: number, text: string): void => {

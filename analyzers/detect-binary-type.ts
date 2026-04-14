@@ -1,7 +1,7 @@
 "use strict";
 
 import { probeByMagic, probeTextLike } from "./probes.js";
-import { mapMachine } from "./pe/signature.js";
+import { mapMachine } from "./pe/security/signature.js";
 import { parsePng } from "./png/index.js";
 import { parseWebp } from "./webp/index.js";
 import { probeWebm, buildWebmLabel } from "./webm/index.js";

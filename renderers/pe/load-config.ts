@@ -5,7 +5,7 @@ import { dd, safe } from "../../html-utils.js";
 import { GUARD_FLAGS } from "../../analyzers/pe/constants.js";
 import {
   PE32_PLUS_OPTIONAL_HEADER_MAGIC
-} from "../../analyzers/pe/optional-header-magic.js";
+} from "../../analyzers/pe/optional-header/magic.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type { PeLoadConfig } from "../../analyzers/pe/load-config/index.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";

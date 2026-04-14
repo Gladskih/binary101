@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseGlobalPtrDirectory } from "../../analyzers/pe/globalptr-directory.js";
+import { parseGlobalPtrDirectory } from "../../analyzers/pe/directories/globalptr-directory.js";
 
 // Microsoft PE format, "Optional Header Data Directories":
 // GLOBALPTR.Size must be zero, so any non-zero value is intentionally malformed here.

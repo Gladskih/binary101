@@ -7,7 +7,7 @@ import type {
   AuthenticodeSignerVerificationInfo,
   ParsedWinCertificate,
   X509CertificateInfo
-} from "../../analyzers/pe/authenticode.js";
+} from "../../analyzers/pe/authenticode/index.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import {
   AUTHENTICODE_PAYLOAD_TYPES,

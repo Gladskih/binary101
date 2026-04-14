@@ -2,8 +2,8 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseSectionHeaders } from "../../analyzers/pe/sections.js";
-import { peSectionNameOffset, peSectionNameValue } from "../../analyzers/pe/section-name.js";
+import { parseSectionHeaders } from "../../analyzers/pe/sections/index.js";
+import { peSectionNameOffset, peSectionNameValue } from "../../analyzers/pe/sections/name.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 // Microsoft PE/COFF: IMAGE_SECTION_HEADER records are 40 bytes wide.
