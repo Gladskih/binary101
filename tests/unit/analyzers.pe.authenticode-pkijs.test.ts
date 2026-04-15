@@ -52,6 +52,21 @@ void test("verifyPkcs7Signatures verifies a valid Authenticode CMS signer", asyn
 
   assert.strictEqual(verified.signerVerifications?.length, 1);
   assert.strictEqual(verified.signerVerifications?.[0]?.signatureVerified, true);
+  assert.deepStrictEqual(verified.signerVerifications?.[0]?.certificatePathIndexes, [0, 1]);
+  assert.strictEqual(verified.signerVerifications?.[0]?.countersignatures?.[0]?.signatureVerified, true);
+  assert.strictEqual(verified.signerVerifications?.[0]?.countersignatures?.[0]?.messageDigestVerified, true);
+  assert.ok(
+    verified.checks?.some(
+      check =>
+        check.status === "pass" && /certificate permits code signing/i.test(check.title)
+    )
+  );
+  assert.ok(
+    verified.checks?.some(
+      check =>
+        check.status === "pass" && /certificate permits time stamping/i.test(check.title)
+    )
+  );
   assert.strictEqual(verified.warnings, undefined);
 });
 
@@ -61,7 +76,19 @@ void test("verifyPkcs7Signatures reports invalid signer signatures without hidin
   const verified = await verifyPkcs7Signatures(tamperSignerSignature(payload));
 
   assert.strictEqual(verified.signerVerifications?.[0]?.signatureVerified, false);
-  assert.ok(verified.warnings?.some(warning => /signature/i.test(warning)));
+  assert.ok(
+    verified.checks?.some(
+      check => check.id === "Signer 1-signature" && check.status === "fail"
+    )
+  );
+  assert.ok(
+    verified.checks?.some(
+      check =>
+        /countersignature 1: signed attributes message digest matches the parent signature/i.test(
+          check.title
+        ) && check.status === "fail"
+    )
+  );
 });
 
 void test("verifyPkcs7Signatures reports missing signer certificates as warnings", async () => {
@@ -70,7 +97,12 @@ void test("verifyPkcs7Signatures reports missing signer certificates as warnings
   const verified = await verifyPkcs7Signatures(removeSignerCertificates(payload));
 
   assert.strictEqual(verified.signerVerifications?.[0]?.code, 3);
-  assert.ok(verified.warnings?.some(warning => /signer certificate/i.test(warning)));
+  assert.ok(
+    verified.checks?.some(
+      check => check.id === "Signer 1-certificate" && check.status === "fail"
+    )
+  );
+  assert.ok(verified.warnings?.some(warning => /unable to find signer certificate/i.test(warning)));
 });
 
 void test("verifyPkcs7Signatures reports malformed BER payloads", async () => {

@@ -59,14 +59,43 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .peSecurityList{margin:.2rem 0 0 0;padding-left:1.1rem}
 .peSecurityList li{margin:.18rem 0}
 .peSecurityList--warn{color:var(--warn-fg)}
-.peSecurityValidation{margin:.55rem 0;padding:.6rem .7rem;border:1px solid var(--border2);border-radius:12px;background:var(--info-bg)}
-.peSecurityValidation--ok{border-color:var(--ok-fg);background:var(--ok-bg)}
-.peSecurityValidation--warn{border-color:var(--warn-fg);background:var(--warn-bg)}
-.peSecurityValidationTitle{display:flex;align-items:center;gap:.45rem;font-weight:700}
-.peSecurityValidationIcon{font-size:15px;line-height:1}
-.peSecurityValidation--ok .peSecurityValidationIcon{color:var(--ok-fg)}
-.peSecurityValidation--warn .peSecurityValidationIcon{color:var(--warn-fg)}
-.peSecurityValidationSummary{margin-top:.25rem}
+.peSecurityCheckList,.peSecurityTrustGapList{list-style:none;margin:.35rem 0 0 0;padding:0;display:grid;gap:.45rem}
+.peSecurityCheck,.peSecurityTrustGap{display:grid;grid-template-columns:auto 1fr;gap:.55rem;padding:.55rem .65rem;border:1px solid var(--border2);border-radius:12px;background:var(--info-bg)}
+.peSecurityCheck--pass{border-color:color-mix(in oklab,var(--ok-fg) 45%,var(--border2));background:var(--ok-bg)}
+.peSecurityCheck--fail{border-color:color-mix(in oklab,var(--warn-fg) 50%,var(--border2));background:var(--warn-bg)}
+.peSecurityCheck--unknown{border-color:var(--border2);background:var(--info-bg)}
+.peSecurityCheckIcon{font-size:15px;line-height:1.1;margin-top:.1rem}
+.peSecurityCheck--pass .peSecurityCheckIcon{color:var(--ok-fg)}
+.peSecurityCheck--fail .peSecurityCheckIcon{color:var(--warn-fg)}
+.peSecurityCheckBody{min-width:0}
+.peSecurityCheckTitle{font-weight:600}
+.peSecurityCheckStatus{margin-top:.15rem}
+.peSecurityCheckDetail{margin-top:.15rem;word-break:break-word}
+.peSecurityTreeForest{display:grid;gap:.6rem;margin-top:.35rem}
+.peSecurityTreeGroup{padding:.15rem 0}
+.peSecurityTree{list-style:none;margin:.35rem 0 0 0;padding:0 0 0 1.15rem;position:relative}
+.peSecurityTreeItem{position:relative;margin:.4rem 0 0 0}
+.peSecurityTreeItem::before{content:"";position:absolute;left:-.75rem;top:-.35rem;bottom:-.45rem;border-left:1px solid var(--border2)}
+.peSecurityTreeItem::after{content:"";position:absolute;left:-.75rem;top:1rem;width:.55rem;border-top:1px solid var(--border2)}
+.peSecurityTree> .peSecurityTreeItem:first-child::before{top:.25rem}
+.peSecurityTree> .peSecurityTreeItem:last-child::before{bottom:calc(100% - 1rem)}
+.peSecurityTreeNode{padding:.55rem .65rem;border:1px solid var(--border2);border-radius:12px;background:var(--card)}
+.peSecurityTreeNode--pass{border-color:color-mix(in oklab,var(--ok-fg) 45%,var(--border2));background:var(--ok-bg)}
+.peSecurityTreeNode--fail{border-color:color-mix(in oklab,var(--warn-fg) 50%,var(--border2));background:var(--warn-bg)}
+.peSecurityTreeNode--unknown,.peSecurityTreeNode--certificate,.peSecurityTreeNode--missing{background:var(--info-bg)}
+.peSecurityTreeNode--missing{border-style:dashed}
+.peSecurityTreeTitleRow{display:flex;gap:.5rem;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}
+.peSecurityTreeTitle{font-weight:700;overflow-wrap:anywhere}
+.peSecurityTreeBadges{display:flex;gap:.35rem;flex-wrap:wrap}
+.peSecurityTreeBadge{font-size:11px;padding:.15rem .4rem;border:1px solid var(--border2);border-radius:999px;background:var(--chip-bg-light)}
+.peSecurityTreeBadge--signer{border-color:var(--accent)}
+.peSecurityTreeBadge--countersignature{border-color:color-mix(in oklab,var(--accent) 55%,var(--border2))}
+.peSecurityTreeBadge--certificate{border-color:var(--border2)}
+.peSecurityTreeBadge--pass{border-color:color-mix(in oklab,var(--ok-fg) 45%,var(--border2));color:var(--ok-fg)}
+.peSecurityTreeBadge--fail{border-color:color-mix(in oklab,var(--warn-fg) 50%,var(--border2));color:var(--warn-fg)}
+.peSecurityTreeBadge--unknown{border-color:var(--border2)}
+.peSecurityTreeMeta{margin-top:.18rem}
+.peSecurityTreeMeta span{color:var(--muted)}
 
 .table{width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:transparent;margin-top:6px}
 .table th,.table td{padding:8px 10px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px}

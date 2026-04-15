@@ -43,18 +43,49 @@ export interface X509CertificateInfo {
   notAfter?: string;
 }
 
+export interface AuthenticodeCounterSignatureInfo {
+  index: number;
+  signerCertificateIndex?: number;
+  certificatePathIndexes?: number[];
+  signatureVerified?: boolean;
+  messageDigestVerified?: boolean;
+  signingTime?: string;
+  message?: string;
+}
+
 export interface AuthenticodeSignerVerificationInfo {
   index: number;
   code?: number;
   message?: string;
   signatureVerified?: boolean;
   signerCertificateVerified?: boolean;
+  signerCertificateIndex?: number;
+  signingTime?: string;
+  certificatePathIndexes?: number[];
+  countersignatures?: AuthenticodeCounterSignatureInfo[];
+}
+
+export type AuthenticodeCheckStatus = "pass" | "fail" | "unknown";
+
+export interface AuthenticodeVerificationCheck {
+  id: string;
+  status: AuthenticodeCheckStatus;
+  title: string;
+  detail?: string;
+}
+
+export interface AuthenticodeTrustGap {
+  id: string;
+  title: string;
+  detail: string;
 }
 
 export interface AuthenticodeVerificationInfo {
   computedFileDigest?: string;
   fileDigestMatches?: boolean;
   signerVerifications?: AuthenticodeSignerVerificationInfo[];
+  checks?: AuthenticodeVerificationCheck[];
+  trustGaps?: AuthenticodeTrustGap[];
   warnings?: string[];
 }
 

@@ -1,173 +1,162 @@
 "use strict";
 
-import { fromBER } from "asn1js";
-import { ContentInfo, SignedData } from "./pkijs-runtime.js";
 import type {
   AuthenticodeSignerVerificationInfo,
+  AuthenticodeVerificationCheck,
   AuthenticodeVerificationInfo
 } from "./index.js";
+import { Certificate, ContentInfo, SignedData } from "./pkijs-runtime.js";
+import { readCountersignatures } from "./pkijs-countersignatures.js";
+import { addExtendedKeyUsageCheck, addSigningKeyUsageCheck, attachPathChecks } from "./pkijs-path.js";
+import {
+  CODE_SIGNING_EKU_OID,
+  addCheck,
+  describeError,
+  getSigningTime,
+  matchSignerCertificate,
+  mergeWarnings,
+  parseIsoDate,
+  toArrayBuffer
+} from "./pkijs-support.js";
 
-const PKCS7_SIGNED_DATA_OID = "1.2.840.113549.1.7.2";
-
-type AuthenticodeSignatureVerification = Pick<
+type VerificationSummary = Pick<
   AuthenticodeVerificationInfo,
-  "signerVerifications" | "warnings"
+  "checks" | "signerVerifications" | "warnings"
 >;
-
-const describeError = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
-
-const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
-  const out = new Uint8Array(bytes.byteLength);
-  out.set(bytes);
-  return out.buffer;
-};
-
-const getBlockDiagnostics = (
-  block: object
-): { error?: string; warnings?: string[] } => {
-  const error = Reflect.get(block, "error");
-  const warnings = Reflect.get(block, "warnings");
-  return {
-    ...(typeof error === "string" && error ? { error } : {}),
-    ...(Array.isArray(warnings)
-      ? {
-          warnings: warnings.filter(
-            (warning): warning is string =>
-              typeof warning === "string" && warning.length > 0
-          )
-        }
-      : {})
-  };
-};
-
-const getErrorProperty = (error: unknown, name: string): unknown =>
-  error && typeof error === "object" ? Reflect.get(error, name) : undefined;
-
-const buildSignerVerification = (
-  index: number,
-  message: string | undefined,
-  code: number | undefined,
-  signatureVerified: boolean | null | undefined,
-  signerCertificateVerified: boolean | null | undefined
-): AuthenticodeSignerVerificationInfo => ({
-  index,
-  ...(typeof code === "number" ? { code } : {}),
-  ...(message ? { message } : {}),
-  ...(typeof signatureVerified === "boolean" ? { signatureVerified } : {}),
-  ...(typeof signerCertificateVerified === "boolean" ? { signerCertificateVerified } : {})
-});
-
-const mergeWarnings = (warnings: string[]): string[] | undefined => {
-  const merged = [...new Set(warnings)];
-  return merged.length ? merged : undefined;
-};
-
-const withWarnings = (warnings: string[]): AuthenticodeSignatureVerification => {
-  const mergedWarnings = mergeWarnings(warnings);
-  return mergedWarnings ? { warnings: mergedWarnings } : {};
-};
-
-const normalizeSignerMessage = (
-  message: string | undefined,
-  signatureVerified: boolean | undefined
-): string | undefined =>
-  message || (signatureVerified === false ? "Signature verification returned false." : undefined);
 
 const verifySigner = async (
   signedData: SignedData,
-  signerIndex: number,
-  warnings: string[]
+  signerIndex: number
 ): Promise<AuthenticodeSignerVerificationInfo> => {
   try {
-    const result = await signedData.verify({
-      signer: signerIndex,
-      checkChain: false,
-      extendedMode: true
-    });
-    const message = normalizeSignerMessage(result.message, result.signatureVerified ?? undefined);
-    if (message && result.signatureVerified === false) {
-      warnings.push(`Signer ${signerIndex + 1}: ${message}`);
-    }
-    return buildSignerVerification(
-      signerIndex,
-      message,
-      result.code,
-      result.signatureVerified,
-      result.signerCertificateVerified
-    );
+    const result = await signedData.verify({ signer: signerIndex, checkChain: false, extendedMode: true });
+    return {
+      index: signerIndex,
+      ...(typeof result.code === "number" ? { code: result.code } : {}),
+      ...(result.message ? { message: result.message } : {}),
+      ...(typeof result.signatureVerified === "boolean" ? { signatureVerified: result.signatureVerified } : {}),
+      ...(typeof result.signerCertificateVerified === "boolean" ? { signerCertificateVerified: result.signerCertificateVerified } : {})
+    };
   } catch (error) {
-    const message = describeError(error);
-    const code = getErrorProperty(error, "code");
-    const signatureVerified = getErrorProperty(error, "signatureVerified");
-    const signerCertificateVerified = getErrorProperty(error, "signerCertificateVerified");
-    warnings.push(`Signer ${signerIndex + 1}: ${message}`);
-    return buildSignerVerification(
-      signerIndex,
-      message,
-      typeof code === "number" ? code : undefined,
-      typeof signatureVerified === "boolean" ? signatureVerified : undefined,
-      typeof signerCertificateVerified === "boolean" ? signerCertificateVerified : undefined
-    );
+    const result = error as Partial<AuthenticodeSignerVerificationInfo>;
+    return {
+      index: signerIndex,
+      ...(typeof result.code === "number" ? { code: result.code } : {}),
+      message: describeError(error),
+      ...(typeof result.signatureVerified === "boolean" ? { signatureVerified: result.signatureVerified } : {}),
+      ...(typeof result.signerCertificateVerified === "boolean" ? { signerCertificateVerified: result.signerCertificateVerified } : {})
+    };
   }
 };
 
-export const verifyPkcs7Signatures = async (
-  payload: Uint8Array
-): Promise<AuthenticodeSignatureVerification> => {
+export const verifyPkcs7Signatures = async (payload: Uint8Array): Promise<VerificationSummary> => {
+  const checks: AuthenticodeVerificationCheck[] = [];
+  const signerVerifications: AuthenticodeSignerVerificationInfo[] = [];
   const warnings: string[] = [];
-  const ber = fromBER(toArrayBuffer(payload));
-  const diagnostics = getBlockDiagnostics(ber.result as object);
-  if (diagnostics.error) {
-    warnings.push(`PKI.js BER parse error: ${diagnostics.error}`);
-  }
-  diagnostics.warnings?.forEach(warning => warnings.push(`PKI.js BER warning: ${warning}`));
-  if (ber.offset === -1) {
-    const mergedWarnings = mergeWarnings(warnings);
-    return mergedWarnings
-      ? { warnings: mergedWarnings }
-      : { warnings: ["PKI.js could not decode the PKCS#7 payload."] };
-  }
-  if (ber.offset < payload.byteLength) {
-    warnings.push("PKI.js BER parser reported trailing bytes after the CMS structure.");
-  }
-
-  let contentInfo: ContentInfo;
-  try {
-    contentInfo = new ContentInfo({ schema: ber.result });
-  } catch (error) {
-    warnings.push(`PKI.js could not parse ContentInfo: ${describeError(error)}`);
-    return withWarnings(warnings);
-  }
-
-  if (contentInfo.contentType !== PKCS7_SIGNED_DATA_OID) {
-    warnings.push(`PKI.js expected SignedData but found ${contentInfo.contentType}.`);
-    return withWarnings(warnings);
-  }
-  if (!contentInfo.content) {
-    warnings.push("PKI.js SignedData payload is missing.");
-    return withWarnings(warnings);
-  }
 
   let signedData: SignedData;
   try {
+    const contentInfo = ContentInfo.fromBER(toArrayBuffer(payload));
     signedData = new SignedData({ schema: contentInfo.content });
   } catch (error) {
-    warnings.push(`PKI.js could not parse SignedData: ${describeError(error)}`);
-    return withWarnings(warnings);
-  }
-  if (!signedData.signerInfos.length) {
-    warnings.push("PKI.js SignedData does not contain any signer infos.");
-    return withWarnings(warnings);
+    return { warnings: [`Unable to decode CMS ContentInfo: ${describeError(error)}`] };
   }
 
-  const signerVerifications: AuthenticodeSignerVerificationInfo[] = [];
+  const certificates = (signedData.certificates ?? []).filter(
+    (certificate): certificate is Certificate => certificate instanceof Certificate
+  );
   for (let signerIndex = 0; signerIndex < signedData.signerInfos.length; signerIndex += 1) {
-    signerVerifications.push(await verifySigner(signedData, signerIndex, warnings));
+    const signer = signedData.signerInfos[signerIndex];
+    if (!signer) continue;
+    const signerLabel = `Signer ${signerIndex + 1}`;
+    const signerVerification = await verifySigner(signedData, signerIndex);
+    const signerCertificateIndex = await matchSignerCertificate(signer, certificates);
+    const signerCertificate =
+      signerCertificateIndex != null && signerCertificateIndex >= 0
+        ? certificates[signerCertificateIndex]
+        : undefined;
+    const embeddedSignerCertificateIndex = signerCertificateIndex;
+    const signingTime = getSigningTime(signer);
+    const signerCertificateLabel =
+      embeddedSignerCertificateIndex != null
+        ? `Certificate ${embeddedSignerCertificateIndex + 1}`
+        : "No embedded certificate matches the signer identifier.";
+
+    if (signerCertificateIndex != null && signerCertificateIndex >= 0) {
+      signerVerification.signerCertificateIndex = signerCertificateIndex;
+    }
+    if (signingTime) {
+      signerVerification.signingTime = signingTime;
+    }
+
+    addCheck(
+      checks,
+      `${signerLabel}-certificate`,
+      signerCertificate ? "pass" : "fail",
+      `${signerLabel}: signer certificate is present in the embedded chain`,
+      signerCertificateLabel
+    );
+    addCheck(
+      checks,
+      `${signerLabel}-signature`,
+      signerVerification.signatureVerified === true ? "pass" : signerVerification.signatureVerified === false ? "fail" : "unknown",
+      `${signerLabel}: CMS signature verifies`,
+      signerVerification.message
+    );
+    if (signerVerification.signatureVerified !== true && signerVerification.message) {
+      warnings.push(`${signerLabel}: ${signerVerification.message}`);
+    }
+
+    if (embeddedSignerCertificateIndex != null && signerCertificate) {
+      addSigningKeyUsageCheck(
+        checks,
+        `${signerLabel}-key-usage`,
+        `${signerLabel}: certificate permits digital signatures`,
+        signerCertificate
+      );
+      addExtendedKeyUsageCheck(
+        checks,
+        `${signerLabel}-eku`,
+        `${signerLabel}: certificate permits code signing`,
+        signerCertificate,
+        CODE_SIGNING_EKU_OID,
+        "Extended Key Usage extension is absent."
+      );
+      const certificatePathIndexes = await attachPathChecks(
+        checks,
+        signerLabel,
+        certificates,
+        embeddedSignerCertificateIndex,
+        signingTime,
+        "signing time"
+      );
+      if (certificatePathIndexes.length) {
+        signerVerification.certificatePathIndexes = certificatePathIndexes;
+      }
+    }
+
+    const countersignatures = await readCountersignatures(signerLabel, signer, certificates, checks, warnings);
+    if (countersignatures?.length) {
+      signerVerification.countersignatures = countersignatures;
+      const signerDate = parseIsoDate(signingTime);
+      countersignatures.forEach(countersignature => {
+        const counterDate = parseIsoDate(countersignature.signingTime);
+        addCheck(
+          checks,
+          `${signerLabel}-countersignature-${countersignature.index + 1}-chronology`,
+          signerDate && counterDate ? (signerDate.getTime() <= counterDate.getTime() ? "pass" : "fail") : "unknown",
+          `${signerLabel}: countersignature ${countersignature.index + 1} is not earlier than the claimed signing time`,
+          signingTime && countersignature.signingTime ? `${signingTime} <= ${countersignature.signingTime}` : "One of the signing times is absent."
+        );
+      });
+    }
+    signerVerifications.push(signerVerification);
   }
 
   const mergedWarnings = mergeWarnings(warnings);
-  return mergedWarnings
-    ? { signerVerifications, warnings: mergedWarnings }
-    : { signerVerifications };
+  return {
+    ...(checks.length ? { checks } : {}),
+    ...(signerVerifications.length ? { signerVerifications } : {}),
+    ...(mergedWarnings ? { warnings: mergedWarnings } : {})
+  };
 };

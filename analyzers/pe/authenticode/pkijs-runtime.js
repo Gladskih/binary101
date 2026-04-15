@@ -3,15 +3,19 @@
 export {
   Attribute,
   AttributeTypeAndValue,
+  BasicConstraints,
   Certificate,
   ContentInfo,
   EncapsulatedContentInfo,
+  ExtKeyUsage,
+  Extension,
   IssuerAndSerialNumber,
   RelativeDistinguishedNames,
   SignedAndUnsignedAttributes,
   SignedData,
   SignerInfo,
-  Time
+  Time,
+  getCrypto
 } from "pkijs";
 // ### PKI.js TypeScript Workaround
 // PE Authenticode verification uses `pkijs` at runtime, but importing `pkijs`

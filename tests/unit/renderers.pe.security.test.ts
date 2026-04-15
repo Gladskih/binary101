@@ -17,7 +17,7 @@ void test("renderSecurity renders details when present", () => {
       format: "pkcs7" as const,
       contentTypeName: "PKCS#7 signedData",
       payloadContentTypeName: "1.2.3.4",
-      digestAlgorithms: ["sha256", "md5"],
+      fileDigestAlgorithmName: "sha256",
       signerCount: 2,
       certificateCount: 3
     },
@@ -33,10 +33,9 @@ void test("renderSecurity renders details when present", () => {
   assert.ok(html.includes("1.2.3.4"));
   assert.ok(!html.includes("Show certificates"));
   assert.ok(html.includes("sha256"));
-  assert.ok(html.includes("md5"));
   assert.ok(html.includes("truncated"));
-  assert.ok(html.includes("Signature integrity check unavailable"));
-  assert.ok(html.includes("No cryptographic verification result is attached"));
+  assert.ok(html.includes("Certificate tree"));
+  assert.ok(html.includes("Authenticode"));
   assert.ok(html.includes("Structural warnings"));
   assert.ok(html.includes("Length field does not match directory entry size."));
 });
@@ -60,11 +59,84 @@ void test("renderSecurity includes expanded Authenticode details", () => {
       verification: {
         computedFileDigest: "deadbeef",
         fileDigestMatches: true,
-        signerVerifications: [{ index: 0, signatureVerified: true, code: 14 }],
+        signerVerifications: [
+          {
+            index: 0,
+            signatureVerified: true,
+            signerCertificateIndex: 0,
+            certificatePathIndexes: [0],
+            countersignatures: [
+              {
+                index: 0,
+                signerCertificateIndex: 1,
+                certificatePathIndexes: [1],
+                signingTime: "2024-01-01T00:05:00Z",
+                signatureVerified: true,
+                messageDigestVerified: true
+              }
+            ]
+          }
+        ],
+        checks: [
+          {
+            id: "file-digest-match",
+            status: "pass" as const,
+            title: "Embedded file digest matches the computed PE Authenticode digest",
+            detail: "deadbeef"
+          },
+          {
+            id: "Signer 1-signature",
+            status: "pass" as const,
+            title: "Signer 1: CMS signature verifies"
+          },
+          {
+            id: "Signer 1-certificate",
+            status: "pass" as const,
+            title: "Signer 1: signer certificate is present in the embedded chain"
+          },
+          {
+            id: "Signer 1-key-usage",
+            status: "pass" as const,
+            title: "Signer 1: certificate permits digital signatures"
+          },
+          {
+            id: "Signer 1-eku",
+            status: "pass" as const,
+            title: "Signer 1: certificate permits code signing"
+          },
+          {
+            id: "Signer 1 countersignature 1-signature",
+            status: "pass" as const,
+            title: "Signer 1 countersignature 1: CMS signature verifies"
+          },
+          {
+            id: "Signer 1 countersignature 1-certificate",
+            status: "pass" as const,
+            title: "Signer 1 countersignature 1: signer certificate is present in the embedded chain"
+          },
+          {
+            id: "Signer 1 countersignature 1-message-digest",
+            status: "unknown" as const,
+            title: "Signer 1 countersignature 1: signed attributes message digest matches the parent signature",
+            detail: "PKI.js crypto engine is unavailable."
+          },
+          {
+            id: "Signer 1-countersignature-1-chronology",
+            status: "unknown" as const,
+            title: "Signer 1: countersignature 1 is not earlier than the claimed signing time"
+          }
+        ],
+        trustGaps: [
+          {
+            id: "revocation",
+            title: "Revocation status",
+            detail: "No CRL / OCSP checks."
+          }
+        ],
         warnings: ["synthetic verification warning"]
       },
       signerCount: 1,
-      certificateCount: 1,
+      certificateCount: 2,
       signers: [
         {
           issuer: "CN=Test Issuer",
@@ -81,6 +153,13 @@ void test("renderSecurity includes expanded Authenticode details", () => {
           serialNumber: "1234",
           notBefore: "2024-01-01T00:00:00Z",
           notAfter: "2025-01-01T00:00:00Z"
+        },
+        {
+          subject: "CN=Test Timestamp",
+          issuer: "CN=Test Issuer",
+          serialNumber: "5678",
+          notBefore: "2024-01-01T00:00:00Z",
+          notAfter: "2026-01-01T00:00:00Z"
         }
       ]
     }
@@ -89,28 +168,21 @@ void test("renderSecurity includes expanded Authenticode details", () => {
   const out: string[] = [];
   renderSecurity(security, out);
   const html = out.join("");
-  assert.ok(html.includes("peSecurityValidation--ok"));
-  assert.ok(html.includes("Signature integrity check passed"));
-  assert.ok(html.includes("Embedded file digest matches this file"));
-  assert.ok(html.includes("all CMS signer signatures verified"));
-  assert.ok(html.includes("This checks signature integrity only."));
-  assert.ok(
-    html.includes("Certificate-chain trust, revocation, EKU, and local platform trust")
-  );
-  assert.ok(html.includes("Embedded file digest (sha256)"));
-  assert.ok(html.includes("Computed file digest (sha256)"));
-  assert.ok(html.includes("Digest match"));
+  assert.ok(html.includes("Certificate tree"));
+  assert.ok(html.includes("Authenticode"));
+  assert.ok(html.includes("Countersignature 1"));
+  assert.ok(html.includes("Not checked for trust"));
+  assert.ok(html.includes("peSecurityTreeBadge--pass"));
+  assert.ok(html.includes("peSecurityTreeBadge--unknown"));
+  assert.ok(html.includes("Digest"));
+  assert.ok(html.includes("Sig"));
+  assert.ok(html.includes("Revocation status"));
   assert.ok(html.includes("PKCS#7"));
   assert.ok(html.includes("SPC_INDIRECT_DATA"));
   assert.ok(html.includes("sha256"));
-  assert.ok(html.includes("opt sel"));
-  assert.ok(html.includes("Signer 1: signature verified."));
-  assert.ok(html.includes("<b>Signer 1</b>:"));
-  assert.ok(html.includes("Issuer CN=Test Issuer"));
-  assert.ok(html.includes("<b>Certificate 1</b>:"));
-  assert.ok(html.includes("Subject CN=Test Subject"));
+  assert.ok(html.includes("Claimed signing time"));
+  assert.ok(html.includes("Subject"));
   assert.ok(html.includes("synthetic verification warning"));
-  assert.ok(!html.includes("PKI.js code 14"));
 });
 
 void test("renderSecurity renders count without certificate table", () => {
@@ -148,7 +220,17 @@ void test("renderSecurity tolerates missing fields and renders negative matches"
       format: "pkcs7" as const,
       fileDigestAlgorithm: "sha256",
       fileDigest: "deadbeef",
-      verification: { fileDigestMatches: false },
+      verification: {
+        fileDigestMatches: false,
+        checks: [
+          {
+            id: "file-digest-match",
+            status: "fail" as const,
+            title: "Embedded file digest matches the computed PE Authenticode digest",
+            detail: "Embedded deadbeef, computed 0011"
+          }
+        ]
+      },
       signers: [{ digestAlgorithm: "sha256", signatureAlgorithm: "rsaEncryption" }],
       certificates: [{ notAfter: "2025-01-01T00:00:00Z" }]
     }
@@ -169,8 +251,7 @@ void test("renderSecurity tolerates missing fields and renders negative matches"
   const out: string[] = [];
   renderSecurity(security, out);
   const html = out.join("");
-  assert.ok(html.includes("peSecurityValidation--warn"));
-  assert.ok(html.includes("Signature integrity check failed"));
-  assert.ok(html.includes("embedded file digest does not match this file"));
-  assert.ok(html.includes("Digest match"));
+  assert.ok(html.includes("peSecurityTreeBadge--fail"));
+  assert.ok(html.includes("Digest"));
+  assert.ok(html.includes("Embedded deadbeef, computed 0011"));
 });

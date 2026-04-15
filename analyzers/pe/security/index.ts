@@ -28,7 +28,9 @@ const hasVerificationData = (
   !!verification &&
   (verification.computedFileDigest !== undefined ||
     verification.fileDigestMatches !== undefined ||
+    !!verification.checks?.length ||
     !!verification.signerVerifications?.length ||
+    !!verification.trustGaps?.length ||
     !!verification.warnings?.length);
 
 const attachVerification = (

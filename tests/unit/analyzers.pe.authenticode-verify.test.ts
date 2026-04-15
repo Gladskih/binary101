@@ -247,6 +247,22 @@ void test("verifyAuthenticode combines CMS signer verification with PE file dige
   assert.strictEqual(verified.fileDigestMatches, true);
   assert.ok(verified.computedFileDigest);
   assert.strictEqual(verified.signerVerifications?.[0]?.signatureVerified, true);
+  assert.ok(
+    verified.checks?.some(
+      check =>
+        check.id === "file-digest-match" &&
+        check.status === "pass" &&
+        /Embedded file digest matches/i.test(check.title)
+    )
+  );
+  assert.ok(
+    verified.checks?.some(
+      check =>
+        check.status === "pass" &&
+        /countersignature 1: certificate permits time stamping/i.test(check.title)
+    )
+  );
+  assert.ok(verified.trustGaps?.some(gap => /Revocation status/i.test(gap.title)));
   assert.strictEqual(verified.warnings, undefined);
 });
 
