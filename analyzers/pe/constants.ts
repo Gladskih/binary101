@@ -75,6 +75,8 @@ export const SUBSYSTEMS: OptionEntry[] = [
   [16, "Windows Boot Application", "Program that runs during Windows boot, before normal apps"]
 ];
 
+// Microsoft PE format, "Characteristics":
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#characteristics
 export const CHAR_FLAGS: OptionEntry[] = [
   [0x0001, "RELOCS_STRIPPED", "Relocations stripped from the file"],
   [0x0002, "EXECUTABLE_IMAGE", "Image is valid and can run"],
@@ -82,11 +84,12 @@ export const CHAR_FLAGS: OptionEntry[] = [
   [0x0008, "LOCAL_SYMS_STRIPPED", "Local symbols removed (COFF)"],
   [0x0010, "AGGRESSIVE_WS_TRIM", "Aggressively trim working set (obsolete)"],
   [0x0020, "LARGE_ADDRESS_AWARE", "Image can handle >2GB addresses"],
-  [0x0040, "BYTES_REVERSED_LO", "Little-endian byte ordering (obsolete)"],
-  [0x0080, "32BIT_MACHINE", "Image is designed for a 32-bit machine"],
-  [0x0100, "DEBUG_STRIPPED", "Debug info removed from file"],
-  [0x0200, "REMOVABLE_RUN_FROM_SWAP", "Copy image to swap file if on removable media"],
-  [0x0400, "NET_RUN_FROM_SWAP", "Copy image to swap file if on network"],
+  [0x0040, "RESERVED_0040", "Reserved for future use"],
+  [0x0080, "BYTES_REVERSED_LO", "Little-endian byte ordering (obsolete)"],
+  [0x0100, "32BIT_MACHINE", "Image is designed for a 32-bit machine"],
+  [0x0200, "DEBUG_STRIPPED", "Debug info removed from file"],
+  [0x0400, "REMOVABLE_RUN_FROM_SWAP", "Copy image to swap file if on removable media"],
+  [0x0800, "NET_RUN_FROM_SWAP", "Copy image to swap file if on network"],
   [0x1000, "SYSTEM", "System file (kernel/driver)"],
   [0x2000, "DLL", "Dynamic-link library"],
   [0x4000, "UP_SYSTEM_ONLY", "Uni-processor machine only"],
@@ -129,10 +132,27 @@ export const DD_TIPS = {
   CLR_RUNTIME: ".NET/CLR header for managed assemblies."
 } as const;
 
+// Microsoft PE format, "Section Flags":
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
 export const SEC_FLAG_TEXTS: OptionEntry[] = [
+  [0x00000001, "RESERVED_00000001"],
+  [0x00000002, "RESERVED_00000002"],
+  [0x00000004, "RESERVED_00000004"],
+  [0x00000008, "TYPE_NO_PAD"],
+  [0x00000010, "RESERVED_00000010"],
   [0x00000020, "CNT_CODE"],
   [0x00000040, "CNT_INITIALIZED_DATA"],
   [0x00000080, "CNT_UNINITIALIZED_DATA"],
+  [0x00000100, "LNK_OTHER"],
+  [0x00000200, "LNK_INFO"],
+  [0x00000400, "RESERVED_00000400"],
+  [0x00000800, "LNK_REMOVE"],
+  [0x00001000, "LNK_COMDAT"],
+  [0x00008000, "GPREL"],
+  [0x00020000, "MEM_PURGEABLE/MEM_16BIT"],
+  [0x00040000, "MEM_LOCKED"],
+  [0x00080000, "MEM_PRELOAD"],
+  [0x01000000, "LNK_NRELOC_OVFL"],
   [0x02000000, "DISCARDABLE"],
   [0x04000000, "NOT_CACHED"],
   [0x08000000, "NOT_PAGED"],
@@ -141,6 +161,38 @@ export const SEC_FLAG_TEXTS: OptionEntry[] = [
   [0x40000000, "READ"],
   [0x80000000, "WRITE"]
 ];
+
+const SECTION_ALIGNMENT_MASK = 0x00f00000;
+
+const SECTION_ALIGNMENT_FLAGS: OptionEntry[] = [
+  [0x00100000, "ALIGN_1BYTES"],
+  [0x00200000, "ALIGN_2BYTES"],
+  [0x00300000, "ALIGN_4BYTES"],
+  [0x00400000, "ALIGN_8BYTES"],
+  [0x00500000, "ALIGN_16BYTES"],
+  [0x00600000, "ALIGN_32BYTES"],
+  [0x00700000, "ALIGN_64BYTES"],
+  [0x00800000, "ALIGN_128BYTES"],
+  [0x00900000, "ALIGN_256BYTES"],
+  [0x00a00000, "ALIGN_512BYTES"],
+  [0x00b00000, "ALIGN_1024BYTES"],
+  [0x00c00000, "ALIGN_2048BYTES"],
+  [0x00d00000, "ALIGN_4096BYTES"],
+  [0x00e00000, "ALIGN_8192BYTES"]
+];
+
+export const formatSectionCharacteristicFlags = (characteristics: number): string[] => {
+  const normalized = characteristics >>> 0;
+  const flags = SEC_FLAG_TEXTS.filter(([bit]) => (normalized & bit) !== 0).map(([, text]) => text);
+  const alignment = normalized & SECTION_ALIGNMENT_MASK;
+  if (alignment !== 0) {
+    flags.push(
+      SECTION_ALIGNMENT_FLAGS.find(([value]) => value === alignment)?.[1] ||
+        `ALIGN_UNKNOWN_0x${alignment.toString(16).padStart(8, "0").toUpperCase()}`
+    );
+  }
+  return flags;
+};
 
 export const GUARD_FLAGS: OptionEntry[] = [
   [0x00000100, "CF_INSTRUMENTED"],

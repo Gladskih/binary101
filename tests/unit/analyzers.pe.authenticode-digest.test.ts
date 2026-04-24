@@ -235,7 +235,7 @@ void test("computePeAuthenticodeDigestFromParsedPe does not exclude a phantom SE
   assert.strictEqual(computed, expectedDigest);
 });
 
-void test("computePeAuthenticodeDigestFromParsedPe orders sections by RVA before hashing", async () => {
+void test("computePeAuthenticodeDigestFromParsedPe orders sections by raw file offset before hashing", async () => {
   const { bytes, core, file } = createStrictAuthenticodeFixture();
   const originalSection = core.sections[0];
   assert.ok(originalSection);
@@ -263,12 +263,13 @@ void test("computePeAuthenticodeDigestFromParsedPe orders sections by RVA before
       }
     ]
   };
-  // Authenticode orders sections by address range before hashing, even if raw file offsets are out of order,
+  // Microsoft Authenticode PE signature format:
+  // sections are sorted by PointerToRawData before hashing, even if RVA order differs,
   // and still includes trailing file bytes after the last section when no certificate is declared.
   const expectedBytes = collectFixtureBytes(bytes, [
     ...listBestEffortAuthenticodeHashRangesWithoutSecurityEntry(reorderedCore.opt.SizeOfHeaders),
-    { start: earlierRvaRawOffset, end: earlierRvaRawOffset + splitRawSize },
     { start: laterRvaRawOffset, end: laterRvaRawOffset + splitRawSize },
+    { start: earlierRvaRawOffset, end: earlierRvaRawOffset + splitRawSize },
     { start: originalSection.pointerToRawData + originalSection.sizeOfRawData, end: bytes.length }
   ]);
   const expectedDigest = toHex(await crypto.subtle.digest("SHA-256", expectedBytes));

@@ -156,6 +156,44 @@ void test("renderHeaders maps COFF characteristic bits to the correct semantic l
   assert.match(html, /<span class="opt sel"[^>]*>UP_SYSTEM_ONLY<\/span>/);
 });
 
+void test("renderHeaders maps the reserved and byte-order COFF characteristic bits at their official offsets", () => {
+  const pe: PeParseResult = createBasePe();
+  // Microsoft PE format, "Characteristics":
+  // 0x0040 is reserved, 0x0080 is IMAGE_FILE_BYTES_REVERSED_LO,
+  // and 0x0100 is IMAGE_FILE_32BIT_MACHINE.
+  pe.coff.Characteristics = 0x01c0;
+
+  const out: string[] = [];
+  renderHeaders(pe, out);
+  const html = out.join("");
+
+  assert.match(html, /<span class="opt sel"[^>]*>RESERVED_0040<\/span>/);
+  assert.match(html, /<span class="opt sel"[^>]*>BYTES_REVERSED_LO<\/span>/);
+  assert.match(html, /<span class="opt sel"[^>]*>32BIT_MACHINE<\/span>/);
+  assert.match(html, /<span class="opt dim"[^>]*>DEBUG_STRIPPED<\/span>/);
+});
+
+void test("renderHeaders names official section characteristics and decodes alignment as a subfield", () => {
+  const pe: PeParseResult = createBasePe();
+  // Microsoft PE format, "Section Flags":
+  // IMAGE_SCN_ALIGN_* values occupy the 0x00f00000 alignment subfield rather than independent bits.
+  pe.sections = [
+    createPeSection(".obj", {
+      characteristics: 0x00000200 | 0x00c00000 | 0x01000000
+    })
+  ];
+
+  const out: string[] = [];
+  renderHeaders(pe, out);
+  const html = out.join("");
+
+  assert.match(html, /LNK_INFO/);
+  assert.match(html, /ALIGN_2048BYTES/);
+  assert.match(html, /LNK_NRELOC_OVFL/);
+  assert.doesNotMatch(html, /ALIGN_1024BYTES/);
+  assert.doesNotMatch(html, /ALIGN_4096BYTES/);
+});
+
 void test("renderHeaders uses the official Microsoft subsystem labels", () => {
   const pe: PeParseResult = createBasePe();
   // Microsoft PE format, "Windows Subsystem": 8 = IMAGE_SUBSYSTEM_NATIVE_WINDOWS.

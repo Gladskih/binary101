@@ -59,9 +59,12 @@ const pushRangeExcludingRange = (
   pushRange(ranges, reader, Math.min(safeEnd, excludedEnd), safeEnd);
 };
 
-const compareSectionHashOrder = (left: PeSection, right: PeSection): number =>
-  (left.virtualAddress >>> 0) - (right.virtualAddress >>> 0) ||
-  (left.pointerToRawData >>> 0) - (right.pointerToRawData >>> 0);
+const compareSectionHashOrder = (left: PeSection, right: PeSection): number => {
+  // Microsoft Authenticode PE signature format, "Calculating the PE Image Hash":
+  // section data is sorted by IMAGE_SECTION_HEADER.PointerToRawData before hashing.
+  return (left.pointerToRawData >>> 0) - (right.pointerToRawData >>> 0) ||
+    (left.virtualAddress >>> 0) - (right.virtualAddress >>> 0);
+};
 
 const listSectionHashRegions = (
   fileSize: number,

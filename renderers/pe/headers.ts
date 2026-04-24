@@ -1,7 +1,14 @@
 "use strict";
 import { humanSize, hex, isoOrDash } from "../../binary-utils.js";
 import { dd, rowOpts, rowFlags, safe } from "../../html-utils.js";
-import { MACHINE, SUBSYSTEMS, CHAR_FLAGS, DLL_FLAGS, SEC_FLAG_TEXTS, DD_TIPS } from "../../analyzers/pe/constants.js";
+import {
+  MACHINE,
+  SUBSYSTEMS,
+  CHAR_FLAGS,
+  DLL_FLAGS,
+  DD_TIPS,
+  formatSectionCharacteristicFlags
+} from "../../analyzers/pe/constants.js";
 import {
   type PeParseResult
 } from "../../analyzers/pe/index.js";
@@ -66,7 +73,7 @@ const renderSections = (pe: PeParseResult, out: string[]): void => {
     `<table class="table" style="margin-top:.35rem"><thead><tr><th>Name</th><th>VirtualSize</th><th>RVA</th><th>RawSize</th><th>FilePtr</th><th>Entropy</th><th>Flags</th></tr></thead><tbody>`
   );
   sections.forEach(section => {
-    const flags = SEC_FLAG_TEXTS.filter(([bit]) => (section.characteristics & bit) !== 0).map(([, text]) => text);
+    const flags = formatSectionCharacteristicFlags(section.characteristics);
     const sectionName = peSectionNameValue(section.name);
     const coffStringTableOffset = peSectionNameOffset(section.name);
     const hint = knownSectionName(sectionName);
