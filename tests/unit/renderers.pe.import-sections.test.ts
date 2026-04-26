@@ -13,6 +13,7 @@ import {
   createPeWithImportLinking,
   createPeWithInferredEagerIatOnly
 } from "../fixtures/pe-import-linking-fixture.js";
+import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 
 void test("renderImportLinking and related sections surface confirmed and non-canonical import relationships", () => {
   const pe = createPeWithImportLinking();
@@ -66,4 +67,36 @@ void test("renderIat shows inferred eager IAT ranges even when IMAGE_DIRECTORY_E
       "IMAGE_DIRECTORY_ENTRY_IAT is absent, but eager IAT ranges were inferred from FirstThunk values in the import descriptors."
     )
   );
+});
+
+void test("renderBoundImports surfaces warning-only parse results", () => {
+  const pe = {
+    boundImports: {
+      entries: [],
+      warning: "Bound import directory is smaller than one descriptor; file may be truncated."
+    }
+  } as unknown as PeWindowsParseResult;
+  const out: string[] = [];
+
+  renderBoundImports(pe, out);
+
+  const html = out.join("");
+  assert.ok(html.includes("Bound imports"));
+  assert.ok(html.includes("file may be truncated"));
+});
+
+void test("renderDelayImports surfaces warning-only parse results", () => {
+  const pe = {
+    delayImports: {
+      entries: [],
+      warning: "Delay import directory is smaller than one descriptor; file may be truncated."
+    }
+  } as unknown as PeWindowsParseResult;
+  const out: string[] = [];
+
+  renderDelayImports(pe, out);
+
+  const html = out.join("");
+  assert.ok(html.includes("Delay-load imports"));
+  assert.ok(html.includes("file may be truncated"));
 });

@@ -82,7 +82,7 @@ export function renderImports(pe: PeWindowsParseResult, out: string[]): void {
 }
 
 export function renderBoundImports(pe: PeWindowsParseResult, out: string[]): void {
-  if (!pe.boundImports?.entries.length) return;
+  if (!pe.boundImports || (!pe.boundImports.entries.length && !pe.boundImports.warning)) return;
   out.push(
     renderPeSectionStart(
       "Bound imports",
@@ -93,21 +93,23 @@ export function renderBoundImports(pe: PeWindowsParseResult, out: string[]): voi
   if (pe.boundImports.warning) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(pe.boundImports.warning)}</div>`);
   }
-  out.push(`<div class="tableWrap"><table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Module</th><th>TimeDateStamp</th><th>ForwarderRefs</th><th>Validated</th><th>Warnings / notes</th></tr></thead><tbody>`);
-  pe.boundImports.entries.forEach((entry, index) => {
-    const linkedModule = findLinkedModuleForBoundImport(pe, index);
-    const forwarderLabel = entry.forwarderRefs?.length
-      ? `${entry.NumberOfModuleForwarderRefs}: ${safe(entry.forwarderRefs.map(ref => ref.name || "(unnamed)").join(", "))}`
-      : String(entry.NumberOfModuleForwarderRefs);
-    const findings = filterFindings(linkedModule, ["bound-match", "bound-without-import"]);
-    out.push(`<tr><td>${index + 1}</td><td>${safe(entry.name || "")}</td><td>${hex(entry.TimeDateStamp >>> 0, 8)}</td><td>${forwarderLabel}</td><td>${renderFindingSummary(findings, "confirmed")}</td><td>${renderFindingSummary(findings, "warning")}${renderFindingSummary(findings, "info")}</td></tr>`);
-  });
-  out.push(`</tbody></table></div>`);
+  if (pe.boundImports.entries.length) {
+    out.push(`<div class="tableWrap"><table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Module</th><th>TimeDateStamp</th><th>ForwarderRefs</th><th>Validated</th><th>Warnings / notes</th></tr></thead><tbody>`);
+    pe.boundImports.entries.forEach((entry, index) => {
+      const linkedModule = findLinkedModuleForBoundImport(pe, index);
+      const forwarderLabel = entry.forwarderRefs?.length
+        ? `${entry.NumberOfModuleForwarderRefs}: ${safe(entry.forwarderRefs.map(ref => ref.name || "(unnamed)").join(", "))}`
+        : String(entry.NumberOfModuleForwarderRefs);
+      const findings = filterFindings(linkedModule, ["bound-match", "bound-without-import"]);
+      out.push(`<tr><td>${index + 1}</td><td>${safe(entry.name || "")}</td><td>${hex(entry.TimeDateStamp >>> 0, 8)}</td><td>${forwarderLabel}</td><td>${renderFindingSummary(findings, "confirmed")}</td><td>${renderFindingSummary(findings, "warning")}${renderFindingSummary(findings, "info")}</td></tr>`);
+    });
+    out.push(`</tbody></table></div>`);
+  }
   out.push(renderPeSectionEnd());
 }
 
 export function renderDelayImports(pe: PeWindowsParseResult, out: string[]): void {
-  if (!pe.delayImports?.entries.length) return;
+  if (!pe.delayImports || (!pe.delayImports.entries.length && !pe.delayImports.warning)) return;
   out.push(
     renderPeSectionStart(
       "Delay-load imports",

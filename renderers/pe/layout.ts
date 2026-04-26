@@ -196,29 +196,31 @@ export function renderException(ex: PeExceptionSection, out: string[]): void {
 }
 
 export function renderBoundImports(bi: PeBoundImportsSection, out: string[]): void {
-  if (!bi.entries?.length) return;
+  if (!bi.entries?.length && !bi.warning) return;
   out.push(renderPeSectionStart("Bound imports"));
   if (bi.warning) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(bi.warning)}</div>`);
   }
-  out.push(
-    `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show bound imports (${bi.entries.length})</summary>`
-  );
-  out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Module</th><th>TimeDateStamp</th><th>ForwarderRefs</th></tr></thead><tbody>`);
-  bi.entries.forEach((e, index) => {
-    const forwarderLabel = e.forwarderRefs?.length
-      ? `${e.NumberOfModuleForwarderRefs}: ${safe(e.forwarderRefs.map(ref => ref.name || "(unnamed)").join(", "))}`
-      : String(e.NumberOfModuleForwarderRefs);
+  if (bi.entries?.length) {
     out.push(
-      `<tr><td>${index + 1}</td><td>${safe(e.name || "")}</td><td>${hex(e.TimeDateStamp, 8)}</td><td>${forwarderLabel}</td></tr>`
+      `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show bound imports (${bi.entries.length})</summary>`
     );
-  });
-  out.push(`</tbody></table></details>`);
+    out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Module</th><th>TimeDateStamp</th><th>ForwarderRefs</th></tr></thead><tbody>`);
+    bi.entries.forEach((e, index) => {
+      const forwarderLabel = e.forwarderRefs?.length
+        ? `${e.NumberOfModuleForwarderRefs}: ${safe(e.forwarderRefs.map(ref => ref.name || "(unnamed)").join(", "))}`
+        : String(e.NumberOfModuleForwarderRefs);
+      out.push(
+        `<tr><td>${index + 1}</td><td>${safe(e.name || "")}</td><td>${hex(e.TimeDateStamp, 8)}</td><td>${forwarderLabel}</td></tr>`
+      );
+    });
+    out.push(`</tbody></table></details>`);
+  }
   out.push(renderPeSectionEnd());
 }
 
 export function renderDelayImports(di: PeDelayImportsSection, out: string[]): void {
-  if (!di.entries?.length) return;
+  if (!di.entries?.length && !di.warning) return;
   out.push(renderPeSectionStart("Delay-load imports"));
   if (di.warning) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(di.warning)}</div>`);
