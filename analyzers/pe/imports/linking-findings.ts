@@ -32,7 +32,7 @@ export const resolveIatDirectoryRelation = (
   iat: PeIatDirectory | null
 ): PeIatDirectoryRelation => {
   if (!tableRva) return "missing-table-rva";
-  if (!iat?.size) return "missing-directory";
+  if (!iat?.rva || !iat.size) return "missing-directory";
   // Microsoft PE format: IMAGE_DIRECTORY_ENTRY_IAT gives one RVA/size span for the image IAT.
   // Compare thunk-table starts against that declared half-open range.
   // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format

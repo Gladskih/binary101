@@ -13,7 +13,7 @@ const compareDeclaredIat = (
   ranges: PeInferredEagerIatRange[],
   iat: PeIatDirectory | null
 ): PeDeclaredIatRelation => {
-  if (!iat?.size) return "declared-absent";
+  if (!iat?.rva || !iat.size) return "declared-absent";
   const declaredStart = iat.rva >>> 0;
   const declaredEnd = declaredStart + (iat.size >>> 0);
   const coversAllRanges = ranges.every(

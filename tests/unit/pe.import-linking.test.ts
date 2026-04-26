@@ -208,3 +208,32 @@ void test("analyzeImportLinking records missing-directory and missing-table-rva 
   assert.equal(userModule.delayImports[0]?.iatDirectoryRelation, "missing-directory");
   assert.equal(result.inferredEagerIat?.relationToDeclared, "declared-absent");
 });
+
+void test("analyzeImportLinking treats an IAT directory with RVA 0 as absent", () => {
+  const { imports, boundImports, delayImports, loadcfg } = createImportLinkingInputs();
+
+  const result = expectDefined(
+    analyzeImportLinking(
+      imports,
+      boundImports,
+      delayImports,
+      {
+        rva: 0,
+        size: 0x300,
+        warnings: ["IAT directory has a non-zero size but RVA is 0."]
+      },
+      loadcfg,
+      createImportLinkingSections()
+    )
+  );
+
+  const kernelModule = expectDefined(
+    result.modules.find(module => module.moduleKey === "kernel32.dll")
+  );
+  const userModule = expectDefined(
+    result.modules.find(module => module.moduleKey === "user32.dll")
+  );
+  assert.equal(kernelModule.imports[0]?.iatDirectoryRelation, "missing-directory");
+  assert.equal(userModule.delayImports[0]?.iatDirectoryRelation, "missing-directory");
+  assert.equal(result.inferredEagerIat?.relationToDeclared, "declared-absent");
+});
