@@ -106,7 +106,25 @@ export async function parseDebugDirectory(
     if (message && !warnings.includes(message)) warnings.push(message);
   };
   const debugDir = dataDirs.find(d => d.name === "DEBUG");
-  if (!debugDir?.rva) return { entry: null, entries: [], warning: null, rawDataRanges: [] };
+  if (!debugDir || (debugDir.rva === 0 && debugDir.size === 0)) {
+    return { entry: null, entries: [], warning: null, rawDataRanges: [] };
+  }
+  if (debugDir.rva === 0) {
+    return {
+      entry: null,
+      entries: [],
+      warning: "Debug directory has a non-zero size but RVA is 0.",
+      rawDataRanges: []
+    };
+  }
+  if (debugDir.size === 0) {
+    return {
+      entry: null,
+      entries: [],
+      warning: "Debug directory has an RVA but size is 0.",
+      rawDataRanges: []
+    };
+  }
   const baseOffset = rvaToOff(debugDir.rva);
   if (baseOffset == null || baseOffset < 0) {
     return {

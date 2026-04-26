@@ -85,8 +85,14 @@ export const parseAmd64ExceptionDirectory = async (
   rvaToOff: RvaToOffset
 ): Promise<PeExceptionDirectory | null> => {
   const dir = dataDirs.find(directory => directory.name === "EXCEPTION");
-  if (!dir?.rva) {
+  if (!dir || (dir.rva === 0 && dir.size === 0)) {
     return null;
+  }
+  if (dir.rva === 0) {
+    return createEmptyExceptionDirectory(
+      ["Exception directory has a non-zero size but RVA is 0."],
+      "amd64"
+    );
   }
   const base = rvaToOff(dir.rva);
   if (base == null) {

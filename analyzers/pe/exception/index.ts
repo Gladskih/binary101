@@ -35,8 +35,13 @@ export async function parseExceptionDirectory(
     return parseArm64ExceptionDirectory(reader, dataDirs, rvaToOff);
   }
   const dir = dataDirs.find(directory => directory.name === "EXCEPTION");
-  if (!dir?.rva) {
+  if (!dir || (dir.rva === 0 && dir.size === 0)) {
     return null;
+  }
+  if (dir.rva === 0) {
+    return createEmptyExceptionDirectory([
+      "Exception directory has a non-zero size but RVA is 0."
+    ]);
   }
   return createEmptyExceptionDirectory([
     `Exception directory decoding is not implemented for machine 0x${machine.toString(16)}.`

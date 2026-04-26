@@ -16,6 +16,13 @@ void test("parseIatDirectory preserves declared but malformed IAT directories wi
   assert.ok(zeroRva);
   assert.ok(zeroRva.warnings?.some(warning => /RVA is 0/i.test(warning)));
 
+  const zeroSize = parseIatDirectory(
+    [{ name: "IAT", rva: 0x1000, size: 0 }],
+    value => value
+  );
+  assert.ok(zeroSize);
+  assert.ok(zeroSize.warnings?.some(warning => /size is 0/i.test(warning)));
+
   const unmapped = parseIatDirectory(
     [{ name: "IAT", rva: 0x1000, size: 0x20 }],
     () => null

@@ -179,7 +179,19 @@ const parseDelayImportsWithThunkReader = async (
   ) => Promise<Array<{ ordinal?: number; hint?: number; name?: string }>>
 ): Promise<{ entries: PeDelayImportEntry[]; warning?: string } | null> => {
   const dir = dataDirs.find(d => d.name === "DELAY_IMPORT");
-  if (!dir?.rva) return null;
+  if (!dir || (dir.rva === 0 && dir.size === 0)) return null;
+  if (dir.rva === 0) {
+    return {
+      entries: [],
+      warning: "Delay import directory has a non-zero size but RVA is 0."
+    };
+  }
+  if (dir.size === 0) {
+    return {
+      entries: [],
+      warning: "Delay import directory has an RVA but size is 0."
+    };
+  }
   const base = rvaToOff(dir.rva);
   if (base == null) {
     return { entries: [], warning: "Delay import directory RVA does not map to file data." };

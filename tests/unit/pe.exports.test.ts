@@ -90,6 +90,18 @@ void test("parseExportDirectory preserves a declared export directory smaller th
   assert.ok(result.issues.some(issue => /export|truncated|40/i.test(issue)));
 });
 
+void test("parseExportDirectory warns when directory size is non-zero but RVA is 0", async () => {
+  const result = await parseExportFixture(
+    new Uint8Array(IMAGE_EXPORT_DIRECTORY_SIZE).fill(0),
+    // Microsoft PE format: IMAGE_DATA_DIRECTORY is an address/size pair; a non-zero size with RVA 0 is malformed.
+    { rva: 0, size: IMAGE_EXPORT_DIRECTORY_SIZE }
+  );
+
+  assert.ok(result);
+  assert.equal(result?.entries.length, 0);
+  assert.ok(result?.issues.some(issue => /rva is 0/i.test(issue)));
+});
+
 void test("parseExportDirectory reports an unmappable export directory instead of silently returning null", async () => {
   const result = await parseExportFixture(
     new Uint8Array(IMAGE_EXPORT_DIRECTORY_SIZE).fill(0),

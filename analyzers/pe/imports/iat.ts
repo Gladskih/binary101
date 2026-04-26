@@ -14,12 +14,18 @@ export const parseIatDirectory = (
 ): PeIatDirectory | null => {
   const dir = dataDirs.find(directory => directory.name === "IAT");
   if (!dir || (dir.rva === 0 && dir.size === 0)) return null;
-  if (!dir.size) return null;
   if (!dir.rva) {
     return {
       rva: 0,
       size: dir.size,
       warnings: ["IAT directory has a non-zero size but RVA is 0."]
+    };
+  }
+  if (!dir.size) {
+    return {
+      rva: dir.rva,
+      size: 0,
+      warnings: ["IAT directory has an RVA but size is 0."]
     };
   }
   const offset = rvaToOff(dir.rva);

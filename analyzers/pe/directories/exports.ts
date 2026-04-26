@@ -4,11 +4,7 @@ import type { FileRangeReader } from "../../file-range-reader.js";
 import { readMappedNullTerminatedAsciiString } from "../strings/mapped-ascii-string.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 
-export async function parseExportDirectory(
-  reader: FileRangeReader,
-  dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset
-): Promise<{
+type PeExportDirectoryResult = {
   flags: number;
   timestamp: number;
   version: number;
@@ -20,55 +16,47 @@ export async function parseExportDirectory(
   ordinalTable: number;
   entries: Array<{ ordinal: number; rva: number; name: string | null; forwarder?: string | null }>;
   issues: string[];
-} | null> {
+};
+
+const createEmptyExportDirectory = (issues: string[]): PeExportDirectoryResult => ({
+  flags: 0,
+  timestamp: 0,
+  version: 0,
+  dllName: "",
+  Base: 0,
+  NumberOfFunctions: 0,
+  NumberOfNames: 0,
+  namePointerTable: 0,
+  ordinalTable: 0,
+  entries: [],
+  issues
+});
+
+export async function parseExportDirectory(
+  reader: FileRangeReader,
+  dataDirs: PeDataDirectory[],
+  rvaToOff: RvaToOffset
+): Promise<PeExportDirectoryResult | null> {
   const dir = dataDirs.find(d => d.name === "EXPORT");
-  if (!dir?.rva) return null;
+  if (!dir || (dir.rva === 0 && dir.size === 0)) return null;
+  if (dir.rva === 0) {
+    return createEmptyExportDirectory(["Export directory has a non-zero size but RVA is 0."]);
+  }
+  if (dir.size === 0) {
+    return createEmptyExportDirectory(["Export directory has an RVA but size is 0."]);
+  }
   const base = rvaToOff(dir.rva);
   if (base == null) {
-    return {
-      flags: 0,
-      timestamp: 0,
-      version: 0,
-      dllName: "",
-      Base: 0,
-      NumberOfFunctions: 0,
-      NumberOfNames: 0,
-      namePointerTable: 0,
-      ordinalTable: 0,
-      entries: [],
-      issues: ["Export directory RVA does not map to file data."]
-    };
+    return createEmptyExportDirectory(["Export directory RVA does not map to file data."]);
   }
   if (base < 0 || base >= reader.size) {
-    return {
-      flags: 0,
-      timestamp: 0,
-      version: 0,
-      dllName: "",
-      Base: 0,
-      NumberOfFunctions: 0,
-      NumberOfNames: 0,
-      namePointerTable: 0,
-      ordinalTable: 0,
-      entries: [],
-      issues: ["Export directory starts outside file data."]
-    };
+    return createEmptyExportDirectory(["Export directory starts outside file data."]);
   }
   const availableDirSize = Math.max(0, Math.min(dir.size, reader.size - base));
   if (availableDirSize < 40) {
-    return {
-      flags: 0,
-      timestamp: 0,
-      version: 0,
-      dllName: "",
-      Base: 0,
-      NumberOfFunctions: 0,
-      NumberOfNames: 0,
-      namePointerTable: 0,
-      ordinalTable: 0,
-      entries: [],
-      issues: ["Export directory is smaller than the 40-byte IMAGE_EXPORT_DIRECTORY header."]
-    };
+    return createEmptyExportDirectory([
+      "Export directory is smaller than the 40-byte IMAGE_EXPORT_DIRECTORY header."
+    ]);
   }
   const dv = await reader.read(base, 40);
   const isReadableOffset = (offset: number | null): offset is number =>

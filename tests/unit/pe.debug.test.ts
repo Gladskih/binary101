@@ -102,6 +102,20 @@ void test("parseDebugDirectory warns when the declared directory is smaller than
   assert.ok(result.warning && /smaller|truncated/i.test(result.warning));
 });
 
+void test("parseDebugDirectory warns when directory size is non-zero but RVA is 0", async () => {
+  const tracked = createSliceTrackingFile(new Uint8Array(28).fill(0), 28, "debug-zero-rva.bin");
+  const result = await parseDebugDirectory(
+    tracked.file,
+    // Microsoft PE format: IMAGE_DATA_DIRECTORY is an address/size pair; a non-zero size with RVA 0 is malformed.
+    [{ name: "DEBUG", rva: 0, size: 28 }],
+    value => value
+  );
+
+  assert.equal(result.entry, null);
+  assert.deepEqual(result.entries, []);
+  assert.ok(result.warning?.toLowerCase().includes("rva is 0"));
+});
+
 void test("parseDebugDirectory warns when the directory size leaves trailing bytes after whole entries", async () => {
   const subject = createTrailingDebugDirectorySubject();
   const result = await parseDebugDirectory(

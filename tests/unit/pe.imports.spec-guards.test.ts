@@ -111,6 +111,30 @@ void test("parseImportDirectory clamps the descriptor walk to the declared impor
   assert.deepEqual(result.entries.map(entry => entry.dll), ["first.dll"]);
 });
 
+void test("parseImportDirectory warns when directory size is non-zero but RVA is 0", async () => {
+  const result = await parseImportDirectory32(
+    new MockFile(new Uint8Array(IMPORT_DIRECTORY_SIZE).fill(0)),
+    // Microsoft PE format: IMAGE_DATA_DIRECTORY is an address/size pair; a non-zero size with RVA 0 is malformed.
+    [{ name: "IMPORT", rva: 0, size: IMPORT_DIRECTORY_SIZE }],
+    value => value
+  );
+
+  assert.deepEqual(result.entries, []);
+  assert.ok(result.warning?.toLowerCase().includes("rva is 0"));
+});
+
+void test("parseImportDirectory warns when directory has an RVA but size is 0", async () => {
+  const result = await parseImportDirectory32(
+    new MockFile(new Uint8Array(IMPORT_DIRECTORY_SIZE).fill(0)),
+    // Microsoft PE format: IMAGE_DATA_DIRECTORY is an address/size pair; a non-zero RVA with size 0 is malformed.
+    [{ name: "IMPORT", rva: IMAGE_THUNK_DATA32_SIZE, size: 0 }],
+    value => value
+  );
+
+  assert.deepEqual(result.entries, []);
+  assert.ok(result.warning?.toLowerCase().includes("size is 0"));
+});
+
 void test("parseImportDirectory drops a truncated live descriptor instead of inventing a partial import", async () => {
   const layout = createImportLayout();
   const descriptorOffset = layout.reserve(

@@ -108,6 +108,20 @@ void test("parseBaseRelocations preserves a non-zero directory that is smaller t
   assert.ok(parsed?.warnings?.some(warning => /smaller|header|8-byte|truncated/i.test(warning)));
 });
 
+void test("parseBaseRelocations warns when directory size is non-zero but RVA is 0", async () => {
+  const parsed = await parseBaseRelocations(
+    new MockFile(new Uint8Array(IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE).fill(0)),
+    // Microsoft PE format: IMAGE_DATA_DIRECTORY is an address/size pair; a non-zero size with RVA 0 is malformed.
+    [{ name: "BASERELOC", rva: 0, size: IMAGE_BASE_RELOCATION_BLOCK_HEADER_SIZE }],
+    rvaToOff
+  );
+
+  assert.ok(parsed);
+  assert.deepStrictEqual(parsed?.blocks, []);
+  assert.strictEqual(parsed?.totalEntries, 0);
+  assert.ok(parsed?.warnings?.some(warning => /rva is 0/i.test(warning)));
+});
+
 void test("parseBaseRelocations warns when a relocation block size runs past the declared directory span", async () => {
   const bytes = new Uint8Array(0x100).fill(0);
   const directoryOffset = 0x20;

@@ -124,7 +124,14 @@ export async function parseBaseRelocations(
   warnings?: string[];
 } | null> {
   const dir = dataDirs.find(d => d.name === "BASERELOC");
-  if (!dir?.rva) return null;
+  if (!dir || (dir.rva === 0 && dir.size === 0)) return null;
+  if (dir.rva === 0) {
+    return {
+      blocks: [],
+      totalEntries: 0,
+      warnings: ["Base relocation directory has a non-zero size but RVA is 0."]
+    };
+  }
   if (dir.size < IMAGE_BASE_RELOCATION_HEADER_SIZE) {
     return {
       blocks: [],

@@ -103,6 +103,19 @@ void test("parseBoundImports preserves a declared directory smaller than one des
   assert.ok(result.warning && /bound import|descriptor|truncated|8-byte/i.test(result.warning));
 });
 
+void test("parseBoundImports warns when directory size is non-zero but RVA is 0", async () => {
+  const result = await parseBoundImports(
+    new MockFile(new Uint8Array(IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE).fill(0)),
+    // Microsoft PE format: IMAGE_DATA_DIRECTORY is an address/size pair; a non-zero size with RVA 0 is malformed.
+    [{ name: "BOUND_IMPORT", rva: 0, size: IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE }],
+    value => value
+  );
+
+  const definedResult = expectDefined(result);
+  assert.deepEqual(definedResult.entries, []);
+  assert.ok(definedResult.warning?.toLowerCase().includes("rva is 0"));
+});
+
 void test("parseBoundImports reports an unmappable directory base instead of silently returning null", async () => {
   const result = await parseBoundImports(
     new MockFile(new Uint8Array(IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE).fill(0), "bound-imports-unmapped.bin"),

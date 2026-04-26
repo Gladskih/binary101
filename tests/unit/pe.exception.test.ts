@@ -107,6 +107,18 @@ void test("parseExceptionDirectory preserves a declared EXCEPTION directory that
   assert.strictEqual(parsed.functionCount, 0);
   assert.ok(parsed.issues.some(issue => /runtime_function|truncated|12 bytes/i.test(issue)));
 });
+void test("parseExceptionDirectory warns when directory size is non-zero but RVA is 0", async () => {
+  const parsed = await parseExceptionFixture(
+    new Uint8Array(12).fill(0),
+    "exception-zero-rva.bin",
+    0,
+    12
+  );
+
+  assert.ok(parsed);
+  assert.strictEqual(parsed.functionCount, 0);
+  assert.ok(parsed.issues.some(issue => /rva is 0/i.test(issue)));
+});
 void test("parseExceptionDirectory stops when later RUNTIME_FUNCTION slots no longer map through rvaToOff", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const exRva = 0x80;

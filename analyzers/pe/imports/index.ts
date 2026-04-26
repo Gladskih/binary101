@@ -21,11 +21,7 @@ const IMAGE_IMPORT_NAME_MASK64 = 0x7fffffffn; // PE32+ keeps the import-by-name 
 const IMAGE_IMPORT_NAME_RESERVED_MASK64 = 0x7fffffff80000000n; // PE32+ reserves bits 62-31.
 const IMAGE_IMPORT_ORDINAL_RESERVED_MASK64 = 0x7fffffffffff0000n; // PE32+ ordinal thunks reserve bits 62-16.
 
-export interface PeImportFunction {
-  ordinal?: number;
-  hint?: number;
-  name?: string;
-}
+export interface PeImportFunction { ordinal?: number; hint?: number; name?: string }
 
 export type PeImportLookupSource = "import-lookup-table" | "iat-fallback" | "missing";
 
@@ -40,11 +36,7 @@ export interface PeImportEntry {
   functions: PeImportFunction[];
 }
 
-export interface PeImportParseResult {
-  entries: PeImportEntry[];
-  thunkEntrySize: number;
-  warning?: string;
-}
+export interface PeImportParseResult { entries: PeImportEntry[]; thunkEntrySize: number; warning?: string }
 type PeParsedThunkTable = { functions: PeImportFunction[]; terminated: boolean };
 
 const readImportByName = async (
@@ -188,7 +180,17 @@ const parseImportDirectoryWithThunkReader = async (
   const isReadableOffset = (offset: number | null): offset is number =>
     offset != null && offset >= 0 && offset < reader.size;
   const maxThunkEntries = (entrySize: number): number => Math.floor(reader.size / entrySize) + 1;
-  if (!impDir?.rva) return { entries: imports, thunkEntrySize };
+  if (!impDir || (impDir.rva === 0 && impDir.size === 0)) return { entries: imports, thunkEntrySize };
+  if (impDir.rva === 0) return {
+    entries: imports,
+    thunkEntrySize,
+    warning: "Import directory has a non-zero size but RVA is 0."
+  };
+  if (impDir.size === 0) return {
+    entries: imports,
+    thunkEntrySize,
+    warning: "Import directory has an RVA but size is 0."
+  };
   const start = rvaToOff(impDir.rva);
   if (start == null || start < 0 || start >= reader.size) {
     return { entries: imports, thunkEntrySize, warning: "Import directory RVA does not map to file data." };
@@ -284,20 +286,14 @@ const parseImportDirectoryWithThunkReader = async (
 
 export const parseImportDirectory32 = async (
   reader: FileRangeReader, dataDirs: PeDataDirectory[], rvaToOff: RvaToOffset
-): Promise<PeImportParseResult> => parseImportDirectoryWithThunkReader(
-  reader,
-  dataDirs,
-  rvaToOff,
-  readImportThunkFunctions32,
-  IMAGE_THUNK_DATA32_SIZE
-);
+): Promise<PeImportParseResult> =>
+  parseImportDirectoryWithThunkReader(
+    reader, dataDirs, rvaToOff, readImportThunkFunctions32, IMAGE_THUNK_DATA32_SIZE
+  );
 
 export const parseImportDirectory64 = async (
   reader: FileRangeReader, dataDirs: PeDataDirectory[], rvaToOff: RvaToOffset
-): Promise<PeImportParseResult> => parseImportDirectoryWithThunkReader(
-  reader,
-  dataDirs,
-  rvaToOff,
-  readImportThunkFunctions64,
-  IMAGE_THUNK_DATA64_SIZE
-);
+): Promise<PeImportParseResult> =>
+  parseImportDirectoryWithThunkReader(
+    reader, dataDirs, rvaToOff, readImportThunkFunctions64, IMAGE_THUNK_DATA64_SIZE
+  );

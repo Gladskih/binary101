@@ -40,7 +40,15 @@ export async function buildResourceTree(
 ): Promise<ResourceTree | null> {
   const utf16Decoder = new TextDecoder("utf-16le", { fatal: false });
   const dir = dataDirs.find(d => d.name === "RESOURCE");
-  if (!dir?.rva) return null;
+  if (!dir || (dir.rva === 0 && dir.size === 0)) return null;
+  if (dir.rva === 0) {
+    return createEmptyResourceTree(
+      dir,
+      rvaToOff(dir.rva),
+      ["Resource directory has a non-zero size but RVA is 0."],
+      rvaToOff
+    );
+  }
   if (dir.size < IMAGE_RESOURCE_DIRECTORY_SIZE) {
     return createEmptyResourceTree(
       dir,

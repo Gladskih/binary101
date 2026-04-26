@@ -44,6 +44,18 @@ void test("buildResourceTree reports a truncated root directory header at EOF", 
   assert.deepStrictEqual(tree.detail, []);
   assert.match((tree.issues || []).join(" "), /truncated/i);
 });
+void test("buildResourceTree warns when directory size is non-zero but RVA is 0", async () => {
+  const tree = await buildResourceTree(
+    new MockFile(new Uint8Array(IMAGE_RESOURCE_DIRECTORY_SIZE).fill(0)),
+    // Microsoft PE format: IMAGE_DATA_DIRECTORY is an address/size pair; a non-zero size with RVA 0 is malformed.
+    [{ name: "RESOURCE", rva: 0, size: IMAGE_RESOURCE_DIRECTORY_SIZE }],
+    value => value
+  );
+
+  assert.ok(tree);
+  assert.deepStrictEqual(tree?.top, []);
+  assert.match((tree?.issues || []).join(" "), /rva is 0/i);
+});
 void test("buildResourceTree preserves full numeric resource IDs", async () => {
   const fixture = createResourceDirectoryFixture(
     IMAGE_RESOURCE_DIRECTORY_SIZE + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE
