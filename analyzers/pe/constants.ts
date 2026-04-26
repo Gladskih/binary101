@@ -96,7 +96,13 @@ export const CHAR_FLAGS: OptionEntry[] = [
   [0x8000, "BYTES_REVERSED_HI", "Big-endian byte ordering (obsolete)"]
 ];
 
+// Microsoft PE format, "DLL Characteristics":
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#dll-characteristics
 export const DLL_FLAGS: OptionEntry[] = [
+  [0x0001, "RESERVED_0001", "Reserved, must be zero"],
+  [0x0002, "RESERVED_0002", "Reserved, must be zero"],
+  [0x0004, "RESERVED_0004", "Reserved, must be zero"],
+  [0x0008, "RESERVED_0008", "Reserved, must be zero"],
   [0x0020, "HIGH_ENTROPY_VA", "Indicates 64-bit high-entropy ASLR support (PE32+)"],
   [0x0040, "DYNAMIC_BASE", "Image is relocatable (ASLR)"],
   [0x0080, "FORCE_INTEGRITY", "Code integrity checks are enforced"],

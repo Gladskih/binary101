@@ -173,6 +173,33 @@ void test("renderHeaders maps the reserved and byte-order COFF characteristic bi
   assert.match(html, /<span class="opt dim"[^>]*>DEBUG_STRIPPED<\/span>/);
 });
 
+void test("renderHeaders surfaces reserved DLL characteristic bits", () => {
+  const pe: PeParseResult = createBasePe();
+  // Microsoft PE format, "DLL Characteristics": 0x0001..0x0008 are reserved and must be zero.
+  (pe.opt as PeWindowsOptionalHeader).DllCharacteristics = 0x0009;
+
+  const out: string[] = [];
+  renderHeaders(pe, out);
+  const html = out.join("");
+
+  assert.match(html, /<span class="opt sel"[^>]*>RESERVED_0001<\/span>/);
+  assert.match(html, /<span class="opt sel"[^>]*>RESERVED_0008<\/span>/);
+  assert.match(html, /<span class="opt dim"[^>]*>HIGH_ENTROPY_VA<\/span>/);
+});
+
+void test("renderHeaders surfaces unknown DLL characteristic bits", () => {
+  const pe: PeParseResult = createBasePe();
+  // Microsoft PE format, "DLL Characteristics" defines adjacent values but no 0x0010 flag.
+  (pe.opt as PeWindowsOptionalHeader).DllCharacteristics = 0x0010;
+
+  const out: string[] = [];
+  renderHeaders(pe, out);
+  const html = out.join("");
+
+  assert.match(html, /UNKNOWN_BITS_0x0010/);
+  assert.match(html, /Unknown flag bits \(0x0010\)/);
+});
+
 void test("renderHeaders names official section characteristics and decodes alignment as a subfield", () => {
   const pe: PeParseResult = createBasePe();
   // Microsoft PE format, "Section Flags":

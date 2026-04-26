@@ -32,16 +32,30 @@ export const renderOptionChips = (
 export const renderFlagChips = (
   mask: number,
   flags: Array<[number, string, string?]>
-): string =>
-  `<div class="optionsRow">${flags
-    .map(([bit, name, explanation]) => {
-      const isSet = (mask & bit) !== 0;
-      const label = explanation ? `${name} - ${explanation}` : name;
-      const tooltip = `${label} (${toHex32(bit, 4)})`;
-      return `<span class="opt ${isSet ? "sel" : "dim"}" title="${escapeHtml(tooltip)}">${name}</span>`;
-    })
-    .join("")}
+): string => {
+  const normalizedMask = mask >>> 0;
+  const knownMask = flags.reduce(
+    (accumulator, [bit]) => (accumulator | (bit >>> 0)) >>> 0,
+    0
+  );
+  const chips = flags.map(([bit, name, explanation]) => {
+    const isSet = (normalizedMask & (bit >>> 0)) !== 0;
+    const label = explanation ? `${name} - ${explanation}` : name;
+    const tooltip = `${label} (${toHex32(bit, 4)})`;
+    return `<span class="opt ${isSet ? "sel" : "dim"}" ` +
+      `title="${escapeHtml(tooltip)}">${name}</span>`;
+  });
+  const unknownBits = (normalizedMask & ~knownMask) >>> 0;
+  if (unknownBits) {
+    const unknownHex = toHex32(unknownBits, 4);
+    chips.push(
+      `<span class="opt sel" title="Unknown flag bits (${unknownHex})">` +
+        `UNKNOWN_BITS_${unknownHex}</span>`
+    );
+  }
+  return `<div class="optionsRow">${chips.join("")}
   </div>`;
+};
 
 // Backwards-compatible aliases kept while refactoring callers.
 export const safe = escapeHtml;

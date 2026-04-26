@@ -59,6 +59,17 @@ void test("renderFlagChips marks set bits, dims others, and escapes labels", () 
   assert.ok(html.includes('class="opt dim" title="WRITE - write access (0x0002)"'));
 });
 
+void test("renderFlagChips surfaces unknown set bits", () => {
+  const html = renderFlagChips(0x05, [
+    [0x01, "READ", "read access"]
+  ]);
+
+  assert.ok(html.includes('class="opt sel" title="READ - read access (0x0001)"'));
+  assert.ok(
+    html.includes('class="opt sel" title="Unknown flag bits (0x0004)">UNKNOWN_BITS_0x0004</span>')
+  );
+});
+
 void test("escapeHtml handles non-string inputs", () => {
   const htmlNumber = escapeHtml(42);
   const htmlNull = escapeHtml(null);
