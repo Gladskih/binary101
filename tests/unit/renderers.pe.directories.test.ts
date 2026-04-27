@@ -45,6 +45,27 @@ void test("renderTls and renderIat display local directory warnings", () => {
   assert.ok(html.includes("IAT directory RVA could not be mapped to a file offset."));
 });
 
+void test("renderTls displays parsed callback RVAs", () => {
+  const tls: Parameters<typeof renderTls>[0] = {
+    StartAddressOfRawData: 0x1000n,
+    EndAddressOfRawData: 0x1010n,
+    AddressOfIndex: 0x1020n,
+    AddressOfCallBacks: 0x1030n,
+    SizeOfZeroFill: 0,
+    Characteristics: 0,
+    CallbackCount: 2,
+    CallbackRvas: [0x2000, 0x2010],
+    parsed: true
+  };
+  const out: string[] = [];
+  renderTls(tls, out);
+  const html = out.join("");
+
+  assert.ok(html.includes("Callback RVAs"));
+  assert.ok(html.includes("0x00002000"));
+  assert.ok(html.includes("0x00002010"));
+});
+
 void test("renderExports renders entries directly without a nested show wrapper", () => {
   const exportsSection: Parameters<typeof renderExports>[0] = {
     flags: 0,

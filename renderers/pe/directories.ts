@@ -18,6 +18,16 @@ type PeIatSection = NonNullable<PeWindowsParseResult["iat"]>;
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
 const IMAGE_SCN_GPREL = 0x00008000;
 
+const renderTlsCallbackRvas = (callbackRvas: number[] | undefined, out: string[]): void => {
+  if (!callbackRvas?.length) return;
+  out.push(`<h5 style="margin:.5rem 0 .25rem 0;font-size:.85rem">Callback RVAs</h5>`);
+  out.push(`<div class="tableWrap"><table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>RVA</th></tr></thead><tbody>`);
+  callbackRvas.forEach((rva, index) => {
+    out.push(`<tr><td>${index + 1}</td><td>${hex(rva, 8)}</td></tr>`);
+  });
+  out.push(`</tbody></table></div>`);
+};
+
 export function renderImports(imports: PeImportsSection, out: string[]): void {
   if (!imports.entries.length && !imports.warning) return;
   out.push(renderPeSectionStart("Import table"));
@@ -97,6 +107,7 @@ export function renderTls(t: PeTlsSection, out: string[]): void {
   out.push(dd("SizeOfZeroFill", String(t.SizeOfZeroFill ?? 0), "Bytes of zero-fill padding (TLS)."));
   out.push(dd("Characteristics", hex(t.Characteristics || 0, 8), "Reserved (should be 0)."));
   out.push(`</dl>`);
+  renderTlsCallbackRvas(t.CallbackRvas, out);
   out.push(renderPeSectionEnd());
 }
 

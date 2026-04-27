@@ -7,7 +7,8 @@ import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
 const IMAGE_TLS_DIRECTORY32_SIZE = 0x18; // IMAGE_TLS_DIRECTORY32
-const IMAGE_TLS_DIRECTORY64_SIZE = 0x30; // IMAGE_TLS_DIRECTORY64
+// Microsoft PE format, "The TLS Directory": PE32+ TLS directory is 0x28 bytes.
+const IMAGE_TLS_DIRECTORY64_SIZE = 0x28;
 const TLS_CALLBACK_ENTRY_SIZE32 = Uint32Array.BYTES_PER_ELEMENT; // One 32-bit callback pointer
 
 void test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
@@ -58,6 +59,31 @@ void test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
 void test("parseTlsDirectory returns null when the TLS data directory is absent", async () => {
   const file = new MockFile(new Uint8Array(16));
   assert.equal(await parseTlsDirectory32(file, [], value => value, 0n), null);
+});
+
+void test("parseTlsDirectory64 accepts the spec-sized TLS directory header", async () => {
+  const tlsRva = 0x20;
+  const bytes = new Uint8Array(tlsRva + 0x28).fill(0);
+  const dv = new DataView(bytes.buffer);
+  // Microsoft PE format, "The TLS Directory": Characteristics is at PE32+
+  // offset 36 with size 4, so a complete PE32+ TLS directory is 0x28 bytes.
+  dv.setBigUint64(tlsRva, 0x1800n, true);
+  dv.setBigUint64(tlsRva + 8, 0x1810n, true);
+  dv.setBigUint64(tlsRva + 16, 0x1820n, true);
+  dv.setBigUint64(tlsRva + 24, 0n, true);
+  dv.setUint32(tlsRva + 32, 4, true);
+  dv.setUint32(tlsRva + 36, 0, true);
+
+  const tls = expectDefined(await parseTlsDirectory64(
+    new MockFile(bytes),
+    [{ name: "TLS", rva: tlsRva, size: 0x28 }],
+    value => value,
+    0n
+  ));
+
+  assert.equal(tls.parsed, true);
+  assert.equal(tls.SizeOfZeroFill, 4);
+  assert.equal(BigInt(tls.StartAddressOfRawData), 0x1800n);
 });
 
 void test("parseTlsDirectory preserves declared but unmapped TLS directories with warnings", async () => {

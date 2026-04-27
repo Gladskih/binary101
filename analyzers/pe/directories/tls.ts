@@ -4,8 +4,12 @@ import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeDataDirectory, PeTlsDirectory, RvaToOffset } from "../types.js";
 
 const MAX_RVA_BIGINT = 0xffff_ffffn;
-const IMAGE_TLS_DIRECTORY32_SIZE = 0x18; // Microsoft PE format: IMAGE_TLS_DIRECTORY32 is six DWORDs.
-const IMAGE_TLS_DIRECTORY64_SIZE = 0x30; // Microsoft PE format: IMAGE_TLS_DIRECTORY64 is four ULONGLONGs plus two DWORDs.
+// Microsoft PE format, "The TLS Directory": PE32 fields end at Characteristics
+// offset 20 with size 4.
+const IMAGE_TLS_DIRECTORY32_SIZE = 0x18;
+// Microsoft PE format, "The TLS Directory": PE32+ fields end at Characteristics
+// offset 36 with size 4.
+const IMAGE_TLS_DIRECTORY64_SIZE = 0x28;
 const TLS_CALLBACK_ENTRY_SIZE32 = Uint32Array.BYTES_PER_ELEMENT;
 const TLS_CALLBACK_ENTRY_SIZE64 = BigUint64Array.BYTES_PER_ELEMENT;
 
