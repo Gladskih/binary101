@@ -4,6 +4,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderClr } from "../../renderers/pe/directories.js";
 
+const HEAP_EXTRA_DATA = 0x40; // CoreCLR CMiniMdSchemaBase::EXTRA_DATA schema flag.
+const READY_TO_RUN_LARGEST_RID_LOG2 = 0x0a; // Observed in CoreCLR ReadyToRun table streams.
+const SCHEMA_EXTRA_DATA_SENTINEL = 0x12345678; // Distinct test value for rendered ExtraData.
+
 void test("renderClr includes extended COR20 fields and native entrypoint interpretation", () => {
   const clr: Parameters<typeof renderClr>[0] = {
     cb: 0x48,
@@ -80,7 +84,58 @@ void test("renderClr decodes managed entrypoint tokens, metadata stream types, a
       streams: [
         { name: "#~", offset: 0x40, size: 0x80 },
         { name: "#Strings", offset: 0xc0, size: 0x50 }
-      ]
+      ],
+      tables: {
+        streamName: "#~",
+        majorVersion: 2,
+        minorVersion: 0,
+        heapSizes: HEAP_EXTRA_DATA,
+        largestRidLog2: READY_TO_RUN_LARGEST_RID_LOG2,
+        extraData: SCHEMA_EXTRA_DATA_SENTINEL,
+        validMask: "0x0000000100001003",
+        sortedMask: "0x0000000000000000",
+        heapIndexSizes: { string: 2, guid: 2, blob: 2 },
+        rowCounts: [
+          { tableId: 0, name: "Module", rows: 1, known: true, sorted: false },
+          { tableId: 0x20, name: "Assembly", rows: 1, known: true, sorted: false }
+        ],
+        modules: [{ row: 1, name: "Demo.dll", mvid: null }],
+        assembly: {
+          row: 1,
+          name: "Demo",
+          culture: "",
+          version: "8.0.0.0",
+          hashAlgorithm: 0x00008004,
+          flags: 0,
+          publicKeySize: 0
+        },
+        assemblyRefs: [],
+        typeRefs: [],
+        typeDefs: [],
+        methodDefs: [],
+        memberRefs: [],
+        moduleRefs: [],
+        implMaps: [],
+        files: [],
+        exportedTypes: [],
+        manifestResources: [],
+        customAttributes: [{
+          row: 1,
+          parent: { table: "Assembly", tableId: 0x20, row: 1, raw: 46, valid: true },
+          parentName: "Demo",
+          constructor: { table: "MemberRef", tableId: 0x0a, row: 1, raw: 11, tag: 3, valid: true },
+          constructorName: ".ctor",
+          attributeType: "System.Runtime.Versioning.TargetFrameworkAttribute",
+          valueBlobIndex: 1,
+          fixedArguments: [{ type: "string", value: ".NETCoreApp,Version=v8.0" }],
+          namedArguments: [{
+            kind: "property",
+            name: "FrameworkDisplayName",
+            type: "string",
+            value: ".NET 8.0"
+          }]
+        }]
+      }
     }
   };
 
@@ -95,4 +150,9 @@ void test("renderClr decodes managed entrypoint tokens, metadata stream types, a
   assert.ok(html.includes("Compressed metadata tables"));
   assert.ok(html.includes("String heap"));
   assert.ok(html.includes("32BIT | CALL_MOST_DERIVED"));
+  assert.ok(html.includes("Target framework"));
+  assert.ok(html.includes(".NETCoreApp,Version=v8.0"));
+  assert.ok(html.includes("Assembly identity"));
+  assert.ok(html.includes("LargestRidLog2"));
+  assert.ok(html.includes("EXTRA_DATA"));
 });

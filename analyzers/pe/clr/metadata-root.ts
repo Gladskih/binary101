@@ -2,6 +2,7 @@
 
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeClrMeta, PeClrStreamInfo } from "./types.js";
+import { parseClrMetadataTablesFromStreams } from "./metadata-streams.js";
 
 export const CLR_METADATA_ROOT_MIN_BYTES = 0x18;
 
@@ -16,6 +17,7 @@ interface Cursor {
 }
 
 interface MetadataReader {
+  availableSize: number;
   readAt: (relativeOffset: number, byteLength: number) => Promise<DataView | null>;
 }
 
@@ -200,7 +202,7 @@ const parseMetadataRootWithReader = async (
   if (streams.length < streamCountRaw) {
     issues.push("Metadata stream list is incomplete; fewer streams were parsed than declared.");
   }
-  return {
+  const meta: PeClrMeta = {
     version,
     verMajor,
     verMinor,
@@ -210,6 +212,9 @@ const parseMetadataRootWithReader = async (
     signature,
     streams
   };
+  const tables = await parseClrMetadataTablesFromStreams(reader, meta, declaredMetaSize, issues);
+  if (tables) meta.tables = tables;
+  return meta;
 };
 
 export const parseClrMetadataRoot = async (
@@ -232,6 +237,7 @@ export const parseClrMetadataRoot = async (
   }
 
   const reader: MetadataReader = {
+    availableSize,
     readAt: async (relativeOffset, byteLength) => {
       if (relativeOffset < 0 || byteLength < 0) return null;
       if (relativeOffset + byteLength > availableSize) return null;

@@ -4,6 +4,7 @@ import { humanSize, hex } from "../../binary-utils.js";
 import { dd, rowFlags, safe } from "../../html-utils.js";
 import type { PeClrHeader } from "../../analyzers/pe/clr/index.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
+import { renderClrMetadataTables } from "./clr-metadata.js";
 
 const COMIMAGE_FLAGS_NATIVE_ENTRYPOINT = 0x00000010;
 
@@ -201,6 +202,7 @@ const renderClrMetadata = (clrHeader: PeClrHeader, out: string[]): void => {
     );
   });
   out.push(`</tbody></table></details>`);
+  renderClrMetadataTables(meta.tables, out);
 };
 
 export function renderClr(clrHeader: PeClrHeader, out: string[]): void {
