@@ -5,6 +5,10 @@ export interface PeExceptionDirectory {
   beginRvas: number[];
   handlerRvas: number[];
   uniqueUnwindInfoCount: number;
+  unwindInfoVersion1Count?: number;
+  unwindInfoVersion2Count?: number;
+  epilogUnwindInfoCount?: number;
+  epilogScopeCount?: number;
   handlerUnwindInfoCount: number;
   chainedUnwindInfoCount: number;
   invalidEntryCount: number;

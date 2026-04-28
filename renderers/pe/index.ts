@@ -24,9 +24,9 @@ import {
   renderIat
 } from "./import-sections.js";
 import { renderResources } from "./resources.js";
+import { renderException } from "./exception.js";
 import {
   renderReloc,
-  renderException,
   renderSanity
 } from "./layout.js";
 

@@ -1,7 +1,7 @@
 "use strict";
 
 import type { FileRangeReader } from "../../file-range-reader.js";
-import { parseAmd64ExceptionDirectory } from "./amd64.js";
+import { parseAmd64ExceptionDirectory } from "./amd64/index.js";
 import { parseArm64ExceptionDirectory } from "./arm64.js";
 import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./types.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";

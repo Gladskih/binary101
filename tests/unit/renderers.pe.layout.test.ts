@@ -4,11 +4,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   renderReloc,
-  renderException,
   renderBoundImports,
   renderDelayImports,
   renderSanity
 } from "../../renderers/pe/layout.js";
+import { renderException } from "../../renderers/pe/exception.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 
 void test("renderReloc wraps relocation table in details", () => {
@@ -29,10 +29,15 @@ void test("renderException renders pdata stats", () => {
     beginRvas: [0x1000],
     handlerRvas: [],
     uniqueUnwindInfoCount: 1,
+    unwindInfoVersion1Count: 0,
+    unwindInfoVersion2Count: 1,
+    epilogUnwindInfoCount: 1,
+    epilogScopeCount: 2,
     handlerUnwindInfoCount: 1,
     chainedUnwindInfoCount: 0,
     invalidEntryCount: 0,
-    issues: []
+    issues: [],
+    format: "amd64"
   };
   const out: string[] = [];
   renderException(exception, out);
@@ -41,6 +46,12 @@ void test("renderException renders pdata stats", () => {
   assert.ok(html.includes("Functions (RUNTIME_FUNCTION entries)"));
   assert.ok(html.includes("<dd>1</dd>"));
   assert.ok(html.includes("Unique UNWIND_INFO blocks"));
+  assert.ok(html.includes("UNWIND_INFO v1 blocks"));
+  assert.ok(html.includes("UNWIND_INFO v2 blocks"));
+  assert.ok(html.includes("UNWIND_INFO v2 epilog records"));
+  assert.ok(html.includes("UNWIND_INFO v2 epilog scopes"));
+  assert.ok(html.includes("x64 .pdata maps code ranges"));
+  assert.ok(html.includes("Microsoft Learn still documents v1"));
   assert.ok(html.includes("Handlers present (EHANDLER/UHANDLER)"));
   assert.ok(html.includes("Chained (CHAININFO)"));
   assert.ok(html.includes("Missing/invalid ranges"));

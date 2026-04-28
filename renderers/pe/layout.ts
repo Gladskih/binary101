@@ -12,7 +12,6 @@ import { renderPeDiagnostics } from "./diagnostics.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 type PeRelocSection = NonNullable<PeWindowsParseResult["reloc"]>;
-type PeExceptionSection = NonNullable<PeWindowsParseResult["exception"]>;
 type PeBoundImportsSection = NonNullable<PeWindowsParseResult["boundImports"]>;
 type PeDelayImportsSection = NonNullable<PeWindowsParseResult["delayImports"]>;
 
@@ -162,35 +161,6 @@ export function renderReloc(reloc: PeRelocSection, out: string[]): void {
       out.push(`<tr><td>${index + 1}</td><td>${hex(block.pageRva, 8)}</td><td>${humanSize(block.size)}</td><td>${block.count}</td></tr>`);
     });
     out.push(`</tbody></table>`);
-  }
-  out.push(renderPeSectionEnd());
-}
-
-export function renderException(ex: PeExceptionSection, out: string[]): void {
-  const unwindLabel =
-    ex.format === "arm64"
-      ? "Unique unwind descriptions (.xdata or packed .pdata)"
-      : "Unique UNWIND_INFO blocks";
-  const handlerLabel =
-    ex.format === "arm64"
-      ? "Handlers present (ARM64 X bit)"
-      : "Handlers present (EHANDLER/UHANDLER)";
-  const chainedLabel = ex.format === "arm64" ? "Chained entries" : "Chained (CHAININFO)";
-  out.push(
-    renderPeSectionStart(
-      "Exception directory (.pdata)",
-      `${ex.functionCount ?? 0} function${(ex.functionCount ?? 0) === 1 ? "" : "s"}`
-    )
-  );
-  out.push(`<dl>`);
-  out.push(`<dt>Functions (RUNTIME_FUNCTION entries)</dt><dd>${ex.functionCount ?? 0}</dd>`);
-  out.push(`<dt>${unwindLabel}</dt><dd>${ex.uniqueUnwindInfoCount ?? 0}</dd>`);
-  out.push(`<dt>${handlerLabel}</dt><dd>${ex.handlerUnwindInfoCount ?? 0}</dd>`);
-  out.push(`<dt>${chainedLabel}</dt><dd>${ex.chainedUnwindInfoCount ?? 0}</dd>`);
-  out.push(`<dt>Missing/invalid ranges</dt><dd>${ex.invalidEntryCount ?? 0}</dd>`);
-  out.push(`</dl>`);
-  if (ex.issues?.length) {
-    out.push(renderPeDiagnostics("Exception directory warnings", ex.issues));
   }
   out.push(renderPeSectionEnd());
 }
