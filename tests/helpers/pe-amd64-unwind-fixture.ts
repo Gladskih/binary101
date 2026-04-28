@@ -243,12 +243,13 @@ const paddedUnwindSlotCapacity = (slotCount: number): number =>
 export const createTruncatedUnwindCodeArrayFixture = (): Amd64ExceptionFixture => {
   const slots = [epilogScopeSlot()] as const;
   const fixture = createAmd64ExceptionFixtureWithSlots(slots);
+  const declaredCodeCount = paddedUnwindSlotCapacity(slots.length) + 1;
   writePrimaryUnwindHeader(
     fixture,
     AMD64_UNWIND_INFO_VERSION_2,
-    paddedUnwindSlotCapacity(slots.length) + 1
+    declaredCodeCount
   );
-  return fixture;
+  return { ...fixture, primaryUnwindCodeCount: declaredCodeCount };
 };
 
 export const createChainedAmd64ExceptionFixture = (
