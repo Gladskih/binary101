@@ -29,19 +29,12 @@ export interface ClrParsedTableStream {
   extraData?: number;
   validMask: bigint;
   sortedMask: bigint;
-  heapIndexSizes: {
-    string: number;
-    guid: number;
-    blob: number;
-  };
+  heapIndexSizes: { string: number; guid: number; blob: number };
   rowCounts: PeClrTableRowCount[];
   tables: Map<number, ClrParsedTable>;
 }
 
-interface ReaderState {
-  view: DataView;
-  offset: number;
-}
+interface ReaderState { view: DataView; offset: number; }
 
 const isPresent = (mask: bigint, tableId: number): boolean =>
   ((mask >> BigInt(tableId)) & 1n) !== 0n;
@@ -142,10 +135,11 @@ const decodeCodedIndex = (
   }
   const tag = raw & ((1 << schema.tagBits) - 1);
   const row = raw >>> schema.tagBits;
+  if (raw === 0) return { table: "null", tableId: -1, row: 0, raw, tag, valid: true };
   const tableId = schema.tables[tag] ?? -1;
   if (tableId < 0) {
-    if (raw !== 0) issues.push(`CLR coded index ${codedIndexName} uses reserved tag ${tag}.`);
-    return { table: row === 0 ? "null" : "Reserved", tableId, row, raw, tag, valid: raw === 0 };
+    issues.push(`CLR coded index ${codedIndexName} uses reserved tag ${tag}.`);
+    return { table: "Reserved", tableId, row, raw, tag, valid: false };
   }
   return {
     table: tableNameById(tableId),
@@ -153,7 +147,7 @@ const decodeCodedIndex = (
     row,
     raw,
     tag,
-    valid: row === 0 || row <= rowCountFor(rowCounts, tableId),
+    valid: row > 0 && row <= rowCountFor(rowCounts, tableId),
     ...(row ? { token: metadataToken(tableId, row) } : {})
   } as PeClrMetadataIndex;
 };

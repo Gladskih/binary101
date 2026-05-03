@@ -22,6 +22,7 @@ const RESOURCE_MANAGER_VERSION = 1;
 const RUNTIME_RESOURCE_SET_VERSION = 2;
 const RESOURCE_TYPE_CODE_STRING = 1;
 const CLR_FILE_TABLE_ID = 0x26; // ECMA-335 II.22.19 File table id.
+const CLR_ASSEMBLY_REF_TABLE_ID = 0x23; // ECMA-335 II.22.5 AssemblyRef table id.
 
 const makeManagedResourceFixture = (): { bytes: Uint8Array; directorySize: number; resourceRva: number } => {
   const directorySize = Uint8Array.BYTES_PER_ELEMENT << 8;
@@ -68,7 +69,8 @@ const makeResourceMetadata = (rows: PeClrManifestResourceInfo[]): PeClrMeta => (
 const makeRow = (
   name: string,
   offset: number,
-  implementation = { table: "null", tableId: -1, row: 0, raw: 0, valid: false }
+  implementation: PeClrManifestResourceInfo["implementation"] =
+    { table: "null", tableId: -1, row: 0, raw: 0, valid: true }
 ): PeClrManifestResourceInfo => ({
   row: 1,
   name,
@@ -176,6 +178,31 @@ void test("parseManagedResources renders direct PNG payloads through existing pr
   assert.strictEqual(parsed?.entries[0]?.previewMime, "image/png");
 });
 
+void test("parseManagedResources treats nil Implementation coded indexes as embedded", async () => {
+  const fixture = makeManagedResourceFixture();
+  const textPayload = `${generatedTextPayload(1)}\n`;
+  putPayload(fixture.bytes, fixture.resourceRva, textEncoder.encode(textPayload));
+
+  const parsed = await parseManagedResources(
+    new MockFile(fixture.bytes),
+    rva => rva,
+    makeClr(fixture.resourceRva, [
+      makeRow(generatedLabel("nil-implementation", 0), 0, {
+        table: "File",
+        tableId: CLR_FILE_TABLE_ID,
+        row: 0,
+        raw: 0,
+        tag: 0,
+        valid: true
+      })
+    ], fixture.directorySize)
+  );
+
+  assert.strictEqual(parsed?.entries[0]?.storage, "embedded");
+  assert.strictEqual(parsed?.entries[0]?.size, textEncoder.encode(textPayload).length);
+  assert.strictEqual(parsed?.entries[0]?.textPreview, textPayload);
+});
+
 void test("parseManagedResources decodes safe primitive .resources entries", async () => {
   const fixture = makeManagedResourceFixture();
   const resources = makeDotNetResources();
@@ -192,18 +219,34 @@ void test("parseManagedResources decodes safe primitive .resources entries", asy
   assert.strictEqual(parsed?.entries[0]?.entries?.[0]?.value, resources.value);
 });
 
-void test("parseManagedResources keeps external manifest resources visible without loading files", async () => {
+void test("parseManagedResources keeps external resources visible and reports invalid indexes", async () => {
   const fixture = makeManagedResourceFixture();
   const parsed = await parseManagedResources(
     new MockFile(fixture.bytes),
     rva => rva,
     makeClr(fixture.resourceRva, [
-      makeRow(generatedLabel("external", 0), 0, { table: "File", tableId: CLR_FILE_TABLE_ID, row: 1, raw: 1, valid: true })
+      makeRow(generatedLabel("external", 0), 0, {
+        table: "File",
+        tableId: CLR_FILE_TABLE_ID,
+        row: 1,
+        raw: 1,
+        valid: true
+      }),
+      makeRow(generatedLabel("invalid-implementation", 0), 0, {
+        table: "AssemblyRef",
+        tableId: CLR_ASSEMBLY_REF_TABLE_ID,
+        row: 0,
+        raw: 1,
+        tag: 1,
+        valid: false
+      })
     ], fixture.directorySize)
   );
 
   assert.strictEqual(parsed?.entries[0]?.storage, "external");
   assert.strictEqual(parsed?.entries[0]?.size, null);
+  assert.strictEqual(parsed?.entries[1]?.storage, "unmapped");
+  assert.ok(parsed?.issues.some(issue => issue.includes("invalid Implementation")));
 });
 
 void test("parseManagedResources reports truncated embedded payloads", async () => {

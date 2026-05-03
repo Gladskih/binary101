@@ -7,6 +7,7 @@ import { parseMetadataTableStream } from "../../analyzers/pe/clr/metadata-table-
 const TABLE_MODULE = 0x00; // ECMA-335 II.22.30 Module table id.
 const TABLE_TYPE_DEF = 0x02; // ECMA-335 II.22.37 TypeDef table id.
 const TABLE_CUSTOM_ATTRIBUTE = 0x0c; // ECMA-335 II.22.10 CustomAttribute table id.
+const TABLE_MANIFEST_RESOURCE = 0x28; // ECMA-335 II.22.24 ManifestResource table id.
 const ALL_HEAP_INDEXES_WIDE = 0x07; // ECMA-335 II.24.2.6 HeapSizes bits for 4-byte indexes.
 const HEAP_EXTRA_DATA = 0x40; // CoreCLR CMiniMdSchemaBase::EXTRA_DATA schema flag.
 const READY_TO_RUN_LARGEST_RID_LOG2 = 0x0a; // Observed in CoreCLR ReadyToRun table streams.
@@ -146,6 +147,54 @@ void test("parseMetadataTableStream reports reserved coded-index tags", () => {
 
   assert.strictEqual(typeof typeIndex, "object");
   assert.ok(issues.some(issue => /reserved tag/i.test(issue)));
+});
+
+void test("parseMetadataTableStream decodes nil coded indexes as null", () => {
+  const row = new TableBytes()
+    .u32(0)
+    .u32(1)
+    .u16(1)
+    .u16(0)
+    .bytes;
+  const issues: string[] = [];
+  const parsed = parseMetadataTableStream(
+    createTableStream(tableMask(TABLE_MANIFEST_RESOURCE), [1], row),
+    "#~",
+    issues
+  );
+  const implementation = parsed?.tables.get(TABLE_MANIFEST_RESOURCE)?.rows[0]?.["Implementation"];
+
+  assert.strictEqual(typeof implementation, "object");
+  if (typeof implementation === "object") {
+    assert.strictEqual(implementation.table, "null");
+    assert.strictEqual(implementation.row, 0);
+    assert.strictEqual(implementation.valid, true);
+  }
+  assert.deepStrictEqual(issues, []);
+});
+
+void test("parseMetadataTableStream rejects nonzero coded indexes with zero rows", () => {
+  const row = new TableBytes()
+    .u32(0)
+    .u32(1)
+    .u16(1)
+    .u16(1)
+    .bytes;
+  const issues: string[] = [];
+  const parsed = parseMetadataTableStream(
+    createTableStream(tableMask(TABLE_MANIFEST_RESOURCE), [1], row),
+    "#~",
+    issues
+  );
+  const implementation = parsed?.tables.get(TABLE_MANIFEST_RESOURCE)?.rows[0]?.["Implementation"];
+
+  assert.strictEqual(typeof implementation, "object");
+  if (typeof implementation === "object") {
+    assert.strictEqual(implementation.row, 0);
+    assert.strictEqual(implementation.raw, 1);
+    assert.strictEqual(implementation.valid, false);
+  }
+  assert.deepStrictEqual(issues, []);
 });
 
 void test("parseMetadataTableStream keeps invalid table indexes visible", () => {

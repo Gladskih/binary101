@@ -3,11 +3,15 @@
 import { humanSize, hex } from "../../binary-utils.js";
 import { dd, rowFlags, safe } from "../../html-utils.js";
 import type { PeClrHeader, PeClrManagedResourceValue } from "../../analyzers/pe/clr/index.js";
+import type { PeClrMetadataIndex } from "../../analyzers/pe/clr/types.js";
 import type { ResourceLangWithPreview } from "../../analyzers/pe/resources/preview/types.js";
 import { renderPreviewCell } from "./resource-preview-cell.js";
 
 const formatClrDirectory = (rva: number, size: number): string =>
   rva || size ? `RVA ${hex(rva, 8)} Size ${humanSize(size)}` : "-";
+
+const indexText = (index: PeClrMetadataIndex): string =>
+  index.row === 0 ? "-" : `${index.table} #${index.row}${index.valid ? "" : " (invalid)"}`;
 
 const renderWarningList = (issues: string[]): string => {
   if (!issues.length) return "";
@@ -40,17 +44,20 @@ export const renderManagedResources = (clrHeader: PeClrHeader, out: string[]): v
   const resources = clrHeader.managedResources;
   if (!resources) return;
   out.push(`<details style="margin-top:.35rem" open><summary>Managed resources (${resources.entries.length})</summary>`);
-  out.push(`<div class="smallNote">CLR managed resources are embedded through ManifestResource metadata and are separate from the PE .rsrc tree.</div>`);
-  out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>Name</th><th>Storage</th><th>Offset</th><th>Size</th><th>Preview</th></tr></thead><tbody>`);
+  out.push(`<div class="smallNote">CLR ManifestResource rows with embedded payload details; separate from the PE .rsrc tree.</div>`);
+  out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>Name</th><th>Storage</th><th>Offset</th><th>Flags</th><th>Implementation</th><th>Size</th><th>Preview</th></tr></thead><tbody>`);
   resources.entries.forEach(entry => {
     const preview = renderPreviewCell(entry as unknown as ResourceLangWithPreview);
-    out.push(`<tr><td>${safe(entry.name || "")}</td><td>${safe(entry.storage)}</td><td>${hex(entry.offset, 8)}</td><td>${entry.size == null ? "-" : humanSize(entry.size)}</td><td>${preview}</td></tr>`);
+    out.push(`<tr><td>${safe(entry.name || "")}</td><td>${safe(entry.storage)}</td>` +
+      `<td>${hex(entry.offset, 8)}</td><td>${hex(entry.flags, 8)}</td>` +
+      `<td>${safe(indexText(entry.implementation))}</td>` +
+      `<td>${entry.size == null ? "-" : humanSize(entry.size)}</td><td>${preview}</td></tr>`);
     if (entry.entries?.length) {
-      out.push(`<tr><td colspan="5"><table class="table" style="margin:.25rem 0"><thead><tr><th>Entry</th><th>Type</th><th>Value</th><th>Preview</th></tr></thead><tbody>`);
+      out.push(`<tr><td colspan="7"><table class="table" style="margin:.25rem 0"><thead><tr><th>Entry</th><th>Type</th><th>Value</th><th>Preview</th></tr></thead><tbody>`);
       entry.entries.forEach(value => out.push(renderManagedResourceValue(value)));
       out.push(`</tbody></table></td></tr>`);
     }
-    if (entry.issues?.length) out.push(`<tr><td colspan="5">${renderWarningList(entry.issues)}</td></tr>`);
+    if (entry.issues?.length) out.push(`<tr><td colspan="7">${renderWarningList(entry.issues)}</td></tr>`);
   });
   out.push(`</tbody></table>${renderWarningList(resources.issues)}</details>`);
 };

@@ -23,6 +23,12 @@ const previewFields = (preview: ResourcePreviewData): Partial<PeClrManagedResour
   ...(preview.previewFields ? { previewFields: preview.previewFields } : {})
 });
 
+const hasExternalImplementation = (row: PeClrManifestResourceInfo): boolean =>
+  row.implementation.valid && row.implementation.row > 0 && row.implementation.table !== "null";
+
+const hasInvalidImplementation = (row: PeClrManifestResourceInfo): boolean =>
+  row.implementation.raw !== 0 && !row.implementation.valid;
+
 const readEmbeddedPayload = async (
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
@@ -68,8 +74,13 @@ export const parseManagedResources = async (
   const issues: string[] = [];
   const entries: PeClrManagedResourceEntry[] = [];
   for (const row of rows) {
-    if (row.implementation.valid && row.implementation.table !== "null") {
+    if (hasExternalImplementation(row)) {
       entries.push({ ...row, storage: "external", size: null });
+      continue;
+    }
+    if (hasInvalidImplementation(row)) {
+      issues.push(`Managed resource row ${row.row} has an invalid Implementation metadata index.`);
+      entries.push({ ...row, storage: "unmapped", size: null });
       continue;
     }
     const payload = await readEmbeddedPayload(reader, rvaToOff, clr, row, issues);

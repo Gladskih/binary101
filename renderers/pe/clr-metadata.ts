@@ -192,16 +192,6 @@ const renderManagedNativeAndResources = (metadata: PeClrMetadataTables): string 
     ])
   ) +
   renderSimpleTable(
-    "Manifest resources",
-    ["Name", "Offset", "Flags", "Implementation"],
-    metadata.manifestResources.map(row => [
-      dash(row.name),
-      hex(row.offset, 8),
-      hex(row.flags, 8),
-      safe(indexText(row.implementation))
-    ])
-  ) +
-  renderSimpleTable(
     "Files and exported types",
     ["Kind", "Name", "Flags", "Implementation"],
     [
