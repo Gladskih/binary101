@@ -80,11 +80,28 @@ export interface AuthenticodeTrustGap {
   detail: string;
 }
 
+export type AuthenticodeCertificateTrustStatus = "trusted" | "revoked" | "unknown";
+
+export interface AuthenticodeCertificateTrustInfo {
+  certificateIndex: number;
+  status: AuthenticodeCertificateTrustStatus;
+  sha1Thumbprint?: string;
+  stores?: string[];
+}
+
+export interface AuthenticodeTrustPolicyInfo {
+  generatedAt: string;
+  source?: string;
+  certificates: AuthenticodeCertificateTrustInfo[];
+  warnings?: string[];
+}
+
 export interface AuthenticodeVerificationInfo {
   computedFileDigest?: string;
   fileDigestMatches?: boolean;
   signerVerifications?: AuthenticodeSignerVerificationInfo[];
   checks?: AuthenticodeVerificationCheck[];
+  trustPolicy?: AuthenticodeTrustPolicyInfo;
   trustGaps?: AuthenticodeTrustGap[];
   warnings?: string[];
 }

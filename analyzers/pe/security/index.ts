@@ -30,6 +30,8 @@ const hasVerificationData = (
     verification.fileDigestMatches !== undefined ||
     !!verification.checks?.length ||
     !!verification.signerVerifications?.length ||
+    !!verification.trustPolicy?.certificates.length ||
+    !!verification.trustPolicy?.warnings?.length ||
     !!verification.trustGaps?.length ||
     !!verification.warnings?.length);
 

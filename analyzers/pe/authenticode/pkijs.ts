@@ -5,9 +5,11 @@ import type {
   AuthenticodeVerificationCheck,
   AuthenticodeVerificationInfo
 } from "./index.js";
+import type { AuthenticodeTrustStoreSnapshot } from "./trust-store.js";
 import { Certificate, ContentInfo, SignedData } from "./pkijs-runtime.js";
 import { readCountersignatures } from "./pkijs-countersignatures.js";
 import { addExtendedKeyUsageCheck, addSigningKeyUsageCheck, attachPathChecks } from "./pkijs-path.js";
+import { evaluateAuthenticodeTrustPolicy } from "./trust-policy.js";
 import {
   CODE_SIGNING_EKU_OID,
   addCheck,
@@ -21,7 +23,7 @@ import {
 
 type VerificationSummary = Pick<
   AuthenticodeVerificationInfo,
-  "checks" | "signerVerifications" | "warnings"
+  "checks" | "signerVerifications" | "trustPolicy" | "warnings"
 >;
 
 const verifySigner = async (
@@ -49,7 +51,10 @@ const verifySigner = async (
   }
 };
 
-export const verifyPkcs7Signatures = async (payload: Uint8Array): Promise<VerificationSummary> => {
+export const verifyPkcs7Signatures = async (
+  payload: Uint8Array,
+  trustStore?: AuthenticodeTrustStoreSnapshot
+): Promise<VerificationSummary> => {
   const checks: AuthenticodeVerificationCheck[] = [];
   const signerVerifications: AuthenticodeSignerVerificationInfo[] = [];
   const warnings: string[] = [];
@@ -154,9 +159,11 @@ export const verifyPkcs7Signatures = async (payload: Uint8Array): Promise<Verifi
   }
 
   const mergedWarnings = mergeWarnings(warnings);
+  const trustPolicy = await evaluateAuthenticodeTrustPolicy(certificates, trustStore);
   return {
     ...(checks.length ? { checks } : {}),
     ...(signerVerifications.length ? { signerVerifications } : {}),
+    ...(trustPolicy ? { trustPolicy } : {}),
     ...(mergedWarnings ? { warnings: mergedWarnings } : {})
   };
 };

@@ -5,6 +5,7 @@
     "dist/**",
     "playwright.config.mjs",
     "eslint.config.mjs",
+    "public/vendor/**",
     "tests/e2e/**",
     "**/types.ts",
     "**/*types.ts",

@@ -2,9 +2,11 @@
 
 import type { AuthenticodeInfo } from "../../analyzers/pe/authenticode/index.js";
 import {
+  createCertificateTrustBadge,
   createCheckBadge,
   findIssuerCandidateIndexes,
   getCertificate,
+  getCertificateTrust,
   getReferenceValidityCheck
 } from "./security-tree-checks.js";
 import {
@@ -47,18 +49,20 @@ const renderAlternativeIssuerBranch = (
   const childIndexes = findIssuerCandidateIndexes(auth, certificateIndex, nextVisited);
   return renderTreeNode(
     formatCertificateTitle(certificateIndex, certificate?.subject),
-    [
+    filterBadges([
       createRoleBadge(
         certificate?.subject === certificate?.issuer ? "Cross-signed root" : "Alt issuer",
         "certificate",
         "Alternative issuer candidate present in the embedded CMS."
       ),
       createInfoBadge("DN", "Issuer DN of the parent certificate matches this certificate subject DN."),
+      createCertificateTrustBadge(auth, certificateIndex),
       createInfoBadge(`Cert ${certificateIndex + 1}`, `Embedded certificate ${certificateIndex + 1}`)
-    ],
+    ]),
     [
       renderTreeMeta("Issuer", certificate?.issuer),
       renderTreeMeta("Serial", certificate?.serialNumber),
+      renderTreeMeta("SHA-1", getCertificateTrust(auth, certificateIndex)?.sha1Thumbprint),
       renderTreeMeta(
         "Validity",
         certificate?.notBefore || certificate?.notAfter
@@ -111,6 +115,7 @@ const renderCertificatePath = (
     formatCertificateTitle(certificateIndex, certificate?.subject),
     filterBadges([
       createRoleBadge(resolveCertificateRole(auth, pathIndexes, depth, leafRole), "certificate"),
+      createCertificateTrustBadge(auth, certificateIndex),
       createInfoBadge(`Cert ${certificateIndex + 1}`, `Embedded certificate ${certificateIndex + 1}`),
       depth === 0 && label ? createCheckBadge(auth, `${label}-key-usage`, "KU") : undefined,
       depth === 0 && label ? createCheckBadge(auth, `${label}-eku`, "EKU") : undefined,
@@ -149,6 +154,7 @@ const renderCertificatePath = (
     [
       renderTreeMeta("Issuer", certificate?.issuer),
       renderTreeMeta("Serial", certificate?.serialNumber),
+      renderTreeMeta("SHA-1", getCertificateTrust(auth, certificateIndex)?.sha1Thumbprint),
       renderTreeMeta(
         "Validity",
         certificate?.notBefore || certificate?.notAfter

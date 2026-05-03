@@ -86,6 +86,69 @@ void test("renderAuthenticodeTree renders signer and countersignature certificat
   assert.ok(html.includes("Sig"));
 });
 
+void test("renderAuthenticodeTree shows Windows CA trust snapshot verdicts", () => {
+  const html = renderAuthenticodeTree({
+    offset: 0,
+    length: 128,
+    availableBytes: 128,
+    revision: 0x0200,
+    revisionName: "Revision 2.0",
+    certificateType: 0x0002,
+    typeName: "PKCS#7 SignedData (Authenticode)",
+    authenticode: {
+      format: "pkcs7",
+      certificates: [
+        { subject: "CN=Leaf", issuer: "CN=Root" },
+        { subject: "CN=Root", issuer: "CN=Root" },
+        { subject: "CN=Timestamp", issuer: "CN=Root" }
+      ],
+      verification: {
+        trustPolicy: {
+          generatedAt: "2026-05-03T00:00:00.000Z",
+          source: "unit",
+          certificates: [
+            { certificateIndex: 0, status: "unknown", sha1Thumbprint: "AA" },
+            {
+              certificateIndex: 1,
+              status: "trusted",
+              sha1Thumbprint: "BB",
+              stores: ["Root"]
+            },
+            {
+              certificateIndex: 2,
+              status: "revoked",
+              sha1Thumbprint: "CC",
+              stores: ["Disallowed"]
+            }
+          ]
+        },
+        signerVerifications: [
+          {
+            index: 0,
+            signerCertificateIndex: 0,
+            certificatePathIndexes: [0, 1],
+            countersignatures: [
+              {
+                index: 0,
+                signerCertificateIndex: 2,
+                certificatePathIndexes: [2]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  });
+
+  assert.ok(html.includes("Trust snapshot"));
+  assert.ok(html.includes("2026-05-03T00:00:00.000Z"));
+  assert.ok(html.includes("Trusted"));
+  assert.ok(html.includes("Revoked"));
+  assert.ok(html.includes("Not in store"));
+  assert.ok(html.includes("SHA-1"));
+  assert.ok(html.includes("Disallowed"));
+});
+
 void test("renderAuthenticodeTree omits output when signer verification paths are unavailable", () => {
   assert.strictEqual(
     renderAuthenticodeTree({

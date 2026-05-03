@@ -9,6 +9,8 @@ import type {
 } from "../../analyzers/pe/authenticode/index.js";
 import {
   createCheckBadge,
+  createCertificatePathTrustBadge,
+  createTrustSnapshotBadge,
   getCertificate,
 } from "./security-tree-checks.js";
 import { renderCertificateBranch } from "./security-tree-certificates.js";
@@ -47,6 +49,7 @@ const renderCountersignatureNode = (
       createCheckBadge(auth, `${counterLabel}-signature`, "Sig"),
       createCheckBadge(auth, `${counterLabel}-message-digest`, "Digest"),
       createCheckBadge(auth, `${counterLabel}-certificate`, "Cert"),
+      createCertificatePathTrustBadge(auth, countersignature.certificatePathIndexes),
       createCheckBadge(
         auth,
         `${signerLabel}-countersignature-${countersignature.index + 1}-chronology`,
@@ -89,6 +92,7 @@ const renderSignerNode = (
         ? createCheckBadge(auth, `${signerLabel}-signature`, "Sig")
         : createStatusBadge("Sig", "unknown", "No structured signer verification result is attached."),
       signerVerification ? createCheckBadge(auth, `${signerLabel}-certificate`, "Cert") : undefined,
+      createCertificatePathTrustBadge(auth, signerVerification?.certificatePathIndexes),
       signerVerification?.signingTime || signer?.signingTime
         ? createInfoBadge("Time", "signingTime attribute is present.")
         : createStatusBadge("No time", "unknown", "CMS signingTime signed attribute is absent.")
@@ -130,6 +134,7 @@ export const renderAuthenticodeTree = (certificate: ParsedWinCertificate): strin
     ),
     renderAdditionalCertificatesNode(auth),
     renderTrustGapsNode(auth.verification?.trustGaps),
+    renderWarningsNode("Trust snapshot warnings", auth.verification?.trustPolicy?.warnings),
     renderWarningsNode("Verification warnings", auth.verification?.warnings),
     renderWarningsNode("Structural warnings", certificate.warnings)
   ]
@@ -144,6 +149,7 @@ export const renderAuthenticodeTree = (certificate: ParsedWinCertificate): strin
       filterBadges([
         createRoleBadge("PKCS#7", "signer"),
         createCheckBadge(auth, "file-digest-match", "Digest"),
+        createTrustSnapshotBadge(auth),
         auth.fileDigestAlgorithmName || auth.fileDigestAlgorithm
           ? createInfoBadge(auth.fileDigestAlgorithmName ?? auth.fileDigestAlgorithm ?? "")
           : undefined,
@@ -153,6 +159,7 @@ export const renderAuthenticodeTree = (certificate: ParsedWinCertificate): strin
       [
         renderTreeMeta("CMS content", auth.contentTypeName || auth.contentType),
         renderTreeMeta("Signed payload", auth.payloadContentTypeName || auth.payloadContentType),
+        renderTreeMeta("Trust snapshot", auth.verification?.trustPolicy?.generatedAt),
         renderTreeMeta("Embedded digest", auth.fileDigest),
         renderTreeMeta("Computed digest", auth.verification?.computedFileDigest)
       ],

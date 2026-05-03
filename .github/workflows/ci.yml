@@ -61,14 +61,43 @@ jobs:
       - name: Test (unit)
         run: npm run test:unit
 
-  e2e-build:
-    runs-on: ubuntu-latest
+  windows-authenticode-trust:
+    runs-on: windows-latest
     permissions:
       contents: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Dump Windows Authenticode trust snapshot
+        shell: pwsh
+        run: >
+          .\scripts\dump-windows-authenticode-trust.ps1
+          -OutputPath .\analyzers\pe\authenticode\windows-trust-store.generated.json
+
+      - name: Upload Windows Authenticode trust snapshot
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-authenticode-trust
+          path: analyzers/pe/authenticode/windows-trust-store.generated.json
+          if-no-files-found: error
+
+  e2e-build:
+    runs-on: ubuntu-latest
+    needs: [windows-authenticode-trust]
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download Windows Authenticode trust snapshot
+        uses: actions/download-artifact@v7
+        with:
+          name: windows-authenticode-trust
+          path: analyzers/pe/authenticode
 
       - name: Setup Node
         uses: actions/setup-node@v6

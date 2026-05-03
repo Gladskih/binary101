@@ -1,7 +1,7 @@
 "use strict";
 import { createFileRangeReader } from "../file-range-reader.js";
 import { isPeWindowsCore, parsePeHeaders } from "./core/index.js";
-import { computePeAuthenticodeDigest, verifyAuthenticode } from "./authenticode/verify.js";
+import { computePeAuthenticodeDigest, verifyAuthenticodeWithBundledTrust } from "./authenticode/verify.js";
 import { parseDebugDirectory } from "./debug/directory.js";
 import { parseLoadConfigDirectory32, parseLoadConfigDirectory64, type PeLoadConfig, type PeLoadConfigTables } from "./load-config/index.js";
 import { readGuardAddressTakenIatEntryTableRvas, readGuardCFFunctionTableRvas, readGuardEhContinuationTableRvas, readGuardLongJumpTargetTableRvas, readSafeSehHandlerTableRvas } from "./load-config/tables.js";
@@ -43,9 +43,7 @@ export type {
   PeParseResult,
   PeWindowsParseResult
 } from "./core/parse-result.js";
-import {
-  PE32_PLUS_OPTIONAL_HEADER_MAGIC
-} from "./optional-header/magic.js";
+import { PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "./optional-header/magic.js";
 import type { PeParseResult } from "./core/parse-result.js";
 
 // Microsoft PE format, "Machine Types":
@@ -230,7 +228,7 @@ export async function parsePe(
   };
   let security = await parseSecurityDirectory(reader, dataDirs, async (payload, certificate) =>
     certificate.authenticode
-      ? verifyAuthenticode(
+      ? verifyAuthenticodeWithBundledTrust(
           reader,
           core,
           securityDir,

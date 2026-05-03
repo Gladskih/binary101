@@ -6,7 +6,9 @@ import type {
 } from "../../analyzers/pe/authenticode/index.js";
 import {
   collectConnectedCertificateIndexes,
-  getCertificate
+  createCertificateTrustBadge,
+  getCertificate,
+  getCertificateTrust
 } from "./security-tree-checks.js";
 import {
   formatCertificateTitle,
@@ -16,6 +18,7 @@ import {
   createInfoBadge,
   createRoleBadge,
   createStatusBadge,
+  filterBadges,
   renderTreeMeta,
   renderTreeNode
 } from "./security-tree-markup.js";
@@ -48,7 +51,7 @@ export const renderAdditionalCertificatesNode = (auth: AuthenticodeInfo): string
       .map(index =>
         renderTreeNode(
           formatCertificateTitle(index, getCertificate(auth.certificates, index)?.subject),
-          [
+          filterBadges([
             createRoleBadge(
               getCertificate(auth.certificates, index)?.subject ===
                 getCertificate(auth.certificates, index)?.issuer
@@ -56,11 +59,13 @@ export const renderAdditionalCertificatesNode = (auth: AuthenticodeInfo): string
                 : "Embedded only",
               "certificate"
             ),
+            createCertificateTrustBadge(auth, index),
             createInfoBadge(`Cert ${index + 1}`, `Embedded certificate ${index + 1}`)
-          ],
+          ]),
           [
             renderTreeMeta("Issuer", getCertificate(auth.certificates, index)?.issuer),
             renderTreeMeta("Serial", getCertificate(auth.certificates, index)?.serialNumber),
+            renderTreeMeta("SHA-1", getCertificateTrust(auth, index)?.sha1Thumbprint),
             renderTreeMeta(
               "Validity",
               getCertificate(auth.certificates, index)?.notBefore ||

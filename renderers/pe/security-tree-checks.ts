@@ -1,10 +1,12 @@
 "use strict";
 
 import type {
+  AuthenticodeCertificateTrustInfo,
   AuthenticodeInfo,
   X509CertificateInfo
 } from "../../analyzers/pe/authenticode/index.js";
 import {
+  createInfoBadge,
   createStatusBadge,
   formatCheckDetail,
   type TreeBadge
@@ -19,6 +21,36 @@ export const getCertificate = (
 const getCheckById = (auth: AuthenticodeInfo, id: string) =>
   auth.verification?.checks?.find(check => check.id === id);
 
+export const getCertificateTrust = (
+  auth: AuthenticodeInfo,
+  certificateIndex: number | undefined
+): AuthenticodeCertificateTrustInfo | undefined =>
+  certificateIndex != null && certificateIndex >= 0
+    ? auth.verification?.trustPolicy?.certificates.find(
+        certificate => certificate.certificateIndex === certificateIndex
+      )
+    : undefined;
+
+const formatTrustStores = (trust: AuthenticodeCertificateTrustInfo): string =>
+  trust.stores?.length ? ` Stores: ${trust.stores.join(", ")}.` : "";
+
+const formatTrustThumbprint = (trust: AuthenticodeCertificateTrustInfo): string =>
+  trust.sha1Thumbprint ? ` SHA-1 ${trust.sha1Thumbprint}.` : "";
+
+const formatTrustDetail = (
+  auth: AuthenticodeInfo,
+  trust: AuthenticodeCertificateTrustInfo
+): string => {
+  const checkedAt = auth.verification?.trustPolicy?.generatedAt || "unknown date";
+  if (trust.status === "revoked") {
+    return `Certificate is in the Windows Disallowed CA snapshot as of ${checkedAt}.${formatTrustThumbprint(trust)}${formatTrustStores(trust)}`;
+  }
+  if (trust.status === "trusted") {
+    return `Certificate is in the Windows trusted CA snapshot as of ${checkedAt}.${formatTrustThumbprint(trust)}${formatTrustStores(trust)}`;
+  }
+  return `Certificate is not in the Windows trusted or disallowed CA snapshot as of ${checkedAt}.${formatTrustThumbprint(trust)}`;
+};
+
 export const createCheckBadge = (
   auth: AuthenticodeInfo,
   id: string,
@@ -29,6 +61,48 @@ export const createCheckBadge = (
     ? createStatusBadge(label, check.status, formatCheckDetail(check.title, check.detail))
     : undefined;
 };
+
+export const createCertificateTrustBadge = (
+  auth: AuthenticodeInfo,
+  certificateIndex: number | undefined
+): TreeBadge | undefined => {
+  const trust = getCertificateTrust(auth, certificateIndex);
+  if (!trust) return undefined;
+  if (trust.status === "trusted") return createStatusBadge("Trusted", "pass", formatTrustDetail(auth, trust));
+  if (trust.status === "revoked") return createStatusBadge("Revoked", "fail", formatTrustDetail(auth, trust));
+  return createStatusBadge("Not in store", "unknown", formatTrustDetail(auth, trust));
+};
+
+export const createCertificatePathTrustBadge = (
+  auth: AuthenticodeInfo,
+  pathIndexes: number[] | undefined
+): TreeBadge | undefined => {
+  if (!auth.verification?.trustPolicy || !pathIndexes?.length) return undefined;
+  const revoked = pathIndexes.map(index => getCertificateTrust(auth, index)).find(
+    trust => trust?.status === "revoked"
+  );
+  if (revoked) return createStatusBadge("Revoked", "fail", formatTrustDetail(auth, revoked));
+  const topCertificateTrust = getCertificateTrust(auth, pathIndexes[pathIndexes.length - 1]);
+  if (topCertificateTrust?.status === "trusted") {
+    return createStatusBadge("Trusted", "pass", formatTrustDetail(auth, topCertificateTrust));
+  }
+  if (topCertificateTrust) {
+    return createStatusBadge("Not trusted", "unknown", formatTrustDetail(auth, topCertificateTrust));
+  }
+  return createStatusBadge(
+    "Not trusted",
+    "unknown",
+    `Certificate path was not found in the Windows CA snapshot as of ${auth.verification.trustPolicy.generatedAt}.`
+  );
+};
+
+export const createTrustSnapshotBadge = (auth: AuthenticodeInfo): TreeBadge | undefined =>
+  auth.verification?.trustPolicy
+    ? createInfoBadge(
+        "Trust snapshot",
+        `Windows CA snapshot generated at ${auth.verification.trustPolicy.generatedAt}.`
+      )
+    : undefined;
 
 export const getReferenceValidityCheck = (
   auth: AuthenticodeInfo,

@@ -86,6 +86,7 @@ export class Certificate {
   constructor(parameters?: unknown);
   getKeyHash(hashAlgorithm?: string): Promise<ArrayBuffer>;
   sign(privateKey: CryptoKey, hashAlgorithm?: string): Promise<void>;
+  toSchema(encodeFlag?: boolean): { toBER(encodeFlag?: boolean): ArrayBuffer };
   verify(issuerCertificate?: Certificate, crypto?: unknown): Promise<boolean>;
 }
 

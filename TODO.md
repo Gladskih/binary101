@@ -1,9 +1,5 @@
 # TODO
 
-Current status notes:
-
-- PE Authenticode support currently parses certificates and can verify the embedded file digest, but it does not build a full trust chain or enforce a trust policy yet.
-
 ## P0 - Architecture, Detection Breadth, Performance
 
 - Remove detection pipeline debt: migrate legacy `detectBinaryType` paths that still call full `parse*` to lightweight `probe*` + one full parse in `parseForUi`.
@@ -18,8 +14,8 @@ Current status notes:
 ## P1 - Flagship Analyzers
 
 - Extend PE educational field explanations.
-- Upgrade PE Authenticode from digest checking to full offline signature validation: CMS/PKCS#7 sanity checks, signer/certificate chain building, time validity, EKU/purpose checks, and explicit trust verdicts.
-- Add an optional built-in CA trust bundle/profile for offline Authenticode validation, with clear UI that distinguishes cryptographic validity from trust policy.
+- Extend PE Authenticode policy coverage beyond the current embedded CMS/path checks: catalog signature lookup, trusted timestamp semantics, and clearer parity notes versus WinVerifyTrust revocation/local-machine policy.
+- Add optional user-supplied CA trust profiles for offline Authenticode validation without changing the default bundled Windows snapshot.
 - Continue deepening ELF: more relocation/linking/debug metadata, better explanation of loader behavior, and more complete security/sanity analysis.
 - Deepen Mach-O load-command coverage: replace more "listed only" commands with command-specific parsing and explanations where the format is well-specified.
 - Extend Mach-O loader/linkedit analysis: exports trie, chained fixups, relocations, and richer dyld binding/rebasing semantics.

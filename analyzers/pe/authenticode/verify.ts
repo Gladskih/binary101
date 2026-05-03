@@ -2,6 +2,11 @@
 
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { AuthenticodeInfo, AuthenticodeTrustGap, AuthenticodeVerificationCheck } from "./index.js";
+import type { AuthenticodeTrustStoreSnapshot } from "./trust-store.js";
+import {
+  authenticodeTrustStoreSnapshot,
+  hasAuthenticodeTrustStoreData
+} from "./trust-store.js";
 import {
   computePeAuthenticodeDigest,
   computePeAuthenticodeDigestBestEffort,
@@ -27,7 +32,7 @@ const TRUST_GAPS: AuthenticodeTrustGap[] = [
     id: "revocation",
     title: "Revocation status",
     detail:
-      "This analyzer does not fetch or validate CRL, OCSP, or Microsoft-specific revocation data for any certificate in the chain."
+      "This analyzer does not fetch or validate live CRL, OCSP, or Microsoft-specific revocation data for any certificate in the chain."
   },
   {
     id: "missing-intermediates",
@@ -48,6 +53,16 @@ const TRUST_GAPS: AuthenticodeTrustGap[] = [
       "Countersignature cryptography can be checked locally, but the timestamping chain is not anchored to a trusted TSA root and is not revocation-checked."
   }
 ];
+
+const trustStoreHasAnchors = (trustStore: AuthenticodeTrustStoreSnapshot | undefined): boolean =>
+  !!trustStore?.generatedAt && trustStore.trustedCAs.length > 0;
+
+const createTrustGaps = (
+  trustStore: AuthenticodeTrustStoreSnapshot | undefined
+): AuthenticodeTrustGap[] =>
+  trustStoreHasAnchors(trustStore)
+    ? TRUST_GAPS.filter(gap => gap.id !== "trust-anchor")
+    : TRUST_GAPS;
 
 const createDigestCheck = (
   auth: AuthenticodeInfo,
@@ -102,16 +117,22 @@ export const verifyAuthenticode = async (
   auth: AuthenticodeInfo,
   payload: Uint8Array,
   digestFunction?: DigestFunction,
-  getComputedDigest?: DigestLookup
+  getComputedDigest?: DigestLookup,
+  trustStore?: AuthenticodeTrustStoreSnapshot
 ): Promise<NonNullable<AuthenticodeInfo["verification"]>> => {
   const warnings: string[] = [];
-  const verification: NonNullable<AuthenticodeInfo["verification"]> = { trustGaps: TRUST_GAPS };
+  const verification: NonNullable<AuthenticodeInfo["verification"]> = {
+    trustGaps: createTrustGaps(trustStore)
+  };
   const checks: AuthenticodeVerificationCheck[] = [];
 
-  const signatureVerification = await verifyPkcs7Signatures(payload);
+  const signatureVerification = await verifyPkcs7Signatures(payload, trustStore);
   if (signatureVerification.checks?.length) checks.push(...signatureVerification.checks);
   if (signatureVerification.signerVerifications?.length) {
     verification.signerVerifications = signatureVerification.signerVerifications;
+  }
+  if (signatureVerification.trustPolicy) {
+    verification.trustPolicy = signatureVerification.trustPolicy;
   }
   if (signatureVerification.warnings?.length) warnings.push(...signatureVerification.warnings);
 
@@ -136,3 +157,25 @@ export const verifyAuthenticode = async (
   const mergedWarnings = mergeWarnings(warnings);
   return mergedWarnings ? { ...verification, warnings: mergedWarnings } : verification;
 };
+
+export const verifyAuthenticodeWithBundledTrust = (
+  reader: FileRangeReader,
+  core: PeAuthenticodeBestEffortCore | PeAuthenticodeParsedCore,
+  securityDir: PeDataDirectory | undefined,
+  auth: AuthenticodeInfo,
+  payload: Uint8Array,
+  digestFunction?: DigestFunction,
+  getComputedDigest?: DigestLookup
+): Promise<NonNullable<AuthenticodeInfo["verification"]>> =>
+  verifyAuthenticode(
+    reader,
+    core,
+    securityDir,
+    auth,
+    payload,
+    digestFunction,
+    getComputedDigest,
+    hasAuthenticodeTrustStoreData(authenticodeTrustStoreSnapshot)
+      ? authenticodeTrustStoreSnapshot
+      : undefined
+  );
