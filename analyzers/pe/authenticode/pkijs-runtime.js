@@ -17,6 +17,7 @@ export {
   Time,
   getCrypto
 } from "pkijs";
+export { fromBER } from "asn1js";
 // ### PKI.js TypeScript Workaround
 // PE Authenticode verification uses `pkijs` at runtime, but importing `pkijs`
 // directly from TypeScript currently breaks this repository's strict

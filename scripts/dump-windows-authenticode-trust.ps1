@@ -18,6 +18,7 @@ function ConvertTo-TrustStoreCertificate {
     serialNumber = $Certificate.SerialNumber
     notBefore   = $Certificate.NotBefore.ToUniversalTime().ToString("o")
     notAfter    = $Certificate.NotAfter.ToUniversalTime().ToString("o")
+    derBase64    = [Convert]::ToBase64String($Certificate.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert))
     stores      = @($StoreName)
   }
 }

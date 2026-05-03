@@ -86,6 +86,8 @@ export interface AuthenticodeCertificateTrustInfo {
   certificateIndex: number;
   status: AuthenticodeCertificateTrustStatus;
   sha1Thumbprint?: string;
+  anchorSha1Thumbprint?: string;
+  anchorSubject?: string;
   stores?: string[];
 }
 

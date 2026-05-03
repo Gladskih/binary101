@@ -8,10 +8,20 @@ import {
   SignedData
 } from "../../analyzers/pe/authenticode/pkijs-runtime.js";
 import { verifyPkcs7Signatures } from "../../analyzers/pe/authenticode/pkijs.js";
+import { evaluateAuthenticodeTrustPolicy } from "../../analyzers/pe/authenticode/trust-policy.js";
 import { verifyAuthenticode } from "../../analyzers/pe/authenticode/verify.js";
 import type { AuthenticodeInfo } from "../../analyzers/pe/authenticode/index.js";
 import type { AuthenticodeTrustStoreSnapshot } from "../../analyzers/pe/authenticode/trust-store.js";
 import { createSignedAuthenticodeCmsFixture } from "../fixtures/pe-authenticode-signed-cms-fixtures.js";
+import {
+  KEY_USAGE_DIGITAL_SIGNATURE,
+  KEY_USAGE_KEY_CERT_SIGN,
+  createBasicConstraintsExtension,
+  createCertificate,
+  createCommonName,
+  createKeyUsageExtension,
+  generateRsaKeyPair
+} from "../fixtures/pe-authenticode-cms-helpers.js";
 
 const TRUST_SNAPSHOT_TIME = "2026-05-03T00:00:00.000Z";
 
@@ -26,6 +36,9 @@ const certificateThumbprint = async (certificate: Certificate): Promise<string> 
   const digest = await crypto.subtle.digest("SHA-1", der);
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("").toUpperCase();
 };
+
+const certificateDerBase64 = (certificate: Certificate): string =>
+  Buffer.from(certificate.toSchema().toBER(false)).toString("base64");
 
 const readCertificateThumbprints = async (payload: Uint8Array): Promise<string[]> => {
   const contentInfo = ContentInfo.fromBER(toArrayBuffer(payload));
@@ -56,6 +69,59 @@ void test("verifyPkcs7Signatures annotates certificates from the Windows trust s
   assert.strictEqual(verified.trustPolicy?.certificates[0]?.status, "unknown");
   assert.strictEqual(verified.trustPolicy?.certificates[1]?.status, "trusted");
   assert.strictEqual(verified.trustPolicy?.certificates[2]?.status, "revoked");
+});
+
+void test("evaluateAuthenticodeTrustPolicy anchors an embedded issuer to a trusted root", async () => {
+  const rootKeys = await generateRsaKeyPair();
+  const intermediateKeys = await generateRsaKeyPair();
+  const signerKeys = await generateRsaKeyPair();
+  const root = await createCertificate(
+    "Binary101 Root",
+    1,
+    rootKeys.publicKey,
+    createCommonName("Binary101 Root"),
+    rootKeys.privateKey,
+    "2020-01-01T00:00:00Z",
+    "2035-01-01T00:00:00Z",
+    [createBasicConstraintsExtension(true), createKeyUsageExtension(KEY_USAGE_KEY_CERT_SIGN)]
+  );
+  const intermediate = await createCertificate(
+    "Binary101 Intermediate",
+    2,
+    intermediateKeys.publicKey,
+    root.subject,
+    rootKeys.privateKey,
+    "2021-01-01T00:00:00Z",
+    "2030-01-01T00:00:00Z",
+    [createBasicConstraintsExtension(true), createKeyUsageExtension(KEY_USAGE_KEY_CERT_SIGN)]
+  );
+  const signer = await createCertificate(
+    "Binary101 Signer",
+    3,
+    signerKeys.publicKey,
+    intermediate.subject,
+    intermediateKeys.privateKey,
+    "2022-01-01T00:00:00Z",
+    "2028-01-01T00:00:00Z",
+    [createBasicConstraintsExtension(false), createKeyUsageExtension(KEY_USAGE_DIGITAL_SIGNATURE)]
+  );
+  const rootThumbprint = await certificateThumbprint(root);
+  const policy = await evaluateAuthenticodeTrustPolicy([signer, intermediate], {
+    schemaVersion: 1,
+    generatedAt: TRUST_SNAPSHOT_TIME,
+    trustedCAs: [{
+      thumbprint: rootThumbprint,
+      subject: "CN=Binary101 Root",
+      derBase64: certificateDerBase64(root),
+      stores: ["Root"]
+    }],
+    revokedCAs: []
+  });
+
+  assert.strictEqual(policy?.certificates[0]?.status, "unknown");
+  assert.strictEqual(policy?.certificates[1]?.status, "trusted");
+  assert.strictEqual(policy?.certificates[1]?.anchorSha1Thumbprint, rootThumbprint);
+  assert.deepStrictEqual(policy?.certificates[1]?.stores, ["Root"]);
 });
 
 void test("verifyAuthenticode removes the trust-anchor gap when a CA snapshot is available", async () => {

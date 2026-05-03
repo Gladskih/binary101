@@ -24,6 +24,7 @@ void test("normalizeAuthenticodeTrustStore keeps trusted and revoked CA entries"
         subject: "CN=Trusted Root",
         issuer: "CN=Trusted Root",
         serialNumber: "01",
+        derBase64: "AQID",
         stores: ["Root", "Root", "AuthRoot"]
       }
     ],
@@ -32,6 +33,7 @@ void test("normalizeAuthenticodeTrustStore keeps trusted and revoked CA entries"
 
   assert.strictEqual(snapshot.generatedAt, "2026-05-03T00:00:00.000Z");
   assert.strictEqual(snapshot.trustedCAs[0]?.thumbprint, "AABB");
+  assert.strictEqual(snapshot.trustedCAs[0]?.derBase64, "AQID");
   assert.deepStrictEqual(snapshot.trustedCAs[0]?.stores, ["AuthRoot", "Root"]);
   assert.strictEqual(snapshot.revokedCAs[0]?.thumbprint, "CCDD");
   assert.strictEqual(hasAuthenticodeTrustStoreData(snapshot), true);

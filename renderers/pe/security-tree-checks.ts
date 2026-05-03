@@ -37,16 +37,24 @@ const formatTrustStores = (trust: AuthenticodeCertificateTrustInfo): string =>
 const formatTrustThumbprint = (trust: AuthenticodeCertificateTrustInfo): string =>
   trust.sha1Thumbprint ? ` SHA-1 ${trust.sha1Thumbprint}.` : "";
 
+const formatTrustAnchor = (trust: AuthenticodeCertificateTrustInfo): string => {
+  if (!trust.anchorSha1Thumbprint) return "";
+  const subject = trust.anchorSubject ? ` ${trust.anchorSubject}.` : "";
+  return ` Anchor SHA-1 ${trust.anchorSha1Thumbprint}.${subject}`;
+};
+
 const formatTrustDetail = (
   auth: AuthenticodeInfo,
   trust: AuthenticodeCertificateTrustInfo
 ): string => {
   const checkedAt = auth.verification?.trustPolicy?.generatedAt || "unknown date";
   if (trust.status === "revoked") {
-    return `Certificate is in the Windows Disallowed CA snapshot as of ${checkedAt}.${formatTrustThumbprint(trust)}${formatTrustStores(trust)}`;
+    return `Certificate chains to the Windows Disallowed CA snapshot as of ${checkedAt}.` +
+      `${formatTrustThumbprint(trust)}${formatTrustAnchor(trust)}${formatTrustStores(trust)}`;
   }
   if (trust.status === "trusted") {
-    return `Certificate is in the Windows trusted CA snapshot as of ${checkedAt}.${formatTrustThumbprint(trust)}${formatTrustStores(trust)}`;
+    return `Certificate chains to the Windows trusted CA snapshot as of ${checkedAt}.` +
+      `${formatTrustThumbprint(trust)}${formatTrustAnchor(trust)}${formatTrustStores(trust)}`;
   }
   return `Certificate is not in the Windows trusted or disallowed CA snapshot as of ${checkedAt}.${formatTrustThumbprint(trust)}`;
 };

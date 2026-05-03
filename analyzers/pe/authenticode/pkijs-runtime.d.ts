@@ -90,6 +90,8 @@ export class Certificate {
   verify(issuerCertificate?: Certificate, crypto?: unknown): Promise<boolean>;
 }
 
+export function fromBER(raw: BufferSource): { offset: number; result?: unknown };
+
 export interface PkijsSignedDataVerifyResult {
   code?: number;
   message: string;

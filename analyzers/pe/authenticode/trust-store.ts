@@ -9,6 +9,7 @@ export interface AuthenticodeTrustStoreCertificate {
   serialNumber?: string;
   notBefore?: string;
   notAfter?: string;
+  derBase64?: string;
   stores?: string[];
 }
 
@@ -57,6 +58,7 @@ const normalizeCertificate = (
   const serialNumber = optionalText(value["serialNumber"]);
   const notBefore = optionalText(value["notBefore"]);
   const notAfter = optionalText(value["notAfter"]);
+  const derBase64 = optionalText(value["derBase64"]);
   const stores = optionalTextArray(value["stores"]);
   return {
     thumbprint,
@@ -65,6 +67,7 @@ const normalizeCertificate = (
     ...(serialNumber ? { serialNumber } : {}),
     ...(notBefore ? { notBefore } : {}),
     ...(notAfter ? { notAfter } : {}),
+    ...(derBase64 ? { derBase64 } : {}),
     ...(stores ? { stores } : {})
   };
 };
