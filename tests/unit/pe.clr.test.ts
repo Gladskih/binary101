@@ -14,6 +14,8 @@ const CLR_DIRECTORY_RVA = 0x100;
 const CLR_METADATA_ROOT_SIGNATURE = 0x424a5342;
 // ECMA-335 II.24.2.6: managed EntryPointToken may encode only MethodDef (0x06) or File (0x26).
 const CLR_ENTRY_POINT_TOKEN_TYPE_REF = 0x02000001; // TypeRef is intentionally invalid here.
+// 0x4b keeps known COMIMAGE_FLAGS bits 0x01, 0x02, and 0x08 set with reserved bit 0x40.
+const CLR_FLAGS_WITH_RESERVED_40 = 0x0000004b;
 // COMIMAGE_FLAGS define only documented low bits; this high bit is intentionally outside the spec.
 const CLR_UNKNOWN_FLAG_BIT = 0x80000000;
 
@@ -243,7 +245,21 @@ void test("parseClrDirectory reports unknown CLR flag bits", async () => {
 
   assert.ok(
     expectDefined(expectDefined(clr).issues).some(
-      issue => /flag|bit|unspecified|unknown/i.test(issue)
+      issue => issue === "CLR header Flags contains unknown bits (0x80000000)."
+    )
+  );
+});
+
+void test("parseClrDirectory excludes known CLR flags from unknown flag reports", async () => {
+  const clr = await parseClrDirectory(
+    createClrHeaderFile(CLR_FLAGS_WITH_RESERVED_40, 0),
+    [{ name: "CLR_RUNTIME", rva: CLR_DIRECTORY_RVA, size: IMAGE_COR20_HEADER_SIZE }],
+    rvaToOff
+  );
+
+  assert.ok(
+    expectDefined(expectDefined(clr).issues).some(
+      issue => issue === "CLR header Flags contains unknown bits (0x00000040)."
     )
   );
 });

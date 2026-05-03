@@ -135,7 +135,7 @@ export async function parseClrDirectory(
   if (clr.cb !== 0 && dir.size !== 0 && dir.size < clr.cb) {
     issues.push("CLR directory size is smaller than the header cb field; header appears truncated.");
   }
-  const unknownFlagBits = clr.Flags & ~KNOWN_COMIMAGE_FLAGS;
+  const unknownFlagBits = (clr.Flags & ~KNOWN_COMIMAGE_FLAGS) >>> 0;
   if (unknownFlagBits !== 0) {
     issues.push(
       `CLR header Flags contains unknown bits (0x${unknownFlagBits.toString(16).padStart(8, "0")}).`

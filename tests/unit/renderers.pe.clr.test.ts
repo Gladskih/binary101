@@ -10,7 +10,9 @@ type RenderClrInput = Parameters<typeof renderClr>[0];
 const CLR_HEADER_SIZE = 0x48; // ECMA-335 II.25.3.3 IMAGE_COR20_HEADER byte size.
 const CLR_NATIVE_ENTRYPOINT_FLAG = 0x00000010; // COMIMAGE_FLAGS_NATIVE_ENTRYPOINT.
 const CLR_ILONLY_FLAG = 0x00000001; // COMIMAGE_FLAGS_ILONLY.
+const CLR_32BIT_REQUIRED_FLAG = 0x00000002; // COMIMAGE_FLAGS_32BITREQUIRED.
 const CLR_STRONG_NAME_SIGNED_FLAG = 0x00000008; // COMIMAGE_FLAGS_STRONGNAMESIGNED.
+const CLR_RESERVED_40_FLAG = 0x00000040; // Not defined by ECMA-335 II.25.3.3.1.
 const VTABLE_32BIT_CALL_MOST_DERIVED = 0x0011; // ECMA-335 II.25.3.3 VTableFixups Type flags.
 const METADATA_ROOT_SIGNATURE = 0x424a5342; // ECMA-335 II.24.2.1 metadata signature "BSJB".
 const HEAP_EXTRA_DATA = 0x40; // CoreCLR CMiniMdSchemaBase::EXTRA_DATA schema flag.
@@ -258,4 +260,23 @@ void test("renderClr includes explanatory strong-name resources and ReadyToRun s
   assert.ok(html.includes("ReadyToRun"));
   assert.ok(html.includes("STRIPPED_IL_BODIES"));
   assert.ok(html.includes("CompilerIdentifier"));
+});
+
+void test("renderClr decodes known CorFlags and leaves only reserved bits unknown", () => {
+  const clr: RenderClrInput = {
+    ...makeClrBase(),
+    Flags: CLR_ILONLY_FLAG |
+      CLR_32BIT_REQUIRED_FLAG |
+      CLR_STRONG_NAME_SIGNED_FLAG |
+      CLR_RESERVED_40_FLAG
+  };
+  const out: string[] = [];
+  renderClr(clr, out);
+  const html = out.join("");
+
+  assert.match(html, /<span class="opt sel"[^>]*>ILONLY<\/span>/);
+  assert.match(html, /<span class="opt sel"[^>]*>32BITREQUIRED<\/span>/);
+  assert.match(html, /<span class="opt sel"[^>]*>STRONGNAMESIGNED<\/span>/);
+  assert.match(html, /UNKNOWN_BITS_0x0040/);
+  assert.doesNotMatch(html, /UNKNOWN_BITS_0x004a/);
 });
