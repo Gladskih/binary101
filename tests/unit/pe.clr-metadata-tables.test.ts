@@ -76,6 +76,7 @@ interface MetadataStringIndexes {
 }
 
 interface MetadataBlobIndexes {
+  assemblyPublicKey: number;
   ctorSignature: number;
   targetFrameworkAttribute: number;
 }
@@ -102,6 +103,10 @@ const targetFrameworkAttributeBlob = (): number[] => [
   ...serString("FrameworkDisplayName"),
   ...serString(".NET 8.0")
 ];
+const generatedAssemblyPublicKey = (): number[] =>
+  Array.from({ length: Uint32Array.BYTES_PER_ELEMENT }, (_, index) => index + Uint8Array.BYTES_PER_ELEMENT);
+const generatedAssemblyVersion = (): number[] =>
+  Array.from({ length: Uint32Array.BYTES_PER_ELEMENT }, (_, index) => index + Uint8Array.BYTES_PER_ELEMENT);
 
 const createMetadataTableStream = (
   strings: MetadataStringIndexes,
@@ -136,9 +141,9 @@ const createMetadataTableStream = (
   writeU16(bytes, (1 << 3) | 3);
   writeU16(bytes, blobs.targetFrameworkAttribute);
   writeU32(bytes, ASSEMBLY_HASH_ALGORITHM_SHA1);
-  [1, 2, 3, 4].forEach(part => writeU16(bytes, part));
+  generatedAssemblyVersion().forEach(part => writeU16(bytes, part));
   writeU32(bytes, 0);
-  writeU16(bytes, 0);
+  writeU16(bytes, blobs.assemblyPublicKey);
   writeU16(bytes, strings.assembly);
   writeU16(bytes, 0);
   return Uint8Array.from(bytes);
@@ -155,6 +160,7 @@ const createClrFileWithMetadataTables = (): MockFile => {
   };
   const blobHeap = [0];
   const blobs = {
+    assemblyPublicKey: addBlob(blobHeap, generatedAssemblyPublicKey()),
     ctorSignature: addBlob(blobHeap, stringConstructorSignature()),
     targetFrameworkAttribute: addBlob(blobHeap, targetFrameworkAttributeBlob())
   };
@@ -206,6 +212,7 @@ void test("parseClrDirectory decodes ECMA-335 metadata tables and TargetFramewor
 
   assert.strictEqual(metadata.assembly?.name, "TestApp");
   assert.strictEqual(metadata.assembly?.version, "1.2.3.4");
+  assert.deepStrictEqual(metadata.assembly?.publicKey, generatedAssemblyPublicKey());
   assert.strictEqual(metadata.typeRefs[0]?.fullName, "System.Runtime.Versioning.TargetFrameworkAttribute");
   assert.strictEqual(targetFramework.attributeType, "System.Runtime.Versioning.TargetFrameworkAttribute");
   assert.strictEqual(targetFramework.fixedArguments[0]?.value, ".NETCoreApp,Version=v8.0");

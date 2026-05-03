@@ -21,6 +21,7 @@ import { parseDynamicRelocationsFromLoadConfig32, parseDynamicRelocationsFromLoa
 import { parseIatDirectory } from "./imports/iat.js";
 import { parseArchitectureDirectory } from "./directories/architecture-directory.js";
 import { parseGlobalPtrDirectory } from "./directories/globalptr-directory.js";
+import { detectNativeAotCandidate } from "./native-aot.js";
 import { analyzeImportLinking } from "./imports/linking.js";
 import {
   analyzeManifestConsistency,
@@ -216,6 +217,7 @@ export async function parsePe(
   const boundImports = await parseBoundImports(reader, dataDirs, rvaToOff);
   const delayImports = await peVariant.parseDelayImports(reader, dataDirs, rvaToOff);
   const clr = await parseClrDirectory(reader, dataDirs, rvaToOff);
+  const nativeAotCandidate = detectNativeAotCandidate(clr != null, exportsInfo, sections);
   const securityDir = dataDirs.find(d => d.name === "SECURITY");
   const authenticodeDigestCache = new Map<string, Promise<string | null>>();
   const getCachedAuthenticodeDigest = (algorithm: AlgorithmIdentifier): Promise<string | null> => {
@@ -291,6 +293,7 @@ export async function parsePe(
     importLinking,
     architecture,
     globalPtr,
+    nativeAotCandidate,
     resources: attachManifestValidation(resources, manifestValidation),
     overlaySize,
     imageEnd,

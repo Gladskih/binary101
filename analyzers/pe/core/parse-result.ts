@@ -8,6 +8,7 @@ import type { PeIatDirectory } from "../imports/iat.js";
 import type { PeArchitectureDirectory } from "../directories/architecture-directory.js";
 import type { PeGlobalPtrDirectory } from "../directories/globalptr-directory.js";
 import type { PeLoadConfig } from "../load-config/index.js";
+import type { PeNativeAotCandidate } from "../native-aot.js";
 import type { PeResources } from "../resources/index.js";
 import type { PeClrHeader } from "../clr/index.js";
 import type { ParsedSecurityDirectory } from "../security/index.js";
@@ -63,6 +64,7 @@ export interface PeWindowsParseResult extends PeParseResultBase {
   globalPtr?: PeGlobalPtrDirectory | null;
   resources: PeResources | null;
   disassembly?: PeInstructionSetReport;
+  nativeAotCandidate?: PeNativeAotCandidate | null;
 }
 
 export interface PeHeaderParseResult extends PeParseResultBase {

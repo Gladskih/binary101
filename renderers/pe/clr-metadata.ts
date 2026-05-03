@@ -93,7 +93,7 @@ const renderAssembly = (metadata: PeClrMetadataTables): string => {
     dd("Culture", dash(metadata.assembly.culture), "Assembly culture string.") +
     dd("Flags", hex(metadata.assembly.flags, 8), "AssemblyFlags bitmask.") +
     dd("HashAlgId", hex(metadata.assembly.hashAlgorithm, 8), "AssemblyHashAlgorithm value.") +
-    dd("PublicKey", metadata.assembly.publicKeySize == null ? "-" : `${metadata.assembly.publicKeySize} bytes`) +
+    dd("PublicKey", metadata.assembly.publicKey == null ? "-" : `${metadata.assembly.publicKey.length} bytes`) +
     `</dl></details>`;
 };
 

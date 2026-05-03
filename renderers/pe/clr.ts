@@ -5,6 +5,7 @@ import { dd, rowFlags, safe } from "../../html-utils.js";
 import type { PeClrHeader } from "../../analyzers/pe/clr/index.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import { renderClrMetadataTables } from "./clr-metadata.js";
+import { renderManagedResources, renderReadyToRun, renderStrongName } from "./clr-advanced.js";
 
 const COMIMAGE_FLAGS_NATIVE_ENTRYPOINT = 0x00000010;
 
@@ -255,6 +256,9 @@ export function renderClr(clrHeader: PeClrHeader, out: string[]): void {
   }
   out.push(`</dl>`);
   renderClrSubdirectories(clrHeader, out);
+  renderStrongName(clrHeader, out);
+  renderManagedResources(clrHeader, out);
+  renderReadyToRun(clrHeader, out);
   if (clrHeader.issues?.length) {
     out.push(`<ul class="smallNote" style="color:var(--warn-fg)">`);
     clrHeader.issues.forEach(issue => out.push(`<li>${safe(issue)}</li>`));

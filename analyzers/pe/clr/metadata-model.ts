@@ -35,10 +35,8 @@ import {
   TABLE_TYPE_DEF,
   TABLE_TYPE_REF
 } from "./metadata-schema.js";
-
 const cellNumber = (row: ClrMetadataRow, name: string): number =>
   typeof row[name] === "number" ? row[name] : 0;
-
 const cellIndex = (row: ClrMetadataRow, name: string): PeClrMetadataIndex =>
   typeof row[name] === "object"
     ? row[name] as PeClrMetadataIndex
@@ -85,6 +83,7 @@ const createAssembly = (
 ): PeClrAssemblyInfo | null => {
   const row = rows[0];
   if (!row) return null;
+  const publicKey = heaps.getBlob(cellNumber(row, "PublicKey"), "Assembly row 1.PublicKey");
   return {
     row: 1,
     name: getString(heaps, row, "Name", "Assembly row 1"),
@@ -92,7 +91,7 @@ const createAssembly = (
     version: versionText(row),
     hashAlgorithm: cellNumber(row, "HashAlgId"),
     flags: cellNumber(row, "Flags"),
-    publicKeySize: blobSize(heaps, row, "PublicKey", "Assembly row 1")
+    ...(publicKey ? { publicKey: Array.from(publicKey) } : {})
   };
 };
 

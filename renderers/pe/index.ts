@@ -25,6 +25,7 @@ import {
 } from "./import-sections.js";
 import { renderResources } from "./resources.js";
 import { renderException } from "./exception.js";
+import { renderNativeAotCandidate } from "./native-aot.js";
 import {
   renderReloc,
   renderSanity
@@ -58,6 +59,7 @@ export function renderPe(pe: PeParseResult | null | undefined): string {
     renderBoundImports(pe, out);
     renderDelayImports(pe, out);
     renderIfPresent(pe.clr, renderClr, out);
+    renderNativeAotCandidate(pe.nativeAotCandidate, out);
     renderIfPresent(pe.security, renderSecurity, out);
     renderIat(pe, out);
     renderArchitectureDirectory(pe, out);

@@ -10,10 +10,24 @@ import {
   readCor20Header
 } from "./cor20-header.js";
 import { parseClrMetadataRoot } from "./metadata-root.js";
+import { parseManagedResources } from "./managed-resources.js";
+import { parseReadyToRun } from "./ready-to-run.js";
+import { parseStrongName } from "./strong-name.js";
 import { parseVTableFixups } from "./vtable-fixups.js";
 import type { PeClrHeader } from "./types.js";
 
-export type { PeClrHeader, PeClrMeta, PeClrStreamInfo, PeClrVTableFixup } from "./types.js";
+export type {
+  PeClrHeader,
+  PeClrMeta,
+  PeClrStreamInfo,
+  PeClrVTableFixup
+} from "./types.js";
+export type {
+  PeClrManagedResourceValue,
+  PeClrManagedResources
+} from "./managed-resource-types.js";
+export type { PeClrReadyToRun } from "./ready-to-run-types.js";
+export type { PeClrStrongName } from "./strong-name-types.js";
 
 // ECMA-335 II.25.3.3.1 ("Runtime flags"):
 // https://carlwa.com/ecma-335/#ii.25.3.3.1-runtime-flags
@@ -190,6 +204,10 @@ export async function parseClrDirectory(
     issues
   );
   if (fixups) clr.vtableFixups = fixups;
+  clr.strongName = await parseStrongName(reader, rvaToOff, clr);
+  const managedResources = await parseManagedResources(reader, rvaToOff, clr);
+  if (managedResources) clr.managedResources = managedResources;
+  clr.readyToRun = await parseReadyToRun(reader, rvaToOff, clr);
   if (issues.length) clr.issues = issues;
   return clr;
 }

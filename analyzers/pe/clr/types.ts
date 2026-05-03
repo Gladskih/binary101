@@ -1,5 +1,9 @@
 "use strict";
 
+import type { PeClrManagedResources } from "./managed-resource-types.js";
+import type { PeClrReadyToRun } from "./ready-to-run-types.js";
+import type { PeClrStrongName } from "./strong-name-types.js";
+
 export interface PeClrStreamInfo {
   name: string;
   offset: number;
@@ -37,7 +41,7 @@ export interface PeClrAssemblyInfo {
   version: string;
   hashAlgorithm: number;
   flags: number;
-  publicKeySize: number | null;
+  publicKey?: number[];
 }
 
 export interface PeClrAssemblyRefInfo {
@@ -231,5 +235,8 @@ export interface PeClrHeader {
   ManagedNativeHeaderSize: number;
   meta?: PeClrMeta;
   vtableFixups?: PeClrVTableFixup[];
+  strongName?: PeClrStrongName;
+  managedResources?: PeClrManagedResources;
+  readyToRun?: PeClrReadyToRun;
   issues?: string[];
 }
