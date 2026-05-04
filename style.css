@@ -51,6 +51,46 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .analysisPanelTitle{display:inline-block;font-size:1rem;font-weight:700}
 .analysisPanelActions{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
 
+.peSection{margin:.15rem 0}
+.peSection + .peSection{margin-top:.3rem}
+.peSectionDetails[open]{padding-bottom:.15rem}
+.peSectionSummary{
+  cursor:pointer;
+  padding:.35rem .6rem;
+  border:1px solid var(--border2);
+  border-radius:8px;
+  background:var(--chip-bg);
+}
+.peSectionDetails[open] > .peSectionSummary{
+  border-color:color-mix(in oklab,var(--accent) 45%,var(--border2));
+  box-shadow:inset 2px 0 0 var(--accent);
+}
+.peSectionBody{
+  margin:.45rem 0 .45rem .85rem;
+  padding-left:.75rem;
+  border-left:1px solid color-mix(in oklab,var(--accent) 30%,var(--border2));
+}
+.peSectionBody details[open]{
+  position:relative;
+  padding-bottom:.1rem;
+}
+.peSectionBody details[open]::before{
+  content:"";
+  position:absolute;
+  left:.55rem;
+  top:2rem;
+  bottom:.25rem;
+  border-left:1px solid color-mix(in oklab,var(--accent) 26%,var(--border2));
+  pointer-events:none;
+}
+.peSectionBody details[open] > summary{
+  box-shadow:inset 2px 0 0 color-mix(in oklab,var(--accent) 72%,var(--border2));
+}
+.peSectionBody details[open] > summary ~ *{
+  margin-left:1.05rem;
+  max-width:calc(100% - 1.05rem);
+}
+
 .peSecurityCertList{display:grid;gap:.75rem;margin-top:.5rem}
 .peSecurityCertCard{padding:.7rem .8rem;border:1px solid var(--border2);border-radius:12px;background:var(--card)}
 .peSecurityCertHeader{display:flex;flex-wrap:wrap;gap:.35rem .5rem;align-items:center;margin-bottom:.45rem}

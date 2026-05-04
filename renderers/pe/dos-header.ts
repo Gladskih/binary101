@@ -3,6 +3,7 @@
 import { hex } from "../../binary-utils.js";
 import { safe } from "../../html-utils.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
+import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import { renderRichHeader } from "./rich-header.js";
 
 type DosHeaderField = readonly [label: string, value: string, hint: string];
@@ -61,12 +62,8 @@ const renderDosStub = (pe: PeParseResult, out: string[]): void => {
 };
 
 export const renderDosHeader = (pe: PeParseResult, out: string[]): void => {
-  out.push(`<section>`);
-  out.push(
-    `<details><summary style="cursor:pointer;padding:.35rem .6rem;border:1px solid var(--border2);border-radius:8px;background:var(--chip-bg)"><b>DOS header</b> (click to expand)</summary>`
-  );
-  out.push(`<div style="margin-top:.5rem">`);
+  out.push(renderPeSectionStart("DOS header"));
   renderDosHeaderFields(pe, out);
   renderDosStub(pe, out);
-  out.push(`</div></details></section>`);
+  out.push(renderPeSectionEnd());
 };
