@@ -120,7 +120,9 @@ void test("renderSanity renders issues and clean state", () => {
   } as unknown as PeParseResult;
   const outClean: string[] = [];
   renderSanity(clean, outClean);
-  assert.ok(outClean.join("").includes("No obvious structural issues"));
+  const htmlClean = outClean.join("");
+  assert.ok(htmlClean.includes("No obvious structural issues"));
+  assert.doesNotMatch(htmlClean, /<details><summary[^>]*><b>Sanity<\/b>/);
 });
 
 void test("renderSanity reports suspicious entrypoint sections", () => {

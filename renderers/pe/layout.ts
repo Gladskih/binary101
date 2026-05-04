@@ -256,11 +256,14 @@ export function renderSanity(pe: PeParseResult, out: string[]): void {
       );
     }
   }
-  out.push(renderPeSectionStart("Sanity"));
   if (!issues.length) {
-    out.push(`<div class="smallNote">No obvious structural issues detected.</div>`);
-  } else {
-    out.push(renderPeDiagnostics("Sanity findings", issues));
+    out.push(
+      `<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Sanity</h4>` +
+      `<div class="smallNote">No obvious structural issues detected.</div></section>`
+    );
+    return;
   }
+  out.push(renderPeSectionStart("Sanity", `${issues.length} finding${issues.length === 1 ? "" : "s"}`));
+  out.push(renderPeDiagnostics("Sanity findings", issues));
   out.push(renderPeSectionEnd());
 }
