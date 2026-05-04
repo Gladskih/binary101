@@ -26,8 +26,8 @@ import {
   linkerVersionHint,
   winVersionName
 } from "./header-format.js";
-import { renderRichHeader } from "./rich-header.js";
 import { renderCoffTailSummary } from "./coff-tail-summary.js";
+import { renderDosHeader } from "./dos-header.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 const renderPeFormatNote = (out: string[]): void => {
@@ -103,56 +103,7 @@ const renderInlineHeaderTitle = (title: string): string =>
 
 export function renderHeaders(pe: PeParseResult, out: string[]): void {
   renderPeFormatNote(out);
-
-  out.push(`<section>`);
-  out.push(
-    `<details><summary style="cursor:pointer;padding:.35rem .6rem;border:1px solid var(--border2);border-radius:8px;background:var(--chip-bg)"><b>DOS header</b> (click to expand)</summary>`
-  );
-  out.push(`<div style="margin-top:.5rem"><dl>`);
-  out.push(dd("e_magic", "MZ", "DOS header signature. PE files begin with a small DOS program (stub)."));
-  out.push(dd("e_cblp", `${pe.dos.e_cblp} bytes last page`, "Number of bytes on last page of file (legacy)."));
-  out.push(dd("e_cp", `${pe.dos.e_cp} pages`, "File size measured in 512-byte pages (legacy)."));
-  out.push(dd("e_crlc", String(pe.dos.e_crlc), "Relocations count for the DOS MZ program (should be 0 for PE)."));
-  out.push(dd("e_cparhdr", `${pe.dos.e_cparhdr} paragraphs (>=4)`, "Header size in 16-byte paragraphs (MZ)."));
-  out.push(dd("e_minalloc", String(pe.dos.e_minalloc), "Minimum extra paragraphs needed (DOS)."));
-  out.push(dd("e_maxalloc", String(pe.dos.e_maxalloc), "Maximum extra paragraphs needed (DOS)."));
-  out.push(dd("e_ss", hex(pe.dos.e_ss, 4), "Initial stack segment for DOS stub (legacy)."));
-  out.push(dd("e_sp", hex(pe.dos.e_sp, 4), "Initial stack pointer for DOS stub (legacy)."));
-  out.push(dd("e_csum", hex(pe.dos.e_csum, 4), "Checksum for DOS program (usually 0)."));
-  out.push(dd("e_ip", hex(pe.dos.e_ip, 4), "Initial instruction pointer for DOS stub."));
-  out.push(dd("e_cs", hex(pe.dos.e_cs, 4), "Initial code segment for DOS stub."));
-  out.push(
-    dd(
-      "e_lfarlc",
-      hex(pe.dos.e_lfarlc, 4),
-      "Offset to relocation table within DOS header (usually 0x40)."
-    )
-  );
-  out.push(dd("e_oemid", hex(pe.dos.e_oemid, 4), "OEM identifier."));
-  out.push(dd("e_oeminfo", hex(pe.dos.e_oeminfo, 4), "OEM-specific information."));
-  out.push(
-    dd(
-      "e_lfanew",
-      hex(pe.dos.e_lfanew, 8),
-      `File offset to PE signature (${pe.dos.e_lfanew >= 0x80 ? "typically near end of headers" : ""}).`
-    )
-  );
-  out.push(`</dl>`);
-  const stub = pe.dos.stub;
-  out.push(`<div class="smallNote">DOS stub: ${stub.kind}${stub.note ? ` - ${safe(stub.note)}` : ""}</div>`);
-  if (stub.strings?.length) {
-    out.push(`<div class="mono smallNote">${stub.strings.map(x => `<div>${safe(String(x))}</div>`).join("")}</div>`);
-  }
-  if (pe.dos.rich) {
-    out.push(`<div style="margin-top:.75rem">`);
-    renderRichHeader(pe.dos.rich, out);
-    out.push(`</div>`);
-  } else {
-    out.push(
-      `<div class="smallNote" style="margin-top:.5rem">Rich header: not present (no DanS/Rich signature found in DOS stub).</div>`
-    );
-  }
-  out.push(`</div></details></section>`);
+  renderDosHeader(pe, out);
 
   out.push(renderPeSectionStart("PE/COFF headers"));
   out.push(renderInlineHeaderTitle("PE signature"));
