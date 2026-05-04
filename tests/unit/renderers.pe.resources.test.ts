@@ -243,6 +243,7 @@ void test("renderResources renders preview cells for common resource types", () 
   assert.match(html, /assembly/);
   assert.match(html, new RegExp(String(manifestName)));
   assert.match(html, /Manifest cross-check/);
+  assert.match(html, /peResourcePreviewWideRow/);
   assert.match(html, /Consistent/);
   assert.match(html, /Parsed tree/);
   assert.match(html, /Copy manifest XML/);

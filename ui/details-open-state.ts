@@ -33,9 +33,13 @@ const getDetailsStateKey = (details: DetailsStateNode): string => {
   return path.join(" > ");
 };
 
+const shouldIgnoreDetailsState = (details: DetailsStateNode): boolean =>
+  Boolean(details.closest?.('[data-details-open-state="ignore"]'));
+
 export const captureOpenDetails = (root: DetailsStateNode): Set<string> => {
   const openDetails = new Set<string>();
   for (const details of Array.from(root.querySelectorAll?.("details") ?? [])) {
+    if (shouldIgnoreDetailsState(details)) continue;
     if (details.open) openDetails.add(getDetailsStateKey(details));
   }
   return openDetails;
@@ -47,6 +51,7 @@ export const restoreOpenDetails = (
   syncViewer: (viewer: DetailsStateNode) => void
 ): void => {
   for (const details of Array.from(root.querySelectorAll?.("details") ?? [])) {
+    if (shouldIgnoreDetailsState(details)) continue;
     details.open = openDetails.has(getDetailsStateKey(details));
   }
   for (const viewer of Array.from(root.querySelectorAll?.("[data-manifest-tree-viewer]") ?? [])) {

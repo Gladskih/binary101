@@ -102,9 +102,11 @@ void test("renderManifestPreview renders manifest validation status and details"
   assert.match(html, /Manifest cross-check/);
   assert.match(html, /Consistent/);
   assert.match(html, /Checks run/);
-  assert.match(html, /Validated details/);
   assert.match(html, /COFF Machine 8664/);
   assert.match(html, /data-manifest-copy-button/);
+  assert.match(html, /class="manifestXmlSourceDetails"/);
+  assert.match(html, /data-details-open-state="ignore"/);
+  assert.doesNotMatch(html, /class="manifestXmlSourceDetails"[^>]* open/);
   assert.doesNotMatch(html, /Raw XML/);
 });
 

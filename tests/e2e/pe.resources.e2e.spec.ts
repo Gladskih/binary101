@@ -103,7 +103,10 @@ test.describe("PE resource previews", () => {
     expect(await html.innerHTML()).toContain("HTML is not executed");
 
     const manifest = await openResourceGroup(page, "MANIFEST");
-    await expect(manifest).toContainText('<?xml version="1.0" encoding="UTF-8"?>');
+    const xmlSource = manifest.locator("[data-manifest-preview] .manifestXmlSourceDetails");
+    await expect(xmlSource).toHaveJSProperty("open", false);
+    await expect(xmlSource).toContainText("XML source");
+    await expect(xmlSource.locator("[data-manifest-copy-source]")).toBeHidden();
     await expect(manifest).toContainText("Manifest cross-check");
     await expect(manifest).toContainText("Consistent");
     await expect(manifest).toContainText("Parsed tree");

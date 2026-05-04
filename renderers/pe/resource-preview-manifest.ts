@@ -6,7 +6,7 @@ import type {
   ResourceManifestTreeAttribute,
   ResourceManifestTreeNode
 } from "../../analyzers/pe/resources/preview/types.js";
-import { dd, safe } from "../../html-utils.js";
+import { safe } from "../../html-utils.js";
 
 const SUPPORTED_OS_LABELS = new Map<string, string>([
   ["{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}", "Windows 10 / 11; Windows Server 2016 / 2019 / 2022"],
@@ -164,6 +164,22 @@ const renderManifestCopyButton = (): string =>
   `</svg>` +
   `</button>`;
 
+const renderManifestXmlSource = (textPreview: string): string =>
+  `<section data-manifest-preview class="manifestXmlSource" ` +
+  `style="margin-top:.35rem;padding:.45rem .55rem;border:1px solid var(--border2);` +
+  `border-radius:8px;background:var(--bg)">` +
+  `<div style="display:flex;gap:.5rem;align-items:flex-start;justify-content:space-between">` +
+  `<details class="manifestXmlSourceDetails" data-details-open-state="ignore" ` +
+  `style="flex:1;min-width:0">` +
+  `<summary style="cursor:pointer"><b>XML source</b></summary>` +
+  `<div data-manifest-copy-source class="mono smallNote" ` +
+  `style="margin-top:.35rem;white-space:pre-wrap;word-break:break-word">` +
+  `${safe(textPreview)}</div>` +
+  `</details>` +
+  renderManifestCopyButton() +
+  `</div>` +
+  `</section>`;
+
 const renderManifestTreeControls = (tree: ResourceManifestTreeNode): string => {
   const nodeCount = countManifestTreeNodes(tree);
   const expandDisabled = nodeCount <= 1;
@@ -177,21 +193,19 @@ const renderManifestTreeControls = (tree: ResourceManifestTreeNode): string => {
   );
 };
 
-const renderManifestValidationRows = (
-  label: string,
+const renderManifestCheckItems = (
   values: string[],
-  colorVariable: string,
-  tooltip: string
+  status: "pass" | "fail"
 ): string =>
-  values.length
-    ? dd(
-        label,
-        `<div class="smallNote" style="margin:0;color:${colorVariable}">${values
-          .map(value => `<div>- ${safe(value)}</div>`)
-          .join("")}</div>`,
-        tooltip
-      )
-    : "";
+  values
+    .map(value =>
+      `<li class="manifestCheckItem manifestCheckItem--${status}">` +
+      `<span class="manifestCheckIcon" aria-hidden="true">${
+        status === "pass" ? "&#10003;" : "&#9888;"
+      }</span>` +
+      `<span>${safe(value)}</span></li>`
+    )
+    .join("");
 
 const renderManifestValidation = (
   manifestValidation: ResourceManifestValidation | undefined
@@ -199,35 +213,18 @@ const renderManifestValidation = (
   if (!manifestValidation) return "";
   const consistent = manifestValidation.status === "consistent";
   const statusLabel = consistent ? "Consistent" : "Warnings";
-  const statusColor = consistent ? "var(--ok-fg)" : "var(--warn-fg)";
+  const checks = renderManifestCheckItems(manifestValidation.validated, "pass") +
+    renderManifestCheckItems(manifestValidation.warnings, "fail");
   return (
-    `<section style="margin-top:.35rem;padding:.45rem .55rem;border:1px solid var(--border2);border-radius:8px;background:var(--bg)">` +
-    `<div class="smallNote" style="margin-bottom:.25rem"><b>Manifest cross-check</b></div>` +
-    `<div class="smallNote" style="margin-bottom:.35rem">This check compares manifest metadata against PE headers and, when present, the CLR header. It also verifies that multiple embedded manifests agree on shared policy fields.</div>` +
-    `<dl>` +
-    dd(
-      "Status",
-      `<span class="smallNote" style="color:${statusColor};font-weight:600">${statusLabel}</span>`,
-      consistent
-        ? "All implemented manifest cross-checks matched the PE/CLR metadata."
-        : "One or more implemented manifest cross-checks contradicted the PE/CLR metadata."
-    ) +
-    dd("Checks run", String(manifestValidation.checkedCount), "Total manifest cross-check verdicts that produced either a validated match or a warning.") +
-    dd("Validated", String(manifestValidation.validated.length), "Cross-checks that matched the PE/CLR metadata or another embedded manifest resource.") +
-    dd("Warnings", String(manifestValidation.warnings.length), "Cross-checks that contradict PE/CLR metadata or another embedded manifest resource.") +
-    renderManifestValidationRows(
-      "Validated details",
-      manifestValidation.validated,
-      "var(--ok-fg)",
-      "Manifest cross-checks that matched the PE/CLR metadata or another embedded manifest."
-    ) +
-    renderManifestValidationRows(
-      "Warning details",
-      manifestValidation.warnings,
-      "var(--warn-fg)",
-      "Manifest cross-checks that contradicted the PE/CLR metadata or another embedded manifest."
-    ) +
-    `</dl></section>`
+    `<section class="manifestChecks">` +
+    `<div class="manifestChecksHeader">` +
+    `<b>Manifest cross-check</b>` +
+    `<span class="manifestChecksStatus manifestChecksStatus--${consistent ? "pass" : "fail"}">` +
+    `${safe(statusLabel)}</span></div>` +
+    `<div class="smallNote">Checks run: ${manifestValidation.checkedCount}; ` +
+    `validated: ${manifestValidation.validated.length}; warnings: ${manifestValidation.warnings.length}.</div>` +
+    `<ul class="manifestCheckList">${checks || `<li class="manifestCheckItem">No check details.</li>`}</ul>` +
+    `</section>`
   );
 };
 
@@ -254,8 +251,5 @@ export const renderManifestPreview = (
   [
     renderManifestValidation(manifestValidation),
     renderManifestTree(manifestInfo, manifestTree),
-    `<section data-manifest-preview style="margin-top:.35rem;padding:.45rem .55rem;border:1px solid var(--border2);border-radius:8px;background:var(--bg)">`,
-    `<div style="display:flex;justify-content:flex-end;margin-bottom:.25rem">${renderManifestCopyButton()}</div>`,
-    `<div data-manifest-copy-source class="mono smallNote" style="white-space:pre-wrap;word-break:break-word">${safe(textPreview)}</div>`,
-    "</section>"
+    renderManifestXmlSource(textPreview)
   ].join("");

@@ -110,7 +110,8 @@ const renderDefinitionRows = (rows: Array<{ label: string; value: string }>): st
   if (!rows.length) return "";
   const cells = rows
     .map(row =>
-      `<div><span class="mono">${safe(row.label)}</span></div><div>${safe(row.value)}</div>`
+      `<div><span class="mono">${safe(row.label)}</span></div>` +
+      `<div style="min-width:0;overflow-wrap:anywhere">${safe(row.value)}</div>`
     )
     .join("");
   return `<div class="smallNote" style="display:grid;grid-template-columns:max-content 1fr;gap:.15rem .55rem;margin-top:.2rem">${cells}</div>`;

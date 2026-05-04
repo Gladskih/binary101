@@ -18,12 +18,16 @@ const createContainer = (parentDetails: DetailsStateNode | null): DetailsStateNo
 const createDetails = (
   summaryText: string,
   open: boolean,
-  parentDetails: DetailsStateNode | null
+  parentDetails: DetailsStateNode | null,
+  ignoreState = false
 ): DetailsStateNode => ({
   tagName: "DETAILS",
   open,
   parentElement: createContainer(parentDetails),
-  children: [createSummary(summaryText)]
+  children: [createSummary(summaryText)],
+  closest: (selector: string) => selector === '[data-details-open-state="ignore"]' && ignoreState
+    ? ({} as DetailsStateNode)
+    : null
 });
 
 void test("captureOpenDetails and restoreOpenDetails preserve nested open states", () => {
@@ -50,4 +54,21 @@ void test("captureOpenDetails and restoreOpenDetails preserve nested open states
   assert.equal(outer.open, true);
   assert.equal(inner.open, false);
   assert.deepEqual(syncedViewers, [viewer]);
+});
+
+void test("captureOpenDetails and restoreOpenDetails ignore opted-out details", () => {
+  const outer = createDetails("MANIFEST", true, null);
+  const xmlSource = createDetails("XML source", true, outer, true);
+  const root: DetailsStateNode = {
+    querySelectorAll: (selector: string) => selector === "details" ? [outer, xmlSource] : []
+  };
+  const captured = captureOpenDetails(root);
+  outer.open = false;
+  xmlSource.open = false;
+
+  restoreOpenDetails(root, captured, () => undefined);
+
+  assert.equal(outer.open, true);
+  assert.equal(xmlSource.open, false);
+  assert.equal(captured.has("MANIFEST > XML source"), false);
 });

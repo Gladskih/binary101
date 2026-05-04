@@ -24,6 +24,12 @@ const formatDirectoryTimestamp = (timeDateStamp: number): string =>
 const formatResourcePathNode = (node: { id: number | null; name: string | null }): string =>
   node.name != null ? safe(node.name) : node.id != null ? `ID ${node.id}` : "(unnamed)";
 
+const isWideResourcePreview = (
+  langEntry: NonNullable<PeResources["detail"]>[number]["entries"][number]["langs"][number]
+): boolean =>
+  langEntry.previewKind === "version" ||
+  (langEntry.previewKind === "text" && Boolean(langEntry.manifestInfo || langEntry.manifestTree));
+
 export function renderResources(resources: PeResources, out: string[]): void {
   const issues = (resources.issues || []).filter((issue): issue is string => Boolean(issue));
   const extraPaths = (resources.paths || []).filter(path => path.nodes.length !== 3);
@@ -87,7 +93,9 @@ export function renderResources(resources: PeResources, out: string[]): void {
       );
       if (entryCount) {
         out.push(
-          `<table class="table" style="margin-top:.35rem"><thead><tr><th>Name / ID</th><th>Lang</th><th>Size</th><th>CodePage</th><th>Preview</th></tr></thead><tbody>`
+          `<div class="tableWrap"><table class="table peResourcePreviewTable" style="margin-top:.35rem">` +
+            `<thead><tr><th>Name / ID</th><th>Lang</th><th>Size</th><th>CodePage</th>` +
+            `<th>Preview</th></tr></thead><tbody>`
         );
         for (const entry of group.entries) {
           const displayName = entry.name
@@ -96,14 +104,18 @@ export function renderResources(resources: PeResources, out: string[]): void {
               ? `ID ${entry.id}`
               : "(unnamed)";
           for (const langEntry of entry.langs || []) {
+            const preview = renderPreviewCell(langEntry);
             out.push(
-              `<tr><td>${displayName}</td><td>${formatLang(langEntry.lang)}</td><td>${humanSize(
-                langEntry.size || 0
-              )}</td><td>${formatCodePage(langEntry.codePage)}</td><td>${renderPreviewCell(langEntry)}</td></tr>`
+              `<tr><td>${displayName}</td><td>${formatLang(langEntry.lang)}</td><td>` +
+                `${humanSize(langEntry.size || 0)}</td><td>${formatCodePage(langEntry.codePage)}` +
+                `</td><td>${isWideResourcePreview(langEntry) ? "below" : preview}</td></tr>`
             );
+            if (isWideResourcePreview(langEntry)) {
+              out.push(`<tr class="peResourcePreviewWideRow"><td colspan="5">${preview}</td></tr>`);
+            }
           }
         }
-        out.push(`</tbody></table>`);
+        out.push(`</tbody></table></div>`);
       }
       out.push(`</details>`);
     }
