@@ -34,7 +34,8 @@ const renderCertificateCard = (certificate: ParsedWinCertificate, index: number)
     `${certificate.availableBytes < certificate.length ? " (truncated)" : ""}`;
   return (
     `<section class="peSecurityCertCard">` +
-    `<div class="peSecurityCertHeader"><span class="peSecurityCertTitle">Certificate #${index + 1}</span></div>` +
+    `<div class="peSecurityCertHeader"><span class="peSecurityCertTitle">` +
+    `WIN_CERTIFICATE record #${index + 1}</span></div>` +
     `<dl>` +
     dd("Offset", hex(certificate.offset, 8)) +
     dd("Length", safe(lengthLabel)) +

@@ -28,7 +28,7 @@ void test("renderSecurity renders details when present", () => {
   renderSecurity(security, out);
   const html = out.join("");
   assert.ok(html.includes("Certificate records"));
-  assert.ok(html.includes("Certificate #1"));
+  assert.ok(html.includes("WIN_CERTIFICATE record #1"));
   assert.ok(html.includes("Type 0xf00d"));
   assert.ok(html.includes("1.2.3.4"));
   assert.ok(!html.includes("Show certificates"));
