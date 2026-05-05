@@ -121,6 +121,7 @@ void test("evaluateAuthenticodeTrustPolicy anchors an embedded issuer to a trust
   assert.strictEqual(policy?.certificates[0]?.status, "unknown");
   assert.strictEqual(policy?.certificates[1]?.status, "trusted");
   assert.strictEqual(policy?.certificates[1]?.anchorSha1Thumbprint, rootThumbprint);
+  assert.strictEqual(policy?.certificates[1]?.anchorDerBase64, certificateDerBase64(root));
   assert.deepStrictEqual(policy?.certificates[1]?.stores, ["Root"]);
 });
 

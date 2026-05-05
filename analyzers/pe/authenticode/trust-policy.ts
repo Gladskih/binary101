@@ -48,9 +48,13 @@ const parseTrustAnchor = (certificate: AuthenticodeTrustStoreCertificate): Certi
 const certificateStoreInfo = (
   certificate: AuthenticodeTrustStoreCertificate,
   anchorSha1Thumbprint: string
-): Pick<AuthenticodeCertificateTrustInfo, "anchorSha1Thumbprint" | "anchorSubject" | "stores"> => ({
+): Pick<
+  AuthenticodeCertificateTrustInfo,
+  "anchorDerBase64" | "anchorSha1Thumbprint" | "anchorSubject" | "stores"
+> => ({
   anchorSha1Thumbprint,
   ...(certificate.subject ? { anchorSubject: certificate.subject } : {}),
+  ...(certificate.derBase64 ? { anchorDerBase64: certificate.derBase64 } : {}),
   ...(certificate.stores?.length ? { stores: certificate.stores } : {})
 });
 
@@ -87,6 +91,7 @@ const createTrustInfo = (
         certificateIndex,
         status: "revoked",
         sha1Thumbprint,
+        ...(revoked.derBase64 ? { derBase64: revoked.derBase64 } : {}),
         ...(revoked.stores?.length ? { stores: revoked.stores } : {})
       };
     }
@@ -96,6 +101,7 @@ const createTrustInfo = (
         certificateIndex,
         status: "trusted",
         sha1Thumbprint,
+        ...(trusted.derBase64 ? { derBase64: trusted.derBase64 } : {}),
         ...(trusted.stores?.length ? { stores: trusted.stores } : {})
       };
     }

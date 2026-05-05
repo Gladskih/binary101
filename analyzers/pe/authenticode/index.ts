@@ -41,6 +41,7 @@ export interface X509CertificateInfo {
   serialNumber?: string;
   notBefore?: string;
   notAfter?: string;
+  derBase64?: string;
 }
 
 export interface AuthenticodeCounterSignatureInfo {
@@ -86,8 +87,10 @@ export interface AuthenticodeCertificateTrustInfo {
   certificateIndex: number;
   status: AuthenticodeCertificateTrustStatus;
   sha1Thumbprint?: string;
+  derBase64?: string;
   anchorSha1Thumbprint?: string;
   anchorSubject?: string;
+  anchorDerBase64?: string;
   stores?: string[];
 }
 

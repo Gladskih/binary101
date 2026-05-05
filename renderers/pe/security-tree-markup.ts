@@ -74,19 +74,37 @@ export const renderTreeMeta = (label: string, value: string | undefined): string
     ? `<div class="smallNote peSecurityTreeMeta"><span>${safe(label)}:</span> ${safe(value)}</div>`
     : "";
 
+export const renderCertificateDownloadButton = (
+  derBase64: string | undefined,
+  filename: string,
+  label: string
+): string =>
+  derBase64
+    ? `<button type="button" class="peSecurityTreeDownloadButton" data-certificate-download ` +
+      `data-certificate-der-base64="${safe(derBase64)}" data-certificate-filename="${safe(filename)}" ` +
+      `aria-label="${safe(label)}" title="${safe(label)}">` +
+      `<svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" ` +
+      `stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">` +
+      `<path d="M8 2.5v7"></path><path d="M5 6.8 8 9.8l3-3"></path>` +
+      `<path d="M3 12.5h10"></path>` +
+      `</svg></button>`
+    : "";
+
 export const renderTreeNode = (
   title: string,
   badges: TreeBadge[],
   meta: string[],
   children?: string,
-  titleDetail?: string
+  titleDetail?: string,
+  actions = ""
 ): string => (
   `<li class="peSecurityTreeItem">` +
   `<div class="peSecurityTreeNode peSecurityTreeNode--${getNodeStatus(badges)}">` +
   `<div class="peSecurityTreeTitleRow">` +
   `<div class="peSecurityTreeTitle"${titleDetail ? ` title="${safe(titleDetail)}"` : ""}>${safe(title)}</div>` +
-  `<div class="peSecurityTreeBadges">${badges.map(renderTreeBadge).join("")}</div>` +
-  `</div>${meta.join("")}</div>` +
+  actions +
+  `</div><div class="peSecurityTreeBadges">${badges.map(renderTreeBadge).join("")}</div>` +
+  `${meta.join("")}</div>` +
   (children ? `<ul class="peSecurityTree">${children}</ul>` : "") +
   `</li>`
 );

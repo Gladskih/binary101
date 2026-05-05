@@ -19,6 +19,7 @@ import {
   createRoleBadge,
   createStatusBadge,
   filterBadges,
+  renderCertificateDownloadButton,
   renderTreeMeta,
   renderTreeNode
 } from "./security-tree-markup.js";
@@ -77,7 +78,13 @@ export const renderAdditionalCertificatesNode = (auth: AuthenticodeInfo): string
             )
           ],
           undefined,
-          formatDistinguishedNameTooltip(getCertificate(auth.certificates, index)?.subject)
+          formatDistinguishedNameTooltip(getCertificate(auth.certificates, index)?.subject),
+          renderCertificateDownloadButton(
+            getCertificate(auth.certificates, index)?.derBase64 ??
+              getCertificateTrust(auth, index)?.derBase64,
+            `authenticode-certificate-${index + 1}.cer`,
+            `Download embedded certificate ${index + 1}`
+          )
         )
       )
       .join("")

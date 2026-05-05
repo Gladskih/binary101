@@ -20,6 +20,16 @@ import {
 import { describeOid, NAME_OID_KEYS, SIGNING_TIME_OID } from "./pkcs7-oids.js";
 import type { AuthenticodeSignerInfo, X509CertificateInfo } from "./index.js";
 
+const bytesToBase64 = (bytes: Uint8Array): string => {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, offset + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+};
+
 export const parseSpcIndirectDataContent = (
   payloadBytes: Uint8Array,
   warnings: string[]
@@ -95,6 +105,7 @@ const parseX509Certificate = (
   if (issuer) info.issuer = issuer;
   const subject = subjectEl ? parseName(bytes, subjectEl, warnings) : undefined;
   if (subject) info.subject = subject;
+  info.derBase64 = bytesToBase64(bytes.subarray(element.start, element.end));
   if (validityEl?.tag === TAG_SEQUENCE) {
     const times = readDerChildren(bytes, validityEl);
     const beforeEl = times[0];

@@ -18,10 +18,53 @@ import {
   createRoleBadge,
   createStatusBadge,
   filterBadges,
+  renderCertificateDownloadButton,
   formatCheckDetail,
   renderTreeMeta,
   renderTreeNode
 } from "./security-tree-markup.js";
+
+const renderEmbeddedCertificateDownloadButton = (
+  auth: AuthenticodeInfo,
+  certificateIndex: number
+): string => {
+  const certificate = getCertificate(auth.certificates, certificateIndex);
+  const trust = getCertificateTrust(auth, certificateIndex);
+  return renderCertificateDownloadButton(
+    certificate?.derBase64 ?? trust?.derBase64,
+    `authenticode-certificate-${certificateIndex + 1}.cer`,
+    `Download embedded certificate ${certificateIndex + 1}`
+  );
+};
+
+const renderTrustAnchorNode = (
+  trust: ReturnType<typeof getCertificateTrust>
+): string => {
+  if (!trust?.anchorDerBase64 || !trust.anchorSha1Thumbprint) return "";
+  const statusLabel = trust.status === "revoked" ? "Disallowed anchor" : "Trust anchor";
+  return renderTreeNode(
+    `${statusLabel}: ${trust.anchorSubject || trust.anchorSha1Thumbprint}`,
+    filterBadges([
+      createRoleBadge(statusLabel, "certificate"),
+      createStatusBadge(
+        trust.status === "revoked" ? "Revoked" : "Trusted",
+        trust.status === "revoked" ? "fail" : "pass",
+        "Certificate from the local Windows CA trust snapshot."
+      )
+    ]),
+    [
+      renderTreeMeta("SHA-1", trust.anchorSha1Thumbprint),
+      renderTreeMeta("Stores", trust.stores?.join(", "))
+    ],
+    undefined,
+    undefined,
+    renderCertificateDownloadButton(
+      trust.anchorDerBase64,
+      `authenticode-trust-anchor-${trust.anchorSha1Thumbprint}.cer`,
+      "Download trust snapshot certificate"
+    )
+  );
+};
 
 const resolveCertificateRole = (
   auth: AuthenticodeInfo,
@@ -71,7 +114,8 @@ const renderAlternativeIssuerBranch = (
       )
     ],
     childIndexes.map(index => renderAlternativeIssuerBranch(auth, index, nextVisited)).join(""),
-    formatDistinguishedNameTooltip(certificate?.subject)
+    formatDistinguishedNameTooltip(certificate?.subject),
+    renderEmbeddedCertificateDownloadButton(auth, certificateIndex)
   );
 };
 
@@ -111,6 +155,7 @@ const renderCertificatePath = (
   const alternativeIssuerIndexes = findIssuerCandidateIndexes(auth, certificateIndex, currentVisited).filter(
     index => index !== nextCertificateIndex
   );
+  const trust = getCertificateTrust(auth, certificateIndex);
   return renderTreeNode(
     formatCertificateTitle(certificateIndex, certificate?.subject),
     filterBadges([
@@ -166,11 +211,13 @@ const renderCertificatePath = (
       depth + 1 < pathIndexes.length
         ? renderCertificatePath(auth, label, pathIndexes, depth + 1, leafRole, currentVisited)
         : "",
+      depth + 1 >= pathIndexes.length ? renderTrustAnchorNode(trust) : "",
       ...alternativeIssuerIndexes.map(index => renderAlternativeIssuerBranch(auth, index, currentVisited))
     ]
       .filter(Boolean)
       .join(""),
-    formatDistinguishedNameTooltip(certificate?.subject)
+    formatDistinguishedNameTooltip(certificate?.subject),
+    renderEmbeddedCertificateDownloadButton(auth, certificateIndex)
   );
 };
 

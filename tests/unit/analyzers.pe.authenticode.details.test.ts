@@ -122,6 +122,7 @@ void test("decodePkcs7 extracts signer, certificate, and file digest details", (
   assert.ok(decoded.certificates?.[0]?.subject?.includes("CN=Test Subject"));
   assert.ok(decoded.certificates?.[0]?.issuer?.includes("CN=Test Issuer"));
   assert.ok(decoded.certificates?.[0]?.notBefore?.includes("2024-01-01"));
+  assert.strictEqual(decoded.certificates?.[0]?.derBase64, Buffer.from(buildCertificate()).toString("base64"));
 });
 
 void test("decodePkcs7 does not truncate certificate parsing after sixteen entries", () => {

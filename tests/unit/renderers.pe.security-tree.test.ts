@@ -26,7 +26,8 @@ void test("renderAuthenticodeTree renders signer and countersignature certificat
           subject: "CN=Leaf Signer",
           issuer: "CN=Issuer CA",
           notBefore: "2024-01-01T00:00:00Z",
-          notAfter: "2026-01-01T00:00:00Z"
+          notAfter: "2026-01-01T00:00:00Z",
+          derBase64: "AQID"
         },
         {
           subject: "CN=Issuer CA",
@@ -84,6 +85,8 @@ void test("renderAuthenticodeTree renders signer and countersignature certificat
   assert.ok(html.includes("Timestamp cert"));
   assert.ok(html.includes("Root"));
   assert.ok(html.includes("Sig"));
+  assert.ok(html.includes("data-certificate-download"));
+  assert.ok(html.includes("authenticode-certificate-1.cer"));
 });
 
 void test("renderAuthenticodeTree shows Windows CA trust snapshot verdicts", () => {
@@ -112,6 +115,9 @@ void test("renderAuthenticodeTree shows Windows CA trust snapshot verdicts", () 
               certificateIndex: 1,
               status: "trusted",
               sha1Thumbprint: "BB",
+              anchorDerBase64: "BAUG",
+              anchorSha1Thumbprint: "DD",
+              anchorSubject: "CN=Trusted Root",
               stores: ["Root"]
             },
             {
@@ -147,6 +153,8 @@ void test("renderAuthenticodeTree shows Windows CA trust snapshot verdicts", () 
   assert.ok(html.includes("Not in store"));
   assert.ok(html.includes("SHA-1"));
   assert.ok(html.includes("Disallowed"));
+  assert.ok(html.includes("Trust anchor: CN=Trusted Root"));
+  assert.ok(html.includes("authenticode-trust-anchor-DD.cer"));
 });
 
 void test("renderAuthenticodeTree omits output when signer verification paths are unavailable", () => {

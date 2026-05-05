@@ -12,6 +12,7 @@ import { createPeDisassemblyController } from "./ui/pe-disassembly.js";
 import { createElfDisassemblyController } from "./ui/elf-disassembly.js";
 import { createPeChecksumClickHandler } from "./ui/pe-checksum-controls.js";
 import { copyManifestPreviewToClipboard } from "./ui/manifest-preview-copy.js";
+import { createCertificateDownloadClickHandler } from "./ui/certificate-download.js";
 import { handleManifestTreeActionClick, syncManifestTreeControls } from "./ui/manifest-tree-controls.js";
 import { captureOpenDetails, restoreOpenDetails } from "./ui/details-open-state.js";
 const getElement = (id: string) => document.getElementById(id)!;
@@ -49,8 +50,6 @@ const setPreviewUrl = (url: string | null): void => {
   currentPreviewUrl = url;
 };
 const setStatusMessage = (message: string | null | undefined): void => { statusMessageElement.textContent = message || ""; };
-const clearStatusMessage = (): void => { statusMessageElement.textContent = ""; };
-const clearPreviewUrl = (): void => { setPreviewUrl(null); };
 const formatAnalysisDuration = (durationMs: number): string =>
   durationMs < 1000 ? `${Math.max(0, Math.round(durationMs))} ms` : `${(durationMs / 1000).toFixed(2)} s`;
 const renderResult = (result: ParseForUiResult): void => {
@@ -86,6 +85,7 @@ const isoClickHandler = createIso9660EntryClickHandler({
 const peChecksumClickHandler = createPeChecksumClickHandler({
   getParseResult: () => currentParseResult, getFile: () => currentFile, setStatusMessage
 });
+const certificateDownloadClickHandler = createCertificateDownloadClickHandler({ setStatusMessage });
 peDetailsValueElement.addEventListener("click", event => {
   const targetNode = event.target as Node | null;
   const targetElement = targetNode instanceof Element ? targetNode : targetNode?.parentElement ?? null;
@@ -142,6 +142,7 @@ peDetailsValueElement.addEventListener("click", event => {
   void isoClickHandler(event);
   void gzipClickHandler(event);
   void zipClickHandler(event);
+  certificateDownloadClickHandler(event);
 });
 peDetailsValueElement.addEventListener("toggle", event => syncManifestTreeControls(event.target as Element | null), true);
 async function showFileInfo(file: File, sourceDescription: string): Promise<void> {
@@ -150,7 +151,7 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
   currentFile = file;
   currentParseResult = { analyzer: null, parsed: null };
   try {
-    clearPreviewUrl();
+    setPreviewUrl(null);
     fileInfoCardElement.hidden = true;
     peDetailsTermElement.hidden = true;
     peDetailsValueElement.hidden = true;
@@ -180,10 +181,10 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     currentParseResult = parsedResult;
     renderResult(parsedResult);
     resetHashDisplay(sha256Controls, sha512Controls);
-    clearStatusMessage();
+    setStatusMessage(null);
   } catch (error) {
     currentTypeLabel = "";
-    clearPreviewUrl();
+    setPreviewUrl(null);
     setStatusMessage(
       `Unable to read file: ${error instanceof Error && error.message ? error.message : String(error)}`
     );
