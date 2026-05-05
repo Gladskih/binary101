@@ -74,40 +74,22 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
   position:relative;
   padding-bottom:.1rem;
 }
-.peSectionBody details[open]::before{
-  content:"";
-  position:absolute;
-  left:.55rem;
-  top:2rem;
-  bottom:.25rem;
-  border-left:1px solid color-mix(in oklab,var(--accent) 26%,var(--border2));
-  pointer-events:none;
-}
-.peSectionBody details[open] > summary{
-  box-shadow:inset 2px 0 0 color-mix(in oklab,var(--accent) 72%,var(--border2));
-}
 .peSectionBody details[open] > summary ~ *{
-  margin-left:1.05rem;
-  max-width:calc(100% - 1.05rem);
-}
-.peSectionBody [data-manifest-tree] details[open]::before{
-  content:none;
-}
-.peSectionBody [data-manifest-tree] details[open] > summary{
-  box-shadow:none;
+  margin-left:.85rem;
+  padding-left:.7rem;
+  border-left:1px solid color-mix(in oklab,var(--accent) 26%,var(--border2));
+  max-width:calc(100% - .85rem);
 }
 .peSectionBody [data-manifest-tree] details[open] > summary ~ *{
   margin-left:0;
+  padding-left:0;
+  border-left:0;
   max-width:none;
-}
-.peSectionBody .manifestXmlSourceDetails[open]::before{
-  content:none;
-}
-.peSectionBody .manifestXmlSourceDetails[open] > summary{
-  box-shadow:none;
 }
 .peSectionBody .manifestXmlSourceDetails[open] > summary ~ *{
   margin-left:0;
+  padding-left:0;
+  border-left:0;
   max-width:none;
 }
 .manifestXmlSourceDetails > summary::marker{
@@ -157,20 +139,20 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .peSecurityCheckDetail{margin-top:.15rem;word-break:break-word}
 .peSecurityTreeForest{display:grid;gap:.6rem;margin-top:.35rem}
 .peSecurityTreeGroup{padding:.15rem 0}
-.peSecurityTree{list-style:none;margin:.35rem 0 0 0;padding:0 0 0 1.15rem;position:relative}
-.peSecurityTreeItem{position:relative;margin:.4rem 0 0 0}
-.peSecurityTreeItem::before{content:"";position:absolute;left:-.75rem;top:-.35rem;bottom:-.45rem;border-left:1px solid var(--border2)}
-.peSecurityTreeItem::after{content:"";position:absolute;left:-.75rem;top:1rem;width:.55rem;border-top:1px solid var(--border2)}
-.peSecurityTree> .peSecurityTreeItem:first-child::before{top:.25rem}
-.peSecurityTree> .peSecurityTreeItem:last-child::before{bottom:calc(100% - 1rem)}
+.peSecurityTree{list-style:none;margin:.35rem 0 0 0;padding:0;display:grid;gap:.45rem}
+.peSecurityTree .peSecurityTree{
+  margin:.45rem 0 0 0;
+  padding-left:.95rem;
+}
+.peSecurityTreeItem{min-width:0}
 .peSecurityTreeNode{padding:.55rem .65rem;border:1px solid var(--border2);border-radius:12px;background:var(--card)}
 .peSecurityTreeNode--pass{border-color:color-mix(in oklab,var(--ok-fg) 45%,var(--border2));background:var(--ok-bg)}
 .peSecurityTreeNode--fail{border-color:color-mix(in oklab,var(--warn-fg) 50%,var(--border2));background:var(--warn-bg)}
 .peSecurityTreeNode--unknown,.peSecurityTreeNode--certificate,.peSecurityTreeNode--missing{background:var(--info-bg)}
 .peSecurityTreeNode--missing{border-style:dashed}
-.peSecurityTreeTitleRow{display:flex;gap:.5rem;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}
+.peSecurityTreeTitleRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.5rem;align-items:start}
 .peSecurityTreeTitle{font-weight:700;overflow-wrap:anywhere}
-.peSecurityTreeBadges{display:flex;gap:.35rem;flex-wrap:wrap}
+.peSecurityTreeBadges{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.35rem}
 .peSecurityTreeBadge{font-size:11px;padding:.15rem .4rem;border:1px solid var(--border2);border-radius:999px;background:var(--chip-bg-light)}
 .peSecurityTreeBadge--signer{border-color:var(--accent)}
 .peSecurityTreeBadge--countersignature{border-color:color-mix(in oklab,var(--accent) 55%,var(--border2))}
@@ -178,6 +160,20 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .peSecurityTreeBadge--pass{border-color:color-mix(in oklab,var(--ok-fg) 45%,var(--border2));color:var(--ok-fg)}
 .peSecurityTreeBadge--fail{border-color:color-mix(in oklab,var(--warn-fg) 50%,var(--border2));color:var(--warn-fg)}
 .peSecurityTreeBadge--unknown{border-color:var(--border2)}
+.peSecurityTreeDownloadButton{
+  align-items:center;
+  border:1px solid var(--border2);
+  border-radius:6px;
+  background:transparent;
+  color:var(--text);
+  cursor:pointer;
+  display:inline-flex;
+  height:1.8rem;
+  justify-content:center;
+  padding:0;
+  width:1.8rem;
+}
+.peSecurityTreeDownloadButton:hover{border-color:var(--accent);color:var(--accent)}
 .peSecurityTreeMeta{margin-top:.18rem}
 .peSecurityTreeMeta span{color:var(--muted)}
 

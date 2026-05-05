@@ -8,7 +8,7 @@ import {
   type PeParseResult,
   type PeWindowsParseResult
 } from "../../analyzers/pe/index.js";
-import { renderPeDiagnostics } from "./diagnostics.js";
+import { renderPeDiagnosticBody, renderPeDiagnostics } from "./diagnostics.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 type PeRelocSection = NonNullable<PeWindowsParseResult["reloc"]>;
@@ -264,6 +264,6 @@ export function renderSanity(pe: PeParseResult, out: string[]): void {
     return;
   }
   out.push(renderPeSectionStart("Sanity", `${issues.length} finding${issues.length === 1 ? "" : "s"}`));
-  out.push(renderPeDiagnostics("Sanity findings", issues));
+  out.push(renderPeDiagnosticBody(issues));
   out.push(renderPeSectionEnd());
 }

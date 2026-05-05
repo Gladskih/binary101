@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { renderPeDiagnostics } from "../../renderers/pe/diagnostics.js";
+import { renderPeDiagnosticBody, renderPeDiagnostics } from "../../renderers/pe/diagnostics.js";
 
 void test("renderPeDiagnostics wraps even a single warning in details", () => {
   const html = renderPeDiagnostics("Resource warnings", [
@@ -49,4 +49,14 @@ void test("renderPeDiagnostics normalizes TYPE_<number> resource warnings into o
 
   assert.match(html, /grouped into 1 pattern/);
   assert.match(html, /TYPE_#/);
+});
+
+void test("renderPeDiagnosticBody renders warning content without nested details", () => {
+  const html = renderPeDiagnosticBody([
+    "AddressOfEntryPoint points outside any section."
+  ]);
+
+  assert.doesNotMatch(html, /<details/);
+  assert.doesNotMatch(html, /<summary/);
+  assert.match(html, /AddressOfEntryPoint points outside any section/);
 });

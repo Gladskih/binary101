@@ -111,6 +111,8 @@ void test("renderSanity renders issues and clean state", () => {
   assert.ok(htmlIssues.includes("Overlay after last section"));
   assert.ok(htmlIssues.includes("SizeOfImage does not match"));
   assert.ok(htmlIssues.includes("bad debug"));
+  assert.doesNotMatch(htmlIssues, /Sanity findings/);
+  assert.equal(htmlIssues.match(/<details/g)?.length, 1);
 
   const clean = {
     overlaySize: 0,

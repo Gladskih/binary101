@@ -59,13 +59,20 @@ export const renderPeDiagnostics = (
 ): string => {
   if (!diagnostics.length) return "";
   const groups = diagnostics.length > 8 ? collectDiagnosticGroups(diagnostics) : [];
+  const body = renderPeDiagnosticBody(diagnostics);
+  return (
+    `<details style="margin-top:.5rem">` +
+    renderDiagnosticSummary(summaryLabel, diagnostics, groups) +
+    body +
+    `</details>`
+  );
+};
+
+export const renderPeDiagnosticBody = (diagnostics: string[]): string => {
+  if (!diagnostics.length) return "";
+  const groups = diagnostics.length > 8 ? collectDiagnosticGroups(diagnostics) : [];
   if (diagnostics.length <= 8) {
-    return (
-      `<details style="margin-top:.5rem">` +
-      renderDiagnosticSummary(summaryLabel, diagnostics, groups) +
-      renderDiagnosticList(diagnostics) +
-      `</details>`
-    );
+    return renderDiagnosticList(diagnostics);
   }
   const rows = groups.map(group => {
     const examples = group.examples.map(example => `<div>${safe(example)}</div>`).join("");
@@ -74,11 +81,9 @@ export const renderPeDiagnostics = (
     );
   }).join("");
   return (
-    `<details style="margin-top:.5rem">` +
-    renderDiagnosticSummary(summaryLabel, diagnostics, groups) +
     `<div class="smallNote" style="margin-top:.35rem">Patterns normalize offsets and other ` +
     `numeric fields so malformed files do not flood the UI with near-duplicate warnings.</div>` +
     `<table class="table" style="margin-top:.35rem"><thead><tr><th>Pattern</th><th>Count</th>` +
-    `<th>Examples</th></tr></thead><tbody>${rows}</tbody></table></details>`
+    `<th>Examples</th></tr></thead><tbody>${rows}</tbody></table>`
   );
 };
