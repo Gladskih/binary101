@@ -2,9 +2,11 @@
 
 import type { AuthenticodeInfo } from "../../analyzers/pe/authenticode/index.js";
 import {
+  createCertificateStoreFactBadge,
   createCertificateTrustBadge,
   createCheckBadge,
   findIssuerCandidateIndexes,
+  getCertificatePathStatus,
   getCertificate,
   getCertificateTrust,
   getReferenceValidityCheck
@@ -47,7 +49,7 @@ const renderTrustAnchorNode = (
     filterBadges([
       createRoleBadge(statusLabel, "certificate"),
       createStatusBadge(
-        trust.status === "revoked" ? "Revoked" : "Trusted",
+        trust.status === "revoked" ? "Disallowed" : "In store",
         trust.status === "revoked" ? "fail" : "pass",
         "Certificate from the local Windows CA trust snapshot."
       )
@@ -87,6 +89,7 @@ const renderAlternativeIssuerBranch = (
   visitedIndexes: ReadonlySet<number>
 ): string => {
   const certificate = getCertificate(auth.certificates, certificateIndex);
+  const isRoot = !!certificate?.subject && certificate.subject === certificate.issuer;
   const nextVisited = new Set(visitedIndexes);
   nextVisited.add(certificateIndex);
   const childIndexes = findIssuerCandidateIndexes(auth, certificateIndex, nextVisited);
@@ -94,12 +97,14 @@ const renderAlternativeIssuerBranch = (
     formatCertificateTitle(certificateIndex, certificate?.subject),
     filterBadges([
       createRoleBadge(
-        certificate?.subject === certificate?.issuer ? "Cross-signed root" : "Alt issuer",
+        isRoot ? "Cross-signed root" : "Alt issuer",
         "certificate",
         "Alternative issuer candidate present in the embedded CMS."
       ),
       createInfoBadge("DN", "Issuer DN of the parent certificate matches this certificate subject DN."),
-      createCertificateTrustBadge(auth, certificateIndex)
+      isRoot
+        ? createCertificateTrustBadge(auth, certificateIndex)
+        : createCertificateStoreFactBadge(auth, certificateIndex)
     ]),
     [
       renderTreeMeta("Issuer", certificate?.issuer),
@@ -155,11 +160,14 @@ const renderCertificatePath = (
     index => index !== nextCertificateIndex
   );
   const trust = getCertificateTrust(auth, certificateIndex);
+  const isPathTop = depth + 1 >= pathIndexes.length;
   return renderTreeNode(
     formatCertificateTitle(certificateIndex, certificate?.subject),
     filterBadges([
       createRoleBadge(resolveCertificateRole(auth, pathIndexes, depth, leafRole), "certificate"),
-      createCertificateTrustBadge(auth, certificateIndex),
+      isPathTop
+        ? createCertificateTrustBadge(auth, certificateIndex)
+        : createCertificateStoreFactBadge(auth, certificateIndex),
       depth === 0 && label ? createCheckBadge(auth, `${label}-key-usage`, "KU") : undefined,
       depth === 0 && label ? createCheckBadge(auth, `${label}-eku`, "EKU") : undefined,
       label
@@ -209,13 +217,14 @@ const renderCertificatePath = (
       depth + 1 < pathIndexes.length
         ? renderCertificatePath(auth, label, pathIndexes, depth + 1, leafRole, currentVisited)
         : "",
-      depth + 1 >= pathIndexes.length ? renderTrustAnchorNode(trust) : "",
+      renderTrustAnchorNode(trust),
       ...alternativeIssuerIndexes.map(index => renderAlternativeIssuerBranch(auth, index, currentVisited))
     ]
       .filter(Boolean)
       .join(""),
     formatDistinguishedNameTooltip(certificate?.subject),
-    renderEmbeddedCertificateDownloadButton(auth, certificateIndex)
+    renderEmbeddedCertificateDownloadButton(auth, certificateIndex),
+    getCertificatePathStatus(auth, pathIndexes)
   );
 };
 

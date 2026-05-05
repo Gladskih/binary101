@@ -6,6 +6,7 @@ import type {
 } from "../../analyzers/pe/authenticode/index.js";
 import {
   collectConnectedCertificateIndexes,
+  createCertificateStoreFactBadge,
   createCertificateTrustBadge,
   getCertificate,
   getCertificateTrust
@@ -60,7 +61,10 @@ export const renderAdditionalCertificatesNode = (auth: AuthenticodeInfo): string
                 : "Embedded only",
               "certificate"
             ),
-            createCertificateTrustBadge(auth, index)
+            getCertificate(auth.certificates, index)?.subject ===
+              getCertificate(auth.certificates, index)?.issuer
+              ? createCertificateTrustBadge(auth, index)
+              : createCertificateStoreFactBadge(auth, index)
           ]),
           [
             renderTreeMeta("Issuer", getCertificate(auth.certificates, index)?.issuer),

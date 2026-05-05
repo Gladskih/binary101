@@ -4,6 +4,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderAuthenticodeTree } from "../../renderers/pe/security-tree.js";
 
+const getNodeClassForTitle = (html: string, title: string): string | undefined => {
+  const titleIndex = html.indexOf(`>${title}</div>`);
+  if (titleIndex < 0) return undefined;
+  const nodeIndex = html.slice(0, titleIndex).lastIndexOf(`<div class="peSecurityTreeNode `);
+  return html.slice(nodeIndex, titleIndex).match(/class="([^"]+)"/)?.[1];
+};
+
 void test("renderAuthenticodeTree renders signer and countersignature certificate paths", () => {
   const html = renderAuthenticodeTree({
     offset: 0,
@@ -102,8 +109,11 @@ void test("renderAuthenticodeTree shows Windows CA trust snapshot verdicts", () 
       format: "pkcs7",
       certificates: [
         { subject: "CN=Leaf", issuer: "CN=Root" },
-        { subject: "CN=Root", issuer: "CN=Root" },
-        { subject: "CN=Timestamp", issuer: "CN=Root" }
+        { subject: "CN=Root", issuer: "CN=External Root" },
+        { subject: "CN=Timestamp", issuer: "CN=Root" },
+        { subject: "CN=Unknown Leaf", issuer: "CN=Unknown CA" },
+        { subject: "CN=Unknown CA", issuer: "CN=Unknown CA" },
+        { subject: "CN=External Root", issuer: "CN=External Root" }
       ],
       verification: {
         trustPolicy: {
@@ -125,14 +135,21 @@ void test("renderAuthenticodeTree shows Windows CA trust snapshot verdicts", () 
               status: "revoked",
               sha1Thumbprint: "CC",
               stores: ["Disallowed"]
-            }
+            },
+            { certificateIndex: 3, status: "unknown", sha1Thumbprint: "EE" },
+            {
+              certificateIndex: 4,
+              status: "unknown",
+              sha1Thumbprint: "FF"
+            },
+            { certificateIndex: 5, status: "unknown", sha1Thumbprint: "11" }
           ]
         },
         signerVerifications: [
           {
             index: 0,
             signerCertificateIndex: 0,
-            certificatePathIndexes: [0, 1],
+            certificatePathIndexes: [0, 1, 5],
             countersignatures: [
               {
                 index: 0,
@@ -140,6 +157,11 @@ void test("renderAuthenticodeTree shows Windows CA trust snapshot verdicts", () 
                 certificatePathIndexes: [2]
               }
             ]
+          },
+          {
+            index: 1,
+            signerCertificateIndex: 3,
+            certificatePathIndexes: [3, 4]
           }
         ]
       }
@@ -148,13 +170,27 @@ void test("renderAuthenticodeTree shows Windows CA trust snapshot verdicts", () 
 
   assert.ok(html.includes("Trust snapshot"));
   assert.ok(html.includes("2026-05-03T00:00:00.000Z"));
-  assert.ok(html.includes("Trusted"));
-  assert.ok(html.includes("Revoked"));
-  assert.ok(html.includes("Not in store"));
+  assert.ok(html.includes("Chain trusted"));
+  assert.ok(html.includes("In store"));
+  assert.ok(html.includes("Disallowed chain"));
+  assert.ok(html.includes("Not trusted"));
   assert.ok(html.includes("SHA-1"));
   assert.ok(html.includes("Disallowed"));
   assert.ok(html.includes("Trust anchor: CN=Trusted Root"));
   assert.ok(html.includes("authenticode-trust-anchor-DD.cer"));
+  assert.equal(
+    getNodeClassForTitle(html, "Certificate &#8470;1: CN=Leaf"),
+    "peSecurityTreeNode peSecurityTreeNode--pass"
+  );
+  assert.equal(
+    getNodeClassForTitle(html, "Certificate &#8470;4: CN=Unknown Leaf"),
+    "peSecurityTreeNode peSecurityTreeNode--unknown"
+  );
+  assert.equal(
+    getNodeClassForTitle(html, "Certificate &#8470;6: CN=External Root"),
+    "peSecurityTreeNode peSecurityTreeNode--unknown"
+  );
+  assert.equal(html.includes("Not in store"), false);
 });
 
 void test("renderAuthenticodeTree omits output when signer verification paths are unavailable", () => {

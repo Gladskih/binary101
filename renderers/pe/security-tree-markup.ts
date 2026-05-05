@@ -52,8 +52,14 @@ export const createStatusBadge = (
 export const filterBadges = (badges: Array<TreeBadge | undefined>): TreeBadge[] =>
   badges.filter((badge): badge is TreeBadge => badge != null);
 
-const getNodeStatus = (badges: TreeBadge[]): TreeBadgeStatus => {
-  const statuses = badges.map(badge => badge.status);
+const getNodeStatus = (
+  badges: TreeBadge[],
+  inheritedStatus: TreeBadgeStatus | undefined
+): TreeBadgeStatus => {
+  const statuses = [
+    ...(inheritedStatus ? [inheritedStatus] : []),
+    ...badges.map(badge => badge.status)
+  ];
   if (statuses.includes("fail")) return "fail";
   if (statuses.includes("unknown")) return "unknown";
   if (statuses.includes("pass")) return "pass";
@@ -96,10 +102,11 @@ export const renderTreeNode = (
   meta: string[],
   children?: string,
   titleDetail?: string,
-  actions = ""
+  actions = "",
+  inheritedStatus?: TreeBadgeStatus
 ): string => (
   `<li class="peSecurityTreeItem">` +
-  `<div class="peSecurityTreeNode peSecurityTreeNode--${getNodeStatus(badges)}">` +
+  `<div class="peSecurityTreeNode peSecurityTreeNode--${getNodeStatus(badges, inheritedStatus)}">` +
   `<div class="peSecurityTreeTitleRow">` +
   `<div class="peSecurityTreeTitle"${titleDetail ? ` title="${safe(titleDetail)}"` : ""}>${safe(title)}</div>` +
   actions +

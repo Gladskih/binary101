@@ -10,6 +10,7 @@ import type {
 import {
   createCheckBadge,
   createCertificatePathTrustBadge,
+  createNeutralUnknownCheckBadge,
   createTrustSnapshotBadge,
   getCertificate,
 } from "./security-tree-checks.js";
@@ -50,7 +51,7 @@ const renderCountersignatureNode = (
       createCheckBadge(auth, `${counterLabel}-message-digest`, "Digest"),
       createCheckBadge(auth, `${counterLabel}-certificate`, "Cert"),
       createCertificatePathTrustBadge(auth, countersignature.certificatePathIndexes),
-      createCheckBadge(
+      createNeutralUnknownCheckBadge(
         auth,
         `${signerLabel}-countersignature-${countersignature.index + 1}-chronology`,
         "Order"
@@ -95,7 +96,7 @@ const renderSignerNode = (
       createCertificatePathTrustBadge(auth, signerVerification?.certificatePathIndexes),
       signerVerification?.signingTime || signer?.signingTime
         ? createInfoBadge("Time", "signingTime attribute is present.")
-        : createStatusBadge("No time", "unknown", "CMS signingTime signed attribute is absent.")
+        : createInfoBadge("No time", "CMS signingTime signed attribute is absent.")
     ]),
     [
       renderTreeMeta("Subject", signerCertificate?.subject),
