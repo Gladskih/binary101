@@ -99,8 +99,7 @@ const renderAlternativeIssuerBranch = (
         "Alternative issuer candidate present in the embedded CMS."
       ),
       createInfoBadge("DN", "Issuer DN of the parent certificate matches this certificate subject DN."),
-      createCertificateTrustBadge(auth, certificateIndex),
-      createInfoBadge(`Cert ${certificateIndex + 1}`, `Embedded certificate ${certificateIndex + 1}`)
+      createCertificateTrustBadge(auth, certificateIndex)
     ]),
     [
       renderTreeMeta("Issuer", certificate?.issuer),
@@ -161,7 +160,6 @@ const renderCertificatePath = (
     filterBadges([
       createRoleBadge(resolveCertificateRole(auth, pathIndexes, depth, leafRole), "certificate"),
       createCertificateTrustBadge(auth, certificateIndex),
-      createInfoBadge(`Cert ${certificateIndex + 1}`, `Embedded certificate ${certificateIndex + 1}`),
       depth === 0 && label ? createCheckBadge(auth, `${label}-key-usage`, "KU") : undefined,
       depth === 0 && label ? createCheckBadge(auth, `${label}-eku`, "EKU") : undefined,
       label

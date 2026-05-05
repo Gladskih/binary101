@@ -60,8 +60,7 @@ export const renderAdditionalCertificatesNode = (auth: AuthenticodeInfo): string
                 : "Embedded only",
               "certificate"
             ),
-            createCertificateTrustBadge(auth, index),
-            createInfoBadge(`Cert ${index + 1}`, `Embedded certificate ${index + 1}`)
+            createCertificateTrustBadge(auth, index)
           ]),
           [
             renderTreeMeta("Issuer", getCertificate(auth.certificates, index)?.issuer),
