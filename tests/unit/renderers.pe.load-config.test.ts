@@ -29,6 +29,7 @@ void test("renderLoadConfig renders GuardFlags names and CFG function-table entr
   Object.assign(loadcfg, {
     // Fixture combines documented GuardFlags, including high-nibble stride 3 for 7-byte GFIDS entries.
     GuardFlags: 0x30417500,
+    Size: 64,
     CodeIntegrity: { Flags: 0, Catalog: 0, CatalogOffset: 0, Reserved: 0 },
     checks: [{
       status: "fail",
@@ -70,6 +71,8 @@ void test("renderLoadConfig renders GuardFlags names and CFG function-table entr
   assert.ok(html.includes("CF_FUNCTION_TABLE_SIZE_7BYTES"));
   assert.ok(html.includes("Load Config cross-checks"));
   assert.ok(html.includes("CFG header agreement"));
+  assert.ok(html.indexOf("Load Config cross-checks") > html.indexOf("GuardFlags"));
+  assert.ok(html.includes("64 B (64 bytes)"));
   assert.ok(html.includes("Module contains compiler-inserted CFG checks"));
   assert.ok(html.includes("GuardCFFunctionTable (1/1)"));
   assert.ok(html.includes("FID_SUPPRESSED, EXPORT_SUPPRESSED"));

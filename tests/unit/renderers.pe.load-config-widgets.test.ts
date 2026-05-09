@@ -77,6 +77,23 @@ void test("renderLoadConfigChecks escapes checklist text and maps fail status", 
   assert.ok(html.includes("&quot;x&quot;"));
 });
 
+void test("renderLoadConfigChecks renders pass checks with pass styling and a check mark", () => {
+  const loadConfig = createPeLoadConfigResult();
+  loadConfig.checks = [{
+    status: "pass",
+    title: "CFG header agreement",
+    detail: "Fields agree."
+  }];
+
+  const html = renderLoadConfigChecks(loadConfig);
+
+  assert.match(
+    html,
+    /<li class="manifestCheckItem manifestCheckItem--pass"><span class="manifestCheckIcon">&#10003;<\/span>/
+  );
+  assert.ok(html.includes("<b>CFG header agreement</b>: Fields agree."));
+});
+
 void test("renderLoadConfigAddressTable caps large tables and renders metadata", () => {
   const html = renderLoadConfigAddressTable(
     table(TABLE_ENTRY_COUNT_OVER_RENDER_LIMIT),
@@ -92,6 +109,21 @@ void test("renderLoadConfigAddressTable caps large tables and renders metadata",
   assert.ok(html.includes("Showing first 512 entries; 1 hidden."));
   assert.ok(html.includes("FID_SUPPRESSED, EXPORT_SUPPRESSED"));
   assert.ok(html.includes(".text"));
+});
+
+void test("renderLoadConfigAddressTable aggregates uniform rows without metadata", () => {
+  const plainTable: PeLoadConfigTable = {
+    ...table(3),
+    entries: Array.from({ length: 3 }, (_, index) => ({
+      index,
+      rva: CFG_TARGET_RVA + index * 0x10
+    }))
+  };
+
+  const html = renderLoadConfigAddressTable(plainTable, [textSection], IMAGE_BASE, 8, "GFIDS table");
+
+  assert.ok(html.includes("3 decoded entries; 3 declared; section .text."));
+  assert.ok(!html.includes("<th>Metadata</th>"));
 });
 
 void test("getDynamicRelocationSymbolName labels known and unknown symbols", () => {

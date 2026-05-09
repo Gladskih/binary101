@@ -76,24 +76,28 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .peSectionBody details[open]{
   position:relative;
   padding-bottom:.1rem;
-}
-.peSectionBody details[open] > summary ~ *{
   margin-left:.85rem;
   padding-left:.7rem;
   border-left:1px solid color-mix(in oklab,var(--accent) 26%,var(--border2));
-  max-width:calc(100% - .85rem);
+}
+.peSectionBody details[open] > summary ~ *{
+  max-width:100%;
 }
 .peSectionBody [data-manifest-tree] details[open] > summary ~ *{
-  margin-left:0;
-  padding-left:0;
-  border-left:0;
   max-width:none;
 }
-.peSectionBody .manifestXmlSourceDetails[open] > summary ~ *{
+.peSectionBody [data-manifest-tree] details[open]{
   margin-left:0;
   padding-left:0;
   border-left:0;
+}
+.peSectionBody .manifestXmlSourceDetails[open] > summary ~ *{
   max-width:none;
+}
+.peSectionBody .manifestXmlSourceDetails[open]{
+  margin-left:0;
+  padding-left:0;
+  border-left:0;
 }
 .manifestXmlSourceDetails > summary::marker{
   color:var(--muted);

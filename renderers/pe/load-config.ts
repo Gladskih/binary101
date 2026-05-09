@@ -1,6 +1,6 @@
 "use strict";
 
-import { hex, isoOrDash } from "../../binary-utils.js";
+import { hex, humanSize, isoOrDash } from "../../binary-utils.js";
 import { dd as renderDefinitionRow, safe } from "../../html-utils.js";
 import {
   PE32_PLUS_OPTIONAL_HEADER_MAGIC
@@ -37,9 +37,8 @@ export function renderLoadConfig(pe: PeWindowsParseResult, out: string[]): void 
   if (lc.warnings?.length) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(lc.warnings.join("; "))}</div>`);
   }
-  out.push(renderLoadConfigChecks(lc));
   out.push(`<dl>`);
-  out.push(dd("Size", hex(lc.Size, 8), "Structure size of IMAGE_LOAD_CONFIG_DIRECTORY."));
+  out.push(dd("Size", humanSize(lc.Size), "Structure size of IMAGE_LOAD_CONFIG_DIRECTORY."));
   out.push(dd("TimeDateStamp", isoOrDash(lc.TimeDateStamp), "Build timestamp for load config data."));
   out.push(dd("Version", `${lc.Major}.${lc.Minor}`, "Load config version (varies between OS/toolchain versions)."));
   out.push(dd("GlobalFlagsClear", hex(lc.GlobalFlagsClear, 8), "Global loader flags to clear for the process."));
@@ -202,6 +201,7 @@ export function renderLoadConfig(pe: PeWindowsParseResult, out: string[]): void 
   out.push(dd("UmaFunctionPointers", formatVa(lc.UmaFunctionPointers), "Pointer to UMA function pointers (undocumented)."));
   out.push(renderDefinitionRow("GuardFlags", renderLoadConfigGuardFlags(lc), "Control Flow Guard related flags."));
   out.push(`</dl>`);
+  out.push(renderLoadConfigChecks(lc));
 
   if (lc.dynamicRelocations) {
     const dr = lc.dynamicRelocations;

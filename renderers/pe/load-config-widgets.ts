@@ -40,6 +40,33 @@ const formatSectionForRva = (sections: PeSection[], rva: number): string => {
   return section ? peSectionNameValue(section.name) || "(unnamed)" : "(outside sections)";
 };
 
+const getEntryNotes = (entry: PeLoadConfigTable["entries"][number]): string[] => [
+  ...(entry.gfidsFlags?.length ? entry.gfidsFlags : []),
+  ...((entry.unknownGfidsFlagBits ?? 0) ? [`UNKNOWN_GFIDS_FLAGS_${hex(entry.unknownGfidsFlagBits ?? 0, 2)}`] : [])
+];
+
+const hasEntryMetadata = (entry: PeLoadConfigTable["entries"][number]): boolean =>
+  Boolean(entry.metadataBytes?.length || getEntryNotes(entry).length);
+
+const shouldRenderAddressRows = (table: PeLoadConfigTable, sections: PeSection[]): boolean => {
+  if (table.entries.some(hasEntryMetadata)) return true;
+  const sectionNames = new Set(table.entries.map(entry => formatSectionForRva(sections, entry.rva)));
+  return sectionNames.size > 1;
+};
+
+const renderAddressTableSummary = (
+  table: PeLoadConfigTable,
+  sections: PeSection[],
+  hiddenCount: number
+): string => {
+  const sectionName = table.entries.length ? formatSectionForRva(sections, table.entries[0]?.rva ?? 0) : "-";
+  return `<div class="smallNote" style="margin:.35rem 0 0 0">` +
+    `${table.entries.length} decoded entr${table.entries.length === 1 ? "y" : "ies"}` +
+    `; ${table.declaredCount} declared; section ${safe(sectionName)}.` +
+    `${hiddenCount ? ` ${hiddenCount} entr${hiddenCount === 1 ? "y is" : "ies are"} beyond the render limit.` : ""}` +
+    `</div>`;
+};
+
 export const getDynamicRelocationSymbolName = (symbol: bigint): string =>
   DYNAMIC_RELOCATION_SYMBOLS.get(symbol) ?? "UNKNOWN";
 
@@ -64,7 +91,7 @@ export const renderLoadConfigGuardFlags = (lc: PeLoadConfig): string => {
 
 export const renderLoadConfigChecks = (lc: PeLoadConfig): string => {
   if (!lc.checks?.length) return "";
-  const icon = (status: string): string => status === "pass" ? "OK" : status === "fail" ? "X" : "i";
+  const icon = (status: string): string => status === "pass" ? "&#10003;" : status === "fail" ? "X" : "i";
   const items = lc.checks.map(check => {
     const className = check.status === "pass"
       ? "manifestCheckItem manifestCheckItem--pass"
@@ -88,14 +115,12 @@ export const renderLoadConfigAddressTable = (
 ): string => {
   const visibleEntries = table.entries.slice(0, ADDRESS_TABLE_RENDER_LIMIT);
   const hiddenCount = Math.max(0, table.entries.length - visibleEntries.length);
+  const renderRows = shouldRenderAddressRows(table, sections);
   const rows = visibleEntries.map(entry => {
     const metadata = entry.metadataBytes?.length
       ? entry.metadataBytes.map(byte => byte.toString(16).padStart(2, "0")).join(" ")
       : "-";
-    const notes = [
-      ...(entry.gfidsFlags?.length ? entry.gfidsFlags : []),
-      ...((entry.unknownGfidsFlagBits ?? 0) ? [`UNKNOWN_GFIDS_FLAGS_${hex(entry.unknownGfidsFlagBits ?? 0, 2)}`] : [])
-    ];
+    const notes = getEntryNotes(entry);
     return `<tr><td>${entry.index}</td><td>${hex(entry.rva, 8)}</td>` +
       `<td>${safe(formatRvaAsVa(imageBase, pointerWidth, entry.rva))}</td>` +
       `<td>${safe(formatSectionForRva(sections, entry.rva))}</td><td>${safe(metadata)}</td>` +
@@ -106,5 +131,5 @@ export const renderLoadConfigAddressTable = (
     `${table.warnings?.length ? `<div class="smallNote" style="margin:.35rem 0 0 0;color:var(--warn-fg)">${safe(table.warnings.join("; "))}</div>` : ""}` +
     `<div class="smallNote" style="margin:.35rem 0 0 0">Entry size ${table.entrySize} bytes; table RVA ${table.tableRva == null ? "-" : safe(hex(table.tableRva, 8))}.` +
     `${hiddenCount ? ` Showing first ${ADDRESS_TABLE_RENDER_LIMIT} entries; ${hiddenCount} hidden.` : ""}</div>` +
-    `<div class="tableWrap"><table class="table"><thead><tr><th>#</th><th>RVA</th><th>VA</th><th>Section</th><th>Metadata</th><th>Notes</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></details>`;
+    `${renderRows ? `<div class="tableWrap"><table class="table"><thead><tr><th>#</th><th>RVA</th><th>VA</th><th>Section</th><th>Metadata</th><th>Notes</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>` : renderAddressTableSummary(table, sections, hiddenCount)}</details>`;
 };
