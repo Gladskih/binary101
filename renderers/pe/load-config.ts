@@ -8,16 +8,13 @@ import {
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import {
-  getDynamicRelocationSymbolName,
-  renderLoadConfigAddressTable,
+  renderLoadConfigAddressTables,
   renderLoadConfigChecks,
+  renderLoadConfigDynamicRelocations,
   renderLoadConfigGuardFlags
 } from "./load-config-widgets.js";
 const formatPointerHex = (value: bigint, width: number): string =>
   `0x${value.toString(16).padStart(width, "0")}`;
-const compareWideInt = (left: bigint, right: bigint): number =>
-  left === right ? 0 : left < right ? -1 : 1;
-const formatWideHex = (value: bigint): string => `0x${value.toString(16)}`;
 
 const valueWithNote = (valueHtml: string, note: string): string =>
   `${valueHtml}<div class="smallNote" style="margin:0">${safe(note)}</div>`;
@@ -204,89 +201,30 @@ export function renderLoadConfig(pe: PeWindowsParseResult, out: string[]): void 
   out.push(renderLoadConfigChecks(lc));
 
   if (lc.dynamicRelocations) {
-    const dr = lc.dynamicRelocations;
-    const typeList = dr.entries.map(e => (e.kind === "v1" ? e.symbol : e.symbol)).filter(v => v);
-    const types = [...new Set(typeList)].sort(compareWideInt);
-    out.push(
-      `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">DynamicRelocations (v${dr.version}, ${dr.entries.length} entr${dr.entries.length === 1 ? "y" : "ies"})</summary>`
-    );
-    if (dr.warnings?.length) {
-      out.push(`<div class="smallNote" style="margin:.35rem 0 0 0;color:var(--warn-fg)">${safe(dr.warnings.join("; "))}</div>`);
-    }
-    out.push(`<dl style="margin:.35rem 0 0 0">`);
-    out.push(dd("Version", hex(dr.version, 8), "Dynamic relocation table version."));
-    out.push(dd("DataSize", hex(dr.dataSize, 8), "Size of the dynamic relocation table payload in bytes."));
-    out.push(
-      dd(
-        "Types",
-        types.length ? safe(types.map(t => formatWideHex(t)).join(", ")) : "-",
-        "Unique relocation symbol/type values present."
-      )
-    );
-    out.push(`</dl>`);
-    if (dr.entries.length) {
-      out.push(
-        `<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Kind</th><th>Symbol</th><th>Name</th><th>Size</th><th>Available</th><th>Status</th></tr></thead><tbody>`
-      );
-      dr.entries.forEach((entry, index) => {
-        const kind = entry.kind;
-        const symbol = entry.symbol ? formatWideHex(entry.symbol) : "-";
-        const symbolName = entry.symbol ? getDynamicRelocationSymbolName(entry.symbol) : "-";
-        const size = entry.kind === "v1" ? hex(entry.baseRelocSize, 8) : hex(entry.fixupInfoSize, 8);
-        const available = hex(entry.availableBytes, 8);
-        const complete =
-          entry.kind === "v1"
-            ? entry.availableBytes >= entry.baseRelocSize
-            : entry.availableBytes >= entry.fixupInfoSize;
-        out.push(
-          `<tr><td>${index + 1}</td><td>${safe(kind)}</td><td>${safe(symbol)}</td>` +
-            `<td>${safe(symbolName)}</td><td>${safe(size)}</td><td>${safe(available)}</td>` +
-            `<td>${complete ? "complete" : "truncated"}</td></tr>`
-        );
-      });
-      out.push(`</tbody></table>`);
-    }
-    out.push(`</details>`);
+    out.push(renderLoadConfigDynamicRelocations(lc.dynamicRelocations));
   }
-
-  if (lc.tables?.safeSehHandler?.entries.length) {
-    out.push(renderLoadConfigAddressTable(lc.tables.safeSehHandler, pe.sections, imageBase, pointerWidth, "SafeSEH handlers (x86 only)."));
-  }
-  if (lc.tables?.guardFid?.entries.length) {
-    out.push(renderLoadConfigAddressTable(
-      lc.tables.guardFid,
-      pe.sections,
-      imageBase,
-      pointerWidth,
-      "CFG function targets (GFIDS), including optional GFIDS metadata flags."
-    ));
-  }
-  if (lc.tables?.guardIat?.entries.length) {
-    out.push(renderLoadConfigAddressTable(
-      lc.tables.guardIat,
-      pe.sections,
-      imageBase,
-      pointerWidth,
-      "Address-taken IAT entries (IAT slots whose imported addresses may be used as function pointers under CFG)."
-    ));
-  }
-  if (lc.tables?.guardLongJumpTarget?.entries.length) {
-    out.push(renderLoadConfigAddressTable(
-      lc.tables.guardLongJumpTarget,
-      pe.sections,
-      imageBase,
-      pointerWidth,
-      "Valid longjmp destinations under CFG."
-    ));
-  }
-  if (lc.tables?.guardEhContinuation?.entries.length) {
-    out.push(renderLoadConfigAddressTable(
-      lc.tables.guardEhContinuation,
-      pe.sections,
-      imageBase,
-      pointerWidth,
-      "Valid exception continuation targets under CFG."
-    ));
-  }
+  out.push(renderLoadConfigAddressTables([
+    ...(lc.tables?.safeSehHandler?.entries.length
+      ? [[lc.tables.safeSehHandler, "SafeSEH handlers (x86 only)."] as const]
+      : []),
+    ...(lc.tables?.guardFid?.entries.length
+      ? [[
+          lc.tables.guardFid,
+          "CFG function targets (GFIDS), including optional GFIDS metadata flags."
+        ] as const]
+      : []),
+    ...(lc.tables?.guardIat?.entries.length
+      ? [[
+          lc.tables.guardIat,
+          "Address-taken IAT entries (IAT slots whose imported addresses may be used as function pointers under CFG)."
+        ] as const]
+      : []),
+    ...(lc.tables?.guardLongJumpTarget?.entries.length
+      ? [[lc.tables.guardLongJumpTarget, "Valid longjmp destinations under CFG."] as const]
+      : []),
+    ...(lc.tables?.guardEhContinuation?.entries.length
+      ? [[lc.tables.guardEhContinuation, "Valid exception continuation targets under CFG."] as const]
+      : [])
+  ], pe.sections, imageBase, pointerWidth));
   out.push(renderPeSectionEnd());
 }

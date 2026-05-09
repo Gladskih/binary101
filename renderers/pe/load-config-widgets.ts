@@ -1,9 +1,13 @@
 "use strict";
 
-import { hex } from "../../binary-utils.js";
+import { hex, humanSize } from "../../binary-utils.js";
 import { rowFlags, safe } from "../../html-utils.js";
 import { GUARD_FLAGS } from "../../analyzers/pe/constants.js";
 import type { PeLoadConfig, PeLoadConfigTable } from "../../analyzers/pe/load-config/index.js";
+import type {
+  PeDynamicRelocationEntry,
+  PeDynamicRelocations
+} from "../../analyzers/pe/dynamic-relocations/index.js";
 import { peSectionNameValue } from "../../analyzers/pe/sections/name.js";
 import type { PeSection } from "../../analyzers/pe/types.js";
 
@@ -29,6 +33,22 @@ const findSectionContainingRva = (sections: PeSection[], rva: number): PeSection
 
 const formatPointerHex = (value: bigint, width: number): string =>
   `0x${value.toString(16).padStart(width, "0")}`;
+const compareWideInt = (left: bigint, right: bigint): number =>
+  left === right ? 0 : left < right ? -1 : 1;
+const formatWideHex = (value: bigint): string => `0x${value.toString(16)}`;
+const formatDynamicRelocationSymbol = (entry: PeDynamicRelocationEntry): string =>
+  entry.symbol === 0n
+    ? "-"
+    : `${formatWideHex(entry.symbol)} (${getDynamicRelocationSymbolName(entry.symbol)})`;
+const dynamicRelocationPayloadSize = (entry: PeDynamicRelocationEntry): number =>
+  entry.kind === "v1" ? entry.baseRelocSize : entry.fixupInfoSize;
+const dynamicRelocationIsComplete = (entry: PeDynamicRelocationEntry): boolean =>
+  entry.availableBytes >= dynamicRelocationPayloadSize(entry);
+const renderDynamicRelocationTitle = (dr: PeDynamicRelocations): string =>
+  `DynamicRelocations (v${dr.version}, ${dr.entries.length} ` +
+  `entr${dr.entries.length === 1 ? "y" : "ies"})`;
+const formatDynamicRelocationTypes = (types: bigint[]): string =>
+  types.length ? types.map(type => formatWideHex(type)).join(", ") : "-";
 
 const formatRvaAsVa = (imageBase: bigint, pointerWidth: number, rva: number): string => {
   if (!Number.isSafeInteger(rva) || rva <= 0) return "-";
@@ -54,21 +74,125 @@ const shouldRenderAddressRows = (table: PeLoadConfigTable, sections: PeSection[]
   return sectionNames.size > 1;
 };
 
-const renderAddressTableSummary = (
-  table: PeLoadConfigTable,
-  sections: PeSection[],
-  hiddenCount: number
-): string => {
+const renderAddressTableSummaryRow = (table: PeLoadConfigTable, sections: PeSection[]): string => {
   const sectionName = table.entries.length ? formatSectionForRva(sections, table.entries[0]?.rva ?? 0) : "-";
-  return `<div class="smallNote" style="margin:.35rem 0 0 0">` +
-    `${table.entries.length} decoded entr${table.entries.length === 1 ? "y" : "ies"}` +
-    `; ${table.declaredCount} declared; section ${safe(sectionName)}.` +
-    `${hiddenCount ? ` ${hiddenCount} entr${hiddenCount === 1 ? "y is" : "ies are"} beyond the render limit.` : ""}` +
-    `</div>`;
+  return `<tr><th scope="row">${safe(table.name)}</th>` +
+    `<td class="num">${table.entries.length}</td>` +
+    `<td class="num">${table.declaredCount}</td>` +
+    `<td>${safe(sectionName)}</td>` +
+    `<td class="num">${table.entrySize} bytes</td>` +
+    `<td>${table.tableRva == null ? "-" : safe(hex(table.tableRva, 8))}</td></tr>`;
 };
+
+const renderAddressTableAggregate = (
+  tables: readonly PeLoadConfigTable[],
+  sections: PeSection[],
+  warningHtml: string[]
+): string =>
+  `<div class="tableWrap loadConfigSummaryTableWrap"><table ` +
+  `class="table loadConfigSummaryTable" aria-label="Decoded Load Config address tables">` +
+  `<thead><tr><th scope="col">Table</th><th scope="col" class="num">Decoded</th>` +
+  `<th scope="col" class="num">Declared</th><th scope="col">Section</th>` +
+  `<th scope="col" class="num">Entry size</th><th scope="col">Table RVA</th></tr></thead>` +
+  `<tbody>${tables.map(table => renderAddressTableSummaryRow(table, sections)).join("")}</tbody>` +
+  `</table></div>${warningHtml.join("")}`;
 
 export const getDynamicRelocationSymbolName = (symbol: bigint): string =>
   DYNAMIC_RELOCATION_SYMBOLS.get(symbol) ?? "UNKNOWN";
+
+const renderDynamicRelocationMeta = (dr: PeDynamicRelocations, types: bigint[]): string =>
+  `<div class="loadConfigDynamicMeta">` +
+  `<span><b>Version</b> ${safe(hex(dr.version, 8))}</span> ` +
+  `<span><b>DataSize</b> ${safe(humanSize(dr.dataSize))}</span> ` +
+  `<span><b>Types</b> ${safe(formatDynamicRelocationTypes(types))}</span>` +
+  `</div>`;
+
+const renderDynamicRelocationSummaryCells = (entry: PeDynamicRelocationEntry | null): string[] => {
+  if (!entry) return ["-", "-"];
+  return [entry.kind, formatDynamicRelocationSymbol(entry)];
+};
+
+const renderDynamicRelocationTruncationCells = (entry: PeDynamicRelocationEntry | null): string[] => {
+  if (!entry) return [];
+  const payloadSize = dynamicRelocationPayloadSize(entry);
+  const complete = dynamicRelocationIsComplete(entry);
+  if (complete && entry.availableBytes === payloadSize) return [];
+  return [humanSize(payloadSize), humanSize(entry.availableBytes), complete ? "complete" : "truncated"];
+};
+
+const renderDynamicRelocationFlatSummary = (
+  dr: PeDynamicRelocations,
+  types: bigint[],
+  warningHtml: string
+): string => {
+  const entry = dr.entries[0] ?? null;
+  const truncationCells = renderDynamicRelocationTruncationCells(entry);
+  const truncationHeaders = truncationCells.length
+    ? `<th scope="col">Payload</th><th scope="col">Available</th><th scope="col">Status</th>`
+    : "";
+  const truncationStatusClass = entry && dynamicRelocationIsComplete(entry)
+    ? "loadConfigStatusOk"
+    : "loadConfigStatusWarn";
+  const truncationRow = truncationCells.length
+    ? `<td>${safe(truncationCells[0])}</td><td>${safe(truncationCells[1])}</td>` +
+      `<td class="${truncationStatusClass}">${safe(truncationCells[2])}</td>`
+    : "";
+  return `<div class="tableWrap loadConfigSummaryTableWrap"><table ` +
+    `class="table loadConfigSummaryTable loadConfigDynamicSummaryTable" ` +
+    `aria-label="Dynamic Load Config relocations">` +
+    `<thead><tr><th scope="col">Table</th><th scope="col">Version</th>` +
+    `<th scope="col" class="num">Entries</th><th scope="col">Data size</th>` +
+    `<th scope="col">Type</th><th scope="col">Entry</th><th scope="col">Symbol</th>` +
+    `${truncationHeaders}</tr></thead><tbody><tr>` +
+    `<th scope="row">DynamicRelocations</th><td>${dr.version}</td>` +
+    `<td class="num">${dr.entries.length}</td><td>${safe(humanSize(dr.dataSize))}</td>` +
+    `<td>${safe(formatDynamicRelocationTypes(types))}</td>` +
+    `${renderDynamicRelocationSummaryCells(entry).map(value => `<td>${safe(value)}</td>`).join("")}` +
+    `${truncationRow}</tr></tbody></table></div>${warningHtml}`;
+};
+
+const renderSingleDynamicRelocationEntry = (entry: PeDynamicRelocationEntry): string => {
+  const status = dynamicRelocationIsComplete(entry) ? "complete" : "truncated";
+  return `<div class="loadConfigDynamicEntrySummary">` +
+    `<span><b>Entry</b> 1</span> ` +
+    `<span><b>Kind</b> ${safe(entry.kind)}</span> ` +
+    `<span><b>Symbol</b> ${safe(formatDynamicRelocationSymbol(entry))}</span> ` +
+    `<span><b>Size</b> ${safe(humanSize(dynamicRelocationPayloadSize(entry)))}</span> ` +
+    `<span><b>Available</b> ${safe(humanSize(entry.availableBytes))}</span> ` +
+    `<span class="loadConfigDynamicStatus--${status}"><b>Status</b> ${status}</span>` +
+    `</div>`;
+};
+
+const renderDynamicRelocationEntries = (entries: PeDynamicRelocationEntry[]): string => {
+  if (!entries.length) return "";
+  const firstEntry = entries[0];
+  if (entries.length === 1 && firstEntry) return renderSingleDynamicRelocationEntry(firstEntry);
+  const rows = entries.map((entry, index) => {
+    const status = dynamicRelocationIsComplete(entry) ? "complete" : "truncated";
+    return `<tr><td>${index + 1}</td><td>${safe(entry.kind)}</td>` +
+      `<td>${safe(formatDynamicRelocationSymbol(entry))}</td>` +
+      `<td>${safe(humanSize(dynamicRelocationPayloadSize(entry)))}</td>` +
+      `<td>${safe(humanSize(entry.availableBytes))}</td><td>${status}</td></tr>`;
+  });
+  return `<div class="tableWrap loadConfigDynamicTable"><table class="table">` +
+    `<thead><tr><th>#</th><th>Kind</th><th>Symbol</th><th>Size</th>` +
+    `<th>Available</th><th>Status</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
+};
+
+export const renderLoadConfigDynamicRelocations = (dr: PeDynamicRelocations): string => {
+  const types = [
+    ...new Set(dr.entries.map(entry => entry.symbol).filter(symbol => symbol !== 0n))
+  ].sort(compareWideInt);
+  const warningHtml = dr.warnings?.length
+    ? `<div class="smallNote" style="margin:.35rem 0 0 0;color:var(--warn-fg)">` +
+      `${safe(dr.warnings.join("; "))}</div>`
+    : "";
+  if (dr.entries.length <= 1) return renderDynamicRelocationFlatSummary(dr, types, warningHtml);
+  return `<details class="loadConfigDynamicRelocations"><summary class="loadConfigNestedSummary">` +
+    safe(renderDynamicRelocationTitle(dr)) +
+    `</summary>${warningHtml}${renderDynamicRelocationMeta(dr, types)}` +
+    `${renderDynamicRelocationEntries(dr.entries)}</details>`;
+};
 
 export const renderLoadConfigGuardFlags = (lc: PeLoadConfig): string => {
   const guardFlags = lc.GuardFlags >>> 0;
@@ -106,7 +230,13 @@ export const renderLoadConfigChecks = (lc: PeLoadConfig): string => {
     `<ul class="manifestCheckList">${items.join("")}</ul></div>`;
 };
 
-export const renderLoadConfigAddressTable = (
+const renderAddressTableWarning = (table: PeLoadConfigTable): string =>
+  table.warnings?.length
+    ? `<div class="smallNote" style="margin:.25rem 0 0 0;color:var(--warn-fg)">` +
+      `${safe(table.warnings.join("; "))}</div>`
+    : "";
+
+const renderDetailedLoadConfigAddressTable = (
   table: PeLoadConfigTable,
   sections: PeSection[],
   imageBase: bigint,
@@ -115,7 +245,6 @@ export const renderLoadConfigAddressTable = (
 ): string => {
   const visibleEntries = table.entries.slice(0, ADDRESS_TABLE_RENDER_LIMIT);
   const hiddenCount = Math.max(0, table.entries.length - visibleEntries.length);
-  const renderRows = shouldRenderAddressRows(table, sections);
   const rows = visibleEntries.map(entry => {
     const metadata = entry.metadataBytes?.length
       ? entry.metadataBytes.map(byte => byte.toString(16).padStart(2, "0")).join(" ")
@@ -126,10 +255,45 @@ export const renderLoadConfigAddressTable = (
       `<td>${safe(formatSectionForRva(sections, entry.rva))}</td><td>${safe(metadata)}</td>` +
       `<td>${notes.length ? safe(notes.join(", ")) : "-"}</td></tr>`;
   });
+  const details = [
+    ...(note ? [safe(note)] : []),
+    `Entry size ${table.entrySize} bytes`,
+    `table RVA ${table.tableRva == null ? "-" : safe(hex(table.tableRva, 8))}`,
+    ...(hiddenCount ? [`showing first ${ADDRESS_TABLE_RENDER_LIMIT}; ${hiddenCount} hidden`] : [])
+  ];
   return `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">${safe(`${table.name} (${table.entries.length}/${table.declaredCount})`)}</summary>` +
-    `${note ? `<div class="smallNote" style="margin:.35rem 0 0 0">${safe(note)}</div>` : ""}` +
-    `${table.warnings?.length ? `<div class="smallNote" style="margin:.35rem 0 0 0;color:var(--warn-fg)">${safe(table.warnings.join("; "))}</div>` : ""}` +
-    `<div class="smallNote" style="margin:.35rem 0 0 0">Entry size ${table.entrySize} bytes; table RVA ${table.tableRva == null ? "-" : safe(hex(table.tableRva, 8))}.` +
-    `${hiddenCount ? ` Showing first ${ADDRESS_TABLE_RENDER_LIMIT} entries; ${hiddenCount} hidden.` : ""}</div>` +
-    `${renderRows ? `<div class="tableWrap"><table class="table"><thead><tr><th>#</th><th>RVA</th><th>VA</th><th>Section</th><th>Metadata</th><th>Notes</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>` : renderAddressTableSummary(table, sections, hiddenCount)}</details>`;
+    `<div class="loadConfigAddressTableBody"><div class="smallNote" style="margin:.35rem 0 0 0">${details.join("; ")}.</div>` +
+    renderAddressTableWarning(table) +
+    `<div class="tableWrap"><table class="table"><thead><tr><th>#</th><th>RVA</th><th>VA</th><th>Section</th><th>Metadata</th><th>Notes</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></div></details>`;
 };
+
+export const renderLoadConfigAddressTables = (
+  tables: readonly (readonly [PeLoadConfigTable, string?])[],
+  sections: PeSection[],
+  imageBase: bigint,
+  pointerWidth: number
+): string => {
+  const aggregateTables = tables.map(([table]) => table).filter(table => !shouldRenderAddressRows(table, sections));
+  const detailedTables = tables.filter(([table]) => shouldRenderAddressRows(table, sections));
+  return (aggregateTables.length ? renderAddressTableAggregate(
+    aggregateTables,
+    sections,
+    aggregateTables.map(renderAddressTableWarning)
+  ) : "") +
+    detailedTables.map(([table, note]) =>
+      renderDetailedLoadConfigAddressTable(table, sections, imageBase, pointerWidth, note)
+    ).join("");
+};
+
+export const renderLoadConfigAddressTable = (
+  table: PeLoadConfigTable,
+  sections: PeSection[],
+  imageBase: bigint,
+  pointerWidth: number,
+  note?: string
+): string => renderLoadConfigAddressTables(
+  note === undefined ? [[table]] : [[table, note]],
+  sections,
+  imageBase,
+  pointerWidth
+);

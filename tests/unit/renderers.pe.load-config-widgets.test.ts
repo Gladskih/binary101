@@ -10,6 +10,7 @@ import {
   getDynamicRelocationSymbolName,
   renderLoadConfigAddressTable,
   renderLoadConfigChecks,
+  renderLoadConfigDynamicRelocations,
   renderLoadConfigGuardFlags
 } from "../../renderers/pe/load-config-widgets.js";
 
@@ -106,7 +107,8 @@ void test("renderLoadConfigAddressTable caps large tables and renders metadata",
   assert.ok(html.includes(
     `GuardCFFunctionTable (${TABLE_ENTRY_COUNT_OVER_RENDER_LIMIT}/${TABLE_ENTRY_COUNT_OVER_RENDER_LIMIT})`
   ));
-  assert.ok(html.includes("Showing first 512 entries; 1 hidden."));
+  assert.ok(html.includes("showing first 512; 1 hidden"));
+  assert.ok(html.includes("loadConfigAddressTableBody"));
   assert.ok(html.includes("FID_SUPPRESSED, EXPORT_SUPPRESSED"));
   assert.ok(html.includes(".text"));
 });
@@ -122,8 +124,16 @@ void test("renderLoadConfigAddressTable aggregates uniform rows without metadata
 
   const html = renderLoadConfigAddressTable(plainTable, [textSection], IMAGE_BASE, 8, "GFIDS table");
 
-  assert.ok(html.includes("3 decoded entries; 3 declared; section .text."));
+  assert.ok(html.includes("loadConfigSummaryTable"));
+  assert.ok(html.includes("<th scope=\"col\">Table</th>"));
+  assert.ok(html.includes("<th scope=\"row\">GuardCFFunctionTable</th>"));
+  assert.ok(html.includes("<td class=\"num\">3</td>"));
+  assert.ok(html.includes("<td>.text</td>"));
+  assert.ok(html.includes("<td class=\"num\">5 bytes</td>"));
+  assert.ok(html.includes("<td>0x00001000</td>"));
+  assert.ok(!html.includes("<summary"));
   assert.ok(!html.includes("<th>Metadata</th>"));
+  assert.ok(!html.includes("beyond the render limit"));
 });
 
 void test("getDynamicRelocationSymbolName labels known and unknown symbols", () => {
@@ -131,4 +141,43 @@ void test("getDynamicRelocationSymbolName labels known and unknown symbols", () 
   assert.equal(getDynamicRelocationSymbolName(6n), "ARM64X");
   // 0xffff is outside the documented dynamic relocation symbol set and should stay explicit.
   assert.equal(getDynamicRelocationSymbolName(0xffffn), "UNKNOWN");
+});
+
+void test("renderLoadConfigDynamicRelocations summarizes a single entry without details", () => {
+  const html = renderLoadConfigDynamicRelocations({
+    version: 1,
+    dataSize: 80,
+    entries: [{
+      kind: "v1",
+      symbol: 7n,
+      baseRelocSize: 68,
+      availableBytes: 68
+    }]
+  });
+
+  assert.ok(html.includes("loadConfigDynamicSummaryTable"));
+  assert.ok(html.includes("80 B (80 bytes)"));
+  assert.ok(!html.includes("68 B (68 bytes)"));
+  assert.ok(!html.includes("Status</th>"));
+  assert.ok(!html.includes("<details"));
+  assert.ok(!html.includes("<dl"));
+  assert.ok(!html.includes("<th>#</th><th>Kind</th>"));
+});
+
+void test("renderLoadConfigDynamicRelocations keeps truncated single-entry status visible", () => {
+  const html = renderLoadConfigDynamicRelocations({
+    version: 1,
+    dataSize: 80,
+    entries: [{
+      kind: "v1",
+      symbol: 7n,
+      baseRelocSize: 68,
+      availableBytes: 32
+    }]
+  });
+
+  assert.ok(html.includes("<th scope=\"col\">Payload</th>"));
+  assert.ok(html.includes("<td>68 B (68 bytes)</td>"));
+  assert.ok(html.includes("<td>32 B (32 bytes)</td>"));
+  assert.ok(html.includes("<td class=\"loadConfigStatusWarn\">truncated</td>"));
 });

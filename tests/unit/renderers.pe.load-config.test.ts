@@ -78,7 +78,7 @@ void test("renderLoadConfig renders GuardFlags names and CFG function-table entr
   assert.ok(html.includes("FID_SUPPRESSED, EXPORT_SUPPRESSED"));
 });
 
-void test("renderLoadConfig caps large decoded Load Config tables", () => {
+void test("renderLoadConfig aggregates large uniform Load Config tables", () => {
   const loadcfg = createPeLoadConfigResult();
   loadcfg.tables = {
     guardFid: {
@@ -101,9 +101,14 @@ void test("renderLoadConfig caps large decoded Load Config tables", () => {
   renderLoadConfig(pe, out);
   const html = out.join("");
 
-  // Renderer contract: large address tables show the first 512 rows and summarize hidden rows.
-  assert.ok(html.includes("Showing first 512 entries; 1 hidden."));
-  assert.ok(html.includes(
+  // Renderer contract: uniform address tables are summarized instead of rendering useless rows.
+  assert.ok(html.includes("loadConfigSummaryTable"));
+  assert.ok(html.includes("<th scope=\"row\">GuardCFFunctionTable</th>"));
+  assert.ok(html.includes("<td class=\"num\">513</td>"));
+  assert.ok(html.includes("<td>(outside sections)</td>"));
+  assert.ok(html.includes("<td class=\"num\">4 bytes</td>"));
+  assert.ok(!html.includes("showing first 512; 1 hidden"));
+  assert.ok(!html.includes(
     `GuardCFFunctionTable (${TABLE_ENTRY_COUNT_OVER_RENDER_LIMIT}/${TABLE_ENTRY_COUNT_OVER_RENDER_LIMIT})`
   ));
 });
@@ -134,7 +139,15 @@ void test("renderLoadConfig labels known dynamic relocation symbols", () => {
   const out: string[] = [];
   renderLoadConfig(pe, out);
   const html = out.join("");
+  const dynamicRelocationsStart = html.indexOf("loadConfigDynamicSummaryTable");
+  assert.notEqual(dynamicRelocationsStart, -1);
+  const dynamicHtml = html.slice(dynamicRelocationsStart);
 
   assert.ok(html.includes("ARM64X"));
-  assert.ok(html.includes("complete"));
+  assert.ok(dynamicHtml.includes("loadConfigDynamicSummaryTable"));
+  assert.ok(dynamicHtml.includes("20 B (20 bytes)"));
+  assert.ok(dynamicHtml.includes("<td>0x6 (ARM64X)</td>"));
+  assert.ok(!dynamicHtml.includes("<details"));
+  assert.ok(!dynamicHtml.includes("<dl"));
+  assert.ok(!dynamicHtml.includes("<th>#</th><th>Kind</th>"));
 });
