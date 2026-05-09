@@ -37,9 +37,9 @@ const compareWideInt = (left: bigint, right: bigint): number =>
   left === right ? 0 : left < right ? -1 : 1;
 const formatWideHex = (value: bigint): string => `0x${value.toString(16)}`;
 const formatDynamicRelocationSymbol = (entry: PeDynamicRelocationEntry): string =>
-  entry.symbol === 0n
-    ? "-"
-    : `${formatWideHex(entry.symbol)} (${getDynamicRelocationSymbolName(entry.symbol)})`;
+  entry.symbol === 0n ? "-" : formatWideHex(entry.symbol);
+const formatDynamicRelocationSymbolName = (entry: PeDynamicRelocationEntry): string =>
+  entry.symbol === 0n ? "-" : getDynamicRelocationSymbolName(entry.symbol);
 const dynamicRelocationPayloadSize = (entry: PeDynamicRelocationEntry): number =>
   entry.kind === "v1" ? entry.baseRelocSize : entry.fixupInfoSize;
 const dynamicRelocationIsComplete = (entry: PeDynamicRelocationEntry): boolean =>
@@ -104,12 +104,12 @@ const renderDynamicRelocationMeta = (dr: PeDynamicRelocations, types: bigint[]):
   `<div class="loadConfigDynamicMeta">` +
   `<span><b>Version</b> ${safe(hex(dr.version, 8))}</span> ` +
   `<span><b>DataSize</b> ${safe(humanSize(dr.dataSize))}</span> ` +
-  `<span><b>Types</b> ${safe(formatDynamicRelocationTypes(types))}</span>` +
+  `<span><b>Symbols</b> ${safe(formatDynamicRelocationTypes(types))}</span>` +
   `</div>`;
 
 const renderDynamicRelocationSummaryCells = (entry: PeDynamicRelocationEntry | null): string[] => {
   if (!entry) return ["-", "-"];
-  return [entry.kind, formatDynamicRelocationSymbol(entry)];
+  return [formatDynamicRelocationSymbol(entry), formatDynamicRelocationSymbolName(entry)];
 };
 
 const renderDynamicRelocationTruncationCells = (entry: PeDynamicRelocationEntry | null): string[] => {
@@ -122,7 +122,6 @@ const renderDynamicRelocationTruncationCells = (entry: PeDynamicRelocationEntry 
 
 const renderDynamicRelocationFlatSummary = (
   dr: PeDynamicRelocations,
-  types: bigint[],
   warningHtml: string
 ): string => {
   const entry = dr.entries[0] ?? null;
@@ -142,11 +141,10 @@ const renderDynamicRelocationFlatSummary = (
     `aria-label="Dynamic Load Config relocations">` +
     `<thead><tr><th scope="col">Table</th><th scope="col">Version</th>` +
     `<th scope="col" class="num">Entries</th><th scope="col">Data size</th>` +
-    `<th scope="col">Type</th><th scope="col">Entry</th><th scope="col">Symbol</th>` +
+    `<th scope="col">Symbol</th><th scope="col">Name</th>` +
     `${truncationHeaders}</tr></thead><tbody><tr>` +
     `<th scope="row">DynamicRelocations</th><td>${dr.version}</td>` +
     `<td class="num">${dr.entries.length}</td><td>${safe(humanSize(dr.dataSize))}</td>` +
-    `<td>${safe(formatDynamicRelocationTypes(types))}</td>` +
     `${renderDynamicRelocationSummaryCells(entry).map(value => `<td>${safe(value)}</td>`).join("")}` +
     `${truncationRow}</tr></tbody></table></div>${warningHtml}`;
 };
@@ -169,13 +167,13 @@ const renderDynamicRelocationEntries = (entries: PeDynamicRelocationEntry[]): st
   if (entries.length === 1 && firstEntry) return renderSingleDynamicRelocationEntry(firstEntry);
   const rows = entries.map((entry, index) => {
     const status = dynamicRelocationIsComplete(entry) ? "complete" : "truncated";
-    return `<tr><td>${index + 1}</td><td>${safe(entry.kind)}</td>` +
-      `<td>${safe(formatDynamicRelocationSymbol(entry))}</td>` +
+    return `<tr><td>${index + 1}</td><td>${safe(formatDynamicRelocationSymbol(entry))}</td>` +
+      `<td>${safe(formatDynamicRelocationSymbolName(entry))}</td>` +
       `<td>${safe(humanSize(dynamicRelocationPayloadSize(entry)))}</td>` +
       `<td>${safe(humanSize(entry.availableBytes))}</td><td>${status}</td></tr>`;
   });
   return `<div class="tableWrap loadConfigDynamicTable"><table class="table">` +
-    `<thead><tr><th>#</th><th>Kind</th><th>Symbol</th><th>Size</th>` +
+    `<thead><tr><th>#</th><th>Symbol</th><th>Name</th><th>Payload</th>` +
     `<th>Available</th><th>Status</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
 };
 
@@ -187,7 +185,7 @@ export const renderLoadConfigDynamicRelocations = (dr: PeDynamicRelocations): st
     ? `<div class="smallNote" style="margin:.35rem 0 0 0;color:var(--warn-fg)">` +
       `${safe(dr.warnings.join("; "))}</div>`
     : "";
-  if (dr.entries.length <= 1) return renderDynamicRelocationFlatSummary(dr, types, warningHtml);
+  if (dr.entries.length <= 1) return renderDynamicRelocationFlatSummary(dr, warningHtml);
   return `<details class="loadConfigDynamicRelocations"><summary class="loadConfigNestedSummary">` +
     safe(renderDynamicRelocationTitle(dr)) +
     `</summary>${warningHtml}${renderDynamicRelocationMeta(dr, types)}` +

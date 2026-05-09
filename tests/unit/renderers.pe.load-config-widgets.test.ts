@@ -157,6 +157,12 @@ void test("renderLoadConfigDynamicRelocations summarizes a single entry without 
 
   assert.ok(html.includes("loadConfigDynamicSummaryTable"));
   assert.ok(html.includes("80 B (80 bytes)"));
+  assert.ok(html.includes("<th scope=\"col\">Symbol</th>"));
+  assert.ok(html.includes("<th scope=\"col\">Name</th>"));
+  assert.ok(html.includes("<td>0x7</td>"));
+  assert.ok(html.includes("<td>UNKNOWN</td>"));
+  assert.ok(!html.includes("<th scope=\"col\">Type</th>"));
+  assert.ok(!html.includes("<th scope=\"col\">Entry</th>"));
   assert.ok(!html.includes("68 B (68 bytes)"));
   assert.ok(!html.includes("Status</th>"));
   assert.ok(!html.includes("<details"));

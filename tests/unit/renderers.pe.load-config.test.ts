@@ -146,7 +146,10 @@ void test("renderLoadConfig labels known dynamic relocation symbols", () => {
   assert.ok(html.includes("ARM64X"));
   assert.ok(dynamicHtml.includes("loadConfigDynamicSummaryTable"));
   assert.ok(dynamicHtml.includes("20 B (20 bytes)"));
-  assert.ok(dynamicHtml.includes("<td>0x6 (ARM64X)</td>"));
+  assert.ok(dynamicHtml.includes("<td>0x6</td>"));
+  assert.ok(dynamicHtml.includes("<td>ARM64X</td>"));
+  assert.ok(!dynamicHtml.includes("<th scope=\"col\">Type</th>"));
+  assert.ok(!dynamicHtml.includes("<th scope=\"col\">Entry</th>"));
   assert.ok(!dynamicHtml.includes("<details"));
   assert.ok(!dynamicHtml.includes("<dl"));
   assert.ok(!dynamicHtml.includes("<th>#</th><th>Kind</th>"));
