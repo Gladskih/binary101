@@ -77,6 +77,15 @@ export const createCheckBadge = (
     : undefined;
 };
 
+export const createInformationalCheckBadge = (
+  auth: AuthenticodeInfo,
+  id: string,
+  label: string
+): TreeBadge | undefined => {
+  const check = getCheckById(auth, id);
+  return check ? createInfoBadge(label, formatCheckDetail(check.title, check.detail)) : undefined;
+};
+
 export const createIssuerMatchBadgeWithTrustContext = (
   auth: AuthenticodeInfo,
   id: string,

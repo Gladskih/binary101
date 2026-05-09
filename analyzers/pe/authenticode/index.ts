@@ -59,6 +59,7 @@ export interface AuthenticodeTimestampTokenInfo {
   signerCertificateIndex?: number;
   certificatePathIndexes?: number[];
   certificates?: X509CertificateInfo[];
+  trustPolicy?: AuthenticodeTrustPolicyInfo;
   signatureVerified?: boolean;
   messageDigestVerified?: boolean;
   signingTime?: string;

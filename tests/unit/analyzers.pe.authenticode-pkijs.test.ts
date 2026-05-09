@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ContentInfo, SignedData } from "../../analyzers/pe/authenticode/pkijs-runtime.js";
+import { Certificate, ContentInfo, SignedData } from "../../analyzers/pe/authenticode/pkijs-runtime.js";
 import { verifyPkcs7Signatures } from "../../analyzers/pe/authenticode/pkijs.js";
 import { createSignedAuthenticodeCmsFixture } from "../fixtures/pe-authenticode-signed-cms-fixtures.js";
 
@@ -24,6 +24,9 @@ const encodeSignedData = (signedData: SignedData): Uint8Array =>
       content: signedData.toSchema(true)
     }).toSchema().toBER()
   );
+
+const certificateDerBase64 = (certificate: Certificate): string =>
+  Buffer.from(certificate.toSchema().toBER(false)).toString("base64");
 
 const tamperSignerSignature = (payload: Uint8Array): Uint8Array => {
   const signedData = parseSignedData(payload);
@@ -83,6 +86,39 @@ void test("verifyPkcs7Signatures verifies a valid Authenticode CMS signer", asyn
     )
   );
   assert.strictEqual(verified.warnings, undefined);
+});
+
+void test("verifyPkcs7Signatures annotates RFC3161 timestamp certificates with trust policy", async () => {
+  const { payload } = await createSignedAuthenticodeCmsFixture();
+  const rootCertificate = parseSignedData(payload).certificates?.find(
+    (certificate): certificate is Certificate =>
+      certificate instanceof Certificate && certificate.subject.isEqual(certificate.issuer)
+  );
+  assert.ok(rootCertificate);
+
+  const verified = await verifyPkcs7Signatures(payload, {
+    schemaVersion: 1,
+    generatedAt: "2026-05-03T00:00:00.000Z",
+    source: "unit",
+    trustedCAs: [
+      {
+        thumbprint: "001122",
+        subject: "CN=Binary101 Root CA",
+        derBase64: certificateDerBase64(rootCertificate),
+        stores: ["Root"]
+      }
+    ],
+    revokedCAs: []
+  });
+
+  assert.strictEqual(
+    verified.signerVerifications?.[0]?.timestampTokens?.[0]?.trustPolicy?.certificates[1]?.status,
+    "trusted"
+  );
+  assert.strictEqual(
+    verified.signerVerifications?.[0]?.timestampTokens?.[0]?.trustPolicy?.certificates[1]?.anchorSubject,
+    "CN=Binary101 Root CA"
+  );
 });
 
 void test("verifyPkcs7Signatures reports invalid signer signatures without hiding the signer result", async () => {

@@ -84,10 +84,14 @@ const renderTimestampTokenNode = (
   token: AuthenticodeTimestampTokenInfo
 ): string => {
   const tokenLabel = `${signerLabel} RFC3161 timestamp ${token.index + 1}`;
+  const tokenVerification = {
+    ...(auth.verification?.checks?.length ? { checks: auth.verification.checks } : {}),
+    ...(token.trustPolicy ? { trustPolicy: token.trustPolicy } : {})
+  };
   const tokenAuth: AuthenticodeInfo = {
     format: auth.format,
     ...(token.certificates?.length ? { certificates: token.certificates } : {}),
-    ...(auth.verification?.checks?.length ? { verification: { checks: auth.verification.checks } } : {})
+    ...(Object.keys(tokenVerification).length ? { verification: tokenVerification } : {})
   };
   const timestampSignerCertificate = getCertificate(token.certificates, token.signerCertificateIndex);
   return renderTreeNode(

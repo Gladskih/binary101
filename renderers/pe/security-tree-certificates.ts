@@ -6,6 +6,7 @@ import {
   createCertificateStoreFactBadge,
   createCertificateTrustBadge,
   createCheckBadge,
+  createInformationalCheckBadge,
   createIssuerMatchBadgeWithTrustContext,
   findIssuerCandidateIndexes,
   getCertificatePathStatus,
@@ -151,6 +152,9 @@ const renderReferenceValidityBadge = (
   );
 };
 
+const isTimestampPathLabel = (label: string | undefined): boolean =>
+  !!label && (label.includes("countersignature") || label.includes("RFC3161 timestamp"));
+
 const renderCertificatePath = (
   auth: AuthenticodeInfo,
   label: string | undefined,
@@ -180,7 +184,13 @@ const renderCertificatePath = (
       depth === 0 && label ? createCheckBadge(auth, `${label}-key-usage`, "KU") : undefined,
       depth === 0 && label ? createCheckBadge(auth, `${label}-eku`, "EKU") : undefined,
       label
-        ? createCheckBadge(
+        ? isTimestampPathLabel(label)
+          ? createInformationalCheckBadge(
+              auth,
+              `${label}-certificate-${certificateIndex + 1}-current-validity`,
+              "Now"
+            )
+          : createCheckBadge(
             auth,
             `${label}-certificate-${certificateIndex + 1}-current-validity`,
             "Now"

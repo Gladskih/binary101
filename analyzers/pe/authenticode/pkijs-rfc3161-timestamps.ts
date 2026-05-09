@@ -6,6 +6,7 @@ import type {
   AuthenticodeVerificationCheck,
   X509CertificateInfo
 } from "./index.js";
+import type { AuthenticodeTrustStoreSnapshot } from "./trust-store.js";
 import type { SignerInfo } from "./pkijs-runtime.js";
 import {
   Certificate,
@@ -15,6 +16,7 @@ import {
   id_eContentType_TSTInfo
 } from "./pkijs-runtime.js";
 import { addExtendedKeyUsageCheck, addSigningKeyUsageCheck, attachPathChecks } from "./pkijs-path.js";
+import { evaluateAuthenticodeTrustPolicy } from "./trust-policy.js";
 import {
   TIME_STAMPING_EKU_OID,
   addCheck,
@@ -149,7 +151,8 @@ const verifyTimestampToken = async (
   value: unknown,
   parentSignatureBytes: Uint8Array,
   checks: AuthenticodeVerificationCheck[],
-  warnings: string[]
+  warnings: string[],
+  trustStore: AuthenticodeTrustStoreSnapshot | undefined
 ): Promise<AuthenticodeTimestampTokenInfo> => {
   const label = `${signerLabel} RFC3161 timestamp ${tokenIndex + 1}`;
   const token: AuthenticodeTimestampTokenInfo = { index: tokenIndex };
@@ -189,6 +192,8 @@ const verifyTimestampToken = async (
   const signerCertificate =
     timestampSignerCertificateIndex != null ? certificates[timestampSignerCertificateIndex] : undefined;
   if (certificates.length) token.certificates = certificates.map(describeCertificate);
+  const trustPolicy = await evaluateAuthenticodeTrustPolicy(certificates, trustStore);
+  if (trustPolicy) token.trustPolicy = trustPolicy;
   if (timestampSignerCertificateIndex != null) token.signerCertificateIndex = timestampSignerCertificateIndex;
   addCheck(
     checks,
@@ -231,7 +236,8 @@ export const readRfc3161TimestampTokens = async (
   signerLabel: string,
   signer: SignerInfo,
   checks: AuthenticodeVerificationCheck[],
-  warnings: string[]
+  warnings: string[],
+  trustStore?: AuthenticodeTrustStoreSnapshot
 ): Promise<AuthenticodeTimestampTokenInfo[] | undefined> => {
   const values =
     signer.unsignedAttrs?.attributes.find(
@@ -243,7 +249,15 @@ export const readRfc3161TimestampTokens = async (
   for (let index = 0; index < values.length; index += 1) {
     try {
       tokens.push(
-        await verifyTimestampToken(signerLabel, index, values[index], parentSignatureBytes, checks, warnings)
+        await verifyTimestampToken(
+          signerLabel,
+          index,
+          values[index],
+          parentSignatureBytes,
+          checks,
+          warnings,
+          trustStore
+        )
       );
     } catch (error) {
       const message = describeError(error);

@@ -156,7 +156,13 @@ export const verifyPkcs7Signatures = async (
         );
       });
     }
-    const timestampTokens = await readRfc3161TimestampTokens(signerLabel, signer, checks, warnings);
+    const timestampTokens = await readRfc3161TimestampTokens(
+      signerLabel,
+      signer,
+      checks,
+      warnings,
+      trustStore
+    );
     if (timestampTokens?.length) {
       signerVerification.timestampTokens = timestampTokens;
     }

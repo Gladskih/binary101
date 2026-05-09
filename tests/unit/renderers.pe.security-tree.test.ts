@@ -62,6 +62,20 @@ void test("renderAuthenticodeTree renders signer and countersignature certificat
         }
       ],
       verification: {
+        checks: [
+          {
+            id: "Signer 1 RFC3161 timestamp 1-certificate-1-current-validity",
+            status: "fail",
+            title: "Signer 1 RFC3161 timestamp 1: certificate 1 is currently valid",
+            detail: "Current time: 2024-01-01T00:00:00Z -> 2024-02-01T00:00:00Z"
+          },
+          {
+            id: "Signer 1 RFC3161 timestamp 1-certificate-1-timestamp time-validity",
+            status: "pass",
+            title: "Signer 1 RFC3161 timestamp 1: certificate 1 was valid at timestamp time",
+            detail: "2024-01-15T00:00:00Z: 2024-01-01T00:00:00Z -> 2024-02-01T00:00:00Z"
+          }
+        ],
         signerVerifications: [
           {
             index: 0,
@@ -86,6 +100,21 @@ void test("renderAuthenticodeTree renders signer and countersignature certificat
                 signingTime: "2024-06-01T12:01:00Z",
                 signatureVerified: true,
                 messageDigestVerified: true,
+                trustPolicy: {
+                  generatedAt: "2026-05-03T00:00:00.000Z",
+                  certificates: [
+                    { certificateIndex: 0, status: "unknown", sha1Thumbprint: "TSLEAF" },
+                    {
+                      certificateIndex: 1,
+                      status: "trusted",
+                      sha1Thumbprint: "TSPCA",
+                      anchorDerBase64: "CAkK",
+                      anchorSha1Thumbprint: "TSROOT",
+                      anchorSubject: "CN=Timestamp Trusted Root",
+                      stores: ["Root"]
+                    }
+                  ]
+                },
                 certificates: [
                   {
                     subject: "CN=RFC3161 Timestamp Leaf",
@@ -117,6 +146,11 @@ void test("renderAuthenticodeTree renders signer and countersignature certificat
   assert.ok(html.includes("RFC3161 timestamp 1"));
   assert.ok(html.includes("Certificate &#8470;1: CN=RFC3161 Timestamp Leaf"));
   assert.ok(html.includes("authenticode-certificate-1.cer"));
+  assert.ok(html.includes("Trust anchor: CN=Timestamp Trusted Root"));
+  assert.strictEqual(
+    getNodeClassForTitle(html, "Certificate &#8470;1: CN=RFC3161 Timestamp Leaf"),
+    "peSecurityTreeNode peSecurityTreeNode--pass"
+  );
   assert.ok(html.includes("Timestamp cert"));
   assert.ok(html.includes("Root"));
   assert.ok(html.includes("Sig"));

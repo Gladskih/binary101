@@ -50,7 +50,7 @@ const TRUST_GAPS: AuthenticodeTrustGap[] = [
     id: "timestamp-trust",
     title: "Trusted timestamp authority",
     detail:
-      "Countersignature cryptography can be checked locally, but the timestamping chain is not anchored to a trusted TSA root and is not revocation-checked."
+      "Timestamping chain trust is evaluated only against the bundled local CA snapshot when available, and revocation is not checked."
   }
 ];
 
