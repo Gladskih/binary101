@@ -10,7 +10,8 @@ void test("renderRichHeader renders a summary and annotated entry table", () => 
     checksum: 0x0,
     entries: [
       { productId: 0x0091, buildNumber: 0x1c87, count: 12 },
-      { productId: 0x1111, buildNumber: 0x2222, count: 5 }
+      { productId: 0x0108, buildNumber: 0x8170, count: 5 },
+      { productId: 0x1111, buildNumber: 0x2222, count: 1 }
     ],
     warnings: ["Example warning"]
   };
@@ -21,10 +22,16 @@ void test("renderRichHeader renders a summary and annotated entry table", () => 
 
   assert.ok(html.includes("Rich header"));
   assert.ok(html.includes("0x12345678"));
+  assert.ok(html.includes("XOR key / checksum"));
+  assert.ok(html.includes("Tool mix"));
+  assert.ok(html.includes("Signals"));
   assert.ok(html.includes("Linker"));
   assert.ok(html.includes("VS97 v5.0 SP3 link 5.10.7303"));
-  assert.ok(html.includes("Unknown tool"));
-  assert.ok(html.includes("Unknown build"));
+  assert.ok(html.includes("LTCG C"));
+  assert.ok(html.includes("VS2022-era MSVC build 33136"));
+  assert.ok(html.includes("LTCG/link-time code generation"));
+  assert.ok(html.includes("Unrecognized product 0x1111"));
+  assert.ok(html.includes("Unrecognized build 0x2222"));
   assert.ok(html.includes("data-rich-bar"));
   assert.ok(html.includes("Example warning"));
   assert.ok(!html.includes("Show top entries"));
