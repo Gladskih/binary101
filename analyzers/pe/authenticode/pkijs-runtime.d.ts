@@ -9,6 +9,9 @@ export interface PkijsOctetString {
 }
 
 export interface PkijsInteger {
+  valueBlock?: {
+    valueHexView?: Uint8Array;
+  };
   isEqual(other: unknown): boolean;
 }
 
@@ -39,6 +42,12 @@ export class AttributeTypeAndValue {
     toString?: () => string;
   };
   constructor(parameters?: unknown);
+}
+
+export class AlgorithmIdentifier {
+  algorithmId: string;
+  constructor(parameters?: unknown);
+  toSchema(): { toBER(encodeFlag?: boolean): ArrayBuffer };
 }
 
 export class BasicConstraints {
@@ -120,6 +129,12 @@ export class IssuerAndSerialNumber {
   constructor(parameters?: unknown);
 }
 
+export class MessageImprint {
+  hashAlgorithm: PkijsAlgorithmIdentifier;
+  hashedMessage: PkijsOctetString;
+  constructor(parameters?: unknown);
+}
+
 export class SignedAndUnsignedAttributes {
   attributes: Attribute[];
   encodedValue: ArrayBuffer;
@@ -151,9 +166,19 @@ export class SignedData {
   toSchema(encodeFlag?: boolean): unknown;
   verify(params: {
     signer: number;
+    data?: ArrayBuffer;
     checkChain: boolean;
     extendedMode: true;
   }): Promise<PkijsSignedDataVerifyResult>;
 }
 
+export class TSTInfo {
+  genTime: Date;
+  messageImprint: MessageImprint;
+  static fromBER(raw: BufferSource): TSTInfo;
+  constructor(parameters?: unknown);
+  toSchema(): { toBER(encodeFlag?: boolean): ArrayBuffer };
+}
+
 export const getCrypto: (safety?: boolean) => PkijsCryptoEngine | null;
+export const id_eContentType_TSTInfo: string;

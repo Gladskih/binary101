@@ -3,6 +3,7 @@
 export {
   Attribute,
   AttributeTypeAndValue,
+  AlgorithmIdentifier,
   BasicConstraints,
   Certificate,
   ContentInfo,
@@ -10,11 +11,14 @@ export {
   ExtKeyUsage,
   Extension,
   IssuerAndSerialNumber,
+  MessageImprint,
   RelativeDistinguishedNames,
   SignedAndUnsignedAttributes,
   SignedData,
   SignerInfo,
+  TSTInfo,
   Time,
+  id_eContentType_TSTInfo,
   getCrypto
 } from "pkijs";
 export { fromBER } from "asn1js";

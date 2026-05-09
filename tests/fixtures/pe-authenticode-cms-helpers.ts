@@ -18,6 +18,8 @@ export const CMS_CONTENT_TYPE_OID = "1.2.840.113549.1.9.3";
 export const CMS_MESSAGE_DIGEST_OID = "1.2.840.113549.1.9.4";
 export const CMS_SIGNING_TIME_OID = "1.2.840.113549.1.9.5";
 export const CMS_COUNTERSIGNATURE_OID = "1.2.840.113549.1.9.6";
+// Microsoft Authenticode RFC 3161 timestamp token unsigned attribute.
+export const AUTHENTICODE_RFC3161_TIMESTAMP_OID = "1.3.6.1.4.1.311.3.3.1";
 export const SPC_INDIRECT_DATA_OID = "1.3.6.1.4.1.311.2.1.4";
 export const CODE_SIGNING_EKU_OID = "1.3.6.1.5.5.7.3.3";
 export const TIME_STAMPING_EKU_OID = "1.3.6.1.5.5.7.3.8";

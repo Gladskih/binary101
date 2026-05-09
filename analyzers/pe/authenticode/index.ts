@@ -54,6 +54,17 @@ export interface AuthenticodeCounterSignatureInfo {
   message?: string;
 }
 
+export interface AuthenticodeTimestampTokenInfo {
+  index: number;
+  signerSubject?: string;
+  signerIssuer?: string;
+  signerSerialNumber?: string;
+  signatureVerified?: boolean;
+  messageDigestVerified?: boolean;
+  signingTime?: string;
+  message?: string;
+}
+
 export interface AuthenticodeSignerVerificationInfo {
   index: number;
   code?: number;
@@ -64,6 +75,7 @@ export interface AuthenticodeSignerVerificationInfo {
   signingTime?: string;
   certificatePathIndexes?: number[];
   countersignatures?: AuthenticodeCounterSignatureInfo[];
+  timestampTokens?: AuthenticodeTimestampTokenInfo[];
 }
 
 export type AuthenticodeCheckStatus = "pass" | "fail" | "unknown";

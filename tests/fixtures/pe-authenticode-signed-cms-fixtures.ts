@@ -2,17 +2,22 @@
 
 import * as asn1js from "asn1js";
 import {
+  AlgorithmIdentifier,
   Attribute,
   ContentInfo,
   EncapsulatedContentInfo,
   IssuerAndSerialNumber,
+  MessageImprint,
   SignedAndUnsignedAttributes,
   SignedData,
-  SignerInfo
+  SignerInfo,
+  TSTInfo,
+  id_eContentType_TSTInfo
 } from "../../analyzers/pe/authenticode/pkijs-runtime.js";
 import { computePeAuthenticodeDigest } from "../../analyzers/pe/authenticode/verify.js";
 import { createStrictAuthenticodeFixture } from "./pe-authenticode-fixtures.js";
 import {
+  AUTHENTICODE_RFC3161_TIMESTAMP_OID,
   CMS_CONTENT_TYPE_OID,
   CMS_COUNTERSIGNATURE_OID,
   CMS_MESSAGE_DIGEST_OID,
@@ -20,6 +25,7 @@ import {
   CODE_SIGNING_EKU_OID,
   KEY_USAGE_DIGITAL_SIGNATURE,
   KEY_USAGE_KEY_CERT_SIGN,
+  SHA256_OID,
   SPC_INDIRECT_DATA_OID,
   TIME_STAMPING_EKU_OID,
   createBasicConstraintsExtension,
@@ -121,6 +127,40 @@ const buildSignedAuthenticodeCmsPayload = async (fileDigestHex: string): Promise
     "SHA-256",
     toArrayBuffer(signerInfo.signature.valueBlock.valueHexView)
   );
+  const timestampInfo = new TSTInfo({
+    version: 1,
+    policy: "1.3.6.1.4.1.311.3.3.1",
+    messageImprint: new MessageImprint({
+      hashAlgorithm: new AlgorithmIdentifier({
+        algorithmId: SHA256_OID,
+        algorithmParams: new asn1js.Null()
+      }),
+      hashedMessage: new asn1js.OctetString({ valueHex: countersignatureDigest })
+    }),
+    serialNumber: new asn1js.Integer({ value: 4 }),
+    genTime: new Date("2024-01-01T00:06:00Z")
+  });
+  const timestampContent = new EncapsulatedContentInfo({
+    eContentType: id_eContentType_TSTInfo
+  });
+  timestampContent.eContent = new asn1js.OctetString({
+    valueHex: timestampInfo.toSchema().toBER(false)
+  });
+  const timestampSignedData = new SignedData({
+    version: 3,
+    encapContentInfo: timestampContent,
+    certificates: [timestampCertificate, rootCertificate]
+  });
+  timestampSignedData.signerInfos.push(
+    new SignerInfo({
+      version: 1,
+      sid: new IssuerAndSerialNumber({
+        issuer: timestampCertificate.issuer,
+        serialNumber: timestampCertificate.serialNumber
+      })
+    })
+  );
+  await timestampSignedData.sign(timestampKeys.privateKey, 0, "SHA-256");
   const countersignedAttrs = new SignedAndUnsignedAttributes({
     type: 0,
     attributes: [
@@ -155,7 +195,18 @@ const buildSignedAuthenticodeCmsPayload = async (fileDigestHex: string): Promise
   });
   signerInfo.unsignedAttrs = new SignedAndUnsignedAttributes({
     type: 1,
-    attributes: [new Attribute({ type: CMS_COUNTERSIGNATURE_OID, values: [countersignerInfo.toSchema()] })]
+    attributes: [
+      new Attribute({ type: CMS_COUNTERSIGNATURE_OID, values: [countersignerInfo.toSchema()] }),
+      new Attribute({
+        type: AUTHENTICODE_RFC3161_TIMESTAMP_OID,
+        values: [
+          new ContentInfo({
+            contentType: ContentInfo.SIGNED_DATA,
+            content: timestampSignedData.toSchema(true)
+          }).toSchema()
+        ]
+      })
+    ]
   });
 
   return new Uint8Array(

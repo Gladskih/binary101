@@ -5,6 +5,7 @@ import type {
   AuthenticodeInfo,
   AuthenticodeSignerInfo,
   AuthenticodeSignerVerificationInfo,
+  AuthenticodeTimestampTokenInfo,
   ParsedWinCertificate,
 } from "../../analyzers/pe/authenticode/index.js";
 import {
@@ -77,6 +78,32 @@ const renderCountersignatureNode = (
   );
 };
 
+const renderTimestampTokenNode = (
+  auth: AuthenticodeInfo,
+  signerLabel: string,
+  token: AuthenticodeTimestampTokenInfo
+): string => {
+  const tokenLabel = `${signerLabel} RFC3161 timestamp ${token.index + 1}`;
+  return renderTreeNode(
+    `RFC3161 timestamp ${token.index + 1}: ${token.signerSubject || "Subject absent"}`,
+    filterBadges([
+      createRoleBadge("Timestamp", "countersignature"),
+      createCheckBadge(auth, `${tokenLabel}-signature`, "Sig"),
+      createCheckBadge(auth, `${tokenLabel}-message-imprint`, "Digest"),
+      createCheckBadge(auth, `${tokenLabel}-certificate`, "Cert")
+    ]),
+    [
+      renderTreeMeta("Subject", token.signerSubject),
+      renderTreeMeta("Issuer", token.signerIssuer),
+      renderTreeMeta("Serial", token.signerSerialNumber),
+      renderTreeMeta("Time", token.signingTime || "Absent"),
+      renderTreeMeta("Message", token.message)
+    ],
+    undefined,
+    formatDistinguishedNameTooltip(token.signerSubject)
+  );
+};
+
 const renderSignerNode = (
   auth: AuthenticodeInfo,
   signer: AuthenticodeSignerInfo | undefined,
@@ -117,6 +144,9 @@ const renderSignerNode = (
       ),
       ...(signerVerification?.countersignatures?.map(counter =>
         renderCountersignatureNode(auth, signerLabel, counter)
+      ) ?? []),
+      ...(signerVerification?.timestampTokens?.map(token =>
+        renderTimestampTokenNode(auth, signerLabel, token)
       ) ?? [])
     ].join(""),
     formatDistinguishedNameTooltip(signerCertificate?.subject)

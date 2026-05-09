@@ -8,6 +8,7 @@ import type {
 import type { AuthenticodeTrustStoreSnapshot } from "./trust-store.js";
 import { Certificate, ContentInfo, SignedData } from "./pkijs-runtime.js";
 import { readCountersignatures } from "./pkijs-countersignatures.js";
+import { readRfc3161TimestampTokens } from "./pkijs-rfc3161-timestamps.js";
 import { addExtendedKeyUsageCheck, addSigningKeyUsageCheck, attachPathChecks } from "./pkijs-path.js";
 import { evaluateAuthenticodeTrustPolicy } from "./trust-policy.js";
 import {
@@ -154,6 +155,10 @@ export const verifyPkcs7Signatures = async (
           signingTime && countersignature.signingTime ? `${signingTime} <= ${countersignature.signingTime}` : "One of the signing times is absent."
         );
       });
+    }
+    const timestampTokens = await readRfc3161TimestampTokens(signerLabel, signer, checks, warnings);
+    if (timestampTokens?.length) {
+      signerVerification.timestampTokens = timestampTokens;
     }
     signerVerifications.push(signerVerification);
   }
