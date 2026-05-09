@@ -140,7 +140,8 @@ const renderReferenceValidityBadge = (
   if (!referenceValidity) return undefined;
   const referenceLabel = referenceValidity.id.includes("signing time")
     ? "At sign"
-    : referenceValidity.id.includes("countersignature time")
+    : referenceValidity.id.includes("countersignature time") ||
+        referenceValidity.id.includes("timestamp time")
       ? "At ts"
       : "At ref";
   return createStatusBadge(

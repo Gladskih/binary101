@@ -44,6 +44,11 @@ const asDerBytes = (value: unknown): Uint8Array | undefined => {
   return typeof encoder === "function" ? new Uint8Array(encoder.call(value, false)) : undefined;
 };
 
+const asSchemaDerBytes = (value: unknown): Uint8Array | undefined => {
+  const schema = (value as { toSchema?: () => unknown } | null)?.toSchema?.();
+  return asDerBytes(schema);
+};
+
 const bytesToBase64 = (bytes: Uint8Array): string => {
   let binary = "";
   const chunkSize = 0x8000;
@@ -68,7 +73,7 @@ const describeCertificate = (certificate: Certificate): X509CertificateInfo => {
   const subject = formatName(certificate.subject);
   const issuer = formatName(certificate.issuer);
   const serialNumber = getByteView(certificate.serialNumber);
-  const derBytes = asDerBytes(certificate);
+  const derBytes = asSchemaDerBytes(certificate);
   if (subject) info.subject = subject;
   if (issuer) info.issuer = issuer;
   if (serialNumber) info.serialNumber = bufferToHex(serialNumber);

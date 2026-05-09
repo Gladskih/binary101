@@ -91,7 +91,8 @@ void test("renderAuthenticodeTree renders signer and countersignature certificat
                     subject: "CN=RFC3161 Timestamp Leaf",
                     issuer: "CN=RFC3161 Timestamp CA",
                     notBefore: "2024-01-01T00:00:00Z",
-                    notAfter: "2028-01-01T00:00:00Z"
+                    notAfter: "2028-01-01T00:00:00Z",
+                    derBase64: "BAUG"
                   },
                   {
                     subject: "CN=RFC3161 Timestamp CA",
@@ -115,6 +116,7 @@ void test("renderAuthenticodeTree renders signer and countersignature certificat
   assert.ok(html.includes("Countersignature 1"));
   assert.ok(html.includes("RFC3161 timestamp 1"));
   assert.ok(html.includes("Certificate &#8470;1: CN=RFC3161 Timestamp Leaf"));
+  assert.ok(html.includes("authenticode-certificate-1.cer"));
   assert.ok(html.includes("Timestamp cert"));
   assert.ok(html.includes("Root"));
   assert.ok(html.includes("Sig"));
