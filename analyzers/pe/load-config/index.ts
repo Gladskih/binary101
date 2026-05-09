@@ -17,12 +17,48 @@ export type PeLoadConfigCodeIntegrity = {
   Reserved: number;
 };
 
+export type PeLoadConfigCheckStatus = "pass" | "fail" | "info";
+
+export type PeLoadConfigCheck = {
+  status: PeLoadConfigCheckStatus;
+  title: string;
+  detail: string;
+  source?: string;
+};
+
+export type PeLoadConfigTableKind =
+  | "guardFid"
+  | "guardIat"
+  | "guardLongJump"
+  | "guardEhContinuation"
+  | "safeSeh";
+
+export type PeLoadConfigTableEntry = {
+  index: number;
+  rva: number;
+  metadataBytes?: number[];
+  gfidsFlags?: string[];
+  unknownGfidsFlagBits?: number;
+};
+
+export type PeLoadConfigTable = {
+  kind: PeLoadConfigTableKind;
+  name: string;
+  tableVa: bigint;
+  tableRva: number | null;
+  declaredCount: number;
+  entrySize: number;
+  entries: PeLoadConfigTableEntry[];
+  truncated: boolean;
+  warnings?: string[];
+};
+
 export type PeLoadConfigTables = {
-  guardFidRvas?: number[];
-  guardEhContinuationRvas?: number[];
-  guardLongJumpTargetRvas?: number[];
-  guardIatRvas?: number[];
-  safeSehHandlerRvas?: number[];
+  guardFid?: PeLoadConfigTable;
+  guardEhContinuation?: PeLoadConfigTable;
+  guardLongJumpTarget?: PeLoadConfigTable;
+  guardIat?: PeLoadConfigTable;
+  safeSehHandler?: PeLoadConfigTable;
 };
 
 export interface PeLoadConfig {
@@ -78,6 +114,7 @@ export interface PeLoadConfig {
   GuardFlags: number;
   tables?: PeLoadConfigTables;
   dynamicRelocations?: PeDynamicRelocations | null;
+  checks?: PeLoadConfigCheck[];
   warnings?: string[];
 }
 

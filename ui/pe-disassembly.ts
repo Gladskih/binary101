@@ -180,8 +180,9 @@ export const createPeDisassemblyController = (
         ? windowsPe.tls.CallbackRvas.filter(rva => Number.isSafeInteger(rva) && rva > 0).map(rva => rva >>> 0)
         : [];
 
-      const guardCFFunctionRvas = windowsPe?.loadcfg
-        ? await readGuardCFFunctionTableRvas(
+      const guardCFFunctionRvas = windowsPe?.loadcfg?.tables?.guardFid?.entries.map(entry => entry.rva) ??
+        (windowsPe?.loadcfg
+          ? await readGuardCFFunctionTableRvas(
             reader,
             pe.rvaToOff,
             windowsPe.opt.ImageBase,
@@ -189,12 +190,13 @@ export const createPeDisassemblyController = (
             windowsPe.loadcfg.GuardCFFunctionCount,
             windowsPe.loadcfg.GuardFlags
           ).catch(() => [])
-        : [];
+          : []);
 
       const safeSehHandlerRvas =
-        pe.coff.Machine === IMAGE_FILE_MACHINE_I386 &&
-        windowsOpt?.Magic === PE32_OPTIONAL_HEADER_MAGIC &&
-        windowsPe?.loadcfg
+        windowsPe?.loadcfg?.tables?.safeSehHandler?.entries.map(entry => entry.rva) ??
+        (pe.coff.Machine === IMAGE_FILE_MACHINE_I386 &&
+          windowsOpt?.Magic === PE32_OPTIONAL_HEADER_MAGIC &&
+          windowsPe?.loadcfg
           ? await readSafeSehHandlerTableRvas(
               reader,
               pe.rvaToOff,
@@ -202,7 +204,7 @@ export const createPeDisassemblyController = (
               windowsPe.loadcfg.SEHandlerTable,
               windowsPe.loadcfg.SEHandlerCount
             ).catch(() => [])
-          : [];
+          : []);
 
       const extraEntrypoints: Array<{ source: string; rvas: number[] }> = [];
       const addPointerSeed = (source: string, pointerVa: bigint | undefined): void => {
@@ -220,8 +222,10 @@ export const createPeDisassemblyController = (
         addPointerSeed("Guard memcpy function", windowsPe.loadcfg.GuardMemcpyFunctionPointer);
       }
 
-      const guardEhContinuationRvas = windowsPe?.loadcfg
-        ? await readGuardEhContinuationTableRvas(
+      const guardEhContinuationRvas =
+        windowsPe?.loadcfg?.tables?.guardEhContinuation?.entries.map(entry => entry.rva) ??
+        (windowsPe?.loadcfg
+          ? await readGuardEhContinuationTableRvas(
             reader,
             pe.rvaToOff,
             windowsPe.opt.ImageBase,
@@ -229,13 +233,15 @@ export const createPeDisassemblyController = (
             windowsPe.loadcfg.GuardEHContinuationCount,
             windowsPe.loadcfg.GuardFlags
           ).catch(() => [])
-        : [];
+          : []);
       if (guardEhContinuationRvas.length) {
         extraEntrypoints.push({ source: "GuardEH continuation", rvas: guardEhContinuationRvas });
       }
 
-      const guardLongJumpTargetRvas = windowsPe?.loadcfg
-        ? await readGuardLongJumpTargetTableRvas(
+      const guardLongJumpTargetRvas =
+        windowsPe?.loadcfg?.tables?.guardLongJumpTarget?.entries.map(entry => entry.rva) ??
+        (windowsPe?.loadcfg
+          ? await readGuardLongJumpTargetTableRvas(
             reader,
             pe.rvaToOff,
             windowsPe.opt.ImageBase,
@@ -243,7 +249,7 @@ export const createPeDisassemblyController = (
             windowsPe.loadcfg.GuardLongJumpTargetCount,
             windowsPe.loadcfg.GuardFlags
           ).catch(() => [])
-        : [];
+          : []);
       if (guardLongJumpTargetRvas.length) {
         extraEntrypoints.push({ source: "Guard longjmp target", rvas: guardLongJumpTargetRvas });
       }

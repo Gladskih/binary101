@@ -201,14 +201,14 @@ export const formatSectionCharacteristicFlags = (characteristics: number): strin
 };
 
 export const GUARD_FLAGS: OptionEntry[] = [
-  [0x00000100, "CF_INSTRUMENTED"],
-  [0x00000200, "CFW_INSTRUMENTED"],
-  [0x00000400, "CF_FUNCTION_TABLE_PRESENT"],
-  [0x00000800, "SECURITY_COOKIE_UNUSED"],
-  [0x00001000, "PROTECT_DELAYLOAD_IAT"],
-  [0x00002000, "DELAYLOAD_IAT_IN_ITS_OWN_SECTION"],
-  [0x00004000, "CF_EXPORT_SUPPRESSION_INFO_PRESENT"],
-  [0x00008000, "CF_ENABLE_EXPORT_SUPPRESSION"],
-  [0x00010000, "CF_LONGJUMP_TABLE_PRESENT"],
-  [0x00400000, "EH_CONTINUATION_TABLE_PRESENT"]
+  [0x00000100, "CF_INSTRUMENTED", "Module contains compiler-inserted CFG checks"],
+  [0x00000200, "CFW_INSTRUMENTED", "Module contains control-flow and write-integrity checks"],
+  [0x00000400, "CF_FUNCTION_TABLE_PRESENT", "GFIDS valid call-target table is present"],
+  [0x00000800, "SECURITY_COOKIE_UNUSED", "Module does not use the /GS security cookie"],
+  [0x00001000, "PROTECT_DELAYLOAD_IAT", "Delay-load IAT should be protected read-only"],
+  [0x00002000, "DELAYLOAD_IAT_IN_ITS_OWN_SECTION", "Delay-load IAT is isolated in its own section"],
+  [0x00004000, "CF_EXPORT_SUPPRESSION_INFO_PRESENT", "Export-suppression metadata is present"],
+  [0x00008000, "CF_ENABLE_EXPORT_SUPPRESSION", "Process opts into CFG export suppression"],
+  [0x00010000, "CF_LONGJUMP_TABLE_PRESENT", "Longjmp target table is present"],
+  [0x00400000, "EH_CONTINUATION_TABLE_PRESENT", "EH continuation target table is present"]
 ];

@@ -3,71 +3,57 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderLoadConfig } from "../../renderers/pe/load-config.js";
+import { createPeLoadConfigResult } from "../../analyzers/pe/load-config/result.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
-import type { PeLoadConfig } from "../../analyzers/pe/load-config/index.js";
 
-const createLoadConfig = (): PeLoadConfig => ({
-  Size: 0,
-  TimeDateStamp: 0,
-  Major: 0,
-  Minor: 0,
-  GlobalFlagsClear: 0,
-  GlobalFlagsSet: 0,
-  CriticalSectionDefaultTimeout: 0,
-  DeCommitFreeBlockThreshold: 0n,
-  DeCommitTotalFreeThreshold: 0n,
-  LockPrefixTable: 0n,
-  MaximumAllocationSize: 0n,
-  VirtualMemoryThreshold: 0n,
-  ProcessHeapFlags: 0,
-  ProcessAffinityMask: 0n,
-  CSDVersion: 0,
-  DependentLoadFlags: 0,
-  EditList: 0n,
-  SecurityCookie: 0n,
-  SEHandlerTable: 0n,
-  SEHandlerCount: 0,
-  GuardCFCheckFunctionPointer: 0n,
-  GuardCFDispatchFunctionPointer: 0n,
-  GuardCFFunctionTable: 0n,
-  GuardCFFunctionCount: 0,
-  CodeIntegrity: { Flags: 0, Catalog: 0, CatalogOffset: 0, Reserved: 0 },
-  GuardAddressTakenIatEntryTable: 0n,
-  GuardAddressTakenIatEntryCount: 0,
-  GuardLongJumpTargetTable: 0n,
-  GuardLongJumpTargetCount: 0,
-  DynamicValueRelocTable: 0n,
-  CHPEMetadataPointer: 0n,
-  GuardRFFailureRoutine: 0n,
-  GuardRFFailureRoutineFunctionPointer: 0n,
-  DynamicValueRelocTableOffset: 0,
-  DynamicValueRelocTableSection: 0,
-  Reserved2: 0,
-  GuardRFVerifyStackPointerFunctionPointer: 0n,
-  HotPatchTableOffset: 0,
-  Reserved3: 0,
-  EnclaveConfigurationPointer: 0n,
-  VolatileMetadataPointer: 0n,
-  GuardEHContinuationTable: 0n,
-  GuardEHContinuationCount: 0,
-  GuardXFGCheckFunctionPointer: 0n,
-  GuardXFGDispatchFunctionPointer: 0n,
-  GuardXFGTableDispatchFunctionPointer: 0n,
-  CastGuardOsDeterminedFailureMode: 0n,
-  GuardMemcpyFunctionPointer: 0n,
-  UmaFunctionPointers: 0n,
-  GuardFlags: 0
-});
+// Microsoft PE format documents 0x00400000 as the historical PE32 executable ImageBase.
+const PE32_DEFAULT_IMAGE_BASE = 0x400000n;
+// Synthetic RVAs stay 16-byte aligned because GFIDS checks treat target RVAs as function starts.
+const CFG_TABLE_RVA = 0x1000;
+const TABLE_ENTRY_COUNT_OVER_RENDER_LIMIT = 513;
+
+const makePe = (
+  loadcfg: ReturnType<typeof createPeLoadConfigResult>,
+  opt: PeWindowsParseResult["opt"] = {
+    Magic: 0x10b,
+    ImageBase: PE32_DEFAULT_IMAGE_BASE
+  } as PeWindowsParseResult["opt"]
+): PeWindowsParseResult => ({
+  opt,
+  sections: [],
+  loadcfg
+}) as unknown as PeWindowsParseResult;
 
 void test("renderLoadConfig renders GuardFlags names and CFG function-table entry size", () => {
-  const pe = {
-    opt: { Magic: 0x10b, ImageBase: 0x400000n },
-    loadcfg: {
-      ...createLoadConfig(),
-      GuardFlags: 0x30417500,
-      CodeIntegrity: { Flags: 0, Catalog: 0, CatalogOffset: 0, Reserved: 0 }
+  const loadcfg = createPeLoadConfigResult();
+  Object.assign(loadcfg, {
+    // Fixture combines documented GuardFlags, including high-nibble stride 3 for 7-byte GFIDS entries.
+    GuardFlags: 0x30417500,
+    CodeIntegrity: { Flags: 0, Catalog: 0, CatalogOffset: 0, Reserved: 0 },
+    checks: [{
+      status: "fail",
+      title: "CFG header agreement",
+      detail: "IMAGE_DLLCHARACTERISTICS_GUARD_CF and IMAGE_GUARD_CF_INSTRUMENTED should agree."
+    }],
+    tables: {
+      guardFid: {
+        kind: "guardFid",
+        name: "GuardCFFunctionTable",
+        tableVa: PE32_DEFAULT_IMAGE_BASE + BigInt(CFG_TABLE_RVA),
+        tableRva: CFG_TABLE_RVA,
+        declaredCount: 1,
+        entrySize: 5,
+        truncated: false,
+        entries: [{
+          index: 0,
+          rva: CFG_TABLE_RVA + 0x10,
+          metadataBytes: [0x03],
+          gfidsFlags: ["FID_SUPPRESSED", "EXPORT_SUPPRESSED"]
+        }]
+      }
     }
-  } as unknown as PeWindowsParseResult;
+  });
+  const pe = makePe(loadcfg);
 
   const out: string[] = [];
   renderLoadConfig(pe, out);
@@ -82,4 +68,70 @@ void test("renderLoadConfig renders GuardFlags names and CFG function-table entr
   assert.ok(html.includes("DELAYLOAD_IAT_IN_ITS_OWN_SECTION"));
   assert.ok(html.includes("EH_CONTINUATION_TABLE_PRESENT"));
   assert.ok(html.includes("CF_FUNCTION_TABLE_SIZE_7BYTES"));
+  assert.ok(html.includes("Load Config cross-checks"));
+  assert.ok(html.includes("CFG header agreement"));
+  assert.ok(html.includes("Module contains compiler-inserted CFG checks"));
+  assert.ok(html.includes("GuardCFFunctionTable (1/1)"));
+  assert.ok(html.includes("FID_SUPPRESSED, EXPORT_SUPPRESSED"));
+});
+
+void test("renderLoadConfig caps large decoded Load Config tables", () => {
+  const loadcfg = createPeLoadConfigResult();
+  loadcfg.tables = {
+    guardFid: {
+      kind: "guardFid",
+      name: "GuardCFFunctionTable",
+      tableVa: PE32_DEFAULT_IMAGE_BASE + BigInt(CFG_TABLE_RVA),
+      tableRva: CFG_TABLE_RVA,
+      declaredCount: TABLE_ENTRY_COUNT_OVER_RENDER_LIMIT,
+      entrySize: 4,
+      truncated: false,
+      entries: Array.from({ length: TABLE_ENTRY_COUNT_OVER_RENDER_LIMIT }, (_, index) => ({
+        index,
+        rva: CFG_TABLE_RVA + index * 0x10
+      }))
+    }
+  };
+  const pe = makePe(loadcfg);
+
+  const out: string[] = [];
+  renderLoadConfig(pe, out);
+  const html = out.join("");
+
+  // Renderer contract: large address tables show the first 512 rows and summarize hidden rows.
+  assert.ok(html.includes("Showing first 512 entries; 1 hidden."));
+  assert.ok(html.includes(
+    `GuardCFFunctionTable (${TABLE_ENTRY_COUNT_OVER_RENDER_LIMIT}/${TABLE_ENTRY_COUNT_OVER_RENDER_LIMIT})`
+  ));
+});
+
+void test("renderLoadConfig labels known dynamic relocation symbols", () => {
+  const loadcfg = createPeLoadConfigResult();
+  loadcfg.dynamicRelocations = {
+    version: 2, // Dynamic relocation v2 rows include symbol and fixup payload columns.
+    dataSize: 20,
+    entries: [{
+      kind: "v2",
+      headerSize: 24,
+      fixupInfoSize: 4,
+      symbol: 6n, // LLVM COFF IMAGE_DYNAMIC_RELOCATION_ARM64X currently uses symbol value 6.
+      symbolGroup: 0,
+      flags: 0,
+      availableBytes: 4
+    }]
+  };
+  const pe = makePe(
+    loadcfg,
+    {
+      Magic: 0x20b, // Microsoft PE Optional Header magic for PE32+.
+      ImageBase: 0x140000000n // Common PE32+ fixture base used to exercise 64-bit VA rendering.
+    } as PeWindowsParseResult["opt"]
+  );
+
+  const out: string[] = [];
+  renderLoadConfig(pe, out);
+  const html = out.join("");
+
+  assert.ok(html.includes("ARM64X"));
+  assert.ok(html.includes("complete"));
 });

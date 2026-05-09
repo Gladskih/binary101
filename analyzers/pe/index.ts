@@ -3,9 +3,10 @@ import { createFileRangeReader } from "../file-range-reader.js";
 import { isPeWindowsCore, parsePeHeaders } from "./core/index.js";
 import { computePeAuthenticodeDigest, verifyAuthenticodeWithBundledTrust } from "./authenticode/verify.js";
 import { parseDebugDirectory } from "./debug/directory.js";
-import { parseLoadConfigDirectory32, parseLoadConfigDirectory64, type PeLoadConfig, type PeLoadConfigTables } from "./load-config/index.js";
-import { readGuardAddressTakenIatEntryTableRvas, readGuardCFFunctionTableRvas, readGuardEhContinuationTableRvas, readGuardLongJumpTargetTableRvas, readSafeSehHandlerTableRvas } from "./load-config/tables.js";
-import { collectLoadConfigWarnings } from "./load-config/warnings.js";
+import { parseLoadConfigDirectory32, parseLoadConfigDirectory64 } from "./load-config/index.js";
+import { readSafeSehHandlerTable } from "./load-config/tables.js";
+import { parseAndEnrichLoadConfig } from "./load-config/enrich.js";
+import { collectLoadConfigChecks } from "./load-config/checks.js";
 import { parseImportDirectory32, parseImportDirectory64 } from "./imports/index.js";
 import { parseExportDirectory } from "./directories/exports.js";
 import { parseTlsDirectory32, parseTlsDirectory64 } from "./directories/tls.js";
@@ -57,11 +58,6 @@ const appendUniqueWarnings = (existing: string[] | undefined, messages: string[]
 const digestCacheKey = (algorithm: AlgorithmIdentifier): string =>
   typeof algorithm === "string" ? algorithm : JSON.stringify(algorithm);
 
-const mergeLoadConfigWarnings = (loadcfg: PeLoadConfig, messages: string[]): void => {
-  const merged = appendUniqueWarnings(loadcfg.warnings, messages);
-  if (merged?.length) loadcfg.warnings = merged;
-};
-
 const withLayoutWarnings = <T extends PeParseResult>(result: T, fileSize: number): T => {
   const mergedWarnings = appendUniqueWarnings(result.warnings, collectPeLayoutWarnings(result, fileSize));
   return mergedWarnings?.length ? { ...result, warnings: mergedWarnings } : result;
@@ -86,7 +82,7 @@ export async function parsePe(
         parseTlsDirectory: parseTlsDirectory64,
         parseDelayImports: parseDelayImports64,
         parseDynamicRelocationsFromLoadConfig: parseDynamicRelocationsFromLoadConfig64,
-        readSafeSehHandlerTableRvas: null
+        readSafeSehHandlerTable: null
       }
     : {
         parseLoadConfigDirectory: parseLoadConfigDirectory32,
@@ -94,118 +90,24 @@ export async function parsePe(
         parseTlsDirectory: parseTlsDirectory32,
         parseDelayImports: parseDelayImports32,
         parseDynamicRelocationsFromLoadConfig: parseDynamicRelocationsFromLoadConfig32,
-        readSafeSehHandlerTableRvas:
+        readSafeSehHandlerTable:
           // Microsoft PE format: SafeSEH applies only to IMAGE_FILE_MACHINE_I386 PE32 images.
-          coff.Machine === IMAGE_FILE_MACHINE_I386 ? readSafeSehHandlerTableRvas : null
-      };
+          coff.Machine === IMAGE_FILE_MACHINE_I386 ? readSafeSehHandlerTable : null
+  };
 
   const debugResult = await parseDebugDirectory(reader, dataDirs, rvaToOff);
-  const loadcfg = await peVariant.parseLoadConfigDirectory(reader, dataDirs, rvaToOff);
-  if (loadcfg) {
-    const warnings = collectLoadConfigWarnings(file.size, rvaToOff, ImageBase, opt.SizeOfImage, loadcfg);
-    mergeLoadConfigWarnings(loadcfg, warnings);
-
-    const tables: PeLoadConfigTables = {};
-    const guardFlags = loadcfg.GuardFlags;
-    const addLoadConfigWarning = (message: string): void => {
-      mergeLoadConfigWarnings(loadcfg, [message]);
-    };
-
-    if (Number.isSafeInteger(loadcfg.GuardCFFunctionCount) && loadcfg.GuardCFFunctionCount > 0) {
-      try {
-        tables.guardFidRvas = await readGuardCFFunctionTableRvas(
-          reader,
-          rvaToOff,
-          ImageBase,
-          loadcfg.GuardCFFunctionTable,
-          loadcfg.GuardCFFunctionCount,
-          guardFlags
-        );
-      } catch (error) {
-        addLoadConfigWarning(`LOAD_CONFIG: failed to read GuardCFFunctionTable (${String(error)}).`);
-      }
-    }
-
-    if (Number.isSafeInteger(loadcfg.GuardEHContinuationCount) && loadcfg.GuardEHContinuationCount > 0) {
-      try {
-        tables.guardEhContinuationRvas = await readGuardEhContinuationTableRvas(
-          reader,
-          rvaToOff,
-          ImageBase,
-          loadcfg.GuardEHContinuationTable,
-          loadcfg.GuardEHContinuationCount,
-          guardFlags
-        );
-      } catch (error) {
-        addLoadConfigWarning(`LOAD_CONFIG: failed to read GuardEHContinuationTable (${String(error)}).`);
-      }
-    }
-
-    if (Number.isSafeInteger(loadcfg.GuardLongJumpTargetCount) && loadcfg.GuardLongJumpTargetCount > 0) {
-      try {
-        tables.guardLongJumpTargetRvas = await readGuardLongJumpTargetTableRvas(
-          reader,
-          rvaToOff,
-          ImageBase,
-          loadcfg.GuardLongJumpTargetTable,
-          loadcfg.GuardLongJumpTargetCount,
-          guardFlags
-        );
-      } catch (error) {
-        addLoadConfigWarning(`LOAD_CONFIG: failed to read GuardLongJumpTargetTable (${String(error)}).`);
-      }
-    }
-
-    if (Number.isSafeInteger(loadcfg.GuardAddressTakenIatEntryCount) && loadcfg.GuardAddressTakenIatEntryCount > 0) {
-      try {
-        tables.guardIatRvas = await readGuardAddressTakenIatEntryTableRvas(
-          reader,
-          rvaToOff,
-          ImageBase,
-          loadcfg.GuardAddressTakenIatEntryTable,
-          loadcfg.GuardAddressTakenIatEntryCount,
-          guardFlags
-        );
-      } catch (error) {
-        addLoadConfigWarning(`LOAD_CONFIG: failed to read GuardAddressTakenIatEntryTable (${String(error)}).`);
-      }
-    }
-
-    if (
-      peVariant.readSafeSehHandlerTableRvas &&
-      Number.isSafeInteger(loadcfg.SEHandlerCount) &&
-      loadcfg.SEHandlerCount > 0
-    ) {
-      try {
-        tables.safeSehHandlerRvas = await peVariant.readSafeSehHandlerTableRvas(
-          reader,
-          rvaToOff,
-          ImageBase,
-          loadcfg.SEHandlerTable,
-          loadcfg.SEHandlerCount
-        );
-      } catch (error) {
-        addLoadConfigWarning(`LOAD_CONFIG: failed to read SEHandlerTable (${String(error)}).`);
-      }
-    }
-
-    if (Object.keys(tables).length) {
-      loadcfg.tables = tables;
-    }
-
-    try {
-      loadcfg.dynamicRelocations = await peVariant.parseDynamicRelocationsFromLoadConfig(
-        reader,
-        sections,
-        rvaToOff,
-        ImageBase,
-        loadcfg
-      );
-    } catch (error) {
-      addLoadConfigWarning(`LOAD_CONFIG: failed to read dynamic relocations (${String(error)}).`);
-      loadcfg.dynamicRelocations = null;
-    }
-  }
+  const loadcfg = await parseAndEnrichLoadConfig(
+    reader,
+    file.size,
+    dataDirs,
+    rvaToOff,
+    ImageBase,
+    opt.SizeOfImage,
+    sections,
+    peVariant.parseLoadConfigDirectory,
+    peVariant.parseDynamicRelocationsFromLoadConfig,
+    peVariant.readSafeSehHandlerTable
+  );
   const importResult = await peVariant.parseImportDirectory(reader, dataDirs, rvaToOff);
   const exportsInfo = await parseExportDirectory(reader, dataDirs, rvaToOff);
   const tls = await peVariant.parseTlsDirectory(reader, dataDirs, rvaToOff, ImageBase);
@@ -249,6 +151,16 @@ export async function parsePe(
     loadcfg,
     sections
   );
+  if (loadcfg) {
+    loadcfg.checks = collectLoadConfigChecks(
+      loadcfg,
+      opt,
+      coff.Machine,
+      sections,
+      delayImports?.entries.length ?? 0,
+      importLinking
+    );
+  }
   const architecture = parseArchitectureDirectory(dataDirs);
   const globalPtr = parseGlobalPtrDirectory(dataDirs, rvaToOff);
   const manifestValidation = analyzeManifestConsistency(resources, coff.Machine, clr);

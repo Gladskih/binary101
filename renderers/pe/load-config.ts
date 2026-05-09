@@ -1,34 +1,29 @@
 "use strict";
 
 import { hex, isoOrDash } from "../../binary-utils.js";
-import { dd, safe } from "../../html-utils.js";
-import { GUARD_FLAGS } from "../../analyzers/pe/constants.js";
+import { dd as renderDefinitionRow, safe } from "../../html-utils.js";
 import {
   PE32_PLUS_OPTIONAL_HEADER_MAGIC
 } from "../../analyzers/pe/optional-header/magic.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
-import type { PeLoadConfig } from "../../analyzers/pe/load-config/index.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
+import {
+  getDynamicRelocationSymbolName,
+  renderLoadConfigAddressTable,
+  renderLoadConfigChecks,
+  renderLoadConfigGuardFlags
+} from "./load-config-widgets.js";
 const formatPointerHex = (value: bigint, width: number): string =>
   `0x${value.toString(16).padStart(width, "0")}`;
 const compareWideInt = (left: bigint, right: bigint): number =>
   left === right ? 0 : left < right ? -1 : 1;
 const formatWideHex = (value: bigint): string => `0x${value.toString(16)}`;
 
-const renderGuardFlags = (lc: PeLoadConfig, out: string[]): void => {
-  if (typeof lc.GuardFlags !== "number") return;
-  const guardFlags = lc.GuardFlags >>> 0;
-  const stride = (guardFlags >>> 28) & 0xf;
-  const flags = GUARD_FLAGS.filter(([bit]) => (guardFlags & bit) !== 0).map(([, name]) => name);
-  if (stride > 0) flags.push(`CF_FUNCTION_TABLE_SIZE_${4 + stride}BYTES`);
-  out.push(
-    dd(
-      "GuardFlags",
-      guardFlags ? hex(guardFlags, 8) : "0",
-      flags.length ? flags.join(", ") : "No CFG-related flags set."
-    )
-  );
-};
+const valueWithNote = (valueHtml: string, note: string): string =>
+  `${valueHtml}<div class="smallNote" style="margin:0">${safe(note)}</div>`;
+
+const dd = (label: string, valueHtml: string, tooltip?: string | null): string =>
+  renderDefinitionRow(label, tooltip ? valueWithNote(valueHtml, tooltip) : valueHtml, tooltip);
 
 export function renderLoadConfig(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.loadcfg) return;
@@ -38,33 +33,11 @@ export function renderLoadConfig(pe: PeWindowsParseResult, out: string[]): void 
   const formatVa = (value: bigint): string =>
     value === 0n ? "-" : formatPointerHex(value, pointerWidth);
 
-  const formatRvaAsVa = (rva: number): string => {
-    if (!Number.isSafeInteger(rva) || rva <= 0) return "-";
-    return formatPointerHex(imageBase + BigInt(rva >>> 0), pointerWidth);
-  };
-
-  const renderAddressList = (title: string, rvas: number[], note?: string): void => {
-    const unique = [...new Set(rvas.map(rva => rva >>> 0))];
-    unique.sort((a, b) => a - b);
-    out.push(
-      `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">${safe(
-        `${title} (${unique.length})`
-      )}</summary>`
-    );
-    if (note) {
-      out.push(`<div class="smallNote" style="margin:.35rem 0 0 0">${safe(note)}</div>`);
-    }
-    out.push(
-      `<pre style="margin:.35rem 0 0 0;padding:.5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg);white-space:pre;overflow:auto">${safe(
-        unique.map(rva => formatRvaAsVa(rva)).join("\n")
-      )}</pre></details>`
-    );
-  };
-
   out.push(renderPeSectionStart("Load Config", `v${lc.Major}.${lc.Minor}`));
   if (lc.warnings?.length) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(lc.warnings.join("; "))}</div>`);
   }
+  out.push(renderLoadConfigChecks(lc));
   out.push(`<dl>`);
   out.push(dd("Size", hex(lc.Size, 8), "Structure size of IMAGE_LOAD_CONFIG_DIRECTORY."));
   out.push(dd("TimeDateStamp", isoOrDash(lc.TimeDateStamp), "Build timestamp for load config data."));
@@ -227,7 +200,7 @@ export function renderLoadConfig(pe: PeWindowsParseResult, out: string[]): void 
   );
   out.push(dd("GuardMemcpyFunctionPointer", formatVa(lc.GuardMemcpyFunctionPointer), "CFG: guard memcpy function pointer used by some toolchains/runtime checks."));
   out.push(dd("UmaFunctionPointers", formatVa(lc.UmaFunctionPointers), "Pointer to UMA function pointers (undocumented)."));
-  renderGuardFlags(lc, out);
+  out.push(renderDefinitionRow("GuardFlags", renderLoadConfigGuardFlags(lc), "Control Flow Guard related flags."));
   out.push(`</dl>`);
 
   if (lc.dynamicRelocations) {
@@ -253,38 +226,67 @@ export function renderLoadConfig(pe: PeWindowsParseResult, out: string[]): void 
     out.push(`</dl>`);
     if (dr.entries.length) {
       out.push(
-        `<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Kind</th><th>Symbol</th><th>Size</th><th>Available</th></tr></thead><tbody>`
+        `<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Kind</th><th>Symbol</th><th>Name</th><th>Size</th><th>Available</th><th>Status</th></tr></thead><tbody>`
       );
       dr.entries.forEach((entry, index) => {
         const kind = entry.kind;
         const symbol = entry.symbol ? formatWideHex(entry.symbol) : "-";
+        const symbolName = entry.symbol ? getDynamicRelocationSymbolName(entry.symbol) : "-";
         const size = entry.kind === "v1" ? hex(entry.baseRelocSize, 8) : hex(entry.fixupInfoSize, 8);
         const available = hex(entry.availableBytes, 8);
-        out.push(`<tr><td>${index + 1}</td><td>${safe(kind)}</td><td>${safe(symbol)}</td><td>${safe(size)}</td><td>${safe(available)}</td></tr>`);
+        const complete =
+          entry.kind === "v1"
+            ? entry.availableBytes >= entry.baseRelocSize
+            : entry.availableBytes >= entry.fixupInfoSize;
+        out.push(
+          `<tr><td>${index + 1}</td><td>${safe(kind)}</td><td>${safe(symbol)}</td>` +
+            `<td>${safe(symbolName)}</td><td>${safe(size)}</td><td>${safe(available)}</td>` +
+            `<td>${complete ? "complete" : "truncated"}</td></tr>`
+        );
       });
       out.push(`</tbody></table>`);
     }
     out.push(`</details>`);
   }
 
-  if (lc.tables?.safeSehHandlerRvas?.length) {
-    renderAddressList("SEHTable", lc.tables.safeSehHandlerRvas, "SafeSEH handlers (x86 only).");
+  if (lc.tables?.safeSehHandler?.entries.length) {
+    out.push(renderLoadConfigAddressTable(lc.tables.safeSehHandler, pe.sections, imageBase, pointerWidth, "SafeSEH handlers (x86 only)."));
   }
-  if (lc.tables?.guardFidRvas?.length) {
-    renderAddressList("GuardFidTable", lc.tables.guardFidRvas, "CFG function targets (GFIDS).");
+  if (lc.tables?.guardFid?.entries.length) {
+    out.push(renderLoadConfigAddressTable(
+      lc.tables.guardFid,
+      pe.sections,
+      imageBase,
+      pointerWidth,
+      "CFG function targets (GFIDS), including optional GFIDS metadata flags."
+    ));
   }
-  if (lc.tables?.guardIatRvas?.length) {
-    renderAddressList(
-      "GuardIatTable",
-      lc.tables.guardIatRvas,
+  if (lc.tables?.guardIat?.entries.length) {
+    out.push(renderLoadConfigAddressTable(
+      lc.tables.guardIat,
+      pe.sections,
+      imageBase,
+      pointerWidth,
       "Address-taken IAT entries (IAT slots whose imported addresses may be used as function pointers under CFG)."
-    );
+    ));
   }
-  if (lc.tables?.guardLongJumpTargetRvas?.length) {
-    renderAddressList("GuardLongJumpTable", lc.tables.guardLongJumpTargetRvas, "Valid longjmp destinations under CFG.");
+  if (lc.tables?.guardLongJumpTarget?.entries.length) {
+    out.push(renderLoadConfigAddressTable(
+      lc.tables.guardLongJumpTarget,
+      pe.sections,
+      imageBase,
+      pointerWidth,
+      "Valid longjmp destinations under CFG."
+    ));
   }
-  if (lc.tables?.guardEhContinuationRvas?.length) {
-    renderAddressList("GuardEHContTable", lc.tables.guardEhContinuationRvas, "Valid exception continuation targets under CFG.");
+  if (lc.tables?.guardEhContinuation?.entries.length) {
+    out.push(renderLoadConfigAddressTable(
+      lc.tables.guardEhContinuation,
+      pe.sections,
+      imageBase,
+      pointerWidth,
+      "Valid exception continuation targets under CFG."
+    ));
   }
   out.push(renderPeSectionEnd());
 }
