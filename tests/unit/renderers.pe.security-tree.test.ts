@@ -113,7 +113,8 @@ void test("renderAuthenticodeTree shows Windows CA trust snapshot verdicts", () 
         { subject: "CN=Timestamp", issuer: "CN=Root" },
         { subject: "CN=Unknown Leaf", issuer: "CN=Unknown CA" },
         { subject: "CN=Unknown CA", issuer: "CN=Unknown CA" },
-        { subject: "CN=External Root", issuer: "CN=External Root" }
+        { subject: "CN=External Root", issuer: "CN=External Root" },
+        { subject: "CN=Root", issuer: "CN=Trusted Root" }
       ],
       verification: {
         trustPolicy: {
@@ -142,7 +143,16 @@ void test("renderAuthenticodeTree shows Windows CA trust snapshot verdicts", () 
               status: "unknown",
               sha1Thumbprint: "FF"
             },
-            { certificateIndex: 5, status: "unknown", sha1Thumbprint: "11" }
+            { certificateIndex: 5, status: "unknown", sha1Thumbprint: "11" },
+            {
+              certificateIndex: 6,
+              status: "trusted",
+              sha1Thumbprint: "22",
+              anchorDerBase64: "CAkK",
+              anchorSha1Thumbprint: "33",
+              anchorSubject: "CN=Trusted Root",
+              stores: ["Root"]
+            }
           ]
         },
         signerVerifications: [
@@ -190,6 +200,11 @@ void test("renderAuthenticodeTree shows Windows CA trust snapshot verdicts", () 
     getNodeClassForTitle(html, "Certificate &#8470;6: CN=External Root"),
     "peSecurityTreeNode peSecurityTreeNode--unknown"
   );
+  assert.equal(
+    getNodeClassForTitle(html, "Certificate &#8470;7: CN=Root"),
+    "peSecurityTreeNode peSecurityTreeNode--pass"
+  );
+  assert.ok(html.includes("authenticode-trust-anchor-33.cer"));
   assert.equal(html.includes("Not in store"), false);
 });
 

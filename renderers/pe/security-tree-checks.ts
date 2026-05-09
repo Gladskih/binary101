@@ -124,6 +124,25 @@ export const createCertificateStoreFactBadge = (
     : createStatusBadge("Disallowed", "fail", formatTrustDetail(auth, trust));
 };
 
+export const createCertificateKnownTrustBadge = (
+  auth: AuthenticodeInfo,
+  certificateIndex: number | undefined
+): TreeBadge | undefined => {
+  const trust = getCertificateTrust(auth, certificateIndex);
+  if (!trust || trust.status === "unknown") return undefined;
+  return trust.status === "trusted"
+    ? createStatusBadge(
+        hasSnapshotAnchor(trust) ? "Chain trusted" : "In store",
+        "pass",
+        formatTrustDetail(auth, trust)
+      )
+    : createStatusBadge(
+        hasSnapshotAnchor(trust) ? "Disallowed chain" : "Disallowed",
+        "fail",
+        formatTrustDetail(auth, trust)
+      );
+};
+
 const findCertificatePathTrust = (
   auth: AuthenticodeInfo,
   pathIndexes: number[],

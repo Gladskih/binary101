@@ -2,6 +2,7 @@
 
 import type { AuthenticodeInfo } from "../../analyzers/pe/authenticode/index.js";
 import {
+  createCertificateKnownTrustBadge,
   createCertificateStoreFactBadge,
   createCertificateTrustBadge,
   createCheckBadge,
@@ -90,6 +91,7 @@ const renderAlternativeIssuerBranch = (
 ): string => {
   const certificate = getCertificate(auth.certificates, certificateIndex);
   const isRoot = !!certificate?.subject && certificate.subject === certificate.issuer;
+  const trust = getCertificateTrust(auth, certificateIndex);
   const nextVisited = new Set(visitedIndexes);
   nextVisited.add(certificateIndex);
   const childIndexes = findIssuerCandidateIndexes(auth, certificateIndex, nextVisited);
@@ -104,7 +106,7 @@ const renderAlternativeIssuerBranch = (
       createInfoBadge("DN", "Issuer DN of the parent certificate matches this certificate subject DN."),
       isRoot
         ? createCertificateTrustBadge(auth, certificateIndex)
-        : createCertificateStoreFactBadge(auth, certificateIndex)
+        : createCertificateKnownTrustBadge(auth, certificateIndex)
     ]),
     [
       renderTreeMeta("Issuer", certificate?.issuer),
@@ -117,7 +119,12 @@ const renderAlternativeIssuerBranch = (
           : undefined
       )
     ],
-    childIndexes.map(index => renderAlternativeIssuerBranch(auth, index, nextVisited)).join(""),
+    [
+      renderTrustAnchorNode(trust),
+      ...childIndexes.map(index => renderAlternativeIssuerBranch(auth, index, nextVisited))
+    ]
+      .filter(Boolean)
+      .join(""),
     formatDistinguishedNameTooltip(certificate?.subject),
     renderEmbeddedCertificateDownloadButton(auth, certificateIndex)
   );
