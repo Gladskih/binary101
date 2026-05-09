@@ -77,6 +77,21 @@ export const createCheckBadge = (
     : undefined;
 };
 
+export const createIssuerMatchBadgeWithTrustContext = (
+  auth: AuthenticodeInfo,
+  id: string,
+  label: string,
+  certificateIndex: number | undefined
+): TreeBadge | undefined => {
+  const check = getCheckById(auth, id);
+  if (!check) return undefined;
+  const trust = getCertificateTrust(auth, certificateIndex);
+  if (check.status === "unknown" && trust?.status === "trusted") {
+    return createInfoBadge(label, formatCheckDetail(check.title, check.detail));
+  }
+  return createStatusBadge(label, check.status, formatCheckDetail(check.title, check.detail));
+};
+
 export const createNeutralUnknownCheckBadge = (
   auth: AuthenticodeInfo,
   id: string,

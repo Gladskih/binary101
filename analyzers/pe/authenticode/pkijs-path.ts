@@ -194,8 +194,8 @@ export const attachPathChecks = async (
         checks,
         `${signerLabel}-certificate-${currentIndex + 1}-issuer-match`,
         "unknown",
-        `${signerLabel}: certificate ${currentIndex + 1} issuer is present in the embedded chain`,
-        "No presented issuer certificate matches the issuer DN."
+        `${signerLabel}: certificate ${currentIndex + 1} issuer search`,
+        "No issuer found in embedded chain. Certificate may chain to a system trust root."
       );
       break;
     }

@@ -6,6 +6,7 @@ import {
   createCertificateStoreFactBadge,
   createCertificateTrustBadge,
   createCheckBadge,
+  createIssuerMatchBadgeWithTrustContext,
   findIssuerCandidateIndexes,
   getCertificatePathStatus,
   getCertificate,
@@ -186,7 +187,12 @@ const renderCertificatePath = (
         : undefined,
       label ? renderReferenceValidityBadge(auth, label, certificateIndex) : undefined,
       label
-        ? createCheckBadge(auth, `${label}-certificate-${certificateIndex + 1}-issuer-match`, "Issuer")
+        ? createIssuerMatchBadgeWithTrustContext(
+            auth,
+            `${label}-certificate-${certificateIndex + 1}-issuer-match`,
+            "Issuer",
+            certificateIndex
+          )
         : undefined,
       label
         ? createCheckBadge(auth, `${label}-certificate-${certificateIndex + 1}-issuer-signature`, "Chain")
