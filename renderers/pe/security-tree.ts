@@ -84,23 +84,37 @@ const renderTimestampTokenNode = (
   token: AuthenticodeTimestampTokenInfo
 ): string => {
   const tokenLabel = `${signerLabel} RFC3161 timestamp ${token.index + 1}`;
+  const tokenAuth: AuthenticodeInfo = {
+    format: auth.format,
+    ...(token.certificates?.length ? { certificates: token.certificates } : {}),
+    ...(auth.verification?.checks?.length ? { verification: { checks: auth.verification.checks } } : {})
+  };
+  const timestampSignerCertificate = getCertificate(token.certificates, token.signerCertificateIndex);
   return renderTreeNode(
-    `RFC3161 timestamp ${token.index + 1}: ${token.signerSubject || "Subject absent"}`,
+    `RFC3161 timestamp ${token.index + 1}: ${timestampSignerCertificate?.subject || "Subject absent"}`,
     filterBadges([
       createRoleBadge("Timestamp", "countersignature"),
       createCheckBadge(auth, `${tokenLabel}-signature`, "Sig"),
       createCheckBadge(auth, `${tokenLabel}-message-imprint`, "Digest"),
-      createCheckBadge(auth, `${tokenLabel}-certificate`, "Cert")
+      createCheckBadge(auth, `${tokenLabel}-certificate`, "Cert"),
+      createCertificatePathTrustBadge(tokenAuth, token.certificatePathIndexes)
     ]),
     [
-      renderTreeMeta("Subject", token.signerSubject),
-      renderTreeMeta("Issuer", token.signerIssuer),
-      renderTreeMeta("Serial", token.signerSerialNumber),
+      renderTreeMeta("Subject", timestampSignerCertificate?.subject),
+      renderTreeMeta("Issuer", timestampSignerCertificate?.issuer),
+      renderTreeMeta("Serial", timestampSignerCertificate?.serialNumber),
       renderTreeMeta("Time", token.signingTime || "Absent"),
       renderTreeMeta("Message", token.message)
     ],
-    undefined,
-    formatDistinguishedNameTooltip(token.signerSubject)
+    renderCertificateBranch(
+      tokenAuth,
+      tokenLabel,
+      token.certificatePathIndexes,
+      token.signerCertificateIndex,
+      "Timestamp cert",
+      "No embedded timestamp certificate matched the RFC3161 signer."
+    ),
+    formatDistinguishedNameTooltip(timestampSignerCertificate?.subject)
   );
 };
 

@@ -56,9 +56,9 @@ export interface AuthenticodeCounterSignatureInfo {
 
 export interface AuthenticodeTimestampTokenInfo {
   index: number;
-  signerSubject?: string;
-  signerIssuer?: string;
-  signerSerialNumber?: string;
+  signerCertificateIndex?: number;
+  certificatePathIndexes?: number[];
+  certificates?: X509CertificateInfo[];
   signatureVerified?: boolean;
   messageDigestVerified?: boolean;
   signingTime?: string;

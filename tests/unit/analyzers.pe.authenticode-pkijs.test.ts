@@ -61,6 +61,14 @@ void test("verifyPkcs7Signatures verifies a valid Authenticode CMS signer", asyn
     verified.signerVerifications?.[0]?.timestampTokens?.[0]?.signingTime,
     "2024-01-01T00:06:00.000Z"
   );
+  assert.deepStrictEqual(
+    verified.signerVerifications?.[0]?.timestampTokens?.[0]?.certificatePathIndexes,
+    [0, 1]
+  );
+  assert.strictEqual(
+    verified.signerVerifications?.[0]?.timestampTokens?.[0]?.certificates?.[0]?.subject,
+    "CN=Binary101 Timestamp Authority"
+  );
   assert.ok(
     verified.checks?.some(
       check =>

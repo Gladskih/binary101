@@ -3,7 +3,8 @@
 import { bufferToHex } from "../../../binary-utils.js";
 import type {
   AuthenticodeTimestampTokenInfo,
-  AuthenticodeVerificationCheck
+  AuthenticodeVerificationCheck,
+  X509CertificateInfo
 } from "./index.js";
 import type { SignerInfo } from "./pkijs-runtime.js";
 import {
@@ -13,7 +14,7 @@ import {
   TSTInfo,
   id_eContentType_TSTInfo
 } from "./pkijs-runtime.js";
-import { addExtendedKeyUsageCheck, addSigningKeyUsageCheck } from "./pkijs-path.js";
+import { addExtendedKeyUsageCheck, addSigningKeyUsageCheck, attachPathChecks } from "./pkijs-path.js";
 import {
   TIME_STAMPING_EKU_OID,
   addCheck,
@@ -43,6 +44,15 @@ const asDerBytes = (value: unknown): Uint8Array | undefined => {
   return typeof encoder === "function" ? new Uint8Array(encoder.call(value, false)) : undefined;
 };
 
+const bytesToBase64 = (bytes: Uint8Array): string => {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+};
+
 const formatName = (name: Certificate["subject"] | undefined): string | undefined => {
   const values = name?.typesAndValues
     .map(item => {
@@ -51,6 +61,25 @@ const formatName = (name: Certificate["subject"] | undefined): string | undefine
     })
     .filter(Boolean);
   return values?.length ? values.join(", ") : undefined;
+};
+
+const describeCertificate = (certificate: Certificate): X509CertificateInfo => {
+  const info: X509CertificateInfo = {};
+  const subject = formatName(certificate.subject);
+  const issuer = formatName(certificate.issuer);
+  const serialNumber = getByteView(certificate.serialNumber);
+  const derBytes = asDerBytes(certificate);
+  if (subject) info.subject = subject;
+  if (issuer) info.issuer = issuer;
+  if (serialNumber) info.serialNumber = bufferToHex(serialNumber);
+  if (Number.isFinite(certificate.notBefore.value.getTime())) {
+    info.notBefore = certificate.notBefore.value.toISOString();
+  }
+  if (Number.isFinite(certificate.notAfter.value.getTime())) {
+    info.notAfter = certificate.notAfter.value.toISOString();
+  }
+  if (derBytes?.length) info.derBase64 = bytesToBase64(derBytes);
+  return info;
 };
 
 const readOctetStringBytes = (value: unknown): Uint8Array | undefined => {
@@ -148,24 +177,24 @@ const verifyTimestampToken = async (
     (certificate): certificate is Certificate => certificate instanceof Certificate
   );
   const signerCertificateIndex = await matchSignerCertificate(signedData.signerInfos[0] as SignerInfo, certificates);
-  const signerCertificate =
+  const timestampSignerCertificateIndex =
     signerCertificateIndex != null && signerCertificateIndex >= 0
-      ? certificates[signerCertificateIndex]
+      ? signerCertificateIndex
       : undefined;
-  const subject = formatName(signerCertificate?.subject);
-  const issuer = formatName(signerCertificate?.issuer);
-  const serialNumber = getByteView(signerCertificate?.serialNumber);
-  if (subject) token.signerSubject = subject;
-  if (issuer) token.signerIssuer = issuer;
-  if (serialNumber) token.signerSerialNumber = bufferToHex(serialNumber);
+  const signerCertificate =
+    timestampSignerCertificateIndex != null ? certificates[timestampSignerCertificateIndex] : undefined;
+  if (certificates.length) token.certificates = certificates.map(describeCertificate);
+  if (timestampSignerCertificateIndex != null) token.signerCertificateIndex = timestampSignerCertificateIndex;
   addCheck(
     checks,
     `${label}-certificate`,
     signerCertificate ? "pass" : "fail",
     `${label}: signer certificate is present in the timestamp token`,
-    token.signerSubject || "No embedded certificate matches the timestamp signer identifier."
+    timestampSignerCertificateIndex != null
+      ? `Certificate ${timestampSignerCertificateIndex + 1}`
+      : "No embedded certificate matches the timestamp signer identifier."
   );
-  if (signerCertificate) {
+  if (signerCertificate && timestampSignerCertificateIndex != null) {
     addSigningKeyUsageCheck(
       checks,
       `${label}-key-usage`,
@@ -180,6 +209,15 @@ const verifyTimestampToken = async (
       TIME_STAMPING_EKU_OID,
       "Extended Key Usage extension is absent."
     );
+    const certificatePathIndexes = await attachPathChecks(
+      checks,
+      label,
+      certificates,
+      timestampSignerCertificateIndex,
+      token.signingTime,
+      "timestamp time"
+    );
+    if (certificatePathIndexes.length) token.certificatePathIndexes = certificatePathIndexes;
   }
   return token;
 };

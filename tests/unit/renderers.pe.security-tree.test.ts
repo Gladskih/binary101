@@ -77,6 +77,30 @@ void test("renderAuthenticodeTree renders signer and countersignature certificat
                 signatureVerified: true,
                 messageDigestVerified: true
               }
+            ],
+            timestampTokens: [
+              {
+                index: 0,
+                signerCertificateIndex: 0,
+                certificatePathIndexes: [0, 1],
+                signingTime: "2024-06-01T12:01:00Z",
+                signatureVerified: true,
+                messageDigestVerified: true,
+                certificates: [
+                  {
+                    subject: "CN=RFC3161 Timestamp Leaf",
+                    issuer: "CN=RFC3161 Timestamp CA",
+                    notBefore: "2024-01-01T00:00:00Z",
+                    notAfter: "2028-01-01T00:00:00Z"
+                  },
+                  {
+                    subject: "CN=RFC3161 Timestamp CA",
+                    issuer: "CN=RFC3161 Timestamp CA",
+                    notBefore: "2023-01-01T00:00:00Z",
+                    notAfter: "2030-01-01T00:00:00Z"
+                  }
+                ]
+              }
             ]
           }
         ]
@@ -89,6 +113,8 @@ void test("renderAuthenticodeTree renders signer and countersignature certificat
   assert.ok(html.includes("Certificate &#8470;1: CN=Leaf Signer"));
   assert.ok(html.includes("Signer cert"));
   assert.ok(html.includes("Countersignature 1"));
+  assert.ok(html.includes("RFC3161 timestamp 1"));
+  assert.ok(html.includes("Certificate &#8470;1: CN=RFC3161 Timestamp Leaf"));
   assert.ok(html.includes("Timestamp cert"));
   assert.ok(html.includes("Root"));
   assert.ok(html.includes("Sig"));
