@@ -1,19 +1,23 @@
-- Follow `CONTRIBUTING.md` as the authoritative source for coding, testing, and verification rules and consider it a strict quality gate.
-- After completing any coding task and before reporting success, explicitly audit the final changes against all applicable `CONTRIBUTING.md` rules.
-- Reuse existing analyzers as reference for structure, warnings, and error handling.
+- Follow `CONTRIBUTING.md` as the authoritative source for coding, testing, and verification rules and consider it a strict quality gate
+- After completing any coding task and before reporting success, explicitly audit the final changes against all applicable `CONTRIBUTING.md` rules
 - All parsing must be resilient to malformed or truncated files:
-  - always bounds-check offsets and sizes,
-  - prefer collecting warnings over throwing exceptions,
-  - never assume headers are present unless you have validated them.
-- Do not add dependencies on external services; analysis must remain fully local in the browser.
-- Do not rely solely on model intuition about binary formats, encodings, or specs.
+  - always bounds-check offsets and sizes
+  - prefer collecting warnings over throwing exceptions
+  - never assume correctness of data stucture unless you have validated it
+- Do not add dependencies on external services; analysis must remain fully local in the browser
+- Do not rely solely on model intuition about binary formats, encodings, or specs
 - When behavior is subtle or ambiguous, prefer authoritative sources:
-  - official specifications or standards for the format,
-  - upstream project documentation and source code,
-  - relevant GitHub issues or discussions for the tools in use.
+  - official specifications or standards for the format
+  - upstream project documentation and source code
+  - relevant GitHub issues or discussions for the tools in use
 - If network access or external lookup is unavailable, be explicit about uncertainty:
-  - clearly separate what is known from what is guessed,
-  - ask the user for clarification, references, or sample files when that can change the answer.
-- Prefer a clearly documented "I am not sure because X" over a confident but incorrect guess.
-- Never run `npm run test:unit` and `npm run test:coverage` in parallel.
-- Tokens and your context are not infinite, limit wordy output of tools. 
+  - clearly separate what is known from what is guessed
+  - ask the user for clarification, references, or sample files when that can change the answer
+- Prefer a clearly documented "I am not sure because X" over a confident but incorrect guess
+- Avoid `npm run test:unit` when `npm run test:coverage` is enough
+- Tokens and your context are expensive, limit wordy output of tools by built-in options or commands and avoid redundant context bloating
+- When you see
+  - anything suspicious in existing code
+  - misunderstanding or confusion on requestor side
+  - point of possible noticible improvement of UX or software quality
+warn about it directly immediately
