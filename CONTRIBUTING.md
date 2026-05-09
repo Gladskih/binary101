@@ -54,6 +54,22 @@
 - Define colors and fonts as CSS variables for consistency.
 - Use mobile-first approach for responsive design.
 
+## UI/UX
+- For dense, structured, repeated data, prefer real tables with clear column headers over
+  card-like repeated label/value groups:
+  - GOV.UK content design tables:
+    https://www.gov.uk/guidance/content-design/tables
+  - GOV.UK Design System table component:
+    https://design-system.service.gov.uk/components/table/
+  - U.S. Web Design System table component:
+    https://designsystem.digital.gov/components/table/
+  - Material Design data tables:
+    https://m1.material.io/components/data-tables.html
+- Keep table cells concise, avoid duplicated facts, and use one clear header row.
+- Right-align numeric columns when users compare numbers down a column.
+- Use horizontal scrolling for wide data tables rather than wrapping cells into unreadable blocks.
+- Do not use disclosure controls when there is no meaningful hidden detail to reveal.
+
 ## Tests
 
 - Before submitting a pull request, ensure your code adheres to the project's standards and that all tests pass.
