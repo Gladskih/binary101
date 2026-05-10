@@ -4,7 +4,7 @@ import { humanSize } from "../../binary-utils.js";
 import type { PeResources } from "../../analyzers/pe/resources/index.js";
 import { safe } from "../../html-utils.js";
 import { renderPeDiagnostics } from "./diagnostics.js";
-import { renderPreviewCell } from "./resource-preview-cell.js";
+import { renderPreviewCell, renderPreviewSummary } from "./resource-preview-cell.js";
 import { formatWindowsLanguageName } from "./windows-language-names.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
@@ -27,7 +27,14 @@ const formatResourcePathNode = (node: { id: number | null; name: string | null }
 const isWideResourcePreview = (
   langEntry: NonNullable<PeResources["detail"]>[number]["entries"][number]["langs"][number]
 ): boolean =>
+  langEntry.previewKind === "dialog" ||
+  langEntry.previewKind === "image" ||
+  langEntry.previewKind === "stringTable" ||
+  langEntry.previewKind === "messageTable" ||
   langEntry.previewKind === "version" ||
+  langEntry.previewKind === "menu" ||
+  langEntry.previewKind === "accelerator" ||
+  langEntry.previewKind === "font" ||
   (langEntry.previewKind === "text" && Boolean(langEntry.manifestInfo || langEntry.manifestTree));
 
 export function renderResources(resources: PeResources, out: string[]): void {
@@ -106,9 +113,12 @@ export function renderResources(resources: PeResources, out: string[]): void {
           for (const langEntry of entry.langs || []) {
             const preview = renderPreviewCell(langEntry);
             out.push(
-              `<tr><td>${displayName}</td><td>${formatLang(langEntry.lang)}</td><td>` +
-                `${humanSize(langEntry.size || 0)}</td><td>${formatCodePage(langEntry.codePage)}` +
-                `</td><td>${isWideResourcePreview(langEntry) ? "below" : preview}</td></tr>`
+              `<tr class="${isWideResourcePreview(langEntry) ? "peResourcePreviewMetaRow" : ""}">` +
+                `<td>${displayName}</td><td>${formatLang(langEntry.lang)}</td>` +
+                `<td class="peNumeric">${humanSize(langEntry.size || 0)}</td>` +
+                `<td class="peNumeric">${formatCodePage(langEntry.codePage)}</td>` +
+                `<td>${isWideResourcePreview(langEntry) ? safe(renderPreviewSummary(langEntry)) : preview}` +
+                `</td></tr>`
             );
             if (isWideResourcePreview(langEntry)) {
               out.push(`<tr class="peResourcePreviewWideRow"><td colspan="5">${preview}</td></tr>`);

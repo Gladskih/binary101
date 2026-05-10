@@ -250,11 +250,11 @@ void test("renderResources renders preview cells for common resource types", () 
   assert.match(html, /processorArchitecture/);
   assert.match(html, /Encoding: UTF-8/);
   assert.match(html, /HTML is not executed/);
-  assert.match(html, /English \(United States\)/);
+  assert.match(html, /American English/);
   assert.match(html, /German \(Germany\)/);
   assert.match(html, /#41/);
   assert.match(html, /world/);
   assert.match(html, /1\.2\.3\.4/);
-  assert.match(html, /Spanish \(Spain\)/);
+  assert.match(html, /European Spanish/);
   assert.match(html, /Resource bytes could not be read/);
 });

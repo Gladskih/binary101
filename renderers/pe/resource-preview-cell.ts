@@ -2,92 +2,27 @@
 import { safe } from "../../html-utils.js";
 import type {
   ResourceAcceleratorEntryPreview,
-  ResourceDialogControlPreview,
-  ResourceDialogPreview,
   ResourceLangWithPreview,
   ResourceMenuItemPreview,
   ResourceVersionPreview
 } from "../../analyzers/pe/resources/preview/types.js";
 import { formatWindowsLanguageName } from "./windows-language-names.js";
+import { renderDialogPreview } from "./resource-preview-dialog.js";
 import { renderManifestPreview, renderManifestTree } from "./resource-preview-manifest.js";
 const renderIssues = (langEntry: ResourceLangWithPreview): string => {
   const issues = (langEntry.previewIssues || []).filter((issue): issue is string => Boolean(issue));
   return issues.length
-    ? `<div class="smallNote" style="color:var(--warning-text,#b45309)">WARNING: ${issues.map(safe).join(" · ")}</div>`
+    ? `<div class="smallNote" style="color:var(--warning-text,#b45309)">WARNING: ${issues.map(safe).join(" - ")}</div>`
     : "";
 };
 const renderFields = (langEntry: ResourceLangWithPreview): string => {
   const fields = langEntry.previewFields || [];
   if (!fields.length) return "";
-  const rows = fields.map(field => `<li><span class="mono">${safe(field.label)}</span>: ${safe(field.value)}</li>`).join("");
-  return `<ul class="smallNote" style="padding-left:1.1rem;margin:.25rem 0 0 0">${rows}</ul>`;
+  const rows = fields
+    .map(field => `<tr><th scope="row">${safe(field.label)}</th><td>${safe(field.value)}</td></tr>`)
+    .join("");
+  return `<table class="table peResourceFieldTable"><tbody>${rows}</tbody></table>`;
 };
-const renderDialogControls = (controls: ResourceDialogControlPreview[]): string => {
-  const rows = controls.map(control =>
-    `<tr><td>${safe(control.kind)}</td><td>${safe(control.title || "")}</td><td class="mono">${control.id != null ? safe(control.id) : "-"}</td><td class="mono">${control.x},${control.y} ${control.width}x${control.height}</td></tr>`
-  ).join("");
-  return `<table class="table" style="margin-top:.35rem"><thead><tr><th>Kind</th><th>Title</th><th>ID</th><th>Bounds</th></tr></thead><tbody>${rows}</tbody></table>`;
-};
-const renderDialogFont = (dialog: ResourceDialogPreview): string => {
-  if (!dialog.font) return "";
-  const parts = [`${dialog.font.pointSize}pt ${dialog.font.typeface}`];
-  if (dialog.font.weight != null) parts.push(`weight ${dialog.font.weight}`);
-  if (dialog.font.italic) parts.push("italic");
-  return `<div class="smallNote">Font: ${safe(parts.join(", "))}</div>`;
-};
-const renderDialogControlBox = (
-  control: ResourceDialogControlPreview,
-  dialog: ResourceDialogPreview
-): string => {
-  const left = Math.max(0, Math.min(100, (control.x / Math.max(1, dialog.width)) * 100));
-  const top = Math.max(0, Math.min(100, (control.y / Math.max(1, dialog.height)) * 100));
-  const width = Math.max(
-    8,
-    Math.min(100 - left, (control.width / Math.max(1, dialog.width)) * 100)
-  );
-  const height = Math.max(
-    8,
-    Math.min(100 - top, (control.height / Math.max(1, dialog.height)) * 100)
-  );
-  const shared =
-    `position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;` +
-    "color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
-  const label = safe(control.title || control.kind);
-  const kind = control.kind.toUpperCase();
-  if (kind === "STATIC") {
-    return `<div style="${shared};padding:.15rem .2rem;border:0;background:transparent">${label}</div>`;
-  }
-  if (kind === "EDIT" || kind === "LISTBOX" || kind === "COMBOBOX") {
-    return `<div style="${shared};padding:.1rem .25rem;border:1px solid var(--border2);border-radius:4px;background:var(--bg)">${label}</div>`;
-  }
-  return `<div style="${shared};padding:.1rem .2rem;border:1px solid var(--border2);border-radius:4px;background:var(--card);display:flex;align-items:center;justify-content:center">${label}</div>`;
-};
-const renderDialogMockup = (dialog: ResourceDialogPreview): string => {
-  const meta = [
-    `<b>${safe(dialog.title || "(untitled dialog)")}</b>`,
-    `${dialog.controls.length} controls`,
-    dialog.templateKind === "extended" ? "DLGTEMPLATEEX" : "DLGTEMPLATE",
-    dialog.menu ? `Menu: ${safe(dialog.menu)}` : "",
-    dialog.className ? `Class: ${safe(dialog.className)}` : ""
-  ].filter(Boolean).join(" · ");
-  const topOffset = dialog.menu ? "3.1rem" : "1.75rem";
-  const controls = dialog.controls.map(control => renderDialogControlBox(control, dialog)).join("");
-  return [
-    '<div style="margin-top:.25rem">',
-    `<div class="smallNote">${meta}</div>`,
-    renderDialogFont(dialog),
-    `<div style="position:relative;margin-top:.25rem;width:${Math.max(220, Math.min(320, dialog.width * 2))}px;height:${Math.max(140, Math.min(240, dialog.height * 2))}px;border:1px solid var(--border2);border-radius:8px;background:var(--card);color:var(--text);overflow:hidden">`,
-    `<div style="padding:.2rem .4rem;border-bottom:1px solid var(--border2);background:var(--bg);color:var(--text)">${safe(dialog.title || "(untitled dialog)")}</div>`,
-    dialog.menu
-      ? `<div style="padding:.15rem .4rem;border-bottom:1px solid var(--border2);background:var(--card)">${safe(dialog.menu)}</div>`
-      : "",
-    `<div style="position:absolute;left:0;right:0;top:${topOffset};bottom:0;background:var(--bg);font-size:${dialog.font?.pointSize ? Math.max(10, Math.min(16, dialog.font.pointSize + 1)) : 12}px">${controls}</div>`,
-    "</div>",
-    renderDialogControls(dialog.controls),
-    "</div>"
-  ].join("");
-};
-
 const renderMenuItems = (items: ResourceMenuItemPreview[]): string => {
   if (!items.length) return '<div class="smallNote">(empty menu)</div>';
   const rows = items.map(item => {
@@ -102,9 +37,11 @@ const renderMenuItems = (items: ResourceMenuItemPreview[]): string => {
 };
 const renderAcceleratorEntries = (entries: ResourceAcceleratorEntryPreview[]): string => {
   const rows = entries.map(entry =>
-    `<li><span class="mono">${safe([...entry.modifiers, entry.key].join("+"))}</span> -> <span class="mono">#${safe(entry.id)}</span></li>`
+    `<tr><td class="mono">${safe([...entry.modifiers, entry.key].join("+"))}</td>` +
+      `<td class="mono peNumeric">#${safe(entry.id)}</td></tr>`
   ).join("");
-  return `<ul class="smallNote" style="padding-left:1.1rem;margin:0">${rows}</ul>`;
+  return `<table class="table peResourceNestedTable"><thead><tr><th>Shortcut</th>` +
+    `<th>Command ID</th></tr></thead><tbody>${rows}</tbody></table>`;
 };
 const renderDefinitionRows = (rows: Array<{ label: string; value: string }>): string => {
   if (!rows.length) return "";
@@ -216,14 +153,60 @@ const renderFontPreview = (langEntry: ResourceLangWithPreview): string => {
     "<style>",
     `@font-face{font-family:${family};src:url(${langEntry.previewDataUrl}) format('truetype');}`,
     "</style>",
-    `<div style="font-family:${family},serif;font-size:1.05rem">Aa Bb Cc 123</div>`,
+    `<div class="peResourceFontSample" style="font-family:${family},serif">Aa Bb Cc 123</div>`,
     renderFields(langEntry),
     renderIssues(langEntry)
   ].join("");
 };
+const renderStringTablePreview = (langEntry: ResourceLangWithPreview): string => {
+  const rows = (langEntry.stringTable || [])
+    .map(entry =>
+      `<tr><td class="mono peNumeric">` +
+      `${entry.id != null ? `#${safe(entry.id)}` : "(index)"}</td>` +
+      `<td dir="auto">${safe(entry.text || "")}</td></tr>`
+    )
+    .join("");
+  return `<table class="table peResourceNestedTable peResourceTextTable">` +
+    `<thead><tr><th>ID</th><th>String</th></tr></thead><tbody>${rows}</tbody></table>` +
+    `${renderFields(langEntry)}${renderIssues(langEntry)}`;
+};
+const renderMessageTablePreview = (langEntry: ResourceLangWithPreview): string => {
+  const rows = (langEntry.messageTable?.messages || [])
+    .map(message => {
+      const text = Array.isArray(message.strings) ? message.strings.join(" | ") : "";
+      return `<tr><td class="mono peNumeric">#${safe(message.id)}</td>` +
+        `<td dir="auto">${safe(text)}</td></tr>`;
+    })
+    .join("");
+  const truncated = langEntry.messageTable?.truncated
+    ? `<div class="smallNote">Preview stopped before the full message table.</div>`
+    : "";
+  return `<table class="table peResourceNestedTable peResourceTextTable">` +
+    `<thead><tr><th>Message ID</th><th>Text</th></tr></thead><tbody>${rows}</tbody></table>` +
+    `${truncated}${renderFields(langEntry)}${renderIssues(langEntry)}`;
+};
+export const renderPreviewSummary = (
+  langEntry: ResourceLangWithPreview | null | undefined
+): string => {
+  if (!langEntry?.previewKind) return "-";
+  if (langEntry.previewKind === "dialog" && langEntry.dialogPreview) {
+    return `${langEntry.dialogPreview.controls.length} controls`;
+  }
+  if (langEntry.previewKind === "stringTable" && Array.isArray(langEntry.stringTable)) {
+    return `${langEntry.stringTable.length} strings`;
+  }
+  if (langEntry.previewKind === "messageTable" && langEntry.messageTable?.messages) {
+    return `${langEntry.messageTable.messages.length} messages`;
+  }
+  if (langEntry.previewKind === "version") return "Version info";
+  if (langEntry.previewKind === "text" && (langEntry.manifestInfo || langEntry.manifestTree)) {
+    return "Manifest";
+  }
+  return langEntry.previewKind;
+};
 const renderTailPreview = (langEntry: ResourceLangWithPreview): string | null => {
   if (langEntry.previewKind === "dialog" && langEntry.dialogPreview) {
-    return renderDialogMockup(langEntry.dialogPreview) + renderFields(langEntry) + renderIssues(langEntry);
+    return renderDialogPreview(langEntry.dialogPreview) + renderFields(langEntry) + renderIssues(langEntry);
   }
   if (langEntry.previewKind === "menu" && langEntry.menuPreview) {
     return renderMenuItems(langEntry.menuPreview.items) + renderFields(langEntry) + renderIssues(langEntry);
@@ -241,7 +224,8 @@ export const renderPreviewCell = (langEntry: ResourceLangWithPreview | null | un
   if (!langEntry) return "-";
   if (langEntry.previewKind === "image" && langEntry.previewDataUrl) {
     return [
-      `<img src="${langEntry.previewDataUrl}" alt="resource preview" title="${safe(langEntry.previewMime || "image/png")}" style="max-width:96px;max-height:72px;border-radius:4px;border:1px solid var(--border2)" />`,
+      `<img class="peResourceImagePreview" src="${langEntry.previewDataUrl}" ` +
+        `alt="resource preview" title="${safe(langEntry.previewMime || "image/png")}" />`,
       renderFields(langEntry),
       renderIssues(langEntry)
     ].join("");
@@ -281,19 +265,10 @@ export const renderPreviewCell = (langEntry: ResourceLangWithPreview | null | un
   }
   if (langEntry.previewKind === "version") return renderVersionPreview(langEntry);
   if (langEntry.previewKind === "stringTable" && Array.isArray(langEntry.stringTable)) {
-    const list = langEntry.stringTable
-      .map(entry => `<li><span class="mono">${entry.id != null ? `#${safe(entry.id)}` : "(index)"}</span> ${safe(entry.text || "")}</li>`)
-      .join("");
-    return `<ol class="smallNote" style="padding-left:1.25rem;margin:0">${list}</ol>${renderFields(langEntry)}${renderIssues(langEntry)}`;
+    return renderStringTablePreview(langEntry);
   }
   if (langEntry.previewKind === "messageTable" && langEntry.messageTable?.messages) {
-    const list = langEntry.messageTable.messages
-      .map(message => {
-        const text = Array.isArray(message.strings) ? message.strings.join(" | ") : "";
-        return `<li><span class="mono">${message.id != null ? `#${safe(message.id)}` : "msg"}</span>: ${safe(text)}</li>`;
-      })
-      .join("");
-    return `<ol class="smallNote" style="padding-left:1.25rem;margin:0">${list}</ol>${renderFields(langEntry)}${renderIssues(langEntry)}`;
+    return renderMessageTablePreview(langEntry);
   }
   const tailPreview = renderTailPreview(langEntry);
   if (tailPreview) return tailPreview;

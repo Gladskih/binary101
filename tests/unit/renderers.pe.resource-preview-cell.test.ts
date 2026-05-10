@@ -130,7 +130,7 @@ void test("renderPreviewCell renders grouped VERSION details with human-readable
   assert.match(versionHtml, /Fixed version info/);
   assert.strictEqual(versionHtml.match(/FileVersion/g)?.length, 1);
   assert.strictEqual(versionHtml.match(/ProductVersion/g)?.length, 1);
-  assert.match(versionHtml, /English \(United States\)/);
+  assert.match(versionHtml, /American English/);
   assert.match(versionHtml, /German \(Germany\)/);
   assert.match(versionHtml, /Declared translations/);
   assert.match(versionHtml, /CompanyName/);

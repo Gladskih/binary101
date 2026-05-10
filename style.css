@@ -277,43 +277,88 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .table th{background:rgba(0,0,0,.1);text-align:left;color:var(--muted)}
 .flagColumn{font-family:var(--mono);word-break:normal;white-space:normal}
 .table tr:last-child td{border-bottom:none}
+.peNumeric{text-align:right}
 .tableWrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-.tableWrap .table{min-width:720px}
-.tableWrap .peResourcePreviewTable{min-width:640px;table-layout:fixed}
-.peResourcePreviewTable th,.peResourcePreviewTable td{vertical-align:top}
-.peResourcePreviewTable th:nth-child(1),
-.peResourcePreviewTable tr:not(.peResourcePreviewWideRow) > td:nth-child(1){
-  width:6.5rem;
+.tableWrap > .table{min-width:600px}
+.tableWrap > .peResourcePreviewTable{min-width:600px;table-layout:fixed}
+.peResourcePreviewTable > thead > tr > th,
+.peResourcePreviewTable > tbody > tr > td{vertical-align:top}
+.peResourcePreviewTable > thead > tr > th:nth-child(1),
+.peResourcePreviewTable > tbody > tr:not(.peResourcePreviewWideRow) > td:nth-child(1){
+  width:6rem;
   white-space:nowrap;
 }
-.peResourcePreviewTable th:nth-child(2),
-.peResourcePreviewTable tr:not(.peResourcePreviewWideRow) > td:nth-child(2){
-  width:12rem;
+.peResourcePreviewTable > thead > tr > th:nth-child(2),
+.peResourcePreviewTable > tbody > tr:not(.peResourcePreviewWideRow) > td:nth-child(2){
+  width:9rem;
   overflow-wrap:normal;
 }
-.peResourcePreviewTable th:nth-child(3),
-.peResourcePreviewTable tr:not(.peResourcePreviewWideRow) > td:nth-child(3){
+.peResourcePreviewTable > thead > tr > th:nth-child(3),
+.peResourcePreviewTable > tbody > tr:not(.peResourcePreviewWideRow) > td:nth-child(3){
   width:8rem;
   white-space:nowrap;
 }
-.peResourcePreviewTable th:nth-child(4),
-.peResourcePreviewTable tr:not(.peResourcePreviewWideRow) > td:nth-child(4){
+.peResourcePreviewTable > thead > tr > th:nth-child(4),
+.peResourcePreviewTable > tbody > tr:not(.peResourcePreviewWideRow) > td:nth-child(4){
   width:5rem;
   white-space:nowrap;
 }
-.peResourcePreviewTable th:nth-child(5),
-.peResourcePreviewTable tr:not(.peResourcePreviewWideRow) > td:nth-child(5){
+.peResourcePreviewTable > thead > tr > th:nth-child(5),
+.peResourcePreviewTable > tbody > tr:not(.peResourcePreviewWideRow) > td:nth-child(5){
   overflow-wrap:anywhere;
 }
 .peResourcePreviewWideRow > td{
-  padding-top:0;
+  padding:12px 14px 18px;
   white-space:normal;
   overflow-wrap:anywhere;
+  background:var(--card);
+  border-bottom:2px solid var(--border2);
+  box-shadow:inset 3px 0 0 var(--border2);
+}
+.peResourcePreviewMetaRow > td{
+  background:var(--card);
+  border-top:2px solid var(--border2);
 }
 .peResourcePreviewWideRow [data-manifest-preview],
 .peResourcePreviewWideRow [data-manifest-tree-viewer]{
   max-width:100%;
 }
+.peResourceNestedTable{background:var(--bg);border-color:var(--border2);margin-top:0;min-width:0}
+.peResourceNestedTable th:first-child,
+.peResourceNestedTable td:first-child{width:10rem;white-space:nowrap}
+.peDialogControlsTable{table-layout:fixed}
+.peDialogControlsTable th:first-child,
+.peDialogControlsTable td:first-child{width:8rem}
+.peDialogControlsTable th:nth-child(3),
+.peDialogControlsTable td:nth-child(3){width:5rem}
+.peDialogControlsTable th:nth-child(4),
+.peDialogControlsTable td:nth-child(4){width:8rem}
+.peResourceTextTable{table-layout:fixed}
+.peResourceTextTable th:first-child,
+.peResourceTextTable td:first-child{width:7rem}
+.peResourceTextTable td:last-child{
+  overflow-wrap:anywhere;
+  text-align:start;
+  unicode-bidi:plaintext;
+  white-space:pre-wrap;
+  word-break:break-word;
+}
+.peResourceFieldTable{margin-top:.35rem;table-layout:fixed}
+.peResourceFieldTable th[scope="row"]{width:8rem}
+.peResourceFieldTable td{overflow-wrap:anywhere}
+.peResourceImagePreview{
+  background:#000;
+  border:1px solid var(--border2);
+  border-radius:4px;
+  display:block;
+  height:auto;
+  max-height:180px;
+  max-width:min(100%,360px);
+  min-height:48px;
+  object-fit:contain;
+  width:min(100%,360px);
+}
+.peResourceFontSample{font-size:1.25rem;line-height:1.4;margin-bottom:.25rem}
 .tableButton{appearance:none;border:1px solid var(--border2);background:transparent;color:var(--text);padding:4px 8px;border-radius:6px;font-size:12px;font-family:var(--mono);cursor:pointer}
 .tableButton:hover{border-color:var(--accent);color:var(--accent)}
 .tableButton:disabled{opacity:.6;cursor:not-allowed}
