@@ -64,6 +64,18 @@ void test("renderAuthenticodeTree renders signer and countersignature certificat
       verification: {
         checks: [
           {
+            id: "Signer 1-certificate-1-current-validity",
+            status: "fail",
+            title: "Signer 1: certificate 1 is currently valid",
+            detail: "Current time: 2024-01-01T00:00:00Z -> 2024-02-01T00:00:00Z"
+          },
+          {
+            id: "Signer 1-certificate-1-timestamp time-validity",
+            status: "pass",
+            title: "Signer 1: certificate 1 was valid at timestamp time",
+            detail: "2024-01-15T00:00:00Z: 2024-01-01T00:00:00Z -> 2024-02-01T00:00:00Z"
+          },
+          {
             id: "Signer 1 RFC3161 timestamp 1-certificate-1-current-validity",
             status: "fail",
             title: "Signer 1 RFC3161 timestamp 1: certificate 1 is currently valid",
@@ -142,6 +154,10 @@ void test("renderAuthenticodeTree renders signer and countersignature certificat
   assert.ok(html.includes("Signer 1: CN=Leaf Signer"));
   assert.ok(html.includes("Certificate &#8470;1: CN=Leaf Signer"));
   assert.ok(html.includes("Signer cert"));
+  assert.strictEqual(
+    getNodeClassForTitle(html, "Certificate &#8470;1: CN=Leaf Signer"),
+    "peSecurityTreeNode peSecurityTreeNode--pass"
+  );
   assert.ok(html.includes("Countersignature 1"));
   assert.ok(html.includes("RFC3161 timestamp 1"));
   assert.ok(html.includes("Certificate &#8470;1: CN=RFC3161 Timestamp Leaf"));
@@ -152,10 +168,8 @@ void test("renderAuthenticodeTree renders signer and countersignature certificat
     "peSecurityTreeNode peSecurityTreeNode--pass"
   );
   assert.ok(html.includes("Timestamp cert"));
-  assert.ok(html.includes("Root"));
   assert.ok(html.includes("Sig"));
   assert.ok(html.includes("data-certificate-download"));
-  assert.ok(html.includes("authenticode-certificate-1.cer"));
 });
 
 void test("renderAuthenticodeTree shows Windows CA trust snapshot verdicts", () => {

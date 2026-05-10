@@ -85,6 +85,16 @@ void test("verifyPkcs7Signatures verifies a valid Authenticode CMS signer", asyn
         check.status === "pass" && /certificate permits time stamping/i.test(check.title)
     )
   );
+  assert.ok(
+    verified.checks?.some(
+      check => check.id === "Signer 1-certificate-1-timestamp time-validity"
+    )
+  );
+  assert.ok(
+    !verified.checks?.some(
+      check => check.id === "Signer 1-certificate-2-timestamp time-validity"
+    )
+  );
   assert.strictEqual(verified.warnings, undefined);
 });
 

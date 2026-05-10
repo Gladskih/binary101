@@ -2,7 +2,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { attachPathChecks } from "../../analyzers/pe/authenticode/pkijs-path.js";
+import {
+  attachPathChecks,
+  attachTimestampPathChecks
+} from "../../analyzers/pe/authenticode/pkijs-path.js";
 import type { AuthenticodeVerificationCheck } from "../../analyzers/pe/authenticode/index.js";
 import {
   CODE_SIGNING_EKU_OID,
@@ -105,3 +108,20 @@ void test(
     );
   }
 );
+
+void test("attachTimestampPathChecks applies timestamp validity only to the leaf", async () => {
+  const checks: AuthenticodeVerificationCheck[] = [];
+  const certificates = await createAmbiguousIssuerFixture();
+
+  const pathIndexes = await attachTimestampPathChecks(
+    checks,
+    "Signer 1",
+    certificates,
+    0,
+    "2024-01-01T00:00:00.000Z"
+  );
+
+  assert.deepStrictEqual(pathIndexes, [0, 2]);
+  assert.ok(checks.some(check => check.id === "Signer 1-certificate-1-timestamp time-validity"));
+  assert.ok(!checks.some(check => check.id === "Signer 1-certificate-3-timestamp time-validity"));
+});

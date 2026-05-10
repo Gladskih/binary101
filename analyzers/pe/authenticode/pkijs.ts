@@ -9,7 +9,7 @@ import type { AuthenticodeTrustStoreSnapshot } from "./trust-store.js";
 import { Certificate, ContentInfo, SignedData } from "./pkijs-runtime.js";
 import { readCountersignatures } from "./pkijs-countersignatures.js";
 import { readRfc3161TimestampTokens } from "./pkijs-rfc3161-timestamps.js";
-import { addExtendedKeyUsageCheck, addSigningKeyUsageCheck, attachPathChecks } from "./pkijs-path.js";
+import { addExtendedKeyUsageCheck, addSigningKeyUsageCheck, attachTimestampPathChecks } from "./pkijs-path.js";
 import { evaluateAuthenticodeTrustPolicy } from "./trust-policy.js";
 import {
   CODE_SIGNING_EKU_OID,
@@ -51,6 +51,17 @@ const verifySigner = async (
     };
   }
 };
+
+const getSignerTimestampReferenceTime = (
+  signerVerification: AuthenticodeSignerVerificationInfo
+): string | undefined => [
+  ...(signerVerification.countersignatures
+    ?.filter(counter => counter.signatureVerified && counter.messageDigestVerified && counter.signingTime)
+    .map(counter => counter.signingTime as string) ?? []),
+  ...(signerVerification.timestampTokens
+    ?.filter(token => token.signatureVerified && token.messageDigestVerified && token.signingTime)
+    .map(token => token.signingTime as string) ?? [])
+].sort()[0];
 
 export const verifyPkcs7Signatures = async (
   payload: Uint8Array,
@@ -113,34 +124,6 @@ export const verifyPkcs7Signatures = async (
       warnings.push(`${signerLabel}: ${signerVerification.message}`);
     }
 
-    if (embeddedSignerCertificateIndex != null && signerCertificate) {
-      addSigningKeyUsageCheck(
-        checks,
-        `${signerLabel}-key-usage`,
-        `${signerLabel}: certificate permits digital signatures`,
-        signerCertificate
-      );
-      addExtendedKeyUsageCheck(
-        checks,
-        `${signerLabel}-eku`,
-        `${signerLabel}: certificate permits code signing`,
-        signerCertificate,
-        CODE_SIGNING_EKU_OID,
-        "Extended Key Usage extension is absent."
-      );
-      const certificatePathIndexes = await attachPathChecks(
-        checks,
-        signerLabel,
-        certificates,
-        embeddedSignerCertificateIndex,
-        signingTime,
-        "signing time"
-      );
-      if (certificatePathIndexes.length) {
-        signerVerification.certificatePathIndexes = certificatePathIndexes;
-      }
-    }
-
     const countersignatures = await readCountersignatures(signerLabel, signer, certificates, checks, warnings);
     if (countersignatures?.length) {
       signerVerification.countersignatures = countersignatures;
@@ -165,6 +148,32 @@ export const verifyPkcs7Signatures = async (
     );
     if (timestampTokens?.length) {
       signerVerification.timestampTokens = timestampTokens;
+    }
+    if (embeddedSignerCertificateIndex != null && signerCertificate) {
+      addSigningKeyUsageCheck(
+        checks,
+        `${signerLabel}-key-usage`,
+        `${signerLabel}: certificate permits digital signatures`,
+        signerCertificate
+      );
+      addExtendedKeyUsageCheck(
+        checks,
+        `${signerLabel}-eku`,
+        `${signerLabel}: certificate permits code signing`,
+        signerCertificate,
+        CODE_SIGNING_EKU_OID,
+        "Extended Key Usage extension is absent."
+      );
+      const certificatePathIndexes = await attachTimestampPathChecks(
+        checks,
+        signerLabel,
+        certificates,
+        embeddedSignerCertificateIndex,
+        getSignerTimestampReferenceTime(signerVerification)
+      );
+      if (certificatePathIndexes.length) {
+        signerVerification.certificatePathIndexes = certificatePathIndexes;
+      }
     }
     signerVerifications.push(signerVerification);
   }

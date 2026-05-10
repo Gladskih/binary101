@@ -6,7 +6,6 @@ import {
   createCertificateStoreFactBadge,
   createCertificateTrustBadge,
   createCheckBadge,
-  createInformationalCheckBadge,
   createIssuerMatchBadgeWithTrustContext,
   findIssuerCandidateIndexes,
   getCertificatePathStatus,
@@ -152,8 +151,21 @@ const renderReferenceValidityBadge = (
   );
 };
 
-const isTimestampPathLabel = (label: string | undefined): boolean =>
-  !!label && (label.includes("countersignature") || label.includes("RFC3161 timestamp"));
+const renderCurrentValidityBadge = (
+  auth: AuthenticodeInfo,
+  label: string | undefined,
+  certificateIndex: number
+) => {
+  if (!label) return undefined;
+  const id = `${label}-certificate-${certificateIndex + 1}-current-validity`;
+  const currentValidity = auth.verification?.checks?.find(check => check.id === id);
+  if (!currentValidity) return undefined;
+  const detail = formatCheckDetail(currentValidity.title, currentValidity.detail);
+  const referenceValidity = getReferenceValidityCheck(auth, label, certificateIndex);
+  return currentValidity.status === "fail" && referenceValidity?.status === "pass"
+    ? createInfoBadge("Now", detail)
+    : createStatusBadge("Now", currentValidity.status, detail);
+};
 
 const renderCertificatePath = (
   auth: AuthenticodeInfo,
@@ -183,19 +195,7 @@ const renderCertificatePath = (
         : createCertificateStoreFactBadge(auth, certificateIndex),
       depth === 0 && label ? createCheckBadge(auth, `${label}-key-usage`, "KU") : undefined,
       depth === 0 && label ? createCheckBadge(auth, `${label}-eku`, "EKU") : undefined,
-      label
-        ? isTimestampPathLabel(label)
-          ? createInformationalCheckBadge(
-              auth,
-              `${label}-certificate-${certificateIndex + 1}-current-validity`,
-              "Now"
-            )
-          : createCheckBadge(
-            auth,
-            `${label}-certificate-${certificateIndex + 1}-current-validity`,
-            "Now"
-          )
-        : undefined,
+      renderCurrentValidityBadge(auth, label, certificateIndex),
       label ? renderReferenceValidityBadge(auth, label, certificateIndex) : undefined,
       label
         ? createIssuerMatchBadgeWithTrustContext(
@@ -239,7 +239,14 @@ const renderCertificatePath = (
     ],
     [
       depth + 1 < pathIndexes.length
-        ? renderCertificatePath(auth, label, pathIndexes, depth + 1, leafRole, currentVisited)
+        ? renderCertificatePath(
+            auth,
+            label,
+            pathIndexes,
+            depth + 1,
+            leafRole,
+            currentVisited
+          )
         : "",
       renderTrustAnchorNode(trust),
       ...alternativeIssuerIndexes.map(index => renderAlternativeIssuerBranch(auth, index, currentVisited))
@@ -267,7 +274,14 @@ export const renderCertificateBranch = (
         ? [certificateIndex]
         : [];
   return resolvedIndexes.length
-    ? renderCertificatePath(auth, label, resolvedIndexes, 0, leafRole, new Set<number>())
+    ? renderCertificatePath(
+        auth,
+        label,
+        resolvedIndexes,
+        0,
+        leafRole,
+        new Set<number>()
+      )
     : renderTreeNode(
         missingTitle,
         [createStatusBadge("Missing", "unknown", missingTitle)],

@@ -15,7 +15,7 @@ import {
   TSTInfo,
   id_eContentType_TSTInfo
 } from "./pkijs-runtime.js";
-import { addExtendedKeyUsageCheck, addSigningKeyUsageCheck, attachPathChecks } from "./pkijs-path.js";
+import { addExtendedKeyUsageCheck, addSigningKeyUsageCheck, attachTimestampPathChecks } from "./pkijs-path.js";
 import { evaluateAuthenticodeTrustPolicy } from "./trust-policy.js";
 import {
   TIME_STAMPING_EKU_OID,
@@ -219,13 +219,12 @@ const verifyTimestampToken = async (
       TIME_STAMPING_EKU_OID,
       "Extended Key Usage extension is absent."
     );
-    const certificatePathIndexes = await attachPathChecks(
+    const certificatePathIndexes = await attachTimestampPathChecks(
       checks,
       label,
       certificates,
       timestampSignerCertificateIndex,
-      token.signingTime,
-      "timestamp time"
+      token.signingTime
     );
     if (certificatePathIndexes.length) token.certificatePathIndexes = certificatePathIndexes;
   }

@@ -7,7 +7,7 @@ import type {
 } from "./index.js";
 import type { Certificate } from "./pkijs-runtime.js";
 import { SignerInfo, getCrypto } from "./pkijs-runtime.js";
-import { addExtendedKeyUsageCheck, addSigningKeyUsageCheck, attachPathChecks } from "./pkijs-path.js";
+import { addExtendedKeyUsageCheck, addSigningKeyUsageCheck, attachTimestampPathChecks } from "./pkijs-path.js";
 import {
   CMS_COUNTERSIGNATURE_OID,
   CMS_MESSAGE_DIGEST_OID,
@@ -143,13 +143,12 @@ const verifyCountersignature = async (
     TIME_STAMPING_EKU_OID,
     "Extended Key Usage extension is absent."
   );
-  const certificatePathIndexes = await attachPathChecks(
+  const certificatePathIndexes = await attachTimestampPathChecks(
     checks,
     label,
     certificates,
     embeddedCountersignerCertificateIndex,
-    signingTime,
-    "countersignature time"
+    signingTime
   );
   if (certificatePathIndexes.length) info.certificatePathIndexes = certificatePathIndexes;
   return info;

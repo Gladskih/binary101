@@ -58,6 +58,10 @@ const addValidityCheck = (
   );
 };
 
+const allCertificates = (): boolean => true;
+
+const leafCertificate = (depth: number): boolean => depth === 0;
+
 export const addSigningKeyUsageCheck = (
   checks: AuthenticodeVerificationCheck[],
   id: string,
@@ -134,13 +138,14 @@ const addIssuerCapabilityChecks = (
   );
 };
 
-export const attachPathChecks = async (
+const attachPathChecksWithReferencePolicy = async (
   checks: AuthenticodeVerificationCheck[],
   signerLabel: string,
   certificates: Certificate[],
   leafIndex: number,
   referenceTime: string | undefined,
-  referenceLabel: string
+  referenceLabel: string,
+  shouldAddReferenceValidity: (depth: number) => boolean
 ): Promise<number[]> => {
   const pathIndexes: number[] = [];
   const visited = new Set<number>();
@@ -159,7 +164,7 @@ export const attachPathChecks = async (
       new Date(),
       "Current time"
     );
-    if (referenceDate) {
+    if (referenceDate && shouldAddReferenceValidity(pathIndexes.length - 1)) {
       addValidityCheck(
         checks,
         `${signerLabel}-certificate-${currentIndex + 1}-${referenceLabel}-validity`,
@@ -230,3 +235,38 @@ export const attachPathChecks = async (
   }
   return pathIndexes;
 };
+
+export const attachPathChecks = (
+  checks: AuthenticodeVerificationCheck[],
+  signerLabel: string,
+  certificates: Certificate[],
+  leafIndex: number,
+  referenceTime: string | undefined,
+  referenceLabel: string
+): Promise<number[]> =>
+  attachPathChecksWithReferencePolicy(
+    checks,
+    signerLabel,
+    certificates,
+    leafIndex,
+    referenceTime,
+    referenceLabel,
+    allCertificates
+  );
+
+export const attachTimestampPathChecks = (
+  checks: AuthenticodeVerificationCheck[],
+  signerLabel: string,
+  certificates: Certificate[],
+  leafIndex: number,
+  referenceTime: string | undefined
+): Promise<number[]> =>
+  attachPathChecksWithReferencePolicy(
+    checks,
+    signerLabel,
+    certificates,
+    leafIndex,
+    referenceTime,
+    "timestamp time",
+    leafCertificate
+  );
