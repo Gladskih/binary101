@@ -3,6 +3,7 @@
 import { humanSize, hex } from "../../binary-utils.js";
 import { dd, rowFlags, safe } from "../../html-utils.js";
 import type { PeClrHeader, PeClrManagedResourceValue } from "../../analyzers/pe/clr/index.js";
+import type { PeClrManagedResourceEntry } from "../../analyzers/pe/clr/managed-resource-types.js";
 import type { PeClrMetadataIndex } from "../../analyzers/pe/clr/types.js";
 import type { ResourceLangWithPreview } from "../../analyzers/pe/resources/preview/types.js";
 import { renderPreviewCell } from "./resource-preview-cell.js";
@@ -34,10 +35,52 @@ export const renderStrongName = (clrHeader: PeClrHeader, out: string[]): void =>
   out.push(`</details>`);
 };
 
-const renderManagedResourceValue = (value: PeClrManagedResourceValue): string => {
-  const preview = renderPreviewCell(value as unknown as ResourceLangWithPreview);
-  return `<tr><td>${safe(value.name)}</td><td>${safe(value.type)}</td>` +
-    `<td>${value.opaque ? "opaque" : safe(String(value.value ?? ""))}</td><td>${preview}</td></tr>`;
+const hasManagedResourcePreview = (entry: PeClrManagedResourceEntry): boolean =>
+  Boolean(entry.previewKind || entry.previewFields?.length || entry.previewDataUrl || entry.textPreview);
+
+const renderManagedResourceMetadata = (entry: PeClrManagedResourceEntry): string =>
+  `<dl class="clrManagedResourceMeta">` +
+    dd("Storage", safe(entry.storage)) +
+    dd("Offset", hex(entry.offset, 8)) +
+    dd("Flags", hex(entry.flags, 8)) +
+    dd("Implementation", safe(indexText(entry.implementation))) +
+    dd("Size", entry.size == null ? "-" : humanSize(entry.size)) +
+  `</dl>`;
+
+const hasVisiblePreview = (previewHtml: string): boolean => {
+  if (/<(?:img|audio)\b/i.test(previewHtml)) return true;
+  return previewHtml.replace(/<[^>]*>/g, "").trim() !== "" && previewHtml.trim() !== "-";
+};
+
+const renderManagedResourceValues = (values: PeClrManagedResourceValue[]): string => {
+  const tableClass = values.every(value => value.type === "String")
+    ? "table clrManagedResourceValuesTable clrManagedResourceStringsTable"
+    : "table clrManagedResourceValuesTable";
+  const rows = values.map(value => {
+    const previewHtml = renderPreviewCell(value as unknown as ResourceLangWithPreview);
+    const preview = hasVisiblePreview(previewHtml)
+      ? `<tr class="clrManagedResourceValuePreviewRow"><td colspan="3">` +
+        `${previewHtml}</td></tr>`
+      : "";
+    return `<tr><td>${safe(value.name)}</td><td>${safe(value.type)}</td>` +
+      `<td>${value.opaque ? "opaque" : safe(String(value.value ?? ""))}</td></tr>${preview}`;
+  }).join("");
+  return `<table class="${tableClass}">` +
+    `<thead><tr><th>Entry</th><th>Type</th><th>Value</th></tr></thead>` +
+    `<tbody>${rows}</tbody></table>`;
+};
+
+const renderManagedResourceEntry = (entry: PeClrManagedResourceEntry): string => {
+  const preview = hasManagedResourcePreview(entry)
+    ? `<div class="clrManagedResourcePreview">${renderPreviewCell(entry as unknown as ResourceLangWithPreview)}</div>`
+    : "";
+  const values = entry.entries?.length
+    ? `<div class="clrManagedResourceValues">${renderManagedResourceValues(entry.entries)}</div>`
+    : "";
+  return `<section class="clrManagedResourceBlock">` +
+    `<h4 class="clrManagedResourceTitle">${safe(entry.name || "(unnamed resource)")}</h4>` +
+    `<div class="clrManagedResourceSummary">${renderManagedResourceMetadata(entry)}${preview}</div>` +
+    `${values}${entry.issues?.length ? renderWarningList(entry.issues) : ""}</section>`;
 };
 
 export const renderManagedResources = (clrHeader: PeClrHeader, out: string[]): void => {
@@ -45,24 +88,9 @@ export const renderManagedResources = (clrHeader: PeClrHeader, out: string[]): v
   if (!resources) return;
   out.push(`<details style="margin-top:.35rem" open><summary>Managed resources (${resources.entries.length})</summary>`);
   out.push(`<div class="smallNote">CLR ManifestResource rows with embedded payload details; separate from the PE .rsrc tree.</div>`);
-  out.push(`<div class="tableWrap"><table class="table clrManagedResourcesTable">` +
-    `<thead><tr><th>Name</th><th>Storage</th><th>Offset</th><th>Flags</th>` +
-    `<th>Implementation</th><th>Size</th><th>Preview</th></tr></thead><tbody>`);
-  resources.entries.forEach(entry => {
-    const preview = renderPreviewCell(entry as unknown as ResourceLangWithPreview);
-    out.push(`<tr><td>${safe(entry.name || "")}</td><td>${safe(entry.storage)}</td>` +
-      `<td>${hex(entry.offset, 8)}</td><td>${hex(entry.flags, 8)}</td>` +
-      `<td>${safe(indexText(entry.implementation))}</td>` +
-      `<td>${entry.size == null ? "-" : humanSize(entry.size)}</td><td>${preview}</td></tr>`);
-    if (entry.entries?.length) {
-      out.push(`<tr><td colspan="7"><table class="table clrManagedResourceValuesTable">` +
-        `<thead><tr><th>Entry</th><th>Type</th><th>Value</th><th>Preview</th></tr></thead><tbody>`);
-      entry.entries.forEach(value => out.push(renderManagedResourceValue(value)));
-      out.push(`</tbody></table></td></tr>`);
-    }
-    if (entry.issues?.length) out.push(`<tr><td colspan="7">${renderWarningList(entry.issues)}</td></tr>`);
-  });
-  out.push(`</tbody></table></div>${renderWarningList(resources.issues)}</details>`);
+  out.push(`<div class="clrManagedResourceList">`);
+  resources.entries.forEach(entry => out.push(renderManagedResourceEntry(entry)));
+  out.push(`</div>${renderWarningList(resources.issues)}</details>`);
 };
 
 export const renderReadyToRun = (clrHeader: PeClrHeader, out: string[]): void => {

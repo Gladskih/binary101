@@ -254,8 +254,8 @@ void test("renderClr includes explanatory strong-name resources and ReadyToRun s
   assert.ok(html.includes(publicKeyToken));
   assert.ok(html.includes("Managed resources"));
   assert.ok(html.includes(resourceName));
-  assert.ok(html.includes("<th>Flags</th>"));
-  assert.ok(html.includes("<th>Implementation</th>"));
+  assert.ok(html.includes("<dt>Flags</dt>"));
+  assert.ok(html.includes("<dt>Implementation</dt>"));
   assert.ok(!html.includes("Manifest resources"));
   assert.ok(html.includes("ReadyToRun"));
   assert.ok(html.includes("STRIPPED_IL_BODIES"));
