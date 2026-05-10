@@ -7,6 +7,21 @@ import { createPngFile } from "../fixtures/image-sample-files.js";
 import { createAniFile, createWavFile } from "../fixtures/riff-sample-files.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
+const createIcoPayload = (): Uint8Array => {
+  const png = createPngFile().data;
+  const ico = new Uint8Array(22 + png.length);
+  const view = new DataView(ico.buffer);
+  view.setUint16(2, 1, true);
+  view.setUint16(4, 1, true);
+  view.setUint8(6, 1);
+  view.setUint8(7, 1);
+  view.setUint16(10, 1, true);
+  view.setUint32(14, png.length, true);
+  view.setUint32(18, 22, true);
+  ico.set(png, 22);
+  return ico;
+};
+
 void test("addHeuristicResourcePreview recognizes inline PNG payloads", async () => {
   const result = await addHeuristicResourcePreview(createPngFile().data, 0);
 
@@ -21,6 +36,21 @@ void test("addHeuristicResourcePreview recognizes WAV payloads as audio", async 
   assert.strictEqual(result?.preview?.previewKind, "audio");
   assert.strictEqual(result?.preview?.previewMime, "audio/wav");
   assert.match(expectDefined(result?.preview?.previewDataUrl), /^data:audio\/wav;base64,/);
+});
+
+void test("addHeuristicResourcePreview recognizes ICO payloads", async () => {
+  const result = await addHeuristicResourcePreview(createIcoPayload(), 0);
+
+  assert.strictEqual(result?.preview?.previewKind, "image");
+  assert.strictEqual(result?.preview?.previewMime, "image/x-icon");
+  assert.match(expectDefined(result?.preview?.previewDataUrl), /^data:image\/x-icon;base64,/);
+  assert.deepEqual(result?.preview?.previewFields, [{ label: "Detected", value: "ICO (heuristic)" }]);
+});
+
+void test("addHeuristicResourcePreview rejects truncated ICO payloads", async () => {
+  const result = await addHeuristicResourcePreview(createIcoPayload().subarray(0, 21), 0);
+
+  assert.strictEqual(result, null);
 });
 
 void test("addHeuristicResourcePreview recognizes JSON-like text payloads", async () => {

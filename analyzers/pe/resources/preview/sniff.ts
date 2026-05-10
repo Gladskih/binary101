@@ -108,6 +108,25 @@ const addAniSummaryPreview = async (data: Uint8Array): Promise<ResourcePreviewRe
   ]);
 };
 
+const hasValidIcoContainer = (data: Uint8Array): boolean => {
+  // ICO = ICONDIR (6 bytes) + ICONDIRENTRY records (16 bytes each). ICONDIR shares
+  // its leading fields with Microsoft ICONRESDIR:
+  // https://learn.microsoft.com/en-us/windows/win32/menurc/iconresdir
+  if (data.length < 22) return false;
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const count = view.getUint16(4, true);
+  if (view.getUint16(0, true) !== 0 || view.getUint16(2, true) !== 1 || count === 0) return false;
+  if (count > Math.floor((data.length - 6) / 16)) return false;
+  for (let index = 0; index < count; index += 1) {
+    const entryOffset = 6 + index * 16;
+    const imageSize = view.getUint32(entryOffset + 8, true);
+    const imageOffset = view.getUint32(entryOffset + 12, true);
+    if (imageSize === 0 || imageOffset < 6 + count * 16) return false;
+    if (imageOffset > data.length || imageSize > data.length - imageOffset) return false;
+  }
+  return true;
+};
+
 export const addHeuristicResourcePreview = async (
   data: Uint8Array,
   codePage: number | undefined
@@ -127,6 +146,9 @@ export const addHeuristicResourcePreview = async (
   }
   if (hasWebpSignature(data)) {
     return buildDataPreview("image", "image/webp", data, [{ label: "Detected", value: "WebP (heuristic)" }]);
+  }
+  if (hasValidIcoContainer(data)) {
+    return buildDataPreview("image", "image/x-icon", data, [{ label: "Detected", value: "ICO (heuristic)" }]);
   }
   // RIFF WAVE form type. Source: Microsoft RIFF Multimedia Programming Interface and Data
   // Specifications 1.0 / https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/Docs/riffmci.pdf
