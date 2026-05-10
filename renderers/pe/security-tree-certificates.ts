@@ -11,6 +11,7 @@ import {
   getCertificatePathStatus,
   getCertificate,
   getCertificateTrust,
+  hasPassedReferenceValidityInPath,
   getReferenceValidityCheck
 } from "./security-tree-checks.js";
 import {
@@ -151,6 +152,9 @@ const renderReferenceValidityBadge = (
   );
 };
 
+const formatTimestampedCurrentValidityDetail = (detail: string): string =>
+  `${detail} Current validity is informational for this timestamped Authenticode path.`;
+
 const renderCurrentValidityBadge = (
   auth: AuthenticodeInfo,
   label: string | undefined,
@@ -162,8 +166,10 @@ const renderCurrentValidityBadge = (
   if (!currentValidity) return undefined;
   const detail = formatCheckDetail(currentValidity.title, currentValidity.detail);
   const referenceValidity = getReferenceValidityCheck(auth, label, certificateIndex);
-  return currentValidity.status === "fail" && referenceValidity?.status === "pass"
-    ? createInfoBadge("Now", detail)
+  const referenceValidityPassed =
+    referenceValidity?.status === "pass" || hasPassedReferenceValidityInPath(auth, label);
+  return currentValidity.status === "fail" && referenceValidityPassed
+    ? createInfoBadge("Now", formatTimestampedCurrentValidityDetail(detail))
     : createStatusBadge("Now", currentValidity.status, detail);
 };
 

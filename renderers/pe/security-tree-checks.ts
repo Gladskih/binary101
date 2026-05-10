@@ -225,6 +225,18 @@ export const getReferenceValidityCheck = (
       check.id !== `${label}-certificate-${certificateIndex + 1}-current-validity`
   );
 
+export const hasPassedReferenceValidityInPath = (
+  auth: AuthenticodeInfo,
+  label: string
+): boolean =>
+  !!auth.verification?.checks?.some(
+    check =>
+      check.status === "pass" &&
+      check.id.startsWith(`${label}-certificate-`) &&
+      check.id.endsWith("-validity") &&
+      !check.id.endsWith("-current-validity")
+  );
+
 export const collectUsedCertificateIndexes = (auth: AuthenticodeInfo): Set<number> => {
   const used = new Set<number>();
   auth.verification?.signerVerifications?.forEach(signerVerification => {

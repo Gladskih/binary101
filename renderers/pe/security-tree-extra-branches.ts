@@ -44,8 +44,8 @@ export const renderAdditionalCertificatesNode = (auth: AuthenticodeInfo): string
     [
       createRoleBadge("Embedded", "certificate"),
       createInfoBadge(
-        `${additionalIndexes.length} detached`,
-        "Embedded certificates that are not connected to any signer or issuer relation."
+        `${additionalIndexes.length} unused`,
+        "Embedded certificates that are not used by signer, countersignature, or issuer paths."
       )
     ],
     [],
