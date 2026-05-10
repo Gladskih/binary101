@@ -45,7 +45,9 @@ export const renderManagedResources = (clrHeader: PeClrHeader, out: string[]): v
   if (!resources) return;
   out.push(`<details style="margin-top:.35rem" open><summary>Managed resources (${resources.entries.length})</summary>`);
   out.push(`<div class="smallNote">CLR ManifestResource rows with embedded payload details; separate from the PE .rsrc tree.</div>`);
-  out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>Name</th><th>Storage</th><th>Offset</th><th>Flags</th><th>Implementation</th><th>Size</th><th>Preview</th></tr></thead><tbody>`);
+  out.push(`<div class="tableWrap"><table class="table clrManagedResourcesTable">` +
+    `<thead><tr><th>Name</th><th>Storage</th><th>Offset</th><th>Flags</th>` +
+    `<th>Implementation</th><th>Size</th><th>Preview</th></tr></thead><tbody>`);
   resources.entries.forEach(entry => {
     const preview = renderPreviewCell(entry as unknown as ResourceLangWithPreview);
     out.push(`<tr><td>${safe(entry.name || "")}</td><td>${safe(entry.storage)}</td>` +
@@ -53,13 +55,14 @@ export const renderManagedResources = (clrHeader: PeClrHeader, out: string[]): v
       `<td>${safe(indexText(entry.implementation))}</td>` +
       `<td>${entry.size == null ? "-" : humanSize(entry.size)}</td><td>${preview}</td></tr>`);
     if (entry.entries?.length) {
-      out.push(`<tr><td colspan="7"><table class="table" style="margin:.25rem 0"><thead><tr><th>Entry</th><th>Type</th><th>Value</th><th>Preview</th></tr></thead><tbody>`);
+      out.push(`<tr><td colspan="7"><table class="table clrManagedResourceValuesTable">` +
+        `<thead><tr><th>Entry</th><th>Type</th><th>Value</th><th>Preview</th></tr></thead><tbody>`);
       entry.entries.forEach(value => out.push(renderManagedResourceValue(value)));
       out.push(`</tbody></table></td></tr>`);
     }
     if (entry.issues?.length) out.push(`<tr><td colspan="7">${renderWarningList(entry.issues)}</td></tr>`);
   });
-  out.push(`</tbody></table>${renderWarningList(resources.issues)}</details>`);
+  out.push(`</tbody></table></div>${renderWarningList(resources.issues)}</details>`);
 };
 
 export const renderReadyToRun = (clrHeader: PeClrHeader, out: string[]): void => {
