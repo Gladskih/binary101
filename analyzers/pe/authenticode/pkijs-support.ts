@@ -12,6 +12,15 @@ export const TIME_STAMPING_EKU_OID = "1.3.6.1.5.5.7.3.8";
 export const RSA_ENCRYPTION_OID = "1.2.840.113549.1.1.1";
 export const OIW_SHA1_WITH_RSA_ENCRYPTION_OID = "1.3.14.3.2.29";
 export const PKCS1_SHA1_WITH_RSA_ENCRYPTION_OID = "1.2.840.113549.1.1.5";
+export const EC_PUBLIC_KEY_OID = "1.2.840.10045.2.1";
+
+const ECDSA_SIGNATURE_OIDS_BY_DIGEST_OID: Readonly<Record<string, string>> = {
+  "1.3.14.3.2.26": "1.2.840.10045.4.1",
+  "2.16.840.1.101.3.4.2.4": "1.2.840.10045.4.3.1",
+  "2.16.840.1.101.3.4.2.1": "1.2.840.10045.4.3.2",
+  "2.16.840.1.101.3.4.2.2": "1.2.840.10045.4.3.3",
+  "2.16.840.1.101.3.4.2.3": "1.2.840.10045.4.3.4"
+};
 
 export const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const out = new Uint8Array(bytes.byteLength);
@@ -97,6 +106,23 @@ export const normalizeLegacySignatureAlgorithm = (
 
 export const normalizeLegacyCertificateSignatureAlgorithm = (certificate: Certificate): void => {
   normalizeLegacySignatureAlgorithm(certificate.signatureAlgorithm);
+};
+
+export const normalizeLegacySignerSignatureAlgorithm = (
+  signer: SignerInfo | undefined
+): string | undefined => {
+  normalizeLegacySignatureAlgorithm(signer?.signatureAlgorithm);
+  if (signer?.signatureAlgorithm?.algorithmId !== EC_PUBLIC_KEY_OID) return undefined;
+  const ecdsaSignatureOid = ECDSA_SIGNATURE_OIDS_BY_DIGEST_OID[signer.digestAlgorithm.algorithmId];
+  if (!ecdsaSignatureOid) return undefined;
+  // RFC 5753 sections 2.1.1 and 7.1.3 require ecdsa-with-SHA* in CMS
+  // SignerInfo.signatureAlgorithm. Windows Authenticode accepts id-ecPublicKey
+  // here when SignerInfo.digestAlgorithm carries the hash; normalize for PKI.js.
+  signer.signatureAlgorithm.algorithmId = ecdsaSignatureOid;
+  return `CMS SignerInfo.signatureAlgorithm uses id-ecPublicKey (${EC_PUBLIC_KEY_OID}) ` +
+    `with digestAlgorithm ${signer.digestAlgorithm.algorithmId}; RFC 5753 expects ` +
+    `the matching ecdsa-with-SHA* signature OID (${ecdsaSignatureOid}). ` +
+    "Verification normalized this Windows Authenticode-compatible encoding.";
 };
 
 export const matchSignerCertificate = async (

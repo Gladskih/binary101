@@ -19,7 +19,7 @@ import {
   matchSignerCertificate,
   mergeWarnings,
   normalizeLegacyCertificateSignatureAlgorithm,
-  normalizeLegacySignatureAlgorithm,
+  normalizeLegacySignerSignatureAlgorithm,
   parseIsoDate,
   toArrayBuffer
 } from "./pkijs-support.js";
@@ -46,10 +46,14 @@ const appendCertificatePathWarnings = (
 
 const verifySigner = async (
   signedData: SignedData,
-  signerIndex: number
+  signerIndex: number,
+  warnings: string[]
 ): Promise<AuthenticodeSignerVerificationInfo> => {
   try {
-    normalizeLegacySignatureAlgorithm(signedData.signerInfos[signerIndex]?.signatureAlgorithm);
+    const normalizationWarning = normalizeLegacySignerSignatureAlgorithm(
+      signedData.signerInfos[signerIndex]
+    );
+    if (normalizationWarning) warnings.push(`Signer ${signerIndex + 1}: ${normalizationWarning}`);
     const result = await signedData.verify({ signer: signerIndex, checkChain: false, extendedMode: true });
     return {
       index: signerIndex,
@@ -105,7 +109,7 @@ export const verifyPkcs7Signatures = async (
     const signer = signedData.signerInfos[signerIndex];
     if (!signer) continue;
     const signerLabel = `Signer ${signerIndex + 1}`;
-    const signerVerification = await verifySigner(signedData, signerIndex);
+    const signerVerification = await verifySigner(signedData, signerIndex, warnings);
     const signerCertificateIndex = await matchSignerCertificate(signer, certificates);
     const signerCertificate =
       signerCertificateIndex != null && signerCertificateIndex >= 0

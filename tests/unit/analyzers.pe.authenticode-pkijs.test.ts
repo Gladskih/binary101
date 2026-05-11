@@ -4,7 +4,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Certificate, ContentInfo, SignedData } from "../../analyzers/pe/authenticode/pkijs-runtime.js";
 import { verifyPkcs7Signatures } from "../../analyzers/pe/authenticode/pkijs.js";
-import { createSignedAuthenticodeCmsFixture } from "../fixtures/pe-authenticode-signed-cms-fixtures.js";
+import {
+  createEcPublicKeySignatureAlgorithmCmsFixture,
+  createSignedAuthenticodeCmsFixture
+} from "../fixtures/pe-authenticode-signed-cms-fixtures.js";
 
 const PKCS1_MD5_WITH_RSA_ENCRYPTION_OID = "1.2.840.113549.1.1.4";
 
@@ -161,6 +164,22 @@ void test("verifyPkcs7Signatures reports invalid signer signatures without hidin
         /countersignature 1: signed attributes message digest matches the parent signature/i.test(
           check.title
         ) && check.status === "fail"
+    )
+  );
+});
+
+void test("verifyPkcs7Signatures accepts Authenticode ECDSA signerInfo with ecPublicKey OID", async () => {
+  const verified = await verifyPkcs7Signatures(await createEcPublicKeySignatureAlgorithmCmsFixture());
+
+  assert.strictEqual(verified.signerVerifications?.[0]?.signatureVerified, true);
+  assert.ok(
+    verified.checks?.some(check => check.id === "Signer 1-signature" && check.status === "pass")
+  );
+  assert.ok(
+    verified.warnings?.some(
+      warning =>
+        /SignerInfo\.signatureAlgorithm uses id-ecPublicKey/i.test(warning) &&
+        /RFC 5753 expects/i.test(warning)
     )
   );
 });

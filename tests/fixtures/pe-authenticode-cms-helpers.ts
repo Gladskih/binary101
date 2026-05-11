@@ -143,3 +143,13 @@ export const generateRsaKeyPair = (hashAlgorithm = "SHA-256"): Promise<CryptoKey
     true,
     ["sign", "verify"]
   ) as Promise<CryptoKeyPair>;
+
+export const generateEcKeyPair = (): Promise<CryptoKeyPair> =>
+  crypto.subtle.generateKey(
+    {
+      name: "ECDSA",
+      namedCurve: "P-256"
+    },
+    true,
+    ["sign", "verify"]
+  ) as Promise<CryptoKeyPair>;

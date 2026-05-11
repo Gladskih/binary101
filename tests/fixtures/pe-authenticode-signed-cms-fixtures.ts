@@ -34,12 +34,17 @@ import {
   createExtendedKeyUsageExtension,
   createKeyUsageExtension,
   createSpcIndirectData,
+  generateEcKeyPair,
   generateRsaKeyPair,
   hexToBytes,
   setEncodedSignedAttributes,
   toArrayBuffer
 } from "./pe-authenticode-cms-helpers.js";
-
+const EC_PUBLIC_KEY_OID = "1.2.840.10045.2.1";
+const encodeContentInfo = (signedData: SignedData): Uint8Array =>
+  new Uint8Array(
+    new ContentInfo({ contentType: ContentInfo.SIGNED_DATA, content: signedData.toSchema(true) }).toSchema().toBER()
+  );
 const buildSignedAuthenticodeCmsPayload = async (fileDigestHex: string): Promise<Uint8Array> => {
   const rootKeys = await generateRsaKeyPair();
   const signerKeys = await generateRsaKeyPair();
@@ -209,12 +214,69 @@ const buildSignedAuthenticodeCmsPayload = async (fileDigestHex: string): Promise
     ]
   });
 
-  return new Uint8Array(
-    new ContentInfo({
-      contentType: ContentInfo.SIGNED_DATA,
-      content: signedData.toSchema(true)
-    }).toSchema().toBER()
+  return encodeContentInfo(signedData);
+};
+
+export const createEcPublicKeySignatureAlgorithmCmsFixture = async (): Promise<Uint8Array> => {
+  const rootKeys = await generateRsaKeyPair();
+  const signerKeys = await generateEcKeyPair();
+  const rootCertificate = await createCertificate(
+    "Binary101 Root CA",
+    1,
+    rootKeys.publicKey,
+    createCommonName("Binary101 Root CA"),
+    rootKeys.privateKey,
+    "2020-01-01T00:00:00Z",
+    "2035-01-01T00:00:00Z",
+    []
   );
+  const signerCertificate = await createCertificate(
+    "Binary101 ECDSA Signer",
+    2,
+    signerKeys.publicKey,
+    rootCertificate.subject,
+    rootKeys.privateKey,
+    "2023-01-01T00:00:00Z",
+    "2030-01-01T00:00:00Z",
+    []
+  );
+  const spcIndirectData = createSpcIndirectData(Uint8Array.of(1, 2, 3, 4));
+  const messageDigest = await crypto.subtle.digest("SHA-256", spcIndirectData);
+  const signedData = new SignedData({
+    version: 1,
+    encapContentInfo: new EncapsulatedContentInfo({
+      eContentType: SPC_INDIRECT_DATA_OID,
+      eContent: new asn1js.OctetString({ valueHex: spcIndirectData })
+    }),
+    certificates: [signerCertificate, rootCertificate]
+  });
+  signedData.signerInfos.push(
+    new SignerInfo({
+      version: 1,
+      sid: new IssuerAndSerialNumber({
+        issuer: signerCertificate.issuer,
+        serialNumber: signerCertificate.serialNumber
+      }),
+      signedAttrs: new SignedAndUnsignedAttributes({
+        type: 0,
+        attributes: [
+          new Attribute({
+            type: CMS_CONTENT_TYPE_OID,
+            values: [new asn1js.ObjectIdentifier({ value: SPC_INDIRECT_DATA_OID })]
+          }),
+          new Attribute({
+            type: CMS_MESSAGE_DIGEST_OID,
+            values: [new asn1js.OctetString({ valueHex: messageDigest })]
+          })
+        ]
+      })
+    })
+  );
+  await signedData.sign(signerKeys.privateKey, 0, "SHA-256");
+  const signerInfo = signedData.signerInfos[0];
+  if (!signerInfo) throw new Error("ECDSA CMS fixture is missing the primary signer.");
+  signerInfo.signatureAlgorithm.algorithmId = EC_PUBLIC_KEY_OID;
+  return encodeContentInfo(signedData);
 };
 
 const buildFixture = async () => {
