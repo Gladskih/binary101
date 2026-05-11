@@ -90,7 +90,6 @@ export const createBasePe = (): PeWindowsParseResult =>
     iat: null,
     importLinking: null,
     resources: null,
-    overlaySize: 0,
     imageEnd: 0,
     imageSizeMismatch: false,
     hasCert: false,

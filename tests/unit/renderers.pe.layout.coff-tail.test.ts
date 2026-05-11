@@ -5,15 +5,20 @@ import { test } from "node:test";
 import { renderSanity } from "../../renderers/pe/layout.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 import { createPeSection, createPeWithSections } from "../fixtures/pe-renderer-headers-fixture.js";
-import {
-  COFF_SYMBOL_RECORD_SIZE,
-  createSyntheticLegacyCoffStringTableFixture
-} from "../fixtures/pe-coff-tail-fixture.js";
+import { createSyntheticLegacyCoffStringTableFixture } from "../fixtures/pe-coff-tail-fixture.js";
+
+const assertSanityClean = (html: string): void => {
+  assert.equal(
+    html,
+    `<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Sanity</h4>` +
+      `<div class="smallNote">No obvious structural issues detected.</div></section>`
+  );
+};
 
 const createPeWithCoffTailFixture = (): {
   pe: PeParseResult;
-  knownCoffTailSize: number;
   firstLongSectionOffset: number;
+  rawImageEnd: number;
 } => {
   const pe = createPeWithSections(createPeSection(""));
   const stringTable = createSyntheticLegacyCoffStringTableFixture(2);
@@ -30,38 +35,42 @@ const createPeWithCoffTailFixture = (): {
   pe.opt.AddressOfEntryPoint = firstSection.virtualAddress;
   return {
     pe,
-    knownCoffTailSize: pe.coff.NumberOfSymbols * COFF_SYMBOL_RECORD_SIZE + pe.coffStringTableSize,
-    firstLongSectionOffset: firstLongSection.offset
+    firstLongSectionOffset: firstLongSection.offset,
+    rawImageEnd: firstSection.pointerToRawData + firstSection.sizeOfRawData
   };
 };
 
-void test("renderSanity does not flag COFF symbol and string tables after the last section", () => {
+void test("renderSanity renders clean state for COFF tail after the last section", () => {
   const out: string[] = [];
   const fixture = createPeWithCoffTailFixture();
 
-  renderSanity({ ...fixture.pe, overlaySize: fixture.knownCoffTailSize } as PeParseResult, out);
-
-  const html = out.join("");
-  assert.ok(!html.includes("Overlay after last section"));
-  assert.ok(html.includes("No obvious structural issues"));
+  renderSanity(fixture.pe, out);
+  assertSanityClean(out.join(""));
 });
 
-void test("renderSanity still reports bytes that remain after the known COFF tail", () => {
+void test("renderSanity renders clean state for overlay range after the known COFF tail", () => {
   const out: string[] = [];
   const fixture = createPeWithCoffTailFixture();
-  const unexplainedOverlayBytes = fixture.firstLongSectionOffset;
 
   renderSanity(
-    { ...fixture.pe, overlaySize: fixture.knownCoffTailSize + unexplainedOverlayBytes } as PeParseResult,
+    {
+      ...fixture.pe,
+      overlay: {
+        ranges: [{
+          start: fixture.rawImageEnd,
+          end: fixture.rawImageEnd + fixture.firstLongSectionOffset,
+          size: fixture.firstLongSectionOffset,
+          findings: []
+        }]
+      }
+    } as PeParseResult,
     out
   );
 
-  assert.ok(
-    out.join("").includes(`Overlay after last section: ${unexplainedOverlayBytes} B (${unexplainedOverlayBytes} bytes).`)
-  );
+  assertSanityClean(out.join(""));
 });
 
-void test("renderSanity does not flag explicit trailing alignment padding after the known COFF tail", () => {
+void test("renderSanity renders clean state for trailing alignment padding after the COFF tail", () => {
   const out: string[] = [];
   const fixture = createPeWithCoffTailFixture();
   const trailingAlignmentPaddingSize = fixture.pe.coffStringTableSize;
@@ -70,12 +79,10 @@ void test("renderSanity does not flag explicit trailing alignment padding after 
   renderSanity(
     {
       ...fixture.pe,
-      // Keep overlay shorter than known COFF tail + zero padding to prove clipping works.
-      overlaySize: fixture.knownCoffTailSize + trailingAlignmentPaddingSize - fixture.firstLongSectionOffset,
       trailingAlignmentPaddingSize
     } as PeParseResult,
     out
   );
 
-  assert.ok(!out.join("").includes("Overlay after last section"));
+  assertSanityClean(out.join(""));
 });

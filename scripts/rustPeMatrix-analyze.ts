@@ -36,6 +36,9 @@ const collectImportFunctionNames = (pe: PeWindowsParseResult): string[] =>
     )
     .sort();
 
+const sumOverlayBytes = (pe: PeWindowsParseResult): number =>
+  pe.overlay?.ranges.reduce((total, range) => total + range.size, 0) ?? 0;
+
 const summarizeAnalyzerResult = (pe: PeWindowsParseResult, html: string): AnalyzerSummary => ({
   machine: pe.coff.Machine,
   optionalMagic: pe.opt.Magic,
@@ -57,7 +60,7 @@ const summarizeAnalyzerResult = (pe: PeWindowsParseResult, html: string): Analyz
   warningCount: pe.warnings?.length ?? 0,
   warnings: pe.warnings ?? [],
   debugWarning: pe.debug?.warning ?? null,
-  overlaySize: pe.overlaySize,
+  overlayBytes: sumOverlayBytes(pe),
   trailingAlignmentPaddingSize: pe.trailingAlignmentPaddingSize ?? 0,
   coffSymbolRecords: pe.coff.NumberOfSymbols,
   coffStringTableSize: pe.coffStringTableSize ?? 0,

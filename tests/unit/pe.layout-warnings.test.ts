@@ -139,19 +139,19 @@ void test("collectPeLayoutWarnings reports security and debug tail anomalies", (
   const pe = createWindowsLayoutSubject(
     createIndexedSection(0, DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT)
   );
-  pe.overlaySize = DEFAULT_FILE_ALIGNMENT >>> 2;
   const securitySize = DEFAULT_FILE_ALIGNMENT >>> 3;
   const mappedImageEnd = getSectionRawEnd(pe.sections[0]!);
+  const fileSize = mappedImageEnd + (DEFAULT_FILE_ALIGNMENT >>> 2);
   // The certificate table is pushed back into the mapped image and the debug payload starts before it ends.
   pe.dirs = [{ name: "SECURITY", rva: mappedImageEnd - (securitySize >>> 1), size: securitySize }];
   pe.debug = createDebugSection(
     createUnmappedDebugEntry(
       mappedImageEnd - (securitySize >>> 3),
-      pe.overlaySize - (securitySize >>> 2)
+      fileSize - mappedImageEnd - (securitySize >>> 2)
     )
   );
 
-  const warnings = collectPeLayoutWarnings(pe);
+  const warnings = collectPeLayoutWarnings(pe, fileSize);
 
   assert.ok(warnings.some(warning => /certificate table starts .*overlaps mapped image/i.test(warning)));
   assert.ok(warnings.some(warning => /debug raw data begins .*overlaps mapped image/i.test(warning)));

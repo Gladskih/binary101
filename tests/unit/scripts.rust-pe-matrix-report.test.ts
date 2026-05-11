@@ -43,7 +43,7 @@ const createSummary = (): SummaryFile => ({
         warningCount: 0,
         warnings: [],
         debugWarning: null,
-        overlaySize: 0,
+        overlayBytes: 0,
         trailingAlignmentPaddingSize: 0,
         coffSymbolRecords: 0,
         coffStringTableSize: 0,

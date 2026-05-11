@@ -9,6 +9,7 @@ import type { PeArchitectureDirectory } from "../directories/architecture-direct
 import type { PeGlobalPtrDirectory } from "../directories/globalptr-directory.js";
 import type { PeLoadConfig } from "../load-config/index.js";
 import type { PeNativeAotCandidate } from "../native-aot.js";
+import type { PeOverlayAnalysis } from "../overlay.js";
 import type { PeResources } from "../resources/index.js";
 import type { PeClrHeader } from "../clr/index.js";
 import type { ParsedSecurityDirectory } from "../security/index.js";
@@ -39,7 +40,7 @@ interface PeParseResultBase {
   sections: PeSection[];
   entrySection: PeCore["entrySection"];
   rvaToOff: RvaToOffset;
-  overlaySize: number;
+  overlay?: PeOverlayAnalysis | null;
   imageEnd: number;
   imageSizeMismatch: boolean;
   hasCert: boolean;

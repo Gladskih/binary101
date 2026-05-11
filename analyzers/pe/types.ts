@@ -147,7 +147,6 @@ interface PeCoreBase {
   sections: PeSection[];
   entrySection: { name: string; index: number } | null;
   rvaToOff: RvaToOffset;
-  overlaySize: number;
   imageEnd: number;
   imageSizeMismatch: boolean;
 }

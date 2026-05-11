@@ -13,6 +13,7 @@ import { createElfDisassemblyController } from "./ui/elf-disassembly.js";
 import { createPeChecksumClickHandler } from "./ui/pe-checksum-controls.js";
 import { copyManifestPreviewToClipboard } from "./ui/manifest-preview-copy.js";
 import { createCertificateDownloadClickHandler } from "./ui/certificate-download.js";
+import { createPeOverlayDownloadClickHandler } from "./ui/pe-overlay-download.js";
 import { handleManifestTreeActionClick, syncManifestTreeControls } from "./ui/manifest-tree-controls.js";
 import { captureOpenDetails, restoreOpenDetails } from "./ui/details-open-state.js";
 const getElement = (id: string) => document.getElementById(id)!;
@@ -63,28 +64,26 @@ const renderResult = (result: ParseForUiResult): void => {
   });
   restoreOpenDetails(peDetailsValueElement, openDetails, viewer => syncManifestTreeControls(viewer as Element));
 };
+const getCurrentFile = (): File | null => currentFile;
+const getCurrentParseResult = (): ParseForUiResult => currentParseResult;
 const peDisassembly = createPeDisassemblyController({
-  getCurrentFile: () => currentFile,
-  getCurrentParseResult: () => currentParseResult,
+  getCurrentFile,
+  getCurrentParseResult,
   renderResult
 });
 const elfDisassembly = createElfDisassemblyController({
-  getCurrentFile: () => currentFile,
-  getCurrentParseResult: () => currentParseResult,
+  getCurrentFile,
+  getCurrentParseResult,
   renderResult
 });
-const zipClickHandler = createZipEntryClickHandler({
-  getParseResult: () => currentParseResult, getFile: () => currentFile, setStatusMessage
-});
-const gzipClickHandler = createGzipClickHandler({
-  getParseResult: () => currentParseResult, getFile: () => currentFile, setStatusMessage
-});
-const isoClickHandler = createIso9660EntryClickHandler({
-  getParseResult: () => currentParseResult, getFile: () => currentFile, setStatusMessage
-});
-const peChecksumClickHandler = createPeChecksumClickHandler({
-  getParseResult: () => currentParseResult, getFile: () => currentFile, setStatusMessage
-});
+const fileActionDeps = {
+  getParseResult: getCurrentParseResult, getFile: getCurrentFile, setStatusMessage
+};
+const zipClickHandler = createZipEntryClickHandler(fileActionDeps);
+const gzipClickHandler = createGzipClickHandler(fileActionDeps);
+const isoClickHandler = createIso9660EntryClickHandler(fileActionDeps);
+const peChecksumClickHandler = createPeChecksumClickHandler(fileActionDeps);
+const peOverlayDownloadClickHandler = createPeOverlayDownloadClickHandler(fileActionDeps);
 const certificateDownloadClickHandler = createCertificateDownloadClickHandler({ setStatusMessage });
 peDetailsValueElement.addEventListener("click", event => {
   const targetNode = event.target as Node | null;
@@ -142,6 +141,7 @@ peDetailsValueElement.addEventListener("click", event => {
   void isoClickHandler(event);
   void gzipClickHandler(event);
   void zipClickHandler(event);
+  peOverlayDownloadClickHandler(event);
   certificateDownloadClickHandler(event);
 });
 peDetailsValueElement.addEventListener("toggle", event => syncManifestTreeControls(event.target as Element | null), true);

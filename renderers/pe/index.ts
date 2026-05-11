@@ -26,6 +26,7 @@ import {
 import { renderResources } from "./resources.js";
 import { renderException } from "./exception.js";
 import { renderNativeAotCandidate } from "./native-aot.js";
+import { renderOverlay } from "./overlay.js";
 import {
   renderReloc,
   renderSanity
@@ -65,6 +66,7 @@ export function renderPe(pe: PeParseResult | null | undefined): string {
     renderArchitectureDirectory(pe, out);
     renderGlobalPtrDirectory(pe, out);
   }
+  renderOverlay(pe, out);
   renderSanity(pe, out);
   return out.join("");
 }

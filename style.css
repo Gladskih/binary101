@@ -271,6 +271,12 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .peSecurityTreeDownloadButton:hover{border-color:var(--accent);color:var(--accent)}
 .peSecurityTreeMeta{margin-top:.18rem}
 .peSecurityTreeMeta span{color:var(--muted)}
+.peOverlayRange{border-left:1px solid var(--border2);margin-top:.55rem;padding-left:.75rem}
+.peOverlayRangeHeader{align-items:center;display:flex;gap:.75rem;justify-content:space-between}
+.peOverlayBar{background:var(--chip-bg);border:1px solid var(--border2);border-radius:6px;height:14px;margin-top:.45rem;overflow:hidden;position:relative}
+.peOverlayBarSegment{display:block;height:100%;position:absolute;top:0}
+.peOverlayBarSegment--found{background:var(--accent)}
+.peOverlayBarSegment--unknown{background:repeating-linear-gradient(45deg,var(--border2) 0 4px,transparent 4px 8px)}
 
 .table{width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:transparent;margin-top:6px}
 .table th,.table td{padding:8px 10px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px}

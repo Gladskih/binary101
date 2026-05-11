@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { isPeWindowsParseResult, parsePe } from "../../analyzers/pe/index.js";
-import { createPeWithSectionAndIat as createSamplePeWithSectionAndIat } from "../fixtures/sample-files-pe.js";
+import {
+  createPeWithSectionAndIat as createSamplePeWithSectionAndIat,
+  createPeWithSectionAndIatFixture
+} from "../fixtures/sample-files-pe.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const DOS_SIGNATURE = 0x5a4d;
@@ -28,6 +31,9 @@ const RESERVED_DIRECTORY_TEST_SIZE = 0x10;
 // Microsoft PE format, "Optional Header Data Directories":
 // GLOBALPTR.Size must be zero, so this non-zero size intentionally exercises the warning path.
 const INVALID_GLOBALPTR_SIZE = 4;
+// PKWARE APPNOTE, "Local file header": local headers start with 0x04034b50.
+// https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
+const ZIP_LOCAL_FILE_HEADER_SIGNATURE = [0x50, 0x4b, 0x03, 0x04];
 
 /**
  * Creates a byte array for a minimal valid PE32 header.
@@ -123,7 +129,7 @@ void test("parsePe does not treat a headers-only image as overlay data", async (
   const result = await parsePe(new MockFile(peBytes, "headers-only.exe"));
 
   assert.ok(result, "parsePe should return a parsed object for a valid PE file");
-  assert.strictEqual(result.overlaySize, 0, "Header bytes are not overlay when the image has no sections");
+  assert.equal(result.overlay, undefined, "Header bytes are not overlay when the image has no sections");
 });
 
 void test("parsePe includes the aligned headers in imageEnd for sectionless images", async () => {
@@ -137,7 +143,7 @@ void test("parsePe includes the aligned headers in imageEnd for sectionless imag
     0x1000,
     "SizeOfImage includes all headers rounded to SectionAlignment even when the image has no sections"
   );
-  assert.strictEqual(result.overlaySize, 0);
+  assert.equal(result.overlay, undefined);
   assert.strictEqual(result.imageSizeMismatch, false);
 });
 
@@ -192,7 +198,7 @@ const writeDataDirectoryEntry = (
   view.setUint32(entryOffset + 4, size, true);
 };
 
-void test("parsePe returns mapping and overlay info for PE32 with one section and IAT", async () => {
+void test("parsePe returns mapping and layout info for PE32 with one section and IAT", async () => {
   const peBytes = createPeWithSectionAndIat();
   const mockFile = new MockFile(peBytes, "section.exe");
 
@@ -210,10 +216,28 @@ void test("parsePe returns mapping and overlay info for PE32 with one section an
   assert.strictEqual(result.iat.rva, SAMPLE_MAPPED_IAT_RVA);
   assert.strictEqual(result.iat.size, SAMPLE_IAT_SIZE);
 
-  assert.strictEqual(result.overlaySize, 0x20);
+  assert.equal(result.overlay?.ranges.length, 1);
+  assert.equal(result.overlay?.ranges[0]?.size, 0x20);
   assert.strictEqual(result.imageEnd, 0x2000);
   assert.strictEqual(result.imageSizeMismatch, false);
   assert.strictEqual(result.hasCert, false);
+});
+
+void test("parsePe detects embedded payloads inside the true PE overlay", async () => {
+  const fixture = createPeWithSectionAndIatFixture();
+  const bytes = new Uint8Array(fixture.bytes);
+  const embeddedOffset = fixture.rawImageEnd + 3;
+  bytes.set(ZIP_LOCAL_FILE_HEADER_SIGNATURE, embeddedOffset);
+
+  const result = await parsePe(new MockFile(bytes, "section-with-overlay.exe"));
+  assert.ok(result, "parsePe should return a parsed object");
+  assert.ok(isPeWindowsParseResult(result));
+
+  const range = result.overlay?.ranges[0];
+  assert.ok(range, "PE overlay range should be reported");
+  assert.equal(range.start, fixture.rawImageEnd);
+  assert.equal(range.findings[0]?.start, embeddedOffset);
+  assert.match(range.findings[0]?.detectedType ?? "", /^ZIP archive/);
 });
 
 void test("parsePe preserves unmapped IAT directories with warnings", async () => {

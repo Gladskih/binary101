@@ -215,7 +215,7 @@ const addSecurityAndDebugTailWarnings = (pe: PeParseResult, warnings: Set<string
   const knownFileSize = getKnownFileSize(fileSize);
   const mappedRanges = getMappedImageRanges(getHeaderSpanEnd(pe), pe.sections, knownFileSize);
   const rawMappedEnd = mappedRanges.length ? mappedRanges[mappedRanges.length - 1]!.end : 0;
-  const fileEnd = knownFileSize ?? rawMappedEnd + (pe.overlaySize >>> 0);
+  const fileEnd = knownFileSize ?? pe.overlay?.ranges.at(-1)?.end ?? rawMappedEnd;
   const securityDir = pe.dirs.find(directory => directory.name === "SECURITY");
   const securityStart = securityDir?.size ? securityDir.rva >>> 0 : null;
   const securityEnd =

@@ -11,6 +11,14 @@ import {
 import { renderException } from "../../renderers/pe/exception.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 
+const assertSanityClean = (html: string): void => {
+  assert.equal(
+    html,
+    `<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Sanity</h4>` +
+      `<div class="smallNote">No obvious structural issues detected.</div></section>`
+  );
+};
+
 void test("renderReloc wraps relocation table in details", () => {
   const reloc: Parameters<typeof renderReloc>[0] = {
     totalEntries: 3,
@@ -19,8 +27,8 @@ void test("renderReloc wraps relocation table in details", () => {
   const out: string[] = [];
   renderReloc(reloc, out);
   const html = out.join("");
+  assert.match(html, /<summary[^>]*><b>Base relocations<\/b> - 3 entries<\/summary>/);
   assert.ok(html.includes("Page RVA"));
-  assert.ok(!html.includes("Show blocks"));
 });
 
 void test("renderException renders pdata stats", () => {
@@ -55,7 +63,6 @@ void test("renderException renders pdata stats", () => {
   assert.ok(html.includes("Handlers present (EHANDLER/UHANDLER)"));
   assert.ok(html.includes("Chained (CHAININFO)"));
   assert.ok(html.includes("Missing/invalid ranges"));
-  assert.ok(!html.includes("Show unwind entries"));
 });
 
 void test("renderBoundImports renders warning and details table", () => {
@@ -100,7 +107,7 @@ void test("renderDelayImports renders function names and ordinals", () => {
 
 void test("renderSanity renders issues and clean state", () => {
   const withIssues = {
-    overlaySize: 100,
+    overlay: { ranges: [{ start: 0x400, end: 0x464, size: 100, findings: [] }] },
     imageSizeMismatch: true,
     opt: { Magic: 0x10b },
     debug: { entry: null, warning: "bad debug" }
@@ -108,28 +115,23 @@ void test("renderSanity renders issues and clean state", () => {
   const outIssues: string[] = [];
   renderSanity(withIssues, outIssues);
   const htmlIssues = outIssues.join("");
-  assert.ok(htmlIssues.includes("Overlay after last section"));
+  assert.match(htmlIssues, /<summary[^>]*><b>Sanity<\/b> - 2 findings<\/summary>/);
   assert.ok(htmlIssues.includes("SizeOfImage does not match"));
   assert.ok(htmlIssues.includes("bad debug"));
-  assert.doesNotMatch(htmlIssues, /Sanity findings/);
   assert.equal(htmlIssues.match(/<details/g)?.length, 1);
 
   const clean = {
-    overlaySize: 0,
     imageSizeMismatch: false,
     opt: { Magic: 0x10b },
     debug: null
   } as unknown as PeParseResult;
   const outClean: string[] = [];
   renderSanity(clean, outClean);
-  const htmlClean = outClean.join("");
-  assert.ok(htmlClean.includes("No obvious structural issues"));
-  assert.doesNotMatch(htmlClean, /<details><summary[^>]*><b>Sanity<\/b>/);
+  assertSanityClean(outClean.join(""));
 });
 
 void test("renderSanity reports suspicious entrypoint sections", () => {
   const outside = {
-    overlaySize: 0,
     imageSizeMismatch: false,
     debug: null,
     opt: { AddressOfEntryPoint: 0x3000 },
@@ -150,7 +152,6 @@ void test("renderSanity reports suspicious entrypoint sections", () => {
   assert.ok(outOutside.join("").includes("AddressOfEntryPoint points outside any section"));
 
   const nonExecutable = {
-    overlaySize: 0,
     imageSizeMismatch: false,
     debug: null,
     opt: { AddressOfEntryPoint: 0x2000 },
@@ -176,7 +177,6 @@ void test("renderSanity treats raw padding beyond VirtualSize as outside the map
   const sectionVirtualSize = 0x100;
   const sectionRawSize = 0x200;
   const pe = {
-    overlaySize: 0,
     imageSizeMismatch: false,
     debug: null,
     // Place the entrypoint inside the on-disk raw padding, halfway between VirtualSize and SizeOfRawData.
@@ -202,9 +202,8 @@ void test("renderSanity treats raw padding beyond VirtualSize as outside the map
   assert.ok(out.join("").includes("AddressOfEntryPoint points outside any section"));
 });
 
-void test("renderSanity does not flag certificate table bytes as suspicious overlay", () => {
+void test("renderSanity renders clean state when only certificate table bytes follow sections", () => {
   const pe = {
-    overlaySize: 0x20,
     imageSizeMismatch: false,
     debug: null,
     dirs: [{ name: "SECURITY", rva: 0x400, size: 0x20 }],
@@ -223,14 +222,11 @@ void test("renderSanity does not flag certificate table bytes as suspicious over
 
   const out: string[] = [];
   renderSanity(pe, out);
-  const html = out.join("");
-  assert.ok(!html.includes("Overlay after last section"));
-  assert.ok(html.includes("No obvious structural issues"));
+  assertSanityClean(out.join(""));
 });
 
-void test("renderSanity skips SizeOfImage mismatch warnings for ROM images", () => {
+void test("renderSanity renders clean state for ROM SizeOfImage mismatch", () => {
   const pe = {
-    overlaySize: 0,
     imageSizeMismatch: true,
     debug: null,
     opt: { Magic: 0x107 }
@@ -238,13 +234,12 @@ void test("renderSanity skips SizeOfImage mismatch warnings for ROM images", () 
 
   const out: string[] = [];
   renderSanity(pe, out);
-
-  assert.ok(!out.join("").includes("SizeOfImage does not match"));
+  assertSanityClean(out.join(""));
 });
 
-void test("renderSanity still reports unexplained overlay after certificate table", () => {
+void test("renderSanity renders clean state for overlay-only PE metadata", () => {
   const pe = {
-    overlaySize: 0x40,
+    overlay: { ranges: [{ start: 0x400, end: 0x420, size: 0x20, findings: [] }] },
     imageSizeMismatch: false,
     debug: null,
     dirs: [{ name: "SECURITY", rva: 0x420, size: 0x20 }],
@@ -263,12 +258,11 @@ void test("renderSanity still reports unexplained overlay after certificate tabl
 
   const out: string[] = [];
   renderSanity(pe, out);
-  assert.ok(out.join("").includes("Overlay after last section"));
+  assertSanityClean(out.join(""));
 });
 
-void test("renderSanity does not flag debug raw data after certificates as unexplained overlay", () => {
+void test("renderSanity renders clean state for debug raw data after certificates", () => {
   const pe = {
-    overlaySize: 0x3a,
     imageSizeMismatch: false,
     debug: {
       entry: { guid: "g", age: 1, path: "a.pdb" },
@@ -290,5 +284,5 @@ void test("renderSanity does not flag debug raw data after certificates as unexp
 
   const out: string[] = [];
   renderSanity(pe, out);
-  assert.ok(!out.join("").includes("Overlay after last section"));
+  assertSanityClean(out.join(""));
 });

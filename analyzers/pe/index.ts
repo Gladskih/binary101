@@ -34,6 +34,7 @@ import {
 } from "./resources/preview/manifest-xml.js";
 import { buildHeaderOnlyPeParseResult } from "./core/header-only-result.js";
 import { collectPeLayoutWarnings } from "./layout/warnings.js";
+import { analyzePeOverlay } from "./overlay.js";
 export {
   isPeRomParseResult,
   isPeWindowsParseResult
@@ -73,7 +74,7 @@ export async function parsePe(
   if (!isPeWindowsCore(core)) {
     return withLayoutWarnings(buildHeaderOnlyPeParseResult(core), file.size);
   }
-  const { dos, coff, opt, dataDirs, sections, entrySection, rvaToOff, overlaySize, imageEnd, imageSizeMismatch } = core;
+  const { dos, coff, opt, dataDirs, sections, entrySection, rvaToOff, imageEnd, imageSizeMismatch } = core;
   const { ImageBase } = opt;
   const peVariant = opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC
     ? {
@@ -142,6 +143,21 @@ export async function parsePe(
       : undefined
   );
   security = addSecurityTailWarning(file.size, security, dataDirs.find(d => d.name === "SECURITY"), debugResult.rawDataRanges);
+  const overlay = await analyzePeOverlay({
+    file,
+    reader,
+    optionalHeaderOffset: core.optOff,
+    optionalHeaderSize: coff.SizeOfOptionalHeader,
+    sectionCount: coff.NumberOfSections,
+    declaredSizeOfHeaders: opt.SizeOfHeaders,
+    sections,
+    ...(core.trailingAlignmentPaddingSize ? { trailingAlignmentPaddingSize: core.trailingAlignmentPaddingSize } : {}),
+    dataDirs,
+    debugRawDataRanges: debugResult.rawDataRanges,
+    pointerToSymbolTable: coff.PointerToSymbolTable,
+    numberOfSymbols: coff.NumberOfSymbols,
+    ...(core.coffStringTableSize != null ? { coffStringTableSize: core.coffStringTableSize } : {})
+  });
   const iat = parseIatDirectory(dataDirs, rvaToOff);
   const importLinking = analyzeImportLinking(
     importResult,
@@ -205,7 +221,7 @@ export async function parsePe(
     globalPtr,
     nativeAotCandidate,
     resources: attachManifestValidation(resources, manifestValidation),
-    overlaySize,
+    ...(overlay ? { overlay } : {}),
     imageEnd,
     imageSizeMismatch,
     hasCert: !!security?.count,

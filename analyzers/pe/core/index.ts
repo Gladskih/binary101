@@ -75,7 +75,6 @@ const computePeImageLayout = (
   declaredSizeOfImage: number | null,
   declaredSizeOfHeaders: number
 ): {
-  overlaySize: number;
   imageEnd: number;
   imageSizeMismatch: boolean;
 } => {
@@ -87,12 +86,6 @@ const computePeImageLayout = (
     Number.isSafeInteger(declaredSizeOfHeaders) && declaredSizeOfHeaders > 0
       ? Math.min(fileSize, declaredSizeOfHeaders >>> 0)
       : headersEnd;
-  let rawEnd = Math.max(headersEnd, normalizedSizeOfHeaders);
-  for (const section of sections) {
-    const endOfSectionData = (section.pointerToRawData >>> 0) + (section.sizeOfRawData >>> 0);
-    rawEnd = Math.max(rawEnd, endOfSectionData);
-  }
-  const overlaySize = fileSize > rawEnd ? fileSize - rawEnd : 0;
   let imageEnd = alignUpClamped(Math.max(headersEnd, normalizedSizeOfHeaders), sectionAlignment);
   for (const section of sections) {
     const endOfSectionImage = Math.min(
@@ -102,7 +95,6 @@ const computePeImageLayout = (
     imageEnd = Math.max(imageEnd, alignUpClamped(endOfSectionImage, sectionAlignment));
   }
   return {
-    overlaySize,
     imageEnd,
     imageSizeMismatch: declaredSizeOfImage != null && imageEnd !== (declaredSizeOfImage >>> 0)
   };
@@ -132,7 +124,7 @@ const buildHeaderCore = async (
     coff.PointerToSymbolTable,
     coff.NumberOfSymbols
   );
-  const { overlaySize, imageEnd, imageSizeMismatch } = computePeImageLayout(
+  const { imageEnd, imageSizeMismatch } = computePeImageLayout(
     reader.size,
     optionalHeaderResult.optOff,
     coff.SizeOfOptionalHeader,
@@ -160,7 +152,6 @@ const buildHeaderCore = async (
     sections: parsedSections.sections,
     entrySection: await computeEntrySection(optionalHeaderResult.opt, parsedSections.sections),
     rvaToOff: parsedSections.rvaToOff,
-    overlaySize,
     imageEnd,
     imageSizeMismatch
   };
@@ -182,7 +173,7 @@ const buildWindowsCore = async (
     coff.PointerToSymbolTable,
     coff.NumberOfSymbols
   );
-  const { overlaySize, imageEnd, imageSizeMismatch } = computePeImageLayout(
+  const { imageEnd, imageSizeMismatch } = computePeImageLayout(
     reader.size,
     optionalHeaderResult.optOff,
     coff.SizeOfOptionalHeader,
@@ -212,7 +203,6 @@ const buildWindowsCore = async (
     sections: parsedSections.sections,
     entrySection: await computeEntrySection(opt, parsedSections.sections),
     rvaToOff: parsedSections.rvaToOff,
-    overlaySize,
     imageEnd,
     imageSizeMismatch
   };

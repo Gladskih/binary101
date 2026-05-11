@@ -23,8 +23,8 @@ export const createPeWithSectionAndIatFixture = () => {
   const iatRva = 0x1100;
   const iatSize = 0x40;
   const sizeOfImage = 0x2000;
-  const overlaySize = 0x20;
-  const fileSize = pointerToRawData + sizeOfRawData + overlaySize;
+  const appendedTailSize = 0x20;
+  const fileSize = pointerToRawData + sizeOfRawData + appendedTailSize;
 
   const buffer = new ArrayBuffer(fileSize);
   const view = new DataView(buffer);
@@ -99,7 +99,7 @@ export const createPeWithSectionAndIatFixture = () => {
     bytes: new Uint8Array(buffer),
     fileAlignment,
     rawImageEnd: pointerToRawData + sizeOfRawData,
-    overlaySize
+    appendedTailSize
   };
 };
 

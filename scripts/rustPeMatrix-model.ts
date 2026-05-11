@@ -51,7 +51,7 @@ export interface AnalyzerSummary {
   warningCount: number;
   warnings: string[];
   debugWarning: string | null;
-  overlaySize: number;
+  overlayBytes: number;
   trailingAlignmentPaddingSize: number;
   coffSymbolRecords: number;
   coffStringTableSize: number;

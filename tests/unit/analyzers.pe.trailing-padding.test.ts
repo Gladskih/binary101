@@ -19,6 +19,6 @@ void test("parsePe classifies trailing zero bytes that exactly finish FileAlignm
   const parsed = await parsePe(file);
   if (!parsed) assert.fail("expected PE parse result");
 
-  assert.equal(parsed.overlaySize, fixture.fileAlignment);
+  assert.equal(parsed.overlay?.ranges[0]?.size, overlayPayloadSize);
   assert.equal(parsed.trailingAlignmentPaddingSize, fixture.fileAlignment - overlayPayloadSize);
 });

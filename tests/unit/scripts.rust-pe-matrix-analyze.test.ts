@@ -21,7 +21,7 @@ void test("analyzeSuccessfulBuild writes parse and rendered outputs for a PE ima
   assert.equal(analysis.outputSize, fixture.bytes.byteLength);
   assert.deepEqual(analysis.analyzer.sectionNames, [".text"]);
   assert.ok(analysis.analyzer.dataDirectories.includes("IAT"));
-  assert.equal(analysis.analyzer.overlaySize, fixture.overlaySize);
+  assert.equal(analysis.analyzer.overlayBytes, fixture.appendedTailSize);
   assert.match(parseOutput, /"signature": "PE"/);
   assert.match(renderedOutput, /IAT/);
 });

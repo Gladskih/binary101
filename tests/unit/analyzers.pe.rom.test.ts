@@ -17,6 +17,6 @@ void test("parsePe keeps PE ROM images visible without inventing Windows data di
   assert.ok(!("iat" in result));
   assert.strictEqual(result.entrySection?.name, ".text");
   assert.strictEqual(result.rvaToOff(0x1000), 0x200);
-  assert.strictEqual(result.overlaySize, 0);
+  assert.equal(result.overlay, undefined);
   assert.strictEqual(result.imageSizeMismatch, false);
 });

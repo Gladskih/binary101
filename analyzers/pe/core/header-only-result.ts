@@ -19,7 +19,6 @@ export const buildHeaderOnlyPeParseResult = (
   sections: core.sections,
   entrySection: core.entrySection,
   rvaToOff: core.rvaToOff,
-  overlaySize: core.overlaySize,
   imageEnd: core.imageEnd,
   imageSizeMismatch: core.imageSizeMismatch,
   hasCert: false

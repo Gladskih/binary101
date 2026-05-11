@@ -134,7 +134,6 @@ export const createWindowsLayoutSubject = (...sections: PeSection[]): PeWindowsP
     },
     dirs: [],
     sections,
-    overlaySize: 0,
     debug: null
   } as unknown as PeWindowsParseResult);
 
@@ -153,6 +152,5 @@ export const createHeaderOnlyLayoutSubject = (
     },
     opt: null,
     dirs: [],
-    sections,
-    overlaySize: 0
+    sections
   } as unknown as PeHeaderParseResult);
