@@ -1,6 +1,7 @@
 "use strict";
 
 import type {
+  AuthenticodeCheckStatus,
   AuthenticodeCounterSignatureInfo,
   AuthenticodeInfo,
   AuthenticodeSignerInfo,
@@ -30,9 +31,44 @@ import {
   createRoleBadge,
   createStatusBadge,
   filterBadges,
+  formatCheckDetail,
   renderTreeMeta,
   renderTreeNode
 } from "./security-tree-markup.js";
+
+const findCheck = (auth: AuthenticodeInfo, id: string) =>
+  auth.verification?.checks?.find(check => check.id === id);
+
+const getCombinedCheckStatus = (
+  checks: Array<{ status: AuthenticodeCheckStatus }>
+): AuthenticodeCheckStatus => {
+  if (checks.some(check => check.status === "fail")) return "fail";
+  if (checks.some(check => check.status === "unknown")) return "unknown";
+  return "pass";
+};
+
+const createSignerSignatureSummaryBadge = (auth: AuthenticodeInfo) => {
+  const signerCount = Math.max(
+    auth.signers?.length ?? 0,
+    auth.verification?.signerVerifications?.length ?? 0,
+    auth.signerCount ?? 0
+  );
+  if (!signerCount) return undefined;
+  const checks = Array.from({ length: signerCount }, (_, index) =>
+    findCheck(auth, `Signer ${index + 1}-signature`)
+  ).filter((check): check is NonNullable<ReturnType<typeof findCheck>> => check != null);
+  if (!checks.length) {
+    return createStatusBadge("Sig", "unknown", "No structured signer signature checks are attached.");
+  }
+  const failingCheck = checks.find(check => check.status === "fail" || check.status === "unknown");
+  return createStatusBadge(
+    "Sig",
+    getCombinedCheckStatus(checks),
+    failingCheck
+      ? formatCheckDetail(failingCheck.title, failingCheck.detail)
+      : "All signer CMS signatures verify."
+  );
+};
 
 const renderCountersignatureNode = (
   auth: AuthenticodeInfo,
@@ -198,6 +234,7 @@ export const renderAuthenticodeTree = (certificate: ParsedWinCertificate): strin
       filterBadges([
         createRoleBadge("PKCS#7", "signer"),
         createCheckBadge(auth, "file-digest-match", "Digest"),
+        createSignerSignatureSummaryBadge(auth),
         createTrustSnapshotBadge(auth),
         auth.fileDigestAlgorithmName || auth.fileDigestAlgorithm
           ? createInfoBadge(auth.fileDigestAlgorithmName ?? auth.fileDigestAlgorithm ?? "")

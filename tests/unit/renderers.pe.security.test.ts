@@ -207,6 +207,46 @@ void test("renderSecurity renders top-level directory warnings", () => {
   assert.ok(html.includes("<ul"));
 });
 
+void test("renderSecurity keeps Authenticode root unknown when signer verification is unknown", () => {
+  const security: Parameters<typeof renderSecurity>[0] = {
+    count: 1,
+    certs: [{
+      offset: 0,
+      length: 32,
+      availableBytes: 32,
+      revision: 0x0200,
+      revisionName: "Revision 2.0",
+      certificateType: 0x0002,
+      typeName: "PKCS#7 SignedData (Authenticode)",
+      authenticode: {
+        format: "pkcs7" as const,
+        fileDigest: "deadbeef",
+        verification: {
+          checks: [
+            {
+              id: "file-digest-match",
+              status: "pass" as const,
+              title: "Embedded file digest matches the computed PE Authenticode digest"
+            },
+            {
+              id: "Signer 1-signature",
+              status: "unknown" as const,
+              title: "Signer 1: CMS signature verifies",
+              detail: "Unsupported signature algorithm"
+            }
+          ]
+        },
+        signerCount: 1
+      }
+    }]
+  };
+  const out: string[] = [];
+  renderSecurity(security, out);
+  const html = out.join("");
+  assert.match(html, /Authenticode[\s\S]*?peSecurityTreeNode--unknown/);
+  assert.ok(html.includes("Unsupported signature algorithm"));
+});
+
 void test("renderSecurity tolerates missing fields and renders negative matches", () => {
   const certWithGaps = {
     offset: 0,
