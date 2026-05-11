@@ -171,7 +171,7 @@ void test("renderSecurity includes expanded Authenticode details", () => {
   assert.ok(html.includes("Certificate tree"));
   assert.ok(html.includes("Authenticode"));
   assert.ok(html.includes("Countersignature 1"));
-  assert.ok(html.includes("Not checked for trust"));
+  assert.ok(html.includes("Trust limitations"));
   assert.ok(html.includes("peSecurityTreeBadge--pass"));
   assert.ok(html.includes("peSecurityTreeBadge--unknown"));
   assert.ok(html.includes("Digest"));

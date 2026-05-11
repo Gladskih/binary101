@@ -97,7 +97,7 @@ export const renderAdditionalCertificatesNode = (auth: AuthenticodeInfo): string
 export const renderTrustGapsNode = (gaps: AuthenticodeTrustGap[] | undefined): string =>
   gaps?.length
     ? renderTreeNode(
-        "Not checked for trust",
+        "Trust limitations",
         [
           createRoleBadge("Trust", "certificate"),
           ...gaps.map(gap =>

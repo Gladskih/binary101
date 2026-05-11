@@ -48,9 +48,9 @@ const TRUST_GAPS: AuthenticodeTrustGap[] = [
   },
   {
     id: "timestamp-trust",
-    title: "Trusted timestamp authority",
+    title: "Timestamp authority trust",
     detail:
-      "Timestamping chain trust is evaluated only against the bundled local CA snapshot when available, and revocation is not checked."
+      "Timestamp countersignatures and RFC3161 tokens are parsed and verified locally, but full TSA trust policy is limited to the bundled local CA snapshot when available, and revocation is not checked."
   }
 ];
 
