@@ -6,6 +6,8 @@ import { Certificate, ContentInfo, SignedData } from "../../analyzers/pe/authent
 import { verifyPkcs7Signatures } from "../../analyzers/pe/authenticode/pkijs.js";
 import { createSignedAuthenticodeCmsFixture } from "../fixtures/pe-authenticode-signed-cms-fixtures.js";
 
+const PKCS1_MD5_WITH_RSA_ENCRYPTION_OID = "1.2.840.113549.1.1.4";
+
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const out = new Uint8Array(bytes.byteLength);
   out.set(bytes);
@@ -45,6 +47,17 @@ const tamperSignerSignature = (payload: Uint8Array): Uint8Array => {
 const removeSignerCertificates = (payload: Uint8Array): Uint8Array => {
   const signedData = parseSignedData(payload);
   signedData.certificates = [];
+  return encodeSignedData(signedData);
+};
+
+const useUnsupportedRootSignatureAlgorithm = (payload: Uint8Array): Uint8Array => {
+  const signedData = parseSignedData(payload);
+  const rootCertificate = signedData.certificates?.find(
+    (certificate): certificate is Certificate =>
+      certificate instanceof Certificate && certificate.subject.isEqual(certificate.issuer)
+  );
+  if (!rootCertificate) throw new Error("Signed CMS fixture is missing a self-signed root.");
+  rootCertificate.signatureAlgorithm.algorithmId = PKCS1_MD5_WITH_RSA_ENCRYPTION_OID;
   return encodeSignedData(signedData);
 };
 
@@ -164,6 +177,28 @@ void test("verifyPkcs7Signatures reports missing signer certificates as warnings
     )
   );
   assert.ok(verified.warnings?.some(warning => /unable to find signer certificate/i.test(warning)));
+});
+
+void test("verifyPkcs7Signatures reports unsupported certificate path signatures as warnings", async () => {
+  const { payload } = await createSignedAuthenticodeCmsFixture();
+
+  const verified = await verifyPkcs7Signatures(useUnsupportedRootSignatureAlgorithm(payload));
+
+  assert.ok(
+    verified.checks?.some(
+      check =>
+        check.id === "Signer 1-certificate-2-self-signed" &&
+        check.status === "unknown" &&
+        /Unsupported signature algorithm/i.test(check.detail ?? "")
+    )
+  );
+  assert.ok(
+    verified.warnings?.some(
+      warning =>
+        /Signer 1: certificate 2 self-signature verifies/i.test(warning) &&
+        warning.includes(PKCS1_MD5_WITH_RSA_ENCRYPTION_OID)
+    )
+  );
 });
 
 void test("verifyPkcs7Signatures reports malformed BER payloads", async () => {

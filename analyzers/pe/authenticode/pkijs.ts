@@ -29,6 +29,21 @@ type VerificationSummary = Pick<
   "checks" | "signerVerifications" | "trustPolicy" | "warnings"
 >;
 
+const appendCertificatePathWarnings = (
+  checks: AuthenticodeVerificationCheck[],
+  warnings: string[]
+): void => {
+  checks.forEach(check => {
+    if (
+      check.status === "unknown" &&
+      check.detail &&
+      (check.id.endsWith("-self-signed") || check.id.endsWith("-issuer-signature"))
+    ) {
+      warnings.push(`${check.title}: ${check.detail}`);
+    }
+  });
+};
+
 const verifySigner = async (
   signedData: SignedData,
   signerIndex: number
@@ -182,6 +197,7 @@ export const verifyPkcs7Signatures = async (
     signerVerifications.push(signerVerification);
   }
 
+  appendCertificatePathWarnings(checks, warnings);
   const mergedWarnings = mergeWarnings(warnings);
   const trustPolicy = await evaluateAuthenticodeTrustPolicy(certificates, trustStore);
   return {
