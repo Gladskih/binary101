@@ -2,7 +2,7 @@
 
 import type { AuthenticodeCheckStatus } from "./index.js";
 import type { Certificate } from "./pkijs-runtime.js";
-import { describeError } from "./pkijs-support.js";
+import { describeError, normalizeLegacyCertificateSignatureAlgorithm } from "./pkijs-support.js";
 
 export type CertificateSignatureStatus = {
   status: AuthenticodeCheckStatus;
@@ -20,6 +20,8 @@ export const verifyCertificateSignature = async (
   issuerCertificate?: Certificate
 ): Promise<CertificateSignatureStatus> => {
   try {
+    normalizeLegacyCertificateSignatureAlgorithm(certificate);
+    if (issuerCertificate) normalizeLegacyCertificateSignatureAlgorithm(issuerCertificate);
     return (await certificate.verify(issuerCertificate))
       ? { status: "pass" }
       : { status: "fail", detail: "Signature verification returned false." };

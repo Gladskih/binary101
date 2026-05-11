@@ -20,6 +20,7 @@ import {
   getByteView,
   getSigningTime,
   matchSignerCertificate,
+  normalizeLegacySignatureAlgorithm,
   resolveDigestAlgorithm,
   toArrayBuffer
 } from "./pkijs-support.js";
@@ -101,6 +102,7 @@ const verifyCountersignature = async (
   }
 
   const shaAlgorithm = resolveDigestAlgorithm(counterSigner.digestAlgorithm.algorithmId);
+  normalizeLegacySignatureAlgorithm(counterSigner.signatureAlgorithm);
   const verificationData = counterSigner.signedAttrs
     ? counterSigner.signedAttrs.encodedValue
     : toArrayBuffer(parentSignatureBytes);

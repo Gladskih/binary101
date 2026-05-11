@@ -6,7 +6,11 @@ import type {
   AuthenticodeTrustPolicyInfo
 } from "./index.js";
 import { Certificate, fromBER } from "./pkijs-runtime.js";
-import { describeError, mergeWarnings } from "./pkijs-support.js";
+import {
+  describeError,
+  mergeWarnings,
+  normalizeLegacyCertificateSignatureAlgorithm
+} from "./pkijs-support.js";
 import type {
   AuthenticodeTrustStoreCertificate,
   AuthenticodeTrustStoreSnapshot
@@ -68,7 +72,10 @@ const verifyTrustAnchor = async (
     if (!anchor.derBase64) continue;
     try {
       const anchorCertificate = parseTrustAnchor(anchor);
-      if (anchorCertificate?.subject.isEqual(certificate.issuer) && await certificate.verify(anchorCertificate)) {
+      if (!anchorCertificate?.subject.isEqual(certificate.issuer)) continue;
+      normalizeLegacyCertificateSignatureAlgorithm(certificate);
+      normalizeLegacyCertificateSignatureAlgorithm(anchorCertificate);
+      if (await certificate.verify(anchorCertificate)) {
         return certificateStoreInfo(anchor, thumbprint);
       }
     } catch (error) {

@@ -18,6 +18,8 @@ import {
   getSigningTime,
   matchSignerCertificate,
   mergeWarnings,
+  normalizeLegacyCertificateSignatureAlgorithm,
+  normalizeLegacySignatureAlgorithm,
   parseIsoDate,
   toArrayBuffer
 } from "./pkijs-support.js";
@@ -32,6 +34,7 @@ const verifySigner = async (
   signerIndex: number
 ): Promise<AuthenticodeSignerVerificationInfo> => {
   try {
+    normalizeLegacySignatureAlgorithm(signedData.signerInfos[signerIndex]?.signatureAlgorithm);
     const result = await signedData.verify({ signer: signerIndex, checkChain: false, extendedMode: true });
     return {
       index: signerIndex,
@@ -82,6 +85,7 @@ export const verifyPkcs7Signatures = async (
   const certificates = (signedData.certificates ?? []).filter(
     (certificate): certificate is Certificate => certificate instanceof Certificate
   );
+  certificates.forEach(normalizeLegacyCertificateSignatureAlgorithm);
   for (let signerIndex = 0; signerIndex < signedData.signerInfos.length; signerIndex += 1) {
     const signer = signedData.signerInfos[signerIndex];
     if (!signer) continue;

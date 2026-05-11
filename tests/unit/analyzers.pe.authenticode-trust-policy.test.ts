@@ -11,6 +11,7 @@ import { verifyPkcs7Signatures } from "../../analyzers/pe/authenticode/pkijs.js"
 import { evaluateAuthenticodeTrustPolicy } from "../../analyzers/pe/authenticode/trust-policy.js";
 import { verifyAuthenticode } from "../../analyzers/pe/authenticode/verify.js";
 import type { AuthenticodeInfo } from "../../analyzers/pe/authenticode/index.js";
+import { OIW_SHA1_WITH_RSA_ENCRYPTION_OID } from "../../analyzers/pe/authenticode/pkijs-support.js";
 import type { AuthenticodeTrustStoreSnapshot } from "../../analyzers/pe/authenticode/trust-store.js";
 import { createSignedAuthenticodeCmsFixture } from "../fixtures/pe-authenticode-signed-cms-fixtures.js";
 import {
@@ -39,6 +40,10 @@ const certificateThumbprint = async (certificate: Certificate): Promise<string> 
 
 const certificateDerBase64 = (certificate: Certificate): string =>
   Buffer.from(certificate.toSchema().toBER(false)).toString("base64");
+
+const useLegacyOiwSha1RsaSignatureOid = (certificate: Certificate): void => {
+  certificate.signatureAlgorithm.algorithmId = OIW_SHA1_WITH_RSA_ENCRYPTION_OID;
+};
 
 const readCertificateThumbprints = async (payload: Uint8Array): Promise<string[]> => {
   const contentInfo = ContentInfo.fromBER(toArrayBuffer(payload));
@@ -123,6 +128,51 @@ void test("evaluateAuthenticodeTrustPolicy anchors an embedded issuer to a trust
   assert.strictEqual(policy?.certificates[1]?.anchorSha1Thumbprint, rootThumbprint);
   assert.strictEqual(policy?.certificates[1]?.anchorDerBase64, certificateDerBase64(root));
   assert.deepStrictEqual(policy?.certificates[1]?.stores, ["Root"]);
+});
+
+void test("evaluateAuthenticodeTrustPolicy accepts legacy OIW RSA/SHA-1 signature OID", async () => {
+  const rootKeys = await generateRsaKeyPair("SHA-1");
+  const intermediateKeys = await generateRsaKeyPair("SHA-1");
+  const root = await createCertificate(
+    "Binary101 Legacy Root",
+    1,
+    rootKeys.publicKey,
+    createCommonName("Binary101 Legacy Root"),
+    rootKeys.privateKey,
+    "2020-01-01T00:00:00Z",
+    "2035-01-01T00:00:00Z",
+    [createBasicConstraintsExtension(true), createKeyUsageExtension(KEY_USAGE_KEY_CERT_SIGN)],
+    "SHA-1"
+  );
+  const intermediate = await createCertificate(
+    "Binary101 Legacy Intermediate",
+    2,
+    intermediateKeys.publicKey,
+    root.subject,
+    rootKeys.privateKey,
+    "2021-01-01T00:00:00Z",
+    "2030-01-01T00:00:00Z",
+    [createBasicConstraintsExtension(true), createKeyUsageExtension(KEY_USAGE_KEY_CERT_SIGN)],
+    "SHA-1"
+  );
+  useLegacyOiwSha1RsaSignatureOid(intermediate);
+
+  const rootThumbprint = await certificateThumbprint(root);
+  const policy = await evaluateAuthenticodeTrustPolicy([intermediate], {
+    schemaVersion: 1,
+    generatedAt: TRUST_SNAPSHOT_TIME,
+    trustedCAs: [{
+      thumbprint: rootThumbprint,
+      subject: "CN=Binary101 Legacy Root",
+      derBase64: certificateDerBase64(root),
+      stores: ["Root"]
+    }],
+    revokedCAs: []
+  });
+
+  assert.strictEqual(policy?.certificates[0]?.status, "trusted");
+  assert.strictEqual(policy?.certificates[0]?.anchorSha1Thumbprint, rootThumbprint);
+  assert.strictEqual(policy?.warnings, undefined);
 });
 
 void test("verifyAuthenticode removes the trust-anchor gap when a CA snapshot is available", async () => {

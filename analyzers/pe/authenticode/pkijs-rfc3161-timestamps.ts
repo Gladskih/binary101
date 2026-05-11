@@ -24,6 +24,8 @@ import {
   equalBytes,
   getByteView,
   matchSignerCertificate,
+  normalizeLegacyCertificateSignatureAlgorithm,
+  normalizeLegacySignatureAlgorithm,
   resolveDigestAlgorithm,
   toArrayBuffer
 } from "./pkijs-support.js";
@@ -163,6 +165,11 @@ const verifyTimestampToken = async (
     return token;
   }
   const signedData = new SignedData({ schema: ContentInfo.fromBER(toArrayBuffer(bytes)).content });
+  signedData.signerInfos.forEach(signer => normalizeLegacySignatureAlgorithm(signer.signatureAlgorithm));
+  const certificates = (signedData.certificates ?? []).filter(
+    (certificate): certificate is Certificate => certificate instanceof Certificate
+  );
+  certificates.forEach(normalizeLegacyCertificateSignatureAlgorithm);
   const timestampInfo = readTimestampInfo(signedData);
   if (timestampInfo) token.signingTime = timestampInfo.genTime.toISOString();
   await addMessageImprintCheck(checks, label, token, timestampInfo, parentSignatureBytes);
@@ -181,9 +188,6 @@ const verifyTimestampToken = async (
     addCheck(checks, `${label}-signature`, "fail", `${label}: CMS signature verifies`, token.message);
     warnings.push(`${label}: ${token.message}`);
   }
-  const certificates = (signedData.certificates ?? []).filter(
-    (certificate): certificate is Certificate => certificate instanceof Certificate
-  );
   const signerCertificateIndex = await matchSignerCertificate(signedData.signerInfos[0] as SignerInfo, certificates);
   const timestampSignerCertificateIndex =
     signerCertificateIndex != null && signerCertificateIndex >= 0

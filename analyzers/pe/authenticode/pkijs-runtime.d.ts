@@ -1,5 +1,6 @@
 export interface PkijsAlgorithmIdentifier {
   algorithmId: string;
+  algorithmParams?: unknown;
 }
 
 export interface PkijsOctetString {
@@ -84,6 +85,8 @@ export class Certificate {
   tbsView: Uint8Array;
   version: number;
   serialNumber: PkijsInteger;
+  signatureAlgorithm: AlgorithmIdentifier;
+  signatureValue: PkijsOctetString;
   issuer: RelativeDistinguishedNames;
   subject: RelativeDistinguishedNames;
   notBefore: Time;

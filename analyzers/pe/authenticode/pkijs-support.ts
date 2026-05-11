@@ -1,7 +1,7 @@
 "use strict";
 
 import type { AuthenticodeCheckStatus, AuthenticodeVerificationCheck } from "./index.js";
-import type { Certificate, SignerInfo } from "./pkijs-runtime.js";
+import type { Certificate, PkijsAlgorithmIdentifier, SignerInfo } from "./pkijs-runtime.js";
 import { IssuerAndSerialNumber, Time, getCrypto } from "./pkijs-runtime.js";
 
 export const CMS_MESSAGE_DIGEST_OID = "1.2.840.113549.1.9.4";
@@ -10,6 +10,8 @@ export const CMS_COUNTERSIGNATURE_OID = "1.2.840.113549.1.9.6";
 export const CODE_SIGNING_EKU_OID = "1.3.6.1.5.5.7.3.3";
 export const TIME_STAMPING_EKU_OID = "1.3.6.1.5.5.7.3.8";
 export const RSA_ENCRYPTION_OID = "1.2.840.113549.1.1.1";
+export const OIW_SHA1_WITH_RSA_ENCRYPTION_OID = "1.3.14.3.2.29";
+export const PKCS1_SHA1_WITH_RSA_ENCRYPTION_OID = "1.2.840.113549.1.1.5";
 
 export const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const out = new Uint8Array(bytes.byteLength);
@@ -80,6 +82,21 @@ export const resolveDigestAlgorithm = (oid: string): string | undefined => {
     | { name?: string; hash?: { name?: string } }
     | undefined;
   return algorithm?.name || algorithm?.hash?.name;
+};
+
+export const normalizeLegacySignatureAlgorithm = (
+  signatureAlgorithm: PkijsAlgorithmIdentifier | undefined
+): void => {
+  if (signatureAlgorithm?.algorithmId !== OIW_SHA1_WITH_RSA_ENCRYPTION_OID) return;
+  // OIW registered this legacy RSA/SHA-1 signature OID; PKI.js 3.4 only dispatches
+  // the equivalent PKCS#1 OID. Sources:
+  // https://oid-base.com/get/1.3.14.3.2.29
+  // https://datatracker.ietf.org/doc/html/rfc3279#section-2.2.1
+  signatureAlgorithm.algorithmId = PKCS1_SHA1_WITH_RSA_ENCRYPTION_OID;
+};
+
+export const normalizeLegacyCertificateSignatureAlgorithm = (certificate: Certificate): void => {
+  normalizeLegacySignatureAlgorithm(certificate.signatureAlgorithm);
 };
 
 export const matchSignerCertificate = async (

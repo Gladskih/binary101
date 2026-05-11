@@ -7,6 +7,8 @@ import {
   attachTimestampPathChecks
 } from "../../analyzers/pe/authenticode/pkijs-path.js";
 import type { AuthenticodeVerificationCheck } from "../../analyzers/pe/authenticode/index.js";
+import type { Certificate } from "../../analyzers/pe/authenticode/pkijs-runtime.js";
+import { OIW_SHA1_WITH_RSA_ENCRYPTION_OID } from "../../analyzers/pe/authenticode/pkijs-support.js";
 import {
   CODE_SIGNING_EKU_OID,
   KEY_USAGE_DIGITAL_SIGNATURE,
@@ -18,6 +20,10 @@ import {
   createKeyUsageExtension,
   generateRsaKeyPair
 } from "../fixtures/pe-authenticode-cms-helpers.js";
+
+const useLegacyOiwSha1RsaSignatureOid = (certificate: Certificate): void => {
+  certificate.signatureAlgorithm.algorithmId = OIW_SHA1_WITH_RSA_ENCRYPTION_OID;
+};
 
 const createAmbiguousIssuerFixture = async () => {
   const assuredRootKeys = await generateRsaKeyPair();
@@ -124,4 +130,28 @@ void test("attachTimestampPathChecks applies timestamp validity only to the leaf
   assert.deepStrictEqual(pathIndexes, [0, 2]);
   assert.ok(checks.some(check => check.id === "Signer 1-certificate-1-timestamp time-validity"));
   assert.ok(!checks.some(check => check.id === "Signer 1-certificate-3-timestamp time-validity"));
+});
+
+void test("attachPathChecks verifies self-signed certificates with legacy OIW RSA/SHA-1 OID", async () => {
+  const checks: AuthenticodeVerificationCheck[] = [];
+  const rootKeys = await generateRsaKeyPair("SHA-1");
+  const root = await createCertificate(
+    "Binary101 Legacy Root",
+    1,
+    rootKeys.publicKey,
+    createCommonName("Binary101 Legacy Root"),
+    rootKeys.privateKey,
+    "2020-01-01T00:00:00Z",
+    "2035-01-01T00:00:00Z",
+    [createBasicConstraintsExtension(true), createKeyUsageExtension(KEY_USAGE_KEY_CERT_SIGN)],
+    "SHA-1"
+  );
+  useLegacyOiwSha1RsaSignatureOid(root);
+
+  const pathIndexes = await attachPathChecks(checks, "Signer 1", [root], 0, undefined, "signing time");
+
+  assert.deepStrictEqual(pathIndexes, [0]);
+  assert.ok(
+    checks.some(check => check.id === "Signer 1-certificate-1-self-signed" && check.status === "pass")
+  );
 });

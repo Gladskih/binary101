@@ -116,7 +116,8 @@ export const createCertificate = async (
   privateKey: CryptoKey,
   notBefore: string,
   notAfter: string,
-  extensions: Extension[]
+  extensions: Extension[],
+  signatureHashAlgorithm = "SHA-256"
 ): Promise<Certificate> => {
   const certificate = new Certificate();
   certificate.version = 2;
@@ -127,17 +128,17 @@ export const createCertificate = async (
   certificate.notAfter = new Time({ value: new Date(notAfter) });
   certificate.extensions = extensions;
   await certificate.subjectPublicKeyInfo.importKey(publicKey);
-  await certificate.sign(privateKey, "SHA-256");
+  await certificate.sign(privateKey, signatureHashAlgorithm);
   return certificate;
 };
 
-export const generateRsaKeyPair = (): Promise<CryptoKeyPair> =>
+export const generateRsaKeyPair = (hashAlgorithm = "SHA-256"): Promise<CryptoKeyPair> =>
   crypto.subtle.generateKey(
     {
       name: "RSASSA-PKCS1-v1_5",
       modulusLength: 2048,
       publicExponent: new Uint8Array([1, 0, 1]),
-      hash: "SHA-256"
+      hash: hashAlgorithm
     },
     true,
     ["sign", "verify"]
