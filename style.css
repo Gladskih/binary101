@@ -273,6 +273,8 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .peSecurityTreeMeta span{color:var(--muted)}
 .peOverlayRange{border-left:1px solid var(--border2);margin-top:.55rem;padding-left:.75rem}
 .peOverlayRangeHeader{align-items:center;display:flex;gap:.75rem;justify-content:space-between}
+.peOverlayScanControls{align-items:center;display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.35rem}
+.peOverlayScanControls progress{height:.5rem;max-width:160px}
 .peOverlayBar{background:var(--chip-bg);border:1px solid var(--border2);border-radius:6px;height:14px;margin-top:.45rem;overflow:hidden;position:relative}
 .peOverlayBarSegment{display:block;height:100%;position:absolute;top:0}
 .peOverlayBarSegment--found{background:var(--accent)}

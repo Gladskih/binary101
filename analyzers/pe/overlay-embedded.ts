@@ -1,20 +1,26 @@
 "use strict";
 
-import { probeElf } from "../elf/probe.js";
-import { probeMachO } from "../macho/probe.js";
-import { probeByMagic } from "../probes.js";
-
 const DOS_SIGNATURE_MZ = 0x5a4d;
 const DOS_E_LFANEW_OFFSET = 0x3c;
 const PE_SIGNATURE = 0x50450000;
 const NE_SIGNATURE = 0x4e45;
 const LE_SIGNATURE = 0x4c45;
 const LX_SIGNATURE = 0x4c58;
+// PKWARE APPNOTE, "Local file header": local headers start with 0x04034b50.
+// https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
+const ZIP_LOCAL_FILE_HEADER_SIGNATURE = 0x504b0304;
+const ZIP_LOCAL_FILE_HEADER_BYTES = 30;
 // RFC 1952 gzip header: ID1 ID2 CM FLG MTIME XFL OS; CM=8 is deflate and FLG bits 5-7 reserved.
 // https://www.rfc-editor.org/rfc/rfc1952#section-2.3.1
 const GZIP_SIGNATURE = 0x1f8b;
 const GZIP_DEFLATE_METHOD = 8;
 const GZIP_RESERVED_FLAGS_MASK = 0xe0;
+// [MS-CAB] CFHEADER starts with "MSCF" and stores cbCabinet at byte offset 8.
+// https://download.microsoft.com/download/4/d/a/4da14f27-b4ef-4170-a6e6-5b1ef85b1baa/[ms-cab].pdf
+const CAB_SIGNATURE = 0x4d534346;
+const CAB_CBCABINET_OFFSET = 8;
+const CAB_SIZE_READ_BYTES = 12;
+const CAB_MIN_CFHEADER_BYTES = 36;
 // Microsoft BITMAPFILEHEADER: "BM", bfSize, reserved words, bfOffBits, then a DIB header.
 // https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapfileheader
 const BMP_SIGNATURE = 0x4d42;
@@ -32,8 +38,18 @@ const MIDI_HEADER_DATA_BYTES = 6;
 const MIDI_HEADER_CHUNK_BYTES = MIDI_CHUNK_HEADER_BYTES + MIDI_HEADER_DATA_BYTES;
 const MIDI_MAX_FORMAT = 2;
 export const EMBEDDED_BMP_LABEL = "BMP bitmap image";
+export const EMBEDDED_CAB_LABEL = "Microsoft Cabinet archive (CAB)";
 export const EMBEDDED_EXECUTABLE_LABEL = "PE/NE/LX executable";
+export const EMBEDDED_GZIP_LABEL = "gzip compressed data";
 export const EMBEDDED_MIDI_LABEL = "MIDI audio";
+export const EMBEDDED_SEVEN_ZIP_LABEL = "7z archive";
+export const EMBEDDED_ZIP_LABEL = "ZIP archive";
+
+// 7zFormat.txt from the official LZMA SDK defines a 32-byte SignatureHeader:
+// Signature, ArchiveVersion, StartHeaderCRC, NextHeaderOffset, NextHeaderSize, NextHeaderCRC.
+// https://www.7-zip.org/sdk.html
+const SEVEN_ZIP_SIGNATURE_BYTES = [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c];
+const SEVEN_ZIP_SIGNATURE_HEADER_BYTES = 32;
 
 const hasExecutableMzSignature = (view: DataView): boolean => {
   if (view.byteLength < 0x40 || view.getUint16(0, true) !== DOS_SIGNATURE_MZ) return false;
@@ -49,6 +65,22 @@ const hasValidGzipHeader = (view: DataView): boolean =>
   view.getUint16(0, false) === GZIP_SIGNATURE &&
   view.getUint8(2) === GZIP_DEFLATE_METHOD &&
   (view.getUint8(3) & GZIP_RESERVED_FLAGS_MASK) === 0;
+
+const hasZipLocalFileHeader = (view: DataView, remainingBytes: number): boolean => {
+  if (view.byteLength < ZIP_LOCAL_FILE_HEADER_BYTES || remainingBytes < ZIP_LOCAL_FILE_HEADER_BYTES) return false;
+  if (view.getUint32(0, false) !== ZIP_LOCAL_FILE_HEADER_SIGNATURE) return false;
+  const fileNameLength = view.getUint16(26, true);
+  const extraFieldLength = view.getUint16(28, true);
+  return ZIP_LOCAL_FILE_HEADER_BYTES + fileNameLength + extraFieldLength <= remainingBytes;
+};
+
+const hasSevenZipSignature = (view: DataView): boolean => {
+  if (view.byteLength < SEVEN_ZIP_SIGNATURE_BYTES.length) return false;
+  for (let index = 0; index < SEVEN_ZIP_SIGNATURE_BYTES.length; index += 1) {
+    if (view.getUint8(index) !== SEVEN_ZIP_SIGNATURE_BYTES[index]) return false;
+  }
+  return true;
+};
 
 const isKnownBmpBitDepth = (bitsPerPixel: number): boolean =>
   bitsPerPixel === 1 ||
@@ -87,6 +119,28 @@ export const readEmbeddedBmpFileSize = (
   return hasValidInfoDibFields(view) ? declaredSize : null;
 };
 
+export const readEmbeddedCabinetFileSize = (
+  view: DataView,
+  remainingBytes: number
+): number | null => {
+  if (view.byteLength < CAB_SIZE_READ_BYTES || view.getUint32(0, false) !== CAB_SIGNATURE) return null;
+  const cabinetSize = view.getUint32(CAB_CBCABINET_OFFSET, true);
+  if (cabinetSize < CAB_MIN_CFHEADER_BYTES || cabinetSize > remainingBytes) return null;
+  return cabinetSize;
+};
+
+export const readEmbeddedSevenZipFileSize = (
+  view: DataView,
+  remainingBytes: number
+): number | null => {
+  if (view.byteLength < SEVEN_ZIP_SIGNATURE_HEADER_BYTES || !hasSevenZipSignature(view)) return null;
+  const nextHeaderOffset = view.getBigUint64(12, true);
+  const nextHeaderSize = view.getBigUint64(20, true);
+  const archiveSize = BigInt(SEVEN_ZIP_SIGNATURE_HEADER_BYTES) + nextHeaderOffset + nextHeaderSize;
+  if (archiveSize > BigInt(remainingBytes) || archiveSize > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+  return Number(archiveSize);
+};
+
 const hasValidMidiDivision = (division: number): boolean => {
   if ((division & 0x8000) === 0) return (division & 0x7fff) > 0;
   const framesPerSecond = division >>> 8;
@@ -120,34 +174,23 @@ export const readEmbeddedMidiFileSize = (
 };
 
 export const isEmbeddedCandidateStartByte = (byteValue: number): boolean =>
-  byteValue === 0x04 ||
   byteValue === 0x1f ||
-  byteValue === 0x25 ||
-  byteValue === 0x28 ||
   byteValue === 0x37 ||
   byteValue === 0x42 ||
-  byteValue === 0x47 ||
   byteValue === 0x4d ||
-  byteValue === 0x50 ||
-  byteValue === 0x52 ||
-  byteValue === 0x7f ||
-  byteValue === 0x89 ||
-  byteValue === 0xca ||
-  byteValue === 0xce ||
-  byteValue === 0xcf ||
-  byteValue === 0xd0 ||
-  byteValue === 0xfd ||
-  byteValue === 0xfe;
+  byteValue === 0x50;
 
 export const detectEmbeddedCandidateType = (
   view: DataView,
   remainingBytes: number
 ): string | null => {
   if (!view.byteLength || !isEmbeddedCandidateStartByte(view.getUint8(0))) return null;
-  if (hasValidGzipHeader(view)) return "gzip compressed data";
-  const label = probeByMagic(view) || probeElf(view) || probeMachO(view, remainingBytes);
-  if (label === EMBEDDED_BMP_LABEL && readEmbeddedBmpFileSize(view, remainingBytes) == null) return null;
-  if (label === EMBEDDED_MIDI_LABEL && readEmbeddedMidiFileSize(view, remainingBytes) == null) return null;
-  if (label && label !== "gzip compressed data") return label;
+  // Overlay scanning walks arbitrary installer tails, so keep this allowlist deliberately small.
+  if (hasValidGzipHeader(view)) return EMBEDDED_GZIP_LABEL;
+  if (hasZipLocalFileHeader(view, remainingBytes)) return EMBEDDED_ZIP_LABEL;
+  if (readEmbeddedCabinetFileSize(view, remainingBytes) != null) return EMBEDDED_CAB_LABEL;
+  if (readEmbeddedBmpFileSize(view, remainingBytes) != null) return EMBEDDED_BMP_LABEL;
+  if (readEmbeddedMidiFileSize(view, remainingBytes) != null) return EMBEDDED_MIDI_LABEL;
+  if (readEmbeddedSevenZipFileSize(view, remainingBytes) != null) return EMBEDDED_SEVEN_ZIP_LABEL;
   return hasExecutableMzSignature(view) ? EMBEDDED_EXECUTABLE_LABEL : null;
 };

@@ -223,7 +223,7 @@ void test("parsePe returns mapping and layout info for PE32 with one section and
   assert.strictEqual(result.hasCert, false);
 });
 
-void test("parsePe detects embedded payloads inside the true PE overlay", async () => {
+void test("parsePe reports true PE overlay ranges without scanning embedded payloads", async () => {
   const fixture = createPeWithSectionAndIatFixture();
   const bytes = new Uint8Array(fixture.bytes);
   const embeddedOffset = fixture.rawImageEnd + 3;
@@ -236,8 +236,9 @@ void test("parsePe detects embedded payloads inside the true PE overlay", async 
   const range = result.overlay?.ranges[0];
   assert.ok(range, "PE overlay range should be reported");
   assert.equal(range.start, fixture.rawImageEnd);
-  assert.equal(range.findings[0]?.start, embeddedOffset);
-  assert.match(range.findings[0]?.detectedType ?? "", /^ZIP archive/);
+  assert.equal(range.end, bytes.byteLength);
+  assert.deepEqual(range.findings, []);
+  assert.equal(range.embeddedScan, undefined);
 });
 
 void test("parsePe preserves unmapped IAT directories with warnings", async () => {

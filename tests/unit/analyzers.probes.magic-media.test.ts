@@ -22,7 +22,6 @@ void test("detects ISO-BMFF and MPEG transport streams", () => {
   dv.setUint32(4, 0x66747970, false);
   dv.setUint32(8, 0x68656963, false);
   assert.strictEqual(run(isobmff), "HEIF/HEIC image (ISO-BMFF)");
-
   const ts = new Uint8Array(188 * 3).fill(0);
   ts[0] = 0x47;
   ts[188] = 0x47;

@@ -7,10 +7,13 @@ import {
   EMBEDDED_EXECUTABLE_LABEL,
   isEmbeddedCandidateStartByte,
   readEmbeddedBmpFileSize,
-  readEmbeddedMidiFileSize
+  readEmbeddedCabinetFileSize,
+  readEmbeddedMidiFileSize,
+  readEmbeddedSevenZipFileSize
 } from "../../analyzers/pe/overlay-embedded.js";
 import { createBmpFile } from "../fixtures/bmp-fixtures.js";
 import { createBareMidiSignatureBytes, createMinimalMidiFileBytes } from "../fixtures/midi-fixtures.js";
+import { createSevenZipFile } from "../fixtures/rar-sevenzip-fixtures.js";
 
 const dataViewFrom = (bytes: ArrayLike<number>): DataView =>
   new DataView(Uint8Array.from(bytes).buffer);
@@ -26,6 +29,7 @@ const createBareBmpSignatureCandidate = (): DataView => {
 
 void test("isEmbeddedCandidateStartByte gates expensive embedded probes", () => {
   assert.equal(isEmbeddedCandidateStartByte(0x50), true);
+  assert.equal(isEmbeddedCandidateStartByte(0x47), false);
   assert.equal(isEmbeddedCandidateStartByte(0x00), false);
 });
 
@@ -60,6 +64,46 @@ void test("detectEmbeddedCandidateType validates gzip method and reserved flags"
     detectEmbeddedCandidateType(dataViewFrom([0x1f, 0x8b, 0x08, 0xe0, 0, 0, 0, 0, 0, 0]), 10),
     null
   );
+});
+
+void test("detectEmbeddedCandidateType accepts validated ZIP local headers", () => {
+  const bytes = new Uint8Array(30);
+  bytes.set([0x50, 0x4b, 0x03, 0x04]);
+
+  assert.equal(detectEmbeddedCandidateType(new DataView(bytes.buffer), bytes.byteLength), "ZIP archive");
+});
+
+void test("detectEmbeddedCandidateType accepts CAB only with coherent cbCabinet", () => {
+  const bytes = new Uint8Array(36);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 0x4d534346, false);
+  view.setUint32(8, bytes.byteLength, true);
+
+  assert.equal(readEmbeddedCabinetFileSize(view, bytes.byteLength), bytes.byteLength);
+  assert.equal(detectEmbeddedCandidateType(view, bytes.byteLength), "Microsoft Cabinet archive (CAB)");
+  view.setUint32(8, bytes.byteLength + 1, true);
+  assert.equal(readEmbeddedCabinetFileSize(view, bytes.byteLength), null);
+  assert.equal(detectEmbeddedCandidateType(view, bytes.byteLength), null);
+});
+
+void test("detectEmbeddedCandidateType accepts 7z only with bounded signature header fields", () => {
+  const bytes = createSevenZipFile().data;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+  assert.equal(readEmbeddedSevenZipFileSize(view, bytes.byteLength), bytes.byteLength);
+  assert.equal(detectEmbeddedCandidateType(view, bytes.byteLength), "7z archive");
+  assert.equal(detectEmbeddedCandidateType(dataViewFrom([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c]), 6), null);
+});
+
+void test("detectEmbeddedCandidateType rejects broad magic-only formats", () => {
+  const tsBytes = new Uint8Array(188 * 5).fill(0);
+  for (let offset = 0; offset < tsBytes.byteLength; offset += 188) {
+    tsBytes[offset] = 0x47;
+    tsBytes[offset + 3] = 0x10;
+  }
+
+  assert.equal(detectEmbeddedCandidateType(dataViewFrom([0x25, 0x50, 0x44, 0x46, 0x2d]), 5), null);
+  assert.equal(detectEmbeddedCandidateType(new DataView(tsBytes.buffer), tsBytes.byteLength), null);
 });
 
 void test("detectEmbeddedCandidateType rejects bare BMP signatures without a coherent header", () => {

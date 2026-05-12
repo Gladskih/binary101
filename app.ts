@@ -14,6 +14,7 @@ import { createPeChecksumClickHandler } from "./ui/pe-checksum-controls.js";
 import { copyManifestPreviewToClipboard } from "./ui/manifest-preview-copy.js";
 import { createCertificateDownloadClickHandler } from "./ui/certificate-download.js";
 import { createPeOverlayDownloadClickHandler } from "./ui/pe-overlay-download.js";
+import { createPeOverlayScanActions } from "./ui/pe-overlay-scan.js";
 import { handleManifestTreeActionClick, syncManifestTreeControls } from "./ui/manifest-tree-controls.js";
 import { captureOpenDetails, restoreOpenDetails } from "./ui/details-open-state.js";
 const getElement = (id: string) => document.getElementById(id)!;
@@ -36,12 +37,10 @@ const sha256ButtonElement = getElement("sha256ComputeButton") as HTMLButtonEleme
 const sha512ButtonElement = getElement("sha512ComputeButton") as HTMLButtonElement;
 const sha256CopyButtonElement = getElement("sha256CopyButton") as HTMLButtonElement;
 const sha512CopyButtonElement = getElement("sha512CopyButton") as HTMLButtonElement;
-const sha256Controls = {
-  valueElement: sha256ValueElement, buttonElement: sha256ButtonElement, copyButtonElement: sha256CopyButtonElement
-};
-const sha512Controls = {
-  valueElement: sha512ValueElement, buttonElement: sha512ButtonElement, copyButtonElement: sha512CopyButtonElement
-};
+const sha256Controls = { valueElement: sha256ValueElement, buttonElement: sha256ButtonElement,
+  copyButtonElement: sha256CopyButtonElement };
+const sha512Controls = { valueElement: sha512ValueElement, buttonElement: sha512ButtonElement,
+  copyButtonElement: sha512CopyButtonElement };
 let currentFile: File | null = null;
 let currentPreviewUrl: string | null = null;
 let currentTypeLabel = "";
@@ -71,6 +70,12 @@ const peDisassembly = createPeDisassemblyController({
   getCurrentParseResult,
   renderResult
 });
+const peOverlayScan = createPeOverlayScanActions({
+  getCurrentFile,
+  getCurrentParseResult,
+  renderResult,
+  setStatusMessage
+});
 const elfDisassembly = createElfDisassemblyController({
   getCurrentFile,
   getCurrentParseResult,
@@ -95,10 +100,7 @@ peDetailsValueElement.addEventListener("click", event => {
     });
     return;
   }
-  if (handleManifestTreeActionClick(targetElement)) {
-    event.preventDefault();
-    return;
-  }
+  if (handleManifestTreeActionClick(targetElement)) { event.preventDefault(); return; }
   const peAnalyzeButton = targetElement?.closest("#peInstructionSetsAnalyzeButton");
   const peCancelButton = targetElement?.closest("#peInstructionSetsCancelButton");
   const elfAnalyzeButton = targetElement?.closest("#elfInstructionSetsAnalyzeButton");
@@ -121,6 +123,10 @@ peDetailsValueElement.addEventListener("click", event => {
   if (peCancelButton) {
     event.preventDefault();
     peDisassembly.cancel();
+    return;
+  }
+  if (peOverlayScan.handleClick(targetElement)) {
+    event.preventDefault();
     return;
   }
   if (elfAnalyzeButton) {
@@ -147,6 +153,7 @@ peDetailsValueElement.addEventListener("click", event => {
 peDetailsValueElement.addEventListener("toggle", event => syncManifestTreeControls(event.target as Element | null), true);
 async function showFileInfo(file: File, sourceDescription: string): Promise<void> {
   peDisassembly.cancel();
+  peOverlayScan.cancel();
   elfDisassembly.cancel();
   currentFile = file;
   currentParseResult = { analyzer: null, parsed: null };
@@ -161,10 +168,7 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     currentTypeLabel = typeLabel || "";
     const timestampIso = nowIsoString();
     const sizeText = formatHumanSize(file.size);
-    const mimeType =
-      typeof file.type === "string" && file.type.length > 0
-        ? file.type
-        : "Not provided by browser";
+    const mimeType = typeof file.type === "string" && file.type.length > 0 ? file.type : "Not provided by browser";
     fileNameDetailElement.textContent = file.name || "";
     fileSizeDetailElement.textContent = sizeText;
     fileTimestampDetailElement.textContent = timestampIso;
@@ -175,9 +179,7 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     setStatusMessage("Parsing file details...");
     const analysisStart = performance.now();
     const parsedResult = await parseForUi(file);
-    fileAnalysisDurationDetailElement.textContent = formatAnalysisDuration(
-      performance.now() - analysisStart
-    );
+    fileAnalysisDurationDetailElement.textContent = formatAnalysisDuration(performance.now() - analysisStart);
     currentParseResult = parsedResult;
     renderResult(parsedResult);
     resetHashDisplay(sha256Controls, sha512Controls);
@@ -274,9 +276,7 @@ const handlePaste = async (event: ClipboardEvent): Promise<void> => {
     setStatusMessage("Paste: empty text.");
     return;
   }
-  const syntheticFile = new File([text], "clipboard.bin", {
-    type: "application/octet-stream"
-  });
+  const syntheticFile = new File([text], "clipboard.bin", { type: "application/octet-stream" });
   await showFileInfo(syntheticFile, "Paste (clipboard data)");
 };
 window.addEventListener("paste", event => {

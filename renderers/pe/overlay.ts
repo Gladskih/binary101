@@ -18,6 +18,24 @@ const renderDownloadButton = (start: number, end: number, label: string): string
   `<path d="M8 2.5v7"></path><path d="M5 6.8 8 9.8l3-3"></path><path d="M3 12.5h10"></path>` +
   `</svg></button>`;
 
+const overlayScanElementId = (range: PeOverlayRange, suffix: string): string =>
+  `peOverlayScan_${range.start}_${range.end}_${suffix}`;
+
+const renderScanControls = (range: PeOverlayRange): string => {
+  if (range.embeddedScan?.status === "complete") {
+    return `<div class="smallNote">Embedded payload signature scan complete.</div>`;
+  }
+  return `<div class="peOverlayScanControls">` +
+    `<button type="button" class="tableButton" id="${overlayScanElementId(range, "button")}" ` +
+    `data-pe-overlay-scan data-overlay-start="${range.start}" data-overlay-end="${range.end}">` +
+    `Scan embedded payloads</button>` +
+    `<button type="button" class="tableButton" id="${overlayScanElementId(range, "cancel")}" ` +
+    `data-pe-overlay-scan-cancel hidden>Cancel</button>` +
+    `<progress id="${overlayScanElementId(range, "progress")}" hidden></progress>` +
+    `<span class="smallNote" id="${overlayScanElementId(range, "text")}">Not scanned.</span>` +
+    `</div>`;
+};
+
 const getCoverageSegments = (range: PeOverlayRange): Array<{
   start: number;
   end: number;
@@ -73,6 +91,7 @@ export function renderOverlay(pe: PeParseResult, out: string[]): void {
         `</div>`
       );
       out.push(renderCoverageBar(range));
+      out.push(renderScanControls(range));
       out.push(
         `<div class="smallNote">Detected payload coverage: ${humanSize(
           range.findings.reduce((total, finding) => total + finding.size, 0)
@@ -83,7 +102,11 @@ export function renderOverlay(pe: PeParseResult, out: string[]): void {
         out.push(renderFindingRows(range));
         out.push(`</tbody></table>`);
       } else {
-        out.push(`<div class="smallNote">No embedded payload signature was recognized inside this overlay range.</div>`);
+        out.push(
+          range.embeddedScan?.status === "complete"
+            ? `<div class="smallNote">No embedded payload signature was recognized inside this overlay range.</div>`
+            : `<div class="smallNote">Embedded payload signatures have not been scanned for this range.</div>`
+        );
       }
       out.push(`</div>`);
     });
