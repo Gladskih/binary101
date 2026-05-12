@@ -6,6 +6,7 @@ import { analyzePeOverlay, getUnexplainedOverlayRanges } from "../../analyzers/p
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import { createBmpFile } from "../fixtures/bmp-fixtures.js";
+import { createBareMidiSignatureBytes, createMinimalMidiFileBytes } from "../fixtures/midi-fixtures.js";
 import { createPeWithSectionAndIat } from "../fixtures/sample-files-pe.js";
 
 // PKWARE APPNOTE, "Local file header": local headers start with 0x04034b50.
@@ -194,6 +195,15 @@ void test("analyzePeOverlay rejects BMP matches without a validated bitmap heade
   assert.deepEqual(range.findings, []);
 });
 
+void test("analyzePeOverlay rejects MIDI matches without validated SMF chunks", async () => {
+  const analysis = expectDefined(
+    await analyzePeOverlay(createOverlayInputsWithPayload(createBareMidiSignatureBytes()).inputs)
+  );
+  const range = expectDefined(analysis.ranges[0]);
+
+  assert.deepEqual(range.findings, []);
+});
+
 void test("analyzePeOverlay bounds embedded BMP findings by the declared bfSize", async () => {
   const prefixBytes = createIncidentalOverlayPrefix();
   const bitmapBytes = createBmpFile().data;
@@ -212,6 +222,26 @@ void test("analyzePeOverlay bounds embedded BMP findings by the declared bfSize"
   assert.equal(finding.end, fixture.overlayStart + prefixBytes.byteLength + bitmapBytes.byteLength);
   assert.equal(finding.detectedType, "BMP bitmap image");
   assert.equal(finding.endDescription, "End comes from the BMP file header bfSize field.");
+});
+
+void test("analyzePeOverlay bounds embedded MIDI findings by track chunk sizes", async () => {
+  const prefixBytes = createIncidentalOverlayPrefix();
+  const midiBytes = createMinimalMidiFileBytes();
+  const payloadBytes = createEmbeddedPayloadWithTrailingBytes(
+    prefixBytes,
+    midiBytes,
+    createIncidentalTrailingBytes()
+  );
+  const fixture = createOverlayInputsWithPayload(payloadBytes);
+  const analysis = expectDefined(await analyzePeOverlay(fixture.inputs));
+  const range = expectDefined(analysis.ranges[0]);
+  const finding = expectDefined(range.findings[0]);
+
+  assert.equal(range.end, fixture.overlayEnd);
+  assert.equal(finding.start, fixture.overlayStart + prefixBytes.byteLength);
+  assert.equal(finding.end, fixture.overlayStart + prefixBytes.byteLength + midiBytes.byteLength);
+  assert.equal(finding.detectedType, "MIDI audio");
+  assert.equal(finding.endDescription, "End comes from the Standard MIDI track chunk length fields.");
 });
 
 void test("analyzePeOverlay ignores stray embedded MZ bytes without an executable signature", async () => {

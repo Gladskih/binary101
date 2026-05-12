@@ -6,9 +6,11 @@ import {
   detectEmbeddedCandidateType,
   EMBEDDED_EXECUTABLE_LABEL,
   isEmbeddedCandidateStartByte,
-  readEmbeddedBmpFileSize
+  readEmbeddedBmpFileSize,
+  readEmbeddedMidiFileSize
 } from "../../analyzers/pe/overlay-embedded.js";
 import { createBmpFile } from "../fixtures/bmp-fixtures.js";
+import { createBareMidiSignatureBytes, createMinimalMidiFileBytes } from "../fixtures/midi-fixtures.js";
 
 const dataViewFrom = (bytes: ArrayLike<number>): DataView =>
   new DataView(Uint8Array.from(bytes).buffer);
@@ -74,4 +76,20 @@ void test("detectEmbeddedCandidateType accepts BMP after validating declared siz
   // createBmpFile encodes BITMAPFILEHEADER.bfSize as 0x3a, the complete fixture size.
   assert.equal(readEmbeddedBmpFileSize(view, bytes.byteLength), 58);
   assert.equal(detectEmbeddedCandidateType(view, bytes.byteLength), "BMP bitmap image");
+});
+
+void test("detectEmbeddedCandidateType rejects bare MIDI signatures without coherent chunks", () => {
+  const bytes = createBareMidiSignatureBytes();
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+  assert.equal(detectEmbeddedCandidateType(view, view.byteLength), null);
+  assert.equal(readEmbeddedMidiFileSize(view, view.byteLength), null);
+});
+
+void test("detectEmbeddedCandidateType accepts MIDI after validating header and track chunks", () => {
+  const bytes = createMinimalMidiFileBytes();
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+  assert.equal(readEmbeddedMidiFileSize(view, view.byteLength), 26);
+  assert.equal(detectEmbeddedCandidateType(view, view.byteLength), "MIDI audio");
 });

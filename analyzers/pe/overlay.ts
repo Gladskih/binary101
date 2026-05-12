@@ -8,8 +8,10 @@ import {
   detectEmbeddedCandidateType,
   EMBEDDED_BMP_LABEL,
   EMBEDDED_EXECUTABLE_LABEL,
+  EMBEDDED_MIDI_LABEL,
   isEmbeddedCandidateStartByte,
-  readEmbeddedBmpFileSize
+  readEmbeddedBmpFileSize,
+  readEmbeddedMidiFileSize
 } from "./overlay-embedded.js";
 
 export interface PeOverlayRange {
@@ -60,6 +62,7 @@ const MAX_EMBEDDED_SIGNATURE_SCAN_BYTES = 1024 * 1024;
 const SCAN_CHUNK_BYTES = 64 * 1024;
 const PROBE_LOOKAHEAD_BYTES = 64 * 1024;
 const OVERLAY_PREFIX_VALIDATE_BYTES = 64;
+const OVERLAY_MIDI_VALIDATE_BYTES = 64 * 1024;
 // [MS-CAB] CFHEADER starts with "MSCF" and stores cbCabinet at byte offset 8.
 // https://download.microsoft.com/download/4/d/a/4da14f27-b4ef-4170-a6e6-5b1ef85b1baa/[ms-cab].pdf
 const CAB_SIGNATURE = 0x4d534346;
@@ -174,11 +177,16 @@ const detectRangeAtOffset = async (
 ): Promise<string | null> => {
   const label = await detectBinaryType(createOverlaySliceFile(file, { start: offset, end: range.end }));
   if (label === "Unknown binary type" || label === "MS-DOS MZ executable" || label === "Text file") return null;
-  if (label !== EMBEDDED_BMP_LABEL) return label;
-  const prefixEnd = Math.min(range.end, offset + OVERLAY_PREFIX_VALIDATE_BYTES);
+  if (label !== EMBEDDED_BMP_LABEL && label !== EMBEDDED_MIDI_LABEL) return label;
+  const prefixEnd = Math.min(range.end, offset + getOverlayValidationBytes(label));
   const prefix = new DataView(await file.slice(offset, prefixEnd).arrayBuffer());
-  return readEmbeddedBmpFileSize(prefix, range.end - offset) == null ? null : label;
+  if (label === EMBEDDED_BMP_LABEL && readEmbeddedBmpFileSize(prefix, range.end - offset) == null) return null;
+  if (label === EMBEDDED_MIDI_LABEL && readEmbeddedMidiFileSize(prefix, range.end - offset) == null) return null;
+  return label;
 };
+
+const getOverlayValidationBytes = (label: string): number =>
+  label === EMBEDDED_MIDI_LABEL ? OVERLAY_MIDI_VALIDATE_BYTES : OVERLAY_PREFIX_VALIDATE_BYTES;
 
 const findEmbeddedFinding = async (
   file: File,
@@ -231,6 +239,16 @@ const readBitmapEnd = async (
   return bitmapSize == null ? null : start + bitmapSize;
 };
 
+const readMidiEnd = async (
+  reader: FileRangeReader,
+  range: FileRange,
+  start: number
+): Promise<number | null> => {
+  const view = await reader.read(start, Math.min(OVERLAY_MIDI_VALIDATE_BYTES, range.end - start));
+  const midiSize = readEmbeddedMidiFileSize(view, range.end - start);
+  return midiSize == null ? null : start + midiSize;
+};
+
 const createOverlayFinding = async (
   reader: FileRangeReader,
   range: FileRange,
@@ -239,7 +257,8 @@ const createOverlayFinding = async (
 ): Promise<PeOverlayFinding> => {
   const cabinetEnd = detectedType === CAB_LABEL ? await readCabinetEnd(reader, range, start) : null;
   const bitmapEnd = detectedType === EMBEDDED_BMP_LABEL ? await readBitmapEnd(reader, range, start) : null;
-  const end = cabinetEnd ?? bitmapEnd ?? range.end;
+  const midiEnd = detectedType === EMBEDDED_MIDI_LABEL ? await readMidiEnd(reader, range, start) : null;
+  const end = cabinetEnd ?? bitmapEnd ?? midiEnd ?? range.end;
   return {
     start,
     end,
@@ -249,6 +268,8 @@ const createOverlayFinding = async (
       ? "End comes from the CAB CFHEADER.cbCabinet size field."
       : bitmapEnd
         ? "End comes from the BMP file header bfSize field."
+        : midiEnd
+          ? "End comes from the Standard MIDI track chunk length fields."
       : "End is the end of the true overlay range; exact embedded payload length is not known."
   };
 };

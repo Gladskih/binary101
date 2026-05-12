@@ -22,8 +22,18 @@ const BMP_FILE_HEADER_BYTES = 14;
 const BMP_MIN_DIB_HEADER_BYTES = 12;
 const BMP_CORE_DIMENSIONS_BYTES = 26;
 const BMP_INFO_DIMENSIONS_BYTES = 30;
+// Standard MIDI Files 1.0: chunks use 4-byte ASCII IDs and big-endian lengths; the
+// MThd header chunk has 6 data bytes, followed by one or more MTrk track chunks.
+// https://midi.org/standard-midi-files-specification
+const MIDI_HEADER_SIGNATURE = 0x4d546864;
+const MIDI_TRACK_SIGNATURE = 0x4d54726b;
+const MIDI_CHUNK_HEADER_BYTES = 8;
+const MIDI_HEADER_DATA_BYTES = 6;
+const MIDI_HEADER_CHUNK_BYTES = MIDI_CHUNK_HEADER_BYTES + MIDI_HEADER_DATA_BYTES;
+const MIDI_MAX_FORMAT = 2;
 export const EMBEDDED_BMP_LABEL = "BMP bitmap image";
 export const EMBEDDED_EXECUTABLE_LABEL = "PE/NE/LX executable";
+export const EMBEDDED_MIDI_LABEL = "MIDI audio";
 
 const hasExecutableMzSignature = (view: DataView): boolean => {
   if (view.byteLength < 0x40 || view.getUint16(0, true) !== DOS_SIGNATURE_MZ) return false;
@@ -77,6 +87,38 @@ export const readEmbeddedBmpFileSize = (
   return hasValidInfoDibFields(view) ? declaredSize : null;
 };
 
+const hasValidMidiDivision = (division: number): boolean => {
+  if ((division & 0x8000) === 0) return (division & 0x7fff) > 0;
+  const framesPerSecond = division >>> 8;
+  const ticksPerFrame = division & 0xff;
+  return ticksPerFrame > 0 &&
+    (framesPerSecond === 0xe8 || framesPerSecond === 0xe7 ||
+      framesPerSecond === 0xe3 || framesPerSecond === 0xe2);
+};
+
+export const readEmbeddedMidiFileSize = (
+  view: DataView,
+  remainingBytes: number
+): number | null => {
+  if (view.byteLength < MIDI_HEADER_CHUNK_BYTES || view.getUint32(0, false) !== MIDI_HEADER_SIGNATURE) return null;
+  if (view.getUint32(4, false) !== MIDI_HEADER_DATA_BYTES) return null;
+  const format = view.getUint16(8, false);
+  const trackCount = view.getUint16(10, false);
+  if (format > MIDI_MAX_FORMAT || trackCount === 0 || (format === 0 && trackCount !== 1)) return null;
+  if (!hasValidMidiDivision(view.getUint16(12, false))) return null;
+  let offset = MIDI_HEADER_CHUNK_BYTES;
+  for (let index = 0; index < trackCount; index += 1) {
+    if (offset + MIDI_CHUNK_HEADER_BYTES > view.byteLength) return null;
+    if (view.getUint32(offset, false) !== MIDI_TRACK_SIGNATURE) return null;
+    const trackSize = view.getUint32(offset + 4, false);
+    offset += MIDI_CHUNK_HEADER_BYTES;
+    if (trackSize > remainingBytes - offset) return null;
+    if (trackSize > view.byteLength - offset) return null;
+    offset += trackSize;
+  }
+  return offset;
+};
+
 export const isEmbeddedCandidateStartByte = (byteValue: number): boolean =>
   byteValue === 0x04 ||
   byteValue === 0x1f ||
@@ -105,6 +147,7 @@ export const detectEmbeddedCandidateType = (
   if (hasValidGzipHeader(view)) return "gzip compressed data";
   const label = probeByMagic(view) || probeElf(view) || probeMachO(view, remainingBytes);
   if (label === EMBEDDED_BMP_LABEL && readEmbeddedBmpFileSize(view, remainingBytes) == null) return null;
+  if (label === EMBEDDED_MIDI_LABEL && readEmbeddedMidiFileSize(view, remainingBytes) == null) return null;
   if (label && label !== "gzip compressed data") return label;
   return hasExecutableMzSignature(view) ? EMBEDDED_EXECUTABLE_LABEL : null;
 };
