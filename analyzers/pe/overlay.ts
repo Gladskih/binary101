@@ -6,8 +6,10 @@ import type { PeDataDirectory, PeSection } from "./types.js";
 import { normalizeFileRanges, type FileRange } from "./layout/file-ranges.js";
 import {
   detectEmbeddedCandidateType,
+  EMBEDDED_BMP_LABEL,
   EMBEDDED_EXECUTABLE_LABEL,
-  isEmbeddedCandidateStartByte
+  isEmbeddedCandidateStartByte,
+  readEmbeddedBmpFileSize
 } from "./overlay-embedded.js";
 
 export interface PeOverlayRange {
@@ -57,6 +59,7 @@ const MAX_EMBEDDED_SIGNATURE_SCAN_BYTES = 1024 * 1024;
 // Match the project FileRangeReader cache window so scans reuse cached slices efficiently.
 const SCAN_CHUNK_BYTES = 64 * 1024;
 const PROBE_LOOKAHEAD_BYTES = 64 * 1024;
+const OVERLAY_PREFIX_VALIDATE_BYTES = 64;
 // [MS-CAB] CFHEADER starts with "MSCF" and stores cbCabinet at byte offset 8.
 // https://download.microsoft.com/download/4/d/a/4da14f27-b4ef-4170-a6e6-5b1ef85b1baa/[ms-cab].pdf
 const CAB_SIGNATURE = 0x4d534346;
@@ -170,7 +173,11 @@ const detectRangeAtOffset = async (
   offset: number
 ): Promise<string | null> => {
   const label = await detectBinaryType(createOverlaySliceFile(file, { start: offset, end: range.end }));
-  return label === "Unknown binary type" || label === "MS-DOS MZ executable" ? null : label;
+  if (label === "Unknown binary type" || label === "MS-DOS MZ executable" || label === "Text file") return null;
+  if (label !== EMBEDDED_BMP_LABEL) return label;
+  const prefixEnd = Math.min(range.end, offset + OVERLAY_PREFIX_VALIDATE_BYTES);
+  const prefix = new DataView(await file.slice(offset, prefixEnd).arrayBuffer());
+  return readEmbeddedBmpFileSize(prefix, range.end - offset) == null ? null : label;
 };
 
 const findEmbeddedFinding = async (
@@ -214,6 +221,16 @@ const readCabinetEnd = async (
   return start + cabinetSize;
 };
 
+const readBitmapEnd = async (
+  reader: FileRangeReader,
+  range: FileRange,
+  start: number
+): Promise<number | null> => {
+  const view = await reader.read(start, Math.min(OVERLAY_PREFIX_VALIDATE_BYTES, range.end - start));
+  const bitmapSize = readEmbeddedBmpFileSize(view, range.end - start);
+  return bitmapSize == null ? null : start + bitmapSize;
+};
+
 const createOverlayFinding = async (
   reader: FileRangeReader,
   range: FileRange,
@@ -221,7 +238,8 @@ const createOverlayFinding = async (
   detectedType: string
 ): Promise<PeOverlayFinding> => {
   const cabinetEnd = detectedType === CAB_LABEL ? await readCabinetEnd(reader, range, start) : null;
-  const end = cabinetEnd ?? range.end;
+  const bitmapEnd = detectedType === EMBEDDED_BMP_LABEL ? await readBitmapEnd(reader, range, start) : null;
+  const end = cabinetEnd ?? bitmapEnd ?? range.end;
   return {
     start,
     end,
@@ -229,6 +247,8 @@ const createOverlayFinding = async (
     detectedType,
     endDescription: cabinetEnd
       ? "End comes from the CAB CFHEADER.cbCabinet size field."
+      : bitmapEnd
+        ? "End comes from the BMP file header bfSize field."
       : "End is the end of the true overlay range; exact embedded payload length is not known."
   };
 };
