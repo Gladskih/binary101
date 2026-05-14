@@ -10,6 +10,7 @@ import type { PeGlobalPtrDirectory } from "../directories/globalptr-directory.js
 import type { PeLoadConfig } from "../load-config/index.js";
 import type { PeNativeAotCandidate } from "../native-aot.js";
 import type { PeOverlayAnalysis } from "../overlay.js";
+import type { PePackerAnalysis } from "../packers/index.js";
 import type { PeResources } from "../resources/index.js";
 import type { PeClrHeader } from "../clr/index.js";
 import type { ParsedSecurityDirectory } from "../security/index.js";
@@ -64,6 +65,7 @@ export interface PeWindowsParseResult extends PeParseResultBase {
   architecture?: PeArchitectureDirectory | null;
   globalPtr?: PeGlobalPtrDirectory | null;
   resources: PeResources | null;
+  packers?: PePackerAnalysis | null;
   disassembly?: PeInstructionSetReport;
   nativeAotCandidate?: PeNativeAotCandidate | null;
 }

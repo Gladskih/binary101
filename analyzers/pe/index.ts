@@ -35,6 +35,7 @@ import {
 import { buildHeaderOnlyPeParseResult } from "./core/header-only-result.js";
 import { collectPeLayoutWarnings } from "./layout/warnings.js";
 import { analyzePeOverlay } from "./overlay.js";
+import { analyzePePackers } from "./packers/index.js";
 export {
   isPeRomParseResult,
   isPeWindowsParseResult
@@ -158,6 +159,14 @@ export async function parsePe(
     numberOfSymbols: coff.NumberOfSymbols,
     ...(core.coffStringTableSize != null ? { coffStringTableSize: core.coffStringTableSize } : {})
   });
+  const packers = await analyzePePackers({
+    reader,
+    sections,
+    overlay,
+    // Bun's .bun Offsets.byte_count is a usize, so it follows the PE image pointer width.
+    // https://github.com/oven-sh/bun/blob/main/src/standalone_graph/StandaloneModuleGraph.zig
+    imagePointerBytes: opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC ? 8 : 4
+  });
   const iat = parseIatDirectory(dataDirs, rvaToOff);
   const importLinking = analyzeImportLinking(
     importResult,
@@ -220,6 +229,7 @@ export async function parsePe(
     architecture,
     globalPtr,
     nativeAotCandidate,
+    packers,
     resources: attachManifestValidation(resources, manifestValidation),
     ...(overlay ? { overlay } : {}),
     imageEnd,

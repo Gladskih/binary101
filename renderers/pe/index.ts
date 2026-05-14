@@ -26,6 +26,7 @@ import {
 import { renderResources } from "./resources.js";
 import { renderException } from "./exception.js";
 import { renderNativeAotCandidate } from "./native-aot.js";
+import { renderPackers } from "./packers.js";
 import { renderOverlay } from "./overlay.js";
 import {
   renderReloc,
@@ -48,6 +49,7 @@ export function renderPe(pe: PeParseResult | null | undefined): string {
   }
   renderHeaders(pe, out);
   if (isPeWindowsParseResult(pe)) {
+    renderPackers(pe.packers, out);
     renderLoadConfig(pe, out);
     renderDebug(pe, out);
     renderImportLinking(pe, out);

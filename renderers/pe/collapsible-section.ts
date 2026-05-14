@@ -37,6 +37,8 @@ const PE_SECTION_DESCRIPTIONS: Record<string, string> = {
     "PE loader metadata for compiler and OS hardening features such as CFG, SafeSEH, GS cookies, Code Integrity hints, and dynamic relocations.",
   "Native AOT candidate":
     "Conservative evidence for .NET Native AOT style images based on PE and CLR metadata.",
+  "Packaging signatures":
+    "High-confidence local evidence for installers and runtime packagers embedded in this PE image.",
   "PE/COFF headers":
     "Core PE signature, COFF file header, and optional header fields that define the image layout.",
   "Resources":
