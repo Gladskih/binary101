@@ -143,7 +143,7 @@ export const describeHeaderKind = (
     case "header":
       return "Plain Header structure: metadata is stored uncompressed at the next-header location.";
     case "encoded":
-      return "Encoded Header: the header database itself is compressed or encrypted; this viewer does not decode it.";
+      return "Encoded Header: the header database itself is compressed or encrypted.";
     case "empty":
       return "Empty Header: no header database is present after the signature header.";
     case "unknown": {

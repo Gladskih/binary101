@@ -10,21 +10,35 @@ import { parseCoderProperties } from "./coders.js";
 import { parsePackDigests } from "./pack-info.js";
 import { readByte, readEncodedUint64, toSafeNumber } from "./readers.js";
 
+// 7z DOC/7zFormat.txt NID values and folder coder flag bits.
+// https://www.7-zip.org/sdk.html
+const FOLDER_SECTION_ID = 0x0b;
+const UNPACK_SIZES_ID = 0x0c;
+const CRC_SECTION_ID = 0x0a;
+const END_ID = 0x00;
+const METHOD_ID_SIZE_MASK = 0x0f;
+const SIMPLE_CODER_FLAG = 0x10;
+const ATTRIBUTES_FLAG = 0x20;
+
 export const parseFolder = (
   ctx: SevenZipContext,
   endOffset: number
 ): SevenZipFolderParseResult => {
   const numCoders = readEncodedUint64(ctx, "Coder count");
-  const numCodersNumber = toSafeNumber(numCoders) || 0;
+  const numCodersNumber = toSafeNumber(numCoders);
   const coders: SevenZipFolderCoderRecord[] = [];
   let totalInStreams = 0;
   let totalOutStreams = 0;
-  for (let i = 0; i < numCodersNumber; i += 1) {
+  if (numCodersNumber == null) {
+    ctx.issues.push("Coder count exceeds supported range.");
+    ctx.offset = endOffset;
+  }
+  for (let i = 0; i < (numCodersNumber ?? 0); i += 1) {
     const flags = readByte(ctx, "Coder flags");
     if (flags == null) break;
-    const idSize = flags & 0x0f;
-    const isSimple = (flags & 0x10) === 0;
-    const hasAttributes = (flags & 0x20) !== 0;
+    const idSize = flags & METHOD_ID_SIZE_MASK;
+    const isSimple = (flags & SIMPLE_CODER_FLAG) === 0;
+    const hasAttributes = (flags & ATTRIBUTES_FLAG) !== 0;
     if (idSize === 0 || ctx.offset + idSize > endOffset) {
       ctx.issues.push("Coder ID is truncated.");
       ctx.offset = endOffset;
@@ -40,15 +54,25 @@ export const parseFolder = (
     if (!isSimple) {
       const inVal = readEncodedUint64(ctx, "Coder input count");
       const outVal = readEncodedUint64(ctx, "Coder output count");
-      if (inVal != null) inStreams = toSafeNumber(inVal) || 0;
-      if (outVal != null) outStreams = toSafeNumber(outVal) || 0;
+      const safeInStreams = toSafeNumber(inVal);
+      const safeOutStreams = toSafeNumber(outVal);
+      if (inVal != null && safeInStreams == null) ctx.issues.push("Coder input count exceeds supported range.");
+      if (outVal != null && safeOutStreams == null) ctx.issues.push("Coder output count exceeds supported range.");
+      if (safeInStreams != null) inStreams = safeInStreams;
+      if (safeOutStreams != null) outStreams = safeOutStreams;
     }
     let propertiesSize = 0;
     let properties = null;
     if (hasAttributes) {
       const propSize = readEncodedUint64(ctx, "Coder property size");
       if (propSize != null) {
-        propertiesSize = toSafeNumber(propSize) || 0;
+        const safePropertiesSize = toSafeNumber(propSize);
+        if (safePropertiesSize == null) {
+          ctx.issues.push("Coder property size exceeds supported range.");
+          ctx.offset = endOffset;
+          break;
+        }
+        propertiesSize = safePropertiesSize;
         if (ctx.offset + propertiesSize > endOffset) {
           ctx.issues.push("Coder properties extend beyond available data.");
           ctx.offset = endOffset;
@@ -59,8 +83,13 @@ export const parseFolder = (
           ctx.dv.byteOffset + ctx.offset,
           propertiesSize
         );
+        const propertyBytes = Array.from(bytes);
         properties = parseCoderProperties(methodId, bytes);
         ctx.offset += propertiesSize;
+        coders.push({ methodId, inStreams, outStreams, propertiesSize, propertyBytes, properties });
+        totalInStreams += inStreams;
+        totalOutStreams += outStreams;
+        continue;
       }
     }
     totalInStreams += inStreams;
@@ -75,7 +104,6 @@ export const parseFolder = (
     bindPairs.push({ inIndex, outIndex });
   }
   const numPackedStreams = Math.max(totalInStreams - numBindPairs, 0);
-  const numOutStreams = Math.max(totalOutStreams - numBindPairs, 0);
   const packedStreams: Array<bigint | null> = [];
   if (numPackedStreams > 1) {
     for (let i = 0; i < numPackedStreams; i += 1) {
@@ -90,8 +118,7 @@ export const parseFolder = (
     bindPairs,
     packedStreams,
     numPackedStreams,
-    numBindPairs,
-    numOutStreams
+    numBindPairs
   };
 };
 
@@ -99,14 +126,18 @@ export const parseUnpackInfo = (ctx: SevenZipContext): SevenZipUnpackInfo => {
   const info: SevenZipUnpackInfo = { folders: [], external: false };
   const folderId = readByte(ctx, "UnpackInfo section id");
   if (folderId == null) return info;
-  if (folderId !== 0x0b) {
+  if (folderId !== FOLDER_SECTION_ID) {
     ctx.issues.push("Unexpected UnpackInfo structure; skipping.");
     return info;
   }
   const numFolders = readEncodedUint64(ctx, "Folder count");
-  const numFoldersNumber = toSafeNumber(numFolders) || 0;
+  const numFoldersNumber = toSafeNumber(numFolders);
   const external = readByte(ctx, "Folder external flag");
   if (external == null) return info;
+  if (numFoldersNumber == null) {
+    ctx.issues.push("Folder count exceeds supported range.");
+    return info;
+  }
   info.external = external !== 0;
   const sectionEnd = ctx.dv.byteLength;
   if (!info.external) {
@@ -117,11 +148,11 @@ export const parseUnpackInfo = (ctx: SevenZipContext): SevenZipUnpackInfo => {
     }
   }
   const sizesId = readByte(ctx, "Unpack sizes id");
-  if (sizesId === 0x0c) {
+  if (sizesId === UNPACK_SIZES_ID) {
     info.unpackSizes = [];
     for (let i = 0; i < numFoldersNumber; i += 1) {
       const folder = info.folders[i];
-      const outStreams = folder?.numOutStreams || 1;
+      const outStreams = folder?.totalOutStreams || 1;
       const sizes: Array<bigint | null> = [];
       for (let j = 0; j < outStreams; j += 1) {
         const size = readEncodedUint64(ctx, "Unpack size");
@@ -134,7 +165,7 @@ export const parseUnpackInfo = (ctx: SevenZipContext): SevenZipUnpackInfo => {
   }
   if (ctx.offset < ctx.dv.byteLength) {
     const crcMarker = readByte(ctx, "UnpackInfo CRC marker");
-    if (crcMarker === 0x0a) {
+    if (crcMarker === CRC_SECTION_ID) {
       const crcInfo = parsePackDigests(
         ctx,
         numFoldersNumber,
@@ -147,7 +178,7 @@ export const parseUnpackInfo = (ctx: SevenZipContext): SevenZipUnpackInfo => {
     }
   }
   const endMarker = readByte(ctx, "UnpackInfo end marker");
-  if (endMarker !== 0x00) {
+  if (endMarker !== END_ID) {
     ctx.issues.push("UnpackInfo did not terminate cleanly.");
   }
   return info;

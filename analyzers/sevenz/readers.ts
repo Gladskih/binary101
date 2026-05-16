@@ -2,6 +2,14 @@
 
 import type { SevenZipContext } from "./types.js";
 
+const UINT64_MAX_ENCODED_BYTES = BigUint64Array.BYTES_PER_ELEMENT;
+const UINT64_BYTES = BigUint64Array.BYTES_PER_ELEMENT;
+const UINT32_BYTES = Uint32Array.BYTES_PER_ELEMENT;
+const BITS_PER_BYTE = 8;
+// 7z encoded UInt64 uses the high bits of the first byte to declare extra bytes.
+// https://www.7-zip.org/sdk.html
+const FIRST_VARINT_MASK = 0x80;
+
 export const toSafeNumber = (value: number | bigint | null | undefined): number | null => {
   if (typeof value === "number") return value;
   if (typeof value === "bigint") {
@@ -24,25 +32,25 @@ export const readByte = (ctx: SevenZipContext, label?: string): number | null =>
 export const readEncodedUint64 = (ctx: SevenZipContext, label?: string): bigint | null => {
   const firstByte = readByte(ctx, label);
   if (firstByte == null) return null;
-  let mask = 0x80;
+  let mask = FIRST_VARINT_MASK;
   let extraBytes = 0;
-  for (; extraBytes < 8; extraBytes += 1) {
+  for (; extraBytes < UINT64_MAX_ENCODED_BYTES; extraBytes += 1) {
     if ((firstByte & mask) === 0) break;
     mask >>= 1;
   }
   const highBits = firstByte & (mask - 1);
   let value = BigInt(highBits);
-  if (extraBytes === 8) {
+  if (extraBytes === UINT64_MAX_ENCODED_BYTES) {
     value = 0n;
   }
   let low = 0n;
   for (let i = 0; i < extraBytes; i += 1) {
     const next = readByte(ctx, label);
     if (next == null) return null;
-    low |= BigInt(next) << BigInt(8 * i);
+    low |= BigInt(next) << BigInt(BITS_PER_BYTE * i);
   }
   if (extraBytes > 0) {
-    value = (value << BigInt(8 * extraBytes)) + low;
+    value = (value << BigInt(BITS_PER_BYTE * extraBytes)) + low;
   }
   return value;
 };
@@ -64,15 +72,25 @@ export const readBoolVector = (
     values.fill(true);
     return values;
   }
-  const numBytes = Math.ceil(count / 8);
+  return readBitVector(ctx, count, endOffset, label);
+};
+
+export const readBitVector = (
+  ctx: SevenZipContext,
+  count: number,
+  endOffset: number,
+  label?: string
+): boolean[] | null => {
+  const values = new Array(count).fill(false);
+  const numBytes = Math.ceil(count / BITS_PER_BYTE);
   if (ctx.offset + numBytes > endOffset) {
     ctx.issues.push(`${label || "Bit vector"} extends beyond the available data.`);
     ctx.offset = endOffset;
     return values;
   }
   for (let i = 0; i < count; i += 1) {
-    const byteIndex = Math.floor(i / 8);
-    const bitIndex = i & 7;
+    const byteIndex = Math.floor(i / BITS_PER_BYTE);
+    const bitIndex = (BITS_PER_BYTE - 1) - (i & (BITS_PER_BYTE - 1));
     const bit = ctx.dv.getUint8(ctx.offset + byteIndex) & (1 << bitIndex);
     values[i] = bit !== 0;
   }
@@ -85,13 +103,13 @@ export const readUint64Le = (
   endOffset: number,
   label?: string
 ): bigint | null => {
-  if (ctx.offset + 8 > endOffset) {
+  if (ctx.offset + UINT64_BYTES > endOffset) {
     if (label) ctx.issues.push(`${label} is truncated.`);
     ctx.offset = endOffset;
     return null;
   }
   const value = ctx.dv.getBigUint64(ctx.offset, true);
-  ctx.offset += 8;
+  ctx.offset += UINT64_BYTES;
   return value;
 };
 
@@ -100,12 +118,12 @@ export const readUint32Le = (
   endOffset: number,
   label?: string
 ): number | null => {
-  if (ctx.offset + 4 > endOffset) {
+  if (ctx.offset + UINT32_BYTES > endOffset) {
     if (label) ctx.issues.push(`${label} is truncated.`);
     ctx.offset = endOffset;
     return null;
   }
   const value = ctx.dv.getUint32(ctx.offset, true);
-  ctx.offset += 4;
+  ctx.offset += UINT32_BYTES;
   return value;
 };

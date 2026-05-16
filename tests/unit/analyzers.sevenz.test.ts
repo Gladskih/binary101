@@ -71,28 +71,26 @@ const buildStructuredHeader = () => {
   const filesInfo = [
     0x02, // file count
     0x0e, // Empty streams
-    0x02, // size
-    0x00, // allDefined flag
-    0x02, // flags (second file is empty stream)
+    0x01, // size
+    0x40, // flags (second file is empty stream)
     0x0f, // Empty files
-    0x02, // size
-    0x00, // allDefined flag
-    0x02, // flags (second file empty file)
+    0x01, // size
+    0x80, // flags (the empty stream is an empty file)
     0x11, // Names
     namesSize,
     0x00, // internal (not external)
     ...names,
     0x14, // Modification times
     0x13, // size (19 bytes)
-    0x00, // external flag
     0x00, // allDefined flag
-    0x03, // flags for two files
+    0xc0, // flags for two files
+    0x00, // external flag
     ...times,
     0x15, // Attributes
     0x0b, // size (11 bytes)
-    0x00, // external flag
     0x00, // allDefined flag
-    0x03, // flags for two files
+    0xc0, // flags for two files
+    0x00, // external flag
     ...attrs,
     0x00 // end FilesInfo
   ];
@@ -188,4 +186,29 @@ void test("parseSevenZip reports encoded headers and encryption markers", async 
       folder.coders.some(coder => coder.id === "AES-256")
     )
   );
+});
+
+void test("parseSevenZip decodes LZMA encoded headers", async () => {
+  const packedHeader = Uint8Array.from([
+    0x00, 0x00, 0x80, 0x25, 0xa5, 0xef, 0xff, 0xff, 0xec, 0xc7, 0x00, 0x00
+  ]);
+  const encodedHeader = Uint8Array.from([
+    0x17, // EncodedHeader
+    0x06, 0x00, 0x01, 0x09, packedHeader.byteLength, 0x00, // PackInfo
+    0x07, 0x0b, 0x01, 0x00, // UnpackInfo: one inline folder
+    0x01, 0x23, 0x03, 0x01, 0x01, // one LZMA coder with properties
+    0x05, 0x5d, 0x00, 0x00, 0x01, 0x00,
+    0x0c, 0x02, 0x00, // unpack size of decoded Header [0x01, 0x00]
+    0x00
+  ]);
+  const startHeader = buildStartHeader(encodedHeader.byteLength, BigInt(packedHeader.byteLength));
+  const bytes = new Uint8Array(startHeader.length + packedHeader.length + encodedHeader.length);
+  bytes.set(startHeader, 0);
+  bytes.set(packedHeader, startHeader.length);
+  bytes.set(encodedHeader, startHeader.length + packedHeader.length);
+
+  const parsed = await parseSevenZip(new MockFile(bytes, "encoded-header.7z"));
+
+  assert.equal(parsed.decodedHeader?.kind, "header");
+  assert.deepEqual(parsed.issues, []);
 });

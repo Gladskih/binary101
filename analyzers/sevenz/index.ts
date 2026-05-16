@@ -13,15 +13,28 @@ import { parseHeader } from "./header-sections.js";
 import { parseStreamsInfo } from "./streams-info.js";
 import { toSafeNumber } from "./readers.js";
 import { deriveStructure } from "./structure.js";
+import { decodeEncodedHeader } from "./encoded-header.js";
+import {
+  SEVENZIP_ARCHIVE_VERSION_MAJOR_OFFSET,
+  SEVENZIP_ARCHIVE_VERSION_MINOR_OFFSET,
+  SEVENZIP_ENCODED_HEADER_MARKER,
+  SEVENZIP_HEADER_MARKER,
+  SEVENZIP_NEXT_HEADER_CRC_OFFSET,
+  SEVENZIP_NEXT_HEADER_OFFSET_OFFSET,
+  SEVENZIP_NEXT_HEADER_SIZE_OFFSET,
+  SEVENZIP_SIGNATURE_BYTES,
+  SEVENZIP_SIGNATURE_HEADER_SIZE,
+  SEVENZIP_SIGNATURE_HEADER_SIZE_NUMBER,
+  SEVENZIP_START_HEADER_CRC_OFFSET
+} from "./layout.js";
 export * from "./types.js";
 
-const SIGNATURE_BYTES = [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c];
-const START_HEADER_SIZE = 32;
+const FIRST_HEADER_BYTE_OFFSET = 0;
 
 const hasSignature = (dv: DataView | null): boolean => {
-  if (!dv || dv.byteLength < SIGNATURE_BYTES.length) return false;
-  for (let i = 0; i < SIGNATURE_BYTES.length; i += 1) {
-    if (dv.getUint8(i) !== SIGNATURE_BYTES[i]) return false;
+  if (!dv || dv.byteLength < SEVENZIP_SIGNATURE_BYTES.length) return false;
+  for (let i = 0; i < SEVENZIP_SIGNATURE_BYTES.length; i += 1) {
+    if (dv.getUint8(i) !== SEVENZIP_SIGNATURE_BYTES[i]) return false;
   }
   return true;
 };
@@ -31,13 +44,13 @@ const parseNextHeader = (dv: DataView | null, issues: string[]): SevenZipParsedN
     issues.push("Next header is empty.");
     return { kind: "empty" };
   }
-  const firstId = dv.getUint8(0);
-  const ctx: SevenZipContext = { dv, offset: 1, issues };
-  if (firstId === 0x01) {
+  const firstId = dv.getUint8(FIRST_HEADER_BYTE_OFFSET);
+  const ctx: SevenZipContext = { dv, offset: Uint8Array.BYTES_PER_ELEMENT, issues };
+  if (firstId === SEVENZIP_HEADER_MARKER) {
     const sections = parseHeader(ctx);
     return { kind: "header", sections };
   }
-  if (firstId === 0x17) {
+  if (firstId === SEVENZIP_ENCODED_HEADER_MARKER) {
     const streams = parseStreamsInfo(ctx);
     const unpackInfo = streams.unpackInfo;
     const folders: SevenZipHeaderFolder[] =
@@ -79,18 +92,18 @@ const parseNextHeader = (dv: DataView | null, issues: string[]): SevenZipParsedN
 
 export async function parseSevenZip(file: File): Promise<SevenZipParseResult> {
   const issues: string[] = [];
-  const startHeaderBuffer = await file.slice(0, START_HEADER_SIZE).arrayBuffer();
+  const startHeaderBuffer = await file.slice(0, SEVENZIP_SIGNATURE_HEADER_SIZE_NUMBER).arrayBuffer();
   const startHeader = new DataView(startHeaderBuffer);
-  if (startHeader.byteLength < START_HEADER_SIZE || !hasSignature(startHeader)) {
+  if (startHeader.byteLength < SEVENZIP_SIGNATURE_HEADER_SIZE_NUMBER || !hasSignature(startHeader)) {
     return { is7z: false, issues };
   }
-  const versionMajor = startHeader.getUint8(6);
-  const versionMinor = startHeader.getUint8(7);
-  const startHeaderCrc = startHeader.getUint32(8, true);
-  const nextHeaderOffset = startHeader.getBigUint64(12, true);
-  const nextHeaderSize = startHeader.getBigUint64(20, true);
-  const nextHeaderCrc = startHeader.getUint32(28, true);
-  const absoluteNextHeaderOffset = 32n + nextHeaderOffset;
+  const versionMajor = startHeader.getUint8(SEVENZIP_ARCHIVE_VERSION_MAJOR_OFFSET);
+  const versionMinor = startHeader.getUint8(SEVENZIP_ARCHIVE_VERSION_MINOR_OFFSET);
+  const startHeaderCrc = startHeader.getUint32(SEVENZIP_START_HEADER_CRC_OFFSET, true);
+  const nextHeaderOffset = startHeader.getBigUint64(SEVENZIP_NEXT_HEADER_OFFSET_OFFSET, true);
+  const nextHeaderSize = startHeader.getBigUint64(SEVENZIP_NEXT_HEADER_SIZE_OFFSET, true);
+  const nextHeaderCrc = startHeader.getUint32(SEVENZIP_NEXT_HEADER_CRC_OFFSET, true);
+  const absoluteNextHeaderOffset = SEVENZIP_SIGNATURE_HEADER_SIZE + nextHeaderOffset;
   const sizeNumber = toSafeNumber(nextHeaderSize);
   const offsetNumber = toSafeNumber(absoluteNextHeaderOffset);
   const result: SevenZipParseResult = {
@@ -146,6 +159,12 @@ export async function parseSevenZip(file: File): Promise<SevenZipParseResult> {
       coders: parsedNextHeader.headerCoders,
       hasEncryptedHeader: parsedNextHeader.hasEncryptedHeader
     };
+    const decodedHeader = await decodeEncodedHeader(file, parsedNextHeader, issues);
+    if (decodedHeader) {
+      result.decodedHeader = decodedHeader;
+      const structure = deriveStructure(decodedHeader, issues);
+      if (structure) result.structure = structure;
+    }
   } else {
     const structure = deriveStructure(parsedNextHeader, issues);
     if (structure) result.structure = structure;
@@ -154,7 +173,7 @@ export async function parseSevenZip(file: File): Promise<SevenZipParseResult> {
 }
 
 export const isSevenZip = async (file: File): Promise<boolean> => {
-  const dv = new DataView(await file.slice(0, START_HEADER_SIZE).arrayBuffer());
+  const dv = new DataView(await file.slice(0, SEVENZIP_SIGNATURE_HEADER_SIZE_NUMBER).arrayBuffer());
   return hasSignature(dv);
 };
 

@@ -24,6 +24,7 @@ export interface SevenZipCoder {
   methodId: string;
   numInStreams: number;
   numOutStreams: number;
+  propertyBytes?: number[];
   properties: unknown | null;
   archHint?: string;
   isEncryption: boolean;
@@ -34,6 +35,7 @@ export interface SevenZipFolderCoderRecord {
   inStreams: number;
   outStreams: number;
   propertiesSize: number;
+  propertyBytes?: number[];
   properties: unknown | null;
 }
 
@@ -50,7 +52,6 @@ export interface SevenZipFolderParseResult {
   packedStreams: Array<bigint | null>;
   numPackedStreams: number;
   numBindPairs: number;
-  numOutStreams: number;
 }
 
 export interface SevenZipSubstream {
@@ -62,6 +63,7 @@ export interface SevenZipFolderSummary {
   index: number;
   unpackSize: bigint | null;
   packedSize: bigint | null;
+  packedOffset?: bigint | null;
   coders: SevenZipCoder[];
   numUnpackStreams: number;
   substreams: SevenZipSubstream[];
@@ -85,12 +87,14 @@ export interface SevenZipFileSummary {
   modifiedTime: string | null;
   attributes: string | null;
   hasStream?: boolean;
+  folderStreamIndex?: number | null;
   isEmptyStream?: boolean;
   isEmptyFile?: boolean;
   isDirectory?: boolean;
   isAnti?: boolean;
   isEncrypted?: boolean;
   isEmpty?: boolean;
+  extractError?: string;
 }
 
 export interface SevenZipArchiveFlags {
@@ -193,6 +197,7 @@ export interface SevenZipParseResult {
   is7z: boolean;
   startHeader?: SevenZipStartHeader;
   nextHeader?: SevenZipNextHeaderInfo;
+  decodedHeader?: SevenZipParsedNextHeader;
   structure?: SevenZipStructure;
   headerEncoding?: SevenZipHeaderEncoding;
   issues: string[];

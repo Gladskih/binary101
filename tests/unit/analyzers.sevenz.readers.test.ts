@@ -7,6 +7,7 @@ import {
   readByte,
   readEncodedUint64,
   readBoolVector,
+  readBitVector,
   readUint32Le,
   readUint64Le
 } from "../../analyzers/sevenz/readers.js";
@@ -42,6 +43,13 @@ void test("readBoolVector sets issues on overflow", () => {
   assert.equal(bits?.length, 16);
   const issue = ctx.issues[0];
   assert.ok(issue?.includes("Flags"));
+});
+
+void test("readBitVector decodes 7z file property bits most-significant first", () => {
+  const ctx = makeCtx([0x40]);
+  const bits = readBitVector(ctx, 2, ctx.dv.byteLength, "Flags");
+  assert.deepEqual(bits, [false, true]);
+  assert.equal(ctx.offset, 1);
 });
 
 void test("readUint32Le and readUint64Le clamp offset and report truncation", () => {

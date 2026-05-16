@@ -3,11 +3,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseStreamsInfo, parseSubStreamsInfo } from "../../analyzers/sevenz/streams-info.js";
+import type { SevenZipContext } from "../../analyzers/sevenz/types.js";
 
-const makeCtx = (bytes: ArrayLike<number>) => ({
+const makeCtx = (bytes: number[]): SevenZipContext => ({
   dv: new DataView(Uint8Array.from(bytes).buffer),
   offset: 0,
-  issues: [] as string[]
+  issues: []
 });
 
 void test("parseSubStreamsInfo uses defaults when no entries declared", () => {
@@ -20,7 +21,8 @@ void test("parseSubStreamsInfo uses defaults when no entries declared", () => {
 void test("parseStreamsInfo wires pack, unpack and substreams sections", () => {
   // StreamsInfo:
   // 0x06 PackInfo (packPos=0, numPackStreams=1, size=5, end)
-  // 0x07 UnpackInfo (folderId=0x0b, folderCount=1, external=0, coderCount=1, flags=0x01, methodId=0x21, sizesId=0x0c, size=5, crc/end marker=0x00)
+  // 0x07 UnpackInfo (folderId=0x0b, folderCount=1, external=0, coderCount=1,
+  // flags=0x01, methodId=0x21, sizesId=0x0c, size=5, crc/end marker=0x00)
   // 0x08 SubStreamsInfo (end marker)
   // 0x00 end StreamsInfo
   const bytes = [
@@ -35,4 +37,18 @@ void test("parseStreamsInfo wires pack, unpack and substreams sections", () => {
   assert.equal(info.unpackInfo?.folders.length, 1);
   assert.deepEqual(info.subStreamsInfo?.numUnpackStreams, [1]);
   assert.equal(ctx.issues.length, 0);
+});
+
+void test("parseSubStreamsInfo reports stream counts beyond the supported range", () => {
+  const ctx = makeCtx([
+    0x0d, // NumUnpackStream property.
+    0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, // 2^56.
+    0x09 // Size property would need that count and must not be walked.
+  ]);
+
+  const parsed = parseSubStreamsInfo(ctx, 1);
+
+  assert.equal(parsed.numUnpackStreams[0], 0x0100000000000000n);
+  assert.deepEqual(ctx.issues, ["Unpack stream count exceeds supported range."]);
+  assert.equal(ctx.offset, ctx.dv.byteLength);
 });

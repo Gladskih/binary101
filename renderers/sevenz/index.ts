@@ -4,25 +4,23 @@ import { dd, safe } from "../../html-utils.js";
 import { toHex32 } from "../../binary-utils.js";
 import type {
   SevenZipArchiveFlags,
-  SevenZipFileSummary,
   SevenZipParseResult,
   SevenZipParsedNextHeader,
   SevenZipStartHeader
 } from "../../analyzers/sevenz/index.js";
 import {
   formatOffset,
-  formatRatio,
   formatSize,
   formatSizeDetailed
 } from "./value-format.js";
-import { ARCHIVE_FLAG_DEFS, FILE_FLAG_DEFS, renderFlagsOrNone } from "./flags-view.js";
+import { ARCHIVE_FLAG_DEFS, renderFlagsOrNone } from "./flags-view.js";
 import {
   KNOWN_METHODS,
   describeCoders,
-  describeFileType,
   describeHeaderKind
 } from "./semantics.js";
 import { renderSignatureLayout } from "./signature.js";
+import { renderFiles } from "./files-table.js";
 
 const renderOverview = (sevenZip: SevenZipParseResult, out: string[]): void => {
   const header = (sevenZip.startHeader || {}) as Partial<SevenZipStartHeader>;
@@ -176,73 +174,6 @@ const renderFolders = (sevenZip: SevenZipParseResult, out: string[]): void => {
   });
 
   out.push(`</tbody></table>`);
-  out.push(`</section>`);
-};
-
-const renderFiles = (sevenZip: SevenZipParseResult, out: string[]): void => {
-  const files = sevenZip.structure?.files || [];
-  const folders = sevenZip.structure?.folders || [];
-  if (!files.length) return;
-
-  const limit = 200;
-  const shown = files.slice(0, limit);
-
-  out.push(`<section>`);
-  out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Files (${files.length})</h4>`);
-  out.push(
-    `<div class="smallNote">Entries come from the FilesInfo header. For solid archives, several files can share one compressed folder, so only the first file in a folder may show a packed size and meaningful compression ratio.</div>`
-  );
-  out.push(
-    `<table class="table"><thead><tr>` +
-      `<th title="File index as stored in the FilesInfo section.">#</th>` +
-      `<th title="File or directory name decoded from the UTF-16 name table.">Name</th>` +
-      `<th title="How this entry is treated by the archive: regular file, directory, empty file, anti-item, metadata-only, or no-stream.">Type</th>` +
-      `<th title="Logical size of the file after decoding (uncompressed size).">Uncompressed</th>` +
-      `<th title="Approximate compressed size accounted to this file.">Packed</th>` +
-      `<th title="Packed size divided by uncompressed size.">Ratio</th>` +
-      `<th title="Folder index and coder chain that carry this file&apos;s stream.">Method</th>` +
-      `<th title="CRC32 of the uncompressed file data, if present in the header.">CRC</th>` +
-      `<th title="Last modification time stored in the header.">Modified</th>` +
-      `<th title="File attribute mask from the header.">Attributes</th>` +
-      `<th title="Convenience flags derived from header fields.">Flags</th>` +
-    `</tr></thead><tbody>`
-  );
-
-  shown.forEach((file: SevenZipFileSummary) => {
-    const type = describeFileType(file);
-    const modified = file.modifiedTime ? safe(file.modifiedTime) : "-";
-    const attrs = file.attributes ? safe(file.attributes) : "-";
-    const folder =
-      file.folderIndex != null && file.folderIndex >= 0 ? folders[file.folderIndex] : null;
-    let methodText = "-";
-    if (folder) {
-      const coderText = describeCoders(folder.coders);
-      const folderLabel = `Folder ${folder.index + 1}`;
-      methodText = coderText !== "-" ? `${folderLabel}: ${coderText}` : folderLabel;
-    }
-    const unpacked = formatSizeDetailed(file.uncompressedSize);
-    const packed = formatSizeDetailed(file.packedSize);
-    const ratio = formatRatio(file.compressionRatio);
-    const crc = file.crc32 != null ? toHex32(file.crc32, 8) : "-";
-    const flagMask =
-      (file.isDirectory ? 1 : 0) |
-      (file.isEncrypted ? 2 : 0) |
-      (file.isEmpty ? 4 : 0) |
-      (file.hasStream === false ? 8 : 0);
-    const flagText = renderFlagsOrNone(flagMask, FILE_FLAG_DEFS);
-    out.push(
-      `<tr><td>${file.index}</td><td>${safe(file.name)}</td>` +
-        `<td>${safe(type)}</td><td>${unpacked}</td><td>${packed}</td>` +
-        `<td>${ratio}</td><td>${safe(methodText)}</td><td>${crc}</td>` +
-        `<td>${modified}</td><td>${attrs}</td><td>${flagText}</td></tr>`
-    );
-  });
-
-  out.push(`</tbody></table>`);
-  if (files.length > limit) {
-    const remaining = files.length - limit;
-    out.push(`<div class="smallNote">${remaining} more entries not shown.</div>`);
-  }
   out.push(`</section>`);
 };
 

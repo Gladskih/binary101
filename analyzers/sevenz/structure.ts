@@ -2,9 +2,12 @@
 
 import { CODER_ARCH_HINTS, describeCoderId, normalizeMethodId } from "./coders.js";
 import { toSafeNumber } from "./readers.js";
+import { SEVENZIP_SIGNATURE_HEADER_SIZE } from "./layout.js";
+import { SEVENZIP_LZMA_METHOD_ID, SEVENZIP_LZMA_PROPERTY_BYTES } from "./method-ids.js";
 import type {
   SevenZipCoder,
   SevenZipFolderCoderRecord,
+  SevenZipFolderParseResult,
   SevenZipFolderSummary,
   SevenZipHeaderSections,
   SevenZipStructure,
@@ -17,6 +20,33 @@ const sumBigIntArray = (values: Array<bigint | number | null | undefined>): bigi
       total + (typeof value === "bigint" ? value : 0n),
     0n
   );
+
+const buildPackOffsets = (
+  packPos: bigint | null | undefined,
+  packSizes: bigint[]
+): Array<bigint | null> => {
+  if (packPos == null) return packSizes.map(() => null);
+  let cursor = SEVENZIP_SIGNATURE_HEADER_SIZE + packPos;
+  return packSizes.map(size => {
+    const offset = cursor;
+    cursor += size;
+    return offset;
+  });
+};
+
+const getFolderPackIndexes = (
+  folder: SevenZipFolderParseResult,
+  packCursor: number
+): number[] => {
+  if (folder.packedStreams.length) {
+    return folder.packedStreams
+      .map(index => toSafeNumber(index))
+      .filter((index): index is number => index != null);
+  }
+  return Array.from({ length: Math.max(folder.numPackedStreams || 0, 0) }, (_, index) =>
+    packCursor + index
+  );
+};
 
 export const buildFolderDetails = (
   sections: SevenZipHeaderSections,
@@ -34,6 +64,7 @@ export const buildFolderDetails = (
   const crcDefined = substreamCrcs?.definedFlags || [];
   const crcMap = new Map((substreamCrcs?.digests || []).map(digest => [digest.index, digest.crc]));
   const packSizes = packInfo?.packSizes || [];
+  const packOffsets = buildPackOffsets(packInfo?.packPos, packSizes);
   const folders: SevenZipFolderSummary[] = [];
   let packCursor = 0;
   let substreamSizeCursor = 0;
@@ -47,15 +78,12 @@ export const buildFolderDetails = (
     const unpackStreams = toSafeNumber(numUnpackStreams[i]) ?? 1;
     const unpackSizes = unpackInfo.unpackSizes?.[i] || [];
     const unpackSize = unpackSizes.length ? sumBigIntArray(unpackSizes) : null;
-    const packedStreams = Math.max(folder.numPackedStreams || 0, 0);
-    const packedSizes: Array<bigint | null> = [];
-    for (let j = 0; j < packedStreams; j += 1) {
-      if (packCursor >= packSizes.length) break;
-      const packSizeEntry = packSizes[packCursor];
-      packedSizes.push(packSizeEntry ?? null);
-      packCursor += 1;
-    }
+    const packStreamIndexes = getFolderPackIndexes(folder, packCursor);
+    const packedSizes = packStreamIndexes.map(index => packSizes[index] ?? null);
+    packCursor += Math.max(folder.numPackedStreams || 0, 0);
     const packedSize = packedSizes.length ? sumBigIntArray(packedSizes) : null;
+    const packedOffset =
+      packStreamIndexes.length === 1 ? packOffsets[packStreamIndexes[0] ?? -1] ?? null : null;
     const substreams: SevenZipFolderSummary["substreams"] = [];
     let consumed = 0n;
     for (let s = 0; s < unpackStreams; s += 1) {
@@ -94,6 +122,7 @@ export const buildFolderDetails = (
           methodId: coder.methodId,
           numInStreams: coder.inStreams,
           numOutStreams: coder.outStreams,
+          ...(coder.propertyBytes ? { propertyBytes: coder.propertyBytes } : {}),
           properties: coder.properties ?? null,
           isEncryption
         };
@@ -106,6 +135,7 @@ export const buildFolderDetails = (
       index: i,
       unpackSize: folderUnpackSize,
       packedSize,
+      packedOffset,
       coders,
       numUnpackStreams: unpackStreams,
       substreams,
@@ -117,6 +147,27 @@ export const buildFolderDetails = (
     issues.push("Extra substream size entries were not matched to folders.");
   }
   return { folders };
+};
+
+const getExtractError = (
+  file: SevenZipFileSummary,
+  folder: SevenZipFolderSummary | null
+): string | undefined => {
+  if (file.isDirectory || file.hasStream === false) return undefined;
+  if (!folder) return "7z folder data is not available for extraction.";
+  if (folder.isEncrypted) return "Encrypted 7z entries are not supported for extraction.";
+  if (folder.packedOffset == null || folder.packedSize == null) {
+    return "7z packed stream bounds are not available for extraction.";
+  }
+  if (folder.coders.length !== 1 || folder.coders[0]?.methodId !== SEVENZIP_LZMA_METHOD_ID) {
+    return "7z extraction currently supports only single LZMA folders.";
+  }
+  if (folder.coders[0].propertyBytes?.length !== SEVENZIP_LZMA_PROPERTY_BYTES) {
+    return "LZMA coder properties are invalid.";
+  }
+  if (file.folderStreamIndex == null) return "7z file stream index is not available.";
+  if (file.uncompressedSize == null) return "7z file size is not available for extraction.";
+  return undefined;
 };
 
 export const buildFileDetails = (
@@ -146,10 +197,11 @@ export const buildFileDetails = (
   const filesWithStreams = files.filter(file => file.hasStream !== false);
   let fileStreamIndex = 0;
   folders.forEach(folder => {
-    folder.substreams.forEach(sub => {
+    folder.substreams.forEach((sub, substreamIndex) => {
       const file = filesWithStreams[fileStreamIndex];
       if (!file) return;
       file.folderIndex = folder.index;
+      file.folderStreamIndex = substreamIndex;
       file.uncompressedSize = sub.size ?? folder.unpackSize ?? null;
       const packedSize = folder.numUnpackStreams === 1 ? folder.packedSize : null;
       file.packedSize = packedSize;
@@ -168,6 +220,8 @@ export const buildFileDetails = (
       file.isDirectory = Boolean(file.isDirectory);
       file.isEmpty =
         (uncompNum === 0 || file.uncompressedSize === 0n) && file.isDirectory !== true;
+      const extractError = getExtractError(file, folder);
+      if (extractError) file.extractError = extractError;
       fileStreamIndex += 1;
     });
   });
