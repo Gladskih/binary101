@@ -49,7 +49,8 @@ const renderManagedResourceMetadata = (entry: PeClrManagedResourceEntry): string
 
 const hasVisiblePreview = (previewHtml: string): boolean => {
   if (/<(?:img|audio)\b/i.test(previewHtml)) return true;
-  return previewHtml.replace(/<[^>]*>/g, "").trim() !== "" && previewHtml.trim() !== "-";
+  const textOnly = previewHtml.replace(/[<>]/g, "").trim();
+  return textOnly !== "" && previewHtml.trim() !== "-";
 };
 
 const renderManagedResourceValues = (values: PeClrManagedResourceValue[]): string => {
