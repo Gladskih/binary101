@@ -12,7 +12,7 @@ import { copyManifestPreviewToClipboard } from "./ui/manifest-preview-copy.js";
 import { createPeOverlayScanActions } from "./ui/pe-overlay-scan.js";
 import { handleManifestTreeActionClick, syncManifestTreeControls } from "./ui/manifest-tree-controls.js";
 import { captureOpenDetails, restoreOpenDetails } from "./ui/details-open-state.js";
-import { handleSortableTableClick } from "./ui/sortable-tables.js";
+import { enhanceSortableTables, handleSortableTableClick } from "./ui/sortable-tables.js";
 const getElement = (id: string) => document.getElementById(id)!;
 const dropZoneElement = getElement("dropZone") as HTMLElement;
 const fileInputElement = getElement("fileInput") as HTMLInputElement;
@@ -57,6 +57,7 @@ const renderResult = (result: ParseForUiResult): void => {
     termElement: peDetailsTermElement,
     valueElement: peDetailsValueElement
   });
+  enhanceSortableTables(peDetailsValueElement);
   restoreOpenDetails(peDetailsValueElement, openDetails, viewer => syncManifestTreeControls(viewer as Element));
 };
 const getCurrentFile = (): File | null => currentFile;

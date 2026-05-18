@@ -10,6 +10,12 @@ void test("compareSortValues sorts numeric strings numerically", () => {
   assert.equal(compareSortValues("16", "16"), 0);
 });
 
+void test("compareSortValues sorts hex and human-readable sizes numerically", () => {
+  assert.ok(compareSortValues("0x00000010", "0x00000100") < 0);
+  assert.ok(compareSortValues("120 KB", "1020 B") > 0);
+  assert.ok(compareSortValues("2.9 KB", "4632 B") < 0);
+});
+
 void test("compareSortValues sorts text naturally when values are not numeric", () => {
   assert.ok(compareSortValues("IMPORT", "RESOURCE") < 0);
   assert.ok(compareSortValues("entry 2", "entry 10") < 0);

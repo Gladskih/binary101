@@ -307,8 +307,8 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 }
 .peDataDirectoryStatus--present{background:var(--ok-fg,#3fb950)}
 .peDataDirectoryStatus--absent{background:var(--muted)}
-.peDataDirectoryTable .sortableTableHeader + .sortableTableHeader,
-.peDataDirectoryTable tbody > tr > * + *{border-left:1px solid var(--border)}
+.table[data-sortable] .sortableTableHeader + .sortableTableHeader,
+.table[data-sortable] tbody > tr > * + *{border-left:1px solid var(--border)}
 .sortableTableHeader{cursor:pointer}
 .sortableTableHeaderButton{
   align-items:center;
