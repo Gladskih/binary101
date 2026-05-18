@@ -288,6 +288,68 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .peNumeric{text-align:right}
 .tableWrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .tableWrap > .table{min-width:600px}
+.tableWrap > .peDataDirectoryTable{min-width:640px}
+.peDataDirectoryTable{table-layout:auto}
+.peDataDirectoryTable__status,
+.peDataDirectoryTable__index,
+.peDataDirectoryTable__directory,
+.peDataDirectoryTable__rva,
+.peDataDirectoryTable__size{white-space:nowrap;width:1%}
+.peDataDirectoryTable__meaning{white-space:normal}
+.peDataDirectoryTable__row--absent{opacity:.62}
+.peDataDirectoryStatus{
+  align-items:center;
+  border-radius:999px;
+  display:inline-flex;
+  height:.55rem;
+  justify-content:center;
+  width:.55rem;
+}
+.peDataDirectoryStatus--present{background:var(--ok-fg,#3fb950)}
+.peDataDirectoryStatus--absent{background:var(--muted)}
+.peDataDirectoryTable .sortableTableHeader + .sortableTableHeader,
+.peDataDirectoryTable tbody > tr > * + *{border-left:1px solid var(--border)}
+.sortableTableHeader{cursor:pointer}
+.sortableTableHeaderButton{
+  align-items:center;
+  appearance:none;
+  background:transparent;
+  border:0;
+  color:inherit;
+  cursor:pointer;
+  display:flex;
+  font:inherit;
+  gap:.35rem;
+  justify-content:space-between;
+  padding:0;
+  text-align:inherit;
+  width:100%;
+}
+.sortableTableHeader:hover .sortableTableHeaderButton,
+.sortableTableHeader:focus-within .sortableTableHeaderButton{color:var(--accent)}
+.sortableTableHeaderSortIcon{
+  display:inline-flex;
+  flex:0 0 auto;
+  flex-direction:column;
+  gap:2px;
+}
+.sortableTableHeaderSortIcon::before,
+.sortableTableHeaderSortIcon::after{
+  border-left:3px solid transparent;
+  border-right:3px solid transparent;
+  content:"";
+  display:block;
+  height:0;
+  width:0;
+}
+.sortableTableHeaderSortIcon::before{border-bottom:4px solid var(--muted)}
+.sortableTableHeaderSortIcon::after{border-top:4px solid var(--muted)}
+.sortableTableHeaderButton[data-sort-direction="ascending"] .sortableTableHeaderSortIcon::before{
+  border-bottom-color:var(--accent);
+}
+.sortableTableHeaderButton[data-sort-direction="descending"] .sortableTableHeaderSortIcon::after{
+  border-top-color:var(--accent);
+}
 .tableWrap > .peResourcePreviewTable{min-width:600px;table-layout:fixed}
 .peResourcePreviewTable > thead > tr > th,
 .peResourcePreviewTable > tbody > tr > td{vertical-align:top}

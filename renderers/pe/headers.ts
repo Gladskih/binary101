@@ -6,7 +6,6 @@ import {
   SUBSYSTEMS,
   CHAR_FLAGS,
   DLL_FLAGS,
-  DD_TIPS,
   formatSectionCharacteristicFlags
 } from "../../analyzers/pe/constants.js";
 import {
@@ -30,6 +29,47 @@ import { renderCoffTailSummary } from "./coff-tail-summary.js";
 import { renderDosHeader } from "./dos-header.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
+const DATA_DIRECTORY_MEANINGS: Record<string, string> = {
+  EXPORT: "Function addresses and names exported by the image.",
+  IMPORT: "Modules and symbols that this image depends on at load time.",
+  RESOURCE: "Version, icons, dialogs, manifests, and other embedded data.",
+  EXCEPTION: "Unwind info for x64 structured exception handling.",
+  SECURITY: "WIN_CERTIFICATE / Authenticode signatures, stored outside mapped image.",
+  BASERELOC: "Fixups applied when image is not loaded at preferred base.",
+  DEBUG: "CodeView/RSDS pointers to PDBs and other debug records.",
+  ARCHITECTURE: "Reserved slot; should be zero by the PE specification.",
+  GLOBALPTR: "Value to store in the global pointer register; Size should be zero.",
+  TLS: "Per-thread data and optional TLS callbacks.",
+  LOAD_CONFIG: "Security hardening structures: CFG, SEH tables, GS cookie.",
+  BOUND_IMPORT: "Prebinding metadata for imported modules, when present.",
+  IAT: "Resolved addresses patched by the loader at runtime.",
+  DELAY_IMPORT: "Imports resolved on first use by the delay-load helper.",
+  CLR_RUNTIME: ".NET/CLR header for managed assemblies.",
+  RESERVED: "Reserved slot."
+};
+
+const dataDirectoryMeaning = (name: string): string =>
+  DATA_DIRECTORY_MEANINGS[name] || "Reserved or producer-specific directory slot.";
+
+const renderDataDirectoryStatus = (present: boolean): string =>
+  `<span class="peDataDirectoryStatus peDataDirectoryStatus--${present ? "present" : "absent"}" ` +
+  `aria-label="${present ? "Present" : "Absent"}" title="${present ? "Present" : "Absent"}"></span>`;
+
+const renderDataDirectorySize = (size: number): string =>
+  `<span title="${size} bytes">${safe(humanSize(size).replace(` (${size} bytes)`, ""))}</span>`;
+
+const renderSortableHeader = (
+  label: string,
+  columnIndex: number,
+  cellClassName: string,
+  visualLabel = label
+): string =>
+  `<th class="sortableTableHeader ${cellClassName}">` +
+  `<button type="button" class="sortableTableHeaderButton" ` +
+  `data-sort-table-column="${columnIndex}" aria-label="Sort by ${safe(label)}">` +
+  `<span class="sortableTableHeaderLabel">${safe(visualLabel)}</span>` +
+  `<span class="sortableTableHeaderSortIcon" aria-hidden="true"></span></button></th>`;
+
 const renderPeFormatNote = (out: string[]): void => {
   out.push(
     `<section><div class="smallNote">Portable Executable (PE) / COFF is the executable and object-file format used by Windows toolchains.</div></section>`
@@ -38,25 +78,49 @@ const renderPeFormatNote = (out: string[]): void => {
 
 const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
   if (!pe.dirs?.length) return;
-  const presentCount = pe.dirs.filter(directory => directory.rva !== 0 || directory.size !== 0).length;
+  const presentCount = pe.dirs.filter(
+    directory => directory.rva !== 0 || directory.size !== 0
+  ).length;
   out.push(
     renderPeSectionStart(
       "Data directories",
       `${presentCount} present, ${pe.dirs.length} entr${pe.dirs.length === 1 ? "y" : "ies"}`
     )
   );
-  out.push(`<dl>`);
-  pe.dirs.forEach(d => {
-    const tip = (DD_TIPS as Record<string, string | undefined>)[d.name] || "Directory";
+  out.push(
+    `<div class="tableWrap"><table class="table peDataDirectoryTable" data-sortable>` +
+    `<thead><tr>${renderSortableHeader("Status", 0, "peDataDirectoryTable__status", "")}` +
+    `${renderSortableHeader("#", 1, "peDataDirectoryTable__index")}` +
+    `${renderSortableHeader("Directory", 2, "peDataDirectoryTable__directory")}` +
+    `${renderSortableHeader("RVA", 3, "peDataDirectoryTable__rva")}` +
+    `${renderSortableHeader("Size", 4, "peDataDirectoryTable__size")}` +
+    `${renderSortableHeader("Meaning", 5, "peDataDirectoryTable__meaning")}` +
+    `</tr></thead><tbody>`
+  );
+  pe.dirs.forEach(directory => {
+    const present = directory.rva !== 0 || directory.size !== 0;
     out.push(
-      dd(
-        `[${d.index}] ${d.name}`,
-        `RVA ${hex(d.rva, 8)}, Size ${humanSize(d.size)}`,
-        tip
-      )
+      `<tr class="peDataDirectoryTable__row${
+        present ? "" : " peDataDirectoryTable__row--absent"
+      }">` +
+      `<td class="peDataDirectoryTable__status" data-sort-value="${present ? "1" : "0"}">` +
+      `${renderDataDirectoryStatus(present)}</td>` +
+      `<td class="peNumeric peDataDirectoryTable__index" data-sort-value="${directory.index ?? ""}">` +
+      `${directory.index == null ? "-" : directory.index}</td>` +
+      `<th scope="row" class="peDataDirectoryTable__directory" ` +
+      `data-sort-value="${safe(directory.name)}">${safe(directory.name)}</th>` +
+      `<td class="peNumeric peDataDirectoryTable__rva" data-sort-value="${directory.rva}">` +
+      `${hex(directory.rva, 8)}</td>` +
+      `<td class="peNumeric peDataDirectoryTable__size peDataDirectorySize" ` +
+      `data-sort-value="${directory.size}">` +
+      `${renderDataDirectorySize(directory.size)}</td>` +
+      `<td class="smallNote peDataDirectoryTable__meaning" style="margin:0;font-family:inherit" ` +
+      `data-sort-value="${safe(dataDirectoryMeaning(directory.name))}">${safe(
+        dataDirectoryMeaning(directory.name)
+      )}</td></tr>`
     );
   });
-  out.push(`</dl>`);
+  out.push(`</tbody></table></div>`);
   out.push(renderPeSectionEnd());
 };
 

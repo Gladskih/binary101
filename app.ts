@@ -12,6 +12,7 @@ import { copyManifestPreviewToClipboard } from "./ui/manifest-preview-copy.js";
 import { createPeOverlayScanActions } from "./ui/pe-overlay-scan.js";
 import { handleManifestTreeActionClick, syncManifestTreeControls } from "./ui/manifest-tree-controls.js";
 import { captureOpenDetails, restoreOpenDetails } from "./ui/details-open-state.js";
+import { handleSortableTableClick } from "./ui/sortable-tables.js";
 const getElement = (id: string) => document.getElementById(id)!;
 const dropZoneElement = getElement("dropZone") as HTMLElement;
 const fileInputElement = getElement("fileInput") as HTMLInputElement;
@@ -90,6 +91,7 @@ peDetailsValueElement.addEventListener("click", event => {
     return;
   }
   if (handleManifestTreeActionClick(targetElement)) { event.preventDefault(); return; }
+  if (handleSortableTableClick(targetElement)) { event.preventDefault(); return; }
   const peAnalyzeButton = targetElement?.closest("#peInstructionSetsAnalyzeButton");
   const peCancelButton = targetElement?.closest("#peInstructionSetsCancelButton");
   const elfAnalyzeButton = targetElement?.closest("#elfInstructionSetsAnalyzeButton");

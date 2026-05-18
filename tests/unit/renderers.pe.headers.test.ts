@@ -18,7 +18,10 @@ void test("renderHeaders covers known/unknown branches and exact linker versions
   windowsOpt.OSVersionMinor = 1;
   // Microsoft PE/COFF: IMAGE_FILE_DLL marks a DLL image.
   pe.coff.Characteristics = 0x2000;
-  pe.dirs = [{ index: 1, name: "IMPORT", rva: 0x1000, size: 0x10 }];
+  pe.dirs = [
+    { index: 1, name: "IMPORT", rva: 0x1000, size: 0x10 },
+    { index: 9, name: "TLS", rva: 0, size: 0 }
+  ];
   pe.sections = [
     createPeSection(".text", {
       virtualSize: 0x100,
@@ -58,7 +61,35 @@ void test("renderHeaders covers known/unknown branches and exact linker versions
   assert.match(html, /<h4[^>]*>PE signature<\/h4>/);
   assert.match(html, /<h4[^>]*>COFF file header<\/h4>/);
   assert.match(html, /<h4[^>]*>Optional header<\/h4>/);
-  assert.match(html, /<summary[^>]*><b>Data directories<\/b> - 1 present, 1 entry<\/summary>/);
+  assert.match(
+    html,
+    /<summary[^>]*><b>Data directories<\/b> - 1 present, 2 entries<\/summary>/
+  );
+  assert.match(html, /<table class="table peDataDirectoryTable" data-sortable>/);
+  assert.match(
+    html,
+    /<th class="sortableTableHeader peDataDirectoryTable__status">/
+  );
+  assert.match(html, /data-sort-table-column="0" aria-label="Sort by Status">/);
+  assert.match(html, /<span class="sortableTableHeaderLabel">#<\/span>/);
+  assert.match(html, /<span class="sortableTableHeaderLabel">Size<\/span>/);
+  assert.match(html, /<span class="sortableTableHeaderSortIcon" aria-hidden="true"><\/span>/);
+  assert.ok(html.includes("peDataDirectoryStatus--present"));
+  assert.ok(html.includes("peDataDirectoryStatus--absent"));
+  assert.doesNotMatch(html, />Present<\/span>/);
+  assert.match(
+    html,
+    /<td class="peNumeric peDataDirectoryTable__index" data-sort-value="1">1<\/td>/
+  );
+  assert.match(
+    html,
+    /class="peDataDirectoryTable__directory" data-sort-value="IMPORT">IMPORT<\/th>/
+  );
+  assert.ok(html.includes(`class="peNumeric peDataDirectoryTable__size peDataDirectorySize"`));
+  assert.ok(html.includes(`data-sort-value="16"`));
+  assert.ok(html.includes(`<span title="16 bytes">16 B</span></td>`));
+  assert.ok(html.includes("Modules and symbols"));
+  assert.ok(!html.includes("Import directory: modules and symbols"));
   assert.match(html, /<summary[^>]*><b>Section headers<\/b> - 2 sections<\/summary>/);
   assert.ok(html.includes("Signature"));
   assert.ok(html.includes("peChecksumValidateButton"));
