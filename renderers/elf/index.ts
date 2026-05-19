@@ -1,6 +1,6 @@
 "use strict";
 
-import { dd, rowOpts, safe } from "../../html-utils.js";
+import { renderDefinitionRow, renderOptionChips, escapeHtml } from "../../html-utils.js";
 import {
   ELF_CLASS,
   ELF_DATA,
@@ -92,19 +92,19 @@ const sectionInfoMeaning = (section: ElfSectionHeader): string => {
 
 const formatSectionLink = (section: ElfSectionHeader, sectionsByIndex: Map<number, ElfSectionHeader>): string => {
   const label = sectionIndexWithName(sectionsByIndex, section.link);
-  return `<span title="${safe(sectionLinkMeaning(section))}">${safe(label)}</span>`;
+  return `<span title="${escapeHtml(sectionLinkMeaning(section))}">${escapeHtml(label)}</span>`;
 };
 
 const formatSectionInfo = (section: ElfSectionHeader, sectionsByIndex: Map<number, ElfSectionHeader>): string => {
   if (section.type === SHT_SYMTAB || section.type === SHT_DYNSYM) {
     const text = `${section.info} (symbol index after last local symbol)`;
-    return `<span title="${safe(sectionInfoMeaning(section))}">${safe(text)}</span>`;
+    return `<span title="${escapeHtml(sectionInfoMeaning(section))}">${escapeHtml(text)}</span>`;
   }
   if (section.type === SHT_REL || section.type === SHT_RELA) {
     const text = sectionIndexWithName(sectionsByIndex, section.info);
-    return `<span title="${safe(sectionInfoMeaning(section))}">${safe(text)}</span>`;
+    return `<span title="${escapeHtml(sectionInfoMeaning(section))}">${escapeHtml(text)}</span>`;
   }
-  return `<span title="${safe(sectionInfoMeaning(section))}">${safe(String(section.info))}</span>`;
+  return `<span title="${escapeHtml(sectionInfoMeaning(section))}">${escapeHtml(String(section.info))}</span>`;
 };
 
 const formatSectionEntSize = (section: ElfSectionHeader): string => {
@@ -126,7 +126,7 @@ function renderOverview(elf: ElfParseResult, out: string[]): void {
     `<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Big picture</h4>`
   );
   const summary =
-    `${bits} ${endian} ELF ${safe(type)} targeting ${safe(machine)}. ` +
+    `${bits} ${endian} ELF ${escapeHtml(type)} targeting ${escapeHtml(machine)}. ` +
     `Entry point at ${entry}. Program and section headers describe how the loader maps ` +
     `segments and named sections into memory.`;
   out.push(`<div class="smallNote">${summary}</div>`);
@@ -137,10 +137,10 @@ function renderIdent(elf: ElfParseResult, out: string[]): void {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Identification</h4>`);
   out.push(`<dl>`);
-  out.push(dd("Class", rowOpts(elf.ident.classByte, ELF_CLASS)));
-  out.push(dd("Data", rowOpts(elf.ident.dataByte, ELF_DATA)));
-  out.push(dd("OS ABI", safe(elf.ident.osabi)));
-  out.push(dd("ABI version", safe(elf.ident.abiVersion)));
+  out.push(renderDefinitionRow("Class", renderOptionChips(elf.ident.classByte, ELF_CLASS)));
+  out.push(renderDefinitionRow("Data", renderOptionChips(elf.ident.dataByte, ELF_DATA)));
+  out.push(renderDefinitionRow("OS ABI", escapeHtml(elf.ident.osabi)));
+  out.push(renderDefinitionRow("ABI version", escapeHtml(elf.ident.abiVersion)));
   out.push(`</dl>`);
   out.push(`</section>`);
 }
@@ -150,16 +150,16 @@ function renderHeader(elf: ElfParseResult, out: string[]): void {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">ELF header</h4>`);
   out.push(`<dl>`);
-  out.push(dd("Type", rowOpts(h.type, ELF_TYPE)));
-  out.push(dd("Machine", rowOpts(h.machine, ELF_MACHINE)));
-  out.push(dd("Entry", formatElfHex(h.entry)));
+  out.push(renderDefinitionRow("Type", renderOptionChips(h.type, ELF_TYPE)));
+  out.push(renderDefinitionRow("Machine", renderOptionChips(h.machine, ELF_MACHINE)));
+  out.push(renderDefinitionRow("Entry", formatElfHex(h.entry)));
   const phText = `${h.phnum} entries @ ${formatElfHex(h.phoff)}`;
   const shText = `${h.shnum} entries @ ${formatElfHex(h.shoff)}`;
-  out.push(dd("Program headers", phText));
-  out.push(dd("Section headers", shText));
-  out.push(dd("Header size", `${h.ehsize} bytes`));
-  out.push(dd("PH entry size", `${h.phentsize} bytes`));
-  out.push(dd("SH entry size", `${h.shentsize} bytes`));
+  out.push(renderDefinitionRow("Program headers", phText));
+  out.push(renderDefinitionRow("Section headers", shText));
+  out.push(renderDefinitionRow("Header size", `${h.ehsize} bytes`));
+  out.push(renderDefinitionRow("PH entry size", `${h.phentsize} bytes`));
+  out.push(renderDefinitionRow("SH entry size", `${h.shentsize} bytes`));
   out.push(`</dl>`);
   out.push(`</section>`);
 }
@@ -185,12 +185,12 @@ function renderProgramHeaders(elf: ElfParseResult, out: string[]): void {
     const typeTitle = opt?.[2] ? `${typeLabel} - ${opt[2]}` : typeLabel;
     const flags = formatElfList(ph.flagNames);
     out.push(
-      `<tr><td>${ph.index}</td><td><span title="${safe(typeTitle)}">${safe(typeLabel)}</span></td>` +
-        `<td>${safe(formatElfHex(ph.offset))}</td>` +
-        `<td>${safe(formatElfHex(ph.vaddr))}</td>` +
+      `<tr><td>${ph.index}</td><td><span title="${escapeHtml(typeTitle)}">${escapeHtml(typeLabel)}</span></td>` +
+        `<td>${escapeHtml(formatElfHex(ph.offset))}</td>` +
+        `<td>${escapeHtml(formatElfHex(ph.vaddr))}</td>` +
         `<td>${formatElfMaybeHumanSize(ph.filesz)}</td>` +
         `<td>${formatElfMaybeHumanSize(ph.memsz)}</td>` +
-        `<td>${flags}</td><td>${safe(formatElfHex(ph.align))}</td></tr>`
+        `<td>${flags}</td><td>${escapeHtml(formatElfHex(ph.align))}</td></tr>`
     );
   });
   out.push(`</tbody></table>`);
@@ -227,15 +227,15 @@ function renderSectionHeaders(elf: ElfParseResult, out: string[]): void {
     const typeTitle = opt?.[2] ? `${typeLabel} - ${opt[2]}` : typeLabel;
     const hint = sec.name ? knownSectionName(sec.name) : null;
     const nameCell = hint
-      ? `<span title="${safe(hint)}"><b>${safe(sec.name)}</b></span>`
-      : safe(sec.name || "");
+      ? `<span title="${escapeHtml(hint)}"><b>${escapeHtml(sec.name)}</b></span>`
+      : escapeHtml(sec.name || "");
     const flags = formatElfList(sec.flagNames);
     out.push(
       `<tr><td>${sec.index}</td><td>${nameCell}</td>` +
-        `<td><span title="${safe(typeTitle)}">${safe(typeLabel)}</span></td><td>${safe(formatElfHex(sec.offset))}</td>` +
+        `<td><span title="${escapeHtml(typeTitle)}">${escapeHtml(typeLabel)}</span></td><td>${escapeHtml(formatElfHex(sec.offset))}</td>` +
         `<td>${formatElfMaybeHumanSize(sec.size)}</td>` +
-        `<td>${safe(formatElfHex(sec.addr))}</td>` +
-        `<td>${flags}</td><td>${safe(formatElfHex(sec.addralign))}</td>` +
+        `<td>${escapeHtml(formatElfHex(sec.addr))}</td>` +
+        `<td>${flags}</td><td>${escapeHtml(formatElfHex(sec.addralign))}</td>` +
         `<td>${formatSectionLink(sec, sectionsByIndex)}</td>` +
         `<td>${formatSectionInfo(sec, sectionsByIndex)}</td>` +
         `<td>${formatSectionEntSize(sec)}</td></tr>`
@@ -250,7 +250,7 @@ function renderIssues(elf: ElfParseResult, out: string[]): void {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Notices</h4>`);
   out.push(`<ul>`);
-  elf.issues.forEach(issue => out.push(`<li>${safe(issue)}</li>`));
+  elf.issues.forEach(issue => out.push(`<li>${escapeHtml(issue)}</li>`));
   out.push(`</ul>`);
   out.push(`</section>`);
 }

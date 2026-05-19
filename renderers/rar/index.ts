@@ -1,6 +1,6 @@
 "use strict";
 
-import { dd, safe } from "../../html-utils.js";
+import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
 import type { RarEntry, RarParseResult } from "../../analyzers/rar/index.js";
 
@@ -32,13 +32,13 @@ const renderSummary = (rar: RarParseResult, out: string[]): void => {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">RAR overview</h4>`);
   out.push(`<dl>`);
-  out.push(dd("Version", safe(rar.version || "-")));
-  out.push(dd("Entries", count.toString()));
-  out.push(dd("Solid archive", main.isSolid ? "Yes" : "No"));
-  out.push(dd("Volume", main.isVolume ? "Yes" : "No"));
-  out.push(dd("Recovery record", main.hasRecovery ? "Yes" : "No"));
-  out.push(dd("Locked", main.isLocked ? "Yes" : "No"));
-  out.push(dd("First volume", main.isFirstVolume ? "Yes" : "No"));
+  out.push(renderDefinitionRow("Version", escapeHtml(rar.version || "-")));
+  out.push(renderDefinitionRow("Entries", count.toString()));
+  out.push(renderDefinitionRow("Solid archive", main.isSolid ? "Yes" : "No"));
+  out.push(renderDefinitionRow("Volume", main.isVolume ? "Yes" : "No"));
+  out.push(renderDefinitionRow("Recovery record", main.hasRecovery ? "Yes" : "No"));
+  out.push(renderDefinitionRow("Locked", main.isLocked ? "Yes" : "No"));
+  out.push(renderDefinitionRow("First volume", main.isFirstVolume ? "Yes" : "No"));
   out.push(`</dl>`);
   out.push(`</section>`);
 };
@@ -61,14 +61,14 @@ const renderEntries = (rar: RarParseResult, out: string[]): void => {
     const unpacked = formatSize(entry.unpackedSize);
     const flags = formatFlags(entry);
     const crc = entry.crc32 != null ? toHex32(entry.crc32, 8) : "-";
-    const modified = safe(entry.modified || "-");
+    const modified = escapeHtml(entry.modified || "-");
     out.push(
       `<tr><td>${entry.index ?? ""}</td>` +
-        `<td>${safe(entry.name || "(unnamed)")}</td>` +
+        `<td>${escapeHtml(entry.name || "(unnamed)")}</td>` +
         `<td>${packed}</td><td>${unpacked}</td>` +
-        `<td>${safe(entry.method || "-")}</td>` +
-        `<td>${safe(entry.hostOs || "-")}</td>` +
-        `<td>${safe(flags)}</td>` +
+        `<td>${escapeHtml(entry.method || "-")}</td>` +
+        `<td>${escapeHtml(entry.hostOs || "-")}</td>` +
+        `<td>${escapeHtml(flags)}</td>` +
         `<td>${modified}<br/><span class="smallNote">CRC ${crc}</span></td>` +
       `</tr>`
     );
@@ -87,7 +87,7 @@ const renderIssues = (rar: RarParseResult, out: string[]): void => {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Notices</h4>`);
   out.push(`<ul>`);
-  issues.forEach(issue => out.push(`<li>${safe(issue)}</li>`));
+  issues.forEach(issue => out.push(`<li>${escapeHtml(issue)}</li>`));
   out.push(`</ul>`);
   out.push(`</section>`);
 };

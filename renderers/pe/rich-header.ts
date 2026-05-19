@@ -1,7 +1,7 @@
 "use strict";
 
 import { hex } from "../../binary-utils.js";
-import { dd, safe } from "../../html-utils.js";
+import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import type { PeRichHeader, PeRichHeaderEntry } from "../../analyzers/pe/types.js";
 import { resolveRichBuildLabel } from "./rich-header-builds.js";
 import { RICH_TOOL_TYPES } from "./rich-header-products.js";
@@ -41,7 +41,7 @@ const formatTopCounts = (counts: Map<string, number>, totalCount: number): strin
   const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
   return sorted.slice(0, 4).map(([label, count]) => {
     const share = totalCount > 0 ? `, ${((count / totalCount) * 100).toFixed(1)}%` : "";
-    return `${safe(label)} <span class="mono">${count}${share}</span>`;
+    return `${escapeHtml(label)} <span class="mono">${count}${share}</span>`;
   }).join(" &middot; ");
 };
 
@@ -54,7 +54,7 @@ const renderSignals = (entries: PeRichHeaderEntry[]): string => {
     entries.some(entry => entry.productId === 0 || entry.productId === 1) ? "Unmarked objects" : null
   ].filter((signal): signal is string => signal != null);
   return signals.length
-    ? signals.map(safe).join(" &middot; ")
+    ? signals.map(escapeHtml).join(" &middot; ")
     : "No LTCG/PGO/managed markers detected";
 };
 
@@ -81,25 +81,25 @@ export function renderRichHeader(rich: PeRichHeader, out: string[]): void {
   );
 
   out.push(`<dl>`);
-  out.push(dd("Entries", String(entries.length), "Number of decoded tool records."));
-  out.push(dd("Total count", String(totalCount), "Sum of Rich header entry counts."));
-  out.push(dd("XOR key / checksum", hex(rich.xorKey, 8), "Stored Rich value used as the XOR key."));
+  out.push(renderDefinitionRow("Entries", String(entries.length), "Number of decoded tool records."));
+  out.push(renderDefinitionRow("Total count", String(totalCount), "Sum of Rich header entry counts."));
+  out.push(renderDefinitionRow("XOR key / checksum", hex(rich.xorKey, 8), "Stored Rich value used as the XOR key."));
   if (entries.length) {
-    out.push(dd("Tool mix", formatTopCounts(
+    out.push(renderDefinitionRow("Tool mix", formatTopCounts(
       countBy(entries, entry => classifyTool(resolveToolLabel(entry.productId))),
       totalCount
     ), "Rich counts grouped by component role."));
-    out.push(dd("Toolsets", formatTopCounts(
+    out.push(renderDefinitionRow("Toolsets", formatTopCounts(
       countBy(entries, entry => resolveRichBuildLabel(entry.buildNumber).replace(/ build .*/, "")),
       totalCount
     ), "Rich counts grouped by resolved or inferred toolset."));
-    out.push(dd("Signals", renderSignals(entries), "Best-effort hints derived from Rich product IDs."));
+    out.push(renderDefinitionRow("Signals", renderSignals(entries), "Best-effort hints derived from Rich product IDs."));
   }
   out.push(`</dl>`);
 
   if (rich.warnings?.length) {
     out.push(
-      `<div class="smallNote" style="color:var(--warn-fg)">${safe(rich.warnings.join(" \u2022 "))}</div>`
+      `<div class="smallNote" style="color:var(--warn-fg)">${escapeHtml(rich.warnings.join(" \u2022 "))}</div>`
     );
   }
 
@@ -118,10 +118,10 @@ export function renderRichHeader(rich: PeRichHeader, out: string[]): void {
   entries.forEach((entry, index) => {
     const toolLabel = resolveToolLabel(entry.productId);
     const buildLabel = resolveRichBuildLabel(entry.buildNumber);
-    const toolHtml = `<div>${safe(toolLabel)}</div><div class="smallNote">Product ${safe(
+    const toolHtml = `<div>${escapeHtml(toolLabel)}</div><div class="smallNote">Product ${escapeHtml(
       hex(entry.productId, 4)
     )}</div>`;
-    const buildHtml = `<div>${safe(buildLabel)}</div><div class="smallNote">Build ${safe(
+    const buildHtml = `<div>${escapeHtml(buildLabel)}</div><div class="smallNote">Build ${escapeHtml(
       hex(entry.buildNumber, 4)
     )}</div>`;
     out.push(
@@ -129,7 +129,7 @@ export function renderRichHeader(rich: PeRichHeader, out: string[]): void {
         entry.count,
         maxCount,
         totalCount
-      )}</td><td>${safe(hex(formatCompId(entry), 8))}</td></tr>`
+      )}</td><td>${escapeHtml(hex(formatCompId(entry), 8))}</td></tr>`
     );
   });
   out.push(`</tbody></table></div>`);

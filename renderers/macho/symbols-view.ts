@@ -1,6 +1,6 @@
 "use strict";
 
-import { dd, safe } from "../../html-utils.js";
+import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import type { MachOImage, MachOSymbol } from "../../analyzers/macho/types.js";
 import {
   sectionNameByIndex,
@@ -18,11 +18,11 @@ const renderSymbols = (image: MachOImage, symbols: MachOSymbol[]): string => {
       const binding = [...symbolBindingLabels(image, symbol), ...symbolDescriptionLabels(symbol)].join(", ");
       const sectionName = sectionNameByIndex(image, symbol.sectionIndex);
       return (
-        `<tr><td>${symbol.index}</td><td><span class="mono">${safe(symbol.name || "")}</span></td>` +
-        `<td>${safe(symbolTypeLabelFor(symbol))}</td>` +
-        `<td><span class="mono">${safe(formatHex(symbol.value))}</span></td>` +
-        `<td>${safe(sectionName || (symbol.sectionIndex ? `section ${symbol.sectionIndex}` : "-"))}</td>` +
-        `<td>${safe(binding || "-")}</td></tr>`
+        `<tr><td>${symbol.index}</td><td><span class="mono">${escapeHtml(symbol.name || "")}</span></td>` +
+        `<td>${escapeHtml(symbolTypeLabelFor(symbol))}</td>` +
+        `<td><span class="mono">${escapeHtml(formatHex(symbol.value))}</span></td>` +
+        `<td>${escapeHtml(sectionName || (symbol.sectionIndex ? `section ${symbol.sectionIndex}` : "-"))}</td>` +
+        `<td>${escapeHtml(binding || "-")}</td></tr>`
       );
     })
     .join("");
@@ -39,16 +39,16 @@ const renderSymtab = (image: MachOImage): string => {
   const counts = summarizeSymbols(image.symtab.symbols);
   return (
     `<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Symbols</h4><dl>` +
-    dd(
+    renderDefinitionRow(
       "Symbol table",
-      safe(`${image.symtab.nsyms} entries @ ${formatFileOffset(image.offset, image.symtab.symoff)}`)
+      escapeHtml(`${image.symtab.nsyms} entries @ ${formatFileOffset(image.offset, image.symtab.symoff)}`)
     ) +
-    dd(
+    renderDefinitionRow(
       "Strings",
-      safe(`${formatByteSize(image.symtab.strsize)} @ ${formatFileOffset(image.offset, image.symtab.stroff)}`)
+      escapeHtml(`${formatByteSize(image.symtab.strsize)} @ ${formatFileOffset(image.offset, image.symtab.stroff)}`)
     ) +
-    dd("Local / defined / undefined", safe(`${counts.local} / ${counts.externalDefined} / ${counts.undefined}`)) +
-    dd("Debug / indirect", safe(`${counts.debug} / ${counts.indirect}`)) +
+    renderDefinitionRow("Local / defined / undefined", escapeHtml(`${counts.local} / ${counts.externalDefined} / ${counts.undefined}`)) +
+    renderDefinitionRow("Debug / indirect", escapeHtml(`${counts.debug} / ${counts.indirect}`)) +
     `</dl>${renderSymbols(image, image.symtab.symbols)}</section>`
   );
 };

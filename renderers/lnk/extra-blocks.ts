@@ -1,6 +1,6 @@
 "use strict";
 
-import { safe } from "../../html-utils.js";
+import { escapeHtml } from "../../html-utils.js";
 import { toHex32 } from "../../binary-utils.js";
 import type {
   LnkExtraDataBlock,
@@ -24,9 +24,9 @@ const renderPropertyStore = (parsed: LnkPropertyStoreData | null | undefined): s
   if (!storages.length) return `<div class="smallNote">Property store present but empty.</div>`;
   const out: string[] = [];
   storages.forEach((storage: LnkPropertyStorage) => {
-    const header = storage.formatId ? `FMTID ${safe(storage.formatId)}` : "Property storage";
+    const header = storage.formatId ? `FMTID ${escapeHtml(storage.formatId)}` : "Property storage";
     const suffix = storage.truncated ? " (truncated)" : "";
-    const magic = storage.magic ? ` ${safe(storage.magic)}` : "";
+    const magic = storage.magic ? ` ${escapeHtml(storage.magic)}` : "";
     out.push(`<div class="smallNote">${header}${magic}${suffix}</div>`);
     if (storage.properties?.length) {
       out.push(`<ul class="smallNote">`);
@@ -36,12 +36,12 @@ const renderPropertyStore = (parsed: LnkPropertyStoreData | null | undefined): s
         if (prop.type != null) {
           const baseHex = toHex32(prop.type & 0xffff, 4);
           const vtName = prop.typeName ? `VT_${prop.typeName}` : `VT_0x${baseHex}`;
-          typeLabel = ` (${safe(vtName)} 0x${baseHex})`;
+          typeLabel = ` (${escapeHtml(vtName)} 0x${baseHex})`;
         }
         const value = formatPropertyValue(prop.value);
         const truncated = prop.truncated ? " [truncated]" : "";
         out.push(
-          `<li title="FMTID ${safe(storage.formatId || "")}, PID ${prop.id}">${safe(name)}${typeLabel}: ${safe(
+          `<li title="FMTID ${escapeHtml(storage.formatId || "")}, PID ${prop.id}">${escapeHtml(name)}${typeLabel}: ${escapeHtml(
             value
           )}${truncated}</li>`
         );
@@ -60,21 +60,21 @@ const describeBlock = (block: LnkExtraDataBlock): string => {
     case 0xa0000007: {
       const parsed = block.parsed as { ansi: string | null; unicode: string | null } | null;
       if (!parsed) return "";
-      const ansi = parsed.ansi ? safe(parsed.ansi) : "-";
-      const unicode = parsed.unicode ? safe(parsed.unicode) : "-";
+      const ansi = parsed.ansi ? escapeHtml(parsed.ansi) : "-";
+      const unicode = parsed.unicode ? escapeHtml(parsed.unicode) : "-";
       return `<div class="smallNote">ANSI: ${ansi}<br/>Unicode: ${unicode}</div>`;
     }
     case 0xa0000003: {
       const parsed = block.parsed as LnkTrackerData | null;
       if (!parsed) return "";
-      const machine = parsed.machineId ? `Machine: ${safe(parsed.machineId)}<br/>` : "";
-      const droidVolume = parsed.droidVolume ? `Droid VolumeID: ${safe(parsed.droidVolume)}<br/>` : "";
-      const droidObject = parsed.droidObject ? `Droid ObjectID: ${safe(parsed.droidObject)}<br/>` : "";
+      const machine = parsed.machineId ? `Machine: ${escapeHtml(parsed.machineId)}<br/>` : "";
+      const droidVolume = parsed.droidVolume ? `Droid VolumeID: ${escapeHtml(parsed.droidVolume)}<br/>` : "";
+      const droidObject = parsed.droidObject ? `Droid ObjectID: ${escapeHtml(parsed.droidObject)}<br/>` : "";
       const birthVolume = parsed.droidBirthVolume
-        ? `Birth VolumeID: ${safe(parsed.droidBirthVolume)}<br/>`
+        ? `Birth VolumeID: ${escapeHtml(parsed.droidBirthVolume)}<br/>`
         : "";
       const birthObject = parsed.droidBirthObject
-        ? `Birth ObjectID: ${safe(parsed.droidBirthObject)}<br/>`
+        ? `Birth ObjectID: ${escapeHtml(parsed.droidBirthObject)}<br/>`
         : "";
       return (
         `<div class="smallNote" title="NTFS object tracking identifiers used by Distributed Link Tracking; Droid VolumeID is for link tracking and typically does not match System.VolumeId from the property store.">Tracker data: shell tracking IDs to find the target after moves/renames (Droid IDs are separate from System.VolumeId).<br/>` +
@@ -103,7 +103,7 @@ const describeBlock = (block: LnkExtraDataBlock): string => {
     case 0xa000000b: {
       const parsed = block.parsed as { knownFolderId?: string | null; offset?: number } | null;
       if (!parsed?.knownFolderId || parsed.offset == null) return "";
-      return `<div class="smallNote">Known folder: ${safe(parsed.knownFolderId)} (offset ${parsed.offset})</div>`;
+      return `<div class="smallNote">Known folder: ${escapeHtml(parsed.knownFolderId)} (offset ${parsed.offset})</div>`;
     }
     default:
       return "";

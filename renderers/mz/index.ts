@@ -1,6 +1,6 @@
 "use strict";
 
-import { dd, safe } from "../../html-utils.js";
+import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
 import type { MzParseResult, MzRelocationEntry } from "../../analyzers/mz/index.js";
 
@@ -25,17 +25,17 @@ const renderHeader = (mz: MzParseResult, out: string[]): void => {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">MS-DOS header</h4>`);
   out.push(`<dl>`);
-  out.push(dd("Signature", safe(h.e_magic || "-")));
-  out.push(dd("Pages", `${h.e_cp || 0} (${formatHumanSize((h.e_cp || 0) * 512)})`));
-  out.push(dd("Last page bytes", h.e_cblp?.toString() ?? "-"));
-  out.push(dd("Relocation entries", h.e_crlc?.toString() ?? "0"));
-  out.push(dd("Header size", `${h.e_cparhdr != null ? h.e_cparhdr * 16 : "-"} bytes`));
-  out.push(dd("Min/Max extra", `${h.e_minalloc ?? "-"} / ${h.e_maxalloc ?? "-"}`));
-  out.push(dd("Initial SP", segOff(h.e_ss, h.e_sp)));
-  out.push(dd("Initial IP", segOff(h.e_cs, h.e_ip)));
-  out.push(dd("Relocation table", hex16(h.e_lfarlc)));
-  out.push(dd("Next header offset", hex32(h.e_lfanew)));
-  out.push(dd("Next header type", safe(describeNext(mz.nextHeader))));
+  out.push(renderDefinitionRow("Signature", escapeHtml(h.e_magic || "-")));
+  out.push(renderDefinitionRow("Pages", `${h.e_cp || 0} (${formatHumanSize((h.e_cp || 0) * 512)})`));
+  out.push(renderDefinitionRow("Last page bytes", h.e_cblp?.toString() ?? "-"));
+  out.push(renderDefinitionRow("Relocation entries", h.e_crlc?.toString() ?? "0"));
+  out.push(renderDefinitionRow("Header size", `${h.e_cparhdr != null ? h.e_cparhdr * 16 : "-"} bytes`));
+  out.push(renderDefinitionRow("Min/Max extra", `${h.e_minalloc ?? "-"} / ${h.e_maxalloc ?? "-"}`));
+  out.push(renderDefinitionRow("Initial SP", segOff(h.e_ss, h.e_sp)));
+  out.push(renderDefinitionRow("Initial IP", segOff(h.e_cs, h.e_ip)));
+  out.push(renderDefinitionRow("Relocation table", hex16(h.e_lfarlc)));
+  out.push(renderDefinitionRow("Next header offset", hex32(h.e_lfanew)));
+  out.push(renderDefinitionRow("Next header type", escapeHtml(describeNext(mz.nextHeader))));
   out.push(`</dl>`);
   out.push(`</section>`);
 };
@@ -64,7 +64,7 @@ const renderStub = (mz: MzParseResult, out: string[]): void => {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Stub text</h4>`);
   out.push(`<ul>`);
-  stubStrings.forEach(text => out.push(`<li>${safe(text)}</li>`));
+  stubStrings.forEach(text => out.push(`<li>${escapeHtml(text)}</li>`));
   out.push(`</ul>`);
   out.push(`</section>`);
 };
@@ -75,7 +75,7 @@ const renderWarnings = (mz: MzParseResult, out: string[]): void => {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Notices</h4>`);
   out.push(`<ul>`);
-  issues.forEach(issue => out.push(`<li>${safe(issue)}</li>`));
+  issues.forEach(issue => out.push(`<li>${escapeHtml(issue)}</li>`));
   out.push(`</ul>`);
   out.push(`</section>`);
 };

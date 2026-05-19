@@ -1,7 +1,7 @@
 "use strict";
 
 import { humanSize, hex } from "../../binary-utils.js";
-import { dd, safe } from "../../html-utils.js";
+import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import type {
   PeDebugSection,
   PeWindowsParseResult
@@ -71,13 +71,13 @@ const hasDecodedPayload = (entry: PeDebugDirectoryEntry): boolean =>
 
 const formatEntryType = (entry: PeDebugDirectoryEntry): string => {
   const typeInfo = getDebugTypeInfo(entry.type >>> 0);
-  return `${safe(typeInfo.label)}<div class="valueHint">${hex(entry.type, 8)}</div>`;
+  return `${escapeHtml(typeInfo.label)}<div class="valueHint">${hex(entry.type, 8)}</div>`;
 };
 
 const formatEntryStorage = (
   pe: PeWindowsParseResult,
   entry: PeDebugDirectoryEntry
-): string => safe(getDebugStorageInfo(pe, entry).label);
+): string => escapeHtml(getDebugStorageInfo(pe, entry).label);
 
 const formatPogoRecordCount = (count: number): string =>
   `${count} record${count === 1 ? "" : "s"}`;
@@ -100,12 +100,12 @@ const renderEntryCommonFields = (
   const typeInfo = getDebugTypeInfo(entry.type >>> 0);
   const storageInfo = getDebugStorageInfo(pe, entry);
   out.push(`<dl>`);
-  out.push(dd("Type", `${safe(typeInfo.label)} (${hex(entry.type, 8)})`, typeInfo.description));
-  out.push(dd("Storage", safe(storageInfo.label), storageInfo.description));
-  out.push(dd("Payload size", safe(humanSize(entry.sizeOfData))));
-  out.push(dd("Raw RVA", safe(hex(entry.addressOfRawData, 8))));
-  out.push(dd("Raw file ptr", safe(hex(entry.pointerToRawData, 8))));
-  out.push(dd("What it contains", safe(getEntrySummary(entry))));
+  out.push(renderDefinitionRow("Type", `${escapeHtml(typeInfo.label)} (${hex(entry.type, 8)})`, typeInfo.description));
+  out.push(renderDefinitionRow("Storage", escapeHtml(storageInfo.label), storageInfo.description));
+  out.push(renderDefinitionRow("Payload size", escapeHtml(humanSize(entry.sizeOfData))));
+  out.push(renderDefinitionRow("Raw RVA", escapeHtml(hex(entry.addressOfRawData, 8))));
+  out.push(renderDefinitionRow("Raw file ptr", escapeHtml(hex(entry.pointerToRawData, 8))));
+  out.push(renderDefinitionRow("What it contains", escapeHtml(getEntrySummary(entry))));
   out.push(`</dl>`);
 };
 
@@ -116,25 +116,25 @@ const renderCodeViewFields = (entry: PeDebugDirectoryEntry, out: string[]): void
       `The debugger uses the GUID and Age to verify it loaded the right symbol file.</div>`
   );
   out.push(`<dl>`);
-  out.push(dd("Signature", "RSDS", "Modern CodeView/PDB record format used by Microsoft tools."));
+  out.push(renderDefinitionRow("Signature", "RSDS", "Modern CodeView/PDB record format used by Microsoft tools."));
   out.push(
-    dd(
+    renderDefinitionRow(
       "GUID",
-      safe((entry.codeView.guid || "").toUpperCase()),
+      escapeHtml((entry.codeView.guid || "").toUpperCase()),
       "PDB identity GUID used to match the correct PDB file."
     )
   );
   out.push(
-    dd(
+    renderDefinitionRow(
       "Age",
-      safe(String(entry.codeView.age)),
+      escapeHtml(String(entry.codeView.age)),
       "PDB age; increments when the PDB is updated without a full rewrite."
     )
   );
   out.push(
-    dd(
+    renderDefinitionRow(
       "Path",
-      safe(entry.codeView.path || "(no path)"),
+      escapeHtml(entry.codeView.path || "(no path)"),
       "Path recorded by the linker. It can be absolute and build-machine specific."
     )
   );
@@ -176,16 +176,16 @@ const renderPogoFields = (entry: PeDebugDirectoryEntry, out: string[]): void => 
   );
   out.push(`<dl>`);
   out.push(
-    dd(
+    renderDefinitionRow(
       "Signature",
-      `${safe(entry.pogo.signatureName)} (${hex(entry.pogo.signature, 8)})`,
+      `${escapeHtml(entry.pogo.signatureName)} (${hex(entry.pogo.signature, 8)})`,
       "POGO payload flavor emitted by the linker."
     )
   );
   out.push(
-    dd(
+    renderDefinitionRow(
       "Entry count",
-      safe(String(entry.pogo.entries.length)),
+      escapeHtml(String(entry.pogo.entries.length)),
       "Number of chunk records stored in this POGO payload."
     )
   );
@@ -196,7 +196,7 @@ const renderPogoFields = (entry: PeDebugDirectoryEntry, out: string[]): void => 
   );
   entry.pogo.entries.forEach((pogoEntry, index) => {
     out.push(
-      `<tr><td>${index + 1}</td><td>${hex(pogoEntry.startRva, 8)}</td><td>${humanSize(pogoEntry.size)}</td><td>${safe(pogoEntry.name || "(empty)")}</td></tr>`
+      `<tr><td>${index + 1}</td><td>${hex(pogoEntry.startRva, 8)}</td><td>${humanSize(pogoEntry.size)}</td><td>${escapeHtml(pogoEntry.name || "(empty)")}</td></tr>`
     );
   });
   out.push(`</tbody></table>`);
@@ -218,7 +218,7 @@ const renderDecodedEntryDetails = (
     const typeInfo = getDebugTypeInfo(entry.type >>> 0);
     const storageInfo = getDebugStorageInfo(pe, entry);
     out.push(
-      `<details style="margin-top:.5rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Entry #${entryIndex + 1}: ${safe(typeInfo.label)} (${safe(storageInfo.label)})</summary>`
+      `<details style="margin-top:.5rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Entry #${entryIndex + 1}: ${escapeHtml(typeInfo.label)} (${escapeHtml(storageInfo.label)})</summary>`
     );
     renderEntryCommonFields(pe, entry, out);
     renderCodeViewFields(entry, out);
@@ -239,7 +239,7 @@ const renderEntryTable = (
   );
   debug.entries.forEach((entry, index) => {
     out.push(
-      `<tr><td>${index + 1}</td><td>${formatEntryType(entry)}</td><td title="${safe(getDebugStorageInfo(pe, entry).description)}">${formatEntryStorage(pe, entry)}</td><td>${humanSize(entry.sizeOfData)}</td><td>${hex(entry.addressOfRawData, 8)}</td><td>${hex(entry.pointerToRawData, 8)}</td><td>${safe(getEntrySummary(entry))}</td></tr>`
+      `<tr><td>${index + 1}</td><td>${formatEntryType(entry)}</td><td title="${escapeHtml(getDebugStorageInfo(pe, entry).description)}">${formatEntryStorage(pe, entry)}</td><td>${humanSize(entry.sizeOfData)}</td><td>${hex(entry.addressOfRawData, 8)}</td><td>${hex(entry.pointerToRawData, 8)}</td><td>${escapeHtml(getEntrySummary(entry))}</td></tr>`
     );
   });
   out.push(`</tbody></table>`);
@@ -264,6 +264,6 @@ export function renderDebug(pe: PeWindowsParseResult, out: string[]): void {
   renderDebugIntro(out);
   renderEntryTable(pe, pe.debug, out);
   renderDecodedEntryDetails(pe, pe.debug, out);
-  if (pe.debug.warning) out.push(`<div class="smallNote">${safe(pe.debug.warning)}</div>`);
+  if (pe.debug.warning) out.push(`<div class="smallNote">${escapeHtml(pe.debug.warning)}</div>`);
   out.push(renderPeSectionEnd());
 }

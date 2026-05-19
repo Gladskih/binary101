@@ -2,7 +2,7 @@
 
 import { humanSize } from "../../binary-utils.js";
 import type { PeResources } from "../../analyzers/pe/resources/index.js";
-import { safe } from "../../html-utils.js";
+import { escapeHtml } from "../../html-utils.js";
 import { renderPeDiagnostics } from "./diagnostics.js";
 import { renderPreviewCell, renderPreviewSummary } from "./resource-preview-cell.js";
 import { formatWindowsLanguageName } from "./windows-language-names.js";
@@ -22,7 +22,7 @@ const formatDirectoryTimestamp = (timeDateStamp: number): string =>
   timeDateStamp ? `0x${timeDateStamp.toString(16).padStart(8, "0")}` : "-";
 
 const formatResourcePathNode = (node: { id: number | null; name: string | null }): string =>
-  node.name != null ? safe(node.name) : node.id != null ? `ID ${node.id}` : "(unnamed)";
+  node.name != null ? escapeHtml(node.name) : node.id != null ? `ID ${node.id}` : "(unnamed)";
 
 const isWideResourcePreview = (
   langEntry: NonNullable<PeResources["detail"]>[number]["entries"][number]["langs"][number]
@@ -68,7 +68,7 @@ export function renderResources(resources: PeResources, out: string[]): void {
       `<table class="table" style="margin-top:.5rem"><thead><tr><th>Type</th><th>Key kind</th><th>Leaf entries</th></tr></thead><tbody>`
     );
     for (const row of topRows) {
-      const typeName = safe(row.typeName || "(unknown)");
+      const typeName = escapeHtml(row.typeName || "(unknown)");
       const kind = row.kind === "name" ? "string name" : "numeric ID";
       out.push(`<tr><td>${typeName}</td><td>${kind}</td><td>${row.leafCount ?? 0}</td></tr>`);
     }
@@ -93,7 +93,7 @@ export function renderResources(resources: PeResources, out: string[]): void {
   }
   if (resources.detail?.length) {
     for (const group of resources.detail) {
-      const typeName = safe(group.typeName || "(unknown)");
+      const typeName = escapeHtml(group.typeName || "(unknown)");
       const entryCount = group.entries?.length || 0;
       out.push(
         `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${typeName}</b> - ${entryCount} entr${entryCount === 1 ? "y" : "ies"}</summary>`
@@ -106,7 +106,7 @@ export function renderResources(resources: PeResources, out: string[]): void {
         );
         for (const entry of group.entries) {
           const displayName = entry.name
-            ? safe(entry.name)
+            ? escapeHtml(entry.name)
             : entry.id != null
               ? `ID ${entry.id}`
               : "(unnamed)";
@@ -117,7 +117,7 @@ export function renderResources(resources: PeResources, out: string[]): void {
                 `<td>${displayName}</td><td>${formatLang(langEntry.lang)}</td>` +
                 `<td class="peNumeric">${humanSize(langEntry.size || 0)}</td>` +
                 `<td class="peNumeric">${formatCodePage(langEntry.codePage)}</td>` +
-                `<td>${isWideResourcePreview(langEntry) ? safe(renderPreviewSummary(langEntry)) : preview}` +
+                `<td>${isWideResourcePreview(langEntry) ? escapeHtml(renderPreviewSummary(langEntry)) : preview}` +
                 `</td></tr>`
             );
             if (isWideResourcePreview(langEntry)) {

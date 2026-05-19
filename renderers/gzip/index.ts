@@ -1,18 +1,18 @@
 "use strict";
 
-import { dd, safe } from "../../html-utils.js";
+import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import { formatHumanSize, formatUnixSecondsOrDash, toHex32 } from "../../binary-utils.js";
 import type { GzipParseResult } from "../../analyzers/gzip/types.js";
 
 const renderFlag = (label: string, active: boolean, tooltip?: string): string => {
   const cls = active ? "opt sel" : "opt dim";
-  const title = tooltip ? ` title="${safe(tooltip)}"` : "";
-  return `<span class="${cls}"${title}>${safe(label)}</span>`;
+  const title = tooltip ? ` title="${escapeHtml(tooltip)}"` : "";
+  return `<span class="${cls}"${title}>${escapeHtml(label)}</span>`;
 };
 
 const renderIssues = (issues: string[] | null | undefined): string => {
   if (!issues || issues.length === 0) return "";
-  return `<h4>Issues</h4><ul class="issueList">${issues.map(issue => `<li>${safe(issue)}</li>`).join("")}</ul>`;
+  return `<h4>Issues</h4><ul class="issueList">${issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul>`;
 };
 
 export function renderGzip(parsed: GzipParseResult | null | unknown): string {
@@ -27,10 +27,10 @@ export function renderGzip(parsed: GzipParseResult | null | unknown): string {
   out.push("<h3>gzip compressed data</h3>");
 
   out.push("<h4>Header</h4><dl>");
-  out.push(dd("File size", safe(formatHumanSize(data.fileSize))));
-  out.push(dd("Compression method", safe(header.compressionMethodName || `${header.compressionMethod ?? "Unknown"}`)));
+  out.push(renderDefinitionRow("File size", escapeHtml(formatHumanSize(data.fileSize))));
+  out.push(renderDefinitionRow("Compression method", escapeHtml(header.compressionMethodName || `${header.compressionMethod ?? "Unknown"}`)));
   out.push(
-    dd(
+    renderDefinitionRow(
       "Flags",
       `<div class="optionsRow">` +
         renderFlag("FTEXT", header.flags.ftext, "ASCII text hint") +
@@ -42,47 +42,47 @@ export function renderGzip(parsed: GzipParseResult | null | unknown): string {
     )
   );
   if (header.flags.reservedBits) {
-    out.push(dd("Reserved flag bits", safe(toHex32(header.flags.reservedBits, 2))));
+    out.push(renderDefinitionRow("Reserved flag bits", escapeHtml(toHex32(header.flags.reservedBits, 2))));
   }
-  out.push(dd("MTIME", safe(header.mtime != null ? formatUnixSecondsOrDash(header.mtime) : "-")));
-  out.push(dd("Extra flags (XFL)", safe(header.extraFlags != null ? toHex32(header.extraFlags, 2) : "-")));
-  out.push(dd("OS", safe(header.osName || (header.os != null ? `${header.os}` : "-"))));
-  out.push(dd("Header CRC16", safe(header.headerCrc16 != null ? toHex32(header.headerCrc16, 4) : "-")));
-  out.push(dd("Header bytes", safe(header.headerBytesTotal != null ? `${header.headerBytesTotal}` : "-")));
+  out.push(renderDefinitionRow("MTIME", escapeHtml(header.mtime != null ? formatUnixSecondsOrDash(header.mtime) : "-")));
+  out.push(renderDefinitionRow("Extra flags (XFL)", escapeHtml(header.extraFlags != null ? toHex32(header.extraFlags, 2) : "-")));
+  out.push(renderDefinitionRow("OS", escapeHtml(header.osName || (header.os != null ? `${header.os}` : "-"))));
+  out.push(renderDefinitionRow("Header CRC16", escapeHtml(header.headerCrc16 != null ? toHex32(header.headerCrc16, 4) : "-")));
+  out.push(renderDefinitionRow("Header bytes", escapeHtml(header.headerBytesTotal != null ? `${header.headerBytesTotal}` : "-")));
 
   if (header.extra) {
     const extraNote = header.extra.truncated
       ? `${header.extra.dataLength}/${header.extra.xlen} bytes (truncated)`
       : `${header.extra.xlen} bytes`;
-    out.push(dd("Extra field", safe(extraNote)));
+    out.push(renderDefinitionRow("Extra field", escapeHtml(extraNote)));
   }
-  out.push(dd("Original filename", safe(header.fileName || "-")));
-  out.push(dd("Comment", safe(header.comment || "-")));
+  out.push(renderDefinitionRow("Original filename", escapeHtml(header.fileName || "-")));
+  out.push(renderDefinitionRow("Comment", escapeHtml(header.comment || "-")));
 
   if (header.truncated) {
-    out.push(dd("Header truncated", safe("Yes")));
+    out.push(renderDefinitionRow("Header truncated", escapeHtml("Yes")));
   }
 
   out.push("</dl>");
 
   out.push("<h4>Trailer</h4><dl>");
-  out.push(dd("CRC32", safe(trailer.crc32 != null ? toHex32(trailer.crc32, 8) : "-")));
+  out.push(renderDefinitionRow("CRC32", escapeHtml(trailer.crc32 != null ? toHex32(trailer.crc32, 8) : "-")));
   out.push(
-    dd(
+    renderDefinitionRow(
       "ISIZE (mod 2^32)",
-      safe(trailer.isize != null ? formatHumanSize(trailer.isize) : "-")
+      escapeHtml(trailer.isize != null ? formatHumanSize(trailer.isize) : "-")
     )
   );
-  out.push(dd("Trailer offset", safe(stream.trailerOffset != null ? `${stream.trailerOffset}` : "-")));
+  out.push(renderDefinitionRow("Trailer offset", escapeHtml(stream.trailerOffset != null ? `${stream.trailerOffset}` : "-")));
   if (trailer.truncated) {
-    out.push(dd("Trailer truncated", safe("Yes")));
+    out.push(renderDefinitionRow("Trailer truncated", escapeHtml("Yes")));
   }
   out.push("</dl>");
 
   out.push("<h4>Stream layout</h4><dl>");
-  out.push(dd("Compressed data offset", safe(stream.compressedOffset != null ? `${stream.compressedOffset}` : "-")));
-  out.push(dd("Compressed data size", safe(stream.compressedSize != null ? formatHumanSize(stream.compressedSize) : "-")));
-  out.push(dd("File truncated", safe(stream.truncatedFile ? "Yes" : "No")));
+  out.push(renderDefinitionRow("Compressed data offset", escapeHtml(stream.compressedOffset != null ? `${stream.compressedOffset}` : "-")));
+  out.push(renderDefinitionRow("Compressed data size", escapeHtml(stream.compressedSize != null ? formatHumanSize(stream.compressedSize) : "-")));
+  out.push(renderDefinitionRow("File truncated", escapeHtml(stream.truncatedFile ? "Yes" : "No")));
   out.push("</dl>");
 
   out.push("<h4>Actions</h4>");

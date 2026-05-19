@@ -1,6 +1,6 @@
 "use strict";
 
-import { safe } from "../../html-utils.js";
+import { escapeHtml } from "../../html-utils.js";
 
 type PeDiagnosticGroup = {
   pattern: string;
@@ -37,7 +37,7 @@ const collectDiagnosticGroups = (diagnostics: string[]): PeDiagnosticGroup[] => 
 
 const renderDiagnosticList = (diagnostics: string[]): string =>
   `<ul class="smallNote" style="color:var(--warning-text,#b45309)">` +
-  diagnostics.map(diagnostic => `<li>${safe(diagnostic)}</li>`).join("") +
+  diagnostics.map(diagnostic => `<li>${escapeHtml(diagnostic)}</li>`).join("") +
   `</ul>`;
 
 const renderDiagnosticSummary = (
@@ -47,7 +47,7 @@ const renderDiagnosticSummary = (
 ): string =>
   `<summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);` +
   `border-radius:6px;background:var(--chip-bg);color:var(--warning-text,#b45309)">` +
-  `<b>${safe(summaryLabel)}</b> - ${diagnostics.length} message${diagnostics.length === 1 ? "" : "s"}` +
+  `<b>${escapeHtml(summaryLabel)}</b> - ${diagnostics.length} message${diagnostics.length === 1 ? "" : "s"}` +
   (diagnostics.length > 8
     ? ` grouped into ${groups.length} pattern${groups.length === 1 ? "" : "s"}`
     : "") +
@@ -75,9 +75,9 @@ export const renderPeDiagnosticBody = (diagnostics: string[]): string => {
     return renderDiagnosticList(diagnostics);
   }
   const rows = groups.map(group => {
-    const examples = group.examples.map(example => `<div>${safe(example)}</div>`).join("");
+    const examples = group.examples.map(example => `<div>${escapeHtml(example)}</div>`).join("");
     return (
-      `<tr><td>${safe(group.pattern)}</td><td>${group.count}</td><td>${examples}</td></tr>`
+      `<tr><td>${escapeHtml(group.pattern)}</td><td>${group.count}</td><td>${examples}</td></tr>`
     );
   }).join("");
   return (

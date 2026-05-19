@@ -1,6 +1,6 @@
 "use strict";
 
-import { safe } from "../../html-utils.js";
+import { escapeHtml } from "../../html-utils.js";
 
 export type NamedChipOption = [string, string, string];
 
@@ -35,10 +35,10 @@ export const renderNamedOptionChips = (
   const known = new Set(options.map(([value]) => normalizeChipValue(value)));
   const chips = options.map(([value, label, description]) => {
     const chipClass = selected.has(normalizeChipValue(value)) ? "opt sel" : "opt dim";
-    return `<span class="${chipClass}" title="${safe(description)}">${safe(label)}</span>`;
+    return `<span class="${chipClass}" title="${escapeHtml(description)}">${escapeHtml(label)}</span>`;
   });
   values
     .filter(value => !known.has(normalizeChipValue(value)))
-    .forEach(value => chips.push(`<span class="opt sel mono">${safe(value)}</span>`));
+    .forEach(value => chips.push(`<span class="opt sel mono">${escapeHtml(value)}</span>`));
   return `<div class="optionsRow">${chips.join("")}</div>`;
 };

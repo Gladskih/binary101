@@ -1,7 +1,7 @@
 "use strict";
 
 import { formatHumanSize, toHex64 } from "../binary-utils.js";
-import { rowFlags, safe } from "../html-utils.js";
+import { renderFlagChips, escapeHtml } from "../html-utils.js";
 import type { Iso9660DirectoryEntrySummary } from "../analyzers/iso9660/types.js";
 
 const FILE_FLAGS: Array<[number, string, string]> = [
@@ -58,11 +58,11 @@ const renderIso9660DirectoryListing = (opts: {
   const out: string[] = [];
   const indent = Math.min(6, Math.max(0, depth));
   const padLeft = `${indent * 12}px`;
-  out.push(`<div class="smallNote" style="margin:.25rem 0 .5rem 0;padding-left:${safe(padLeft)}">`);
+  out.push(`<div class="smallNote" style="margin:.25rem 0 .5rem 0;padding-left:${escapeHtml(padLeft)}">`);
   out.push(
-    `${safe(directoryPath)} - ${safe(String(totalEntries))} entries` +
-      `, ${safe(formatHumanSize(bytesRead))} scanned` +
-      (declaredSize > bytesRead ? ` <span class="dim">(declared ${safe(formatHumanSize(declaredSize))})</span>` : "")
+    `${escapeHtml(directoryPath)} - ${escapeHtml(String(totalEntries))} entries` +
+      `, ${escapeHtml(formatHumanSize(bytesRead))} scanned` +
+      (declaredSize > bytesRead ? ` <span class="dim">(declared ${escapeHtml(formatHumanSize(declaredSize))})</span>` : "")
   );
   out.push(`</div>`);
 
@@ -77,12 +77,12 @@ const renderIso9660DirectoryListing = (opts: {
         if (entry.extentLocationLba == null) return `<span class="smallNote">Unavailable</span>`;
         const targetId = `${containerIdPrefix}-dir-${index}`;
         const nextPath = joinIsoPath(directoryPath, name);
-        const sizeAttr = entry.dataLength != null ? ` data-iso-size="${safe(String(entry.dataLength))}"` : "";
+        const sizeAttr = entry.dataLength != null ? ` data-iso-size="${escapeHtml(String(entry.dataLength))}"` : "";
         return (
           `<button type="button" class="tableButton isoDirToggleButton" data-iso-action="toggle-dir"` +
-            ` data-iso-lba="${safe(String(entry.extentLocationLba))}"${sizeAttr}` +
-            ` data-iso-path="${safe(nextPath)}" data-iso-depth="${safe(String(depth + 1))}"` +
-            ` data-iso-target="${safe(targetId)}">Expand</button>`
+            ` data-iso-lba="${escapeHtml(String(entry.extentLocationLba))}"${sizeAttr}` +
+            ` data-iso-path="${escapeHtml(nextPath)}" data-iso-depth="${escapeHtml(String(depth + 1))}"` +
+            ` data-iso-target="${escapeHtml(targetId)}">Expand</button>`
         );
       }
       if (entry.kind !== "file") return `<span class="smallNote">-</span>`;
@@ -91,8 +91,8 @@ const renderIso9660DirectoryListing = (opts: {
       const offset = entry.extentLocationLba * isoBlockSize;
       return (
         `<button type="button" class="tableButton isoExtractButton" data-iso-action="extract"` +
-          ` data-iso-offset="${safe(String(offset))}" data-iso-length="${safe(String(entry.dataLength))}"` +
-          ` data-iso-name="${safe(name)}" data-iso-flags="${safe(String(entry.fileFlags))}">Download</button>`
+          ` data-iso-offset="${escapeHtml(String(offset))}" data-iso-length="${escapeHtml(String(entry.dataLength))}"` +
+          ` data-iso-name="${escapeHtml(name)}" data-iso-flags="${escapeHtml(String(entry.fileFlags))}">Download</button>`
       );
     })();
 
@@ -101,19 +101,19 @@ const renderIso9660DirectoryListing = (opts: {
 
     out.push(
       "<tr>" +
-        `<td style="padding-left:${safe(padLeft)}">${safe(name)}</td>` +
-        `<td>${safe(entry.kind)}</td>` +
-        `<td>${safe(entry.dataLength != null ? formatHumanSize(entry.dataLength) : "-")}</td>` +
-        `<td>${safe(formatLbaWithOffset(entry.extentLocationLba, isoBlockSize))}</td>` +
-        `<td>${rowFlags(entry.fileFlags, FILE_FLAGS)}</td>` +
-        `<td>${safe(entry.recordingDateTime || "-")}</td>` +
+        `<td style="padding-left:${escapeHtml(padLeft)}">${escapeHtml(name)}</td>` +
+        `<td>${escapeHtml(entry.kind)}</td>` +
+        `<td>${escapeHtml(entry.dataLength != null ? formatHumanSize(entry.dataLength) : "-")}</td>` +
+        `<td>${escapeHtml(formatLbaWithOffset(entry.extentLocationLba, isoBlockSize))}</td>` +
+        `<td>${renderFlagChips(entry.fileFlags, FILE_FLAGS)}</td>` +
+        `<td>${escapeHtml(entry.recordingDateTime || "-")}</td>` +
         `<td>${actionCell}</td>` +
       "</tr>"
     );
     if (childTarget) {
       out.push(
         `<tr hidden><td colspan="7">` +
-          `<div id="${safe(childTarget)}" class="isoDirChildren" data-iso-loaded="0"></div>` +
+          `<div id="${escapeHtml(childTarget)}" class="isoDirChildren" data-iso-loaded="0"></div>` +
         `</td></tr>`
       );
     }
@@ -121,12 +121,12 @@ const renderIso9660DirectoryListing = (opts: {
 
   out.push(`</tbody></table>`);
   if (omittedEntries) {
-    out.push(`<div class="smallNote">${safe(String(omittedEntries))} more entries not shown.</div>`);
+    out.push(`<div class="smallNote">${escapeHtml(String(omittedEntries))} more entries not shown.</div>`);
   }
   if (issues.length) {
     out.push(`<div class="smallNote" style="margin-top:.5rem">Notices:</div>`);
     out.push(`<ul class="issueList">`);
-    issues.forEach(issue => out.push(`<li>${safe(issue)}</li>`));
+    issues.forEach(issue => out.push(`<li>${escapeHtml(issue)}</li>`));
     out.push(`</ul>`);
   }
   return out.join("");

@@ -1,6 +1,6 @@
 "use strict";
 
-import { dd, safe } from "../../html-utils.js";
+import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import type { ElfParseResult, ElfTlsInfo } from "../../analyzers/elf/types.js";
 import { formatElfHex, formatElfList, formatElfMaybeHumanSize } from "./value-format.js";
 
@@ -9,8 +9,8 @@ const renderSegmentsTable = (tls: ElfTlsInfo): string => {
   const rows = tls.segments
     .map(seg => {
       return (
-        `<tr><td>${seg.index}</td><td>${safe(formatElfHex(seg.offset))}</td><td>${safe(formatElfHex(seg.vaddr))}</td>` +
-        `<td>${formatElfMaybeHumanSize(seg.filesz)}</td><td>${formatElfMaybeHumanSize(seg.memsz)}</td><td>${safe(
+        `<tr><td>${seg.index}</td><td>${escapeHtml(formatElfHex(seg.offset))}</td><td>${escapeHtml(formatElfHex(seg.vaddr))}</td>` +
+        `<td>${formatElfMaybeHumanSize(seg.filesz)}</td><td>${formatElfMaybeHumanSize(seg.memsz)}</td><td>${escapeHtml(
           formatElfHex(seg.align)
         )}</td></tr>`
       );
@@ -28,11 +28,11 @@ const renderSectionsTable = (tls: ElfTlsInfo): string => {
   if (!tls.sections.length) return `<div class="smallNote dim">No TLS-flagged sections found.</div>`;
   const rows = tls.sections
     .map(sec => {
-      const name = sec.name ? `<b>${safe(sec.name)}</b>` : `<span class="dim">(unnamed)</span>`;
+      const name = sec.name ? `<b>${escapeHtml(sec.name)}</b>` : `<span class="dim">(unnamed)</span>`;
       return (
-        `<tr><td>${sec.index}</td><td>${name}</td><td>${safe(formatElfHex(sec.offset))}</td><td>${formatElfMaybeHumanSize(
+        `<tr><td>${sec.index}</td><td>${name}</td><td>${escapeHtml(formatElfHex(sec.offset))}</td><td>${formatElfMaybeHumanSize(
           sec.size
-        )}</td><td>${safe(formatElfHex(sec.addr))}</td><td>${formatElfList(sec.flags)}</td></tr>`
+        )}</td><td>${escapeHtml(formatElfHex(sec.addr))}</td><td>${formatElfList(sec.flags)}</td></tr>`
       );
     })
     .join("");
@@ -54,8 +54,8 @@ export function renderElfTls(elf: ElfParseResult, out: string[]): void {
     `<div class="smallNote">Thread-local storage describes per-thread variables and the template copied into each new thread.</div>`
   );
   out.push(`<dl>`);
-  out.push(dd("PT_TLS segments", safe(String(tls.segments.length))));
-  out.push(dd("TLS sections", safe(String(tls.sections.length))));
+  out.push(renderDefinitionRow("PT_TLS segments", escapeHtml(String(tls.segments.length))));
+  out.push(renderDefinitionRow("TLS sections", escapeHtml(String(tls.sections.length))));
   out.push(`</dl>`);
   out.push(renderSegmentsTable(tls));
   out.push(renderSectionsTable(tls));

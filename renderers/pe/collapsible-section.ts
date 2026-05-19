@@ -1,6 +1,6 @@
 "use strict";
 
-import { safe } from "../../html-utils.js";
+import { escapeHtml } from "../../html-utils.js";
 
 const PE_SECTION_DESCRIPTIONS: Record<string, string> = {
   "Architecture directory":
@@ -57,13 +57,13 @@ const PE_SECTION_DESCRIPTIONS: Record<string, string> = {
 
 const renderPeSectionDescription = (title: string): string => {
   const description = PE_SECTION_DESCRIPTIONS[title];
-  return description ? `<div class="smallNote">${safe(description)}</div>` : "";
+  return description ? `<div class="smallNote">${escapeHtml(description)}</div>` : "";
 };
 
 export const renderPeSectionStart = (title: string, summary?: string): string =>
   `<section class="peSection"><details class="peSectionDetails">` +
-  `<summary class="peSectionSummary"><b>${safe(title)}</b>${
-    summary ? ` - ${safe(summary)}` : ""
+  `<summary class="peSectionSummary"><b>${escapeHtml(title)}</b>${
+    summary ? ` - ${escapeHtml(summary)}` : ""
   }</summary><div class="peSectionBody">${renderPeSectionDescription(title)}`;
 
 export const renderPeSectionEnd = (): string => "</div></details></section>";

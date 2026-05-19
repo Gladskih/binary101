@@ -1,6 +1,6 @@
 "use strict";
 
-import { safe } from "../../html-utils.js";
+import { escapeHtml } from "../../html-utils.js";
 import { toHex32 } from "../../binary-utils.js";
 import type { SevenZipFileSummary, SevenZipParseResult } from "../../analyzers/sevenz/index.js";
 import { FILE_FLAG_DEFS, renderFlagsOrNone } from "./flags-view.js";
@@ -67,12 +67,12 @@ const renderFileRow = (
     (file.isEncrypted ? FILE_FLAG_ENCRYPTED : 0) |
     (file.isEmpty ? FILE_FLAG_EMPTY : 0) |
     (file.hasStream === false ? FILE_FLAG_NO_STREAM : 0);
-  return `<tr><td>${file.index}</td><td>${safe(file.name)}</td>` +
-    `<td>${safe(describeFileType(file))}</td><td>${formatSizeDetailed(file.uncompressedSize)}</td>` +
+  return `<tr><td>${file.index}</td><td>${escapeHtml(file.name)}</td>` +
+    `<td>${escapeHtml(describeFileType(file))}</td><td>${formatSizeDetailed(file.uncompressedSize)}</td>` +
     `<td>${formatSizeDetailed(file.packedSize)}</td><td>${formatRatio(file.compressionRatio)}</td>` +
-    `<td>${safe(methodText)}</td><td>${file.crc32 != null ? toHex32(file.crc32, CRC32_HEX_WIDTH) : "-"}</td>` +
-    `<td>${file.modifiedTime ? safe(file.modifiedTime) : "-"}</td>` +
-    `<td>${file.attributes ? safe(file.attributes) : "-"}</td>` +
+    `<td>${escapeHtml(methodText)}</td><td>${file.crc32 != null ? toHex32(file.crc32, CRC32_HEX_WIDTH) : "-"}</td>` +
+    `<td>${file.modifiedTime ? escapeHtml(file.modifiedTime) : "-"}</td>` +
+    `<td>${file.attributes ? escapeHtml(file.attributes) : "-"}</td>` +
     `<td>${renderFlagsOrNone(flagMask, FILE_FLAG_DEFS)}</td>${renderActionCell(file, showActions)}</tr>`;
 };
 
@@ -84,7 +84,7 @@ const renderFolderMethod = (index: number, coderText: string): string => {
 const renderActionCell = (file: SevenZipFileSummary, showActions: boolean): string => {
   if (!showActions) return "";
   if (file.hasStream === false || file.isDirectory) return "<td>-</td>";
-  if (file.extractError) return `<td><span class="smallNote">${safe(file.extractError)}</span></td>`;
+  if (file.extractError) return `<td><span class="smallNote">${escapeHtml(file.extractError)}</span></td>`;
   return `<td><button type="button" class="tableButton sevenZipExtractButton" ` +
     `data-sevenzip-entry="${file.index}">Extract</button></td>`;
 };

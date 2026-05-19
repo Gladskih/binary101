@@ -1,6 +1,6 @@
 "use strict";
 
-import { safe } from "../../html-utils.js";
+import { escapeHtml } from "../../html-utils.js";
 import { toHex32 } from "../../binary-utils.js";
 
 export const ARCHIVE_FLAG_DEFS: Array<[number, string, string]> = [
@@ -31,7 +31,7 @@ export const renderFlagsOrNone = (
     const label = explanation ? `${name} - ${explanation}` : name;
     const tooltip = `${label} (${toHex32(bit, 4)})`;
     parts.push(
-      `<span class="opt ${isSet ? "sel" : "dim"}" title="${safe(tooltip)}">${name}</span>`
+      `<span class="opt ${isSet ? "sel" : "dim"}" title="${escapeHtml(tooltip)}">${name}</span>`
     );
   });
   return `<div class="optionsRow">${parts.join("")}</div>`;

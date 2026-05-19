@@ -1,6 +1,6 @@
 "use strict";
 
-import { dd, safe } from "../../html-utils.js";
+import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import type { MachOCodeSignature } from "../../analyzers/macho/types.js";
 import {
   codeDirectoryExecSegLabels,
@@ -14,32 +14,32 @@ import { formatByteSize, formatFileOffset, formatHex, formatList } from "./value
 
 const renderCodeSignature = (signature: MachOCodeSignature, imageOffset = 0): string => {
   const details: string[] = [
-    dd(
+    renderDefinitionRow(
       "Blob",
-      safe(`${codeSignatureBlobLabel(signature.magic)} @ ${formatFileOffset(imageOffset, signature.dataoff)}`)
+      escapeHtml(`${codeSignatureBlobLabel(signature.magic)} @ ${formatFileOffset(imageOffset, signature.dataoff)}`)
     ),
-    dd("Size", safe(formatByteSize(signature.datasize)))
+    renderDefinitionRow("Size", escapeHtml(formatByteSize(signature.datasize)))
   ];
-  if (signature.blobCount != null) details.push(dd("Indexed blobs", safe(String(signature.blobCount))));
+  if (signature.blobCount != null) details.push(renderDefinitionRow("Indexed blobs", escapeHtml(String(signature.blobCount))));
   if (signature.codeDirectory) {
     const codeDirectory = signature.codeDirectory;
-    details.push(dd("Identifier", `<span class="mono">${safe(codeDirectory.identifier || "-")}</span>`));
+    details.push(renderDefinitionRow("Identifier", `<span class="mono">${escapeHtml(codeDirectory.identifier || "-")}</span>`));
     if (codeDirectory.teamIdentifier) {
-      details.push(dd("Team", `<span class="mono">${safe(codeDirectory.teamIdentifier)}</span>`));
+      details.push(renderDefinitionRow("Team", `<span class="mono">${escapeHtml(codeDirectory.teamIdentifier)}</span>`));
     }
     details.push(
-      dd(
+      renderDefinitionRow(
         "CodeDirectory",
-        safe(
+        escapeHtml(
           `v${formatHex(codeDirectory.version)}; ${codeDirectoryHashLabel(codeDirectory.hashType)}; ` +
             `${codeDirectory.nCodeSlots} code slots`
         )
       )
     );
-    details.push(dd("Flags", formatList(codeDirectoryFlagLabels(codeDirectory.flags))));
+    details.push(renderDefinitionRow("Flags", formatList(codeDirectoryFlagLabels(codeDirectory.flags))));
     const execSegLabels = codeDirectoryExecSegLabels(codeDirectory.execSegFlags);
-    if (execSegLabels.length) details.push(dd("Exec segment flags", formatList(execSegLabels)));
-    details.push(dd("Page size", safe(pageSizeLabel(codeDirectory.pageSizeShift))));
+    if (execSegLabels.length) details.push(renderDefinitionRow("Exec segment flags", formatList(execSegLabels)));
+    details.push(renderDefinitionRow("Page size", escapeHtml(pageSizeLabel(codeDirectory.pageSizeShift))));
   }
   const slots = !signature.slots.length
     ? ""
@@ -47,10 +47,10 @@ const renderCodeSignature = (signature: MachOCodeSignature, imageOffset = 0): st
         signature.slots
           .map(
             slot =>
-              `<tr><td><span class="mono">${safe(formatHex(slot.offset))}</span></td>` +
-              `<td>${safe(codeSignatureSlotLabelFor(slot.type))}</td>` +
-              `<td>${safe(slot.magic != null ? codeSignatureBlobLabel(slot.magic) : "-")}</td>` +
-              `<td>${safe(slot.length != null ? String(slot.length) : "-")}</td></tr>`
+              `<tr><td><span class="mono">${escapeHtml(formatHex(slot.offset))}</span></td>` +
+              `<td>${escapeHtml(codeSignatureSlotLabelFor(slot.type))}</td>` +
+              `<td>${escapeHtml(slot.magic != null ? codeSignatureBlobLabel(slot.magic) : "-")}</td>` +
+              `<td>${escapeHtml(slot.length != null ? String(slot.length) : "-")}</td></tr>`
           )
           .join("") +
         `</tbody></table></div>`;

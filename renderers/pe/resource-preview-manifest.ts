@@ -6,7 +6,7 @@ import type {
   ResourceManifestTreeAttribute,
   ResourceManifestTreeNode
 } from "../../analyzers/pe/resources/preview/types.js";
-import { safe } from "../../html-utils.js";
+import { escapeHtml } from "../../html-utils.js";
 
 const SUPPORTED_OS_LABELS = new Map<string, string>([
   ["{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}", "Windows 10 / 11; Windows Server 2016 / 2019 / 2022"],
@@ -30,7 +30,7 @@ const renderAttributeList = (node: ResourceManifestTreeNode): string => {
   const items = node.attributes
     .map(attribute => {
       const supportedOsLabel = getSupportedOsLabel(node, attribute);
-      return `<li><span class="mono">@${safe(attribute.name)}</span>: ${safe(attribute.value)}${supportedOsLabel ? ` <span class="smallNote">(${safe(supportedOsLabel)})</span>` : ""}</li>`;
+      return `<li><span class="mono">@${escapeHtml(attribute.name)}</span>: ${escapeHtml(attribute.value)}${supportedOsLabel ? ` <span class="smallNote">(${escapeHtml(supportedOsLabel)})</span>` : ""}</li>`;
     })
     .join("");
   return `<ul class="smallNote" style="padding-left:1.1rem;margin:.25rem 0 0 0">${items}</ul>`;
@@ -38,11 +38,11 @@ const renderAttributeList = (node: ResourceManifestTreeNode): string => {
 
 const renderNodeText = (text: string | null): string =>
   text
-    ? `<div class="mono smallNote" style="margin-top:.25rem;white-space:pre-wrap;word-break:break-word">${safe(text)}</div>`
+    ? `<div class="mono smallNote" style="margin-top:.25rem;white-space:pre-wrap;word-break:break-word">${escapeHtml(text)}</div>`
     : "";
 
 const renderNodeSummary = (node: ResourceManifestTreeNode): string => {
-  const parts = [`<span class="mono">&lt;${safe(node.name)}&gt;</span>`];
+  const parts = [`<span class="mono">&lt;${escapeHtml(node.name)}&gt;</span>`];
   if (node.attributes.length) {
     parts.push(
       `<span class="smallNote">${node.attributes.length} attr${node.attributes.length === 1 ? "" : "s"}</span>`
@@ -54,7 +54,7 @@ const renderNodeSummary = (node: ResourceManifestTreeNode): string => {
     );
   } else if (node.text) {
     const preview = node.text.length > 48 ? `${node.text.slice(0, 45)}...` : node.text;
-    parts.push(`<span class="smallNote">${safe(preview)}</span>`);
+    parts.push(`<span class="smallNote">${escapeHtml(preview)}</span>`);
   }
   return parts.join(" ");
 };
@@ -174,7 +174,7 @@ const renderManifestXmlSource = (textPreview: string): string =>
   `<summary style="cursor:pointer"><b>XML source</b></summary>` +
   `<div data-manifest-copy-source class="mono smallNote" ` +
   `style="margin-top:.35rem;white-space:pre-wrap;word-break:break-word">` +
-  `${safe(textPreview)}</div>` +
+  `${escapeHtml(textPreview)}</div>` +
   `</details>` +
   renderManifestCopyButton() +
   `</div>` +
@@ -203,7 +203,7 @@ const renderManifestCheckItems = (
       `<span class="manifestCheckIcon" aria-hidden="true">${
         status === "pass" ? "&#10003;" : "&#9888;"
       }</span>` +
-      `<span>${safe(value)}</span></li>`
+      `<span>${escapeHtml(value)}</span></li>`
     )
     .join("");
 
@@ -220,7 +220,7 @@ const renderManifestValidation = (
     `<div class="manifestChecksHeader">` +
     `<b>Manifest cross-check</b>` +
     `<span class="manifestChecksStatus manifestChecksStatus--${consistent ? "pass" : "fail"}">` +
-    `${safe(statusLabel)}</span></div>` +
+    `${escapeHtml(statusLabel)}</span></div>` +
     `<div class="smallNote">Checks run: ${manifestValidation.checkedCount}; ` +
     `validated: ${manifestValidation.validated.length}; warnings: ${manifestValidation.warnings.length}.</div>` +
     `<ul class="manifestCheckList">${checks || `<li class="manifestCheckItem">No check details.</li>`}</ul>` +

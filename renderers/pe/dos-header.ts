@@ -1,7 +1,7 @@
 "use strict";
 
 import { hex } from "../../binary-utils.js";
-import { safe } from "../../html-utils.js";
+import { escapeHtml } from "../../html-utils.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import { renderRichHeader } from "./rich-header.js";
@@ -9,8 +9,8 @@ import { renderRichHeader } from "./rich-header.js";
 type DosHeaderField = readonly [label: string, value: string, hint: string];
 
 const renderDosHeaderRow = (label: string, value: string, hint: string): string =>
-  `<tr><th scope="row">${safe(label)}</th><td>${safe(value)}</td>` +
-  `<td class="smallNote" style="margin:0;font-family:inherit">${safe(hint)}</td></tr>`;
+  `<tr><th scope="row">${escapeHtml(label)}</th><td>${escapeHtml(value)}</td>` +
+  `<td class="smallNote" style="margin:0;font-family:inherit">${escapeHtml(hint)}</td></tr>`;
 
 const renderDosHeaderFields = (pe: PeParseResult, out: string[]): void => {
   out.push(
@@ -46,9 +46,9 @@ const renderDosHeaderFields = (pe: PeParseResult, out: string[]): void => {
 
 const renderDosStub = (pe: PeParseResult, out: string[]): void => {
   const stub = pe.dos.stub;
-  out.push(`<div class="smallNote">DOS stub: ${stub.kind}${stub.note ? ` - ${safe(stub.note)}` : ""}</div>`);
+  out.push(`<div class="smallNote">DOS stub: ${stub.kind}${stub.note ? ` - ${escapeHtml(stub.note)}` : ""}</div>`);
   if (stub.strings?.length) {
-    out.push(`<div class="mono smallNote">${stub.strings.map(x => `<div>${safe(String(x))}</div>`).join("")}</div>`);
+    out.push(`<div class="mono smallNote">${stub.strings.map(x => `<div>${escapeHtml(String(x))}</div>`).join("")}</div>`);
   }
   if (pe.dos.rich) {
     out.push(`<div style="margin-top:.75rem">`);

@@ -1,7 +1,7 @@
 "use strict";
 
 import { formatHumanSize, toHex32, toHex64 } from "../../binary-utils.js";
-import { dd, rowFlags, safe } from "../../html-utils.js";
+import { renderDefinitionRow, renderFlagChips, escapeHtml } from "../../html-utils.js";
 import type {
   Iso9660DirectoryEntrySummary,
   Iso9660ParseResult,
@@ -30,7 +30,7 @@ const formatLba = (lba: number | null | undefined, blockSize: number): string =>
 const formatBlocksSize = (blocks: number | null | undefined, blockSize: number): string => {
   if (blocks == null) return "-";
   const bytes = blocks * blockSize;
-  return `${blocks} blocks (${safe(formatHumanSize(bytes))})`;
+  return `${blocks} blocks (${escapeHtml(formatHumanSize(bytes))})`;
 };
 
 const renderDescriptors = (iso: Iso9660ParseResult, out: string[]): void => {
@@ -44,9 +44,9 @@ const renderDescriptors = (iso: Iso9660ParseResult, out: string[]): void => {
     out.push(
       "<tr>" +
         `<td>${index}</td>` +
-        `<td>${safe(d.typeName)}</td>` +
-        `<td>${safe(String(d.sector))}</td>` +
-        `<td>${safe(toHex32(d.byteOffset >>> 0, 8))}</td>` +
+        `<td>${escapeHtml(d.typeName)}</td>` +
+        `<td>${escapeHtml(String(d.sector))}</td>` +
+        `<td>${escapeHtml(toHex32(d.byteOffset >>> 0, 8))}</td>` +
       "</tr>"
     );
   });
@@ -62,25 +62,25 @@ const renderVolumeDescriptor = (
 ): void => {
   if (!vd) return;
   out.push("<section>");
-  out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">${safe(label)}</h4>`);
+  out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">${escapeHtml(label)}</h4>`);
   out.push("<dl>");
-  if (opts?.encoding) out.push(dd("Encoding", safe(opts.encoding)));
-  if (opts?.escapeSequences != null) out.push(dd("Escape sequences", safe(opts.escapeSequences || "-")));
-  out.push(dd("System identifier", safe(vd.systemIdentifier || "-")));
-  out.push(dd("Volume identifier", safe(vd.volumeIdentifier || "-")));
-  out.push(dd("Volume space size", formatBlocksSize(vd.volumeSpaceSizeBlocks, vd.logicalBlockSize || 2048)));
-  out.push(dd("Logical block size", safe(vd.logicalBlockSize != null ? `${vd.logicalBlockSize} bytes` : "-")));
-  out.push(dd("Path table size", safe(vd.pathTableSize != null ? `${vd.pathTableSize} bytes` : "-")));
-  out.push(dd("Type L path table", safe(vd.typeLPathTableLocation != null ? String(vd.typeLPathTableLocation) : "-")));
-  out.push(dd("Root directory extent", safe(formatLba(vd.rootDirectoryRecord?.extentLocationLba ?? null, vd.logicalBlockSize || 2048))));
-  out.push(dd("Root directory size", safe(vd.rootDirectoryRecord?.dataLength != null ? formatHumanSize(vd.rootDirectoryRecord.dataLength) : "-")));
-  out.push(dd("Publisher", safe(vd.publisherIdentifier || "-")));
-  out.push(dd("Data preparer", safe(vd.dataPreparerIdentifier || "-")));
-  out.push(dd("Application", safe(vd.applicationIdentifier || "-")));
-  out.push(dd("Created", safe(vd.volumeCreationDateTime || "-")));
-  out.push(dd("Modified", safe(vd.volumeModificationDateTime || "-")));
-  out.push(dd("Expires", safe(vd.volumeExpirationDateTime || "-")));
-  out.push(dd("Effective", safe(vd.volumeEffectiveDateTime || "-")));
+  if (opts?.encoding) out.push(renderDefinitionRow("Encoding", escapeHtml(opts.encoding)));
+  if (opts?.escapeSequences != null) out.push(renderDefinitionRow("Escape sequences", escapeHtml(opts.escapeSequences || "-")));
+  out.push(renderDefinitionRow("System identifier", escapeHtml(vd.systemIdentifier || "-")));
+  out.push(renderDefinitionRow("Volume identifier", escapeHtml(vd.volumeIdentifier || "-")));
+  out.push(renderDefinitionRow("Volume space size", formatBlocksSize(vd.volumeSpaceSizeBlocks, vd.logicalBlockSize || 2048)));
+  out.push(renderDefinitionRow("Logical block size", escapeHtml(vd.logicalBlockSize != null ? `${vd.logicalBlockSize} bytes` : "-")));
+  out.push(renderDefinitionRow("Path table size", escapeHtml(vd.pathTableSize != null ? `${vd.pathTableSize} bytes` : "-")));
+  out.push(renderDefinitionRow("Type L path table", escapeHtml(vd.typeLPathTableLocation != null ? String(vd.typeLPathTableLocation) : "-")));
+  out.push(renderDefinitionRow("Root directory extent", escapeHtml(formatLba(vd.rootDirectoryRecord?.extentLocationLba ?? null, vd.logicalBlockSize || 2048))));
+  out.push(renderDefinitionRow("Root directory size", escapeHtml(vd.rootDirectoryRecord?.dataLength != null ? formatHumanSize(vd.rootDirectoryRecord.dataLength) : "-")));
+  out.push(renderDefinitionRow("Publisher", escapeHtml(vd.publisherIdentifier || "-")));
+  out.push(renderDefinitionRow("Data preparer", escapeHtml(vd.dataPreparerIdentifier || "-")));
+  out.push(renderDefinitionRow("Application", escapeHtml(vd.applicationIdentifier || "-")));
+  out.push(renderDefinitionRow("Created", escapeHtml(vd.volumeCreationDateTime || "-")));
+  out.push(renderDefinitionRow("Modified", escapeHtml(vd.volumeModificationDateTime || "-")));
+  out.push(renderDefinitionRow("Expires", escapeHtml(vd.volumeExpirationDateTime || "-")));
+  out.push(renderDefinitionRow("Effective", escapeHtml(vd.volumeEffectiveDateTime || "-")));
   out.push("</dl>");
   out.push("</section>");
 };
@@ -91,10 +91,10 @@ const renderBootRecords = (iso: Iso9660ParseResult, out: string[]): void => {
   out.push('<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Boot records</h4>');
   out.push("<dl>");
   const first = iso.bootRecords[0];
-  out.push(dd("Count", safe(String(iso.bootRecords.length))));
-  out.push(dd("Boot system identifier", safe(first?.bootSystemIdentifier || "-")));
-  out.push(dd("Boot identifier", safe(first?.bootIdentifier || "-")));
-  out.push(dd("El Torito catalog LBA", safe(first?.elToritoCatalogLba != null ? String(first.elToritoCatalogLba) : "-")));
+  out.push(renderDefinitionRow("Count", escapeHtml(String(iso.bootRecords.length))));
+  out.push(renderDefinitionRow("Boot system identifier", escapeHtml(first?.bootSystemIdentifier || "-")));
+  out.push(renderDefinitionRow("Boot identifier", escapeHtml(first?.bootIdentifier || "-")));
+  out.push(renderDefinitionRow("El Torito catalog LBA", escapeHtml(first?.elToritoCatalogLba != null ? String(first.elToritoCatalogLba) : "-")));
   out.push("</dl>");
   out.push("</section>");
 };
@@ -105,10 +105,10 @@ const renderPathTable = (iso: Iso9660ParseResult, out: string[]): void => {
   out.push("<section>");
   out.push('<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Path table (Type L)</h4>');
   out.push("<dl>");
-  out.push(dd("Location (LBA)", safe(pathTable.locationLba != null ? String(pathTable.locationLba) : "-")));
-  out.push(dd("Declared size", safe(pathTable.declaredSize != null ? formatHumanSize(pathTable.declaredSize) : "-")));
-  out.push(dd("Bytes scanned", safe(formatHumanSize(pathTable.bytesRead))));
-  out.push(dd("Entries (parsed)", safe(String(pathTable.entryCount))));
+  out.push(renderDefinitionRow("Location (LBA)", escapeHtml(pathTable.locationLba != null ? String(pathTable.locationLba) : "-")));
+  out.push(renderDefinitionRow("Declared size", escapeHtml(pathTable.declaredSize != null ? formatHumanSize(pathTable.declaredSize) : "-")));
+  out.push(renderDefinitionRow("Bytes scanned", escapeHtml(formatHumanSize(pathTable.bytesRead))));
+  out.push(renderDefinitionRow("Entries (parsed)", escapeHtml(String(pathTable.entryCount))));
   out.push("</dl>");
 
   if (pathTable.entries.length) {
@@ -118,16 +118,16 @@ const renderPathTable = (iso: Iso9660ParseResult, out: string[]): void => {
     pathTable.entries.forEach((entry: Iso9660PathTableEntry) => {
       out.push(
         "<tr>" +
-          `<td>${safe(String(entry.index))}</td>` +
-          `<td>${safe(entry.identifier || "(unnamed)")}</td>` +
-          `<td>${safe(entry.extentLocationLba != null ? String(entry.extentLocationLba) : "-")}</td>` +
-          `<td>${safe(entry.parentDirectoryIndex != null ? String(entry.parentDirectoryIndex) : "-")}</td>` +
+          `<td>${escapeHtml(String(entry.index))}</td>` +
+          `<td>${escapeHtml(entry.identifier || "(unnamed)")}</td>` +
+          `<td>${escapeHtml(entry.extentLocationLba != null ? String(entry.extentLocationLba) : "-")}</td>` +
+          `<td>${escapeHtml(entry.parentDirectoryIndex != null ? String(entry.parentDirectoryIndex) : "-")}</td>` +
         "</tr>"
       );
     });
     out.push("</tbody></table>");
     if (pathTable.omittedEntries) {
-      out.push(`<div class="smallNote">${safe(String(pathTable.omittedEntries))} more entries not shown.</div>`);
+      out.push(`<div class="smallNote">${escapeHtml(String(pathTable.omittedEntries))} more entries not shown.</div>`);
     }
   }
   out.push("</section>");
@@ -139,10 +139,10 @@ const renderRootDirectory = (iso: Iso9660ParseResult, out: string[]): void => {
   out.push("<section>");
   out.push('<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Root directory</h4>');
   out.push("<dl>");
-  out.push(dd("Extent", safe(formatLba(root.extentLocationLba, iso.selectedBlockSize))));
-  out.push(dd("Declared size", safe(root.declaredSize != null ? formatHumanSize(root.declaredSize) : "-")));
-  out.push(dd("Bytes scanned", safe(formatHumanSize(root.bytesRead))));
-  out.push(dd("Entries (parsed)", safe(String(root.totalEntries))));
+  out.push(renderDefinitionRow("Extent", escapeHtml(formatLba(root.extentLocationLba, iso.selectedBlockSize))));
+  out.push(renderDefinitionRow("Declared size", escapeHtml(root.declaredSize != null ? formatHumanSize(root.declaredSize) : "-")));
+  out.push(renderDefinitionRow("Bytes scanned", escapeHtml(formatHumanSize(root.bytesRead))));
+  out.push(renderDefinitionRow("Entries (parsed)", escapeHtml(String(root.totalEntries))));
   out.push("</dl>");
 
   if (root.entries.length) {
@@ -154,11 +154,11 @@ const renderRootDirectory = (iso: Iso9660ParseResult, out: string[]): void => {
         if (entry.extentLocationLba == null) return "<span class=\"smallNote\">Unavailable</span>";
         const targetId = `isoDir-${index}`;
         const path = entry.name ? `/${entry.name}` : "/";
-        const sizeAttr = entry.dataLength != null ? ` data-iso-size="${safe(String(entry.dataLength))}"` : "";
+        const sizeAttr = entry.dataLength != null ? ` data-iso-size="${escapeHtml(String(entry.dataLength))}"` : "";
         return (
           `<button type="button" class="tableButton isoDirToggleButton" data-iso-action="toggle-dir"` +
-            ` data-iso-lba="${safe(String(entry.extentLocationLba))}"${sizeAttr}` +
-            ` data-iso-path="${safe(path)}" data-iso-depth="0" data-iso-target="${safe(targetId)}">Expand</button>`
+            ` data-iso-lba="${escapeHtml(String(entry.extentLocationLba))}"${sizeAttr}` +
+            ` data-iso-path="${escapeHtml(path)}" data-iso-depth="0" data-iso-target="${escapeHtml(targetId)}">Expand</button>`
         );
       }
       if (entry.kind !== "file") return "<span class=\"smallNote\">-</span>";
@@ -170,33 +170,33 @@ const renderRootDirectory = (iso: Iso9660ParseResult, out: string[]): void => {
       }
       return (
         `<button type="button" class="tableButton isoExtractButton" data-iso-action="extract"` +
-          ` data-iso-entry="${safe(String(index))}">Download</button>`
+          ` data-iso-entry="${escapeHtml(String(index))}">Download</button>`
       );
     };
     root.entries.forEach((entry: Iso9660DirectoryEntrySummary, index: number) => {
       const childRowTarget = entry.kind === "directory" && entry.extentLocationLba != null ? `isoDir-${index}` : null;
       out.push(
         "<tr>" +
-          `<td>${safe(entry.name || "(unnamed)")}</td>` +
-          `<td>${safe(entry.kind)}</td>` +
-          `<td>${safe(entry.dataLength != null ? formatHumanSize(entry.dataLength) : "-")}</td>` +
-          `<td>${safe(formatLba(entry.extentLocationLba, iso.selectedBlockSize))}</td>` +
-          `<td>${rowFlags(entry.fileFlags, FILE_FLAGS)}</td>` +
-          `<td>${safe(entry.recordingDateTime || "-")}</td>` +
+          `<td>${escapeHtml(entry.name || "(unnamed)")}</td>` +
+          `<td>${escapeHtml(entry.kind)}</td>` +
+          `<td>${escapeHtml(entry.dataLength != null ? formatHumanSize(entry.dataLength) : "-")}</td>` +
+          `<td>${escapeHtml(formatLba(entry.extentLocationLba, iso.selectedBlockSize))}</td>` +
+          `<td>${renderFlagChips(entry.fileFlags, FILE_FLAGS)}</td>` +
+          `<td>${escapeHtml(entry.recordingDateTime || "-")}</td>` +
           `<td>${renderExtractAction(entry, index)}</td>` +
         "</tr>"
       );
       if (childRowTarget) {
         out.push(
           `<tr hidden><td colspan="7">` +
-            `<div id="${safe(childRowTarget)}" class="isoDirChildren" data-iso-loaded="0"></div>` +
+            `<div id="${escapeHtml(childRowTarget)}" class="isoDirChildren" data-iso-loaded="0"></div>` +
           `</td></tr>`
         );
       }
     });
     out.push("</tbody></table>");
     if (root.omittedEntries) {
-      out.push(`<div class="smallNote">${safe(String(root.omittedEntries))} more entries not shown.</div>`);
+      out.push(`<div class="smallNote">${escapeHtml(String(root.omittedEntries))} more entries not shown.</div>`);
     }
   }
   out.push("</section>");
@@ -208,11 +208,11 @@ const renderTraversal = (iso: Iso9660ParseResult, out: string[]): void => {
   out.push("<section>");
   out.push('<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Directory traversal</h4>');
   out.push("<dl>");
-  out.push(dd("Directories scanned", safe(String(traversal.scannedDirectories))));
-  out.push(dd("Files scanned", safe(String(traversal.scannedFiles))));
-  out.push(dd("Max depth", safe(String(traversal.maxDepth))));
-  out.push(dd("Loop detections", safe(String(traversal.loopDetections))));
-  if (traversal.omittedDirectories) out.push(dd("Directories omitted", safe(String(traversal.omittedDirectories))));
+  out.push(renderDefinitionRow("Directories scanned", escapeHtml(String(traversal.scannedDirectories))));
+  out.push(renderDefinitionRow("Files scanned", escapeHtml(String(traversal.scannedFiles))));
+  out.push(renderDefinitionRow("Max depth", escapeHtml(String(traversal.maxDepth))));
+  out.push(renderDefinitionRow("Loop detections", escapeHtml(String(traversal.loopDetections))));
+  if (traversal.omittedDirectories) out.push(renderDefinitionRow("Directories omitted", escapeHtml(String(traversal.omittedDirectories))));
   out.push("</dl>");
   out.push("</section>");
 };
@@ -223,7 +223,7 @@ const renderIssues = (iso: Iso9660ParseResult, out: string[]): void => {
   out.push("<section>");
   out.push('<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Notices</h4>');
   out.push("<ul>");
-  issues.forEach(issue => out.push(`<li>${safe(issue)}</li>`));
+  issues.forEach(issue => out.push(`<li>${escapeHtml(issue)}</li>`));
   out.push("</ul>");
   out.push("</section>");
 };
@@ -237,15 +237,15 @@ export const renderIso9660 = (iso: Iso9660ParseResult | null): string => {
   out.push("<section>");
   out.push('<h4 style="margin:0 0 .5rem 0;font-size:.9rem">ISO-9660 overview</h4>');
   out.push("<dl>");
-  out.push(dd("File size", safe(formatHumanSize(iso.fileSize))));
-  out.push(dd("Selected encoding", safe(iso.selectedEncoding)));
-  out.push(dd("Logical block size", safe(`${iso.selectedBlockSize} bytes`)));
-  if (selected?.volumeIdentifier) out.push(dd("Volume identifier", safe(selected.volumeIdentifier)));
-  if (selected?.systemIdentifier) out.push(dd("System identifier", safe(selected.systemIdentifier)));
+  out.push(renderDefinitionRow("File size", escapeHtml(formatHumanSize(iso.fileSize))));
+  out.push(renderDefinitionRow("Selected encoding", escapeHtml(iso.selectedEncoding)));
+  out.push(renderDefinitionRow("Logical block size", escapeHtml(`${iso.selectedBlockSize} bytes`)));
+  if (selected?.volumeIdentifier) out.push(renderDefinitionRow("Volume identifier", escapeHtml(selected.volumeIdentifier)));
+  if (selected?.systemIdentifier) out.push(renderDefinitionRow("System identifier", escapeHtml(selected.systemIdentifier)));
   if (selected?.volumeSpaceSizeBlocks != null) {
-    out.push(dd("Volume space", formatBlocksSize(selected.volumeSpaceSizeBlocks, iso.selectedBlockSize)));
+    out.push(renderDefinitionRow("Volume space", formatBlocksSize(selected.volumeSpaceSizeBlocks, iso.selectedBlockSize)));
   }
-  out.push(dd("Volume partitions", safe(String(iso.volumePartitionDescriptorCount))));
+  out.push(renderDefinitionRow("Volume partitions", escapeHtml(String(iso.volumePartitionDescriptorCount))));
   out.push("</dl>");
   out.push("</section>");
 

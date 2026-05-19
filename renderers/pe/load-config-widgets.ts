@@ -1,7 +1,7 @@
 "use strict";
 
 import { hex, humanSize } from "../../binary-utils.js";
-import { rowFlags, safe } from "../../html-utils.js";
+import { renderFlagChips, escapeHtml } from "../../html-utils.js";
 import { GUARD_FLAGS } from "../../analyzers/pe/constants.js";
 import type { PeLoadConfig, PeLoadConfigTable } from "../../analyzers/pe/load-config/index.js";
 import type {
@@ -76,12 +76,12 @@ const shouldRenderAddressRows = (table: PeLoadConfigTable, sections: PeSection[]
 
 const renderAddressTableSummaryRow = (table: PeLoadConfigTable, sections: PeSection[]): string => {
   const sectionName = table.entries.length ? formatSectionForRva(sections, table.entries[0]?.rva ?? 0) : "-";
-  return `<tr><th scope="row">${safe(table.name)}</th>` +
+  return `<tr><th scope="row">${escapeHtml(table.name)}</th>` +
     `<td class="num">${table.entries.length}</td>` +
     `<td class="num">${table.declaredCount}</td>` +
-    `<td>${safe(sectionName)}</td>` +
+    `<td>${escapeHtml(sectionName)}</td>` +
     `<td class="num">${table.entrySize} bytes</td>` +
-    `<td>${table.tableRva == null ? "-" : safe(hex(table.tableRva, 8))}</td></tr>`;
+    `<td>${table.tableRva == null ? "-" : escapeHtml(hex(table.tableRva, 8))}</td></tr>`;
 };
 
 const renderAddressTableAggregate = (
@@ -102,9 +102,9 @@ export const getDynamicRelocationSymbolName = (symbol: bigint): string =>
 
 const renderDynamicRelocationMeta = (dr: PeDynamicRelocations, types: bigint[]): string =>
   `<div class="loadConfigDynamicMeta">` +
-  `<span><b>Version</b> ${safe(hex(dr.version, 8))}</span> ` +
-  `<span><b>DataSize</b> ${safe(humanSize(dr.dataSize))}</span> ` +
-  `<span><b>Symbols</b> ${safe(formatDynamicRelocationTypes(types))}</span>` +
+  `<span><b>Version</b> ${escapeHtml(hex(dr.version, 8))}</span> ` +
+  `<span><b>DataSize</b> ${escapeHtml(humanSize(dr.dataSize))}</span> ` +
+  `<span><b>Symbols</b> ${escapeHtml(formatDynamicRelocationTypes(types))}</span>` +
   `</div>`;
 
 const renderDynamicRelocationSummaryCells = (entry: PeDynamicRelocationEntry | null): string[] => {
@@ -133,8 +133,8 @@ const renderDynamicRelocationFlatSummary = (
     ? "loadConfigStatusOk"
     : "loadConfigStatusWarn";
   const truncationRow = truncationCells.length
-    ? `<td>${safe(truncationCells[0])}</td><td>${safe(truncationCells[1])}</td>` +
-      `<td class="${truncationStatusClass}">${safe(truncationCells[2])}</td>`
+    ? `<td>${escapeHtml(truncationCells[0])}</td><td>${escapeHtml(truncationCells[1])}</td>` +
+      `<td class="${truncationStatusClass}">${escapeHtml(truncationCells[2])}</td>`
     : "";
   return `<div class="tableWrap loadConfigSummaryTableWrap"><table ` +
     `class="table loadConfigSummaryTable loadConfigDynamicSummaryTable" ` +
@@ -144,8 +144,8 @@ const renderDynamicRelocationFlatSummary = (
     `<th scope="col">Symbol</th><th scope="col">Name</th>` +
     `${truncationHeaders}</tr></thead><tbody><tr>` +
     `<th scope="row">DynamicRelocations</th><td>${dr.version}</td>` +
-    `<td class="num">${dr.entries.length}</td><td>${safe(humanSize(dr.dataSize))}</td>` +
-    `${renderDynamicRelocationSummaryCells(entry).map(value => `<td>${safe(value)}</td>`).join("")}` +
+    `<td class="num">${dr.entries.length}</td><td>${escapeHtml(humanSize(dr.dataSize))}</td>` +
+    `${renderDynamicRelocationSummaryCells(entry).map(value => `<td>${escapeHtml(value)}</td>`).join("")}` +
     `${truncationRow}</tr></tbody></table></div>${warningHtml}`;
 };
 
@@ -153,10 +153,10 @@ const renderSingleDynamicRelocationEntry = (entry: PeDynamicRelocationEntry): st
   const status = dynamicRelocationIsComplete(entry) ? "complete" : "truncated";
   return `<div class="loadConfigDynamicEntrySummary">` +
     `<span><b>Entry</b> 1</span> ` +
-    `<span><b>Kind</b> ${safe(entry.kind)}</span> ` +
-    `<span><b>Symbol</b> ${safe(formatDynamicRelocationSymbol(entry))}</span> ` +
-    `<span><b>Size</b> ${safe(humanSize(dynamicRelocationPayloadSize(entry)))}</span> ` +
-    `<span><b>Available</b> ${safe(humanSize(entry.availableBytes))}</span> ` +
+    `<span><b>Kind</b> ${escapeHtml(entry.kind)}</span> ` +
+    `<span><b>Symbol</b> ${escapeHtml(formatDynamicRelocationSymbol(entry))}</span> ` +
+    `<span><b>Size</b> ${escapeHtml(humanSize(dynamicRelocationPayloadSize(entry)))}</span> ` +
+    `<span><b>Available</b> ${escapeHtml(humanSize(entry.availableBytes))}</span> ` +
     `<span class="loadConfigDynamicStatus--${status}"><b>Status</b> ${status}</span>` +
     `</div>`;
 };
@@ -167,10 +167,10 @@ const renderDynamicRelocationEntries = (entries: PeDynamicRelocationEntry[]): st
   if (entries.length === 1 && firstEntry) return renderSingleDynamicRelocationEntry(firstEntry);
   const rows = entries.map((entry, index) => {
     const status = dynamicRelocationIsComplete(entry) ? "complete" : "truncated";
-    return `<tr><td>${index + 1}</td><td>${safe(formatDynamicRelocationSymbol(entry))}</td>` +
-      `<td>${safe(formatDynamicRelocationSymbolName(entry))}</td>` +
-      `<td>${safe(humanSize(dynamicRelocationPayloadSize(entry)))}</td>` +
-      `<td>${safe(humanSize(entry.availableBytes))}</td><td>${status}</td></tr>`;
+    return `<tr><td>${index + 1}</td><td>${escapeHtml(formatDynamicRelocationSymbol(entry))}</td>` +
+      `<td>${escapeHtml(formatDynamicRelocationSymbolName(entry))}</td>` +
+      `<td>${escapeHtml(humanSize(dynamicRelocationPayloadSize(entry)))}</td>` +
+      `<td>${escapeHtml(humanSize(entry.availableBytes))}</td><td>${status}</td></tr>`;
   });
   return `<div class="tableWrap loadConfigDynamicTable"><table class="table">` +
     `<thead><tr><th>#</th><th>Symbol</th><th>Name</th><th>Payload</th>` +
@@ -183,11 +183,11 @@ export const renderLoadConfigDynamicRelocations = (dr: PeDynamicRelocations): st
   ].sort(compareWideInt);
   const warningHtml = dr.warnings?.length
     ? `<div class="smallNote" style="margin:.35rem 0 0 0;color:var(--warn-fg)">` +
-      `${safe(dr.warnings.join("; "))}</div>`
+      `${escapeHtml(dr.warnings.join("; "))}</div>`
     : "";
   if (dr.entries.length <= 1) return renderDynamicRelocationFlatSummary(dr, warningHtml);
   return `<details class="loadConfigDynamicRelocations"><summary class="loadConfigNestedSummary">` +
-    safe(renderDynamicRelocationTitle(dr)) +
+    escapeHtml(renderDynamicRelocationTitle(dr)) +
     `</summary>${warningHtml}${renderDynamicRelocationMeta(dr, types)}` +
     `${renderDynamicRelocationEntries(dr.entries)}</details>`;
 };
@@ -203,8 +203,8 @@ export const renderLoadConfigGuardFlags = (lc: PeLoadConfig): string => {
     .filter(([bit]) => (guardFlags & bit) !== 0)
     .map(([, name, explanation]) => `${name}: ${explanation ?? "documented GuardFlags bit"}`);
   return `${guardFlags ? hex(guardFlags, 8) : "0"}` +
-    `${rowFlags(guardFlags & 0x0fff_ffff, GUARD_FLAGS)}<div class="optionsRow">${strideChip}</div>` +
-    `<div class="smallNote" style="margin:0">${safe(
+    `${renderFlagChips(guardFlags & 0x0fff_ffff, GUARD_FLAGS)}<div class="optionsRow">${strideChip}</div>` +
+    `<div class="smallNote" style="margin:0">${escapeHtml(
       notes.length
         ? notes.join("; ")
         : "No CFG-related flags are set; high nibble still defines CFG table entry size."
@@ -222,7 +222,7 @@ export const renderLoadConfigChecks = (lc: PeLoadConfig): string => {
         : "manifestCheckItem";
     const detail = check.source ? `${check.detail} Source: ${check.source}.` : check.detail;
     return `<li class="${className}"><span class="manifestCheckIcon">${icon(check.status)}</span>` +
-      `<span><b>${safe(check.title)}</b>: ${safe(detail)}</span></li>`;
+      `<span><b>${escapeHtml(check.title)}</b>: ${escapeHtml(detail)}</span></li>`;
   });
   return `<div class="loadConfigChecks"><div class="smallNote">Load Config cross-checks</div>` +
     `<ul class="manifestCheckList">${items.join("")}</ul></div>`;
@@ -231,7 +231,7 @@ export const renderLoadConfigChecks = (lc: PeLoadConfig): string => {
 const renderAddressTableWarning = (table: PeLoadConfigTable): string =>
   table.warnings?.length
     ? `<div class="smallNote" style="margin:.25rem 0 0 0;color:var(--warn-fg)">` +
-      `${safe(table.warnings.join("; "))}</div>`
+      `${escapeHtml(table.warnings.join("; "))}</div>`
     : "";
 
 const renderDetailedLoadConfigAddressTable = (
@@ -249,17 +249,17 @@ const renderDetailedLoadConfigAddressTable = (
       : "-";
     const notes = getEntryNotes(entry);
     return `<tr><td>${entry.index}</td><td>${hex(entry.rva, 8)}</td>` +
-      `<td>${safe(formatRvaAsVa(imageBase, pointerWidth, entry.rva))}</td>` +
-      `<td>${safe(formatSectionForRva(sections, entry.rva))}</td><td>${safe(metadata)}</td>` +
-      `<td>${notes.length ? safe(notes.join(", ")) : "-"}</td></tr>`;
+      `<td>${escapeHtml(formatRvaAsVa(imageBase, pointerWidth, entry.rva))}</td>` +
+      `<td>${escapeHtml(formatSectionForRva(sections, entry.rva))}</td><td>${escapeHtml(metadata)}</td>` +
+      `<td>${notes.length ? escapeHtml(notes.join(", ")) : "-"}</td></tr>`;
   });
   const details = [
-    ...(note ? [safe(note)] : []),
+    ...(note ? [escapeHtml(note)] : []),
     `Entry size ${table.entrySize} bytes`,
-    `table RVA ${table.tableRva == null ? "-" : safe(hex(table.tableRva, 8))}`,
+    `table RVA ${table.tableRva == null ? "-" : escapeHtml(hex(table.tableRva, 8))}`,
     ...(hiddenCount ? [`showing first ${ADDRESS_TABLE_RENDER_LIMIT}; ${hiddenCount} hidden`] : [])
   ];
-  return `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">${safe(`${table.name} (${table.entries.length}/${table.declaredCount})`)}</summary>` +
+  return `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">${escapeHtml(`${table.name} (${table.entries.length}/${table.declaredCount})`)}</summary>` +
     `<div class="loadConfigAddressTableBody"><div class="smallNote" style="margin:.35rem 0 0 0">${details.join("; ")}.</div>` +
     renderAddressTableWarning(table) +
     `<div class="tableWrap"><table class="table"><thead><tr><th>#</th><th>RVA</th><th>VA</th><th>Section</th><th>Metadata</th><th>Notes</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></div></details>`;

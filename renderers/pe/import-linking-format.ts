@@ -1,6 +1,6 @@
 "use strict";
 
-import { dd, safe } from "../../html-utils.js";
+import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type {
   PeDeclaredIatRelation,
@@ -46,7 +46,7 @@ const getSectionDisplayName = (section: PeSection | null): string => {
 
 export const describeSectionForRva = (pe: PeWindowsParseResult, rva: number): string => {
   if (!rva) return "-";
-  return safe(getSectionDisplayName(findSectionContainingRva(pe.sections, rva)));
+  return escapeHtml(getSectionDisplayName(findSectionContainingRva(pe.sections, rva)));
 };
 
 export const findLinkedModuleForImport = (
@@ -115,10 +115,10 @@ const renderFindingGroup = (
   findings: PeImportLinkingFinding[],
   colorVariable: string
 ): string =>
-  dd(
+  renderDefinitionRow(
     label,
     `<div class="smallNote" style="margin:0;color:${colorVariable}">${findings
-      .map(finding => `<div>- ${safe(finding.message)}</div>`)
+      .map(finding => `<div>- ${escapeHtml(finding.message)}</div>`)
       .join("")}</div>`,
     label === "Validated"
       ? "Cross-checks that matched the PE documentation or a documented producer-specific layout."
@@ -155,7 +155,7 @@ export const renderFindingSummary = (
         ? "var(--warn-fg)"
         : "var(--muted)";
   return `<div class="smallNote" style="margin:0;color:${colorVariable}">${filtered
-    .map(finding => `<div>- ${safe(finding.message)}</div>`)
+    .map(finding => `<div>- ${escapeHtml(finding.message)}</div>`)
     .join("")}</div>`;
 };
 
@@ -251,7 +251,7 @@ export const summarizeLookupSources = (
   const uniqueSources = [...new Set(sources)];
   if (!uniqueSources.length) return "-";
   if (uniqueSources.length === 1) {
-    return safe(renderLookupSourceLabel(uniqueSources[0]));
+    return escapeHtml(renderLookupSourceLabel(uniqueSources[0]));
   }
   return "Mixed";
 };
@@ -259,8 +259,8 @@ export const summarizeLookupSources = (
 export const summarizeRelations = (relations: PeIatDirectoryRelation[]): string => {
   const uniqueRelations = [...new Set(relations)];
   if (!uniqueRelations.length) return "-";
-  if (uniqueRelations.length === 1) return safe(renderIatRelation(uniqueRelations[0]));
-  return safe(`Mixed (${uniqueRelations.map(renderIatRelation).join("; ")})`);
+  if (uniqueRelations.length === 1) return escapeHtml(renderIatRelation(uniqueRelations[0]));
+  return escapeHtml(`Mixed (${uniqueRelations.map(renderIatRelation).join("; ")})`);
 };
 
 export const countRelation = (
@@ -287,8 +287,8 @@ export const renderDelaySectionContext = (
   const section = findSectionContainingRva(pe.sections, iatRva >>> 0);
   const sectionName = getSectionDisplayName(section);
   return sectionName.toLowerCase() === CANONICAL_DELAYLOAD_IAT_SECTION_NAME
-    ? `${safe(sectionName)}<div class="smallNote">Microsoft documents .didat as the canonical section for protected delay-load IATs.</div>`
-    : safe(sectionName);
+    ? `${escapeHtml(sectionName)}<div class="smallNote">Microsoft documents .didat as the canonical section for protected delay-load IATs.</div>`
+    : escapeHtml(sectionName);
 };
 
 export const renderImportNamesForIndices = (
@@ -299,5 +299,5 @@ export const renderImportNamesForIndices = (
     .map(importIndex => pe.imports.entries[importIndex]?.dll)
     .filter((value): value is string => !!value))];
   if (!names.length) return "-";
-  return safe(names.join(", "));
+  return escapeHtml(names.join(", "));
 };

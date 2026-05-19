@@ -1,7 +1,7 @@
 "use strict";
 
 import { hex } from "../../binary-utils.js";
-import { dd, rowFlags, safe } from "../../html-utils.js";
+import { renderDefinitionRow, renderFlagChips, escapeHtml } from "../../html-utils.js";
 import type {
   PeClrCustomAttributeInfo,
   PeClrMetadataIndex,
@@ -26,7 +26,7 @@ const METADATA_HEAP_FLAGS: Array<[number, string, string?]> = [
 ];
 
 const dash = (value: string | number | boolean | null | undefined): string =>
-  value == null || value === "" ? "-" : safe(value);
+  value == null || value === "" ? "-" : escapeHtml(value);
 
 const indexText = (index: PeClrMetadataIndex): string =>
   index.row === 0 ? "-" : `${index.table} #${index.row}${index.valid ? "" : " (invalid)"}`;
@@ -59,10 +59,10 @@ const renderSimpleTable = (
   const body = rows.slice(0, MAX_RENDERED_ROWS)
     .map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join("")}</tr>`)
     .join("");
-  return `<details style="margin-top:.35rem"><summary>${safe(title)} (${rows.length})</summary>` +
+  return `<details style="margin-top:.35rem"><summary>${escapeHtml(title)} (${rows.length})</summary>` +
     limitNote(rows.length) +
     `<table class="table" style="margin-top:.35rem"><thead><tr>` +
-    headers.map(header => `<th>${safe(header)}</th>`).join("") +
+    headers.map(header => `<th>${escapeHtml(header)}</th>`).join("") +
     `</tr></thead><tbody>${body}</tbody></table></details>`;
 };
 
@@ -80,46 +80,46 @@ const renderTargetFramework = (metadata: PeClrMetadataTables): string => {
   const frameworkName = attr.fixedArguments[0]?.value;
   const displayName = attr.namedArguments.find(arg => arg.name === "FrameworkDisplayName")?.value;
   return `<details style="margin-top:.35rem" open><summary>Target framework</summary><dl>` +
-    dd("FrameworkName", dash(frameworkName), "TargetFrameworkAttribute constructor argument.") +
-    dd("FrameworkDisplayName", dash(displayName), "TargetFrameworkAttribute FrameworkDisplayName named property.") +
+    renderDefinitionRow("FrameworkName", dash(frameworkName), "TargetFrameworkAttribute constructor argument.") +
+    renderDefinitionRow("FrameworkDisplayName", dash(displayName), "TargetFrameworkAttribute FrameworkDisplayName named property.") +
     `</dl></details>`;
 };
 
 const renderAssembly = (metadata: PeClrMetadataTables): string => {
   if (!metadata.assembly) return "";
   return `<details style="margin-top:.35rem" open><summary>Assembly identity</summary><dl>` +
-    dd("Name", dash(metadata.assembly.name), "Assembly table Name column.") +
-    dd("Version", safe(metadata.assembly.version), "Assembly table version columns.") +
-    dd("Culture", dash(metadata.assembly.culture), "Assembly culture string.") +
-    dd("Flags", hex(metadata.assembly.flags, 8), "AssemblyFlags bitmask.") +
-    dd("HashAlgId", hex(metadata.assembly.hashAlgorithm, 8), "AssemblyHashAlgorithm value.") +
-    dd("PublicKey", metadata.assembly.publicKey == null ? "-" : `${metadata.assembly.publicKey.length} bytes`) +
+    renderDefinitionRow("Name", dash(metadata.assembly.name), "Assembly table Name column.") +
+    renderDefinitionRow("Version", escapeHtml(metadata.assembly.version), "Assembly table version columns.") +
+    renderDefinitionRow("Culture", dash(metadata.assembly.culture), "Assembly culture string.") +
+    renderDefinitionRow("Flags", hex(metadata.assembly.flags, 8), "AssemblyFlags bitmask.") +
+    renderDefinitionRow("HashAlgId", hex(metadata.assembly.hashAlgorithm, 8), "AssemblyHashAlgorithm value.") +
+    renderDefinitionRow("PublicKey", metadata.assembly.publicKey == null ? "-" : `${metadata.assembly.publicKey.length} bytes`) +
     `</dl></details>`;
 };
 
 const renderTableStreamSummary = (metadata: PeClrMetadataTables): string =>
   `<details style="margin-top:.35rem"><summary>Metadata table stream</summary><dl>` +
-  dd("Stream", safe(metadata.streamName), "#~ is optimized; #- is unoptimized metadata tables.") +
-  dd("Version", `${metadata.majorVersion}.${metadata.minorVersion}`, "Metadata table stream version.") +
-  dd(
+  renderDefinitionRow("Stream", escapeHtml(metadata.streamName), "#~ is optimized; #- is unoptimized metadata tables.") +
+  renderDefinitionRow("Version", `${metadata.majorVersion}.${metadata.minorVersion}`, "Metadata table stream version.") +
+  renderDefinitionRow(
     "HeapSizes",
-    `<div class="mono">${hex(metadata.heapSizes, 2)}</div>${rowFlags(metadata.heapSizes, METADATA_HEAP_FLAGS)}`,
+    `<div class="mono">${hex(metadata.heapSizes, 2)}</div>${renderFlagChips(metadata.heapSizes, METADATA_HEAP_FLAGS)}`,
     "String/GUID/Blob index-size flags plus CoreCLR metadata schema flags."
   ) +
-  dd("LargestRidLog2", hex(metadata.largestRidLog2, 2), "CoreCLR m_rid: log-base-2 of largest RID.") +
+  renderDefinitionRow("LargestRidLog2", hex(metadata.largestRidLog2, 2), "CoreCLR m_rid: log-base-2 of largest RID.") +
   (metadata.extraData == null
     ? ""
-    : dd("ExtraData", hex(metadata.extraData, 8), "Extra 4-byte CoreCLR schema value.")) +
-  dd("Index sizes", `${metadata.heapIndexSizes.string}/${metadata.heapIndexSizes.guid}/` +
+    : renderDefinitionRow("ExtraData", hex(metadata.extraData, 8), "Extra 4-byte CoreCLR schema value.")) +
+  renderDefinitionRow("Index sizes", `${metadata.heapIndexSizes.string}/${metadata.heapIndexSizes.guid}/` +
     `${metadata.heapIndexSizes.blob} bytes`, "#Strings/#GUID/#Blob index widths.") +
-  dd("Valid", safe(metadata.validMask), "Bit mask of metadata tables present in the stream.") +
-  dd("Sorted", safe(metadata.sortedMask), "Bit mask of metadata tables sorted by key.") +
+  renderDefinitionRow("Valid", escapeHtml(metadata.validMask), "Bit mask of metadata tables present in the stream.") +
+  renderDefinitionRow("Sorted", escapeHtml(metadata.sortedMask), "Bit mask of metadata tables sorted by key.") +
   `</dl></details>` +
   renderSimpleTable(
     "Metadata tables",
     ["Table", "Rows", "Sorted"],
     metadata.rowCounts.map(row => [
-      safe(row.name),
+      escapeHtml(row.name),
       String(row.rows),
       row.sorted ? "Yes" : "No"
     ])
@@ -131,7 +131,7 @@ const renderReferences = (metadata: PeClrMetadataTables): string =>
     ["Name", "Version", "Culture", "Flags"],
     metadata.assemblyRefs.map(row => [
       dash(row.name),
-      safe(row.version),
+      escapeHtml(row.version),
       dash(row.culture),
       hex(row.flags, 8)
     ])
@@ -139,7 +139,7 @@ const renderReferences = (metadata: PeClrMetadataTables): string =>
   renderSimpleTable(
     "Type references",
     ["Type", "Resolution scope"],
-    metadata.typeRefs.map(row => [dash(row.fullName), safe(indexText(row.resolutionScope))])
+    metadata.typeRefs.map(row => [dash(row.fullName), escapeHtml(indexText(row.resolutionScope))])
   );
 
 const renderTypesAndMethods = (metadata: PeClrMetadataTables): string =>
@@ -148,7 +148,7 @@ const renderTypesAndMethods = (metadata: PeClrMetadataTables): string =>
     ["Type", "Extends", "Flags", "Methods"],
     metadata.typeDefs.map(row => [
       dash(row.fullName),
-      safe(indexText(row.extends)),
+      escapeHtml(indexText(row.extends)),
       hex(row.flags, 8),
       methodCount(row)
     ])
@@ -157,10 +157,10 @@ const renderTypesAndMethods = (metadata: PeClrMetadataTables): string =>
     "Method definitions",
     ["Method", "RVA", "Flags", "Signature"],
     metadata.methodDefs.map(row => [
-      safe(fullMethodName(row.ownerType, row.name)),
+      escapeHtml(fullMethodName(row.ownerType, row.name)),
       hex(row.rva, 8),
       hex(row.flags, 4),
-      safe(signatureText(row.signature))
+      escapeHtml(signatureText(row.signature))
     ])
   );
 
@@ -175,7 +175,7 @@ const renderCustomAttributes = (metadata: PeClrMetadataTables): string =>
         dash(row.parentName || indexText(row.parent)),
         dash(row.attributeType),
         dash(row.constructorName),
-        safe([...fixed, ...named].join("; ") || "-")
+        escapeHtml([...fixed, ...named].join("; ") || "-")
       ];
     })
   );
@@ -200,7 +200,7 @@ const renderManagedNativeAndResources = (metadata: PeClrMetadataTables): string 
         "ExportedType",
         dash(row.fullName),
         hex(row.flags, 8),
-        safe(indexText(row.implementation))
+        escapeHtml(indexText(row.implementation))
       ])
     ]
   );

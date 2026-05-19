@@ -1,6 +1,6 @@
 "use strict";
 import { humanSize, hex } from "../../binary-utils.js";
-import { dd, rowOpts, safe } from "../../html-utils.js";
+import { renderDefinitionRow, renderOptionChips, escapeHtml } from "../../html-utils.js";
 import type { ParsedWinCertificate } from "../../analyzers/pe/authenticode/index.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
@@ -20,13 +20,13 @@ const WIN_CERTIFICATE_TYPES: Array<[number, string, string]> = [
 
 const renderWarningSection = (title: string, warnings: string[] | undefined): string =>
   warnings?.length
-    ? `<div class="peSecuritySection"><div class="smallNote" style="color:var(--warn-fg)"><b>${title}</b></div><ul class="peSecurityList peSecurityList--warn">${warnings.map(warning => `<li>${safe(warning)}</li>`).join("")}</ul></div>`
+    ? `<div class="peSecuritySection"><div class="smallNote" style="color:var(--warn-fg)"><b>${title}</b></div><ul class="peSecurityList peSecurityList--warn">${warnings.map(warning => `<li>${escapeHtml(warning)}</li>`).join("")}</ul></div>`
     : "";
 
 const renderCertificateType = (certificateType: number, typeName: string): string =>
   WIN_CERTIFICATE_TYPES.some(([type]) => type === certificateType)
-    ? rowOpts(certificateType, WIN_CERTIFICATE_TYPES)
-    : `<span class="mono">${hex(certificateType, 4)}</span> (${safe(typeName)})`;
+    ? renderOptionChips(certificateType, WIN_CERTIFICATE_TYPES)
+    : `<span class="mono">${hex(certificateType, 4)}</span> (${escapeHtml(typeName)})`;
 
 const renderCertificateCard = (certificate: ParsedWinCertificate, index: number): string => {
   const lengthLabel =
@@ -37,10 +37,10 @@ const renderCertificateCard = (certificate: ParsedWinCertificate, index: number)
     `<div class="peSecurityCertHeader"><span class="peSecurityCertTitle">` +
     `WIN_CERTIFICATE record #${index + 1}</span></div>` +
     `<dl>` +
-    dd("Offset", hex(certificate.offset, 8)) +
-    dd("Length", safe(lengthLabel)) +
-    dd("Revision", `${hex(certificate.revision, 4)} (${safe(certificate.revisionName)})`) +
-    dd("Type", renderCertificateType(certificate.certificateType, certificate.typeName)) +
+    renderDefinitionRow("Offset", hex(certificate.offset, 8)) +
+    renderDefinitionRow("Length", escapeHtml(lengthLabel)) +
+    renderDefinitionRow("Revision", `${hex(certificate.revision, 4)} (${escapeHtml(certificate.revisionName)})`) +
+    renderDefinitionRow("Type", renderCertificateType(certificate.certificateType, certificate.typeName)) +
     `</dl>` +
     `${certificate.authenticode ? renderAuthenticodeTree(certificate) : ""}` +
     `${!certificate.authenticode ? renderWarningSection("Structural warnings", certificate.warnings) : ""}` +
@@ -57,7 +57,7 @@ export function renderSecurity(security: PeSecuritySection, out: string[]): void
   );
   out.push(`<dl>`);
   out.push(
-    dd(
+    renderDefinitionRow(
       "Certificate records",
       String(security.count ?? 0),
       "Number of certificate blobs present (Authenticode)."
@@ -66,7 +66,7 @@ export function renderSecurity(security: PeSecuritySection, out: string[]): void
   out.push(`</dl>`);
   if (security.warnings?.length) {
     out.push(`<ul class="smallNote">`);
-    security.warnings.forEach(warning => out.push(`<li>${safe(warning)}</li>`));
+    security.warnings.forEach(warning => out.push(`<li>${escapeHtml(warning)}</li>`));
     out.push(`</ul>`);
   }
   if (security.certs?.length) {

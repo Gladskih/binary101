@@ -1,6 +1,6 @@
 "use strict";
 
-import { dd, safe } from "../../html-utils.js";
+import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
 import type {
   ZipCentralDirectoryEntry,
@@ -33,10 +33,10 @@ const renderSummary = (zip: ZipParseResult, out: string[]): void => {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">ZIP overview</h4>`);
   out.push(`<dl>`);
-  out.push(dd("Central directory offset", cdOffset));
-  out.push(dd("Central directory size", cdSize));
-  out.push(dd("Entry count (parsed)", entries.toString()));
-  out.push(dd("File comment", safe(comment)));
+  out.push(renderDefinitionRow("Central directory offset", cdOffset));
+  out.push(renderDefinitionRow("Central directory size", cdSize));
+  out.push(renderDefinitionRow("Entry count (parsed)", entries.toString()));
+  out.push(renderDefinitionRow("File comment", escapeHtml(comment)));
   if (truncated) {
     out.push(
       `<div class="smallNote">Central directory extends beyond the file size.</div>`
@@ -52,14 +52,14 @@ const renderEocd = (zip: ZipParseResult, out: string[]): void => {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">End of central directory</h4>`);
   out.push(`<dl>`);
-  out.push(dd("Offset", formatOffset(eocd.offset)));
-  out.push(dd("Disk number", eocd.diskNumber.toString()));
-  out.push(dd("Central dir disk", eocd.centralDirDisk.toString()));
-  out.push(dd("Entries on this disk", eocd.entriesThisDisk.toString()));
-  out.push(dd("Total entries", eocd.totalEntries.toString()));
-  out.push(dd("Central dir size (EOCD)", formatSize(eocd.centralDirSize)));
-  out.push(dd("Central dir offset (EOCD)", formatOffset(eocd.centralDirOffset)));
-  out.push(dd("Comment length", eocd.commentLength.toString()));
+  out.push(renderDefinitionRow("Offset", formatOffset(eocd.offset)));
+  out.push(renderDefinitionRow("Disk number", eocd.diskNumber.toString()));
+  out.push(renderDefinitionRow("Central dir disk", eocd.centralDirDisk.toString()));
+  out.push(renderDefinitionRow("Entries on this disk", eocd.entriesThisDisk.toString()));
+  out.push(renderDefinitionRow("Total entries", eocd.totalEntries.toString()));
+  out.push(renderDefinitionRow("Central dir size (EOCD)", formatSize(eocd.centralDirSize)));
+  out.push(renderDefinitionRow("Central dir offset (EOCD)", formatOffset(eocd.centralDirOffset)));
+  out.push(renderDefinitionRow("Comment length", eocd.commentLength.toString()));
   out.push(`</dl>`);
   out.push(`</section>`);
 };
@@ -70,17 +70,17 @@ const renderZip64 = (zip: ZipParseResult, out: string[]): void => {
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">ZIP64 metadata</h4>`);
   out.push(`<dl>`);
   if (zip.zip64Locator) {
-    out.push(dd("Locator offset", formatOffset(zip.zip64Locator.offset)));
-    out.push(dd("ZIP64 EOCD offset", formatOffset(zip.zip64Locator.zip64EocdOffset)));
-    out.push(dd("Total disks", zip.zip64Locator.totalDisks.toString()));
+    out.push(renderDefinitionRow("Locator offset", formatOffset(zip.zip64Locator.offset)));
+    out.push(renderDefinitionRow("ZIP64 EOCD offset", formatOffset(zip.zip64Locator.zip64EocdOffset)));
+    out.push(renderDefinitionRow("Total disks", zip.zip64Locator.totalDisks.toString()));
   }
   if (zip.zip64) {
-    out.push(dd("EOCD offset", formatOffset(zip.zip64.offset)));
-    out.push(dd("Record size", formatSize(zip.zip64.size)));
-    out.push(dd("Version needed", zip.zip64.versionNeeded.toString()));
-    out.push(dd("Entries (ZIP64)", zip.zip64.totalEntries.toString()));
-    out.push(dd("Central dir size (ZIP64)", formatSize(zip.zip64.centralDirSize)));
-    out.push(dd("Central dir offset (ZIP64)", formatOffset(zip.zip64.centralDirOffset)));
+    out.push(renderDefinitionRow("EOCD offset", formatOffset(zip.zip64.offset)));
+    out.push(renderDefinitionRow("Record size", formatSize(zip.zip64.size)));
+    out.push(renderDefinitionRow("Version needed", zip.zip64.versionNeeded.toString()));
+    out.push(renderDefinitionRow("Entries (ZIP64)", zip.zip64.totalEntries.toString()));
+    out.push(renderDefinitionRow("Central dir size (ZIP64)", formatSize(zip.zip64.centralDirSize)));
+    out.push(renderDefinitionRow("Central dir offset (ZIP64)", formatOffset(zip.zip64.centralDirOffset)));
   }
   out.push(`</dl>`);
   out.push(`</section>`);
@@ -109,7 +109,7 @@ const renderEntries = (zip: ZipParseResult, out: string[]): void => {
   );
   const renderAction = (entry: ZipCentralDirectoryEntry): string => {
     if (entry.extractError) {
-      return `<span class="smallNote">${safe(entry.extractError)}</span>`;
+      return `<span class="smallNote">${escapeHtml(entry.extractError)}</span>`;
     }
     if (entry.dataOffset == null || entry.dataLength == null) {
       return `<span class="smallNote">Unavailable</span>`;
@@ -120,12 +120,12 @@ const renderEntries = (zip: ZipParseResult, out: string[]): void => {
   entries.forEach((entry: ZipCentralDirectoryEntry) => {
     const compSize = formatSize(entry.compressedSize);
     const uncompSize = formatSize(entry.uncompressedSize);
-    const mod = safe(entry.modTimeIso || "-");
+    const mod = escapeHtml(entry.modTimeIso || "-");
     out.push(
-      `<tr><td>${entry.index}</td><td>${safe(entry.fileName)}</td>` +
-        `<td>${safe(entry.compressionName)}</td>` +
+      `<tr><td>${entry.index}</td><td>${escapeHtml(entry.fileName)}</td>` +
+        `<td>${escapeHtml(entry.compressionName)}</td>` +
         `<td>${compSize}</td><td>${uncompSize}</td>` +
-        `<td>${mod}</td><td>${safe(describeFlags(entry))}</td>` +
+        `<td>${mod}</td><td>${escapeHtml(describeFlags(entry))}</td>` +
         `<td>${renderAction(entry)}</td></tr>`
     );
   });
@@ -143,7 +143,7 @@ const renderIssues = (zip: ZipParseResult, out: string[]): void => {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Notices</h4>`);
   out.push(`<ul>`);
-  issues.forEach(issue => out.push(`<li>${safe(issue)}</li>`));
+  issues.forEach(issue => out.push(`<li>${escapeHtml(issue)}</li>`));
   out.push(`</ul>`);
   out.push(`</section>`);
 };

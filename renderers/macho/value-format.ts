@@ -1,7 +1,7 @@
 "use strict";
 
 import { formatHumanSize, toHex32, toHex64 } from "../../binary-utils.js";
-import { safe } from "../../html-utils.js";
+import { escapeHtml } from "../../html-utils.js";
 
 const asBigInt = (value: bigint | number): bigint =>
   typeof value === "bigint" ? value : BigInt(value);
@@ -34,6 +34,6 @@ const formatFileRange = (imageOffset: number, offset: bigint | number, size: big
   return `${base} (${formatHex(offset)} in slice)`;
 };
 
-const formatList = (items: string[]): string => (items.length ? safe(items.join(", ")) : "<span class=\"muted\">-</span>");
+const formatList = (items: string[]): string => (items.length ? escapeHtml(items.join(", ")) : "<span class=\"muted\">-</span>");
 
 export { formatByteSize, formatFileOffset, formatFileRange, formatHex, formatList };

@@ -1,7 +1,7 @@
 "use strict";
 
 import { humanSize, hex } from "../../binary-utils.js";
-import { safe } from "../../html-utils.js";
+import { escapeHtml } from "../../html-utils.js";
 import {
   isPeRomParseResult,
   isPeWindowsParseResult,
@@ -44,7 +44,7 @@ const renderDelayImportAttributes = (attributes: number): string => {
   if (unknownBits !== 0) {
     notes.push(`Unknown or undocumented attribute bits remain set: ${hex(unknownBits, 8)}.`);
   }
-  return `${hex(normalized, 8)}<div class="smallNote">${notes.map(safe).join("<br/>")}</div>`;
+  return `${hex(normalized, 8)}<div class="smallNote">${notes.map(escapeHtml).join("<br/>")}</div>`;
 };
 
 export function renderReloc(reloc: PeRelocSection, out: string[]): void {
@@ -75,7 +75,7 @@ export function renderBoundImports(bi: PeBoundImportsSection, out: string[]): vo
   if (!bi.entries?.length && !bi.warning) return;
   out.push(renderPeSectionStart("Bound imports"));
   if (bi.warning) {
-    out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(bi.warning)}</div>`);
+    out.push(`<div class="smallNote" style="color:var(--warn-fg)">${escapeHtml(bi.warning)}</div>`);
   }
   if (bi.entries?.length) {
     out.push(
@@ -84,10 +84,10 @@ export function renderBoundImports(bi: PeBoundImportsSection, out: string[]): vo
     out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Module</th><th>TimeDateStamp</th><th>ForwarderRefs</th></tr></thead><tbody>`);
     bi.entries.forEach((e, index) => {
       const forwarderLabel = e.forwarderRefs?.length
-        ? `${e.NumberOfModuleForwarderRefs}: ${safe(e.forwarderRefs.map(ref => ref.name || "(unnamed)").join(", "))}`
+        ? `${e.NumberOfModuleForwarderRefs}: ${escapeHtml(e.forwarderRefs.map(ref => ref.name || "(unnamed)").join(", "))}`
         : String(e.NumberOfModuleForwarderRefs);
       out.push(
-        `<tr><td>${index + 1}</td><td>${safe(e.name || "")}</td><td>${hex(e.TimeDateStamp, 8)}</td><td>${forwarderLabel}</td></tr>`
+        `<tr><td>${index + 1}</td><td>${escapeHtml(e.name || "")}</td><td>${hex(e.TimeDateStamp, 8)}</td><td>${forwarderLabel}</td></tr>`
       );
     });
     out.push(`</tbody></table></details>`);
@@ -99,10 +99,10 @@ export function renderDelayImports(di: PeDelayImportsSection, out: string[]): vo
   if (!di.entries?.length && !di.warning) return;
   out.push(renderPeSectionStart("Delay-load imports"));
   if (di.warning) {
-    out.push(`<div class="smallNote" style="color:var(--warn-fg)">${safe(di.warning)}</div>`);
+    out.push(`<div class="smallNote" style="color:var(--warn-fg)">${escapeHtml(di.warning)}</div>`);
   }
   for (const entry of di.entries) {
-    const dll = safe(entry.name || "(unknown DLL)");
+    const dll = escapeHtml(entry.name || "(unknown DLL)");
     const fnCount = entry.functions?.length || 0;
     out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${dll}</b> \u2014 ${fnCount} function(s)</summary>`);
     out.push(`<dl style="margin-top:.35rem">`);
@@ -118,7 +118,7 @@ export function renderDelayImports(di: PeDelayImportsSection, out: string[]): vo
       out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th></tr></thead><tbody>`);
       entry.functions.forEach((fn, index) => {
         const hint = fn.hint != null ? String(fn.hint) : "-";
-        const nm = fn.name ? safe(fn.name) : fn.ordinal != null ? "ORD " + fn.ordinal : "-";
+        const nm = fn.name ? escapeHtml(fn.name) : fn.ordinal != null ? "ORD " + fn.ordinal : "-";
         out.push(`<tr><td>${index + 1}</td><td>${hint}</td><td>${nm}</td></tr>`);
       });
       out.push(`</tbody></table>`);

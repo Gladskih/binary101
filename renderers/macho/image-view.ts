@@ -1,6 +1,6 @@
 "use strict";
 
-import { dd, safe } from "../../html-utils.js";
+import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import { resolveEntryVirtualAddress } from "../../analyzers/macho/format.js";
 import {
   dylibCommandKind,
@@ -46,7 +46,7 @@ const renderSummary = (image: MachOImage): string => {
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Big picture</h4>`);
   out.push(
     `<div class="smallNote">` +
-      `${image.header.is64 ? "64-bit" : "32-bit"} Mach-O ${safe(kind)} for ${safe(cpu)}. ` +
+      `${image.header.is64 ? "64-bit" : "32-bit"} Mach-O ${escapeHtml(kind)} for ${escapeHtml(cpu)}. ` +
       `${segmentCount} segment${segmentCount === 1 ? "" : "s"}, ` +
       `${image.loadCommands.length} load command${image.loadCommands.length === 1 ? "" : "s"}, ` +
       `${symbolCount} symbol${symbolCount === 1 ? "" : "s"}${image.codeSignature ? ", code-signed" : ""}.` +
@@ -62,12 +62,12 @@ const renderHeader = (image: MachOImage): string => {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Mach-O header</h4>`);
   out.push(`<dl>`);
-  out.push(dd("Magic", safe(`${magicLabel(header.magic)} (${formatHex(header.magic)})`)));
-  out.push(dd("CPU", safe(headerCpuLabel(header))));
-  out.push(dd("File type", safe(fileTypeLabel(header.filetype))));
-  out.push(dd("Commands", safe(`${header.ncmds} (${header.sizeofcmds} bytes)`)));
-  out.push(dd("Flags", formatList(headerFlagLabels(header.flags))));
-  if (header.reserved != null) out.push(dd("Reserved", safe(formatHex(header.reserved))));
+  out.push(renderDefinitionRow("Magic", escapeHtml(`${magicLabel(header.magic)} (${formatHex(header.magic)})`)));
+  out.push(renderDefinitionRow("CPU", escapeHtml(headerCpuLabel(header))));
+  out.push(renderDefinitionRow("File type", escapeHtml(fileTypeLabel(header.filetype))));
+  out.push(renderDefinitionRow("Commands", escapeHtml(`${header.ncmds} (${header.sizeofcmds} bytes)`)));
+  out.push(renderDefinitionRow("Flags", formatList(headerFlagLabels(header.flags))));
+  if (header.reserved != null) out.push(renderDefinitionRow("Reserved", escapeHtml(formatHex(header.reserved))));
   out.push(`</dl>`);
   out.push(`</section>`);
   return out.join("");
@@ -87,8 +87,8 @@ const renderVersions = (image: MachOImage): string => {
             .join(", ")}`
         : "";
       out.push(
-        `<li>${safe(buildPlatformLabel(build.platform))} ` +
-          `(min ${safe(packedVersionText(build.minos))}, sdk ${safe(packedVersionText(build.sdk))}${safe(tools)})</li>`
+        `<li>${escapeHtml(buildPlatformLabel(build.platform))} ` +
+          `(min ${escapeHtml(packedVersionText(build.minos))}, sdk ${escapeHtml(packedVersionText(build.sdk))}${escapeHtml(tools)})</li>`
       );
     }
     out.push(`</ul>`);
@@ -97,14 +97,14 @@ const renderVersions = (image: MachOImage): string => {
     out.push(`<ul>`);
     for (const version of image.minVersions) {
       out.push(
-        `<li>${safe(versionMinLabel(version.command))} min ${safe(packedVersionText(version.version))}, ` +
-          `sdk ${safe(packedVersionText(version.sdk))}</li>`
+        `<li>${escapeHtml(versionMinLabel(version.command))} min ${escapeHtml(packedVersionText(version.version))}, ` +
+          `sdk ${escapeHtml(packedVersionText(version.sdk))}</li>`
       );
     }
     out.push(`</ul>`);
   }
   if (image.sourceVersion) {
-    out.push(`<div class="smallNote">Source version ${safe(sourceVersionText(image.sourceVersion.value))}</div>`);
+    out.push(`<div class="smallNote">Source version ${escapeHtml(sourceVersionText(image.sourceVersion.value))}</div>`);
   }
   out.push(`</section>`);
   return out.join("");
@@ -116,26 +116,26 @@ const renderEntryPoint = (image: MachOImage): string => {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Identity and startup</h4>`);
   out.push(`<dl>`);
-  if (image.uuid) out.push(dd("UUID", `<span class="mono">${safe(image.uuid)}</span>`));
+  if (image.uuid) out.push(renderDefinitionRow("UUID", `<span class="mono">${escapeHtml(image.uuid)}</span>`));
   if (image.entryPoint) {
     const fileOffset = entryFileOffset(image, image.entryPoint);
     const virtualAddress = entryVirtualAddress(image, image.entryPoint);
-    out.push(dd("Entry offset", `<span class="mono">${safe(formatHex(image.entryPoint.entryoff))}</span>`));
-    out.push(dd("Entry file offset", `<span class="mono">${safe(formatHex(fileOffset))}</span>`));
+    out.push(renderDefinitionRow("Entry offset", `<span class="mono">${escapeHtml(formatHex(image.entryPoint.entryoff))}</span>`));
+    out.push(renderDefinitionRow("Entry file offset", `<span class="mono">${escapeHtml(formatHex(fileOffset))}</span>`));
     out.push(
-      dd(
+      renderDefinitionRow(
         "Entry virtual address",
         virtualAddress != null
-          ? `<span class="mono">${safe(formatHex(virtualAddress))}</span>`
+          ? `<span class="mono">${escapeHtml(formatHex(virtualAddress))}</span>`
           : "<span class=\"muted\">Not mapped by parsed segments</span>"
       )
     );
     if (image.entryPoint.stacksize !== 0n) {
-      out.push(dd("Initial stack", safe(formatByteSize(image.entryPoint.stacksize))));
+      out.push(renderDefinitionRow("Initial stack", escapeHtml(formatByteSize(image.entryPoint.stacksize))));
     }
   }
   for (const stringCommand of image.stringCommands) {
-    out.push(dd(loadCommandName(stringCommand.command), `<span class="mono">${safe(stringCommand.value || "-")}</span>`));
+    out.push(renderDefinitionRow(loadCommandName(stringCommand.command), `<span class="mono">${escapeHtml(stringCommand.value || "-")}</span>`));
   }
   out.push(`</dl>`);
   out.push(`</section>`);
@@ -154,10 +154,10 @@ const renderLoadCommands = (image: MachOImage): string => {
   out.push(`<div class="tableWrap"><table class="table"><thead><tr><th>#</th><th>Command</th><th>Offset</th><th>Size</th><th>Meaning</th></tr></thead><tbody>`);
   for (const command of image.loadCommands) {
     out.push(
-      `<tr><td>${command.index}</td><td>${safe(loadCommandName(command.cmd))}</td>` +
-        `<td><span class="mono">${safe(formatHex(command.offset))}</span></td>` +
-        `<td>${safe(String(command.cmdsize))}</td>` +
-        `<td>${safe(loadCommandDescription(command.cmd) || "-")}</td></tr>`
+      `<tr><td>${command.index}</td><td>${escapeHtml(loadCommandName(command.cmd))}</td>` +
+        `<td><span class="mono">${escapeHtml(formatHex(command.offset))}</span></td>` +
+        `<td>${escapeHtml(String(command.cmdsize))}</td>` +
+        `<td>${escapeHtml(loadCommandDescription(command.cmd) || "-")}</td></tr>`
     );
   }
   out.push(`</tbody></table></div></details></section>`);
@@ -170,21 +170,21 @@ const renderLinkedImages = (image: MachOImage): string => {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Linking</h4>`);
   if (image.idDylib) {
-    out.push(`<div class="smallNote">Install name: <span class="mono">${safe(image.idDylib.name)}</span></div>`);
+    out.push(`<div class="smallNote">Install name: <span class="mono">${escapeHtml(image.idDylib.name)}</span></div>`);
   }
   if (image.dylibs.length) {
     out.push(`<ul>`);
     for (const dylib of image.dylibs) {
       out.push(
-        `<li>${safe(dylibCommandKind(dylib.command))}: <span class="mono">${safe(dylib.name || "-")}</span> ` +
-          `(compat ${safe(packedVersionText(dylib.compatibilityVersion))}, ` +
-          `current ${safe(packedVersionText(dylib.currentVersion))})</li>`
+        `<li>${escapeHtml(dylibCommandKind(dylib.command))}: <span class="mono">${escapeHtml(dylib.name || "-")}</span> ` +
+          `(compat ${escapeHtml(packedVersionText(dylib.compatibilityVersion))}, ` +
+          `current ${escapeHtml(packedVersionText(dylib.currentVersion))})</li>`
       );
     }
     out.push(`</ul>`);
   }
   if (image.rpaths.length) {
-    out.push(`<div class="smallNote">RPATHs: ${image.rpaths.map(item => `<span class="mono">${safe(item.path)}</span>`).join(", ")}</div>`);
+    out.push(`<div class="smallNote">RPATHs: ${image.rpaths.map(item => `<span class="mono">${escapeHtml(item.path)}</span>`).join(", ")}</div>`);
   }
   out.push(`</section>`);
   return out.join("");
@@ -204,10 +204,10 @@ const renderSegments = (image: MachOImage, segments: MachOSegment[]): string => 
     const initProtection = vmProtectionNames(segment.initprot).join("/") || "-";
     const maxProtection = vmProtectionNames(segment.maxprot).join("/") || "-";
     out.push(
-      `<tr><td>${safe(segment.name || "<unnamed>")}</td>` +
-        `<td><span class="mono">${safe(formatHex(segment.vmaddr))}</span> / ${safe(formatByteSize(segment.vmsize))}</td>` +
-        `<td><span class="mono">${safe(formatFileOffset(image.offset, segment.fileoff))}</span> / ${safe(formatByteSize(segment.filesize))}</td>` +
-        `<td>init: ${safe(initProtection)}<br>max: ${safe(maxProtection)}</td>` +
+      `<tr><td>${escapeHtml(segment.name || "<unnamed>")}</td>` +
+        `<td><span class="mono">${escapeHtml(formatHex(segment.vmaddr))}</span> / ${escapeHtml(formatByteSize(segment.vmsize))}</td>` +
+        `<td><span class="mono">${escapeHtml(formatFileOffset(image.offset, segment.fileoff))}</span> / ${escapeHtml(formatByteSize(segment.filesize))}</td>` +
+        `<td>init: ${escapeHtml(initProtection)}<br>max: ${escapeHtml(maxProtection)}</td>` +
         `<td>${segment.sections.length}</td>` +
         `<td>${formatList(segmentFlags(segment.flags))}</td></tr>`
     );
@@ -218,11 +218,11 @@ const renderSegments = (image: MachOImage, segments: MachOSegment[]): string => 
     out.push(`<div class="tableWrap"><table class="table"><thead><tr><th>#</th><th>Section</th><th>Segment</th><th>Address</th><th>Size</th><th>Offset</th><th>Type</th><th>Attributes</th></tr></thead><tbody>`);
     for (const section of sections) {
       out.push(
-        `<tr><td>${section.index}</td><td>${safe(section.sectionName)}</td><td>${safe(section.segmentName)}</td>` +
-          `<td><span class="mono">${safe(formatHex(section.addr))}</span></td>` +
-          `<td>${safe(formatByteSize(section.size))}</td>` +
-          `<td><span class="mono">${safe(formatFileOffset(image.offset, section.offset))}</span></td>` +
-          `<td>${safe(sectionTypeName(section.flags))}</td>` +
+        `<tr><td>${section.index}</td><td>${escapeHtml(section.sectionName)}</td><td>${escapeHtml(section.segmentName)}</td>` +
+          `<td><span class="mono">${escapeHtml(formatHex(section.addr))}</span></td>` +
+          `<td>${escapeHtml(formatByteSize(section.size))}</td>` +
+          `<td><span class="mono">${escapeHtml(formatFileOffset(image.offset, section.offset))}</span></td>` +
+          `<td>${escapeHtml(sectionTypeName(section.flags))}</td>` +
           `<td>${formatList(sectionAttributeFlagNames(section.flags))}</td></tr>`
       );
     }
@@ -253,29 +253,29 @@ const renderImage = (image: MachOImage): string => {
     out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Extra loader metadata</h4>`);
     out.push(`<dl>`);
     if (image.dyldInfo) {
-      out.push(dd("Dyld info", safe(`rebase ${image.dyldInfo.rebaseSize} B, bind ${image.dyldInfo.bindSize} B, export ${image.dyldInfo.exportSize} B`)));
+      out.push(renderDefinitionRow("Dyld info", escapeHtml(`rebase ${image.dyldInfo.rebaseSize} B, bind ${image.dyldInfo.bindSize} B, export ${image.dyldInfo.exportSize} B`)));
     }
     for (const item of image.linkeditData) {
       out.push(
-        dd(
+        renderDefinitionRow(
           loadCommandName(item.command),
-          safe(formatFileRange(image.offset, item.dataoff, item.datasize))
+          escapeHtml(formatFileRange(image.offset, item.dataoff, item.datasize))
         )
       );
     }
     for (const info of image.encryptionInfos) {
       out.push(
-        dd(
+        renderDefinitionRow(
           loadCommandName(info.command),
-          safe(`${formatFileRange(image.offset, info.cryptoff, info.cryptsize)}, cryptid ${info.cryptid}`)
+          escapeHtml(`${formatFileRange(image.offset, info.cryptoff, info.cryptsize)}, cryptid ${info.cryptid}`)
         )
       );
     }
     for (const entry of image.fileSetEntries) {
       out.push(
-        dd(
+        renderDefinitionRow(
           "Fileset entry",
-          `<span class="mono">${safe(entry.entryId || "-")}</span> @ ${safe(formatFileOffset(image.offset, entry.fileoff))}`
+          `<span class="mono">${escapeHtml(entry.entryId || "-")}</span> @ ${escapeHtml(formatFileOffset(image.offset, entry.fileoff))}`
         )
       );
     }
@@ -283,7 +283,7 @@ const renderImage = (image: MachOImage): string => {
   }
   if (image.issues.length) {
     out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Notices</h4><ul>`);
-    for (const issue of image.issues) out.push(`<li>${safe(issue)}</li>`);
+    for (const issue of image.issues) out.push(`<li>${escapeHtml(issue)}</li>`);
     out.push(`</ul></section>`);
   }
   return out.join("");

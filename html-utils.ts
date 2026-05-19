@@ -56,9 +56,3 @@ export const renderFlagChips = (
   return `<div class="optionsRow">${chips.join("")}
   </div>`;
 };
-
-// Backwards-compatible aliases kept while refactoring callers.
-export const safe = escapeHtml;
-export const dd = renderDefinitionRow;
-export const rowOpts = renderOptionChips;
-export const rowFlags = renderFlagChips;

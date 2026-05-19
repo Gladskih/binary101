@@ -1,7 +1,7 @@
 "use strict";
 
 import { humanSize, hex } from "../../binary-utils.js";
-import { dd, rowFlags, safe } from "../../html-utils.js";
+import { renderDefinitionRow, renderFlagChips, escapeHtml } from "../../html-utils.js";
 import type { PeClrHeader } from "../../analyzers/pe/clr/index.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import { renderClrMetadataTables } from "./clr-metadata.js";
@@ -124,7 +124,7 @@ const renderClrSubdirectories = (clrHeader: PeClrHeader, out: string[]): void =>
       `<dl>`
   );
   subdirectories.forEach(([name, rva, size, tip]) => {
-    out.push(dd(name, formatClrDirectory(rva, size), tip));
+    out.push(renderDefinitionRow(name, formatClrDirectory(rva, size), tip));
   });
   out.push(`</dl>`);
   if (clrHeader.vtableFixups?.length) {
@@ -141,7 +141,7 @@ const renderClrSubdirectories = (clrHeader: PeClrHeader, out: string[]): void =>
     clrHeader.vtableFixups.forEach((entry, index) => {
       out.push(
         `<tr><td>${index + 1}</td><td>${hex(entry.RVA, 8)}</td>` +
-          `<td>${entry.Count}</td><td>${safe(formatVTableFixupType(entry.Type))}</td></tr>`
+          `<td>${entry.Count}</td><td>${escapeHtml(formatVTableFixupType(entry.Type))}</td></tr>`
       );
     });
     out.push(`</tbody></table></details>`);
@@ -154,11 +154,11 @@ const renderClrMetadata = (clrHeader: PeClrHeader, out: string[]): void => {
   const meta = clrHeader.meta;
   out.push(`<details style="margin-top:.35rem" open><summary>Metadata root</summary><dl>`);
   if (meta.version) {
-    out.push(dd("VersionString", safe(meta.version), "Metadata version string from the metadata root."));
+    out.push(renderDefinitionRow("VersionString", escapeHtml(meta.version), "Metadata version string from the metadata root."));
   }
   if (meta.verMajor != null && meta.verMinor != null) {
     out.push(
-      dd(
+      renderDefinitionRow(
         "Version",
         `${meta.verMajor}.${meta.verMinor}`,
         "Metadata root format version fields (major/minor)."
@@ -166,17 +166,17 @@ const renderClrMetadata = (clrHeader: PeClrHeader, out: string[]): void => {
     );
   }
   if (meta.signature != null) {
-    out.push(dd("Signature", hex(meta.signature, 8), "Metadata root signature, expected BSJB."));
+    out.push(renderDefinitionRow("Signature", hex(meta.signature, 8), "Metadata root signature, expected BSJB."));
   }
   if (meta.flags != null) {
-    out.push(dd("Flags", hex(meta.flags, 4), "Metadata root flags field."));
+    out.push(renderDefinitionRow("Flags", hex(meta.flags, 4), "Metadata root flags field."));
   }
   if (meta.reserved != null) {
-    out.push(dd("Reserved", hex(meta.reserved, 8), "Reserved metadata root value (usually 0)."));
+    out.push(renderDefinitionRow("Reserved", hex(meta.reserved, 8), "Reserved metadata root value (usually 0)."));
   }
   if (meta.streamCount != null) {
     out.push(
-      dd(
+      renderDefinitionRow(
         "StreamCount",
         `${meta.streamCount} declared, ${meta.streams.length} parsed`,
         "Declared stream header count versus successfully parsed stream entries."
@@ -198,7 +198,7 @@ const renderClrMetadata = (clrHeader: PeClrHeader, out: string[]): void => {
   meta.streams.forEach((stream, index) => {
     const streamEnd = stream.offset + stream.size;
     out.push(
-      `<tr><td>${index + 1}</td><td>${safe(stream.name)}</td><td>${safe(describeMetadataStreamType(stream.name))}</td>` +
+      `<tr><td>${index + 1}</td><td>${escapeHtml(stream.name)}</td><td>${escapeHtml(describeMetadataStreamType(stream.name))}</td>` +
         `<td>${hex(stream.offset, 8)}</td><td>${hex(streamEnd, 8)}</td><td>${humanSize(stream.size)}</td></tr>`
     );
   });
@@ -214,32 +214,32 @@ export function renderClr(clrHeader: PeClrHeader, out: string[]): void {
     )
   );
   out.push(`<dl>`);
-  out.push(dd("Size", String(clrHeader.cb), "Size of IMAGE_COR20_HEADER in bytes."));
+  out.push(renderDefinitionRow("Size", String(clrHeader.cb), "Size of IMAGE_COR20_HEADER in bytes."));
   out.push(
-    dd(
+    renderDefinitionRow(
       "RuntimeVersion",
       `${clrHeader.MajorRuntimeVersion}.${clrHeader.MinorRuntimeVersion}`,
       "CLR runtime version required by this assembly."
     )
   );
   out.push(
-    dd(
+    renderDefinitionRow(
       "MetaData",
       formatClrDirectory(clrHeader.MetaDataRVA, clrHeader.MetaDataSize),
       "Location and size of CLR metadata streams (tables/heap)."
     )
   );
   out.push(
-    dd(
+    renderDefinitionRow(
       "Flags",
-      `<div class="mono">${safe(hex(clrHeader.Flags, 8))}</div>` +
-        rowFlags(clrHeader.Flags, CLR_IMAGE_FLAGS),
+      `<div class="mono">${escapeHtml(hex(clrHeader.Flags, 8))}</div>` +
+        renderFlagChips(clrHeader.Flags, CLR_IMAGE_FLAGS),
       "CLR image flags (COMIMAGE_FLAGS)."
     )
   );
   if ((clrHeader.Flags & COMIMAGE_FLAGS_NATIVE_ENTRYPOINT) !== 0) {
     out.push(
-      dd(
+      renderDefinitionRow(
         "EntryPointRVA",
         hex(clrHeader.EntryPointToken, 8),
         "Native entry point RVA (COMIMAGE_FLAGS_NATIVE_ENTRYPOINT)."
@@ -247,9 +247,9 @@ export function renderClr(clrHeader: PeClrHeader, out: string[]): void {
     );
   } else {
     out.push(
-      dd(
+      renderDefinitionRow(
         "EntryPointToken",
-        safe(decodeEntryPointToken(clrHeader.EntryPointToken)),
+        escapeHtml(decodeEntryPointToken(clrHeader.EntryPointToken)),
         "Managed method token (table id + RID) used as the startup entry point."
       )
     );
@@ -261,7 +261,7 @@ export function renderClr(clrHeader: PeClrHeader, out: string[]): void {
   renderReadyToRun(clrHeader, out);
   if (clrHeader.issues?.length) {
     out.push(`<ul class="smallNote" style="color:var(--warn-fg)">`);
-    clrHeader.issues.forEach(issue => out.push(`<li>${safe(issue)}</li>`));
+    clrHeader.issues.forEach(issue => out.push(`<li>${escapeHtml(issue)}</li>`));
     out.push(`</ul>`);
   }
   renderClrMetadata(clrHeader, out);

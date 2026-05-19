@@ -1,6 +1,6 @@
 "use strict";
 
-import { dd, safe } from "../../html-utils.js";
+import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import { toHex32 } from "../../binary-utils.js";
 import type {
   SevenZipArchiveFlags,
@@ -40,7 +40,7 @@ const renderOverview = (sevenZip: SevenZipParseResult, out: string[]): void => {
       ? `${header.versionMajor}.${header.versionMinor}`
       : "-";
   out.push(
-    dd(
+    renderDefinitionRow(
       "Version",
       versionText,
       "7z format version stored in the 32-byte signature header."
@@ -48,7 +48,7 @@ const renderOverview = (sevenZip: SevenZipParseResult, out: string[]): void => {
   );
 
   out.push(
-    dd(
+    renderDefinitionRow(
       "Start header CRC",
       toHex32(header.startHeaderCrc ?? 0, 8),
       "CRC32 over the fields that locate the main header database."
@@ -58,7 +58,7 @@ const renderOverview = (sevenZip: SevenZipParseResult, out: string[]): void => {
   const relativeOffset = header.nextHeaderOffset;
   const relativeText = relativeOffset != null ? formatOffset(relativeOffset) : "-";
   out.push(
-    dd(
+    renderDefinitionRow(
       "Next header offset",
       formatOffset(header.absoluteNextHeaderOffset),
       `File offset (absolute position) of the header database. Stored on disk as a UINT64 offset from the end of the signature header; the stored relative offset here is ${relativeText}.`
@@ -66,7 +66,7 @@ const renderOverview = (sevenZip: SevenZipParseResult, out: string[]): void => {
   );
 
   out.push(
-    dd(
+    renderDefinitionRow(
       "Next header size",
       formatSize(header.nextHeaderSize),
       "Size in bytes of the encoded header database (packed size if compressed)."
@@ -74,7 +74,7 @@ const renderOverview = (sevenZip: SevenZipParseResult, out: string[]): void => {
   );
 
   out.push(
-    dd(
+    renderDefinitionRow(
       "Next header CRC",
       toHex32((next.crc ?? header.nextHeaderCrc) ?? 0, 8),
       "CRC32 checksum of the header database after decoding."
@@ -82,15 +82,15 @@ const renderOverview = (sevenZip: SevenZipParseResult, out: string[]): void => {
   );
 
   out.push(
-    dd(
+    renderDefinitionRow(
       "Header kind",
-      safe(describeHeaderKind(next.parsed)),
+      escapeHtml(describeHeaderKind(next.parsed)),
       "Whether the next header is plain, encoded (compressed/encrypted), empty or unknown."
     )
   );
 
   out.push(
-    dd(
+    renderDefinitionRow(
       "Archive flags",
       flags
         ? renderFlagsOrNone(
@@ -120,15 +120,15 @@ const renderOverview = (sevenZip: SevenZipParseResult, out: string[]): void => {
       encodingSummary = `${parts.join("; ")} — ${note}`;
     }
     out.push(
-      dd(
+      renderDefinitionRow(
         "Header encoding",
-        safe(encodingSummary),
+        escapeHtml(encodingSummary),
         "How the header database itself is encoded (compression and/or encryption coders)."
       )
     );
   } else {
     out.push(
-      dd(
+      renderDefinitionRow(
         "Header encoding",
         "Plain (not encoded)",
         "Header database is stored directly at the next-header location."
@@ -163,7 +163,7 @@ const renderFolders = (sevenZip: SevenZipParseResult, out: string[]): void => {
 
   folders.forEach((folder, index) => {
     const coderText = describeCoders(folder.coders);
-    const coders = safe(coderText);
+    const coders = escapeHtml(coderText);
     const unpacked = formatSizeDetailed(folder.unpackSize);
     const packed = formatSizeDetailed(folder.packedSize);
     const encrypted = folder.isEncrypted ? "Yes" : "No";
@@ -189,9 +189,9 @@ const renderKnownMethods = (out: string[]): void => {
   );
   out.push(`<ul class="smallNote">`);
   KNOWN_METHODS.forEach(([id, name, description]) => {
-    const label = safe(name);
-    const idText = safe(id);
-    const desc = description ? ` - ${safe(description)}` : "";
+    const label = escapeHtml(name);
+    const idText = escapeHtml(id);
+    const desc = description ? ` - ${escapeHtml(description)}` : "";
     out.push(`<li>${label} (id ${idText})${desc}</li>`);
   });
   out.push(`</ul>`);
@@ -205,7 +205,7 @@ const renderIssues = (sevenZip: SevenZipParseResult, out: string[]): void => {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Notices</h4>`);
   out.push(`<ul>`);
-  issues.forEach(issue => out.push(`<li>${safe(issue)}</li>`));
+  issues.forEach(issue => out.push(`<li>${escapeHtml(issue)}</li>`));
   out.push(`</ul>`);
   out.push(`</section>`);
 };

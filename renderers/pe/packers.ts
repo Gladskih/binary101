@@ -1,7 +1,7 @@
 "use strict";
 
 import { hex, humanSize } from "../../binary-utils.js";
-import { safe } from "../../html-utils.js";
+import { escapeHtml } from "../../html-utils.js";
 import type {
   PePackerAnalysis,
   PePackerDetail,
@@ -33,19 +33,19 @@ const renderDetailList = (finding: PePackerFinding): string => {
   if (!details.length) return "";
   return `<dl class="smallNote" style="display:grid;grid-template-columns:max-content 1fr;` +
     `gap:.15rem .55rem;margin:.25rem 0 0 0">${details.map(detail =>
-      `<dt>${safe(detail.label)}</dt><dd>${safe(formatDetailValue(detail))}</dd>`
+      `<dt>${escapeHtml(detail.label)}</dt><dd>${escapeHtml(formatDetailValue(detail))}</dd>`
     ).join("")}</dl>`;
 };
 
 const renderEvidence = (finding: PePackerFinding): string =>
   `<ul class="smallNote" style="margin:.1rem 0 0 0;padding-left:1.1rem">` +
-  finding.evidence.map(item => `<li>${safe(item)}</li>`).join("") +
+  finding.evidence.map(item => `<li>${escapeHtml(item)}</li>`).join("") +
   `</ul>${renderDetailList(finding)}`;
 
 const renderFindingRows = (findings: PePackerFinding[]): string =>
   findings.map(finding =>
-    `<tr><td>${safe(finding.name)}</td><td>${safe(kindLabel(finding.kind))}</td>` +
-    `<td>${safe(finding.confidence)}</td><td>${renderEvidence(finding)}</td></tr>`
+    `<tr><td>${escapeHtml(finding.name)}</td><td>${escapeHtml(kindLabel(finding.kind))}</td>` +
+    `<td>${escapeHtml(finding.confidence)}</td><td>${renderEvidence(finding)}</td></tr>`
   ).join("");
 
 export const renderPackers = (

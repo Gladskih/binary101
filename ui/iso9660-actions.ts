@@ -2,7 +2,7 @@
 
 import type { ParseForUiResult } from "../analyzers/index.js";
 import { formatHumanSize } from "../binary-utils.js";
-import { safe } from "../html-utils.js";
+import { escapeHtml } from "../html-utils.js";
 import { scanDirectoryBytes } from "../analyzers/iso9660/directory-records.js";
 import type { Iso9660StringEncoding } from "../analyzers/iso9660/types.js";
 import { renderIso9660DirectoryListing } from "./iso9660-directory-listing.js";
@@ -108,7 +108,7 @@ const createIso9660EntryClickHandler = ({ getParseResult, getFile, setStatusMess
         const available = Math.max(0, file.size - offset);
         const bytesToRead = Math.min(size, available, MAX_DIRECTORY_BYTES);
         if (bytesToRead <= 0) {
-          container.innerHTML = `<div class="smallNote">${safe("Directory is outside the file bounds.")}</div>`;
+          container.innerHTML = `<div class="smallNote">${escapeHtml("Directory is outside the file bounds.")}</div>`;
           setStatusMessage("Directory is outside the file bounds.");
           row.hidden = false;
           return;
@@ -146,7 +146,7 @@ const createIso9660EntryClickHandler = ({ getParseResult, getFile, setStatusMess
         setStatusMessage(null);
       } catch (error) {
         const message = error instanceof Error && error.message ? error.message : String(error);
-        container.innerHTML = `<div class="smallNote">${safe(message)}</div>`;
+        container.innerHTML = `<div class="smallNote">${escapeHtml(message)}</div>`;
         setStatusMessage(`Directory read failed: ${message}`);
       } finally {
         button.disabled = false;

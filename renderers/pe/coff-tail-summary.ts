@@ -1,7 +1,7 @@
 "use strict";
 
 import { humanSize, hex } from "../../binary-utils.js";
-import { dd, safe } from "../../html-utils.js";
+import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 import { peSectionNameOffset, peSectionNameValue } from "../../analyzers/pe/sections/name.js";
 
@@ -39,20 +39,20 @@ export const renderCoffTailSummary = (pe: PeParseResult): string | null => {
     `<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Legacy COFF tail</h4>`,
     `<div class="smallNote">These legacy COFF symbol/string-table structures live outside section data and are not mapped by the PE loader.</div>`,
     `<dl>`,
-    dd("SymbolTableOffset", hex(pe.coff.PointerToSymbolTable, 8), "File offset of the legacy COFF symbol table."),
-    dd("SymbolRecords", String(pe.coff.NumberOfSymbols >>> 0), "Number of 18-byte COFF symbol records."),
-    dd("SymbolTableSize", formatBigByteSize(coffSymbolTableSize), "Total size of the COFF symbol table."),
-    dd(
+    renderDefinitionRow("SymbolTableOffset", hex(pe.coff.PointerToSymbolTable, 8), "File offset of the legacy COFF symbol table."),
+    renderDefinitionRow("SymbolRecords", String(pe.coff.NumberOfSymbols >>> 0), "Number of 18-byte COFF symbol records."),
+    renderDefinitionRow("SymbolTableSize", formatBigByteSize(coffSymbolTableSize), "Total size of the COFF symbol table."),
+    renderDefinitionRow(
       "StringTableOffset",
       coffStringTableOffset != null ? hex(coffStringTableOffset, 8) : "-",
       "File offset where the COFF string table begins, immediately after the symbol table."
     ),
-    dd(
+    renderDefinitionRow(
       "StringTableSize",
       pe.coffStringTableSize != null ? humanSize(pe.coffStringTableSize) : "-",
       "Readable bytes of the COFF string table, including the 4-byte size field."
     ),
-    dd(
+    renderDefinitionRow(
       "RecoveredLongSectionNames",
       String(recoveredLongSectionNames.length),
       "Section names recovered from non-standard /<offset> references into the COFF string table."
@@ -60,7 +60,7 @@ export const renderCoffTailSummary = (pe: PeParseResult): string | null => {
   ];
   if (pe.trailingAlignmentPaddingSize) {
     out.push(
-      dd(
+      renderDefinitionRow(
         "TrailingAlignmentPadding",
         humanSize(pe.trailingAlignmentPaddingSize),
         "Zero-filled bytes that only pad the file tail to FileAlignment."
@@ -74,7 +74,7 @@ export const renderCoffTailSummary = (pe: PeParseResult): string | null => {
     );
     out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>Raw</th><th>Resolved</th></tr></thead><tbody>`);
     for (const entry of recoveredLongSectionNames) {
-      out.push(`<tr><td>${safe(entry.raw)}</td><td>${safe(entry.resolved)}</td></tr>`);
+      out.push(`<tr><td>${escapeHtml(entry.raw)}</td><td>${escapeHtml(entry.resolved)}</td></tr>`);
     }
     out.push(`</tbody></table></details>`);
   }

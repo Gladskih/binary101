@@ -5,15 +5,13 @@ import {
   escapeHtml,
   renderDefinitionRow,
   renderFlagChips,
-  renderOptionChips,
-  safe
+  renderOptionChips
 } from "../../html-utils.js";
 
 void test("escapeHtml replaces risky characters while leaving safe ones alone", () => {
   const raw = `5 < 6 && "quote"`;
   const escaped = escapeHtml(raw);
   assert.strictEqual(escaped, "5 &lt; 6 && &quot;quote&quot;");
-  assert.strictEqual(safe(raw), escaped);
 });
 
 void test("renderDefinitionRow emits tooltip-escaped definition pairs", () => {

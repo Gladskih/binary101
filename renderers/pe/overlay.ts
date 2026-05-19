@@ -1,7 +1,7 @@
 "use strict";
 
 import { humanSize, hex } from "../../binary-utils.js";
-import { safe } from "../../html-utils.js";
+import { escapeHtml } from "../../html-utils.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 import type { PeOverlayRange } from "../../analyzers/pe/overlay.js";
 import { renderPeDiagnostics } from "./diagnostics.js";
@@ -12,7 +12,7 @@ const getUnexplainedOverlaySize = (pe: PeParseResult): number =>
 
 const renderDownloadButton = (start: number, end: number, label: string): string =>
   `<button type="button" class="peSecurityTreeDownloadButton" data-pe-overlay-download ` +
-  `data-overlay-start="${start}" data-overlay-end="${end}" aria-label="${safe(label)}" title="${safe(label)}">` +
+  `data-overlay-start="${start}" data-overlay-end="${end}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">` +
   `<svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" ` +
   `stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">` +
   `<path d="M8 2.5v7"></path><path d="M5 6.8 8 9.8l3-3"></path><path d="M3 12.5h10"></path>` +
@@ -61,7 +61,7 @@ const renderCoverageBar = (range: PeOverlayRange): string =>
     const label = segment.kind === "found" ? "Detected payload" : "Unclassified bytes";
     return `<span class="peOverlayBarSegment peOverlayBarSegment--${segment.kind}" ` +
       `style="left:${leftPercent.toFixed(4)}%;width:${widthPercent.toFixed(4)}%" ` +
-      `title="${safe(`${label}: +${hex(segment.start - range.start)}..+${hex(segment.end - range.start)}`)}"></span>`;
+      `title="${escapeHtml(`${label}: +${hex(segment.start - range.start)}..+${hex(segment.end - range.start)}`)}"></span>`;
   }).join("") +
   `</div>`;
 
@@ -69,8 +69,8 @@ const renderFindingRows = (range: PeOverlayRange): string =>
   range.findings.map((finding, index) =>
     `<tr><td>${index + 1}</td><td>+${hex(finding.start - range.start)}-+${hex(finding.end - range.start)}` +
     `<div class="smallNote">${hex(finding.start, 8)}-${hex(finding.end, 8)}</div></td>` +
-    `<td>${humanSize(finding.size)}</td><td>${safe(finding.detectedType)}` +
-    `<div class="smallNote">${safe(finding.endDescription)}</div></td>` +
+    `<td>${humanSize(finding.size)}</td><td>${escapeHtml(finding.detectedType)}` +
+    `<div class="smallNote">${escapeHtml(finding.endDescription)}</div></td>` +
     `<td>${renderDownloadButton(finding.start, finding.end, `Download detected payload ${index + 1}`)}</td></tr>`
   ).join("");
 

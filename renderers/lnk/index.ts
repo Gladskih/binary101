@@ -1,6 +1,11 @@
 "use strict";
 
-import { dd, rowFlags, rowOpts, safe } from "../../html-utils.js";
+import {
+  renderDefinitionRow,
+  renderFlagChips,
+  renderOptionChips,
+  escapeHtml
+} from "../../html-utils.js";
 import { formatHumanSize, toHex32 } from "../../binary-utils.js";
 import { describeBlock } from "./extra-blocks.js";
 import { FILE_ATTRIBUTE_FLAGS, LINKINFO_FLAGS, LINK_FLAGS, SHOW_COMMAND_OPTIONS } from "./constants.js";
@@ -19,7 +24,7 @@ const formatTime = (value: { iso: string | null } | null | undefined): string =>
 const formatSize = (value: number | null | undefined): string =>
   value ? formatHumanSize(value) : "-";
 
-const renderHint = (text: string): string => `<div class="smallNote">${safe(text)}</div>`;
+const renderHint = (text: string): string => `<div class="smallNote">${escapeHtml(text)}</div>`;
 
 const renderHeader = (lnk: LnkParseResult, out: string[]): void => {
   const { header } = lnk;
@@ -29,30 +34,30 @@ const renderHeader = (lnk: LnkParseResult, out: string[]): void => {
   const clsidText = header.clsid || "-";
   const clsidTitle =
     "COM class identifier for Shell Link objects; 00021401-0000-0000-c000-000000000046 is the standard Shell Link CLSID.";
-  out.push(dd("LinkCLSID", `<span title="${safe(clsidTitle)}">${safe(clsidText)}</span>`));
-  out.push(dd("File size", formatSize(header.fileSize)));
-  out.push(dd("Flags", rowFlags(header.linkFlags || 0, LINK_FLAGS)));
-  out.push(dd("File attributes", rowFlags(header.fileAttributes || 0, FILE_ATTRIBUTE_FLAGS)));
-  out.push(dd("Created", safe(formatTime(header.creationTime))));
-  out.push(dd("Accessed", safe(formatTime(header.accessTime))));
-  out.push(dd("Modified", safe(formatTime(header.writeTime))));
+  out.push(renderDefinitionRow("LinkCLSID", `<span title="${escapeHtml(clsidTitle)}">${escapeHtml(clsidText)}</span>`));
+  out.push(renderDefinitionRow("File size", formatSize(header.fileSize)));
+  out.push(renderDefinitionRow("Flags", renderFlagChips(header.linkFlags || 0, LINK_FLAGS)));
+  out.push(renderDefinitionRow("File attributes", renderFlagChips(header.fileAttributes || 0, FILE_ATTRIBUTE_FLAGS)));
+  out.push(renderDefinitionRow("Created", escapeHtml(formatTime(header.creationTime))));
+  out.push(renderDefinitionRow("Accessed", escapeHtml(formatTime(header.accessTime))));
+  out.push(renderDefinitionRow("Modified", escapeHtml(formatTime(header.writeTime))));
 
   const showCommandValue = header.showCommand;
   const showCommandRow =
-    showCommandValue != null ? rowOpts(showCommandValue, SHOW_COMMAND_OPTIONS) : "-";
-  out.push(dd("Show command", showCommandRow));
+    showCommandValue != null ? renderOptionChips(showCommandValue, SHOW_COMMAND_OPTIONS) : "-";
+  out.push(renderDefinitionRow("Show command", showCommandRow));
 
-  out.push(dd("Hotkey", safe(header.hotKeyLabel || "-")));
+  out.push(renderDefinitionRow("Hotkey", escapeHtml(header.hotKeyLabel || "-")));
 
   let iconIndexHtml = "-";
   if (header.iconIndex != null) {
     const iconTitle =
       "Index of the icon within the icon location or target file; 0 refers to the first icon resource.";
-    iconIndexHtml = `<span title="${safe(iconTitle)}">${safe(
+    iconIndexHtml = `<span title="${escapeHtml(iconTitle)}">${escapeHtml(
       header.iconIndex.toString()
     )}</span>`;
   }
-  out.push(dd("Icon index", iconIndexHtml));
+  out.push(renderDefinitionRow("Icon index", iconIndexHtml));
 
   out.push(`</dl>`);
   out.push(
@@ -77,14 +82,14 @@ const renderVolumeInfo = (volume: LnkLinkInfo["volume"]): string => {
   if (!volume) return "-";
   const out: string[] = [];
   out.push(`<div class="smallNote">`);
-  out.push(`Drive type: ${safe(volume.driveTypeName || "-")}<br/>`);
+  out.push(`Drive type: ${escapeHtml(volume.driveTypeName || "-")}<br/>`);
   out.push(
     `Serial: ${
-      volume.driveSerialNumber != null ? safe(toHex32(volume.driveSerialNumber, 8)) : "-"
+      volume.driveSerialNumber != null ? escapeHtml(toHex32(volume.driveSerialNumber, 8)) : "-"
     }`
   );
   if (volume.volumeLabel) {
-    out.push(`<br/>Label: ${safe(volume.volumeLabel)}`);
+    out.push(`<br/>Label: ${escapeHtml(volume.volumeLabel)}`);
   }
   if (volume.truncated) {
     out.push(`<br/><span class="smallNote">VolumeID truncated</span>`);
@@ -97,12 +102,12 @@ const renderNetworkInfo = (network: LnkLinkInfo["network"]): string => {
   if (!network) return "";
   const parts: string[] = [];
   parts.push(`<div class="smallNote">`);
-  if (network.netName) parts.push(`Network path: ${safe(network.netName)}<br/>`);
-  if (network.deviceName) parts.push(`Device: ${safe(network.deviceName)}<br/>`);
+  if (network.netName) parts.push(`Network path: ${escapeHtml(network.netName)}<br/>`);
+  if (network.deviceName) parts.push(`Device: ${escapeHtml(network.deviceName)}<br/>`);
   const provider =
     network.networkProviderName ||
     (network.networkProviderType != null ? toHex32(network.networkProviderType, 8) : null);
-  if (provider) parts.push(`Provider: ${safe(provider)}<br/>`);
+  if (provider) parts.push(`Provider: ${escapeHtml(provider)}<br/>`);
   if (network.truncated) parts.push(`<span class="smallNote">Network data truncated</span>`);
   parts.push(`</div>`);
   return parts.join("");
@@ -114,21 +119,21 @@ const renderLinkInfo = (lnk: LnkParseResult, out: string[]): void => {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">LinkInfo</h4>`);
   out.push(`<dl>`);
-  out.push(dd("Flags", rowFlags(info.flags || 0, LINKINFO_FLAGS)));
+  out.push(renderDefinitionRow("Flags", renderFlagChips(info.flags || 0, LINKINFO_FLAGS)));
   if (info.localBasePath != null) {
-    out.push(dd("LocalBasePath (ANSI)", safe(info.localBasePath)));
+    out.push(renderDefinitionRow("LocalBasePath (ANSI)", escapeHtml(info.localBasePath)));
   }
   if (info.localBasePathUnicode) {
-    out.push(dd("LocalBasePathUnicode (UTF-16LE)", safe(info.localBasePathUnicode)));
+    out.push(renderDefinitionRow("LocalBasePathUnicode (UTF-16LE)", escapeHtml(info.localBasePathUnicode)));
   }
   if (info.commonPathSuffix != null) {
-    out.push(dd("CommonPathSuffix (ANSI)", safe(info.commonPathSuffix)));
+    out.push(renderDefinitionRow("CommonPathSuffix (ANSI)", escapeHtml(info.commonPathSuffix)));
   }
   if (info.commonPathSuffixUnicode) {
-    out.push(dd("CommonPathSuffixUnicode (UTF-16LE)", safe(info.commonPathSuffixUnicode)));
+    out.push(renderDefinitionRow("CommonPathSuffixUnicode (UTF-16LE)", escapeHtml(info.commonPathSuffixUnicode)));
   }
-  out.push(dd("Volume", renderVolumeInfo(info.volume)));
-  out.push(dd("Network", renderNetworkInfo(info.network) || "-"));
+  out.push(renderDefinitionRow("Volume", renderVolumeInfo(info.volume)));
+  out.push(renderDefinitionRow("Network", renderNetworkInfo(info.network) || "-"));
   const base = info.localBasePathUnicode || info.localBasePath;
   const suffix = info.commonPathSuffixUnicode || info.commonPathSuffix;
   let resolved = null;
@@ -140,7 +145,7 @@ const renderLinkInfo = (lnk: LnkParseResult, out: string[]): void => {
     resolved = suffix;
   }
   if (resolved) {
-    out.push(dd("LocalBasePath + CommonPathSuffix", safe(resolved)));
+    out.push(renderDefinitionRow("LocalBasePath + CommonPathSuffix", escapeHtml(resolved)));
   }
   if (info.truncated) {
     out.push(`<div class="smallNote">LinkInfo extends beyond file size.</div>`);
@@ -164,7 +169,7 @@ const renderStrings = (lnk: LnkParseResult, out: string[]): void => {
   out.push(`<dl>`);
   keys.forEach(key => {
     const value = s[key];
-    if (value) out.push(dd(key, safe(value)));
+    if (value) out.push(renderDefinitionRow(key, escapeHtml(value)));
   });
   out.push(`</dl>`);
   out.push(
@@ -181,9 +186,9 @@ const renderIdList = (lnk: LnkParseResult, out: string[]): void => {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">LinkTargetIDList</h4>`);
   out.push(`<dl>`);
-  out.push(dd("Size", `${idList.size} bytes`));
+  out.push(renderDefinitionRow("Size", `${idList.size} bytes`));
   const itemCount = idList.items?.length ? idList.items.length.toString() : "0";
-  out.push(dd("Items", itemCount));
+  out.push(renderDefinitionRow("Items", itemCount));
   if (idList.truncated) out.push(`<div class="smallNote">ID list truncated</div>`);
   out.push(`</dl>`);
   if (idList.items?.length) {
@@ -195,12 +200,12 @@ const renderIdList = (lnk: LnkParseResult, out: string[]): void => {
       const typeTitle = item.typeHex ? `${typeLabel} (${item.typeHex})` : typeLabel;
       out.push(
         `<tr><td>${item.index ?? ""}</td>` +
-          `<td title="${safe(typeTitle)}">${safe(typeLabel)}</td>` +
-          `<td title="DOS 8.3 short name">${safe(item.shortName || "-")}</td>` +
-          `<td title="Decoded from BEEF0004 extension">${safe(item.longName || "-")}</td>` +
+          `<td title="${escapeHtml(typeTitle)}">${escapeHtml(typeLabel)}</td>` +
+          `<td title="DOS 8.3 short name">${escapeHtml(item.shortName || "-")}</td>` +
+          `<td title="Decoded from BEEF0004 extension">${escapeHtml(item.longName || "-")}</td>` +
           `<td>${item.fileSize != null ? item.fileSize.toString() : "-"}</td>` +
-          `<td>${safe(item.modified || "-")}</td>` +
-          `<td title="File attributes">${item.attributes != null ? safe(toHex32(item.attributes, 4)) : "-"}</td>` +
+          `<td>${escapeHtml(item.modified || "-")}</td>` +
+          `<td title="File attributes">${item.attributes != null ? escapeHtml(toHex32(item.attributes, 4)) : "-"}</td>` +
         `</tr>`
       );
     });
@@ -225,7 +230,7 @@ const renderExtraData = (lnk: LnkParseResult, out: string[]): void => {
     const sig = toHex32(block.signature >>> 0, 8);
     const note = block.truncated ? " (truncated)" : "";
     out.push(
-      `<li>${safe(name)} ${safe(sig)} - ${block.size} bytes${note}${describeBlock(block)}</li>`
+      `<li>${escapeHtml(name)} ${escapeHtml(sig)} - ${block.size} bytes${note}${describeBlock(block)}</li>`
     );
   });
   out.push(`</ul>`);
@@ -243,7 +248,7 @@ const renderWarnings = (lnk: LnkParseResult, out: string[]): void => {
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Notices</h4>`);
   out.push(`<ul>`);
-  issues.forEach(issue => out.push(`<li>${safe(issue)}</li>`));
+  issues.forEach(issue => out.push(`<li>${escapeHtml(issue)}</li>`));
   out.push(`</ul>`);
   out.push(`</section>`);
 };

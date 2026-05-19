@@ -1,5 +1,5 @@
 "use strict";
-import { safe } from "../../html-utils.js";
+import { escapeHtml } from "../../html-utils.js";
 import type {
   ResourceAcceleratorEntryPreview,
   ResourceLangWithPreview,
@@ -12,14 +12,14 @@ import { renderManifestPreview, renderManifestTree } from "./resource-preview-ma
 const renderIssues = (langEntry: ResourceLangWithPreview): string => {
   const issues = (langEntry.previewIssues || []).filter((issue): issue is string => Boolean(issue));
   return issues.length
-    ? `<div class="smallNote" style="color:var(--warning-text,#b45309)">WARNING: ${issues.map(safe).join(" - ")}</div>`
+    ? `<div class="smallNote" style="color:var(--warning-text,#b45309)">WARNING: ${issues.map(escapeHtml).join(" - ")}</div>`
     : "";
 };
 const renderFields = (langEntry: ResourceLangWithPreview): string => {
   const fields = langEntry.previewFields || [];
   if (!fields.length) return "";
   const rows = fields
-    .map(field => `<tr><th scope="row">${safe(field.label)}</th><td>${safe(field.value)}</td></tr>`)
+    .map(field => `<tr><th scope="row">${escapeHtml(field.label)}</th><td>${escapeHtml(field.value)}</td></tr>`)
     .join("");
   return `<table class="table peResourceFieldTable"><tbody>${rows}</tbody></table>`;
 };
@@ -27,9 +27,9 @@ const renderMenuItems = (items: ResourceMenuItemPreview[]): string => {
   if (!items.length) return '<div class="smallNote">(empty menu)</div>';
   const rows = items.map(item => {
     const header = [
-      item.text ? safe(item.text) : '<span class="smallNote">(separator or unnamed)</span>',
-      item.id != null ? `<span class="mono">#${safe(item.id)}</span>` : "",
-      item.flags.length ? `<span class="smallNote">${safe(item.flags.join(", "))}</span>` : ""
+      item.text ? escapeHtml(item.text) : '<span class="smallNote">(separator or unnamed)</span>',
+      item.id != null ? `<span class="mono">#${escapeHtml(item.id)}</span>` : "",
+      item.flags.length ? `<span class="smallNote">${escapeHtml(item.flags.join(", "))}</span>` : ""
     ].filter(Boolean).join(" ");
     return `<li>${header}${item.children.length ? renderMenuItems(item.children) : ""}</li>`;
   }).join("");
@@ -37,8 +37,8 @@ const renderMenuItems = (items: ResourceMenuItemPreview[]): string => {
 };
 const renderAcceleratorEntries = (entries: ResourceAcceleratorEntryPreview[]): string => {
   const rows = entries.map(entry =>
-    `<tr><td class="mono">${safe([...entry.modifiers, entry.key].join("+"))}</td>` +
-      `<td class="mono peNumeric">#${safe(entry.id)}</td></tr>`
+    `<tr><td class="mono">${escapeHtml([...entry.modifiers, entry.key].join("+"))}</td>` +
+      `<td class="mono peNumeric">#${escapeHtml(entry.id)}</td></tr>`
   ).join("");
   return `<table class="table peResourceNestedTable"><thead><tr><th>Shortcut</th>` +
     `<th>Command ID</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -47,8 +47,8 @@ const renderDefinitionRows = (rows: Array<{ label: string; value: string }>): st
   if (!rows.length) return "";
   const cells = rows
     .map(row =>
-      `<div><span class="mono">${safe(row.label)}</span></div>` +
-      `<div style="min-width:0;overflow-wrap:anywhere">${safe(row.value)}</div>`
+      `<div><span class="mono">${escapeHtml(row.label)}</span></div>` +
+      `<div style="min-width:0;overflow-wrap:anywhere">${escapeHtml(row.value)}</div>`
     )
     .join("");
   return `<div class="smallNote" style="display:grid;grid-template-columns:max-content 1fr;gap:.15rem .55rem;margin-top:.2rem">${cells}</div>`;
@@ -97,7 +97,7 @@ const renderVersionTranslations = (
   );
   if (!translations.length) return "";
   const rows = translations
-    .map(entry => `<li>${safe(formatVersionTranslation(entry.languageId, entry.codePage))}</li>`)
+    .map(entry => `<li>${escapeHtml(formatVersionTranslation(entry.languageId, entry.codePage))}</li>`)
     .join("");
   return `<div class="smallNote" style="margin-top:.35rem"><b>Declared translations</b><ul style="padding-left:1.1rem;margin:.2rem 0 0 0">${rows}</ul></div>`;
 };
@@ -128,7 +128,7 @@ const renderVersionStringTables = (info: ResourceVersionPreview): string => {
   }
   return [...stringsByTable.entries()].map(([table, values]) =>
     values.length
-      ? `<div class="smallNote" style="margin-top:.35rem"><b>${safe(formatVersionTableName(table))}</b>${renderDefinitionRows(values.map(value => ({ label: value.key, value: value.value })))}</div>`
+      ? `<div class="smallNote" style="margin-top:.35rem"><b>${escapeHtml(formatVersionTableName(table))}</b>${renderDefinitionRows(values.map(value => ({ label: value.key, value: value.value })))}</div>`
       : ""
   ).join("");
 };
@@ -162,8 +162,8 @@ const renderStringTablePreview = (langEntry: ResourceLangWithPreview): string =>
   const rows = (langEntry.stringTable || [])
     .map(entry =>
       `<tr><td class="mono peNumeric">` +
-      `${entry.id != null ? `#${safe(entry.id)}` : "(index)"}</td>` +
-      `<td dir="auto">${safe(entry.text || "")}</td></tr>`
+      `${entry.id != null ? `#${escapeHtml(entry.id)}` : "(index)"}</td>` +
+      `<td dir="auto">${escapeHtml(entry.text || "")}</td></tr>`
     )
     .join("");
   return `<table class="table peResourceNestedTable peResourceTextTable">` +
@@ -174,8 +174,8 @@ const renderMessageTablePreview = (langEntry: ResourceLangWithPreview): string =
   const rows = (langEntry.messageTable?.messages || [])
     .map(message => {
       const text = Array.isArray(message.strings) ? message.strings.join(" | ") : "";
-      return `<tr><td class="mono peNumeric">#${safe(message.id)}</td>` +
-        `<td dir="auto">${safe(text)}</td></tr>`;
+      return `<tr><td class="mono peNumeric">#${escapeHtml(message.id)}</td>` +
+        `<td dir="auto">${escapeHtml(text)}</td></tr>`;
     })
     .join("");
   const truncated = langEntry.messageTable?.truncated
@@ -225,7 +225,7 @@ export const renderPreviewCell = (langEntry: ResourceLangWithPreview | null | un
   if (langEntry.previewKind === "image" && langEntry.previewDataUrl) {
     return [
       `<img class="peResourceImagePreview" src="${langEntry.previewDataUrl}" ` +
-        `alt="resource preview" title="${safe(langEntry.previewMime || "image/png")}" />`,
+        `alt="resource preview" title="${escapeHtml(langEntry.previewMime || "image/png")}" />`,
       renderFields(langEntry),
       renderIssues(langEntry)
     ].join("");
@@ -248,7 +248,7 @@ export const renderPreviewCell = (langEntry: ResourceLangWithPreview | null | un
       ) + renderFields(langEntry) + renderIssues(langEntry);
     }
     return [
-      `<div class="mono smallNote" style="white-space:pre-wrap;word-break:break-word">${safe(String(langEntry.textPreview))}</div>`,
+      `<div class="mono smallNote" style="white-space:pre-wrap;word-break:break-word">${escapeHtml(String(langEntry.textPreview))}</div>`,
       renderFields(langEntry),
       renderIssues(langEntry)
     ].join("");
@@ -256,9 +256,9 @@ export const renderPreviewCell = (langEntry: ResourceLangWithPreview | null | un
   if (langEntry.previewKind === "html" && langEntry.textPreview) {
     return [
       langEntry.textEncoding
-        ? `<div class="smallNote">Encoding: ${safe(langEntry.textEncoding)}</div>`
+        ? `<div class="smallNote">Encoding: ${escapeHtml(langEntry.textEncoding)}</div>`
         : "",
-      `<div class="mono smallNote" style="white-space:pre-wrap;word-break:break-word">${safe(String(langEntry.textPreview))}</div>`,
+      `<div class="mono smallNote" style="white-space:pre-wrap;word-break:break-word">${escapeHtml(String(langEntry.textPreview))}</div>`,
       renderFields(langEntry),
       renderIssues(langEntry)
     ].join("");
