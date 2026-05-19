@@ -65,15 +65,13 @@ void test("renderHeaders covers known/unknown branches and exact linker versions
     html,
     /<summary[^>]*><b>Data directories<\/b> - 1 present, 2 entries<\/summary>/
   );
-  assert.match(html, /<table class="table peDataDirectoryTable" data-sortable>/);
+  assert.match(html, /<table class="table peDataDirectoryTable">/);
   assert.match(
     html,
-    /<th class="sortableTableHeader peDataDirectoryTable__status">/
+    /<th class="peDataDirectoryTable__status" aria-label="Status"><\/th>/
   );
-  assert.match(html, /data-sort-table-column="0" aria-label="Sort by Status">/);
-  assert.match(html, /<span class="sortableTableHeaderLabel">#<\/span>/);
-  assert.match(html, /<span class="sortableTableHeaderLabel">Size<\/span>/);
-  assert.match(html, /<span class="sortableTableHeaderSortIcon" aria-hidden="true"><\/span>/);
+  assert.match(html, /<th class="peDataDirectoryTable__index">#<\/th>/);
+  assert.match(html, /<th class="peDataDirectoryTable__size">Size<\/th>/);
   assert.ok(html.includes("peDataDirectoryStatus--present"));
   assert.ok(html.includes("peDataDirectoryStatus--absent"));
   assert.doesNotMatch(html, />Present<\/span>/);
@@ -114,6 +112,18 @@ void test("renderHeaders handles fallbacks and missing optional parts", () => {
   assert.ok(html.includes("11.0 (11.0)"));
   assert.ok(html.includes("Portable Executable (PE) / COFF"));
   assert.ok(html.includes("Rich header: not present"));
+});
+
+void test("renderHeaders keeps data directory sorting out of renderer markup", () => {
+  const pe: PeParseResult = createBasePe();
+  pe.dirs = [{ index: 1, name: "IMPORT", rva: 0x1000, size: 0x10 }];
+  const out: string[] = [];
+  renderHeaders(pe, out);
+  const html = out.join("");
+
+  assert.match(html, /<table class="table peDataDirectoryTable">/);
+  assert.doesNotMatch(html, /sortableTableHeaderButton/);
+  assert.match(html, /<th class="peDataDirectoryTable__directory">Directory<\/th>/);
 });
 
 void test("renderHeaders renders ROM-specific optional fields and omits Windows-only controls", () => {

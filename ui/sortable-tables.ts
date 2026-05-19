@@ -36,7 +36,7 @@ const isAutoSortableTable = (table: HTMLTableElement): boolean => {
   const tbody = table.tBodies.item(0);
   if (!headerRow || !tbody || table.tHead?.rows.length !== 1) return false;
   const columnCount = headerRow.cells.length;
-  if (columnCount < 2 || !hasSimpleCells(headerRow.cells)) return false;
+  if (tbody.rows.length < 2 || columnCount < 2 || !hasSimpleCells(headerRow.cells)) return false;
   return Array.from(tbody.rows).every(
     row => row.cells.length === columnCount && hasSimpleCells(row.cells)
   );

@@ -1,6 +1,11 @@
 "use strict";
 import { humanSize, hex, isoOrDash } from "../../binary-utils.js";
-import { dd, rowOpts, rowFlags, safe } from "../../html-utils.js";
+import {
+  renderDefinitionRow,
+  renderOptionChips,
+  renderFlagChips,
+  escapeHtml
+} from "../../html-utils.js";
 import {
   MACHINE,
   SUBSYSTEMS,
@@ -56,19 +61,7 @@ const renderDataDirectoryStatus = (present: boolean): string =>
   `aria-label="${present ? "Present" : "Absent"}" title="${present ? "Present" : "Absent"}"></span>`;
 
 const renderDataDirectorySize = (size: number): string =>
-  `<span title="${size} bytes">${safe(humanSize(size).replace(` (${size} bytes)`, ""))}</span>`;
-
-const renderSortableHeader = (
-  label: string,
-  columnIndex: number,
-  cellClassName: string,
-  visualLabel = label
-): string =>
-  `<th class="sortableTableHeader ${cellClassName}">` +
-  `<button type="button" class="sortableTableHeaderButton" ` +
-  `data-sort-table-column="${columnIndex}" aria-label="Sort by ${safe(label)}">` +
-  `<span class="sortableTableHeaderLabel">${safe(visualLabel)}</span>` +
-  `<span class="sortableTableHeaderSortIcon" aria-hidden="true"></span></button></th>`;
+  `<span title="${size} bytes">${humanSize(size).replace(` (${size} bytes)`, "")}</span>`;
 
 const renderPeFormatNote = (out: string[]): void => {
   out.push(
@@ -88,17 +81,19 @@ const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
     )
   );
   out.push(
-    `<div class="tableWrap"><table class="table peDataDirectoryTable" data-sortable>` +
-    `<thead><tr>${renderSortableHeader("Status", 0, "peDataDirectoryTable__status", "")}` +
-    `${renderSortableHeader("#", 1, "peDataDirectoryTable__index")}` +
-    `${renderSortableHeader("Directory", 2, "peDataDirectoryTable__directory")}` +
-    `${renderSortableHeader("RVA", 3, "peDataDirectoryTable__rva")}` +
-    `${renderSortableHeader("Size", 4, "peDataDirectoryTable__size")}` +
-    `${renderSortableHeader("Meaning", 5, "peDataDirectoryTable__meaning")}` +
+    `<div class="tableWrap"><table class="table peDataDirectoryTable">` +
+    `<thead><tr>` +
+    `<th class="peDataDirectoryTable__status" aria-label="Status"></th>` +
+    `<th class="peDataDirectoryTable__index">#</th>` +
+    `<th class="peDataDirectoryTable__directory">Directory</th>` +
+    `<th class="peDataDirectoryTable__rva">RVA</th>` +
+    `<th class="peDataDirectoryTable__size">Size</th>` +
+    `<th class="peDataDirectoryTable__meaning">Meaning</th>` +
     `</tr></thead><tbody>`
   );
   pe.dirs.forEach(directory => {
     const present = directory.rva !== 0 || directory.size !== 0;
+    const meaning = dataDirectoryMeaning(directory.name);
     out.push(
       `<tr class="peDataDirectoryTable__row${
         present ? "" : " peDataDirectoryTable__row--absent"
@@ -108,16 +103,14 @@ const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
       `<td class="peNumeric peDataDirectoryTable__index" data-sort-value="${directory.index ?? ""}">` +
       `${directory.index == null ? "-" : directory.index}</td>` +
       `<th scope="row" class="peDataDirectoryTable__directory" ` +
-      `data-sort-value="${safe(directory.name)}">${safe(directory.name)}</th>` +
+      `data-sort-value="${escapeHtml(directory.name)}">${escapeHtml(directory.name)}</th>` +
       `<td class="peNumeric peDataDirectoryTable__rva" data-sort-value="${directory.rva}">` +
       `${hex(directory.rva, 8)}</td>` +
       `<td class="peNumeric peDataDirectoryTable__size peDataDirectorySize" ` +
       `data-sort-value="${directory.size}">` +
       `${renderDataDirectorySize(directory.size)}</td>` +
       `<td class="smallNote peDataDirectoryTable__meaning" style="margin:0;font-family:inherit" ` +
-      `data-sort-value="${safe(dataDirectoryMeaning(directory.name))}">${safe(
-        dataDirectoryMeaning(directory.name)
-      )}</td></tr>`
+      `data-sort-value="${meaning}">${meaning}</td></tr>`
     );
   });
   out.push(`</tbody></table></div>`);
@@ -142,8 +135,8 @@ const renderSections = (pe: PeParseResult, out: string[]): void => {
     const coffStringTableOffset = peSectionNameOffset(section.name);
     const hint = knownSectionName(sectionName);
     const baseNameCell = hint
-      ? `<span title="${safe(hint)}"><b>${safe(sectionName || "(unnamed)")}</b></span>`
-      : `<span title="User-defined">${safe(sectionName || "(unnamed)")}</span>`;
+      ? `<span title="${hint}"><b>${escapeHtml(sectionName || "(unnamed)")}</b></span>`
+      : `<span title="User-defined">${escapeHtml(sectionName || "(unnamed)")}</span>`;
     const nameCell =
       coffStringTableOffset != null && sectionName !== `/${coffStringTableOffset}`
         ? `${baseNameCell}<div class="smallNote dim">COFF name /${coffStringTableOffset}</div>`
@@ -163,7 +156,7 @@ const renderSections = (pe: PeParseResult, out: string[]): void => {
 };
 
 const renderInlineHeaderTitle = (title: string): string =>
-  `<h4 style="margin:0 0 .5rem 0;font-size:.9rem">${safe(title)}</h4>`;
+  `<h4 style="margin:0 0 .5rem 0;font-size:.9rem">${title}</h4>`;
 
 export function renderHeaders(pe: PeParseResult, out: string[]): void {
   renderPeFormatNote(out);
@@ -172,17 +165,17 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
   out.push(renderPeSectionStart("PE/COFF headers"));
   out.push(renderInlineHeaderTitle("PE signature"));
   out.push(`<dl>`);
-  out.push(dd("Signature", "PE", "The PE\\0\\0 signature precedes the COFF file header and identifies the image as PE/COFF."));
+  out.push(renderDefinitionRow("Signature", "PE", "The PE\\0\\0 signature precedes the COFF file header and identifies the image as PE/COFF."));
   out.push(`</dl>`);
   out.push(renderInlineHeaderTitle("COFF file header"));
   out.push(`<dl>`);
-  out.push(dd("Machine", rowOpts(pe.coff.Machine, MACHINE), "Target CPU architecture. The highlighted chip indicates the Machine field value."));
-  out.push(dd("NumberOfSections", `${pe.coff.NumberOfSections}`, "Number of section headers that immediately follow the optional header."));
-  out.push(dd("TimeDateStamp", isoOrDash(pe.coff.TimeDateStamp), "Link time as Unix epoch. Toolchains sometimes set this to reproducible values."));
-  out.push(dd("PointerToSymbolTable", hex(pe.coff.PointerToSymbolTable, 8), "COFF symbol table pointer (deprecated, usually 0)."));
-  out.push(dd("NumberOfSymbols", String(pe.coff.NumberOfSymbols), "COFF symbol count (deprecated)."));
-  out.push(dd("SizeOfOptionalHeader", `${pe.coff.SizeOfOptionalHeader} bytes`, "Size of the optional header (standard + Windows-specific)."));
-  out.push(dd("Characteristics", rowFlags(pe.coff.Characteristics, CHAR_FLAGS), "Flags describing image traits (DLL, system file, etc.)."));
+  out.push(renderDefinitionRow("Machine", renderOptionChips(pe.coff.Machine, MACHINE), "Target CPU architecture. The highlighted chip indicates the Machine field value."));
+  out.push(renderDefinitionRow("NumberOfSections", `${pe.coff.NumberOfSections}`, "Number of section headers that immediately follow the optional header."));
+  out.push(renderDefinitionRow("TimeDateStamp", isoOrDash(pe.coff.TimeDateStamp), "Link time as Unix epoch. Toolchains sometimes set this to reproducible values."));
+  out.push(renderDefinitionRow("PointerToSymbolTable", hex(pe.coff.PointerToSymbolTable, 8), "COFF symbol table pointer (deprecated, usually 0)."));
+  out.push(renderDefinitionRow("NumberOfSymbols", String(pe.coff.NumberOfSymbols), "COFF symbol count (deprecated)."));
+  out.push(renderDefinitionRow("SizeOfOptionalHeader", `${pe.coff.SizeOfOptionalHeader} bytes`, "Size of the optional header (standard + Windows-specific)."));
+  out.push(renderDefinitionRow("Characteristics", renderFlagChips(pe.coff.Characteristics, CHAR_FLAGS), "Flags describing image traits (DLL, system file, etc.)."));
   out.push(`</dl>`);
 
   const oh = pe.opt;
@@ -202,36 +195,36 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
     return;
   }
   out.push(
-    dd(
+    renderDefinitionRow(
       "Magic",
-      rowOpts(oh.Magic, [[PE32_OPTIONAL_HEADER_MAGIC, "PE32"], [PE32_PLUS_OPTIONAL_HEADER_MAGIC, "PE32+"], [ROM_OPTIONAL_HEADER_MAGIC, "ROM"]]),
+      renderOptionChips(oh.Magic, [[PE32_OPTIONAL_HEADER_MAGIC, "PE32"], [PE32_PLUS_OPTIONAL_HEADER_MAGIC, "PE32+"], [ROM_OPTIONAL_HEADER_MAGIC, "ROM"]]),
       "Identifies PE32 (32-bit), PE32+ (64-bit), or IMAGE_ROM_OPTIONAL_HEADER."
     )
   );
   out.push(
-    dd(
+    renderDefinitionRow(
       "LinkerVersion",
       linkerVersionHint(oh.LinkerMajor, oh.LinkerMinor),
       "Linker that produced this image (MSVC or lld-link version family)."
     )
   );
-  out.push(dd("SizeOfCode", humanSize(oh.SizeOfCode), "Size of code section bytes."));
+  out.push(renderDefinitionRow("SizeOfCode", humanSize(oh.SizeOfCode), "Size of code section bytes."));
   out.push(
-    dd(
+    renderDefinitionRow(
       "SizeOfInitializedData",
       humanSize(oh.SizeOfInitializedData),
       "Size of initialized data section bytes."
     )
   );
   out.push(
-    dd(
+    renderDefinitionRow(
       "SizeOfUninitializedData",
       humanSize(oh.SizeOfUninitializedData),
       "Size of uninitialized data bytes (BSS)."
     )
   );
   out.push(
-    dd(
+    renderDefinitionRow(
       "AddressOfEntryPoint",
       hex(oh.AddressOfEntryPoint, 8),
       oh.Magic === ROM_OPTIONAL_HEADER_MAGIC
@@ -239,42 +232,42 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
         : "RVA of entry point. Zero for DLLs without a preferred entry."
     )
   );
-  out.push(dd("EntrySection", pe.entrySection ? safe(pe.entrySection.name || "(unnamed)") : "-", entrySectionInfo));
+  out.push(renderDefinitionRow("EntrySection", pe.entrySection ? escapeHtml(pe.entrySection.name || "(unnamed)") : "-", entrySectionInfo));
   if (oh.Magic === ROM_OPTIONAL_HEADER_MAGIC) {
-    out.push(dd("BaseOfCode", hex(oh.BaseOfCode, 8), "Base address of code within the ROM image."));
-    out.push(dd("BaseOfData", hex(oh.BaseOfData, 8), "Base address of initialized data within the ROM image."));
-    out.push(dd("BaseOfBss", hex(oh.rom.BaseOfBss, 8), "Base address of uninitialized data within the ROM image."));
-    out.push(dd("GprMask", hex(oh.rom.GprMask, 8), "General-purpose register mask recorded by the ROM toolchain."));
-    out.push(dd("CprMask", safe(formatWordListHex(oh.rom.CprMask)), "Coprocessor register masks recorded by the ROM toolchain."));
-    out.push(dd("GpValue", hex(oh.rom.GpValue, 8), "Global-pointer seed value recorded in IMAGE_ROM_OPTIONAL_HEADER."));
+    out.push(renderDefinitionRow("BaseOfCode", hex(oh.BaseOfCode, 8), "Base address of code within the ROM image."));
+    out.push(renderDefinitionRow("BaseOfData", hex(oh.BaseOfData, 8), "Base address of initialized data within the ROM image."));
+    out.push(renderDefinitionRow("BaseOfBss", hex(oh.rom.BaseOfBss, 8), "Base address of uninitialized data within the ROM image."));
+    out.push(renderDefinitionRow("GprMask", hex(oh.rom.GprMask, 8), "General-purpose register mask recorded by the ROM toolchain."));
+    out.push(renderDefinitionRow("CprMask", formatWordListHex(oh.rom.CprMask), "Coprocessor register masks recorded by the ROM toolchain."));
+    out.push(renderDefinitionRow("GpValue", hex(oh.rom.GpValue, 8), "Global-pointer seed value recorded in IMAGE_ROM_OPTIONAL_HEADER."));
     out.push(`</dl>`);
     out.push(`<div class="smallNote">ROM optional headers stop here: Windows-only fields such as ImageBase, SectionAlignment, Subsystem, CheckSum, stack/heap sizes, and the PE data-directory array are not part of IMAGE_ROM_OPTIONAL_HEADER.</div>`);
     out.push(renderPeSectionEnd());
   } else {
     const pointerWidth = oh.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC ? 16 : 8;
-    out.push(dd("ImageBase", formatPointerHex(oh.ImageBase, pointerWidth), "Preferred load address."));
-    out.push(dd("SectionAlignment", humanSize(oh.SectionAlignment), "Alignment of sections in memory."));
-    out.push(dd("FileAlignment", humanSize(oh.FileAlignment), "Alignment of sections in the file."));
-    out.push(dd("OperatingSystemVersion", winVersionName(oh.OSVersionMajor, oh.OSVersionMinor), "Minimum required OS version."));
-    out.push(dd("ImageVersion", `${oh.ImageVersionMajor}.${oh.ImageVersionMinor}`, "Image version (informational)."));
-    out.push(dd("SubsystemVersion", `${oh.SubsystemVersionMajor}.${oh.SubsystemVersionMinor}`, "Minimum subsystem version."));
-    out.push(dd("Subsystem", rowOpts(oh.Subsystem, SUBSYSTEMS), "Required subsystem (GUI, CUI, etc.)."));
-    out.push(dd("DllCharacteristics", rowFlags(oh.DllCharacteristics, DLL_FLAGS), "DLL characteristics (ASLR, DEP, etc.)."));
-    out.push(dd("SizeOfImage", humanSize(oh.SizeOfImage), "Size of image in memory, including all headers and sections."));
-    out.push(dd("SizeOfHeaders", humanSize(oh.SizeOfHeaders), "Combined size of DOS stub, PE header, and section headers."));
+    out.push(renderDefinitionRow("ImageBase", formatPointerHex(oh.ImageBase, pointerWidth), "Preferred load address."));
+    out.push(renderDefinitionRow("SectionAlignment", humanSize(oh.SectionAlignment), "Alignment of sections in memory."));
+    out.push(renderDefinitionRow("FileAlignment", humanSize(oh.FileAlignment), "Alignment of sections in the file."));
+    out.push(renderDefinitionRow("OperatingSystemVersion", winVersionName(oh.OSVersionMajor, oh.OSVersionMinor), "Minimum required OS version."));
+    out.push(renderDefinitionRow("ImageVersion", `${oh.ImageVersionMajor}.${oh.ImageVersionMinor}`, "Image version (informational)."));
+    out.push(renderDefinitionRow("SubsystemVersion", `${oh.SubsystemVersionMajor}.${oh.SubsystemVersionMinor}`, "Minimum subsystem version."));
+    out.push(renderDefinitionRow("Subsystem", renderOptionChips(oh.Subsystem, SUBSYSTEMS), "Required subsystem (GUI, CUI, etc.)."));
+    out.push(renderDefinitionRow("DllCharacteristics", renderFlagChips(oh.DllCharacteristics, DLL_FLAGS), "DLL characteristics (ASLR, DEP, etc.)."));
+    out.push(renderDefinitionRow("SizeOfImage", humanSize(oh.SizeOfImage), "Size of image in memory, including all headers and sections."));
+    out.push(renderDefinitionRow("SizeOfHeaders", humanSize(oh.SizeOfHeaders), "Combined size of DOS stub, PE header, and section headers."));
     const checksumHtml = [
       `<div style="display:flex;flex-direction:column;gap:.35rem">`,
-      `<div class="mono">${safe(hex(oh.CheckSum, 8))}</div>`,
+      `<div class="mono">${hex(oh.CheckSum, 8)}</div>`,
       `<div class="smallNote">Validation: <span id="peChecksumStatus">Not validated yet.</span></div>`,
       `<div class="smallNote">Computed: <span class="mono" id="peChecksumComputed">-</span></div>`,
       `<div><button type="button" class="actionButton" id="peChecksumValidateButton">Validate CheckSum</button></div>`,
       `</div>`
     ].join("");
-    out.push(dd("CheckSum", checksumHtml, "Image checksum (used by some system components)."));
-    out.push(dd("SizeOfStackReserve", formatBigByteSize(oh.SizeOfStackReserve), "Stack reservation size."));
-    out.push(dd("SizeOfStackCommit", formatBigByteSize(oh.SizeOfStackCommit), "Stack commit size."));
-    out.push(dd("SizeOfHeapReserve", formatBigByteSize(oh.SizeOfHeapReserve), "Heap reservation size."));
-    out.push(dd("SizeOfHeapCommit", formatBigByteSize(oh.SizeOfHeapCommit), "Heap commit size."));
+    out.push(renderDefinitionRow("CheckSum", checksumHtml, "Image checksum (used by some system components)."));
+    out.push(renderDefinitionRow("SizeOfStackReserve", formatBigByteSize(oh.SizeOfStackReserve), "Stack reservation size."));
+    out.push(renderDefinitionRow("SizeOfStackCommit", formatBigByteSize(oh.SizeOfStackCommit), "Stack commit size."));
+    out.push(renderDefinitionRow("SizeOfHeapReserve", formatBigByteSize(oh.SizeOfHeapReserve), "Heap reservation size."));
+    out.push(renderDefinitionRow("SizeOfHeapCommit", formatBigByteSize(oh.SizeOfHeapCommit), "Heap commit size."));
     out.push(`</dl>`);
     out.push(renderPeSectionEnd());
   }
