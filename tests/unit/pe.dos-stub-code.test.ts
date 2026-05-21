@@ -28,6 +28,51 @@ const dxThenPushPopCode = (dxOffset: number, exitCode = 0): number[] => [
   0xb8, exitCode, 0x4c, 0xcd, 0x21
 ];
 
+const writeAscii = (bytes: Uint8Array, offset: number, text: string): void => {
+  bytes.set(encoder.encode(text), offset);
+};
+
+const createNestedPeLoadModule = (): Uint8Array => {
+  const bytes = new Uint8Array(0x360);
+  const view = new DataView(bytes.buffer);
+  view.setUint16(0, DOS_SIGNATURE_MZ, true);
+  view.setUint32(DOS_E_LFANEW_OFFSET, 0x80, true);
+  bytes.set([0x50, 0x45, 0x00, 0x00], 0x80);
+  view.setUint16(0x84, IMAGE_FILE_MACHINE_I386, true);
+  view.setUint16(0x86, 1, true);
+  view.setUint16(0x94, 0xe0, true);
+  view.setUint16(0x98, 0x10b, true);
+  view.setUint32(0xa8, 0x314, true);
+  view.setUint32(0xd0, 0x1000, true);
+  view.setUint32(0xd4, 0x200, true);
+  view.setUint16(0xdc, 16, true);
+  view.setUint32(0xf4, 16, true);
+  view.setUint32(0x128, 0x220, true);
+  view.setUint32(0x12c, 28, true);
+  writeAscii(bytes, 0x178, "MLEINIT");
+  view.setUint32(0x180, 0x140, true);
+  view.setUint32(0x184, 0x220, true);
+  view.setUint32(0x188, 0x140, true);
+  view.setUint32(0x18c, 0x220, true);
+  view.setUint32(0x1a0, 0x60000020, true);
+  view.setUint32(0x220 + 12, 2, true);
+  view.setUint32(0x220 + 16, 40, true);
+  view.setUint32(0x220 + 20, 0x280, true);
+  view.setUint32(0x220 + 24, 0x280, true);
+  bytes.set([0x52, 0x53, 0x44, 0x53], 0x280);
+  writeAscii(bytes, 0x298, "mlestartup.pdb");
+  const mleOffset = 0x2c0;
+  [0x9082ac5a, 0x74a7476f, 0xa2555c0f, 0x42b651cb].forEach((value, index) => {
+    view.setUint32(mleOffset + index * 4, value, true);
+  });
+  view.setUint32(mleOffset + 16, 0x34, true);
+  view.setUint32(mleOffset + 20, 0x20003, true);
+  view.setUint32(mleOffset + 24, 0x314, true);
+  view.setUint32(mleOffset + 36, 0x360, true);
+  view.setUint32(mleOffset + 40, 0x440f, true);
+  return bytes;
+};
+
 const withMessage = (code: number[], message = COMMON_STUB_MESSAGE): Uint8Array => {
   const messageBytes = encoder.encode(`${message}$`);
   const bytes = new Uint8Array(code.length + messageBytes.length);
@@ -143,8 +188,36 @@ void test("analyzePeDosStubCode previews custom code only until a control-flow i
   assert.ok(result.notes?.some(note => /control-flow/i.test(note)));
 });
 
+void test("analyzePeDosStubCode reports nested PE images at the DOS entrypoint", async () => {
+  const result = await analyzeLoadModule(createNestedPeLoadModule());
+
+  assert.equal(result.kind, "custom-or-unrecognized");
+  assert.equal(result.instructions.length, 0);
+  assert.ok(result.notes?.some(note => /nested PE image/i.test(note)));
+  assert.equal(result.nestedPe?.offset, 0);
+  assert.equal(result.nestedPe?.endOffset, 0x360);
+  assert.equal(result.nestedPe?.peHeaderOffset, 0x80);
+  assert.equal(result.nestedPe?.machine, IMAGE_FILE_MACHINE_I386);
+  assert.equal(result.nestedPe?.entrypointRva, 0x314);
+  assert.equal(result.nestedPe?.subsystem, 16);
+  assert.equal(result.nestedPe?.sections[0]?.name, "MLEINIT");
+  assert.equal(result.nestedPe?.codeViewPath, "mlestartup.pdb");
+  assert.equal(result.nestedPe?.mle?.entryPoint, 0x314);
+  assert.equal(result.nestedPe?.mle?.mleEnd, 0x360);
+});
+
+void test("analyzePeDosStubCode recognizes common stubs after malformed short DOS headers", async () => {
+  const code = pushPopThenDxCode(0x0e);
+
+  const result = await analyzePeDosStubCode({ e_cparhdr: 0, e_cs: 0, e_ip: 0 }, withMessage(code), 0x80);
+
+  assert.equal(result.kind, "standard-print-exit");
+  assert.equal(result.message, COMMON_STUB_MESSAGE);
+  assert.ok(result.notes?.some(note => /after the fixed header/i.test(note)));
+});
+
 void test("analyzePeDosStubCode reports unavailable analysis for malformed offsets", async () => {
-  const badHeader = await analyzePeDosStubCode({ e_cparhdr: 0, e_cs: 0, e_ip: 0 }, new Uint8Array(), 0x80);
+  const badHeader = await analyzePeDosStubCode({ e_cparhdr: 0, e_cs: 0, e_ip: 0 }, new Uint8Array([0x90]), 0x80);
   const badEntrypoint = await analyzeLoadModule(new Uint8Array([0x90]), 0, 2);
 
   assert.equal(badHeader.kind, "unavailable");

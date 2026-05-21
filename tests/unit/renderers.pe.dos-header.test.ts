@@ -52,3 +52,53 @@ void test("renderDosHeader renders DOS stub code as informational notes", () => 
   assert.ok(html.includes("stub &lt;differs> from common pattern"));
   assert.doesNotMatch(html, /WARNING/i);
 });
+
+void test("renderDosHeader renders nested PE download controls", () => {
+  const pe = createBasePe();
+  pe.dos.stub = {
+    kind: "non-standard",
+    note: "printable text",
+    code: {
+      kind: "custom-or-unrecognized",
+      instructions: [],
+      nestedPe: {
+        offset: 0,
+        endOffset: 0x2ce0,
+        peHeaderOffset: 0xb0,
+        machine: 0x014c,
+        optionalMagic: 0x10b,
+        entrypointRva: 0x314,
+        subsystem: 16,
+        sizeOfImage: 0x2ce0,
+        sizeOfHeaders: 0x220,
+        sections: [{
+          name: "MLEINIT",
+          virtualAddress: 0x220,
+          virtualSize: 542,
+          sizeOfRawData: 544,
+          pointerToRawData: 0x220
+        }],
+        codeViewPath: "mlestartup.pdb",
+        mle: {
+          offset: 0x220,
+          version: 0x20003,
+          entryPoint: 0x314,
+          firstValidPage: 0,
+          mleStart: 0,
+          mleEnd: 0x2ce0,
+          capabilities: 0x440f
+        }
+      }
+    }
+  };
+  const out: string[] = [];
+  renderDosHeader(pe, out);
+  const html = out.join("");
+  assert.ok(html.includes("PE file for x86 (I386) found at offset"));
+  assert.ok(html.includes("data-pe-dos-nested-download"));
+  assert.ok(html.includes("data-nested-start=\"64\""));
+  assert.ok(html.includes("data-nested-end=\"11552\""));
+  assert.doesNotMatch(html, /DOS stub: non-standard.*printable text/);
+  assert.doesNotMatch(html, /mlestartup\.pdb/);
+  assert.doesNotMatch(html, /MLEINIT/);
+});

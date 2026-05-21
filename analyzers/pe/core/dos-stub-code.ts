@@ -3,7 +3,7 @@
 import { isPrintableByte } from "../../../binary-utils.js";
 import { loadIcedX86 } from "#iced-x86-loader";
 import type { PeDosHeader, PeDosStubCode, PeDosStubInstruction } from "../types.js";
-
+import { parseNestedPeAtDosEntrypoint } from "./dos-stub-nested-pe.js";
 type DosStubPattern = NonNullable<PeDosStubCode["pattern"]>;
 type IcedInstruction = {
   code: number;
@@ -39,17 +39,14 @@ interface MatchResult {
 interface PreviewInstruction {
   publicInstruction: PeDosStubInstruction; code: number; length: number; nextOffset: number; flowControl: number;
 }
-
 const DOS_FIXED_HEADER_BYTES = 0x40;
 const DOS_CODE_PREVIEW_LIMIT = 16;
 // MS-DOS Encyclopedia, Section V: INT 21h AH=09h prints DS:DX until "$"; AH=4Ch exits.
 // https://www.pcjs.org/documents/books/mspl13/msdos/encyclopedia/section5/
 const DOS_PRINT_STRING_FUNCTION = 0x09;
-const DOS_TERMINATE_FUNCTION = 0x4c;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
-
 const isDosStubIcedModule = (value: unknown): value is DosStubIcedModule => {
   if (!isRecord(value)) return false;
   const code = value["Code"];
@@ -70,7 +67,6 @@ const isDosStubIcedModule = (value: unknown): value is DosStubIcedModule => {
     typeof value["Instruction"] === "function"
   );
 };
-
 const safeFree = (resource: { free(): void } | null | undefined): void => {
   if (!resource) return;
   try {
@@ -79,14 +75,10 @@ const safeFree = (resource: { free(): void } | null | undefined): void => {
     // iced-x86 cleanup is best-effort; parse results should survive partial WASM teardown.
   }
 };
-
 const unavailable = (notes: string[]): PeDosStubCode => ({ kind: "unavailable", instructions: [], notes });
-
 const hex16 = (value: number): string => `0x${(value & 0xffff).toString(16).padStart(4, "0")}`;
-
 const isDosMessageByte = (value: number): boolean =>
   isPrintableByte(value) || value === 0x09 || value === 0x0a || value === 0x0d;
-
 const readDosMessage = (bytes: Uint8Array, offset: number): { text?: string; note?: string } => {
   if (!Number.isSafeInteger(offset) || offset < 0 || offset >= bytes.length) {
     return { note: "DOS print string offset does not point inside the DOS load module." };
@@ -102,10 +94,8 @@ const readDosMessage = (bytes: Uint8Array, offset: number): { text?: string; not
   }
   return { note: "DOS print string is not '$'-terminated before the PE header." };
 };
-
 const readU16 = (bytes: Uint8Array, offset: number): number | null =>
   offset >= 0 && offset + 2 <= bytes.length ? bytes[offset]! | (bytes[offset + 1]! << 8) : null;
-
 const instruction = (offset: number, text: string): PeDosStubInstruction => ({ offset, text });
 
 const commonPatternInstructions = (
@@ -113,25 +103,15 @@ const commonPatternInstructions = (
   dxOffset: number,
   exitCode: number
 ): PeDosStubInstruction[] =>
-  pattern === "push-pop-then-dx"
-    ? [
-        instruction(0, "push cs"),
-        instruction(1, "pop ds"),
-        instruction(2, `mov dx,${hex16(dxOffset)}`),
-        instruction(5, "mov ah,09h"),
-        instruction(7, "int 21h"),
-        instruction(9, `mov ax,${hex16(0x4c00 | exitCode)}`),
-        instruction(12, "int 21h")
-      ]
-    : [
-        instruction(0, `mov dx,${hex16(dxOffset)}`),
-        instruction(3, "push cs"),
-        instruction(4, "pop ds"),
-        instruction(5, "mov ah,09h"),
-        instruction(7, "int 21h"),
-        instruction(9, `mov ax,${hex16(0x4c00 | exitCode)}`),
-        instruction(12, "int 21h")
-      ];
+  pattern === "push-pop-then-dx" ? [
+    instruction(0, "push cs"), instruction(1, "pop ds"), instruction(2, `mov dx,${hex16(dxOffset)}`),
+    instruction(5, "mov ah,09h"), instruction(7, "int 21h"),
+    instruction(9, `mov ax,${hex16(0x4c00 | exitCode)}`), instruction(12, "int 21h")
+  ] : [
+    instruction(0, `mov dx,${hex16(dxOffset)}`), instruction(3, "push cs"), instruction(4, "pop ds"),
+    instruction(5, "mov ah,09h"), instruction(7, "int 21h"),
+    instruction(9, `mov ax,${hex16(0x4c00 | exitCode)}`), instruction(12, "int 21h")
+  ];
 
 const matchCommonPattern = (
   bytes: Uint8Array,
@@ -142,14 +122,8 @@ const matchCommonPattern = (
   const dxOffset = readU16(bytes, entryOffset + (pattern === "push-pop-then-dx" ? 3 : 1));
   const exitCode = bytes[entryOffset + 10];
   const expected = pattern === "push-pop-then-dx"
-    ? [
-        0x0e, 0x1f, 0xba, null, null, 0xb4, DOS_PRINT_STRING_FUNCTION, 0xcd, 0x21,
-        0xb8, null, DOS_TERMINATE_FUNCTION, 0xcd, 0x21
-      ]
-    : [
-        0xba, null, null, 0x0e, 0x1f, 0xb4, DOS_PRINT_STRING_FUNCTION, 0xcd, 0x21,
-        0xb8, null, DOS_TERMINATE_FUNCTION, 0xcd, 0x21
-      ];
+    ? [0x0e, 0x1f, 0xba, null, null, 0xb4, DOS_PRINT_STRING_FUNCTION, 0xcd, 0x21, 0xb8, null, 0x4c, 0xcd, 0x21]
+    : [0xba, null, null, 0x0e, 0x1f, 0xb4, DOS_PRINT_STRING_FUNCTION, 0xcd, 0x21, 0xb8, null, 0x4c, 0xcd, 0x21];
   if (dxOffset == null || exitCode == null || entryOffset + expected.length > bytes.length) return null;
   for (let index = 0; index < expected.length; index += 1) {
     const value = expected[index];
@@ -186,6 +160,11 @@ const buildStandardCode = (bytes: Uint8Array, match: MatchResult): PeDosStubCode
     instructions: match.instructions
   };
 };
+
+const appendNote = (code: PeDosStubCode, note: string): PeDosStubCode => ({
+  ...code,
+  notes: [...(code.notes ?? []), note]
+});
 
 const decodeAt = (
   decoder: IcedDecoder,
@@ -268,6 +247,15 @@ export const analyzePeDosStubCode = async (
 ): Promise<PeDosStubCode> => {
   const dosHeaderBytes = dos.e_cparhdr * 16;
   if (dosHeaderBytes < DOS_FIXED_HEADER_BYTES) {
+    const fixedHeaderFallback =
+      matchCommonPattern(stubBytesAfterFixedHeader, 0, 0, "push-pop-then-dx") ||
+      matchCommonPattern(stubBytesAfterFixedHeader, 0, 0, "dx-then-push-pop");
+    if (fixedHeaderFallback) {
+      return appendNote(
+        buildStandardCode(stubBytesAfterFixedHeader, fixedHeaderFallback),
+        "DOS header size is smaller than the fixed MZ header; code was recognized after the fixed header."
+      );
+    }
     return unavailable(["DOS header size is smaller than the fixed MZ header; code analysis skipped."]);
   }
   if (peHeaderOffset <= dosHeaderBytes) return unavailable(["DOS load module is empty before the PE header."]);
@@ -279,6 +267,15 @@ export const analyzePeDosStubCode = async (
   const loadModuleBytes = stubBytesAfterFixedHeader.subarray(loadModuleOffset);
   if (entryOffset < 0 || entryOffset >= loadModuleBytes.length) {
     return unavailable(["MZ entrypoint does not point inside the DOS load module."]);
+  }
+  const nestedPe = parseNestedPeAtDosEntrypoint(loadModuleBytes, entryOffset);
+  if (nestedPe) {
+    return {
+      kind: "custom-or-unrecognized",
+      instructions: [],
+      nestedPe,
+      notes: ["MZ entrypoint begins with a nested PE image instead of 16-bit DOS stub code."]
+    };
   }
   const common =
     matchCommonPattern(loadModuleBytes, entryOffset, segmentBase, "push-pop-then-dx") ||

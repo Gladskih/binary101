@@ -33,6 +33,40 @@ export interface PeDosStubInstruction {
   text: string;
 }
 
+export interface PeDosStubNestedPeSection {
+  name: string;
+  virtualAddress: number;
+  virtualSize: number;
+  sizeOfRawData: number;
+  pointerToRawData: number;
+}
+
+export interface PeDosStubMleHeader {
+  offset: number;
+  version: number;
+  entryPoint: number;
+  firstValidPage: number;
+  mleStart: number;
+  mleEnd: number;
+  capabilities: number;
+}
+
+export interface PeDosStubNestedPe {
+  offset: number;
+  endOffset: number;
+  peHeaderOffset: number;
+  machine: number;
+  optionalMagic: number | null;
+  entrypointRva: number | null;
+  subsystem: number | null;
+  sizeOfImage: number | null;
+  sizeOfHeaders: number | null;
+  sections: PeDosStubNestedPeSection[];
+  codeViewPath?: string;
+  mle?: PeDosStubMleHeader;
+  warnings?: string[];
+}
+
 export interface PeDosStubCode {
   kind: "standard-print-exit" | "custom-or-unrecognized" | "unavailable";
   pattern?: "push-pop-then-dx" | "dx-then-push-pop";
@@ -40,6 +74,7 @@ export interface PeDosStubCode {
   message?: string;
   exitCode?: number;
   instructions: PeDosStubInstruction[];
+  nestedPe?: PeDosStubNestedPe;
   notes?: string[];
 }
 

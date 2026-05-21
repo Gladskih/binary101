@@ -3,6 +3,7 @@
 import { hex } from "../../binary-utils.js";
 import { escapeHtml } from "../../html-utils.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
+import { mapMachine } from "../../analyzers/pe/security/signature.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import { renderRichHeader } from "./rich-header.js";
 
@@ -46,9 +47,12 @@ const renderDosHeaderFields = (pe: PeParseResult, out: string[]): void => {
 
 const renderDosStub = (pe: PeParseResult, out: string[]): void => {
   const stub = pe.dos.stub;
-  out.push(`<div class="smallNote">DOS stub: ${stub.kind}${stub.note ? ` - ${escapeHtml(stub.note)}` : ""}</div>`);
-  if (stub.strings?.length) {
-    out.push(`<div class="mono smallNote">${stub.strings.map(x => `<div>${escapeHtml(String(x))}</div>`).join("")}</div>`);
+  const hasNestedPe = stub.code?.nestedPe != null;
+  if (!hasNestedPe) {
+    out.push(`<div class="smallNote">DOS stub: ${stub.kind}${stub.note ? ` - ${escapeHtml(stub.note)}` : ""}</div>`);
+    if (stub.strings?.length) {
+      out.push(`<div class="mono smallNote">${stub.strings.map(x => `<div>${escapeHtml(String(x))}</div>`).join("")}</div>`);
+    }
   }
   if (stub.code) renderDosStubCode(stub.code, out);
   if (pe.dos.rich) {
@@ -68,18 +72,37 @@ const describeStubCodeKind = (kind: string): string => {
   return "unavailable";
 };
 
-const renderDosStubCode = (code: NonNullable<PeParseResult["dos"]["stub"]["code"]>, out: string[]): void => {
-  const pattern = code.pattern ? ` (${escapeHtml(code.pattern)})` : "";
+const renderNestedPe = (code: NonNullable<PeParseResult["dos"]["stub"]["code"]>, out: string[]): void => {
+  const nested = code.nestedPe;
+  if (!nested) return;
+  const machineDesc = mapMachine(nested.machine);
   out.push(
     `<div class="smallNote" style="margin-top:.5rem">` +
-    `DOS stub code: ${describeStubCodeKind(code.kind)}${pattern}</div>`
+    `PE file for ${escapeHtml(machineDesc)} found at offset +${nested.offset.toString(16)}..+${nested.endOffset.toString(16)}</div>`
   );
-  if (code.messageOffset != null) {
-    out.push(`<div class="mono smallNote">Message target: +${code.messageOffset.toString(16).padStart(4, "0")}</div>`);
+  out.push(
+    `<button type="button" class="peSecurityTreeDownloadButton" data-pe-dos-nested-download ` +
+    `data-nested-start="${0x40 + nested.offset}" data-nested-end="${0x40 + nested.endOffset}" ` +
+    `title="Download nested PE"></button>`
+  );
+};
+
+const renderDosStubCode = (code: NonNullable<PeParseResult["dos"]["stub"]["code"]>, out: string[]): void => {
+  const hasNestedPe = code.nestedPe != null;
+  if (!hasNestedPe) {
+    const pattern = code.pattern ? ` (${escapeHtml(code.pattern)})` : "";
+    out.push(
+      `<div class="smallNote" style="margin-top:.5rem">` +
+      `DOS stub code: ${describeStubCodeKind(code.kind)}${pattern}</div>`
+    );
+    if (code.messageOffset != null) {
+      out.push(`<div class="mono smallNote">Message target: +${code.messageOffset.toString(16).padStart(4, "0")}</div>`);
+    }
+    if (code.message) {
+      out.push(`<div class="mono smallNote">${escapeHtml(code.message)}</div>`);
+    }
   }
-  if (code.message) {
-    out.push(`<div class="mono smallNote">${escapeHtml(code.message)}</div>`);
-  }
+  renderNestedPe(code, out);
   if (code.instructions.length) {
     out.push(
       `<table class="table" style="margin-top:.35rem"><thead><tr>` +
