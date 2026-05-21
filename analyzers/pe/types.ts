@@ -25,6 +25,22 @@ export interface PeDosStub {
   kind: string;
   note: string;
   strings?: string[];
+  code?: PeDosStubCode;
+}
+
+export interface PeDosStubInstruction {
+  offset: number;
+  text: string;
+}
+
+export interface PeDosStubCode {
+  kind: "standard-print-exit" | "custom-or-unrecognized" | "unavailable";
+  pattern?: "push-pop-then-dx" | "dx-then-push-pop";
+  messageOffset?: number;
+  message?: string;
+  exitCode?: number;
+  instructions: PeDosStubInstruction[];
+  notes?: string[];
 }
 
 export interface PeRichHeaderEntry {

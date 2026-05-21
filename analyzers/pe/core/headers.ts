@@ -4,6 +4,7 @@ import { readAsciiString, collectPrintableRuns } from "../../../binary-utils.js"
 import type { FileRangeReader } from "../../file-range-reader.js";
 export { parseOptionalHeaderAndDirectories } from "../optional-header/parse.js";
 import { parseRichHeaderFromDosStub } from "./rich-header.js";
+import { analyzePeDosStubCode } from "./dos-stub-code.js";
 import type { PeCoffHeader, PeDosHeader } from "../types.js";
 
 const IMAGE_FILE_HEADER_SIZE = 20;
@@ -44,11 +45,15 @@ export async function parseDosHeaderAndStub(
     const stubLength = peHeaderOffset - 0x40;
     const stubBytes = await reader.readBytes(0x40, stubLength);
     dos.rich = parseRichHeaderFromDosStub(stubBytes);
+    const code = await analyzePeDosStubCode(dos, stubBytes, peHeaderOffset);
     const printableRuns = collectPrintableRuns(stubBytes, 12);
-    const classicMessage = printableRuns.find(text => /this program cannot be run in dos mode/i.test(text));
-    if (classicMessage) dos.stub = { kind: "standard", note: "classic DOS message", strings: [classicMessage] };
+    if (code.kind === "standard-print-exit" && code.message) {
+      dos.stub = { kind: "standard", note: "DOS print-and-exit code", code };
+    }
     else if (printableRuns.length) {
-      dos.stub = { kind: "non-standard", note: "printable text", strings: printableRuns };
+      dos.stub = { kind: "non-standard", note: "printable text", strings: printableRuns, code };
+    } else {
+      dos.stub = { ...dos.stub, code };
     }
   }
   return dos;

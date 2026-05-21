@@ -50,6 +50,7 @@ const renderDosStub = (pe: PeParseResult, out: string[]): void => {
   if (stub.strings?.length) {
     out.push(`<div class="mono smallNote">${stub.strings.map(x => `<div>${escapeHtml(String(x))}</div>`).join("")}</div>`);
   }
+  if (stub.code) renderDosStubCode(stub.code, out);
   if (pe.dos.rich) {
     out.push(`<div style="margin-top:.75rem">`);
     renderRichHeader(pe.dos.rich, out);
@@ -58,6 +59,40 @@ const renderDosStub = (pe: PeParseResult, out: string[]): void => {
     out.push(
       `<div class="smallNote" style="margin-top:.5rem">Rich header: not present (no DanS/Rich signature found in DOS stub).</div>`
     );
+  }
+};
+
+const describeStubCodeKind = (kind: string): string => {
+  if (kind === "standard-print-exit") return "standard DOS print-and-exit";
+  if (kind === "custom-or-unrecognized") return "custom or unrecognized DOS code";
+  return "unavailable";
+};
+
+const renderDosStubCode = (code: NonNullable<PeParseResult["dos"]["stub"]["code"]>, out: string[]): void => {
+  const pattern = code.pattern ? ` (${escapeHtml(code.pattern)})` : "";
+  out.push(
+    `<div class="smallNote" style="margin-top:.5rem">` +
+    `DOS stub code: ${describeStubCodeKind(code.kind)}${pattern}</div>`
+  );
+  if (code.messageOffset != null) {
+    out.push(`<div class="mono smallNote">Message target: +${code.messageOffset.toString(16).padStart(4, "0")}</div>`);
+  }
+  if (code.message) {
+    out.push(`<div class="mono smallNote">${escapeHtml(code.message)}</div>`);
+  }
+  if (code.instructions.length) {
+    out.push(
+      `<table class="table" style="margin-top:.35rem"><thead><tr>` +
+      `<th>Offset</th><th>Instruction</th></tr></thead><tbody>` +
+      code.instructions.map(instruction => (
+        `<tr><td class="mono">+${instruction.offset.toString(16).padStart(4, "0")}</td>` +
+        `<td class="mono">${escapeHtml(instruction.text)}</td></tr>`
+      )).join("") +
+      `</tbody></table>`
+    );
+  }
+  if (code.notes?.length) {
+    out.push(`<ul class="smallNote">${code.notes.map(note => `<li>${escapeHtml(note)}</li>`).join("")}</ul>`);
   }
 };
 
