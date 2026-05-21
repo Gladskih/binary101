@@ -5,6 +5,7 @@ import {
   type PeParseResult,
   type PeWindowsParseResult
 } from "../core/parse-result.js";
+import { collectPeDosHeaderWarnings } from "./dos-header-warnings.js";
 import { peSectionNameValue } from "../sections/name.js";
 import type { PeSection } from "../types.js";
 // Microsoft PE/COFF: IMAGE_FILE_HEADER is 20 bytes. https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#coff-file-header-object-and-image
@@ -273,7 +274,7 @@ const addSecurityAndDebugTailWarnings = (pe: PeParseResult, warnings: Set<string
 };
 
 export const collectPeLayoutWarnings = (pe: PeParseResult, fileSize?: number): string[] => {
-  const warnings = new Set<string>();
+  const warnings = new Set(collectPeDosHeaderWarnings(pe.dos));
   addSectionHeaderWarnings(pe, warnings);
   addSectionVirtualLayoutWarnings(pe, warnings);
   addSectionRawLayoutWarnings(pe, warnings);

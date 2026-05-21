@@ -28,14 +28,18 @@ void test("collectPeLayoutWarnings returns no warnings for a canonical adjacent 
   assert.deepStrictEqual(warnings, []);
 });
 void test("collectPeLayoutWarnings reports header-only PE header alignment anomalies", () => {
-  const warnings = collectPeLayoutWarnings(
+  const pe = createHeaderOnlyLayoutSubject(
     // PE headers are expected to be 8-byte aligned.
-    createHeaderOnlyLayoutSubject(
-      DEFAULT_PE_HEADER_OFFSET + 2,
-      createIndexedSection(0, DEFAULT_SECTION_ALIGNMENT, 0)
-    )
+    DEFAULT_PE_HEADER_OFFSET + 2,
+    createIndexedSection(0, DEFAULT_SECTION_ALIGNMENT, 0)
   );
+  // IMAGE_DOS_HEADER is 64 bytes, encoded as 4 paragraphs in the MZ e_cparhdr field.
+  pe.dos.e_cparhdr = 0;
+
+  const warnings = collectPeLayoutWarnings(pe);
+
   assert.ok(warnings.some(warning => /e_lfanew .* is not 8-byte aligned/i.test(warning)));
+  assert.ok(warnings.some(warning => /e_cparhdr 0 paragraph.*smaller than.*IMAGE_DOS_HEADER/i.test(warning)));
 });
 void test("collectPeLayoutWarnings reports header span and raw alignment anomalies", () => {
   const pe = createWindowsLayoutSubject(
