@@ -4,6 +4,7 @@ import { humanSize, hex } from "../../binary-utils.js";
 import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 import { peSectionNameOffset, peSectionNameValue } from "../../analyzers/pe/sections/name.js";
+import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 const IMAGE_SYMBOL_SIZE = 18n;
 
@@ -36,7 +37,10 @@ export const renderCoffTailSummary = (pe: PeParseResult): string | null => {
   const coffStringTableOffset = getCoffStringTableOffset(pe);
   const recoveredLongSectionNames = getRecoveredLongSectionNames(pe);
   const out = [
-    `<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Legacy COFF tail</h4>`,
+    renderPeSectionStart(
+      "Legacy COFF tail",
+      `${pe.coff.NumberOfSymbols >>> 0} symbol${pe.coff.NumberOfSymbols === 1 ? "" : "s"}`
+    ),
     `<div class="smallNote">These legacy COFF symbol/string-table structures live outside section data and are not mapped by the PE loader.</div>`,
     `<dl>`,
     renderDefinitionRow("SymbolTableOffset", hex(pe.coff.PointerToSymbolTable, 8), "File offset of the legacy COFF symbol table."),
@@ -78,6 +82,6 @@ export const renderCoffTailSummary = (pe: PeParseResult): string | null => {
     }
     out.push(`</tbody></table></details>`);
   }
-  out.push(`</section>`);
+  out.push(renderPeSectionEnd());
   return out.join("");
 };

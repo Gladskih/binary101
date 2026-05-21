@@ -38,7 +38,8 @@ void test("renderCoffTailSummary renders a structured legacy COFF tail section",
   const html = renderCoffTailSummary(pe);
 
   assert.ok(html, "expected COFF tail section");
-  assert.match(html, /Legacy COFF tail/);
+  assert.match(html, /<details class="peSectionDetails">/);
+  assert.match(html, /<summary[^>]*><b>Legacy COFF tail<\/b> - 2 symbols<\/summary>/);
   assert.match(html, /SymbolTableOffset/);
   assert.match(html, new RegExp(`0x${symbolTableOffset.toString(16).padStart(8, "0")}`));
   assert.match(html, /SymbolRecords/);
