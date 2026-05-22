@@ -34,6 +34,12 @@ void test("renderImportLinking and related sections surface confirmed and non-ca
   assert.ok(html.includes("Matched BOUND_IMPORT entry"));
   assert.ok(html.includes("Delay-load IAT is isolated in the canonical .didat section"));
   assert.ok(html.includes("Names come from OriginalFirstThunk / the Import Lookup Table (INT)."));
+  assert.ok(!html.includes("normally resolved as a Windows KnownDLL"));
+  assert.ok(html.includes("Core Win32 file, process, thread, memory"));
+  assert.ok(html.includes("Window manager, message, input, menu, dialog"));
+  assert.ok(html.includes("<td>Sleep</td>"));
+  assert.ok(html.includes("<td>MessageBoxW</td>"));
+  assert.ok(!html.includes("learn.microsoft.com/search"));
   assert.ok(
     html.includes(
       "Import descriptor TimeDateStamp is non-zero, but no matching BOUND_IMPORT entry was found."

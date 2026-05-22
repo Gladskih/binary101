@@ -1,6 +1,6 @@
 "use strict";
 
-import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
+import { renderDefinitionRow } from "../../html-utils.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import {
   countFindings,
@@ -11,6 +11,7 @@ import {
   summarizeLookupSources,
   summarizeRelations
 } from "./import-linking-format.js";
+import { renderImportLibraryNameWithInfo } from "./import-library-info.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 export function renderImportLinking(pe: PeWindowsParseResult, out: string[]): void {
@@ -47,7 +48,7 @@ export function renderImportLinking(pe: PeWindowsParseResult, out: string[]): vo
     const eagerRelations = linkedModule.imports.map(linkedImport => linkedImport.iatDirectoryRelation);
     const delayRelations = linkedModule.delayImports.map(linkedImport => linkedImport.iatDirectoryRelation);
     const findings = linkedModule.findings ?? [];
-    out.push(`<tr><td>${escapeHtml(getModuleDisplayName(pe, linkedModule))}</td><td>${linkedModule.imports.length || "-"}</td><td>${linkedModule.boundImports.length || "-"}</td><td>${linkedModule.delayImports.length || "-"}</td><td>${summarizeLookupSources(pe, linkedModule)}</td><td>${summarizeRelations(eagerRelations)}</td><td>${summarizeRelations(delayRelations)}</td><td>${renderFindingSummary(findings, "confirmed")}</td><td>${renderFindingSummary(findings, "warning")}${renderFindingSummary(findings, "info")}</td></tr>`);
+    out.push(`<tr><td>${renderImportLibraryNameWithInfo(getModuleDisplayName(pe, linkedModule))}</td><td>${linkedModule.imports.length || "-"}</td><td>${linkedModule.boundImports.length || "-"}</td><td>${linkedModule.delayImports.length || "-"}</td><td>${summarizeLookupSources(pe, linkedModule)}</td><td>${summarizeRelations(eagerRelations)}</td><td>${summarizeRelations(delayRelations)}</td><td>${renderFindingSummary(findings, "confirmed")}</td><td>${renderFindingSummary(findings, "warning")}${renderFindingSummary(findings, "info")}</td></tr>`);
   });
   out.push(`</tbody></table></div>`);
   out.push(renderPeSectionEnd());

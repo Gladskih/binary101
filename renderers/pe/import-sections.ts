@@ -21,10 +21,13 @@ import {
   renderFindingRows,
   renderFindingSummary,
   renderImportNamesForIndices,
-  renderIatRelation
-  ,
+  renderIatRelation,
   renderLookupSource
 } from "./import-linking-format.js";
+import {
+  renderImportLibraryInfoNote,
+  renderImportLibraryNameWithInfo
+} from "./import-library-info.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 export { renderImportLinking } from "./import-linking-section.js";
@@ -45,8 +48,10 @@ export function renderImports(pe: PeWindowsParseResult, out: string[]): void {
     const dll = escapeHtml(mod.dll || "(unknown DLL)");
     const linkedModule = findLinkedModuleForImport(pe, index);
     const linkedImport = findLinkedImportDescriptor(linkedModule, index);
+    const moduleNote = renderImportLibraryInfoNote(mod.dll);
     out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${dll}</b> - ${mod.functions?.length || 0} function(s)</summary>`);
     out.push(`<dl style="margin-top:.35rem">`);
+    if (moduleNote) out.push(renderDefinitionRow("Module note", moduleNote));
     out.push(renderDefinitionRow("OriginalFirstThunk", hex(mod.originalFirstThunkRva >>> 0, 8), "PE format: RVA of the Import Lookup Table (INT/ILT)."));
     out.push(renderDefinitionRow("OriginalFirstThunk section", describeSectionForRva(pe, mod.originalFirstThunkRva), "Section containing the Import Lookup Table RVA."));
     out.push(renderDefinitionRow("FirstThunk", hex(mod.firstThunkRva >>> 0, 8), "PE format: RVA of the Import Address Table (IAT) that the loader patches with resolved addresses."));
@@ -71,7 +76,11 @@ export function renderImports(pe: PeWindowsParseResult, out: string[]): void {
       out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th></tr></thead><tbody>`);
       mod.functions.forEach((fn, functionIndex) => {
         const hint = fn.hint != null ? String(fn.hint) : "-";
-        const name = fn.name ? escapeHtml(fn.name) : fn.ordinal != null ? `ORD ${fn.ordinal}` : "-";
+        const name = fn.name
+          ? escapeHtml(fn.name)
+          : fn.ordinal != null
+            ? `ORD ${fn.ordinal}`
+            : "-";
         out.push(`<tr><td>${functionIndex + 1}</td><td>${hint}</td><td>${name}</td></tr>`);
       });
       out.push(`</tbody></table>`);
@@ -101,7 +110,7 @@ export function renderBoundImports(pe: PeWindowsParseResult, out: string[]): voi
         ? `${entry.NumberOfModuleForwarderRefs}: ${escapeHtml(entry.forwarderRefs.map(ref => ref.name || "(unnamed)").join(", "))}`
         : String(entry.NumberOfModuleForwarderRefs);
       const findings = filterFindings(linkedModule, ["bound-match", "bound-without-import"]);
-      out.push(`<tr><td>${index + 1}</td><td>${escapeHtml(entry.name || "")}</td><td>${hex(entry.TimeDateStamp >>> 0, 8)}</td><td>${forwarderLabel}</td><td>${renderFindingSummary(findings, "confirmed")}</td><td>${renderFindingSummary(findings, "warning")}${renderFindingSummary(findings, "info")}</td></tr>`);
+      out.push(`<tr><td>${index + 1}</td><td>${renderImportLibraryNameWithInfo(entry.name || "")}</td><td>${hex(entry.TimeDateStamp >>> 0, 8)}</td><td>${forwarderLabel}</td><td>${renderFindingSummary(findings, "confirmed")}</td><td>${renderFindingSummary(findings, "warning")}${renderFindingSummary(findings, "info")}</td></tr>`);
     });
     out.push(`</tbody></table></div>`);
   }
@@ -124,8 +133,10 @@ export function renderDelayImports(pe: PeWindowsParseResult, out: string[]): voi
     const dll = escapeHtml(entry.name || "(unknown DLL)");
     const linkedModule = findLinkedModuleForDelayImport(pe, index);
     const linkedDelayImport = findLinkedDelayImportDescriptor(linkedModule, index);
+    const moduleNote = renderImportLibraryInfoNote(entry.name);
     out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${dll}</b> - ${entry.functions?.length || 0} function(s)</summary>`);
     out.push(`<dl style="margin-top:.35rem">`);
+    if (moduleNote) out.push(renderDefinitionRow("Module note", moduleNote));
     out.push(renderDefinitionRow("Attributes", hex(entry.Attributes >>> 0, 8), "MSVC delayimp.h documents bit 0 as dlattrRva for VC7+ RVA-based descriptors, while the PE format page separately says the field should be zero."));
     out.push(renderDefinitionRow("ModuleHandleRVA", hex(entry.ModuleHandleRVA >>> 0, 8), "Delay-load module-handle slot."));
     out.push(renderDefinitionRow("ModuleHandle section", describeSectionForRva(pe, entry.ModuleHandleRVA), "Section containing the delay-load module-handle slot."));
@@ -154,7 +165,11 @@ export function renderDelayImports(pe: PeWindowsParseResult, out: string[]): voi
       out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th></tr></thead><tbody>`);
       entry.functions.forEach((fn, functionIndex) => {
         const hint = fn.hint != null ? String(fn.hint) : "-";
-        const name = fn.name ? escapeHtml(fn.name) : fn.ordinal != null ? `ORD ${fn.ordinal}` : "-";
+        const name = fn.name
+          ? escapeHtml(fn.name)
+          : fn.ordinal != null
+            ? `ORD ${fn.ordinal}`
+            : "-";
         out.push(`<tr><td>${functionIndex + 1}</td><td>${hint}</td><td>${name}</td></tr>`);
       });
       out.push(`</tbody></table>`);
