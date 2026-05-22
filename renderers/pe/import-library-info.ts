@@ -6,6 +6,8 @@ export type PeImportLibraryInfo = {
   summary: string;
 };
 
+const nameBasedImportLibraryNotePrefix = "Name-based DLL note: ";
+
 const COMMON_WINDOWS_IMPORT_LIBRARY_INFO: Record<string, PeImportLibraryInfo> = {
   // Sources:
   // - RegOpenKeyExW requirements: Advapi32.dll
@@ -101,6 +103,14 @@ const COMMON_WINDOWS_IMPORT_LIBRARY_INFO: Record<string, PeImportLibraryInfo> = 
   "ncrypt.dll": {
     summary: "CNG key storage provider APIs."
   },
+  // Sources:
+  // - NtQueryInformationProcess requirements: Ntdll.dll, with internal-API compatibility warning.
+  //   https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntqueryinformationprocess
+  // - RtlGetVersion requirements: Ntdll.dll and Ntdll.lib for user-mode callers.
+  //   https://learn.microsoft.com/en-us/windows/win32/devnotes/rtlgetversion
+  "ntdll.dll": {
+    summary: "Native NT and RTL runtime APIs, including internal OS interfaces and status helpers."
+  },
   // Source: ShellExecuteW requirements: Shell32.dll
   // https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew
   "shell32.dll": {
@@ -184,11 +194,11 @@ export const renderImportLibraryNameWithInfo = (name: string): string => {
   const info = getImportLibraryInfo(displayName);
   if (!info) return escapeHtml(displayName);
   return `${escapeHtml(displayName)}<div class="smallNote" style="margin:0">${
-    escapeHtml(info.summary)
+    escapeHtml(nameBasedImportLibraryNotePrefix + info.summary)
   }</div>`;
 };
 
 export const renderImportLibraryInfoNote = (name: string): string => {
   const info = getImportLibraryInfo(name);
-  return info ? escapeHtml(info.summary) : "";
+  return info ? escapeHtml(nameBasedImportLibraryNotePrefix + info.summary) : "";
 };

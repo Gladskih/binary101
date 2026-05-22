@@ -51,7 +51,7 @@ export function renderImports(pe: PeWindowsParseResult, out: string[]): void {
     const moduleNote = renderImportLibraryInfoNote(mod.dll);
     out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${dll}</b> - ${mod.functions?.length || 0} function(s)</summary>`);
     out.push(`<dl style="margin-top:.35rem">`);
-    if (moduleNote) out.push(renderDefinitionRow("Module note", moduleNote));
+    if (moduleNote) out.push(renderDefinitionRow("DLL-name note", moduleNote));
     out.push(renderDefinitionRow("OriginalFirstThunk", hex(mod.originalFirstThunkRva >>> 0, 8), "PE format: RVA of the Import Lookup Table (INT/ILT)."));
     out.push(renderDefinitionRow("OriginalFirstThunk section", describeSectionForRva(pe, mod.originalFirstThunkRva), "Section containing the Import Lookup Table RVA."));
     out.push(renderDefinitionRow("FirstThunk", hex(mod.firstThunkRva >>> 0, 8), "PE format: RVA of the Import Address Table (IAT) that the loader patches with resolved addresses."));
@@ -136,7 +136,7 @@ export function renderDelayImports(pe: PeWindowsParseResult, out: string[]): voi
     const moduleNote = renderImportLibraryInfoNote(entry.name);
     out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${dll}</b> - ${entry.functions?.length || 0} function(s)</summary>`);
     out.push(`<dl style="margin-top:.35rem">`);
-    if (moduleNote) out.push(renderDefinitionRow("Module note", moduleNote));
+    if (moduleNote) out.push(renderDefinitionRow("DLL-name note", moduleNote));
     out.push(renderDefinitionRow("Attributes", hex(entry.Attributes >>> 0, 8), "MSVC delayimp.h documents bit 0 as dlattrRva for VC7+ RVA-based descriptors, while the PE format page separately says the field should be zero."));
     out.push(renderDefinitionRow("ModuleHandleRVA", hex(entry.ModuleHandleRVA >>> 0, 8), "Delay-load module-handle slot."));
     out.push(renderDefinitionRow("ModuleHandle section", describeSectionForRva(pe, entry.ModuleHandleRVA), "Section containing the delay-load module-handle slot."));

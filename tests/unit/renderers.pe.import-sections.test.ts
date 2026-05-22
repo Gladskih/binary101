@@ -35,6 +35,8 @@ void test("renderImportLinking and related sections surface confirmed and non-ca
   assert.ok(html.includes("Delay-load IAT is isolated in the canonical .didat section"));
   assert.ok(html.includes("Names come from OriginalFirstThunk / the Import Lookup Table (INT)."));
   assert.ok(!html.includes("normally resolved as a Windows KnownDLL"));
+  assert.ok(html.includes("DLL-name note"));
+  assert.ok(html.includes("Name-based DLL note"));
   assert.ok(html.includes("Core Win32 file, process, thread, memory"));
   assert.ok(html.includes("Window manager, message, input, menu, dialog"));
   assert.ok(html.includes("<td>Sleep</td>"));
