@@ -4,7 +4,7 @@ import { isPrintableByte } from "../../../binary-utils.js";
 import { loadIcedX86 } from "#iced-x86-loader";
 import type { PeDosHeader, PeDosStubCode, PeDosStubInstruction } from "../types.js";
 import { parseNestedPeAtDosEntrypoint } from "./dos-stub-nested-pe.js";
-type DosStubPattern = NonNullable<PeDosStubCode["pattern"]>;
+type DosStubPattern = "push-pop-then-dx" | "dx-then-push-pop";
 type IcedInstruction = {
   code: number;
   length: number;
@@ -30,7 +30,6 @@ type DosStubIcedModule = {
 type IcedLoader = () => Promise<unknown>;
 
 interface MatchResult {
-  pattern: DosStubPattern;
   messageOffset: number;
   exitCode: number;
   instructions: PeDosStubInstruction[];
@@ -130,7 +129,6 @@ const matchCommonPattern = (
     if (value != null && bytes[entryOffset + index] !== value) return null;
   }
   return {
-    pattern,
     messageOffset: segmentBase + dxOffset,
     exitCode,
     instructions: commonPatternInstructions(pattern, dxOffset, exitCode).map(item => ({
@@ -153,7 +151,6 @@ const buildStandardCode = (bytes: Uint8Array, match: MatchResult): PeDosStubCode
   }
   return {
     kind: "standard-print-exit",
-    pattern: match.pattern,
     messageOffset: match.messageOffset,
     message: message.text,
     exitCode: match.exitCode,

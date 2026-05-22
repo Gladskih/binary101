@@ -4,19 +4,19 @@ import { humanSize, hex } from "../../binary-utils.js";
 import { escapeHtml } from "../../html-utils.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 import type { PeOverlayRange } from "../../analyzers/pe/overlay.js";
+import { renderDownloadButton } from "../download-button.js";
 import { renderPeDiagnostics } from "./diagnostics.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 const getUnexplainedOverlaySize = (pe: PeParseResult): number =>
   pe.overlay?.ranges.reduce((total, range) => total + range.size, 0) ?? 0;
 
-const renderDownloadButton = (start: number, end: number, label: string): string =>
-  `<button type="button" class="peSecurityTreeDownloadButton" data-pe-overlay-download ` +
-  `data-overlay-start="${start}" data-overlay-end="${end}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">` +
-  `<svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" ` +
-  `stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">` +
-  `<path d="M8 2.5v7"></path><path d="M5 6.8 8 9.8l3-3"></path><path d="M3 12.5h10"></path>` +
-  `</svg></button>`;
+const renderOverlayDownloadButton = (start: number, end: number, label: string): string =>
+  renderDownloadButton(label, [
+    ["data-pe-overlay-download"],
+    ["data-overlay-start", start],
+    ["data-overlay-end", end]
+  ]);
 
 const overlayScanElementId = (range: PeOverlayRange, suffix: string): string =>
   `peOverlayScan_${range.start}_${range.end}_${suffix}`;
@@ -71,7 +71,7 @@ const renderFindingRows = (range: PeOverlayRange): string =>
     `<div class="smallNote">${hex(finding.start, 8)}-${hex(finding.end, 8)}</div></td>` +
     `<td>${humanSize(finding.size)}</td><td>${escapeHtml(finding.detectedType)}` +
     `<div class="smallNote">${escapeHtml(finding.endDescription)}</div></td>` +
-    `<td>${renderDownloadButton(finding.start, finding.end, `Download detected payload ${index + 1}`)}</td></tr>`
+    `<td>${renderOverlayDownloadButton(finding.start, finding.end, `Download detected payload ${index + 1}`)}</td></tr>`
   ).join("");
 
 export function renderOverlay(pe: PeParseResult, out: string[]): void {
@@ -87,7 +87,7 @@ export function renderOverlay(pe: PeParseResult, out: string[]): void {
       out.push(
         `<div class="peOverlayRangeHeader"><div><b>True overlay #${index + 1}</b>` +
         `<div class="smallNote">${hex(range.start, 8)}-${hex(range.end, 8)}; ${humanSize(range.size)}</div></div>` +
-        renderDownloadButton(range.start, range.end, `Download complete overlay ${index + 1}`) +
+        renderOverlayDownloadButton(range.start, range.end, `Download complete overlay ${index + 1}`) +
         `</div>`
       );
       out.push(renderCoverageBar(range));

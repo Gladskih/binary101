@@ -69,7 +69,6 @@ export interface PeDosStubNestedPe {
 
 export interface PeDosStubCode {
   kind: "standard-print-exit" | "custom-or-unrecognized" | "unavailable";
-  pattern?: "push-pop-then-dx" | "dx-then-push-pop";
   messageOffset?: number;
   message?: string;
   exitCode?: number;

@@ -53,6 +53,29 @@ void test("renderDosHeader renders DOS stub code as informational notes", () => 
   assert.doesNotMatch(html, /WARNING/i);
 });
 
+void test("renderDosHeader does not expose internal standard stub pattern names", () => {
+  const pe = createBasePe();
+  pe.dos.stub = {
+    kind: "standard",
+    note: "DOS print-and-exit code",
+    code: {
+      kind: "standard-print-exit",
+      messageOffset: 0x0e,
+      message: "This program cannot be run in DOS mode.",
+      instructions: [{ offset: 0, text: "push cs" }]
+    }
+  };
+  const out: string[] = [];
+  renderDosHeader(pe, out);
+  const html = out.join("");
+  assert.ok(html.includes("DOS stub: standard print-and-exit code"));
+  assert.ok(html.includes("Message target: +000e"));
+  assert.ok(html.includes("This program cannot be run in DOS mode."));
+  assert.ok(html.includes("push cs"));
+  assert.doesNotMatch(html, /DOS stub code: standard DOS print-and-exit/);
+  assert.doesNotMatch(html, /push-pop-then-dx/);
+});
+
 void test("renderDosHeader renders nested PE download controls", () => {
   const pe = createBasePe();
   pe.dos.stub = {
@@ -98,6 +121,9 @@ void test("renderDosHeader renders nested PE download controls", () => {
   assert.ok(html.includes("data-pe-dos-nested-download"));
   assert.ok(html.includes("data-nested-start=\"64\""));
   assert.ok(html.includes("data-nested-end=\"11552\""));
+  assert.ok(html.includes("aria-label=\"Download nested PE\""));
+  assert.ok(html.includes("<svg aria-hidden=\"true\""));
+  assert.ok(html.includes("peDosNestedPe__header"));
   assert.doesNotMatch(html, /DOS stub: non-standard.*printable text/);
   assert.doesNotMatch(html, /mlestartup\.pdb/);
   assert.doesNotMatch(html, /MLEINIT/);

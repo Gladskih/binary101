@@ -255,7 +255,7 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .peSecurityTreeBadge--pass{border-color:color-mix(in oklab,var(--ok-fg) 45%,var(--border2));color:var(--ok-fg)}
 .peSecurityTreeBadge--fail{border-color:color-mix(in oklab,var(--warn-fg) 50%,var(--border2));color:var(--warn-fg)}
 .peSecurityTreeBadge--unknown{border-color:var(--border2)}
-.peSecurityTreeDownloadButton{
+.downloadIconButton{
   align-items:center;
   border:1px solid var(--border2);
   border-radius:6px;
@@ -268,9 +268,16 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
   padding:0;
   width:1.8rem;
 }
-.peSecurityTreeDownloadButton:hover{border-color:var(--accent);color:var(--accent)}
+.downloadIconButton:hover{border-color:var(--accent);color:var(--accent)}
 .peSecurityTreeMeta{margin-top:.18rem}
 .peSecurityTreeMeta span{color:var(--muted)}
+.peDosNestedPe__header{
+  align-items:center;
+  display:flex;
+  gap:.75rem;
+  justify-content:space-between;
+  margin-top:.5rem;
+}
 .peOverlayRange{border-left:1px solid var(--border2);margin-top:.55rem;padding-left:.75rem}
 .peOverlayRangeHeader{align-items:center;display:flex;gap:.75rem;justify-content:space-between}
 .peOverlayScanControls{align-items:center;display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.35rem}

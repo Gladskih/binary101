@@ -109,7 +109,6 @@ void test("analyzePeDosStubCode recognizes the common push/pop before DX DOS stu
   const result = await analyzeLoadModule(withMessage(code));
 
   assert.equal(result.kind, "standard-print-exit");
-  assert.equal(result.pattern, "push-pop-then-dx");
   assert.equal(result.messageOffset, 0x0e);
   assert.equal(result.message, COMMON_STUB_MESSAGE);
   assert.equal(result.exitCode, 1);
@@ -123,7 +122,6 @@ void test("analyzePeDosStubCode recognizes the common DX before push/pop DOS stu
   const result = await analyzeLoadModule(withMessage(code));
 
   assert.equal(result.kind, "standard-print-exit");
-  assert.equal(result.pattern, "dx-then-push-pop");
   assert.equal(result.messageOffset, 0x0e);
   assert.equal(result.message, COMMON_STUB_MESSAGE);
   assert.equal(result.exitCode, 0);
