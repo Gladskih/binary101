@@ -14,6 +14,11 @@ void test("renderPeDiagnostics wraps even a single warning in details", () => {
   assert.match(html, /Resource warnings/);
   assert.match(html, /1 message/);
   assert.match(html, /TYPE_1325421056 points directly to data/);
+  assert.match(html, /<details class="peDiagnosticDetails"/);
+  assert.match(html, /<ul class="smallNote peDiagnosticList"/);
+  assert.match(html, /class="peDiagnosticItem"/);
+  assert.match(html, /class="peDiagnosticText"/);
+  assert.match(html, /&bull;/);
 });
 
 void test("renderPeDiagnostics groups larger warning sets by normalized pattern", () => {

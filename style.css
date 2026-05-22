@@ -106,6 +106,23 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .peSectionBody .manifestXmlSourceDetails[open]::before{
   display:none;
 }
+.peDiagnosticList{
+  color:var(--warning-text,#b45309);
+  margin:.35rem 0 0 0;
+  padding-left:0;
+  list-style:none;
+}
+.peDiagnosticItem{
+  display:grid;
+  grid-template-columns:.75rem minmax(0,1fr);
+  column-gap:.25rem;
+  align-items:start;
+  min-width:0;
+}
+.peDiagnosticText{
+  min-width:0;
+  overflow-wrap:anywhere;
+}
 .manifestXmlSourceDetails > summary::marker{
   color:var(--muted);
 }

@@ -36,8 +36,14 @@ const collectDiagnosticGroups = (diagnostics: string[]): PeDiagnosticGroup[] => 
 };
 
 const renderDiagnosticList = (diagnostics: string[]): string =>
-  `<ul class="smallNote" style="color:var(--warning-text,#b45309)">` +
-  diagnostics.map(diagnostic => `<li>${escapeHtml(diagnostic)}</li>`).join("") +
+  `<ul class="smallNote peDiagnosticList">` +
+  diagnostics
+    .map(
+      diagnostic =>
+        `<li class="peDiagnosticItem"><span aria-hidden="true">&bull;</span>` +
+        `<span class="peDiagnosticText">${escapeHtml(diagnostic)}</span></li>`
+    )
+    .join("") +
   `</ul>`;
 
 const renderDiagnosticSummary = (
@@ -61,7 +67,7 @@ export const renderPeDiagnostics = (
   const groups = diagnostics.length > 8 ? collectDiagnosticGroups(diagnostics) : [];
   const body = renderPeDiagnosticBody(diagnostics);
   return (
-    `<details style="margin-top:.5rem">` +
+    `<details class="peDiagnosticDetails" style="margin-top:.5rem">` +
     renderDiagnosticSummary(summaryLabel, diagnostics, groups) +
     body +
     `</details>`
