@@ -63,6 +63,10 @@ const DEBUG_TYPE_INFOS: Record<number, DebugTypeInfo> = {
   20: {
     label: "EX_DLLCHARACTERISTICS",
     description: "Extended DLL characteristics bits beyond the optional-header field."
+  },
+  21: {
+    label: "R2R_PERFMAP",
+    description: "ReadyToRun PerfMap metadata emitted by .NET toolchains."
   }
 };
 

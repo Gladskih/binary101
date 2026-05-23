@@ -11,6 +11,7 @@ import {
   createInconsistentEmbeddedDebugViewSection,
   createSupportedDebugViewSection,
   createDecodedDebugViewSection,
+  createDebugViewEntry,
   createMappedCodeViewDebugViewSection,
   createUnresolvedDebugViewSection
 } from "../fixtures/pe-debug-view-subject.js";
@@ -170,4 +171,58 @@ void test("renderDebug renders decoded VC_FEATURE and POGO payload details", () 
     escapeRegExp(pogo.entries[1]!.name)
   ]);
   assert.doesNotMatch(html, /Types present/);
+});
+
+void test("renderDebug renders decoded details for extra debug payload formats", () => {
+  const pe = createBasePe();
+  pe.debug = {
+    entry: null,
+    entries: [
+      {
+        ...createDebugViewEntry(2, 0, 0x80, 26),
+        codeView: { signature: "NB10", offset: 0, timestamp: 0x3aef6cec, age: 1, path: "crtdll.pdb" }
+      },
+      { ...createDebugViewEntry(3, 0, 0x90, 16), fpo: { records: [{
+        startOffset: 0x1000,
+        procedureSize: 0x20,
+        localDwordCount: 2,
+        parameterDwordCount: 3,
+        prologByteCount: 0x12,
+        savedRegisterCount: 5,
+        hasStructuredExceptionHandling: true,
+        usesBasePointer: true,
+        frameType: 2
+      }] } },
+      {
+        ...createDebugViewEntry(4, 0, 0xa0, 26),
+        misc: { dataType: 1, length: 26, unicode: false, text: "mfc40_opt.DBG" }
+      },
+      { ...createDebugViewEntry(16, 0, 0xb0, 0), repro: { hashLength: null, hashBytes: [] } },
+      {
+        ...createDebugViewEntry(17, 0, 0xc0, 9),
+        embeddedPortablePdb: { signature: "MPDB", uncompressedSize: 115724, compressedSize: 91953 }
+      },
+      {
+        ...createDebugViewEntry(19, 0, 0xd0, 9),
+        pdbChecksum: { algorithmName: "SHA256", checksumBytes: [0xaa, 0xbb] }
+      },
+      { ...createDebugViewEntry(20, 0, 0xe0, 4), exDllCharacteristics: { value: 0x41 } },
+      { ...createDebugViewEntry(10, 0, 0xf0, 4), rawPayload: { previewBytes: [0xb4, 0x9c] } }
+    ],
+    rawDataRanges: []
+  };
+
+  const html = renderDebugHtml(pe);
+
+  assertIncludesAll(html, [
+    "CodeView NB10 record with PDB identity and path",
+    "crtdll\\.pdb",
+    "Frame-pointer omission table with 1 records",
+    "mfc40_opt\\.DBG",
+    "Deterministic build marker",
+    "MPDB",
+    "SHA256",
+    "0x00000041",
+    "b4 9c"
+  ]);
 });

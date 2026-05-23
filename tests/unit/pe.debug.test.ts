@@ -38,8 +38,9 @@ void test("parseDebugDirectory reads CodeView RSDS entry", async () => {
   );
 
   const entry = expectDefined(result.entry);
+  assert.equal(entry.signature, "RSDS");
   assert.equal(entry.age, subject.age);
-  assert.equal(entry.guid, RSDS_TEST_GUID_TEXT);
+  assert.equal(entry.signature === "RSDS" ? entry.guid : "", RSDS_TEST_GUID_TEXT);
   assert.equal(entry.path, subject.path);
 });
 

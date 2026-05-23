@@ -56,6 +56,7 @@ export const createDebugViewEntry = (
 });
 
 export const createDebugViewCodeView = (id = 0): PeCodeViewEntry => ({
+  signature: "RSDS",
   guid: `g-s${id.toString(36)}`,
   age: id,
   path: createSyntheticPdbPath(id)

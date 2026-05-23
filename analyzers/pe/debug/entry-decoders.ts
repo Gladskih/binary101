@@ -1,0 +1,149 @@
+"use strict";
+
+import type { FileRangeReader } from "../../file-range-reader.js";
+import type { RvaToOffset } from "../types.js";
+import { parseCodeViewEntry, type PeCodeViewEntry } from "./codeview.js";
+import {
+  parseEmbeddedPortablePdbInfo,
+  type PeEmbeddedPortablePdbInfo
+} from "./embedded-portable-pdb.js";
+import {
+  parseExDllCharacteristicsInfo,
+  type PeExDllCharacteristicsInfo
+} from "./ex-dll-characteristics.js";
+import { parseFpoInfo, type PeFpoInfo } from "./fpo.js";
+import { parseMiscDebugInfo, type PeMiscDebugInfo } from "./misc.js";
+import { parsePdbChecksumInfo, type PePdbChecksumInfo } from "./pdb-checksum.js";
+import { parsePogoInfo, type PePogoInfo } from "./pogo.js";
+import { parseRawDebugPayload, type PeRawDebugPayload } from "./raw-payload.js";
+import { parseReproInfo, type PeReproInfo } from "./repro.js";
+import { parseVcFeatureInfo, type PeVcFeatureInfo } from "./vc-feature.js";
+
+export type PeDebugPayloads = {
+  codeView?: PeCodeViewEntry;
+  fpo?: PeFpoInfo;
+  misc?: PeMiscDebugInfo;
+  vcFeature?: PeVcFeatureInfo;
+  pogo?: PePogoInfo;
+  repro?: PeReproInfo;
+  embeddedPortablePdb?: PeEmbeddedPortablePdbInfo;
+  pdbChecksum?: PePdbChecksumInfo;
+  exDllCharacteristics?: PeExDllCharacteristicsInfo;
+  rawPayload?: PeRawDebugPayload;
+};
+
+type DecodeInput = {
+  type: number;
+  typeName: string;
+  fileSize: number;
+  rvaToOff: RvaToOffset;
+  addressOfRawDataRva: number;
+  pointerToRawDataOff: number;
+  dataSize: number;
+};
+
+const IMAGE_DEBUG_TYPE_CODEVIEW = 2;
+const IMAGE_DEBUG_TYPE_FPO = 3;
+const IMAGE_DEBUG_TYPE_MISC = 4;
+const IMAGE_DEBUG_TYPE_VC_FEATURE = 12;
+const IMAGE_DEBUG_TYPE_POGO = 13;
+const IMAGE_DEBUG_TYPE_REPRO = 16;
+const IMAGE_DEBUG_TYPE_EMBEDDED_PORTABLE_PDB = 17;
+const IMAGE_DEBUG_TYPE_PDB_CHECKSUM = 19;
+const IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS = 20;
+
+const hasDecodedPayload = (payloads: PeDebugPayloads): boolean =>
+  Boolean(
+    payloads.codeView ||
+      payloads.fpo ||
+      payloads.misc ||
+      payloads.vcFeature ||
+      payloads.pogo ||
+      payloads.repro ||
+      payloads.embeddedPortablePdb ||
+      payloads.pdbChecksum ||
+      payloads.exDllCharacteristics ||
+      payloads.rawPayload
+  );
+
+const readRawFallback = (
+  reader: FileRangeReader,
+  input: DecodeInput,
+  addWarning: (message: string) => void
+): Promise<PeRawDebugPayload | null> =>
+  input.dataSize > 0
+    ? parseRawDebugPayload(
+        input.typeName,
+        reader,
+        input.fileSize,
+        input.rvaToOff,
+        input.addressOfRawDataRva,
+        input.pointerToRawDataOff,
+        input.dataSize,
+        addWarning
+      )
+    : Promise.resolve(null);
+
+const parseKnownPayload = async (
+  reader: FileRangeReader,
+  input: DecodeInput,
+  addWarning: (message: string) => void
+): Promise<PeDebugPayloads> => {
+  const args = [
+    reader,
+    input.fileSize,
+    input.rvaToOff,
+    input.addressOfRawDataRva,
+    input.pointerToRawDataOff,
+    input.dataSize,
+    addWarning
+  ] as const;
+  if (input.type === IMAGE_DEBUG_TYPE_CODEVIEW) {
+    const codeView = await parseCodeViewEntry(...args);
+    return codeView ? { codeView } : {};
+  }
+  if (input.type === IMAGE_DEBUG_TYPE_FPO) {
+    const fpo = await parseFpoInfo(...args);
+    return fpo ? { fpo } : {};
+  }
+  if (input.type === IMAGE_DEBUG_TYPE_MISC) {
+    const misc = await parseMiscDebugInfo(...args);
+    return misc ? { misc } : {};
+  }
+  if (input.type === IMAGE_DEBUG_TYPE_VC_FEATURE) {
+    const vcFeature = await parseVcFeatureInfo(...args);
+    return vcFeature ? { vcFeature } : {};
+  }
+  if (input.type === IMAGE_DEBUG_TYPE_POGO) {
+    const pogo = await parsePogoInfo(...args);
+    return pogo ? { pogo } : {};
+  }
+  if (input.type === IMAGE_DEBUG_TYPE_REPRO) {
+    const repro = await parseReproInfo(...args);
+    return repro ? { repro } : {};
+  }
+  if (input.type === IMAGE_DEBUG_TYPE_EMBEDDED_PORTABLE_PDB) {
+    const embeddedPortablePdb = await parseEmbeddedPortablePdbInfo(...args);
+    return embeddedPortablePdb ? { embeddedPortablePdb } : {};
+  }
+  if (input.type === IMAGE_DEBUG_TYPE_PDB_CHECKSUM) {
+    const pdbChecksum = await parsePdbChecksumInfo(...args);
+    return pdbChecksum ? { pdbChecksum } : {};
+  }
+  if (input.type === IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS) {
+    const exDllCharacteristics = await parseExDllCharacteristicsInfo(...args);
+    return exDllCharacteristics ? { exDllCharacteristics } : {};
+  }
+  return {};
+};
+
+export const decodeDebugEntryPayload = async (
+  reader: FileRangeReader,
+  input: DecodeInput,
+  addWarning: (message: string) => void
+): Promise<PeDebugPayloads> => {
+  const payloads = await parseKnownPayload(reader, input, addWarning);
+  if (hasDecodedPayload(payloads)) return payloads;
+  const rawPayload = await readRawFallback(reader, input, addWarning);
+  return rawPayload ? { ...payloads, rawPayload } : payloads;
+};

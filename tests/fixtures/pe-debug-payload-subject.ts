@@ -91,7 +91,7 @@ export const createVcFeaturePayload = (
 };
 
 export const createTruncatedVcFeaturePayload = (): Uint8Array =>
-  new Uint8Array(VC_FEATURE_COUNTER_COUNT * DWORD_SIZE - 1);
+  new Uint8Array(VC_FEATURE_COUNTER_COUNT * DWORD_SIZE - DWORD_SIZE - 1);
 
 const align4 = (value: number): number => (value + 3) & ~3;
 

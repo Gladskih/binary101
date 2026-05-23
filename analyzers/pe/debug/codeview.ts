@@ -9,23 +9,41 @@ import type { RvaToOffset } from "../types.js";
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-type
 // RSDS CodeView records are:
 // signature (4) + GUID (16) + age (4) + NUL-terminated path.
+// Legacy NB10 records are documented by dotnet/runtime PE-COFF.md,
+// section "CodeView Debug Directory Entry (type 2)".
 const CODEVIEW_RSDS_MIN_SIZE = 24;
+const CODEVIEW_NB10_MIN_SIZE = 16;
 const CODEVIEW_SIGNATURE_RSDS = 0x53445352;
+const CODEVIEW_SIGNATURE_NB10 = 0x3031424e;
 const CODEVIEW_RSDS_OFF_GUID_DATA1 = 4;
 const CODEVIEW_RSDS_OFF_GUID_DATA2 = 8;
 const CODEVIEW_RSDS_OFF_GUID_DATA3 = 10;
 const CODEVIEW_RSDS_OFF_GUID_DATA4 = 12;
 const CODEVIEW_RSDS_GUID_DATA4_LENGTH = 8;
 const CODEVIEW_RSDS_OFF_AGE = 20;
+const CODEVIEW_NB10_OFF_OFFSET = 4;
+const CODEVIEW_NB10_OFF_TIMESTAMP = 8;
+const CODEVIEW_NB10_OFF_AGE = 12;
 // Implementation detail: bounded 64-byte slices keep path scanning incremental while honoring
 // SizeOfData, instead of reading arbitrarily large PDB paths in one go.
 const CODEVIEW_PATH_READ_CHUNK_SIZE = 64;
 
-export interface PeCodeViewEntry {
+export interface PeCodeViewRsdsEntry {
+  signature: "RSDS";
   guid: string;
   age: number;
   path: string;
 }
+
+export interface PeCodeViewNb10Entry {
+  signature: "NB10";
+  offset: number;
+  timestamp: number;
+  age: number;
+  path: string;
+}
+
+export type PeCodeViewEntry = PeCodeViewRsdsEntry | PeCodeViewNb10Entry;
 
 const readCodeViewPathFromMappedData = async (
   reader: FileRangeReader,
@@ -57,10 +75,11 @@ const readCodeViewPathFromFilePointer = async (
   reader: FileRangeReader,
   dataOffset: number,
   dataSize: number,
+  headerSize: number,
   addWarning: (message: string) => void
 ): Promise<string> => {
   let path = "";
-  let pos = dataOffset + CODEVIEW_RSDS_MIN_SIZE;
+  let pos = dataOffset + headerSize;
   const pathEnd = dataOffset + dataSize;
   while (pos < pathEnd) {
     const chunkLength = Math.min(CODEVIEW_PATH_READ_CHUNK_SIZE, pathEnd - pos);
@@ -76,7 +95,7 @@ const readCodeViewPathFromFilePointer = async (
     }
     return path;
   }
-  addWarning("CodeView RSDS path is not NUL-terminated within SizeOfData.");
+  addWarning("CodeView path is not NUL-terminated within SizeOfData.");
   return path;
 };
 
@@ -89,8 +108,8 @@ export const parseCodeViewEntry = async (
   dataSize: number,
   addWarning: (message: string) => void
 ): Promise<PeCodeViewEntry | null> => {
-  if (dataSize < CODEVIEW_RSDS_MIN_SIZE) {
-    addWarning("CodeView debug entry is smaller than the minimum RSDS header.");
+  if (dataSize < CODEVIEW_NB10_MIN_SIZE) {
+    addWarning("CodeView debug entry is smaller than the minimum NB10 header.");
     return null;
   }
   const dataOffset = pointerToRawDataOff
@@ -110,12 +129,33 @@ export const parseCodeViewEntry = async (
     addWarning("Debug directory points outside file bounds; file may be malformed.");
     return null;
   }
-  const header = await reader.read(dataOffset, CODEVIEW_RSDS_MIN_SIZE);
-  if (header.byteLength < CODEVIEW_RSDS_MIN_SIZE) {
-    addWarning("CodeView debug entry is truncated before the full RSDS header.");
+  const header = await reader.read(dataOffset, Math.min(dataSize, CODEVIEW_RSDS_MIN_SIZE));
+  if (header.byteLength < CODEVIEW_NB10_MIN_SIZE) {
+    addWarning("CodeView debug entry is truncated before the full NB10 header.");
     return null;
   }
-  if (header.getUint32(0, true) !== CODEVIEW_SIGNATURE_RSDS) {
+  const signature = header.getUint32(0, true);
+  if (signature === CODEVIEW_SIGNATURE_NB10) {
+    return {
+      signature: "NB10",
+      offset: header.getUint32(CODEVIEW_NB10_OFF_OFFSET, true),
+      timestamp: header.getUint32(CODEVIEW_NB10_OFF_TIMESTAMP, true),
+      age: header.getUint32(CODEVIEW_NB10_OFF_AGE, true),
+      path: await readCodeViewPathFromFilePointer(
+        reader,
+        dataOffset,
+        dataSize,
+        CODEVIEW_NB10_MIN_SIZE,
+        addWarning
+      )
+    };
+  }
+  if (signature !== CODEVIEW_SIGNATURE_RSDS) {
+    addWarning("CodeView debug entry signature is not RSDS or NB10.");
+    return null;
+  }
+  if (header.byteLength < CODEVIEW_RSDS_MIN_SIZE) {
+    addWarning("CodeView debug entry is truncated before the full RSDS header.");
     return null;
   }
   const sig0 = header.getUint32(CODEVIEW_RSDS_OFF_GUID_DATA1, true);
@@ -141,6 +181,12 @@ export const parseCodeViewEntry = async (
           pathByteLength,
           addWarning
         )
-      : await readCodeViewPathFromFilePointer(reader, dataOffset, dataSize, addWarning);
-  return { guid, age, path };
+      : await readCodeViewPathFromFilePointer(
+          reader,
+          dataOffset,
+          dataSize,
+          CODEVIEW_RSDS_MIN_SIZE,
+          addWarning
+        );
+  return { signature: "RSDS", guid, age, path };
 };

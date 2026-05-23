@@ -1,13 +1,19 @@
 "use strict";
 
 import type { FileRangeReader } from "../../file-range-reader.js";
-import { parseCodeViewEntry, type PeCodeViewEntry } from "./codeview.js";
-import { parsePogoInfo, type PePogoInfo } from "./pogo.js";
-import { parseVcFeatureInfo, type PeVcFeatureInfo } from "./vc-feature.js";
+import type { PeCodeViewEntry } from "./codeview.js";
+import { decodeDebugEntryPayload, type PeDebugPayloads } from "./entry-decoders.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 
 export type { PeCodeViewEntry } from "./codeview.js";
+export type { PeEmbeddedPortablePdbInfo } from "./embedded-portable-pdb.js";
+export type { PeExDllCharacteristicsInfo } from "./ex-dll-characteristics.js";
+export type { PeFpoInfo, PeFpoRecord } from "./fpo.js";
+export type { PeMiscDebugInfo } from "./misc.js";
+export type { PePdbChecksumInfo } from "./pdb-checksum.js";
 export type { PePogoEntry, PePogoInfo } from "./pogo.js";
+export type { PeRawDebugPayload } from "./raw-payload.js";
+export type { PeReproInfo } from "./repro.js";
 export type { PeVcFeatureInfo } from "./vc-feature.js";
 
 // Microsoft PE format, "Debug Directory (Image Only)":
@@ -22,11 +28,6 @@ const IMAGE_DEBUG_DIRECTORY_OFF_TYPE = 0x0c;
 const IMAGE_DEBUG_DIRECTORY_OFF_SIZE_OF_DATA = 0x10;
 const IMAGE_DEBUG_DIRECTORY_OFF_ADDRESS_OF_RAW_DATA = 0x14;
 const IMAGE_DEBUG_DIRECTORY_OFF_POINTER_TO_RAW_DATA = 0x18;
-
-// PE/COFF: IMAGE_DEBUG_TYPE_CODEVIEW
-const IMAGE_DEBUG_TYPE_CODEVIEW = 2;
-const IMAGE_DEBUG_TYPE_VC_FEATURE = 12;
-const IMAGE_DEBUG_TYPE_POGO = 13;
 
 const DEBUG_TYPE_NAMES: Record<number, string> = {
   0: "UNKNOWN",
@@ -48,20 +49,18 @@ const DEBUG_TYPE_NAMES: Record<number, string> = {
   16: "REPRO",
   17: "EMBEDDED DEBUG",
   19: "SYMBOL HASH",
-  20: "EX_DLLCHARACTERISTICS"
+  20: "EX_DLLCHARACTERISTICS",
+  21: "R2R_PERFMAP"
 };
 
 type FileRange = { start: number; end: number };
 
-export interface PeDebugDirectoryEntry {
+export interface PeDebugDirectoryEntry extends PeDebugPayloads {
   type: number;
   typeName: string;
   sizeOfData: number;
   addressOfRawData: number;
   pointerToRawData: number;
-  codeView?: PeCodeViewEntry;
-  vcFeature?: PeVcFeatureInfo;
-  pogo?: PePogoInfo;
 }
 
 const appendFileRange = (ranges: FileRange[], start: number, end: number, fileSize: number): void => {
@@ -198,45 +197,23 @@ export async function parseDebugDirectory(
       addressOfRawData: addressOfRawDataRva,
       pointerToRawData: pointerToRawDataOff
     };
-    if (type === IMAGE_DEBUG_TYPE_CODEVIEW) {
-      const codeView = await parseCodeViewEntry(
+    Object.assign(
+      currentEntry,
+      await decodeDebugEntryPayload(
         reader,
-        fileSize,
-        rvaToOff,
-        addressOfRawDataRva,
-        pointerToRawDataOff,
-        dataSize,
+        {
+          type,
+          typeName: currentEntry.typeName,
+          fileSize,
+          rvaToOff,
+          addressOfRawDataRva,
+          pointerToRawDataOff,
+          dataSize
+        },
         addWarning
-      );
-      if (codeView) {
-        currentEntry.codeView = codeView;
-        if (!entry) entry = codeView;
-      }
-    }
-    if (type === IMAGE_DEBUG_TYPE_VC_FEATURE) {
-      const vcFeature = await parseVcFeatureInfo(
-        reader,
-        fileSize,
-        rvaToOff,
-        addressOfRawDataRva,
-        pointerToRawDataOff,
-        dataSize,
-        addWarning
-      );
-      if (vcFeature) currentEntry.vcFeature = vcFeature;
-    }
-    if (type === IMAGE_DEBUG_TYPE_POGO) {
-      const pogo = await parsePogoInfo(
-        reader,
-        fileSize,
-        rvaToOff,
-        addressOfRawDataRva,
-        pointerToRawDataOff,
-        dataSize,
-        addWarning
-      );
-      if (pogo) currentEntry.pogo = pogo;
-    }
+      )
+    );
+    if (currentEntry.codeView && !entry) entry = currentEntry.codeView;
     entries.push(currentEntry);
   }
   return {
