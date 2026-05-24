@@ -18,10 +18,10 @@ import type { DirectoryTableElements } from "./directory-table-rendering.js";
 type StatusWriter = (message: string | null | undefined) => void;
 type FileTypeDetector = (file: File) => Promise<string>;
 type FileOpener = (file: File, sourceDescription: string) => Promise<void>;
+type DirectoryOpener = (route: DirectoryInspectionRoute) => void;
 type TimeSource = () => number;
 interface DirectoryInspectionConfig extends DirectoryTableElements {
   openButtonElement: HTMLButtonElement;
-  backButtonElement: HTMLButtonElement;
   cardElement: HTMLElement;
   nameElement: HTMLElement;
   summaryElement: HTMLElement;
@@ -31,6 +31,7 @@ interface DirectoryInspectionConfig extends DirectoryTableElements {
   resetFileInspection: () => void;
   setStatusMessage: StatusWriter;
   openFile: FileOpener;
+  openDirectory: DirectoryOpener;
   detectFileType?: FileTypeDetector;
   now?: TimeSource;
   yieldToBrowser?: () => Promise<void>;
@@ -41,10 +42,15 @@ interface DirectoryInspectionController {
   openFiles(files: readonly File[], sourceDescription: string): Promise<boolean>;
   open(): Promise<void>;
   openDroppedItems(items: DirectoryDropItemList, sourceDescription?: string): Promise<boolean>;
+  showRoute(route: DirectoryInspectionRoute): Promise<void>;
 }
 interface DirectoryLocation {
   readonly displayPath: string;
   readonly handle: BrowserDirectoryHandle;
+}
+interface DirectoryInspectionRoute {
+  readonly locations: readonly DirectoryLocation[];
+  readonly sourceDescription: string;
 }
 interface DirectoryViewState {
   fileRows: ReadonlyMap<string, DirectoryFileRow>;
@@ -70,13 +76,12 @@ const createRowMap = <Row extends DirectoryRow>(
     .map(row => [row.path, row])
 );
 
-const setBackButtonState = (
-  config: DirectoryInspectionConfig,
-  locations: readonly DirectoryLocation[]
-): void => {
-  config.backButtonElement.hidden = locations.length <= 1;
-  config.backButtonElement.disabled = locations.length <= 1;
-};
+const copyLocations = (locations: readonly DirectoryLocation[]): DirectoryLocation[] =>
+  locations.map(location => ({ displayPath: location.displayPath, handle: location.handle }));
+const createDirectoryRoute = (state: DirectoryViewState): DirectoryInspectionRoute => ({
+  locations: copyLocations(state.locations),
+  sourceDescription: state.sourceDescription
+});
 const updateSummary = (
   element: HTMLElement,
   rows: readonly DirectoryRow[],
@@ -105,7 +110,6 @@ const inspectDirectoryLocation = async (
   config.summaryElement.textContent = "Listing folder...";
   clearDirectoryTables(config);
   config.progressWrapElement.hidden = true;
-  setBackButtonState(config, state.locations);
   const rows = await collectDirectoryRows(location.handle, isCurrent);
   if (!rows) return;
   state.fileRows = createRowMap<DirectoryFileRow>(rows, "file");
@@ -144,6 +148,7 @@ const createDirectoryInspectionController = (
     statusMessage: string
   ): Promise<void> => {
     const currentGeneration = resetToRoot(root, sourceDescription);
+    config.openDirectory(createDirectoryRoute(state));
     config.setStatusMessage(statusMessage);
     await inspectCurrentLocation(currentGeneration);
   };
@@ -151,12 +156,13 @@ const createDirectoryInspectionController = (
     const row = state.fileRows.get(path);
     if (!row) return;
     const currentGeneration = generation + 1;
+    const location = state.locations.at(-1);
     generation = currentGeneration;
     try {
       config.setStatusMessage(`Opening ${path}...`);
       const file = await row.handle.getFile();
       if (generation !== currentGeneration) return;
-      await config.openFile(file, `${state.sourceDescription}: ${state.locations.at(-1)?.displayPath}/${path}`);
+      await config.openFile(file, `${state.sourceDescription}: ${location?.displayPath}/${path}`);
     } catch (error) {
       if (generation === currentGeneration) config.setStatusMessage(`Unable to open file: ${formatAccessError(error)}`);
     }
@@ -168,6 +174,7 @@ const createDirectoryInspectionController = (
     const currentGeneration = generation + 1;
     generation = currentGeneration;
     state.locations.push({ displayPath: `${current.displayPath}/${path}`, handle: row.handle });
+    config.openDirectory(createDirectoryRoute(state));
     await inspectCurrentLocation(currentGeneration);
   };
   const activateRow = (target: Element | null): boolean => {
@@ -187,10 +194,20 @@ const createDirectoryInspectionController = (
     state.folderRows = new Map();
     clearDirectoryTables(config);
     config.progressWrapElement.hidden = true;
-    setBackButtonState(config, state.locations);
   };
   const cancel = (): void => {
     generation += 1;
+  };
+  const showRoute = async (route: DirectoryInspectionRoute): Promise<void> => {
+    if (route.locations.length === 0) {
+      hide();
+      return;
+    }
+    const currentGeneration = generation + 1;
+    generation = currentGeneration;
+    state.sourceDescription = route.sourceDescription;
+    state.locations = copyLocations(route.locations);
+    await inspectCurrentLocation(currentGeneration);
   };
   const open = async (): Promise<void> => {
     const picker = getDirectoryPicker();
@@ -207,6 +224,7 @@ const createDirectoryInspectionController = (
       const root = await picker();
       if (generation !== currentGeneration) return;
       state.locations = [{ displayPath: root.name || "Selected folder", handle: root }];
+      config.openDirectory(createDirectoryRoute(state));
       await inspectCurrentLocation(currentGeneration);
     } catch (error) {
       if (isAbortError(error)) {
@@ -250,13 +268,6 @@ const createDirectoryInspectionController = (
   config.openButtonElement.addEventListener("click", () => {
     void open();
   });
-  config.backButtonElement.addEventListener("click", () => {
-    if (state.locations.length <= 1) return;
-    const currentGeneration = generation + 1;
-    generation = currentGeneration;
-    state.locations = state.locations.slice(0, -1);
-    void inspectCurrentLocation(currentGeneration);
-  });
   config.cardElement.addEventListener("click", event => {
     const target = event.target instanceof Element ? event.target : null;
     if (handleSortableTableClick(target)) return;
@@ -267,7 +278,7 @@ const createDirectoryInspectionController = (
     const target = event.target instanceof Element ? event.target : null;
     if (activateRow(target)) event.preventDefault();
   });
-  return { cancel, hide, open, openFiles, openDroppedItems };
+  return { cancel, hide, open, openFiles, openDroppedItems, showRoute };
 };
 export { createDirectoryInspectionController };
-export type { DirectoryInspectionController, DirectoryInspectionConfig };
+export type { DirectoryInspectionController, DirectoryInspectionConfig, DirectoryInspectionRoute };

@@ -172,7 +172,7 @@ const expectMultipleFolders = async (page: Page, rootName: string): Promise<void
   await expect(page.locator("#directoryFolderListingBody tr")).toHaveCount(2);
   await page.locator("#directoryFolderListingBody tr", { hasText: "folder-one/" }).click();
   await expect(page.locator("#directoryName")).toHaveText(`${rootName}/folder-one`);
-  await page.getByRole("button", { name: "Back" }).click();
+  await page.goBack();
   await expect(page.locator("#directoryName")).toHaveText(rootName);
   await expectPageNotStretched(page);
 };

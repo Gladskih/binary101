@@ -117,7 +117,7 @@ test.describe("file type detection", () => {
     await expect(page.locator("#directoryName")).toHaveText("fixture-folder/docs");
     await expect(page.locator("#directoryFileListingBody")).toContainText("note.txt");
     await expect(page.locator("#directoryFileListingBody")).toContainText("5 B (5 bytes)");
-    await page.getByRole("button", { name: "Back" }).click();
+    await page.goBack();
     await expect(page.locator("#directoryName")).toHaveText("fixture-folder");
     await page.locator("#directoryFileListingBody tr", { hasText: "pixel.png" }).click();
     await expectBaseDetails(page, "pixel.png", "PNG image");

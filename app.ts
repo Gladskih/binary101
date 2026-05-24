@@ -13,7 +13,12 @@ import { createPeOverlayScanActions } from "./ui/pe-overlay-scan.js";
 import { handleManifestTreeActionClick, syncManifestTreeControls } from "./ui/manifest-tree-controls.js";
 import { captureOpenDetails, restoreOpenDetails } from "./ui/details-open-state.js";
 import { enhanceSortableTables, handleSortableTableClick } from "./ui/sortable-tables.js";
-import { createDirectoryInspectionController } from "./ui/directory-inspection.js";
+import {
+  createDirectoryInspectionController,
+  type DirectoryInspectionController
+} from "./ui/directory-inspection.js";
+import { createInspectionNavigationController } from "./ui/inspection-navigation.js";
+import { attachSelectionInputs } from "./ui/selection-inputs.js";
 const getElement = (id: string) => document.getElementById(id)!;
 const html = (id: string): HTMLElement => getElement(id) as HTMLElement;
 const dropZoneElement = getElement("dropZone") as HTMLElement,
@@ -43,6 +48,7 @@ let currentFile: File | null = null;
 let currentPreviewUrl: string | null = null;
 let currentTypeLabel = "";
 let currentParseResult: ParseForUiResult = { analyzer: null, parsed: null };
+let fileInspectionGeneration = 0;
 const setPreviewUrl = (url: string | null): void => {
   if (currentPreviewUrl) URL.revokeObjectURL(currentPreviewUrl);
   currentPreviewUrl = url;
@@ -50,8 +56,6 @@ const setPreviewUrl = (url: string | null): void => {
 const setStatusMessage = (message: string | null | undefined): void => { statusElement.textContent = message || ""; };
 const formatAnalysisDuration = (durationMs: number): string =>
   durationMs < 1000 ? `${Math.max(0, Math.round(durationMs))} ms` : `${(durationMs / 1000).toFixed(2)} s`;
-const snapshotFileList = (files: FileList): File[] =>
-  Array.from({ length: files.length }, (_, index) => files.item(index)).filter((file): file is File => file != null);
 const renderResult = (result: ParseForUiResult): void => {
   const openDetails = captureOpenDetails(peDetailsValueElement);
   renderParsedResult(result, {
@@ -75,9 +79,32 @@ const fileActionClickHandler = createFileActionClickHandler({
   getParseResult: getCurrentParseResult, getFile: getCurrentFile, setStatusMessage
 });
 const cancelActiveAnalysis = (): void => { peDisassembly.cancel(); peOverlayScan.cancel(); elfDisassembly.cancel(); };
-const directoryInspection = createDirectoryInspectionController({
+const resetFileInspectionView = (): void => {
+  fileInspectionGeneration += 1;
+  cancelActiveAnalysis();
+  currentFile = null;
+  currentTypeLabel = "";
+  currentParseResult = { analyzer: null, parsed: null };
+  setPreviewUrl(null);
+  fileInfoCardElement.hidden = true;
+  peDetailsTermElement.hidden = true;
+  peDetailsValueElement.hidden = true;
+  peDetailsValueElement.innerHTML = "";
+  fileAnalysisDurationDetailElement.textContent = "";
+  resetHashDisplay(sha256Controls, sha512Controls);
+};
+const showEmptyInspection = (message: string | null): void => {
+  directoryInspection.hide();
+  resetFileInspectionView();
+  setStatusMessage(message);
+};
+const inspectionNavigation = createInspectionNavigationController({
+  openDirectoryRoute: route => { void directoryInspection.showRoute(route); },
+  openEmptyRoute: showEmptyInspection,
+  openFileRoute: showFileInfo
+});
+const directoryInspection: DirectoryInspectionController = createDirectoryInspectionController({
   openButtonElement: getElement("directoryOpenButton") as HTMLButtonElement,
-  backButtonElement: getElement("directoryBackButton") as HTMLButtonElement,
   cardElement: html("directoryInfoCard"), nameElement: html("directoryName"),
   summaryElement: html("directorySummary"), progressWrapElement: html("directoryProgressWrap"),
   progressElement: getElement("directoryScanProgress") as HTMLProgressElement,
@@ -85,10 +112,18 @@ const directoryInspection = createDirectoryInspectionController({
   folderSectionElement: html("directoryFoldersSection"), fileSectionElement: html("directoryFilesSection"),
   warningSectionElement: html("directoryWarningsSection"), folderTableBodyElement: html("directoryFolderListingBody"),
   fileTableBodyElement: html("directoryFileListingBody"), warningTableBodyElement: html("directoryWarningListingBody"),
-  resetFileInspection: () => { cancelActiveAnalysis(); currentFile = null; setPreviewUrl(null);
-    currentParseResult = { analyzer: null, parsed: null }; fileInfoCardElement.hidden = true; },
+  resetFileInspection: resetFileInspectionView,
   setStatusMessage,
-  openFile: showFileInfo
+  openFile: inspectionNavigation.openFile,
+  openDirectory: inspectionNavigation.openDirectory
+});
+inspectionNavigation.initialize();
+attachSelectionInputs({
+  directoryInspection,
+  dropZoneElement,
+  fileInputElement,
+  openFile: inspectionNavigation.openFile,
+  setStatusMessage
 });
 peDetailsValueElement.addEventListener("click", event => {
   const targetNode = event.target as Node | null;
@@ -149,6 +184,8 @@ peDetailsValueElement.addEventListener("click", event => {
 const syncToggledManifestTree = (event: Event): void => syncManifestTreeControls(event.target as Element | null);
 peDetailsValueElement.addEventListener("toggle", syncToggledManifestTree, true);
 async function showFileInfo(file: File, sourceDescription: string): Promise<void> {
+  const currentGeneration = fileInspectionGeneration + 1;
+  fileInspectionGeneration = currentGeneration;
   cancelActiveAnalysis();
   directoryInspection.hide();
   currentFile = file;
@@ -161,6 +198,7 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     peDetailsValueElement.innerHTML = "";
     setStatusMessage("Detecting file type...");
     const typeLabel = await detectBinaryType(file);
+    if (fileInspectionGeneration !== currentGeneration) return;
     currentTypeLabel = typeLabel || "";
     const timestampIso = nowIsoString();
     const sizeText = formatHumanSize(file.size);
@@ -175,12 +213,14 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     setStatusMessage("Parsing file details...");
     const analysisStart = performance.now();
     const parsedResult = await parseForUi(file);
+    if (fileInspectionGeneration !== currentGeneration) return;
     fileAnalysisDurationDetailElement.textContent = formatAnalysisDuration(performance.now() - analysisStart);
     currentParseResult = parsedResult;
     renderResult(parsedResult);
     resetHashDisplay(sha256Controls, sha512Controls);
     setStatusMessage(null);
   } catch (error) {
+    if (fileInspectionGeneration !== currentGeneration) return;
     currentTypeLabel = "";
     setPreviewUrl(null);
     setStatusMessage(
@@ -192,89 +232,6 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     peDetailsValueElement.innerHTML = "";
   }
 }
-const openFileSelection = (files: readonly File[], sourceDescription: string): void => {
-  if (files.length === 0) {
-    setStatusMessage("No file selected.");
-    return;
-  }
-  void directoryInspection.openFiles(files, sourceDescription);
-};
-const handleSelectedFiles = (files: FileList | null): void =>
-  openFileSelection(files ? snapshotFileList(files) : [], "File selection");
-["dragenter", "dragover"].forEach(eventName =>
-  dropZoneElement.addEventListener(eventName, event => {
-    event.preventDefault();
-    dropZoneElement.classList.add("dragover");
-  })
-);
-["dragleave", "drop"].forEach(eventName =>
-  dropZoneElement.addEventListener(eventName, event => {
-    event.preventDefault();
-    if (event.type === "drop") {
-      const dragEvent = event as DragEvent;
-      const dataTransfer = dragEvent.dataTransfer;
-      if (!dataTransfer) {
-        setStatusMessage("Drop: cannot access data.");
-      } else {
-        const droppedFiles = snapshotFileList(dataTransfer.files);
-        void directoryInspection.openDroppedItems(dataTransfer.items, "Drop").then(openedItems => {
-          if (!openedItems) openFileSelection(droppedFiles, "Drop");
-        });
-      }
-    }
-    dropZoneElement.classList.remove("dragover");
-  })
-);
-dropZoneElement.addEventListener("keydown", event => {
-  if (event.key === " " || event.key === "Enter") {
-    event.preventDefault();
-    fileInputElement.click();
-  }
-});
-fileInputElement.addEventListener("change", event => {
-  const input = event.currentTarget;
-  if (!(input instanceof HTMLInputElement)) return;
-  handleSelectedFiles(input.files);
-  input.value = "";
-});
-const handlePaste = async (event: ClipboardEvent): Promise<void> => {
-  const clipboardData = event.clipboardData;
-  if (!clipboardData) {
-    setStatusMessage("Paste: clipboard not available.");
-    return;
-  }
-  const files = clipboardData.files ? snapshotFileList(clipboardData.files) : [];
-  if (files.length > 0) {
-    await directoryInspection.openFiles(files, files.length === 1 ? "Paste (file)" : "Paste (files)");
-    return;
-  }
-  const items = clipboardData.items ? Array.from(clipboardData.items) : [];
-  const openedItems = await directoryInspection.openDroppedItems(
-    { length: items.length, item: index => items[index] ?? null },
-    "Paste"
-  );
-  if (openedItems) return;
-  const textItems = items.filter(item => item.kind === "string");
-  if (textItems.length !== 1) {
-    setStatusMessage("Paste: unsupported clipboard payload.");
-    return;
-  }
-  const [textItem] = textItems;
-  if (!textItem) {
-    setStatusMessage("Paste: clipboard item missing.");
-    return;
-  }
-  const text = await new Promise<string | null>(resolve => textItem.getAsString(resolve));
-  if (typeof text !== "string" || text.length === 0) {
-    setStatusMessage("Paste: empty text.");
-    return;
-  }
-  const syntheticFile = new File([text], "clipboard.bin", { type: "application/octet-stream" });
-  await showFileInfo(syntheticFile, "Paste (clipboard data)");
-};
-window.addEventListener("paste", event => {
-  void handlePaste(event as ClipboardEvent);
-});
 sha256ButtonElement.addEventListener("click", () => {
   void computeAndDisplayHash("SHA-256", currentFile, sha256Controls);
 });

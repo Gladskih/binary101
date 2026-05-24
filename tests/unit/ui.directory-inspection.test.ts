@@ -66,7 +66,6 @@ interface FakeDropItem {
 
 const createElements = () => ({
   openButtonElement: new FakeElement(),
-  backButtonElement: new FakeElement(),
   cardElement: new FakeElement(),
   nameElement: new FakeElement(),
   summaryElement: new FakeElement(),
@@ -86,7 +85,6 @@ const createController = (
   config: Partial<DirectoryInspectionConfig> = {}
 ) => createDirectoryInspectionController({
   openButtonElement: elements.openButtonElement as unknown as HTMLButtonElement,
-  backButtonElement: elements.backButtonElement as unknown as HTMLButtonElement,
   cardElement: elements.cardElement as unknown as HTMLElement,
   nameElement: elements.nameElement as unknown as HTMLElement,
   summaryElement: elements.summaryElement as unknown as HTMLElement,
@@ -102,6 +100,7 @@ const createController = (
   resetFileInspection: () => undefined,
   setStatusMessage: () => undefined,
   openFile: async () => undefined,
+  openDirectory: () => undefined,
   ...config
 });
 
