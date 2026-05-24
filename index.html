@@ -37,14 +37,85 @@
   <main>
     <label id="dropZone" for="fileInput" tabindex="0" aria-describedby="zoneHelp">
       <div id="dropZoneInner">
-        <div class="zoneTitle">Drop file / Paste (Ctrl+V) / Click to browse</div>
-        <div class="zoneHint" id="zoneHelp">Single file. Directories are not supported.</div>
+        <div class="zoneTitle">Drop file or folder / Paste / Click to browse</div>
+        <div class="zoneHint" id="zoneHelp">One or more files, or folders.</div>
         <div id="statusMessage" aria-live="polite" aria-atomic="true"></div>
       </div>
     </label>
-    <input id="fileInput" type="file" />
+    <div class="pickerActions">
+      <button type="button" class="actionButton" id="directoryOpenButton">Open folder</button>
+    </div>
+    <input id="fileInput" type="file" multiple />
 
     <section id="resultsSection">
+      <article id="directoryInfoCard" hidden aria-live="polite" aria-atomic="true">
+        <div class="directoryHeader">
+          <div>
+            <h2 id="directoryName">Folder</h2>
+            <p id="directorySummary" class="smallNote"></p>
+          </div>
+          <button type="button" class="actionButton directoryBackButton" id="directoryBackButton" hidden>
+            Back
+          </button>
+          <div id="directoryProgressWrap" hidden>
+            <progress
+              id="directoryScanProgress"
+              max="0"
+              value="0"
+              aria-describedby="directoryScanProgressText"
+            ></progress>
+            <span id="directoryScanProgressText" class="smallNote"></span>
+          </div>
+        </div>
+        <section id="directoryFoldersSection" class="directoryListingSection">
+          <h3>Folders</h3>
+          <div class="tableWrap">
+            <table class="table directoryFolderTable">
+              <thead>
+                <tr>
+                  <th scope="col">Path</th>
+                  <th scope="col">Direct folders</th>
+                  <th scope="col">Direct files</th>
+                  <th scope="col">Total folders</th>
+                  <th scope="col">Total files</th>
+                </tr>
+              </thead>
+              <tbody id="directoryFolderListingBody"></tbody>
+            </table>
+          </div>
+        </section>
+        <section id="directoryFilesSection" class="directoryListingSection">
+          <h3>Files</h3>
+          <div class="tableWrap">
+            <table class="table directoryFileTable">
+              <thead>
+                <tr>
+                  <th scope="col">Path</th>
+                  <th scope="col">Size</th>
+                  <th scope="col">MIME type</th>
+                  <th scope="col">Modified</th>
+                  <th scope="col">Detected type</th>
+                </tr>
+              </thead>
+              <tbody id="directoryFileListingBody"></tbody>
+            </table>
+          </div>
+        </section>
+        <section id="directoryWarningsSection" class="directoryListingSection" hidden>
+          <h3>Warnings</h3>
+          <div class="tableWrap">
+            <table class="table directoryWarningTable">
+              <thead>
+                <tr>
+                  <th scope="col">Path</th>
+                  <th scope="col">Warning</th>
+                </tr>
+              </thead>
+              <tbody id="directoryWarningListingBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </article>
       <article id="fileInfoCard" hidden aria-live="polite" aria-atomic="true">
         <dl>
           <dt>File name</dt><dd id="fileNameDetail"></dd>

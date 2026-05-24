@@ -14,6 +14,7 @@ import { createSqliteFile } from "../fixtures/sqlite-fixtures.js";
 import { createSampleAsfFile } from "../fixtures/asf-fixtures.js";
 import { createMachOFile, createMachOUniversalFile } from "../fixtures/macho-fixtures.js";
 import { createPeFile, createPePlusFile, createPeRomFile } from "../fixtures/sample-files-pe.js";
+import { createSliceTrackingFile } from "../helpers/slice-tracking-file.js";
 
 const fromAscii = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "ascii"));
 
@@ -154,40 +155,34 @@ void test("detectBinaryType recognises MP3 streams even when frames are not at o
   prefixed.set(base.data, 16);
   const file = new MockFile(prefixed, "prefixed.mp3", "audio/mpeg");
   const label = await detectBinaryType(file);
-  assert.strictEqual(label, "MPEG Version 1, Layer III, 128 kbps, 44100 Hz, Stereo");
+  assert.strictEqual(label, "MPEG audio stream (MP3/AAC)");
 });
 
-void test("detectBinaryType reports WebM with track summary", async () => {
+void test("detectBinaryType reports Matroska/WebM by container signature", async () => {
   const label = await detectBinaryType(createWebmFile());
-  assert.ok(label.startsWith("WebM"));
-  assert.match(label, /video/i);
+  assert.strictEqual(label, "Matroska/WebM container");
 });
 
-void test("detectBinaryType reports MP4 with track summary", async () => {
+void test("detectBinaryType reports MP4 by ISO-BMFF signature", async () => {
   const label = await detectBinaryType(createMp4File());
-  assert.match(label, /MP4/);
-  assert.match(label, /video:/);
+  assert.strictEqual(label, "MP4/QuickTime container (ISO-BMFF)");
 });
 
-void test("detectBinaryType builds ASF labels with stream info", async () => {
+void test("detectBinaryType reports ASF by GUID without parsing streams", async () => {
   const label = await detectBinaryType(createSampleAsfFile());
-  assert.ok(label.startsWith("ASF container"));
-  assert.ok(label.includes("audio / 1 video"));
+  assert.strictEqual(label, "ASF container (WMA/WMV)");
 });
 
 void test("detectBinaryType reports MP3 for minimal single-frame files", async () => {
   const full = createMp3File();
   const singleFrame = full.data.slice(0, full.data.length / 2);
   const label = await detectBinaryType(new MockFile(singleFrame, "single-frame.mp3", "audio/mpeg"));
-  assert.strictEqual(label, "MPEG Version 1, Layer III, 128 kbps, 44100 Hz, Stereo");
+  assert.strictEqual(label, "MPEG audio stream (MP3/AAC)");
 });
 
-void test("detectBinaryType refines FLAC labels using stream info", async () => {
+void test("detectBinaryType reports FLAC by stream marker without metadata parsing", async () => {
   const label = await detectBinaryType(createFlacFile());
-  assert.match(label, /^FLAC audio/);
-  assert.match(label, /44100/);
-  assert.match(label, /2ch/);
-  assert.match(label, /16-bit/);
+  assert.strictEqual(label, "FLAC audio");
 });
 
 void test("detectBinaryType does not mislabel MPEG Program Stream as MP3", async () => {
@@ -201,7 +196,7 @@ void test("detectBinaryType does not mislabel MPEG Program Stream as MP3", async
   assert.strictEqual(label, "MPEG Program Stream (MPG)");
 });
 
-void test("detectBinaryType rejects MP3 label when second frame is invalid", async () => {
+void test("detectBinaryType keeps damaged MPEG-like streams as shallow MP3 candidates", async () => {
   const full = createMp3File();
   const firstFrameLength = full.data.length / 2;
   const damaged = new Uint8Array(firstFrameLength + 16);
@@ -209,7 +204,7 @@ void test("detectBinaryType rejects MP3 label when second frame is invalid", asy
   // Add some junk after the first frame to force a bad second header
   damaged.fill(0, firstFrameLength);
   const label = await detectBinaryType(new MockFile(damaged, "damaged.mp3", "audio/mpeg"));
-  assert.strictEqual(label, "Unknown binary type");
+  assert.strictEqual(label, "MPEG audio stream (MP3/AAC)");
 });
 
 void test("detectBinaryType recognises animated cursors (ANI)", async () => {
@@ -222,11 +217,19 @@ void test("detectBinaryType recognises animated cursors (ANI)", async () => {
   assert.strictEqual(label, "Windows animated cursor (ANI)");
 });
 
-void test("detectBinaryType refines SQLite labels with page and encoding info", async () => {
+void test("detectBinaryType reports SQLite by signature without page parsing", async () => {
   const label = await detectBinaryType(createSqliteFile());
-  assert.match(label, /^SQLite database/);
-  assert.match(label, /512 byte pages/);
-  assert.match(label, /UTF-8/);
+  assert.strictEqual(label, "SQLite 3.x database");
+});
+
+void test("detectBinaryType avoids full media parsing during signature detection", async () => {
+  const sample = createMp4File();
+  const tracked = createSliceTrackingFile(sample.data, sample.size, sample.name);
+
+  const label = await detectBinaryType(tracked.file);
+
+  assert.equal(label, "MP4/QuickTime container (ISO-BMFF)");
+  assert.deepEqual(tracked.requests, [sample.size]);
 });
 
 void test("detectBinaryType reports PE32, PE32+, and ROM labels without full parsing", async () => {
@@ -271,5 +274,5 @@ void test("detectBinaryType tolerates truncated optional headers for PE labels",
   view.setUint32(0x3c, peHeaderOffset, true);
   bytes.set([0x50, 0x45, 0x00, 0x00], peHeaderOffset);
   const label = await detectBinaryType(new MockFile(bytes, "tiny.exe"));
-  assert.strictEqual(label, "PE32 executable for UNKNOWN");
+  assert.strictEqual(label, "PE executable (truncated COFF header)");
 });

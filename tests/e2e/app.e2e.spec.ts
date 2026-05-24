@@ -19,7 +19,6 @@ import { createZipFile } from "../fixtures/zip-fixtures.js";
 import { createGzipFile } from "../fixtures/gzip-fixtures.js";
 import { createMachOFile } from "../fixtures/macho-fixtures.js";
 import type { MockFile } from "../helpers/mock-file.js";
-
 const toUpload = (file: MockFile) => ({
   name: file.name,
   mimeType: file.type,
@@ -31,125 +30,186 @@ const expectBaseDetails = async (page: Page, fileName: string, expectedKind: str
   await expect(page.locator("#fileNameDetail")).toHaveText(fileName);
   await expect(page.locator("#fileBinaryTypeDetail")).toHaveText(expectedKind);
 };
-
 test.describe("file type detection", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Local File Inspector" })).toBeVisible();
   });
 
-  void test("uploads a text file, shows its details, and hashes", async ({ page }) => {
+  void test("drops a text file, shows its details, and hashes", async ({ page }) => {
     const fileContent = "Hello from Playwright";
-    await page.setInputFiles("#fileInput", {
-      name: "sample.txt",
-      mimeType: "text/plain",
-      buffer: Buffer.from(fileContent)
-    });
-
+    await page.evaluate(text => {
+      let file: File | null = new File([text], "sample.txt", { type: "text/plain" });
+      const dropEvent = new Event("drop", { bubbles: true, cancelable: true });
+      Object.defineProperty(dropEvent, "dataTransfer", {
+        value: {
+          files: { length: 1, item: () => file },
+          items: {
+            length: 1,
+            item: () => ({
+              kind: "file",
+              getAsFileSystemHandle: async () => { throw new Error("file probe rejected"); }
+            })
+          }
+        }
+      });
+      globalThis.document.getElementById("dropZone")?.dispatchEvent(dropEvent);
+      file = null;
+    }, fileContent);
     await expectBaseDetails(page, "sample.txt", "Text file");
     await expect(page.locator("#peDetailsValue")).toBeHidden();
-
     await page.getByRole("button", { name: "Compute SHA-256" }).click();
     await expect(page.locator("#sha256Value")).toHaveText(/^[0-9a-f]{64}$/);
+  });
+
+  void test("drops a folder and fills file type rows progressively", async ({ page }) => {
+    await page.evaluate(() => {
+      type BrowserHandle = {
+        kind: "directory" | "file";
+        name: string;
+        entries?: () => AsyncIterableIterator<[string, BrowserHandle]>;
+        getFile?: () => Promise<File>;
+      };
+      const lastModified = Date.UTC(2024, 0, 2, 3, 4, 5);
+      const fileHandle = (name: string, bytes: number[], type: string): BrowserHandle => ({
+        kind: "file",
+        name,
+        getFile: async () => new File([new Uint8Array(bytes)], name, { type, lastModified })
+      });
+      const docsHandle: BrowserHandle = {
+        kind: "directory",
+        name: "docs",
+        async *entries() {
+          yield ["note.txt", fileHandle("note.txt", Array.from(new TextEncoder().encode("hello")), "text/plain")];
+        }
+      };
+      const rootHandle: BrowserHandle = {
+        kind: "directory",
+        name: "fixture-folder",
+        async *entries() {
+          yield ["docs", docsHandle];
+          yield [
+            "pixel.png",
+            fileHandle("pixel.png", [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], "image/png")
+          ];
+        }
+      };
+      const dropEvent = new Event("drop", { bubbles: true, cancelable: true });
+      Object.defineProperty(dropEvent, "dataTransfer", {
+        value: {
+          files: [],
+          items: {
+            length: 1,
+            item: () => ({ kind: "file", getAsFileSystemHandle: async () => rootHandle })
+          }
+        }
+      });
+      globalThis.document.getElementById("dropZone")?.dispatchEvent(dropEvent);
+    });
+    await expect(page.locator("#directoryInfoCard")).toBeVisible();
+    await expect(page.locator("#directoryName")).toHaveText("fixture-folder");
+    await expect(page.locator("#directorySummary")).toHaveText("1 file, 1 folder, 1/1 files scanned");
+    await expect(page.locator("#directoryFolderListingBody tr")).toHaveCount(1);
+    await expect(page.locator("#directoryFileListingBody tr")).toHaveCount(1);
+    await expect(page.locator("#directoryFileListingBody")).toContainText("2024-01-02T03:04:05.000Z");
+    await expect(page.locator("#statusMessage")).toHaveText("Folder scan complete: 1 file.");
+    await page.locator("#directoryFolderListingBody tr").click();
+    await expect(page.locator("#directoryName")).toHaveText("fixture-folder/docs");
+    await expect(page.locator("#directoryFileListingBody")).toContainText("note.txt");
+    await expect(page.locator("#directoryFileListingBody")).toContainText("5 B (5 bytes)");
+    await page.getByRole("button", { name: "Back" }).click();
+    await expect(page.locator("#directoryName")).toHaveText("fixture-folder");
+    await page.locator("#directoryFileListingBody tr", { hasText: "pixel.png" }).click();
+    await expectBaseDetails(page, "pixel.png", "PNG image");
   });
 
   const happyCases = [
     {
       name: "PNG",
       file: createPngFile,
-      expectedKind: "PNG image (1x1, Grayscale + alpha, alpha)",
-      term: "PNG details",
+      expectedKind: "PNG image",
       detailText: "Chunks"
     },
     {
       name: "GIF",
       file: createGifFile,
       expectedKind: "GIF image",
-      term: "GIF details",
       detailText: "Frames"
     },
     {
       name: "JPEG",
       file: createJpegFile,
       expectedKind: "JPEG image",
-      term: "JPEG details",
       detailText: "JPEG structure"
     },
     {
       name: "WebP",
       file: createWebpFile,
       expectedKind: "WebP image",
-      term: "WebP details",
       detailText: "Chunks"
     },
     {
       name: "BMP",
       file: createBmpFile,
       expectedKind: "BMP bitmap image",
-      term: "BMP details",
       detailText: "BMP structure"
     },
     {
       name: "FictionBook (FB2)",
       file: createFb2File,
       expectedKind: "FictionBook e-book (FB2)",
-      term: "FB2 details",
       detailText: "Document info"
     },
     {
       name: "TAR",
       file: createTarFile,
       expectedKind: "TAR archive",
-      term: "TAR details",
       detailText: "TAR overview"
     },
     {
       name: "gzip",
-      file: () => createGzipFile({ payload: Buffer.from("hello"), extra: null, comment: null, includeHeaderCrc16: false }),
+      file: () => createGzipFile({
+        payload: Buffer.from("hello"),
+        extra: null, comment: null,
+        includeHeaderCrc16: false
+      }),
       expectedKind: "gzip compressed data",
-      term: "gzip details",
       detailText: "gzip compressed data"
     },
     {
       name: "Windows shortcut (.lnk)",
       file: createLnkFile,
       expectedKind: "Windows shortcut (.lnk)",
-      term: "Windows shortcut details",
       detailText: "Shell link header"
     },
     {
       name: "ZIP",
       file: createZipFile,
       expectedKind: "ZIP archive",
-      term: "ZIP details",
       detailText: "ZIP overview"
     },
     {
       name: "PDF",
       file: createPdfFile,
       expectedKind: "PDF document (v1.4)",
-      term: "PDF details",
       detailText: "Cross-reference"
     },
     {
       name: "ELF 64-bit",
       file: createElfFile,
       expectedKind: "ELF 64-bit LSB executable, x86-64",
-      term: "ELF details",
       detailText: "ELF header"
     },
     {
       name: "MP3",
       file: createMp3File,
-      expectedKind: "MPEG Version 1, Layer III, 128 kbps, 44100 Hz, Stereo",
-      term: "MP3 details",
+      expectedKind: "MPEG audio stream (MP3/AAC)",
       detailText: "MPEG audio stream"
     },
     {
       name: "7z",
       file: createSevenZipFile,
-      expectedKind: "7z archive v0.4",
-      term: "7z details",
+      expectedKind: "7z archive",
       detailText: "7z overview"
     },
     {
@@ -206,7 +266,7 @@ test.describe("file type detection", () => {
     const file = createMp3File();
     await page.setInputFiles("#fileInput", toUpload(file));
 
-    await expectBaseDetails(page, file.name, "MPEG Version 1, Layer III, 128 kbps, 44100 Hz, Stereo");
+    await expectBaseDetails(page, file.name, "MPEG audio stream (MP3/AAC)");
     await expect(page.locator("#peDetailsValue")).toContainText("MPEG audio stream");
     await expect(page.locator("#peDetailsValue")).toContainText("Summary");
     await expect(page.locator(".audioPreview audio")).toBeVisible();
@@ -219,7 +279,7 @@ test.describe("file type detection", () => {
     await expectBaseDetails(
       page,
       videoFile.name,
-      "isom MP4 (video: avc1.42001e, 320x180; audio: mp4a.40.2, 48000 Hz, 2 ch; 2.000 s)"
+      "MP4/QuickTime container (ISO-BMFF)"
     );
     await expect(page.locator("#peDetailsValue")).toContainText("MP4 / ISO-BMFF container");
     await expect(page.locator(".videoPreview video")).toHaveCount(0);

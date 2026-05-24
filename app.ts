@@ -13,26 +13,28 @@ import { createPeOverlayScanActions } from "./ui/pe-overlay-scan.js";
 import { handleManifestTreeActionClick, syncManifestTreeControls } from "./ui/manifest-tree-controls.js";
 import { captureOpenDetails, restoreOpenDetails } from "./ui/details-open-state.js";
 import { enhanceSortableTables, handleSortableTableClick } from "./ui/sortable-tables.js";
+import { createDirectoryInspectionController } from "./ui/directory-inspection.js";
 const getElement = (id: string) => document.getElementById(id)!;
-const dropZoneElement = getElement("dropZone") as HTMLElement;
-const fileInputElement = getElement("fileInput") as HTMLInputElement;
-const statusMessageElement = getElement("statusMessage") as HTMLElement;
-const fileInfoCardElement = getElement("fileInfoCard") as HTMLElement;
-const fileNameDetailElement = getElement("fileNameDetail") as HTMLElement;
-const fileSizeDetailElement = getElement("fileSizeDetail") as HTMLElement;
-const fileTimestampDetailElement = getElement("fileTimestampDetail") as HTMLElement;
-const fileAnalysisDurationDetailElement = getElement("fileAnalysisDurationDetail") as HTMLElement;
-const fileSourceDetailElement = getElement("fileSourceDetail") as HTMLElement;
-const fileBinaryTypeDetailElement = getElement("fileBinaryTypeDetail") as HTMLElement;
-const fileMimeTypeDetailElement = getElement("fileMimeTypeDetail") as HTMLElement;
-const peDetailsTermElement = getElement("peDetailsTerm") as HTMLElement;
-const peDetailsValueElement = getElement("peDetailsValue") as HTMLElement;
-const sha256ValueElement = getElement("sha256Value") as HTMLElement;
-const sha512ValueElement = getElement("sha512Value") as HTMLElement;
-const sha256ButtonElement = getElement("sha256ComputeButton") as HTMLButtonElement;
-const sha512ButtonElement = getElement("sha512ComputeButton") as HTMLButtonElement;
-const sha256CopyButtonElement = getElement("sha256CopyButton") as HTMLButtonElement;
-const sha512CopyButtonElement = getElement("sha512CopyButton") as HTMLButtonElement;
+const html = (id: string): HTMLElement => getElement(id) as HTMLElement;
+const dropZoneElement = getElement("dropZone") as HTMLElement,
+  fileInputElement = getElement("fileInput") as HTMLInputElement,
+  statusElement = getElement("statusMessage") as HTMLElement,
+  fileInfoCardElement = getElement("fileInfoCard") as HTMLElement,
+  fileNameDetailElement = getElement("fileNameDetail") as HTMLElement,
+  fileSizeDetailElement = getElement("fileSizeDetail") as HTMLElement,
+  fileTimestampDetailElement = getElement("fileTimestampDetail") as HTMLElement,
+  fileAnalysisDurationDetailElement = getElement("fileAnalysisDurationDetail") as HTMLElement,
+  fileSourceDetailElement = getElement("fileSourceDetail") as HTMLElement,
+  fileBinaryTypeDetailElement = getElement("fileBinaryTypeDetail") as HTMLElement,
+  fileMimeTypeDetailElement = getElement("fileMimeTypeDetail") as HTMLElement,
+  peDetailsTermElement = getElement("peDetailsTerm") as HTMLElement,
+  peDetailsValueElement = getElement("peDetailsValue") as HTMLElement,
+  sha256ValueElement = getElement("sha256Value") as HTMLElement,
+  sha512ValueElement = getElement("sha512Value") as HTMLElement,
+  sha256ButtonElement = getElement("sha256ComputeButton") as HTMLButtonElement,
+  sha512ButtonElement = getElement("sha512ComputeButton") as HTMLButtonElement,
+  sha256CopyButtonElement = getElement("sha256CopyButton") as HTMLButtonElement,
+  sha512CopyButtonElement = getElement("sha512CopyButton") as HTMLButtonElement;
 const sha256Controls = { valueElement: sha256ValueElement, buttonElement: sha256ButtonElement,
   copyButtonElement: sha256CopyButtonElement };
 const sha512Controls = { valueElement: sha512ValueElement, buttonElement: sha512ButtonElement,
@@ -45,9 +47,11 @@ const setPreviewUrl = (url: string | null): void => {
   if (currentPreviewUrl) URL.revokeObjectURL(currentPreviewUrl);
   currentPreviewUrl = url;
 };
-const setStatusMessage = (message: string | null | undefined): void => { statusMessageElement.textContent = message || ""; };
+const setStatusMessage = (message: string | null | undefined): void => { statusElement.textContent = message || ""; };
 const formatAnalysisDuration = (durationMs: number): string =>
   durationMs < 1000 ? `${Math.max(0, Math.round(durationMs))} ms` : `${(durationMs / 1000).toFixed(2)} s`;
+const snapshotFileList = (files: FileList): File[] =>
+  Array.from({ length: files.length }, (_, index) => files.item(index)).filter((file): file is File => file != null);
 const renderResult = (result: ParseForUiResult): void => {
   const openDetails = captureOpenDetails(peDetailsValueElement);
   renderParsedResult(result, {
@@ -62,24 +66,29 @@ const renderResult = (result: ParseForUiResult): void => {
 };
 const getCurrentFile = (): File | null => currentFile;
 const getCurrentParseResult = (): ParseForUiResult => currentParseResult;
-const peDisassembly = createPeDisassemblyController({
-  getCurrentFile,
-  getCurrentParseResult,
-  renderResult
-});
+const peDisassembly = createPeDisassemblyController({ getCurrentFile, getCurrentParseResult, renderResult });
 const peOverlayScan = createPeOverlayScanActions({
-  getCurrentFile,
-  getCurrentParseResult,
-  renderResult,
-  setStatusMessage
+  getCurrentFile, getCurrentParseResult, renderResult, setStatusMessage
 });
-const elfDisassembly = createElfDisassemblyController({
-  getCurrentFile,
-  getCurrentParseResult,
-  renderResult
-});
+const elfDisassembly = createElfDisassemblyController({ getCurrentFile, getCurrentParseResult, renderResult });
 const fileActionClickHandler = createFileActionClickHandler({
   getParseResult: getCurrentParseResult, getFile: getCurrentFile, setStatusMessage
+});
+const cancelActiveAnalysis = (): void => { peDisassembly.cancel(); peOverlayScan.cancel(); elfDisassembly.cancel(); };
+const directoryInspection = createDirectoryInspectionController({
+  openButtonElement: getElement("directoryOpenButton") as HTMLButtonElement,
+  backButtonElement: getElement("directoryBackButton") as HTMLButtonElement,
+  cardElement: html("directoryInfoCard"), nameElement: html("directoryName"),
+  summaryElement: html("directorySummary"), progressWrapElement: html("directoryProgressWrap"),
+  progressElement: getElement("directoryScanProgress") as HTMLProgressElement,
+  progressTextElement: html("directoryScanProgressText"),
+  folderSectionElement: html("directoryFoldersSection"), fileSectionElement: html("directoryFilesSection"),
+  warningSectionElement: html("directoryWarningsSection"), folderTableBodyElement: html("directoryFolderListingBody"),
+  fileTableBodyElement: html("directoryFileListingBody"), warningTableBodyElement: html("directoryWarningListingBody"),
+  resetFileInspection: () => { cancelActiveAnalysis(); currentFile = null; setPreviewUrl(null);
+    currentParseResult = { analyzer: null, parsed: null }; fileInfoCardElement.hidden = true; },
+  setStatusMessage,
+  openFile: showFileInfo
 });
 peDetailsValueElement.addEventListener("click", event => {
   const targetNode = event.target as Node | null;
@@ -137,11 +146,11 @@ peDetailsValueElement.addEventListener("click", event => {
   }
   fileActionClickHandler(event);
 });
-peDetailsValueElement.addEventListener("toggle", event => syncManifestTreeControls(event.target as Element | null), true);
+const syncToggledManifestTree = (event: Event): void => syncManifestTreeControls(event.target as Element | null);
+peDetailsValueElement.addEventListener("toggle", syncToggledManifestTree, true);
 async function showFileInfo(file: File, sourceDescription: string): Promise<void> {
-  peDisassembly.cancel();
-  peOverlayScan.cancel();
-  elfDisassembly.cancel();
+  cancelActiveAnalysis();
+  directoryInspection.hide();
   currentFile = file;
   currentParseResult = { analyzer: null, parsed: null };
   try {
@@ -183,22 +192,15 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     peDetailsValueElement.innerHTML = "";
   }
 }
-const handleSelectedFiles = (files: FileList | null): void => {
-  if (!files || files.length === 0) {
+const openFileSelection = (files: readonly File[], sourceDescription: string): void => {
+  if (files.length === 0) {
     setStatusMessage("No file selected.");
     return;
   }
-  if (files.length > 1) {
-    setStatusMessage("Multiple files are not supported yet.");
-    return;
-  }
-  const first = files.item(0);
-  if (!first) {
-    setStatusMessage("No file selected.");
-    return;
-  }
-  void showFileInfo(first, "File selection");
+  void directoryInspection.openFiles(files, sourceDescription);
 };
+const handleSelectedFiles = (files: FileList | null): void =>
+  openFileSelection(files ? snapshotFileList(files) : [], "File selection");
 ["dragenter", "dragover"].forEach(eventName =>
   dropZoneElement.addEventListener(eventName, event => {
     event.preventDefault();
@@ -214,7 +216,10 @@ const handleSelectedFiles = (files: FileList | null): void => {
       if (!dataTransfer) {
         setStatusMessage("Drop: cannot access data.");
       } else {
-        handleSelectedFiles(dataTransfer.files);
+        const droppedFiles = snapshotFileList(dataTransfer.files);
+        void directoryInspection.openDroppedItems(dataTransfer.items, "Drop").then(openedItems => {
+          if (!openedItems) openFileSelection(droppedFiles, "Drop");
+        });
       }
     }
     dropZoneElement.classList.remove("dragover");
@@ -238,17 +243,18 @@ const handlePaste = async (event: ClipboardEvent): Promise<void> => {
     setStatusMessage("Paste: clipboard not available.");
     return;
   }
-  const files = clipboardData.files ? Array.from(clipboardData.files) : [];
-  if (files.length === 1) {
-    const [file] = files;
-    if (file) {
-      await showFileInfo(file, "Paste (file)");
-    }
+  const files = clipboardData.files ? snapshotFileList(clipboardData.files) : [];
+  if (files.length > 0) {
+    await directoryInspection.openFiles(files, files.length === 1 ? "Paste (file)" : "Paste (files)");
     return;
   }
-  const textItems = (clipboardData.items ? Array.from(clipboardData.items) : []).filter(
-    item => item.kind === "string"
+  const items = clipboardData.items ? Array.from(clipboardData.items) : [];
+  const openedItems = await directoryInspection.openDroppedItems(
+    { length: items.length, item: index => items[index] ?? null },
+    "Paste"
   );
+  if (openedItems) return;
+  const textItems = items.filter(item => item.kind === "string");
   if (textItems.length !== 1) {
     setStatusMessage("Paste: unsupported clipboard payload.");
     return;

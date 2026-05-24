@@ -50,17 +50,17 @@ void test("detectBinaryType recognizes common binary formats", async () => {
   assert.match(detections[3], /^WebP image/);
   assert.match(detections[4], /^PDF document/);
   assert.match(detections[5], /tar archive/i);
-  assert.match(detections[6], /^7z archive v0\.4/);
-  assert.match(detections[7], /^RAR archive/);
+  assert.strictEqual(detections[6], "7z archive");
+  assert.strictEqual(detections[7], "RAR archive");
   assert.strictEqual(detections[8], "Windows shortcut (.lnk)");
-  assert.match(detections[9], /^WebM/);
+  assert.strictEqual(detections[9], "Matroska/WebM container");
   assert.match(detections[10], /^WAVE audio/);
   assert.match(detections[11], /^AVI\/DivX video/);
   assert.match(detections[12], /animated cursor/i);
   assert.strictEqual(detections[13], "Text file");
   assert.match(detections[14], /^FLAC audio/);
   assert.match(detections[15], /^BMP bitmap image/);
-  assert.match(detections[16], /^Matroska/);
+  assert.strictEqual(detections[16], "Matroska/WebM container");
 });
 
 void test("detectBinaryType distinguishes DOS MZ executables from PE", async () => {

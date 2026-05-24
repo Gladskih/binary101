@@ -31,7 +31,7 @@ test.describe("download actions", () => {
     const zip = createZipWithEntries();
     await page.setInputFiles("#fileInput", toUpload(zip));
 
-    await expectBaseDetails(page, zip.name, "ZIP archive (PK-based, e.g. Office, JAR, APK)");
+    await expectBaseDetails(page, zip.name, "ZIP archive");
     const table = page.locator("button.zipExtractButton");
     await expect(table).toHaveCount(2);
 
