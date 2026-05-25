@@ -25,6 +25,28 @@ const cellIndex = (row: ClrMetadataRow, name: string): PeClrCustomAttributeInfo[
     ? row[name] as PeClrCustomAttributeInfo["parent"]
     : { table: "null", tableId: -1, row: 0, raw: 0, valid: false };
 
+const resolveSignatureParameterType = (
+  parameterType: string | null,
+  typeRefs: PeClrTypeReferenceInfo[],
+  typeDefs: PeClrTypeDefinitionInfo[]
+): string | null => {
+  const match = parameterType?.match(/^(class|valuetype) (TypeDef|TypeRef)#(\d+)(\[\])?$/);
+  if (!match) return parameterType;
+  const tableName = match[2];
+  const row = Number(match[3]);
+  const resolved = tableName === "TypeRef"
+    ? typeRefs[row - 1]?.fullName
+    : typeDefs[row - 1]?.fullName;
+  return resolved ? `${resolved}${match[4] ?? ""}` : parameterType;
+};
+
+const resolveSignatureParameterTypes = (
+  parameterTypes: Array<string | null>,
+  typeRefs: PeClrTypeReferenceInfo[],
+  typeDefs: PeClrTypeDefinitionInfo[]
+): Array<string | null> =>
+  parameterTypes.map(parameterType => resolveSignatureParameterType(parameterType, typeRefs, typeDefs));
+
 export const createCustomAttributes = (
   rows: ClrMetadataRow[],
   heaps: ClrHeapReaders,
@@ -51,7 +73,7 @@ export const createCustomAttributes = (
     const decoded = signature
       ? decodeCustomAttributeValue(
           heaps.getBlob(valueBlobIndex, `CustomAttribute row ${index + 1}.Value`),
-          signature.parameterTypes,
+          resolveSignatureParameterTypes(signature.parameterTypes, typeRefs, typeDefs),
           `CustomAttribute row ${index + 1}`
         )
       : {

@@ -14,6 +14,16 @@ interface DecodedCustomAttributeValue {
   issues?: string[];
 }
 
+interface ReadValueResult {
+  value: string | number | boolean | null;
+  complete: boolean;
+}
+
+interface ReadFixedArgumentResult {
+  argument: PeClrCustomAttributeArgument;
+  complete: boolean;
+}
+
 class AttributeCursor {
   offset = 0;
 
@@ -25,6 +35,10 @@ class AttributeCursor {
 
   get remaining(): number {
     return this.bytes.length - this.offset;
+  }
+
+  get issueCount(): number {
+    return this.issues.length;
   }
 
   readU8(): number | null {
@@ -83,24 +97,45 @@ class AttributeCursor {
     this.offset += length.value;
     return text;
   }
+
+  addIssue(message: string): void {
+    this.issues.push(`${this.context} ${message}`);
+  }
 }
 
-const readPrimitive = (cursor: AttributeCursor, type: string | null): string | number | boolean | null => {
-  if (type === "string") return cursor.readSerString();
-  if (type === "bool") return (cursor.readU8() ?? 0) !== 0;
+const readWithIssueStatus = (
+  cursor: AttributeCursor,
+  readValue: () => string | number | boolean | null
+): ReadValueResult => {
+  const issueCount = cursor.issueCount;
+  return { value: readValue(), complete: cursor.issueCount === issueCount };
+};
+
+const readPrimitive = (cursor: AttributeCursor, type: string | null): ReadValueResult => {
+  if (type === "string" || type === "System.Type") {
+    return readWithIssueStatus(cursor, () => cursor.readSerString());
+  }
+  if (type === "bool") return readWithIssueStatus(cursor, () => (cursor.readU8() ?? 0) !== 0);
   if (type === "char") {
-    const value = cursor.readU16();
-    return value == null ? null : String.fromCharCode(value);
+    return readWithIssueStatus(cursor, () => {
+      const value = cursor.readU16();
+      return value == null ? null : String.fromCharCode(value);
+    });
   }
-  if (type === "i1" || type === "u1") return cursor.readU8();
-  if (type === "i2" || type === "u2") return cursor.readU16();
-  if (type === "i4" || type === "u4") return cursor.readU32();
+  if (type === "i1" || type === "u1") return readWithIssueStatus(cursor, () => cursor.readU8());
+  if (type === "i2" || type === "u2") return readWithIssueStatus(cursor, () => cursor.readU16());
+  if (type === "i4" || type === "u4") return readWithIssueStatus(cursor, () => cursor.readU32());
   if (type === "i8" || type === "u8") {
-    const low = cursor.readU32();
-    const high = cursor.readU32();
-    return low == null || high == null ? null : `0x${high.toString(16)}${low.toString(16).padStart(8, "0")}`;
+    return readWithIssueStatus(cursor, () => {
+      const low = cursor.readU32();
+      const high = cursor.readU32();
+      return low == null || high == null
+        ? null
+        : `0x${high.toString(16)}${low.toString(16).padStart(8, "0")}`;
+    });
   }
-  return null;
+  cursor.addIssue(`fixed argument type "${type ?? "unknown"}" is not supported; decoding stopped.`);
+  return { value: null, complete: false };
 };
 
 const elementTypeName = (elementType: number): string | null => {
@@ -133,15 +168,26 @@ const readFieldOrPropType = (cursor: AttributeCursor): string | null => {
 const readFixedArgument = (
   cursor: AttributeCursor,
   type: string | null
-): PeClrCustomAttributeArgument => {
+): ReadFixedArgumentResult => {
   if (type?.endsWith("[]")) {
     const count = cursor.readU32();
-    if (count == null || count === 0xffffffff) return { type, value: null };
-    const values = Array.from({ length: count }, () => readPrimitive(cursor, type.slice(0, -2)));
-    return { type, value: values.map(value => String(value)).join(", ") };
+    if (count == null || count === 0xffffffff) {
+      return { argument: { type, value: null }, complete: true };
+    }
+    const values: Array<string | number | boolean | null> = [];
+    for (let index = 0; index < count; index += 1) {
+      if (cursor.remaining <= 0) {
+        cursor.addIssue(`array argument "${type}" is truncated after ${index}/${count} element(s).`);
+        return { argument: { type, value: values.map(String).join(", ") }, complete: false };
+      }
+      const value = readPrimitive(cursor, type.slice(0, -2));
+      if (!value.complete) return { argument: { type, value: values.map(String).join(", ") }, complete: false };
+      values.push(value.value);
+    }
+    return { argument: { type, value: values.map(String).join(", ") }, complete: true };
   }
   const value = readPrimitive(cursor, type);
-  return { type, value };
+  return { argument: { type, value: value.value }, complete: value.complete };
 };
 
 const readNamedArgument = (cursor: AttributeCursor): PeClrCustomAttributeNamedArgument | null => {
@@ -153,7 +199,7 @@ const readNamedArgument = (cursor: AttributeCursor): PeClrCustomAttributeNamedAr
   const name = cursor.readSerString();
   const value = type === "System.Type"
     ? cursor.readSerString()
-    : readFixedArgument(cursor, type).value;
+    : readFixedArgument(cursor, type).argument.value;
   return { kind, name, type, value };
 };
 
@@ -168,9 +214,20 @@ export const decodeCustomAttributeValue = (
   // ECMA-335 II.23.3: every CustomAttrib blob starts with prolog 0x0001.
   const prolog = cursor.readU16();
   if (prolog !== 0x0001) issues.push(`${context} custom attribute prolog is not 0x0001.`);
-  const fixedArguments = parameterTypes.map(type => readFixedArgument(cursor, type));
+  const fixedArguments: PeClrCustomAttributeArgument[] = [];
+  let fixedArgumentsComplete = true;
+  for (const type of parameterTypes) {
+    const fixedArgument = readFixedArgument(cursor, type);
+    fixedArguments.push(fixedArgument.argument);
+    if (!fixedArgument.complete) {
+      fixedArgumentsComplete = false;
+      break;
+    }
+  }
   const namedArguments: PeClrCustomAttributeNamedArgument[] = [];
-  if (cursor.remaining >= 2) {
+  if (!fixedArgumentsComplete) {
+    issues.push(`${context} named arguments were not decoded because fixed arguments are incomplete.`);
+  } else if (cursor.remaining >= 2) {
     const namedCount = cursor.readU16() ?? 0;
     for (let index = 0; index < namedCount; index += 1) {
       const argument = readNamedArgument(cursor);
