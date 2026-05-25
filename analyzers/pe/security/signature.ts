@@ -1,7 +1,6 @@
 "use strict";
 
-import { toHex32 } from "../../../binary-utils.js";
-import { MACHINE } from "../constants.js";
+import { formatPeMachine } from "../machine.js";
 import type { PeDataDirectory } from "../types.js";
 
 export const peProbe = (dataView: DataView): { e_lfanew: number } | null =>
@@ -10,7 +9,7 @@ export const peProbe = (dataView: DataView): { e_lfanew: number } | null =>
     : null;
 
 export const mapMachine = (machineCode: number): string =>
-  MACHINE.find(([code]) => code === machineCode)?.[1] || `machine=${toHex32(machineCode, 4)}`;
+  formatPeMachine(machineCode);
 
 export const findDataDirectory = (
   dataDirs: PeDataDirectory[],

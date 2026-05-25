@@ -7,6 +7,7 @@ import {
 } from "../core/parse-result.js";
 import { collectPeDosHeaderWarnings } from "./dos-header-warnings.js";
 import { isPeWinmd } from "../winmd.js";
+import { isReadyToRunOsOverriddenMachine } from "../machine.js";
 import { peSectionNameValue } from "../sections/name.js";
 import type { PeSection } from "../types.js";
 // Microsoft PE/COFF: IMAGE_FILE_HEADER is 20 bytes. https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#coff-file-header-object-and-image
@@ -43,8 +44,11 @@ const getKnownFileSize = (fileSize?: number): number | null =>
   Number.isSafeInteger(fileSize) && fileSize != null && fileSize >= 0 ? fileSize : null;
 const getArchitecturePageSize = (machine: number): number =>
   machine === IMAGE_FILE_MACHINE_IA64 ? ITANIUM_PAGE_SIZE : COMMON_ARCH_PAGE_SIZE;
+const usesWindowsSectionAlignmentRules = (pe: PeParseResult): boolean =>
+  !isReadyToRunOsOverriddenMachine(pe.coff.Machine >>> 0);
 const usesLowSectionAlignmentLayout = (pe: PeParseResult): boolean =>
-  isPeWindowsParseResult(pe) && (pe.opt.SectionAlignment >>> 0) > 0 &&
+  isPeWindowsParseResult(pe) && usesWindowsSectionAlignmentRules(pe) &&
+  (pe.opt.SectionAlignment >>> 0) > 0 &&
   (pe.opt.SectionAlignment >>> 0) < getArchitecturePageSize(pe.coff.Machine >>> 0);
 const isUninitializedDataOnlySection = (section: PeSection): boolean =>
   ((section.characteristics >>> 0) & IMAGE_SCN_CNT_UNINITIALIZED_DATA) !== 0 &&
@@ -131,7 +135,7 @@ const addSectionVirtualLayoutWarnings = (pe: PeParseResult, warnings: Set<string
       );
       continue;
     }
-    if (current.virtualAddress > previous.virtualEndAligned) {
+    if (usesWindowsSectionAlignmentRules(pe) && current.virtualAddress > previous.virtualEndAligned) {
       warnings.add(
         `Sections ${previous.label} and ${current.label} are not adjacent in RVA order; expected ` +
           `${formatHex(previous.virtualEndAligned)} but found ${formatHex(current.virtualAddress)}.`

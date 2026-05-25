@@ -37,6 +37,7 @@ import { collectPeLayoutWarnings } from "./layout/warnings.js";
 import { analyzePeOverlay } from "./overlay.js";
 import { analyzePePackers } from "./packers/index.js";
 import { detectPeSubtypeFromClr } from "./winmd.js";
+import { getCanonicalPeMachine } from "./machine.js";
 export {
   isPeRomParseResult,
   isPeWindowsParseResult
@@ -78,6 +79,7 @@ export async function parsePe(
   }
   const { dos, coff, opt, dataDirs, sections, entrySection, rvaToOff, imageEnd, imageSizeMismatch } = core;
   const { ImageBase } = opt;
+  const canonicalMachine = getCanonicalPeMachine(coff.Machine);
   const peVariant = opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC
     ? {
         parseLoadConfigDirectory: parseLoadConfigDirectory64,
@@ -95,7 +97,7 @@ export async function parsePe(
         parseDynamicRelocationsFromLoadConfig: parseDynamicRelocationsFromLoadConfig32,
         readSafeSehHandlerTable:
           // Microsoft PE format: SafeSEH applies only to IMAGE_FILE_MACHINE_I386 PE32 images.
-          coff.Machine === IMAGE_FILE_MACHINE_I386 ? readSafeSehHandlerTable : null
+          canonicalMachine === IMAGE_FILE_MACHINE_I386 ? readSafeSehHandlerTable : null
   };
 
   const debugResult = await parseDebugDirectory(reader, dataDirs, rvaToOff);
@@ -116,7 +118,7 @@ export async function parsePe(
   const tls = await peVariant.parseTlsDirectory(reader, dataDirs, rvaToOff, ImageBase);
   const resources = await parseResources(reader, dataDirs, rvaToOff, parseManifestXmlDocument);
   const reloc = await parseBaseRelocations(reader, dataDirs, rvaToOff);
-  const exception = await parseExceptionDirectory(reader, dataDirs, rvaToOff, coff.Machine);
+  const exception = await parseExceptionDirectory(reader, dataDirs, rvaToOff, canonicalMachine);
   const boundImports = await parseBoundImports(reader, dataDirs, rvaToOff);
   const delayImports = await peVariant.parseDelayImports(reader, dataDirs, rvaToOff);
   const clr = await parseClrDirectory(reader, dataDirs, rvaToOff);
@@ -182,7 +184,7 @@ export async function parsePe(
     loadcfg.checks = collectLoadConfigChecks(
       loadcfg,
       opt,
-      coff.Machine,
+      canonicalMachine,
       sections,
       delayImports?.entries.length ?? 0,
       importLinking
@@ -190,7 +192,7 @@ export async function parsePe(
   }
   const architecture = parseArchitectureDirectory(dataDirs);
   const globalPtr = parseGlobalPtrDirectory(dataDirs, rvaToOff);
-  const manifestValidation = analyzeManifestConsistency(resources, coff.Machine, clr);
+  const manifestValidation = analyzeManifestConsistency(resources, canonicalMachine, clr);
   const warnings = appendUniqueWarnings(
     core.warnings,
     manifestValidation?.warnings ?? []

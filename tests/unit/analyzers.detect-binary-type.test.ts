@@ -259,6 +259,13 @@ void test("detectBinaryType uses the official Microsoft machine names for PE lab
   }
 });
 
+void test("detectBinaryType labels .NET ReadyToRun OS-overridden PE machines", async () => {
+  // .NET ReadyToRun: IMAGE_FILE_MACHINE_AMD64 0x8664 XOR Linux override 0x7B79.
+  // https://github.com/dotnet/runtime/blob/main/src/coreclr/inc/pedecoder.h
+  const label = await detectBinaryType(createMinimalPeLabelProbe(0xfd1d, 0x20b));
+  assert.strictEqual(label, "PE32+ executable for x86-64 (AMD64) ReadyToRun for Linux");
+});
+
 void test("detectBinaryType labels ROM optional headers as PE ROM images", async () => {
   // Microsoft PE/COFF: 0x107 identifies IMAGE_ROM_OPTIONAL_HEADER.
   const label = await detectBinaryType(createMinimalPeLabelProbe(0x0166, 0x107));

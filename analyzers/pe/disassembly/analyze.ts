@@ -7,8 +7,9 @@ import { disassembleControlFlowForInstructionSets } from "../../x86/disassembly-
 import { isIcedX86Module } from "../../x86/disassembly-iced.js";
 import { loadIcedX86 } from "#iced-x86-loader";
 import { peSectionNameValue } from "../sections/name.js";
-const IMAGE_FILE_MACHINE_I386 = 0x014c; // Microsoft PE format: IMAGE_FILE_MACHINE_I386.
-const IMAGE_FILE_MACHINE_AMD64 = 0x8664; // Microsoft PE format: IMAGE_FILE_MACHINE_AMD64.
+import { getCanonicalPeMachine } from "../machine.js";
+// Microsoft PE format: IMAGE_FILE_MACHINE_I386 and IMAGE_FILE_MACHINE_AMD64.
+const IMAGE_FILE_MACHINE_I386 = 0x014c, IMAGE_FILE_MACHINE_AMD64 = 0x8664;
 const IMAGE_SCN_CNT_CODE = 0x00000020; // Microsoft PE format: IMAGE_SCN_CNT_CODE.
 const IMAGE_SCN_MEM_EXECUTE = 0x20000000; // Microsoft PE format: IMAGE_SCN_MEM_EXECUTE.
 const getMappedSectionSpan = (section: PeSection): number =>
@@ -58,7 +59,7 @@ export async function analyzePeInstructionSets(
   opts: AnalyzePeInstructionSetOptions
 ): Promise<PeInstructionSetReport> {
   const issues: string[] = [];
-  const coffMachine = opts.coffMachine >>> 0;
+  const coffMachine = getCanonicalPeMachine(opts.coffMachine);
   const supported = coffMachine === IMAGE_FILE_MACHINE_I386 || coffMachine === IMAGE_FILE_MACHINE_AMD64;
   const bitness: 32 | 64 = opts.is64Bit ? 64 : 32;
   const yieldEveryInstructions =

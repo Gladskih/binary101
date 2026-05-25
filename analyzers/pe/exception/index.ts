@@ -5,6 +5,7 @@ import { parseAmd64ExceptionDirectory } from "./amd64/index.js";
 import { parseArm64ExceptionDirectory } from "./arm64.js";
 import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./types.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
+import { getCanonicalPeMachine } from "../machine.js";
 
 // Microsoft PE format, "Machine Types":
 // AMD64, ARM64, ARM64EC, and ARM64X are the PE/COFF machine values whose EXCEPTION
@@ -28,10 +29,11 @@ export async function parseExceptionDirectory(
   rvaToOff: RvaToOffset,
   machine = IMAGE_FILE_MACHINE_AMD64
 ): Promise<PeExceptionDirectory | null> {
-  if (machine === IMAGE_FILE_MACHINE_AMD64) {
+  const canonicalMachine = getCanonicalPeMachine(machine);
+  if (canonicalMachine === IMAGE_FILE_MACHINE_AMD64) {
     return parseAmd64ExceptionDirectory(reader, dataDirs, rvaToOff);
   }
-  if (isArm64ExceptionMachine(machine)) {
+  if (isArm64ExceptionMachine(canonicalMachine)) {
     return parseArm64ExceptionDirectory(reader, dataDirs, rvaToOff);
   }
   const dir = dataDirs.find(directory => directory.name === "EXCEPTION");

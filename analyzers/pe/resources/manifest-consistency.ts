@@ -2,6 +2,7 @@
 
 import { getManifestProcessorArchitectureForMachine } from "../constants.js";
 import type { PeClrHeader } from "../clr/types.js";
+import { getCanonicalPeMachine } from "../machine.js";
 import type { PeResources } from "./index.js";
 import type {
   ResourceLangWithPreview,
@@ -63,7 +64,8 @@ const addProcessorArchitectureFindings = (
   validated: Set<string>,
   warnings: Set<string>
 ): void => {
-  const expectedArchitecture = getManifestProcessorArchitectureForMachine(machine);
+  const canonicalMachine = getCanonicalPeMachine(machine);
+  const expectedArchitecture = getManifestProcessorArchitectureForMachine(canonicalMachine);
   if (!expectedArchitecture) return;
   entries.forEach(entry => {
     const manifestArchitecture = normalizeArchitecture(entry.manifestInfo.processorArchitecture);

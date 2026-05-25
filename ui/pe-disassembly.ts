@@ -1,20 +1,15 @@
 import { formatHumanSize } from "../binary-utils.js";
 import { createFileRangeReader, type FileRangeReader } from "../analyzers/file-range-reader.js";
 import type { ParseForUiResult } from "../analyzers/index.js";
-import {
-  isPeWindowsParseResult,
-  type PeParseResult
-} from "../analyzers/pe/index.js";
+import { isPeWindowsParseResult, type PeParseResult } from "../analyzers/pe/index.js";
 import {
   analyzePeInstructionSets,
   type AnalyzePeInstructionSetOptions,
   type PeInstructionSetProgress,
   type PeInstructionSetReport
 } from "../analyzers/pe/disassembly/index.js";
-import {
-  PE32_OPTIONAL_HEADER_MAGIC,
-  PE32_PLUS_OPTIONAL_HEADER_MAGIC
-} from "../analyzers/pe/optional-header/magic.js";
+import { PE32_OPTIONAL_HEADER_MAGIC, PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "../analyzers/pe/optional-header/magic.js";
+import { getCanonicalPeMachine } from "../analyzers/pe/machine.js";
 import { readLoadConfigPointerRva } from "../analyzers/pe/load-config/index.js";
 import {
   readGuardCFFunctionTableRvas,
@@ -154,6 +149,7 @@ export const createPeDisassemblyController = (
       const reader = createFileRangeReader(file, 0, file.size);
       const windowsPe = isPeWindowsParseResult(pe) ? pe : null;
       const windowsOpt = windowsPe?.opt ?? null;
+      const canonicalMachine = getCanonicalPeMachine(pe.coff.Machine);
       const entrypointRva = pe.opt?.AddressOfEntryPoint ?? 0;
       const exportRvas =
         windowsPe?.exports?.entries
@@ -194,7 +190,7 @@ export const createPeDisassemblyController = (
 
       const safeSehHandlerRvas =
         windowsPe?.loadcfg?.tables?.safeSehHandler?.entries.map(entry => entry.rva) ??
-        (pe.coff.Machine === IMAGE_FILE_MACHINE_I386 &&
+        (canonicalMachine === IMAGE_FILE_MACHINE_I386 &&
           windowsOpt?.Magic === PE32_OPTIONAL_HEADER_MAGIC &&
           windowsPe?.loadcfg
           ? await readSafeSehHandlerTableRvas(
@@ -255,7 +251,7 @@ export const createPeDisassemblyController = (
       }
 
       const report = await analyze(reader, {
-        coffMachine: pe.coff.Machine,
+        coffMachine: canonicalMachine,
         is64Bit: windowsOpt?.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC,
         imageBase: windowsOpt?.ImageBase ?? 0n,
         entrypointRva,

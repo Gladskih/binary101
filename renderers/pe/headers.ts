@@ -7,12 +7,12 @@ import {
   escapeHtml
 } from "../../html-utils.js";
 import {
-  MACHINE,
   SUBSYSTEMS,
   CHAR_FLAGS,
   DLL_FLAGS,
   formatSectionCharacteristicFlags
 } from "../../analyzers/pe/constants.js";
+import { getPeMachineRenderOptions } from "../../analyzers/pe/machine.js";
 import {
   type PeParseResult
 } from "../../analyzers/pe/index.js";
@@ -173,7 +173,7 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
   out.push(`</dl>`);
   out.push(renderInlineHeaderTitle("COFF file header"));
   out.push(`<dl>`);
-  out.push(renderDefinitionRow("Machine", renderOptionChips(pe.coff.Machine, MACHINE), "Target CPU architecture. The highlighted chip indicates the Machine field value."));
+  out.push(renderDefinitionRow("Machine", renderOptionChips(pe.coff.Machine, getPeMachineRenderOptions(pe.coff.Machine)), "Target CPU architecture. The highlighted chip indicates the Machine field value."));
   out.push(renderDefinitionRow("NumberOfSections", `${pe.coff.NumberOfSections}`, "Number of section headers that immediately follow the optional header."));
   out.push(renderDefinitionRow("TimeDateStamp", isoOrDash(pe.coff.TimeDateStamp), "Link time as Unix epoch. Toolchains sometimes set this to reproducible values."));
   out.push(renderDefinitionRow("PointerToSymbolTable", hex(pe.coff.PointerToSymbolTable, 8), "COFF symbol table pointer (deprecated, usually 0)."));

@@ -2,6 +2,7 @@
 
 import { readLoadConfigPointerRva, type PeLoadConfig, type PeLoadConfigCheck } from "./index.js";
 import type { PeImportLinkingResult } from "../imports/linking.js";
+import { getCanonicalPeMachine } from "../machine.js";
 import type { PeSection, PeWindowsOptionalHeader } from "../types.js";
 
 const IMAGE_FILE_MACHINE_I386 = 0x014c;
@@ -203,6 +204,7 @@ export const collectLoadConfigChecks = (
   importLinking: PeImportLinkingResult | null
 ): PeLoadConfigCheck[] => {
   const checks: PeLoadConfigCheck[] = [];
+  const canonicalMachine = getCanonicalPeMachine(coffMachine);
   const guardCfHeader = hasFlag(opt.DllCharacteristics, IMAGE_DLL_CHARACTERISTICS_GUARD_CF);
   const cfgInstrumented = hasFlag(lc.GuardFlags, IMAGE_GUARD_CF_INSTRUMENTED);
   addCheck(
@@ -241,7 +243,7 @@ export const collectLoadConfigChecks = (
   if (lc.SEHandlerCount > 0 || lc.SEHandlerTable !== 0n) {
     addCheck(
       checks,
-      coffMachine === IMAGE_FILE_MACHINE_I386 ? "pass" : "fail",
+      canonicalMachine === IMAGE_FILE_MACHINE_I386 ? "pass" : "fail",
       "SafeSEH architecture",
       "SafeSEH is documented for x86 images only."
     );
