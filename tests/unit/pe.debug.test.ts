@@ -21,6 +21,7 @@ import {
 } from "../fixtures/pe-debug-directory-subject.js";
 import {
   createPogoDebugDirectorySubject,
+  createSpgoDebugDirectorySubject,
   createVcFeatureDebugDirectorySubject
 } from "../fixtures/pe-debug-payload-subject.js";
 
@@ -201,5 +202,14 @@ void test("parseDebugDirectory decodes POGO signature and records on matching en
 
   const result = await parseDebugDirectory(file, dataDirs, value => value);
 
+  assert.deepEqual(expectDefined(result.entries?.[0]).pogo, expected);
+});
+
+void test("parseDebugDirectory decodes SPGO debug-directory entries as POGO maps", async () => {
+  const { file, dataDirs, expected } = createSpgoDebugDirectorySubject();
+
+  const result = await parseDebugDirectory(file, dataDirs, value => value);
+
+  assert.equal(expectDefined(result.entries?.[0]).typeName, "SPGO");
   assert.deepEqual(expectDefined(result.entries?.[0]).pogo, expected);
 });

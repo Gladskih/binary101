@@ -6,9 +6,9 @@ const encoder = new TextEncoder();
 // Microsoft PE/COFF, IMAGE_DEBUG_DIRECTORY entry size is 28 bytes.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
 const IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE = 28;
-// LLVM and other PE parsers use these IMAGE_DEBUG_DIRECTORY.Type values:
+// Windows SDK winnt.h and PE parsers use these IMAGE_DEBUG_DIRECTORY.Type values:
 // VC_FEATURE = 12, POGO = 13.
-// https://llvm.org/doxygen/BinaryFormat_2COFF_8h_source.html
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
 const IMAGE_DEBUG_TYPE_VC_FEATURE = 12;
 const IMAGE_DEBUG_TYPE_POGO = 13;
 
@@ -132,6 +132,13 @@ export const createPogoSubjectInfo = (count = 2) => ({
   entries: createPogoSubjectEntries(count)
 });
 
+export const createSpgoPogoSubjectInfo = (count = 2) => ({
+  // dumpbin 14.51 prints a POGO payload beginning with this value as "5350474F (SPGO)".
+  signature: 0x5350474f,
+  signatureName: "SPGO",
+  entries: createPogoSubjectEntries(count)
+});
+
 export const createTruncatedPogoPayload = (): Uint8Array =>
   createPogoPayload(POGO_SIGNATURE_LTCG, createPogoSubjectEntries(1)).slice(0, -1);
 
@@ -187,6 +194,18 @@ export const createPogoDebugDirectorySubject = (count = 2) => {
     ...createDebugDirectorySubject([{
       payload: createPogoPayload(expected.signature, expected.entries),
       type: IMAGE_DEBUG_TYPE_POGO
+    }]),
+    expected
+  };
+};
+
+export const createSpgoDebugDirectorySubject = (count = 2) => {
+  const expected = createSpgoPogoSubjectInfo(count);
+  return {
+    ...createDebugDirectorySubject([{
+      payload: createPogoPayload(expected.signature, expected.entries),
+      // Windows SDK winnt.h defines IMAGE_DEBUG_TYPE_SPGO as 18.
+      type: 18
     }]),
     expected
   };

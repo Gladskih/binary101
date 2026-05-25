@@ -25,7 +25,9 @@ const POGO_SIGNATURE_NAMES: Record<number, string> = {
   0x4c544347: "LTCG",
   0x50474900: "PGI",
   0x50474f00: "PGO",
-  0x50475500: "PGU"
+  0x50475500: "PGU",
+  // Visual Studio 18 dumpbin /HEADERS reports 0x5350474F as "(SPGO)".
+  0x5350474f: "SPGO"
 };
 
 // Upstream parsers model each POGO record as start_rva + size + NUL-terminated name.

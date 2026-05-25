@@ -6,6 +6,7 @@ import { parsePogoInfo } from "../../analyzers/pe/debug/pogo.js";
 import {
   createOffsetPayloadSubject,
   createPogoSubjectInfo,
+  createSpgoPogoSubjectInfo,
   createTruncatedPogoPayload,
   createPogoPayload,
 } from "../fixtures/pe-debug-payload-subject.js";
@@ -15,6 +16,27 @@ const identityRvaToOff = (value: number): number => value;
 void test("parsePogoInfo reads the signature and aligned entries", async () => {
   const warnings: string[] = [];
   const expected = createPogoSubjectInfo();
+  const { file, offset } = createOffsetPayloadSubject(
+    createPogoPayload(expected.signature, expected.entries)
+  );
+
+  const result = await parsePogoInfo(
+    file,
+    file.size,
+    identityRvaToOff,
+    0,
+    offset,
+    file.size - offset,
+    message => warnings.push(message)
+  );
+
+  assert.deepEqual(result, expected);
+  assert.deepEqual(warnings, []);
+});
+
+void test("parsePogoInfo reads SPGO signature maps emitted by current MSVC tools", async () => {
+  const warnings: string[] = [];
+  const expected = createSpgoPogoSubjectInfo();
   const { file, offset } = createOffsetPayloadSubject(
     createPogoPayload(expected.signature, expected.entries)
   );

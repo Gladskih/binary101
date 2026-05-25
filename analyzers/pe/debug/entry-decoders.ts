@@ -49,6 +49,7 @@ const IMAGE_DEBUG_TYPE_VC_FEATURE = 12;
 const IMAGE_DEBUG_TYPE_POGO = 13;
 const IMAGE_DEBUG_TYPE_REPRO = 16;
 const IMAGE_DEBUG_TYPE_EMBEDDED_PORTABLE_PDB = 17;
+const IMAGE_DEBUG_TYPE_SPGO = 18;
 const IMAGE_DEBUG_TYPE_PDB_CHECKSUM = 19;
 const IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS = 20;
 
@@ -114,7 +115,7 @@ const parseKnownPayload = async (
     const vcFeature = await parseVcFeatureInfo(...args);
     return vcFeature ? { vcFeature } : {};
   }
-  if (input.type === IMAGE_DEBUG_TYPE_POGO) {
+  if (input.type === IMAGE_DEBUG_TYPE_POGO || input.type === IMAGE_DEBUG_TYPE_SPGO) {
     const pogo = await parsePogoInfo(...args);
     return pogo ? { pogo } : {};
   }

@@ -22,6 +22,15 @@ void test("getDebugTypeInfo returns LLVM-backed toolchain metadata for POGO", ()
   });
 });
 
+void test("getDebugTypeInfo returns Microsoft metadata for SPGO", () => {
+  const info = getDebugTypeInfo(18); // IMAGE_DEBUG_TYPE_SPGO in Windows SDK winnt.h.
+
+  assert.deepEqual(info, {
+    label: "SPGO",
+    description: "Sample profile-guided optimization metadata emitted by the toolchain."
+  });
+});
+
 void test("getDebugTypeInfo falls back for unknown debug types", () => {
   const info = getDebugTypeInfo(255);
 

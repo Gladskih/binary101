@@ -18,6 +18,7 @@ export type { PeVcFeatureInfo } from "./vc-feature.js";
 
 // Microsoft PE format, "Debug Directory (Image Only)":
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
+// Windows SDK winnt.h provides additional IMAGE_DEBUG_TYPE_* values used by MSVC tools.
 // IMAGE_DEBUG_DIRECTORY entry layout (28 bytes, file form):
 // - Type (DWORD) at +0x0c
 // - SizeOfData (DWORD) at +0x10
@@ -48,6 +49,7 @@ const DEBUG_TYPE_NAMES: Record<number, string> = {
   15: "MPX",
   16: "REPRO",
   17: "EMBEDDED DEBUG",
+  18: "SPGO",
   19: "SYMBOL HASH",
   20: "EX_DLLCHARACTERISTICS",
   21: "R2R_PERFMAP"

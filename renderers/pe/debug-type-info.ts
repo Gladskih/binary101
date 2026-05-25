@@ -4,6 +4,7 @@ type DebugTypeInfo = { label: string; description: string };
 
 // Microsoft PE format, "Debug Type":
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
+// Windows SDK winnt.h provides additional IMAGE_DEBUG_TYPE_* values used by MSVC tools.
 // LLVM COFF DebugType enum fills in additional toolchain-defined names such as
 // VC_FEATURE / POGO / ILTCG / MPX:
 // https://llvm.org/doxygen/namespacellvm_1_1COFF.html
@@ -55,6 +56,10 @@ const DEBUG_TYPE_INFOS: Record<number, DebugTypeInfo> = {
   17: {
     label: "EMBEDDED DEBUG",
     description: "Debugging information embedded in the PE file at PointerToRawData."
+  },
+  18: {
+    label: "SPGO",
+    description: "Sample profile-guided optimization metadata emitted by the toolchain."
   },
   19: {
     label: "SYMBOL HASH",
