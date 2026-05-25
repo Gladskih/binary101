@@ -82,6 +82,31 @@ void test("parseLoadConfigDirectory uses official field offsets (32-bit)", async
   assert.equal(lc.UmaFunctionPointers, 0x01020304n);
 });
 
+void test("parseLoadConfigDirectory uses internal Size beyond x86 SEH directory size", async () => {
+  const bytes = new Uint8Array(512).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const lcRva = 0x80;
+
+  // Microsoft PE format, Load Configuration Directory:
+  // x86 pre-reserved SEH data-directory size 64 is a compatibility version check.
+  dv.setUint32(lcRva + 0x00, 0xc0, true);
+  dv.setUint32(lcRva + 0x40, 0x200, true); // SEHandlerTable
+  dv.setUint32(lcRva + 0x44, 3, true); // SEHandlerCount
+  dv.setUint32(lcRva + 0xb8, 0x2468ace0, true); // CastGuardOsDeterminedFailureMode
+
+  const lc = expectDefined(await parseLoadConfigDirectory32(
+    new MockFile(bytes, "loadcfg32-internal-size.bin"),
+    [{ name: "LOAD_CONFIG", rva: lcRva, size: 0x40 }],
+    value => value
+  ));
+
+  assert.equal(lc.Size, 0xc0);
+  assert.equal(lc.SEHandlerTable, 0x200n);
+  assert.equal(lc.SEHandlerCount, 3);
+  assert.equal(lc.CastGuardOsDeterminedFailureMode, 0x2468ace0n);
+  assert.ok(!lc.warnings?.some(warning => warning.includes("smaller than the Size field")));
+});
+
 void test("parseLoadConfigDirectory uses official field offsets (64-bit)", async () => {
   const bytes = new Uint8Array(512).fill(0);
   const dv = new DataView(bytes.buffer);
@@ -109,7 +134,7 @@ void test("parseLoadConfigDirectory uses official field offsets (64-bit)", async
     await parseLoadConfigDirectory64(
       new MockFile(bytes, "loadcfg64.bin"),
       [{ name: "LOAD_CONFIG", rva: 0x10, size: 0x148 }],
-      value => (value === 0x10 ? 0 : value)
+      value => (value >= 0x10 ? value - 0x10 : null)
     )
   );
 
@@ -165,7 +190,7 @@ void test("parseLoadConfigDirectory reads 32-bit and 64-bit fields", async () =>
   const lc64 = expectDefined(await parseLoadConfigDirectory64(
     new MockFile(bytes64),
     [{ name: "LOAD_CONFIG", rva: 0x10, size: 0x140 }],
-    value => (value === 0x10 ? 0 : value)
+    value => (value >= 0x10 ? value - 0x10 : null)
   ));
   assert.equal(lc64.SEHandlerCount, 5);
   assert.equal(lc64.GuardCFFunctionCount, 6);
@@ -186,7 +211,7 @@ void test("parseLoadConfigDirectory preserves representable 64-bit values instea
     await parseLoadConfigDirectory64(
       new MockFile(bytes, "loadcfg64-exact-u64.bin"),
       [{ name: "LOAD_CONFIG", rva: 0x10, size: 0x148 }],
-      value => (value === 0x10 ? 0 : value)
+      value => (value >= 0x10 ? value - 0x10 : null)
     )
   );
 

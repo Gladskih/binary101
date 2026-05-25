@@ -27,3 +27,26 @@ void test("parseLoadConfigDirectory returns a partial result with warnings on a 
   assert.equal(parsed?.TimeDateStamp, 0x12345678);
   assert.ok(parsed?.warnings?.some(warning => warning.toLowerCase().includes("truncated")));
 });
+
+void test("parseLoadConfigDirectory bounds internal Size by mapped RVA bytes", async () => {
+  const bytes = new Uint8Array(0x200).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const loadConfigRva = 0x80;
+
+  // Microsoft PE format, Load Configuration Directory:
+  // x86 pre-reserved SEH data-directory size 64 is a compatibility version check.
+  dv.setUint32(loadConfigRva + 0, 0xc0, true);
+  dv.setUint32(loadConfigRva + 0x40, 0x200, true);
+  dv.setUint32(loadConfigRva + 0x44, 3, true);
+
+  const parsed = await parseLoadConfigDirectory32(
+    new MockFile(bytes, "loadcfg-mapped-truncated.bin"),
+    [{ name: "LOAD_CONFIG", rva: loadConfigRva, size: 0x40 }],
+    value => (value >= loadConfigRva && value < loadConfigRva + 0x40 ? value : null)
+  );
+
+  assert.ok(parsed);
+  assert.equal(parsed?.SEHandlerTable, 0n);
+  assert.equal(parsed?.SEHandlerCount, 0);
+  assert.ok(parsed?.warnings?.some(warning => warning.includes("smaller than the Size field")));
+});

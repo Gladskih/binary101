@@ -119,6 +119,9 @@ export interface PeLoadConfig {
 }
 
 const MAX_RVA_BIGINT = 0xffff_ffffn;
+// Local corruption guard, not a PE limit: Microsoft PE Load Configuration Layout and
+// Windows SDK 10.0.26100.0 winnt.h currently document structures far smaller than 64 KiB.
+const MAX_REASONABLE_LOAD_CONFIG_SIZE = 0x10000;
 
 const toRvaFromVa = (virtualAddress: bigint, imageBase: bigint): number | null => {
   if (virtualAddress === 0n || imageBase <= 0n) return null;
@@ -134,6 +137,33 @@ const toSafeCount = (fieldName: string, value: bigint, warnings: string[]): numb
     `LOAD_CONFIG: ${fieldName} exceeds Number.MAX_SAFE_INTEGER and cannot be represented exactly; using 0.`
   );
   return 0;
+};
+
+const getContiguousMappedSize = (
+  startRva: number,
+  startOffset: number,
+  maximumSize: number,
+  rvaToOff: RvaToOffset
+): number => {
+  let low = 0;
+  let high = Math.max(0, maximumSize);
+  while (low < high) {
+    const middle = low + Math.ceil((high - low) / 2);
+    const endRva = startRva + middle - 1;
+    const endOffset = endRva <= Number(MAX_RVA_BIGINT) ? rvaToOff(endRva >>> 0) : null;
+    if (endOffset === startOffset + middle - 1) {
+      low = middle;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return low;
+};
+
+const getDeclaredLoadConfigSize = (view: DataView): number => {
+  if (view.byteLength < 4) return 0;
+  const Size = view.getUint32(0, true);
+  return Size > 0 && Size <= MAX_REASONABLE_LOAD_CONFIG_SIZE ? Size : 0;
 };
 
 const parseLoadConfigDirectoryWithBuilder = async (
@@ -159,20 +189,33 @@ const parseLoadConfigDirectoryWithBuilder = async (
     warnings.push("LOAD_CONFIG starts past end of file.");
     return createPeLoadConfigResult(warnings);
   }
-  const availableSize = Math.min(lcDir.size, Math.max(0, fileSize - base));
-  if (availableSize < lcDir.size) warnings.push("LOAD_CONFIG directory is truncated by end of file.");
+  const fileAvailableSize = Math.max(0, fileSize - base);
+  const directoryAvailableSize = Math.min(lcDir.size, fileAvailableSize);
+  if (directoryAvailableSize < lcDir.size) warnings.push("LOAD_CONFIG directory is truncated by end of file.");
   if (lcDir.size > 0 && lcDir.size < 0x40) {
     warnings.push("LOAD_CONFIG directory is smaller than the minimum documented header size (0x40 bytes).");
   }
-  if (availableSize === 0) {
+  if (directoryAvailableSize === 0) {
     warnings.push("LOAD_CONFIG does not contain any readable bytes.");
     return createPeLoadConfigResult(warnings);
   }
-  const view = await reader.read(base, availableSize);
-  if (view.byteLength < 4) {
+  const initialView = await reader.read(
+    base,
+    getContiguousMappedSize(lcDir.rva, base, Math.min(4, directoryAvailableSize), rvaToOff)
+  );
+  if (initialView.byteLength < 4) {
     warnings.push("LOAD_CONFIG is truncated before the Size field.");
     return createPeLoadConfigResult(warnings);
   }
+  const declaredSize = getDeclaredLoadConfigSize(initialView);
+  const requestedSize = Math.max(Math.min(lcDir.size, MAX_REASONABLE_LOAD_CONFIG_SIZE), declaredSize);
+  const mappedAvailableSize = getContiguousMappedSize(
+    lcDir.rva,
+    base,
+    Math.min(requestedSize, fileAvailableSize),
+    rvaToOff
+  );
+  const view = await reader.read(base, mappedAvailableSize);
   if (view.byteLength < 12) {
     warnings.push("LOAD_CONFIG is truncated before the fixed header fields are complete.");
   }
@@ -180,11 +223,10 @@ const parseLoadConfigDirectoryWithBuilder = async (
   const TimeDateStamp = view.byteLength >= 8 ? view.getUint32(4, true) : 0;
   const Major = view.byteLength >= 10 ? view.getUint16(8, true) : 0;
   const Minor = view.byteLength >= 12 ? view.getUint16(10, true) : 0;
-  const declaredSize = Number.isFinite(Size) && Size > 0 && Size <= 0x10000 ? Size : 0;
   if (declaredSize > 0 && declaredSize < 0x40) {
     warnings.push("LOAD_CONFIG Size field is smaller than the minimum documented header size (0x40 bytes).");
   }
-  if (declaredSize > 0 && availableSize < declaredSize) {
+  if (declaredSize > 0 && view.byteLength < declaredSize) {
     warnings.push("LOAD_CONFIG bytes available in file are smaller than the Size field.");
   }
   const withinDeclared = (endExclusive: number): boolean => !declaredSize || declaredSize >= endExclusive;
