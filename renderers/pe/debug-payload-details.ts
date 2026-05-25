@@ -1,9 +1,10 @@
 "use strict";
 
 import { humanSize, hex } from "../../binary-utils.js";
-import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
+import { renderDefinitionRow, renderFlagChips, escapeHtml } from "../../html-utils.js";
 import type { PeDebugSection, PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type { PeDebugDirectoryEntry } from "../../analyzers/pe/debug/directory.js";
+import { EX_DLL_CHARACTERISTICS_FLAGS } from "../../analyzers/pe/constants.js";
 import { getDebugTypeInfo } from "./debug-type-info.js";
 import { getDebugStorageInfo, getEntrySummary } from "./debug-entry-summary.js";
 
@@ -191,7 +192,11 @@ const renderPdbChecksumFields = (entry: PeDebugDirectoryEntry, out: string[]): v
 
 const renderExDllCharacteristicsFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
   if (entry.exDllCharacteristics) {
-    out.push(`<dl>${renderDefinitionRow("Bits", escapeHtml(hex(entry.exDllCharacteristics.value >>> 0, 8)))}</dl>`);
+    out.push(`<dl>${renderDefinitionRow(
+      "Bits",
+      `<div class="mono">${escapeHtml(hex(entry.exDllCharacteristics.value >>> 0, 8))}</div>` +
+        renderFlagChips(entry.exDllCharacteristics.value, EX_DLL_CHARACTERISTICS_FLAGS)
+    )}</dl>`);
   }
 };
 

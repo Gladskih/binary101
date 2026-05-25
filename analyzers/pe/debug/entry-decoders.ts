@@ -17,6 +17,18 @@ import { parsePdbChecksumInfo, type PePdbChecksumInfo } from "./pdb-checksum.js"
 import { parsePogoInfo, type PePogoInfo } from "./pogo.js";
 import { parseRawDebugPayload, type PeRawDebugPayload } from "./raw-payload.js";
 import { parseReproInfo, type PeReproInfo } from "./repro.js";
+import {
+  IMAGE_DEBUG_TYPE_CODEVIEW,
+  IMAGE_DEBUG_TYPE_EMBEDDED_PORTABLE_PDB,
+  IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS,
+  IMAGE_DEBUG_TYPE_FPO,
+  IMAGE_DEBUG_TYPE_MISC,
+  IMAGE_DEBUG_TYPE_PDB_CHECKSUM,
+  IMAGE_DEBUG_TYPE_POGO,
+  IMAGE_DEBUG_TYPE_REPRO,
+  IMAGE_DEBUG_TYPE_SPGO,
+  IMAGE_DEBUG_TYPE_VC_FEATURE
+} from "./types.js";
 import { parseVcFeatureInfo, type PeVcFeatureInfo } from "./vc-feature.js";
 
 export type PeDebugPayloads = {
@@ -41,17 +53,6 @@ type DecodeInput = {
   pointerToRawDataOff: number;
   dataSize: number;
 };
-
-const IMAGE_DEBUG_TYPE_CODEVIEW = 2;
-const IMAGE_DEBUG_TYPE_FPO = 3;
-const IMAGE_DEBUG_TYPE_MISC = 4;
-const IMAGE_DEBUG_TYPE_VC_FEATURE = 12;
-const IMAGE_DEBUG_TYPE_POGO = 13;
-const IMAGE_DEBUG_TYPE_REPRO = 16;
-const IMAGE_DEBUG_TYPE_EMBEDDED_PORTABLE_PDB = 17;
-const IMAGE_DEBUG_TYPE_SPGO = 18;
-const IMAGE_DEBUG_TYPE_PDB_CHECKSUM = 19;
-const IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS = 20;
 
 const hasDecodedPayload = (payloads: PeDebugPayloads): boolean =>
   Boolean(

@@ -86,5 +86,8 @@ void test("renderDecodedEntryDetails renders small decoded payload fields", () =
   assert.match(html, /MPDB/);
   assert.match(html, /SHA256/);
   assert.match(html, /0x00000041/);
+  assert.match(html, /CET_COMPAT/);
+  assert.match(html, /FORWARD_CFI_COMPAT/);
+  assert.match(html, /HOTPATCH_COMPATIBLE/);
   assert.match(html, /b4 9c/);
 });

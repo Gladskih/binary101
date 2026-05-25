@@ -1,6 +1,8 @@
 "use strict";
 
 import type { FileRangeReader } from "../../file-range-reader.js";
+import { toHex32 } from "../../../binary-utils.js";
+import { EX_DLL_CHARACTERISTICS_KNOWN_MASK } from "../constants.js";
 import type { RvaToOffset } from "../types.js";
 import { getReadableDebugData } from "./data.js";
 
@@ -44,5 +46,10 @@ export const parseExDllCharacteristicsInfo = async (
     addWarning("EX_DLLCHARACTERISTICS debug entry is truncated.");
     return null;
   }
-  return { value: view.getUint32(0, true) };
+  const value = view.getUint32(0, true);
+  const unknownBits = (value & ~EX_DLL_CHARACTERISTICS_KNOWN_MASK) >>> 0;
+  if (unknownBits) {
+    addWarning(`EX_DLLCHARACTERISTICS has unknown bits ${toHex32(unknownBits, 8)}.`);
+  }
+  return { value };
 };

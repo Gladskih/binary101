@@ -3,6 +3,7 @@
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeCodeViewEntry } from "./codeview.js";
 import { decodeDebugEntryPayload, type PeDebugPayloads } from "./entry-decoders.js";
+import { DEBUG_TYPE_NAMES } from "./types.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 
 export type { PeCodeViewEntry } from "./codeview.js";
@@ -18,7 +19,6 @@ export type { PeVcFeatureInfo } from "./vc-feature.js";
 
 // Microsoft PE format, "Debug Directory (Image Only)":
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
-// Windows SDK winnt.h provides additional IMAGE_DEBUG_TYPE_* values used by MSVC tools.
 // IMAGE_DEBUG_DIRECTORY entry layout (28 bytes, file form):
 // - Type (DWORD) at +0x0c
 // - SizeOfData (DWORD) at +0x10
@@ -29,31 +29,6 @@ const IMAGE_DEBUG_DIRECTORY_OFF_TYPE = 0x0c;
 const IMAGE_DEBUG_DIRECTORY_OFF_SIZE_OF_DATA = 0x10;
 const IMAGE_DEBUG_DIRECTORY_OFF_ADDRESS_OF_RAW_DATA = 0x14;
 const IMAGE_DEBUG_DIRECTORY_OFF_POINTER_TO_RAW_DATA = 0x18;
-
-const DEBUG_TYPE_NAMES: Record<number, string> = {
-  0: "UNKNOWN",
-  1: "COFF",
-  2: "CODEVIEW",
-  3: "FPO",
-  4: "MISC",
-  5: "EXCEPTION",
-  6: "FIXUP",
-  7: "OMAP_TO_SRC",
-  8: "OMAP_FROM_SRC",
-  9: "BORLAND",
-  10: "RESERVED10",
-  11: "CLSID",
-  12: "VC_FEATURE",
-  13: "POGO",
-  14: "ILTCG",
-  15: "MPX",
-  16: "REPRO",
-  17: "EMBEDDED DEBUG",
-  18: "SPGO",
-  19: "SYMBOL HASH",
-  20: "EX_DLLCHARACTERISTICS",
-  21: "R2R_PERFMAP"
-};
 
 type FileRange = { start: number; end: number };
 

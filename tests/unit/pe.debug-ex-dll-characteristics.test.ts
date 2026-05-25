@@ -42,6 +42,13 @@ void test("parseExDllCharacteristicsInfo reports trailing bytes after the bit fi
   assert.match(warnings.join(" | "), /trailing bytes/i);
 });
 
+void test("parseExDllCharacteristicsInfo reports unknown bits outside the Windows SDK mask", async () => {
+  const { result, warnings } = await parseSubject(Uint8Array.from([0x01, 0x01, 0x00, 0x00]));
+
+  assert.deepEqual(result, { value: 0x101 });
+  assert.match(warnings.join(" | "), /EX_DLLCHARACTERISTICS has unknown bits 0x00000100/i);
+});
+
 void test("parseExDllCharacteristicsInfo reports unmapped payload locations", async () => {
   const warnings: string[] = [];
   const subject = createExtraDebugPayloadSubject(Uint8Array.from([0x01, 0x00, 0x00, 0x00]));

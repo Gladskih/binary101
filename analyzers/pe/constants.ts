@@ -116,6 +116,31 @@ export const DLL_FLAGS: OptionEntry[] = [
   [0x8000, "TERMINAL_SERVER_AWARE", "Terminal Server aware"]
 ];
 
+// Windows SDK winnt.h, IMAGE_DLLCHARACTERISTICS_EX_* definitions.
+export const EX_DLL_CHARACTERISTICS_FLAGS: OptionEntry[] = [
+  [0x01, "CET_COMPAT", "Compatible with Control-flow Enforcement Technology shadow stacks"],
+  [0x02, "CET_COMPAT_STRICT_MODE", "Requests strict CET compatibility policy"],
+  [
+    0x04,
+    "CET_SET_CONTEXT_IP_VALIDATION_RELAXED_MODE",
+    "Relaxes CET validation for SetThreadContext-like instruction-pointer changes"
+  ],
+  [
+    0x08,
+    "CET_DYNAMIC_APIS_ALLOW_IN_PROC",
+    "Allows selected dynamic-code APIs in-process under CET policy"
+  ],
+  [0x10, "CET_RESERVED_1", "Reserved for CET policy downgrade only"],
+  [0x20, "CET_RESERVED_2", "Reserved for CET policy downgrade only"],
+  [0x40, "FORWARD_CFI_COMPAT", "Compatible with forward-edge control-flow integrity"],
+  [0x80, "HOTPATCH_COMPATIBLE", "Image is compatible with hotpatching"]
+];
+
+export const EX_DLL_CHARACTERISTICS_KNOWN_MASK = EX_DLL_CHARACTERISTICS_FLAGS.reduce(
+  (mask, [bit]) => (mask | bit) >>> 0,
+  0
+);
+
 export const DD_NAMES = [
   "EXPORT", "IMPORT", "RESOURCE", "EXCEPTION", "SECURITY", "BASERELOC", "DEBUG", "ARCHITECTURE",
   "GLOBALPTR", "TLS", "LOAD_CONFIG", "BOUND_IMPORT", "IAT", "DELAY_IMPORT", "CLR_RUNTIME", "RESERVED"
