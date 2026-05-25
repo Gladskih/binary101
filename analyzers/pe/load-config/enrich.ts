@@ -10,7 +10,7 @@ import {
   readGuardEhContinuationTable,
   readGuardLongJumpTargetTable
 } from "./tables.js";
-import { collectLoadConfigWarnings } from "./warnings.js";
+import { collectLoadConfigDiagnostics } from "./warnings.js";
 
 type LoadConfigParser = (
   reader: FileRangeReader,
@@ -34,12 +34,17 @@ type SafeSehTableReader = (
   seHandlerCount: number
 ) => Promise<PeLoadConfigTable>;
 
-const appendUniqueWarnings = (existing: string[] | undefined, messages: string[]): string[] | undefined =>
+const appendUniqueMessages = (existing: string[] | undefined, messages: string[]): string[] | undefined =>
   messages.length ? [...new Set([...(existing ?? []), ...messages])] : existing;
 
 const mergeLoadConfigWarnings = (loadcfg: PeLoadConfig, messages: string[]): void => {
-  const merged = appendUniqueWarnings(loadcfg.warnings, messages);
+  const merged = appendUniqueMessages(loadcfg.warnings, messages);
   if (merged?.length) loadcfg.warnings = merged;
+};
+
+const mergeLoadConfigNotes = (loadcfg: PeLoadConfig, messages: string[]): void => {
+  const merged = appendUniqueMessages(loadcfg.notes, messages);
+  if (merged?.length) loadcfg.notes = merged;
 };
 
 const readOptionalTable = async (
@@ -77,7 +82,9 @@ export const parseAndEnrichLoadConfig = async (
 ): Promise<PeLoadConfig | null> => {
   const loadcfg = await parseLoadConfigDirectory(reader, dataDirs, rvaToOff);
   if (!loadcfg) return null;
-  mergeLoadConfigWarnings(loadcfg, collectLoadConfigWarnings(fileSize, rvaToOff, imageBase, sizeOfImage, loadcfg));
+  const diagnostics = collectLoadConfigDiagnostics(fileSize, rvaToOff, imageBase, sizeOfImage, loadcfg);
+  mergeLoadConfigWarnings(loadcfg, diagnostics.warnings);
+  mergeLoadConfigNotes(loadcfg, diagnostics.notes);
   const tables: PeLoadConfigTables = {};
   const guardFlags = loadcfg.GuardFlags;
   if (loadcfg.GuardCFFunctionCount > 0) {

@@ -2,7 +2,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readSafeSehHandlerTableRvas } from "../../analyzers/pe/load-config/tables.js";
+import {
+  readSafeSehHandlerTable,
+  readSafeSehHandlerTableRvas
+} from "../../analyzers/pe/load-config/tables.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 // Microsoft PE format documents 0x00400000 as the default ImageBase for Windows NT/2000/XP/95/98/Me EXE images.
@@ -98,6 +101,23 @@ void test("readSafeSehHandlerTableRvas returns empty list for invalid or unmappe
 
   assert.deepEqual(await readSafeSehHandlerTableRvas(file, rva => rva, PE32_DEFAULT_IMAGE_BASE, 0x1000n, 1), []);
   assert.deepEqual(await readSafeSehHandlerTableRvas(file, () => null, PE32_DEFAULT_IMAGE_BASE, tableVa, 1), []);
+});
+
+void test("readSafeSehHandlerTable notes tables that are not raw-file-backed", async () => {
+  const bytes = new Uint8Array(0x100).fill(0);
+  const tableVa = PE32_DEFAULT_IMAGE_BASE + BigInt(LOAD_CONFIG_TEST_TABLE_RVA);
+  const table = await readSafeSehHandlerTable(
+    new MockFile(bytes, "safeseh-unbacked.bin"),
+    () => null,
+    PE32_DEFAULT_IMAGE_BASE,
+    tableVa,
+    1
+  );
+
+  assert.deepEqual(table.entries, []);
+  assert.equal(table.truncated, true);
+  assert.equal(table.warnings, undefined);
+  assert.ok(table.notes?.some(note => note.includes("not backed by raw file data")));
 });
 
 void test("readSafeSehHandlerTableRvas truncates reads when the table spills past EOF", async () => {

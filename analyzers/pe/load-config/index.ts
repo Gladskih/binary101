@@ -50,6 +50,7 @@ export type PeLoadConfigTable = {
   entrySize: number;
   entries: PeLoadConfigTableEntry[];
   truncated: boolean;
+  notes?: string[];
   warnings?: string[];
 };
 
@@ -115,6 +116,7 @@ export interface PeLoadConfig {
   tables?: PeLoadConfigTables;
   dynamicRelocations?: PeDynamicRelocations | null;
   checks?: PeLoadConfigCheck[];
+  notes?: string[];
   warnings?: string[];
 }
 

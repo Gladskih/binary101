@@ -234,6 +234,12 @@ const renderAddressTableWarning = (table: PeLoadConfigTable): string =>
       `${escapeHtml(table.warnings.join("; "))}</div>`
     : "";
 
+const renderAddressTableNote = (table: PeLoadConfigTable): string =>
+  table.notes?.length
+    ? `<div class="smallNote" style="margin:.25rem 0 0 0">` +
+      `${escapeHtml(table.notes.join("; "))}</div>`
+    : "";
+
 const renderDetailedLoadConfigAddressTable = (
   table: PeLoadConfigTable,
   sections: PeSection[],
@@ -261,6 +267,7 @@ const renderDetailedLoadConfigAddressTable = (
   ];
   return `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">${escapeHtml(`${table.name} (${table.entries.length}/${table.declaredCount})`)}</summary>` +
     `<div class="loadConfigAddressTableBody"><div class="smallNote" style="margin:.35rem 0 0 0">${details.join("; ")}.</div>` +
+    renderAddressTableNote(table) +
     renderAddressTableWarning(table) +
     `<div class="tableWrap"><table class="table"><thead><tr><th>#</th><th>RVA</th><th>VA</th><th>Section</th><th>Metadata</th><th>Notes</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></div></details>`;
 };
@@ -276,7 +283,7 @@ export const renderLoadConfigAddressTables = (
   return (aggregateTables.length ? renderAddressTableAggregate(
     aggregateTables,
     sections,
-    aggregateTables.map(renderAddressTableWarning)
+    aggregateTables.flatMap(table => [renderAddressTableNote(table), renderAddressTableWarning(table)])
   ) : "") +
     detailedTables.map(([table, note]) =>
       renderDetailedLoadConfigAddressTable(table, sections, imageBase, pointerWidth, note)

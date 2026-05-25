@@ -113,6 +113,33 @@ void test("renderLoadConfig aggregates large uniform Load Config tables", () => 
   ));
 });
 
+void test("renderLoadConfig renders Load Config notes without warning styling", () => {
+  const loadcfg = createPeLoadConfigResult();
+  loadcfg.notes = ["LOAD_CONFIG: SecurityCookie RVA 0x500 is not backed by raw file data."];
+  loadcfg.tables = {
+    safeSehHandler: {
+      kind: "safeSeh",
+      name: "SEHandlerTable",
+      tableVa: PE32_DEFAULT_IMAGE_BASE + BigInt(CFG_TABLE_RVA),
+      tableRva: CFG_TABLE_RVA,
+      declaredCount: 1,
+      entrySize: 4,
+      truncated: true,
+      entries: [],
+      notes: ["SEHandlerTable: table RVA 0x1000 is not backed by raw file data."]
+    }
+  };
+  const pe = makePe(loadcfg);
+
+  const out: string[] = [];
+  renderLoadConfig(pe, out);
+  const html = out.join("");
+
+  assert.ok(html.includes("SecurityCookie RVA 0x500 is not backed by raw file data."));
+  assert.ok(html.includes("SEHandlerTable: table RVA 0x1000 is not backed by raw file data."));
+  assert.ok(!html.includes("color:var(--warn-fg)"));
+});
+
 void test("renderLoadConfig labels known dynamic relocation symbols", () => {
   const loadcfg = createPeLoadConfigResult();
   loadcfg.dynamicRelocations = {

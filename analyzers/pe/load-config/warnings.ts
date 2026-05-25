@@ -4,14 +4,23 @@ import { readLoadConfigPointerRva, type PeLoadConfig } from "./index.js";
 import { getCfgTargetTableEntrySize } from "./tables.js";
 import type { RvaToOffset } from "../types.js";
 
-export function collectLoadConfigWarnings(
+export type PeLoadConfigDiagnostics = {
+  warnings: string[];
+  notes: string[];
+};
+
+const formatRvaNote = (name: string, rva: number): string =>
+  `LOAD_CONFIG: ${name} RVA 0x${rva.toString(16)} is not backed by raw file data.`;
+
+export function collectLoadConfigDiagnostics(
   fileSize: number,
   rvaToOff: RvaToOffset,
   imageBase: bigint,
   sizeOfImage: number,
   lc: PeLoadConfig
-): string[] {
+): PeLoadConfigDiagnostics {
   const warnings: string[] = [];
+  const notes: string[] = [];
   const cfgEntrySize = getCfgTargetTableEntrySize(lc.GuardFlags);
 
   const checkTable = (name: string, tableVa: bigint, count: number, entrySize: number): void => {
@@ -36,8 +45,12 @@ export function collectLoadConfigWarnings(
     }
     if (!Number.isFinite(fileSize) || fileSize <= 0) return;
     const off = rvaToOff(tableRva);
-    if (off == null || off < 0 || off >= fileSize) {
-      warnings.push(`LOAD_CONFIG: ${name} RVA 0x${tableRva.toString(16)} does not map to file data.`);
+    if (off == null) {
+      notes.push(formatRvaNote(name, tableRva));
+      return;
+    }
+    if (off < 0 || off >= fileSize) {
+      warnings.push(`LOAD_CONFIG: ${name} RVA 0x${tableRva.toString(16)} maps outside file data.`);
       return;
     }
     const maxFile = Math.floor((fileSize - off) / entrySize);
@@ -57,8 +70,12 @@ export function collectLoadConfigWarnings(
     }
     if (!Number.isFinite(fileSize) || fileSize <= 0) return;
     const off = rvaToOff(rva);
-    if (off == null || off < 0 || off >= fileSize) {
-      warnings.push(`LOAD_CONFIG: ${name} RVA 0x${rva.toString(16)} does not map to file data.`);
+    if (off == null) {
+      notes.push(formatRvaNote(name, rva));
+      return;
+    }
+    if (off < 0 || off >= fileSize) {
+      warnings.push(`LOAD_CONFIG: ${name} RVA 0x${rva.toString(16)} maps outside file data.`);
     }
   };
 
@@ -94,5 +111,5 @@ export function collectLoadConfigWarnings(
     warnings.push("LOAD_CONFIG: DynamicValueRelocTableOffset is set but DynamicValueRelocTableSection is 0.");
   }
 
-  return warnings;
+  return { warnings, notes };
 }

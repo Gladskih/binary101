@@ -6,11 +6,11 @@ import {
   parseLoadConfigDirectory32,
   parseLoadConfigDirectory64
 } from "../../analyzers/pe/load-config/index.js";
-import { collectLoadConfigWarnings } from "../../analyzers/pe/load-config/warnings.js";
+import { collectLoadConfigDiagnostics } from "../../analyzers/pe/load-config/warnings.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 
-void test("collectLoadConfigWarnings reports tables that do not fit in file/image bounds", async () => {
+void test("collectLoadConfigDiagnostics reports tables that do not fit in file/image bounds", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const dv = new DataView(bytes.buffer);
   const lcRva = 0x80;
@@ -29,11 +29,11 @@ void test("collectLoadConfigWarnings reports tables that do not fit in file/imag
   );
 
   assert.equal(lc.GuardCFFunctionCount, 4);
-  const warnings = collectLoadConfigWarnings(file.size, value => value, 0x400000n, 0x200, lc);
+  const warnings = collectLoadConfigDiagnostics(file.size, value => value, 0x400000n, 0x200, lc).warnings;
   assert.ok(warnings.some(w => w.includes("GuardCFFunctionTable")));
 });
 
-void test("collectLoadConfigWarnings reports tables that start outside SizeOfImage even when raw bytes exist", async () => {
+void test("collectLoadConfigDiagnostics reports tables that start outside SizeOfImage", async () => {
   const bytes = new Uint8Array(0x400).fill(0);
   const dv = new DataView(bytes.buffer);
   const lcRva = 0x80;
@@ -53,11 +53,11 @@ void test("collectLoadConfigWarnings reports tables that start outside SizeOfIma
     )
   );
 
-  const warnings = collectLoadConfigWarnings(bytes.length, value => value, imageBase, 0x200, lc);
+  const warnings = collectLoadConfigDiagnostics(bytes.length, value => value, imageBase, 0x200, lc).warnings;
   assert.ok(warnings.some(w => /GuardCFFunctionTable/.test(w) && /SizeOfImage/.test(w)));
 });
 
-void test("collectLoadConfigWarnings rejects raw RVAs in documented VA table-pointer fields", async () => {
+void test("collectLoadConfigDiagnostics rejects raw RVAs in documented VA table-pointer fields", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const dv = new DataView(bytes.buffer);
   const lcRva = 0x80;
@@ -75,17 +75,17 @@ void test("collectLoadConfigWarnings rejects raw RVAs in documented VA table-poi
     )
   );
 
-  const warnings = collectLoadConfigWarnings(
+  const warnings = collectLoadConfigDiagnostics(
     bytes.length,
     value => value,
     0x400000n,
     bytes.length,
     lc
-  );
+  ).warnings;
   assert.ok(warnings.some(w => /GuardCFFunctionTable/.test(w) && /not a valid VA/.test(w)));
 });
 
-void test("collectLoadConfigWarnings rejects raw RVAs in documented VA pointer fields", async () => {
+void test("collectLoadConfigDiagnostics rejects raw RVAs in documented VA pointer fields", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const dv = new DataView(bytes.buffer);
   const lcRva = 0x20;
@@ -103,12 +103,12 @@ void test("collectLoadConfigWarnings rejects raw RVAs in documented VA pointer f
     )
   );
 
-  const warnings = collectLoadConfigWarnings(
+  const warnings = collectLoadConfigDiagnostics(
     file.size,
     value => value,
     0x400000n,
     file.size,
     lc
-  );
+  ).warnings;
   assert.ok(warnings.some(w => /VolatileMetadataPointer/.test(w) && /not a valid VA/.test(w)));
 });

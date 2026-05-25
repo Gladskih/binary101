@@ -22,6 +22,9 @@ const valueWithNote = (valueHtml: string, note: string): string =>
 const renderLoadConfigDefinitionRow = (label: string, valueHtml: string, tooltip?: string | null): string =>
   renderDefinitionRow(label, tooltip ? valueWithNote(valueHtml, tooltip) : valueHtml, tooltip);
 
+const hasLoadConfigTableInfo = (table: { entries: unknown[]; notes?: string[]; warnings?: string[] }): boolean =>
+  table.entries.length > 0 || Boolean(table.notes?.length || table.warnings?.length);
+
 export function renderLoadConfig(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.loadcfg) return;
   const lc = pe.loadcfg;
@@ -33,6 +36,9 @@ export function renderLoadConfig(pe: PeWindowsParseResult, out: string[]): void 
   out.push(renderPeSectionStart("Load Config", `v${lc.Major}.${lc.Minor}`));
   if (lc.warnings?.length) {
     out.push(`<div class="smallNote" style="color:var(--warn-fg)">${escapeHtml(lc.warnings.join("; "))}</div>`);
+  }
+  if (lc.notes?.length) {
+    out.push(`<div class="smallNote">${escapeHtml(lc.notes.join("; "))}</div>`);
   }
   out.push(`<dl>`);
   out.push(renderLoadConfigDefinitionRow("Size", humanSize(lc.Size), "Structure size of IMAGE_LOAD_CONFIG_DIRECTORY."));
@@ -204,25 +210,25 @@ export function renderLoadConfig(pe: PeWindowsParseResult, out: string[]): void 
     out.push(renderLoadConfigDynamicRelocations(lc.dynamicRelocations));
   }
   out.push(renderLoadConfigAddressTables([
-    ...(lc.tables?.safeSehHandler?.entries.length
+    ...(lc.tables?.safeSehHandler && hasLoadConfigTableInfo(lc.tables.safeSehHandler)
       ? [[lc.tables.safeSehHandler, "SafeSEH handlers (x86 only)."] as const]
       : []),
-    ...(lc.tables?.guardFid?.entries.length
+    ...(lc.tables?.guardFid && hasLoadConfigTableInfo(lc.tables.guardFid)
       ? [[
           lc.tables.guardFid,
           "CFG function targets (GFIDS), including optional GFIDS metadata flags."
         ] as const]
       : []),
-    ...(lc.tables?.guardIat?.entries.length
+    ...(lc.tables?.guardIat && hasLoadConfigTableInfo(lc.tables.guardIat)
       ? [[
           lc.tables.guardIat,
           "Address-taken IAT entries (IAT slots whose imported addresses may be used as function pointers under CFG)."
         ] as const]
       : []),
-    ...(lc.tables?.guardLongJumpTarget?.entries.length
+    ...(lc.tables?.guardLongJumpTarget && hasLoadConfigTableInfo(lc.tables.guardLongJumpTarget)
       ? [[lc.tables.guardLongJumpTarget, "Valid longjmp destinations under CFG."] as const]
       : []),
-    ...(lc.tables?.guardEhContinuation?.entries.length
+    ...(lc.tables?.guardEhContinuation && hasLoadConfigTableInfo(lc.tables.guardEhContinuation)
       ? [[lc.tables.guardEhContinuation, "Valid exception continuation targets under CFG."] as const]
       : [])
   ], pe.sections, imageBase, pointerWidth));

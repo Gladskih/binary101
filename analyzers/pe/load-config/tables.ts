@@ -40,6 +40,7 @@ const readLoadConfigRvaTable = async (
   name: string
 ): Promise<PeLoadConfigTable> => {
   const warnings: string[] = [];
+  const notes: string[] = [];
   const tableRva = readLoadConfigPointerRva(imageBase, tableVa);
   const result = (
     entries: PeLoadConfigTable["entries"],
@@ -53,6 +54,7 @@ const readLoadConfigRvaTable = async (
     entrySize: Number.isSafeInteger(entrySize) && entrySize > 0 ? entrySize : 0,
     entries,
     truncated,
+    ...(notes.length ? { notes } : {}),
     ...(warnings.length ? { warnings } : {})
   });
   if (!Number.isSafeInteger(count) || count <= 0) return result([], false);
@@ -64,12 +66,25 @@ const readLoadConfigRvaTable = async (
     warnings.push(`${name}: table pointer is not a valid VA.`);
     return result([], true);
   }
+  const tableOff = rvaToOff(tableRva);
+  if (tableOff == null) {
+    notes.push(`${name}: table RVA 0x${tableRva.toString(16)} is not backed by raw file data.`);
+    return result([], true);
+  }
+  if (tableOff < 0 || tableOff >= reader.size) {
+    warnings.push(`${name}: table RVA 0x${tableRva.toString(16)} maps outside file data.`);
+    return result([], true);
+  }
   const entries: PeLoadConfigTable["entries"] = [];
   for (let index = 0; index < count; index += 1) {
     const entryRva = (tableRva + index * entrySize) >>> 0;
     const entryOff = rvaToOff(entryRva);
-    if (entryOff == null || entryOff < 0 || entryOff + entrySize > reader.size) {
-      warnings.push(`${name}: entry ${index} does not map to complete file data.`);
+    if (entryOff == null) {
+      notes.push(`${name}: entry ${index} RVA 0x${entryRva.toString(16)} is not backed by raw file data.`);
+      return result(entries, true);
+    }
+    if (entryOff < 0 || entryOff + entrySize > reader.size) {
+      warnings.push(`${name}: entry ${index} maps outside complete file data.`);
       return result(entries, true);
     }
     const dv = await reader.read(entryOff, entrySize);
