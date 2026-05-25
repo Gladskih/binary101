@@ -75,6 +75,9 @@ export const getEntrySummary = (entry: PeDebugDirectoryEntry): string => {
   if (entry.embeddedPortablePdb) return "Deflate-compressed Portable PDB embedded in the PE file.";
   if (entry.pdbChecksum) return `${entry.pdbChecksum.algorithmName || "PDB"} checksum.`;
   if (entry.exDllCharacteristics) return "Extended DLL characteristics bit field.";
+  if (entry.r2rPerfMap) {
+    return `ReadyToRun PerfMap pointer to ${entry.r2rPerfMap.path || "(no path)"}.`;
+  }
   if (entry.rawPayload) return "Raw debug payload preview for a reserved or unrecognized format.";
   return getDebugTypeInfo(entry.type >>> 0).description;
 };

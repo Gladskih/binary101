@@ -13,6 +13,7 @@ export type { PeFpoInfo, PeFpoRecord } from "./fpo.js";
 export type { PeMiscDebugInfo } from "./misc.js";
 export type { PePdbChecksumInfo } from "./pdb-checksum.js";
 export type { PePogoEntry, PePogoInfo } from "./pogo.js";
+export type { PeR2rPerfMapInfo } from "./r2r-perfmap.js";
 export type { PeRawDebugPayload } from "./raw-payload.js";
 export type { PeReproInfo } from "./repro.js";
 export type { PeVcFeatureInfo } from "./vc-feature.js";

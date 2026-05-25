@@ -15,6 +15,7 @@ import { parseFpoInfo, type PeFpoInfo } from "./fpo.js";
 import { parseMiscDebugInfo, type PeMiscDebugInfo } from "./misc.js";
 import { parsePdbChecksumInfo, type PePdbChecksumInfo } from "./pdb-checksum.js";
 import { parsePogoInfo, type PePogoInfo } from "./pogo.js";
+import { parseR2rPerfMapInfo, type PeR2rPerfMapInfo } from "./r2r-perfmap.js";
 import { parseRawDebugPayload, type PeRawDebugPayload } from "./raw-payload.js";
 import { parseReproInfo, type PeReproInfo } from "./repro.js";
 import {
@@ -25,6 +26,7 @@ import {
   IMAGE_DEBUG_TYPE_MISC,
   IMAGE_DEBUG_TYPE_PDB_CHECKSUM,
   IMAGE_DEBUG_TYPE_POGO,
+  IMAGE_DEBUG_TYPE_R2R_PERFMAP,
   IMAGE_DEBUG_TYPE_REPRO,
   IMAGE_DEBUG_TYPE_SPGO,
   IMAGE_DEBUG_TYPE_VC_FEATURE
@@ -41,6 +43,7 @@ export type PeDebugPayloads = {
   embeddedPortablePdb?: PeEmbeddedPortablePdbInfo;
   pdbChecksum?: PePdbChecksumInfo;
   exDllCharacteristics?: PeExDllCharacteristicsInfo;
+  r2rPerfMap?: PeR2rPerfMapInfo;
   rawPayload?: PeRawDebugPayload;
 };
 
@@ -65,6 +68,7 @@ const hasDecodedPayload = (payloads: PeDebugPayloads): boolean =>
       payloads.embeddedPortablePdb ||
       payloads.pdbChecksum ||
       payloads.exDllCharacteristics ||
+      payloads.r2rPerfMap ||
       payloads.rawPayload
   );
 
@@ -135,6 +139,10 @@ const parseKnownPayload = async (
   if (input.type === IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS) {
     const exDllCharacteristics = await parseExDllCharacteristicsInfo(...args);
     return exDllCharacteristics ? { exDllCharacteristics } : {};
+  }
+  if (input.type === IMAGE_DEBUG_TYPE_R2R_PERFMAP) {
+    const r2rPerfMap = await parseR2rPerfMapInfo(...args);
+    return r2rPerfMap ? { r2rPerfMap } : {};
   }
   return {};
 };

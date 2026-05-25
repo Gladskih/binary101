@@ -31,6 +31,7 @@ const DEBUG_VIEW_TYPE_CODEVIEW = 2;
 const DEBUG_VIEW_TYPE_VC_FEATURE = 12;
 const DEBUG_VIEW_TYPE_POGO = 13;
 const DEBUG_VIEW_TYPE_EMBEDDED_DEBUG = 17;
+const DEBUG_VIEW_TYPE_R2R_PERFMAP = 21;
 
 const createDebugRawRange = (entry: PeDebugDirectoryEntry) => ({
   start: entry.pointerToRawData,
@@ -135,7 +136,7 @@ export const createRepeatedDebugViewSection = (type: number, count: number) =>
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
 // https://llvm.org/doxygen/BinaryFormat_2COFF_8h_source.html
 export const createSupportedDebugViewTypes = (): number[] => [
-  0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20
+  0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21
 ];
 
 export const createSupportedDebugViewSection = () =>
@@ -204,4 +205,14 @@ export const createPogoDebugViewEntry = (
     pogo.entries.length + pogo.signatureName.length
   ),
   pogo
+});
+
+export const createR2rPerfMapDebugViewEntry = (): PeDebugDirectoryEntry => ({
+  ...createDebugViewEntry(DEBUG_VIEW_TYPE_R2R_PERFMAP, 0, 0x120, 0x30),
+  r2rPerfMap: {
+    magic: "R2RM",
+    signatureBytes: Array.from({ length: 16 }, (_, index) => index),
+    version: 1,
+    path: "sample.ni.r2rmap"
+  }
 });

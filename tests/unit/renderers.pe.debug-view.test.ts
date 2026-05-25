@@ -13,6 +13,7 @@ import {
   createDecodedDebugViewSection,
   createDebugViewEntry,
   createMappedCodeViewDebugViewSection,
+  createR2rPerfMapDebugViewEntry,
   createUnresolvedDebugViewSection
 } from "../fixtures/pe-debug-view-subject.js";
 import { createBasePe } from "../fixtures/pe-renderer-headers-fixture.js";
@@ -115,7 +116,8 @@ void test("renderDebug renders supported debug-format labels and descriptions", 
     "MPX",
     "REPRO",
     "SYMBOL HASH",
-    "EX_DLLCHARACTERISTICS"
+    "EX_DLLCHARACTERISTICS",
+    "R2R_PERFMAP"
   ]);
   assertIncludesAll(html, [
     "Unknown debug format ignored by tools\\.",
@@ -132,7 +134,8 @@ void test("renderDebug renders supported debug-format labels and descriptions", 
     "Intel MPX metadata emitted by the toolchain\\.",
     "PE determinism or reproducibility metadata\\.",
     "Crypto hash of the symbol file content used to build the PE/COFF file\\.",
-    "Extended DLL characteristics bits beyond the optional-header field\\."
+    "Extended DLL characteristics bits beyond the optional-header field\\.",
+    "ReadyToRun PerfMap metadata emitted by \\.NET toolchains\\."
   ]);
   assert.doesNotMatch(html, /<span class="opt sel"/);
 });
@@ -207,6 +210,7 @@ void test("renderDebug renders decoded details for extra debug payload formats",
         pdbChecksum: { algorithmName: "SHA256", checksumBytes: [0xaa, 0xbb] }
       },
       { ...createDebugViewEntry(20, 0, 0xe0, 4), exDllCharacteristics: { value: 0x41 } },
+      createR2rPerfMapDebugViewEntry(),
       { ...createDebugViewEntry(10, 0, 0xf0, 4), rawPayload: { previewBytes: [0xb4, 0x9c] } }
     ],
     rawDataRanges: []
@@ -223,6 +227,8 @@ void test("renderDebug renders decoded details for extra debug payload formats",
     "MPDB",
     "SHA256",
     "0x00000041",
+    "R2RM",
+    "sample\\.ni\\.r2rmap",
     "b4 9c"
   ]);
 });

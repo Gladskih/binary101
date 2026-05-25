@@ -19,6 +19,7 @@ const hasDecodedPayload = (entry: PeDebugDirectoryEntry): boolean =>
     entry.embeddedPortablePdb ||
     entry.pdbChecksum ||
     entry.exDllCharacteristics ||
+    entry.r2rPerfMap ||
     entry.rawPayload
   );
 
@@ -200,6 +201,19 @@ const renderExDllCharacteristicsFields = (entry: PeDebugDirectoryEntry, out: str
   }
 };
 
+const renderR2rPerfMapFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
+  if (!entry.r2rPerfMap) return;
+  out.push(`<dl>`);
+  out.push(renderDefinitionRow("Magic", escapeHtml(entry.r2rPerfMap.magic)));
+  out.push(renderDefinitionRow("Version", escapeHtml(String(entry.r2rPerfMap.version))));
+  out.push(renderDefinitionRow(
+    "Signature",
+    `<span class="mono">${formatByteString(entry.r2rPerfMap.signatureBytes)}</span>`
+  ));
+  out.push(renderDefinitionRow("Path", escapeHtml(entry.r2rPerfMap.path || "(no path)")));
+  out.push(`</dl>`);
+};
+
 const renderRawPayloadFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
   if (entry.rawPayload) {
     out.push(`<dl>`);
@@ -242,6 +256,7 @@ export const renderDecodedEntryDetails = (
     renderEmbeddedPortablePdbFields(entry, out);
     renderPdbChecksumFields(entry, out);
     renderExDllCharacteristicsFields(entry, out);
+    renderR2rPerfMapFields(entry, out);
     renderRawPayloadFields(entry, out);
     out.push(`</details>`);
   });
