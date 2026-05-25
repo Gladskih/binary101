@@ -69,6 +69,9 @@ const renderPeFormatNote = (out: string[]): void => {
   );
 };
 
+const formatPeSubtype = (pe: PeParseResult): string =>
+  pe.subtype === "winmd" ? "Windows Metadata (WinMD)" : "-";
+
 const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
   if (!pe.dirs?.length) return;
   const presentCount = pe.dirs.filter(
@@ -166,6 +169,7 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
   out.push(renderInlineHeaderTitle("PE signature"));
   out.push(`<dl>`);
   out.push(renderDefinitionRow("Signature", "PE", "The PE\\0\\0 signature precedes the COFF file header and identifies the image as PE/COFF."));
+  out.push(renderDefinitionRow("Subtype", formatPeSubtype(pe), "Derived from specification-defined PE metadata when present."));
   out.push(`</dl>`);
   out.push(renderInlineHeaderTitle("COFF file header"));
   out.push(`<dl>`);

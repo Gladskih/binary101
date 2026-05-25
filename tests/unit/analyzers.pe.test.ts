@@ -12,6 +12,8 @@ const PE_SIGNATURE = 0x00004550;
 const IMAGE_FILE_MACHINE_I386 = 0x014c;
 const IMAGE_FILE_EXECUTABLE_IMAGE = 0x0002;
 const IMAGE_NT_OPTIONAL_HDR32_MAGIC = 0x10b;
+// Conventional PE32 ImageBase used by these minimal parser fixtures.
+const TEST_PE32_IMAGE_BASE = 0x00400000n;
 // Microsoft PE/COFF: IMAGE_OPTIONAL_HEADER32.DataDirectory begins 96 bytes into the optional header.
 const PE32_DATA_DIRECTORIES_OFFSET = 0x60;
 // Microsoft PE format: data-directory indices for SECURITY, DEBUG, and IAT.
@@ -23,6 +25,11 @@ const IMAGE_DIRECTORY_ENTRY_IAT = 12;
 // In that fixture, the IAT is placed at RVA 0x1100 with size 0x40, which maps to file offset 0x300.
 const SAMPLE_MAPPED_IAT_RVA = 0x1100;
 const SAMPLE_IAT_SIZE = 0x40;
+const SAMPLE_MAPPED_IAT_FILE_OFFSET = 0x300;
+// tests/fixtures/sample-files-pe.ts declares SizeOfImage as two 4 KiB SectionAlignment pages.
+const SAMPLE_SIZE_OF_IMAGE = 0x2000;
+// tests/fixtures/sample-files-pe.ts appends 0x20 bytes after the mapped image.
+const SAMPLE_OVERLAY_SIZE = 0x20;
 // Any RVA beyond the only mapped sample section is sufficient; 0x3000 lies outside the fixture image data.
 const SAMPLE_UNMAPPED_IAT_RVA = 0x3000;
 // Any non-zero pair is enough to trigger the reserved ARCHITECTURE anomaly path; exact values are incidental.
@@ -70,7 +77,7 @@ function createTinyPEHeader() {
   // Optional Header (PE32)
   const optionalHeaderOffset = coffHeaderOffset + coffHeaderSize;
   view.setUint16(optionalHeaderOffset, IMAGE_NT_OPTIONAL_HDR32_MAGIC, true); // Magic: PE32
-  view.setUint32(optionalHeaderOffset + 28, 0x00400000, true); // ImageBase
+  view.setUint32(optionalHeaderOffset + 28, Number(TEST_PE32_IMAGE_BASE), true); // ImageBase
   view.setUint32(optionalHeaderOffset + 56, totalHeaderSize, true); // SizeOfHeaders
 
   return new Uint8Array(buffer);
@@ -100,7 +107,7 @@ function createHeadersOnlyPeWithAlignedImageSize() {
 
   const optionalHeaderOffset = coffHeaderOffset + coffHeaderSize;
   view.setUint16(optionalHeaderOffset, IMAGE_NT_OPTIONAL_HDR32_MAGIC, true); // Magic: PE32
-  view.setUint32(optionalHeaderOffset + 28, 0x00400000, true); // ImageBase
+  view.setUint32(optionalHeaderOffset + 28, Number(TEST_PE32_IMAGE_BASE), true); // ImageBase
   view.setUint32(optionalHeaderOffset + 32, sectionAlignment, true);
   view.setUint32(optionalHeaderOffset + 36, fileAlignment, true);
   view.setUint32(optionalHeaderOffset + 56, sizeOfImage, true);
@@ -121,7 +128,7 @@ void test("parsePe correctly parses a minimal PE header", async () => {
   assert.strictEqual(result.coff.NumberOfSections, 0, "COFF header should report 0 sections");
   assert.ok(isPeWindowsParseResult(result));
   assert.strictEqual(result.opt.Magic, IMAGE_NT_OPTIONAL_HDR32_MAGIC, "Optional header magic should be PE32");
-  assert.strictEqual(result.opt.ImageBase, 0x00400000n, "Optional header ImageBase should be parsed correctly");
+  assert.strictEqual(result.opt.ImageBase, TEST_PE32_IMAGE_BASE, "Optional header ImageBase should be parsed correctly");
 });
 
 void test("parsePe does not treat a headers-only image as overlay data", async () => {
@@ -209,7 +216,7 @@ void test("parsePe returns mapping and layout info for PE32 with one section and
   assert.deepStrictEqual(result.entrySection, { name: ".text", index: 0 }, "Entry point should map to .text");
   assert.strictEqual(
     result.rvaToOff(SAMPLE_MAPPED_IAT_RVA),
-    0x300,
+    SAMPLE_MAPPED_IAT_FILE_OFFSET,
     "IAT RVA should resolve to the raw .text offset defined by createSamplePeWithSectionAndIat()."
   );
   assert.ok(result.iat, "IAT data directory should be recognized");
@@ -217,8 +224,8 @@ void test("parsePe returns mapping and layout info for PE32 with one section and
   assert.strictEqual(result.iat.size, SAMPLE_IAT_SIZE);
 
   assert.equal(result.overlay?.ranges.length, 1);
-  assert.equal(result.overlay?.ranges[0]?.size, 0x20);
-  assert.strictEqual(result.imageEnd, 0x2000);
+  assert.equal(result.overlay?.ranges[0]?.size, SAMPLE_OVERLAY_SIZE);
+  assert.strictEqual(result.imageEnd, SAMPLE_SIZE_OF_IMAGE);
   assert.strictEqual(result.imageSizeMismatch, false);
   assert.strictEqual(result.hasCert, false);
 });

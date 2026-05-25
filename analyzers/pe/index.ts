@@ -36,6 +36,7 @@ import { buildHeaderOnlyPeParseResult } from "./core/header-only-result.js";
 import { collectPeLayoutWarnings } from "./layout/warnings.js";
 import { analyzePeOverlay } from "./overlay.js";
 import { analyzePePackers } from "./packers/index.js";
+import { detectPeSubtypeFromClr } from "./winmd.js";
 export {
   isPeRomParseResult,
   isPeWindowsParseResult
@@ -119,6 +120,7 @@ export async function parsePe(
   const boundImports = await parseBoundImports(reader, dataDirs, rvaToOff);
   const delayImports = await peVariant.parseDelayImports(reader, dataDirs, rvaToOff);
   const clr = await parseClrDirectory(reader, dataDirs, rvaToOff);
+  const subtype = detectPeSubtypeFromClr(clr);
   const nativeAotCandidate = detectNativeAotCandidate(clr != null, exportsInfo, sections);
   const securityDir = dataDirs.find(d => d.name === "SECURITY");
   const authenticodeDigestCache = new Map<string, Promise<string | null>>();
@@ -206,6 +208,7 @@ export async function parsePe(
     dos,
     signature: "PE",
     coff,
+    ...(subtype ? { subtype } : {}),
     ...(core.coffStringTableSize != null ? { coffStringTableSize: core.coffStringTableSize } : {}),
     ...(core.trailingAlignmentPaddingSize ? { trailingAlignmentPaddingSize: core.trailingAlignmentPaddingSize } : {}),
     opt,
