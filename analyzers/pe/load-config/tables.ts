@@ -29,6 +29,9 @@ const decodeGfidsFlags = (flags: number): string[] => [
   ...((flags & IMAGE_GUARD_FLAG_EXPORT_SUPPRESSED) !== 0 ? ["EXPORT_SUPPRESSED"] : [])
 ];
 
+const readTableRvas = async (table: Promise<PeLoadConfigTable>): Promise<number[]> =>
+  (await table).entries.map(entry => entry.rva);
+
 const readLoadConfigRvaTable = async (
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
@@ -131,7 +134,6 @@ export async function readGuardCFFunctionTable(
     "GuardCFFunctionTable"
   );
 }
-
 export async function readGuardCFFunctionTableRvas(
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
@@ -140,17 +142,15 @@ export async function readGuardCFFunctionTableRvas(
   guardCFFunctionCount: number,
   guardFlags?: number
 ): Promise<number[]> {
-  const table = await readGuardCFFunctionTable(
+  return readTableRvas(readGuardCFFunctionTable(
     reader,
     rvaToOff,
     imageBase,
     guardCFFunctionTableVa,
     guardCFFunctionCount,
     guardFlags
-  );
-  return table.entries.map(entry => entry.rva);
+  ));
 }
-
 export async function readSafeSehHandlerTable(
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
@@ -169,7 +169,6 @@ export async function readSafeSehHandlerTable(
     "SEHandlerTable"
   );
 }
-
 export async function readSafeSehHandlerTableRvas(
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
@@ -177,16 +176,14 @@ export async function readSafeSehHandlerTableRvas(
   seHandlerTableVa: bigint,
   seHandlerCount: number
 ): Promise<number[]> {
-  const table = await readSafeSehHandlerTable(
+  return readTableRvas(readSafeSehHandlerTable(
     reader,
     rvaToOff,
     imageBase,
     seHandlerTableVa,
     seHandlerCount
-  );
-  return table.entries.map(entry => entry.rva);
+  ));
 }
-
 export async function readGuardEhContinuationTable(
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
@@ -216,15 +213,14 @@ export async function readGuardEhContinuationTableRvas(
   guardEhContinuationCount: number,
   guardFlags?: number
 ): Promise<number[]> {
-  const table = await readGuardEhContinuationTable(
+  return readTableRvas(readGuardEhContinuationTable(
     reader,
     rvaToOff,
     imageBase,
     guardEhContinuationTableVa,
     guardEhContinuationCount,
     guardFlags
-  );
-  return table.entries.map(entry => entry.rva);
+  ));
 }
 
 export async function readGuardLongJumpTargetTable(
@@ -256,15 +252,14 @@ export async function readGuardLongJumpTargetTableRvas(
   guardLongJumpTargetCount: number,
   guardFlags?: number
 ): Promise<number[]> {
-  const table = await readGuardLongJumpTargetTable(
+  return readTableRvas(readGuardLongJumpTargetTable(
     reader,
     rvaToOff,
     imageBase,
     guardLongJumpTargetTableVa,
     guardLongJumpTargetCount,
     guardFlags
-  );
-  return table.entries.map(entry => entry.rva);
+  ));
 }
 
 export async function readGuardAddressTakenIatEntryTable(
@@ -296,13 +291,12 @@ export async function readGuardAddressTakenIatEntryTableRvas(
   guardAddressTakenIatEntryCount: number,
   guardFlags?: number
 ): Promise<number[]> {
-  const table = await readGuardAddressTakenIatEntryTable(
+  return readTableRvas(readGuardAddressTakenIatEntryTable(
     reader,
     rvaToOff,
     imageBase,
     guardAddressTakenIatEntryTableVa,
     guardAddressTakenIatEntryCount,
     guardFlags
-  );
-  return table.entries.map(entry => entry.rva);
+  ));
 }

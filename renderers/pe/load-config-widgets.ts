@@ -296,9 +296,5 @@ export const renderLoadConfigAddressTable = (
   imageBase: bigint,
   pointerWidth: number,
   note?: string
-): string => renderLoadConfigAddressTables(
-  note === undefined ? [[table]] : [[table, note]],
-  sections,
-  imageBase,
-  pointerWidth
-);
+): string =>
+  renderLoadConfigAddressTables(note === undefined ? [[table]] : [[table, note]], sections, imageBase, pointerWidth);
