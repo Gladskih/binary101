@@ -30,11 +30,14 @@ const createClrWithVersion = (version: string | undefined): PeClrHeader => ({
 
 void test("detectPeSubtypeFromClr recognises WinMD metadata version tokens", () => {
   assert.equal(detectPeSubtypeFromClr(createClrWithVersion("WindowsRuntime 1.2")), "winmd");
+  assert.equal(detectPeSubtypeFromClr(createClrWithVersion("WindowsRuntime 1.4")), "winmd");
+  assert.equal(detectPeSubtypeFromClr(createClrWithVersion("WindowsRuntime 1.4;CLR v4.0.30319")), "winmd");
   assert.equal(detectPeSubtypeFromClr(createClrWithVersion("Windows Runtime 1.2")), "winmd");
 });
 
 void test("detectPeSubtypeFromClr does not infer WinMD without the required marker", () => {
   assert.equal(detectPeSubtypeFromClr(createClrWithVersion("v4.0.30319")), null);
+  assert.equal(detectPeSubtypeFromClr(createClrWithVersion("NotWindowsRuntime 1.4")), null);
   assert.equal(detectPeSubtypeFromClr(createClrWithVersion(undefined)), null);
   assert.equal(detectPeSubtypeFromClr(null), null);
 });

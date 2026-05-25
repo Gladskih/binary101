@@ -4,18 +4,25 @@ import type { PeClrHeader } from "./clr/types.js";
 
 export type PeSubtype = "winmd";
 
-// Microsoft Learn, "Windows Metadata (WinMD) files", requires the WinMD metadata
-// version string to contain "Windows Runtime 1.2". Microsoft SDK WinMD files encode
-// that marker as the compact metadata token below.
+// Microsoft Learn, "Windows Metadata (WinMD) files", identifies WinMD by a CLR
+// metadata version-string component in the Windows Runtime family. Windows SDK
+// 10.0.26100.0 WinMD files use "WindowsRuntime 1.4" and older SDK files use 1.2.
 // https://learn.microsoft.com/en-us/uwp/winrt-cref/winmd-files#winmd-file-format
-const WINMD_METADATA_VERSION_TOKEN = "WindowsRuntime 1.2";
-const WINMD_METADATA_VERSION_TOKEN_WITH_SPACE = "Windows Runtime 1.2";
+const WINMD_METADATA_VERSION_COMPONENTS = new Set([
+  "WindowsRuntime 1.2",
+  "WindowsRuntime 1.3",
+  "WindowsRuntime 1.4",
+  "Windows Runtime 1.2",
+  "Windows Runtime 1.3",
+  "Windows Runtime 1.4"
+]);
 
 export const detectPeSubtypeFromClr = (clr: PeClrHeader | null): PeSubtype | null => {
   const version = clr?.meta?.version;
   if (!version) return null;
-  if (version.includes(WINMD_METADATA_VERSION_TOKEN)) return "winmd";
-  return version.includes(WINMD_METADATA_VERSION_TOKEN_WITH_SPACE) ? "winmd" : null;
+  return version.split(";").some(component => WINMD_METADATA_VERSION_COMPONENTS.has(component.trim()))
+    ? "winmd"
+    : null;
 };
 
 export const isPeWinmd = (pe: { subtype?: PeSubtype | null }): boolean =>
