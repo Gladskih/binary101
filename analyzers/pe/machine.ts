@@ -3,7 +3,7 @@
 import { toHex32 } from "../../binary-utils.js";
 import { MACHINE } from "./constants.js";
 
-type PeMachineOs = "Apple" | "FreeBSD" | "Linux" | "NetBSD" | "SunOS";
+export type PeMachineOs = "Apple" | "FreeBSD" | "Linux" | "NetBSD" | "SunOS";
 
 export interface DecodedPeMachine {
   rawMachine: number;
@@ -21,6 +21,13 @@ const READY_TO_RUN_OS_OVERRIDES: Array<[number, PeMachineOs]> = [
   [0x1993, "NetBSD"],
   [0x1992, "SunOS"]
 ];
+
+export const READY_TO_RUN_OS_OVERRIDE_OPTIONS: Array<[number, string, string?]> =
+  READY_TO_RUN_OS_OVERRIDES.map(([override, os]) => [
+    override,
+    os,
+    `.NET ReadyToRun OS override from IMAGE_FILE_MACHINE_NATIVE_OS_OVERRIDE`
+  ]);
 
 const machineName = (machine: number): string | null =>
   MACHINE.find(([code]) => code === (machine >>> 0))?.[1] || null;
@@ -59,15 +66,7 @@ export const formatPeMachine = (machine: number): string => {
     : decoded.machineName;
 };
 
-export const getPeMachineRenderOptions = (machine: number): Array<[number, string, string?]> => {
+export const getReadyToRunOsOverride = (machine: number): number | null => {
   const decoded = decodePeMachine(machine);
-  if (!decoded.os) return MACHINE;
-  return [
-    ...MACHINE,
-    [
-      decoded.rawMachine,
-      `${decoded.os} R2R ${decoded.machineName}`,
-      `ReadyToRun Machine value: ${decoded.machineName} XOR ${decoded.os} OS override`
-    ]
-  ];
+  return decoded.os ? ((decoded.rawMachine ^ decoded.machine) & 0xffff) : null;
 };

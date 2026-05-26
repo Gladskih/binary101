@@ -12,7 +12,6 @@ import {
   DLL_FLAGS,
   formatSectionCharacteristicFlags
 } from "../../analyzers/pe/constants.js";
-import { getPeMachineRenderOptions } from "../../analyzers/pe/machine.js";
 import {
   type PeParseResult
 } from "../../analyzers/pe/index.js";
@@ -32,6 +31,7 @@ import {
 } from "./header-format.js";
 import { renderCoffTailSummary } from "./coff-tail-summary.js";
 import { renderDosHeader } from "./dos-header.js";
+import { renderMachineRows } from "./machine-rows.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 const DATA_DIRECTORY_MEANINGS: Record<string, string> = {
@@ -173,7 +173,7 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
   out.push(`</dl>`);
   out.push(renderInlineHeaderTitle("COFF file header"));
   out.push(`<dl>`);
-  out.push(renderDefinitionRow("Machine", renderOptionChips(pe.coff.Machine, getPeMachineRenderOptions(pe.coff.Machine)), "Target CPU architecture. The highlighted chip indicates the Machine field value."));
+  renderMachineRows(pe, out);
   out.push(renderDefinitionRow("NumberOfSections", `${pe.coff.NumberOfSections}`, "Number of section headers that immediately follow the optional header."));
   out.push(renderDefinitionRow("TimeDateStamp", isoOrDash(pe.coff.TimeDateStamp), "Link time as Unix epoch. Toolchains sometimes set this to reproducible values."));
   out.push(renderDefinitionRow("PointerToSymbolTable", hex(pe.coff.PointerToSymbolTable, 8), "COFF symbol table pointer (deprecated, usually 0)."));
