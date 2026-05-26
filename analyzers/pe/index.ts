@@ -36,7 +36,7 @@ import { buildHeaderOnlyPeParseResult } from "./core/header-only-result.js";
 import { collectPeLayoutWarnings } from "./layout/warnings.js";
 import { analyzePeOverlay } from "./overlay.js";
 import { analyzePePackers } from "./packers/index.js";
-import { detectPeSubtypeFromClr } from "./winmd.js";
+import { detectPeSubtypeFromClr } from "./subtype.js";
 import { getCanonicalPeMachine } from "./machine.js";
 export {
   isPeRomParseResult,

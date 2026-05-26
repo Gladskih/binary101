@@ -15,7 +15,7 @@ import type { PeResources } from "../resources/index.js";
 import type { PeClrHeader } from "../clr/index.js";
 import type { ParsedSecurityDirectory } from "../security/index.js";
 import type { PeCore, PeDataDirectory, PeRomOptionalHeader, PeSection, PeTlsDirectory, PeWindowsOptionalHeader, RvaToOffset } from "../types.js";
-import type { PeSubtype } from "../winmd.js";
+import type { PeSubtype } from "../subtype.js";
 import type { parseExportDirectory } from "../directories/exports.js";
 import type { parseBaseRelocations } from "../directories/reloc.js";
 import type { parseExceptionDirectory } from "../exception/index.js";

@@ -6,7 +6,7 @@ import {
   type PeWindowsParseResult
 } from "../core/parse-result.js";
 import { collectPeDosHeaderWarnings } from "./dos-header-warnings.js";
-import { isPeClrNativeImage, isPeWinmd } from "../winmd.js";
+import { isPeClrNativeImage, isPeWinmd } from "../subtype.js";
 import { isReadyToRunOsOverriddenMachine } from "../machine.js";
 import { peSectionNameValue } from "../sections/name.js";
 import type { PeSection } from "../types.js";
