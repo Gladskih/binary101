@@ -13,24 +13,24 @@ const syntheticRva = (slot: number): number => 0x1000 + slot * 0x100;
 
 const directory = (rva: number, size: number) => [{ name: "GLOBALPTR", rva, size }];
 
-void test("parseGlobalPtrDirectory validates Size and RVA mapping", () => {
-  assert.equal(parseGlobalPtrDirectory([], value => value), null);
-  assert.equal(parseGlobalPtrDirectory(directory(0, 0), value => value), null);
+void test("parseGlobalPtrDirectory validates Size and image bounds", () => {
+  assert.equal(parseGlobalPtrDirectory([]), null);
+  assert.equal(parseGlobalPtrDirectory(directory(0, 0)), null);
 
-  const valid = parseGlobalPtrDirectory(directory(syntheticRva(1), 0), value => value);
+  const valid = parseGlobalPtrDirectory(directory(syntheticRva(1), 0), syntheticRva(2));
   assert.deepEqual(valid, { rva: syntheticRva(1), size: 0 });
 
   const malformed = parseGlobalPtrDirectory(
     directory(syntheticRva(32), INVALID_GLOBALPTR_SIZE),
-    () => null
+    syntheticRva(3)
   );
   assert.ok(malformed);
   assert.ok(malformed.warnings?.some(warning => /size must be 0/i.test(warning)));
-  assert.ok(malformed.warnings?.some(warning => /could not be mapped/i.test(warning)));
+  assert.ok(malformed.warnings?.some(warning => /outside SizeOfImage/i.test(warning)));
 });
 
 void test("parseGlobalPtrDirectory preserves a non-zero size with a missing RVA", () => {
-  const result = parseGlobalPtrDirectory(directory(0, INVALID_GLOBALPTR_SIZE), value => value);
+  const result = parseGlobalPtrDirectory(directory(0, INVALID_GLOBALPTR_SIZE));
 
   assert.ok(result);
   assert.ok(result.warnings?.some(warning => /size must be 0/i.test(warning)));

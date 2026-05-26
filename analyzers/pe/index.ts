@@ -191,7 +191,7 @@ export async function parsePe(
     );
   }
   const architecture = parseArchitectureDirectory(dataDirs);
-  const globalPtr = parseGlobalPtrDirectory(dataDirs, rvaToOff);
+  const globalPtr = parseGlobalPtrDirectory(dataDirs, opt.SizeOfImage);
   const manifestValidation = analyzeManifestConsistency(resources, canonicalMachine, clr);
   const warnings = appendUniqueWarnings(
     core.warnings,

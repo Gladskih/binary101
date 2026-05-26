@@ -1,6 +1,6 @@
 "use strict";
 
-import type { PeDataDirectory, RvaToOffset } from "../types.js";
+import type { PeDataDirectory } from "../types.js";
 
 // Microsoft PE format, "Optional Header Data Directories":
 // GLOBALPTR stores the RVA of the value for the global pointer register and its
@@ -14,7 +14,7 @@ export interface PeGlobalPtrDirectory {
 
 export const parseGlobalPtrDirectory = (
   dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset
+  sizeOfImage?: number
 ): PeGlobalPtrDirectory | null => {
   const dir = dataDirs.find(directory => directory.name === "GLOBALPTR");
   if (!dir || (dir.rva === 0 && dir.size === 0)) return null;
@@ -24,11 +24,8 @@ export const parseGlobalPtrDirectory = (
   }
   if (dir.rva === 0) {
     warnings.push("GLOBALPTR directory has a non-zero size but RVA is 0.");
-  } else {
-    const offset = rvaToOff(dir.rva);
-    if (offset == null || offset < 0) {
-      warnings.push("GLOBALPTR directory RVA could not be mapped to a file offset.");
-    }
+  } else if (sizeOfImage != null && dir.rva >= sizeOfImage) {
+    warnings.push("GLOBALPTR directory RVA is outside SizeOfImage.");
   }
   return {
     rva: dir.rva,
