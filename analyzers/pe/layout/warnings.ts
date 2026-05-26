@@ -6,7 +6,7 @@ import {
   type PeWindowsParseResult
 } from "../core/parse-result.js";
 import { collectPeDosHeaderWarnings } from "./dos-header-warnings.js";
-import { isPeWinmd } from "../winmd.js";
+import { isPeClrNativeImage, isPeWinmd } from "../winmd.js";
 import { isReadyToRunOsOverriddenMachine } from "../machine.js";
 import { peSectionNameValue } from "../sections/name.js";
 import type { PeSection } from "../types.js";
@@ -278,8 +278,11 @@ const addSecurityAndDebugTailWarnings = (pe: PeParseResult, warnings: Set<string
   }
 };
 
+const shouldSkipDosStubWarnings = (pe: PeParseResult): boolean =>
+  isPeWinmd(pe) || isPeClrNativeImage(pe);
+
 export const collectPeLayoutWarnings = (pe: PeParseResult, fileSize?: number): string[] => {
-  const warnings = new Set(isPeWinmd(pe) ? [] : collectPeDosHeaderWarnings(pe.dos));
+  const warnings = new Set(shouldSkipDosStubWarnings(pe) ? [] : collectPeDosHeaderWarnings(pe.dos));
   addSectionHeaderWarnings(pe, warnings);
   addSectionVirtualLayoutWarnings(pe, warnings);
   addSectionRawLayoutWarnings(pe, warnings);

@@ -69,8 +69,13 @@ const renderPeFormatNote = (out: string[]): void => {
   );
 };
 
+const PE_SUBTYPE_LABELS: Record<string, string> = {
+  "winmd": "Windows Metadata (WinMD)",
+  "clr-native-image": "CLR native image"
+};
+
 const formatPeSubtype = (pe: PeParseResult): string =>
-  pe.subtype === "winmd" ? "Windows Metadata (WinMD)" : "-";
+  pe.subtype ? PE_SUBTYPE_LABELS[pe.subtype] ?? pe.subtype : "-";
 
 const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
   if (!pe.dirs?.length) return;
