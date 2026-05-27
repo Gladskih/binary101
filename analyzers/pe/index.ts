@@ -3,6 +3,7 @@ import { createFileRangeReader } from "../file-range-reader.js";
 import { isPeWindowsCore, parsePeHeaders } from "./core/index.js";
 import { computePeAuthenticodeDigest, verifyAuthenticodeWithBundledTrust } from "./authenticode/verify.js";
 import { parseDebugDirectory } from "./debug/directory.js";
+import { parseCoffDebugInfoFromFileHeader } from "./debug/coff.js";
 import { parseLoadConfigDirectory32, parseLoadConfigDirectory64 } from "./load-config/index.js";
 import { readSafeSehHandlerTable } from "./load-config/tables.js";
 import { parseAndEnrichLoadConfig } from "./load-config/enrich.js";
@@ -101,6 +102,18 @@ export async function parsePe(
   };
 
   const debugResult = await parseDebugDirectory(reader, dataDirs, rvaToOff);
+  const hasMatchingCoffEntry = debugResult.entries.some(entry =>
+    entry.coff?.symbolTableOffset === coff.PointerToSymbolTable
+  );
+  const coffDebug = hasMatchingCoffEntry
+    ? null
+    : await parseCoffDebugInfoFromFileHeader(
+        reader,
+        coff.PointerToSymbolTable,
+        coff.NumberOfSymbols,
+        sections,
+        () => undefined
+      );
   const loadcfg = await parseAndEnrichLoadConfig(
     reader,
     file.size,
@@ -207,6 +220,7 @@ export async function parsePe(
             ...(debugResult.warning ? { warning: debugResult.warning } : {})
           }
         : null,
+    ...(coffDebug ? { coffDebug } : {}),
     dos,
     signature: "PE",
     coff,

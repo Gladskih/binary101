@@ -16,6 +16,7 @@ import {
   renderGlobalPtrDirectory
 } from "./directories.js";
 import { renderDebug } from "./debug-view.js";
+import { renderCoffSymbols } from "./coff-symbols.js";
 import {
   renderImportLinking,
   renderImports,
@@ -52,6 +53,7 @@ export function renderPe(pe: PeParseResult | null | undefined): string {
     renderPackers(pe.packers, out);
     renderLoadConfig(pe, out);
     renderDebug(pe, out);
+    renderCoffSymbols(pe, out);
     renderImportLinking(pe, out);
     renderImports(pe, out);
     renderIfPresent(pe.resources, renderResources, out);

@@ -59,7 +59,7 @@ const createRvaToOffsetMapper = (
   };
 };
 
-const readSectionHeader = (
+const readSectionHeader = async (
   sectionHeadersView: DataView,
   baseOffset: number,
   stringTableResolver: Awaited<ReturnType<typeof createCoffStringTableResolver>>["resolver"]
@@ -71,7 +71,8 @@ const readSectionHeader = (
   );
   const zeroIndex = nameBytes.indexOf(0);
   const rawName = sectionNameDecoder.decode(nameBytes.subarray(0, zeroIndex === -1 ? 8 : zeroIndex));
-  return resolveSectionName(rawName, stringTableResolver).then(resolvedName => ({
+  const resolvedName = await resolveSectionName(rawName, stringTableResolver);
+  return {
     rawName,
     section: {
       name: resolvedName.name,
@@ -79,10 +80,14 @@ const readSectionHeader = (
       virtualAddress: sectionHeadersView.getUint32(baseOffset + 12, true),
       sizeOfRawData: sectionHeadersView.getUint32(baseOffset + 16, true),
       pointerToRawData: sectionHeadersView.getUint32(baseOffset + 20, true),
+      pointerToRelocations: sectionHeadersView.getUint32(baseOffset + 24, true),
+      pointerToLinenumbers: sectionHeadersView.getUint32(baseOffset + 28, true),
+      numberOfRelocations: sectionHeadersView.getUint16(baseOffset + 32, true),
+      numberOfLinenumbers: sectionHeadersView.getUint16(baseOffset + 34, true),
       characteristics: sectionHeadersView.getUint32(baseOffset + 36, true)
     },
     ...(resolvedName.warning ? { warning: resolvedName.warning } : {})
-  }));
+  };
 };
 
 const parseSectionHeaders = async (

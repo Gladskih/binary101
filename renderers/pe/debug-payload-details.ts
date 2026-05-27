@@ -7,9 +7,11 @@ import type { PeDebugDirectoryEntry } from "../../analyzers/pe/debug/directory.j
 import { EX_DLL_CHARACTERISTICS_FLAGS } from "../../analyzers/pe/constants.js";
 import { getDebugTypeInfo } from "./debug-type-info.js";
 import { getDebugStorageInfo, getEntrySummary } from "./debug-entry-summary.js";
+import { renderCoffDebugInfo } from "./debug-coff.js";
 
 const hasDecodedPayload = (entry: PeDebugDirectoryEntry): boolean =>
   !!(
+    entry.coff ||
     entry.codeView ||
     entry.fpo ||
     entry.misc ||
@@ -66,6 +68,10 @@ const renderCodeViewFields = (entry: PeDebugDirectoryEntry, out: string[]): void
   out.push(renderDefinitionRow("Age", escapeHtml(String(entry.codeView.age))));
   out.push(renderDefinitionRow("Path", escapeHtml(entry.codeView.path || "(no path)")));
   out.push(`</dl>`);
+};
+
+const renderCoffFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
+  if (entry.coff) renderCoffDebugInfo(entry.coff, out);
 };
 
 const renderFpoFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
@@ -247,6 +253,7 @@ export const renderDecodedEntryDetails = (
         `(${escapeHtml(storageInfo.label)})</summary>`
     );
     renderEntryCommonFields(pe, entry, out);
+    renderCoffFields(entry, out);
     renderCodeViewFields(entry, out);
     renderFpoFields(entry, out);
     renderMiscFields(entry, out);

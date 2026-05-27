@@ -142,6 +142,38 @@ void test("parsePeHeaders does not read optional-header fields from section-head
   assert.deepStrictEqual(parsed.dataDirs, []);
 });
 
+void test("parsePeHeaders preserves COFF section relocation and line-number fields", async () => {
+  const bytes = new Uint8Array(0x200).fill(0);
+  const view = new DataView(bytes.buffer);
+  const coffOffset = PE_SIGNATURE_OFFSET + 4;
+  const optionalHeaderOffset = coffOffset + 20;
+  const sectionHeaderOffset = optionalHeaderOffset;
+
+  view.setUint16(0, DOS_SIGNATURE_MZ, true);
+  view.setUint32(DOS_E_LFANEW_OFFSET, PE_SIGNATURE_OFFSET, true);
+  bytes.set([0x50, 0x45, 0x00, 0x00], PE_SIGNATURE_OFFSET); // "PE\0\0"
+  view.setUint16(coffOffset, IMAGE_FILE_MACHINE_I386, true);
+  view.setUint16(coffOffset + 2, 1, true);
+  view.setUint16(coffOffset + 16, 0, true);
+  // Microsoft PE/COFF section header layout:
+  // PointerToRelocations is at +24, PointerToLinenumbers at +28,
+  // NumberOfRelocations at +32, and NumberOfLinenumbers at +34.
+  // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-table-section-headers
+  view.setUint32(sectionHeaderOffset + 24, 0x180, true);
+  view.setUint32(sectionHeaderOffset + 28, 0x1a0, true);
+  view.setUint16(sectionHeaderOffset + 32, 3, true);
+  view.setUint16(sectionHeaderOffset + 34, 4, true);
+
+  const parsed = await parsePeHeaders(new MockFile(bytes, "coff-section-metadata.exe"));
+
+  assert.ok(parsed);
+  const section = parsed.sections[0];
+  assert.equal(section?.pointerToRelocations, 0x180);
+  assert.equal(section?.pointerToLinenumbers, 0x1a0);
+  assert.equal(section?.numberOfRelocations, 3);
+  assert.equal(section?.numberOfLinenumbers, 4);
+});
+
 void test("parsePeHeaders keeps truncated optional headers visible with warnings", async () => {
   const coffOffset = PE_SIGNATURE_OFFSET + 4;
   const bytes = new Uint8Array(coffOffset + 20 + 8).fill(0);

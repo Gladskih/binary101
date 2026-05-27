@@ -17,6 +17,7 @@ import {
   createUnresolvedDebugViewSection
 } from "../fixtures/pe-debug-view-subject.js";
 import { createBasePe } from "../fixtures/pe-renderer-headers-fixture.js";
+import { TEST_COFF_STORAGE_CLASS } from "../fixtures/pe-coff-debug-fixtures.js";
 
 const renderDebugHtml = (pe: ReturnType<typeof createBasePe>): string => {
   const out: string[] = [];
@@ -174,6 +175,52 @@ void test("renderDebug renders decoded VC_FEATURE and POGO payload details", () 
     escapeRegExp(pogo.entries[1]!.name)
   ]);
   assert.doesNotMatch(html, /Types present/);
+});
+
+void test("renderDebug renders COFF symbols from debug-directory entries only", () => {
+  const pe = createBasePe();
+  pe.debug = {
+    entry: null,
+    entries: [{
+      ...createDebugViewEntry(1, 0, 0x80, 0x40),
+      coff: {
+        source: "debug-directory",
+        symbolTableOffset: 0xa0,
+        stringTableOffset: 0xd0,
+        stringTableSize: 12,
+        symbols: [{
+          index: 0,
+          name: "main",
+          nameSource: "short",
+          value: 0x1000,
+          sectionNumber: 1,
+          type: 0x20,
+          storageClass: TEST_COFF_STORAGE_CLASS.EXTERNAL,
+          auxiliarySymbolCount: 1,
+          auxiliaryRecords: [{
+            kind: "function-definition",
+            tagIndex: 0,
+            totalSize: 0x20,
+            pointerToLineNumber: 0x200,
+            pointerToNextFunction: 0
+          }]
+        }],
+        lineNumberBlocks: [{ offset: 0x200, records: [{ symbolTableIndexOrVirtualAddress: 0x1000, lineNumber: 7 }] }]
+      }
+    }],
+    rawDataRanges: []
+  };
+
+  const html = renderDebugHtml(pe);
+
+  assertIncludesAll(html, [
+    "Entry #1: COFF \\(UNMAPPED\\)",
+    "COFF symbol table with 1 parsed symbols",
+    "function NULL",
+    "EXTERNAL",
+    "<td>7</td>"
+  ]);
+  assert.doesNotMatch(html, /COFF symbols from file header/);
 });
 
 void test("renderDebug renders decoded details for extra debug payload formats", () => {

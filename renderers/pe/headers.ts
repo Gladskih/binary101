@@ -9,8 +9,7 @@ import {
 import {
   SUBSYSTEMS,
   CHAR_FLAGS,
-  DLL_FLAGS,
-  formatSectionCharacteristicFlags
+  DLL_FLAGS
 } from "../../analyzers/pe/constants.js";
 import {
   type PeParseResult
@@ -20,12 +19,10 @@ import {
   PE32_PLUS_OPTIONAL_HEADER_MAGIC,
   ROM_OPTIONAL_HEADER_MAGIC
 } from "../../analyzers/pe/optional-header/magic.js";
-import { peSectionNameOffset, peSectionNameValue } from "../../analyzers/pe/sections/name.js";
 import {
   formatBigByteSize,
   formatPointerHex,
   formatWordListHex,
-  knownSectionName,
   linkerVersionHint,
   winVersionName
 } from "./header-format.js";
@@ -33,6 +30,7 @@ import { renderCoffTailSummary } from "./coff-tail-summary.js";
 import { renderDosHeader } from "./dos-header.js";
 import { renderMachineRows } from "./machine-rows.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
+import { renderSections } from "./section-headers.js";
 
 const DATA_DIRECTORY_MEANINGS: Record<string, string> = {
   EXPORT: "Function addresses and names exported by the image.",
@@ -122,44 +120,6 @@ const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
     );
   });
   out.push(`</tbody></table></div>`);
-  out.push(renderPeSectionEnd());
-};
-
-const renderSections = (pe: PeParseResult, out: string[]): void => {
-  const sections = pe.sections || [];
-  if (!sections.length) return;
-  out.push(
-    renderPeSectionStart(
-      "Section headers",
-      `${sections.length} section${sections.length === 1 ? "" : "s"}`
-    )
-  );
-  out.push(
-    `<table class="table" style="margin-top:.35rem"><thead><tr><th>Name</th><th>VirtualSize</th><th>RVA</th><th>RawSize</th><th>FilePtr</th><th>Entropy</th><th>Flags</th></tr></thead><tbody>`
-  );
-  sections.forEach(section => {
-    const flags = formatSectionCharacteristicFlags(section.characteristics);
-    const sectionName = peSectionNameValue(section.name);
-    const coffStringTableOffset = peSectionNameOffset(section.name);
-    const hint = knownSectionName(sectionName);
-    const baseNameCell = hint
-      ? `<span title="${hint}"><b>${escapeHtml(sectionName || "(unnamed)")}</b></span>`
-      : `<span title="User-defined">${escapeHtml(sectionName || "(unnamed)")}</span>`;
-    const nameCell =
-      coffStringTableOffset != null && sectionName !== `/${coffStringTableOffset}`
-        ? `${baseNameCell}<div class="smallNote dim">COFF name /${coffStringTableOffset}</div>`
-        : baseNameCell;
-    out.push(`<tr>
-        <td>${nameCell}</td>
-        <td>${humanSize(section.virtualSize)}</td>
-        <td>${hex(section.virtualAddress, 8)}</td>
-        <td>${humanSize(section.sizeOfRawData)}</td>
-        <td>${hex(section.pointerToRawData, 8)}</td>
-        <td title="Shannon entropy (0..8 bits/byte). Near 0 means very simple or empty, near 8 means very mixed data (often compressed or encrypted).">${(section.entropy ?? 0).toFixed(2)}</td>
-        <td>${flags.join(" &middot; ")}</td>
-      </tr>`);
-  });
-  out.push(`</tbody></table>`);
   out.push(renderPeSectionEnd());
 };
 

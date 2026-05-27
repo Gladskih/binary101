@@ -1,6 +1,6 @@
 "use strict";
 
-import type { PeCodeViewEntry, PeDebugDirectoryEntry } from "../debug/directory.js";
+import type { PeCodeViewEntry, PeCoffDebugInfo, PeDebugDirectoryEntry } from "../debug/directory.js";
 import type { PeInstructionSetReport } from "../disassembly/index.js";
 import type { PeImportLinkingResult } from "../imports/linking.js";
 import type { PeImportParseResult } from "../imports/index.js";
@@ -51,6 +51,7 @@ interface PeParseResultBase {
 
 export interface PeWindowsParseResult extends PeParseResultBase {
   debug: PeDebugSection | null;
+  coffDebug?: PeCoffDebugInfo;
   opt: PeWindowsOptionalHeader;
   imports: PeImportParseResult;
   loadcfg: PeLoadConfig | null;

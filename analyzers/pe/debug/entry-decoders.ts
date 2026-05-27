@@ -3,6 +3,7 @@
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
 import { parseCodeViewEntry, type PeCodeViewEntry } from "./codeview.js";
+import { parseCoffDebugInfo, type PeCoffDebugInfo } from "./coff.js";
 import {
   parseEmbeddedPortablePdbInfo,
   type PeEmbeddedPortablePdbInfo
@@ -19,6 +20,7 @@ import { parseR2rPerfMapInfo, type PeR2rPerfMapInfo } from "./r2r-perfmap.js";
 import { parseRawDebugPayload, type PeRawDebugPayload } from "./raw-payload.js";
 import { parseReproInfo, type PeReproInfo } from "./repro.js";
 import {
+  IMAGE_DEBUG_TYPE_COFF,
   IMAGE_DEBUG_TYPE_CODEVIEW,
   IMAGE_DEBUG_TYPE_EMBEDDED_PORTABLE_PDB,
   IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS,
@@ -34,6 +36,7 @@ import {
 import { parseVcFeatureInfo, type PeVcFeatureInfo } from "./vc-feature.js";
 
 export type PeDebugPayloads = {
+  coff?: PeCoffDebugInfo;
   codeView?: PeCodeViewEntry;
   fpo?: PeFpoInfo;
   misc?: PeMiscDebugInfo;
@@ -60,6 +63,7 @@ type DecodeInput = {
 const hasDecodedPayload = (payloads: PeDebugPayloads): boolean =>
   Boolean(
     payloads.codeView ||
+      payloads.coff ||
       payloads.fpo ||
       payloads.misc ||
       payloads.vcFeature ||
@@ -104,6 +108,10 @@ const parseKnownPayload = async (
     input.dataSize,
     addWarning
   ] as const;
+  if (input.type === IMAGE_DEBUG_TYPE_COFF) {
+    const coff = await parseCoffDebugInfo(...args);
+    return coff ? { coff } : {};
+  }
   if (input.type === IMAGE_DEBUG_TYPE_CODEVIEW) {
     const codeView = await parseCodeViewEntry(...args);
     return codeView ? { codeView } : {};

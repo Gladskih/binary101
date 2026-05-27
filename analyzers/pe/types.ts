@@ -17,6 +17,10 @@ export interface PeSection {
   virtualAddress: number;
   sizeOfRawData: number;
   pointerToRawData: number;
+  pointerToRelocations?: number;
+  pointerToLinenumbers?: number;
+  numberOfRelocations?: number;
+  numberOfLinenumbers?: number;
   characteristics: number;
   entropy?: number | null;
 }
