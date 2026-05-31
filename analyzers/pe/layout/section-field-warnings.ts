@@ -28,10 +28,10 @@ const getSectionLabel = (section: PeSection, index: number): string =>
 // zero for executable images, with line numbers deprecated.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-table-section-headers
 const hasObjectRelocationOrLineNumberFields = (section: PeSection): boolean =>
-  (section.pointerToRelocations >>> 0) !== 0 ||
-  (section.pointerToLinenumbers >>> 0) !== 0 ||
-  (section.numberOfRelocations >>> 0) !== 0 ||
-  (section.numberOfLinenumbers >>> 0) !== 0;
+  ((section.pointerToRelocations ?? 0) >>> 0) !== 0 ||
+  ((section.pointerToLinenumbers ?? 0) >>> 0) !== 0 ||
+  ((section.numberOfRelocations ?? 0) >>> 0) !== 0 ||
+  ((section.numberOfLinenumbers ?? 0) >>> 0) !== 0;
 
 const addObjectFieldWarning = (section: PeSection, index: number, warnings: string[]): void => {
   if (!hasObjectRelocationOrLineNumberFields(section)) return;
