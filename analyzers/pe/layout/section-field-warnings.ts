@@ -8,7 +8,8 @@ import { formatSectionCharacteristicFlags } from "../constants.js";
 // Microsoft PE/COFF, "Section Flags": TYPE_NO_PAD, LNK_* contribution flags,
 // and IMAGE_SCN_ALIGN_* flags are object-file-only or obsolete object syntax.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
-const OBJECT_ONLY_SECTION_FLAGS_MASK = 0x00000008 | 0x00000200 | 0x00000800 | 0x00001000;
+const OBJECT_ONLY_SECTION_FLAGS_MASK =
+  0x00000008 | 0x00000200 | 0x00000800 | 0x00001000 | 0x01000000;
 const SECTION_ALIGNMENT_FLAGS_MASK = 0x00f00000;
 const VALID_SECTION_ALIGNMENT_FLAGS_MASK = 0x00e00000;
 // Microsoft PE/COFF, "Section Flags": these values are reserved for future use.
@@ -16,9 +17,9 @@ const VALID_SECTION_ALIGNMENT_FLAGS_MASK = 0x00e00000;
 const RESERVED_SECTION_FLAGS_MASK =
   0x00000001 | 0x00000002 | 0x00000004 | 0x00000010 | 0x00000100 |
   0x00000400 | 0x00020000 | 0x00040000 | 0x00080000;
-// Microsoft PE/COFF, "Machine Types" and "Section Flags": IMAGE_SCN_GPREL is IA64-specific.
-// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types
-const IMAGE_FILE_MACHINE_IA64 = 0x0200;
+// Microsoft PE/COFF, "Special Sections": IMAGE_SCN_GPREL is object-file-only;
+// image files must not set it even for GP-relative section names.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#special-sections
 const IMAGE_SCN_GPREL = 0x00008000;
 
 const getSectionLabel = (section: PeSection, index: number): string =>
@@ -75,17 +76,11 @@ const addReservedFlagWarning = (section: PeSection, index: number, warnings: str
   );
 };
 
-const addGprelWarning = (
-  pe: PeParseResult,
-  section: PeSection,
-  index: number,
-  warnings: string[]
-): void => {
+const addGprelWarning = (section: PeSection, index: number, warnings: string[]): void => {
   if (((section.characteristics >>> 0) & IMAGE_SCN_GPREL) === 0) return;
-  if ((pe.coff.Machine >>> 0) === IMAGE_FILE_MACHINE_IA64) return;
   warnings.push(
-    `Section ${getSectionLabel(section, index)} has IMAGE_SCN_GPREL set; this flag should be used only ` +
-    "for IA64 and must not be set in image files for other architectures."
+    `Section ${getSectionLabel(section, index)} has IMAGE_SCN_GPREL set; this flag is object-file-only ` +
+    "and must not be set in image files."
   );
 };
 
@@ -96,7 +91,7 @@ export const collectPeSectionFieldWarnings = (pe: PeParseResult): string[] => {
     addGroupedNameWarning(section, warnings);
     addObjectOnlyFlagWarning(section, index, warnings);
     addReservedFlagWarning(section, index, warnings);
-    addGprelWarning(pe, section, index, warnings);
+    addGprelWarning(section, index, warnings);
   });
   return warnings;
 };
