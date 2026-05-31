@@ -33,6 +33,7 @@ export type OptionalHeaderParseResult = {
 
 type OptionalHeaderViewInfo = {
   optionalHeaderOffset: number;
+  sizeOfOptionalHeader: number;
   declaredSize: number;
   optionalHeaderView: DataView;
 };
@@ -100,6 +101,7 @@ async function readOptionalHeaderView(
   const viewSize = declaredSize || Math.min(MINIMUM_OPTIONAL_HEADER_PROBE_SIZE, maxReadable);
   return {
     optionalHeaderOffset,
+    sizeOfOptionalHeader,
     declaredSize,
     optionalHeaderView: await reader.read(optionalHeaderOffset, viewSize)
   };
@@ -209,7 +211,8 @@ function createWindowsOptionalHeaderResult(
     ? parseOptionalHeaderTail64(viewInfo.optionalHeaderView, standardFields.nextPosition)
     : parseOptionalHeaderTail32(viewInfo.optionalHeaderView, standardFields.nextPosition);
   const ddStartRel = tail.nextPosition;
-  addWindowsOptionalHeaderSizeWarning(viewInfo.declaredSize, standardFields.Magic, warnings);
+  addWindowsOptionalHeaderSizeWarning(viewInfo.sizeOfOptionalHeader, standardFields.Magic, warnings);
+  addDataDirectoryFitWarning(tail.NumberOfRvaAndSizes, viewInfo.sizeOfOptionalHeader, ddStartRel, warnings);
   const ddCount = Math.min(
     tail.NumberOfRvaAndSizes,
     Math.max(0, Math.floor((viewInfo.optionalHeaderView.byteLength - ddStartRel) / 8))
@@ -227,6 +230,20 @@ function createWindowsOptionalHeaderResult(
     opt: createWindowsOptionalHeader(standardFields, tail),
     ...(warnings.length ? { warnings } : {})
   };
+}
+
+function addDataDirectoryFitWarning(
+  numberOfRvaAndSizes: number,
+  sizeOfOptionalHeader: number,
+  ddStartRel: number,
+  warnings: string[]
+): void {
+  const fitCount = Math.max(0, Math.floor((sizeOfOptionalHeader - ddStartRel) / 8));
+  if ((numberOfRvaAndSizes >>> 0) <= fitCount) return;
+  warnings.push(
+    `NumberOfRvaAndSizes declares ${numberOfRvaAndSizes} data directories, but only ` +
+      `${fitCount} fit in SizeOfOptionalHeader.`
+  );
 }
 
 function addWindowsOptionalHeaderSizeWarning(

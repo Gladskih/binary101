@@ -14,6 +14,21 @@ const PE32_PLUS_WINDOWS_FIELDS_SIZE = 112;
 const WINDOWS_FIELDS_SIZE_WARNING =
   "SizeOfOptionalHeader is too small to contain the complete PE32/PE32+ optional header before data directories.";
 const patternedSentinelWord = (index: number): number => ((index + 1) * 0x11111111) >>> 0;
+const createPe32OptionalHeaderWithDirectoryCount = (
+  sizeOfOptionalHeader: number,
+  numberOfRvaAndSizes: number
+): Uint8Array => {
+  const fileBytes = new Uint8Array(24 + sizeOfOptionalHeader).fill(0);
+  const view = new DataView(fileBytes.buffer);
+  view.setUint16(24, PE32_OPTIONAL_HEADER_MAGIC, true);
+  view.setUint32(24 + 28, 0x00400000, true);
+  view.setUint32(24 + 32, 0x1000, true);
+  view.setUint32(24 + 36, 0x0200, true);
+  view.setUint32(24 + 56, 0x2000, true);
+  view.setUint32(24 + 60, 0x0200, true);
+  view.setUint32(24 + 92, numberOfRvaAndSizes, true);
+  return fileBytes;
+};
 
 void test("parseOptionalHeaderAndDirectories preserves data directories beyond index 15", async () => {
   const dataDirectoryCount = 17;
@@ -153,4 +168,31 @@ void test("parseOptionalHeaderAndDirectories accepts complete Windows fields bef
 
   assert.deepStrictEqual(pe32.warnings ?? [], []);
   assert.deepStrictEqual(pe32Plus.warnings ?? [], []);
+});
+
+void test("parseOptionalHeaderAndDirectories warns when declared data directories do not fit", async () => {
+  const dataDirectoryCount = 4;
+  const fittingDataDirectoryCount = 3;
+  const optionalHeaderSize = PE32_WINDOWS_FIELDS_SIZE + fittingDataDirectoryCount * 8;
+  const parsed = await parseOptionalHeaderAndDirectories(
+    new MockFile(createPe32OptionalHeaderWithDirectoryCount(optionalHeaderSize, dataDirectoryCount)),
+    0,
+    optionalHeaderSize
+  );
+
+  assert.ok(parsed.warnings?.includes(
+    "NumberOfRvaAndSizes declares 4 data directories, but only 3 fit in SizeOfOptionalHeader."
+  ));
+});
+
+void test("parseOptionalHeaderAndDirectories accepts data directories that fit", async () => {
+  const dataDirectoryCount = 3;
+  const optionalHeaderSize = PE32_WINDOWS_FIELDS_SIZE + dataDirectoryCount * 8;
+  const parsed = await parseOptionalHeaderAndDirectories(
+    new MockFile(createPe32OptionalHeaderWithDirectoryCount(optionalHeaderSize, dataDirectoryCount)),
+    0,
+    optionalHeaderSize
+  );
+
+  assert.deepStrictEqual(parsed.warnings ?? [], []);
 });
