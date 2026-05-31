@@ -7,6 +7,7 @@ export const IMAGE_DEBUG_TYPE_COFF = 1;
 export const IMAGE_DEBUG_TYPE_CODEVIEW = 2;
 export const IMAGE_DEBUG_TYPE_FPO = 3;
 export const IMAGE_DEBUG_TYPE_MISC = 4;
+export const IMAGE_DEBUG_TYPE_EXCEPTION = 5;
 export const IMAGE_DEBUG_TYPE_VC_FEATURE = 12;
 export const IMAGE_DEBUG_TYPE_POGO = 13;
 export const IMAGE_DEBUG_TYPE_REPRO = 16;
@@ -22,7 +23,7 @@ export const DEBUG_TYPE_NAMES: Record<number, string> = {
   [IMAGE_DEBUG_TYPE_CODEVIEW]: "CODEVIEW",
   [IMAGE_DEBUG_TYPE_FPO]: "FPO",
   [IMAGE_DEBUG_TYPE_MISC]: "MISC",
-  5: "EXCEPTION",
+  [IMAGE_DEBUG_TYPE_EXCEPTION]: "EXCEPTION",
   6: "FIXUP",
   7: "OMAP_TO_SRC",
   8: "OMAP_FROM_SRC",

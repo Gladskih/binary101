@@ -13,6 +13,7 @@ import {
 const IMAGE_DEBUG_TYPE_CODEVIEW = 2;
 const IMAGE_DEBUG_TYPE_REPRO = 16;
 const IMAGE_DEBUG_TYPE_R2R_PERFMAP = 21;
+const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
 const UNKNOWN_DEBUG_TYPE = 0xff;
 const RSDS_SIGNATURE = 0x53445352;
 const R2R_PERFMAP_MAGIC = 0x4d523252;
@@ -29,7 +30,8 @@ const createDecodeSubject = async (type: number, payload: Uint8Array, typeName =
       rvaToOff: identityRvaToOff,
       addressOfRawDataRva: 0,
       pointerToRawDataOff: subject.offset,
-      dataSize: subject.declaredSize
+      dataSize: subject.declaredSize,
+      machine: IMAGE_FILE_MACHINE_AMD64
     },
     message => warnings.push(message)
   );

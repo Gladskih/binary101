@@ -8,6 +8,7 @@ import { EX_DLL_CHARACTERISTICS_FLAGS } from "../../analyzers/pe/constants.js";
 import { getDebugTypeInfo } from "./debug-type-info.js";
 import { getDebugStorageInfo, getEntrySummary } from "./debug-entry-summary.js";
 import { renderCoffDebugInfo } from "./debug-coff.js";
+import { renderException } from "./exception.js";
 
 const hasDecodedPayload = (entry: PeDebugDirectoryEntry): boolean =>
   !!(
@@ -19,6 +20,7 @@ const hasDecodedPayload = (entry: PeDebugDirectoryEntry): boolean =>
     entry.pogo ||
     entry.repro ||
     entry.embeddedPortablePdb ||
+    entry.exception ||
     entry.pdbChecksum ||
     entry.exDllCharacteristics ||
     entry.r2rPerfMap ||
@@ -186,6 +188,10 @@ const renderEmbeddedPortablePdbFields = (entry: PeDebugDirectoryEntry, out: stri
   }
 };
 
+const renderExceptionFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
+  if (entry.exception) renderException(entry.exception, out);
+};
+
 const renderPdbChecksumFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
   if (entry.pdbChecksum) {
     out.push(`<dl>${renderDefinitionRow("Algorithm", escapeHtml(entry.pdbChecksum.algorithmName || "(empty)"))}`);
@@ -261,6 +267,7 @@ export const renderDecodedEntryDetails = (
     renderPogoFields(entry, out);
     renderReproFields(entry, out);
     renderEmbeddedPortablePdbFields(entry, out);
+    renderExceptionFields(entry, out);
     renderPdbChecksumFields(entry, out);
     renderExDllCharacteristicsFields(entry, out);
     renderR2rPerfMapFields(entry, out);

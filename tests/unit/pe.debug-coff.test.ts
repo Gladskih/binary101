@@ -22,6 +22,8 @@ import {
   writeU32
 } from "../fixtures/pe-coff-debug-fixtures.js";
 
+const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
+
 void test("parseCoffDebugInfoFromFileHeader decodes symbols, aux records, strings, and line numbers", async () => {
   const symbolTable = createSymbolTable(
     [
@@ -92,7 +94,12 @@ void test("parseDebugDirectory decodes IMAGE_DEBUG_TYPE_COFF payloads", async ()
   // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-type
   const subject = createDebugDirectorySubject([{ payload, type: 1 }]);
 
-  const result = await parseDebugDirectory(subject.file, subject.dataDirs, value => value);
+  const result = await parseDebugDirectory(
+    subject.file,
+    subject.dataDirs,
+    value => value,
+    IMAGE_FILE_MACHINE_AMD64
+  );
 
   const coff = expectDefined(result.entries[0]?.coff);
   assert.equal(coff.header?.numberOfSymbols, 1);

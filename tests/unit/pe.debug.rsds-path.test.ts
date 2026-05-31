@@ -10,6 +10,7 @@ const encoder = new TextEncoder();
 const IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE = 28;
 // PE/COFF debug type 2 is the CodeView record family.
 const IMAGE_DEBUG_TYPE_CODEVIEW = 2;
+const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
 // Microsoft CodeView RSDS records start with the ASCII signature "RSDS" in little-endian form.
 const RSDS_SIGNATURE = 0x53445352;
 // RSDS records use a fixed 24-byte header: signature, GUID, and age.
@@ -49,7 +50,8 @@ void test("parseDebugDirectory warns when a CodeView entry is smaller than the m
   const result = await parseDebugDirectory(
     new MockFile(bytes, "debug-short-rsds.bin"),
     [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE }],
-    value => value
+    value => value,
+    IMAGE_FILE_MACHINE_AMD64
   );
 
   assert.equal(result.entry, null);
@@ -79,7 +81,8 @@ void test("parseDebugDirectory warns when the RSDS path is not NUL-terminated wi
   const result = await parseDebugDirectory(
     new MockFile(bytes, "debug-rsds-missing-nul.bin"),
     [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE }],
-    value => value
+    value => value,
+    IMAGE_FILE_MACHINE_AMD64
   );
 
   assert.equal(result.entry?.path, "abc");
@@ -118,7 +121,8 @@ void test("parseDebugDirectory warns when the RSDS path stops mapping before its
   const result = await parseDebugDirectory(
     new MockFile(bytes, "debug-rsds-gap.bin"),
     [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE }],
-    sparseRvaToOff
+    sparseRvaToOff,
+    IMAGE_FILE_MACHINE_AMD64
   );
 
   assert.equal(result.entry?.path, path);
@@ -144,7 +148,8 @@ void test("parseDebugDirectory keeps later RSDS warnings instead of dropping the
   const result = await parseDebugDirectory(
     new MockFile(bytes, "debug-multi-warning.bin"),
     [{ name: "DEBUG", rva: debugRva, size: IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE + 1 }],
-    value => value
+    value => value,
+    IMAGE_FILE_MACHINE_AMD64
   );
 
   assert.equal(result.entry?.path, "abc");

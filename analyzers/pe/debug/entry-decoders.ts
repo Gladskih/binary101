@@ -8,6 +8,8 @@ import {
   parseEmbeddedPortablePdbInfo,
   type PeEmbeddedPortablePdbInfo
 } from "./embedded-portable-pdb.js";
+import { parseExceptionDebugInfo } from "./exception.js";
+import type { PeExceptionDirectory } from "../exception/index.js";
 import {
   parseExDllCharacteristicsInfo,
   type PeExDllCharacteristicsInfo
@@ -23,6 +25,7 @@ import {
   IMAGE_DEBUG_TYPE_COFF,
   IMAGE_DEBUG_TYPE_CODEVIEW,
   IMAGE_DEBUG_TYPE_EMBEDDED_PORTABLE_PDB,
+  IMAGE_DEBUG_TYPE_EXCEPTION,
   IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS,
   IMAGE_DEBUG_TYPE_FPO,
   IMAGE_DEBUG_TYPE_MISC,
@@ -44,6 +47,7 @@ export type PeDebugPayloads = {
   pogo?: PePogoInfo;
   repro?: PeReproInfo;
   embeddedPortablePdb?: PeEmbeddedPortablePdbInfo;
+  exception?: PeExceptionDirectory;
   pdbChecksum?: PePdbChecksumInfo;
   exDllCharacteristics?: PeExDllCharacteristicsInfo;
   r2rPerfMap?: PeR2rPerfMapInfo;
@@ -58,6 +62,7 @@ type DecodeInput = {
   addressOfRawDataRva: number;
   pointerToRawDataOff: number;
   dataSize: number;
+  machine: number;
 };
 
 const hasDecodedPayload = (payloads: PeDebugPayloads): boolean =>
@@ -70,6 +75,7 @@ const hasDecodedPayload = (payloads: PeDebugPayloads): boolean =>
       payloads.pogo ||
       payloads.repro ||
       payloads.embeddedPortablePdb ||
+      payloads.exception ||
       payloads.pdbChecksum ||
       payloads.exDllCharacteristics ||
       payloads.r2rPerfMap ||
@@ -123,6 +129,19 @@ const parseKnownPayload = async (
   if (input.type === IMAGE_DEBUG_TYPE_MISC) {
     const misc = await parseMiscDebugInfo(...args);
     return misc ? { misc } : {};
+  }
+  if (input.type === IMAGE_DEBUG_TYPE_EXCEPTION) {
+    const exception = await parseExceptionDebugInfo(
+      reader,
+      input.fileSize,
+      input.rvaToOff,
+      input.addressOfRawDataRva,
+      input.pointerToRawDataOff,
+      input.dataSize,
+      input.machine,
+      addWarning
+    );
+    return exception ? { exception } : {};
   }
   if (input.type === IMAGE_DEBUG_TYPE_VC_FEATURE) {
     const vcFeature = await parseVcFeatureInfo(...args);

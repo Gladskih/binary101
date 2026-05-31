@@ -101,7 +101,7 @@ export async function parsePe(
           canonicalMachine === IMAGE_FILE_MACHINE_I386 ? readSafeSehHandlerTable : null
   };
 
-  const debugResult = await parseDebugDirectory(reader, dataDirs, rvaToOff);
+  const debugResult = await parseDebugDirectory(reader, dataDirs, rvaToOff, canonicalMachine);
   const hasMatchingCoffEntry = debugResult.entries.some(entry =>
     entry.coff?.symbolTableOffset === coff.PointerToSymbolTable
   );

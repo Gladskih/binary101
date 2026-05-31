@@ -7,10 +7,15 @@ const encoder = new TextEncoder();
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
 const IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE = 28;
 // Windows SDK winnt.h and PE parsers use these IMAGE_DEBUG_DIRECTORY.Type values:
-// VC_FEATURE = 12, POGO = 13.
+// EXCEPTION = 5, VC_FEATURE = 12, POGO = 13.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
+const IMAGE_DEBUG_TYPE_EXCEPTION = 5;
 const IMAGE_DEBUG_TYPE_VC_FEATURE = 12;
 const IMAGE_DEBUG_TYPE_POGO = 13;
+// Microsoft PE format, ".pdata (Exception Information)": x64 RUNTIME_FUNCTION
+// records are three DWORD RVAs: BeginAddress, EndAddress, UnwindInfoAddress.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#the-pdata-section
+const AMD64_RUNTIME_FUNCTION_ENTRY_SIZE = 12;
 
 // Upstream PE parsers model VC_FEATURE as five DWORD counters:
 // https://raw.githubusercontent.com/saferwall/pe/main/debug.go
@@ -142,6 +147,18 @@ export const createSpgoPogoSubjectInfo = (count = 2) => ({
 export const createTruncatedPogoPayload = (): Uint8Array =>
   createPogoPayload(POGO_SIGNATURE_LTCG, createPogoSubjectEntries(1)).slice(0, -1);
 
+const createExceptionPayload = (): Uint8Array => {
+  const bytes = new Uint8Array(AMD64_RUNTIME_FUNCTION_ENTRY_SIZE);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 1, true);
+  view.setUint32(4, 2, true);
+  view.setUint32(8, 0, true);
+  return bytes;
+};
+
+const createTruncatedExceptionPayload = (): Uint8Array =>
+  createExceptionPayload().slice(0, AMD64_RUNTIME_FUNCTION_ENTRY_SIZE - 1);
+
 export const createDebugDirectorySubject = (
   entries: Array<{ payload: Uint8Array; type: number }>
 ): {
@@ -198,6 +215,20 @@ export const createPogoDebugDirectorySubject = (count = 2) => {
     expected
   };
 };
+
+export const createExceptionDebugDirectorySubject = () => ({
+  ...createDebugDirectorySubject([{
+    payload: createExceptionPayload(),
+    type: IMAGE_DEBUG_TYPE_EXCEPTION
+  }])
+});
+
+export const createTruncatedExceptionDebugDirectorySubject = () => ({
+  ...createDebugDirectorySubject([{
+    payload: createTruncatedExceptionPayload(),
+    type: IMAGE_DEBUG_TYPE_EXCEPTION
+  }])
+});
 
 export const createSpgoDebugDirectorySubject = (count = 2) => {
   const expected = createSpgoPogoSubjectInfo(count);

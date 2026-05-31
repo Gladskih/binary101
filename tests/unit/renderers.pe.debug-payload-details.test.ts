@@ -91,3 +91,24 @@ void test("renderDecodedEntryDetails renders small decoded payload fields", () =
   assert.match(html, /HOTPATCH_COMPATIBLE/);
   assert.match(html, /b4 9c/);
 });
+
+void test("renderDecodedEntryDetails renders EXCEPTION pdata analysis", () => {
+  const html = renderDetails([{
+    ...createDebugViewEntry(5, 0x2000, 0x90, 12),
+    exception: {
+      functionCount: 1,
+      beginRvas: [0x1000],
+      handlerRvas: [],
+      uniqueUnwindInfoCount: 0,
+      handlerUnwindInfoCount: 0,
+      chainedUnwindInfoCount: 0,
+      invalidEntryCount: 0,
+      issues: [],
+      format: "amd64"
+    }
+  }]);
+
+  assert.match(html, /Entry #1: EXCEPTION/);
+  assert.match(html, /Exception directory \(\.pdata\)/);
+  assert.match(html, /x64 \.pdata maps code ranges/);
+});

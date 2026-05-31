@@ -79,7 +79,8 @@ const resolveDebugRawSpan = (
 export async function parseDebugDirectory(
   reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset
+  rvaToOff: RvaToOffset,
+  machine: number
 ): Promise<{
   entry: PeCodeViewEntry | null;
   entries: PeDebugDirectoryEntry[];
@@ -194,7 +195,8 @@ export async function parseDebugDirectory(
           rvaToOff,
           addressOfRawDataRva,
           pointerToRawDataOff,
-          dataSize
+          dataSize,
+          machine
         },
         addWarning
       )

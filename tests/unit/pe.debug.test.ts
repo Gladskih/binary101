@@ -20,8 +20,10 @@ import {
   createLongPathCodeViewSubject
 } from "../fixtures/pe-debug-directory-subject.js";
 import {
+  createExceptionDebugDirectorySubject,
   createPogoDebugDirectorySubject,
   createSpgoDebugDirectorySubject,
+  createTruncatedExceptionDebugDirectorySubject,
   createVcFeatureDebugDirectorySubject
 } from "../fixtures/pe-debug-payload-subject.js";
 
@@ -29,13 +31,15 @@ import {
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
 const IMAGE_DEBUG_TYPE_CODEVIEW = 2;
 const IMAGE_DEBUG_TYPE_MISC = 4;
+const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
 void test("parseDebugDirectory reads CodeView RSDS entry", async () => {
   const subject = createCodeViewSubject();
 
   const result = await parseDebugDirectory(
     subject.file,
     [subject.dataDir],
-    value => value
+    value => value,
+    IMAGE_FILE_MACHINE_AMD64
   );
 
   const entry = expectDefined(result.entry);
@@ -56,7 +60,8 @@ void test("parseDebugDirectory bounds CodeView reads to header and path chunks",
   const result = await parseDebugDirectory(
     tracked.file,
     [subject.dataDir],
-    value => value
+    value => value,
+    IMAGE_FILE_MACHINE_AMD64
   );
 
   assert.equal(result.entry?.age, subject.age);
@@ -72,7 +77,8 @@ void test("parseDebugDirectory reads CodeView paths beyond the old 1024-byte par
   const result = await parseDebugDirectory(
     subject.file,
     [subject.dataDir],
-    value => value
+    value => value,
+    IMAGE_FILE_MACHINE_AMD64
   );
 
   assert.equal(expectDefined(result.entry).path, subject.path);
@@ -85,7 +91,8 @@ void test("parseDebugDirectory clamps the CodeView path to SizeOfData", async ()
   const result = await parseDebugDirectory(
     subject.file,
     [subject.dataDir],
-    value => value
+    value => value,
+    IMAGE_FILE_MACHINE_AMD64
   );
 
   const entry = expectDefined(result.entry);
@@ -97,7 +104,8 @@ void test("parseDebugDirectory warns when the declared directory is smaller than
   const result = await parseDebugDirectory(
     subject.file,
     [subject.dataDir],
-    value => value
+    value => value,
+    IMAGE_FILE_MACHINE_AMD64
   );
 
   assert.equal(result.entry, null);
@@ -110,7 +118,8 @@ void test("parseDebugDirectory warns when directory size is non-zero but RVA is 
     tracked.file,
     // Microsoft PE format: IMAGE_DATA_DIRECTORY is an address/size pair; a non-zero size with RVA 0 is malformed.
     [{ name: "DEBUG", rva: 0, size: 28 }],
-    value => value
+    value => value,
+    IMAGE_FILE_MACHINE_AMD64
   );
 
   assert.equal(result.entry, null);
@@ -123,7 +132,8 @@ void test("parseDebugDirectory warns when the directory size leaves trailing byt
   const result = await parseDebugDirectory(
     subject.file,
     [subject.dataDir],
-    value => value
+    value => value,
+    IMAGE_FILE_MACHINE_AMD64
   );
 
   assert.equal(result.entry, null);
@@ -136,7 +146,8 @@ void test("parseDebugDirectory does not decode entries past an rvaToOff gap", as
   const result = await parseDebugDirectory(
     subject.file,
     [subject.dataDir],
-    value => (value === subject.dataDir.rva ? subject.dataDir.rva : null)
+    value => (value === subject.dataDir.rva ? subject.dataDir.rva : null),
+    IMAGE_FILE_MACHINE_AMD64
   );
 
   assert.equal(result.entry, null);
@@ -148,7 +159,8 @@ void test("parseDebugDirectory continues past the first 16 entries to find later
   const result = await parseDebugDirectory(
     subject.file,
     [subject.dataDir],
-    value => value
+    value => value,
+    IMAGE_FILE_MACHINE_AMD64
   );
 
   const entry = expectDefined(result.entry);
@@ -162,7 +174,8 @@ void test("parseDebugDirectory preserves every debug-directory entry instead of 
   const result = await parseDebugDirectory(
     subject.file,
     [subject.dataDir],
-    value => value
+    value => value,
+    IMAGE_FILE_MACHINE_AMD64
   );
 
   assert.equal(result.entries?.length, 2);
@@ -192,15 +205,47 @@ void test("parseDebugDirectory preserves every debug-directory entry instead of 
 void test("parseDebugDirectory decodes VC_FEATURE counters on matching entries", async () => {
   const { file, dataDirs, expected } = createVcFeatureDebugDirectorySubject();
 
-  const result = await parseDebugDirectory(file, dataDirs, value => value);
+  const result = await parseDebugDirectory(
+    file,
+    dataDirs,
+    value => value,
+    IMAGE_FILE_MACHINE_AMD64
+  );
 
   assert.deepEqual(expectDefined(result.entries?.[0]).vcFeature, expected);
+});
+
+void test("parseDebugDirectory decodes EXCEPTION entries with the pdata analyzer", async () => {
+  const { file, dataDirs } = createExceptionDebugDirectorySubject();
+
+  const result = await parseDebugDirectory(file, dataDirs, value => value, IMAGE_FILE_MACHINE_AMD64);
+
+  const exception = expectDefined(result.entries?.[0]?.exception);
+  assert.equal(exception.format, "amd64");
+  assert.equal(exception.functionCount, 1);
+  assert.deepEqual(exception.beginRvas, [1]);
+  assert.equal(exception.invalidEntryCount, 0);
+});
+
+void test("parseDebugDirectory reports malformed EXCEPTION debug payloads as warnings", async () => {
+  const { file, dataDirs } = createTruncatedExceptionDebugDirectorySubject();
+
+  const result = await parseDebugDirectory(file, dataDirs, value => value, IMAGE_FILE_MACHINE_AMD64);
+
+  const exception = expectDefined(result.entries?.[0]?.exception);
+  assert.equal(exception.functionCount, 0);
+  assert.ok(exception.issues.some(issue => /smaller than one runtime_function/i.test(issue)));
 });
 
 void test("parseDebugDirectory decodes POGO signature and records on matching entries", async () => {
   const { file, dataDirs, expected } = createPogoDebugDirectorySubject();
 
-  const result = await parseDebugDirectory(file, dataDirs, value => value);
+  const result = await parseDebugDirectory(
+    file,
+    dataDirs,
+    value => value,
+    IMAGE_FILE_MACHINE_AMD64
+  );
 
   assert.deepEqual(expectDefined(result.entries?.[0]).pogo, expected);
 });
@@ -208,7 +253,12 @@ void test("parseDebugDirectory decodes POGO signature and records on matching en
 void test("parseDebugDirectory decodes SPGO debug-directory entries as POGO maps", async () => {
   const { file, dataDirs, expected } = createSpgoDebugDirectorySubject();
 
-  const result = await parseDebugDirectory(file, dataDirs, value => value);
+  const result = await parseDebugDirectory(
+    file,
+    dataDirs,
+    value => value,
+    IMAGE_FILE_MACHINE_AMD64
+  );
 
   assert.equal(expectDefined(result.entries?.[0]).typeName, "SPGO");
   assert.deepEqual(expectDefined(result.entries?.[0]).pogo, expected);
