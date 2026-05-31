@@ -16,6 +16,8 @@ const OBJECT_FIELD_WARNING =
 
 const createTextSection = () =>
   createSection(".text", DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT);
+const createTextSectionWithFlags = (characteristics: number) =>
+  createSection(".text", DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT, undefined, undefined, characteristics);
 
 void test("collectPeSectionFieldWarnings reports PointerToRelocations", () => {
   const section = createTextSection();
@@ -78,4 +80,32 @@ void test("collectPeSectionFieldWarnings reports grouped section names", () => {
 
 void test("collectPeSectionFieldWarnings accepts ordinary section names", () => {
   assert.deepStrictEqual(collectPeSectionFieldWarnings(createWindowsLayoutSubject(createTextSection())), []);
+});
+
+void test("collectPeSectionFieldWarnings reports object-only section flags", () => {
+  const lnkInfo = createTextSectionWithFlags(0x00000200);
+  const aligned = createTextSectionWithFlags(0x00100000);
+  const typeNoPad = createTextSectionWithFlags(0x00000008);
+
+  assert.ok(
+    collectPeSectionFieldWarnings(createWindowsLayoutSubject(lnkInfo)).some(warning =>
+      warning.includes("object-only section flags set: LNK_INFO")
+    )
+  );
+  assert.ok(
+    collectPeSectionFieldWarnings(createWindowsLayoutSubject(aligned)).some(warning =>
+      warning.includes("object-only section flags set: ALIGN_1BYTES")
+    )
+  );
+  assert.ok(
+    collectPeSectionFieldWarnings(createWindowsLayoutSubject(typeNoPad)).some(warning =>
+      warning.includes("object-only section flags set: TYPE_NO_PAD")
+    )
+  );
+});
+
+void test("collectPeSectionFieldWarnings accepts standard memory section flags", () => {
+  const section = createTextSectionWithFlags(0x40000000 | 0x80000000 | 0x20000000);
+
+  assert.deepStrictEqual(collectPeSectionFieldWarnings(createWindowsLayoutSubject(section)), []);
 });
