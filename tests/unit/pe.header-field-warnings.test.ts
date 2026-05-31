@@ -80,3 +80,19 @@ void test("collectPeHeaderFieldWarnings accepts 64K-aligned ImageBase", () => {
 
   assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
 });
+
+void test("collectPeHeaderFieldWarnings reports non-zero Win32VersionValue", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.opt.Win32VersionValue = 1;
+
+  assert.ok(
+    collectPeHeaderFieldWarnings(pe).includes("Win32VersionValue is reserved and must be zero.")
+  );
+});
+
+void test("collectPeHeaderFieldWarnings accepts zero Win32VersionValue", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.opt.Win32VersionValue = 0;
+
+  assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
+});

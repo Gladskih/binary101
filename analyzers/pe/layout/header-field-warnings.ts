@@ -49,5 +49,8 @@ export const collectPeHeaderFieldWarnings = (pe: PeParseResult): string[] => {
   ) {
     warnings.push("ImageBase is not a multiple of 64K.");
   }
+  if (isPeWindowsParseResult(pe) && (pe.opt.Win32VersionValue >>> 0) !== 0) {
+    warnings.push("Win32VersionValue is reserved and must be zero.");
+  }
   return warnings;
 };
