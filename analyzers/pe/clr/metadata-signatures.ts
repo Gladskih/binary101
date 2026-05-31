@@ -26,6 +26,9 @@ const ELEMENT_TYPE_NAMES: Record<number, string> = {
   0x1c: "object"
 };
 
+// ECMA-335 II.23.2.4: FieldSig begins with CALLCONV_FIELD.
+const FIELD_SIGNATURE_CALLING_CONVENTION = 0x06;
+
 class SignatureCursor {
   offset = 0;
 
@@ -150,6 +153,23 @@ const parseMethodSignatureCore = (cursor: SignatureCursor): PeClrMethodSignature
   };
 };
 
+const parseFieldSignatureCore = (cursor: SignatureCursor): PeClrMethodSignature | null => {
+  // ECMA-335 II.23.2.4: FieldSig is CALLCONV_FIELD followed by one type.
+  const callingConvention = cursor.readU8();
+  if (callingConvention == null) return null;
+  if (callingConvention !== FIELD_SIGNATURE_CALLING_CONVENTION) {
+    cursor.readCompressedUInt();
+    return null;
+  }
+  const fieldType = parseSignatureType(cursor);
+  return {
+    callingConvention,
+    parameterCount: 0,
+    returnType: fieldType,
+    parameterTypes: []
+  };
+};
+
 export const parseMethodSignature = (
   blob: Uint8Array | null,
   context: string
@@ -157,6 +177,20 @@ export const parseMethodSignature = (
   if (!blob) return undefined;
   const issues: string[] = [];
   const parsed = parseMethodSignatureCore(new SignatureCursor(blob, issues, context));
+  if (!parsed) return { callingConvention: 0, parameterCount: 0, returnType: null, parameterTypes: [], issues };
+  return issues.length ? { ...parsed, issues } : parsed;
+};
+
+export const parseMemberRefSignature = (
+  blob: Uint8Array | null,
+  context: string
+): PeClrMethodSignature | undefined => {
+  if (!blob) return undefined;
+  const issues: string[] = [];
+  const cursor = new SignatureCursor(blob, issues, context);
+  const parsed = cursor.peekU8() === FIELD_SIGNATURE_CALLING_CONVENTION
+    ? parseFieldSignatureCore(cursor)
+    : parseMethodSignatureCore(cursor);
   if (!parsed) return { callingConvention: 0, parameterCount: 0, returnType: null, parameterTypes: [], issues };
   return issues.length ? { ...parsed, issues } : parsed;
 };

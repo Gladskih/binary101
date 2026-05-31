@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseMethodSignature } from "../../analyzers/pe/clr/metadata-signatures.js";
+import { parseMemberRefSignature, parseMethodSignature } from "../../analyzers/pe/clr/metadata-signatures.js";
 
 const DEFAULT_CALLING_CONVENTION = 0x00; // ECMA-335 II.23.2.1 DEFAULT method signature.
 const HASTHIS_CALLING_CONVENTION = 0x20; // ECMA-335 II.23.2.1 HASTHIS method signature flag.
@@ -10,6 +10,7 @@ const ELEMENT_TYPE_VOID = 0x01; // ECMA-335 II.23.1.16 ELEMENT_TYPE_VOID.
 const ELEMENT_TYPE_I4 = 0x08; // ECMA-335 II.23.1.16 ELEMENT_TYPE_I4.
 const ELEMENT_TYPE_STRING = 0x0e; // ECMA-335 II.23.1.16 ELEMENT_TYPE_STRING.
 const ELEMENT_TYPE_SZARRAY = 0x1d; // ECMA-335 II.23.1.16 ELEMENT_TYPE_SZARRAY.
+const FIELD_CALLING_CONVENTION = 0x06; // ECMA-335 II.23.2.4 FIELD signature.
 
 void test("parseMethodSignature decodes normal parameters and return types", () => {
   const signature = parseMethodSignature(
@@ -42,4 +43,16 @@ void test("parseMethodSignature reports truncated and malformed signatures", () 
 
   assert.ok(empty?.issues?.some(issue => /truncated/i.test(issue)));
   assert.ok(malformedCompressedInt?.issues?.some(issue => /compressed integer/i.test(issue)));
+});
+
+void test("parseMemberRefSignature decodes field signatures without treating field type as parameter count", () => {
+  const signature = parseMemberRefSignature(
+    Uint8Array.of(FIELD_CALLING_CONVENTION, ELEMENT_TYPE_STRING),
+    "MemberRef.Signature"
+  );
+
+  assert.strictEqual(signature?.callingConvention, FIELD_CALLING_CONVENTION);
+  assert.strictEqual(signature?.returnType, "string");
+  assert.deepStrictEqual(signature?.parameterTypes, []);
+  assert.strictEqual(signature?.issues, undefined);
 });

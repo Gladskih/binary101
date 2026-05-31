@@ -16,7 +16,7 @@ import type {
   PeClrTypeReferenceInfo
 } from "./types.js";
 import type { ClrHeapReaders } from "./metadata-heaps.js";
-import { parseMethodSignature } from "./metadata-signatures.js";
+import { parseMemberRefSignature, parseMethodSignature } from "./metadata-signatures.js";
 import type { ClrMetadataRow, ClrParsedTableStream } from "./metadata-table-reader.js";
 import { createCustomAttributes } from "./metadata-custom-attributes.js";
 import { resolveMetadataIndexName } from "./metadata-name-resolver.js";
@@ -209,7 +209,7 @@ export const buildClrMetadataTables = (
       parent, modules, assembly, assemblyRefs, typeRefs, typeDefs, methodDefs, moduleRefs
     );
     const context = `MemberRef row ${index + 1}.Signature`;
-    const signature = parseMethodSignature(heaps.getBlob(signatureBlobIndex, context), context);
+    const signature = parseMemberRefSignature(heaps.getBlob(signatureBlobIndex, context), context);
     return {
       row: index + 1,
       name: getString(heaps, row, "Name", `MemberRef row ${index + 1}`),
