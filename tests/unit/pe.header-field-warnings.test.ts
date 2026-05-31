@@ -66,3 +66,17 @@ void test("collectPeHeaderFieldWarnings accepts standard FileAlignment", () => {
 
   assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
 });
+
+void test("collectPeHeaderFieldWarnings reports unaligned ImageBase", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.opt.ImageBase = 0x140001000n;
+
+  assert.ok(collectPeHeaderFieldWarnings(pe).includes("ImageBase is not a multiple of 64K."));
+});
+
+void test("collectPeHeaderFieldWarnings accepts 64K-aligned ImageBase", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.opt.ImageBase = 0x140000000n;
+
+  assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
+});

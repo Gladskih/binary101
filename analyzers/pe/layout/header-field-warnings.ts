@@ -11,6 +11,9 @@ const WINDOWS_LOADER_SECTION_LIMIT = 96;
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#optional-header-windows-specific-fields-image-only
 const MINIMUM_FILE_ALIGNMENT = 0x200;
 const MAXIMUM_FILE_ALIGNMENT = 0x10000;
+// Microsoft PE/COFF, "Optional Header Windows-Specific Fields": ImageBase must be 64 K aligned.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#optional-header-windows-specific-fields-image-only
+const IMAGE_BASE_ALIGNMENT = 0x10000n;
 
 const isPowerOfTwo = (value: number): boolean => value > 0 && (value & (value - 1)) === 0;
 
@@ -38,6 +41,13 @@ export const collectPeHeaderFieldWarnings = (pe: PeParseResult): string[] => {
     )
   ) {
     warnings.push("FileAlignment is not a power of two between 512 and 64K inclusive.");
+  }
+  if (
+    isPeWindowsParseResult(pe) &&
+    typeof pe.opt.ImageBase === "bigint" &&
+    pe.opt.ImageBase % IMAGE_BASE_ALIGNMENT !== 0n
+  ) {
+    warnings.push("ImageBase is not a multiple of 64K.");
   }
   return warnings;
 };
