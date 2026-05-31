@@ -145,12 +145,17 @@ export async function parseExportDirectory(
 
   if (isReadableOffset(funcTableOff)) {
     const functionNames = new Map<number, string>();
+    let previousExportName: string | null = null;
+    let canCheckNameSorting = NumberOfNames > 1;
+    let namePointerTableIsSorted = true;
     if (NumberOfNames > 0) {
       if (!AddressOfNames || !isReadableOffset(nameTableOff)) {
         issues.push("Export name pointer table is missing or does not map while NumberOfNames is non-zero.");
+        canCheckNameSorting = false;
       }
       if (!AddressOfNameOrdinals || !isReadableOffset(ordTableOff)) {
         issues.push("Export ordinal table is missing or does not map while NumberOfNames is non-zero.");
+        canCheckNameSorting = false;
       }
     }
     if (AddressOfNames && AddressOfNameOrdinals && isReadableOffset(nameTableOff) && isReadableOffset(ordTableOff)) {
@@ -161,12 +166,10 @@ export async function parseExportDirectory(
           if (nameIndex < NumberOfNames) {
             issues.push("Export name/ordinal tables are truncated; some names are missing.");
           }
+          canCheckNameSorting = false;
           break;
         }
-        if (funcIndex >= NumberOfFunctions) {
-          issues.push(`Export ordinal table entry ${funcIndex} is out of range for ${NumberOfFunctions} functions.`);
-          continue;
-        }
+        let exportName: string | null = null;
         const nameOffset = rvaToOff(nameRva);
         if (isReadableOffset(nameOffset)) {
           const nameInfo = await readMappedNullTerminatedAsciiString(
@@ -177,13 +180,33 @@ export async function parseExportDirectory(
             reader.size
           );
           if (nameInfo) {
-            functionNames.set(funcIndex, nameInfo.text);
-            if (!nameInfo.terminated) issues.push("Export name string truncated.");
+            exportName = nameInfo.text;
+            if (!nameInfo.terminated) {
+              issues.push("Export name string truncated.");
+              canCheckNameSorting = false;
+            }
           }
         } else if (nameRva) {
           issues.push("Export name RVA does not map to file data.");
+          canCheckNameSorting = false;
+        } else {
+          canCheckNameSorting = false;
         }
+        if (exportName != null && previousExportName != null && previousExportName > exportName) {
+          namePointerTableIsSorted = false;
+        }
+        if (exportName != null) previousExportName = exportName;
+        if (funcIndex >= NumberOfFunctions) {
+          issues.push(`Export ordinal table entry ${funcIndex} is out of range for ${NumberOfFunctions} functions.`);
+          continue;
+        }
+        if (exportName != null) functionNames.set(funcIndex, exportName);
       }
+    }
+    if (canCheckNameSorting && !namePointerTableIsSorted) {
+      issues.push(
+        "Export name pointer table is not sorted lexically; the PE loader expects it to support binary search."
+      );
     }
     for (let idx = 0; idx < NumberOfFunctions; idx += 1) {
       const funcRva = await readMappedU32(AddressOfFunctions, idx);
