@@ -58,6 +58,7 @@ export function renderDebug(pe: PeWindowsParseResult, out: string[]): void {
   renderDebugIntro(out);
   renderEntryTable(pe, out);
   renderDecodedEntryDetails(pe, pe.debug, out);
+  if (pe.debug.notes?.length) out.push(`<div class="smallNote">${escapeHtml(pe.debug.notes.join(" | "))}</div>`);
   if (pe.debug.warning) out.push(`<div class="smallNote">${escapeHtml(pe.debug.warning)}</div>`);
   out.push(renderPeSectionEnd());
 }

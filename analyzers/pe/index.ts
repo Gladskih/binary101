@@ -3,6 +3,7 @@ import { createFileRangeReader } from "../file-range-reader.js";
 import { isPeWindowsCore, parsePeHeaders } from "./core/index.js";
 import { computePeAuthenticodeDigest, verifyAuthenticodeWithBundledTrust } from "./authenticode/verify.js";
 import { parseDebugDirectory } from "./debug/directory.js";
+import { collectDebugExceptionConsistencyFindings } from "./debug/exception-consistency.js";
 import { parseCoffDebugInfoFromFileHeader } from "./debug/coff.js";
 import { parseLoadConfigDirectory32, parseLoadConfigDirectory64 } from "./load-config/index.js";
 import { readSafeSehHandlerTable } from "./load-config/tables.js";
@@ -57,14 +58,19 @@ import type { PeParseResult } from "./core/parse-result.js";
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types
 const IMAGE_FILE_MACHINE_I386 = 0x014c;
 
-const appendUniqueWarnings = (existing: string[] | undefined, messages: string[]): string[] | undefined =>
+const appendUniqueMessages = (existing: string[] | undefined, messages: string[]): string[] | undefined =>
   messages.length ? [...new Set([...(existing ?? []), ...messages])] : existing;
+
+const appendDebugWarnings = (existing: string | null, messages: string[]): string | null => {
+  if (!messages.length) return existing;
+  return [...new Set([...(existing ? existing.split(" | ") : []), ...messages])].join(" | ");
+};
 
 const digestCacheKey = (algorithm: AlgorithmIdentifier): string =>
   typeof algorithm === "string" ? algorithm : JSON.stringify(algorithm);
 
 const withLayoutWarnings = <T extends PeParseResult>(result: T, fileSize: number): T => {
-  const mergedWarnings = appendUniqueWarnings(result.warnings, collectPeLayoutWarnings(result, fileSize));
+  const mergedWarnings = appendUniqueMessages(result.warnings, collectPeLayoutWarnings(result, fileSize));
   return mergedWarnings?.length ? { ...result, warnings: mergedWarnings } : result;
 };
 
@@ -132,6 +138,17 @@ export async function parsePe(
   const resources = await parseResources(reader, dataDirs, rvaToOff, parseManifestXmlDocument);
   const reloc = await parseBaseRelocations(reader, dataDirs, rvaToOff);
   const exception = await parseExceptionDirectory(reader, dataDirs, rvaToOff, canonicalMachine);
+  const debugExceptionFindings = await collectDebugExceptionConsistencyFindings(
+    reader,
+    dataDirs,
+    rvaToOff,
+    debugResult.entries
+  );
+  const debugNotes = appendUniqueMessages(undefined, debugExceptionFindings.notes);
+  const debugWarning = appendDebugWarnings(
+    debugResult.warning,
+    debugExceptionFindings.warnings
+  );
   const boundImports = await parseBoundImports(reader, dataDirs, rvaToOff);
   const delayImports = await peVariant.parseDelayImports(reader, dataDirs, rvaToOff);
   const clr = await parseClrDirectory(reader, dataDirs, rvaToOff);
@@ -206,18 +223,19 @@ export async function parsePe(
   const architecture = parseArchitectureDirectory(dataDirs);
   const globalPtr = parseGlobalPtrDirectory(dataDirs, opt.SizeOfImage);
   const manifestValidation = analyzeManifestConsistency(resources, canonicalMachine, clr);
-  const warnings = appendUniqueWarnings(
+  const warnings = appendUniqueMessages(
     core.warnings,
     manifestValidation?.warnings ?? []
   );
   return withLayoutWarnings({
     debug:
-      debugResult.entry || debugResult.warning || debugResult.entries.length
+      debugResult.entry || debugWarning || debugNotes?.length || debugResult.entries.length
         ? {
             entry: debugResult.entry,
             ...(debugResult.entries.length ? { entries: debugResult.entries } : {}),
+            ...(debugNotes?.length ? { notes: debugNotes } : {}),
             ...(debugResult.rawDataRanges.length ? { rawDataRanges: debugResult.rawDataRanges } : {}),
-            ...(debugResult.warning ? { warning: debugResult.warning } : {})
+            ...(debugWarning ? { warning: debugWarning } : {})
           }
         : null,
     ...(coffDebug ? { coffDebug } : {}),

@@ -39,6 +39,7 @@ void test("renderDebug renders CodeView summary and plain entry values", () => {
   const codeView = createDebugViewCodeView();
   const warning = createSyntheticWarning();
   pe.debug = createMappedCodeViewDebugViewSection(section, codeView, warning);
+  pe.debug.notes = ["IMAGE_DEBUG_TYPE_EXCEPTION entry #1 uses a separate physical byte range."];
 
   const html = renderDebugHtml(pe);
 
@@ -60,6 +61,7 @@ void test("renderDebug renders CodeView summary and plain entry values", () => {
     "CodeView RSDS record with PDB identity and path",
     "RSDS",
       escapeRegExp(codeView.path),
+      "IMAGE_DEBUG_TYPE_EXCEPTION entry #1 uses a separate physical byte range",
       escapeRegExp(warning)
   ]);
   assert.doesNotMatch(html, /Show debug directory entries/);

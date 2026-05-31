@@ -26,6 +26,7 @@ import { ROM_OPTIONAL_HEADER_MAGIC } from "../optional-header/magic.js";
 export interface PeDebugSection {
   entry: PeCodeViewEntry | null;
   entries?: PeDebugDirectoryEntry[];
+  notes?: string[];
   warning?: string;
   rawDataRanges?: Array<{ start: number; end: number }>;
 }
