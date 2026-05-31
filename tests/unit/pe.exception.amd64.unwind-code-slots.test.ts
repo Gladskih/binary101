@@ -55,6 +55,29 @@ void test("analyzeAmd64UnwindCodeSlots flags v2 epilog codes after regular codes
   });
 });
 
+void test("analyzeAmd64UnwindCodeSlots skips regular unwind operand slots", async () => {
+  const fixture = createAmd64ExceptionFixtureWithSlots([
+    epilogScopeSlot(),
+    // Microsoft x64 UWOP_SAVE_NONVOL (4) consumes the following slot as a frame
+    // offset operand; the operand's low nibble can equal UOP_Epilog (6).
+    [0x13, 0x34],
+    [0x0a, 0x06],
+    regularUnwindSlot()
+  ]);
+  const analysis = await analyzeAmd64UnwindCodeSlots(
+    new MockFile(fixture.bytes, "amd64-unwind-code-slots-operands.bin"),
+    fixture.primaryUnwindRva,
+    fixture.primaryUnwindCodeCount,
+    AMD64_UNWIND_INFO_VERSION_2
+  );
+  assert.deepEqual(analysis, {
+    epilogScopeCount: 1,
+    hasEpilogInfo: true,
+    hasLateEpilogCode: false,
+    isTruncated: false
+  });
+});
+
 void test("analyzeAmd64UnwindCodeSlots ignores opcode 6 for version 1 blocks", async () => {
   const fixture = createAmd64ExceptionFixtureWithSlots([epilogScopeSlot()]);
   const analysis = await analyzeAmd64UnwindCodeSlots(

@@ -33,11 +33,33 @@ const TRUNCATED_UNWIND_CODE_ANALYSIS: Amd64UnwindCodeAnalysis = {
   isTruncated: true
 };
 
+const regularUnwindSlotCount = (operationCode: number, operationInfo: number): number => {
+  // Microsoft x64 exception handling documents which UWOP_* opcodes consume
+  // trailing UNWIND_CODE slots as operands; those operand slots are raw data
+  // and must not be decoded as independent operations.
+  // https://learn.microsoft.com/en-us/cpp/build/exception-handling-x64
+  switch (operationCode) {
+    case 1:
+      return operationInfo === 0 ? 2 : 3;
+    case 4:
+    case 8:
+      return 2;
+    case 5:
+    case 9:
+      return 3;
+    default:
+      return 1;
+  }
+};
+
 const isUnwindCodeArrayTruncated = (
   offset: number,
   codeBytes: number,
   fileSize: number
 ): boolean => offset < 0 || offset + Uint32Array.BYTES_PER_ELEMENT + codeBytes > fileSize;
+
+const readUnwindOperationByte = (codeView: DataView, codeIndex: number): number =>
+  codeView.getUint8(codeIndex * Uint16Array.BYTES_PER_ELEMENT + 1);
 
 export const analyzeAmd64UnwindCodeSlots = async (
   reader: FileRangeReader,
@@ -54,22 +76,25 @@ export const analyzeAmd64UnwindCodeSlots = async (
   if (codeView.byteLength < codeBytes) return TRUNCATED_UNWIND_CODE_ANALYSIS;
   if (version !== AMD64_UNWIND_INFO_VERSION_2) return NO_UNWIND_CODE_ANALYSIS;
   let epilogScopeCount = 0;
-  let sawNonEpilogCode = false;
-  let hasLateEpilogCode = false;
-  for (let codeIndex = 0; codeIndex < countOfCodes; codeIndex += 1) {
-    const operationByte = codeView.getUint8(codeIndex * Uint16Array.BYTES_PER_ELEMENT + 1);
-    if ((operationByte & 0x0f) !== AMD64_UNWIND_V2_UOP_EPILOG) {
-      sawNonEpilogCode = true;
-      continue;
-    }
-    if (sawNonEpilogCode) {
-      hasLateEpilogCode = true;
-      continue;
-    }
+  let codeIndex = 0;
+  while (codeIndex < countOfCodes) {
+    const operationByte = readUnwindOperationByte(codeView, codeIndex);
+    if ((operationByte & 0x0f) !== AMD64_UNWIND_V2_UOP_EPILOG) break;
     const codeOffset = codeView.getUint8(codeIndex * Uint16Array.BYTES_PER_ELEMENT);
     if (codeOffset !== 0 || operationByte >> 4 !== 0) {
       epilogScopeCount += 1;
     }
+    codeIndex += 1;
+  }
+  let hasLateEpilogCode = false;
+  while (codeIndex < countOfCodes) {
+    const operationByte = readUnwindOperationByte(codeView, codeIndex);
+    const operationCode = operationByte & 0x0f;
+    if (operationCode === AMD64_UNWIND_V2_UOP_EPILOG) {
+      hasLateEpilogCode = true;
+      break;
+    }
+    codeIndex += regularUnwindSlotCount(operationCode, operationByte >> 4);
   }
   return {
     epilogScopeCount,
