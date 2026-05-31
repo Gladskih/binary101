@@ -16,11 +16,29 @@ const hasObjectRelocationOrLineNumberFields = (section: PeSection): boolean =>
   (section.numberOfRelocations >>> 0) !== 0 ||
   (section.numberOfLinenumbers >>> 0) !== 0;
 
-export const collectPeSectionFieldWarnings = (pe: PeParseResult): string[] =>
-  pe.sections
-    .map((section, index) => ({ section, index }))
-    .filter(({ section }) => hasObjectRelocationOrLineNumberFields(section))
-    .map(({ section, index }) =>
-      `Section ${getSectionLabel(section, index)} has COFF object relocation/line-number fields set; ` +
-      "these fields should be zero in executable images."
-    );
+const addObjectFieldWarning = (section: PeSection, index: number, warnings: string[]): void => {
+  if (!hasObjectRelocationOrLineNumberFields(section)) return;
+  warnings.push(
+    `Section ${getSectionLabel(section, index)} has COFF object relocation/line-number fields set; ` +
+    "these fields should be zero in executable images."
+  );
+};
+
+// Microsoft PE/COFF, "Grouped Sections": "$" is object-file syntax, never image syntax.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#grouped-sections-object-only
+const addGroupedNameWarning = (section: PeSection, warnings: string[]): void => {
+  if (!peSectionNameValue(section.name).includes("$")) return;
+  warnings.push(
+    "Section name contains \"$\"; grouped section names are object-file syntax and image section names never " +
+    "contain \"$\"."
+  );
+};
+
+export const collectPeSectionFieldWarnings = (pe: PeParseResult): string[] => {
+  const warnings: string[] = [];
+  pe.sections.forEach((section, index) => {
+    addObjectFieldWarning(section, index, warnings);
+    addGroupedNameWarning(section, warnings);
+  });
+  return warnings;
+};

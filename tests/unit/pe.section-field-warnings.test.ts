@@ -66,3 +66,16 @@ void test("collectPeSectionFieldWarnings accepts zero object relocation and line
 
   assert.deepStrictEqual(collectPeSectionFieldWarnings(createWindowsLayoutSubject(section)), []);
 });
+
+void test("collectPeSectionFieldWarnings reports grouped section names", () => {
+  const section = createSection(".text$mn", DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT);
+
+  assert.deepStrictEqual(collectPeSectionFieldWarnings(createWindowsLayoutSubject(section)), [
+    "Section name contains \"$\"; grouped section names are object-file syntax and image section names never " +
+      "contain \"$\"."
+  ]);
+});
+
+void test("collectPeSectionFieldWarnings accepts ordinary section names", () => {
+  assert.deepStrictEqual(collectPeSectionFieldWarnings(createWindowsLayoutSubject(createTextSection())), []);
+});
