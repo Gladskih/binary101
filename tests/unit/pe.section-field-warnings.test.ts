@@ -13,6 +13,10 @@ import {
 const OBJECT_FIELD_WARNING =
   "Section .text has COFF object relocation/line-number fields set; " +
   "these fields should be zero in executable images.";
+// Microsoft PE/COFF machine and section flag values used by the GPREL tests.
+const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
+const IMAGE_FILE_MACHINE_IA64 = 0x0200;
+const IMAGE_SCN_GPREL = 0x00008000;
 
 const createTextSection = () =>
   createSection(".text", DEFAULT_SECTION_ALIGNMENT, DEFAULT_FILE_ALIGNMENT);
@@ -130,4 +134,24 @@ void test("collectPeSectionFieldWarnings accepts standard content and memory fla
   const section = createTextSectionWithFlags(0x00000020 | 0x00000040 | 0x40000000);
 
   assert.deepStrictEqual(collectPeSectionFieldWarnings(createWindowsLayoutSubject(section)), []);
+});
+
+void test("collectPeSectionFieldWarnings reports GPREL outside IA64 images", () => {
+  const i386 = createWindowsLayoutSubject(createTextSectionWithFlags(IMAGE_SCN_GPREL));
+  const amd64 = createWindowsLayoutSubject(createTextSectionWithFlags(IMAGE_SCN_GPREL));
+  amd64.coff.Machine = IMAGE_FILE_MACHINE_AMD64;
+
+  assert.ok(
+    collectPeSectionFieldWarnings(i386).some(warning => warning.includes("has IMAGE_SCN_GPREL set"))
+  );
+  assert.ok(
+    collectPeSectionFieldWarnings(amd64).some(warning => warning.includes("has IMAGE_SCN_GPREL set"))
+  );
+});
+
+void test("collectPeSectionFieldWarnings accepts GPREL for IA64", () => {
+  const pe = createWindowsLayoutSubject(createTextSectionWithFlags(IMAGE_SCN_GPREL));
+  pe.coff.Machine = IMAGE_FILE_MACHINE_IA64;
+
+  assert.deepStrictEqual(collectPeSectionFieldWarnings(pe), []);
 });

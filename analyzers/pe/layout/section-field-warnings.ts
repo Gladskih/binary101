@@ -16,6 +16,10 @@ const VALID_SECTION_ALIGNMENT_FLAGS_MASK = 0x00e00000;
 const RESERVED_SECTION_FLAGS_MASK =
   0x00000001 | 0x00000002 | 0x00000004 | 0x00000010 | 0x00000100 |
   0x00000400 | 0x00020000 | 0x00040000 | 0x00080000;
+// Microsoft PE/COFF, "Machine Types" and "Section Flags": IMAGE_SCN_GPREL is IA64-specific.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types
+const IMAGE_FILE_MACHINE_IA64 = 0x0200;
+const IMAGE_SCN_GPREL = 0x00008000;
 
 const getSectionLabel = (section: PeSection, index: number): string =>
   peSectionNameValue(section.name) || `(unnamed #${index + 1})`;
@@ -71,6 +75,20 @@ const addReservedFlagWarning = (section: PeSection, index: number, warnings: str
   );
 };
 
+const addGprelWarning = (
+  pe: PeParseResult,
+  section: PeSection,
+  index: number,
+  warnings: string[]
+): void => {
+  if (((section.characteristics >>> 0) & IMAGE_SCN_GPREL) === 0) return;
+  if ((pe.coff.Machine >>> 0) === IMAGE_FILE_MACHINE_IA64) return;
+  warnings.push(
+    `Section ${getSectionLabel(section, index)} has IMAGE_SCN_GPREL set; this flag should be used only ` +
+    "for IA64 and must not be set in image files for other architectures."
+  );
+};
+
 export const collectPeSectionFieldWarnings = (pe: PeParseResult): string[] => {
   const warnings: string[] = [];
   pe.sections.forEach((section, index) => {
@@ -78,6 +96,7 @@ export const collectPeSectionFieldWarnings = (pe: PeParseResult): string[] => {
     addGroupedNameWarning(section, warnings);
     addObjectOnlyFlagWarning(section, index, warnings);
     addReservedFlagWarning(section, index, warnings);
+    addGprelWarning(pe, section, index, warnings);
   });
   return warnings;
 };
