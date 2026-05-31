@@ -17,15 +17,41 @@ const IMAGE_BASE_ALIGNMENT = 0x10000n;
 // Microsoft PE/COFF, "DLL Characteristics": bits 0x0001 through 0x0008 are reserved.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#dll-characteristics
 const RESERVED_DLL_CHARACTERISTICS_MASK = 0x000f;
+// Microsoft PE/COFF, "Characteristics": these COFF file flags are deprecated, obsolete,
+// or reserved and should be zero in current images.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#characteristics
+const NON_STANDARD_COFF_CHARACTERISTICS = [
+  [0x0004, "LINE_NUMS_STRIPPED"],
+  [0x0008, "LOCAL_SYMS_STRIPPED"],
+  [0x0010, "AGGRESSIVE_WS_TRIM"],
+  [0x0040, "RESERVED_0040"],
+  [0x0080, "BYTES_REVERSED_LO"],
+  [0x8000, "BYTES_REVERSED_HI"]
+] as const;
 
 const isPowerOfTwo = (value: number): boolean => value > 0 && (value & (value - 1)) === 0;
 const formatHex16 = (value: number): string => `0x${(value & 0xffff).toString(16).padStart(4, "0")}`;
+const formatNamedBits = (bits: readonly (readonly [number, string])[], value: number): string =>
+  bits
+    .filter(([bit]) => ((value >>> 0) & bit) !== 0)
+    .map(([bit, name]) => `${name} (${formatHex16(bit)})`)
+    .join(", ");
 
 export const collectPeHeaderFieldWarnings = (pe: PeParseResult): string[] => {
   const warnings: string[] = [];
   if ((pe.coff.NumberOfSections >>> 0) > WINDOWS_LOADER_SECTION_LIMIT) {
     warnings.push(
       "NumberOfSections is greater than 96; the Windows loader limits image section count to 96."
+    );
+  }
+  const nonStandardCoffCharacteristics = formatNamedBits(
+    NON_STANDARD_COFF_CHARACTERISTICS,
+    pe.coff.Characteristics
+  );
+  if (nonStandardCoffCharacteristics.length) {
+    warnings.push(
+      `COFF Characteristics contains deprecated or reserved bits: ` +
+        `${nonStandardCoffCharacteristics}.`
     );
   }
   if (

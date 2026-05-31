@@ -129,3 +129,22 @@ void test("collectPeHeaderFieldWarnings accepts standard DllCharacteristics bits
 
   assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
 });
+
+void test("collectPeHeaderFieldWarnings reports deprecated or reserved COFF Characteristics bits", () => {
+  for (const bit of [0x0004, 0x0008, 0x0010, 0x0040, 0x0080, 0x8000]) {
+    const pe = createWindowsLayoutSubject();
+    pe.coff.Characteristics = bit;
+    assert.ok(
+      collectPeHeaderFieldWarnings(pe).some(warning =>
+        warning.includes("COFF Characteristics contains deprecated or reserved bits")
+      )
+    );
+  }
+});
+
+void test("collectPeHeaderFieldWarnings accepts standard COFF Characteristics bits", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.coff.Characteristics = 0x0002 | 0x0020 | 0x2000;
+
+  assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
+});
