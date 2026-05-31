@@ -110,3 +110,22 @@ void test("collectPeHeaderFieldWarnings accepts zero LoaderFlags", () => {
 
   assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
 });
+
+void test("collectPeHeaderFieldWarnings reports reserved DllCharacteristics bits", () => {
+  for (const bit of [0x0001, 0x0002, 0x0004, 0x0008]) {
+    const pe = createWindowsLayoutSubject();
+    pe.opt.DllCharacteristics = bit;
+    assert.ok(
+      collectPeHeaderFieldWarnings(pe).some(warning =>
+        warning.includes(`DllCharacteristics has reserved bits set: 0x${bit.toString(16).padStart(4, "0")}.`)
+      )
+    );
+  }
+});
+
+void test("collectPeHeaderFieldWarnings accepts standard DllCharacteristics bits", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.opt.DllCharacteristics = 0x0100 | 0x0040;
+
+  assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
+});

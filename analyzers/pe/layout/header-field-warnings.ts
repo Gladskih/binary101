@@ -14,8 +14,12 @@ const MAXIMUM_FILE_ALIGNMENT = 0x10000;
 // Microsoft PE/COFF, "Optional Header Windows-Specific Fields": ImageBase must be 64 K aligned.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#optional-header-windows-specific-fields-image-only
 const IMAGE_BASE_ALIGNMENT = 0x10000n;
+// Microsoft PE/COFF, "DLL Characteristics": bits 0x0001 through 0x0008 are reserved.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#dll-characteristics
+const RESERVED_DLL_CHARACTERISTICS_MASK = 0x000f;
 
 const isPowerOfTwo = (value: number): boolean => value > 0 && (value & (value - 1)) === 0;
+const formatHex16 = (value: number): string => `0x${(value & 0xffff).toString(16).padStart(4, "0")}`;
 
 export const collectPeHeaderFieldWarnings = (pe: PeParseResult): string[] => {
   const warnings: string[] = [];
@@ -54,6 +58,12 @@ export const collectPeHeaderFieldWarnings = (pe: PeParseResult): string[] => {
   }
   if (isPeWindowsParseResult(pe) && (pe.opt.LoaderFlags >>> 0) !== 0) {
     warnings.push("LoaderFlags is reserved and must be zero.");
+  }
+  if (isPeWindowsParseResult(pe) && ((pe.opt.DllCharacteristics >>> 0) & RESERVED_DLL_CHARACTERISTICS_MASK) !== 0) {
+    warnings.push(
+      `DllCharacteristics has reserved bits set: ${formatHex16(pe.opt.DllCharacteristics)}. ` +
+        "Reserved bits 0x0001, 0x0002, 0x0004, and 0x0008 must be zero."
+    );
   }
   return warnings;
 };
