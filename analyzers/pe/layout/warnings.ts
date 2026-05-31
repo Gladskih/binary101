@@ -6,6 +6,7 @@ import {
   type PeWindowsParseResult
 } from "../core/parse-result.js";
 import { collectPeDosHeaderWarnings } from "./dos-header-warnings.js";
+import { collectPeHeaderFieldWarnings } from "./header-field-warnings.js";
 import { isPeClrNativeImage, isPeWinmd } from "../subtype.js";
 import { isReadyToRunOsOverriddenMachine } from "../machine.js";
 import { peSectionNameValue } from "../sections/name.js";
@@ -283,6 +284,7 @@ const shouldSkipDosStubWarnings = (pe: PeParseResult): boolean =>
 
 export const collectPeLayoutWarnings = (pe: PeParseResult, fileSize?: number): string[] => {
   const warnings = new Set(shouldSkipDosStubWarnings(pe) ? [] : collectPeDosHeaderWarnings(pe.dos));
+  collectPeHeaderFieldWarnings(pe).forEach(warning => warnings.add(warning));
   addSectionHeaderWarnings(pe, warnings);
   addSectionVirtualLayoutWarnings(pe, warnings);
   addSectionRawLayoutWarnings(pe, warnings);
