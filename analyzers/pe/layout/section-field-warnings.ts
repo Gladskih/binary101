@@ -11,6 +11,11 @@ import { formatSectionCharacteristicFlags } from "../constants.js";
 const OBJECT_ONLY_SECTION_FLAGS_MASK = 0x00000008 | 0x00000200 | 0x00000800 | 0x00001000;
 const SECTION_ALIGNMENT_FLAGS_MASK = 0x00f00000;
 const VALID_SECTION_ALIGNMENT_FLAGS_MASK = 0x00e00000;
+// Microsoft PE/COFF, "Section Flags": these values are reserved for future use.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
+const RESERVED_SECTION_FLAGS_MASK =
+  0x00000001 | 0x00000002 | 0x00000004 | 0x00000010 | 0x00000100 |
+  0x00000400 | 0x00020000 | 0x00040000 | 0x00080000;
 
 const getSectionLabel = (section: PeSection, index: number): string =>
   peSectionNameValue(section.name) || `(unnamed #${index + 1})`;
@@ -57,12 +62,22 @@ const addObjectOnlyFlagWarning = (section: PeSection, index: number, warnings: s
   );
 };
 
+const addReservedFlagWarning = (section: PeSection, index: number, warnings: string[]): void => {
+  const flags = (section.characteristics >>> 0) & RESERVED_SECTION_FLAGS_MASK;
+  if (!flags) return;
+  warnings.push(
+    `Section ${getSectionLabel(section, index)} has reserved section flags set: ` +
+    `${formatSectionCharacteristicFlags(flags).join(", ")}.`
+  );
+};
+
 export const collectPeSectionFieldWarnings = (pe: PeParseResult): string[] => {
   const warnings: string[] = [];
   pe.sections.forEach((section, index) => {
     addObjectFieldWarning(section, index, warnings);
     addGroupedNameWarning(section, warnings);
     addObjectOnlyFlagWarning(section, index, warnings);
+    addReservedFlagWarning(section, index, warnings);
   });
   return warnings;
 };

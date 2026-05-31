@@ -109,3 +109,25 @@ void test("collectPeSectionFieldWarnings accepts standard memory section flags",
 
   assert.deepStrictEqual(collectPeSectionFieldWarnings(createWindowsLayoutSubject(section)), []);
 });
+
+void test("collectPeSectionFieldWarnings reports reserved section flags", () => {
+  const lowReserved = createTextSectionWithFlags(0x00000001);
+  const highReserved = createTextSectionWithFlags(0x00020000);
+
+  assert.ok(
+    collectPeSectionFieldWarnings(createWindowsLayoutSubject(lowReserved)).some(warning =>
+      warning.includes("reserved section flags set: RESERVED_00000001")
+    )
+  );
+  assert.ok(
+    collectPeSectionFieldWarnings(createWindowsLayoutSubject(highReserved)).some(warning =>
+      warning.includes("reserved section flags set: MEM_PURGEABLE/MEM_16BIT")
+    )
+  );
+});
+
+void test("collectPeSectionFieldWarnings accepts standard content and memory flags", () => {
+  const section = createTextSectionWithFlags(0x00000020 | 0x00000040 | 0x40000000);
+
+  assert.deepStrictEqual(collectPeSectionFieldWarnings(createWindowsLayoutSubject(section)), []);
+});
