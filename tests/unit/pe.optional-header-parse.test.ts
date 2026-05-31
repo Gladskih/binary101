@@ -6,7 +6,13 @@ import { parseOptionalHeaderAndDirectories } from "../../analyzers/pe/optional-h
 import { MockFile } from "../helpers/mock-file.js";
 
 const PE32_OPTIONAL_HEADER_MAGIC = 0x10b;
+const PE32_PLUS_OPTIONAL_HEADER_MAGIC = 0x20b;
 const ROM_OPTIONAL_HEADER_MAGIC = 0x107;
+// Microsoft PE/COFF Optional Header: PE32/PE32+ Windows fields end at 96/112.
+const PE32_WINDOWS_FIELDS_SIZE = 96;
+const PE32_PLUS_WINDOWS_FIELDS_SIZE = 112;
+const WINDOWS_FIELDS_SIZE_WARNING =
+  "SizeOfOptionalHeader is too small to contain the complete PE32/PE32+ optional header before data directories.";
 const patternedSentinelWord = (index: number): number => ((index + 1) * 0x11111111) >>> 0;
 
 void test("parseOptionalHeaderAndDirectories preserves data directories beyond index 15", async () => {
@@ -98,4 +104,53 @@ void test("parseOptionalHeaderAndDirectories decodes IMAGE_ROM_OPTIONAL_HEADER w
   });
   assert.deepStrictEqual(parsed.dataDirs, []);
   assert.deepStrictEqual(parsed.warnings ?? [], []);
+});
+
+void test("parseOptionalHeaderAndDirectories warns when PE32 Windows fields do not fit", async () => {
+  const optionalHeaderSize = PE32_WINDOWS_FIELDS_SIZE - 1;
+  const fileBytes = new Uint8Array(24 + optionalHeaderSize).fill(0);
+  const optionalHeaderOffset = 24;
+  new DataView(fileBytes.buffer).setUint16(optionalHeaderOffset, PE32_OPTIONAL_HEADER_MAGIC, true);
+
+  const parsed = await parseOptionalHeaderAndDirectories(
+    new MockFile(fileBytes, "short-pe32-optional-header.bin"),
+    0,
+    optionalHeaderSize
+  );
+
+  assert.ok(parsed.warnings?.includes(WINDOWS_FIELDS_SIZE_WARNING));
+});
+
+void test("parseOptionalHeaderAndDirectories warns when PE32+ Windows fields do not fit", async () => {
+  const optionalHeaderSize = PE32_PLUS_WINDOWS_FIELDS_SIZE - 1;
+  const fileBytes = new Uint8Array(24 + optionalHeaderSize).fill(0);
+  const optionalHeaderOffset = 24;
+  new DataView(fileBytes.buffer).setUint16(optionalHeaderOffset, PE32_PLUS_OPTIONAL_HEADER_MAGIC, true);
+
+  const parsed = await parseOptionalHeaderAndDirectories(
+    new MockFile(fileBytes, "short-pe32-plus-optional-header.bin"),
+    0,
+    optionalHeaderSize
+  );
+
+  assert.ok(parsed.warnings?.includes(WINDOWS_FIELDS_SIZE_WARNING));
+});
+
+void test("parseOptionalHeaderAndDirectories accepts complete Windows fields before directories", async () => {
+  const pe32Bytes = new Uint8Array(24 + PE32_WINDOWS_FIELDS_SIZE).fill(0);
+  const pe32PlusBytes = new Uint8Array(24 + PE32_PLUS_WINDOWS_FIELDS_SIZE).fill(0);
+  const pe32View = new DataView(pe32Bytes.buffer);
+  const pe32PlusView = new DataView(pe32PlusBytes.buffer);
+  pe32View.setUint16(24, PE32_OPTIONAL_HEADER_MAGIC, true);
+  pe32PlusView.setUint16(24, PE32_PLUS_OPTIONAL_HEADER_MAGIC, true);
+
+  const pe32 = await parseOptionalHeaderAndDirectories(new MockFile(pe32Bytes), 0, PE32_WINDOWS_FIELDS_SIZE);
+  const pe32Plus = await parseOptionalHeaderAndDirectories(
+    new MockFile(pe32PlusBytes),
+    0,
+    PE32_PLUS_WINDOWS_FIELDS_SIZE
+  );
+
+  assert.deepStrictEqual(pe32.warnings ?? [], []);
+  assert.deepStrictEqual(pe32Plus.warnings ?? [], []);
 });
