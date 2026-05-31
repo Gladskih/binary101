@@ -260,3 +260,27 @@ void test("parseExportDirectory reports when a mapped DLL name offset falls past
   ));
   assert.ok(result.issues.some(issue => /name/i.test(issue)));
 });
+
+void test("parseExportDirectory warns when export flags are non-zero", async () => {
+  const directoryRva = 0x10;
+  const bytes = new Uint8Array(directoryRva + IMAGE_EXPORT_DIRECTORY_SIZE).fill(0);
+  new DataView(bytes.buffer).setUint32(directoryRva, 1, true);
+
+  const result = expectDefined(await parseExportFixture(bytes, {
+    rva: directoryRva,
+    size: IMAGE_EXPORT_DIRECTORY_SIZE
+  }));
+
+  assert.ok(result.issues.includes("Export directory flags are reserved and must be zero."));
+});
+
+void test("parseExportDirectory accepts zero export flags", async () => {
+  const directoryRva = 0x10;
+  const bytes = new Uint8Array(directoryRva + IMAGE_EXPORT_DIRECTORY_SIZE).fill(0);
+  const result = expectDefined(await parseExportFixture(bytes, {
+    rva: directoryRva,
+    size: IMAGE_EXPORT_DIRECTORY_SIZE
+  }));
+
+  assert.ok(!result.issues.includes("Export directory flags are reserved and must be zero."));
+});

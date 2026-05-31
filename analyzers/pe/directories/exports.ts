@@ -117,6 +117,7 @@ export async function parseExportDirectory(
   const AddressOfNameOrdinals = dv.getUint32(36, true);
   const issues: string[] = [];
   const entries: Array<{ ordinal: number; rva: number; name: string | null; forwarder?: string | null }> = [];
+  if (Characteristics !== 0) issues.push("Export directory flags are reserved and must be zero.");
 
   const namePtr = NameRva ? rvaToOff(NameRva) : null;
   let name = "";
