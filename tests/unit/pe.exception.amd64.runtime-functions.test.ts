@@ -89,16 +89,17 @@ void test("readAmd64RuntimeFunctions reports unsorted valid entries once", async
   assert.strictEqual(issues.filter(issue => /not sorted/i.test(issue)).length, 1);
 });
 
-void test("readAmd64RuntimeFunctions skips invalid begin ranges but keeps unwind seeds", async () => {
+void test("readAmd64RuntimeFunctions skips invalid begin ranges and ignores their unwind seeds", async () => {
   const fixture = createRuntimeFunctionFixture(2);
   const validFunctionRva = fixture.beginRvas[0]!;
   const invalidFunctionRva = fixture.beginRvas[1]!;
+  const invalidUnwindInfoRva = fixture.unwindInfoRva + UNWIND_INFO_HEADER_SIZE_BYTES;
   writeRuntimeFunction(
     fixture.view,
     fixture.directoryRva + RUNTIME_FUNCTION_ENTRY_SIZE_BYTES,
     invalidFunctionRva,
     invalidFunctionRva,
-    fixture.unwindInfoRva
+    invalidUnwindInfoRva
   );
   const issues: string[] = [];
   const table = await readAmd64RuntimeFunctions(
@@ -112,19 +113,68 @@ void test("readAmd64RuntimeFunctions skips invalid begin ranges but keeps unwind
   assert.strictEqual(table.invalidEntryCount, 1);
   assert.deepEqual(table.beginRvas, [validFunctionRva]);
   assert.deepEqual([...table.unwindRvas], [fixture.unwindInfoRva]);
+  assert.ok(issues.some(issue => /RUNTIME_FUNCTION.*BeginAddress/i.test(issue)));
+});
+
+void test("readAmd64RuntimeFunctions rejects unwind pointers back into the exception table", async () => {
+  const fixture = createRuntimeFunctionFixture(1);
+  writeRuntimeFunction(
+    fixture.view,
+    fixture.directoryRva,
+    fixture.beginRvas[0]!,
+    fixture.beginRvas[0]! + fixture.functionSizeBytes,
+    fixture.directoryRva
+  );
+  const issues: string[] = [];
+  const table = await readAmd64RuntimeFunctions(
+    new MockFile(fixture.bytes, "amd64-runtime-functions-pdata-unwind.bin"),
+    fixture.directoryRva,
+    1,
+    identityRvaToOffset,
+    issues
+  );
+
+  assert.strictEqual(table.invalidEntryCount, 1);
+  assert.deepEqual([...table.unwindRvas], []);
+  assert.ok(issues.some(issue => /RUNTIME_FUNCTION.*UnwindInfoAddress/i.test(issue)));
+});
+
+void test("readAmd64RuntimeFunctions rejects missing top-level unwind addresses", async () => {
+  const fixture = createRuntimeFunctionFixture(1);
+  writeRuntimeFunction(
+    fixture.view,
+    fixture.directoryRva,
+    fixture.beginRvas[0]!,
+    fixture.beginRvas[0]! + fixture.functionSizeBytes,
+    0
+  );
+  const issues: string[] = [];
+  const table = await readAmd64RuntimeFunctions(
+    new MockFile(fixture.bytes, "amd64-runtime-functions-zero-unwind.bin"),
+    fixture.directoryRva,
+    1,
+    identityRvaToOffset,
+    issues
+  );
+
+  assert.strictEqual(table.invalidEntryCount, 1);
+  assert.deepEqual([...table.unwindRvas], []);
+  assert.ok(issues.some(issue => /RUNTIME_FUNCTION.*UnwindInfoAddress.*zero/i.test(issue)));
 });
 
 void test("readAmd64RuntimeFunctions stops when declared entries stop mapping", async () => {
   const allocator = createRvaAllocator();
   const directoryRva = allocator.allocate(RUNTIME_FUNCTION_ENTRY_SIZE_BYTES * 2);
   const functionRva = allocator.allocate(Uint8Array.BYTES_PER_ELEMENT);
+  const unwindInfoRva = allocator.allocate(UNWIND_INFO_HEADER_SIZE_BYTES);
   const bytes = new Uint8Array(allocator.current()).fill(0);
+  bytes[unwindInfoRva] = AMD64_UNWIND_INFO_VERSION_1;
   writeRuntimeFunction(
     new DataView(bytes.buffer),
     directoryRva,
     functionRva,
     functionRva + Uint8Array.BYTES_PER_ELEMENT,
-    0
+    unwindInfoRva
   );
   const issues: string[] = [];
   const table = await readAmd64RuntimeFunctions(

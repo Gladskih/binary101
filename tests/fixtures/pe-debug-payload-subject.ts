@@ -152,7 +152,9 @@ const createExceptionPayload = (): Uint8Array => {
   const view = new DataView(bytes.buffer);
   view.setUint32(0, 1, true);
   view.setUint32(4, 2, true);
-  view.setUint32(8, 0, true);
+  // This fixture only embeds the .pdata copy; use a nonzero RVA outside it so
+  // the pdata analyzer can validate the RUNTIME_FUNCTION row itself.
+  view.setUint32(8, 3, true);
   return bytes;
 };
 

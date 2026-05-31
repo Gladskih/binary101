@@ -5,6 +5,8 @@ import { parseExceptionDirectory } from "../../analyzers/pe/exception/index.js";
 import { MockFile } from "../helpers/mock-file.js";
 const rvaToOff = (rva: number): number => rva;
 const IMAGE_FILE_MACHINE_I386 = 0x014c;
+// Microsoft x64 UNWIND_INFO stores version 1 in the low three bits of the header.
+const AMD64_UNWIND_INFO_VERSION_1 = 0x01;
 const writeRuntimeFunction = (
   view: DataView,
   offset: number,
@@ -52,8 +54,10 @@ void test("parseExceptionDirectory parses pdata entries and unwind info stats", 
 void test("parseExceptionDirectory reports misaligned directory sizes", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const exOff = 0x80;
+  const unwindInfoRva = 0x100;
+  bytes[unwindInfoRva] = AMD64_UNWIND_INFO_VERSION_1;
   const dv = new DataView(bytes.buffer);
-  writeRuntimeFunction(dv, exOff, 0x10, 0x20, 0);
+  writeRuntimeFunction(dv, exOff, 0x10, 0x20, unwindInfoRva);
   const parsed = await parseExceptionFixture(bytes, "exception-misaligned.bin", exOff, 13);
   assert.ok(parsed);
   assert.strictEqual(parsed.functionCount, 1);
@@ -82,8 +86,8 @@ void test("parseExceptionDirectory reports unsorted RUNTIME_FUNCTION entries", a
   // RUNTIME_FUNCTION entries are sorted by function start address before emission into .pdata.
   writeRuntimeFunction(dv, exOff + 0, 0x100, 0x110, 0x200);
   writeRuntimeFunction(dv, exOff + 12, 0x80, 0x90, 0x210);
-  bytes[0x200] = 0x01;
-  bytes[0x210] = 0x01;
+  bytes[0x200] = AMD64_UNWIND_INFO_VERSION_1;
+  bytes[0x210] = AMD64_UNWIND_INFO_VERSION_1;
   const parsed = await parseExceptionFixture(bytes, "exception-unsorted.bin", exOff, 24);
   assert.ok(parsed);
   assert.ok(parsed.issues.some(issue => /sorted|order/i.test(issue)));
@@ -150,18 +154,18 @@ void test("parseExceptionDirectory returns empty stats when no complete entry is
   assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("truncated")));
   assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("does not contain")));
 });
-void test("parseExceptionDirectory reports unreadable UNWIND_INFO blocks", async () => {
+void test("parseExceptionDirectory does not scan unwind RVAs from invalid runtime functions", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const exOff = 0x80;
   const dv = new DataView(bytes.buffer);
   writeRuntimeFunction(dv, exOff, 0x10, 0x20, 0x300);
   const parsed = await parseExceptionFixture(bytes, "exception-unwind-missing.bin", exOff, 12);
   assert.ok(parsed);
-  assert.strictEqual(parsed.uniqueUnwindInfoCount, 1);
+  assert.strictEqual(parsed.uniqueUnwindInfoCount, 0);
   assert.strictEqual(parsed.handlerUnwindInfoCount, 0);
   assert.strictEqual(parsed.chainedUnwindInfoCount, 0);
   assert.strictEqual(parsed.invalidEntryCount, 1);
-  assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("could not be read")));
+  assert.ok(!parsed.issues.some(issue => issue.toLowerCase().includes("could not be read")));
 });
 void test("parseExceptionDirectory reports unexpected UNWIND_INFO versions", async () => {
   const bytes = new Uint8Array(0x400).fill(0);
@@ -181,8 +185,10 @@ void test("parseExceptionDirectory reports unexpected UNWIND_INFO versions", asy
 void test("parseExceptionDirectory counts invalid RUNTIME_FUNCTION ranges", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const exOff = 0x80;
+  const unwindInfoRva = 0x100;
+  bytes[unwindInfoRva] = AMD64_UNWIND_INFO_VERSION_1;
   const dv = new DataView(bytes.buffer);
-  writeRuntimeFunction(dv, exOff, 0x10, 0x20, 0);
+  writeRuntimeFunction(dv, exOff, 0x10, 0x20, unwindInfoRva);
   writeRuntimeFunction(dv, exOff + 12, 0x30, 0x20, 0);
   const parsed = await parseExceptionFixture(bytes, "exception-invalid-range.bin", exOff, 24);
   assert.ok(parsed);
@@ -192,8 +198,10 @@ void test("parseExceptionDirectory counts invalid RUNTIME_FUNCTION ranges", asyn
 void test("parseExceptionDirectory does not expose invalid function ranges as unwind begin seeds", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const exOff = 0x80;
+  const unwindInfoRva = 0x100;
+  bytes[unwindInfoRva] = AMD64_UNWIND_INFO_VERSION_1;
   const dv = new DataView(bytes.buffer);
-  writeRuntimeFunction(dv, exOff, 0x10, 0x20, 0);
+  writeRuntimeFunction(dv, exOff, 0x10, 0x20, unwindInfoRva);
   writeRuntimeFunction(dv, exOff + 12, 0x30, 0x20, 0);
   const parsed = await parseExceptionFixture(bytes, "exception-invalid-seed.bin", exOff, 24);
   assert.ok(parsed);
