@@ -1,0 +1,20 @@
+{
+  "name": "Binary101 Local File Inspector",
+  "short_name": "Binary101",
+  "description": "Inspect binary files locally in the browser. No uploads or tracking.",
+  "id": ".",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#f6f7f9",
+  "theme_color": "#141418",
+  "categories": ["developer tools", "education", "utilities"],
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
