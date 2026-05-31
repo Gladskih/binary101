@@ -52,5 +52,8 @@ export const collectPeHeaderFieldWarnings = (pe: PeParseResult): string[] => {
   if (isPeWindowsParseResult(pe) && (pe.opt.Win32VersionValue >>> 0) !== 0) {
     warnings.push("Win32VersionValue is reserved and must be zero.");
   }
+  if (isPeWindowsParseResult(pe) && (pe.opt.LoaderFlags >>> 0) !== 0) {
+    warnings.push("LoaderFlags is reserved and must be zero.");
+  }
   return warnings;
 };

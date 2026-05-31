@@ -96,3 +96,17 @@ void test("collectPeHeaderFieldWarnings accepts zero Win32VersionValue", () => {
 
   assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
 });
+
+void test("collectPeHeaderFieldWarnings reports non-zero LoaderFlags", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.opt.LoaderFlags = 1;
+
+  assert.ok(collectPeHeaderFieldWarnings(pe).includes("LoaderFlags is reserved and must be zero."));
+});
+
+void test("collectPeHeaderFieldWarnings accepts zero LoaderFlags", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.opt.LoaderFlags = 0;
+
+  assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
+});
