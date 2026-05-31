@@ -148,3 +148,25 @@ void test("collectPeHeaderFieldWarnings accepts standard COFF Characteristics bi
 
   assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
 });
+
+void test("collectPeHeaderFieldWarnings reports reserved data directory values", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.dirs = [
+    { name: "ARCHITECTURE", rva: 0x1000, size: 0 },
+    { name: "GLOBALPTR", rva: 0x2000, size: 4 },
+    { name: "RESERVED", rva: 0, size: 8 }
+  ];
+
+  assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), [
+    "ARCHITECTURE data directory is reserved and must be zero.",
+    "GLOBALPTR data directory Size must be zero.",
+    "Reserved data directory is reserved and must be zero."
+  ]);
+});
+
+void test("collectPeHeaderFieldWarnings accepts a GLOBALPTR RVA with zero Size", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.dirs = [{ name: "GLOBALPTR", rva: 0x2000, size: 0 }];
+
+  assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
+});

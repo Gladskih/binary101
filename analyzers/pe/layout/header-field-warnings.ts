@@ -36,6 +36,22 @@ const formatNamedBits = (bits: readonly (readonly [number, string])[], value: nu
     .filter(([bit]) => ((value >>> 0) & bit) !== 0)
     .map(([bit, name]) => `${name} (${formatHex16(bit)})`)
     .join(", ");
+const isNonZeroDataDirectory = (rva: number, size: number): boolean =>
+  (rva >>> 0) !== 0 || (size >>> 0) !== 0;
+
+const addReservedDataDirectoryWarnings = (pe: PeParseResult, warnings: string[]): void => {
+  for (const directory of pe.dirs) {
+    if (directory.name === "ARCHITECTURE" && isNonZeroDataDirectory(directory.rva, directory.size)) {
+      warnings.push("ARCHITECTURE data directory is reserved and must be zero.");
+    }
+    if (directory.name === "GLOBALPTR" && (directory.size >>> 0) !== 0) {
+      warnings.push("GLOBALPTR data directory Size must be zero.");
+    }
+    if (directory.name === "RESERVED" && isNonZeroDataDirectory(directory.rva, directory.size)) {
+      warnings.push("Reserved data directory is reserved and must be zero.");
+    }
+  }
+};
 
 export const collectPeHeaderFieldWarnings = (pe: PeParseResult): string[] => {
   const warnings: string[] = [];
@@ -91,5 +107,6 @@ export const collectPeHeaderFieldWarnings = (pe: PeParseResult): string[] => {
         "Reserved bits 0x0001, 0x0002, 0x0004, and 0x0008 must be zero."
     );
   }
+  addReservedDataDirectoryWarnings(pe, warnings);
   return warnings;
 };
