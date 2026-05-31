@@ -1,7 +1,7 @@
 "use strict";
 
 import type { FileRangeReader } from "../../file-range-reader.js";
-import { addSectionEntropies } from "../sections/entropy.js";
+import { addSectionRawDataAnalysis } from "../sections/raw-data.js";
 import {
   ROM_OPTIONAL_HEADER_MAGIC
 } from "../optional-header/magic.js";
@@ -135,7 +135,7 @@ const buildHeaderCore = async (
     null,
     0
   );
-  await addSectionEntropies(reader, parsedSections.sections);
+  await addSectionRawDataAnalysis(reader, parsedSections.sections);
   const warnings = buildCoreWarnings(optionalHeaderResult.warnings, parsedSections.warnings);
   return {
     dos,
@@ -184,7 +184,7 @@ const buildWindowsCore = async (
     opt.SizeOfImage,
     opt.SizeOfHeaders
   );
-  await addSectionEntropies(reader, parsedSections.sections);
+  await addSectionRawDataAnalysis(reader, parsedSections.sections);
   const trailingAlignmentPaddingSize = await computeTrailingAlignmentPaddingSize(reader, opt.FileAlignment);
   const warnings = buildCoreWarnings(optionalHeaderResult.warnings, parsedSections.warnings);
   return {

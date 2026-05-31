@@ -23,6 +23,13 @@ export interface PeSection {
   numberOfLinenumbers?: number;
   characteristics: number;
   entropy?: number | null;
+  rawTail?: PeSectionRawTail;
+}
+
+export interface PeSectionRawTail {
+  zeroFilled: boolean | null;
+  readableSize: number;
+  warnings?: string[];
 }
 
 export interface PeDosStub {

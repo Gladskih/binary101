@@ -56,3 +56,41 @@ void test("renderSections shows COFF section relocation and line-number metadata
   assert.match(html, /00000180/i);
   assert.match(html, /000001a0/i);
 });
+
+void test("renderSections shows raw tail padding status", () => {
+  const pe: PeParseResult = createBasePe();
+  pe.sections = [
+    createPeSection(".zero", {
+      virtualSize: 0x100,
+      sizeOfRawData: 0x180,
+      rawTail: { zeroFilled: true, readableSize: 0x80 }
+    }),
+    createPeSection(".big", {
+      virtualSize: 0x100,
+      sizeOfRawData: 0x400,
+      rawTail: { zeroFilled: false, readableSize: 0x300 }
+    }),
+    createPeSection(".trunc", {
+      virtualSize: 0x100,
+      sizeOfRawData: 0x180,
+      rawTail: {
+        zeroFilled: null,
+        readableSize: 0x40,
+        warnings: ["Section raw tail is truncated by end of file; zero-fill status is incomplete."]
+      }
+    }),
+    createPeSection(".plain", { virtualSize: 0x200, sizeOfRawData: 0x200 })
+  ];
+
+  const out: string[] = [];
+  renderSections(pe, out);
+  const html = out.join("");
+
+  assert.match(html, /<th>Padding<\/th>/);
+  assert.match(html, /zero-filled/);
+  assert.match(html, /contains non-zero bytes/);
+  assert.match(html, /does not exceed FileAlignment/);
+  assert.match(html, /exceeds FileAlignment/);
+  assert.match(html, /unknown zero-fill status; readable 64 B \(64 bytes\)/);
+  assert.match(html, /<span class="dim">No<\/span>/);
+});
