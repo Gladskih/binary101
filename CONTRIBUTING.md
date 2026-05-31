@@ -73,7 +73,7 @@
 ## Tests
 
 - Before submitting a pull request, ensure your code adheres to the project's standards and that all tests pass.
-- Run the coverage report before and after your change; coverage must not go down.
+- Test coverage must not go down with a change. New code should have close to 100% coverage by all metrics.
 - Use **one test file per production module** whenever practical. 
 - For every new public function or module:
   - write tests for the “happy paths” behavior, and
