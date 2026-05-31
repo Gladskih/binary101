@@ -44,3 +44,25 @@ void test("collectPeHeaderFieldWarnings accepts equal or larger SectionAlignment
   assert.deepStrictEqual(collectPeHeaderFieldWarnings(equal), []);
   assert.deepStrictEqual(collectPeHeaderFieldWarnings(larger), []);
 });
+
+void test("collectPeHeaderFieldWarnings reports invalid FileAlignment values", () => {
+  const nonPowerOfTwo = createWindowsLayoutSubject();
+  nonPowerOfTwo.opt.FileAlignment = 0x180;
+  const tooSmall = createWindowsLayoutSubject();
+  tooSmall.opt.FileAlignment = 0x100;
+  const tooLarge = createWindowsLayoutSubject();
+  tooLarge.opt.SectionAlignment = 0x40000;
+  tooLarge.opt.FileAlignment = 0x20000;
+  const expected = "FileAlignment is not a power of two between 512 and 64K inclusive.";
+
+  assert.ok(collectPeHeaderFieldWarnings(nonPowerOfTwo).includes(expected));
+  assert.ok(collectPeHeaderFieldWarnings(tooSmall).includes(expected));
+  assert.ok(collectPeHeaderFieldWarnings(tooLarge).includes(expected));
+});
+
+void test("collectPeHeaderFieldWarnings accepts standard FileAlignment", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.opt.FileAlignment = 0x200;
+
+  assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
+});
