@@ -7,6 +7,16 @@ import { collectRuntimeFunctionSpans, readRuntimeFunctionSpan } from "../runtime
 
 const TRUNCATED_RUNTIME_FUNCTION_ISSUE =
   "Exception directory is truncated; some RUNTIME_FUNCTION entries are missing.";
+// Windows SDK winnt.h defines bit 0 of RUNTIME_FUNCTION.UnwindData as
+// RUNTIME_FUNCTION_INDIRECT; dumpbin reports these entries as reusing unwind
+// metadata from another RUNTIME_FUNCTION row.
+// https://mingw.googlesource.com/mingw-w64/+/refs/tags/v11.0.1/mingw-w64-headers/include/winnt.h
+const RUNTIME_FUNCTION_INDIRECT = 0x1;
+
+type RuntimeFunctionEntryValidation = {
+  issue: string | null;
+  unwindInfoRva: number | null;
+};
 
 export interface Amd64RuntimeFunctionTable {
   beginRvas: number[];
@@ -32,36 +42,130 @@ const getMappedRvaIssue = (
   return null;
 };
 
-const getRuntimeFunctionEntryIssue = (
+const isIndirectRuntimeFunction = (unwindDataRva: number): boolean =>
+  (unwindDataRva & RUNTIME_FUNCTION_INDIRECT) !== 0;
+
+const getIndirectRuntimeFunctionRva = (unwindDataRva: number): number =>
+  (unwindDataRva & ~RUNTIME_FUNCTION_INDIRECT) >>> 0;
+
+const getExceptionDirectoryIssue = (
+  rva: number,
+  exceptionDirectoryRva: number,
+  exceptionDirectorySize: number
+): string | null => {
+  const endRva = rva + AMD64_RUNTIME_FUNCTION_ENTRY_SIZE;
+  if (rva < exceptionDirectoryRva || endRva > exceptionDirectoryRva + exceptionDirectorySize) {
+    return "points outside the RUNTIME_FUNCTION table";
+  }
+  if ((rva - exceptionDirectoryRva) % AMD64_RUNTIME_FUNCTION_ENTRY_SIZE !== 0) {
+    return "does not point to the start of a RUNTIME_FUNCTION entry";
+  }
+  return null;
+};
+
+const readIndirectUnwindInfoRva = async (
+  reader: FileRangeReader,
+  indirectRuntimeFunctionRva: number,
+  rvaToOff: RvaToOffset
+): Promise<number | null> => {
+  const indirectRuntimeFunctionOff = rvaToOff(indirectRuntimeFunctionRva);
+  if (indirectRuntimeFunctionOff == null || indirectRuntimeFunctionOff < 0) return null;
+  const unwindDataOff = indirectRuntimeFunctionOff + Uint32Array.BYTES_PER_ELEMENT * 2;
+  if (unwindDataOff + Uint32Array.BYTES_PER_ELEMENT > reader.size) return null;
+  const view = await reader.read(unwindDataOff, Uint32Array.BYTES_PER_ELEMENT);
+  return view.byteLength === Uint32Array.BYTES_PER_ELEMENT
+    ? view.getUint32(0, true) >>> 0
+    : null;
+};
+
+const resolveUnwindInfoRva = async (
+  reader: FileRangeReader,
+  unwindDataRva: number,
+  exceptionDirectoryRva: number,
+  exceptionDirectorySize: number,
+  rvaToOff: RvaToOffset,
+  fileSize: number,
+  visitedIndirectRvas = new Set<number>()
+): Promise<RuntimeFunctionEntryValidation> => {
+  if (!unwindDataRva) return { issue: "UnwindData is zero", unwindInfoRva: null };
+  if (!isIndirectRuntimeFunction(unwindDataRva)) {
+    if (
+      unwindDataRva >= exceptionDirectoryRva &&
+      unwindDataRva < exceptionDirectoryRva + exceptionDirectorySize
+    ) {
+      return {
+        issue: "UnwindData points back into the RUNTIME_FUNCTION table",
+        unwindInfoRva: null
+      };
+    }
+    const unwindIssue = getMappedRvaIssue(unwindDataRva, rvaToOff, fileSize);
+    return {
+      issue: unwindIssue ? `UnwindData ${unwindIssue}` : null,
+      unwindInfoRva: unwindIssue ? null : unwindDataRva
+    };
+  }
+  const indirectRuntimeFunctionRva = getIndirectRuntimeFunctionRva(unwindDataRva);
+  if (visitedIndirectRvas.has(indirectRuntimeFunctionRva)) {
+    return { issue: "Indirect UnwindData forms a cycle", unwindInfoRva: null };
+  }
+  visitedIndirectRvas.add(indirectRuntimeFunctionRva);
+  const indirectIssue = getExceptionDirectoryIssue(
+    indirectRuntimeFunctionRva,
+    exceptionDirectoryRva,
+    exceptionDirectorySize
+  );
+  if (indirectIssue) return { issue: `Indirect UnwindData ${indirectIssue}`, unwindInfoRva: null };
+  const unwindInfoRva = await readIndirectUnwindInfoRva(
+    reader,
+    indirectRuntimeFunctionRva,
+    rvaToOff
+  );
+  if (unwindInfoRva == null) {
+    return { issue: "Indirect UnwindData target could not be read", unwindInfoRva: null };
+  }
+  return resolveUnwindInfoRva(
+    reader,
+    unwindInfoRva,
+    exceptionDirectoryRva,
+    exceptionDirectorySize,
+    rvaToOff,
+    fileSize,
+    visitedIndirectRvas
+  );
+};
+
+const validateRuntimeFunctionEntry = async (
+  reader: FileRangeReader,
   beginRva: number,
   endRva: number,
-  unwindInfoRva: number,
+  unwindDataRva: number,
   exceptionDirectoryRva: number,
   exceptionDirectorySize: number,
   rvaToOff: RvaToOffset,
   fileSize: number
-): string | null => {
+): Promise<RuntimeFunctionEntryValidation> => {
   // Microsoft documents .pdata as sorted RUNTIME_FUNCTION records with
-  // image-relative function start, function end, and unwind-info addresses.
-  // Chained RUNTIME_FUNCTION records are trailing UNWIND_INFO payload, so the
-  // top-level UnwindInfoAddress must not point back into this .pdata table.
+  // image-relative function start, function end, and unwind data. Chained
+  // RUNTIME_FUNCTION records are trailing UNWIND_INFO payload; indirect
+  // RUNTIME_FUNCTION rows use the Windows header low-bit marker instead.
   // https://learn.microsoft.com/en-us/cpp/build/exception-handling-x64#struct-runtime_function
   if (beginRva >= endRva) {
-    return "BeginAddress is greater than or equal to EndAddress";
+    return { issue: "BeginAddress is greater than or equal to EndAddress", unwindInfoRva: null };
   }
   const beginIssue = getMappedRvaIssue(beginRva, rvaToOff, fileSize);
-  if (beginIssue) return `BeginAddress ${beginIssue}`;
+  if (beginIssue) return { issue: `BeginAddress ${beginIssue}`, unwindInfoRva: null };
   const endIssue = getMappedRvaIssue((endRva - 1) >>> 0, rvaToOff, fileSize);
-  if (endIssue) return `EndAddress ${endIssue}`;
+  if (endIssue) return { issue: `EndAddress ${endIssue}`, unwindInfoRva: null };
   // Leaf functions without unwind state are omitted from .pdata; once a
-  // RUNTIME_FUNCTION record exists, the unwind-info address is required.
-  if (!unwindInfoRva) return "UnwindInfoAddress is zero";
-  if (
-    unwindInfoRva >= exceptionDirectoryRva &&
-    unwindInfoRva < exceptionDirectoryRva + exceptionDirectorySize
-  ) return "UnwindInfoAddress points back into the RUNTIME_FUNCTION table";
-  const unwindIssue = getMappedRvaIssue(unwindInfoRva, rvaToOff, fileSize);
-  return unwindIssue ? `UnwindInfoAddress ${unwindIssue}` : null;
+  // RUNTIME_FUNCTION record exists, the unwind data is required.
+  return resolveUnwindInfoRva(
+    reader,
+    unwindDataRva,
+    exceptionDirectoryRva,
+    exceptionDirectorySize,
+    rvaToOff,
+    fileSize
+  );
 };
 
 const formatHex = (value: number): string => `0x${(value >>> 0).toString(16)}`;
@@ -136,23 +240,24 @@ export const readAmd64RuntimeFunctions = async (
       const entryOffset = index * AMD64_RUNTIME_FUNCTION_ENTRY_SIZE;
       const beginRva = spanView.getUint32(entryOffset, true) >>> 0;
       const endRva = spanView.getUint32(entryOffset + 4, true) >>> 0;
-      const unwindInfoRva = spanView.getUint32(entryOffset + 8, true) >>> 0;
-      const invalidIssue = getRuntimeFunctionEntryIssue(
+      const unwindDataRva = spanView.getUint32(entryOffset + 8, true) >>> 0;
+      const validation = await validateRuntimeFunctionEntry(
+        reader,
         beginRva,
         endRva,
-        unwindInfoRva,
+        unwindDataRva,
         directoryRva,
         entryCount * AMD64_RUNTIME_FUNCTION_ENTRY_SIZE,
         rvaToOff,
         reader.size
       );
       functionCount += 1;
-      if (invalidIssue) {
+      if (validation.issue) {
         invalidEntryCount += 1;
-        addInvalidEntryIssue(invalidEntryIssues, invalidIssue);
+        addInvalidEntryIssue(invalidEntryIssues, validation.issue);
         continue;
       }
-      if (unwindInfoRva) unwindRvas.add(unwindInfoRva);
+      if (validation.unwindInfoRva) unwindRvas.add(validation.unwindInfoRva);
       if (reportedUnsortedEntries) {
         beginRvas.push(beginRva);
         previousBeginRva = beginRva;

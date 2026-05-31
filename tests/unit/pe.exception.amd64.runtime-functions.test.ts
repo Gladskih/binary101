@@ -136,7 +136,31 @@ void test("readAmd64RuntimeFunctions rejects unwind pointers back into the excep
 
   assert.strictEqual(table.invalidEntryCount, 1);
   assert.deepEqual([...table.unwindRvas], []);
-  assert.ok(issues.some(issue => /RUNTIME_FUNCTION.*UnwindInfoAddress/i.test(issue)));
+  assert.ok(issues.some(issue => /RUNTIME_FUNCTION.*UnwindData/i.test(issue)));
+});
+
+void test("readAmd64RuntimeFunctions resolves indirect unwind data entries", async () => {
+  const fixture = createRuntimeFunctionFixture(2);
+  const indirectFunctionRva = fixture.beginRvas[1]!;
+  writeRuntimeFunction(
+    fixture.view,
+    fixture.directoryRva + RUNTIME_FUNCTION_ENTRY_SIZE_BYTES,
+    indirectFunctionRva,
+    indirectFunctionRva + fixture.functionSizeBytes,
+    fixture.directoryRva | 1
+  );
+  const issues: string[] = [];
+  const table = await readAmd64RuntimeFunctions(
+    new MockFile(fixture.bytes, "amd64-runtime-functions-indirect.bin"),
+    fixture.directoryRva,
+    2,
+    identityRvaToOffset,
+    issues
+  );
+
+  assert.strictEqual(table.invalidEntryCount, 0);
+  assert.deepEqual([...table.unwindRvas], [fixture.unwindInfoRva]);
+  assert.deepEqual(issues, []);
 });
 
 void test("readAmd64RuntimeFunctions rejects missing top-level unwind addresses", async () => {
@@ -159,7 +183,7 @@ void test("readAmd64RuntimeFunctions rejects missing top-level unwind addresses"
 
   assert.strictEqual(table.invalidEntryCount, 1);
   assert.deepEqual([...table.unwindRvas], []);
-  assert.ok(issues.some(issue => /RUNTIME_FUNCTION.*UnwindInfoAddress.*zero/i.test(issue)));
+  assert.ok(issues.some(issue => /RUNTIME_FUNCTION.*UnwindData.*zero/i.test(issue)));
 });
 
 void test("readAmd64RuntimeFunctions stops when declared entries stop mapping", async () => {
