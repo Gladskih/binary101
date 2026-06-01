@@ -143,7 +143,9 @@ export async function parseExportDirectory(
   const nameTableOff = AddressOfNames ? rvaToOff(AddressOfNames) : null;
   const ordTableOff = AddressOfNameOrdinals ? rvaToOff(AddressOfNameOrdinals) : null;
 
-  if (isReadableOffset(funcTableOff)) {
+  if (NumberOfFunctions === 0 && NumberOfNames === 0) {
+    // Empty export directories can still carry a DLL name; there is no EAT slot to map.
+  } else if (isReadableOffset(funcTableOff)) {
     const functionNames = new Map<number, string>();
     let previousExportName: string | null = null;
     let canCheckNameSorting = NumberOfNames > 1;

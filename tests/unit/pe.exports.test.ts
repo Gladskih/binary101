@@ -113,6 +113,25 @@ void test("parseExportDirectory reports an unmappable export directory instead o
   assert.equal(result?.entries.length, 0);
   assert.ok(result?.issues.some(issue => /map|offset|rva/i.test(issue)));
 });
+
+void test("parseExportDirectory accepts an empty export address table", async () => {
+  const bytes = new Uint8Array(128).fill(0);
+  const dv = new DataView(bytes.buffer);
+  const directoryRva = 0x20;
+  const dllNameRva = 0x60;
+  dv.setUint32(directoryRva + 12, dllNameRva, true);
+  encoder.encodeInto("resource.dll\0", new Uint8Array(bytes.buffer, dllNameRva));
+
+  const result = expectDefined(await parseExportFixture(
+    bytes,
+    { rva: directoryRva, size: IMAGE_EXPORT_DIRECTORY_SIZE }
+  ));
+
+  assert.equal(result.dllName, "resource.dll");
+  assert.deepStrictEqual(result.entries, []);
+  assert.deepStrictEqual(result.issues, []);
+});
+
 void test("parseExportDirectory stops at available function table size", async () => {
   const bytes = new Uint8Array(128).fill(0);
   const dv = new DataView(bytes.buffer);
