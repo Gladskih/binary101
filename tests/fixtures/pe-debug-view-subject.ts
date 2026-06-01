@@ -49,6 +49,7 @@ export const createDebugViewEntry = (
   pointerToRawData: number,
   sizeOfData = createSyntheticDebugSize(type)
 ): PeDebugDirectoryEntry => ({
+  characteristics: 0,
   type,
   typeName: `TYPE_${type}`,
   sizeOfData,

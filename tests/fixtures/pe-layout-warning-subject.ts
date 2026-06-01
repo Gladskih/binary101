@@ -40,6 +40,7 @@ const createDebugEntry = (
   sizeOfData: number,
   addressOfRawData: number
 ) => ({
+  characteristics: 0,
   type: IMAGE_DEBUG_TYPE_CODEVIEW,
   typeName: "CODEVIEW",
   sizeOfData,

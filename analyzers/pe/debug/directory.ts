@@ -29,11 +29,13 @@ export type { PeVcFeatureInfo } from "./vc-feature.js";
 // Microsoft PE format, "Debug Directory (Image Only)":
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
 // IMAGE_DEBUG_DIRECTORY entry layout (28 bytes, file form):
+// - Characteristics (DWORD, reserved, must be 0) at +0x00
 // - Type (DWORD) at +0x0c
 // - SizeOfData (DWORD) at +0x10
 // - AddressOfRawData (DWORD, RVA) at +0x14
 // - PointerToRawData (DWORD, file offset) at +0x18
 const IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE = 28;
+const IMAGE_DEBUG_DIRECTORY_OFF_CHARACTERISTICS = 0x00;
 const IMAGE_DEBUG_DIRECTORY_OFF_TYPE = 0x0c;
 const IMAGE_DEBUG_DIRECTORY_OFF_SIZE_OF_DATA = 0x10;
 const IMAGE_DEBUG_DIRECTORY_OFF_ADDRESS_OF_RAW_DATA = 0x14;
@@ -42,6 +44,7 @@ const IMAGE_DEBUG_DIRECTORY_OFF_POINTER_TO_RAW_DATA = 0x18;
 type FileRange = { start: number; end: number };
 
 export interface PeDebugDirectoryEntry extends PeDebugPayloads {
+  characteristics: number;
   type: number;
   typeName: string;
   sizeOfData: number;
@@ -162,6 +165,10 @@ export async function parseDebugDirectory(
       break;
     }
 
+    const characteristics = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_CHARACTERISTICS, true);
+    if (characteristics !== 0) {
+      addWarning("Debug directory entry Characteristics field is non-zero; the PE format reserves it as 0.");
+    }
     const type = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_TYPE, true);
     const dataSize = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_SIZE_OF_DATA, true);
     const addressOfRawDataRva = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_ADDRESS_OF_RAW_DATA, true);
@@ -178,6 +185,7 @@ export async function parseDebugDirectory(
     }
 
     const currentEntry: PeDebugDirectoryEntry = {
+      characteristics,
       type,
       typeName: DEBUG_TYPE_NAMES[type] || `TYPE_${type}`,
       sizeOfData: dataSize,
