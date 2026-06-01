@@ -78,6 +78,22 @@ void test("verifyStrongNameSignature rejects malformed RSA public-key blobs", as
   assert.ok(issues.some(issue => issue.includes("too short")));
 });
 
+void test("verifyStrongNameSignature accepts ECMA Standard Public Key without an RSA warning", async () => {
+  const issues: string[] = [];
+  const verified = await verifyStrongNameSignature(
+    new MockFile(generatedBytes(Uint32Array.BYTES_PER_ELEMENT)),
+    // ECMA-335 II.6.2.1.3 Standard Public Key for Standard Library assemblies.
+    [0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0],
+    generatedBytes(Uint32Array.BYTES_PER_ELEMENT),
+    0,
+    SHA1_HASH_ALGORITHM_ID,
+    issues
+  );
+
+  assert.strictEqual(verified, null);
+  assert.deepStrictEqual(issues, []);
+});
+
 void test("verifyStrongNameSignature rejects unsupported hash algorithms before PE hashing", async () => {
   const issues: string[] = [];
   const verified = await verifyStrongNameSignature(

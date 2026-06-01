@@ -29,6 +29,11 @@ const trimLeadingZeroes = (bytes: Uint8Array): Uint8Array => {
   return first === -1 ? new Uint8Array([0]) : bytes.subarray(first);
 };
 
+const isEcmaStandardPublicKey = (publicKey: number[]): boolean =>
+  // ECMA-335 II.6.2.1.3 defines this 16-byte Standard Public Key for Standard Library assemblies.
+  // Spec: https://www.ecma-international.org/publications-and-standards/standards/ecma-335/
+  publicKey.length === 16 && publicKey.every((byte, index) => byte === (index === 8 ? 4 : 0));
+
 const algorithmName = (hashAlgorithm: number): string | null => {
   // Assembly.HashAlgId values use ECMA-335 II.22.2 Assembly metadata plus Windows ALG_ID values:
   // https://carlwa.com/ecma-335/#ii.22.2-assembly-0x20
@@ -264,6 +269,7 @@ export const verifyStrongNameSignature = async (
   hashAlgorithm: number,
   issues: string[]
 ): Promise<boolean | null> => {
+  if (publicKey && isEcmaStandardPublicKey(publicKey)) return null;
   const rsaPublicKey = parseRsaPublicKey(publicKey, issues);
   if (!rsaPublicKey) return null;
   const hashName = algorithmName(hashAlgorithm || rsaPublicKey.hashAlgorithm);
