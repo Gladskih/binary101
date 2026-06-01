@@ -120,6 +120,7 @@ void test("parseReadyToRun reports non-RTR managed native headers", async () => 
 
   assert.strictEqual(parsed.status, "unknown-managed-native-header");
   assert.strictEqual(parsed.signature, nonReadyToRunSignature);
+  assert.deepStrictEqual(parsed.issues, []);
 });
 
 void test("parseReadyToRun reports truncated section tables", async () => {

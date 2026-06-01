@@ -83,7 +83,7 @@ export const parseReadyToRun = async (
       flags,
       sectionCount: 0,
       sections: [],
-      issues: ["ManagedNativeHeader signature is not READYTORUN_SIGNATURE ('RTR')."]
+      issues: []
     };
   }
   const sectionBytes = sectionCount * 12;
