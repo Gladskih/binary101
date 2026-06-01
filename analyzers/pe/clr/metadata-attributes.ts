@@ -13,26 +13,29 @@ import {
   NAMED_ARGUMENT_FIELD_TAG,
   NAMED_ARGUMENT_PROPERTY_TAG
 } from "./metadata-attribute-cursor.js";
+import {
+  readFieldOrPropType,
+  TYPE_ARRAY_SUFFIX,
+  TYPE_BOOL,
+  TYPE_CHAR,
+  TYPE_ENUM_PREFIX,
+  TYPE_I1,
+  TYPE_I2,
+  TYPE_I4,
+  TYPE_I8,
+  TYPE_OBJECT,
+  TYPE_R4,
+  TYPE_R8,
+  TYPE_STRING,
+  TYPE_SYSTEM_TYPE,
+  TYPE_U1,
+  TYPE_U2,
+  TYPE_U4,
+  TYPE_U8
+} from "./metadata-attribute-field-or-prop-type.js";
 
 // ECMA-335 II.23.3 defines the serialized CustomAttrib blob and named argument tags.
 // Spec: https://docs.ecma-international.org/ecma-335/Ecma-335-part-i-iv.pdf
-const TYPE_BOOL = "bool";
-const TYPE_CHAR = "char";
-const TYPE_I1 = "i1";
-const TYPE_U1 = "u1";
-const TYPE_I2 = "i2";
-const TYPE_U2 = "u2";
-const TYPE_I4 = "i4";
-const TYPE_U4 = "u4";
-const TYPE_I8 = "i8";
-const TYPE_U8 = "u8";
-const TYPE_R4 = "r4";
-const TYPE_R8 = "r8";
-const TYPE_STRING = "string";
-const TYPE_SYSTEM_TYPE = "System.Type";
-const TYPE_OBJECT = "object";
-const TYPE_ENUM_PREFIX = "enum ";
-const TYPE_ARRAY_SUFFIX = "[]";
 const TYPE_NAME_SEPARATOR = " ";
 const TYPE_METADATA_TOKEN_MARKER = "#";
 const PREFERRED_ENUM_VALUE_BYTE_WIDTHS = [
@@ -103,12 +106,6 @@ const readWithIssueStatus = (
 };
 
 const readPrimitive = (cursor: AttributeCursor, type: string | null): ReadValueResult => {
-  if (type === TYPE_OBJECT) {
-    const boxedType = readFieldOrPropType(cursor);
-    if (!boxedType) return { value: null, complete: false };
-    const boxedArgument = readFixedArgument(cursor, boxedType);
-    return { value: boxedArgument.argument.value, complete: boxedArgument.complete };
-  }
   if (type === TYPE_STRING || type === TYPE_SYSTEM_TYPE) {
     return readWithIssueStatus(cursor, () => cursor.readSerString());
   }
@@ -135,41 +132,14 @@ const readPrimitive = (cursor: AttributeCursor, type: string | null): ReadValueR
   return { value: null, complete: false };
 };
 
-const elementTypeName = (elementType: number): string | null => {
-  // ECMA-335 II.23.1.16 names the ELEMENT_TYPE values; these short labels are the
-  // analyzer's stable internal representation for CustomAttrib decoding.
-  const names: Record<number, string> = {
-    0x02: TYPE_BOOL,
-    0x03: TYPE_CHAR,
-    0x04: TYPE_I1,
-    0x05: TYPE_U1,
-    0x06: TYPE_I2,
-    0x07: TYPE_U2,
-    0x08: TYPE_I4,
-    0x09: TYPE_U4,
-    0x0a: TYPE_I8,
-    0x0b: TYPE_U8,
-    0x0c: TYPE_R4,
-    0x0d: TYPE_R8,
-    0x0e: TYPE_STRING,
-    0x50: TYPE_SYSTEM_TYPE,
-    0x51: TYPE_OBJECT
-  };
-  return names[elementType] || null;
-};
-
-const readFieldOrPropType = (cursor: AttributeCursor): string | null => {
-  const elementType = cursor.readU8();
-  if (elementType == null) return null;
-  // ECMA-335 II.23.3: FieldOrPropType 0x55 is enum followed by a TypeName.
-  if (elementType === 0x55) {
-    return `${TYPE_ENUM_PREFIX}${cursor.readSerString() || "?"}`;
-  }
-  // ECMA-335 II.23.3: FieldOrPropType 0x1d is SZARRAY followed by an element type.
-  if (elementType === 0x1d) {
-    return `${readFieldOrPropType(cursor) || "?"}${TYPE_ARRAY_SUFFIX}`;
-  }
-  return elementTypeName(elementType) || `ELEMENT_TYPE_${elementType.toString(16).padStart(2, "0")}`;
+const readFixedBoxedArgument = (
+  cursor: AttributeCursor,
+  remainingFixedArgumentCount: number
+): ReadValueResult => {
+  const boxedType = readFieldOrPropType(cursor);
+  if (!boxedType) return { value: null, complete: false };
+  const boxedArgument = readFixedArgument(cursor, boxedType, remainingFixedArgumentCount);
+  return { value: boxedArgument.argument.value, complete: boxedArgument.complete };
 };
 
 const readFixedArgument = (
@@ -194,6 +164,10 @@ const readFixedArgument = (
       values.push(value.value);
     }
     return { argument: { type, value: values.map(String).join(", ") }, complete: true };
+  }
+  if (type === TYPE_OBJECT) {
+    const value = readFixedBoxedArgument(cursor, remainingFixedArgumentCount);
+    return { argument: { type, value: value.value }, complete: value.complete };
   }
   if (isEnumLikeArgumentType(type) && remainingFixedArgumentCount === 0) {
     const byteLength = PREFERRED_ENUM_VALUE_BYTE_WIDTHS.find(candidate =>
@@ -226,6 +200,15 @@ const readNamedArgumentValue = (
 ): ReadValueResult => {
   if (type === TYPE_SYSTEM_TYPE) return readWithIssueStatus(cursor, () => cursor.readSerString());
   if (type?.startsWith(TYPE_ENUM_PREFIX)) return readNamedEnumValue(cursor, remainingNamedArgumentCount);
+  if (type === TYPE_OBJECT) {
+    const boxedType = readFieldOrPropType(cursor);
+    if (!boxedType) return { value: null, complete: false };
+    if (boxedType.startsWith(TYPE_ENUM_PREFIX)) {
+      return readNamedEnumValue(cursor, remainingNamedArgumentCount);
+    }
+    const boxedArgument = readFixedArgument(cursor, boxedType);
+    return { value: boxedArgument.argument.value, complete: boxedArgument.complete };
+  }
   const value = readFixedArgument(cursor, type);
   return { value: value.argument.value, complete: value.complete };
 };

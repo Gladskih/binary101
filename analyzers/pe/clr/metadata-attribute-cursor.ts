@@ -13,6 +13,33 @@ export const BYTE_WIDTH_U64 = BigUint64Array.BYTES_PER_ELEMENT;
 export const BYTE_WIDTH_F32 = Float32Array.BYTES_PER_ELEMENT;
 export const BYTE_WIDTH_F64 = Float64Array.BYTES_PER_ELEMENT;
 
+const isFieldOrPropertyTypeStart = (elementType: number | undefined): boolean => {
+  // ECMA-335 II.23.3 FieldOrPropType starts with an ELEMENT_TYPE simple type, Type,
+  // boxed object, SZARRAY, or enum marker.
+  switch (elementType) {
+    case 0x02:
+    case 0x03:
+    case 0x04:
+    case 0x05:
+    case 0x06:
+    case 0x07:
+    case 0x08:
+    case 0x09:
+    case 0x0a:
+    case 0x0b:
+    case 0x0c:
+    case 0x0d:
+    case 0x0e:
+    case 0x1d:
+    case 0x50:
+    case 0x51:
+    case 0x55:
+      return true;
+    default:
+      return false;
+  }
+};
+
 export class AttributeCursor {
   offset = 0;
 
@@ -88,12 +115,27 @@ export class AttributeCursor {
     if (this.remaining < byteLength) return false;
     if (remainingNamedArgumentCount === 0) return this.remaining === byteLength;
     const nextKindByte = this.bytes[this.offset + byteLength];
-    return nextKindByte === NAMED_ARGUMENT_FIELD_TAG ||
-      nextKindByte === NAMED_ARGUMENT_PROPERTY_TAG;
+    const nextTypeByte = this.bytes[this.offset + byteLength + BYTE_WIDTH_U8];
+    return (
+      nextKindByte === NAMED_ARGUMENT_FIELD_TAG ||
+      nextKindByte === NAMED_ARGUMENT_PROPERTY_TAG
+    ) && isFieldOrPropertyTypeStart(nextTypeByte);
   }
 
   hasTrailingNamedCountAfter(byteLength: number): boolean {
-    return this.remaining >= byteLength + BYTE_WIDTH_U16;
+    if (this.remaining < byteLength + BYTE_WIDTH_U16) return false;
+    const namedCount = new DataView(
+      this.bytes.buffer,
+      this.bytes.byteOffset + this.offset + byteLength,
+      BYTE_WIDTH_U16
+    ).getUint16(0, true);
+    if (namedCount === 0) return this.remaining === byteLength + BYTE_WIDTH_U16;
+    const firstNamedKind = this.bytes[this.offset + byteLength + BYTE_WIDTH_U16];
+    const firstNamedType = this.bytes[this.offset + byteLength + BYTE_WIDTH_U16 + BYTE_WIDTH_U8];
+    return (
+      firstNamedKind === NAMED_ARGUMENT_FIELD_TAG ||
+      firstNamedKind === NAMED_ARGUMENT_PROPERTY_TAG
+    ) && isFieldOrPropertyTypeStart(firstNamedType);
   }
 
   readSerString(): string | null {
