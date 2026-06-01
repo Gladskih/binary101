@@ -3,7 +3,9 @@
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 
+const IMAGE_REL_BASED_RESERVED = 6;
 const IMAGE_REL_BASED_HIGHADJ = 4;
+const BASE_RELOCATION_PAGE_SIZE = 0x1000;
 // Microsoft PE/COFF: IMAGE_BASE_RELOCATION consists of an 8-byte header followed by WORD entries.
 const IMAGE_BASE_RELOCATION_HEADER_SIZE = 8;
 const IMAGE_BASE_RELOCATION_ENTRY_SIZE = Uint16Array.BYTES_PER_ELEMENT;
@@ -101,6 +103,9 @@ const parseRelocationEntries = (
       true
     );
     const type = (raw >> 12) & 0xf;
+    if (type === IMAGE_REL_BASED_RESERVED) {
+      addWarning("Base relocation entry uses reserved type 6.");
+    }
     entries.push({ type, offset: raw & 0xfff });
     if (type === IMAGE_REL_BASED_HIGHADJ) {
       if (entryIndex + 1 >= availableEntries) {
@@ -182,6 +187,9 @@ export async function parseBaseRelocations(
     }
     const pageRva = dv.getUint32(0, true);
     const blockSize = dv.getUint32(4, true);
+    if ((pageRva & (BASE_RELOCATION_PAGE_SIZE - 1)) !== 0) {
+      addWarning("Base relocation PageRVA is not aligned to a 4 KiB page.");
+    }
     if (!blockSize) {
       addWarning("Base relocation block size is 0, so parsing stops at an invalid terminator.");
       break;

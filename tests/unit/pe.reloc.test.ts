@@ -92,6 +92,46 @@ void test("parseBaseRelocations reports an unmappable directory base instead of 
   assert.ok(parsed?.warnings?.some(warning => /map|offset|rva/i.test(warning)));
 });
 
+void test("parseBaseRelocations warns when PageRVA is not 4 KiB aligned", async () => {
+  const bytes = new Uint8Array(0x100).fill(0);
+  const directoryOffset = 0x20;
+  const view = new DataView(bytes.buffer);
+  const blockSize = writeBaseRelocationBlock(view, {
+    pageRva: 0x1001,
+    entries: [0],
+    fileOffset: directoryOffset
+  });
+
+  const parsed = await parseBaseRelocations(
+    new MockFile(bytes, "reloc-misaligned-page.bin"),
+    [{ name: "BASERELOC", rva: directoryOffset, size: blockSize }],
+    rvaToOff
+  );
+
+  assert.ok(parsed?.warnings?.some(warning => /PageRVA|4 KiB/i.test(warning)));
+});
+
+void test("parseBaseRelocations warns when an entry uses reserved type 6", async () => {
+  const bytes = new Uint8Array(0x100).fill(0);
+  const directoryOffset = 0x20;
+  const view = new DataView(bytes.buffer);
+  // Microsoft PE Base Relocation Types table reserves type 6.
+  const reservedType6WithOffset1 = (6 << 12) | 1;
+  const blockSize = writeBaseRelocationBlock(view, {
+    pageRva: 0x1000,
+    entries: [reservedType6WithOffset1],
+    fileOffset: directoryOffset
+  });
+
+  const parsed = await parseBaseRelocations(
+    new MockFile(bytes, "reloc-reserved-type.bin"),
+    [{ name: "BASERELOC", rva: directoryOffset, size: blockSize }],
+    rvaToOff
+  );
+
+  assert.ok(parsed?.warnings?.some(warning => /reserved type 6/i.test(warning)));
+});
+
 void test("parseBaseRelocations preserves a non-zero directory that is smaller than one block header", async () => {
   const parsed = await parseBaseRelocations(
     new MockFile(
