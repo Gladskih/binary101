@@ -66,6 +66,8 @@ export function decodeTextResource(
   }
 }
 
+const looksLikeHtmlText = (text: string): boolean => /^\s*</u.test(text);
+
 export function addHtmlPreview(
   data: Uint8Array,
   typeName: string,
@@ -76,6 +78,7 @@ export function addHtmlPreview(
   const { text, error, encoding, terminated } = decodeTextResource(data, codePage);
   if (error) issues.push("HTML resource text could not be decoded.");
   if (!text) return issues.length ? { issues } : null;
+  if (!looksLikeHtmlText(text)) return null;
   if (terminated) issues.push("HTML preview stopped at a NUL terminator before the declared data size.");
   return {
     preview: {
