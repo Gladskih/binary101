@@ -154,12 +154,15 @@ const readFixedArgument = (
       return { argument: { type, value: null }, complete: true };
     }
     const values: Array<string | number | boolean | null> = [];
+    const elementType = type.slice(0, -TYPE_ARRAY_SUFFIX.length);
     for (let index = 0; index < count; index += 1) {
       if (cursor.remaining <= 0) {
         cursor.addIssue(`array argument "${type}" is truncated after ${index}/${count} element(s).`);
         return { argument: { type, value: values.map(String).join(", ") }, complete: false };
       }
-      const value = readPrimitive(cursor, type.slice(0, -TYPE_ARRAY_SUFFIX.length));
+      const value = elementType === TYPE_OBJECT
+        ? readFixedBoxedArgument(cursor, remainingFixedArgumentCount)
+        : readPrimitive(cursor, elementType);
       if (!value.complete) return { argument: { type, value: values.map(String).join(", ") }, complete: false };
       values.push(value.value);
     }
