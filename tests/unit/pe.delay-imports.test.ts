@@ -23,7 +23,7 @@ void test("parseDelayImports reads delay descriptors, names, and ordinals", asyn
   const delayImportName = "kernel32.dll";
   const importHint = 0x1234; // Deliberately non-trivial to catch little-endian hint decoding.
   const layout = createDelayImportLayout(0x40);
-  const descriptorOffset = layout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
+  const descriptorOffset = layout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE * 2);
   const hintNameRva = layout.reserve(imageImportByNameSize("Func"));
   const thunkTableRva = layout.reserve(IMAGE_THUNK_DATA32_SIZE * 3);
   const dllNameRva = layout.reserve(delayImportName.length + 1);
@@ -43,7 +43,7 @@ void test("parseDelayImports reads delay descriptors, names, and ordinals", asyn
 
   const result = await parseDelayImports32(
     new MockFile(bytes, "delay-imports.bin"),
-    [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
+    [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE * 2 }],
     value => value
   );
 
@@ -121,11 +121,11 @@ void test("parseDelayImports tolerates truncated INT in 64-bit path", async () =
 });
 
 void test("parseDelayImports handles an empty INT in the 32-bit path", async () => {
-  const bytes = new Uint8Array(96).fill(0);
+  const bytes = new Uint8Array(128).fill(0);
   const dv = new DataView(bytes.buffer);
   const descriptorOffset = 0x10;
-  const dllNameRva = 0x30;
-  const thunkTableRva = 0x50;
+  const dllNameRva = 0x50;
+  const thunkTableRva = 0x70;
   writeDelayImportDescriptor(dv, descriptorOffset, {
     dllNameRva,
     importNameTableRva: thunkTableRva
@@ -135,7 +135,7 @@ void test("parseDelayImports handles an empty INT in the 32-bit path", async () 
 
   const result = await parseDelayImports32(
     new MockFile(bytes),
-    [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
+    [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE * 2 }],
     value => value
   );
 
@@ -179,7 +179,7 @@ void test("parseDelayImports handles truncated hint/name strings", async () => {
 
 void test("parseDelayImports treats descriptor fields as RVA when Attributes is zero", async () => {
   const layout = createDelayImportLayout(0x40);
-  const descriptorOffset = layout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
+  const descriptorOffset = layout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE * 2);
   const dllNameRva = layout.reserve("kernel32.dll".length + 1);
   const intRva = layout.reserve(IMAGE_THUNK_DATA32_SIZE * 2);
   const hintNameRva = layout.reserve(imageImportByNameSize("Func"));
@@ -195,7 +195,7 @@ void test("parseDelayImports treats descriptor fields as RVA when Attributes is 
 
   const result = await parseDelayImports32(
     new MockFile(bytes),
-    [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
+    [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE * 2 }],
     value => value
   );
 
@@ -262,7 +262,7 @@ void test("parseDelayImports accepts dlattrRva without warning", async () => {
 
   const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes),
-    [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
+    [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE * 2 }],
     value => value
   ));
 
