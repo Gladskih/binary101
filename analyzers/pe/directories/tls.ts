@@ -12,6 +12,9 @@ const IMAGE_TLS_DIRECTORY32_SIZE = 0x18;
 const IMAGE_TLS_DIRECTORY64_SIZE = 0x28;
 const TLS_CALLBACK_ENTRY_SIZE32 = Uint32Array.BYTES_PER_ELEMENT;
 const TLS_CALLBACK_ENTRY_SIZE64 = BigUint64Array.BYTES_PER_ELEMENT;
+// Microsoft PE format, TLS Characteristics: only alignment bits 23:20 are defined.
+const TLS_CHARACTERISTICS_ALIGNMENT_MASK = 0x00f00000;
+const TLS_INDEX_STORAGE_SIZE = Uint32Array.BYTES_PER_ELEMENT;
 
 const createTlsWarningResult = (warnings: string[]): PeTlsDirectory => ({
   StartAddressOfRawData: 0n,
@@ -32,6 +35,61 @@ const toRvaFromVa = (virtualAddress: bigint, imageBase: bigint): number | null =
   const delta = virtualAddress - imageBase;
   if (delta > MAX_RVA_BIGINT) return null;
   return Number(delta);
+};
+
+const isReadableMappedVa = (
+  virtualAddress: bigint,
+  byteLength: number,
+  imageBase: bigint,
+  rvaToOff: RvaToOffset,
+  fileSize: number
+): boolean => {
+  const rva = toRvaFromVa(virtualAddress, imageBase);
+  if (rva == null) return false;
+  const offset = rvaToOff(rva);
+  return offset != null && offset >= 0 && offset + byteLength <= fileSize;
+};
+
+const addTlsRawDataWarnings = (
+  startAddressOfRawData: bigint,
+  endAddressOfRawData: bigint,
+  imageBase: bigint,
+  rvaToOff: RvaToOffset,
+  fileSize: number,
+  warnings: string[]
+): void => {
+  if (startAddressOfRawData === 0n && endAddressOfRawData === 0n) return;
+  if (startAddressOfRawData === 0n || endAddressOfRawData === 0n || endAddressOfRawData < startAddressOfRawData) {
+    warnings.push("TLS raw data VA range is invalid.");
+    return;
+  }
+  const lastRawDataByteVa = endAddressOfRawData > startAddressOfRawData
+    ? endAddressOfRawData - 1n
+    : endAddressOfRawData;
+  if (
+    !isReadableMappedVa(startAddressOfRawData, 1, imageBase, rvaToOff, fileSize) ||
+    !isReadableMappedVa(lastRawDataByteVa, 1, imageBase, rvaToOff, fileSize)
+  ) {
+    warnings.push("TLS raw data VA range does not map to file data.");
+  }
+};
+
+const addTlsFieldWarnings = (
+  startAddressOfRawData: bigint,
+  endAddressOfRawData: bigint,
+  addressOfIndex: bigint,
+  characteristics: number,
+  imageBase: bigint,
+  rvaToOff: RvaToOffset,
+  fileSize: number,
+  warnings: string[]
+): void => {
+  const reservedBits = characteristics & ~TLS_CHARACTERISTICS_ALIGNMENT_MASK;
+  if (reservedBits !== 0) warnings.push("TLS Characteristics has reserved bits set.");
+  addTlsRawDataWarnings(startAddressOfRawData, endAddressOfRawData, imageBase, rvaToOff, fileSize, warnings);
+  if (!isReadableMappedVa(addressOfIndex, TLS_INDEX_STORAGE_SIZE, imageBase, rvaToOff, fileSize)) {
+    warnings.push(`TLS AddressOfIndex pointer 0x${addressOfIndex.toString(16)} is not a readable mapped VA.`);
+  }
 };
 
 const readTlsCallbackRvas32 = async (
@@ -134,6 +192,16 @@ export const parseTlsDirectory32 = async (
   const AddressOfCallBacks = BigInt(dv.getUint32(12, true));
   const SizeOfZeroFill = dv.getUint32(16, true);
   const Characteristics = dv.getUint32(20, true);
+  addTlsFieldWarnings(
+    StartAddressOfRawData,
+    EndAddressOfRawData,
+    AddressOfIndex,
+    Characteristics,
+    imageBase,
+    rvaToOff,
+    reader.size,
+    warnings
+  );
   const callbackTableRva = toRvaFromVa(AddressOfCallBacks, imageBase);
   const callbackTableOff = callbackTableRva != null ? rvaToOff(callbackTableRva) : null;
   if (AddressOfCallBacks !== 0n && callbackTableRva == null) {
@@ -196,7 +264,16 @@ export const parseTlsDirectory64 = async (
   const AddressOfCallBacksVa = dv.getBigUint64(24, true);
   const SizeOfZeroFill = dv.getUint32(32, true);
   const Characteristics = dv.getUint32(36, true);
-
+  addTlsFieldWarnings(
+    StartAddressOfRawDataVa,
+    EndAddressOfRawDataVa,
+    AddressOfIndexVa,
+    Characteristics,
+    imageBase,
+    rvaToOff,
+    reader.size,
+    warnings
+  );
   const callbackTableRva = toRvaFromVa(AddressOfCallBacksVa, imageBase);
   const callbackTableOff = callbackTableRva != null ? rvaToOff(callbackTableRva) : null;
   if (AddressOfCallBacksVa !== 0n && callbackTableRva == null) {
