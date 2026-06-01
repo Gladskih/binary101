@@ -109,3 +109,31 @@ void test("parseExceptionDirectory accepts ARM64 packed unwind pdata entries", a
   assert.strictEqual(parsed.invalidEntryCount, 0);
   assert.deepEqual(parsed.issues, []);
 });
+
+void test("parseExceptionDirectory accepts ARM64 chained pdata entries", async () => {
+  const bytes = new Uint8Array(0x300).fill(0);
+  const exOff = 0x80;
+  const targetPdataRva = exOff + ARM64_RUNTIME_FUNCTION_ENTRY_SIZE;
+  const xdataRva = 0x200;
+  const dv = new DataView(bytes.buffer);
+
+  // MSVC dumpbin /unwindinfo 14.51 reports ARM64 Flag=3 entries as chained pdata
+  // whose second-word payload points at another 8-byte pdata record.
+  writeArm64RuntimeFunction(dv, exOff, 0x100, targetPdataRva | 0x3);
+  writeArm64RuntimeFunction(dv, targetPdataRva, 0x180, xdataRva);
+  dv.setUint32(xdataRva, 1, true);
+
+  const parsed = await parseArm64ExceptionFixture(
+    bytes,
+    "exception-arm64-chained.bin",
+    exOff,
+    ARM64_RUNTIME_FUNCTION_ENTRY_SIZE * 2
+  );
+
+  assert.ok(parsed);
+  assert.strictEqual(parsed.functionCount, 2);
+  assert.deepEqual(parsed.beginRvas, [0x100, 0x180]);
+  assert.strictEqual(parsed.chainedUnwindInfoCount, 1);
+  assert.strictEqual(parsed.invalidEntryCount, 0);
+  assert.deepEqual(parsed.issues, []);
+});

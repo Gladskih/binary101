@@ -1,6 +1,10 @@
 "use strict";
 
 import type { FileRangeReader } from "../../file-range-reader.js";
+import {
+  isMappedArm64FunctionBegin,
+  isValidArm64FunctionRange
+} from "./arm64-function-range.js";
 import { collectRuntimeFunctionSpans, readRuntimeFunctionSpan } from "./runtime-spans.js";
 import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./types.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
@@ -14,7 +18,9 @@ const ARM64_RUNTIME_FUNCTION_ENTRY_SIZE = 8;
 // or packed unwind data, depending on Flag.
 const ARM64_PDATA_FLAG_MASK = 0x3;
 const ARM64_PDATA_FLAG_XDATA = 0;
-const ARM64_PDATA_FLAG_RESERVED = 0x3;
+const ARM64_PDATA_FLAG_CHAINED = 0x3;
+// MSVC dumpbin /unwindinfo 14.51 labels ARM64 Flag=3 entries as "Chained pdata".
+const ARM64_CHAINED_PDATA_MAX_DEPTH = 8;
 // Microsoft ARM64 exception-handling docs, ".xdata records":
 // Function Length is 18 bits, Vers is 2 bits, and the X/E bits live at bit positions 20/21.
 const ARM64_XDATA_FUNCTION_LENGTH_MASK = 0x3ffff;
@@ -28,6 +34,7 @@ const ARM64_PACKED_FUNCTION_LENGTH_SHIFT = 2;
 const ARM64_PACKED_FUNCTION_LENGTH_MASK = 0x7ff;
 
 type Arm64UnwindInfo = {
+  chained: boolean;
   functionLengthBytes: number;
   handlerRva: number | null;
   hasHandler: boolean;
@@ -43,22 +50,13 @@ const readUint32 = async (reader: FileRangeReader, offset: number): Promise<numb
   return view.byteLength === Uint32Array.BYTES_PER_ELEMENT ? view.getUint32(0, true) >>> 0 : null;
 };
 
-const computeFunctionEndRva = (beginRva: number, functionLengthBytes: number): number | null => {
-  if (!beginRva || functionLengthBytes <= 0) {
-    return null;
-  }
-  const endRva = beginRva + functionLengthBytes;
-  return Number.isSafeInteger(endRva) && endRva > beginRva && endRva <= 0xffffffff
-    ? endRva >>> 0
-    : null;
-};
-
 const readPackedUnwindInfo = (packedWord: number): Arm64UnwindInfo => ({
   functionLengthBytes:
     ((packedWord >>> ARM64_PACKED_FUNCTION_LENGTH_SHIFT) & ARM64_PACKED_FUNCTION_LENGTH_MASK) * 4,
   handlerRva: null,
   hasHandler: false,
   key: `packed:${packedWord >>> 0}`,
+  chained: false,
   version: null
 });
 
@@ -118,6 +116,7 @@ const readXdataUnwindInfo = async (
     handlerRva,
     hasHandler,
     key: `xdata:${xdataRva >>> 0}`,
+    chained: false,
     version: (headerWord >>> ARM64_XDATA_VERSION_SHIFT) & ARM64_XDATA_VERSION_MASK
   };
 };
@@ -126,12 +125,39 @@ const readArm64UnwindInfo = async (
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
   unwindWord: number,
-  issues: string[]
+  issues: string[],
+  chainedDepth = 0
 ): Promise<Arm64UnwindInfo | null> => {
   const flag = unwindWord & ARM64_PDATA_FLAG_MASK;
-  if (flag === ARM64_PDATA_FLAG_RESERVED) {
-    issues.push("ARM64 .pdata entry uses reserved packed-unwind flag value 3.");
-    return null;
+  if (flag === ARM64_PDATA_FLAG_CHAINED) {
+    if (chainedDepth >= ARM64_CHAINED_PDATA_MAX_DEPTH) {
+      issues.push(
+        `ARM64 chained .pdata entries exceed the parser recursion limit (${ARM64_CHAINED_PDATA_MAX_DEPTH}).`
+      );
+      return null;
+    }
+    const targetPdataRva = unwindWord & ~ARM64_PDATA_FLAG_MASK;
+    const targetPdataOff = rvaToOff(targetPdataRva >>> 0);
+    if (targetPdataOff == null || targetPdataOff < 0 || targetPdataOff >= reader.size) {
+      issues.push("ARM64 chained .pdata target RVA does not map to file data.");
+      return null;
+    }
+    const chainedEntry = await reader.read(targetPdataOff, ARM64_RUNTIME_FUNCTION_ENTRY_SIZE);
+    if (chainedEntry.byteLength < ARM64_RUNTIME_FUNCTION_ENTRY_SIZE) {
+      issues.push("ARM64 chained .pdata target is truncated.");
+      return null;
+    }
+    const chainedUnwindWord = chainedEntry.getUint32(Uint32Array.BYTES_PER_ELEMENT, true) >>> 0;
+    const chainedInfo = await readArm64UnwindInfo(
+      reader,
+      rvaToOff,
+      chainedUnwindWord,
+      issues,
+      chainedDepth + 1
+    );
+    return chainedInfo
+      ? { ...chainedInfo, key: `chained:${targetPdataRva >>> 0}`, chained: true }
+      : null;
   }
   if (flag === ARM64_PDATA_FLAG_XDATA) {
     const xdataRva = unwindWord & ~ARM64_PDATA_FLAG_MASK;
@@ -142,21 +168,6 @@ const readArm64UnwindInfo = async (
     return readXdataUnwindInfo(reader, rvaToOff, xdataRva >>> 0, issues);
   }
   return readPackedUnwindInfo(unwindWord);
-};
-
-const isValidFunctionRange = (
-  beginRva: number,
-  functionLengthBytes: number,
-  rvaToOff: RvaToOffset,
-  fileSize: number
-): boolean => {
-  const endRva = computeFunctionEndRva(beginRva, functionLengthBytes);
-  if (endRva == null) {
-    return false;
-  }
-  const beginOff = rvaToOff(beginRva);
-  const endOff = rvaToOff((endRva - 1) >>> 0);
-  return beginOff != null && beginOff >= 0 && endOff != null && endOff >= 0 && endOff < fileSize;
 };
 
 export async function parseArm64ExceptionDirectory(
@@ -201,6 +212,7 @@ export async function parseArm64ExceptionDirectory(
   let functionCount = 0;
   let invalidEntryCount = 0;
   let handlerUnwindInfoCount = 0;
+  let chainedUnwindInfoCount = 0;
   let unexpectedXdataVersionCount = 0;
   let previousBegin: number | null = null;
   let reportedUnsortedEntries = false;
@@ -242,6 +254,9 @@ export async function parseArm64ExceptionDirectory(
       if (unwindInfo?.hasHandler) {
         handlerUnwindInfoCount += 1;
       }
+      if (unwindInfo?.chained) {
+        chainedUnwindInfoCount += 1;
+      }
       if (unwindInfo?.handlerRva && !handlerRvasSet.has(unwindInfo.handlerRva)) {
         handlerRvasSet.add(unwindInfo.handlerRva);
         handlerRvas.push(unwindInfo.handlerRva);
@@ -249,7 +264,11 @@ export async function parseArm64ExceptionDirectory(
 
       const valid = Boolean(
         unwindInfo &&
-        isValidFunctionRange(beginRva, unwindInfo.functionLengthBytes, rvaToOff, reader.size)
+        (
+          unwindInfo.chained
+            ? isMappedArm64FunctionBegin(beginRva, rvaToOff, reader.size)
+            : isValidArm64FunctionRange(beginRva, unwindInfo.functionLengthBytes, rvaToOff, reader.size)
+        )
       );
       if (!valid) {
         invalidEntryCount += 1;
@@ -276,7 +295,7 @@ export async function parseArm64ExceptionDirectory(
     handlerRvas,
     uniqueUnwindInfoCount: uniqueUnwindInfos.size,
     handlerUnwindInfoCount,
-    chainedUnwindInfoCount: 0,
+    chainedUnwindInfoCount,
     invalidEntryCount,
     issues,
     format: "arm64"
