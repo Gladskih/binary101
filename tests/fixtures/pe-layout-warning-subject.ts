@@ -124,7 +124,8 @@ export const createWindowsLayoutSubject = (...sections: PeSection[]): PeWindowsP
     coff: {
       Machine: IMAGE_FILE_MACHINE_I386,
       NumberOfSections: sections.length,
-      SizeOfOptionalHeader: PE32_OPTIONAL_HEADER_SIZE
+      SizeOfOptionalHeader: PE32_OPTIONAL_HEADER_SIZE,
+      Characteristics: 0x0002
     },
     opt: {
       Magic: PE32_OPTIONAL_HEADER_MAGIC,
@@ -148,7 +149,8 @@ export const createHeaderOnlyLayoutSubject = (
     coff: {
       Machine: IMAGE_FILE_MACHINE_I386,
       NumberOfSections: sections.length,
-      SizeOfOptionalHeader: 0
+      SizeOfOptionalHeader: 0,
+      Characteristics: 0x0002
     },
     opt: null,
     dirs: [],

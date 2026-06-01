@@ -5,6 +5,13 @@ import { test } from "node:test";
 import { collectPeHeaderFieldWarnings } from "../../analyzers/pe/layout/header-field-warnings.js";
 import { createWindowsLayoutSubject } from "../fixtures/pe-layout-warning-subject.js";
 
+// Microsoft PE/COFF file and DLL characteristic bits used by these header-warning fixtures.
+const IMAGE_FILE_EXECUTABLE_IMAGE = 0x0002;
+const IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA = 0x0020;
+// Microsoft PE/COFF optional header magic values: 0x10b is PE32, 0x20b is PE32+.
+const PE32_OPTIONAL_HEADER_MAGIC = 0x10b;
+const PE32_PLUS_OPTIONAL_HEADER_MAGIC = 0x20b;
+
 void test("collectPeHeaderFieldWarnings reports section counts above the loader limit", () => {
   const pe = createWindowsLayoutSubject();
   pe.coff.NumberOfSections = 97;
@@ -17,6 +24,22 @@ void test("collectPeHeaderFieldWarnings reports section counts above the loader 
 void test("collectPeHeaderFieldWarnings accepts the Windows loader section count limit", () => {
   const pe = createWindowsLayoutSubject();
   pe.coff.NumberOfSections = 96;
+
+  assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
+});
+
+void test("collectPeHeaderFieldWarnings reports missing executable-image characteristic", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.coff.Characteristics = 0;
+
+  assert.ok(collectPeHeaderFieldWarnings(pe).includes(
+    "COFF Characteristics does not set IMAGE_FILE_EXECUTABLE_IMAGE; the PE spec says this indicates a linker error."
+  ));
+});
+
+void test("collectPeHeaderFieldWarnings accepts executable-image characteristic", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.coff.Characteristics = IMAGE_FILE_EXECUTABLE_IMAGE;
 
   assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
 });
@@ -81,6 +104,24 @@ void test("collectPeHeaderFieldWarnings accepts 64K-aligned ImageBase", () => {
   assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
 });
 
+void test("collectPeHeaderFieldWarnings reports oversized PE32+ SizeOfImage", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.opt.Magic = PE32_PLUS_OPTIONAL_HEADER_MAGIC;
+  pe.opt.SizeOfImage = 0x80000001;
+
+  assert.ok(collectPeHeaderFieldWarnings(pe).includes(
+    "PE32+ SizeOfImage exceeds 2 GiB; PE32+ images are documented as limited to a 2 GiB image size."
+  ));
+});
+
+void test("collectPeHeaderFieldWarnings accepts the PE32+ SizeOfImage limit", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.opt.Magic = PE32_PLUS_OPTIONAL_HEADER_MAGIC;
+  pe.opt.SizeOfImage = 0x80000000;
+
+  assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
+});
+
 void test("collectPeHeaderFieldWarnings reports non-zero Win32VersionValue", () => {
   const pe = createWindowsLayoutSubject();
   pe.opt.Win32VersionValue = 1;
@@ -126,6 +167,24 @@ void test("collectPeHeaderFieldWarnings reports reserved DllCharacteristics bits
 void test("collectPeHeaderFieldWarnings accepts standard DllCharacteristics bits", () => {
   const pe = createWindowsLayoutSubject();
   pe.opt.DllCharacteristics = 0x0100 | 0x0040;
+
+  assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
+});
+
+void test("collectPeHeaderFieldWarnings reports HIGH_ENTROPY_VA on PE32", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.opt.Magic = PE32_OPTIONAL_HEADER_MAGIC;
+  pe.opt.DllCharacteristics = IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA;
+
+  assert.ok(collectPeHeaderFieldWarnings(pe).includes(
+    "HIGH_ENTROPY_VA is set on PE32, but the flag describes support for high-entropy 64-bit virtual address space."
+  ));
+});
+
+void test("collectPeHeaderFieldWarnings accepts HIGH_ENTROPY_VA on PE32+", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.opt.Magic = PE32_PLUS_OPTIONAL_HEADER_MAGIC;
+  pe.opt.DllCharacteristics = IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA;
 
   assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
 });
