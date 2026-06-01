@@ -31,6 +31,9 @@ const READY_TO_RUN_MAJOR_VERSION = 18;
 const READY_TO_RUN_STRIPPED_IL_BODIES = 0x00000200;
 const COMPILER_IDENTIFIER_SECTION = 100;
 const OWNER_COMPOSITE_EXECUTABLE_SECTION = 116;
+// CoreCLR corcompile.h defines CORCOMPILE_SIGNATURE for NGen CORCOMPILE_HEADER.
+// https://raw.githubusercontent.com/dotnet/coreclr/master/src/inc/corcompile.h
+const NGEN_SIGNATURE = 0x0045474e;
 
 const makeClr = (rva: number, size: number): PeClrHeader => ({
   cb: 0x48, // ECMA-335 II.25.3.3 IMAGE_COR20_HEADER byte size.
@@ -120,6 +123,24 @@ void test("parseReadyToRun reports non-RTR managed native headers", async () => 
 
   assert.strictEqual(parsed.status, "unknown-managed-native-header");
   assert.strictEqual(parsed.signature, nonReadyToRunSignature);
+  assert.strictEqual(parsed.majorVersion, null);
+  assert.strictEqual(parsed.flags, null);
+  assert.deepStrictEqual(parsed.issues, []);
+});
+
+void test("parseReadyToRun recognizes NGen managed native headers", async () => {
+  const fixture = makeReadyToRunFixture();
+  const view = new DataView(fixture.bytes.buffer);
+  view.setUint32(fixture.layout.headerRva, NGEN_SIGNATURE, true);
+
+  const parsed = await parseReadyToRun(new MockFile(fixture.bytes), rva => rva, fixture.clr);
+
+  assert.strictEqual(parsed.status, "ngen");
+  assert.strictEqual(parsed.signature, NGEN_SIGNATURE);
+  assert.strictEqual(parsed.majorVersion, null);
+  assert.strictEqual(parsed.flags, null);
+  assert.strictEqual(parsed.sectionCount, 0);
+  assert.deepStrictEqual(parsed.sections, []);
   assert.deepStrictEqual(parsed.issues, []);
 });
 

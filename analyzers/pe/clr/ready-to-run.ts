@@ -75,12 +75,17 @@ export const parseReadyToRun = async (
   const sectionCount = header.getUint32(12, true);
   // READYTORUN_SIGNATURE is ASCII "RTR" stored little-endian as 0x00525452.
   if (signature !== 0x00525452) {
+    // CoreCLR corcompile.h defines CORCOMPILE_SIGNATURE as 0x0045474e for
+    // CORCOMPILE_HEADER, which IMAGE_COR20_HEADER.ManagedNativeHeader points to
+    // in NGen images. Do not parse its version-specific CORCOMPILE_HEADER layout
+    // as ReadyToRun.
+    // https://raw.githubusercontent.com/dotnet/coreclr/master/src/inc/corcompile.h
     return {
-      status: "unknown-managed-native-header",
+      status: signature === 0x0045474e ? "ngen" : "unknown-managed-native-header",
       signature,
-      majorVersion,
-      minorVersion,
-      flags,
+      majorVersion: null,
+      minorVersion: null,
+      flags: null,
       sectionCount: 0,
       sections: [],
       issues: []

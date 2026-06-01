@@ -98,26 +98,28 @@ export const renderReadyToRun = (clrHeader: PeClrHeader, out: string[]): void =>
   const readyToRun = clrHeader.readyToRun;
   if (!readyToRun || readyToRun.status === "absent") return;
   out.push(`<details style="margin-top:.35rem" open><summary>ReadyToRun / managed native header</summary><dl>`);
-  out.push(renderDefinitionRow("Status", escapeHtml(readyToRun.status), "ReadyToRun means a managed IL assembly includes precompiled native code."));
-  out.push(renderDefinitionRow("Signature", readyToRun.signature == null ? "-" : hex(readyToRun.signature, 8), "Expected READYTORUN_SIGNATURE ('RTR')."));
-  if (readyToRun.majorVersion != null && readyToRun.minorVersion != null) {
-    out.push(renderDefinitionRow("Version", `${readyToRun.majorVersion}.${readyToRun.minorVersion}`, "ReadyToRun major/minor version."));
+  out.push(renderDefinitionRow("Status", escapeHtml(readyToRun.status), "ManagedNativeHeader format classification."));
+  out.push(renderDefinitionRow("Signature", readyToRun.signature == null ? "-" : hex(readyToRun.signature, 8), "ManagedNativeHeader signature."));
+  if (readyToRun.status === "ready-to-run") {
+    if (readyToRun.majorVersion != null && readyToRun.minorVersion != null) {
+      out.push(renderDefinitionRow("Version", `${readyToRun.majorVersion}.${readyToRun.minorVersion}`, "ReadyToRun major/minor version."));
+    }
+    if (readyToRun.flags != null) {
+      // ReadyToRunCoreHeader flags come from CoreCLR readytorun.h:
+      // https://github.com/dotnet/runtime/blob/main/src/coreclr/inc/readytorun.h
+      out.push(renderDefinitionRow("Flags", `<div class="mono">${hex(readyToRun.flags, 8)}</div>${renderFlagChips(readyToRun.flags, [
+        [0x00000001, "PLATFORM_NEUTRAL_SOURCE", "Original IL assembly was platform-neutral."],
+        [0x00000010, "EMBEDDED_MSIL", "MSIL is embedded in a composite ReadyToRun image."],
+        [0x00000100, "PLATFORM_NATIVE_IMAGE", "Owner composite executable uses platform-native format."],
+        [0x00000200, "STRIPPED_IL_BODIES", "IL method bodies were stripped."],
+        [0x00000400, "STRIPPED_INLINING_INFO", "Inlining info was stripped."],
+        [0x00000800, "STRIPPED_DEBUG_INFO", "Debug info was stripped."]
+      ])}`, "ReadyToRun core header flags."));
+    }
+    out.push(renderDefinitionRow("Sections", `${readyToRun.sections.length} parsed / ${readyToRun.sectionCount} declared`, "ReadyToRun section table entries."));
   }
-  if (readyToRun.flags != null) {
-    // ReadyToRunCoreHeader flags come from CoreCLR readytorun.h:
-    // https://github.com/dotnet/runtime/blob/main/src/coreclr/inc/readytorun.h
-    out.push(renderDefinitionRow("Flags", `<div class="mono">${hex(readyToRun.flags, 8)}</div>${renderFlagChips(readyToRun.flags, [
-      [0x00000001, "PLATFORM_NEUTRAL_SOURCE", "Original IL assembly was platform-neutral."],
-      [0x00000010, "EMBEDDED_MSIL", "MSIL is embedded in a composite ReadyToRun image."],
-      [0x00000100, "PLATFORM_NATIVE_IMAGE", "Owner composite executable uses platform-native format."],
-      [0x00000200, "STRIPPED_IL_BODIES", "IL method bodies were stripped."],
-      [0x00000400, "STRIPPED_INLINING_INFO", "Inlining info was stripped."],
-      [0x00000800, "STRIPPED_DEBUG_INFO", "Debug info was stripped."]
-    ])}`, "ReadyToRun core header flags."));
-  }
-  out.push(renderDefinitionRow("Sections", `${readyToRun.sections.length} parsed / ${readyToRun.sectionCount} declared`, "ReadyToRun section table entries."));
   out.push(`</dl>`);
-  if (readyToRun.sections.length) {
+  if (readyToRun.status === "ready-to-run" && readyToRun.sections.length) {
     out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>Type</th><th>Name</th><th>RVA</th><th>Size</th></tr></thead><tbody>`);
     readyToRun.sections.forEach(section => out.push(`<tr><td>${section.type}</td><td>${escapeHtml(section.name)}</td><td>${hex(section.rva, 8)}</td><td>${humanSize(section.size)}</td></tr>`));
     out.push(`</tbody></table>`);

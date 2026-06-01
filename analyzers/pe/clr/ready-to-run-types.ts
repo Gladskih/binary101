@@ -8,7 +8,7 @@ export interface PeClrReadyToRunSection {
 }
 
 export interface PeClrReadyToRun {
-  status: "ready-to-run" | "unknown-managed-native-header" | "truncated" | "unmapped" | "absent";
+  status: "ready-to-run" | "ngen" | "unknown-managed-native-header" | "truncated" | "unmapped" | "absent";
   signature: number | null;
   majorVersion: number | null;
   minorVersion: number | null;

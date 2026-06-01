@@ -262,6 +262,23 @@ void test("renderClr includes explanatory strong-name resources and ReadyToRun s
   assert.ok(html.includes("CompilerIdentifier"));
 });
 
+void test("renderClr labels NGen managed native headers without ReadyToRun fields", () => {
+  const out: string[] = [];
+  renderClr({
+    ...makeClrBase(),
+    readyToRun: {
+      // CoreCLR corcompile.h defines CORCOMPILE_SIGNATURE for NGen CORCOMPILE_HEADER:
+      // https://raw.githubusercontent.com/dotnet/coreclr/master/src/inc/corcompile.h
+      status: "ngen", signature: 0x0045474e, majorVersion: null, minorVersion: null,
+      flags: null, sectionCount: 0, sections: [], issues: []
+    }
+  }, out);
+  const html = out.join("");
+  assert.ok(html.includes("ngen"));
+  assert.ok(html.includes("0045474e"));
+  assert.doesNotMatch(html, /ReadyToRun section table entries|STRIPPED_IL_BODIES/);
+});
+
 void test("renderClr decodes known CorFlags and leaves only reserved bits unknown", () => {
   const clr: RenderClrInput = {
     ...makeClrBase(),

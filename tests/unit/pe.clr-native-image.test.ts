@@ -44,6 +44,7 @@ const createClrWithManagedNativeHeader = (
 
 void test("detectPeClrNativeImageSubtypeFromClr recognises confirmed CLR native images", () => {
   assert.equal(detectPeClrNativeImageSubtypeFromClr(createClrWithManagedNativeHeader("ready-to-run")), "clr-native-image");
+  assert.equal(detectPeClrNativeImageSubtypeFromClr(createClrWithManagedNativeHeader("ngen")), "clr-native-image");
   assert.equal(
     detectPeClrNativeImageSubtypeFromClr(createClrWithManagedNativeHeader("unknown-managed-native-header")),
     "clr-native-image"
