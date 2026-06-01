@@ -10,6 +10,7 @@ const WIN_CERTIFICATE_HEADER_SIZE = 8;
 const WIN_CERT_REVISION_2_0 = 0x0200;
 const WIN_CERT_TYPE_X509 = 0x0001;
 const WIN_CERT_TYPE_PKCS_SIGNED_DATA = 0x0002;
+const WIN_CERT_TYPE_RESERVED_1 = 0x0003;
 
 class RejectNegativeSliceFile extends MockFile {
   override slice(start?: number, end?: number, contentType?: string): Blob {
@@ -218,6 +219,22 @@ void test("parseSecurityDirectory warns when WIN_CERTIFICATE.dwLength is not qua
   const sec = expectDefined(parsed);
   assert.strictEqual(sec.count, 1);
   assert.ok(sec.warnings?.some(warning => /length|align/i.test(warning)));
+});
+
+void test("parseSecurityDirectory warns when WIN_CERTIFICATE type is reserved", async () => {
+  const secOff = 0x40;
+  const bytes = new Uint8Array(secOff + WIN_CERTIFICATE_HEADER_SIZE).fill(0);
+  const dv = new DataView(bytes.buffer);
+  // Microsoft PE format: WIN_CERT_TYPE_RESERVED_1 is 0x0003.
+  writeWinCertificateHeader(dv, secOff, WIN_CERTIFICATE_HEADER_SIZE, WIN_CERT_TYPE_RESERVED_1);
+
+  const parsed = await parseSecurityDirectory(
+    new MockFile(bytes, "sec-reserved-type.bin"),
+    [{ name: "SECURITY", rva: secOff, size: WIN_CERTIFICATE_HEADER_SIZE }]
+  );
+
+  const sec = expectDefined(parsed);
+  assert.ok(sec.certs[0]?.warnings?.some(warning => /reserved/i.test(warning)));
 });
 
 void test("parseSecurityDirectory treats oversized WIN_CERTIFICATE lengths as invalid instead of walking backwards", async () => {

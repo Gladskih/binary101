@@ -13,6 +13,8 @@ const CERT_TYPE_NAMES: Record<number, string> = {
   0x0ef2: "EFI signed data"
 };
 
+const WIN_CERT_TYPE_RESERVED_1 = 0x0003; // Microsoft PE format: WIN_CERTIFICATE type 0x0003 is reserved.
+
 const REVISION_NAMES: Record<number, string> = {
   0x0100: "Revision 1.0",
   0x0200: "Revision 2.0"
@@ -186,6 +188,9 @@ export const decodeWinCertificate = (
   const payload = data.subarray(contentStart);
   if (payload.length + contentStart < declaredLength) {
     warnings.push("Certificate data is truncated.");
+  }
+  if (certificateType === WIN_CERT_TYPE_RESERVED_1) {
+    warnings.push("WIN_CERTIFICATE type 0x0003 is reserved.");
   }
   let authenticode: AuthenticodeInfo | undefined;
   if (certificateType === 0x0002 && payload.length) {
