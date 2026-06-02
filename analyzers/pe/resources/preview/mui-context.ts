@@ -2,8 +2,8 @@
 
 import type { FileRangeReader } from "../../../file-range-reader.js";
 import {
-  parseMuiResourceConfiguration,
-  type MuiResourceConfiguration
+  parseMuiResourceConfigurationDetailed,
+  type MuiResourceConfigurationParseResult
 } from "../mui-config.js";
 import type { ResourceTree } from "../tree-types.js";
 import { readResourceLeafBytes } from "./leaf-data.js";
@@ -12,6 +12,12 @@ import type {
   ResourceLangWithPreview
 } from "./types.js";
 
+export interface MuiResourceContext {
+  dataRVA: number;
+  size: number;
+  result: MuiResourceConfigurationParseResult;
+}
+
 const findMuiResourceConfigurationLang = (
   detail: ResourceDetailGroup[]
 ): ResourceLangWithPreview | null =>
@@ -19,13 +25,23 @@ const findMuiResourceConfigurationLang = (
     ?.entries.find(entry => entry.id === 1)
     ?.langs[0] ?? null;
 
-export const readMuiResourceConfiguration = async (
+export const readMuiResourceContext = async (
   reader: FileRangeReader,
   tree: ResourceTree,
   detail: ResourceDetailGroup[]
-): Promise<MuiResourceConfiguration | null> => {
+): Promise<MuiResourceContext | null> => {
   const langEntry = findMuiResourceConfigurationLang(detail);
   if (!langEntry?.size || !langEntry.dataRVA) return null;
   const leaf = await readResourceLeafBytes(reader, tree, langEntry);
-  return leaf.data ? parseMuiResourceConfiguration(leaf.data) : null;
+  const result = leaf.data
+    ? parseMuiResourceConfigurationDetailed(leaf.data)
+    : { configuration: null, issues: [] };
+  return {
+    dataRVA: langEntry.dataRVA,
+    size: langEntry.size,
+    result: {
+      configuration: result.configuration,
+      issues: [...(leaf.issues || []), ...result.issues]
+    }
+  };
 };

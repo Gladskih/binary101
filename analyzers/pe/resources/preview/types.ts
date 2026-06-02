@@ -1,6 +1,7 @@
 "use strict";
 
 import type { ResourceLangEntry } from "../core.js";
+import type { MuiResourceConfiguration } from "../mui-config.js";
 
 export interface ResourcePreviewField {
   label: string;
@@ -114,6 +115,7 @@ export interface ResourcePreviewData {
   manifestValidation?: ResourceManifestValidation;
   stringTable?: Array<{ id: number | null; text: string }>;
   messageTable?: { messages: Array<{ id: number; strings: string[] }>; truncated: boolean };
+  muiConfig?: MuiResourceConfiguration;
   versionInfo?: ResourceVersionPreview;
   previewFields?: ResourcePreviewField[];
   dialogPreview?: ResourceDialogPreview;

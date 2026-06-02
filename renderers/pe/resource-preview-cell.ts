@@ -9,6 +9,7 @@ import type {
 import { formatWindowsLanguageName } from "./windows-language-names.js";
 import { renderDialogPreview } from "./resource-preview-dialog.js";
 import { renderManifestPreview, renderManifestTree } from "./resource-preview-manifest.js";
+import { renderMuiConfigPreview } from "./resource-preview-mui.js";
 const renderIssues = (langEntry: ResourceLangWithPreview): string => {
   const issues = (langEntry.previewIssues || []).filter((issue): issue is string => Boolean(issue));
   return issues.length
@@ -198,6 +199,9 @@ export const renderPreviewSummary = (
   if (langEntry.previewKind === "messageTable" && langEntry.messageTable?.messages) {
     return `${langEntry.messageTable.messages.length} messages`;
   }
+  if (langEntry.previewKind === "muiConfig" && langEntry.muiConfig) {
+    return "MUI resource config";
+  }
   if (langEntry.previewKind === "version") return "Version info";
   if (langEntry.previewKind === "text" && (langEntry.manifestInfo || langEntry.manifestTree)) {
     return "Manifest";
@@ -269,6 +273,9 @@ export const renderPreviewCell = (langEntry: ResourceLangWithPreview | null | un
   }
   if (langEntry.previewKind === "messageTable" && langEntry.messageTable?.messages) {
     return renderMessageTablePreview(langEntry);
+  }
+  if (langEntry.previewKind === "muiConfig" && langEntry.muiConfig) {
+    return renderMuiConfigPreview(langEntry.muiConfig) + renderFields(langEntry) + renderIssues(langEntry);
   }
   const tailPreview = renderTailPreview(langEntry);
   if (tailPreview) return tailPreview;

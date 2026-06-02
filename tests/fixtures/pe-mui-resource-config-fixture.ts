@@ -47,7 +47,11 @@ export const buildMuiResourceConfigurationFixture = (): Uint8Array => {
   view.setUint32(0, 0xfecdfecd, true);
   view.setUint32(8, MUI_RESOURCE_VERSION, true);
   view.setUint32(16, LANGUAGE_SPECIFIC_MUI_FILE_TYPE, true);
+  // Service Checksum and Checksum are 16-byte fields in the MUI resource header.
+  output.set(Array.from({ length: 16 }, (_, index) => index + 1), 28);
+  output.set(Array.from({ length: 16 }, (_, index) => 0xa0 + index), 44);
   // Fixed-header range offsets follow the MUI resource layout used by GetFileMUIInfo.
+  cursor = appendRange(output, 68, cursor, encodeUtf16MultiString(["en-US\\fixture.dll.mui"]));
   cursor = appendRange(output, 84, cursor, encodeUtf16MultiString(["MUI"]));
   cursor = appendRange(output, 92, cursor, encodeUint32Array([24]));
   cursor = appendRange(output, 108, cursor, encodeUint32Array([16]));

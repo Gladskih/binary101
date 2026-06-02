@@ -19,6 +19,13 @@ const encoder = new TextEncoder();
 type ResourcePreviewResult = Awaited<ReturnType<typeof enrichResourcePreviews>>;
 type PreviewResourceLang =
   ResourceTree["detail"][number]["entries"][number]["langs"][number] & {
+    muiConfig?: {
+      checksum: string;
+      fileType: number;
+      mainTypeIds: number[];
+      muiPaths: string[];
+    };
+    previewKind?: string;
     textPreview?: string;
     previewIssues?: string[];
   };
@@ -46,6 +53,13 @@ void test("enrichResourcePreviews accepts manifest placeholders only with MUI re
     }
   );
   const manifestLang = getManifestLang(result);
+  const muiLang = result.detail.find(entry => entry.typeName === "MUI")?.entries[0]?.langs[0] as
+    | PreviewResourceLang
+    | undefined;
+  assert.equal(muiLang?.previewKind, "muiConfig");
+  assert.equal(muiLang?.muiConfig?.checksum, "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf");
+  assert.deepEqual(muiLang?.muiConfig?.mainTypeIds, [24]);
+  assert.deepEqual(muiLang?.muiConfig?.muiPaths, ["en-US\\fixture.dll.mui"]);
   assert.equal(manifestLang.textPreview, "placeholder");
   assert.equal(manifestLang.previewIssues, undefined);
   assert.ok(result.muiResourceConfiguration);
@@ -67,5 +81,19 @@ void test("enrichResourcePreviews reports manifest placeholders without valid MU
   );
   const manifestLang = getManifestLang(result);
   assert.ok(manifestLang.previewIssues?.some(issue => /XML parser threw/.test(issue)));
+  assert.equal(result.muiResourceConfiguration, undefined);
+});
+
+void test("enrichResourcePreviews reports malformed MUI resource configs", async () => {
+  const fixture = createPreviewFixture(256);
+  const malformed = fixture.appendData(encoder.encode("not-mu"));
+  const tree = createPreviewTree([
+    createPreviewDetailGroup("MUI", 1, createPreviewLangEntry(malformed.offset, malformed.size, 0, 1033))
+  ]);
+
+  const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
+  const muiLang = result.detail[0]?.entries[0]?.langs[0] as PreviewResourceLang | undefined;
+  assert.equal(muiLang?.previewKind, undefined);
+  assert.ok(muiLang?.previewIssues?.includes("MUI resource config signature is not fecdfecd."));
   assert.equal(result.muiResourceConfiguration, undefined);
 });

@@ -33,14 +33,24 @@ const createClr = (values: Partial<PeClrHeader>): PeClrHeader => ({
 });
 
 const createMuiResourceConfiguration = (): MuiResourceConfiguration => ({
+  declaredSize: 0,
   version: 0x00010000,
+  pathType: 0,
   fileType: 0x12,
+  systemAttributes: 0,
+  fallbackLocation: 0,
+  serviceChecksum: "",
+  checksum: "",
+  unknown1: [0, 0],
+  unknown2: [0, 0],
+  muiPaths: [],
   mainTypeNames: ["MUI"],
   mainTypeIds: [24],
   muiTypeNames: [],
   muiTypeIds: [16],
   languageName: "en-US",
-  fallbackLanguageName: null
+  fallbackLanguageName: null,
+  trailingByteCount: 0
 });
 
 void test("detectPeSubtypeFromClr delegates to WinMD subtype detection first", () => {

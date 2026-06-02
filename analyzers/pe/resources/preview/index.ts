@@ -37,7 +37,11 @@ import {
 import { addAniCursorPreview, addAniIconPreview } from "./ani.js";
 import { addVersionPreview } from "./version.js";
 import { addMessageTableResourcePreview } from "./message-table.js";
-import { readMuiResourceConfiguration } from "./mui-context.js";
+import { addMuiConfigPreview, createMuiConfigPreview } from "./mui-config.js";
+import {
+  readMuiResourceContext,
+  type MuiResourceContext
+} from "./mui-context.js";
 import type { MuiResourceConfiguration } from "../mui-config.js";
 import type {
   ResourceDetailGroup,
@@ -48,7 +52,6 @@ import type { ResourceTree } from "../core.js";
 
 type ResourceEntryPreviewDecode = ResourcePreviewResult[];
 type ResourceGroupPreviewDecode = ResourceEntryPreviewDecode[];
-
 const combineIssues = (...lists: Array<string[] | undefined>): string[] | undefined => {
   const issues = lists.flatMap(list => list || []);
   return issues.length ? issues : undefined;
@@ -62,7 +65,6 @@ const runSyncPreviewDecoder = (fn: () => ResourcePreviewResult | null): Resource
     return { issues: [`Preview failed: ${message}`] };
   }
 };
-
 const runAsyncPreviewDecoder = async (
   fn: () => Promise<ResourcePreviewResult | null>
 ): Promise<ResourcePreviewResult | null> => {
@@ -82,7 +84,7 @@ const decodeSpecificResourcePreview = async (
   lang: number | null | undefined,
   loadIconLeafData: LoadResourceLeafData,
   loadCursorLeafData: LoadResourceLeafData,
-  muiResourceConfiguration: MuiResourceConfiguration | null,
+  muiResourceContext: MuiResourceContext | null,
   parseManifestXmlDocument: ManifestXmlDocumentParser
 ): Promise<ResourcePreviewResult | null> => {
   switch (typeName) {
@@ -96,9 +98,11 @@ const decodeSpecificResourcePreview = async (
       return runAsyncPreviewDecoder(() => addGroupCursorPreview(data, typeName, loadCursorLeafData, lang));
     case "BITMAP":
       return runSyncPreviewDecoder(() => addBitmapPreview(data, typeName));
+    case "MUI":
+      return runSyncPreviewDecoder(() => addMuiConfigPreview(data, typeName));
     case "MANIFEST":
       return runSyncPreviewDecoder(() => (
-        addMuiManifestPlaceholderPreview(data, typeName, muiResourceConfiguration) ||
+        addMuiManifestPlaceholderPreview(data, typeName, muiResourceContext?.result.configuration ?? null) ||
         addManifestPreviewWithXmlParser(
           data,
           typeName,
@@ -149,10 +153,18 @@ const decodeResourceLeafPreview = async (
   langEntry: ResourceLangWithPreview,
   loadIconLeafData: LoadResourceLeafData,
   loadCursorLeafData: LoadResourceLeafData,
-  muiResourceConfiguration: MuiResourceConfiguration | null,
+  muiResourceContext: MuiResourceContext | null,
   parseManifestXmlDocument: ManifestXmlDocumentParser
 ): Promise<ResourcePreviewResult> => {
   if (!langEntry.size || !langEntry.dataRVA) return {};
+  if (
+    groupTypeName === "MUI" &&
+    entryId === 1 &&
+    muiResourceContext?.dataRVA === langEntry.dataRVA &&
+    muiResourceContext.size === langEntry.size
+  ) {
+    return createMuiConfigPreview(muiResourceContext.result);
+  }
   try {
     const leaf = await readResourceLeafBytes(reader, tree, langEntry);
     if (!leaf.data?.length) return leaf.issues?.length ? { issues: leaf.issues } : {};
@@ -165,7 +177,7 @@ const decodeResourceLeafPreview = async (
       langEntry.lang,
       loadIconLeafData,
       loadCursorLeafData,
-      muiResourceConfiguration,
+      muiResourceContext,
       parseManifestXmlDocument
     );
     if (typedPreview?.preview) {
@@ -194,7 +206,7 @@ const decodeDetailPreviews = async (
   detail: ResourceDetailGroup[],
   loadIconLeafData: LoadResourceLeafData,
   loadCursorLeafData: LoadResourceLeafData,
-  muiResourceConfiguration: MuiResourceConfiguration | null,
+  muiResourceContext: MuiResourceContext | null,
   parseManifestXmlDocument: ManifestXmlDocumentParser
 ): Promise<ResourceGroupPreviewDecode[]> =>
   Promise.all(detail.map(group =>
@@ -208,7 +220,7 @@ const decodeDetailPreviews = async (
           langEntry as ResourceLangWithPreview,
           loadIconLeafData,
           loadCursorLeafData,
-          muiResourceConfiguration,
+          muiResourceContext,
           parseManifestXmlDocument
         )
       ))
@@ -264,14 +276,14 @@ export async function enrichResourcePreviews(
     "GROUP_CURSOR",
     "CURSOR"
   );
-  const muiResourceConfiguration = await readMuiResourceConfiguration(reader, tree, detail);
+  const muiResourceContext = await readMuiResourceContext(reader, tree, detail);
   const decodedGroups = await decodeDetailPreviews(
     reader,
     tree,
     detail,
     loadIconLeafData,
     loadCursorLeafData,
-    muiResourceConfiguration,
+    muiResourceContext,
     parseManifestXmlDocument
   );
   const issues = [...(tree.issues || [])];
@@ -280,7 +292,9 @@ export async function enrichResourcePreviews(
     detail: attachDetailPreviews(detail, decodedGroups),
     ...(tree.directories?.length ? { directories: tree.directories } : {}),
     ...(tree.paths?.length ? { paths: tree.paths } : {}),
-    ...(muiResourceConfiguration ? { muiResourceConfiguration } : {}),
+    ...(muiResourceContext?.result.configuration
+      ? { muiResourceConfiguration: muiResourceContext.result.configuration }
+      : {}),
     ...(issues.length ? { issues } : {})
   };
 }
