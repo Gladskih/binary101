@@ -26,6 +26,8 @@ const IMAGE_FILE_RELOCS_STRIPPED = 0x0001;
 const IMAGE_FILE_EXECUTABLE_IMAGE = 0x0002;
 const IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA = 0x0020;
 const IMAGE_DLLCHARACTERISTICS_NO_BIND = 0x0800;
+const COMIMAGE_FLAGS_ILONLY = 0x00000001;
+const COMIMAGE_FLAGS_32BITREQUIRED = 0x00000002;
 // Microsoft PE/COFF, "Characteristics": these COFF file flags are deprecated, obsolete,
 // or reserved and should be zero in current images.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#characteristics
@@ -49,6 +51,11 @@ const isNonZeroDataDirectory = (rva: number, size: number): boolean =>
   (rva >>> 0) !== 0 || (size >>> 0) !== 0;
 const hasDataDirectory = (pe: PeParseResult, name: string): boolean =>
   pe.dirs.some(directory => directory.name === name && isNonZeroDataDirectory(directory.rva, directory.size));
+const isClrAnyCpuImage = (pe: PeParseResult): boolean =>
+  isPeWindowsParseResult(pe) &&
+  pe.clr != null &&
+  ((pe.clr.Flags >>> 0) & COMIMAGE_FLAGS_ILONLY) !== 0 &&
+  ((pe.clr.Flags >>> 0) & COMIMAGE_FLAGS_32BITREQUIRED) === 0;
 
 const addCoffWarnings = (pe: PeParseResult, warnings: string[]): void => {
   if ((pe.coff.NumberOfSections >>> 0) > WINDOWS_LOADER_SECTION_LIMIT) {
@@ -145,7 +152,11 @@ const addDllCharacteristicWarnings = (pe: PeParseResult, warnings: string[]): vo
   }
   if (
     pe.opt.Magic === PE32_OPTIONAL_HEADER_MAGIC &&
-    ((pe.opt.DllCharacteristics >>> 0) & IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA) !== 0
+    ((pe.opt.DllCharacteristics >>> 0) & IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA) !== 0 &&
+    // Microsoft compiler docs for -highentropyva allow this flag for 64-bit
+    // executables and AnyCPU managed executables.
+    // https://learn.microsoft.com/en-us/dotnet/visual-basic/reference/command-line-compiler/highentropyva
+    !isClrAnyCpuImage(pe)
   ) {
     warnings.push(
       "HIGH_ENTROPY_VA is set on PE32, but the flag describes support for high-entropy 64-bit virtual address space."

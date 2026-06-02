@@ -8,6 +8,8 @@ import { createWindowsLayoutSubject } from "../fixtures/pe-layout-warning-subjec
 // Microsoft PE/COFF file and DLL characteristic bits used by these header-warning fixtures.
 const IMAGE_FILE_EXECUTABLE_IMAGE = 0x0002;
 const IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA = 0x0020;
+const COMIMAGE_FLAGS_ILONLY = 0x00000001;
+const COMIMAGE_FLAGS_32BITREQUIRED = 0x00000002;
 // Microsoft PE/COFF optional header magic values: 0x10b is PE32, 0x20b is PE32+.
 const PE32_OPTIONAL_HEADER_MAGIC = 0x10b;
 const PE32_PLUS_OPTIONAL_HEADER_MAGIC = 0x20b;
@@ -175,6 +177,28 @@ void test("collectPeHeaderFieldWarnings reports HIGH_ENTROPY_VA on PE32", () => 
   const pe = createWindowsLayoutSubject();
   pe.opt.Magic = PE32_OPTIONAL_HEADER_MAGIC;
   pe.opt.DllCharacteristics = IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA;
+
+  assert.ok(collectPeHeaderFieldWarnings(pe).includes(
+    "HIGH_ENTROPY_VA is set on PE32, but the flag describes support for high-entropy 64-bit virtual address space."
+  ));
+});
+
+void test("collectPeHeaderFieldWarnings accepts HIGH_ENTROPY_VA on PE32 CLR AnyCPU", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.opt.Magic = PE32_OPTIONAL_HEADER_MAGIC;
+  pe.opt.DllCharacteristics = IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA;
+  pe.clr = { Flags: COMIMAGE_FLAGS_ILONLY } as NonNullable<typeof pe.clr>;
+
+  assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
+});
+
+void test("collectPeHeaderFieldWarnings reports HIGH_ENTROPY_VA on PE32 CLR x86-only", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.opt.Magic = PE32_OPTIONAL_HEADER_MAGIC;
+  pe.opt.DllCharacteristics = IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA;
+  pe.clr = {
+    Flags: COMIMAGE_FLAGS_ILONLY | COMIMAGE_FLAGS_32BITREQUIRED
+  } as NonNullable<typeof pe.clr>;
 
   assert.ok(collectPeHeaderFieldWarnings(pe).includes(
     "HIGH_ENTROPY_VA is set on PE32, but the flag describes support for high-entropy 64-bit virtual address space."
