@@ -2,8 +2,12 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { detectPeSubtypeFromClr } from "../../analyzers/pe/subtype.js";
+import {
+  detectPeMuiResourceSubtype,
+  detectPeSubtypeFromClr
+} from "../../analyzers/pe/subtype.js";
 import type { PeClrHeader } from "../../analyzers/pe/clr/types.js";
+import type { MuiResourceConfiguration } from "../../analyzers/pe/resources/mui-config.js";
 
 const createClr = (values: Partial<PeClrHeader>): PeClrHeader => ({
   cb: 0,
@@ -26,6 +30,17 @@ const createClr = (values: Partial<PeClrHeader>): PeClrHeader => ({
   ManagedNativeHeaderRVA: 0,
   ManagedNativeHeaderSize: 0,
   ...values
+});
+
+const createMuiResourceConfiguration = (): MuiResourceConfiguration => ({
+  version: 0x00010000,
+  fileType: 0x12,
+  mainTypeNames: ["MUI"],
+  mainTypeIds: [24],
+  muiTypeNames: [],
+  muiTypeIds: [16],
+  languageName: "en-US",
+  fallbackLanguageName: null
 });
 
 void test("detectPeSubtypeFromClr delegates to WinMD subtype detection first", () => {
@@ -52,4 +67,35 @@ void test("detectPeSubtypeFromClr delegates to CLR native image detection", () =
 void test("detectPeSubtypeFromClr returns null without confirmed subtype markers", () => {
   assert.equal(detectPeSubtypeFromClr(createClr({})), null);
   assert.equal(detectPeSubtypeFromClr(null), null);
+});
+
+void test("detectPeMuiResourceSubtype recognizes resource-only MUI images", () => {
+  assert.equal(
+    detectPeMuiResourceSubtype(
+      createMuiResourceConfiguration(),
+      0,
+      [{ characteristics: 0 }]
+    ),
+    "mui-resource-image"
+  );
+});
+
+void test("detectPeMuiResourceSubtype ignores MUI configs on executable images", () => {
+  assert.equal(
+    detectPeMuiResourceSubtype(
+      createMuiResourceConfiguration(),
+      0x1000,
+      [{ characteristics: 0 }]
+    ),
+    null
+  );
+  assert.equal(
+    detectPeMuiResourceSubtype(
+      createMuiResourceConfiguration(),
+      0,
+      // Microsoft PE format, "Section Flags": IMAGE_SCN_MEM_EXECUTE is 0x20000000.
+      [{ characteristics: 0x20000000 }]
+    ),
+    null
+  );
 });

@@ -19,6 +19,7 @@ import {
   addStringTablePreview
 } from "./text.js";
 import {
+  addMuiManifestPlaceholderPreview,
   addManifestPreviewWithXmlParser
 } from "./manifest.js";
 import {
@@ -35,7 +36,9 @@ import {
 } from "./standard-types.js";
 import { addAniCursorPreview, addAniIconPreview } from "./ani.js";
 import { addVersionPreview } from "./version.js";
-import { decodeMessageTablePreview } from "./message-table.js";
+import { addMessageTableResourcePreview } from "./message-table.js";
+import { readMuiResourceConfiguration } from "./mui-context.js";
+import type { MuiResourceConfiguration } from "../mui-config.js";
 import type {
   ResourceDetailGroup,
   ResourceLangWithPreview,
@@ -49,30 +52,6 @@ type ResourceGroupPreviewDecode = ResourceEntryPreviewDecode[];
 const combineIssues = (...lists: Array<string[] | undefined>): string[] | undefined => {
   const issues = lists.flatMap(list => list || []);
   return issues.length ? issues : undefined;
-};
-
-const addMessageTableResourcePreview = (
-  data: Uint8Array,
-  typeName: string,
-  codePage: number | undefined
-): ResourcePreviewResult | null => {
-  if (typeName !== "MESSAGETABLE") return null;
-  const messageTable = decodeMessageTablePreview(data, codePage || 0);
-  if (!messageTable) return null;
-  const issues = combineIssues(
-    messageTable.truncated ? ["Message table preview is truncated or malformed."] : undefined,
-    messageTable.issues
-  );
-  return {
-    preview: {
-      previewKind: "messageTable",
-      messageTable: {
-        messages: messageTable.messages,
-        truncated: messageTable.truncated
-      }
-    },
-    ...(issues ? { issues } : {})
-  };
 };
 
 const runSyncPreviewDecoder = (fn: () => ResourcePreviewResult | null): ResourcePreviewResult | null => {
@@ -103,6 +82,7 @@ const decodeSpecificResourcePreview = async (
   lang: number | null | undefined,
   loadIconLeafData: LoadResourceLeafData,
   loadCursorLeafData: LoadResourceLeafData,
+  muiResourceConfiguration: MuiResourceConfiguration | null,
   parseManifestXmlDocument: ManifestXmlDocumentParser
 ): Promise<ResourcePreviewResult | null> => {
   switch (typeName) {
@@ -117,14 +97,15 @@ const decodeSpecificResourcePreview = async (
     case "BITMAP":
       return runSyncPreviewDecoder(() => addBitmapPreview(data, typeName));
     case "MANIFEST":
-      return runSyncPreviewDecoder(() =>
+      return runSyncPreviewDecoder(() => (
+        addMuiManifestPlaceholderPreview(data, typeName, muiResourceConfiguration) ||
         addManifestPreviewWithXmlParser(
           data,
           typeName,
           codePage,
           parseManifestXmlDocument
         )
-      );
+      ));
     case "HTML":
       return runSyncPreviewDecoder(() => addHtmlPreview(data, typeName, codePage));
     case "RCDATA":
@@ -168,6 +149,7 @@ const decodeResourceLeafPreview = async (
   langEntry: ResourceLangWithPreview,
   loadIconLeafData: LoadResourceLeafData,
   loadCursorLeafData: LoadResourceLeafData,
+  muiResourceConfiguration: MuiResourceConfiguration | null,
   parseManifestXmlDocument: ManifestXmlDocumentParser
 ): Promise<ResourcePreviewResult> => {
   if (!langEntry.size || !langEntry.dataRVA) return {};
@@ -183,6 +165,7 @@ const decodeResourceLeafPreview = async (
       langEntry.lang,
       loadIconLeafData,
       loadCursorLeafData,
+      muiResourceConfiguration,
       parseManifestXmlDocument
     );
     if (typedPreview?.preview) {
@@ -211,6 +194,7 @@ const decodeDetailPreviews = async (
   detail: ResourceDetailGroup[],
   loadIconLeafData: LoadResourceLeafData,
   loadCursorLeafData: LoadResourceLeafData,
+  muiResourceConfiguration: MuiResourceConfiguration | null,
   parseManifestXmlDocument: ManifestXmlDocumentParser
 ): Promise<ResourceGroupPreviewDecode[]> =>
   Promise.all(detail.map(group =>
@@ -224,6 +208,7 @@ const decodeDetailPreviews = async (
           langEntry as ResourceLangWithPreview,
           loadIconLeafData,
           loadCursorLeafData,
+          muiResourceConfiguration,
           parseManifestXmlDocument
         )
       ))
@@ -265,6 +250,7 @@ export async function enrichResourcePreviews(
   detail: ResourceDetailGroup[];
   directories?: ResourceTree["directories"];
   paths?: ResourceTree["paths"];
+  muiResourceConfiguration?: MuiResourceConfiguration;
   issues?: string[];
 }> {
   const detail = tree.detail as ResourceDetailGroup[];
@@ -278,12 +264,14 @@ export async function enrichResourcePreviews(
     "GROUP_CURSOR",
     "CURSOR"
   );
+  const muiResourceConfiguration = await readMuiResourceConfiguration(reader, tree, detail);
   const decodedGroups = await decodeDetailPreviews(
     reader,
     tree,
     detail,
     loadIconLeafData,
     loadCursorLeafData,
+    muiResourceConfiguration,
     parseManifestXmlDocument
   );
   const issues = [...(tree.issues || [])];
@@ -292,6 +280,7 @@ export async function enrichResourcePreviews(
     detail: attachDetailPreviews(detail, decodedGroups),
     ...(tree.directories?.length ? { directories: tree.directories } : {}),
     ...(tree.paths?.length ? { paths: tree.paths } : {}),
+    ...(muiResourceConfiguration ? { muiResourceConfiguration } : {}),
     ...(issues.length ? { issues } : {})
   };
 }

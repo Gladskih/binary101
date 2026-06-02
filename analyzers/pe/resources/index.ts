@@ -7,6 +7,7 @@ import {
   parseBrowserManifestXmlDocument,
   type ManifestXmlDocumentParser
 } from "./preview/manifest-xml.js";
+import type { MuiResourceConfiguration } from "./mui-config.js";
 import type { ResourceDetailGroup } from "./preview/types.js";
 import type { ResourceTree } from "./tree-types.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
@@ -16,6 +17,7 @@ export interface PeResources {
   detail: ResourceDetailGroup[];
   directories?: ResourceTree["directories"];
   paths?: ResourceTree["paths"];
+  muiResourceConfiguration?: MuiResourceConfiguration;
   issues?: string[];
 }
 

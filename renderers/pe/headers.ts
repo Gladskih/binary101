@@ -69,7 +69,8 @@ const renderPeFormatNote = (out: string[]): void => {
 
 const PE_SUBTYPE_LABELS: Record<string, string> = {
   "winmd": "Windows Metadata (WinMD)",
-  "clr-native-image": "CLR native image"
+  "clr-native-image": "CLR native image",
+  "mui-resource-image": "MUI resource-only image"
 };
 
 const formatPeSubtype = (pe: PeParseResult): string =>

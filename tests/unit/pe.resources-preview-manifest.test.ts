@@ -75,6 +75,26 @@ void test("addManifestPreviewWithXmlParser reports invalid uiAccess values", () 
   assert.ok(result?.issues?.some(issue => /uiAccess/i.test(issue)));
 });
 
+void test("addManifestPreviewWithXmlParser reports standalone manifest placeholders as non-XML", () => {
+  const result = addManifestPreviewWithXmlParser(
+    encoder.encode("placeholder\0"),
+    "MANIFEST",
+    65001,
+    () => {
+      throw new Error("fixture parser should not run for a manifest placeholder");
+    }
+  );
+
+  assert.equal(result?.preview?.previewKind, "text");
+  assert.equal(result?.preview?.textPreview, "placeholder");
+  assert.equal(result?.preview?.manifestInfo, undefined);
+  assert.equal(result?.preview?.manifestTree, undefined);
+  assert.ok(result?.issues?.includes(
+    "Manifest preview stopped at a NUL terminator before the declared data size."
+  ));
+  assert.ok(result?.issues?.some(issue => /XML parser threw/.test(issue)));
+});
+
 void test("addManifestPreviewWithXmlParser parses namespace-prefixed roots and reports empty supportedArchitectures", () => {
   const fixture = createPrefixedManifestXmlFixture(createManifestIncidentalValues(), {
     processorArchitecture: "amd64"

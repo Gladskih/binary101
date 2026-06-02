@@ -38,7 +38,7 @@ import { buildHeaderOnlyPeParseResult } from "./core/header-only-result.js";
 import { collectPeLayoutWarnings } from "./layout/warnings.js";
 import { analyzePeOverlay } from "./overlay.js";
 import { analyzePePackers } from "./packers/index.js";
-import { detectPeSubtypeFromClr } from "./subtype.js";
+import { detectPeSubtype } from "./subtype.js";
 import { getCanonicalPeMachine } from "./machine.js";
 export {
   isPeRomParseResult,
@@ -152,7 +152,7 @@ export async function parsePe(
   const boundImports = await parseBoundImports(reader, dataDirs, rvaToOff);
   const delayImports = await peVariant.parseDelayImports(reader, dataDirs, rvaToOff);
   const clr = await parseClrDirectory(reader, dataDirs, rvaToOff);
-  const subtype = detectPeSubtypeFromClr(clr);
+  const subtype = detectPeSubtype(clr, resources?.muiResourceConfiguration, opt.AddressOfEntryPoint, sections);
   const nativeAotCandidate = detectNativeAotCandidate(clr != null, exportsInfo, sections);
   const securityDir = dataDirs.find(d => d.name === "SECURITY");
   const authenticodeDigestCache = new Map<string, Promise<string | null>>();

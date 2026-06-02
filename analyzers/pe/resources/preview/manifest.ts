@@ -17,10 +17,16 @@ import type {
   ResourceManifestTreeNode,
   ResourcePreviewResult
 } from "./types.js";
+import type { MuiResourceConfiguration } from "../mui-config.js";
 
 const XML_ELEMENT_NODE = 1;
 const XML_TEXT_NODE = 3;
 const XML_CDATA_SECTION_NODE = 4;
+// Observed Windows SystemResources .mun RT_MANIFEST marker. It is accepted only
+// when the containing PE also has a valid MUI resource configuration.
+const ASCII_MANIFEST_PLACEHOLDER = [
+  0x70, 0x6c, 0x61, 0x63, 0x65, 0x68, 0x6f, 0x6c, 0x64, 0x65, 0x72
+];
 
 const normalizeText = (value: string | null | undefined): string | null => {
   const trimmed = value?.trim();
@@ -165,6 +171,27 @@ const parseManifestInfo = (
     supportedArchitectures
   };
 };
+
+const isMuiManifestPlaceholderPayload = (data: Uint8Array): boolean =>
+  data.length >= ASCII_MANIFEST_PLACEHOLDER.length &&
+  ASCII_MANIFEST_PLACEHOLDER.every((byte, index) => data[index] === byte) &&
+  data.subarray(ASCII_MANIFEST_PLACEHOLDER.length).every(byte => byte === 0);
+
+export function addMuiManifestPlaceholderPreview(
+  data: Uint8Array,
+  typeName: string,
+  muiResourceConfiguration: MuiResourceConfiguration | null
+): ResourcePreviewResult | null {
+  if (typeName !== "MANIFEST" || !muiResourceConfiguration || !isMuiManifestPlaceholderPayload(data)) {
+    return null;
+  }
+  return {
+    preview: {
+      previewKind: "text",
+      textPreview: "placeholder"
+    }
+  };
+}
 
 export function addManifestPreviewWithXmlParser(
   data: Uint8Array,

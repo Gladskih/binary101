@@ -1,5 +1,7 @@
 "use strict";
 
+import type { ResourcePreviewResult } from "./types.js";
+
 // Microsoft Learn, MESSAGE_RESOURCE_BLOCK: LowId, HighId, OffsetToEntries are three DWORDs.
 // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-message_resource_block
 const MESSAGE_BLOCK_HEADER_SIZE = 12;
@@ -139,4 +141,33 @@ export const decodeMessageTablePreview = (
     }
   }
   return { messages, truncated, issues };
+};
+
+const combineIssues = (...lists: Array<string[] | undefined>): string[] | undefined => {
+  const issues = lists.flatMap(list => list || []);
+  return issues.length ? issues : undefined;
+};
+
+export const addMessageTableResourcePreview = (
+  data: Uint8Array,
+  typeName: string,
+  codePage: number | undefined
+): ResourcePreviewResult | null => {
+  if (typeName !== "MESSAGETABLE") return null;
+  const messageTable = decodeMessageTablePreview(data, codePage || 0);
+  if (!messageTable) return null;
+  const issues = combineIssues(
+    messageTable.truncated ? ["Message table preview is truncated or malformed."] : undefined,
+    messageTable.issues
+  );
+  return {
+    preview: {
+      previewKind: "messageTable",
+      messageTable: {
+        messages: messageTable.messages,
+        truncated: messageTable.truncated
+      }
+    },
+    ...(issues ? { issues } : {})
+  };
 };
