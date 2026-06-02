@@ -1,7 +1,7 @@
 "use strict";
 
 import assert from "node:assert/strict";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
@@ -33,11 +33,14 @@ void test("buildExperimentalVariantSpecs includes cross-target probes", () => {
 
 void test("writeSourceFiles writes console and windows hello-world sources", async () => {
   const sourceDirectory = await mkdtemp(join(tmpdir(), "binary101-rust-matrix-"));
+  try {
+    const sourcePaths = await writeSourceFiles(sourceDirectory);
+    const consoleSource = await readFile(sourcePaths["hello.rs"] ?? "", "utf8");
+    const windowsSource = await readFile(sourcePaths["hello-windows.rs"] ?? "", "utf8");
 
-  const sourcePaths = await writeSourceFiles(sourceDirectory);
-  const consoleSource = await readFile(sourcePaths["hello.rs"] ?? "", "utf8");
-  const windowsSource = await readFile(sourcePaths["hello-windows.rs"] ?? "", "utf8");
-
-  assert.match(consoleSource, /println!\("Hello, world!"\);/);
-  assert.match(windowsSource, /windows_subsystem = "windows"/);
+    assert.match(consoleSource, /println!\("Hello, world!"\);/);
+    assert.match(windowsSource, /windows_subsystem = "windows"/);
+  } finally {
+    await rm(sourceDirectory, { recursive: true, force: true });
+  }
 });
