@@ -1,9 +1,9 @@
 "use strict";
 
 import type { FileRangeReader } from "../../file-range-reader.js";
-import type { PeDataDirectory, PeTlsDirectory, RvaToOffset } from "../types.js";
+import type { PeDataDirectory, PeSection, PeTlsDirectory, RvaToOffset } from "../types.js";
+import { isReadableMappedTlsVa, isTlsImageVa, toTlsRvaFromVa } from "./tls-addresses.js";
 
-const MAX_RVA_BIGINT = 0xffff_ffffn;
 // Microsoft PE format, "The TLS Directory": PE32 fields end at Characteristics
 // offset 20 with size 4.
 const IMAGE_TLS_DIRECTORY32_SIZE = 0x18;
@@ -29,27 +29,6 @@ const createTlsWarningResult = (warnings: string[]): PeTlsDirectory => ({
   parsed: false
 });
 
-const toRvaFromVa = (virtualAddress: bigint, imageBase: bigint): number | null => {
-  if (virtualAddress === 0n) return null;
-  if (virtualAddress < imageBase) return null;
-  const delta = virtualAddress - imageBase;
-  if (delta > MAX_RVA_BIGINT) return null;
-  return Number(delta);
-};
-
-const isReadableMappedVa = (
-  virtualAddress: bigint,
-  byteLength: number,
-  imageBase: bigint,
-  rvaToOff: RvaToOffset,
-  fileSize: number
-): boolean => {
-  const rva = toRvaFromVa(virtualAddress, imageBase);
-  if (rva == null) return false;
-  const offset = rvaToOff(rva);
-  return offset != null && offset >= 0 && offset + byteLength <= fileSize;
-};
-
 const addTlsRawDataWarnings = (
   startAddressOfRawData: bigint,
   endAddressOfRawData: bigint,
@@ -67,8 +46,8 @@ const addTlsRawDataWarnings = (
     ? endAddressOfRawData - 1n
     : endAddressOfRawData;
   if (
-    !isReadableMappedVa(startAddressOfRawData, 1, imageBase, rvaToOff, fileSize) ||
-    !isReadableMappedVa(lastRawDataByteVa, 1, imageBase, rvaToOff, fileSize)
+    !isReadableMappedTlsVa(startAddressOfRawData, 1, imageBase, rvaToOff, fileSize) ||
+    !isReadableMappedTlsVa(lastRawDataByteVa, 1, imageBase, rvaToOff, fileSize)
   ) {
     warnings.push("TLS raw data VA range does not map to file data.");
   }
@@ -82,13 +61,18 @@ const addTlsFieldWarnings = (
   imageBase: bigint,
   rvaToOff: RvaToOffset,
   fileSize: number,
+  sections: PeSection[],
   warnings: string[]
 ): void => {
   const reservedBits = characteristics & ~TLS_CHARACTERISTICS_ALIGNMENT_MASK;
   if (reservedBits !== 0) warnings.push("TLS Characteristics has reserved bits set.");
   addTlsRawDataWarnings(startAddressOfRawData, endAddressOfRawData, imageBase, rvaToOff, fileSize, warnings);
-  if (!isReadableMappedVa(addressOfIndex, TLS_INDEX_STORAGE_SIZE, imageBase, rvaToOff, fileSize)) {
-    warnings.push(`TLS AddressOfIndex pointer 0x${addressOfIndex.toString(16)} is not a readable mapped VA.`);
+  // Microsoft PE format, "The TLS Directory": AddressOfIndex is the VA of an
+  // ordinary data location where the loader writes the module TLS index.
+  // That slot may be in virtual zero-fill data, so file-backed readability is
+  // not required.
+  if (!isTlsImageVa(addressOfIndex, TLS_INDEX_STORAGE_SIZE, imageBase, sections)) {
+    warnings.push(`TLS AddressOfIndex pointer 0x${addressOfIndex.toString(16)} is not a valid image VA.`);
   }
 };
 
@@ -114,7 +98,7 @@ const readTlsCallbackRvas32 = async (
     }
     const pointer = BigInt(dv.getUint32(0, true));
     if (pointer === 0n) return { rvas: callbacks, tableBytes: (index + 1) * TLS_CALLBACK_ENTRY_SIZE32 };
-    const rva = toRvaFromVa(pointer, imageBase);
+    const rva = toTlsRvaFromVa(pointer, imageBase);
     if (rva != null) {
       callbacks.push(rva);
       continue;
@@ -145,7 +129,7 @@ const readTlsCallbackRvas64 = async (
     }
     const pointer = dv.getBigUint64(0, true);
     if (pointer === 0n) return { rvas: callbacks, tableBytes: (index + 1) * TLS_CALLBACK_ENTRY_SIZE64 };
-    const rva = toRvaFromVa(pointer, imageBase);
+    const rva = toTlsRvaFromVa(pointer, imageBase);
     if (rva != null) {
       callbacks.push(rva);
       continue;
@@ -158,7 +142,8 @@ export const parseTlsDirectory32 = async (
   reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
-  imageBase: bigint
+  imageBase: bigint,
+  sections: PeSection[] = []
 ): Promise<PeTlsDirectory | null> => {
   const dir = dataDirs.find(entry => entry.name === "TLS");
   if (!dir || (dir.rva === 0 && dir.size === 0)) return null;
@@ -200,9 +185,10 @@ export const parseTlsDirectory32 = async (
     imageBase,
     rvaToOff,
     reader.size,
+    sections,
     warnings
   );
-  const callbackTableRva = toRvaFromVa(AddressOfCallBacks, imageBase);
+  const callbackTableRva = toTlsRvaFromVa(AddressOfCallBacks, imageBase);
   const callbackTableOff = callbackTableRva != null ? rvaToOff(callbackTableRva) : null;
   if (AddressOfCallBacks !== 0n && callbackTableRva == null) {
     warnings.push(`TLS AddressOfCallBacks pointer 0x${AddressOfCallBacks.toString(16)} is not a valid VA.`);
@@ -230,7 +216,8 @@ export const parseTlsDirectory64 = async (
   reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
-  imageBase: bigint
+  imageBase: bigint,
+  sections: PeSection[] = []
 ): Promise<PeTlsDirectory | null> => {
   const dir = dataDirs.find(entry => entry.name === "TLS");
   if (!dir || (dir.rva === 0 && dir.size === 0)) return null;
@@ -272,9 +259,10 @@ export const parseTlsDirectory64 = async (
     imageBase,
     rvaToOff,
     reader.size,
+    sections,
     warnings
   );
-  const callbackTableRva = toRvaFromVa(AddressOfCallBacksVa, imageBase);
+  const callbackTableRva = toTlsRvaFromVa(AddressOfCallBacksVa, imageBase);
   const callbackTableOff = callbackTableRva != null ? rvaToOff(callbackTableRva) : null;
   if (AddressOfCallBacksVa !== 0n && callbackTableRva == null) {
     warnings.push(`TLS AddressOfCallBacks pointer 0x${AddressOfCallBacksVa.toString(16)} is not a valid VA.`);

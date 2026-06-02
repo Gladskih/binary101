@@ -134,7 +134,7 @@ export async function parsePe(
   );
   const importResult = await peVariant.parseImportDirectory(reader, dataDirs, rvaToOff);
   const exportsInfo = await parseExportDirectory(reader, dataDirs, rvaToOff);
-  const tls = await peVariant.parseTlsDirectory(reader, dataDirs, rvaToOff, ImageBase);
+  const tls = await peVariant.parseTlsDirectory(reader, dataDirs, rvaToOff, ImageBase, sections);
   const resources = await parseResources(reader, dataDirs, rvaToOff, parseManifestXmlDocument);
   const reloc = await parseBaseRelocations(reader, dataDirs, rvaToOff);
   const exception = await parseExceptionDirectory(reader, dataDirs, rvaToOff, canonicalMachine);
