@@ -3,8 +3,8 @@
 import type {
   ResourceManifestPreview,
   ResourceManifestValidation,
-  ResourceManifestTreeAttribute,
-  ResourceManifestTreeNode
+  ResourceXmlTreeAttribute,
+  ResourceXmlTreeNode
 } from "../../analyzers/pe/resources/preview/types.js";
 import { escapeHtml } from "../../html-utils.js";
 
@@ -17,15 +17,15 @@ const SUPPORTED_OS_LABELS = new Map<string, string>([
 ]);
 
 const getSupportedOsLabel = (
-  node: ResourceManifestTreeNode,
-  attribute: ResourceManifestTreeAttribute
+  node: ResourceXmlTreeNode,
+  attribute: ResourceXmlTreeAttribute
 ): string | null => {
   if (node.name.split(":").pop()?.toLowerCase() !== "supportedos") return null;
   if (attribute.name.toLowerCase() !== "id") return null;
   return SUPPORTED_OS_LABELS.get(attribute.value.toLowerCase()) || null;
 };
 
-const renderAttributeList = (node: ResourceManifestTreeNode): string => {
+const renderAttributeList = (node: ResourceXmlTreeNode): string => {
   if (!node.attributes.length) return "";
   const items = node.attributes
     .map(attribute => {
@@ -41,7 +41,7 @@ const renderNodeText = (text: string | null): string =>
     ? `<div class="mono smallNote" style="margin-top:.25rem;white-space:pre-wrap;word-break:break-word">${escapeHtml(text)}</div>`
     : "";
 
-const renderNodeSummary = (node: ResourceManifestTreeNode): string => {
+const renderNodeSummary = (node: ResourceXmlTreeNode): string => {
   const parts = [`<span class="mono">&lt;${escapeHtml(node.name)}&gt;</span>`];
   if (node.attributes.length) {
     parts.push(
@@ -53,13 +53,12 @@ const renderNodeSummary = (node: ResourceManifestTreeNode): string => {
       `<span class="smallNote">${node.children.length} child${node.children.length === 1 ? "" : "ren"}</span>`
     );
   } else if (node.text) {
-    const preview = node.text.length > 48 ? `${node.text.slice(0, 45)}...` : node.text;
-    parts.push(`<span class="smallNote">${escapeHtml(preview)}</span>`);
+    parts.push('<span class="smallNote">text</span>');
   }
   return parts.join(" ");
 };
 
-const renderManifestTreeNode = (node: ResourceManifestTreeNode, depth: number): string => {
+const renderManifestTreeNode = (node: ResourceXmlTreeNode, depth: number): string => {
   const body = [
     renderAttributeList(node),
     renderNodeText(node.text),
@@ -80,9 +79,9 @@ const renderManifestTreeNode = (node: ResourceManifestTreeNode, depth: number): 
 const createNode = (
   name: string,
   attributes: Record<string, string | null | undefined>,
-  children: ResourceManifestTreeNode[] = [],
+  children: ResourceXmlTreeNode[] = [],
   text: string | null = null
-): ResourceManifestTreeNode => ({
+): ResourceXmlTreeNode => ({
   name,
   attributes: Object.entries(attributes)
     .filter(([, value]) => value != null && value !== "")
@@ -94,14 +93,14 @@ const createNode = (
   children
 });
 
-const countManifestTreeNodes = (node: ResourceManifestTreeNode): number =>
+const countManifestTreeNodes = (node: ResourceXmlTreeNode): number =>
   1 + node.children.reduce((count, child) => count + countManifestTreeNodes(child), 0);
 
 const createSyntheticManifestTree = (
   manifestInfo: ResourceManifestPreview | undefined
-): ResourceManifestTreeNode | null => {
+): ResourceXmlTreeNode | null => {
   if (!manifestInfo) return null;
-  const children: ResourceManifestTreeNode[] = [];
+  const children: ResourceXmlTreeNode[] = [];
   const assemblyIdentity = createNode("assemblyIdentity", {
     type: manifestInfo.assemblyType,
     name: manifestInfo.assemblyName,
@@ -180,7 +179,7 @@ const renderManifestXmlSource = (textPreview: string): string =>
   `</div>` +
   `</section>`;
 
-const renderManifestTreeControls = (tree: ResourceManifestTreeNode): string => {
+const renderManifestTreeControls = (tree: ResourceXmlTreeNode): string => {
   const nodeCount = countManifestTreeNodes(tree);
   const expandDisabled = nodeCount <= 1;
   const collapseDisabled = false;
@@ -230,7 +229,7 @@ const renderManifestValidation = (
 
 export const renderManifestTree = (
   manifestInfo: ResourceManifestPreview | undefined,
-  manifestTree: ResourceManifestTreeNode | undefined
+  manifestTree: ResourceXmlTreeNode | undefined
 ): string => {
   const tree = manifestTree || createSyntheticManifestTree(manifestInfo);
   if (!tree) return "";
@@ -245,7 +244,7 @@ export const renderManifestTree = (
 export const renderManifestPreview = (
   textPreview: string,
   manifestInfo: ResourceManifestPreview | undefined,
-  manifestTree: ResourceManifestTreeNode | undefined,
+  manifestTree: ResourceXmlTreeNode | undefined,
   manifestValidation: ResourceManifestValidation | undefined
 ): string =>
   [

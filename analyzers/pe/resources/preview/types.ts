@@ -26,16 +26,16 @@ export interface ResourceManifestValidation {
   warnings: string[];
 }
 
-export interface ResourceManifestTreeAttribute {
+export interface ResourceXmlTreeAttribute {
   name: string;
   value: string;
 }
 
-export interface ResourceManifestTreeNode {
+export interface ResourceXmlTreeNode {
   name: string;
-  attributes: ResourceManifestTreeAttribute[];
+  attributes: ResourceXmlTreeAttribute[];
   text: string | null;
-  children: ResourceManifestTreeNode[];
+  children: ResourceXmlTreeNode[];
 }
 
 export interface ResourceVersionPreview {
@@ -106,16 +106,49 @@ export interface ResourceAcceleratorPreview {
   entries: ResourceAcceleratorEntryPreview[];
 }
 
+export interface ResourceInfEntryPreview {
+  line: number;
+  kind: "directive" | "entry";
+  key: string | null;
+  value: string;
+}
+
+export interface ResourceInfSectionPreview {
+  name: string;
+  entries: ResourceInfEntryPreview[];
+}
+
+export interface ResourceInfPreview {
+  sections: ResourceInfSectionPreview[];
+  commentCount: number;
+  entryCount: number;
+}
+
+export interface ResourceTypeLibrarySegmentPreview {
+  name: string;
+  offset: number;
+  length: number;
+}
+
+export interface ResourceTypeLibraryPreview {
+  format: "MSFT" | "SLTG" | "placeholder" | "unknown";
+  headerFields: ResourcePreviewField[];
+  segments: ResourceTypeLibrarySegmentPreview[];
+}
+
 export interface ResourcePreviewData {
   previewKind: string;
   textPreview?: string;
   textEncoding?: string | null;
   manifestInfo?: ResourceManifestPreview;
-  manifestTree?: ResourceManifestTreeNode;
+  manifestTree?: ResourceXmlTreeNode;
+  xmlTree?: ResourceXmlTreeNode;
   manifestValidation?: ResourceManifestValidation;
   stringTable?: Array<{ id: number | null; text: string }>;
   messageTable?: { messages: Array<{ id: number; strings: string[] }>; truncated: boolean };
   muiConfig?: MuiResourceConfiguration;
+  infPreview?: ResourceInfPreview;
+  typeLibrary?: ResourceTypeLibraryPreview;
   versionInfo?: ResourceVersionPreview;
   previewFields?: ResourcePreviewField[];
   dialogPreview?: ResourceDialogPreview;

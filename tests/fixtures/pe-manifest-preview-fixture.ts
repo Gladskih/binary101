@@ -2,7 +2,7 @@
 
 import type { PeClrHeader } from "../../analyzers/pe/clr/types.js";
 import type { PeResources } from "../../analyzers/pe/resources/index.js";
-import type { ResourceLangWithPreview, ResourceManifestPreview, ResourceManifestTreeNode, ResourceManifestValidation } from "../../analyzers/pe/resources/preview/types.js";
+import type { ResourceLangWithPreview, ResourceManifestPreview, ResourceManifestValidation } from "../../analyzers/pe/resources/preview/types.js";
 export type ManifestIncidentalValues = {
   nextLabel: (prefix: string) => string;
   nextLang: () => number;
@@ -79,7 +79,7 @@ export const createManifestInfoFixture = (
 export const createManifestTreeFixture = (
   spec: ManifestFixtureSpec = {},
   incidental = createManifestIncidentalValues()
-): ResourceManifestTreeNode => {
+): NonNullable<ResourceLangWithPreview["manifestTree"]> => {
   const values = withDefaults(incidental, spec);
   return {
     name: "assembly",

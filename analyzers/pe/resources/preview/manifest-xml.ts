@@ -32,13 +32,17 @@ export interface ManifestXmlDocument {
 
 export type ManifestXmlDocumentParser = (text: string) => ManifestXmlDocument;
 
-export function readManifestParserIssue(doc: ManifestXmlDocument): string | null {
+export function readXmlParserIssue(doc: ManifestXmlDocument, subject: string): string | null {
   const parserError = doc.getElementsByTagName("parsererror").item(0);
   if (!parserError) return null;
   const message = (parserError.textContent || "").trim();
   return message
-    ? `XML parser reported malformed manifest markup: ${message}`
-    : "XML parser reported malformed manifest markup.";
+    ? `XML parser reported malformed ${subject} markup: ${message}`
+    : `XML parser reported malformed ${subject} markup.`;
+}
+
+export function readManifestParserIssue(doc: ManifestXmlDocument): string | null {
+  return readXmlParserIssue(doc, "manifest");
 }
 
 export function parseBrowserManifestXmlDocument(text: string): ManifestXmlDocument {
@@ -48,9 +52,13 @@ export function parseBrowserManifestXmlDocument(text: string): ManifestXmlDocume
   return new DOMParser().parseFromString(text, "application/xml");
 }
 
-export function describeManifestXmlParserThrow(error: unknown): string {
+export function describeXmlParserThrow(error: unknown, subject: string): string {
   if (error instanceof Error && error.message) {
-    return `XML parser threw while reading manifest markup: ${error.message}`;
+    return `XML parser threw while reading ${subject} markup: ${error.message}`;
   }
-  return "XML parser threw while reading manifest markup.";
+  return `XML parser threw while reading ${subject} markup.`;
+}
+
+export function describeManifestXmlParserThrow(error: unknown): string {
+  return describeXmlParserThrow(error, "manifest");
 }

@@ -37,6 +37,9 @@ const isWideResourcePreview = (
   langEntry.previewKind === "font" ||
   langEntry.previewKind === "audio" ||
   langEntry.previewKind === "muiConfig" ||
+  langEntry.previewKind === "inf" ||
+  langEntry.previewKind === "xml" ||
+  langEntry.previewKind === "typeLibrary" ||
   langEntry.previewKind === "html" ||
   langEntry.previewKind === "text";
 

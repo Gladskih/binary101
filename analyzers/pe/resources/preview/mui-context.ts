@@ -18,20 +18,19 @@ export interface MuiResourceContext {
   result: MuiResourceConfigurationParseResult;
 }
 
-const findMuiResourceConfigurationLang = (
+const findMuiResourceConfigurationLangs = (
   detail: ResourceDetailGroup[]
-): ResourceLangWithPreview | null =>
-  detail.find(group => group.typeName === "MUI")
-    ?.entries.find(entry => entry.id === 1)
-    ?.langs[0] ?? null;
+): ResourceLangWithPreview[] =>
+  detail
+    .filter(group => group.typeName === "MUI")
+    .flatMap(group => group.entries.flatMap(entry => entry.langs as ResourceLangWithPreview[]));
 
-export const readMuiResourceContext = async (
+const readMuiResourceCandidate = async (
   reader: FileRangeReader,
   tree: ResourceTree,
-  detail: ResourceDetailGroup[]
+  langEntry: ResourceLangWithPreview
 ): Promise<MuiResourceContext | null> => {
-  const langEntry = findMuiResourceConfigurationLang(detail);
-  if (!langEntry?.size || !langEntry.dataRVA) return null;
+  if (!langEntry.size || !langEntry.dataRVA) return null;
   const leaf = await readResourceLeafBytes(reader, tree, langEntry);
   const result = leaf.data
     ? parseMuiResourceConfigurationDetailed(leaf.data)
@@ -44,4 +43,19 @@ export const readMuiResourceContext = async (
       issues: [...(leaf.issues || []), ...result.issues]
     }
   };
+};
+
+export const readMuiResourceContext = async (
+  reader: FileRangeReader,
+  tree: ResourceTree,
+  detail: ResourceDetailGroup[]
+): Promise<MuiResourceContext | null> => {
+  let firstParsedCandidate: MuiResourceContext | null = null;
+  for (const langEntry of findMuiResourceConfigurationLangs(detail)) {
+    const context = await readMuiResourceCandidate(reader, tree, langEntry);
+    if (!context) continue;
+    if (context.result.configuration) return context;
+    firstParsedCandidate ??= context;
+  }
+  return firstParsedCandidate;
 };

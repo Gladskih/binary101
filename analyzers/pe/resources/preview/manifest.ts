@@ -5,28 +5,18 @@ import {
   parseBrowserManifestXmlDocument,
   readManifestParserIssue,
   type ManifestXmlDocument,
-  type ManifestXmlAttribute,
   type ManifestXmlDocumentParser,
-  type ManifestXmlNode,
   type ManifestXmlElement
 } from "./manifest-xml.js";
+import { getXmlLocalTagName, parseXmlTree } from "./xml-tree.js";
+import { isAsciiPlaceholderPayload } from "./mui-placeholder.js";
 import { decodeTextResource } from "./text.js";
 import type {
   ResourceManifestPreview,
-  ResourceManifestTreeAttribute,
-  ResourceManifestTreeNode,
-  ResourcePreviewResult
+  ResourcePreviewResult,
+  ResourceXmlTreeNode
 } from "./types.js";
 import type { MuiResourceConfiguration } from "../mui-config.js";
-
-const XML_ELEMENT_NODE = 1;
-const XML_TEXT_NODE = 3;
-const XML_CDATA_SECTION_NODE = 4;
-// Observed Windows SystemResources .mun RT_MANIFEST marker. It is accepted only
-// when the containing PE also has a valid MUI resource configuration.
-const ASCII_MANIFEST_PLACEHOLDER = [
-  0x70, 0x6c, 0x61, 0x63, 0x65, 0x68, 0x6f, 0x6c, 0x64, 0x65, 0x72
-];
 
 const normalizeText = (value: string | null | undefined): string | null => {
   const trimmed = value?.trim();
@@ -46,60 +36,15 @@ const normalizeBooleanAttribute = (
   return null;
 };
 
-const getLocalTagName = (tagName: string): string => {
-  const localName = tagName.split(":").pop();
-  return (localName || tagName).toLowerCase();
-};
-
-const normalizeNodeText = (node: ManifestXmlNode): string | null => normalizeText(node.nodeValue);
-
 const createElementIndex = (doc: ManifestXmlDocument): Map<string, ManifestXmlElement[]> => {
   const index = new Map<string, ManifestXmlElement[]>();
   for (const element of Array.from(doc.getElementsByTagName("*"))) {
-    const localName = getLocalTagName(element.tagName);
+    const localName = getXmlLocalTagName(element.tagName);
     const elements = index.get(localName) || [];
     elements.push(element);
     index.set(localName, elements);
   }
   return index;
-};
-
-const readElementAttributes = (
-  element: ManifestXmlElement
-): ResourceManifestTreeAttribute[] =>
-  Array.from(element.attributes || [])
-    .map((attribute: ManifestXmlAttribute) => ({
-      name: attribute.name,
-      value: attribute.value
-    }))
-    .filter(attribute => attribute.name);
-
-const buildManifestTreeNode = (element: ManifestXmlElement): ResourceManifestTreeNode => {
-  const children: ResourceManifestTreeNode[] = [];
-  const textSegments: string[] = [];
-  for (const childNode of Array.from(element.childNodes || [])) {
-    if (childNode.nodeType === XML_ELEMENT_NODE) {
-      children.push(buildManifestTreeNode(childNode as ManifestXmlElement));
-      continue;
-    }
-    if (childNode.nodeType === XML_TEXT_NODE || childNode.nodeType === XML_CDATA_SECTION_NODE) {
-      const text = normalizeNodeText(childNode);
-      if (text) textSegments.push(text);
-    }
-  }
-  return {
-    name: element.tagName,
-    attributes: readElementAttributes(element),
-    text: textSegments.length ? textSegments.join(" ") : null,
-    children
-  };
-};
-
-const parseManifestTree = (doc: ManifestXmlDocument): ResourceManifestTreeNode | null => {
-  const root = doc.documentElement;
-  if (!root) return null;
-  if (getLocalTagName(root.tagName) === "parsererror") return null;
-  return buildManifestTreeNode(root);
 };
 
 const readFirstElementAttribute = (
@@ -172,17 +117,12 @@ const parseManifestInfo = (
   };
 };
 
-const isMuiManifestPlaceholderPayload = (data: Uint8Array): boolean =>
-  data.length >= ASCII_MANIFEST_PLACEHOLDER.length &&
-  ASCII_MANIFEST_PLACEHOLDER.every((byte, index) => data[index] === byte) &&
-  data.subarray(ASCII_MANIFEST_PLACEHOLDER.length).every(byte => byte === 0);
-
 export function addMuiManifestPlaceholderPreview(
   data: Uint8Array,
   typeName: string,
   muiResourceConfiguration: MuiResourceConfiguration | null
 ): ResourcePreviewResult | null {
-  if (typeName !== "MANIFEST" || !muiResourceConfiguration || !isMuiManifestPlaceholderPayload(data)) {
+  if (typeName !== "MANIFEST" || !muiResourceConfiguration || !isAsciiPlaceholderPayload(data)) {
     return null;
   }
   return {
@@ -206,13 +146,13 @@ export function addManifestPreviewWithXmlParser(
   if (!text) return issues.length ? { issues } : null;
   if (terminated) issues.push("Manifest preview stopped at a NUL terminator before the declared data size.");
   let manifestInfo: ResourceManifestPreview | null = null;
-  let manifestTree: ResourceManifestTreeNode | null = null;
+  let manifestTree: ResourceXmlTreeNode | null = null;
   try {
     const doc = parseXmlDocument(text);
     const parserIssue = readManifestParserIssue(doc);
     if (parserIssue) issues.push(parserIssue);
     manifestInfo = parseManifestInfo(doc, issues);
-    manifestTree = parseManifestTree(doc);
+    manifestTree = parseXmlTree(doc);
   } catch (error) {
     issues.push(describeManifestXmlParserThrow(error));
   }

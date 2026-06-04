@@ -10,6 +10,7 @@ import { formatWindowsLanguageName } from "./windows-language-names.js";
 import { renderDialogPreview } from "./resource-preview-dialog.js";
 import { renderManifestPreview, renderManifestTree } from "./resource-preview-manifest.js";
 import { renderMuiConfigPreview } from "./resource-preview-mui.js";
+import { renderStructuredPreview, renderStructuredPreviewSummary } from "./resource-preview-structured.js";
 const renderIssues = (langEntry: ResourceLangWithPreview): string => {
   const issues = (langEntry.previewIssues || []).filter((issue): issue is string => Boolean(issue));
   return issues.length
@@ -205,6 +206,8 @@ export const renderPreviewSummary = (
   if (langEntry.previewKind === "muiConfig" && langEntry.muiConfig) {
     return "MUI resource config";
   }
+  const structuredSummary = renderStructuredPreviewSummary(langEntry);
+  if (structuredSummary) return structuredSummary;
   if (langEntry.previewKind === "version") return "Version info";
   if (langEntry.previewKind === "text" && (langEntry.manifestInfo || langEntry.manifestTree)) {
     return "Manifest";
@@ -229,6 +232,8 @@ const renderTailPreview = (langEntry: ResourceLangWithPreview): string | null =>
       renderFields(langEntry) +
       renderIssues(langEntry);
   }
+  const structuredPreview = renderStructuredPreview(langEntry);
+  if (structuredPreview) return structuredPreview + renderFields(langEntry) + renderIssues(langEntry);
   if (langEntry.previewKind === "summary") return renderFields(langEntry) + renderIssues(langEntry) || "-";
   return null;
 };
