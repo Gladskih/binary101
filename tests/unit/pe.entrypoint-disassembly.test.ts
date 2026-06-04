@@ -265,13 +265,14 @@ void test("analyzePeEntrypointDisassembly stops when decoded length crosses read
 });
 
 void test("analyzePeEntrypointDisassembly caps long straight-line previews", async () => {
+  // 300 one-byte NOPs exceed the 256-instruction entrypoint preview cap.
   const result = await analyzeEntrypoint(
-    new Uint8Array(80).fill(0x90),
-    createExecutableSection({ virtualSize: 80, sizeOfRawData: 80 })
+    new Uint8Array(300).fill(0x90),
+    createExecutableSection({ virtualSize: 300, sizeOfRawData: 300 })
   );
 
-  assert.equal(result.instructionCount, 64);
-  assert.ok(result.issues.some(issue => /capped at 64/i.test(issue)));
+  assert.equal(result.instructionCount, 256);
+  assert.ok(result.issues.some(issue => /capped at 256/i.test(issue)));
 });
 
 void test("analyzePeEntrypointDisassembly ignores cleanup failures", async () => {

@@ -22,6 +22,8 @@ import {
 } from "./entrypoint-control-flow.js";
 import { buildImportTargetMap, type ImportTarget } from "./entrypoint-import-targets.js";
 import { getReturningImportFallthrough } from "./entrypoint-import-fallthrough.js";
+import { followDirectCodeTarget } from "./entrypoint-direct-target.js";
+import { createEntrypointInstruction } from "./entrypoint-instruction.js";
 import {
   ENTRYPOINT_PREVIEW_BLOCK_LIMIT,
   queueConditionalBranch,
@@ -45,7 +47,7 @@ type DecodeState = {
 };
 
 // UI preview caps: enough for entry stubs/prologues while avoiding accidental whole-file sweeps.
-const ENTRYPOINT_PREVIEW_INSTRUCTION_LIMIT = 64;
+const ENTRYPOINT_PREVIEW_INSTRUCTION_LIMIT = 256;
 
 const safeFree = (resource: { free(): void } | null | undefined): void => {
   if (!resource) return;
@@ -105,12 +107,13 @@ const decodeBlock = async (
         importTarget,
         block.returnRva
       );
-      const text = formatter.format(instr);
-      const instruction: PeEntrypointInstruction = {
+      const instruction = createEntrypointInstruction(
+        iced,
+        instr,
+        formatter,
         rva,
-        fileOffset: block.mapped.fileOffsetStart + offsetInPreview,
-        text
-      };
+        block.mapped.fileOffsetStart + offsetInPreview
+      );
       if (importTarget) {
         const returnFollowed = importFallthrough?.kind === "source-call"
           ? await queueFollowedBlock(
@@ -128,20 +131,16 @@ const decodeBlock = async (
           : { ...importTarget, returnRva: importFallthrough.rva, returnFollowed };
       }
       if (!importTarget && directTarget) {
-        const returnRva = directTarget.kind === "followed-call"
-          ? toRva(instr.nextIP, opts.imageBase)
-          : null;
-        const followed = await queueFollowedBlock(
+        instruction.target = await followDirectCodeTarget(
           reader,
           opts,
           state,
           pending,
           directTarget,
           rva,
-          issues,
-          returnRva
+          instr.nextIP,
+          issues
         );
-        instruction.target = { kind: "code", rva: directTarget.rva, followed };
       }
       if (!importTarget && !directTarget && branchTargets) {
         const followed = await queueConditionalBranch(
@@ -170,11 +169,17 @@ const decodeBlock = async (
         } else if (importTarget) {
           issues.push(`Entrypoint preview stopped at imported target '${importTarget.label}'.`);
         } else if (directTarget && instruction.target?.kind === "code" && instruction.target.followed) {
-          issues.push(`Entrypoint preview followed ${directTarget.kind.replace("followed-", "")} target.`);
+          const maybeSpeculative = instruction.target.fallthroughKind === "speculative-call-return"
+            ? " and speculative call fallthrough"
+            : "";
+          issues.push(
+            `Entrypoint preview followed ${directTarget.kind.replace("followed-", "")} ` +
+            `target${maybeSpeculative}.`
+          );
         } else if (instruction.target?.kind === "branch") {
           issues.push("Entrypoint preview followed conditional branch target(s).");
         } else {
-          issues.push(`Entrypoint preview stopped at control-flow instruction '${text}'.`);
+          issues.push(`Entrypoint preview stopped at control-flow instruction '${instruction.text}'.`);
         }
         if (importFallthrough?.kind === "current-block") continue;
         recordedStopReason = true;

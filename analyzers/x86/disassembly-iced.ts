@@ -6,9 +6,12 @@ type IcedInstruction = {
   ip: bigint;
   nextIP: bigint;
   readonly flowControl: number;
+  readonly opCount: number;
   readonly nearBranchTarget: bigint;
   readonly memoryDisplacement: bigint;
   op0Kind: number;
+  opKind(operand: number): number;
+  immediate(operand: number): bigint;
   cpuidFeatures(): Int32Array;
   free(): void;
 };

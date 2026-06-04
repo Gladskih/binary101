@@ -37,6 +37,10 @@ export type FollowedCodeTarget =
   | {
       kind: "followed-import-return";
       rva: number;
+    }
+  | {
+      kind: "speculative-call-fallthrough";
+      rva: number;
     };
 
 export const toRva = (virtualAddress: bigint, imageBase: bigint): number | null => {

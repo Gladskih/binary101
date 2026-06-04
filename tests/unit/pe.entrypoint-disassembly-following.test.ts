@@ -22,13 +22,19 @@ void test("analyzePeEntrypointDisassembly follows direct call targets as separat
     createExecutableSection({ virtualSize: 3, sizeOfRawData: 3 })
   );
 
-  assert.equal(result.blocks.length, 2);
+  assert.equal(result.blocks.length, 3);
   assert.equal(result.blocks[0]?.kind, "entrypoint");
   assert.equal(result.blocks[1]?.kind, "followed-call");
   assert.equal(result.blocks[1]?.startRva, 0x1002);
+  assert.equal(result.blocks[2]?.kind, "speculative-call-fallthrough");
+  assert.equal(result.blocks[2]?.startRva, 0x1001);
   assert.equal(result.blocks[0]?.instructions[0]?.target?.kind, "code");
   assert.equal(result.blocks[0]?.instructions[0]?.target?.followed, true);
+  assert.equal(result.blocks[0]?.instructions[0]?.target?.fallthroughRva, 0x1001);
+  assert.equal(result.blocks[0]?.instructions[0]?.target?.fallthroughFollowed, true);
+  assert.equal(result.blocks[0]?.instructions[0]?.target?.fallthroughKind, "speculative-call-return");
   assert.deepEqual(result.blocks[1]?.instructions.map(instruction => instruction.text), ["ret"]);
+  assert.deepEqual(result.blocks[2]?.instructions.map(instruction => instruction.text), ["op_90", "ret"]);
 });
 
 void test("analyzePeEntrypointDisassembly refuses followed targets in non-executable sections", async () => {
@@ -46,9 +52,12 @@ void test("analyzePeEntrypointDisassembly refuses followed targets in non-execut
     { sections: [createExecutableSection({ virtualSize: 2, sizeOfRawData: 2 }), dataSection] }
   );
 
-  assert.equal(result.blocks.length, 1);
+  assert.equal(result.blocks.length, 2);
   assert.equal(result.blocks[0]?.instructions[0]?.target?.kind, "code");
   assert.equal(result.blocks[0]?.instructions[0]?.target?.followed, false);
+  assert.equal(result.blocks[0]?.instructions[0]?.target?.fallthroughFollowed, true);
+  assert.equal(result.blocks[1]?.kind, "speculative-call-fallthrough");
+  assert.equal(result.blocks[1]?.startRva, 0x1001);
   assert.ok(result.issues.some(issue => /non-executable section/i.test(issue)));
 });
 
@@ -187,7 +196,7 @@ void test("analyzePeEntrypointDisassembly follows returns from direct import thu
   assert.equal(result.blocks.length, 3);
   assert.equal(result.blocks[1]?.kind, "followed-call");
   assert.equal(result.blocks[1]?.startRva, 0x1002);
-  assert.equal(result.blocks[2]?.kind, "followed-import-return");
+  assert.equal(result.blocks[2]?.kind, "speculative-call-fallthrough");
   assert.equal(result.blocks[2]?.startRva, 0x1001);
   assert.equal(thunkTarget?.kind, "import");
   assert.equal(thunkTarget?.returnRva, 0x1001);

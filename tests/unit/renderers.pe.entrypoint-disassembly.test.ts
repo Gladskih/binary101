@@ -80,3 +80,78 @@ void test("renderInstructionSets labels followed returning import fallthrough bl
 
   assert.ok(out.join("").includes("Followed returning import fallthrough from 0x00001010"));
 });
+
+void test("renderInstructionSets marks speculative call fallthrough blocks", () => {
+  const pe = createPe();
+  pe.entrypointDisassembly = {
+    bitness: 64,
+    entrypointRva: 0x1000,
+    bytesDecoded: 3,
+    instructionCount: 3,
+    blocks: [
+      {
+        kind: "entrypoint",
+        startRva: 0x1000,
+        fileOffsetStart: 0x200,
+        instructions: [{
+          rva: 0x1000,
+          fileOffset: 0x200,
+          text: "call 0000000140001010h",
+          target: {
+            kind: "code",
+            rva: 0x1010,
+            followed: true,
+            fallthroughRva: 0x1005,
+            fallthroughFollowed: true,
+            fallthroughKind: "speculative-call-return"
+          }
+        }]
+      },
+      {
+        kind: "speculative-call-fallthrough",
+        startRva: 0x1005,
+        fileOffsetStart: 0x205,
+        sourceInstructionRva: 0x1000,
+        instructions: [{ rva: 0x1005, fileOffset: 0x205, text: "ret" }]
+      }
+    ],
+    issues: []
+  };
+
+  const out: string[] = [];
+  renderInstructionSets(pe, out);
+  const html = out.join("");
+
+  assert.ok(html.includes("speculative fallthrough followed 0x00001005"));
+  assert.ok(html.includes("Speculative call fallthrough from 0x00001000"));
+});
+
+void test("renderInstructionSets renders entrypoint notes column", () => {
+  const pe = createPe();
+  pe.entrypointDisassembly = {
+    bitness: 64,
+    entrypointRva: 0x1000,
+    bytesDecoded: 1,
+    instructionCount: 1,
+    blocks: [{
+      kind: "entrypoint",
+      startRva: 0x1000,
+      fileOffsetStart: 0x200,
+      instructions: [{
+        rva: 0x1000,
+        fileOffset: 0x200,
+        text: "mov eax,0BB40E64Eh",
+        notes: ["MSVC-compatible x86 /GS default security cookie (0xBB40E64E)."]
+      }]
+    }],
+    issues: []
+  };
+
+  const out: string[] = [];
+  renderInstructionSets(pe, out);
+  const html = out.join("");
+
+  assert.ok(html.includes("<th>Notes</th>"));
+  assert.ok(!html.includes("<th>Target</th>"));
+  assert.ok(html.includes("MSVC-compatible x86 /GS default security cookie"));
+});

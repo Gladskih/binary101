@@ -5,6 +5,7 @@ import { escapeHtml } from "../../html-utils.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type {
   PeEntrypointDisassemblyBlock,
+  PeEntrypointInstruction,
   PeEntrypointInstructionTarget
 } from "../../analyzers/pe/disassembly/index.js";
 import {
@@ -43,10 +44,15 @@ const renderEntrypointActions = (pe: PeWindowsParseResult, out: string[]): void 
 };
 
 const renderEntrypointTarget = (target: PeEntrypointInstructionTarget | undefined): string => {
-  if (!target) return `<span class="dim">-</span>`;
+  if (!target) return "";
   if (target.kind === "code") {
     const status = target.followed ? "followed" : "not followed";
-    return `${escapeHtml(status)} ${hex(target.rva, 8)}`;
+    const callFallthrough = target.fallthroughKind === "speculative-call-return" &&
+      target.fallthroughRva != null
+      ? `; speculative fallthrough ${target.fallthroughFollowed ? "followed" : "not followed"} ` +
+        `${hex(target.fallthroughRva, 8)}`
+      : "";
+    return `${escapeHtml(status)} ${hex(target.rva, 8)}${callFallthrough}`;
   }
   if (target.kind === "branch") {
     const branchStatus = target.branchFollowed ? "followed" : "not followed";
@@ -62,12 +68,21 @@ const renderEntrypointTarget = (target: PeEntrypointInstructionTarget | undefine
     `${hex(target.slotRva, 8)}${returnTarget})</span>`;
 };
 
+const renderEntrypointNotes = (instruction: PeEntrypointInstruction): string => {
+  const notes = [
+    renderEntrypointTarget(instruction.target),
+    ...(instruction.notes ?? []).map(note => escapeHtml(note))
+  ].filter(Boolean);
+  return notes.length ? notes.join("<br>") : `<span class="dim">-</span>`;
+};
+
 const renderEntrypointBlockLabel = (block: PeEntrypointDisassemblyBlock): string => {
   if (block.kind === "entrypoint") return "Entry point";
   const source = block.sourceInstructionRva == null ? "" : ` from ${hex(block.sourceInstructionRva, 8)}`;
   if (block.kind === "followed-call") return `Followed call target${source}`;
   if (block.kind === "followed-jump") return `Followed jump target${source}`;
   if (block.kind === "followed-import-return") return `Followed returning import fallthrough${source}`;
+  if (block.kind === "speculative-call-fallthrough") return `Speculative call fallthrough${source}`;
   return block.kind === "followed-branch"
     ? `Followed conditional branch target${source}`
     : `Followed conditional fallthrough${source}`;
@@ -81,14 +96,14 @@ const renderEntrypointBlock = (block: PeEntrypointDisassemblyBlock, out: string[
   );
   out.push(
     `<table class="table" style="margin-top:.35rem"><thead><tr>` +
-    `<th>RVA</th><th>File offset</th><th>Instruction</th><th>Target</th></tr></thead><tbody>` +
+    `<th>RVA</th><th>File offset</th><th>Instruction</th><th>Notes</th></tr></thead><tbody>` +
     block.instructions.map(instruction => (
       `<tr><td class="mono peNumeric" data-sort-value="${instruction.rva}">` +
       `${hex(instruction.rva, 8)}</td>` +
       `<td class="mono peNumeric" data-sort-value="${instruction.fileOffset}">` +
       `${hex(instruction.fileOffset, 8)}</td>` +
       `<td class="mono">${escapeHtml(instruction.text)}</td>` +
-      `<td>${renderEntrypointTarget(instruction.target)}</td></tr>`
+      `<td>${renderEntrypointNotes(instruction)}</td></tr>`
     )).join("") +
     `</tbody></table>`
   );

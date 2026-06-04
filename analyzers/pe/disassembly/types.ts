@@ -26,6 +26,7 @@ export interface PeEntrypointInstruction {
   rva: number;
   fileOffset: number;
   text: string;
+  notes?: string[];
   target?: PeEntrypointInstructionTarget;
 }
 
@@ -34,6 +35,9 @@ export type PeEntrypointInstructionTarget =
       kind: "code";
       rva: number;
       followed: boolean;
+      fallthroughRva?: number;
+      fallthroughFollowed?: boolean;
+      fallthroughKind?: "speculative-call-return";
     }
   | {
       kind: "branch";
@@ -58,7 +62,8 @@ export type PeEntrypointDisassemblyBlockKind =
   | "followed-jump"
   | "followed-branch"
   | "followed-fallthrough"
-  | "followed-import-return";
+  | "followed-import-return"
+  | "speculative-call-fallthrough";
 
 export interface PeEntrypointDisassemblyBlock {
   kind: PeEntrypointDisassemblyBlockKind;

@@ -16,13 +16,13 @@ export type PendingEntrypointBlock = {
   returnRva?: number;
 };
 
-type FollowQueueState = {
+export type FollowQueueState = {
   blocks: PeEntrypointDisassemblyBlock[];
   visitedBlocks: Set<number>;
   queuedBlocks: Set<number>;
 };
 
-export const ENTRYPOINT_PREVIEW_BLOCK_LIMIT = 4;
+export const ENTRYPOINT_PREVIEW_BLOCK_LIMIT = 16;
 
 const canQueueBlock = (
   state: FollowQueueState,

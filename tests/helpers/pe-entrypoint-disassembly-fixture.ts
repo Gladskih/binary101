@@ -20,10 +20,17 @@ export class TestInstruction {
   ip = 0n;
   nextIP = 0n;
   flowControl = 0;
+  opCount = 0;
   nearBranchTarget = 0n;
   memoryDisplacement = 0n;
   op0Kind = 0;
   text = "";
+  opKind(): number {
+    return 0;
+  }
+  immediate(): bigint {
+    return 0n;
+  }
   free(): void {}
 }
 
