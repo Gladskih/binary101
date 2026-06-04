@@ -79,6 +79,9 @@ const formatVersionTableName = (table: string): string => {
 const createTranslationKey = (languageId: number, codePage: number): string =>
   `${languageId}:${codePage}`;
 
+const findDetectedPreviewField = (langEntry: ResourceLangWithPreview): string | null =>
+  langEntry.previewFields?.find(field => field.label === "Detected")?.value ?? null;
+
 const collectVersionTableTranslations = (info: ResourceVersionPreview): Set<string> => {
   const translations = new Set<string>();
   for (const entry of info.stringValues || []) {
@@ -205,6 +208,12 @@ export const renderPreviewSummary = (
   if (langEntry.previewKind === "version") return "Version info";
   if (langEntry.previewKind === "text" && (langEntry.manifestInfo || langEntry.manifestTree)) {
     return "Manifest";
+  }
+  if (langEntry.previewKind === "text" || langEntry.previewKind === "html") {
+    return findDetectedPreviewField(langEntry) || langEntry.previewKind;
+  }
+  if (langEntry.previewKind === "summary") {
+    return findDetectedPreviewField(langEntry) || langEntry.previewKind;
   }
   return langEntry.previewKind;
 };

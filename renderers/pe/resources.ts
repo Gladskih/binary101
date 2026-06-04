@@ -35,7 +35,10 @@ const isWideResourcePreview = (
   langEntry.previewKind === "menu" ||
   langEntry.previewKind === "accelerator" ||
   langEntry.previewKind === "font" ||
-  (langEntry.previewKind === "text" && Boolean(langEntry.manifestInfo || langEntry.manifestTree));
+  langEntry.previewKind === "audio" ||
+  langEntry.previewKind === "muiConfig" ||
+  langEntry.previewKind === "html" ||
+  langEntry.previewKind === "text";
 
 export function renderResources(resources: PeResources, out: string[]): void {
   const issues = (resources.issues || []).filter((issue): issue is string => Boolean(issue));
@@ -112,15 +115,16 @@ export function renderResources(resources: PeResources, out: string[]): void {
               : "(unnamed)";
           for (const langEntry of entry.langs || []) {
             const preview = renderPreviewCell(langEntry);
+            const widePreview = isWideResourcePreview(langEntry);
             out.push(
-              `<tr class="${isWideResourcePreview(langEntry) ? "peResourcePreviewMetaRow" : ""}">` +
+              `<tr class="${widePreview ? "peResourcePreviewMetaRow" : ""}">` +
                 `<td>${displayName}</td><td>${formatLang(langEntry.lang)}</td>` +
                 `<td class="peNumeric">${humanSize(langEntry.size || 0)}</td>` +
                 `<td class="peNumeric">${formatCodePage(langEntry.codePage)}</td>` +
-                `<td>${isWideResourcePreview(langEntry) ? escapeHtml(renderPreviewSummary(langEntry)) : preview}` +
+                `<td>${widePreview ? escapeHtml(renderPreviewSummary(langEntry)) : preview}` +
                 `</td></tr>`
             );
-            if (isWideResourcePreview(langEntry)) {
+            if (widePreview) {
               out.push(`<tr class="peResourcePreviewWideRow"><td colspan="5">${preview}</td></tr>`);
             }
           }

@@ -61,6 +61,15 @@ void test("addHeuristicResourcePreview recognizes JSON-like text payloads", asyn
   assert.deepEqual(result?.preview?.previewFields, [{ label: "Detected", value: "JSON/Text (heuristic)" }]);
 });
 
+void test("addHeuristicResourcePreview recognizes INF-like sectioned text before JSON arrays", async () => {
+  const text = "[Version]\nSignature=\"$CHICAGO$\"\n";
+  const result = await addHeuristicResourcePreview(new TextEncoder().encode(text), 0);
+
+  assert.strictEqual(result?.preview?.previewKind, "text");
+  assert.strictEqual(result?.preview?.textPreview, text);
+  assert.deepEqual(result?.preview?.previewFields, [{ label: "Detected", value: "INI/Text (heuristic)" }]);
+});
+
 void test("addHeuristicResourcePreview recognizes ANI payloads and exposes summary fields", async () => {
   const result = await addHeuristicResourcePreview(createAniFile().data, 0);
 

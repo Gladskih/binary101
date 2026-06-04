@@ -67,8 +67,12 @@ const detectTextFormat = (text: string): string | null => {
   const trimmed = text.trimStart();
   if (!trimmed) return null;
   if (trimmed.startsWith("<?xml") || trimmed.startsWith("<")) return "XML/Text";
+  // Windows INF files use bracketed section headers such as [Version].
+  // https://learn.microsoft.com/en-us/windows-hardware/drivers/install/general-syntax-rules-for-inf-files
+  if (/^\[[^\]\r\n]+\]\s*(?:\r?\n|$)/u.test(trimmed) || /^[A-Za-z0-9_.-]+\s*=/u.test(trimmed)) {
+    return "INI/Text";
+  }
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) return "JSON/Text";
-  if (/^[A-Za-z0-9_.-]+\s*=/.test(trimmed)) return "INI/Text";
   return "Text";
 };
 
