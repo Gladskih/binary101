@@ -213,9 +213,10 @@ export const createPePlusEntrypointCallFile = () => {
   const bytes = createPePlusWithSection();
   const textRawOffset = 0x200;
   // createPePlusWithSection maps entry RVA 0x1000 to raw 0x200.
-  // Intel SDM opcode reference: 0xe8 is near CALL rel32, 0x90 is NOP, 0xc3 is near RET.
+  // Intel SDM opcode reference: 0xe8 is near CALL rel32, 0x74 is JE rel8,
+  // 0x90 is NOP, and 0xc3 is near RET.
   // https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
-  bytes.set([0xe8, 0x01, 0x00, 0x00, 0x00, 0x90, 0xc3], textRawOffset);
+  bytes.set([0xe8, 0x01, 0x00, 0x00, 0x00, 0x90, 0x74, 0x02, 0xc3, 0x90, 0xc3], textRawOffset);
   return new MockFile(
     bytes,
     "sample-x64-entry-call.exe",

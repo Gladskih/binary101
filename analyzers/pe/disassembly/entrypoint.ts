@@ -6,7 +6,6 @@ import { loadIcedX86 } from "#iced-x86-loader";
 import type {
   AnalyzePeEntrypointDisassemblyOptions,
   PeEntrypointDisassemblyBlock,
-  PeEntrypointDisassemblyBlockKind,
   PeEntrypointDisassemblyReport,
   PeEntrypointInstruction
 } from "./types.js";
@@ -17,12 +16,18 @@ import {
 } from "./entrypoint-metadata.js";
 import { loadCodeBytes, type MappedCodeBlock } from "./entrypoint-code-bytes.js";
 import {
+  getConditionalBranchTargets,
   getDirectControlFlowTarget,
   getImportTarget,
-  toRva,
-  type DirectControlFlowTarget
+  toRva
 } from "./entrypoint-control-flow.js";
 import { buildImportTargetMap, type ImportTarget } from "./entrypoint-import-targets.js";
+import {
+  ENTRYPOINT_PREVIEW_BLOCK_LIMIT,
+  queueConditionalBranch,
+  queueFollowedBlock,
+  type PendingEntrypointBlock
+} from "./entrypoint-follow-queue.js";
 
 type IcedInstruction = InstanceType<IcedX86Module["Instruction"]>;
 type IcedFormatter = { format(instruction: IcedInstruction): string; free(): void };
@@ -31,11 +36,6 @@ type EntrypointIcedModule = IcedX86Module & {
   FormatterSyntax: { Nasm: number };
 };
 type IcedLoader = () => Promise<unknown>;
-type PendingBlock = {
-  kind: PeEntrypointDisassemblyBlockKind;
-  mapped: MappedCodeBlock;
-  sourceInstructionRva?: number;
-};
 type DecodeState = {
   blocks: PeEntrypointDisassemblyBlock[];
   bytesDecoded: number;
@@ -47,7 +47,6 @@ type DecodeState = {
 
 // UI preview caps: enough for entry stubs/prologues while avoiding accidental whole-file sweeps.
 const ENTRYPOINT_PREVIEW_INSTRUCTION_LIMIT = 64;
-const ENTRYPOINT_PREVIEW_BLOCK_LIMIT = 4;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -72,36 +71,6 @@ const safeFree = (resource: { free(): void } | null | undefined): void => {
   }
 };
 
-const canQueueBlock = (
-  state: DecodeState,
-  pending: PendingBlock[],
-  rva: number
-): boolean => {
-  if (state.visitedBlocks.has(rva) || state.queuedBlocks.has(rva)) return true;
-  return state.blocks.length + pending.length < ENTRYPOINT_PREVIEW_BLOCK_LIMIT;
-};
-
-const queueFollowedBlock = async (
-  reader: FileRangeReader,
-  opts: AnalyzePeEntrypointDisassemblyOptions,
-  state: DecodeState,
-  pending: PendingBlock[],
-  follow: DirectControlFlowTarget,
-  instructionRva: number,
-  issues: string[]
-): Promise<boolean> => {
-  if (state.visitedBlocks.has(follow.rva) || state.queuedBlocks.has(follow.rva)) return true;
-  if (!canQueueBlock(state, pending, follow.rva)) {
-    issues.push(`Entrypoint preview capped at ${ENTRYPOINT_PREVIEW_BLOCK_LIMIT} code blocks.`);
-    return false;
-  }
-  const mapped = await loadCodeBytes(reader, opts, follow.rva, issues, "Control-flow target");
-  if (!mapped) return false;
-  pending.push({ kind: follow.kind, mapped, sourceInstructionRva: instructionRva });
-  state.queuedBlocks.add(follow.rva);
-  return true;
-};
-
 const logPreviewLimit = (state: DecodeState, issues: string[]): void => {
   if (state.previewLimitLogged) return;
   state.previewLimitLogged = true;
@@ -112,11 +81,11 @@ const decodeBlock = async (
   reader: FileRangeReader,
   iced: EntrypointIcedModule,
   opts: AnalyzePeEntrypointDisassemblyOptions,
-  block: PendingBlock,
+  block: PendingEntrypointBlock,
   formatter: IcedFormatter,
   importTargets: Map<number, ImportTarget>,
   state: DecodeState,
-  pending: PendingBlock[],
+  pending: PendingEntrypointBlock[],
   issues: string[]
 ): Promise<PeEntrypointDisassemblyBlock> => {
   const decoder = new iced.Decoder(opts.is64Bit ? 64 : 32, block.mapped.data, iced.DecoderOptions.None);
@@ -142,6 +111,7 @@ const decodeBlock = async (
       }
       const importTarget = getImportTarget(iced, opts, instr, importTargets);
       const directTarget = getDirectControlFlowTarget(iced, opts, instr);
+      const branchTargets = getConditionalBranchTargets(iced, opts, instr);
       const text = formatter.format(instr);
       const instruction: PeEntrypointInstruction = {
         rva,
@@ -161,6 +131,24 @@ const decodeBlock = async (
         );
         instruction.target = { kind: "code", rva: directTarget.rva, followed };
       }
+      if (!importTarget && !directTarget && branchTargets) {
+        const followed = await queueConditionalBranch(
+          reader,
+          opts,
+          state,
+          pending,
+          branchTargets,
+          rva,
+          issues
+        );
+        instruction.target = {
+          kind: "branch",
+          branchRva: branchTargets.branch.rva,
+          branchFollowed: followed.branchFollowed,
+          fallthroughRva: branchTargets.fallthrough.rva,
+          fallthroughFollowed: followed.fallthroughFollowed
+        };
+      }
       instructions.push(instruction);
       state.bytesDecoded += instr.length;
       state.instructionCount += 1;
@@ -169,6 +157,8 @@ const decodeBlock = async (
           issues.push(`Entrypoint preview stopped at imported target '${importTarget.label}'.`);
         } else if (directTarget && instruction.target?.kind === "code" && instruction.target.followed) {
           issues.push(`Entrypoint preview followed ${directTarget.kind.replace("followed-", "")} target.`);
+        } else if (instruction.target?.kind === "branch") {
+          issues.push("Entrypoint preview followed conditional branch target(s).");
         } else {
           issues.push(`Entrypoint preview stopped at control-flow instruction '${text}'.`);
         }
@@ -212,7 +202,7 @@ const decodeEntrypointPreview = async (
     visitedBlocks: new Set(),
     queuedBlocks: new Set([mapped.rvaStart])
   };
-  const pending: PendingBlock[] = [{ kind: "entrypoint", mapped }];
+  const pending: PendingEntrypointBlock[] = [{ kind: "entrypoint", mapped }];
   try {
     while (pending.length > 0 && state.blocks.length < ENTRYPOINT_PREVIEW_BLOCK_LIMIT) {
       const block = pending.shift();

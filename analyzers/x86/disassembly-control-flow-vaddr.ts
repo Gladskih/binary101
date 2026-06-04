@@ -1,6 +1,7 @@
 "use strict";
 
 import type { IcedX86Module } from "./disassembly-iced.js";
+import { getNearBranchTarget } from "./disassembly-branch-targets.js";
 
 type DisassemblySectionVaddr = {
   vaddrStart: bigint;
@@ -14,9 +15,6 @@ type DisassemblyYieldSnapshot = {
 };
 
 const MAX_DECODE_STOP_ISSUES = 200;
-
-const isNearBranch = (opKind: number, OpKind: IcedX86Module["OpKind"]): boolean =>
-  opKind === OpKind["NearBranch16"] || opKind === OpKind["NearBranch32"] || opKind === OpKind["NearBranch64"];
 
 const safeFree = (resource: { free(): void } | null | undefined): void => {
   if (!resource) return;
@@ -152,9 +150,8 @@ export async function disassembleControlFlowForInstructionSetsVaddr(opts: {
         }
 
         if (opts.iced.FlowControl["UnconditionalBranch"] === instr.flowControl) {
-          if (isNearBranch(instr.op0Kind, opts.iced.OpKind)) {
-            addWork(BigInt.asUintN(64, instr.nearBranchTarget));
-          }
+          const target = getNearBranchTarget(instr, opts.iced.OpKind);
+          addWork(target == null ? null : BigInt.asUintN(64, target));
           break;
         }
 
@@ -163,9 +160,8 @@ export async function disassembleControlFlowForInstructionSetsVaddr(opts: {
           opts.iced.FlowControl["Call"] === instr.flowControl ||
           opts.iced.FlowControl["XbeginXabortXend"] === instr.flowControl
         ) {
-          if (isNearBranch(instr.op0Kind, opts.iced.OpKind)) {
-            addWork(BigInt.asUintN(64, instr.nearBranchTarget));
-          }
+          const target = getNearBranchTarget(instr, opts.iced.OpKind);
+          addWork(target == null ? null : BigInt.asUintN(64, target));
         } else if (
           opts.iced.FlowControl["IndirectBranch"] === instr.flowControl ||
           opts.iced.FlowControl["Return"] === instr.flowControl ||

@@ -179,6 +179,9 @@ test.describe("download actions", () => {
     await expect(detailsValue).toContainText("Entrypoint preview:");
     await expect(detailsValue).toContainText("Followed call target");
     await expect(detailsValue).toContainText("followed 0x00001006");
+    await expect(detailsValue).toContainText("branch followed 0x0000100a; fallthrough followed 0x00001008");
+    await expect(detailsValue).toContainText("Followed conditional branch target");
+    await expect(detailsValue).toContainText("Followed conditional fallthrough");
     await expect(detailsValue).toContainText("Instruction");
     await expect(detailsValue).not.toContainText("Failed to load iced-x86 disassembler");
     await expect(detailsValue).not.toContainText("Entrypoint disassembly failed");

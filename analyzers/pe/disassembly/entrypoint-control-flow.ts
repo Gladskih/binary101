@@ -1,6 +1,10 @@
 "use strict";
 
 import type { IcedX86Module } from "../../x86/disassembly-iced.js";
+import {
+  getNearBranchEdges,
+  getNearBranchTarget
+} from "../../x86/disassembly-branch-targets.js";
 import { MAX_RVA } from "./entrypoint-metadata.js";
 import type { ImportTarget } from "./entrypoint-import-targets.js";
 import type {
@@ -15,6 +19,22 @@ export type DirectControlFlowTarget = {
   rva: number;
 };
 
+export type ConditionalBranchTargets = {
+  branch: {
+    kind: "followed-branch";
+    rva: number;
+  };
+  fallthrough: {
+    kind: "followed-fallthrough";
+    rva: number;
+  };
+};
+
+export type FollowedCodeTarget =
+  | DirectControlFlowTarget
+  | ConditionalBranchTargets["branch"]
+  | ConditionalBranchTargets["fallthrough"];
+
 export const toRva = (virtualAddress: bigint, imageBase: bigint): number | null => {
   if (virtualAddress < imageBase) return null;
   const delta = virtualAddress - imageBase;
@@ -23,11 +43,6 @@ export const toRva = (virtualAddress: bigint, imageBase: bigint): number | null 
   return Number.isSafeInteger(value) && value >= 0 ? value >>> 0 : null;
 };
 
-const isNearBranch = (iced: IcedX86Module, instruction: IcedInstruction): boolean =>
-  instruction.op0Kind === iced.OpKind["NearBranch16"] ||
-  instruction.op0Kind === iced.OpKind["NearBranch32"] ||
-  instruction.op0Kind === iced.OpKind["NearBranch64"];
-
 export const getDirectControlFlowTarget = (
   iced: IcedX86Module,
   opts: AnalyzePeEntrypointDisassemblyOptions,
@@ -35,10 +50,29 @@ export const getDirectControlFlowTarget = (
 ): DirectControlFlowTarget | null => {
   const isCall = instruction.flowControl === iced.FlowControl["Call"];
   const isJump = instruction.flowControl === iced.FlowControl["UnconditionalBranch"];
-  if ((!isCall && !isJump) || !isNearBranch(iced, instruction)) return null;
-  const rva = toRva(instruction.nearBranchTarget, opts.imageBase);
+  if (!isCall && !isJump) return null;
+  const target = getNearBranchTarget(instruction, iced.OpKind);
+  if (target == null) return null;
+  const rva = toRva(target, opts.imageBase);
   if (rva == null) return null;
   return { kind: isCall ? "followed-call" : "followed-jump", rva };
+};
+
+export const getConditionalBranchTargets = (
+  iced: IcedX86Module,
+  opts: AnalyzePeEntrypointDisassemblyOptions,
+  instruction: IcedInstruction
+): ConditionalBranchTargets | null => {
+  if (instruction.flowControl !== iced.FlowControl["ConditionalBranch"]) return null;
+  const edges = getNearBranchEdges(instruction, iced.OpKind);
+  if (!edges) return null;
+  const branchRva = toRva(edges.branchTarget, opts.imageBase);
+  const fallthroughRva = toRva(edges.fallthroughTarget, opts.imageBase);
+  if (branchRva == null || fallthroughRva == null) return null;
+  return {
+    branch: { kind: "followed-branch", rva: branchRva },
+    fallthrough: { kind: "followed-fallthrough", rva: fallthroughRva }
+  };
 };
 
 export const getImportTarget = (

@@ -36,6 +36,13 @@ export type PeEntrypointInstructionTarget =
       followed: boolean;
     }
   | {
+      kind: "branch";
+      branchRva: number;
+      branchFollowed: boolean;
+      fallthroughRva: number;
+      fallthroughFollowed: boolean;
+    }
+  | {
       kind: "import";
       label: string;
       slotRva: number;
@@ -46,7 +53,9 @@ export type PeEntrypointInstructionTarget =
 export type PeEntrypointDisassemblyBlockKind =
   | "entrypoint"
   | "followed-call"
-  | "followed-jump";
+  | "followed-jump"
+  | "followed-branch"
+  | "followed-fallthrough";
 
 export interface PeEntrypointDisassemblyBlock {
   kind: PeEntrypointDisassemblyBlockKind;

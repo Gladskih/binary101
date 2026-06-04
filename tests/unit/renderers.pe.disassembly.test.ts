@@ -141,6 +141,58 @@ void test("renderInstructionSets separates followed entrypoint blocks", () => {
   assert.ok(html.includes("followed 0x00001010"));
 });
 
+void test("renderInstructionSets labels followed conditional branch blocks", () => {
+  const pe = createPe();
+  pe.entrypointDisassembly = {
+    bitness: 64,
+    entrypointRva: 0x1000,
+    bytesDecoded: 3,
+    instructionCount: 3,
+    blocks: [
+      {
+        kind: "entrypoint",
+        startRva: 0x1000,
+        fileOffsetStart: 0x200,
+        instructions: [{
+          rva: 0x1000,
+          fileOffset: 0x200,
+          text: "je short 0000000140001004h",
+          target: {
+            kind: "branch",
+            branchRva: 0x1004,
+            branchFollowed: true,
+            fallthroughRva: 0x1002,
+            fallthroughFollowed: true
+          }
+        }]
+      },
+      {
+        kind: "followed-branch",
+        startRva: 0x1004,
+        fileOffsetStart: 0x204,
+        sourceInstructionRva: 0x1000,
+        instructions: [{ rva: 0x1004, fileOffset: 0x204, text: "xor eax,eax" }]
+      },
+      {
+        kind: "followed-fallthrough",
+        startRva: 0x1002,
+        fileOffsetStart: 0x202,
+        sourceInstructionRva: 0x1000,
+        instructions: [{ rva: 0x1002, fileOffset: 0x202, text: "ret" }]
+      }
+    ],
+    issues: []
+  };
+
+  const out: string[] = [];
+  renderInstructionSets(pe, out);
+  const html = out.join("");
+
+  assert.ok(html.includes("branch followed 0x00001004; fallthrough followed 0x00001002"));
+  assert.ok(html.includes("Followed conditional branch target from 0x00001000"));
+  assert.ok(html.includes("Followed conditional fallthrough from 0x00001000"));
+});
+
 void test("renderInstructionSets renders an empty-state message", () => {
   const pe = createPe();
   pe.disassembly = {

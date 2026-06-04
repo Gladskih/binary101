@@ -63,6 +63,11 @@ export class TestDecoder {
       instruction.nearBranchTarget = this.ip + 2n;
       instruction.op0Kind = 2;
       instruction.text = "jmp near";
+    } else if (byte === 0x74) {
+      instruction.flowControl = 3;
+      instruction.nearBranchTarget = this.ip + 2n;
+      instruction.op0Kind = 2;
+      instruction.text = "je short";
     } else if (byte === 0x15) {
       instruction.flowControl = 6;
       instruction.memoryDisplacement = 0x140002000n;
