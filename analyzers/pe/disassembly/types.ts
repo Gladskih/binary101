@@ -19,6 +19,20 @@ export interface PeInstructionSetReport {
   issues: string[];
 }
 
+export interface PeEntrypointInstruction {
+  rva: number;
+  fileOffset: number;
+  text: string;
+}
+
+export interface PeEntrypointDisassemblyReport {
+  bitness: 32 | 64;
+  entrypointRva: number;
+  bytesDecoded: number;
+  instructions: PeEntrypointInstruction[];
+  issues: string[];
+}
+
 export interface AnalyzePeInstructionSetOptions {
   coffMachine: number;
   is64Bit: boolean;
@@ -37,6 +51,16 @@ export interface AnalyzePeInstructionSetOptions {
   yieldEveryInstructions?: number;
   signal?: AbortSignal;
   onProgress?: (progress: PeInstructionSetProgress) => void;
+}
+
+export interface AnalyzePeEntrypointDisassemblyOptions {
+  coffMachine: number;
+  is64Bit: boolean;
+  imageBase: bigint;
+  headerRvaLimit?: number;
+  entrypointRva: number;
+  rvaToOff: RvaToOffset;
+  sections: PeSection[];
 }
 
 export interface PeInstructionSetProgress {

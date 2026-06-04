@@ -5,16 +5,13 @@ import { parseAmd64ExceptionDirectory } from "./amd64/index.js";
 import { parseArm64ExceptionDirectory } from "./arm64.js";
 import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./types.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
-import { getCanonicalPeMachine } from "../machine.js";
-
-// Microsoft PE format, "Machine Types":
-// AMD64, ARM64, ARM64EC, and ARM64X are the PE/COFF machine values whose EXCEPTION
-// directory formats this parser understands.
-// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types
-const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
-const IMAGE_FILE_MACHINE_ARM64 = 0xaa64;
-const IMAGE_FILE_MACHINE_ARM64EC = 0xa641;
-const IMAGE_FILE_MACHINE_ARM64X = 0xa64e;
+import {
+  IMAGE_FILE_MACHINE_AMD64,
+  IMAGE_FILE_MACHINE_ARM64,
+  IMAGE_FILE_MACHINE_ARM64EC,
+  IMAGE_FILE_MACHINE_ARM64X,
+  getCanonicalPeMachine
+} from "../machine.js";
 
 const isArm64ExceptionMachine = (machine: number): boolean =>
   machine === IMAGE_FILE_MACHINE_ARM64 ||

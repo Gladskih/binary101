@@ -3,6 +3,14 @@
 import { toHex32 } from "../../binary-utils.js";
 import { MACHINE } from "./constants.js";
 
+// Microsoft PE format, "Machine Types":
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types
+export const IMAGE_FILE_MACHINE_I386 = 0x014c;
+export const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
+export const IMAGE_FILE_MACHINE_ARM64 = 0xaa64;
+export const IMAGE_FILE_MACHINE_ARM64EC = 0xa641;
+export const IMAGE_FILE_MACHINE_ARM64X = 0xa64e;
+
 export type PeMachineOs = "Apple" | "FreeBSD" | "Linux" | "NetBSD" | "SunOS";
 
 export interface DecodedPeMachine {

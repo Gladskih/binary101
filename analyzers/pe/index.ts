@@ -39,7 +39,7 @@ import { collectPeLayoutWarnings } from "./layout/warnings.js";
 import { analyzePeOverlay } from "./overlay.js";
 import { analyzePePackers } from "./packers/index.js";
 import { detectPeSubtype } from "./subtype.js";
-import { getCanonicalPeMachine } from "./machine.js";
+import { IMAGE_FILE_MACHINE_I386, getCanonicalPeMachine } from "./machine.js";
 export {
   isPeRomParseResult,
   isPeWindowsParseResult
@@ -52,11 +52,6 @@ export type {
 } from "./core/parse-result.js";
 import { PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "./optional-header/magic.js";
 import type { PeParseResult } from "./core/parse-result.js";
-
-// Microsoft PE format, "Machine Types":
-// IMAGE_FILE_MACHINE_I386 is the only PE32 machine where SafeSEH applies.
-// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types
-const IMAGE_FILE_MACHINE_I386 = 0x014c;
 
 const appendUniqueMessages = (existing: string[] | undefined, messages: string[]): string[] | undefined =>
   messages.length ? [...new Set([...(existing ?? []), ...messages])] : existing;

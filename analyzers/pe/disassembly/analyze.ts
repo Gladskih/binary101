@@ -7,9 +7,7 @@ import { disassembleControlFlowForInstructionSets } from "../../x86/disassembly-
 import { isIcedX86Module } from "../../x86/disassembly-iced.js";
 import { loadIcedX86 } from "#iced-x86-loader";
 import { peSectionNameValue } from "../sections/name.js";
-import { getCanonicalPeMachine } from "../machine.js";
-// Microsoft PE format: IMAGE_FILE_MACHINE_I386 and IMAGE_FILE_MACHINE_AMD64.
-const IMAGE_FILE_MACHINE_I386 = 0x014c, IMAGE_FILE_MACHINE_AMD64 = 0x8664;
+import { IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_I386, getCanonicalPeMachine } from "../machine.js";
 const IMAGE_SCN_CNT_CODE = 0x00000020; // Microsoft PE format: IMAGE_SCN_CNT_CODE.
 const IMAGE_SCN_MEM_EXECUTE = 0x20000000; // Microsoft PE format: IMAGE_SCN_MEM_EXECUTE.
 const getMappedSectionSpan = (section: PeSection): number =>

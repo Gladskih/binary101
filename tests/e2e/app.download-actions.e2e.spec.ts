@@ -160,4 +160,26 @@ test.describe("download actions", () => {
     await expect(detailsValue).not.toContainText("Failed to load iced-x86 disassembler");
     await expect(detailsValue).not.toContainText("Disassembly failed");
   });
+
+  void test("runs PE entrypoint disassembly on demand", async ({ page }) => {
+    const mockFile = createPePlusFile();
+    await page.setInputFiles("#fileInput", toUpload(mockFile));
+    await expectBaseDetails(page, mockFile.name, "PE32+ executable for x86-64 (AMD64)");
+
+    const detailsValue = page.locator("#peDetailsValue");
+    const instructionSection = detailsValue.locator("details.analysisPanel").filter({
+      has: page.locator("summary", { hasText: /^Instruction-set analysis\b/ })
+    }).first();
+    await instructionSection.locator(":scope > summary").click();
+    await expect(instructionSection).toHaveJSProperty("open", true);
+    await expect(detailsValue.locator("#peEntrypointDisassembleButton")).toBeVisible();
+
+    await detailsValue.locator("#peEntrypointDisassembleButton").click();
+    await expect(instructionSection).toHaveJSProperty("open", true);
+    await expect(detailsValue).toContainText("Entrypoint preview:");
+    await expect(detailsValue).toContainText("Instruction");
+    await expect(detailsValue).not.toContainText("Failed to load iced-x86 disassembler");
+    await expect(detailsValue).not.toContainText("Entrypoint disassembly failed");
+    await expect(detailsValue).not.toContainText("unexpected module shape");
+  });
 });

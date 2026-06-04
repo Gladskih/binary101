@@ -7,6 +7,7 @@ import { computeAndDisplayHash, copyHashToClipboard, resetHashDisplay } from "./
 import { createFileActionClickHandler } from "./ui/file-actions.js";
 import { isPeWindowsParseResult } from "./analyzers/pe/index.js";
 import { createPeDisassemblyController } from "./ui/pe-disassembly.js";
+import { createPeEntrypointDisassemblyController } from "./ui/pe-entrypoint-disassembly.js";
 import { createElfDisassemblyController } from "./ui/elf-disassembly.js";
 import { copyManifestPreviewToClipboard } from "./ui/manifest-preview-copy.js";
 import { createPeOverlayScanActions } from "./ui/pe-overlay-scan.js";
@@ -71,6 +72,9 @@ const renderResult = (result: ParseForUiResult): void => {
 const getCurrentFile = (): File | null => currentFile;
 const getCurrentParseResult = (): ParseForUiResult => currentParseResult;
 const peDisassembly = createPeDisassemblyController({ getCurrentFile, getCurrentParseResult, renderResult });
+const peEntrypointDisassembly = createPeEntrypointDisassemblyController({
+  getCurrentFile, getCurrentParseResult, renderResult
+});
 const peOverlayScan = createPeOverlayScanActions({
   getCurrentFile, getCurrentParseResult, renderResult, setStatusMessage
 });
@@ -78,7 +82,12 @@ const elfDisassembly = createElfDisassemblyController({ getCurrentFile, getCurre
 const fileActionClickHandler = createFileActionClickHandler({
   getParseResult: getCurrentParseResult, getFile: getCurrentFile, setStatusMessage
 });
-const cancelActiveAnalysis = (): void => { peDisassembly.cancel(); peOverlayScan.cancel(); elfDisassembly.cancel(); };
+const cancelActiveAnalysis = (): void => {
+  peDisassembly.cancel();
+  peEntrypointDisassembly.cancel();
+  peOverlayScan.cancel();
+  elfDisassembly.cancel();
+};
 const resetFileInspectionView = (): void => {
   fileInspectionGeneration += 1;
   cancelActiveAnalysis();
@@ -139,6 +148,7 @@ peDetailsValueElement.addEventListener("click", event => {
   if (handleSortableTableClick(targetElement)) { event.preventDefault(); return; }
   const peAnalyzeButton = targetElement?.closest("#peInstructionSetsAnalyzeButton");
   const peCancelButton = targetElement?.closest("#peInstructionSetsCancelButton");
+  const peEntrypointButton = targetElement?.closest("#peEntrypointDisassembleButton");
   const elfAnalyzeButton = targetElement?.closest("#elfInstructionSetsAnalyzeButton");
   const elfCancelButton = targetElement?.closest("#elfInstructionSetsCancelButton");
   if (peAnalyzeButton) {
@@ -151,6 +161,7 @@ peDetailsValueElement.addEventListener("click", event => {
     ) {
       return;
     }
+    peEntrypointDisassembly.cancel();
     delete currentParseResult.parsed.disassembly;
     renderResult(currentParseResult);
     peDisassembly.start(currentFile, currentParseResult.parsed);
@@ -159,6 +170,22 @@ peDetailsValueElement.addEventListener("click", event => {
   if (peCancelButton) {
     event.preventDefault();
     peDisassembly.cancel();
+    return;
+  }
+  if (peEntrypointButton) {
+    event.preventDefault();
+    if (!currentFile) return;
+    if (
+      currentParseResult.analyzer !== "pe" ||
+      !currentParseResult.parsed ||
+      !isPeWindowsParseResult(currentParseResult.parsed)
+    ) {
+      return;
+    }
+    peDisassembly.cancel();
+    delete currentParseResult.parsed.entrypointDisassembly;
+    renderResult(currentParseResult);
+    peEntrypointDisassembly.start(currentFile, currentParseResult.parsed);
     return;
   }
   if (peOverlayScan.handleClick(targetElement)) {

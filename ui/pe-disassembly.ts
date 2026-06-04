@@ -9,7 +9,10 @@ import {
   type PeInstructionSetReport
 } from "../analyzers/pe/disassembly/index.js";
 import { PE32_OPTIONAL_HEADER_MAGIC, PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "../analyzers/pe/optional-header/magic.js";
-import { getCanonicalPeMachine } from "../analyzers/pe/machine.js";
+import {
+  IMAGE_FILE_MACHINE_I386,
+  getCanonicalPeMachine
+} from "../analyzers/pe/machine.js";
 import { readLoadConfigPointerRva } from "../analyzers/pe/load-config/index.js";
 import {
   readGuardCFFunctionTableRvas,
@@ -17,8 +20,6 @@ import {
   readGuardLongJumpTargetTableRvas,
   readSafeSehHandlerTableRvas
 } from "../analyzers/pe/load-config/tables.js";
-
-const IMAGE_FILE_MACHINE_I386 = 0x014c;
 
 type AnalyzePeInstructionSets = (
   reader: FileRangeReader,
@@ -39,6 +40,7 @@ export type PeDisassemblyController = {
 
 const ANALYZE_BUTTON_ID = "peInstructionSetsAnalyzeButton";
 const CANCEL_BUTTON_ID = "peInstructionSetsCancelButton";
+const ENTRYPOINT_BUTTON_ID = "peEntrypointDisassembleButton";
 const PROGRESS_TEXT_ID = "peInstructionSetsProgressText";
 const PROGRESS_BAR_ID = "peInstructionSetsProgress";
 const CHIP_ID_PREFIX = "peInstructionSetChip_";
@@ -46,9 +48,9 @@ const COUNT_ID_PREFIX = "peInstructionSetCount_";
 
 const setDisassemblyUiState = (state: "busy" | "idle"): void => {
   const isBusy = state === "busy";
-  const analyzeButton = document.getElementById(ANALYZE_BUTTON_ID);
-  if (analyzeButton && "disabled" in analyzeButton) {
-    (analyzeButton as HTMLButtonElement).disabled = isBusy;
+  for (const id of [ANALYZE_BUTTON_ID, ENTRYPOINT_BUTTON_ID]) {
+    const button = document.getElementById(id);
+    if (button && "disabled" in button) (button as HTMLButtonElement).disabled = isBusy;
   }
 
   const cancelButton = document.getElementById(CANCEL_BUTTON_ID);
@@ -88,7 +90,9 @@ const updatePeDisassemblyProgress = (progress: PeInstructionSetProgress): void =
       progress.bytesSampled > 0
         ? `${formatHumanSize(progress.bytesDecoded)} / ${formatHumanSize(progress.bytesSampled)}`
         : "0 B";
-    text.textContent = `${stageLabel} ${percent}% (${bytesText}), ${progress.instructionCount} instr., ${progress.invalidInstructionCount} invalid.`;
+    text.textContent =
+      `${stageLabel} ${percent}% (${bytesText}), ${progress.instructionCount} instr., ` +
+      `${progress.invalidInstructionCount} invalid.`;
   }
 
   if (progress.knownFeatureCounts) {

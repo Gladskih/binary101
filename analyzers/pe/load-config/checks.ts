@@ -2,10 +2,9 @@
 
 import { readLoadConfigPointerRva, type PeLoadConfig, type PeLoadConfigCheck } from "./index.js";
 import type { PeImportLinkingResult } from "../imports/linking.js";
-import { getCanonicalPeMachine } from "../machine.js";
+import { IMAGE_FILE_MACHINE_I386, getCanonicalPeMachine } from "../machine.js";
 import type { PeSection, PeWindowsOptionalHeader } from "../types.js";
 
-const IMAGE_FILE_MACHINE_I386 = 0x014c;
 const IMAGE_DLL_CHARACTERISTICS_DYNAMIC_BASE = 0x0040;
 const IMAGE_DLL_CHARACTERISTICS_NO_SEH = 0x0400;
 const IMAGE_DLL_CHARACTERISTICS_GUARD_CF = 0x4000;

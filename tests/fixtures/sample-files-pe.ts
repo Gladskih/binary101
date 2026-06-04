@@ -194,7 +194,12 @@ export const createPePlusWithSection = () => {
   view.setUint32(sectionHeaderOffset + 20, pointerToRawData, true);
   view.setUint32(sectionHeaderOffset + 36, 0x60000020, true);
 
-  return new Uint8Array(buffer);
+  const bytes = new Uint8Array(buffer);
+  // Intel SDM opcode reference: 0x90 is NOP, 0xc3 is near RET.
+  // https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
+  bytes[pointerToRawData] = 0x90;
+  bytes[pointerToRawData + 1] = 0xc3;
+  return bytes;
 };
 
 export const createPePlusFile = () =>

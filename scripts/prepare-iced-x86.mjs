@@ -42,14 +42,21 @@ const webBootstrap = `const wasmUrl = new URL("iced_x86_bg.wasm", import.meta.ur
   `export const CpuidFeature = module.exports.CpuidFeature;\n` +
   `export const FlowControl = module.exports.FlowControl;\n` +
   `export const OpKind = module.exports.OpKind;\n` +
+  `export const FormatterSyntax = module.exports.FormatterSyntax;\n` +
   `export const DecoderOptions = module.exports.DecoderOptions;\n` +
   `export const Mnemonic = module.exports.Mnemonic;\n` +
   `export const getIcedFeatures = module.exports.getIcedFeatures;\n` +
   `\n` +
   `const DecoderExport = module.exports.Decoder;\n` +
+  `const FormatterExport = module.exports.Formatter;\n` +
   `const InstructionExport = module.exports.Instruction;\n` +
   `const OpCodeInfoExport = module.exports.OpCodeInfo;\n` +
-  `export { DecoderExport as Decoder, InstructionExport as Instruction, OpCodeInfoExport as OpCodeInfo };\n`;
+  `export {\n` +
+  `  DecoderExport as Decoder,\n` +
+  `  FormatterExport as Formatter,\n` +
+  `  InstructionExport as Instruction,\n` +
+  `  OpCodeInfoExport as OpCodeInfo\n` +
+  `};\n`;
 
 const webEntry = preamble + withoutUtilRequire.slice(0, bootstrapIndex) + webBootstrap;
 

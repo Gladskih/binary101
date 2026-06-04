@@ -3,9 +3,19 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderInstructionSets } from "../../renderers/pe/disassembly.js";
+import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
+
+const createPe = (overrides: Partial<PeWindowsParseResult> = {}): PeWindowsParseResult =>
+  ({
+    coff: { Machine: 0x8664 },
+    opt: { AddressOfEntryPoint: 0x1000 },
+    sections: [],
+    ...overrides
+  }) as unknown as PeWindowsParseResult;
 
 void test("renderInstructionSets renders a chip table", () => {
-  const disassembly: Parameters<typeof renderInstructionSets>[0] = {
+  const pe = createPe();
+  pe.disassembly = {
     bitness: 64,
     bytesSampled: 10,
     bytesDecoded: 6,
@@ -18,7 +28,7 @@ void test("renderInstructionSets renders a chip table", () => {
   };
 
   const out: string[] = [];
-  renderInstructionSets(disassembly, out);
+  renderInstructionSets(pe, out);
   const html = out.join("");
 
   assert.ok(html.includes("Instruction-set analysis"));
@@ -30,10 +40,12 @@ void test("renderInstructionSets renders a chip table", () => {
   assert.ok(html.includes("CpuidFeature.AVX"));
   assert.ok(html.includes(">AVX<"));
   assert.ok(html.includes("CpuidFeature.SSE2"));
+  assert.ok(html.includes("peEntrypointDisassembleButton"));
 });
 
 void test("renderInstructionSets escapes user-controlled strings", () => {
-  const disassembly: Parameters<typeof renderInstructionSets>[0] = {
+  const pe = createPe();
+  pe.disassembly = {
     bitness: 32,
     bytesSampled: 1,
     bytesDecoded: 1,
@@ -49,19 +61,31 @@ void test("renderInstructionSets escapes user-controlled strings", () => {
       }
     ]
   };
+  pe.entrypointDisassembly = {
+    bitness: 32,
+    entrypointRva: 0x1000,
+    bytesDecoded: 1,
+    instructions: [{ rva: 0x1000, fileOffset: 0x200, text: "mov eax,<bad>" }],
+    issues: ["entry <note>"]
+  };
 
   const out: string[] = [];
-  renderInstructionSets(disassembly, out);
+  renderInstructionSets(pe, out);
   const html = out.join("");
 
   assert.ok(!html.includes("<script>"));
   assert.ok(html.includes("&lt;script>alert(1)&lt;/script>"));
   assert.ok(html.includes("&lt;b>WEIRD&lt;/b>"));
   assert.ok(html.includes("note &lt;b>unsafe&lt;/b>"));
+  assert.ok(html.includes("mov eax,&lt;bad>"));
+  assert.ok(html.includes("entry &lt;note>"));
+  assert.ok(html.includes(`class="mono peNumeric" data-sort-value="4096">0x00001000</td>`));
+  assert.ok(html.includes(`class="mono peNumeric" data-sort-value="512">0x00000200</td>`));
 });
 
 void test("renderInstructionSets renders an empty-state message", () => {
-  const disassembly: Parameters<typeof renderInstructionSets>[0] = {
+  const pe = createPe();
+  pe.disassembly = {
     bitness: 64,
     bytesSampled: 0,
     bytesDecoded: 0,
@@ -72,7 +96,7 @@ void test("renderInstructionSets renders an empty-state message", () => {
   };
 
   const out: string[] = [];
-  renderInstructionSets(disassembly, out);
+  renderInstructionSets(pe, out);
   const html = out.join("");
 
   assert.ok(html.includes("No instruction-set requirements were detected"));
@@ -81,7 +105,7 @@ void test("renderInstructionSets renders an empty-state message", () => {
 
 void test("renderInstructionSets renders a progress placeholder before analysis", () => {
   const out: string[] = [];
-  renderInstructionSets(undefined, out);
+  renderInstructionSets(createPe(), out);
   const html = out.join("");
 
   assert.ok(html.includes("peInstructionSetsAnalyzeButton"));
@@ -90,4 +114,11 @@ void test("renderInstructionSets renders a progress placeholder before analysis"
   assert.ok(html.includes("peInstructionSetsProgressText"));
   assert.ok(html.includes("peInstructionSetChip_SSE"));
   assert.ok(html.includes("peInstructionSetCount_SSE"));
+});
+
+void test("renderInstructionSets hides entrypoint button when AddressOfEntryPoint is absent", () => {
+  const out: string[] = [];
+  renderInstructionSets(createPe({ opt: { AddressOfEntryPoint: 0 } } as Partial<PeWindowsParseResult>), out);
+
+  assert.ok(!out.join("").includes("peEntrypointDisassembleButton"));
 });

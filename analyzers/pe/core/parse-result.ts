@@ -1,7 +1,7 @@
 "use strict";
 
 import type { PeCodeViewEntry, PeCoffDebugInfo, PeDebugDirectoryEntry } from "../debug/directory.js";
-import type { PeInstructionSetReport } from "../disassembly/index.js";
+import type { PeEntrypointDisassemblyReport, PeInstructionSetReport } from "../disassembly/index.js";
 import type { PeImportLinkingResult } from "../imports/linking.js";
 import type { PeImportParseResult } from "../imports/index.js";
 import type { PeIatDirectory } from "../imports/iat.js";
@@ -14,7 +14,15 @@ import type { PePackerAnalysis } from "../packers/index.js";
 import type { PeResources } from "../resources/index.js";
 import type { PeClrHeader } from "../clr/index.js";
 import type { ParsedSecurityDirectory } from "../security/index.js";
-import type { PeCore, PeDataDirectory, PeRomOptionalHeader, PeSection, PeTlsDirectory, PeWindowsOptionalHeader, RvaToOffset } from "../types.js";
+import type {
+  PeCore,
+  PeDataDirectory,
+  PeRomOptionalHeader,
+  PeSection,
+  PeTlsDirectory,
+  PeWindowsOptionalHeader,
+  RvaToOffset
+} from "../types.js";
 import type { PeSubtype } from "../subtype.js";
 import type { parseExportDirectory } from "../directories/exports.js";
 import type { parseBaseRelocations } from "../directories/reloc.js";
@@ -71,6 +79,7 @@ export interface PeWindowsParseResult extends PeParseResultBase {
   resources: PeResources | null;
   packers?: PePackerAnalysis | null;
   disassembly?: PeInstructionSetReport;
+  entrypointDisassembly?: PeEntrypointDisassemblyReport;
   nativeAotCandidate?: PeNativeAotCandidate | null;
 }
 

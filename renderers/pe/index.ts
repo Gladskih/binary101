@@ -46,7 +46,7 @@ export function renderPe(pe: PeParseResult | null | undefined): string {
   if (!pe) return "";
   const out: string[] = [];
   if (isPeWindowsParseResult(pe)) {
-    renderInstructionSets(pe.disassembly, out);
+    renderInstructionSets(pe, out);
   }
   renderHeaders(pe, out);
   if (isPeWindowsParseResult(pe)) {
