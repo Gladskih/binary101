@@ -31,7 +31,8 @@ export const emptyEntrypointReport = (
   bitness: opts.is64Bit ? 64 : 32,
   entrypointRva: normalizeEntrypointRva(opts.entrypointRva) ?? 0,
   bytesDecoded: 0,
-  instructions: [],
+  instructionCount: 0,
+  blocks: [],
   issues
 });
 

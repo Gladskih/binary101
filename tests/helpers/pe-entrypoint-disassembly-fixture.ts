@@ -20,6 +20,9 @@ export class TestInstruction {
   ip = 0n;
   nextIP = 0n;
   flowControl = 0;
+  nearBranchTarget = 0n;
+  memoryDisplacement = 0n;
+  op0Kind = 0;
   text = "";
   free(): void {}
 }
@@ -42,8 +45,35 @@ export class TestDecoder {
     instruction.length = 1;
     instruction.nextIP = this.ip + 1n;
     instruction.code = byte === 0xff ? 0 : 1;
-    instruction.flowControl = byte === 0xc3 ? 1 : 0;
-    instruction.text = byte === 0xc3 ? "ret" : byte === 0xff ? "invalid" : `op_${byte.toString(16)}`;
+    instruction.flowControl = 0;
+    instruction.nearBranchTarget = 0n;
+    instruction.memoryDisplacement = 0n;
+    instruction.op0Kind = 0;
+    instruction.text = byte === 0xff ? "invalid" : `op_${byte.toString(16)}`;
+    if (byte === 0xc3) {
+      instruction.flowControl = 4;
+      instruction.text = "ret";
+    } else if (byte === 0xe8) {
+      instruction.flowControl = 5;
+      instruction.nearBranchTarget = this.ip + 2n;
+      instruction.op0Kind = 2;
+      instruction.text = "call near";
+    } else if (byte === 0xe9) {
+      instruction.flowControl = 1;
+      instruction.nearBranchTarget = this.ip + 2n;
+      instruction.op0Kind = 2;
+      instruction.text = "jmp near";
+    } else if (byte === 0x15) {
+      instruction.flowControl = 6;
+      instruction.memoryDisplacement = 0x140002000n;
+      instruction.op0Kind = 24;
+      instruction.text = "call [iat]";
+    } else if (byte === 0x25) {
+      instruction.flowControl = 2;
+      instruction.memoryDisplacement = 0x140002000n;
+      instruction.op0Kind = 24;
+      instruction.text = "jmp [iat]";
+    }
     this.position += 1;
     this.ip = instruction.nextIP;
   }
@@ -55,7 +85,15 @@ export const fakeIced = {
   CpuidFeature: {},
   Decoder: TestDecoder,
   DecoderOptions: { None: 0 },
-  FlowControl: { Next: 0 },
+  FlowControl: {
+    Next: 0,
+    UnconditionalBranch: 1,
+    IndirectBranch: 2,
+    ConditionalBranch: 3,
+    Return: 4,
+    Call: 5,
+    IndirectCall: 6
+  },
   Formatter: class {
     format(instruction: TestInstruction): string {
       return instruction.text;
@@ -64,7 +102,12 @@ export const fakeIced = {
   },
   FormatterSyntax: { Nasm: 0 },
   Instruction: TestInstruction,
-  OpKind: {}
+  OpKind: {
+    NearBranch16: 1,
+    NearBranch32: 2,
+    NearBranch64: 3,
+    Memory: 24
+  }
 };
 
 export const throwingFreeIced = {

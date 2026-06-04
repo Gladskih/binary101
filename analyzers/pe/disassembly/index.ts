@@ -3,8 +3,10 @@
 export type {
   AnalyzePeInstructionSetOptions,
   AnalyzePeEntrypointDisassemblyOptions,
+  PeEntrypointDisassemblyBlock,
   PeEntrypointDisassemblyReport,
   PeEntrypointInstruction,
+  PeEntrypointInstructionTarget,
   PeInstructionSetProgress,
   PeInstructionSetReport,
   PeInstructionSetUsage

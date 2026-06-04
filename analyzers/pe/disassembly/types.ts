@@ -1,5 +1,8 @@
 "use strict";
 
+import type { PeDelayImportEntry } from "../imports/delay.js";
+import type { PeImportParseResult } from "../imports/index.js";
+import type { PeLoadConfig } from "../load-config/index.js";
 import type { PeSection, RvaToOffset } from "../types.js";
 
 export interface PeInstructionSetUsage {
@@ -23,13 +26,42 @@ export interface PeEntrypointInstruction {
   rva: number;
   fileOffset: number;
   text: string;
+  target?: PeEntrypointInstructionTarget;
+}
+
+export type PeEntrypointInstructionTarget =
+  | {
+      kind: "code";
+      rva: number;
+      followed: boolean;
+    }
+  | {
+      kind: "import";
+      label: string;
+      slotRva: number;
+      importKind: "eager" | "delay";
+      guardIatEntry: boolean;
+    };
+
+export type PeEntrypointDisassemblyBlockKind =
+  | "entrypoint"
+  | "followed-call"
+  | "followed-jump";
+
+export interface PeEntrypointDisassemblyBlock {
+  kind: PeEntrypointDisassemblyBlockKind;
+  startRva: number;
+  fileOffsetStart: number;
+  sourceInstructionRva?: number;
+  instructions: PeEntrypointInstruction[];
 }
 
 export interface PeEntrypointDisassemblyReport {
   bitness: 32 | 64;
   entrypointRva: number;
   bytesDecoded: number;
-  instructions: PeEntrypointInstruction[];
+  instructionCount: number;
+  blocks: PeEntrypointDisassemblyBlock[];
   issues: string[];
 }
 
@@ -59,6 +91,9 @@ export interface AnalyzePeEntrypointDisassemblyOptions {
   imageBase: bigint;
   headerRvaLimit?: number;
   entrypointRva: number;
+  imports?: PeImportParseResult;
+  delayImports?: { entries: PeDelayImportEntry[] } | null;
+  loadcfg?: PeLoadConfig | null;
   rvaToOff: RvaToOffset;
   sections: PeSection[];
 }

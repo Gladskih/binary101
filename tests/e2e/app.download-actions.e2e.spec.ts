@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 import { createGzipFile } from "../fixtures/gzip-fixtures.js";
 import { createIso9660PrimaryFile } from "../fixtures/iso9660-fixtures.js";
-import { createPePlusFile } from "../fixtures/sample-files-pe.js";
+import { createPePlusEntrypointCallFile, createPePlusFile } from "../fixtures/sample-files-pe.js";
 import { createZipWithEntries } from "../fixtures/zip-fixtures.js";
 import type { MockFile } from "../helpers/mock-file.js";
 
@@ -162,7 +162,7 @@ test.describe("download actions", () => {
   });
 
   void test("runs PE entrypoint disassembly on demand", async ({ page }) => {
-    const mockFile = createPePlusFile();
+    const mockFile = createPePlusEntrypointCallFile();
     await page.setInputFiles("#fileInput", toUpload(mockFile));
     await expectBaseDetails(page, mockFile.name, "PE32+ executable for x86-64 (AMD64)");
 
@@ -177,6 +177,8 @@ test.describe("download actions", () => {
     await detailsValue.locator("#peEntrypointDisassembleButton").click();
     await expect(instructionSection).toHaveJSProperty("open", true);
     await expect(detailsValue).toContainText("Entrypoint preview:");
+    await expect(detailsValue).toContainText("Followed call target");
+    await expect(detailsValue).toContainText("followed 0x00001006");
     await expect(detailsValue).toContainText("Instruction");
     await expect(detailsValue).not.toContainText("Failed to load iced-x86 disassembler");
     await expect(detailsValue).not.toContainText("Entrypoint disassembly failed");

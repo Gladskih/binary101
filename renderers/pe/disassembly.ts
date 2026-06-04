@@ -3,6 +3,10 @@
 import { formatHumanSize, hex } from "../../binary-utils.js";
 import { escapeHtml } from "../../html-utils.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
+import type {
+  PeEntrypointDisassemblyBlock,
+  PeEntrypointInstructionTarget
+} from "../../analyzers/pe/disassembly/index.js";
 import {
   KNOWN_CPUID_FEATURES,
   describeCpuidFeature,
@@ -38,27 +42,54 @@ const renderEntrypointActions = (pe: PeWindowsParseResult, out: string[]): void 
   );
 };
 
+const renderEntrypointTarget = (target: PeEntrypointInstructionTarget | undefined): string => {
+  if (!target) return `<span class="dim">-</span>`;
+  if (target.kind === "code") {
+    const status = target.followed ? "followed" : "not followed";
+    return `${escapeHtml(status)} ${hex(target.rva, 8)}`;
+  }
+  const guard = target.guardIatEntry ? " guarded" : "";
+  return `${escapeHtml(target.label)} <span class="dim">(${target.importKind}${guard} IAT ` +
+    `${hex(target.slotRva, 8)})</span>`;
+};
+
+const renderEntrypointBlockLabel = (block: PeEntrypointDisassemblyBlock): string => {
+  if (block.kind === "entrypoint") return "Entry point";
+  const source = block.sourceInstructionRva == null ? "" : ` from ${hex(block.sourceInstructionRva, 8)}`;
+  return block.kind === "followed-call" ? `Followed call target${source}` : `Followed jump target${source}`;
+};
+
+const renderEntrypointBlock = (block: PeEntrypointDisassemblyBlock, out: string[]): void => {
+  out.push(
+    `<div class="smallNote" style="margin-top:.7rem"><strong>` +
+    `${escapeHtml(renderEntrypointBlockLabel(block))}</strong>: RVA ${hex(block.startRva, 8)}, ` +
+    `file offset ${hex(block.fileOffsetStart, 8)}.</div>`
+  );
+  out.push(
+    `<table class="table" style="margin-top:.35rem"><thead><tr>` +
+    `<th>RVA</th><th>File offset</th><th>Instruction</th><th>Target</th></tr></thead><tbody>` +
+    block.instructions.map(instruction => (
+      `<tr><td class="mono peNumeric" data-sort-value="${instruction.rva}">` +
+      `${hex(instruction.rva, 8)}</td>` +
+      `<td class="mono peNumeric" data-sort-value="${instruction.fileOffset}">` +
+      `${hex(instruction.fileOffset, 8)}</td>` +
+      `<td class="mono">${escapeHtml(instruction.text)}</td>` +
+      `<td>${renderEntrypointTarget(instruction.target)}</td></tr>`
+    )).join("") +
+    `</tbody></table>`
+  );
+};
+
 const renderEntrypointDisassembly = (pe: PeWindowsParseResult, out: string[]): void => {
   const report = pe.entrypointDisassembly;
   if (!report) return;
   out.push(
     `<div class="smallNote" style="margin-top:.7rem">Entrypoint preview: ` +
-    `${report.instructions.length} instruction(s), ${formatHumanSize(report.bytesDecoded)}, ` +
+    `${report.instructionCount} instruction(s), ${formatHumanSize(report.bytesDecoded)}, ` +
     `RVA ${hex(report.entrypointRva, 8)}.</div>`
   );
-  if (report.instructions.length) {
-    out.push(
-      `<table class="table" style="margin-top:.35rem"><thead><tr>` +
-      `<th>RVA</th><th>File offset</th><th>Instruction</th></tr></thead><tbody>` +
-      report.instructions.map(instruction => (
-        `<tr><td class="mono peNumeric" data-sort-value="${instruction.rva}">` +
-        `${hex(instruction.rva, 8)}</td>` +
-        `<td class="mono peNumeric" data-sort-value="${instruction.fileOffset}">` +
-        `${hex(instruction.fileOffset, 8)}</td>` +
-        `<td class="mono">${escapeHtml(instruction.text)}</td></tr>`
-      )).join("") +
-      `</tbody></table>`
-    );
+  for (const block of report.blocks) {
+    renderEntrypointBlock(block, out);
   }
   if (report.issues.length) {
     const items = report.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("");

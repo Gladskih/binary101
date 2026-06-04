@@ -22,14 +22,23 @@ const createMinimalPe = (): PeWindowsParseResult =>
       SizeOfHeaders: 0x400
     },
     rvaToOff: () => 0,
-    sections: []
+    sections: [],
+    imports: { entries: [], thunkEntrySize: 8 },
+    delayImports: null,
+    loadcfg: null
   }) as unknown as PeWindowsParseResult;
 
 const createFakeReport = (): PeEntrypointDisassemblyReport => ({
   bitness: 64,
   entrypointRva: 0x1000,
   bytesDecoded: 1,
-  instructions: [{ rva: 0x1000, fileOffset: 0, text: "nop" }],
+  instructionCount: 1,
+  blocks: [{
+    kind: "entrypoint",
+    startRva: 0x1000,
+    fileOffsetStart: 0,
+    instructions: [{ rva: 0x1000, fileOffset: 0, text: "nop" }]
+  }],
   issues: []
 });
 
@@ -61,7 +70,7 @@ void test("pe entrypoint disassembly controller renders when complete", async ()
   assert.equal(renders.length, 1);
   assert.equal(button.disabled, false);
   assert.equal(instructionSetButton.disabled, false);
-  assert.equal(pe.entrypointDisassembly?.instructions.length, 1);
+  assert.equal(pe.entrypointDisassembly?.instructionCount, 1);
   dom.restore();
 });
 
@@ -91,6 +100,9 @@ void test("pe entrypoint disassembly controller passes PE entrypoint options", a
   assert.equal(capturedOptions.entrypointRva, 0x1000);
   assert.equal(capturedOptions.headerRvaLimit, 0x400);
   assert.equal(capturedOptions.imageBase, 0x140000000n);
+  assert.equal(capturedOptions.imports, pe.imports);
+  assert.equal(capturedOptions.delayImports, pe.delayImports);
+  assert.equal(capturedOptions.loadcfg, pe.loadcfg);
   dom.restore();
 });
 
@@ -141,7 +153,7 @@ void test("pe entrypoint disassembly controller renders analyzer failures as not
   await flushTimers();
 
   assert.equal(renders.length, 1);
-  assert.equal(pe.entrypointDisassembly?.instructions.length, 0);
+  assert.equal(pe.entrypointDisassembly?.instructionCount, 0);
   assert.ok(pe.entrypointDisassembly?.issues.some(issue => /boom/i.test(issue)));
   dom.restore();
 });

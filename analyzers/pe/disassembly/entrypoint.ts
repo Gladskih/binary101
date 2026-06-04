@@ -2,23 +2,27 @@
 
 import type { FileRangeReader } from "../../file-range-reader.js";
 import { isIcedX86Module, type IcedX86Module } from "../../x86/disassembly-iced.js";
-import type { PeSection } from "../types.js";
 import { loadIcedX86 } from "#iced-x86-loader";
-import { peSectionNameValue } from "../sections/name.js";
 import type {
   AnalyzePeEntrypointDisassemblyOptions,
+  PeEntrypointDisassemblyBlock,
+  PeEntrypointDisassemblyBlockKind,
   PeEntrypointDisassemblyReport,
   PeEntrypointInstruction
 } from "./types.js";
 import {
-  IMAGE_SCN_MEM_EXECUTE,
-  MAX_RVA,
-  RVA_EXCLUSIVE_LIMIT,
   type ValidEntrypointMetadata,
   emptyEntrypointReport,
-  getHeaderRvaLimit,
   validateEntrypointMetadata
 } from "./entrypoint-metadata.js";
+import { loadCodeBytes, type MappedCodeBlock } from "./entrypoint-code-bytes.js";
+import {
+  getDirectControlFlowTarget,
+  getImportTarget,
+  toRva,
+  type DirectControlFlowTarget
+} from "./entrypoint-control-flow.js";
+import { buildImportTargetMap, type ImportTarget } from "./entrypoint-import-targets.js";
 
 type IcedInstruction = InstanceType<IcedX86Module["Instruction"]>;
 type IcedFormatter = { format(instruction: IcedInstruction): string; free(): void };
@@ -27,14 +31,23 @@ type EntrypointIcedModule = IcedX86Module & {
   FormatterSyntax: { Nasm: number };
 };
 type IcedLoader = () => Promise<unknown>;
-type MappedEntrypoint = {
-  fileOffsetStart: number;
-  rvaStart: number;
-  data: Uint8Array<ArrayBufferLike>;
+type PendingBlock = {
+  kind: PeEntrypointDisassemblyBlockKind;
+  mapped: MappedCodeBlock;
+  sourceInstructionRva?: number;
+};
+type DecodeState = {
+  blocks: PeEntrypointDisassemblyBlock[];
+  bytesDecoded: number;
+  instructionCount: number;
+  previewLimitLogged: boolean;
+  visitedBlocks: Set<number>;
+  queuedBlocks: Set<number>;
 };
 
-// UI preview cap: enough for entry stubs/prologues while avoiding accidental long linear sweeps.
-const ENTRYPOINT_PREVIEW_LIMIT = 64;
+// UI preview caps: enough for entry stubs/prologues while avoiding accidental whole-file sweeps.
+const ENTRYPOINT_PREVIEW_INSTRUCTION_LIMIT = 64;
+const ENTRYPOINT_PREVIEW_BLOCK_LIMIT = 4;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -59,127 +72,61 @@ const safeFree = (resource: { free(): void } | null | undefined): void => {
   }
 };
 
-const getMappedSectionSpan = (section: PeSection): number =>
-  (section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0);
-
-const findSectionContainingRva = (sections: PeSection[], rva: number): PeSection | null => {
-  for (const section of sections) {
-    const start = section.virtualAddress >>> 0;
-    const size = getMappedSectionSpan(section);
-    const end = Math.min(RVA_EXCLUSIVE_LIMIT, start + size);
-    if (rva >= start && rva < end) return section;
-  }
-  return null;
+const canQueueBlock = (
+  state: DecodeState,
+  pending: PendingBlock[],
+  rva: number
+): boolean => {
+  if (state.visitedBlocks.has(rva) || state.queuedBlocks.has(rva)) return true;
+  return state.blocks.length + pending.length < ENTRYPOINT_PREVIEW_BLOCK_LIMIT;
 };
 
-const toRva = (ip: bigint, imageBase: bigint): number | null => {
-  if (ip < imageBase) return null;
-  const delta = ip - imageBase;
-  if (delta > BigInt(MAX_RVA)) return null;
-  const value = Number(delta);
-  return Number.isSafeInteger(value) && value >= 0 ? value >>> 0 : null;
-};
-
-const loadSectionEntrypointBytes = async (
+const queueFollowedBlock = async (
   reader: FileRangeReader,
   opts: AnalyzePeEntrypointDisassemblyOptions,
-  section: PeSection,
-  rva: number,
+  state: DecodeState,
+  pending: PendingBlock[],
+  follow: DirectControlFlowTarget,
+  instructionRva: number,
   issues: string[]
-): Promise<MappedEntrypoint | null> => {
-  const sectionRva = section.virtualAddress >>> 0;
-  const offsetInSection = rva - sectionRva;
-  const mappedAvailable = getMappedSectionSpan(section) - offsetInSection;
-  const fileOffsetStart = opts.rvaToOff(rva);
-  const rawStart = section.pointerToRawData >>> 0;
-  const rawEnd = rawStart + (section.sizeOfRawData >>> 0);
-  if (
-    fileOffsetStart == null ||
-    !Number.isSafeInteger(fileOffsetStart) ||
-    fileOffsetStart < rawStart ||
-    fileOffsetStart >= rawEnd ||
-    mappedAvailable <= 0
-  ) {
-    issues.push("Entry point maps outside the section bytes stored in the file.");
-    return null;
+): Promise<boolean> => {
+  if (state.visitedBlocks.has(follow.rva) || state.queuedBlocks.has(follow.rva)) return true;
+  if (!canQueueBlock(state, pending, follow.rva)) {
+    issues.push(`Entrypoint preview capped at ${ENTRYPOINT_PREVIEW_BLOCK_LIMIT} code blocks.`);
+    return false;
   }
-  const rawAvailable = rawEnd - fileOffsetStart;
-  const readableSize = Math.min(mappedAvailable, rawAvailable, reader.size - fileOffsetStart);
-  if (readableSize <= 0) {
-    issues.push("No file bytes are available at the mapped entry point.");
-    return null;
-  }
-  return {
-    fileOffsetStart,
-    rvaStart: rva >>> 0,
-    data: await reader.readBytes(fileOffsetStart, readableSize)
-  };
+  const mapped = await loadCodeBytes(reader, opts, follow.rva, issues, "Control-flow target");
+  if (!mapped) return false;
+  pending.push({ kind: follow.kind, mapped, sourceInstructionRva: instructionRva });
+  state.queuedBlocks.add(follow.rva);
+  return true;
 };
 
-const loadHeaderEntrypointBytes = async (
+const logPreviewLimit = (state: DecodeState, issues: string[]): void => {
+  if (state.previewLimitLogged) return;
+  state.previewLimitLogged = true;
+  issues.push(`Entrypoint preview capped at ${ENTRYPOINT_PREVIEW_INSTRUCTION_LIMIT} instructions.`);
+};
+
+const decodeBlock = async (
   reader: FileRangeReader,
-  opts: AnalyzePeEntrypointDisassemblyOptions,
-  rva: number,
-  issues: string[]
-): Promise<MappedEntrypoint | null> => {
-  const headerRvaLimit = getHeaderRvaLimit(opts);
-  if (headerRvaLimit <= rva) {
-    issues.push("Entry point is not inside a section or the mapped PE headers.");
-    return null;
-  }
-  const fileOffsetStart = opts.rvaToOff(rva);
-  if (
-    fileOffsetStart == null ||
-    !Number.isSafeInteger(fileOffsetStart) ||
-    fileOffsetStart < 0 ||
-    fileOffsetStart >= reader.size
-  ) {
-    issues.push("Entry point RVA could not be mapped to a file offset.");
-    return null;
-  }
-  // Microsoft PE format: header-resident entrypoints are mapped only through SizeOfHeaders.
-  const readableSize = Math.min(headerRvaLimit - rva, reader.size - fileOffsetStart);
-  return {
-    fileOffsetStart,
-    rvaStart: rva >>> 0,
-    data: await reader.readBytes(fileOffsetStart, readableSize)
-  };
-};
-
-const loadEntrypointBytes = async (
-  reader: FileRangeReader,
-  opts: AnalyzePeEntrypointDisassemblyOptions,
-  rva: number,
-  issues: string[]
-): Promise<MappedEntrypoint | null> => {
-  const section = findSectionContainingRva(opts.sections, rva);
-  if (!section) return loadHeaderEntrypointBytes(reader, opts, rva, issues);
-  if ((section.characteristics & IMAGE_SCN_MEM_EXECUTE) === 0) {
-    issues.push(
-      `Entry point is inside non-executable section ${peSectionNameValue(section.name)}; disassembly skipped.`
-    );
-    return null;
-  }
-  return loadSectionEntrypointBytes(reader, opts, section, rva, issues);
-};
-
-const decodeEntrypointPreview = (
   iced: EntrypointIcedModule,
   opts: AnalyzePeEntrypointDisassemblyOptions,
-  metadata: ValidEntrypointMetadata,
-  mapped: MappedEntrypoint,
+  block: PendingBlock,
+  formatter: IcedFormatter,
+  importTargets: Map<number, ImportTarget>,
+  state: DecodeState,
+  pending: PendingBlock[],
   issues: string[]
-): Pick<PeEntrypointDisassemblyReport, "bytesDecoded" | "instructions"> => {
-  const decoder = new iced.Decoder(metadata.bitness, mapped.data, iced.DecoderOptions.None);
-  const formatter = new iced.Formatter(iced.FormatterSyntax.Nasm);
+): Promise<PeEntrypointDisassemblyBlock> => {
+  const decoder = new iced.Decoder(opts.is64Bit ? 64 : 32, block.mapped.data, iced.DecoderOptions.None);
   const instr = new iced.Instruction();
   const instructions: PeEntrypointInstruction[] = [];
-  let bytesDecoded = 0;
   let recordedStopReason = false;
   try {
     decoder.position = 0;
-    decoder.ip = BigInt.asUintN(64, opts.imageBase + BigInt(mapped.rvaStart));
-    for (let index = 0; index < ENTRYPOINT_PREVIEW_LIMIT && decoder.canDecode; index += 1) {
+    decoder.ip = BigInt.asUintN(64, opts.imageBase + BigInt(block.mapped.rvaStart));
+    while (decoder.canDecode && state.instructionCount < ENTRYPOINT_PREVIEW_INSTRUCTION_LIMIT) {
       decoder.decodeOut(instr);
       const rva = toRva(instr.ip, opts.imageBase);
       if (rva == null || instr.length <= 0 || instr.code === iced.Code["INVALID"]) {
@@ -187,35 +134,113 @@ const decodeEntrypointPreview = (
         recordedStopReason = true;
         break;
       }
-      const offsetInPreview = rva - mapped.rvaStart;
-      if (offsetInPreview < 0 || instr.length > mapped.data.length - offsetInPreview) {
+      const offsetInPreview = rva - block.mapped.rvaStart;
+      if (offsetInPreview < 0 || instr.length > block.mapped.data.length - offsetInPreview) {
         issues.push("Entrypoint preview stopped at the readable byte boundary.");
         recordedStopReason = true;
         break;
       }
+      const importTarget = getImportTarget(iced, opts, instr, importTargets);
+      const directTarget = getDirectControlFlowTarget(iced, opts, instr);
       const text = formatter.format(instr);
-      instructions.push({
+      const instruction: PeEntrypointInstruction = {
         rva,
-        fileOffset: mapped.fileOffsetStart + offsetInPreview,
+        fileOffset: block.mapped.fileOffsetStart + offsetInPreview,
         text
-      });
-      bytesDecoded += instr.length;
+      };
+      if (importTarget) instruction.target = importTarget;
+      if (!importTarget && directTarget) {
+        const followed = await queueFollowedBlock(
+          reader,
+          opts,
+          state,
+          pending,
+          directTarget,
+          rva,
+          issues
+        );
+        instruction.target = { kind: "code", rva: directTarget.rva, followed };
+      }
+      instructions.push(instruction);
+      state.bytesDecoded += instr.length;
+      state.instructionCount += 1;
       if (instr.flowControl !== iced.FlowControl["Next"]) {
-        issues.push(`Entrypoint preview stopped at control-flow instruction '${text}'.`);
+        if (importTarget) {
+          issues.push(`Entrypoint preview stopped at imported target '${importTarget.label}'.`);
+        } else if (directTarget && instruction.target?.kind === "code" && instruction.target.followed) {
+          issues.push(`Entrypoint preview followed ${directTarget.kind.replace("followed-", "")} target.`);
+        } else {
+          issues.push(`Entrypoint preview stopped at control-flow instruction '${text}'.`);
+        }
         recordedStopReason = true;
         break;
       }
     }
-    if (instructions.length >= ENTRYPOINT_PREVIEW_LIMIT) {
-      issues.push(`Entrypoint preview capped at ${ENTRYPOINT_PREVIEW_LIMIT} instructions.`);
+    if (state.instructionCount >= ENTRYPOINT_PREVIEW_INSTRUCTION_LIMIT && decoder.canDecode) {
+      logPreviewLimit(state, issues);
     } else if (!recordedStopReason && instructions.length > 0 && !decoder.canDecode) {
       issues.push("Entrypoint preview stopped at the readable byte boundary.");
     }
-    return { bytesDecoded, instructions };
+    return {
+      kind: block.kind,
+      startRva: block.mapped.rvaStart,
+      fileOffsetStart: block.mapped.fileOffsetStart,
+      ...(block.sourceInstructionRva != null ? { sourceInstructionRva: block.sourceInstructionRva } : {}),
+      instructions
+    };
   } finally {
     safeFree(instr);
-    safeFree(formatter);
     safeFree(decoder);
+  }
+};
+
+const decodeEntrypointPreview = async (
+  reader: FileRangeReader,
+  iced: EntrypointIcedModule,
+  opts: AnalyzePeEntrypointDisassemblyOptions,
+  metadata: ValidEntrypointMetadata,
+  mapped: MappedCodeBlock,
+  issues: string[]
+): Promise<Pick<PeEntrypointDisassemblyReport, "blocks" | "bytesDecoded" | "instructionCount">> => {
+  const formatter = new iced.Formatter(iced.FormatterSyntax.Nasm);
+  const importTargets = buildImportTargetMap(opts, metadata);
+  const state: DecodeState = {
+    blocks: [],
+    bytesDecoded: 0,
+    instructionCount: 0,
+    previewLimitLogged: false,
+    visitedBlocks: new Set(),
+    queuedBlocks: new Set([mapped.rvaStart])
+  };
+  const pending: PendingBlock[] = [{ kind: "entrypoint", mapped }];
+  try {
+    while (pending.length > 0 && state.blocks.length < ENTRYPOINT_PREVIEW_BLOCK_LIMIT) {
+      const block = pending.shift();
+      if (!block) break;
+      state.queuedBlocks.delete(block.mapped.rvaStart);
+      if (state.visitedBlocks.has(block.mapped.rvaStart)) continue;
+      state.visitedBlocks.add(block.mapped.rvaStart);
+      const decoded = await decodeBlock(
+        reader,
+        iced,
+        opts,
+        block,
+        formatter,
+        importTargets,
+        state,
+        pending,
+        issues
+      );
+      if (decoded.instructions.length) state.blocks.push(decoded);
+      if (state.instructionCount >= ENTRYPOINT_PREVIEW_INSTRUCTION_LIMIT) break;
+    }
+    return {
+      blocks: state.blocks,
+      bytesDecoded: state.bytesDecoded,
+      instructionCount: state.instructionCount
+    };
+  } finally {
+    safeFree(formatter);
   }
 };
 
@@ -227,9 +252,9 @@ export async function analyzePeEntrypointDisassembly(
   const issues: string[] = [];
   const metadata = validateEntrypointMetadata(opts, issues);
   if (!metadata) return emptyEntrypointReport(opts, issues);
-  let mapped: MappedEntrypoint | null;
+  let mapped: MappedCodeBlock | null;
   try {
-    mapped = await loadEntrypointBytes(reader, opts, metadata.entrypointRva, issues);
+    mapped = await loadCodeBytes(reader, opts, metadata.entrypointRva, issues, "Entry point");
   } catch (error) {
     issues.push(`Entrypoint byte loading failed (${String(error)})`);
     return emptyEntrypointReport(opts, issues);
@@ -254,7 +279,7 @@ export async function analyzePeEntrypointDisassembly(
     return {
       bitness: metadata.bitness,
       entrypointRva: metadata.entrypointRva,
-      ...decodeEntrypointPreview(loaded, opts, metadata, mapped, issues),
+      ...(await decodeEntrypointPreview(reader, loaded, opts, metadata, mapped, issues)),
       issues
     };
   } catch (error) {

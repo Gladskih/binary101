@@ -65,7 +65,24 @@ void test("renderInstructionSets escapes user-controlled strings", () => {
     bitness: 32,
     entrypointRva: 0x1000,
     bytesDecoded: 1,
-    instructions: [{ rva: 0x1000, fileOffset: 0x200, text: "mov eax,<bad>" }],
+    instructionCount: 1,
+    blocks: [{
+      kind: "entrypoint",
+      startRva: 0x1000,
+      fileOffsetStart: 0x200,
+      instructions: [{
+        rva: 0x1000,
+        fileOffset: 0x200,
+        text: "mov eax,<bad>",
+        target: {
+          kind: "import",
+          label: "EVIL<dll>!Bad<api>",
+          slotRva: 0x3000,
+          importKind: "eager",
+          guardIatEntry: true
+        }
+      }]
+    }],
     issues: ["entry <note>"]
   };
 
@@ -78,9 +95,50 @@ void test("renderInstructionSets escapes user-controlled strings", () => {
   assert.ok(html.includes("&lt;b>WEIRD&lt;/b>"));
   assert.ok(html.includes("note &lt;b>unsafe&lt;/b>"));
   assert.ok(html.includes("mov eax,&lt;bad>"));
+  assert.ok(html.includes("EVIL&lt;dll>!Bad&lt;api>"));
+  assert.ok(html.includes("guarded IAT"));
   assert.ok(html.includes("entry &lt;note>"));
   assert.ok(html.includes(`class="mono peNumeric" data-sort-value="4096">0x00001000</td>`));
   assert.ok(html.includes(`class="mono peNumeric" data-sort-value="512">0x00000200</td>`));
+});
+
+void test("renderInstructionSets separates followed entrypoint blocks", () => {
+  const pe = createPe();
+  pe.entrypointDisassembly = {
+    bitness: 64,
+    entrypointRva: 0x1000,
+    bytesDecoded: 2,
+    instructionCount: 2,
+    blocks: [
+      {
+        kind: "entrypoint",
+        startRva: 0x1000,
+        fileOffsetStart: 0x200,
+        instructions: [{
+          rva: 0x1000,
+          fileOffset: 0x200,
+          text: "call 0000000140001010h",
+          target: { kind: "code", rva: 0x1010, followed: true }
+        }]
+      },
+      {
+        kind: "followed-call",
+        startRva: 0x1010,
+        fileOffsetStart: 0x210,
+        sourceInstructionRva: 0x1000,
+        instructions: [{ rva: 0x1010, fileOffset: 0x210, text: "ret" }]
+      }
+    ],
+    issues: []
+  };
+
+  const out: string[] = [];
+  renderInstructionSets(pe, out);
+  const html = out.join("");
+
+  assert.ok(html.includes("Entry point"));
+  assert.ok(html.includes("Followed call target from 0x00001000"));
+  assert.ok(html.includes("followed 0x00001010"));
 });
 
 void test("renderInstructionSets renders an empty-state message", () => {

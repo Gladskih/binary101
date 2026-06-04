@@ -18,27 +18,25 @@ import {
 import type { TestInstruction } from "../helpers/pe-entrypoint-disassembly-fixture.js";
 import { MockFile } from "../helpers/mock-file.js";
 
+const allInstructions = (result: Awaited<ReturnType<typeof analyzeEntrypoint>>) =>
+  result.blocks.flatMap(block => block.instructions);
+
 void test("analyzePeEntrypointDisassembly previews only until control flow", async () => {
   const result = await analyzeEntrypoint(new Uint8Array([0x90, 0x40, 0xc3, 0x90]));
+  const instructions = allInstructions(result);
 
-  assert.deepEqual(result.instructions.map(instruction => instruction.text), ["op_90", "op_40", "ret"]);
-  assert.equal(result.instructions.length, 3);
+  assert.deepEqual(instructions.map(instruction => instruction.text), ["op_90", "op_40", "ret"]);
+  assert.equal(result.instructionCount, 3);
   assert.equal(result.bytesDecoded, 3);
-  assert.deepEqual(
-    result.instructions.map(instruction => instruction.rva),
-    [0x1000, 0x1001, 0x1002]
-  );
-  assert.deepEqual(
-    result.instructions.map(instruction => instruction.fileOffset),
-    [0, 1, 2]
-  );
+  assert.deepEqual(instructions.map(instruction => instruction.rva), [0x1000, 0x1001, 0x1002]);
+  assert.deepEqual(instructions.map(instruction => instruction.fileOffset), [0, 1, 2]);
   assert.ok(result.issues.some(issue => /control-flow instruction/i.test(issue)));
 });
 
 void test("analyzePeEntrypointDisassembly reports invalid entrypoint decodes", async () => {
   const result = await analyzeEntrypoint(new Uint8Array([0xff]));
 
-  assert.equal(result.instructions.length, 0);
+  assert.equal(result.instructionCount, 0);
   assert.ok(result.issues.some(issue => /invalid/i.test(issue)));
 });
 
@@ -61,7 +59,7 @@ void test("analyzePeEntrypointDisassembly refuses non-executable entrypoint sect
     createExecutableSection({ characteristics: IMAGE_SCN_CNT_CODE })
   );
 
-  assert.equal(result.instructions.length, 0);
+  assert.equal(result.instructionCount, 0);
   assert.ok(result.issues.some(issue => /non-executable section/i.test(issue)));
 });
 
@@ -72,7 +70,7 @@ void test("analyzePeEntrypointDisassembly bounds-checks raw section bytes", asyn
     0x1002
   );
 
-  assert.equal(result.instructions.length, 0);
+  assert.equal(result.instructionCount, 0);
   assert.ok(result.issues.some(issue => /outside the section bytes/i.test(issue)));
 });
 
@@ -91,7 +89,7 @@ void test("analyzePeEntrypointDisassembly uses mapped header bytes only within S
     async () => fakeIced
   );
 
-  assert.deepEqual(result.instructions.map(instruction => instruction.text), ["op_90", "ret"]);
+  assert.deepEqual(allInstructions(result).map(instruction => instruction.text), ["op_90", "ret"]);
   assert.equal(result.bytesDecoded, 2);
 });
 
@@ -111,7 +109,7 @@ void test("analyzePeEntrypointDisassembly reports disassembler load failures", a
     }
   );
 
-  assert.equal(result.instructions.length, 0);
+  assert.equal(result.instructionCount, 0);
   assert.ok(result.issues.some(issue => /Failed to load iced-x86/i.test(issue)));
 });
 
@@ -129,7 +127,7 @@ void test("analyzePeEntrypointDisassembly reports when mapped file tail is empty
     async () => fakeIced
   );
 
-  assert.equal(result.instructions.length, 0);
+  assert.equal(result.instructionCount, 0);
   assert.ok(result.issues.some(issue => /No file bytes/i.test(issue)));
 });
 
@@ -148,7 +146,7 @@ void test("analyzePeEntrypointDisassembly rejects unmapped header entrypoints", 
     async () => fakeIced
   );
 
-  assert.equal(result.instructions.length, 0);
+  assert.equal(result.instructionCount, 0);
   assert.ok(result.issues.some(issue => /mapped PE headers/i.test(issue)));
 });
 
@@ -167,7 +165,7 @@ void test("analyzePeEntrypointDisassembly rejects header entrypoints without fil
     async () => fakeIced
   );
 
-  assert.equal(result.instructions.length, 0);
+  assert.equal(result.instructionCount, 0);
   assert.ok(result.issues.some(issue => /could not be mapped/i.test(issue)));
 });
 
@@ -211,7 +209,7 @@ void test("analyzePeEntrypointDisassembly reports unexpected disassembler module
     async () => ({})
   );
 
-  assert.equal(result.instructions.length, 0);
+  assert.equal(result.instructionCount, 0);
   assert.ok(result.issues.some(issue => /unexpected module shape/i.test(issue)));
 });
 
@@ -236,7 +234,7 @@ void test("analyzePeEntrypointDisassembly reports runtime disassembly failures",
     })
   );
 
-  assert.equal(result.instructions.length, 0);
+  assert.equal(result.instructionCount, 0);
   assert.ok(result.issues.some(issue => /disassembly failed/i.test(issue)));
 });
 
@@ -262,7 +260,7 @@ void test("analyzePeEntrypointDisassembly stops when decoded length crosses read
     })
   );
 
-  assert.equal(result.instructions.length, 0);
+  assert.equal(result.instructionCount, 0);
   assert.ok(result.issues.some(issue => /readable byte boundary/i.test(issue)));
 });
 
@@ -272,7 +270,7 @@ void test("analyzePeEntrypointDisassembly caps long straight-line previews", asy
     createExecutableSection({ virtualSize: 80, sizeOfRawData: 80 })
   );
 
-  assert.equal(result.instructions.length, 64);
+  assert.equal(result.instructionCount, 64);
   assert.ok(result.issues.some(issue => /capped at 64/i.test(issue)));
 });
 
@@ -290,7 +288,7 @@ void test("analyzePeEntrypointDisassembly ignores cleanup failures", async () =>
     async () => throwingFreeIced
   );
 
-  assert.equal(result.instructions.length, 1);
+  assert.equal(result.instructionCount, 1);
   assert.equal(result.issues.length, 1);
   assert.ok(result.issues[0]?.includes("readable byte boundary"));
 });

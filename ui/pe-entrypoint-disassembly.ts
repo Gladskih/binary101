@@ -52,7 +52,8 @@ const buildFailureReport = (
   bitness: pe.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC ? 64 : 32,
   entrypointRva: pe.opt.AddressOfEntryPoint >>> 0,
   bytesDecoded: 0,
-  instructions: [],
+  instructionCount: 0,
+  blocks: [],
   issues: [message]
 });
 
@@ -86,6 +87,9 @@ export const createPeEntrypointDisassemblyController = (
           imageBase: windowsPe.opt.ImageBase,
           entrypointRva: windowsPe.opt.AddressOfEntryPoint,
           headerRvaLimit: windowsPe.opt.SizeOfHeaders,
+          imports: windowsPe.imports,
+          delayImports: windowsPe.delayImports,
+          loadcfg: windowsPe.loadcfg,
           rvaToOff: windowsPe.rvaToOff,
           sections: windowsPe.sections
         }
