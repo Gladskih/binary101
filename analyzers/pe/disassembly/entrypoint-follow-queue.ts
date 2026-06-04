@@ -13,6 +13,7 @@ export type PendingEntrypointBlock = {
   kind: PeEntrypointDisassemblyBlockKind;
   mapped: MappedCodeBlock;
   sourceInstructionRva?: number;
+  returnRva?: number;
 };
 
 type FollowQueueState = {
@@ -39,7 +40,8 @@ export const queueFollowedBlock = async (
   pending: PendingEntrypointBlock[],
   follow: FollowedCodeTarget,
   instructionRva: number,
-  issues: string[]
+  issues: string[],
+  returnRva?: number | null
 ): Promise<boolean> => {
   if (state.visitedBlocks.has(follow.rva) || state.queuedBlocks.has(follow.rva)) return true;
   if (!canQueueBlock(state, pending, follow.rva)) {
@@ -48,7 +50,12 @@ export const queueFollowedBlock = async (
   }
   const mapped = await loadCodeBytes(reader, opts, follow.rva, issues, "Control-flow target");
   if (!mapped) return false;
-  pending.push({ kind: follow.kind, mapped, sourceInstructionRva: instructionRva });
+  pending.push({
+    kind: follow.kind,
+    mapped,
+    sourceInstructionRva: instructionRva,
+    ...(returnRva != null ? { returnRva } : {})
+  });
   state.queuedBlocks.add(follow.rva);
   return true;
 };

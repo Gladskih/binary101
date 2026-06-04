@@ -33,7 +33,11 @@ export type ConditionalBranchTargets = {
 export type FollowedCodeTarget =
   | DirectControlFlowTarget
   | ConditionalBranchTargets["branch"]
-  | ConditionalBranchTargets["fallthrough"];
+  | ConditionalBranchTargets["fallthrough"]
+  | {
+      kind: "followed-import-return";
+      rva: number;
+    };
 
 export const toRva = (virtualAddress: bigint, imageBase: bigint): number | null => {
   if (virtualAddress < imageBase) return null;

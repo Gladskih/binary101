@@ -48,6 +48,8 @@ export type PeEntrypointInstructionTarget =
       slotRva: number;
       importKind: "eager" | "delay";
       guardIatEntry: boolean;
+      returnRva?: number;
+      returnFollowed?: boolean;
     };
 
 export type PeEntrypointDisassemblyBlockKind =
@@ -55,7 +57,8 @@ export type PeEntrypointDisassemblyBlockKind =
   | "followed-call"
   | "followed-jump"
   | "followed-branch"
-  | "followed-fallthrough";
+  | "followed-fallthrough"
+  | "followed-import-return";
 
 export interface PeEntrypointDisassemblyBlock {
   kind: PeEntrypointDisassemblyBlockKind;

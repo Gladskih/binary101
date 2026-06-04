@@ -1,7 +1,6 @@
 "use strict";
 
 import type { FileRangeReader } from "../../file-range-reader.js";
-import { isIcedX86Module, type IcedX86Module } from "../../x86/disassembly-iced.js";
 import { loadIcedX86 } from "#iced-x86-loader";
 import type {
   AnalyzePeEntrypointDisassemblyOptions,
@@ -22,19 +21,19 @@ import {
   toRva
 } from "./entrypoint-control-flow.js";
 import { buildImportTargetMap, type ImportTarget } from "./entrypoint-import-targets.js";
+import { getReturningImportFallthrough } from "./entrypoint-import-fallthrough.js";
 import {
   ENTRYPOINT_PREVIEW_BLOCK_LIMIT,
   queueConditionalBranch,
   queueFollowedBlock,
   type PendingEntrypointBlock
 } from "./entrypoint-follow-queue.js";
+import {
+  isEntrypointIcedModule,
+  type EntrypointIcedModule,
+  type IcedFormatter
+} from "./entrypoint-iced.js";
 
-type IcedInstruction = InstanceType<IcedX86Module["Instruction"]>;
-type IcedFormatter = { format(instruction: IcedInstruction): string; free(): void };
-type EntrypointIcedModule = IcedX86Module & {
-  Formatter: new (syntax: number) => IcedFormatter;
-  FormatterSyntax: { Nasm: number };
-};
 type IcedLoader = () => Promise<unknown>;
 type DecodeState = {
   blocks: PeEntrypointDisassemblyBlock[];
@@ -47,20 +46,6 @@ type DecodeState = {
 
 // UI preview caps: enough for entry stubs/prologues while avoiding accidental whole-file sweeps.
 const ENTRYPOINT_PREVIEW_INSTRUCTION_LIMIT = 64;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
-const isEntrypointIcedModule = (value: unknown): value is EntrypointIcedModule => {
-  if (!isRecord(value) || !isIcedX86Module(value)) return false;
-  const module = value as IcedX86Module & Record<string, unknown>;
-  const formatterSyntax = module["FormatterSyntax"];
-  return (
-    isRecord(formatterSyntax) &&
-    typeof formatterSyntax["Nasm"] === "number" &&
-    typeof module["Formatter"] === "function"
-  );
-};
 
 const safeFree = (resource: { free(): void } | null | undefined): void => {
   if (!resource) return;
@@ -112,14 +97,40 @@ const decodeBlock = async (
       const importTarget = getImportTarget(iced, opts, instr, importTargets);
       const directTarget = getDirectControlFlowTarget(iced, opts, instr);
       const branchTargets = getConditionalBranchTargets(iced, opts, instr);
+      const importFallthrough = getReturningImportFallthrough(
+        iced,
+        opts,
+        block.mapped,
+        instr,
+        importTarget,
+        block.returnRva
+      );
       const text = formatter.format(instr);
       const instruction: PeEntrypointInstruction = {
         rva,
         fileOffset: block.mapped.fileOffsetStart + offsetInPreview,
         text
       };
-      if (importTarget) instruction.target = importTarget;
+      if (importTarget) {
+        const returnFollowed = importFallthrough?.kind === "source-call"
+          ? await queueFollowedBlock(
+            reader,
+            opts,
+            state,
+            pending,
+            { kind: "followed-import-return", rva: importFallthrough.rva },
+            rva,
+            issues
+          )
+          : importFallthrough?.kind === "current-block";
+        instruction.target = importFallthrough == null
+          ? importTarget
+          : { ...importTarget, returnRva: importFallthrough.rva, returnFollowed };
+      }
       if (!importTarget && directTarget) {
+        const returnRva = directTarget.kind === "followed-call"
+          ? toRva(instr.nextIP, opts.imageBase)
+          : null;
         const followed = await queueFollowedBlock(
           reader,
           opts,
@@ -127,7 +138,8 @@ const decodeBlock = async (
           pending,
           directTarget,
           rva,
-          issues
+          issues,
+          returnRva
         );
         instruction.target = { kind: "code", rva: directTarget.rva, followed };
       }
@@ -153,7 +165,9 @@ const decodeBlock = async (
       state.bytesDecoded += instr.length;
       state.instructionCount += 1;
       if (instr.flowControl !== iced.FlowControl["Next"]) {
-        if (importTarget) {
+        if (importTarget && instruction.target?.kind === "import" && instruction.target.returnFollowed) {
+          issues.push(`Entrypoint preview continued after returning import '${importTarget.label}'.`);
+        } else if (importTarget) {
           issues.push(`Entrypoint preview stopped at imported target '${importTarget.label}'.`);
         } else if (directTarget && instruction.target?.kind === "code" && instruction.target.followed) {
           issues.push(`Entrypoint preview followed ${directTarget.kind.replace("followed-", "")} target.`);
@@ -162,6 +176,7 @@ const decodeBlock = async (
         } else {
           issues.push(`Entrypoint preview stopped at control-flow instruction '${text}'.`);
         }
+        if (importFallthrough?.kind === "current-block") continue;
         recordedStopReason = true;
         break;
       }

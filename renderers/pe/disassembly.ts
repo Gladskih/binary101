@@ -55,8 +55,11 @@ const renderEntrypointTarget = (target: PeEntrypointInstructionTarget | undefine
       `fallthrough ${escapeHtml(fallthroughStatus)} ${hex(target.fallthroughRva, 8)}`;
   }
   const guard = target.guardIatEntry ? " guarded" : "";
+  const returnTarget = target.returnRva != null
+    ? `; returns ${target.returnFollowed ? "followed" : "not followed"} to ${hex(target.returnRva, 8)}`
+    : "";
   return `${escapeHtml(target.label)} <span class="dim">(${target.importKind}${guard} IAT ` +
-    `${hex(target.slotRva, 8)})</span>`;
+    `${hex(target.slotRva, 8)}${returnTarget})</span>`;
 };
 
 const renderEntrypointBlockLabel = (block: PeEntrypointDisassemblyBlock): string => {
@@ -64,6 +67,7 @@ const renderEntrypointBlockLabel = (block: PeEntrypointDisassemblyBlock): string
   const source = block.sourceInstructionRva == null ? "" : ` from ${hex(block.sourceInstructionRva, 8)}`;
   if (block.kind === "followed-call") return `Followed call target${source}`;
   if (block.kind === "followed-jump") return `Followed jump target${source}`;
+  if (block.kind === "followed-import-return") return `Followed returning import fallthrough${source}`;
   return block.kind === "followed-branch"
     ? `Followed conditional branch target${source}`
     : `Followed conditional fallthrough${source}`;

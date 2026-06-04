@@ -125,6 +125,74 @@ void test("analyzePeEntrypointDisassembly annotates indirect calls through the I
   assert.equal(target?.label, "KERNEL32.dll!ExitProcess");
   assert.equal(target?.slotRva, 0x2000);
   assert.equal(target?.guardIatEntry, false);
+  assert.equal(result.blocks[0]?.instructions.length, 1);
+  assert.ok(result.issues.some(issue => /stopped at imported target/i.test(issue)));
+});
+
+void test("analyzePeEntrypointDisassembly continues after known returning imports", async () => {
+  const result = await analyzeEntrypoint(
+    new Uint8Array([0x15, 0xc3]),
+    createExecutableSection({ virtualSize: 2, sizeOfRawData: 2 }),
+    0x1000,
+    {
+      imports: {
+        thunkEntrySize: 8,
+        entries: [{
+          dll: "KERNEL32.dll",
+          originalFirstThunkRva: 0x3000,
+          timeDateStamp: 0,
+          forwarderChain: 0,
+          firstThunkRva: 0x2000,
+          lookupSource: "import-lookup-table",
+          thunkTableTerminated: true,
+          functions: [{ name: "GetSystemTimeAsFileTime" }]
+        }]
+      }
+    }
+  );
+  const target = result.blocks[0]?.instructions[0]?.target;
+
+  assert.equal(result.blocks.length, 1);
+  assert.deepEqual(result.blocks[0]?.instructions.map(instruction => instruction.text), ["call [iat]", "ret"]);
+  assert.equal(target?.kind, "import");
+  assert.equal(target?.label, "KERNEL32.dll!GetSystemTimeAsFileTime");
+  assert.equal(target?.returnRva, 0x1001);
+  assert.equal(target?.returnFollowed, true);
+  assert.ok(result.issues.some(issue => /continued after returning import/i.test(issue)));
+});
+
+void test("analyzePeEntrypointDisassembly follows returns from direct import thunks", async () => {
+  const result = await analyzeEntrypoint(
+    new Uint8Array([0xe8, 0xc3, 0x25]),
+    createExecutableSection({ virtualSize: 3, sizeOfRawData: 3 }),
+    0x1000,
+    {
+      imports: {
+        thunkEntrySize: 8,
+        entries: [{
+          dll: "KERNEL32.dll",
+          originalFirstThunkRva: 0x3000,
+          timeDateStamp: 0,
+          forwarderChain: 0,
+          firstThunkRva: 0x2000,
+          lookupSource: "import-lookup-table",
+          thunkTableTerminated: true,
+          functions: [{ name: "GetSystemTimeAsFileTime" }]
+        }]
+      }
+    }
+  );
+  const thunkTarget = result.blocks[1]?.instructions[0]?.target;
+
+  assert.equal(result.blocks.length, 3);
+  assert.equal(result.blocks[1]?.kind, "followed-call");
+  assert.equal(result.blocks[1]?.startRva, 0x1002);
+  assert.equal(result.blocks[2]?.kind, "followed-import-return");
+  assert.equal(result.blocks[2]?.startRva, 0x1001);
+  assert.equal(thunkTarget?.kind, "import");
+  assert.equal(thunkTarget?.returnRva, 0x1001);
+  assert.equal(thunkTarget?.returnFollowed, true);
+  assert.deepEqual(result.blocks[2]?.instructions.map(instruction => instruction.text), ["ret"]);
 });
 
 void test("analyzePeEntrypointDisassembly shows imports reached through direct thunks", async () => {
