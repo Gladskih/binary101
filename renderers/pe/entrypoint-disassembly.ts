@@ -17,6 +17,16 @@ type RenderBlock = {
   sources: number[];
 };
 
+type SignatureScalar = string | number | boolean | null;
+type TargetSignature = Record<string, SignatureScalar> | null;
+type InstructionSignature = {
+  rva: number;
+  fileOffset: number;
+  text: string;
+  notes: string[];
+  target: TargetSignature;
+};
+
 const hasEntrypoint = (pe: PeWindowsParseResult): boolean =>
   Number.isSafeInteger(pe.opt.AddressOfEntryPoint) && pe.opt.AddressOfEntryPoint > 0;
 
@@ -97,12 +107,45 @@ const renderEntrypointBlockLabel = (block: RenderBlock): string => {
     : `Followed conditional fallthrough${source}${duplicates}`;
 };
 
+const targetSignature = (target: PeEntrypointInstructionTarget | undefined): TargetSignature => {
+  if (!target) return null;
+  if (target.kind === "code") return { kind: target.kind, rva: target.rva };
+  if (target.kind === "return") {
+    return "rva" in target
+      ? { kind: target.kind, rva: target.rva }
+      : { kind: target.kind, reason: target.reason };
+  }
+  if (target.kind === "branch") {
+    return {
+      kind: target.kind,
+      branchRva: target.branchRva,
+      fallthroughRva: target.fallthroughRva
+    };
+  }
+  return {
+    kind: target.kind,
+    label: target.label,
+    slotRva: target.slotRva,
+    importKind: target.importKind,
+    guardIatEntry: target.guardIatEntry,
+    returnRva: target.returnRva ?? null
+  };
+};
+
+const instructionSignature = (instruction: PeEntrypointInstruction): InstructionSignature => ({
+  rva: instruction.rva,
+  fileOffset: instruction.fileOffset,
+  text: instruction.text,
+  notes: instruction.notes ?? [],
+  target: targetSignature(instruction.target)
+});
+
 const blockSignature = (block: PeEntrypointDisassemblyBlock): string =>
   JSON.stringify({
     kind: block.kind,
     startRva: block.startRva,
     fileOffsetStart: block.fileOffsetStart,
-    instructions: block.instructions
+    instructions: block.instructions.map(instructionSignature)
   });
 
 const uniqueSourceRvas = (block: RenderBlock, sourceRva: number | undefined): number[] =>
