@@ -19,6 +19,7 @@ export class TestInstruction {
   length = 0;
   ip = 0n;
   nextIP = 0n;
+  mnemonic = 0;
   flowControl = 0;
   opCount = 0;
   nearBranchTarget = 0n;
@@ -26,6 +27,9 @@ export class TestInstruction {
   op0Kind = 0;
   text = "";
   opKind(): number {
+    return 0;
+  }
+  opRegister(): number {
     return 0;
   }
   immediate(): bigint {
@@ -52,6 +56,7 @@ export class TestDecoder {
     instruction.length = 1;
     instruction.nextIP = this.ip + 1n;
     instruction.code = byte === 0xff ? 0 : 1;
+    instruction.mnemonic = 0;
     instruction.flowControl = 0;
     instruction.nearBranchTarget = 0n;
     instruction.memoryDisplacement = 0n;
@@ -114,11 +119,29 @@ export const fakeIced = {
   },
   FormatterSyntax: { Nasm: 0 },
   Instruction: TestInstruction,
+  Mnemonic: {
+    And: 21,
+    Bt: 54,
+    Cpuid: 106,
+    Mov: 414,
+    Test: 751,
+    Xor: 1518
+  },
   OpKind: {
     NearBranch16: 1,
     NearBranch32: 2,
     NearBranch64: 3,
     Memory: 24
+  },
+  Register: {
+    EAX: 37,
+    ECX: 38,
+    EDX: 39,
+    EBX: 40,
+    RAX: 53,
+    RCX: 54,
+    RDX: 55,
+    RBX: 56
   }
 };
 

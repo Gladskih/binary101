@@ -5,14 +5,26 @@ type IcedInstruction = {
   length: number;
   ip: bigint;
   nextIP: bigint;
+  readonly mnemonic: number;
   readonly flowControl: number;
   readonly opCount: number;
   readonly nearBranchTarget: bigint;
   readonly memoryDisplacement: bigint;
   op0Kind: number;
   opKind(operand: number): number;
+  opRegister(operand: number): number;
   immediate(operand: number): bigint;
   cpuidFeatures(): Int32Array;
+  free(): void;
+};
+
+type IcedInstructionInfo = {
+  readonly op0Access: number;
+  free(): void;
+};
+
+type IcedInstructionInfoFactory = {
+  info(instruction: IcedInstruction): IcedInstructionInfo;
   free(): void;
 };
 
@@ -30,7 +42,11 @@ export type IcedX86Module = {
   Decoder: new (bitness: number, data: Uint8Array<ArrayBufferLike>, options: number) => IcedDecoder;
   DecoderOptions: { None: number };
   FlowControl: Record<string, number> & Record<number, string | undefined>;
+  InstructionInfoFactory?: new () => IcedInstructionInfoFactory;
+  Mnemonic?: Record<string, number> & Record<number, string | undefined>;
+  OpAccess?: Record<string, number> & Record<number, string | undefined>;
   OpKind: Record<string, number> & Record<number, string | undefined>;
+  Register?: Record<string, number> & Record<number, string | undefined>;
   Instruction: new () => IcedInstruction;
 };
 

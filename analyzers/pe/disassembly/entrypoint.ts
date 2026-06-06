@@ -23,7 +23,7 @@ import {
 import { buildImportTargetMap, type ImportTarget } from "./entrypoint-import-targets.js";
 import { getReturningImportFallthrough } from "./entrypoint-import-fallthrough.js";
 import { followDirectCodeTarget } from "./entrypoint-direct-target.js";
-import { createEntrypointInstruction } from "./entrypoint-instruction.js";
+import { createEntrypointInstruction, createEntrypointNoteState } from "./entrypoint-instruction.js";
 import {
   ENTRYPOINT_PREVIEW_BLOCK_LIMIT,
   queueConditionalBranch,
@@ -78,6 +78,7 @@ const decodeBlock = async (
   const decoder = new iced.Decoder(opts.is64Bit ? 64 : 32, block.mapped.data, iced.DecoderOptions.None);
   const instr = new iced.Instruction();
   const instructions: PeEntrypointInstruction[] = [];
+  const noteState = createEntrypointNoteState();
   let recordedStopReason = false;
   try {
     decoder.position = 0;
@@ -112,7 +113,8 @@ const decodeBlock = async (
         instr,
         formatter,
         rva,
-        block.mapped.fileOffsetStart + offsetInPreview
+        block.mapped.fileOffsetStart + offsetInPreview,
+        noteState
       );
       if (importTarget) {
         const returnFollowed = importFallthrough?.kind === "source-call"

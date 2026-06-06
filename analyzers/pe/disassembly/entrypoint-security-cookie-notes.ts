@@ -1,6 +1,7 @@
 "use strict";
 
 import type { EntrypointIcedModule, IcedInstruction } from "./entrypoint-iced.js";
+import { collectImmediateOperands } from "./entrypoint-immediate-operands.js";
 
 type SecurityCookieImmediate = {
   value: bigint;
@@ -43,31 +44,6 @@ const KNOWN_SECURITY_COOKIE_IMMEDIATES: readonly SecurityCookieImmediate[] = [
   }
 ];
 
-const isImmediateOperand = (
-  opKinds: EntrypointIcedModule["OpKind"],
-  kind: number
-): boolean =>
-  kind === opKinds["Immediate8"] ||
-  kind === opKinds["Immediate8_2nd"] ||
-  kind === opKinds["Immediate16"] ||
-  kind === opKinds["Immediate32"] ||
-  kind === opKinds["Immediate64"] ||
-  kind === opKinds["Immediate8to16"] ||
-  kind === opKinds["Immediate8to32"] ||
-  kind === opKinds["Immediate8to64"] ||
-  kind === opKinds["Immediate32to64"];
-
-const readImmediateOperand = (
-  instruction: IcedInstruction,
-  operand: number
-): bigint | null => {
-  try {
-    return BigInt.asUintN(64, instruction.immediate(operand));
-  } catch {
-    return null;
-  }
-};
-
 const describeSecurityCookieImmediate = (value: bigint): string | null =>
   KNOWN_SECURITY_COOKIE_IMMEDIATES.find(known => known.value === value)?.note ?? null;
 
@@ -77,13 +53,11 @@ export const collectSecurityCookieOperandNotes = (
 ): string[] => {
   const notes: string[] = [];
   const seenValues = new Set<bigint>();
-  for (let operand = 0; operand < instruction.opCount; operand += 1) {
-    if (!isImmediateOperand(iced.OpKind, instruction.opKind(operand))) continue;
-    const immediate = readImmediateOperand(instruction, operand);
-    if (immediate == null || seenValues.has(immediate)) continue;
-    const note = describeSecurityCookieImmediate(immediate);
+  for (const { value } of collectImmediateOperands(iced, instruction)) {
+    if (seenValues.has(value)) continue;
+    const note = describeSecurityCookieImmediate(value);
     if (note) notes.push(note);
-    seenValues.add(immediate);
+    seenValues.add(value);
   }
   return notes;
 };
