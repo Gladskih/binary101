@@ -161,6 +161,53 @@ void test("renderEntrypointDisassembly renders entrypoint notes column", () => {
   assert.ok(html.includes("MSVC-compatible x86 /GS default security cookie"));
 });
 
+void test("renderEntrypointDisassembly hides diagnostics after instruction tables", () => {
+  const pe = createPe();
+  pe.entrypointDisassembly = {
+    bitness: 64,
+    entrypointRva: 0x1000,
+    bytesDecoded: 1,
+    instructionCount: 1,
+    blocks: [{
+      kind: "entrypoint",
+      startRva: 0x1000,
+      fileOffsetStart: 0x200,
+      instructions: [{
+        rva: 0x1000,
+        fileOffset: 0x200,
+        text: "call 0000000140001010h",
+        target: { kind: "code", rva: 0x1010, followed: true }
+      }]
+    }],
+    issues: ["Entrypoint preview followed call target."]
+  };
+
+  const out: string[] = [];
+  renderEntrypointDisassembly(pe, out);
+  const html = out.join("");
+
+  assert.ok(html.includes("<table"));
+  assert.ok(!html.includes("Entrypoint preview followed call target."));
+});
+void test("renderEntrypointDisassembly keeps diagnostics when no table was rendered", () => {
+  const pe = createPe();
+  pe.entrypointDisassembly = {
+    bitness: 64,
+    entrypointRva: 0x1000,
+    bytesDecoded: 0,
+    instructionCount: 0,
+    blocks: [],
+    issues: ["Failed to load iced-x86 disassembler."]
+  };
+
+  const out: string[] = [];
+  renderEntrypointDisassembly(pe, out);
+  const html = out.join("");
+
+  assert.ok(!html.includes("<table"));
+  assert.ok(html.includes("Failed to load iced-x86 disassembler."));
+});
+
 void test("renderEntrypointDisassembly merges identical blocks", () => {
   const pe = createPe();
   pe.entrypointDisassembly = {

@@ -213,7 +213,7 @@ const renderEntrypointReport = (pe: PeWindowsParseResult, out: string[]): void =
   for (const block of visibleBlocks(report.blocks)) {
     renderEntrypointBlock(block, out);
   }
-  if (report.issues.length) {
+  if (!report.blocks.length && report.issues.length) {
     const items = report.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("");
     out.push(`<ul class="smallNote">${items}</ul>`);
   }
