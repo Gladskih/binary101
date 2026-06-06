@@ -188,12 +188,10 @@ void test("pe disassembly controller updates instruction-set chip table while de
 });
 void test("pe disassembly controller toggles analyze/cancel buttons and renders 0-byte progress", async () => {
   const analyzeButton = new FakeHTMLElement();
-  const entrypointButton = new FakeHTMLElement();
   const cancelButton = new FakeHTMLElement();
   cancelButton.hidden = true;
   const dom = installFakeDom({
     peInstructionSetsAnalyzeButton: analyzeButton,
-    peEntrypointDisassembleButton: entrypointButton,
     peInstructionSetsCancelButton: cancelButton
   });
   const pe = createMinimalPe();
@@ -217,13 +215,11 @@ void test("pe disassembly controller toggles analyze/cancel buttons and renders 
   });
   controller.start(file, pe);
   assert.equal(analyzeButton.disabled, true);
-  assert.equal(entrypointButton.disabled, true);
   assert.equal(cancelButton.hidden, false);
   assert.ok(dom.text.textContent?.includes("0 B"));
   await flushTimers();
   await flushTimers();
   assert.equal(analyzeButton.disabled, false);
-  assert.equal(entrypointButton.disabled, false);
   assert.equal(cancelButton.hidden, true);
   dom.restore();
 });

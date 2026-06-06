@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
-import { renderInstructionSets } from "../../renderers/pe/disassembly.js";
+import { renderEntrypointDisassembly } from "../../renderers/pe/entrypoint-disassembly.js";
 
 const createPe = (overrides: Partial<PeWindowsParseResult> = {}): PeWindowsParseResult =>
   ({
@@ -13,7 +13,7 @@ const createPe = (overrides: Partial<PeWindowsParseResult> = {}): PeWindowsParse
     ...overrides
   }) as unknown as PeWindowsParseResult;
 
-void test("renderInstructionSets shows imports that continue at fallthrough", () => {
+void test("renderEntrypointDisassembly shows imports that continue at fallthrough", () => {
   const pe = createPe();
   pe.entrypointDisassembly = {
     bitness: 64,
@@ -43,14 +43,16 @@ void test("renderInstructionSets shows imports that continue at fallthrough", ()
   };
 
   const out: string[] = [];
-  renderInstructionSets(pe, out);
+  renderEntrypointDisassembly(pe, out);
   const html = out.join("");
 
   assert.ok(html.includes("KERNEL32.dll!GetSystemTimeAsFileTime"));
-  assert.ok(html.includes("returns followed to 0x00001006"));
+  assert.ok(html.includes("returns followed"));
+  assert.ok(html.includes("0x00001006"));
+  assert.ok(html.includes("data-pe-entrypoint-jump=\"4102\""));
 });
 
-void test("renderInstructionSets labels followed returning import fallthrough blocks", () => {
+void test("renderEntrypointDisassembly labels followed returning import fallthrough blocks", () => {
   const pe = createPe();
   pe.entrypointDisassembly = {
     bitness: 64,
@@ -76,12 +78,12 @@ void test("renderInstructionSets labels followed returning import fallthrough bl
   };
 
   const out: string[] = [];
-  renderInstructionSets(pe, out);
+  renderEntrypointDisassembly(pe, out);
 
   assert.ok(out.join("").includes("Followed returning import fallthrough from 0x00001010"));
 });
 
-void test("renderInstructionSets marks followed return blocks", () => {
+void test("renderEntrypointDisassembly marks followed return blocks", () => {
   const pe = createPe();
   pe.entrypointDisassembly = {
     bitness: 64,
@@ -121,14 +123,15 @@ void test("renderInstructionSets marks followed return blocks", () => {
   };
 
   const out: string[] = [];
-  renderInstructionSets(pe, out);
+  renderEntrypointDisassembly(pe, out);
   const html = out.join("");
 
-  assert.ok(html.includes("return followed 0x00001005"));
+  assert.ok(html.includes("return followed"));
+  assert.ok(html.includes("0x00001005"));
   assert.ok(html.includes("Followed return target from 0x00001010"));
 });
 
-void test("renderInstructionSets renders entrypoint notes column", () => {
+void test("renderEntrypointDisassembly renders entrypoint notes column", () => {
   const pe = createPe();
   pe.entrypointDisassembly = {
     bitness: 64,
@@ -150,10 +153,45 @@ void test("renderInstructionSets renders entrypoint notes column", () => {
   };
 
   const out: string[] = [];
-  renderInstructionSets(pe, out);
+  renderEntrypointDisassembly(pe, out);
   const html = out.join("");
 
   assert.ok(html.includes("<th>Notes</th>"));
   assert.ok(!html.includes("<th>Target</th>"));
   assert.ok(html.includes("MSVC-compatible x86 /GS default security cookie"));
+});
+
+void test("renderEntrypointDisassembly merges identical blocks", () => {
+  const pe = createPe();
+  pe.entrypointDisassembly = {
+    bitness: 64,
+    entrypointRva: 0x1000,
+    bytesDecoded: 2,
+    instructionCount: 2,
+    blocks: [
+      {
+        kind: "followed-call",
+        startRva: 0x1010,
+        fileOffsetStart: 0x210,
+        sourceInstructionRva: 0x1000,
+        instructions: [{ rva: 0x1010, fileOffset: 0x210, text: "ret" }]
+      },
+      {
+        kind: "followed-call",
+        startRva: 0x1010,
+        fileOffsetStart: 0x210,
+        sourceInstructionRva: 0x1006,
+        instructions: [{ rva: 0x1010, fileOffset: 0x210, text: "ret" }]
+      }
+    ],
+    issues: []
+  };
+
+  const out: string[] = [];
+  renderEntrypointDisassembly(pe, out);
+  const html = out.join("");
+
+  assert.equal((html.match(/<table/g) ?? []).length, 1);
+  assert.ok(html.includes("from 0x00001000, 0x00001006"));
+  assert.ok(html.includes("1 duplicate context(s) merged"));
 });

@@ -6,6 +6,7 @@ import {
 } from "../../analyzers/pe/index.js";
 import { renderHeaders } from "./headers.js";
 import { renderInstructionSets } from "./disassembly.js";
+import { renderEntrypointDisassembly } from "./entrypoint-disassembly.js";
 import { renderLoadConfig } from "./load-config.js";
 import {
   renderExports,
@@ -47,6 +48,7 @@ export function renderPe(pe: PeParseResult | null | undefined): string {
   const out: string[] = [];
   if (isPeWindowsParseResult(pe)) {
     renderInstructionSets(pe, out);
+    renderEntrypointDisassembly(pe, out);
   }
   renderHeaders(pe, out);
   if (isPeWindowsParseResult(pe)) {

@@ -40,7 +40,6 @@ export type PeDisassemblyController = {
 
 const ANALYZE_BUTTON_ID = "peInstructionSetsAnalyzeButton";
 const CANCEL_BUTTON_ID = "peInstructionSetsCancelButton";
-const ENTRYPOINT_BUTTON_ID = "peEntrypointDisassembleButton";
 const PROGRESS_TEXT_ID = "peInstructionSetsProgressText";
 const PROGRESS_BAR_ID = "peInstructionSetsProgress";
 const CHIP_ID_PREFIX = "peInstructionSetChip_";
@@ -48,10 +47,8 @@ const COUNT_ID_PREFIX = "peInstructionSetCount_";
 
 const setDisassemblyUiState = (state: "busy" | "idle"): void => {
   const isBusy = state === "busy";
-  for (const id of [ANALYZE_BUTTON_ID, ENTRYPOINT_BUTTON_ID]) {
-    const button = document.getElementById(id);
-    if (button && "disabled" in button) (button as HTMLButtonElement).disabled = isBusy;
-  }
+  const button = document.getElementById(ANALYZE_BUTTON_ID);
+  if (button && "disabled" in button) (button as HTMLButtonElement).disabled = isBusy;
 
   const cancelButton = document.getElementById(CANCEL_BUTTON_ID);
   if (cancelButton && "hidden" in cancelButton) {

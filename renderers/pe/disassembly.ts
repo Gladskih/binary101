@@ -1,13 +1,8 @@
 "use strict";
 
-import { formatHumanSize, hex } from "../../binary-utils.js";
+import { formatHumanSize } from "../../binary-utils.js";
 import { escapeHtml } from "../../html-utils.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
-import type {
-  PeEntrypointDisassemblyBlock,
-  PeEntrypointInstruction,
-  PeEntrypointInstructionTarget
-} from "../../analyzers/pe/disassembly/index.js";
 import {
   KNOWN_CPUID_FEATURES,
   describeCpuidFeature,
@@ -16,7 +11,6 @@ import {
 
 const ANALYZE_BUTTON_ID = "peInstructionSetsAnalyzeButton";
 const CANCEL_BUTTON_ID = "peInstructionSetsCancelButton";
-const ENTRYPOINT_BUTTON_ID = "peEntrypointDisassembleButton";
 const PROGRESS_TEXT_ID = "peInstructionSetsProgressText";
 const PROGRESS_BAR_ID = "peInstructionSetsProgress";
 const CHIP_ID_PREFIX = "peInstructionSetChip_";
@@ -29,107 +23,6 @@ const renderInstructionPanelStart = (): string =>
 
 const renderInstructionPanelEnd = (): string => "</div></details>";
 
-const hasEntrypoint = (pe: PeWindowsParseResult): boolean =>
-  Number.isSafeInteger(pe.opt.AddressOfEntryPoint) && pe.opt.AddressOfEntryPoint > 0;
-
-const renderEntrypointActions = (pe: PeWindowsParseResult, out: string[]): void => {
-  if (!hasEntrypoint(pe)) return;
-  const label = pe.entrypointDisassembly
-    ? "Re-disassemble entry point"
-    : "Disassemble entry point";
-  out.push(
-    `<button type="button" class="actionButton" id="${ENTRYPOINT_BUTTON_ID}">` +
-    `${escapeHtml(label)}</button>`
-  );
-};
-
-const renderEntrypointTarget = (target: PeEntrypointInstructionTarget | undefined): string => {
-  if (!target) return "";
-  if (target.kind === "code") {
-    const status = target.followed ? "followed" : "not followed";
-    return `${escapeHtml(status)} ${hex(target.rva, 8)}`;
-  }
-  if (target.kind === "return") {
-    if ("rva" in target) {
-      const status = target.followed ? "followed" : "not followed";
-      return `return ${escapeHtml(status)} ${hex(target.rva, 8)}`;
-    }
-    return target.reason === "outside-image"
-      ? "return target outside image"
-      : "return target unknown";
-  }
-  if (target.kind === "branch") {
-    const branchStatus = target.branchFollowed ? "followed" : "not followed";
-    const fallthroughStatus = target.fallthroughFollowed ? "followed" : "not followed";
-    return `branch ${escapeHtml(branchStatus)} ${hex(target.branchRva, 8)}; ` +
-      `fallthrough ${escapeHtml(fallthroughStatus)} ${hex(target.fallthroughRva, 8)}`;
-  }
-  const guard = target.guardIatEntry ? " guarded" : "";
-  const returnTarget = target.returnRva != null
-    ? `; returns ${target.returnFollowed ? "followed" : "not followed"} to ${hex(target.returnRva, 8)}`
-    : "";
-  return `${escapeHtml(target.label)} <span class="dim">(${target.importKind}${guard} IAT ` +
-    `${hex(target.slotRva, 8)}${returnTarget})</span>`;
-};
-
-const renderEntrypointNotes = (instruction: PeEntrypointInstruction): string => {
-  const notes = [
-    renderEntrypointTarget(instruction.target),
-    ...(instruction.notes ?? []).map(note => escapeHtml(note))
-  ].filter(Boolean);
-  return notes.length ? notes.join("<br>") : `<span class="dim">-</span>`;
-};
-
-const renderEntrypointBlockLabel = (block: PeEntrypointDisassemblyBlock): string => {
-  if (block.kind === "entrypoint") return "Entry point";
-  const source = block.sourceInstructionRva == null ? "" : ` from ${hex(block.sourceInstructionRva, 8)}`;
-  if (block.kind === "followed-call") return `Followed call target${source}`;
-  if (block.kind === "followed-jump") return `Followed jump target${source}`;
-  if (block.kind === "followed-import-return") return `Followed returning import fallthrough${source}`;
-  if (block.kind === "followed-return") return `Followed return target${source}`;
-  return block.kind === "followed-branch"
-    ? `Followed conditional branch target${source}`
-    : `Followed conditional fallthrough${source}`;
-};
-
-const renderEntrypointBlock = (block: PeEntrypointDisassemblyBlock, out: string[]): void => {
-  out.push(
-    `<div class="smallNote" style="margin-top:.7rem"><strong>` +
-    `${escapeHtml(renderEntrypointBlockLabel(block))}</strong>: RVA ${hex(block.startRva, 8)}, ` +
-    `file offset ${hex(block.fileOffsetStart, 8)}.</div>`
-  );
-  out.push(
-    `<table class="table" style="margin-top:.35rem"><thead><tr>` +
-    `<th>RVA</th><th>File offset</th><th>Instruction</th><th>Notes</th></tr></thead><tbody>` +
-    block.instructions.map(instruction => (
-      `<tr><td class="mono peNumeric" data-sort-value="${instruction.rva}">` +
-      `${hex(instruction.rva, 8)}</td>` +
-      `<td class="mono peNumeric" data-sort-value="${instruction.fileOffset}">` +
-      `${hex(instruction.fileOffset, 8)}</td>` +
-      `<td class="mono">${escapeHtml(instruction.text)}</td>` +
-      `<td>${renderEntrypointNotes(instruction)}</td></tr>`
-    )).join("") +
-    `</tbody></table>`
-  );
-};
-
-const renderEntrypointDisassembly = (pe: PeWindowsParseResult, out: string[]): void => {
-  const report = pe.entrypointDisassembly;
-  if (!report) return;
-  out.push(
-    `<div class="smallNote" style="margin-top:.7rem">Entrypoint preview: ` +
-    `${report.instructionCount} instruction(s), ${formatHumanSize(report.bytesDecoded)}, ` +
-    `RVA ${hex(report.entrypointRva, 8)}.</div>`
-  );
-  for (const block of report.blocks) {
-    renderEntrypointBlock(block, out);
-  }
-  if (report.issues.length) {
-    const items = report.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("");
-    out.push(`<ul class="smallNote">${items}</ul>`);
-  }
-};
-
 export function renderInstructionSets(pe: PeWindowsParseResult, out: string[]): void {
   const disasm = pe.disassembly;
   out.push(renderInstructionPanelStart());
@@ -138,7 +31,6 @@ export function renderInstructionSets(pe: PeWindowsParseResult, out: string[]): 
     `<button type="button" class="actionButton" id="${ANALYZE_BUTTON_ID}">` +
     `${escapeHtml(analyzeLabel)}</button>`
   );
-  renderEntrypointActions(pe, out);
   out.push(
     `<button type="button" class="actionButton" id="${CANCEL_BUTTON_ID}" hidden>` +
     `Cancel</button>`
@@ -148,8 +40,6 @@ export function renderInstructionSets(pe: PeWindowsParseResult, out: string[]): 
     `<div class="smallNote">Static code sampling of reachable instructions. ` +
     `This is derived behavior, not a PE file section or header field.</div>`
   );
-  renderEntrypointDisassembly(pe, out);
-
   if (!disasm) {
     out.push(
       `<div class="smallNote dim" id="${PROGRESS_TEXT_ID}">Not analyzed yet. ` +

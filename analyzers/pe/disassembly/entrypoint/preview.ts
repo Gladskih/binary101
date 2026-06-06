@@ -25,13 +25,9 @@ type DecodeState = {
   blocks: PeEntrypointDisassemblyBlock[];
   bytesDecoded: number;
   instructionCount: number;
-  previewLimitLogged: boolean;
   visitedBlocks: Set<string>;
   queuedBlocks: Set<string>;
 };
-
-// UI preview caps: enough for entry stubs/prologues while avoiding accidental whole-file sweeps.
-const PREVIEW_INSTRUCTION_LIMIT = 256;
 
 const safeFree = (resource: { free(): void } | null | undefined): void => {
   if (!resource) return;
@@ -40,12 +36,6 @@ const safeFree = (resource: { free(): void } | null | undefined): void => {
   } catch {
     // iced-x86 cleanup is best-effort; cleanup failures must not hide analysis notes.
   }
-};
-
-const logPreviewLimit = (state: DecodeState, issues: string[]): void => {
-  if (state.previewLimitLogged) return;
-  state.previewLimitLogged = true;
-  issues.push(`Entrypoint preview capped at ${PREVIEW_INSTRUCTION_LIMIT} instructions.`);
 };
 
 const decodeBlock = async (
@@ -66,7 +56,7 @@ const decodeBlock = async (
   try {
     decoder.position = 0;
     decoder.ip = BigInt.asUintN(64, opts.imageBase + BigInt(block.mapped.rvaStart));
-    while (decoder.canDecode && state.instructionCount < PREVIEW_INSTRUCTION_LIMIT) {
+    while (decoder.canDecode) {
       decoder.decodeOut(instr);
       const rva = toRva(instr.ip, opts.imageBase);
       if (rva == null || instr.length <= 0 || instr.code === iced.Code["INVALID"]) {
@@ -111,9 +101,7 @@ const decodeBlock = async (
         break;
       }
     }
-    if (state.instructionCount >= PREVIEW_INSTRUCTION_LIMIT && decoder.canDecode) {
-      logPreviewLimit(state, issues);
-    } else if (!recordedStopReason && instructions.length > 0 && !decoder.canDecode) {
+    if (!recordedStopReason && instructions.length > 0 && !decoder.canDecode) {
       issues.push("Entrypoint preview stopped at the readable byte boundary.");
     }
     return {
@@ -145,7 +133,6 @@ export const decodePreview = async (
     blocks: [],
     bytesDecoded: 0,
     instructionCount: 0,
-    previewLimitLogged: false,
     visitedBlocks: new Set(),
     queuedBlocks: new Set([entryKey])
   };
@@ -174,7 +161,6 @@ export const decodePreview = async (
         issues
       );
       if (decoded.instructions.length) state.blocks.push(decoded);
-      if (state.instructionCount >= PREVIEW_INSTRUCTION_LIMIT) break;
     }
     return {
       blocks: state.blocks,

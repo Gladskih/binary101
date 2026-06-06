@@ -31,17 +31,12 @@ export type PeEntrypointDisassemblyController = {
 };
 
 const ENTRYPOINT_BUTTON_ID = "peEntrypointDisassembleButton";
-const INSTRUCTION_SET_BUTTON_ID = "peInstructionSetsAnalyzeButton";
 
 const setEntrypointUiState = (state: "busy" | "idle"): void => {
   const isBusy = state === "busy";
   const button = document.getElementById(ENTRYPOINT_BUTTON_ID);
   if (button && "disabled" in button) {
     (button as HTMLButtonElement).disabled = isBusy;
-  }
-  const instructionSetButton = document.getElementById(INSTRUCTION_SET_BUTTON_ID);
-  if (instructionSetButton && "disabled" in instructionSetButton) {
-    (instructionSetButton as HTMLButtonElement).disabled = isBusy;
   }
 };
 

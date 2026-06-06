@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderInstructionSets } from "../../renderers/pe/disassembly.js";
+import { renderEntrypointDisassembly } from "../../renderers/pe/entrypoint-disassembly.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 
 const createPe = (overrides: Partial<PeWindowsParseResult> = {}): PeWindowsParseResult =>
@@ -40,7 +41,7 @@ void test("renderInstructionSets renders a chip table", () => {
   assert.ok(html.includes("CpuidFeature.AVX"));
   assert.ok(html.includes(">AVX<"));
   assert.ok(html.includes("CpuidFeature.SSE2"));
-  assert.ok(html.includes("peEntrypointDisassembleButton"));
+  assert.ok(!html.includes("peEntrypointDisassembleButton"));
 });
 
 void test("renderInstructionSets escapes user-controlled strings", () => {
@@ -61,31 +62,6 @@ void test("renderInstructionSets escapes user-controlled strings", () => {
       }
     ]
   };
-  pe.entrypointDisassembly = {
-    bitness: 32,
-    entrypointRva: 0x1000,
-    bytesDecoded: 1,
-    instructionCount: 1,
-    blocks: [{
-      kind: "entrypoint",
-      startRva: 0x1000,
-      fileOffsetStart: 0x200,
-      instructions: [{
-        rva: 0x1000,
-        fileOffset: 0x200,
-        text: "mov eax,<bad>",
-        target: {
-          kind: "import",
-          label: "EVIL<dll>!Bad<api>",
-          slotRva: 0x3000,
-          importKind: "eager",
-          guardIatEntry: true
-        }
-      }]
-    }],
-    issues: ["entry <note>"]
-  };
-
   const out: string[] = [];
   renderInstructionSets(pe, out);
   const html = out.join("");
@@ -94,15 +70,9 @@ void test("renderInstructionSets escapes user-controlled strings", () => {
   assert.ok(html.includes("&lt;script>alert(1)&lt;/script>"));
   assert.ok(html.includes("&lt;b>WEIRD&lt;/b>"));
   assert.ok(html.includes("note &lt;b>unsafe&lt;/b>"));
-  assert.ok(html.includes("mov eax,&lt;bad>"));
-  assert.ok(html.includes("EVIL&lt;dll>!Bad&lt;api>"));
-  assert.ok(html.includes("guarded IAT"));
-  assert.ok(html.includes("entry &lt;note>"));
-  assert.ok(html.includes(`class="mono peNumeric" data-sort-value="4096">0x00001000</td>`));
-  assert.ok(html.includes(`class="mono peNumeric" data-sort-value="512">0x00000200</td>`));
 });
 
-void test("renderInstructionSets separates followed entrypoint blocks", () => {
+void test("renderEntrypointDisassembly separates followed entrypoint blocks", () => {
   const pe = createPe();
   pe.entrypointDisassembly = {
     bitness: 64,
@@ -133,15 +103,16 @@ void test("renderInstructionSets separates followed entrypoint blocks", () => {
   };
 
   const out: string[] = [];
-  renderInstructionSets(pe, out);
+  renderEntrypointDisassembly(pe, out);
   const html = out.join("");
 
   assert.ok(html.includes("Entry point"));
   assert.ok(html.includes("Followed call target from 0x00001000"));
-  assert.ok(html.includes("followed 0x00001010"));
+  assert.ok(html.includes("followed"));
+  assert.ok(html.includes("0x00001010"));
 });
 
-void test("renderInstructionSets labels followed conditional branch blocks", () => {
+void test("renderEntrypointDisassembly labels followed conditional branch blocks", () => {
   const pe = createPe();
   pe.entrypointDisassembly = {
     bitness: 64,
@@ -185,10 +156,13 @@ void test("renderInstructionSets labels followed conditional branch blocks", () 
   };
 
   const out: string[] = [];
-  renderInstructionSets(pe, out);
+  renderEntrypointDisassembly(pe, out);
   const html = out.join("");
 
-  assert.ok(html.includes("branch followed 0x00001004; fallthrough followed 0x00001002"));
+  assert.ok(html.includes("branch followed"));
+  assert.ok(html.includes("fallthrough followed"));
+  assert.ok(html.includes("0x00001004"));
+  assert.ok(html.includes("0x00001002"));
   assert.ok(html.includes("Followed conditional branch target from 0x00001000"));
   assert.ok(html.includes("Followed conditional fallthrough from 0x00001000"));
 });
@@ -226,9 +200,9 @@ void test("renderInstructionSets renders a progress placeholder before analysis"
   assert.ok(html.includes("peInstructionSetCount_SSE"));
 });
 
-void test("renderInstructionSets hides entrypoint button when AddressOfEntryPoint is absent", () => {
+void test("renderEntrypointDisassembly hides entrypoint button when AddressOfEntryPoint is absent", () => {
   const out: string[] = [];
-  renderInstructionSets(createPe({ opt: { AddressOfEntryPoint: 0 } } as Partial<PeWindowsParseResult>), out);
+  renderEntrypointDisassembly(createPe({ opt: { AddressOfEntryPoint: 0 } } as Partial<PeWindowsParseResult>), out);
 
   assert.ok(!out.join("").includes("peEntrypointDisassembleButton"));
 });

@@ -8,6 +8,7 @@ import { createFileActionClickHandler } from "./ui/file-actions.js";
 import { isPeWindowsParseResult } from "./analyzers/pe/index.js";
 import { createPeDisassemblyController } from "./ui/pe-disassembly.js";
 import { createPeEntrypointDisassemblyController } from "./ui/pe-entrypoint-disassembly.js";
+import { handlePeEntrypointJumpClick } from "./ui/pe-entrypoint-navigation.js";
 import { createElfDisassemblyController } from "./ui/elf-disassembly.js";
 import { copyManifestPreviewToClipboard } from "./ui/manifest-preview-copy.js";
 import { createPeOverlayScanActions } from "./ui/pe-overlay-scan.js";
@@ -146,6 +147,7 @@ peDetailsValueElement.addEventListener("click", event => {
   }
   if (handleManifestTreeActionClick(targetElement)) { event.preventDefault(); return; }
   if (handleSortableTableClick(targetElement)) { event.preventDefault(); return; }
+  if (handlePeEntrypointJumpClick(targetElement, peDetailsValueElement)) { event.preventDefault(); return; }
   const peAnalyzeButton = targetElement?.closest("#peInstructionSetsAnalyzeButton");
   const peCancelButton = targetElement?.closest("#peInstructionSetsCancelButton");
   const peEntrypointButton = targetElement?.closest("#peEntrypointDisassembleButton");
@@ -161,7 +163,6 @@ peDetailsValueElement.addEventListener("click", event => {
     ) {
       return;
     }
-    peEntrypointDisassembly.cancel();
     delete currentParseResult.parsed.disassembly;
     renderResult(currentParseResult);
     peDisassembly.start(currentFile, currentParseResult.parsed);
@@ -182,7 +183,6 @@ peDetailsValueElement.addEventListener("click", event => {
     ) {
       return;
     }
-    peDisassembly.cancel();
     delete currentParseResult.parsed.entrypointDisassembly;
     renderResult(currentParseResult);
     peEntrypointDisassembly.start(currentFile, currentParseResult.parsed);

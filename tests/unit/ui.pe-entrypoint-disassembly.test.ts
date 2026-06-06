@@ -44,10 +44,8 @@ const createFakeReport = (): PeEntrypointDisassemblyReport => ({
 
 void test("pe entrypoint disassembly controller renders when complete", async () => {
   const button = new FakeHTMLElement();
-  const instructionSetButton = new FakeHTMLElement();
   const dom = installFakeDom({
-    peEntrypointDisassembleButton: button,
-    peInstructionSetsAnalyzeButton: instructionSetButton
+    peEntrypointDisassembleButton: button
   });
   const pe = createMinimalPe();
   const file = new MockFile(new Uint8Array([0x90]), "pe.bin");
@@ -64,12 +62,10 @@ void test("pe entrypoint disassembly controller renders when complete", async ()
 
   controller.start(file, pe);
   assert.equal(button.disabled, true);
-  assert.equal(instructionSetButton.disabled, true);
   await flushTimers();
 
   assert.equal(renders.length, 1);
   assert.equal(button.disabled, false);
-  assert.equal(instructionSetButton.disabled, false);
   assert.equal(pe.entrypointDisassembly?.instructionCount, 1);
   dom.restore();
 });
