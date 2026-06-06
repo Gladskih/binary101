@@ -26,17 +26,43 @@ export type FollowQueueState = {
   blocks: PeEntrypointDisassemblyBlock[];
   visitedBlocks: Set<string>;
   queuedBlocks: Set<string>;
+  contextKeysByRva: Map<number, Set<string>>;
+  contextLimitReportedRvas: Set<number>;
 };
 
-export const PREVIEW_BLOCK_LIMIT = 16;
+// Local browser-safety threshold, not a PE/x86 limit: normal acyclic control-flow
+// can visit any number of RVAs, while repeated visits to one RVA with many
+// different emulated states usually mean recursion or a mutating loop.
+export const MAX_CONTEXTS_PER_RVA = 64;
 
-const canQueueBlock = (
+const formatRva = (rva: number): string =>
+  `0x${(rva >>> 0).toString(16).padStart(8, "0")}`;
+
+const contextKeysForRva = (
   state: FollowQueueState,
-  pending: PendingBlock[],
-  key: string
+  rva: number
+): Set<string> => {
+  const existing = state.contextKeysByRva.get(rva);
+  if (existing) return existing;
+  const created = new Set<string>();
+  state.contextKeysByRva.set(rva, created);
+  return created;
+};
+
+const canQueueNewContext = (
+  state: FollowQueueState,
+  rva: number,
+  issues: string[]
 ): boolean => {
-  if (state.visitedBlocks.has(key) || state.queuedBlocks.has(key)) return true;
-  return state.blocks.length + pending.length < PREVIEW_BLOCK_LIMIT;
+  if (contextKeysForRva(state, rva).size < MAX_CONTEXTS_PER_RVA) return true;
+  if (!state.contextLimitReportedRvas.has(rva)) {
+    state.contextLimitReportedRvas.add(rva);
+    issues.push(
+      `Entrypoint preview stopped following ${formatRva(rva)} after ` +
+      `${MAX_CONTEXTS_PER_RVA} distinct emulation contexts.`
+    );
+  }
+  return false;
 };
 
 const valueKey = (value: EmulatedValue | undefined): string => {
@@ -74,12 +100,10 @@ export const queueFollowedBlock = async (
 ): Promise<boolean> => {
   const key = createBlockKey(follow.rva, emulationState);
   if (state.visitedBlocks.has(key) || state.queuedBlocks.has(key)) return true;
-  if (!canQueueBlock(state, pending, key)) {
-    issues.push(`Entrypoint preview capped at ${PREVIEW_BLOCK_LIMIT} code blocks.`);
-    return false;
-  }
+  if (!canQueueNewContext(state, follow.rva, issues)) return false;
   const mapped = await loadCodeBytes(reader, opts, follow.rva, issues, "Control-flow target");
   if (!mapped) return false;
+  contextKeysForRva(state, follow.rva).add(key);
   pending.push({
     kind: follow.kind,
     mapped,

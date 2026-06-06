@@ -15,18 +15,15 @@ import { createInstruction } from "./instruction.js";
 import { createEmulationState } from "./emulation.js";
 import { applyInstructionTargets, controlFlowIssue } from "./targeting.js";
 import {
-  PREVIEW_BLOCK_LIMIT,
   createBlockKey,
+  type FollowQueueState,
   type PendingBlock
 } from "./follow-queue.js";
 import type { IcedFormatter, IcedModule } from "./iced.js";
 
-type DecodeState = {
-  blocks: PeEntrypointDisassemblyBlock[];
+type DecodeState = FollowQueueState & {
   bytesDecoded: number;
   instructionCount: number;
-  visitedBlocks: Set<string>;
-  queuedBlocks: Set<string>;
 };
 
 const safeFree = (resource: { free(): void } | null | undefined): void => {
@@ -49,7 +46,11 @@ const decodeBlock = async (
   pending: PendingBlock[],
   issues: string[]
 ): Promise<PeEntrypointDisassemblyBlock> => {
-  const decoder = new iced.Decoder(opts.is64Bit ? 64 : 32, block.mapped.data, iced.DecoderOptions.None);
+  const decoder = new iced.Decoder(
+    opts.is64Bit ? 64 : 32,
+    block.mapped.data,
+    iced.DecoderOptions.None
+  );
   const instr = new iced.Instruction();
   const instructions: PeEntrypointInstruction[] = [];
   let recordedStopReason = false;
@@ -108,7 +109,9 @@ const decodeBlock = async (
       kind: block.kind,
       startRva: block.mapped.rvaStart,
       fileOffsetStart: block.mapped.fileOffsetStart,
-      ...(block.sourceInstructionRva != null ? { sourceInstructionRva: block.sourceInstructionRva } : {}),
+      ...(block.sourceInstructionRva != null
+        ? { sourceInstructionRva: block.sourceInstructionRva }
+        : {}),
       instructions
     };
   } finally {
@@ -134,7 +137,9 @@ export const decodePreview = async (
     bytesDecoded: 0,
     instructionCount: 0,
     visitedBlocks: new Set(),
-    queuedBlocks: new Set([entryKey])
+    queuedBlocks: new Set([entryKey]),
+    contextKeysByRva: new Map([[mapped.rvaStart, new Set([entryKey])]]),
+    contextLimitReportedRvas: new Set()
   };
   const pending: PendingBlock[] = [{
     kind: "entrypoint",
@@ -143,7 +148,7 @@ export const decodePreview = async (
     key: entryKey
   }];
   try {
-    while (pending.length > 0 && state.blocks.length < PREVIEW_BLOCK_LIMIT) {
+    while (pending.length > 0) {
       const block = pending.shift();
       if (!block) break;
       state.queuedBlocks.delete(block.key);

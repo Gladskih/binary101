@@ -2,12 +2,19 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createFileRangeReader } from "../../analyzers/file-range-reader.js";
+import { analyzePeEntrypointDisassembly } from "../../analyzers/pe/disassembly/index.js";
 import {
+  IMAGE_FILE_MACHINE_AMD64,
   IMAGE_SCN_CNT_CODE,
+  TestDecoder,
+  fakeIced,
   analyzeEntrypoint,
-  createExecutableSection
+  createExecutableSection,
+  type TestInstruction
 } from "../helpers/pe-entrypoint-disassembly-fixture.js";
 import type { PeEntrypointInstructionTarget } from "../../analyzers/pe/disassembly/index.js";
+import { MockFile } from "../helpers/mock-file.js";
 
 const assertBranchTarget = (
   target: PeEntrypointInstructionTarget | undefined
@@ -82,6 +89,41 @@ void test("analyzePeEntrypointDisassembly follows conditional branch edges as se
   assert.equal(branchTarget.fallthroughFollowed, true);
   assert.deepEqual(result.blocks[1]?.instructions.map(instruction => instruction.text), ["op_90", "ret"]);
   assert.deepEqual(result.blocks[2]?.instructions.map(instruction => instruction.text), ["ret"]);
+});
+
+void test("analyzePeEntrypointDisassembly guards repeated contexts at one RVA", async () => {
+  class RecursiveCallDecoder extends TestDecoder {
+    override decodeOut(instruction: TestInstruction): void {
+      instruction.ip = this.ip;
+      instruction.length = 1;
+      instruction.nextIP = this.ip + 1n;
+      instruction.code = 1;
+      instruction.flowControl = fakeIced.FlowControl.Call;
+      instruction.nearBranchTarget = this.ip;
+      instruction.op0Kind = fakeIced.OpKind.NearBranch64;
+      instruction.text = "call self";
+      this.position += 1;
+      this.ip = instruction.nextIP;
+    }
+  }
+  const result = await analyzePeEntrypointDisassembly(
+    createFileRangeReader(new MockFile(new Uint8Array([0xe8]), "recursive.exe"), 0, 1),
+    {
+      coffMachine: IMAGE_FILE_MACHINE_AMD64,
+      is64Bit: true,
+      imageBase: 0x140000000n,
+      entrypointRva: 0x1000,
+      rvaToOff: rva => rva - 0x1000,
+      sections: [createExecutableSection({ virtualSize: 1, sizeOfRawData: 1 })]
+    },
+    async () => ({ ...fakeIced, Decoder: RecursiveCallDecoder })
+  );
+  const lastInstruction = result.blocks.at(-1)?.instructions.at(-1);
+
+  assert.ok(result.blocks.length > 16);
+  assert.equal(lastInstruction?.target?.kind, "code");
+  assert.equal(lastInstruction?.target?.followed, false);
+  assert.ok(result.issues.some(issue => /distinct emulation contexts/i.test(issue)));
 });
 
 void test("analyzePeEntrypointDisassembly reports refused conditional branch edges", async () => {

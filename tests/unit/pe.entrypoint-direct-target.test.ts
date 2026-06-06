@@ -32,7 +32,9 @@ const createOptions = (): AnalyzePeEntrypointDisassemblyOptions => ({
 const createQueueState = (): FollowQueueState => ({
   blocks: [],
   visitedBlocks: new Set(),
-  queuedBlocks: new Set()
+  queuedBlocks: new Set(),
+  contextKeysByRva: new Map(),
+  contextLimitReportedRvas: new Set()
 });
 
 void test("followDirectCodeTarget queues call target with a call-stack state", async () => {
