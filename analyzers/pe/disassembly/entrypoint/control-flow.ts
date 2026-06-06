@@ -1,18 +1,17 @@
 "use strict";
 
-import type { IcedX86Module } from "../../x86/disassembly-iced.js";
+import type { IcedX86Module } from "../../../x86/disassembly-iced.js";
 import {
   getNearBranchEdges,
   getNearBranchTarget
-} from "../../x86/disassembly-branch-targets.js";
-import { MAX_RVA } from "./entrypoint-metadata.js";
-import type { ImportTarget } from "./entrypoint-import-targets.js";
+} from "../../../x86/disassembly-branch-targets.js";
+import { MAX_RVA } from "./metadata.js";
+import type { ImportTarget } from "./import-targets.js";
+import type { IcedInstructionObject } from "./iced.js";
 import type {
   AnalyzePeEntrypointDisassemblyOptions,
   PeEntrypointInstructionTarget
-} from "./types.js";
-
-type IcedInstruction = InstanceType<IcedX86Module["Instruction"]>;
+} from "../types.js";
 
 export type DirectControlFlowTarget = {
   kind: "followed-call" | "followed-jump";
@@ -39,7 +38,7 @@ export type FollowedCodeTarget =
       rva: number;
     }
   | {
-      kind: "speculative-call-fallthrough";
+      kind: "followed-return";
       rva: number;
     };
 
@@ -54,7 +53,7 @@ export const toRva = (virtualAddress: bigint, imageBase: bigint): number | null 
 export const getDirectControlFlowTarget = (
   iced: IcedX86Module,
   opts: AnalyzePeEntrypointDisassemblyOptions,
-  instruction: IcedInstruction
+  instruction: IcedInstructionObject
 ): DirectControlFlowTarget | null => {
   const isCall = instruction.flowControl === iced.FlowControl["Call"];
   const isJump = instruction.flowControl === iced.FlowControl["UnconditionalBranch"];
@@ -69,7 +68,7 @@ export const getDirectControlFlowTarget = (
 export const getConditionalBranchTargets = (
   iced: IcedX86Module,
   opts: AnalyzePeEntrypointDisassemblyOptions,
-  instruction: IcedInstruction
+  instruction: IcedInstructionObject
 ): ConditionalBranchTargets | null => {
   if (instruction.flowControl !== iced.FlowControl["ConditionalBranch"]) return null;
   const edges = getNearBranchEdges(instruction, iced.OpKind);
@@ -86,7 +85,7 @@ export const getConditionalBranchTargets = (
 export const getImportTarget = (
   iced: IcedX86Module,
   opts: AnalyzePeEntrypointDisassemblyOptions,
-  instruction: IcedInstruction,
+  instruction: IcedInstructionObject,
   importTargets: Map<number, ImportTarget>
 ): Extract<PeEntrypointInstructionTarget, { kind: "import" }> | null => {
   const flowControl = instruction.flowControl;

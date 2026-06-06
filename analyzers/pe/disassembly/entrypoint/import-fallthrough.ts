@@ -1,13 +1,13 @@
 "use strict";
 
-import type { IcedX86Module } from "../../x86/disassembly-iced.js";
-import type { AnalyzePeEntrypointDisassemblyOptions } from "./types.js";
-import type { MappedCodeBlock } from "./entrypoint-code-bytes.js";
-import { toRva } from "./entrypoint-control-flow.js";
-import type { ImportTarget } from "./entrypoint-import-targets.js";
-import { isKnownReturningImport } from "./entrypoint-returning-imports.js";
-
-type IcedInstruction = InstanceType<IcedX86Module["Instruction"]>;
+import type { AnalyzePeEntrypointDisassemblyOptions } from "../types.js";
+import type { MappedCodeBlock } from "./code-bytes.js";
+import { toRva } from "./control-flow.js";
+import type { ImportTarget } from "./import-targets.js";
+import type { IcedInstructionObject, IcedModule } from "./iced.js";
+import { isKnownReturningImport } from "./returning-imports.js";
+import { getStackReturnTarget } from "./call-stack.js";
+import type { EmulationState } from "./emulation-state.js";
 
 export type ReturningImportFallthrough =
   | {
@@ -15,7 +15,7 @@ export type ReturningImportFallthrough =
       rva: number;
     }
   | {
-      kind: "source-call";
+      kind: "stack-return";
       rva: number;
     };
 
@@ -25,17 +25,18 @@ const canContinueInBlock = (mapped: MappedCodeBlock, rva: number): boolean => {
 };
 
 export const getReturningImportFallthrough = (
-  iced: IcedX86Module,
+  iced: IcedModule,
   opts: AnalyzePeEntrypointDisassemblyOptions,
   mapped: MappedCodeBlock,
-  instruction: IcedInstruction,
+  instruction: IcedInstructionObject,
   importTarget: ImportTarget | null,
-  sourceCallReturnRva?: number
+  emulationState: EmulationState
 ): ReturningImportFallthrough | null => {
   if (!importTarget) return null;
   if (!isKnownReturningImport(importTarget.label)) return null;
-  if (instruction.flowControl === iced.FlowControl["IndirectBranch"] && sourceCallReturnRva != null) {
-    return { kind: "source-call", rva: sourceCallReturnRva };
+  if (instruction.flowControl === iced.FlowControl["IndirectBranch"]) {
+    const target = getStackReturnTarget(iced, opts, emulationState);
+    return target.kind === "known" ? { kind: "stack-return", rva: target.rva } : null;
   }
   if (instruction.flowControl !== iced.FlowControl["IndirectCall"]) return null;
   const fallthroughRva = toRva(instruction.nextIP, opts.imageBase);

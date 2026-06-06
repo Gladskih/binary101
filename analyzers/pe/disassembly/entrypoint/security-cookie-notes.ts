@@ -1,7 +1,7 @@
 "use strict";
 
-import type { EntrypointIcedModule, IcedInstruction } from "./entrypoint-iced.js";
-import { collectImmediateOperands } from "./entrypoint-immediate-operands.js";
+import type { IcedModule, IcedInstructionObject } from "./iced.js";
+import { collectImmediateOperands } from "./immediate-operands.js";
 
 type SecurityCookieImmediate = {
   value: bigint;
@@ -48,8 +48,8 @@ const describeSecurityCookieImmediate = (value: bigint): string | null =>
   KNOWN_SECURITY_COOKIE_IMMEDIATES.find(known => known.value === value)?.note ?? null;
 
 export const collectSecurityCookieOperandNotes = (
-  iced: EntrypointIcedModule,
-  instruction: IcedInstruction
+  iced: IcedModule,
+  instruction: IcedInstructionObject
 ): string[] => {
   const notes: string[] = [];
   const seenValues = new Set<bigint>();

@@ -30,7 +30,7 @@ void test("analyzePeEntrypointDisassembly previews only until control flow", asy
   assert.equal(result.bytesDecoded, 3);
   assert.deepEqual(instructions.map(instruction => instruction.rva), [0x1000, 0x1001, 0x1002]);
   assert.deepEqual(instructions.map(instruction => instruction.fileOffset), [0, 1, 2]);
-  assert.ok(result.issues.some(issue => /control-flow instruction/i.test(issue)));
+  assert.ok(result.issues.some(issue => /return with unknown stack target/i.test(issue)));
 });
 
 void test("analyzePeEntrypointDisassembly reports invalid entrypoint decodes", async () => {

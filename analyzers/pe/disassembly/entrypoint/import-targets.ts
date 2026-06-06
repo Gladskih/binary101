@@ -1,7 +1,7 @@
 "use strict";
 
-import { MAX_RVA, type ValidEntrypointMetadata } from "./entrypoint-metadata.js";
-import type { AnalyzePeEntrypointDisassemblyOptions } from "./types.js";
+import { MAX_RVA, type ValidMetadata } from "./metadata.js";
+import type { AnalyzePeEntrypointDisassemblyOptions } from "../types.js";
 
 export type ImportTarget = {
   label: string;
@@ -21,7 +21,7 @@ const formatImportSymbol = (
 
 export const buildImportTargetMap = (
   opts: AnalyzePeEntrypointDisassemblyOptions,
-  metadata: ValidEntrypointMetadata
+  metadata: ValidMetadata
 ): Map<number, ImportTarget> => {
   const out = new Map<number, ImportTarget>();
   const guardIatRvas = new Set(opts.loadcfg?.tables?.guardIat?.entries.map(entry => entry.rva) ?? []);

@@ -1,10 +1,10 @@
 "use strict";
 
-import type { FileRangeReader } from "../../file-range-reader.js";
-import { peSectionNameValue } from "../sections/name.js";
-import type { PeSection } from "../types.js";
-import type { AnalyzePeEntrypointDisassemblyOptions } from "./types.js";
-import { IMAGE_SCN_MEM_EXECUTE, RVA_EXCLUSIVE_LIMIT, getHeaderRvaLimit } from "./entrypoint-metadata.js";
+import type { FileRangeReader } from "../../../file-range-reader.js";
+import { peSectionNameValue } from "../../sections/name.js";
+import type { PeSection } from "../../types.js";
+import type { AnalyzePeEntrypointDisassemblyOptions } from "../types.js";
+import { IMAGE_SCN_MEM_EXECUTE, RVA_EXCLUSIVE_LIMIT, getHeaderRvaLimit } from "./metadata.js";
 
 export type MappedCodeBlock = {
   fileOffsetStart: number;

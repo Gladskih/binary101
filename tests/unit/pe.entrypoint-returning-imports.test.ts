@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isKnownReturningImport } from "../../analyzers/pe/disassembly/entrypoint-returning-imports.js";
+import { isKnownReturningImport } from "../../analyzers/pe/disassembly/entrypoint/returning-imports.js";
 
 void test("isKnownReturningImport accepts documented returning Kernel32 query APIs", () => {
   assert.equal(isKnownReturningImport("KERNEL32.dll!GetSystemTimeAsFileTime"), true);

@@ -23,7 +23,10 @@ export class TestInstruction {
   flowControl = 0;
   opCount = 0;
   nearBranchTarget = 0n;
+  memoryBase = 0;
   memoryDisplacement = 0n;
+  memoryIndex = 0;
+  memoryIndexScale = 1;
   op0Kind = 0;
   text = "";
   opKind(): number {
@@ -59,7 +62,10 @@ export class TestDecoder {
     instruction.mnemonic = 0;
     instruction.flowControl = 0;
     instruction.nearBranchTarget = 0n;
+    instruction.memoryBase = 0;
     instruction.memoryDisplacement = 0n;
+    instruction.memoryIndex = 0;
+    instruction.memoryIndexScale = 1;
     instruction.op0Kind = 0;
     instruction.text = byte === 0xff ? "invalid" : `op_${byte.toString(16)}`;
     if (byte === 0xc3) {
@@ -120,17 +126,33 @@ export const fakeIced = {
   FormatterSyntax: { Nasm: 0 },
   Instruction: TestInstruction,
   Mnemonic: {
+    Add: 7,
     And: 21,
     Bt: 54,
     Cpuid: 106,
+    Lea: 368,
     Mov: 414,
+    Or: 486,
+    Pop: 534,
+    Push: 586,
+    Sub: 703,
     Test: 751,
     Xor: 1518
   },
   OpKind: {
+    Register: 0,
     NearBranch16: 1,
     NearBranch32: 2,
     NearBranch64: 3,
+    Immediate8: 10,
+    Immediate8_2nd: 11,
+    Immediate16: 12,
+    Immediate32: 13,
+    Immediate64: 14,
+    Immediate8to16: 15,
+    Immediate8to32: 16,
+    Immediate8to64: 17,
+    Immediate32to64: 18,
     Memory: 24
   },
   Register: {
@@ -138,10 +160,12 @@ export const fakeIced = {
     ECX: 38,
     EDX: 39,
     EBX: 40,
+    ESP: 44,
     RAX: 53,
     RCX: 54,
     RDX: 55,
-    RBX: 56
+    RBX: 56,
+    RSP: 60
   }
 };
 

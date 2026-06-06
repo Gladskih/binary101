@@ -3,18 +3,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as iced from "iced-x86";
-import { collectImmediateOperands } from "../../analyzers/pe/disassembly/entrypoint-immediate-operands.js";
+import { collectImmediateOperands } from "../../analyzers/pe/disassembly/entrypoint/immediate-operands.js";
 import type {
-  EntrypointIcedModule,
-  IcedInstruction
-} from "../../analyzers/pe/disassembly/entrypoint-iced.js";
+  IcedInstructionObject,
+  IcedModule,
+} from "../../analyzers/pe/disassembly/entrypoint/iced.js";
 
-const icedModule = iced as unknown as EntrypointIcedModule;
+const icedModule = iced as unknown as IcedModule;
 
 const instructionWithKinds = (
   kinds: number[],
   values: bigint[]
-): IcedInstruction => ({
+): IcedInstructionObject => ({
   opCount: kinds.length,
   opKind: (operand: number) => {
     if (operand >= kinds.length) throw new Error("out of range");
@@ -25,7 +25,7 @@ const instructionWithKinds = (
     if (value == null) throw new Error("missing immediate");
     return value;
   }
-} as unknown as IcedInstruction);
+} as unknown as IcedInstructionObject);
 
 void test("collectImmediateOperands returns immediate values with operand indexes", () => {
   const decoder = new iced.Decoder(
@@ -91,7 +91,7 @@ void test("collectImmediateOperands ignores immediate accessor failures", () => 
       immediate: () => {
         throw new Error("bad operand");
       }
-    } as unknown as IcedInstruction),
+    } as unknown as IcedInstructionObject),
     []
   );
 });

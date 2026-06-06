@@ -1,14 +1,14 @@
 "use strict";
 
-import type { EntrypointIcedModule, IcedInstruction } from "./entrypoint-iced.js";
+import type { IcedModule, IcedInstructionObject } from "./iced.js";
 
-export type EntrypointImmediateOperand = {
+export type ImmediateOperand = {
   operand: number;
   value: bigint;
 };
 
 const isImmediateOperand = (
-  opKinds: EntrypointIcedModule["OpKind"],
+  opKinds: IcedModule["OpKind"],
   kind: number
 ): boolean =>
   kind === opKinds["Immediate8"] ||
@@ -22,7 +22,7 @@ const isImmediateOperand = (
   kind === opKinds["Immediate32to64"];
 
 const readImmediateOperand = (
-  instruction: IcedInstruction,
+  instruction: IcedInstructionObject,
   operand: number
 ): bigint | null => {
   try {
@@ -33,10 +33,10 @@ const readImmediateOperand = (
 };
 
 export const collectImmediateOperands = (
-  iced: EntrypointIcedModule,
-  instruction: IcedInstruction
-): EntrypointImmediateOperand[] => {
-  const operands: EntrypointImmediateOperand[] = [];
+  iced: IcedModule,
+  instruction: IcedInstructionObject
+): ImmediateOperand[] => {
+  const operands: ImmediateOperand[] = [];
   for (let operand = 0; operand < instruction.opCount; operand += 1) {
     if (!isImmediateOperand(iced.OpKind, instruction.opKind(operand))) continue;
     const value = readImmediateOperand(instruction, operand);

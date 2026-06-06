@@ -81,7 +81,7 @@ void test("renderInstructionSets labels followed returning import fallthrough bl
   assert.ok(out.join("").includes("Followed returning import fallthrough from 0x00001010"));
 });
 
-void test("renderInstructionSets marks speculative call fallthrough blocks", () => {
+void test("renderInstructionSets marks followed return blocks", () => {
   const pe = createPe();
   pe.entrypointDisassembly = {
     bitness: 64,
@@ -100,19 +100,21 @@ void test("renderInstructionSets marks speculative call fallthrough blocks", () 
           target: {
             kind: "code",
             rva: 0x1010,
-            followed: true,
-            fallthroughRva: 0x1005,
-            fallthroughFollowed: true,
-            fallthroughKind: "speculative-call-return"
+            followed: true
           }
         }]
       },
       {
-        kind: "speculative-call-fallthrough",
+        kind: "followed-return",
         startRva: 0x1005,
         fileOffsetStart: 0x205,
-        sourceInstructionRva: 0x1000,
-        instructions: [{ rva: 0x1005, fileOffset: 0x205, text: "ret" }]
+        sourceInstructionRva: 0x1010,
+        instructions: [{
+          rva: 0x1005,
+          fileOffset: 0x205,
+          text: "ret",
+          target: { kind: "return", rva: 0x1005, followed: true }
+        }]
       }
     ],
     issues: []
@@ -122,8 +124,8 @@ void test("renderInstructionSets marks speculative call fallthrough blocks", () 
   renderInstructionSets(pe, out);
   const html = out.join("");
 
-  assert.ok(html.includes("speculative fallthrough followed 0x00001005"));
-  assert.ok(html.includes("Speculative call fallthrough from 0x00001000"));
+  assert.ok(html.includes("return followed 0x00001005"));
+  assert.ok(html.includes("Followed return target from 0x00001010"));
 });
 
 void test("renderInstructionSets renders entrypoint notes column", () => {

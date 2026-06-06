@@ -3,14 +3,14 @@
 import type {
   AnalyzePeEntrypointDisassemblyOptions,
   PeEntrypointDisassemblyReport
-} from "./types.js";
+} from "../types.js";
 import {
   IMAGE_FILE_MACHINE_AMD64,
   IMAGE_FILE_MACHINE_I386,
   getCanonicalPeMachine
-} from "../machine.js";
+} from "../../machine.js";
 
-export type ValidEntrypointMetadata = {
+export type ValidMetadata = {
   bitness: 32 | 64;
   entrypointRva: number;
 };
@@ -21,15 +21,15 @@ export const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
 export const RVA_EXCLUSIVE_LIMIT = 0x1_0000_0000;
 export const MAX_RVA = RVA_EXCLUSIVE_LIMIT - 1;
 
-export const normalizeEntrypointRva = (value: number): number | null =>
+export const normalizeRva = (value: number): number | null =>
   Number.isSafeInteger(value) && value >= 0 && value <= MAX_RVA ? value >>> 0 : null;
 
-export const emptyEntrypointReport = (
+export const emptyReport = (
   opts: AnalyzePeEntrypointDisassemblyOptions,
   issues: string[]
 ): PeEntrypointDisassemblyReport => ({
   bitness: opts.is64Bit ? 64 : 32,
-  entrypointRva: normalizeEntrypointRva(opts.entrypointRva) ?? 0,
+  entrypointRva: normalizeRva(opts.entrypointRva) ?? 0,
   bytesDecoded: 0,
   instructionCount: 0,
   blocks: [],
@@ -41,10 +41,10 @@ export const getHeaderRvaLimit = (opts: AnalyzePeEntrypointDisassemblyOptions): 
   return Number.isSafeInteger(value) && value > 0 ? Math.min(value, RVA_EXCLUSIVE_LIMIT) : 0;
 };
 
-export const validateEntrypointMetadata = (
+export const validateMetadata = (
   opts: AnalyzePeEntrypointDisassemblyOptions,
   issues: string[]
-): ValidEntrypointMetadata | null => {
+): ValidMetadata | null => {
   const coffMachine = getCanonicalPeMachine(opts.coffMachine);
   if (coffMachine !== IMAGE_FILE_MACHINE_I386 && coffMachine !== IMAGE_FILE_MACHINE_AMD64) {
     issues.push(

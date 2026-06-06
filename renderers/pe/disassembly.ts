@@ -47,12 +47,16 @@ const renderEntrypointTarget = (target: PeEntrypointInstructionTarget | undefine
   if (!target) return "";
   if (target.kind === "code") {
     const status = target.followed ? "followed" : "not followed";
-    const callFallthrough = target.fallthroughKind === "speculative-call-return" &&
-      target.fallthroughRva != null
-      ? `; speculative fallthrough ${target.fallthroughFollowed ? "followed" : "not followed"} ` +
-        `${hex(target.fallthroughRva, 8)}`
-      : "";
-    return `${escapeHtml(status)} ${hex(target.rva, 8)}${callFallthrough}`;
+    return `${escapeHtml(status)} ${hex(target.rva, 8)}`;
+  }
+  if (target.kind === "return") {
+    if ("rva" in target) {
+      const status = target.followed ? "followed" : "not followed";
+      return `return ${escapeHtml(status)} ${hex(target.rva, 8)}`;
+    }
+    return target.reason === "outside-image"
+      ? "return target outside image"
+      : "return target unknown";
   }
   if (target.kind === "branch") {
     const branchStatus = target.branchFollowed ? "followed" : "not followed";
@@ -82,7 +86,7 @@ const renderEntrypointBlockLabel = (block: PeEntrypointDisassemblyBlock): string
   if (block.kind === "followed-call") return `Followed call target${source}`;
   if (block.kind === "followed-jump") return `Followed jump target${source}`;
   if (block.kind === "followed-import-return") return `Followed returning import fallthrough${source}`;
-  if (block.kind === "speculative-call-fallthrough") return `Speculative call fallthrough${source}`;
+  if (block.kind === "followed-return") return `Followed return target${source}`;
   return block.kind === "followed-branch"
     ? `Followed conditional branch target${source}`
     : `Followed conditional fallthrough${source}`;

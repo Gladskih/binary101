@@ -3,12 +3,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as iced from "iced-x86";
-import { createEntrypointInstruction } from "../../analyzers/pe/disassembly/entrypoint-instruction.js";
-import type { EntrypointIcedModule } from "../../analyzers/pe/disassembly/entrypoint-iced.js";
+import { createInstruction } from "../../analyzers/pe/disassembly/entrypoint/instruction.js";
+import type { IcedModule } from "../../analyzers/pe/disassembly/entrypoint/iced.js";
 
-const icedModule = iced as unknown as EntrypointIcedModule;
+const icedModule = iced as unknown as IcedModule;
 
-void test("createEntrypointInstruction includes formatted text and operand notes", () => {
+void test("createInstruction includes formatted text and operand notes", () => {
   const decoder = new iced.Decoder(
     32,
     new Uint8Array([0xb8, 0x4e, 0xe6, 0x40, 0xbb]),
@@ -18,7 +18,7 @@ void test("createEntrypointInstruction includes formatted text and operand notes
   try {
     decoder.decodeOut(decoded);
     assert.deepEqual(
-      createEntrypointInstruction(
+      createInstruction(
         icedModule,
         decoded,
         { format: () => "mov eax,cookie", free: () => {} },

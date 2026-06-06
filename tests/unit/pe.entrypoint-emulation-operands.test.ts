@@ -1,0 +1,116 @@
+"use strict";
+
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import * as iced from "iced-x86";
+import type { IcedModule } from "../../analyzers/pe/disassembly/entrypoint/iced.js";
+import { resolveRegister } from "../../analyzers/pe/disassembly/entrypoint/emulation-registers.js";
+import {
+  isSameRegisterOperand,
+  readOperand,
+  resolveMemoryAddress,
+  resolveStackPointer,
+  writeOperand
+} from "../../analyzers/pe/disassembly/entrypoint/emulation-operands.js";
+import {
+  createEmulationState,
+  known,
+  readRegister,
+  writeRegister
+} from "../../analyzers/pe/disassembly/entrypoint/emulation-state.js";
+
+const icedModule = iced as unknown as IcedModule;
+
+const decodeOne = (bytes: number[]): iced.Instruction => {
+  const decoder = new iced.Decoder(64, new Uint8Array(bytes), iced.DecoderOptions.None);
+  const instruction = new iced.Instruction();
+  decoder.decodeOut(instruction);
+  decoder.free();
+  return instruction;
+};
+
+void test("isSameRegisterOperand compares decoded register operands", () => {
+  const same = decodeOne([0x31, 0xc0]);
+  const different = decodeOne([0x31, 0xc8]);
+  const immediate = decodeOne([0xb8, 0x01, 0x00, 0x00, 0x00]);
+  try {
+    assert.equal(isSameRegisterOperand(icedModule, same), true);
+    assert.equal(isSameRegisterOperand(icedModule, different), false);
+    assert.equal(isSameRegisterOperand(icedModule, immediate), false);
+  } finally {
+    same.free();
+    different.free();
+    immediate.free();
+  }
+});
+
+void test("resolveMemoryAddress rejects unsupported memory base registers", () => {
+  const state = createEmulationState(64);
+  const instruction = decodeOne([0x48, 0x8b, 0x05, 0x00, 0x00, 0x00, 0x00]);
+  try {
+    assert.equal(resolveMemoryAddress(icedModule, state, instruction), null);
+  } finally {
+    instruction.free();
+  }
+});
+
+void test("readOperand and writeOperand use concrete stack addresses", () => {
+  const state = createEmulationState(64);
+  const store = decodeOne([0x48, 0x89, 0x44, 0x24, 0x08]);
+  const load = decodeOne([0x48, 0x8b, 0x5c, 0x24, 0x08]);
+  try {
+    writeRegister(state, resolveRegister(icedModule, iced.Register.RAX), known(9n, 64));
+    writeOperand(icedModule, state, store, 0, readOperand(icedModule, state, store, 1));
+
+    writeOperand(icedModule, state, load, 0, readOperand(icedModule, state, load, 1));
+
+    assert.deepEqual(readRegister(state, resolveRegister(icedModule, iced.Register.RBX)), {
+      kind: "known",
+      value: 9n,
+      bits: 64
+    });
+  } finally {
+    store.free();
+    load.free();
+  }
+});
+
+void test("resolveMemoryAddress uses base, index, scale, and displacement", () => {
+  const state = createEmulationState(64);
+  const instruction = decodeOne([0x48, 0x8b, 0x44, 0x8b, 0x10]);
+  try {
+    writeRegister(state, resolveRegister(icedModule, iced.Register.RBX), known(0x1000n, 64));
+    writeRegister(state, resolveRegister(icedModule, iced.Register.RCX), known(3n, 64));
+
+    assert.equal(resolveMemoryAddress(icedModule, state, instruction), 0x101cn);
+  } finally {
+    instruction.free();
+  }
+});
+
+void test("readOperand selects the requested immediate operand", () => {
+  const state = createEmulationState(64);
+  const instruction = decodeOne([0xc8, 0x34, 0x12, 0x56]);
+  try {
+    assert.deepEqual(readOperand(icedModule, state, instruction, 1), {
+      kind: "known",
+      value: 0x56n,
+      bits: 64
+    });
+  } finally {
+    instruction.free();
+  }
+});
+
+void test("resolveStackPointer returns the bitness-specific stack alias", () => {
+  assert.deepEqual(resolveStackPointer(icedModule, createEmulationState(64)), {
+    canonical: "RSP",
+    accessBits: 64,
+    bitOffset: 0
+  });
+  assert.deepEqual(resolveStackPointer(icedModule, createEmulationState(32)), {
+    canonical: "RSP",
+    accessBits: 32,
+    bitOffset: 0
+  });
+});

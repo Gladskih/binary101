@@ -3,17 +3,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createFileRangeReader } from "../../analyzers/file-range-reader.js";
-import { followDirectCodeTarget } from "../../analyzers/pe/disassembly/entrypoint-direct-target.js";
+import { followDirectCodeTarget } from "../../analyzers/pe/disassembly/entrypoint/direct-target.js";
 import type { AnalyzePeEntrypointDisassemblyOptions } from "../../analyzers/pe/disassembly/index.js";
 import type {
   FollowQueueState,
-  PendingEntrypointBlock
-} from "../../analyzers/pe/disassembly/entrypoint-follow-queue.js";
+  PendingBlock
+} from "../../analyzers/pe/disassembly/entrypoint/follow-queue.js";
+import { createEmulationState } from "../../analyzers/pe/disassembly/entrypoint/emulation.js";
+import type { IcedModule } from "../../analyzers/pe/disassembly/entrypoint/iced.js";
 import {
+  fakeIced,
   IMAGE_FILE_MACHINE_AMD64,
   createExecutableSection
 } from "../helpers/pe-entrypoint-disassembly-fixture.js";
 import { MockFile } from "../helpers/mock-file.js";
+
+const iced = fakeIced as unknown as IcedModule;
 
 const createOptions = (): AnalyzePeEntrypointDisassemblyOptions => ({
   coffMachine: IMAGE_FILE_MACHINE_AMD64,
@@ -30,9 +35,10 @@ const createQueueState = (): FollowQueueState => ({
   queuedBlocks: new Set()
 });
 
-void test("followDirectCodeTarget queues call target and speculative fallthrough", async () => {
-  const pending: PendingEntrypointBlock[] = [];
+void test("followDirectCodeTarget queues call target with a call-stack state", async () => {
+  const pending: PendingBlock[] = [];
   const target = await followDirectCodeTarget(
+    iced,
     createFileRangeReader(new MockFile(new Uint8Array([0xe8, 0x90, 0xc3]), "entry.exe"), 0, 3),
     createOptions(),
     createQueueState(),
@@ -40,19 +46,20 @@ void test("followDirectCodeTarget queues call target and speculative fallthrough
     { kind: "followed-call", rva: 0x1002 },
     0x1000,
     0x140001001n,
+    createEmulationState(64),
     []
   );
 
   assert.equal(target.followed, true);
-  assert.equal(target.fallthroughRva, 0x1001);
-  assert.equal(target.fallthroughFollowed, true);
-  assert.equal(target.fallthroughKind, "speculative-call-return");
-  assert.deepEqual(pending.map(block => block.kind), ["followed-call", "speculative-call-fallthrough"]);
+  assert.equal(target.rva, 0x1002);
+  assert.deepEqual(pending.map(block => block.kind), ["followed-call"]);
+  assert.equal(pending[0]?.emulationState.memory.size, 1);
 });
 
 void test("followDirectCodeTarget queues jumps without speculative fallthrough", async () => {
-  const pending: PendingEntrypointBlock[] = [];
+  const pending: PendingBlock[] = [];
   const target = await followDirectCodeTarget(
+    iced,
     createFileRangeReader(new MockFile(new Uint8Array([0xe9, 0x90, 0xc3]), "entry.exe"), 0, 3),
     createOptions(),
     createQueueState(),
@@ -60,10 +67,10 @@ void test("followDirectCodeTarget queues jumps without speculative fallthrough",
     { kind: "followed-jump", rva: 0x1002 },
     0x1000,
     0x140001001n,
+    createEmulationState(64),
     []
   );
 
   assert.equal(target.followed, true);
-  assert.equal(target.fallthroughRva, undefined);
   assert.deepEqual(pending.map(block => block.kind), ["followed-jump"]);
 });

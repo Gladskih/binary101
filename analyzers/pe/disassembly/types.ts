@@ -35,9 +35,15 @@ export type PeEntrypointInstructionTarget =
       kind: "code";
       rva: number;
       followed: boolean;
-      fallthroughRva?: number;
-      fallthroughFollowed?: boolean;
-      fallthroughKind?: "speculative-call-return";
+    }
+  | {
+      kind: "return";
+      rva: number;
+      followed: boolean;
+    }
+  | {
+      kind: "return";
+      reason: "outside-image" | "unknown";
     }
   | {
       kind: "branch";
@@ -63,7 +69,7 @@ export type PeEntrypointDisassemblyBlockKind =
   | "followed-branch"
   | "followed-fallthrough"
   | "followed-import-return"
-  | "speculative-call-fallthrough";
+  | "followed-return";
 
 export interface PeEntrypointDisassemblyBlock {
   kind: PeEntrypointDisassemblyBlockKind;

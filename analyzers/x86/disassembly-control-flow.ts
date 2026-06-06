@@ -1,35 +1,7 @@
 "use strict";
 
+import type { IcedX86Module } from "./disassembly-iced.js";
 import { getNearBranchTarget } from "./disassembly-branch-targets.js";
-
-type IcedInstruction = {
-  code: number;
-  length: number;
-  ip: bigint;
-  nextIP: bigint;
-  readonly flowControl: number;
-  readonly nearBranchTarget: bigint;
-  op0Kind: number;
-  cpuidFeatures(): Int32Array;
-  free(): void;
-};
-
-type IcedDecoder = {
-  ip: bigint;
-  canDecode: boolean;
-  position: number;
-  decodeOut(instruction: IcedInstruction): void;
-  free(): void;
-};
-
-type IcedX86Module = {
-  Code: Record<string, number> & Record<number, string | undefined>;
-  Decoder: new (bitness: number, data: Uint8Array<ArrayBufferLike>, options: number) => IcedDecoder;
-  DecoderOptions: { None: number };
-  FlowControl: Record<string, number> & Record<number, string | undefined>;
-  OpKind: Record<string, number> & Record<number, string | undefined>;
-  Instruction: new () => IcedInstruction;
-};
 
 type DisassemblySection = {
   rvaStart: number;

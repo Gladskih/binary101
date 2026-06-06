@@ -2,7 +2,9 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { getReturningImportFallthrough } from "../../analyzers/pe/disassembly/entrypoint-import-fallthrough.js";
+import { getReturningImportFallthrough } from "../../analyzers/pe/disassembly/entrypoint/import-fallthrough.js";
+import { createEmulationState } from "../../analyzers/pe/disassembly/entrypoint/emulation.js";
+import { createCallStackState } from "../../analyzers/pe/disassembly/entrypoint/call-stack.js";
 import {
   IMAGE_FILE_MACHINE_AMD64,
   TestInstruction,
@@ -10,9 +12,9 @@ import {
   fakeIced
 } from "../helpers/pe-entrypoint-disassembly-fixture.js";
 import type { AnalyzePeEntrypointDisassemblyOptions } from "../../analyzers/pe/disassembly/index.js";
-import type { IcedX86Module } from "../../analyzers/x86/disassembly-iced.js";
+import type { IcedModule } from "../../analyzers/pe/disassembly/entrypoint/iced.js";
 
-const iced = fakeIced as unknown as IcedX86Module;
+const iced = fakeIced as unknown as IcedModule;
 type IcedInstruction = Parameters<typeof getReturningImportFallthrough>[3];
 
 const createOptions = (): AnalyzePeEntrypointDisassemblyOptions => ({
@@ -46,13 +48,14 @@ void test("getReturningImportFallthrough returns in-block fallthrough for known 
         slotRva: 0x2000,
         importKind: "eager",
         guardIatEntry: false
-      }
+      },
+      createEmulationState(64)
     ),
     { kind: "current-block", rva: 0x1001 }
   );
 });
 
-void test("getReturningImportFallthrough returns source call returns for import thunks", () => {
+void test("getReturningImportFallthrough returns stack returns for import thunks", () => {
   assert.deepEqual(
     getReturningImportFallthrough(
       iced,
@@ -65,9 +68,9 @@ void test("getReturningImportFallthrough returns source call returns for import 
         importKind: "eager",
         guardIatEntry: false
       },
-      0x1001
+      createCallStackState(iced, createEmulationState(64), 0x140001001n)
     ),
-    { kind: "source-call", rva: 0x1001 }
+    { kind: "stack-return", rva: 0x1001 }
   );
 });
 
@@ -78,7 +81,8 @@ void test("getReturningImportFallthrough rejects unknown imports and out-of-bloc
       createOptions(),
       { rvaStart: 0x1000, fileOffsetStart: 0, data: new Uint8Array([0x15, 0xc3]) },
       createIndirectCallInstruction(0x1001),
-      { label: "KERNEL32.dll!ExitProcess", slotRva: 0x2000, importKind: "eager", guardIatEntry: false }
+      { label: "KERNEL32.dll!ExitProcess", slotRva: 0x2000, importKind: "eager", guardIatEntry: false },
+      createEmulationState(64)
     ),
     null
   );
@@ -93,7 +97,8 @@ void test("getReturningImportFallthrough rejects unknown imports and out-of-bloc
         slotRva: 0x2000,
         importKind: "eager",
         guardIatEntry: false
-      }
+      },
+      createEmulationState(64)
     ),
     null
   );
