@@ -118,6 +118,7 @@ export const discoverToolchains = async (): Promise<Toolchains> => {
   ].filter(Boolean));
   return {
     clang: firstExisting([findOnPath("clang.exe") ?? "", join(programFiles, "LLVM", "bin", "clang.exe")].filter(Boolean)),
+    clangxx: firstExisting([findOnPath("clang++.exe") ?? "", join(programFiles, "LLVM", "bin", "clang++.exe")].filter(Boolean)),
     clangCl: firstExisting([findOnPath("clang-cl.exe") ?? "", join(programFiles, "LLVM", "bin", "clang-cl.exe")].filter(Boolean)),
     dmd: firstExisting([findOnPath("dmd.exe") ?? "", "C:\\D\\dmd2\\windows\\bin64\\dmd.exe"].filter(Boolean)),
     dotnet: findOnPath("dotnet.exe"),

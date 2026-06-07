@@ -73,6 +73,7 @@ export const buildSummaryMarkdown = (summary: SampleSummary): string => {
 const renderToolchains = (toolchains: Toolchains): string[] => [
   toolchainLine("Visual Studio vcvarsall", toolchains.visualStudio?.vcvarsallPath ?? null),
   toolchainLine("clang", toolchains.clang),
+  toolchainLine("clang++", toolchains.clangxx),
   toolchainLine("clang-cl", toolchains.clangCl),
   toolchainLine("dmd", toolchains.dmd),
   toolchainLine("dotnet", toolchains.dotnet),
@@ -83,7 +84,8 @@ const renderToolchains = (toolchains: Toolchains): string[] => [
   toolchainLine("rustc", toolchains.rustc),
   toolchainLine("zig", toolchains.zig),
   toolchainLine("MSYS2 CLANG64 clang", toolchains.msysClang64.clang),
-  toolchainLine("MSYS2 UCRT64 gcc", toolchains.msysUcrt64.gcc)
+  toolchainLine("MSYS2 UCRT64 gcc", toolchains.msysUcrt64.gcc),
+  toolchainLine("MSYS2 UCRT64 clang", toolchains.msysUcrt64.clang)
 ];
 
 export const writeCommandsFile = async (

@@ -16,6 +16,7 @@ const createMsysToolchain = (prefix: string): MsysToolchain => ({
 
 const createToolchains = (): Toolchains => ({
   clang: "C:\\LLVM\\bin\\clang.exe",
+  clangxx: "C:\\LLVM\\bin\\clang++.exe",
   clangCl: "C:\\LLVM\\bin\\clang-cl.exe",
   dmd: "C:\\D\\dmd2\\windows\\bin64\\dmd.exe",
   dotnet: "C:\\Program Files\\dotnet\\dotnet.exe",
@@ -40,13 +41,18 @@ void test("buildSampleVariants covers each hello-world source family", () => {
   const languages = new Set(variants.map(variant => variant.language));
   const ids = variants.map(variant => variant.id);
 
-  assert.equal(variants.length, 102);
+  assert.equal(variants.length, 204);
   assert.deepEqual(languages, new Set(["assembly", "c", "cpp", "csharp", "d", "go", "pascal", "rust", "zig"]));
   assert.ok(ids.includes("c-msvc-x64-o2-md"));
+  assert.ok(ids.includes("c-msvc-x64-o2-md-arch-avx512"));
+  assert.ok(ids.includes("c-llvm-clang-msvc-x64-o2-march-x86-64-v3"));
+  assert.ok(ids.includes("cpp-msys-ucrt64-clang-x64-o2-flto"));
   assert.ok(ids.includes("cpp-zig-cc-x86-o2"));
-  assert.ok(ids.includes("rust-x64-msvc-o3-panic-abort"));
-  assert.ok(ids.includes("go-windows-386-noopt"));
+  assert.ok(ids.includes("rust-x64-msvc-o3-panic-abort-target-cpu-native"));
+  assert.ok(ids.includes("go-windows-amd64-goamd64-v4"));
+  assert.ok(ids.includes("csharp-readytorun-win-x64-release"));
   assert.ok(ids.includes("csharp-nativeaot-win-x64-release"));
+  assert.ok(ids.includes("csharp-nativeaot-win-x86-release"));
   assert.ok(ids.includes("assembly-nasm-x64-lld"));
 });
 

@@ -39,6 +39,7 @@ export interface MsysToolchain {
 
 export interface Toolchains {
   clang: string | null;
+  clangxx: string | null;
   clangCl: string | null;
   dmd: string | null;
   dotnet: string | null;

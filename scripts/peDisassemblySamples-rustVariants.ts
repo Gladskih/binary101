@@ -18,6 +18,16 @@ const rustTargets = [
   { id: "x86-msvc", target: "i686-pc-windows-msvc", vcArchitecture: "x86", linker: null }
 ] as const;
 
+type RustTarget = (typeof rustTargets)[number];
+
+const rustTargetCpuModes = ["x86-64-v2", "x86-64-v3", "native"] as const;
+
+const optimizedAbortArgs = [
+  "-C", "opt-level=3",
+  "-C", "panic=abort",
+  "-C", "debuginfo=0"
+] as const;
+
 const variantDirectory = (outputRoot: string, id: string): string =>
   join(outputRoot, "variants", id);
 
@@ -56,6 +66,32 @@ const rustLinkerMissing = (
   return [];
 };
 
+const buildRustCompileVariant = (
+  outputRoot: string,
+  toolchains: Toolchains,
+  sourcePath: string,
+  target: RustTarget,
+  idSuffix: string,
+  label: string,
+  modeArgs: readonly string[],
+  linkerEnv: Record<string, string> | undefined
+): BuildVariant => {
+  const id = `rust-${target.id}-${idSuffix}`;
+  const args = [sourcePath, "--target", target.target, ...modeArgs, "-o", outputPath(outputRoot, id)];
+  const direct = toolchains.rustc ? [directStep(toolchains.rustc, args, linkerEnv)] : [];
+  const steps = target.vcArchitecture && toolchains.rustc && toolchains.visualStudio
+    ? [createVisualStudioStep("compile", toolchains.visualStudio, target.vcArchitecture, [[toolchains.rustc, ...args]])]
+    : direct;
+  const vsMissing = target.vcArchitecture
+    ? missing("Visual Studio vcvarsall.bat", toolchains.visualStudio?.vcvarsallPath ?? null)
+    : [];
+  return makeVariant(outputRoot, id, label, steps, [
+    ...missing("rustc", toolchains.rustc),
+    ...vsMissing,
+    ...rustLinkerMissing(toolchains, target.linker)
+  ]);
+};
+
 export const buildRustVariants = (
   outputRoot: string,
   toolchains: Toolchains,
@@ -71,21 +107,21 @@ export const buildRustVariants = (
   for (const target of rustTargets) {
     for (const optLevel of ["0", "3", "z"]) {
       for (const panicStrategy of ["unwind", "abort"]) {
-        const id = `rust-${target.id}-o${optLevel}-panic-${panicStrategy}`;
-        const args = [sourcePath, "--target", target.target, "-C", `opt-level=${optLevel}`, "-C", `panic=${panicStrategy}`, "-C", "debuginfo=0", "-o", outputPath(outputRoot, id)];
-        const direct = toolchains.rustc ? [directStep(toolchains.rustc, args, linkerEnv)] : [];
-        const steps = target.vcArchitecture && toolchains.rustc && toolchains.visualStudio
-          ? [createVisualStudioStep("compile", toolchains.visualStudio, target.vcArchitecture, [[toolchains.rustc, ...args]])]
-          : direct;
-        const vsMissing = target.vcArchitecture
-          ? missing("Visual Studio vcvarsall.bat", toolchains.visualStudio?.vcvarsallPath ?? null)
-          : [];
-        variants.push(makeVariant(outputRoot, id, target.target, steps, [
-          ...missing("rustc", toolchains.rustc),
-          ...vsMissing,
-          ...rustLinkerMissing(toolchains, target.linker)
-        ]));
+        variants.push(buildRustCompileVariant(outputRoot, toolchains, sourcePath, target,
+          `o${optLevel}-panic-${panicStrategy}`, target.target,
+          ["-C", `opt-level=${optLevel}`, "-C", `panic=${panicStrategy}`, "-C", "debuginfo=0"],
+          linkerEnv));
       }
+    }
+    if (target.id.startsWith("x64")) {
+      for (const cpu of rustTargetCpuModes) {
+        variants.push(buildRustCompileVariant(outputRoot, toolchains, sourcePath, target,
+          `o3-panic-abort-target-cpu-${cpu}`, `${target.target} target-cpu=${cpu}`,
+          [...optimizedAbortArgs, "-C", `target-cpu=${cpu}`], linkerEnv));
+      }
+      variants.push(buildRustCompileVariant(outputRoot, toolchains, sourcePath, target,
+        "o3-panic-abort-lto-thin", `${target.target} lto=thin`,
+        [...optimizedAbortArgs, "-C", "lto=thin"], linkerEnv));
     }
   }
   return variants;

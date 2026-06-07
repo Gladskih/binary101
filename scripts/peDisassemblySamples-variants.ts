@@ -1,25 +1,20 @@
 "use strict";
 
 import { dirname, join } from "node:path";
-import { createVisualStudioStep, prependPath, toCommandLine } from "./peDisassemblySamples-command.js";
+import { toCommandLine } from "./peDisassemblySamples-command.js";
 import { buildAssemblyVariants } from "./peDisassemblySamples-assemblyVariants.js";
+import { buildNativeLanguageVariants } from "./peDisassemblySamples-nativeVariants.js";
 import { buildRustVariants } from "./peDisassemblySamples-rustVariants.js";
 import {
   projectRoot,
   sampleSourceRoot,
   type BuildStep,
   type BuildVariant,
-  type MsysToolchain,
   type SampleLanguage,
   type SampleSources,
   type Toolchains
 } from "./peDisassemblySamples-model.js";
 
-const releaseModes = [
-  { id: "o0", label: "O0", args: ["-O0"] },
-  { id: "o2", label: "O2", args: ["-O2"] },
-  { id: "os", label: "Os", args: ["-Os"] }
-] as const;
 export const getSampleSources = (): SampleSources => ({
   assemblyMasmX64: join(sampleSourceRoot, "assembly", "hello-masm-x64.asm"),
   assemblyMasmX86: join(sampleSourceRoot, "assembly", "hello-masm-x86.asm"),
@@ -62,104 +57,6 @@ const directStep = (
   const step = { label, executable, args, cwd };
   return env ? { ...step, env } : step;
 };
-const visualStudioCompileStep = (
-  toolchains: Toolchains,
-  architecture: string,
-  executable: string,
-  args: string[]
-): BuildStep[] =>
-  toolchains.visualStudio ? [
-    createVisualStudioStep("compile", toolchains.visualStudio, architecture, [[executable, ...args]])
-  ] : [];
-const msvcRuntimeModes = [
-  { id: "od-md", label: "Od /MD", args: ["/Od", "/MD"] },
-  { id: "o2-md", label: "O2 /MD", args: ["/O2", "/MD"] },
-  { id: "o2-mt", label: "O2 /MT", args: ["/O2", "/MT"] }
-] as const;
-const buildMsvcLanguageVariants = (
-  outputRoot: string,
-  toolchains: Toolchains,
-  language: "c" | "cpp",
-  sourcePath: string
-): BuildVariant[] => {
-  const variants: BuildVariant[] = [];
-  for (const architecture of ["x64", "x86"]) {
-    for (const mode of msvcRuntimeModes) {
-      const id = `${language}-msvc-${architecture}-${mode.id}`;
-      const args = [sourcePath, "/nologo", `/Fo:${variantDirectory(outputRoot, id)}\\`, `/Fe:${outputPath(outputRoot, id)}`, ...mode.args];
-      variants.push(makeVariant(outputRoot, id, language, "msvc-cl", `${architecture} ${mode.label}`, visualStudioCompileStep(toolchains, architecture, "cl.exe", args), missing("Visual Studio vcvarsall.bat", toolchains.visualStudio?.vcvarsallPath ?? null)));
-    }
-  }
-  return variants;
-};
-const buildClangClLanguageVariants = (
-  outputRoot: string,
-  toolchains: Toolchains,
-  language: "c" | "cpp",
-  sourcePath: string
-): BuildVariant[] => {
-  const variants: BuildVariant[] = [];
-  for (const architecture of ["x64", "x86"]) {
-    for (const mode of msvcRuntimeModes) {
-      const id = `${language}-clang-cl-${architecture}-${mode.id}`;
-      const target = architecture === "x64" ? "x86_64-pc-windows-msvc" : "i686-pc-windows-msvc";
-      const args = [sourcePath, "/nologo", "-fuse-ld=lld", `/Fo:${variantDirectory(outputRoot, id)}\\`, `/Fe:${outputPath(outputRoot, id)}`, ...mode.args];
-      args.unshift(`--target=${target}`);
-      const steps = toolchains.clangCl
-        ? visualStudioCompileStep(toolchains, architecture, toolchains.clangCl, args)
-        : [];
-      const skipReasons = [
-        ...missing("clang-cl", toolchains.clangCl),
-        ...missing("Visual Studio vcvarsall.bat", toolchains.visualStudio?.vcvarsallPath ?? null)
-      ];
-      variants.push(makeVariant(outputRoot, id, language, "llvm-clang-cl", `${architecture} ${mode.label}`, steps, skipReasons));
-    }
-  }
-  return variants;
-};
-const buildMsysLanguageVariants = (
-  outputRoot: string,
-  toolchain: MsysToolchain,
-  language: "c" | "cpp",
-  sourcePath: string,
-  family: string
-): BuildVariant[] => {
-  const compiler = language === "c" ? toolchain.gcc ?? toolchain.clang : toolchain.gxx ?? toolchain.clangxx;
-  const env = toolchain.binDirectory ? prependPath([toolchain.binDirectory, "C:\\msys64\\usr\\bin"]) : undefined;
-  return releaseModes.map(mode => {
-    const id = `${language}-${family}-x64-${mode.id}`;
-    const args = [sourcePath, "-o", outputPath(outputRoot, id), ...mode.args];
-    return makeVariant(outputRoot, id, language, family, `x64 ${mode.label}`, compiler ? [directStep("compile", compiler, args, projectRoot, env)] : [], missing(`${family} ${language} compiler`, compiler ?? null));
-  });
-};
-const buildZigCcLanguageVariants = (
-  outputRoot: string,
-  toolchains: Toolchains,
-  language: "c" | "cpp",
-  sourcePath: string
-): BuildVariant[] => {
-  const variants: BuildVariant[] = [];
-  for (const target of ["x86_64-windows-gnu", "x86-windows-gnu"]) {
-    for (const mode of releaseModes.slice(0, 2)) {
-      const id = `${language}-zig-cc-${target.startsWith("x86_64") ? "x64" : "x86"}-${mode.id}`;
-      const args = [language === "c" ? "cc" : "c++", sourcePath, "-target", target, "-o", outputPath(outputRoot, id), ...mode.args];
-      variants.push(makeVariant(outputRoot, id, language, "zig-cc", `${target} ${mode.label}`, toolchains.zig ? [directStep("compile", toolchains.zig, args)] : [], missing("zig", toolchains.zig)));
-    }
-  }
-  return variants;
-};
-const buildNativeLanguageVariants = (
-  outputRoot: string,
-  toolchains: Toolchains,
-  language: "c" | "cpp",
-  sourcePath: string
-): BuildVariant[] => [
-  ...buildMsvcLanguageVariants(outputRoot, toolchains, language, sourcePath),
-  ...buildClangClLanguageVariants(outputRoot, toolchains, language, sourcePath),
-  ...buildMsysLanguageVariants(outputRoot, toolchains.msysUcrt64, language, sourcePath, "msys-ucrt64"),
-  ...buildMsysLanguageVariants(outputRoot, toolchains.msysClang64, language, sourcePath, "msys-clang64"),
-  ...buildZigCcLanguageVariants(outputRoot, toolchains, language, sourcePath)
-];
 const buildGoVariants = (
   outputRoot: string,
   toolchains: Toolchains,
@@ -167,9 +64,20 @@ const buildGoVariants = (
 ): BuildVariant[] => {
   const variants: BuildVariant[] = [];
   for (const architecture of ["amd64", "386"]) {
-    for (const mode of [{ id: "default", args: [] }, { id: "noopt", args: ["-gcflags=all=-N -l"] }]) {
+    const modes = architecture === "amd64"
+      ? [
+        { id: "default", args: [], env: {} },
+        { id: "noopt", args: ["-gcflags=all=-N -l"], env: {} },
+        { id: "goamd64-v3", args: [], env: { GOAMD64: "v3" } },
+        { id: "goamd64-v4", args: [], env: { GOAMD64: "v4" } }
+      ]
+      : [
+        { id: "default", args: [], env: {} },
+        { id: "noopt", args: ["-gcflags=all=-N -l"], env: {} }
+      ];
+    for (const mode of modes) {
       const id = `go-windows-${architecture}-${mode.id}`;
-      const env = { GOOS: "windows", GOARCH: architecture, CGO_ENABLED: "0" };
+      const env = { GOOS: "windows", GOARCH: architecture, CGO_ENABLED: "0", ...mode.env };
       const args = ["build", "-trimpath", "-o", outputPath(outputRoot, id), ...mode.args, sourcePath];
       variants.push(makeVariant(outputRoot, id, "go", "go", `${architecture} ${mode.id}`, toolchains.go ? [directStep("compile", toolchains.go, args, dirname(sourcePath), env)] : [], missing("go", toolchains.go)));
     }
@@ -198,12 +106,22 @@ const buildCsharpVariants = (
   flavor: "framework",
   extra: ["--self-contained", "false"]
 }, {
+  runtime: "win-x64",
+  configuration: "Release",
+  flavor: "readytorun",
+  extra: ["--self-contained", "false", "-p:PublishReadyToRun=true"]
+}, {
   runtime: "win-x86",
   configuration: "Release",
   flavor: "selfcontained",
   extra: ["--self-contained", "true"]
 }, {
   runtime: "win-x64",
+  configuration: "Release",
+  flavor: "nativeaot",
+  extra: ["--self-contained", "true", "-p:PublishAot=true"]
+}, {
+  runtime: "win-x86",
   configuration: "Release",
   flavor: "nativeaot",
   extra: ["--self-contained", "true", "-p:PublishAot=true"]
