@@ -85,9 +85,9 @@ that, Rust `i686-pc-windows-gnu` and `i686-pc-windows-gnullvm` variants are skip
 matching `i686-w64-mingw32-gcc` / `i686-w64-mingw32-clang` linker toolchains and import
 libraries are added later.
 
-## Why 206 Variants
+## Why 205 Variants
 
-The matrix currently attempts 206 variants:
+The matrix currently attempts 205 variants:
 
 | family | count | source |
 |---|---:|---|
@@ -96,11 +96,11 @@ The matrix currently attempts 206 variants:
 | Rust | 48 | 6 Windows targets x 3 opt levels x 2 panic strategies, plus x64 target-cpu/LTO variants |
 | Go | 6 | 2 architectures x default/noopt, plus `GOAMD64=v3/v4` |
 | Zig | 6 | 2 architectures x Debug/ReleaseFast/ReleaseSmall |
-| C# | 7 | win-x64 framework-dependent, ReadyToRun, ReadyToRun single-file, ReadyToRun self-contained single-file, win-x86 self-contained, win-x64/x86 NativeAOT |
+| C# | 6 | win-x64 framework-dependent, ReadyToRun single-file, ReadyToRun self-contained single-file, win-x86 self-contained, win-x64/x86 NativeAOT |
 | Pascal | 2 | Free Pascal win32 O1/O3 |
 | D | 3 | DMD x64 debug, x64 release, x86 MSCOFF release |
 | Assembly | 4 | NASM x64/x86 and MASM x64/x86 |
-| Total | 206 |  |
+| Total | 205 |  |
 
 The C and C++ rows use the same 65-way compiler spread:
 
@@ -144,35 +144,35 @@ The script records every command and does not stop the whole matrix when a toolc
 missing. Variants with known missing prerequisites are marked as skipped; actual compiler or
 linker failures are recorded as failures with stdout/stderr in the variant log.
 
-The .NET samples now include three ReadyToRun shapes: framework-dependent apphost plus
-adjacent ReadyToRun DLL, framework-dependent single-file apphost, and self-contained
-single-file apphost. The single-file variants keep the publish output to one `.exe`, but the
-entrypoint is still the .NET apphost/bootstrap rather than the managed `Main` body.
+The .NET ReadyToRun samples are intentionally single-file shapes only: framework-dependent
+single-file apphost and self-contained single-file apphost. Both keep the publish output to
+one `.exe`, but the entrypoint is still the .NET apphost/bootstrap rather than the managed
+`Main` body.
 
 ## Current Machine Result
 
 Measured on the dev machine after a full build to
-`%TEMP%\binary101-pe-disassembly-samples-r2r-singlefile`:
+`%TEMP%\binary101-pe-disassembly-samples-single-exe-final`:
 
 | metric | value |
 |---|---:|
-| Attempted variants | 206 |
-| Successful PE outputs | 194 |
+| Attempted variants | 205 |
+| Successful PE outputs | 193 |
 | Failed variants | 0 |
 | Skipped variants | 12 |
-| Full build wall-clock time | 34.655 s |
-| Successful output bytes | 215,663,926 |
-| Successful output size | 205.673 MiB |
-| All `.exe` files under output root, including support/intermediate files | 218.923 MiB |
-| All `.dll` files under output root, including support/intermediate files | 435.677 MiB |
-| Full output directory, including logs, obj, .NET support files | 779.468 MiB |
+| Full build wall-clock time | 33.275 s |
+| Successful output bytes | 215,501,622 |
+| Successful output size | 205.518 MiB |
+| All `.exe` files under output root, including support/intermediate files | 218.459 MiB |
+| All `.dll` files under output root, including support/intermediate files | 435.630 MiB |
+| Full output directory, including logs, obj, .NET support files | 778.864 MiB |
 
 The 12 skipped variants are Rust `i686-pc-windows-gnu` and `i686-pc-windows-gnullvm` builds.
 The Rust standard libraries are installed, but this machine does not currently have
 `i686-w64-mingw32-gcc` or `i686-w64-mingw32-clang` plus the matching import libraries in the
 local toolchain. The MSVC i686 Rust target does build.
 
-All 194 successful PE outputs were run locally with MSYS2 UCRT64/CLANG64 runtime
+All 193 successful PE outputs were run locally with MSYS2 UCRT64/CLANG64 runtime
 directories on `PATH`; all exited with code 0 and printed exactly `Hello, world!`.
 
 ## Size Leaders and Notes
@@ -219,9 +219,11 @@ Interesting size patterns from this run:
 The size table keeps the variant id for traceability, but splits the always-present
 dimensions into separate columns so the rows are easier to sort and compare by eye.
 
-`runtime linkage` describes how the language runtime or CRT is packaged. It is not a claim
-that the PE has no dynamic imports; even mostly static Windows binaries still import system
-DLLs such as `kernel32.dll` or API-set DLLs.
+`runtime linkage` describes how the language runtime or CRT is packaged. The matrix selects
+one primary `.exe` per variant; this column also calls out publish shapes that keep app or
+runtime files adjacent to that `.exe`. It is not a claim that the PE has no dynamic imports;
+even mostly static Windows binaries still import system DLLs such as `kernel32.dll` or
+API-set DLLs.
 
 | language | arch | compiler | mode | runtime linkage | size bytes | size KiB | variant id |
 |---|---|---|---|---|---:|---:|---|
@@ -359,9 +361,8 @@ DLLs such as `kernel32.dll` or API-set DLLs.
 | cpp | x86 | MSVC cl.exe | od-md | DLL MSVC CRT | 11264 | 11.0 | cpp-msvc-x86-od-md |
 | cpp | x86 | Zig cc/c++ | o0 | Zig libc bundled | 1427456 | 1394.0 | cpp-zig-cc-x86-o0 |
 | cpp | x86 | Zig cc/c++ | o2 | Zig libc bundled | 853504 | 833.5 | cpp-zig-cc-x86-o2 |
-| csharp | x64 | .NET publish | framework release | .NET runtime external | 162304 | 158.5 | csharp-framework-win-x64-release |
+| csharp | x64 | .NET publish | framework release | .NET runtime external + app DLL | 162304 | 158.5 | csharp-framework-win-x64-release |
 | csharp | x64 | .NET publish | nativeaot release | NativeAOT self-contained | 1105408 | 1079.5 | csharp-nativeaot-win-x64-release |
-| csharp | x64 | .NET publish | readytorun release | .NET runtime external + R2R DLL | 162304 | 158.5 | csharp-readytorun-win-x64-release |
 | csharp | x64 | .NET publish | readytorun selfcontained singlefile release | .NET runtime bundled single-file | 83176755 | 81227.3 | csharp-readytorun-selfcontained-singlefile-win-x64-release |
 | csharp | x64 | .NET publish | readytorun singlefile release | .NET runtime external single-file | 180914 | 176.7 | csharp-readytorun-singlefile-win-x64-release |
 | csharp | x86 | .NET publish | nativeaot release | NativeAOT self-contained | 933888 | 912.0 | csharp-nativeaot-win-x86-release |

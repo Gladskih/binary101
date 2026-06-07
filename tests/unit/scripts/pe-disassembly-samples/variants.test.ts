@@ -51,8 +51,9 @@ void test("buildSampleVariants covers each hello-world source family", () => {
   const variants = buildSampleVariants(createToolchains(), "C:\\out");
   const languages = new Set(variants.map(variant => variant.language));
   const ids = variants.map(variant => variant.id);
+  const csharpIds = ids.filter(id => id.startsWith("csharp-")).sort();
 
-  assert.equal(variants.length, 206);
+  assert.equal(variants.length, 205);
   assert.deepEqual(languages, new Set(["assembly", "c", "cpp", "csharp", "d", "go", "pascal", "rust", "zig"]));
   assert.ok(ids.includes("c-msvc-x64-o2-md"));
   assert.ok(ids.includes("c-msvc-x64-o2-md-arch-avx512"));
@@ -61,12 +62,19 @@ void test("buildSampleVariants covers each hello-world source family", () => {
   assert.ok(ids.includes("cpp-zig-cc-x86-o2"));
   assert.ok(ids.includes("rust-x64-msvc-o3-panic-abort-target-cpu-native"));
   assert.ok(ids.includes("go-windows-amd64-goamd64-v4"));
-  assert.ok(ids.includes("csharp-readytorun-win-x64-release"));
   assert.ok(ids.includes("csharp-readytorun-singlefile-win-x64-release"));
   assert.ok(ids.includes("csharp-readytorun-selfcontained-singlefile-win-x64-release"));
   assert.ok(ids.includes("csharp-nativeaot-win-x64-release"));
   assert.ok(ids.includes("csharp-nativeaot-win-x86-release"));
   assert.ok(ids.includes("assembly-nasm-x64-lld"));
+  assert.deepEqual(csharpIds, [
+    "csharp-framework-win-x64-release",
+    "csharp-nativeaot-win-x64-release",
+    "csharp-nativeaot-win-x86-release",
+    "csharp-readytorun-selfcontained-singlefile-win-x64-release",
+    "csharp-readytorun-singlefile-win-x64-release",
+    "csharp-selfcontained-win-x86-release"
+  ]);
 });
 
 void test("buildSampleVariants keeps missing tools as skipped variants", () => {

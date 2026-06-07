@@ -108,11 +108,6 @@ const buildCsharpVariants = (
 }, {
   runtime: "win-x64",
   configuration: "Release",
-  flavor: "readytorun",
-  extra: ["--self-contained", "false", "-p:PublishReadyToRun=true"]
-}, {
-  runtime: "win-x64",
-  configuration: "Release",
   flavor: "readytorun-singlefile",
   extra: ["--self-contained", "false", "-p:PublishReadyToRun=true", "-p:PublishSingleFile=true"]
 }, {
