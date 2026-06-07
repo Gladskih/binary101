@@ -225,6 +225,11 @@ runtime files adjacent to that `.exe`. It is not a claim that the PE has no dyna
 even mostly static Windows binaries still import system DLLs such as `kernel32.dll` or
 API-set DLLs.
 
+For Rust rows, `std` means the Rust standard library is linked into the primary `.exe` by the
+default `rustc` behavior used here. It does not mean the binary is fully static: MSVC targets
+still import MSVC/UCRT DLLs, GNU targets import Windows/UCRT support DLLs, and gnullvm unwind
+builds can import `libunwind.dll`.
+
 | language | arch | compiler | mode | runtime linkage | size bytes | size KiB | variant id |
 |---|---|---|---|---|---:|---:|---|
 | assembly | x64 | MASM + link.exe | link | WinAPI DLL imports | 2560 | 2.5 | assembly-masm-x64-link |
@@ -378,42 +383,42 @@ API-set DLLs.
 | go | x86 | Go gc | noopt | Go runtime bundled | 2238464 | 2186.0 | go-windows-386-noopt |
 | pascal | x86 | Free Pascal | o1 | FPC runtime bundled | 34304 | 33.5 | pascal-fpc-win32-o1 |
 | pascal | x86 | Free Pascal | o3 | FPC runtime bundled | 34304 | 33.5 | pascal-fpc-win32-o3 |
-| rust | x64 | rustc GNU | o0-panic-abort | Rust std bundled | 4901523 | 4786.6 | rust-x64-gnu-o0-panic-abort |
-| rust | x64 | rustc GNU | o0-panic-unwind | Rust std bundled | 4908772 | 4793.7 | rust-x64-gnu-o0-panic-unwind |
-| rust | x64 | rustc GNU | o3-panic-abort | Rust std bundled | 4901133 | 4786.3 | rust-x64-gnu-o3-panic-abort |
-| rust | x64 | rustc GNU | o3-panic-abort-lto-thin | Rust std bundled | 1894106 | 1849.7 | rust-x64-gnu-o3-panic-abort-lto-thin |
-| rust | x64 | rustc GNU | o3-panic-abort-target-cpu-native | Rust std bundled | 4901133 | 4786.3 | rust-x64-gnu-o3-panic-abort-target-cpu-native |
-| rust | x64 | rustc GNU | o3-panic-abort-target-cpu-x86-64-v2 | Rust std bundled | 4901133 | 4786.3 | rust-x64-gnu-o3-panic-abort-target-cpu-x86-64-v2 |
-| rust | x64 | rustc GNU | o3-panic-abort-target-cpu-x86-64-v3 | Rust std bundled | 4901133 | 4786.3 | rust-x64-gnu-o3-panic-abort-target-cpu-x86-64-v3 |
-| rust | x64 | rustc GNU | o3-panic-unwind | Rust std bundled | 4908364 | 4793.3 | rust-x64-gnu-o3-panic-unwind |
-| rust | x64 | rustc GNU | oz-panic-abort | Rust std bundled | 4901194 | 4786.3 | rust-x64-gnu-oz-panic-abort |
-| rust | x64 | rustc GNU | oz-panic-unwind | Rust std bundled | 4908425 | 4793.4 | rust-x64-gnu-oz-panic-unwind |
-| rust | x64 | rustc gnullvm | o0-panic-abort | Rust std bundled | 4154880 | 4057.5 | rust-x64-gnullvm-o0-panic-abort |
-| rust | x64 | rustc gnullvm | o0-panic-unwind | Rust std bundled | 4162560 | 4065.0 | rust-x64-gnullvm-o0-panic-unwind |
-| rust | x64 | rustc gnullvm | o3-panic-abort | Rust std bundled | 4154368 | 4057.0 | rust-x64-gnullvm-o3-panic-abort |
-| rust | x64 | rustc gnullvm | o3-panic-abort-lto-thin | Rust std bundled | 1845760 | 1802.5 | rust-x64-gnullvm-o3-panic-abort-lto-thin |
-| rust | x64 | rustc gnullvm | o3-panic-abort-target-cpu-native | Rust std bundled | 4154368 | 4057.0 | rust-x64-gnullvm-o3-panic-abort-target-cpu-native |
-| rust | x64 | rustc gnullvm | o3-panic-abort-target-cpu-x86-64-v2 | Rust std bundled | 4154368 | 4057.0 | rust-x64-gnullvm-o3-panic-abort-target-cpu-x86-64-v2 |
-| rust | x64 | rustc gnullvm | o3-panic-abort-target-cpu-x86-64-v3 | Rust std bundled | 4154368 | 4057.0 | rust-x64-gnullvm-o3-panic-abort-target-cpu-x86-64-v3 |
-| rust | x64 | rustc gnullvm | o3-panic-unwind | Rust std bundled | 4162048 | 4064.5 | rust-x64-gnullvm-o3-panic-unwind |
-| rust | x64 | rustc gnullvm | oz-panic-abort | Rust std bundled | 4154368 | 4057.0 | rust-x64-gnullvm-oz-panic-abort |
-| rust | x64 | rustc gnullvm | oz-panic-unwind | Rust std bundled | 4162048 | 4064.5 | rust-x64-gnullvm-oz-panic-unwind |
-| rust | x64 | rustc MSVC | o0-panic-abort | Rust std bundled | 126464 | 123.5 | rust-x64-msvc-o0-panic-abort |
-| rust | x64 | rustc MSVC | o0-panic-unwind | Rust std bundled | 129024 | 126.0 | rust-x64-msvc-o0-panic-unwind |
-| rust | x64 | rustc MSVC | o3-panic-abort | Rust std bundled | 123904 | 121.0 | rust-x64-msvc-o3-panic-abort |
-| rust | x64 | rustc MSVC | o3-panic-abort-lto-thin | Rust std bundled | 122368 | 119.5 | rust-x64-msvc-o3-panic-abort-lto-thin |
-| rust | x64 | rustc MSVC | o3-panic-abort-target-cpu-native | Rust std bundled | 123904 | 121.0 | rust-x64-msvc-o3-panic-abort-target-cpu-native |
-| rust | x64 | rustc MSVC | o3-panic-abort-target-cpu-x86-64-v2 | Rust std bundled | 123904 | 121.0 | rust-x64-msvc-o3-panic-abort-target-cpu-x86-64-v2 |
-| rust | x64 | rustc MSVC | o3-panic-abort-target-cpu-x86-64-v3 | Rust std bundled | 123904 | 121.0 | rust-x64-msvc-o3-panic-abort-target-cpu-x86-64-v3 |
-| rust | x64 | rustc MSVC | o3-panic-unwind | Rust std bundled | 125440 | 122.5 | rust-x64-msvc-o3-panic-unwind |
-| rust | x64 | rustc MSVC | oz-panic-abort | Rust std bundled | 123904 | 121.0 | rust-x64-msvc-oz-panic-abort |
-| rust | x64 | rustc MSVC | oz-panic-unwind | Rust std bundled | 125440 | 122.5 | rust-x64-msvc-oz-panic-unwind |
-| rust | x86 | rustc MSVC | o0-panic-abort | Rust std bundled | 111616 | 109.0 | rust-x86-msvc-o0-panic-abort |
-| rust | x86 | rustc MSVC | o0-panic-unwind | Rust std bundled | 113664 | 111.0 | rust-x86-msvc-o0-panic-unwind |
-| rust | x86 | rustc MSVC | o3-panic-abort | Rust std bundled | 111104 | 108.5 | rust-x86-msvc-o3-panic-abort |
-| rust | x86 | rustc MSVC | o3-panic-unwind | Rust std bundled | 112640 | 110.0 | rust-x86-msvc-o3-panic-unwind |
-| rust | x86 | rustc MSVC | oz-panic-abort | Rust std bundled | 111104 | 108.5 | rust-x86-msvc-oz-panic-abort |
-| rust | x86 | rustc MSVC | oz-panic-unwind | Rust std bundled | 112640 | 110.0 | rust-x86-msvc-oz-panic-unwind |
+| rust | x64 | rustc GNU | o0-panic-abort | Rust std static + Windows/UCRT DLLs | 4901523 | 4786.6 | rust-x64-gnu-o0-panic-abort |
+| rust | x64 | rustc GNU | o0-panic-unwind | Rust std static + Windows/UCRT DLLs | 4908772 | 4793.7 | rust-x64-gnu-o0-panic-unwind |
+| rust | x64 | rustc GNU | o3-panic-abort | Rust std static + Windows/UCRT DLLs | 4901133 | 4786.3 | rust-x64-gnu-o3-panic-abort |
+| rust | x64 | rustc GNU | o3-panic-abort-lto-thin | Rust std static + Windows/UCRT DLLs | 1894106 | 1849.7 | rust-x64-gnu-o3-panic-abort-lto-thin |
+| rust | x64 | rustc GNU | o3-panic-abort-target-cpu-native | Rust std static + Windows/UCRT DLLs | 4901133 | 4786.3 | rust-x64-gnu-o3-panic-abort-target-cpu-native |
+| rust | x64 | rustc GNU | o3-panic-abort-target-cpu-x86-64-v2 | Rust std static + Windows/UCRT DLLs | 4901133 | 4786.3 | rust-x64-gnu-o3-panic-abort-target-cpu-x86-64-v2 |
+| rust | x64 | rustc GNU | o3-panic-abort-target-cpu-x86-64-v3 | Rust std static + Windows/UCRT DLLs | 4901133 | 4786.3 | rust-x64-gnu-o3-panic-abort-target-cpu-x86-64-v3 |
+| rust | x64 | rustc GNU | o3-panic-unwind | Rust std static + Windows/UCRT DLLs | 4908364 | 4793.3 | rust-x64-gnu-o3-panic-unwind |
+| rust | x64 | rustc GNU | oz-panic-abort | Rust std static + Windows/UCRT DLLs | 4901194 | 4786.3 | rust-x64-gnu-oz-panic-abort |
+| rust | x64 | rustc GNU | oz-panic-unwind | Rust std static + Windows/UCRT DLLs | 4908425 | 4793.4 | rust-x64-gnu-oz-panic-unwind |
+| rust | x64 | rustc gnullvm | o0-panic-abort | Rust std static + libunwind/UCRT DLLs | 4154880 | 4057.5 | rust-x64-gnullvm-o0-panic-abort |
+| rust | x64 | rustc gnullvm | o0-panic-unwind | Rust std static + libunwind/UCRT DLLs | 4162560 | 4065.0 | rust-x64-gnullvm-o0-panic-unwind |
+| rust | x64 | rustc gnullvm | o3-panic-abort | Rust std static + libunwind/UCRT DLLs | 4154368 | 4057.0 | rust-x64-gnullvm-o3-panic-abort |
+| rust | x64 | rustc gnullvm | o3-panic-abort-lto-thin | Rust std static + libunwind/UCRT DLLs | 1845760 | 1802.5 | rust-x64-gnullvm-o3-panic-abort-lto-thin |
+| rust | x64 | rustc gnullvm | o3-panic-abort-target-cpu-native | Rust std static + libunwind/UCRT DLLs | 4154368 | 4057.0 | rust-x64-gnullvm-o3-panic-abort-target-cpu-native |
+| rust | x64 | rustc gnullvm | o3-panic-abort-target-cpu-x86-64-v2 | Rust std static + libunwind/UCRT DLLs | 4154368 | 4057.0 | rust-x64-gnullvm-o3-panic-abort-target-cpu-x86-64-v2 |
+| rust | x64 | rustc gnullvm | o3-panic-abort-target-cpu-x86-64-v3 | Rust std static + libunwind/UCRT DLLs | 4154368 | 4057.0 | rust-x64-gnullvm-o3-panic-abort-target-cpu-x86-64-v3 |
+| rust | x64 | rustc gnullvm | o3-panic-unwind | Rust std static + libunwind/UCRT DLLs | 4162048 | 4064.5 | rust-x64-gnullvm-o3-panic-unwind |
+| rust | x64 | rustc gnullvm | oz-panic-abort | Rust std static + libunwind/UCRT DLLs | 4154368 | 4057.0 | rust-x64-gnullvm-oz-panic-abort |
+| rust | x64 | rustc gnullvm | oz-panic-unwind | Rust std static + libunwind/UCRT DLLs | 4162048 | 4064.5 | rust-x64-gnullvm-oz-panic-unwind |
+| rust | x64 | rustc MSVC | o0-panic-abort | Rust std static + MSVC/UCRT DLLs | 126464 | 123.5 | rust-x64-msvc-o0-panic-abort |
+| rust | x64 | rustc MSVC | o0-panic-unwind | Rust std static + MSVC/UCRT DLLs | 129024 | 126.0 | rust-x64-msvc-o0-panic-unwind |
+| rust | x64 | rustc MSVC | o3-panic-abort | Rust std static + MSVC/UCRT DLLs | 123904 | 121.0 | rust-x64-msvc-o3-panic-abort |
+| rust | x64 | rustc MSVC | o3-panic-abort-lto-thin | Rust std static + MSVC/UCRT DLLs | 122368 | 119.5 | rust-x64-msvc-o3-panic-abort-lto-thin |
+| rust | x64 | rustc MSVC | o3-panic-abort-target-cpu-native | Rust std static + MSVC/UCRT DLLs | 123904 | 121.0 | rust-x64-msvc-o3-panic-abort-target-cpu-native |
+| rust | x64 | rustc MSVC | o3-panic-abort-target-cpu-x86-64-v2 | Rust std static + MSVC/UCRT DLLs | 123904 | 121.0 | rust-x64-msvc-o3-panic-abort-target-cpu-x86-64-v2 |
+| rust | x64 | rustc MSVC | o3-panic-abort-target-cpu-x86-64-v3 | Rust std static + MSVC/UCRT DLLs | 123904 | 121.0 | rust-x64-msvc-o3-panic-abort-target-cpu-x86-64-v3 |
+| rust | x64 | rustc MSVC | o3-panic-unwind | Rust std static + MSVC/UCRT DLLs | 125440 | 122.5 | rust-x64-msvc-o3-panic-unwind |
+| rust | x64 | rustc MSVC | oz-panic-abort | Rust std static + MSVC/UCRT DLLs | 123904 | 121.0 | rust-x64-msvc-oz-panic-abort |
+| rust | x64 | rustc MSVC | oz-panic-unwind | Rust std static + MSVC/UCRT DLLs | 125440 | 122.5 | rust-x64-msvc-oz-panic-unwind |
+| rust | x86 | rustc MSVC | o0-panic-abort | Rust std static + MSVC/UCRT DLLs | 111616 | 109.0 | rust-x86-msvc-o0-panic-abort |
+| rust | x86 | rustc MSVC | o0-panic-unwind | Rust std static + MSVC/UCRT DLLs | 113664 | 111.0 | rust-x86-msvc-o0-panic-unwind |
+| rust | x86 | rustc MSVC | o3-panic-abort | Rust std static + MSVC/UCRT DLLs | 111104 | 108.5 | rust-x86-msvc-o3-panic-abort |
+| rust | x86 | rustc MSVC | o3-panic-unwind | Rust std static + MSVC/UCRT DLLs | 112640 | 110.0 | rust-x86-msvc-o3-panic-unwind |
+| rust | x86 | rustc MSVC | oz-panic-abort | Rust std static + MSVC/UCRT DLLs | 111104 | 108.5 | rust-x86-msvc-oz-panic-abort |
+| rust | x86 | rustc MSVC | oz-panic-unwind | Rust std static + MSVC/UCRT DLLs | 112640 | 110.0 | rust-x86-msvc-oz-panic-unwind |
 | zig | x64 | Zig build-exe | debug | Zig runtime bundled | 1830400 | 1787.5 | zig-x64-debug |
 | zig | x64 | Zig build-exe | releasefast | Zig runtime bundled | 754688 | 737.0 | zig-x64-releasefast |
 | zig | x64 | Zig build-exe | releasesmall | Zig runtime bundled | 433152 | 423.0 | zig-x64-releasesmall |
