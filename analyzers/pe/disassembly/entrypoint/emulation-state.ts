@@ -9,6 +9,7 @@ import type {
 type KnownValueBits = 8 | 16 | 32 | 64;
 type KnownValue = { kind: "known"; value: bigint; bits: KnownValueBits };
 type UnknownValue = { kind: "unknown" };
+type ImportReturnValue = { kind: "import-return"; label: string };
 type CpuIdOutputValue = {
   kind: "cpuid-output";
   leaf: number;
@@ -16,7 +17,7 @@ type CpuIdOutputValue = {
   register: CpuIdOutputRegister;
 };
 
-export type EmulatedValue = KnownValue | UnknownValue | CpuIdOutputValue;
+export type EmulatedValue = KnownValue | UnknownValue | ImportReturnValue | CpuIdOutputValue;
 
 export type EmulationState = {
   bitness: 32 | 64;
@@ -35,6 +36,11 @@ export const known = (value: bigint, bits: KnownValueBits): KnownValue => ({
   kind: "known",
   value: BigInt.asUintN(bits, value),
   bits
+});
+
+export const importReturn = (label: string): ImportReturnValue => ({
+  kind: "import-return",
+  label
 });
 
 export const readRegister = (
@@ -76,7 +82,10 @@ const writeKnownRegister = (
       state.registers.set(access.canonical, UNKNOWN);
       return;
     }
-    state.registers.set(access.canonical, known(replaceBits(current, access, value.value), current.bits));
+    state.registers.set(
+      access.canonical,
+      known(replaceBits(current, access, value.value), current.bits)
+    );
     return;
   }
   state.registers.set(access.canonical, known(value.value, writeStorageBits(state, access)));
@@ -106,7 +115,9 @@ export const binaryKnown = (
   right: EmulatedValue,
   op: (a: bigint, b: bigint) => bigint
 ): EmulatedValue =>
-  left.kind === "known" && right.kind === "known" ? known(op(left.value, right.value), left.bits) : UNKNOWN;
+  left.kind === "known" && right.kind === "known"
+    ? known(op(left.value, right.value), left.bits)
+    : UNKNOWN;
 
 export const createEmulationState = (bitness: 32 | 64): EmulationState => {
   const registers = new Map<CanonicalRegister, EmulatedValue>();

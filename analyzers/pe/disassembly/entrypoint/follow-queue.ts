@@ -68,6 +68,7 @@ const canQueueNewContext = (
 const valueKey = (value: EmulatedValue | undefined): string => {
   if (!value) return "unset";
   if (value.kind === "known") return `known:${value.bits}:${value.value.toString(16)}`;
+  if (value.kind === "import-return") return `import:${value.label}`;
   if (value.kind === "cpuid-output") {
     const subleaf = value.subleaf == null ? "" : `:${value.subleaf}`;
     return `cpuid:${value.leaf}${subleaf}:${value.register}`;

@@ -19,6 +19,8 @@ import {
 import { followDirectCodeTarget } from "./direct-target.js";
 import type { ImportTarget } from "./import-targets.js";
 import { createReturnStackState } from "./call-stack.js";
+import { applyReturningImportEffects } from "./import-effects.js";
+import type { EmulationState } from "./emulation-state.js";
 import {
   queueConditionalBranch,
   queueFollowedBlock,
@@ -33,6 +35,16 @@ export type InstructionTargetingResult = {
   directTarget: DirectControlFlowTarget | null;
   branchTargets: ConditionalBranchTargets | null;
   importFallthrough: ReturningImportFallthrough | null;
+};
+
+const createImportReturnState = (
+  iced: IcedModule,
+  emulationState: EmulationState,
+  importTarget: ImportTarget
+): EmulationState => {
+  const returned = createReturnStackState(iced, emulationState);
+  applyReturningImportEffects(iced, returned, importTarget);
+  return returned;
 };
 
 const applyImportTarget = async (
@@ -57,9 +69,12 @@ const applyImportTarget = async (
       { kind: "followed-import-return", rva: importFallthrough.rva },
       rva,
       issues,
-      createReturnStackState(iced, block.emulationState)
+      createImportReturnState(iced, block.emulationState, importTarget)
     )
     : importFallthrough?.kind === "current-block";
+  if (importFallthrough?.kind === "current-block") {
+    applyReturningImportEffects(iced, block.emulationState, importTarget);
+  }
   instruction.target = importFallthrough == null
     ? { kind: "import", ...importTarget }
     : { kind: "import", ...importTarget, returnRva: importFallthrough.rva, returnFollowed };
@@ -175,9 +190,28 @@ export const applyInstructionTargets = async (
       issues
     );
   } else if (branchTargets) {
-    await applyBranchTarget(reader, opts, block, instruction, branchTargets, rva, state, pending, issues);
+    await applyBranchTarget(
+      reader,
+      opts,
+      block,
+      instruction,
+      branchTargets,
+      rva,
+      state,
+      pending,
+      issues
+    );
   } else if (decoded.flowControl === iced.FlowControl["Return"]) {
-    instruction.target = await followReturnTarget(reader, iced, opts, block, rva, state, pending, issues);
+    instruction.target = await followReturnTarget(
+      reader,
+      iced,
+      opts,
+      block,
+      rva,
+      state,
+      pending,
+      issues
+    );
   }
   return { importTarget, directTarget, branchTargets, importFallthrough };
 };
