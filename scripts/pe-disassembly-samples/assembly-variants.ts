@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createVisualStudioStep } from "./command.js";
 import {
   projectRoot,
+  type BinarySizeTableColumns,
   type BuildStep,
   type BuildVariant,
   type SampleSources,
@@ -19,6 +20,12 @@ const outputPath = (outputRoot: string, id: string): string =>
 const missing = (name: string, value: string | null): string[] =>
   value ? [] : [`${name} was not found.`];
 
+const sizeColumns = (
+  arch: string,
+  compiler: string,
+  mode: string
+): BinarySizeTableColumns => ({ arch, compiler, mode, runtimeLinkage: "WinAPI DLL imports" });
+
 const directStep = (label: string, executable: string, args: string[]): BuildStep => ({
   label,
   executable,
@@ -31,6 +38,7 @@ const makeVariant = (
   id: string,
   toolchain: string,
   label: string,
+  sizeTableColumns: BinarySizeTableColumns,
   steps: BuildStep[],
   skipReasons: string[]
 ): BuildVariant => {
@@ -39,6 +47,7 @@ const makeVariant = (
     label,
     language: "assembly" as const,
     outputPath: outputPath(outputRoot, id),
+    sizeTableColumns,
     steps,
     toolchain
   };
@@ -62,10 +71,18 @@ const buildNasmVariant = (
       "/defaultlib:kernel32", `/out:${outputPath(outputRoot, id)}`
     ])
   ] : [];
-  return makeVariant(outputRoot, id, "nasm+lld-link", `${architecture} direct WinAPI`, steps, [
-    ...missing("nasm", toolchains.nasm),
-    ...missing("lld-link", toolchains.lldLink)
-  ]);
+  return makeVariant(
+    outputRoot,
+    id,
+    "nasm+lld-link",
+    `${architecture} direct WinAPI`,
+    sizeColumns(architecture, "NASM + lld-link", "lld"),
+    steps,
+    [
+      ...missing("nasm", toolchains.nasm),
+      ...missing("lld-link", toolchains.lldLink)
+    ]
+  );
 };
 
 const buildMasmVariant = (
@@ -88,10 +105,15 @@ const buildMasmVariant = (
   const steps = toolchains.visualStudio
     ? [createVisualStudioStep("assemble and link", toolchains.visualStudio, architecture, commands)]
     : [];
-  return makeVariant(outputRoot, id, "masm+link", `${architecture} direct WinAPI`, steps, missing(
-    "Visual Studio vcvarsall.bat",
-    toolchains.visualStudio?.vcvarsallPath ?? null
-  ));
+  return makeVariant(
+    outputRoot,
+    id,
+    "masm+link",
+    `${architecture} direct WinAPI`,
+    sizeColumns(architecture, "MASM + link.exe", "link"),
+    steps,
+    missing("Visual Studio vcvarsall.bat", toolchains.visualStudio?.vcvarsallPath ?? null)
+  );
 };
 
 export const buildAssemblyVariants = (

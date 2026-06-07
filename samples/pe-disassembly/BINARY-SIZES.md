@@ -25,7 +25,7 @@ Adjacent PDB files may still exist for toolchains that emit them.
 | c | x64 | LLVM clang-cl | o2-md-flto | DLL MSVC CRT | 8704 | 8.5 | c-clang-cl-x64-o2-md-flto |
 | c | x64 | LLVM clang-cl | o2-md-march-x86-64-v2 | DLL MSVC CRT | 8704 | 8.5 | c-clang-cl-x64-o2-md-march-x86-64-v2 |
 | c | x64 | LLVM clang-cl | o2-md-march-x86-64-v3 | DLL MSVC CRT | 8704 | 8.5 | c-clang-cl-x64-o2-md-march-x86-64-v3 |
-| c | x64 | LLVM clang-cl | o2-md-mtune-znver5 | static MSVC CRT | 8704 | 8.5 | c-clang-cl-x64-o2-md-mtune-znver5 |
+| c | x64 | LLVM clang-cl | o2-md-mtune-znver5 | DLL MSVC CRT | 8704 | 8.5 | c-clang-cl-x64-o2-md-mtune-znver5 |
 | c | x64 | LLVM clang-cl | o2-md-march-znver5 | DLL MSVC CRT | 8704 | 8.5 | c-clang-cl-x64-o2-md-march-znver5 |
 | c | x86 | LLVM clang-cl | od-md | DLL MSVC CRT | 7680 | 7.5 | c-clang-cl-x86-od-md |
 | c | x86 | LLVM clang-cl | o2-md | DLL MSVC CRT | 7680 | 7.5 | c-clang-cl-x86-o2-md |
@@ -90,7 +90,7 @@ Adjacent PDB files may still exist for toolchains that emit them.
 | cpp | x64 | LLVM clang-cl | o2-md-flto | DLL MSVC CRT | 9728 | 9.5 | cpp-clang-cl-x64-o2-md-flto |
 | cpp | x64 | LLVM clang-cl | o2-md-march-x86-64-v2 | DLL MSVC CRT | 10240 | 10.0 | cpp-clang-cl-x64-o2-md-march-x86-64-v2 |
 | cpp | x64 | LLVM clang-cl | o2-md-march-x86-64-v3 | DLL MSVC CRT | 10240 | 10.0 | cpp-clang-cl-x64-o2-md-march-x86-64-v3 |
-| cpp | x64 | LLVM clang-cl | o2-md-mtune-znver5 | static MSVC CRT | 10240 | 10.0 | cpp-clang-cl-x64-o2-md-mtune-znver5 |
+| cpp | x64 | LLVM clang-cl | o2-md-mtune-znver5 | DLL MSVC CRT | 10240 | 10.0 | cpp-clang-cl-x64-o2-md-mtune-znver5 |
 | cpp | x64 | LLVM clang-cl | o2-md-march-znver5 | DLL MSVC CRT | 10240 | 10.0 | cpp-clang-cl-x64-o2-md-march-znver5 |
 | cpp | x86 | LLVM clang-cl | od-md | DLL MSVC CRT | 10240 | 10.0 | cpp-clang-cl-x86-od-md |
 | cpp | x86 | LLVM clang-cl | o2-md | DLL MSVC CRT | 8704 | 8.5 | cpp-clang-cl-x86-o2-md |

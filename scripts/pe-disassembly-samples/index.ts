@@ -77,6 +77,7 @@ const buildSkippedResult = (variant: BuildVariant, reason: string): SampleResult
   id: variant.id,
   label: variant.label,
   language: variant.language,
+  sizeTableColumns: variant.sizeTableColumns,
   commandLines: buildCommandLines(variant),
   reason
 });
@@ -91,6 +92,7 @@ const buildFailureResult = (
   id: variant.id,
   label: variant.label,
   language: variant.language,
+  sizeTableColumns: variant.sizeTableColumns,
   durationMs,
   commandLines: buildCommandLines(variant),
   error,
@@ -131,6 +133,7 @@ const compileVariant = async (variant: BuildVariant): Promise<SampleResult> => {
     language: variant.language,
     outputPath: variant.outputPath,
     outputSize: output.size,
+    sizeTableColumns: variant.sizeTableColumns,
     durationMs,
     commandLines: variant.steps.map(getStepCommandLine),
     steps

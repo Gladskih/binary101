@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createVisualStudioStep, prependPath } from "./command.js";
 import {
   projectRoot,
+  type BinarySizeTableColumns,
   type BuildStep,
   type BuildVariant,
   type MsysToolchain,
@@ -22,15 +23,18 @@ import {
 } from "./native-modes.js";
 
 type NativeLanguage = "c" | "cpp";
-
 const variantDirectory = (outputRoot: string, id: string): string =>
   join(outputRoot, "variants", id);
-
 const outputPath = (outputRoot: string, id: string): string =>
   join(variantDirectory(outputRoot, id), `${id}.exe`);
-
 const missing = (name: string, value: string | null): string[] =>
   value ? [] : [`${name} was not found.`];
+const sizeColumns = (
+  arch: string,
+  compiler: string,
+  mode: string,
+  runtimeLinkage: string
+): BinarySizeTableColumns => ({ arch, compiler, mode, runtimeLinkage });
 
 const makeVariant = (
   outputRoot: string,
@@ -38,10 +42,19 @@ const makeVariant = (
   language: SampleLanguage,
   toolchain: string,
   label: string,
+  sizeTableColumns: BinarySizeTableColumns,
   steps: BuildStep[],
   skipReasons: string[]
 ): BuildVariant => {
-  const variant = { id, label, language, outputPath: outputPath(outputRoot, id), steps, toolchain };
+  const variant = {
+    id,
+    label,
+    language,
+    outputPath: outputPath(outputRoot, id),
+    sizeTableColumns,
+    steps,
+    toolchain
+  };
   return skipReasons.length ? { ...variant, skipReason: skipReasons.join(" ") } : variant;
 };
 
@@ -86,6 +99,7 @@ const buildMsvcLanguageVariants = (
         ...mode.args
       ];
       return makeVariant(outputRoot, id, language, "msvc-cl", `${architecture} ${mode.label}`,
+        sizeColumns(architecture, "MSVC cl.exe", mode.id, mode.runtimeLinkage ?? "DLL MSVC CRT"),
         visualStudioCompileStep(toolchains, architecture, "cl.exe", args),
         missing("Visual Studio vcvarsall.bat", toolchains.visualStudio?.vcvarsallPath ?? null));
     })
@@ -95,7 +109,6 @@ const clangClModesForArchitecture = (architecture: string): readonly CompilerMod
   architecture === "x64"
     ? [...msvcRuntimeModes, ...clangClExtraModes]
     : [...msvcRuntimeModes, clangClExtraModes[0]!];
-
 const buildClangClLanguageVariants = (
   outputRoot: string,
   toolchains: Toolchains,
@@ -123,9 +136,19 @@ const buildClangClLanguageVariants = (
         ...missing("Visual Studio vcvarsall.bat", toolchains.visualStudio?.vcvarsallPath ?? null)
       ];
       return makeVariant(outputRoot, id, language, "llvm-clang-cl", `${architecture} ${mode.label}`,
+        sizeColumns(architecture, "LLVM clang-cl", mode.id, mode.runtimeLinkage ?? "DLL MSVC CRT"),
         steps, skipReasons);
     })
   );
+
+const directCompilerLabel = (family: string): string => {
+  if (family === "msys-ucrt64") return "MSYS2 UCRT64 GCC/G++";
+  if (family === "msys-ucrt64-clang") return "MSYS2 UCRT64 clang/clang++";
+  return "MSYS2 CLANG64 clang/clang++";
+};
+
+const directRuntimeLinkage = (family: string): string =>
+  family === "msys-clang64" ? "MSYS2 CLANG64 DLLs" : "MSYS2 UCRT DLLs";
 
 const buildDirectGccStyleVariants = (
   outputRoot: string,
@@ -140,7 +163,9 @@ const buildDirectGccStyleVariants = (
     const id = `${language}-${family}-x64-${mode.id}`;
     const args = [sourcePath, "-o", outputPath(outputRoot, id), ...mode.args, "-s"];
     const steps = compiler ? [directStep(compiler, args, env)] : [];
-    return makeVariant(outputRoot, id, language, family, `x64 ${mode.label}`, steps,
+    return makeVariant(outputRoot, id, language, family, `x64 ${mode.label}`,
+      sizeColumns("x64", directCompilerLabel(family), mode.id, directRuntimeLinkage(family)),
+      steps,
       missing(`${family} ${language} compiler`, compiler));
   });
 
@@ -201,10 +226,19 @@ const buildLlvmClangMsvcVariant = (
   const target = architecture === "x64" ? "x86_64-pc-windows-msvc" : "i686-pc-windows-msvc";
   const args = [`--target=${target}`, sourcePath, "-fuse-ld=lld", "-o", outputPath(outputRoot, id), ...mode.args];
   const steps = compiler ? visualStudioCompileStep(toolchains, architecture, compiler, args) : [];
-  return makeVariant(outputRoot, id, language, "llvm-clang", `${architecture} ${mode.label}`, steps, [
-    ...missing(compilerName, compiler),
-    ...missing("Visual Studio vcvarsall.bat", toolchains.visualStudio?.vcvarsallPath ?? null)
-  ]);
+  return makeVariant(
+    outputRoot,
+    id,
+    language,
+    "llvm-clang",
+    `${architecture} ${mode.label}`,
+    sizeColumns(architecture, "LLVM clang/clang++ MSVC", mode.id, "DLL MSVC CRT"),
+    steps,
+    [
+      ...missing(compilerName, compiler),
+      ...missing("Visual Studio vcvarsall.bat", toolchains.visualStudio?.vcvarsallPath ?? null)
+    ]
+  );
 };
 
 const buildZigCcLanguageVariants = (
@@ -245,6 +279,7 @@ const buildZigCcVariant = (
   ];
   const steps = toolchains.zig ? [directStep(toolchains.zig, args)] : [];
   return makeVariant(outputRoot, id, language, "zig-cc", `${target} ${mode.label}`,
+    sizeColumns(architecture, "Zig cc/c++", mode.id, "Zig libc bundled"),
     steps, missing("zig", toolchains.zig));
 };
 

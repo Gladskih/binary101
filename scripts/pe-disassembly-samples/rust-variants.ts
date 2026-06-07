@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createVisualStudioStep, prependPath } from "./command.js";
 import {
   projectRoot,
+  type BinarySizeTableColumns,
   type BuildStep,
   type BuildVariant,
   type Toolchains
@@ -38,14 +39,42 @@ const outputPath = (outputRoot: string, id: string): string =>
 const missing = (name: string, value: string | null): string[] =>
   value ? [] : [`${name} was not found.`];
 
+const rustRuntimeLinkage = (id: string): string => {
+  if (id.endsWith("-gnu")) return "Rust std static + Windows/UCRT DLLs";
+  if (id.endsWith("-gnullvm")) return "Rust std static + libunwind/UCRT DLLs";
+  return "Rust std static + MSVC/UCRT DLLs";
+};
+
+const sizeColumns = (
+  target: RustTarget,
+  mode: string
+): BinarySizeTableColumns => {
+  const [arch, abi] = target.id.split("-");
+  return {
+    arch: arch ?? "unknown",
+    compiler: `rustc ${(abi ?? "unknown").toUpperCase()}`,
+    mode,
+    runtimeLinkage: rustRuntimeLinkage(target.id)
+  };
+};
+
 const makeVariant = (
   outputRoot: string,
   id: string,
   label: string,
+  sizeTableColumns: BinarySizeTableColumns,
   steps: BuildStep[],
   skipReasons: string[]
 ): BuildVariant => {
-  const variant = { id, label, language: "rust" as const, outputPath: outputPath(outputRoot, id), steps, toolchain: "rustc" };
+  const variant = {
+    id,
+    label,
+    language: "rust" as const,
+    outputPath: outputPath(outputRoot, id),
+    sizeTableColumns,
+    steps,
+    toolchain: "rustc"
+  };
   return skipReasons.length ? { ...variant, skipReason: skipReasons.join(" ") } : variant;
 };
 
@@ -86,7 +115,7 @@ const buildRustCompileVariant = (
   const vsMissing = target.vcArchitecture
     ? missing("Visual Studio vcvarsall.bat", toolchains.visualStudio?.vcvarsallPath ?? null)
     : [];
-  return makeVariant(outputRoot, id, label, steps, [
+  return makeVariant(outputRoot, id, label, sizeColumns(target, idSuffix), steps, [
     ...missing("rustc", toolchains.rustc),
     ...vsMissing,
     ...rustLinkerMissing(toolchains, target.linker)

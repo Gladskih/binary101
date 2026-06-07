@@ -81,11 +81,19 @@ export interface BuildStep {
   windowsVerbatimArguments?: boolean;
 }
 
+export interface BinarySizeTableColumns {
+  arch: string;
+  compiler: string;
+  mode: string;
+  runtimeLinkage: string;
+}
+
 export interface BuildVariant {
   id: string;
   label: string;
   language: SampleLanguage;
   outputPath: string;
+  sizeTableColumns: BinarySizeTableColumns;
   steps: BuildStep[];
   toolchain: string;
   notes?: string[];
@@ -107,6 +115,7 @@ export interface SuccessfulSampleResult {
   language: SampleLanguage;
   outputPath: string;
   outputSize: number;
+  sizeTableColumns: BinarySizeTableColumns;
   durationMs: number;
   commandLines: string[];
   steps: StepResult[];
@@ -117,6 +126,7 @@ export interface FailedSampleResult {
   id: string;
   label: string;
   language: SampleLanguage;
+  sizeTableColumns: BinarySizeTableColumns;
   durationMs: number;
   commandLines: string[];
   error: string;
@@ -128,6 +138,7 @@ export interface SkippedSampleResult {
   id: string;
   label: string;
   language: SampleLanguage;
+  sizeTableColumns: BinarySizeTableColumns;
   commandLines: string[];
   reason: string;
 }

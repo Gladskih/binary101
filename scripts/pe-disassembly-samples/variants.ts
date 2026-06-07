@@ -8,6 +8,7 @@ import { buildRustVariants } from "./rust-variants.js";
 import {
   projectRoot,
   sampleSourceRoot,
+  type BinarySizeTableColumns,
   type BuildStep,
   type BuildVariant,
   type SampleLanguage,
@@ -35,16 +36,36 @@ const outputPath = (outputRoot: string, id: string): string =>
   join(variantDirectory(outputRoot, id), `${id}.exe`);
 const missing = (name: string, value: string | null): string[] =>
   value ? [] : [`${name} was not found.`];
+
+const architectureLabel = (value: string): string =>
+  value === "amd64" || value === "x64" || value === "win-x64" ? "x64" : "x86";
+
+const sizeColumns = (
+  arch: string,
+  compiler: string,
+  mode: string,
+  runtimeLinkage: string
+): BinarySizeTableColumns => ({ arch, compiler, mode, runtimeLinkage });
+
 const makeVariant = (
   outputRoot: string,
   id: string,
   language: SampleLanguage,
   toolchain: string,
   label: string,
+  sizeTableColumns: BinarySizeTableColumns,
   steps: BuildStep[],
   skipReasons: string[]
 ): BuildVariant => {
-  const variant = { id, label, language, outputPath: outputPath(outputRoot, id), steps, toolchain };
+  const variant = {
+    id,
+    label,
+    language,
+    outputPath: outputPath(outputRoot, id),
+    sizeTableColumns,
+    steps,
+    toolchain
+  };
   return skipReasons.length ? { ...variant, skipReason: skipReasons.join(" ") } : variant;
 };
 const directStep = (
@@ -83,6 +104,7 @@ const buildGoVariants = (
         ...mode.args, sourcePath
       ];
       variants.push(makeVariant(outputRoot, id, "go", "go", `${architecture} ${mode.id}`,
+        sizeColumns(architectureLabel(architecture), "Go gc", mode.id, "Go runtime bundled"),
         toolchains.go ? [directStep("compile", toolchains.go, args, dirname(sourcePath), env)] : [],
         missing("go", toolchains.go)));
     }
@@ -101,9 +123,19 @@ const buildZigVariants = (
         "build-exe", sourcePath, "-target", target, "-O", mode, "-fstrip",
         `-femit-bin=${outputPath(outputRoot, id)}`
       ];
-      return makeVariant(outputRoot, id, "zig", "zig", `${target} ${mode}`, toolchains.zig ? [directStep("compile", toolchains.zig, args)] : [], missing("zig", toolchains.zig));
+      return makeVariant(outputRoot, id, "zig", "zig", `${target} ${mode}`,
+        sizeColumns(target.startsWith("x86_64") ? "x64" : "x86", "Zig build-exe",
+          mode.toLowerCase(), "Zig runtime bundled"),
+        toolchains.zig ? [directStep("compile", toolchains.zig, args)] : [], missing("zig", toolchains.zig));
     })
   );
+const csharpRuntimeLinkage = (flavor: string): string => {
+  if (flavor === "framework") return ".NET runtime external + app DLL";
+  if (flavor === "readytorun-singlefile") return ".NET runtime external single-file";
+  if (flavor === "readytorun-selfcontained-singlefile") return ".NET runtime bundled single-file";
+  if (flavor === "selfcontained") return ".NET runtime files adjacent";
+  return "NativeAOT self-contained";
+};
 const buildCsharpVariants = (
   outputRoot: string,
   toolchains: Toolchains,
@@ -151,7 +183,17 @@ const buildCsharpVariants = (
     ...extra
   ];
   const steps = toolchains.dotnet ? [directStep("compile", toolchains.dotnet, args, projectRoot, env)] : [];
-  const variant = makeVariant(outputRoot, id, "csharp", "dotnet", `${runtime} ${flavor}`, steps, missing("dotnet", toolchains.dotnet));
+  const variant = makeVariant(
+    outputRoot,
+    id,
+    "csharp",
+    "dotnet",
+    `${runtime} ${flavor}`,
+    sizeColumns(architectureLabel(runtime), ".NET publish", `${flavor.replace(/-/gu, " ")} release`,
+      csharpRuntimeLinkage(flavor)),
+    steps,
+    missing("dotnet", toolchains.dotnet)
+  );
   return { ...variant, outputPath: join(publishDirectory, "HelloCSharp.exe") };
 });
 const buildPascalVariants = (
@@ -162,7 +204,9 @@ const buildPascalVariants = (
   ["1", "3"].map(level => {
     const id = `pascal-fpc-win32-o${level}`;
     const args = ["-Twin32", "-Pi386", `-O${level}`, `-FE${variantDirectory(outputRoot, id)}`, `-o${outputPath(outputRoot, id)}`, sourcePath];
-    return makeVariant(outputRoot, id, "pascal", "fpc", `win32 O${level}`, toolchains.fpc ? [directStep("compile", toolchains.fpc, args)] : [], missing("fpc", toolchains.fpc));
+    return makeVariant(outputRoot, id, "pascal", "fpc", `win32 O${level}`,
+      sizeColumns("x86", "Free Pascal", `o${level}`, "FPC runtime bundled"),
+      toolchains.fpc ? [directStep("compile", toolchains.fpc, args)] : [], missing("fpc", toolchains.fpc));
   });
 
 const buildDVariants = (
@@ -177,7 +221,10 @@ const buildDVariants = (
   ].map(mode => {
     const id = `d-dmd-${mode.id}`;
     const args = [sourcePath, `-of=${outputPath(outputRoot, id)}`, ...mode.args];
-    return makeVariant(outputRoot, id, "d", "dmd", mode.id, toolchains.dmd ? [directStep("compile", toolchains.dmd, args)] : [], missing("dmd", toolchains.dmd));
+    return makeVariant(outputRoot, id, "d", "dmd", mode.id,
+      sizeColumns(mode.id.startsWith("x86") ? "x86" : "x64", "DMD",
+        mode.id.replace(/-/gu, " "), "D runtime bundled"),
+      toolchains.dmd ? [directStep("compile", toolchains.dmd, args)] : [], missing("dmd", toolchains.dmd));
   });
 
 export const buildSampleVariants = (

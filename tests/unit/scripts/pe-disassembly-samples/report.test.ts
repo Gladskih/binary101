@@ -3,7 +3,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildSummary, buildSummaryMarkdown } from "../../../../scripts/pe-disassembly-samples/report.js";
-import type { SampleResult } from "../../../../scripts/pe-disassembly-samples/model.js";
+import type { BinarySizeTableColumns, SampleResult } from "../../../../scripts/pe-disassembly-samples/model.js";
+
+const sizeTableColumns: BinarySizeTableColumns = {
+  arch: "x64",
+  compiler: "compiler",
+  mode: "mode",
+  runtimeLinkage: "runtime"
+};
 
 const createResults = (): SampleResult[] => [
   {
@@ -11,6 +18,7 @@ const createResults = (): SampleResult[] => [
     id: "c-msvc-x64-o2-md",
     label: "x64 O2 /MD",
     language: "c",
+    sizeTableColumns,
     outputPath: "C:\\out\\hello.exe",
     outputSize: 4096,
     durationMs: 100,
@@ -22,6 +30,7 @@ const createResults = (): SampleResult[] => [
     id: "zig-x64-debug",
     label: "zig debug",
     language: "zig",
+    sizeTableColumns,
     durationMs: 50,
     commandLines: ["zig build-exe hello.zig"],
     error: "compiler failed\nsecond line",
@@ -32,6 +41,7 @@ const createResults = (): SampleResult[] => [
     id: "assembly-nasm-x64-lld",
     label: "nasm",
     language: "assembly",
+    sizeTableColumns,
     commandLines: [],
     reason: "nasm was not found."
   }
