@@ -7,7 +7,11 @@ import type {
   PeEntrypointDisassemblyBlockKind
 } from "../types.js";
 import { loadCodeBytes, type MappedCodeBlock } from "./code-bytes.js";
-import type { ConditionalBranchTargets, FollowedCodeTarget } from "./control-flow.js";
+import {
+  toRva,
+  type ConditionalBranchTargets,
+  type FollowedCodeTarget
+} from "./control-flow.js";
 import {
   cloneEmulationState,
   type EmulatedValue,
@@ -76,18 +80,44 @@ const valueKey = (value: EmulatedValue | undefined): string => {
   return "unknown";
 };
 
-const registerStateKey = (state: EmulationState): string =>
-  Array.from(state.registers, ([name, value]) => `${name}=${valueKey(value)}`)
-    .sort()
-    .join(",");
+const pointerBytes = (state: EmulationState): bigint => BigInt(state.bitness / 8);
 
-const memoryStateKey = (state: EmulationState): string =>
-  Array.from(state.memory, ([address, value]) => `${address}=${valueKey(value)}`)
-    .sort()
-    .join(",");
+const stackSlotKey = (
+  state: EmulationState,
+  address: bigint,
+  imageBase: bigint
+): string | null => {
+  const value = state.memory.get(address.toString());
+  if (value?.kind !== "known") return null;
+  return toRva(value.value, imageBase) == null
+    ? null
+    : `${address.toString(16)}=${valueKey(value)}`;
+};
 
-export const createBlockKey = (rva: number, state: EmulationState): string =>
-  `${rva.toString(16)}|r:${registerStateKey(state)}|m:${memoryStateKey(state)}`;
+const stackSlotKeys = (state: EmulationState, imageBase: bigint): string => {
+  const keys = new Set<string>();
+  for (const register of ["RSP", "RBP"] as const) {
+    const value = state.registers.get(register);
+    if (value?.kind !== "known") continue;
+    for (const offset of [0n, pointerBytes(state)] as const) {
+      const key = stackSlotKey(state, value.value + offset, imageBase);
+      if (key) keys.add(key);
+    }
+  }
+  return Array.from(keys)
+    .sort()
+    .join("|");
+};
+
+const stackStateKey = (state: EmulationState, imageBase: bigint): string =>
+  `slots=${stackSlotKeys(state, imageBase)}`;
+
+export const createBlockKey = (
+  rva: number,
+  state: EmulationState,
+  imageBase: bigint
+): string =>
+  `${rva.toString(16)}|stack:${stackStateKey(state, imageBase)}`;
 
 export const queueFollowedBlock = async (
   reader: FileRangeReader,
@@ -99,7 +129,7 @@ export const queueFollowedBlock = async (
   issues: string[],
   emulationState: EmulationState
 ): Promise<boolean> => {
-  const key = createBlockKey(follow.rva, emulationState);
+  const key = createBlockKey(follow.rva, emulationState, opts.imageBase);
   if (state.visitedBlocks.has(key) || state.queuedBlocks.has(key)) return true;
   if (!canQueueNewContext(state, follow.rva, issues)) return false;
   const mapped = await loadCodeBytes(reader, opts, follow.rva, issues, "Control-flow target");

@@ -59,6 +59,7 @@ export const createReturnStackState = (
     writeRegister(next, stackPointer, UNKNOWN);
     return next;
   }
+  next.memory.delete(current.value.toString());
   writeRegister(next, stackPointer, known(current.value + pointerBytes(next), next.bitness));
   return next;
 };

@@ -121,7 +121,13 @@ export const emulateInstruction = (
   }
   if (mnemonic === iced.Mnemonic["Lea"]) {
     const address = resolveMemoryAddress(iced, state, decoded);
-    writeOperand(iced, state, decoded, 0, address == null ? UNKNOWN : known(address, state.bitness));
+    writeOperand(
+      iced,
+      state,
+      decoded,
+      0,
+      address == null ? UNKNOWN : known(address, state.bitness)
+    );
     return;
   }
   if (mnemonic === iced.Mnemonic["Xor"] && isSameRegisterOperand(iced, decoded)) {
@@ -199,15 +205,17 @@ export const emulateInstruction = (
   if (mnemonic === iced.Mnemonic["Pop"]) {
     const stackPointer = resolveStackPointer(iced, state);
     const current = readRegister(state, stackPointer);
-    const value = current.kind === "known" ? state.memory.get(current.value.toString()) ?? UNKNOWN : UNKNOWN;
-    writeOperand(iced, state, decoded, 0, value);
     if (current.kind === "known") {
+      const stackSlot = current.value.toString();
+      writeOperand(iced, state, decoded, 0, state.memory.get(stackSlot) ?? UNKNOWN);
+      state.memory.delete(stackSlot);
       writeRegister(
         state,
         stackPointer,
         known(current.value + BigInt(state.bitness / 8), state.bitness)
       );
     } else {
+      writeOperand(iced, state, decoded, 0, UNKNOWN);
       writeRegister(state, stackPointer, UNKNOWN);
     }
   }

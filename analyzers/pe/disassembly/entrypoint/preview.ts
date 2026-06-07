@@ -97,7 +97,11 @@ const decodeBlock = async (
       state.instructionCount += 1;
       if (instr.flowControl !== iced.FlowControl["Next"]) {
         issues.push(controlFlowIssue(instruction, targets));
-        if (targets.importFallthrough?.kind === "current-block") continue;
+        if (
+          targets.importFallthrough?.kind === "current-block" ||
+          targets.guardFallthrough?.kind === "current-block" ||
+          targets.unknownIndirectCallFallthrough?.kind === "current-block"
+        ) continue;
         recordedStopReason = true;
         break;
       }
@@ -131,7 +135,7 @@ export const decodePreview = async (
   const formatter = new iced.Formatter(iced.FormatterSyntax.Nasm);
   const importTargets = buildImportTargetMap(opts, metadata);
   const entryState = createEmulationState(metadata.bitness);
-  const entryKey = createBlockKey(mapped.rvaStart, entryState);
+  const entryKey = createBlockKey(mapped.rvaStart, entryState, opts.imageBase);
   const state: DecodeState = {
     blocks: [],
     bytesDecoded: 0,

@@ -16,6 +16,14 @@ import {
   getReturningImportFallthrough,
   type ReturningImportFallthrough
 } from "./import-fallthrough.js";
+import {
+  getGuardFallthrough,
+  type GuardFallthrough
+} from "./guard-fallthrough.js";
+import {
+  getUnknownIndirectCallFallthrough,
+  type IndirectCallFallthrough
+} from "./indirect-call-fallthrough.js";
 import { followDirectCodeTarget } from "./direct-target.js";
 import type { ImportTarget } from "./import-targets.js";
 import { createReturnStackState } from "./call-stack.js";
@@ -35,6 +43,8 @@ export type InstructionTargetingResult = {
   directTarget: DirectControlFlowTarget | null;
   branchTargets: ConditionalBranchTargets | null;
   importFallthrough: ReturningImportFallthrough | null;
+  guardFallthrough: GuardFallthrough | null;
+  unknownIndirectCallFallthrough: IndirectCallFallthrough | null;
 };
 
 const createImportReturnState = (
@@ -161,6 +171,10 @@ export const applyInstructionTargets = async (
     importTarget,
     block.emulationState
   );
+  const guardFallthrough = getGuardFallthrough(iced, opts, block.mapped, decoded);
+  const unknownIndirectCallFallthrough = importTarget || guardFallthrough
+    ? null
+    : getUnknownIndirectCallFallthrough(iced, opts, block.mapped, decoded);
   if (importTarget) {
     await applyImportTarget(
       reader,
@@ -175,6 +189,16 @@ export const applyInstructionTargets = async (
       pending,
       issues
     );
+  } else if (guardFallthrough) {
+    instruction.notes = [
+      ...(instruction.notes ?? []),
+      "CFG guard function pointer call is treated as returning."
+    ];
+  } else if (unknownIndirectCallFallthrough) {
+    instruction.notes = [
+      ...(instruction.notes ?? []),
+      "Unknown indirect call target; preview continues at fallthrough."
+    ];
   } else if (directTarget) {
     await applyDirectTarget(
       reader,
@@ -213,7 +237,14 @@ export const applyInstructionTargets = async (
       issues
     );
   }
-  return { importTarget, directTarget, branchTargets, importFallthrough };
+  return {
+    importTarget,
+    directTarget,
+    branchTargets,
+    importFallthrough,
+    guardFallthrough,
+    unknownIndirectCallFallthrough
+  };
 };
 
 export const controlFlowIssue = (
@@ -225,6 +256,12 @@ export const controlFlowIssue = (
     return `Entrypoint preview continued after returning import '${importTarget.label}'.`;
   }
   if (importTarget) return `Entrypoint preview stopped at imported target '${importTarget.label}'.`;
+  if (targets.guardFallthrough) {
+    return "Entrypoint preview continued after CFG guard function pointer call.";
+  }
+  if (targets.unknownIndirectCallFallthrough) {
+    return "Entrypoint preview continued after unknown indirect call.";
+  }
   if (directTarget && instruction.target?.kind === "code" && instruction.target.followed) {
     return `Entrypoint preview followed ${directTarget.kind.replace("followed-", "")} target.`;
   }

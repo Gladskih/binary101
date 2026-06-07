@@ -261,4 +261,5 @@ void test("emulateInstruction models basic stack push and pop", () => {
     value: 0x100000000000n,
     bits: 64
   });
+  assert.equal(state.memory.size, 0);
 });
