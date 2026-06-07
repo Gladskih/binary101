@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const scriptDirectory = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
-export const projectRoot = resolve(scriptDirectory, "..");
+export const projectRoot = resolve(scriptDirectory, "..", "..");
 export const sampleSourceRoot = join(projectRoot, "samples", "pe-disassembly");
 export const defaultOutputRoot = join(
   process.env["TEMP"] ?? projectRoot,

@@ -1,8 +1,14 @@
 "use strict";
 
 import assert from "node:assert/strict";
+import { basename, join } from "node:path";
 import { test } from "node:test";
-import type { MsysToolchain, Toolchains } from "../../../../scripts/pe-disassembly-samples/model.js";
+import {
+  projectRoot,
+  sampleSourceRoot,
+  type MsysToolchain,
+  type Toolchains
+} from "../../../../scripts/pe-disassembly-samples/model.js";
 import { buildSampleVariants } from "../../../../scripts/pe-disassembly-samples/variants.js";
 
 const createMsysToolchain = (prefix: string): MsysToolchain => ({
@@ -36,12 +42,17 @@ const createToolchains = (): Toolchains => ({
   msysUcrt64: createMsysToolchain("C:\\msys64\\ucrt64")
 });
 
+void test("sample source root stays anchored at the repository root", () => {
+  assert.equal(sampleSourceRoot, join(projectRoot, "samples", "pe-disassembly"));
+  assert.notEqual(basename(projectRoot), "scripts");
+});
+
 void test("buildSampleVariants covers each hello-world source family", () => {
   const variants = buildSampleVariants(createToolchains(), "C:\\out");
   const languages = new Set(variants.map(variant => variant.language));
   const ids = variants.map(variant => variant.id);
 
-  assert.equal(variants.length, 204);
+  assert.equal(variants.length, 206);
   assert.deepEqual(languages, new Set(["assembly", "c", "cpp", "csharp", "d", "go", "pascal", "rust", "zig"]));
   assert.ok(ids.includes("c-msvc-x64-o2-md"));
   assert.ok(ids.includes("c-msvc-x64-o2-md-arch-avx512"));
@@ -51,6 +62,8 @@ void test("buildSampleVariants covers each hello-world source family", () => {
   assert.ok(ids.includes("rust-x64-msvc-o3-panic-abort-target-cpu-native"));
   assert.ok(ids.includes("go-windows-amd64-goamd64-v4"));
   assert.ok(ids.includes("csharp-readytorun-win-x64-release"));
+  assert.ok(ids.includes("csharp-readytorun-singlefile-win-x64-release"));
+  assert.ok(ids.includes("csharp-readytorun-selfcontained-singlefile-win-x64-release"));
   assert.ok(ids.includes("csharp-nativeaot-win-x64-release"));
   assert.ok(ids.includes("csharp-nativeaot-win-x86-release"));
   assert.ok(ids.includes("assembly-nasm-x64-lld"));
