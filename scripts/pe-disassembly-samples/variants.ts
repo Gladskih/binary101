@@ -74,12 +74,17 @@ const buildGoVariants = (
       : [
         { id: "default", args: [], env: {} },
         { id: "noopt", args: ["-gcflags=all=-N -l"], env: {} }
-      ];
+    ];
     for (const mode of modes) {
       const id = `go-windows-${architecture}-${mode.id}`;
       const env = { GOOS: "windows", GOARCH: architecture, CGO_ENABLED: "0", ...mode.env };
-      const args = ["build", "-trimpath", "-o", outputPath(outputRoot, id), ...mode.args, sourcePath];
-      variants.push(makeVariant(outputRoot, id, "go", "go", `${architecture} ${mode.id}`, toolchains.go ? [directStep("compile", toolchains.go, args, dirname(sourcePath), env)] : [], missing("go", toolchains.go)));
+      const args = [
+        "build", "-trimpath", "-ldflags=-s -w", "-o", outputPath(outputRoot, id),
+        ...mode.args, sourcePath
+      ];
+      variants.push(makeVariant(outputRoot, id, "go", "go", `${architecture} ${mode.id}`,
+        toolchains.go ? [directStep("compile", toolchains.go, args, dirname(sourcePath), env)] : [],
+        missing("go", toolchains.go)));
     }
   }
   return variants;
@@ -92,7 +97,10 @@ const buildZigVariants = (
   ["Debug", "ReleaseFast", "ReleaseSmall"].flatMap(mode =>
     ["x86_64-windows-gnu", "x86-windows-gnu"].map(target => {
       const id = `zig-${target.startsWith("x86_64") ? "x64" : "x86"}-${mode.toLowerCase()}`;
-      const args = ["build-exe", sourcePath, "-target", target, "-O", mode, `-femit-bin=${outputPath(outputRoot, id)}`];
+      const args = [
+        "build-exe", sourcePath, "-target", target, "-O", mode, "-fstrip",
+        `-femit-bin=${outputPath(outputRoot, id)}`
+      ];
       return makeVariant(outputRoot, id, "zig", "zig", `${target} ${mode}`, toolchains.zig ? [directStep("compile", toolchains.zig, args)] : [], missing("zig", toolchains.zig));
     })
   );

@@ -10,55 +10,18 @@ import {
   type SampleLanguage,
   type Toolchains
 } from "./model.js";
+import {
+  clangClExtraModes,
+  cpuModes,
+  ltoMode,
+  type CompilerMode,
+  msvcExtraModes,
+  msvcRuntimeModes,
+  releaseModes,
+  zigCpuModes
+} from "./native-modes.js";
 
 type NativeLanguage = "c" | "cpp";
-interface CompilerMode {
-  args: string[];
-  id: string;
-  label: string;
-}
-
-const releaseModes: readonly CompilerMode[] = [
-  { id: "o0", label: "O0", args: ["-O0"] },
-  { id: "o2", label: "O2", args: ["-O2"] },
-  { id: "os", label: "Os", args: ["-Os"] }
-];
-
-const cpuModes: readonly CompilerMode[] = [
-  { id: "o2-march-x86-64-v2", label: "O2 -march=x86-64-v2", args: ["-O2", "-march=x86-64-v2"] },
-  { id: "o2-march-x86-64-v3", label: "O2 -march=x86-64-v3", args: ["-O2", "-march=x86-64-v3"] },
-  { id: "o2-mtune-znver5", label: "O2 -mtune=znver5", args: ["-O2", "-mtune=znver5"] },
-  { id: "o2-march-znver5", label: "O2 -march=znver5", args: ["-O2", "-march=znver5"] }
-];
-
-const zigCpuModes: readonly CompilerMode[] = [
-  { id: "o2-march-x86-64-v2", label: "O2 -march=x86_64_v2", args: ["-O2", "-march=x86_64_v2"] },
-  { id: "o2-march-x86-64-v3", label: "O2 -march=x86_64_v3", args: ["-O2", "-march=x86_64_v3"] },
-  { id: "o2-mtune-znver5", label: "O2 -mtune=znver5", args: ["-O2", "-mtune=znver5"] },
-  { id: "o2-march-znver5", label: "O2 -march=znver5", args: ["-O2", "-march=znver5"] }
-];
-
-const ltoMode: CompilerMode = { id: "o2-flto", label: "O2 -flto", args: ["-O2", "-flto"] };
-
-const msvcRuntimeModes: readonly CompilerMode[] = [
-  { id: "od-md", label: "Od /MD", args: ["/Od", "/MD"] },
-  { id: "o2-md", label: "O2 /MD", args: ["/O2", "/MD"] },
-  { id: "o2-mt", label: "O2 /MT", args: ["/O2", "/MT"] }
-];
-
-const msvcExtraModes: readonly CompilerMode[] = [
-  { id: "o2-md-ltcg", label: "O2 /MD /GL /LTCG", args: ["/O2", "/MD", "/GL", "/link", "/LTCG"] },
-  { id: "o2-md-arch-avx2", label: "O2 /MD /arch:AVX2", args: ["/O2", "/MD", "/arch:AVX2"] },
-  { id: "o2-md-arch-avx512", label: "O2 /MD /arch:AVX512", args: ["/O2", "/MD", "/arch:AVX512"] }
-];
-
-const clangClExtraModes: readonly CompilerMode[] = [
-  { id: "o2-md-flto", label: "O2 /MD -flto", args: ["/O2", "/MD", "-flto"] },
-  { id: "o2-md-march-x86-64-v2", label: "O2 /MD -march=x86-64-v2", args: ["/O2", "/MD", "-march=x86-64-v2"] },
-  { id: "o2-md-march-x86-64-v3", label: "O2 /MD -march=x86-64-v3", args: ["/O2", "/MD", "-march=x86-64-v3"] },
-  { id: "o2-md-mtune-znver5", label: "O2 /MD -mtune=znver5", args: ["/O2", "/MD", "-mtune=znver5"] },
-  { id: "o2-md-march-znver5", label: "O2 /MD -march=znver5", args: ["/O2", "/MD", "-march=znver5"] }
-];
 
 const variantDirectory = (outputRoot: string, id: string): string =>
   join(outputRoot, "variants", id);
@@ -175,7 +138,7 @@ const buildDirectGccStyleVariants = (
 ): BuildVariant[] =>
   [...releaseModes, ...cpuModes, { ...ltoMode, args: [...ltoMode.args, ...ltoExtraArgs] }].map(mode => {
     const id = `${language}-${family}-x64-${mode.id}`;
-    const args = [sourcePath, "-o", outputPath(outputRoot, id), ...mode.args];
+    const args = [sourcePath, "-o", outputPath(outputRoot, id), ...mode.args, "-s"];
     const steps = compiler ? [directStep(compiler, args, env)] : [];
     return makeVariant(outputRoot, id, language, family, `x64 ${mode.label}`, steps,
       missing(`${family} ${language} compiler`, compiler));
@@ -277,7 +240,8 @@ const buildZigCcVariant = (
     target,
     "-o",
     outputPath(outputRoot, id),
-    ...mode.args
+    ...mode.args,
+    "-s"
   ];
   const steps = toolchains.zig ? [directStep(toolchains.zig, args)] : [];
   return makeVariant(outputRoot, id, language, "zig-cc", `${target} ${mode.label}`,

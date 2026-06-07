@@ -25,7 +25,8 @@ const rustTargetCpuModes = ["x86-64-v2", "x86-64-v3", "native"] as const;
 const optimizedAbortArgs = [
   "-C", "opt-level=3",
   "-C", "panic=abort",
-  "-C", "debuginfo=0"
+  "-C", "debuginfo=0",
+  "-C", "strip=symbols"
 ] as const;
 
 const variantDirectory = (outputRoot: string, id: string): string =>
@@ -109,7 +110,12 @@ export const buildRustVariants = (
       for (const panicStrategy of ["unwind", "abort"]) {
         variants.push(buildRustCompileVariant(outputRoot, toolchains, sourcePath, target,
           `o${optLevel}-panic-${panicStrategy}`, target.target,
-          ["-C", `opt-level=${optLevel}`, "-C", `panic=${panicStrategy}`, "-C", "debuginfo=0"],
+          [
+            "-C", `opt-level=${optLevel}`,
+            "-C", `panic=${panicStrategy}`,
+            "-C", "debuginfo=0",
+            "-C", "strip=symbols"
+          ],
           linkerEnv));
       }
     }

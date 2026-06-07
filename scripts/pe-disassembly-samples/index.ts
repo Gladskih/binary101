@@ -6,6 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import {
   defaultOutputRoot,
   projectRoot,
+  sampleSourceRoot,
   type BuildVariant,
   type SampleResult,
   type StepResult
@@ -13,6 +14,8 @@ import {
 import { getStepCommandLine, runStep } from "./command.js";
 import { buildSummary, buildSummaryMarkdown, writeCommandsFile } from "./report.js";
 import { discoverToolchains } from "./toolchains.js";
+import { validateNoPeCoffSymbolRecords } from "./pe-coff-symbols.js";
+import { buildBinarySizeMarkdown } from "./size-table.js";
 import { buildSampleVariants, buildCommandLines } from "./variants.js";
 
 interface CliConfig {
@@ -20,6 +23,7 @@ interface CliConfig {
   filters: string[];
   jobs: number;
   outputRoot: string;
+  sizeTablePath: string | null;
 }
 
 const parseCliConfig = (args: string[]): CliConfig => {
@@ -27,7 +31,8 @@ const parseCliConfig = (args: string[]): CliConfig => {
     dryRun: false,
     filters: [],
     jobs: Math.max(1, Math.min(availableParallelism(), 8)),
-    outputRoot: defaultOutputRoot
+    outputRoot: defaultOutputRoot,
+    sizeTablePath: null
   };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -35,6 +40,9 @@ const parseCliConfig = (args: string[]): CliConfig => {
     if (arg === "--output") config.outputRoot = resolve(args[index += 1] ?? defaultOutputRoot);
     if (arg === "--jobs") config.jobs = Math.max(1, Number.parseInt(args[index += 1] ?? "1", 10));
     if (arg === "--filter") config.filters.push(...(args[index += 1] ?? "").split(",").filter(Boolean));
+    if (arg === "--size-table") {
+      config.sizeTablePath = resolve(args[index += 1] ?? join(sampleSourceRoot, "BINARY-SIZES.md"));
+    }
   }
   return config;
 };
@@ -105,6 +113,17 @@ const compileVariant = async (variant: BuildVariant): Promise<SampleResult> => {
   }
   const output = await stat(variant.outputPath).catch(() => null);
   if (!output) return buildFailureResult(variant, durationMs, steps, `Output file was not created: ${variant.outputPath}`);
+  const symbolResult = await validateNoPeCoffSymbolRecords(variant.outputPath);
+  if (symbolResult.warnings.length) {
+    steps.push({
+      code: 0,
+      durationMs: 0,
+      label: "inspect PE COFF symbols",
+      stderr: "",
+      stdout: `${symbolResult.warnings.join("\n")}\n`
+    });
+  }
+  if (symbolResult.error) return buildFailureResult(variant, durationMs, steps, symbolResult.error);
   return {
     kind: "success",
     id: variant.id,
@@ -147,10 +166,17 @@ const runVariant = async (
   return result;
 };
 
-const writeSummaryFiles = async (outputRoot: string, results: SampleResult[]): Promise<void> => {
+const writeSummaryFiles = async (
+  outputRoot: string,
+  results: SampleResult[],
+  sizeTablePath: string | null
+): Promise<void> => {
   const summary = buildSummary(outputRoot, results);
+  const binarySizeMarkdown = buildBinarySizeMarkdown(summary);
   await writeFile(join(outputRoot, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`, "utf8");
   await writeFile(join(outputRoot, "summary.md"), buildSummaryMarkdown(summary), "utf8");
+  await writeFile(join(outputRoot, "binary-sizes.md"), binarySizeMarkdown, "utf8");
+  if (sizeTablePath) await writeFile(sizeTablePath, binarySizeMarkdown, "utf8");
 };
 
 const main = async (): Promise<void> => {
@@ -161,14 +187,18 @@ const main = async (): Promise<void> => {
   const variants = filterVariants(buildSampleVariants(toolchains, config.outputRoot), config.filters);
   await writeCommandsFile(config.outputRoot, toolchains, variants);
   if (config.dryRun) {
-    await writeSummaryFiles(config.outputRoot, variants.map(variant => buildSkippedResult(variant, "dry run")));
+    await writeSummaryFiles(
+      config.outputRoot,
+      variants.map(variant => buildSkippedResult(variant, "dry run")),
+      config.sizeTablePath
+    );
     console.warn(`Wrote dry-run commands to ${config.outputRoot}`);
     return;
   }
   const results = await runLimited(variants, config.jobs, (variant, index) =>
     runVariant(variant, index, variants.length)
   );
-  await writeSummaryFiles(config.outputRoot, results);
+  await writeSummaryFiles(config.outputRoot, results, config.sizeTablePath);
   console.warn(`Wrote PE disassembly samples to ${config.outputRoot}`);
 };
 
