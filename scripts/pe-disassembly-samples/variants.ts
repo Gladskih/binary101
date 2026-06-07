@@ -1,10 +1,10 @@
 "use strict";
 
 import { dirname, join } from "node:path";
-import { toCommandLine } from "./peDisassemblySamples-command.js";
-import { buildAssemblyVariants } from "./peDisassemblySamples-assemblyVariants.js";
-import { buildNativeLanguageVariants } from "./peDisassemblySamples-nativeVariants.js";
-import { buildRustVariants } from "./peDisassemblySamples-rustVariants.js";
+import { toCommandLine } from "./command.js";
+import { buildAssemblyVariants } from "./assembly-variants.js";
+import { buildNativeLanguageVariants } from "./native-variants.js";
+import { buildRustVariants } from "./rust-variants.js";
 import {
   projectRoot,
   sampleSourceRoot,
@@ -13,7 +13,7 @@ import {
   type SampleLanguage,
   type SampleSources,
   type Toolchains
-} from "./peDisassemblySamples-model.js";
+} from "./model.js";
 
 export const getSampleSources = (): SampleSources => ({
   assemblyMasmX64: join(sampleSourceRoot, "assembly", "hello-masm-x64.asm"),

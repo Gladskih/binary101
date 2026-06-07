@@ -10,8 +10,8 @@ import type {
   SkippedSampleResult,
   SuccessfulSampleResult,
   Toolchains
-} from "./peDisassemblySamples-model.js";
-import { buildCommandLines } from "./peDisassemblySamples-variants.js";
+} from "./model.js";
+import { buildCommandLines } from "./variants.js";
 
 const flatten = (value: string): string =>
   value.replace(/\r?\n/gu, " ").trim();

@@ -2,8 +2,8 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildSummary, buildSummaryMarkdown } from "../../scripts/peDisassemblySamples-report.js";
-import type { SampleResult } from "../../scripts/peDisassemblySamples-model.js";
+import { buildSummary, buildSummaryMarkdown } from "../../../../scripts/pe-disassembly-samples/report.js";
+import type { SampleResult } from "../../../../scripts/pe-disassembly-samples/model.js";
 
 const createResults = (): SampleResult[] => [
   {

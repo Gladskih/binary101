@@ -2,8 +2,8 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createVisualStudioStep, toCommandLine } from "../../scripts/peDisassemblySamples-command.js";
-import type { VisualStudioToolchain } from "../../scripts/peDisassemblySamples-model.js";
+import { createVisualStudioStep, toCommandLine } from "../../../../scripts/pe-disassembly-samples/command.js";
+import type { VisualStudioToolchain } from "../../../../scripts/pe-disassembly-samples/model.js";
 
 const createVisualStudio = (): VisualStudioToolchain => ({
   installationPath: "C:\\VS BuildTools",

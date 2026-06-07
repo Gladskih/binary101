@@ -1,7 +1,7 @@
 "use strict";
 
 import { spawn } from "node:child_process";
-import type { BuildStep, StepResult, VisualStudioToolchain } from "./peDisassemblySamples-model.js";
+import type { BuildStep, StepResult, VisualStudioToolchain } from "./model.js";
 
 export const quoteCommandPart = (value: string): string =>
   /[\s"]/u.test(value) ? `"${value.replaceAll("\"", "\\\"")}"` : value;

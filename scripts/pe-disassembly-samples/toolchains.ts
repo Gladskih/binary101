@@ -4,8 +4,8 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { basename, join } from "node:path";
-import type { MsysToolchain, Toolchains, VisualStudioToolchain } from "./peDisassemblySamples-model.js";
-import { projectRoot } from "./peDisassemblySamples-model.js";
+import type { MsysToolchain, Toolchains, VisualStudioToolchain } from "./model.js";
+import { projectRoot } from "./model.js";
 
 interface CommandOutput {
   code: number;

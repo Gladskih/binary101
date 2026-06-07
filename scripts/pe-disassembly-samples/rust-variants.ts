@@ -1,13 +1,13 @@
 "use strict";
 
 import { join } from "node:path";
-import { createVisualStudioStep, prependPath } from "./peDisassemblySamples-command.js";
+import { createVisualStudioStep, prependPath } from "./command.js";
 import {
   projectRoot,
   type BuildStep,
   type BuildVariant,
   type Toolchains
-} from "./peDisassemblySamples-model.js";
+} from "./model.js";
 
 const rustTargets = [
   { id: "x64-gnullvm", target: "x86_64-pc-windows-gnullvm", vcArchitecture: null, linker: null },

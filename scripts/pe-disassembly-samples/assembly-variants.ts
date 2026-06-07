@@ -1,14 +1,14 @@
 "use strict";
 
 import { join } from "node:path";
-import { createVisualStudioStep } from "./peDisassemblySamples-command.js";
+import { createVisualStudioStep } from "./command.js";
 import {
   projectRoot,
   type BuildStep,
   type BuildVariant,
   type SampleSources,
   type Toolchains
-} from "./peDisassemblySamples-model.js";
+} from "./model.js";
 
 const variantDirectory = (outputRoot: string, id: string): string =>
   join(outputRoot, "variants", id);

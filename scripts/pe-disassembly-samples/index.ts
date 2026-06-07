@@ -9,11 +9,11 @@ import {
   type BuildVariant,
   type SampleResult,
   type StepResult
-} from "./peDisassemblySamples-model.js";
-import { getStepCommandLine, runStep } from "./peDisassemblySamples-command.js";
-import { buildSummary, buildSummaryMarkdown, writeCommandsFile } from "./peDisassemblySamples-report.js";
-import { discoverToolchains } from "./peDisassemblySamples-toolchains.js";
-import { buildSampleVariants, buildCommandLines } from "./peDisassemblySamples-variants.js";
+} from "./model.js";
+import { getStepCommandLine, runStep } from "./command.js";
+import { buildSummary, buildSummaryMarkdown, writeCommandsFile } from "./report.js";
+import { discoverToolchains } from "./toolchains.js";
+import { buildSampleVariants, buildCommandLines } from "./variants.js";
 
 interface CliConfig {
   dryRun: boolean;

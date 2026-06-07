@@ -1,7 +1,7 @@
 "use strict";
 
 import { join } from "node:path";
-import { createVisualStudioStep, prependPath } from "./peDisassemblySamples-command.js";
+import { createVisualStudioStep, prependPath } from "./command.js";
 import {
   projectRoot,
   type BuildStep,
@@ -9,7 +9,7 @@ import {
   type MsysToolchain,
   type SampleLanguage,
   type Toolchains
-} from "./peDisassemblySamples-model.js";
+} from "./model.js";
 
 type NativeLanguage = "c" | "cpp";
 interface CompilerMode {

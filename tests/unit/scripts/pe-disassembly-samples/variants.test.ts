@@ -2,8 +2,8 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { MsysToolchain, Toolchains } from "../../scripts/peDisassemblySamples-model.js";
-import { buildSampleVariants } from "../../scripts/peDisassemblySamples-variants.js";
+import type { MsysToolchain, Toolchains } from "../../../../scripts/pe-disassembly-samples/model.js";
+import { buildSampleVariants } from "../../../../scripts/pe-disassembly-samples/variants.js";
 
 const createMsysToolchain = (prefix: string): MsysToolchain => ({
   binDirectory: `${prefix}\\bin`,
