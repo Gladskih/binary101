@@ -30,7 +30,8 @@
     "test:e2e": "playwright test",
     "test:elf-wsl": "tsx --test tests/external/analyzers.elf.wsl-readelf.test.ts",
     "test:pe-extreme": "tsx --test tests/external/analyzers.pe.extreme-fixtures.test.ts",
-    "fetch:pe-fixtures": "tsx scripts/fetchExternalPeFixtures.ts"
+    "fetch:pe-fixtures": "tsx scripts/fetchExternalPeFixtures.ts",
+    "build:pe-samples": "tsx scripts/peDisassemblySamples.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

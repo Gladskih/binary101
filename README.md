@@ -41,6 +41,10 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
   Results are written to
   `%TEMP%\binary101-rust-hello-bin\matrix\` (`commands.txt`, `summary.md`,
   and per-variant `parse.json` / `rendered.html`).
+- `npm run build:pe-samples` &mdash; build local hello-world PE samples from
+  `samples/pe-disassembly/` with the available C/C++/C#/Rust/Go/Zig/Pascal/D
+  and assembly toolchains. Results are written to
+  `%TEMP%\binary101-pe-disassembly-samples\`.
 
 ## Project Structure (high level)
 - `index.html` & `style.css` &mdash; Vite HTML entry and page styling.
