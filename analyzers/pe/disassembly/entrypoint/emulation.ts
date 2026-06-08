@@ -102,6 +102,67 @@ const collectBitTestNotes = (
   return note ? [note] : [];
 };
 
+const pointerBytes = (state: EmulationState): bigint => BigInt(state.bitness / 8);
+
+const pushStackValue = (
+  iced: IcedModule,
+  state: EmulationState,
+  value: EmulatedValue,
+  byteCount: bigint
+): void => {
+  const stackPointer = resolveStackPointer(iced, state);
+  const current = readRegister(state, stackPointer);
+  if (current.kind !== "known") {
+    writeRegister(state, stackPointer, UNKNOWN);
+    return;
+  }
+  const next = known(current.value - byteCount, state.bitness);
+  writeRegister(state, stackPointer, next);
+  state.memory.set(next.value.toString(), value);
+};
+
+const popStackValue = (
+  iced: IcedModule,
+  state: EmulationState,
+  byteCount: bigint
+): EmulatedValue => {
+  const stackPointer = resolveStackPointer(iced, state);
+  const current = readRegister(state, stackPointer);
+  if (current.kind !== "known") {
+    writeRegister(state, stackPointer, UNKNOWN);
+    return UNKNOWN;
+  }
+  const stackSlot = current.value.toString();
+  const value = state.memory.get(stackSlot) ?? UNKNOWN;
+  state.memory.delete(stackSlot);
+  writeRegister(state, stackPointer, known(current.value + byteCount, state.bitness));
+  return value;
+};
+
+const isMnemonic = (
+  iced: IcedModule,
+  mnemonic: number,
+  name: string
+): boolean =>
+  iced.Mnemonic?.[name] === mnemonic;
+
+// PUSHF/PUSHFD/PUSHFQ and POPF/POPFD/POPFQ stack widths follow the instruction
+// operand size. Intel SDM Vol. 2 PUSHF/PUSHFD/PUSHFQ and POPF/POPFD/POPFQ.
+// https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
+const flagPushBytes = (iced: IcedModule, mnemonic: number): bigint | null => {
+  if (isMnemonic(iced, mnemonic, "Pushf")) return 2n;
+  if (isMnemonic(iced, mnemonic, "Pushfd")) return 4n;
+  if (isMnemonic(iced, mnemonic, "Pushfq")) return 8n;
+  return null;
+};
+
+const flagPopBytes = (iced: IcedModule, mnemonic: number): bigint | null => {
+  if (isMnemonic(iced, mnemonic, "Popf")) return 2n;
+  if (isMnemonic(iced, mnemonic, "Popfd")) return 4n;
+  if (isMnemonic(iced, mnemonic, "Popfq")) return 8n;
+  return null;
+};
+
 export const emulateInstruction = (
   iced: IcedModule,
   decoded: IcedInstructionObject,
@@ -190,33 +251,21 @@ export const emulateInstruction = (
     writeOperand(iced, state, decoded, 0, value);
     return;
   }
+  const pushedFlagsBytes = flagPushBytes(iced, mnemonic);
+  if (pushedFlagsBytes != null) {
+    pushStackValue(iced, state, UNKNOWN, pushedFlagsBytes);
+    return;
+  }
+  const poppedFlagsBytes = flagPopBytes(iced, mnemonic);
+  if (poppedFlagsBytes != null) {
+    popStackValue(iced, state, poppedFlagsBytes);
+    return;
+  }
   if (mnemonic === iced.Mnemonic["Push"]) {
-    const stackPointer = resolveStackPointer(iced, state);
-    const current = readRegister(state, stackPointer);
-    if (current.kind !== "known") {
-      writeRegister(state, stackPointer, UNKNOWN);
-      return;
-    }
-    const next = known(current.value - BigInt(state.bitness / 8), state.bitness);
-    writeRegister(state, stackPointer, next);
-    state.memory.set(next.value.toString(), readOperand(iced, state, decoded, 0));
+    pushStackValue(iced, state, readOperand(iced, state, decoded, 0), pointerBytes(state));
     return;
   }
   if (mnemonic === iced.Mnemonic["Pop"]) {
-    const stackPointer = resolveStackPointer(iced, state);
-    const current = readRegister(state, stackPointer);
-    if (current.kind === "known") {
-      const stackSlot = current.value.toString();
-      writeOperand(iced, state, decoded, 0, state.memory.get(stackSlot) ?? UNKNOWN);
-      state.memory.delete(stackSlot);
-      writeRegister(
-        state,
-        stackPointer,
-        known(current.value + BigInt(state.bitness / 8), state.bitness)
-      );
-    } else {
-      writeOperand(iced, state, decoded, 0, UNKNOWN);
-      writeRegister(state, stackPointer, UNKNOWN);
-    }
+    writeOperand(iced, state, decoded, 0, popStackValue(iced, state, pointerBytes(state)));
   }
 };

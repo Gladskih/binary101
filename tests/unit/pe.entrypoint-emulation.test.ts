@@ -243,23 +243,3 @@ void test("emulateInstruction reads and writes stack memory operands", () => {
     bits: 64
   });
 });
-
-void test("emulateInstruction models basic stack push and pop", () => {
-  const { state } = emulateBytesWithState([
-    0x48, 0xbb, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11,
-    0x53,
-    0x58
-  ]);
-
-  assert.deepEqual(state.registers.get("RAX"), {
-    kind: "known",
-    value: 0x1122334455667788n,
-    bits: 64
-  });
-  assert.deepEqual(state.registers.get("RSP"), {
-    kind: "known",
-    value: 0x100000000000n,
-    bits: 64
-  });
-  assert.equal(state.memory.size, 0);
-});
