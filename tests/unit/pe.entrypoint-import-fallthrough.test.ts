@@ -36,7 +36,7 @@ const createBranchInstruction = (nextRva: number, flowControl: number): IcedInst
 const createIndirectCallInstruction = (nextRva: number): IcedInstruction =>
   createBranchInstruction(nextRva, fakeIced.FlowControl["IndirectCall"]);
 
-void test("getReturningImportFallthrough returns in-block fallthrough for known returning imports", () => {
+void test("getReturningImportFallthrough returns in-block fallthrough for imports", () => {
   assert.deepEqual(
     getReturningImportFallthrough(
       iced,
@@ -44,7 +44,7 @@ void test("getReturningImportFallthrough returns in-block fallthrough for known 
       { rvaStart: 0x1000, fileOffsetStart: 0, data: new Uint8Array([0x15, 0xc3]) },
       createIndirectCallInstruction(0x1001),
       {
-        label: "KERNEL32.dll!GetSystemTimeAsFileTime",
+        label: "USER32.dll!MessageBoxW",
         slotRva: 0x2000,
         importKind: "eager",
         guardIatEntry: false
@@ -74,14 +74,19 @@ void test("getReturningImportFallthrough returns stack returns for import thunks
   );
 });
 
-void test("getReturningImportFallthrough rejects unknown imports and out-of-block returns", () => {
+void test("getReturningImportFallthrough rejects non-returning imports and out-of-block returns", () => {
   assert.equal(
     getReturningImportFallthrough(
       iced,
       createOptions(),
       { rvaStart: 0x1000, fileOffsetStart: 0, data: new Uint8Array([0x15, 0xc3]) },
       createIndirectCallInstruction(0x1001),
-      { label: "KERNEL32.dll!ExitProcess", slotRva: 0x2000, importKind: "eager", guardIatEntry: false },
+      {
+        label: "KERNEL32.dll!ExitProcess",
+        slotRva: 0x2000,
+        importKind: "eager",
+        guardIatEntry: false
+      },
       createEmulationState(64)
     ),
     null
