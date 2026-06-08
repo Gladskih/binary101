@@ -8,6 +8,8 @@ import {
 } from "./emulation-registers.js";
 import {
   UNKNOWN,
+  collectKnownValues,
+  joinEmulatedValues,
   known,
   readRegister,
   writeRegister,
@@ -53,19 +55,44 @@ const readMemoryAddressRegister = (
   return access ? readRegister(state, access) : null;
 };
 
+const MAX_MEMORY_ADDRESS_ALTERNATIVES = 4;
+
+export const resolveMemoryAddresses = (
+  iced: IcedModule,
+  state: EmulationState,
+  instruction: IcedInstructionObject
+): bigint[] | null => {
+  const baseValue = readMemoryAddressRegister(iced, state, instruction.memoryBase);
+  const indexValue = readMemoryAddressRegister(iced, state, instruction.memoryIndex);
+  if (baseValue == null || indexValue == null) return null;
+  const baseValues = collectKnownValues(baseValue);
+  const indexValues = collectKnownValues(indexValue);
+  if (!baseValues.length || !indexValues.length) return null;
+  const addresses = new Set<bigint>();
+  for (const base of baseValues) {
+    for (const index of indexValues) {
+      addresses.add(
+        base.value +
+        index.value * BigInt(instruction.memoryIndexScale) +
+        instruction.memoryDisplacement
+      );
+      if (addresses.size > MAX_MEMORY_ADDRESS_ALTERNATIVES) return null;
+    }
+  }
+  return Array.from(addresses);
+};
+
 export const resolveMemoryAddress = (
   iced: IcedModule,
   state: EmulationState,
   instruction: IcedInstructionObject
 ): bigint | null => {
-  const baseValue = readMemoryAddressRegister(iced, state, instruction.memoryBase);
-  const indexValue = readMemoryAddressRegister(iced, state, instruction.memoryIndex);
-  if (baseValue == null || indexValue == null) return null;
-  if (baseValue.kind !== "known" || indexValue.kind !== "known") return null;
-  return baseValue.value +
-    indexValue.value * BigInt(instruction.memoryIndexScale) +
-    instruction.memoryDisplacement;
+  const addresses = resolveMemoryAddresses(iced, state, instruction);
+  return addresses?.length === 1 ? addresses[0] ?? null : null;
 };
+
+const joinReadValues = (values: EmulatedValue[]): EmulatedValue =>
+  values.reduce((left, right) => joinEmulatedValues(left, right));
 
 export const readOperand = (
   iced: IcedModule,
@@ -77,8 +104,10 @@ export const readOperand = (
     return readRegister(state, resolveRegister(iced, instruction.opRegister(operand)));
   }
   if (isMemoryOperand(iced, instruction, operand)) {
-    const address = resolveMemoryAddress(iced, state, instruction);
-    return address == null ? UNKNOWN : state.memory.get(address.toString()) ?? UNKNOWN;
+    const addresses = resolveMemoryAddresses(iced, state, instruction);
+    return addresses == null
+      ? UNKNOWN
+      : joinReadValues(addresses.map(address => state.memory.get(address.toString()) ?? UNKNOWN));
   }
   return immediateValue(iced, instruction, operand);
 };
@@ -95,8 +124,10 @@ export const writeOperand = (
     return;
   }
   if (isMemoryOperand(iced, instruction, operand)) {
-    const address = resolveMemoryAddress(iced, state, instruction);
-    if (address != null) state.memory.set(address.toString(), value);
+    const addresses = resolveMemoryAddresses(iced, state, instruction);
+    if (addresses != null) {
+      for (const address of addresses) state.memory.set(address.toString(), value);
+    }
   }
 };
 

@@ -13,7 +13,9 @@ import {
   type FollowedCodeTarget
 } from "./control-flow.js";
 import {
+  collectKnownValues,
   cloneEmulationState,
+  mergeEmulationStates,
   type EmulatedValue,
   type EmulationState
 } from "./emulation-state.js";
@@ -29,15 +31,17 @@ export type PendingBlock = {
 export type FollowQueueState = {
   blocks: PeEntrypointDisassemblyBlock[];
   visitedBlocks: Set<string>;
-  queuedBlocks: Set<string>;
+  queuedBlocksByKey: Map<string, PendingBlock>;
+  emulationStatesByKey: Map<string, EmulationState>;
   contextKeysByRva: Map<number, Set<string>>;
-  contextLimitReportedRvas: Set<number>;
+  precisionCostByRva: Map<number, number>;
+  precisionLimitReportedRvas: Set<number>;
 };
 
-// Local browser-safety threshold, not a PE/x86 limit: normal acyclic control-flow
-// can visit any number of RVAs, while repeated visits to one RVA with many
-// different emulated states usually mean recursion or a mutating loop.
-export const MAX_CONTEXTS_PER_RVA = 64;
+// Local browser-safety threshold, not a PE/x86 limit. It charges both distinct
+// contexts and value-set width so merging improves precision without allowing
+// recursive or highly mutating flows to grow unbounded in the browser.
+export const MAX_PRECISION_BUDGET_PER_RVA = 256;
 
 const formatRva = (rva: number): string =>
   `0x${(rva >>> 0).toString(16).padStart(8, "0")}`;
@@ -56,22 +60,46 @@ const contextKeysForRva = (
 const canQueueNewContext = (
   state: FollowQueueState,
   rva: number,
+  emulationState: EmulationState,
   issues: string[]
 ): boolean => {
-  if (contextKeysForRva(state, rva).size < MAX_CONTEXTS_PER_RVA) return true;
-  if (!state.contextLimitReportedRvas.has(rva)) {
-    state.contextLimitReportedRvas.add(rva);
+  const used = state.precisionCostByRva.get(rva) ?? 0;
+  const cost = precisionCost(emulationState);
+  if (used + cost <= MAX_PRECISION_BUDGET_PER_RVA) return true;
+  if (!state.precisionLimitReportedRvas.has(rva)) {
+    state.precisionLimitReportedRvas.add(rva);
     issues.push(
-      `Entrypoint preview stopped following ${formatRva(rva)} after ` +
-      `${MAX_CONTEXTS_PER_RVA} distinct emulation contexts.`
+      `Entrypoint preview stopped following ${formatRva(rva)} after exhausting ` +
+      `${MAX_PRECISION_BUDGET_PER_RVA} emulation precision budget.`
     );
   }
   return false;
 };
 
+const recordPrecisionCost = (
+  state: FollowQueueState,
+  rva: number,
+  emulationState: EmulationState
+): void => {
+  state.precisionCostByRva.set(
+    rva,
+    (state.precisionCostByRva.get(rva) ?? 0) + precisionCost(emulationState)
+  );
+};
+
+const precisionCost = (state: EmulationState): number =>
+  Math.max(
+    1,
+    [...state.registers.values(), ...state.memory.values()]
+      .reduce((sum, value) => sum + Math.max(1, collectKnownValues(value).length), 0)
+  );
+
 const valueKey = (value: EmulatedValue | undefined): string => {
   if (!value) return "unset";
   if (value.kind === "known") return `known:${value.bits}:${value.value.toString(16)}`;
+  if (value.kind === "value-set") {
+    return `set:${value.values.map(candidate => valueKey(candidate)).join(",")}`;
+  }
   if (value.kind === "import-return") return `import:${value.label}`;
   if (value.kind === "cpuid-output") {
     const subleaf = value.subleaf == null ? "" : `:${value.subleaf}`;
@@ -88,10 +116,11 @@ const stackSlotKey = (
   imageBase: bigint
 ): string | null => {
   const value = state.memory.get(address.toString());
-  if (value?.kind !== "known") return null;
-  return toRva(value.value, imageBase) == null
-    ? null
-    : `${address.toString(16)}=${valueKey(value)}`;
+  const values = collectKnownValues(value);
+  if (!values.length) return null;
+  return values.every(candidate => toRva(candidate.value, imageBase) != null)
+    ? `${address.toString(16)}=${valueKey(value)}`
+    : null;
 };
 
 const stackSlotKeys = (state: EmulationState, imageBase: bigint): string => {
@@ -119,6 +148,30 @@ export const createBlockKey = (
 ): string =>
   `${rva.toString(16)}|stack:${stackStateKey(state, imageBase)}`;
 
+const mergeQueuedBlockState = (
+  state: FollowQueueState,
+  rva: number,
+  existing: PendingBlock,
+  emulationState: EmulationState
+): void => {
+  const before = precisionCost(existing.emulationState);
+  existing.emulationState = mergeEmulationStates(existing.emulationState, emulationState);
+  const after = precisionCost(existing.emulationState);
+  if (after > before) {
+    state.precisionCostByRva.set(rva, (state.precisionCostByRva.get(rva) ?? 0) + after - before);
+  }
+};
+
+const stateKey = (state: EmulationState): string => {
+  const registerKeys = Array.from(state.registers)
+    .map(([key, value]) => `r:${key}=${valueKey(value)}`);
+  const memoryKeys = Array.from(state.memory)
+    .map(([key, value]) => `m:${key}=${valueKey(value)}`);
+  return [...registerKeys, ...memoryKeys]
+    .sort()
+    .join("|");
+};
+
 export const queueFollowedBlock = async (
   reader: FileRangeReader,
   opts: AnalyzePeEntrypointDisassemblyOptions,
@@ -130,19 +183,30 @@ export const queueFollowedBlock = async (
   emulationState: EmulationState
 ): Promise<boolean> => {
   const key = createBlockKey(follow.rva, emulationState, opts.imageBase);
-  if (state.visitedBlocks.has(key) || state.queuedBlocks.has(key)) return true;
-  if (!canQueueNewContext(state, follow.rva, issues)) return false;
+  const queued = state.queuedBlocksByKey.get(key);
+  if (queued) {
+    mergeQueuedBlockState(state, follow.rva, queued, emulationState);
+    state.emulationStatesByKey.set(key, cloneEmulationState(queued.emulationState));
+    return true;
+  }
+  const knownState = state.emulationStatesByKey.get(key);
+  const nextState = knownState ? mergeEmulationStates(knownState, emulationState) : emulationState;
+  if (knownState && stateKey(knownState) === stateKey(nextState)) return true;
+  if (!canQueueNewContext(state, follow.rva, nextState, issues)) return false;
   const mapped = await loadCodeBytes(reader, opts, follow.rva, issues, "Control-flow target");
   if (!mapped) return false;
+  state.emulationStatesByKey.set(key, cloneEmulationState(nextState));
   contextKeysForRva(state, follow.rva).add(key);
-  pending.push({
+  recordPrecisionCost(state, follow.rva, nextState);
+  const block = {
     kind: follow.kind,
     mapped,
-    emulationState,
+    emulationState: nextState,
     key,
     sourceInstructionRva: instructionRva
-  });
-  state.queuedBlocks.add(key);
+  };
+  pending.push(block);
+  state.queuedBlocksByKey.set(key, block);
   return true;
 };
 

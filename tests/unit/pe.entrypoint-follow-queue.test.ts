@@ -2,13 +2,45 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createBlockKey } from "../../analyzers/pe/disassembly/entrypoint/follow-queue.js";
+import { createFileRangeReader } from "../../analyzers/file-range-reader.js";
+import type { AnalyzePeEntrypointDisassemblyOptions } from "../../analyzers/pe/disassembly/index.js";
+import {
+  createBlockKey,
+  queueFollowedBlock,
+  type FollowQueueState,
+  type PendingBlock
+} from "../../analyzers/pe/disassembly/entrypoint/follow-queue.js";
 import { createEmulationState } from "../../analyzers/pe/disassembly/entrypoint/emulation.js";
 import {
+  collectKnownValues,
   known
 } from "../../analyzers/pe/disassembly/entrypoint/emulation-state.js";
+import {
+  IMAGE_FILE_MACHINE_AMD64,
+  createExecutableSection
+} from "../helpers/pe-entrypoint-disassembly-fixture.js";
+import { MockFile } from "../helpers/mock-file.js";
 
 const imageBase = 0x140000000n;
+
+const createQueueState = (): FollowQueueState => ({
+  blocks: [],
+  visitedBlocks: new Set(),
+  queuedBlocksByKey: new Map(),
+  emulationStatesByKey: new Map(),
+  contextKeysByRva: new Map(),
+  precisionCostByRva: new Map(),
+  precisionLimitReportedRvas: new Set()
+});
+
+const createOptions = (): AnalyzePeEntrypointDisassemblyOptions => ({
+  coffMachine: IMAGE_FILE_MACHINE_AMD64,
+  is64Bit: true,
+  imageBase,
+  entrypointRva: 0x1000,
+  rvaToOff: rva => rva - 0x1000,
+  sections: [createExecutableSection({ virtualSize: 1, sizeOfRawData: 1 })]
+});
 
 void test("createBlockKey ignores scratch registers and non-stack memory", () => {
   const left = createEmulationState(64);
@@ -51,5 +83,42 @@ void test("createBlockKey distinguishes frame-pointer return slots", () => {
   assert.notEqual(
     createBlockKey(0x1000, left, imageBase),
     createBlockKey(0x1000, right, imageBase)
+  );
+});
+
+void test("queueFollowedBlock merges same-key pending emulation states", async () => {
+  const state = createQueueState();
+  const pending: PendingBlock[] = [];
+  const left = createEmulationState(64);
+  const right = createEmulationState(64);
+  left.registers.set("R11", known(0x140001010n, 64));
+  right.registers.set("R11", known(0x140002020n, 64));
+
+  await queueFollowedBlock(
+    createFileRangeReader(new MockFile(new Uint8Array([0xc3]), "target.exe"), 0, 1),
+    createOptions(),
+    state,
+    pending,
+    { kind: "followed-call", rva: 0x1000 },
+    0x2000,
+    [],
+    left
+  );
+  await queueFollowedBlock(
+    createFileRangeReader(new MockFile(new Uint8Array([0xc3]), "target.exe"), 0, 1),
+    createOptions(),
+    state,
+    pending,
+    { kind: "followed-call", rva: 0x1000 },
+    0x2001,
+    [],
+    right
+  );
+
+  assert.equal(pending.length, 1);
+  assert.deepEqual(
+    collectKnownValues(pending[0]?.emulationState.registers.get("R11"))
+      .map(value => value.value),
+    [0x140001010n, 0x140002020n]
   );
 });

@@ -6,8 +6,8 @@ import type {
   RegisterAccess
 } from "./emulation-registers.js";
 
-type KnownValueBits = 8 | 16 | 32 | 64;
-type KnownValue = { kind: "known"; value: bigint; bits: KnownValueBits };
+export type KnownValueBits = 8 | 16 | 32 | 64;
+export type KnownValue = { kind: "known"; value: bigint; bits: KnownValueBits };
 type UnknownValue = { kind: "unknown" };
 type ImportReturnValue = { kind: "import-return"; label: string };
 type CpuIdOutputValue = {
@@ -16,8 +16,14 @@ type CpuIdOutputValue = {
   subleaf?: number;
   register: CpuIdOutputRegister;
 };
+type ValueSetValue = { kind: "value-set"; values: KnownValue[] };
 
-export type EmulatedValue = KnownValue | UnknownValue | ImportReturnValue | CpuIdOutputValue;
+export type EmulatedValue =
+  | KnownValue
+  | UnknownValue
+  | ImportReturnValue
+  | CpuIdOutputValue
+  | ValueSetValue;
 
 export type EmulationState = {
   bitness: 32 | 64;
@@ -26,6 +32,7 @@ export type EmulationState = {
 };
 
 export const UNKNOWN: UnknownValue = { kind: "unknown" };
+const MAX_VALUE_SET_VALUES = 4;
 
 // Synthetic stack anchors: only relative stack slots matter for this local model.
 const STACK_BASE_32 = 0x10000000n;
@@ -43,15 +50,69 @@ export const importReturn = (label: string): ImportReturnValue => ({
   label
 });
 
+const knownValueKey = (value: KnownValue): string =>
+  `${value.bits}:${value.value.toString(16)}`;
+
+const sameSpecialValue = (left: EmulatedValue, right: EmulatedValue): boolean =>
+  (left.kind === "unknown" && right.kind === "unknown") ||
+  (left.kind === "import-return" && right.kind === "import-return" && left.label === right.label) ||
+  (
+    left.kind === "cpuid-output" &&
+    right.kind === "cpuid-output" &&
+    left.leaf === right.leaf &&
+    left.subleaf === right.subleaf &&
+    left.register === right.register
+  );
+
+export const collectKnownValues = (value: EmulatedValue | undefined): KnownValue[] => {
+  if (!value || value.kind === "unknown") return [];
+  if (value.kind === "known") return [value];
+  return value.kind === "value-set" ? value.values : [];
+};
+
+const valueSet = (values: KnownValue[]): EmulatedValue => {
+  const out = new Map<string, KnownValue>();
+  for (const value of values) out.set(knownValueKey(value), value);
+  const merged = Array.from(out.values())
+    .sort((left, right) => left.bits - right.bits || (left.value < right.value ? -1 : 1));
+  if (merged.length === 0 || merged.length > MAX_VALUE_SET_VALUES) return UNKNOWN;
+  return merged.length === 1 ? merged[0] as EmulatedValue : { kind: "value-set", values: merged };
+};
+
+export const joinEmulatedValues = (
+  left: EmulatedValue | undefined,
+  right: EmulatedValue | undefined
+): EmulatedValue => {
+  if (!left || !right) return UNKNOWN;
+  const leftKnownValues = collectKnownValues(left);
+  const rightKnownValues = collectKnownValues(right);
+  if (leftKnownValues.length || rightKnownValues.length) {
+    return leftKnownValues.length && rightKnownValues.length
+      ? valueSet([...leftKnownValues, ...rightKnownValues])
+      : UNKNOWN;
+  }
+  return sameSpecialValue(left, right) ? left : UNKNOWN;
+};
+
+const readKnownValue = (value: KnownValue, access: RegisterAccess): KnownValue =>
+  known(value.value >> BigInt(access.bitOffset), access.accessBits);
+
+const readKnownValues = (
+  values: KnownValue[],
+  access: RegisterAccess
+): EmulatedValue =>
+  valueSet(values.map(value => readKnownValue(value, access)));
+
 export const readRegister = (
   state: EmulationState,
   access: RegisterAccess | null
 ): EmulatedValue => {
   if (!access) return UNKNOWN;
   const value = state.registers.get(access.canonical) ?? UNKNOWN;
+  if (value.kind === "value-set") return readKnownValues(value.values, access);
   if (value.kind !== "known" && (access.accessBits < 32 || access.bitOffset !== 0)) return UNKNOWN;
   if (value.kind !== "known") return value;
-  return known(value.value >> BigInt(access.bitOffset), access.accessBits);
+  return readKnownValue(value, access);
 };
 
 export const writeRegister = (
@@ -62,6 +123,10 @@ export const writeRegister = (
   if (!access) return;
   if (value.kind === "known") {
     writeKnownRegister(state, access, value);
+    return;
+  }
+  if (value.kind === "value-set" && access.accessBits >= 32 && access.bitOffset === 0) {
+    writeValueSetRegister(state, access, value);
     return;
   }
   if (access.accessBits < 32) {
@@ -91,6 +156,18 @@ const writeKnownRegister = (
   state.registers.set(access.canonical, known(value.value, writeStorageBits(state, access)));
 };
 
+const writeValueSetRegister = (
+  state: EmulationState,
+  access: RegisterAccess,
+  value: ValueSetValue
+): void => {
+  const storageBits = writeStorageBits(state, access);
+  state.registers.set(
+    access.canonical,
+    valueSet(value.values.map(candidate => known(candidate.value, storageBits)))
+  );
+};
+
 const writeStorageBits = (
   state: EmulationState,
   access: RegisterAccess
@@ -114,10 +191,15 @@ export const binaryKnown = (
   left: EmulatedValue,
   right: EmulatedValue,
   op: (a: bigint, b: bigint) => bigint
-): EmulatedValue =>
-  left.kind === "known" && right.kind === "known"
-    ? known(op(left.value, right.value), left.bits)
-    : UNKNOWN;
+): EmulatedValue => {
+  const leftValues = collectKnownValues(left);
+  const rightValues = collectKnownValues(right);
+  if (!leftValues.length || !rightValues.length) return UNKNOWN;
+  if (leftValues.length * rightValues.length > MAX_VALUE_SET_VALUES) return UNKNOWN;
+  return valueSet(leftValues.flatMap(leftValue =>
+    rightValues.map(rightValue => known(op(leftValue.value, rightValue.value), leftValue.bits))
+  ));
+};
 
 export const createEmulationState = (bitness: 32 | 64): EmulationState => {
   const registers = new Map<CanonicalRegister, EmulatedValue>();
@@ -129,4 +211,25 @@ export const cloneEmulationState = (state: EmulationState): EmulationState => ({
   bitness: state.bitness,
   registers: new Map(state.registers),
   memory: new Map(state.memory)
+});
+
+const mergeValueMap = <Key>(
+  left: Map<Key, EmulatedValue>,
+  right: Map<Key, EmulatedValue>
+): Map<Key, EmulatedValue> => {
+  const merged = new Map<Key, EmulatedValue>();
+  for (const key of new Set([...left.keys(), ...right.keys()])) {
+    const value = joinEmulatedValues(left.get(key), right.get(key));
+    if (value.kind !== "unknown") merged.set(key, value);
+  }
+  return merged;
+};
+
+export const mergeEmulationStates = (
+  left: EmulationState,
+  right: EmulationState
+): EmulationState => ({
+  bitness: left.bitness,
+  registers: mergeValueMap(left.registers, right.registers),
+  memory: mergeValueMap(left.memory, right.memory)
 });

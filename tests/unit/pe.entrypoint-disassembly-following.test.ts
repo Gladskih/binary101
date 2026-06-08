@@ -193,7 +193,7 @@ void test("analyzePeEntrypointDisassembly guards repeated contexts at one RVA", 
   assert.ok(result.blocks.length > 16);
   assert.equal(lastInstruction?.target?.kind, "code");
   assert.equal(lastInstruction?.target?.followed, false);
-  assert.ok(result.issues.some(issue => /distinct emulation contexts/i.test(issue)));
+  assert.ok(result.issues.some(issue => /precision budget/i.test(issue)));
 });
 
 void test("analyzePeEntrypointDisassembly reports refused conditional branch edges", async () => {

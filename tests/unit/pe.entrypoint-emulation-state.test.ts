@@ -6,8 +6,10 @@ import * as iced from "iced-x86";
 import type { IcedModule } from "../../analyzers/pe/disassembly/entrypoint/iced.js";
 import { resolveRegister } from "../../analyzers/pe/disassembly/entrypoint/emulation-registers.js";
 import {
+  collectKnownValues,
   createEmulationState,
   known,
+  mergeEmulationStates,
   readRegister,
   writeRegister
 } from "../../analyzers/pe/disassembly/entrypoint/emulation-state.js";
@@ -100,4 +102,30 @@ void test("createEmulationState initializes abstract stack by bitness", () => {
     value: 0x100000000000n,
     bits: 64
   });
+});
+
+void test("mergeEmulationStates joins concrete register alternatives", () => {
+  const left = createEmulationState(64);
+  const right = createEmulationState(64);
+  const r11 = resolveRegister(icedModule, iced.Register.R11);
+
+  writeRegister(left, r11, known(0x140001010n, 64));
+  writeRegister(right, r11, known(0x140002020n, 64));
+
+  const merged = mergeEmulationStates(left, right);
+
+  assert.deepEqual(
+    collectKnownValues(readRegister(merged, r11)).map(value => value.value),
+    [0x140001010n, 0x140002020n]
+  );
+});
+
+void test("mergeEmulationStates widens missing path-only values to unknown", () => {
+  const left = createEmulationState(64);
+  const right = createEmulationState(64);
+  const r11 = resolveRegister(icedModule, iced.Register.R11);
+
+  writeRegister(left, r11, known(0x140001010n, 64));
+
+  assert.deepEqual(readRegister(mergeEmulationStates(left, right), r11), { kind: "unknown" });
 });

@@ -1,13 +1,17 @@
 "use strict";
 
-import type { IcedX86Module } from "../../../x86/disassembly-iced.js";
 import {
   getNearBranchEdges,
   getNearBranchTarget
 } from "../../../x86/disassembly-branch-targets.js";
 import { MAX_RVA } from "./metadata.js";
 import type { ImportTarget } from "./import-targets.js";
-import type { IcedInstructionObject } from "./iced.js";
+import type { IcedInstructionObject, IcedModule } from "./iced.js";
+import { readOperand } from "./emulation-operands.js";
+import {
+  collectKnownValues,
+  type EmulationState
+} from "./emulation-state.js";
 import type {
   AnalyzePeEntrypointDisassemblyOptions,
   PeEntrypointInstructionTarget
@@ -51,7 +55,7 @@ export const toRva = (virtualAddress: bigint, imageBase: bigint): number | null 
 };
 
 export const getDirectControlFlowTarget = (
-  iced: IcedX86Module,
+  iced: IcedModule,
   opts: AnalyzePeEntrypointDisassemblyOptions,
   instruction: IcedInstructionObject
 ): DirectControlFlowTarget | null => {
@@ -65,8 +69,28 @@ export const getDirectControlFlowTarget = (
   return { kind: isCall ? "followed-call" : "followed-jump", rva };
 };
 
+export const getEmulatedIndirectControlFlowTarget = (
+  iced: IcedModule,
+  opts: AnalyzePeEntrypointDisassemblyOptions,
+  instruction: IcedInstructionObject,
+  state: EmulationState
+): DirectControlFlowTarget | null => {
+  const indirectCall = instruction.flowControl === iced.FlowControl["IndirectCall"];
+  const indirectJump = instruction.flowControl === iced.FlowControl["IndirectBranch"];
+  if (!indirectCall && !indirectJump) return null;
+  const rvas = new Set<number>();
+  for (const value of collectKnownValues(readOperand(iced, state, instruction, 0))) {
+    const rva = toRva(value.value, opts.imageBase);
+    if (rva == null) continue;
+    rvas.add(rva);
+  }
+  if (rvas.size !== 1) return null;
+  const [rva] = rvas;
+  return rva == null ? null : { kind: indirectCall ? "followed-call" : "followed-jump", rva };
+};
+
 export const getConditionalBranchTargets = (
-  iced: IcedX86Module,
+  iced: IcedModule,
   opts: AnalyzePeEntrypointDisassemblyOptions,
   instruction: IcedInstructionObject
 ): ConditionalBranchTargets | null => {
@@ -83,7 +107,7 @@ export const getConditionalBranchTargets = (
 };
 
 export const getImportTarget = (
-  iced: IcedX86Module,
+  iced: IcedModule,
   opts: AnalyzePeEntrypointDisassemblyOptions,
   instruction: IcedInstructionObject,
   importTargets: Map<number, ImportTarget>

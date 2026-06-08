@@ -2,8 +2,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import * as realIced from "iced-x86";
 import { createFileRangeReader } from "../../analyzers/file-range-reader.js";
 import { analyzePeEntrypointDisassembly } from "../../analyzers/pe/disassembly/index.js";
+import type { IcedModule } from "../../analyzers/pe/disassembly/entrypoint/iced.js";
 import {
   IMAGE_FILE_MACHINE_AMD64,
   TestDecoder,
@@ -13,6 +15,8 @@ import {
   type TestInstruction
 } from "../helpers/pe-entrypoint-disassembly-fixture.js";
 import { MockFile } from "../helpers/mock-file.js";
+
+const realIcedModule = realIced as unknown as IcedModule;
 
 void test("analyzePeEntrypointDisassembly annotates indirect calls through the IAT", async () => {
   const result = await analyzeEntrypoint(
@@ -110,6 +114,39 @@ void test("analyzePeEntrypointDisassembly continues after unknown indirect calls
     "Unknown indirect call target; preview continues at fallthrough."
   ]);
   assert.ok(result.issues.some(issue => /continued after unknown indirect call/i.test(issue)));
+});
+
+void test("analyzePeEntrypointDisassembly follows concrete register indirect calls", async () => {
+  const bytes = new Uint8Array([
+    0x49, 0xbb, 0x10, 0x10, 0x00, 0x40, 0x01, 0x00, 0x00, 0x00,
+    0x41, 0xff, 0xd3,
+    0xc3,
+    0x90, 0x90,
+    0x90, 0xc3
+  ]);
+  const result = await analyzePeEntrypointDisassembly(
+    createFileRangeReader(new MockFile(bytes, "indirect-register.exe"), 0, bytes.length),
+    {
+      coffMachine: IMAGE_FILE_MACHINE_AMD64,
+      is64Bit: true,
+      imageBase: 0x140000000n,
+      entrypointRva: 0x1000,
+      rvaToOff: rva => rva - 0x1000,
+      sections: [createExecutableSection({ virtualSize: bytes.length, sizeOfRawData: bytes.length })]
+    },
+    async () => realIcedModule
+  );
+  const target = result.blocks[0]?.instructions[1]?.target;
+
+  assert.equal(target?.kind, "code");
+  assert.equal(target?.rva, 0x1010);
+  assert.equal(target?.followed, true);
+  assert.equal(result.blocks[1]?.kind, "followed-call");
+  assert.equal(result.blocks[1]?.startRva, 0x1010);
+  assert.deepEqual(result.blocks[1]?.instructions.map(instruction => instruction.text), [
+    "nop",
+    "ret"
+  ]);
 });
 
 void test("analyzePeEntrypointDisassembly continues after unknown memory calls", async () => {

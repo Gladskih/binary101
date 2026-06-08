@@ -13,6 +13,7 @@ import { toRva } from "./control-flow.js";
 import { buildImportTargetMap, type ImportTarget } from "./import-targets.js";
 import { createInstruction } from "./instruction.js";
 import { createEmulationState } from "./emulation.js";
+import { cloneEmulationState } from "./emulation-state.js";
 import { applyInstructionTargets, controlFlowIssue } from "./targeting.js";
 import {
   createBlockKey,
@@ -136,27 +137,29 @@ export const decodePreview = async (
   const importTargets = buildImportTargetMap(opts, metadata);
   const entryState = createEmulationState(metadata.bitness);
   const entryKey = createBlockKey(mapped.rvaStart, entryState, opts.imageBase);
+  const entryBlock: PendingBlock = {
+    kind: "entrypoint",
+    mapped,
+    emulationState: entryState,
+    key: entryKey
+  };
   const state: DecodeState = {
     blocks: [],
     bytesDecoded: 0,
     instructionCount: 0,
     visitedBlocks: new Set(),
-    queuedBlocks: new Set([entryKey]),
+    queuedBlocksByKey: new Map([[entryKey, entryBlock]]),
+    emulationStatesByKey: new Map([[entryKey, cloneEmulationState(entryState)]]),
     contextKeysByRva: new Map([[mapped.rvaStart, new Set([entryKey])]]),
-    contextLimitReportedRvas: new Set()
+    precisionCostByRva: new Map([[mapped.rvaStart, 1]]),
+    precisionLimitReportedRvas: new Set()
   };
-  const pending: PendingBlock[] = [{
-    kind: "entrypoint",
-    mapped,
-    emulationState: entryState,
-    key: entryKey
-  }];
+  const pending: PendingBlock[] = [entryBlock];
   try {
     while (pending.length > 0) {
       const block = pending.shift();
       if (!block) break;
-      state.queuedBlocks.delete(block.key);
-      if (state.visitedBlocks.has(block.key)) continue;
+      state.queuedBlocksByKey.delete(block.key);
       state.visitedBlocks.add(block.key);
       const decoded = await decodeBlock(
         reader,
