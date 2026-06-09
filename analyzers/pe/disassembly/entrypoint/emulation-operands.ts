@@ -11,10 +11,12 @@ import {
   collectKnownValues,
   joinEmulatedValues,
   known,
+  mapKnownValues,
   readRegister,
   writeRegister,
   type EmulatedValue,
-  type EmulationState
+  type EmulationState,
+  type KnownValueBits
 } from "./emulation-state.js";
 
 const immediateValue = (
@@ -31,7 +33,10 @@ const opKindName = (
   iced: IcedModule,
   instruction: IcedInstructionObject,
   operand: number
-): string | undefined => iced.OpKind[instruction.opKind(operand)];
+): string | undefined => {
+  if (!Number.isInteger(operand) || operand < 0 || operand >= instruction.opCount) return undefined;
+  return iced.OpKind[instruction.opKind(operand)];
+};
 
 const isRegisterOperand = (
   iced: IcedModule,
@@ -44,6 +49,40 @@ const isMemoryOperand = (
   instruction: IcedInstructionObject,
   operand: number
 ): boolean => opKindName(iced, instruction, operand) === "Memory";
+
+const memorySizeBits = (
+  iced: IcedModule,
+  instruction: IcedInstructionObject
+): KnownValueBits | null => {
+  const name = iced.MemorySize?.[instruction.memorySize];
+  if (name === "UInt8" || name === "Int8") return 8;
+  if (name === "UInt16" || name === "Int16") return 16;
+  if (name === "UInt32" || name === "Int32") return 32;
+  if (name === "UInt64" || name === "Int64") return 64;
+  return null;
+};
+
+export const operandBits = (
+  iced: IcedModule,
+  instruction: IcedInstructionObject,
+  operand: number
+): KnownValueBits | null => {
+  if (isRegisterOperand(iced, instruction, operand)) {
+    return resolveRegister(iced, instruction.opRegister(operand))?.accessBits ?? null;
+  }
+  return isMemoryOperand(iced, instruction, operand) ? memorySizeBits(iced, instruction) : null;
+};
+
+const coerceOperandValue = (
+  iced: IcedModule,
+  instruction: IcedInstructionObject,
+  operand: number,
+  value: EmulatedValue
+): EmulatedValue => {
+  const bits = operandBits(iced, instruction, operand);
+  if (bits == null || (value.kind !== "known" && value.kind !== "value-set")) return value;
+  return mapKnownValues(value, bits, data => data);
+};
 
 const readMemoryAddressRegister = (
   iced: IcedModule,
@@ -107,7 +146,12 @@ export const readOperand = (
     const addresses = resolveMemoryAddresses(iced, state, instruction);
     return addresses == null
       ? UNKNOWN
-      : joinReadValues(addresses.map(address => state.memory.get(address.toString()) ?? UNKNOWN));
+      : coerceOperandValue(
+        iced,
+        instruction,
+        operand,
+        joinReadValues(addresses.map(address => state.memory.get(address.toString()) ?? UNKNOWN))
+      );
   }
   return immediateValue(iced, instruction, operand);
 };
@@ -126,7 +170,8 @@ export const writeOperand = (
   if (isMemoryOperand(iced, instruction, operand)) {
     const addresses = resolveMemoryAddresses(iced, state, instruction);
     if (addresses != null) {
-      for (const address of addresses) state.memory.set(address.toString(), value);
+      const stored = coerceOperandValue(iced, instruction, operand, value);
+      for (const address of addresses) state.memory.set(address.toString(), stored);
     }
   }
 };

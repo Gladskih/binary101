@@ -22,6 +22,7 @@ export type IcedFormatter = { format(instruction: IcedInstructionObject): string
 export type IcedModule = IcedX86Module & {
   Formatter: new (syntax: number) => IcedFormatter;
   FormatterSyntax: { Nasm: number };
+  MemorySize?: Record<string, number> & Record<number, string | undefined>;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

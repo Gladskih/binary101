@@ -7,6 +7,7 @@ import type { IcedModule } from "../../analyzers/pe/disassembly/entrypoint/iced.
 import { resolveRegister } from "../../analyzers/pe/disassembly/entrypoint/emulation-registers.js";
 import {
   isSameRegisterOperand,
+  operandBits,
   readOperand,
   resolveMemoryAddress,
   resolveStackPointer,
@@ -96,6 +97,47 @@ void test("readOperand selects the requested immediate operand", () => {
       kind: "known",
       value: 0x56n,
       bits: 64
+    });
+  } finally {
+    instruction.free();
+  }
+});
+
+void test("operandBits reports register and memory operand widths", () => {
+  const register = decodeOne([0x0f, 0xb6, 0xc0]);
+  const memory = decodeOne([0x8b, 0x04, 0x24]);
+  try {
+    assert.equal(operandBits(icedModule, register, 0), 32);
+    assert.equal(operandBits(icedModule, register, 1), 8);
+    assert.equal(operandBits(icedModule, memory, 1), 32);
+  } finally {
+    register.free();
+    memory.free();
+  }
+});
+
+void test("readOperand and writeOperand tolerate out-of-range operand indexes", () => {
+  const state = createEmulationState(64);
+  const instruction = decodeOne([0x90]);
+  try {
+    assert.deepEqual(readOperand(icedModule, state, instruction, 0), { kind: "unknown" });
+    writeOperand(icedModule, state, instruction, 0, known(1n, 64));
+    assert.equal(state.registers.size, 1);
+  } finally {
+    instruction.free();
+  }
+});
+
+void test("readOperand coerces memory reads to the instruction memory width", () => {
+  const state = createEmulationState(64);
+  const instruction = decodeOne([0x8b, 0x04, 0x24]);
+  try {
+    state.memory.set(0x100000000000n.toString(), known(0x1122_3344_5566_7788n, 64));
+
+    assert.deepEqual(readOperand(icedModule, state, instruction, 1), {
+      kind: "known",
+      value: 0x5566_7788n,
+      bits: 32
     });
   } finally {
     instruction.free();

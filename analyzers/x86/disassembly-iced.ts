@@ -21,6 +21,7 @@ export type IcedInstructionObject = {
   readonly memoryDisplacement: bigint;
   readonly memoryIndex: number;
   readonly memoryIndexScale: number;
+  readonly memorySize: number;
   readonly op0Kind: number;
   opKind(operand: number): number;
   opRegister(operand: number): number;
@@ -55,6 +56,7 @@ export type IcedX86Module = {
   FlowControl: Record<string, number> & Record<number, string | undefined>;
   InstructionInfoFactory?: new () => IcedInstructionInfoFactory;
   Mnemonic?: Record<string, number> & Record<number, string | undefined>;
+  MemorySize?: Record<string, number> & Record<number, string | undefined>;
   OpAccess?: Record<string, number> & Record<number, string | undefined>;
   OpKind: Record<string, number> & Record<number, string | undefined>;
   Register?: Record<string, number> & Record<number, string | undefined>;

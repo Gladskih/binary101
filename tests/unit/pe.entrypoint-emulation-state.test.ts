@@ -8,7 +8,9 @@ import { resolveRegister } from "../../analyzers/pe/disassembly/entrypoint/emula
 import {
   collectKnownValues,
   createEmulationState,
+  joinEmulatedValues,
   known,
+  mapKnownValues,
   mergeEmulationStates,
   readRegister,
   writeRegister
@@ -25,6 +27,21 @@ void test("writeRegister zero-extends 32-bit writes in 64-bit mode", () => {
   writeRegister(state, eax, known(1n, 32));
 
   assert.deepEqual(readRegister(state, rax), { kind: "known", value: 1n, bits: 64 });
+});
+
+void test("writeRegister truncates oversized values before 32-bit zero-extension", () => {
+  const state = createEmulationState(64);
+  const rax = resolveRegister(icedModule, iced.Register.RAX);
+  const eax = resolveRegister(icedModule, iced.Register.EAX);
+
+  writeRegister(state, rax, known(0n, 64));
+  writeRegister(state, eax, known(0x1122_3344_5566_7788n, 64));
+
+  assert.deepEqual(readRegister(state, rax), {
+    kind: "known",
+    value: 0x5566_7788n,
+    bits: 64
+  });
 });
 
 void test("writeRegister keeps 32-bit state width in 32-bit mode", () => {
@@ -118,6 +135,17 @@ void test("mergeEmulationStates joins concrete register alternatives", () => {
     collectKnownValues(readRegister(merged, r11)).map(value => value.value),
     [0x140001010n, 0x140002020n]
   );
+});
+
+void test("mapKnownValues transforms bounded value-set alternatives", () => {
+  const mapped = mapKnownValues(
+    joinEmulatedValues(known(1n, 8), known(2n, 8)),
+    16,
+    value => value + 1n
+  );
+
+  assert.deepEqual(collectKnownValues(mapped).map(value => value.value), [2n, 3n]);
+  assert.deepEqual(collectKnownValues(mapped).map(value => value.bits), [16, 16]);
 });
 
 void test("mergeEmulationStates widens missing path-only values to unknown", () => {

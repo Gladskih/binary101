@@ -94,6 +94,16 @@ export const joinEmulatedValues = (
   return sameSpecialValue(left, right) ? left : UNKNOWN;
 };
 
+export const mapKnownValues = (
+  value: EmulatedValue,
+  bits: KnownValueBits,
+  op: (value: bigint, bits: KnownValueBits) => bigint
+): EmulatedValue => {
+  const values = collectKnownValues(value);
+  if (!values.length) return UNKNOWN;
+  return valueSet(values.map(candidate => known(op(candidate.value, candidate.bits), bits)));
+};
+
 const readKnownValue = (value: KnownValue, access: RegisterAccess): KnownValue =>
   known(value.value >> BigInt(access.bitOffset), access.accessBits);
 
@@ -153,7 +163,10 @@ const writeKnownRegister = (
     );
     return;
   }
-  state.registers.set(access.canonical, known(value.value, writeStorageBits(state, access)));
+  state.registers.set(
+    access.canonical,
+    known(known(value.value, access.accessBits).value, writeStorageBits(state, access))
+  );
 };
 
 const writeValueSetRegister = (
@@ -164,7 +177,9 @@ const writeValueSetRegister = (
   const storageBits = writeStorageBits(state, access);
   state.registers.set(
     access.canonical,
-    valueSet(value.values.map(candidate => known(candidate.value, storageBits)))
+    valueSet(value.values.map(candidate =>
+      known(known(candidate.value, access.accessBits).value, storageBits)
+    ))
   );
 };
 

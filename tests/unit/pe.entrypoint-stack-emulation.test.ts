@@ -54,6 +54,85 @@ void test("emulateInstruction models basic stack push and pop", () => {
   assert.equal(state.memory.size, 0);
 });
 
+void test("emulateInstruction uses operand-size width for 16-bit push", () => {
+  const state = emulateBytesWithState([
+    0x48, 0xc7, 0xc0, 0x22, 0x11, 0x00, 0x00,
+    0x66, 0x50
+  ]);
+
+  assert.deepEqual(state.registers.get("RSP"), {
+    kind: "known",
+    value: 0xffffffffffen,
+    bits: 64
+  });
+  assert.deepEqual(state.memory.get(0xffffffffffen.toString()), {
+    kind: "known",
+    value: 0x1122n,
+    bits: 16
+  });
+});
+
+void test("emulateInstruction models enter nesting zero and leave", () => {
+  const state = emulateBytesWithState([
+    0xc8, 0x20, 0x00, 0x00,
+    0xc9
+  ]);
+
+  assert.deepEqual(state.registers.get("RSP"), {
+    kind: "known",
+    value: 0x100000000000n,
+    bits: 64
+  });
+  assert.deepEqual(state.registers.get("RBP"), { kind: "unknown" });
+  assert.equal(state.memory.size, 0);
+});
+
+void test("emulateInstruction pushad stores the original ESP slot", () => {
+  const state = emulateBytesWithState([0x60], 32);
+
+  assert.deepEqual(state.memory.get(0x0fffffecn.toString()), {
+    kind: "known",
+    value: 0x10000000n,
+    bits: 32
+  });
+  assert.deepEqual(state.registers.get("RSP"), {
+    kind: "known",
+    value: 0x0fffffe0n,
+    bits: 32
+  });
+});
+
+void test("emulateInstruction popad restores saved general registers", () => {
+  const state = emulateBytesWithState([
+    0xb8, 0x01, 0x00, 0x00, 0x00,
+    0xb9, 0x02, 0x00, 0x00, 0x00,
+    0xba, 0x03, 0x00, 0x00, 0x00,
+    0xbb, 0x04, 0x00, 0x00, 0x00,
+    0xbd, 0x05, 0x00, 0x00, 0x00,
+    0xbe, 0x06, 0x00, 0x00, 0x00,
+    0xbf, 0x07, 0x00, 0x00, 0x00,
+    0x60,
+    0x61
+  ], 32);
+
+  assert.deepEqual(state.registers.get("RAX"), { kind: "known", value: 1n, bits: 32 });
+  assert.deepEqual(state.registers.get("RBX"), { kind: "known", value: 4n, bits: 32 });
+  assert.deepEqual(state.registers.get("RDI"), { kind: "known", value: 7n, bits: 32 });
+  assert.deepEqual(state.registers.get("RSP"), {
+    kind: "known",
+    value: 0x10000000n,
+    bits: 32
+  });
+  assert.equal(state.memory.size, 0);
+});
+
+void test("emulateInstruction marks nested enter frames unknown", () => {
+  const state = emulateBytesWithState([0xc8, 0x00, 0x00, 0x01]);
+
+  assert.deepEqual(state.registers.get("RSP"), { kind: "unknown" });
+  assert.deepEqual(state.registers.get("RBP"), { kind: "unknown" });
+});
+
 void test("emulateInstruction lets pushed 64-bit flags expose the saved return slot", () => {
   const state = emulateBytesWithState([
     // Seed a call-like saved return VA on the synthetic stack, then rewrite it
