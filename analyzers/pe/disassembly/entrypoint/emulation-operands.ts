@@ -96,6 +96,42 @@ const readMemoryAddressRegister = (
 
 const MAX_MEMORY_ADDRESS_ALTERNATIVES = 4;
 
+const memoryAddressRegisterAccess = (
+  iced: IcedModule,
+  register: number
+): RegisterAccess | null =>
+  register === (iced.Register?.["None"] ?? 0) ? null : resolveRegister(iced, register);
+
+const addressBitsFromAccess = (access: RegisterAccess | null): KnownValueBits | null => {
+  if (access?.accessBits === 16) return 16;
+  if (access?.accessBits === 32) return 32;
+  if (access?.accessBits === 64) return 64;
+  return null;
+};
+
+const memoryAddressBits = (
+  iced: IcedModule,
+  state: EmulationState,
+  instruction: IcedInstructionObject
+): KnownValueBits =>
+  addressBitsFromAccess(memoryAddressRegisterAccess(iced, instruction.memoryBase)) ??
+  addressBitsFromAccess(memoryAddressRegisterAccess(iced, instruction.memoryIndex)) ??
+  state.bitness;
+
+const effectiveMemoryAddress = (
+  instruction: IcedInstructionObject,
+  base: bigint,
+  index: bigint,
+  addressBits: KnownValueBits
+): bigint =>
+  // Intel SDM Vol. 1, 3.7.5: effective-address computation uses the active
+  // address size. iced-x86 can expose 32-bit negative displacements as their
+  // unsigned form, so wrap the final sum to the modeled address width.
+  BigInt.asUintN(
+    addressBits,
+    base + index * BigInt(instruction.memoryIndexScale) + instruction.memoryDisplacement
+  );
+
 export const resolveMemoryAddresses = (
   iced: IcedModule,
   state: EmulationState,
@@ -108,13 +144,10 @@ export const resolveMemoryAddresses = (
   const indexValues = collectKnownValues(indexValue);
   if (!baseValues.length || !indexValues.length) return null;
   const addresses = new Set<bigint>();
+  const addressBits = memoryAddressBits(iced, state, instruction);
   for (const base of baseValues) {
     for (const index of indexValues) {
-      addresses.add(
-        base.value +
-        index.value * BigInt(instruction.memoryIndexScale) +
-        instruction.memoryDisplacement
-      );
+      addresses.add(effectiveMemoryAddress(instruction, base.value, index.value, addressBits));
       if (addresses.size > MAX_MEMORY_ADDRESS_ALTERNATIVES) return null;
     }
   }
@@ -180,7 +213,10 @@ export const isSameRegisterOperand = (
   iced: IcedModule,
   instruction: IcedInstructionObject
 ): boolean => {
-  if (!isRegisterOperand(iced, instruction, 0) || !isRegisterOperand(iced, instruction, 1)) return false;
+  if (
+    !isRegisterOperand(iced, instruction, 0) ||
+    !isRegisterOperand(iced, instruction, 1)
+  ) return false;
   return instruction.opRegister(0) === instruction.opRegister(1);
 };
 

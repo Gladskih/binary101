@@ -22,8 +22,8 @@ import {
 
 const icedModule = iced as unknown as IcedModule;
 
-const decodeOne = (bytes: number[]): iced.Instruction => {
-  const decoder = new iced.Decoder(64, new Uint8Array(bytes), iced.DecoderOptions.None);
+const decodeOne = (bytes: number[], bitness = 64): iced.Instruction => {
+  const decoder = new iced.Decoder(bitness, new Uint8Array(bytes), iced.DecoderOptions.None);
   const instruction = new iced.Instruction();
   decoder.decodeOut(instruction);
   decoder.free();
@@ -84,6 +84,25 @@ void test("resolveMemoryAddress uses base, index, scale, and displacement", () =
     writeRegister(state, resolveRegister(icedModule, iced.Register.RCX), known(3n, 64));
 
     assert.equal(resolveMemoryAddress(icedModule, state, instruction), 0x101cn);
+  } finally {
+    instruction.free();
+  }
+});
+
+void test("readOperand resolves 32-bit negative frame displacements", () => {
+  const state = createEmulationState(32);
+  // Intel SDM Vol. 2 PUSH: FF /6 with disp8 F8 encodes PUSH r/m32 [EBP-8].
+  const instruction = decodeOne([0xff, 0x75, 0xf8], 32);
+  try {
+    writeRegister(state, resolveRegister(icedModule, iced.Register.EBP), known(0x1000n, 32));
+    state.memory.set(0x0ff8n.toString(), known(0x40100cn, 32));
+
+    assert.equal(resolveMemoryAddress(icedModule, state, instruction), 0x0ff8n);
+    assert.deepEqual(readOperand(icedModule, state, instruction, 0), {
+      kind: "known",
+      value: 0x40100cn,
+      bits: 32
+    });
   } finally {
     instruction.free();
   }
