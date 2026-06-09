@@ -40,9 +40,12 @@ const STDCALL_ARGUMENT_COUNTS = new Map<string, number>([
   ["KERNEL32.dll!GetLastError", 0],
   ["KERNEL32.dll!GetProcAddress", 2],
   ["KERNEL32.dll!GetSystemTimeAsFileTime", 1],
+  ["KERNEL32.dll!HeapAlloc", 3],
+  ["KERNEL32.dll!HeapFree", 3],
   ["KERNEL32.dll!InitializeCriticalSectionAndSpinCount", 2],
   ["KERNEL32.dll!LoadLibraryExW", 3],
   ["KERNEL32.dll!QueryPerformanceCounter", 1],
+  ["KERNEL32.dll!SetLastError", 1],
   ["KERNEL32.dll!TlsSetValue", 2]
 ]);
 

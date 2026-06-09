@@ -110,6 +110,11 @@ const valueKey = (value: EmulatedValue | undefined): string => {
 
 const pointerBytes = (state: EmulationState): bigint => BigInt(state.bitness / 8);
 
+const stackKeyOffsets = (state: EmulationState): bigint[] => {
+  const bytes = pointerBytes(state);
+  return [0n, bytes, bytes * 2n, bytes * 3n];
+};
+
 const stackSlotKey = (
   state: EmulationState,
   address: bigint,
@@ -128,7 +133,7 @@ const stackSlotKeys = (state: EmulationState, imageBase: bigint): string => {
   for (const register of ["RSP", "RBP"] as const) {
     const value = state.registers.get(register);
     if (value?.kind !== "known") continue;
-    for (const offset of [0n, pointerBytes(state)] as const) {
+    for (const offset of stackKeyOffsets(state)) {
       const key = stackSlotKey(state, value.value + offset, imageBase);
       if (key) keys.add(key);
     }
