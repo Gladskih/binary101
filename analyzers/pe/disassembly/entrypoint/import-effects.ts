@@ -33,6 +33,7 @@ const returnRegister = (state: EmulationState): string =>
   state.bitness === 64 ? "RAX" : "EAX";
 
 const STDCALL_ARGUMENT_COUNTS = new Map<string, number>([
+  ["KERNEL32.dll!DeleteCriticalSection", 1],
   ["KERNEL32.dll!FreeLibrary", 1],
   ["KERNEL32.dll!GetCurrentProcessId", 0],
   ["KERNEL32.dll!GetCurrentThreadId", 0],
@@ -41,7 +42,8 @@ const STDCALL_ARGUMENT_COUNTS = new Map<string, number>([
   ["KERNEL32.dll!GetSystemTimeAsFileTime", 1],
   ["KERNEL32.dll!InitializeCriticalSectionAndSpinCount", 2],
   ["KERNEL32.dll!LoadLibraryExW", 3],
-  ["KERNEL32.dll!QueryPerformanceCounter", 1]
+  ["KERNEL32.dll!QueryPerformanceCounter", 1],
+  ["KERNEL32.dll!TlsSetValue", 2]
 ]);
 
 const x86StdcallArgumentBytes = (label: string): bigint => {

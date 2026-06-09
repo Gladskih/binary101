@@ -66,3 +66,23 @@ void test("applyReturningImportEffects cleans known x86 stdcall import arguments
   });
   assert.equal(state.memory.size, 0);
 });
+
+void test("applyReturningImportEffects cleans multiple x86 stdcall import arguments", () => {
+  const state = createEmulationState(32);
+  pushStackValue(icedModule, state, known(0x2222n, 32), 4n);
+  pushStackValue(icedModule, state, known(0x1111n, 32), 4n);
+
+  applyReturningImportEffects(icedModule, state, {
+    label: "KERNEL32.dll!TlsSetValue",
+    slotRva: 0x2060,
+    importKind: "eager",
+    guardIatEntry: false
+  });
+
+  assert.deepEqual(readRegister(state, resolveRegister(icedModule, iced.Register.ESP)), {
+    kind: "known",
+    value: 0x10000000n,
+    bits: 32
+  });
+  assert.equal(state.memory.size, 0);
+});
