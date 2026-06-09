@@ -132,7 +132,9 @@ void test("analyzePeEntrypointDisassembly follows concrete register indirect cal
       imageBase: 0x140000000n,
       entrypointRva: 0x1000,
       rvaToOff: rva => rva - 0x1000,
-      sections: [createExecutableSection({ virtualSize: bytes.length, sizeOfRawData: bytes.length })]
+      sections: [
+        createExecutableSection({ virtualSize: bytes.length, sizeOfRawData: bytes.length })
+      ]
     },
     async () => realIcedModule
   );
