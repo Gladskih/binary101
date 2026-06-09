@@ -1,5 +1,6 @@
 "use strict";
 
+import type { FileRangeReader } from "../../../file-range-reader.js";
 import {
   getNearBranchEdges,
   getNearBranchTarget
@@ -7,7 +8,10 @@ import {
 import { MAX_RVA } from "./metadata.js";
 import type { ImportTarget } from "./import-targets.js";
 import type { IcedInstructionObject, IcedModule } from "./iced.js";
-import { readOperand } from "./emulation-operands.js";
+import {
+  readOperand,
+  resolveMemoryAddress
+} from "./emulation-operands.js";
 import {
   collectKnownValues,
   type EmulationState
@@ -87,6 +91,52 @@ export const getEmulatedIndirectControlFlowTarget = (
   if (rvas.size !== 1) return null;
   const [rva] = rvas;
   return rva == null ? null : { kind: indirectCall ? "followed-call" : "followed-jump", rva };
+};
+
+const readPointerValue = (view: DataView): bigint => {
+  let value = 0n;
+  for (let offset = 0; offset < view.byteLength; offset += 1) {
+    value |= BigInt(view.getUint8(offset)) << BigInt(offset * 8);
+  }
+  return value;
+};
+
+const pointerBytes = (opts: AnalyzePeEntrypointDisassemblyOptions): number =>
+  opts.is64Bit ? 8 : 4;
+
+export const getImageMemoryIndirectControlFlowTarget = async (
+  reader: FileRangeReader,
+  iced: IcedModule,
+  opts: AnalyzePeEntrypointDisassemblyOptions,
+  instruction: IcedInstructionObject,
+  state: EmulationState,
+  issues: string[]
+): Promise<DirectControlFlowTarget | null> => {
+  const indirectCall = instruction.flowControl === iced.FlowControl["IndirectCall"];
+  const indirectJump = instruction.flowControl === iced.FlowControl["IndirectBranch"];
+  if (!indirectCall && !indirectJump) return null;
+  if (instruction.op0Kind !== iced.OpKind["Memory"]) return null;
+  const slotAddress = resolveMemoryAddress(iced, state, instruction);
+  if (slotAddress == null) return null;
+  const slotRva = toRva(slotAddress, opts.imageBase);
+  if (slotRva == null) return null;
+  const fileOffset = opts.rvaToOff(slotRva);
+  const size = pointerBytes(opts);
+  if (
+    fileOffset == null ||
+    !Number.isSafeInteger(fileOffset) ||
+    fileOffset < 0 ||
+    fileOffset > reader.size - size
+  ) return null;
+  try {
+    const view = await reader.read(fileOffset, size);
+    if (view.byteLength !== size) return null;
+    const rva = toRva(readPointerValue(view), opts.imageBase);
+    return rva == null ? null : { kind: indirectCall ? "followed-call" : "followed-jump", rva };
+  } catch (error) {
+    issues.push(`Indirect memory target slot could not be read (${String(error)})`);
+    return null;
+  }
 };
 
 export const getConditionalBranchTargets = (

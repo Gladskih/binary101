@@ -9,6 +9,7 @@ import {
   getConditionalBranchTargets,
   getDirectControlFlowTarget,
   getEmulatedIndirectControlFlowTarget,
+  getImageMemoryIndirectControlFlowTarget,
   getImportTarget,
   type ConditionalBranchTargets,
   type DirectControlFlowTarget
@@ -163,7 +164,15 @@ export const applyInstructionTargets = async (
 ): Promise<InstructionTargetingResult> => {
   const importTarget = getImportTarget(iced, opts, decoded, importTargets);
   const directTarget = getDirectControlFlowTarget(iced, opts, decoded) ??
-    getEmulatedIndirectControlFlowTarget(iced, opts, decoded, block.emulationState);
+    getEmulatedIndirectControlFlowTarget(iced, opts, decoded, block.emulationState) ??
+    await getImageMemoryIndirectControlFlowTarget(
+      reader,
+      iced,
+      opts,
+      decoded,
+      block.emulationState,
+      issues
+    );
   const branchTargets = getConditionalBranchTargets(iced, opts, decoded);
   const importFallthrough = getReturningImportFallthrough(
     iced,
