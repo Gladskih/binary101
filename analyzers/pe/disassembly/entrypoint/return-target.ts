@@ -9,18 +9,21 @@ import {
   createReturnStackState,
   getStackReturnTarget
 } from "./call-stack.js";
+import { collectImmediateOperands } from "./immediate-operands.js";
 import {
   queueFollowedBlock,
   type FollowQueueState,
   type PendingBlock
 } from "./follow-queue.js";
 import type { IcedModule } from "./iced.js";
+import type { IcedInstructionObject } from "./iced.js";
 
 export const followReturnTarget = async (
   reader: FileRangeReader,
   iced: IcedModule,
   opts: AnalyzePeEntrypointDisassemblyOptions,
   block: PendingBlock,
+  instruction: IcedInstructionObject,
   instructionRva: number,
   state: FollowQueueState,
   pending: PendingBlock[],
@@ -39,10 +42,16 @@ export const followReturnTarget = async (
       { kind: "followed-return", rva: target.rva },
       instructionRva,
       issues,
-      createReturnStackState(iced, block.emulationState)
+      createReturnStackState(iced, block.emulationState, returnImmediateBytes(iced, instruction))
     )
   };
 };
+
+const returnImmediateBytes = (
+  iced: IcedModule,
+  instruction: IcedInstructionObject
+): bigint =>
+  collectImmediateOperands(iced, instruction)[0]?.value ?? 0n;
 
 export const returnIssue = (
   target: Extract<PeEntrypointInstructionTarget, { kind: "return" }>

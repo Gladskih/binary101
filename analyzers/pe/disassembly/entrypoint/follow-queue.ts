@@ -91,7 +91,8 @@ const precisionCost = (state: EmulationState): number =>
   Math.max(
     1,
     [...state.registers.values(), ...state.memory.values()]
-      .reduce((sum, value) => sum + Math.max(1, collectKnownValues(value).length), 0)
+      .reduce((sum, value) => sum + Math.max(1, collectKnownValues(value).length), 0) +
+      Object.keys(state.flags).length
   );
 
 const valueKey = (value: EmulatedValue | undefined): string => {
@@ -172,7 +173,9 @@ const stateKey = (state: EmulationState): string => {
     .map(([key, value]) => `r:${key}=${valueKey(value)}`);
   const memoryKeys = Array.from(state.memory)
     .map(([key, value]) => `m:${key}=${valueKey(value)}`);
-  return [...registerKeys, ...memoryKeys]
+  const flagKeys = Object.entries(state.flags)
+    .map(([key, value]) => `f:${key}=${value ? "1" : "0"}`);
+  return [...registerKeys, ...memoryKeys, ...flagKeys]
     .sort()
     .join("|");
 };
@@ -224,8 +227,8 @@ export const queueConditionalBranch = async (
   instructionRva: number,
   issues: string[],
   emulationState: EmulationState
-): Promise<{ branchFollowed: boolean; fallthroughFollowed: boolean }> => ({
-  branchFollowed: await queueFollowedBlock(
+): Promise<{ branchFollowed: boolean; fallthroughFollowed: boolean }> => {
+  const branchFollowed = branch.taken !== false && await queueFollowedBlock(
     reader,
     opts,
     state,
@@ -234,8 +237,8 @@ export const queueConditionalBranch = async (
     instructionRva,
     issues,
     cloneEmulationState(emulationState)
-  ),
-  fallthroughFollowed: await queueFollowedBlock(
+  );
+  const fallthroughFollowed = branch.taken !== true && await queueFollowedBlock(
     reader,
     opts,
     state,
@@ -244,5 +247,6 @@ export const queueConditionalBranch = async (
     instructionRva,
     issues,
     cloneEmulationState(emulationState)
-  )
-});
+  );
+  return { branchFollowed, fallthroughFollowed };
+};

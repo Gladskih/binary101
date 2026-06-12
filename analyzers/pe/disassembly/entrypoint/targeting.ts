@@ -173,7 +173,7 @@ export const applyInstructionTargets = async (
       block.emulationState,
       issues
     );
-  const branchTargets = getConditionalBranchTargets(iced, opts, decoded);
+  const branchTargets = getConditionalBranchTargets(iced, opts, decoded, block.emulationState);
   const importFallthrough = getReturningImportFallthrough(
     iced,
     opts,
@@ -242,6 +242,7 @@ export const applyInstructionTargets = async (
       iced,
       opts,
       block,
+      decoded,
       rva,
       state,
       pending,

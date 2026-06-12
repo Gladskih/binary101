@@ -4,10 +4,10 @@ import type { PeEntrypointInstruction } from "../types.js";
 import type { IcedInstructionObject, IcedModule } from "./iced.js";
 import type { EmulationState } from "./emulation-state.js";
 import {
-  executeArithmetic,
   executeDataMovement,
   executeLogical
 } from "./emulation-integer-data.js";
+import { executeArithmetic } from "./emulation-integer-arithmetic.js";
 import {
   executeBitScanAndCount,
   executeDoubleShift,
@@ -17,8 +17,10 @@ import {
   executeAccumulatorExtension,
   executeCompareExchange,
   executeConditionalWrites,
-  executeExchange
+  executeExchange,
 } from "./emulation-integer-effects.js";
+import { executeFlagControl } from "./emulation-flag-control.js";
+import { executeCounterControlFlow } from "./emulation-counter-control.js";
 import { executeMultiplyDivide } from "./emulation-integer-multiply.js";
 
 export const executeIntegerInstruction = (
@@ -35,6 +37,8 @@ export const executeIntegerInstruction = (
   executeExchange(iced, state, instruction) ||
   executeCompareExchange(iced, state, instruction) ||
   executeConditionalWrites(iced, state, instruction) ||
+  executeFlagControl(iced, state, instruction) ||
+  executeCounterControlFlow(iced, state, instruction) ||
   executeAccumulatorExtension(iced, state, instruction) ||
   executeBitScanAndCount(iced, state, instruction) ||
   executeMultiplyDivide(iced, state, instruction);

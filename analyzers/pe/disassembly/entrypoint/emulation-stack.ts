@@ -1,7 +1,12 @@
 "use strict";
 
 import type { IcedInstructionObject, IcedModule } from "./iced.js";
-import { operandBits, readOperand, resolveStackPointer, writeOperand } from "./emulation-operands.js";
+import {
+  operandBits,
+  readOperand,
+  resolveStackPointer,
+  writeOperand
+} from "./emulation-operands.js";
 import { resolveRegister } from "./emulation-registers.js";
 import {
   UNKNOWN,
@@ -13,6 +18,7 @@ import {
   type EmulationState,
   type KnownValueBits
 } from "./emulation-state.js";
+import { clearFlags } from "./emulation-flags.js";
 
 const isMnemonic = (
   iced: IcedModule,
@@ -168,7 +174,12 @@ const executeEnter = (
     return;
   }
   pushStackValue(iced, state, registerValue(iced, state, frameRegisterName(bytes)), bytes);
-  writeRegisterByName(iced, state, frameRegisterName(bytes), readRegister(state, resolveStackPointer(iced, state)));
+  writeRegisterByName(
+    iced,
+    state,
+    frameRegisterName(bytes),
+    readRegister(state, resolveStackPointer(iced, state))
+  );
   const current = readRegister(state, resolveStackPointer(iced, state));
   writeRegister(
     state,
@@ -212,14 +223,26 @@ export const executeStackInstruction = (
   const poppedFlagsBytes = flagPopBytes(iced, mnemonic);
   if (poppedFlagsBytes != null) {
     popStackValue(iced, state, poppedFlagsBytes);
+    clearFlags(state);
     return true;
   }
   if (mnemonic === iced.Mnemonic?.["Push"]) {
-    pushStackValue(iced, state, readOperand(iced, state, instruction, 0), stackOperandBytes(iced, state, instruction));
+    pushStackValue(
+      iced,
+      state,
+      readOperand(iced, state, instruction, 0),
+      stackOperandBytes(iced, state, instruction)
+    );
     return true;
   }
   if (mnemonic === iced.Mnemonic?.["Pop"]) {
-    writeOperand(iced, state, instruction, 0, popStackValue(iced, state, stackOperandBytes(iced, state, instruction)));
+    writeOperand(
+      iced,
+      state,
+      instruction,
+      0,
+      popStackValue(iced, state, stackOperandBytes(iced, state, instruction))
+    );
     return true;
   }
   if (mnemonic === iced.Mnemonic?.["Pushad"] || mnemonic === iced.Mnemonic?.["Pusha"]) {

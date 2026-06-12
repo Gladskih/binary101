@@ -14,8 +14,11 @@ import {
 } from "./emulation-operands.js";
 import {
   collectKnownValues,
+  readRegister,
   type EmulationState
 } from "./emulation-state.js";
+import { evaluateCondition, readFlag } from "./emulation-flags.js";
+import { resolveRegister } from "./emulation-registers.js";
 import type {
   AnalyzePeEntrypointDisassemblyOptions,
   PeEntrypointInstructionTarget
@@ -35,6 +38,7 @@ export type ConditionalBranchTargets = {
     kind: "followed-fallthrough";
     rva: number;
   };
+  taken?: boolean;
 };
 
 export type FollowedCodeTarget =
@@ -142,7 +146,8 @@ export const getImageMemoryIndirectControlFlowTarget = async (
 export const getConditionalBranchTargets = (
   iced: IcedModule,
   opts: AnalyzePeEntrypointDisassemblyOptions,
-  instruction: IcedInstructionObject
+  instruction: IcedInstructionObject,
+  state: EmulationState
 ): ConditionalBranchTargets | null => {
   if (instruction.flowControl !== iced.FlowControl["ConditionalBranch"]) return null;
   const edges = getNearBranchEdges(instruction, iced.OpKind);
@@ -152,8 +157,81 @@ export const getConditionalBranchTargets = (
   if (branchRva == null || fallthroughRva == null) return null;
   return {
     branch: { kind: "followed-branch", rva: branchRva },
-    fallthrough: { kind: "followed-fallthrough", rva: fallthroughRva }
+    fallthrough: { kind: "followed-fallthrough", rva: fallthroughRva },
+    ...knownBranchDirection(iced, instruction, state)
   };
+};
+
+const knownBranchDirection = (
+  iced: IcedModule,
+  instruction: IcedInstructionObject,
+  state: EmulationState
+): { taken: boolean } | Record<string, never> => {
+  const flags = evaluateCondition(iced, instruction.mnemonic, state);
+  if (flags != null) return { taken: flags };
+  const counter = evaluateCounterBranch(iced, instruction, state);
+  return counter == null ? {} : { taken: counter };
+};
+
+const evaluateCounterBranch = (
+  iced: IcedModule,
+  instruction: IcedInstructionObject,
+  state: EmulationState
+): boolean | null => {
+  if (instruction.mnemonic === iced.Mnemonic?.["Jcxz"]) return counterIsZero(iced, state, "CX");
+  if (instruction.mnemonic === iced.Mnemonic?.["Jecxz"]) return counterIsZero(iced, state, "ECX");
+  if (instruction.mnemonic === iced.Mnemonic?.["Jrcxz"]) return counterIsZero(iced, state, "RCX");
+  if (instruction.mnemonic === iced.Mnemonic?.["Loop"]) {
+    return counterIsNonZero(iced, state, instruction);
+  }
+  if (instruction.mnemonic === iced.Mnemonic?.["Loope"]) {
+    return evaluateLoopWithZeroFlag(iced, state, instruction, true);
+  }
+  if (instruction.mnemonic === iced.Mnemonic?.["Loopne"]) {
+    return evaluateLoopWithZeroFlag(iced, state, instruction, false);
+  }
+  return null;
+};
+
+const evaluateLoopWithZeroFlag = (
+  iced: IcedModule,
+  state: EmulationState,
+  instruction: IcedInstructionObject,
+  expectedZeroFlag: boolean
+): boolean | null => {
+  const counter = counterIsNonZero(iced, state, instruction);
+  const zeroFlag = readFlag(state, "ZF");
+  return counter == null || zeroFlag == null ? null : counter && zeroFlag === expectedZeroFlag;
+};
+
+const counterIsNonZero = (
+  iced: IcedModule,
+  state: EmulationState,
+  instruction: IcedInstructionObject
+): boolean | null => {
+  const name = iced.Code[instruction.code] ?? "";
+  if (name.includes("_RCX")) return counterValueIs(iced, state, "RCX", false);
+  if (name.includes("_ECX")) return counterValueIs(iced, state, "ECX", false);
+  if (name.includes("_CX")) return counterValueIs(iced, state, "CX", false);
+  return counterValueIs(iced, state, state.bitness === 64 ? "RCX" : "ECX", false);
+};
+
+const counterIsZero = (
+  iced: IcedModule,
+  state: EmulationState,
+  register: string
+): boolean | null => counterValueIs(iced, state, register, true);
+
+const counterValueIs = (
+  iced: IcedModule,
+  state: EmulationState,
+  register: string,
+  zero: boolean
+): boolean | null => {
+  const values = collectKnownValues(
+    readRegister(state, resolveRegister(iced, iced.Register?.[register] ?? 0))
+  );
+  return values.length === 1 ? (values[0]?.value === 0n) === zero : null;
 };
 
 export const getImportTarget = (

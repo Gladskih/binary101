@@ -2,43 +2,32 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import * as iced from "iced-x86";
+import { createEmulationState } from "../../analyzers/pe/disassembly/entrypoint/emulation.js";
 import {
-  createEmulationState,
-  emulateInstruction,
-  type EmulationState
-} from "../../analyzers/pe/disassembly/entrypoint/emulation.js";
-import type { IcedModule } from "../../analyzers/pe/disassembly/entrypoint/iced.js";
+  createCallStackState,
+  createReturnStackState
+} from "../../analyzers/pe/disassembly/entrypoint/call-stack.js";
+import type { IcedInstructionObject } from "../../analyzers/pe/disassembly/entrypoint/iced.js";
+import { known } from "../../analyzers/pe/disassembly/entrypoint/emulation-state.js";
+import {
+  emulateFixtures,
+  fixtureIced,
+  imm,
+  instruction as ins,
+  mem,
+  reg
+} from "../helpers/pe-entrypoint-emulation-fixture.js";
 
-const icedModule = iced as unknown as IcedModule;
-
-const emulateBytesWithState = (
-  bytes: number[],
+const emulateInstructionsWithState = (
+  instructions: readonly IcedInstructionObject[],
   bitness: 32 | 64 = 64
-): EmulationState => {
-  const decoder = new iced.Decoder(bitness, new Uint8Array(bytes), iced.DecoderOptions.None);
-  const state = createEmulationState(bitness);
-  try {
-    while (decoder.canDecode) {
-      const decoded = new iced.Instruction();
-      try {
-        decoder.decodeOut(decoded);
-        emulateInstruction(icedModule, decoded, { rva: 0, fileOffset: 0, text: "" }, state);
-      } finally {
-        decoded.free();
-      }
-    }
-    return state;
-  } finally {
-    decoder.free();
-  }
-};
+): ReturnType<typeof emulateFixtures>["state"] => emulateFixtures(instructions, bitness).state;
 
 void test("emulateInstruction models basic stack push and pop", () => {
-  const state = emulateBytesWithState([
-    0x48, 0xbb, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11,
-    0x53,
-    0x58
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("RBX"), imm(0x1122334455667788n, "Immediate64")]),
+    ins("Push", [reg("RBX")]),
+    ins("Pop", [reg("RAX")])
   ]);
 
   assert.deepEqual(state.registers.get("RAX"), {
@@ -55,9 +44,9 @@ void test("emulateInstruction models basic stack push and pop", () => {
 });
 
 void test("emulateInstruction uses operand-size width for 16-bit push", () => {
-  const state = emulateBytesWithState([
-    0x48, 0xc7, 0xc0, 0x22, 0x11, 0x00, 0x00,
-    0x66, 0x50
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("RAX"), imm(0x1122)]),
+    ins("Push", [reg("AX")])
   ]);
 
   assert.deepEqual(state.registers.get("RSP"), {
@@ -73,9 +62,11 @@ void test("emulateInstruction uses operand-size width for 16-bit push", () => {
 });
 
 void test("emulateInstruction models enter nesting zero and leave", () => {
-  const state = emulateBytesWithState([
-    0xc8, 0x20, 0x00, 0x00,
-    0xc9
+  const state = emulateInstructionsWithState([
+    ins("Enter", [imm(0x20, "Immediate16"), imm(0, "Immediate8_2nd")], {
+      code: "Enterq"
+    }),
+    ins("Leave", [], { code: "Leaveq" })
   ]);
 
   assert.deepEqual(state.registers.get("RSP"), {
@@ -88,7 +79,7 @@ void test("emulateInstruction models enter nesting zero and leave", () => {
 });
 
 void test("emulateInstruction pushad stores the original ESP slot", () => {
-  const state = emulateBytesWithState([0x60], 32);
+  const state = emulateInstructionsWithState([ins("Pushad")], 32);
 
   assert.deepEqual(state.memory.get(0x0fffffecn.toString()), {
     kind: "known",
@@ -103,16 +94,16 @@ void test("emulateInstruction pushad stores the original ESP slot", () => {
 });
 
 void test("emulateInstruction popad restores saved general registers", () => {
-  const state = emulateBytesWithState([
-    0xb8, 0x01, 0x00, 0x00, 0x00,
-    0xb9, 0x02, 0x00, 0x00, 0x00,
-    0xba, 0x03, 0x00, 0x00, 0x00,
-    0xbb, 0x04, 0x00, 0x00, 0x00,
-    0xbd, 0x05, 0x00, 0x00, 0x00,
-    0xbe, 0x06, 0x00, 0x00, 0x00,
-    0xbf, 0x07, 0x00, 0x00, 0x00,
-    0x60,
-    0x61
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("EAX"), imm(1)]),
+    ins("Mov", [reg("ECX"), imm(2)]),
+    ins("Mov", [reg("EDX"), imm(3)]),
+    ins("Mov", [reg("EBX"), imm(4)]),
+    ins("Mov", [reg("EBP"), imm(5)]),
+    ins("Mov", [reg("ESI"), imm(6)]),
+    ins("Mov", [reg("EDI"), imm(7)]),
+    ins("Pushad"),
+    ins("Popad")
   ], 32);
 
   assert.deepEqual(state.registers.get("RAX"), { kind: "known", value: 1n, bits: 32 });
@@ -127,22 +118,24 @@ void test("emulateInstruction popad restores saved general registers", () => {
 });
 
 void test("emulateInstruction marks nested enter frames unknown", () => {
-  const state = emulateBytesWithState([0xc8, 0x00, 0x00, 0x01]);
+  const state = emulateInstructionsWithState([
+    ins("Enter", [imm(0, "Immediate16"), imm(1, "Immediate8_2nd")], {
+      code: "Enterq"
+    })
+  ]);
 
   assert.deepEqual(state.registers.get("RSP"), { kind: "unknown" });
   assert.deepEqual(state.registers.get("RBP"), { kind: "unknown" });
 });
 
 void test("emulateInstruction lets pushed 64-bit flags expose the saved return slot", () => {
-  const state = emulateBytesWithState([
-    // Seed a call-like saved return VA on the synthetic stack, then rewrite it
-    // below PUSHFQ's 8-byte flags slot before POPFQ restores the stack.
-    0x48, 0xb8, 0x05, 0x10, 0x00, 0x40, 0x01, 0x00, 0x00, 0x00,
-    0x50,
-    0x9c,
-    0x48, 0x83, 0x44, 0x24, 0x08, 0x0c,
-    0x9d,
-    0x5b
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("RAX"), imm(0x140001005n, "Immediate64")]),
+    ins("Push", [reg("RAX")]),
+    ins("Pushfq"),
+    ins("Add", [mem("UInt64", "RSP", 8n), imm(0x0c, "Immediate8to64")]),
+    ins("Popfq"),
+    ins("Pop", [reg("RBX")])
   ]);
 
   assert.deepEqual(state.registers.get("RBX"), {
@@ -159,14 +152,13 @@ void test("emulateInstruction lets pushed 64-bit flags expose the saved return s
 });
 
 void test("emulateInstruction lets pushed 32-bit flags expose the saved return slot", () => {
-  const state = emulateBytesWithState([
-    // PUSHFD reserves a 4-byte flags slot, so the saved return is at [esp+4].
-    0xb8, 0x05, 0x10, 0x40, 0x00,
-    0x50,
-    0x9c,
-    0x83, 0x44, 0x24, 0x04, 0x05,
-    0x9d,
-    0x5b
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("EAX"), imm(0x401005)]),
+    ins("Push", [reg("EAX")]),
+    ins("Pushfd"),
+    ins("Add", [mem("UInt32", "ESP", 4n), imm(5, "Immediate8to32")]),
+    ins("Popfd"),
+    ins("Pop", [reg("EBX")])
   ], 32);
 
   assert.deepEqual(state.registers.get("RBX"), {
@@ -183,14 +175,13 @@ void test("emulateInstruction lets pushed 32-bit flags expose the saved return s
 });
 
 void test("emulateInstruction models operand-size 16-bit flag pushes", () => {
-  const state = emulateBytesWithState([
-    // 66 PUSHF reserves a 2-byte flags slot in 64-bit code.
-    0x48, 0xb8, 0x05, 0x10, 0x00, 0x40, 0x01, 0x00, 0x00, 0x00,
-    0x50,
-    0x66, 0x9c,
-    0x48, 0x83, 0x44, 0x24, 0x02, 0x0c,
-    0x66, 0x9d,
-    0x5b
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("RAX"), imm(0x140001005n, "Immediate64")]),
+    ins("Push", [reg("RAX")]),
+    ins("Pushf"),
+    ins("Add", [mem("UInt64", "RSP", 2n), imm(0x0c, "Immediate8to64")]),
+    ins("Popf"),
+    ins("Pop", [reg("RBX")])
   ]);
 
   assert.deepEqual(state.registers.get("RBX"), {
@@ -204,4 +195,18 @@ void test("emulateInstruction models operand-size 16-bit flag pushes", () => {
     bits: 64
   });
   assert.equal(state.memory.size, 0);
+});
+
+void test("createReturnStackState applies ret immediate stack cleanup", () => {
+  const called = createCallStackState(fixtureIced, createEmulationState(32), 0x401000n);
+  called.memory.set(0x10000000n.toString(), known(0x1111n, 32));
+  called.memory.set(0x10000004n.toString(), known(0x2222n, 32));
+  const returned = createReturnStackState(fixtureIced, called, 8n);
+
+  assert.deepEqual(returned.registers.get("RSP"), {
+    kind: "known",
+    value: 0x10000008n,
+    bits: 32
+  });
+  assert.equal(returned.memory.size, 0);
 });

@@ -8,6 +8,8 @@ import type {
 
 export type KnownValueBits = 8 | 16 | 32 | 64;
 export type KnownValue = { kind: "known"; value: bigint; bits: KnownValueBits };
+export type CpuFlag = "CF" | "PF" | "AF" | "ZF" | "SF" | "OF";
+export type EmulationFlags = Partial<Record<CpuFlag, boolean>>;
 type UnknownValue = { kind: "unknown" };
 type ImportReturnValue = { kind: "import-return"; label: string };
 type CpuIdOutputValue = {
@@ -29,6 +31,7 @@ export type EmulationState = {
   bitness: 32 | 64;
   registers: Map<CanonicalRegister, EmulatedValue>;
   memory: Map<string, EmulatedValue>;
+  flags: EmulationFlags;
 };
 
 export const UNKNOWN: UnknownValue = { kind: "unknown" };
@@ -219,13 +222,14 @@ export const binaryKnown = (
 export const createEmulationState = (bitness: 32 | 64): EmulationState => {
   const registers = new Map<CanonicalRegister, EmulatedValue>();
   registers.set("RSP", known(bitness === 64 ? STACK_BASE_64 : STACK_BASE_32, bitness));
-  return { bitness, registers, memory: new Map() };
+  return { bitness, registers, memory: new Map(), flags: {} };
 };
 
 export const cloneEmulationState = (state: EmulationState): EmulationState => ({
   bitness: state.bitness,
   registers: new Map(state.registers),
-  memory: new Map(state.memory)
+  memory: new Map(state.memory),
+  flags: { ...state.flags }
 });
 
 const mergeValueMap = <Key>(
@@ -246,5 +250,14 @@ export const mergeEmulationStates = (
 ): EmulationState => ({
   bitness: left.bitness,
   registers: mergeValueMap(left.registers, right.registers),
-  memory: mergeValueMap(left.memory, right.memory)
+  memory: mergeValueMap(left.memory, right.memory),
+  flags: mergeFlags(left.flags, right.flags)
 });
+
+const mergeFlags = (left: EmulationFlags, right: EmulationFlags): EmulationFlags => {
+  const merged: EmulationFlags = {};
+  for (const flag of new Set([...Object.keys(left), ...Object.keys(right)]) as Set<CpuFlag>) {
+    if (left[flag] === right[flag] && left[flag] != null) merged[flag] = left[flag];
+  }
+  return merged;
+};

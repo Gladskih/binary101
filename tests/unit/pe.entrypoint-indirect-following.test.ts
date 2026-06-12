@@ -14,6 +14,12 @@ import {
   fakeIced,
   type TestInstruction
 } from "../helpers/pe-entrypoint-disassembly-fixture.js";
+import {
+  createScriptedIced,
+  imm,
+  instruction as ins,
+  reg
+} from "../helpers/pe-entrypoint-emulation-fixture.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const realIcedModule = realIced as unknown as IcedModule;
@@ -149,6 +155,42 @@ void test("analyzePeEntrypointDisassembly follows concrete register indirect cal
     "nop",
     "ret"
   ]);
+});
+
+void test("analyzePeEntrypointDisassembly prunes known conditional branches", async () => {
+  const imageBase = 0x140000000n;
+  const va = (rva: number): bigint => imageBase + BigInt(rva);
+  const bytes = new Uint8Array(14);
+  const result = await analyzePeEntrypointDisassembly(
+    createFileRangeReader(new MockFile(bytes, "known-branch.exe"), 0, bytes.length),
+    {
+      coffMachine: IMAGE_FILE_MACHINE_AMD64,
+      is64Bit: true,
+      imageBase,
+      entrypointRva: 0x1000,
+      rvaToOff: rva => rva - 0x1000,
+      sections: [createExecutableSection({ virtualSize: 14, sizeOfRawData: 14 })]
+    },
+    async () => createScriptedIced([
+      ins("Mov", [reg("EAX"), imm(1)], { ip: va(0x1000), length: 5 }),
+      ins("Cmp", [reg("EAX"), imm(1, "Immediate8to32")], { ip: va(0x1005), length: 3 }),
+      ins("Je", [imm(va(0x100c), "NearBranch64")], {
+        flowControl: "ConditionalBranch",
+        ip: va(0x1008),
+        length: 2,
+        nearBranchTarget: va(0x100c)
+      }),
+      ins("Mov", [], { flowControl: "Return", ip: va(0x100c), length: 1 })
+    ])
+  );
+  const target = result.blocks[0]?.instructions[2]?.target;
+
+  assert.equal(target?.kind, "branch");
+  assert.equal(target?.branchRva, 0x100c);
+  assert.equal(target?.branchFollowed, true);
+  assert.equal(target?.fallthroughRva, 0x100a);
+  assert.equal(target?.fallthroughFollowed, false);
+  assert.equal(result.blocks[1]?.startRva, 0x100c);
 });
 
 void test("analyzePeEntrypointDisassembly continues after unknown memory calls", async () => {

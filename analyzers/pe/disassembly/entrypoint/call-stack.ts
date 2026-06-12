@@ -50,7 +50,8 @@ export const createCallStackState = (
 
 export const createReturnStackState = (
   iced: IcedModule,
-  state: EmulationState
+  state: EmulationState,
+  immediateBytes = 0n
 ): EmulationState => {
   const next = cloneEmulationState(state);
   const stackPointer = resolveStackPointer(iced, next);
@@ -60,7 +61,15 @@ export const createReturnStackState = (
     return next;
   }
   next.memory.delete(current.value.toString());
-  writeRegister(next, stackPointer, known(current.value + pointerBytes(next), next.bitness));
+  const bytes = pointerBytes(next);
+  for (let offset = bytes; offset < bytes + immediateBytes; offset += bytes) {
+    next.memory.delete((current.value + offset).toString());
+  }
+  writeRegister(
+    next,
+    stackPointer,
+    known(current.value + bytes + immediateBytes, next.bitness)
+  );
   return next;
 };
 

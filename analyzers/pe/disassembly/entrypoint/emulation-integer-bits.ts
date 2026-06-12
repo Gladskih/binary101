@@ -16,6 +16,7 @@ import {
   maskForBits,
   writeMappedOperand
 } from "./emulation-integer-common.js";
+import { clearFlags, writeKnownFlags } from "./emulation-flags.js";
 
 // Shift and rotate counts are masked by operand size on modern x86.
 // Intel SDM Vol. 1, section 7.3.1 and Vol. 2 shift/rotate instruction refs.
@@ -56,20 +57,26 @@ export const executeShift = (
   instruction: IcedInstructionObject
 ): boolean => {
   const mnemonic = instruction.mnemonic;
-  if (!isAnyMnemonic(iced, mnemonic, ["Sal", "Sar", "Shl", "Shr", "Rol", "Ror", "Rcl", "Rcr"])) return false;
+  if (!isAnyMnemonic(iced, mnemonic, [
+    "Sal", "Sar", "Shl", "Shr", "Rol", "Ror", "Rcl", "Rcr"
+  ])) return false;
   const count = readOperand(iced, state, instruction, 1);
   const bits = bitsOrState(iced, state, instruction, 0);
   if (count.kind !== "known") {
     writeOperand(iced, state, instruction, 0, UNKNOWN);
+    clearFlags(state);
     return true;
   }
-  if (isAnyMnemonic(iced, mnemonic, ["Rcl", "Rcr"]) && (count.value & countMask(bits)) !== 0n) {
+  const maskedCount = count.value & countMask(bits);
+  if (isAnyMnemonic(iced, mnemonic, ["Rcl", "Rcr"]) && maskedCount !== 0n) {
     writeOperand(iced, state, instruction, 0, UNKNOWN);
+    clearFlags(state);
     return true;
   }
   writeMappedOperand(iced, state, instruction, value =>
     shiftedValue(mnemonic, iced, value, bits, count.value)
   );
+  if (maskedCount !== 0n) clearFlags(state);
   return true;
 };
 
@@ -84,11 +91,13 @@ export const executeDoubleShift = (
   const count = readOperand(iced, state, instruction, 2);
   if (count.kind !== "known") {
     writeOperand(iced, state, instruction, 0, UNKNOWN);
+    clearFlags(state);
     return true;
   }
   const maskedCount = count.value & countMask(bits);
   if (maskedCount === 0n) return true;
   writeDoubleShiftResult(iced, state, instruction, bits, maskedCount);
+  clearFlags(state);
   return true;
 };
 
@@ -172,6 +181,8 @@ const executeBitScan = (
   const values = collectKnownValues(readOperand(iced, state, instruction, 1));
   if (!values.length || values.some(value => value.value === 0n)) {
     writeOperand(iced, state, instruction, 0, UNKNOWN);
+    if (values.length === 1 && values[0]?.value === 0n) writeKnownFlags(state, { ZF: true });
+    else clearFlags(state, ["ZF"]);
     return;
   }
   writeOperand(
@@ -185,6 +196,7 @@ const executeBitScan = (
       scan
     )
   );
+  writeKnownFlags(state, { ZF: false });
 };
 
 const executeBitCount = (
@@ -205,6 +217,41 @@ const executeBitCount = (
       value => countKnownBits(iced, mnemonic, value, sourceBits)
     )
   );
+  writeBitCountFlags(iced, state, instruction, mnemonic);
+};
+
+const writeBitCountFlags = (
+  iced: IcedModule,
+  state: EmulationState,
+  instruction: IcedInstructionObject,
+  mnemonic: number
+): void => {
+  const values = collectKnownValues(readOperand(iced, state, instruction, 1));
+  if (values.length !== 1) {
+    clearFlags(state);
+    return;
+  }
+  if (mnemonic === iced.Mnemonic?.["Popcnt"]) {
+    writeKnownFlags(state, {
+      CF: false,
+      PF: false,
+      AF: false,
+      ZF: values[0]?.value === 0n,
+      SF: false,
+      OF: false
+    });
+    return;
+  }
+  clearFlags(state, ["OF", "SF", "AF", "PF"]);
+  writeKnownFlags(state, {
+    CF: values[0]?.value === 0n,
+    ZF: countKnownBits(
+      iced,
+      mnemonic,
+      values[0]?.value ?? 0n,
+      bitsOrState(iced, state, instruction, 1)
+    ) === 0n
+  });
 };
 
 const countKnownBits = (
@@ -215,7 +262,9 @@ const countKnownBits = (
 ): bigint => {
   if (mnemonic === iced.Mnemonic?.["Popcnt"]) return populationCount(value);
   if (mnemonic === iced.Mnemonic?.["Lzcnt"]) {
-    return value === 0n ? BigInt(sourceBits) : BigInt(sourceBits) - BigInt(value.toString(2).length);
+    return value === 0n
+      ? BigInt(sourceBits)
+      : BigInt(sourceBits) - BigInt(value.toString(2).length);
   }
   return value === 0n ? BigInt(sourceBits) : leastSignificantBitIndex(value);
 };

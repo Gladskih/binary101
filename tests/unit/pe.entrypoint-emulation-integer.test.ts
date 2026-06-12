@@ -2,44 +2,26 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import * as iced from "iced-x86";
-import {
-  createEmulationState,
-  emulateInstruction,
-  type EmulationState
-} from "../../analyzers/pe/disassembly/entrypoint/emulation.js";
-import type { IcedModule } from "../../analyzers/pe/disassembly/entrypoint/iced.js";
+import type { IcedInstructionObject } from "../../analyzers/pe/disassembly/entrypoint/iced.js";
 import { collectKnownValues } from "../../analyzers/pe/disassembly/entrypoint/emulation-state.js";
+import {
+  emulateFixtures,
+  imm,
+  instruction as ins,
+  mem,
+  reg
+} from "../helpers/pe-entrypoint-emulation-fixture.js";
 
-const icedModule = iced as unknown as IcedModule;
-
-const emulateBytesWithState = (
-  bytes: number[],
+const emulateInstructionsWithState = (
+  instructions: readonly IcedInstructionObject[],
   bitness: 32 | 64 = 64
-): EmulationState => {
-  const decoder = new iced.Decoder(bitness, new Uint8Array(bytes), iced.DecoderOptions.None);
-  const state = createEmulationState(bitness);
-  try {
-    while (decoder.canDecode) {
-      const decoded = new iced.Instruction();
-      try {
-        decoder.decodeOut(decoded);
-        emulateInstruction(icedModule, decoded, { rva: 0, fileOffset: 0, text: "" }, state);
-      } finally {
-        decoded.free();
-      }
-    }
-    return state;
-  } finally {
-    decoder.free();
-  }
-};
+): ReturnType<typeof emulateFixtures>["state"] => emulateFixtures(instructions, bitness).state;
 
 void test("emulateInstruction models sign and zero extension moves", () => {
-  const state = emulateBytesWithState([
-    0x48, 0xc7, 0xc0, 0xff, 0xff, 0xff, 0xff,
-    0x0f, 0xb6, 0xc0,
-    0x0f, 0xbe, 0xc8
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("RAX"), imm(-1n, "Immediate32to64")]),
+    ins("Movzx", [reg("EAX"), reg("AL")]),
+    ins("Movsx", [reg("ECX"), reg("AL")])
   ]);
 
   assert.deepEqual(state.registers.get("RAX"), { kind: "known", value: 0xffn, bits: 64 });
@@ -47,11 +29,11 @@ void test("emulateInstruction models sign and zero extension moves", () => {
 });
 
 void test("emulateInstruction models unary arithmetic and shifts", () => {
-  const state = emulateBytesWithState([
-    0xb8, 0x00, 0x00, 0x00, 0x80,
-    0xd1, 0xf8,
-    0xff, 0xc0,
-    0xf7, 0xd8
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("EAX"), imm(0x80000000)]),
+    ins("Sar", [reg("EAX"), imm(1, "Immediate8")]),
+    ins("Inc", [reg("EAX")]),
+    ins("Neg", [reg("EAX")])
   ]);
 
   assert.deepEqual(state.registers.get("RAX"), {
@@ -62,11 +44,11 @@ void test("emulateInstruction models unary arithmetic and shifts", () => {
 });
 
 void test("emulateInstruction masks 64-bit variable shift counts", () => {
-  const state = emulateBytesWithState([
-    0x48, 0xc7, 0xc0, 0x01, 0x00, 0x00, 0x00,
-    0x31, 0xc9,
-    0xb1, 0x20,
-    0x48, 0xd3, 0xe0
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("RAX"), imm(1)]),
+    ins("Xor", [reg("ECX"), reg("ECX")]),
+    ins("Mov", [reg("CL"), imm(0x20, "Immediate8")]),
+    ins("Shl", [reg("RAX"), reg("CL")])
   ]);
 
   assert.deepEqual(state.registers.get("RAX"), {
@@ -77,12 +59,12 @@ void test("emulateInstruction masks 64-bit variable shift counts", () => {
 });
 
 void test("emulateInstruction models logical shifts and rotates", () => {
-  const state = emulateBytesWithState([
-    0xb8, 0x00, 0x00, 0x00, 0x80,
-    0xd1, 0xe8,
-    0xb8, 0x01, 0x00, 0x00, 0x80,
-    0xd1, 0xc0,
-    0xd1, 0xc8
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("EAX"), imm(0x80000000)]),
+    ins("Shr", [reg("EAX"), imm(1, "Immediate8")]),
+    ins("Mov", [reg("EAX"), imm(0x80000001)]),
+    ins("Rol", [reg("EAX"), imm(1, "Immediate8")]),
+    ins("Ror", [reg("EAX"), imm(1, "Immediate8")])
   ]);
 
   assert.deepEqual(state.registers.get("RAX"), {
@@ -93,19 +75,19 @@ void test("emulateInstruction models logical shifts and rotates", () => {
 });
 
 void test("emulateInstruction marks carry rotates unknown when count is nonzero", () => {
-  const state = emulateBytesWithState([
-    0xb8, 0x01, 0x00, 0x00, 0x00,
-    0xd1, 0xd0
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("EAX"), imm(1)]),
+    ins("Rcl", [reg("EAX"), imm(1, "Immediate8")])
   ]);
 
   assert.deepEqual(state.registers.get("RAX"), { kind: "unknown" });
 });
 
 void test("emulateInstruction models double-precision shifts", () => {
-  const state = emulateBytesWithState([
-    0xb8, 0x78, 0x56, 0x34, 0x12,
-    0xb9, 0x00, 0x00, 0x00, 0xf0,
-    0x0f, 0xa4, 0xc8, 0x04
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("EAX"), imm(0x12345678)]),
+    ins("Mov", [reg("ECX"), imm(0xf0000000)]),
+    ins("Shld", [reg("EAX"), reg("ECX"), imm(4, "Immediate8")])
   ]);
 
   assert.deepEqual(state.registers.get("RAX"), {
@@ -116,10 +98,10 @@ void test("emulateInstruction models double-precision shifts", () => {
 });
 
 void test("emulateInstruction joins conditional move outcomes when flags are unknown", () => {
-  const state = emulateBytesWithState([
-    0xb8, 0x01, 0x00, 0x00, 0x00,
-    0xb9, 0x02, 0x00, 0x00, 0x00,
-    0x0f, 0x45, 0xc1
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("EAX"), imm(1)]),
+    ins("Mov", [reg("ECX"), imm(2)]),
+    ins("Cmovne", [reg("EAX"), reg("ECX")])
   ]);
 
   assert.deepEqual(
@@ -129,7 +111,9 @@ void test("emulateInstruction joins conditional move outcomes when flags are unk
 });
 
 void test("emulateInstruction stores setcc as boolean alternatives", () => {
-  const state = emulateBytesWithState([0x0f, 0x95, 0x04, 0x24]);
+  const state = emulateInstructionsWithState([
+    ins("Setne", [mem("UInt8", "RSP")])
+  ]);
 
   assert.deepEqual(
     collectKnownValues(state.memory.get(0x100000000000n.toString())).map(value => value.value),
@@ -138,13 +122,13 @@ void test("emulateInstruction stores setcc as boolean alternatives", () => {
 });
 
 void test("emulateInstruction models xchg, xadd, and cmpxchg register effects", () => {
-  const state = emulateBytesWithState([
-    0xb8, 0x03, 0x00, 0x00, 0x00,
-    0xb9, 0x04, 0x00, 0x00, 0x00,
-    0x87, 0xc8,
-    0x0f, 0xc1, 0xc8,
-    0xba, 0x09, 0x00, 0x00, 0x00,
-    0x0f, 0xb1, 0xca
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("EAX"), imm(3)]),
+    ins("Mov", [reg("ECX"), imm(4)]),
+    ins("Xchg", [reg("EAX"), reg("ECX")]),
+    ins("Xadd", [reg("EAX"), reg("ECX")]),
+    ins("Mov", [reg("EDX"), imm(9)]),
+    ins("Cmpxchg", [reg("EDX"), reg("ECX")])
   ]);
 
   assert.deepEqual(state.registers.get("RAX"), { kind: "known", value: 9n, bits: 64 });
@@ -153,12 +137,12 @@ void test("emulateInstruction models xchg, xadd, and cmpxchg register effects", 
 });
 
 void test("emulateInstruction models accumulator sign-extension instructions", () => {
-  const state = emulateBytesWithState([
-    0x31, 0xc0,
-    0xb0, 0xff,
-    0x66, 0x98,
-    0x98,
-    0x99
+  const state = emulateInstructionsWithState([
+    ins("Xor", [reg("EAX"), reg("EAX")]),
+    ins("Mov", [reg("AL"), imm(0xff, "Immediate8")]),
+    ins("Cbw"),
+    ins("Cwde"),
+    ins("Cdq")
   ]);
 
   assert.deepEqual(state.registers.get("RAX"), {
@@ -174,11 +158,11 @@ void test("emulateInstruction models accumulator sign-extension instructions", (
 });
 
 void test("emulateInstruction models multiply and bit count instructions", () => {
-  const state = emulateBytesWithState([
-    0xb8, 0x03, 0x00, 0x00, 0x00,
-    0xb9, 0x04, 0x00, 0x00, 0x00,
-    0xf7, 0xe1,
-    0xf3, 0x0f, 0xb8, 0xc8
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("EAX"), imm(3)]),
+    ins("Mov", [reg("ECX"), imm(4)]),
+    ins("Mul", [reg("ECX")]),
+    ins("Popcnt", [reg("ECX"), reg("EAX")])
   ]);
 
   assert.deepEqual(state.registers.get("RAX"), { kind: "known", value: 12n, bits: 64 });
@@ -187,9 +171,9 @@ void test("emulateInstruction models multiply and bit count instructions", () =>
 });
 
 void test("emulateInstruction models signed imul low-result forms", () => {
-  const state = emulateBytesWithState([
-    0xb8, 0x03, 0x00, 0x00, 0x00,
-    0x6b, 0xc0, 0xfe
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("EAX"), imm(3)]),
+    ins("Imul", [reg("EAX"), reg("EAX"), imm(-2n, "Immediate8to32")])
   ]);
 
   assert.deepEqual(state.registers.get("RAX"), {
@@ -199,25 +183,25 @@ void test("emulateInstruction models signed imul low-result forms", () => {
   });
 });
 
-void test("emulateInstruction invalidates accumulator registers for div", () => {
-  const state = emulateBytesWithState([
-    0x31, 0xd2,
-    0xb8, 0x0a, 0x00, 0x00, 0x00,
-    0xb9, 0x02, 0x00, 0x00, 0x00,
-    0xf7, 0xf1
+void test("emulateInstruction computes known accumulator registers for div", () => {
+  const state = emulateInstructionsWithState([
+    ins("Xor", [reg("EDX"), reg("EDX")]),
+    ins("Mov", [reg("EAX"), imm(10)]),
+    ins("Mov", [reg("ECX"), imm(2)]),
+    ins("Div", [reg("ECX")])
   ]);
 
-  assert.deepEqual(state.registers.get("RAX"), { kind: "unknown" });
-  assert.deepEqual(state.registers.get("RDX"), { kind: "unknown" });
+  assert.deepEqual(state.registers.get("RAX"), { kind: "known", value: 5n, bits: 64 });
+  assert.deepEqual(state.registers.get("RDX"), { kind: "known", value: 0n, bits: 64 });
 });
 
 void test("emulateInstruction models bit scan and zero-count instructions", () => {
-  const state = emulateBytesWithState([
-    0xb8, 0x10, 0x00, 0x00, 0x00,
-    0x0f, 0xbc, 0xc8,
-    0x0f, 0xbd, 0xd0,
-    0xf3, 0x0f, 0xbd, 0xd8,
-    0xf3, 0x0f, 0xbc, 0xf0
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("EAX"), imm(0x10)]),
+    ins("Bsf", [reg("ECX"), reg("EAX")]),
+    ins("Bsr", [reg("EDX"), reg("EAX")]),
+    ins("Lzcnt", [reg("EBX"), reg("EAX")]),
+    ins("Tzcnt", [reg("ESI"), reg("EAX")])
   ]);
 
   assert.deepEqual(state.registers.get("RCX"), { kind: "known", value: 4n, bits: 64 });

@@ -2,75 +2,41 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import * as iced from "iced-x86";
 import type { PeEntrypointInstruction } from "../../analyzers/pe/disassembly/index.js";
+import type { IcedInstructionObject } from "../../analyzers/pe/disassembly/entrypoint/iced.js";
+import type { EmulationState } from "../../analyzers/pe/disassembly/entrypoint/emulation.js";
 import {
-  createEmulationState,
-  emulateInstruction,
-  type EmulationState
-} from "../../analyzers/pe/disassembly/entrypoint/emulation.js";
-import type { IcedModule } from "../../analyzers/pe/disassembly/entrypoint/iced.js";
+  emulateFixtures,
+  imm,
+  instruction as ins,
+  mem,
+  reg
+} from "../helpers/pe-entrypoint-emulation-fixture.js";
 
-const icedModule = iced as unknown as IcedModule;
+const emulateInstructions = (
+  instructions: readonly IcedInstructionObject[],
+  bitness: 32 | 64 = 64
+): PeEntrypointInstruction[] => emulateFixtures(instructions, bitness).rendered;
 
-const emulateBytes = (bytes: number[], bitness: 32 | 64 = 64): PeEntrypointInstruction[] => {
-  const decoder = new iced.Decoder(bitness, new Uint8Array(bytes), iced.DecoderOptions.None);
-  const state = createEmulationState(bitness);
-  const instructions: PeEntrypointInstruction[] = [];
-  try {
-    while (decoder.canDecode) {
-      const decoded = new iced.Instruction();
-      try {
-        decoder.decodeOut(decoded);
-        const rendered = { rva: instructions.length, fileOffset: instructions.length, text: "" };
-        emulateInstruction(icedModule, decoded, rendered, state);
-        instructions.push(rendered);
-      } finally {
-        decoded.free();
-      }
-    }
-    return instructions;
-  } finally {
-    decoder.free();
-  }
-};
-
-const emulateBytesWithState = (
-  bytes: number[],
+const emulateInstructionsWithState = (
+  instructions: readonly IcedInstructionObject[],
   bitness: 32 | 64 = 64
 ): { instructions: PeEntrypointInstruction[]; state: EmulationState } => {
-  const decoder = new iced.Decoder(bitness, new Uint8Array(bytes), iced.DecoderOptions.None);
-  const state = createEmulationState(bitness);
-  const instructions: PeEntrypointInstruction[] = [];
-  try {
-    while (decoder.canDecode) {
-      const decoded = new iced.Instruction();
-      try {
-        decoder.decodeOut(decoded);
-        const rendered = { rva: instructions.length, fileOffset: instructions.length, text: "" };
-        emulateInstruction(icedModule, decoded, rendered, state);
-        instructions.push(rendered);
-      } finally {
-        decoded.free();
-      }
-    }
-    return { instructions, state };
-  } finally {
-    decoder.free();
-  }
+  const result = emulateFixtures(instructions, bitness);
+  return { instructions: result.rendered, state: result.state };
 };
 
 void test("emulateInstruction follows the LLVM two-CPUID startup idiom", () => {
-  const instructions = emulateBytes([
-    0x31, 0xc0,
-    0x31, 0xc9,
-    0x0f, 0xa2,
-    0x81, 0xf1, 0x6e, 0x74, 0x65, 0x6c,
-    0x81, 0xf2, 0x69, 0x6e, 0x65, 0x49,
-    0xb8, 0x01, 0x00, 0x00, 0x00,
-    0x81, 0xf3, 0x47, 0x65, 0x6e, 0x75,
-    0x8d, 0x48, 0xff,
-    0x0f, 0xa2
+  const instructions = emulateInstructions([
+    ins("Xor", [reg("EAX"), reg("EAX")]),
+    ins("Xor", [reg("ECX"), reg("ECX")]),
+    ins("Cpuid"),
+    ins("Xor", [reg("ECX"), imm(0x6c65746e)]),
+    ins("Xor", [reg("EDX"), imm(0x49656e69)]),
+    ins("Mov", [reg("EAX"), imm(1)]),
+    ins("Xor", [reg("EBX"), imm(0x756e6547)]),
+    ins("Lea", [reg("ECX"), mem("UInt32", "RAX", -1n)]),
+    ins("Cpuid")
   ]);
 
   assert.deepEqual(instructions[2]?.notes, [
@@ -91,11 +57,11 @@ void test("emulateInstruction follows the LLVM two-CPUID startup idiom", () => {
 });
 
 void test("emulateInstruction annotates checks on copied CPUID outputs", () => {
-  const instructions = emulateBytes([
-    0xb8, 0x01, 0x00, 0x00, 0x00,
-    0x0f, 0xa2,
-    0x89, 0xcf,
-    0xf7, 0xc7, 0x00, 0x00, 0x00, 0x18
+  const instructions = emulateInstructions([
+    ins("Mov", [reg("EAX"), imm(1)]),
+    ins("Cpuid"),
+    ins("Mov", [reg("EDI"), reg("ECX")]),
+    ins("Test", [reg("EDI"), imm(0x18000000)])
   ]);
 
   assert.deepEqual(instructions[3]?.notes, [
@@ -104,12 +70,12 @@ void test("emulateInstruction annotates checks on copied CPUID outputs", () => {
 });
 
 void test("emulateInstruction does not keep stale CPUID leaf setup", () => {
-  const instructions = emulateBytes([
-    0xb8, 0x07, 0x00, 0x00, 0x00,
-    0x83, 0xc0, 0x01,
-    0x31, 0xc9,
-    0x0f, 0xa2,
-    0xf7, 0xc3, 0x20, 0x00, 0x00, 0x00
+  const instructions = emulateInstructions([
+    ins("Mov", [reg("EAX"), imm(7)]),
+    ins("Add", [reg("EAX"), imm(1, "Immediate8to32")]),
+    ins("Xor", [reg("ECX"), reg("ECX")]),
+    ins("Cpuid"),
+    ins("Test", [reg("EBX"), imm(0x20)])
   ]);
 
   assert.deepEqual(instructions[3]?.notes, undefined);
@@ -117,11 +83,11 @@ void test("emulateInstruction does not keep stale CPUID leaf setup", () => {
 });
 
 void test("emulateInstruction handles leaf 7 subleaf 0 feature checks", () => {
-  const instructions = emulateBytes([
-    0xb8, 0x07, 0x00, 0x00, 0x00,
-    0x31, 0xc9,
-    0x0f, 0xa2,
-    0xf7, 0xc3, 0x20, 0x00, 0x00, 0x00
+  const instructions = emulateInstructions([
+    ins("Mov", [reg("EAX"), imm(7)]),
+    ins("Xor", [reg("ECX"), reg("ECX")]),
+    ins("Cpuid"),
+    ins("Test", [reg("EBX"), imm(0x20)])
   ]);
 
   assert.deepEqual(instructions[3]?.notes, [
@@ -130,10 +96,10 @@ void test("emulateInstruction handles leaf 7 subleaf 0 feature checks", () => {
 });
 
 void test("emulateInstruction handles CPUID bit-test feature checks", () => {
-  const instructions = emulateBytes([
-    0xb8, 0x01, 0x00, 0x00, 0x00,
-    0x0f, 0xa2,
-    0x0f, 0xba, 0xe1, 0x1c
+  const instructions = emulateInstructions([
+    ins("Mov", [reg("EAX"), imm(1)]),
+    ins("Cpuid"),
+    ins("Bt", [reg("ECX"), imm(0x1c, "Immediate8")])
   ]);
 
   assert.deepEqual(instructions[2]?.notes, [
@@ -142,11 +108,11 @@ void test("emulateInstruction handles CPUID bit-test feature checks", () => {
 });
 
 void test("emulateInstruction handles CPUID bit-test boundary bit 31", () => {
-  const instructions = emulateBytes([
-    0xb8, 0x07, 0x00, 0x00, 0x00,
-    0x31, 0xc9,
-    0x0f, 0xa2,
-    0x0f, 0xba, 0xe3, 0x1f
+  const instructions = emulateInstructions([
+    ins("Mov", [reg("EAX"), imm(7)]),
+    ins("Xor", [reg("ECX"), reg("ECX")]),
+    ins("Cpuid"),
+    ins("Bt", [reg("EBX"), imm(0x1f, "Immediate8")])
   ]);
 
   assert.deepEqual(instructions[3]?.notes, [
@@ -155,22 +121,22 @@ void test("emulateInstruction handles CPUID bit-test boundary bit 31", () => {
 });
 
 void test("emulateInstruction does not annotate partial CPUID registers", () => {
-  const instructions = emulateBytes([
-    0xb8, 0x01, 0x00, 0x00, 0x00,
-    0x0f, 0xa2,
-    0xf6, 0xc5, 0x01
+  const instructions = emulateInstructions([
+    ins("Mov", [reg("EAX"), imm(1)]),
+    ins("Cpuid"),
+    ins("Test", [reg("CH"), imm(1, "Immediate8")])
   ]);
 
   assert.deepEqual(instructions[2]?.notes, undefined);
 });
 
 void test("emulateInstruction computes basic integer operations", () => {
-  const { state } = emulateBytesWithState([
-    0xb8, 0x07, 0x00, 0x00, 0x00,
-    0x83, 0xe8, 0x02,
-    0x83, 0xc0, 0x01,
-    0x83, 0xc8, 0x08,
-    0x83, 0xe0, 0x0d
+  const { state } = emulateInstructionsWithState([
+    ins("Mov", [reg("EAX"), imm(7)]),
+    ins("Sub", [reg("EAX"), imm(2, "Immediate8to32")]),
+    ins("Add", [reg("EAX"), imm(1, "Immediate8to32")]),
+    ins("Or", [reg("EAX"), imm(8, "Immediate8to32")]),
+    ins("And", [reg("EAX"), imm(0x0d, "Immediate8to32")])
   ]);
 
   assert.deepEqual(state.registers.get("RAX"), {
@@ -181,9 +147,9 @@ void test("emulateInstruction computes basic integer operations", () => {
 });
 
 void test("emulateInstruction computes concrete xor operations", () => {
-  const { state } = emulateBytesWithState([
-    0xb8, 0xf0, 0x00, 0x00, 0x00,
-    0x83, 0xf0, 0x33
+  const { state } = emulateInstructionsWithState([
+    ins("Mov", [reg("EAX"), imm(0xf0)]),
+    ins("Xor", [reg("EAX"), imm(0x33, "Immediate8to32")])
   ]);
 
   assert.deepEqual(state.registers.get("RAX"), {
@@ -194,10 +160,10 @@ void test("emulateInstruction computes concrete xor operations", () => {
 });
 
 void test("emulateInstruction executes lea through the operand layer", () => {
-  const { state } = emulateBytesWithState([
-    0x48, 0xc7, 0xc3, 0x00, 0x10, 0x00, 0x00,
-    0x48, 0xc7, 0xc1, 0x03, 0x00, 0x00, 0x00,
-    0x48, 0x8d, 0x44, 0x8b, 0x10
+  const { state } = emulateInstructionsWithState([
+    ins("Mov", [reg("RBX"), imm(0x1000)]),
+    ins("Mov", [reg("RCX"), imm(3)]),
+    ins("Lea", [reg("RAX"), mem("UInt64", "RBX", 0x10n, "RCX", 4)])
   ]);
 
   assert.deepEqual(state.registers.get("RAX"), {
@@ -208,9 +174,9 @@ void test("emulateInstruction executes lea through the operand layer", () => {
 });
 
 void test("emulateInstruction keeps CPUID leaf 0xffffffff concrete", () => {
-  const { state } = emulateBytesWithState([
-    0xb8, 0xff, 0xff, 0xff, 0xff,
-    0x0f, 0xa2
+  const { state } = emulateInstructionsWithState([
+    ins("Mov", [reg("EAX"), imm(0xffffffff)]),
+    ins("Cpuid")
   ]);
 
   assert.deepEqual(state.registers.get("RAX"), {
@@ -221,9 +187,9 @@ void test("emulateInstruction keeps CPUID leaf 0xffffffff concrete", () => {
 });
 
 void test("emulateInstruction clears CPUID outputs when the leaf is unknown", () => {
-  const { state } = emulateBytesWithState([
-    0x66, 0xb8, 0x01, 0x00,
-    0x0f, 0xa2
+  const { state } = emulateInstructionsWithState([
+    ins("Mov", [reg("AX"), imm(1, "Immediate16")]),
+    ins("Cpuid")
   ]);
 
   assert.deepEqual(state.registers.get("RAX"), { kind: "unknown" });
@@ -231,10 +197,10 @@ void test("emulateInstruction clears CPUID outputs when the leaf is unknown", ()
 });
 
 void test("emulateInstruction reads and writes stack memory operands", () => {
-  const { state } = emulateBytesWithState([
-    0xbb, 0x05, 0x00, 0x00, 0x00,
-    0x48, 0x89, 0x5c, 0x24, 0x10,
-    0x48, 0x8b, 0x44, 0x24, 0x10
+  const { state } = emulateInstructionsWithState([
+    ins("Mov", [reg("EBX"), imm(5)]),
+    ins("Mov", [mem("UInt64", "RSP", 0x10n), reg("RBX")]),
+    ins("Mov", [reg("RAX"), mem("UInt64", "RSP", 0x10n)])
   ]);
 
   assert.deepEqual(state.registers.get("RAX"), {

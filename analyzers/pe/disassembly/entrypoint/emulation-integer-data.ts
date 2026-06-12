@@ -3,17 +3,27 @@
 import type { PeEntrypointInstruction } from "../types.js";
 import { describeCpuIdFeatureBits } from "./cpuid-notes.js";
 import type { IcedInstructionObject, IcedModule } from "./iced.js";
-import { isSameRegisterOperand, readOperand, resolveMemoryAddress, writeOperand } from "./emulation-operands.js";
+import {
+  isSameRegisterOperand,
+  readOperand,
+  resolveMemoryAddress,
+  writeOperand
+} from "./emulation-operands.js";
 import {
   UNKNOWN,
   binaryKnown,
-  joinEmulatedValues,
+  collectKnownValues,
   known,
   mapKnownValues,
   type EmulatedValue,
   type EmulationState
 } from "./emulation-state.js";
-import { bitsOrState, writeMappedOperand, writeBinaryOperand } from "./emulation-integer-common.js";
+import { bitsOrState, writeMappedOperand } from "./emulation-integer-common.js";
+import {
+  clearFlags,
+  writeBitCarryFlag,
+  writeLogicalFlags
+} from "./emulation-flags.js";
 
 const appendNotes = (instruction: PeEntrypointInstruction, notes: string[]): void => {
   if (notes.length) instruction.notes = [...(instruction.notes ?? []), ...notes];
@@ -48,9 +58,19 @@ export const executeDataMovement = (
     writeOperand(iced, state, instruction, 0, readOperand(iced, state, instruction, 1));
     return true;
   }
+  if (mnemonic === iced.Mnemonic?.["Crc32"]) {
+    writeOperand(iced, state, instruction, 0, UNKNOWN);
+    return true;
+  }
   if (mnemonic === iced.Mnemonic?.["Lea"]) {
     const address = resolveMemoryAddress(iced, state, instruction);
-    writeOperand(iced, state, instruction, 0, address == null ? UNKNOWN : known(address, state.bitness));
+    writeOperand(
+      iced,
+      state,
+      instruction,
+      0,
+      address == null ? UNKNOWN : known(address, state.bitness)
+    );
     return true;
   }
   if (mnemonic === iced.Mnemonic?.["Movzx"] || mnemonic === iced.Mnemonic?.["Movsx"]) {
@@ -58,9 +78,31 @@ export const executeDataMovement = (
     else executeZeroExtendMove(iced, state, instruction);
     return true;
   }
+  if (mnemonic === iced.Mnemonic?.["Movbe"]) {
+    writeOperand(
+      iced,
+      state,
+      instruction,
+      0,
+      mapKnownValues(
+        readOperand(iced, state, instruction, 1),
+        bitsOrState(iced, state, instruction, 0),
+        reversedBytes
+      )
+    );
+    return true;
+  }
   if (mnemonic !== iced.Mnemonic?.["Movsxd"]) return false;
   executeSignExtendMove(iced, state, instruction);
   return true;
+};
+
+const reversedBytes = (value: bigint, bits: 8 | 16 | 32 | 64): bigint => {
+  let out = 0n;
+  for (let offset = 0n; offset < BigInt(bits); offset += 8n) {
+    out = (out << 8n) | ((value >> offset) & 0xffn);
+  }
+  return out;
 };
 
 const executeSignExtendMove = (
@@ -103,96 +145,123 @@ export const executeLogical = (
 ): boolean => {
   const mnemonic = instruction.mnemonic;
   if (mnemonic === iced.Mnemonic?.["Xor"] && isSameRegisterOperand(iced, instruction)) {
-    writeOperand(iced, state, instruction, 0, known(0n, bitsOrState(iced, state, instruction, 0)));
+    const result = known(0n, bitsOrState(iced, state, instruction, 0));
+    writeOperand(iced, state, instruction, 0, result);
+    writeLogicalFlags(state, result, bitsOrState(iced, state, instruction, 0));
     return true;
   }
   if (mnemonic === iced.Mnemonic?.["Xor"]) {
-    return executeBinary(iced, state, instruction, (left, right) => left ^ right);
+    return executeLogicalBinary(iced, state, instruction, (left, right) => left ^ right);
   }
-  if (mnemonic === iced.Mnemonic?.["Or"]) return executeBinary(iced, state, instruction, (left, right) => left | right);
+  if (mnemonic === iced.Mnemonic?.["Or"]) {
+    return executeLogicalBinary(iced, state, instruction, (left, right) => left | right);
+  }
   if (mnemonic === iced.Mnemonic?.["And"]) {
     const left = readOperand(iced, state, instruction, 0);
     const right = readOperand(iced, state, instruction, 1);
+    const result = binaryKnown(left, right, (a, b) => a & b);
     appendNotes(rendered, collectFeatureNotes(left, right));
-    writeOperand(iced, state, instruction, 0, binaryKnown(left, right, (a, b) => a & b));
+    writeOperand(iced, state, instruction, 0, result);
+    writeLogicalFlags(state, result, bitsOrState(iced, state, instruction, 0));
     return true;
   }
   if (mnemonic === iced.Mnemonic?.["Not"]) {
     writeMappedOperand(iced, state, instruction, value => ~value);
     return true;
   }
-  if (mnemonic !== iced.Mnemonic?.["Test"] && mnemonic !== iced.Mnemonic?.["Bt"]) return false;
-  appendNotes(rendered, mnemonic === iced.Mnemonic?.["Test"]
-    ? collectFeatureNotes(readOperand(iced, state, instruction, 0), readOperand(iced, state, instruction, 1))
-    : collectBitTestNotes(readOperand(iced, state, instruction, 0), readOperand(iced, state, instruction, 1)));
+  if (mnemonic === iced.Mnemonic?.["Test"]) return executeTest(iced, state, rendered, instruction);
+  if (
+    mnemonic !== iced.Mnemonic?.["Bt"] &&
+    mnemonic !== iced.Mnemonic?.["Btc"] &&
+    mnemonic !== iced.Mnemonic?.["Btr"] &&
+    mnemonic !== iced.Mnemonic?.["Bts"]
+  ) return false;
+  executeBitTest(iced, state, rendered, instruction);
   return true;
 };
 
-const executeBinary = (
+const executeLogicalBinary = (
   iced: IcedModule,
   state: EmulationState,
   instruction: IcedInstructionObject,
   op: (left: bigint, right: bigint) => bigint
-): boolean => {
-  writeBinaryOperand(iced, state, instruction, op);
-  return true;
-};
-
-export const executeArithmetic = (
-  iced: IcedModule,
-  state: EmulationState,
-  instruction: IcedInstructionObject
-): boolean => {
-  const mnemonic = instruction.mnemonic;
-  if (mnemonic === iced.Mnemonic?.["Add"]) {
-    return executeBinary(iced, state, instruction, (left, right) => left + right);
-  }
-  if (mnemonic === iced.Mnemonic?.["Sub"]) {
-    return executeBinary(iced, state, instruction, (left, right) => left - right);
-  }
-  if (mnemonic === iced.Mnemonic?.["Inc"]) return executeUnary(iced, state, instruction, value => value + 1n);
-  if (mnemonic === iced.Mnemonic?.["Dec"]) return executeUnary(iced, state, instruction, value => value - 1n);
-  if (mnemonic === iced.Mnemonic?.["Neg"]) return executeUnary(iced, state, instruction, value => -value);
-  if (mnemonic !== iced.Mnemonic?.["Adc"] && mnemonic !== iced.Mnemonic?.["Sbb"]) return false;
-  if (mnemonic === iced.Mnemonic?.["Adc"]) executeAdc(iced, state, instruction);
-  else executeSbb(iced, state, instruction);
-  return true;
-};
-
-const executeUnary = (
-  iced: IcedModule,
-  state: EmulationState,
-  instruction: IcedInstructionObject,
-  op: (value: bigint) => bigint
-): boolean => {
-  writeMappedOperand(iced, state, instruction, op);
-  return true;
-};
-
-const executeAdc = (
-  iced: IcedModule,
-  state: EmulationState,
-  instruction: IcedInstructionObject
-): void => executeCarryArithmetic(iced, state, instruction, (left, right) => left + right, value => value + 1n);
-
-const executeSbb = (
-  iced: IcedModule,
-  state: EmulationState,
-  instruction: IcedInstructionObject
-): void => executeCarryArithmetic(iced, state, instruction, (left, right) => left - right, value => value - 1n);
-
-const executeCarryArithmetic = (
-  iced: IcedModule,
-  state: EmulationState,
-  instruction: IcedInstructionObject,
-  baseOp: (left: bigint, right: bigint) => bigint,
-  carryOp: (value: bigint) => bigint
-): void => {
-  const base = binaryKnown(
+): true => {
+  const result = binaryKnown(
     readOperand(iced, state, instruction, 0),
     readOperand(iced, state, instruction, 1),
-    baseOp
+    op
   );
-  const carry = mapKnownValues(base, bitsOrState(iced, state, instruction, 0), carryOp);
-  writeOperand(iced, state, instruction, 0, joinEmulatedValues(base, carry));
+  writeOperand(iced, state, instruction, 0, result);
+  writeLogicalFlags(state, result, bitsOrState(iced, state, instruction, 0));
+  return true;
+};
+
+const executeTest = (
+  iced: IcedModule,
+  state: EmulationState,
+  rendered: PeEntrypointInstruction,
+  instruction: IcedInstructionObject
+): true => {
+  const left = readOperand(iced, state, instruction, 0);
+  const right = readOperand(iced, state, instruction, 1);
+  appendNotes(rendered, collectFeatureNotes(left, right));
+  writeLogicalFlags(
+    state,
+    binaryKnown(left, right, (a, b) => a & b),
+    bitsOrState(iced, state, instruction, 0)
+  );
+  return true;
+};
+
+const executeBitTest = (
+  iced: IcedModule,
+  state: EmulationState,
+  rendered: PeEntrypointInstruction,
+  instruction: IcedInstructionObject
+): void => {
+  const value = readOperand(iced, state, instruction, 0);
+  const bitIndex = readOperand(iced, state, instruction, 1);
+  appendNotes(rendered, collectBitTestNotes(value, bitIndex));
+  const normalized = normalizedBitIndex(iced, state, instruction, bitIndex);
+  if (normalized == null) {
+    clearFlags(state, ["CF"]);
+    if (instruction.mnemonic !== iced.Mnemonic?.["Bt"]) {
+      writeOperand(iced, state, instruction, 0, UNKNOWN);
+    }
+    return;
+  }
+  writeBitCarryFlag(state, value, normalized);
+  writeBitTestDestination(iced, state, instruction, normalized);
+};
+
+const normalizedBitIndex = (
+  iced: IcedModule,
+  state: EmulationState,
+  instruction: IcedInstructionObject,
+  bitIndex: EmulatedValue
+): bigint | null => {
+  const bits = bitsOrState(iced, state, instruction, 0);
+  const values = collectKnownValues(bitIndex);
+  if (values.length !== 1) return null;
+  const value = values[0]?.value;
+  if (value == null) return null;
+  if (instruction.op0Kind === iced.OpKind?.["Memory"] && value >= BigInt(bits)) return null;
+  return value % BigInt(bits);
+};
+
+const writeBitTestDestination = (
+  iced: IcedModule,
+  state: EmulationState,
+  instruction: IcedInstructionObject,
+  bitIndex: bigint
+): void => {
+  if (instruction.mnemonic === iced.Mnemonic?.["Bt"]) return;
+  const mask = 1n << bitIndex;
+  if (instruction.mnemonic === iced.Mnemonic?.["Bts"]) {
+    writeMappedOperand(iced, state, instruction, value => value | mask);
+  } else if (instruction.mnemonic === iced.Mnemonic?.["Btr"]) {
+    writeMappedOperand(iced, state, instruction, value => value & ~mask);
+  } else {
+    writeMappedOperand(iced, state, instruction, value => value ^ mask);
+  }
 };
