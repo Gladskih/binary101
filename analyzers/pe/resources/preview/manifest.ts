@@ -17,6 +17,7 @@ import type {
   ResourceXmlTreeNode
 } from "./types.js";
 import type { MuiResourceConfiguration } from "../mui-config.js";
+import { addMissingManifestNamespaceDeclarations } from "./manifest-namespace-fallback.js";
 
 const normalizeText = (value: string | null | undefined): string | null => {
   const trimmed = value?.trim();
@@ -117,6 +118,28 @@ const parseManifestInfo = (
   };
 };
 
+const parseWithManifestNamespaceFallback = (
+  text: string,
+  parseXmlDocument: ManifestXmlDocumentParser
+): ManifestXmlDocument | null => {
+  const patchedText = addMissingManifestNamespaceDeclarations(text);
+  if (!patchedText) return null;
+  try {
+    const doc = parseXmlDocument(patchedText);
+    return readManifestParserIssue(doc) ? null : doc;
+  } catch {
+    return null;
+  }
+};
+
+const parseManifestPreviewDocument = (
+  doc: ManifestXmlDocument,
+  issues: string[]
+): { manifestInfo: ResourceManifestPreview | null; manifestTree: ResourceXmlTreeNode | null } => ({
+  manifestInfo: parseManifestInfo(doc, issues),
+  manifestTree: parseXmlTree(doc)
+});
+
 export function addMuiManifestPlaceholderPreview(
   data: Uint8Array,
   typeName: string,
@@ -151,10 +174,17 @@ export function addManifestPreviewWithXmlParser(
     const doc = parseXmlDocument(text);
     const parserIssue = readManifestParserIssue(doc);
     if (parserIssue) issues.push(parserIssue);
-    manifestInfo = parseManifestInfo(doc, issues);
-    manifestTree = parseXmlTree(doc);
+    ({ manifestInfo, manifestTree } = parseManifestPreviewDocument(doc, issues));
+    const fallbackDoc = parserIssue ? parseWithManifestNamespaceFallback(text, parseXmlDocument) : null;
+    if (fallbackDoc && (!manifestInfo || !manifestTree)) {
+      ({ manifestInfo, manifestTree } = parseManifestPreviewDocument(fallbackDoc, issues));
+    }
   } catch (error) {
     issues.push(describeManifestXmlParserThrow(error));
+    const fallbackDoc = parseWithManifestNamespaceFallback(text, parseXmlDocument);
+    if (fallbackDoc) {
+      ({ manifestInfo, manifestTree } = parseManifestPreviewDocument(fallbackDoc, issues));
+    }
   }
   const uniqueIssues = [...new Set(issues)];
   return {

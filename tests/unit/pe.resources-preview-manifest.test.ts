@@ -115,3 +115,28 @@ void test("addManifestPreviewWithXmlParser parses namespace-prefixed roots and r
     "Manifest supportedArchitectures element is present but empty."
   ));
 });
+
+void test("addManifestPreviewWithXmlParser tolerates missing known manifest namespace declarations", () => {
+  const result = addManifestPreviewWithXmlParser(
+    encoder.encode(
+      "<assembly xmlns=\"urn:schemas-microsoft-com:asm.v1\" manifestVersion=\"1.0\">" +
+      "<assemblyIdentity name=\"Microsoft.Windows.Net.XWIZARD\" processorArchitecture=\"x86\" />" +
+      "<asmv3:application><asmv3:windowsSettings>" +
+      "<dpiAware>true</dpiAware>" +
+      "</asmv3:windowsSettings></asmv3:application>" +
+      "<trustInfo xmlns=\"urn:schemas-microsoft-com:asm.v3\"><security>" +
+      "<requestedPrivileges><requestedExecutionLevel level=\"asInvoker\" /></requestedPrivileges>" +
+      "</security></trustInfo>" +
+      "</assembly>"
+    ),
+    "MANIFEST",
+    65001,
+    parseManifestTestXmlDocument
+  );
+
+  assert.equal(result?.preview?.manifestInfo?.assemblyName, "Microsoft.Windows.Net.XWIZARD");
+  assert.equal(result?.preview?.manifestInfo?.processorArchitecture, "x86");
+  assert.equal(result?.preview?.manifestInfo?.requestedExecutionLevel, "asInvoker");
+  assert.equal(result?.preview?.manifestTree?.children[1]?.name, "asmv3:application");
+  assert.ok(result?.issues?.some(issue => /NamespaceError|namespace/i.test(issue)));
+});
