@@ -63,7 +63,7 @@ const tsRuleOverrides = {
 export default [
   js.configs.recommended,
   {
-    files: ["**/*.js"],
+    files: ["**/*.{js,mjs}"],
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",
@@ -148,7 +148,12 @@ export default [
     }
   },
   {
-    files: ["tests/**/*.{js,mjs}", "playwright.config.mjs"],
+    files: [
+      "eslint.config.mjs",
+      "playwright.config.mjs",
+      "scripts/**/*.mjs",
+      "tests/**/*.{js,mjs}"
+    ],
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",
