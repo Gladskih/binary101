@@ -146,6 +146,7 @@ export const parseDibHeader = async (
   pushIssue: (message: string) => void
 ): Promise<ParsedDibHeader> => {
   let dibSize = readUint32le(bytes, FILE_HEADER_SIZE);
+  let headerBytes = bytes;
   if (dibSize == null) {
     if (fileSize >= FILE_HEADER_SIZE) pushIssue("DIB header size field missing (file truncated).");
     dibSize = null;
@@ -158,8 +159,8 @@ export const parseDibHeader = async (
   const dibEnd = dibSize != null ? FILE_HEADER_SIZE + dibSize : FILE_HEADER_SIZE;
   let haveDibBytes = false;
   if (dibSize != null) {
-    bytes = await ensureBytes(dibEnd);
-    haveDibBytes = bytes.length >= dibEnd;
+    headerBytes = await ensureBytes(dibEnd);
+    haveDibBytes = headerBytes.length >= dibEnd;
   }
   const dibTruncated = dibSize != null ? !haveDibBytes || dibEnd > fileSize : true;
   if (dibSize != null && dibEnd > fileSize) {
@@ -189,36 +190,35 @@ export const parseDibHeader = async (
   let profileSize: number | null = null;
   let reserved: number | null = null;
   let masksAfterHeaderBytes = 0;
-
   if (dibSize != null && dibSize >= 12 && dibSize < 40) {
-    width = readUint16le(bytes, 18);
-    height = readUint16le(bytes, 20);
+    width = readUint16le(headerBytes, 18);
+    height = readUint16le(headerBytes, 20);
     signedHeight = height;
     topDown = false;
-    planes = readUint16le(bytes, 22);
-    bitsPerPixel = readUint16le(bytes, 24);
+    planes = readUint16le(headerBytes, 22);
+    bitsPerPixel = readUint16le(headerBytes, 24);
   } else if (dibSize != null && dibSize >= 40) {
-    width = readInt32le(bytes, 18);
-    signedHeight = readInt32le(bytes, 22);
+    width = readInt32le(headerBytes, 18);
+    signedHeight = readInt32le(headerBytes, 22);
     if (signedHeight != null) {
       topDown = signedHeight < 0;
       height = Math.abs(signedHeight);
     }
-    planes = readUint16le(bytes, 26);
-    bitsPerPixel = readUint16le(bytes, 28);
-    compression = readUint32le(bytes, 30);
-    imageSize = readUint32le(bytes, 34);
-    xPixelsPerMeter = readInt32le(bytes, 38);
-    yPixelsPerMeter = readInt32le(bytes, 42);
-    colorsUsed = readUint32le(bytes, 46);
-    importantColors = readUint32le(bytes, 50);
+    planes = readUint16le(headerBytes, 26);
+    bitsPerPixel = readUint16le(headerBytes, 28);
+    compression = readUint32le(headerBytes, 30);
+    imageSize = readUint32le(headerBytes, 34);
+    xPixelsPerMeter = readInt32le(headerBytes, 38);
+    yPixelsPerMeter = readInt32le(headerBytes, 42);
+    colorsUsed = readUint32le(headerBytes, 46);
+    importantColors = readUint32le(headerBytes, 50);
 
     const headerContainsMasks = dibSize === 52 || dibSize === 56 || dibSize >= 108;
     if (headerContainsMasks) {
-      const redMask = readUint32le(bytes, 54);
-      const greenMask = readUint32le(bytes, 58);
-      const blueMask = readUint32le(bytes, 62);
-      const alphaMask = dibSize >= 56 ? readUint32le(bytes, 66) : null;
+      const redMask = readUint32le(headerBytes, 54);
+      const greenMask = readUint32le(headerBytes, 58);
+      const blueMask = readUint32le(headerBytes, 62);
+      const alphaMask = dibSize >= 56 ? readUint32le(headerBytes, 66) : null;
       masks = {
         red: buildBitmaskChannel(redMask),
         green: buildBitmaskChannel(greenMask),
@@ -228,11 +228,11 @@ export const parseDibHeader = async (
     } else if (dibSize === 40 && (compression === 3 || compression === 6)) {
       masksAfterHeaderBytes = compression === 6 ? 16 : 12;
       const required = FILE_HEADER_SIZE + dibSize + masksAfterHeaderBytes;
-      bytes = await ensureBytes(required);
-      const redMask = readUint32le(bytes, 54);
-      const greenMask = readUint32le(bytes, 58);
-      const blueMask = readUint32le(bytes, 62);
-      const alphaMask = compression === 6 ? readUint32le(bytes, 66) : null;
+      headerBytes = await ensureBytes(required);
+      const redMask = readUint32le(headerBytes, 54);
+      const greenMask = readUint32le(headerBytes, 58);
+      const blueMask = readUint32le(headerBytes, 62);
+      const alphaMask = compression === 6 ? readUint32le(headerBytes, 66) : null;
       masks = {
         red: buildBitmaskChannel(redMask),
         green: buildBitmaskChannel(greenMask),
@@ -242,17 +242,17 @@ export const parseDibHeader = async (
       if (required > fileSize) pushIssue("BITFIELDS masks truncated (file ends early).");
     }
     if (dibSize >= 108) {
-      colorSpaceType = readUint32le(bytes, 70);
-      endpoints = buildCieXyzTriple(bytes, 74);
-      gammaRed = readUint32le(bytes, 110);
-      gammaGreen = readUint32le(bytes, 114);
-      gammaBlue = readUint32le(bytes, 118);
+      colorSpaceType = readUint32le(headerBytes, 70);
+      endpoints = buildCieXyzTriple(headerBytes, 74);
+      gammaRed = readUint32le(headerBytes, 110);
+      gammaGreen = readUint32le(headerBytes, 114);
+      gammaBlue = readUint32le(headerBytes, 118);
     }
     if (dibSize >= 124) {
-      intent = readUint32le(bytes, 122);
-      profileDataOffset = readUint32le(bytes, 126);
-      profileSize = readUint32le(bytes, 130);
-      reserved = readUint32le(bytes, 134);
+      intent = readUint32le(headerBytes, 122);
+      profileDataOffset = readUint32le(headerBytes, 126);
+      profileSize = readUint32le(headerBytes, 130);
+      reserved = readUint32le(headerBytes, 134);
     }
   }
   if (width != null && width <= 0) pushIssue(`Width is non-positive (${width}).`);

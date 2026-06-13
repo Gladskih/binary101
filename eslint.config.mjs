@@ -6,6 +6,7 @@ import tsPlugin from "@typescript-eslint/eslint-plugin";
 const sharedRules = {
   "prefer-const": "error",
   "no-var": "error",
+  "no-param-reassign": "error",
   "max-len": [
     "error",
     {
