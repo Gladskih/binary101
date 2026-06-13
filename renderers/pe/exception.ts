@@ -40,6 +40,33 @@ const renderAmd64VersionNote = (ex: PeExceptionSection, out: string[]): void => 
 };
 
 const getExceptionRenderProfile = (format: PeExceptionFormat): ExceptionRenderProfile => {
+  if (format === "ready-to-run-x86") {
+    return {
+      chainedLabel: "Chained entries",
+      handlerLabel: "Exception clauses",
+      introNote:
+        "ReadyToRun x86 uses 8-byte RuntimeFunction rows with code start and x86 " +
+        "unwind/GC-info RVAs; the row has no explicit end RVA.",
+      renderFormatNote: renderNoFormatDetails,
+      renderFormatStats: (ex, out) => {
+        if (ex.exceptionInfoMethodCount != null) {
+          out.push(`<dt>ExceptionInfo methods</dt><dd>${ex.exceptionInfoMethodCount}</dd>`);
+        }
+        if (ex.exceptionClauseCount != null) {
+          out.push(`<dt>Exception clauses</dt><dd>${ex.exceptionClauseCount}</dd>`);
+        }
+        ([
+          ["Catch clauses", ex.catchClauseCount],
+          ["Filter clauses", ex.filterClauseCount],
+          ["Finally clauses", ex.finallyClauseCount],
+          ["Fault clauses", ex.faultClauseCount]
+        ] as const).forEach(([label, count]) => {
+          if (count != null) out.push(`<dt>${label}</dt><dd>${count}</dd>`);
+        });
+      },
+      unwindLabel: "Unique unwind blobs"
+    };
+  }
   if (format === "arm64") {
     return {
       chainedLabel: "Chained entries",

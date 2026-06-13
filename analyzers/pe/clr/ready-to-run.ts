@@ -3,7 +3,12 @@
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
 import type { PeClrHeader } from "./types.js";
-import type { PeClrReadyToRun, PeClrReadyToRunSection } from "./ready-to-run-types.js";
+import {
+  READY_TO_RUN_SECTION_EXCEPTION_INFO,
+  READY_TO_RUN_SECTION_RUNTIME_FUNCTIONS,
+  type PeClrReadyToRun,
+  type PeClrReadyToRunSection
+} from "./ready-to-run-types.js";
 
 const readyToRunSectionName = (type: number): string => {
   // Section type ids come from CoreCLR readytorun.h:
@@ -11,9 +16,9 @@ const readyToRunSectionName = (type: number): string => {
   switch (type) {
     case 100: return "CompilerIdentifier";
     case 101: return "ImportSections";
-    case 102: return "RuntimeFunctions";
+    case READY_TO_RUN_SECTION_RUNTIME_FUNCTIONS: return "RuntimeFunctions";
     case 103: return "MethodDefEntryPoints";
-    case 104: return "ExceptionInfo";
+    case READY_TO_RUN_SECTION_EXCEPTION_INFO: return "ExceptionInfo";
     case 105: return "DebugInfo";
     case 106: return "DelayLoadMethodCallThunks";
     case 108: return "AvailableTypes";

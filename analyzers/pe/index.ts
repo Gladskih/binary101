@@ -132,7 +132,14 @@ export async function parsePe(
   const tls = await peVariant.parseTlsDirectory(reader, dataDirs, rvaToOff, ImageBase, sections);
   const resources = await parseResources(reader, dataDirs, rvaToOff, parseManifestXmlDocument);
   const reloc = await parseBaseRelocations(reader, dataDirs, rvaToOff);
-  const exception = await parseExceptionDirectory(reader, dataDirs, rvaToOff, canonicalMachine);
+  const clr = await parseClrDirectory(reader, dataDirs, rvaToOff);
+  const exception = await parseExceptionDirectory(
+    reader,
+    dataDirs,
+    rvaToOff,
+    canonicalMachine,
+    clr?.readyToRun
+  );
   const debugExceptionFindings = await collectDebugExceptionConsistencyFindings(
     reader,
     dataDirs,
@@ -146,7 +153,6 @@ export async function parsePe(
   );
   const boundImports = await parseBoundImports(reader, dataDirs, rvaToOff);
   const delayImports = await peVariant.parseDelayImports(reader, dataDirs, rvaToOff);
-  const clr = await parseClrDirectory(reader, dataDirs, rvaToOff);
   const subtype = detectPeSubtype(clr, resources?.muiResourceConfiguration, opt.AddressOfEntryPoint, sections);
   const nativeAotCandidate = detectNativeAotCandidate(clr != null, exportsInfo, sections);
   const securityDir = dataDirs.find(d => d.name === "SECURITY");

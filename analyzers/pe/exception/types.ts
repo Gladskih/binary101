@@ -13,7 +13,13 @@ export interface PeExceptionDirectory {
   chainedUnwindInfoCount: number;
   invalidEntryCount: number;
   issues: string[];
-  format?: "amd64" | "arm64";
+  format?: "amd64" | "arm64" | "ready-to-run-x86";
+  exceptionInfoMethodCount?: number;
+  exceptionClauseCount?: number;
+  catchClauseCount?: number;
+  filterClauseCount?: number;
+  finallyClauseCount?: number;
+  faultClauseCount?: number;
 }
 
 export const createEmptyExceptionDirectory = (
