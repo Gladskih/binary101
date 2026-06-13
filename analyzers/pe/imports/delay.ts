@@ -2,6 +2,7 @@
 
 import { toHex32 } from "../../../binary-utils.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
+import { isRvaRangeInsideSizeOfImage } from "../layout/rva-limits.js";
 import { readMappedNullTerminatedAsciiString } from "../strings/mapped-ascii-string.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 import {
@@ -15,6 +16,10 @@ const IMAGE_DELAYLOAD_DESCRIPTOR_SIZE = 32; // Microsoft PE format: IMAGE_DELAYL
 // MSVC delayimp.h: dlattrRva marks VC7+ descriptors whose fields are RVAs instead of pointers.
 // https://learn.microsoft.com/en-us/cpp/build/reference/understanding-the-helper-function
 const DELAY_IMPORT_ATTRIBUTE_DLATTR_RVA = 0x1;
+interface DelayImportImageMapping {
+  sizeOfImage: number;
+}
+
 const readDelayImportName = async (
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
@@ -50,7 +55,8 @@ const parseDelayImportsWithThunkReader = async (
   reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
-  readDelayThunkFunctions: ReadDelayThunkFunctions
+  readDelayThunkFunctions: ReadDelayThunkFunctions,
+  mapping?: DelayImportImageMapping
 ): Promise<{ entries: PeDelayImportEntry[]; warning?: string } | null> => {
   const dir = dataDirs.find(d => d.name === "DELAY_IMPORT");
   if (!dir || (dir.rva === 0 && dir.size === 0)) return null;
@@ -68,6 +74,15 @@ const parseDelayImportsWithThunkReader = async (
   }
   const base = rvaToOff(dir.rva);
   if (base == null) {
+    // Microsoft PE format data-directory entries are RVAs in the loaded image, not file offsets,
+    // and packers can populate declared image memory before delay-load helpers use it.
+    // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#optional-header-data-directories-image-only
+    if (mapping && isRvaRangeInsideSizeOfImage(dir.rva, dir.size, mapping.sizeOfImage)) {
+      return { entries: [] };
+    }
+    if (mapping) {
+      return { entries: [], warning: "Delay import directory range is outside SizeOfImage." };
+    }
     return { entries: [], warning: "Delay import directory RVA does not map to file data." };
   }
   if (base < 0 || base >= reader.size) {
@@ -174,12 +189,14 @@ const parseDelayImportsWithThunkReader = async (
 export const parseDelayImports32 = async (
   reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset
+  rvaToOff: RvaToOffset,
+  mapping?: DelayImportImageMapping
 ): Promise<{ entries: PeDelayImportEntry[]; warning?: string } | null> =>
-  parseDelayImportsWithThunkReader(reader, dataDirs, rvaToOff, readDelayThunkFunctions32);
+  parseDelayImportsWithThunkReader(reader, dataDirs, rvaToOff, readDelayThunkFunctions32, mapping);
 export const parseDelayImports64 = async (
   reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset
+  rvaToOff: RvaToOffset,
+  mapping?: DelayImportImageMapping
 ): Promise<{ entries: PeDelayImportEntry[]; warning?: string } | null> =>
-  parseDelayImportsWithThunkReader(reader, dataDirs, rvaToOff, readDelayThunkFunctions64);
+  parseDelayImportsWithThunkReader(reader, dataDirs, rvaToOff, readDelayThunkFunctions64, mapping);

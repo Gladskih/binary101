@@ -19,6 +19,9 @@ import {
   writeThunkTable64
 } from "./pe.delay-import-layout.js";
 
+const PACKED_DELAY_DIRECTORY_RVA = IMAGE_DELAYLOAD_DESCRIPTOR_SIZE;
+const PACKED_IMAGE_SIZE = PACKED_DELAY_DIRECTORY_RVA + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE;
+
 void test("parseDelayImports warns when the Delay Import Name Table cannot be mapped", async () => {
   const dllName = "delay.dll";
   const layout = createDelayImportLayout();
@@ -50,6 +53,32 @@ void test("parseDelayImports reports an unmappable directory base instead of sil
   assert.ok(result);
   assert.deepEqual(result?.entries, []);
   assert.ok(result?.warning?.toLowerCase().match(/map|offset|rva/));
+});
+
+void test("parseDelayImports does not warn when a packed delay directory is only present in the loaded image", async () => {
+  const result = await parseDelayImports32(
+    new MockFile(new Uint8Array(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE).fill(0)),
+    [{ name: "DELAY_IMPORT", rva: PACKED_DELAY_DIRECTORY_RVA, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
+    () => null,
+    { sizeOfImage: PACKED_IMAGE_SIZE }
+  );
+
+  assert.ok(result);
+  assert.deepEqual(result.entries, []);
+  assert.equal(result.warning, undefined);
+});
+
+void test("parseDelayImports still warns when an unmappable delay directory is outside SizeOfImage", async () => {
+  const result = await parseDelayImports32(
+    new MockFile(new Uint8Array(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE).fill(0)),
+    [{ name: "DELAY_IMPORT", rva: PACKED_IMAGE_SIZE, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
+    () => null,
+    { sizeOfImage: PACKED_IMAGE_SIZE }
+  );
+
+  assert.ok(result);
+  assert.deepEqual(result.entries, []);
+  assert.equal(result.warning, "Delay import directory range is outside SizeOfImage.");
 });
 
 void test("parseDelayImports warns when PE32+ name thunks set reserved bits", async () => {

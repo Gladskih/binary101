@@ -154,7 +154,12 @@ export async function parsePe(
     debugExceptionFindings.warnings
   );
   const boundImports = await parseBoundImports(reader, dataDirs, rvaToOff);
-  const delayImports = await peVariant.parseDelayImports(reader, dataDirs, rvaToOff);
+  const delayImports = await peVariant.parseDelayImports(
+    reader,
+    dataDirs,
+    rvaToOff,
+    { sizeOfImage: opt.SizeOfImage }
+  );
   const subtype = detectPeSubtype(clr, resources?.muiResourceConfiguration, opt.AddressOfEntryPoint, sections);
   const securityDir = dataDirs.find(d => d.name === "SECURITY");
   const authenticodeDigestCache = new Map<string, Promise<string | null>>();
