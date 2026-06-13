@@ -29,6 +29,7 @@ const createPreviewLang = (
   // The zeroed PE metadata fields are incidental; this test exercises row layout only.
   codePage: 0,
   dataRVA: 0,
+  dataFileOffset: 0,
   reserved: 0,
   ...preview
 });

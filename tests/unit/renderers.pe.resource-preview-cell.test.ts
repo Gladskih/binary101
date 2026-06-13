@@ -18,6 +18,7 @@ const createBaseLang = (): ResourceLangWithPreview => ({
   size: 64,
   codePage: 0,
   dataRVA: 0,
+  dataFileOffset: 0,
   reserved: 0
 });
 

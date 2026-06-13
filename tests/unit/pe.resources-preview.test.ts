@@ -190,14 +190,17 @@ void test("enrichResourcePreviews reports unmapped GROUP_ICON leaf payload RVAs"
   const groupIcon = fixture.appendData(buildSingleEntryGroupIconResource(createPngFile().data.length, 1));
   const tree = createPreviewTree(
     [
-      createPreviewDetailGroup("ICON", 1, createPreviewLangEntry(0x2000, createPngFile().data.length, 0, 1033)),
+      createPreviewDetailGroup(
+        "ICON",
+        1,
+        createPreviewLangEntry(0x2000, createPngFile().data.length, 0, 1033, null)
+      ),
       createPreviewDetailGroup(
         "GROUP_ICON",
         12,
         createPreviewLangEntry(groupIcon.offset, groupIcon.size, 0, 1033)
       )
-    ],
-    value => (value === groupIcon.offset ? groupIcon.offset : null)
+    ]
   );
 
   const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);
@@ -211,14 +214,13 @@ void test("enrichResourcePreviews reports unmapped GROUP_CURSOR leaf payload RVA
   const groupCursor = fixture.appendData(buildSingleEntryGroupCursorResource(32, 4, 7, 9));
   const tree = createPreviewTree(
     [
-      createPreviewDetailGroup("CURSOR", 4, createPreviewLangEntry(0x2400, 32, 0, 1033)),
+      createPreviewDetailGroup("CURSOR", 4, createPreviewLangEntry(0x2400, 32, 0, 1033, null)),
       createPreviewDetailGroup(
         "GROUP_CURSOR",
         13,
         createPreviewLangEntry(groupCursor.offset, groupCursor.size, 0, 1033)
       )
-    ],
-    value => (value === groupCursor.offset ? groupCursor.offset : null)
+    ]
   );
 
   const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes), tree);

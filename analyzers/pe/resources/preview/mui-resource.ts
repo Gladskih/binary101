@@ -5,14 +5,13 @@ import {
   parseMuiResourceConfigurationDetailed,
   type MuiResourceConfigurationParseResult
 } from "../mui-config.js";
-import type { ResourceTree } from "../tree-types.js";
 import { readResourceLeafBytes } from "./leaf-data.js";
 import type {
   ResourceDetailGroup,
   ResourceLangWithPreview
 } from "./types.js";
 
-export interface MuiResourceContext {
+export interface MuiResourceCandidate {
   dataRVA: number;
   size: number;
   result: MuiResourceConfigurationParseResult;
@@ -27,11 +26,10 @@ const findMuiResourceConfigurationLangs = (
 
 const readMuiResourceCandidate = async (
   reader: FileRangeReader,
-  tree: ResourceTree,
   langEntry: ResourceLangWithPreview
-): Promise<MuiResourceContext | null> => {
+): Promise<MuiResourceCandidate | null> => {
   if (!langEntry.size || !langEntry.dataRVA) return null;
-  const leaf = await readResourceLeafBytes(reader, tree, langEntry);
+  const leaf = await readResourceLeafBytes(reader, langEntry);
   const result = leaf.data
     ? parseMuiResourceConfigurationDetailed(leaf.data)
     : { configuration: null, issues: [] };
@@ -45,17 +43,16 @@ const readMuiResourceCandidate = async (
   };
 };
 
-export const readMuiResourceContext = async (
+export const readMuiResource = async (
   reader: FileRangeReader,
-  tree: ResourceTree,
   detail: ResourceDetailGroup[]
-): Promise<MuiResourceContext | null> => {
-  let firstParsedCandidate: MuiResourceContext | null = null;
+): Promise<MuiResourceCandidate | null> => {
+  let firstParsedCandidate: MuiResourceCandidate | null = null;
   for (const langEntry of findMuiResourceConfigurationLangs(detail)) {
-    const context = await readMuiResourceCandidate(reader, tree, langEntry);
-    if (!context) continue;
-    if (context.result.configuration) return context;
-    firstParsedCandidate ??= context;
+    const candidate = await readMuiResourceCandidate(reader, langEntry);
+    if (!candidate) continue;
+    if (candidate.result.configuration) return candidate;
+    firstParsedCandidate ??= candidate;
   }
   return firstParsedCandidate;
 };

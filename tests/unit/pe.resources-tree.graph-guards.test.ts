@@ -112,6 +112,7 @@ void test("buildResourceTree skips repeated traversal when multiple parents re-e
         { id: 0x00000409, name: null }
       ],
       dataRVA: 0x00002000,
+      dataFileOffset: 0,
       size: 0x10,
       codePage: 0x000004b0,
       reserved: 0
@@ -235,6 +236,7 @@ void test("buildResourceTree preserves valid resource paths deeper than the Wind
         { id: 0x200, name: null }
       ],
       dataRVA: 0x00002000,
+      dataFileOffset: 0,
       size: 0x10,
       codePage: 0x000004b0,
       reserved: 0

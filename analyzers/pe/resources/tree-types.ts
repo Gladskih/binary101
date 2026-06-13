@@ -1,12 +1,11 @@
 "use strict";
 
-import type { RvaToOffset } from "../types.js";
-
 export interface ResourceLangEntry {
   lang: number | null;
   size: number;
   codePage: number;
   dataRVA: number;
+  dataFileOffset: number | null;
   reserved: number;
 }
 
@@ -26,6 +25,7 @@ export interface ResourceLeafPath {
   size: number;
   codePage: number;
   dataRVA: number;
+  dataFileOffset: number | null;
   reserved: number;
 }
 
@@ -50,5 +50,4 @@ export interface ResourceTree {
   top: Array<{ typeName: string; kind: "name" | "id"; leafCount: number }>;
   detail: Array<{ typeName: string; entries: ResourceDetailEntry[] }>;
   view: (offset: number, length: number) => Promise<DataView>;
-  rvaToOff: RvaToOffset;
 }

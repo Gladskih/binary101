@@ -21,6 +21,7 @@ const createBaseLang = (
   // The zeroed PE metadata fields are incidental; these tests exercise preview rendering only.
   codePage: 0,
   dataRVA: 0,
+  dataFileOffset: 0,
   reserved: 0,
   ...preview
 });

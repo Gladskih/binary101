@@ -4,12 +4,10 @@ import type { FileRangeReader } from "../../../file-range-reader.js";
 import { chooseResourceLeafRecord } from "./leaf-index.js";
 import type { ResourceLeafIndex } from "./leaf-index.js";
 import type { ResourceLangWithPreview } from "./types.js";
-import type { ResourceTree } from "../core.js";
 import type { LoadedResourceLeaf, LoadResourceLeafData } from "./icon.js";
 
 export const createGroupLeafLoader = (
   reader: FileRangeReader,
-  tree: ResourceTree,
   index: ResourceLeafIndex,
   groupTypeName: "GROUP_ICON" | "GROUP_CURSOR",
   leafTypeName: "ICON" | "CURSOR"
@@ -19,8 +17,7 @@ export const createGroupLeafLoader = (
 ): Promise<LoadedResourceLeaf> => {
   const record = chooseResourceLeafRecord(index, id, lang);
   if (!record) return { data: null };
-  const offset = tree.rvaToOff(record.dataRva);
-  if (offset == null || offset < 0) {
+  if (record.dataFileOffset == null || record.dataFileOffset < 0) {
     return {
       data: null,
       issues: [
@@ -36,7 +33,7 @@ export const createGroupLeafLoader = (
       ]
     };
   }
-  const data = await reader.readBytes(offset, record.size);
+  const data = await reader.readBytes(record.dataFileOffset, record.size);
   return {
     data: data.byteLength ? data : null,
     ...(data.byteLength < record.size
@@ -51,17 +48,15 @@ export const createGroupLeafLoader = (
 
 export const readResourceLeafBytes = async (
   reader: FileRangeReader,
-  tree: ResourceTree,
   langEntry: ResourceLangWithPreview
 ): Promise<LoadedResourceLeaf> => {
-  const offset = tree.rvaToOff(langEntry.dataRVA);
-  if (offset == null) {
+  if (langEntry.dataFileOffset == null || langEntry.dataFileOffset < 0) {
     return {
       data: null,
       issues: ["Resource RVA could not be mapped to a file offset."]
     };
   }
-  const data = await reader.readBytes(offset, langEntry.size);
+  const data = await reader.readBytes(langEntry.dataFileOffset, langEntry.size);
   return {
     data: data.byteLength ? data : null,
     ...(data.byteLength < langEntry.size

@@ -41,13 +41,12 @@ const createIdentityResourceTree = (
           {
             id: 1,
             name: null,
-            langs: [{ lang, size, codePage, dataRVA: dataRva, reserved: 0 }]
+            langs: [{ lang, size, codePage, dataRVA: dataRva, dataFileOffset: dataRva, reserved: 0 }]
           }
         ]
       }
     ],
-    view: async (off: number, len: number) => new DataView(directoryBuffer, off, len),
-    rvaToOff: value => value
+    view: async (off: number, len: number) => new DataView(directoryBuffer, off, len)
   };
 };
 

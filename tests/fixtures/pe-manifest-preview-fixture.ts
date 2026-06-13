@@ -158,7 +158,7 @@ export const createManifestLangFixture = (
     lang: values.lang,
     size: 128,
     codePage: 65001,
-    dataRVA: 0,
+    dataRVA: 0, dataFileOffset: 0,
     reserved: 0,
     previewKind: "text",
     textPreview: createManifestTextFixture(incidental),

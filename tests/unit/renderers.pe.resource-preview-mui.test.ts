@@ -14,6 +14,7 @@ void test("renderPreviewCell renders structured MUI resource configuration previ
     size: 160,
     codePage: 0,
     dataRVA: 0x1000,
+    dataFileOffset: 0x1000,
     reserved: 0,
     previewKind: "muiConfig",
     muiConfig: expectDefined(parseMuiResourceConfiguration(buildMuiResourceConfigurationFixture()))

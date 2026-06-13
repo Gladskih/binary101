@@ -21,12 +21,14 @@ export const createPreviewLangEntry = (
   dataRva = 0,
   size = 0,
   codePage = 0,
-  lang: number | null = 1033
+  lang: number | null = 1033,
+  dataFileOffset: number | null = dataRva
 ): ResourceLangWithPreview => ({
   lang,
   size,
   codePage,
   dataRVA: dataRva,
+  dataFileOffset,
   reserved: 0
 });
 
@@ -39,17 +41,13 @@ export const createPreviewDetailGroup = (
   entries: [{ id, name: null, langs: [langEntry] }]
 });
 
-export const createPreviewTree = (
-  detail: ResourceTree["detail"],
-  rvaToOff: ResourceTree["rvaToOff"] = value => value
-): ResourceTree => ({
+export const createPreviewTree = (detail: ResourceTree["detail"]): ResourceTree => ({
   base: 0,
   limitEnd: RESOURCE_DIRECTORY_HEADER_SIZE,
   top: [],
   detail,
   view: async (off, len) =>
-    new DataView(new ArrayBuffer(Math.max(RESOURCE_DIRECTORY_HEADER_SIZE, off + len)), off, len),
-  rvaToOff
+    new DataView(new ArrayBuffer(Math.max(RESOURCE_DIRECTORY_HEADER_SIZE, off + len)), off, len)
 });
 
 export const createPreviewFixture = (fileSize: number): {
