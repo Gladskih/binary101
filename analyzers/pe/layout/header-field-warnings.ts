@@ -26,8 +26,9 @@ const IMAGE_FILE_RELOCS_STRIPPED = 0x0001;
 const IMAGE_FILE_EXECUTABLE_IMAGE = 0x0002;
 const IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA = 0x0020;
 const IMAGE_DLLCHARACTERISTICS_NO_BIND = 0x0800;
+// ECMA-335 II.25.3.3.1 ("Runtime flags"): COMIMAGE_FLAGS_ILONLY.
+// https://carlwa.com/ecma-335/#ii.25.3.3.1-runtime-flags
 const COMIMAGE_FLAGS_ILONLY = 0x00000001;
-const COMIMAGE_FLAGS_32BITREQUIRED = 0x00000002;
 // Microsoft PE/COFF, "Characteristics": these COFF file flags are deprecated, obsolete,
 // or reserved and should be zero in current images.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#characteristics
@@ -51,11 +52,10 @@ const isNonZeroDataDirectory = (rva: number, size: number): boolean =>
   (rva >>> 0) !== 0 || (size >>> 0) !== 0;
 const hasDataDirectory = (pe: PeParseResult, name: string): boolean =>
   pe.dirs.some(directory => directory.name === name && isNonZeroDataDirectory(directory.rva, directory.size));
-const isClrAnyCpuImage = (pe: PeParseResult): boolean =>
+const isIlOnlyClrImage = (pe: PeParseResult): boolean =>
   isPeWindowsParseResult(pe) &&
   pe.clr != null &&
-  ((pe.clr.Flags >>> 0) & COMIMAGE_FLAGS_ILONLY) !== 0 &&
-  ((pe.clr.Flags >>> 0) & COMIMAGE_FLAGS_32BITREQUIRED) === 0;
+  ((pe.clr.Flags >>> 0) & COMIMAGE_FLAGS_ILONLY) !== 0;
 
 const addCoffWarnings = (pe: PeParseResult, warnings: string[]): void => {
   if ((pe.coff.NumberOfSections >>> 0) > WINDOWS_LOADER_SECTION_LIMIT) {
@@ -153,10 +153,11 @@ const addDllCharacteristicWarnings = (pe: PeParseResult, warnings: string[]): vo
   if (
     pe.opt.Magic === PE32_OPTIONAL_HEADER_MAGIC &&
     ((pe.opt.DllCharacteristics >>> 0) & IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA) !== 0 &&
-    // Microsoft compiler docs for -highentropyva allow this flag for 64-bit
-    // executables and AnyCPU managed executables.
-    // https://learn.microsoft.com/en-us/dotnet/visual-basic/reference/command-line-compiler/highentropyva
-    !isClrAnyCpuImage(pe)
+    // Microsoft C# compiler docs say HighEntropyVA is enabled by default for .NET Framework 4.5+,
+    // .NET Standard, and .NET Core. IL-only PE32 x86 images can carry the bit even though they
+    // never run as a 64-bit process.
+    // https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-options/security#highentropyva
+    !isIlOnlyClrImage(pe)
   ) {
     warnings.push(
       "HIGH_ENTROPY_VA is set on PE32, but the flag describes support for high-entropy 64-bit virtual address space."

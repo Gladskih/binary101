@@ -192,12 +192,23 @@ void test("collectPeHeaderFieldWarnings accepts HIGH_ENTROPY_VA on PE32 CLR AnyC
   assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
 });
 
-void test("collectPeHeaderFieldWarnings reports HIGH_ENTROPY_VA on PE32 CLR x86-only", () => {
+void test("collectPeHeaderFieldWarnings accepts HIGH_ENTROPY_VA on PE32 CLR x86-only IL-only images", () => {
   const pe = createWindowsLayoutSubject();
   pe.opt.Magic = PE32_OPTIONAL_HEADER_MAGIC;
   pe.opt.DllCharacteristics = IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA;
   pe.clr = {
     Flags: COMIMAGE_FLAGS_ILONLY | COMIMAGE_FLAGS_32BITREQUIRED
+  } as NonNullable<typeof pe.clr>;
+
+  assert.deepStrictEqual(collectPeHeaderFieldWarnings(pe), []);
+});
+
+void test("collectPeHeaderFieldWarnings reports HIGH_ENTROPY_VA on PE32 CLR images without ILONLY", () => {
+  const pe = createWindowsLayoutSubject();
+  pe.opt.Magic = PE32_OPTIONAL_HEADER_MAGIC;
+  pe.opt.DllCharacteristics = IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA;
+  pe.clr = {
+    Flags: COMIMAGE_FLAGS_32BITREQUIRED
   } as NonNullable<typeof pe.clr>;
 
   assert.ok(collectPeHeaderFieldWarnings(pe).includes(
