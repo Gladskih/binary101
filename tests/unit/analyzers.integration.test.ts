@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createParseForUi } from "../../analyzers/index.js";
+import type { AnalyzerName, ParsedByAnalyzer } from "../../analyzers/index.js";
 import { createElfFile } from "../fixtures/elf-sample-file.js";
 import { createFb2File, createPdfFile } from "../fixtures/document-sample-files.js";
 import {
@@ -35,28 +36,31 @@ import { parseFb2ForTests } from "../helpers/fb2-test-parser.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import type { FlacMetadataBlockDetail } from "../../analyzers/flac/types.js";
+import type { LnkExtraDataBlock, LnkPropertyStoreBlock } from "../../analyzers/lnk/types.js";
 const textEncoder = new TextEncoder();
 const parseForUi = createParseForUi(parseFb2ForTests);
 
-const assertParsed = async <TParsed = unknown>(
+const isLnkPropertyStoreBlock = (block: LnkExtraDataBlock): block is LnkPropertyStoreBlock =>
+  block.signature === 0xa0000009;
+
+const assertParsed = async <Name extends AnalyzerName>(
   file: MockFile | File,
-  expectedAnalyzer: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  checks?: (parsed: any) => void
+  expectedAnalyzer: Name,
+  checks?: (parsed: ParsedByAnalyzer<Name>) => void
 ): Promise<void> => {
   const { analyzer, parsed } = await parseForUi(file);
   assert.strictEqual(analyzer, expectedAnalyzer);
   assert.ok(parsed, `Expected parsed data for ${expectedAnalyzer}`);
   if (checks) {
-    const parsedValue = expectDefined(parsed) as unknown as TParsed;
+    const parsedValue = expectDefined(parsed) as ParsedByAnalyzer<Name>;
     checks(parsedValue);
   }
 };
 
 void test("parseForUi parses and reports PNG layout", async () => {
   await assertParsed(createPngFile(), "png", png => {
-    assert.strictEqual(png.ihdr.width, 1);
-    assert.strictEqual(png.ihdr.height, 1);
+    assert.strictEqual(expectDefined(png.ihdr).width, 1);
+    assert.strictEqual(expectDefined(png.ihdr).height, 1);
     assert.ok(Array.isArray(png.chunks));
   });
 });
@@ -146,13 +150,10 @@ void test("parseForUi parses PDF cross-reference data", async () => {
 
 void test("parseForUi parses Windows shortcuts", async () => {
   await assertParsed(createLnkFile(), "lnk", lnk => {
-    assert.strictEqual(lnk.linkInfo.localBasePath, "C:\\Program Files\\Example");
+    assert.strictEqual(expectDefined(lnk.linkInfo).localBasePath, "C:\\Program Files\\Example");
     assert.strictEqual(lnk.stringData.relativePath, ".\\Example\\app.exe");
     assert.ok(Array.isArray(lnk.extraData.blocks));
-    const propertyStore = lnk.extraData.blocks.find(
-      (block: { signature?: number; parsed?: { storages?: unknown[] } }) =>
-        block.signature === 0xa0000009
-    );
+    const propertyStore = lnk.extraData.blocks.find(isLnkPropertyStoreBlock);
     assert.ok(propertyStore?.parsed?.storages?.length);
   });
 });

@@ -18,6 +18,28 @@ const expectBaseDetails = async (page: Page, fileName: string, expectedKind: str
   await expect(page.locator("#fileBinaryTypeDetail")).toHaveText(expectedKind);
 };
 
+const toBufferChunk = (chunk: unknown): Buffer => {
+  if (Buffer.isBuffer(chunk)) return chunk;
+  if (chunk instanceof Uint8Array) return Buffer.from(chunk);
+  if (typeof chunk === "string") return Buffer.from(chunk);
+  throw new Error("Unexpected download stream chunk type");
+};
+
+const readDownloadText = async (
+  page: Page,
+  locator: Locator
+): Promise<{ name: string; content: string }> => {
+  const [download] = await Promise.all([page.waitForEvent("download"), locator.click()]);
+  const stream = await download.createReadStream();
+  if (!stream) throw new Error("Download stream unavailable");
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(toBufferChunk(chunk));
+  return {
+    name: download.suggestedFilename(),
+    content: Buffer.concat(chunks).toString("utf8")
+  };
+};
+
 test.describe("download actions", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
@@ -35,21 +57,11 @@ test.describe("download actions", () => {
     const table = page.locator("button.zipExtractButton");
     await expect(table).toHaveCount(2);
 
-    const readDownloadText = async (locator: Locator): Promise<{ name: string; content: string }> => {
-      const [download] = await Promise.all([page.waitForEvent("download"), locator.click()]);
-      const stream = await download.createReadStream();
-      if (!stream) throw new Error("Download stream unavailable");
-      const chunks: Buffer[] = [];
-      for await (const chunk of stream) chunks.push(chunk);
-      const content = Buffer.concat(chunks).toString("utf8");
-      return { name: download.suggestedFilename(), content };
-    };
-
-    const storedResult = await readDownloadText(page.locator('[data-zip-entry="0"]'));
+    const storedResult = await readDownloadText(page, page.locator('[data-zip-entry="0"]'));
     expect(storedResult.name).toBe("stored.txt");
     expect(storedResult.content).toBe("stored");
 
-    const deflatedResult = await readDownloadText(page.locator('[data-zip-entry="1"]'));
+    const deflatedResult = await readDownloadText(page, page.locator('[data-zip-entry="1"]'));
     expect(deflatedResult.name).toBe("deflated.txt");
     expect(deflatedResult.content).toBe("deflated");
   });
@@ -83,14 +95,9 @@ test.describe("download actions", () => {
     const button = page.locator("button.gzipDecompressButton");
     await expect(button).toHaveCount(1);
 
-    const [download] = await Promise.all([page.waitForEvent("download"), button.click()]);
-    const stream = await download.createReadStream();
-    if (!stream) throw new Error("Download stream unavailable");
-    const chunks: Buffer[] = [];
-    for await (const chunk of stream) chunks.push(chunk);
-    const content = Buffer.concat(chunks).toString("utf8");
-    expect(download.suggestedFilename()).toBe("hello.txt");
-    expect(content).toBe("hello");
+    const result = await readDownloadText(page, button);
+    expect(result.name).toBe("hello.txt");
+    expect(result.content).toBe("hello");
   });
 
   void test("allows downloading ISO-9660 file contents from the UI", async ({ page }) => {
@@ -103,15 +110,9 @@ test.describe("download actions", () => {
     const button = page.locator("button.isoExtractButton");
     await expect(button).toHaveCount(1);
 
-    const [download] = await Promise.all([page.waitForEvent("download"), button.click()]);
-    const stream = await download.createReadStream();
-    if (!stream) throw new Error("Download stream unavailable");
-    const chunks: Buffer[] = [];
-    for await (const chunk of stream) chunks.push(chunk);
-    const content = Buffer.concat(chunks).toString("utf8");
-
-    expect(download.suggestedFilename()).toBe("HELLO.TXT");
-    expect(content).toBe("HELLO");
+    const result = await readDownloadText(page, button);
+    expect(result.name).toBe("HELLO.TXT");
+    expect(result.content).toBe("HELLO");
   });
 
   void test("expands ISO-9660 directories and downloads nested files", async ({ page }) => {
@@ -128,15 +129,9 @@ test.describe("download actions", () => {
     const nestedButton = page.locator('tr:has-text("INNER.TXT") button.isoExtractButton');
     await expect(nestedButton).toHaveCount(1);
 
-    const [download] = await Promise.all([page.waitForEvent("download"), nestedButton.click()]);
-    const stream = await download.createReadStream();
-    if (!stream) throw new Error("Download stream unavailable");
-    const chunks: Buffer[] = [];
-    for await (const chunk of stream) chunks.push(chunk);
-    const content = Buffer.concat(chunks).toString("utf8");
-
-    expect(download.suggestedFilename()).toBe("INNER.TXT");
-    expect(content).toBe("INNER");
+    const result = await readDownloadText(page, nestedButton);
+    expect(result.name).toBe("INNER.TXT");
+    expect(result.content).toBe("INNER");
   });
 
   void test("runs PE instruction-set analysis on demand", async ({ page }) => {

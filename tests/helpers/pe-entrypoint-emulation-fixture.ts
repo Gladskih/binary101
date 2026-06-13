@@ -201,7 +201,7 @@ const copyInstruction = (
   destination: IcedInstructionObject,
   source: IcedInstructionObject
 ): void => {
-  Object.setPrototypeOf(destination, Object.getPrototypeOf(source));
+  Object.setPrototypeOf(destination, Object.getPrototypeOf(source) as object | null);
   Object.assign(destination, source);
 };
 

@@ -69,7 +69,7 @@ void test("parseApplicationExtension parses loop count and warns on size", () =>
   assert.equal(definedInfo.loopCount, 1);
 
   const badSize = parseApplicationExtension(
-    makeDv([0x21, 0xff, 0x05, ...new Array(11).fill(0)]),
+    makeDv([0x21, 0xff, 0x05, ...new Array<number>(11).fill(0)]),
     0
   );
   assert.ok(badSize.warning?.includes("invalid block size"));
@@ -86,7 +86,7 @@ void test("parsePlainTextExtension notes truncated or complete blocks", () => {
   const truncated = parsePlainTextExtension(makeDv([0x21]), 0);
   assert.ok(truncated.warning);
 
-  const dv = makeDv([0x21, 0x01, 0x0c, ...new Array(12).fill(0), 0x00]);
+  const dv = makeDv([0x21, 0x01, 0x0c, ...new Array<number>(12).fill(0), 0x00]);
   const complete = parsePlainTextExtension(dv, 0);
   assert.equal(complete.warning, null);
 });

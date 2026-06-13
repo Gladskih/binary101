@@ -58,7 +58,7 @@ export const buildFolderDetails = (
   if (!unpackInfo?.folders?.length) return { folders: [] };
   const folderCount = unpackInfo.folders.length;
   const numUnpackStreams =
-    mainStreams?.subStreamsInfo?.numUnpackStreams || new Array(folderCount).fill(1);
+    mainStreams?.subStreamsInfo?.numUnpackStreams || new Array<number>(folderCount).fill(1);
   const substreamSizes = mainStreams?.subStreamsInfo?.substreamSizes || [];
   const substreamCrcs = mainStreams?.subStreamsInfo?.substreamCrcs;
   const crcDefined = substreamCrcs?.definedFlags || [];

@@ -27,6 +27,33 @@ const manifestPath = join(fixturesRoot, "manifest.json");
 
 const isKnownMagic = (value: number): boolean => value === 0x10b || value === 0x20b || value === 0x107;
 
+const isManifestEntry = (value: unknown): value is ManifestEntry => {
+  if (!value || typeof value !== "object") return false;
+  const entry = value as Record<string, unknown>;
+  return (
+    typeof entry["source"] === "string" &&
+    typeof entry["relativePath"] === "string" &&
+    typeof entry["size"] === "number" &&
+    (typeof entry["sha"] === "string" || entry["sha"] === null)
+  );
+};
+
+const parseManifest = (manifestText: string): ManifestFile => {
+  const value = JSON.parse(manifestText) as unknown;
+  if (!value || typeof value !== "object") throw new Error("Fixture manifest is not an object.");
+  const manifest = value as Record<string, unknown>;
+  if (typeof manifest["generatedAt"] !== "string") {
+    throw new Error("Fixture manifest is missing generatedAt.");
+  }
+  if (!Array.isArray(manifest["entries"]) || !manifest["entries"].every(isManifestEntry)) {
+    throw new Error("Fixture manifest entries are invalid.");
+  }
+  return {
+    generatedAt: manifest["generatedAt"],
+    entries: manifest["entries"]
+  };
+};
+
 // Some entries in the external corpora are not executable PE files by design:
 // - d_nonnull.dll (corkami/radare2): e_lfanew far beyond file, no PE header.
 // - d_tiny.dll, dosZMXP.exe (corkami/radare2): no MZ signature at all.
@@ -42,8 +69,7 @@ void test("parsePe stays stable on external PE corpora", async () => {
     "Fixture manifest is missing. Run `npm run fetch:pe-fixtures` to rebuild it."
   );
 
-  const manifestText = await readFile(manifestPath, "utf8");
-  const manifest: ManifestFile = JSON.parse(manifestText);
+  const manifest = parseManifest(await readFile(manifestPath, "utf8"));
 
   assert.ok(Array.isArray(manifest.entries) && manifest.entries.length > 0, "Fixture manifest is empty.");
 

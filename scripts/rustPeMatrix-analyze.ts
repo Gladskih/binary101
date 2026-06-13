@@ -12,14 +12,15 @@ import { peSectionNameValue } from "../analyzers/pe/sections/name.js";
 import { renderPe } from "../renderers/pe/index.js";
 import type { AnalyzerSummary, SuccessfulVariantResult } from "./rustPeMatrix-model.js";
 
-const sanitizeParseResult = (value: PeParseResult): unknown =>
-  JSON.parse(
-    JSON.stringify(value, (_key, entry) => {
+const sanitizeParseResult = (value: PeParseResult): unknown => {
+  return JSON.parse(
+    JSON.stringify(value, (_key: string, entry: unknown): unknown => {
       if (typeof entry === "bigint") return `${entry}n`;
       if (typeof entry === "function") return undefined;
       return entry;
     })
-  );
+  ) as unknown;
+};
 
 const collectDataDirectoryNames = (pe: PeParseResult): string[] =>
   pe.dirs

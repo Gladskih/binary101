@@ -55,7 +55,9 @@ export const parseSubStreamsInfo = (
   ctx: SevenZipContext,
   folderCount: number
 ): SevenZipSubStreamsInfo => {
-  const info: SevenZipSubStreamsInfo = { numUnpackStreams: new Array(folderCount).fill(1) };
+  const info: SevenZipSubStreamsInfo = {
+    numUnpackStreams: new Array<number>(folderCount).fill(1)
+  };
   while (ctx.offset < ctx.dv.byteLength) {
     const id = readByte(ctx, "SubStreamsInfo field id");
     if (id == null) break;

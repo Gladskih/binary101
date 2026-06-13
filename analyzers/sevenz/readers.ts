@@ -67,7 +67,7 @@ export const readBoolVector = (
   }
   const allDefined = readByte(ctx, label);
   if (allDefined == null) return null;
-  const values = new Array(count).fill(false);
+  const values = new Array<boolean>(count).fill(false);
   if (allDefined !== 0) {
     values.fill(true);
     return values;
@@ -81,7 +81,7 @@ export const readBitVector = (
   endOffset: number,
   label?: string
 ): boolean[] | null => {
-  const values = new Array(count).fill(false);
+  const values = new Array<boolean>(count).fill(false);
   const numBytes = Math.ceil(count / BITS_PER_BYTE);
   if (ctx.offset + numBytes > endOffset) {
     ctx.issues.push(`${label || "Bit vector"} extends beyond the available data.`);

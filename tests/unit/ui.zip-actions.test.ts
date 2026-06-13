@@ -35,11 +35,11 @@ void test("zip entry click handler ignores unrelated targets and invalid indices
   try {
     await handler({ target: {} } as Event);
 
-    const malformedTarget = Object.assign(
-      Object.create((globalThis as unknown as Record<string, unknown>)["HTMLElement"] as object),
-      { attributes: new Map([["data-zip-entry", "not-a-number"]]) }
-    );
-    await handler({ target: malformedTarget } as Event);
+    const malformedTarget = environment.button as HTMLButtonElement & {
+      attributes: Map<string, string>;
+    };
+    malformedTarget.attributes.set("data-zip-entry", "not-a-number");
+    await handler({ target: malformedTarget } as unknown as Event);
 
     assert.deepEqual(messages, []);
   } finally {

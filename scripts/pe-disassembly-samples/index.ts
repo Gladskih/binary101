@@ -145,7 +145,7 @@ const runLimited = async (
   jobs: number,
   worker: (variant: BuildVariant, index: number) => Promise<SampleResult>
 ): Promise<SampleResult[]> => {
-  const results: SampleResult[] = new Array(variants.length);
+  const results = new Array<SampleResult>(variants.length);
   let nextIndex = 0;
   const workers = Array.from({ length: Math.min(jobs, variants.length) }, async () => {
     while (nextIndex < variants.length) {

@@ -56,7 +56,7 @@ const parseTimes = (
     ctx.offset = endOffset;
     return null;
   }
-  const times = new Array(fileCount).fill(null);
+  const times = new Array<string | null>(fileCount).fill(null);
   for (let i = 0; i < fileCount; i += 1) {
     if (!defined[i]) continue;
     const raw = readUint64Le(ctx, endOffset, `${label} value`);
@@ -81,7 +81,7 @@ const parseAttributes = (
     ctx.offset = endOffset;
     return null;
   }
-  const attributes = new Array(fileCount).fill(null);
+  const attributes = new Array<number | null>(fileCount).fill(null);
   for (let i = 0; i < fileCount; i += 1) {
     if (!defined[i]) continue;
     const attr = readUint32Le(ctx, endOffset, "Attribute value");
@@ -112,9 +112,10 @@ const parseNames = (
   );
   const decoded = UTF16_DECODER.decode(nameBytes);
   const parts = decoded.split("\u0000");
-  const names = new Array(fileCount).fill("(no name)");
+  const names = new Array<string>(fileCount).fill("(no name)");
   for (let i = 0; i < fileCount && i < parts.length; i += 1) {
-    if (parts[i]) names[i] = parts[i];
+    const part = parts[i];
+    if (part) names[i] = part;
   }
   ctx.offset = endOffset;
   return { names, external: false };
@@ -126,7 +127,7 @@ const expandEmptyStreamFlags = (
   fileCount: number
 ): boolean[] | null => {
   if (!flags || !emptyStreams) return flags;
-  const expanded = new Array(fileCount).fill(false);
+  const expanded = new Array<boolean>(fileCount).fill(false);
   let emptyIndex = 0;
   for (let index = 0; index < fileCount; index += 1) {
     if (!emptyStreams[index]) continue;
