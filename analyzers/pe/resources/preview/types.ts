@@ -38,7 +38,14 @@ export interface ResourceXmlTreeNode {
   children: ResourceXmlTreeNode[];
 }
 
+export interface ResourceVersionFixedFileInfo {
+  structVersionRaw: number;
+  structVersionMajor: number;
+  structVersionMinor: number;
+}
+
 export interface ResourceVersionPreview {
+  fixedFileInfo?: ResourceVersionFixedFileInfo;
   fileVersionString?: string;
   productVersionString?: string;
   stringValues?: Array<{ table: string; key: string; value: string }>;

@@ -74,13 +74,18 @@ const buildVersionResource = (
   return bytes;
 };
 
-void test("addVersionPreview keeps version preview when VS_FIXEDFILEINFO struct version is non-standard", () => {
+void test("addVersionPreview keeps version preview without warning on non-standard VS_FIXEDFILEINFO struct version", () => {
   const expectedVersion = createGeneratedVersion();
   const preview = addVersionPreview(buildVersionResource(0, expectedVersion), "VERSION");
 
   assert.ok(preview);
   assert.strictEqual(preview.preview?.previewKind, "version");
+  assert.deepStrictEqual(preview.preview?.versionInfo?.fixedFileInfo, {
+    structVersionRaw: 0,
+    structVersionMajor: 0,
+    structVersionMinor: 0
+  });
   assert.strictEqual(preview.preview?.versionInfo?.fileVersionString, expectedVersion.text);
   assert.strictEqual(preview.preview?.versionInfo?.productVersionString, expectedVersion.text);
-  assert.ok((preview.issues || []).some(issue => /struct version is unexpected/i.test(issue)));
+  assert.deepStrictEqual(preview.issues, undefined);
 });

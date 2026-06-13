@@ -3,14 +3,14 @@ import { escapeHtml } from "../../html-utils.js";
 import type {
   ResourceAcceleratorEntryPreview,
   ResourceLangWithPreview,
-  ResourceMenuItemPreview,
-  ResourceVersionPreview
+  ResourceMenuItemPreview
 } from "../../analyzers/pe/resources/preview/types.js";
-import { formatWindowsLanguageName } from "./windows-language-names.js";
 import { renderDialogPreview } from "./resource-preview-dialog.js";
 import { renderManifestPreview, renderManifestTree } from "./resource-preview-manifest.js";
 import { renderMuiConfigPreview } from "./resource-preview-mui.js";
 import { renderStructuredPreview, renderStructuredPreviewSummary } from "./resource-preview-structured.js";
+import { renderVersionPreview } from "./resource-preview-version.js";
+
 const renderIssues = (langEntry: ResourceLangWithPreview): string => {
   const issues = (langEntry.previewIssues || []).filter((issue): issue is string => Boolean(issue));
   return issues.length
@@ -45,111 +45,8 @@ const renderAcceleratorEntries = (entries: ResourceAcceleratorEntryPreview[]): s
   return `<table class="table peResourceNestedTable"><thead><tr><th>Shortcut</th>` +
     `<th>Command ID</th></tr></thead><tbody>${rows}</tbody></table>`;
 };
-const renderDefinitionRows = (rows: Array<{ label: string; value: string }>): string => {
-  if (!rows.length) return "";
-  const cells = rows
-    .map(row =>
-      `<div><span class="mono">${escapeHtml(row.label)}</span></div>` +
-      `<div style="min-width:0;overflow-wrap:anywhere">${escapeHtml(row.value)}</div>`
-    )
-    .join("");
-  return `<div class="smallNote" style="display:grid;grid-template-columns:max-content 1fr;gap:.15rem .55rem;margin-top:.2rem">${cells}</div>`;
-};
-const parseVersionTableTranslation = (
-  table: string
-): { languageId: number; codePage: number } | null => {
-  // StringFileInfo table names encode LANGID and code page as 8 hex digits, e.g. 040904E4.
-  // Source: https://learn.microsoft.com/en-us/windows/win32/menurc/versioninfo-resource
-  if (!/^[0-9a-fA-F]{8}$/.test(table)) return null;
-  return {
-    languageId: Number.parseInt(table.slice(0, 4), 16),
-    codePage: Number.parseInt(table.slice(4), 16)
-  };
-};
-
-const formatVersionTranslation = (languageId: number, codePage: number): string =>
-  `${formatWindowsLanguageName(languageId)} / CP${codePage}`;
-
-const formatVersionTableName = (table: string): string => {
-  const translation = parseVersionTableTranslation(table);
-  return translation
-    ? formatVersionTranslation(translation.languageId, translation.codePage)
-    : table;
-};
-
-const createTranslationKey = (languageId: number, codePage: number): string =>
-  `${languageId}:${codePage}`;
-
 const findDetectedPreviewField = (langEntry: ResourceLangWithPreview): string | null =>
   langEntry.previewFields?.find(field => field.label === "Detected")?.value ?? null;
-
-const collectVersionTableTranslations = (info: ResourceVersionPreview): Set<string> => {
-  const translations = new Set<string>();
-  for (const entry of info.stringValues || []) {
-    const translation = parseVersionTableTranslation(entry.table);
-    if (!translation) continue;
-    translations.add(createTranslationKey(translation.languageId, translation.codePage));
-  }
-  return translations;
-};
-
-const renderVersionTranslations = (
-  info: ResourceVersionPreview,
-  tableTranslations: Set<string>
-): string => {
-  const translations = (info.translations || []).filter(entry =>
-    !tableTranslations.has(createTranslationKey(entry.languageId, entry.codePage))
-  );
-  if (!translations.length) return "";
-  const rows = translations
-    .map(entry => `<li>${escapeHtml(formatVersionTranslation(entry.languageId, entry.codePage))}</li>`)
-    .join("");
-  return `<div class="smallNote" style="margin-top:.35rem"><b>Declared translations</b><ul style="padding-left:1.1rem;margin:.2rem 0 0 0">${rows}</ul></div>`;
-};
-
-const renderVersionFixedInfo = (info: ResourceVersionPreview): string => {
-  const rows = [
-    info.fileVersionString
-      ? { label: "FileVersion", value: info.fileVersionString }
-      : null,
-    info.productVersionString
-      ? { label: "ProductVersion", value: info.productVersionString }
-      : null
-  ].filter((row): row is { label: string; value: string } => Boolean(row));
-  return rows.length
-    ? `<div class="smallNote"><b>Fixed version info</b>${renderDefinitionRows(rows)}</div>`
-    : "";
-};
-
-const renderVersionStringTables = (info: ResourceVersionPreview): string => {
-  if (!info.stringValues?.length) return "";
-  const stringsByTable = new Map<string, Array<{ key: string; value: string }>>();
-  for (const entry of info.stringValues) {
-    if (entry.key === "FileVersion" && entry.value === info.fileVersionString) continue;
-    if (entry.key === "ProductVersion" && entry.value === info.productVersionString) continue;
-    const tableEntries = stringsByTable.get(entry.table) || [];
-    tableEntries.push({ key: entry.key, value: entry.value });
-    stringsByTable.set(entry.table, tableEntries);
-  }
-  return [...stringsByTable.entries()].map(([table, values]) =>
-    values.length
-      ? `<div class="smallNote" style="margin-top:.35rem"><b>${escapeHtml(formatVersionTableName(table))}</b>${renderDefinitionRows(values.map(value => ({ label: value.key, value: value.value })))}</div>`
-      : ""
-  ).join("");
-};
-
-const renderVersionPreview = (langEntry: ResourceLangWithPreview): string => {
-  const info = langEntry.versionInfo;
-  if (!info) return "-";
-  const tableTranslations = collectVersionTableTranslations(info);
-  return [
-    renderVersionFixedInfo(info),
-    renderVersionTranslations(info, tableTranslations),
-    renderVersionStringTables(info),
-    renderFields(langEntry),
-    renderIssues(langEntry)
-  ].join("") || "-";
-};
 
 const renderFontPreview = (langEntry: ResourceLangWithPreview): string => {
   if (!langEntry.previewDataUrl) return renderFields(langEntry) + renderIssues(langEntry);
@@ -281,7 +178,13 @@ export const renderPreviewCell = (langEntry: ResourceLangWithPreview | null | un
       renderIssues(langEntry)
     ].join("");
   }
-  if (langEntry.previewKind === "version") return renderVersionPreview(langEntry);
+  if (langEntry.previewKind === "version") {
+    return [
+      langEntry.versionInfo ? renderVersionPreview(langEntry.versionInfo) : "",
+      renderFields(langEntry),
+      renderIssues(langEntry)
+    ].join("") || "-";
+  }
   if (langEntry.previewKind === "stringTable" && Array.isArray(langEntry.stringTable)) {
     return renderStringTablePreview(langEntry);
   }

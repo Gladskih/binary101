@@ -112,6 +112,11 @@ void test("renderPreviewCell renders grouped VERSION details with human-readable
     ...createBaseLang(),
     previewKind: "version",
     versionInfo: {
+      fixedFileInfo: {
+        structVersionRaw: 0x00010000,
+        structVersionMajor: 1,
+        structVersionMinor: 0
+      },
       fileVersionString: "1.2.3.4",
       productVersionString: "5.6.7.8",
       translations: [
@@ -128,6 +133,8 @@ void test("renderPreviewCell renders grouped VERSION details with human-readable
   });
 
   assert.match(versionHtml, /Fixed version info/);
+  assert.match(versionHtml, /StructVersion/);
+  assert.match(versionHtml, /1\.0 \(0x00010000\)/);
   assert.strictEqual(versionHtml.match(/FileVersion/g)?.length, 1);
   assert.strictEqual(versionHtml.match(/ProductVersion/g)?.length, 1);
   assert.match(versionHtml, /American English/);
