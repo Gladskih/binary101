@@ -133,12 +133,14 @@ export async function parsePe(
   const resources = await parseResources(reader, dataDirs, rvaToOff, parseManifestXmlDocument);
   const reloc = await parseBaseRelocations(reader, dataDirs, rvaToOff);
   const clr = await parseClrDirectory(reader, dataDirs, rvaToOff);
+  const nativeAotCandidate = detectNativeAotCandidate(clr != null, exportsInfo, sections);
   const exception = await parseExceptionDirectory(
     reader,
     dataDirs,
     rvaToOff,
     canonicalMachine,
-    clr?.readyToRun
+    clr?.readyToRun,
+    nativeAotCandidate
   );
   const debugExceptionFindings = await collectDebugExceptionConsistencyFindings(
     reader,
@@ -154,7 +156,6 @@ export async function parsePe(
   const boundImports = await parseBoundImports(reader, dataDirs, rvaToOff);
   const delayImports = await peVariant.parseDelayImports(reader, dataDirs, rvaToOff);
   const subtype = detectPeSubtype(clr, resources?.muiResourceConfiguration, opt.AddressOfEntryPoint, sections);
-  const nativeAotCandidate = detectNativeAotCandidate(clr != null, exportsInfo, sections);
   const securityDir = dataDirs.find(d => d.name === "SECURITY");
   const authenticodeDigestCache = new Map<string, Promise<string | null>>();
   const getCachedAuthenticodeDigest = (algorithm: AlgorithmIdentifier): Promise<string | null> => {

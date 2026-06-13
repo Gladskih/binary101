@@ -3,10 +3,12 @@
 import type { FileRangeReader } from "../../file-range-reader.js";
 import { parseAmd64ExceptionDirectory } from "./amd64/index.js";
 import { parseArm64ExceptionDirectory } from "./arm64.js";
+import { parseNativeAotX86ExceptionDirectory } from "./native-aot-x86.js";
 import { parseReadyToRunX86ExceptionDirectory } from "./ready-to-run-x86.js";
 import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./types.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 import type { PeClrReadyToRun } from "../clr/ready-to-run-types.js";
+import type { PeNativeAotCandidate } from "../native-aot.js";
 import {
   IMAGE_FILE_MACHINE_AMD64,
   IMAGE_FILE_MACHINE_ARM64,
@@ -28,7 +30,8 @@ export async function parseExceptionDirectory(
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   machine = IMAGE_FILE_MACHINE_AMD64,
-  readyToRun?: PeClrReadyToRun | null
+  readyToRun?: PeClrReadyToRun | null,
+  nativeAotCandidate?: PeNativeAotCandidate | null
 ): Promise<PeExceptionDirectory | null> {
   const canonicalMachine = getCanonicalPeMachine(machine);
   if (canonicalMachine === IMAGE_FILE_MACHINE_I386) {
@@ -39,6 +42,13 @@ export async function parseExceptionDirectory(
       readyToRun
     );
     if (readyToRunException) return readyToRunException;
+    const nativeAotException = await parseNativeAotX86ExceptionDirectory(
+      reader,
+      dataDirs,
+      rvaToOff,
+      nativeAotCandidate
+    );
+    if (nativeAotException) return nativeAotException;
   }
   if (canonicalMachine === IMAGE_FILE_MACHINE_AMD64) {
     return parseAmd64ExceptionDirectory(reader, dataDirs, rvaToOff);

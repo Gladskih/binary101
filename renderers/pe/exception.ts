@@ -40,6 +40,18 @@ const renderAmd64VersionNote = (ex: PeExceptionSection, out: string[]): void => 
 };
 
 const getExceptionRenderProfile = (format: PeExceptionFormat): ExceptionRenderProfile => {
+  if (format === "native-aot-x86") {
+    return {
+      chainedLabel: "Chained entries",
+      handlerLabel: "Handlers present",
+      introNote:
+        "NativeAOT x86 uses 12-byte RuntimeFunction rows with BeginAddress, " +
+        "EndAddress, and an x86 UNWIND_INFO RVA.",
+      renderFormatNote: renderNoFormatDetails,
+      renderFormatStats: renderNoFormatDetails,
+      unwindLabel: "Unique x86 UNWIND_INFO blocks"
+    };
+  }
   if (format === "ready-to-run-x86") {
     return {
       chainedLabel: "Chained entries",

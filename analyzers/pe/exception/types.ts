@@ -13,7 +13,7 @@ export interface PeExceptionDirectory {
   chainedUnwindInfoCount: number;
   invalidEntryCount: number;
   issues: string[];
-  format?: "amd64" | "arm64" | "ready-to-run-x86";
+  format?: "amd64" | "arm64" | "ready-to-run-x86" | "native-aot-x86";
   exceptionInfoMethodCount?: number;
   exceptionClauseCount?: number;
   catchClauseCount?: number;
