@@ -14,11 +14,14 @@ import type { MuiResourceConfiguration } from "../mui-config.js";
 // https://doxygen.reactos.org/d1/daf/typelib__struct_8h_source.html
 const TYPELIB_SIGNATURE_SIZE = 4;
 // ReactOS/Wine typelib_struct.h defines a 0x54-byte MSFT_Header followed by
-// 15 MSFT_pSeg records of 0x10 bytes each in MSFT_SegDir.
+// an MSFT_SegDir containing 15 MSFT_pSeg records of 0x10 bytes each.
 // https://doxygen.reactos.org/d1/daf/typelib__struct_8h_source.html
 const MSFT_HEADER_SIZE = 0x54;
 const MSFT_SEGMENT_SIZE = 0x10;
-const MSFT_SEGMENT_DIRECTORY_OFFSET = MSFT_HEADER_SIZE;
+// ReactOS/Wine tagMSFT_Header stores an optional help-string DLL offset before
+// the typeinfo offset table when varflags bit 0x100 is set.
+// https://doxygen.reactos.org/d1/daf/typelib__struct_8h_source.html
+const MSFT_VARFLAG_HAS_HELP_STRING_DLL = 0x100;
 const MSFT_SEGMENT_NAMES = [
   "TypeInfoTab",
   "ImpInfo",
@@ -147,20 +150,31 @@ const validateMsftSegment = (
   }
 };
 
+const readMsftSegmentDirectoryOffset = (view: DataView): number => {
+  const typeInfoCount = view.getUint32(MSFT_HEADER_FIELD_OFFSETS.typeInfoCount, true);
+  const varFlags = view.getUint32(MSFT_HEADER_FIELD_OFFSETS.varFlags, true);
+  const helpStringDllOffsetSize = (varFlags & MSFT_VARFLAG_HAS_HELP_STRING_DLL) !== 0 ? 4 : 0;
+  // ReactOS/Wine save_all_changes writes MSFT_Header, optional help-string DLL offset,
+  // then one 4-byte typeinfo offset per nrtypeinfos before MSFT_SegDir.
+  // https://doxygen.reactos.org/d4/df2/write__msft_8c_source.html
+  return MSFT_HEADER_SIZE + helpStringDllOffsetSize + typeInfoCount * 4;
+};
+
 const readMsftSegments = (
   view: DataView,
   dataLength: number,
   issues: string[]
 ): ResourceTypeLibrarySegmentPreview[] => {
+  const segmentDirectoryOffset = readMsftSegmentDirectoryOffset(view);
   if (
-    dataLength <
-    MSFT_SEGMENT_DIRECTORY_OFFSET + MSFT_SEGMENT_NAMES.length * MSFT_SEGMENT_SIZE
+    segmentDirectoryOffset > dataLength ||
+    dataLength - segmentDirectoryOffset < MSFT_SEGMENT_NAMES.length * MSFT_SEGMENT_SIZE
   ) {
     issues.push("TYPELIB MSFT segment directory is truncated.");
     return [];
   }
   return MSFT_SEGMENT_NAMES.map((name, index) => {
-    const offset = MSFT_SEGMENT_DIRECTORY_OFFSET + index * MSFT_SEGMENT_SIZE;
+    const offset = segmentDirectoryOffset + index * MSFT_SEGMENT_SIZE;
     // MSFT_pSeg starts with offset, then length; both are 32-bit signed fields.
     // Source: https://doxygen.reactos.org/d1/daf/typelib__struct_8h_source.html
     const segment = {
