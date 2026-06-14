@@ -24,7 +24,8 @@ const sharedRules = {
       max: 300,
       skipComments: true
     }
-  ]
+  ],
+  "max-params": ["error", 8]
 };
 
 const tsRuleOverrides = {
