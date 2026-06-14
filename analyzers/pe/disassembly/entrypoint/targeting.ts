@@ -69,8 +69,7 @@ const applyImportTarget = async (
   block: PendingBlock,
   instruction: PeEntrypointInstruction,
   importTarget: ImportTarget,
-  importFallthrough: ReturningImportFallthrough | null,
-  rva: number
+  importFallthrough: ReturningImportFallthrough | null
 ): Promise<void> => {
   const returnFollowed = importFallthrough?.kind === "stack-return"
     ? await queueFollowedBlock(
@@ -78,7 +77,7 @@ const applyImportTarget = async (
       opts,
       state,
       { kind: "followed-import-return", rva: importFallthrough.rva },
-      rva,
+      instruction.rva,
       createImportReturnState(iced, block.emulationState, importTarget)
     )
     : importFallthrough?.kind === "current-block";
@@ -98,8 +97,7 @@ const applyDirectTarget = async (
   block: PendingBlock,
   instruction: PeEntrypointInstruction,
   directTarget: DirectControlFlowTarget,
-  decoded: IcedInstructionObject,
-  rva: number
+  decoded: IcedInstructionObject
 ): Promise<void> => {
   instruction.target = await followDirectCodeTarget(
     iced,
@@ -107,7 +105,7 @@ const applyDirectTarget = async (
     opts,
     state,
     directTarget,
-    rva,
+    instruction.rva,
     decoded.nextIP,
     block.emulationState
   );
@@ -147,8 +145,7 @@ export const applyInstructionTargets = async (
   block: PendingBlock,
   decoded: IcedInstructionObject,
   instruction: PeEntrypointInstruction,
-  importTargets: Map<number, ImportTarget>,
-  rva: number
+  importTargets: Map<number, ImportTarget>
 ): Promise<InstructionTargetingResult> => {
   const importTarget = getImportTarget(iced, opts, decoded, importTargets);
   const directTarget = getDirectControlFlowTarget(iced, opts, decoded) ??
@@ -183,8 +180,7 @@ export const applyInstructionTargets = async (
       block,
       instruction,
       importTarget,
-      importFallthrough,
-      rva
+      importFallthrough
     );
   } else if (guardFallthrough) {
     instruction.notes = [
@@ -205,8 +201,7 @@ export const applyInstructionTargets = async (
       block,
       instruction,
       directTarget,
-      decoded,
-      rva
+      decoded
     );
   } else if (branchTargets) {
     await applyBranchTarget(
@@ -216,7 +211,7 @@ export const applyInstructionTargets = async (
       block,
       instruction,
       branchTargets,
-      rva
+      instruction.rva
     );
   } else if (decoded.flowControl === iced.FlowControl["Return"]) {
     instruction.target = await followReturnTarget(
@@ -225,7 +220,7 @@ export const applyInstructionTargets = async (
       opts,
       block,
       decoded,
-      rva,
+      instruction.rva,
       state
     );
   }

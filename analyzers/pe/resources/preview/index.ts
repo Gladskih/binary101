@@ -52,8 +52,7 @@ const decodeSpecificResourcePreview = async (
   data: Uint8Array,
   typeName: string,
   entryId: number | null,
-  codePage: number | undefined,
-  lang: number | null | undefined,
+  langEntry: ResourceLangWithPreview,
   loadIconLeafData: LoadResourceLeafData,
   loadCursorLeafData: LoadResourceLeafData,
   muiResource: MuiResourceCandidate | null,
@@ -64,20 +63,20 @@ const decodeSpecificResourcePreview = async (
       return runSyncPreviewDecoder(() => addIconPreview(data, typeName));
     case "GROUP_ICON":
       return runAsyncPreviewDecoder(() =>
-        addGroupIconPreview(data, typeName, loadIconLeafData, lang)
+        addGroupIconPreview(data, typeName, loadIconLeafData, langEntry.lang)
       );
     case "CURSOR":
       return runSyncPreviewDecoder(() => addCursorPreview(data, typeName));
     case "GROUP_CURSOR":
       return runAsyncPreviewDecoder(() =>
-        addGroupCursorPreview(data, typeName, loadCursorLeafData, lang)
+        addGroupCursorPreview(data, typeName, loadCursorLeafData, langEntry.lang)
       );
     case "BITMAP":
       return runSyncPreviewDecoder(() => addBitmapPreview(data, typeName));
     case "MUI":
       return runSyncPreviewDecoder(() => addMuiConfigPreview(data, typeName));
     case "REGINST":
-      return runSyncPreviewDecoder(() => addRegInstPreview(data, typeName, codePage));
+      return runSyncPreviewDecoder(() => addRegInstPreview(data, typeName, langEntry.codePage));
     case "TYPELIB":
       return runSyncPreviewDecoder(() =>
         addTypeLibraryPreview(data, typeName, muiResource?.result.configuration ?? null)
@@ -85,7 +84,7 @@ const decodeSpecificResourcePreview = async (
     case "XMLFILE":
     case "UIFILE":
       return runSyncPreviewDecoder(() =>
-        addXmlResourcePreviewWithParser(data, typeName, codePage, parseManifestXmlDocument)
+        addXmlResourcePreviewWithParser(data, typeName, langEntry.codePage, parseManifestXmlDocument)
       );
     case "MANIFEST":
       return runSyncPreviewDecoder(() => (
@@ -97,14 +96,14 @@ const decodeSpecificResourcePreview = async (
         addManifestPreviewWithXmlParser(
           data,
           typeName,
-          codePage,
+          langEntry.codePage,
           parseManifestXmlDocument
         )
       ));
     case "HTML":
-      return runSyncPreviewDecoder(() => addHtmlPreview(data, typeName, codePage));
+      return runSyncPreviewDecoder(() => addHtmlPreview(data, typeName, langEntry.codePage));
     case "RCDATA":
-      return runAsyncPreviewDecoder(() => addRcDataPreview(data, typeName, codePage));
+      return runAsyncPreviewDecoder(() => addRcDataPreview(data, typeName, langEntry.codePage));
     case "VERSION":
       return runSyncPreviewDecoder(() => addVersionPreview(data, typeName));
     case "STRING":
@@ -121,10 +120,10 @@ const decodeSpecificResourcePreview = async (
       return runSyncPreviewDecoder(() => addAcceleratorPreview(data, typeName));
     case "MESSAGETABLE":
       return runSyncPreviewDecoder(() =>
-        addMessageTableResourcePreview(data, typeName, codePage)
+        addMessageTableResourcePreview(data, typeName, langEntry.codePage)
       );
     case "DLGINCLUDE":
-      return runSyncPreviewDecoder(() => addDialogIncludePreview(data, typeName, codePage));
+      return runSyncPreviewDecoder(() => addDialogIncludePreview(data, typeName, langEntry.codePage));
     case "PLUGPLAY":
       return runSyncPreviewDecoder(() => addPlugPlayPreview(data, typeName));
     case "VXD":
@@ -164,8 +163,7 @@ const decodeResourceLeafPreview = async (
       leafData,
       groupTypeName,
       entryId,
-      langEntry.codePage,
-      langEntry.lang,
+      langEntry,
       loadIconLeafData,
       loadCursorLeafData,
       muiResource,

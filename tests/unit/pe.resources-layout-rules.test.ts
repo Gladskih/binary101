@@ -28,7 +28,6 @@ const collectIssues = (
     RESOURCE_RVA,
     RESOURCE_SIZE,
     RESOURCE_BASE,
-    RESOURCE_LIMIT_END,
     fileSize
   );
 
@@ -208,7 +207,6 @@ void test("validateResourceLayout reports payload file offsets before the resour
     RESOURCE_RVA,
     RESOURCE_SIZE,
     0x40,
-    0x40 + RESOURCE_SIZE,
     0x200
   );
 

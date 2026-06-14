@@ -60,7 +60,10 @@ const getSubdirectoryTargetIssues = (
   return [
     ...(duplicate == null
       ? []
-      : [`Resource subdirectory at ${formatRelOffset(duplicate)} is referenced by multiple parents.`]),
+      : [
+          `Resource subdirectory at ${formatRelOffset(duplicate)} is referenced by multiple ` +
+            "parents."
+        ]),
     ...(firstLateTarget == null
       ? []
       : [
@@ -119,13 +122,15 @@ const getDataPayloadSpanIssues = (
     resourceDataEntry.dataRva + resourceDataEntry.size > resourceRva + resourceSize
   ) {
     issues.push(
-      `Resource data payload at RVA ${formatRelOffset(resourceDataEntry.dataRva)} lies outside the declared .rsrc RVA span.`
+      `Resource data payload at RVA ${formatRelOffset(resourceDataEntry.dataRva)} lies ` +
+        "outside the declared .rsrc RVA span."
     );
   }
   if (resourceDataEntry.dataFileOffset == null) {
     return [
       ...issues,
-      `Resource data payload at RVA ${formatRelOffset(resourceDataEntry.dataRva)} could not be mapped within the file.`
+      `Resource data payload at RVA ${formatRelOffset(resourceDataEntry.dataRva)} could ` +
+        "not be mapped within the file."
     ];
   }
   if (
@@ -134,7 +139,8 @@ const getDataPayloadSpanIssues = (
   ) {
     return [
       ...issues,
-      `Resource data payload at RVA ${formatRelOffset(resourceDataEntry.dataRva)} is truncated by end of file.`
+      `Resource data payload at RVA ${formatRelOffset(resourceDataEntry.dataRva)} is ` +
+        "truncated by end of file."
     ];
   }
   if (
@@ -142,7 +148,8 @@ const getDataPayloadSpanIssues = (
     resourceDataEntry.dataFileOffset + resourceDataEntry.size > resourceLimitEnd
   ) {
     issues.push(
-      `Resource data payload at RVA ${formatRelOffset(resourceDataEntry.dataRva)} maps outside the .rsrc file span.`
+      `Resource data payload at RVA ${formatRelOffset(resourceDataEntry.dataRva)} maps ` +
+        "outside the .rsrc file span."
     );
   }
   return issues;
@@ -174,9 +181,9 @@ export const validateResourceLayout = (
   resourceRva: number,
   resourceSize: number,
   resourceBase: number,
-  resourceLimitEnd: number,
   fileSize: number
 ): string[] => {
+  const resourceLimitEnd = resourceBase + resourceSize;
   const firstDataEntryStart = resourceDataEntries.length
     ? Math.min(...resourceDataEntries.map(entry => entry.start))
     : Number.POSITIVE_INFINITY;

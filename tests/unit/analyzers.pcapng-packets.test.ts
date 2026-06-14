@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { createFileRangeReader } from "../../analyzers/file-range-reader.js";
+import { createEthernetSummary } from "../../analyzers/capture/payload-analysis.js";
 import {
   parseEnhancedPacketBlock,
   parseLegacyPacketBlock,
@@ -67,7 +68,11 @@ void test("parseEnhancedPacketBlock reports truncated headers", async () => {
 });
 
 void test("parseSimplePacketBlock warns when interface 0 is missing", async () => {
-  const block = makeSimplePacketBlock({ littleEndian: true, payload: ipv4Frame, originalLength: ipv4Frame.length });
+  const block = makeSimplePacketBlock({
+    littleEndian: true,
+    payload: ipv4Frame,
+    originalLength: ipv4Frame.length
+  });
   const issues: string[] = [];
   const traffic = createMutableTrafficStats();
 
@@ -82,16 +87,39 @@ void test("parseSimplePacketBlock warns when interface 0 is missing", async () =
   );
 
   assert.strictEqual(traffic.totalPackets, 1);
+  assert.strictEqual(traffic.totalCapturedBytes, ipv4Frame.length);
+  assert.strictEqual(traffic.totalOriginalBytes, ipv4Frame.length);
+  assert.ok(issues.some(issue => issue.includes("requires interface 0")));
+});
+
+void test("parseSimplePacketBlock accepts the exact fixed header size", async () => {
+  // SPB fixed fields occupy 12 octets including the pcapng block type and total length.
+  // Source: draft-ietf-opsawg-pcapng-05 Section 4.4.
+  const simplePacketHeaderBytes = 12;
+  const issues: string[] = [];
+
+  await parseSimplePacketBlock(
+    makeReader(new Uint8Array(simplePacketHeaderBytes), "exact-simple-header-spb.pcapng"),
+    0,
+    simplePacketHeaderBytes,
+    makeSection([]),
+    createMutableTrafficStats(),
+    null,
+    issue => issues.push(issue)
+  );
+
+  assert.ok(!issues.some(issue => issue.includes("is truncated")));
   assert.ok(issues.some(issue => issue.includes("requires interface 0")));
 });
 
 void test("parseSimplePacketBlock reports missing packet bytes when snaplen exceeds the stored payload", async () => {
   const block = makeSimplePacketBlock({
     littleEndian: true,
-    payload: new Uint8Array(14),
+    payload: new Uint8Array(10),
     originalLength: 20
   });
   const issues: string[] = [];
+  const linkLayer = { ethernet: createEthernetSummary() };
 
   await parseSimplePacketBlock(
     makeReader(block, "short-spb.pcapng"),
@@ -99,11 +127,13 @@ void test("parseSimplePacketBlock reports missing packet bytes when snaplen exce
     block.length,
     makeSection([makeInterface(64)]),
     createMutableTrafficStats(),
-    null,
+    linkLayer,
     issue => issues.push(issue)
   );
 
   assert.ok(issues.some(issue => issue.includes("does not contain the expected packet bytes")));
+  assert.strictEqual(linkLayer.ethernet.framesParsed, 0);
+  assert.strictEqual(linkLayer.ethernet.shortFrames, 1);
 });
 
 void test("parseLegacyPacketBlock reports truncated headers", async () => {
@@ -146,7 +176,7 @@ void test("parseLegacyPacketBlock reports missing interfaces and option overlap 
   );
 
   assert.ok(issues.some(issue => issue.includes("references missing interface 5")));
-  assert.ok(issues.some(issue => issue.includes("overlaps the block trailer")));
+  assert.ok(issues.includes("Packet Block at 0x0 has packet data that overlaps the block trailer."));
 });
 
 void test("parseEnhancedPacketBlock reports option overlap when captured length exceeds the block", async () => {
@@ -172,5 +202,7 @@ void test("parseEnhancedPacketBlock reports option overlap when captured length 
   );
 
   assert.ok(issues.some(issue => issue.includes("exceeds interface snaplen")));
-  assert.ok(issues.some(issue => issue.includes("overlaps the block trailer")));
+  assert.ok(
+    issues.includes("Enhanced Packet Block at 0x0 has packet data that overlaps the block trailer.")
+  );
 });

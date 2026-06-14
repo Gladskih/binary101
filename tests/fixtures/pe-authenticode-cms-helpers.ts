@@ -30,6 +30,11 @@ const KEY_USAGE_OID = "2.5.29.15";
 const BASIC_CONSTRAINTS_OID = "2.5.29.19";
 const EXTENDED_KEY_USAGE_OID = "2.5.29.37";
 
+export type CertificateValidity = {
+  notBefore: string;
+  notAfter: string;
+};
+
 export const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const out = new Uint8Array(bytes.byteLength);
   out.set(bytes);
@@ -114,8 +119,7 @@ export const createCertificate = async (
   publicKey: CryptoKey,
   signerName: RelativeDistinguishedNames,
   privateKey: CryptoKey,
-  notBefore: string,
-  notAfter: string,
+  validity: CertificateValidity,
   extensions: Extension[],
   signatureHashAlgorithm = "SHA-256"
 ): Promise<Certificate> => {
@@ -124,8 +128,8 @@ export const createCertificate = async (
   certificate.serialNumber = new asn1js.Integer({ value: serialNumber });
   certificate.issuer = signerName;
   certificate.subject = createCommonName(commonName);
-  certificate.notBefore = new Time({ value: new Date(notBefore) });
-  certificate.notAfter = new Time({ value: new Date(notAfter) });
+  certificate.notBefore = new Time({ value: new Date(validity.notBefore) });
+  certificate.notAfter = new Time({ value: new Date(validity.notAfter) });
   certificate.extensions = extensions;
   await certificate.subjectPublicKeyInfo.importKey(publicKey);
   await certificate.sign(privateKey, signatureHashAlgorithm);

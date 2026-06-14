@@ -199,6 +199,7 @@ void test("parsePeHeaders keeps truncated optional headers visible with warnings
 void test("parsePeHeaders keeps images with unrecognized OptionalHeader.Magic visible with warnings", async () => {
   const coffOffset = PE_SIGNATURE_OFFSET + 4;
   const optionalHeaderSize = 0xe0;
+  const optionalHeaderOffset = coffOffset + 20;
   const bytes = new Uint8Array(coffOffset + 20 + optionalHeaderSize).fill(0);
   const view = new DataView(bytes.buffer);
 
@@ -209,13 +210,15 @@ void test("parsePeHeaders keeps images with unrecognized OptionalHeader.Magic vi
   view.setUint16(coffOffset + 2, 0, true);
   view.setUint16(coffOffset + 16, optionalHeaderSize, true);
   // Microsoft PE format says the optional-header magic must be validated for format compatibility.
-  view.setUint16(coffOffset + 20, 0x1337, true);
+  view.setUint16(optionalHeaderOffset, 0x1337, true);
 
   const parsed = await parsePeHeaders(new MockFile(bytes, "unknown-optional-magic.exe"));
 
   assert.ok(parsed);
   assert.strictEqual(parsed.opt, null);
   assert.deepStrictEqual(parsed.dataDirs, []);
+  assert.strictEqual(parsed.imageEnd, optionalHeaderOffset + optionalHeaderSize);
+  assert.strictEqual(parsed.imageSizeMismatch, false);
   assert.ok(parsed.warnings?.some(warning => /magic/i.test(warning)));
 });
 
@@ -284,5 +287,7 @@ void test("parsePeHeaders reports a truncated section table when NumberOfSection
 
   assert.ok(parsed);
   assert.strictEqual(parsed.sections.length, 1);
+  // PE section headers are 40 bytes; imageEnd includes the full declared table span.
+  assert.strictEqual(parsed.imageEnd, sectionHeaderOffset + 2 * 40);
   assert.ok(parsed.warnings?.some(warning => /section header|truncated/i.test(warning)));
 });

@@ -7,7 +7,7 @@ import { collectDebugExceptionConsistencyFindings } from "./debug/exception-cons
 import { parseCoffDebugInfoFromFileHeader } from "./debug/coff.js";
 import { parseLoadConfigDirectory32, parseLoadConfigDirectory64 } from "./load-config/index.js";
 import { readSafeSehHandlerTable } from "./load-config/tables.js";
-import { parseAndEnrichLoadConfig } from "./load-config/enrich.js";
+import { createLoadConfigEnricher } from "./load-config/enrich.js";
 import { collectLoadConfigChecks } from "./load-config/checks.js";
 import { parseImportDirectory32, parseImportDirectory64 } from "./imports/index.js";
 import { parseExportDirectory } from "./directories/exports.js";
@@ -20,7 +20,10 @@ import { parseBaseRelocations } from "./directories/reloc.js";
 import { parseExceptionDirectory } from "./exception/index.js";
 import { parseBoundImports } from "./imports/bound.js";
 import { parseDelayImports32, parseDelayImports64 } from "./imports/delay.js";
-import { parseDynamicRelocationsFromLoadConfig32, parseDynamicRelocationsFromLoadConfig64 } from "./dynamic-relocations/index.js";
+import {
+  parseDynamicRelocationsFromLoadConfig32,
+  parseDynamicRelocationsFromLoadConfig64
+} from "./dynamic-relocations/index.js";
 import { parseIatDirectory } from "./imports/iat.js";
 import { parseArchitectureDirectory } from "./directories/architecture-directory.js";
 import { parseGlobalPtrDirectory } from "./directories/globalptr-directory.js";
@@ -84,23 +87,26 @@ export async function parsePe(
   const canonicalMachine = getCanonicalPeMachine(coff.Machine);
   const peVariant = opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC
     ? {
-        parseLoadConfigDirectory: parseLoadConfigDirectory64,
+        parseAndEnrichLoadConfig: createLoadConfigEnricher(
+          parseLoadConfigDirectory64,
+          parseDynamicRelocationsFromLoadConfig64,
+          null
+        ),
         parseImportDirectory: parseImportDirectory64,
         parseTlsDirectory: parseTlsDirectory64,
-        parseDelayImports: parseDelayImports64,
-        parseDynamicRelocationsFromLoadConfig: parseDynamicRelocationsFromLoadConfig64,
-        readSafeSehHandlerTable: null
+        parseDelayImports: parseDelayImports64
       }
     : {
-        parseLoadConfigDirectory: parseLoadConfigDirectory32,
-        parseImportDirectory: parseImportDirectory32,
-        parseTlsDirectory: parseTlsDirectory32,
-        parseDelayImports: parseDelayImports32,
-        parseDynamicRelocationsFromLoadConfig: parseDynamicRelocationsFromLoadConfig32,
-        readSafeSehHandlerTable:
+        parseAndEnrichLoadConfig: createLoadConfigEnricher(
+          parseLoadConfigDirectory32,
+          parseDynamicRelocationsFromLoadConfig32,
           // Microsoft PE format: SafeSEH applies only to IMAGE_FILE_MACHINE_I386 PE32 images.
           canonicalMachine === IMAGE_FILE_MACHINE_I386 ? readSafeSehHandlerTable : null
-  };
+        ),
+        parseImportDirectory: parseImportDirectory32,
+        parseTlsDirectory: parseTlsDirectory32,
+        parseDelayImports: parseDelayImports32
+      };
 
   const debugResult = await parseDebugDirectory(reader, dataDirs, rvaToOff, canonicalMachine);
   const hasMatchingCoffEntry = debugResult.entries.some(entry =>
@@ -115,16 +121,13 @@ export async function parsePe(
         sections,
         () => undefined
       );
-  const loadcfg = await parseAndEnrichLoadConfig(
+  const loadcfg = await peVariant.parseAndEnrichLoadConfig(
     reader,
     dataDirs,
     rvaToOff,
     ImageBase,
     opt.SizeOfImage,
-    sections,
-    peVariant.parseLoadConfigDirectory,
-    peVariant.parseDynamicRelocationsFromLoadConfig,
-    peVariant.readSafeSehHandlerTable
+    sections
   );
   const importResult = await peVariant.parseImportDirectory(reader, dataDirs, rvaToOff);
   const exportsInfo = await parseExportDirectory(reader, dataDirs, rvaToOff);
@@ -183,7 +186,12 @@ export async function parsePe(
         )
       : undefined
   );
-  security = addSecurityTailWarning(file.size, security, dataDirs.find(d => d.name === "SECURITY"), debugResult.rawDataRanges);
+  security = addSecurityTailWarning(
+    file.size,
+    security,
+    dataDirs.find(d => d.name === "SECURITY"),
+    debugResult.rawDataRanges
+  );
   const overlay = await analyzePeOverlay({
     file,
     reader,

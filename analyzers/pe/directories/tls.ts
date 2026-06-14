@@ -56,17 +56,23 @@ const addTlsRawDataWarnings = (
 const addTlsFieldWarnings = (
   startAddressOfRawData: bigint,
   endAddressOfRawData: bigint,
-  addressOfIndex: bigint,
   characteristics: number,
   imageBase: bigint,
   rvaToOff: RvaToOffset,
   fileSize: number,
-  sections: PeSection[],
   warnings: string[]
 ): void => {
   const reservedBits = characteristics & ~TLS_CHARACTERISTICS_ALIGNMENT_MASK;
   if (reservedBits !== 0) warnings.push("TLS Characteristics has reserved bits set.");
   addTlsRawDataWarnings(startAddressOfRawData, endAddressOfRawData, imageBase, rvaToOff, fileSize, warnings);
+};
+
+const addTlsIndexWarning = (
+  addressOfIndex: bigint,
+  imageBase: bigint,
+  sections: PeSection[],
+  warnings: string[]
+): void => {
   // Microsoft PE format, "The TLS Directory": AddressOfIndex is the VA of an
   // ordinary data location where the loader writes the module TLS index.
   // That slot may be in virtual zero-fill data, so file-backed readability is
@@ -180,14 +186,13 @@ export const parseTlsDirectory32 = async (
   addTlsFieldWarnings(
     StartAddressOfRawData,
     EndAddressOfRawData,
-    AddressOfIndex,
     Characteristics,
     imageBase,
     rvaToOff,
     reader.size,
-    sections,
     warnings
   );
+  addTlsIndexWarning(AddressOfIndex, imageBase, sections, warnings);
   const callbackTableRva = toTlsRvaFromVa(AddressOfCallBacks, imageBase);
   const callbackTableOff = callbackTableRva != null ? rvaToOff(callbackTableRva) : null;
   if (AddressOfCallBacks !== 0n && callbackTableRva == null) {
@@ -254,14 +259,13 @@ export const parseTlsDirectory64 = async (
   addTlsFieldWarnings(
     StartAddressOfRawDataVa,
     EndAddressOfRawDataVa,
-    AddressOfIndexVa,
     Characteristics,
     imageBase,
     rvaToOff,
     reader.size,
-    sections,
     warnings
   );
+  addTlsIndexWarning(AddressOfIndexVa, imageBase, sections, warnings);
   const callbackTableRva = toTlsRvaFromVa(AddressOfCallBacksVa, imageBase);
   const callbackTableOff = callbackTableRva != null ? rvaToOff(callbackTableRva) : null;
   if (AddressOfCallBacksVa !== 0n && callbackTableRva == null) {

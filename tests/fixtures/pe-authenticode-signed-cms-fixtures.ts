@@ -55,8 +55,7 @@ const buildSignedAuthenticodeCmsPayload = async (fileDigestHex: string): Promise
     rootKeys.publicKey,
     createCommonName("Binary101 Root CA"),
     rootKeys.privateKey,
-    "2020-01-01T00:00:00Z",
-    "2035-01-01T00:00:00Z",
+    { notBefore: "2020-01-01T00:00:00Z", notAfter: "2035-01-01T00:00:00Z" },
     [createBasicConstraintsExtension(true), createKeyUsageExtension(KEY_USAGE_KEY_CERT_SIGN)]
   );
   const signerCertificate = await createCertificate(
@@ -65,8 +64,7 @@ const buildSignedAuthenticodeCmsPayload = async (fileDigestHex: string): Promise
     signerKeys.publicKey,
     rootCertificate.subject,
     rootKeys.privateKey,
-    "2023-01-01T00:00:00Z",
-    "2030-01-01T00:00:00Z",
+    { notBefore: "2023-01-01T00:00:00Z", notAfter: "2030-01-01T00:00:00Z" },
     [
       createBasicConstraintsExtension(false),
       createKeyUsageExtension(KEY_USAGE_DIGITAL_SIGNATURE),
@@ -79,8 +77,7 @@ const buildSignedAuthenticodeCmsPayload = async (fileDigestHex: string): Promise
     timestampKeys.publicKey,
     rootCertificate.subject,
     rootKeys.privateKey,
-    "2023-01-01T00:00:00Z",
-    "2030-01-01T00:00:00Z",
+    { notBefore: "2023-01-01T00:00:00Z", notAfter: "2030-01-01T00:00:00Z" },
     [
       createBasicConstraintsExtension(false),
       createKeyUsageExtension(KEY_USAGE_DIGITAL_SIGNATURE),
@@ -226,8 +223,7 @@ export const createEcPublicKeySignatureAlgorithmCmsFixture = async (): Promise<U
     rootKeys.publicKey,
     createCommonName("Binary101 Root CA"),
     rootKeys.privateKey,
-    "2020-01-01T00:00:00Z",
-    "2035-01-01T00:00:00Z",
+    { notBefore: "2020-01-01T00:00:00Z", notAfter: "2035-01-01T00:00:00Z" },
     []
   );
   const signerCertificate = await createCertificate(
@@ -236,8 +232,7 @@ export const createEcPublicKeySignatureAlgorithmCmsFixture = async (): Promise<U
     signerKeys.publicKey,
     rootCertificate.subject,
     rootKeys.privateKey,
-    "2023-01-01T00:00:00Z",
-    "2030-01-01T00:00:00Z",
+    { notBefore: "2023-01-01T00:00:00Z", notAfter: "2030-01-01T00:00:00Z" },
     []
   );
   const spcIndirectData = createSpcIndirectData(Uint8Array.of(1, 2, 3, 4));

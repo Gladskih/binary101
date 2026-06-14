@@ -86,8 +86,7 @@ void test("evaluateAuthenticodeTrustPolicy anchors an embedded issuer to a trust
     rootKeys.publicKey,
     createCommonName("Binary101 Root"),
     rootKeys.privateKey,
-    "2020-01-01T00:00:00Z",
-    "2035-01-01T00:00:00Z",
+    { notBefore: "2020-01-01T00:00:00Z", notAfter: "2035-01-01T00:00:00Z" },
     [createBasicConstraintsExtension(true), createKeyUsageExtension(KEY_USAGE_KEY_CERT_SIGN)]
   );
   const intermediate = await createCertificate(
@@ -96,8 +95,7 @@ void test("evaluateAuthenticodeTrustPolicy anchors an embedded issuer to a trust
     intermediateKeys.publicKey,
     root.subject,
     rootKeys.privateKey,
-    "2021-01-01T00:00:00Z",
-    "2030-01-01T00:00:00Z",
+    { notBefore: "2021-01-01T00:00:00Z", notAfter: "2030-01-01T00:00:00Z" },
     [createBasicConstraintsExtension(true), createKeyUsageExtension(KEY_USAGE_KEY_CERT_SIGN)]
   );
   const signer = await createCertificate(
@@ -106,8 +104,7 @@ void test("evaluateAuthenticodeTrustPolicy anchors an embedded issuer to a trust
     signerKeys.publicKey,
     intermediate.subject,
     intermediateKeys.privateKey,
-    "2022-01-01T00:00:00Z",
-    "2028-01-01T00:00:00Z",
+    { notBefore: "2022-01-01T00:00:00Z", notAfter: "2028-01-01T00:00:00Z" },
     [createBasicConstraintsExtension(false), createKeyUsageExtension(KEY_USAGE_DIGITAL_SIGNATURE)]
   );
   const rootThumbprint = await certificateThumbprint(root);
@@ -139,8 +136,7 @@ void test("evaluateAuthenticodeTrustPolicy accepts legacy OIW RSA/SHA-1 signatur
     rootKeys.publicKey,
     createCommonName("Binary101 Legacy Root"),
     rootKeys.privateKey,
-    "2020-01-01T00:00:00Z",
-    "2035-01-01T00:00:00Z",
+    { notBefore: "2020-01-01T00:00:00Z", notAfter: "2035-01-01T00:00:00Z" },
     [createBasicConstraintsExtension(true), createKeyUsageExtension(KEY_USAGE_KEY_CERT_SIGN)],
     "SHA-1"
   );
@@ -150,8 +146,7 @@ void test("evaluateAuthenticodeTrustPolicy accepts legacy OIW RSA/SHA-1 signatur
     intermediateKeys.publicKey,
     root.subject,
     rootKeys.privateKey,
-    "2021-01-01T00:00:00Z",
-    "2030-01-01T00:00:00Z",
+    { notBefore: "2021-01-01T00:00:00Z", notAfter: "2030-01-01T00:00:00Z" },
     [createBasicConstraintsExtension(true), createKeyUsageExtension(KEY_USAGE_KEY_CERT_SIGN)],
     "SHA-1"
   );

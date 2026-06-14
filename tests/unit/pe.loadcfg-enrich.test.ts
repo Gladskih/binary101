@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseAndEnrichLoadConfig } from "../../analyzers/pe/load-config/enrich.js";
+import { createLoadConfigEnricher } from "../../analyzers/pe/load-config/enrich.js";
 import { createPeLoadConfigResult } from "../../analyzers/pe/load-config/result.js";
 import type { PeDynamicRelocations } from "../../analyzers/pe/dynamic-relocations/index.js";
 import type { PeLoadConfig, PeLoadConfigTable } from "../../analyzers/pe/load-config/index.js";
@@ -23,16 +23,17 @@ const parseWith = (
   parseDynamicRelocations: () => Promise<PeDynamicRelocations | null> = async () => null,
   readSafeSehHandlerTable: (() => Promise<PeLoadConfigTable>) | null = null
 ): Promise<PeLoadConfig | null> =>
-  parseAndEnrichLoadConfig(
+  createLoadConfigEnricher(
+    async () => loadConfig,
+    parseDynamicRelocations,
+    readSafeSehHandlerTable
+  )(
     reader,
     [],
     (rva: number) => rva,
     IMAGE_BASE,
     MOCK_FILE_SIZE,
-    [],
-    async () => loadConfig,
-    parseDynamicRelocations,
-    readSafeSehHandlerTable
+    []
   );
 
 void test("parseAndEnrichLoadConfig returns null when no LOAD_CONFIG is present", async () => {

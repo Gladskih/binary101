@@ -35,8 +35,7 @@ const createAmbiguousIssuerFixture = async () => {
     assuredRootKeys.publicKey,
     createCommonName("Assured Root"),
     assuredRootKeys.privateKey,
-    "2020-01-01T00:00:00Z",
-    "2035-01-01T00:00:00Z",
+    { notBefore: "2020-01-01T00:00:00Z", notAfter: "2035-01-01T00:00:00Z" },
     [createBasicConstraintsExtension(true), createKeyUsageExtension(KEY_USAGE_KEY_CERT_SIGN)]
   );
   const g4RootName = createCommonName("G4 Root");
@@ -46,8 +45,7 @@ const createAmbiguousIssuerFixture = async () => {
     g4RootKeys.publicKey,
     assuredRoot.subject,
     assuredRootKeys.privateKey,
-    "2021-01-01T00:00:00Z",
-    "2035-01-01T00:00:00Z",
+    { notBefore: "2021-01-01T00:00:00Z", notAfter: "2035-01-01T00:00:00Z" },
     [createBasicConstraintsExtension(true), createKeyUsageExtension(KEY_USAGE_KEY_CERT_SIGN)]
   );
   const selfSignedG4Root = await createCertificate(
@@ -56,8 +54,7 @@ const createAmbiguousIssuerFixture = async () => {
     g4RootKeys.publicKey,
     g4RootName,
     g4RootKeys.privateKey,
-    "2021-01-01T00:00:00Z",
-    "2035-01-01T00:00:00Z",
+    { notBefore: "2021-01-01T00:00:00Z", notAfter: "2035-01-01T00:00:00Z" },
     [createBasicConstraintsExtension(true), createKeyUsageExtension(KEY_USAGE_KEY_CERT_SIGN)]
   );
   const signerCertificate = await createCertificate(
@@ -66,8 +63,7 @@ const createAmbiguousIssuerFixture = async () => {
     signerKeys.publicKey,
     g4RootName,
     g4RootKeys.privateKey,
-    "2023-01-01T00:00:00Z",
-    "2030-01-01T00:00:00Z",
+    { notBefore: "2023-01-01T00:00:00Z", notAfter: "2030-01-01T00:00:00Z" },
     [
       createBasicConstraintsExtension(false),
       createKeyUsageExtension(KEY_USAGE_DIGITAL_SIGNATURE),
@@ -141,8 +137,7 @@ void test("attachPathChecks verifies self-signed certificates with legacy OIW RS
     rootKeys.publicKey,
     createCommonName("Binary101 Legacy Root"),
     rootKeys.privateKey,
-    "2020-01-01T00:00:00Z",
-    "2035-01-01T00:00:00Z",
+    { notBefore: "2020-01-01T00:00:00Z", notAfter: "2035-01-01T00:00:00Z" },
     [createBasicConstraintsExtension(true), createKeyUsageExtension(KEY_USAGE_KEY_CERT_SIGN)],
     "SHA-1"
   );

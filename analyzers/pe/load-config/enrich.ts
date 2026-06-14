@@ -34,6 +34,15 @@ type SafeSehTableReader = (
   seHandlerCount: number
 ) => Promise<PeLoadConfigTable>;
 
+type LoadConfigEnricher = (
+  reader: FileRangeReader,
+  dataDirs: PeDataDirectory[],
+  rvaToOff: RvaToOffset,
+  imageBase: bigint,
+  sizeOfImage: number,
+  sections: PeSection[]
+) => Promise<PeLoadConfig | null>;
+
 const appendUniqueMessages = (existing: string[] | undefined, messages: string[]): string[] | undefined =>
   messages.length ? [...new Set([...(existing ?? []), ...messages])] : existing;
 
@@ -68,17 +77,18 @@ const assignTable = (
   if (table) tables[name] = table;
 };
 
-export const parseAndEnrichLoadConfig = async (
-  reader: FileRangeReader,
-  dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset,
-  imageBase: bigint,
-  sizeOfImage: number,
-  sections: PeSection[],
+export const createLoadConfigEnricher = (
   parseLoadConfigDirectory: LoadConfigParser,
   parseDynamicRelocationsFromLoadConfig: DynamicRelocationParser,
   readSafeSehHandlerTable: SafeSehTableReader | null
-): Promise<PeLoadConfig | null> => {
+): LoadConfigEnricher => async (
+  reader,
+  dataDirs,
+  rvaToOff,
+  imageBase,
+  sizeOfImage,
+  sections
+) => {
   const loadcfg = await parseLoadConfigDirectory(reader, dataDirs, rvaToOff);
   if (!loadcfg) return null;
   const diagnostics = collectLoadConfigDiagnostics(

@@ -30,21 +30,25 @@ const updatePacketStats = (
   timestampSeconds: number | null,
   packetSample: Uint8Array,
   linkLayer: PcapLinkLayerSummary | null,
-  pushIssue: (message: string) => void,
-  packetNumber: number
+  pushIssue: (message: string) => void
 ): void => {
+  const packetNumber = globalTraffic.totalPackets + 1;
   if (originalLength < capturedLength) {
     pushIssue(
-      `Packet #${packetNumber} has captured length (${capturedLength}) larger than original length (${originalLength}).`
+      `Packet #${packetNumber} has captured length (${capturedLength}) larger than original ` +
+      `length (${originalLength}).`
     );
   }
   if (interfaceState && interfaceState.snaplen > 0 && capturedLength > interfaceState.snaplen) {
     pushIssue(
-      `Packet #${packetNumber} captured length (${capturedLength}) exceeds interface snaplen (${interfaceState.snaplen}).`
+      `Packet #${packetNumber} captured length (${capturedLength}) exceeds interface ` +
+      `snaplen (${interfaceState.snaplen}).`
     );
   }
   observePacket(globalTraffic, capturedLength, originalLength, timestampSeconds);
-  if (interfaceState) observePacket(interfaceState.traffic, capturedLength, originalLength, timestampSeconds);
+  if (interfaceState) {
+    observePacket(interfaceState.traffic, capturedLength, originalLength, timestampSeconds);
+  }
   if (interfaceState && isEthernetLinkType(interfaceState.linkType)) {
     analyzeEthernetSample(packetSample, getEthernetSummary(linkLayer));
   }
@@ -93,11 +97,12 @@ export const parseEnhancedPacketBlock = async (
   const interfaceId = blockView.getUint32(8, section.littleEndian);
   const interfaceState = section.interfaces[interfaceId] || null;
   if (!interfaceState) {
-    pushIssue(`Enhanced Packet Block at ${formatOffset(offset)} references missing interface ${interfaceId}.`);
+    pushIssue(
+      `Enhanced Packet Block at ${formatOffset(offset)} references missing interface ${interfaceId}.`
+    );
   }
   const capturedLength = blockView.getUint32(20, section.littleEndian);
   const originalLength = blockView.getUint32(24, section.littleEndian);
-  const packetNumber = globalTraffic.totalPackets + 1;
   const packetBytesAvailable = Math.max(
     0,
     blockView.byteLength - ENHANCED_PACKET_HEADER_BYTES - BLOCK_TRAILER_BYTES
@@ -121,8 +126,7 @@ export const parseEnhancedPacketBlock = async (
     ),
     packetSample,
     linkLayer,
-    pushIssue,
-    packetNumber
+    pushIssue
   );
   const options = readPacketOptions(
     blockView,
@@ -136,7 +140,13 @@ export const parseEnhancedPacketBlock = async (
   // https://datatracker.ietf.org/doc/draft-ietf-opsawg-pcapng/
   addObservedDropCount(
     interfaceState,
-    readUint64OptionValue(options, 4, section.littleEndian, pushIssue, `Enhanced Packet Block at ${formatOffset(offset)}`)
+    readUint64OptionValue(
+      options,
+      4,
+      section.littleEndian,
+      pushIssue,
+      `Enhanced Packet Block at ${formatOffset(offset)}`
+    )
   );
 };
 
@@ -159,21 +169,31 @@ export const parseSimplePacketBlock = async (
   // https://datatracker.ietf.org/doc/draft-ietf-opsawg-pcapng/
   const interfaceState = section.interfaces[0] || null;
   if (!interfaceState) {
-    pushIssue(`Simple Packet Block at ${formatOffset(offset)} requires interface 0, but none was defined.`);
+    pushIssue(
+      `Simple Packet Block at ${formatOffset(offset)} requires interface 0, but none was defined.`
+    );
   }
   const originalLength = blockView.getUint32(8, section.littleEndian);
-  const actualPacketBytes = Math.max(0, blockLength - SIMPLE_PACKET_HEADER_BYTES - BLOCK_TRAILER_BYTES);
+  const actualPacketBytes = Math.max(
+    0,
+    blockLength - SIMPLE_PACKET_HEADER_BYTES - BLOCK_TRAILER_BYTES
+  );
   const capturedLength =
     interfaceState && interfaceState.snaplen > 0
       ? Math.min(interfaceState.snaplen, originalLength)
       : Math.min(originalLength, actualPacketBytes);
   if (alignUpTo(capturedLength, PCAPNG_ALIGNMENT_BYTES) > actualPacketBytes) {
-    pushIssue(`Simple Packet Block at ${formatOffset(offset)} does not contain the expected packet bytes.`);
+    pushIssue(
+      `Simple Packet Block at ${formatOffset(offset)} does not contain the expected packet bytes.`
+    );
   }
   const packetSample = new Uint8Array(
     blockView.buffer,
     blockView.byteOffset + SIMPLE_PACKET_HEADER_BYTES,
-    Math.min(capturedLength, Math.max(0, blockView.byteLength - SIMPLE_PACKET_HEADER_BYTES - BLOCK_TRAILER_BYTES))
+    Math.min(
+      capturedLength,
+      Math.max(0, blockView.byteLength - SIMPLE_PACKET_HEADER_BYTES - BLOCK_TRAILER_BYTES)
+    )
   );
   updatePacketStats(
     globalTraffic,
@@ -183,8 +203,7 @@ export const parseSimplePacketBlock = async (
     null,
     packetSample,
     linkLayer,
-    pushIssue,
-    globalTraffic.totalPackets + 1
+    pushIssue
   );
 };
 
@@ -209,14 +228,19 @@ export const parseLegacyPacketBlock = async (
   const interfaceId = blockView.getUint16(8, section.littleEndian);
   const interfaceState = section.interfaces[interfaceId] || null;
   if (!interfaceState) {
-    pushIssue(`Packet Block at ${formatOffset(offset)} references missing interface ${interfaceId}.`);
+    pushIssue(
+      `Packet Block at ${formatOffset(offset)} references missing interface ${interfaceId}.`
+    );
   }
   const capturedLength = blockView.getUint32(20, section.littleEndian);
   const originalLength = blockView.getUint32(24, section.littleEndian);
   const packetSample = new Uint8Array(
     blockView.buffer,
     blockView.byteOffset + LEGACY_PACKET_HEADER_BYTES,
-    Math.min(capturedLength, Math.max(0, blockView.byteLength - LEGACY_PACKET_HEADER_BYTES - BLOCK_TRAILER_BYTES))
+    Math.min(
+      capturedLength,
+      Math.max(0, blockView.byteLength - LEGACY_PACKET_HEADER_BYTES - BLOCK_TRAILER_BYTES)
+    )
   );
   updatePacketStats(
     globalTraffic,
@@ -232,8 +256,7 @@ export const parseLegacyPacketBlock = async (
     ),
     packetSample,
     linkLayer,
-    pushIssue,
-    globalTraffic.totalPackets + 1
+    pushIssue
   );
   const dropsCount = BigInt(blockView.getUint16(10, section.littleEndian));
   // Appendix A reserves 0xFFFF as "drop count unknown" for the obsolete Packet Block.

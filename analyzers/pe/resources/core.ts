@@ -91,7 +91,7 @@ const parseResourceTree = async (
     readLeafPath,
     readPathNode
   );
-  const issues = collectResourceTreeIssues(root, paths, dir, base, limitEnd, reader.size);
+  const issues = collectResourceTreeIssues(root, paths, dir, base, reader.size);
   return {
     base,
     limitEnd,
@@ -129,7 +129,6 @@ const collectResourceTreeIssues = (
   paths: ResourcePathCollections,
   dir: PeDataDirectory,
   base: number,
-  limitEnd: number,
   fileSize: number
 ): string[] => [
   ...root.issues,
@@ -142,7 +141,6 @@ const collectResourceTreeIssues = (
     dir.rva,
     dir.size,
     base,
-    limitEnd,
     fileSize
   )
 ];

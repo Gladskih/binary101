@@ -64,7 +64,7 @@ const computeTrailingAlignmentPaddingSize = async (
   return expectedPadding === trailingZeroBytes ? expectedPadding : 0;
 };
 
-const computePeImageLayout = (
+const computePeImageEnd = (
   fileSize: number,
   optionalHeaderOffset: number,
   optionalHeaderSize: number,
@@ -72,12 +72,8 @@ const computePeImageLayout = (
   sectionCount: number,
   sections: PeCore["sections"],
   sectionAlignment: number,
-  declaredSizeOfImage: number | null,
   declaredSizeOfHeaders: number
-): {
-  imageEnd: number;
-  imageSizeMismatch: boolean;
-} => {
+): number => {
   const headersEnd = Math.max(
     optionalHeaderOffset + optionalHeaderSize,
     sectionHeadersOffset + sectionCount * 40
@@ -94,10 +90,7 @@ const computePeImageLayout = (
     );
     imageEnd = Math.max(imageEnd, alignUpClamped(endOfSectionImage, sectionAlignment));
   }
-  return {
-    imageEnd,
-    imageSizeMismatch: declaredSizeOfImage != null && imageEnd !== (declaredSizeOfImage >>> 0)
-  };
+  return imageEnd;
 };
 
 const buildCoreWarnings = (
@@ -124,7 +117,7 @@ const buildHeaderCore = async (
     coff.PointerToSymbolTable,
     coff.NumberOfSymbols
   );
-  const { imageEnd, imageSizeMismatch } = computePeImageLayout(
+  const imageEnd = computePeImageEnd(
     reader.size,
     optionalHeaderResult.optOff,
     coff.SizeOfOptionalHeader,
@@ -132,7 +125,6 @@ const buildHeaderCore = async (
     coff.NumberOfSections,
     parsedSections.sections,
     0,
-    null,
     0
   );
   await addSectionRawDataAnalysis(reader, parsedSections.sections);
@@ -153,7 +145,7 @@ const buildHeaderCore = async (
     entrySection: await computeEntrySection(optionalHeaderResult.opt, parsedSections.sections),
     rvaToOff: parsedSections.rvaToOff,
     imageEnd,
-    imageSizeMismatch
+    imageSizeMismatch: false
   };
 };
 
@@ -173,7 +165,7 @@ const buildWindowsCore = async (
     coff.PointerToSymbolTable,
     coff.NumberOfSymbols
   );
-  const { imageEnd, imageSizeMismatch } = computePeImageLayout(
+  const imageEnd = computePeImageEnd(
     reader.size,
     optionalHeaderResult.optOff,
     coff.SizeOfOptionalHeader,
@@ -181,7 +173,6 @@ const buildWindowsCore = async (
     coff.NumberOfSections,
     parsedSections.sections,
     opt.SectionAlignment,
-    opt.SizeOfImage,
     opt.SizeOfHeaders
   );
   await addSectionRawDataAnalysis(reader, parsedSections.sections);
@@ -204,7 +195,7 @@ const buildWindowsCore = async (
     entrySection: await computeEntrySection(opt, parsedSections.sections),
     rvaToOff: parsedSections.rvaToOff,
     imageEnd,
-    imageSizeMismatch
+    imageSizeMismatch: imageEnd !== (opt.SizeOfImage >>> 0)
   };
 };
 

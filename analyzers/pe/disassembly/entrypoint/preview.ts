@@ -86,8 +86,7 @@ const decodeBlock = async (
         block,
         instr,
         instruction,
-        importTargets,
-        rva
+        importTargets
       );
       instructions.push(instruction);
       state.bytesDecoded += instr.length;
