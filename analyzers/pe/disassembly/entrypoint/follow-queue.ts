@@ -30,6 +30,8 @@ export type PendingBlock = {
 
 export type FollowQueueState = {
   blocks: PeEntrypointDisassemblyBlock[];
+  pending: PendingBlock[];
+  issues: string[];
   visitedBlocks: Set<string>;
   queuedBlocksByKey: Map<string, PendingBlock>;
   emulationStatesByKey: Map<string, EmulationState>;
@@ -60,15 +62,14 @@ const contextKeysForRva = (
 const canQueueNewContext = (
   state: FollowQueueState,
   rva: number,
-  emulationState: EmulationState,
-  issues: string[]
+  emulationState: EmulationState
 ): boolean => {
   const used = state.precisionCostByRva.get(rva) ?? 0;
   const cost = precisionCost(emulationState);
   if (used + cost <= MAX_PRECISION_BUDGET_PER_RVA) return true;
   if (!state.precisionLimitReportedRvas.has(rva)) {
     state.precisionLimitReportedRvas.add(rva);
-    issues.push(
+    state.issues.push(
       `Entrypoint preview stopped following ${formatRva(rva)} after exhausting ` +
       `${MAX_PRECISION_BUDGET_PER_RVA} emulation precision budget.`
     );
@@ -184,10 +185,8 @@ export const queueFollowedBlock = async (
   reader: FileRangeReader,
   opts: AnalyzePeEntrypointDisassemblyOptions,
   state: FollowQueueState,
-  pending: PendingBlock[],
   follow: FollowedCodeTarget,
   instructionRva: number,
-  issues: string[],
   emulationState: EmulationState
 ): Promise<boolean> => {
   const key = createBlockKey(follow.rva, emulationState, opts.imageBase);
@@ -200,8 +199,8 @@ export const queueFollowedBlock = async (
   const knownState = state.emulationStatesByKey.get(key);
   const nextState = knownState ? mergeEmulationStates(knownState, emulationState) : emulationState;
   if (knownState && stateKey(knownState) === stateKey(nextState)) return true;
-  if (!canQueueNewContext(state, follow.rva, nextState, issues)) return false;
-  const mapped = await loadCodeBytes(reader, opts, follow.rva, issues, "Control-flow target");
+  if (!canQueueNewContext(state, follow.rva, nextState)) return false;
+  const mapped = await loadCodeBytes(reader, opts, follow.rva, state.issues, "Control-flow target");
   if (!mapped) return false;
   state.emulationStatesByKey.set(key, cloneEmulationState(nextState));
   contextKeysForRva(state, follow.rva).add(key);
@@ -213,7 +212,7 @@ export const queueFollowedBlock = async (
     key,
     sourceInstructionRva: instructionRva
   };
-  pending.push(block);
+  state.pending.push(block);
   state.queuedBlocksByKey.set(key, block);
   return true;
 };
@@ -222,30 +221,24 @@ export const queueConditionalBranch = async (
   reader: FileRangeReader,
   opts: AnalyzePeEntrypointDisassemblyOptions,
   state: FollowQueueState,
-  pending: PendingBlock[],
   branch: ConditionalBranchTargets,
   instructionRva: number,
-  issues: string[],
   emulationState: EmulationState
 ): Promise<{ branchFollowed: boolean; fallthroughFollowed: boolean }> => {
   const branchFollowed = branch.taken !== false && await queueFollowedBlock(
     reader,
     opts,
     state,
-    pending,
     branch.branch,
     instructionRva,
-    issues,
     cloneEmulationState(emulationState)
   );
   const fallthroughFollowed = branch.taken !== true && await queueFollowedBlock(
     reader,
     opts,
     state,
-    pending,
     branch.fallthrough,
     instructionRva,
-    issues,
     cloneEmulationState(emulationState)
   );
   return { branchFollowed, fallthroughFollowed };

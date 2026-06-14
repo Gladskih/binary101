@@ -23,8 +23,10 @@ import { MockFile } from "../helpers/mock-file.js";
 
 const imageBase = 0x140000000n;
 
-const createQueueState = (): FollowQueueState => ({
+const createQueueState = (pending: PendingBlock[]): FollowQueueState => ({
   blocks: [],
+  pending,
+  issues: [],
   visitedBlocks: new Set(),
   queuedBlocksByKey: new Map(),
   emulationStatesByKey: new Map(),
@@ -101,8 +103,8 @@ void test("createBlockKey distinguishes frame-pointer return slots", () => {
 });
 
 void test("queueFollowedBlock merges same-key pending emulation states", async () => {
-  const state = createQueueState();
   const pending: PendingBlock[] = [];
+  const state = createQueueState(pending);
   const left = createEmulationState(64);
   const right = createEmulationState(64);
   left.registers.set("R11", known(0x140001010n, 64));
@@ -112,20 +114,16 @@ void test("queueFollowedBlock merges same-key pending emulation states", async (
     createFileRangeReader(new MockFile(new Uint8Array([0xc3]), "target.exe"), 0, 1),
     createOptions(),
     state,
-    pending,
     { kind: "followed-call", rva: 0x1000 },
     0x2000,
-    [],
     left
   );
   await queueFollowedBlock(
     createFileRangeReader(new MockFile(new Uint8Array([0xc3]), "target.exe"), 0, 1),
     createOptions(),
     state,
-    pending,
     { kind: "followed-call", rva: 0x1000 },
     0x2001,
-    [],
     right
   );
 

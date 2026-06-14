@@ -47,33 +47,41 @@ const resolveSignatureParameterTypes = (
 ): Array<string | null> =>
   parameterTypes.map(parameterType => resolveSignatureParameterType(parameterType, typeRefs, typeDefs));
 
+export type ClrMetadataReferenceGraph = {
+  modules: PeClrModuleInfo[];
+  assembly: PeClrAssemblyInfo | null;
+  assemblyRefs: PeClrAssemblyRefInfo[];
+  typeRefs: PeClrTypeReferenceInfo[];
+  typeDefs: PeClrTypeDefinitionInfo[];
+  methodDefs: PeClrMethodDefinitionInfo[];
+  memberRefs: PeClrMemberReferenceInfo[];
+  moduleRefs: PeClrModuleReferenceInfo[];
+};
+
 export const createCustomAttributes = (
   rows: ClrMetadataRow[],
   heaps: ClrHeapReaders,
-  modules: PeClrModuleInfo[],
-  assembly: PeClrAssemblyInfo | null,
-  assemblyRefs: PeClrAssemblyRefInfo[],
-  typeRefs: PeClrTypeReferenceInfo[],
-  typeDefs: PeClrTypeDefinitionInfo[],
-  methodDefs: PeClrMethodDefinitionInfo[],
-  memberRefs: PeClrMemberReferenceInfo[],
-  moduleRefs: PeClrModuleReferenceInfo[]
+  references: ClrMetadataReferenceGraph
 ): PeClrCustomAttributeInfo[] =>
   rows.map((row, index): PeClrCustomAttributeInfo => {
     const parent = cellIndex(row, "Parent");
     const constructor = cellIndex(row, "Type");
     const memberRef = constructor.tableId === TABLE_MEMBER_REF
-      ? memberRefs[constructor.row - 1]
+      ? references.memberRefs[constructor.row - 1]
       : undefined;
     const methodDef = constructor.tableId === TABLE_METHOD_DEF
-      ? methodDefs[constructor.row - 1]
+      ? references.methodDefs[constructor.row - 1]
       : undefined;
     const signature = memberRef?.signature ?? methodDef?.signature;
     const valueBlobIndex = cellNumber(row, "Value");
     const decoded = signature
       ? decodeCustomAttributeValue(
           heaps.getBlob(valueBlobIndex, `CustomAttribute row ${index + 1}.Value`),
-          resolveSignatureParameterTypes(signature.parameterTypes, typeRefs, typeDefs),
+          resolveSignatureParameterTypes(
+            signature.parameterTypes,
+            references.typeRefs,
+            references.typeDefs
+          ),
           `CustomAttribute row ${index + 1}`
         )
       : {
@@ -85,7 +93,14 @@ export const createCustomAttributes = (
       row: index + 1,
       parent,
       parentName: resolveMetadataIndexName(
-        parent, modules, assembly, assemblyRefs, typeRefs, typeDefs, methodDefs, moduleRefs
+        parent,
+        references.modules,
+        references.assembly,
+        references.assemblyRefs,
+        references.typeRefs,
+        references.typeDefs,
+        references.methodDefs,
+        references.moduleRefs
       ),
       constructor,
       constructorName: memberRef?.name ?? methodDef?.name ?? null,

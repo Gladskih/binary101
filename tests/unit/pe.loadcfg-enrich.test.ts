@@ -25,7 +25,6 @@ const parseWith = (
 ): Promise<PeLoadConfig | null> =>
   parseAndEnrichLoadConfig(
     reader,
-    reader.size,
     [],
     (rva: number) => rva,
     IMAGE_BASE,

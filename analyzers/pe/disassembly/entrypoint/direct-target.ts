@@ -7,8 +7,7 @@ import type {
 } from "../types.js";
 import {
   queueFollowedBlock,
-  type FollowQueueState,
-  type PendingBlock
+  type FollowQueueState
 } from "./follow-queue.js";
 import type { DirectControlFlowTarget } from "./control-flow.js";
 import { createCallStackState } from "./call-stack.js";
@@ -23,12 +22,10 @@ export const followDirectCodeTarget = async (
   reader: FileRangeReader,
   opts: AnalyzePeEntrypointDisassemblyOptions,
   state: FollowQueueState,
-  pending: PendingBlock[],
   directTarget: DirectControlFlowTarget,
   instructionRva: number,
   nextIp: bigint,
-  emulationState: EmulationState,
-  issues: string[]
+  emulationState: EmulationState
 ): Promise<Extract<PeEntrypointInstructionTarget, { kind: "code" }>> => {
   const targetState = directTarget.kind === "followed-call"
     ? createCallStackState(iced, emulationState, nextIp)
@@ -37,10 +34,8 @@ export const followDirectCodeTarget = async (
     reader,
     opts,
     state,
-    pending,
     directTarget,
     instructionRva,
-    issues,
     targetState
   );
   return { kind: "code", rva: directTarget.rva, followed };

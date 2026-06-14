@@ -26,7 +26,9 @@ import {
   getUnknownIndirectCallFallthrough,
   type IndirectCallFallthrough
 } from "./indirect-call-fallthrough.js";
-import { followDirectCodeTarget } from "./direct-target.js";
+import {
+  followDirectCodeTarget
+} from "./direct-target.js";
 import type { ImportTarget } from "./import-targets.js";
 import { createReturnStackState } from "./call-stack.js";
 import { applyReturningImportEffects } from "./import-effects.js";
@@ -63,24 +65,20 @@ const applyImportTarget = async (
   reader: FileRangeReader,
   iced: IcedModule,
   opts: AnalyzePeEntrypointDisassemblyOptions,
+  state: FollowQueueState,
   block: PendingBlock,
   instruction: PeEntrypointInstruction,
   importTarget: ImportTarget,
   importFallthrough: ReturningImportFallthrough | null,
-  rva: number,
-  state: FollowQueueState,
-  pending: PendingBlock[],
-  issues: string[]
+  rva: number
 ): Promise<void> => {
   const returnFollowed = importFallthrough?.kind === "stack-return"
     ? await queueFollowedBlock(
       reader,
       opts,
       state,
-      pending,
       { kind: "followed-import-return", rva: importFallthrough.rva },
       rva,
-      issues,
       createImportReturnState(iced, block.emulationState, importTarget)
     )
     : importFallthrough?.kind === "current-block";
@@ -96,48 +94,40 @@ const applyDirectTarget = async (
   reader: FileRangeReader,
   iced: IcedModule,
   opts: AnalyzePeEntrypointDisassemblyOptions,
+  state: FollowQueueState,
   block: PendingBlock,
   instruction: PeEntrypointInstruction,
   directTarget: DirectControlFlowTarget,
   decoded: IcedInstructionObject,
-  rva: number,
-  state: FollowQueueState,
-  pending: PendingBlock[],
-  issues: string[]
+  rva: number
 ): Promise<void> => {
   instruction.target = await followDirectCodeTarget(
     iced,
     reader,
     opts,
     state,
-    pending,
     directTarget,
     rva,
     decoded.nextIP,
-    block.emulationState,
-    issues
+    block.emulationState
   );
 };
 
 const applyBranchTarget = async (
   reader: FileRangeReader,
   opts: AnalyzePeEntrypointDisassemblyOptions,
+  state: FollowQueueState,
   block: PendingBlock,
   instruction: PeEntrypointInstruction,
   branchTargets: ConditionalBranchTargets,
-  rva: number,
-  state: FollowQueueState,
-  pending: PendingBlock[],
-  issues: string[]
+  rva: number
 ): Promise<void> => {
   const followed = await queueConditionalBranch(
     reader,
     opts,
     state,
-    pending,
     branchTargets,
     rva,
-    issues,
     block.emulationState
   );
   instruction.target = {
@@ -153,14 +143,12 @@ export const applyInstructionTargets = async (
   reader: FileRangeReader,
   iced: IcedModule,
   opts: AnalyzePeEntrypointDisassemblyOptions,
+  state: FollowQueueState,
   block: PendingBlock,
   decoded: IcedInstructionObject,
   instruction: PeEntrypointInstruction,
   importTargets: Map<number, ImportTarget>,
-  rva: number,
-  state: FollowQueueState,
-  pending: PendingBlock[],
-  issues: string[]
+  rva: number
 ): Promise<InstructionTargetingResult> => {
   const importTarget = getImportTarget(iced, opts, decoded, importTargets);
   const directTarget = getDirectControlFlowTarget(iced, opts, decoded) ??
@@ -171,7 +159,7 @@ export const applyInstructionTargets = async (
       opts,
       decoded,
       block.emulationState,
-      issues
+      state.issues
     );
   const branchTargets = getConditionalBranchTargets(iced, opts, decoded, block.emulationState);
   const importFallthrough = getReturningImportFallthrough(
@@ -191,14 +179,12 @@ export const applyInstructionTargets = async (
       reader,
       iced,
       opts,
+      state,
       block,
       instruction,
       importTarget,
       importFallthrough,
-      rva,
-      state,
-      pending,
-      issues
+      rva
     );
   } else if (guardFallthrough) {
     instruction.notes = [
@@ -215,26 +201,22 @@ export const applyInstructionTargets = async (
       reader,
       iced,
       opts,
+      state,
       block,
       instruction,
       directTarget,
       decoded,
-      rva,
-      state,
-      pending,
-      issues
+      rva
     );
   } else if (branchTargets) {
     await applyBranchTarget(
       reader,
       opts,
+      state,
       block,
       instruction,
       branchTargets,
-      rva,
-      state,
-      pending,
-      issues
+      rva
     );
   } else if (decoded.flowControl === iced.FlowControl["Return"]) {
     instruction.target = await followReturnTarget(
@@ -244,9 +226,7 @@ export const applyInstructionTargets = async (
       block,
       decoded,
       rva,
-      state,
-      pending,
-      issues
+      state
     );
   }
   return {

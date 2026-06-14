@@ -70,7 +70,6 @@ const assignTable = (
 
 export const parseAndEnrichLoadConfig = async (
   reader: FileRangeReader,
-  fileSize: number,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   imageBase: bigint,
@@ -82,30 +81,70 @@ export const parseAndEnrichLoadConfig = async (
 ): Promise<PeLoadConfig | null> => {
   const loadcfg = await parseLoadConfigDirectory(reader, dataDirs, rvaToOff);
   if (!loadcfg) return null;
-  const diagnostics = collectLoadConfigDiagnostics(fileSize, rvaToOff, imageBase, sizeOfImage, loadcfg);
+  const diagnostics = collectLoadConfigDiagnostics(
+    reader.size,
+    rvaToOff,
+    imageBase,
+    sizeOfImage,
+    loadcfg
+  );
   mergeLoadConfigWarnings(loadcfg, diagnostics.warnings);
   mergeLoadConfigNotes(loadcfg, diagnostics.notes);
   const tables: PeLoadConfigTables = {};
   const guardFlags = loadcfg.GuardFlags;
   if (loadcfg.GuardCFFunctionCount > 0) {
     assignTable(tables, "guardFid", await readOptionalTable(loadcfg, () =>
-      readGuardCFFunctionTable(reader, rvaToOff, imageBase, loadcfg.GuardCFFunctionTable, loadcfg.GuardCFFunctionCount, guardFlags), "GuardCFFunctionTable"));
+      readGuardCFFunctionTable(
+        reader,
+        rvaToOff,
+        imageBase,
+        loadcfg.GuardCFFunctionTable,
+        loadcfg.GuardCFFunctionCount,
+        guardFlags
+      ), "GuardCFFunctionTable"));
   }
   if (loadcfg.GuardEHContinuationCount > 0) {
     assignTable(tables, "guardEhContinuation", await readOptionalTable(loadcfg, () =>
-      readGuardEhContinuationTable(reader, rvaToOff, imageBase, loadcfg.GuardEHContinuationTable, loadcfg.GuardEHContinuationCount, guardFlags), "GuardEHContinuationTable"));
+      readGuardEhContinuationTable(
+        reader,
+        rvaToOff,
+        imageBase,
+        loadcfg.GuardEHContinuationTable,
+        loadcfg.GuardEHContinuationCount,
+        guardFlags
+      ), "GuardEHContinuationTable"));
   }
   if (loadcfg.GuardLongJumpTargetCount > 0) {
     assignTable(tables, "guardLongJumpTarget", await readOptionalTable(loadcfg, () =>
-      readGuardLongJumpTargetTable(reader, rvaToOff, imageBase, loadcfg.GuardLongJumpTargetTable, loadcfg.GuardLongJumpTargetCount, guardFlags), "GuardLongJumpTargetTable"));
+      readGuardLongJumpTargetTable(
+        reader,
+        rvaToOff,
+        imageBase,
+        loadcfg.GuardLongJumpTargetTable,
+        loadcfg.GuardLongJumpTargetCount,
+        guardFlags
+      ), "GuardLongJumpTargetTable"));
   }
   if (loadcfg.GuardAddressTakenIatEntryCount > 0) {
     assignTable(tables, "guardIat", await readOptionalTable(loadcfg, () =>
-      readGuardAddressTakenIatEntryTable(reader, rvaToOff, imageBase, loadcfg.GuardAddressTakenIatEntryTable, loadcfg.GuardAddressTakenIatEntryCount, guardFlags), "GuardAddressTakenIatEntryTable"));
+      readGuardAddressTakenIatEntryTable(
+        reader,
+        rvaToOff,
+        imageBase,
+        loadcfg.GuardAddressTakenIatEntryTable,
+        loadcfg.GuardAddressTakenIatEntryCount,
+        guardFlags
+      ), "GuardAddressTakenIatEntryTable"));
   }
   if (readSafeSehHandlerTable && loadcfg.SEHandlerCount > 0) {
     assignTable(tables, "safeSehHandler", await readOptionalTable(loadcfg, () =>
-      readSafeSehHandlerTable(reader, rvaToOff, imageBase, loadcfg.SEHandlerTable, loadcfg.SEHandlerCount), "SEHandlerTable"));
+      readSafeSehHandlerTable(
+        reader,
+        rvaToOff,
+        imageBase,
+        loadcfg.SEHandlerTable,
+        loadcfg.SEHandlerCount
+      ), "SEHandlerTable"));
   }
   if (Object.values(tables).some(table => table != null)) loadcfg.tables = tables;
   try {

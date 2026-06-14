@@ -117,7 +117,6 @@ export async function parsePe(
       );
   const loadcfg = await parseAndEnrichLoadConfig(
     reader,
-    file.size,
     dataDirs,
     rvaToOff,
     ImageBase,

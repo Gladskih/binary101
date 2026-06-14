@@ -145,49 +145,82 @@ export const createElfMetadataFile = (): ElfMetadataFixture => {
   writePh(2, 2, 4, dynamicOff, dynamicBytes.length, dynamicBytes.length, 8n); // PT_DYNAMIC R
   writePh(3, 4, 4, noteOff, noteBytes.length, noteBytes.length, 4n); // PT_NOTE R
   writePh(4, 7, 4, tdataOff, tdataBytes.length, tdataBytes.length + 4, 8n); // PT_TLS R
-  const writeSh = (
-    index: number,
-    nameOff: number,
-    type: number,
-    flags: bigint,
-    addr: bigint,
-    fileOffset: number,
-    size: number,
-    link: number,
-    info: number,
-    addralign: bigint,
-    entsize: bigint
-  ): void => {
-    const base = shoff + index * shSize;
-    dv.setUint32(base + 0, nameOff, true);
-    dv.setUint32(base + 4, type, true);
-    dv.setBigUint64(base + 8, flags, true);
-    dv.setBigUint64(base + 16, addr, true);
-    dv.setBigUint64(base + 24, BigInt(fileOffset), true);
-    dv.setBigUint64(base + 32, BigInt(size), true);
-    dv.setUint32(base + 40, link, true);
-    dv.setUint32(base + 44, info, true);
-    dv.setBigUint64(base + 48, addralign, true);
-    dv.setBigUint64(base + 56, entsize, true);
+  type ElfSectionHeader = {
+    index: number;
+    nameOff: number;
+    type: number;
+    flags: bigint;
+    addr: bigint;
+    fileOffset: number;
+    size: number;
+    link: number;
+    info: number;
+    addralign: bigint;
+    entsize: bigint;
+  };
+  const writeSh = (section: ElfSectionHeader): void => {
+    const base = shoff + section.index * shSize;
+    dv.setUint32(base + 0, section.nameOff, true);
+    dv.setUint32(base + 4, section.type, true);
+    dv.setBigUint64(base + 8, section.flags, true);
+    dv.setBigUint64(base + 16, section.addr, true);
+    dv.setBigUint64(base + 24, BigInt(section.fileOffset), true);
+    dv.setBigUint64(base + 32, BigInt(section.size), true);
+    dv.setUint32(base + 40, section.link, true);
+    dv.setUint32(base + 44, section.info, true);
+    dv.setBigUint64(base + 48, section.addralign, true);
+    dv.setBigUint64(base + 56, section.entsize, true);
   };
   // #0 NULL
-  writeSh(0, 0, 0, 0n, 0n, 0, 0, 0, 0, 0n, 0n);
+  writeSh({
+    index: 0, nameOff: 0, type: 0, flags: 0n, addr: 0n, fileOffset: 0,
+    size: 0, link: 0, info: 0, addralign: 0n, entsize: 0n
+  });
   // #1 .shstrtab
-  writeSh(1, shNameOff[".shstrtab"]!, 3, 0n, 0n, shstrOff, shstrBytes.length, 0, 0, 1n, 0n);
+  writeSh({
+    index: 1, nameOff: shNameOff[".shstrtab"]!, type: 3, flags: 0n, addr: 0n,
+    fileOffset: shstrOff, size: shstrBytes.length, link: 0, info: 0, addralign: 1n, entsize: 0n
+  });
   // #2 .dynstr
-  writeSh(2, shNameOff[".dynstr"]!, 3, 0x2n, fileVaddr(dynstrOff), dynstrOff, dynstrBytes.length, 0, 0, 1n, 0n);
+  writeSh({
+    index: 2, nameOff: shNameOff[".dynstr"]!, type: 3, flags: 0x2n,
+    addr: fileVaddr(dynstrOff), fileOffset: dynstrOff, size: dynstrBytes.length,
+    link: 0, info: 0, addralign: 1n, entsize: 0n
+  });
   // #3 .dynsym
-  writeSh(3, shNameOff[".dynsym"]!, 11, 0x2n, fileVaddr(dynsymOff), dynsymOff, dynsymBytes.length, 2, 0, 8n, 24n);
+  writeSh({
+    index: 3, nameOff: shNameOff[".dynsym"]!, type: 11, flags: 0x2n,
+    addr: fileVaddr(dynsymOff), fileOffset: dynsymOff, size: dynsymBytes.length,
+    link: 2, info: 0, addralign: 8n, entsize: 24n
+  });
   // #4 .dynamic
-  writeSh(4, shNameOff[".dynamic"]!, 6, 0x2n, fileVaddr(dynamicOff), dynamicOff, dynamicBytes.length, 2, 0, 8n, 16n);
+  writeSh({
+    index: 4, nameOff: shNameOff[".dynamic"]!, type: 6, flags: 0x2n,
+    addr: fileVaddr(dynamicOff), fileOffset: dynamicOff, size: dynamicBytes.length,
+    link: 2, info: 0, addralign: 8n, entsize: 16n
+  });
   // #5 .comment
-  writeSh(5, shNameOff[".comment"]!, 1, 0n, 0n, commentOff, commentBytes.length, 0, 0, 1n, 0n);
+  writeSh({
+    index: 5, nameOff: shNameOff[".comment"]!, type: 1, flags: 0n, addr: 0n,
+    fileOffset: commentOff, size: commentBytes.length, link: 0, info: 0, addralign: 1n, entsize: 0n
+  });
   // #6 .gnu_debuglink
-  writeSh(6, shNameOff[".gnu_debuglink"]!, 1, 0n, 0n, debugLinkOff, debugLinkBytes.length, 0, 0, 4n, 0n);
+  writeSh({
+    index: 6, nameOff: shNameOff[".gnu_debuglink"]!, type: 1, flags: 0n, addr: 0n,
+    fileOffset: debugLinkOff, size: debugLinkBytes.length, link: 0, info: 0, addralign: 4n, entsize: 0n
+  });
   // #7 .note.gnu.build-id
-  writeSh(7, shNameOff[".note.gnu.build-id"]!, 7, 0x2n, fileVaddr(noteOff), noteOff, noteBytes.length, 0, 0, 4n, 0n);
+  writeSh({
+    index: 7, nameOff: shNameOff[".note.gnu.build-id"]!, type: 7, flags: 0x2n,
+    addr: fileVaddr(noteOff), fileOffset: noteOff, size: noteBytes.length,
+    link: 0, info: 0, addralign: 4n, entsize: 0n
+  });
   // #8 .tdata (TLS)
-  writeSh(8, shNameOff[".tdata"]!, 1, 0x403n, fileVaddr(tdataOff), tdataOff, tdataBytes.length, 0, 0, 8n, 0n);
+  writeSh({
+    index: 8, nameOff: shNameOff[".tdata"]!, type: 1, flags: 0x403n,
+    addr: fileVaddr(tdataOff), fileOffset: tdataOff, size: tdataBytes.length,
+    link: 0, info: 0, addralign: 8n, entsize: 0n
+  });
   // Fill .dynsym contents
   const dynsymDv = new DataView(bytes.buffer, dynsymOff, dynsymBytes.length);
   const putsOff = dynstrText.indexOf(`${importSymbol}\0`);

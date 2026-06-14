@@ -262,14 +262,10 @@ export const buildClrMetadataTables = (
   const customAttributes = createCustomAttributes(
     tableRows(parsed, TABLE_CUSTOM_ATTRIBUTE),
     heaps,
-    modules,
-    assembly,
-    assemblyRefs,
-    typeRefs,
-    typeDefs,
-    methodDefs,
-    memberRefs,
-    moduleRefs
+    {
+      modules, assembly, assemblyRefs, typeRefs,
+      typeDefs, methodDefs, memberRefs, moduleRefs
+    }
   );
   return {
     streamName: parsed.streamName,

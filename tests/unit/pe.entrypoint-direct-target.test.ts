@@ -29,8 +29,10 @@ const createOptions = (): AnalyzePeEntrypointDisassemblyOptions => ({
   sections: [createExecutableSection({ virtualSize: 3, sizeOfRawData: 3 })]
 });
 
-const createQueueState = (): FollowQueueState => ({
+const createQueueState = (pending: PendingBlock[]): FollowQueueState => ({
   blocks: [],
+  pending,
+  issues: [],
   visitedBlocks: new Set(),
   queuedBlocksByKey: new Map(),
   emulationStatesByKey: new Map(),
@@ -41,17 +43,16 @@ const createQueueState = (): FollowQueueState => ({
 
 void test("followDirectCodeTarget queues call target with a call-stack state", async () => {
   const pending: PendingBlock[] = [];
+  const bytes = new Uint8Array([0xe8, 0x90, 0xc3]);
   const target = await followDirectCodeTarget(
     iced,
-    createFileRangeReader(new MockFile(new Uint8Array([0xe8, 0x90, 0xc3]), "entry.exe"), 0, 3),
+    createFileRangeReader(new MockFile(bytes, "entry.exe"), 0, bytes.length),
     createOptions(),
-    createQueueState(),
-    pending,
+    createQueueState(pending),
     { kind: "followed-call", rva: 0x1002 },
     0x1000,
     0x140001001n,
-    createEmulationState(64),
-    []
+    createEmulationState(64)
   );
 
   assert.equal(target.followed, true);
@@ -62,17 +63,16 @@ void test("followDirectCodeTarget queues call target with a call-stack state", a
 
 void test("followDirectCodeTarget queues jumps without speculative fallthrough", async () => {
   const pending: PendingBlock[] = [];
+  const bytes = new Uint8Array([0xe9, 0x90, 0xc3]);
   const target = await followDirectCodeTarget(
     iced,
-    createFileRangeReader(new MockFile(new Uint8Array([0xe9, 0x90, 0xc3]), "entry.exe"), 0, 3),
+    createFileRangeReader(new MockFile(bytes, "entry.exe"), 0, bytes.length),
     createOptions(),
-    createQueueState(),
-    pending,
+    createQueueState(pending),
     { kind: "followed-jump", rva: 0x1002 },
     0x1000,
     0x140001001n,
-    createEmulationState(64),
-    []
+    createEmulationState(64)
   );
 
   assert.equal(target.followed, true);

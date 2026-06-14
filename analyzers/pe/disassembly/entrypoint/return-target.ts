@@ -25,9 +25,7 @@ export const followReturnTarget = async (
   block: PendingBlock,
   instruction: IcedInstructionObject,
   instructionRva: number,
-  state: FollowQueueState,
-  pending: PendingBlock[],
-  issues: string[]
+  state: FollowQueueState
 ): Promise<Extract<PeEntrypointInstructionTarget, { kind: "return" }>> => {
   const target = getStackReturnTarget(iced, opts, block.emulationState);
   if (target.kind !== "known") return { kind: "return", reason: target.kind };
@@ -38,10 +36,8 @@ export const followReturnTarget = async (
       reader,
       opts,
       state,
-      pending,
       { kind: "followed-return", rva: target.rva },
       instructionRva,
-      issues,
       createReturnStackState(iced, block.emulationState, returnImmediateBytes(iced, instruction))
     )
   };

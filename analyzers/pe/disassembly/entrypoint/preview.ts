@@ -43,9 +43,7 @@ const decodeBlock = async (
   block: PendingBlock,
   formatter: IcedFormatter,
   importTargets: Map<number, ImportTarget>,
-  state: DecodeState,
-  pending: PendingBlock[],
-  issues: string[]
+  state: DecodeState
 ): Promise<PeEntrypointDisassemblyBlock> => {
   const decoder = new iced.Decoder(
     opts.is64Bit ? 64 : 32,
@@ -62,13 +60,13 @@ const decodeBlock = async (
       decoder.decodeOut(instr);
       const rva = toRva(instr.ip, opts.imageBase);
       if (rva == null || instr.length <= 0 || instr.code === iced.Code["INVALID"]) {
-        issues.push("Entrypoint preview stopped at an invalid or zero-length instruction.");
+        state.issues.push("Entrypoint preview stopped at an invalid or zero-length instruction.");
         recordedStopReason = true;
         break;
       }
       const offsetInPreview = rva - block.mapped.rvaStart;
       if (offsetInPreview < 0 || instr.length > block.mapped.data.length - offsetInPreview) {
-        issues.push("Entrypoint preview stopped at the readable byte boundary.");
+        state.issues.push("Entrypoint preview stopped at the readable byte boundary.");
         recordedStopReason = true;
         break;
       }
@@ -84,20 +82,18 @@ const decodeBlock = async (
         reader,
         iced,
         opts,
+        state,
         block,
         instr,
         instruction,
         importTargets,
-        rva,
-        state,
-        pending,
-        issues
+        rva
       );
       instructions.push(instruction);
       state.bytesDecoded += instr.length;
       state.instructionCount += 1;
       if (instr.flowControl !== iced.FlowControl["Next"]) {
-        issues.push(controlFlowIssue(instruction, targets));
+        state.issues.push(controlFlowIssue(instruction, targets));
         if (
           targets.importFallthrough?.kind === "current-block" ||
           targets.guardFallthrough?.kind === "current-block" ||
@@ -108,7 +104,7 @@ const decodeBlock = async (
       }
     }
     if (!recordedStopReason && instructions.length > 0 && !decoder.canDecode) {
-      issues.push("Entrypoint preview stopped at the readable byte boundary.");
+      state.issues.push("Entrypoint preview stopped at the readable byte boundary.");
     }
     return {
       kind: block.kind,
@@ -145,6 +141,8 @@ export const decodePreview = async (
   };
   const state: DecodeState = {
     blocks: [],
+    pending: [entryBlock],
+    issues,
     bytesDecoded: 0,
     instructionCount: 0,
     visitedBlocks: new Set(),
@@ -154,10 +152,9 @@ export const decodePreview = async (
     precisionCostByRva: new Map([[mapped.rvaStart, 1]]),
     precisionLimitReportedRvas: new Set()
   };
-  const pending: PendingBlock[] = [entryBlock];
   try {
-    while (pending.length > 0) {
-      const block = pending.shift();
+    while (state.pending.length > 0) {
+      const block = state.pending.shift();
       if (!block) break;
       state.queuedBlocksByKey.delete(block.key);
       state.visitedBlocks.add(block.key);
@@ -168,9 +165,7 @@ export const decodePreview = async (
         block,
         formatter,
         importTargets,
-        state,
-        pending,
-        issues
+        state
       );
       if (decoded.instructions.length) state.blocks.push(decoded);
     }

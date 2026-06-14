@@ -259,14 +259,10 @@ void test("createCustomAttributes resolves constructor TypeRef parameters before
       ...u32le(1),
       ...serString("Declaration")
     ], issues),
-    [],
-    null,
-    [],
-    [systemTypeRef()],
-    [],
-    [],
-    [memberRef],
-    []
+    {
+      modules: [], assembly: null, assemblyRefs: [], typeRefs: [systemTypeRef()],
+      typeDefs: [], methodDefs: [], memberRefs: [memberRef], moduleRefs: []
+    }
   );
 
   assert.strictEqual(attributes[0]?.fixedArguments[0]?.value, "Microsoft.CodeAnalysis.SymbolKey");
