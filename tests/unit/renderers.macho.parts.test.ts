@@ -41,45 +41,7 @@ const TWOLEVEL_NAMESPACE_FLAG = 0x80;
 // xnu/osfmk/kern/cs_blobs.h: CSMAGIC_CODEDIRECTORY.
 const CODEDIRECTORY_MAGIC = 0xfade0c02;
 
-void test("Mach-O renderer semantics expose fallback labels", () => {
-  const image = createRendererMachOImage();
-  const slice: MachOFatSlice = {
-    index: 0,
-    cputype: CPU_TYPE_ARM64,
-    cpusubtype: CPU_SUBTYPE_ARM64E,
-    offset: 0x1000,
-    size: 0x2000,
-    align: 12,
-    reserved: null,
-    image: null,
-    issues: []
-  };
-  assert.equal(magicLabel(0xfeedfacf), "MH_MAGIC_64");
-  assert.equal(magicLabel(0xcffaedfe), "MH_CIGAM_64");
-  // Not a known Mach-O magic.
-  assert.equal(magicLabel(0xdeadbeef), "0xdeadbeef");
-  assert.equal(fileTypeLabel(6), "Dynamic library");
-  // Not present in fileTypeNames.
-  assert.equal(fileTypeLabel(0xffff), "0xffff");
-  assert.equal(headerCpuLabel(image.header), "ARM64 (arm64e)");
-  assert.equal(fatSliceCpuLabel(slice), "ARM64 (arm64e)");
-  assert.equal(buildPlatformLabel(11), "visionOS");
-  // platformNames only defines the currently known platform IDs 0..12.
-  assert.equal(buildPlatformLabel(0xff), "platform 0xff");
-  assert.equal(buildToolLabel(1024), "metal");
-  // buildToolNames only defines 1..4 and 1024.
-  assert.equal(buildToolLabel(0xff), "0xff");
-  assert.equal(versionMinLabel(0x30), "watchOS"); // LC_VERSION_MIN_WATCHOS
-  assert.equal(codeSignatureBlobLabel(null), "Unknown");
-  assert.equal(codeSignatureBlobLabel(CODEDIRECTORY_MAGIC), "CodeDirectory");
-  assert.equal(codeDirectoryHashLabel(99), "hash 99");
-  assert.deepEqual(codeDirectoryExecSegLabels(null), []);
-  assert.equal(pageSizeLabel(0), "Infinite");
-  assert.equal(pageSizeLabel(12), "4 KB (4096 bytes)");
-  assert.match(formatByteSize(0x100000000), /4294967296 bytes/);
-});
-
-void test("Mach-O symbol semantics and symbol view cover bindings, descriptions, and summaries", () => {
+const createMachOSymbolViewSubject = () => {
   const values = createMachOIncidentalValues();
   const image = createRendererMachOImage();
   image.header.flags |= TWOLEVEL_NAMESPACE_FLAG;
@@ -143,9 +105,10 @@ void test("Mach-O symbol semantics and symbol view cover bindings, descriptions,
     symbols,
     issues: []
   };
+  return { image, symbols };
+};
 
-  assert.equal(sectionNameByIndex(image, 1), "__text");
-  assert.equal(sectionNameByIndex(image, 99), null);
+const expectMachOSymbolDescriptions = (symbols: MachOSymbol[]): void => {
   assert.equal(symbolTypeLabelFor(symbols[4]!), "Debug / STAB");
   assert.deepEqual(symbolDescriptionLabels(symbols[1]!), [
     "Undefined (lazy)",
@@ -153,12 +116,17 @@ void test("Mach-O symbol semantics and symbol view cover bindings, descriptions,
     "Weak reference"
   ]);
   assert.deepEqual(symbolDescriptionLabels(symbols[2]!), ["Private undefined (lazy)", "Reference to weak symbol"]);
+};
+
+const expectMachOSymbolBindings = (
+  image: ReturnType<typeof createRendererMachOImage>,
+  symbols: MachOSymbol[]
+): void => {
   assert.deepEqual(symbolBindingLabels(image, symbols[0]!), ["local"]);
   assert.deepEqual(symbolBindingLabels(image, {
     ...symbols[0]!,
     index: 7,
     name: "_localWithFlagBits",
-    // High-byte n_desc flag bits must not be treated as a dylib ordinal for locals.
     description: 0x0100,
     libraryOrdinal: 1
   }), ["local"]);
@@ -170,6 +138,52 @@ void test("Mach-O symbol semantics and symbol view cover bindings, descriptions,
     libraryOrdinal: SELF_LIBRARY_ORDINAL
   }), ["external", "This image"]);
   assert.deepEqual(symbolBindingLabels(image, symbols[3]!), ["external", "Dylib #254"]);
+};
+
+void test("Mach-O renderer semantics expose fallback labels", () => {
+  const image = createRendererMachOImage();
+  const slice: MachOFatSlice = {
+    index: 0,
+    cputype: CPU_TYPE_ARM64,
+    cpusubtype: CPU_SUBTYPE_ARM64E,
+    offset: 0x1000,
+    size: 0x2000,
+    align: 12,
+    reserved: null,
+    image: null,
+    issues: []
+  };
+  assert.equal(magicLabel(0xfeedfacf), "MH_MAGIC_64");
+  assert.equal(magicLabel(0xcffaedfe), "MH_CIGAM_64");
+  // Not a known Mach-O magic.
+  assert.equal(magicLabel(0xdeadbeef), "0xdeadbeef");
+  assert.equal(fileTypeLabel(6), "Dynamic library");
+  // Not present in fileTypeNames.
+  assert.equal(fileTypeLabel(0xffff), "0xffff");
+  assert.equal(headerCpuLabel(image.header), "ARM64 (arm64e)");
+  assert.equal(fatSliceCpuLabel(slice), "ARM64 (arm64e)");
+  assert.equal(buildPlatformLabel(11), "visionOS");
+  // platformNames only defines the currently known platform IDs 0..12.
+  assert.equal(buildPlatformLabel(0xff), "platform 0xff");
+  assert.equal(buildToolLabel(1024), "metal");
+  // buildToolNames only defines 1..4 and 1024.
+  assert.equal(buildToolLabel(0xff), "0xff");
+  assert.equal(versionMinLabel(0x30), "watchOS"); // LC_VERSION_MIN_WATCHOS
+  assert.equal(codeSignatureBlobLabel(null), "Unknown");
+  assert.equal(codeSignatureBlobLabel(CODEDIRECTORY_MAGIC), "CodeDirectory");
+  assert.equal(codeDirectoryHashLabel(99), "hash 99");
+  assert.deepEqual(codeDirectoryExecSegLabels(null), []);
+  assert.equal(pageSizeLabel(0), "Infinite");
+  assert.equal(pageSizeLabel(12), "4 KB (4096 bytes)");
+  assert.match(formatByteSize(0x100000000), /4294967296 bytes/);
+});
+
+void test("Mach-O symbol semantics and symbol view cover bindings, descriptions, and summaries", () => {
+  const { image, symbols } = createMachOSymbolViewSubject();
+  assert.equal(sectionNameByIndex(image, 1), "__text");
+  assert.equal(sectionNameByIndex(image, 99), null);
+  expectMachOSymbolDescriptions(symbols);
+  expectMachOSymbolBindings(image, symbols);
   assert.deepEqual(symbolBindingLabels(image, {
     ...symbols[1]!,
     index: 5,

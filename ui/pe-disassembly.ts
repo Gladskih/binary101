@@ -8,18 +8,8 @@ import {
   type PeInstructionSetProgress,
   type PeInstructionSetReport
 } from "../analyzers/pe/disassembly/index.js";
-import { PE32_OPTIONAL_HEADER_MAGIC, PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "../analyzers/pe/optional-header/magic.js";
-import {
-  IMAGE_FILE_MACHINE_I386,
-  getCanonicalPeMachine
-} from "../analyzers/pe/machine.js";
-import { readLoadConfigPointerRva } from "../analyzers/pe/load-config/index.js";
-import {
-  readGuardCFFunctionTableRvas,
-  readGuardEhContinuationTableRvas,
-  readGuardLongJumpTargetTableRvas,
-  readSafeSehHandlerTableRvas
-} from "../analyzers/pe/load-config/tables.js";
+import { PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "../analyzers/pe/optional-header/magic.js";
+import { collectPeDisassemblySeeds } from "./pe-disassembly-seeds.js";
 
 type AnalyzePeInstructionSets = (
   reader: FileRangeReader,
@@ -150,119 +140,20 @@ export const createPeDisassemblyController = (
       const reader = createFileRangeReader(file, 0, file.size);
       const windowsPe = isPeWindowsParseResult(pe) ? pe : null;
       const windowsOpt = windowsPe?.opt ?? null;
-      const canonicalMachine = getCanonicalPeMachine(pe.coff.Machine);
-      const entrypointRva = pe.opt?.AddressOfEntryPoint ?? 0;
-      const exportRvas =
-        windowsPe?.exports?.entries
-          ?.filter(entry => entry.rva && !entry.forwarder)
-          .map(entry => entry.rva >>> 0) ?? [];
-
-      const unwindBeginRvas =
-        windowsOpt?.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC &&
-        Array.isArray(windowsPe?.exception?.beginRvas)
-          ? windowsPe.exception.beginRvas
-              .filter(rva => Number.isSafeInteger(rva) && rva > 0)
-              .map(rva => rva >>> 0)
-          : [];
-
-      const unwindHandlerRvas =
-        windowsOpt?.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC &&
-        Array.isArray(windowsPe?.exception?.handlerRvas)
-          ? windowsPe.exception.handlerRvas
-              .filter(rva => Number.isSafeInteger(rva) && rva > 0)
-              .map(rva => rva >>> 0)
-          : [];
-
-      const tlsCallbackRvas = Array.isArray(windowsPe?.tls?.CallbackRvas)
-        ? windowsPe.tls.CallbackRvas.filter(rva => Number.isSafeInteger(rva) && rva > 0).map(rva => rva >>> 0)
-        : [];
-
-      const guardCFFunctionRvas = windowsPe?.loadcfg?.tables?.guardFid?.entries.map(entry => entry.rva) ??
-        (windowsPe?.loadcfg
-          ? await readGuardCFFunctionTableRvas(
-            reader,
-            pe.rvaToOff,
-            windowsPe.opt.ImageBase,
-            windowsPe.loadcfg.GuardCFFunctionTable,
-            windowsPe.loadcfg.GuardCFFunctionCount,
-            windowsPe.loadcfg.GuardFlags
-          ).catch(() => [])
-          : []);
-
-      const safeSehHandlerRvas =
-        windowsPe?.loadcfg?.tables?.safeSehHandler?.entries.map(entry => entry.rva) ??
-        (canonicalMachine === IMAGE_FILE_MACHINE_I386 &&
-          windowsOpt?.Magic === PE32_OPTIONAL_HEADER_MAGIC &&
-          windowsPe?.loadcfg
-          ? await readSafeSehHandlerTableRvas(
-              reader,
-              pe.rvaToOff,
-              windowsPe.opt.ImageBase,
-              windowsPe.loadcfg.SEHandlerTable,
-              windowsPe.loadcfg.SEHandlerCount
-            ).catch(() => [])
-          : []);
-
-      const extraEntrypoints: Array<{ source: string; rvas: number[] }> = [];
-      const addPointerSeed = (source: string, pointerVa: bigint | undefined): void => {
-        const rva = readLoadConfigPointerRva(windowsOpt?.ImageBase ?? 0n, pointerVa ?? 0n);
-        if (rva == null) return;
-        extraEntrypoints.push({ source, rvas: [rva] });
-      };
-
-      if (windowsPe?.loadcfg) {
-        addPointerSeed("GuardCF check function", windowsPe.loadcfg.GuardCFCheckFunctionPointer);
-        addPointerSeed("GuardCF dispatch function", windowsPe.loadcfg.GuardCFDispatchFunctionPointer);
-        addPointerSeed("GuardXFG check function", windowsPe.loadcfg.GuardXFGCheckFunctionPointer);
-        addPointerSeed("GuardXFG dispatch function", windowsPe.loadcfg.GuardXFGDispatchFunctionPointer);
-        addPointerSeed("GuardXFG table dispatch function", windowsPe.loadcfg.GuardXFGTableDispatchFunctionPointer);
-        addPointerSeed("Guard memcpy function", windowsPe.loadcfg.GuardMemcpyFunctionPointer);
-      }
-
-      const guardEhContinuationRvas =
-        windowsPe?.loadcfg?.tables?.guardEhContinuation?.entries.map(entry => entry.rva) ??
-        (windowsPe?.loadcfg
-          ? await readGuardEhContinuationTableRvas(
-            reader,
-            pe.rvaToOff,
-            windowsPe.opt.ImageBase,
-            windowsPe.loadcfg.GuardEHContinuationTable,
-            windowsPe.loadcfg.GuardEHContinuationCount,
-            windowsPe.loadcfg.GuardFlags
-          ).catch(() => [])
-          : []);
-      if (guardEhContinuationRvas.length) {
-        extraEntrypoints.push({ source: "GuardEH continuation", rvas: guardEhContinuationRvas });
-      }
-
-      const guardLongJumpTargetRvas =
-        windowsPe?.loadcfg?.tables?.guardLongJumpTarget?.entries.map(entry => entry.rva) ??
-        (windowsPe?.loadcfg
-          ? await readGuardLongJumpTargetTableRvas(
-            reader,
-            pe.rvaToOff,
-            windowsPe.opt.ImageBase,
-            windowsPe.loadcfg.GuardLongJumpTargetTable,
-            windowsPe.loadcfg.GuardLongJumpTargetCount,
-            windowsPe.loadcfg.GuardFlags
-          ).catch(() => [])
-          : []);
-      if (guardLongJumpTargetRvas.length) {
-        extraEntrypoints.push({ source: "Guard longjmp target", rvas: guardLongJumpTargetRvas });
-      }
+      const seeds = await collectPeDisassemblySeeds(file, pe);
 
       const report = await analyze(reader, {
-        coffMachine: canonicalMachine,
+        coffMachine: seeds.canonicalMachine,
         is64Bit: windowsOpt?.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC,
         imageBase: windowsOpt?.ImageBase ?? 0n,
-        entrypointRva,
-        exportRvas,
-        unwindBeginRvas,
-        unwindHandlerRvas,
-        guardCFFunctionRvas,
-        safeSehHandlerRvas,
-        tlsCallbackRvas,
-        ...(extraEntrypoints.length ? { extraEntrypoints } : {}),
+        entrypointRva: seeds.entrypointRva,
+        exportRvas: seeds.exportRvas,
+        unwindBeginRvas: seeds.unwindBeginRvas,
+        unwindHandlerRvas: seeds.unwindHandlerRvas,
+        guardCFFunctionRvas: seeds.guardCFFunctionRvas,
+        safeSehHandlerRvas: seeds.safeSehHandlerRvas,
+        tlsCallbackRvas: seeds.tlsCallbackRvas,
+        ...(seeds.extraEntrypoints.length ? { extraEntrypoints: seeds.extraEntrypoints } : {}),
         ...(windowsOpt ? { headerRvaLimit: windowsOpt.SizeOfHeaders } : {}),
         rvaToOff: pe.rvaToOff,
         sections: pe.sections,

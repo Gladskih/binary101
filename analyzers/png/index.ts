@@ -23,6 +23,73 @@ const PNG_SIG0 = 0x89504e47;
 const PNG_SIG1 = 0x0d0a1a0a;
 const MAX_CHUNKS = 4096;
 
+type PngParseState = {
+  chunks: PngChunk[];
+  issues: string[];
+  texts: PngTextChunk[];
+  ihdr: PngIhdr | null;
+  firstChunkType: string | null;
+  paletteEntries: number;
+  hasTransparency: boolean;
+  gamma: number | null;
+  iccProfile: PngIccProfile | null;
+  physical: PngPhysicalInfo | null;
+  idatChunks: number;
+  idatSize: number;
+  sawIend: boolean;
+};
+
+const parseKnownChunk = (
+  dv: DataView,
+  offset: number,
+  length: number,
+  typeString: string,
+  chunkCount: number,
+  state: PngParseState
+): void => {
+  if (typeString === "IHDR") {
+    if (state.ihdr) state.issues.push("Multiple IHDR chunks found (only one allowed).");
+    state.ihdr = parseIhdr(dv, offset, length, state.issues);
+    if (chunkCount !== 0) state.issues.push("IHDR is not the first chunk.");
+  } else if (typeString === "PLTE") {
+    state.paletteEntries = length % 3 === 0 ? length / 3 : state.paletteEntries;
+    if (length % 3 !== 0) {
+      state.issues.push("PLTE length is not a multiple of 3 bytes per entry.");
+    }
+  } else if (typeString === "IDAT") {
+    state.idatChunks += 1;
+    state.idatSize += length;
+  } else if (typeString === "tRNS") {
+    state.hasTransparency =
+      state.hasTransparency || parseTransparency(length, state.ihdr ? state.ihdr.colorType : null);
+  } else if (typeString === "pHYs" && !state.physical) {
+    state.physical = parsePhys(dv, offset, length);
+  } else if (typeString === "gAMA" && state.gamma == null) {
+    state.gamma = parseGamma(dv, offset, length);
+  } else if (typeString === "iCCP" && !state.iccProfile) {
+    state.iccProfile = parseIcc(dv, offset, length);
+  } else if ((typeString === "tEXt" || typeString === "iTXt") && state.texts.length < 8) {
+    const text = parseTextChunk(dv, offset, length);
+    if (text) state.texts.push(text);
+  } else if (typeString === "IEND") {
+    state.sawIend = true;
+  }
+};
+
+const addPngFinalIssues = (state: PngParseState): void => {
+  if (!state.ihdr) state.issues.push("IHDR chunk missing or unreadable.");
+  if (!state.sawIend) {
+    state.issues.push("IEND chunk missing; file may be truncated or extra data present.");
+  }
+  if (state.ihdr && state.ihdr.usesPalette && state.paletteEntries === 0) {
+    state.issues.push("Indexed-color images should include a PLTE palette.");
+  }
+  if (state.idatChunks === 0) state.issues.push("No IDAT chunks found; image data missing.");
+  if (state.chunks.length >= MAX_CHUNKS) {
+    state.issues.push(`Parsing stopped after ${MAX_CHUNKS} chunks to avoid runaway input.`);
+  }
+};
+
 export async function parsePng(file: File): Promise<PngParseResult | null> {
   const buffer = await file.arrayBuffer();
   const dv = new DataView(buffer);
@@ -32,28 +99,29 @@ export async function parsePng(file: File): Promise<PngParseResult | null> {
     return null;
   }
 
-  const chunks: PngChunk[] = [];
-  const issues: string[] = [];
-  const texts: PngTextChunk[] = [];
+  const state: PngParseState = {
+    chunks: [],
+    issues: [],
+    texts: [],
+    ihdr: null,
+    firstChunkType: null,
+    paletteEntries: 0,
+    hasTransparency: false,
+    gamma: null,
+    iccProfile: null,
+    physical: null,
+    idatChunks: 0,
+    idatSize: 0,
+    sawIend: false
+  };
   let offset = 8;
   let chunkCount = 0;
-  let ihdr: PngIhdr | null = null;
-  let firstChunkType: string | null = null;
-  let paletteEntries = 0;
-  let hasTransparency = false;
-  let gamma: number | null = null;
-  let iccProfile: PngIccProfile | null = null;
-  let physical: PngPhysicalInfo | null = null;
-  let idatChunks = 0;
-  let idatSize = 0;
-  let sawIend = false;
-
   while (offset + 8 <= size && chunkCount < MAX_CHUNKS) {
     const header = readChunkHeader(dv, offset);
     if (!header) break;
     const { length } = header;
     const typeString = readChunkType(dv, offset);
-    if (!firstChunkType) firstChunkType = typeString;
+    if (!state.firstChunkType) state.firstChunkType = typeString;
     const dataStart = offset + 8;
     const dataEnd = dataStart + length;
     const crcOffset = dataEnd;
@@ -68,72 +136,35 @@ export async function parsePng(file: File): Promise<PngParseResult | null> {
     };
 
     if (truncated) {
-      issues.push(`Chunk ${typeString} at ${offset} is truncated.`);
-      chunks.push(chunk);
+      state.issues.push(`Chunk ${typeString} at ${offset} is truncated.`);
+      state.chunks.push(chunk);
       break;
     }
 
-    if (typeString === "IHDR") {
-      if (ihdr) issues.push("Multiple IHDR chunks found (only one allowed).");
-      ihdr = parseIhdr(dv, offset, length, issues);
-      if (chunkCount !== 0) issues.push("IHDR is not the first chunk.");
-    } else if (typeString === "PLTE") {
-      paletteEntries = length % 3 === 0 ? length / 3 : paletteEntries;
-      if (length % 3 !== 0) {
-        issues.push("PLTE length is not a multiple of 3 bytes per entry.");
-      }
-    } else if (typeString === "IDAT") {
-      idatChunks += 1;
-      idatSize += length;
-    } else if (typeString === "tRNS") {
-      hasTransparency =
-        hasTransparency || parseTransparency(length, ihdr ? ihdr.colorType : null);
-    } else if (typeString === "pHYs" && !physical) {
-      physical = parsePhys(dv, offset, length);
-    } else if (typeString === "gAMA" && gamma == null) {
-      gamma = parseGamma(dv, offset, length);
-    } else if (typeString === "iCCP" && !iccProfile) {
-      iccProfile = parseIcc(dv, offset, length);
-    } else if ((typeString === "tEXt" || typeString === "iTXt") && texts.length < 8) {
-      const text = parseTextChunk(dv, offset, length);
-      if (text) texts.push(text);
-    } else if (typeString === "IEND") {
-      sawIend = true;
-    }
-
-    chunks.push(chunk);
+    parseKnownChunk(dv, offset, length, typeString, chunkCount, state);
+    state.chunks.push(chunk);
     chunkCount += 1;
     offset = nextOffset;
     if (typeString === "IEND") break;
   }
 
-  if (!ihdr) issues.push("IHDR chunk missing or unreadable.");
-  if (!sawIend) {
-    issues.push("IEND chunk missing; file may be truncated or extra data present.");
-  }
-  if (ihdr && ihdr.usesPalette && paletteEntries === 0) {
-    issues.push("Indexed-color images should include a PLTE palette.");
-  }
-  if (idatChunks === 0) issues.push("No IDAT chunks found; image data missing.");
-  if (chunks.length >= MAX_CHUNKS) {
-    issues.push(`Parsing stopped after ${MAX_CHUNKS} chunks to avoid runaway input.`);
-  }
+  addPngFinalIssues(state);
 
   return {
     size,
-    ihdr,
-    chunkCount: chunks.length,
-    firstChunkType,
-    paletteEntries,
-    hasTransparency: hasTransparency || (ihdr ? ihdr.hasAlphaChannel : false),
-    gamma,
-    iccProfile,
-    physical,
-    idatChunks,
-    idatSize,
-    sawIend,
-    texts,
-    chunks,
-    issues
+    ihdr: state.ihdr,
+    chunkCount: state.chunks.length,
+    firstChunkType: state.firstChunkType,
+    paletteEntries: state.paletteEntries,
+    hasTransparency: state.hasTransparency || (state.ihdr ? state.ihdr.hasAlphaChannel : false),
+    gamma: state.gamma,
+    iccProfile: state.iccProfile,
+    physical: state.physical,
+    idatChunks: state.idatChunks,
+    idatSize: state.idatSize,
+    sawIend: state.sawIend,
+    texts: state.texts,
+    chunks: state.chunks,
+    issues: state.issues
   };
 }

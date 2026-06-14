@@ -63,65 +63,92 @@ const verifyCountersignature = async (
     info.message = "Countersigner certificate was not found in the embedded chain.";
     return info;
   }
+  await verifyCountersignatureDigest(label, parentSigner, counterSigner, checks, info);
+  await verifyCountersignatureSignature(
+    label,
+    parentSigner,
+    counterSigner,
+    countersignerCertificate,
+    checks,
+    warnings,
+    info
+  );
+  const certificatePathIndexes = await attachCountersignatureCertificateChecks(
+    label,
+    countersignerCertificate,
+    certificates,
+    embeddedCountersignerCertificateIndex,
+    signingTime,
+    checks
+  );
+  if (certificatePathIndexes.length) info.certificatePathIndexes = certificatePathIndexes;
+  return info;
+};
 
+const verifyCountersignatureDigest = async (
+  label: string,
+  parentSigner: SignerInfo,
+  counterSigner: SignerInfo,
+  checks: AuthenticodeVerificationCheck[],
+  info: AuthenticodeCounterSignatureInfo
+): Promise<void> => {
   const parentSignatureBytes = parentSigner.signature.valueBlock.valueHexView;
   const messageDigestValue = getByteView(getAttributeValue(counterSigner, CMS_MESSAGE_DIGEST_OID));
-  if (messageDigestValue?.length) {
-    const shaAlgorithm = resolveDigestAlgorithm(counterSigner.digestAlgorithm.algorithmId);
-    if (!shaAlgorithm) {
-      addCheck(
-        checks,
-        `${label}-message-digest`,
-        "unknown",
-        `${label}: signed attributes message digest matches the parent signature`,
-        `Unsupported digest algorithm OID ${counterSigner.digestAlgorithm.algorithmId}.`
-      );
-    } else {
-      const digestBytes = new Uint8Array(
-        await crypto.subtle.digest(shaAlgorithm, toArrayBuffer(parentSignatureBytes))
-      );
-      const digestMatches = equalBytes(digestBytes, messageDigestValue);
-      info.messageDigestVerified = digestMatches;
-      addCheck(
-        checks,
-        `${label}-message-digest`,
-        digestMatches ? "pass" : "fail",
-        `${label}: signed attributes message digest matches the parent signature`,
-        `Expected ${bufferToHex(messageDigestValue)}, computed ${bufferToHex(digestBytes)}`
-      );
-    }
-  } else {
+  if (!messageDigestValue?.length) {
     addCheck(checks, `${label}-message-digest`, "unknown", `${label}: signed attributes message digest matches the parent signature`, "messageDigest signed attribute is absent.");
+    return;
   }
+  const shaAlgorithm = resolveDigestAlgorithm(counterSigner.digestAlgorithm.algorithmId);
+  if (!shaAlgorithm) {
+    addCheck(
+      checks,
+      `${label}-message-digest`,
+      "unknown",
+      `${label}: signed attributes message digest matches the parent signature`,
+      `Unsupported digest algorithm OID ${counterSigner.digestAlgorithm.algorithmId}.`
+    );
+    return;
+  }
+  const digestBytes = new Uint8Array(await crypto.subtle.digest(shaAlgorithm, toArrayBuffer(parentSignatureBytes)));
+  const digestMatches = equalBytes(digestBytes, messageDigestValue);
+  info.messageDigestVerified = digestMatches;
+  addCheck(
+    checks,
+    `${label}-message-digest`,
+    digestMatches ? "pass" : "fail",
+    `${label}: signed attributes message digest matches the parent signature`,
+    `Expected ${bufferToHex(messageDigestValue)}, computed ${bufferToHex(digestBytes)}`
+  );
+};
 
+const verifyCountersignatureSignature = async (
+  label: string,
+  parentSigner: SignerInfo,
+  counterSigner: SignerInfo,
+  countersignerCertificate: Certificate,
+  checks: AuthenticodeVerificationCheck[],
+  warnings: string[],
+  info: AuthenticodeCounterSignatureInfo
+): Promise<void> => {
   const cryptoEngine = getCrypto(true);
   if (!cryptoEngine) {
     addCheck(checks, `${label}-signature`, "unknown", `${label}: CMS signature verifies`, "PKI.js crypto engine is unavailable.");
     info.message = "PKI.js crypto engine is unavailable.";
-    return info;
+    return;
   }
-
   const shaAlgorithm = resolveDigestAlgorithm(counterSigner.digestAlgorithm.algorithmId);
   normalizeLegacySignatureAlgorithm(counterSigner.signatureAlgorithm);
   const verificationData = counterSigner.signedAttrs
     ? counterSigner.signedAttrs.encodedValue
-    : toArrayBuffer(parentSignatureBytes);
+    : toArrayBuffer(parentSigner.signature.valueBlock.valueHexView);
   try {
-    const verified =
-      counterSigner.signatureAlgorithm.algorithmId === RSA_ENCRYPTION_OID && shaAlgorithm
-        ? await cryptoEngine.verifyWithPublicKey(
-            verificationData,
-            counterSigner.signature,
-            countersignerCertificate.subjectPublicKeyInfo,
-            counterSigner.signatureAlgorithm,
-            shaAlgorithm
-          )
-        : await cryptoEngine.verifyWithPublicKey(
-            verificationData,
-            counterSigner.signature,
-            countersignerCertificate.subjectPublicKeyInfo,
-            counterSigner.signatureAlgorithm
-          );
+    const verified = await cryptoEngine.verifyWithPublicKey(
+      verificationData,
+      counterSigner.signature,
+      countersignerCertificate.subjectPublicKeyInfo,
+      counterSigner.signatureAlgorithm,
+      counterSigner.signatureAlgorithm.algorithmId === RSA_ENCRYPTION_OID ? shaAlgorithm : undefined
+    );
     info.signatureVerified = verified;
     addCheck(checks, `${label}-signature`, verified ? "pass" : "fail", `${label}: CMS signature verifies`);
   } catch (error) {
@@ -130,13 +157,17 @@ const verifyCountersignature = async (
     addCheck(checks, `${label}-signature`, "unknown", `${label}: CMS signature verifies`, message);
     warnings.push(`${label}: ${message}`);
   }
+};
 
-  addSigningKeyUsageCheck(
-    checks,
-    `${label}-key-usage`,
-    `${label}: certificate permits digital signatures`,
-    countersignerCertificate
-  );
+const attachCountersignatureCertificateChecks = async (
+  label: string,
+  countersignerCertificate: Certificate,
+  certificates: Certificate[],
+  embeddedCountersignerCertificateIndex: number,
+  signingTime: string | undefined,
+  checks: AuthenticodeVerificationCheck[]
+): Promise<number[]> => {
+  addSigningKeyUsageCheck(checks, `${label}-key-usage`, `${label}: certificate permits digital signatures`, countersignerCertificate);
   addExtendedKeyUsageCheck(
     checks,
     `${label}-eku`,
@@ -145,15 +176,7 @@ const verifyCountersignature = async (
     TIME_STAMPING_EKU_OID,
     "Extended Key Usage extension is absent."
   );
-  const certificatePathIndexes = await attachTimestampPathChecks(
-    checks,
-    label,
-    certificates,
-    embeddedCountersignerCertificateIndex,
-    signingTime
-  );
-  if (certificatePathIndexes.length) info.certificatePathIndexes = certificatePathIndexes;
-  return info;
+  return attachTimestampPathChecks(checks, label, certificates, embeddedCountersignerCertificateIndex, signingTime);
 };
 
 export const readCountersignatures = async (

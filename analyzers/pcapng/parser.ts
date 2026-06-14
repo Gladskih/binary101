@@ -40,6 +40,219 @@ const maybeEnableEthernetSummary = (
     : null;
 };
 
+type PcapNgBlockHeader = {
+  blockType: number;
+  blockLength: number;
+  blockEnd: number;
+  littleEndian: boolean;
+};
+
+type PcapNgParserState = {
+  sections: PcapNgParseResult["sections"];
+  interfaceStates: SectionState["interfaces"];
+  blocks: PcapNgParseResult["blocks"];
+  nameResolution: PcapNgParseResult["nameResolution"];
+  globalTraffic: ReturnType<typeof createMutableTrafficStats>;
+  linkLayer: PcapLinkLayerSummary | null;
+  currentSection: SectionState | null;
+  truncatedFile: boolean;
+};
+
+const createPcapNgParserState = (): PcapNgParserState => ({
+  sections: [],
+  interfaceStates: [],
+  blocks: createBlockSummary(),
+  nameResolution: createNameResolutionSummary(),
+  globalTraffic: createMutableTrafficStats(),
+  linkLayer: null,
+  currentSection: null,
+  truncatedFile: false
+});
+
+const readPcapNgBlockHeader = async (
+  reader: ReturnType<typeof createFileRangeReader>,
+  offset: number,
+  fileSize: number,
+  currentSection: SectionState | null,
+  pushIssue: (message: string) => void
+): Promise<PcapNgBlockHeader | null> => {
+  const headerView = await reader.read(offset, BLOCK_HEADER_BYTES);
+  if (headerView.byteLength < BLOCK_PREFIX_BYTES) return null;
+  const isSectionHeader = headerView.getUint32(0, false) === SHB_TYPE;
+  const littleEndian = isSectionHeader ? readSectionEndianness(headerView) : currentSection?.littleEndian ?? null;
+  if (littleEndian == null) {
+    pushIssue(`Block at ${formatOffset(offset)} appears before a valid Section Header Block.`);
+    return null;
+  }
+  if (headerView.byteLength < BLOCK_HEADER_BYTES) {
+    pushIssue(`Block header at ${formatOffset(offset)} is truncated (${headerView.byteLength}/${BLOCK_HEADER_BYTES} bytes).`);
+    return null;
+  }
+  const blockLength = headerView.getUint32(4, littleEndian);
+  const blockEnd = offset + blockLength;
+  if (blockLength < BLOCK_HEADER_BYTES || blockLength % PCAPNG_ALIGNMENT_BYTES !== 0) {
+    pushIssue(`Block at ${formatOffset(offset)} has invalid Block Total Length ${blockLength}.`);
+    return null;
+  }
+  if (!Number.isFinite(blockEnd) || blockEnd <= offset) {
+    pushIssue(`Block at ${formatOffset(offset)} does not advance the file offset.`);
+    return null;
+  }
+  if (blockEnd > fileSize) {
+    pushIssue(`Block at ${formatOffset(offset)} runs past EOF (${blockLength} bytes).`);
+    return null;
+  }
+  const trailingLength = await readBlockTailLength(reader, blockEnd, littleEndian);
+  if (trailingLength != null && trailingLength !== blockLength) {
+    pushIssue(`Block at ${formatOffset(offset)} has mismatched trailing Block Total Length ${trailingLength} (expected ${blockLength}).`);
+  }
+  return {
+    blockType: isSectionHeader ? SHB_TYPE : headerView.getUint32(0, littleEndian),
+    blockLength,
+    blockEnd,
+    littleEndian
+  };
+};
+
+const parsePcapNgPacketBlock = async (
+  reader: ReturnType<typeof createFileRangeReader>,
+  offset: number,
+  blockLength: number,
+  state: PcapNgParserState,
+  pushIssue: (message: string) => void
+): Promise<void> => {
+  if (!state.currentSection) {
+    pushIssue(`Packet Block at ${formatOffset(offset)} appears outside a section.`);
+    return;
+  }
+  state.linkLayer = maybeEnableEthernetSummary(state.linkLayer, state.currentSection);
+  await parseLegacyPacketBlock(
+    reader,
+    offset,
+    blockLength,
+    state.currentSection,
+    state.globalTraffic,
+    state.linkLayer,
+    pushIssue
+  );
+};
+
+const dispatchPcapNgBlock = async (
+  reader: ReturnType<typeof createFileRangeReader>,
+  offset: number,
+  header: PcapNgBlockHeader,
+  state: PcapNgParserState,
+  pushIssue: (message: string) => void
+): Promise<void> => {
+  state.blocks.totalBlocks += 1;
+  if (header.blockType === SHB_TYPE) {
+    const parsed = await parseSectionHeaderBlock(
+      reader,
+      offset,
+      header.blockLength,
+      state.sections.length,
+      header.littleEndian,
+      pushIssue
+    );
+    state.sections.push(parsed.summary);
+    state.currentSection = parsed.state;
+  } else if (header.blockType === IDB_TYPE) {
+    state.blocks.interfaceDescriptionBlocks += 1;
+    if (!state.currentSection) pushIssue(`Interface Description Block at ${formatOffset(offset)} appears outside a section.`);
+    else {
+      const interfaceState = await parseInterfaceDescriptionBlock(
+        reader,
+        offset,
+        header.blockLength,
+        state.currentSection,
+        pushIssue
+      );
+      if (interfaceState) {
+        state.currentSection.interfaces.push(interfaceState);
+        state.interfaceStates.push(interfaceState);
+      }
+    }
+  } else {
+    await dispatchPcapNgDataBlock(reader, offset, header, state, pushIssue);
+  }
+};
+
+const dispatchPcapNgDataBlock = async (
+  reader: ReturnType<typeof createFileRangeReader>,
+  offset: number,
+  header: PcapNgBlockHeader,
+  state: PcapNgParserState,
+  pushIssue: (message: string) => void
+): Promise<void> => {
+  if (header.blockType === ENHANCED_PACKET_BLOCK_TYPE || header.blockType === SIMPLE_PACKET_BLOCK_TYPE) {
+    await dispatchPcapNgModernPacketBlock(reader, offset, header, state, pushIssue);
+  } else if (header.blockType === PACKET_BLOCK_TYPE) {
+    state.blocks.packetBlocks += 1;
+    await parsePcapNgPacketBlock(reader, offset, header.blockLength, state, pushIssue);
+  } else if (header.blockType === NAME_RESOLUTION_BLOCK_TYPE) {
+    state.blocks.nameResolutionBlocks += 1;
+    if (!state.currentSection) pushIssue(`Name Resolution Block at ${formatOffset(offset)} appears outside a section.`);
+    else {
+      await parseNameResolutionBlock(
+        reader,
+        offset,
+        header.blockLength,
+        state.currentSection,
+        state.nameResolution,
+        pushIssue
+      );
+    }
+  } else if (header.blockType === INTERFACE_STATISTICS_BLOCK_TYPE) {
+    state.blocks.interfaceStatisticsBlocks += 1;
+    if (!state.currentSection) pushIssue(`Interface Statistics Block at ${formatOffset(offset)} appears outside a section.`);
+    else await parseInterfaceStatisticsBlock(reader, offset, header.blockLength, state.currentSection, pushIssue);
+  } else if (header.blockType === DECRYPTION_SECRETS_BLOCK_TYPE) state.blocks.decryptionSecretsBlocks += 1;
+  else if (header.blockType === CUSTOM_BLOCK_COPYABLE_TYPE || header.blockType === CUSTOM_BLOCK_NOCOPY_TYPE) {
+    state.blocks.customBlocks += 1;
+  }
+  else state.blocks.unknownBlocks += 1;
+};
+
+const dispatchPcapNgModernPacketBlock = async (
+  reader: ReturnType<typeof createFileRangeReader>,
+  offset: number,
+  header: PcapNgBlockHeader,
+  state: PcapNgParserState,
+  pushIssue: (message: string) => void
+): Promise<void> => {
+  const isEnhanced = header.blockType === ENHANCED_PACKET_BLOCK_TYPE;
+  if (isEnhanced) state.blocks.enhancedPacketBlocks += 1;
+  else state.blocks.simplePacketBlocks += 1;
+  if (!state.currentSection) {
+    pushIssue(
+      `${isEnhanced ? "Enhanced Packet" : "Simple Packet"} Block at ${formatOffset(offset)} appears outside a section.`
+    );
+    return;
+  }
+  state.linkLayer = maybeEnableEthernetSummary(state.linkLayer, state.currentSection);
+  if (isEnhanced) {
+    await parseEnhancedPacketBlock(
+      reader,
+      offset,
+      header.blockLength,
+      state.currentSection,
+      state.globalTraffic,
+      state.linkLayer,
+      pushIssue
+    );
+  } else {
+    await parseSimplePacketBlock(
+      reader,
+      offset,
+      header.blockLength,
+      state.currentSection,
+      state.globalTraffic,
+      state.linkLayer,
+      pushIssue
+    );
+  }
+};
+
 export const parsePcapNg = async (
   file: File,
   pushIssue: (message: string) => void
@@ -47,168 +260,20 @@ export const parsePcapNg = async (
   const reader = createFileRangeReader(file, 0, file.size);
   const firstBytes = await reader.read(0, BLOCK_HEADER_BYTES);
   if (firstBytes.byteLength < 4 || firstBytes.getUint32(0, false) !== SHB_TYPE) return null;
-
-  const sections = [];
-  const interfaceStates = [];
-  const blocks = createBlockSummary();
-  const nameResolution = createNameResolutionSummary();
-  const globalTraffic = createMutableTrafficStats();
-  let linkLayer: PcapLinkLayerSummary | null = null;
-  let currentSection: SectionState | null = null;
-  let truncatedFile = false;
+  const state = createPcapNgParserState();
   let offset = 0;
-
-  // All pcapng blocks start with Block Type + Block Total Length, i.e. 8 octets.
-  // Source: draft-ietf-opsawg-pcapng-05 Section 3.1,
-  // https://datatracker.ietf.org/doc/draft-ietf-opsawg-pcapng/
   while (offset + BLOCK_PREFIX_BYTES <= file.size) {
-    const headerView = await reader.read(offset, BLOCK_HEADER_BYTES);
-    if (headerView.byteLength < BLOCK_PREFIX_BYTES) break;
-
-    const isSectionHeader = headerView.getUint32(0, false) === SHB_TYPE;
-    const littleEndian = isSectionHeader ? readSectionEndianness(headerView) : currentSection?.littleEndian ?? null;
-    if (littleEndian == null) {
-      truncatedFile = true;
-      pushIssue(`Block at ${formatOffset(offset)} appears before a valid Section Header Block.`);
+    const header = await readPcapNgBlockHeader(reader, offset, file.size, state.currentSection, pushIssue);
+    if (!header) {
+      state.truncatedFile = true;
       break;
     }
-    if (headerView.byteLength < BLOCK_HEADER_BYTES) {
-      truncatedFile = true;
-      pushIssue(`Block header at ${formatOffset(offset)} is truncated (${headerView.byteLength}/${BLOCK_HEADER_BYTES} bytes).`);
-      break;
-    }
-
-    const blockType = isSectionHeader ? SHB_TYPE : headerView.getUint32(0, littleEndian);
-    const blockLength = headerView.getUint32(4, littleEndian);
-    const blockEnd = offset + blockLength;
-    if (
-      blockLength < BLOCK_HEADER_BYTES ||
-      blockLength % PCAPNG_ALIGNMENT_BYTES !== 0
-    ) {
-      truncatedFile = true;
-      pushIssue(`Block at ${formatOffset(offset)} has invalid Block Total Length ${blockLength}.`);
-      break;
-    }
-    if (!Number.isFinite(blockEnd) || blockEnd <= offset) {
-      truncatedFile = true;
-      pushIssue(`Block at ${formatOffset(offset)} does not advance the file offset.`);
-      break;
-    }
-    if (blockEnd > file.size) {
-      truncatedFile = true;
-      pushIssue(`Block at ${formatOffset(offset)} runs past EOF (${blockLength} bytes).`);
-      break;
-    }
-    const trailingLength = await readBlockTailLength(reader, blockEnd, littleEndian);
-    if (trailingLength != null && trailingLength !== blockLength) {
-      pushIssue(`Block at ${formatOffset(offset)} has mismatched trailing Block Total Length ${trailingLength} (expected ${blockLength}).`);
-    }
-
-    blocks.totalBlocks += 1;
-    if (blockType === SHB_TYPE) {
-      const parsed = await parseSectionHeaderBlock(
-        reader,
-        offset,
-        blockLength,
-        sections.length,
-        littleEndian,
-        pushIssue
-      );
-      sections.push(parsed.summary);
-      currentSection = parsed.state;
-    } else if (blockType === IDB_TYPE) {
-      blocks.interfaceDescriptionBlocks += 1;
-      if (!currentSection) pushIssue(`Interface Description Block at ${formatOffset(offset)} appears outside a section.`);
-      else {
-        const interfaceState = await parseInterfaceDescriptionBlock(
-          reader,
-          offset,
-          blockLength,
-          currentSection,
-          pushIssue
-        );
-        if (interfaceState) {
-          currentSection.interfaces.push(interfaceState);
-          interfaceStates.push(interfaceState);
-        }
-      }
-    } else if (blockType === ENHANCED_PACKET_BLOCK_TYPE) {
-      blocks.enhancedPacketBlocks += 1;
-      if (!currentSection) pushIssue(`Enhanced Packet Block at ${formatOffset(offset)} appears outside a section.`);
-      else {
-        linkLayer = maybeEnableEthernetSummary(linkLayer, currentSection);
-        await parseEnhancedPacketBlock(
-          reader,
-          offset,
-          blockLength,
-          currentSection,
-          globalTraffic,
-          linkLayer,
-          pushIssue
-        );
-      }
-    } else if (blockType === SIMPLE_PACKET_BLOCK_TYPE) {
-      blocks.simplePacketBlocks += 1;
-      if (!currentSection) pushIssue(`Simple Packet Block at ${formatOffset(offset)} appears outside a section.`);
-      else {
-        linkLayer = maybeEnableEthernetSummary(linkLayer, currentSection);
-        await parseSimplePacketBlock(
-          reader,
-          offset,
-          blockLength,
-          currentSection,
-          globalTraffic,
-          linkLayer,
-          pushIssue
-        );
-      }
-    } else if (blockType === PACKET_BLOCK_TYPE) {
-      blocks.packetBlocks += 1;
-      if (!currentSection) pushIssue(`Packet Block at ${formatOffset(offset)} appears outside a section.`);
-      else {
-        linkLayer = maybeEnableEthernetSummary(linkLayer, currentSection);
-        await parseLegacyPacketBlock(
-          reader,
-          offset,
-          blockLength,
-          currentSection,
-          globalTraffic,
-          linkLayer,
-          pushIssue
-        );
-      }
-    } else if (blockType === NAME_RESOLUTION_BLOCK_TYPE) {
-      blocks.nameResolutionBlocks += 1;
-      if (!currentSection) pushIssue(`Name Resolution Block at ${formatOffset(offset)} appears outside a section.`);
-      else {
-        await parseNameResolutionBlock(
-          reader,
-          offset,
-          blockLength,
-          currentSection,
-          nameResolution,
-          pushIssue
-        );
-      }
-    } else if (blockType === INTERFACE_STATISTICS_BLOCK_TYPE) {
-      blocks.interfaceStatisticsBlocks += 1;
-      if (!currentSection) pushIssue(`Interface Statistics Block at ${formatOffset(offset)} appears outside a section.`);
-      else {
-        await parseInterfaceStatisticsBlock(reader, offset, blockLength, currentSection, pushIssue);
-      }
-    } else if (blockType === DECRYPTION_SECRETS_BLOCK_TYPE) {
-      blocks.decryptionSecretsBlocks += 1;
-    } else if (blockType === CUSTOM_BLOCK_COPYABLE_TYPE || blockType === CUSTOM_BLOCK_NOCOPY_TYPE) {
-      blocks.customBlocks += 1;
-    } else {
-      blocks.unknownBlocks += 1;
-    }
-
-    offset = blockEnd;
+    await dispatchPcapNgBlock(reader, offset, header, state, pushIssue);
+    offset = header.blockEnd;
   }
 
   if (offset < file.size) {
-    truncatedFile = true;
+    state.truncatedFile = true;
     pushIssue(`File ends with ${file.size - offset} trailing bytes after the last complete block.`);
   }
 
@@ -216,12 +281,12 @@ export const parsePcapNg = async (
     isPcap: true,
     format: "pcapng",
     fileSize: file.size,
-    sections,
-    interfaces: finalizeInterfaces(interfaceStates),
-    blocks,
-    nameResolution,
-    packets: finalizePacketStats(globalTraffic, truncatedFile),
-    linkLayer,
+    sections: state.sections,
+    interfaces: finalizeInterfaces(state.interfaceStates),
+    blocks: state.blocks,
+    nameResolution: state.nameResolution,
+    packets: finalizePacketStats(state.globalTraffic, state.truncatedFile),
+    linkLayer: state.linkLayer,
     issues: []
   };
 };

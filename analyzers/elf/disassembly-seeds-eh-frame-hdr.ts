@@ -150,6 +150,105 @@ const locateEhFrameHdr = (
   return { fileOffset: sec.offset, fileSize: sec.size, vaddr: sec.addr };
 };
 
+type EhFrameHdrDecodedTable = {
+  cursor: number;
+  tableEnc: number;
+  count: number;
+  dataRelBase: bigint;
+};
+
+const decodeEhFrameHdrTableStart = (
+  bytes: Uint8Array<ArrayBuffer>,
+  dv: DataView,
+  littleEndian: boolean,
+  pointerSize: 4 | 8,
+  hdrVaddr: bigint,
+  issues: string[]
+): EhFrameHdrDecodedTable | null => {
+  if (dv.byteLength < 4) return null;
+  const version = dv.getUint8(0);
+  if (version !== 1) {
+    issues.push(`.eh_frame_hdr has unexpected version ${version}.`);
+    return null;
+  }
+  const tableEnc = dv.getUint8(3);
+  if (tableEnc === DW_EH_PE_omit) return null;
+  let cursor = 4;
+  const dataRelBase = hdrVaddr;
+  const ehFramePtr = readEncodedPointer({
+    bytes,
+    dv,
+    offset: cursor,
+    encoding: dv.getUint8(1),
+    littleEndian,
+    pointerSize,
+    fieldVaddr: hdrVaddr + BigInt(cursor),
+    dataRelBase
+  });
+  if (!ehFramePtr) {
+    issues.push(".eh_frame_hdr uses an unsupported eh_frame_ptr encoding.");
+    return null;
+  }
+  cursor += ehFramePtr.size;
+  const fdeCount = readEncodedPointer({
+    bytes,
+    dv,
+    offset: cursor,
+    encoding: dv.getUint8(2),
+    littleEndian,
+    pointerSize,
+    fieldVaddr: hdrVaddr + BigInt(cursor),
+    dataRelBase
+  });
+  if (!fdeCount || fdeCount.value == null) {
+    issues.push(".eh_frame_hdr uses an unsupported fde_count encoding.");
+    return null;
+  }
+  const count = Number(fdeCount.value);
+  if (!Number.isSafeInteger(count) || count <= 0) return null;
+  return { cursor: cursor + fdeCount.size, tableEnc, count, dataRelBase };
+};
+
+const collectEhFrameHdrStartPcs = (
+  bytes: Uint8Array<ArrayBuffer>,
+  dv: DataView,
+  littleEndian: boolean,
+  pointerSize: 4 | 8,
+  hdrVaddr: bigint,
+  table: EhFrameHdrDecodedTable
+): bigint[] => {
+  const vaddrs: bigint[] = [];
+  let cursor = table.cursor;
+  for (let index = 0; index < table.count; index += 1) {
+    const startPc = readEncodedPointer({
+      bytes,
+      dv,
+      offset: cursor,
+      encoding: table.tableEnc,
+      littleEndian,
+      pointerSize,
+      fieldVaddr: hdrVaddr + BigInt(cursor),
+      dataRelBase: table.dataRelBase
+    });
+    if (!startPc) break;
+    cursor += startPc.size;
+    const fdePtr = readEncodedPointer({
+      bytes,
+      dv,
+      offset: cursor,
+      encoding: table.tableEnc,
+      littleEndian,
+      pointerSize,
+      fieldVaddr: hdrVaddr + BigInt(cursor),
+      dataRelBase: table.dataRelBase
+    });
+    if (!fdePtr) break;
+    cursor += fdePtr.size;
+    if (startPc.value != null && startPc.value !== 0n) vaddrs.push(startPc.value);
+  }
+  return vaddrs;
+};
+
 export async function collectElfDisassemblySeedsFromEhFrameHdr(opts: {
   file: File;
   programHeaders: ElfProgramHeader[];
@@ -168,87 +267,19 @@ export async function collectElfDisassemblySeedsFromEhFrameHdr(opts: {
   if (start >= opts.file.size || end <= start) return [];
   const bytes = new Uint8Array(await opts.file.slice(start, end).arrayBuffer());
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (dv.byteLength < 4) return [];
-
-  const version = dv.getUint8(0);
-  if (version !== 1) {
-    opts.issues.push(`.eh_frame_hdr has unexpected version ${version}.`);
-    return [];
-  }
-  const ehFramePtrEnc = dv.getUint8(1);
-  const fdeCountEnc = dv.getUint8(2);
-  const tableEnc = dv.getUint8(3);
-  if (tableEnc === DW_EH_PE_omit) return [];
-
   const pointerSize: 4 | 8 = opts.is64 ? 8 : 4;
-  let cursor = 4;
-  const dataRelBase = location.vaddr;
-
-  const ehFramePtr = readEncodedPointer({
+  const table = decodeEhFrameHdrTableStart(
+    bytes, dv, opts.littleEndian, pointerSize, location.vaddr, opts.issues
+  );
+  if (!table) return [];
+  const vaddrs = collectEhFrameHdrStartPcs(
     bytes,
     dv,
-    offset: cursor,
-    encoding: ehFramePtrEnc,
-    littleEndian: opts.littleEndian,
+    opts.littleEndian,
     pointerSize,
-    fieldVaddr: location.vaddr + BigInt(cursor),
-    dataRelBase
-  });
-  if (!ehFramePtr) {
-    opts.issues.push(".eh_frame_hdr uses an unsupported eh_frame_ptr encoding.");
-    return [];
-  }
-  cursor += ehFramePtr.size;
-
-  const fdeCount = readEncodedPointer({
-    bytes,
-    dv,
-    offset: cursor,
-    encoding: fdeCountEnc,
-    littleEndian: opts.littleEndian,
-    pointerSize,
-    fieldVaddr: location.vaddr + BigInt(cursor),
-    dataRelBase
-  });
-  if (!fdeCount || fdeCount.value == null) {
-    opts.issues.push(".eh_frame_hdr uses an unsupported fde_count encoding.");
-    return [];
-  }
-  cursor += fdeCount.size;
-
-  const decodedCount = Number(fdeCount.value);
-  if (!Number.isSafeInteger(decodedCount) || decodedCount <= 0) return [];
-
-  const vaddrs: bigint[] = [];
-  for (let index = 0; index < decodedCount; index += 1) {
-    const startPc = readEncodedPointer({
-      bytes,
-      dv,
-      offset: cursor,
-      encoding: tableEnc,
-      littleEndian: opts.littleEndian,
-      pointerSize,
-      fieldVaddr: location.vaddr + BigInt(cursor),
-      dataRelBase
-    });
-    if (!startPc) break;
-    cursor += startPc.size;
-    const fdePtr = readEncodedPointer({
-      bytes,
-      dv,
-      offset: cursor,
-      encoding: tableEnc,
-      littleEndian: opts.littleEndian,
-      pointerSize,
-      fieldVaddr: location.vaddr + BigInt(cursor),
-      dataRelBase
-    });
-    if (!fdePtr) break;
-    cursor += fdePtr.size;
-
-    if (startPc.value != null && startPc.value !== 0n) vaddrs.push(startPc.value);
-  }
-
+    location.vaddr,
+    table
+  );
   if (vaddrs.length === 0) return [];
   return [{ source: ".eh_frame_hdr start PCs", vaddrs }];
 }

@@ -23,6 +23,41 @@ const renderInstructionPanelStart = (): string =>
 
 const renderInstructionPanelEnd = (): string => "</div></details>";
 
+const renderKnownFeatureRows = (countsById: Map<string, number>): string => {
+  const rows = KNOWN_CPUID_FEATURES.map(id => {
+    const countValue = countsById.get(id) || 0;
+    const label = escapeHtml(formatCpuidLabel(id));
+    const description = escapeHtml(describeCpuidFeature(id));
+    const title = escapeHtml(`CpuidFeature.${id}`);
+    const chipClass = countValue > 0 ? "opt sel" : "opt dim";
+    const count = countValue > 0 ? escapeHtml(String(countValue)) : `<span class="dim">0</span>`;
+    return (
+      `<tr><td><span class="${chipClass}" title="${title}">${label}</span></td>` +
+      `<td>${count}</td><td>${description}</td></tr>`
+    );
+  });
+  return rows.join("");
+};
+
+const renderPendingFeatureRows = (): string => {
+  const rows = KNOWN_CPUID_FEATURES.map(id => {
+    const label = escapeHtml(formatCpuidLabel(id));
+    const description = escapeHtml(describeCpuidFeature(id));
+    const title = escapeHtml(`CpuidFeature.${id}`);
+    const chipId = escapeHtml(`${CHIP_ID_PREFIX}${id}`);
+    const countId = escapeHtml(`${COUNT_ID_PREFIX}${id}`);
+    return (
+      `<tr><td><span class="opt dim" id="${chipId}" title="${title}">${label}</span></td>` +
+      `<td class="dim" id="${countId}">0</td><td>${description}</td></tr>`
+    );
+  });
+  return rows.join("");
+};
+
+const renderFeatureTable = (rows: string): string =>
+  `<table class="table" style="margin-top:.35rem"><thead><tr>` +
+  `<th>Set</th><th>Instr.</th><th>What it is</th></tr></thead><tbody>${rows}</tbody></table>`;
+
 export function renderInstructionSets(pe: PeWindowsParseResult, out: string[]): void {
   const disasm = pe.disassembly;
   out.push(renderInstructionPanelStart());
@@ -46,22 +81,7 @@ export function renderInstructionSets(pe: PeWindowsParseResult, out: string[]): 
       `Start analysis to highlight CPU feature usage as instructions are decoded.</div>` +
       `<progress id="${PROGRESS_BAR_ID}" style="width:100%" hidden></progress>`
     );
-    out.push(
-      `<table class="table" style="margin-top:.35rem"><thead><tr>` +
-      `<th>Set</th><th>Instr.</th><th>What it is</th></tr></thead><tbody>`
-    );
-    for (const id of KNOWN_CPUID_FEATURES) {
-      const label = escapeHtml(formatCpuidLabel(id));
-      const description = escapeHtml(describeCpuidFeature(id));
-      const title = escapeHtml(`CpuidFeature.${id}`);
-      const chipId = escapeHtml(`${CHIP_ID_PREFIX}${id}`);
-      const countId = escapeHtml(`${COUNT_ID_PREFIX}${id}`);
-      out.push(
-        `<tr><td><span class="opt dim" id="${chipId}" title="${title}">${label}</span></td>` +
-        `<td class="dim" id="${countId}">0</td><td>${description}</td></tr>`
-      );
-    }
-    out.push(`</tbody></table>`);
+    out.push(renderFeatureTable(renderPendingFeatureRows()));
     out.push(renderInstructionPanelEnd());
     return;
   }
@@ -100,25 +120,7 @@ export function renderInstructionSets(pe: PeWindowsParseResult, out: string[]): 
   }
 
   const knownIds = new Set<string>(KNOWN_CPUID_FEATURES);
-  out.push(
-    `<table class="table" style="margin-top:.35rem"><thead><tr>` +
-    `<th>Set</th><th>Instr.</th><th>What it is</th></tr></thead><tbody>`
-  );
-  for (const id of KNOWN_CPUID_FEATURES) {
-    const countValue = countsById.get(id) || 0;
-    const label = escapeHtml(formatCpuidLabel(id));
-    const description = escapeHtml(describeCpuidFeature(id));
-    const title = escapeHtml(`CpuidFeature.${id}`);
-    const chipClass = countValue > 0 ? "opt sel" : "opt dim";
-    const count = countValue > 0
-      ? escapeHtml(String(countValue))
-      : `<span class="dim">0</span>`;
-    out.push(
-      `<tr><td><span class="${chipClass}" title="${title}">${label}</span></td>` +
-      `<td>${count}</td><td>${description}</td></tr>`
-    );
-  }
-  out.push(`</tbody></table>`);
+  out.push(renderFeatureTable(renderKnownFeatureRows(countsById)));
 
   const other = disasm.instructionSets.filter(set => !knownIds.has(set.id));
   if (other.length) {

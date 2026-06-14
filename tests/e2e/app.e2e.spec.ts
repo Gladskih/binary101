@@ -30,6 +30,43 @@ const expectBaseDetails = async (page: Page, fileName: string, expectedKind: str
   await expect(page.locator("#fileNameDetail")).toHaveText(fileName);
   await expect(page.locator("#fileBinaryTypeDetail")).toHaveText(expectedKind);
 };
+
+const happyCases = [
+  { name: "PNG", file: createPngFile, expectedKind: "PNG image", detailText: "Chunks" },
+  { name: "GIF", file: createGifFile, expectedKind: "GIF image", detailText: "Frames" },
+  { name: "JPEG", file: createJpegFile, expectedKind: "JPEG image", detailText: "JPEG structure" },
+  { name: "WebP", file: createWebpFile, expectedKind: "WebP image", detailText: "Chunks" },
+  { name: "BMP", file: createBmpFile, expectedKind: "BMP bitmap image", detailText: "BMP structure" },
+  { name: "FictionBook (FB2)", file: createFb2File, expectedKind: "FictionBook e-book (FB2)", detailText: "Document info" },
+  { name: "TAR", file: createTarFile, expectedKind: "TAR archive", detailText: "TAR overview" },
+  {
+    name: "gzip",
+    file: () => createGzipFile({ payload: Buffer.from("hello"), extra: null, comment: null, includeHeaderCrc16: false }),
+    expectedKind: "gzip compressed data",
+    detailText: "gzip compressed data"
+  },
+  { name: "Windows shortcut (.lnk)", file: createLnkFile, expectedKind: "Windows shortcut (.lnk)", detailText: "Shell link header" },
+  { name: "ZIP", file: createZipFile, expectedKind: "ZIP archive", detailText: "ZIP overview" },
+  { name: "PDF", file: createPdfFile, expectedKind: "PDF document (v1.4)", detailText: "Cross-reference" },
+  { name: "ELF 64-bit", file: createElfFile, expectedKind: "ELF 64-bit LSB executable, x86-64", detailText: "ELF header" },
+  { name: "MP3", file: createMp3File, expectedKind: "MPEG audio stream (MP3/AAC)", detailText: "MPEG audio stream" },
+  { name: "7z", file: createSevenZipFile, expectedKind: "7z archive", detailText: "7z overview" },
+  {
+    name: "PE32 (x86)",
+    file: createPeFile,
+    expectedKind: "PE32 executable for x86 (I386)",
+    detailText: "PE/COFF headers",
+    extraDetailText: "Instruction-set analysis"
+  },
+  {
+    name: "PE32+ (x86-64)",
+    file: createPePlusFile,
+    expectedKind: "PE32+ executable for x86-64 (AMD64)",
+    detailText: "PE/COFF headers",
+    extraDetailText: "Instruction-set analysis"
+  }
+];
+
 test.describe("file type detection", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
@@ -122,111 +159,13 @@ test.describe("file type detection", () => {
     await page.locator("#directoryFileListingBody tr", { hasText: "pixel.png" }).click();
     await expectBaseDetails(page, "pixel.png", "PNG image");
   });
+});
 
-  const happyCases = [
-    {
-      name: "PNG",
-      file: createPngFile,
-      expectedKind: "PNG image",
-      detailText: "Chunks"
-    },
-    {
-      name: "GIF",
-      file: createGifFile,
-      expectedKind: "GIF image",
-      detailText: "Frames"
-    },
-    {
-      name: "JPEG",
-      file: createJpegFile,
-      expectedKind: "JPEG image",
-      detailText: "JPEG structure"
-    },
-    {
-      name: "WebP",
-      file: createWebpFile,
-      expectedKind: "WebP image",
-      detailText: "Chunks"
-    },
-    {
-      name: "BMP",
-      file: createBmpFile,
-      expectedKind: "BMP bitmap image",
-      detailText: "BMP structure"
-    },
-    {
-      name: "FictionBook (FB2)",
-      file: createFb2File,
-      expectedKind: "FictionBook e-book (FB2)",
-      detailText: "Document info"
-    },
-    {
-      name: "TAR",
-      file: createTarFile,
-      expectedKind: "TAR archive",
-      detailText: "TAR overview"
-    },
-    {
-      name: "gzip",
-      file: () => createGzipFile({
-        payload: Buffer.from("hello"),
-        extra: null, comment: null,
-        includeHeaderCrc16: false
-      }),
-      expectedKind: "gzip compressed data",
-      detailText: "gzip compressed data"
-    },
-    {
-      name: "Windows shortcut (.lnk)",
-      file: createLnkFile,
-      expectedKind: "Windows shortcut (.lnk)",
-      detailText: "Shell link header"
-    },
-    {
-      name: "ZIP",
-      file: createZipFile,
-      expectedKind: "ZIP archive",
-      detailText: "ZIP overview"
-    },
-    {
-      name: "PDF",
-      file: createPdfFile,
-      expectedKind: "PDF document (v1.4)",
-      detailText: "Cross-reference"
-    },
-    {
-      name: "ELF 64-bit",
-      file: createElfFile,
-      expectedKind: "ELF 64-bit LSB executable, x86-64",
-      detailText: "ELF header"
-    },
-    {
-      name: "MP3",
-      file: createMp3File,
-      expectedKind: "MPEG audio stream (MP3/AAC)",
-      detailText: "MPEG audio stream"
-    },
-    {
-      name: "7z",
-      file: createSevenZipFile,
-      expectedKind: "7z archive",
-      detailText: "7z overview"
-    },
-    {
-      name: "PE32 (x86)",
-      file: createPeFile,
-      expectedKind: "PE32 executable for x86 (I386)",
-      detailText: "PE/COFF headers",
-      extraDetailText: "Instruction-set analysis"
-    },
-    {
-      name: "PE32+ (x86-64)",
-      file: createPePlusFile,
-      expectedKind: "PE32+ executable for x86-64 (AMD64)",
-      detailText: "PE/COFF headers",
-      extraDetailText: "Instruction-set analysis"
-    }
-  ];
+test.describe("file type rendering", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Local File Inspector" })).toBeVisible();
+  });
 
   for (const { name, file, expectedKind, detailText, extraDetailText } of happyCases) {
     void test(`recognises ${name} files`, async ({ page }) => {

@@ -91,6 +91,78 @@ const addOptionalDirIssues = (
   }
 };
 
+const createEmptyClrHeader = (issues: string[]): PeClrHeader => {
+  const empty = readCor20Header(new DataView(new ArrayBuffer(0)));
+  if (issues.length) empty.issues = issues;
+  return empty;
+};
+
+const validateCor20Header = (
+  clr: PeClrHeader,
+  directorySize: number,
+  issues: string[]
+): void => {
+  if (clr.cb !== 0 && clr.cb !== COR20_HEADER_SIZE_BYTES) {
+    issues.push(`CLR header cb is ${clr.cb} bytes; expected ${COR20_HEADER_SIZE_BYTES} (0x48).`);
+  }
+  if (clr.cb !== 0 && clr.cb < COR20_HEADER_MIN_BYTES) {
+    issues.push("CLR header cb is smaller than the minimum header size (0x18 bytes).");
+  }
+  if (clr.cb !== 0 && directorySize !== 0 && directorySize < clr.cb) {
+    issues.push("CLR directory size is smaller than the header cb field; header appears truncated.");
+  }
+  const unknownFlagBits = (clr.Flags & ~KNOWN_COMIMAGE_FLAGS) >>> 0;
+  if (unknownFlagBits !== 0) {
+    issues.push(`CLR header Flags contains unknown bits (0x${unknownFlagBits.toString(16).padStart(8, "0")}).`);
+  }
+};
+
+const validateEntryPointToken = (clr: PeClrHeader, issues: string[]): void => {
+  if ((clr.Flags & COMIMAGE_FLAGS_NATIVE_ENTRYPOINT) !== 0 || clr.EntryPointToken === 0) return;
+  const tokenTable = (clr.EntryPointToken >>> 24) & 0xff;
+  if (tokenTable !== TOKEN_TABLE_METHODDEF && tokenTable !== TOKEN_TABLE_FILE) {
+    issues.push("Managed EntryPointToken must reference a MethodDef or File token.");
+  }
+};
+
+const attachClrMetadata = async (
+  reader: FileRangeReader,
+  rvaToOff: RvaToOffset,
+  clr: PeClrHeader,
+  issues: string[]
+): Promise<void> => {
+  if (clr.MetaDataRVA === 0 && clr.MetaDataSize !== 0) issues.push("Metadata has a non-zero size but RVA is 0.");
+  if (clr.MetaDataRVA !== 0 && clr.MetaDataSize === 0) issues.push("Metadata has an RVA but size is 0.");
+  if (clr.MetaDataRVA === 0 || clr.MetaDataSize === 0) return;
+  const metaOffset = rvaToOff(clr.MetaDataRVA);
+  if (metaOffset == null) {
+    issues.push("Metadata RVA could not be mapped to a file offset.");
+    return;
+  }
+  const meta = await parseClrMetadataRoot(reader, metaOffset, clr.MetaDataSize, issues);
+  if (meta) clr.meta = meta;
+};
+
+const attachClrSubdirectories = async (
+  reader: FileRangeReader,
+  rvaToOff: RvaToOffset,
+  fileSize: number,
+  clr: PeClrHeader,
+  issues: string[]
+): Promise<void> => {
+  addOptionalDirIssues("Resources", clr.ResourcesRVA, clr.ResourcesSize, fileSize, rvaToOff, issues);
+  addOptionalDirIssues("StrongNameSignature", clr.StrongNameSignatureRVA, clr.StrongNameSignatureSize, fileSize, rvaToOff, issues);
+  addOptionalDirIssues("CodeManagerTable", clr.CodeManagerTableRVA, clr.CodeManagerTableSize, fileSize, rvaToOff, issues);
+  addOptionalDirIssues("ExportAddressTableJumps", clr.ExportAddressTableJumpsRVA, clr.ExportAddressTableJumpsSize, fileSize, rvaToOff, issues);
+  addOptionalDirIssues("ManagedNativeHeader", clr.ManagedNativeHeaderRVA, clr.ManagedNativeHeaderSize, fileSize, rvaToOff, issues);
+  const fixups = await parseVTableFixups(reader, rvaToOff, fileSize, clr.VTableFixupsRVA, clr.VTableFixupsSize, issues);
+  if (fixups) clr.vtableFixups = fixups;
+  clr.strongName = await parseStrongName(reader, rvaToOff, clr);
+  const managedResources = await parseManagedResources(reader, rvaToOff, clr);
+  if (managedResources) clr.managedResources = managedResources;
+  clr.readyToRun = await parseReadyToRun(reader, rvaToOff, clr);
+};
+
 export async function parseClrDirectory(
   reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
@@ -104,110 +176,26 @@ export async function parseClrDirectory(
   if (dir.rva === 0 && dir.size !== 0) issues.push("CLR directory has a non-zero size but RVA is 0.");
   if (dir.rva !== 0 && dir.size === 0) issues.push("CLR directory has an RVA but size is 0.");
   if (dir.rva === 0) {
-    const empty = readCor20Header(new DataView(new ArrayBuffer(0)));
-    if (issues.length) empty.issues = issues;
-    return empty;
+    return createEmptyClrHeader(issues);
   }
   const base = rvaToOff(dir.rva);
   if (base == null) {
     issues.push("CLR directory RVA could not be mapped to a file offset.");
-    const empty = readCor20Header(new DataView(new ArrayBuffer(0)));
-    if (issues.length) empty.issues = issues;
-    return empty;
+    return createEmptyClrHeader(issues);
   }
   if (base < 0 || base >= fileSize) {
     issues.push("CLR directory location is outside the file.");
-    const empty = readCor20Header(new DataView(new ArrayBuffer(0)));
-    if (issues.length) empty.issues = issues;
-    return empty;
+    return createEmptyClrHeader(issues);
   }
   const availableSize = Math.min(dir.size, Math.max(0, fileSize - base));
   issues.push(...buildCor20Issues(dir.size, availableSize));
   const clr = readCor20Header(
     await reader.read(base, Math.min(availableSize, COR20_HEADER_SIZE_BYTES))
   );
-  if (clr.cb !== 0 && clr.cb !== COR20_HEADER_SIZE_BYTES) {
-    issues.push(`CLR header cb is ${clr.cb} bytes; expected ${COR20_HEADER_SIZE_BYTES} (0x48).`);
-  }
-  if (clr.cb !== 0 && clr.cb < COR20_HEADER_MIN_BYTES) {
-    issues.push("CLR header cb is smaller than the minimum header size (0x18 bytes).");
-  }
-  if (clr.cb !== 0 && dir.size !== 0 && dir.size < clr.cb) {
-    issues.push("CLR directory size is smaller than the header cb field; header appears truncated.");
-  }
-  const unknownFlagBits = (clr.Flags & ~KNOWN_COMIMAGE_FLAGS) >>> 0;
-  if (unknownFlagBits !== 0) {
-    issues.push(
-      `CLR header Flags contains unknown bits (0x${unknownFlagBits.toString(16).padStart(8, "0")}).`
-    );
-  }
-  if ((clr.Flags & COMIMAGE_FLAGS_NATIVE_ENTRYPOINT) === 0 && clr.EntryPointToken !== 0) {
-    const tokenTable = (clr.EntryPointToken >>> 24) & 0xff;
-    if (tokenTable !== TOKEN_TABLE_METHODDEF && tokenTable !== TOKEN_TABLE_FILE) {
-      issues.push("Managed EntryPointToken must reference a MethodDef or File token.");
-    }
-  }
-  if (clr.MetaDataRVA === 0 && clr.MetaDataSize !== 0) {
-    issues.push("Metadata has a non-zero size but RVA is 0.");
-  }
-  if (clr.MetaDataRVA !== 0 && clr.MetaDataSize === 0) {
-    issues.push("Metadata has an RVA but size is 0.");
-  }
-  if (clr.MetaDataRVA !== 0 && clr.MetaDataSize !== 0) {
-    const metaOffset = rvaToOff(clr.MetaDataRVA);
-    if (metaOffset == null) {
-      issues.push("Metadata RVA could not be mapped to a file offset.");
-    } else {
-      const meta = await parseClrMetadataRoot(reader, metaOffset, clr.MetaDataSize, issues);
-      if (meta) clr.meta = meta;
-    }
-  }
-  addOptionalDirIssues("Resources", clr.ResourcesRVA, clr.ResourcesSize, fileSize, rvaToOff, issues);
-  addOptionalDirIssues(
-    "StrongNameSignature",
-    clr.StrongNameSignatureRVA,
-    clr.StrongNameSignatureSize,
-    fileSize,
-    rvaToOff,
-    issues
-  );
-  addOptionalDirIssues(
-    "CodeManagerTable",
-    clr.CodeManagerTableRVA,
-    clr.CodeManagerTableSize,
-    fileSize,
-    rvaToOff,
-    issues
-  );
-  addOptionalDirIssues(
-    "ExportAddressTableJumps",
-    clr.ExportAddressTableJumpsRVA,
-    clr.ExportAddressTableJumpsSize,
-    fileSize,
-    rvaToOff,
-    issues
-  );
-  addOptionalDirIssues(
-    "ManagedNativeHeader",
-    clr.ManagedNativeHeaderRVA,
-    clr.ManagedNativeHeaderSize,
-    fileSize,
-    rvaToOff,
-    issues
-  );
-  const fixups = await parseVTableFixups(
-    reader,
-    rvaToOff,
-    fileSize,
-    clr.VTableFixupsRVA,
-    clr.VTableFixupsSize,
-    issues
-  );
-  if (fixups) clr.vtableFixups = fixups;
-  clr.strongName = await parseStrongName(reader, rvaToOff, clr);
-  const managedResources = await parseManagedResources(reader, rvaToOff, clr);
-  if (managedResources) clr.managedResources = managedResources;
-  clr.readyToRun = await parseReadyToRun(reader, rvaToOff, clr);
+  validateCor20Header(clr, dir.size, issues);
+  validateEntryPointToken(clr, issues);
+  await attachClrMetadata(reader, rvaToOff, clr, issues);
+  await attachClrSubdirectories(reader, rvaToOff, fileSize, clr, issues);
   if (issues.length) clr.issues = issues;
   return clr;
 }

@@ -61,38 +61,18 @@ const createGlobalHeader = (
 const createLinkLayerSummary = (linkType: number | null): PcapLinkLayerSummary | null =>
   linkType === LINKTYPE_ETHERNET ? { ethernet: createEthernetSummary() } : null;
 
-export const parsePcap = async (file: File): Promise<PcapClassicParseResult | null> => {
-  const issues: string[] = [];
-  const pushIssue = (message: string): void => {
-    issues.push(message);
-  };
+type PcapPacketParseResult = {
+  traffic: ReturnType<typeof createMutableTrafficStats>;
+  truncatedFile: boolean;
+};
 
-  const reader = createFileRangeReader(file, 0, file.size);
-  const headerDv = await reader.read(0, GLOBAL_HEADER_SIZE);
-  const magic = detectClassicPcapMagic(headerDv);
-  if (!magic) return null;
-
+const readGlobalHeader = (
+  headerDv: DataView,
+  magic: { littleEndian: boolean; timestampResolution: PcapTimestampResolution },
+  issues: string[]
+): PcapGlobalHeader => {
   const header = createGlobalHeader(magic.littleEndian, magic.timestampResolution);
-  const traffic = createMutableTrafficStats();
-  let truncatedFile = false;
-
-  if (headerDv.byteLength < GLOBAL_HEADER_SIZE) {
-    truncatedFile = true;
-    pushIssue(`Global header is truncated (${headerDv.byteLength}/${GLOBAL_HEADER_SIZE} bytes).`);
-    return {
-      isPcap: true,
-      format: "pcap",
-      fileSize: file.size,
-      header,
-      packets: finalizePacketStats(traffic, truncatedFile),
-      linkLayer: null,
-      issues
-    };
-  }
-
   const littleEndian = magic.littleEndian;
-  // File Header field offsets come directly from Figure 1:
-  // version_major/version_minor/reserved1/reserved2/snaplen/linktype are at 4/6/8/12/16/20.
   header.versionMajor = headerDv.getUint16(4, littleEndian);
   header.versionMinor = headerDv.getUint16(6, littleEndian);
   header.thiszone = headerDv.getInt32(8, littleEndian);
@@ -101,54 +81,51 @@ export const parsePcap = async (file: File): Promise<PcapClassicParseResult | nu
   header.network = headerDv.getUint32(20, littleEndian);
   header.networkName =
     header.network != null ? describeLinkType(header.network) || `LinkType ${header.network}` : null;
-
-  // The historical pcap format documented by the IETF is version 2.4.
-  // Source: draft-ietf-opsawg-pcap-07 Section 4,
-  // https://datatracker.ietf.org/doc/html/draft-ietf-opsawg-pcap
   if (header.versionMajor !== 2 || header.versionMinor !== 4) {
-    pushIssue(`Unusual PCAP version ${header.versionMajor}.${header.versionMinor} (expected 2.4).`);
+    issues.push(`Unusual PCAP version ${header.versionMajor}.${header.versionMinor} (expected 2.4).`);
   }
+  return header;
+};
 
-  const linkLayer = createLinkLayerSummary(header.network);
+const parsePacketRecords = async (
+  file: File,
+  reader: ReturnType<typeof createFileRangeReader>,
+  header: PcapGlobalHeader,
+  magic: { littleEndian: boolean; timestampResolution: PcapTimestampResolution },
+  linkLayer: PcapLinkLayerSummary | null,
+  issues: string[]
+): Promise<PcapPacketParseResult> => {
+  const traffic = createMutableTrafficStats();
   const ethernet = linkLayer?.ethernet || null;
-  // These are SI unit conversions used to normalize the sub-second timestamp field into seconds.
-  // The pcap magic number decides whether the packet field is in microseconds or nanoseconds.
   const subSecondDivisor =
     magic.timestampResolution === "microseconds" ? 1_000_000 : 1_000_000_000;
-
+  let truncatedFile = false;
   let offset = GLOBAL_HEADER_SIZE;
   while (offset + RECORD_HEADER_SIZE <= file.size) {
     const recordDv = await reader.read(offset, RECORD_HEADER_SIZE);
     if (recordDv.byteLength < RECORD_HEADER_SIZE) break;
-
     const packetIndex = traffic.totalPackets + 1;
-    // Packet Record field offsets come directly from Figure 3:
-    // ts_sec/ts_subsec/captured_len/original_len are at 0/4/8/12.
-    const capturedLength = recordDv.getUint32(8, littleEndian);
-    const originalLength = recordDv.getUint32(12, littleEndian);
-
+    const capturedLength = recordDv.getUint32(8, magic.littleEndian);
+    const originalLength = recordDv.getUint32(12, magic.littleEndian);
     if (originalLength < capturedLength) {
-      pushIssue(
-        `Packet #${packetIndex} has captured length (${capturedLength}) larger than original length (${originalLength}).`
-      );
+      issues.push(`Packet #${packetIndex} has captured length (${capturedLength}) larger than original length (${originalLength}).`);
     }
     if (header.snaplen != null && capturedLength > header.snaplen) {
-      pushIssue(
-        `Packet #${packetIndex} captured length (${capturedLength}) exceeds snaplen (${header.snaplen}).`
-      );
+      issues.push(`Packet #${packetIndex} captured length (${capturedLength}) exceeds snaplen (${header.snaplen}).`);
     }
-
     const recordEnd = offset + RECORD_HEADER_SIZE + capturedLength;
     if (!Number.isFinite(recordEnd) || recordEnd < offset) {
       truncatedFile = true;
-      pushIssue(`Packet #${packetIndex} has an invalid captured length (${capturedLength}).`);
+      issues.push(`Packet #${packetIndex} has an invalid captured length (${capturedLength}).`);
       break;
     }
-
-    const timestampSeconds =
-      recordDv.getUint32(0, littleEndian) + recordDv.getUint32(4, littleEndian) / subSecondDivisor;
-    observePacket(traffic, capturedLength, originalLength, timestampSeconds);
-
+    observePacket(
+      traffic,
+      capturedLength,
+      originalLength,
+      recordDv.getUint32(0, magic.littleEndian) +
+        recordDv.getUint32(4, magic.littleEndian) / subSecondDivisor
+    );
     const recordView = await reader.read(offset, RECORD_HEADER_SIZE + capturedLength);
     const payloadAvailable = Math.max(0, recordView.byteLength - RECORD_HEADER_SIZE);
     if (payloadAvailable > 0) {
@@ -161,29 +138,48 @@ export const parsePcap = async (file: File): Promise<PcapClassicParseResult | nu
         ethernet
       );
     }
-
     if (recordEnd > file.size) {
       truncatedFile = true;
-      pushIssue(
-        `Packet #${traffic.totalPackets} payload runs past EOF (need ${capturedLength} bytes at offset ${offset + RECORD_HEADER_SIZE}).`
-      );
+      issues.push(`Packet #${traffic.totalPackets} payload runs past EOF (need ${capturedLength} bytes at offset ${offset + RECORD_HEADER_SIZE}).`);
       break;
     }
-
     offset = recordEnd;
   }
-
   if (offset < file.size && offset + RECORD_HEADER_SIZE > file.size) {
     truncatedFile = true;
-    pushIssue(`File ends with ${file.size - offset} trailing bytes (truncated packet record header).`);
+    issues.push(`File ends with ${file.size - offset} trailing bytes (truncated packet record header).`);
   }
+  return { traffic, truncatedFile };
+};
+
+export const parsePcap = async (file: File): Promise<PcapClassicParseResult | null> => {
+  const issues: string[] = [];
+  const reader = createFileRangeReader(file, 0, file.size);
+  const headerDv = await reader.read(0, GLOBAL_HEADER_SIZE);
+  const magic = detectClassicPcapMagic(headerDv);
+  if (!magic) return null;
+  if (headerDv.byteLength < GLOBAL_HEADER_SIZE) {
+    issues.push(`Global header is truncated (${headerDv.byteLength}/${GLOBAL_HEADER_SIZE} bytes).`);
+    return {
+      isPcap: true,
+      format: "pcap",
+      fileSize: file.size,
+      header: createGlobalHeader(magic.littleEndian, magic.timestampResolution),
+      packets: finalizePacketStats(createMutableTrafficStats(), true),
+      linkLayer: null,
+      issues
+    };
+  }
+  const header = readGlobalHeader(headerDv, magic, issues);
+  const linkLayer = createLinkLayerSummary(header.network);
+  const packets = await parsePacketRecords(file, reader, header, magic, linkLayer, issues);
 
   return {
     isPcap: true,
     format: "pcap",
     fileSize: file.size,
     header,
-    packets: finalizePacketStats(traffic, truncatedFile),
+    packets: finalizePacketStats(packets.traffic, packets.truncatedFile),
     linkLayer,
     issues
   };

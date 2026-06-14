@@ -4,6 +4,71 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderSecurity } from "../../renderers/pe/security-view.js";
 
+const EXPANDED_AUTHENTICODE_SECURITY: Parameters<typeof renderSecurity>[0] = {
+  count: 1,
+  certs: [{
+    offset: 0,
+    length: 32,
+    availableBytes: 32,
+    revision: 0x0200,
+    revisionName: "Revision 2.0",
+    certificateType: 0x0002,
+    typeName: "PKCS#7 SignedData (Authenticode)",
+    authenticode: {
+      format: "pkcs7" as const,
+      contentTypeName: "PKCS#7 signedData",
+      payloadContentTypeName: "SPC_INDIRECT_DATA",
+      digestAlgorithms: ["sha256"],
+      fileDigestAlgorithmName: "sha256",
+      fileDigest: "deadbeef",
+      verification: {
+        computedFileDigest: "deadbeef",
+        fileDigestMatches: true,
+        signerVerifications: [{
+          index: 0,
+          signatureVerified: true,
+          signerCertificateIndex: 0,
+          certificatePathIndexes: [0],
+          countersignatures: [{
+            index: 0,
+            signerCertificateIndex: 1,
+            certificatePathIndexes: [1],
+            signingTime: "2024-01-01T00:05:00Z",
+            signatureVerified: true,
+            messageDigestVerified: true
+          }]
+        }],
+        checks: [
+          { id: "file-digest-match", status: "pass" as const, title: "Embedded file digest matches the computed PE Authenticode digest", detail: "deadbeef" },
+          { id: "Signer 1-signature", status: "pass" as const, title: "Signer 1: CMS signature verifies" },
+          { id: "Signer 1-certificate", status: "pass" as const, title: "Signer 1: signer certificate is present in the embedded chain" },
+          { id: "Signer 1-key-usage", status: "pass" as const, title: "Signer 1: certificate permits digital signatures" },
+          { id: "Signer 1-eku", status: "pass" as const, title: "Signer 1: certificate permits code signing" },
+          { id: "Signer 1 countersignature 1-signature", status: "pass" as const, title: "Signer 1 countersignature 1: CMS signature verifies" },
+          { id: "Signer 1 countersignature 1-certificate", status: "pass" as const, title: "Signer 1 countersignature 1: signer certificate is present in the embedded chain" },
+          { id: "Signer 1 countersignature 1-message-digest", status: "unknown" as const, title: "Signer 1 countersignature 1: signed attributes message digest matches the parent signature", detail: "PKI.js crypto engine is unavailable." },
+          { id: "Signer 1-countersignature-1-chronology", status: "unknown" as const, title: "Signer 1: countersignature 1 is not earlier than the claimed signing time" }
+        ],
+        trustGaps: [{ id: "revocation", title: "Revocation status", detail: "No CRL / OCSP checks." }],
+        warnings: ["synthetic verification warning"]
+      },
+      signerCount: 1,
+      certificateCount: 2,
+      signers: [{
+        issuer: "CN=Test Issuer",
+        serialNumber: "1234",
+        digestAlgorithmName: "sha256",
+        signatureAlgorithmName: "rsaEncryption",
+        signingTime: "2024-01-01T00:00:00Z"
+      }],
+      certificates: [
+        { subject: "CN=Test Subject", issuer: "CN=Test Issuer", serialNumber: "1234", notBefore: "2024-01-01T00:00:00Z", notAfter: "2025-01-01T00:00:00Z" },
+        { subject: "CN=Test Timestamp", issuer: "CN=Test Issuer", serialNumber: "5678", notBefore: "2024-01-01T00:00:00Z", notAfter: "2026-01-01T00:00:00Z" }
+      ]
+    }
+  }]
+};
+
 void test("renderSecurity renders details when present", () => {
   const cert = {
     offset: 0,
@@ -41,132 +106,8 @@ void test("renderSecurity renders details when present", () => {
 });
 
 void test("renderSecurity includes expanded Authenticode details", () => {
-  const cert = {
-    offset: 0,
-    length: 32,
-    availableBytes: 32,
-    revision: 0x0200,
-    revisionName: "Revision 2.0",
-    certificateType: 0x0002,
-    typeName: "PKCS#7 SignedData (Authenticode)",
-    authenticode: {
-      format: "pkcs7" as const,
-      contentTypeName: "PKCS#7 signedData",
-      payloadContentTypeName: "SPC_INDIRECT_DATA",
-      digestAlgorithms: ["sha256"],
-      fileDigestAlgorithmName: "sha256",
-      fileDigest: "deadbeef",
-      verification: {
-        computedFileDigest: "deadbeef",
-        fileDigestMatches: true,
-        signerVerifications: [
-          {
-            index: 0,
-            signatureVerified: true,
-            signerCertificateIndex: 0,
-            certificatePathIndexes: [0],
-            countersignatures: [
-              {
-                index: 0,
-                signerCertificateIndex: 1,
-                certificatePathIndexes: [1],
-                signingTime: "2024-01-01T00:05:00Z",
-                signatureVerified: true,
-                messageDigestVerified: true
-              }
-            ]
-          }
-        ],
-        checks: [
-          {
-            id: "file-digest-match",
-            status: "pass" as const,
-            title: "Embedded file digest matches the computed PE Authenticode digest",
-            detail: "deadbeef"
-          },
-          {
-            id: "Signer 1-signature",
-            status: "pass" as const,
-            title: "Signer 1: CMS signature verifies"
-          },
-          {
-            id: "Signer 1-certificate",
-            status: "pass" as const,
-            title: "Signer 1: signer certificate is present in the embedded chain"
-          },
-          {
-            id: "Signer 1-key-usage",
-            status: "pass" as const,
-            title: "Signer 1: certificate permits digital signatures"
-          },
-          {
-            id: "Signer 1-eku",
-            status: "pass" as const,
-            title: "Signer 1: certificate permits code signing"
-          },
-          {
-            id: "Signer 1 countersignature 1-signature",
-            status: "pass" as const,
-            title: "Signer 1 countersignature 1: CMS signature verifies"
-          },
-          {
-            id: "Signer 1 countersignature 1-certificate",
-            status: "pass" as const,
-            title: "Signer 1 countersignature 1: signer certificate is present in the embedded chain"
-          },
-          {
-            id: "Signer 1 countersignature 1-message-digest",
-            status: "unknown" as const,
-            title: "Signer 1 countersignature 1: signed attributes message digest matches the parent signature",
-            detail: "PKI.js crypto engine is unavailable."
-          },
-          {
-            id: "Signer 1-countersignature-1-chronology",
-            status: "unknown" as const,
-            title: "Signer 1: countersignature 1 is not earlier than the claimed signing time"
-          }
-        ],
-        trustGaps: [
-          {
-            id: "revocation",
-            title: "Revocation status",
-            detail: "No CRL / OCSP checks."
-          }
-        ],
-        warnings: ["synthetic verification warning"]
-      },
-      signerCount: 1,
-      certificateCount: 2,
-      signers: [
-        {
-          issuer: "CN=Test Issuer",
-          serialNumber: "1234",
-          digestAlgorithmName: "sha256",
-          signatureAlgorithmName: "rsaEncryption",
-          signingTime: "2024-01-01T00:00:00Z"
-        }
-      ],
-      certificates: [
-        {
-          subject: "CN=Test Subject",
-          issuer: "CN=Test Issuer",
-          serialNumber: "1234",
-          notBefore: "2024-01-01T00:00:00Z",
-          notAfter: "2025-01-01T00:00:00Z"
-        },
-        {
-          subject: "CN=Test Timestamp",
-          issuer: "CN=Test Issuer",
-          serialNumber: "5678",
-          notBefore: "2024-01-01T00:00:00Z",
-          notAfter: "2026-01-01T00:00:00Z"
-        }
-      ]
-    }
-  };
-  const security: Parameters<typeof renderSecurity>[0] = { count: 1, certs: [cert] };
   const out: string[] = [];
-  renderSecurity(security, out);
+  renderSecurity(EXPANDED_AUTHENTICODE_SECURITY, out);
   const html = out.join("");
   assert.ok(html.includes("Certificate tree"));
   assert.ok(html.includes("Authenticode"));

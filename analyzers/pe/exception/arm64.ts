@@ -5,6 +5,11 @@ import {
   isMappedArm64FunctionBegin,
   isValidArm64FunctionRange
 } from "./arm64-function-range.js";
+import {
+  createArm64ExceptionState,
+  recordArm64HandlerRva,
+  type Arm64ExceptionState
+} from "./arm64-state.js";
 import { collectRuntimeFunctionSpans, readRuntimeFunctionSpan } from "./runtime-spans.js";
 import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./types.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
@@ -170,6 +175,41 @@ const readArm64UnwindInfo = async (
   return readPackedUnwindInfo(unwindWord);
 };
 
+const processArm64RuntimeFunction = async (
+  reader: FileRangeReader,
+  rvaToOff: RvaToOffset,
+  beginRva: number,
+  unwindWord: number,
+  issues: string[],
+  state: Arm64ExceptionState
+): Promise<void> => {
+  state.functionCount += 1;
+  const unwindInfo = await readArm64UnwindInfo(reader, rvaToOff, unwindWord, issues);
+  if (unwindInfo?.key) state.uniqueUnwindInfos.add(unwindInfo.key);
+  if (unwindInfo?.version != null && unwindInfo.version !== 0) state.unexpectedXdataVersionCount += 1;
+  if (unwindInfo?.hasHandler) state.handlerUnwindInfoCount += 1;
+  if (unwindInfo?.chained) state.chainedUnwindInfoCount += 1;
+  recordArm64HandlerRva(state, unwindInfo?.handlerRva ?? null);
+  const valid = Boolean(
+    unwindInfo &&
+    (
+      unwindInfo.chained
+        ? isMappedArm64FunctionBegin(beginRva, rvaToOff, reader.size)
+        : isValidArm64FunctionRange(beginRva, unwindInfo.functionLengthBytes, rvaToOff, reader.size)
+    )
+  );
+  if (!valid) {
+    state.invalidEntryCount += 1;
+    return;
+  }
+  if (state.previousBegin != null && beginRva < state.previousBegin && !state.reportedUnsortedEntries) {
+    issues.push("ARM64 .pdata entries are not sorted by function start RVA.");
+    state.reportedUnsortedEntries = true;
+  }
+  state.previousBegin = beginRva;
+  state.beginRvas.push(beginRva);
+};
+
 export async function parseArm64ExceptionDirectory(
   reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
@@ -205,18 +245,7 @@ export async function parseArm64ExceptionDirectory(
   if (dir.size % ARM64_RUNTIME_FUNCTION_ENTRY_SIZE !== 0) {
     issues.push("Exception directory size is not a multiple of ARM64 .pdata entry size (8 bytes).");
   }
-  const beginRvas: number[] = [];
-  const handlerRvas: number[] = [];
-  const handlerRvasSet = new Set<number>();
-  const uniqueUnwindInfos = new Set<string>();
-  let functionCount = 0;
-  let invalidEntryCount = 0;
-  let handlerUnwindInfoCount = 0;
-  let chainedUnwindInfoCount = 0;
-  let unexpectedXdataVersionCount = 0;
-  let previousBegin: number | null = null;
-  let reportedUnsortedEntries = false;
-
+  const state = createArm64ExceptionState();
   const spans = collectRuntimeFunctionSpans(
     dir.rva,
     Math.floor(dir.size / ARM64_RUNTIME_FUNCTION_ENTRY_SIZE),
@@ -242,61 +271,24 @@ export async function parseArm64ExceptionDirectory(
       const entryOffset = index * ARM64_RUNTIME_FUNCTION_ENTRY_SIZE;
       const beginRva = spanView.getUint32(entryOffset, true) >>> 0;
       const unwindWord = spanView.getUint32(entryOffset + Uint32Array.BYTES_PER_ELEMENT, true) >>> 0;
-      functionCount += 1;
-
-      const unwindInfo = await readArm64UnwindInfo(reader, rvaToOff, unwindWord, issues);
-      if (unwindInfo?.key) {
-        uniqueUnwindInfos.add(unwindInfo.key);
-      }
-      if (unwindInfo?.version != null && unwindInfo.version !== 0) {
-        unexpectedXdataVersionCount += 1;
-      }
-      if (unwindInfo?.hasHandler) {
-        handlerUnwindInfoCount += 1;
-      }
-      if (unwindInfo?.chained) {
-        chainedUnwindInfoCount += 1;
-      }
-      if (unwindInfo?.handlerRva && !handlerRvasSet.has(unwindInfo.handlerRva)) {
-        handlerRvasSet.add(unwindInfo.handlerRva);
-        handlerRvas.push(unwindInfo.handlerRva);
-      }
-
-      const valid = Boolean(
-        unwindInfo &&
-        (
-          unwindInfo.chained
-            ? isMappedArm64FunctionBegin(beginRva, rvaToOff, reader.size)
-            : isValidArm64FunctionRange(beginRva, unwindInfo.functionLengthBytes, rvaToOff, reader.size)
-        )
-      );
-      if (!valid) {
-        invalidEntryCount += 1;
-        continue;
-      }
-      if (previousBegin != null && beginRva < previousBegin && !reportedUnsortedEntries) {
-        issues.push("ARM64 .pdata entries are not sorted by function start RVA.");
-        reportedUnsortedEntries = true;
-      }
-      previousBegin = beginRva;
-      beginRvas.push(beginRva);
+      await processArm64RuntimeFunction(reader, rvaToOff, beginRva, unwindWord, issues, state);
     }
   }
-  if (functionCount === 0) {
+  if (state.functionCount === 0) {
     issues.push("Exception directory does not contain a complete ARM64 .pdata entry.");
     return createEmptyExceptionDirectory(issues, "arm64");
   }
-  if (unexpectedXdataVersionCount > 0) {
-    issues.push(`${unexpectedXdataVersionCount} ARM64 .xdata record(s) have an unexpected version.`);
+  if (state.unexpectedXdataVersionCount > 0) {
+    issues.push(`${state.unexpectedXdataVersionCount} ARM64 .xdata record(s) have an unexpected version.`);
   }
   return {
-    functionCount,
-    beginRvas,
-    handlerRvas,
-    uniqueUnwindInfoCount: uniqueUnwindInfos.size,
-    handlerUnwindInfoCount,
-    chainedUnwindInfoCount,
-    invalidEntryCount,
+    functionCount: state.functionCount,
+    beginRvas: state.beginRvas,
+    handlerRvas: state.handlerRvas,
+    uniqueUnwindInfoCount: state.uniqueUnwindInfos.size,
+    handlerUnwindInfoCount: state.handlerUnwindInfoCount,
+    chainedUnwindInfoCount: state.chainedUnwindInfoCount,
+    invalidEntryCount: state.invalidEntryCount,
     issues,
     format: "arm64"
   };

@@ -22,15 +22,103 @@ export type Iso9660ActionsDomStubs = {
   restore: () => void;
 };
 
+type Iso9660DomGlobalPresence = {
+  Element: boolean;
+  HTMLButtonElement: boolean;
+  document: boolean;
+};
+
+type Iso9660DomOriginalGlobals = {
+  Element: unknown;
+  HTMLButtonElement: unknown;
+  document: unknown;
+  createObjectURL: typeof URL.createObjectURL;
+  revokeObjectURL: typeof URL.revokeObjectURL;
+};
+
+class FakeElement {
+  readonly tagName: string;
+  readonly parent: FakeElement | null;
+  readonly classes: Set<string>;
+
+  constructor(tagName: string, parent: FakeElement | null = null) {
+    this.tagName = tagName.toLowerCase();
+    this.parent = parent;
+    this.classes = new Set();
+  }
+
+  addClass(name: string): void {
+    this.classes.add(name);
+  }
+
+  closest(selector: string): FakeElement | null {
+    const wantedSelector =
+      selector === "button.isoExtractButton"
+        ? ["button", "isoExtractButton"]
+        : selector === "button.isoDirToggleButton"
+          ? ["button", "isoDirToggleButton"]
+          : selector === "tr"
+            ? ["tr", null]
+            : null;
+    if (!wantedSelector) return null;
+    const [wantedTag, wantedClass] = wantedSelector;
+    let current: FakeElement | null = this;
+    while (current) {
+      if (current.tagName === wantedTag && (wantedClass == null || current.classes.has(wantedClass))) {
+        return current;
+      }
+      current = current.parent;
+    }
+    return null;
+  }
+}
+
+class FakeButtonElement extends FakeElement {
+  disabled = false;
+  textContent: string | null = "Download";
+  readonly attributes = new Map<string, string>();
+
+  constructor(parent: FakeElement | null = null) {
+    super("button", parent);
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null;
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
+}
+
+class FakeRowElement extends FakeElement {
+  hidden = true;
+
+  constructor() {
+    super("tr", null);
+  }
+}
+
+class FakeHtmlElement extends FakeElement {
+  innerHTML = "";
+  readonly attributes = new Map<string, string>();
+
+  getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null;
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
+}
+
 export const installIso9660ActionsDomStubs = (): Iso9660ActionsDomStubs => {
   const globals = globalThis as unknown as Record<string, unknown>;
-
   const hadGlobals = {
     Element: Object.prototype.hasOwnProperty.call(globals, "Element"),
     HTMLButtonElement: Object.prototype.hasOwnProperty.call(globals, "HTMLButtonElement"),
     document: Object.prototype.hasOwnProperty.call(globals, "document")
   };
-
   const originals = {
     Element: globals["Element"],
     HTMLButtonElement: globals["HTMLButtonElement"],
@@ -38,94 +126,10 @@ export const installIso9660ActionsDomStubs = (): Iso9660ActionsDomStubs => {
     createObjectURL: URL.createObjectURL,
     revokeObjectURL: URL.revokeObjectURL
   };
-
-  class FakeElement {
-    readonly tagName: string;
-    readonly parent: FakeElement | null;
-    readonly classes: Set<string>;
-
-    constructor(tagName: string, parent: FakeElement | null = null) {
-      this.tagName = tagName.toLowerCase();
-      this.parent = parent;
-      this.classes = new Set();
-    }
-
-    addClass(name: string): void {
-      this.classes.add(name);
-    }
-
-    closest(selector: string): FakeElement | null {
-      const wantedSelector =
-        selector === "button.isoExtractButton"
-          ? ["button", "isoExtractButton"]
-          : selector === "button.isoDirToggleButton"
-            ? ["button", "isoDirToggleButton"]
-            : selector === "tr"
-              ? ["tr", null]
-              : null;
-      if (!wantedSelector) {
-        return null;
-      }
-      const [wantedTag, wantedClass] = wantedSelector;
-      let current: FakeElement | null = this;
-      while (current) {
-        if (
-          current.tagName === wantedTag &&
-          (wantedClass == null || current.classes.has(wantedClass))
-        ) {
-          return current;
-        }
-        current = current.parent;
-      }
-      return null;
-    }
-  }
-
-  class FakeButtonElement extends FakeElement {
-    disabled = false;
-    textContent: string | null = "Download";
-    readonly attributes = new Map<string, string>();
-
-    constructor(parent: FakeElement | null = null) {
-      super("button", parent);
-    }
-
-    getAttribute(name: string): string | null {
-      return this.attributes.get(name) ?? null;
-    }
-
-    setAttribute(name: string, value: string): void {
-      this.attributes.set(name, value);
-    }
-  }
-
   globals["Element"] = FakeElement;
   globals["HTMLButtonElement"] = FakeButtonElement;
-
-  class FakeRowElement extends FakeElement {
-    hidden = true;
-
-    constructor() {
-      super("tr", null);
-    }
-  }
-
-  class FakeHtmlElement extends FakeElement {
-    innerHTML = "";
-    readonly attributes = new Map<string, string>();
-
-    getAttribute(name: string): string | null {
-      return this.attributes.get(name) ?? null;
-    }
-
-    setAttribute(name: string, value: string): void {
-      this.attributes.set(name, value);
-    }
-  }
-
   let anchor: AnchorStub | null = null;
   let createdBlob: Blob | null = null;
-
   const body = {
     appendCalls: 0,
     removeCalls: 0,
@@ -141,11 +145,9 @@ export const installIso9660ActionsDomStubs = (): Iso9660ActionsDomStubs => {
       return node;
     }
   };
-
   const dirRow = new FakeRowElement();
   const dirContainer = new FakeHtmlElement("div", dirRow);
   const dirContainerId = "isoDir-0";
-
   globals["document"] = {
     body,
     createElement(tagName: string) {
@@ -164,20 +166,16 @@ export const installIso9660ActionsDomStubs = (): Iso9660ActionsDomStubs => {
       return id === dirContainerId ? dirContainer : null;
     }
   };
-
   URL.createObjectURL = (blob: Blob): string => {
     createdBlob = blob;
     return "blob:unit-test";
   };
   URL.revokeObjectURL = () => {};
-
   const button = new FakeButtonElement();
   button.addClass("isoExtractButton");
   button.setAttribute("data-iso-action", "extract");
   button.setAttribute("data-iso-entry", "0");
-
   const child = new FakeElement("span", button);
-
   const dirButton = new FakeButtonElement();
   dirButton.addClass("isoDirToggleButton");
   dirButton.setAttribute("data-iso-action", "toggle-dir");
@@ -187,11 +185,8 @@ export const installIso9660ActionsDomStubs = (): Iso9660ActionsDomStubs => {
   dirButton.setAttribute("data-iso-depth", "0");
   dirButton.setAttribute("data-iso-target", dirContainerId);
   dirButton.textContent = "Expand";
-
   const dirChild = new FakeElement("span", dirButton);
-
   const messages: Array<string | null | undefined> = [];
-
   return {
     getAnchor: () => anchor,
     getButton: () => button as unknown as HTMLButtonElement,
@@ -202,24 +197,21 @@ export const installIso9660ActionsDomStubs = (): Iso9660ActionsDomStubs => {
     getDirRow: () => dirRow as unknown as { hidden: boolean },
     getCreatedBlob: () => createdBlob,
     getMessages: () => messages,
-    restore: () => {
-      if (hadGlobals.Element) {
-        globals["Element"] = originals.Element;
-      } else {
-        Reflect.deleteProperty(globals, "Element");
-      }
-      if (hadGlobals.HTMLButtonElement) {
-        globals["HTMLButtonElement"] = originals.HTMLButtonElement;
-      } else {
-        Reflect.deleteProperty(globals, "HTMLButtonElement");
-      }
-      if (hadGlobals.document) {
-        globals["document"] = originals.document;
-      } else {
-        Reflect.deleteProperty(globals, "document");
-      }
-      URL.createObjectURL = originals.createObjectURL;
-      URL.revokeObjectURL = originals.revokeObjectURL;
-    }
+    restore: () => restoreIso9660ActionsDomGlobals(globals, hadGlobals, originals)
   };
+};
+
+const restoreIso9660ActionsDomGlobals = (
+  globals: Record<string, unknown>,
+  hadGlobals: Iso9660DomGlobalPresence,
+  originals: Iso9660DomOriginalGlobals
+): void => {
+  if (hadGlobals.Element) globals["Element"] = originals.Element;
+  else Reflect.deleteProperty(globals, "Element");
+  if (hadGlobals.HTMLButtonElement) globals["HTMLButtonElement"] = originals.HTMLButtonElement;
+  else Reflect.deleteProperty(globals, "HTMLButtonElement");
+  if (hadGlobals.document) globals["document"] = originals.document;
+  else Reflect.deleteProperty(globals, "document");
+  URL.createObjectURL = originals.createObjectURL;
+  URL.revokeObjectURL = originals.revokeObjectURL;
 };

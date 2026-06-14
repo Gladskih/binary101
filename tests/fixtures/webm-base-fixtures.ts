@@ -3,8 +3,8 @@
 import { MockFile } from "../helpers/mock-file.js";
 import { concatParts, ebmlElement, ebmlFloat, ebmlString, ebmlUInt, encodeEbmlId } from "./webm-fixture-helpers.js";
 
-export const createWebmFile = () => {
-  const ebmlHeader = ebmlElement(
+const createWebmHeader = (): Uint8Array =>
+  ebmlElement(
     0x1a45dfa3,
     concatParts([
       ebmlUInt(0x4286, 1, 1), // EBMLVersion
@@ -17,13 +17,16 @@ export const createWebmFile = () => {
     ])
   );
 
+const createWebmInfo = (): Uint8Array => {
   const timecodeScale = ebmlUInt(0x2ad7b1, 1000000, 3); // ns
   const duration = ebmlFloat(0x4489, 2000, 8); // 2 seconds with default scale
   const muxingApp = ebmlString(0x4d80, "binary101-tests");
   const writingApp = ebmlString(0x5741, "binary101-webm");
   const title = ebmlString(0x7ba9, "Example WebM");
-  const info = ebmlElement(0x1549a966, concatParts([timecodeScale, duration, muxingApp, writingApp, title]));
+  return ebmlElement(0x1549a966, concatParts([timecodeScale, duration, muxingApp, writingApp, title]));
+};
 
+const createWebmVideoTrack = (): Uint8Array => {
   const videoSettings = ebmlElement(
     0xe0,
     concatParts([
@@ -38,7 +41,7 @@ export const createWebmFile = () => {
     ])
   );
 
-  const videoTrack = ebmlElement(
+  return ebmlElement(
     0xae,
     concatParts([
       ebmlUInt(0xd7, 1, 1), // TrackNumber
@@ -53,7 +56,9 @@ export const createWebmFile = () => {
       videoSettings
     ])
   );
+};
 
+const createWebmAudioTrack = (): Uint8Array => {
   const audioSettings = ebmlElement(
     0xe1,
     concatParts([
@@ -63,7 +68,7 @@ export const createWebmFile = () => {
     ])
   );
 
-  const audioTrack = ebmlElement(
+  return ebmlElement(
     0xae,
     concatParts([
       ebmlUInt(0xd7, 2, 1),
@@ -76,36 +81,46 @@ export const createWebmFile = () => {
       audioSettings
     ])
   );
+};
 
-  const tracks = ebmlElement(0x1654ae6b, concatParts([videoTrack, audioTrack]));
+const createWebmTracks = (): Uint8Array =>
+  ebmlElement(0x1654ae6b, concatParts([createWebmVideoTrack(), createWebmAudioTrack()]));
 
-  const buildSeekHead = (infoOffset: number, tracksOffset: number): Uint8Array => {
-    const seekInfo = ebmlElement(
-      0x4dbb,
-      concatParts([
-        ebmlElement(0x53ab, encodeEbmlId(0x1549a966)),
-        ebmlUInt(0x53ac, infoOffset, 2)
-      ])
-    );
-    const seekTracks = ebmlElement(
-      0x4dbb,
-      concatParts([
-        ebmlElement(0x53ab, encodeEbmlId(0x1654ae6b)),
-        ebmlUInt(0x53ac, tracksOffset, 2)
-      ])
-    );
-    return ebmlElement(0x114d9b74, concatParts([seekInfo, seekTracks]));
-  };
+const createWebmSeekHead = (infoOffset: number, tracksOffset: number): Uint8Array => {
+  const seekInfo = ebmlElement(
+    0x4dbb,
+    concatParts([
+      ebmlElement(0x53ab, encodeEbmlId(0x1549a966)),
+      ebmlUInt(0x53ac, infoOffset, 2)
+    ])
+  );
+  const seekTracks = ebmlElement(
+    0x4dbb,
+    concatParts([
+      ebmlElement(0x53ab, encodeEbmlId(0x1654ae6b)),
+      ebmlUInt(0x53ac, tracksOffset, 2)
+    ])
+  );
+  return ebmlElement(0x114d9b74, concatParts([seekInfo, seekTracks]));
+};
 
-  let seekHead = buildSeekHead(0, 0);
+const createStableWebmSeekHead = (info: Uint8Array): Uint8Array => {
+  let seekHead = createWebmSeekHead(0, 0);
   for (let i = 0; i < 4; i += 1) {
     const infoOffset = seekHead.length;
     const tracksOffset = seekHead.length + info.length;
-    const rebuilt = buildSeekHead(infoOffset, tracksOffset);
+    const rebuilt = createWebmSeekHead(infoOffset, tracksOffset);
     if (rebuilt.length === seekHead.length) break;
     seekHead = rebuilt;
   }
+  return seekHead;
+};
 
+export const createWebmFile = () => {
+  const ebmlHeader = createWebmHeader();
+  const info = createWebmInfo();
+  const tracks = createWebmTracks();
+  const seekHead = createStableWebmSeekHead(info);
   const segmentPayload = concatParts([seekHead, info, tracks]);
   const segment = ebmlElement(0x18538067, segmentPayload);
   const bytes = concatParts([ebmlHeader, segment]);

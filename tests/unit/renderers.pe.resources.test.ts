@@ -15,6 +15,208 @@ import {
 // IMAGE_FILE_HEADER.Machine values are defined by the PE/COFF spec and winnt.h.
 const AMD64_MACHINE = 0x8664;
 
+const createIconResourceGroup = (): NonNullable<PeResources["detail"]>[number] => ({
+  typeName: "ICON",
+  entries: [
+    {
+      id: null,
+      name: "app",
+      langs: [
+        {
+          lang: 1033,
+          size: 2048,
+          codePage: 1252,
+          dataRVA: 0,
+          dataFileOffset: 0,
+          reserved: 0,
+          previewMime: "image/png",
+          previewKind: "image",
+          previewDataUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB",
+          previewIssues: ["opaque background"]
+        }
+      ]
+    }
+  ]
+});
+
+const createManifestResourceGroup = (): NonNullable<PeResources["detail"]>[number] => {
+  const infoIncidental = createManifestIncidentalValues();
+  const validationIncidental = createManifestIncidentalValues();
+  return {
+    typeName: "MANIFEST",
+    entries: [
+      {
+        id: 2,
+        name: null,
+        langs: [
+          {
+            lang: null,
+            size: 96,
+            codePage: 0,
+            dataRVA: 0,
+            dataFileOffset: 0,
+            reserved: 0,
+            previewKind: "text",
+            textPreview: createManifestTextFixture(),
+            manifestInfo: createManifestInfoFixture(
+              {
+                processorArchitecture: "amd64",
+                requestedExecutionLevel: "asInvoker",
+                supportedArchitectures: ["amd64", "arm64"]
+              },
+              infoIncidental
+            ),
+            manifestValidation: {
+              ...createManifestValidationFixture(
+                AMD64_MACHINE,
+                { lang: null, processorArchitecture: "amd64", resourceId: 2 },
+                [],
+                validationIncidental
+              ),
+              validated: [
+                createManifestValidationMessageFixture(
+                  AMD64_MACHINE,
+                  { lang: null, processorArchitecture: "amd64", resourceId: 2 },
+                  validationIncidental
+                )
+              ]
+            },
+            previewIssues: ["invalid schema"]
+          }
+        ]
+      }
+    ]
+  };
+};
+
+const createTextResourceGroups = (): NonNullable<PeResources["detail"]> => [
+  {
+    typeName: "HTML",
+    entries: [
+      {
+        id: 9,
+        name: null,
+        langs: [
+          {
+            lang: 1033,
+            size: 128,
+            codePage: 65001,
+            dataRVA: 0,
+            dataFileOffset: 0,
+            reserved: 0,
+            previewKind: "html",
+            textPreview: "<b>hello</b>",
+            textEncoding: "UTF-8",
+            previewFields: [
+              { label: "Safety", value: "Shown as escaped source; HTML is not executed." }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    typeName: "STRING",
+    entries: [
+      {
+        id: 3,
+        name: null,
+        langs: [
+          {
+            lang: 1031,
+            size: 512,
+            codePage: 1200,
+            dataRVA: 0,
+            dataFileOffset: 0,
+            reserved: 0,
+            previewKind: "stringTable",
+            stringTable: Array.from({ length: 10 }, (_, idx) => ({ id: 32 + idx, text: `s${idx}` })),
+            previewIssues: ["String table data ended unexpectedly."]
+          }
+        ]
+      }
+    ]
+  }
+];
+
+const createStructuredResourceGroups = (): NonNullable<PeResources["detail"]> => [
+  {
+    typeName: "MESSAGETABLE",
+    entries: [
+      {
+        id: null,
+        name: "msgs",
+        langs: [
+          {
+            lang: 2057,
+            size: 640,
+            codePage: 0,
+            dataRVA: 0,
+            dataFileOffset: 0,
+            reserved: 0,
+            previewKind: "messageTable",
+            messageTable: {
+              messages: [
+                { id: 1, strings: ["hello"] },
+                { id: 2, strings: ["world"] }
+              ],
+              truncated: true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    typeName: "VERSION",
+    entries: [
+      {
+        id: 4,
+        name: null,
+        langs: [
+          {
+            lang: 3082,
+            size: 192,
+            codePage: 1252,
+            dataRVA: 0,
+            dataFileOffset: 0,
+            reserved: 0,
+            previewKind: "version",
+            versionInfo: {
+              fileVersionString: "1.2.3.4",
+              productVersionString: "5.6.7.8",
+              translations: [{ languageId: 3082, codePage: 1252 }],
+              stringValues: [{ table: "0c0a04e4", key: "CompanyName", value: "Binary101" }]
+            }
+          }
+        ]
+      }
+    ]
+  }
+];
+
+const createOtherResourceGroup = (): NonNullable<PeResources["detail"]>[number] => ({
+  typeName: "OTHER",
+  entries: [
+    {
+      id: 5,
+      name: null,
+      langs: [
+        {
+          lang: 0,
+          size: 0,
+          codePage: 0,
+          dataRVA: 0,
+          dataFileOffset: 0,
+          reserved: 0,
+          previewKind: "",
+          previewIssues: ["Resource bytes could not be read for preview."]
+        }
+      ]
+    }
+  ]
+});
+
 const createPeResources = (): PeResources => ({
   top: [
     { typeName: "ICON", kind: "id", leafCount: 2 },
@@ -33,201 +235,11 @@ const createPeResources = (): PeResources => ({
   ],
   issues: ["RT_ICON name directory could not be mapped."],
   detail: [
-    {
-      typeName: "ICON",
-      entries: [
-        {
-          id: null,
-          name: "app",
-          langs: [
-            {
-              lang: 1033,
-              size: 2048,
-              codePage: 1252,
-              dataRVA: 0,
-              dataFileOffset: 0,
-              reserved: 0,
-              previewMime: "image/png",
-              previewKind: "image",
-              previewDataUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB",
-              previewIssues: ["opaque background"]
-            }
-          ]
-        }
-      ]
-    },
-    {
-      typeName: "MANIFEST",
-      entries: [
-        {
-          id: 2,
-          name: null,
-          langs: [
-            {
-              lang: null,
-              size: 96,
-              codePage: 0,
-              dataRVA: 0,
-              dataFileOffset: 0,
-              reserved: 0,
-              previewKind: "text",
-              textPreview: createManifestTextFixture(),
-              manifestInfo: (() => {
-                const incidental = createManifestIncidentalValues();
-                return createManifestInfoFixture(
-                  {
-                    processorArchitecture: "amd64",
-                    requestedExecutionLevel: "asInvoker",
-                    supportedArchitectures: ["amd64", "arm64"]
-                  },
-                  incidental
-                );
-              })(),
-              manifestValidation: (() => {
-                const incidental = createManifestIncidentalValues();
-                return {
-                  ...createManifestValidationFixture(
-                    AMD64_MACHINE,
-                    { lang: null, processorArchitecture: "amd64", resourceId: 2 },
-                    [],
-                    incidental
-                  ),
-                  validated: [
-                    createManifestValidationMessageFixture(
-                      AMD64_MACHINE,
-                      { lang: null, processorArchitecture: "amd64", resourceId: 2 },
-                      incidental
-                    )
-                  ]
-                };
-              })(),
-              previewIssues: ["invalid schema"]
-            }
-          ]
-        }
-      ]
-    },
-    {
-      typeName: "HTML",
-      entries: [
-        {
-          id: 9,
-          name: null,
-          langs: [
-            {
-              lang: 1033,
-              size: 128,
-              codePage: 65001,
-              dataRVA: 0,
-              dataFileOffset: 0,
-              reserved: 0,
-              previewKind: "html",
-              textPreview: "<b>hello</b>",
-              textEncoding: "UTF-8",
-              previewFields: [
-                { label: "Safety", value: "Shown as escaped source; HTML is not executed." }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    {
-      typeName: "STRING",
-      entries: [
-        {
-          id: 3,
-          name: null,
-          langs: [
-            {
-              lang: 1031,
-              size: 512,
-              codePage: 1200,
-              dataRVA: 0,
-              dataFileOffset: 0,
-              reserved: 0,
-              previewKind: "stringTable",
-              stringTable: Array.from({ length: 10 }, (_, idx) => ({ id: 32 + idx, text: `s${idx}` })),
-              previewIssues: ["String table data ended unexpectedly."]
-            }
-          ]
-        }
-      ]
-    },
-    {
-      typeName: "MESSAGETABLE",
-      entries: [
-        {
-          id: null,
-          name: "msgs",
-          langs: [
-            {
-              lang: 2057,
-              size: 640,
-              codePage: 0,
-              dataRVA: 0,
-              dataFileOffset: 0,
-              reserved: 0,
-              previewKind: "messageTable",
-              messageTable: {
-                messages: [
-                  { id: 1, strings: ["hello"] },
-                  { id: 2, strings: ["world"] }
-                ],
-                truncated: true
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      typeName: "VERSION",
-      entries: [
-        {
-          id: 4,
-          name: null,
-          langs: [
-            {
-              lang: 3082,
-              size: 192,
-              codePage: 1252,
-              dataRVA: 0,
-              dataFileOffset: 0,
-              reserved: 0,
-              previewKind: "version",
-              versionInfo: {
-                fileVersionString: "1.2.3.4",
-                productVersionString: "5.6.7.8",
-                translations: [{ languageId: 3082, codePage: 1252 }],
-                stringValues: [{ table: "0c0a04e4", key: "CompanyName", value: "Binary101" }]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      typeName: "OTHER",
-      entries: [
-        {
-          id: 5,
-          name: null,
-          langs: [
-            {
-              lang: 0,
-              size: 0,
-              codePage: 0,
-              dataRVA: 0,
-              dataFileOffset: 0,
-              reserved: 0,
-              previewKind: "",
-              previewIssues: ["Resource bytes could not be read for preview."]
-            }
-          ]
-        }
-      ]
-    }
+    createIconResourceGroup(),
+    createManifestResourceGroup(),
+    ...createTextResourceGroups(),
+    ...createStructuredResourceGroups(),
+    createOtherResourceGroup()
   ]
 });
 

@@ -79,6 +79,77 @@ const resolveDebugRawSpan = (
   return { start, end };
 };
 
+const readDebugDirectoryEntry = async (
+  reader: FileRangeReader,
+  rvaToOff: RvaToOffset,
+  debugDirectoryRva: number,
+  index: number,
+  addWarning: (message: string | null) => void
+): Promise<DataView | null> => {
+  const entryRva = debugDirectoryRva + index * IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE;
+  const entryOffset = rvaToOff(entryRva >>> 0);
+  if (entryOffset == null || entryOffset < 0) {
+    addWarning("Debug directory no longer maps through rvaToOff.");
+    return null;
+  }
+  if (entryOffset + IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE > reader.size) {
+    addWarning("Debug directory extends beyond end of file (possible truncation).");
+    return null;
+  }
+  const view = await reader.read(entryOffset, IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE);
+  if (view.byteLength < IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE) {
+    addWarning("Debug directory entry is truncated.");
+    return null;
+  }
+  return view;
+};
+
+const decodeDebugDirectoryEntry = async (
+  reader: FileRangeReader,
+  rvaToOff: RvaToOffset,
+  view: DataView,
+  machine: number,
+  addWarning: (message: string | null) => void,
+  rawDataRanges: FileRange[]
+): Promise<PeDebugDirectoryEntry> => {
+  const characteristics = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_CHARACTERISTICS, true);
+  if (characteristics !== 0) {
+    addWarning("Debug directory entry Characteristics field is non-zero; the PE format reserves it as 0.");
+  }
+  const type = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_TYPE, true);
+  const dataSize = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_SIZE_OF_DATA, true);
+  const addressOfRawDataRva = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_ADDRESS_OF_RAW_DATA, true);
+  const pointerToRawDataOff = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_POINTER_TO_RAW_DATA, true);
+  const rawDataRange = resolveDebugRawSpan(reader.size, rvaToOff, addressOfRawDataRva, pointerToRawDataOff, dataSize);
+  if (rawDataRange) appendFileRange(rawDataRanges, rawDataRange.start, rawDataRange.end, reader.size);
+  const currentEntry: PeDebugDirectoryEntry = {
+    characteristics,
+    type,
+    typeName: DEBUG_TYPE_NAMES[type] || `TYPE_${type}`,
+    sizeOfData: dataSize,
+    addressOfRawData: addressOfRawDataRva,
+    pointerToRawData: pointerToRawDataOff
+  };
+  Object.assign(
+    currentEntry,
+    await decodeDebugEntryPayload(
+      reader,
+      {
+        type,
+        typeName: currentEntry.typeName,
+        fileSize: reader.size,
+        rvaToOff,
+        addressOfRawDataRva,
+        pointerToRawDataOff,
+        dataSize,
+        machine
+      },
+      addWarning
+    )
+  );
+  return currentEntry;
+};
+
 export async function parseDebugDirectory(
   reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
@@ -149,66 +220,9 @@ export async function parseDebugDirectory(
     addWarning("Debug directory size has trailing bytes after whole entries.");
   }
   for (let index = 0; index < maxEntries; index++) {
-    const entryRva = debugDir.rva + index * IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE;
-    const entryOffset = rvaToOff(entryRva >>> 0);
-    if (entryOffset == null || entryOffset < 0) {
-      addWarning("Debug directory no longer maps through rvaToOff.");
-      break;
-    }
-    if (entryOffset + IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE > fileSize) {
-      addWarning("Debug directory extends beyond end of file (possible truncation).");
-      break;
-    }
-    const view = await reader.read(entryOffset, IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE);
-    if (view.byteLength < IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE) {
-      addWarning("Debug directory entry is truncated.");
-      break;
-    }
-
-    const characteristics = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_CHARACTERISTICS, true);
-    if (characteristics !== 0) {
-      addWarning("Debug directory entry Characteristics field is non-zero; the PE format reserves it as 0.");
-    }
-    const type = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_TYPE, true);
-    const dataSize = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_SIZE_OF_DATA, true);
-    const addressOfRawDataRva = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_ADDRESS_OF_RAW_DATA, true);
-    const pointerToRawDataOff = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_POINTER_TO_RAW_DATA, true);
-    const rawDataRange = resolveDebugRawSpan(
-      fileSize,
-      rvaToOff,
-      addressOfRawDataRva,
-      pointerToRawDataOff,
-      dataSize
-    );
-    if (rawDataRange) {
-      appendFileRange(rawDataRanges, rawDataRange.start, rawDataRange.end, fileSize);
-    }
-
-    const currentEntry: PeDebugDirectoryEntry = {
-      characteristics,
-      type,
-      typeName: DEBUG_TYPE_NAMES[type] || `TYPE_${type}`,
-      sizeOfData: dataSize,
-      addressOfRawData: addressOfRawDataRva,
-      pointerToRawData: pointerToRawDataOff
-    };
-    Object.assign(
-      currentEntry,
-      await decodeDebugEntryPayload(
-        reader,
-        {
-          type,
-          typeName: currentEntry.typeName,
-          fileSize,
-          rvaToOff,
-          addressOfRawDataRva,
-          pointerToRawDataOff,
-          dataSize,
-          machine
-        },
-        addWarning
-      )
-    );
+    const view = await readDebugDirectoryEntry(reader, rvaToOff, debugDir.rva, index, addWarning);
+    if (!view) break;
+    const currentEntry = await decodeDebugDirectoryEntry(reader, rvaToOff, view, machine, addWarning, rawDataRanges);
     if (currentEntry.codeView && !entry) entry = currentEntry.codeView;
     entries.push(currentEntry);
   }

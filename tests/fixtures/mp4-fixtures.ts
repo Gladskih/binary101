@@ -55,14 +55,13 @@ const makeNullTerminatedAscii = (text: string): Uint8Array => {
   return out;
 };
 
-export const createMp4File = () => {
-  const buildFtyp = () =>
-    makeBox(
-      "ftyp",
-      concatParts([encoder.encode("isom"), u32be(0x200), encoder.encode("isom"), encoder.encode("mp41")])
-    );
+const buildFtyp = () =>
+  makeBox(
+    "ftyp",
+    concatParts([encoder.encode("isom"), u32be(0x200), encoder.encode("isom"), encoder.encode("mp41")])
+  );
 
-  const buildMvhd = (timescale: number, duration: number) => {
+const buildMvhd = (timescale: number, duration: number) => {
     const payload = new Uint8Array(96).fill(0);
     const dv = new DataView(payload.buffer);
     dv.setUint32(0, 0, false);
@@ -76,9 +75,9 @@ export const createMp4File = () => {
     dv.setUint32(56, 0x40000000, false);
     dv.setUint32(92, 3, false);
     return makeFullBox("mvhd", 0, 0, payload);
-  };
+};
 
-  const buildTkhd = (trackId: number, duration: number, width: number, height: number, volume: number) => {
+const buildTkhd = (trackId: number, duration: number, width: number, height: number, volume: number) => {
     const payload = new Uint8Array(80).fill(0);
     const dv = new DataView(payload.buffer);
     dv.setUint32(0, 0, false);
@@ -103,9 +102,9 @@ export const createMp4File = () => {
     dv.setUint32(72, width << 16, false);
     dv.setUint32(76, height << 16, false);
     return makeFullBox("tkhd", 0, 0x000007, payload);
-  };
+};
 
-  const buildMdhd = (timescale: number, duration: number) => {
+const buildMdhd = (timescale: number, duration: number) => {
     const payload = new Uint8Array(20).fill(0);
     const dv = new DataView(payload.buffer);
     dv.setUint32(0, 0, false);
@@ -114,15 +113,15 @@ export const createMp4File = () => {
     dv.setUint32(12, duration >>> 0, false);
     dv.setUint16(16, 0x15c7, false); // "eng"
     return makeFullBox("mdhd", 0, 0, payload);
-  };
+};
 
-  const buildHdlr = (handler: string, name: string) => {
+const buildHdlr = (handler: string, name: string) => {
     const nameBytes = makeNullTerminatedAscii(name);
     const payload = concatParts([u32be(0), encoder.encode(handler), new Uint8Array(12).fill(0), nameBytes]);
     return makeFullBox("hdlr", 0, 0, payload);
-  };
+};
 
-  const buildAvc1Stsd = () => {
+const buildAvc1Stsd = () => {
     const body = new Uint8Array(78).fill(0);
     const dv = new DataView(body.buffer);
     dv.setUint16(6, 1, false);
@@ -147,9 +146,9 @@ export const createMp4File = () => {
     entry.set(avcC, 8 + body.length);
     const entryCount = u32be(1);
     return makeFullBox("stsd", 0, 0, concatParts([entryCount, entry]));
-  };
+};
 
-  const buildEsds = () => {
+const buildEsds = () => {
     const audioSpecific = new Uint8Array([0x11, 0x90]);
     const decoderSpecific = concatParts([new Uint8Array([0x05, audioSpecific.length]), audioSpecific]);
     const decConfigPayload = concatParts([
@@ -170,9 +169,9 @@ export const createMp4File = () => {
       slConfig
     ]);
     return makeFullBox("esds", 0, 0, esDescriptor);
-  };
+};
 
-  const buildMp4aStsd = () => {
+const buildMp4aStsd = () => {
     const body = new Uint8Array(28).fill(0);
     const dv = new DataView(body.buffer);
     dv.setUint16(6, 1, false);
@@ -189,14 +188,14 @@ export const createMp4File = () => {
     entry.set(esds, 8 + body.length);
     const entryCount = u32be(1);
     return makeFullBox("stsd", 0, 0, concatParts([entryCount, entry]));
-  };
+};
 
-  const buildStts = (sampleCount: number, delta: number) => {
+const buildStts = (sampleCount: number, delta: number) => {
     const payload = concatParts([u32be(1), u32be(sampleCount), u32be(delta)]);
     return makeFullBox("stts", 0, 0, payload);
-  };
+};
 
-  const buildStsz = (sampleCount: number, sizes: number[]) => {
+const buildStsz = (sampleCount: number, sizes: number[]) => {
     const table = new Uint8Array(sampleCount * 4);
     const tdv = new DataView(table.buffer);
     sizes.forEach((size, idx) => {
@@ -204,36 +203,37 @@ export const createMp4File = () => {
     });
     const payload = concatParts([u32be(0), u32be(sampleCount), table]);
     return makeFullBox("stsz", 0, 0, payload);
-  };
+};
 
-  const buildStco = () => makeFullBox("stco", 0, 0, concatParts([u32be(1), u32be(0)]));
+const buildStco = () => makeFullBox("stco", 0, 0, concatParts([u32be(1), u32be(0)]));
 
-  const buildStbl = (stsd: Uint8Array, stts: Uint8Array, stsz: Uint8Array, stco: Uint8Array) =>
-    makeBox("stbl", concatParts([stsd, stts, stsz, stco]));
+const buildStbl = (stsd: Uint8Array, stts: Uint8Array, stsz: Uint8Array, stco: Uint8Array) =>
+  makeBox("stbl", concatParts([stsd, stts, stsz, stco]));
 
-  const buildVmhd = () => makeFullBox("vmhd", 0, 0x000001, concatParts([u16be(0), u16be(0), u16be(0), u16be(0)]));
-  const buildSmhd = () => makeFullBox("smhd", 0, 0, concatParts([u16be(0), u16be(0)]));
+const buildVmhd = () => makeFullBox("vmhd", 0, 0x000001, concatParts([u16be(0), u16be(0), u16be(0), u16be(0)]));
+const buildSmhd = () => makeFullBox("smhd", 0, 0, concatParts([u16be(0), u16be(0)]));
 
-  const buildMinf = (isVideo: boolean, stbl: Uint8Array) => {
+const buildMinf = (isVideo: boolean, stbl: Uint8Array) => {
     const header = isVideo ? buildVmhd() : buildSmhd();
     return makeBox("minf", concatParts([header, stbl]));
-  };
+};
 
-  const buildMdia = (
-    handler: string,
-    name: string,
-    timescale: number,
-    duration: number,
-    stbl: Uint8Array
-  ) =>
-    makeBox(
-      "mdia",
-      concatParts([buildMdhd(timescale, duration), buildHdlr(handler, name), buildMinf(handler === "vide", stbl)])
-    );
+const buildMdia = (
+  handler: string,
+  name: string,
+  timescale: number,
+  duration: number,
+  stbl: Uint8Array
+) =>
+  makeBox(
+    "mdia",
+    concatParts([buildMdhd(timescale, duration), buildHdlr(handler, name), buildMinf(handler === "vide", stbl)])
+  );
 
-  const buildTrak = (id: number, duration: number, width: number, height: number, volume: number, mdia: Uint8Array) =>
-    makeBox("trak", concatParts([buildTkhd(id, duration, width, height, volume), mdia]));
+const buildTrak = (id: number, duration: number, width: number, height: number, volume: number, mdia: Uint8Array) =>
+  makeBox("trak", concatParts([buildTkhd(id, duration, width, height, volume), mdia]));
 
+export const createMp4File = () => {
   const stsdVideo = buildAvc1Stsd();
   const sttsVideo = buildStts(2, 90000);
   const stszVideo = buildStsz(2, [1200, 1100]);

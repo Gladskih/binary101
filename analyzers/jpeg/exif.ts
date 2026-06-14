@@ -1,8 +1,6 @@
 "use strict";
-
 import { readAsciiString } from "../../binary-utils.js";
 import type { ExifData, ExifGps, ExifRational, ExifRawTag } from "./types.js";
-
 const EXIF_TYPE_SIZE: Record<number, number> = {
   1: 1, // BYTE
   2: 1, // ASCII
@@ -10,24 +8,24 @@ const EXIF_TYPE_SIZE: Record<number, number> = {
   4: 4, // LONG
   5: 8 // RATIONAL
 };
-
+interface ExifParsingState {
+  dv: DataView; tiffOffset: number; littleEndian: boolean; exif: ExifData;
+  exifIfdRel: number | null; gpsIfdRel: number | null;
+}
 function readUint16(dv: DataView, offset: number, littleEndian: boolean): number | null {
   if (offset + 2 > dv.byteLength) return null;
   return dv.getUint16(offset, littleEndian);
 }
-
 function readUint32(dv: DataView, offset: number, littleEndian: boolean): number | null {
   if (offset + 4 > dv.byteLength) return null;
   return dv.getUint32(offset, littleEndian);
 }
-
 function readRational(dv: DataView, offset: number, littleEndian: boolean): ExifRational | null {
   const num = readUint32(dv, offset, littleEndian);
   const den = readUint32(dv, offset + 4, littleEndian);
   if (num == null || den == null || den === 0) return null;
   return { num, den };
 }
-
 function readTagValueOffset(
   dv: DataView,
   base: number,
@@ -41,12 +39,9 @@ function readTagValueOffset(
   const valueBytes = typeSize * count;
   const valueOrOffset = readUint32(dv, entryOffset + 8, littleEndian);
   if (valueOrOffset == null) return null;
-  if (valueBytes <= 4) {
-    return entryOffset + 8;
-  }
+  if (valueBytes <= 4) return entryOffset + 8;
   return base + valueOrOffset;
 }
-
 function createRawTagPreview(
   dv: DataView,
   valueOffset: number,
@@ -89,7 +84,6 @@ function createRawTagPreview(
   }
   return "(binary/unsupported type)";
 }
-
 function recordRawTag(
   exif: ExifData,
   dv: DataView,
@@ -110,7 +104,6 @@ function recordRawTag(
   };
   exif.rawTags.push(rawTag);
 }
-
 export function parseExifFromApp1(dv: DataView, tiffOffset: number): ExifData | null {
   if (tiffOffset + 8 > dv.byteLength) return null;
   const endianMark = readUint16(dv, tiffOffset, false);
@@ -122,8 +115,21 @@ export function parseExifFromApp1(dv: DataView, tiffOffset: number): ExifData | 
   if (ifd0Rel == null) return null;
   const ifd0 = tiffOffset + ifd0Rel;
   if (ifd0 + 2 > dv.byteLength) return null;
-
-  const exif: ExifData = {
+  const state: ExifParsingState = {
+    dv,
+    tiffOffset,
+    littleEndian,
+    exif: createEmptyExifData(),
+    exifIfdRel: null,
+    gpsIfdRel: null
+  };
+  parseIfd(state, ifd0, "IFD0", true);
+  parseReferencedExifIfd(state);
+  parseReferencedGpsIfd(state);
+  return state.exif;
+}
+function createEmptyExifData(): ExifData {
+  return {
     orientation: null,
     make: null,
     model: null,
@@ -138,158 +144,157 @@ export function parseExifFromApp1(dv: DataView, tiffOffset: number): ExifData | 
     gps: null,
     rawTags: []
   };
-
-  let exifIfdRel: number | null = null;
-  let gpsIfdRel: number | null = null;
-
-  const parseIfd = (ifdStart: number, ifdName: string, isRoot: boolean): void => {
-    if (ifdStart + 2 > dv.byteLength) return;
-    const count = readUint16(dv, ifdStart, littleEndian);
-    if (count == null) return;
-    let entryOffset = ifdStart + 2;
-    for (let i = 0; i < count; i += 1) {
-      if (entryOffset + 12 > dv.byteLength) break;
-      const tag = readUint16(dv, entryOffset, littleEndian);
-      const type = readUint16(dv, entryOffset + 2, littleEndian);
-      const valueCount = readUint32(dv, entryOffset + 4, littleEndian);
-      if (tag == null || type == null || valueCount == null) break;
-      const valueOffset = readTagValueOffset(
-        dv,
-        tiffOffset,
-        entryOffset,
-        littleEndian,
-        type,
-        valueCount
-      );
-      if (valueOffset == null || valueOffset > dv.byteLength) {
-        entryOffset += 12;
-        continue;
-      }
-
-      if (isRoot) {
-        if (tag === 0x0112 && type === 3 && valueCount >= 1) {
-          const v = readUint16(dv, valueOffset, littleEndian);
-          if (v != null) exif.orientation = v;
-        } else if ((tag === 0x010f || tag === 0x0110) && type === 2) {
-          const str = readAsciiString(dv, valueOffset, valueCount);
-          if (str) {
-            if (tag === 0x010f) exif.make = str;
-            if (tag === 0x0110) exif.model = str;
-          }
-        } else if (tag === 0x8769 && (type === 4 || type === 3) && valueCount === 1) {
-          exifIfdRel = readUint32(dv, entryOffset + 8, littleEndian);
-        } else if (tag === 0x8825 && (type === 4 || type === 3) && valueCount === 1) {
-          gpsIfdRel = readUint32(dv, entryOffset + 8, littleEndian);
-        }
-      } else {
-        if (tag === 0x8827 && (type === 3 || type === 4) && valueCount >= 1) {
-          const v =
-            type === 3
-              ? readUint16(dv, valueOffset, littleEndian)
-              : readUint32(dv, valueOffset, littleEndian);
-          if (v != null) exif.iso = v;
-        } else if (tag === 0x829a && type === 5 && valueCount >= 1) {
-          const r = readRational(dv, valueOffset, littleEndian);
-          if (r) exif.exposureTime = r;
-        } else if (tag === 0x829d && type === 5 && valueCount >= 1) {
-          const r = readRational(dv, valueOffset, littleEndian);
-          if (r) exif.fNumber = r;
-        } else if (tag === 0x920a && type === 5 && valueCount >= 1) {
-          const r = readRational(dv, valueOffset, littleEndian);
-          if (r) exif.focalLength = r;
-        } else if (tag === 0x9003 && type === 2) {
-          const str = readAsciiString(dv, valueOffset, valueCount);
-          if (str) exif.dateTimeOriginal = str;
-        } else if (tag === 0x9209 && type === 3 && valueCount >= 1) {
-          const v = readUint16(dv, valueOffset, littleEndian);
-          if (v != null) exif.flash = v;
-        } else if (tag === 0xa002 && (type === 3 || type === 4) && valueCount >= 1) {
-          const v =
-            type === 3
-              ? readUint16(dv, valueOffset, littleEndian)
-              : readUint32(dv, valueOffset, littleEndian);
-          if (v != null) exif.pixelXDimension = v;
-        } else if (tag === 0xa003 && (type === 3 || type === 4) && valueCount >= 1) {
-          const v =
-            type === 3
-              ? readUint16(dv, valueOffset, littleEndian)
-              : readUint32(dv, valueOffset, littleEndian);
-          if (v != null) exif.pixelYDimension = v;
-        }
-      }
-
-      recordRawTag(exif, dv, littleEndian, ifdName, tag, type, valueCount, valueOffset);
-
-      entryOffset += 12;
-    }
-  };
-
-  parseIfd(ifd0, "IFD0", true);
-
-  if (exifIfdRel != null) {
-    const exifIfd = tiffOffset + exifIfdRel;
-    if (exifIfd + 2 <= dv.byteLength) {
-      parseIfd(exifIfd, "ExifIFD", false);
-    }
+}
+function parseIfd(state: ExifParsingState, ifdStart: number, ifdName: string, isRoot: boolean): void {
+  if (ifdStart + 2 > state.dv.byteLength) return;
+  const count = readUint16(state.dv, ifdStart, state.littleEndian);
+  if (count == null) return;
+  let entryOffset = ifdStart + 2;
+  for (let i = 0; i < count; i += 1) {
+    if (entryOffset + 12 > state.dv.byteLength) break;
+    entryOffset = parseIfdEntry(state, ifdName, entryOffset, isRoot);
   }
-
-  if (gpsIfdRel != null) {
-    const gpsIfd = tiffOffset + gpsIfdRel;
-    if (gpsIfd + 2 <= dv.byteLength) {
-      const gps: ExifGps = {
-        latRef: null,
-        lat: null,
-        lonRef: null,
-        lon: null
-      };
-      const count = readUint16(dv, gpsIfd, littleEndian);
-      if (count != null) {
-        let entryOffset = gpsIfd + 2;
-        for (let i = 0; i < count; i += 1) {
-          if (entryOffset + 12 > dv.byteLength) break;
-          const tag = readUint16(dv, entryOffset, littleEndian);
-          const type = readUint16(dv, entryOffset + 2, littleEndian);
-          const valueCount = readUint32(dv, entryOffset + 4, littleEndian);
-          if (tag == null || type == null || valueCount == null) break;
-          const valueOffset = readTagValueOffset(
-            dv,
-            tiffOffset,
-            entryOffset,
-            littleEndian,
-            type,
-            valueCount
-          );
-          if (valueOffset == null || valueOffset > dv.byteLength) {
-            entryOffset += 12;
-            continue;
-          }
-
-          recordRawTag(exif, dv, littleEndian, "GPSIFD", tag, type, valueCount, valueOffset);
-
-          if (tag === 0x0001 && type === 2 && valueCount >= 1) {
-            gps.latRef = readAsciiString(dv, valueOffset, valueCount).trim();
-          } else if (tag === 0x0002 && type === 5 && valueCount >= 3) {
-            const r0 = readRational(dv, valueOffset + 0, littleEndian);
-            const r1 = readRational(dv, valueOffset + 8, littleEndian);
-            const r2 = readRational(dv, valueOffset + 16, littleEndian);
-            if (r0 && r1 && r2) gps.lat = [r0, r1, r2];
-          } else if (tag === 0x0003 && type === 2 && valueCount >= 1) {
-            gps.lonRef = readAsciiString(dv, valueOffset, valueCount).trim();
-          } else if (tag === 0x0004 && type === 5 && valueCount >= 3) {
-            const r0 = readRational(dv, valueOffset + 0, littleEndian);
-            const r1 = readRational(dv, valueOffset + 8, littleEndian);
-            const r2 = readRational(dv, valueOffset + 16, littleEndian);
-            if (r0 && r1 && r2) gps.lon = [r0, r1, r2];
-          }
-
-          entryOffset += 12;
-        }
-      }
-      if (gps.lat && gps.lon && gps.latRef && gps.lonRef) {
-        exif.gps = gps;
-      }
-    }
+}
+function parseIfdEntry(
+  state: ExifParsingState,
+  ifdName: string,
+  entryOffset: number,
+  isRoot: boolean
+): number {
+  const tag = readUint16(state.dv, entryOffset, state.littleEndian);
+  const type = readUint16(state.dv, entryOffset + 2, state.littleEndian);
+  const valueCount = readUint32(state.dv, entryOffset + 4, state.littleEndian);
+  if (tag == null || type == null || valueCount == null) return state.dv.byteLength;
+  const valueOffset = readTagValueOffset(state.dv, state.tiffOffset, entryOffset, state.littleEndian, type, valueCount);
+  if (valueOffset == null || valueOffset > state.dv.byteLength) return entryOffset + 12;
+  if (isRoot) readRootTag(state, tag, type, valueCount, valueOffset, entryOffset);
+  else readExifTag(state, tag, type, valueCount, valueOffset);
+  recordRawTag(state.exif, state.dv, state.littleEndian, ifdName, tag, type, valueCount, valueOffset);
+  return entryOffset + 12;
+}
+function readRootTag(
+  state: ExifParsingState,
+  tag: number,
+  type: number,
+  valueCount: number,
+  valueOffset: number,
+  entryOffset: number
+): void {
+  if (tag === 0x0112 && type === 3 && valueCount >= 1) {
+    state.exif.orientation = readUint16(state.dv, valueOffset, state.littleEndian);
+  } else if ((tag === 0x010f || tag === 0x0110) && type === 2) {
+    readCameraString(state, tag, valueOffset, valueCount);
+  } else if (tag === 0x8769 && (type === 4 || type === 3) && valueCount === 1) {
+    state.exifIfdRel = readUint32(state.dv, entryOffset + 8, state.littleEndian);
+  } else if (tag === 0x8825 && (type === 4 || type === 3) && valueCount === 1) {
+    state.gpsIfdRel = readUint32(state.dv, entryOffset + 8, state.littleEndian);
   }
-
-  return exif;
+}
+function readCameraString(state: ExifParsingState, tag: number, valueOffset: number, valueCount: number): void {
+  const str = readAsciiString(state.dv, valueOffset, valueCount);
+  if (!str) return;
+  if (tag === 0x010f) state.exif.make = str;
+  if (tag === 0x0110) state.exif.model = str;
+}
+function readExifTag(
+  state: ExifParsingState,
+  tag: number,
+  type: number,
+  valueCount: number,
+  valueOffset: number
+): void {
+  if (tag === 0x8827 && (type === 3 || type === 4) && valueCount >= 1) {
+    state.exif.iso = readShortOrLong(state, type, valueOffset);
+  } else if (tag === 0x829a && type === 5 && valueCount >= 1) {
+    state.exif.exposureTime = readRational(state.dv, valueOffset, state.littleEndian);
+  } else if (tag === 0x829d && type === 5 && valueCount >= 1) {
+    state.exif.fNumber = readRational(state.dv, valueOffset, state.littleEndian);
+  } else if (tag === 0x920a && type === 5 && valueCount >= 1) {
+    state.exif.focalLength = readRational(state.dv, valueOffset, state.littleEndian);
+  } else {
+    readSecondaryExifTag(state, tag, type, valueCount, valueOffset);
+  }
+}
+function readSecondaryExifTag(
+  state: ExifParsingState,
+  tag: number,
+  type: number,
+  valueCount: number,
+  valueOffset: number
+): void {
+  if (tag === 0x9003 && type === 2) {
+    const str = readAsciiString(state.dv, valueOffset, valueCount);
+    if (str) state.exif.dateTimeOriginal = str;
+  } else if (tag === 0x9209 && type === 3 && valueCount >= 1) {
+    state.exif.flash = readUint16(state.dv, valueOffset, state.littleEndian);
+  } else if (tag === 0xa002 && (type === 3 || type === 4) && valueCount >= 1) {
+    state.exif.pixelXDimension = readShortOrLong(state, type, valueOffset);
+  } else if (tag === 0xa003 && (type === 3 || type === 4) && valueCount >= 1) {
+    state.exif.pixelYDimension = readShortOrLong(state, type, valueOffset);
+  }
+}
+function readShortOrLong(state: ExifParsingState, type: number, valueOffset: number): number | null {
+  return type === 3
+    ? readUint16(state.dv, valueOffset, state.littleEndian)
+    : readUint32(state.dv, valueOffset, state.littleEndian);
+}
+function parseReferencedExifIfd(state: ExifParsingState): void {
+  if (state.exifIfdRel == null) return;
+  const exifIfd = state.tiffOffset + state.exifIfdRel;
+  if (exifIfd + 2 <= state.dv.byteLength) parseIfd(state, exifIfd, "ExifIFD", false);
+}
+function parseReferencedGpsIfd(state: ExifParsingState): void {
+  if (state.gpsIfdRel == null) return;
+  const gpsIfd = state.tiffOffset + state.gpsIfdRel;
+  if (gpsIfd + 2 > state.dv.byteLength) return;
+  const gps: ExifGps = { latRef: null, lat: null, lonRef: null, lon: null };
+  parseGpsIfdEntries(state, gpsIfd, gps);
+  if (gps.lat && gps.lon && gps.latRef && gps.lonRef) state.exif.gps = gps;
+}
+function parseGpsIfdEntries(state: ExifParsingState, gpsIfd: number, gps: ExifGps): void {
+  const count = readUint16(state.dv, gpsIfd, state.littleEndian);
+  if (count == null) return;
+  let entryOffset = gpsIfd + 2;
+  for (let i = 0; i < count; i += 1) {
+    if (entryOffset + 12 > state.dv.byteLength) break;
+    entryOffset = parseGpsEntry(state, gps, entryOffset);
+  }
+}
+function parseGpsEntry(state: ExifParsingState, gps: ExifGps, entryOffset: number): number {
+  const tag = readUint16(state.dv, entryOffset, state.littleEndian);
+  const type = readUint16(state.dv, entryOffset + 2, state.littleEndian);
+  const valueCount = readUint32(state.dv, entryOffset + 4, state.littleEndian);
+  if (tag == null || type == null || valueCount == null) return state.dv.byteLength;
+  const valueOffset = readTagValueOffset(state.dv, state.tiffOffset, entryOffset, state.littleEndian, type, valueCount);
+  if (valueOffset == null || valueOffset > state.dv.byteLength) return entryOffset + 12;
+  recordRawTag(state.exif, state.dv, state.littleEndian, "GPSIFD", tag, type, valueCount, valueOffset);
+  readGpsTag(state, gps, tag, type, valueCount, valueOffset);
+  return entryOffset + 12;
+}
+function readGpsTag(
+  state: ExifParsingState,
+  gps: ExifGps,
+  tag: number,
+  type: number,
+  valueCount: number,
+  valueOffset: number
+): void {
+  if (tag === 0x0001 && type === 2 && valueCount >= 1) {
+    gps.latRef = readAsciiString(state.dv, valueOffset, valueCount).trim();
+  } else if (tag === 0x0002 && type === 5 && valueCount >= 3) {
+    gps.lat = readGpsCoordinate(state, valueOffset);
+  } else if (tag === 0x0003 && type === 2 && valueCount >= 1) {
+    gps.lonRef = readAsciiString(state.dv, valueOffset, valueCount).trim();
+  } else if (tag === 0x0004 && type === 5 && valueCount >= 3) {
+    gps.lon = readGpsCoordinate(state, valueOffset);
+  }
+}
+function readGpsCoordinate(
+  state: ExifParsingState,
+  valueOffset: number
+): [ExifRational, ExifRational, ExifRational] | null {
+  const r0 = readRational(state.dv, valueOffset, state.littleEndian);
+  const r1 = readRational(state.dv, valueOffset + 8, state.littleEndian);
+  const r2 = readRational(state.dv, valueOffset + 16, state.littleEndian);
+  return r0 && r1 && r2 ? [r0, r1, r2] : null;
 }

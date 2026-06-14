@@ -80,15 +80,12 @@ void test("renderers produce readable HTML output", async () => {
   const jpeg = await parseOnly(createJpegFile(), "jpeg");
   const jpegHtml = renderJpeg(jpeg);
   assert.match(jpegHtml, /JPEG/);
-
   const webp = await parseOnly(createWebpFile(), "webp");
   const webpHtml = renderWebp(webp);
   assert.match(webpHtml, /WebP/);
-
   const ani = await parseOnly(createAniFile(), "ani");
   const aniHtml = renderAni(ani);
   assert.match(aniHtml, /ANI/);
-
   const webm = await parseOnly(createWebmWithCues(), "webm");
   const webmHtml = renderWebm(webm);
   assert.match(webmHtml, /WebM/);
@@ -130,6 +127,9 @@ void test("renderers produce readable HTML output", async () => {
   const pcapng = await parseOnly(createPcapNgFile(), "pcapng");
   const pcapngHtml = renderPcapNg(pcapng);
   assert.match(pcapngHtml, /PCAP-NG/i);
+});
+
+void test("renderers produce readable document and audio HTML output", async () => {
   const avi = await parseOnly(createAviFile(), "avi");
   const aviHtml = renderAvi(avi);
   assert.match(aviHtml, /AVI/);
@@ -172,7 +172,8 @@ void test("renderers produce readable HTML output", async () => {
   assert.match(lnkHtml, /LocalBasePath \+ CommonPathSuffix/);
   assert.match(lnkHtml, /System\.VolumeId/);
   assert.match(lnkHtml, /System\.Link\.TargetParsingPath/);
-
+});
+void test("renderers produce readable archive and executable HTML output", async () => {
   const zip = await parseOnly(createZipFile(), "zip");
   zip.issues = ["central directory synthetic issue"];
   const zipHtml = renderZip(zip);

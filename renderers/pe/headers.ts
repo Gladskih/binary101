@@ -127,6 +127,42 @@ const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
 const renderInlineHeaderTitle = (title: string): string =>
   `<h4 style="margin:0 0 .5rem 0;font-size:.9rem">${title}</h4>`;
 
+const renderHeadersTail = (pe: PeParseResult, out: string[]): void => {
+  renderDataDirectories(pe, out);
+  renderSections(pe, out);
+  const coffTailSummary = renderCoffTailSummary(pe);
+  if (coffTailSummary) out.push(coffTailSummary);
+};
+
+const renderMissingOptionalHeader = (pe: PeParseResult, out: string[]): void => {
+  out.push(`</dl>`);
+  out.push(`<div class="smallNote">Optional header fields are unavailable because the file did not declare a recognized PE32, PE32+, or ROM optional header.</div>`);
+  out.push(renderPeSectionEnd());
+  renderHeadersTail(pe, out);
+};
+
+const renderRomOptionalHeader = (pe: PeParseResult, out: string[]): void => {
+  if (!pe.opt || pe.opt.Magic !== ROM_OPTIONAL_HEADER_MAGIC) return;
+  out.push(renderDefinitionRow("BaseOfCode", hex(pe.opt.BaseOfCode, 8), "Base address of code within the ROM image."));
+  out.push(renderDefinitionRow("BaseOfData", hex(pe.opt.BaseOfData, 8), "Base address of initialized data within the ROM image."));
+  out.push(renderDefinitionRow("BaseOfBss", hex(pe.opt.rom.BaseOfBss, 8), "Base address of uninitialized data within the ROM image."));
+  out.push(renderDefinitionRow("GprMask", hex(pe.opt.rom.GprMask, 8), "General-purpose register mask recorded by the ROM toolchain."));
+  out.push(renderDefinitionRow("CprMask", formatWordListHex(pe.opt.rom.CprMask), "Coprocessor register masks recorded by the ROM toolchain."));
+  out.push(renderDefinitionRow("GpValue", hex(pe.opt.rom.GpValue, 8), "Global-pointer seed value recorded in IMAGE_ROM_OPTIONAL_HEADER."));
+  out.push(`</dl>`);
+  out.push(`<div class="smallNote">ROM optional headers stop here: Windows-only fields such as ImageBase, SectionAlignment, Subsystem, CheckSum, stack/heap sizes, and the PE data-directory array are not part of IMAGE_ROM_OPTIONAL_HEADER.</div>`);
+  out.push(renderPeSectionEnd());
+};
+
+const renderChecksumHtml = (checkSum: number): string => [
+  `<div style="display:flex;flex-direction:column;gap:.35rem">`,
+  `<div class="mono">${hex(checkSum, 8)}</div>`,
+  `<div class="smallNote">Validation: <span id="peChecksumStatus">Not validated yet.</span></div>`,
+  `<div class="smallNote">Computed: <span class="mono" id="peChecksumComputed">-</span></div>`,
+  `<div><button type="button" class="actionButton" id="peChecksumValidateButton">Validate CheckSum</button></div>`,
+  `</div>`
+].join("");
+
 export function renderHeaders(pe: PeParseResult, out: string[]): void {
   renderPeFormatNote(out);
   renderDosHeader(pe, out);
@@ -155,13 +191,7 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
   out.push(renderInlineHeaderTitle("Optional header"));
   out.push(`<dl>`);
   if (!oh) {
-    out.push(`</dl>`);
-    out.push(`<div class="smallNote">Optional header fields are unavailable because the file did not declare a recognized PE32, PE32+, or ROM optional header.</div>`);
-    out.push(renderPeSectionEnd());
-    renderDataDirectories(pe, out);
-    renderSections(pe, out);
-    const coffTailSummary = renderCoffTailSummary(pe);
-    if (coffTailSummary) out.push(coffTailSummary);
+    renderMissingOptionalHeader(pe, out);
     return;
   }
   out.push(
@@ -204,15 +234,7 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
   );
   out.push(renderDefinitionRow("EntrySection", pe.entrySection ? escapeHtml(pe.entrySection.name || "(unnamed)") : "-", entrySectionInfo));
   if (oh.Magic === ROM_OPTIONAL_HEADER_MAGIC) {
-    out.push(renderDefinitionRow("BaseOfCode", hex(oh.BaseOfCode, 8), "Base address of code within the ROM image."));
-    out.push(renderDefinitionRow("BaseOfData", hex(oh.BaseOfData, 8), "Base address of initialized data within the ROM image."));
-    out.push(renderDefinitionRow("BaseOfBss", hex(oh.rom.BaseOfBss, 8), "Base address of uninitialized data within the ROM image."));
-    out.push(renderDefinitionRow("GprMask", hex(oh.rom.GprMask, 8), "General-purpose register mask recorded by the ROM toolchain."));
-    out.push(renderDefinitionRow("CprMask", formatWordListHex(oh.rom.CprMask), "Coprocessor register masks recorded by the ROM toolchain."));
-    out.push(renderDefinitionRow("GpValue", hex(oh.rom.GpValue, 8), "Global-pointer seed value recorded in IMAGE_ROM_OPTIONAL_HEADER."));
-    out.push(`</dl>`);
-    out.push(`<div class="smallNote">ROM optional headers stop here: Windows-only fields such as ImageBase, SectionAlignment, Subsystem, CheckSum, stack/heap sizes, and the PE data-directory array are not part of IMAGE_ROM_OPTIONAL_HEADER.</div>`);
-    out.push(renderPeSectionEnd());
+    renderRomOptionalHeader(pe, out);
   } else {
     const pointerWidth = oh.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC ? 16 : 8;
     out.push(renderDefinitionRow("ImageBase", formatPointerHex(oh.ImageBase, pointerWidth), "Preferred load address."));
@@ -225,15 +247,7 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
     out.push(renderDefinitionRow("DllCharacteristics", renderFlagChips(oh.DllCharacteristics, DLL_FLAGS), "DLL characteristics (ASLR, DEP, etc.)."));
     out.push(renderDefinitionRow("SizeOfImage", humanSize(oh.SizeOfImage), "Size of image in memory, including all headers and sections."));
     out.push(renderDefinitionRow("SizeOfHeaders", humanSize(oh.SizeOfHeaders), "Combined size of DOS stub, PE header, and section headers."));
-    const checksumHtml = [
-      `<div style="display:flex;flex-direction:column;gap:.35rem">`,
-      `<div class="mono">${hex(oh.CheckSum, 8)}</div>`,
-      `<div class="smallNote">Validation: <span id="peChecksumStatus">Not validated yet.</span></div>`,
-      `<div class="smallNote">Computed: <span class="mono" id="peChecksumComputed">-</span></div>`,
-      `<div><button type="button" class="actionButton" id="peChecksumValidateButton">Validate CheckSum</button></div>`,
-      `</div>`
-    ].join("");
-    out.push(renderDefinitionRow("CheckSum", checksumHtml, "Image checksum (used by some system components)."));
+    out.push(renderDefinitionRow("CheckSum", renderChecksumHtml(oh.CheckSum), "Image checksum (used by some system components)."));
     out.push(renderDefinitionRow("SizeOfStackReserve", formatBigByteSize(oh.SizeOfStackReserve), "Stack reservation size."));
     out.push(renderDefinitionRow("SizeOfStackCommit", formatBigByteSize(oh.SizeOfStackCommit), "Stack commit size."));
     out.push(renderDefinitionRow("SizeOfHeapReserve", formatBigByteSize(oh.SizeOfHeapReserve), "Heap reservation size."));
@@ -241,8 +255,5 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
     out.push(`</dl>`);
     out.push(renderPeSectionEnd());
   }
-  renderDataDirectories(pe, out);
-  renderSections(pe, out);
-  const coffTailSummary = renderCoffTailSummary(pe);
-  if (coffTailSummary) out.push(coffTailSummary);
+  renderHeadersTail(pe, out);
 }

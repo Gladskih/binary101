@@ -30,6 +30,77 @@ const formatLbaWithOffset = (lba: number | null | undefined, blockSize: number):
   return `${lba} (${toHex64(offset)})`;
 };
 
+const renderDirectoryAction = (
+  entry: Iso9660DirectoryEntrySummary,
+  name: string,
+  index: number,
+  directoryPath: string,
+  depth: number,
+  containerIdPrefix: string
+): string => {
+  if (entry.extentLocationLba == null) return `<span class="smallNote">Unavailable</span>`;
+  const targetId = `${containerIdPrefix}-dir-${index}`;
+  const sizeAttr = entry.dataLength != null ? ` data-iso-size="${escapeHtml(String(entry.dataLength))}"` : "";
+  return (
+    `<button type="button" class="tableButton isoDirToggleButton" data-iso-action="toggle-dir"` +
+      ` data-iso-lba="${escapeHtml(String(entry.extentLocationLba))}"${sizeAttr}` +
+      ` data-iso-path="${escapeHtml(joinIsoPath(directoryPath, name))}"` +
+      ` data-iso-depth="${escapeHtml(String(depth + 1))}"` +
+      ` data-iso-target="${escapeHtml(targetId)}">Expand</button>`
+  );
+};
+
+const renderFileAction = (
+  entry: Iso9660DirectoryEntrySummary,
+  name: string,
+  isoBlockSize: number
+): string => {
+  if (entry.extentLocationLba == null || entry.dataLength == null) {
+    return `<span class="smallNote">Unavailable</span>`;
+  }
+  if ((entry.fileFlags & 0x80) !== 0) return `<span class="smallNote">Multi-extent</span>`;
+  return (
+    `<button type="button" class="tableButton isoExtractButton" data-iso-action="extract"` +
+      ` data-iso-offset="${escapeHtml(String(entry.extentLocationLba * isoBlockSize))}"` +
+      ` data-iso-length="${escapeHtml(String(entry.dataLength))}"` +
+      ` data-iso-name="${escapeHtml(name)}" data-iso-flags="${escapeHtml(String(entry.fileFlags))}">Download</button>`
+  );
+};
+
+const renderEntryAction = (
+  entry: Iso9660DirectoryEntrySummary,
+  name: string,
+  index: number,
+  directoryPath: string,
+  depth: number,
+  isoBlockSize: number,
+  containerIdPrefix: string
+): string => {
+  if (entry.kind === "directory") {
+    return renderDirectoryAction(entry, name, index, directoryPath, depth, containerIdPrefix);
+  }
+  if (entry.kind !== "file") return `<span class="smallNote">-</span>`;
+  return renderFileAction(entry, name, isoBlockSize);
+};
+
+const renderEntryRow = (
+  entry: Iso9660DirectoryEntrySummary,
+  name: string,
+  actionCell: string,
+  padLeft: string,
+  isoBlockSize: number
+): string => (
+  "<tr>" +
+    `<td style="padding-left:${escapeHtml(padLeft)}">${escapeHtml(name)}</td>` +
+    `<td>${escapeHtml(entry.kind)}</td>` +
+    `<td>${escapeHtml(entry.dataLength != null ? formatHumanSize(entry.dataLength) : "-")}</td>` +
+    `<td>${escapeHtml(formatLbaWithOffset(entry.extentLocationLba, isoBlockSize))}</td>` +
+    `<td>${renderFlagChips(entry.fileFlags, FILE_FLAGS)}</td>` +
+    `<td>${escapeHtml(entry.recordingDateTime || "-")}</td>` +
+    `<td>${actionCell}</td>` +
+  "</tr>"
+);
+
 const renderIso9660DirectoryListing = (opts: {
   entries: Iso9660DirectoryEntrySummary[];
   totalEntries: number;
@@ -72,44 +143,10 @@ const renderIso9660DirectoryListing = (opts: {
 
   entries.forEach((entry, index) => {
     const name = entry.name || "(unnamed)";
-    const actionCell = (() => {
-      if (entry.kind === "directory") {
-        if (entry.extentLocationLba == null) return `<span class="smallNote">Unavailable</span>`;
-        const targetId = `${containerIdPrefix}-dir-${index}`;
-        const nextPath = joinIsoPath(directoryPath, name);
-        const sizeAttr = entry.dataLength != null ? ` data-iso-size="${escapeHtml(String(entry.dataLength))}"` : "";
-        return (
-          `<button type="button" class="tableButton isoDirToggleButton" data-iso-action="toggle-dir"` +
-            ` data-iso-lba="${escapeHtml(String(entry.extentLocationLba))}"${sizeAttr}` +
-            ` data-iso-path="${escapeHtml(nextPath)}" data-iso-depth="${escapeHtml(String(depth + 1))}"` +
-            ` data-iso-target="${escapeHtml(targetId)}">Expand</button>`
-        );
-      }
-      if (entry.kind !== "file") return `<span class="smallNote">-</span>`;
-      if (entry.extentLocationLba == null || entry.dataLength == null) return `<span class="smallNote">Unavailable</span>`;
-      if ((entry.fileFlags & 0x80) !== 0) return `<span class="smallNote">Multi-extent</span>`;
-      const offset = entry.extentLocationLba * isoBlockSize;
-      return (
-        `<button type="button" class="tableButton isoExtractButton" data-iso-action="extract"` +
-          ` data-iso-offset="${escapeHtml(String(offset))}" data-iso-length="${escapeHtml(String(entry.dataLength))}"` +
-          ` data-iso-name="${escapeHtml(name)}" data-iso-flags="${escapeHtml(String(entry.fileFlags))}">Download</button>`
-      );
-    })();
-
+    const actionCell = renderEntryAction(entry, name, index, directoryPath, depth, isoBlockSize, containerIdPrefix);
     const childTarget =
       entry.kind === "directory" && entry.extentLocationLba != null ? `${containerIdPrefix}-dir-${index}` : null;
-
-    out.push(
-      "<tr>" +
-        `<td style="padding-left:${escapeHtml(padLeft)}">${escapeHtml(name)}</td>` +
-        `<td>${escapeHtml(entry.kind)}</td>` +
-        `<td>${escapeHtml(entry.dataLength != null ? formatHumanSize(entry.dataLength) : "-")}</td>` +
-        `<td>${escapeHtml(formatLbaWithOffset(entry.extentLocationLba, isoBlockSize))}</td>` +
-        `<td>${renderFlagChips(entry.fileFlags, FILE_FLAGS)}</td>` +
-        `<td>${escapeHtml(entry.recordingDateTime || "-")}</td>` +
-        `<td>${actionCell}</td>` +
-      "</tr>"
-    );
+    out.push(renderEntryRow(entry, name, actionCell, padLeft, isoBlockSize));
     if (childTarget) {
       out.push(
         `<tr hidden><td colspan="7">` +

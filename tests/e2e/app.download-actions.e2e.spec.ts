@@ -133,6 +133,13 @@ test.describe("download actions", () => {
     expect(result.name).toBe("INNER.TXT");
     expect(result.content).toBe("INNER");
   });
+});
+
+test.describe("PE analysis actions", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Local File Inspector" })).toBeVisible();
+  });
 
   void test("runs PE instruction-set analysis on demand", async ({ page }) => {
     const mockFile = createPePlusFile();

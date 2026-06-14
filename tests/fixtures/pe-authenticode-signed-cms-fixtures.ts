@@ -1,5 +1,4 @@
 "use strict";
-
 import * as asn1js from "asn1js";
 import {
   AlgorithmIdentifier,
@@ -14,6 +13,7 @@ import {
   TSTInfo,
   id_eContentType_TSTInfo
 } from "../../analyzers/pe/authenticode/pkijs-runtime.js";
+import type { Certificate } from "../../analyzers/pe/authenticode/pkijs-runtime.js";
 import { computePeAuthenticodeDigest } from "../../analyzers/pe/authenticode/verify.js";
 import { createStrictAuthenticodeFixture } from "./pe-authenticode-fixtures.js";
 import {
@@ -41,50 +41,52 @@ import {
   toArrayBuffer
 } from "./pe-authenticode-cms-helpers.js";
 const EC_PUBLIC_KEY_OID = "1.2.840.10045.2.1";
+const contentTypeAttribute = (oid: string): Attribute =>
+  new Attribute({ type: CMS_CONTENT_TYPE_OID, values: [new asn1js.ObjectIdentifier({ value: oid })] });
+const messageDigestAttribute = (messageDigest: ArrayBuffer): Attribute =>
+  new Attribute({ type: CMS_MESSAGE_DIGEST_OID, values: [new asn1js.OctetString({ valueHex: messageDigest })] });
 const encodeContentInfo = (signedData: SignedData): Uint8Array =>
   new Uint8Array(
     new ContentInfo({ contentType: ContentInfo.SIGNED_DATA, content: signedData.toSchema(true) }).toSchema().toBER()
   );
-const buildSignedAuthenticodeCmsPayload = async (fileDigestHex: string): Promise<Uint8Array> => {
+type CertificateChain = {
+  root: Certificate;
+  signer: Certificate;
+  timestamp: Certificate;
+  signerPrivateKey: CryptoKey;
+  timestampPrivateKey: CryptoKey;
+};
+const createCertificateChain = async (): Promise<CertificateChain> => {
   const rootKeys = await generateRsaKeyPair();
   const signerKeys = await generateRsaKeyPair();
   const timestampKeys = await generateRsaKeyPair();
-  const rootCertificate = await createCertificate(
-    "Binary101 Root CA",
-    1,
-    rootKeys.publicKey,
-    createCommonName("Binary101 Root CA"),
-    rootKeys.privateKey,
-    { notBefore: "2020-01-01T00:00:00Z", notAfter: "2035-01-01T00:00:00Z" },
-    [createBasicConstraintsExtension(true), createKeyUsageExtension(KEY_USAGE_KEY_CERT_SIGN)]
-  );
-  const signerCertificate = await createCertificate(
-    "Binary101 Authenticode Signer",
-    2,
-    signerKeys.publicKey,
-    rootCertificate.subject,
-    rootKeys.privateKey,
-    { notBefore: "2023-01-01T00:00:00Z", notAfter: "2030-01-01T00:00:00Z" },
-    [
-      createBasicConstraintsExtension(false),
-      createKeyUsageExtension(KEY_USAGE_DIGITAL_SIGNATURE),
+  const rootValidity = { notBefore: "2020-01-01T00:00:00Z", notAfter: "2035-01-01T00:00:00Z" };
+  const issuedValidity = { notBefore: "2023-01-01T00:00:00Z", notAfter: "2030-01-01T00:00:00Z" };
+  const rootCertificate = await createCertificate("Binary101 Root CA", 1, rootKeys.publicKey,
+    createCommonName("Binary101 Root CA"), rootKeys.privateKey, rootValidity,
+    [createBasicConstraintsExtension(true), createKeyUsageExtension(KEY_USAGE_KEY_CERT_SIGN)]);
+  const signerCertificate = await createCertificate("Binary101 Authenticode Signer", 2, signerKeys.publicKey,
+    rootCertificate.subject, rootKeys.privateKey, issuedValidity, [
+      createBasicConstraintsExtension(false), createKeyUsageExtension(KEY_USAGE_DIGITAL_SIGNATURE),
       createExtendedKeyUsageExtension(CODE_SIGNING_EKU_OID)
-    ]
-  );
-  const timestampCertificate = await createCertificate(
-    "Binary101 Timestamp Authority",
-    3,
-    timestampKeys.publicKey,
-    rootCertificate.subject,
-    rootKeys.privateKey,
-    { notBefore: "2023-01-01T00:00:00Z", notAfter: "2030-01-01T00:00:00Z" },
-    [
-      createBasicConstraintsExtension(false),
-      createKeyUsageExtension(KEY_USAGE_DIGITAL_SIGNATURE),
+    ]);
+  const timestampCertificate = await createCertificate("Binary101 Timestamp Authority", 3, timestampKeys.publicKey,
+    rootCertificate.subject, rootKeys.privateKey, issuedValidity, [
+      createBasicConstraintsExtension(false), createKeyUsageExtension(KEY_USAGE_DIGITAL_SIGNATURE),
       createExtendedKeyUsageExtension(TIME_STAMPING_EKU_OID)
-    ]
-  );
-
+    ]);
+  return {
+    root: rootCertificate,
+    signer: signerCertificate,
+    timestamp: timestampCertificate,
+    signerPrivateKey: signerKeys.privateKey,
+    timestampPrivateKey: timestampKeys.privateKey
+  };
+};
+const createSignedData = async (
+  fileDigestHex: string,
+  chain: CertificateChain
+): Promise<SignedData> => {
   const spcIndirectData = createSpcIndirectData(hexToBytes(fileDigestHex));
   const messageDigest = await crypto.subtle.digest("SHA-256", spcIndirectData);
   const signedData = new SignedData({
@@ -93,42 +95,35 @@ const buildSignedAuthenticodeCmsPayload = async (fileDigestHex: string): Promise
       eContentType: SPC_INDIRECT_DATA_OID,
       eContent: new asn1js.OctetString({ valueHex: spcIndirectData })
     }),
-    certificates: [signerCertificate, rootCertificate, timestampCertificate]
+    certificates: [chain.signer, chain.root, chain.timestamp]
   });
   signedData.signerInfos.push(
     new SignerInfo({
       version: 1,
       sid: new IssuerAndSerialNumber({
-        issuer: signerCertificate.issuer,
-        serialNumber: signerCertificate.serialNumber
+        issuer: chain.signer.issuer,
+        serialNumber: chain.signer.serialNumber
       }),
       signedAttrs: new SignedAndUnsignedAttributes({
         type: 0,
         attributes: [
-          new Attribute({
-            type: CMS_CONTENT_TYPE_OID,
-            values: [new asn1js.ObjectIdentifier({ value: SPC_INDIRECT_DATA_OID })]
-          }),
+          contentTypeAttribute(SPC_INDIRECT_DATA_OID),
           new Attribute({
             type: CMS_SIGNING_TIME_OID,
             values: [new asn1js.UTCTime({ valueDate: new Date("2024-01-01T00:00:00Z") })]
           }),
-          new Attribute({
-            type: CMS_MESSAGE_DIGEST_OID,
-            values: [new asn1js.OctetString({ valueHex: messageDigest })]
-          })
+          messageDigestAttribute(messageDigest)
         ]
       })
     })
   );
-  await signedData.sign(signerKeys.privateKey, 0, "SHA-256");
-
-  const signerInfo = signedData.signerInfos[0];
-  if (!signerInfo) throw new Error("Signed CMS fixture is missing the primary signer.");
-  const countersignatureDigest = await crypto.subtle.digest(
-    "SHA-256",
-    toArrayBuffer(signerInfo.signature.valueBlock.valueHexView)
-  );
+  await signedData.sign(chain.signerPrivateKey, 0, "SHA-256");
+  return signedData;
+};
+const createTimestampSignedData = async (
+  countersignatureDigest: ArrayBuffer,
+  chain: CertificateChain
+): Promise<SignedData> => {
   const timestampInfo = new TSTInfo({
     version: 1,
     policy: "1.3.6.1.4.1.311.3.3.1",
@@ -151,18 +146,23 @@ const buildSignedAuthenticodeCmsPayload = async (fileDigestHex: string): Promise
   const timestampSignedData = new SignedData({
     version: 3,
     encapContentInfo: timestampContent,
-    certificates: [timestampCertificate, rootCertificate]
+    certificates: [chain.timestamp, chain.root]
   });
   timestampSignedData.signerInfos.push(
     new SignerInfo({
       version: 1,
       sid: new IssuerAndSerialNumber({
-        issuer: timestampCertificate.issuer,
-        serialNumber: timestampCertificate.serialNumber
+        issuer: chain.timestamp.issuer,
+        serialNumber: chain.timestamp.serialNumber
       })
     })
   );
-  await timestampSignedData.sign(timestampKeys.privateKey, 0, "SHA-256");
+  await timestampSignedData.sign(chain.timestampPrivateKey, 0, "SHA-256");
+  return timestampSignedData;
+};
+const createCountersignedAttributes = (
+  countersignatureDigest: ArrayBuffer
+): SignedAndUnsignedAttributes => {
   const countersignedAttrs = new SignedAndUnsignedAttributes({
     type: 0,
     attributes: [
@@ -170,19 +170,23 @@ const buildSignedAuthenticodeCmsPayload = async (fileDigestHex: string): Promise
         type: CMS_SIGNING_TIME_OID,
         values: [new asn1js.UTCTime({ valueDate: new Date("2024-01-01T00:05:00Z") })]
       }),
-      new Attribute({
-        type: CMS_MESSAGE_DIGEST_OID,
-        values: [new asn1js.OctetString({ valueHex: countersignatureDigest })]
-      })
+      messageDigestAttribute(countersignatureDigest)
     ]
   });
   setEncodedSignedAttributes(countersignedAttrs);
-
+  return countersignedAttrs;
+};
+const createCountersignerInfo = async (
+  signerInfo: SignerInfo,
+  countersignatureDigest: ArrayBuffer,
+  chain: CertificateChain
+): Promise<SignerInfo> => {
+  const countersignedAttrs = createCountersignedAttributes(countersignatureDigest);
   const countersignerInfo = new SignerInfo({
     version: 1,
     sid: new IssuerAndSerialNumber({
-      issuer: timestampCertificate.issuer,
-      serialNumber: timestampCertificate.serialNumber
+      issuer: chain.timestamp.issuer,
+      serialNumber: chain.timestamp.serialNumber
     }),
     digestAlgorithm: signerInfo.digestAlgorithm,
     signedAttrs: countersignedAttrs,
@@ -191,10 +195,22 @@ const buildSignedAuthenticodeCmsPayload = async (fileDigestHex: string): Promise
   countersignerInfo.signature = new asn1js.OctetString({
     valueHex: await crypto.subtle.sign(
       { name: "RSASSA-PKCS1-v1_5" },
-      timestampKeys.privateKey,
+      chain.timestampPrivateKey,
       countersignedAttrs.encodedValue
     )
   });
+  return countersignerInfo;
+};
+const addTimestampUnsignedAttributes = async (
+  signerInfo: SignerInfo,
+  chain: CertificateChain
+): Promise<void> => {
+  const countersignatureDigest = await crypto.subtle.digest(
+    "SHA-256",
+    toArrayBuffer(signerInfo.signature.valueBlock.valueHexView)
+  );
+  const timestampSignedData = await createTimestampSignedData(countersignatureDigest, chain);
+  const countersignerInfo = await createCountersignerInfo(signerInfo, countersignatureDigest, chain);
   signerInfo.unsignedAttrs = new SignedAndUnsignedAttributes({
     type: 1,
     attributes: [
@@ -210,31 +226,24 @@ const buildSignedAuthenticodeCmsPayload = async (fileDigestHex: string): Promise
       })
     ]
   });
-
+};
+const buildSignedAuthenticodeCmsPayload = async (fileDigestHex: string): Promise<Uint8Array> => {
+  const chain = await createCertificateChain();
+  const signedData = await createSignedData(fileDigestHex, chain);
+  const signerInfo = signedData.signerInfos[0];
+  if (!signerInfo) throw new Error("Signed CMS fixture is missing the primary signer.");
+  await addTimestampUnsignedAttributes(signerInfo, chain);
   return encodeContentInfo(signedData);
 };
-
 export const createEcPublicKeySignatureAlgorithmCmsFixture = async (): Promise<Uint8Array> => {
   const rootKeys = await generateRsaKeyPair();
   const signerKeys = await generateEcKeyPair();
-  const rootCertificate = await createCertificate(
-    "Binary101 Root CA",
-    1,
-    rootKeys.publicKey,
-    createCommonName("Binary101 Root CA"),
-    rootKeys.privateKey,
-    { notBefore: "2020-01-01T00:00:00Z", notAfter: "2035-01-01T00:00:00Z" },
-    []
-  );
-  const signerCertificate = await createCertificate(
-    "Binary101 ECDSA Signer",
-    2,
-    signerKeys.publicKey,
-    rootCertificate.subject,
-    rootKeys.privateKey,
-    { notBefore: "2023-01-01T00:00:00Z", notAfter: "2030-01-01T00:00:00Z" },
-    []
-  );
+  const rootCertificate = await createCertificate("Binary101 Root CA", 1, rootKeys.publicKey,
+    createCommonName("Binary101 Root CA"), rootKeys.privateKey,
+    { notBefore: "2020-01-01T00:00:00Z", notAfter: "2035-01-01T00:00:00Z" }, []);
+  const signerCertificate = await createCertificate("Binary101 ECDSA Signer", 2, signerKeys.publicKey,
+    rootCertificate.subject, rootKeys.privateKey,
+    { notBefore: "2023-01-01T00:00:00Z", notAfter: "2030-01-01T00:00:00Z" }, []);
   const spcIndirectData = createSpcIndirectData(Uint8Array.of(1, 2, 3, 4));
   const messageDigest = await crypto.subtle.digest("SHA-256", spcIndirectData);
   const signedData = new SignedData({
@@ -255,14 +264,8 @@ export const createEcPublicKeySignatureAlgorithmCmsFixture = async (): Promise<U
       signedAttrs: new SignedAndUnsignedAttributes({
         type: 0,
         attributes: [
-          new Attribute({
-            type: CMS_CONTENT_TYPE_OID,
-            values: [new asn1js.ObjectIdentifier({ value: SPC_INDIRECT_DATA_OID })]
-          }),
-          new Attribute({
-            type: CMS_MESSAGE_DIGEST_OID,
-            values: [new asn1js.OctetString({ valueHex: messageDigest })]
-          })
+          contentTypeAttribute(SPC_INDIRECT_DATA_OID),
+          messageDigestAttribute(messageDigest)
         ]
       })
     })
@@ -273,7 +276,6 @@ export const createEcPublicKeySignatureAlgorithmCmsFixture = async (): Promise<U
   signerInfo.signatureAlgorithm.algorithmId = EC_PUBLIC_KEY_OID;
   return encodeContentInfo(signedData);
 };
-
 const buildFixture = async () => {
   const peFixture = createStrictAuthenticodeFixture();
   const digestHex = await computePeAuthenticodeDigest(
@@ -285,9 +287,7 @@ const buildFixture = async () => {
   if (!digestHex) throw new Error("Unable to compute the synthetic PE Authenticode digest.");
   return { ...peFixture, digestHex, payload: await buildSignedAuthenticodeCmsPayload(digestHex) };
 };
-
 let cachedFixturePromise: Promise<Awaited<ReturnType<typeof buildFixture>>> | undefined;
-
 export const createSignedAuthenticodeCmsFixture = async () => {
   const fixture = await (cachedFixturePromise ??= buildFixture());
   return { ...fixture, payload: fixture.payload.slice() };

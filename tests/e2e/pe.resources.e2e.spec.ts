@@ -33,6 +33,66 @@ const openResourceGroup = async (page: Page, typeName: string) => {
   return details;
 };
 
+const expectVisualResourcePreviews = async (page: Page): Promise<void> => {
+  const groupCursor = await openResourceGroup(page, "GROUP_CURSOR");
+  await expect(groupCursor).toContainText("Hotspot");
+  await expect(groupCursor).toContainText("7, 9");
+  const groupIcon = await openResourceGroup(page, "GROUP_ICON");
+  await expect(groupIcon).toContainText("ID 1");
+  const bitmap = await openResourceGroup(page, "BITMAP");
+  await expect(bitmap).toContainText("ID 1");
+  const dialog = await openResourceGroup(page, "DIALOG");
+  await expect(dialog).toContainText("Preview Dialog");
+  await expect(dialog).toContainText("BUTTON");
+  const menu = await openResourceGroup(page, "MENU");
+  await expect(menu).toContainText("File");
+  await expect(menu).toContainText("Open");
+  const accelerator = await openResourceGroup(page, "ACCELERATOR");
+  await expect(accelerator).toContainText("Ctrl+O");
+};
+
+const expectLegacyResourcePreviews = async (page: Page): Promise<void> => {
+  const fontDir = await openResourceGroup(page, "FONTDIR");
+  expect(await fontDir.innerHTML()).toContain("Font-directory resource table.");
+  const font = await openResourceGroup(page, "FONT");
+  expect(await font.innerHTML()).toContain("TrueType font (heuristic)");
+  const version = await openResourceGroup(page, "VERSION");
+  await expect(version).toContainText("CompanyName");
+  await expect(version).toContainText("Binary101");
+  const rcdata = await openResourceGroup(page, "RCDATA");
+  await expect(rcdata).toContainText("JSON/Text (heuristic)");
+  await expect(rcdata).toContainText("{\"kind\":\"rcdata\"}");
+  const dlgInclude = await openResourceGroup(page, "DLGINCLUDE");
+  await expect(dlgInclude).toContainText("preview-dialog.h");
+  const plugPlay = await openResourceGroup(page, "PLUGPLAY");
+  expect(await plugPlay.innerHTML()).toContain("Legacy Plug and Play resource.");
+  const vxd = await openResourceGroup(page, "VXD");
+  expect(await vxd.innerHTML()).toContain("Legacy virtual-device resource.");
+  const ani = await openResourceGroup(page, "ANICURSOR");
+  expect(await ani.innerHTML()).toContain("Animated cursor (ANI)");
+  const aniIcon = await openResourceGroup(page, "ANIICON");
+  expect(await aniIcon.innerHTML()).toContain("Animated icon (ANI)");
+  const html = await openResourceGroup(page, "HTML");
+  expect(await html.innerHTML()).toContain("HTML is not executed");
+};
+
+const expectManifestAndMessageTablePreviews = async (page: Page): Promise<void> => {
+  const manifest = await openResourceGroup(page, "MANIFEST");
+  const xmlSource = manifest.locator("[data-manifest-preview] .manifestXmlSourceDetails");
+  await expect(xmlSource).toHaveJSProperty("open", false);
+  await expect(xmlSource).toContainText("XML source");
+  await expect(xmlSource.locator("[data-manifest-copy-source]")).toBeHidden();
+  await expect(manifest).toContainText("Manifest cross-check");
+  await expect(manifest).toContainText("Consistent");
+  await expect(manifest).toContainText("Parsed tree");
+  await expect(manifest).toContainText("Windows 10 / 11");
+  await expect(manifest).toContainText("MANIFEST");
+  await expect(manifest.getByRole("button", { name: "Copy manifest XML" })).toBeVisible();
+  const messageTable = await openResourceGroup(page, "MESSAGETABLE");
+  await expect(messageTable).toContainText("OK");
+  await expect(messageTable).toContainText("Hi");
+};
+
 test.describe("PE resource previews", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
@@ -48,75 +108,9 @@ test.describe("PE resource previews", () => {
     const resourcesSection = await openTopLevelSection(page, "Resources");
     await expect(resourcesSection).toHaveJSProperty("open", true);
     await expect(page.locator('#peDetailsValue img[alt="resource preview"]')).toHaveCount(5);
-
-    const groupCursor = await openResourceGroup(page, "GROUP_CURSOR");
-    await expect(groupCursor).toContainText("Hotspot");
-    await expect(groupCursor).toContainText("7, 9");
-
-    const groupIcon = await openResourceGroup(page, "GROUP_ICON");
-    await expect(groupIcon).toContainText("ID 1");
-
-    const bitmap = await openResourceGroup(page, "BITMAP");
-    await expect(bitmap).toContainText("ID 1");
-
-    const dialog = await openResourceGroup(page, "DIALOG");
-    await expect(dialog).toContainText("Preview Dialog");
-    await expect(dialog).toContainText("BUTTON");
-
-    const menu = await openResourceGroup(page, "MENU");
-    await expect(menu).toContainText("File");
-    await expect(menu).toContainText("Open");
-
-    const accelerator = await openResourceGroup(page, "ACCELERATOR");
-    await expect(accelerator).toContainText("Ctrl+O");
-
-    const fontDir = await openResourceGroup(page, "FONTDIR");
-    expect(await fontDir.innerHTML()).toContain("Font-directory resource table.");
-
-    const font = await openResourceGroup(page, "FONT");
-    expect(await font.innerHTML()).toContain("TrueType font (heuristic)");
-
-    const version = await openResourceGroup(page, "VERSION");
-    await expect(version).toContainText("CompanyName");
-    await expect(version).toContainText("Binary101");
-
-    const rcdata = await openResourceGroup(page, "RCDATA");
-    await expect(rcdata).toContainText("JSON/Text (heuristic)");
-    await expect(rcdata).toContainText("{\"kind\":\"rcdata\"}");
-
-    const dlgInclude = await openResourceGroup(page, "DLGINCLUDE");
-    await expect(dlgInclude).toContainText("preview-dialog.h");
-
-    const plugPlay = await openResourceGroup(page, "PLUGPLAY");
-    expect(await plugPlay.innerHTML()).toContain("Legacy Plug and Play resource.");
-
-    const vxd = await openResourceGroup(page, "VXD");
-    expect(await vxd.innerHTML()).toContain("Legacy virtual-device resource.");
-
-    const ani = await openResourceGroup(page, "ANICURSOR");
-    expect(await ani.innerHTML()).toContain("Animated cursor (ANI)");
-
-    const aniIcon = await openResourceGroup(page, "ANIICON");
-    expect(await aniIcon.innerHTML()).toContain("Animated icon (ANI)");
-
-    const html = await openResourceGroup(page, "HTML");
-    expect(await html.innerHTML()).toContain("HTML is not executed");
-
-    const manifest = await openResourceGroup(page, "MANIFEST");
-    const xmlSource = manifest.locator("[data-manifest-preview] .manifestXmlSourceDetails");
-    await expect(xmlSource).toHaveJSProperty("open", false);
-    await expect(xmlSource).toContainText("XML source");
-    await expect(xmlSource.locator("[data-manifest-copy-source]")).toBeHidden();
-    await expect(manifest).toContainText("Manifest cross-check");
-    await expect(manifest).toContainText("Consistent");
-    await expect(manifest).toContainText("Parsed tree");
-    await expect(manifest).toContainText("Windows 10 / 11");
-    await expect(manifest).toContainText("MANIFEST");
-    await expect(manifest.getByRole("button", { name: "Copy manifest XML" })).toBeVisible();
-
-    const messageTable = await openResourceGroup(page, "MESSAGETABLE");
-    await expect(messageTable).toContainText("OK");
-    await expect(messageTable).toContainText("Hi");
+    await expectVisualResourcePreviews(page);
+    await expectLegacyResourcePreviews(page);
+    await expectManifestAndMessageTablePreviews(page);
   });
 
   void test("manifest tree controls enable only the action that can still change the XML tree", async ({ page }) => {

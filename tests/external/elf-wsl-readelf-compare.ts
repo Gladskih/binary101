@@ -94,7 +94,21 @@ export function compareElfWithReadelf(
   coverage: ElfReadelfCoverage
 ): string[] {
   const issues: string[] = [];
+  compareHeader(elf, readelf, coverage, issues);
+  compareProgramHeaders(elf, readelf, coverage, issues);
+  compareSections(elf, readelf, coverage, issues);
+  compareDynamicSection(elf, readelf, coverage, issues);
+  compareDynamicSymbols(elf, readelf, coverage, issues);
+  compareBuildId(elf, readelf, coverage, issues);
+  return issues;
+}
 
+const compareHeader = (
+  elf: ElfParseResult,
+  readelf: ReadelfSnapshot,
+  coverage: ElfReadelfCoverage,
+  issues: string[]
+): void => {
   coverage.header += 1;
   const header = readelf.header;
   const expectedClass = elf.is64 ? "ELF64" : "ELF32";
@@ -112,7 +126,14 @@ export function compareElfWithReadelf(
   if (elf.header.shentsize !== header.shentsize) issues.push("header.shentsize mismatch");
   if (elf.header.shnum !== header.shnum) issues.push("header.shnum mismatch");
   if (elf.header.shstrndx !== header.shstrndx) issues.push("header.shstrndx mismatch");
+};
 
+const compareProgramHeaders = (
+  elf: ElfParseResult,
+  readelf: ReadelfSnapshot,
+  coverage: ElfReadelfCoverage,
+  issues: string[]
+): void => {
   coverage.programHeaders += 1;
   if (elf.programHeaders.length !== readelf.programHeaders.length) {
     issues.push(`program header count expected ${readelf.programHeaders.length}, got ${elf.programHeaders.length}`);
@@ -132,7 +153,14 @@ export function compareElfWithReadelf(
     if ((actual.flags & 0x7) !== expected.flagsMask) issues.push(`program[${index}].flags mismatch`);
     if (actual.align !== expected.align) issues.push(`program[${index}].align mismatch`);
   }
+};
 
+const compareSections = (
+  elf: ElfParseResult,
+  readelf: ReadelfSnapshot,
+  coverage: ElfReadelfCoverage,
+  issues: string[]
+): void => {
   coverage.sections += 1;
   if (elf.sections.length !== readelf.sections.length) {
     issues.push(`section count expected ${readelf.sections.length}, got ${elf.sections.length}`);
@@ -157,8 +185,15 @@ export function compareElfWithReadelf(
     if (actual.addralign !== BigInt(expected.align)) issues.push(`section[${index}].addralign mismatch`);
     if (actual.flags !== expected.flagsMask) issues.push(`section[${index}].flags mismatch`);
   }
+};
 
-  if (readelf.dynamic) {
+const compareDynamicSection = (
+  elf: ElfParseResult,
+  readelf: ReadelfSnapshot,
+  coverage: ElfReadelfCoverage,
+  issues: string[]
+): void => {
+  if (!readelf.dynamic) return;
     coverage.dynamic += 1;
     const actual = elf.dynamic;
     if (!actual) {
@@ -194,9 +229,15 @@ export function compareElfWithReadelf(
       }
       if (expected.flags1.size || actual.flags1 != null) coverage.withFlags1 += 1;
     }
-  }
+};
 
-  if (readelf.dynSymbols) {
+const compareDynamicSymbols = (
+  elf: ElfParseResult,
+  readelf: ReadelfSnapshot,
+  coverage: ElfReadelfCoverage,
+  issues: string[]
+): void => {
+  if (!readelf.dynSymbols) return;
     coverage.dynSymbols += 1;
     if (!elf.dynSymbols) {
       issues.push("dynSymbols: expected values, but parser returned null");
@@ -212,15 +253,18 @@ export function compareElfWithReadelf(
         issues.push(`dynSymbols.exports mismatch: ${firstDifference(actualExports, expectedExports) || "different sets"}`);
       }
     }
-  }
+};
 
-  if (readelf.buildId) {
-    coverage.buildId += 1;
-    const actualBuildId = readBuildId(elf);
-    if (actualBuildId !== readelf.buildId) {
-      issues.push(`notes.build-id expected ${readelf.buildId}, got ${actualBuildId || "(none)"}`);
-    }
+const compareBuildId = (
+  elf: ElfParseResult,
+  readelf: ReadelfSnapshot,
+  coverage: ElfReadelfCoverage,
+  issues: string[]
+): void => {
+  if (!readelf.buildId) return;
+  coverage.buildId += 1;
+  const actualBuildId = readBuildId(elf);
+  if (actualBuildId !== readelf.buildId) {
+    issues.push(`notes.build-id expected ${readelf.buildId}, got ${actualBuildId || "(none)"}`);
   }
-
-  return issues;
-}
+};

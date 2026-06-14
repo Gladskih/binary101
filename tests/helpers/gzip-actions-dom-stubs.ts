@@ -18,6 +18,66 @@ export type GzipActionsDomStubs = {
   restore: () => void;
 };
 
+type GzipDomGlobalPresence = {
+  Element: boolean;
+  HTMLButtonElement: boolean;
+  document: boolean;
+  DecompressionStream: boolean;
+};
+
+type GzipDomOriginalGlobals = {
+  Element: unknown;
+  HTMLButtonElement: unknown;
+  document: unknown;
+  DecompressionStream: unknown;
+  createObjectURL: typeof URL.createObjectURL;
+  revokeObjectURL: typeof URL.revokeObjectURL;
+};
+
+class FakeElement {
+  readonly tagName: string;
+  readonly parent: FakeElement | null;
+  readonly classes: Set<string>;
+
+  constructor(tagName: string, parent: FakeElement | null = null) {
+    this.tagName = tagName.toLowerCase();
+    this.parent = parent;
+    this.classes = new Set();
+  }
+
+  addClass(name: string): void {
+    this.classes.add(name);
+  }
+
+  closest(selector: string): FakeElement | null {
+    if (selector !== "button.gzipDecompressButton") return null;
+    let current: FakeElement | null = this;
+    while (current) {
+      if (current.tagName === "button" && current.classes.has("gzipDecompressButton")) return current;
+      current = current.parent;
+    }
+    return null;
+  }
+}
+
+class FakeButtonElement extends FakeElement {
+  disabled = false;
+  textContent: string | null = "Decompress";
+  readonly attributes = new Map<string, string>();
+
+  constructor(parent: FakeElement | null = null) {
+    super("button", parent);
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null;
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
+}
+
 export const installGzipActionsDomStubs = (): GzipActionsDomStubs => {
   const globals = globalThis as unknown as Record<string, unknown>;
 
@@ -36,52 +96,6 @@ export const installGzipActionsDomStubs = (): GzipActionsDomStubs => {
     createObjectURL: URL.createObjectURL,
     revokeObjectURL: URL.revokeObjectURL
   };
-
-  class FakeElement {
-    readonly tagName: string;
-    readonly parent: FakeElement | null;
-    readonly classes: Set<string>;
-
-    constructor(tagName: string, parent: FakeElement | null = null) {
-      this.tagName = tagName.toLowerCase();
-      this.parent = parent;
-      this.classes = new Set();
-    }
-
-    addClass(name: string): void {
-      this.classes.add(name);
-    }
-
-    closest(selector: string): FakeElement | null {
-      if (selector !== "button.gzipDecompressButton") return null;
-      let current: FakeElement | null = this;
-      while (current) {
-        if (current.tagName === "button" && current.classes.has("gzipDecompressButton")) {
-          return current;
-        }
-        current = current.parent;
-      }
-      return null;
-    }
-  }
-
-  class FakeButtonElement extends FakeElement {
-    disabled = false;
-    textContent: string | null = "Decompress";
-    readonly attributes = new Map<string, string>();
-
-    constructor(parent: FakeElement | null = null) {
-      super("button", parent);
-    }
-
-    getAttribute(name: string): string | null {
-      return this.attributes.get(name) ?? null;
-    }
-
-    setAttribute(name: string, value: string): void {
-      this.attributes.set(name, value);
-    }
-  }
 
   globals["Element"] = FakeElement;
   globals["HTMLButtonElement"] = FakeButtonElement;
@@ -141,33 +155,30 @@ export const installGzipActionsDomStubs = (): GzipActionsDomStubs => {
     getChild: () => child as unknown as Element,
     getCreatedBlob: () => createdBlob,
     getMessages: () => messages,
-    restore: () => {
-      if (hadGlobals.Element) {
-        globals["Element"] = originals.Element;
-      } else {
-        Reflect.deleteProperty(globals, "Element");
-      }
-      if (hadGlobals.HTMLButtonElement) {
-        globals["HTMLButtonElement"] = originals.HTMLButtonElement;
-      } else {
-        Reflect.deleteProperty(globals, "HTMLButtonElement");
-      }
-      if (hadGlobals.document) {
-        globals["document"] = originals.document;
-      } else {
-        Reflect.deleteProperty(globals, "document");
-      }
-      if (hadGlobals.DecompressionStream) {
-        Object.defineProperty(globals, "DecompressionStream", {
-          value: originals.DecompressionStream,
-          writable: true,
-          configurable: true
-        });
-      } else {
-        Reflect.deleteProperty(globals, "DecompressionStream");
-      }
-      URL.createObjectURL = originals.createObjectURL;
-      URL.revokeObjectURL = originals.revokeObjectURL;
-    }
+    restore: () => restoreGzipActionsDomGlobals(globals, hadGlobals, originals)
   };
+};
+
+const restoreGzipActionsDomGlobals = (
+  globals: Record<string, unknown>,
+  hadGlobals: GzipDomGlobalPresence,
+  originals: GzipDomOriginalGlobals
+): void => {
+  if (hadGlobals.Element) globals["Element"] = originals.Element;
+  else Reflect.deleteProperty(globals, "Element");
+  if (hadGlobals.HTMLButtonElement) globals["HTMLButtonElement"] = originals.HTMLButtonElement;
+  else Reflect.deleteProperty(globals, "HTMLButtonElement");
+  if (hadGlobals.document) globals["document"] = originals.document;
+  else Reflect.deleteProperty(globals, "document");
+  if (hadGlobals.DecompressionStream) {
+    Object.defineProperty(globals, "DecompressionStream", {
+      value: originals.DecompressionStream,
+      writable: true,
+      configurable: true
+    });
+  } else {
+    Reflect.deleteProperty(globals, "DecompressionStream");
+  }
+  URL.createObjectURL = originals.createObjectURL;
+  URL.revokeObjectURL = originals.revokeObjectURL;
 };

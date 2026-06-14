@@ -14,6 +14,28 @@ type DisassemblyYieldSnapshot = {
   invalidInstructionCount: number;
 };
 
+type DisassemblyDecoderEntry = DisassemblySection & {
+  decoder: InstanceType<IcedX86Module["Decoder"]>;
+};
+
+type ControlFlowDecodeState = {
+  iced: IcedX86Module;
+  imageBase: bigint;
+  bytesSampled: number;
+  decoders: DisassemblyDecoderEntry[];
+  visited: Set<number>;
+  queued: Set<number>;
+  queue: number[];
+  featureCounts: Map<number, number>;
+  yieldEveryInstructions: number;
+  signal?: AbortSignal;
+  onYield?: (snapshot: DisassemblyYieldSnapshot) => Promise<void>;
+  bytesDecoded: number;
+  instructionCount: number;
+  invalidInstructionCount: number;
+  recordDecodeStopIssue(message: string): void;
+};
+
 const MAX_RVA = 0xffff_ffff;
 const MAX_DECODE_STOP_ISSUES = 200;
 
@@ -34,6 +56,103 @@ const safeFree = (resource: { free(): void } | null | undefined): void => {
     // Best-effort cleanup: iced-x86 objects own WASM allocations and `free()` may throw if the module
     // is partially initialized/aborted or if the object has already been released.
     // Cleanup errors should never override real analysis results.
+  }
+};
+
+const snapshot = (state: ControlFlowDecodeState): DisassemblyYieldSnapshot => ({
+  bytesDecoded: state.bytesDecoded,
+  instructionCount: state.instructionCount,
+  invalidInstructionCount: state.invalidInstructionCount
+});
+
+const getDecoderForRva = (
+  decoders: DisassemblyDecoderEntry[],
+  rva: number
+): DisassemblyDecoderEntry | null => {
+  for (const entry of decoders) {
+    const start = entry.rvaStart;
+    const end = start + entry.data.length;
+    if (rva >= start && rva < end) return entry;
+  }
+  return null;
+};
+
+const addControlFlowWork = (state: ControlFlowDecodeState, rva: number | null): void => {
+  if (rva == null) return;
+  const normalized = rva >>> 0;
+  if (state.visited.has(normalized) || state.queued.has(normalized)) return;
+  state.queue.push(normalized);
+  state.queued.add(normalized);
+};
+
+const countInstructionFeatures = (state: ControlFlowDecodeState, instr: InstanceType<IcedX86Module["Instruction"]>): void => {
+  const features = instr.cpuidFeatures();
+  for (const feature of features) {
+    state.featureCounts.set(feature, (state.featureCounts.get(feature) || 0) + 1);
+  }
+};
+
+const decodeLinearRun = async (
+  state: ControlFlowDecodeState,
+  decoderEntry: DisassemblyDecoderEntry,
+  startRva: number,
+  instr: InstanceType<IcedX86Module["Instruction"]>
+): Promise<void> => {
+  const offset = startRva - decoderEntry.rvaStart;
+  if (offset < 0 || offset >= decoderEntry.data.length) return;
+  const decoder = decoderEntry.decoder;
+  decoder.position = offset;
+  decoder.ip = BigInt.asUintN(64, state.imageBase + BigInt(startRva));
+  while (decoder.canDecode) {
+    if (state.signal?.aborted) return;
+    decoder.decodeOut(instr);
+    state.instructionCount += 1;
+    const instrRva = toRva(instr.ip, state.imageBase);
+    if (instrRva == null) break;
+    if (state.visited.has(instrRva)) break;
+    state.visited.add(instrRva);
+    const len = instr.length;
+    if (len <= 0) {
+      state.invalidInstructionCount += 1;
+      state.recordDecodeStopIssue("Stopping at a zero-length instruction decode.");
+      break;
+    }
+    state.bytesDecoded = Math.min(state.bytesSampled, state.bytesDecoded + len);
+    const isInvalidDecode = instr.code === state.iced.Code["INVALID"];
+    const isUd2Trap = instr.code === state.iced.Code["Ud2"];
+    const isHardException = instr.flowControl === state.iced.FlowControl["Exception"] && !isUd2Trap;
+    if (isInvalidDecode || isHardException) {
+      state.invalidInstructionCount += 1;
+      state.recordDecodeStopIssue(`Stopping at an invalid instruction at RVA 0x${instrRva.toString(16)}.`);
+      break;
+    }
+    if (!isUd2Trap) countInstructionFeatures(state, instr);
+    if (state.iced.FlowControl["UnconditionalBranch"] === instr.flowControl) {
+      const target = getNearBranchTarget(instr, state.iced.OpKind);
+      addControlFlowWork(state, target == null ? null : toRva(target, state.imageBase));
+      break;
+    }
+    if (
+      state.iced.FlowControl["ConditionalBranch"] === instr.flowControl ||
+      state.iced.FlowControl["Call"] === instr.flowControl ||
+      state.iced.FlowControl["XbeginXabortXend"] === instr.flowControl
+    ) {
+      const target = getNearBranchTarget(instr, state.iced.OpKind);
+      addControlFlowWork(state, target == null ? null : toRva(target, state.imageBase));
+    } else if (
+      state.iced.FlowControl["IndirectBranch"] === instr.flowControl ||
+      state.iced.FlowControl["Return"] === instr.flowControl ||
+      state.iced.FlowControl["Interrupt"] === instr.flowControl
+    ) {
+      break;
+    }
+    const nextRva = toRva(instr.nextIP, state.imageBase);
+    if (nextRva == null) break;
+    const nextDecoderEntry = getDecoderForRva(state.decoders, nextRva);
+    if (!nextDecoderEntry || nextDecoderEntry !== decoderEntry) break;
+    if (state.yieldEveryInstructions && state.instructionCount % state.yieldEveryInstructions === 0) {
+      await state.onYield?.(snapshot(state));
+    }
   }
 };
 
@@ -83,15 +202,6 @@ export async function disassembleControlFlowForInstructionSets(opts: {
     }
   };
 
-  const getDecoderForRva = (rva: number): (typeof decoders)[number] | null => {
-    for (const entry of decoders) {
-      const start = entry.rvaStart;
-      const end = start + entry.data.length;
-      if (rva >= start && rva < end) return entry;
-    }
-    return null;
-  };
-
   const visited = new Set<number>();
   const queued = new Set<number>();
   const queue = [...opts.entrypoints].reverse();
@@ -99,17 +209,23 @@ export async function disassembleControlFlowForInstructionSets(opts: {
     queued.add(rva >>> 0);
   }
 
-  const addWork = (rva: number | null): void => {
-    if (rva == null) return;
-    const normalized = rva >>> 0;
-    if (visited.has(normalized) || queued.has(normalized)) return;
-    queue.push(normalized);
-    queued.add(normalized);
+  const state: ControlFlowDecodeState = {
+    iced: opts.iced,
+    imageBase: opts.imageBase,
+    bytesSampled,
+    decoders,
+    visited,
+    queued,
+    queue,
+    featureCounts: opts.featureCounts,
+    yieldEveryInstructions: opts.yieldEveryInstructions,
+    ...(opts.signal ? { signal: opts.signal } : {}),
+    ...(opts.onYield ? { onYield: opts.onYield } : {}),
+    bytesDecoded: 0,
+    instructionCount: 0,
+    invalidInstructionCount: 0,
+    recordDecodeStopIssue
   };
-
-  let bytesDecoded = 0;
-  let instructionCount = 0;
-  let invalidInstructionCount = 0;
 
   const instr = new opts.iced.Instruction();
   try {
@@ -119,87 +235,11 @@ export async function disassembleControlFlowForInstructionSets(opts: {
       const startRva = queue.pop();
       if (startRva == null) break;
       queued.delete(startRva);
-
-      const decoderEntry = getDecoderForRva(startRva);
+      const decoderEntry = getDecoderForRva(decoders, startRva);
       if (!decoderEntry) continue;
-
-      const offset = startRva - decoderEntry.rvaStart;
-      if (offset < 0 || offset >= decoderEntry.data.length) continue;
-
-      const decoder = decoderEntry.decoder;
-      decoder.position = offset;
-      decoder.ip = BigInt.asUintN(64, opts.imageBase + BigInt(startRva));
-
-      while (decoder.canDecode) {
-        if (opts.signal?.aborted) return { bytesDecoded, instructionCount, invalidInstructionCount };
-
-        decoder.decodeOut(instr);
-        instructionCount++;
-
-        const instrRva = toRva(instr.ip, opts.imageBase);
-        if (instrRva == null) break;
-        if (visited.has(instrRva)) break;
-        visited.add(instrRva);
-
-        const len = instr.length;
-        if (len <= 0) {
-          invalidInstructionCount++;
-          recordDecodeStopIssue("Stopping at a zero-length instruction decode.");
-          break;
-        }
-        bytesDecoded = Math.min(bytesSampled, bytesDecoded + len);
-
-        const isInvalidDecode = instr.code === opts.iced.Code["INVALID"];
-        const isUd2Trap = instr.code === opts.iced.Code["Ud2"];
-        const isHardException = instr.flowControl === opts.iced.FlowControl["Exception"] && !isUd2Trap;
-        if (isInvalidDecode || isHardException) {
-          invalidInstructionCount++;
-          recordDecodeStopIssue(`Stopping at an invalid instruction at RVA 0x${instrRva.toString(16)}.`);
-          break;
-        }
-
-        if (!isUd2Trap) {
-          const features = instr.cpuidFeatures();
-          for (const feature of features) {
-            opts.featureCounts.set(feature, (opts.featureCounts.get(feature) || 0) + 1);
-          }
-        }
-
-        if (opts.iced.FlowControl["UnconditionalBranch"] === instr.flowControl) {
-          const target = getNearBranchTarget(instr, opts.iced.OpKind);
-          addWork(target == null ? null : toRva(target, opts.imageBase));
-          break;
-        }
-
-        if (
-          opts.iced.FlowControl["ConditionalBranch"] === instr.flowControl ||
-          opts.iced.FlowControl["Call"] === instr.flowControl ||
-          opts.iced.FlowControl["XbeginXabortXend"] === instr.flowControl
-        ) {
-          const target = getNearBranchTarget(instr, opts.iced.OpKind);
-          addWork(target == null ? null : toRva(target, opts.imageBase));
-        } else if (
-          opts.iced.FlowControl["IndirectBranch"] === instr.flowControl ||
-          opts.iced.FlowControl["Return"] === instr.flowControl ||
-          opts.iced.FlowControl["Interrupt"] === instr.flowControl
-        ) {
-          break;
-        }
-
-        const nextRva = toRva(instr.nextIP, opts.imageBase);
-        if (nextRva == null) break;
-
-        const nextDecoderEntry = getDecoderForRva(nextRva);
-        if (!nextDecoderEntry || nextDecoderEntry !== decoderEntry) {
-          break;
-        }
-
-        if (opts.yieldEveryInstructions && instructionCount % opts.yieldEveryInstructions === 0) {
-          await opts.onYield?.({ bytesDecoded, instructionCount, invalidInstructionCount });
-        }
-      }
+      await decodeLinearRun(state, decoderEntry, startRva, instr);
     }
-    return { bytesDecoded, instructionCount, invalidInstructionCount };
+    return snapshot(state);
   } finally {
     if (decodeStopIssuesSuppressed > 0) {
       opts.issues.push(

@@ -87,6 +87,126 @@ const pickElement = (
   return { id: targetId, size: null, headerSize: 0, dataOffset: offset, offset, sizeUnknown: true };
 };
 
+const parseSegmentSeekHead = async (
+  file: File,
+  segmentHeader: EbmlElementHeader,
+  scan: SegmentScanResult,
+  issues: Issues
+): Promise<WebmSeekHead | null> => {
+  const [firstSeek] = scan.seekHeaders;
+  if (!firstSeek) return null;
+  return parseSeekHead(file, firstSeek, segmentHeader.dataOffset, issues);
+};
+
+const parseSegmentInfo = async (
+  file: File,
+  scan: SegmentScanResult,
+  seekHead: WebmSeekHead | null,
+  issues: Issues
+): Promise<WebmSegment["info"]> => {
+  const infoHeader = scan.infoHeader || pickElement(scan, seekHead, INFO_ID) || null;
+  if (!infoHeader) return null;
+  const resolved = infoHeader.headerSize ? infoHeader : await readElementAt(file, infoHeader.offset, issues);
+  return resolved && resolved.id === INFO_ID ? parseInfo(file, resolved, 1000000, issues) : null;
+};
+
+const parseSegmentTracks = async (
+  file: File,
+  scan: SegmentScanResult,
+  seekHead: WebmSeekHead | null,
+  issues: Issues
+): Promise<WebmSegment["tracks"]> => {
+  const tracksHeader = scan.tracksHeader || pickElement(scan, seekHead, TRACKS_ID) || null;
+  if (!tracksHeader) return [];
+  const resolved = tracksHeader.headerSize ? tracksHeader : await readElementAt(file, tracksHeader.offset, issues);
+  return resolved && resolved.id === TRACKS_ID ? parseTracks(file, resolved, issues) : [];
+};
+
+const validateWebmTrackCodecs = (segment: WebmSegment, issues: Issues): void => {
+  const allowed = new Set(["V_VP8", "V_VP9", "V_AV1", "A_VORBIS", "A_OPUS"]);
+  for (const track of segment.tracks) {
+    if (track.codecId) {
+      const isAllowed = allowed.has(track.codecId);
+      track.codecIdValidForWebm = isAllowed;
+      if (!isAllowed) issues.push(`CodecID ${track.codecId} is not allowed in WebM.`);
+    }
+  }
+};
+
+const readElementFromScanOrSeek = async (
+  file: File,
+  scan: SegmentScanResult,
+  seekHead: WebmSeekHead | null,
+  targetId: number,
+  issues: Issues
+): Promise<EbmlElementHeader | null> => {
+  const scanned = scan.scanned.find(element => element.id === targetId);
+  if (scanned) return readElementAt(file, scanned.offset, issues);
+  const seekEntry = seekHead?.entries.find(entry => entry.id === targetId && entry.absoluteOffset != null);
+  return seekEntry?.absoluteOffset != null ? readElementAt(file, seekEntry.absoluteOffset, issues) : null;
+};
+
+const parseSegmentCues = async (
+  file: File,
+  segment: WebmSegment,
+  scan: SegmentScanResult,
+  seekHead: WebmSeekHead | null,
+  issues: Issues
+): Promise<void> => {
+  const cuesHeader = await readElementFromScanOrSeek(file, scan, seekHead, CUES_ID, issues);
+  if (cuesHeader && cuesHeader.id === CUES_ID) {
+    segment.cues = await parseCues(file, cuesHeader, issues, segment.info?.timecodeScale ?? 1000000);
+  }
+};
+
+const reportSegmentPresenceIssues = (
+  segment: WebmSegment,
+  scan: SegmentScanResult,
+  seekHead: WebmSeekHead | null,
+  docTypeLower: string,
+  issues: Issues
+): { hasAttachments: boolean; hasTags: boolean } => {
+  const ids = new Set(scan.scanned.map(element => element.id));
+  const seekIds = new Set(
+    (seekHead?.entries || []).filter(entry => entry.absoluteOffset != null).map(entry => entry.id)
+  );
+  const hasCues = ids.has(CUES_ID) || seekIds.has(CUES_ID) || segment.cues != null;
+  const hasAttachments = ids.has(ATTACHMENTS_ID) || seekIds.has(ATTACHMENTS_ID);
+  const hasTags = ids.has(TAGS_ID) || seekIds.has(TAGS_ID);
+  const hasChapters = ids.has(CHAPTERS_ID) || seekIds.has(CHAPTERS_ID);
+  if (!hasCues) issues.push("Cues element not found; seeking metadata may be missing.");
+  if (docTypeLower === "webm") {
+    if (hasAttachments) issues.push("Attachments element present; invalid for WebM.");
+    if (hasTags) issues.push("Tags element present; invalid for WebM.");
+    if (hasChapters) issues.push("Chapters element present; invalid for WebM.");
+  }
+  return { hasAttachments, hasTags };
+};
+
+const parseSegmentAttachments = async (
+  file: File,
+  segment: WebmSegment,
+  scan: SegmentScanResult,
+  seekHead: WebmSeekHead | null,
+  issues: Issues
+): Promise<void> => {
+  const resolved = await readElementFromScanOrSeek(file, scan, seekHead, ATTACHMENTS_ID, issues);
+  if (resolved && resolved.id === ATTACHMENTS_ID) {
+    segment.attachments = await parseAttachments(file, resolved, issues);
+  }
+};
+
+const parseSegmentTags = async (
+  file: File,
+  segment: WebmSegment,
+  scan: SegmentScanResult,
+  seekHead: WebmSeekHead | null,
+  issues: Issues
+): Promise<void> => {
+  const resolved = await readElementFromScanOrSeek(file, scan, seekHead, TAGS_ID, issues);
+  if (resolved && resolved.id === TAGS_ID) segment.tags = await parseTags(file, resolved, issues);
+};
+
 const parseSegmentCore = async (
   file: File,
   segmentHeader: EbmlElementHeader,
@@ -124,121 +244,21 @@ const parseSegmentCore = async (
     segment.scanLimit = initialScan.bytesScanned;
   }
   segment.scannedElements = scan.scanned;
-  let seekHead: WebmSeekHead | null = null;
-  const [firstSeek] = scan.seekHeaders;
-  if (firstSeek) {
-    seekHead = await parseSeekHead(file, firstSeek, segmentHeader.dataOffset, issues);
-    segment.seekHead = seekHead;
-  }
-
-  const infoHeader =
-    scan.infoHeader ||
-    pickElement(scan, seekHead, INFO_ID) ||
-    null;
-  if (infoHeader) {
-    const resolved = infoHeader.headerSize
-      ? infoHeader
-      : await readElementAt(file, infoHeader.offset, issues);
-    if (resolved && resolved.id === INFO_ID) {
-      segment.info = await parseInfo(file, resolved, 1000000, issues);
-    }
-  }
-
-  const tracksHeader =
-    scan.tracksHeader ||
-    pickElement(scan, seekHead, TRACKS_ID) ||
-    null;
-  if (tracksHeader) {
-    const resolved = tracksHeader.headerSize
-      ? tracksHeader
-      : await readElementAt(file, tracksHeader.offset, issues);
-    if (resolved && resolved.id === TRACKS_ID) {
-      segment.tracks = await parseTracks(file, resolved, issues);
-    }
-  }
-  if (docTypeLower === "webm") {
-    const allowed = new Set(["V_VP8", "V_VP9", "V_AV1", "A_VORBIS", "A_OPUS"]);
-    for (const track of segment.tracks) {
-      if (track.codecId) {
-        const isAllowed = allowed.has(track.codecId);
-        track.codecIdValidForWebm = isAllowed;
-        if (!isAllowed) {
-          issues.push(`CodecID ${track.codecId} is not allowed in WebM.`);
-        }
-      }
-    }
-  }
-
-  let cuesHeader: EbmlElementHeader | null = null;
-  const scannedCue = scan.scanned.find(element => element.id === CUES_ID);
-  if (scannedCue) {
-    cuesHeader = await readElementAt(file, scannedCue.offset, issues);
-  } else if (seekHead) {
-    const cueEntry = seekHead.entries.find(entry => entry.id === CUES_ID && entry.absoluteOffset != null);
-    if (cueEntry?.absoluteOffset != null) {
-      cuesHeader = await readElementAt(file, cueEntry.absoluteOffset, issues);
-    }
-  }
-  if (cuesHeader && cuesHeader.id === CUES_ID) {
-    segment.cues = await parseCues(file, cuesHeader, issues, segment.info?.timecodeScale ?? 1000000);
-  }
+  const seekHead = await parseSegmentSeekHead(file, segmentHeader, scan, issues);
+  segment.seekHead = seekHead;
+  segment.info = await parseSegmentInfo(file, scan, seekHead, issues);
+  segment.tracks = await parseSegmentTracks(file, scan, seekHead, issues);
+  if (docTypeLower === "webm") validateWebmTrackCodecs(segment, issues);
+  await parseSegmentCues(file, segment, scan, seekHead, issues);
 
   if ((!scan.infoHeader || !scan.tracksHeader) && scan.hitLimit && segmentHeader.size == null) {
     issues.push(
       `Segment scanning stopped after ${scan.bytesScanned} bytes; segment size is unknown so some metadata may be missing.`
     );
   }
-
-  const ids = new Set(scan.scanned.map(element => element.id));
-  const seekIds = new Set(
-    (seekHead?.entries || []).filter(entry => entry.absoluteOffset != null).map(entry => entry.id)
-  );
-  const hasCues = ids.has(CUES_ID) || seekIds.has(CUES_ID) || segment.cues != null;
-  const hasAttachments = ids.has(ATTACHMENTS_ID) || seekIds.has(ATTACHMENTS_ID);
-  const hasTags = ids.has(TAGS_ID) || seekIds.has(TAGS_ID);
-  const hasChapters = ids.has(CHAPTERS_ID) || seekIds.has(CHAPTERS_ID);
-  if (!hasCues) {
-    issues.push("Cues element not found; seeking metadata may be missing.");
-  }
-  if (docTypeLower === "webm") {
-    if (hasAttachments) issues.push("Attachments element present; invalid for WebM.");
-    if (hasTags) issues.push("Tags element present; invalid for WebM.");
-    if (hasChapters) issues.push("Chapters element present; invalid for WebM.");
-  }
-
-  if (hasAttachments) {
-    const attachmentsHeader =
-      scan.scanned.find(element => element.id === ATTACHMENTS_ID) ||
-      seekHead?.entries.find(entry => entry.id === ATTACHMENTS_ID && entry.absoluteOffset != null) ||
-      null;
-    const attachmentsOffset = attachmentsHeader
-      ? "offset" in attachmentsHeader
-        ? attachmentsHeader.offset
-        : attachmentsHeader.absoluteOffset
-      : null;
-    if (attachmentsOffset != null) {
-      const resolved = await readElementAt(file, attachmentsOffset, issues);
-      if (resolved && resolved.id === ATTACHMENTS_ID) {
-        segment.attachments = await parseAttachments(file, resolved, issues);
-      }
-    }
-  }
-
-  if (hasTags) {
-    const tagHeader =
-      scan.scanned.find(element => element.id === TAGS_ID) ||
-      seekHead?.entries.find(entry => entry.id === TAGS_ID && entry.absoluteOffset != null) ||
-      null;
-    const tagsOffset = tagHeader
-      ? "offset" in tagHeader
-        ? tagHeader.offset
-        : tagHeader.absoluteOffset
-      : null;
-    if (tagsOffset != null) {
-      const resolved = await readElementAt(file, tagsOffset, issues);
-      if (resolved && resolved.id === TAGS_ID) segment.tags = await parseTags(file, resolved, issues);
-    }
-  }
+  const presence = reportSegmentPresenceIssues(segment, scan, seekHead, docTypeLower, issues);
+  if (presence.hasAttachments) await parseSegmentAttachments(file, segment, scan, seekHead, issues);
+  if (presence.hasTags) await parseSegmentTags(file, segment, scan, seekHead, issues);
 
   return segment;
 };

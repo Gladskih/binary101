@@ -17,61 +17,65 @@ import type { MachOImage } from "../../analyzers/macho/types.js";
 import { CPU_SUBTYPE_ARM64E, CPU_TYPE_ARM64 } from "./macho-thin-sample.js";
 import { createMachOIncidentalValues, packMachOVersion } from "./macho-incidental-values.js";
 
+const createRendererMachOHeader = (): MachOImage["header"] => ({
+  magic: MH_MAGIC_64,
+  is64: true,
+  littleEndian: true,
+  cputype: CPU_TYPE_ARM64,
+  cpusubtype: CPU_SUBTYPE_ARM64E,
+  filetype: 6,
+  ncmds: 4,
+  sizeofcmds: 0x120,
+  flags: 0x00200000,
+  reserved: 0
+});
+
+const createRendererMachOSegments = (): MachOImage["segments"] => [
+  {
+    loadCommandIndex: 0,
+    name: "__TEXT",
+    vmaddr: 0x1000n,
+    vmsize: 0x1000n,
+    fileoff: 0n,
+    filesize: 0x800n,
+    maxprot: 7,
+    initprot: 5,
+    nsects: 1,
+    flags: 0x1,
+    sections: [
+      {
+        index: 1,
+        segmentName: "__TEXT",
+        sectionName: "__text",
+        addr: 0x1000n,
+        size: 0x40n,
+        offset: 0x200,
+        align: 4,
+        reloff: 0,
+        nreloc: 0,
+        flags: 0x80000400,
+        reserved1: 0,
+        reserved2: 0,
+        reserved3: 0
+      }
+    ]
+  }
+];
+
 const createRendererMachOImage = (): MachOImage => {
   const values = createMachOIncidentalValues();
   const dylibVersion = packMachOVersion(1);
   return {
     offset: 0,
     size: 0x3000,
-    header: {
-      magic: MH_MAGIC_64,
-      is64: true,
-      littleEndian: true,
-      cputype: CPU_TYPE_ARM64,
-      cpusubtype: CPU_SUBTYPE_ARM64E,
-      filetype: 6,
-      ncmds: 4,
-      sizeofcmds: 0x120,
-      flags: 0x00200000,
-      reserved: 0
-    },
+    header: createRendererMachOHeader(),
     loadCommands: [
       { index: 0, offset: 0x20, cmd: LC_LOAD_DYLINKER, cmdsize: 24 },
       { index: 1, offset: 0x38, cmd: LC_MAIN, cmdsize: 24 },
       { index: 2, offset: 0x50, cmd: LC_UUID, cmdsize: 24 },
       { index: 3, offset: 0x68, cmd: LC_RPATH, cmdsize: 24 }
     ],
-    segments: [
-      {
-        loadCommandIndex: 0,
-        name: "__TEXT",
-        vmaddr: 0x1000n,
-        vmsize: 0x1000n,
-        fileoff: 0n,
-        filesize: 0x800n,
-        maxprot: 7,
-        initprot: 5,
-        nsects: 1,
-        flags: 0x1,
-        sections: [
-          {
-            index: 1,
-            segmentName: "__TEXT",
-            sectionName: "__text",
-            addr: 0x1000n,
-            size: 0x40n,
-            offset: 0x200,
-            align: 4,
-            reloff: 0,
-            nreloc: 0,
-            flags: 0x80000400,
-            reserved1: 0,
-            reserved2: 0,
-            reserved3: 0
-          }
-        ]
-      }
-    ],
+    segments: createRendererMachOSegments(),
     dylibs: [
       {
         loadCommandIndex: 1,

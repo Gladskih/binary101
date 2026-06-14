@@ -25,7 +25,14 @@ const sharedRules = {
       skipComments: true
     }
   ],
-  "max-params": ["error", 8]
+  "max-params": ["error", 8],
+  "max-lines-per-function": [
+    "error",
+    {
+      max: 100,
+      IIFEs: true,
+    }
+  ]
 };
 
 const tsRuleOverrides = {

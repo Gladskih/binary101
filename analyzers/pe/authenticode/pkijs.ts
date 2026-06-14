@@ -29,6 +29,15 @@ type VerificationSummary = Pick<
   "checks" | "signerVerifications" | "trustPolicy" | "warnings"
 >;
 
+type Pkcs7VerificationState = {
+  signedData: SignedData;
+  certificates: Certificate[];
+  checks: AuthenticodeVerificationCheck[];
+  signerVerifications: AuthenticodeSignerVerificationInfo[];
+  warnings: string[];
+  trustStore?: AuthenticodeTrustStoreSnapshot;
+};
+
 const appendCertificatePathWarnings = (
   checks: AuthenticodeVerificationCheck[],
   warnings: string[]
@@ -85,6 +94,116 @@ const getSignerTimestampReferenceTime = (
     .map(token => token.signingTime as string) ?? [])
 ].sort()[0];
 
+const addCountersignatureChronologyChecks = (
+  checks: AuthenticodeVerificationCheck[],
+  signerLabel: string,
+  signingTime: string | undefined,
+  signerVerification: AuthenticodeSignerVerificationInfo
+): void => {
+  const signerDate = parseIsoDate(signingTime);
+  signerVerification.countersignatures?.forEach(countersignature => {
+    const counterDate = parseIsoDate(countersignature.signingTime);
+    addCheck(
+      checks,
+      `${signerLabel}-countersignature-${countersignature.index + 1}-chronology`,
+      signerDate && counterDate ? (signerDate.getTime() <= counterDate.getTime() ? "pass" : "fail") : "unknown",
+      `${signerLabel}: countersignature ${countersignature.index + 1} is not earlier than the claimed signing time`,
+      signingTime && countersignature.signingTime ? `${signingTime} <= ${countersignature.signingTime}` : "One of the signing times is absent."
+    );
+  });
+};
+
+const addSignerCertificateChecks = async (
+  state: Pkcs7VerificationState,
+  signerLabel: string,
+  signerCertificate: Certificate,
+  embeddedSignerCertificateIndex: number,
+  signerVerification: AuthenticodeSignerVerificationInfo
+): Promise<void> => {
+  addSigningKeyUsageCheck(
+    state.checks,
+    `${signerLabel}-key-usage`,
+    `${signerLabel}: certificate permits digital signatures`,
+    signerCertificate
+  );
+  addExtendedKeyUsageCheck(
+    state.checks,
+    `${signerLabel}-eku`,
+    `${signerLabel}: certificate permits code signing`,
+    signerCertificate,
+    CODE_SIGNING_EKU_OID,
+    "Extended Key Usage extension is absent."
+  );
+  const certificatePathIndexes = await attachTimestampPathChecks(
+    state.checks,
+    signerLabel,
+    state.certificates,
+    embeddedSignerCertificateIndex,
+    getSignerTimestampReferenceTime(signerVerification)
+  );
+  if (certificatePathIndexes.length) signerVerification.certificatePathIndexes = certificatePathIndexes;
+};
+
+const verifyPkcs7Signer = async (state: Pkcs7VerificationState, signerIndex: number): Promise<void> => {
+  const signer = state.signedData.signerInfos[signerIndex];
+  if (!signer) return;
+  const signerLabel = `Signer ${signerIndex + 1}`;
+  const signerVerification = await verifySigner(state.signedData, signerIndex, state.warnings);
+  const signerCertificateIndex = await matchSignerCertificate(signer, state.certificates);
+  const signerCertificate =
+    signerCertificateIndex != null && signerCertificateIndex >= 0
+      ? state.certificates[signerCertificateIndex]
+      : undefined;
+  const embeddedSignerCertificateIndex = signerCertificateIndex;
+  const signingTime = getSigningTime(signer);
+  const signerCertificateLabel =
+    embeddedSignerCertificateIndex != null
+      ? `Certificate ${embeddedSignerCertificateIndex + 1}`
+      : "No embedded certificate matches the signer identifier.";
+  if (signerCertificateIndex != null && signerCertificateIndex >= 0) {
+    signerVerification.signerCertificateIndex = signerCertificateIndex;
+  }
+  if (signingTime) signerVerification.signingTime = signingTime;
+  addCheck(
+    state.checks,
+    `${signerLabel}-certificate`,
+    signerCertificate ? "pass" : "fail",
+    `${signerLabel}: signer certificate is present in the embedded chain`,
+    signerCertificateLabel
+  );
+  addCheck(
+    state.checks,
+    `${signerLabel}-signature`,
+    signerVerification.signatureVerified === true ? "pass" : signerVerification.signatureVerified === false ? "fail" : "unknown",
+    `${signerLabel}: CMS signature verifies`,
+    signerVerification.message
+  );
+  if (signerVerification.signatureVerified !== true && signerVerification.message) {
+    state.warnings.push(`${signerLabel}: ${signerVerification.message}`);
+  }
+  const countersignatures = await readCountersignatures(
+    signerLabel, signer, state.certificates, state.checks, state.warnings
+  );
+  if (countersignatures?.length) {
+    signerVerification.countersignatures = countersignatures;
+    addCountersignatureChronologyChecks(state.checks, signerLabel, signingTime, signerVerification);
+  }
+  const timestampTokens = await readRfc3161TimestampTokens(
+    signerLabel,
+    signer,
+    state.checks,
+    state.warnings,
+    state.trustStore
+  );
+  if (timestampTokens?.length) signerVerification.timestampTokens = timestampTokens;
+  if (embeddedSignerCertificateIndex != null && signerCertificate) {
+    await addSignerCertificateChecks(
+      state, signerLabel, signerCertificate, embeddedSignerCertificateIndex, signerVerification
+    );
+  }
+  state.signerVerifications.push(signerVerification);
+};
+
 export const verifyPkcs7Signatures = async (
   payload: Uint8Array,
   trustStore?: AuthenticodeTrustStoreSnapshot
@@ -105,100 +224,16 @@ export const verifyPkcs7Signatures = async (
     (certificate): certificate is Certificate => certificate instanceof Certificate
   );
   certificates.forEach(normalizeLegacyCertificateSignatureAlgorithm);
+  const state: Pkcs7VerificationState = {
+    signedData,
+    certificates,
+    checks,
+    signerVerifications,
+    warnings,
+    ...(trustStore ? { trustStore } : {})
+  };
   for (let signerIndex = 0; signerIndex < signedData.signerInfos.length; signerIndex += 1) {
-    const signer = signedData.signerInfos[signerIndex];
-    if (!signer) continue;
-    const signerLabel = `Signer ${signerIndex + 1}`;
-    const signerVerification = await verifySigner(signedData, signerIndex, warnings);
-    const signerCertificateIndex = await matchSignerCertificate(signer, certificates);
-    const signerCertificate =
-      signerCertificateIndex != null && signerCertificateIndex >= 0
-        ? certificates[signerCertificateIndex]
-        : undefined;
-    const embeddedSignerCertificateIndex = signerCertificateIndex;
-    const signingTime = getSigningTime(signer);
-    const signerCertificateLabel =
-      embeddedSignerCertificateIndex != null
-        ? `Certificate ${embeddedSignerCertificateIndex + 1}`
-        : "No embedded certificate matches the signer identifier.";
-
-    if (signerCertificateIndex != null && signerCertificateIndex >= 0) {
-      signerVerification.signerCertificateIndex = signerCertificateIndex;
-    }
-    if (signingTime) {
-      signerVerification.signingTime = signingTime;
-    }
-
-    addCheck(
-      checks,
-      `${signerLabel}-certificate`,
-      signerCertificate ? "pass" : "fail",
-      `${signerLabel}: signer certificate is present in the embedded chain`,
-      signerCertificateLabel
-    );
-    addCheck(
-      checks,
-      `${signerLabel}-signature`,
-      signerVerification.signatureVerified === true ? "pass" : signerVerification.signatureVerified === false ? "fail" : "unknown",
-      `${signerLabel}: CMS signature verifies`,
-      signerVerification.message
-    );
-    if (signerVerification.signatureVerified !== true && signerVerification.message) {
-      warnings.push(`${signerLabel}: ${signerVerification.message}`);
-    }
-
-    const countersignatures = await readCountersignatures(signerLabel, signer, certificates, checks, warnings);
-    if (countersignatures?.length) {
-      signerVerification.countersignatures = countersignatures;
-      const signerDate = parseIsoDate(signingTime);
-      countersignatures.forEach(countersignature => {
-        const counterDate = parseIsoDate(countersignature.signingTime);
-        addCheck(
-          checks,
-          `${signerLabel}-countersignature-${countersignature.index + 1}-chronology`,
-          signerDate && counterDate ? (signerDate.getTime() <= counterDate.getTime() ? "pass" : "fail") : "unknown",
-          `${signerLabel}: countersignature ${countersignature.index + 1} is not earlier than the claimed signing time`,
-          signingTime && countersignature.signingTime ? `${signingTime} <= ${countersignature.signingTime}` : "One of the signing times is absent."
-        );
-      });
-    }
-    const timestampTokens = await readRfc3161TimestampTokens(
-      signerLabel,
-      signer,
-      checks,
-      warnings,
-      trustStore
-    );
-    if (timestampTokens?.length) {
-      signerVerification.timestampTokens = timestampTokens;
-    }
-    if (embeddedSignerCertificateIndex != null && signerCertificate) {
-      addSigningKeyUsageCheck(
-        checks,
-        `${signerLabel}-key-usage`,
-        `${signerLabel}: certificate permits digital signatures`,
-        signerCertificate
-      );
-      addExtendedKeyUsageCheck(
-        checks,
-        `${signerLabel}-eku`,
-        `${signerLabel}: certificate permits code signing`,
-        signerCertificate,
-        CODE_SIGNING_EKU_OID,
-        "Extended Key Usage extension is absent."
-      );
-      const certificatePathIndexes = await attachTimestampPathChecks(
-        checks,
-        signerLabel,
-        certificates,
-        embeddedSignerCertificateIndex,
-        getSignerTimestampReferenceTime(signerVerification)
-      );
-      if (certificatePathIndexes.length) {
-        signerVerification.certificatePathIndexes = certificatePathIndexes;
-      }
-    }
-    signerVerifications.push(signerVerification);
+    await verifyPkcs7Signer(state, signerIndex);
   }
 
   appendCertificatePathWarnings(checks, warnings);

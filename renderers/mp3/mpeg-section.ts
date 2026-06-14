@@ -101,107 +101,110 @@ function describeNonAudioBytes(nonAudioBytes: number | null | undefined): string
   return `${formatHumanSize(nonAudioBytes)} of non-audio data - unusually large; may contain bundled files or junk.`;
 }
 
-export function renderMpeg(mpeg: Mp3SuccessResult["mpeg"] | null | undefined): string {
-  if (!mpeg || !mpeg.firstFrame) return "";
-  const f: MpegFrameHeader = mpeg.firstFrame;
-  const rows = [];
-  rows.push(
+function renderFrameLayoutRows(frame: MpegFrameHeader): string[] {
+  return [
     renderDefinitionRow(
       "Frame offset",
       withFieldNote(
-        valueWithHint(`${f.offset} B`, describeFrameOffset(f.offset)),
+        valueWithHint(`${frame.offset} B`, describeFrameOffset(frame.offset)),
         "Position of the first MPEG frame relative to file start."
       )
-    )
-  );
-  rows.push(
+    ),
     renderDefinitionRow(
       "Frame length",
       withFieldNote(
-        valueWithHint(f.frameLengthBytes ? `${f.frameLengthBytes} B` : "Unknown", describeFrameLength(f.frameLengthBytes)),
+        valueWithHint(
+          frame.frameLengthBytes ? `${frame.frameLengthBytes} B` : "Unknown",
+          describeFrameLength(frame.frameLengthBytes)
+        ),
         "Size of the first MPEG frame in bytes."
       )
-    )
-  );
-  rows.push(
+    ),
     renderDefinitionRow(
       "Samples per frame",
       withFieldNote(
         valueWithHint(
-          f.samplesPerFrame != null ? `${f.samplesPerFrame}` : "Unknown",
-          describeSamplesPerFrame(f.samplesPerFrame)
+          frame.samplesPerFrame != null ? `${frame.samplesPerFrame}` : "Unknown",
+          describeSamplesPerFrame(frame.samplesPerFrame)
         ),
         "PCM samples carried by one frame."
       )
     )
-  );
-  rows.push(
+  ];
+}
+
+function renderFrameFlagRows(frame: MpegFrameHeader): string[] {
+  return [
     renderDefinitionRow(
       "CRC present",
       withFieldNote(
-        valueWithHint(formatBoolean(f.hasCrc), describeCrc(f.hasCrc)),
+        valueWithHint(formatBoolean(frame.hasCrc), describeCrc(frame.hasCrc)),
         "CRC16 checksum bit for this frame."
       )
-    )
-  );
-  rows.push(
+    ),
     renderDefinitionRow(
       "Padding",
       withFieldNote(
-        valueWithHint(formatBoolean(f.padding), describePadding(f.padding)),
+        valueWithHint(formatBoolean(frame.padding), describePadding(frame.padding)),
         "Padding bit toggles extra slot to keep constant bitrate timing."
       )
-    )
-  );
-  rows.push(
+    ),
     renderDefinitionRow(
       "Private bit",
       withFieldNote(
-        valueWithHint(formatBoolean(f.privateBit), describePrivateBit(f.privateBit)),
+        valueWithHint(formatBoolean(frame.privateBit), describePrivateBit(frame.privateBit)),
         "Reserved encoder-specific flag."
       )
-    )
-  );
-  rows.push(
+    ),
     renderDefinitionRow(
       "Copyright",
       withFieldNote(
-        valueWithHint(formatBoolean(f.copyright), describeCopyright(f.copyright)),
+        valueWithHint(formatBoolean(frame.copyright), describeCopyright(frame.copyright)),
         "Copyright flag from header."
       )
-    )
-  );
-  rows.push(
+    ),
     renderDefinitionRow(
       "Original",
       withFieldNote(
-        valueWithHint(formatBoolean(f.original), describeOriginal(f.original)),
+        valueWithHint(formatBoolean(frame.original), describeOriginal(frame.original)),
         "Marks stream as original vs copy."
       )
     )
-  );
-  if (f.modeExtension) {
+  ];
+}
+
+function renderStereoRows(frame: MpegFrameHeader): string[] {
+  const rows: string[] = [];
+  if (frame.modeExtension) {
     rows.push(
       renderDefinitionRow(
         "Mode extension",
         withFieldNote(
-          valueWithHint(escapeHtml(f.modeExtension), describeModeExtension(f.modeExtension, f.channelMode)),
+          valueWithHint(
+            escapeHtml(frame.modeExtension),
+            describeModeExtension(frame.modeExtension, frame.channelMode)
+          ),
           "Stereo coding tools used only when channel mode is Joint stereo."
         )
       )
     );
   }
-  if (f.emphasis && f.emphasis !== "None") {
+  if (frame.emphasis && frame.emphasis !== "None") {
     rows.push(
       renderDefinitionRow(
         "Emphasis",
         withFieldNote(
-          valueWithHint(escapeHtml(f.emphasis), describeEmphasis(f.emphasis)),
+          valueWithHint(escapeHtml(frame.emphasis), describeEmphasis(frame.emphasis)),
           "Playback de-emphasis request (legacy)."
         )
       )
     );
   }
+  return rows;
+}
+
+function renderStreamValidationRows(mpeg: Mp3SuccessResult["mpeg"]): string[] {
+  const rows: string[] = [];
   if (mpeg.secondFrameValidated === false) {
     rows.push(
       renderDefinitionRow(
@@ -223,6 +226,17 @@ export function renderMpeg(mpeg: Mp3SuccessResult["mpeg"] | null | undefined): s
       )
     );
   }
+  return rows;
+}
+
+export function renderMpeg(mpeg: Mp3SuccessResult["mpeg"] | null | undefined): string {
+  if (!mpeg || !mpeg.firstFrame) return "";
+  const rows = [
+    ...renderFrameLayoutRows(mpeg.firstFrame),
+    ...renderFrameFlagRows(mpeg.firstFrame),
+    ...renderStereoRows(mpeg.firstFrame),
+    ...renderStreamValidationRows(mpeg)
+  ];
   if (mpeg.nonAudioBytes != null) {
     rows.push(
       renderDefinitionRow(

@@ -21,6 +21,16 @@ interface MetadataReader {
   readAt: (relativeOffset: number, byteLength: number) => Promise<DataView | null>;
 }
 
+type MetadataRootHeader = {
+  signature: number;
+  verMajor: number;
+  verMinor: number;
+  reserved: number;
+  version: string;
+  flags: number;
+  streamCountRaw: number;
+};
+
 const alignTo4 = (value: number): number => (value + 3) & ~3;
 
 const toHex = (value: number, width: number): string =>
@@ -95,12 +105,12 @@ const readStreamNameAt = async (
   };
 };
 
-const parseMetadataRootWithReader = async (
+const readMetadataRootHeader = async (
   reader: MetadataReader,
   declaredMetaSize: number,
+  cursor: Cursor,
   issues: string[]
-): Promise<PeClrMeta | null> => {
-  const cursor: Cursor = { offset: 0 };
+): Promise<MetadataRootHeader | null> => {
   const signature = await readU32At(reader, cursor);
   if (signature == null) {
     issues.push("Metadata root is truncated; missing signature.");
@@ -156,6 +166,16 @@ const parseMetadataRootWithReader = async (
     issues.push("Metadata root is truncated; missing stream header fields.");
     return null;
   }
+  return { signature, verMajor, verMinor, reserved, version, flags, streamCountRaw };
+};
+
+const readMetadataStreams = async (
+  reader: MetadataReader,
+  declaredMetaSize: number,
+  cursor: Cursor,
+  streamCountRaw: number,
+  issues: string[]
+): Promise<PeClrStreamInfo[]> => {
   const streams: PeClrStreamInfo[] = [];
   const seenStreamNames = new Set<string>();
   for (let streamIndex = 0; streamIndex < streamCountRaw; streamIndex += 1) {
@@ -202,14 +222,26 @@ const parseMetadataRootWithReader = async (
   if (streams.length < streamCountRaw) {
     issues.push("Metadata stream list is incomplete; fewer streams were parsed than declared.");
   }
+  return streams;
+};
+
+const parseMetadataRootWithReader = async (
+  reader: MetadataReader,
+  declaredMetaSize: number,
+  issues: string[]
+): Promise<PeClrMeta | null> => {
+  const cursor: Cursor = { offset: 0 };
+  const header = await readMetadataRootHeader(reader, declaredMetaSize, cursor, issues);
+  if (!header) return null;
+  const streams = await readMetadataStreams(reader, declaredMetaSize, cursor, header.streamCountRaw, issues);
   const meta: PeClrMeta = {
-    version,
-    verMajor,
-    verMinor,
-    reserved,
-    flags,
-    streamCount: streamCountRaw,
-    signature,
+    version: header.version,
+    verMajor: header.verMajor,
+    verMinor: header.verMinor,
+    reserved: header.reserved,
+    flags: header.flags,
+    streamCount: header.streamCountRaw,
+    signature: header.signature,
     streams
   };
   const tables = await parseClrMetadataTablesFromStreams(reader, meta, declaredMetaSize, issues);

@@ -123,162 +123,174 @@ const inspectDirectoryLocation = async (
   updateSummary(config.summaryElement, rows, scannedFiles);
   config.setStatusMessage(`Folder scan complete: ${scannedFiles} file${scannedFiles === 1 ? "" : "s"}.`);
 };
-const createDirectoryInspectionController = (
-  config: DirectoryInspectionConfig
-): DirectoryInspectionController => {
-  let generation = 0;
-  const state: DirectoryViewState = {
+class DirectoryInspectionControllerImpl implements DirectoryInspectionController {
+  private generation = 0;
+  private readonly state: DirectoryViewState = {
     fileRows: new Map(),
     folderRows: new Map(),
     locations: [],
     sourceDescription: ""
   };
-  const inspectCurrentLocation = async (currentGeneration: number): Promise<void> =>
-    inspectDirectoryLocation(config, state, () => generation === currentGeneration);
-  const resetToRoot = (handle: BrowserDirectoryHandle, sourceDescription: string): number => {
-    const currentGeneration = generation + 1;
-    generation = currentGeneration;
-    state.sourceDescription = sourceDescription;
-    state.locations = [{ displayPath: handle.name || "Selected folder", handle }];
-    return currentGeneration;
-  };
-  const openRoot = async (
-    root: BrowserDirectoryHandle,
-    sourceDescription: string,
-    statusMessage: string
-  ): Promise<void> => {
-    const currentGeneration = resetToRoot(root, sourceDescription);
-    config.openDirectory(createDirectoryRoute(state));
-    config.setStatusMessage(statusMessage);
-    await inspectCurrentLocation(currentGeneration);
-  };
-  const openFileRow = async (path: string): Promise<void> => {
-    const row = state.fileRows.get(path);
-    if (!row) return;
-    const currentGeneration = generation + 1;
-    const location = state.locations.at(-1);
-    generation = currentGeneration;
-    try {
-      config.setStatusMessage(`Opening ${path}...`);
-      const file = await row.handle.getFile();
-      if (generation !== currentGeneration) return;
-      await config.openFile(file, `${state.sourceDescription}: ${location?.displayPath}/${path}`);
-    } catch (error) {
-      if (generation === currentGeneration) config.setStatusMessage(`Unable to open file: ${formatAccessError(error)}`);
-    }
-  };
-  const openFolderRow = async (path: string): Promise<void> => {
-    const row = state.folderRows.get(path);
-    const current = state.locations.at(-1);
-    if (!row || !current) return;
-    const currentGeneration = generation + 1;
-    generation = currentGeneration;
-    state.locations.push({ displayPath: `${current.displayPath}/${path}`, handle: row.handle });
-    config.openDirectory(createDirectoryRoute(state));
-    await inspectCurrentLocation(currentGeneration);
-  };
-  const activateRow = (target: Element | null): boolean => {
-    const row = target?.closest<HTMLTableRowElement>("[data-directory-action-kind]");
-    const path = row?.dataset["directoryActionPath"];
-    if (!row || !path) return false;
-    if (row.dataset["directoryActionKind"] === "file") void openFileRow(path);
-    else if (row.dataset["directoryActionKind"] === "directory") void openFolderRow(path);
-    return true;
-  };
-  const hide = (): void => {
-    generation += 1;
-    config.cardElement.hidden = true;
-    state.locations = [];
-    state.sourceDescription = "";
-    state.fileRows = new Map();
-    state.folderRows = new Map();
-    clearDirectoryTables(config);
-    config.progressWrapElement.hidden = true;
-  };
-  const cancel = (): void => {
-    generation += 1;
-  };
-  const showRoute = async (route: DirectoryInspectionRoute): Promise<void> => {
-    if (route.locations.length === 0) {
-      hide();
-      return;
-    }
-    const currentGeneration = generation + 1;
-    generation = currentGeneration;
-    state.sourceDescription = route.sourceDescription;
-    state.locations = copyLocations(route.locations);
-    await inspectCurrentLocation(currentGeneration);
-  };
-  const open = async (): Promise<void> => {
+
+  constructor(private readonly config: DirectoryInspectionConfig) {
+    config.openButtonElement.addEventListener("click", () => {
+      void this.open();
+    });
+    config.cardElement.addEventListener("click", event => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (handleSortableTableClick(target)) return;
+      if (this.activateRow(target)) event.preventDefault();
+    });
+    config.cardElement.addEventListener("keydown", event => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (this.activateRow(target)) event.preventDefault();
+    });
+  }
+  cancel(): void {
+    this.generation += 1;
+  }
+  hide(): void {
+    this.generation += 1;
+    this.config.cardElement.hidden = true;
+    this.state.locations = [];
+    this.state.sourceDescription = "";
+    this.state.fileRows = new Map();
+    this.state.folderRows = new Map();
+    clearDirectoryTables(this.config);
+    this.config.progressWrapElement.hidden = true;
+  }
+  async open(): Promise<void> {
     const picker = getDirectoryPicker();
     if (!picker) {
-      config.setStatusMessage("Folder picker is not supported by this browser.");
+      this.config.setStatusMessage("Folder picker is not supported by this browser.");
       return;
     }
-    const currentGeneration = generation + 1;
-    generation = currentGeneration;
-    state.locations = [];
-    state.sourceDescription = "Folder";
+    const currentGeneration = this.startFolderSelection();
     try {
-      config.setStatusMessage("Opening folder...");
+      this.config.setStatusMessage("Opening folder...");
       const root = await picker();
-      if (generation !== currentGeneration) return;
-      state.locations = [{ displayPath: root.name || "Selected folder", handle: root }];
-      config.openDirectory(createDirectoryRoute(state));
-      await inspectCurrentLocation(currentGeneration);
+      if (this.generation !== currentGeneration) return;
+      this.state.locations = [{ displayPath: root.name || "Selected folder", handle: root }];
+      this.config.openDirectory(createDirectoryRoute(this.state));
+      await this.inspectCurrentLocation(currentGeneration);
     } catch (error) {
-      if (isAbortError(error)) {
-        config.setStatusMessage(
-          "Folder selection cancelled or blocked by browser. Drop the folder onto the page instead."
-        );
-      } else {
-        config.setStatusMessage(`Unable to open folder: ${formatAccessError(error)}`);
-      }
+      this.reportFolderPickerError(error);
     }
-  };
-  const openFiles = async (files: readonly File[], sourceDescription: string): Promise<boolean> => {
+  }
+  async openFiles(files: readonly File[], sourceDescription: string): Promise<boolean> {
     const [onlyFile] = files;
     if (!onlyFile) return false;
     if (files.length === 1) {
-      generation += 1;
-      await config.openFile(onlyFile, sourceDescription);
+      this.generation += 1;
+      await this.config.openFile(onlyFile, sourceDescription);
       return true;
     }
     const root = createDirectoryRootForFiles("Selected files", files);
     if (!root) return false;
-    await openRoot(root, sourceDescription, "Opening selected files...");
+    await this.openRoot(root, sourceDescription, "Opening selected files...");
     return true;
-  };
-  const openDroppedItems = async (
+  }
+  async openDroppedItems(
     items: DirectoryDropItemList,
     sourceDescription = "Drop"
-  ): Promise<boolean> => {
+  ): Promise<boolean> {
     try {
       const handles = await getDroppedFileSystemHandles(items);
       if (handles.length === 1 && handles[0]?.kind === "file") return false;
       const root = createDirectoryRootForHandles("Dropped items", handles);
       if (!root) return false;
-      await openRoot(root, sourceDescription, "Opening selected items...");
+      await this.openRoot(root, sourceDescription, "Opening selected items...");
       return true;
     } catch (error) {
-      config.setStatusMessage(`Unable to open dropped items: ${formatAccessError(error)}`);
+      this.config.setStatusMessage(`Unable to open dropped items: ${formatAccessError(error)}`);
       return true;
     }
-  };
-  config.openButtonElement.addEventListener("click", () => {
-    void open();
-  });
-  config.cardElement.addEventListener("click", event => {
-    const target = event.target instanceof Element ? event.target : null;
-    if (handleSortableTableClick(target)) return;
-    if (activateRow(target)) event.preventDefault();
-  });
-  config.cardElement.addEventListener("keydown", event => {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    const target = event.target instanceof Element ? event.target : null;
-    if (activateRow(target)) event.preventDefault();
-  });
-  return { cancel, hide, open, openFiles, openDroppedItems, showRoute };
-};
+  }
+  async showRoute(route: DirectoryInspectionRoute): Promise<void> {
+    if (route.locations.length === 0) {
+      this.hide();
+      return;
+    }
+    const currentGeneration = this.generation + 1;
+    this.generation = currentGeneration;
+    this.state.sourceDescription = route.sourceDescription;
+    this.state.locations = copyLocations(route.locations);
+    await this.inspectCurrentLocation(currentGeneration);
+  }
+  private activateRow(target: Element | null): boolean {
+    const row = target?.closest<HTMLTableRowElement>("[data-directory-action-kind]");
+    const path = row?.dataset["directoryActionPath"];
+    if (!row || !path) return false;
+    if (row.dataset["directoryActionKind"] === "file") void this.openFileRow(path);
+    else if (row.dataset["directoryActionKind"] === "directory") void this.openFolderRow(path);
+    return true;
+  }
+  private async inspectCurrentLocation(currentGeneration: number): Promise<void> {
+    await inspectDirectoryLocation(this.config, this.state, () => this.generation === currentGeneration);
+  }
+  private async openFileRow(path: string): Promise<void> {
+    const row = this.state.fileRows.get(path);
+    if (!row) return;
+    const currentGeneration = this.generation + 1;
+    const location = this.state.locations.at(-1);
+    this.generation = currentGeneration;
+    try {
+      this.config.setStatusMessage(`Opening ${path}...`);
+      const file = await row.handle.getFile();
+      if (this.generation !== currentGeneration) return;
+      await this.config.openFile(file, `${this.state.sourceDescription}: ${location?.displayPath}/${path}`);
+    } catch (error) {
+      if (this.generation === currentGeneration) this.config.setStatusMessage(`Unable to open file: ${formatAccessError(error)}`);
+    }
+  }
+  private async openFolderRow(path: string): Promise<void> {
+    const row = this.state.folderRows.get(path);
+    const current = this.state.locations.at(-1);
+    if (!row || !current) return;
+    const currentGeneration = this.generation + 1;
+    this.generation = currentGeneration;
+    this.state.locations.push({ displayPath: `${current.displayPath}/${path}`, handle: row.handle });
+    this.config.openDirectory(createDirectoryRoute(this.state));
+    await this.inspectCurrentLocation(currentGeneration);
+  }
+  private async openRoot(
+    root: BrowserDirectoryHandle,
+    sourceDescription: string,
+    statusMessage: string
+  ): Promise<void> {
+    const currentGeneration = this.resetToRoot(root, sourceDescription);
+    this.config.openDirectory(createDirectoryRoute(this.state));
+    this.config.setStatusMessage(statusMessage);
+    await this.inspectCurrentLocation(currentGeneration);
+  }
+  private reportFolderPickerError(error: unknown): void {
+    if (isAbortError(error)) {
+      this.config.setStatusMessage(
+        "Folder selection cancelled or blocked by browser. Drop the folder onto the page instead."
+      );
+    } else {
+      this.config.setStatusMessage(`Unable to open folder: ${formatAccessError(error)}`);
+    }
+  }
+  private resetToRoot(handle: BrowserDirectoryHandle, sourceDescription: string): number {
+    const currentGeneration = this.generation + 1;
+    this.generation = currentGeneration;
+    this.state.sourceDescription = sourceDescription;
+    this.state.locations = [{ displayPath: handle.name || "Selected folder", handle }];
+    return currentGeneration;
+  }
+  private startFolderSelection(): number {
+    const currentGeneration = this.generation + 1;
+    this.generation = currentGeneration;
+    this.state.locations = [];
+    this.state.sourceDescription = "Folder";
+    return currentGeneration;
+  }
+}
+
+const createDirectoryInspectionController = (
+  config: DirectoryInspectionConfig
+): DirectoryInspectionController => new DirectoryInspectionControllerImpl(config);
 export { createDirectoryInspectionController };
 export type { DirectoryInspectionController, DirectoryInspectionConfig, DirectoryInspectionRoute };

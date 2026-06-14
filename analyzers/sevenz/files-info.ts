@@ -137,6 +137,76 @@ const expandEmptyStreamFlags = (
   return expanded;
 };
 
+type SevenZipFilesInfoState = {
+  emptyStreams: boolean[] | null;
+  emptyFiles: boolean[] | null;
+  antiItems: boolean[] | null;
+  names: string[] | null;
+  mTimes: Array<string | null> | null;
+  attributes: Array<number | null> | null;
+  hasNames: boolean;
+  hasModificationTimes: boolean;
+};
+
+const readFileProperty = (
+  ctx: SevenZipContext,
+  fileCount: number,
+  propertyType: number,
+  propEnd: number,
+  state: SevenZipFilesInfoState
+): void => {
+  if (propertyType === EMPTY_STREAMS_PROPERTY_ID) {
+    state.emptyStreams = readBitVector(ctx, fileCount, propEnd, "Empty stream flags");
+  } else if (propertyType === EMPTY_FILES_PROPERTY_ID) {
+    const emptyCount = state.emptyStreams?.filter(Boolean).length ?? fileCount;
+    state.emptyFiles = expandEmptyStreamFlags(
+      readBitVector(ctx, emptyCount, propEnd, "Empty file flags"),
+      state.emptyStreams,
+      fileCount
+    );
+  } else if (propertyType === ANTI_ITEMS_PROPERTY_ID) {
+    const emptyCount = state.emptyStreams?.filter(Boolean).length ?? fileCount;
+    state.antiItems = expandEmptyStreamFlags(
+      readBitVector(ctx, emptyCount, propEnd, "Anti item flags"),
+      state.emptyStreams,
+      fileCount
+    );
+  } else if (propertyType === NAMES_PROPERTY_ID) {
+    const parsedNames = parseNames(ctx, fileCount, propEnd);
+    state.names = parsedNames.names;
+    state.hasNames = !!state.names;
+  } else if (propertyType === MODIFICATION_TIMES_PROPERTY_ID) {
+    state.mTimes = parseTimes(ctx, fileCount, propEnd, "Modification time");
+    state.hasModificationTimes = !!state.mTimes;
+  } else if (propertyType === ATTRIBUTES_PROPERTY_ID) {
+    state.attributes = parseAttributes(ctx, fileCount, propEnd);
+  }
+  ctx.offset = propEnd;
+};
+
+const applyFileInfo = (
+  files: SevenZipFileInfoEntry[],
+  fileCount: number,
+  state: SevenZipFilesInfoState
+): void => {
+  for (let i = 0; i < fileCount; i += 1) {
+    const file = files[i];
+    if (!file) continue;
+    file.hasStream = state.emptyStreams ? !state.emptyStreams[i] : true;
+    file.isEmptyStream = state.emptyStreams ? Boolean(state.emptyStreams[i]) : false;
+    file.isEmptyFile = state.emptyFiles ? Boolean(state.emptyFiles[i]) : false;
+    file.isAnti = state.antiItems ? Boolean(state.antiItems[i]) : false;
+    file.name = state.names?.[i] ?? "(no name)";
+    file.modifiedTime = state.mTimes?.[i] ?? null;
+    const attr = state.attributes ? state.attributes[i] : null;
+    if (attr != null) {
+      file.attributes = toHex32(attr, 8);
+      if ((attr & WINDOWS_DIRECTORY_ATTRIBUTE) !== 0) file.isDirectory = true;
+    }
+    if (file.isEmptyStream && file.isEmptyFile === false) file.isDirectory = true;
+  }
+};
+
 export const parseFilesInfo = (ctx: SevenZipContext): SevenZipFilesInfo => {
   const numFiles = readEncodedUint64(ctx, "File count");
   const fileCount = toSafeNumber(numFiles);
@@ -146,14 +216,16 @@ export const parseFilesInfo = (ctx: SevenZipContext): SevenZipFilesInfo => {
   const files: SevenZipFileInfoEntry[] = Array.from({ length: fileCount }, (_, index) => ({
     index: index + 1
   }));
-  let emptyStreams: boolean[] | null = null;
-  let emptyFiles: boolean[] | null = null;
-  let antiItems: boolean[] | null = null;
-  let names: string[] | null = null;
-  let mTimes: Array<string | null> | null = null;
-  let attributes: Array<number | null> | null = null;
-  let hasNames = false;
-  let hasModificationTimes = false;
+  const state: SevenZipFilesInfoState = {
+    emptyStreams: null,
+    emptyFiles: null,
+    antiItems: null,
+    names: null,
+    mTimes: null,
+    attributes: null,
+    hasNames: false,
+    hasModificationTimes: false
+  };
   while (ctx.offset < ctx.dv.byteLength) {
     const propertyType = readByte(ctx, "File property id");
     if (propertyType == null) break;
@@ -166,79 +238,13 @@ export const parseFilesInfo = (ctx: SevenZipContext): SevenZipFilesInfo => {
       break;
     }
     const propEnd = ctx.offset + sizeNumber;
-    if (propertyType === EMPTY_STREAMS_PROPERTY_ID) {
-      emptyStreams = readBitVector(
-        ctx,
-        fileCount,
-        propEnd,
-        "Empty stream flags"
-      );
-      ctx.offset = propEnd;
-      continue;
-    }
-    if (propertyType === EMPTY_FILES_PROPERTY_ID) {
-      const emptyCount = emptyStreams?.filter(Boolean).length ?? fileCount;
-      emptyFiles = expandEmptyStreamFlags(
-        readBitVector(ctx, emptyCount, propEnd, "Empty file flags"),
-        emptyStreams,
-        fileCount
-      );
-      ctx.offset = propEnd;
-      continue;
-    }
-    if (propertyType === ANTI_ITEMS_PROPERTY_ID) {
-      const emptyCount = emptyStreams?.filter(Boolean).length ?? fileCount;
-      antiItems = expandEmptyStreamFlags(
-        readBitVector(ctx, emptyCount, propEnd, "Anti item flags"),
-        emptyStreams,
-        fileCount
-      );
-      ctx.offset = propEnd;
-      continue;
-    }
-    if (propertyType === NAMES_PROPERTY_ID) {
-      const parsedNames = parseNames(ctx, fileCount, propEnd);
-      names = parsedNames.names;
-      hasNames = !!names;
-      ctx.offset = propEnd;
-      continue;
-    }
-    if (propertyType === MODIFICATION_TIMES_PROPERTY_ID) {
-      mTimes = parseTimes(ctx, fileCount, propEnd, "Modification time");
-      hasModificationTimes = !!mTimes;
-      ctx.offset = propEnd;
-      continue;
-    }
-    if (propertyType === ATTRIBUTES_PROPERTY_ID) {
-      attributes = parseAttributes(ctx, fileCount, propEnd);
-      ctx.offset = propEnd;
-      continue;
-    }
-    ctx.offset = propEnd;
+    readFileProperty(ctx, fileCount, propertyType, propEnd, state);
   }
-  for (let i = 0; i < fileCount; i += 1) {
-    const file = files[i];
-    if (!file) continue;
-    const hasStream = emptyStreams ? !emptyStreams[i] : true;
-    file.hasStream = hasStream;
-    file.isEmptyStream = emptyStreams ? Boolean(emptyStreams[i]) : false;
-    file.isEmptyFile = emptyFiles ? Boolean(emptyFiles[i]) : false;
-    file.isAnti = antiItems ? Boolean(antiItems[i]) : false;
-    file.name = names?.[i] ?? "(no name)";
-    file.modifiedTime = mTimes?.[i] ?? null;
-    const attr = attributes ? attributes[i] : null;
-    if (attr != null) {
-      file.attributes = toHex32(attr, 8);
-      if ((attr & WINDOWS_DIRECTORY_ATTRIBUTE) !== 0) file.isDirectory = true;
-    }
-    if (file.isEmptyStream && file.isEmptyFile === false) {
-      file.isDirectory = true;
-    }
-  }
+  applyFileInfo(files, fileCount, state);
   return {
     fileCount,
     files,
-    hasNames,
-    hasModificationTimes
+    hasNames: state.hasNames,
+    hasModificationTimes: state.hasModificationTimes
   };
 };

@@ -29,116 +29,127 @@ const renderIssues = (issues: string[]): string => {
   return `<h4>Warnings</h4><ul class="issueList">${items}</ul>`;
 };
 
+const renderHeaderStorageRows = (header: SqliteParseResult["header"]): string[] => [
+  renderDefinitionRow(
+    "Page size",
+    formatMaybe(header.pageSizeBytes, " bytes"),
+    "Number of bytes per b-tree page (1 represents 65536)."
+  ),
+  renderDefinitionRow(
+    "Usable page size",
+    formatMaybe(header.usablePageSize, " bytes"),
+    "Page size minus reserved bytes; affects payload capacity."
+  ),
+  renderDefinitionRow(
+    "Reserved bytes",
+    formatMaybe(header.reservedSpace, " bytes"),
+    "Bytes left unused at the end of each page for extensions like checksums."
+  ),
+  renderDefinitionRow(
+    "Write version",
+    valueWithMeaning(header.writeVersion, header.writeVersionMeaning),
+    "Journal mode required for writers (1=rollback journal, 2=WAL)."
+  ),
+  renderDefinitionRow(
+    "Read version",
+    valueWithMeaning(header.readVersion, header.readVersionMeaning),
+    "Minimum journal mode readers expect (1=rollback journal, 2=WAL)."
+  ),
+  renderDefinitionRow(
+    "Payload fractions",
+    [
+      formatMaybe(header.maxPayloadFraction),
+      formatMaybe(header.minPayloadFraction),
+      formatMaybe(header.leafPayloadFraction)
+    ].join(" / "),
+    [
+      "Maximum embedded payload, minimum embedded payload, and leaf payload fractions",
+      "(defaults 64/32/32)."
+    ].join(" ")
+  ),
+  renderDefinitionRow(
+    "Change counter",
+    formatMaybe(header.fileChangeCounter),
+    "Incremented when the database content changes."
+  ),
+  renderDefinitionRow(
+    "Database size",
+    header.databaseSizeBytes != null
+      ? `${formatHumanSize(header.databaseSizeBytes)}`
+      : formatMaybe(header.databaseSizePages, " pages"),
+    "Number of pages in the database file."
+  ),
+  renderDefinitionRow(
+    "Freelist",
+    [
+      `${formatMaybe(header.firstFreelistTrunkPage)} (first trunk)`,
+      `${formatMaybe(header.totalFreelistPages)} (total pages)`
+    ].join(" / "),
+    "Tracks unused pages that can be recycled."
+  )
+];
+
+const renderHeaderSchemaRows = (header: SqliteParseResult["header"]): string[] => [
+  renderDefinitionRow(
+    "Schema cookie",
+    formatMaybe(header.schemaCookie),
+    "Schema version used to detect DDL changes."
+  ),
+  renderDefinitionRow(
+    "Schema format",
+    valueWithMeaning(header.schemaFormat, header.schemaFormatMeaning),
+    "File-format revision; must be between 1 and 4."
+  ),
+  renderDefinitionRow(
+    "Default page cache size",
+    formatMaybe(header.defaultPageCacheSize, " pages"),
+    "Preferred cache size when unspecified by the host."
+  ),
+  renderDefinitionRow(
+    "Largest root page",
+    formatMaybe(header.largestRootPage),
+    "Largest root b-tree page number (historical field)."
+  ),
+  renderDefinitionRow(
+    "Text encoding",
+    valueWithMeaning(header.textEncodingName, null),
+    "Encoding used for text values in records."
+  )
+];
+
+const renderHeaderApplicationRows = (header: SqliteParseResult["header"]): string[] => [
+  renderDefinitionRow(
+    "User version",
+    formatMaybe(header.userVersion),
+    "Application-defined schema marker."
+  ),
+  renderDefinitionRow(
+    "Auto-vacuum",
+    valueWithMeaning(header.vacuumMode, header.vacuumModeMeaning),
+    "0 disables auto-vacuum, 1 enables full, 2 enables incremental."
+  ),
+  renderDefinitionRow(
+    "Application ID",
+    header.applicationId != null ? toHex32(header.applicationId, 8) : "Unknown",
+    "Identifier set by applications to tag the file."
+  ),
+  renderDefinitionRow(
+    "Version-valid-for",
+    formatMaybe(header.versionValidFor),
+    "Change counter value when the cache was last valid (WAL housekeeping)."
+  ),
+  renderDefinitionRow(
+    "SQLite version",
+    valueWithMeaning(header.sqliteVersionString, null),
+    "SQLite library version that last wrote the file."
+  )
+];
+
 const renderHeader = (parsed: SqliteParseResult): string => {
-  const header = parsed.header;
   const rows = [
-    renderDefinitionRow(
-      "Page size",
-      formatMaybe(header.pageSizeBytes, " bytes"),
-      "Number of bytes per b-tree page (1 represents 65536)."
-    ),
-    renderDefinitionRow(
-      "Usable page size",
-      formatMaybe(header.usablePageSize, " bytes"),
-      "Page size minus reserved bytes; affects payload capacity."
-    ),
-    renderDefinitionRow(
-      "Reserved bytes",
-      formatMaybe(header.reservedSpace, " bytes"),
-      "Bytes left unused at the end of each page for extensions like checksums."
-    ),
-    renderDefinitionRow(
-      "Write version",
-      valueWithMeaning(header.writeVersion, header.writeVersionMeaning),
-      "Journal mode required for writers (1=rollback journal, 2=WAL)."
-    ),
-    renderDefinitionRow(
-      "Read version",
-      valueWithMeaning(header.readVersion, header.readVersionMeaning),
-      "Minimum journal mode readers expect (1=rollback journal, 2=WAL)."
-    ),
-    renderDefinitionRow(
-      "Payload fractions",
-      [
-        formatMaybe(header.maxPayloadFraction),
-        formatMaybe(header.minPayloadFraction),
-        formatMaybe(header.leafPayloadFraction)
-      ].join(" / "),
-      [
-        "Maximum embedded payload, minimum embedded payload, and leaf payload fractions",
-        "(defaults 64/32/32)."
-      ].join(" ")
-    ),
-    renderDefinitionRow(
-      "Change counter",
-      formatMaybe(header.fileChangeCounter),
-      "Incremented when the database content changes."
-    ),
-    renderDefinitionRow(
-      "Database size",
-      header.databaseSizeBytes != null
-        ? `${formatHumanSize(header.databaseSizeBytes)}`
-        : formatMaybe(header.databaseSizePages, " pages"),
-      "Number of pages in the database file."
-    ),
-    renderDefinitionRow(
-      "Freelist",
-      [
-        `${formatMaybe(header.firstFreelistTrunkPage)} (first trunk)`,
-        `${formatMaybe(header.totalFreelistPages)} (total pages)`
-      ].join(" / "),
-      "Tracks unused pages that can be recycled."
-    ),
-    renderDefinitionRow(
-      "Schema cookie",
-      formatMaybe(header.schemaCookie),
-      "Schema version used to detect DDL changes."
-    ),
-    renderDefinitionRow(
-      "Schema format",
-      valueWithMeaning(header.schemaFormat, header.schemaFormatMeaning),
-      "File-format revision; must be between 1 and 4."
-    ),
-    renderDefinitionRow(
-      "Default page cache size",
-      formatMaybe(header.defaultPageCacheSize, " pages"),
-      "Preferred cache size when unspecified by the host."
-    ),
-    renderDefinitionRow(
-      "Largest root page",
-      formatMaybe(header.largestRootPage),
-      "Largest root b-tree page number (historical field)."
-    ),
-    renderDefinitionRow(
-      "Text encoding",
-      valueWithMeaning(header.textEncodingName, null),
-      "Encoding used for text values in records."
-    ),
-    renderDefinitionRow(
-      "User version",
-      formatMaybe(header.userVersion),
-      "Application-defined schema marker."
-    ),
-    renderDefinitionRow(
-      "Auto-vacuum",
-      valueWithMeaning(header.vacuumMode, header.vacuumModeMeaning),
-      "0 disables auto-vacuum, 1 enables full, 2 enables incremental."
-    ),
-    renderDefinitionRow(
-      "Application ID",
-      header.applicationId != null ? toHex32(header.applicationId, 8) : "Unknown",
-      "Identifier set by applications to tag the file."
-    ),
-    renderDefinitionRow(
-      "Version-valid-for",
-      formatMaybe(header.versionValidFor),
-      "Change counter value when the cache was last valid (WAL housekeeping)."
-    ),
-    renderDefinitionRow(
-      "SQLite version",
-      valueWithMeaning(header.sqliteVersionString, null),
-      "SQLite library version that last wrote the file."
-    )
+    ...renderHeaderStorageRows(parsed.header),
+    ...renderHeaderSchemaRows(parsed.header),
+    ...renderHeaderApplicationRows(parsed.header)
   ];
   return `<h4>File header</h4><dl>${rows.join("")}</dl>`;
 };

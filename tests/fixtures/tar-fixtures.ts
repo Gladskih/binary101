@@ -61,6 +61,82 @@ type TarEntry = TarHeaderOptions & {
   longLink?: string;
 };
 
+const createTarContentBlock = (contentBytes: Uint8Array): Uint8Array => {
+  const block = new Uint8Array(Math.ceil(contentBytes.byteLength / TAR_BLOCK_SIZE) * TAR_BLOCK_SIZE).fill(0);
+  block.set(contentBytes);
+  return block;
+};
+
+const appendPaxHeaderBlocks = (tarBlocks: Uint8Array[], entry: TarEntry): void => {
+  if (!entry.paxHeader) return;
+  const paxData = entry.paxHeader;
+  const paxSize = TEXT_ENCODER.encode(paxData).byteLength;
+  tarBlocks.push(buildTarHeader({
+    name: entry.name || "PaxHeader",
+    size: paxSize,
+    typeFlag: entry.typeFlag || "x", // 'x' for extended, 'g' for global
+    magic: "ustar",
+    version: "00",
+  }));
+  const paxContentBlock = new Uint8Array(Math.ceil(paxSize / TAR_BLOCK_SIZE) * TAR_BLOCK_SIZE).fill(0);
+  TEXT_ENCODER.encodeInto(paxData, paxContentBlock);
+  tarBlocks.push(paxContentBlock);
+};
+
+const appendLongNameBlocks = (tarBlocks: Uint8Array[], entry: TarEntry): void => {
+  if (!entry.longName) return;
+  const longNameBytes = TEXT_ENCODER.encode(entry.longName + "\0");
+  tarBlocks.push(buildTarHeader({
+    name: "././@LongLink", // Standard for GNU long name
+    size: longNameBytes.byteLength,
+    typeFlag: "L",
+    magic: "ustar",
+    version: "00",
+  }));
+  tarBlocks.push(createTarContentBlock(longNameBytes));
+};
+
+const appendLongLinkBlocks = (tarBlocks: Uint8Array[], entry: TarEntry): void => {
+  if (!entry.longLink) return;
+  const longLinkBytes = TEXT_ENCODER.encode(entry.longLink + "\0");
+  tarBlocks.push(buildTarHeader({
+    name: "././@LongLink", // Standard for GNU long link
+    size: longLinkBytes.byteLength,
+    typeFlag: "K",
+    magic: "ustar",
+    version: "00",
+  }));
+  tarBlocks.push(createTarContentBlock(longLinkBytes));
+};
+
+const createTarHeaderOptionsForEntry = (entry: TarEntry, contentSize: number): TarHeaderOptions => {
+  const headerOpts: TarHeaderOptions = { size: contentSize };
+  if (entry.name !== undefined) headerOpts.name = entry.name;
+  if (entry.mode !== undefined) headerOpts.mode = entry.mode;
+  if (entry.uid !== undefined) headerOpts.uid = entry.uid;
+  if (entry.gid !== undefined) headerOpts.gid = entry.gid;
+  if (entry.mtime !== undefined) headerOpts.mtime = entry.mtime;
+  if (entry.typeFlag !== undefined) headerOpts.typeFlag = entry.typeFlag;
+  if (entry.linkName !== undefined) headerOpts.linkName = entry.linkName;
+  if (entry.magic !== undefined) headerOpts.magic = entry.magic;
+  if (entry.version !== undefined) headerOpts.version = entry.version;
+  if (entry.uname !== undefined) headerOpts.uname = entry.uname;
+  if (entry.gname !== undefined) headerOpts.gname = entry.gname;
+  if (entry.devMajor !== undefined) headerOpts.devMajor = entry.devMajor;
+  if (entry.devMinor !== undefined) headerOpts.devMinor = entry.devMinor;
+  if (entry.prefix !== undefined) headerOpts.prefix = entry.prefix;
+  return headerOpts;
+};
+
+const appendTarEntryBlocks = (tarBlocks: Uint8Array[], entry: TarEntry): void => {
+  appendPaxHeaderBlocks(tarBlocks, entry);
+  appendLongNameBlocks(tarBlocks, entry);
+  appendLongLinkBlocks(tarBlocks, entry);
+  const contentBytes = TEXT_ENCODER.encode(entry.content || "");
+  tarBlocks.push(buildTarHeader(createTarHeaderOptionsForEntry(entry, contentBytes.byteLength)));
+  if (contentBytes.byteLength > 0) tarBlocks.push(createTarContentBlock(contentBytes));
+};
+
 export const buildTarHeader = (opts: TarHeaderOptions = {}) => {
   const {
     name = "",
@@ -116,85 +192,7 @@ export const createTarFileWithEntries = (
   const tarBlocks: Uint8Array[] = [];
 
   for (const entry of entries) {
-    // Handle PAX Global/Extended headers
-    if (entry.paxHeader) {
-      const paxData = entry.paxHeader;
-      const paxSize = TEXT_ENCODER.encode(paxData).byteLength;
-      const paxHeaderOpts = {
-        name: entry.name || "PaxHeader",
-        size: paxSize,
-        typeFlag: entry.typeFlag || "x", // 'x' for extended, 'g' for global
-        magic: "ustar",
-        version: "00",
-      };
-      const paxHeaderBlock = buildTarHeader(paxHeaderOpts);
-      tarBlocks.push(paxHeaderBlock);
-      const paxContentBlock = new Uint8Array(Math.ceil(paxSize / TAR_BLOCK_SIZE) * TAR_BLOCK_SIZE).fill(0);
-      TEXT_ENCODER.encodeInto(paxData, paxContentBlock);
-      tarBlocks.push(paxContentBlock);
-    }
-
-    // Handle LongLink/LongName (L/K typeflags)
-    if (entry.longName) {
-      const longNameBytes = TEXT_ENCODER.encode(entry.longName + "\0");
-      const longNameSize = longNameBytes.byteLength;
-      const longNameHeaderOpts = {
-        name: "././@LongLink", // Standard for GNU long name
-        size: longNameSize,
-        typeFlag: "L",
-        magic: "ustar",
-        version: "00",
-      };
-      const longNameHeaderBlock = buildTarHeader(longNameHeaderOpts);
-      tarBlocks.push(longNameHeaderBlock);
-      const longNameContentBlock = new Uint8Array(Math.ceil(longNameSize / TAR_BLOCK_SIZE) * TAR_BLOCK_SIZE).fill(0);
-      longNameContentBlock.set(longNameBytes);
-      tarBlocks.push(longNameContentBlock);
-    }
-    
-    if (entry.longLink) {
-      const longLinkBytes = TEXT_ENCODER.encode(entry.longLink + "\0");
-      const longLinkSize = longLinkBytes.byteLength;
-      const longLinkHeaderOpts = {
-        name: "././@LongLink", // Standard for GNU long link
-        size: longLinkSize,
-        typeFlag: "K",
-        magic: "ustar",
-        version: "00",
-      };
-      const longLinkHeaderBlock = buildTarHeader(longLinkHeaderOpts);
-      tarBlocks.push(longLinkHeaderBlock);
-      const longLinkContentBlock = new Uint8Array(Math.ceil(longLinkSize / TAR_BLOCK_SIZE) * TAR_BLOCK_SIZE).fill(0);
-      longLinkContentBlock.set(longLinkBytes);
-      tarBlocks.push(longLinkContentBlock);
-    }
-
-    const contentBytes = TEXT_ENCODER.encode(entry.content || "");
-    const contentSize = contentBytes.byteLength;
-    const headerOpts: TarHeaderOptions = { size: contentSize };
-    if (entry.name !== undefined) headerOpts.name = entry.name;
-    if (entry.mode !== undefined) headerOpts.mode = entry.mode;
-    if (entry.uid !== undefined) headerOpts.uid = entry.uid;
-    if (entry.gid !== undefined) headerOpts.gid = entry.gid;
-    if (entry.mtime !== undefined) headerOpts.mtime = entry.mtime;
-    if (entry.typeFlag !== undefined) headerOpts.typeFlag = entry.typeFlag;
-    if (entry.linkName !== undefined) headerOpts.linkName = entry.linkName;
-    if (entry.magic !== undefined) headerOpts.magic = entry.magic;
-    if (entry.version !== undefined) headerOpts.version = entry.version;
-    if (entry.uname !== undefined) headerOpts.uname = entry.uname;
-    if (entry.gname !== undefined) headerOpts.gname = entry.gname;
-    if (entry.devMajor !== undefined) headerOpts.devMajor = entry.devMajor;
-    if (entry.devMinor !== undefined) headerOpts.devMinor = entry.devMinor;
-    if (entry.prefix !== undefined) headerOpts.prefix = entry.prefix;
-    const headerBlock = buildTarHeader(headerOpts);
-    tarBlocks.push(headerBlock);
-
-    if (contentSize > 0) {
-      const dataBlockCount = Math.ceil(contentSize / TAR_BLOCK_SIZE);
-      const dataBlocks = new Uint8Array(dataBlockCount * TAR_BLOCK_SIZE).fill(0);
-      dataBlocks.set(contentBytes);
-      tarBlocks.push(dataBlocks);
-    }
+    appendTarEntryBlocks(tarBlocks, entry);
   }
 
   // Append zero blocks for termination

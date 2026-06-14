@@ -46,6 +46,158 @@ const readFileBytes = async (file: File, offset: number, length: number): Promis
   return new Uint8Array(buffer);
 };
 
+const readPathTable = async (
+  file: File,
+  selectedVolume: Iso9660ParseResult["primaryVolume"],
+  selectedBlockSize: number,
+  selectedEncoding: Iso9660StringEncoding,
+  pushIssue: (message: string) => void
+): Promise<Iso9660ParseResult["pathTable"]> => {
+  if (!selectedVolume || selectedVolume.pathTableSize == null || selectedVolume.typeLPathTableLocation == null) {
+    return null;
+  }
+  if (selectedVolume.pathTableSize <= 0 || selectedVolume.typeLPathTableLocation <= 0) return null;
+  const pathTableOffset = selectedVolume.typeLPathTableLocation * selectedBlockSize;
+  const declaredSize = selectedVolume.pathTableSize;
+  const bytesToRead = Math.min(declaredSize, Math.max(0, file.size - pathTableOffset), MAX_PATH_TABLE_BYTES);
+  if (bytesToRead <= 0) return null;
+  if (declaredSize > bytesToRead) {
+    pushIssue(`Path table is large (${declaredSize} bytes); only first ${bytesToRead} bytes were scanned.`);
+  }
+  const bytes = await readFileBytes(file, pathTableOffset, bytesToRead);
+  const parsed = parseTypeLPathTable({
+    bytes,
+    absoluteBaseOffset: pathTableOffset,
+    encoding: selectedEncoding,
+    pushIssue,
+    maxEntries: MAX_PATH_TABLE_ENTRIES
+  });
+  return {
+    locationLba: selectedVolume.typeLPathTableLocation,
+    declaredSize,
+    bytesRead: bytes.length,
+    entryCount: parsed.entryCount,
+    entries: parsed.entries,
+    omittedEntries: parsed.omittedEntries
+  };
+};
+
+const readRootDirectory = async (
+  file: File,
+  selectedVolume: Iso9660ParseResult["primaryVolume"],
+  selectedBlockSize: number,
+  selectedEncoding: Iso9660StringEncoding,
+  pushIssue: (message: string) => void
+): Promise<Iso9660DirectoryListing | null> => {
+  const root = selectedVolume?.rootDirectoryRecord;
+  if (!root || root.extentLocationLba == null || root.dataLength == null) return null;
+  const directoryOffset = root.extentLocationLba * selectedBlockSize;
+  const declaredSize = root.dataLength;
+  const bytesToRead = Math.min(declaredSize, Math.max(0, file.size - directoryOffset), MAX_DIRECTORY_BYTES);
+  if (bytesToRead <= 0) {
+    pushIssue(`Root directory claims bytes past end of file at ${formatOffsetHex(directoryOffset)}.`);
+    return null;
+  }
+  if (declaredSize > bytesToRead) {
+    pushIssue(`Root directory is large (${declaredSize} bytes); only first ${bytesToRead} bytes were scanned.`);
+  }
+  const bytes = await readFileBytes(file, directoryOffset, bytesToRead);
+  const scan = scanDirectoryBytes({
+    bytes,
+    absoluteBaseOffset: directoryOffset,
+    blockSize: selectedBlockSize,
+    encoding: selectedEncoding,
+    pushIssue,
+    maxEntries: MAX_ROOT_ENTRIES
+  });
+  return {
+    extentLocationLba: root.extentLocationLba,
+    byteOffset: directoryOffset,
+    declaredSize,
+    bytesRead: bytes.length,
+    totalEntries: scan.totalEntries,
+    entries: scan.entries,
+    omittedEntries: scan.omittedEntries
+  };
+};
+
+const scanDirectoryTree = async (
+  file: File,
+  selectedVolume: Iso9660ParseResult["primaryVolume"],
+  selectedBlockSize: number,
+  selectedEncoding: Iso9660StringEncoding,
+  pushIssue: (message: string) => void
+): Promise<Iso9660DirectoryTraversalStats | null> => {
+  const root = selectedVolume?.rootDirectoryRecord;
+  if (!root || root.extentLocationLba == null || root.dataLength == null) return null;
+  const visited = new Set<number>();
+  const stack: Array<{ lba: number; size: number; depth: number }> = [
+    { lba: root.extentLocationLba, size: root.dataLength, depth: 0 }
+  ];
+  const stats: Iso9660DirectoryTraversalStats = {
+    scannedDirectories: 0,
+    scannedFiles: 0,
+    maxDepth: 0,
+    omittedDirectories: 0,
+    omittedEntries: 0,
+    loopDetections: 0
+  };
+  while (stack.length) {
+    const next = stack.pop();
+    if (!next) break;
+    if (next.depth > MAX_SCAN_DEPTH) {
+      stats.omittedDirectories += 1;
+      continue;
+    }
+    if (visited.has(next.lba)) {
+      stats.loopDetections += 1;
+      continue;
+    }
+    visited.add(next.lba);
+    await scanDirectoryTreeNode(file, selectedBlockSize, selectedEncoding, pushIssue, stats, stack, next);
+  }
+  return stats;
+};
+
+const scanDirectoryTreeNode = async (
+  file: File,
+  selectedBlockSize: number,
+  selectedEncoding: Iso9660StringEncoding,
+  pushIssue: (message: string) => void,
+  stats: Iso9660DirectoryTraversalStats,
+  stack: Array<{ lba: number; size: number; depth: number }>,
+  next: { lba: number; size: number; depth: number }
+): Promise<void> => {
+  if (stats.scannedDirectories >= MAX_SCAN_DIRECTORIES) {
+    stats.omittedDirectories += stack.length + 1;
+    stack.length = 0;
+    return;
+  }
+  const directoryOffset = next.lba * selectedBlockSize;
+  const bytesToRead = Math.min(next.size, Math.max(0, file.size - directoryOffset), MAX_DIRECTORY_BYTES);
+  if (bytesToRead <= 0) {
+    pushIssue(`Directory at LBA ${next.lba} is outside the file (offset ${formatOffsetHex(directoryOffset)}).`);
+    stats.omittedDirectories += 1;
+    return;
+  }
+  const bytes = await readFileBytes(file, directoryOffset, bytesToRead);
+  const scan = scanDirectoryBytes({
+    bytes,
+    absoluteBaseOffset: directoryOffset,
+    blockSize: selectedBlockSize,
+    encoding: selectedEncoding,
+    pushIssue,
+    maxEntries: 0
+  });
+  stats.scannedDirectories += 1;
+  stats.scannedFiles += scan.fileCount;
+  stats.maxDepth = Math.max(stats.maxDepth, next.depth);
+  if (next.size > bytesToRead) stats.omittedEntries += 1;
+  for (const child of scan.childDirectories) {
+    stack.push({ lba: child.extentLocationLba, size: child.dataLength ?? selectedBlockSize, depth: next.depth + 1 });
+  }
+};
+
 export async function parseIso9660(file: File): Promise<Iso9660ParseResult | null> {
   if (!file) return null;
   const issues: string[] = [];
@@ -116,142 +268,9 @@ export async function parseIso9660(file: File): Promise<Iso9660ParseResult | nul
     pushIssue(`Unusual logical block size: ${selectedBlockSize} bytes (expected ${ISO9660_DESCRIPTOR_BLOCK_SIZE}).`);
   }
 
-  const pathTable = await (async (): Promise<Iso9660ParseResult["pathTable"]> => {
-    if (
-      !selectedVolume ||
-      selectedVolume.pathTableSize == null ||
-      selectedVolume.typeLPathTableLocation == null
-    ) {
-      return null;
-    }
-    if (selectedVolume.pathTableSize <= 0 || selectedVolume.typeLPathTableLocation <= 0) return null;
-    const pathTableOffset = selectedVolume.typeLPathTableLocation * selectedBlockSize;
-    const declaredSize = selectedVolume.pathTableSize;
-    const available = Math.max(0, file.size - pathTableOffset);
-    const bytesToRead = Math.min(declaredSize, available, MAX_PATH_TABLE_BYTES);
-    if (bytesToRead <= 0) return null;
-    if (declaredSize > bytesToRead) {
-      pushIssue(
-        `Path table is large (${declaredSize} bytes); only first ${bytesToRead} bytes were scanned.`
-      );
-    }
-    const bytes = await readFileBytes(file, pathTableOffset, bytesToRead);
-    const parsed = parseTypeLPathTable({
-      bytes,
-      absoluteBaseOffset: pathTableOffset,
-      encoding: selectedEncoding,
-      pushIssue,
-      maxEntries: MAX_PATH_TABLE_ENTRIES
-    });
-    return {
-      locationLba: selectedVolume.typeLPathTableLocation,
-      declaredSize,
-      bytesRead: bytes.length,
-      entryCount: parsed.entryCount,
-      entries: parsed.entries,
-      omittedEntries: parsed.omittedEntries
-    };
-  })();
-
-  const rootDirectory = await (async (): Promise<Iso9660DirectoryListing | null> => {
-    const root = selectedVolume?.rootDirectoryRecord;
-    if (!root || root.extentLocationLba == null || root.dataLength == null) return null;
-    const directoryOffset = root.extentLocationLba * selectedBlockSize;
-    const declaredSize = root.dataLength;
-    const available = Math.max(0, file.size - directoryOffset);
-    const bytesToRead = Math.min(declaredSize, available, MAX_DIRECTORY_BYTES);
-    if (bytesToRead <= 0) {
-      pushIssue(`Root directory claims bytes past end of file at ${formatOffsetHex(directoryOffset)}.`);
-      return null;
-    }
-    if (declaredSize > bytesToRead) {
-      pushIssue(`Root directory is large (${declaredSize} bytes); only first ${bytesToRead} bytes were scanned.`);
-    }
-    const bytes = await readFileBytes(file, directoryOffset, bytesToRead);
-    const scan = scanDirectoryBytes({
-      bytes,
-      absoluteBaseOffset: directoryOffset,
-      blockSize: selectedBlockSize,
-      encoding: selectedEncoding,
-      pushIssue,
-      maxEntries: MAX_ROOT_ENTRIES
-    });
-    return {
-      extentLocationLba: root.extentLocationLba,
-      byteOffset: directoryOffset,
-      declaredSize,
-      bytesRead: bytes.length,
-      totalEntries: scan.totalEntries,
-      entries: scan.entries,
-      omittedEntries: scan.omittedEntries
-    };
-  })();
-
-  const traversal = await (async (): Promise<Iso9660DirectoryTraversalStats | null> => {
-    const root = selectedVolume?.rootDirectoryRecord;
-    if (!root || root.extentLocationLba == null || root.dataLength == null) return null;
-
-    const visited = new Set<number>();
-    const stack: Array<{ lba: number; size: number; depth: number }> = [
-      { lba: root.extentLocationLba, size: root.dataLength, depth: 0 }
-    ];
-    const stats: Iso9660DirectoryTraversalStats = {
-      scannedDirectories: 0,
-      scannedFiles: 0,
-      maxDepth: 0,
-      omittedDirectories: 0,
-      omittedEntries: 0,
-      loopDetections: 0
-    };
-
-    while (stack.length) {
-      const next = stack.pop();
-      if (!next) break;
-      if (next.depth > MAX_SCAN_DEPTH) {
-        stats.omittedDirectories += 1;
-        continue;
-      }
-      if (visited.has(next.lba)) {
-        stats.loopDetections += 1;
-        continue;
-      }
-      visited.add(next.lba);
-      if (stats.scannedDirectories >= MAX_SCAN_DIRECTORIES) {
-        stats.omittedDirectories += stack.length + 1;
-        break;
-      }
-
-      const directoryOffset = next.lba * selectedBlockSize;
-      const declaredSize = next.size;
-      const available = Math.max(0, file.size - directoryOffset);
-      const bytesToRead = Math.min(declaredSize, available, MAX_DIRECTORY_BYTES);
-      if (bytesToRead <= 0) {
-        pushIssue(`Directory at LBA ${next.lba} is outside the file (offset ${formatOffsetHex(directoryOffset)}).`);
-        stats.omittedDirectories += 1;
-        continue;
-      }
-      const bytes = await readFileBytes(file, directoryOffset, bytesToRead);
-      const scan = scanDirectoryBytes({
-        bytes,
-        absoluteBaseOffset: directoryOffset,
-        blockSize: selectedBlockSize,
-        encoding: selectedEncoding,
-        pushIssue,
-        maxEntries: 0
-      });
-      stats.scannedDirectories += 1;
-      stats.scannedFiles += scan.fileCount;
-      stats.maxDepth = Math.max(stats.maxDepth, next.depth);
-      if (declaredSize > bytesToRead) stats.omittedEntries += 1;
-
-      for (const child of scan.childDirectories) {
-        const childSize = child.dataLength ?? selectedBlockSize;
-        stack.push({ lba: child.extentLocationLba, size: childSize, depth: next.depth + 1 });
-      }
-    }
-
-    return stats;
-  })();
+  const pathTable = await readPathTable(file, selectedVolume, selectedBlockSize, selectedEncoding, pushIssue);
+  const rootDirectory = await readRootDirectory(file, selectedVolume, selectedBlockSize, selectedEncoding, pushIssue);
+  const traversal = await scanDirectoryTree(file, selectedVolume, selectedBlockSize, selectedEncoding, pushIssue);
 
   const parsed: Iso9660ParseResult = {
     isIso9660: true,

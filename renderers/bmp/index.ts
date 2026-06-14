@@ -83,12 +83,7 @@ const renderMasks = (bmp: BmpParseResult): string => {
   );
 };
 
-export const renderBmp = (bmp: BmpParseResult | null): string => {
-  if (!bmp) return "";
-
-  const out: string[] = [];
-  out.push("<h3>BMP structure</h3>");
-  out.push("<dl>");
+const renderBmpHeaderRows = (bmp: BmpParseResult, out: string[]): void => {
   out.push(renderDefinitionRow("File size", escapeHtml(formatHumanSize(bmp.fileSize))));
   out.push(renderDefinitionRow("Signature", escapeHtml(bmp.fileHeader.signature || "Unknown")));
   out.push(
@@ -114,7 +109,9 @@ export const renderBmp = (bmp: BmpParseResult | null): string => {
       "DIB (device-independent bitmap) header declares image dimensions and pixel format."
     )
   );
+};
 
+const renderBmpFormatRows = (bmp: BmpParseResult, out: string[]): void => {
   const dims =
     bmp.dibHeader.width != null && bmp.dibHeader.height != null
       ? `${bmp.dibHeader.width} x ${bmp.dibHeader.height} px`
@@ -122,7 +119,6 @@ export const renderBmp = (bmp: BmpParseResult | null): string => {
   const orientation =
     bmp.dibHeader.topDown == null ? "" : bmp.dibHeader.topDown ? " (top-down)" : " (bottom-up)";
   out.push(renderDefinitionRow("Dimensions", escapeHtml(dims + orientation)));
-
   out.push(
     renderDefinitionRow(
       "Bits per pixel",
@@ -142,7 +138,9 @@ export const renderBmp = (bmp: BmpParseResult | null): string => {
       "Compression codes come from the DIB header; BI_RGB indicates uncompressed pixels."
     )
   );
+};
 
+const renderBmpOptionalDibRows = (bmp: BmpParseResult, out: string[]): void => {
   if (bmp.dibHeader.planes != null) {
     out.push(
       renderDefinitionRow(
@@ -152,7 +150,6 @@ export const renderBmp = (bmp: BmpParseResult | null): string => {
       )
     );
   }
-
   if (bmp.dibHeader.imageSize != null) {
     out.push(
       renderDefinitionRow(
@@ -162,7 +159,6 @@ export const renderBmp = (bmp: BmpParseResult | null): string => {
       )
     );
   }
-
   if (bmp.dibHeader.xPixelsPerMeter != null || bmp.dibHeader.yPixelsPerMeter != null) {
     const ppmX = bmp.dibHeader.xPixelsPerMeter != null ? String(bmp.dibHeader.xPixelsPerMeter) : "-";
     const ppmY = bmp.dibHeader.yPixelsPerMeter != null ? String(bmp.dibHeader.yPixelsPerMeter) : "-";
@@ -174,7 +170,9 @@ export const renderBmp = (bmp: BmpParseResult | null): string => {
       )
     );
   }
+};
 
+const renderBmpPaletteRows = (bmp: BmpParseResult, out: string[]): void => {
   if (bmp.dibHeader.colorsUsed != null) {
     out.push(
       renderDefinitionRow(
@@ -193,7 +191,6 @@ export const renderBmp = (bmp: BmpParseResult | null): string => {
       )
     );
   }
-
   if (bmp.palette) {
     out.push(
       renderDefinitionRow(
@@ -202,16 +199,18 @@ export const renderBmp = (bmp: BmpParseResult | null): string => {
         "Color table entries are BGR(A) tuples stored between the DIB header and the pixel array."
       )
     );
-  } else {
-    out.push(
-      renderDefinitionRow(
-        "Palette",
-        "Not present",
-        "Indexed-color BMPs (<= 8 bpp) typically store a palette before the pixel array."
-      )
-    );
+    return;
   }
+  out.push(
+    renderDefinitionRow(
+      "Palette",
+      "Not present",
+      "Indexed-color BMPs (<= 8 bpp) typically store a palette before the pixel array."
+    )
+  );
+};
 
+const renderBmpPixelRows = (bmp: BmpParseResult, out: string[]): void => {
   const pixelOffset =
     bmp.fileHeader.pixelArrayOffset != null ? bmp.fileHeader.pixelArrayOffset : null;
   const pixelOffsetLabel = pixelOffset != null ? `${pixelOffset} (${toHex32(pixelOffset, 8)})` : "Unknown";
@@ -222,31 +221,40 @@ export const renderBmp = (bmp: BmpParseResult | null): string => {
       "bfOffBits points to the start of pixel data."
     )
   );
+  if (!bmp.pixelArray) return;
+  out.push(
+    renderDefinitionRow(
+      "Row stride",
+      bmp.pixelArray.rowStride != null ? escapeHtml(`${bmp.pixelArray.rowStride} bytes`) : "Unknown",
+      "Each row is padded to a 4-byte boundary."
+    )
+  );
+  out.push(
+    renderDefinitionRow(
+      "Pixel bytes (expected)",
+      escapeHtml(formatByteSize(bmp.pixelArray.expectedBytes)),
+      "Calculated for uncompressed layouts: rowStride * height."
+    )
+  );
+  out.push(
+    renderDefinitionRow(
+      "Pixel bytes (available)",
+      escapeHtml(formatByteSize(bmp.pixelArray.availableBytes)),
+      "Bytes available in the file starting at bfOffBits."
+    )
+  );
+};
 
-  if (bmp.pixelArray) {
-    out.push(
-      renderDefinitionRow(
-        "Row stride",
-        bmp.pixelArray.rowStride != null ? escapeHtml(`${bmp.pixelArray.rowStride} bytes`) : "Unknown",
-        "Each row is padded to a 4-byte boundary."
-      )
-    );
-    out.push(
-      renderDefinitionRow(
-        "Pixel bytes (expected)",
-        escapeHtml(formatByteSize(bmp.pixelArray.expectedBytes)),
-        "Calculated for uncompressed layouts: rowStride * height."
-      )
-    );
-    out.push(
-      renderDefinitionRow(
-        "Pixel bytes (available)",
-        escapeHtml(formatByteSize(bmp.pixelArray.availableBytes)),
-        "Bytes available in the file starting at bfOffBits."
-      )
-    );
-  }
-
+export const renderBmp = (bmp: BmpParseResult | null): string => {
+  if (!bmp) return "";
+  const out: string[] = [];
+  out.push("<h3>BMP structure</h3>");
+  out.push("<dl>");
+  renderBmpHeaderRows(bmp, out);
+  renderBmpFormatRows(bmp, out);
+  renderBmpOptionalDibRows(bmp, out);
+  renderBmpPaletteRows(bmp, out);
+  renderBmpPixelRows(bmp, out);
   out.push("</dl>");
   out.push(renderWarnings(bmp.issues));
   out.push(renderBmpColorSpace(bmp));

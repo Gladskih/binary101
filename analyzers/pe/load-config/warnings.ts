@@ -9,8 +9,81 @@ export type PeLoadConfigDiagnostics = {
   notes: string[];
 };
 
+type PeLoadConfigDiagnosticContext = PeLoadConfigDiagnostics & {
+  fileSize: number;
+  rvaToOff: RvaToOffset;
+  imageBase: bigint;
+  sizeOfImage: number;
+};
+
 const formatRvaNote = (name: string, rva: number): string =>
   `LOAD_CONFIG: ${name} RVA 0x${rva.toString(16)} is not backed by raw file data.`;
+
+const collectTableDiagnostic = (
+  context: PeLoadConfigDiagnosticContext,
+  name: string,
+  tableVa: bigint,
+  count: number,
+  entrySize: number
+): void => {
+  if (!Number.isSafeInteger(count) || count <= 0) return;
+  if (!Number.isSafeInteger(entrySize) || entrySize <= 0) return;
+  if (!tableVa) {
+    context.warnings.push(`LOAD_CONFIG: ${name} has count ${count} but table pointer is 0.`);
+    return;
+  }
+  const tableRva = readLoadConfigPointerRva(context.imageBase, tableVa);
+  if (tableRva == null) {
+    context.warnings.push(`LOAD_CONFIG: ${name} pointer 0x${tableVa.toString(16)} is not a valid VA.`);
+    return;
+  }
+  if (Number.isFinite(context.sizeOfImage) && context.sizeOfImage > 0) {
+    if (tableRva >= context.sizeOfImage) {
+      context.warnings.push(`LOAD_CONFIG: ${name} RVA 0x${tableRva.toString(16)} is outside SizeOfImage.`);
+    } else {
+      const maxImage = Math.floor((context.sizeOfImage - tableRva) / entrySize);
+      if (count > maxImage) context.warnings.push(`LOAD_CONFIG: ${name} spills past SizeOfImage (${count} > ${maxImage}).`);
+    }
+  }
+  if (!Number.isFinite(context.fileSize) || context.fileSize <= 0) return;
+  const off = context.rvaToOff(tableRva);
+  if (off == null) {
+    context.notes.push(formatRvaNote(name, tableRva));
+    return;
+  }
+  if (off < 0 || off >= context.fileSize) {
+    context.warnings.push(`LOAD_CONFIG: ${name} RVA 0x${tableRva.toString(16)} maps outside file data.`);
+    return;
+  }
+  const maxFile = Math.floor((context.fileSize - off) / entrySize);
+  if (count > maxFile) context.warnings.push(`LOAD_CONFIG: ${name} spills past EOF (${count} > ${maxFile}).`);
+};
+
+const collectPointerDiagnostic = (
+  context: PeLoadConfigDiagnosticContext,
+  name: string,
+  pointerVa: bigint
+): void => {
+  if (pointerVa === 0n) return;
+  const rva = readLoadConfigPointerRva(context.imageBase, pointerVa);
+  if (rva == null) {
+    context.warnings.push(`LOAD_CONFIG: ${name} pointer 0x${pointerVa.toString(16)} is not a valid VA.`);
+    return;
+  }
+  if (Number.isFinite(context.sizeOfImage) && context.sizeOfImage > 0 && rva >= context.sizeOfImage) {
+    context.warnings.push(`LOAD_CONFIG: ${name} RVA 0x${rva.toString(16)} is outside SizeOfImage.`);
+    return;
+  }
+  if (!Number.isFinite(context.fileSize) || context.fileSize <= 0) return;
+  const off = context.rvaToOff(rva);
+  if (off == null) {
+    context.notes.push(formatRvaNote(name, rva));
+    return;
+  }
+  if (off < 0 || off >= context.fileSize) {
+    context.warnings.push(`LOAD_CONFIG: ${name} RVA 0x${rva.toString(16)} maps outside file data.`);
+  }
+};
 
 export function collectLoadConfigDiagnostics(
   fileSize: number,
@@ -21,62 +94,15 @@ export function collectLoadConfigDiagnostics(
 ): PeLoadConfigDiagnostics {
   const warnings: string[] = [];
   const notes: string[] = [];
+  const context = { warnings, notes, fileSize, rvaToOff, imageBase, sizeOfImage };
   const cfgEntrySize = getCfgTargetTableEntrySize(lc.GuardFlags);
 
   const checkTable = (name: string, tableVa: bigint, count: number, entrySize: number): void => {
-    if (!Number.isSafeInteger(count) || count <= 0) return;
-    if (!Number.isSafeInteger(entrySize) || entrySize <= 0) return;
-    if (!tableVa) {
-      warnings.push(`LOAD_CONFIG: ${name} has count ${count} but table pointer is 0.`);
-      return;
-    }
-    const tableRva = readLoadConfigPointerRva(imageBase, tableVa);
-    if (tableRva == null) {
-      warnings.push(`LOAD_CONFIG: ${name} pointer 0x${tableVa.toString(16)} is not a valid VA.`);
-      return;
-    }
-    if (Number.isFinite(sizeOfImage) && sizeOfImage > 0) {
-      if (tableRva >= sizeOfImage) {
-        warnings.push(`LOAD_CONFIG: ${name} RVA 0x${tableRva.toString(16)} is outside SizeOfImage.`);
-      } else {
-        const maxImage = Math.floor((sizeOfImage - tableRva) / entrySize);
-        if (count > maxImage) warnings.push(`LOAD_CONFIG: ${name} spills past SizeOfImage (${count} > ${maxImage}).`);
-      }
-    }
-    if (!Number.isFinite(fileSize) || fileSize <= 0) return;
-    const off = rvaToOff(tableRva);
-    if (off == null) {
-      notes.push(formatRvaNote(name, tableRva));
-      return;
-    }
-    if (off < 0 || off >= fileSize) {
-      warnings.push(`LOAD_CONFIG: ${name} RVA 0x${tableRva.toString(16)} maps outside file data.`);
-      return;
-    }
-    const maxFile = Math.floor((fileSize - off) / entrySize);
-    if (count > maxFile) warnings.push(`LOAD_CONFIG: ${name} spills past EOF (${count} > ${maxFile}).`);
+    collectTableDiagnostic(context, name, tableVa, count, entrySize);
   };
 
   const checkPointer = (name: string, pointerVa: bigint): void => {
-    if (pointerVa === 0n) return;
-    const rva = readLoadConfigPointerRva(imageBase, pointerVa);
-    if (rva == null) {
-      warnings.push(`LOAD_CONFIG: ${name} pointer 0x${pointerVa.toString(16)} is not a valid VA.`);
-      return;
-    }
-    if (Number.isFinite(sizeOfImage) && sizeOfImage > 0 && rva >= sizeOfImage) {
-      warnings.push(`LOAD_CONFIG: ${name} RVA 0x${rva.toString(16)} is outside SizeOfImage.`);
-      return;
-    }
-    if (!Number.isFinite(fileSize) || fileSize <= 0) return;
-    const off = rvaToOff(rva);
-    if (off == null) {
-      notes.push(formatRvaNote(name, rva));
-      return;
-    }
-    if (off < 0 || off >= fileSize) {
-      warnings.push(`LOAD_CONFIG: ${name} RVA 0x${rva.toString(16)} maps outside file data.`);
-    }
+    collectPointerDiagnostic(context, name, pointerVa);
   };
 
   checkTable("SEHandlerTable", lc.SEHandlerTable, lc.SEHandlerCount, 4);

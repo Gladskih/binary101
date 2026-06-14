@@ -31,6 +31,19 @@ const MARKER_NAMES = new Map<number, string>([
 
 const isRestartMarker = (marker: number): boolean => marker >= 0xffd0 && marker <= 0xffd7;
 
+interface JpegScanState {
+  offset: number;
+  sof: JpegSof | null;
+  hasExif: boolean;
+  hasJfif: boolean;
+  jfif: JpegJfif | null;
+  hasIcc: boolean;
+  hasAdobe: boolean;
+  foundEoi: boolean;
+  comments: JpegComment[];
+  exif: ExifData | null;
+}
+
 function readUint16BE(dv: DataView, offset: number): number | null {
   if (offset + 2 > dv.byteLength) return null;
   return dv.getUint16(offset, false);
@@ -54,154 +67,150 @@ function scanForRarSignature(dv: DataView): boolean {
   return false;
 }
 
+function createInitialScanState(): JpegScanState {
+  return {
+    offset: 2,
+    sof: null,
+    hasExif: false,
+    hasJfif: false,
+    jfif: null,
+    hasIcc: false,
+    hasAdobe: false,
+    foundEoi: false,
+    comments: [],
+    exif: null
+  };
+}
+
+function readJpegSegments(dv: DataView): { segments: JpegSegment[]; state: JpegScanState } {
+  const segments: JpegSegment[] = [];
+  const state = createInitialScanState();
+  while (state.offset + 2 <= dv.byteLength) {
+    const marker = readUint16BE(dv, state.offset);
+    if (marker == null || (marker & 0xff00) !== 0xff00) break;
+    const markerOffset = state.offset;
+    state.offset += 2;
+    if (marker === 0xffd9) {
+      segments.push({ marker, name: MARKER_NAMES.get(marker) || "EOI", offset: markerOffset, length: 2 });
+      state.foundEoi = true;
+      break;
+    }
+    if (marker === 0xff01 || isRestartMarker(marker)) {
+      segments.push({ marker, name: MARKER_NAMES.get(marker) || "RST/ESC", offset: markerOffset, length: 2 });
+      continue;
+    }
+    if (state.offset + 2 > dv.byteLength) break;
+    const segLen = readUint16BE(dv, state.offset);
+    if (segLen == null || segLen < 2 || state.offset + segLen > dv.byteLength) break;
+    const seg = createSegment(dv, marker, markerOffset, segLen, state);
+    segments.push(seg);
+    state.offset += segLen;
+    if (marker === 0xffda) break;
+  }
+  return { segments, state };
+}
+
+function createSegment(
+  dv: DataView,
+  marker: number,
+  markerOffset: number,
+  segLen: number,
+  state: JpegScanState
+): JpegSegment {
+  const name = MARKER_NAMES.get(marker) || "Segment";
+  const seg: JpegSegment = { marker, name, offset: markerOffset, length: 2 + segLen };
+  if (marker >= 0xffc0 && marker <= 0xffc3 && segLen >= 8) readSofSegment(dv, marker, name, state.offset, state, seg);
+  else if (marker === 0xffe0 && segLen >= 16) readJfifSegment(dv, state.offset, state, seg);
+  else if (marker === 0xffe1 && segLen >= 8) readApp1Segment(dv, state.offset, state, seg);
+  else if (marker === 0xffe2) state.hasIcc = true;
+  else if (marker === 0xffee) state.hasAdobe = true;
+  else if (marker === 0xfffe && segLen > 2) readCommentSegment(dv, state.offset, segLen, state, seg);
+  return seg;
+}
+
+function readSofSegment(
+  dv: DataView,
+  marker: number,
+  name: string,
+  offset: number,
+  state: JpegScanState,
+  seg: JpegSegment
+): void {
+  state.sof = {
+    marker,
+    markerName: name,
+    precision: dv.getUint8(offset + 2),
+    width: readUint16BE(dv, offset + 5),
+    height: readUint16BE(dv, offset + 3),
+    components: dv.getUint8(offset + 7)
+  };
+  seg.info = state.sof;
+}
+
+function readJfifSegment(dv: DataView, offset: number, state: JpegScanState, seg: JpegSegment): void {
+  const id = readAsciiString(dv, offset + 2, 5);
+  seg.info = { id };
+  if (!id.startsWith("JFIF")) return;
+  state.hasJfif = true;
+  if (state.jfif) return;
+  state.jfif = {
+    versionMajor: dv.getUint8(offset + 7),
+    versionMinor: dv.getUint8(offset + 8),
+    units: dv.getUint8(offset + 9),
+    xDensity: readUint16BE(dv, offset + 10),
+    yDensity: readUint16BE(dv, offset + 12),
+    xThumbnail: dv.getUint8(offset + 14),
+    yThumbnail: dv.getUint8(offset + 15)
+  };
+}
+
+function readApp1Segment(dv: DataView, offset: number, state: JpegScanState, seg: JpegSegment): void {
+  const id = readAsciiString(dv, offset + 2, 6);
+  seg.info = { id };
+  if (id.startsWith("Exif")) {
+    state.hasExif = true;
+    if (!state.exif && offset + 8 < dv.byteLength) state.exif = parseExifFromApp1(dv, offset + 8);
+    return;
+  }
+  if (id.startsWith("http:")) state.hasExif = true;
+}
+
+function readCommentSegment(
+  dv: DataView,
+  offset: number,
+  segLen: number,
+  state: JpegScanState,
+  seg: JpegSegment
+): void {
+  const maxCommentBytes = Math.min(segLen - 2, 256);
+  const comment = readAsciiString(dv, offset + 2, maxCommentBytes);
+  if (!comment) return;
+  const commentInfo: JpegComment = { text: comment, truncated: segLen - 2 > maxCommentBytes };
+  seg.info = commentInfo;
+  state.comments.push(commentInfo);
+}
+
 export async function parseJpeg(file: File): Promise<JpegParseResult | null> {
   const buffer = await file.arrayBuffer();
   const dv = new DataView(buffer);
   const size = dv.byteLength;
   if (size < 4) return null;
   if (readUint16BE(dv, 0) !== 0xffd8) return null;
-
-  const segments: JpegSegment[] = [];
-  let offset = 2;
-  let sof: JpegSof | null = null;
-  let hasExif = false;
-  let hasJfif = false;
-  let jfif: JpegJfif | null = null;
-  let hasIcc = false;
-  let hasAdobe = false;
-  let foundEoi = false;
-  const comments: JpegComment[] = [];
-  let exif: ExifData | null = null;
-
-  while (offset + 2 <= size) {
-    const marker = readUint16BE(dv, offset);
-    if (marker == null || (marker & 0xff00) !== 0xff00) break;
-    const markerOffset = offset;
-    offset += 2;
-    if (marker === 0xffd9) {
-      segments.push({
-        marker,
-        name: MARKER_NAMES.get(marker) || "EOI",
-        offset: markerOffset,
-        length: 2
-      });
-      foundEoi = true;
-      break;
-    }
-    if (marker === 0xff01 || isRestartMarker(marker)) {
-      segments.push({
-        marker,
-        name: MARKER_NAMES.get(marker) || "RST/ESC",
-        offset: markerOffset,
-        length: 2
-      });
-      continue;
-    }
-    if (offset + 2 > size) break;
-    const segLenRaw = readUint16BE(dv, offset);
-    if (segLenRaw == null || segLenRaw < 2 || offset + segLenRaw > size) break;
-    const segLen = segLenRaw;
-    const segStart = markerOffset;
-    const segTotalLen = 2 + segLen;
-
-    const name = MARKER_NAMES.get(marker) || "Segment";
-    const seg: JpegSegment = {
-      marker,
-      name,
-      offset: segStart,
-      length: segTotalLen
-    };
-
-    if (marker >= 0xffc0 && marker <= 0xffc3 && segLen >= 8) {
-      const precision = dv.getUint8(offset + 2);
-      const height = readUint16BE(dv, offset + 3);
-      const width = readUint16BE(dv, offset + 5);
-      const components = dv.getUint8(offset + 7);
-      sof = {
-        marker,
-        markerName: name,
-        precision,
-        width,
-        height,
-        components
-      };
-      seg.info = sof;
-    } else if (marker === 0xffe0 && segLen >= 16) {
-      const id = readAsciiString(dv, offset + 2, 5);
-      seg.info = { id };
-      if (id.startsWith("JFIF")) {
-        hasJfif = true;
-        if (!jfif) {
-          const versionMajor = dv.getUint8(offset + 7);
-          const versionMinor = dv.getUint8(offset + 8);
-          const units = dv.getUint8(offset + 9);
-          const xDensity = readUint16BE(dv, offset + 10);
-          const yDensity = readUint16BE(dv, offset + 12);
-          const xThumbnail = dv.getUint8(offset + 14);
-          const yThumbnail = dv.getUint8(offset + 15);
-          jfif = {
-            versionMajor,
-            versionMinor,
-            units,
-            xDensity,
-            yDensity,
-            xThumbnail,
-            yThumbnail
-          };
-        }
-      }
-    } else if (marker === 0xffe1 && segLen >= 8) {
-      const id = readAsciiString(dv, offset + 2, 6);
-      seg.info = { id };
-      if (id.startsWith("Exif")) {
-        hasExif = true;
-        if (!exif) {
-          const tiffOffset = offset + 2 + 6;
-          if (tiffOffset < dv.byteLength) {
-            exif = parseExifFromApp1(dv, tiffOffset);
-          }
-        }
-      } else if (id.startsWith("http:")) {
-        hasExif = true;
-      }
-    } else if (marker === 0xffe2) {
-      hasIcc = true;
-    } else if (marker === 0xffee) {
-      hasAdobe = true;
-    } else if (marker === 0xfffe && segLen > 2) {
-      const maxCommentBytes = Math.min(segLen - 2, 256);
-      const comment = readAsciiString(dv, offset + 2, maxCommentBytes);
-      if (comment) {
-        const commentInfo: JpegComment = {
-          text: comment,
-          truncated: segLen - 2 > maxCommentBytes
-        };
-        seg.info = commentInfo;
-        comments.push(commentInfo);
-      }
-    }
-
-    segments.push(seg);
-
-    offset += segLen;
-    if (marker === 0xffda) break;
-  }
-
+  const { segments, state } = readJpegSegments(dv);
   const hasRar = scanForRarSignature(dv);
-
   return {
     size,
-    sof,
-    hasJfif,
-    hasExif,
-    hasIcc,
-    hasAdobe,
+    sof: state.sof,
+    hasJfif: state.hasJfif,
+    hasExif: state.hasExif,
+    hasIcc: state.hasIcc,
+    hasAdobe: state.hasAdobe,
     hasRar,
-    hasEoi: foundEoi,
+    hasEoi: state.foundEoi,
     segmentCount: segments.length,
     segments,
-    comments,
-    jfif,
-    exif
+    comments: state.comments,
+    jfif: state.jfif,
+    exif: state.exif
   };
 }

@@ -91,6 +91,78 @@ const readSignedInteger = (view: DataView, offset: number, length: number): bigi
   return (signed & signBit) !== 0n ? signed - (1n << bitLength) : signed;
 };
 
+const sliceRecordBytes = (
+  view: DataView,
+  dataOffset: number,
+  bytesToUse: number
+): ArrayBuffer | SharedArrayBuffer => {
+  if (bytesToUse <= 0 || view.byteOffset + dataOffset >= view.buffer.byteLength) {
+    return new ArrayBuffer(0);
+  }
+  const sliceLength = Math.min(
+    bytesToUse,
+    view.buffer.byteLength - (view.byteOffset + dataOffset)
+  );
+  return view.buffer.slice(
+    view.byteOffset + dataOffset,
+    view.byteOffset + dataOffset + sliceLength
+  );
+};
+
+const decodeRecordText = (
+  view: DataView,
+  dataOffset: number,
+  bytesToUse: number,
+  encoding: string | null,
+  issues: string[]
+): string => {
+  if (bytesToUse <= 0 || view.byteOffset + dataOffset >= view.buffer.byteLength) return "";
+  const sliceLength = Math.min(
+    bytesToUse,
+    view.buffer.byteLength - (view.byteOffset + dataOffset)
+  );
+  return decodeText(
+    new Uint8Array(view.buffer, view.byteOffset + dataOffset, Math.max(0, sliceLength)),
+    encoding,
+    issues,
+    "record text"
+  );
+};
+
+const decodeRecordValue = (
+  view: DataView,
+  dataOffset: number,
+  serialType: number,
+  expectedSize: number,
+  bytesToUse: number,
+  encoding: string | null,
+  issues: string[]
+): { value: string | number | bigint | ArrayBuffer | SharedArrayBuffer | null; description: string } => {
+  if (serialType === 0) return { value: null, description: "NULL" };
+  if (serialType === 7 && bytesToUse === 8) {
+    return { value: view.getFloat64(dataOffset, false), description: "64-bit IEEE float" };
+  }
+  if (serialType === 8) return { value: 0, description: "Integer constant 0" };
+  if (serialType === 9) return { value: 1, description: "Integer constant 1" };
+  if (serialType >= 1 && serialType <= 6 && bytesToUse === expectedSize) {
+    const signed = readSignedInteger(view, dataOffset, expectedSize);
+    return {
+      value: expectedSize <= 4 ? Number(signed) : signed,
+      description: `${expectedSize * 8}-bit signed integer`
+    };
+  }
+  if (serialType >= 12 && serialType % 2 === 0) {
+    return { value: sliceRecordBytes(view, dataOffset, bytesToUse), description: "Raw BLOB payload" };
+  }
+  if (serialType >= 13 && serialType % 2 === 1) {
+    return {
+      value: decodeRecordText(view, dataOffset, bytesToUse, encoding, issues),
+      description: `Text using ${encoding || "UTF-8"}`
+    };
+  }
+  return { value: null, description: storageClass(serialType) };
+};
+
 const parseRecord = (
   view: DataView,
   payloadOffset: number,
@@ -139,61 +211,22 @@ const parseRecord = (
     const expectedSize = size ?? 0;
     const truncated = available < expectedSize;
     const bytesToUse = Math.min(available, expectedSize);
-    let value: string | number | bigint | ArrayBuffer | SharedArrayBuffer | null = null;
-    let description = className;
-    if (serialType === 0) {
-      value = null;
-    } else if (serialType === 7 && bytesToUse === 8) {
-      value = view.getFloat64(dataOffset, false);
-      description = "64-bit IEEE float";
-    } else if (serialType === 8) {
-      value = 0;
-      description = "Integer constant 0";
-    } else if (serialType === 9) {
-      value = 1;
-      description = "Integer constant 1";
-    } else if (serialType >= 1 && serialType <= 6 && bytesToUse === expectedSize) {
-      const signed = readSignedInteger(view, dataOffset, expectedSize);
-      value = size && size <= 4 ? Number(signed) : signed;
-      description = `${expectedSize * 8}-bit signed integer`;
-    } else if (serialType >= 12 && serialType % 2 === 0) {
-      if (bytesToUse > 0 && view.byteOffset + dataOffset < view.buffer.byteLength) {
-        const sliceLength = Math.min(
-          bytesToUse,
-          view.buffer.byteLength - (view.byteOffset + dataOffset)
-        );
-        value = view.buffer.slice(
-          view.byteOffset + dataOffset,
-          view.byteOffset + dataOffset + sliceLength
-        );
-      } else {
-        value = new ArrayBuffer(0);
-      }
-      description = "Raw BLOB payload";
-    } else if (serialType >= 13 && serialType % 2 === 1) {
-      if (bytesToUse > 0 && view.byteOffset + dataOffset < view.buffer.byteLength) {
-        const sliceLength = Math.min(
-          bytesToUse,
-          view.buffer.byteLength - (view.byteOffset + dataOffset)
-        );
-        const textBytes = new Uint8Array(
-          view.buffer,
-          view.byteOffset + dataOffset,
-          Math.max(0, sliceLength)
-        );
-        value = decodeText(textBytes, encoding, issues, "record text");
-      } else {
-        value = "";
-      }
-      description = `Text using ${encoding || "UTF-8"}`;
-    }
+    const decoded = decodeRecordValue(
+      view,
+      dataOffset,
+      serialType,
+      expectedSize,
+      bytesToUse,
+      encoding,
+      issues
+    );
     values.push({
       name: columnNames[index] ?? null,
       serialType,
       storageClass: className,
       sizeBytes: size,
-      value,
-      description,
+      value: decoded.value,
+      description: decoded.description,
       truncated
     });
     dataOffset += expectedSize;

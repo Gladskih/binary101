@@ -43,6 +43,56 @@ const formatTimestamp = (
   return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
 };
 
+const readPostageStamp = async (
+  file: File,
+  stampOffsetValue: number | null,
+  pixelSizeBytes: number | null
+): Promise<TgaPostageStampSummary | null> => {
+  if (!stampOffsetValue) return null;
+  const headerEnd = Math.min(file.size, stampOffsetValue + 2);
+  const stampBytes = new Uint8Array(await file.slice(stampOffsetValue, headerEnd).arrayBuffer());
+  const stampWidth = readUint8(stampBytes, 0);
+  const stampHeight = readUint8(stampBytes, 1);
+  const expectedBytes =
+    stampWidth != null && stampHeight != null && pixelSizeBytes != null
+      ? 2 + stampWidth * stampHeight * pixelSizeBytes
+      : null;
+  return {
+    offset: stampOffsetValue,
+    width: stampWidth,
+    height: stampHeight,
+    expectedBytes,
+    truncated: expectedBytes != null ? stampOffsetValue + expectedBytes > file.size : stampBytes.length < 2
+  };
+};
+
+const buildColorCorrectionTable = (
+  fileSize: number,
+  colorOffsetValue: number | null
+): TgaColorCorrectionTableSummary | null => (
+  colorOffsetValue
+    ? {
+        offset: colorOffsetValue,
+        expectedBytes: TGA_COLOR_CORRECTION_TABLE_SIZE,
+        truncated: colorOffsetValue + TGA_COLOR_CORRECTION_TABLE_SIZE > fileSize
+      }
+    : null
+);
+
+const buildScanLineTable = (
+  fileSize: number,
+  scanOffsetValue: number | null,
+  imageHeight: number | null
+): TgaScanLineTableSummary | null => (
+  scanOffsetValue
+    ? {
+        offset: scanOffsetValue,
+        expectedBytes: imageHeight != null ? imageHeight * 4 : null,
+        truncated: imageHeight != null ? scanOffsetValue + imageHeight * 4 > fileSize : scanOffsetValue > fileSize
+      }
+    : null
+);
+
 export const parseTgaExtensionArea = async (
   file: File,
   offset: number,
@@ -110,42 +160,9 @@ export const parseTgaExtensionArea = async (
   const stampOffsetValue = readUint32le(bytes, 486);
   const scanOffsetValue = readUint32le(bytes, 490);
   const attributesType = readUint8(bytes, 494);
-
-  const colorCorrectionTable: TgaColorCorrectionTableSummary | null = colorOffsetValue
-    ? {
-        offset: colorOffsetValue,
-        expectedBytes: TGA_COLOR_CORRECTION_TABLE_SIZE,
-        truncated: colorOffsetValue + TGA_COLOR_CORRECTION_TABLE_SIZE > file.size
-      }
-    : null;
-
-  let postageStamp: TgaPostageStampSummary | null = null;
-  if (stampOffsetValue) {
-    const headerEnd = Math.min(file.size, stampOffsetValue + 2);
-    const stampBytes = new Uint8Array(await file.slice(stampOffsetValue, headerEnd).arrayBuffer());
-    const stampWidth = readUint8(stampBytes, 0);
-    const stampHeight = readUint8(stampBytes, 1);
-    const expectedBytes =
-      stampWidth != null && stampHeight != null && pixelSizeBytes != null
-        ? 2 + stampWidth * stampHeight * pixelSizeBytes
-        : null;
-    postageStamp = {
-      offset: stampOffsetValue,
-      width: stampWidth,
-      height: stampHeight,
-      expectedBytes,
-      truncated: expectedBytes != null ? stampOffsetValue + expectedBytes > file.size : stampBytes.length < 2
-    };
-  }
-
-  const scanLineTable: TgaScanLineTableSummary | null = scanOffsetValue
-    ? {
-        offset: scanOffsetValue,
-        expectedBytes: imageHeight != null ? imageHeight * 4 : null,
-        truncated:
-          imageHeight != null ? scanOffsetValue + imageHeight * 4 > file.size : scanOffsetValue > file.size
-      }
-    : null;
+  const colorCorrectionTable = buildColorCorrectionTable(file.size, colorOffsetValue);
+  const postageStamp = await readPostageStamp(file, stampOffsetValue, pixelSizeBytes);
+  const scanLineTable = buildScanLineTable(file.size, scanOffsetValue, imageHeight);
 
   return {
     offset,

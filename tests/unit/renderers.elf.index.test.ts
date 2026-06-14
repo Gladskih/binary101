@@ -5,8 +5,8 @@ import { test } from "node:test";
 import { renderElf } from "../../renderers/elf/index.js";
 import type { ElfParseResult } from "../../analyzers/elf/types.js";
 
-void test("renderElf (ELF) renders collapsible program/section tables with hints", () => {
-  const elf = {
+const createRendererElfSubject = (): ElfParseResult =>
+  ({
     ident: { classByte: 2, className: "ELF64", dataByte: 1, dataName: "LSB", osabi: 0, abiVersion: 0 },
     header: {
       type: 2,
@@ -93,9 +93,10 @@ void test("renderElf (ELF) renders collapsible program/section tables with hints
     is64: true,
     littleEndian: true,
     fileSize: 0
-  } as unknown as ElfParseResult;
+  }) as unknown as ElfParseResult;
 
-  const html = renderElf(elf);
+void test("renderElf (ELF) renders collapsible program/section tables with hints", () => {
+  const html = renderElf(createRendererElfSubject());
 
   assert.ok(html.includes("Show program headers (1)"));
   assert.ok(html.includes("Show section headers (3)"));

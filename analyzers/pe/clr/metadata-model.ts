@@ -3,10 +3,6 @@
 import type {
   PeClrAssemblyInfo,
   PeClrAssemblyRefInfo,
-  PeClrExportedTypeInfo,
-  PeClrFileInfo,
-  PeClrImplementationMapInfo,
-  PeClrManifestResourceInfo,
   PeClrMetadataIndex,
   PeClrMetadataTables,
   PeClrMethodDefinitionInfo,
@@ -16,10 +12,16 @@ import type {
   PeClrTypeReferenceInfo
 } from "./types.js";
 import type { ClrHeapReaders } from "./metadata-heaps.js";
-import { parseMemberRefSignature, parseMethodSignature } from "./metadata-signatures.js";
+import { parseMethodSignature } from "./metadata-signatures.js";
 import type { ClrMetadataRow, ClrParsedTableStream } from "./metadata-table-reader.js";
 import { createCustomAttributes } from "./metadata-custom-attributes.js";
-import { resolveMetadataIndexName } from "./metadata-name-resolver.js";
+import {
+  createExportedTypes,
+  createFiles,
+  createImplMaps,
+  createManifestResources,
+  createMemberRefs
+} from "./metadata-derived-tables.js";
 import {
   TABLE_ASSEMBLY,
   TABLE_ASSEMBLY_REF,
@@ -202,63 +204,22 @@ export const buildClrMetadataTables = (
     tableRows(parsed, TABLE_METHOD_DEF).length
   );
   const methodDefs = createMethodDefs(tableRows(parsed, TABLE_METHOD_DEF), heaps, typeDefs);
-  const memberRefs = tableRows(parsed, TABLE_MEMBER_REF).map((row, index) => {
-    const signatureBlobIndex = cellNumber(row, "Signature");
-    const parent = cellIndex(row, "Class");
-    const parentName = resolveMetadataIndexName(
-      parent, modules, assembly, assemblyRefs, typeRefs, typeDefs, methodDefs, moduleRefs
-    );
-    const context = `MemberRef row ${index + 1}.Signature`;
-    const signature = parseMemberRefSignature(heaps.getBlob(signatureBlobIndex, context), context);
-    return {
-      row: index + 1,
-      name: getString(heaps, row, "Name", `MemberRef row ${index + 1}`),
-      parent,
-      parentName,
-      signatureBlobIndex,
-      ...(signature ? { signature } : {})
-    };
-  });
-  const implMaps = tableRows(parsed, TABLE_IMPL_MAP).map((row, index): PeClrImplementationMapInfo => {
-    const member = cellIndex(row, "MemberForwarded");
-    return {
-      row: index + 1,
-      mappingFlags: cellNumber(row, "MappingFlags"),
-      member,
-      memberName: resolveMetadataIndexName(
-        member, modules, assembly, assemblyRefs, typeRefs, typeDefs, methodDefs, moduleRefs
-      ),
-      importName: getString(heaps, row, "ImportName", `ImplMap row ${index + 1}`),
-      importScopeName: moduleRefs[cellIndex(row, "ImportScope").row - 1]?.name ?? null
-    };
-  });
-  const files = tableRows(parsed, TABLE_FILE).map((row, index): PeClrFileInfo => ({
-    row: index + 1,
-    name: getString(heaps, row, "Name", `File row ${index + 1}`),
-    flags: cellNumber(row, "Flags"),
-    hashValueSize: blobSize(heaps, row, "HashValue", `File row ${index + 1}`)
-  }));
-  const exportedTypes = tableRows(parsed, TABLE_EXPORTED_TYPE).map((row, index): PeClrExportedTypeInfo => {
-    const name = getString(heaps, row, "TypeName", `ExportedType row ${index + 1}`);
-    const namespaceName = getString(heaps, row, "TypeNamespace", `ExportedType row ${index + 1}`);
-    return {
-      row: index + 1,
-      name,
-      namespace: namespaceName,
-      fullName: fullName(namespaceName, name),
-      flags: cellNumber(row, "Flags"),
-      typeDefId: cellNumber(row, "TypeDefId"),
-      implementation: cellIndex(row, "Implementation")
-    };
-  });
-  const manifestResources = tableRows(parsed, TABLE_MANIFEST_RESOURCE)
-    .map((row, index): PeClrManifestResourceInfo => ({
-      row: index + 1,
-      name: getString(heaps, row, "Name", `ManifestResource row ${index + 1}`),
-      offset: cellNumber(row, "Offset"),
-      flags: cellNumber(row, "Flags"),
-      implementation: cellIndex(row, "Implementation")
-    }));
+  const resolutionTables = {
+    modules, assembly, assemblyRefs, typeRefs, typeDefs, methodDefs, moduleRefs
+  };
+  const memberRefs = createMemberRefs(
+    tableRows(parsed, TABLE_MEMBER_REF),
+    heaps,
+    resolutionTables
+  );
+  const implMaps = createImplMaps(
+    tableRows(parsed, TABLE_IMPL_MAP),
+    heaps,
+    resolutionTables
+  );
+  const files = createFiles(tableRows(parsed, TABLE_FILE), heaps);
+  const exportedTypes = createExportedTypes(tableRows(parsed, TABLE_EXPORTED_TYPE), heaps);
+  const manifestResources = createManifestResources(tableRows(parsed, TABLE_MANIFEST_RESOURCE), heaps);
   const customAttributes = createCustomAttributes(
     tableRows(parsed, TABLE_CUSTOM_ATTRIBUTE),
     heaps,

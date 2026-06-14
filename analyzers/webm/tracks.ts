@@ -1,11 +1,6 @@
 "use strict";
 
-import {
-  VIDEO_ID,
-  AUDIO_ID,
-  MAX_TRACKS_BYTES,
-  TRACK_ENTRY_ID
-} from "./constants.js";
+import { VIDEO_ID, AUDIO_ID, MAX_TRACKS_BYTES, TRACK_ENTRY_ID } from "./constants.js";
 import { clampReadLength, readElementHeader, readUnsigned, readFloat, readUtf8 } from "./ebml.js";
 import { parseVorbisCodecPrivate } from "./codecprivate.js";
 import type { EbmlElementHeader } from "./ebml.js";
@@ -129,6 +124,96 @@ const describeTrackType = (trackType: number | null): string => {
   return "Unknown";
 };
 
+const readUnsignedNumber = (
+  dv: DataView,
+  offset: number,
+  size: number,
+  issues: Issues,
+  label: string
+): number | null => {
+  const value = readUnsigned(dv, offset, size, issues, label);
+  return value != null ? Number(value) : null;
+};
+
+const readUnsignedBoolean = (
+  dv: DataView,
+  offset: number,
+  size: number,
+  issues: Issues,
+  label: string
+): boolean | null => {
+  const value = readUnsignedNumber(dv, offset, size, issues, label);
+  return value != null ? value !== 0 : null;
+};
+
+const setDefaultDuration = (
+  track: WebmTrack,
+  value: bigint,
+  header: EbmlElementHeader,
+  issues: Issues
+): void => {
+  let numeric: number | null = null;
+  if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
+    if (header.size != null && header.size <= 8) {
+      numeric = Number(value & 0xffffffffn);
+      issues.push("DefaultDuration is larger than safe range; using low 32 bits.");
+    } else {
+      issues.push("DefaultDuration is too large to represent precisely.");
+    }
+  } else {
+    numeric = Number(value);
+  }
+  track.defaultDuration = numeric;
+  if (numeric && numeric > 0) track.defaultDurationFps = Math.round((1e9 / numeric) * 100) / 100;
+};
+
+const parseTrackEntryElement = (
+  dv: DataView,
+  header: EbmlElementHeader,
+  dataStart: number,
+  available: number,
+  track: WebmTrack,
+  issues: Issues
+): void => {
+  if (header.id === 0xd7 && available > 0) {
+    track.trackNumber = readUnsignedNumber(dv, dataStart, available, issues, "TrackNumber");
+  } else if (header.id === 0x73c5 && available > 0) {
+    const value = readUnsigned(dv, dataStart, available, issues, "TrackUID");
+    if (value != null) track.trackUid = value > BigInt(Number.MAX_SAFE_INTEGER) ? value.toString() : Number(value);
+  } else if (header.id === 0x83 && available > 0) {
+    track.trackType = readUnsignedNumber(dv, dataStart, available, issues, "TrackType");
+    track.trackTypeLabel = describeTrackType(track.trackType);
+  } else if (header.id === 0x86 && available > 0) {
+    track.codecId = readUtf8(dv, dataStart, available);
+  } else if (header.id === 0x258688 && available > 0) {
+    track.codecName = readUtf8(dv, dataStart, available);
+  } else if (header.id === 0x536e && available > 0) {
+    track.name = readUtf8(dv, dataStart, available);
+  } else if (header.id === 0x22b59c && available > 0) {
+    track.language = readUtf8(dv, dataStart, available);
+  } else if (header.id === 0x23e383 && available > 0) {
+    const value = readUnsigned(dv, dataStart, available, issues, "DefaultDuration");
+    if (value != null) setDefaultDuration(track, value, header, issues);
+  } else if (header.id === 0xb9 && available > 0) {
+    track.flagEnabled = readUnsignedBoolean(dv, dataStart, available, issues, "FlagEnabled");
+  } else if (header.id === 0x88 && available > 0) {
+    track.flagDefault = readUnsignedBoolean(dv, dataStart, available, issues, "FlagDefault");
+  } else if (header.id === 0x55aa && available > 0) {
+    track.flagForced = readUnsignedBoolean(dv, dataStart, available, issues, "FlagForced");
+  } else if (header.id === 0x9c && available > 0) {
+    track.flagLacing = readUnsignedBoolean(dv, dataStart, available, issues, "FlagLacing");
+  } else if (header.id === 0x63a2 && header.size != null) {
+    track.codecPrivateSize = header.size;
+    if (track.codecId === VORBIS_CODEC_ID) {
+      track.codecPrivateVorbis = parseVorbisCodecPrivate(dv, dataStart, header.size, issues);
+    }
+  } else if (header.id === VIDEO_ID && header.size != null) {
+    track.video = parseVideo(dv, dataStart, header.size, header.dataOffset, issues);
+  } else if (header.id === AUDIO_ID && header.size != null) {
+    track.audio = parseAudio(dv, dataStart, header.size, header.dataOffset, issues);
+  }
+};
+
 export const parseTrackEntry = (
   dv: DataView,
   offset: number,
@@ -163,68 +248,7 @@ export const parseTrackEntry = (
     if (!header || header.headerSize === 0) break;
     const dataStart = offset + cursor + header.headerSize;
     const available = Math.min(header.size ?? 0, limit - (cursor + header.headerSize));
-    if (header.id === 0xd7 && available > 0) {
-      const value = readUnsigned(dv, dataStart, available, issues, "TrackNumber");
-      track.trackNumber = value != null ? Number(value) : null;
-    } else if (header.id === 0x73c5 && available > 0) {
-      const value = readUnsigned(dv, dataStart, available, issues, "TrackUID");
-      if (value != null) {
-        track.trackUid = value > BigInt(Number.MAX_SAFE_INTEGER) ? value.toString() : Number(value);
-      }
-    } else if (header.id === 0x83 && available > 0) {
-      const value = readUnsigned(dv, dataStart, available, issues, "TrackType");
-      track.trackType = value != null ? Number(value) : null;
-      track.trackTypeLabel = describeTrackType(track.trackType);
-    } else if (header.id === 0x86 && available > 0) {
-      track.codecId = readUtf8(dv, dataStart, available);
-    } else if (header.id === 0x258688 && available > 0) {
-      track.codecName = readUtf8(dv, dataStart, available);
-    } else if (header.id === 0x536e && available > 0) {
-      track.name = readUtf8(dv, dataStart, available);
-    } else if (header.id === 0x22b59c && available > 0) {
-      track.language = readUtf8(dv, dataStart, available);
-    } else if (header.id === 0x23e383 && available > 0) {
-      const value = readUnsigned(dv, dataStart, available, issues, "DefaultDuration");
-      if (value != null) {
-        let numeric: number | null = null;
-        const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
-        if (value > maxSafe) {
-          if (header.size != null && header.size <= 8) {
-            numeric = Number(value & 0xffffffffn);
-            issues.push("DefaultDuration is larger than safe range; using low 32 bits.");
-          } else {
-            issues.push("DefaultDuration is too large to represent precisely.");
-          }
-        } else {
-          numeric = Number(value);
-        }
-        track.defaultDuration = numeric;
-        if (numeric && numeric > 0) {
-          track.defaultDurationFps = Math.round((1e9 / numeric) * 100) / 100;
-        }
-      }
-    } else if (header.id === 0xb9 && available > 0) {
-      const value = readUnsigned(dv, dataStart, available, issues, "FlagEnabled");
-      track.flagEnabled = value != null ? Number(value) !== 0 : null;
-    } else if (header.id === 0x88 && available > 0) {
-      const value = readUnsigned(dv, dataStart, available, issues, "FlagDefault");
-      track.flagDefault = value != null ? Number(value) !== 0 : null;
-    } else if (header.id === 0x55aa && available > 0) {
-      const value = readUnsigned(dv, dataStart, available, issues, "FlagForced");
-      track.flagForced = value != null ? Number(value) !== 0 : null;
-    } else if (header.id === 0x9c && available > 0) {
-      const value = readUnsigned(dv, dataStart, available, issues, "FlagLacing");
-      track.flagLacing = value != null ? Number(value) !== 0 : null;
-    } else if (header.id === 0x63a2 && header.size != null) {
-      track.codecPrivateSize = header.size;
-      if (track.codecId === VORBIS_CODEC_ID) {
-        track.codecPrivateVorbis = parseVorbisCodecPrivate(dv, dataStart, header.size, issues);
-      }
-    } else if (header.id === VIDEO_ID && header.size != null) {
-      track.video = parseVideo(dv, dataStart, header.size, header.dataOffset, issues);
-    } else if (header.id === AUDIO_ID && header.size != null) {
-      track.audio = parseAudio(dv, dataStart, header.size, header.dataOffset, issues);
-    }
+    parseTrackEntryElement(dv, header, dataStart, available, track, issues);
     if (header.size == null) break;
     cursor += header.headerSize + header.size;
   }

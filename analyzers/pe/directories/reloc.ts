@@ -119,6 +119,103 @@ const parseRelocationEntries = (
   return entries;
 };
 
+const validateBaseRelocationDirectory = (
+  reader: FileRangeReader,
+  dataDirs: PeDataDirectory[],
+  rvaToOff: RvaToOffset
+): { dir: PeDataDirectory; base: number } | { result: {
+  blocks: [];
+  totalEntries: 0;
+  warnings?: string[];
+} | null } => {
+  const dir = dataDirs.find(d => d.name === "BASERELOC");
+  if (!dir || (dir.rva === 0 && dir.size === 0)) return { result: null };
+  if (dir.rva === 0) {
+    return { result: {
+      blocks: [],
+      totalEntries: 0,
+      warnings: ["Base relocation directory has a non-zero size but RVA is 0."]
+    } };
+  }
+  if (dir.size < IMAGE_BASE_RELOCATION_HEADER_SIZE) {
+    return { result: {
+      blocks: [],
+      totalEntries: 0,
+      warnings: ["Base relocation directory is smaller than the 8-byte IMAGE_BASE_RELOCATION header."]
+    } };
+  }
+  const base = rvaToOff(dir.rva);
+  if (base == null) {
+    return { result: {
+      blocks: [],
+      totalEntries: 0,
+      warnings: ["Base relocation directory RVA does not map to file data."]
+    } };
+  }
+  if (base < 0 || base >= reader.size) {
+    return { result: {
+      blocks: [],
+      totalEntries: 0,
+      warnings: ["Base relocation directory starts outside file data."]
+    } };
+  }
+  return { dir, base };
+};
+
+const parseBaseRelocationBlock = async (
+  reader: FileRangeReader,
+  rvaToOff: RvaToOffset,
+  dir: PeDataDirectory,
+  rel: number,
+  addWarning: (message: string) => void
+): Promise<{
+  block: { pageRva: number; size: number; count: number; entries: Array<{ type: number; offset: number }> } | null;
+  nextRel: number;
+  stop: boolean;
+}> => {
+  const blockRva = (dir.rva + rel) >>> 0;
+  const blockOff = rvaToOff(blockRva >>> 0);
+  if (blockOff == null) {
+    addWarning("Base relocation block RVA does not map to file data.");
+    return { block: null, nextRel: rel, stop: true };
+  }
+  const dv = await reader.read(blockOff, IMAGE_BASE_RELOCATION_HEADER_SIZE);
+  if (dv.byteLength < IMAGE_BASE_RELOCATION_HEADER_SIZE) {
+    addWarning("Base relocation block header is truncated.");
+    return { block: null, nextRel: rel, stop: true };
+  }
+  const pageRva = dv.getUint32(0, true);
+  const blockSize = dv.getUint32(4, true);
+  if ((pageRva & (BASE_RELOCATION_PAGE_SIZE - 1)) !== 0) {
+    addWarning("Base relocation PageRVA is not aligned to a 4 KiB page.");
+  }
+  if (!blockSize) {
+    addWarning("Base relocation block size is 0, so parsing stops at an invalid terminator.");
+    return { block: null, nextRel: rel, stop: true };
+  }
+  if (blockSize < IMAGE_BASE_RELOCATION_HEADER_SIZE) {
+    addWarning("Base relocation block size is smaller than the 8-byte IMAGE_BASE_RELOCATION header.");
+    return { block: null, nextRel: rel, stop: true };
+  }
+  if (blockSize > dir.size - rel) {
+    addWarning("Base relocation block is truncated by the declared relocation directory size.");
+  }
+  const availableBlockBytes = Math.min(blockSize, dir.size - rel);
+  const availableEntries = Math.floor(
+    Math.max(0, availableBlockBytes - IMAGE_BASE_RELOCATION_HEADER_SIZE) /
+      IMAGE_BASE_RELOCATION_ENTRY_SIZE
+  );
+  const entrySpans = collectRelocationEntrySpans(availableEntries, blockRva, rvaToOff, reader.size, addWarning);
+  const spanViews = entrySpans ? await readRelocationEntrySpans(reader, entrySpans, addWarning) : null;
+  const entries = spanViews ? parseRelocationEntries(availableEntries, spanViews, addWarning) : [];
+  const nextRel = rel + blockSize;
+  return {
+    block: { pageRva, size: blockSize, count: entries.length, entries },
+    nextRel,
+    stop: (nextRel & 3) !== 0
+  };
+};
+
 export async function parseBaseRelocations(
   reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
@@ -128,39 +225,9 @@ export async function parseBaseRelocations(
   totalEntries: number;
   warnings?: string[];
 } | null> {
-  const dir = dataDirs.find(d => d.name === "BASERELOC");
-  if (!dir || (dir.rva === 0 && dir.size === 0)) return null;
-  if (dir.rva === 0) {
-    return {
-      blocks: [],
-      totalEntries: 0,
-      warnings: ["Base relocation directory has a non-zero size but RVA is 0."]
-    };
-  }
-  if (dir.size < IMAGE_BASE_RELOCATION_HEADER_SIZE) {
-    return {
-      blocks: [],
-      totalEntries: 0,
-      warnings: [
-        "Base relocation directory is smaller than the 8-byte IMAGE_BASE_RELOCATION header."
-      ]
-    };
-  }
-  const base = rvaToOff(dir.rva);
-  if (base == null) {
-    return {
-      blocks: [],
-      totalEntries: 0,
-      warnings: ["Base relocation directory RVA does not map to file data."]
-    };
-  }
-  if (base < 0 || base >= reader.size) {
-    return {
-      blocks: [],
-      totalEntries: 0,
-      warnings: ["Base relocation directory starts outside file data."]
-    };
-  }
+  const validation = validateBaseRelocationDirectory(reader, dataDirs, rvaToOff);
+  if ("result" in validation) return validation.result;
+  const { dir } = validation;
   const blocks: Array<{
     pageRva: number;
     size: number;
@@ -174,59 +241,15 @@ export async function parseBaseRelocations(
   let rel = 0;
   let totalEntries = 0;
   while (rel + IMAGE_BASE_RELOCATION_HEADER_SIZE <= dir.size) {
-    const blockRva = (dir.rva + rel) >>> 0;
-    const blockOff = rvaToOff(blockRva >>> 0);
-    if (blockOff == null) {
-      addWarning("Base relocation block RVA does not map to file data.");
-      break;
-    }
-    const dv = await reader.read(blockOff, IMAGE_BASE_RELOCATION_HEADER_SIZE);
-    if (dv.byteLength < IMAGE_BASE_RELOCATION_HEADER_SIZE) {
-      addWarning("Base relocation block header is truncated.");
-      break;
-    }
-    const pageRva = dv.getUint32(0, true);
-    const blockSize = dv.getUint32(4, true);
-    if ((pageRva & (BASE_RELOCATION_PAGE_SIZE - 1)) !== 0) {
-      addWarning("Base relocation PageRVA is not aligned to a 4 KiB page.");
-    }
-    if (!blockSize) {
-      addWarning("Base relocation block size is 0, so parsing stops at an invalid terminator.");
-      break;
-    }
-    if (blockSize < IMAGE_BASE_RELOCATION_HEADER_SIZE) {
-      addWarning("Base relocation block size is smaller than the 8-byte IMAGE_BASE_RELOCATION header.");
-      break;
-    }
-    if (blockSize > dir.size - rel) {
-      addWarning("Base relocation block is truncated by the declared relocation directory size.");
-    }
-    const availableBlockBytes = Math.min(blockSize, dir.size - rel);
-    const availableEntries = Math.floor(
-      Math.max(0, availableBlockBytes - IMAGE_BASE_RELOCATION_HEADER_SIZE) /
-        IMAGE_BASE_RELOCATION_ENTRY_SIZE
-    );
-    const entrySpans = collectRelocationEntrySpans(
-      availableEntries,
-      blockRva,
-      rvaToOff,
-      reader.size,
-      addWarning
-    );
-    const spanViews = entrySpans
-      ? await readRelocationEntrySpans(reader, entrySpans, addWarning)
-      : null;
-    const entries = spanViews
-      ? parseRelocationEntries(availableEntries, spanViews, addWarning)
-      : [];
-    blocks.push({ pageRva, size: blockSize, count: entries.length, entries });
-    totalEntries += entries.length;
-    const nextRel = rel + blockSize;
-    if ((nextRel & 3) !== 0) {
+    const parsed = await parseBaseRelocationBlock(reader, rvaToOff, dir, rel, addWarning);
+    if (!parsed.block) break;
+    blocks.push(parsed.block);
+    totalEntries += parsed.block.entries.length;
+    if (parsed.stop) {
       addWarning("Base relocation blocks must begin on a 32-bit boundary; stopping at misaligned block size.");
       break;
     }
-    rel = nextRel;
+    rel = parsed.nextRel;
   }
   return warnings.length ? { blocks, totalEntries, warnings } : { blocks, totalEntries };
 }

@@ -14,6 +14,27 @@ type DisassemblyYieldSnapshot = {
   invalidInstructionCount: number;
 };
 
+type DisassemblyDecoderEntryVaddr = DisassemblySectionVaddr & {
+  decoder: InstanceType<IcedX86Module["Decoder"]>;
+};
+
+type ControlFlowDecodeStateVaddr = {
+  iced: IcedX86Module;
+  bytesSampled: number;
+  decoders: DisassemblyDecoderEntryVaddr[];
+  visited: Set<bigint>;
+  queued: Set<bigint>;
+  queue: bigint[];
+  featureCounts: Map<number, number>;
+  yieldEveryInstructions: number;
+  signal?: AbortSignal;
+  onYield?: (snapshot: DisassemblyYieldSnapshot) => Promise<void>;
+  bytesDecoded: number;
+  instructionCount: number;
+  invalidInstructionCount: number;
+  recordDecodeStopIssue(message: string): void;
+};
+
 const MAX_DECODE_STOP_ISSUES = 200;
 
 const safeFree = (resource: { free(): void } | null | undefined): void => {
@@ -34,6 +55,102 @@ const tryGetOffsetInSection = (vaddr: bigint, section: DisassemblySectionVaddr):
   const offset = Number(delta);
   if (!Number.isSafeInteger(offset) || offset < 0 || offset >= section.data.length) return null;
   return offset;
+};
+
+const snapshot = (state: ControlFlowDecodeStateVaddr): DisassemblyYieldSnapshot => ({
+  bytesDecoded: state.bytesDecoded,
+  instructionCount: state.instructionCount,
+  invalidInstructionCount: state.invalidInstructionCount
+});
+
+const getDecoderForVaddr = (
+  decoders: DisassemblyDecoderEntryVaddr[],
+  vaddr: bigint
+): DisassemblyDecoderEntryVaddr | null => {
+  for (const entry of decoders) {
+    if (tryGetOffsetInSection(vaddr, entry) != null) return entry;
+  }
+  return null;
+};
+
+const addControlFlowWork = (state: ControlFlowDecodeStateVaddr, vaddr: bigint | null): void => {
+  if (vaddr == null) return;
+  if (state.visited.has(vaddr) || state.queued.has(vaddr)) return;
+  if (!getDecoderForVaddr(state.decoders, vaddr)) return;
+  state.queue.push(vaddr);
+  state.queued.add(vaddr);
+};
+
+const countInstructionFeatures = (
+  state: ControlFlowDecodeStateVaddr,
+  instr: InstanceType<IcedX86Module["Instruction"]>
+): void => {
+  const features = instr.cpuidFeatures();
+  for (const feature of features) {
+    state.featureCounts.set(feature, (state.featureCounts.get(feature) || 0) + 1);
+  }
+};
+
+const decodeLinearRun = async (
+  state: ControlFlowDecodeStateVaddr,
+  decoderEntry: DisassemblyDecoderEntryVaddr,
+  startVaddr: bigint,
+  instr: InstanceType<IcedX86Module["Instruction"]>
+): Promise<void> => {
+  const offset = tryGetOffsetInSection(startVaddr, decoderEntry);
+  if (offset == null) return;
+  const decoder = decoderEntry.decoder;
+  decoder.position = offset;
+  decoder.ip = BigInt.asUintN(64, startVaddr);
+  while (decoder.canDecode) {
+    if (state.signal?.aborted) return;
+    decoder.decodeOut(instr);
+    state.instructionCount += 1;
+    const instrVaddr = BigInt.asUintN(64, instr.ip);
+    if (state.visited.has(instrVaddr)) break;
+    state.visited.add(instrVaddr);
+    const len = instr.length;
+    if (len <= 0) {
+      state.invalidInstructionCount += 1;
+      state.recordDecodeStopIssue("Stopping at a zero-length instruction decode.");
+      break;
+    }
+    state.bytesDecoded = Math.min(state.bytesSampled, state.bytesDecoded + len);
+    const isInvalidDecode = instr.code === state.iced.Code["INVALID"];
+    const isUd2Trap = instr.code === state.iced.Code["Ud2"];
+    const isHardException = instr.flowControl === state.iced.FlowControl["Exception"] && !isUd2Trap;
+    if (isInvalidDecode || isHardException) {
+      state.invalidInstructionCount += 1;
+      state.recordDecodeStopIssue(`Stopping at an invalid instruction at address 0x${instrVaddr.toString(16)}.`);
+      break;
+    }
+    if (!isUd2Trap) countInstructionFeatures(state, instr);
+    if (state.iced.FlowControl["UnconditionalBranch"] === instr.flowControl) {
+      const target = getNearBranchTarget(instr, state.iced.OpKind);
+      addControlFlowWork(state, target == null ? null : BigInt.asUintN(64, target));
+      break;
+    }
+    if (
+      state.iced.FlowControl["ConditionalBranch"] === instr.flowControl ||
+      state.iced.FlowControl["Call"] === instr.flowControl ||
+      state.iced.FlowControl["XbeginXabortXend"] === instr.flowControl
+    ) {
+      const target = getNearBranchTarget(instr, state.iced.OpKind);
+      addControlFlowWork(state, target == null ? null : BigInt.asUintN(64, target));
+    } else if (
+      state.iced.FlowControl["IndirectBranch"] === instr.flowControl ||
+      state.iced.FlowControl["Return"] === instr.flowControl ||
+      state.iced.FlowControl["Interrupt"] === instr.flowControl
+    ) {
+      break;
+    }
+    const nextVaddr = BigInt.asUintN(64, instr.nextIP);
+    const nextDecoderEntry = getDecoderForVaddr(state.decoders, nextVaddr);
+    if (!nextDecoderEntry || nextDecoderEntry !== decoderEntry) break;
+    if (state.yieldEveryInstructions && state.instructionCount % state.yieldEveryInstructions === 0) {
+      await state.onYield?.(snapshot(state));
+    }
+  }
 };
 
 /**
@@ -70,13 +187,6 @@ export async function disassembleControlFlowForInstructionSetsVaddr(opts: {
     }
   };
 
-  const getDecoderForVaddr = (vaddr: bigint): (typeof decoders)[number] | null => {
-    for (const entry of decoders) {
-      if (tryGetOffsetInSection(vaddr, entry) != null) return entry;
-    }
-    return null;
-  };
-
   const visited = new Set<bigint>();
   const queued = new Set<bigint>();
   const queue = [...opts.entrypoints].reverse();
@@ -84,17 +194,22 @@ export async function disassembleControlFlowForInstructionSetsVaddr(opts: {
     queued.add(vaddr);
   }
 
-  const addWork = (vaddr: bigint | null): void => {
-    if (vaddr == null) return;
-    if (visited.has(vaddr) || queued.has(vaddr)) return;
-    if (!getDecoderForVaddr(vaddr)) return;
-    queue.push(vaddr);
-    queued.add(vaddr);
+  const state: ControlFlowDecodeStateVaddr = {
+    iced: opts.iced,
+    bytesSampled,
+    decoders,
+    visited,
+    queued,
+    queue,
+    featureCounts: opts.featureCounts,
+    yieldEveryInstructions: opts.yieldEveryInstructions,
+    ...(opts.signal ? { signal: opts.signal } : {}),
+    ...(opts.onYield ? { onYield: opts.onYield } : {}),
+    bytesDecoded: 0,
+    instructionCount: 0,
+    invalidInstructionCount: 0,
+    recordDecodeStopIssue
   };
-
-  let bytesDecoded = 0;
-  let instructionCount = 0;
-  let invalidInstructionCount = 0;
 
   const instr = new opts.iced.Instruction();
   try {
@@ -105,83 +220,11 @@ export async function disassembleControlFlowForInstructionSetsVaddr(opts: {
       if (startVaddr == null) break;
       queued.delete(startVaddr);
 
-      const decoderEntry = getDecoderForVaddr(startVaddr);
+      const decoderEntry = getDecoderForVaddr(decoders, startVaddr);
       if (!decoderEntry) continue;
-
-      const offset = tryGetOffsetInSection(startVaddr, decoderEntry);
-      if (offset == null) continue;
-
-      const decoder = decoderEntry.decoder;
-      decoder.position = offset;
-      decoder.ip = BigInt.asUintN(64, startVaddr);
-
-      while (decoder.canDecode) {
-        if (opts.signal?.aborted) return { bytesDecoded, instructionCount, invalidInstructionCount };
-
-        decoder.decodeOut(instr);
-        instructionCount += 1;
-
-        const instrVaddr = BigInt.asUintN(64, instr.ip);
-        if (visited.has(instrVaddr)) break;
-        visited.add(instrVaddr);
-
-        const len = instr.length;
-        if (len <= 0) {
-          invalidInstructionCount += 1;
-          recordDecodeStopIssue("Stopping at a zero-length instruction decode.");
-          break;
-        }
-        bytesDecoded = Math.min(bytesSampled, bytesDecoded + len);
-
-        const isInvalidDecode = instr.code === opts.iced.Code["INVALID"];
-        const isUd2Trap = instr.code === opts.iced.Code["Ud2"];
-        const isHardException = instr.flowControl === opts.iced.FlowControl["Exception"] && !isUd2Trap;
-        if (isInvalidDecode || isHardException) {
-          invalidInstructionCount += 1;
-          recordDecodeStopIssue(`Stopping at an invalid instruction at address 0x${instrVaddr.toString(16)}.`);
-          break;
-        }
-
-        if (!isUd2Trap) {
-          const features = instr.cpuidFeatures();
-          for (const feature of features) {
-            opts.featureCounts.set(feature, (opts.featureCounts.get(feature) || 0) + 1);
-          }
-        }
-
-        if (opts.iced.FlowControl["UnconditionalBranch"] === instr.flowControl) {
-          const target = getNearBranchTarget(instr, opts.iced.OpKind);
-          addWork(target == null ? null : BigInt.asUintN(64, target));
-          break;
-        }
-
-        if (
-          opts.iced.FlowControl["ConditionalBranch"] === instr.flowControl ||
-          opts.iced.FlowControl["Call"] === instr.flowControl ||
-          opts.iced.FlowControl["XbeginXabortXend"] === instr.flowControl
-        ) {
-          const target = getNearBranchTarget(instr, opts.iced.OpKind);
-          addWork(target == null ? null : BigInt.asUintN(64, target));
-        } else if (
-          opts.iced.FlowControl["IndirectBranch"] === instr.flowControl ||
-          opts.iced.FlowControl["Return"] === instr.flowControl ||
-          opts.iced.FlowControl["Interrupt"] === instr.flowControl
-        ) {
-          break;
-        }
-
-        const nextVaddr = BigInt.asUintN(64, instr.nextIP);
-        const nextDecoderEntry = getDecoderForVaddr(nextVaddr);
-        if (!nextDecoderEntry || nextDecoderEntry !== decoderEntry) {
-          break;
-        }
-
-        if (opts.yieldEveryInstructions && instructionCount % opts.yieldEveryInstructions === 0) {
-          await opts.onYield?.({ bytesDecoded, instructionCount, invalidInstructionCount });
-        }
-      }
+      await decodeLinearRun(state, decoderEntry, startVaddr, instr);
     }
-    return { bytesDecoded, instructionCount, invalidInstructionCount };
+    return snapshot(state);
   } finally {
     if (decodeStopIssuesSuppressed > 0) {
       opts.issues.push(

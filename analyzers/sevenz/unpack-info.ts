@@ -20,6 +20,76 @@ const METHOD_ID_SIZE_MASK = 0x0f;
 const SIMPLE_CODER_FLAG = 0x10;
 const ATTRIBUTES_FLAG = 0x20;
 
+const readFolderCoder = (
+  ctx: SevenZipContext,
+  endOffset: number
+): SevenZipFolderCoderRecord | null => {
+  const flags = readByte(ctx, "Coder flags");
+  if (flags == null) return null;
+  const idSize = flags & METHOD_ID_SIZE_MASK;
+  const isSimple = (flags & SIMPLE_CODER_FLAG) === 0;
+  const hasAttributes = (flags & ATTRIBUTES_FLAG) !== 0;
+  if (idSize === 0 || ctx.offset + idSize > endOffset) {
+    ctx.issues.push("Coder ID is truncated.");
+    ctx.offset = endOffset;
+    return null;
+  }
+  const methodBytes = new Uint8Array(ctx.dv.buffer, ctx.dv.byteOffset + ctx.offset, idSize);
+  const methodId = Array.from(methodBytes).map(b => b.toString(16).padStart(2, "0")).join("");
+  ctx.offset += idSize;
+  return readCoderStreamsAndProperties(ctx, endOffset, methodId, isSimple, hasAttributes);
+};
+
+const readCoderStreamsAndProperties = (
+  ctx: SevenZipContext,
+  endOffset: number,
+  methodId: string,
+  isSimple: boolean,
+  hasAttributes: boolean
+): SevenZipFolderCoderRecord | null => {
+  let inStreams = 1;
+  let outStreams = 1;
+  if (!isSimple) {
+    const inVal = readEncodedUint64(ctx, "Coder input count");
+    const outVal = readEncodedUint64(ctx, "Coder output count");
+    const safeInStreams = toSafeNumber(inVal);
+    const safeOutStreams = toSafeNumber(outVal);
+    if (inVal != null && safeInStreams == null) ctx.issues.push("Coder input count exceeds supported range.");
+    if (outVal != null && safeOutStreams == null) ctx.issues.push("Coder output count exceeds supported range.");
+    if (safeInStreams != null) inStreams = safeInStreams;
+    if (safeOutStreams != null) outStreams = safeOutStreams;
+  }
+  if (!hasAttributes) return { methodId, inStreams, outStreams, propertiesSize: 0, properties: null };
+  return readCoderProperties(ctx, endOffset, methodId, inStreams, outStreams);
+};
+
+const readCoderProperties = (
+  ctx: SevenZipContext,
+  endOffset: number,
+  methodId: string,
+  inStreams: number,
+  outStreams: number
+): SevenZipFolderCoderRecord | null => {
+  const propSize = readEncodedUint64(ctx, "Coder property size");
+  if (propSize == null) return { methodId, inStreams, outStreams, propertiesSize: 0, properties: null };
+  const propertiesSize = toSafeNumber(propSize);
+  if (propertiesSize == null) {
+    ctx.issues.push("Coder property size exceeds supported range.");
+    ctx.offset = endOffset;
+    return null;
+  }
+  if (ctx.offset + propertiesSize > endOffset) {
+    ctx.issues.push("Coder properties extend beyond available data.");
+    ctx.offset = endOffset;
+    return null;
+  }
+  const bytes = new Uint8Array(ctx.dv.buffer, ctx.dv.byteOffset + ctx.offset, propertiesSize);
+  const propertyBytes = Array.from(bytes);
+  const properties = parseCoderProperties(methodId, bytes);
+  ctx.offset += propertiesSize;
+  return { methodId, inStreams, outStreams, propertiesSize, propertyBytes, properties };
+};
+
 export const parseFolder = (
   ctx: SevenZipContext,
   endOffset: number
@@ -34,67 +104,11 @@ export const parseFolder = (
     ctx.offset = endOffset;
   }
   for (let i = 0; i < (numCodersNumber ?? 0); i += 1) {
-    const flags = readByte(ctx, "Coder flags");
-    if (flags == null) break;
-    const idSize = flags & METHOD_ID_SIZE_MASK;
-    const isSimple = (flags & SIMPLE_CODER_FLAG) === 0;
-    const hasAttributes = (flags & ATTRIBUTES_FLAG) !== 0;
-    if (idSize === 0 || ctx.offset + idSize > endOffset) {
-      ctx.issues.push("Coder ID is truncated.");
-      ctx.offset = endOffset;
-      break;
-    }
-    const methodBytes = new Uint8Array(ctx.dv.buffer, ctx.dv.byteOffset + ctx.offset, idSize);
-    const methodId = Array.from(methodBytes)
-      .map(b => b.toString(16).padStart(2, "0"))
-      .join("");
-    ctx.offset += idSize;
-    let inStreams = 1;
-    let outStreams = 1;
-    if (!isSimple) {
-      const inVal = readEncodedUint64(ctx, "Coder input count");
-      const outVal = readEncodedUint64(ctx, "Coder output count");
-      const safeInStreams = toSafeNumber(inVal);
-      const safeOutStreams = toSafeNumber(outVal);
-      if (inVal != null && safeInStreams == null) ctx.issues.push("Coder input count exceeds supported range.");
-      if (outVal != null && safeOutStreams == null) ctx.issues.push("Coder output count exceeds supported range.");
-      if (safeInStreams != null) inStreams = safeInStreams;
-      if (safeOutStreams != null) outStreams = safeOutStreams;
-    }
-    let propertiesSize = 0;
-    let properties = null;
-    if (hasAttributes) {
-      const propSize = readEncodedUint64(ctx, "Coder property size");
-      if (propSize != null) {
-        const safePropertiesSize = toSafeNumber(propSize);
-        if (safePropertiesSize == null) {
-          ctx.issues.push("Coder property size exceeds supported range.");
-          ctx.offset = endOffset;
-          break;
-        }
-        propertiesSize = safePropertiesSize;
-        if (ctx.offset + propertiesSize > endOffset) {
-          ctx.issues.push("Coder properties extend beyond available data.");
-          ctx.offset = endOffset;
-          break;
-        }
-        const bytes = new Uint8Array(
-          ctx.dv.buffer,
-          ctx.dv.byteOffset + ctx.offset,
-          propertiesSize
-        );
-        const propertyBytes = Array.from(bytes);
-        properties = parseCoderProperties(methodId, bytes);
-        ctx.offset += propertiesSize;
-        coders.push({ methodId, inStreams, outStreams, propertiesSize, propertyBytes, properties });
-        totalInStreams += inStreams;
-        totalOutStreams += outStreams;
-        continue;
-      }
-    }
-    totalInStreams += inStreams;
-    totalOutStreams += outStreams;
-    coders.push({ methodId, inStreams, outStreams, propertiesSize, properties });
+    const coder = readFolderCoder(ctx, endOffset);
+    if (!coder) break;
+    totalInStreams += coder.inStreams;
+    totalOutStreams += coder.outStreams;
+    coders.push(coder);
   }
   const bindPairs: SevenZipFolderParseResult["bindPairs"] = [];
   const numBindPairs = Math.max(totalOutStreams - 1, 0);

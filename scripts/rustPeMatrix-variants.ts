@@ -62,7 +62,7 @@ export const buildCoreVariantSpecs = (hostTarget: string): VariantSpec[] => {
   return variants;
 };
 
-export const buildExperimentalVariantSpecs = (hostTarget: string): VariantSpec[] => [
+const buildHostExperimentalVariantSpecs = (hostTarget: string): VariantSpec[] => [
   {
     id: "exp-lto-thin",
     label: "thin LTO release",
@@ -140,6 +140,9 @@ export const buildExperimentalVariantSpecs = (hostTarget: string): VariantSpec[]
     target: hostTarget,
     rustcArgs: ["-C", "opt-level=3", "-C", "debuginfo=0", "-C", "link-arg=-Wl,/heap:0x400000"]
   },
+];
+
+const buildCrossExperimentalVariantSpecs = (): VariantSpec[] => [
   {
     id: "cross-i686-gnullvm",
     label: "cross-target i686-pc-windows-gnullvm",
@@ -175,4 +178,9 @@ export const buildExperimentalVariantSpecs = (hostTarget: string): VariantSpec[]
     target: "thumbv7a-pc-windows-msvc",
     rustcArgs: ["-C", "opt-level=3", "-C", "debuginfo=0"]
   }
+];
+
+export const buildExperimentalVariantSpecs = (hostTarget: string): VariantSpec[] => [
+  ...buildHostExperimentalVariantSpecs(hostTarget),
+  ...buildCrossExperimentalVariantSpecs()
 ];

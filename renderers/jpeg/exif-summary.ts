@@ -140,11 +140,7 @@ function describeGps(gps: ExifGps | null | undefined): string {
   return `${latText}, ${lonText} — approximate capture location`;
 }
 
-export function renderJpegExifSummary(exif: ExifData | null): string {
-  if (!exif) return "";
-  const out: string[] = [];
-  out.push("<h4>EXIF summary</h4>");
-  out.push("<dl>");
+function renderExifBasicRows(exif: ExifData, out: string[]): void {
   out.push(
     renderDefinitionRow(
       "Camera make",
@@ -213,6 +209,14 @@ export function renderJpegExifSummary(exif: ExifData | null): string {
       escapeHtml(describeGps(exif.gps))
     )
   );
+}
+
+export function renderJpegExifSummary(exif: ExifData | null): string {
+  if (!exif) return "";
+  const out: string[] = [];
+  out.push("<h4>EXIF summary</h4>");
+  out.push("<dl>");
+  renderExifBasicRows(exif, out);
   out.push("</dl>");
 
   const raw: ExifRawTag[] = Array.isArray(exif.rawTags) ? exif.rawTags : [];

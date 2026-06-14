@@ -43,9 +43,7 @@ const isWideResourcePreview = (
   langEntry.previewKind === "html" ||
   langEntry.previewKind === "text";
 
-export function renderResources(resources: PeResources, out: string[]): void {
-  const issues = (resources.issues || []).filter((issue): issue is string => Boolean(issue));
-  const extraPaths = (resources.paths || []).filter(path => path.nodes.length !== 3);
+const renderResourceIntro = (resources: PeResources, out: string[]): void => {
   const topRows = resources.top || [];
   out.push(
     renderPeSectionStart(
@@ -61,95 +59,116 @@ export function renderResources(resources: PeResources, out: string[]): void {
       `message tables, version info, and heuristic payloads carried by RCDATA or ` +
       `custom types.</div>`
   );
-  if (issues.length) {
-    out.push(renderPeDiagnostics("Resource warnings", issues));
+  if (resources.issues?.length) {
+    out.push(renderPeDiagnostics("Resource warnings", resources.issues.filter(Boolean)));
   }
-  if (topRows.length) {
-    if (topRows.length > 12) {
+};
+
+const renderTopResourceKinds = (resources: PeResources, out: string[]): void => {
+  const topRows = resources.top || [];
+  if (!topRows.length) return;
+  if (topRows.length > 12) {
+    out.push(
+      `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>Top-level resource kinds</b> - ${topRows.length} type bucket${topRows.length === 1 ? "" : "s"}</summary>`
+    );
+  }
+  out.push(
+    `<table class="table" style="margin-top:.5rem"><thead><tr><th>Type</th><th>Key kind</th><th>Leaf entries</th></tr></thead><tbody>`
+  );
+  for (const row of topRows) {
+    const typeName = escapeHtml(row.typeName || "(unknown)");
+    const kind = row.kind === "name" ? "string name" : "numeric ID";
+    out.push(`<tr><td>${typeName}</td><td>${kind}</td><td>${row.leafCount ?? 0}</td></tr>`);
+  }
+  out.push(`</tbody></table>`);
+  if (topRows.length > 12) out.push(`</details>`);
+};
+
+const renderResourceDirectories = (resources: PeResources, out: string[]): void => {
+  if (!resources.directories?.length) return;
+  out.push(
+    `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>IMAGE_RESOURCE_DIRECTORY</b> - ${resources.directories.length} table${resources.directories.length === 1 ? "" : "s"}</summary>`
+  );
+  out.push(
+    `<table class="table" style="margin-top:.35rem"><thead><tr><th>Offset</th><th>Timestamp</th><th>Version</th><th>Named</th><th>ID</th></tr></thead><tbody>`
+  );
+  for (const directory of resources.directories) {
+    out.push(
+      `<tr><td class="mono">0x${directory.offset.toString(16)}</td><td class="mono">${formatDirectoryTimestamp(directory.timeDateStamp)}</td><td>${formatDirectoryVersion(directory.majorVersion, directory.minorVersion)}</td><td>${directory.namedEntries}</td><td>${directory.idEntries}</td></tr>`
+    );
+  }
+  out.push(`</tbody></table></details>`);
+};
+
+const renderResourcePreviewRows = (
+  entry: NonNullable<PeResources["detail"]>[number]["entries"][number],
+  out: string[]
+): void => {
+  const displayName = entry.name
+    ? escapeHtml(entry.name)
+    : entry.id != null
+      ? `ID ${entry.id}`
+      : "(unnamed)";
+  for (const langEntry of entry.langs || []) {
+    const preview = renderPreviewCell(langEntry);
+    const widePreview = isWideResourcePreview(langEntry);
+    out.push(
+      `<tr class="${widePreview ? "peResourcePreviewMetaRow" : ""}">` +
+        `<td>${displayName}</td><td>${formatLang(langEntry.lang)}</td>` +
+        `<td class="peNumeric">${humanSize(langEntry.size || 0)}</td>` +
+        `<td class="peNumeric">${formatCodePage(langEntry.codePage)}</td>` +
+        `<td>${widePreview ? escapeHtml(renderPreviewSummary(langEntry)) : preview}` +
+        `</td></tr>`
+    );
+    if (widePreview) {
+      out.push(`<tr class="peResourcePreviewWideRow"><td colspan="5">${preview}</td></tr>`);
+    }
+  }
+};
+
+const renderResourceDetails = (resources: PeResources, out: string[]): void => {
+  if (!resources.detail?.length) return;
+  for (const group of resources.detail) {
+    const typeName = escapeHtml(group.typeName || "(unknown)");
+    const entryCount = group.entries?.length || 0;
+    out.push(
+      `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${typeName}</b> - ${entryCount} entr${entryCount === 1 ? "y" : "ies"}</summary>`
+    );
+    if (entryCount) {
       out.push(
-        `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>Top-level resource kinds</b> - ${topRows.length} type bucket${topRows.length === 1 ? "" : "s"}</summary>`
+        `<div class="tableWrap"><table class="table peResourcePreviewTable" style="margin-top:.35rem">` +
+          `<thead><tr><th>Name / ID</th><th>Lang</th><th>Size</th><th>CodePage</th>` +
+          `<th>Preview</th></tr></thead><tbody>`
       );
+      for (const entry of group.entries) renderResourcePreviewRows(entry, out);
+      out.push(`</tbody></table></div>`);
     }
-    out.push(
-      `<table class="table" style="margin-top:.5rem"><thead><tr><th>Type</th><th>Key kind</th><th>Leaf entries</th></tr></thead><tbody>`
-    );
-    for (const row of topRows) {
-      const typeName = escapeHtml(row.typeName || "(unknown)");
-      const kind = row.kind === "name" ? "string name" : "numeric ID";
-      out.push(`<tr><td>${typeName}</td><td>${kind}</td><td>${row.leafCount ?? 0}</td></tr>`);
-    }
-    out.push(`</tbody></table>`);
-    if (topRows.length > 12) {
-      out.push(`</details>`);
-    }
+    out.push(`</details>`);
   }
-  if (resources.directories?.length) {
+};
+
+const renderAdditionalResourcePaths = (resources: PeResources, out: string[]): void => {
+  const extraPaths = (resources.paths || []).filter(path => path.nodes.length !== 3);
+  if (!extraPaths.length) return;
+  out.push(
+    `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>Additional resource paths</b> - ${extraPaths.length}</summary>`
+  );
+  out.push(
+    `<table class="table" style="margin-top:.35rem"><thead><tr><th>Path</th><th>Size</th><th>CodePage</th><th>Data RVA</th></tr></thead><tbody>`
+  );
+  for (const path of extraPaths) {
     out.push(
-      `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>IMAGE_RESOURCE_DIRECTORY</b> - ${resources.directories.length} table${resources.directories.length === 1 ? "" : "s"}</summary>`
+      `<tr><td>${path.nodes.map(formatResourcePathNode).join(" / ")}</td><td>${humanSize(path.size)}</td><td>${formatCodePage(path.codePage)}</td><td class="mono">0x${path.dataRVA.toString(16)}</td></tr>`
     );
-    out.push(
-      `<table class="table" style="margin-top:.35rem"><thead><tr><th>Offset</th><th>Timestamp</th><th>Version</th><th>Named</th><th>ID</th></tr></thead><tbody>`
-    );
-    for (const directory of resources.directories) {
-      out.push(
-        `<tr><td class="mono">0x${directory.offset.toString(16)}</td><td class="mono">${formatDirectoryTimestamp(directory.timeDateStamp)}</td><td>${formatDirectoryVersion(directory.majorVersion, directory.minorVersion)}</td><td>${directory.namedEntries}</td><td>${directory.idEntries}</td></tr>`
-      );
-    }
-    out.push(`</tbody></table></details>`);
   }
-  if (resources.detail?.length) {
-    for (const group of resources.detail) {
-      const typeName = escapeHtml(group.typeName || "(unknown)");
-      const entryCount = group.entries?.length || 0;
-      out.push(
-        `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${typeName}</b> - ${entryCount} entr${entryCount === 1 ? "y" : "ies"}</summary>`
-      );
-      if (entryCount) {
-        out.push(
-          `<div class="tableWrap"><table class="table peResourcePreviewTable" style="margin-top:.35rem">` +
-            `<thead><tr><th>Name / ID</th><th>Lang</th><th>Size</th><th>CodePage</th>` +
-            `<th>Preview</th></tr></thead><tbody>`
-        );
-        for (const entry of group.entries) {
-          const displayName = entry.name
-            ? escapeHtml(entry.name)
-            : entry.id != null
-              ? `ID ${entry.id}`
-              : "(unnamed)";
-          for (const langEntry of entry.langs || []) {
-            const preview = renderPreviewCell(langEntry);
-            const widePreview = isWideResourcePreview(langEntry);
-            out.push(
-              `<tr class="${widePreview ? "peResourcePreviewMetaRow" : ""}">` +
-                `<td>${displayName}</td><td>${formatLang(langEntry.lang)}</td>` +
-                `<td class="peNumeric">${humanSize(langEntry.size || 0)}</td>` +
-                `<td class="peNumeric">${formatCodePage(langEntry.codePage)}</td>` +
-                `<td>${widePreview ? escapeHtml(renderPreviewSummary(langEntry)) : preview}` +
-                `</td></tr>`
-            );
-            if (widePreview) {
-              out.push(`<tr class="peResourcePreviewWideRow"><td colspan="5">${preview}</td></tr>`);
-            }
-          }
-        }
-        out.push(`</tbody></table></div>`);
-      }
-      out.push(`</details>`);
-    }
-  }
-  if (extraPaths.length) {
-    out.push(
-      `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>Additional resource paths</b> - ${extraPaths.length}</summary>`
-    );
-    out.push(
-      `<table class="table" style="margin-top:.35rem"><thead><tr><th>Path</th><th>Size</th><th>CodePage</th><th>Data RVA</th></tr></thead><tbody>`
-    );
-    for (const path of extraPaths) {
-      out.push(
-        `<tr><td>${path.nodes.map(formatResourcePathNode).join(" / ")}</td><td>${humanSize(path.size)}</td><td>${formatCodePage(path.codePage)}</td><td class="mono">0x${path.dataRVA.toString(16)}</td></tr>`
-      );
-    }
-    out.push(`</tbody></table></details>`);
-  }
+  out.push(`</tbody></table></details>`);
+};
+
+export function renderResources(resources: PeResources, out: string[]): void {
+  renderResourceIntro(resources, out);
+  renderTopResourceKinds(resources, out);
+  renderResourceDirectories(resources, out);
+  renderResourceDetails(resources, out);
+  renderAdditionalResourcePaths(resources, out);
   out.push(renderPeSectionEnd());
 }
