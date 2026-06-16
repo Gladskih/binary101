@@ -1,11 +1,11 @@
 "use strict";
 
-import type { IcedModule, IcedInstructionObject } from "./iced.js";
-import { collectImmediateOperands } from "./immediate-operands.js";
+import type { IcedModule, IcedInstructionObject } from "../iced.js";
+import { collectImmediateOperands } from "../immediate-operands.js";
 import {
   type RegisterAccess,
   resolveRegister
-} from "./emulation-registers.js";
+} from "./registers.js";
 import {
   UNKNOWN,
   collectKnownValues,
@@ -17,7 +17,7 @@ import {
   type EmulatedValue,
   type EmulationState,
   type KnownValueBits
-} from "./emulation-state.js";
+} from "./state.js";
 
 const immediateValue = (
   iced: IcedModule,

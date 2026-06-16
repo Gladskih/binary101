@@ -1,10 +1,10 @@
 "use strict";
 
-import type { CpuIdOutputRegister } from "./cpuid-notes.js";
+import type { CpuIdOutputRegister } from "../cpuid-notes.js";
 import type {
   CanonicalRegister,
   RegisterAccess
-} from "./emulation-registers.js";
+} from "./registers.js";
 
 export type KnownValueBits = 8 | 16 | 32 | 64;
 export type KnownValue = { kind: "known"; value: bigint; bits: KnownValueBits };

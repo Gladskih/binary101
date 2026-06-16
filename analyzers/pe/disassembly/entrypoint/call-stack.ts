@@ -9,8 +9,8 @@ import {
   readRegister,
   writeRegister,
   type EmulationState
-} from "./emulation-state.js";
-import { resolveStackPointer } from "./emulation-operands.js";
+} from "./emulation/state.js";
+import { resolveStackPointer } from "./emulation/operands.js";
 import type { IcedModule } from "./iced.js";
 
 export type StackReturnTarget =

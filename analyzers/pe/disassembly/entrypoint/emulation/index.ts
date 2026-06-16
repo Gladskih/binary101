@@ -1,15 +1,15 @@
 "use strict";
 
-import type { PeEntrypointInstruction } from "../types.js";
-import type { IcedModule, IcedInstructionObject } from "./iced.js";
+import type { PeEntrypointInstruction } from "../../types.js";
+import type { IcedModule, IcedInstructionObject } from "../iced.js";
 import {
   type CpuIdOutputRegister,
   collectCpuIdVendorChunkNotes,
   describeCpuIdLeaf
-} from "./cpuid-notes.js";
-import { resolveRegister } from "./emulation-registers.js";
-import { executeIntegerInstruction } from "./emulation-integer.js";
-import { executeStackInstruction } from "./emulation-stack.js";
+} from "../cpuid-notes.js";
+import { resolveRegister } from "./registers.js";
+import { executeIntegerInstruction } from "./integer/index.js";
+import { executeStackInstruction } from "./stack.js";
 import {
   UNKNOWN,
   createEmulationState,
@@ -17,7 +17,7 @@ import {
   writeRegister,
   type EmulatedValue,
   type EmulationState
-} from "./emulation-state.js";
+} from "./state.js";
 
 export {
   createEmulationState,

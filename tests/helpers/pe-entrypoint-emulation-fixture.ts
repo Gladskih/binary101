@@ -5,7 +5,7 @@ import {
   createEmulationState,
   emulateInstruction,
   type EmulationState
-} from "../../analyzers/pe/disassembly/entrypoint/emulation.js";
+} from "../../analyzers/pe/disassembly/entrypoint/emulation/index.js";
 import type {
   IcedFormatter,
   IcedInstructionObject,

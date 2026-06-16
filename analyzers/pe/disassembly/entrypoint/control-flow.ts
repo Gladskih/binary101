@@ -11,14 +11,14 @@ import type { IcedInstructionObject, IcedModule } from "./iced.js";
 import {
   readOperand,
   resolveMemoryAddress
-} from "./emulation-operands.js";
+} from "./emulation/operands.js";
 import {
   collectKnownValues,
   readRegister,
   type EmulationState
-} from "./emulation-state.js";
-import { evaluateCondition, readFlag } from "./emulation-flags.js";
-import { resolveRegister } from "./emulation-registers.js";
+} from "./emulation/state.js";
+import { evaluateCondition, readFlag } from "./emulation/flags.js";
+import { resolveRegister } from "./emulation/registers.js";
 import type {
   AnalyzePeEntrypointDisassemblyOptions,
   PeEntrypointInstructionTarget

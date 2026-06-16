@@ -1,14 +1,14 @@
 "use strict";
 
-import type { IcedModule } from "./iced.js";
+import type { IcedModule } from "../iced.js";
 import {
   collectKnownValues,
   type CpuFlag,
   type EmulatedValue,
   type EmulationState,
   type KnownValueBits
-} from "./emulation-state.js";
-import { maskForBits } from "./emulation-integer-common.js";
+} from "./state.js";
+import { maskForBits } from "./integer/common.js";
 
 const FLAGS: readonly CpuFlag[] = ["CF", "PF", "AF", "ZF", "SF", "OF"];
 

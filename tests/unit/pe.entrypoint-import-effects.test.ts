@@ -6,15 +6,15 @@ import * as iced from "iced-x86";
 import {
   applyReturningImportEffects
 } from "../../analyzers/pe/disassembly/entrypoint/import-effects.js";
-import { pushStackValue } from "../../analyzers/pe/disassembly/entrypoint/emulation-stack.js";
+import { pushStackValue } from "../../analyzers/pe/disassembly/entrypoint/emulation/stack.js";
 import type { IcedModule } from "../../analyzers/pe/disassembly/entrypoint/iced.js";
-import { resolveRegister } from "../../analyzers/pe/disassembly/entrypoint/emulation-registers.js";
+import { resolveRegister } from "../../analyzers/pe/disassembly/entrypoint/emulation/registers.js";
 import {
   createEmulationState,
   known,
   readRegister,
   writeRegister
-} from "../../analyzers/pe/disassembly/entrypoint/emulation-state.js";
+} from "../../analyzers/pe/disassembly/entrypoint/emulation/state.js";
 
 const icedModule = iced as unknown as IcedModule;
 

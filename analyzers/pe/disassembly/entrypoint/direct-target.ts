@@ -14,7 +14,7 @@ import { createCallStackState } from "./call-stack.js";
 import {
   cloneEmulationState,
   type EmulationState
-} from "./emulation-state.js";
+} from "./emulation/state.js";
 import type { IcedModule } from "./iced.js";
 
 export const followDirectCodeTarget = async (

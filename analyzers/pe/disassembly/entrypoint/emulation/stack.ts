@@ -1,13 +1,13 @@
 "use strict";
 
-import type { IcedInstructionObject, IcedModule } from "./iced.js";
+import type { IcedInstructionObject, IcedModule } from "../iced.js";
 import {
   operandBits,
   readOperand,
   resolveStackPointer,
   writeOperand
-} from "./emulation-operands.js";
-import { resolveRegister } from "./emulation-registers.js";
+} from "./operands.js";
+import { resolveRegister } from "./registers.js";
 import {
   UNKNOWN,
   known,
@@ -17,8 +17,8 @@ import {
   type EmulatedValue,
   type EmulationState,
   type KnownValueBits
-} from "./emulation-state.js";
-import { clearFlags } from "./emulation-flags.js";
+} from "./state.js";
+import { clearFlags } from "./flags.js";
 
 const isMnemonic = (
   iced: IcedModule,

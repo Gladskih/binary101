@@ -18,7 +18,7 @@ import {
   mergeEmulationStates,
   type EmulatedValue,
   type EmulationState
-} from "./emulation-state.js";
+} from "./emulation/state.js";
 
 export type PendingBlock = {
   kind: PeEntrypointDisassemblyBlockKind;

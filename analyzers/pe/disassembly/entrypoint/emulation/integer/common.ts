@@ -1,8 +1,8 @@
 "use strict";
 
-import type { IcedInstructionObject, IcedModule } from "./iced.js";
-import { operandBits, readOperand, writeOperand } from "./emulation-operands.js";
-import { resolveRegister } from "./emulation-registers.js";
+import type { IcedInstructionObject, IcedModule } from "../../iced.js";
+import { operandBits, readOperand, writeOperand } from "../operands.js";
+import { resolveRegister } from "../registers.js";
 import {
   binaryKnown,
   known,
@@ -12,7 +12,7 @@ import {
   type EmulatedValue,
   type EmulationState,
   type KnownValueBits
-} from "./emulation-state.js";
+} from "../state.js";
 
 export const isMnemonic = (iced: IcedModule, mnemonic: number, name: string): boolean =>
   iced.Mnemonic?.[name] === mnemonic;

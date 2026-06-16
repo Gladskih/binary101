@@ -1,16 +1,16 @@
 "use strict";
 
-import type { IcedInstructionObject, IcedModule } from "./iced.js";
+import type { IcedInstructionObject, IcedModule } from "../iced.js";
 import {
   mapKnownValues,
   type EmulationState,
   type KnownValueBits
-} from "./emulation-state.js";
+} from "./state.js";
 import {
   isAnyMnemonic,
   registerValue,
   writeRegisterByName
-} from "./emulation-integer-common.js";
+} from "./integer/common.js";
 
 export const executeCounterControlFlow = (
   iced: IcedModule,

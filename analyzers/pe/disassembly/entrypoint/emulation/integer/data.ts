@@ -1,14 +1,14 @@
 "use strict";
 
-import type { PeEntrypointInstruction } from "../types.js";
-import { describeCpuIdFeatureBits } from "./cpuid-notes.js";
-import type { IcedInstructionObject, IcedModule } from "./iced.js";
+import type { PeEntrypointInstruction } from "../../../types.js";
+import { describeCpuIdFeatureBits } from "../../cpuid-notes.js";
+import type { IcedInstructionObject, IcedModule } from "../../iced.js";
 import {
   isSameRegisterOperand,
   readOperand,
   resolveMemoryAddress,
   writeOperand
-} from "./emulation-operands.js";
+} from "../operands.js";
 import {
   UNKNOWN,
   binaryKnown,
@@ -17,13 +17,13 @@ import {
   mapKnownValues,
   type EmulatedValue,
   type EmulationState
-} from "./emulation-state.js";
-import { bitsOrState, writeMappedOperand } from "./emulation-integer-common.js";
+} from "../state.js";
+import { bitsOrState, writeMappedOperand } from "./common.js";
 import {
   clearFlags,
   writeBitCarryFlag,
   writeLogicalFlags
-} from "./emulation-flags.js";
+} from "../flags.js";
 
 const appendNotes = (instruction: PeEntrypointInstruction, notes: string[]): void => {
   if (notes.length) instruction.notes = [...(instruction.notes ?? []), ...notes];

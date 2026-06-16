@@ -1,6 +1,6 @@
 "use strict";
 
-import type { IcedModule } from "./iced.js";
+import type { IcedModule } from "../iced.js";
 
 /**
  * Canonical general-purpose registers modeled by the entrypoint micro-emulator.

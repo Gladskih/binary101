@@ -1,12 +1,12 @@
 "use strict";
 
-import type { IcedInstructionObject, IcedModule } from "./iced.js";
-import type { EmulationState } from "./emulation-state.js";
+import type { IcedInstructionObject, IcedModule } from "../iced.js";
+import type { EmulationState } from "./state.js";
 import {
   clearFlags,
   readFlag,
   writeKnownFlags
-} from "./emulation-flags.js";
+} from "./flags.js";
 
 export const executeFlagControl = (
   iced: IcedModule,

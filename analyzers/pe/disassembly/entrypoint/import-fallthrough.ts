@@ -7,7 +7,7 @@ import type { ImportTarget } from "./import-targets.js";
 import type { IcedInstructionObject, IcedModule } from "./iced.js";
 import { isKnownNonReturningImport } from "./non-returning-imports.js";
 import { getStackReturnTarget } from "./call-stack.js";
-import type { EmulationState } from "./emulation-state.js";
+import type { EmulationState } from "./emulation/state.js";
 
 export type ReturningImportFallthrough =
   | {

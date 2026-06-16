@@ -9,7 +9,7 @@ import {
   mem,
   reg
 } from "../helpers/pe-entrypoint-emulation-fixture.js";
-import { resolveRegister } from "../../analyzers/pe/disassembly/entrypoint/emulation-registers.js";
+import { resolveRegister } from "../../analyzers/pe/disassembly/entrypoint/emulation/registers.js";
 import {
   isSameRegisterOperand,
   operandBits,
@@ -17,13 +17,13 @@ import {
   resolveMemoryAddress,
   resolveStackPointer,
   writeOperand
-} from "../../analyzers/pe/disassembly/entrypoint/emulation-operands.js";
+} from "../../analyzers/pe/disassembly/entrypoint/emulation/operands.js";
 import {
   createEmulationState,
   known,
   readRegister,
   writeRegister
-} from "../../analyzers/pe/disassembly/entrypoint/emulation-state.js";
+} from "../../analyzers/pe/disassembly/entrypoint/emulation/state.js";
 
 const access = (name: string) =>
   resolveRegister(fixtureIced, fixtureIced.Register?.[name] ?? 0);

@@ -32,7 +32,7 @@ import {
 import type { ImportTarget } from "./import-targets.js";
 import { createReturnStackState } from "./call-stack.js";
 import { applyReturningImportEffects } from "./import-effects.js";
-import type { EmulationState } from "./emulation-state.js";
+import type { EmulationState } from "./emulation/state.js";
 import {
   queueConditionalBranch,
   queueFollowedBlock,

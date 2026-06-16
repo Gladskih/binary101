@@ -12,8 +12,8 @@ import type { MappedCodeBlock } from "./code-bytes.js";
 import { toRva } from "./control-flow.js";
 import { buildImportTargetMap, type ImportTarget } from "./import-targets.js";
 import { createInstruction } from "./instruction.js";
-import { createEmulationState } from "./emulation.js";
-import { cloneEmulationState } from "./emulation-state.js";
+import { createEmulationState } from "./emulation/index.js";
+import { cloneEmulationState } from "./emulation/state.js";
 import { applyInstructionTargets, controlFlowIssue } from "./targeting.js";
 import {
   createBlockKey,

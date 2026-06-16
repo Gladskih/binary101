@@ -2,13 +2,13 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createEmulationState } from "../../analyzers/pe/disassembly/entrypoint/emulation.js";
+import { createEmulationState } from "../../analyzers/pe/disassembly/entrypoint/emulation/index.js";
 import {
   createCallStackState,
   createReturnStackState
 } from "../../analyzers/pe/disassembly/entrypoint/call-stack.js";
 import type { IcedInstructionObject } from "../../analyzers/pe/disassembly/entrypoint/iced.js";
-import { known } from "../../analyzers/pe/disassembly/entrypoint/emulation-state.js";
+import { known } from "../../analyzers/pe/disassembly/entrypoint/emulation/state.js";
 import {
   emulateFixtures,
   fixtureIced,

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PeEntrypointInstruction } from "../../analyzers/pe/disassembly/index.js";
 import type { IcedInstructionObject } from "../../analyzers/pe/disassembly/entrypoint/iced.js";
-import type { EmulationState } from "../../analyzers/pe/disassembly/entrypoint/emulation.js";
+import type { EmulationState } from "../../analyzers/pe/disassembly/entrypoint/emulation/index.js";
 import {
   emulateFixtures,
   imm,

@@ -1,7 +1,7 @@
 "use strict";
 
-import type { IcedInstructionObject, IcedModule } from "./iced.js";
-import { operandBits, readOperand, writeOperand } from "./emulation-operands.js";
+import type { IcedInstructionObject, IcedModule } from "../../iced.js";
+import { operandBits, readOperand, writeOperand } from "../operands.js";
 import {
   UNKNOWN,
   binaryKnown,
@@ -10,19 +10,19 @@ import {
   type EmulatedValue,
   type EmulationState,
   type KnownValueBits
-} from "./emulation-state.js";
+} from "../state.js";
 import {
   accumulatorName,
   highAccumulatorName,
   writeAccumulatorPair
-} from "./emulation-integer-effects.js";
+} from "./effects.js";
 import {
   bitsOrState,
   maskForBits,
   registerValue,
   writeRegisterByName
-} from "./emulation-integer-common.js";
-import { clearFlags } from "./emulation-flags.js";
+} from "./common.js";
+import { clearFlags } from "../flags.js";
 
 export const executeMultiplyDivide = (
   iced: IcedModule,

@@ -1,15 +1,15 @@
 "use strict";
 
-import type { IcedInstructionObject, IcedModule } from "./iced.js";
-import { readOperand, writeOperand } from "./emulation-operands.js";
+import type { IcedInstructionObject, IcedModule } from "../../iced.js";
+import { readOperand, writeOperand } from "../operands.js";
 import {
   binaryKnown,
   joinEmulatedValues,
   known,
   mapKnownValues,
   type EmulationState
-} from "./emulation-state.js";
-import { bitsOrState } from "./emulation-integer-common.js";
+} from "../state.js";
+import { bitsOrState } from "./common.js";
 import {
   clearFlags,
   readFlag,
@@ -17,7 +17,7 @@ import {
   writeAddWithCarryFlags,
   writeSubFlags,
   writeSubWithBorrowFlags
-} from "./emulation-flags.js";
+} from "../flags.js";
 
 export const executeArithmetic = (
   iced: IcedModule,

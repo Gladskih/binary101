@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { IcedInstructionObject } from "../../analyzers/pe/disassembly/entrypoint/iced.js";
-import { collectKnownValues } from "../../analyzers/pe/disassembly/entrypoint/emulation-state.js";
+import { collectKnownValues } from "../../analyzers/pe/disassembly/entrypoint/emulation/state.js";
 import {
   emulateFixtures,
   imm,
@@ -74,13 +74,78 @@ void test("emulateInstruction models logical shifts and rotates", () => {
   });
 });
 
-void test("emulateInstruction marks carry rotates unknown when count is nonzero", () => {
+void test("emulateInstruction models carry rotates with known carry flag", () => {
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("EAX"), imm(1)]),
+    ins("Cmp", [reg("EAX"), imm(1)]),
+    ins("Stc"),
+    ins("Rcl", [reg("EAX"), imm(1, "Immediate8")]),
+    ins("Mov", [reg("ECX"), imm(2)]),
+    ins("Stc"),
+    ins("Rcr", [reg("ECX"), imm(1, "Immediate8")])
+  ]);
+
+  assert.deepEqual(state.registers.get("RAX"), { kind: "known", value: 3n, bits: 64 });
+  assert.deepEqual(state.registers.get("RCX"), {
+    kind: "known",
+    value: 0x8000_0001n,
+    bits: 64
+  });
+  assert.equal(state.flags.CF, false);
+  assert.equal(state.flags.OF, true);
+  assert.equal(state.flags.ZF, true);
+});
+
+void test("emulateInstruction models multi-bit carry rotates and undefined overflow", () => {
+  const state = emulateInstructionsWithState([
+    ins("Mov", [reg("EAX"), imm(1)]),
+    ins("Stc"),
+    ins("Rcr", [reg("EAX"), imm(2, "Immediate8")])
+  ]);
+
+  assert.deepEqual(state.registers.get("RAX"), {
+    kind: "known",
+    value: 0xc000_0000n,
+    bits: 64
+  });
+  assert.equal(state.flags.CF, false);
+  assert.equal(state.flags.OF, undefined);
+});
+
+void test("emulateInstruction keeps carry rotates unknown when carry is unknown", () => {
   const state = emulateInstructionsWithState([
     ins("Mov", [reg("EAX"), imm(1)]),
     ins("Rcl", [reg("EAX"), imm(1, "Immediate8")])
   ]);
 
   assert.deepEqual(state.registers.get("RAX"), { kind: "unknown" });
+  assert.equal(state.flags.CF, undefined);
+  assert.equal(state.flags.OF, undefined);
+});
+
+void test("emulateInstruction handles carry rotate count edge cases", () => {
+  const fullCycleState = emulateInstructionsWithState([
+    ins("Mov", [reg("EAX"), imm(0x81)]),
+    ins("Stc"),
+    ins("Rcl", [reg("AL"), imm(9, "Immediate8")])
+  ]);
+  const unknownCountState = emulateInstructionsWithState([
+    ins("Mov", [reg("EAX"), imm(1)]),
+    ins("Cmp", [reg("EAX"), imm(1)]),
+    ins("Stc"),
+    ins("Rcr", [reg("EAX"), reg("CL")])
+  ]);
+
+  assert.deepEqual(fullCycleState.registers.get("RAX"), {
+    kind: "known",
+    value: 0x81n,
+    bits: 64
+  });
+  assert.equal(fullCycleState.flags.CF, true);
+  assert.deepEqual(unknownCountState.registers.get("RAX"), { kind: "unknown" });
+  assert.equal(unknownCountState.flags.CF, undefined);
+  assert.equal(unknownCountState.flags.OF, undefined);
+  assert.equal(unknownCountState.flags.ZF, true);
 });
 
 void test("emulateInstruction models double-precision shifts", () => {

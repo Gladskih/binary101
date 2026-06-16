@@ -1,7 +1,7 @@
 "use strict";
 
-import type { IcedInstructionObject, IcedModule } from "./iced.js";
-import { readOperand, writeOperand } from "./emulation-operands.js";
+import type { IcedInstructionObject, IcedModule } from "../../iced.js";
+import { readOperand, writeOperand } from "../operands.js";
 import {
   UNKNOWN,
   binaryKnown,
@@ -9,31 +9,22 @@ import {
   mapKnownValues,
   type EmulationState,
   type KnownValueBits
-} from "./emulation-state.js";
+} from "../state.js";
 import {
   bitsOrState,
   isAnyMnemonic,
-  maskForBits,
   writeMappedOperand
-} from "./emulation-integer-common.js";
-import { clearFlags, writeKnownFlags } from "./emulation-flags.js";
+} from "./common.js";
+import { clearFlags, writeKnownFlags } from "../flags.js";
+import {
+  executeRotate,
+  isRotateInstruction
+} from "./rotates.js";
 
 // Shift and rotate counts are masked by operand size on modern x86.
 // Intel SDM Vol. 1, section 7.3.1 and Vol. 2 shift/rotate instruction refs.
 // https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
 const countMask = (bits: KnownValueBits): bigint => bits === 64 ? 0x3fn : 0x1fn;
-
-const rotateLeft = (value: bigint, bits: KnownValueBits, count: bigint): bigint => {
-  const maskedCount = count % BigInt(bits);
-  if (maskedCount === 0n) return value;
-  return ((value << maskedCount) | (value >> (BigInt(bits) - maskedCount))) & maskForBits(bits);
-};
-
-const rotateRight = (value: bigint, bits: KnownValueBits, count: bigint): bigint => {
-  const maskedCount = count % BigInt(bits);
-  if (maskedCount === 0n) return value;
-  return ((value >> maskedCount) | (value << (BigInt(bits) - maskedCount))) & maskForBits(bits);
-};
 
 const shiftedValue = (
   mnemonic: number,
@@ -46,8 +37,6 @@ const shiftedValue = (
   if (maskedCount === 0n) return value;
   if (mnemonic === iced.Mnemonic?.["Sar"]) return BigInt.asIntN(bits, value) >> maskedCount;
   if (mnemonic === iced.Mnemonic?.["Shr"]) return BigInt.asUintN(bits, value) >> maskedCount;
-  if (mnemonic === iced.Mnemonic?.["Rol"]) return rotateLeft(value, bits, maskedCount);
-  if (mnemonic === iced.Mnemonic?.["Ror"]) return rotateRight(value, bits, maskedCount);
   return value << maskedCount;
 };
 
@@ -62,17 +51,15 @@ export const executeShift = (
   ])) return false;
   const count = readOperand(iced, state, instruction, 1);
   const bits = bitsOrState(iced, state, instruction, 0);
+  if (isRotateInstruction(iced, mnemonic)) {
+    return executeRotate(iced, state, instruction, bits, count);
+  }
   if (count.kind !== "known") {
     writeOperand(iced, state, instruction, 0, UNKNOWN);
     clearFlags(state);
     return true;
   }
   const maskedCount = count.value & countMask(bits);
-  if (isAnyMnemonic(iced, mnemonic, ["Rcl", "Rcr"]) && maskedCount !== 0n) {
-    writeOperand(iced, state, instruction, 0, UNKNOWN);
-    clearFlags(state);
-    return true;
-  }
   writeMappedOperand(iced, state, instruction, value =>
     shiftedValue(mnemonic, iced, value, bits, count.value)
   );

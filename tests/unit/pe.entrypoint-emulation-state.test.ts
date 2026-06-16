@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as iced from "iced-x86";
 import type { IcedModule } from "../../analyzers/pe/disassembly/entrypoint/iced.js";
-import { resolveRegister } from "../../analyzers/pe/disassembly/entrypoint/emulation-registers.js";
+import { resolveRegister } from "../../analyzers/pe/disassembly/entrypoint/emulation/registers.js";
 import {
   collectKnownValues,
   createEmulationState,
@@ -14,7 +14,7 @@ import {
   mergeEmulationStates,
   readRegister,
   writeRegister
-} from "../../analyzers/pe/disassembly/entrypoint/emulation-state.js";
+} from "../../analyzers/pe/disassembly/entrypoint/emulation/state.js";
 
 const icedModule = iced as unknown as IcedModule;
 

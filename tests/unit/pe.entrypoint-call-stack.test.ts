@@ -6,7 +6,7 @@ import {
   createCallStackState,
   createReturnStackState
 } from "../../analyzers/pe/disassembly/entrypoint/call-stack.js";
-import { createEmulationState } from "../../analyzers/pe/disassembly/entrypoint/emulation.js";
+import { createEmulationState } from "../../analyzers/pe/disassembly/entrypoint/emulation/index.js";
 import type { IcedModule } from "../../analyzers/pe/disassembly/entrypoint/iced.js";
 import {
   fakeIced

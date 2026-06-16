@@ -10,11 +10,11 @@ import {
   type FollowQueueState,
   type PendingBlock
 } from "../../analyzers/pe/disassembly/entrypoint/follow-queue.js";
-import { createEmulationState } from "../../analyzers/pe/disassembly/entrypoint/emulation.js";
+import { createEmulationState } from "../../analyzers/pe/disassembly/entrypoint/emulation/index.js";
 import {
   collectKnownValues,
   known
-} from "../../analyzers/pe/disassembly/entrypoint/emulation-state.js";
+} from "../../analyzers/pe/disassembly/entrypoint/emulation/state.js";
 import {
   IMAGE_FILE_MACHINE_AMD64,
   createExecutableSection

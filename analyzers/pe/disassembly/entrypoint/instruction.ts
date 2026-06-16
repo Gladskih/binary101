@@ -6,7 +6,7 @@ import { collectSecurityCookieOperandNotes } from "./security-cookie-notes.js";
 import {
   emulateInstruction,
   type EmulationState
-} from "./emulation.js";
+} from "./emulation/index.js";
 
 export const createInstruction = (
   iced: IcedModule,

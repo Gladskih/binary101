@@ -1,27 +1,27 @@
 "use strict";
 
-import type { PeEntrypointInstruction } from "../types.js";
-import type { IcedInstructionObject, IcedModule } from "./iced.js";
-import type { EmulationState } from "./emulation-state.js";
+import type { PeEntrypointInstruction } from "../../../types.js";
+import type { IcedInstructionObject, IcedModule } from "../../iced.js";
+import type { EmulationState } from "../state.js";
 import {
   executeDataMovement,
   executeLogical
-} from "./emulation-integer-data.js";
-import { executeArithmetic } from "./emulation-integer-arithmetic.js";
+} from "./data.js";
+import { executeArithmetic } from "./arithmetic.js";
 import {
   executeBitScanAndCount,
   executeDoubleShift,
   executeShift
-} from "./emulation-integer-bits.js";
+} from "./bits.js";
 import {
   executeAccumulatorExtension,
   executeCompareExchange,
   executeConditionalWrites,
   executeExchange,
-} from "./emulation-integer-effects.js";
-import { executeFlagControl } from "./emulation-flag-control.js";
-import { executeCounterControlFlow } from "./emulation-counter-control.js";
-import { executeMultiplyDivide } from "./emulation-integer-multiply.js";
+} from "./effects.js";
+import { executeFlagControl } from "../flag-control.js";
+import { executeCounterControlFlow } from "../counter-control.js";
+import { executeMultiplyDivide } from "./multiply.js";
 
 export const executeIntegerInstruction = (
   iced: IcedModule,

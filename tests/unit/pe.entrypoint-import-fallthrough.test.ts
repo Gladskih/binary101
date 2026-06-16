@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { getReturningImportFallthrough } from "../../analyzers/pe/disassembly/entrypoint/import-fallthrough.js";
-import { createEmulationState } from "../../analyzers/pe/disassembly/entrypoint/emulation.js";
+import { createEmulationState } from "../../analyzers/pe/disassembly/entrypoint/emulation/index.js";
 import { createCallStackState } from "../../analyzers/pe/disassembly/entrypoint/call-stack.js";
 import {
   IMAGE_FILE_MACHINE_AMD64,

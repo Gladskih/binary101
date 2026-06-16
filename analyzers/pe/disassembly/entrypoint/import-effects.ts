@@ -2,7 +2,7 @@
 
 import type { ImportTarget } from "./import-targets.js";
 import type { IcedModule } from "./iced.js";
-import { resolveRegister } from "./emulation-registers.js";
+import { resolveRegister } from "./emulation/registers.js";
 import {
   UNKNOWN,
   importReturn,
@@ -11,8 +11,8 @@ import {
   writeRegister,
   type EmulatedValue,
   type EmulationState
-} from "./emulation-state.js";
-import { resolveStackPointer } from "./emulation-operands.js";
+} from "./emulation/state.js";
+import { resolveStackPointer } from "./emulation/operands.js";
 
 const VOLATILE_REGISTERS_32 = ["EAX", "ECX", "EDX"] as const;
 const VOLATILE_REGISTERS_64 = ["RAX", "RCX", "RDX", "R8", "R9", "R10", "R11"] as const;
