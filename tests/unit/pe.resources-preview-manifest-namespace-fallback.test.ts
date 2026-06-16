@@ -126,6 +126,15 @@ void test("addMissingManifestNamespaceDeclarations rejects a truncated comment",
   );
 });
 
+void test(
+  "addMissingManifestNamespaceDeclarations rejects adversarial comment-only prologs",
+  { timeout: 1_000 },
+  () => {
+    // Thirty adjacent comments made the removed root-tag regex backtrack for seconds.
+    assert.equal(addMissingManifestNamespaceDeclarations("<!---->".repeat(30)), null);
+  }
+);
+
 void test("addMissingManifestNamespaceDeclarations rejects a truncated processing instruction", () => {
   assert.equal(
     addMissingManifestNamespaceDeclarations("<?xml version=\"1.0\"<assembly />"),

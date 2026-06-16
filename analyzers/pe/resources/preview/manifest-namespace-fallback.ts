@@ -15,13 +15,88 @@ type RootStartTag = {
 
 // XML 1.0 permits declarations, comments, processing instructions, doctypes, and whitespace
 // before the document element. Source: https://www.w3.org/TR/xml/#sec-prolog-dtd
-const ROOT_START_TAG_PATTERN =
-  /^(?:\s|<\?[\s\S]*?\?>|<!--[\s\S]*?-->|<!(?!-)[^>]*>)*(<(?![!?/])(?:[^"'>]|"[^"]*"|'[^']*')*>)/u;
+const PROCESSING_INSTRUCTION_START = "<?";
+const XML_COMMENT_START = "<!--";
+const DECLARATION_START = "<!";
+const TAG_OPEN = "<";
+const TAG_CLOSE = ">";
+
+const skipClosedToken = (
+  text: string,
+  offset: number,
+  openingToken: string,
+  closingToken: string
+): number | null => {
+  const closingOffset = text.indexOf(closingToken, offset + openingToken.length);
+  return closingOffset === -1 ? null : closingOffset + closingToken.length;
+};
+
+const skipWhitespace = (text: string, offset: number): number => {
+  let nextOffset = offset;
+  while (nextOffset < text.length) {
+    const character = text[nextOffset];
+    if (character === undefined || character.trim() !== "") return nextOffset;
+    nextOffset += 1;
+  }
+  return nextOffset;
+};
+
+const skipDeclaration = (text: string, offset: number): number | null => {
+  const closingOffset = text.indexOf(TAG_CLOSE, offset + DECLARATION_START.length);
+  return closingOffset === -1 ? null : closingOffset + TAG_CLOSE.length;
+};
+
+const skipPrologItem = (text: string, offset: number): number | null => {
+  if (text.startsWith(PROCESSING_INSTRUCTION_START, offset)) {
+    return skipClosedToken(text, offset, PROCESSING_INSTRUCTION_START, "?>");
+  }
+  if (text.startsWith(XML_COMMENT_START, offset)) {
+    return skipClosedToken(text, offset, XML_COMMENT_START, "-->");
+  }
+  if (text.startsWith(DECLARATION_START, offset)) {
+    if (text[offset + DECLARATION_START.length] === "-") return null;
+    return skipDeclaration(text, offset);
+  }
+  return offset;
+};
+
+const skipXmlProlog = (text: string): number | null => {
+  let offset = 0;
+  while (offset < text.length) {
+    const contentOffset = skipWhitespace(text, offset);
+    const nextOffset = skipPrologItem(text, contentOffset);
+    if (nextOffset === null || nextOffset === contentOffset) return nextOffset;
+    offset = nextOffset;
+  }
+  return offset;
+};
+
+const findRootTagEndOffset = (text: string, offset: number): number | null => {
+  let nextOffset = offset + TAG_OPEN.length;
+  let quotedAttributeDelimiter: string | null = null;
+  while (nextOffset < text.length) {
+    const character = text[nextOffset];
+    if (character === undefined) return null;
+    if (quotedAttributeDelimiter !== null && character === quotedAttributeDelimiter) {
+      quotedAttributeDelimiter = null;
+    } else if (quotedAttributeDelimiter === null && (character === "\"" || character === "'")) {
+      quotedAttributeDelimiter = character;
+    } else if (quotedAttributeDelimiter === null && character === TAG_CLOSE) {
+      return nextOffset;
+    }
+    nextOffset += 1;
+  }
+  return null;
+};
 
 const findRootStartTag = (text: string): RootStartTag | null => {
-  const match = ROOT_START_TAG_PATTERN.exec(text);
-  const rootTag = match?.[1];
-  return rootTag ? { endOffset: match[0].length - 1, text: rootTag } : null;
+  const offset = skipXmlProlog(text);
+  if (offset === null || !text.startsWith(TAG_OPEN, offset)) return null;
+  const rootNameStart = text[offset + TAG_OPEN.length];
+  if (rootNameStart === undefined || rootNameStart === "!" || rootNameStart === "?") return null;
+  if (rootNameStart === "/") return null;
+  const endOffset = findRootTagEndOffset(text, offset);
+  return endOffset === null ? null : { endOffset, text: text.slice(offset, endOffset + 1) };
 };
 
 const usesPrefix = (text: string, prefix: string): boolean =>
