@@ -1,0 +1,303 @@
+"use strict";
+
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { analyzePeInstructionSets } from "../../../../../analyzers/pe/disassembly/index.js";
+import { inlinePeSectionName } from "../../../../../analyzers/pe/sections/name.js";
+import { MockFile } from "../../../../helpers/mock-file.js";
+
+void test("analyzePeInstructionSets reports AVX and AVX-512 requirements", async () => {
+  const bytes = new Uint8Array([
+    // vmovaps xmm1,xmm5 (AVX)
+    0xc5, 0xf8, 0x28, 0xcd,
+    // vmovaps xmm10{k3}{z},xmm19 (AVX-512: AVX512VL + AVX512F)
+    0x62, 0x31, 0x7c, 0x8b, 0x28, 0xd3
+  ]);
+  const file = new MockFile(bytes, "avx-pe.bin");
+
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x8664,
+    is64Bit: true,
+    imageBase: 0x140000000n,
+    entrypointRva: 0x1000,
+    rvaToOff: (rva: number) => (rva === 0x1000 ? 0 : null),
+    sections: [
+      {
+        name: inlinePeSectionName(".text"),
+        virtualSize: bytes.length,
+        virtualAddress: 0x1000,
+        sizeOfRawData: bytes.length,
+        pointerToRawData: 0,
+        characteristics: 0x60000020
+      }
+    ]
+  });
+
+  assert.ok(report, "Expected disassembly report");
+  assert.equal(report.instructionCount, 2);
+  assert.equal(report.invalidInstructionCount, 0);
+  const ids = new Set(report.instructionSets.map(set => set.id));
+  assert.ok(ids.has("AVX"));
+  assert.ok(ids.has("AVX512F"));
+  assert.ok(ids.has("AVX512VL"));
+});
+
+void test("analyzePeInstructionSets skips unsupported machines", async () => {
+  const file = new MockFile(new Uint8Array([0x90]), "arm-pe.bin");
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x01c0, // ARM
+    is64Bit: false,
+    imageBase: 0n,
+    entrypointRva: 0x1000,
+    rvaToOff: () => 0,
+    sections: []
+  });
+
+  assert.ok(report, "Expected report even when skipped");
+  assert.equal(report.instructionCount, 0);
+  assert.equal(report.instructionSets.length, 0);
+  assert.ok(report.issues.some(issue => issue.toLowerCase().includes("x86")));
+});
+
+void test("analyzePeInstructionSets reports unmapped entrypoint RVAs", async () => {
+  const file = new MockFile(new Uint8Array([0x90]), "unmapped.bin");
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x14c,
+    is64Bit: false,
+    imageBase: 0x400000n,
+    entrypointRva: 0x1234,
+    rvaToOff: () => null,
+    sections: []
+  });
+
+  assert.ok(report);
+  assert.equal(report.instructionCount, 0);
+  assert.equal(report.instructionSets.length, 0);
+  assert.ok(report.issues.some(issue => issue.toLowerCase().includes("entry")));
+});
+
+void test("analyzePeInstructionSets falls back to .text when entrypoint is zero", async () => {
+  const file = new MockFile(new Uint8Array([0x90, 0x90]), "fallback.bin");
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x8664,
+    is64Bit: true,
+    imageBase: 0x140000000n,
+    entrypointRva: 0,
+    rvaToOff: () => null,
+    sections: [
+      {
+        name: inlinePeSectionName(".text"),
+        virtualSize: 2,
+        virtualAddress: 0x1000,
+        sizeOfRawData: 2,
+        pointerToRawData: 0,
+        characteristics: 0x60000020
+      }
+    ]
+  });
+
+  assert.ok(report);
+  assert.equal(report.instructionCount, 2);
+  assert.ok(report.issues.some(issue => issue.toLowerCase().includes("falling back")));
+});
+
+void test("analyzePeInstructionSets reports out-of-bounds start offsets", async () => {
+  const file = new MockFile(new Uint8Array([0x90]), "oob.bin");
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x14c,
+    is64Bit: false,
+    imageBase: 0x400000n,
+    entrypointRva: 0x1000,
+    rvaToOff: () => 10,
+    sections: []
+  });
+
+  assert.ok(report);
+  assert.equal(report.instructionCount, 0);
+  assert.ok(report.issues.some(issue => issue.toLowerCase().includes("section")));
+});
+
+void test("analyzePeInstructionSets stops at the first invalid instruction", async () => {
+  const invalidInstr = new Uint8Array([0xf0, 0x01, 0xce]); // lock add esi,ecx (invalid lock prefix)
+  const bytes = new Uint8Array(invalidInstr.length * 200);
+  for (let i = 0; i < 200; i++) {
+    bytes.set(invalidInstr, i * invalidInstr.length);
+  }
+
+  const file = new MockFile(bytes, "invalid.bin");
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x8664,
+    is64Bit: true,
+    imageBase: 0x140000000n,
+    entrypointRva: 0x1000,
+    rvaToOff: () => 0,
+    sections: [
+      {
+        name: inlinePeSectionName(".text"),
+        virtualSize: bytes.length,
+        virtualAddress: 0x1000,
+        sizeOfRawData: bytes.length,
+        pointerToRawData: 0,
+        characteristics: 0x60000020
+      }
+    ]
+  });
+
+  assert.ok(report);
+  assert.equal(report.invalidInstructionCount, 1);
+  assert.ok(report.issues.some(issue => issue.toLowerCase().includes("invalid instruction")));
+});
+
+void test("analyzePeInstructionSets reports decoded bytes when returning early", async () => {
+  const bytes = new Uint8Array([0xc3, 0x90]); // ret; nop (should stop at ret)
+  const file = new MockFile(bytes, "cap.bin");
+
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x8664,
+    is64Bit: true,
+    imageBase: 0x140000000n,
+    entrypointRva: 0x1000,
+    rvaToOff: () => 0,
+    sections: [
+      {
+        name: inlinePeSectionName(".text"),
+        virtualSize: bytes.length,
+        virtualAddress: 0x1000,
+        sizeOfRawData: bytes.length,
+        pointerToRawData: 0,
+        characteristics: 0x60000020
+      }
+    ]
+  });
+
+  assert.ok(report);
+  assert.equal(report.bytesSampled, 2);
+  assert.equal(report.bytesDecoded, 1);
+  assert.equal(report.instructionCount, 1);
+  assert.equal(report.invalidInstructionCount, 0);
+});
+
+void test("analyzePeInstructionSets accepts a header-resident entrypoint when rvaToOff resolves it", async () => {
+  const file = new MockFile(new Uint8Array([0xc3]), "header-entrypoint.bin"); // ret
+
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x8664, // IMAGE_FILE_MACHINE_AMD64
+    is64Bit: true,
+    imageBase: 0x140000000n, // Conventional PE32+ image base
+    entrypointRva: 0x80, // Header RVA: below SizeOfHeaders in the companion parsePe fixture
+    // PE headers are part of the loaded image; an RVA inside SizeOfHeaders is still a valid entrypoint.
+    rvaToOff: (rva: number) => (rva === 0x80 ? 0 : null),
+    sections: []
+  });
+
+  assert.ok(report);
+  assert.equal(report.instructionCount, 1);
+  assert.equal(report.bytesSampled, 1);
+  assert.ok(!report.issues.some(issue => issue.toLowerCase().includes("not within any section")));
+});
+
+void test("analyzePeInstructionSets reports progress while decoding", async () => {
+  const bytes = new Uint8Array([0x90, 0x90]); // nop; nop
+  const file = new MockFile(bytes, "progress.bin");
+  const stages: string[] = [];
+
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x8664,
+    is64Bit: true,
+    imageBase: 0x140000000n,
+    entrypointRva: 0x1000,
+    rvaToOff: () => 0,
+    sections: [
+      {
+        name: inlinePeSectionName(".text"),
+        virtualSize: bytes.length,
+        virtualAddress: 0x1000,
+        sizeOfRawData: bytes.length,
+        pointerToRawData: 0,
+        characteristics: 0x60000020
+      }
+    ],
+    yieldEveryInstructions: 1,
+    onProgress: progress => {
+      stages.push(progress.stage);
+      assert.ok(progress.bytesSampled > 0);
+    }
+  });
+
+  assert.ok(report);
+  assert.ok(stages.includes("loading"));
+  assert.ok(stages.includes("decoding"));
+  assert.ok(stages.includes("done"));
+});
+
+void test("analyzePeInstructionSets reports known feature counts in progress snapshots", async () => {
+  const bytes = new Uint8Array([
+    // vmovaps xmm1,xmm5 (AVX)
+    0xc5, 0xf8, 0x28, 0xcd,
+    // nop (keeps decoder.canDecode=true so we can observe a progress snapshot)
+    0x90
+  ]);
+  const file = new MockFile(bytes, "progress-avx.bin");
+  const seen: Array<Record<string, number> | undefined> = [];
+
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x8664,
+    is64Bit: true,
+    imageBase: 0x140000000n,
+    entrypointRva: 0x1000,
+    rvaToOff: () => 0,
+    sections: [
+      {
+        name: inlinePeSectionName(".text"),
+        virtualSize: bytes.length,
+        virtualAddress: 0x1000,
+        sizeOfRawData: bytes.length,
+        pointerToRawData: 0,
+        characteristics: 0x60000020
+      }
+    ],
+    yieldEveryInstructions: 1,
+    onProgress: progress => {
+      if (progress.stage !== "decoding") return;
+      seen.push(progress.knownFeatureCounts);
+    }
+  });
+
+  assert.ok(report);
+  assert.ok(seen.some(snapshot => snapshot?.["AVX"] === 1));
+});
+
+void test("analyzePeInstructionSets warns and skips entrypoints in non-executable sections", async () => {
+  const bytes = new Uint8Array([0x90]); // nop
+  const file = new MockFile(bytes, "entrypoint-data.bin");
+
+  const report = await analyzePeInstructionSets(file, {
+    coffMachine: 0x8664,
+    is64Bit: true,
+    imageBase: 0x140000000n,
+    entrypointRva: 0x2000, // points into .data
+    rvaToOff: () => 0,
+    sections: [
+      {
+        name: inlinePeSectionName(".text"),
+        virtualSize: bytes.length,
+        virtualAddress: 0x1000,
+        sizeOfRawData: bytes.length,
+        pointerToRawData: 0,
+        characteristics: 0x60000020
+      },
+      {
+        name: inlinePeSectionName(".data"),
+        virtualSize: 4,
+        virtualAddress: 0x2000,
+        sizeOfRawData: 4,
+        pointerToRawData: 0,
+        characteristics: 0x40000040
+      }
+    ]
+  });
+
+  assert.ok(report);
+  assert.equal(report.instructionCount, 1);
+  assert.ok(report.issues.some(issue => issue.toLowerCase().includes("non-executable section")));
+});

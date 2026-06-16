@@ -39,7 +39,6 @@
     "analyzers/pe/**/*.ts"
   ],
   "testFiles": [
-    "tests/unit/pe*.test.ts",
-    "tests/unit/analyzers.pe*.test.ts"
+    "tests/unit/analyzers/pe/**/*.test.ts"
   ]
 }

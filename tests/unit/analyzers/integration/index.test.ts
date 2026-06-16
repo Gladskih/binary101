@@ -1,0 +1,297 @@
+"use strict";
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { createParseForUi } from "../../../../analyzers/index.js";
+import type { AnalyzerName, ParsedByAnalyzer } from "../../../../analyzers/index.js";
+import { createElfFile } from "../../../fixtures/elf-sample-file.js";
+import { createFb2File, createPdfFile } from "../../../fixtures/document-sample-files.js";
+import {
+  createBmpFile,
+  createGifFile,
+  createJpegFile,
+  createPngFile,
+  createWebpFile
+} from "../../../fixtures/image-sample-files.js";
+import { createLnkFile } from "../../../fixtures/lnk-sample-file.js";
+import { createMp3File } from "../../../fixtures/audio-sample-files.js";
+import { createFlacFile } from "../../../fixtures/flac-fixtures.js";
+import { createPeFile } from "../../../fixtures/sample-files-pe.js";
+import {
+  createRar4File,
+  createRar5File,
+  createSevenZipFile
+} from "../../../fixtures/rar-sevenzip-fixtures.js";
+import { createTarFile } from "../../../fixtures/tar-fixtures.js";
+import { createZipFile } from "../../../fixtures/zip-fixtures.js";
+import { createWebmFile } from "../../../fixtures/webm-base-fixtures.js";
+import { createMkvFile } from "../../../fixtures/mkv-base-fixtures.js";
+import { createAniFile, createAviFile, createWavFile } from "../../../fixtures/riff-sample-files.js";
+import { createSampleAsfFile } from "../../../fixtures/asf-fixtures.js";
+import { createMpegPsFile } from "../../../fixtures/mpegps-fixtures.js";
+import { createMachOFile, createMachOUniversalFile } from "../../../fixtures/macho-fixtures.js";
+import { createPcapFile } from "../../../fixtures/pcap-fixtures.js";
+import { createGzipFile } from "../../../fixtures/gzip-fixtures.js";
+import { createMinimalJavaClassBytes } from "../../../fixtures/java-class-fixtures.js";
+import { parseFb2ForTests } from "../../../helpers/fb2-test-parser.js";
+import { MockFile } from "../../../helpers/mock-file.js";
+import { expectDefined } from "../../../helpers/expect-defined.js";
+import type { FlacMetadataBlockDetail } from "../../../../analyzers/flac/types.js";
+import type { LnkExtraDataBlock, LnkPropertyStoreBlock } from "../../../../analyzers/lnk/types.js";
+const textEncoder = new TextEncoder();
+const parseForUi = createParseForUi(parseFb2ForTests);
+
+const isLnkPropertyStoreBlock = (block: LnkExtraDataBlock): block is LnkPropertyStoreBlock =>
+  block.signature === 0xa0000009;
+
+const assertParsed = async <Name extends AnalyzerName>(
+  file: MockFile | File,
+  expectedAnalyzer: Name,
+  checks?: (parsed: ParsedByAnalyzer<Name>) => void
+): Promise<void> => {
+  const { analyzer, parsed } = await parseForUi(file);
+  assert.strictEqual(analyzer, expectedAnalyzer);
+  assert.ok(parsed, `Expected parsed data for ${expectedAnalyzer}`);
+  if (checks) {
+    const parsedValue = expectDefined(parsed) as ParsedByAnalyzer<Name>;
+    checks(parsedValue);
+  }
+};
+
+void test("parseForUi parses and reports PNG layout", async () => {
+  await assertParsed(createPngFile(), "png", png => {
+    assert.strictEqual(expectDefined(png.ihdr).width, 1);
+    assert.strictEqual(expectDefined(png.ihdr).height, 1);
+    assert.ok(Array.isArray(png.chunks));
+  });
+});
+void test("parseForUi parses BMP header fields", async () => {
+  await assertParsed(createBmpFile(), "bmp", bmp => {
+    assert.strictEqual(bmp.isBmp, true);
+    assert.strictEqual(bmp.dibHeader.width, 1);
+    assert.strictEqual(bmp.dibHeader.height, 1);
+    assert.strictEqual(bmp.dibHeader.bitsPerPixel, 24);
+  });
+});
+void test("parseForUi parses PE headers and sections", async () => {
+  await assertParsed(createPeFile(), "pe", pe => {
+    assert.strictEqual(pe.coff.NumberOfSections, 1);
+    assert.ok(pe.sections);
+  });
+});
+void test("parseForUi parses GIF frames and trailer", async () => {
+  await assertParsed(createGifFile(), "gif", gif => {
+    assert.ok(gif.hasTrailer);
+    assert.ok(Array.isArray(gif.frames));
+    assert.strictEqual(gif.frames.length >= 0, true);
+  });
+});
+void test("parseForUi parses JPEG metadata", async () => {
+  await assertParsed(createJpegFile(), "jpeg", jpeg => {
+    assert.ok(Array.isArray(jpeg.segments));
+    assert.ok(jpeg.segmentCount >= 1);
+  });
+});
+void test("parseForUi parses WebP chunks", async () => {
+  await assertParsed(createWebpFile(), "webp", webp => {
+    assert.ok(Array.isArray(webp.chunks));
+  });
+});
+void test("parseForUi parses WAV audio", async () => {
+  await assertParsed(createWavFile(), "wav", wav => {
+    assert.strictEqual(wav.format?.channels, 1);
+    assert.ok(wav.data?.durationSeconds);
+  });
+});
+void test("parseForUi parses AVI headers and streams", async () => {
+  await assertParsed(createAviFile(), "avi", avi => {
+    assert.strictEqual(avi.mainHeader?.width, 320);
+    assert.strictEqual(avi.streams.length, 1);
+    assert.strictEqual(avi.streams[0]?.header?.type, "vids");
+  });
+});
+void test("parseForUi parses ASF headers and streams", async () => {
+  await assertParsed(createSampleAsfFile(), "asf", asf => {
+    assert.strictEqual(asf.streams.length, 2);
+    assert.ok(asf.contentDescription?.title);
+  });
+});
+void test("parseForUi parses ANI metadata", async () => {
+  await assertParsed(createAniFile(), "ani", ani => {
+    assert.strictEqual(ani.header?.frameCount, 2);
+    assert.ok(ani.frames >= 2);
+  });
+});
+void test("parseForUi parses FB2 XML", async () => {
+  await assertParsed(createFb2File(), "fb2", fb2 => {
+    assert.ok(fb2.title);
+    assert.ok(fb2.bodyCount >= 0);
+  });
+});
+
+void test("parseForUi keeps malformed FB2 files visible with warnings", async () => {
+  const malformed = new MockFile(
+    textEncoder.encode("<FictionBook><description></FictionBook>"),
+    "broken.fb2",
+    "text/xml"
+  );
+  const parsed = await parseForUi(malformed);
+  assert.strictEqual(parsed.analyzer, "fb2");
+  assert.ok(parsed.parsed);
+  assert.strictEqual(parsed.parsed.parseError, true);
+  assert.ok(parsed.parsed.issues.some(issue => issue.includes("XML parser threw")));
+});
+void test("parseForUi parses PDF cross-reference data", async () => {
+  await assertParsed(createPdfFile(), "pdf", pdf => {
+    assert.ok(pdf.header);
+    assert.ok(pdf.xref);
+    assert.ok(Array.isArray(pdf.issues));
+  });
+});
+
+void test("parseForUi parses Windows shortcuts", async () => {
+  await assertParsed(createLnkFile(), "lnk", lnk => {
+    assert.strictEqual(expectDefined(lnk.linkInfo).localBasePath, "C:\\Program Files\\Example");
+    assert.strictEqual(lnk.stringData.relativePath, ".\\Example\\app.exe");
+    assert.ok(Array.isArray(lnk.extraData.blocks));
+    const propertyStore = lnk.extraData.blocks.find(isLnkPropertyStoreBlock);
+    assert.ok(propertyStore?.parsed?.storages?.length);
+  });
+});
+
+void test("parseForUi parses MP3 frames and summary", async () => {
+  await assertParsed(createMp3File(), "mp3", mp3 => {
+    assert.strictEqual(mp3.isMp3, true);
+    assert.ok(mp3.mpeg.firstFrame);
+    assert.ok(mp3.summary);
+  });
+});
+
+void test("parseForUi parses FLAC stream info and metadata blocks", async () => {
+  await assertParsed(createFlacFile(), "flac", flac => {
+    assert.strictEqual(flac.streamInfo?.sampleRate, 44100);
+    assert.strictEqual(flac.streamInfo?.channels, 2);
+    assert.ok(Array.isArray(flac.blocks));
+    const comments = flac.blocks.find(
+      (block: FlacMetadataBlockDetail) => block.type === "VORBIS_COMMENT"
+    );
+    assert.ok(comments);
+  });
+});
+
+void test("parseForUi parses TAR headers", async () => {
+  await assertParsed(createTarFile(), "tar", tar => {
+    assert.strictEqual(tar.isTar, true);
+    assert.ok(Array.isArray(tar.entries));
+    assert.ok(tar.entries[0]);
+  });
+});
+
+void test("parseForUi parses gzip headers", async () => {
+  await assertParsed(createGzipFile({ payload: textEncoder.encode("hello") }), "gzip", gzip => {
+    assert.strictEqual(gzip.header.compressionMethod, 8);
+    assert.ok(gzip.stream.compressedSize != null);
+  });
+});
+
+void test("parseForUi parses WebM metadata and tracks", async () => {
+  await assertParsed(createWebmFile(), "webm", webm => {
+    assert.strictEqual(webm.docType, "webm");
+    assert.ok(webm.segment?.info?.durationSeconds);
+    assert.ok(webm.segment?.tracks.length);
+  });
+});
+
+void test("parseForUi parses Matroska (MKV) metadata, tags and attachments", async () => {
+  await assertParsed(createMkvFile(), "mkv", mkv => {
+    assert.strictEqual(mkv.docType, "matroska");
+    assert.ok(mkv.segment?.info?.durationSeconds);
+    assert.ok(mkv.segment?.tracks.length);
+    assert.ok(mkv.segment?.tags?.length);
+    assert.ok(mkv.segment?.attachments?.files?.length);
+  });
+});
+
+void test("parseForUi parses MPEG Program Streams (MPEG-PS)", async () => {
+  await assertParsed(createMpegPsFile(), "mpegps", mpegps => {
+    assert.strictEqual(mpegps.packHeaders.totalCount >= 1, true);
+    assert.strictEqual(mpegps.pes.totalPackets >= 1, true);
+  });
+});
+
+void test("parseForUi parses PCAP capture files", async () => {
+  await assertParsed(createPcapFile(), "pcap", pcap => {
+    assert.strictEqual(pcap.format, "pcap");
+    assert.strictEqual(pcap.header.network, 1);
+    assert.strictEqual(pcap.packets.totalPackets >= 1, true);
+  });
+});
+
+void test("parseForUi parses RAR v4 and v5 headers", async () => {
+  await assertParsed(createRar4File(), "rar", rar => {
+    assert.strictEqual(rar.version, 4);
+    assert.ok(rar.entries.length >= 1);
+  });
+  await assertParsed(createRar5File(), "rar", rar => {
+    assert.strictEqual(rar.version, 5);
+    assert.ok(rar.entries.length >= 1);
+  });
+});
+
+void test("parseForUi parses ZIP EOCD", async () => {
+  await assertParsed(createZipFile(), "zip", zip => {
+    assert.ok(zip.eocd);
+    assert.ok(zip.centralDirectory);
+  });
+});
+
+void test("parseForUi parses ELF header and sections", async () => {
+  await assertParsed(createElfFile(), "elf", elf => {
+    assert.strictEqual(elf.ident.className, "ELF64");
+    assert.ok(Array.isArray(elf.sections));
+  });
+});
+
+void test("parseForUi parses thin Mach-O executables", async () => {
+  await assertParsed(createMachOFile(), "macho", macho => {
+    assert.strictEqual(macho.kind, "thin");
+    assert.strictEqual(macho.image?.header.cputype, 0x01000007);
+    assert.strictEqual(macho.image?.segments.length, 2);
+    assert.ok(macho.image?.symtab?.symbols.length);
+  });
+});
+
+void test("parseForUi parses universal Mach-O binaries", async () => {
+  await assertParsed(createMachOUniversalFile(), "macho", macho => {
+    assert.strictEqual(macho.kind, "fat");
+    assert.strictEqual(macho.slices.length, 2);
+    assert.strictEqual(macho.slices[1]?.image?.header.cputype, 0x0100000c);
+  });
+});
+
+void test("parseForUi does not route Java class files through Mach-O parsing", async () => {
+  const javaClass = new MockFile(createMinimalJavaClassBytes());
+  const parsed = await parseForUi(javaClass);
+  assert.deepStrictEqual(parsed, { analyzer: null, parsed: null });
+});
+
+void test("parseForUi keeps truncated thin Mach-O results visible with warnings", async () => {
+  const truncatedMachO = new MockFile(
+    new Uint8Array([0xfe, 0xed, 0xfa, 0xcf]),
+    "truncated-macho",
+    "application/octet-stream"
+  );
+  const parsed = await parseForUi(truncatedMachO);
+  assert.strictEqual(parsed.analyzer, "macho");
+  assert.ok(parsed.parsed);
+  assert.strictEqual(parsed.parsed.kind, "thin");
+  assert.ok(parsed.parsed.image);
+  assert.match(parsed.parsed.image.issues[0] ?? "", /header is truncated/i);
+});
+
+void test("parseForUi parses 7z start header even when next header is unknown", async () => {
+  await assertParsed(createSevenZipFile(), "sevenZip", sevenZip => {
+    assert.strictEqual(sevenZip.is7z, true);
+    assert.ok(Array.isArray(sevenZip.issues));
+    assert.ok(sevenZip.nextHeader);
+  });
+});

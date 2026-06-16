@@ -1,0 +1,40 @@
+"use strict";
+
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { renderRichHeader } from "../../../../renderers/pe/rich-header.js";
+
+void test("renderRichHeader renders a summary and annotated entry table", () => {
+  const rich: Parameters<typeof renderRichHeader>[0] = {
+    xorKey: 0x12345678,
+    checksum: 0x0,
+    entries: [
+      { productId: 0x0091, buildNumber: 0x1c87, count: 12 },
+      { productId: 0x0108, buildNumber: 0x8170, count: 5 },
+      { productId: 0x1111, buildNumber: 0x2222, count: 1 }
+    ],
+    warnings: ["Example warning"]
+  };
+
+  const out: string[] = [];
+  renderRichHeader(rich, out);
+  const html = out.join("");
+
+  assert.ok(html.includes("Rich header"));
+  assert.ok(html.includes("0x12345678"));
+  assert.ok(html.includes("XOR key / checksum"));
+  assert.ok(html.includes("Tool mix"));
+  assert.ok(html.includes("Signals"));
+  assert.ok(html.includes("Linker"));
+  assert.ok(html.includes("VS97 v5.0 SP3 link 5.10.7303"));
+  assert.ok(html.includes("LTCG C"));
+  assert.ok(html.includes("VS2022-era MSVC build 33136"));
+  assert.ok(html.includes("LTCG/link-time code generation"));
+  assert.ok(html.includes("Unrecognized product 0x1111"));
+  assert.ok(html.includes("Unrecognized build 0x2222"));
+  assert.ok(html.includes("data-rich-bar"));
+  assert.ok(html.includes("Example warning"));
+  assert.ok(!html.includes("Show top entries"));
+  assert.ok(!html.includes("Show all entries"));
+  assert.strictEqual((html.match(/<table/g) ?? []).length, 1);
+});
