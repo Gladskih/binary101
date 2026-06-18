@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Certificate, ContentInfo, SignedData } from "../../../../../analyzers/pe/authenticode/pkijs-runtime.js";
 import { verifyPkcs7Signatures } from "../../../../../analyzers/pe/authenticode/pkijs.js";
+import { createMd5RootSignatureCmsFixture } from "../../../../fixtures/pe-authenticode-md5-fixtures.js";
 import {
   createEcPublicKeySignatureAlgorithmCmsFixture,
   createSignedAuthenticodeCmsFixture
@@ -53,7 +54,7 @@ const removeSignerCertificates = (payload: Uint8Array): Uint8Array => {
   return encodeSignedData(signedData);
 };
 
-const useUnsupportedRootSignatureAlgorithm = (payload: Uint8Array): Uint8Array => {
+const useMismatchedMd5RootSignatureAlgorithm = (payload: Uint8Array): Uint8Array => {
   const signedData = parseSignedData(payload);
   const rootCertificate = signedData.certificates?.find(
     (certificate): certificate is Certificate =>
@@ -198,26 +199,42 @@ void test("verifyPkcs7Signatures reports missing signer certificates as warnings
   assert.ok(verified.warnings?.some(warning => /unable to find signer certificate/i.test(warning)));
 });
 
-void test("verifyPkcs7Signatures reports unsupported certificate path signatures as warnings", async () => {
-  const { payload } = await createSignedAuthenticodeCmsFixture();
-
-  const verified = await verifyPkcs7Signatures(useUnsupportedRootSignatureAlgorithm(payload));
+void test("verifyPkcs7Signatures verifies RSA/MD5 certificate path signatures locally", async () => {
+  const verified = await verifyPkcs7Signatures(await createMd5RootSignatureCmsFixture());
 
   assert.ok(
     verified.checks?.some(
       check =>
         check.id === "Signer 1-certificate-2-self-signed" &&
-        check.status === "unknown" &&
-        /Unsupported signature algorithm/i.test(check.detail ?? "")
+        check.status === "pass" &&
+        /legacy RSA\/MD5/i.test(check.detail ?? "")
     )
   );
   assert.ok(
-    verified.warnings?.some(
-      warning =>
-        /Signer 1: certificate 2 self-signature verifies/i.test(warning) &&
-        warning.includes(PKCS1_MD5_WITH_RSA_ENCRYPTION_OID)
+    verified.checks?.some(
+      check =>
+        check.id === "Signer 1 RFC3161 timestamp 1-certificate-2-self-signed" &&
+        check.status === "pass" &&
+        /legacy RSA\/MD5/i.test(check.detail ?? "")
     )
   );
+  assert.strictEqual(verified.warnings, undefined);
+});
+
+void test("verifyPkcs7Signatures reports mismatched RSA/MD5 certificate path signatures", async () => {
+  const { payload } = await createSignedAuthenticodeCmsFixture();
+
+  const verified = await verifyPkcs7Signatures(useMismatchedMd5RootSignatureAlgorithm(payload));
+
+  assert.ok(
+    verified.checks?.some(
+      check =>
+        check.id === "Signer 1-certificate-2-self-signed" &&
+        check.status === "fail" &&
+        /RSA\/MD5 PKCS#1 v1\.5 signature mismatch/i.test(check.detail ?? "")
+    )
+  );
+  assert.ok(!verified.warnings?.some(warning => warning.includes(PKCS1_MD5_WITH_RSA_ENCRYPTION_OID)));
 });
 
 void test("verifyPkcs7Signatures reports malformed BER payloads", async () => {

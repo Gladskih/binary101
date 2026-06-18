@@ -1,6 +1,7 @@
 "use strict";
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 import {
   computePeAuthenticodeDigest,
@@ -133,17 +134,25 @@ void test("verifyAuthenticodeFileDigest supports canonical and punctuated names 
   }
 });
 
-void test("verifyAuthenticodeFileDigest warns on unsupported algorithms", async () => {
-  const file = createBestEffortAuthenticodeFixture().file;
-  const securityDir = { name: "SECURITY", index: 4, rva: 0, size: 0 };
-  const core = { optOff: 0, ddStartRel: 0, dataDirs: [securityDir] };
+void test("verifyAuthenticodeFileDigest supports MD5 file digests locally", async () => {
+  const { bytes, core, file, securityDir } = createStrictAuthenticodeFixture();
+  const expectedHashedBytes = collectFixtureBytes(bytes, listStrictAuthenticodeHashRanges());
+  const expectedDigest = createHash("md5").update(Buffer.from(expectedHashedBytes)).digest("hex");
   const auth: AuthenticodeInfo = {
     format: "pkcs7",
     fileDigestAlgorithmName: "md5",
-    fileDigest: "00"
+    fileDigest: expectedDigest
   };
   const verified = await verifyAuthenticodeFileDigest(file, core, securityDir, auth);
-  assert.ok(verified.warnings?.some(w => w.includes("Unsupported")));
+  const verifiedFromOid = await verifyAuthenticodeFileDigest(file, core, securityDir, {
+    format: "pkcs7",
+    fileDigestAlgorithm: "1.2.840.113549.2.5",
+    fileDigest: expectedDigest
+  });
+  assert.strictEqual(verified.fileDigestMatches, true);
+  assert.strictEqual(verified.computedFileDigest, expectedDigest);
+  assert.strictEqual(verified.warnings, undefined);
+  assert.strictEqual(verifiedFromOid.fileDigestMatches, true);
 });
 
 void test("verifyAuthenticodeFileDigest reports mismatching digests without warnings", async () => {

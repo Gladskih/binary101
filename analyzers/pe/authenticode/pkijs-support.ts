@@ -1,6 +1,7 @@
 "use strict";
 
 import type { AuthenticodeCheckStatus, AuthenticodeVerificationCheck } from "./index.js";
+import { resolveDigestAlgorithmByOid } from "./digest-algorithms.js";
 import type { Certificate, PkijsAlgorithmIdentifier, SignerInfo } from "./pkijs-runtime.js";
 import { IssuerAndSerialNumber, Time, getCrypto } from "./pkijs-runtime.js";
 
@@ -42,6 +43,22 @@ export const getByteView = (value: unknown): Uint8Array | undefined => {
   if (valueBlock?.valueHexView instanceof Uint8Array) return valueBlock.valueHexView;
   if (valueBlock?.valueHex instanceof ArrayBuffer) return new Uint8Array(valueBlock.valueHex);
   return undefined;
+};
+
+export const readOctetStringBytes = (value: unknown): Uint8Array | undefined => {
+  const direct = getByteView(value);
+  if (direct?.length) return direct;
+  const parts = (value as { valueBlock?: { value?: unknown[] } } | undefined)?.valueBlock?.value;
+  if (!Array.isArray(parts) || !parts.length) return direct;
+  const chunks = parts.map(part => getByteView(part)).filter((part): part is Uint8Array => !!part);
+  if (!chunks.length) return direct;
+  const out = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.length, 0));
+  let offset = 0;
+  chunks.forEach(chunk => {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  });
+  return out;
 };
 
 export const equalBytes = (left: Uint8Array, right: Uint8Array): boolean => {
@@ -87,10 +104,16 @@ export const parseIsoDate = (value: string | undefined): Date | undefined => {
 };
 
 export const resolveDigestAlgorithm = (oid: string): string | undefined => {
-  const algorithm = getCrypto(true)?.getAlgorithmByOID(oid, true, "digestAlgorithm") as
-    | { name?: string; hash?: { name?: string } }
-    | undefined;
-  return algorithm?.name || algorithm?.hash?.name;
+  const localAlgorithm = resolveDigestAlgorithmByOid(oid);
+  if (localAlgorithm) return localAlgorithm;
+  try {
+    const algorithm = getCrypto(true)?.getAlgorithmByOID(oid, true, "digestAlgorithm") as
+      | { name?: string; hash?: { name?: string } }
+      | undefined;
+    return algorithm?.name || algorithm?.hash?.name;
+  } catch {
+    return undefined;
+  }
 };
 
 export const normalizeLegacySignatureAlgorithm = (

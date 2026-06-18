@@ -89,7 +89,10 @@ const buildSpcIndirectDataWithDigest = (): Uint8Array => {
   return seq(data, digestInfo);
 };
 
-const buildSignedDataDetailedWithCertificateCount = (certificateCount: number): Uint8Array => {
+const buildSignedDataDetailedWithCertificateCount = (
+  certificateCount: number,
+  signatureAlgorithmOid = "1.2.840.113549.1.1.1"
+): Uint8Array => {
   const digestAlgorithm = seq(oid("2.16.840.1.101.3.4.2.1"), nul());
   const spc = buildSpcIndirectDataWithDigest();
   const signedContent = seq(oid("1.3.6.1.4.1.311.2.1.4"), ctx0(octet(spc)));
@@ -99,7 +102,7 @@ const buildSignedDataDetailedWithCertificateCount = (certificateCount: number): 
     seq(name(rdn("2.5.4.3", "Test Issuer")), int(0x1234)),
     seq(oid("2.16.840.1.101.3.4.2.1"), nul()),
     tag(0xa0, seq(oid("1.2.840.113549.1.9.5"), set(utcTime("240101000000Z")))),
-    seq(oid("1.2.840.113549.1.1.1"), nul()),
+    seq(oid(signatureAlgorithmOid), nul()),
     octet(Uint8Array.of(0x00))
   );
   const signerInfos = set(signerInfo);
@@ -132,6 +135,14 @@ void test("decodePkcs7 does not truncate certificate parsing after sixteen entri
 
   assert.strictEqual(decoded.certificateCount, 17);
   assert.strictEqual(decoded.certificates?.length, 17);
+});
+
+void test("decodePkcs7 names RSA/MD5 signer signature algorithms", () => {
+  const signedData = buildSignedDataDetailedWithCertificateCount(1, "1.2.840.113549.1.1.4");
+  const wrapper = seq(oid("1.2.840.113549.1.7.2"), ctx0(signedData));
+  const decoded = decodePkcs7(wrapper);
+
+  assert.strictEqual(decoded.signers?.[0]?.signatureAlgorithmName, "md5WithRSAEncryption");
 });
 
 void test("decodePkcs7 preserves SignerIdentifier subjectKeyIdentifier values", () => {

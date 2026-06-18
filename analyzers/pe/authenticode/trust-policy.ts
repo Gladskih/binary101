@@ -11,6 +11,7 @@ import {
   mergeWarnings,
   normalizeLegacyCertificateSignatureAlgorithm
 } from "./pkijs-support.js";
+import { verifyRsaPkcs1v15Signature } from "./rsa-pkcs1v15.js";
 import type {
   AuthenticodeTrustStoreCertificate,
   AuthenticodeTrustStoreSnapshot
@@ -112,6 +113,24 @@ const certificateStoreInfo = (
   ...(certificate.stores?.length ? { stores: certificate.stores } : {})
 });
 
+const verifyCertificateSignatureWithAnchor = async (
+  certificate: Certificate,
+  anchor: Certificate
+): Promise<boolean> => {
+  normalizeLegacyCertificateSignatureAlgorithm(certificate);
+  // RFC 5280 section 4.1.1.3: signatureValue is computed over the DER
+  // encoded tbsCertificate. Use the same local RSA fallback as CMS paths for
+  // legacy algorithms Web Crypto cannot dispatch, then keep PKI.js as default.
+  const localResult = await verifyRsaPkcs1v15Signature(
+    certificate.tbsView,
+    certificate.signatureValue.valueBlock.valueHexView,
+    anchor.subjectPublicKeyInfo,
+    certificate.signatureAlgorithm
+  );
+  if (localResult?.verified != null) return localResult.verified;
+  return certificate.verify(anchor);
+};
+
 const verifyTrustAnchor = async (
   certificate: Certificate,
   anchors: ParsedTrustAnchorIndex,
@@ -123,7 +142,7 @@ const verifyTrustAnchor = async (
   for (const anchor of subjectAnchors ?? anchors.all) {
     try {
       if (!anchor.certificate.subject.isEqual(certificate.issuer)) continue;
-      if (await certificate.verify(anchor.certificate)) {
+      if (await verifyCertificateSignatureWithAnchor(certificate, anchor.certificate)) {
         return certificateStoreInfo(anchor.source, anchor.thumbprint);
       }
     } catch (error) {

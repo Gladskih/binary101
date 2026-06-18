@@ -6,6 +6,7 @@ export const TAG_SEQUENCE = 0x10;
 export const TAG_SET = 0x11;
 export const TAG_OID = 0x06;
 export const TAG_INTEGER = 0x02;
+export const TAG_BIT_STRING = 0x03;
 export const TAG_OCTET_STRING = 0x04;
 export const TAG_UTF8_STRING = 0x0c;
 export const TAG_PRINTABLE_STRING = 0x13;

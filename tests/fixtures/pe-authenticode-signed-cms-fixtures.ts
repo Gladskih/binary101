@@ -45,18 +45,19 @@ const contentTypeAttribute = (oid: string): Attribute =>
   new Attribute({ type: CMS_CONTENT_TYPE_OID, values: [new asn1js.ObjectIdentifier({ value: oid })] });
 const messageDigestAttribute = (messageDigest: ArrayBuffer): Attribute =>
   new Attribute({ type: CMS_MESSAGE_DIGEST_OID, values: [new asn1js.OctetString({ valueHex: messageDigest })] });
-const encodeContentInfo = (signedData: SignedData): Uint8Array =>
+export const encodeContentInfo = (signedData: SignedData): Uint8Array =>
   new Uint8Array(
     new ContentInfo({ contentType: ContentInfo.SIGNED_DATA, content: signedData.toSchema(true) }).toSchema().toBER()
   );
-type CertificateChain = {
+export type CertificateChain = {
   root: Certificate;
   signer: Certificate;
   timestamp: Certificate;
+  rootPrivateKey: CryptoKey;
   signerPrivateKey: CryptoKey;
   timestampPrivateKey: CryptoKey;
 };
-const createCertificateChain = async (): Promise<CertificateChain> => {
+export const createCertificateChain = async (): Promise<CertificateChain> => {
   const rootKeys = await generateRsaKeyPair();
   const signerKeys = await generateRsaKeyPair();
   const timestampKeys = await generateRsaKeyPair();
@@ -79,11 +80,12 @@ const createCertificateChain = async (): Promise<CertificateChain> => {
     root: rootCertificate,
     signer: signerCertificate,
     timestamp: timestampCertificate,
+    rootPrivateKey: rootKeys.privateKey,
     signerPrivateKey: signerKeys.privateKey,
     timestampPrivateKey: timestampKeys.privateKey
   };
 };
-const createSignedData = async (
+export const createSignedData = async (
   fileDigestHex: string,
   chain: CertificateChain
 ): Promise<SignedData> => {
@@ -201,7 +203,7 @@ const createCountersignerInfo = async (
   });
   return countersignerInfo;
 };
-const addTimestampUnsignedAttributes = async (
+export const addTimestampUnsignedAttributes = async (
   signerInfo: SignerInfo,
   chain: CertificateChain
 ): Promise<void> => {

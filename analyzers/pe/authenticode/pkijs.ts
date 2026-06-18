@@ -10,6 +10,7 @@ import { Certificate, ContentInfo, SignedData } from "./pkijs-runtime.js";
 import { readCountersignatures } from "./pkijs-countersignatures.js";
 import { readRfc3161TimestampTokens } from "./pkijs-rfc3161-timestamps.js";
 import { addExtendedKeyUsageCheck, addSigningKeyUsageCheck, attachTimestampPathChecks } from "./pkijs-path.js";
+import { verifySignedDataSignerWithLocalRsa } from "./pkijs-local-rsa.js";
 import { evaluateAuthenticodeTrustPolicy } from "./trust-policy.js";
 import {
   CODE_SIGNING_EKU_OID,
@@ -56,13 +57,23 @@ const appendCertificatePathWarnings = (
 const verifySigner = async (
   signedData: SignedData,
   signerIndex: number,
+  signerCertificate: Certificate | undefined,
   warnings: string[]
 ): Promise<AuthenticodeSignerVerificationInfo> => {
+  const signer = signedData.signerInfos[signerIndex];
   try {
-    const normalizationWarning = normalizeLegacySignerSignatureAlgorithm(
-      signedData.signerInfos[signerIndex]
-    );
+    const normalizationWarning = normalizeLegacySignerSignatureAlgorithm(signer);
     if (normalizationWarning) warnings.push(`Signer ${signerIndex + 1}: ${normalizationWarning}`);
+    if (signer && signerCertificate) {
+      const localResult = await verifySignedDataSignerWithLocalRsa(signedData, signer, signerCertificate);
+      if (localResult) {
+        return {
+          index: signerIndex,
+          ...(localResult.message ? { message: localResult.message } : {}),
+          ...(localResult.signatureVerified != null ? { signatureVerified: localResult.signatureVerified } : {})
+        };
+      }
+    }
     const result = await signedData.verify({ signer: signerIndex, checkChain: false, extendedMode: true });
     return {
       index: signerIndex,
@@ -148,12 +159,17 @@ const verifyPkcs7Signer = async (state: Pkcs7VerificationState, signerIndex: num
   const signer = state.signedData.signerInfos[signerIndex];
   if (!signer) return;
   const signerLabel = `Signer ${signerIndex + 1}`;
-  const signerVerification = await verifySigner(state.signedData, signerIndex, state.warnings);
   const signerCertificateIndex = await matchSignerCertificate(signer, state.certificates);
   const signerCertificate =
     signerCertificateIndex != null && signerCertificateIndex >= 0
       ? state.certificates[signerCertificateIndex]
       : undefined;
+  const signerVerification = await verifySigner(
+    state.signedData,
+    signerIndex,
+    signerCertificate,
+    state.warnings
+  );
   const embeddedSignerCertificateIndex = signerCertificateIndex;
   const signingTime = getSigningTime(signer);
   const signerCertificateLabel =

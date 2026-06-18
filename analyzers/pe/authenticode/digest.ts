@@ -3,6 +3,11 @@
 import { bufferToHex } from "../../../binary-utils.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { AuthenticodeInfo } from "./index.js";
+import {
+  computeDigest,
+  resolveDigestAlgorithmByName,
+  resolveDigestAlgorithmByOid
+} from "./digest-algorithms.js";
 import type { PeCore, PeDataDirectory, PeSection, PeWindowsOptionalHeader } from "../types.js";
 
 export type DigestFunction = (algorithm: AlgorithmIdentifier, data: ArrayBuffer) => Promise<ArrayBuffer>;
@@ -13,25 +18,15 @@ export type PeAuthenticodeParsedCore = PeAuthenticodeBestEffortCore & {
   sections: PeSection[];
 };
 
-const WEB_CRYPTO_HASHES: Record<string, AlgorithmIdentifier> = {
-  sha1: "SHA-1",
-  sha224: "SHA-224",
-  sha256: "SHA-256",
-  sha384: "SHA-384",
-  sha512: "SHA-512"
-};
-
 type FileByteRange = { start: number; end: number };
 
-const normalizeAlgName = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]/g, "");
-
-const resolveWebCryptoHash = (auth: AuthenticodeInfo): AlgorithmIdentifier | null => {
+const resolveAuthenticodeHash = (auth: AuthenticodeInfo): AlgorithmIdentifier | null => {
   const raw =
     auth.fileDigestAlgorithmName ||
     auth.fileDigestAlgorithm ||
     (auth.digestAlgorithms?.length === 1 ? auth.digestAlgorithms[0] : undefined);
   if (!raw) return null;
-  return WEB_CRYPTO_HASHES[normalizeAlgName(raw)] || null;
+  return resolveDigestAlgorithmByName(raw) ?? resolveDigestAlgorithmByOid(raw) ?? null;
 };
 
 const pushRange = (ranges: FileByteRange[], reader: FileRangeReader, start: number, end: number): void => {
@@ -145,7 +140,7 @@ export const computePeAuthenticodeDigestBestEffort = async (
   pushRange(ranges, reader, certEnd > afterSecurityEntry ? certEnd : afterSecurityEntry, reader.size);
 
   const data = await readRanges(reader, ranges);
-  const digest = digestFunction ?? ((a: AlgorithmIdentifier, d: ArrayBuffer) => crypto.subtle.digest(a, d));
+  const digest = digestFunction ?? computeDigest;
   return bufferToHex(await digest(algorithm, data));
 };
 
@@ -183,7 +178,7 @@ export const computePeAuthenticodeDigestFromParsedPe = async (
   pushRangeExcludingRange(ranges, reader, trailingStart, reader.size, certOff, certEnd);
 
   const data = await readRanges(reader, ranges);
-  const digest = digestFunction ?? ((a: AlgorithmIdentifier, d: ArrayBuffer) => crypto.subtle.digest(a, d));
+  const digest = digestFunction ?? computeDigest;
   return bufferToHex(await digest(algorithm, data));
 };
 
@@ -211,7 +206,7 @@ export const verifyAuthenticodeFileDigest = async (
     warnings.push("Signature payload does not include a file digest.");
     return { warnings };
   }
-  const algorithm = resolveWebCryptoHash(auth);
+  const algorithm = resolveAuthenticodeHash(auth);
   if (!algorithm) {
     warnings.push("Unsupported or unknown digest algorithm for verification.");
     return { warnings };

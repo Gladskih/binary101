@@ -16,6 +16,12 @@ export interface PkijsInteger {
   isEqual(other: unknown): boolean;
 }
 
+export interface PkijsSubjectPublicKeyInfo {
+  algorithm: PkijsAlgorithmIdentifier;
+  importKey(publicKey: CryptoKey): Promise<void>;
+  toSchema(): { toBER(encodeFlag?: boolean): ArrayBuffer };
+}
+
 export interface PkijsCryptoEngine {
   digest(algorithm: AlgorithmIdentifier, data: BufferSource): Promise<ArrayBuffer>;
   getAlgorithmByOID(oid: string, safety?: boolean, target?: string): object;
@@ -47,6 +53,7 @@ export class AttributeTypeAndValue {
 
 export class AlgorithmIdentifier {
   algorithmId: string;
+  algorithmParams?: unknown;
   constructor(parameters?: unknown);
   toSchema(): { toBER(encodeFlag?: boolean): ArrayBuffer };
 }
@@ -91,9 +98,7 @@ export class Certificate {
   subject: RelativeDistinguishedNames;
   notBefore: Time;
   notAfter: Time;
-  subjectPublicKeyInfo: {
-    importKey(publicKey: CryptoKey): Promise<void>;
-  };
+  subjectPublicKeyInfo: PkijsSubjectPublicKeyInfo;
   extensions?: Extension[];
   constructor(parameters?: unknown);
   getKeyHash(hashAlgorithm?: string): Promise<ArrayBuffer>;

@@ -1,6 +1,7 @@
 "use strict";
 
 import { bufferToHex } from "../../../binary-utils.js";
+import { computeDigest } from "./digest-algorithms.js";
 import type {
   AuthenticodeCounterSignatureInfo,
   AuthenticodeVerificationCheck
@@ -24,6 +25,10 @@ import {
   resolveDigestAlgorithm,
   toArrayBuffer
 } from "./pkijs-support.js";
+import {
+  shouldVerifyRsaPkcs1v15Locally,
+  verifyRsaPkcs1v15Signature
+} from "./rsa-pkcs1v15.js";
 
 const verifyCountersignature = async (
   signerLabel: string,
@@ -109,7 +114,7 @@ const verifyCountersignatureDigest = async (
     );
     return;
   }
-  const digestBytes = new Uint8Array(await crypto.subtle.digest(shaAlgorithm, toArrayBuffer(parentSignatureBytes)));
+  const digestBytes = new Uint8Array(await computeDigest(shaAlgorithm, toArrayBuffer(parentSignatureBytes)));
   const digestMatches = equalBytes(digestBytes, messageDigestValue);
   info.messageDigestVerified = digestMatches;
   addCheck(
@@ -141,6 +146,27 @@ const verifyCountersignatureSignature = async (
   const verificationData = counterSigner.signedAttrs
     ? counterSigner.signedAttrs.encodedValue
     : toArrayBuffer(parentSigner.signature.valueBlock.valueHexView);
+  if (shouldVerifyRsaPkcs1v15Locally(counterSigner.signatureAlgorithm, counterSigner.digestAlgorithm.algorithmId)) {
+    const localResult = await verifyRsaPkcs1v15Signature(
+      new Uint8Array(verificationData),
+      counterSigner.signature.valueBlock.valueHexView,
+      countersignerCertificate.subjectPublicKeyInfo,
+      counterSigner.signatureAlgorithm,
+      counterSigner.digestAlgorithm.algorithmId
+    );
+    if (localResult) {
+      if (localResult.verified != null) info.signatureVerified = localResult.verified;
+      addCheck(
+        checks,
+        `${label}-signature`,
+        localResult.verified == null ? "unknown" : localResult.verified ? "pass" : "fail",
+        `${label}: CMS signature verifies`,
+        localResult.detail
+      );
+      if (localResult.verified == null && localResult.detail) warnings.push(`${label}: ${localResult.detail}`);
+      return;
+    }
+  }
   try {
     const verified = await cryptoEngine.verifyWithPublicKey(
       verificationData,

@@ -3,6 +3,10 @@
 import type { AuthenticodeCheckStatus } from "./index.js";
 import type { Certificate } from "./pkijs-runtime.js";
 import { describeError, normalizeLegacyCertificateSignatureAlgorithm } from "./pkijs-support.js";
+import {
+  shouldVerifyRsaPkcs1v15Locally,
+  verifyRsaPkcs1v15Signature
+} from "./rsa-pkcs1v15.js";
 
 export type CertificateSignatureStatus = {
   status: AuthenticodeCheckStatus;
@@ -22,6 +26,18 @@ export const verifyCertificateSignature = async (
   try {
     normalizeLegacyCertificateSignatureAlgorithm(certificate);
     if (issuerCertificate) normalizeLegacyCertificateSignatureAlgorithm(issuerCertificate);
+    if (shouldVerifyRsaPkcs1v15Locally(certificate.signatureAlgorithm)) {
+      const localResult = await verifyRsaPkcs1v15Signature(
+        certificate.tbsView,
+        certificate.signatureValue.valueBlock.valueHexView,
+        (issuerCertificate ?? certificate).subjectPublicKeyInfo,
+        certificate.signatureAlgorithm
+      );
+      if (localResult) {
+        const status = localResult.verified == null ? "unknown" : localResult.verified ? "pass" : "fail";
+        return { status, ...(localResult.detail ? { detail: localResult.detail } : {}) };
+      }
+    }
     return (await certificate.verify(issuerCertificate))
       ? { status: "pass" }
       : { status: "fail", detail: "Signature verification returned false." };

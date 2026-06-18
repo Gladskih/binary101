@@ -1,11 +1,8 @@
 "use strict";
 
 import { bufferToHex } from "../../../binary-utils.js";
-import type {
-  AuthenticodeTimestampTokenInfo,
-  AuthenticodeVerificationCheck,
-  X509CertificateInfo
-} from "./index.js";
+import { computeDigest } from "./digest-algorithms.js";
+import type { AuthenticodeTimestampTokenInfo, AuthenticodeVerificationCheck, X509CertificateInfo } from "./index.js";
 import type { AuthenticodeTrustStoreSnapshot } from "./trust-store.js";
 import type { SignerInfo } from "./pkijs-runtime.js";
 import {
@@ -26,21 +23,19 @@ import {
   matchSignerCertificate,
   normalizeLegacyCertificateSignatureAlgorithm,
   normalizeLegacySignatureAlgorithm,
+  readOctetStringBytes,
   resolveDigestAlgorithm,
   toArrayBuffer
 } from "./pkijs-support.js";
+import { verifySignedDataSignerWithLocalRsa } from "./pkijs-local-rsa.js";
 
 // Microsoft Authenticode stores RFC 3161 timestamp tokens in this unsigned attribute.
 // RFC 3161 section 2.4.2 defines TimeStampToken as CMS ContentInfo/SignedData.
 const AUTHENTICODE_RFC3161_TIMESTAMP_OID = "1.3.6.1.4.1.311.3.3.1";
 
 const NAME_OID_KEYS: Record<string, string> = {
-  "2.5.4.3": "CN",
-  "2.5.4.6": "C",
-  "2.5.4.7": "L",
-  "2.5.4.8": "S",
-  "2.5.4.10": "O",
-  "2.5.4.11": "OU"
+  "2.5.4.3": "CN", "2.5.4.6": "C", "2.5.4.7": "L",
+  "2.5.4.8": "S", "2.5.4.10": "O", "2.5.4.11": "OU"
 };
 
 const asDerBytes = (value: unknown): Uint8Array | undefined => {
@@ -91,22 +86,6 @@ const describeCertificate = (certificate: Certificate): X509CertificateInfo => {
   return info;
 };
 
-const readOctetStringBytes = (value: unknown): Uint8Array | undefined => {
-  const direct = getByteView(value);
-  if (direct?.length) return direct;
-  const parts = (value as { valueBlock?: { value?: unknown[] } } | undefined)?.valueBlock?.value;
-  if (!Array.isArray(parts) || !parts.length) return direct;
-  const chunks = parts.map(part => getByteView(part)).filter((part): part is Uint8Array => !!part);
-  if (!chunks.length) return direct;
-  const out = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.length, 0));
-  let offset = 0;
-  chunks.forEach(chunk => {
-    out.set(chunk, offset);
-    offset += chunk.length;
-  });
-  return out;
-};
-
 const readTimestampInfo = (signedData: SignedData): TSTInfo | undefined => {
   if (signedData.encapContentInfo.eContentType !== id_eContentType_TSTInfo) return undefined;
   const content = readOctetStringBytes(signedData.encapContentInfo.eContent);
@@ -135,7 +114,7 @@ const addMessageImprintCheck = async (
     return;
   }
   const computed = new Uint8Array(
-    await crypto.subtle.digest(shaAlgorithm, toArrayBuffer(parentSignatureBytes))
+    await computeDigest(shaAlgorithm, toArrayBuffer(parentSignatureBytes))
   );
   token.messageDigestVerified = equalBytes(computed, expected);
   addCheck(
@@ -145,6 +124,51 @@ const addMessageImprintCheck = async (
     `${label}: TSTInfo messageImprint matches the parent signature`,
     `Expected ${bufferToHex(expected)}, computed ${bufferToHex(computed)}`
   );
+};
+
+const addTimestampSignatureCheck = async (
+  label: string,
+  signedData: SignedData,
+  parentSignatureBytes: Uint8Array,
+  timestampSigner: SignerInfo | undefined,
+  signerCertificate: Certificate | undefined,
+  token: AuthenticodeTimestampTokenInfo,
+  checks: AuthenticodeVerificationCheck[],
+  warnings: string[]
+): Promise<void> => {
+  try {
+    const localResult = timestampSigner && signerCertificate
+      ? await verifySignedDataSignerWithLocalRsa(signedData, timestampSigner, signerCertificate, parentSignatureBytes)
+      : undefined;
+    if (localResult) {
+      if (localResult.signatureVerified != null) token.signatureVerified = localResult.signatureVerified;
+      if (localResult.message) token.message = localResult.message;
+      addCheck(
+        checks,
+        `${label}-signature`,
+        localResult.signatureVerified == null ? "unknown" : localResult.signatureVerified ? "pass" : "fail",
+        `${label}: CMS signature verifies`,
+        localResult.message
+      );
+      if (localResult.signatureVerified !== true && localResult.message) {
+        warnings.push(`${label}: ${localResult.message}`);
+      }
+      return;
+    }
+    await signedData.verify({
+      signer: 0,
+      data: toArrayBuffer(parentSignatureBytes),
+      checkChain: false,
+      extendedMode: true
+    });
+    token.signatureVerified = true;
+    addCheck(checks, `${label}-signature`, "pass", `${label}: CMS signature verifies`);
+  } catch (error) {
+    token.signatureVerified = false;
+    token.message = describeError(error);
+    addCheck(checks, `${label}-signature`, "fail", `${label}: CMS signature verifies`, token.message);
+    warnings.push(`${label}: ${token.message}`);
+  }
 };
 
 const verifyTimestampToken = async (
@@ -173,28 +197,26 @@ const verifyTimestampToken = async (
   const timestampInfo = readTimestampInfo(signedData);
   if (timestampInfo) token.signingTime = timestampInfo.genTime.toISOString();
   await addMessageImprintCheck(checks, label, token, timestampInfo, parentSignatureBytes);
-  try {
-    await signedData.verify({
-      signer: 0,
-      data: toArrayBuffer(parentSignatureBytes),
-      checkChain: false,
-      extendedMode: true
-    });
-    token.signatureVerified = true;
-    addCheck(checks, `${label}-signature`, "pass", `${label}: CMS signature verifies`);
-  } catch (error) {
-    token.signatureVerified = false;
-    token.message = describeError(error);
-    addCheck(checks, `${label}-signature`, "fail", `${label}: CMS signature verifies`, token.message);
-    warnings.push(`${label}: ${token.message}`);
-  }
-  const signerCertificateIndex = await matchSignerCertificate(signedData.signerInfos[0] as SignerInfo, certificates);
+  const timestampSigner = signedData.signerInfos[0] as SignerInfo | undefined;
+  const signerCertificateIndex = timestampSigner
+    ? await matchSignerCertificate(timestampSigner, certificates)
+    : undefined;
   const timestampSignerCertificateIndex =
     signerCertificateIndex != null && signerCertificateIndex >= 0
       ? signerCertificateIndex
       : undefined;
   const signerCertificate =
     timestampSignerCertificateIndex != null ? certificates[timestampSignerCertificateIndex] : undefined;
+  await addTimestampSignatureCheck(
+    label,
+    signedData,
+    parentSignatureBytes,
+    timestampSigner,
+    signerCertificate,
+    token,
+    checks,
+    warnings
+  );
   if (certificates.length) token.certificates = certificates.map(describeCertificate);
   const trustPolicy = await evaluateAuthenticodeTrustPolicy(certificates, trustStore);
   if (trustPolicy) token.trustPolicy = trustPolicy;

@@ -14,6 +14,7 @@ import type { AuthenticodeInfo } from "../../../../../analyzers/pe/authenticode/
 import { OIW_SHA1_WITH_RSA_ENCRYPTION_OID } from "../../../../../analyzers/pe/authenticode/pkijs-support.js";
 import type { AuthenticodeTrustStoreSnapshot } from "../../../../../analyzers/pe/authenticode/trust-store.js";
 import { createSignedAuthenticodeCmsFixture } from "../../../../fixtures/pe-authenticode-signed-cms-fixtures.js";
+import { signCertificateWithMd5Rsa } from "../../../../fixtures/pe-authenticode-md5-fixtures.js";
 import {
   KEY_USAGE_DIGITAL_SIGNATURE,
   KEY_USAGE_KEY_CERT_SIGN,
@@ -159,6 +160,47 @@ void test("evaluateAuthenticodeTrustPolicy accepts legacy OIW RSA/SHA-1 signatur
     trustedCAs: [{
       thumbprint: rootThumbprint,
       subject: "CN=Binary101 Legacy Root",
+      derBase64: certificateDerBase64(root),
+      stores: ["Root"]
+    }],
+    revokedCAs: []
+  });
+
+  assert.strictEqual(policy?.certificates[0]?.status, "trusted");
+  assert.strictEqual(policy?.certificates[0]?.anchorSha1Thumbprint, rootThumbprint);
+  assert.strictEqual(policy?.warnings, undefined);
+});
+
+void test("evaluateAuthenticodeTrustPolicy verifies RSA/MD5 certificates against trusted anchors", async () => {
+  const rootKeys = await generateRsaKeyPair();
+  const intermediateKeys = await generateRsaKeyPair();
+  const root = await createCertificate(
+    "Binary101 MD5 Trust Root",
+    1,
+    rootKeys.publicKey,
+    createCommonName("Binary101 MD5 Trust Root"),
+    rootKeys.privateKey,
+    { notBefore: "2020-01-01T00:00:00Z", notAfter: "2035-01-01T00:00:00Z" },
+    [createBasicConstraintsExtension(true), createKeyUsageExtension(KEY_USAGE_KEY_CERT_SIGN)]
+  );
+  const intermediate = await createCertificate(
+    "Binary101 MD5 Intermediate",
+    2,
+    intermediateKeys.publicKey,
+    root.subject,
+    rootKeys.privateKey,
+    { notBefore: "2021-01-01T00:00:00Z", notAfter: "2030-01-01T00:00:00Z" },
+    [createBasicConstraintsExtension(true), createKeyUsageExtension(KEY_USAGE_KEY_CERT_SIGN)]
+  );
+  await signCertificateWithMd5Rsa(intermediate, rootKeys.privateKey);
+
+  const rootThumbprint = await certificateThumbprint(root);
+  const policy = await evaluateAuthenticodeTrustPolicy([intermediate], {
+    schemaVersion: 1,
+    generatedAt: TRUST_SNAPSHOT_TIME,
+    trustedCAs: [{
+      thumbprint: rootThumbprint,
+      subject: "CN=Binary101 MD5 Trust Root",
       derBase64: certificateDerBase64(root),
       stores: ["Root"]
     }],
