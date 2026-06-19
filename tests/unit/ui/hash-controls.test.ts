@@ -1,15 +1,18 @@
 "use strict";
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 import {
+  HASH_ALGORITHMS,
   computeAndDisplayHash,
   copyHashToClipboard,
   resetHashDisplay,
+  type HashAlgorithmOption,
   type HashControls
 } from "../../../ui/hash-controls.js";
 
-const createHashControlsFixture = (): {
+const createHashControlsFixture = (label = "SHA-256"): {
   controls: HashControls;
   valueElement: HTMLElement;
   buttonElement: HTMLButtonElement;
@@ -23,7 +26,7 @@ const createHashControlsFixture = (): {
   } as HTMLButtonElement;
   const copyButtonElement = { hidden: true } as HTMLButtonElement;
   return {
-    controls: { valueElement, buttonElement, copyButtonElement },
+    controls: { label, valueElement, buttonElement, copyButtonElement },
     valueElement,
     buttonElement,
     copyButtonElement
@@ -39,6 +42,18 @@ const createClipboardDigestText = (): string => {
 };
 const createHashValueElement = (textContent: string): HTMLElement =>
   ({ textContent }) as HTMLElement;
+
+const getHashAlgorithm = (id: string): HashAlgorithmOption => {
+  const algorithm = HASH_ALGORITHMS.find(entry => entry.id === id);
+  assert.ok(algorithm);
+  return algorithm;
+};
+
+const nodeDigestNameForHashAlgorithm = (algorithm: HashAlgorithmOption): string => {
+  if (algorithm.id === "sha512224") return "sha512-224";
+  if (algorithm.id === "sha512256") return "sha512-256";
+  return algorithm.id;
+};
 
 const installClipboardStub = (
   writeText: (text: string) => Promise<void>
@@ -64,7 +79,7 @@ const installClipboardStub = (
 
 void test("resetHashDisplay restores both hash controls to their initial state", () => {
   const sha256 = createHashControlsFixture().controls;
-  const sha512 = createHashControlsFixture().controls;
+  const sha512 = createHashControlsFixture("SHA-512").controls;
   sha256.valueElement.textContent = "stale";
   sha256.buttonElement.hidden = true;
   sha256.buttonElement.disabled = true;
@@ -94,19 +109,33 @@ void test("computeAndDisplayHash renders the computed digest and enables copy", 
   const { controls, valueElement, buttonElement, copyButtonElement } = createHashControlsFixture();
   const fileBytes = new TextEncoder().encode("abc");
   const file = new File([fileBytes], "abc.bin");
-  const expectedDigest = Buffer.from(await crypto.subtle.digest("SHA-256", fileBytes)).toString("hex");
+  const expectedDigest = createHash("sha256").update(fileBytes).digest("hex");
 
-  await computeAndDisplayHash("SHA-256", file, controls);
+  await computeAndDisplayHash(getHashAlgorithm("sha256"), file, controls);
 
   assert.equal(valueElement.textContent, expectedDigest);
   assert.equal(copyButtonElement.hidden, false);
   assert.equal(buttonElement.hidden, true);
 });
 
+void test("computeAndDisplayHash supports every visible hash algorithm", async () => {
+  const fileBytes = new TextEncoder().encode("abc");
+  const file = new File([fileBytes], "abc.bin");
+
+  for (const algorithm of HASH_ALGORITHMS) {
+    const { controls, valueElement } = createHashControlsFixture();
+    const expectedDigest = createHash(nodeDigestNameForHashAlgorithm(algorithm))
+      .update(fileBytes)
+      .digest("hex");
+    await computeAndDisplayHash(algorithm, file, controls);
+    assert.equal(valueElement.textContent, expectedDigest);
+  }
+});
+
 void test("computeAndDisplayHash reports when no file is selected", async () => {
   const { controls, valueElement, buttonElement, copyButtonElement } = createHashControlsFixture();
 
-  await computeAndDisplayHash("SHA-256", null, controls);
+  await computeAndDisplayHash(getHashAlgorithm("sha256"), null, controls);
 
   assert.equal(valueElement.textContent, "No file selected.");
   assert.equal(buttonElement.disabled, false);
@@ -117,12 +146,15 @@ void test("computeAndDisplayHash reports when no file is selected", async () => 
 void test("computeAndDisplayHash surfaces failures and leaves the button retryable", async () => {
   const { controls, valueElement, buttonElement, copyButtonElement } = createHashControlsFixture();
   const file = {
-    arrayBuffer: async (): Promise<ArrayBuffer> => {
-      throw new Error("boom");
-    }
-  } as File;
+    stream: () => ({
+      getReader: () => ({
+        read: async () => { throw new Error("boom"); },
+        releaseLock: () => undefined
+      })
+    })
+  } as unknown as File;
 
-  await computeAndDisplayHash("SHA-256", file, controls);
+  await computeAndDisplayHash(getHashAlgorithm("sha256"), file, controls);
 
   assert.match(valueElement.textContent || "", /^Hash failed:/);
   assert.match(valueElement.textContent || "", /boom$/);

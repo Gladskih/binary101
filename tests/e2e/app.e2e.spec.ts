@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { createHash } from "node:crypto";
 import type { Page } from "@playwright/test";
 import { createFb2File, createPdfFile } from "../fixtures/document-sample-files.js";
 import { createElfFile } from "../fixtures/elf-sample-file.js";
@@ -25,10 +26,30 @@ const toUpload = (file: MockFile) => ({
   buffer: Buffer.from(file.data)
 });
 
+const hashExpectations = [
+  { label: "MD5", id: "md5", nodeDigestName: "md5" },
+  { label: "SHA-1", id: "sha1", nodeDigestName: "sha1" },
+  { label: "SHA-224", id: "sha224", nodeDigestName: "sha224" },
+  { label: "SHA-256", id: "sha256", nodeDigestName: "sha256" },
+  { label: "SHA-384", id: "sha384", nodeDigestName: "sha384" },
+  { label: "SHA-512", id: "sha512", nodeDigestName: "sha512" },
+  { label: "SHA-512/224", id: "sha512224", nodeDigestName: "sha512-224" },
+  { label: "SHA-512/256", id: "sha512256", nodeDigestName: "sha512-256" }
+] as const;
+
 const expectBaseDetails = async (page: Page, fileName: string, expectedKind: string): Promise<void> => {
   await expect(page.locator("#fileInfoCard")).toBeVisible();
   await expect(page.locator("#fileNameDetail")).toHaveText(fileName);
   await expect(page.locator("#fileBinaryTypeDetail")).toHaveText(expectedKind);
+};
+
+const expectEveryHashCanBeComputed = async (page: Page, file: MockFile): Promise<void> => {
+  const fileBytes = Buffer.from(file.data);
+  for (const { label, id, nodeDigestName } of hashExpectations) {
+    const expectedDigest = createHash(nodeDigestName).update(fileBytes).digest("hex");
+    await page.getByRole("button", { name: `Compute ${label}`, exact: true }).click();
+    await expect(page.locator(`#${id}Value`)).toHaveText(expectedDigest);
+  }
 };
 
 const happyCases = [
@@ -158,6 +179,26 @@ test.describe("file type detection", () => {
     await expect(page.locator("#directoryName")).toHaveText("fixture-folder");
     await page.locator("#directoryFileListingBody tr", { hasText: "pixel.png" }).click();
     await expectBaseDetails(page, "pixel.png", "PNG image");
+  });
+});
+
+test.describe("file hash actions", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Local File Inspector" })).toBeVisible();
+  });
+
+  void test("places hash actions before analysis details and computes every digest", async ({ page }) => {
+    const file = createPeFile();
+    await page.setInputFiles("#fileInput", toUpload(file));
+    await expectBaseDetails(page, "sample.exe", "PE32 executable for x86 (I386)");
+    await expect(page.locator("#peDetailsValue")).toContainText("PE/COFF headers");
+
+    const hashButtonBox = await page.locator("#md5ComputeButton").boundingBox();
+    const detailsBox = await page.locator("#peDetailsValue").boundingBox();
+    expect(hashButtonBox?.y).toBeLessThan(detailsBox?.y ?? 0);
+
+    await expectEveryHashCanBeComputed(page, file);
   });
 });
 

@@ -125,15 +125,44 @@
           <dt>Source</dt><dd id="fileSourceDetail"></dd>
           <dt>Binary type</dt><dd id="fileBinaryTypeDetail"></dd>
 
-          <dt id="peDetailsTerm" hidden>PE/COFF details</dt>
-          <dd id="peDetailsValue" hidden></dd>
-
+          <dt>MD5</dt>
+          <dd class="hashRow">
+            <span class="hashValue" id="md5Value"></span>
+            <div class="hashButtons">
+              <button type="button" class="actionButton" id="md5ComputeButton">Compute MD5</button>
+              <button type="button" class="copyButton" id="md5CopyButton" hidden>Copy</button>
+            </div>
+          </dd>
+          <dt>SHA-1</dt>
+          <dd class="hashRow">
+            <span class="hashValue" id="sha1Value"></span>
+            <div class="hashButtons">
+              <button type="button" class="actionButton" id="sha1ComputeButton">Compute SHA-1</button>
+              <button type="button" class="copyButton" id="sha1CopyButton" hidden>Copy</button>
+            </div>
+          </dd>
+          <dt>SHA-224</dt>
+          <dd class="hashRow">
+            <span class="hashValue" id="sha224Value"></span>
+            <div class="hashButtons">
+              <button type="button" class="actionButton" id="sha224ComputeButton">Compute SHA-224</button>
+              <button type="button" class="copyButton" id="sha224CopyButton" hidden>Copy</button>
+            </div>
+          </dd>
           <dt>SHA-256</dt>
           <dd class="hashRow">
             <span class="hashValue" id="sha256Value"></span>
             <div class="hashButtons">
               <button type="button" class="actionButton" id="sha256ComputeButton">Compute SHA-256</button>
               <button type="button" class="copyButton" id="sha256CopyButton" hidden>Copy</button>
+            </div>
+          </dd>
+          <dt>SHA-384</dt>
+          <dd class="hashRow">
+            <span class="hashValue" id="sha384Value"></span>
+            <div class="hashButtons">
+              <button type="button" class="actionButton" id="sha384ComputeButton">Compute SHA-384</button>
+              <button type="button" class="copyButton" id="sha384CopyButton" hidden>Copy</button>
             </div>
           </dd>
           <dt>SHA-512</dt>
@@ -144,6 +173,25 @@
               <button type="button" class="copyButton" id="sha512CopyButton" hidden>Copy</button>
             </div>
           </dd>
+          <dt>SHA-512/224</dt>
+          <dd class="hashRow">
+            <span class="hashValue" id="sha512224Value"></span>
+            <div class="hashButtons">
+              <button type="button" class="actionButton" id="sha512224ComputeButton">Compute SHA-512/224</button>
+              <button type="button" class="copyButton" id="sha512224CopyButton" hidden>Copy</button>
+            </div>
+          </dd>
+          <dt>SHA-512/256</dt>
+          <dd class="hashRow">
+            <span class="hashValue" id="sha512256Value"></span>
+            <div class="hashButtons">
+              <button type="button" class="actionButton" id="sha512256ComputeButton">Compute SHA-512/256</button>
+              <button type="button" class="copyButton" id="sha512256CopyButton" hidden>Copy</button>
+            </div>
+          </dd>
+
+          <dt id="peDetailsTerm" hidden>PE/COFF details</dt>
+          <dd id="peDetailsValue" hidden></dd>
         </dl>
       </article>
     </section>

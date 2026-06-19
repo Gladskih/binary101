@@ -1,28 +1,69 @@
 "use strict";
 
+import { md5, sha1 } from "@noble/hashes/legacy";
+import { sha224, sha256 } from "@noble/hashes/sha256";
+import { sha384, sha512, sha512_224, sha512_256 } from "@noble/hashes/sha512";
+import type { CHash } from "@noble/hashes/utils";
 import { bufferToHex } from "../binary-utils.js";
 
+type HashAlgorithmId =
+  "md5" | "sha1" | "sha224" | "sha256" | "sha384" | "sha512" |
+  "sha512224" | "sha512256";
+
+type HashAlgorithmOption = {
+  id: HashAlgorithmId;
+  label: string;
+  digest: CHash;
+};
+
 type HashControls = {
+  label: string;
   valueElement: HTMLElement;
   buttonElement: HTMLButtonElement;
   copyButtonElement: HTMLButtonElement;
 };
 
-const resetHashDisplay = (sha256: HashControls, sha512: HashControls): void => {
-  sha256.valueElement.textContent = "";
-  sha512.valueElement.textContent = "";
-  sha256.copyButtonElement.hidden = true;
-  sha512.copyButtonElement.hidden = true;
-  sha256.buttonElement.hidden = false;
-  sha512.buttonElement.hidden = false;
-  sha256.buttonElement.disabled = false;
-  sha512.buttonElement.disabled = false;
-  sha256.buttonElement.textContent = "Compute SHA-256";
-  sha512.buttonElement.textContent = "Compute SHA-512";
+const HASH_ALGORITHMS: readonly HashAlgorithmOption[] = [
+  { id: "md5", label: "MD5", digest: md5 },
+  { id: "sha1", label: "SHA-1", digest: sha1 },
+  { id: "sha224", label: "SHA-224", digest: sha224 },
+  { id: "sha256", label: "SHA-256", digest: sha256 },
+  { id: "sha384", label: "SHA-384", digest: sha384 },
+  { id: "sha512", label: "SHA-512", digest: sha512 },
+  { id: "sha512224", label: "SHA-512/224", digest: sha512_224 },
+  { id: "sha512256", label: "SHA-512/256", digest: sha512_256 }
+] as const;
+
+const resetHashDisplay = (...controls: HashControls[]): void => {
+  for (const control of controls) {
+    control.valueElement.textContent = "";
+    control.copyButtonElement.hidden = true;
+    control.buttonElement.hidden = false;
+    control.buttonElement.disabled = false;
+    control.buttonElement.textContent = `Compute ${control.label}`;
+  }
+};
+
+const computeFileDigest = async (
+  digest: CHash,
+  file: File
+): Promise<Uint8Array> => {
+  const hash = digest.create();
+  const reader = file.stream().getReader();
+  try {
+    let result = await reader.read();
+    while (!result.done) {
+      hash.update(result.value);
+      result = await reader.read();
+    }
+    return hash.digest();
+  } finally {
+    reader.releaseLock();
+  }
 };
 
 const computeAndDisplayHash = async (
-  algorithmName: AlgorithmIdentifier,
+  algorithm: HashAlgorithmOption,
   file: File | null,
   { valueElement, buttonElement, copyButtonElement }: HashControls
 ): Promise<void> => {
@@ -33,9 +74,7 @@ const computeAndDisplayHash = async (
   buttonElement.disabled = true;
   buttonElement.textContent = "Working...";
   try {
-    valueElement.textContent = bufferToHex(
-      await crypto.subtle.digest(algorithmName, await file.arrayBuffer())
-    );
+    valueElement.textContent = bufferToHex(await computeFileDigest(algorithm.digest, file));
     copyButtonElement.hidden = false;
     buttonElement.hidden = true;
   } catch (error) {
@@ -59,5 +98,5 @@ const copyHashToClipboard = async (
   }
 };
 
-export type { HashControls };
-export { computeAndDisplayHash, copyHashToClipboard, resetHashDisplay };
+export type { HashAlgorithmOption, HashControls };
+export { HASH_ALGORITHMS, computeAndDisplayHash, copyHashToClipboard, resetHashDisplay };

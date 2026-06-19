@@ -3,7 +3,12 @@ import { nowIsoString, formatHumanSize } from "./binary-utils.js";
 import { detectBinaryType, parseForUi, type ParseForUiResult } from "./analyzers/index.js";
 import { renderAnalysisIntoUi as renderParsedResult } from "./ui/render-analysis.js";
 import { attachPreviewGuards, buildPreviewHtml } from "./ui/preview.js";
-import { computeAndDisplayHash, copyHashToClipboard, resetHashDisplay } from "./ui/hash-controls.js";
+import {
+  HASH_ALGORITHMS,
+  computeAndDisplayHash,
+  copyHashToClipboard,
+  resetHashDisplay
+} from "./ui/hash-controls.js";
 import { createFileActionClickHandler } from "./ui/file-actions.js";
 import { isPeWindowsParseResult } from "./analyzers/pe/index.js";
 import { createPeDisassemblyController } from "./ui/pe-disassembly.js";
@@ -35,17 +40,14 @@ const dropZoneElement = getElement("dropZone") as HTMLElement,
   fileBinaryTypeDetailElement = getElement("fileBinaryTypeDetail") as HTMLElement,
   fileMimeTypeDetailElement = getElement("fileMimeTypeDetail") as HTMLElement,
   peDetailsTermElement = getElement("peDetailsTerm") as HTMLElement,
-  peDetailsValueElement = getElement("peDetailsValue") as HTMLElement,
-  sha256ValueElement = getElement("sha256Value") as HTMLElement,
-  sha512ValueElement = getElement("sha512Value") as HTMLElement,
-  sha256ButtonElement = getElement("sha256ComputeButton") as HTMLButtonElement,
-  sha512ButtonElement = getElement("sha512ComputeButton") as HTMLButtonElement,
-  sha256CopyButtonElement = getElement("sha256CopyButton") as HTMLButtonElement,
-  sha512CopyButtonElement = getElement("sha512CopyButton") as HTMLButtonElement;
-const sha256Controls = { valueElement: sha256ValueElement, buttonElement: sha256ButtonElement,
-  copyButtonElement: sha256CopyButtonElement };
-const sha512Controls = { valueElement: sha512ValueElement, buttonElement: sha512ButtonElement,
-  copyButtonElement: sha512CopyButtonElement };
+  peDetailsValueElement = getElement("peDetailsValue") as HTMLElement;
+const hashControls = HASH_ALGORITHMS.map(algorithm => ({
+  algorithm,
+  label: algorithm.label,
+  valueElement: getElement(`${algorithm.id}Value`) as HTMLElement,
+  buttonElement: getElement(`${algorithm.id}ComputeButton`) as HTMLButtonElement,
+  copyButtonElement: getElement(`${algorithm.id}CopyButton`) as HTMLButtonElement
+}));
 let currentFile: File | null = null;
 let currentPreviewUrl: string | null = null;
 let currentTypeLabel = "";
@@ -101,7 +103,7 @@ const resetFileInspectionView = (): void => {
   peDetailsValueElement.hidden = true;
   peDetailsValueElement.innerHTML = "";
   fileAnalysisDurationDetailElement.textContent = "";
-  resetHashDisplay(sha256Controls, sha512Controls);
+  resetHashDisplay(...hashControls);
 };
 const showEmptyInspection = (message: string | null): void => {
   directoryInspection.hide();
@@ -244,7 +246,7 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     fileAnalysisDurationDetailElement.textContent = formatAnalysisDuration(performance.now() - analysisStart);
     currentParseResult = parsedResult;
     renderResult(parsedResult);
-    resetHashDisplay(sha256Controls, sha512Controls);
+    resetHashDisplay(...hashControls);
     setStatusMessage(null);
   } catch (error) {
     if (fileInspectionGeneration !== currentGeneration) return;
@@ -259,19 +261,13 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     peDetailsValueElement.innerHTML = "";
   }
 }
-sha256ButtonElement.addEventListener("click", () => {
-  void computeAndDisplayHash("SHA-256", currentFile, sha256Controls);
-});
-sha512ButtonElement.addEventListener("click", () => {
-  void computeAndDisplayHash("SHA-512", currentFile, sha512Controls);
-});
-sha256CopyButtonElement.addEventListener("click", () => {
-  void copyHashToClipboard(sha256ValueElement).then(status => {
-    setStatusMessage(status === "copied" ? "SHA-256 copied." : "Clipboard copy failed.");
+hashControls.forEach(control => {
+  control.buttonElement.addEventListener("click", () => {
+    void computeAndDisplayHash(control.algorithm, currentFile, control);
   });
-});
-sha512CopyButtonElement.addEventListener("click", () => {
-  void copyHashToClipboard(sha512ValueElement).then(status => {
-    setStatusMessage(status === "copied" ? "SHA-512 copied." : "Clipboard copy failed.");
+  control.copyButtonElement.addEventListener("click", () => {
+    void copyHashToClipboard(control.valueElement).then(status => {
+      setStatusMessage(status === "copied" ? `${control.label} copied.` : "Clipboard copy failed.");
+    });
   });
 });
