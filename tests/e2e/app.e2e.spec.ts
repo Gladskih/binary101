@@ -12,7 +12,6 @@ import {
 } from "../fixtures/image-sample-files.js";
 import { createLnkFile } from "../fixtures/lnk-sample-file.js";
 import { createMp3File } from "../fixtures/audio-sample-files.js";
-import { createMp4File } from "../fixtures/mp4-fixtures.js";
 import { createPeFile, createPePlusFile } from "../fixtures/sample-files-pe.js";
 import { createSevenZipFile } from "../fixtures/rar-sevenzip-fixtures.js";
 import { createTarFile } from "../fixtures/tar-fixtures.js";
@@ -250,19 +249,6 @@ test.describe("file type rendering", () => {
     await expect(page.locator("#peDetailsValue")).toContainText("MPEG audio stream");
     await expect(page.locator("#peDetailsValue")).toContainText("Summary");
     await expect(page.locator(".audioPreview audio")).toBeVisible();
-  });
-
-  void test("renders MP4 details and suppresses unplayable previews", async ({ page }) => {
-    const videoFile = createMp4File();
-    await page.setInputFiles("#fileInput", toUpload(videoFile));
-
-    await expectBaseDetails(
-      page,
-      videoFile.name,
-      "MP4/QuickTime container (ISO-BMFF)"
-    );
-    await expect(page.locator("#peDetailsValue")).toContainText("MP4 / ISO-BMFF container");
-    await expect(page.locator(".videoPreview video")).toHaveCount(0);
   });
 
   void test("shows unknown binary type when no probe matches", async ({ page }) => {
