@@ -14,6 +14,7 @@
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;min-height:100dvh;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;display:flex;flex-direction:column}
+.iconSprite{position:absolute;width:0;height:0;overflow:hidden}
 header{text-align:center;padding:16px 16px 0}
 header h1{font-size:16px;margin:0 0 6px 0}
 header p{margin:0;color:var(--muted);font-size:12px}
@@ -134,13 +135,7 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .iconButton:hover{border-color:var(--accent);color:var(--accent)}
 .iconButton:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .iconButton[hidden]{display:none}
-.copyButton{position:relative}
-.copyButton::before,.copyButton::after{
-  content:"";position:absolute;width:.55rem;height:.65rem;border:1.5px solid currentColor;
-  border-radius:2px;background:var(--card)
-}
-.copyButton::before{top:.42rem;left:.48rem}
-.copyButton::after{top:.67rem;left:.73rem}
+.copyButton svg{display:block;width:14px;height:14px}
 
 .optionsRow{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
 .opt{font-size:11.5px;padding:.15rem .45rem;border-radius:7px;border:1px solid var(--border)}

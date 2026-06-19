@@ -31,6 +31,13 @@
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
+  <svg class="iconSprite" aria-hidden="true">
+    <symbol id="copyIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="14" height="14" x="8" y="8" rx="2"></rect>
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+    </symbol>
+  </svg>
   <header>
     <h1>Local File Inspector</h1>
     <p>All analysis runs locally in your browser. Nothing is uploaded.</p>
@@ -138,7 +145,9 @@
             <div class="hashButtons">
               <button type="button" class="actionButton" id="md5ComputeButton">Compute MD5</button>
               <button type="button" class="iconButton copyButton" id="md5CopyButton"
-                aria-label="Copy MD5 hash" title="Copy MD5 hash" hidden></button>
+                aria-label="Copy MD5 hash" title="Copy MD5 hash" hidden>
+                <svg aria-hidden="true" viewBox="0 0 24 24"><use href="#copyIcon"></use></svg>
+              </button>
             </div>
           </dd>
           <dt class="nativeHashLabel">
@@ -154,7 +163,9 @@
             <div class="hashButtons">
               <button type="button" class="actionButton" id="sha1ComputeButton">Compute SHA-1</button>
               <button type="button" class="iconButton copyButton" id="sha1CopyButton"
-                aria-label="Copy SHA-1 hash" title="Copy SHA-1 hash" hidden></button>
+                aria-label="Copy SHA-1 hash" title="Copy SHA-1 hash" hidden>
+                <svg aria-hidden="true" viewBox="0 0 24 24"><use href="#copyIcon"></use></svg>
+              </button>
             </div>
           </dd>
           <dt>SHA-224</dt>
@@ -163,7 +174,9 @@
             <div class="hashButtons">
               <button type="button" class="actionButton" id="sha224ComputeButton">Compute SHA-224</button>
               <button type="button" class="iconButton copyButton" id="sha224CopyButton"
-                aria-label="Copy SHA-224 hash" title="Copy SHA-224 hash" hidden></button>
+                aria-label="Copy SHA-224 hash" title="Copy SHA-224 hash" hidden>
+                <svg aria-hidden="true" viewBox="0 0 24 24"><use href="#copyIcon"></use></svg>
+              </button>
             </div>
           </dd>
           <dt class="nativeHashLabel">
@@ -179,7 +192,9 @@
             <div class="hashButtons">
               <button type="button" class="actionButton" id="sha256ComputeButton">Compute SHA-256</button>
               <button type="button" class="iconButton copyButton" id="sha256CopyButton"
-                aria-label="Copy SHA-256 hash" title="Copy SHA-256 hash" hidden></button>
+                aria-label="Copy SHA-256 hash" title="Copy SHA-256 hash" hidden>
+                <svg aria-hidden="true" viewBox="0 0 24 24"><use href="#copyIcon"></use></svg>
+              </button>
             </div>
           </dd>
           <dt class="nativeHashLabel">
@@ -195,7 +210,9 @@
             <div class="hashButtons">
               <button type="button" class="actionButton" id="sha384ComputeButton">Compute SHA-384</button>
               <button type="button" class="iconButton copyButton" id="sha384CopyButton"
-                aria-label="Copy SHA-384 hash" title="Copy SHA-384 hash" hidden></button>
+                aria-label="Copy SHA-384 hash" title="Copy SHA-384 hash" hidden>
+                <svg aria-hidden="true" viewBox="0 0 24 24"><use href="#copyIcon"></use></svg>
+              </button>
             </div>
           </dd>
           <dt class="nativeHashLabel">
@@ -211,7 +228,9 @@
             <div class="hashButtons">
               <button type="button" class="actionButton" id="sha512ComputeButton">Compute SHA-512</button>
               <button type="button" class="iconButton copyButton" id="sha512CopyButton"
-                aria-label="Copy SHA-512 hash" title="Copy SHA-512 hash" hidden></button>
+                aria-label="Copy SHA-512 hash" title="Copy SHA-512 hash" hidden>
+                <svg aria-hidden="true" viewBox="0 0 24 24"><use href="#copyIcon"></use></svg>
+              </button>
             </div>
           </dd>
           <dt>SHA-512/224</dt>
@@ -220,7 +239,9 @@
             <div class="hashButtons">
               <button type="button" class="actionButton" id="sha512224ComputeButton">Compute SHA-512/224</button>
               <button type="button" class="iconButton copyButton" id="sha512224CopyButton"
-                aria-label="Copy SHA-512/224 hash" title="Copy SHA-512/224 hash" hidden></button>
+                aria-label="Copy SHA-512/224 hash" title="Copy SHA-512/224 hash" hidden>
+                <svg aria-hidden="true" viewBox="0 0 24 24"><use href="#copyIcon"></use></svg>
+              </button>
             </div>
           </dd>
           <dt>SHA-512/256</dt>
@@ -229,7 +250,9 @@
             <div class="hashButtons">
               <button type="button" class="actionButton" id="sha512256ComputeButton">Compute SHA-512/256</button>
               <button type="button" class="iconButton copyButton" id="sha512256CopyButton"
-                aria-label="Copy SHA-512/256 hash" title="Copy SHA-512/256 hash" hidden></button>
+                aria-label="Copy SHA-512/256 hash" title="Copy SHA-512/256 hash" hidden>
+                <svg aria-hidden="true" viewBox="0 0 24 24"><use href="#copyIcon"></use></svg>
+              </button>
             </div>
           </dd>
           </dl>
