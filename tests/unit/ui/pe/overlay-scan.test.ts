@@ -82,6 +82,7 @@ void test("pe overlay scan controller updates progress and renders when complete
     embeddedScan: { status: "complete", scannedBytes: OVERLAY_SIZE }
   };
   const renders: ParseForUiResult[] = [];
+  const panelRenders: PeParseResult[] = [];
   const statuses: string[] = [];
   const scan = async (
     _file: File,
@@ -99,6 +100,9 @@ void test("pe overlay scan controller updates progress and renders when complete
     renderResult: result => {
       renders.push(result);
     },
+    renderPanel: panel => {
+      panelRenders.push(panel);
+    },
     setStatusMessage: message => {
       statuses.push(message ?? "");
     },
@@ -106,7 +110,8 @@ void test("pe overlay scan controller updates progress and renders when complete
   });
   controller.start(file, range);
   await flushTimers();
-  assert.equal(renders.length, 1);
+  assert.equal(renders.length, 0);
+  assert.deepEqual(panelRenders, [parseResult.parsed]);
   assert.equal((parseResult.parsed as PeParseResult).overlay?.ranges[0], scannedRange);
   assert.equal(dom.progress.max, OVERLAY_SIZE);
   assert.equal(dom.progress.value, OVERLAY_SIZE);

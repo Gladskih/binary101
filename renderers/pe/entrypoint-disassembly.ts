@@ -11,6 +11,8 @@ import type {
 
 const ENTRYPOINT_BUTTON_ID = "peEntrypointDisassembleButton";
 
+export const PE_ENTRYPOINT_DISASSEMBLY_PANEL_ID = "peEntrypointDisassemblyPanel";
+
 type RenderBlock = {
   block: PeEntrypointDisassemblyBlock;
   duplicateCount: number;
@@ -219,7 +221,7 @@ const renderEntrypointReport = (pe: PeWindowsParseResult, out: string[]): void =
   }
 };
 
-export const renderEntrypointDisassembly = (pe: PeWindowsParseResult, out: string[]): void => {
+const renderEntrypointDisassemblyContent = (pe: PeWindowsParseResult, out: string[]): void => {
   if (!hasEntrypoint(pe) && !pe.entrypointDisassembly) return;
   out.push(
     `<details class="analysisPanel"><summary class="analysisPanelSummary">` +
@@ -230,4 +232,14 @@ export const renderEntrypointDisassembly = (pe: PeWindowsParseResult, out: strin
   out.push(`</div>`);
   renderEntrypointReport(pe, out);
   out.push(`</div></details>`);
+};
+
+export const renderEntrypointDisassemblyPanel = (pe: PeWindowsParseResult): string => {
+  const out: string[] = [];
+  renderEntrypointDisassemblyContent(pe, out);
+  return out.length ? `<section id="${PE_ENTRYPOINT_DISASSEMBLY_PANEL_ID}">${out.join("")}</section>` : "";
+};
+
+export const renderEntrypointDisassembly = (pe: PeWindowsParseResult, out: string[]): void => {
+  out.push(renderEntrypointDisassemblyPanel(pe));
 };

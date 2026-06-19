@@ -65,6 +65,7 @@ void test("elf disassembly controller updates progress and renders when complete
   const file = new MockFile(new Uint8Array([0x90]), "elf.bin");
   const parseResult: ParseForUiResult = { analyzer: "elf", parsed: elf };
   const renders: ParseForUiResult[] = [];
+  const panelRenders: ElfParseResult[] = [];
   const analyze = async (_file: File, opts: AnalyzeElfInstructionSetOptions): Promise<ElfInstructionSetReport> => {
     opts.onProgress?.({
       stage: "loading",
@@ -95,13 +96,17 @@ void test("elf disassembly controller updates progress and renders when complete
     renderResult: result => {
       renders.push(result);
     },
+    renderPanel: panel => {
+      panelRenders.push(panel);
+    },
     analyze
   });
 
   controller.start(file, elf);
   await flushTimers();
 
-  assert.equal(renders.length, 1);
+  assert.equal(renders.length, 0);
+  assert.deepEqual(panelRenders, [elf]);
   assert.ok(elf.disassembly);
   assert.equal(elf.disassembly.instructionCount, 3);
   assert.equal(progress.max, 10);

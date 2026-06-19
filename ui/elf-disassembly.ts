@@ -16,7 +16,8 @@ type AnalyzeElfInstructionSets = (
 type ElfDisassemblyControllerOptions = {
   getCurrentFile: () => File | null;
   getCurrentParseResult: () => ParseForUiResult;
-  renderResult: (result: ParseForUiResult) => void;
+  renderPanel?: (elf: ElfParseResult) => void;
+  renderResult?: (result: ParseForUiResult) => void;
   analyze?: AnalyzeElfInstructionSets;
 };
 
@@ -166,7 +167,11 @@ export const createElfDisassemblyController = (
         current.parsed.disassembly = report;
         setDisassemblyUiRunning(false);
         abortController = null;
-        opts.renderResult(current);
+        if (opts.renderPanel) {
+          opts.renderPanel(current.parsed);
+        } else {
+          opts.renderResult?.(current);
+        }
       } catch (error) {
         if (localRunId !== runId) return;
         if (localAbortController.signal.aborted) return;

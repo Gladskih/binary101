@@ -30,6 +30,7 @@ void test("pe disassembly controller updates progress and renders when complete"
   const file = new MockFile(new Uint8Array([0x90]), "pe.bin");
   const parseResult: ParseForUiResult = { analyzer: "pe", parsed: pe };
   const renders: ParseForUiResult[] = [];
+  const panelRenders: PeWindowsParseResult[] = [];
   const analyze = async (
     _reader: FileRangeReader,
     opts: AnalyzePeInstructionSetOptions
@@ -63,11 +64,15 @@ void test("pe disassembly controller updates progress and renders when complete"
     renderResult: result => {
       renders.push(result);
     },
+    renderPanel: panel => {
+      panelRenders.push(panel);
+    },
     analyze
   });
   controller.start(file, pe);
   await flushTimers();
-  assert.equal(renders.length, 1);
+  assert.equal(renders.length, 0);
+  assert.deepEqual(panelRenders, [pe]);
   assert.ok(pe.disassembly);
   assert.equal(pe.disassembly.instructionCount, 3);
   assert.equal(dom.progress.max, 10);

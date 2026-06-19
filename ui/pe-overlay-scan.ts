@@ -8,6 +8,7 @@ import type {
   PeOverlayScanOptions,
   PeOverlayScanProgress
 } from "../analyzers/pe/overlay.js";
+import type { PeParseResult } from "../analyzers/pe/index.js";
 import { scanPeOverlayRange } from "../analyzers/pe/overlay-scan.js";
 
 type ScanPeOverlayRange = (
@@ -20,7 +21,8 @@ type ScanPeOverlayRange = (
 type PeOverlayScanControllerOptions = {
   getCurrentFile: () => File | null;
   getCurrentParseResult: () => ParseForUiResult;
-  renderResult: (result: ParseForUiResult) => void;
+  renderPanel?: (pe: PeParseResult) => void;
+  renderResult?: (result: ParseForUiResult) => void;
   setStatusMessage: (message: string | null | undefined) => void;
   scan?: ScanPeOverlayRange;
 };
@@ -132,7 +134,11 @@ export const createPeOverlayScanController = (
         abortController = null;
         activeRange = null;
         setOverlayScanUiState(range, "idle");
-        opts.renderResult(current);
+        if (opts.renderPanel) {
+          opts.renderPanel(current.parsed);
+        } else {
+          opts.renderResult?.(current);
+        }
         opts.setStatusMessage(`PE overlay scan complete: ${scannedRange.findings.length} finding(s).`);
       } catch (error) {
         if (localAbortController.signal.aborted) return;

@@ -16,6 +16,8 @@ const PROGRESS_BAR_ID = "peInstructionSetsProgress";
 const CHIP_ID_PREFIX = "peInstructionSetChip_";
 const COUNT_ID_PREFIX = "peInstructionSetCount_";
 
+export const PE_INSTRUCTION_SETS_PANEL_ID = "peInstructionSetsPanel";
+
 const renderInstructionPanelStart = (): string =>
   `<details class="analysisPanel"><summary class="analysisPanelSummary">` +
   `<span class="analysisPanelTitle">Instruction-set analysis</span></summary>` +
@@ -58,7 +60,7 @@ const renderFeatureTable = (rows: string): string =>
   `<table class="table" style="margin-top:.35rem"><thead><tr>` +
   `<th>Set</th><th>Instr.</th><th>What it is</th></tr></thead><tbody>${rows}</tbody></table>`;
 
-export function renderInstructionSets(pe: PeWindowsParseResult, out: string[]): void {
+const renderInstructionSetsContent = (pe: PeWindowsParseResult, out: string[]): void => {
   const disasm = pe.disassembly;
   out.push(renderInstructionPanelStart());
   const analyzeLabel = disasm ? "Re-analyze instruction sets" : "Analyze instruction sets";
@@ -146,4 +148,14 @@ export function renderInstructionSets(pe: PeWindowsParseResult, out: string[]): 
   }
 
   out.push(renderInstructionPanelEnd());
-}
+};
+
+export const renderInstructionSetsPanel = (pe: PeWindowsParseResult): string => {
+  const out: string[] = [];
+  renderInstructionSetsContent(pe, out);
+  return `<section id="${PE_INSTRUCTION_SETS_PANEL_ID}">${out.join("")}</section>`;
+};
+
+export const renderInstructionSets = (pe: PeWindowsParseResult, out: string[]): void => {
+  out.push(renderInstructionSetsPanel(pe));
+};

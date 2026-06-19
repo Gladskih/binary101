@@ -11,12 +11,14 @@ import {
 } from "./ui/hash-controls.js";
 import { createFileActionClickHandler } from "./ui/file-actions.js";
 import { isPeWindowsParseResult } from "./analyzers/pe/index.js";
-import { createPeDisassemblyController } from "./ui/pe-disassembly.js";
-import { createPeEntrypointDisassemblyController } from "./ui/pe-entrypoint-disassembly.js";
 import { handlePeEntrypointJumpClick } from "./ui/pe-entrypoint-navigation.js";
-import { createElfDisassemblyController } from "./ui/elf-disassembly.js";
+import { createAnalysisPanelActions } from "./ui/analysis-panel-actions.js";
+import {
+  refreshElfInstructionSetsPanel,
+  refreshPeEntrypointDisassemblyPanel,
+  refreshPeInstructionSetsPanel
+} from "./ui/analysis-panel-refresh.js";
 import { copyManifestPreviewToClipboard } from "./ui/manifest-preview-copy.js";
-import { createPeOverlayScanActions } from "./ui/pe-overlay-scan.js";
 import { handleManifestTreeActionClick, syncManifestTreeControls } from "./ui/manifest-tree-controls.js";
 import { captureOpenDetails, restoreOpenDetails } from "./ui/details-open-state.js";
 import { enhanceSortableTables, handleSortableTableClick } from "./ui/sortable-tables.js";
@@ -92,14 +94,8 @@ const setBinaryTypeLabel = (typeLabel: string): void => {
 };
 const getCurrentFile = (): File | null => currentFile;
 const getCurrentParseResult = (): ParseForUiResult => currentParseResult;
-const peDisassembly = createPeDisassemblyController({ getCurrentFile, getCurrentParseResult, renderResult });
-const peEntrypointDisassembly = createPeEntrypointDisassemblyController({
-  getCurrentFile, getCurrentParseResult, renderResult
-});
-const peOverlayScan = createPeOverlayScanActions({
-  getCurrentFile, getCurrentParseResult, renderResult, setStatusMessage
-});
-const elfDisassembly = createElfDisassemblyController({ getCurrentFile, getCurrentParseResult, renderResult });
+const { peDisassembly, peEntrypointDisassembly, peOverlayScan, elfDisassembly } =
+  createAnalysisPanelActions(getCurrentFile, getCurrentParseResult, setStatusMessage);
 const fileActionClickHandler = createFileActionClickHandler({
   getParseResult: getCurrentParseResult, getFile: getCurrentFile, setStatusMessage
 });
@@ -186,7 +182,7 @@ peDetailsValueElement.addEventListener("click", event => {
       return;
     }
     delete currentParseResult.parsed.disassembly;
-    renderResult(currentParseResult);
+    refreshPeInstructionSetsPanel(currentParseResult.parsed);
     peDisassembly.start(currentFile, currentParseResult.parsed);
     return;
   }
@@ -206,7 +202,7 @@ peDetailsValueElement.addEventListener("click", event => {
       return;
     }
     delete currentParseResult.parsed.entrypointDisassembly;
-    renderResult(currentParseResult);
+    refreshPeEntrypointDisassemblyPanel(currentParseResult.parsed);
     peEntrypointDisassembly.start(currentFile, currentParseResult.parsed);
     return;
   }
@@ -219,7 +215,7 @@ peDetailsValueElement.addEventListener("click", event => {
     if (!currentFile) return;
     if (currentParseResult.analyzer !== "elf" || !currentParseResult.parsed) return;
     delete currentParseResult.parsed.disassembly;
-    renderResult(currentParseResult);
+    refreshElfInstructionSetsPanel(currentParseResult.parsed);
     elfDisassembly.start(currentFile, currentParseResult.parsed);
     return;
   }

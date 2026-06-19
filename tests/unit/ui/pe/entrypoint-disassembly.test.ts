@@ -51,11 +51,15 @@ void test("pe entrypoint disassembly controller renders when complete", async ()
   const file = new MockFile(new Uint8Array([0x90]), "pe.bin");
   const parseResult: ParseForUiResult = { analyzer: "pe", parsed: pe };
   const renders: ParseForUiResult[] = [];
+  const panelRenders: PeWindowsParseResult[] = [];
   const controller = createPeEntrypointDisassemblyController({
     getCurrentFile: () => file,
     getCurrentParseResult: () => parseResult,
     renderResult: result => {
       renders.push(result);
+    },
+    renderPanel: panel => {
+      panelRenders.push(panel);
     },
     analyze: async () => createFakeReport()
   });
@@ -64,7 +68,8 @@ void test("pe entrypoint disassembly controller renders when complete", async ()
   assert.equal(button.disabled, true);
   await flushTimers();
 
-  assert.equal(renders.length, 1);
+  assert.equal(renders.length, 0);
+  assert.deepEqual(panelRenders, [pe]);
   assert.equal(button.disabled, false);
   assert.equal(pe.entrypointDisassembly?.instructionCount, 1);
   dom.restore();

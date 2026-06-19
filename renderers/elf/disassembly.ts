@@ -16,6 +16,8 @@ const PROGRESS_BAR_ID = "elfInstructionSetsProgress";
 const CHIP_ID_PREFIX = "elfInstructionSetChip_";
 const COUNT_ID_PREFIX = "elfInstructionSetCount_";
 
+export const ELF_INSTRUCTION_SETS_PANEL_ID = "elfInstructionSetsPanel";
+
 const renderFeatureRow = (id: string, countValue: number | null): string => {
   const label = escapeHtml(formatCpuidLabel(id));
   const description = escapeHtml(describeCpuidFeature(id));
@@ -37,7 +39,7 @@ const renderFeatureTableStart = (out: string[]): void => {
 };
 
 const renderInstructionSetHeader = (disasm: ElfParseResult["disassembly"], out: string[]): void => {
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Instruction sets</h4>`);
+  out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Instruction sets</h4>`);
   const analyzeLabel = disasm ? "Re-analyze instruction sets" : "Analyze instruction sets";
   out.push(`<div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">`);
   out.push(
@@ -54,7 +56,7 @@ const renderPendingInstructionSets = (out: string[]): void => {
   );
   renderFeatureTableStart(out);
   for (const id of KNOWN_CPUID_FEATURES) out.push(renderFeatureRow(id, null));
-  out.push(`</tbody></table></section>`);
+  out.push(`</tbody></table>`);
 };
 
 const renderDisassemblySummary = (disasm: NonNullable<ElfParseResult["disassembly"]>, out: string[]): void => {
@@ -143,7 +145,7 @@ const renderOtherFeatureCounts = (disasm: NonNullable<ElfParseResult["disassembl
   out.push(`</tbody></table></details>`);
 };
 
-export function renderInstructionSets(elf: ElfParseResult, out: string[]): void {
+const renderInstructionSetsContent = (elf: ElfParseResult, out: string[]): void => {
   const disasm = elf.disassembly;
   renderInstructionSetHeader(disasm, out);
   if (!disasm) {
@@ -154,5 +156,14 @@ export function renderInstructionSets(elf: ElfParseResult, out: string[]): void 
   renderSeedSummary(disasm, out);
   renderKnownFeatureCounts(disasm, out);
   renderOtherFeatureCounts(disasm, out);
-  out.push(`</section>`);
-}
+};
+
+export const renderInstructionSetsPanel = (elf: ElfParseResult): string => {
+  const out: string[] = [];
+  renderInstructionSetsContent(elf, out);
+  return `<section id="${ELF_INSTRUCTION_SETS_PANEL_ID}">${out.join("")}</section>`;
+};
+
+export const renderInstructionSets = (elf: ElfParseResult, out: string[]): void => {
+  out.push(renderInstructionSetsPanel(elf));
+};

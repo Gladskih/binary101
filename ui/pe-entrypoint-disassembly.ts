@@ -21,7 +21,8 @@ type AnalyzePeEntrypointDisassembly = (
 type PeEntrypointDisassemblyControllerOptions = {
   getCurrentFile: () => File | null;
   getCurrentParseResult: () => ParseForUiResult;
-  renderResult: (result: ParseForUiResult) => void;
+  renderPanel?: (pe: PeWindowsParseResult) => void;
+  renderResult?: (result: ParseForUiResult) => void;
   analyze?: AnalyzePeEntrypointDisassembly;
 };
 
@@ -95,7 +96,11 @@ export const createPeEntrypointDisassemblyController = (
       const current = opts.getCurrentParseResult();
       if (current.analyzer !== "pe" || !current.parsed || !isPeWindowsParseResult(current.parsed)) return;
       current.parsed.entrypointDisassembly = report;
-      opts.renderResult(current);
+      if (opts.renderPanel) {
+        opts.renderPanel(current.parsed);
+      } else {
+        opts.renderResult?.(current);
+      }
     })();
   };
 

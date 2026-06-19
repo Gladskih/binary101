@@ -1,7 +1,11 @@
 import { formatHumanSize } from "../binary-utils.js";
 import { createFileRangeReader, type FileRangeReader } from "../analyzers/file-range-reader.js";
 import type { ParseForUiResult } from "../analyzers/index.js";
-import { isPeWindowsParseResult, type PeParseResult } from "../analyzers/pe/index.js";
+import {
+  isPeWindowsParseResult,
+  type PeParseResult,
+  type PeWindowsParseResult
+} from "../analyzers/pe/index.js";
 import {
   analyzePeInstructionSets,
   type AnalyzePeInstructionSetOptions,
@@ -19,7 +23,8 @@ type AnalyzePeInstructionSets = (
 type PeDisassemblyControllerOptions = {
   getCurrentFile: () => File | null;
   getCurrentParseResult: () => ParseForUiResult;
-  renderResult: (result: ParseForUiResult) => void;
+  renderPanel?: (pe: PeWindowsParseResult) => void;
+  renderResult?: (result: ParseForUiResult) => void;
   analyze?: AnalyzePeInstructionSets;
 };
 
@@ -180,7 +185,11 @@ export const createPeDisassemblyController = (
       current.parsed.disassembly = report;
       setDisassemblyUiState("idle");
       abortController = null;
-      opts.renderResult(current);
+      if (opts.renderPanel) {
+        opts.renderPanel(current.parsed);
+      } else {
+        opts.renderResult?.(current);
+      }
     })();
   };
 

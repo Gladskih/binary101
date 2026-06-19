@@ -8,6 +8,8 @@ import { renderDownloadButton } from "../download-button.js";
 import { renderPeDiagnostics } from "./diagnostics.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
+export const PE_OVERLAY_PANEL_ID = "peOverlayPanel";
+
 const getUnexplainedOverlaySize = (pe: PeParseResult): number =>
   pe.overlay?.ranges.reduce((total, range) => total + range.size, 0) ?? 0;
 
@@ -74,7 +76,7 @@ const renderFindingRows = (range: PeOverlayRange): string =>
     `<td>${renderOverlayDownloadButton(finding.start, finding.end, `Download detected payload ${index + 1}`)}</td></tr>`
   ).join("");
 
-export function renderOverlay(pe: PeParseResult, out: string[]): void {
+const renderOverlayContent = (pe: PeParseResult, out: string[]): void => {
   if (!pe.overlay?.ranges.length && !pe.overlay?.warnings?.length) return;
   out.push(renderPeSectionStart("Overlay", `${getUnexplainedOverlaySize(pe)} byte(s)`));
   out.push(
@@ -112,6 +114,16 @@ export function renderOverlay(pe: PeParseResult, out: string[]): void {
     });
   }
   out.push(renderPeSectionEnd());
-}
+};
+
+export const renderOverlayPanel = (pe: PeParseResult): string => {
+  const out: string[] = [];
+  renderOverlayContent(pe, out);
+  return out.length ? `<section id="${PE_OVERLAY_PANEL_ID}">${out.join("")}</section>` : "";
+};
+
+export const renderOverlay = (pe: PeParseResult, out: string[]): void => {
+  out.push(renderOverlayPanel(pe));
+};
 
 export { getUnexplainedOverlaySize };

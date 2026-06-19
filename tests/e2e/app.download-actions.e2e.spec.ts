@@ -196,4 +196,29 @@ test.describe("PE analysis actions", () => {
     await expect(detailsValue).not.toContainText("Entrypoint disassembly failed");
     await expect(detailsValue).not.toContainText("unexpected module shape");
   });
+
+  void test("keeps instruction-set table sorting when entrypoint disassembly completes", async ({ page }) => {
+    const mockFile = createPePlusEntrypointCallFile();
+    await page.setInputFiles("#fileInput", toUpload(mockFile));
+
+    const detailsValue = page.locator("#peDetailsValue");
+    const instructionSection = detailsValue.locator("details.analysisPanel").filter({
+      has: page.locator("summary", { hasText: /^Instruction-set analysis\b/ })
+    }).first();
+    const entrypointSection = detailsValue.locator("details.analysisPanel").filter({
+      has: page.locator("summary", { hasText: /^Entrypoint disassembly\b/ })
+    }).first();
+    await instructionSection.locator(":scope > summary").click();
+    await detailsValue.locator("#peInstructionSetsAnalyzeButton").click();
+    await expect(instructionSection).toContainText("Disassembly sample");
+
+    const sortSetButton = instructionSection.getByRole("button", { name: "Sort by Set" }).first();
+    await sortSetButton.click();
+    await expect(sortSetButton.locator("..")).toHaveAttribute("aria-sort", "ascending");
+
+    await entrypointSection.locator(":scope > summary").click();
+    await detailsValue.locator("#peEntrypointDisassembleButton").click();
+    await expect(entrypointSection).toContainText("Entrypoint preview:");
+    await expect(sortSetButton.locator("..")).toHaveAttribute("aria-sort", "ascending");
+  });
 });
