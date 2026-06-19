@@ -44,6 +44,7 @@ const expectBaseDetails = async (page: Page, fileName: string, expectedKind: str
 
 const expectEveryHashCanBeComputed = async (page: Page, file: MockFile): Promise<void> => {
   const fileBytes = Buffer.from(file.data);
+  await page.locator("#hashDetails > summary").click();
   for (const { label, id, nodeDigestName } of hashExpectations) {
     const expectedDigest = createHash(nodeDigestName).update(fileBytes).digest("hex");
     await page.getByRole("button", { name: `Compute ${label}`, exact: true }).click();
@@ -115,6 +116,7 @@ test.describe("file type detection", () => {
     }, fileContent);
     await expectBaseDetails(page, "sample.txt", "Text file");
     await expect(page.locator("#peDetailsValue")).toBeHidden();
+    await page.locator("#hashDetails > summary").click();
     await page.getByRole("button", { name: "Compute SHA-256" }).click();
     await expect(page.locator("#sha256Value")).toHaveText(/^[0-9a-f]{64}$/);
   });
@@ -187,15 +189,17 @@ test.describe("file hash actions", () => {
     await expect(page.getByRole("heading", { name: "Local File Inspector" })).toBeVisible();
   });
 
-  void test("places hash actions before analysis details and computes every digest", async ({ page }) => {
+  void test("keeps hash actions in a collapsed section before analysis details", async ({ page }) => {
     const file = createPeFile();
     await page.setInputFiles("#fileInput", toUpload(file));
     await expectBaseDetails(page, "sample.exe", "PE32 executable for x86 (I386)");
     await expect(page.locator("#peDetailsValue")).toContainText("PE/COFF headers");
 
-    const hashButtonBox = await page.locator("#md5ComputeButton").boundingBox();
+    const hashDetails = page.locator("#hashDetails");
     const detailsBox = await page.locator("#peDetailsValue").boundingBox();
-    expect(hashButtonBox?.y).toBeLessThan(detailsBox?.y ?? 0);
+    await expect(hashDetails).not.toHaveAttribute("open", "");
+    const hashSummaryBox = await hashDetails.locator("summary").boundingBox();
+    expect(hashSummaryBox?.y).toBeLessThan(detailsBox?.y ?? 0);
 
     await expectEveryHashCanBeComputed(page, file);
   });

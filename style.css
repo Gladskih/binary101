@@ -76,6 +76,9 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 #peDetailsTerm,#peDetailsValue{grid-column:1 / -1}
 #peDetailsValue{padding-left:0}
 
+.hashDetails{margin-top:16px}
+.hashDetails > summary{color:var(--muted);cursor:pointer;font-weight:600}
+.hashDetails[open] > dl{margin-top:12px}
 .hashRow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
 .hashValue{font-family:var(--mono);font-size:12px}
 .hashButtons{display:flex;gap:8px}

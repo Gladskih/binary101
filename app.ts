@@ -40,7 +40,8 @@ const dropZoneElement = getElement("dropZone") as HTMLElement,
   fileBinaryTypeDetailElement = getElement("fileBinaryTypeDetail") as HTMLElement,
   fileMimeTypeDetailElement = getElement("fileMimeTypeDetail") as HTMLElement,
   peDetailsTermElement = getElement("peDetailsTerm") as HTMLElement,
-  peDetailsValueElement = getElement("peDetailsValue") as HTMLElement;
+  peDetailsValueElement = getElement("peDetailsValue") as HTMLElement,
+  hashDetailsElement = getElement("hashDetails") as HTMLDetailsElement;
 const hashControls = HASH_ALGORITHMS.map(algorithm => ({
   algorithm,
   label: algorithm.label,
@@ -103,6 +104,7 @@ const resetFileInspectionView = (): void => {
   peDetailsValueElement.hidden = true;
   peDetailsValueElement.innerHTML = "";
   fileAnalysisDurationDetailElement.textContent = "";
+  hashDetailsElement.open = false;
   resetHashDisplay(...hashControls);
 };
 const showEmptyInspection = (message: string | null): void => {
@@ -219,6 +221,8 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
   directoryInspection.hide();
   currentFile = file;
   currentParseResult = { analyzer: null, parsed: null };
+  hashDetailsElement.open = false;
+  resetHashDisplay(...hashControls);
   try {
     setPreviewUrl(null);
     fileInfoCardElement.hidden = true;
@@ -246,7 +250,6 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     fileAnalysisDurationDetailElement.textContent = formatAnalysisDuration(performance.now() - analysisStart);
     currentParseResult = parsedResult;
     renderResult(parsedResult);
-    resetHashDisplay(...hashControls);
     setStatusMessage(null);
   } catch (error) {
     if (fileInspectionGeneration !== currentGeneration) return;
@@ -263,7 +266,8 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
 }
 hashControls.forEach(control => {
   control.buttonElement.addEventListener("click", () => {
-    void computeAndDisplayHash(control.algorithm, currentFile, control);
+    const file = currentFile;
+    void computeAndDisplayHash(control.algorithm, file, control, () => currentFile === file);
   });
   control.copyButtonElement.addEventListener("click", () => {
     void copyHashToClipboard(control.valueElement).then(status => {

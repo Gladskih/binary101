@@ -124,7 +124,11 @@
           <dt>Analysis duration</dt><dd id="fileAnalysisDurationDetail"></dd>
           <dt>Source</dt><dd id="fileSourceDetail"></dd>
           <dt>Binary type</dt><dd id="fileBinaryTypeDetail"></dd>
+        </dl>
 
+        <details id="hashDetails" class="hashDetails">
+          <summary>File hashes</summary>
+          <dl>
           <dt>MD5</dt>
           <dd class="hashRow">
             <span class="hashValue" id="md5Value"></span>
@@ -189,7 +193,10 @@
               <button type="button" class="copyButton" id="sha512256CopyButton" hidden>Copy</button>
             </div>
           </dd>
+          </dl>
+        </details>
 
+        <dl>
           <dt id="peDetailsTerm" hidden>PE/COFF details</dt>
           <dd id="peDetailsValue" hidden></dd>
         </dl>

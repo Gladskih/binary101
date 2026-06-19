@@ -55,6 +55,17 @@ const nodeDigestNameForHashAlgorithm = (algorithm: HashAlgorithmOption): string 
   return algorithm.id;
 };
 
+const createNativeHashFile = (bytes: Uint8Array<ArrayBuffer>): File => ({
+  arrayBuffer: async () =>
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+  stream: () => { throw new Error("Native hash must not read a stream."); }
+}) as unknown as File;
+
+const createFallbackHashFile = (bytes: Uint8Array<ArrayBuffer>): File => ({
+  arrayBuffer: async () => { throw new Error("Fallback hash must not read an ArrayBuffer."); },
+  stream: () => new Blob([bytes]).stream()
+}) as unknown as File;
+
 const installClipboardStub = (
   writeText: (text: string) => Promise<void>
 ): (() => void) => {
@@ -132,6 +143,53 @@ void test("computeAndDisplayHash supports every visible hash algorithm", async (
   }
 });
 
+void test("computeAndDisplayHash uses WebCrypto input for browser-native algorithms", async () => {
+  const fileBytes = new TextEncoder().encode("abc");
+
+  for (const id of ["sha1", "sha256", "sha384", "sha512"]) {
+    const algorithm = getHashAlgorithm(id);
+    const { controls, valueElement } = createHashControlsFixture(algorithm.label);
+    await computeAndDisplayHash(algorithm, createNativeHashFile(fileBytes), controls);
+    assert.equal(
+      valueElement.textContent,
+      createHash(nodeDigestNameForHashAlgorithm(algorithm)).update(fileBytes).digest("hex")
+    );
+  }
+});
+
+void test("computeAndDisplayHash streams algorithms without browser-native support", async () => {
+  const fileBytes = new TextEncoder().encode("abc");
+
+  for (const id of ["md5", "sha224", "sha512224", "sha512256"]) {
+    const algorithm = getHashAlgorithm(id);
+    const { controls, valueElement } = createHashControlsFixture(algorithm.label);
+    await computeAndDisplayHash(algorithm, createFallbackHashFile(fileBytes), controls);
+    assert.equal(
+      valueElement.textContent,
+      createHash(nodeDigestNameForHashAlgorithm(algorithm)).update(fileBytes).digest("hex")
+    );
+  }
+});
+
+void test("computeAndDisplayHash ignores a result after the selected file changes", async () => {
+  const { controls, valueElement, buttonElement, copyButtonElement } = createHashControlsFixture();
+  const fileBytes = new TextEncoder().encode("abc");
+  let resolveArrayBuffer: (buffer: ArrayBuffer) => void = () => undefined;
+  const file = {
+    arrayBuffer: () => new Promise<ArrayBuffer>(resolve => { resolveArrayBuffer = resolve; })
+  } as unknown as File;
+  const computing = computeAndDisplayHash(getHashAlgorithm("sha256"), file, controls, () => false);
+
+  resetHashDisplay(controls);
+  resolveArrayBuffer(fileBytes.buffer);
+  await computing;
+
+  assert.equal(valueElement.textContent, "");
+  assert.equal(buttonElement.hidden, false);
+  assert.equal(buttonElement.disabled, false);
+  assert.equal(copyButtonElement.hidden, true);
+});
+
 void test("computeAndDisplayHash reports when no file is selected", async () => {
   const { controls, valueElement, buttonElement, copyButtonElement } = createHashControlsFixture();
 
@@ -154,7 +212,7 @@ void test("computeAndDisplayHash surfaces failures and leaves the button retryab
     })
   } as unknown as File;
 
-  await computeAndDisplayHash(getHashAlgorithm("sha256"), file, controls);
+  await computeAndDisplayHash(getHashAlgorithm("md5"), file, controls);
 
   assert.match(valueElement.textContent || "", /^Hash failed:/);
   assert.match(valueElement.textContent || "", /boom$/);
