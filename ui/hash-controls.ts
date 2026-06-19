@@ -16,8 +16,10 @@ type NativeHashAlgorithmOption = {
   nativeAlgorithm: AlgorithmIdentifier;
 };
 
+type FallbackHashId = "md5" | "sha224" | "sha512224" | "sha512256";
+
 type FallbackHashAlgorithmOption = {
-  id: HashAlgorithmId;
+  id: FallbackHashId;
   label: string;
   digest: CHash;
 };
@@ -77,10 +79,54 @@ const computeNativeFileDigest = async (
   await crypto.subtle.digest(nativeAlgorithm, await file.arrayBuffer())
 );
 
+const getWorkerDigest = (value: unknown): Uint8Array | null => {
+  if (!value || typeof value !== "object") return null;
+  const result = value as { digest?: unknown };
+  return result.digest instanceof ArrayBuffer ? new Uint8Array(result.digest) : null;
+};
+
+const getWorkerError = (value: unknown): string => {
+  if (!value || typeof value !== "object") return "Fallback hash failed.";
+  const result = value as { error?: unknown };
+  return typeof result.error === "string" ? result.error : "Fallback hash failed.";
+};
+
+const computeWorkerFallbackDigest = (
+  algorithmId: FallbackHashId,
+  file: File
+): Promise<Uint8Array> => new Promise((resolve, reject) => {
+  const worker = new Worker(
+    new URL("./hash-fallback-worker.ts", import.meta.url),
+    { type: "module" }
+  );
+  worker.addEventListener("error", () => {
+    worker.terminate();
+    reject(new Error("Fallback hash worker failed."));
+  }, { once: true });
+  worker.addEventListener("message", event => {
+    worker.terminate();
+    const digest = getWorkerDigest(event.data);
+    if (digest) {
+      resolve(digest);
+      return;
+    }
+    reject(new Error(getWorkerError(event.data)));
+  }, { once: true });
+  worker.postMessage({ algorithmId, file });
+});
+
+const computeFallbackDigest = (
+  algorithm: FallbackHashAlgorithmOption,
+  file: File
+): Promise<Uint8Array> =>
+  typeof Worker === "undefined"
+    ? computeFallbackFileDigest(algorithm.digest, file)
+    : computeWorkerFallbackDigest(algorithm.id, file);
+
 const computeFileDigest = (algorithm: HashAlgorithmOption, file: File): Promise<Uint8Array> =>
   "nativeAlgorithm" in algorithm
     ? computeNativeFileDigest(algorithm.nativeAlgorithm, file)
-    : computeFallbackFileDigest(algorithm.digest, file);
+    : computeFallbackDigest(algorithm, file);
 
 const computeAndDisplayHash = async (
   algorithm: HashAlgorithmOption,

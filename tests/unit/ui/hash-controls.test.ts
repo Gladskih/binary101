@@ -66,6 +66,36 @@ const createFallbackHashFile = (bytes: Uint8Array<ArrayBuffer>): File => ({
   stream: () => new Blob([bytes]).stream()
 }) as unknown as File;
 
+const installNativeDigestProbe = (): {
+  algorithms: AlgorithmIdentifier[];
+  restore: () => void;
+} => {
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const cryptoDescriptor = Object.getOwnPropertyDescriptor(globals, "crypto");
+  const nativeDigest = crypto.subtle.digest.bind(crypto.subtle);
+  const algorithms: AlgorithmIdentifier[] = [];
+  Object.defineProperty(globals, "crypto", {
+    configurable: true,
+    value: {
+      subtle: {
+        digest: async (
+          algorithm: AlgorithmIdentifier,
+          data: BufferSource
+        ): Promise<ArrayBuffer> => {
+          algorithms.push(algorithm);
+          return nativeDigest(algorithm, data);
+        }
+      }
+    }
+  });
+  return {
+    algorithms,
+    restore: () => {
+      if (cryptoDescriptor) Object.defineProperty(globals, "crypto", cryptoDescriptor);
+    }
+  };
+};
+
 const installClipboardStub = (
   writeText: (text: string) => Promise<void>
 ): (() => void) => {
@@ -145,15 +175,21 @@ void test("computeAndDisplayHash supports every visible hash algorithm", async (
 
 void test("computeAndDisplayHash uses WebCrypto input for browser-native algorithms", async () => {
   const fileBytes = new TextEncoder().encode("abc");
+  const probe = installNativeDigestProbe();
 
-  for (const id of ["sha1", "sha256", "sha384", "sha512"]) {
-    const algorithm = getHashAlgorithm(id);
-    const { controls, valueElement } = createHashControlsFixture(algorithm.label);
-    await computeAndDisplayHash(algorithm, createNativeHashFile(fileBytes), controls);
-    assert.equal(
-      valueElement.textContent,
-      createHash(nodeDigestNameForHashAlgorithm(algorithm)).update(fileBytes).digest("hex")
-    );
+  try {
+    for (const id of ["sha1", "sha256", "sha384", "sha512"]) {
+      const algorithm = getHashAlgorithm(id);
+      const { controls, valueElement } = createHashControlsFixture(algorithm.label);
+      await computeAndDisplayHash(algorithm, createNativeHashFile(fileBytes), controls);
+      assert.equal(
+        valueElement.textContent,
+        createHash(nodeDigestNameForHashAlgorithm(algorithm)).update(fileBytes).digest("hex")
+      );
+    }
+    assert.deepEqual(probe.algorithms, ["SHA-1", "SHA-256", "SHA-384", "SHA-512"]);
+  } finally {
+    probe.restore();
   }
 });
 

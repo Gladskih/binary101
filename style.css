@@ -76,9 +76,21 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 #peDetailsTerm,#peDetailsValue{grid-column:1 / -1}
 #peDetailsValue{padding-left:0}
 
-.hashDetails{margin-top:16px}
-.hashDetails > summary{color:var(--muted);cursor:pointer;font-weight:600}
-.hashDetails[open] > dl{margin-top:12px}
+.hashDetails{
+  margin-top:16px;border:1px solid var(--border2);border-radius:8px;background:var(--info-bg)
+}
+.hashDetails > summary{
+  display:list-item;padding:.7rem .8rem;color:var(--text);cursor:pointer;font-weight:700
+}
+.hashDetailsCount{float:right;color:var(--muted);font-size:12px;font-weight:600}
+.hashDetails[open] > dl{margin:0;padding:0 .8rem .8rem}
+.nativeHashLabel{
+  display:flex;flex-wrap:wrap;align-items:center;gap:6px;color:var(--text);font-weight:600
+}
+.nativeHashBadge{
+  display:inline-flex;align-items:center;padding:.1rem .35rem;border-radius:var(--radius-chip);
+  background:var(--ok-bg);font-size:11px;line-height:1;white-space:nowrap
+}
 .hashRow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
 .hashValue{font-family:var(--mono);font-size:12px}
 .hashButtons{display:flex;gap:8px}

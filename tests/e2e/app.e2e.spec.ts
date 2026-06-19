@@ -196,8 +196,16 @@ test.describe("file hash actions", () => {
     await expect(page.locator("#peDetailsValue")).toContainText("PE/COFF headers");
 
     const hashDetails = page.locator("#hashDetails");
+    const nativeHashLabels = page.locator(".nativeHashLabel");
     const detailsBox = await page.locator("#peDetailsValue").boundingBox();
     await expect(hashDetails).not.toHaveAttribute("open", "");
+    await expect(nativeHashLabels).toHaveCount(4);
+    await expect(nativeHashLabels).toHaveText([
+      "SHA-1 🍃",
+      "SHA-256 🍃",
+      "SHA-384 🍃",
+      "SHA-512 🍃"
+    ]);
     const hashSummaryBox = await hashDetails.locator("summary").boundingBox();
     expect(hashSummaryBox?.y).toBeLessThan(detailsBox?.y ?? 0);
 
