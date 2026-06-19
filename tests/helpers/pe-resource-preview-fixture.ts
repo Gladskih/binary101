@@ -113,6 +113,27 @@ export const buildSingleEntryGroupIconResource = (
   return bytes;
 };
 
+export const buildMultiEntryGroupIconResource = (
+  entries: Array<{ width: number; height: number; bitCount: number; iconSize: number; iconId: number }>
+): Uint8Array => {
+  const bytes = new Uint8Array(
+    GROUP_RESOURCE_HEADER_SIZE + entries.length * GROUP_RESOURCE_ENTRY_SIZE
+  ).fill(0);
+  const view = new DataView(bytes.buffer);
+  view.setUint16(2, 1, true); // GRPICONDIR.idType = 1 for icons in winuser.h.
+  view.setUint16(4, entries.length, true);
+  entries.forEach((entry, index) => {
+    const entryOffset = GROUP_RESOURCE_HEADER_SIZE + index * GROUP_RESOURCE_ENTRY_SIZE;
+    view.setUint8(entryOffset, entry.width === 256 ? 0 : entry.width);
+    view.setUint8(entryOffset + 1, entry.height === 256 ? 0 : entry.height);
+    view.setUint16(entryOffset + 4, 1, true);
+    view.setUint16(entryOffset + 6, entry.bitCount, true);
+    view.setUint32(entryOffset + 8, entry.iconSize, true);
+    view.setUint16(entryOffset + 12, entry.iconId, true);
+  });
+  return bytes;
+};
+
 export const buildLargeGroupIconResource = (
   entryCount: number,
   iconSize: number,

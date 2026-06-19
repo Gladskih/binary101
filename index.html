@@ -123,15 +123,20 @@
         </section>
       </article>
       <article id="fileInfoCard" hidden aria-live="polite" aria-atomic="true">
-        <dl>
-          <dt>File name</dt><dd id="fileNameDetail"></dd>
-          <dt>Size</dt><dd id="fileSizeDetail"></dd>
-          <dt>MIME type</dt><dd id="fileMimeTypeDetail"></dd>
-          <dt>Inspection time (UTC)</dt><dd id="fileTimestampDetail"></dd>
-          <dt>Analysis duration</dt><dd id="fileAnalysisDurationDetail"></dd>
-          <dt>Source</dt><dd id="fileSourceDetail"></dd>
-          <dt>Binary type</dt><dd id="fileBinaryTypeDetail"></dd>
-        </dl>
+        <div class="filePrimaryInfo">
+          <dl>
+            <dt>File name</dt><dd id="fileNameDetail"></dd>
+            <dt>Size</dt><dd id="fileSizeDetail"></dd>
+            <dt>MIME type</dt><dd id="fileMimeTypeDetail"></dd>
+            <dt>Inspection time (UTC)</dt><dd id="fileTimestampDetail"></dd>
+            <dt>Analysis duration</dt><dd id="fileAnalysisDurationDetail"></dd>
+            <dt>Source</dt><dd id="fileSourceDetail"></dd>
+            <dt>Binary type</dt><dd id="fileBinaryTypeDetail"></dd>
+          </dl>
+          <div id="fileIconWrap" class="filePrimaryInfo__iconWrap" hidden>
+            <img id="fileIcon" class="filePrimaryInfo__icon" alt="">
+          </div>
+        </div>
 
         <details id="hashDetails" class="hashDetails">
           <summary>

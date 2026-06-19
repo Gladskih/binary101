@@ -30,6 +30,7 @@ import {
   addAccessibleTooltip,
   enhanceAccessibleTooltips
 } from "./ui/accessible-tooltips.js";
+import { renderPeFileIcon } from "./ui/pe-file-icon.js";
 const getElement = (id: string) => document.getElementById(id)!;
 const html = (id: string): HTMLElement => getElement(id) as HTMLElement;
 const dropZoneElement = getElement("dropZone") as HTMLElement,
@@ -43,6 +44,8 @@ const dropZoneElement = getElement("dropZone") as HTMLElement,
   fileSourceDetailElement = getElement("fileSourceDetail") as HTMLElement,
   fileBinaryTypeDetailElement = getElement("fileBinaryTypeDetail") as HTMLElement,
   fileMimeTypeDetailElement = getElement("fileMimeTypeDetail") as HTMLElement,
+  fileIconWrapElement = getElement("fileIconWrap") as HTMLElement,
+  fileIconElement = getElement("fileIcon") as HTMLImageElement,
   peDetailsTermElement = getElement("peDetailsTerm") as HTMLElement,
   peDetailsValueElement = getElement("peDetailsValue") as HTMLElement,
   hashDetailsElement = getElement("hashDetails") as HTMLDetailsElement;
@@ -112,6 +115,7 @@ const resetFileInspectionView = (): void => {
   currentFile = null;
   currentTypeLabel = "";
   currentParseResult = { analyzer: null, parsed: null };
+  renderPeFileIcon(null, "", fileIconElement, fileIconWrapElement);
   setPreviewUrl(null);
   fileInfoCardElement.hidden = true;
   peDetailsTermElement.hidden = true;
@@ -235,6 +239,7 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
   directoryInspection.hide();
   currentFile = file;
   currentParseResult = { analyzer: null, parsed: null };
+  renderPeFileIcon(null, "", fileIconElement, fileIconWrapElement);
   hashDetailsElement.open = false;
   resetHashDisplay(...hashControls);
   try {
@@ -263,11 +268,13 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     if (fileInspectionGeneration !== currentGeneration) return;
     fileAnalysisDurationDetailElement.textContent = formatAnalysisDuration(performance.now() - analysisStart);
     currentParseResult = parsedResult;
+    renderPeFileIcon(parsedResult, file.name, fileIconElement, fileIconWrapElement);
     renderResult(parsedResult);
     setStatusMessage(null);
   } catch (error) {
     if (fileInspectionGeneration !== currentGeneration) return;
     currentTypeLabel = "";
+    renderPeFileIcon(null, "", fileIconElement, fileIconWrapElement);
     setPreviewUrl(null);
     setStatusMessage(
       `Unable to read file: ${error instanceof Error && error.message ? error.message : String(error)}`

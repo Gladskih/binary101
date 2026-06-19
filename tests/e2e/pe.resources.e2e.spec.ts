@@ -17,6 +17,21 @@ const expectBaseDetails = async (page: Page, fileName: string, expectedKind: str
   await expect(page.locator("#fileBinaryTypeDetail")).toHaveText(expectedKind);
 };
 
+const expectFileIcon = async (page: Page, fileName: string): Promise<void> => {
+  const icon = page.locator("#fileIcon");
+  await expect(icon).toBeVisible();
+  await expect(icon).toHaveAttribute("alt", `Icon embedded in ${fileName}`);
+  await expect(icon).toHaveAttribute("src", /^data:image\/x-icon;base64,/);
+  const detailsBox = await page.locator(".filePrimaryInfo > dl").boundingBox();
+  const iconBox = await icon.boundingBox();
+  expect(detailsBox).not.toBeNull();
+  expect(iconBox).not.toBeNull();
+  expect(iconBox!.x).toBeGreaterThan(detailsBox!.x + detailsBox!.width);
+  // Keep the icon visually comparable to the seven-row primary-details block.
+  expect(iconBox!.height / detailsBox!.height).toBeGreaterThan(0.7);
+  expect(iconBox!.height / detailsBox!.height).toBeLessThan(1.3);
+};
+
 const openTopLevelSection = async (page: Page, title: string) => {
   const details = page.locator("#peDetailsValue > section > details").filter({
     has: page.locator("summary", { hasText: new RegExp(`^${title}\\b`) })
@@ -104,6 +119,7 @@ test.describe("PE resource previews", () => {
     await page.setInputFiles("#fileInput", toUpload(file));
 
     await expectBaseDetails(page, file.name, "PE32+ executable for x86-64 (AMD64)");
+    await expectFileIcon(page, file.name);
     await expect(page.locator("#peDetailsValue")).toContainText("Resources");
     const resourcesSection = await openTopLevelSection(page, "Resources");
     await expect(resourcesSection).toHaveJSProperty("open", true);

@@ -98,14 +98,18 @@ const pickBestGroupEntry = (groupData: DataView): number | null => {
   // RT_GROUP_ICON starts with NEWHEADER (6 bytes), then fixed-size 14-byte RESDIR records.
   if (!entryCount || 6 + entryCount * 14 > groupData.byteLength) return null;
   let selectedIndex = 0;
-  let bestWidth = 0;
+  let bestPixelCount = 0;
+  let bestBitCount = 0;
   for (let index = 0; index < entryCount; index += 1) {
-    // UI heuristic: prefer a 32px icon preview when present; otherwise pick the largest width.
-    const width = groupData.getUint8(6 + index * 14) || 256;
-    if (width === 32) return index;
-    if (width > bestWidth) {
+    const entryOffset = 6 + index * 14;
+    const width = groupData.getUint8(entryOffset) || 256;
+    const height = groupData.getUint8(entryOffset + 1) || 256;
+    const bitCount = groupData.getUint16(entryOffset + 6, true);
+    const pixelCount = width * height;
+    if (pixelCount > bestPixelCount || (pixelCount === bestPixelCount && bitCount > bestBitCount)) {
       selectedIndex = index;
-      bestWidth = width;
+      bestPixelCount = pixelCount;
+      bestBitCount = bitCount;
     }
   }
   return selectedIndex;
