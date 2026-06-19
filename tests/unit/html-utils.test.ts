@@ -17,6 +17,7 @@ void test("escapeHtml replaces risky characters while leaving safe ones alone", 
 void test("renderDefinitionRow emits tooltip-escaped definition pairs", () => {
   const html = renderDefinitionRow("Label", "<b>value</b>", 'tooltip with <tag> and "quotes"');
   assert.ok(html.startsWith("<dt"));
+  assert.ok(html.includes("data-accessible-tooltip"));
   assert.ok(html.includes('title="tooltip with &lt;tag> and &quot;quotes&quot;"'));
   assert.ok(html.endsWith("</dd>"));
 });
@@ -25,6 +26,7 @@ void test("renderDefinitionRow omits title attribute when tooltip is missing", (
   const html = renderDefinitionRow("Plain", "<i>value</i>");
   assert.ok(html.startsWith("<dt"));
   assert.ok(!html.includes('title="'));
+  assert.ok(!html.includes("data-accessible-tooltip"));
 });
 
 void test("renderOptionChips marks the selected option and formats tooltips", () => {
@@ -43,8 +45,13 @@ void test("renderOptionChips includes explanations in tooltips when available", 
     [0x02, "Two"]
   ]);
 
-  assert.ok(html.includes('class="opt sel" title="One - first option (0x0001)"'));
+  assert.ok(
+    html.includes(
+      'class="opt sel" data-accessible-tooltip title="One - first option (0x0001)"'
+    )
+  );
   assert.ok(html.includes('class="opt dim" title="Two (0x0002)"'));
+  assert.equal(html.match(/data-accessible-tooltip/g)?.length, 1);
 });
 
 void test("renderFlagChips marks set bits, dims others, and escapes labels", () => {
@@ -53,8 +60,12 @@ void test("renderFlagChips marks set bits, dims others, and escapes labels", () 
     [0x02, "WRITE", "write access"]
   ]);
 
-  assert.ok(html.includes('class="opt sel" title="READ - &lt;allowed> (0x0001)"'));
-  assert.ok(html.includes('class="opt dim" title="WRITE - write access (0x0002)"'));
+  assert.ok(html.includes(
+    'class="opt sel" data-accessible-tooltip title="READ - &lt;allowed> (0x0001)"'
+  ));
+  assert.ok(html.includes(
+    'class="opt dim" data-accessible-tooltip title="WRITE - write access (0x0002)"'
+  ));
 });
 
 void test("renderFlagChips surfaces unknown set bits", () => {
@@ -62,7 +73,9 @@ void test("renderFlagChips surfaces unknown set bits", () => {
     [0x01, "READ", "read access"]
   ]);
 
-  assert.ok(html.includes('class="opt sel" title="READ - read access (0x0001)"'));
+  assert.ok(html.includes(
+    'class="opt sel" data-accessible-tooltip title="READ - read access (0x0001)"'
+  ));
   assert.ok(
     html.includes('class="opt sel" title="Unknown flag bits (0x0004)">UNKNOWN_BITS_0x0004</span>')
   );

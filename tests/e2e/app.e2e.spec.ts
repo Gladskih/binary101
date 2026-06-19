@@ -194,6 +194,21 @@ test.describe("file hash actions", () => {
     await page.setInputFiles("#fileInput", toUpload(file));
     await expectBaseDetails(page, "sample.exe", "PE32 executable for x86 (I386)");
     await expect(page.locator("#peDetailsValue")).toContainText("PE/COFF headers");
+    await expect(page.locator("#peDetailsValue")).not.toContainText(
+      "Portable Executable (PE) / COFF is the executable and object-file format"
+    );
+
+    const typeHelp = page.locator("#fileBinaryTypeDetail .accessibleTooltipButton");
+    await expect(typeHelp).toBeVisible();
+    await typeHelp.click();
+    await expect(page.locator("#fileBinaryTypeDetail .accessibleTooltipPopup")).toHaveAttribute(
+      "aria-label",
+      "Portable Executable (PE) / COFF is the executable and object-file format used by " +
+      "Windows toolchains."
+    );
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#fileBinaryTypeDetail .accessibleTooltipPopup")).toBeHidden();
+    expect(await page.locator("#peDetailsValue .accessibleTooltipButton").count()).toBeGreaterThan(0);
 
     const hashDetails = page.locator("#hashDetails");
     const nativeHashLabels = page.locator(".nativeHashLabel");

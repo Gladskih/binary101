@@ -61,12 +61,6 @@ const renderDataDirectoryStatus = (present: boolean): string =>
 const renderDataDirectorySize = (size: number): string =>
   `<span title="${size} bytes">${humanSize(size).replace(` (${size} bytes)`, "")}</span>`;
 
-const renderPeFormatNote = (out: string[]): void => {
-  out.push(
-    `<section><div class="smallNote">Portable Executable (PE) / COFF is the executable and object-file format used by Windows toolchains.</div></section>`
-  );
-};
-
 const PE_SUBTYPE_LABELS: Record<string, string> = {
   "winmd": "Windows Metadata (WinMD)",
   "clr-native-image": "CLR native image",
@@ -164,7 +158,6 @@ const renderChecksumHtml = (checkSum: number): string => [
 ].join("");
 
 export function renderHeaders(pe: PeParseResult, out: string[]): void {
-  renderPeFormatNote(out);
   renderDosHeader(pe, out);
 
   out.push(renderPeSectionStart("PE/COFF headers"));

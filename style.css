@@ -69,15 +69,19 @@ main{flex:1;display:flex;flex-direction:column;align-items:stretch}
 .directoryActionRow:hover{background:var(--chip-bg-light)}
 .directoryActionRow:focus{outline:2px solid var(--accent);outline-offset:-2px}
 #fileInfoCard[hidden]{display:none}
-#fileInfoCard{border:1px solid var(--border);border-radius:var(--radius-card);background:var(--card);padding:16px 18px}
+#fileInfoCard{
+  --content-section-gap:12px;border:1px solid var(--border);
+  border-radius:var(--radius-card);background:var(--card);padding:16px 18px
+}
 dl{display:grid;grid-template-columns:max-content 1fr;row-gap:8px;column-gap:16px;margin:0}
 dt{color:var(--muted)}
 dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 #peDetailsTerm,#peDetailsValue{grid-column:1 / -1}
-#peDetailsValue{padding-left:0}
+#peDetailsValue{padding-left:0;margin-top:var(--content-section-gap)}
 
 .hashDetails{
-  margin-top:16px;border:1px solid var(--border2);border-radius:8px;background:var(--info-bg)
+  margin-top:var(--content-section-gap);border:1px solid var(--border2);border-radius:8px;
+  background:var(--info-bg)
 }
 .hashDetails > summary{
   display:list-item;padding:.7rem .8rem;color:var(--text);cursor:pointer;font-weight:700
@@ -91,6 +95,28 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
   display:inline-flex;align-items:center;padding:.1rem .35rem;border-radius:var(--radius-chip);
   background:var(--ok-bg);font-size:11px;line-height:1;white-space:nowrap
 }
+.accessibleTooltip{
+  position:relative;display:inline-flex;margin-left:.3rem;vertical-align:middle
+}
+.accessibleTooltipButton{
+  display:grid;place-items:center;width:1.1rem;height:1.1rem;padding:0;
+  border:1px solid var(--border2);border-radius:3px;background:var(--chip-bg);
+  color:var(--muted);font:700 11px/1 system-ui;cursor:pointer
+}
+.accessibleTooltipButton:hover,.accessibleTooltipButton:focus-visible{
+  border-color:var(--accent);color:var(--text);outline:none
+}
+.accessibleTooltipButton::before{content:"?"}
+.accessibleTooltipPopup{
+  position:absolute;z-index:1000;top:calc(100% + .35rem);left:0;width:max-content;
+  max-width:min(22rem,calc(100vw - 2rem));padding:.55rem .65rem;border:1px solid var(--border2);
+  border-radius:6px;background:var(--card);color:var(--text);
+  box-shadow:0 .5rem 1.5rem rgb(0 0 0 / .3);
+  font:12px/1.4 system-ui;text-align:left;white-space:normal
+}
+.accessibleTooltip--alignEnd > .accessibleTooltipPopup{right:0;left:auto}
+.accessibleTooltipPopup::before{content:attr(aria-label)}
+.accessibleTooltipPopup[hidden]{display:none}
 .hashRow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
 .hashValue{font-family:var(--mono);font-size:12px}
 .hashButtons{display:flex;gap:8px}
@@ -104,6 +130,10 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .smallNote{color:var(--muted);font-size:12px;margin-top:4px}
 .mono{font-family:var(--mono)}
 .analysisPanel{margin:.2rem 0 .8rem 0;border:1px solid var(--border2);border-radius:14px;background:var(--info-bg)}
+#peDetailsValue > .analysisPanel,#peDetailsValue > .peSection{
+  margin:0 0 var(--content-section-gap)
+}
+#peDetailsValue > :last-child{margin-bottom:0}
 .analysisPanelSummary{cursor:pointer;padding:.85rem 1rem}
 .analysisPanelBody{padding:0 1rem .9rem 1rem}
 .analysisPanelTitle{display:inline-block;font-size:1rem;font-weight:700}

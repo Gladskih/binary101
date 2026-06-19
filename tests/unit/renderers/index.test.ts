@@ -201,7 +201,7 @@ void test("renderers produce readable archive and executable HTML output", async
 
   const pe = await parseOnly(createPeFile(), "pe");
   const peHtml = renderPe(pe);
-  assert.match(peHtml, /Portable Executable \(PE\) \/ COFF/);
+  assert.doesNotMatch(peHtml, /Portable Executable \(PE\) \/ COFF/);
   assert.match(peHtml, /Instruction-set analysis/);
 
   const mz = await parseOnly(createDosMzExe(), "mz");

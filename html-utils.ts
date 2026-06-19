@@ -12,7 +12,8 @@ export const renderDefinitionRow = (
   valueHtml: string,
   tooltip?: string | null
 ): string =>
-  `<dt${tooltip ? ` title="${escapeHtml(tooltip)}"` : ""}>${label}</dt><dd>${valueHtml}</dd>`;
+  `<dt${tooltip ? ` data-accessible-tooltip title="${escapeHtml(tooltip)}"` : ""}>` +
+  `${label}</dt><dd>${valueHtml}</dd>`;
 
 export const renderOptionChips = (
   selectedCode: number,
@@ -22,9 +23,9 @@ export const renderOptionChips = (
     .map(([code, label, explanation]) => {
       const tooltipLabel = explanation ? `${label} - ${explanation}` : label;
       const tooltip = `${tooltipLabel} (${toHex32(code, 4)})`;
-      return `<span class="opt ${code === selectedCode ? "sel" : "dim"}" title="${escapeHtml(
-        tooltip
-      )}">${label}</span>`;
+      return `<span class="opt ${code === selectedCode ? "sel" : "dim"}" ` +
+        `${explanation ? "data-accessible-tooltip " : ""}title="${escapeHtml(tooltip)}">` +
+        `${label}</span>`;
     })
     .join("")}
   </div>`;
@@ -43,6 +44,7 @@ export const renderFlagChips = (
     const label = explanation ? `${name} - ${explanation}` : name;
     const tooltip = `${label} (${toHex32(bit, 4)})`;
     return `<span class="opt ${isSet ? "sel" : "dim"}" ` +
+      `${explanation ? "data-accessible-tooltip " : ""}` +
       `title="${escapeHtml(tooltip)}">${name}</span>`;
   });
   const unknownBits = (normalizedMask & ~knownMask) >>> 0;

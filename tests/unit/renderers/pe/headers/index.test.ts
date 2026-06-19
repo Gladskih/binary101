@@ -51,7 +51,7 @@ void test("renderHeaders covers known/unknown branches and exact linker versions
   assert.ok(html.includes("64-bit"));
   assert.ok(html.includes("14.2 - VS2019 era"));
   assert.ok(html.includes("Windows 7"));
-  assert.ok(html.includes("Portable Executable (PE) / COFF"));
+  assert.ok(!html.includes("Portable Executable (PE) / COFF"));
   assert.ok(html.includes("DOS stub: stub - hello"));
   assert.ok(html.includes("Rich header"));
   assert.ok(html.includes("Tool and build names"));
@@ -110,7 +110,7 @@ void test("renderHeaders handles fallbacks and missing optional parts", () => {
   assert.ok(html.includes("32-bit"));
   assert.ok(html.includes("13.0 - MSVC (pre-VS2015)"));
   assert.ok(html.includes("11.0 (11.0)"));
-  assert.ok(html.includes("Portable Executable (PE) / COFF"));
+  assert.ok(!html.includes("Portable Executable (PE) / COFF"));
   assert.ok(html.includes("Rich header: not present"));
 });
 
@@ -157,7 +157,7 @@ void test("renderHeaders renders ROM-specific optional fields and omits Windows-
   renderHeaders(pe, out);
   const html = out.join("");
 
-  assert.ok(html.includes("Portable Executable (PE) / COFF"));
+  assert.ok(!html.includes("Portable Executable (PE) / COFF"));
   assert.ok(html.includes("IMAGE_ROM_OPTIONAL_HEADER"));
   assert.ok(html.includes("BaseOfBss"));
   assert.ok(html.includes("GprMask"));
@@ -181,7 +181,7 @@ void test("renderHeaders keeps unrecognized or absent optional headers in a gene
   renderHeaders(pe, out);
   const html = out.join("");
 
-  assert.ok(html.includes("Portable Executable (PE) / COFF"));
+  assert.ok(!html.includes("Portable Executable (PE) / COFF"));
   assert.ok(html.includes("Optional header fields are unavailable"));
   assert.ok(!html.includes("peChecksumValidateButton"));
 });

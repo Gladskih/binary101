@@ -26,6 +26,10 @@ import {
 } from "./ui/directory-inspection.js";
 import { createInspectionNavigationController } from "./ui/inspection-navigation.js";
 import { attachSelectionInputs } from "./ui/selection-inputs.js";
+import {
+  addAccessibleTooltip,
+  enhanceAccessibleTooltips
+} from "./ui/accessible-tooltips.js";
 const getElement = (id: string) => document.getElementById(id)!;
 const html = (id: string): HTMLElement => getElement(id) as HTMLElement;
 const dropZoneElement = getElement("dropZone") as HTMLElement,
@@ -71,7 +75,17 @@ const renderResult = (result: ParseForUiResult): void => {
     valueElement: peDetailsValueElement
   });
   enhanceSortableTables(peDetailsValueElement);
+  enhanceAccessibleTooltips(fileInfoCardElement);
   restoreOpenDetails(peDetailsValueElement, openDetails, viewer => syncManifestTreeControls(viewer as Element));
+};
+const setBinaryTypeLabel = (typeLabel: string): void => {
+  fileBinaryTypeDetailElement.textContent = typeLabel;
+  if (!typeLabel.startsWith("PE")) return;
+  addAccessibleTooltip(
+    fileBinaryTypeDetailElement,
+    "Portable Executable (PE) / COFF is the executable and object-file format used by " +
+    "Windows toolchains."
+  );
 };
 const getCurrentFile = (): File | null => currentFile;
 const getCurrentParseResult = (): ParseForUiResult => currentParseResult;
@@ -240,7 +254,7 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     fileSizeDetailElement.textContent = sizeText;
     fileTimestampDetailElement.textContent = timestampIso;
     fileSourceDetailElement.textContent = sourceDescription;
-    fileBinaryTypeDetailElement.textContent = typeLabel;
+    setBinaryTypeLabel(typeLabel);
     fileMimeTypeDetailElement.textContent = mimeType;
     fileInfoCardElement.hidden = false;
     setStatusMessage("Parsing file details...");
