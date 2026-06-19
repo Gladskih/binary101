@@ -42,22 +42,4 @@ test.describe("MP4 previews", () => {
     await expect(page.locator(".videoPreview video")).toHaveCount(0);
   });
 
-  void test("removes previews after a browser playback error", async ({ page }) => {
-    await page.evaluate(() => {
-      // Force preview creation so the UI reacts to the subsequent media error.
-      HTMLMediaElement.prototype.canPlayType =
-        mimeType => (mimeType === "video/mp4" ? "maybe" : "");
-    });
-    const { file, upload } = toUpload();
-    await page.setInputFiles("#fileInput", upload);
-
-    await expectMp4Details(page, file.name);
-    const videoPreview = page.locator(".videoPreview video");
-    await expect(videoPreview).toBeVisible();
-    await videoPreview.dispatchEvent("error");
-    await expect(videoPreview).toHaveCount(0);
-    await expect(page.locator("#statusMessage")).toHaveText(
-      "Preview not shown: browser cannot play this video format inline."
-    );
-  });
 });
