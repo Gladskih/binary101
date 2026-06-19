@@ -11,7 +11,7 @@ export const renderDownloadButton = (
   label: string,
   attributes: readonly DownloadButtonAttribute[]
 ): string =>
-  `<button type="button" class="downloadIconButton"` +
+  `<button type="button" class="iconButton downloadIconButton"` +
   `${attributes.map(renderAttribute).join("")} aria-label="${escapeHtml(label)}" ` +
   `title="${escapeHtml(label)}">` +
   `<svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" ` +

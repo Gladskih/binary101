@@ -49,6 +49,7 @@ const expectEveryHashCanBeComputed = async (page: Page, file: MockFile): Promise
     const expectedDigest = createHash(nodeDigestName).update(fileBytes).digest("hex");
     await page.getByRole("button", { name: `Compute ${label}`, exact: true }).click();
     await expect(page.locator(`#${id}Value`)).toHaveText(expectedDigest);
+    await expect(page.getByRole("button", { name: `Copy ${label} hash`, exact: true })).toBeVisible();
   }
 };
 

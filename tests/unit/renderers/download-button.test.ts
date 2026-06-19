@@ -10,7 +10,7 @@ void test("renderDownloadButton renders shared download button markup", () => {
     ["data-overlay-start", 64],
     ["data-name", "a\"b"]
   ]);
-  assert.ok(html.includes("class=\"downloadIconButton\""));
+  assert.ok(html.includes("class=\"iconButton downloadIconButton\""));
   assert.ok(html.includes("data-pe-overlay-download"));
   assert.ok(html.includes("data-overlay-start=\"64\""));
   assert.ok(html.includes("data-name=\"a&quot;b\""));
