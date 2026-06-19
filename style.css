@@ -80,14 +80,14 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 #peDetailsValue{padding-left:0;margin-top:var(--content-section-gap)}
 
 .hashDetails{
-  margin-top:var(--content-section-gap);border:1px solid var(--border2);border-radius:8px;
+  margin-top:var(--content-section-gap);border:1px solid var(--border2);border-radius:14px;
   background:var(--info-bg)
 }
 .hashDetails > summary{
-  display:list-item;padding:.7rem .8rem;color:var(--text);cursor:pointer;font-weight:700
+  display:list-item;padding:.85rem 1rem;color:var(--text);cursor:pointer;font-weight:700
 }
 .hashDetailsCount{float:right;color:var(--muted);font-size:12px;font-weight:600}
-.hashDetails[open] > dl{margin:0;padding:0 .8rem .8rem}
+.hashDetails[open] > dl{margin:0;padding:0 1rem .9rem}
 .nativeHashLabel{
   display:flex;flex-wrap:wrap;align-items:center;gap:6px;color:var(--text);font-weight:600
 }

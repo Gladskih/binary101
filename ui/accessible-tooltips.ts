@@ -35,7 +35,7 @@ const addAccessibleTooltip = (target: HTMLElement, tooltip: string): void => {
   if (!text || target.querySelector(":scope > .accessibleTooltip")) return;
   const document = target.ownerDocument;
   ensureTooltipDismissal(document);
-  target.removeAttribute("title");
+  target.setAttribute("title", text);
   const control = document.createElement("span");
   const button = document.createElement("button");
   const popup = document.createElement("span");

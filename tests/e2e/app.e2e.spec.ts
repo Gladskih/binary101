@@ -199,6 +199,11 @@ test.describe("file hash actions", () => {
     );
 
     const typeHelp = page.locator("#fileBinaryTypeDetail .accessibleTooltipButton");
+    await expect(page.locator("#fileBinaryTypeDetail")).toHaveAttribute(
+      "title",
+      "Portable Executable (PE) / COFF is the executable and object-file format used by " +
+      "Windows toolchains."
+    );
     await expect(typeHelp).toBeVisible();
     await typeHelp.click();
     await expect(page.locator("#fileBinaryTypeDetail .accessibleTooltipPopup")).toHaveAttribute(
