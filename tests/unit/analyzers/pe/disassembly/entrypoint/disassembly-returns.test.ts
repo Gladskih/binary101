@@ -8,11 +8,19 @@ import {
   analyzePeEntrypointDisassembly,
   type PeEntrypointInstructionTarget
 } from "../../../../../../analyzers/pe/disassembly/index.js";
+import type {
+  IcedInstructionObject
+} from "../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";
 import { MockFile } from "../../../../../helpers/mock-file.js";
 import {
   IMAGE_FILE_MACHINE_I386,
   createExecutableSection
 } from "../../../../../helpers/pe-entrypoint-disassembly-fixture.js";
+import {
+  createScriptedIced,
+  imm,
+  instruction as ins
+} from "../../../../../helpers/pe-entrypoint-emulation-fixture.js";
 
 const assertKnownReturnTarget = (
   target: PeEntrypointInstructionTarget | undefined
@@ -22,22 +30,112 @@ const assertKnownReturnTarget = (
   return target;
 };
 
-const analyzeRealEntrypoint = (bytes: Uint8Array) =>
-  analyzePeEntrypointDisassembly(
+const analyzeRealEntrypoint = (bytes: Uint8Array) => {
+  const section = createExecutableSection({
+    sizeOfRawData: bytes.length,
+    virtualSize: bytes.length
+  });
+  return analyzePeEntrypointDisassembly(
     createFileRangeReader(new MockFile(bytes, "entry.exe"), 0, bytes.length),
     {
       coffMachine: IMAGE_FILE_MACHINE_I386,
       is64Bit: false,
-      imageBase: 0n,
-      entrypointRva: 0x1000,
-      headerRvaLimit: 0x400,
-      rvaToOff: rva => rva - 0x1000,
-      sections: [
-        createExecutableSection({ virtualSize: bytes.length, sizeOfRawData: bytes.length })
-      ]
+      imageBase: 0n, // Keep fixture virtual addresses equal to RVAs.
+      entrypointRva: section.virtualAddress,
+      rvaToOff: rva => rva - section.virtualAddress,
+      sections: [section]
     },
     async () => iced
   );
+};
+
+const scriptedByteLength = (
+  instructions: Parameters<typeof createScriptedIced>[0]
+): number => {
+  const startIp = instructions[0]?.ip ?? 0n;
+  return Math.max(...instructions.map(instruction => Number(instruction.nextIP - startIp)));
+};
+
+const analyzeScriptedEntrypoint = (
+  instructions: Parameters<typeof createScriptedIced>[0]
+): ReturnType<typeof analyzePeEntrypointDisassembly> => {
+  const byteLength = scriptedByteLength(instructions);
+  const section = createExecutableSection({
+    sizeOfRawData: byteLength,
+    virtualAddress: Number(instructions[0]?.ip ?? 0n),
+    virtualSize: byteLength
+  });
+  return analyzePeEntrypointDisassembly(
+    createFileRangeReader(
+      new MockFile(new Uint8Array(byteLength), "scripted-entry.exe"),
+      0,
+      byteLength
+    ),
+    {
+      coffMachine: IMAGE_FILE_MACHINE_I386,
+      is64Bit: false,
+      imageBase: 0n, // Keep scripted instruction ips equal to RVAs.
+      entrypointRva: section.virtualAddress,
+      rvaToOff: rva => rva - section.virtualAddress,
+      sections: [section]
+    },
+    async () => createScriptedIced(instructions)
+  );
+};
+
+const scriptedInstructionLength = (): number => Uint8Array.BYTES_PER_ELEMENT;
+
+const createFarReturnReleasedArgumentScenario = (): {
+  instructions: IcedInstructionObject[];
+  returnSiteRva: number;
+} => {
+  const instructions: IcedInstructionObject[] = [];
+  let nextRva = createExecutableSection().virtualAddress;
+  const append = (
+    mnemonic: Parameters<typeof ins>[0],
+    operands: Parameters<typeof ins>[1],
+    spec: Parameters<typeof ins>[2]
+  ): number => {
+    const rva = nextRva;
+    instructions.push(ins(mnemonic, operands, {
+      ...spec,
+      ip: BigInt(rva),
+      length: scriptedInstructionLength()
+    }));
+    nextRva += scriptedInstructionLength();
+    return rva;
+  };
+  const pushDword = (value: bigint): void => {
+    append("Push", [imm(value, "Immediate32")], { code: "Pushd_imm32" });
+  };
+  const callNear = (targetRva: number): void => {
+    append("Call", [imm(BigInt(targetRva), "NearBranch32")], {
+      flowControl: "Call",
+      nearBranchTarget: BigInt(targetRva)
+    });
+  };
+  const retNear = (): number => append("Ret", [], {
+    code: "Retnd",
+    flowControl: "Return"
+  });
+  const retFarReleasingDwords = (releasedDwords: number): void => {
+    append("Retf", [imm(Uint32Array.BYTES_PER_ELEMENT * releasedDwords, "Immediate16")], {
+      code: "Retfd_imm16",
+      flowControl: "Return"
+    });
+  };
+  const entrypointRva = nextRva;
+  // Reuse an executable RVA so stale stack cleanup would expose a plausible return target.
+  const releasedArguments = [BigInt(entrypointRva), BigInt(entrypointRva)];
+  for (const value of releasedArguments) pushDword(value);
+  pushDword(BigInt(entrypointRva));
+  const returnSiteRva = nextRva + scriptedInstructionLength();
+  const farReturnRva = returnSiteRva + scriptedInstructionLength();
+  callNear(farReturnRva);
+  retNear();
+  retFarReleasingDwords(releasedArguments.length);
+  return { instructions, returnSiteRva };
+};
 
 void test(
   "analyzePeEntrypointDisassembly follows a return address changed on the stack",
@@ -96,6 +194,17 @@ void test("analyzePeEntrypointDisassembly follows BND return after x86 EH prolog
   assert.ok(
     !result.issues.includes("Entrypoint preview stopped at return with unknown stack target.")
   );
+});
+
+void test("analyzePeEntrypointDisassembly does not reuse far-ret released arguments", async () => {
+  // Intel SDM Vol. 2 RET: far returns pop EIP then CS before imm16 cleanup.
+  // https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
+  const scenario = createFarReturnReleasedArgumentScenario();
+  const result = await analyzeScriptedEntrypoint(scenario.instructions);
+  const returnedBlock = result.blocks.find(block => block.startRva === scenario.returnSiteRva);
+  const returnedRet = returnedBlock?.instructions.at(-1)?.target;
+
+  assert.deepEqual(returnedRet, { kind: "return", reason: "unknown" });
 });
 
 void test(

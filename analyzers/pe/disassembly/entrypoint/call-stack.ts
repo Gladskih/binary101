@@ -30,6 +30,26 @@ export type StackReturnTarget =
 // https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
 const pointerBytes = (state: EmulationState): bigint => BigInt(state.bitness / 8);
 
+const stackSlotAddress = (slot: string): bigint | null => {
+  try {
+    return BigInt(slot);
+  } catch {
+    return null;
+  }
+};
+
+const deleteStackMemoryRange = (
+  state: EmulationState,
+  start: bigint,
+  byteCount: bigint
+): void => {
+  const end = start + byteCount;
+  for (const slot of Array.from(state.memory.keys())) {
+    const address = stackSlotAddress(slot);
+    if (address != null && address >= start && address < end) state.memory.delete(slot);
+  }
+};
+
 export const createCallStackState = (
   iced: IcedModule,
   state: EmulationState,
@@ -51,7 +71,8 @@ export const createCallStackState = (
 export const createReturnStackState = (
   iced: IcedModule,
   state: EmulationState,
-  immediateBytes = 0n
+  immediateBytes = 0n,
+  returnFrameBytes?: bigint
 ): EmulationState => {
   const next = cloneEmulationState(state);
   const stackPointer = resolveStackPointer(iced, next);
@@ -60,15 +81,12 @@ export const createReturnStackState = (
     writeRegister(next, stackPointer, UNKNOWN);
     return next;
   }
-  next.memory.delete(current.value.toString());
-  const bytes = pointerBytes(next);
-  for (let offset = bytes; offset < bytes + immediateBytes; offset += bytes) {
-    next.memory.delete((current.value + offset).toString());
-  }
+  const consumedBytes = (returnFrameBytes ?? pointerBytes(next)) + immediateBytes;
+  deleteStackMemoryRange(next, current.value, consumedBytes);
   writeRegister(
     next,
     stackPointer,
-    known(current.value + bytes + immediateBytes, next.bitness)
+    known(current.value + consumedBytes, next.bitness)
   );
   return next;
 };

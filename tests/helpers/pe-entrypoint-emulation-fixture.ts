@@ -35,7 +35,8 @@ const mnemonicNames = [
   "Sete", "Setne", "Shl", "Shld", "Shr", "Shrd", "Stc", "Sub", "Test",
   "Tzcnt", "Xadd", "Xchg", "Xor", "Cmove", "Cmovne", "Ja", "Jae", "Jb",
   "Jbe", "Je", "Jg", "Jge", "Jl", "Jle", "Jne", "Jno", "Jnp", "Jns",
-  "Jo", "Jp", "Js", "Jcxz", "Jecxz", "Jrcxz", "Loop", "Loope", "Loopne"
+  "Jo", "Jp", "Js", "Jcxz", "Jecxz", "Jrcxz", "Loop", "Loope", "Loopne",
+  "Call", "Ret", "Retf"
 ] as const;
 
 const registerNames = [
@@ -65,7 +66,10 @@ const codeNames = [
   "Push_r16", "Push_r32", "Push_r64", "Pop_r16", "Pop_r32", "Pop_r64",
   "Loop_rel8_16_CX", "Loop_rel8_32_ECX", "Loop_rel8_64_RCX",
   "Loope_rel8_16_CX", "Loope_rel8_32_ECX", "Loope_rel8_64_RCX",
-  "Loopne_rel8_16_CX", "Loopne_rel8_32_ECX", "Loopne_rel8_64_RCX"
+  "Loopne_rel8_16_CX", "Loopne_rel8_32_ECX", "Loopne_rel8_64_RCX",
+  "Pushd_imm8", "Pushd_imm32",
+  "Retnw", "Retnw_imm16", "Retnd", "Retnd_imm16", "Retnq", "Retnq_imm16",
+  "Retfw", "Retfw_imm16", "Retfd", "Retfd_imm16", "Retfq", "Retfq_imm16"
 ] as const;
 
 const flowControlNames = [
