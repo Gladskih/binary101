@@ -117,7 +117,7 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .accessibleTooltip--alignEnd > .accessibleTooltipPopup{right:0;left:auto}
 .accessibleTooltipPopup::before{content:attr(aria-label)}
 .accessibleTooltipPopup[hidden]{display:none}
-.hashRow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
+.hashRow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .hashValue{font-family:var(--mono);font-size:12px}
 .hashButtons{display:flex;gap:8px}
 .actionButton{
