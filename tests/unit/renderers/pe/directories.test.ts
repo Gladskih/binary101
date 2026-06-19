@@ -61,6 +61,13 @@ void test("renderTls displays parsed callback RVAs", () => {
   renderTls(tls, out);
   const html = out.join("");
 
+  assert.match(html, /<th>Field<\/th><th>Value<\/th><th>Meaning<\/th>/);
+  assert.match(
+    html,
+    /<th scope="row">StartAddressOfRawData<\/th><td class="peNumeric">0x1000<\/td>/
+  );
+  assert.ok(html.includes("VA for beginning of TLS template data."));
+  assert.doesNotMatch(html, /<dl>/);
   assert.ok(html.includes("Callback RVAs"));
   assert.ok(html.includes("0x00002000"));
   assert.ok(html.includes("0x00002010"));

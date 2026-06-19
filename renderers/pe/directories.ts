@@ -13,6 +13,7 @@ type PeImportsSection = PeImportParseResult;
 type PeExportSection = NonNullable<PeWindowsParseResult["exports"]>;
 type PeTlsSection = NonNullable<PeWindowsParseResult["tls"]>;
 type PeIatSection = NonNullable<PeWindowsParseResult["iat"]>;
+type TlsField = readonly [label: string, value: string, meaning: string];
 // Microsoft PE format, "Section Flags":
 // IMAGE_SCN_GPREL marks sections whose data is referenced through the global pointer (GP).
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
@@ -24,6 +25,34 @@ const renderTlsCallbackRvas = (callbackRvas: number[] | undefined, out: string[]
   out.push(`<div class="tableWrap"><table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>RVA</th></tr></thead><tbody>`);
   callbackRvas.forEach((rva, index) => {
     out.push(`<tr><td>${index + 1}</td><td>${hex(rva, 8)}</td></tr>`);
+  });
+  out.push(`</tbody></table></div>`);
+};
+
+const renderTlsFields = (tls: PeTlsSection, out: string[]): void => {
+  out.push(
+    `<div class="tableWrap"><table class="table"><thead><tr>` +
+    `<th>Field</th><th>Value</th><th>Meaning</th></tr></thead><tbody>`
+  );
+  ([
+    ["StartAddressOfRawData", `0x${BigInt(tls.StartAddressOfRawData).toString(16)}`,
+      "VA for beginning of TLS template data."],
+    ["EndAddressOfRawData", `0x${BigInt(tls.EndAddressOfRawData).toString(16)}`,
+      "VA for end of TLS template data."],
+    ["AddressOfIndex", `0x${BigInt(tls.AddressOfIndex).toString(16)}`,
+      "VA of TLS index used by the loader."],
+    ["AddressOfCallBacks", `0x${BigInt(tls.AddressOfCallBacks).toString(16)}`,
+      "VA of null-terminated array of TLS callbacks (if present)."],
+    ["CallbackCount", String(tls.CallbackCount ?? 0),
+      "Number of TLS callbacks found before the terminating NULL pointer."],
+    ["SizeOfZeroFill", String(tls.SizeOfZeroFill ?? 0), "Bytes of zero-fill padding (TLS)."],
+    ["Characteristics", hex(tls.Characteristics || 0, 8), "Reserved (should be 0)."]
+  ] satisfies TlsField[]).forEach(([label, value, meaning]) => {
+    out.push(
+      `<tr><th scope="row">${escapeHtml(label)}</th>` +
+      `<td class="peNumeric">${escapeHtml(value)}</td>` +
+      `<td class="smallNote">${escapeHtml(meaning)}</td></tr>`
+    );
   });
   out.push(`</tbody></table></div>`);
 };
@@ -98,15 +127,7 @@ export function renderTls(t: PeTlsSection, out: string[]): void {
     out.push(renderPeSectionEnd());
     return;
   }
-  out.push(`<dl>`);
-  out.push(renderDefinitionRow("StartAddressOfRawData", "0x" + BigInt(t.StartAddressOfRawData).toString(16), "VA for beginning of TLS template data."));
-  out.push(renderDefinitionRow("EndAddressOfRawData", "0x" + BigInt(t.EndAddressOfRawData).toString(16), "VA for end of TLS template data."));
-  out.push(renderDefinitionRow("AddressOfIndex", "0x" + BigInt(t.AddressOfIndex).toString(16), "VA of TLS index used by the loader."));
-  out.push(renderDefinitionRow("AddressOfCallBacks", "0x" + BigInt(t.AddressOfCallBacks).toString(16), "VA of null-terminated array of TLS callbacks (if present)."));
-  out.push(renderDefinitionRow("CallbackCount", String(t.CallbackCount ?? 0), "Number of TLS callbacks determined by scanning callback pointer array until NULL."));
-  out.push(renderDefinitionRow("SizeOfZeroFill", String(t.SizeOfZeroFill ?? 0), "Bytes of zero-fill padding (TLS)."));
-  out.push(renderDefinitionRow("Characteristics", hex(t.Characteristics || 0, 8), "Reserved (should be 0)."));
-  out.push(`</dl>`);
+  renderTlsFields(t, out);
   renderTlsCallbackRvas(t.CallbackRvas, out);
   out.push(renderPeSectionEnd());
 }
