@@ -36,7 +36,14 @@
   - analyzers are pure parsing (no DOM, no direct UI code)
   - renderers are pure HTML formatting (no file I/O)
 - Maintain the UI parse contract: `parseForUi(file)` must continue to return `{ analyzer, parsed }`.
-- **Memory efficiency**: Use `file.slice(...).arrayBuffer()` to read file segments; avoid loading entire files.
+- **Memory efficiency**: Read bounded file segments; avoid loading entire files.
+- **I/O efficiency**:
+  - Use `file.stream()` or `file.slice(...).stream()` with incremental, bounded-memory parsing
+    for deep sequential scans that inspect most bytes.
+  - Use `createFileRangeReader()` for repeated random, nearby, or sparse reads, including forward
+    jumps over large payloads.
+  - Use direct `file.slice(...).arrayBuffer()` only for isolated bounded reads where neither a
+    sequential stream nor the shared range reader fits.
 - **Error handling**: Report anomalies visibly in the UI instead of silently failing or bypassing.
 - **Return types**: Parsers should return plain JavaScript objects (no DOM).
 - Current default architecture is `probe+parse`: keep detection lightweight and run full parsing in `parseForUi`.

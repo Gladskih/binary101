@@ -7,7 +7,13 @@
 - Concrete plan for the routing refactor: first introduce typed `FormatDescriptor` entries plus factory entrypoints like `createParseForUi(registry)` and `createDetectBinaryType(registry)` without changing public behavior; then migrate `parseForUi` to registry-driven routing; then migrate `detectBinaryType` and label enrichment to the same registry so probe order and format guards live in one place; finally split tests so routing logic is covered by registry-level unit/component tests and keep only a small set of real seam cases in broader integration/e2e coverage.
 - Make "unknown binary type" rare for files larger than 1 KiB: expand cheap magic/container/text probes until unidentified files are exceptions rather than the norm.
 - Add an "unknown sample triage" workflow: keep a local corpus of unidentified real-world files, classify them, and turn them into probes/tests.
-- Audit analyzers for unnecessary `file.arrayBuffer()` reads and switch to bounded `file.slice(...).arrayBuffer()` reads where possible.
+- Finish the file-I/O migration identified by the deep-parser audit:
+  - use incremental streams for GIF and for JPEG's whole-file embedded-signature scan (or
+    replace that scan with a bounded strategy);
+  - use `createFileRangeReader()` for sparse structural traversal in RIFF-based ANI/AVI/WAV/WebP,
+    PNG, TAR, MP3, and PDF;
+  - migrate repeated direct range reads in ASF, FLAC, MP4, and RAR to the shared range reader;
+  - keep direct `file.slice(...).arrayBuffer()` only for isolated bounded reads such as 7z headers.
 - Reduce startup bundle size with code-splitting/lazy-loading for heavy analyzers and renderers.
 - Add performance budgets for large local files so detection stays cheap and deep parsing remains opt-in or progressive where needed.
 

@@ -10,6 +10,7 @@ import { createWebmWithCues } from "../../../fixtures/webm-cues-fixtures.js";
 import { createWebmWithDurationMismatch } from "../../../fixtures/webm-duration-fixtures.js";
 import { createWebmWithInvalidCodecs } from "../../../fixtures/webm-invalid-codecs-fixtures.js";
 import { createWebmWithVariableVp8FrameSizes } from "../../../fixtures/webm-vp8-frame-size-fixtures.js";
+import { createOneByteChunkedStreamFile } from "../../../helpers/chunked-stream-file.js";
 
 const parseTracksFromFixture = async () => {
   const file = createWebmFile();
@@ -121,6 +122,21 @@ void test("parseSegment computes real duration per track", async () => {
   assert.strictEqual(segment.computedDuration?.videoSeconds, 1);
   assert.strictEqual(segment.computedDuration?.audioSeconds, 2.5);
   assert.strictEqual(segment.computedDuration?.overallSeconds, 2.5);
+});
+
+void test("parseSegment streams the cluster scan across one-byte chunks", async () => {
+  const tracked = createOneByteChunkedStreamFile(createWebmWithDurationMismatch());
+  const issues: string[] = [];
+  const ebmlHeader = await readElementAt(tracked.file, 0, issues);
+  assert.ok(ebmlHeader?.size != null);
+  const segmentOffset = ebmlHeader.dataOffset + ebmlHeader.size;
+  const segmentHeader = await readElementAt(tracked.file, segmentOffset, issues);
+  assert.ok(segmentHeader);
+
+  const segment = await parseSegment(tracked.file, segmentHeader, issues, "webm");
+
+  assert.ok(segment.computedDuration?.overallSeconds != null);
+  assert.deepEqual(tracked.streamSizes, [segment.dataSize]);
 });
 
 void test("parseSegment detects VP8 bitstream frame-size anomalies", async () => {

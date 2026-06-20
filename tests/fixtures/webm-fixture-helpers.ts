@@ -1,6 +1,15 @@
 "use strict";
 
 const encoder = new TextEncoder();
+// Matroska SimpleBlock structure and flags:
+// https://www.matroska.org/technical/notes.html#block-structure
+const SIMPLE_BLOCK = {
+  id: 0xa3,
+  oneByteTrackVintMarker: 0x80,
+  oneByteTrackNumberMask: 0x7f
+} as const;
+const BLOCK_TIMECODE_BYTES = 2;
+const BLOCK_FLAGS_BYTES = Uint8Array.BYTES_PER_ELEMENT;
 
 export const concatParts = (parts: Uint8Array[]): Uint8Array => {
   const total = parts.reduce((sum, part) => sum + part.length, 0);
@@ -82,12 +91,28 @@ export const ebmlUInt = (id: number, value: number, width = 0): Uint8Array =>
 export const ebmlFloat = (id: number, value: number, width = 8): Uint8Array =>
   ebmlElement(id, encodeEbmlFloat(value, width));
 
-export const simpleBlock = (track: number, timecode: number, flags: number, payload: Uint8Array): Uint8Array => {
-  const out = new Uint8Array(1 + 2 + 1 + payload.length);
-  out[0] = 0x80 | (track & 0x7f);
-  const tc = new DataView(out.buffer, out.byteOffset + 1, 2);
+export const webmBlockPayload = (
+  track: number,
+  timecode: number,
+  flags: number,
+  payload: Uint8Array
+): Uint8Array => {
+  const trackVintBytes = Uint8Array.BYTES_PER_ELEMENT;
+  const out = new Uint8Array(
+    trackVintBytes + BLOCK_TIMECODE_BYTES + BLOCK_FLAGS_BYTES + payload.length
+  );
+  out[0] = SIMPLE_BLOCK.oneByteTrackVintMarker | (track & SIMPLE_BLOCK.oneByteTrackNumberMask);
+  const tc = new DataView(out.buffer, out.byteOffset + trackVintBytes, BLOCK_TIMECODE_BYTES);
   tc.setInt16(0, timecode, false);
-  out[3] = flags;
-  out.set(payload, 4);
-  return ebmlElement(0xa3, out);
+  const flagsOffset = trackVintBytes + BLOCK_TIMECODE_BYTES;
+  out[flagsOffset] = flags;
+  out.set(payload, flagsOffset + BLOCK_FLAGS_BYTES);
+  return out;
 };
+
+export const simpleBlock = (
+  track: number,
+  timecode: number,
+  flags: number,
+  payload: Uint8Array
+): Uint8Array => ebmlElement(SIMPLE_BLOCK.id, webmBlockPayload(track, timecode, flags, payload));

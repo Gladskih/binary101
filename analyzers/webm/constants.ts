@@ -11,6 +11,13 @@ export const SEEK_ID_ID = 0x53ab;
 export const SEEK_POSITION_ID = 0x53ac;
 export const CUES_ID = 0x1c53bb6b;
 export const CLUSTER_ID = 0x1f43b675;
+// Matroska element IDs: https://www.matroska.org/technical/elements.html
+export const CLUSTER_TIMECODE_ID = 0xe7;
+export const SIMPLE_BLOCK_ID = 0xa3;
+export const BLOCK_GROUP_ID = 0xa0;
+export const BLOCK_ID = 0xa1;
+export const REFERENCE_BLOCK_ID = 0xfb;
+export const BLOCK_DURATION_ID = 0x9b;
 export const ATTACHMENTS_ID = 0x1941a469;
 export const ATTACHED_FILE_ID = 0x61a7;
 export const FILE_DESCRIPTION_ID = 0x467e;
@@ -41,6 +48,9 @@ export const AUDIO_ID = 0xe1;
 
 export const EBML_DATE_EPOCH_MS = Date.UTC(2001, 0, 1, 0, 0, 0);
 export const MAX_ELEMENT_HEADER = 12;
+// RFC 8794 sections 4.1 and 7.1 limit these EBML values to eight bytes.
+export const MAX_EBML_VINT_BYTES = 8;
+export const MAX_EBML_INTEGER_BYTES = 8;
 export const MAX_EBML_HEADER_BYTES = 65536;
 export const INITIAL_SCAN_BYTES = 1024 * 1024;
 export const MAX_INFO_BYTES = 256 * 1024;

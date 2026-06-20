@@ -2,6 +2,7 @@
 
 import {
   EBML_DATE_EPOCH_MS,
+  MAX_EBML_VINT_BYTES,
   MAX_ELEMENT_HEADER
 } from "./constants.js";
 import type { Issues } from "./types.js";
@@ -30,11 +31,11 @@ export const readVint = (dv: DataView, offset: number): Vint | null => {
   if (first === 0) return null;
   let length = 1;
   let mask = 0x80;
-  while (length <= 8 && (first & mask) === 0) {
+  while (length <= MAX_EBML_VINT_BYTES && (first & mask) === 0) {
     length += 1;
     mask >>= 1;
   }
-  if (length > 8) return null;
+  if (length > MAX_EBML_VINT_BYTES) return null;
   if (offset + length > dv.byteLength) return null;
   let value = 0n;
   for (let i = 0; i < length; i += 1) {

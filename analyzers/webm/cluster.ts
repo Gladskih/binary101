@@ -1,191 +1,230 @@
 "use strict";
 
-import { clampReadLength, readElementHeader, readUnsigned, readVint } from "./ebml.js";
+import {
+  ATTACHMENTS_ID,
+  BLOCK_DURATION_ID,
+  BLOCK_GROUP_ID,
+  BLOCK_ID,
+  CHAPTERS_ID,
+  CLUSTER_ID,
+  CLUSTER_TIMECODE_ID,
+  CUES_ID,
+  INFO_ID,
+  MAX_EBML_INTEGER_BYTES,
+  REFERENCE_BLOCK_ID,
+  SEEK_HEAD_ID,
+  SIMPLE_BLOCK_ID,
+  TAGS_ID,
+  TRACKS_ID
+} from "./constants.js";
+import {
+  BLOCK_ANALYSIS_PREFIX_BYTES,
+  emitStreamBlockTiming,
+  MIN_BLOCK_HEADER_BYTES,
+  parseStreamBlockHeader,
+  WEBM_BLOCK_FLAGS
+} from "./cluster-block.js";
+import type { OnClusterBlock, WebmBlockHeader } from "./cluster-block.js";
+import type { EbmlStreamReader } from "./ebml-stream.js";
+import { readUnsigned } from "./ebml.js";
 import type { EbmlElementHeader } from "./ebml.js";
 import type { Issues } from "./types.js";
 
-type OnClusterBlock = (timing: {
-  trackNumber: number | null;
-  timecode: number | null;
-  durationTimecode: number | null;
-  frames: number;
-  isKeyframe: boolean;
-  lacingMode: number | null;
-  payload: Uint8Array | null;
-}) => void;
-
-type WebmBlockHeader = {
-  trackNumber: number | null;
-  relativeTimecode: number | null;
-  flags: number | null;
-  frames: number;
-  lacingMode: number | null;
-  payloadOffset: number | null;
-  payloadSize: number | null;
+type ClusterScan = {
+  blocks: number;
+  keyframes: number;
+  nextHeader: EbmlElementHeader | null;
+  stopSegment: boolean;
 };
 
-const emptyBlockHeader = (): WebmBlockHeader => ({
-  trackNumber: null,
-  relativeTimecode: null,
-  flags: null,
-  frames: 1,
-  lacingMode: null,
-  payloadOffset: null,
-  payloadSize: null
-});
+const SEGMENT_LEVEL_IDS = new Set([
+  ATTACHMENTS_ID,
+  CHAPTERS_ID,
+  CLUSTER_ID,
+  CUES_ID,
+  INFO_ID,
+  SEEK_HEAD_ID,
+  TAGS_ID,
+  TRACKS_ID
+]);
 
-const parseBlockHeader = (
-  dv: DataView,
-  offset: number,
-  available: number,
-  issues: Issues
-): WebmBlockHeader => {
-  if (available < 4) return emptyBlockHeader();
-  const trackVint = readVint(dv, offset);
-  if (!trackVint) return emptyBlockHeader();
-  const trackNumber =
-    trackVint.data <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(trackVint.data) : null;
-  if (trackNumber == null) issues.push("Block track number exceeds safe integer range.");
-  const timecodeOffset = offset + trackVint.length;
-  if (timecodeOffset + 2 > offset + available) {
-    issues.push("Block timecode is truncated.");
-    return { ...emptyBlockHeader(), trackNumber };
-  }
-  const relativeTimecode = dv.getInt16(timecodeOffset, false);
-  const flagsOffset = timecodeOffset + 2;
-  if (flagsOffset >= offset + available) {
-    issues.push("Block flags are truncated.");
-    return { ...emptyBlockHeader(), trackNumber, relativeTimecode };
-  }
-  const flags = dv.getUint8(flagsOffset);
-  const lacingMode = (flags & 0x06) >> 1;
-  if (lacingMode === 0) {
-    return {
-      trackNumber,
-      relativeTimecode,
-      flags,
-      frames: 1,
-      lacingMode,
-      payloadOffset: flagsOffset + 1,
-      payloadSize: Math.max(0, offset + available - (flagsOffset + 1))
-    };
-  }
-  const laceCountOffset = flagsOffset + 1;
-  if (laceCountOffset >= offset + available) issues.push("Block lacing header is truncated.");
-  return {
-    trackNumber,
-    relativeTimecode,
-    flags,
-    frames: laceCountOffset < offset + available ? dv.getUint8(laceCountOffset) + 1 : 1,
-    lacingMode,
-    payloadOffset: null,
-    payloadSize: null
-  };
-};
-
-const emitBlockTiming = (
-  dv: DataView,
-  block: WebmBlockHeader,
-  clusterTimecode: number | null,
-  durationTimecode: number | null,
-  isKeyframe: boolean,
-  onBlock?: OnClusterBlock
-): void => {
-  if (!onBlock || block.trackNumber == null || block.relativeTimecode == null) return;
-  const payload =
-    block.payloadOffset != null && block.payloadSize != null && block.payloadSize > 0
-      ? new Uint8Array(dv.buffer, dv.byteOffset + block.payloadOffset, block.payloadSize)
-      : null;
-  onBlock({
-    trackNumber: block.trackNumber,
-    timecode: (clusterTimecode ?? 0) + block.relativeTimecode,
-    durationTimecode,
-    frames: block.frames,
-    isKeyframe,
-    lacingMode: block.lacingMode,
-    payload
-  });
-};
-
-export const countBlocksInCluster = async (
-  file: File,
-  clusterHeader: EbmlElementHeader,
+const boundedSize = (
+  header: EbmlElementHeader,
+  endOffset: number,
   issues: Issues,
-  onBlock?: OnClusterBlock
-): Promise<{ blocks: number; keyframes: number }> => {
-  if (clusterHeader.size == null || clusterHeader.size <= 0) return { blocks: 0, keyframes: 0 };
-  const { length } = clampReadLength(file.size, clusterHeader.dataOffset, clusterHeader.size, clusterHeader.size);
-  const dv = new DataView(await file.slice(clusterHeader.dataOffset, clusterHeader.dataOffset + length).arrayBuffer());
-  const limit = Math.min(length, clusterHeader.size);
-  let cursor = 0;
+  label: string
+): number | null => {
+  if (header.size == null) {
+    issues.push(`${label} at ${header.offset} has unknown size.`);
+    return null;
+  }
+  const available = Math.max(0, endOffset - header.dataOffset);
+  if (header.size > available) issues.push(`${label} at ${header.offset} is truncated.`);
+  return Math.min(header.size, available);
+};
+
+const readUnsignedElement = async (
+  reader: EbmlStreamReader,
+  header: EbmlElementHeader,
+  endOffset: number,
+  issues: Issues,
+  label: string
+): Promise<number | null> => {
+  const size = boundedSize(header, endOffset, issues, label);
+  if (size == null) return null;
+  const expectedBytes = Math.min(size, MAX_EBML_INTEGER_BYTES);
+  const bytes = await reader.readBytes(expectedBytes);
+  const skipped = await reader.skip(size - bytes.byteLength);
+  if (bytes.byteLength < expectedBytes || bytes.byteLength + skipped < size) {
+    issues.push(`${label} at ${header.offset} is truncated.`);
+    return null;
+  }
+  if (size > MAX_EBML_INTEGER_BYTES) {
+    issues.push(`${label} uses unsupported integer size ${size}.`);
+    return null;
+  }
+  const value = readUnsigned(
+    new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength),
+    0,
+    bytes.byteLength,
+    issues,
+    label
+  );
+  if (value == null) return null;
+  const numeric = Number(value);
+  if (Number.isSafeInteger(numeric)) return numeric;
+  issues.push(`${label} exceeds safe integer range.`);
+  return null;
+};
+
+const skipElement = async (
+  reader: EbmlStreamReader,
+  header: EbmlElementHeader,
+  endOffset: number,
+  issues: Issues
+): Promise<boolean> => {
+  const size = boundedSize(header, endOffset, issues, "Cluster child");
+  return size != null && await reader.skip(size) === size;
+};
+
+const scanBlockGroup = async (
+  reader: EbmlStreamReader,
+  header: EbmlElementHeader,
+  clusterEnd: number,
+  issues: Issues,
+  clusterTimecode: number | null,
+  onBlock: OnClusterBlock
+): Promise<{ blocks: number; keyframes: number; complete: boolean }> => {
+  const size = boundedSize(header, clusterEnd, issues, "BlockGroup");
+  if (size == null) return { blocks: 0, keyframes: 0, complete: false };
+  const groupEnd = header.dataOffset + size;
+  let block: WebmBlockHeader | null = null;
+  let blockData: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
+  let blocks = 0;
+  let hasReference = false;
+  let durationTimecode: number | null = null;
+  while (reader.offset < groupEnd) {
+    const child = await reader.readElementHeader(groupEnd, issues);
+    if (!child) return { blocks, keyframes: 0, complete: false };
+    if (child.id === BLOCK_ID) {
+      const childSize = boundedSize(child, groupEnd, issues, "Block");
+      if (childSize == null) return { blocks, keyframes: 0, complete: false };
+      blockData = await reader.readBytes(Math.min(childSize, BLOCK_ANALYSIS_PREFIX_BYTES));
+      await reader.skip(childSize - blockData.byteLength);
+      if (childSize < MIN_BLOCK_HEADER_BYTES) {
+        issues.push(`Block at ${child.offset} is too short.`);
+      }
+      block = childSize >= MIN_BLOCK_HEADER_BYTES
+        ? parseStreamBlockHeader(blockData, issues)
+        : null;
+      blocks++;
+    } else if (child.id === REFERENCE_BLOCK_ID) {
+      hasReference = true;
+      if (!await skipElement(reader, child, groupEnd, issues)) {
+        return { blocks, keyframes: 0, complete: false };
+      }
+    } else if (child.id === BLOCK_DURATION_ID) {
+      durationTimecode = await readUnsignedElement(
+        reader,
+        child,
+        groupEnd,
+        issues,
+        "BlockDuration"
+      );
+    } else if (!await skipElement(reader, child, groupEnd, issues)) {
+      return { blocks, keyframes: 0, complete: false };
+    }
+  }
+  const isKeyframe = block != null && !hasReference;
+  if (block) {
+    emitStreamBlockTiming(block, blockData, clusterTimecode, durationTimecode, isKeyframe, onBlock);
+  }
+  return { blocks, keyframes: Number(isKeyframe), complete: true };
+};
+
+export const scanCluster = async (
+  reader: EbmlStreamReader,
+  clusterHeader: EbmlElementHeader,
+  segmentEnd: number,
+  issues: Issues,
+  onBlock: OnClusterBlock
+): Promise<ClusterScan> => {
+  const declaredSize = clusterHeader.size;
+  const available = Math.max(0, segmentEnd - clusterHeader.dataOffset);
+  const unknownSize = declaredSize == null;
+  const clusterEnd = declaredSize == null
+    ? segmentEnd
+    : clusterHeader.dataOffset + Math.min(declaredSize, available);
+  if (declaredSize != null && declaredSize > available) {
+    issues.push(`Cluster at ${clusterHeader.offset} extends beyond the Segment.`);
+  }
   let blocks = 0;
   let keyframes = 0;
   let clusterTimecode: number | null = null;
-
-  while (cursor < limit) {
-    const header = readElementHeader(dv, cursor, clusterHeader.dataOffset + cursor, issues);
-    if (!header || header.headerSize === 0) break;
-    const dataStart = cursor + header.headerSize;
-    const available = Math.min(header.size ?? 0, limit - dataStart);
-    if (header.id === 0xe7 && available > 0) {
-      const value = readUnsigned(dv, dataStart, available, issues, "ClusterTimecode");
-      if (value != null) {
-        const numeric = Number(value);
-        if (Number.isSafeInteger(numeric)) {
-          clusterTimecode = numeric;
-        } else {
-          issues.push("Cluster timecode exceeds safe integer range.");
-        }
-      }
-    } else if (header.id === 0xa3 && available > 3) {
-      const block = parseBlockHeader(dv, dataStart, available, issues);
-      blocks += 1;
-      const isKeyframe = block.flags != null && (block.flags & 0x80) !== 0;
-      if (isKeyframe) keyframes += 1;
-      emitBlockTiming(dv, block, clusterTimecode, null, isKeyframe, onBlock);
-    } else if (header.id === 0xa0 && available > 0) {
-      let innerCursor = dataStart;
-      const innerLimit = Math.min(dataStart + available, dv.byteLength);
-      let hasReference = false;
-      let hasBlock = false;
-      let durationTimecode: number | null = null;
-      let blockTiming: WebmBlockHeader | null = null;
-      while (innerCursor < innerLimit) {
-        const innerHeader = readElementHeader(dv, innerCursor, clusterHeader.dataOffset + innerCursor, issues);
-        if (!innerHeader || innerHeader.headerSize === 0 || innerHeader.size == null) break;
-        if (innerHeader.id === 0xa1) {
-          hasBlock = true;
-          blocks += 1;
-          const dataOffset = innerCursor + innerHeader.headerSize;
-          const dataAvailable = Math.min(innerHeader.size, innerLimit - dataOffset);
-          if (dataAvailable > 3) {
-            blockTiming = parseBlockHeader(dv, dataOffset, dataAvailable, issues);
-          }
-        } else if (innerHeader.id === 0xfb) {
-          hasReference = true;
-        } else if (innerHeader.id === 0x9b) {
-          const dataOffset = innerCursor + innerHeader.headerSize;
-          const dataAvailable = Math.min(innerHeader.size, innerLimit - dataOffset);
-          if (dataAvailable > 0) {
-            const value = readUnsigned(dv, dataOffset, dataAvailable, issues, "BlockDuration");
-            if (value != null) {
-              const numeric = Number(value);
-              if (Number.isSafeInteger(numeric)) {
-                durationTimecode = numeric;
-              } else {
-                issues.push("BlockDuration exceeds safe integer range.");
-              }
-            }
-          }
-        }
-        innerCursor += innerHeader.headerSize + innerHeader.size;
-      }
-      const isKeyframe = hasBlock && !hasReference;
-      if (isKeyframe) keyframes += 1;
-      if (blockTiming) emitBlockTiming(dv, blockTiming, clusterTimecode, durationTimecode, isKeyframe, onBlock);
+  while (reader.offset < clusterEnd) {
+    const header = await reader.readElementHeader(clusterEnd, issues);
+    if (!header) return { blocks, keyframes, nextHeader: null, stopSegment: true };
+    if (unknownSize && SEGMENT_LEVEL_IDS.has(header.id)) {
+      return { blocks, keyframes, nextHeader: header, stopSegment: false };
     }
-    if (header.size == null) break;
-    cursor += header.headerSize + header.size;
+    if (header.id === CLUSTER_TIMECODE_ID) {
+      clusterTimecode = await readUnsignedElement(
+        reader,
+        header,
+        clusterEnd,
+        issues,
+        "ClusterTimecode"
+      );
+    } else if (header.id === SIMPLE_BLOCK_ID) {
+      const size = boundedSize(header, clusterEnd, issues, "SimpleBlock");
+      if (size == null) return { blocks, keyframes, nextHeader: null, stopSegment: true };
+      const data = await reader.readBytes(Math.min(size, BLOCK_ANALYSIS_PREFIX_BYTES));
+      await reader.skip(size - data.byteLength);
+      if (size >= MIN_BLOCK_HEADER_BYTES) {
+        const block = parseStreamBlockHeader(data, issues);
+        const isKeyframe =
+          block.flags != null && (block.flags & WEBM_BLOCK_FLAGS.keyframe) !== 0;
+        blocks++;
+        if (isKeyframe) keyframes++;
+        emitStreamBlockTiming(block, data, clusterTimecode, null, isKeyframe, onBlock);
+      } else {
+        issues.push(`SimpleBlock at ${header.offset} is too short.`);
+      }
+    } else if (header.id === BLOCK_GROUP_ID) {
+      const group = await scanBlockGroup(
+        reader,
+        header,
+        clusterEnd,
+        issues,
+        clusterTimecode,
+        onBlock
+      );
+      blocks += group.blocks;
+      keyframes += group.keyframes;
+      if (!group.complete) return { blocks, keyframes, nextHeader: null, stopSegment: true };
+    } else if (!await skipElement(reader, header, clusterEnd, issues)) {
+      return { blocks, keyframes, nextHeader: null, stopSegment: true };
+    }
   }
-  return { blocks, keyframes };
+  return { blocks, keyframes, nextHeader: null, stopSegment: false };
 };

@@ -1,9 +1,8 @@
 "use strict";
 
-import { CLUSTER_ID } from "./constants.js";
-import { readElementAt } from "./ebml.js";
+import { VP8_KEYFRAME_HEADER_BYTES } from "./cluster-block.js";
 import type { EbmlElementHeader } from "./ebml.js";
-import { countBlocksInCluster } from "./cluster.js";
+import { scanSegmentClusters } from "./segment-stream.js";
 import type { Issues, WebmComputedDuration, WebmComputedTrackDuration, WebmTrack, WebmTrackBitstreamFrameStats } from "./types.js";
 
 type TrackTimingState = { startsNs: number[]; maxEndNs: number | null; blockCount: number };
@@ -45,7 +44,7 @@ const createVideoFrameSizeState = (): VideoFrameSizeState => ({
   sizeCounts: new Map()
 });
 const parseVp8KeyframeSize = (payload: Uint8Array): { width: number; height: number } | null => {
-  if (payload.length < 10) return null;
+  if (payload.length < VP8_KEYFRAME_HEADER_BYTES) return null;
   const b0 = payload[0] ?? 0;
   const b1 = payload[1] ?? 0;
   const b2 = payload[2] ?? 0;
@@ -190,7 +189,12 @@ const updateVp8FrameSize = (
   }
   frameState.blockCount += 1;
   if (isKeyframe) frameState.keyframeCount += 1;
-  if (!isKeyframe || (lacingMode != null && lacingMode !== 0) || !payload || payload.length < 10) return;
+  if (
+    !isKeyframe ||
+    (lacingMode != null && lacingMode !== 0) ||
+    !payload ||
+    payload.length < VP8_KEYFRAME_HEADER_BYTES
+  ) return;
   const parsedSize = parseVp8KeyframeSize(payload);
   if (!parsedSize) return;
   frameState.parsedFrameCount += 1;
@@ -246,53 +250,31 @@ export const scanSegmentForComputedDuration = async (
     issues
   };
 
-  const segmentEnd = Math.min(file.size, segmentHeader.dataOffset + Math.max(0, segmentSize));
-  let cursor = segmentHeader.dataOffset;
-  let clusterCount = 0;
-  let blockCount = 0;
-  let keyframeCount = 0;
-  let firstClusterOffset: number | null = null;
-  while (cursor < segmentEnd) {
-    const header = await readElementAt(file, cursor, issues);
-    if (!header || header.headerSize === 0) break;
-    if (header.id === CLUSTER_ID) {
-      clusterCount += 1;
-      if (firstClusterOffset == null) firstClusterOffset = header.offset;
-      const size = header.size ?? Math.max(0, segmentEnd - header.dataOffset);
-      const resolvedCluster: EbmlElementHeader = {
-        ...header,
-        size,
-        sizeUnknown: false
-      };
-      const stats = await countBlocksInCluster(file, resolvedCluster, issues, timing => {
-        if (timing.trackNumber == null || timing.timecode == null) return;
-        updateTrackTiming(scanState, timing.trackNumber, timing.timecode, timing.durationTimecode, timing.frames);
-        updateVp8FrameSize(
-          scanState,
-          timing.trackNumber,
-          timing.isKeyframe,
-          timing.lacingMode,
-          timing.payload
-        );
-      });
-      blockCount += stats.blocks;
-      keyframeCount += stats.keyframes;
-      if (header.size == null || header.sizeUnknown) break;
-      const next = header.dataOffset + (header.size ?? 0);
-      if (next <= cursor) break;
-      cursor = next;
-      continue;
+  const clusters = await scanSegmentClusters(
+    file,
+    segmentHeader,
+    segmentSize,
+    issues,
+    timing => {
+      if (timing.trackNumber == null || timing.timecode == null) return;
+      updateTrackTiming(
+        scanState,
+        timing.trackNumber,
+        timing.timecode,
+        timing.durationTimecode,
+        timing.frames
+      );
+      updateVp8FrameSize(
+        scanState,
+        timing.trackNumber,
+        timing.isKeyframe,
+        timing.lacingMode,
+        timing.payload
+      );
     }
-    if (header.size == null || header.sizeUnknown) break;
-    const next = header.dataOffset + header.size;
-    if (next <= cursor) break;
-    cursor = next;
-  }
+  );
   return {
-    clusterCount,
-    blockCount,
-    keyframeCount,
-    firstClusterOffset,
+    ...clusters,
     computedDuration: computeComputedDuration(trackStates, tracksByNumber, timecodeScaleNs),
     trackFrameStats: buildTrackFrameStats(frameSizeStates)
   };

@@ -23,6 +23,7 @@ const EMPTY_BYTES = new Uint8Array(0);
 // the curve; larger windows only shave off a couple of reads while doubling
 // the cached bytes and over-read span. Keep that production-tuned default
 // when reusing the same reader strategy in other analyzers.
+export const DEFAULT_FILE_READ_WINDOW_BYTES = 64 * 1024;
 
 const clampRangeSize = (limit: number, offset: number, size: number): number => {
   if (offset < 0) return 0;
@@ -40,7 +41,7 @@ export const createFileRangeReader = (
   file: File,
   baseOffset: number,
   limit: number,
-  windowBytes = 64 * 1024
+  windowBytes = DEFAULT_FILE_READ_WINDOW_BYTES
 ): FileRangeReader => {
   const size = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 0;
   let cachedWindow: CachedWindow | null = null;
