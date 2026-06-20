@@ -22,6 +22,20 @@ void test("handleHashWorkerMessage computes fallback digests", async () => {
   );
 });
 
+void test("handleHashWorkerMessage computes native algorithm fallbacks", async () => {
+  const bytes = new TextEncoder().encode("abc");
+  const response = await handleHashWorkerMessage({
+    algorithmId: "sha256",
+    file: new File([bytes], "abc.bin")
+  });
+
+  assert.ok("digest" in response);
+  assert.equal(
+    Buffer.from(response.digest).toString("hex"),
+    createHash("sha256").update(bytes).digest("hex")
+  );
+});
+
 void test("handleHashWorkerMessage rejects malformed requests", async () => {
   const response = await handleHashWorkerMessage({ algorithmId: "sha256" });
 

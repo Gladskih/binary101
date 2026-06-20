@@ -57,7 +57,8 @@ const hashControls = HASH_ALGORITHMS.map(algorithm => ({
   label: algorithm.label,
   valueElement: getElement(`${algorithm.id}Value`) as HTMLElement,
   buttonElement: getElement(`${algorithm.id}ComputeButton`) as HTMLButtonElement,
-  copyButtonElement: getElement(`${algorithm.id}CopyButton`) as HTMLButtonElement
+  copyButtonElement: getElement(`${algorithm.id}CopyButton`) as HTMLButtonElement,
+  nativeFallbackElement: document.getElementById(`${algorithm.id}NativeFallback`) ?? undefined
 }));
 let currentFile: File | null = null;
 let currentPreviewUrl: string | null = null;

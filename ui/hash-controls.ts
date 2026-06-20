@@ -1,8 +1,8 @@
 "use strict";
 
-import { md5 } from "@noble/hashes/legacy";
-import { sha224 } from "@noble/hashes/sha256";
-import { sha512_224, sha512_256 } from "@noble/hashes/sha512";
+import { md5, sha1 } from "@noble/hashes/legacy";
+import { sha224, sha256 } from "@noble/hashes/sha256";
+import { sha384, sha512, sha512_224, sha512_256 } from "@noble/hashes/sha512";
 import type { CHash } from "@noble/hashes/utils";
 import { bufferToHex } from "../binary-utils.js";
 
@@ -16,12 +16,11 @@ type NativeHashAlgorithmOption = {
   nativeAlgorithm: AlgorithmIdentifier;
 };
 
-type FallbackHashId = "md5" | "sha224" | "sha512224" | "sha512256";
+type FallbackHashId = HashAlgorithmId;
 
 type FallbackHashAlgorithmOption = {
   id: FallbackHashId;
   label: string;
-  digest: CHash;
 };
 
 type HashAlgorithmOption = NativeHashAlgorithmOption | FallbackHashAlgorithmOption;
@@ -31,23 +30,41 @@ type HashControls = {
   valueElement: HTMLElement;
   buttonElement: HTMLButtonElement;
   copyButtonElement: HTMLButtonElement;
+  nativeFallbackElement?: HTMLElement | undefined;
+};
+
+type FileDigest = {
+  value: Uint8Array;
+  usedNativeFallback: boolean;
 };
 
 const HASH_ALGORITHMS: readonly HashAlgorithmOption[] = [
-  { id: "md5", label: "MD5", digest: md5 },
+  { id: "md5", label: "MD5" },
   { id: "sha1", label: "SHA-1", nativeAlgorithm: "SHA-1" },
-  { id: "sha224", label: "SHA-224", digest: sha224 },
+  { id: "sha224", label: "SHA-224" },
   { id: "sha256", label: "SHA-256", nativeAlgorithm: "SHA-256" },
   { id: "sha384", label: "SHA-384", nativeAlgorithm: "SHA-384" },
   { id: "sha512", label: "SHA-512", nativeAlgorithm: "SHA-512" },
-  { id: "sha512224", label: "SHA-512/224", digest: sha512_224 },
-  { id: "sha512256", label: "SHA-512/256", digest: sha512_256 }
+  { id: "sha512224", label: "SHA-512/224" },
+  { id: "sha512256", label: "SHA-512/256" }
 ] as const;
+
+const FALLBACK_HASHES: Readonly<Record<FallbackHashId, CHash>> = {
+  md5,
+  sha1,
+  sha224,
+  sha256,
+  sha384,
+  sha512,
+  sha512224: sha512_224,
+  sha512256: sha512_256
+};
 
 const resetHashDisplay = (...controls: HashControls[]): void => {
   for (const control of controls) {
     control.valueElement.textContent = "";
     control.copyButtonElement.hidden = true;
+    if (control.nativeFallbackElement) control.nativeFallbackElement.hidden = true;
     control.buttonElement.hidden = false;
     control.buttonElement.disabled = false;
     control.buttonElement.textContent = `Compute ${control.label}`;
@@ -78,6 +95,14 @@ const computeNativeFileDigest = async (
 ): Promise<Uint8Array> => new Uint8Array(
   await crypto.subtle.digest(nativeAlgorithm, await file.arrayBuffer())
 );
+
+// Measured on 2026-06-20 in Chrome 149 on Windows: File.arrayBuffer() accepted
+// 2,145,386,496 bytes (0x7fe00000, 2046 MiB) and rejected one byte more.
+// SHA-256 at that size did not complete before the DevTools protocol timed out.
+// See Chromium issue 40055619: https://issues.chromium.org/issues/40055619
+// Do not turn this observation into a size oracle; only the actual read error opts in.
+const isNativeReadFailure = (error: unknown): boolean =>
+  error instanceof DOMException && error.name === "NotReadableError";
 
 const getWorkerDigest = (value: unknown): Uint8Array | null => {
   if (!value || typeof value !== "object") return null;
@@ -116,22 +141,39 @@ const computeWorkerFallbackDigest = (
 });
 
 const computeFallbackDigest = (
-  algorithm: FallbackHashAlgorithmOption,
+  algorithmId: FallbackHashId,
   file: File
 ): Promise<Uint8Array> =>
   typeof Worker === "undefined"
-    ? computeFallbackFileDigest(algorithm.digest, file)
-    : computeWorkerFallbackDigest(algorithm.id, file);
+    ? computeFallbackFileDigest(FALLBACK_HASHES[algorithmId], file)
+    : computeWorkerFallbackDigest(algorithmId, file);
 
-const computeFileDigest = (algorithm: HashAlgorithmOption, file: File): Promise<Uint8Array> =>
-  "nativeAlgorithm" in algorithm
-    ? computeNativeFileDigest(algorithm.nativeAlgorithm, file)
-    : computeFallbackDigest(algorithm, file);
+const computeNativeDigestWithFallback = async (
+  algorithm: NativeHashAlgorithmOption,
+  file: File
+): Promise<FileDigest> => {
+  try {
+    return {
+      value: await computeNativeFileDigest(algorithm.nativeAlgorithm, file),
+      usedNativeFallback: false
+    };
+  } catch (error) {
+    if (!isNativeReadFailure(error)) throw error;
+    return { value: await computeFallbackDigest(algorithm.id, file), usedNativeFallback: true };
+  }
+};
+
+const computeFileDigest = async (
+  algorithm: HashAlgorithmOption,
+  file: File
+): Promise<FileDigest> => "nativeAlgorithm" in algorithm
+  ? computeNativeDigestWithFallback(algorithm, file)
+  : { value: await computeFallbackDigest(algorithm.id, file), usedNativeFallback: false };
 
 const computeAndDisplayHash = async (
   algorithm: HashAlgorithmOption,
   file: File | null,
-  { valueElement, buttonElement, copyButtonElement }: HashControls,
+  { valueElement, buttonElement, copyButtonElement, nativeFallbackElement }: HashControls,
   canDisplayResult: () => boolean = (): boolean => true
 ): Promise<void> => {
   if (!file) {
@@ -143,7 +185,8 @@ const computeAndDisplayHash = async (
   try {
     const digest = await computeFileDigest(algorithm, file);
     if (!canDisplayResult()) return;
-    valueElement.textContent = bufferToHex(digest);
+    valueElement.textContent = bufferToHex(digest.value);
+    if (nativeFallbackElement) nativeFallbackElement.hidden = !digest.usedNativeFallback;
     copyButtonElement.hidden = false;
     buttonElement.hidden = true;
   } catch (error) {

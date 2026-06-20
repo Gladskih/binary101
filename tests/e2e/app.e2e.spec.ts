@@ -218,15 +218,15 @@ test.describe("file hash actions", () => {
 
     const hashDetails = page.locator("#hashDetails");
     const nativeHashLabels = page.locator(".nativeHashLabel");
+    const nativeHashBadges = page.locator(".nativeHashBadge");
+    const nativeFallbackNotices = page.locator(".nativeFallbackNotice");
     const detailsBox = await page.locator("#peDetailsValue").boundingBox();
     await expect(hashDetails).not.toHaveAttribute("open", "");
     await expect(nativeHashLabels).toHaveCount(4);
-    await expect(nativeHashLabels).toHaveText([
-      "SHA-1 🍃",
-      "SHA-256 🍃",
-      "SHA-384 🍃",
-      "SHA-512 🍃"
-    ]);
+    await expect(nativeHashBadges).toHaveText(["🍃", "🍃", "🍃", "🍃"]);
+    expect(await nativeFallbackNotices.evaluateAll(notices =>
+      notices.every(notice => notice.hasAttribute("hidden"))
+    )).toBe(true);
     const hashSummaryBox = await hashDetails.locator("summary").boundingBox();
     expect(hashSummaryBox?.y).toBeLessThan(detailsBox?.y ?? 0);
 

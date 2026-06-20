@@ -1,11 +1,13 @@
 "use strict";
 
-import { md5 } from "@noble/hashes/legacy";
-import { sha224 } from "@noble/hashes/sha256";
-import { sha512_224, sha512_256 } from "@noble/hashes/sha512";
+import { md5, sha1 } from "@noble/hashes/legacy";
+import { sha224, sha256 } from "@noble/hashes/sha256";
+import { sha384, sha512, sha512_224, sha512_256 } from "@noble/hashes/sha512";
 import type { CHash } from "@noble/hashes/utils";
 
-type FallbackHashId = "md5" | "sha224" | "sha512224" | "sha512256";
+type FallbackHashId =
+  "md5" | "sha1" | "sha224" | "sha256" | "sha384" | "sha512" |
+  "sha512224" | "sha512256";
 
 type HashWorkerRequest = {
   algorithmId: FallbackHashId;
@@ -21,7 +23,11 @@ type HashWorkerScope = {
 
 const FALLBACK_HASHES: Readonly<Record<FallbackHashId, CHash>> = {
   md5,
+  sha1,
   sha224,
+  sha256,
+  sha384,
+  sha512,
   sha512224: sha512_224,
   sha512256: sha512_256
 };
