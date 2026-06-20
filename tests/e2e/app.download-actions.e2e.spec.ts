@@ -90,7 +90,7 @@ test.describe("download actions", () => {
     await page.setInputFiles("#fileInput", toUpload(gzip));
 
     await expectBaseDetails(page, gzip.name, "gzip compressed data");
-    await expect(page.locator("#peDetailsValue")).toContainText("gzip compressed data");
+    await expect(page.locator("#analysisValue")).toContainText("gzip compressed data");
 
     const button = page.locator("button.gzipDecompressButton");
     await expect(button).toHaveCount(1);
@@ -105,7 +105,7 @@ test.describe("download actions", () => {
     await page.setInputFiles("#fileInput", toUpload(iso));
 
     await expectBaseDetails(page, iso.name, "ISO-9660 CD/DVD image (ISO)");
-    await expect(page.locator("#peDetailsValue")).toContainText("ISO-9660 overview");
+    await expect(page.locator("#analysisValue")).toContainText("ISO-9660 overview");
 
     const button = page.locator("button.isoExtractButton");
     await expect(button).toHaveCount(1);
@@ -120,7 +120,7 @@ test.describe("download actions", () => {
     await page.setInputFiles("#fileInput", toUpload(iso));
 
     await expectBaseDetails(page, iso.name, "ISO-9660 CD/DVD image (ISO)");
-    await expect(page.locator("#peDetailsValue")).toContainText("ISO-9660 overview");
+    await expect(page.locator("#analysisValue")).toContainText("ISO-9660 overview");
 
     const expand = page.locator("button.isoDirToggleButton");
     await expect(expand).toHaveCount(1);
@@ -146,7 +146,7 @@ test.describe("PE analysis actions", () => {
     await page.setInputFiles("#fileInput", toUpload(mockFile));
     await expectBaseDetails(page, mockFile.name, "PE32+ executable for x86-64 (AMD64)");
 
-    const detailsValue = page.locator("#peDetailsValue");
+    const detailsValue = page.locator("#analysisValue");
     const instructionSection = detailsValue.locator("details.analysisPanel").filter({
       has: page.locator("summary", { hasText: /^Instruction-set analysis\b/ })
     }).first();
@@ -168,7 +168,7 @@ test.describe("PE analysis actions", () => {
     await page.setInputFiles("#fileInput", toUpload(mockFile));
     await expectBaseDetails(page, mockFile.name, "PE32+ executable for x86-64 (AMD64)");
 
-    const detailsValue = page.locator("#peDetailsValue");
+    const detailsValue = page.locator("#analysisValue");
     const entrypointSection = detailsValue.locator("details.analysisPanel").filter({
       has: page.locator("summary", { hasText: /^Entrypoint disassembly\b/ })
     }).first();
@@ -201,7 +201,7 @@ test.describe("PE analysis actions", () => {
     const mockFile = createPePlusEntrypointCallFile();
     await page.setInputFiles("#fileInput", toUpload(mockFile));
 
-    const detailsValue = page.locator("#peDetailsValue");
+    const detailsValue = page.locator("#analysisValue");
     const instructionSection = detailsValue.locator("details.analysisPanel").filter({
       has: page.locator("summary", { hasText: /^Instruction-set analysis\b/ })
     }).first();

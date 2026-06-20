@@ -100,13 +100,13 @@ main{flex:1;display:flex;flex-direction:column;align-items:stretch}
   #resultsSection{margin:16px 0 24px;width:100%}
   #fileInfoCard{border-inline:0;border-radius:0;padding-inline:0}
   .filePrimaryInfo{padding-inline:16px}
-  #peDetailsValue:not(:has(> section)){padding-inline:16px}
+  #analysisValue:not(:has(> section)){padding-inline:16px}
 }
 dl{display:grid;grid-template-columns:max-content 1fr;row-gap:8px;column-gap:16px;margin:0}
 dt{color:var(--muted)}
 dd{margin:0;word-break:normal;overflow-wrap:anywhere}
-#peDetailsTerm,#peDetailsValue{grid-column:1 / -1}
-#peDetailsValue{padding-left:0;margin-top:var(--content-section-gap)}
+#analysisTerm,#analysisValue{grid-column:1 / -1}
+#analysisValue{padding-left:0;margin-top:var(--content-section-gap)}
 
 .hashDetails{
   margin-top:var(--content-section-gap);border:1px solid var(--border2);border-radius:14px;
@@ -182,10 +182,10 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .smallNote{color:var(--muted);font-size:12px;margin-top:4px}
 .mono{font-family:var(--mono)}
 .analysisPanel{margin:.2rem 0 .8rem 0;border:1px solid var(--border2);border-radius:14px;background:var(--info-bg)}
-#peDetailsValue > .analysisPanel,#peDetailsValue > .peSection{
+#analysisValue > .analysisPanel,#analysisValue > .peSection{
   margin:0 0 var(--content-section-gap)
 }
-#peDetailsValue > :last-child{margin-bottom:0}
+#analysisValue > :last-child{margin-bottom:0}
 .analysisPanelSummary{cursor:pointer;padding:.85rem 1rem}
 .analysisPanelSummary:hover{background:color-mix(in oklab,var(--accent) 10%,transparent)}
 .analysisPanelSummary:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}

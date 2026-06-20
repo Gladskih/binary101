@@ -50,8 +50,8 @@ const dropZoneElement = getElement("dropZone") as HTMLElement,
   fileMimeTypeDetailElement = getElement("fileMimeTypeDetail") as HTMLElement,
   fileIconWrapElement = getElement("fileIconWrap") as HTMLElement,
   fileIconElement = getElement("fileIcon") as HTMLImageElement,
-  peDetailsTermElement = getElement("peDetailsTerm") as HTMLElement,
-  peDetailsValueElement = getElement("peDetailsValue") as HTMLElement,
+  analysisTermElement = getElement("analysisTerm") as HTMLElement,
+  analysisValueElement = getElement("analysisValue") as HTMLElement,
   hashDetailsElement = getElement("hashDetails") as HTMLDetailsElement;
 attachPeFileIconGuard(fileIconElement, fileIconWrapElement);
 const fileInspectionContext = createFileInspectionContext(html);
@@ -79,17 +79,17 @@ const setStatusMessage = (message: string | null | undefined): void => { statusE
 const formatAnalysisDuration = (durationMs: number): string =>
   durationMs < 1000 ? `${Math.max(0, Math.round(durationMs))} ms` : `${(durationMs / 1000).toFixed(2)} s`;
 const renderResult = (result: ParseForUiResult): void => {
-  const openDetails = captureOpenDetails(peDetailsValueElement);
+  const openDetails = captureOpenDetails(analysisValueElement);
   renderParsedResult(result, {
     buildPreview: () =>
       buildPreviewHtml({ file: currentFile, typeLabel: currentTypeLabel, setPreviewUrl }),
-    attachGuards: preview => attachPreviewGuards(preview, peDetailsValueElement, setStatusMessage),
-    termElement: peDetailsTermElement,
-    valueElement: peDetailsValueElement
+    attachGuards: preview => attachPreviewGuards(preview, analysisValueElement, setStatusMessage),
+    termElement: analysisTermElement,
+    valueElement: analysisValueElement
   });
-  enhanceSortableTables(peDetailsValueElement);
+  enhanceSortableTables(analysisValueElement);
   enhanceAccessibleTooltips(fileInfoCardElement);
-  restoreOpenDetails(peDetailsValueElement, openDetails, viewer => syncManifestTreeControls(viewer as Element));
+  restoreOpenDetails(analysisValueElement, openDetails, viewer => syncManifestTreeControls(viewer as Element));
 };
 const getCurrentFile = (): File | null => currentFile;
 const getCurrentParseResult = (): ParseForUiResult => currentParseResult;
@@ -113,9 +113,9 @@ const resetFileInspectionView = (): void => {
   renderPeFileIcon(null, "", fileIconElement, fileIconWrapElement);
   setPreviewUrl(null);
   fileInfoCardElement.hidden = true;
-  peDetailsTermElement.hidden = true;
-  peDetailsValueElement.hidden = true;
-  peDetailsValueElement.innerHTML = "";
+  analysisTermElement.hidden = true;
+  analysisValueElement.hidden = true;
+  analysisValueElement.innerHTML = "";
   fileAnalysisDurationDetailElement.textContent = "";
   hashDetailsElement.open = false;
   resetHashDisplay(...hashControls);
@@ -159,7 +159,7 @@ attachSelectionInputs({
   openFile: inspectionNavigation.openFile,
   setStatusMessage
 });
-peDetailsValueElement.addEventListener("click", event => {
+analysisValueElement.addEventListener("click", event => {
   const targetNode = event.target as Node | null;
   const targetElement = targetNode instanceof Element ? targetNode : targetNode?.parentElement ?? null;
   if (targetElement?.closest("[data-manifest-copy-button]")) {
@@ -171,7 +171,7 @@ peDetailsValueElement.addEventListener("click", event => {
   }
   if (handleManifestTreeActionClick(targetElement)) { event.preventDefault(); return; }
   if (handleSortableTableClick(targetElement)) { event.preventDefault(); return; }
-  if (handlePeEntrypointJumpClick(targetElement, peDetailsValueElement)) { event.preventDefault(); return; }
+  if (handlePeEntrypointJumpClick(targetElement, analysisValueElement)) { event.preventDefault(); return; }
   const peAnalyzeButton = targetElement?.closest("#peInstructionSetsAnalyzeButton");
   const peCancelButton = targetElement?.closest("#peInstructionSetsCancelButton");
   const peEntrypointButton = targetElement?.closest("#peEntrypointDisassembleButton");
@@ -233,7 +233,7 @@ peDetailsValueElement.addEventListener("click", event => {
   fileActionClickHandler(event);
 });
 const syncToggledManifestTree = (event: Event): void => syncManifestTreeControls(event.target as Element | null);
-peDetailsValueElement.addEventListener("toggle", syncToggledManifestTree, true);
+analysisValueElement.addEventListener("toggle", syncToggledManifestTree, true);
 async function showFileInfo(file: File, context: Parameters<typeof fileInspectionContext.render>[0]): Promise<void> {
   const currentGeneration = fileInspectionGeneration + 1;
   fileInspectionGeneration = currentGeneration;
@@ -247,9 +247,9 @@ async function showFileInfo(file: File, context: Parameters<typeof fileInspectio
   try {
     setPreviewUrl(null);
     fileInfoCardElement.hidden = true;
-    peDetailsTermElement.hidden = true;
-    peDetailsValueElement.hidden = true;
-    peDetailsValueElement.innerHTML = "";
+    analysisTermElement.hidden = true;
+    analysisValueElement.hidden = true;
+    analysisValueElement.innerHTML = "";
     setStatusMessage("Detecting file type...");
     const typeLabel = await detectBinaryType(file);
     if (fileInspectionGeneration !== currentGeneration) return;
@@ -282,9 +282,9 @@ async function showFileInfo(file: File, context: Parameters<typeof fileInspectio
       `Unable to read file: ${error instanceof Error && error.message ? error.message : String(error)}`
     );
     fileAnalysisDurationDetailElement.textContent = "";
-    peDetailsTermElement.hidden = true;
-    peDetailsValueElement.hidden = true;
-    peDetailsValueElement.innerHTML = "";
+    analysisTermElement.hidden = true;
+    analysisValueElement.hidden = true;
+    analysisValueElement.innerHTML = "";
   }
 }
 hashControls.forEach(control => {

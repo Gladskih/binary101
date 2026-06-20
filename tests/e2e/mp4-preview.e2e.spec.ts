@@ -20,7 +20,7 @@ const expectMp4Details = async (page: Page, fileName: string): Promise<void> => 
   await expect(page.locator("#fileBinaryTypeDetail")).toHaveText(
     "MP4/QuickTime container (ISO-BMFF)"
   );
-  await expect(page.locator("#peDetailsValue")).toContainText("MP4 / ISO-BMFF container");
+  await expect(page.locator("#analysisValue")).toContainText("MP4 / ISO-BMFF container");
 };
 
 const installDeferredMediaError = async (page: Page): Promise<void> => {

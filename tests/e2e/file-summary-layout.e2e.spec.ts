@@ -74,7 +74,7 @@ void test("uses the full phone width for the PE result card and its sections", a
 
   const cardBox = await page.locator("#fileInfoCard").boundingBox();
   const hashesBox = await page.locator("#hashDetails").boundingBox();
-  const sectionBox = await page.locator("#peDetailsValue > .peSection").first().boundingBox();
+  const sectionBox = await page.locator("#analysisValue > .peSection").first().boundingBox();
   expect(cardBox).not.toBeNull();
   expect(hashesBox).not.toBeNull();
   expect(sectionBox).not.toBeNull();
@@ -87,7 +87,7 @@ void test("insets unsectioned analysis content on phone-sized screens", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await inspectFile(page, createGzipFile({ payload: Buffer.from("hello") }));
 
-  const details = page.locator("#peDetailsValue");
+  const details = page.locator("#analysisValue");
   const headingBox = await details.locator(":scope > h3").boundingBox();
   expect(await details.locator(":scope > section").count()).toBe(0);
   expect(headingBox).not.toBeNull();

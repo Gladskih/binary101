@@ -11,7 +11,7 @@ void test("PE diagnostic warning bullets stay inside the panel and wrapped text 
   await page.setViewportSize({ width: 520, height: 260 });
   await page.setContent(
     `<style>${css}</style><main id="resultsSection"><dl>` +
-      `<dt id="peDetailsTerm">PE/COFF details</dt><dd id="peDetailsValue">` +
+      `<dt id="analysisTerm">PE/COFF details</dt><dd id="analysisValue">` +
       `<section class="peSection"><details class="peSectionDetails" open>` +
       `<summary class="peSectionSummary"><b>Resources</b> - 8 kinds</summary>` +
       `<div class="peSectionBody">` +

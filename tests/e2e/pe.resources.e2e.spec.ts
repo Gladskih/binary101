@@ -33,7 +33,7 @@ const expectFileIcon = async (page: Page, fileName: string): Promise<void> => {
 };
 
 const openTopLevelSection = async (page: Page, title: string) => {
-  const details = page.locator("#peDetailsValue > section > details").filter({
+  const details = page.locator("#analysisValue > section > details").filter({
     has: page.locator("summary", { hasText: new RegExp(`^${title}\\b`) })
   }).first();
   await details.locator(":scope > summary").click();
@@ -41,7 +41,7 @@ const openTopLevelSection = async (page: Page, title: string) => {
 };
 
 const openResourceGroup = async (page: Page, typeName: string) => {
-  const details = page.locator("#peDetailsValue details details").filter({
+  const details = page.locator("#analysisValue details details").filter({
     has: page.locator("summary", { hasText: new RegExp(`^${typeName}\\b`) })
   }).first();
   await details.locator(":scope > summary").click();
@@ -120,10 +120,10 @@ test.describe("PE resource previews", () => {
 
     await expectBaseDetails(page, file.name, "PE32+ executable for x86-64 (AMD64)");
     await expectFileIcon(page, file.name);
-    await expect(page.locator("#peDetailsValue")).toContainText("Resources");
+    await expect(page.locator("#analysisValue")).toContainText("Resources");
     const resourcesSection = await openTopLevelSection(page, "Resources");
     await expect(resourcesSection).toHaveJSProperty("open", true);
-    await expect(page.locator('#peDetailsValue img[alt="resource preview"]')).toHaveCount(5);
+    await expect(page.locator('#analysisValue img[alt="resource preview"]')).toHaveCount(5);
     await expectVisualResourcePreviews(page);
     await expectLegacyResourcePreviews(page);
     await expectManifestAndMessageTablePreviews(page);

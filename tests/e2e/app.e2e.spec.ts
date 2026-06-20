@@ -110,7 +110,7 @@ test.describe("file type detection", () => {
       file = null;
     }, fileContent);
     await expectBaseDetails(page, "sample.txt", "Text file");
-    await expect(page.locator("#peDetailsValue")).toBeHidden();
+    await expect(page.locator("#analysisValue")).toBeHidden();
     await page.locator("#hashDetails > summary").click();
     await page.getByRole("button", { name: "Compute SHA-256" }).click();
     await expect(page.locator("#sha256Value")).toHaveText(/^[0-9a-f]{64}$/);
@@ -190,8 +190,8 @@ test.describe("file hash actions", () => {
     const file = createPeFile();
     await page.setInputFiles("#fileInput", toUpload(file));
     await expectBaseDetails(page, "sample.exe", "PE32 executable for x86 (I386)");
-    await expect(page.locator("#peDetailsValue")).toContainText("PE/COFF headers");
-    await expect(page.locator("#peDetailsValue")).not.toContainText(
+    await expect(page.locator("#analysisValue")).toContainText("PE/COFF headers");
+    await expect(page.locator("#analysisValue")).not.toContainText(
       "Portable Executable (PE) / COFF is the executable and object-file format"
     );
     const typeHelp = page.locator("#fileBinaryTypeDetail .accessibleTooltipButton");
@@ -209,13 +209,13 @@ test.describe("file hash actions", () => {
     );
     await page.keyboard.press("Escape");
     await expect(page.locator("#fileBinaryTypeDetail .accessibleTooltipPopup")).toBeHidden();
-    expect(await page.locator("#peDetailsValue .accessibleTooltipButton").count()).toBeGreaterThan(0);
+    expect(await page.locator("#analysisValue .accessibleTooltipButton").count()).toBeGreaterThan(0);
 
     const hashDetails = page.locator("#hashDetails");
     const nativeHashLabels = page.locator(".nativeHashLabel");
     const nativeHashBadges = page.locator(".nativeHashBadge");
     const nativeHashTooltip = page.locator("#sha256NativeBadge ~ .accessibleTooltipPopup");
-    const detailsBox = await page.locator("#peDetailsValue").boundingBox();
+    const detailsBox = await page.locator("#analysisValue").boundingBox();
     await expect(hashDetails).not.toHaveAttribute("open", "");
     await expect(nativeHashLabels).toHaveCount(4);
     await expect(nativeHashBadges).toHaveText(["🍃", "🍃", "🍃", "🍃"]);
@@ -247,7 +247,7 @@ test.describe("file type rendering", () => {
       await page.setInputFiles("#fileInput", toUpload(mockFile));
       await expectBaseDetails(page, mockFile.name, expectedKind);
 
-      const detailsValue = page.locator("#peDetailsValue");
+      const detailsValue = page.locator("#analysisValue");
       await expect(detailsValue).toBeVisible();
       await expect(detailsValue).toContainText(detailText);
       if (extraDetailText) {
@@ -261,9 +261,9 @@ test.describe("file type rendering", () => {
     const mockFile = createLnkFile();
     await page.setInputFiles("#fileInput", toUpload(mockFile));
     await expectBaseDetails(page, mockFile.name, "Windows shortcut (.lnk)");
-    await expect(page.locator("#peDetailsValue")).toContainText("System.Link.TargetParsingPath");
-    await expect(page.locator("#peDetailsValue")).toContainText("C:\\Program Files\\Example\\app.exe");
-    await expect(page.locator("#peDetailsValue")).toContainText("System.VolumeId");
+    await expect(page.locator("#analysisValue")).toContainText("System.Link.TargetParsingPath");
+    await expect(page.locator("#analysisValue")).toContainText("C:\\Program Files\\Example\\app.exe");
+    await expect(page.locator("#analysisValue")).toContainText("System.VolumeId");
   });
 
   void test("renders Mach-O analysis", async ({ page }) => {
@@ -271,8 +271,8 @@ test.describe("file type rendering", () => {
     await page.setInputFiles("#fileInput", toUpload(file));
 
     await expectBaseDetails(page, file.name, "Mach-O 64-bit");
-    await expect(page.locator("#peDetailsValue")).toContainText("Mach-O header");
-    await expect(page.locator("#peDetailsValue")).toContainText("Code signing");
+    await expect(page.locator("#analysisValue")).toContainText("Mach-O header");
+    await expect(page.locator("#analysisValue")).toContainText("Code signing");
   });
 
   void test("renders MP3 audio summary", async ({ page }) => {
@@ -280,8 +280,8 @@ test.describe("file type rendering", () => {
     await page.setInputFiles("#fileInput", toUpload(file));
 
     await expectBaseDetails(page, file.name, "MPEG audio stream (MP3/AAC)");
-    await expect(page.locator("#peDetailsValue")).toContainText("MPEG audio stream");
-    await expect(page.locator("#peDetailsValue")).toContainText("Summary");
+    await expect(page.locator("#analysisValue")).toContainText("MPEG audio stream");
+    await expect(page.locator("#analysisValue")).toContainText("Summary");
     await expect(page.locator(".audioPreview audio")).toBeVisible();
   });
 
@@ -294,7 +294,7 @@ test.describe("file type rendering", () => {
     });
 
     await expectBaseDetails(page, "unknown.bin", "Unknown binary type");
-    await expect(page.locator("#peDetailsValue")).toBeHidden();
+    await expect(page.locator("#analysisValue")).toBeHidden();
   });
 
 });
