@@ -27,7 +27,10 @@ const createHashControlsFixture = (label = "SHA-256"): {
   } as HTMLButtonElement;
   const copyButtonElement = { hidden: true } as HTMLButtonElement;
   const nativeHashBadgeElement = {
+    classList: { add: () => undefined, remove: () => undefined },
+    parentElement: null,
     textContent: "🍃",
+    title: "",
     setAttribute: () => undefined
   } as unknown as HTMLButtonElement;
   return {

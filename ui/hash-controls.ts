@@ -5,6 +5,7 @@ import { sha224, sha256 } from "@noble/hashes/sha256";
 import { sha384, sha512, sha512_224, sha512_256 } from "@noble/hashes/sha512";
 import type { CHash } from "@noble/hashes/utils";
 import { bufferToHex } from "../binary-utils.js";
+import { updateAccessibleTooltipButton } from "./accessible-tooltips.js";
 
 type HashAlgorithmId =
   "md5" | "sha1" | "sha224" | "sha256" | "sha384" | "sha512" |
@@ -60,17 +61,23 @@ const FALLBACK_HASHES: Readonly<Record<FallbackHashId, CHash>> = {
   sha512256: sha512_256
 };
 
+const showNativeHashBadge = (badge: HTMLButtonElement): void => {
+  badge.textContent = "🍃";
+  badge.classList.remove("nativeHashBadge--fallback");
+  updateAccessibleTooltipButton(badge, "Native crypto is tried first.");
+};
+
+const showFallbackHashBadge = (badge: HTMLButtonElement): void => {
+  badge.textContent = "🍂";
+  badge.classList.add("nativeHashBadge--fallback");
+  updateAccessibleTooltipButton(badge, "Native crypto failed; fallback used.");
+};
+
 const resetHashDisplay = (...controls: HashControls[]): void => {
   for (const control of controls) {
     control.valueElement.textContent = "";
     control.copyButtonElement.hidden = true;
-    if (control.nativeHashBadgeElement) {
-      control.nativeHashBadgeElement.textContent = "🍃";
-      control.nativeHashBadgeElement.setAttribute(
-        "aria-label",
-        "Show hashing method: native browser crypto is tried first."
-      );
-    }
+    if (control.nativeHashBadgeElement) showNativeHashBadge(control.nativeHashBadgeElement);
     control.buttonElement.hidden = false;
     control.buttonElement.disabled = false;
     control.buttonElement.textContent = `Compute ${control.label}`;
@@ -192,13 +199,7 @@ const computeAndDisplayHash = async (
     const digest = await computeFileDigest(algorithm, file);
     if (!canDisplayResult()) return;
     valueElement.textContent = bufferToHex(digest.value);
-    if (nativeHashBadgeElement && digest.usedNativeFallback) {
-      nativeHashBadgeElement.textContent = "🍃↪";
-      nativeHashBadgeElement.setAttribute(
-        "aria-label",
-        "Show hashing method: native browser crypto could not read the file."
-      );
-    }
+    if (nativeHashBadgeElement && digest.usedNativeFallback) showFallbackHashBadge(nativeHashBadgeElement);
     copyButtonElement.hidden = false;
     buttonElement.hidden = true;
   } catch (error) {

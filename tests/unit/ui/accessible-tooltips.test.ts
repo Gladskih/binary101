@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   accessibleTooltipSelector,
-  addAccessibleTooltipToButton
+  addAccessibleTooltipToButton,
+  updateAccessibleTooltipButton
 } from "../../../ui/accessible-tooltips.js";
 
 class FakeTooltipElement {
@@ -45,6 +46,8 @@ class FakeTooltipElement {
     this.parentElement = null;
   }
 
+  querySelector(): FakeTooltipElement | null { return this.children[1] ?? null; }
+
   setAttribute(name: string, value: string): void { this.attributes.set(name, value); }
 }
 
@@ -83,4 +86,7 @@ void test("button tooltips open from the supplied button", () => {
   button.listeners.get("click")?.({ stopPropagation: () => undefined });
   assert.equal(popup.hidden, false);
   assert.equal(button.attributes.get("aria-expanded"), "true");
+  updateAccessibleTooltipButton(button as unknown as HTMLButtonElement, "Native crypto failed; fallback used.");
+  assert.equal(button.title, "Native crypto failed; fallback used.");
+  assert.equal(popup.attributes.get("aria-label"), "Native crypto failed; fallback used.");
 });

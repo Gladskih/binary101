@@ -123,6 +123,10 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
   line-height:1;white-space:nowrap;cursor:pointer
 }
 .nativeHashBadge:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.nativeHashBadge--fallback{
+  background:color-mix(in oklab,var(--warning-text,#b45309) 16%,var(--info-bg));
+  color:var(--warning-text,#b45309)
+}
 .accessibleTooltip{
   position:relative;display:inline-flex;margin-left:.3rem;vertical-align:middle
 }

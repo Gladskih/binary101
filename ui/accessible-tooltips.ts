@@ -117,6 +117,14 @@ const addAccessibleTooltipToButton = (button: HTMLButtonElement, tooltip: string
   control.append(button, popup);
 };
 
+const updateAccessibleTooltipButton = (button: HTMLButtonElement, tooltip: string): void => {
+  const text = tooltip.trim();
+  if (!text) return;
+  configureTooltipButton(button, text);
+  button.parentElement?.querySelector<HTMLElement>(".accessibleTooltipPopup")
+    ?.setAttribute("aria-label", text);
+};
+
 const enhanceAccessibleTooltips = (root: HTMLElement): void => {
   root.querySelectorAll<HTMLElement>(accessibleTooltipSelector).forEach(target => {
     const tooltip = target.getAttribute("title")?.trim() ?? "";
@@ -135,5 +143,6 @@ export {
   accessibleTooltipSelector,
   addAccessibleTooltip,
   addAccessibleTooltipToButton,
-  enhanceAccessibleTooltips
+  enhanceAccessibleTooltips,
+  updateAccessibleTooltipButton
 };

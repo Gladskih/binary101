@@ -219,7 +219,7 @@ test.describe("file hash actions", () => {
     await expect(nativeHashBadges).toHaveText(["🍃", "🍃", "🍃", "🍃"]);
     await expect(page.locator("#sha256NativeBadge")).toHaveAttribute(
       "title",
-      "Native browser crypto is tried first. An arrow means local fallback was used."
+      "Native crypto is tried first."
     );
     const hashSummaryBox = await hashDetails.locator("summary").boundingBox();
     expect(hashSummaryBox?.y).toBeLessThan(detailsBox?.y ?? 0);
@@ -228,7 +228,7 @@ test.describe("file hash actions", () => {
     await page.locator("#sha256NativeBadge").click();
     await expect(nativeHashTooltip).toHaveAttribute(
       "aria-label",
-      "Native browser crypto is tried first. An arrow means local fallback was used."
+      "Native crypto is tried first."
     );
   });
 });
