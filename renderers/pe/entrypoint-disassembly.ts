@@ -225,7 +225,7 @@ const renderEntrypointDisassemblyContent = (pe: PeWindowsParseResult, out: strin
   if (!hasEntrypoint(pe) && !pe.entrypointDisassembly) return;
   out.push(
     `<details class="analysisPanel"><summary class="analysisPanelSummary">` +
-    `<span class="analysisPanelTitle">Entrypoint disassembly</span></summary>` +
+    `<span class="detailsSummaryTitle">Entrypoint disassembly</span></summary>` +
     `<div class="analysisPanelBody"><div class="analysisPanelActions">`
   );
   renderEntrypointActions(pe, out);

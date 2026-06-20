@@ -190,7 +190,7 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .analysisPanelSummary:hover{background:color-mix(in oklab,var(--accent) 10%,transparent)}
 .analysisPanelSummary:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .analysisPanelBody{padding:0 1rem .9rem 1rem}
-.analysisPanelTitle{display:inline-block;font-size:1rem;font-weight:700}
+.detailsSummaryTitle{display:inline-block;font-size:1rem;font-weight:700}
 .analysisPanelActions{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
 .peEntrypointJump{
   appearance:none;
@@ -662,8 +662,13 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .tableButton:hover{border-color:var(--accent);color:var(--accent)}
 .tableButton:disabled{opacity:.6;cursor:not-allowed}
 
-.jpegPreview{margin-bottom:10px;max-height:260px;overflow:hidden;display:flex;justify-content:flex-start}
-.jpegPreview img{max-height:260px;max-width:100%;height:auto;width:auto;object-fit:contain;border-radius:6px;border:1px solid var(--border2);background:#000}
+.imagePreview{
+  display:flex;justify-content:flex-start;margin-bottom:10px;max-height:260px;overflow:hidden
+}
+.imagePreview img{
+  width:auto;max-width:100%;height:auto;max-height:260px;object-fit:contain;
+  border:1px solid var(--border2);border-radius:6px;background:#000
+}
 .videoPreview{margin-bottom:10px;max-height:320px;overflow:hidden;display:flex;justify-content:flex-start}
 .videoPreview video{max-height:320px;max-width:100%;width:100%;border-radius:6px;border:1px solid var(--border2);background:#000}
 .audioPreview{margin-bottom:10px;display:flex;justify-content:flex-start}

@@ -55,7 +55,7 @@ const buildPreviewHtml = ({ file, typeLabel, setPreviewUrl }: PreviewContext): P
     const altText = file.name ? `Preview of ${file.name}` : "Image preview";
     return {
       kind: "image",
-      html: `<div class="jpegPreview"><img src="${previewUrl}" alt="${escapeHtml(
+      html: `<div class="imagePreview"><img src="${previewUrl}" alt="${escapeHtml(
         altText
       )}" /></div>`
     };

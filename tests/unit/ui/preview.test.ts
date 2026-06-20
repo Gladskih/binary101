@@ -165,7 +165,9 @@ void test("buildPreviewHtml renders image previews with escaped alt text", () =>
 
     assert.deepEqual(preview, {
       kind: "image",
-      html: '<div class="jpegPreview"><img src="blob:image" alt="Preview of cover&lt;1>.png" /></div>'
+      html:
+        '<div class="imagePreview"><img src="blob:image" ' +
+        'alt="Preview of cover&lt;1>.png" /></div>'
     });
     assert.deepEqual(previewUrls, [null, "blob:image"]);
     assert.equal(environment.createdBlobs.length, 1);
