@@ -2,6 +2,7 @@
 
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { createGzipFile } from "../fixtures/gzip-fixtures.js";
 import { createPngFile } from "../fixtures/image-sample-files.js";
 import { createPeResourcePreviewFile } from "../fixtures/pe-resource-preview-file.js";
 import type { MockFile } from "../helpers/mock-file.js";
@@ -80,6 +81,17 @@ void test("uses the full phone width for the PE result card and its sections", a
   expect(cardBox!.x).toBeCloseTo(0, 0);
   expect(hashesBox!.x).toBeCloseTo(0, 0);
   expect(sectionBox!.x).toBeCloseTo(0, 0);
+});
+
+void test("insets unsectioned analysis content on phone-sized screens", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await inspectFile(page, createGzipFile({ payload: Buffer.from("hello") }));
+
+  const details = page.locator("#peDetailsValue");
+  const headingBox = await details.locator(":scope > h3").boundingBox();
+  expect(await details.locator(":scope > section").count()).toBe(0);
+  expect(headingBox).not.toBeNull();
+  expect(headingBox!.x).toBeCloseTo(16, 0);
 });
 
 void test("shows a hover affordance for collapsible PE sections", async ({ page }) => {
