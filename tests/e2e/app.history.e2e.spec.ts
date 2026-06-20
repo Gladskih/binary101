@@ -47,9 +47,19 @@ const dispatchFixtureFolderDrop = async (page: Page): Promise<void> => {
   });
 };
 
-const expectDirectory = async (page: Page, name: string): Promise<void> => {
+const expectDirectory = async (
+  page: Page,
+  name: string,
+  source: string,
+  object: string,
+  relativePath?: string
+): Promise<void> => {
   await expect(page.locator("#directoryInfoCard")).toBeVisible();
   await expect(page.locator("#directoryName")).toHaveText(name);
+  await expect(page.locator("#directorySourceDetail .opt.sel")).toHaveText(source);
+  await expect(page.locator("#directoryObjectDetail .opt.sel")).toHaveText(object);
+  if (relativePath) await expect(page.locator("#directoryRelativePathDetail")).toHaveText(relativePath);
+  else await expect(page.locator("#directoryRelativePathTerm")).toBeHidden();
 };
 
 const expectPixelFile = async (page: Page): Promise<void> => {
@@ -62,19 +72,22 @@ test("browser back and forward restore folder and file inspection routes", async
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Local File Inspector" })).toBeVisible();
   await dispatchFixtureFolderDrop(page);
-  await expectDirectory(page, "fixture-folder");
+  await expectDirectory(page, "fixture-folder", "Drop", "Directory");
   await page.locator("#directoryFolderListingBody tr").click();
-  await expectDirectory(page, "fixture-folder/docs");
+  await expectDirectory(page, "docs", "Navigation", "Directory", "fixture-folder/docs");
   await page.goBack();
-  await expectDirectory(page, "fixture-folder");
+  await expectDirectory(page, "fixture-folder", "Drop", "Directory");
   await page.goForward();
-  await expectDirectory(page, "fixture-folder/docs");
+  await expectDirectory(page, "docs", "Navigation", "Directory", "fixture-folder/docs");
   await page.goBack();
-  await expectDirectory(page, "fixture-folder");
+  await expectDirectory(page, "fixture-folder", "Drop", "Directory");
   await page.locator("#directoryFileListingBody tr", { hasText: "pixel.png" }).click();
   await expectPixelFile(page);
+  await expect(page.locator("#fileSourceDetail .opt.sel")).toHaveText("Navigation");
+  await expect(page.locator("#fileObjectDetail .opt.sel")).toHaveText("File");
+  await expect(page.locator("#fileRelativePathDetail")).toHaveText("fixture-folder/pixel.png");
   await page.goBack();
-  await expectDirectory(page, "fixture-folder");
+  await expectDirectory(page, "fixture-folder", "Drop", "Directory");
   await page.goForward();
   await expectPixelFile(page);
 });

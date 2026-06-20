@@ -61,6 +61,19 @@
         <div class="directoryHeader">
           <div>
             <h2 id="directoryName">Folder</h2>
+            <div class="inspectionContext" aria-label="Inspection context">
+              <div class="inspectionContext__field">
+                <span class="inspectionContext__label">Source</span>
+                <span id="directorySourceDetail" class="optionsRow"></span>
+              </div>
+              <div class="inspectionContext__field">
+                <span class="inspectionContext__label">Object</span>
+                <span id="directoryObjectDetail" class="optionsRow"></span>
+              </div>
+            </div>
+            <p id="directoryRelativePathTerm" class="inspectionRelativePath" hidden>
+              Relative path: <span id="directoryRelativePathDetail"></span>
+            </p>
             <p id="directorySummary" class="smallNote"></p>
           </div>
           <div id="directoryProgressWrap" hidden>
@@ -130,7 +143,10 @@
             <dt>MIME type</dt><dd id="fileMimeTypeDetail"></dd>
             <dt>Inspection time (UTC)</dt><dd id="fileTimestampDetail"></dd>
             <dt>Analysis duration</dt><dd id="fileAnalysisDurationDetail"></dd>
-            <dt>Source</dt><dd id="fileSourceDetail"></dd>
+            <dt>Source</dt><dd id="fileSourceDetail" class="optionsRow"></dd>
+            <dt>Object</dt><dd id="fileObjectDetail" class="optionsRow"></dd>
+            <dt id="fileRelativePathTerm" hidden>Relative path</dt>
+            <dd id="fileRelativePathDetail" hidden></dd>
             <dt>Binary type</dt><dd id="fileBinaryTypeDetail"></dd>
           </dl>
           <div id="fileIconWrap" class="filePrimaryInfo__iconWrap" hidden>

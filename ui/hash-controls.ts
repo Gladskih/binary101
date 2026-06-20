@@ -183,6 +183,11 @@ const computeFileDigest = async (
   ? computeNativeDigestWithFallback(algorithm, file)
   : { value: await computeFallbackDigest(algorithm.id, file), usedNativeFallback: false };
 
+const formatHashError = (error: unknown): string => {
+  if (!(error instanceof Error)) return String(error);
+  return error.message || error.name || "Unknown error";
+};
+
 const computeAndDisplayHash = async (
   algorithm: HashAlgorithmOption,
   file: File | null,
@@ -204,8 +209,7 @@ const computeAndDisplayHash = async (
     buttonElement.hidden = true;
   } catch (error) {
     if (!canDisplayResult()) return;
-    const namePart = error instanceof Error && error.name ? `${error.name}: ` : "";
-    valueElement.textContent = `Hash failed: ${namePart}${String(error)}`;
+    valueElement.textContent = `Hash failed: ${formatHashError(error)}`;
     buttonElement.disabled = false;
     buttonElement.textContent = "Retry";
     copyButtonElement.hidden = true;

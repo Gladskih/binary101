@@ -20,7 +20,7 @@ class FakeElement {
   hidden = false;
   max = 0;
   tabIndex = -1;
-  textContent: string | null = "";
+  innerHTML = ""; textContent: string | null = "";
   title = "";
   value = 0;
   #listeners = new Map<string, Array<(event: Event) => void>>();
@@ -58,6 +58,12 @@ const createElements = () => ({
   openButtonElement: new FakeElement(),
   cardElement: new FakeElement(),
   nameElement: new FakeElement(),
+  contextElements: {
+    objectElement: new FakeElement(),
+    relativePathElement: new FakeElement(),
+    relativePathTermElement: new FakeElement(),
+    sourceElement: new FakeElement()
+  },
   summaryElement: new FakeElement(),
   progressWrapElement: new FakeElement(),
   progressElement: new FakeElement(),
@@ -77,6 +83,12 @@ const createController = (
   openButtonElement: elements.openButtonElement as unknown as HTMLButtonElement,
   cardElement: elements.cardElement as unknown as HTMLElement,
   nameElement: elements.nameElement as unknown as HTMLElement,
+  contextElements: {
+    objectElement: elements.contextElements.objectElement as unknown as HTMLElement,
+    relativePathElement: elements.contextElements.relativePathElement as unknown as HTMLElement,
+    relativePathTermElement: elements.contextElements.relativePathTermElement as unknown as HTMLElement,
+    sourceElement: elements.contextElements.sourceElement as unknown as HTMLElement
+  },
   summaryElement: elements.summaryElement as unknown as HTMLElement,
   progressWrapElement: elements.progressWrapElement as unknown as HTMLElement,
   progressElement: elements.progressElement as unknown as HTMLProgressElement,
@@ -130,15 +142,18 @@ void test("directory inspection emits and restores browser history routes", asyn
     });
     await controller.open();
     await controller.showRoute({
+      context: { source: "navigation", object: "directory", relativePath: "fixture/docs" },
       locations: [
-        { displayPath: "fixture", handle: root },
-        { displayPath: "fixture/docs", handle: docs }
-      ],
-      sourceDescription: "Folder"
+        { handle: root, name: "fixture", relativePath: "fixture" },
+        { handle: docs, name: "docs", relativePath: "fixture/docs" }
+      ]
     });
     assert.equal(routes.length, 1);
-    assert.equal(routes[0]?.locations[0]?.displayPath, "fixture");
-    assert.equal(elements.nameElement.textContent, "fixture/docs");
+    assert.equal(routes[0]?.locations[0]?.name, "fixture");
+    assert.equal(elements.nameElement.textContent, "docs");
+    assert.match(elements.contextElements.sourceElement.innerHTML, />Navigation<\/span>/);
+    assert.match(elements.contextElements.objectElement.innerHTML, />Directory<\/span>/);
+    assert.equal(elements.contextElements.relativePathElement.textContent, "fixture/docs");
     assert.deepEqual(rowTexts(elements.fileTableBodyElement), [
       ["readme.txt", "1 B (1 bytes)", "text/plain", "2024-01-02T03:04:05.000Z", "Text file"]
     ]);

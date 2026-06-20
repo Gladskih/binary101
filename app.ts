@@ -28,6 +28,8 @@ import {
 } from "./ui/directory-inspection.js";
 import { createInspectionNavigationController } from "./ui/inspection-navigation.js";
 import { attachSelectionInputs } from "./ui/selection-inputs.js";
+import { createFileInspectionContext } from "./ui/file-inspection-context.js";
+import { setFileBinaryTypeLabel } from "./ui/file-type-label.js";
 import {
   addAccessibleTooltip,
   addAccessibleTooltipToButton,
@@ -44,7 +46,6 @@ const dropZoneElement = getElement("dropZone") as HTMLElement,
   fileSizeDetailElement = getElement("fileSizeDetail") as HTMLElement,
   fileTimestampDetailElement = getElement("fileTimestampDetail") as HTMLElement,
   fileAnalysisDurationDetailElement = getElement("fileAnalysisDurationDetail") as HTMLElement,
-  fileSourceDetailElement = getElement("fileSourceDetail") as HTMLElement,
   fileBinaryTypeDetailElement = getElement("fileBinaryTypeDetail") as HTMLElement,
   fileMimeTypeDetailElement = getElement("fileMimeTypeDetail") as HTMLElement,
   fileIconWrapElement = getElement("fileIconWrap") as HTMLElement,
@@ -53,6 +54,7 @@ const dropZoneElement = getElement("dropZone") as HTMLElement,
   peDetailsValueElement = getElement("peDetailsValue") as HTMLElement,
   hashDetailsElement = getElement("hashDetails") as HTMLDetailsElement;
 attachPeFileIconGuard(fileIconElement, fileIconWrapElement);
+const fileInspectionContext = createFileInspectionContext(html);
 const hashControls = HASH_ALGORITHMS.map(algorithm => ({
   algorithm,
   label: algorithm.label,
@@ -89,15 +91,6 @@ const renderResult = (result: ParseForUiResult): void => {
   enhanceAccessibleTooltips(fileInfoCardElement);
   restoreOpenDetails(peDetailsValueElement, openDetails, viewer => syncManifestTreeControls(viewer as Element));
 };
-const setBinaryTypeLabel = (typeLabel: string): void => {
-  fileBinaryTypeDetailElement.textContent = typeLabel;
-  if (!typeLabel.startsWith("PE")) return;
-  addAccessibleTooltip(
-    fileBinaryTypeDetailElement,
-    "Portable Executable (PE) / COFF is the executable and object-file format used by " +
-    "Windows toolchains."
-  );
-};
 const getCurrentFile = (): File | null => currentFile;
 const getCurrentParseResult = (): ParseForUiResult => currentParseResult;
 const { peDisassembly, peEntrypointDisassembly, peOverlayScan, elfDisassembly } =
@@ -126,6 +119,7 @@ const resetFileInspectionView = (): void => {
   fileAnalysisDurationDetailElement.textContent = "";
   hashDetailsElement.open = false;
   resetHashDisplay(...hashControls);
+  fileInspectionContext.clear();
 };
 const showEmptyInspection = (message: string | null): void => {
   directoryInspection.hide();
@@ -140,6 +134,12 @@ const inspectionNavigation = createInspectionNavigationController({
 const directoryInspection: DirectoryInspectionController = createDirectoryInspectionController({
   openButtonElement: getElement("directoryOpenButton") as HTMLButtonElement,
   cardElement: html("directoryInfoCard"), nameElement: html("directoryName"),
+  contextElements: {
+    objectElement: html("directoryObjectDetail"),
+    relativePathElement: html("directoryRelativePathDetail"),
+    relativePathTermElement: html("directoryRelativePathTerm"),
+    sourceElement: html("directorySourceDetail")
+  },
   summaryElement: html("directorySummary"), progressWrapElement: html("directoryProgressWrap"),
   progressElement: getElement("directoryScanProgress") as HTMLProgressElement,
   progressTextElement: html("directoryScanProgressText"),
@@ -234,7 +234,7 @@ peDetailsValueElement.addEventListener("click", event => {
 });
 const syncToggledManifestTree = (event: Event): void => syncManifestTreeControls(event.target as Element | null);
 peDetailsValueElement.addEventListener("toggle", syncToggledManifestTree, true);
-async function showFileInfo(file: File, sourceDescription: string): Promise<void> {
+async function showFileInfo(file: File, context: Parameters<typeof fileInspectionContext.render>[0]): Promise<void> {
   const currentGeneration = fileInspectionGeneration + 1;
   fileInspectionGeneration = currentGeneration;
   cancelActiveAnalysis();
@@ -260,8 +260,8 @@ async function showFileInfo(file: File, sourceDescription: string): Promise<void
     fileNameDetailElement.textContent = file.name || "";
     fileSizeDetailElement.textContent = sizeText;
     fileTimestampDetailElement.textContent = timestampIso;
-    fileSourceDetailElement.textContent = sourceDescription;
-    setBinaryTypeLabel(typeLabel);
+    fileInspectionContext.render(context);
+    setFileBinaryTypeLabel(fileBinaryTypeDetailElement, typeLabel, addAccessibleTooltip);
     fileMimeTypeDetailElement.textContent = mimeType;
     fileInfoCardElement.hidden = false;
     setStatusMessage("Parsing file details...");

@@ -115,7 +115,6 @@ test.describe("file type detection", () => {
     await page.getByRole("button", { name: "Compute SHA-256" }).click();
     await expect(page.locator("#sha256Value")).toHaveText(/^[0-9a-f]{64}$/);
   });
-
   void test("drops a folder and fills file type rows progressively", async ({ page }) => {
     await page.evaluate(() => {
       type BrowserHandle = {
@@ -168,7 +167,10 @@ test.describe("file type detection", () => {
     await expect(page.locator("#directoryFileListingBody")).toContainText("2024-01-02T03:04:05.000Z");
     await expect(page.locator("#statusMessage")).toHaveText("Folder scan complete: 1 file.");
     await page.locator("#directoryFolderListingBody tr").click();
-    await expect(page.locator("#directoryName")).toHaveText("fixture-folder/docs");
+    await expect(page.locator("#directoryName")).toHaveText("docs");
+    await expect(page.locator("#directorySourceDetail .opt.sel")).toHaveText("Navigation");
+    await expect(page.locator("#directoryObjectDetail .opt.sel")).toHaveText("Directory");
+    await expect(page.locator("#directoryRelativePathDetail")).toHaveText("fixture-folder/docs");
     await expect(page.locator("#directoryFileListingBody")).toContainText("note.txt");
     await expect(page.locator("#directoryFileListingBody")).toContainText("5 B (5 bytes)");
     await page.goBack();

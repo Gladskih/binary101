@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
-type PayloadKind = "one-file" | "multiple-files" | "folder" | "multiple-folders";
+type PayloadKind = "one-file" | "multiple-files" | "folder" | "multiple-folders" | "mixed" | "text";
 type SourceKind = "drop" | "paste" | "dialog";
 type BrowserHandle = {
   kind: "directory" | "file";
@@ -14,6 +14,8 @@ type SelectionFixtureWindow = Window & {
   __binary101DispatchPaste?: (payload: PayloadKind) => void;
   __binary101InstallDirectoryPicker?: (payload: PayloadKind) => void;
 };
+const sourceOptions = ["Selection", "Paste", "Drop", "Navigation"];
+const objectOptions = ["File", "Directory", "Collection"];
 
 const uploadFile = (name: string, text: string) => ({
   name,
@@ -28,7 +30,9 @@ const uploadsFor = (payload: PayloadKind) =>
 
 const installSelectionFixtures = async (page: Page): Promise<void> => {
   await page.addInitScript(() => {
-    type FixtureItem = { kind: "file"; getAsFileSystemHandle: () => Promise<BrowserHandle | null> };
+    type FixtureItem =
+      | { kind: "file"; getAsFileSystemHandle: () => Promise<BrowserHandle | null> }
+      | { kind: "string"; getAsString: (callback: (value: string) => void) => void };
     const browserWindow = globalThis as unknown as SelectionFixtureWindow;
     const browserDocument = (globalThis as { document: Document }).document;
     const file = (name: string, text: string): File =>
@@ -46,6 +50,7 @@ const installSelectionFixtures = async (page: Page): Promise<void> => {
       }
     });
     const handlesFor = (payload: PayloadKind): BrowserHandle[] => {
+      if (payload === "text") return [];
       if (payload === "folder") {
         return [directoryHandle("folder-one", [fileHandle("inside.txt", "inside")])];
       }
@@ -53,6 +58,12 @@ const installSelectionFixtures = async (page: Page): Promise<void> => {
         return [
           directoryHandle("folder-one", [fileHandle("one.txt", "one")]),
           directoryHandle("folder-two", [fileHandle("two.txt", "two")])
+        ];
+      }
+      if (payload === "mixed") {
+        return [
+          fileHandle("alpha.txt", "alpha"),
+          directoryHandle("folder-one", [fileHandle("inside.txt", "inside")])
         ];
       }
       return payload === "one-file"
@@ -69,8 +80,17 @@ const installSelectionFixtures = async (page: Page): Promise<void> => {
     });
     const itemListFor = (items: readonly FixtureItem[]) =>
       Object.assign([...items], { item: (index: number): FixtureItem | null => items[index] ?? null });
-    const handleItemsFor = (handles: readonly BrowserHandle[]): FixtureItem[] =>
-      handles.map(handle => ({ kind: "file", getAsFileSystemHandle: async () => handle }));
+    const handleItemsFor = (handles: readonly BrowserHandle[]): FixtureItem[] => {
+      let accessOpen = true;
+      queueMicrotask(() => { accessOpen = false; });
+      return handles.map(handle => ({
+        kind: "file",
+        getAsFileSystemHandle: async () => {
+          if (!accessOpen) throw new Error("file handle access expired");
+          return handle;
+        }
+      }));
+    };
     const fileProbeItemsFor = (files: readonly File[]): FixtureItem[] =>
       files.map(() => ({
         kind: "file",
@@ -88,12 +108,15 @@ const installSelectionFixtures = async (page: Page): Promise<void> => {
     };
     browserWindow.__binary101DispatchPaste = payload => {
       const files = filesFor(payload);
-      const items = payload.includes("file") ? [] : handleItemsFor(handlesFor(payload));
+      const items: FixtureItem[] = payload === "text"
+        ? [{ kind: "string", getAsString: callback => { callback("clipboard text"); } }]
+        : payload.includes("file") ? [] : handleItemsFor(handlesFor(payload));
       const pasteEvent = new Event("paste", { bubbles: true, cancelable: true });
       Object.defineProperty(pasteEvent, "clipboardData", {
         value: { files: fileListFor(files), items: itemListFor(items) }
       });
       browserWindow.dispatchEvent(pasteEvent);
+      files.splice(0, files.length);
     };
     browserWindow.__binary101InstallDirectoryPicker = payload => {
       const handles = handlesFor(payload);
@@ -132,10 +155,40 @@ const useSource = async (page: Page, source: SourceKind, payload: PayloadKind): 
   else await openDialog(page, payload);
 };
 
-const expectFileDetails = async (page: Page, fileName: string): Promise<void> => {
+const sourceLabel = (source: SourceKind): string => ({
+  dialog: "Selection",
+  drop: "Drop",
+  paste: "Paste"
+})[source];
+
+const expectOptionChips = async (
+  page: Page,
+  selector: string,
+  options: readonly string[],
+  selected: string
+): Promise<void> => {
+  const container = page.locator(selector);
+  await expect(container.locator(".opt")).toHaveText([...options]);
+  await expect(container.locator(".opt.sel")).toHaveText(selected);
+  await expect(container.locator(".opt.dim")).toHaveCount(options.length - 1);
+};
+
+const expectFileDetails = async (
+  page: Page,
+  fileName: string,
+  source = "Navigation",
+  relativePath = fileName
+): Promise<void> => {
   await expect(page.locator("#fileInfoCard")).toBeVisible();
   await expect(page.locator("#fileNameDetail")).toHaveText(fileName);
   await expect(page.locator("#fileBinaryTypeDetail")).toHaveText("Text file");
+  await expectOptionChips(page, "#fileSourceDetail", sourceOptions, source);
+  await expectOptionChips(page, "#fileObjectDetail", objectOptions, "File");
+  if (source === "Navigation") {
+    await expect(page.locator("#fileRelativePathDetail")).toHaveText(relativePath);
+  } else {
+    await expect(page.locator("#fileRelativePathTerm")).toBeHidden();
+  }
 };
 
 const expectPageNotStretched = async (page: Page): Promise<void> => {
@@ -145,9 +198,11 @@ const expectPageNotStretched = async (page: Page): Promise<void> => {
   })).toBe(true);
 };
 
-const expectMultipleFiles = async (page: Page): Promise<void> => {
+const expectMultipleFiles = async (page: Page, source: string): Promise<void> => {
   await expect(page.locator("#directoryInfoCard")).toBeVisible();
   await expect(page.locator("#directoryName")).toHaveText("Selected files");
+  await expectOptionChips(page, "#directorySourceDetail", sourceOptions, source);
+  await expectOptionChips(page, "#directoryObjectDetail", objectOptions, "Collection");
   await expect(page.locator("#directorySummary")).toHaveText("2 files, 0 folders, 2/2 files scanned");
   await expect(page.locator("#directoryFileListingBody tr")).toHaveCount(2);
   await expectPageNotStretched(page);
@@ -155,34 +210,77 @@ const expectMultipleFiles = async (page: Page): Promise<void> => {
   await expectFileDetails(page, "alpha.txt");
 };
 
-const expectOneFolder = async (page: Page): Promise<void> => {
+const expectOneFolder = async (page: Page, source: string): Promise<void> => {
   await expect(page.locator("#directoryInfoCard")).toBeVisible();
   await expect(page.locator("#directoryName")).toHaveText("folder-one");
+  await expectOptionChips(page, "#directorySourceDetail", sourceOptions, source);
+  await expectOptionChips(page, "#directoryObjectDetail", objectOptions, "Directory");
   await expect(page.locator("#directorySummary")).toHaveText("1 file, 0 folders, 1/1 files scanned");
   await expect(page.locator("#directoryFileListingBody tr")).toHaveCount(1);
   await expectPageNotStretched(page);
   await page.locator("#directoryFileListingBody tr", { hasText: "inside.txt" }).click();
-  await expectFileDetails(page, "inside.txt");
+  await expectFileDetails(page, "inside.txt", "Navigation", "folder-one/inside.txt");
 };
 
-const expectMultipleFolders = async (page: Page, rootName: string): Promise<void> => {
+const expectMultipleFolders = async (
+  page: Page,
+  rootName: string,
+  source: string,
+  object: string
+): Promise<void> => {
   await expect(page.locator("#directoryInfoCard")).toBeVisible();
   await expect(page.locator("#directoryName")).toHaveText(rootName);
+  await expectOptionChips(page, "#directorySourceDetail", sourceOptions, source);
+  await expectOptionChips(page, "#directoryObjectDetail", objectOptions, object);
   await expect(page.locator("#directorySummary")).toHaveText("0 files, 2 folders, 0/0 files scanned");
   await expect(page.locator("#directoryFolderListingBody tr")).toHaveCount(2);
   await page.locator("#directoryFolderListingBody tr", { hasText: "folder-one/" }).click();
-  await expect(page.locator("#directoryName")).toHaveText(`${rootName}/folder-one`);
+  await expect(page.locator("#directoryName")).toHaveText("folder-one");
+  await expectOptionChips(page, "#directorySourceDetail", sourceOptions, "Navigation");
+  await expectOptionChips(page, "#directoryObjectDetail", objectOptions, "Directory");
+  await expect(page.locator("#directoryRelativePathDetail")).toHaveText("folder-one");
   await page.goBack();
   await expect(page.locator("#directoryName")).toHaveText(rootName);
   await expectPageNotStretched(page);
 };
 
-const expectPayload = async (page: Page, source: SourceKind, payload: PayloadKind): Promise<void> => {
-  if (payload === "one-file") await expectFileDetails(page, "alpha.txt");
-  else if (payload === "multiple-files") await expectMultipleFiles(page);
-  else if (payload === "folder") await expectOneFolder(page);
-  else await expectMultipleFolders(page, source === "dialog" ? "Selected folders" : "Dropped items");
+const expectMixedItems = async (page: Page, source: string, rootName: string): Promise<void> => {
+  await expect(page.locator("#directoryInfoCard")).toBeVisible();
+  await expect(page.locator("#directoryName")).toHaveText(rootName);
+  await expectOptionChips(page, "#directorySourceDetail", sourceOptions, source);
+  await expectOptionChips(page, "#directoryObjectDetail", objectOptions, "Collection");
+  await expect(page.locator("#directoryFolderListingBody tr")).toHaveCount(1);
+  await expect(page.locator("#directoryFileListingBody tr")).toHaveCount(1);
+  await page.locator("#directoryFolderListingBody tr", { hasText: "folder-one/" }).click();
+  await expect(page.locator("#directoryName")).toHaveText("folder-one");
+  await expect(page.locator("#fileInfoCard")).toBeHidden();
+  await expect(page.locator("#directoryRelativePathDetail")).toHaveText("folder-one");
+  await page.locator("#directoryFileListingBody tr", { hasText: "inside.txt" }).click();
+  await expectFileDetails(page, "inside.txt", "Navigation", "folder-one/inside.txt");
+  await expectPageNotStretched(page);
 };
+
+const expectPayload = async (page: Page, source: SourceKind, payload: PayloadKind): Promise<void> => {
+  if (payload === "one-file") await expectFileDetails(page, "alpha.txt", sourceLabel(source));
+  else if (payload === "text") await expectFileDetails(page, "clipboard.bin", "Paste");
+  else if (payload === "multiple-files") await expectMultipleFiles(page, sourceLabel(source));
+  else if (payload === "folder") await expectOneFolder(page, sourceLabel(source));
+  else if (payload === "mixed") {
+    await expectMixedItems(page, sourceLabel(source), source === "paste" ? "Pasted items" : "Dropped items");
+  }
+  else await expectMultipleFolders(
+    page,
+    source === "paste" ? "Pasted items" : "Dropped items",
+    sourceLabel(source),
+    "Collection"
+  );
+};
+
+const sourcePayloads: ReadonlyArray<readonly [SourceKind, readonly PayloadKind[]]> = [
+  ["paste", ["one-file", "multiple-files", "folder", "multiple-folders", "mixed", "text"]],
+  ["drop", ["one-file", "multiple-files", "folder", "multiple-folders", "mixed"]],
+  ["dialog", ["one-file", "multiple-files", "folder"]]
+];
 
 test.describe("selection sources", () => {
   test.beforeEach(async ({ page }) => {
@@ -191,8 +289,8 @@ test.describe("selection sources", () => {
     await expect(page.getByRole("heading", { name: "Local File Inspector" })).toBeVisible();
   });
 
-  for (const source of ["paste", "drop", "dialog"] as const) {
-    for (const payload of ["one-file", "multiple-files", "folder", "multiple-folders"] as const) {
+  for (const [source, payloads] of sourcePayloads) {
+    for (const payload of payloads) {
       void test(`${source} handles ${payload}`, async ({ page }) => {
         await useSource(page, source, payload);
         await expectPayload(page, source, payload);

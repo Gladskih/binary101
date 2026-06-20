@@ -31,9 +31,9 @@ class FakeWindow {
   }
 }
 
-const createDirectoryRoute = (displayPath: string): DirectoryInspectionRoute => ({
-  locations: [{ displayPath, handle: createDirectoryHandle(displayPath) }],
-  sourceDescription: "Folder"
+const createDirectoryRoute = (name: string): DirectoryInspectionRoute => ({
+  context: { source: "selection", object: "directory" },
+  locations: [{ handle: createDirectoryHandle(name), name, relativePath: "" }]
 });
 
 const createDirectoryHandle = (name: string): BrowserDirectoryHandle => ({
@@ -55,7 +55,7 @@ void test("inspection navigation pushes directory and file routes", async () => 
   });
   navigation.initialize();
   navigation.openDirectory(createDirectoryRoute("root"));
-  await navigation.openFile(new File(["a"], "alpha.txt"), "File selection");
+  await navigation.openFile(new File(["a"], "alpha.txt"), { source: "selection", object: "file" });
   assert.equal(openedFiles[0], "alpha.txt");
   assert.deepEqual(history.replacedStates, [{ app: "binary101", routeId: "inspection-1", version: 1 }]);
   assert.deepEqual(history.pushedStates, [
@@ -72,7 +72,7 @@ void test("inspection navigation restores routes from browser history", () => {
   const navigation = createInspectionNavigationController({
     history,
     targetWindow,
-    openDirectoryRoute: route => openedDirectories.push(route.locations[0]?.displayPath ?? ""),
+    openDirectoryRoute: route => openedDirectories.push(route.locations[0]?.name ?? ""),
     openEmptyRoute: message => emptyMessages.push(message),
     openFileRoute: async () => undefined
   });

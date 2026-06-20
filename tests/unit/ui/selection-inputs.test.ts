@@ -109,7 +109,7 @@ void test("selection inputs route dropped files through directory inspection", a
     dropZone.dispatch("drop", event);
     await Promise.resolve();
     assert.equal(event.defaultPrevented, true);
-    assert.deepEqual(openedSources, ["Drop"]);
+    assert.deepEqual(openedSources, ["drop"]);
   } finally {
     browser.restore();
   }
@@ -140,6 +140,38 @@ void test("selection inputs handle keyboard selection and pasted text", async ()
     assert.equal(input.clickCount, 1);
     assert.equal(openedFiles[0]?.name, "clipboard.bin");
     assert.equal(await openedFiles[0]?.text(), "hello");
+  } finally {
+    browser.restore();
+  }
+});
+
+void test("selection inputs prefer pasted handles over the file fallback", async () => {
+  const browser = installFakeBrowser();
+  let openedItems = 0;
+  let openedFiles = 0;
+  try {
+    attachSelectionInputs({
+      directoryInspection: createDirectoryInspection(async () => {
+        openedItems += 1;
+        return true;
+      }, async () => {
+        openedFiles += 1;
+        return true;
+      }),
+      dropZoneElement: new FakeElement() as unknown as HTMLElement,
+      fileInputElement: new FakeInputElement() as unknown as HTMLInputElement,
+      openFile: async () => undefined,
+      setStatusMessage: () => undefined
+    });
+    browser.targetWindow.dispatch("paste", {
+      clipboardData: {
+        files: fileListFor([new File(["a"], "alpha.txt")]),
+        items: [{ kind: "file", getAsFileSystemHandle: async () => null }]
+      }
+    } as unknown as ClipboardEvent);
+    await Promise.resolve();
+    assert.equal(openedItems, 1);
+    assert.equal(openedFiles, 0);
   } finally {
     browser.restore();
   }

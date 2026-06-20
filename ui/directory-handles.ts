@@ -205,19 +205,20 @@ const getDroppedDirectoryHandle = async (
 const getDroppedFileSystemHandles = async (
   items: DirectoryDropItemList
 ): Promise<BrowserFileSystemHandle[]> => {
-  const handles: BrowserFileSystemHandle[] = [];
+  const handlePromises: Array<Promise<BrowserFileSystemHandle | null>> = [];
   for (let index = 0; index < items.length; index += 1) {
     const item = "item" in items ? items.item(index) : items[index] ?? null;
     if (item?.kind !== "file" || typeof item.getAsFileSystemHandle !== "function") continue;
-    let handle: BrowserFileSystemHandle | null;
     try {
-      handle = await item.getAsFileSystemHandle();
+      handlePromises.push(item.getAsFileSystemHandle().catch(() => null));
     } catch {
       continue;
     }
-    if (handle && (isDirectoryHandle(handle) || isFileHandle(handle))) handles.push(handle);
   }
-  return handles;
+  return (await Promise.all(handlePromises))
+    .filter((handle): handle is BrowserFileSystemHandle =>
+      handle != null && (isDirectoryHandle(handle) || isFileHandle(handle))
+    );
 };
 
 export { collectDirectoryRows, formatAccessError, getDroppedDirectoryHandle, getDroppedFileSystemHandles };

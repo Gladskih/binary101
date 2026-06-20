@@ -259,8 +259,7 @@ void test("computeAndDisplayHash surfaces failures and leaves the button retryab
 
   await computeAndDisplayHash(getHashAlgorithm("md5"), file, controls);
 
-  assert.match(valueElement.textContent || "", /^Hash failed:/);
-  assert.match(valueElement.textContent || "", /boom$/);
+  assert.equal(valueElement.textContent, "Hash failed: boom");
   assert.equal(buttonElement.disabled, false);
   assert.equal(buttonElement.textContent, "Retry");
   assert.equal(copyButtonElement.hidden, true);

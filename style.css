@@ -52,6 +52,12 @@ main{flex:1;display:flex;flex-direction:column;align-items:stretch}
   min-width:0;
 }
 .directoryHeader h2{font-size:15px;margin:0}
+.inspectionContext{display:grid;gap:4px;margin-top:6px}
+.inspectionContext__field{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.inspectionContext__label{color:var(--muted);font-size:12px;min-width:3.5rem}
+.inspectionContext .optionsRow{margin-top:0}
+.inspectionRelativePath{margin:6px 0 0;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.inspectionRelativePath[hidden]{display:none}
 #directoryProgressWrap{
   display:flex;
   gap:8px;

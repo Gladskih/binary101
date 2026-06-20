@@ -14,7 +14,7 @@ class FakeElement {
   hidden = false;
   max = 0;
   tabIndex = -1;
-  textContent: string | null = "";
+  innerHTML = ""; textContent: string | null = "";
   title = "";
   value = 0;
   #listeners = new Map<string, Array<(event: Event) => void>>();
@@ -49,7 +49,6 @@ class FakeDirectoryHandle {
     for (const child of this.children) yield [child.name, child];
   }
 }
-
 class FailingDirectoryHandle extends FakeDirectoryHandle {
   constructor(name: string) {
     super(name, []);
@@ -58,16 +57,20 @@ class FailingDirectoryHandle extends FakeDirectoryHandle {
     throw new Error("blocked");
   }
 }
-
 interface FakeDropItem {
   kind: string;
   getAsFileSystemHandle?: () => Promise<FakeDirectoryHandle | FakeFileHandle | null>;
 }
-
 const createElements = () => ({
   openButtonElement: new FakeElement(),
   cardElement: new FakeElement(),
   nameElement: new FakeElement(),
+  contextElements: {
+    objectElement: new FakeElement(),
+    relativePathElement: new FakeElement(),
+    relativePathTermElement: new FakeElement(),
+    sourceElement: new FakeElement()
+  },
   summaryElement: new FakeElement(),
   progressWrapElement: new FakeElement(),
   progressElement: new FakeElement(),
@@ -79,7 +82,6 @@ const createElements = () => ({
   fileTableBodyElement: new FakeElement(),
   warningTableBodyElement: new FakeElement()
 });
-
 const createController = (
   elements: ReturnType<typeof createElements>,
   config: Partial<DirectoryInspectionConfig> = {}
@@ -87,6 +89,12 @@ const createController = (
   openButtonElement: elements.openButtonElement as unknown as HTMLButtonElement,
   cardElement: elements.cardElement as unknown as HTMLElement,
   nameElement: elements.nameElement as unknown as HTMLElement,
+  contextElements: {
+    objectElement: elements.contextElements.objectElement as unknown as HTMLElement,
+    relativePathElement: elements.contextElements.relativePathElement as unknown as HTMLElement,
+    relativePathTermElement: elements.contextElements.relativePathTermElement as unknown as HTMLElement,
+    sourceElement: elements.contextElements.sourceElement as unknown as HTMLElement
+  },
   summaryElement: elements.summaryElement as unknown as HTMLElement,
   progressWrapElement: elements.progressWrapElement as unknown as HTMLElement,
   progressElement: elements.progressElement as unknown as HTMLProgressElement,
@@ -103,7 +111,6 @@ const createController = (
   openDirectory: () => undefined,
   ...config
 });
-
 const installFakeBrowser = (
   root: FakeDirectoryHandle | null
 ): { restore: () => void } => {
@@ -119,21 +126,16 @@ const installFakeBrowser = (
     }
   };
 };
-
 const rowTexts = (body: FakeElement): string[][] =>
   body.children.map(row => row.children.map(cell => cell.textContent ?? ""));
-
 const createDropItems = (...items: FakeDropItem[]) => ({
   length: items.length,
   item: (index: number): FakeDropItem | null => items[index] ?? null
 });
-
 const STABLE_FILE_MODIFIED_MS = Date.UTC(2024, 0, 2, 3, 4, 5);
 const STABLE_FILE_MODIFIED_ISO = "2024-01-02T03:04:05.000Z";
-
 const createFile = (name: string, bytes: number[], type: string): File =>
   new File([new Uint8Array(bytes)], name, { type, lastModified: STABLE_FILE_MODIFIED_MS });
-
 const folderRow = (
   path: string,
   directFolders = "0",
@@ -141,7 +143,6 @@ const folderRow = (
   totalFolders = "0",
   totalFiles = "1"
 ): string[] => [path, directFolders, directFiles, totalFolders, totalFiles];
-
 const fileRow = (path: string, mimeType: string, detectedType: string): string[] => [
   path,
   "1 B (1 bytes)",
@@ -178,6 +179,8 @@ void test("directory inspection lists nested entries and shallow-scans file rows
 
     assert.equal(resetCount, 1);
     assert.equal(elements.cardElement.hidden, false);
+    assert.match(elements.contextElements.sourceElement.innerHTML, />Selection<\/span>/);
+    assert.match(elements.contextElements.objectElement.innerHTML, />Directory<\/span>/);
     assert.deepEqual(rowTexts(elements.folderTableBodyElement), [
       folderRow("docs/"),
     ]);
@@ -265,6 +268,8 @@ void test("directory inspection opens dropped folder handles without the native 
     assert.equal(opened, true);
     assert.equal(resetCount, 1);
     assert.equal(elements.nameElement.textContent, "drop-root");
+    assert.match(elements.contextElements.sourceElement.innerHTML, />Drop<\/span>/);
+    assert.match(elements.contextElements.objectElement.innerHTML, />Directory<\/span>/);
     assert.deepEqual(rowTexts(elements.folderTableBodyElement), [
       folderRow("bin/"),
     ]);

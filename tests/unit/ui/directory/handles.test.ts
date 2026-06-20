@@ -111,6 +111,47 @@ void test("getDroppedFileSystemHandles returns supported file and folder handles
   assert.deepEqual(dropped, [file, folder]);
 });
 
+void test("getDroppedFileSystemHandles requests every handle before awaiting", async () => {
+  const file = new FakeFileHandle("single.bin");
+  const folder = new FakeDirectoryHandle("root", []);
+  let accessOpen = true;
+  const dropped = await getDroppedFileSystemHandles({
+    length: 2,
+    item: index => index === 0
+      ? {
+        kind: "file",
+        getAsFileSystemHandle: () => Promise.resolve().then(() => {
+          accessOpen = false;
+          return file;
+        })
+      }
+      : {
+        kind: "file",
+        getAsFileSystemHandle: async () => {
+          if (!accessOpen) throw new Error("drop access expired");
+          return folder;
+        }
+      }
+  });
+
+  assert.deepEqual(dropped, [file, folder]);
+});
+
+void test("getDroppedFileSystemHandles ignores failed and unsupported handles", async () => {
+  const items = [
+    { kind: "file", getAsFileSystemHandle: () => { throw new Error("blocked"); } },
+    { kind: "file", getAsFileSystemHandle: async () => { throw new Error("expired"); } },
+    { kind: "file", getAsFileSystemHandle: async () => new UnsupportedHandle("device", "pipe") }
+  ];
+
+  const dropped = await getDroppedFileSystemHandles({
+    length: items.length,
+    item: index => items[index] ?? null
+  });
+
+  assert.deepEqual(dropped, []);
+});
+
 void test("getDroppedDirectoryHandle ignores non-file and legacy-only dropped items", async () => {
   const dropped = await getDroppedDirectoryHandle({
     length: 2,

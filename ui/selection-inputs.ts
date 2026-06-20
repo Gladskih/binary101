@@ -1,9 +1,10 @@
 "use strict";
 
 import type { DirectoryInspectionController } from "./directory-inspection.js";
+import type { DirectInspectionSource, InspectionContext } from "./inspection-context.js";
 
 type StatusWriter = (message: string | null | undefined) => void;
-type FileOpener = (file: File, sourceDescription: string) => Promise<void>;
+type FileOpener = (file: File, context: InspectionContext) => Promise<void>;
 
 interface SelectionInputConfig {
   readonly directoryInspection: DirectoryInspectionController;
@@ -19,13 +20,13 @@ const snapshotFileList = (files: FileList): File[] =>
 const openFileSelection = (
   config: SelectionInputConfig,
   files: readonly File[],
-  sourceDescription: string
+  source: DirectInspectionSource
 ): void => {
   if (files.length === 0) {
     config.setStatusMessage("No file selected.");
     return;
   }
-  void config.directoryInspection.openFiles(files, sourceDescription);
+  void config.directoryInspection.openFiles(files, source);
 };
 
 const handleDroppedFiles = (config: SelectionInputConfig, event: Event): void => {
@@ -35,8 +36,8 @@ const handleDroppedFiles = (config: SelectionInputConfig, event: Event): void =>
     return;
   }
   const droppedFiles = snapshotFileList(dataTransfer.files);
-  void config.directoryInspection.openDroppedItems(dataTransfer.items, "Drop").then(openedItems => {
-    if (!openedItems) openFileSelection(config, droppedFiles, "Drop");
+  void config.directoryInspection.openDroppedItems(dataTransfer.items, "drop").then(openedItems => {
+    if (!openedItems) openFileSelection(config, droppedFiles, "drop");
   });
 };
 
@@ -50,16 +51,16 @@ const handlePaste = async (
     return;
   }
   const files = clipboardData.files ? snapshotFileList(clipboardData.files) : [];
-  if (files.length > 0) {
-    await config.directoryInspection.openFiles(files, files.length === 1 ? "Paste (file)" : "Paste (files)");
-    return;
-  }
   const items = clipboardData.items ? Array.from(clipboardData.items) : [];
   const openedItems = await config.directoryInspection.openDroppedItems(
     { length: items.length, item: index => items[index] ?? null },
-    "Paste"
+    "paste"
   );
   if (openedItems) return;
+  if (files.length > 0) {
+    await config.directoryInspection.openFiles(files, "paste");
+    return;
+  }
   const textItems = items.filter(item => item.kind === "string");
   if (textItems.length !== 1) {
     config.setStatusMessage("Paste: unsupported clipboard payload.");
@@ -77,7 +78,7 @@ const handlePaste = async (
   }
   await config.openFile(
     new File([text], "clipboard.bin", { type: "application/octet-stream" }),
-    "Paste (clipboard data)"
+    { source: "paste", object: "file" }
   );
 };
 
@@ -103,7 +104,7 @@ const attachSelectionInputs = (config: SelectionInputConfig): void => {
   config.fileInputElement.addEventListener("change", event => {
     const input = event.currentTarget;
     if (!(input instanceof HTMLInputElement)) return;
-    openFileSelection(config, input.files ? snapshotFileList(input.files) : [], "File selection");
+    openFileSelection(config, input.files ? snapshotFileList(input.files) : [], "selection");
     input.value = "";
   });
   window.addEventListener("paste", event => { void handlePaste(config, event as ClipboardEvent); });
