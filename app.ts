@@ -30,6 +30,7 @@ import { createInspectionNavigationController } from "./ui/inspection-navigation
 import { attachSelectionInputs } from "./ui/selection-inputs.js";
 import {
   addAccessibleTooltip,
+  addAccessibleTooltipToButton,
   enhanceAccessibleTooltips
 } from "./ui/accessible-tooltips.js";
 import { attachPeFileIconGuard, renderPeFileIcon } from "./ui/pe-file-icon.js";
@@ -58,12 +59,15 @@ const hashControls = HASH_ALGORITHMS.map(algorithm => ({
   valueElement: getElement(`${algorithm.id}Value`) as HTMLElement,
   buttonElement: getElement(`${algorithm.id}ComputeButton`) as HTMLButtonElement,
   copyButtonElement: getElement(`${algorithm.id}CopyButton`) as HTMLButtonElement,
-  nativeFallbackElement: document.getElementById(`${algorithm.id}NativeFallback`) ?? undefined
+  nativeHashBadgeElement: document.getElementById(`${algorithm.id}NativeBadge`) as HTMLButtonElement | null ?? undefined
 }));
-let currentFile: File | null = null;
-let currentPreviewUrl: string | null = null;
-let currentTypeLabel = "";
-let currentParseResult: ParseForUiResult = { analyzer: null, parsed: null };
+hashControls.forEach(control => {
+  if (control.nativeHashBadgeElement) addAccessibleTooltipToButton(
+    control.nativeHashBadgeElement, control.nativeHashBadgeElement.title
+  );
+});
+let currentFile: File | null = null; let currentPreviewUrl: string | null = null;
+let currentTypeLabel = ""; let currentParseResult: ParseForUiResult = { analyzer: null, parsed: null };
 let fileInspectionGeneration = 0;
 const setPreviewUrl = (url: string | null): void => {
   if (currentPreviewUrl) URL.revokeObjectURL(currentPreviewUrl);

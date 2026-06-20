@@ -11,8 +11,12 @@ const getSha256 = () => {
   return algorithm;
 };
 
-const createControls = (): { controls: HashControls; fallback: HTMLElement; value: HTMLElement } => {
-  const fallback = { hidden: true } as HTMLElement;
+const createControls = (): {
+  badge: HTMLButtonElement;
+  controls: HashControls;
+  value: HTMLElement;
+} => {
+  const badge = { textContent: "🍃", setAttribute: () => undefined } as unknown as HTMLButtonElement;
   const value = { textContent: "" } as HTMLElement;
   return {
     controls: {
@@ -20,16 +24,16 @@ const createControls = (): { controls: HashControls; fallback: HTMLElement; valu
       valueElement: value,
       buttonElement: { hidden: false, disabled: false, textContent: "Compute SHA-256" } as HTMLButtonElement,
       copyButtonElement: { hidden: true } as HTMLButtonElement,
-      nativeFallbackElement: fallback
+      nativeHashBadgeElement: badge
     },
-    fallback,
+    badge,
     value
   };
 };
 
 void test("retries native hashes with noble after NotReadableError", async () => {
   const bytes = new TextEncoder().encode("abc");
-  const { controls, fallback, value } = createControls();
+  const { badge, controls, value } = createControls();
   const file = {
     arrayBuffer: async () => { throw new DOMException("file is too large", "NotReadableError"); },
     stream: () => new Blob([bytes]).stream()
@@ -38,11 +42,11 @@ void test("retries native hashes with noble after NotReadableError", async () =>
   await computeAndDisplayHash(getSha256(), file, controls);
 
   assert.equal(value.textContent, createHash("sha256").update(bytes).digest("hex"));
-  assert.equal(fallback.hidden, false);
+  assert.equal(badge.textContent, "🍃↪");
 });
 
 void test("does not retry native hashes after other errors", async () => {
-  const { controls, fallback, value } = createControls();
+  const { badge, controls, value } = createControls();
   const file = {
     arrayBuffer: async () => { throw new Error("boom"); },
     stream: () => { throw new Error("Noble must not run."); }
@@ -51,5 +55,5 @@ void test("does not retry native hashes after other errors", async () => {
   await computeAndDisplayHash(getSha256(), file, controls);
 
   assert.match(value.textContent || "", /boom$/);
-  assert.equal(fallback.hidden, true);
+  assert.equal(badge.textContent, "🍃");
 });

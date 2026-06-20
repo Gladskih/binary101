@@ -17,7 +17,7 @@ const createHashControlsFixture = (label = "SHA-256"): {
   valueElement: HTMLElement;
   buttonElement: HTMLButtonElement;
   copyButtonElement: HTMLButtonElement;
-  nativeFallbackElement: HTMLElement;
+  nativeHashBadgeElement: HTMLButtonElement;
 } => {
   const valueElement = { textContent: "" } as HTMLElement;
   const buttonElement = {
@@ -26,13 +26,16 @@ const createHashControlsFixture = (label = "SHA-256"): {
     textContent: "Compute SHA-256"
   } as HTMLButtonElement;
   const copyButtonElement = { hidden: true } as HTMLButtonElement;
-  const nativeFallbackElement = { hidden: true } as HTMLElement;
+  const nativeHashBadgeElement = {
+    textContent: "🍃",
+    setAttribute: () => undefined
+  } as unknown as HTMLButtonElement;
   return {
-    controls: { label, valueElement, buttonElement, copyButtonElement, nativeFallbackElement },
+    controls: { label, valueElement, buttonElement, copyButtonElement, nativeHashBadgeElement },
     valueElement,
     buttonElement,
     copyButtonElement,
-    nativeFallbackElement
+    nativeHashBadgeElement
   };
 };
 

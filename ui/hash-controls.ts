@@ -30,7 +30,7 @@ type HashControls = {
   valueElement: HTMLElement;
   buttonElement: HTMLButtonElement;
   copyButtonElement: HTMLButtonElement;
-  nativeFallbackElement?: HTMLElement | undefined;
+  nativeHashBadgeElement?: HTMLButtonElement | undefined;
 };
 
 type FileDigest = {
@@ -64,7 +64,13 @@ const resetHashDisplay = (...controls: HashControls[]): void => {
   for (const control of controls) {
     control.valueElement.textContent = "";
     control.copyButtonElement.hidden = true;
-    if (control.nativeFallbackElement) control.nativeFallbackElement.hidden = true;
+    if (control.nativeHashBadgeElement) {
+      control.nativeHashBadgeElement.textContent = "🍃";
+      control.nativeHashBadgeElement.setAttribute(
+        "aria-label",
+        "Show hashing method: native browser crypto is tried first."
+      );
+    }
     control.buttonElement.hidden = false;
     control.buttonElement.disabled = false;
     control.buttonElement.textContent = `Compute ${control.label}`;
@@ -173,7 +179,7 @@ const computeFileDigest = async (
 const computeAndDisplayHash = async (
   algorithm: HashAlgorithmOption,
   file: File | null,
-  { valueElement, buttonElement, copyButtonElement, nativeFallbackElement }: HashControls,
+  { valueElement, buttonElement, copyButtonElement, nativeHashBadgeElement }: HashControls,
   canDisplayResult: () => boolean = (): boolean => true
 ): Promise<void> => {
   if (!file) {
@@ -186,7 +192,13 @@ const computeAndDisplayHash = async (
     const digest = await computeFileDigest(algorithm, file);
     if (!canDisplayResult()) return;
     valueElement.textContent = bufferToHex(digest.value);
-    if (nativeFallbackElement) nativeFallbackElement.hidden = !digest.usedNativeFallback;
+    if (nativeHashBadgeElement && digest.usedNativeFallback) {
+      nativeHashBadgeElement.textContent = "🍃↪";
+      nativeHashBadgeElement.setAttribute(
+        "aria-label",
+        "Show hashing method: native browser crypto could not read the file."
+      );
+    }
     copyButtonElement.hidden = false;
     buttonElement.hidden = true;
   } catch (error) {

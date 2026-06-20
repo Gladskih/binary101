@@ -24,7 +24,6 @@ const toUpload = (file: MockFile) => ({
   mimeType: file.type,
   buffer: Buffer.from(file.data)
 });
-
 const hashExpectations = [
   { label: "MD5", id: "md5", nodeDigestName: "md5" },
   { label: "SHA-1", id: "sha1", nodeDigestName: "sha1" },
@@ -35,13 +34,11 @@ const hashExpectations = [
   { label: "SHA-512/224", id: "sha512224", nodeDigestName: "sha512-224" },
   { label: "SHA-512/256", id: "sha512256", nodeDigestName: "sha512-256" }
 ] as const;
-
 const expectBaseDetails = async (page: Page, fileName: string, expectedKind: string): Promise<void> => {
   await expect(page.locator("#fileInfoCard")).toBeVisible();
   await expect(page.locator("#fileNameDetail")).toHaveText(fileName);
   await expect(page.locator("#fileBinaryTypeDetail")).toHaveText(expectedKind);
 };
-
 const expectEveryHashCanBeComputed = async (page: Page, file: MockFile): Promise<void> => {
   const fileBytes = Buffer.from(file.data);
   await page.locator("#hashDetails > summary").click();
@@ -52,7 +49,6 @@ const expectEveryHashCanBeComputed = async (page: Page, file: MockFile): Promise
     await expect(page.getByRole("button", { name: `Copy ${label} hash`, exact: true })).toBeVisible();
   }
 };
-
 const happyCases = [
   { name: "PNG", file: createPngFile, expectedKind: "PNG image", detailText: "Chunks" },
   { name: "GIF", file: createGifFile, expectedKind: "GIF image", detailText: "Frames" },
@@ -88,13 +84,11 @@ const happyCases = [
     extraDetailText: "Instruction-set analysis"
   }
 ];
-
 test.describe("file type detection", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Local File Inspector" })).toBeVisible();
   });
-
   void test("drops a text file, shows its details, and hashes", async ({ page }) => {
     const fileContent = "Hello from Playwright";
     await page.evaluate(text => {
@@ -198,7 +192,6 @@ test.describe("file hash actions", () => {
     await expect(page.locator("#peDetailsValue")).not.toContainText(
       "Portable Executable (PE) / COFF is the executable and object-file format"
     );
-
     const typeHelp = page.locator("#fileBinaryTypeDetail .accessibleTooltipButton");
     await expect(page.locator("#fileBinaryTypeDetail")).toHaveAttribute(
       "title",
@@ -219,18 +212,24 @@ test.describe("file hash actions", () => {
     const hashDetails = page.locator("#hashDetails");
     const nativeHashLabels = page.locator(".nativeHashLabel");
     const nativeHashBadges = page.locator(".nativeHashBadge");
-    const nativeFallbackNotices = page.locator(".nativeFallbackNotice");
+    const nativeHashTooltip = page.locator("#sha256NativeBadge ~ .accessibleTooltipPopup");
     const detailsBox = await page.locator("#peDetailsValue").boundingBox();
     await expect(hashDetails).not.toHaveAttribute("open", "");
     await expect(nativeHashLabels).toHaveCount(4);
     await expect(nativeHashBadges).toHaveText(["🍃", "🍃", "🍃", "🍃"]);
-    expect(await nativeFallbackNotices.evaluateAll(notices =>
-      notices.every(notice => notice.hasAttribute("hidden"))
-    )).toBe(true);
+    await expect(page.locator("#sha256NativeBadge")).toHaveAttribute(
+      "title",
+      "Native browser crypto is tried first. An arrow means local fallback was used."
+    );
     const hashSummaryBox = await hashDetails.locator("summary").boundingBox();
     expect(hashSummaryBox?.y).toBeLessThan(detailsBox?.y ?? 0);
 
     await expectEveryHashCanBeComputed(page, file);
+    await page.locator("#sha256NativeBadge").click();
+    await expect(nativeHashTooltip).toHaveAttribute(
+      "aria-label",
+      "Native browser crypto is tried first. An arrow means local fallback was used."
+    );
   });
 });
 

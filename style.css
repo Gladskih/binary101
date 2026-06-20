@@ -118,9 +118,11 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
   display:flex;flex-wrap:wrap;align-items:center;gap:6px;color:var(--text);font-weight:600
 }
 .nativeHashBadge{
-  display:inline-flex;align-items:center;padding:.1rem .35rem;border-radius:var(--radius-chip);
-  background:var(--ok-bg);font-size:11px;line-height:1;white-space:nowrap
+  appearance:none;display:inline-flex;align-items:center;padding:.1rem .35rem;border:0;
+  border-radius:var(--radius-chip);background:var(--ok-bg);color:var(--text);font-size:11px;
+  line-height:1;white-space:nowrap;cursor:pointer
 }
+.nativeHashBadge:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .accessibleTooltip{
   position:relative;display:inline-flex;margin-left:.3rem;vertical-align:middle
 }
@@ -213,6 +215,7 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
   border-radius:8px;
   background:var(--chip-bg);
 }
+.nativeHashTooltip{margin-left:0}
 .peSectionSummary:hover{
   border-color:color-mix(in oklab,var(--accent) 60%,var(--border2));
   background:color-mix(in oklab,var(--accent) 12%,var(--chip-bg));

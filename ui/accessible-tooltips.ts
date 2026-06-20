@@ -53,25 +53,21 @@ const ensureTooltipDismissal = (document: Document): void => {
   });
 };
 
-const addAccessibleTooltip = (target: HTMLElement, tooltip: string): void => {
-  const text = tooltip.trim();
-  if (!text || target.querySelector(":scope > .accessibleTooltip")) return;
-  const document = target.ownerDocument;
-  ensureTooltipDismissal(document);
-  target.setAttribute("title", text);
-  const control = document.createElement("span");
-  const button = document.createElement("button");
+const createTooltipPopup = (document: Document, text: string): HTMLElement => {
   const popup = document.createElement("span");
-  control.className = "accessibleTooltip";
-  button.type = "button";
-  button.className = "accessibleTooltipButton";
-  button.title = text;
-  button.setAttribute("aria-label", `Show explanation: ${text}`);
-  button.setAttribute("aria-expanded", "false");
   popup.className = "accessibleTooltipPopup";
   popup.setAttribute("role", "tooltip");
   popup.setAttribute("aria-label", text);
   popup.hidden = true;
+  return popup;
+};
+
+const attachTooltip = (
+  control: HTMLElement,
+  button: HTMLButtonElement,
+  popup: HTMLElement,
+  document: Document
+): void => {
   button.addEventListener("click", event => {
     event.stopPropagation();
     const opening = popup.hidden !== false;
@@ -81,8 +77,44 @@ const addAccessibleTooltip = (target: HTMLElement, tooltip: string): void => {
     popup.hidden = !opening;
     if (opening) positionTooltip(control, button, popup, document);
   });
+};
+
+const configureTooltipButton = (button: HTMLButtonElement, text: string): void => {
+  button.title = text;
+  button.setAttribute("aria-label", `Show explanation: ${text}`);
+  button.setAttribute("aria-expanded", "false");
+};
+
+const addAccessibleTooltip = (target: HTMLElement, tooltip: string): void => {
+  const text = tooltip.trim();
+  if (!text || target.querySelector(":scope > .accessibleTooltip")) return;
+  const document = target.ownerDocument;
+  ensureTooltipDismissal(document);
+  target.setAttribute("title", text);
+  const control = document.createElement("span");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "accessibleTooltipButton";
+  configureTooltipButton(button, text);
+  const popup = createTooltipPopup(document, text);
+  control.className = "accessibleTooltip";
+  attachTooltip(control, button, popup, document);
   control.append(button, popup);
   target.append(control);
+};
+
+const addAccessibleTooltipToButton = (button: HTMLButtonElement, tooltip: string): void => {
+  const text = tooltip.trim();
+  if (!text || button.parentElement?.classList.contains("accessibleTooltip")) return;
+  const document = button.ownerDocument;
+  ensureTooltipDismissal(document);
+  const control = document.createElement("span");
+  control.className = "accessibleTooltip nativeHashTooltip";
+  const popup = createTooltipPopup(document, text);
+  configureTooltipButton(button, text);
+  attachTooltip(control, button, popup, document);
+  button.replaceWith(control);
+  control.append(button, popup);
 };
 
 const enhanceAccessibleTooltips = (root: HTMLElement): void => {
@@ -99,4 +131,9 @@ const enhanceAccessibleTooltips = (root: HTMLElement): void => {
   });
 };
 
-export { accessibleTooltipSelector, addAccessibleTooltip, enhanceAccessibleTooltips };
+export {
+  accessibleTooltipSelector,
+  addAccessibleTooltip,
+  addAccessibleTooltipToButton,
+  enhanceAccessibleTooltips
+};
