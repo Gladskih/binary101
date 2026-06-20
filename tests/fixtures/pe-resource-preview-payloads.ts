@@ -1,6 +1,6 @@
 "use strict";
 
-import { createBmpFile, createPngFile } from "./image-sample-files.js";
+import { createBmpFile, createVisiblePngFile } from "./image-sample-files.js";
 import {
   buildMessageTableResource,
   buildStringTableResource,
@@ -156,7 +156,7 @@ const buildStandardDialogTemplate = (): Uint8Array => {
 };
 
 export const createPeResourceSpecs = (): ResourceSpec[] => {
-  const png = createPngFile().data;
+  const png = createVisiblePngFile().data;
   const cursorLeaf = buildCursorResource(7, 9, png);
   const manifest = createManifestXmlFixture(
     {

@@ -32,7 +32,7 @@ import {
   addAccessibleTooltip,
   enhanceAccessibleTooltips
 } from "./ui/accessible-tooltips.js";
-import { renderPeFileIcon } from "./ui/pe-file-icon.js";
+import { attachPeFileIconGuard, renderPeFileIcon } from "./ui/pe-file-icon.js";
 const getElement = (id: string) => document.getElementById(id)!;
 const html = (id: string): HTMLElement => getElement(id) as HTMLElement;
 const dropZoneElement = getElement("dropZone") as HTMLElement,
@@ -51,6 +51,7 @@ const dropZoneElement = getElement("dropZone") as HTMLElement,
   peDetailsTermElement = getElement("peDetailsTerm") as HTMLElement,
   peDetailsValueElement = getElement("peDetailsValue") as HTMLElement,
   hashDetailsElement = getElement("hashDetails") as HTMLDetailsElement;
+attachPeFileIconGuard(fileIconElement, fileIconWrapElement);
 const hashControls = HASH_ALGORITHMS.map(algorithm => ({
   algorithm,
   label: algorithm.label,

@@ -5,10 +5,33 @@ const accessibleTooltipSelector = "[data-accessible-tooltip][title]";
 
 const closeTooltip = (control: HTMLElement): void => {
   control.classList.remove("accessibleTooltip--open");
+  control.classList.remove("accessibleTooltip--above");
   const button = control.querySelector<HTMLButtonElement>(".accessibleTooltipButton");
   const popup = control.querySelector<HTMLElement>(".accessibleTooltipPopup");
   if (button) button.setAttribute("aria-expanded", "false");
-  if (popup) popup.hidden = true;
+  if (popup) {
+    popup.hidden = true;
+    popup.style.removeProperty("left");
+    popup.style.removeProperty("right");
+  }
+};
+
+const positionTooltip = (
+  control: HTMLElement,
+  button: HTMLButtonElement,
+  popup: HTMLElement,
+  document: Document
+): void => {
+  popup.style.left = "0";
+  popup.style.right = "auto";
+  const initialBounds = popup.getBoundingClientRect();
+  const viewport = document.documentElement;
+  if (initialBounds.bottom > viewport.clientHeight && button.getBoundingClientRect().top >= initialBounds.height) {
+    control.classList.add("accessibleTooltip--above");
+  }
+  const bounds = popup.getBoundingClientRect();
+  const left = Math.min(Math.max(bounds.left, 0), viewport.clientWidth - bounds.width);
+  popup.style.left = `${left - bounds.left}px`;
 };
 
 const closeOtherTooltips = (document: Document, keep: HTMLElement | null): void => {
@@ -54,12 +77,9 @@ const addAccessibleTooltip = (target: HTMLElement, tooltip: string): void => {
     const opening = popup.hidden !== false;
     closeOtherTooltips(document, opening ? control : null);
     control.classList.toggle("accessibleTooltip--open", opening);
-    control.classList.toggle(
-      "accessibleTooltip--alignEnd",
-      button.getBoundingClientRect().left > document.documentElement.clientWidth / 2
-    );
     button.setAttribute("aria-expanded", String(opening));
     popup.hidden = !opening;
+    if (opening) positionTooltip(control, button, popup, document);
   });
   control.append(button, popup);
   target.append(control);

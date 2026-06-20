@@ -72,9 +72,33 @@ void test("uses the full phone width for the PE result card and its sections", a
   await inspectFile(page, createPeResourcePreviewFile());
 
   const cardBox = await page.locator("#fileInfoCard").boundingBox();
+  const hashesBox = await page.locator("#hashDetails").boundingBox();
   const sectionBox = await page.locator("#peDetailsValue > .peSection").first().boundingBox();
   expect(cardBox).not.toBeNull();
+  expect(hashesBox).not.toBeNull();
   expect(sectionBox).not.toBeNull();
   expect(cardBox!.x).toBeCloseTo(0, 0);
+  expect(hashesBox!.x).toBeCloseTo(0, 0);
   expect(sectionBox!.x).toBeCloseTo(0, 0);
+});
+
+void test("shows a hover affordance for collapsible PE sections", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await inspectFile(page, createPeResourcePreviewFile());
+
+  const sectionSummary = page.locator(".peSectionSummary").first();
+  const initialBorderColor = await sectionSummary.evaluate(element =>
+    element.ownerDocument.defaultView!.getComputedStyle(element).borderColor
+  );
+  await sectionSummary.hover();
+  const hoverBorderColor = await sectionSummary.evaluate(element =>
+    element.ownerDocument.defaultView!.getComputedStyle(element).borderColor
+  );
+
+  expect(
+    await sectionSummary.evaluate(element =>
+      element.ownerDocument.defaultView!.getComputedStyle(element).cursor
+    )
+  ).toBe("pointer");
+  expect(hoverBorderColor).not.toBe(initialBorderColor);
 });

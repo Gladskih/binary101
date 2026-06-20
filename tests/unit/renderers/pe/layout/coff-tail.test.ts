@@ -7,13 +7,7 @@ import type { PeParseResult } from "../../../../../analyzers/pe/index.js";
 import { createPeSection, createPeWithSections } from "../../../../fixtures/pe-renderer-headers-fixture.js";
 import { createSyntheticLegacyCoffStringTableFixture } from "../../../../fixtures/pe-coff-tail-fixture.js";
 
-const assertSanityClean = (html: string): void => {
-  assert.equal(
-    html,
-    `<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Sanity</h4>` +
-      `<div class="smallNote">No obvious structural issues detected.</div></section>`
-  );
-};
+const assertSanityAbsent = (html: string): void => assert.equal(html, "");
 
 const createPeWithCoffTailFixture = (): {
   pe: PeParseResult;
@@ -40,15 +34,15 @@ const createPeWithCoffTailFixture = (): {
   };
 };
 
-void test("renderSanity renders clean state for COFF tail after the last section", () => {
+void test("renderSanity omits a clean result for a COFF tail after the last section", () => {
   const out: string[] = [];
   const fixture = createPeWithCoffTailFixture();
 
   renderSanity(fixture.pe, out);
-  assertSanityClean(out.join(""));
+  assertSanityAbsent(out.join(""));
 });
 
-void test("renderSanity renders clean state for overlay range after the known COFF tail", () => {
+void test("renderSanity omits a clean result for an overlay range after a COFF tail", () => {
   const out: string[] = [];
   const fixture = createPeWithCoffTailFixture();
 
@@ -67,10 +61,10 @@ void test("renderSanity renders clean state for overlay range after the known CO
     out
   );
 
-  assertSanityClean(out.join(""));
+  assertSanityAbsent(out.join(""));
 });
 
-void test("renderSanity renders clean state for trailing alignment padding after the COFF tail", () => {
+void test("renderSanity omits a clean result for trailing alignment padding", () => {
   const out: string[] = [];
   const fixture = createPeWithCoffTailFixture();
   const trailingAlignmentPaddingSize = fixture.pe.coffStringTableSize;
@@ -84,5 +78,5 @@ void test("renderSanity renders clean state for trailing alignment padding after
     out
   );
 
-  assertSanityClean(out.join(""));
+  assertSanityAbsent(out.join(""));
 });

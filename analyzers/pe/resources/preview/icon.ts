@@ -77,17 +77,15 @@ const buildIcoPreview = (
   )
 });
 
+const buildPngPreview = (data: Uint8Array): ResourcePreviewData => ({
+  previewKind: "image",
+  previewMime: "image/png",
+  previewDataUrl: makeDataUrl("image/png", data)
+});
+
 export function addIconPreview(data: Uint8Array, typeName: string): ResourcePreviewResult | null {
   if (typeName !== "ICON") return null;
-  if (hasPngSignature(data)) {
-    return {
-      preview: {
-        previewKind: "image",
-        previewMime: "image/png",
-        previewDataUrl: makeDataUrl("image/png", data)
-      }
-    };
-  }
+  if (hasPngSignature(data)) return { preview: buildPngPreview(data) };
   const spec = readIconImageSpec(data, true);
   if (!spec) return null;
   return { preview: buildIcoPreview(data, spec.width, spec.height, 0, 1, spec.bitCount) };
@@ -135,7 +133,9 @@ export async function addGroupIconPreview(
   const planes = group.getUint16(entryOffset + 4, true);
   const bitCount = group.getUint16(entryOffset + 6, true);
   return {
-    preview: buildIcoPreview(leaf.data, width, height, colorCount, planes, bitCount),
+    preview: hasPngSignature(leaf.data)
+      ? buildPngPreview(leaf.data)
+      : buildIcoPreview(leaf.data, width, height, colorCount, planes, bitCount),
     ...(leaf.issues?.length ? { issues: leaf.issues } : {})
   };
 }

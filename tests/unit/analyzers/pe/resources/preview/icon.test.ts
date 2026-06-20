@@ -6,7 +6,7 @@ import {
   addGroupIconPreview,
   addIconPreview
 } from "../../../../../../analyzers/pe/resources/preview/icon.js";
-import { createPngFile } from "../../../../../fixtures/image-sample-files.js";
+import { createBmpFile, createPngFile } from "../../../../../fixtures/image-sample-files.js";
 import {
   buildLargeGroupIconResource,
   buildMultiEntryGroupIconResource,
@@ -23,7 +23,7 @@ void test("addIconPreview emits PNG previews for RT_ICON resources", () => {
   assert.match(expectDefined(result?.preview?.previewDataUrl), /^data:image\/png;base64,/);
 });
 
-void test("addGroupIconPreview emits ICO previews when the selected icon is at the directory boundary", async () => {
+void test("addGroupIconPreview emits PNG previews when the selected icon leaf is PNG", async () => {
   const groupIcon = buildSingleEntryGroupIconResource(png1x1.length, 1);
   const result = await addGroupIconPreview(
     groupIcon,
@@ -33,7 +33,16 @@ void test("addGroupIconPreview emits ICO previews when the selected icon is at t
   );
 
   assert.strictEqual(result?.preview?.previewKind, "image");
-  assert.match(expectDefined(result?.preview?.previewMime), /x-icon/);
+  assert.strictEqual(result?.preview?.previewMime, "image/png");
+  assert.match(expectDefined(result?.preview?.previewDataUrl), /^data:image\/png;base64,/);
+});
+
+void test("addGroupIconPreview keeps a DIB icon wrapped as ICO", async () => {
+  const dib = createBmpFile().data.subarray(14);
+  const groupIcon = buildSingleEntryGroupIconResource(dib.length, 1);
+  const result = await addGroupIconPreview(groupIcon, "GROUP_ICON", async () => ({ data: dib }), 1033);
+
+  assert.strictEqual(result?.preview?.previewMime, "image/x-icon");
   assert.match(expectDefined(result?.preview?.previewDataUrl), /^data:image\/x-icon;base64,/);
 });
 
@@ -48,7 +57,7 @@ void test("addGroupIconPreview reads group-icon tables beyond the old 4096-byte 
   );
 
   assert.strictEqual(result?.preview?.previewKind, "image");
-  assert.match(expectDefined(result?.preview?.previewMime), /x-icon/);
+  assert.strictEqual(result?.preview?.previewMime, "image/png");
 });
 
 void test("addGroupIconPreview selects the highest-resolution group entry", async () => {

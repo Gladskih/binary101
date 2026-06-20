@@ -11,13 +11,7 @@ import {
 import { renderException } from "../../../../../renderers/pe/exception.js";
 import type { PeParseResult } from "../../../../../analyzers/pe/index.js";
 
-const assertSanityClean = (html: string): void => {
-  assert.equal(
-    html,
-    `<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">Sanity</h4>` +
-      `<div class="smallNote">No obvious structural issues detected.</div></section>`
-  );
-};
+const assertSanityAbsent = (html: string): void => assert.equal(html, "");
 
 void test("renderReloc wraps relocation table in details", () => {
   const reloc: Parameters<typeof renderReloc>[0] = {
@@ -105,7 +99,7 @@ void test("renderDelayImports renders function names and ordinals", () => {
   assert.ok(html.includes("delayimp.h"));
 });
 
-void test("renderSanity renders issues and clean state", () => {
+void test("renderSanity renders issues and omits a clean result", () => {
   const withIssues = {
     overlay: { ranges: [{ start: 0x400, end: 0x464, size: 100, findings: [] }] },
     imageSizeMismatch: true,
@@ -127,7 +121,7 @@ void test("renderSanity renders issues and clean state", () => {
   } as unknown as PeParseResult;
   const outClean: string[] = [];
   renderSanity(clean, outClean);
-  assertSanityClean(outClean.join(""));
+  assertSanityAbsent(outClean.join(""));
 });
 
 void test("renderSanity reports suspicious entrypoint sections", () => {
@@ -202,7 +196,7 @@ void test("renderSanity treats raw padding beyond VirtualSize as outside the map
   assert.ok(out.join("").includes("AddressOfEntryPoint points outside any section"));
 });
 
-void test("renderSanity renders clean state when only certificate table bytes follow sections", () => {
+void test("renderSanity omits a clean result when only certificate bytes follow sections", () => {
   const pe = {
     imageSizeMismatch: false,
     debug: null,
@@ -222,10 +216,10 @@ void test("renderSanity renders clean state when only certificate table bytes fo
 
   const out: string[] = [];
   renderSanity(pe, out);
-  assertSanityClean(out.join(""));
+  assertSanityAbsent(out.join(""));
 });
 
-void test("renderSanity renders clean state for ROM SizeOfImage mismatch", () => {
+void test("renderSanity omits a clean result for ROM SizeOfImage mismatch", () => {
   const pe = {
     imageSizeMismatch: true,
     debug: null,
@@ -234,10 +228,10 @@ void test("renderSanity renders clean state for ROM SizeOfImage mismatch", () =>
 
   const out: string[] = [];
   renderSanity(pe, out);
-  assertSanityClean(out.join(""));
+  assertSanityAbsent(out.join(""));
 });
 
-void test("renderSanity renders clean state for overlay-only PE metadata", () => {
+void test("renderSanity omits a clean result for overlay-only PE metadata", () => {
   const pe = {
     overlay: { ranges: [{ start: 0x400, end: 0x420, size: 0x20, findings: [] }] },
     imageSizeMismatch: false,
@@ -258,10 +252,10 @@ void test("renderSanity renders clean state for overlay-only PE metadata", () =>
 
   const out: string[] = [];
   renderSanity(pe, out);
-  assertSanityClean(out.join(""));
+  assertSanityAbsent(out.join(""));
 });
 
-void test("renderSanity renders clean state for debug raw data after certificates", () => {
+void test("renderSanity omits a clean result for debug data after certificates", () => {
   const pe = {
     imageSizeMismatch: false,
     debug: {
@@ -284,5 +278,5 @@ void test("renderSanity renders clean state for debug raw data after certificate
 
   const out: string[] = [];
   renderSanity(pe, out);
-  assertSanityClean(out.join(""));
+  assertSanityAbsent(out.join(""));
 });

@@ -21,7 +21,7 @@ const expectFileIcon = async (page: Page, fileName: string): Promise<void> => {
   const icon = page.locator("#fileIcon");
   await expect(icon).toBeVisible();
   await expect(icon).toHaveAttribute("alt", `Icon embedded in ${fileName}`);
-  await expect(icon).toHaveAttribute("src", /^data:image\/x-icon;base64,/);
+  await expect(icon).toHaveAttribute("src", /^data:image\/png;base64,/);
   const detailsBox = await page.locator(".filePrimaryInfo > dl").boundingBox();
   const iconBox = await icon.boundingBox();
   expect(detailsBox).not.toBeNull();

@@ -52,3 +52,13 @@ export const createPngWithIhdr = () =>
     "two-by-two.png",
     "image/png"
   );
+
+export const createVisiblePngFile = () =>
+  new MockFile(
+    fromBase64(
+      "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR4AWLyd3v6H4SZGKAAAAAA" +
+      "//9UqkCTAAAABklEQVQDAEBcBPcPZUY8AAAAAElFTkSuQmCC"
+    ),
+    "visible.png",
+    "image/png"
+  );
