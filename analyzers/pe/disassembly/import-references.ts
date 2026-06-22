@@ -14,6 +14,13 @@ export type PeDirectIatReferenceCounter = {
   references(): PeDirectIatReferenceCount[];
 };
 
+type DirectIatReferenceKind = "call" | "jump";
+
+type DirectIatReference = {
+  kind: DirectIatReferenceKind;
+  slotRva: number;
+};
+
 export const getIatSlotRva = (
   startRva: unknown,
   index: number,
@@ -122,22 +129,37 @@ const directMemoryAddress = (
   return instruction.memoryDisplacement;
 };
 
-const directIatSlotRva = (
+const directIatReferenceKind = (
+  iced: IcedX86Module,
+  instruction: IcedInstructionObject
+): DirectIatReferenceKind | null => {
+  if (instruction.isCallNearIndirect) {
+    if (
+      instruction.isJmpNearIndirect ||
+      instruction.flowControl !== iced.FlowControl["IndirectCall"]
+    ) return null;
+    return "call";
+  }
+  if (
+    !instruction.isJmpNearIndirect ||
+    instruction.flowControl !== iced.FlowControl["IndirectBranch"]
+  ) return null;
+  return "jump";
+};
+
+const directIatReference = (
   iced: IcedX86Module,
   imageBase: bigint,
   instruction: IcedInstructionObject
-): number | null => {
-  const nearCall = instruction.isCallNearIndirect;
-  const nearJump = instruction.isJmpNearIndirect;
-  if (nearCall === nearJump) return null;
-  if (nearCall && instruction.flowControl !== iced.FlowControl["IndirectCall"]) return null;
-  if (nearJump && instruction.flowControl !== iced.FlowControl["IndirectBranch"]) return null;
+): DirectIatReference | null => {
+  const kind = directIatReferenceKind(iced, instruction);
+  if (kind == null) return null;
   const address = directMemoryAddress(iced, instruction);
   if (address == null || address < imageBase) return null;
   const delta = address - imageBase;
   if (delta >= BigInt(PE_RVA_EXCLUSIVE_LIMIT)) return null;
   const rva = Number(delta);
-  return Number.isSafeInteger(rva) ? rva >>> 0 : null;
+  return Number.isSafeInteger(rva) ? { kind, slotRva: rva >>> 0 } : null;
 };
 
 export const createDirectIatReferenceCounter = (
@@ -145,15 +167,24 @@ export const createDirectIatReferenceCounter = (
   imageBase: bigint,
   slots: ReadonlySet<number>
 ): PeDirectIatReferenceCounter => {
-  const counts = new Map<number, number>();
+  const counts = new Map<number, PeDirectIatReferenceCount>();
   return {
     record: instruction => {
-      const slotRva = directIatSlotRva(iced, imageBase, instruction);
-      if (slotRva == null || !slots.has(slotRva)) return;
-      counts.set(slotRva, (counts.get(slotRva) ?? 0) + 1);
+      const reference = directIatReference(iced, imageBase, instruction);
+      if (reference == null || !slots.has(reference.slotRva)) return;
+      const current = counts.get(reference.slotRva);
+      counts.set(reference.slotRva, {
+        slotRva: reference.slotRva,
+        callReferenceCount: reference.kind === "call"
+          ? (current?.callReferenceCount ?? 0) + 1
+          : current?.callReferenceCount ?? 0,
+        jumpReferenceCount: reference.kind === "jump"
+          ? (current?.jumpReferenceCount ?? 0) + 1
+          : current?.jumpReferenceCount ?? 0
+      });
     },
     references: () => [...counts]
       .sort(([left], [right]) => left - right)
-      .map(([slotRva, referenceCount]) => ({ slotRva, referenceCount }))
+      .map(([, reference]) => reference)
   };
 };

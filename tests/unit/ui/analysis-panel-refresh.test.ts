@@ -94,8 +94,8 @@ void test("refreshPeDisassemblyPanels renders ISA and import regions from one PE
     refreshPeDisassemblyPanels(pe);
 
     assert.match(dom.markup(PE_INSTRUCTION_SETS_PANEL_ID), /Instruction-set analysis/);
-    assert.match(dom.markup(PE_IMPORTS_PANEL_ID), /Direct IAT refs/);
-    assert.match(dom.markup(PE_DELAY_IMPORTS_PANEL_ID), /Direct IAT refs/);
+    assert.match(dom.markup(PE_IMPORTS_PANEL_ID), /Direct CALL refs/);
+    assert.match(dom.markup(PE_DELAY_IMPORTS_PANEL_ID), /Direct JMP refs/);
   } finally {
     dom.restore();
   }

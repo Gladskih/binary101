@@ -120,7 +120,7 @@ const analyzeScriptedInstructions = (
   async () => createScriptedIced(instructions)
 );
 
-void test("analyzePeInstructionSets counts unique direct IAT references", async () => {
+void test("analyzePeInstructionSets counts direct IAT calls once per decoded instruction", async () => {
   const secondCallRva = TEXT_SECTION_RVA + SCRIPTED_INSTRUCTION_LENGTH;
   const returnRva = secondCallRva + SCRIPTED_INSTRUCTION_LENGTH;
   const instructions = [
@@ -137,7 +137,11 @@ void test("analyzePeInstructionSets counts unique direct IAT references", async 
     [secondCallRva]
   );
 
-  assert.deepEqual(report.directIatReferences, [{ slotRva: IAT_RVA, referenceCount: 2 }]);
+  assert.deepEqual(report.directIatReferences, [{
+    slotRva: IAT_RVA,
+    callReferenceCount: 2,
+    jumpReferenceCount: 0
+  }]);
 });
 
 void test("analyzePeInstructionSets counts one IAT jump in a shared import thunk", async () => {
@@ -158,7 +162,11 @@ void test("analyzePeInstructionSets counts one IAT jump in a shared import thunk
     undefined
   );
 
-  assert.deepEqual(report.directIatReferences, [{ slotRva: IAT_RVA, referenceCount: 1 }]);
+  assert.deepEqual(report.directIatReferences, [{
+    slotRva: IAT_RVA,
+    callReferenceCount: 0,
+    jumpReferenceCount: 1
+  }]);
 });
 
 void test("analyzePeInstructionSets counts delay-load IAT references", async () => {
@@ -169,5 +177,9 @@ void test("analyzePeInstructionSets counts delay-load IAT references", async () 
     createSingleDelayImport()
   );
 
-  assert.deepEqual(report.directIatReferences, [{ slotRva: IAT_RVA, referenceCount: 1 }]);
+  assert.deepEqual(report.directIatReferences, [{
+    slotRva: IAT_RVA,
+    callReferenceCount: 1,
+    jumpReferenceCount: 0
+  }]);
 });

@@ -66,7 +66,7 @@ const ipRelativeCall = (address: bigint) => instruction(
 );
 
 const ipRelativeJump = (address: bigint) => instruction(
-  "Call",
+  "Jmp",
   [mem("UInt64", "RIP", address)],
   { flowControl: "IndirectBranch", indirectControlFlow: "near-jump" }
 );
@@ -119,7 +119,7 @@ void test("collectDirectIatSlotRvas reports a mismatched eager thunk width", () 
   assert.match(issues[0] ?? "", /does not match 8-byte image pointers/i);
 });
 
-void test("direct IAT reference counter counts IP-relative calls and jumps", () => {
+void test("direct IAT reference counter separates IP-relative calls and jumps", () => {
   const counter = createDirectIatReferenceCounter(
     fixtureIced,
     IMAGE_BASE_AMD64,
@@ -130,7 +130,11 @@ void test("direct IAT reference counter counts IP-relative calls and jumps", () 
   counter.record(ipRelativeCall(targetVa));
   counter.record(ipRelativeJump(targetVa));
 
-  assert.deepEqual(counter.references(), [{ slotRva: IAT_RVA, referenceCount: 2 }]);
+  assert.deepEqual(counter.references(), [{
+    slotRva: IAT_RVA,
+    callReferenceCount: 1,
+    jumpReferenceCount: 1
+  }]);
 });
 
 void test("direct IAT reference counter counts absolute memory calls", () => {
@@ -142,7 +146,11 @@ void test("direct IAT reference counter counts absolute memory calls", () => {
 
   counter.record(absoluteCall(IMAGE_BASE_I386 + BigInt(IAT_RVA)));
 
-  assert.deepEqual(counter.references(), [{ slotRva: IAT_RVA, referenceCount: 1 }]);
+  assert.deepEqual(counter.references(), [{
+    slotRva: IAT_RVA,
+    callReferenceCount: 1,
+    jumpReferenceCount: 0
+  }]);
 });
 
 void test("direct IAT reference counter sorts slots by RVA", () => {
@@ -158,8 +166,8 @@ void test("direct IAT reference counter sorts slots by RVA", () => {
   counter.record(ipRelativeCall(IMAGE_BASE_AMD64 + BigInt(lowerSlotRva)));
 
   assert.deepEqual(counter.references(), [
-    { slotRva: lowerSlotRva, referenceCount: 1 },
-    { slotRva: higherSlotRva, referenceCount: 1 }
+    { slotRva: lowerSlotRva, callReferenceCount: 1, jumpReferenceCount: 0 },
+    { slotRva: higherSlotRva, callReferenceCount: 1, jumpReferenceCount: 0 }
   ]);
 });
 

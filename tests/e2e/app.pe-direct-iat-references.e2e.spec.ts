@@ -21,7 +21,7 @@ test("updates direct IAT reference counts without losing import table state", as
     has: page.locator("summary", { hasText: /KERNEL32\.dll/ })
   });
   await moduleDetails.locator(":scope > summary").click();
-  const sortButton = moduleDetails.getByRole("button", { name: "Sort by Direct IAT refs" });
+  const sortButton = moduleDetails.getByRole("button", { name: "Sort by Direct CALL refs" });
   await sortButton.click();
   await expect(sortButton.locator("..")).toHaveAttribute("aria-sort", "ascending");
 
@@ -33,8 +33,10 @@ test("updates direct IAT reference counts without losing import table state", as
   await expect(importsSection).toHaveJSProperty("open", true);
   await expect(moduleDetails).toHaveJSProperty("open", true);
   await expect(sortButton.locator("..")).toHaveAttribute("aria-sort", "ascending");
-  await expect(moduleDetails.getByRole("row", { name: /Sleep/ }).locator("td").last())
+  await expect(moduleDetails.getByRole("row", { name: /Sleep/ }).locator("td.peNumeric").first())
     .toHaveText("1");
-  await expect(moduleDetails.getByRole("row", { name: /ExitProcess/ }).locator("td").last())
+  await expect(moduleDetails.getByRole("row", { name: /Sleep/ }).locator("td.peNumeric").last())
     .toHaveText("—");
+  await expect(moduleDetails.getByRole("row", { name: /ExitProcess/ }).locator("td.peNumeric"))
+    .toHaveText(["—", "—"]);
 });

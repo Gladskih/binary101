@@ -14,7 +14,8 @@ export interface PeInstructionSetUsage {
 
 export interface PeDirectIatReferenceCount {
   slotRva: number;
-  referenceCount: number;
+  callReferenceCount: number;
+  jumpReferenceCount: number;
 }
 
 export interface PeInstructionSetReport {

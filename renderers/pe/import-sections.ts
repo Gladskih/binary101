@@ -32,8 +32,8 @@ import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.
 import {
   directIatEntrySize,
   directIatReferenceCounts,
-  renderDirectIatRefsCell,
-  renderDirectIatRefsHeader
+  renderDirectIatRefsCells,
+  renderDirectIatRefsHeaders
 } from "./direct-iat-references.js";
 
 export { renderImportLinking } from "./import-linking-section.js";
@@ -85,7 +85,11 @@ const renderImportsContent = (pe: PeWindowsParseResult, out: string[]): void => 
     ])));
     out.push(`</dl>`);
     if (mod.functions?.length) {
-      out.push(`<table class="table" data-sort-state-key="eager-import-${index}" style="margin-top:.35rem"><thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th>${renderDirectIatRefsHeader()}</tr></thead><tbody>`);
+      out.push(
+        `<table class="table" data-sort-state-key="eager-import-${index}" style="margin-top:.35rem">` +
+        `<thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th>` +
+        `${renderDirectIatRefsHeaders()}</tr></thead><tbody>`
+      );
       mod.functions.forEach((fn, functionIndex) => {
         const hint = fn.hint != null ? String(fn.hint) : "-";
         const name = fn.name
@@ -93,13 +97,16 @@ const renderImportsContent = (pe: PeWindowsParseResult, out: string[]): void => 
           : fn.ordinal != null
             ? `ORD ${fn.ordinal}`
             : "-";
-        const directIatRefs = renderDirectIatRefsCell(
+        const directIatRefs = renderDirectIatRefsCells(
           counts,
           mod.firstThunkRva,
           functionIndex,
           entrySize
         );
-        out.push(`<tr><td>${functionIndex + 1}</td><td>${hint}</td><td>${name}</td>${directIatRefs}</tr>`);
+        out.push(
+          `<tr><td>${functionIndex + 1}</td><td>${hint}</td><td>${name}</td>` +
+          `${directIatRefs}</tr>`
+        );
       });
       out.push(`</tbody></table>`);
     }
@@ -193,7 +200,11 @@ const renderDelayImportsContent = (pe: PeWindowsParseResult, out: string[]): voi
     ])));
     out.push(`</dl>`);
     if (entry.functions?.length) {
-      out.push(`<table class="table" data-sort-state-key="delay-import-${index}" style="margin-top:.35rem"><thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th>${renderDirectIatRefsHeader()}</tr></thead><tbody>`);
+      out.push(
+        `<table class="table" data-sort-state-key="delay-import-${index}" style="margin-top:.35rem">` +
+        `<thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th>` +
+        `${renderDirectIatRefsHeaders()}</tr></thead><tbody>`
+      );
       entry.functions.forEach((fn, functionIndex) => {
         const hint = fn.hint != null ? String(fn.hint) : "-";
         const name = fn.name
@@ -201,13 +212,16 @@ const renderDelayImportsContent = (pe: PeWindowsParseResult, out: string[]): voi
           : fn.ordinal != null
             ? `ORD ${fn.ordinal}`
             : "-";
-        const directIatRefs = renderDirectIatRefsCell(
+        const directIatRefs = renderDirectIatRefsCells(
           counts,
           entry.ImportAddressTableRVA,
           functionIndex,
           entrySize
         );
-        out.push(`<tr><td>${functionIndex + 1}</td><td>${hint}</td><td>${name}</td>${directIatRefs}</tr>`);
+        out.push(
+          `<tr><td>${functionIndex + 1}</td><td>${hint}</td><td>${name}</td>` +
+          `${directIatRefs}</tr>`
+        );
       });
       out.push(`</tbody></table>`);
     }

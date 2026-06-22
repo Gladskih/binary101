@@ -10,10 +10,11 @@ import {
 } from "../../../../renderers/pe/direct-iat-references.js";
 
 const IAT_RVA = 0x2000;
-const REFERENCE_COUNT = 3;
+const CALL_REFERENCE_COUNT = 3;
+const JUMP_REFERENCE_COUNT = 2;
 const AMD64_BITNESS = 64 as const;
 const FIRST_IMPORT_FUNCTION_INDEX = 0;
-const MISSING_IAT_RVA = 0;
+const INVALID_IAT_RVA = 0;
 
 const createPe = (): PeWindowsParseResult => ({
   disassembly: {
@@ -22,13 +23,17 @@ const createPe = (): PeWindowsParseResult => ({
     bytesDecoded: 0,
     instructionCount: 0,
     invalidInstructionCount: 0,
-    directIatReferences: [{ slotRva: IAT_RVA, referenceCount: REFERENCE_COUNT }],
+    directIatReferences: [{
+      slotRva: IAT_RVA,
+      callReferenceCount: CALL_REFERENCE_COUNT,
+      jumpReferenceCount: JUMP_REFERENCE_COUNT
+    }],
     instructionSets: [],
     issues: []
   }
 }) as unknown as PeWindowsParseResult;
 
-void test("direct IAT reference cells render counts and sortable dashes", () => {
+void test("direct IAT reference cells render separate sortable call and jump counts", () => {
   const counts = directIatReferenceCounts(createPe());
 
   assert.match(
@@ -36,25 +41,40 @@ void test("direct IAT reference cells render counts and sortable dashes", () => 
       counts,
       IAT_RVA,
       FIRST_IMPORT_FUNCTION_INDEX,
-      BigUint64Array.BYTES_PER_ELEMENT
+      BigUint64Array.BYTES_PER_ELEMENT,
+      "call"
     ),
-    new RegExp(`data-sort-value="${REFERENCE_COUNT}">${REFERENCE_COUNT}</td>`)
+    new RegExp(`data-sort-value="${CALL_REFERENCE_COUNT}">${CALL_REFERENCE_COUNT}</td>`)
   );
   assert.match(
     renderDirectIatRefsCell(
       counts,
-      MISSING_IAT_RVA,
+      IAT_RVA,
       FIRST_IMPORT_FUNCTION_INDEX,
-      BigUint64Array.BYTES_PER_ELEMENT
+      BigUint64Array.BYTES_PER_ELEMENT,
+      "jump"
+    ),
+    new RegExp(`data-sort-value="${JUMP_REFERENCE_COUNT}">${JUMP_REFERENCE_COUNT}</td>`)
+  );
+  assert.match(
+    renderDirectIatRefsCell(
+      counts,
+      INVALID_IAT_RVA,
+      FIRST_IMPORT_FUNCTION_INDEX,
+      BigUint64Array.BYTES_PER_ELEMENT,
+      "call"
     ),
     /data-sort-value="0">—<\/td>/
   );
 });
 
-void test("direct IAT reference header explains static counter semantics", () => {
-  const html = renderDirectIatRefsHeader();
+void test("direct IAT reference headers explain the distinct static counters", () => {
+  const callHtml = renderDirectIatRefsHeader("call");
+  const jumpHtml = renderDirectIatRefsHeader("jump");
 
-  assert.ok(html.includes("data-accessible-tooltip"));
-  assert.ok(html.includes("not a runtime call count"));
-  assert.ok(html.includes("does not expand shared import thunks"));
+  assert.ok(callHtml.includes("data-accessible-tooltip"));
+  assert.ok(callHtml.includes("Direct CALL refs"));
+  assert.ok(callHtml.includes("not a runtime call count"));
+  assert.ok(jumpHtml.includes("Direct JMP refs"));
+  assert.ok(jumpHtml.includes("import thunk or tail transfer"));
 });

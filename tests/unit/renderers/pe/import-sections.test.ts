@@ -19,6 +19,11 @@ import {
 } from "../../../fixtures/pe-import-linking-fixture.js";
 import type { PeWindowsParseResult } from "../../../../analyzers/pe/index.js";
 
+const DIRECT_IAT_REFERENCE_COLUMN_COUNT = 2;
+const DIRECT_CALL_REFERENCE_COUNT = 2;
+const DIRECT_JUMP_REFERENCE_COUNT = 1;
+const NO_DIRECT_IAT_REFERENCES = 0;
+
 void test("renderImportLinking and related sections surface confirmed and non-canonical import relationships", () => {
   const pe = createPeWithImportLinking();
   const out: string[] = [];
@@ -113,8 +118,10 @@ void test("renderDelayImports surfaces warning-only parse results", () => {
   assert.ok(html.includes("file may be truncated"));
 });
 
-void test("import panels render direct IAT reference counts from the disassembly model", () => {
+void test("import panels render separate call and jump counters from the disassembly model", () => {
   const pe = createPeWithImportLinking();
+  const eagerIatSlotRva = pe.imports.entries[0]!.firstThunkRva;
+  const delayIatSlotRva = pe.delayImports!.entries[0]!.ImportAddressTableRVA;
   pe.disassembly = {
     bitness: 32,
     bytesSampled: 16,
@@ -122,8 +129,16 @@ void test("import panels render direct IAT reference counts from the disassembly
     instructionCount: 4,
     invalidInstructionCount: 0,
     directIatReferences: [
-      { slotRva: 0x2000, referenceCount: 2 },
-      { slotRva: 0x2300, referenceCount: 1 }
+      {
+        slotRva: eagerIatSlotRva,
+        callReferenceCount: DIRECT_CALL_REFERENCE_COUNT,
+        jumpReferenceCount: NO_DIRECT_IAT_REFERENCES
+      },
+      {
+        slotRva: delayIatSlotRva,
+        callReferenceCount: NO_DIRECT_IAT_REFERENCES,
+        jumpReferenceCount: DIRECT_JUMP_REFERENCE_COUNT
+      }
     ],
     instructionSets: [],
     issues: []
@@ -134,10 +149,19 @@ void test("import panels render direct IAT reference counts from the disassembly
 
   assert.ok(importsHtml.includes(`id="${PE_IMPORTS_PANEL_ID}"`));
   assert.ok(delayHtml.includes(`id="${PE_DELAY_IMPORTS_PANEL_ID}"`));
-  assert.match(importsHtml, /Direct IAT refs/);
-  assert.match(importsHtml, /data-sort-value="2">2<\/td>/);
+  assert.match(importsHtml, /Direct CALL refs/);
+  assert.match(importsHtml, /Direct JMP refs/);
+  assert.match(
+    importsHtml,
+    new RegExp(`data-sort-value="${DIRECT_CALL_REFERENCE_COUNT}">` +
+      `${DIRECT_CALL_REFERENCE_COUNT}</td>`)
+  );
   assert.match(importsHtml, /data-sort-value="0">—<\/td>/);
-  assert.match(delayHtml, /data-sort-value="1">1<\/td>/);
+  assert.match(
+    delayHtml,
+    new RegExp(`data-sort-value="${DIRECT_JUMP_REFERENCE_COUNT}">` +
+      `${DIRECT_JUMP_REFERENCE_COUNT}</td>`)
+  );
   assert.match(importsHtml, /data-accessible-tooltip/);
 });
 
@@ -147,6 +171,13 @@ void test("import panels render dashes before instruction-set analysis", () => {
   const importsHtml = renderImportsPanel(pe);
   const delayHtml = renderDelayImportsPanel(pe);
 
-  assert.equal((importsHtml.match(/data-sort-value="0">—<\/td>/g) ?? []).length, 2);
-  assert.equal((delayHtml.match(/data-sort-value="0">—<\/td>/g) ?? []).length, 1);
+  assert.equal(
+    (importsHtml.match(/data-sort-value="0">—<\/td>/g) ?? []).length,
+    pe.imports.entries.flatMap(entry => entry.functions).length * DIRECT_IAT_REFERENCE_COLUMN_COUNT
+  );
+  assert.equal(
+    (delayHtml.match(/data-sort-value="0">—<\/td>/g) ?? []).length,
+    (pe.delayImports?.entries.flatMap(entry => entry.functions).length ?? 0) *
+      DIRECT_IAT_REFERENCE_COLUMN_COUNT
+  );
 });
