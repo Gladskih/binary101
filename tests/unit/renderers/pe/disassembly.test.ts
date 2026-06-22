@@ -22,6 +22,7 @@ void test("renderInstructionSets renders a chip table", () => {
     bytesDecoded: 6,
     instructionCount: 2,
     invalidInstructionCount: 0,
+    directIatReferences: [],
     issues: [],
     instructionSets: [
       { id: "AVX", label: "AVX", description: "Advanced Vector Extensions", instructionCount: 1 }
@@ -52,6 +53,7 @@ void test("renderInstructionSets escapes user-controlled strings", () => {
     bytesDecoded: 1,
     instructionCount: 1,
     invalidInstructionCount: 0,
+    directIatReferences: [],
     issues: ["note <b>unsafe</b>"],
     instructionSets: [
       {
@@ -175,6 +177,7 @@ void test("renderInstructionSets renders an empty-state message", () => {
     bytesDecoded: 0,
     instructionCount: 0,
     invalidInstructionCount: 0,
+    directIatReferences: [],
     issues: [],
     instructionSets: []
   };

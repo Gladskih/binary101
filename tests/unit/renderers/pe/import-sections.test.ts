@@ -3,6 +3,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  PE_DELAY_IMPORTS_PANEL_ID,
+  PE_IMPORTS_PANEL_ID,
+  renderDelayImportsPanel,
+  renderImportsPanel,
   renderImportLinking,
   renderImports,
   renderBoundImports,
@@ -107,4 +111,42 @@ void test("renderDelayImports surfaces warning-only parse results", () => {
   const html = out.join("");
   assert.ok(html.includes("Delay-load imports"));
   assert.ok(html.includes("file may be truncated"));
+});
+
+void test("import panels render direct IAT reference counts from the disassembly model", () => {
+  const pe = createPeWithImportLinking();
+  pe.disassembly = {
+    bitness: 32,
+    bytesSampled: 16,
+    bytesDecoded: 16,
+    instructionCount: 4,
+    invalidInstructionCount: 0,
+    directIatReferences: [
+      { slotRva: 0x2000, referenceCount: 2 },
+      { slotRva: 0x2300, referenceCount: 1 }
+    ],
+    instructionSets: [],
+    issues: []
+  };
+
+  const importsHtml = renderImportsPanel(pe);
+  const delayHtml = renderDelayImportsPanel(pe);
+
+  assert.ok(importsHtml.includes(`id="${PE_IMPORTS_PANEL_ID}"`));
+  assert.ok(delayHtml.includes(`id="${PE_DELAY_IMPORTS_PANEL_ID}"`));
+  assert.match(importsHtml, /Direct IAT refs/);
+  assert.match(importsHtml, /data-sort-value="2">2<\/td>/);
+  assert.match(importsHtml, /data-sort-value="0">—<\/td>/);
+  assert.match(delayHtml, /data-sort-value="1">1<\/td>/);
+  assert.match(importsHtml, /data-accessible-tooltip/);
+});
+
+void test("import panels render dashes before instruction-set analysis", () => {
+  const pe = createPeWithImportLinking();
+
+  const importsHtml = renderImportsPanel(pe);
+  const delayHtml = renderDelayImportsPanel(pe);
+
+  assert.equal((importsHtml.match(/data-sort-value="0">—<\/td>/g) ?? []).length, 2);
+  assert.equal((delayHtml.match(/data-sort-value="0">—<\/td>/g) ?? []).length, 1);
 });

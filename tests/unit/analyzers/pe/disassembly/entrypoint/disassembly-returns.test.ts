@@ -17,10 +17,10 @@ import {
   createExecutableSection
 } from "../../../../../helpers/pe-entrypoint-disassembly-fixture.js";
 import {
-  createScriptedIced,
   imm,
   instruction as ins
 } from "../../../../../helpers/pe-entrypoint-emulation-fixture.js";
+import { createScriptedIced } from "../../../../../helpers/pe-entrypoint-scripted-iced-fixture.js";
 
 const assertKnownReturnTarget = (
   target: PeEntrypointInstructionTarget | undefined

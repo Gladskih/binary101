@@ -4,9 +4,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ElfParseResult } from "../../../analyzers/elf/types.js";
 import type { PeParseResult, PeWindowsParseResult } from "../../../analyzers/pe/index.js";
+import { createPeWithImportLinking } from "../../fixtures/pe-import-linking-fixture.js";
 import {
   ELF_INSTRUCTION_SETS_PANEL_ID
 } from "../../../renderers/elf/disassembly.js";
+import {
+  PE_DELAY_IMPORTS_PANEL_ID,
+  PE_IMPORTS_PANEL_ID
+} from "../../../renderers/pe/import-sections.js";
 import {
   PE_INSTRUCTION_SETS_PANEL_ID
 } from "../../../renderers/pe/disassembly.js";
@@ -16,6 +21,7 @@ import {
 import { PE_OVERLAY_PANEL_ID } from "../../../renderers/pe/overlay.js";
 import {
   refreshElfInstructionSetsPanel,
+  refreshPeDisassemblyPanels,
   refreshPeEntrypointDisassemblyPanel,
   refreshPeInstructionSetsPanel,
   refreshPeOverlayPanel
@@ -72,6 +78,24 @@ void test("refreshPeInstructionSetsPanel replaces only its rendered panel", () =
     dom.addPanel(PE_INSTRUCTION_SETS_PANEL_ID);
     refreshPeInstructionSetsPanel(createPe());
     assert.match(dom.markup(PE_INSTRUCTION_SETS_PANEL_ID), /Instruction-set analysis/);
+  } finally {
+    dom.restore();
+  }
+});
+
+void test("refreshPeDisassemblyPanels renders ISA and import regions from one PE model", () => {
+  const dom = installPanelDom();
+  try {
+    const pe = createPeWithImportLinking();
+    dom.addPanel(PE_INSTRUCTION_SETS_PANEL_ID);
+    dom.addPanel(PE_IMPORTS_PANEL_ID);
+    dom.addPanel(PE_DELAY_IMPORTS_PANEL_ID);
+
+    refreshPeDisassemblyPanels(pe);
+
+    assert.match(dom.markup(PE_INSTRUCTION_SETS_PANEL_ID), /Instruction-set analysis/);
+    assert.match(dom.markup(PE_IMPORTS_PANEL_ID), /Direct IAT refs/);
+    assert.match(dom.markup(PE_DELAY_IMPORTS_PANEL_ID), /Direct IAT refs/);
   } finally {
     dom.restore();
   }

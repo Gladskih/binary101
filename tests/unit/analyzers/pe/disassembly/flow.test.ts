@@ -27,6 +27,7 @@ const createTextSection = (rawSize: number, virtualSize = rawSize) => [
 const mapTextRvaToOffset = (rawSize: number) => (rva: number): number | null =>
   rva >= TEXT_SECTION_RVA && rva < TEXT_SECTION_RVA + rawSize ? rva - TEXT_SECTION_RVA : null;
 
+
 void test("analyzePeInstructionSets follows unconditional jumps and skips invalid bytes", async () => {
   const bytes = new Uint8Array([
     0xeb, 0x02, // jmp +2 (to the final nop)

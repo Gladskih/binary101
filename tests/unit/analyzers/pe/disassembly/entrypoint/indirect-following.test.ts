@@ -15,11 +15,11 @@ import {
   type TestInstruction
 } from "../../../../../helpers/pe-entrypoint-disassembly-fixture.js";
 import {
-  createScriptedIced,
   imm,
   instruction as ins,
   reg
 } from "../../../../../helpers/pe-entrypoint-emulation-fixture.js";
+import { createScriptedIced } from "../../../../../helpers/pe-entrypoint-scripted-iced-fixture.js";
 import { MockFile } from "../../../../../helpers/mock-file.js";
 
 const realIcedModule = realIced as unknown as IcedModule;

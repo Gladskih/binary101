@@ -3,8 +3,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  captureSortableTableState,
   compareSortValues,
-  enhanceSortableTables
+  enhanceSortableTables,
+  restoreSortableTableState
 } from "../../../ui/sortable-tables.js";
 
 type FakeCell = {
@@ -15,6 +17,10 @@ type FakeCell = {
 type FakeRow = {
   cells: FakeCell[];
 };
+
+const SORT_STATE_KEY = "imports";
+const SORT_COLUMN_INDEX = 0;
+const ASCENDING_SORT_VALUES = ["1", "2"] as const;
 
 const rowsWithItem = <Value>(rows: Value[]): Value[] & { item(index: number): Value | null } =>
   Object.assign(rows, { item: (index: number) => rows[index] ?? null });
@@ -58,4 +64,70 @@ void test("enhanceSortableTables skips tables with fewer than two body rows", ()
   const table = { setAttributeCalls: 0 };
   enhanceSortableTables(fakeSortableRoot(1, table) as unknown as ParentNode);
   assert.equal(table.setAttributeCalls, 0);
+});
+
+const createStatefulTableDom = () => {
+  const rows = ASCENDING_SORT_VALUES.map(value => ({
+    cells: rowsWithItem([{
+      colSpan: 1,
+      rowSpan: 1,
+      dataset: { sortValue: value },
+      textContent: value
+    }])
+  }));
+  const tbody = {
+    rows,
+    append: (row: (typeof rows)[number]): void => {
+      const index = rows.indexOf(row);
+      if (index >= 0) rows.splice(index, 1);
+      rows.push(row);
+    }
+  };
+  const headerAttributes = new Map<string, string>();
+  const header = {
+    removeAttribute: (name: string): void => { headerAttributes.delete(name); },
+    setAttribute: (name: string, value: string): void => { headerAttributes.set(name, value); }
+  };
+  const button: {
+    dataset: { sortTableColumn: string; sortDirection?: string };
+    closest: (selector: string) => typeof header | null;
+    removeAttribute: (name: string) => void;
+  } = {
+    dataset: { sortTableColumn: String(SORT_COLUMN_INDEX), sortDirection: "ascending" },
+    closest: (selector: string) => selector === "th" ? header : null,
+    removeAttribute: (name: string): void => {
+      if (name === "data-sort-direction") delete button.dataset.sortDirection;
+    }
+  };
+  const table = {
+    dataset: { sortStateKey: SORT_STATE_KEY },
+    tBodies: rowsWithItem([tbody]),
+    querySelector: () => button,
+    querySelectorAll: (selector: string) => selector === "th" ? [header] : [button]
+  };
+  const root = { querySelectorAll: () => [table] };
+  return { button, headerAttributes, root, rows };
+};
+
+void test("sortable table state restores keyed column, direction, and row order", () => {
+  const dom = createStatefulTableDom();
+  const captured = captureSortableTableState(dom.root as unknown as ParentNode);
+
+  assert.deepEqual(captured, [{
+    key: SORT_STATE_KEY,
+    columnIndex: SORT_COLUMN_INDEX,
+    direction: "ascending"
+  }]);
+
+  restoreSortableTableState(
+    dom.root as unknown as ParentNode,
+    [{ key: SORT_STATE_KEY, columnIndex: SORT_COLUMN_INDEX, direction: "descending" }]
+  );
+
+  assert.deepEqual(
+    dom.rows.map(row => row.cells[SORT_COLUMN_INDEX]?.textContent),
+    [...ASCENDING_SORT_VALUES].reverse()
+  );
+  assert.equal(dom.button.dataset.sortDirection, "descending");
+  assert.equal(dom.headerAttributes.get("aria-sort"), "descending");
 });

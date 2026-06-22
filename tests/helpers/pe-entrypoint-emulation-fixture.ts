@@ -35,8 +35,8 @@ const mnemonicNames = [
   "Sete", "Setne", "Shl", "Shld", "Shr", "Shrd", "Stc", "Sub", "Test",
   "Tzcnt", "Xadd", "Xchg", "Xor", "Cmove", "Cmovne", "Ja", "Jae", "Jb",
   "Jbe", "Je", "Jg", "Jge", "Jl", "Jle", "Jne", "Jno", "Jnp", "Jns",
-  "Jo", "Jp", "Js", "Jcxz", "Jecxz", "Jrcxz", "Loop", "Loope", "Loopne",
-  "Call", "Ret", "Retf"
+  "Jo", "Jp", "Js", "Jcxz", "Jecxz", "Jrcxz", "Jmp", "Loop", "Loope",
+  "Loopne", "Call", "Ret", "Retf"
 ] as const;
 
 const registerNames = [
@@ -99,6 +99,7 @@ type FixtureOperand =
 type FixtureInstructionSpec = {
   code?: FixtureCode;
   flowControl?: FixtureFlowControl;
+  indirectControlFlow?: "near-call" | "near-jump" | "far-call";
   ip?: bigint;
   length?: number;
   nearBranchTarget?: bigint;
@@ -133,6 +134,9 @@ class FixtureInstruction implements IcedInstructionObject {
   readonly op0Kind: number;
   readonly opCount: number;
   readonly ip: bigint;
+  readonly isCallNearIndirect: boolean;
+  readonly isIpRelMemoryOperand: boolean;
+  readonly isJmpNearIndirect: boolean;
   constructor(
     mnemonic: FixtureMnemonic,
     private readonly operands: readonly FixtureOperand[],
@@ -157,6 +161,16 @@ class FixtureInstruction implements IcedInstructionObject {
     this.nextIP = this.ip + BigInt(this.length);
     this.op0Kind = this.opKind(0);
     this.opCount = operands.length;
+    const inferredIndirectControlFlow =
+      spec.flowControl === "IndirectCall" && this.op0Kind === fixtureOpKind["Memory"]
+        ? "near-call"
+        : spec.flowControl === "IndirectBranch" && this.op0Kind === fixtureOpKind["Memory"]
+          ? "near-jump"
+          : null;
+    const indirectControlFlow = spec.indirectControlFlow ?? inferredIndirectControlFlow;
+    this.isCallNearIndirect = indirectControlFlow === "near-call";
+    this.isIpRelMemoryOperand = this.memoryBase === fixtureRegister["RIP"];
+    this.isJmpNearIndirect = indirectControlFlow === "near-jump";
   }
   opKind(operand: number): number {
     const data = this.operands[operand];
@@ -200,33 +214,6 @@ class FixtureDecoder {
   }
   free(): void {}
 }
-
-const copyInstruction = (
-  destination: IcedInstructionObject,
-  source: IcedInstructionObject
-): void => {
-  Object.setPrototypeOf(destination, Object.getPrototypeOf(source) as object | null);
-  Object.assign(destination, source);
-};
-
-export const createScriptedIced = (
-  instructions: readonly IcedInstructionObject[]
-): IcedModule => {
-  const byIp = new Map(instructions.map(item => [item.ip.toString(), item]));
-  class ScriptedDecoder extends FixtureDecoder {
-    override get canDecode(): boolean {
-      return this.position < this.data.length && byIp.has(this.ip.toString());
-    }
-    override decodeOut(instruction: IcedInstructionObject): void {
-      const decoded = byIp.get(this.ip.toString());
-      if (!decoded) throw new Error(`No scripted instruction for ${this.ip.toString(16)}`);
-      copyInstruction(instruction, decoded);
-      this.position += decoded.length;
-      this.ip = decoded.nextIP;
-    }
-  }
-  return { ...fixtureIced, Decoder: ScriptedDecoder };
-};
 
 class EmptyFixtureInstruction extends FixtureInstruction {
   constructor() {

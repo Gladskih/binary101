@@ -23,6 +23,9 @@ export type IcedInstructionObject = {
   readonly memoryIndexScale: number;
   readonly memorySize: number;
   readonly op0Kind: number;
+  readonly isCallNearIndirect: boolean;
+  readonly isIpRelMemoryOperand: boolean;
+  readonly isJmpNearIndirect: boolean;
   opKind(operand: number): number;
   opRegister(operand: number): number;
   immediate(operand: number): bigint;

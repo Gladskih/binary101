@@ -4,8 +4,8 @@ import type { ParseForUiResult } from "../analyzers/index.js";
 import { createElfDisassemblyController } from "./elf-disassembly.js";
 import {
   refreshElfInstructionSetsPanel,
+  refreshPeDisassemblyPanels,
   refreshPeEntrypointDisassemblyPanel,
-  refreshPeInstructionSetsPanel,
   refreshPeOverlayPanel
 } from "./analysis-panel-refresh.js";
 import { createPeDisassemblyController } from "./pe-disassembly.js";
@@ -20,7 +20,7 @@ export const createAnalysisPanelActions = (
   peDisassembly: createPeDisassemblyController({
     getCurrentFile,
     getCurrentParseResult,
-    renderPanel: refreshPeInstructionSetsPanel
+    renderPanel: refreshPeDisassemblyPanels
   }),
   peEntrypointDisassembly: createPeEntrypointDisassemblyController({
     getCurrentFile,

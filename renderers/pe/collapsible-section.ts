@@ -62,8 +62,9 @@ const renderPeSectionDescription = (title: string): string => {
   return description ? `<div class="smallNote">${escapeHtml(description)}</div>` : "";
 };
 
-export const renderPeSectionStart = (title: string, summary?: string): string =>
-  `<section class="peSection"><details class="peSectionDetails">` +
+export const renderPeSectionStart = (title: string, summary?: string, id?: string): string =>
+  `<section${id ? ` id="${escapeHtml(id)}"` : ""} class="peSection">` +
+  `<details class="peSectionDetails">` +
   `<summary class="peSectionSummary"><b>${escapeHtml(title)}</b>${
     summary ? ` - ${escapeHtml(summary)}` : ""
   }</summary><div class="peSectionBody">${renderPeSectionDescription(title)}`;

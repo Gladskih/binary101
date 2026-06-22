@@ -152,6 +152,7 @@ export const createPeDisassemblyController = (
         is64Bit: windowsOpt?.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC,
         imageBase: windowsOpt?.ImageBase ?? 0n,
         entrypointRva: seeds.entrypointRva,
+        ...(windowsPe ? { imports: windowsPe.imports, delayImports: windowsPe.delayImports } : {}),
         exportRvas: seeds.exportRvas,
         unwindBeginRvas: seeds.unwindBeginRvas,
         unwindHandlerRvas: seeds.unwindHandlerRvas,

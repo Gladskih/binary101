@@ -30,6 +30,7 @@ type ControlFlowDecodeState = {
   yieldEveryInstructions: number;
   signal?: AbortSignal;
   onYield?: (snapshot: DisassemblyYieldSnapshot) => Promise<void>;
+  onInstruction?: (instruction: InstanceType<IcedX86Module["Instruction"]>) => void;
   bytesDecoded: number;
   instructionCount: number;
   invalidInstructionCount: number;
@@ -126,6 +127,7 @@ const decodeLinearRun = async (
       state.recordDecodeStopIssue(`Stopping at an invalid instruction at RVA 0x${instrRva.toString(16)}.`);
       break;
     }
+    state.onInstruction?.(instr);
     if (!isUd2Trap) countInstructionFeatures(state, instr);
     if (state.iced.FlowControl["UnconditionalBranch"] === instr.flowControl) {
       const target = getNearBranchTarget(instr, state.iced.OpKind);
@@ -184,6 +186,7 @@ export async function disassembleControlFlowForInstructionSets(opts: {
   issues: string[];
   signal?: AbortSignal;
   onYield?: (snapshot: DisassemblyYieldSnapshot) => Promise<void>;
+  onInstruction?: (instruction: InstanceType<IcedX86Module["Instruction"]>) => void;
 }): Promise<DisassemblyYieldSnapshot> {
   const bytesSampled = opts.sections.reduce((sum, entry) => sum + entry.data.length, 0);
   const decoders = opts.sections.map(entry => ({
@@ -221,6 +224,7 @@ export async function disassembleControlFlowForInstructionSets(opts: {
     yieldEveryInstructions: opts.yieldEveryInstructions,
     ...(opts.signal ? { signal: opts.signal } : {}),
     ...(opts.onYield ? { onYield: opts.onYield } : {}),
+    ...(opts.onInstruction ? { onInstruction: opts.onInstruction } : {}),
     bytesDecoded: 0,
     instructionCount: 0,
     invalidInstructionCount: 0,

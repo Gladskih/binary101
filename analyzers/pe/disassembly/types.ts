@@ -12,12 +12,18 @@ export interface PeInstructionSetUsage {
   instructionCount: number;
 }
 
+export interface PeDirectIatReferenceCount {
+  slotRva: number;
+  referenceCount: number;
+}
+
 export interface PeInstructionSetReport {
   bitness: 32 | 64;
   bytesSampled: number;
   bytesDecoded: number;
   instructionCount: number;
   invalidInstructionCount: number;
+  directIatReferences: PeDirectIatReferenceCount[];
   instructionSets: PeInstructionSetUsage[];
   issues: string[];
 }
@@ -94,6 +100,8 @@ export interface AnalyzePeInstructionSetOptions {
   imageBase: bigint;
   headerRvaLimit?: number;
   entrypointRva: number;
+  imports?: PeImportParseResult;
+  delayImports?: { entries: PeDelayImportEntry[] } | null;
   exportRvas?: number[];
   unwindBeginRvas?: number[];
   unwindHandlerRvas?: number[];

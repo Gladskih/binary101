@@ -2,6 +2,14 @@
 
 const SORTABLE_TABLE_SELECTOR = "table.table:not([data-sortable=\"false\"])";
 
+type SortDirection = "ascending" | "descending";
+
+export type SortableTableState = {
+  key: string;
+  columnIndex: number;
+  direction: SortDirection;
+};
+
 const parseSortNumber = (value: string): number | null => {
   const normalized = value.trim().replace(/,/g, "");
   if (/^0x[0-9a-f]+$/i.test(normalized)) return Number.parseInt(normalized.slice(2), 16);
@@ -83,7 +91,7 @@ export const enhanceSortableTables = (root: ParentNode): void => {
 const updateSortHeaders = (
   table: HTMLTableElement,
   activeButton: HTMLButtonElement,
-  direction: "ascending" | "descending"
+  direction: SortDirection
 ): void => {
   table.querySelectorAll("th").forEach(header => header.removeAttribute("aria-sort"));
   table.querySelectorAll<HTMLButtonElement>("[data-sort-table-column]").forEach(button => {
@@ -96,7 +104,7 @@ const updateSortHeaders = (
 const sortTableRows = (
   table: HTMLTableElement,
   columnIndex: number,
-  direction: "ascending" | "descending"
+  direction: SortDirection
 ): void => {
   const tbody = table.tBodies.item(0);
   if (!tbody) return;
@@ -128,6 +136,40 @@ export const handleSortableTableClick = (target: Element | null): boolean => {
   sortTableRows(table, columnIndex, direction);
   updateSortHeaders(table, button, direction);
   return true;
+};
+
+const readSortDirection = (value: string | undefined): SortDirection | null =>
+  value === "ascending" || value === "descending" ? value : null;
+
+export const captureSortableTableState = (root: ParentNode): SortableTableState[] => {
+  const states: SortableTableState[] = [];
+  root.querySelectorAll<HTMLTableElement>("table[data-sort-state-key]").forEach(table => {
+    const key = table.dataset["sortStateKey"];
+    const button = table.querySelector<HTMLButtonElement>("[data-sort-direction]");
+    const direction = readSortDirection(button?.dataset["sortDirection"]);
+    const columnIndex = Number(button?.dataset["sortTableColumn"]);
+    if (!key || !direction || !Number.isInteger(columnIndex) || columnIndex < 0) return;
+    states.push({ key, columnIndex, direction });
+  });
+  return states;
+};
+
+export const restoreSortableTableState = (
+  root: ParentNode,
+  states: SortableTableState[]
+): void => {
+  const tables = Array.from(
+    root.querySelectorAll<HTMLTableElement>("table[data-sort-state-key]")
+  );
+  for (const state of states) {
+    const table = tables.find(entry => entry.dataset["sortStateKey"] === state.key);
+    const button = table?.querySelector<HTMLButtonElement>(
+      `[data-sort-table-column="${state.columnIndex}"]`
+    );
+    if (!table || !button) continue;
+    sortTableRows(table, state.columnIndex, state.direction);
+    updateSortHeaders(table, button, state.direction);
+  }
 };
 
 export { compareSortValues };

@@ -7,6 +7,7 @@ export type {
   PeEntrypointDisassemblyReport,
   PeEntrypointInstruction,
   PeEntrypointInstructionTarget,
+  PeDirectIatReferenceCount,
   PeInstructionSetProgress,
   PeInstructionSetReport,
   PeInstructionSetUsage

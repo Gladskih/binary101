@@ -29,15 +29,27 @@ import {
   renderImportLibraryNameWithInfo
 } from "./import-library-info.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
+import {
+  directIatEntrySize,
+  directIatReferenceCounts,
+  renderDirectIatRefsCell,
+  renderDirectIatRefsHeader
+} from "./direct-iat-references.js";
 
 export { renderImportLinking } from "./import-linking-section.js";
 
-export function renderImports(pe: PeWindowsParseResult, out: string[]): void {
+export const PE_IMPORTS_PANEL_ID = "peImportsPanel";
+export const PE_DELAY_IMPORTS_PANEL_ID = "peDelayImportsPanel";
+
+const renderImportsContent = (pe: PeWindowsParseResult, out: string[]): void => {
   if (!pe.imports.entries.length && !pe.imports.warning) return;
+  const counts = directIatReferenceCounts(pe);
+  const entrySize = directIatEntrySize(pe);
   out.push(
     renderPeSectionStart(
       "Import table",
-      `${pe.imports.entries.length} module${pe.imports.entries.length === 1 ? "" : "s"}`
+      `${pe.imports.entries.length} module${pe.imports.entries.length === 1 ? "" : "s"}`,
+      PE_IMPORTS_PANEL_ID
     )
   );
   out.push(`<div class="smallNote">Each IMAGE_IMPORT_DESCRIPTOR names one DLL and points to two tables: OriginalFirstThunk normally gives the lookup names, while FirstThunk gives the runtime IAT slots that the loader patches.</div>`);
@@ -73,7 +85,7 @@ export function renderImports(pe: PeWindowsParseResult, out: string[]): void {
     ])));
     out.push(`</dl>`);
     if (mod.functions?.length) {
-      out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th></tr></thead><tbody>`);
+      out.push(`<table class="table" data-sort-state-key="eager-import-${index}" style="margin-top:.35rem"><thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th>${renderDirectIatRefsHeader()}</tr></thead><tbody>`);
       mod.functions.forEach((fn, functionIndex) => {
         const hint = fn.hint != null ? String(fn.hint) : "-";
         const name = fn.name
@@ -81,13 +93,29 @@ export function renderImports(pe: PeWindowsParseResult, out: string[]): void {
           : fn.ordinal != null
             ? `ORD ${fn.ordinal}`
             : "-";
-        out.push(`<tr><td>${functionIndex + 1}</td><td>${hint}</td><td>${name}</td></tr>`);
+        const directIatRefs = renderDirectIatRefsCell(
+          counts,
+          mod.firstThunkRva,
+          functionIndex,
+          entrySize
+        );
+        out.push(`<tr><td>${functionIndex + 1}</td><td>${hint}</td><td>${name}</td>${directIatRefs}</tr>`);
       });
       out.push(`</tbody></table>`);
     }
     out.push(`</details>`);
   });
   out.push(renderPeSectionEnd());
+};
+
+export const renderImportsPanel = (pe: PeWindowsParseResult): string => {
+  const out: string[] = [];
+  renderImportsContent(pe, out);
+  return out.join("");
+};
+
+export function renderImports(pe: PeWindowsParseResult, out: string[]): void {
+  out.push(renderImportsPanel(pe));
 }
 
 export function renderBoundImports(pe: PeWindowsParseResult, out: string[]): void {
@@ -117,12 +145,15 @@ export function renderBoundImports(pe: PeWindowsParseResult, out: string[]): voi
   out.push(renderPeSectionEnd());
 }
 
-export function renderDelayImports(pe: PeWindowsParseResult, out: string[]): void {
+const renderDelayImportsContent = (pe: PeWindowsParseResult, out: string[]): void => {
   if (!pe.delayImports || (!pe.delayImports.entries.length && !pe.delayImports.warning)) return;
+  const counts = directIatReferenceCounts(pe);
+  const entrySize = directIatEntrySize(pe);
   out.push(
     renderPeSectionStart(
       "Delay-load imports",
-      `${pe.delayImports.entries.length} module${pe.delayImports.entries.length === 1 ? "" : "s"}`
+      `${pe.delayImports.entries.length} module${pe.delayImports.entries.length === 1 ? "" : "s"}`,
+      PE_DELAY_IMPORTS_PANEL_ID
     )
   );
   out.push(`<div class="smallNote">Delay-load descriptors describe imports that are resolved on first use instead of during process startup. Modern Windows images sometimes protect delay-load IATs with Load Config GuardFlags and a dedicated .didat section.</div>`);
@@ -162,7 +193,7 @@ export function renderDelayImports(pe: PeWindowsParseResult, out: string[]): voi
     ])));
     out.push(`</dl>`);
     if (entry.functions?.length) {
-      out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th></tr></thead><tbody>`);
+      out.push(`<table class="table" data-sort-state-key="delay-import-${index}" style="margin-top:.35rem"><thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th>${renderDirectIatRefsHeader()}</tr></thead><tbody>`);
       entry.functions.forEach((fn, functionIndex) => {
         const hint = fn.hint != null ? String(fn.hint) : "-";
         const name = fn.name
@@ -170,13 +201,29 @@ export function renderDelayImports(pe: PeWindowsParseResult, out: string[]): voi
           : fn.ordinal != null
             ? `ORD ${fn.ordinal}`
             : "-";
-        out.push(`<tr><td>${functionIndex + 1}</td><td>${hint}</td><td>${name}</td></tr>`);
+        const directIatRefs = renderDirectIatRefsCell(
+          counts,
+          entry.ImportAddressTableRVA,
+          functionIndex,
+          entrySize
+        );
+        out.push(`<tr><td>${functionIndex + 1}</td><td>${hint}</td><td>${name}</td>${directIatRefs}</tr>`);
       });
       out.push(`</tbody></table>`);
     }
     out.push(`</details>`);
   });
   out.push(renderPeSectionEnd());
+};
+
+export const renderDelayImportsPanel = (pe: PeWindowsParseResult): string => {
+  const out: string[] = [];
+  renderDelayImportsContent(pe, out);
+  return out.join("");
+};
+
+export function renderDelayImports(pe: PeWindowsParseResult, out: string[]): void {
+  out.push(renderDelayImportsPanel(pe));
 }
 
 export function renderIat(pe: PeWindowsParseResult, out: string[]): void {

@@ -11,6 +11,10 @@ import {
   type PeDisassemblySample,
   resolvePeDisassemblyEntrypoints
 } from "./sampling.js";
+import {
+  collectDirectIatSlotRvas,
+  createDirectIatReferenceCounter
+} from "./import-references.js";
 
 type PeInstructionSetDecodeRun = {
   iced: IcedX86Module;
@@ -18,6 +22,7 @@ type PeInstructionSetDecodeRun = {
   imageBase: bigint;
   sampledSections: PeDisassemblySample[];
   resolvedEntrypoints: number[];
+  directIatSlotRvas: Set<number>;
   yieldEveryInstructions: number;
   bytesSampled: number;
   issues: string[];
@@ -28,6 +33,7 @@ type PeInstructionSetDecodeResult = {
   bytesDecoded: number;
   instructionCount: number;
   invalidInstructionCount: number;
+  directIatReferences: PeInstructionSetReport["directIatReferences"];
   instructionSets: PeInstructionSetReport["instructionSets"];
 };
 
@@ -35,10 +41,20 @@ const reportProgress = (opts: AnalyzePeInstructionSetOptions, progress: PeInstru
   if (!opts.onProgress) return;
   try { opts.onProgress(progress); } catch { /* UI callbacks must not abort analysis. */ }
 };
+const collectRequestedDirectIatSlots = (
+  opts: AnalyzePeInstructionSetOptions,
+  issues: string[]
+): Set<number> => collectDirectIatSlotRvas(
+  opts.is64Bit,
+  opts.imports,
+  opts.delayImports,
+  issues
+);
 const yieldToEventLoop = async (): Promise<void> => new Promise<void>(resolve => setTimeout(resolve, 0));
 export async function analyzePeInstructionSets(
   reader: FileRangeReader,
-  opts: AnalyzePeInstructionSetOptions
+  opts: AnalyzePeInstructionSetOptions,
+  loadIced: () => Promise<unknown> = loadIcedX86
 ): Promise<PeInstructionSetReport> {
   const issues: string[] = [];
   const coffMachine = getCanonicalPeMachine(opts.coffMachine);
@@ -56,6 +72,7 @@ export async function analyzePeInstructionSets(
     bytesDecoded: 0,
     instructionCount: 0,
     invalidInstructionCount: 0,
+    directIatReferences: [],
     instructionSets: [],
     issues
   });
@@ -65,6 +82,7 @@ export async function analyzePeInstructionSets(
   } else if (coffMachine === IMAGE_FILE_MACHINE_I386 && bitness !== 32) {
     issues.push("Machine is I386 but optional header reports 64-bit mode.");
   }
+  const directIatSlotRvas = collectRequestedDirectIatSlots(opts, issues);
   const resolvedEntrypoints = resolvePeDisassemblyEntrypoints(opts, issues);
   if (!resolvedEntrypoints.length) return emptyReport(0);
   if (opts.signal?.aborted) {
@@ -98,7 +116,7 @@ export async function analyzePeInstructionSets(
   }
   let iced: unknown;
   try {
-    iced = await loadIcedX86();
+    iced = await loadIced();
   } catch (err) {
     issues.push(`Failed to load iced-x86 disassembler (${String(err)})`);
     return emptyReport(bytesSampled);
@@ -113,6 +131,7 @@ export async function analyzePeInstructionSets(
     imageBase,
     sampledSections,
     resolvedEntrypoints,
+    directIatSlotRvas,
     yieldEveryInstructions,
     bytesSampled,
     issues,
@@ -124,6 +143,7 @@ export async function analyzePeInstructionSets(
     bytesDecoded: decoded.bytesDecoded,
     instructionCount: decoded.instructionCount,
     invalidInstructionCount: decoded.invalidInstructionCount,
+    directIatReferences: decoded.directIatReferences,
     instructionSets: decoded.instructionSets,
     issues
   };
@@ -134,6 +154,11 @@ const decodePeInstructionSetUsage = async (
 ): Promise<PeInstructionSetDecodeResult> => {
   const { iced, bitness, imageBase, sampledSections, resolvedEntrypoints } = run;
   const instructionSetUsage = createX86InstructionSetUsageTracker(iced.CpuidFeature);
+  const directIatReferences = createDirectIatReferenceCounter(
+    iced,
+    imageBase,
+    run.directIatSlotRvas
+  );
   let bytesDecoded = 0; let instructionCount = 0; let invalidInstructionCount = 0;
   reportProgress(run.opts, {
     stage: "decoding",
@@ -154,6 +179,9 @@ const decodePeInstructionSetUsage = async (
       featureCounts: instructionSetUsage.featureCounts,
       issues: run.issues,
       ...(run.opts.signal ? { signal: run.opts.signal } : {}),
+      onInstruction: instruction => {
+        directIatReferences.record(instruction);
+      },
       onYield: async snapshot => {
         bytesDecoded = snapshot.bytesDecoded;
         instructionCount = snapshot.instructionCount;
@@ -187,6 +215,7 @@ const decodePeInstructionSetUsage = async (
     bytesDecoded,
     instructionCount,
     invalidInstructionCount,
+    directIatReferences: directIatReferences.references(),
     instructionSets: instructionSetUsage.instructionSets(),
   };
 };
