@@ -32,32 +32,37 @@ const volatileRegisters = (state: EmulationState): readonly string[] =>
 const returnRegister = (state: EmulationState): string =>
   state.bitness === 64 ? "RAX" : "EAX";
 
-const STDCALL_ARGUMENT_COUNTS = new Map<string, number>([
-  ["KERNEL32.dll!DeleteCriticalSection", 1],
-  ["KERNEL32.dll!FreeLibrary", 1],
-  ["KERNEL32.dll!GetCurrentProcessId", 0],
-  ["KERNEL32.dll!GetCurrentThreadId", 0],
-  ["KERNEL32.dll!GetLastError", 0],
-  ["KERNEL32.dll!GetProcAddress", 2],
-  ["KERNEL32.dll!GetSystemTimeAsFileTime", 1],
-  ["KERNEL32.dll!HeapAlloc", 3],
-  ["KERNEL32.dll!HeapFree", 3],
-  ["KERNEL32.dll!InitializeCriticalSectionAndSpinCount", 2],
-  ["KERNEL32.dll!LoadLibraryExW", 3],
-  ["KERNEL32.dll!QueryPerformanceCounter", 1],
-  ["KERNEL32.dll!SetLastError", 1],
-  ["KERNEL32.dll!TlsSetValue", 2]
+const KERNEL32_STDCALL_ARGUMENT_COUNTS = new Map<string, number>([
+  ["DeleteCriticalSection", 1],
+  ["FreeLibrary", 1],
+  ["GetCurrentProcessId", 0],
+  ["GetCurrentThreadId", 0],
+  ["GetLastError", 0],
+  ["GetModuleHandleW", 1],
+  ["GetProcAddress", 2],
+  ["GetSystemTimeAsFileTime", 1],
+  ["HeapAlloc", 3],
+  ["HeapFree", 3],
+  ["InitializeCriticalSectionAndSpinCount", 2],
+  ["LoadLibraryExW", 3],
+  ["QueryPerformanceCounter", 1],
+  ["SetLastError", 1],
+  ["TlsSetValue", 2]
 ]);
 
+// PE import names are ASCII. Normalize only the DLL portion for this local ABI catalogue:
+// export names remain case-sensitive, as required by GetProcAddress.
 const x86StdcallArgumentBytes = (label: string): bigint => {
-  const count = STDCALL_ARGUMENT_COUNTS.get(label);
+  const delimiter = label.indexOf("!");
+  if (delimiter < 1 || label.slice(0, delimiter).toLowerCase() !== "kernel32.dll") return 0n;
+  const count = KERNEL32_STDCALL_ARGUMENT_COUNTS.get(label.slice(delimiter + 1));
   return count == null ? 0n : BigInt(count * 4);
 };
 
 const cleanX86StdcallArguments = (
   iced: IcedModule,
   state: EmulationState,
-  importTarget: ImportTarget
+  importTarget: Pick<ImportTarget, "label">
 ): void => {
   // Microsoft x86 __stdcall: the callee pops its fixed arguments before
   // returning. https://learn.microsoft.com/cpp/cpp/stdcall
@@ -76,7 +81,7 @@ const cleanX86StdcallArguments = (
 export const applyReturningImportEffects = (
   iced: IcedModule,
   state: EmulationState,
-  importTarget: ImportTarget
+  importTarget: Pick<ImportTarget, "label">
 ): void => {
   // Microsoft x64 ABI: integer/pointer returns use RAX and RAX/RCX/RDX/R8-R11
   // are volatile. x86 return values are widened and returned in EAX.
