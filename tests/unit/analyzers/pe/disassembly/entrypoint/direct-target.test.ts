@@ -34,7 +34,6 @@ const createQueueState = (pending: PendingBlock[]): FollowQueueState => ({
   pending,
   issues: [],
   visitedBlocks: new Set(),
-  queuedBlocksByKey: new Map(),
   emulationStatesByKey: new Map(),
   contextKeysByRva: new Map(),
   precisionCostByRva: new Map(),

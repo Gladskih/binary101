@@ -15,10 +15,16 @@ import {
 import {
   collectKnownValues,
   cloneEmulationState,
-  mergeEmulationStates,
-  type EmulatedValue,
   type EmulationState
 } from "./emulation/state.js";
+import {
+  addCorrelatedState,
+  correlatedStatesContain,
+  emulatedValueKey,
+  MAX_CORRELATED_STATES_PER_CONTEXT,
+  mergeCorrelatedStates,
+  type CorrelatedEmulationStates
+} from "./correlated-states.js";
 
 export type PendingBlock = {
   kind: PeEntrypointDisassemblyBlockKind;
@@ -33,17 +39,16 @@ export type FollowQueueState = {
   pending: PendingBlock[];
   issues: string[];
   visitedBlocks: Set<string>;
-  queuedBlocksByKey: Map<string, PendingBlock>;
-  emulationStatesByKey: Map<string, EmulationState>;
+  emulationStatesByKey: Map<string, CorrelatedEmulationStates>;
   contextKeysByRva: Map<number, Set<string>>;
   precisionCostByRva: Map<number, number>;
   precisionLimitReportedRvas: Set<number>;
 };
 
-// Local browser-safety threshold, not a PE/x86 limit. A new context pays its
-// full state cost; an existing context pays only for precision added by widening.
-// Distinct recursive contexts therefore remain bounded without double-charging loops.
-export const MAX_PRECISION_BUDGET_PER_RVA = 256;
+// Local browser-safety threshold, not a PE/x86 limit. Preserve the previous
+// 256-unit allowance for each complete path retained by the context policy.
+export const MAX_PRECISION_BUDGET_PER_RVA =
+  256 * MAX_CORRELATED_STATES_PER_CONTEXT;
 
 const formatRva = (rva: number): string =>
   `0x${(rva >>> 0).toString(16).padStart(8, "0")}`;
@@ -102,20 +107,6 @@ const addedPrecisionCost = (
   ? Math.max(0, precisionCost(next) - precisionCost(previous))
   : precisionCost(next);
 
-const valueKey = (value: EmulatedValue | undefined): string => {
-  if (!value) return "unset";
-  if (value.kind === "known") return `known:${value.bits}:${value.value.toString(16)}`;
-  if (value.kind === "value-set") {
-    return `set:${value.values.map(candidate => valueKey(candidate)).join(",")}`;
-  }
-  if (value.kind === "import-return") return `import:${value.label}`;
-  if (value.kind === "cpuid-output") {
-    const subleaf = value.subleaf == null ? "" : `:${value.subleaf}`;
-    return `cpuid:${value.leaf}${subleaf}:${value.register}`;
-  }
-  return "unknown";
-};
-
 const pointerBytes = (state: EmulationState): bigint => BigInt(state.bitness / 8);
 
 const stackKeyOffsets = (state: EmulationState): bigint[] => {
@@ -129,10 +120,11 @@ const stackSlotKey = (
   imageBase: bigint
 ): string | null => {
   const value = state.memory.get(address.toString());
+  if (!value) return null;
   const values = collectKnownValues(value);
   if (!values.length) return null;
   return values.every(candidate => toRva(candidate.value, imageBase) != null)
-    ? `${address.toString(16)}=${valueKey(value)}`
+    ? `${address.toString(16)}=${emulatedValueKey(value)}`
     : null;
 };
 
@@ -161,31 +153,31 @@ export const createBlockKey = (
 ): string =>
   `${rva.toString(16)}|stack:${stackStateKey(state, imageBase)}`;
 
-const mergeQueuedBlockState = (
-  state: FollowQueueState,
-  rva: number,
-  existing: PendingBlock,
-  emulationState: EmulationState
-): boolean => {
-  const merged = mergeEmulationStates(existing.emulationState, emulationState);
-  const addedCost = addedPrecisionCost(existing.emulationState, merged);
-  if (!canSpendPrecision(state, rva, addedCost)) return false;
-  existing.emulationState = merged;
-  recordPrecisionCost(state, rva, addedCost);
-  return true;
+const stateToProcess = (
+  correlated: CorrelatedEmulationStates
+): EmulationState => correlated.states.at(-1) ?? correlated.states[0];
+
+const addedCorrelatedPrecisionCost = (
+  previous: CorrelatedEmulationStates | undefined,
+  next: CorrelatedEmulationStates
+): number => {
+  if (!previous) return precisionCost(stateToProcess(next));
+  if (previous.mode === "complete-paths" && next.mode === "complete-paths") {
+    return precisionCost(stateToProcess(next));
+  }
+  return addedPrecisionCost(
+    mergeCorrelatedStates(previous),
+    mergeCorrelatedStates(next)
+  );
 };
 
-const stateKey = (state: EmulationState): string => {
-  const registerKeys = Array.from(state.registers)
-    .map(([key, value]) => `r:${key}=${valueKey(value)}`);
-  const memoryKeys = Array.from(state.memory)
-    .map(([key, value]) => `m:${key}=${valueKey(value)}`);
-  const flagKeys = Object.entries(state.flags)
-    .map(([key, value]) => `f:${key}=${value ? "1" : "0"}`);
-  return [...registerKeys, ...memoryKeys, ...flagKeys]
-    .sort()
-    .join("|");
-};
+export const isPendingBlockCurrent = (
+  state: FollowQueueState,
+  block: PendingBlock
+): boolean => correlatedStatesContain(
+  state.emulationStatesByKey.get(block.key),
+  block.emulationState
+);
 
 export const queueFollowedBlock = async (
   reader: FileRangeReader,
@@ -196,31 +188,25 @@ export const queueFollowedBlock = async (
   emulationState: EmulationState
 ): Promise<boolean> => {
   const key = createBlockKey(follow.rva, emulationState, opts.imageBase);
-  const queued = state.queuedBlocksByKey.get(key);
-  if (queued) {
-    if (!mergeQueuedBlockState(state, follow.rva, queued, emulationState)) return false;
-    state.emulationStatesByKey.set(key, cloneEmulationState(queued.emulationState));
-    return true;
-  }
-  const knownState = state.emulationStatesByKey.get(key);
-  const nextState = knownState ? mergeEmulationStates(knownState, emulationState) : emulationState;
-  if (knownState && stateKey(knownState) === stateKey(nextState)) return true;
-  const addedCost = addedPrecisionCost(knownState, nextState);
+  const knownStates = state.emulationStatesByKey.get(key);
+  const nextStates = addCorrelatedState(knownStates, emulationState);
+  if (knownStates === nextStates) return true;
+  const addedCost = addedCorrelatedPrecisionCost(knownStates, nextStates);
   if (!canSpendPrecision(state, follow.rva, addedCost)) return false;
   const mapped = await loadCodeBytes(reader, opts, follow.rva, state.issues, "Control-flow target");
   if (!mapped) return false;
-  state.emulationStatesByKey.set(key, cloneEmulationState(nextState));
+  const nextState = stateToProcess(nextStates);
+  state.emulationStatesByKey.set(key, nextStates);
   contextKeysForRva(state, follow.rva).add(key);
   recordPrecisionCost(state, follow.rva, addedCost);
   const block = {
     kind: follow.kind,
     mapped,
-    emulationState: nextState,
+    emulationState: cloneEmulationState(nextState),
     key,
     sourceInstructionRva: instructionRva
   };
   state.pending.push(block);
-  state.queuedBlocksByKey.set(key, block);
   return true;
 };
 

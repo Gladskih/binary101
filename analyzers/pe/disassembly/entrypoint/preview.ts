@@ -17,9 +17,11 @@ import { cloneEmulationState } from "./emulation/state.js";
 import { applyInstructionTargets, controlFlowIssue } from "./targeting.js";
 import {
   createBlockKey,
+  isPendingBlockCurrent,
   type FollowQueueState,
   type PendingBlock
 } from "./follow-queue.js";
+import { addCorrelatedState } from "./correlated-states.js";
 import type { IcedFormatter, IcedModule } from "./iced.js";
 
 type DecodeState = FollowQueueState & {
@@ -145,8 +147,10 @@ export const decodePreview = async (
     bytesDecoded: 0,
     instructionCount: 0,
     visitedBlocks: new Set(),
-    queuedBlocksByKey: new Map([[entryKey, entryBlock]]),
-    emulationStatesByKey: new Map([[entryKey, cloneEmulationState(entryState)]]),
+    emulationStatesByKey: new Map([[
+      entryKey,
+      addCorrelatedState(undefined, cloneEmulationState(entryState))
+    ]]),
     contextKeysByRva: new Map([[mapped.rvaStart, new Set([entryKey])]]),
     precisionCostByRva: new Map([[mapped.rvaStart, 1]]),
     precisionLimitReportedRvas: new Set()
@@ -155,7 +159,7 @@ export const decodePreview = async (
     while (state.pending.length > 0) {
       const block = state.pending.shift();
       if (!block) break;
-      state.queuedBlocksByKey.delete(block.key);
+      if (!isPendingBlockCurrent(state, block)) continue;
       state.visitedBlocks.add(block.key);
       const decoded = await decodeBlock(
         reader,

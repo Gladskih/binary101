@@ -7,10 +7,12 @@ import type { AnalyzePeEntrypointDisassemblyOptions } from "../../../../../../an
 import {
   MAX_PRECISION_BUDGET_PER_RVA,
   createBlockKey,
+  isPendingBlockCurrent,
   queueFollowedBlock,
   type FollowQueueState,
   type PendingBlock
 } from "../../../../../../analyzers/pe/disassembly/entrypoint/follow-queue.js";
+import { addCorrelatedState } from "../../../../../../analyzers/pe/disassembly/entrypoint/correlated-states.js";
 import { createEmulationState } from "../../../../../../analyzers/pe/disassembly/entrypoint/emulation/index.js";
 import {
   collectKnownValues,
@@ -24,7 +26,8 @@ import { MockFile } from "../../../../../helpers/mock-file.js";
 
 const imageBase = 0x140000000n;
 const TARGET_FILE_SIZE = Uint8Array.BYTES_PER_ELEMENT;
-const EXPECTED_PRECISION_GROWTH = 1;
+// The fixture models one stack pointer and one path-dependent call target.
+const MODELED_VALUES_PER_PATH = 2;
 
 const createTargetReader = () => createFileRangeReader(
   new MockFile(new Uint8Array(TARGET_FILE_SIZE), "target.exe"),
@@ -37,7 +40,6 @@ const createQueueState = (pending: PendingBlock[]): FollowQueueState => ({
   pending,
   issues: [],
   visitedBlocks: new Set(),
-  queuedBlocksByKey: new Map(),
   emulationStatesByKey: new Map(),
   contextKeysByRva: new Map(),
   precisionCostByRva: new Map(),
@@ -125,49 +127,78 @@ void test("createBlockKey distinguishes frame-pointer return slots", () => {
   );
 });
 
-void test("queueFollowedBlock merges same-key pending emulation states", async () => {
+void test("queueFollowedBlock keeps same-context path states separate", async () => {
+  const opts = createOptions();
   const pending: PendingBlock[] = [];
   const state = createQueueState(pending);
-  const left = createEmulationState(64);
-  const right = createEmulationState(64);
-  left.registers.set("R11", known(0x140001010n, 64));
-  right.registers.set("R11", known(0x140002020n, 64));
+  const { incoming, previous } = createPrecisionGrowthStates(opts.entrypointRva);
 
   const firstQueued = await queueFollowedBlock(
     createTargetReader(),
-    createOptions(),
+    opts,
     state,
     { kind: "followed-call", rva: 0x1000 },
     0x2000,
-    left
+    previous
   );
   const secondQueued = await queueFollowedBlock(
     createTargetReader(),
-    createOptions(),
+    opts,
     state,
     { kind: "followed-call", rva: 0x1000 },
     0x2001,
-    right
+    incoming
   );
 
   assert.equal(firstQueued, true);
   assert.equal(secondQueued, true);
-  assert.equal(pending.length, 1);
+  assert.equal(pending.length, 2);
   assert.deepEqual(
     collectKnownValues(pending[0]?.emulationState.registers.get("R11"))
       .map(value => value.value),
-    [0x140001010n, 0x140002020n]
+    [imageBase + BigInt(opts.entrypointRva)]
+  );
+  assert.deepEqual(
+    collectKnownValues(pending[1]?.emulationState.registers.get("R11"))
+      .map(value => value.value),
+    [imageBase + BigInt(opts.entrypointRva + Uint8Array.BYTES_PER_ELEMENT)]
   );
 });
 
-void test("queueFollowedBlock charges only added precision for a processed context", async () => {
+void test("isPendingBlockCurrent rejects a superseded state snapshot", async () => {
+  const opts = createOptions();
+  const state = createQueueState([]);
+  const { incoming, previous } = createPrecisionGrowthStates(opts.entrypointRva);
+  await queueFollowedBlock(
+    createTargetReader(),
+    opts,
+    state,
+    { kind: "followed-call", rva: opts.entrypointRva },
+    opts.entrypointRva,
+    previous
+  );
+  const pending = state.pending[0];
+  assert.ok(pending);
+  const currentBefore = isPendingBlockCurrent(state, pending);
+  state.emulationStatesByKey.set(
+    pending.key,
+    addCorrelatedState(undefined, incoming)
+  );
+
+  const currentAfter = isPendingBlockCurrent(state, pending);
+
+  assert.equal(currentBefore, true);
+  assert.equal(currentAfter, false);
+});
+
+void test("queueFollowedBlock charges a complete new path state", async () => {
   const opts = createOptions();
   const targetRva = opts.entrypointRva;
   const { incoming, previous } = createPrecisionGrowthStates(targetRva);
   const key = createBlockKey(targetRva, previous, imageBase);
   const state = createQueueState([]);
-  state.emulationStatesByKey.set(key, previous);
-  const precisionBefore = MAX_PRECISION_BUDGET_PER_RVA - EXPECTED_PRECISION_GROWTH;
+  state.emulationStatesByKey.set(key, addCorrelatedState(undefined, previous));
+  const precisionBefore = MAX_PRECISION_BUDGET_PER_RVA - MODELED_VALUES_PER_PATH;
   state.precisionCostByRva.set(targetRva, precisionBefore);
 
   const queued = await queueFollowedBlock(
@@ -183,7 +214,7 @@ void test("queueFollowedBlock charges only added precision for a processed conte
   assert.equal(state.pending.length, 1);
   assert.equal(
     state.precisionCostByRva.get(targetRva),
-    precisionBefore + EXPECTED_PRECISION_GROWTH
+    precisionBefore + MODELED_VALUES_PER_PATH
   );
   assert.deepEqual(state.issues, []);
 });
