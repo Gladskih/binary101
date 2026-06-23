@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { createFileRangeReader } from "../../../../../../analyzers/file-range-reader.js";
 import type { AnalyzePeEntrypointDisassemblyOptions } from "../../../../../../analyzers/pe/disassembly/index.js";
 import {
+  MAX_PRECISION_BUDGET_PER_RVA,
   createBlockKey,
   queueFollowedBlock,
   type FollowQueueState,
@@ -22,6 +23,14 @@ import {
 import { MockFile } from "../../../../../helpers/mock-file.js";
 
 const imageBase = 0x140000000n;
+const TARGET_FILE_SIZE = Uint8Array.BYTES_PER_ELEMENT;
+const EXPECTED_PRECISION_GROWTH = 1;
+
+const createTargetReader = () => createFileRangeReader(
+  new MockFile(new Uint8Array(TARGET_FILE_SIZE), "target.exe"),
+  0,
+  TARGET_FILE_SIZE
+);
 
 const createQueueState = (pending: PendingBlock[]): FollowQueueState => ({
   blocks: [],
@@ -41,8 +50,22 @@ const createOptions = (): AnalyzePeEntrypointDisassemblyOptions => ({
   imageBase,
   entrypointRva: 0x1000,
   rvaToOff: rva => rva - 0x1000,
-  sections: [createExecutableSection({ virtualSize: 1, sizeOfRawData: 1 })]
+  sections: [createExecutableSection({
+    virtualSize: TARGET_FILE_SIZE,
+    sizeOfRawData: TARGET_FILE_SIZE
+  })]
 });
+
+const createPrecisionGrowthStates = (targetRva: number) => {
+  const previous = createEmulationState(64);
+  const incoming = createEmulationState(64);
+  previous.registers.set("R11", known(imageBase + BigInt(targetRva), 64));
+  incoming.registers.set(
+    "R11",
+    known(imageBase + BigInt(targetRva + Uint8Array.BYTES_PER_ELEMENT), 64)
+  );
+  return { incoming, previous };
+};
 
 void test("createBlockKey ignores scratch registers and non-stack memory", () => {
   const left = createEmulationState(64);
@@ -110,16 +133,16 @@ void test("queueFollowedBlock merges same-key pending emulation states", async (
   left.registers.set("R11", known(0x140001010n, 64));
   right.registers.set("R11", known(0x140002020n, 64));
 
-  await queueFollowedBlock(
-    createFileRangeReader(new MockFile(new Uint8Array([0xc3]), "target.exe"), 0, 1),
+  const firstQueued = await queueFollowedBlock(
+    createTargetReader(),
     createOptions(),
     state,
     { kind: "followed-call", rva: 0x1000 },
     0x2000,
     left
   );
-  await queueFollowedBlock(
-    createFileRangeReader(new MockFile(new Uint8Array([0xc3]), "target.exe"), 0, 1),
+  const secondQueued = await queueFollowedBlock(
+    createTargetReader(),
     createOptions(),
     state,
     { kind: "followed-call", rva: 0x1000 },
@@ -127,10 +150,84 @@ void test("queueFollowedBlock merges same-key pending emulation states", async (
     right
   );
 
+  assert.equal(firstQueued, true);
+  assert.equal(secondQueued, true);
   assert.equal(pending.length, 1);
   assert.deepEqual(
     collectKnownValues(pending[0]?.emulationState.registers.get("R11"))
       .map(value => value.value),
     [0x140001010n, 0x140002020n]
   );
+});
+
+void test("queueFollowedBlock charges only added precision for a processed context", async () => {
+  const opts = createOptions();
+  const targetRva = opts.entrypointRva;
+  const { incoming, previous } = createPrecisionGrowthStates(targetRva);
+  const key = createBlockKey(targetRva, previous, imageBase);
+  const state = createQueueState([]);
+  state.emulationStatesByKey.set(key, previous);
+  const precisionBefore = MAX_PRECISION_BUDGET_PER_RVA - EXPECTED_PRECISION_GROWTH;
+  state.precisionCostByRva.set(targetRva, precisionBefore);
+
+  const queued = await queueFollowedBlock(
+    createTargetReader(),
+    opts,
+    state,
+    { kind: "followed-branch", rva: targetRva },
+    targetRva,
+    incoming
+  );
+
+  assert.equal(queued, true);
+  assert.equal(state.pending.length, 1);
+  assert.equal(
+    state.precisionCostByRva.get(targetRva),
+    precisionBefore + EXPECTED_PRECISION_GROWTH
+  );
+  assert.deepEqual(state.issues, []);
+});
+
+void test("queueFollowedBlock refuses precision growth beyond the pending-context budget", async () => {
+  const opts = createOptions();
+  const targetRva = opts.entrypointRva;
+  const { incoming, previous } = createPrecisionGrowthStates(targetRva);
+  const state = createQueueState([]);
+  await queueFollowedBlock(
+    createTargetReader(),
+    opts,
+    state,
+    { kind: "followed-branch", rva: targetRva },
+    targetRva,
+    previous
+  );
+  state.precisionCostByRva.set(targetRva, MAX_PRECISION_BUDGET_PER_RVA);
+
+  const queued = await queueFollowedBlock(
+    createTargetReader(),
+    opts,
+    state,
+    { kind: "followed-branch", rva: targetRva },
+    targetRva,
+    incoming
+  );
+  const repeated = await queueFollowedBlock(
+    createTargetReader(),
+    opts,
+    state,
+    { kind: "followed-branch", rva: targetRva },
+    targetRva,
+    incoming
+  );
+
+  assert.equal(queued, false);
+  assert.equal(repeated, false);
+  assert.equal(state.pending.length, 1);
+  assert.deepEqual(
+    collectKnownValues(state.pending[0]?.emulationState.registers.get("R11"))
+      .map(value => value.value),
+    [imageBase + BigInt(targetRva)]
+  );
+  assert.equal(state.issues.length, 1);
+  assert.match(state.issues[0] ?? "", /precision budget/i);
 });
