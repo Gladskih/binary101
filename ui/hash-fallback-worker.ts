@@ -1,9 +1,8 @@
 "use strict";
 
-import { md5, sha1 } from "@noble/hashes/legacy";
-import { sha224, sha256 } from "@noble/hashes/sha256";
-import { sha384, sha512, sha512_224, sha512_256 } from "@noble/hashes/sha512";
-import type { CHash } from "@noble/hashes/utils";
+import { md5, sha1 } from "@noble/hashes/legacy.js";
+import { sha224, sha256, sha384, sha512, sha512_224, sha512_256 } from "@noble/hashes/sha2.js";
+import type { CHash } from "@noble/hashes/utils.js";
 
 type FallbackHashId =
   "md5" | "sha1" | "sha224" | "sha256" | "sha384" | "sha512" |

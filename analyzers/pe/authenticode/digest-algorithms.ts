@@ -1,8 +1,7 @@
 "use strict";
 
-import { md5 } from "@noble/hashes/legacy";
-import { sha224 } from "@noble/hashes/sha256";
-import { sha512_224, sha512_256 } from "@noble/hashes/sha512";
+import { md5 } from "@noble/hashes/legacy.js";
+import { sha224, sha512_224, sha512_256 } from "@noble/hashes/sha2.js";
 
 export type AuthenticodeDigestAlgorithm =
   "MD5" | "SHA-1" | "SHA-224" | "SHA-256" | "SHA-384" | "SHA-512" |
