@@ -6,6 +6,7 @@ import { createGzipFile } from "../fixtures/gzip-fixtures.js";
 import { createPngFile } from "../fixtures/image-sample-files.js";
 import { createPeResourcePreviewFile } from "../fixtures/pe-resource-preview-file.js";
 import type { MockFile } from "../helpers/mock-file.js";
+import { NARROW_LAYOUT_VIEWPORT } from "./viewports.js";
 
 const toUpload = (file: MockFile) => ({
   name: file.name,
@@ -33,7 +34,7 @@ const expectFullWidthDetails = async (page: Page): Promise<void> => {
 };
 
 void test("uses full summary width without a PE icon", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize(NARROW_LAYOUT_VIEWPORT);
   await inspectFile(page, createPngFile());
 
   await expect(page.locator("#fileIconWrap")).toBeHidden();
@@ -47,7 +48,7 @@ void test("uses full summary width without a PE icon", async ({ page }) => {
 });
 
 void test("places a PE icon below the summary on phone-sized screens", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize(NARROW_LAYOUT_VIEWPORT);
   await inspectFile(page, createPeResourcePreviewFile());
 
   const detailsBox = await page.locator(".filePrimaryInfo > dl").boundingBox();
@@ -69,7 +70,7 @@ void test("places a PE icon to the right of the summary on wide screens", async 
 });
 
 void test("uses the full phone width for the PE result card and its sections", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize(NARROW_LAYOUT_VIEWPORT);
   await inspectFile(page, createPeResourcePreviewFile());
 
   const cardBox = await page.locator("#fileInfoCard").boundingBox();
@@ -84,7 +85,7 @@ void test("uses the full phone width for the PE result card and its sections", a
 });
 
 void test("insets unsectioned analysis content on phone-sized screens", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize(NARROW_LAYOUT_VIEWPORT);
   await inspectFile(page, createGzipFile({ payload: Buffer.from("hello") }));
 
   const details = page.locator("#analysisValue");

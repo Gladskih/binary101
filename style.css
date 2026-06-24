@@ -147,13 +147,12 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 }
 .accessibleTooltipButton::before{content:"?"}
 .accessibleTooltipPopup{
-  position:absolute;z-index:1000;top:calc(100% + .35rem);left:0;width:max-content;
+  position:fixed;z-index:1000;top:0;left:0;width:max-content;
   max-width:min(22rem,calc(100vw - 2rem));padding:.55rem .65rem;border:1px solid var(--border2);
   border-radius:6px;background:var(--card);color:var(--text);
   box-shadow:0 .5rem 1.5rem rgb(0 0 0 / .3);
   font:12px/1.4 system-ui;text-align:left;white-space:normal
 }
-.accessibleTooltip--above > .accessibleTooltipPopup{top:auto;bottom:calc(100% + .35rem)}
 .accessibleTooltipPopup::before{content:attr(aria-label)}
 .accessibleTooltipPopup[hidden]{display:none}
 .hashRow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}

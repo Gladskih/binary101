@@ -13,6 +13,7 @@ const closeTooltip = (control: HTMLElement): void => {
     popup.hidden = true;
     popup.style.removeProperty("left");
     popup.style.removeProperty("right");
+    popup.style.removeProperty("top");
   }
 };
 
@@ -22,16 +23,23 @@ const positionTooltip = (
   popup: HTMLElement,
   document: Document
 ): void => {
-  popup.style.left = "0";
+  control.classList.remove("accessibleTooltip--above");
   popup.style.right = "auto";
-  const initialBounds = popup.getBoundingClientRect();
-  const viewport = document.documentElement;
-  if (initialBounds.bottom > viewport.clientHeight && button.getBoundingClientRect().top >= initialBounds.height) {
-    control.classList.add("accessibleTooltip--above");
-  }
+  const buttonBounds = button.getBoundingClientRect();
+  popup.style.left = `${buttonBounds.left}px`;
+  popup.style.top = `${buttonBounds.bottom}px`;
   const bounds = popup.getBoundingClientRect();
-  const left = Math.min(Math.max(bounds.left, 0), viewport.clientWidth - bounds.width);
-  popup.style.left = `${left - bounds.left}px`;
+  const viewport = document.documentElement;
+  if (bounds.bottom > viewport.clientHeight && buttonBounds.top >= bounds.height) {
+    control.classList.add("accessibleTooltip--above");
+    popup.style.top = `${buttonBounds.top - bounds.height}px`;
+  } else if (bounds.bottom > viewport.clientHeight) {
+    popup.style.top = `${Math.max(0, viewport.clientHeight - bounds.height)}px`;
+  }
+  popup.style.left = `${Math.min(
+    Math.max(buttonBounds.left, 0),
+    Math.max(0, viewport.clientWidth - bounds.width)
+  )}px`;
 };
 
 const closeOtherTooltips = (document: Document, keep: HTMLElement | null): void => {
