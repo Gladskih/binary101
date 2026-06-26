@@ -13,6 +13,9 @@ dist/
 # Generated browser-only vendor shim
 public/vendor/iced-x86/
 
+# Generated WinAPI metadata assets
+public/winapi-metadata/*.json
+
 # External binary fixtures
 external-pe-fixtures/
 

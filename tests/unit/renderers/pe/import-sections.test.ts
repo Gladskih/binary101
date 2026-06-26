@@ -18,14 +18,35 @@ import {
   createPeWithInferredEagerIatOnly
 } from "../../../fixtures/pe-import-linking-fixture.js";
 import type { PeWindowsParseResult } from "../../../../analyzers/pe/index.js";
+import type { WinapiMetadataEntry } from "../../../../winapi-metadata-schema.js";
 
 const DIRECT_IAT_REFERENCE_COLUMN_COUNT = 2;
 const DIRECT_CALL_REFERENCE_COUNT = 2;
 const DIRECT_JUMP_REFERENCE_COUNT = 1;
 const NO_DIRECT_IAT_REFERENCES = 0;
 
+const sleepMetadata = (): WinapiMetadataEntry => ({
+  id: "MethodDef:0x06000001;ImplMap:1",
+  module: "KERNEL32.dll",
+  entrypoint: "Sleep",
+  namespace: "Windows.Win32.System.Threading",
+  api: "Sleep",
+  signature: "void Sleep(u4 dwMilliseconds)",
+  returnType: "void",
+  rawReturnType: "void",
+  parameters: [{ name: "dwMilliseconds", type: "u4", rawType: "u4", x86StackBytes: 4 }],
+  callingConvention: "winapi",
+  x86StackBytes: 4,
+  variadic: false,
+  setLastError: false,
+  characterSet: null,
+  architecture: [],
+  platform: ["windows5.1.2600"]
+});
+
 void test("renderImportLinking and related sections surface confirmed and non-canonical import relationships", () => {
   const pe = createPeWithImportLinking();
+  pe.imports.entries[0]!.functions[0]!.winapiMetadata = sleepMetadata();
   const out: string[] = [];
 
   renderImportLinking(pe, out);
@@ -50,6 +71,9 @@ void test("renderImportLinking and related sections surface confirmed and non-ca
   assert.ok(html.includes("Window manager, message, input, menu, dialog"));
   assert.ok(html.includes("<td>Sleep</td>"));
   assert.ok(html.includes("<td>MessageBoxW</td>"));
+  assert.ok(html.includes("<th>WinAPI</th>"));
+  assert.ok(html.includes("Windows.Win32.System.Threading"));
+  assert.ok(html.includes("void Sleep(u4 dwMilliseconds)"));
   assert.ok(!html.includes("learn.microsoft.com/search"));
   assert.ok(
     html.includes(

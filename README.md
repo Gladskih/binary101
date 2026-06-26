@@ -45,6 +45,15 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
   `samples/pe-disassembly/` with the available C/C++/C#/Rust/Go/Zig/Pascal/D
   and assembly toolchains. Results are written to
   `%TEMP%\binary101-pe-disassembly-samples\`.
+- `npm run generate:winapi-metadata` &mdash; download the pinned
+  `Microsoft.Windows.SDK.Win32Metadata` NuGet package, extract
+  `Windows.Win32.winmd`, and generate PE import-enrichment JSON assets.
+- `npm run validate:winapi-metadata` &mdash; validate the generated WinAPI
+  metadata manifest and per-DLL chunks.
+- `npm run build:with-winapi-metadata` &mdash; generate and validate WinAPI
+  metadata, then build the static site.
+- WinAPI metadata asset details live in
+  [`docs/winapi-metadata.md`](docs/winapi-metadata.md).
 
 ## Project Structure (high level)
 - `index.html` & `style.css` &mdash; Vite HTML entry and page styling.

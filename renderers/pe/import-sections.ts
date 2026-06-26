@@ -31,10 +31,9 @@ import {
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import {
   directIatEntrySize,
-  directIatReferenceCounts,
-  renderDirectIatRefsCells,
-  renderDirectIatRefsHeaders
+  directIatReferenceCounts
 } from "./direct-iat-references.js";
+import { renderImportFunctionTable } from "./import-function-table.js";
 
 export { renderImportLinking } from "./import-linking-section.js";
 
@@ -85,30 +84,13 @@ const renderImportsContent = (pe: PeWindowsParseResult, out: string[]): void => 
     ])));
     out.push(`</dl>`);
     if (mod.functions?.length) {
-      out.push(
-        `<table class="table" data-sort-state-key="eager-import-${index}" style="margin-top:.35rem">` +
-        `<thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th>` +
-        `${renderDirectIatRefsHeaders()}</tr></thead><tbody>`
-      );
-      mod.functions.forEach((fn, functionIndex) => {
-        const hint = fn.hint != null ? String(fn.hint) : "-";
-        const name = fn.name
-          ? escapeHtml(fn.name)
-          : fn.ordinal != null
-            ? `ORD ${fn.ordinal}`
-            : "-";
-        const directIatRefs = renderDirectIatRefsCells(
-          counts,
-          mod.firstThunkRva,
-          functionIndex,
-          entrySize
-        );
-        out.push(
-          `<tr><td>${functionIndex + 1}</td><td>${hint}</td><td>${name}</td>` +
-          `${directIatRefs}</tr>`
-        );
-      });
-      out.push(`</tbody></table>`);
+      out.push(renderImportFunctionTable(
+        mod.functions,
+        `eager-import-${index}`,
+        mod.firstThunkRva,
+        counts,
+        entrySize
+      ));
     }
     out.push(`</details>`);
   });
@@ -200,30 +182,13 @@ const renderDelayImportsContent = (pe: PeWindowsParseResult, out: string[]): voi
     ])));
     out.push(`</dl>`);
     if (entry.functions?.length) {
-      out.push(
-        `<table class="table" data-sort-state-key="delay-import-${index}" style="margin-top:.35rem">` +
-        `<thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th>` +
-        `${renderDirectIatRefsHeaders()}</tr></thead><tbody>`
-      );
-      entry.functions.forEach((fn, functionIndex) => {
-        const hint = fn.hint != null ? String(fn.hint) : "-";
-        const name = fn.name
-          ? escapeHtml(fn.name)
-          : fn.ordinal != null
-            ? `ORD ${fn.ordinal}`
-            : "-";
-        const directIatRefs = renderDirectIatRefsCells(
-          counts,
-          entry.ImportAddressTableRVA,
-          functionIndex,
-          entrySize
-        );
-        out.push(
-          `<tr><td>${functionIndex + 1}</td><td>${hint}</td><td>${name}</td>` +
-          `${directIatRefs}</tr>`
-        );
-      });
-      out.push(`</tbody></table>`);
+      out.push(renderImportFunctionTable(
+        entry.functions,
+        `delay-import-${index}`,
+        entry.ImportAddressTableRVA,
+        counts,
+        entrySize
+      ));
     }
     out.push(`</details>`);
   });

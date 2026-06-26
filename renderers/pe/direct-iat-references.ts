@@ -7,7 +7,7 @@ import { escapeHtml } from "../../html-utils.js";
 
 export type DirectIatReferenceKind = "call" | "jump";
 
-type DirectIatReferenceCounts = {
+export type DirectIatReferenceCounts = {
   callReferenceCount: number;
   jumpReferenceCount: number;
 };

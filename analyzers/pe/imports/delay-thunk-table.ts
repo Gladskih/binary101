@@ -1,6 +1,7 @@
 "use strict";
 
 import type { FileRangeReader } from "../../file-range-reader.js";
+import type { WinapiMetadataEntry } from "../../../winapi-metadata-schema.js";
 import { readMappedNullTerminatedAsciiString } from "../strings/mapped-ascii-string.js";
 import type { RvaToOffset } from "../types.js";
 
@@ -16,7 +17,12 @@ const IMAGE_DELAY_IMPORT_NAME_MASK64 = 0x7fffffffn; // PE32+ keeps the import-by
 const IMAGE_DELAY_IMPORT_NAME_RESERVED_MASK64 = 0x7fffffff80000000n; // PE32+ reserves bits 62-31.
 const IMAGE_DELAY_IMPORT_ORDINAL_RESERVED_MASK64 = 0x7fffffffffff0000n; // PE32+ ordinal thunks reserve bits 62-16.
 
-export type PeDelayImportFunction = { ordinal?: number; hint?: number; name?: string };
+export interface PeDelayImportFunction {
+  ordinal?: number;
+  hint?: number;
+  name?: string;
+  winapiMetadata?: WinapiMetadataEntry;
+}
 export type DelayThunkTable = { functions: PeDelayImportFunction[]; terminated: boolean };
 export type ReadDelayThunkFunctions = (
   reader: FileRangeReader,

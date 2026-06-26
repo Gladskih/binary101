@@ -29,22 +29,24 @@ import {
   restoreSortableTableState
 } from "./sortable-tables.js";
 
-const replaceRenderedRegion = (panelId: string, markup: string): void => {
+const replaceRenderedRegion = (panelId: string, markup: string): HTMLElement | null => {
   const panel = document.getElementById(panelId);
-  if (!(panel instanceof HTMLElement)) return;
+  if (!(panel instanceof HTMLElement)) return null;
   const openDetails = captureOpenDetails(panel);
   const sortableTables = captureSortableTableState(panel);
   panel.outerHTML = markup;
   const updatedPanel = document.getElementById(panelId);
-  if (!(updatedPanel instanceof HTMLElement)) return;
+  if (!(updatedPanel instanceof HTMLElement)) return null;
   enhanceSortableTables(updatedPanel);
   restoreSortableTableState(updatedPanel, sortableTables);
   enhanceAccessibleTooltips(updatedPanel);
   restoreOpenDetails(updatedPanel, openDetails, () => {});
+  return updatedPanel;
 };
 
-export const refreshPeInstructionSetsPanel = (pe: PeWindowsParseResult): void =>
+export const refreshPeInstructionSetsPanel = (pe: PeWindowsParseResult): void => {
   replaceRenderedRegion(PE_INSTRUCTION_SETS_PANEL_ID, renderPeInstructionSetsPanel(pe));
+};
 
 export const refreshPeDisassemblyPanels = (pe: PeWindowsParseResult): void => {
   refreshPeInstructionSetsPanel(pe);
@@ -52,11 +54,14 @@ export const refreshPeDisassemblyPanels = (pe: PeWindowsParseResult): void => {
   replaceRenderedRegion(PE_DELAY_IMPORTS_PANEL_ID, renderDelayImportsPanel(pe));
 };
 
-export const refreshPeEntrypointDisassemblyPanel = (pe: PeWindowsParseResult): void =>
+export const refreshPeEntrypointDisassemblyPanel = (pe: PeWindowsParseResult): void => {
   replaceRenderedRegion(PE_ENTRYPOINT_DISASSEMBLY_PANEL_ID, renderEntrypointDisassemblyPanel(pe));
+};
 
-export const refreshPeOverlayPanel = (pe: PeParseResult): void =>
+export const refreshPeOverlayPanel = (pe: PeParseResult): void => {
   replaceRenderedRegion(PE_OVERLAY_PANEL_ID, renderOverlayPanel(pe));
+};
 
-export const refreshElfInstructionSetsPanel = (elf: ElfParseResult): void =>
+export const refreshElfInstructionSetsPanel = (elf: ElfParseResult): void => {
   replaceRenderedRegion(ELF_INSTRUCTION_SETS_PANEL_ID, renderElfInstructionSetsPanel(elf));
+};

@@ -1,6 +1,6 @@
 "use strict";
 
-import { parsePe } from "./pe/index.js";
+import { isPeWindowsParseResult, parsePe } from "./pe/index.js";
 import { parseJpeg } from "./jpeg/index.js";
 import { parseElf } from "./elf/index.js";
 import { parseMachO } from "./macho/index.js";
@@ -41,6 +41,7 @@ import { parsePcap } from "./pcap/index.js";
 import { parsePcapNg } from "./pcapng/index.js";
 import { parseGzip } from "./gzip/index.js";
 import type { GzipParseResult } from "./gzip/types.js";
+import { enrichPeImportMetadata } from "./pe/imports/winapi-metadata.js";
 
 type Fb2Parser = typeof parseFb2;
 type GzipParser = (file: File) => Promise<GzipParseResult | null>;
@@ -70,7 +71,12 @@ const tryMzFormats = async (file: File, dv: DataView): Promise<ParseForUiResult 
   if (!mzKind) return null;
   if (mzKind.kind === "pe") {
     const pe = await parsePe(file);
-    if (pe) return { analyzer: "pe", parsed: pe };
+    if (pe) {
+      return {
+        analyzer: "pe",
+        parsed: isPeWindowsParseResult(pe) ? await enrichPeImportMetadata(pe) : pe
+      };
+    }
   }
   const mz = await parseMz(file);
   if (!mz) return null;

@@ -2,6 +2,7 @@
 
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
+import type { WinapiMetadataEntry } from "../../../winapi-metadata-schema.js";
 import { readMappedNullTerminatedAsciiString } from "../strings/mapped-ascii-string.js";
 import {
   IMAGE_THUNK_DATA32_SIZE,
@@ -14,7 +15,12 @@ import {
 // Microsoft PE format, Import Directory Table: IMAGE_IMPORT_DESCRIPTOR is five DWORDs.
 const IMAGE_IMPORT_DESCRIPTOR_SIZE = 20;
 
-export interface PeImportFunction { ordinal?: number; hint?: number; name?: string }
+export interface PeImportFunction {
+  ordinal?: number;
+  hint?: number;
+  name?: string;
+  winapiMetadata?: WinapiMetadataEntry;
+}
 
 export type PeImportLookupSource = "import-lookup-table" | "iat-fallback" | "missing";
 
