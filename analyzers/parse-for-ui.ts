@@ -41,7 +41,7 @@ import { parsePcap } from "./pcap/index.js";
 import { parsePcapNg } from "./pcapng/index.js";
 import { parseGzip } from "./gzip/index.js";
 import type { GzipParseResult } from "./gzip/types.js";
-import { enrichPeImportMetadata } from "./pe/imports/winapi-metadata.js";
+import { enrichPeImportMetadata } from "./pe/imports/api-metadata.js";
 
 type Fb2Parser = typeof parseFb2;
 type GzipParser = (file: File) => Promise<GzipParseResult | null>;

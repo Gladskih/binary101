@@ -1,5 +1,15 @@
 "use strict";
 
+import {
+  isPeImportMetadataEntry,
+  isPlainNumber,
+  isPlainRecord,
+  isPlainString,
+  isPlainStringArray,
+  type PeImportMetadataEntry,
+  type PeImportMetadataParameter
+} from "./pe-import-metadata-schema.js";
+
 export const WINAPI_METADATA_FORMAT_VERSION = 1;
 
 export interface WinapiMetadataSource {
@@ -35,31 +45,9 @@ export interface WinapiMetadataManifest {
   chunks: WinapiMetadataManifestChunk[];
 }
 
-export interface WinapiMetadataParameter {
-  name: string | null;
-  type: string;
-  rawType: string | null;
-  x86StackBytes: number | null;
-}
+export type WinapiMetadataParameter = PeImportMetadataParameter;
 
-export interface WinapiMetadataEntry {
-  id: string;
-  module: string;
-  entrypoint: string;
-  namespace: string | null;
-  api: string;
-  signature: string;
-  returnType: string;
-  rawReturnType: string | null;
-  parameters: WinapiMetadataParameter[];
-  callingConvention: string;
-  x86StackBytes: number | null;
-  variadic: boolean;
-  setLastError: boolean;
-  characterSet: string | null;
-  architecture: string[];
-  platform: string[];
-}
+export type WinapiMetadataEntry = PeImportMetadataEntry & { sourceKind: "winapi" };
 
 export interface WinapiMetadataChunk {
   formatVersion: typeof WINAPI_METADATA_FORMAT_VERSION;
@@ -80,22 +68,11 @@ export interface WinapiMetadataEntrypointIndex {
   entries: Record<string, string[]>;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+const isRecord = isPlainRecord;
+const isString = isPlainString;
 
-const isString = (value: unknown): value is string => typeof value === "string";
-
-const isStringOrNull = (value: unknown): value is string | null =>
-  value === null || isString(value);
-
-const isNumber = (value: unknown): value is number =>
-  typeof value === "number" && Number.isFinite(value);
-
-const isNumberOrNull = (value: unknown): value is number | null =>
-  value === null || isNumber(value);
-
-const isStringArray = (value: unknown): value is string[] =>
-  Array.isArray(value) && value.every(isString);
+const isNumber = isPlainNumber;
+const isStringArray = isPlainStringArray;
 
 const isSource = (value: unknown): value is WinapiMetadataSource =>
   isRecord(value) &&
@@ -132,32 +109,8 @@ export const isWinapiMetadataManifest = (value: unknown): value is WinapiMetadat
   Array.isArray(value["chunks"]) &&
   value["chunks"].every(isManifestChunk);
 
-const isParameter = (value: unknown): value is WinapiMetadataParameter =>
-  isRecord(value) &&
-  isStringOrNull(value["name"]) &&
-  isString(value["type"]) &&
-  isStringOrNull(value["rawType"]) &&
-  isNumberOrNull(value["x86StackBytes"]);
-
 const isEntry = (value: unknown): value is WinapiMetadataEntry =>
-  isRecord(value) &&
-  isString(value["id"]) &&
-  isString(value["module"]) &&
-  isString(value["entrypoint"]) &&
-  isStringOrNull(value["namespace"]) &&
-  isString(value["api"]) &&
-  isString(value["signature"]) &&
-  isString(value["returnType"]) &&
-  isStringOrNull(value["rawReturnType"]) &&
-  Array.isArray(value["parameters"]) &&
-  value["parameters"].every(isParameter) &&
-  isString(value["callingConvention"]) &&
-  isNumberOrNull(value["x86StackBytes"]) &&
-  typeof value["variadic"] === "boolean" &&
-  typeof value["setLastError"] === "boolean" &&
-  isStringOrNull(value["characterSet"]) &&
-  isStringArray(value["architecture"]) &&
-  isStringArray(value["platform"]);
+  isPeImportMetadataEntry(value) && value.sourceKind === "winapi";
 
 const isEntryRecord = (value: unknown): value is Record<string, WinapiMetadataEntry> =>
   isRecord(value) && Object.values(value).every(isEntry);

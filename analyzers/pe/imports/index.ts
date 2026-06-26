@@ -2,6 +2,7 @@
 
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
+import type { PeImportMetadataEntry } from "../../../pe-import-metadata-schema.js";
 import type { WinapiMetadataEntry } from "../../../winapi-metadata-schema.js";
 import { readMappedNullTerminatedAsciiString } from "../strings/mapped-ascii-string.js";
 import {
@@ -19,6 +20,7 @@ export interface PeImportFunction {
   ordinal?: number;
   hint?: number;
   name?: string;
+  apiMetadata?: PeImportMetadataEntry;
   winapiMetadata?: WinapiMetadataEntry;
 }
 

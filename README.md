@@ -48,12 +48,14 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
 - `npm run generate:winapi-metadata` &mdash; download the pinned
   `Microsoft.Windows.SDK.Win32Metadata` NuGet package, extract
   `Windows.Win32.winmd`, and generate PE import-enrichment JSON assets.
-- `npm run validate:winapi-metadata` &mdash; validate the generated WinAPI
-  metadata manifest and per-DLL chunks.
-- `npm run build:with-winapi-metadata` &mdash; generate and validate WinAPI
+- `npm run generate:ucrt-metadata` &mdash; download pinned Windows SDK C++
+  packages and generate UCRT PE import-enrichment JSON assets.
+- `npm run validate:api-metadata` &mdash; validate generated WinAPI and UCRT
+  metadata manifests and per-DLL chunks.
+- `npm run build:with-api-metadata` &mdash; generate and validate PE import
   metadata, then build the static site.
-- WinAPI metadata asset details live in
-  [`docs/winapi-metadata.md`](docs/winapi-metadata.md).
+- PE import metadata details live in
+  [`docs/pe-import-metadata.md`](docs/pe-import-metadata.md).
 
 ## Project Structure (high level)
 - `index.html` & `style.css` &mdash; Vite HTML entry and page styling.

@@ -102,6 +102,19 @@ const findCentralDirectoryEntry = (bytes: Uint8Array, entryName: string): ZipEnt
   throw new Error(`ZIP entry "${entryName}" was not found.`);
 };
 
+export const listZipEntries = (bytes: Uint8Array): string[] => {
+  const directory = findEndOfCentralDirectory(bytes);
+  const names: string[] = [];
+  let offset = directory.offset;
+  for (let index = 0; index < directory.entryCount; index += 1) {
+    const parsed = readCentralDirectoryEntry(bytes, offset);
+    names.push(parsed.entry.name);
+    offset = parsed.nextOffset;
+    if (offset > directory.offset + directory.size) break;
+  }
+  return names;
+};
+
 const readCompressedEntryData = (bytes: Uint8Array, entry: ZipEntry): Uint8Array => {
   const offset = entry.localHeaderOffset;
   if (readU32(bytes, offset, "local-file-header signature") !== ZIP_LOCAL_FILE_HEADER_SIGNATURE) {

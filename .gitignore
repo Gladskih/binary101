@@ -15,6 +15,7 @@ public/vendor/iced-x86/
 
 # Generated WinAPI metadata assets
 public/winapi-metadata/*.json
+public/ucrt-metadata/*.json
 
 # External binary fixtures
 external-pe-fixtures/

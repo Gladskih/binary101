@@ -1,6 +1,7 @@
 "use strict";
 
 import type { FileRangeReader } from "../../file-range-reader.js";
+import type { PeImportMetadataEntry } from "../../../pe-import-metadata-schema.js";
 import type { WinapiMetadataEntry } from "../../../winapi-metadata-schema.js";
 import { readMappedNullTerminatedAsciiString } from "../strings/mapped-ascii-string.js";
 import type { RvaToOffset } from "../types.js";
@@ -21,6 +22,7 @@ export interface PeDelayImportFunction {
   ordinal?: number;
   hint?: number;
   name?: string;
+  apiMetadata?: PeImportMetadataEntry;
   winapiMetadata?: WinapiMetadataEntry;
 }
 export type DelayThunkTable = { functions: PeDelayImportFunction[]; terminated: boolean };

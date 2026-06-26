@@ -137,6 +137,7 @@ const createEntry = (
   if (!api || !module || !entrypoint || !isLoadableImportScope(module)) return null;
   const parameters = buildWinapiParameters(method, tables);
   return {
+    sourceKind: "winapi",
     id: `MethodDef:${tokenHex(method)};ImplMap:${implMap.row}`,
     module,
     entrypoint,

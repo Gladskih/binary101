@@ -6,24 +6,29 @@ import {
   renderDirectIatRefsHeaders,
   type DirectIatReferenceCounts
 } from "./direct-iat-references.js";
+import type { PeImportMetadataEntry } from "../../pe-import-metadata-schema.js";
 import type { WinapiMetadataEntry } from "../../winapi-metadata-schema.js";
 
 interface ImportFunctionRow {
   ordinal?: number;
   hint?: number;
   name?: string;
+  apiMetadata?: PeImportMetadataEntry;
   winapiMetadata?: WinapiMetadataEntry;
 }
 
-const renderWinapiMetadataCell = (entry: WinapiMetadataEntry | undefined): string => {
+const sourceLabel = (entry: PeImportMetadataEntry): string =>
+  entry.sourceKind === "ucrt" ? "UCRT" : "Win32Metadata";
+
+const renderApiMetadataCell = (entry: PeImportMetadataEntry | undefined): string => {
   if (!entry) return `<td class="winapiMetadataCell">-</td>`;
   const callingConvention = entry.variadic
     ? `${entry.callingConvention}, variadic`
     : entry.callingConvention;
   return `<td class="winapiMetadataCell">` +
-    `<span class="winapiMetadataNamespace">${escapeHtml(entry.namespace ?? "Win32Metadata")}</span>` +
+    `<span class="winapiMetadataNamespace">${escapeHtml(entry.namespace ?? sourceLabel(entry))}</span>` +
     `<code class="winapiMetadataSignature">${escapeHtml(entry.signature)}</code>` +
-    `<span class="winapiMetadataConvention">${escapeHtml(callingConvention)}</span>` +
+    `<span class="winapiMetadataConvention">${escapeHtml(`${sourceLabel(entry)} - ${callingConvention}`)}</span>` +
     `</td>`;
 };
 
@@ -44,7 +49,7 @@ const renderFunctionRow = (
   const directIatRefs = renderDirectIatRefsCells(counts, iatRva, functionIndex, entrySize);
   const hint = fn.hint != null ? String(fn.hint) : "-";
   return `<tr><td>${functionIndex + 1}</td><td>${hint}</td><td>${renderImportName(fn)}</td>` +
-    `${renderWinapiMetadataCell(fn.winapiMetadata)}${directIatRefs}</tr>`;
+    `${renderApiMetadataCell(fn.apiMetadata ?? fn.winapiMetadata)}${directIatRefs}</tr>`;
 };
 
 export const renderImportFunctionTable = (
@@ -58,6 +63,6 @@ export const renderImportFunctionTable = (
     renderFunctionRow(fn, index, iatRva, counts, entrySize));
   return `<div class="tableWrap"><table class="table" data-sort-state-key="${escapeHtml(sortKey)}" ` +
     `style="margin-top:.35rem"><thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th>` +
-    `<th>WinAPI</th>${renderDirectIatRefsHeaders()}</tr></thead><tbody>` +
+    `<th>API</th>${renderDirectIatRefsHeaders()}</tr></thead><tbody>` +
     `${rows.join("")}</tbody></table></div>`;
 };

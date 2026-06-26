@@ -112,7 +112,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Build
-        run: npm run build:with-winapi-metadata
+        run: npm run build:with-api-metadata
 
       - name: Test (e2e)
         run: npm run test:e2e

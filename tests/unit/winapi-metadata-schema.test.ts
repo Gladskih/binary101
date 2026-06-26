@@ -44,6 +44,7 @@ const chunk: WinapiMetadataChunk = {
   entryCount: 1,
   entries: {
     Sleep: {
+      sourceKind: "winapi",
       id: "MethodDef:0x06000001;ImplMap:1",
       module: "KERNEL32.dll",
       entrypoint: "Sleep",

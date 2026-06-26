@@ -3,9 +3,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  createPeImportMetadataLookup,
   createWinapiMetadataLookup,
   enrichPeImportMetadata
 } from "../../../../../analyzers/pe/imports/winapi-metadata.js";
+import type {
+  UcrtMetadataChunk,
+  UcrtMetadataEntry,
+  UcrtMetadataManifest
+} from "../../../../../ucrt-metadata-schema.js";
 import type {
   WinapiMetadataChunk,
   WinapiMetadataEntrypointIndex,
@@ -20,11 +26,21 @@ const source = {
   fileName: "Windows.Win32.winmd"
 };
 
+const ucrtSource = {
+  headerPackageName: "Microsoft.Windows.SDK.CPP",
+  importLibraryPackageName: "Microsoft.Windows.SDK.CPP.x64",
+  packageVersion: "10.0.28000.1839",
+  headerRoot: "c/Include/10.0.28000.0/ucrt",
+  importLibraryPath: "c/ucrt/x64/ucrt.lib",
+  architecture: "x64"
+};
+
 const createEntry = (
   module: string,
   entrypoint: string,
   namespace = "Windows.Win32.System.Threading"
 ): WinapiMetadataEntry => ({
+  sourceKind: "winapi",
   id: `MethodDef:${module}:${entrypoint}`,
   module,
   entrypoint,
@@ -43,6 +59,26 @@ const createEntry = (
   platform: ["windows5.1.2600"]
 });
 
+const createUcrtEntry = (module: string, entrypoint: string): UcrtMetadataEntry => ({
+  sourceKind: "ucrt",
+  id: `UCRT:${module}:${entrypoint}`,
+  module,
+  entrypoint,
+  namespace: "UCRT.stdio",
+  api: entrypoint,
+  signature: `int ${entrypoint}(const char * format, ...)`,
+  returnType: "int",
+  rawReturnType: "int",
+  parameters: [{ name: "format", type: "const char *", rawType: "const char *", x86StackBytes: 4 }],
+  callingConvention: "cdecl",
+  x86StackBytes: 0,
+  variadic: true,
+  setLastError: false,
+  characterSet: null,
+  architecture: [],
+  platform: []
+});
+
 const createChunk = (
   dll: string,
   entries: Record<string, WinapiMetadataEntry>
@@ -50,6 +86,19 @@ const createChunk = (
   formatVersion: 1,
   generatedAt: "2026-06-26T00:00:00.000Z",
   source,
+  dll,
+  moduleKey: dll.toLowerCase(),
+  entryCount: Object.keys(entries).length,
+  entries
+});
+
+const createUcrtChunk = (
+  dll: string,
+  entries: Record<string, UcrtMetadataEntry>
+): UcrtMetadataChunk => ({
+  formatVersion: 1,
+  generatedAt: "2026-06-26T00:00:00.000Z",
+  source: ucrtSource,
   dll,
   moduleKey: dll.toLowerCase(),
   entryCount: Object.keys(entries).length,
@@ -84,6 +133,22 @@ const entrypointIndex: WinapiMetadataEntrypointIndex = {
     MessageBoxW: ["user32.dll"],
     Sleep: ["kernel32.dll"]
   }
+};
+
+const ucrtManifest: UcrtMetadataManifest = {
+  formatVersion: 1,
+  generatedAt: "2026-06-26T00:00:00.000Z",
+  source: ucrtSource,
+  entryCounts: { dlls: 2, entries: 2 },
+  chunks: [
+    {
+      dll: "api-ms-win-crt-stdio-l1-1-0.dll",
+      moduleKey: "api-ms-win-crt-stdio-l1-1-0.dll",
+      path: "api-ms-win-crt-stdio-l1-1-0.dll.json",
+      entries: 1
+    },
+    { dll: "ucrtbase.dll", moduleKey: "ucrtbase.dll", path: "ucrtbase.dll.json", entries: 1 }
+  ]
 };
 
 const createLookup = (seenPaths: string[] = []) => {
@@ -134,4 +199,35 @@ void test("enrichPeImportMetadata does not mix decorated Ansi and Unicode entryp
   const enriched = await enrichPeImportMetadata(pe, createLookup());
 
   assert.equal(enriched.imports.entries[1]?.functions[0]?.winapiMetadata, undefined);
+});
+
+void test("enrichPeImportMetadata attaches UCRT metadata for api-ms-win-crt imports", async () => {
+  const seenPaths: string[] = [];
+  const assets: Record<string, unknown> = {
+    "winapi-metadata/manifest.json": manifest,
+    "ucrt-metadata/manifest.json": ucrtManifest,
+    "ucrt-metadata/api-ms-win-crt-stdio-l1-1-0.dll.json": createUcrtChunk(
+      "api-ms-win-crt-stdio-l1-1-0.dll",
+      { printf: createUcrtEntry("api-ms-win-crt-stdio-l1-1-0.dll", "printf") }
+    ),
+    "ucrt-metadata/ucrtbase.dll.json": createUcrtChunk(
+      "ucrtbase.dll",
+      { printf: createUcrtEntry("ucrtbase.dll", "printf") }
+    )
+  };
+  const pe = createPeWithImportLinking();
+  pe.imports.entries[0]!.dll = "api-ms-win-crt-stdio-l1-1-0.dll";
+  pe.imports.entries[0]!.functions = [{ hint: 1, name: "printf" }];
+  const lookup = createPeImportMetadataLookup(async path => {
+    seenPaths.push(path);
+    return assets[path] ?? null;
+  });
+
+  const enriched = await enrichPeImportMetadata(pe, lookup);
+
+  assert.equal(enriched.imports.entries[0]?.functions[0]?.apiMetadata?.sourceKind, "ucrt");
+  assert.equal(enriched.imports.entries[0]?.functions[0]?.apiMetadata?.module, "api-ms-win-crt-stdio-l1-1-0.dll");
+  assert.equal(enriched.imports.entries[0]?.functions[0]?.winapiMetadata, undefined);
+  assert.ok(seenPaths.includes("ucrt-metadata/manifest.json"));
+  assert.ok(!seenPaths.includes("winapi-metadata/entrypoint-index.json"));
 });

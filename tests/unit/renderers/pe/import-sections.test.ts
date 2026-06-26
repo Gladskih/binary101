@@ -18,6 +18,7 @@ import {
   createPeWithInferredEagerIatOnly
 } from "../../../fixtures/pe-import-linking-fixture.js";
 import type { PeWindowsParseResult } from "../../../../analyzers/pe/index.js";
+import type { PeImportMetadataEntry } from "../../../../pe-import-metadata-schema.js";
 import type { WinapiMetadataEntry } from "../../../../winapi-metadata-schema.js";
 
 const DIRECT_IAT_REFERENCE_COLUMN_COUNT = 2;
@@ -26,6 +27,7 @@ const DIRECT_JUMP_REFERENCE_COUNT = 1;
 const NO_DIRECT_IAT_REFERENCES = 0;
 
 const sleepMetadata = (): WinapiMetadataEntry => ({
+  sourceKind: "winapi",
   id: "MethodDef:0x06000001;ImplMap:1",
   module: "KERNEL32.dll",
   entrypoint: "Sleep",
@@ -42,6 +44,26 @@ const sleepMetadata = (): WinapiMetadataEntry => ({
   characterSet: null,
   architecture: [],
   platform: ["windows5.1.2600"]
+});
+
+const printfMetadata = (): PeImportMetadataEntry => ({
+  sourceKind: "ucrt",
+  id: "UCRT:ucrtbase.dll:printf",
+  module: "ucrtbase.dll",
+  entrypoint: "printf",
+  namespace: "UCRT.stdio",
+  api: "printf",
+  signature: "int printf(const char * format, ...)",
+  returnType: "int",
+  rawReturnType: "int",
+  parameters: [{ name: "format", type: "const char *", rawType: "const char *", x86StackBytes: 4 }],
+  callingConvention: "cdecl",
+  x86StackBytes: 0,
+  variadic: true,
+  setLastError: false,
+  characterSet: null,
+  architecture: [],
+  platform: []
 });
 
 void test("renderImportLinking and related sections surface confirmed and non-canonical import relationships", () => {
@@ -71,7 +93,7 @@ void test("renderImportLinking and related sections surface confirmed and non-ca
   assert.ok(html.includes("Window manager, message, input, menu, dialog"));
   assert.ok(html.includes("<td>Sleep</td>"));
   assert.ok(html.includes("<td>MessageBoxW</td>"));
-  assert.ok(html.includes("<th>WinAPI</th>"));
+  assert.ok(html.includes("<th>API</th>"));
   assert.ok(html.includes("Windows.Win32.System.Threading"));
   assert.ok(html.includes("void Sleep(u4 dwMilliseconds)"));
   assert.ok(!html.includes("learn.microsoft.com/search"));
@@ -90,6 +112,20 @@ void test("renderImportLinking and related sections surface confirmed and non-ca
   assert.ok(!html.includes("Show linked modules"));
   assert.ok(!html.includes("Show bound imports"));
   assert.ok(!html.includes("Show inferred eager IAT ranges"));
+});
+
+void test("renderImports shows UCRT import metadata from generic API enrichment", () => {
+  const pe = createPeWithImportLinking();
+  pe.imports.entries[0]!.dll = "ucrtbase.dll";
+  pe.imports.entries[0]!.functions = [{ hint: 1, name: "printf", apiMetadata: printfMetadata() }];
+  const out: string[] = [];
+
+  renderImports(pe, out);
+
+  const html = out.join("");
+  assert.ok(html.includes("UCRT.stdio"));
+  assert.ok(html.includes("int printf(const char * format, ...)"));
+  assert.ok(html.includes("UCRT - cdecl, variadic"));
 });
 
 void test("renderIat shows inferred eager IAT ranges even when IMAGE_DIRECTORY_ENTRY_IAT is absent", () => {
