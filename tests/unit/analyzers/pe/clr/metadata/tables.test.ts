@@ -22,6 +22,9 @@ const CLR_METADATA_STREAM_COUNT = 3;
 // ECMA-335 II.24.2.6 Valid mask table ids used by this fixture.
 const TABLE_MODULE = 0x00;
 const TABLE_TYPE_REF = 0x01;
+const TABLE_TYPE_DEF = 0x02;
+const TABLE_METHOD_DEF = 0x06;
+const TABLE_PARAM = 0x08;
 const TABLE_MEMBER_REF = 0x0a;
 const TABLE_CUSTOM_ATTRIBUTE = 0x0c;
 const TABLE_ASSEMBLY = 0x20;
@@ -70,6 +73,10 @@ const writeU32 = (bytes: number[], value: number): void => {
 interface MetadataStringIndexes {
   module: number;
   assembly: number;
+  apiTypeNamespace: number;
+  apiTypeName: number;
+  methodName: number;
+  parameterName: number;
   attributeNamespace: number;
   attributeName: number;
   ctor: number;
@@ -78,6 +85,7 @@ interface MetadataStringIndexes {
 interface MetadataBlobIndexes {
   assemblyPublicKey: number;
   ctorSignature: number;
+  methodSignature: number;
   targetFrameworkAttribute: number;
 }
 
@@ -89,6 +97,13 @@ interface MetadataStreamPlacement {
 
 const stringConstructorSignature = (): number[] => [
   METHOD_SIGNATURE_HASTHIS,
+  1,
+  ELEMENT_TYPE_VOID,
+  ELEMENT_TYPE_STRING
+];
+
+const testApiSignature = (): number[] => [
+  0,
   1,
   ELEMENT_TYPE_VOID,
   ELEMENT_TYPE_STRING
@@ -120,12 +135,20 @@ const createMetadataTableStream = (
     0,
     CLR_METADATA_TABLE_STREAM_RESERVED2
   );
-  writeU32(bytes, tableMask(TABLE_MODULE, TABLE_TYPE_REF, TABLE_MEMBER_REF, TABLE_CUSTOM_ATTRIBUTE));
-  writeU32(bytes, 1);
+  writeU32(bytes, tableMask(
+    TABLE_MODULE,
+    TABLE_TYPE_REF,
+    TABLE_TYPE_DEF,
+    TABLE_METHOD_DEF,
+    TABLE_PARAM,
+    TABLE_MEMBER_REF,
+    TABLE_CUSTOM_ATTRIBUTE
+  ));
+  writeU32(bytes, 1 << (TABLE_ASSEMBLY - 32));
   writeU32(bytes, 0);
   writeU32(bytes, 0);
-  // Row counts are stored in ascending table-id order for the five present tables.
-  [1, 1, 1, 1, 1].forEach(count => writeU32(bytes, count));
+  // Row counts are stored in ascending table-id order for the eight present tables.
+  [1, 1, 1, 1, 1, 1, 1, 1].forEach(count => writeU32(bytes, count));
   writeU16(bytes, 0);
   writeU16(bytes, strings.module);
   writeU16(bytes, 0);
@@ -134,10 +157,25 @@ const createMetadataTableStream = (
   writeU16(bytes, 0);
   writeU16(bytes, strings.attributeName);
   writeU16(bytes, strings.attributeNamespace);
+  writeU32(bytes, 0);
+  writeU16(bytes, strings.apiTypeName);
+  writeU16(bytes, strings.apiTypeNamespace);
+  writeU16(bytes, 0);
+  writeU16(bytes, 1);
+  writeU16(bytes, 1);
+  writeU32(bytes, 0);
+  writeU16(bytes, 0);
+  writeU16(bytes, 0);
+  writeU16(bytes, strings.methodName);
+  writeU16(bytes, blobs.methodSignature);
+  writeU16(bytes, 1);
+  writeU16(bytes, 0);
+  writeU16(bytes, 1);
+  writeU16(bytes, strings.parameterName);
   writeU16(bytes, (1 << 3) | 1);
   writeU16(bytes, strings.ctor);
   writeU16(bytes, blobs.ctorSignature);
-  writeU16(bytes, (1 << 5) | TABLE_ASSEMBLY);
+  writeU16(bytes, (1 << 5) | 14);
   writeU16(bytes, (1 << 3) | 3);
   writeU16(bytes, blobs.targetFrameworkAttribute);
   writeU32(bytes, ASSEMBLY_HASH_ALGORITHM_SHA1);
@@ -154,6 +192,10 @@ const createClrFileWithMetadataTables = (): MockFile => {
   const strings = {
     module: addString(stringHeap, "TestApp.dll"),
     assembly: addString(stringHeap, "TestApp"),
+    apiTypeNamespace: addString(stringHeap, "Windows.Win32.Tests"),
+    apiTypeName: addString(stringHeap, "Apis"),
+    methodName: addString(stringHeap, "TestApi"),
+    parameterName: addString(stringHeap, "value"),
     attributeNamespace: addString(stringHeap, "System.Runtime.Versioning"),
     attributeName: addString(stringHeap, "TargetFrameworkAttribute"),
     ctor: addString(stringHeap, ".ctor")
@@ -162,6 +204,7 @@ const createClrFileWithMetadataTables = (): MockFile => {
   const blobs = {
     assemblyPublicKey: addBlob(blobHeap, generatedAssemblyPublicKey()),
     ctorSignature: addBlob(blobHeap, stringConstructorSignature()),
+    methodSignature: addBlob(blobHeap, testApiSignature()),
     targetFrameworkAttribute: addBlob(blobHeap, targetFrameworkAttributeBlob())
   };
   const tableStream = createMetadataTableStream(strings, blobs);
@@ -214,6 +257,10 @@ void test("parseClrDirectory decodes ECMA-335 metadata tables and TargetFramewor
   assert.strictEqual(metadata.assembly?.version, "1.2.3.4");
   assert.deepStrictEqual(metadata.assembly?.publicKey, generatedAssemblyPublicKey());
   assert.strictEqual(metadata.typeRefs[0]?.fullName, "System.Runtime.Versioning.TargetFrameworkAttribute");
+  assert.strictEqual(metadata.typeDefs[0]?.methodEnd, 1);
+  assert.strictEqual(metadata.methodDefs[0]?.ownerType, "Windows.Win32.Tests.Apis");
+  assert.strictEqual(metadata.methodDefs[0]?.parameters?.[0]?.name, "value");
+  assert.strictEqual(metadata.parameters[0]?.sequence, 1);
   assert.strictEqual(targetFramework.attributeType, "System.Runtime.Versioning.TargetFrameworkAttribute");
   assert.strictEqual(targetFramework.fixedArguments[0]?.value, ".NETCoreApp,Version=v8.0");
   assert.strictEqual(targetFramework.namedArguments[0]?.value, ".NET 8.0");

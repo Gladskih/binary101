@@ -151,6 +151,7 @@ void test("renderClr decodes managed entrypoint tokens, metadata stream types, a
         typeRefs: [],
         typeDefs: [],
         methodDefs: [],
+        parameters: [],
         memberRefs: [],
         moduleRefs: [],
         implMaps: [],

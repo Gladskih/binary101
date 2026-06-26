@@ -8,6 +8,7 @@ import type {
   PeClrMethodDefinitionInfo,
   PeClrModuleInfo,
   PeClrModuleReferenceInfo,
+  PeClrParameterInfo,
   PeClrTypeDefinitionInfo,
   PeClrTypeReferenceInfo
 } from "./types.js";
@@ -34,6 +35,7 @@ import {
   TABLE_METHOD_DEF,
   TABLE_MODULE,
   TABLE_MODULE_REF,
+  TABLE_PARAM,
   TABLE_TYPE_DEF,
   TABLE_TYPE_REF
 } from "./metadata-schema.js";
@@ -127,6 +129,16 @@ const createTypeRefs = (
     };
   });
 
+const methodEndForType = (
+  methodStart: number,
+  nextMethodStart: number | null,
+  methodRowCount: number
+): number | null => {
+  if (methodStart <= 0 || methodStart > methodRowCount) return null;
+  if (nextMethodStart != null) return nextMethodStart > methodStart ? nextMethodStart - 1 : null;
+  return methodRowCount;
+};
+
 const createTypeDefs = (
   rows: ClrMetadataRow[],
   heaps: ClrHeapReaders,
@@ -137,7 +149,7 @@ const createTypeDefs = (
     const name = getString(heaps, row, "TypeName", `TypeDef row ${index + 1}`);
     const namespaceName = getString(heaps, row, "TypeNamespace", `TypeDef row ${index + 1}`);
     const methodStart = cellIndex(row, "MethodList").row;
-    const nextMethodStart = nextRow ? cellIndex(nextRow, "MethodList").row : methodRowCount + 1;
+    const nextMethodStart = nextRow ? cellIndex(nextRow, "MethodList").row : null;
     return {
       row: index + 1,
       name,
@@ -147,7 +159,7 @@ const createTypeDefs = (
       extends: cellIndex(row, "Extends"),
       fieldStart: cellIndex(row, "FieldList").row,
       methodStart,
-      methodEnd: methodStart > 0 && nextMethodStart > methodStart ? nextMethodStart - 1 : null
+      methodEnd: methodEndForType(methodStart, nextMethodStart, methodRowCount)
     };
   });
 
@@ -156,15 +168,41 @@ const ownerForMethod = (
   typeDefs: PeClrTypeDefinitionInfo[]
 ): string | null =>
   typeDefs.find(typeDef =>
-    methodRow >= typeDef.methodStart && (typeDef.methodEnd == null || methodRow <= typeDef.methodEnd)
+    typeDef.methodEnd != null && methodRow >= typeDef.methodStart && methodRow <= typeDef.methodEnd
   )?.fullName ?? null;
+
+const createParameters = (
+  rows: ClrMetadataRow[],
+  heaps: ClrHeapReaders
+): PeClrParameterInfo[] =>
+  rows.map((row, index) => ({
+    row: index + 1,
+    flags: cellNumber(row, "Flags"),
+    sequence: cellNumber(row, "Sequence"),
+    name: getString(heaps, row, "Name", `Param row ${index + 1}`)
+  }));
+
+const parametersForMethod = (
+  row: ClrMetadataRow,
+  nextRow: ClrMetadataRow | undefined,
+  parameters: PeClrParameterInfo[]
+): PeClrParameterInfo[] => {
+  const parameterStart = cellIndex(row, "ParamList").row;
+  const nextParameterStart = nextRow ? cellIndex(nextRow, "ParamList").row : parameters.length + 1;
+  if (parameterStart <= 0 || parameterStart > parameters.length || nextParameterStart <= parameterStart) {
+    return [];
+  }
+  return parameters.slice(parameterStart - 1, Math.min(parameters.length, nextParameterStart - 1));
+};
 
 const createMethodDefs = (
   rows: ClrMetadataRow[],
   heaps: ClrHeapReaders,
-  typeDefs: PeClrTypeDefinitionInfo[]
+  typeDefs: PeClrTypeDefinitionInfo[],
+  parameters: PeClrParameterInfo[]
 ): PeClrMethodDefinitionInfo[] =>
   rows.map((row, index) => {
+    const methodParameters = parametersForMethod(row, rows[index + 1], parameters);
     const signatureBlobIndex = cellNumber(row, "Signature");
     const context = `MethodDef row ${index + 1}.Signature`;
     const signature = parseMethodSignature(heaps.getBlob(signatureBlobIndex, context), context);
@@ -176,7 +214,8 @@ const createMethodDefs = (
       implFlags: cellNumber(row, "ImplFlags"),
       flags: cellNumber(row, "Flags"),
       signatureBlobIndex,
-      ...(signature ? { signature } : {})
+      ...(signature ? { signature } : {}),
+      ...(methodParameters.length ? { parameters: methodParameters } : {})
     };
   });
 
@@ -203,7 +242,8 @@ export const buildClrMetadataTables = (
     heaps,
     tableRows(parsed, TABLE_METHOD_DEF).length
   );
-  const methodDefs = createMethodDefs(tableRows(parsed, TABLE_METHOD_DEF), heaps, typeDefs);
+  const parameters = createParameters(tableRows(parsed, TABLE_PARAM), heaps);
+  const methodDefs = createMethodDefs(tableRows(parsed, TABLE_METHOD_DEF), heaps, typeDefs, parameters);
   const resolutionTables = {
     modules, assembly, assemblyRefs, typeRefs, typeDefs, methodDefs, moduleRefs
   };
@@ -245,6 +285,7 @@ export const buildClrMetadataTables = (
     typeRefs,
     typeDefs,
     methodDefs,
+    parameters,
     memberRefs,
     moduleRefs,
     implMaps,

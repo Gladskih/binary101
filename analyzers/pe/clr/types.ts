@@ -74,6 +74,13 @@ export interface PeClrTypeDefinitionInfo {
   methodEnd: number | null;
 }
 
+export interface PeClrParameterInfo {
+  row: number;
+  flags: number;
+  sequence: number;
+  name: string | null;
+}
+
 export interface PeClrMethodSignature {
   callingConvention: number;
   genericParameterCount?: number;
@@ -92,6 +99,7 @@ export interface PeClrMethodDefinitionInfo {
   flags: number;
   signatureBlobIndex: number;
   signature?: PeClrMethodSignature;
+  parameters?: PeClrParameterInfo[];
 }
 
 export interface PeClrMemberReferenceInfo {
@@ -186,6 +194,7 @@ export interface PeClrMetadataTables {
   typeRefs: PeClrTypeReferenceInfo[];
   typeDefs: PeClrTypeDefinitionInfo[];
   methodDefs: PeClrMethodDefinitionInfo[];
+  parameters: PeClrParameterInfo[];
   memberRefs: PeClrMemberReferenceInfo[];
   moduleRefs: PeClrModuleReferenceInfo[];
   implMaps: PeClrImplementationMapInfo[];
