@@ -15,8 +15,10 @@ import {
   collectDirectIatSlotRvas,
   createDirectIatReferenceCounter
 } from "./import-references.js";
+import { createPeApiStringReferenceCollector } from "./api-string-references.js";
 
 type PeInstructionSetDecodeRun = {
+  reader: FileRangeReader;
   iced: IcedX86Module;
   bitness: 32 | 64;
   imageBase: bigint;
@@ -34,6 +36,7 @@ type PeInstructionSetDecodeResult = {
   instructionCount: number;
   invalidInstructionCount: number;
   directIatReferences: PeInstructionSetReport["directIatReferences"];
+  apiStringReferences: PeInstructionSetReport["apiStringReferences"];
   instructionSets: PeInstructionSetReport["instructionSets"];
 };
 
@@ -73,6 +76,7 @@ export async function analyzePeInstructionSets(
     instructionCount: 0,
     invalidInstructionCount: 0,
     directIatReferences: [],
+    apiStringReferences: [],
     instructionSets: [],
     issues
   });
@@ -126,6 +130,7 @@ export async function analyzePeInstructionSets(
     return emptyReport(bytesSampled);
   }
   const decoded = await decodePeInstructionSetUsage({
+    reader,
     iced,
     bitness,
     imageBase,
@@ -144,6 +149,7 @@ export async function analyzePeInstructionSets(
     instructionCount: decoded.instructionCount,
     invalidInstructionCount: decoded.invalidInstructionCount,
     directIatReferences: decoded.directIatReferences,
+    apiStringReferences: decoded.apiStringReferences,
     instructionSets: decoded.instructionSets,
     issues
   };
@@ -159,6 +165,13 @@ const decodePeInstructionSetUsage = async (
     imageBase,
     run.directIatSlotRvas
   );
+  const apiStringReferences = createPeApiStringReferenceCollector(iced, {
+    imageBase,
+    is64Bit: bitness === 64,
+    imports: run.opts.imports,
+    delayImports: run.opts.delayImports,
+    rvaToOff: run.opts.rvaToOff
+  });
   let bytesDecoded = 0; let instructionCount = 0; let invalidInstructionCount = 0;
   reportProgress(run.opts, {
     stage: "decoding",
@@ -181,6 +194,7 @@ const decodePeInstructionSetUsage = async (
       ...(run.opts.signal ? { signal: run.opts.signal } : {}),
       onInstruction: instruction => {
         directIatReferences.record(instruction);
+        apiStringReferences.record(instruction);
       },
       onYield: async snapshot => {
         bytesDecoded = snapshot.bytesDecoded;
@@ -216,6 +230,7 @@ const decodePeInstructionSetUsage = async (
     instructionCount,
     invalidInstructionCount,
     directIatReferences: directIatReferences.references(),
+    apiStringReferences: await apiStringReferences.references(run.reader),
     instructionSets: instructionSetUsage.instructionSets(),
   };
 };

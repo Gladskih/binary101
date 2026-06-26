@@ -4,6 +4,7 @@ import type { PeDelayImportEntry } from "../imports/delay.js";
 import type { PeImportParseResult } from "../imports/index.js";
 import type { PeLoadConfig } from "../load-config/index.js";
 import type { PeSection, RvaToOffset } from "../types.js";
+import type { PeImportMetadataSourceKind } from "../../../pe-import-metadata-schema.js";
 
 export interface PeInstructionSetUsage {
   id: string;
@@ -18,6 +19,25 @@ export interface PeDirectIatReferenceCount {
   jumpReferenceCount: number;
 }
 
+export type PeApiStringEncoding = "ascii" | "utf-8" | "utf-16le";
+
+export interface PeApiStringCallSite {
+  instructionRva: number;
+  module: string;
+  entrypoint: string;
+  sourceKind: PeImportMetadataSourceKind;
+  parameterIndex: number;
+  parameterName: string | null;
+}
+
+export interface PeApiStringReference {
+  rva: number;
+  encoding: PeApiStringEncoding;
+  byteLength: number;
+  text: string;
+  callSites: PeApiStringCallSite[];
+}
+
 export interface PeInstructionSetReport {
   bitness: 32 | 64;
   bytesSampled: number;
@@ -25,6 +45,7 @@ export interface PeInstructionSetReport {
   instructionCount: number;
   invalidInstructionCount: number;
   directIatReferences: PeDirectIatReferenceCount[];
+  apiStringReferences: PeApiStringReference[];
   instructionSets: PeInstructionSetUsage[];
   issues: string[];
 }

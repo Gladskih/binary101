@@ -3,6 +3,9 @@
 export type {
   AnalyzePeInstructionSetOptions,
   AnalyzePeEntrypointDisassemblyOptions,
+  PeApiStringCallSite,
+  PeApiStringEncoding,
+  PeApiStringReference,
   PeEntrypointDisassemblyBlock,
   PeEntrypointDisassemblyReport,
   PeEntrypointInstruction,

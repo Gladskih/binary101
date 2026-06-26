@@ -200,6 +200,7 @@ void test("import panels render separate call and jump counters from the disasse
         jumpReferenceCount: DIRECT_JUMP_REFERENCE_COUNT
       }
     ],
+    apiStringReferences: [],
     instructionSets: [],
     issues: []
   };

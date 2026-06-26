@@ -28,6 +28,7 @@ const createPe = (): PeWindowsParseResult => ({
       callReferenceCount: CALL_REFERENCE_COUNT,
       jumpReferenceCount: JUMP_REFERENCE_COUNT
     }],
+    apiStringReferences: [],
     instructionSets: [],
     issues: []
   }

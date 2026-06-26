@@ -5,6 +5,10 @@ import { test } from "node:test";
 import { renderInstructionSets } from "../../../../renderers/pe/disassembly.js";
 import { renderEntrypointDisassembly } from "../../../../renderers/pe/entrypoint-disassembly.js";
 import type { PeWindowsParseResult } from "../../../../analyzers/pe/index.js";
+import { inlinePeSectionName } from "../../../../analyzers/pe/sections/name.js";
+
+const STRING_RVA = 0x3000;
+const CALL_RVA = 0x1010;
 
 const createPe = (overrides: Partial<PeWindowsParseResult> = {}): PeWindowsParseResult =>
   ({
@@ -23,6 +27,7 @@ void test("renderInstructionSets renders a chip table", () => {
     instructionCount: 2,
     invalidInstructionCount: 0,
     directIatReferences: [],
+    apiStringReferences: [],
     issues: [],
     instructionSets: [
       { id: "AVX", label: "AVX", description: "Advanced Vector Extensions", instructionCount: 1 }
@@ -54,6 +59,7 @@ void test("renderInstructionSets escapes user-controlled strings", () => {
     instructionCount: 1,
     invalidInstructionCount: 0,
     directIatReferences: [],
+    apiStringReferences: [],
     issues: ["note <b>unsafe</b>"],
     instructionSets: [
       {
@@ -178,6 +184,7 @@ void test("renderInstructionSets renders an empty-state message", () => {
     instructionCount: 0,
     invalidInstructionCount: 0,
     directIatReferences: [],
+    apiStringReferences: [],
     issues: [],
     instructionSets: []
   };
@@ -188,6 +195,52 @@ void test("renderInstructionSets renders an empty-state message", () => {
 
   assert.ok(html.includes("No instruction-set requirements were detected"));
   assert.ok(html.includes("CpuidFeature.SSE"));
+});
+
+void test("renderInstructionSets renders API string references", () => {
+  const pe = createPe({
+    sections: [{
+      name: inlinePeSectionName(".rdata"),
+      virtualAddress: STRING_RVA,
+      virtualSize: 0x80,
+      sizeOfRawData: 0x80,
+      pointerToRawData: 0x200,
+      characteristics: 0
+    }]
+  });
+  pe.disassembly = {
+    bitness: 64,
+    bytesSampled: 4,
+    bytesDecoded: 4,
+    instructionCount: 2,
+    invalidInstructionCount: 0,
+    directIatReferences: [],
+    apiStringReferences: [{
+      rva: STRING_RVA,
+      encoding: "ascii",
+      byteLength: 12,
+      text: `<tag "value"`,
+      callSites: [{
+        instructionRva: CALL_RVA,
+        module: "ucrtbase.dll",
+        entrypoint: "fopen",
+        sourceKind: "ucrt",
+        parameterIndex: 0,
+        parameterName: "_FileName"
+      }]
+    }],
+    issues: [],
+    instructionSets: []
+  };
+
+  const out: string[] = [];
+  renderInstructionSets(pe, out);
+  const html = out.join("");
+
+  assert.ok(html.includes("WinAPI/UCRT string arguments (1)"));
+  assert.ok(html.includes(".rdata"));
+  assert.ok(html.includes("UCRT ucrtbase.dll!fopen _FileName @ 0x00001010"));
+  assert.ok(html.includes("&lt;tag &quot;value&quot;"));
 });
 
 void test("renderInstructionSets renders a progress placeholder before analysis", () => {
