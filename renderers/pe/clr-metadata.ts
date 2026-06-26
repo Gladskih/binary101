@@ -6,7 +6,8 @@ import type {
   PeClrCustomAttributeInfo,
   PeClrMetadataIndex,
   PeClrMetadataTables,
-  PeClrMethodSignature,
+  PeClrMethodDefinitionInfo,
+  PeClrParameterInfo,
   PeClrTypeDefinitionInfo
 } from "../../analyzers/pe/clr/types.js";
 
@@ -31,10 +32,21 @@ const dash = (value: string | number | boolean | null | undefined): string =>
 const indexText = (index: PeClrMetadataIndex): string =>
   index.row === 0 ? "-" : `${index.table} #${index.row}${index.valid ? "" : " (invalid)"}`;
 
-const signatureText = (signature: PeClrMethodSignature | undefined): string => {
-  if (!signature) return "-";
-  const args = signature.parameterTypes.map(type => type || "?").join(", ");
-  return `${signature.returnType || "?"} (${args})`;
+const parameterForSequence = (
+  parameters: PeClrParameterInfo[] | undefined,
+  sequence: number
+): PeClrParameterInfo | undefined => parameters?.find(parameter => parameter.sequence === sequence);
+
+const typedParameterText = (type: string | null, parameter?: PeClrParameterInfo): string =>
+  parameter?.name ? `${type || "?"} ${parameter.name}` : type || "?";
+
+const signatureText = (method: PeClrMethodDefinitionInfo): string => {
+  if (!method.signature) return "-";
+  const args = method.signature.parameterTypes
+    .map((type, index) => typedParameterText(type, parameterForSequence(method.parameters, index + 1)))
+    .join(", ");
+  return typedParameterText(method.signature.returnType, parameterForSequence(method.parameters, 0)) +
+    ` (${args})`;
 };
 
 const fullMethodName = (ownerType: string | null, methodName: string | null): string =>
@@ -160,7 +172,17 @@ const renderTypesAndMethods = (metadata: PeClrMetadataTables): string =>
       escapeHtml(fullMethodName(row.ownerType, row.name)),
       hex(row.rva, 8),
       hex(row.flags, 4),
-      escapeHtml(signatureText(row.signature))
+      escapeHtml(signatureText(row))
+    ])
+  ) +
+  renderSimpleTable(
+    "Parameter rows",
+    ["RID", "Sequence", "Name", "Flags"],
+    metadata.parameters.map(row => [
+      String(row.row),
+      String(row.sequence),
+      dash(row.name),
+      hex(row.flags, 4)
     ])
   );
 
