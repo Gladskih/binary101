@@ -184,7 +184,7 @@ export const runClangAstDump = async (headers: string[]): Promise<string> => {
     "-D_CRT_DECLARE_NONSTDC_NAMES=1",
     "-D_CRT_SECURE_NO_WARNINGS",
     "-D_CRT_NONSTDC_NO_WARNINGS",
-    "-Xclang", "-ast-dump",
+    "-Xclang", "-ast-dump=json",
     "-"
   ];
   return (await runProcess(clangCommand(), args, buildClangInput(headers))).stdout;

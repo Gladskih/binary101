@@ -15,44 +15,52 @@ export interface ClangFunctionDecl {
   score: number;
 }
 
+type ClangAstNode = {
+  kind?: string;
+  name?: string;
+  type?: {
+    qualType?: string;
+    desugaredQualType?: string;
+  };
+  inner?: ClangAstNode[];
+  isImplicit?: boolean;
+  variadic?: boolean;
+};
+
 const CDECL_ATTRIBUTE = "__attribute__((cdecl))";
 
-const quotedParts = (line: string): string[] =>
-  [...line.matchAll(/'([^']+)'/g)].map(match => match[1] ?? "");
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
-const astNodeIndent = (line: string, kind: string): number =>
-  line.indexOf(kind);
+const isClangAstNode = (value: unknown): value is ClangAstNode =>
+  isRecord(value);
 
-const anyAstNodeIndent = (line: string): number => {
-  const match = line.match(/^([| `-]*)([A-Za-z].*)/);
-  return match ? match[1]?.length ?? -1 : -1;
-};
+const nodeChildren = (node: ClangAstNode): ClangAstNode[] =>
+  Array.isArray(node.inner) ? node.inner.filter(isClangAstNode) : [];
 
-const functionNameFromLine = (line: string): string | null => {
-  const parts = quotedParts(line);
-  if (!parts.length) return null;
-  const beforeType = line.slice(0, line.indexOf(`'${parts[0]}'`)).trim();
-  const name = beforeType.match(/([A-Za-z_][A-Za-z0-9_]*)$/)?.[1];
-  return name ?? null;
-};
+const functionTypeText = (node: ClangAstNode): string =>
+  node.type?.desugaredQualType ?? node.type?.qualType ?? "";
 
-const parameterFromLine = (line: string): ClangFunctionParameter | null => {
-  const parts = quotedParts(line);
-  const type = parts.at(-1);
-  if (!type) return null;
-  const beforeType = line.slice(0, line.indexOf(`'${parts[0]}'`)).trim();
-  const name = beforeType.match(/([A-Za-z_][A-Za-z0-9_]*)$/)?.[1] ?? null;
-  return { name, type };
+const matchingParenIndex = (value: string, open: number): number => {
+  let depth = 0;
+  for (let index = open; index < value.length; index += 1) {
+    const char = value[index];
+    if (char === "(") depth += 1;
+    else if (char === ")") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return -1;
 };
 
 const splitFunctionType = (type: string): { returnType: string; parameterText: string } => {
-  const normalized = type.replace(` ${CDECL_ATTRIBUTE}`, "");
-  const open = normalized.indexOf("(");
-  const close = normalized.lastIndexOf(")");
-  if (open < 0 || close < open) return { returnType: normalized, parameterText: "" };
+  const open = type.indexOf("(");
+  const close = open >= 0 ? matchingParenIndex(type, open) : -1;
+  if (open < 0 || close < open) return { returnType: type.trim(), parameterText: "" };
   return {
-    returnType: normalized.slice(0, open).trim(),
-    parameterText: normalized.slice(open + 1, close).trim()
+    returnType: type.slice(0, open).replace(CDECL_ATTRIBUTE, "").trim(),
+    parameterText: type.slice(open + 1, close).trim()
   };
 };
 
@@ -81,57 +89,63 @@ const fallbackParameters = (parameterText: string): ClangFunctionParameter[] => 
     .map(type => ({ name: null, type }));
 };
 
-const functionScore = (line: string, parameters: ClangFunctionParameter[]): number =>
-  (line.includes(" implicit ") ? 0 : 4) +
-  (line.includes("<invalid sloc>") ? 0 : 2) +
+const parameterFromNode = (node: ClangAstNode): ClangFunctionParameter | null => {
+  const type = node.type?.qualType;
+  if (!type) return null;
+  return { name: node.name ?? null, type };
+};
+
+const functionParameters = (
+  node: ClangAstNode,
+  parameterText: string
+): ClangFunctionParameter[] => {
+  const parameters = nodeChildren(node)
+    .filter(child => child.kind === "ParmVarDecl")
+    .map(parameterFromNode)
+    .filter((parameter): parameter is ClangFunctionParameter => parameter != null);
+  return parameters.length ? parameters : fallbackParameters(parameterText);
+};
+
+const functionScore = (
+  node: ClangAstNode,
+  parameters: ClangFunctionParameter[]
+): number =>
+  (node.isImplicit ? 0 : 4) +
   parameters.filter(parameter => parameter.name).length;
 
-const parseFunctionDeclAt = (
-  lines: string[],
-  index: number
-): ClangFunctionDecl | null => {
-  const line = lines[index] ?? "";
-  const name = functionNameFromLine(line);
-  const types = quotedParts(line);
-  if (!name || !types.length) return null;
-  const rawType = types[0] ?? "";
-  const canonicalType = types.at(-1) ?? rawType;
-  const indent = astNodeIndent(line, "FunctionDecl");
-  const parameters: ClangFunctionParameter[] = [];
-  for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
-    const child = lines[cursor] ?? "";
-    const childParmIndent = astNodeIndent(child, "ParmVarDecl");
-    const childKindIndent = anyAstNodeIndent(child);
-    if (childKindIndent >= 0 && childKindIndent <= indent) break;
-    if (childParmIndent > indent) {
-      const parameter = parameterFromLine(child);
-      if (parameter) parameters.push(parameter);
-    }
-  }
-  const split = splitFunctionType(canonicalType);
-  const variadic = split.parameterText.split(",").some(part => part.trim() === "...");
-  const fixedParameters = parameters.length ? parameters : fallbackParameters(split.parameterText);
+const isVariadicFunction = (node: ClangAstNode, parameterText: string): boolean =>
+  node.variadic === true || parameterText.split(",").some(part => part.trim() === "...");
+
+const parseFunctionNode = (node: ClangAstNode): ClangFunctionDecl | null => {
+  if (node.kind !== "FunctionDecl" || !node.name) return null;
+  const rawType = node.type?.qualType ?? "";
+  const split = splitFunctionType(functionTypeText(node));
+  const parameters = functionParameters(node, split.parameterText);
   return {
-    name,
+    name: node.name,
     returnType: split.returnType,
     rawType,
-    parameters: fixedParameters,
+    parameters,
     callingConvention: rawType.includes(CDECL_ATTRIBUTE) ? "cdecl" : "default",
-    variadic,
-    score: functionScore(line, fixedParameters)
+    variadic: isVariadicFunction(node, split.parameterText),
+    score: functionScore(node, parameters)
   };
 };
 
+const collectFunctionNodes = (node: ClangAstNode): ClangAstNode[] => [
+  ...(node.kind === "FunctionDecl" ? [node] : []),
+  ...nodeChildren(node).flatMap(collectFunctionNodes)
+];
+
 export const parseClangFunctions = (
-  astText: string,
+  astJson: string,
   exportNames: ReadonlySet<string>
 ): Map<string, ClangFunctionDecl> => {
+  const parsed = JSON.parse(astJson) as unknown;
+  if (!isClangAstNode(parsed)) return new Map();
   const functions = new Map<string, ClangFunctionDecl>();
-  const lines = astText.split(/\r?\n/);
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index] ?? "";
-    if (!line.includes("FunctionDecl")) continue;
-    const decl = parseFunctionDeclAt(lines, index);
+  for (const node of collectFunctionNodes(parsed)) {
+    const decl = parseFunctionNode(node);
     if (!decl || !exportNames.has(decl.name)) continue;
     const existing = functions.get(decl.name);
     if (!existing || decl.score >= existing.score) functions.set(decl.name, decl);
