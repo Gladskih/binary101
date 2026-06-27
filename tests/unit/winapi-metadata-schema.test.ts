@@ -61,7 +61,6 @@ const chunk: WinapiMetadataChunk = {
         x86StackBytes: 4
       }],
       callingConvention: "winapi",
-      x86StackBytes: 4,
       variadic: false,
       setLastError: false,
       characterSet: null,

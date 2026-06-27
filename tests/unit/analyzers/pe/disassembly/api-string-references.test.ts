@@ -53,7 +53,6 @@ const metadataEntry = (
   rawReturnType: "int",
   parameters,
   callingConvention: sourceKind === "ucrt" ? "cdecl" : "winapi",
-  x86StackBytes: null,
   variadic: false,
   setLastError: false,
   characterSet: null,

@@ -63,6 +63,7 @@ const typeDefs: PeClrTypeDefinitionInfo[] = [{
   flags: 0,
   extends: index("TypeRef", TYPE_REF_TABLE_ID, 1),
   fieldStart: 1,
+  fieldEnd: null,
   methodStart: 1,
   methodEnd: null
 }];

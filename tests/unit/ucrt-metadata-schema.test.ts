@@ -52,7 +52,6 @@ const chunk: UcrtMetadataChunk = {
         x86StackBytes: 4
       }],
       callingConvention: "cdecl",
-      x86StackBytes: 0,
       variadic: true,
       setLastError: false,
       characterSet: null,

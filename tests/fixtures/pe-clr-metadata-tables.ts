@@ -73,6 +73,7 @@ export const createClrMetadataTablesWithParameterNames = (): PeClrMetadataTables
       flags: 0,
       extends: nullTypeRefIndex(),
       fieldStart: 0,
+      fieldEnd: null,
       methodStart: 1,
       methodEnd: 3
     }],

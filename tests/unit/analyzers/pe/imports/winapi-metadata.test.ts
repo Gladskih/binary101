@@ -57,7 +57,6 @@ const createEntry = (
     x86StackBytes: 4
   }],
   callingConvention: "winapi",
-  x86StackBytes: 4,
   variadic: false,
   setLastError: false,
   characterSet: null,
@@ -83,7 +82,6 @@ const createUcrtEntry = (module: string, entrypoint: string): UcrtMetadataEntry 
     x86StackBytes: 4
   }],
   callingConvention: "cdecl",
-  x86StackBytes: 0,
   variadic: true,
   setLastError: false,
   characterSet: null,

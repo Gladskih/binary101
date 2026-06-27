@@ -70,8 +70,17 @@ export interface PeClrTypeDefinitionInfo {
   flags: number;
   extends: PeClrMetadataIndex;
   fieldStart: number;
+  fieldEnd: number | null;
   methodStart: number;
   methodEnd: number | null;
+}
+
+export interface PeClrFieldInfo {
+  row: number;
+  name: string | null;
+  flags: number;
+  signatureBlobIndex: number;
+  signature?: PeClrMethodSignature;
 }
 
 export interface PeClrParameterInfo {
@@ -193,6 +202,7 @@ export interface PeClrMetadataTables {
   assemblyRefs: PeClrAssemblyRefInfo[];
   typeRefs: PeClrTypeReferenceInfo[];
   typeDefs: PeClrTypeDefinitionInfo[];
+  fields?: PeClrFieldInfo[];
   methodDefs: PeClrMethodDefinitionInfo[];
   parameters: PeClrParameterInfo[];
   memberRefs: PeClrMemberReferenceInfo[];

@@ -25,8 +25,7 @@ import { WINAPI_METADATA_PACKAGE } from "./config.js";
 import {
   buildWinapiParameters,
   formatWinapiSignature,
-  resolveSignatureType,
-  x86StackBytesForParameters
+  resolveSignatureType
 } from "./signature-format.js";
 import {
   decodeCallingConvention,
@@ -148,7 +147,6 @@ const createEntry = (
     rawReturnType: method.signature?.returnType ?? null,
     parameters,
     callingConvention: decodeCallingConvention(implMap.mappingFlags),
-    x86StackBytes: x86StackBytesForParameters(parameters),
     variadic: isVariadicConvention(implMap.mappingFlags),
     setLastError: mappingSupportsLastError(implMap.mappingFlags),
     characterSet: characterSet(implMap.mappingFlags, attributes),

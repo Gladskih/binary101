@@ -23,7 +23,6 @@ export interface PeImportMetadataEntry {
   rawReturnType: string | null;
   parameters: PeImportMetadataParameter[];
   callingConvention: string;
-  x86StackBytes: number | null;
   variadic: boolean;
   setLastError: boolean;
   characterSet: string | null;
@@ -75,14 +74,13 @@ export const isPeImportMetadataEntry = (value: unknown): value is PeImportMetada
   isStringOrNull(value["namespace"]) &&
   isString(value["api"]) &&
   isString(value["signature"]) &&
-  isString(value["returnType"]) &&
-  isStringOrNull(value["rawReturnType"]) &&
-  Array.isArray(value["parameters"]) &&
-  value["parameters"].every(isPeImportMetadataParameter) &&
-  isString(value["callingConvention"]) &&
-  isNumberOrNull(value["x86StackBytes"]) &&
-  typeof value["variadic"] === "boolean" &&
-  typeof value["setLastError"] === "boolean" &&
+    isString(value["returnType"]) &&
+    isStringOrNull(value["rawReturnType"]) &&
+    Array.isArray(value["parameters"]) &&
+    value["parameters"].every(isPeImportMetadataParameter) &&
+    isString(value["callingConvention"]) &&
+    typeof value["variadic"] === "boolean" &&
+    typeof value["setLastError"] === "boolean" &&
   isStringOrNull(value["characterSet"]) &&
   isStringArray(value["architecture"]) &&
   isStringArray(value["platform"]);

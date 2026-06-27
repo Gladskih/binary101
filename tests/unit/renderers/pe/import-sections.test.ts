@@ -44,7 +44,6 @@ const sleepMetadata = (): WinapiMetadataEntry => ({
     x86StackBytes: 4
   }],
   callingConvention: "winapi",
-  x86StackBytes: 4,
   variadic: false,
   setLastError: false,
   characterSet: null,
@@ -70,7 +69,6 @@ const printfMetadata = (): PeImportMetadataEntry => ({
     x86StackBytes: 4
   }],
   callingConvention: "cdecl",
-  x86StackBytes: 0,
   variadic: true,
   setLastError: false,
   characterSet: null,

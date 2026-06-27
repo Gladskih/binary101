@@ -51,11 +51,80 @@ export const resolveSignatureType = (
     .replaceAll(CLASS_PREFIX, "");
 };
 
-const x86StackBytesForType = (rawType: string | null | undefined): number | null => {
+type TypeReference = {
+  kind: "TypeDef" | "TypeRef";
+  row: number;
+};
+
+const typeReference = (rawType: string): TypeReference | null => {
+  const match = rawType
+    .replaceAll(VALUE_TYPE_PREFIX, "")
+    .replaceAll(CLASS_PREFIX, "")
+    .match(/^(TypeDef|TypeRef)#(\d+)$/);
+  const row = Number(match?.[2]);
+  if (!match || !Number.isInteger(row) || row <= 0) return null;
+  return { kind: match[1] as TypeReference["kind"], row };
+};
+
+const isStackByteCount = (value: number | null): value is number =>
+  value != null;
+
+const typeReferenceName = (
+  reference: TypeReference,
+  tables: PeClrMetadataTables
+): string | null =>
+  reference.kind === "TypeRef"
+    ? tables.typeRefs[reference.row - 1]?.fullName ?? null
+    : tables.typeDefs[reference.row - 1]?.fullName ?? null;
+
+const typeDefRowForReference = (
+  reference: TypeReference,
+  tables: PeClrMetadataTables
+): number | null => {
+  if (reference.kind === "TypeDef") return reference.row;
+  const name = typeReferenceName(reference, tables);
+  return name == null
+    ? null
+    : tables.typeDefs.find(typeDef => typeDef.fullName === name)?.row ?? null;
+};
+
+const fieldsForTypeDef = (
+  row: number,
+  tables: PeClrMetadataTables
+) => {
+  const typeDef = tables.typeDefs[row - 1];
+  if (!typeDef?.fieldEnd || !tables.fields) return [];
+  return tables.fields
+    .slice(typeDef.fieldStart - 1, typeDef.fieldEnd)
+    .filter(field => (field.flags & 0x0010) === 0);
+};
+
+const x86StackBytesForValueType = (
+  reference: TypeReference,
+  tables: PeClrMetadataTables,
+  seen: ReadonlySet<string>
+): number | null => {
+  const key = `${reference.kind}#${reference.row}`;
+  if (seen.has(key)) return null;
+  const row = typeDefRowForReference(reference, tables);
+  if (row == null) return null;
+  const nextSeen = new Set([...seen, key]);
+  const sizes = fieldsForTypeDef(row, tables)
+    .map(field => x86StackBytesForType(field.signature?.returnType, tables, nextSeen));
+  if (!sizes.length || !sizes.every(isStackByteCount)) return null;
+  return sizes.reduce((total, size) => total + size, 0);
+};
+
+const x86StackBytesForType = (
+  rawType: string | null | undefined,
+  tables: PeClrMetadataTables,
+  seen: ReadonlySet<string> = new Set()
+): number | null => {
   if (!rawType) return null;
   if (rawType.includes("*") || rawType.includes("&") || rawType.startsWith(CLASS_PREFIX)) return 4;
   const withoutPrefixes = rawType.replaceAll(VALUE_TYPE_PREFIX, "").replaceAll(CLASS_PREFIX, "");
-  if (withoutPrefixes.startsWith("TypeDef#") || withoutPrefixes.startsWith("TypeRef#")) return null;
+  const reference = typeReference(rawType);
+  if (reference) return x86StackBytesForValueType(reference, tables, seen);
   return STACK_BYTES_BY_TYPE[withoutPrefixes] ?? null;
 };
 
@@ -85,7 +154,7 @@ export const buildWinapiParameters = (
     type: resolveSignatureType(rawType, tables),
     rawType: rawType ?? null,
     direction: parameterDirection(method, index),
-    x86StackBytes: x86StackBytesForType(rawType)
+    x86StackBytes: x86StackBytesForType(rawType, tables)
   })) ?? [];
 
 const parameterSignatureText = (
@@ -100,11 +169,4 @@ export const formatWinapiSignature = (
 ): string => {
   const parameters = buildWinapiParameters(method, tables).map(parameterSignatureText);
   return `${resolveSignatureType(method.signature?.returnType, tables)} ${apiName}(${parameters.join(", ")})`;
-};
-
-export const x86StackBytesForParameters = (
-  parameters: WinapiMetadataParameter[]
-): number | null => {
-  if (parameters.some(parameter => parameter.x86StackBytes == null)) return null;
-  return parameters.reduce((total, parameter) => total + (parameter.x86StackBytes ?? 0), 0);
 };

@@ -6,8 +6,7 @@ import type { PeClrMetadataTables, PeClrMethodDefinitionInfo } from "../../../..
 import {
   buildWinapiParameters,
   formatWinapiSignature,
-  resolveSignatureType,
-  x86StackBytesForParameters
+  resolveSignatureType
 } from "../../../../scripts/winapi-metadata/signature-format.js";
 
 const PARAM_IN_FLAG = 0x0001;
@@ -33,7 +32,30 @@ const tables = (): PeClrMetadataTables => ({
     resolutionScope: { table: "null", tableId: -1, row: 0, raw: 0, valid: true },
     fullName: "Windows.Win32.Foundation.PWSTR"
   }],
-  typeDefs: [],
+  typeDefs: [{
+    row: 1,
+    name: "PWSTR",
+    namespace: "Windows.Win32.Foundation",
+    fullName: "Windows.Win32.Foundation.PWSTR",
+    flags: 0,
+    extends: { table: "null", tableId: -1, row: 0, raw: 0, valid: true },
+    fieldStart: 1,
+    fieldEnd: 1,
+    methodStart: 1,
+    methodEnd: null
+  }],
+  fields: [{
+    row: 1,
+    name: "Value",
+    flags: 0,
+    signatureBlobIndex: 1,
+    signature: {
+      callingConvention: 0x06,
+      parameterCount: 0,
+      returnType: "u2*",
+      parameterTypes: []
+    }
+  }],
   methodDefs: [],
   parameters: [],
   memberRefs: [],
@@ -75,10 +97,9 @@ void test("signature formatting resolves metadata type references and parameter 
   );
 });
 
-void test("x86 stack byte metadata is conservative for unresolved value types", () => {
+void test("x86 stack byte metadata resolves WinMD value-type wrappers", () => {
   const parameters = buildWinapiParameters(method(), tables());
 
-  assert.deepStrictEqual(parameters.map(parameter => parameter.x86StackBytes), [4, null]);
+  assert.deepStrictEqual(parameters.map(parameter => parameter.x86StackBytes), [4, 4]);
   assert.deepStrictEqual(parameters.map(parameter => parameter.direction), ["in", "inout"]);
-  assert.equal(x86StackBytesForParameters(parameters), null);
 });

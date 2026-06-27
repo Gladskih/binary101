@@ -131,7 +131,6 @@ export const createUcrtEntry = (
     rawReturnType: declaration.returnType,
     parameters,
     callingConvention: declaration.callingConvention,
-    x86StackBytes: declaration.callingConvention === "cdecl" ? 0 : null,
     variadic: declaration.variadic,
     setLastError: false,
     characterSet: null,

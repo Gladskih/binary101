@@ -3,6 +3,7 @@
 import type {
   PeClrAssemblyInfo,
   PeClrAssemblyRefInfo,
+  PeClrFieldInfo,
   PeClrMetadataIndex,
   PeClrMetadataTables,
   PeClrMethodDefinitionInfo,
@@ -13,7 +14,7 @@ import type {
   PeClrTypeReferenceInfo
 } from "./types.js";
 import type { ClrHeapReaders } from "./metadata-heaps.js";
-import { parseMethodSignature } from "./metadata-signatures.js";
+import { parseMemberRefSignature, parseMethodSignature } from "./metadata-signatures.js";
 import type { ClrMetadataRow, ClrParsedTableStream } from "./metadata-table-reader.js";
 import { createCustomAttributes } from "./metadata-custom-attributes.js";
 import {
@@ -28,6 +29,7 @@ import {
   TABLE_ASSEMBLY_REF,
   TABLE_CUSTOM_ATTRIBUTE,
   TABLE_EXPORTED_TYPE,
+  TABLE_FIELD,
   TABLE_FILE,
   TABLE_IMPL_MAP,
   TABLE_MANIFEST_RESOURCE,
@@ -139,15 +141,28 @@ const methodEndForType = (
   return methodRowCount;
 };
 
+const rowEndForType = (
+  rowStart: number,
+  nextRowStart: number | null,
+  rowCount: number
+): number | null => {
+  if (rowStart <= 0 || rowStart > rowCount) return null;
+  if (nextRowStart != null) return nextRowStart > rowStart ? nextRowStart - 1 : null;
+  return rowCount;
+};
+
 const createTypeDefs = (
   rows: ClrMetadataRow[],
   heaps: ClrHeapReaders,
+  fieldRowCount: number,
   methodRowCount: number
 ): PeClrTypeDefinitionInfo[] =>
   rows.map((row, index) => {
     const nextRow = rows[index + 1];
     const name = getString(heaps, row, "TypeName", `TypeDef row ${index + 1}`);
     const namespaceName = getString(heaps, row, "TypeNamespace", `TypeDef row ${index + 1}`);
+    const fieldStart = cellIndex(row, "FieldList").row;
+    const nextFieldStart = nextRow ? cellIndex(nextRow, "FieldList").row : null;
     const methodStart = cellIndex(row, "MethodList").row;
     const nextMethodStart = nextRow ? cellIndex(nextRow, "MethodList").row : null;
     return {
@@ -157,7 +172,8 @@ const createTypeDefs = (
       fullName: fullName(namespaceName, name),
       flags: cellNumber(row, "Flags"),
       extends: cellIndex(row, "Extends"),
-      fieldStart: cellIndex(row, "FieldList").row,
+      fieldStart,
+      fieldEnd: rowEndForType(fieldStart, nextFieldStart, fieldRowCount),
       methodStart,
       methodEnd: methodEndForType(methodStart, nextMethodStart, methodRowCount)
     };
@@ -181,6 +197,23 @@ const createParameters = (
     sequence: cellNumber(row, "Sequence"),
     name: getString(heaps, row, "Name", `Param row ${index + 1}`)
   }));
+
+const createFields = (
+  rows: ClrMetadataRow[],
+  heaps: ClrHeapReaders
+): PeClrFieldInfo[] =>
+  rows.map((row, index) => {
+    const signatureBlobIndex = cellNumber(row, "Signature");
+    const context = `Field row ${index + 1}.Signature`;
+    const signature = parseMemberRefSignature(heaps.getBlob(signatureBlobIndex, context), context);
+    return {
+      row: index + 1,
+      name: getString(heaps, row, "Name", `Field row ${index + 1}`),
+      flags: cellNumber(row, "Flags"),
+      signatureBlobIndex,
+      ...(signature ? { signature } : {})
+    };
+  });
 
 const parametersForMethod = (
   row: ClrMetadataRow,
@@ -237,9 +270,11 @@ export const buildClrMetadataTables = (
   const assembly = createAssembly(tableRows(parsed, TABLE_ASSEMBLY), heaps);
   const assemblyRefs = createAssemblyRefs(tableRows(parsed, TABLE_ASSEMBLY_REF), heaps);
   const typeRefs = createTypeRefs(tableRows(parsed, TABLE_TYPE_REF), heaps);
+  const fields = createFields(tableRows(parsed, TABLE_FIELD), heaps);
   const typeDefs = createTypeDefs(
     tableRows(parsed, TABLE_TYPE_DEF),
     heaps,
+    fields.length,
     tableRows(parsed, TABLE_METHOD_DEF).length
   );
   const parameters = createParameters(tableRows(parsed, TABLE_PARAM), heaps);
@@ -284,6 +319,7 @@ export const buildClrMetadataTables = (
     assemblyRefs,
     typeRefs,
     typeDefs,
+    fields,
     methodDefs,
     parameters,
     memberRefs,

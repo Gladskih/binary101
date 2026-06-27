@@ -69,5 +69,5 @@ are not sent through WinAPI API Set fallback.
 - UCRT architecture/platform constraints are not inferred per function. The
   manifest records that the export list came from the pinned x64 import library.
 - x86 parameter stack-byte metadata is conservative. Unknown by-value structs
-  keep `x86StackBytes: null`; UCRT `cdecl` functions record function cleanup as
-  `0` because callers clean the stack.
+  keep parameter `x86StackBytes: null`; function cleanup is derived from calling
+  convention at the use site instead of being stored in the assets.
