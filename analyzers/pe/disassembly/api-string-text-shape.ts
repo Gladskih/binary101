@@ -107,6 +107,42 @@ const hasPackedAsciiPairs = (text: string): boolean => {
   return total >= 6 && packedSpaces > 0 && packed * 2 >= total;
 };
 
+const appendPackedAsciiBytes = (bytes: number[], codePoint: number): boolean => {
+  if (isPackedAsciiPair(codePoint)) {
+    bytes.push(codePoint & 0xff, codePoint >> 8);
+    return true;
+  }
+  if (!isAsciiTextCodePoint(codePoint)) return false;
+  bytes.push(codePoint);
+  return true;
+};
+
+const hasPackedNumericAsciiPairs = (text: string): boolean => {
+  const bytes: number[] = [];
+  let total = 0;
+  let packed = 0;
+  for (const char of text) {
+    const codePoint = char.codePointAt(0) ?? 0;
+    total += 1;
+    if (isPackedAsciiPair(codePoint)) packed += 1;
+    if (!appendPackedAsciiBytes(bytes, codePoint)) return false;
+  }
+  if (total < 4 || packed * 2 < total) return false;
+  let digits = 0;
+  let separators = 0;
+  for (const byte of bytes) {
+    const character = String.fromCharCode(byte);
+    if (character >= "0" && character <= "9") {
+      digits += 1;
+    } else if (".:/-".includes(character)) {
+      separators += 1;
+    } else {
+      return false;
+    }
+  }
+  return digits >= 4 && (separators > 0 || digits === bytes.length);
+};
+
 const asciiDominates = (counts: Map<number, number>, total: number): boolean => {
   for (const count of counts.values()) {
     if (count * 3 >= total * 2) return true;
@@ -235,6 +271,7 @@ export const hasImplausibleWideTextShape = (text: string): boolean => {
   }
   if (
     hasPackedAsciiPairs(text) ||
+    hasPackedNumericAsciiPairs(text) ||
     hasAlternatingAsciiHan(text) ||
     hasSequentialCodepointTable(text) ||
     hasDisjointScriptSoup(text)

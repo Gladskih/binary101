@@ -69,6 +69,20 @@ void test("hasImplausibleWideTextShape rejects sequential Unicode lookup tables"
   assert.equal(hasImplausibleWideTextShape(sequentialLookupTableText()), true);
 });
 
+void test("hasImplausibleWideTextShape rejects numeric ASCII pairs read as UTF-16", () => {
+  assert.equal(hasImplausibleWideTextShape(textFromCodeUnits([
+    0x3032, 0x2e38, 0x3436, 0x322e, 0x3030, 0x302e, 0x322f, 0x0032,
+    0x3032, 0x2e38, 0x3837, 0x312e, 0x3436, 0x302e, 0x322f, 0x0032,
+    0x3531, 0x2e35, 0x3331, 0x2e33, 0x3432, 0x2e30, 0x2f30, 0x3332
+  ])), true);
+  assert.equal(hasImplausibleWideTextShape(textFromCodeUnits([
+    0x3030, 0x303a, 0x3a30, 0x3030
+  ])), true);
+  assert.equal(hasImplausibleWideTextShape(textFromCodeUnits([
+    0x3036, 0x3030, 0x3030, 0x3030
+  ])), true);
+});
+
 void test("hasImplausibleWideTextShape keeps compact ASCII-pair text without word spaces", () => {
   assert.equal(hasImplausibleWideTextShape(textFromCodeUnits([
     0x4142, 0x4344, 0x4546, 0x4748, 0x494a, 0x4b4c
