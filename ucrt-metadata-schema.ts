@@ -8,7 +8,7 @@ import {
   type PeImportMetadataEntry
 } from "./pe-import-metadata-schema.js";
 
-export const UCRT_METADATA_FORMAT_VERSION = 1;
+export const UCRT_METADATA_FORMAT_VERSION = 2;
 
 export interface UcrtMetadataSource {
   headerPackageName: string;

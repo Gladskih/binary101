@@ -38,6 +38,7 @@ void test("parseClangFunctions reads function declarations from JSON AST", () =>
     parameters: [],
     callingConvention: "default",
     variadic: false,
+    noReturn: true,
     score: 4
   });
   assert.deepEqual(functions.get("example")?.parameters, [
@@ -46,4 +47,5 @@ void test("parseClangFunctions reads function declarations from JSON AST", () =>
     { name: "count", type: "int" }
   ]);
   assert.equal(functions.get("example")?.callingConvention, "cdecl");
+  assert.equal(functions.get("example")?.noReturn, false);
 });

@@ -5,7 +5,6 @@ import type { MappedCodeBlock } from "./code-bytes.js";
 import { toRva } from "./control-flow.js";
 import type { ImportTarget } from "./import-targets.js";
 import type { IcedInstructionObject, IcedModule } from "./iced.js";
-import { isKnownNonReturningImport } from "./non-returning-imports.js";
 import { getStackReturnTarget } from "./call-stack.js";
 import type { EmulationState } from "./emulation/state.js";
 
@@ -33,7 +32,7 @@ export const getReturningImportFallthrough = (
   emulationState: EmulationState
 ): ReturningImportFallthrough | null => {
   if (!importTarget) return null;
-  if (isKnownNonReturningImport(importTarget.label)) return null;
+  if (importTarget.apiMetadata?.noReturn) return null;
   if (instruction.flowControl === iced.FlowControl["IndirectBranch"]) {
     const target = getStackReturnTarget(iced, opts, emulationState);
     return target.kind === "known" ? { kind: "stack-return", rva: target.rva } : null;

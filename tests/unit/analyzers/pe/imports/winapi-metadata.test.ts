@@ -58,6 +58,7 @@ const createEntry = (
   }],
   callingConvention: "winapi",
   variadic: false,
+  noReturn: false,
   setLastError: false,
   characterSet: null,
   architecture: [],
@@ -83,6 +84,7 @@ const createUcrtEntry = (module: string, entrypoint: string): UcrtMetadataEntry 
   }],
   callingConvention: "cdecl",
   variadic: true,
+  noReturn: false,
   setLastError: false,
   characterSet: null,
   architecture: [],
@@ -93,7 +95,7 @@ const createChunk = (
   dll: string,
   entries: Record<string, WinapiMetadataEntry>
 ): WinapiMetadataChunk => ({
-  formatVersion: 1,
+  formatVersion: 2,
   generatedAt: "2026-06-26T00:00:00.000Z",
   source,
   dll,
@@ -106,7 +108,7 @@ const createUcrtChunk = (
   dll: string,
   entries: Record<string, UcrtMetadataEntry>
 ): UcrtMetadataChunk => ({
-  formatVersion: 1,
+  formatVersion: 2,
   generatedAt: "2026-06-26T00:00:00.000Z",
   source: ucrtSource,
   dll,
@@ -116,7 +118,7 @@ const createUcrtChunk = (
 });
 
 const manifest: WinapiMetadataManifest = {
-  formatVersion: 1,
+  formatVersion: 2,
   generatedAt: "2026-06-26T00:00:00.000Z",
   source,
   entryCounts: { dlls: 3, entries: 4 },
@@ -134,7 +136,7 @@ const manifest: WinapiMetadataManifest = {
 };
 
 const entrypointIndex: WinapiMetadataEntrypointIndex = {
-  formatVersion: 1,
+  formatVersion: 2,
   generatedAt: manifest.generatedAt,
   source,
   entryCount: 2,
@@ -146,7 +148,7 @@ const entrypointIndex: WinapiMetadataEntrypointIndex = {
 };
 
 const ucrtManifest: UcrtMetadataManifest = {
-  formatVersion: 1,
+  formatVersion: 2,
   generatedAt: "2026-06-26T00:00:00.000Z",
   source: ucrtSource,
   entryCounts: { dlls: 2, entries: 2 },

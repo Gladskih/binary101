@@ -16,6 +16,7 @@ const declaration = (): ClangFunctionDecl => ({
   ],
   callingConvention: "cdecl",
   variadic: false,
+  noReturn: false,
   score: 0
 });
 

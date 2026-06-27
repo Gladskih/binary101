@@ -19,7 +19,7 @@ const source = {
 };
 
 const manifest: UcrtMetadataManifest = {
-  formatVersion: 1,
+  formatVersion: 2,
   generatedAt: "2026-06-26T00:00:00.000Z",
   source,
   entryCounts: { dlls: 1, entries: 1 },
@@ -27,7 +27,7 @@ const manifest: UcrtMetadataManifest = {
 };
 
 const chunk: UcrtMetadataChunk = {
-  formatVersion: 1,
+  formatVersion: 2,
   generatedAt: manifest.generatedAt,
   source,
   dll: "ucrtbase.dll",
@@ -53,6 +53,7 @@ const chunk: UcrtMetadataChunk = {
       }],
       callingConvention: "cdecl",
       variadic: true,
+      noReturn: false,
       setLastError: false,
       characterSet: null,
       architecture: [],

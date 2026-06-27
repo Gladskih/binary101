@@ -24,6 +24,7 @@ export interface PeImportMetadataEntry {
   parameters: PeImportMetadataParameter[];
   callingConvention: string;
   variadic: boolean;
+  noReturn: boolean;
   setLastError: boolean;
   characterSet: string | null;
   architecture: string[];
@@ -80,6 +81,7 @@ export const isPeImportMetadataEntry = (value: unknown): value is PeImportMetada
     value["parameters"].every(isPeImportMetadataParameter) &&
     isString(value["callingConvention"]) &&
     typeof value["variadic"] === "boolean" &&
+    typeof value["noReturn"] === "boolean" &&
     typeof value["setLastError"] === "boolean" &&
   isStringOrNull(value["characterSet"]) &&
   isStringArray(value["architecture"]) &&

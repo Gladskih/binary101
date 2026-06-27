@@ -43,6 +43,7 @@ const metadata = (
   })),
   callingConvention,
   variadic: false,
+  noReturn: false,
   setLastError: false,
   characterSet: null,
   architecture: [],

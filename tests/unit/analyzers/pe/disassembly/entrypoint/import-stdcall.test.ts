@@ -34,6 +34,7 @@ const freeLibraryMetadata = (): PeImportMetadataEntry => ({
   }],
   callingConvention: "winapi",
   variadic: false,
+  noReturn: false,
   setLastError: true,
   characterSet: null,
   architecture: [],

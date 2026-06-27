@@ -12,6 +12,7 @@ export interface ClangFunctionDecl {
   parameters: ClangFunctionParameter[];
   callingConvention: string;
   variadic: boolean;
+  noReturn: boolean;
   score: number;
 }
 
@@ -28,6 +29,7 @@ type ClangAstNode = {
 };
 
 const CDECL_ATTRIBUTE = "__attribute__((cdecl))";
+const NO_RETURN_ATTRIBUTE = "__attribute__((noreturn))";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -116,6 +118,11 @@ const functionScore = (
 const isVariadicFunction = (node: ClangAstNode, parameterText: string): boolean =>
   node.variadic === true || parameterText.split(",").some(part => part.trim() === "...");
 
+const isNoReturnFunction = (node: ClangAstNode, rawType: string): boolean =>
+  rawType.includes(NO_RETURN_ATTRIBUTE) ||
+  functionTypeText(node).includes(NO_RETURN_ATTRIBUTE) ||
+  nodeChildren(node).some(child => child.kind === "NoReturnAttr" || child.kind === "CXX11NoReturnAttr");
+
 const parseFunctionNode = (node: ClangAstNode): ClangFunctionDecl | null => {
   if (node.kind !== "FunctionDecl" || !node.name) return null;
   const rawType = node.type?.qualType ?? "";
@@ -128,6 +135,7 @@ const parseFunctionNode = (node: ClangAstNode): ClangFunctionDecl | null => {
     parameters,
     callingConvention: rawType.includes(CDECL_ATTRIBUTE) ? "cdecl" : "default",
     variadic: isVariadicFunction(node, split.parameterText),
+    noReturn: isNoReturnFunction(node, rawType),
     score: functionScore(node, parameters)
   };
 };

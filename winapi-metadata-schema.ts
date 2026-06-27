@@ -10,7 +10,7 @@ import {
   type PeImportMetadataParameter
 } from "./pe-import-metadata-schema.js";
 
-export const WINAPI_METADATA_FORMAT_VERSION = 1;
+export const WINAPI_METADATA_FORMAT_VERSION = 2;
 
 export interface WinapiMetadataSource {
   packageName: string;

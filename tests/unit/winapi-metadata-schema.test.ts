@@ -18,7 +18,7 @@ const source = {
 };
 
 const manifest: WinapiMetadataManifest = {
-  formatVersion: 1,
+  formatVersion: 2,
   generatedAt: "2026-06-26T00:00:00.000Z",
   source,
   entryCounts: { dlls: 1, entries: 1 },
@@ -27,7 +27,7 @@ const manifest: WinapiMetadataManifest = {
 };
 
 const entrypointIndex: WinapiMetadataEntrypointIndex = {
-  formatVersion: 1,
+  formatVersion: 2,
   generatedAt: manifest.generatedAt,
   source,
   entryCount: 1,
@@ -36,7 +36,7 @@ const entrypointIndex: WinapiMetadataEntrypointIndex = {
 };
 
 const chunk: WinapiMetadataChunk = {
-  formatVersion: 1,
+  formatVersion: 2,
   generatedAt: manifest.generatedAt,
   source,
   dll: "KERNEL32.dll",
@@ -62,6 +62,7 @@ const chunk: WinapiMetadataChunk = {
       }],
       callingConvention: "winapi",
       variadic: false,
+      noReturn: false,
       setLastError: false,
       characterSet: null,
       architecture: [],
@@ -82,7 +83,7 @@ void test("WinAPI metadata schema accepts valid manifest and chunk shapes", () =
 });
 
 void test("WinAPI metadata schema rejects wrong versions and malformed entries", () => {
-  assert.equal(isWinapiMetadataManifest({ ...manifest, formatVersion: 2 }), false);
+  assert.equal(isWinapiMetadataManifest({ ...manifest, formatVersion: 1 }), false);
   assert.equal(isWinapiMetadataChunk({
     ...chunk,
     entries: { Sleep: { ...chunk.entries["Sleep"], parameters: [{ name: "bad" }] } }

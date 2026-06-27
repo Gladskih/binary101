@@ -13,6 +13,8 @@ import {
 } from "../../../../../helpers/pe-entrypoint-disassembly-fixture.js";
 import type { AnalyzePeEntrypointDisassemblyOptions } from "../../../../../../analyzers/pe/disassembly/index.js";
 import type { IcedModule } from "../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";
+import type { ImportTarget } from "../../../../../../analyzers/pe/disassembly/entrypoint/import-targets.js";
+import type { PeImportMetadataEntry } from "../../../../../../pe-import-metadata-schema.js";
 
 const iced = fakeIced as unknown as IcedModule;
 type IcedInstruction = Parameters<typeof getReturningImportFallthrough>[3];
@@ -36,6 +38,37 @@ const createBranchInstruction = (nextRva: number, flowControl: number): IcedInst
 const createIndirectCallInstruction = (nextRva: number): IcedInstruction =>
   createBranchInstruction(nextRva, fakeIced.FlowControl["IndirectCall"]);
 
+const importMetadata = (noReturn: boolean): PeImportMetadataEntry => ({
+  sourceKind: "winapi",
+  id: "test:import",
+  module: "KERNEL32.dll",
+  entrypoint: "ExitProcess",
+  namespace: null,
+  api: "ExitProcess",
+  signature: "void ExitProcess(u4 exitCode)",
+  returnType: "void",
+  rawReturnType: "void",
+  parameters: [{ name: "exitCode", type: "u4", rawType: "u4", direction: "in", x86StackBytes: 4 }],
+  callingConvention: "winapi",
+  variadic: false,
+  noReturn,
+  setLastError: false,
+  characterSet: null,
+  architecture: [],
+  platform: []
+});
+
+const importTarget = (
+  label: string,
+  apiMetadata?: PeImportMetadataEntry
+): ImportTarget => ({
+  label,
+  slotRva: 0x2000,
+  importKind: "eager",
+  guardIatEntry: false,
+  ...(apiMetadata ? { apiMetadata } : {})
+});
+
 void test("getReturningImportFallthrough returns in-block fallthrough for imports", () => {
   assert.deepEqual(
     getReturningImportFallthrough(
@@ -43,12 +76,7 @@ void test("getReturningImportFallthrough returns in-block fallthrough for import
       createOptions(),
       { rvaStart: 0x1000, fileOffsetStart: 0, data: new Uint8Array([0x15, 0xc3]) },
       createIndirectCallInstruction(0x1001),
-      {
-        label: "USER32.dll!MessageBoxW",
-        slotRva: 0x2000,
-        importKind: "eager",
-        guardIatEntry: false
-      },
+      importTarget("USER32.dll!MessageBoxW"),
       createEmulationState(64)
     ),
     { kind: "current-block", rva: 0x1001 }
@@ -62,12 +90,7 @@ void test("getReturningImportFallthrough returns stack returns for import thunks
       createOptions(),
       { rvaStart: 0x1002, fileOffsetStart: 2, data: new Uint8Array([0x25]) },
       createBranchInstruction(0x1001, fakeIced.FlowControl["IndirectBranch"]),
-      {
-        label: "KERNEL32.dll!GetSystemTimeAsFileTime",
-        slotRva: 0x2000,
-        importKind: "eager",
-        guardIatEntry: false
-      },
+      importTarget("KERNEL32.dll!GetSystemTimeAsFileTime"),
       createCallStackState(iced, createEmulationState(64), 0x140001001n)
     ),
     { kind: "stack-return", rva: 0x1001 }
@@ -81,12 +104,7 @@ void test("getReturningImportFallthrough rejects non-returning imports and out-o
       createOptions(),
       { rvaStart: 0x1000, fileOffsetStart: 0, data: new Uint8Array([0x15, 0xc3]) },
       createIndirectCallInstruction(0x1001),
-      {
-        label: "KERNEL32.dll!ExitProcess",
-        slotRva: 0x2000,
-        importKind: "eager",
-        guardIatEntry: false
-      },
+      importTarget("KERNEL32.dll!ExitProcess", importMetadata(true)),
       createEmulationState(64)
     ),
     null
@@ -97,12 +115,7 @@ void test("getReturningImportFallthrough rejects non-returning imports and out-o
       createOptions(),
       { rvaStart: 0x1000, fileOffsetStart: 0, data: new Uint8Array([0x15]) },
       createIndirectCallInstruction(0x1001),
-      {
-        label: "KERNEL32.dll!GetSystemTimeAsFileTime",
-        slotRva: 0x2000,
-        importKind: "eager",
-        guardIatEntry: false
-      },
+      importTarget("KERNEL32.dll!GetSystemTimeAsFileTime"),
       createEmulationState(64)
     ),
     null

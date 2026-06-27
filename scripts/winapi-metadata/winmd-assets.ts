@@ -38,6 +38,7 @@ const METHOD_DEF_TABLE_ID = 0x06;
 const API_TYPE_SUFFIX = ".Apis";
 const ANSI_ATTRIBUTE = "Windows.Win32.Foundation.Metadata.AnsiAttribute";
 const UNICODE_ATTRIBUTE = "Windows.Win32.Foundation.Metadata.UnicodeAttribute";
+const DOES_NOT_RETURN_ATTRIBUTE = "System.Diagnostics.CodeAnalysis.DoesNotReturnAttribute";
 const SUPPORTED_OS_ATTRIBUTE = "Windows.Win32.Foundation.Metadata.SupportedOSPlatformAttribute";
 const SUPPORTED_ARCHITECTURE_ATTRIBUTE = "Windows.Win32.Foundation.Metadata.SupportedArchitectureAttribute";
 export const WINAPI_METADATA_ENTRYPOINT_INDEX_PATH = "entrypoint-index.json";
@@ -124,6 +125,9 @@ const characterSet = (
   return decodeCharacterSet(mappingFlags);
 };
 
+export const hasDoesNotReturnAttribute = (attributes: PeClrCustomAttributeInfo[]): boolean =>
+  attributes.some(attribute => attribute.attributeType === DOES_NOT_RETURN_ATTRIBUTE);
+
 const createEntry = (
   implMap: PeClrImplementationMapInfo,
   method: PeClrMethodDefinitionInfo,
@@ -148,6 +152,7 @@ const createEntry = (
     parameters,
     callingConvention: decodeCallingConvention(implMap.mappingFlags),
     variadic: isVariadicConvention(implMap.mappingFlags),
+    noReturn: hasDoesNotReturnAttribute(attributes),
     setLastError: mappingSupportsLastError(implMap.mappingFlags),
     characterSet: characterSet(implMap.mappingFlags, attributes),
     architecture: architectureConstraints(attributes),

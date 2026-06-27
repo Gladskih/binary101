@@ -132,6 +132,7 @@ export const createUcrtEntry = (
     parameters,
     callingConvention: declaration.callingConvention,
     variadic: declaration.variadic,
+    noReturn: declaration.noReturn,
     setLastError: false,
     characterSet: null,
     architecture: [],

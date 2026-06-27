@@ -14,7 +14,7 @@ for DLLs that appear in the parsed eager or delay import tables.
   `scripts/ucrt-metadata/config.ts`.
 
 The UCRT generator uses `ucrt.lib` for the real export/module list, then parses
-UCRT headers with MSVC-compatible `clang` AST output. It keeps only function
+UCRT headers with MSVC-compatible `clang` JSON AST output. It keeps only function
 declarations that match exported names. A small local `vcruntime*.h` shim is
 used so CI does not need a Visual Studio include directory.
 
@@ -64,6 +64,9 @@ are not sent through WinAPI API Set fallback.
 - Parameter metadata includes `direction` when available or inferable:
   `in`, `out`, `inout`, or `null`. WinAPI direction comes from WinMD CLR
   `ParamAttributes`; UCRT direction is inferred conservatively from C types.
+- Function metadata includes `noReturn`. UCRT records it from clang JSON AST
+  attributes; WinAPI records it from WinMD `DoesNotReturnAttribute` metadata
+  when the pinned package provides that attribute.
 - UCRT extraction records function declarations only; exported variables and
   exports without a readable header declaration are intentionally omitted.
 - UCRT architecture/platform constraints are not inferred per function. The
