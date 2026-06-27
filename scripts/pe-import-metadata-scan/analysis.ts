@@ -157,7 +157,13 @@ const scanPath = async (path: string, options: ScanOptions, state: ScanState): P
     return;
   }
   if (info.isDirectory()) {
-    const entries = await readdir(path, { withFileTypes: true });
+    let entries;
+    try {
+      entries = await readdir(path, { withFileTypes: true });
+    } catch (error) {
+      state.errors.push({ path, message: cleanErrorMessage(error) });
+      return;
+    }
     for (const entry of entries) await scanPath(resolve(path, entry.name), options, state);
     return;
   }
