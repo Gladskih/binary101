@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 import { createGzipFile } from "../fixtures/gzip-fixtures.js";
 import { createIso9660PrimaryFile } from "../fixtures/iso9660-fixtures.js";
+import { createLargePeCodeStringReferenceFile } from "../fixtures/pe-code-string-table-file.js";
 import { createPePlusEntrypointCallFile, createPePlusFile } from "../fixtures/sample-files-pe.js";
 import { createZipWithEntries } from "../fixtures/zip-fixtures.js";
 import type { MockFile } from "../helpers/mock-file.js";
@@ -220,5 +221,45 @@ test.describe("PE analysis actions", () => {
     await detailsValue.locator("#peEntrypointDisassembleButton").click();
     await expect(entrypointSection).toContainText("Entrypoint preview:");
     await expect(sortSetButton.locator("..")).toHaveAttribute("aria-sort", "ascending");
+  });
+});
+
+test.describe("large PE string tables", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Local File Inspector" })).toBeVisible();
+  });
+
+  void test("pages and sorts large PE code string tables", async ({ page }) => {
+    const mockFile = createLargePeCodeStringReferenceFile();
+    await page.setInputFiles("#fileInput", toUpload(mockFile));
+    await expectBaseDetails(page, mockFile.name, "PE32+ executable for x86-64 (AMD64)");
+
+    const detailsValue = page.locator("#analysisValue");
+    const instructionSection = detailsValue.locator("details.analysisPanel").filter({
+      has: page.locator("summary", { hasText: /^Instruction-set analysis\b/ })
+    }).first();
+    await instructionSection.locator(":scope > summary").click();
+    await detailsValue.locator("#peInstructionSetsAnalyzeButton").click();
+    await expect(instructionSection).toContainText("Code-referenced strings (1005)");
+
+    const stringDetails = instructionSection.locator("details").filter({
+      has: page.locator("summary", { hasText: /^Code-referenced strings \(1005\)/ })
+    }).first();
+    await stringDetails.locator(":scope > summary").click();
+    const pagedTable = stringDetails.locator("[data-paged-sortable-table-root]").first();
+    await expect(pagedTable.getByText("Showing 1-500 of 1005")).toBeVisible();
+    await expect(pagedTable.locator("tbody tr")).toHaveCount(500);
+    await expect(pagedTable).toContainText("value-1005");
+    await expect(pagedTable).not.toContainText("value-0001");
+
+    const textSortButton = pagedTable.getByRole("button", { name: "Sort by Text" });
+    await textSortButton.click();
+    await expect(textSortButton.locator("..")).toHaveAttribute("aria-sort", "ascending");
+    await expect(pagedTable.locator("tbody tr").first()).toContainText("value-0001");
+
+    await pagedTable.getByRole("button", { name: "Last" }).click();
+    await expect(pagedTable.getByText("Showing 1001-1005 of 1005")).toBeVisible();
+    await expect(pagedTable.locator("tbody tr")).toHaveCount(5);
   });
 });

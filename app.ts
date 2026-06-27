@@ -3,12 +3,7 @@ import { nowIsoString, formatHumanSize } from "./binary-utils.js";
 import { detectBinaryType, parseForUi, type ParseForUiResult } from "./analyzers/index.js";
 import { renderAnalysisIntoUi as renderParsedResult } from "./ui/render-analysis.js";
 import { attachPreviewGuards, buildPreviewHtml } from "./ui/preview.js";
-import {
-  HASH_ALGORITHMS,
-  computeAndDisplayHash,
-  copyHashToClipboard,
-  resetHashDisplay
-} from "./ui/hash-controls.js";
+import { HASH_ALGORITHMS, computeAndDisplayHash, copyHashToClipboard, resetHashDisplay } from "./ui/hash-controls.js";
 import { createFileActionClickHandler } from "./ui/file-actions.js";
 import { isPeWindowsParseResult } from "./analyzers/pe/index.js";
 import { handlePeEntrypointJumpClick } from "./ui/pe-entrypoint-navigation.js";
@@ -22,6 +17,8 @@ import { copyManifestPreviewToClipboard } from "./ui/manifest-preview-copy.js";
 import { handleManifestTreeActionClick, syncManifestTreeControls } from "./ui/manifest-tree-controls.js";
 import { captureOpenDetails, restoreOpenDetails } from "./ui/details-open-state.js";
 import { enhanceSortableTables, handleSortableTableClick } from "./ui/sortable-tables.js";
+import { enhanceAnalysisPagedTables } from "./ui/analysis-paged-tables.js";
+import { capturePagedSortableTableState } from "./ui/paged-sortable-tables.js";
 import {
   createDirectoryInspectionController,
   type DirectoryInspectionController
@@ -80,6 +77,7 @@ const formatAnalysisDuration = (durationMs: number): string =>
   durationMs < 1000 ? `${Math.max(0, Math.round(durationMs))} ms` : `${(durationMs / 1000).toFixed(2)} s`;
 const renderResult = (result: ParseForUiResult): void => {
   const openDetails = captureOpenDetails(analysisValueElement);
+  const pagedTables = capturePagedSortableTableState(analysisValueElement);
   renderParsedResult(result, {
     buildPreview: () =>
       buildPreviewHtml({ file: currentFile, typeLabel: currentTypeLabel, setPreviewUrl }),
@@ -88,6 +86,7 @@ const renderResult = (result: ParseForUiResult): void => {
     valueElement: analysisValueElement
   });
   enhanceSortableTables(analysisValueElement);
+  enhanceAnalysisPagedTables(analysisValueElement, result, pagedTables);
   enhanceAccessibleTooltips(fileInfoCardElement);
   restoreOpenDetails(analysisValueElement, openDetails, viewer => syncManifestTreeControls(viewer as Element));
 };

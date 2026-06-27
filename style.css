@@ -512,6 +512,8 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .peDataDirectoryStatus--absent{background:var(--muted)}
 .table[data-sortable] .sortableTableHeader + .sortableTableHeader,
 .table[data-sortable] tbody > tr > * + *{border-left:1px solid var(--border)}
+.table[data-paged-sortable-table] .sortableTableHeader + .sortableTableHeader,
+.table[data-paged-sortable-table] tbody > tr > * + *{border-left:1px solid var(--border)}
 .sortableTableHeader{cursor:pointer}
 .sortableTableHeaderButton{
   align-items:center;
@@ -552,6 +554,42 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 }
 .sortableTableHeaderButton[data-sort-direction="descending"] .sortableTableHeaderSortIcon::after{
   border-top-color:var(--accent);
+}
+.pagedSortableTable{margin-top:.35rem}
+.pagedSortableTableToolbar{
+  align-items:center;
+  display:flex;
+  flex-wrap:wrap;
+  gap:.5rem .75rem;
+  justify-content:space-between;
+  margin:.35rem 0;
+}
+.pagedSortableTableRange,
+.pagedSortableTablePageCount{
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:12px;
+}
+.pagedSortableTableControls{
+  align-items:center;
+  display:flex;
+  flex-wrap:wrap;
+  gap:.35rem;
+}
+.pagedSortableTablePageInput{
+  background:transparent;
+  border:1px solid var(--border2);
+  border-radius:6px;
+  color:var(--text);
+  font-family:var(--mono);
+  font-size:12px;
+  padding:4px 6px;
+  width:4.5rem;
+}
+.pagedSortableTablePageInput:focus-visible{
+  border-color:var(--accent);
+  outline:2px solid color-mix(in oklab,var(--accent) 35%,transparent);
+  outline-offset:1px;
 }
 .tableWrap > .peResourcePreviewTable{min-width:600px;table-layout:fixed}
 .peResourcePreviewTable > thead > tr > th,

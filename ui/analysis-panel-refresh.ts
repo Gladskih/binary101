@@ -22,21 +22,37 @@ import {
 } from "../renderers/pe/entrypoint-disassembly.js";
 import { PE_OVERLAY_PANEL_ID, renderOverlayPanel } from "../renderers/pe/overlay.js";
 import { enhanceAccessibleTooltips } from "./accessible-tooltips.js";
+import { enhancePeDisassemblyPagedTables } from "./analysis-paged-tables.js";
 import { captureOpenDetails, restoreOpenDetails } from "./details-open-state.js";
+import {
+  capturePagedSortableTableState,
+  type PagedSortableTableSnapshot
+} from "./paged-sortable-tables.js";
 import {
   captureSortableTableState,
   enhanceSortableTables,
   restoreSortableTableState
 } from "./sortable-tables.js";
 
-const replaceRenderedRegion = (panelId: string, markup: string): HTMLElement | null => {
+type RegionPagedTableEnhancer = (
+  root: HTMLElement,
+  snapshots: readonly PagedSortableTableSnapshot[]
+) => void;
+
+const replaceRenderedRegion = (
+  panelId: string,
+  markup: string,
+  enhancePagedTables?: RegionPagedTableEnhancer
+): HTMLElement | null => {
   const panel = document.getElementById(panelId);
   if (!(panel instanceof HTMLElement)) return null;
   const openDetails = captureOpenDetails(panel);
   const sortableTables = captureSortableTableState(panel);
+  const pagedTables = capturePagedSortableTableState(panel);
   panel.outerHTML = markup;
   const updatedPanel = document.getElementById(panelId);
   if (!(updatedPanel instanceof HTMLElement)) return null;
+  enhancePagedTables?.(updatedPanel, pagedTables);
   enhanceSortableTables(updatedPanel);
   restoreSortableTableState(updatedPanel, sortableTables);
   enhanceAccessibleTooltips(updatedPanel);
@@ -45,7 +61,11 @@ const replaceRenderedRegion = (panelId: string, markup: string): HTMLElement | n
 };
 
 export const refreshPeInstructionSetsPanel = (pe: PeWindowsParseResult): void => {
-  replaceRenderedRegion(PE_INSTRUCTION_SETS_PANEL_ID, renderPeInstructionSetsPanel(pe));
+  replaceRenderedRegion(
+    PE_INSTRUCTION_SETS_PANEL_ID,
+    renderPeInstructionSetsPanel(pe),
+    (root, snapshots) => enhancePeDisassemblyPagedTables(root, pe, snapshots)
+  );
 };
 
 export const refreshPeDisassemblyPanels = (pe: PeWindowsParseResult): void => {

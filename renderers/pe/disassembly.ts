@@ -3,16 +3,15 @@
 import { formatHumanSize } from "../../binary-utils.js";
 import { escapeHtml } from "../../html-utils.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
-import { peSectionNameValue } from "../../analyzers/pe/sections/name.js";
 import {
   KNOWN_CPUID_FEATURES,
   describeCpuidFeature,
   formatCpuidLabel
 } from "../../analyzers/x86/cpuid-features.js";
-import type {
-  PeApiStringReference,
-  PeCodeStringReference
-} from "../../analyzers/pe/disassembly/index.js";
+import {
+  renderApiStringReferences,
+  renderCodeStringReferences
+} from "./disassembly-strings.js";
 
 const ANALYZE_BUTTON_ID = "peInstructionSetsAnalyzeButton";
 const CANCEL_BUTTON_ID = "peInstructionSetsCancelButton";
@@ -64,106 +63,6 @@ const renderPendingFeatureRows = (): string => {
 const renderFeatureTable = (rows: string): string =>
   `<table class="table" style="margin-top:.35rem"><thead><tr>` +
   `<th>Set</th><th>Instr.</th><th>What it is</th></tr></thead><tbody>${rows}</tbody></table>`;
-
-const formatRva = (rva: number): string => `0x${(rva >>> 0).toString(16).padStart(8, "0")}`;
-
-const sectionForRva = (pe: PeWindowsParseResult, rva: number): string => {
-  const section = pe.sections.find(candidate => {
-    const start = candidate.virtualAddress >>> 0;
-    const span = (candidate.virtualSize >>> 0) || (candidate.sizeOfRawData >>> 0);
-    return rva >= start && rva < start + span;
-  });
-  return section ? peSectionNameValue(section.name) || "(unnamed)" : "-";
-};
-
-const clippedText = (text: string): string =>
-  text.length > 120 ? `${text.slice(0, 117)}...` : text;
-
-const sourceLabel = (sourceKind: PeApiStringReference["callSites"][number]["sourceKind"]): string =>
-  sourceKind === "ucrt" ? "UCRT" : "WinAPI";
-
-const renderCodeStringInstructionRvas = (reference: PeCodeStringReference): string => {
-  const rvas = reference.instructionRvas.slice(0, 5).map(formatRva);
-  const suffix = reference.instructionRvas.length > rvas.length
-    ? ` +${reference.instructionRvas.length - rvas.length} more`
-    : "";
-  return escapeHtml(`${rvas.join(", ")}${suffix}`);
-};
-
-const renderCodeStringRows = (
-  pe: PeWindowsParseResult,
-  references: PeCodeStringReference[]
-): string => references.map(reference => {
-  const text = escapeHtml(clippedText(reference.text));
-  const title = escapeHtml(reference.text);
-  return `<tr><td class="peNumeric">${formatRva(reference.rva)}</td>` +
-    `<td>${escapeHtml(sectionForRva(pe, reference.rva))}</td>` +
-    `<td>${escapeHtml(reference.encoding)}</td>` +
-    `<td class="peNumeric">${reference.instructionRvas.length}</td>` +
-    `<td>${renderCodeStringInstructionRvas(reference)}</td>` +
-    `<td><code title="${title}">${text}</code></td></tr>`;
-}).join("");
-
-const renderCodeStringReferences = (pe: PeWindowsParseResult, out: string[]): void => {
-  const references = pe.disassembly?.codeStringReferences ?? [];
-  if (!references.length) {
-    out.push(`<div class="smallNote dim">No code-referenced strings were detected.</div>`);
-    return;
-  }
-  out.push(
-    `<details style="margin-top:.35rem"><summary class="dim" style="cursor:pointer">` +
-    `Code-referenced strings (${references.length})</summary>` +
-    `<div class="tableWrap"><table class="table" style="margin-top:.35rem">` +
-    `<thead><tr><th class="peNumeric">RVA</th><th>Section</th><th>Encoding</th>` +
-    `<th class="peNumeric">Refs</th><th>Code refs</th><th>Text</th></tr></thead>` +
-    `<tbody>${renderCodeStringRows(pe, references)}</tbody></table></div></details>`
-  );
-};
-
-const renderApiStringCallSites = (reference: PeApiStringReference): string => {
-  const sites = reference.callSites.slice(0, 3).map(site => {
-    const parameter = site.parameterName ?? `arg${site.parameterIndex + 1}`;
-    return `${sourceLabel(site.sourceKind)} ${site.module}!${site.entrypoint} ` +
-      `${parameter} @ ${formatRva(site.instructionRva)}`;
-  });
-  const suffix = reference.callSites.length > sites.length
-    ? ` +${reference.callSites.length - sites.length} more`
-    : "";
-  return escapeHtml(`${sites.join("; ")}${suffix}`);
-};
-
-const renderApiStringRows = (
-  pe: PeWindowsParseResult,
-  references: PeApiStringReference[]
-): string => references.map(reference => {
-  const text = escapeHtml(clippedText(reference.text));
-  const title = escapeHtml(reference.text);
-  return `<tr><td class="peNumeric">${formatRva(reference.rva)}</td>` +
-    `<td>${escapeHtml(sectionForRva(pe, reference.rva))}</td>` +
-    `<td>${escapeHtml(reference.encoding)}</td>` +
-    `<td class="peNumeric">${reference.callSites.length}</td>` +
-    `<td>${renderApiStringCallSites(reference)}</td>` +
-    `<td><code title="${title}">${text}</code></td></tr>`;
-}).join("");
-
-const renderApiStringReferences = (pe: PeWindowsParseResult, out: string[]): void => {
-  const references = pe.disassembly?.apiStringReferences ?? [];
-  if (!references.length) {
-    out.push(
-      `<div class="smallNote dim">No WinAPI/UCRT string arguments were detected ` +
-      `in direct imported calls.</div>`
-    );
-    return;
-  }
-  out.push(
-    `<details style="margin-top:.35rem"><summary class="dim" style="cursor:pointer">` +
-    `WinAPI/UCRT string arguments (${references.length})</summary>` +
-    `<div class="tableWrap"><table class="table" style="margin-top:.35rem">` +
-    `<thead><tr><th class="peNumeric">RVA</th><th>Section</th><th>Encoding</th>` +
-    `<th class="peNumeric">Refs</th><th>API argument</th><th>Text</th></tr></thead>` +
-    `<tbody>${renderApiStringRows(pe, references)}</tbody></table></div></details>`
-  );
-};
 
 const renderInstructionSetsContent = (pe: PeWindowsParseResult, out: string[]): void => {
   const disasm = pe.disassembly;
