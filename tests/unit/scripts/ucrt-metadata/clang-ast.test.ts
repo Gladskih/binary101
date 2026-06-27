@@ -14,6 +14,12 @@ const astJson = (): string => JSON.stringify({
     },
     {
       kind: "FunctionDecl",
+      name: "c11_abort",
+      type: { qualType: "void (void)" },
+      inner: [{ kind: "C11NoReturnAttr" }]
+    },
+    {
+      kind: "FunctionDecl",
       name: "example",
       type: {
         qualType: "int (const char *, char *, int) __attribute__((cdecl))",
@@ -29,7 +35,7 @@ const astJson = (): string => JSON.stringify({
 });
 
 void test("parseClangFunctions reads function declarations from JSON AST", () => {
-  const functions = parseClangFunctions(astJson(), new Set(["abort", "example"]));
+  const functions = parseClangFunctions(astJson(), new Set(["abort", "c11_abort", "example"]));
 
   assert.deepEqual(functions.get("abort"), {
     name: "abort",
@@ -41,6 +47,7 @@ void test("parseClangFunctions reads function declarations from JSON AST", () =>
     noReturn: true,
     score: 4
   });
+  assert.equal(functions.get("c11_abort")?.noReturn, true);
   assert.deepEqual(functions.get("example")?.parameters, [
     { name: "source", type: "const char *" },
     { name: "target", type: "char *" },
@@ -50,6 +57,6 @@ void test("parseClangFunctions reads function declarations from JSON AST", () =>
   assert.equal(functions.get("example")?.noReturn, false);
 });
 
-void test("parseClangFunctions ignores malformed JSON AST", () => {
-  assert.deepEqual([...parseClangFunctions("{", new Set(["abort"])).entries()], []);
+void test("parseClangFunctions rejects malformed JSON AST", () => {
+  assert.throws(() => parseClangFunctions("{", new Set(["abort"])), SyntaxError);
 });

@@ -37,13 +37,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isClangAstNode = (value: unknown): value is ClangAstNode =>
   isRecord(value);
 
-const parseAstJson = (astJson: string): ClangAstNode | null => {
-  try {
-    const parsed = JSON.parse(astJson) as unknown;
-    return isClangAstNode(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
+const parseAstJson = (astJson: string): ClangAstNode => {
+  const parsed = JSON.parse(astJson) as unknown;
+  if (!isClangAstNode(parsed)) throw new Error("Clang JSON AST root is not an object.");
+  return parsed;
 };
 
 const nodeChildren = (node: ClangAstNode): ClangAstNode[] =>
@@ -130,7 +127,10 @@ const isVariadicFunction = (node: ClangAstNode, parameterText: string): boolean 
 const isNoReturnFunction = (node: ClangAstNode, rawType: string): boolean =>
   rawType.includes(NO_RETURN_ATTRIBUTE) ||
   functionTypeText(node).includes(NO_RETURN_ATTRIBUTE) ||
-  nodeChildren(node).some(child => child.kind === "NoReturnAttr" || child.kind === "CXX11NoReturnAttr");
+  nodeChildren(node).some(child =>
+    child.kind === "C11NoReturnAttr" ||
+    child.kind === "CXX11NoReturnAttr" ||
+    child.kind === "NoReturnAttr");
 
 const parseFunctionNode = (node: ClangAstNode): ClangFunctionDecl | null => {
   if (node.kind !== "FunctionDecl" || !node.name) return null;
@@ -159,7 +159,6 @@ export const parseClangFunctions = (
   exportNames: ReadonlySet<string>
 ): Map<string, ClangFunctionDecl> => {
   const parsed = parseAstJson(astJson);
-  if (!parsed) return new Map();
   const functions = new Map<string, ClangFunctionDecl>();
   for (const node of collectFunctionNodes(parsed)) {
     const decl = parseFunctionNode(node);
