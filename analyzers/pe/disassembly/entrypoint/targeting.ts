@@ -84,9 +84,15 @@ const applyImportTarget = async (
   if (importFallthrough?.kind === "current-block") {
     applyReturningImportEffects(iced, block.emulationState, importTarget);
   }
+  const target = {
+    label: importTarget.label,
+    slotRva: importTarget.slotRva,
+    importKind: importTarget.importKind,
+    guardIatEntry: importTarget.guardIatEntry
+  };
   instruction.target = importFallthrough == null
-    ? { kind: "import", ...importTarget }
-    : { kind: "import", ...importTarget, returnRva: importFallthrough.rva, returnFollowed };
+    ? { kind: "import", ...target }
+    : { kind: "import", ...target, returnRva: importFallthrough.rva, returnFollowed };
 };
 
 const applyDirectTarget = async (

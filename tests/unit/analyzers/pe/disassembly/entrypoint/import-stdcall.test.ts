@@ -6,6 +6,7 @@ import * as realIced from "iced-x86";
 import { createFileRangeReader } from "../../../../../../analyzers/file-range-reader.js";
 import { analyzePeEntrypointDisassembly } from "../../../../../../analyzers/pe/disassembly/index.js";
 import type { IcedModule } from "../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";
+import type { PeImportMetadataEntry } from "../../../../../../pe-import-metadata-schema.js";
 import {
   IMAGE_FILE_MACHINE_I386,
   createExecutableSection
@@ -13,6 +14,31 @@ import {
 import { MockFile } from "../../../../../helpers/mock-file.js";
 
 const realIcedModule = realIced as unknown as IcedModule;
+
+const freeLibraryMetadata = (): PeImportMetadataEntry => ({
+  sourceKind: "winapi",
+  id: "test:FreeLibrary",
+  module: "KERNEL32.dll",
+  entrypoint: "FreeLibrary",
+  namespace: "Windows.Win32.Foundation",
+  api: "FreeLibrary",
+  signature: "BOOL FreeLibrary(HMODULE hLibModule)",
+  returnType: "BOOL",
+  rawReturnType: "valuetype TypeRef#1",
+  parameters: [{
+    name: "hLibModule",
+    type: "Windows.Win32.Foundation.HMODULE",
+    rawType: "valuetype TypeRef#2",
+    direction: "in",
+    x86StackBytes: 4
+  }],
+  callingConvention: "winapi",
+  variadic: false,
+  setLastError: true,
+  characterSet: null,
+  architecture: [],
+  platform: []
+});
 
 void test("analyzePeEntrypointDisassembly cleans x86 stdcall import arguments", async () => {
   const bytes = new Uint8Array([
@@ -57,7 +83,7 @@ void test("analyzePeEntrypointDisassembly cleans x86 stdcall import arguments", 
           firstThunkRva: 0x2000,
           lookupSource: "import-lookup-table",
           thunkTableTerminated: true,
-          functions: [{ name: "FreeLibrary" }]
+          functions: [{ name: "FreeLibrary", apiMetadata: freeLibraryMetadata() }]
         }]
       }
     },
