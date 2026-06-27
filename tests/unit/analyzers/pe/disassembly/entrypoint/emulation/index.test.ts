@@ -173,6 +173,18 @@ void test("emulateInstruction executes lea through the operand layer", () => {
   });
 });
 
+void test("emulateInstruction resolves RIP-relative lea addresses", () => {
+  const { state } = emulateInstructionsWithState([
+    ins("Lea", [reg("RAX"), mem("UInt64", "RIP", 0x14000223bn)])
+  ]);
+
+  assert.deepEqual(state.registers.get("RAX"), {
+    kind: "known",
+    value: 0x14000223bn,
+    bits: 64
+  });
+});
+
 void test("emulateInstruction keeps CPUID leaf 0xffffffff concrete", () => {
   const { state } = emulateInstructionsWithState([
     ins("Mov", [reg("EAX"), imm(0xffffffff)]),

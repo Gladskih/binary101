@@ -47,7 +47,7 @@ const registerNames = [
   "R9D", "R9W", "R9L", "R10", "R10D", "R10W", "R10L", "R11", "R11D",
   "R11W", "R11L", "R12", "R12D", "R12W", "R12L", "R13", "R13D", "R13W",
   "R13L", "R14", "R14D", "R14W", "R14L", "R15", "R15D", "R15W", "R15L",
-  "RIP"
+  "RIP", "EIP", "XMM0"
 ] as const;
 
 const opKindNames = [
@@ -137,6 +137,7 @@ class FixtureInstruction implements IcedInstructionObject {
   readonly isCallNearIndirect: boolean;
   readonly isIpRelMemoryOperand: boolean;
   readonly isJmpNearIndirect: boolean;
+  readonly ipRelMemoryAddress: bigint;
   constructor(
     mnemonic: FixtureMnemonic,
     private readonly operands: readonly FixtureOperand[],
@@ -169,8 +170,12 @@ class FixtureInstruction implements IcedInstructionObject {
           : null;
     const indirectControlFlow = spec.indirectControlFlow ?? inferredIndirectControlFlow;
     this.isCallNearIndirect = indirectControlFlow === "near-call";
-    this.isIpRelMemoryOperand = this.memoryBase === fixtureRegister["RIP"];
+    this.isIpRelMemoryOperand =
+      this.memoryBase === fixtureRegister["RIP"] || this.memoryBase === fixtureRegister["EIP"];
     this.isJmpNearIndirect = indirectControlFlow === "near-jump";
+    this.ipRelMemoryAddress = this.isIpRelMemoryOperand
+      ? this.memoryDisplacement
+      : 0n;
   }
   opKind(operand: number): number {
     const data = this.operands[operand];

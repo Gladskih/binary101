@@ -40,9 +40,16 @@ void test("isSameRegisterOperand compares decoded register operands", () => {
 
 void test("resolveMemoryAddress rejects unsupported memory base registers", () => {
   const state = createEmulationState(64);
-  const instruction = ins("Mov", [reg("RAX"), mem("UInt64", "RIP")]);
+  const instruction = ins("Mov", [reg("RAX"), mem("UInt64", "XMM0")]);
 
   assert.equal(resolveMemoryAddress(fixtureIced, state, instruction), null);
+});
+
+void test("resolveMemoryAddress uses iced IP-relative memory addresses", () => {
+  const state = createEmulationState(64);
+  const instruction = ins("Mov", [reg("RAX"), mem("UInt64", "RIP", 0x14000223bn)]);
+
+  assert.equal(resolveMemoryAddress(fixtureIced, state, instruction), 0x14000223bn);
 });
 
 void test("readOperand and writeOperand use concrete stack addresses", () => {

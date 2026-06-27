@@ -26,6 +26,7 @@ export type IcedInstructionObject = {
   readonly isCallNearIndirect: boolean;
   readonly isIpRelMemoryOperand: boolean;
   readonly isJmpNearIndirect: boolean;
+  readonly ipRelMemoryAddress: bigint;
   opKind(operand: number): number;
   opRegister(operand: number): number;
   immediate(operand: number): bigint;

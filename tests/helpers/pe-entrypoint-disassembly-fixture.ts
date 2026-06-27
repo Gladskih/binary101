@@ -31,6 +31,7 @@ export class TestInstruction {
   isCallNearIndirect = false;
   isIpRelMemoryOperand = false;
   isJmpNearIndirect = false;
+  ipRelMemoryAddress = 0n;
   text = "";
   opKind(): number {
     return 0;
@@ -73,6 +74,7 @@ export class TestDecoder {
     instruction.isCallNearIndirect = false;
     instruction.isIpRelMemoryOperand = false;
     instruction.isJmpNearIndirect = false;
+    instruction.ipRelMemoryAddress = 0n;
     instruction.text = byte === 0xff ? "invalid" : `op_${byte.toString(16)}`;
     if (byte === 0xc3) {
       instruction.flowControl = 4;
@@ -97,6 +99,7 @@ export class TestDecoder {
       instruction.isCallNearIndirect = true;
       instruction.isIpRelMemoryOperand = true;
       instruction.memoryDisplacement = 0x140002000n;
+      instruction.ipRelMemoryAddress = 0x140002000n;
       instruction.op0Kind = 24;
       instruction.text = "call [iat]";
     } else if (byte === 0x25) {
@@ -104,6 +107,7 @@ export class TestDecoder {
       instruction.isIpRelMemoryOperand = true;
       instruction.isJmpNearIndirect = true;
       instruction.memoryDisplacement = 0x140002000n;
+      instruction.ipRelMemoryAddress = 0x140002000n;
       instruction.op0Kind = 24;
       instruction.text = "jmp [iat]";
     }

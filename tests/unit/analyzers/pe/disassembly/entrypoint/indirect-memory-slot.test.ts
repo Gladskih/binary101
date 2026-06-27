@@ -9,6 +9,7 @@ import type { IcedModule } from "../../../../../../analyzers/pe/disassembly/entr
 import { inlinePeSectionName } from "../../../../../../analyzers/pe/sections/name.js";
 import type { PeSection } from "../../../../../../analyzers/pe/types.js";
 import {
+  IMAGE_FILE_MACHINE_AMD64,
   IMAGE_FILE_MACHINE_I386,
   createExecutableSection
 } from "../../../../../helpers/pe-entrypoint-disassembly-fixture.js";
@@ -21,7 +22,7 @@ const IMAGE_SCN_MEM_READ = 0x40000000;
 
 const rvaToOff = (rva: number): number | null => {
   if (rva >= 0x1000 && rva < 0x1040) return rva - 0x1000;
-  if (rva >= 0x2000 && rva < 0x2004) return 0x40 + rva - 0x2000;
+  if (rva >= 0x2000 && rva < 0x2008) return 0x40 + rva - 0x2000;
   return null;
 };
 
@@ -63,6 +64,33 @@ void test("analyzePeEntrypointDisassembly follows indirect jumps through image s
     "nop",
     "ret"
   ]);
+});
+
+void test("analyzePeEntrypointDisassembly follows RIP-relative indirect image slots", async () => {
+  const bytes = new Uint8Array(0x48);
+  bytes.set([0xff, 0x25, 0xfa, 0x0f, 0x00, 0x00]);
+  bytes.set([0x90, 0xc3], 0x10);
+  bytes.set([0x10, 0x10, 0x00, 0x40, 0x01, 0x00, 0x00, 0x00], 0x40);
+  const result = await analyzePeEntrypointDisassembly(
+    createFileRangeReader(new MockFile(bytes, "rip-relative-indirect-slot.exe"), 0, bytes.length),
+    {
+      coffMachine: IMAGE_FILE_MACHINE_AMD64,
+      is64Bit: true,
+      imageBase: 0x140000000n,
+      entrypointRva: 0x1000,
+      rvaToOff,
+      sections: [
+        createExecutableSection({ virtualSize: 0x40, sizeOfRawData: 0x40 }),
+        dataSection(8)
+      ]
+    },
+    async () => realIcedModule
+  );
+  const target = result.blocks[0]?.instructions[0]?.target;
+
+  assert.deepEqual(target, { kind: "code", rva: 0x1010, followed: true });
+  assert.equal(result.blocks[1]?.kind, "followed-jump");
+  assert.equal(result.blocks[1]?.startRva, 0x1010);
 });
 
 void test("analyzePeEntrypointDisassembly ignores truncated indirect image slots", async () => {

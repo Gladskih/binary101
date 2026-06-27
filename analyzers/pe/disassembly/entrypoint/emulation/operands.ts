@@ -137,6 +137,10 @@ export const resolveMemoryAddresses = (
   state: EmulationState,
   instruction: IcedInstructionObject
 ): bigint[] | null => {
+  // iced-x86 already exposes EIP/RIP-relative operands as absolute addresses.
+  if (instruction.isIpRelMemoryOperand) {
+    return [known(instruction.ipRelMemoryAddress, state.bitness).value];
+  }
   const baseValue = readMemoryAddressRegister(iced, state, instruction.memoryBase);
   const indexValue = readMemoryAddressRegister(iced, state, instruction.memoryIndex);
   if (baseValue == null || indexValue == null) return null;
