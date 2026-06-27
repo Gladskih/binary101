@@ -32,8 +32,9 @@ const IMPORT_LOOKUP_TABLE_RVA = 0x2800;
 const parameter = (
   name: string | null,
   type: string,
-  x86StackBytes = Uint32Array.BYTES_PER_ELEMENT
-): PeImportMetadataParameter => ({ name, type, rawType: type, x86StackBytes });
+  x86StackBytes = Uint32Array.BYTES_PER_ELEMENT,
+  direction: PeImportMetadataParameter["direction"] = "in"
+): PeImportMetadataParameter => ({ name, type, rawType: type, direction, x86StackBytes });
 
 const metadataEntry = (
   sourceKind: PeImportMetadataEntry["sourceKind"],
@@ -280,4 +281,18 @@ void test("collector skips unmapped and unterminated string candidates", async (
   const references = await collector.references(reader);
 
   assert.deepEqual(references, []);
+});
+
+void test("collector skips pure output string parameters", async () => {
+  const { reader, rvaToOff } = createReader([{ rva: RDATA_RVA, bytes: utf16z("not an input") }]);
+  const metadata = metadataEntry("winapi", "KERNEL32.dll", "GetModuleFileNameW", [parameter("hModule", "Windows.Win32.Foundation.HMODULE"), parameter("lpFilename", "Windows.Win32.Foundation.PWSTR", Uint32Array.BYTES_PER_ELEMENT, "out"), parameter("nSize", "u4")]);
+  const collector = createPeApiStringReferenceCollector(fixtureIced, {
+    imageBase: IMAGE_BASE_AMD64, is64Bit: true,
+    imports: importTable("KERNEL32.dll", metadata, BigUint64Array.BYTES_PER_ELEMENT), rvaToOff
+  });
+
+  collector.record(leaArgument(IMAGE_BASE_AMD64, TEXT_RVA, "RDX", RDATA_RVA));
+  collector.record(importedCall(IMAGE_BASE_AMD64, TEXT_RVA + 1, "UInt64"));
+
+  assert.deepEqual(await collector.references(reader), []);
 });

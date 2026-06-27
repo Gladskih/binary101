@@ -120,6 +120,7 @@ const hasInputName = (parameter: PeImportMetadataParameter): boolean => {
 const stringEncodingForParameter = (
   parameter: PeImportMetadataParameter
 ): PeApiStringEncoding | null => {
+  if (parameter.direction === "out") return null;
   const type = normalizeType(parameter.type);
   if (type.includes("const wchar_t *")) return "utf-16le";
   if (type.includes("const char *")) return "ascii";

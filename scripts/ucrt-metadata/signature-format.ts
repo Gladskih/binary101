@@ -84,6 +84,14 @@ const x86StackBytesForType = (type: string): number | null => {
   return STACK_BYTES_BY_TYPE.get(normalized) ?? null;
 };
 
+const parameterDirection = (
+  type: string
+): UcrtMetadataEntry["parameters"][number]["direction"] => {
+  const normalized = normalizeTypeForStack(type);
+  if (!normalized.includes("*") && !POINTER_TYPE_NAMES.has(normalized)) return "in";
+  return /\bconst\b/.test(type) ? "in" : "inout";
+};
+
 const parameterSignatureText = (
   parameter: UcrtMetadataEntry["parameters"][number],
   index: number
@@ -104,6 +112,7 @@ export const createUcrtEntry = (
     name: parameter.name,
     type: formatDisplayType(parameter.type),
     rawType: parameter.type,
+    direction: parameterDirection(parameter.type),
     x86StackBytes: x86StackBytesForType(parameter.type)
   }));
   const signatureParameters = [

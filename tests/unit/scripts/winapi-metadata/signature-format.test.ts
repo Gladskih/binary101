@@ -10,6 +10,9 @@ import {
   x86StackBytesForParameters
 } from "../../../../scripts/winapi-metadata/signature-format.js";
 
+const PARAM_IN_FLAG = 0x0001;
+const PARAM_OUT_FLAG = 0x0002;
+
 const tables = (): PeClrMetadataTables => ({
   streamName: "#~",
   majorVersion: 2,
@@ -57,8 +60,8 @@ const method = (): PeClrMethodDefinitionInfo => ({
     parameterTypes: ["u4", "valuetype TypeRef#1"]
   },
   parameters: [
-    { row: 1, flags: 0, sequence: 1, name: "flags" },
-    { row: 2, flags: 0, sequence: 2, name: "name" }
+    { row: 1, flags: PARAM_IN_FLAG, sequence: 1, name: "flags" },
+    { row: 2, flags: PARAM_IN_FLAG | PARAM_OUT_FLAG, sequence: 2, name: "name" }
   ]
 });
 
@@ -76,5 +79,6 @@ void test("x86 stack byte metadata is conservative for unresolved value types", 
   const parameters = buildWinapiParameters(method(), tables());
 
   assert.deepStrictEqual(parameters.map(parameter => parameter.x86StackBytes), [4, null]);
+  assert.deepStrictEqual(parameters.map(parameter => parameter.direction), ["in", "inout"]);
   assert.equal(x86StackBytesForParameters(parameters), null);
 });

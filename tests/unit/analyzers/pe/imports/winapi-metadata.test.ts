@@ -49,7 +49,13 @@ const createEntry = (
   signature: `void ${entrypoint}(u4 milliseconds)`,
   returnType: "void",
   rawReturnType: "void",
-  parameters: [{ name: "milliseconds", type: "u4", rawType: "u4", x86StackBytes: 4 }],
+  parameters: [{
+    name: "milliseconds",
+    type: "u4",
+    rawType: "u4",
+    direction: "in",
+    x86StackBytes: 4
+  }],
   callingConvention: "winapi",
   x86StackBytes: 4,
   variadic: false,
@@ -69,7 +75,13 @@ const createUcrtEntry = (module: string, entrypoint: string): UcrtMetadataEntry 
   signature: `int ${entrypoint}(const char * format, ...)`,
   returnType: "int",
   rawReturnType: "int",
-  parameters: [{ name: "format", type: "const char *", rawType: "const char *", x86StackBytes: 4 }],
+  parameters: [{
+    name: "format",
+    type: "const char *",
+    rawType: "const char *",
+    direction: "in",
+    x86StackBytes: 4
+  }],
   callingConvention: "cdecl",
   x86StackBytes: 0,
   variadic: true,

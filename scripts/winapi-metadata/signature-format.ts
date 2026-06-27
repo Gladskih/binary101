@@ -6,6 +6,8 @@ import type { WinapiMetadataParameter } from "../../winapi-metadata-schema.js";
 const TYPE_REFERENCE_PATTERN = /\b(TypeDef|TypeRef)#(\d+)\b/g;
 const VALUE_TYPE_PREFIX = "valuetype ";
 const CLASS_PREFIX = "class ";
+const PARAM_IN_FLAG = 0x0001;
+const PARAM_OUT_FLAG = 0x0002;
 
 const STACK_BYTES_BY_TYPE: Record<string, number> = {
   bool: 4,
@@ -60,6 +62,20 @@ const x86StackBytesForType = (rawType: string | null | undefined): number | null
 const parameterName = (method: PeClrMethodDefinitionInfo, index: number): string | null =>
   method.parameters?.find(parameter => parameter.sequence === index + 1)?.name || null;
 
+const parameterDirection = (
+  method: PeClrMethodDefinitionInfo,
+  index: number
+): WinapiMetadataParameter["direction"] => {
+  const flags = method.parameters?.find(parameter => parameter.sequence === index + 1)?.flags;
+  if (flags == null) return null;
+  const input = (flags & PARAM_IN_FLAG) !== 0;
+  const output = (flags & PARAM_OUT_FLAG) !== 0;
+  if (input && output) return "inout";
+  if (input) return "in";
+  if (output) return "out";
+  return null;
+};
+
 export const buildWinapiParameters = (
   method: PeClrMethodDefinitionInfo,
   tables: PeClrMetadataTables
@@ -68,6 +84,7 @@ export const buildWinapiParameters = (
     name: parameterName(method, index),
     type: resolveSignatureType(rawType, tables),
     rawType: rawType ?? null,
+    direction: parameterDirection(method, index),
     x86StackBytes: x86StackBytesForType(rawType)
   })) ?? [];
 

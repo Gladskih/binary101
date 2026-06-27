@@ -61,6 +61,9 @@ are not sent through WinAPI API Set fallback.
 
 - Generated JSON files are build artifacts and are ignored by Git.
 - Metadata coverage is limited to the pinned packages.
+- Parameter metadata includes `direction` when available or inferable:
+  `in`, `out`, `inout`, or `null`. WinAPI direction comes from WinMD CLR
+  `ParamAttributes`; UCRT direction is inferred conservatively from C types.
 - UCRT extraction records function declarations only; exported variables and
   exports without a readable header declaration are intentionally omitted.
 - UCRT architecture/platform constraints are not inferred per function. The

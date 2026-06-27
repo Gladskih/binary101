@@ -1,11 +1,13 @@
 "use strict";
 
 export type PeImportMetadataSourceKind = "winapi" | "ucrt";
+export type PeImportMetadataParameterDirection = "in" | "out" | "inout";
 
 export interface PeImportMetadataParameter {
   name: string | null;
   type: string;
   rawType: string | null;
+  direction: PeImportMetadataParameterDirection | null;
   x86StackBytes: number | null;
 }
 
@@ -49,6 +51,11 @@ const isStringArray = (value: unknown): value is string[] =>
 const isSourceKind = (value: unknown): value is PeImportMetadataSourceKind =>
   value === "winapi" || value === "ucrt";
 
+const isParameterDirectionOrNull = (
+  value: unknown
+): value is PeImportMetadataParameterDirection | null =>
+  value === null || value === "in" || value === "out" || value === "inout";
+
 export const isPeImportMetadataParameter = (
   value: unknown
 ): value is PeImportMetadataParameter =>
@@ -56,6 +63,7 @@ export const isPeImportMetadataParameter = (
   isStringOrNull(value["name"]) &&
   isString(value["type"]) &&
   isStringOrNull(value["rawType"]) &&
+  isParameterDirectionOrNull(value["direction"]) &&
   isNumberOrNull(value["x86StackBytes"]);
 
 export const isPeImportMetadataEntry = (value: unknown): value is PeImportMetadataEntry =>

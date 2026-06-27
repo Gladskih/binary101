@@ -44,7 +44,13 @@ const chunk: UcrtMetadataChunk = {
       signature: "int printf(const char * param1, ...)",
       returnType: "int",
       rawReturnType: "int",
-      parameters: [{ name: null, type: "const char *", rawType: "const char *", x86StackBytes: 4 }],
+      parameters: [{
+        name: null,
+        type: "const char *",
+        rawType: "const char *",
+        direction: "in",
+        x86StackBytes: 4
+      }],
       callingConvention: "cdecl",
       x86StackBytes: 0,
       variadic: true,
@@ -56,6 +62,11 @@ const chunk: UcrtMetadataChunk = {
   }
 };
 
+const printfEntry = chunk.entries["printf"];
+if (!printfEntry) throw new Error("Missing printf fixture entry.");
+const printfParameter = printfEntry.parameters[0];
+if (!printfParameter) throw new Error("Missing printf fixture parameter.");
+
 void test("UCRT metadata schema accepts valid manifest and chunk shapes", () => {
   assert.equal(isUcrtMetadataManifest(manifest), true);
   assert.equal(isUcrtMetadataChunk(chunk), true);
@@ -66,5 +77,14 @@ void test("UCRT metadata schema rejects malformed entries", () => {
   assert.equal(isUcrtMetadataChunk({
     ...chunk,
     entries: { printf: { ...chunk.entries["printf"], sourceKind: "winapi" } }
+  }), false);
+  assert.equal(isUcrtMetadataChunk({
+    ...chunk,
+    entries: {
+      printf: {
+        ...printfEntry,
+        parameters: [{ ...printfParameter, direction: "sideways" }]
+      }
+    }
   }), false);
 });

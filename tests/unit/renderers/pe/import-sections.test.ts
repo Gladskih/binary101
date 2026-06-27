@@ -36,7 +36,13 @@ const sleepMetadata = (): WinapiMetadataEntry => ({
   signature: "void Sleep(u4 dwMilliseconds)",
   returnType: "void",
   rawReturnType: "void",
-  parameters: [{ name: "dwMilliseconds", type: "u4", rawType: "u4", x86StackBytes: 4 }],
+  parameters: [{
+    name: "dwMilliseconds",
+    type: "u4",
+    rawType: "u4",
+    direction: "in",
+    x86StackBytes: 4
+  }],
   callingConvention: "winapi",
   x86StackBytes: 4,
   variadic: false,
@@ -56,7 +62,13 @@ const printfMetadata = (): PeImportMetadataEntry => ({
   signature: "int printf(const char * format, ...)",
   returnType: "int",
   rawReturnType: "int",
-  parameters: [{ name: "format", type: "const char *", rawType: "const char *", x86StackBytes: 4 }],
+  parameters: [{
+    name: "format",
+    type: "const char *",
+    rawType: "const char *",
+    direction: "in",
+    x86StackBytes: 4
+  }],
   callingConvention: "cdecl",
   x86StackBytes: 0,
   variadic: true,

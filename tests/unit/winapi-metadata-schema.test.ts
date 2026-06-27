@@ -53,7 +53,13 @@ const chunk: WinapiMetadataChunk = {
       signature: "void Sleep(u4 dwMilliseconds)",
       returnType: "void",
       rawReturnType: "void",
-      parameters: [{ name: "dwMilliseconds", type: "u4", rawType: "u4", x86StackBytes: 4 }],
+      parameters: [{
+        name: "dwMilliseconds",
+        type: "u4",
+        rawType: "u4",
+        direction: "in",
+        x86StackBytes: 4
+      }],
       callingConvention: "winapi",
       x86StackBytes: 4,
       variadic: false,
@@ -64,6 +70,11 @@ const chunk: WinapiMetadataChunk = {
     }
   }
 };
+
+const sleepEntry = chunk.entries["Sleep"];
+if (!sleepEntry) throw new Error("Missing Sleep fixture entry.");
+const sleepParameter = sleepEntry.parameters[0];
+if (!sleepParameter) throw new Error("Missing Sleep fixture parameter.");
 
 void test("WinAPI metadata schema accepts valid manifest and chunk shapes", () => {
   assert.equal(isWinapiMetadataManifest(manifest), true);
@@ -76,6 +87,15 @@ void test("WinAPI metadata schema rejects wrong versions and malformed entries",
   assert.equal(isWinapiMetadataChunk({
     ...chunk,
     entries: { Sleep: { ...chunk.entries["Sleep"], parameters: [{ name: "bad" }] } }
+  }), false);
+  assert.equal(isWinapiMetadataChunk({
+    ...chunk,
+    entries: {
+      Sleep: {
+        ...sleepEntry,
+        parameters: [{ ...sleepParameter, direction: "sideways" }]
+      }
+    }
   }), false);
   assert.equal(isWinapiMetadataEntrypointIndex({
     ...entrypointIndex,
