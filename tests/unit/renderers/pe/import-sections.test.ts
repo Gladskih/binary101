@@ -239,7 +239,7 @@ void test("import panels render separate call and jump counters from the disasse
   assert.match(importsHtml, /data-accessible-tooltip/);
 });
 
-void test("import panels render dashes before Instruction-set and strings analysis", () => {
+void test("import panels render dashes before Instruction-set, imports and strings analysis", () => {
   const pe = createPeWithImportLinking();
 
   const importsHtml = renderImportsPanel(pe);

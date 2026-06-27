@@ -39,7 +39,7 @@ void test("renderInstructionSets renders a chip table", () => {
   renderInstructionSets(pe, out);
   const html = out.join("");
 
-  assert.ok(html.includes("Instruction-set and strings analysis"));
+  assert.ok(html.includes("Instruction-set, imports and strings analysis"));
   assert.ok(html.includes(`class="analysisPanel"`));
   assert.ok(html.includes(`class="analysisPanelSummary"`));
   assert.ok(html.includes("not a PE file section"));
