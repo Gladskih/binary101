@@ -9,7 +9,10 @@ import {
   describeCpuidFeature,
   formatCpuidLabel
 } from "../../analyzers/x86/cpuid-features.js";
-import type { PeApiStringReference } from "../../analyzers/pe/disassembly/index.js";
+import type {
+  PeApiStringReference,
+  PeCodeStringReference
+} from "../../analyzers/pe/disassembly/index.js";
 
 const ANALYZE_BUTTON_ID = "peInstructionSetsAnalyzeButton";
 const CANCEL_BUTTON_ID = "peInstructionSetsCancelButton";
@@ -78,6 +81,44 @@ const clippedText = (text: string): string =>
 
 const sourceLabel = (sourceKind: PeApiStringReference["callSites"][number]["sourceKind"]): string =>
   sourceKind === "ucrt" ? "UCRT" : "WinAPI";
+
+const renderCodeStringInstructionRvas = (reference: PeCodeStringReference): string => {
+  const rvas = reference.instructionRvas.slice(0, 5).map(formatRva);
+  const suffix = reference.instructionRvas.length > rvas.length
+    ? ` +${reference.instructionRvas.length - rvas.length} more`
+    : "";
+  return escapeHtml(`${rvas.join(", ")}${suffix}`);
+};
+
+const renderCodeStringRows = (
+  pe: PeWindowsParseResult,
+  references: PeCodeStringReference[]
+): string => references.map(reference => {
+  const text = escapeHtml(clippedText(reference.text));
+  const title = escapeHtml(reference.text);
+  return `<tr><td class="peNumeric">${formatRva(reference.rva)}</td>` +
+    `<td>${escapeHtml(sectionForRva(pe, reference.rva))}</td>` +
+    `<td>${escapeHtml(reference.encoding)}</td>` +
+    `<td class="peNumeric">${reference.instructionRvas.length}</td>` +
+    `<td>${renderCodeStringInstructionRvas(reference)}</td>` +
+    `<td><code title="${title}">${text}</code></td></tr>`;
+}).join("");
+
+const renderCodeStringReferences = (pe: PeWindowsParseResult, out: string[]): void => {
+  const references = pe.disassembly?.codeStringReferences ?? [];
+  if (!references.length) {
+    out.push(`<div class="smallNote dim">No code-referenced strings were detected.</div>`);
+    return;
+  }
+  out.push(
+    `<details style="margin-top:.35rem"><summary class="dim" style="cursor:pointer">` +
+    `Code-referenced strings (${references.length})</summary>` +
+    `<div class="tableWrap"><table class="table" style="margin-top:.35rem">` +
+    `<thead><tr><th class="peNumeric">RVA</th><th>Section</th><th>Encoding</th>` +
+    `<th class="peNumeric">Refs</th><th>Code refs</th><th>Text</th></tr></thead>` +
+    `<tbody>${renderCodeStringRows(pe, references)}</tbody></table></div></details>`
+  );
+};
 
 const renderApiStringCallSites = (reference: PeApiStringReference): string => {
   const sites = reference.callSites.slice(0, 3).map(site => {
@@ -173,6 +214,7 @@ const renderInstructionSetsContent = (pe: PeWindowsParseResult, out: string[]): 
     );
   }
 
+  renderCodeStringReferences(pe, out);
   renderApiStringReferences(pe, out);
 
   const countsById = new Map<string, number>();

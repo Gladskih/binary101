@@ -16,6 +16,7 @@ import {
   createDirectIatReferenceCounter
 } from "./import-references.js";
 import { createPeApiStringReferenceCollector } from "./api-string-references.js";
+import { createPeCodeStringReferenceCollector } from "./code-string-references.js";
 
 type PeInstructionSetDecodeRun = {
   reader: FileRangeReader;
@@ -36,6 +37,7 @@ type PeInstructionSetDecodeResult = {
   instructionCount: number;
   invalidInstructionCount: number;
   directIatReferences: PeInstructionSetReport["directIatReferences"];
+  codeStringReferences: PeInstructionSetReport["codeStringReferences"];
   apiStringReferences: PeInstructionSetReport["apiStringReferences"];
   instructionSets: PeInstructionSetReport["instructionSets"];
 };
@@ -54,6 +56,24 @@ const collectRequestedDirectIatSlots = (
   issues
 );
 const yieldToEventLoop = async (): Promise<void> => new Promise<void>(resolve => setTimeout(resolve, 0));
+
+const emptyInstructionSetReport = (
+  bitness: 32 | 64,
+  bytesSampled: number,
+  issues: string[]
+): PeInstructionSetReport => ({
+  bitness,
+  bytesSampled,
+  bytesDecoded: 0,
+  instructionCount: 0,
+  invalidInstructionCount: 0,
+  directIatReferences: [],
+  codeStringReferences: [],
+  apiStringReferences: [],
+  instructionSets: [],
+  issues
+});
+
 export async function analyzePeInstructionSets(
   reader: FileRangeReader,
   opts: AnalyzePeInstructionSetOptions,
@@ -69,17 +89,8 @@ export async function analyzePeInstructionSets(
     opts.yieldEveryInstructions > 0
       ? opts.yieldEveryInstructions
       : 0;
-  const emptyReport = (bytesSampled: number): PeInstructionSetReport => ({
-    bitness,
-    bytesSampled,
-    bytesDecoded: 0,
-    instructionCount: 0,
-    invalidInstructionCount: 0,
-    directIatReferences: [],
-    apiStringReferences: [],
-    instructionSets: [],
-    issues
-  });
+  const emptyReport = (bytesSampled: number): PeInstructionSetReport =>
+    emptyInstructionSetReport(bitness, bytesSampled, issues);
   if (!supported) return (issues.push(`Disassembly is only supported for x86/x86-64 (Machine ${coffMachine.toString(16)}).`), emptyReport(0));
   if (coffMachine === IMAGE_FILE_MACHINE_AMD64 && bitness !== 64) {
     issues.push("Machine is AMD64 but optional header reports 32-bit mode.");
@@ -149,6 +160,7 @@ export async function analyzePeInstructionSets(
     instructionCount: decoded.instructionCount,
     invalidInstructionCount: decoded.invalidInstructionCount,
     directIatReferences: decoded.directIatReferences,
+    codeStringReferences: decoded.codeStringReferences,
     apiStringReferences: decoded.apiStringReferences,
     instructionSets: decoded.instructionSets,
     issues
@@ -170,6 +182,12 @@ const decodePeInstructionSetUsage = async (
     is64Bit: bitness === 64,
     imports: run.opts.imports,
     delayImports: run.opts.delayImports,
+    headerRvaLimit: run.opts.headerRvaLimit,
+    rvaToOff: run.opts.rvaToOff
+  });
+  const codeStringReferences = createPeCodeStringReferenceCollector(iced, {
+    imageBase,
+    headerRvaLimit: run.opts.headerRvaLimit,
     rvaToOff: run.opts.rvaToOff
   });
   let bytesDecoded = 0; let instructionCount = 0; let invalidInstructionCount = 0;
@@ -194,6 +212,7 @@ const decodePeInstructionSetUsage = async (
       ...(run.opts.signal ? { signal: run.opts.signal } : {}),
       onInstruction: instruction => {
         directIatReferences.record(instruction);
+        codeStringReferences.record(instruction);
         apiStringReferences.record(instruction);
       },
       onYield: async snapshot => {
@@ -225,12 +244,14 @@ const decodePeInstructionSetUsage = async (
     invalidInstructionCount,
     knownFeatureCounts: instructionSetUsage.knownFeatureCounts()
   });
+  const apiReferences = await apiStringReferences.references(run.reader);
   return {
     bytesDecoded,
     instructionCount,
     invalidInstructionCount,
     directIatReferences: directIatReferences.references(),
-    apiStringReferences: await apiStringReferences.references(run.reader),
+    codeStringReferences: await codeStringReferences.references(run.reader, apiReferences),
+    apiStringReferences: apiReferences,
     instructionSets: instructionSetUsage.instructionSets(),
   };
 };

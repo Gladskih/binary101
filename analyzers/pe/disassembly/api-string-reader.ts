@@ -6,35 +6,28 @@ import type { RvaToOffset } from "../types.js";
 import type { PeApiStringEncoding } from "./types.js";
 import {
   peApiStringAddressToRva,
+  type PeApiStringAddressCandidate,
   type PeApiStringDecoded,
-  type PeApiStringPendingReference
 } from "./api-string-reference-model.js";
+import {
+  hasImplausibleWideTextShape,
+  hasOnlyReasonableText,
+  isReasonableAsciiByte
+} from "./api-string-text-shape.js";
 
 // Per-candidate cap keeps malformed or unterminated strings from driving unbounded reads.
 const MAX_STRING_BYTES = 4096;
 // Chunked random reads avoid one range-reader call per character while staying bounded.
 const READ_CHUNK_BYTES = 256;
-// US-ASCII graphic characters are 0x20..0x7e; CR/LF/TAB are accepted separately.
-const PRINTABLE_ASCII_MIN = 0x20;
-const PRINTABLE_ASCII_MAX = 0x7e;
 
-const isPrintableAscii = (byte: number): boolean =>
-  byte >= PRINTABLE_ASCII_MIN && byte <= PRINTABLE_ASCII_MAX;
-
-const isTextControl = (codePoint: number): boolean =>
-  codePoint === 0x09 || codePoint === 0x0a || codePoint === 0x0d;
-
-const isReasonableAsciiByte = (byte: number): boolean =>
-  isPrintableAscii(byte) || isTextControl(byte);
-
-const hasOnlyReasonableText = (text: string): boolean => {
-  for (const char of text) {
-    const codePoint = char.codePointAt(0) ?? 0;
-    if (codePoint < PRINTABLE_ASCII_MIN && !isTextControl(codePoint)) return false;
-    if (codePoint === 0xfffd) return false;
-  }
-  return text.length > 0;
+type PeApiStringReadOptions = {
+  headerRvaLimit?: number | undefined;
 };
+
+const normalizedHeaderRvaLimit = (headerRvaLimit: number | undefined): number =>
+  Number.isSafeInteger(headerRvaLimit) && (headerRvaLimit ?? 0) > 0
+    ? (headerRvaLimit ?? 0) >>> 0
+    : 0;
 
 const decodeNarrowString = (
   bytes: Uint8Array,
@@ -58,7 +51,7 @@ const decodeWideString = (bytes: Uint8Array): string | null => {
   if (bytes.byteLength % 2 !== 0) return null;
   try {
     const text = new TextDecoder("utf-16le", { fatal: true }).decode(bytes);
-    return hasOnlyReasonableText(text) ? text : null;
+    return hasOnlyReasonableText(text) && !hasImplausibleWideTextShape(text) ? text : null;
   } catch {
     return null;
   }
@@ -138,10 +131,12 @@ export const readPeApiStringCandidate = async (
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
   imageBase: bigint,
-  candidate: PeApiStringPendingReference
+  candidate: PeApiStringAddressCandidate,
+  opts: PeApiStringReadOptions = {}
 ): Promise<PeApiStringDecoded | null> => {
   const rva = peApiStringAddressToRva(candidate.address, imageBase);
   if (rva == null) return null;
+  if (rva < normalizedHeaderRvaLimit(opts.headerRvaLimit)) return null;
   const unitSize = candidate.encoding === "utf-16le"
     ? Uint16Array.BYTES_PER_ELEMENT
     : Uint8Array.BYTES_PER_ELEMENT;

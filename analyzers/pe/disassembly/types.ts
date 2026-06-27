@@ -38,6 +38,14 @@ export interface PeApiStringReference {
   callSites: PeApiStringCallSite[];
 }
 
+export interface PeCodeStringReference {
+  rva: number;
+  encoding: PeApiStringEncoding;
+  byteLength: number;
+  text: string;
+  instructionRvas: number[];
+}
+
 export interface PeInstructionSetReport {
   bitness: 32 | 64;
   bytesSampled: number;
@@ -45,6 +53,7 @@ export interface PeInstructionSetReport {
   instructionCount: number;
   invalidInstructionCount: number;
   directIatReferences: PeDirectIatReferenceCount[];
+  codeStringReferences: PeCodeStringReference[];
   apiStringReferences: PeApiStringReference[];
   instructionSets: PeInstructionSetUsage[];
   issues: string[];

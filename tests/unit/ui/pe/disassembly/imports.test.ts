@@ -40,6 +40,7 @@ const createReport = (): PeInstructionSetReport => ({
   instructionCount: 0,
   invalidInstructionCount: 0,
   directIatReferences: [],
+  codeStringReferences: [],
   apiStringReferences: [],
   instructionSets: [],
   issues: []

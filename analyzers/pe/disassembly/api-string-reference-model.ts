@@ -21,6 +21,11 @@ export type PeApiStringAddressSource = {
   address: bigint;
 };
 
+export type PeApiStringAddressCandidate = {
+  address: bigint;
+  encoding: PeApiStringEncoding;
+};
+
 export type PeApiStringRecentInstruction = {
   ip: bigint;
   nextIp: bigint;
@@ -30,9 +35,7 @@ export type PeApiStringRecentInstruction = {
   memoryAddress: bigint | null;
 };
 
-export type PeApiStringPendingReference = {
-  address: bigint;
-  encoding: PeApiStringEncoding;
+export type PeApiStringPendingReference = PeApiStringAddressCandidate & {
   callSite: PeApiStringCallSite;
 };
 

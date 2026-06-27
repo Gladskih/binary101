@@ -27,6 +27,7 @@ void test("renderInstructionSets renders a chip table", () => {
     instructionCount: 2,
     invalidInstructionCount: 0,
     directIatReferences: [],
+    codeStringReferences: [],
     apiStringReferences: [],
     issues: [],
     instructionSets: [
@@ -59,6 +60,7 @@ void test("renderInstructionSets escapes user-controlled strings", () => {
     instructionCount: 1,
     invalidInstructionCount: 0,
     directIatReferences: [],
+    codeStringReferences: [],
     apiStringReferences: [],
     issues: ["note <b>unsafe</b>"],
     instructionSets: [
@@ -184,6 +186,7 @@ void test("renderInstructionSets renders an empty-state message", () => {
     instructionCount: 0,
     invalidInstructionCount: 0,
     directIatReferences: [],
+    codeStringReferences: [],
     apiStringReferences: [],
     issues: [],
     instructionSets: []
@@ -215,6 +218,7 @@ void test("renderInstructionSets renders API string references", () => {
     instructionCount: 2,
     invalidInstructionCount: 0,
     directIatReferences: [],
+    codeStringReferences: [],
     apiStringReferences: [{
       rva: STRING_RVA,
       encoding: "ascii",

@@ -59,6 +59,7 @@ export const createPeApiStringReferenceCollector = (
     is64Bit: boolean;
     imports?: PeImportParseResult | undefined;
     delayImports?: { entries: PeDelayImportEntry[] } | null | undefined;
+    headerRvaLimit?: number | undefined;
     rvaToOff: RvaToOffset;
   }
 ): PeApiStringReferenceCollector => {
@@ -91,7 +92,8 @@ export const createPeApiStringReferenceCollector = (
           reader,
           opts.rvaToOff,
           opts.imageBase,
-          candidate
+          candidate,
+          { headerRvaLimit: opts.headerRvaLimit }
         );
         if (decoded) mergeReference(references, decoded, candidate);
       }

@@ -6,6 +6,7 @@ export type {
   PeApiStringCallSite,
   PeApiStringEncoding,
   PeApiStringReference,
+  PeCodeStringReference,
   PeEntrypointDisassemblyBlock,
   PeEntrypointDisassemblyReport,
   PeEntrypointInstruction,
