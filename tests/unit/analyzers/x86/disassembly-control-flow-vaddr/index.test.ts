@@ -143,6 +143,27 @@ void test("disassembleControlFlowForInstructionSetsVaddr caps repeated decode-st
   assert.match(issues.at(-1) ?? "", /omitted/i);
 });
 
+void test("disassembleControlFlowForInstructionSetsVaddr counts overlapping entrypoints once", async () => {
+  const issues: string[] = [];
+  const featureCounts = new Map<number, number>();
+  const data = new Uint8Array([0x90, 0x90, 0x90]);
+
+  const result = await disassembleControlFlowForInstructionSetsVaddr({
+    iced: fakeIced as unknown as Parameters<typeof disassembleControlFlowForInstructionSetsVaddr>[0]["iced"],
+    bitness: 64,
+    sections: [{ vaddrStart: 0x1000n, data }],
+    entrypoints: [0x1000n, 0x1001n],
+    yieldEveryInstructions: 0,
+    featureCounts,
+    issues
+  });
+
+  assert.equal(result.bytesDecoded, data.length);
+  assert.equal(result.instructionCount, data.length);
+  assert.equal(result.invalidInstructionCount, 0);
+  assert.deepEqual(issues, []);
+});
+
 void test("disassembleControlFlowForInstructionSetsVaddr continues past UD2 trap instructions", async () => {
   const issues: string[] = [];
   const featureCounts = new Map<number, number>();

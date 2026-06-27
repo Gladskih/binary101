@@ -123,3 +123,25 @@ void test("disassembleControlFlowForInstructionSets caps repeated decode-stop is
   assert.equal(issues.length, 201);
   assert.match(issues.at(-1) ?? "", /omitted/i);
 });
+
+void test("disassembleControlFlowForInstructionSets counts overlapping entrypoints once", async () => {
+  const issues: string[] = [];
+  const featureCounts = new Map<number, number>();
+  const data = new Uint8Array([0x90, 0x90, 0x90]);
+
+  const result = await disassembleControlFlowForInstructionSets({
+    iced: fakeIced as unknown as Parameters<typeof disassembleControlFlowForInstructionSets>[0]["iced"],
+    bitness: 64,
+    imageBase: 0n,
+    sections: [{ rvaStart: 0x1000, data }],
+    entrypoints: [0x1000, 0x1001],
+    yieldEveryInstructions: 0,
+    featureCounts,
+    issues
+  });
+
+  assert.equal(result.bytesDecoded, data.length);
+  assert.equal(result.instructionCount, data.length);
+  assert.equal(result.invalidInstructionCount, 0);
+  assert.deepEqual(issues, []);
+});

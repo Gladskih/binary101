@@ -107,11 +107,11 @@ const decodeLinearRun = async (
   while (decoder.canDecode) {
     if (state.signal?.aborted) return;
     decoder.decodeOut(instr);
-    state.instructionCount += 1;
     const instrRva = toRva(instr.ip, state.imageBase);
     if (instrRva == null) break;
     if (state.visited.has(instrRva)) break;
     state.visited.add(instrRva);
+    state.instructionCount += 1;
     const len = instr.length;
     if (len <= 0) {
       state.invalidInstructionCount += 1;

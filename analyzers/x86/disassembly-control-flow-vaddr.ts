@@ -105,10 +105,10 @@ const decodeLinearRun = async (
   while (decoder.canDecode) {
     if (state.signal?.aborted) return;
     decoder.decodeOut(instr);
-    state.instructionCount += 1;
     const instrVaddr = BigInt.asUintN(64, instr.ip);
     if (state.visited.has(instrVaddr)) break;
     state.visited.add(instrVaddr);
+    state.instructionCount += 1;
     const len = instr.length;
     if (len <= 0) {
       state.invalidInstructionCount += 1;
