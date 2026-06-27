@@ -24,7 +24,7 @@ export const PE_INSTRUCTION_SETS_PANEL_ID = "peInstructionSetsPanel";
 
 const renderInstructionPanelStart = (): string =>
   `<details class="analysisPanel"><summary class="analysisPanelSummary">` +
-  `<span class="detailsSummaryTitle">Instruction-set analysis</span></summary>` +
+  `<span class="detailsSummaryTitle">Instruction-set and strings analysis</span></summary>` +
   `<div class="analysisPanelBody"><div class="analysisPanelActions">`;
 
 const renderInstructionPanelEnd = (): string => "</div></details>";

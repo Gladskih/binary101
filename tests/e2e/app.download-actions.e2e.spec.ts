@@ -142,18 +142,18 @@ test.describe("PE analysis actions", () => {
     await expect(page.getByRole("heading", { name: "Local File Inspector" })).toBeVisible();
   });
 
-  void test("runs PE instruction-set analysis on demand", async ({ page }) => {
+  void test("runs PE Instruction-set and strings analysis on demand", async ({ page }) => {
     const mockFile = createPePlusFile();
     await page.setInputFiles("#fileInput", toUpload(mockFile));
     await expectBaseDetails(page, mockFile.name, "PE32+ executable for x86-64 (AMD64)");
 
     const detailsValue = page.locator("#analysisValue");
     const instructionSection = detailsValue.locator("details.analysisPanel").filter({
-      has: page.locator("summary", { hasText: /^Instruction-set analysis\b/ })
+      has: page.locator("summary", { hasText: /^Instruction-set and strings analysis\b/ })
     }).first();
     await instructionSection.locator(":scope > summary").click();
     await expect(instructionSection).toHaveJSProperty("open", true);
-    await expect(detailsValue).toContainText("Instruction-set analysis");
+    await expect(detailsValue).toContainText("Instruction-set and strings analysis");
     await expect(detailsValue.locator("#peInstructionSetsAnalyzeButton")).toBeVisible();
 
     await detailsValue.locator("#peInstructionSetsAnalyzeButton").click();
@@ -204,7 +204,7 @@ test.describe("PE analysis actions", () => {
 
     const detailsValue = page.locator("#analysisValue");
     const instructionSection = detailsValue.locator("details.analysisPanel").filter({
-      has: page.locator("summary", { hasText: /^Instruction-set analysis\b/ })
+      has: page.locator("summary", { hasText: /^Instruction-set and strings analysis\b/ })
     }).first();
     const entrypointSection = detailsValue.locator("details.analysisPanel").filter({
       has: page.locator("summary", { hasText: /^Entrypoint disassembly\b/ })
@@ -237,7 +237,7 @@ test.describe("large PE string tables", () => {
 
     const detailsValue = page.locator("#analysisValue");
     const instructionSection = detailsValue.locator("details.analysisPanel").filter({
-      has: page.locator("summary", { hasText: /^Instruction-set analysis\b/ })
+      has: page.locator("summary", { hasText: /^Instruction-set and strings analysis\b/ })
     }).first();
     await instructionSection.locator(":scope > summary").click();
     await detailsValue.locator("#peInstructionSetsAnalyzeButton").click();

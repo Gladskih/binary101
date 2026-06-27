@@ -74,14 +74,14 @@ const happyCases = [
     file: createPeFile,
     expectedKind: "PE32 executable for x86 (I386)",
     detailText: "PE/COFF headers",
-    extraDetailText: "Instruction-set analysis"
+    extraDetailText: "Instruction-set and strings analysis"
   },
   {
     name: "PE32+ (x86-64)",
     file: createPePlusFile,
     expectedKind: "PE32+ executable for x86-64 (AMD64)",
     detailText: "PE/COFF headers",
-    extraDetailText: "Instruction-set analysis"
+    extraDetailText: "Instruction-set and strings analysis"
   }
 ];
 test.describe("file type detection", () => {
