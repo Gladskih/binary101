@@ -37,6 +37,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isClangAstNode = (value: unknown): value is ClangAstNode =>
   isRecord(value);
 
+const parseAstJson = (astJson: string): ClangAstNode | null => {
+  try {
+    const parsed = JSON.parse(astJson) as unknown;
+    return isClangAstNode(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
 const nodeChildren = (node: ClangAstNode): ClangAstNode[] =>
   Array.isArray(node.inner) ? node.inner.filter(isClangAstNode) : [];
 
@@ -149,8 +158,8 @@ export const parseClangFunctions = (
   astJson: string,
   exportNames: ReadonlySet<string>
 ): Map<string, ClangFunctionDecl> => {
-  const parsed = JSON.parse(astJson) as unknown;
-  if (!isClangAstNode(parsed)) return new Map();
+  const parsed = parseAstJson(astJson);
+  if (!parsed) return new Map();
   const functions = new Map<string, ClangFunctionDecl>();
   for (const node of collectFunctionNodes(parsed)) {
     const decl = parseFunctionNode(node);

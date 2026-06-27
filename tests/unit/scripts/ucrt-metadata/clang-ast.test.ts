@@ -49,3 +49,7 @@ void test("parseClangFunctions reads function declarations from JSON AST", () =>
   assert.equal(functions.get("example")?.callingConvention, "cdecl");
   assert.equal(functions.get("example")?.noReturn, false);
 });
+
+void test("parseClangFunctions ignores malformed JSON AST", () => {
+  assert.deepEqual([...parseClangFunctions("{", new Set(["abort"])).entries()], []);
+});
