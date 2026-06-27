@@ -5,6 +5,10 @@ import { PE32_OPTIONAL_HEADER_MAGIC, PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "../
 import { IMAGE_FILE_MACHINE_I386, getCanonicalPeMachine } from "../analyzers/pe/machine.js";
 import { readLoadConfigPointerRva } from "../analyzers/pe/load-config/index.js";
 import {
+  findSectionContainingRva,
+  isMemoryExecutableSection
+} from "../analyzers/pe/disassembly/sampling.js";
+import {
   readGuardCFFunctionTableRvas,
   readGuardEhContinuationTableRvas,
   readGuardLongJumpTargetTableRvas,
@@ -23,6 +27,18 @@ type PeDisassemblySeedSet = {
   extraEntrypoints: Array<{ source: string; rvas: number[] }>;
 };
 
+type ReadLoadConfigPointerSlotTargetRva = (
+  reader: FileRangeReader,
+  pe: PeParseResult,
+  imageBase: bigint,
+  pointerSlotVa: bigint
+) => Promise<number | null>;
+
+const isExecutableExportRva = (pe: PeParseResult, rva: number): boolean => {
+  const section = findSectionContainingRva(pe.sections, rva >>> 0);
+  return section != null && isMemoryExecutableSection(section);
+};
+
 const collectBasicPeDisassemblySeeds = (
   pe: PeParseResult,
   windowsPe: PeWindowsParseResult | null
@@ -32,7 +48,7 @@ const collectBasicPeDisassemblySeeds = (
     canonicalMachine: getCanonicalPeMachine(pe.coff.Machine),
     entrypointRva: pe.opt?.AddressOfEntryPoint ?? 0,
     exportRvas: windowsPe?.exports?.entries
-      ?.filter(entry => entry.rva && !entry.forwarder)
+      ?.filter(entry => entry.rva && !entry.forwarder && isExecutableExportRva(pe, entry.rva))
       .map(entry => entry.rva >>> 0) ?? [],
     unwindBeginRvas: windowsOpt?.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC &&
       Array.isArray(windowsPe?.exception?.beginRvas)
@@ -51,22 +67,82 @@ const collectBasicPeDisassemblySeeds = (
   };
 };
 
-const addLoadConfigPointerSeeds = (
-  seeds: PeDisassemblySeedSet,
+const readLoadConfigPointerSlotTargetRva = async (
+  reader: FileRangeReader,
+  pe: PeParseResult,
   imageBase: bigint,
+  pointerSlotVa: bigint,
+  pointerSize: number,
+  readPointerVa: (view: DataView) => bigint
+): Promise<number | null> => {
+  const slotRva = readLoadConfigPointerRva(imageBase, pointerSlotVa);
+  if (slotRva == null) return null;
+  const slotOffset = pe.rvaToOff(slotRva);
+  if (
+    slotOffset == null ||
+    !Number.isSafeInteger(slotOffset) ||
+    slotOffset < 0 ||
+    slotOffset + pointerSize > reader.size
+  ) {
+    return null;
+  }
+  const view = await reader.read(slotOffset, pointerSize);
+  if (view.byteLength < pointerSize) return null;
+  return readLoadConfigPointerRva(imageBase, readPointerVa(view));
+};
+
+// Microsoft PE format: IMAGE_LOAD_CONFIG_DIRECTORY32 uses 4-byte VA fields.
+const readPe32LoadConfigPointerSlotTargetRva: ReadLoadConfigPointerSlotTargetRva = (
+  reader,
+  pe,
+  imageBase,
+  pointerSlotVa
+) => readLoadConfigPointerSlotTargetRva(
+  reader,
+  pe,
+  imageBase,
+  pointerSlotVa,
+  4,
+  view => BigInt(view.getUint32(0, true))
+);
+
+// Microsoft PE format: IMAGE_LOAD_CONFIG_DIRECTORY64 uses 8-byte VA fields.
+const readPe32PlusLoadConfigPointerSlotTargetRva: ReadLoadConfigPointerSlotTargetRva = (
+  reader,
+  pe,
+  imageBase,
+  pointerSlotVa
+) => readLoadConfigPointerSlotTargetRva(
+  reader,
+  pe,
+  imageBase,
+  pointerSlotVa,
+  8,
+  view => view.getBigUint64(0, true)
+);
+
+const addLoadConfigPointerSeeds = async (
+  seeds: PeDisassemblySeedSet,
+  reader: FileRangeReader,
+  pe: PeParseResult,
+  imageBase: bigint,
+  readPointerSlotTargetRva: ReadLoadConfigPointerSlotTargetRva,
   loadcfg: PeWindowsParseResult["loadcfg"] | undefined
-): void => {
+): Promise<void> => {
   if (!loadcfg) return;
-  const addPointerSeed = (source: string, pointerVa: bigint | undefined): void => {
-    const rva = readLoadConfigPointerRva(imageBase, pointerVa ?? 0n);
+  const addPointerSeed = async (source: string, pointerVa: bigint | undefined): Promise<void> => {
+    const rva = await readPointerSlotTargetRva(reader, pe, imageBase, pointerVa ?? 0n);
     if (rva != null) seeds.extraEntrypoints.push({ source, rvas: [rva] });
   };
-  addPointerSeed("GuardCF check function", loadcfg.GuardCFCheckFunctionPointer);
-  addPointerSeed("GuardCF dispatch function", loadcfg.GuardCFDispatchFunctionPointer);
-  addPointerSeed("GuardXFG check function", loadcfg.GuardXFGCheckFunctionPointer);
-  addPointerSeed("GuardXFG dispatch function", loadcfg.GuardXFGDispatchFunctionPointer);
-  addPointerSeed("GuardXFG table dispatch function", loadcfg.GuardXFGTableDispatchFunctionPointer);
-  addPointerSeed("Guard memcpy function", loadcfg.GuardMemcpyFunctionPointer);
+  await addPointerSeed("GuardCF check function", loadcfg.GuardCFCheckFunctionPointer);
+  await addPointerSeed("GuardCF dispatch function", loadcfg.GuardCFDispatchFunctionPointer);
+  await addPointerSeed("GuardXFG check function", loadcfg.GuardXFGCheckFunctionPointer);
+  await addPointerSeed("GuardXFG dispatch function", loadcfg.GuardXFGDispatchFunctionPointer);
+  await addPointerSeed(
+    "GuardXFG table dispatch function",
+    loadcfg.GuardXFGTableDispatchFunctionPointer
+  );
+  await addPointerSeed("Guard memcpy function", loadcfg.GuardMemcpyFunctionPointer);
 };
 
 const addGuardEhContinuationSeeds = async (
@@ -151,7 +227,16 @@ const collectPeDisassemblySeeds = async (
   const reader = createFileRangeReader(file, 0, file.size);
   const windowsPe = isPeWindowsParseResult(pe) ? pe : null;
   const seeds = collectBasicPeDisassemblySeeds(pe, windowsPe);
-  addLoadConfigPointerSeeds(seeds, windowsPe?.opt.ImageBase ?? 0n, windowsPe?.loadcfg ?? undefined);
+  await addLoadConfigPointerSeeds(
+    seeds,
+    reader,
+    pe,
+    windowsPe?.opt.ImageBase ?? 0n,
+    windowsPe?.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC
+      ? readPe32PlusLoadConfigPointerSlotTargetRva
+      : readPe32LoadConfigPointerSlotTargetRva,
+    windowsPe?.loadcfg ?? undefined
+  );
   await addLoadConfigTableSeeds(seeds, reader, pe, windowsPe);
   return seeds;
 };

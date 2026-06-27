@@ -8,12 +8,20 @@ import type { AnalyzePeInstructionSetOptions, PeInstructionSetReport } from "../
 import { FakeHTMLElement, installFakeDom, flushTimers } from "../../../../helpers/fake-dom.js";
 import { expectDefined } from "../../../../helpers/expect-defined.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
+import { inlinePeSectionName } from "../../../../../analyzers/pe/sections/name.js";
 const createMinimalPe = (): PeWindowsParseResult =>
   ({
     coff: { Machine: 0x8664 },
     opt: { Magic: 0x20b, ImageBase: 0x140000000n, AddressOfEntryPoint: 0x1000 },
     rvaToOff: () => 0,
-    sections: []
+    sections: [{
+      name: inlinePeSectionName(".text"),
+      virtualAddress: 0x1000,
+      virtualSize: 0x1000,
+      sizeOfRawData: 0x1000,
+      pointerToRawData: 0x1000,
+      characteristics: 0x20000000 // Microsoft PE format: IMAGE_SCN_MEM_EXECUTE.
+    }]
   }) as unknown as PeWindowsParseResult;
 const createFakeReport = (): PeInstructionSetReport => ({
   bitness: 64,

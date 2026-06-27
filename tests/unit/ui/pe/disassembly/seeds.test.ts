@@ -5,6 +5,7 @@ import test from "node:test";
 import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../analyzers/pe/machine.js";
 import { PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "../../../../../analyzers/pe/optional-header/magic.js";
 import type { PeWindowsParseResult } from "../../../../../analyzers/pe/core/parse-result.js";
+import { inlinePeSectionName } from "../../../../../analyzers/pe/sections/name.js";
 import { collectPeDisassemblySeeds } from "../../../../../ui/pe-disassembly-seeds.js";
 
 void test("collectPeDisassemblySeeds gathers basic Windows PE entry seeds", async () => {
@@ -29,7 +30,14 @@ const createWindowsPe = (): PeWindowsParseResult => ({
     SizeOfHeaders: 0x400
   } as PeWindowsParseResult["opt"],
   dirs: [],
-  sections: [],
+  sections: [{
+    name: inlinePeSectionName(".text"),
+    virtualAddress: 0x2000,
+    virtualSize: 0x1000,
+    sizeOfRawData: 0x1000,
+    pointerToRawData: 0x2000,
+    characteristics: 0x20000000 // Microsoft PE format: IMAGE_SCN_MEM_EXECUTE.
+  }],
   entrySection: null,
   rvaToOff: () => null,
   imageEnd: 0,
@@ -42,6 +50,7 @@ const createWindowsPe = (): PeWindowsParseResult => ({
     entries: [
       { rva: 0x2000, forwarder: null },
       { rva: 0, forwarder: null },
+      { rva: 0x7000, forwarder: null },
       { rva: 0x2100, forwarder: "other.dll.Target" }
     ]
   } as PeWindowsParseResult["exports"],
