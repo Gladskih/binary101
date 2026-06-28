@@ -207,6 +207,8 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .peEntrypointBlockIndex{margin-top:.55rem}
 .peEntrypointSelectedBlock{margin-top:.7rem}
 .peEntrypointBlock{margin-top:.7rem}
+.peEntrypointSources{margin-top:.35rem}
+.peEntrypointSources .peEntrypointPager{margin:.15rem 0 .25rem}
 .peEntrypointBlockIndexTable th:nth-child(1),
 .peEntrypointBlockIndexTable td:nth-child(1),
 .peEntrypointBlockIndexTable th:nth-child(4),
@@ -539,6 +541,8 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .table[data-sortable] tbody > tr > * + *{border-left:1px solid var(--border)}
 .table[data-paged-sortable-table] .sortableTableHeader + .sortableTableHeader,
 .table[data-paged-sortable-table] tbody > tr > * + *{border-left:1px solid var(--border)}
+.peEntrypointBlockIndexTable .sortableTableHeader + .sortableTableHeader,
+.peEntrypointBlockIndexTable tbody > tr > * + *{border-left:1px solid var(--border)}
 .sortableTableHeader{cursor:pointer}
 .sortableTableHeaderButton{
   align-items:center;

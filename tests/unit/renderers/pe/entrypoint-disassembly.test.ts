@@ -4,7 +4,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PeWindowsParseResult } from "../../../../analyzers/pe/index.js";
 import { renderEntrypointDisassembly } from "../../../../renderers/pe/entrypoint-disassembly.js";
-import { renderEntrypointExplorer } from "../../../../renderers/pe/entrypoint-disassembly-explorer.js";
+import {
+  DEFAULT_PE_ENTRYPOINT_EXPLORER_STATE,
+  renderEntrypointExplorer
+} from "../../../../renderers/pe/entrypoint-disassembly-explorer.js";
 
 const createPe = (overrides: Partial<PeWindowsParseResult> = {}): PeWindowsParseResult =>
   ({
@@ -83,6 +86,7 @@ void test("renderEntrypointDisassembly labels followed returning import fallthro
 
   assert.ok(out.join("").includes("Import return"));
   assert.ok(renderEntrypointExplorer(pe.entrypointDisassembly, {
+    ...DEFAULT_PE_ENTRYPOINT_EXPLORER_STATE,
     selectedBlockIndex: 1,
     blockPageIndex: 0,
     instructionPageIndex: 0
@@ -131,6 +135,7 @@ void test("renderEntrypointDisassembly marks followed return blocks", () => {
   const out: string[] = [];
   renderEntrypointDisassembly(pe, out);
   const html = renderEntrypointExplorer(pe.entrypointDisassembly, {
+    ...DEFAULT_PE_ENTRYPOINT_EXPLORER_STATE,
     selectedBlockIndex: 1,
     blockPageIndex: 0,
     instructionPageIndex: 0

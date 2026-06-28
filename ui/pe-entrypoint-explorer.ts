@@ -9,8 +9,10 @@ import {
   renderEntrypointExplorerContent,
   selectEntrypointBlock,
   selectEntrypointRva,
+  toggleEntrypointBlockSort,
   visibleEntrypointBlocks,
   type PeEntrypointExplorerState,
+  type PeEntrypointSortDirection,
   type PeEntrypointRenderBlock
 } from "../renderers/pe/entrypoint-disassembly-explorer.js";
 
@@ -53,7 +55,7 @@ export const selectPeEntrypointRva = (root: ParentNode, rva: number): boolean =>
   for (const element of explorerElements(root)) {
     const runtime = runtimeByElement.get(element);
     if (!runtime) continue;
-    const state = selectEntrypointRva(runtime.blocks, rva);
+    const state = selectEntrypointRva(runtime.blocks, rva, runtime.state);
     if (!state) continue;
     runtime.state = state;
     renderRuntime(element, runtime);
@@ -68,6 +70,12 @@ const handleClick = (element: HTMLElement, event: Event): void => {
   if (selector) {
     event.preventDefault();
     selectBlock(element, selector);
+    return;
+  }
+  const sorter = target?.closest<HTMLElement>("[data-pe-entrypoint-block-sort]");
+  if (sorter) {
+    event.preventDefault();
+    sortBlocks(element, sorter);
     return;
   }
   const pager = target?.closest<HTMLElement>("[data-pe-entrypoint-page-action]");
@@ -96,7 +104,15 @@ const selectBlock = (element: HTMLElement, selector: HTMLElement): void => {
   const runtime = runtimeByElement.get(element);
   const blockIndex = Number(selector.dataset["peEntrypointBlockSelect"]);
   if (!runtime || !Number.isInteger(blockIndex)) return;
-  runtime.state = selectEntrypointBlock(runtime.blocks, blockIndex);
+  runtime.state = selectEntrypointBlock(runtime.blocks, blockIndex, runtime.state);
+  renderRuntime(element, runtime);
+};
+
+const sortBlocks = (element: HTMLElement, sorter: HTMLElement): void => {
+  const runtime = runtimeByElement.get(element);
+  const columnIndex = Number(sorter.dataset["peEntrypointBlockSort"]);
+  if (!runtime || !Number.isInteger(columnIndex)) return;
+  runtime.state = toggleEntrypointBlockSort(runtime.blocks, runtime.state, columnIndex);
   renderRuntime(element, runtime);
 };
 
@@ -117,13 +133,20 @@ const renderRuntime = (
   element.dataset["peEntrypointSelectedBlockIndex"] = String(runtime.state.selectedBlockIndex);
   element.dataset["peEntrypointBlockPageIndex"] = String(runtime.state.blockPageIndex);
   element.dataset["peEntrypointInstructionPageIndex"] = String(runtime.state.instructionPageIndex);
+  element.dataset["peEntrypointSourcePageIndex"] = String(runtime.state.sourcePageIndex);
+  element.dataset["peEntrypointBlockSortColumn"] =
+    runtime.state.blockSortColumnIndex == null ? "" : String(runtime.state.blockSortColumnIndex);
+  element.dataset["peEntrypointBlockSortDirection"] = runtime.state.blockSortDirection ?? "";
   element.innerHTML = renderEntrypointExplorerContent(runtime.blocks, runtime.state);
 };
 
 const readState = (element: HTMLElement): PeEntrypointExplorerState => ({
   selectedBlockIndex: readInteger(element.dataset["peEntrypointSelectedBlockIndex"]),
   blockPageIndex: readInteger(element.dataset["peEntrypointBlockPageIndex"]),
-  instructionPageIndex: readInteger(element.dataset["peEntrypointInstructionPageIndex"])
+  instructionPageIndex: readInteger(element.dataset["peEntrypointInstructionPageIndex"]),
+  sourcePageIndex: readInteger(element.dataset["peEntrypointSourcePageIndex"]),
+  blockSortColumnIndex: readNullableInteger(element.dataset["peEntrypointBlockSortColumn"]),
+  blockSortDirection: readSortDirection(element.dataset["peEntrypointBlockSortDirection"])
 });
 
 const readInteger = (value: string | undefined): number => {
@@ -131,8 +154,8 @@ const readInteger = (value: string | undefined): number => {
   return Number.isInteger(parsed) ? parsed : 0;
 };
 
-const readPageTarget = (value: string): "blocks" | "instructions" | null =>
-  value === "blocks" || value === "instructions" ? value : null;
+const readPageTarget = (value: string): "blocks" | "instructions" | "sources" | null =>
+  value === "blocks" || value === "instructions" || value === "sources" ? value : null;
 
 const readPageAction = (
   value: string
@@ -140,6 +163,14 @@ const readPageAction = (
   value === "first" || value === "previous" || value === "next" || value === "last"
     ? value
     : null;
+
+const readNullableInteger = (value: string | undefined): number | null => {
+  const parsed = Number(value);
+  return value !== "" && Number.isInteger(parsed) ? parsed : null;
+};
+
+const readSortDirection = (value: string | undefined): PeEntrypointSortDirection | null =>
+  value === "ascending" || value === "descending" ? value : null;
 
 const explorerElements = (root: ParentNode): HTMLElement[] => {
   const out: HTMLElement[] = [];

@@ -33,9 +33,9 @@ void test("renderEntrypointDisassembly paginates large block indexes", () => {
   renderEntrypointDisassembly(pe, out);
   const html = out.join("");
 
-  assert.ok(html.includes("Blocks 1-50 of 51"));
-  assert.ok(html.includes("0x00001310"));
-  assert.ok(!html.includes("0x00001320"));
+  assert.ok(html.includes("Blocks 1-20 of 51"));
+  assert.ok(html.includes("0x00001130"));
+  assert.ok(!html.includes("0x00001140"));
 });
 
 void test("renderEntrypointDisassembly paginates long selected blocks", () => {

@@ -1,69 +1,36 @@
 "use strict";
 
-import type {
-  PeEntrypointDisassemblyBlock,
-  PeEntrypointInstruction,
-  PeEntrypointInstructionTarget
-} from "../../analyzers/pe/disassembly/index.js";
+import {
+  visibleEntrypointBlocks,
+  type PeEntrypointRenderBlock
+} from "./entrypoint-disassembly-visible-blocks.js";
 
-export const PE_ENTRYPOINT_BLOCK_INDEX_PAGE_SIZE = 50;
+export { visibleEntrypointBlocks, type PeEntrypointRenderBlock };
+
+export const PE_ENTRYPOINT_BLOCK_INDEX_PAGE_SIZE = 20;
 export const PE_ENTRYPOINT_INSTRUCTION_PAGE_SIZE = 120;
+export const PE_ENTRYPOINT_SOURCE_PAGE_SIZE = 8;
 
-export type PeEntrypointRenderBlock = {
-  block: PeEntrypointDisassemblyBlock;
-  duplicateCount: number;
-  sources: number[];
-};
+export type PeEntrypointSortDirection = "ascending" | "descending";
 
 export type PeEntrypointExplorerState = {
   selectedBlockIndex: number;
   blockPageIndex: number;
   instructionPageIndex: number;
+  sourcePageIndex: number;
+  blockSortColumnIndex: number | null;
+  blockSortDirection: PeEntrypointSortDirection | null;
 };
 
-export type PeEntrypointRvaSelection = {
-  blockIndex: number;
-  instructionPageIndex: number;
-};
-
-type SignatureScalar = string | number | boolean | null;
-type TargetSignature = Record<string, SignatureScalar> | null;
-type InstructionSignature = {
-  rva: number;
-  fileOffset: number;
-  text: string;
-  notes: string[];
-  target: TargetSignature;
-};
+export type PeEntrypointRvaSelection = { blockIndex: number; instructionPageIndex: number };
 
 export const DEFAULT_PE_ENTRYPOINT_EXPLORER_STATE: PeEntrypointExplorerState = {
   selectedBlockIndex: 0,
   blockPageIndex: 0,
-  instructionPageIndex: 0
-};
-
-export const visibleEntrypointBlocks = (
-  blocks: readonly PeEntrypointDisassemblyBlock[]
-): PeEntrypointRenderBlock[] => {
-  const out: PeEntrypointRenderBlock[] = [];
-  const bySignature = new Map<string, PeEntrypointRenderBlock>();
-  for (const block of blocks) {
-    const signature = blockSignature(block);
-    const existing = bySignature.get(signature);
-    if (existing) {
-      existing.duplicateCount += 1;
-      existing.sources = uniqueSourceRvas(existing, block.sourceInstructionRva);
-    } else {
-      const rendered = {
-        block,
-        duplicateCount: 1,
-        sources: block.sourceInstructionRva == null ? [] : [block.sourceInstructionRva]
-      };
-      bySignature.set(signature, rendered);
-      out.push(rendered);
-    }
-  }
-  return out;
+  instructionPageIndex: 0,
+  sourcePageIndex: 0,
+  blockSortColumnIndex: null,
+  blockSortDirection: null
 };
 
 export const normalizeEntrypointExplorerState = (
@@ -71,6 +38,10 @@ export const normalizeEntrypointExplorerState = (
   state: PeEntrypointExplorerState
 ): PeEntrypointExplorerState => {
   const selectedBlockIndex = clampIndex(state.selectedBlockIndex, blocks.length);
+  const sortColumnIndex = normalizeSortColumnIndex(state.blockSortColumnIndex);
+  const sortDirection = sortColumnIndex == null
+    ? null
+    : normalizeSortDirection(state.blockSortDirection);
   return {
     selectedBlockIndex,
     blockPageIndex: clampPageIndex(
@@ -80,31 +51,74 @@ export const normalizeEntrypointExplorerState = (
     instructionPageIndex: clampPageIndex(
       state.instructionPageIndex,
       instructionPageCount(blocks[selectedBlockIndex])
-    )
+    ),
+    sourcePageIndex: clampPageIndex(
+      state.sourcePageIndex,
+      sourcePageCount(blocks[selectedBlockIndex])
+    ),
+    blockSortColumnIndex: sortColumnIndex,
+    blockSortDirection: sortDirection
   };
 };
 
 export const selectEntrypointBlock = (
   blocks: readonly PeEntrypointRenderBlock[],
-  blockIndex: number
+  blockIndex: number,
+  state: PeEntrypointExplorerState = DEFAULT_PE_ENTRYPOINT_EXPLORER_STATE
 ): PeEntrypointExplorerState => {
   const selectedBlockIndex = clampIndex(blockIndex, blocks.length);
+  const normalized = normalizeEntrypointExplorerState(blocks, state);
   return normalizeEntrypointExplorerState(blocks, {
+    ...normalized,
     selectedBlockIndex,
-    blockPageIndex: pageIndexForRow(selectedBlockIndex, PE_ENTRYPOINT_BLOCK_INDEX_PAGE_SIZE),
-    instructionPageIndex: 0
+    blockPageIndex: blockPageIndexForBlock(blocks, normalized, selectedBlockIndex),
+    instructionPageIndex: 0,
+    sourcePageIndex: 0
   });
 };
 
 export const moveEntrypointExplorerPage = (
   blocks: readonly PeEntrypointRenderBlock[],
   state: PeEntrypointExplorerState,
-  target: "blocks" | "instructions",
+  target: "blocks" | "instructions" | "sources",
   next: "first" | "previous" | "next" | "last" | number
 ): PeEntrypointExplorerState => {
   const normalized = normalizeEntrypointExplorerState(blocks, state);
   if (target === "blocks") return moveBlockPage(blocks, normalized, next);
-  return moveInstructionPage(blocks, normalized, next);
+  if (target === "instructions") return moveInstructionPage(blocks, normalized, next);
+  return moveSourcePage(blocks, normalized, next);
+};
+
+export const toggleEntrypointBlockSort = (
+  blocks: readonly PeEntrypointRenderBlock[],
+  state: PeEntrypointExplorerState,
+  columnIndex: number
+): PeEntrypointExplorerState => {
+  const normalized = normalizeEntrypointExplorerState(blocks, state);
+  const sortColumnIndex = normalizeSortColumnIndex(columnIndex);
+  if (sortColumnIndex == null) return normalized;
+  const direction =
+    normalized.blockSortColumnIndex === sortColumnIndex &&
+    normalized.blockSortDirection === "ascending"
+      ? "descending"
+      : "ascending";
+  return normalizeEntrypointExplorerState(blocks, {
+    ...normalized,
+    blockPageIndex: 0,
+    blockSortColumnIndex: sortColumnIndex,
+    blockSortDirection: direction
+  });
+};
+
+export const entrypointBlockPageIndexes = (
+  blocks: readonly PeEntrypointRenderBlock[],
+  state: PeEntrypointExplorerState
+): number[] => {
+  const normalized = normalizeEntrypointExplorerState(blocks, state);
+  const indexes = sortedEntrypointBlockIndexes(blocks, normalized);
+  const start = normalized.blockPageIndex * PE_ENTRYPOINT_BLOCK_INDEX_PAGE_SIZE;
+  const end = Math.min(blocks.length, start + PE_ENTRYPOINT_BLOCK_INDEX_PAGE_SIZE);
+  return indexes.slice(start, end);
 };
 
 export const findEntrypointRvaSelection = (
@@ -126,14 +140,18 @@ export const findEntrypointRvaSelection = (
 
 export const selectEntrypointRva = (
   blocks: readonly PeEntrypointRenderBlock[],
-  rva: number
+  rva: number,
+  state: PeEntrypointExplorerState = DEFAULT_PE_ENTRYPOINT_EXPLORER_STATE
 ): PeEntrypointExplorerState | null => {
   const selection = findEntrypointRvaSelection(blocks, rva);
   if (!selection) return null;
+  const normalized = normalizeEntrypointExplorerState(blocks, state);
   return normalizeEntrypointExplorerState(blocks, {
+    ...normalized,
     selectedBlockIndex: selection.blockIndex,
-    blockPageIndex: pageIndexForRow(selection.blockIndex, PE_ENTRYPOINT_BLOCK_INDEX_PAGE_SIZE),
-    instructionPageIndex: selection.instructionPageIndex
+    blockPageIndex: blockPageIndexForBlock(blocks, normalized, selection.blockIndex),
+    instructionPageIndex: selection.instructionPageIndex,
+    sourcePageIndex: 0
   });
 };
 
@@ -152,51 +170,6 @@ export const entrypointPageCount = (rowCount: number, pageSize: number): number 
   if (!Number.isSafeInteger(pageSize) || pageSize <= 0) return 1;
   return Math.max(1, Math.ceil(rowCount / pageSize));
 };
-
-const targetSignature = (target: PeEntrypointInstructionTarget | undefined): TargetSignature => {
-  if (!target) return null;
-  if (target.kind === "code") return { kind: target.kind, rva: target.rva };
-  if (target.kind === "return") {
-    return "rva" in target
-      ? { kind: target.kind, rva: target.rva }
-      : { kind: target.kind, reason: target.reason };
-  }
-  if (target.kind === "branch") {
-    return { kind: target.kind, branchRva: target.branchRva, fallthroughRva: target.fallthroughRva };
-  }
-  return {
-    kind: target.kind,
-    label: target.label,
-    slotRva: target.slotRva,
-    importKind: target.importKind,
-    guardIatEntry: target.guardIatEntry,
-    returnRva: target.returnRva ?? null
-  };
-};
-
-const instructionSignature = (instruction: PeEntrypointInstruction): InstructionSignature => ({
-  rva: instruction.rva,
-  fileOffset: instruction.fileOffset,
-  text: instruction.text,
-  notes: instruction.notes ?? [],
-  target: targetSignature(instruction.target)
-});
-
-const blockSignature = (block: PeEntrypointDisassemblyBlock): string =>
-  JSON.stringify({
-    kind: block.kind,
-    startRva: block.startRva,
-    fileOffsetStart: block.fileOffsetStart,
-    instructions: block.instructions.map(instructionSignature)
-  });
-
-const uniqueSourceRvas = (
-  block: PeEntrypointRenderBlock,
-  sourceRva: number | undefined
-): number[] =>
-  sourceRva == null || block.sources.includes(sourceRva)
-    ? block.sources
-    : [...block.sources, sourceRva];
 
 const moveBlockPage = (
   blocks: readonly PeEntrypointRenderBlock[],
@@ -224,8 +197,81 @@ const moveInstructionPage = (
   )
 });
 
+const moveSourcePage = (
+  blocks: readonly PeEntrypointRenderBlock[],
+  state: PeEntrypointExplorerState,
+  next: "first" | "previous" | "next" | "last" | number
+): PeEntrypointExplorerState => ({
+  ...state,
+  sourcePageIndex: movedPageIndex(
+    state.sourcePageIndex,
+    sourcePageCount(blocks[state.selectedBlockIndex]),
+    next
+  )
+});
+
 const instructionPageCount = (block: PeEntrypointRenderBlock | undefined): number =>
   entrypointPageCount(block?.block.instructions.length ?? 0, PE_ENTRYPOINT_INSTRUCTION_PAGE_SIZE);
+
+const sourcePageCount = (block: PeEntrypointRenderBlock | undefined): number =>
+  entrypointPageCount(block?.sources.length ?? 0, PE_ENTRYPOINT_SOURCE_PAGE_SIZE);
+
+const sortedEntrypointBlockIndexes = (
+  blocks: readonly PeEntrypointRenderBlock[],
+  state: PeEntrypointExplorerState
+): number[] => {
+  const indexes = Array.from({ length: Math.max(0, blocks.length) }, (_value, index) => index);
+  if (state.blockSortColumnIndex == null || !state.blockSortDirection) return indexes;
+  const sign = state.blockSortDirection === "ascending" ? 1 : -1;
+  const columnIndex = state.blockSortColumnIndex;
+  return indexes.sort((left, right) => {
+    const compared = compareBlockSortValues(
+      blockSortValue(blocks[left], columnIndex),
+      blockSortValue(blocks[right], columnIndex)
+    ) * sign;
+    return compared || left - right;
+  });
+};
+
+const blockPageIndexForBlock = (
+  blocks: readonly PeEntrypointRenderBlock[],
+  state: PeEntrypointExplorerState,
+  blockIndex: number
+): number => {
+  const sortedIndex = sortedEntrypointBlockIndexes(blocks, state).indexOf(blockIndex);
+  return pageIndexForRow(Math.max(0, sortedIndex), PE_ENTRYPOINT_BLOCK_INDEX_PAGE_SIZE);
+};
+
+const blockSortValue = (
+  block: PeEntrypointRenderBlock | undefined,
+  columnIndex: number
+): string | number => {
+  if (!block) return "";
+  if (columnIndex === 0) return block.block.startRva;
+  if (columnIndex === 1) return block.block.kind;
+  if (columnIndex === 2) return block.sources[0] ?? -1;
+  if (columnIndex === 3) return block.block.instructions.length;
+  return block.block.fileOffsetStart;
+};
+
+const compareBlockSortValues = (left: string | number, right: string | number): number =>
+  typeof left === "number" && typeof right === "number"
+    ? left - right
+    : String(left).localeCompare(
+      String(right),
+      undefined,
+      { numeric: true, sensitivity: "base" }
+    );
+
+const normalizeSortColumnIndex = (columnIndex: number | null): number | null =>
+  Number.isInteger(columnIndex) && columnIndex != null && columnIndex >= 0 && columnIndex <= 4
+    ? columnIndex
+    : null;
+
+const normalizeSortDirection = (
+  direction: PeEntrypointSortDirection | null
+): PeEntrypointSortDirection | null =>
+  direction === "ascending" || direction === "descending" ? direction : null;
 
 const movedPageIndex = (
   pageIndex: number,

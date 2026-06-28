@@ -34,6 +34,9 @@ class FakeElement {
     if (selector === "[data-pe-entrypoint-page-action]") {
       return this.dataset["peEntrypointPageAction"] == null ? null : this;
     }
+    if (selector === "[data-pe-entrypoint-block-sort]") {
+      return this.dataset["peEntrypointBlockSort"] == null ? null : this;
+    }
     return null;
   }
   querySelectorAll(selector: string): FakeElement[] {
@@ -85,6 +88,23 @@ const createManyBlockPe = (): PeWindowsParseResult =>
     }
   }) as unknown as PeWindowsParseResult;
 
+const createManySourcePe = (): PeWindowsParseResult =>
+  ({
+    entrypointDisassembly: {
+      bitness: 64,
+      entrypointRva: 0x1000,
+      bytesDecoded: 10,
+      instructionCount: 10,
+      blocks: Array.from({ length: 10 }, (_value, index) => ({
+        kind: "followed-call",
+        startRva: 0x2000,
+        fileOffsetStart: 0x200,
+        sourceInstructionRva: 0x1000 + index,
+        instructions: [createInstruction(0x2000)]
+      }))
+    }
+  }) as unknown as PeWindowsParseResult;
+
 const withFakeDom = (callback: () => void): void => {
   const globals = globalThis as unknown as GlobalDom;
   const originalElement = globals.Element;
@@ -132,12 +152,38 @@ void test("enhancePeEntrypointExplorer handles block and page controls", () => {
     blockSelector.dataset["peEntrypointBlockSelect"] = "50";
     fakeExplorer.dispatch("click", blockSelector);
     assert.equal(fakeExplorer.dataset["peEntrypointSelectedBlockIndex"], "50");
+    assert.equal(fakeExplorer.dataset["peEntrypointBlockPageIndex"], "2");
 
     const input = new FakeInputElement("input");
     input.dataset["peEntrypointPageInput"] = "blocks";
     input.value = "1";
     fakeExplorer.dispatch("change", input);
     assert.equal(fakeExplorer.dataset["peEntrypointBlockPageIndex"], "0");
+  });
+});
+
+void test("enhancePeEntrypointExplorer sorts block index and pages selected sources", () => {
+  withFakeDom(() => {
+    fakeExplorer.dataset = {};
+    fakeExplorer.innerHTML = "";
+    enhancePeEntrypointExplorer(fakeRoot as unknown as ParentNode, createManySourcePe());
+
+    assert.match(fakeExplorer.innerHTML, /Sources 1-8 of 10/);
+    assert.equal(fakeExplorer.innerHTML.includes(`data-pe-entrypoint-jump="4103"`), true);
+    assert.equal(fakeExplorer.innerHTML.includes(`data-pe-entrypoint-jump="4104"`), false);
+
+    const nextSources = new FakeElement("button");
+    nextSources.dataset["peEntrypointPageTarget"] = "sources";
+    nextSources.dataset["peEntrypointPageAction"] = "next";
+    fakeExplorer.dispatch("click", nextSources);
+    assert.equal(fakeExplorer.dataset["peEntrypointSourcePageIndex"], "1");
+    assert.equal(fakeExplorer.innerHTML.includes(`data-pe-entrypoint-jump="4104"`), true);
+
+    const sortRva = new FakeElement("button");
+    sortRva.dataset["peEntrypointBlockSort"] = "0";
+    fakeExplorer.dispatch("click", sortRva);
+    assert.equal(fakeExplorer.dataset["peEntrypointBlockSortColumn"], "0");
+    assert.equal(fakeExplorer.dataset["peEntrypointBlockSortDirection"], "ascending");
   });
 });
 

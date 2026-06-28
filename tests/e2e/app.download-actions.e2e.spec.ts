@@ -181,6 +181,12 @@ test.describe("PE analysis actions", () => {
     await expect(entrypointSection).toHaveJSProperty("open", true);
     await expect(detailsValue).toContainText("Entrypoint preview:");
     await expect(detailsValue).toContainText("Call target");
+    const sortByInstructions = entrypointSection.locator(
+      '[data-pe-entrypoint-block-sort="3"]'
+    ).first();
+    await expect(sortByInstructions).toBeVisible();
+    await sortByInstructions.click();
+    await expect(sortByInstructions.locator("..")).toHaveAttribute("aria-sort", "ascending");
     await expect(detailsValue.locator('[data-pe-entrypoint-jump="4102"]').first()).toBeVisible();
     await detailsValue.locator('[data-pe-entrypoint-jump="4102"]').first().click();
     const callTargetRow = detailsValue.locator(

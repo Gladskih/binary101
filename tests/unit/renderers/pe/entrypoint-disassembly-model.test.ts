@@ -7,8 +7,11 @@ import type {
   PeEntrypointInstruction
 } from "../../../../analyzers/pe/disassembly/index.js";
 import {
+  DEFAULT_PE_ENTRYPOINT_EXPLORER_STATE,
+  entrypointBlockPageIndexes,
   moveEntrypointExplorerPage,
   selectEntrypointRva,
+  toggleEntrypointBlockSort,
   visibleEntrypointBlocks
 } from "../../../../renderers/pe/entrypoint-disassembly-model.js";
 
@@ -56,8 +59,11 @@ void test("selectEntrypointRva opens the containing block and instruction page",
 
   assert.deepEqual(state, {
     selectedBlockIndex: 50,
-    blockPageIndex: 1,
-    instructionPageIndex: 1
+    blockPageIndex: 2,
+    instructionPageIndex: 1,
+    sourcePageIndex: 0,
+    blockSortColumnIndex: null,
+    blockSortDirection: null
   });
 });
 
@@ -65,7 +71,7 @@ void test("moveEntrypointExplorerPage clamps oversized page requests", () => {
   const blocks = visibleEntrypointBlocks(createPagedBlocks());
   const state = moveEntrypointExplorerPage(
     blocks,
-    { selectedBlockIndex: 50, blockPageIndex: 0, instructionPageIndex: 0 },
+    { ...DEFAULT_PE_ENTRYPOINT_EXPLORER_STATE, selectedBlockIndex: 50 },
     "instructions",
     99
   );
@@ -73,6 +79,29 @@ void test("moveEntrypointExplorerPage clamps oversized page requests", () => {
   assert.deepEqual(state, {
     selectedBlockIndex: 50,
     blockPageIndex: 0,
-    instructionPageIndex: 1
+    instructionPageIndex: 1,
+    sourcePageIndex: 0,
+    blockSortColumnIndex: null,
+    blockSortDirection: null
   });
+});
+
+void test("toggleEntrypointBlockSort sorts all block index rows before paging", () => {
+  const blocks = visibleEntrypointBlocks([
+    block(0x3000, [instruction(0x3000)]),
+    block(0x1000, [instruction(0x1000)]),
+    block(0x2000, [instruction(0x2000)])
+  ]);
+  const state = toggleEntrypointBlockSort(blocks, DEFAULT_PE_ENTRYPOINT_EXPLORER_STATE, 0);
+  const indexes = entrypointBlockPageIndexes(blocks, state);
+
+  assert.deepEqual(state, {
+    selectedBlockIndex: 0,
+    blockPageIndex: 0,
+    instructionPageIndex: 0,
+    sourcePageIndex: 0,
+    blockSortColumnIndex: 0,
+    blockSortDirection: "ascending"
+  });
+  assert.deepEqual(indexes, [1, 2, 0]);
 });
