@@ -37,11 +37,22 @@ export interface PeDosStub {
   note: string;
   strings?: string[];
   code?: PeDosStubCode;
+  valveIntegrity?: PeValveIntegrityBlock;
 }
 
 export interface PeDosStubInstruction {
   offset: number;
   text: string;
+}
+
+export interface PeValveIntegrityBlock {
+  version?: number;
+  signedDataSize?: number;
+  timestamp?: number;
+  signatureHex?: string;
+  paddingSize: number;
+  paddingZeroFilled?: boolean;
+  warnings?: string[];
 }
 
 export interface PeDosStubNestedPeSection {

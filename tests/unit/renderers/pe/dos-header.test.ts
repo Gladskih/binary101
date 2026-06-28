@@ -5,6 +5,10 @@ import { test } from "node:test";
 import { renderDosHeader } from "../../../../renderers/pe/dos-header.js";
 import { createBasePe } from "../../../fixtures/pe-renderer-headers-fixture.js";
 
+const VALVE_SIGNED_DATA_SIZE_FIXTURE_BYTES = 3_976_704;
+// Valve Steam blocks carry a 128-byte RSA signature.
+const VALVE_SIGNATURE_HEX_FIXTURE = "ab".repeat(0x80);
+
 void test("renderDosHeader shows field hints inline instead of tooltip-only text", () => {
   const pe = createBasePe();
   const out: string[] = [];
@@ -127,4 +131,34 @@ void test("renderDosHeader renders nested PE download controls", () => {
   assert.doesNotMatch(html, /DOS stub: non-standard.*printable text/);
   assert.doesNotMatch(html, /mlestartup\.pdb/);
   assert.doesNotMatch(html, /MLEINIT/);
+});
+
+void test("renderDosHeader renders Valve integrity blocks as structured data", () => {
+  const pe = createBasePe();
+  pe.dos.e_lfanew = 0x158;
+  pe.dos.stub = {
+    kind: "valve-integrity",
+    note: "Valve PE integrity block",
+    valveIntegrity: {
+      version: 1,
+      signedDataSize: VALVE_SIGNED_DATA_SIZE_FIXTURE_BYTES,
+      timestamp: 0x64d1f2a0,
+      signatureHex: VALVE_SIGNATURE_HEX_FIXTURE,
+      paddingSize: 0x88,
+      paddingZeroFilled: true
+    }
+  };
+  const out: string[] = [];
+  renderDosHeader(pe, out);
+  const html = out.join("");
+  assert.ok(html.includes("DOS stub: Valve PE integrity block"));
+  assert.ok(html.includes("Valve block found at file offset 0x00000040."));
+  assert.ok(html.includes("<th scope=\"row\">Magic</th><td>VLV\\0</td>"));
+  assert.ok(
+    html.includes(
+      `<th scope="row">Signed data size</th><td>3.8 MB (${VALVE_SIGNED_DATA_SIZE_FIXTURE_BYTES} bytes)</td>`
+    )
+  );
+  assert.ok(html.includes(VALVE_SIGNATURE_HEX_FIXTURE));
+  assert.ok(html.includes("<th scope=\"row\">Padding before PE header</th><td>136 B (136 bytes) (zero-filled)</td>"));
 });

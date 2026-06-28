@@ -5,6 +5,7 @@ import type { FileRangeReader } from "../../file-range-reader.js";
 export { parseOptionalHeaderAndDirectories } from "../optional-header/parse.js";
 import { parseRichHeaderFromDosStub } from "./rich-header.js";
 import { analyzePeDosStubCode } from "./dos-stub-code.js";
+import { parseValveIntegrityBlock } from "./valve-integrity.js";
 import type { PeCoffHeader, PeDosHeader } from "../types.js";
 
 const IMAGE_FILE_HEADER_SIZE = 20;
@@ -45,6 +46,11 @@ export async function parseDosHeaderAndStub(
     const stubLength = peHeaderOffset - 0x40;
     const stubBytes = await reader.readBytes(0x40, stubLength);
     dos.rich = parseRichHeaderFromDosStub(stubBytes);
+    const valveIntegrity = parseValveIntegrityBlock(stubBytes);
+    if (valveIntegrity) {
+      dos.stub = { kind: "valve-integrity", note: "Valve PE integrity block", valveIntegrity };
+      return dos;
+    }
     const code = await analyzePeDosStubCode(dos, stubBytes, peHeaderOffset);
     const printableRuns = collectPrintableRuns(stubBytes, 12);
     if (code.kind === "standard-print-exit" && code.message) {

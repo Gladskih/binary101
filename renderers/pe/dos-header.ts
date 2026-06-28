@@ -1,6 +1,6 @@
 "use strict";
 
-import { hex } from "../../binary-utils.js";
+import { hex, humanSize, isoOrDash } from "../../binary-utils.js";
 import { escapeHtml } from "../../html-utils.js";
 import type { PeParseResult } from "../../analyzers/pe/index.js";
 import { mapMachine } from "../../analyzers/pe/security/signature.js";
@@ -50,6 +50,9 @@ const formatDosStubSummary = (stub: PeParseResult["dos"]["stub"]): string => {
   if (stub.kind === "standard" && stub.note === "DOS print-and-exit code") {
     return "standard print-and-exit code";
   }
+  if (stub.kind === "valve-integrity" && stub.note === "Valve PE integrity block") {
+    return "Valve PE integrity block";
+  }
   return stub.note ? `${stub.kind} - ${stub.note}` : stub.kind;
 };
 
@@ -62,6 +65,7 @@ const renderDosStub = (pe: PeParseResult, out: string[]): void => {
       out.push(`<div class="mono smallNote">${stub.strings.map(x => `<div>${escapeHtml(String(x))}</div>`).join("")}</div>`);
     }
   }
+  if (stub.valveIntegrity) renderValveIntegrityBlock(stub.valveIntegrity, out);
   if (stub.code) renderDosStubCode(stub.code, out);
   if (pe.dos.rich) {
     out.push(`<div style="margin-top:.75rem">`);
@@ -72,6 +76,44 @@ const renderDosStub = (pe: PeParseResult, out: string[]): void => {
       `<div class="smallNote" style="margin-top:.5rem">Rich header: not present (no DanS/Rich signature found in DOS stub).</div>`
     );
   }
+};
+
+const renderValveRow = (label: string, value: string): string =>
+  `<tr><th scope="row">${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`;
+
+const renderValveIntegrityBlock = (
+  block: NonNullable<PeParseResult["dos"]["stub"]["valveIntegrity"]>,
+  out: string[]
+): void => {
+  out.push(
+    `<div class="smallNote" style="margin-top:.35rem">` +
+    // Microsoft PE format: IMAGE_DOS_HEADER.e_lfanew is at 0x3c, so the fixed header ends at 0x40.
+    `Valve block found at file offset ${escapeHtml(hex(0x40, 8))}.</div>` +
+    `<div class="tableWrap"><table class="table" style="margin-top:.35rem"><thead><tr>` +
+    `<th>Field</th><th>Value</th></tr></thead><tbody>` +
+    renderValveRow("Magic", "VLV\\0") +
+    renderValveRow("Version", block.version == null ? "-" : String(block.version)) +
+    renderValveRow("Signed data size", block.signedDataSize == null ? "-" : humanSize(block.signedDataSize)) +
+    renderValveRow(
+      "Timestamp",
+      block.timestamp == null ? "-" : `${hex(block.timestamp, 8)} (${isoOrDash(block.timestamp)})`
+    ) +
+    renderValveRow("RSA signature", block.signatureHex ?? "-") +
+    renderValveRow("Padding before PE header", formatValvePadding(block)) +
+    `</tbody></table></div>`
+  );
+  if (block.warnings?.length) {
+    out.push(`<ul class="smallNote">${block.warnings.map(note => `<li>${escapeHtml(note)}</li>`).join("")}</ul>`);
+  }
+};
+
+const formatValvePadding = (
+  block: NonNullable<PeParseResult["dos"]["stub"]["valveIntegrity"]>
+): string => {
+  const formattedSize = humanSize(block.paddingSize);
+  return block.paddingZeroFilled == null
+    ? formattedSize
+    : `${formattedSize} (${block.paddingZeroFilled ? "zero-filled" : "contains non-zero bytes"})`;
 };
 
 const describeStubCodeKind = (kind: string): string => {
