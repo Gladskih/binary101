@@ -5,6 +5,7 @@ import type { Page } from "@playwright/test";
 import { createGzipFile } from "../fixtures/gzip-fixtures.js";
 import { createPngFile } from "../fixtures/image-sample-files.js";
 import { createPeResourcePreviewFile } from "../fixtures/pe-resource-preview-file.js";
+import { createPeFile } from "../fixtures/sample-files-pe.js";
 import type { MockFile } from "../helpers/mock-file.js";
 import { NARROW_LAYOUT_VIEWPORT } from "./viewports.js";
 
@@ -82,6 +83,25 @@ void test("uses the full phone width for the PE result card and its sections", a
   expect(cardBox!.x).toBeCloseTo(0, 0);
   expect(hashesBox!.x).toBeCloseTo(0, 0);
   expect(sectionBox!.x).toBeCloseTo(0, 0);
+});
+
+void test("keeps collapsed action panels evenly spaced after file hashes", async ({ page }) => {
+  await inspectFile(page, createPeFile());
+
+  const hashBox = await page.locator("#hashDetails").boundingBox();
+  const instructionBox = await page.locator("#peInstructionSetsPanel > .analysisPanel").boundingBox();
+  const entrypointBox = await page.locator("#peEntrypointDisassemblyPanel > .analysisPanel").boundingBox();
+  const contentGap = await page.locator("#fileInfoCard").evaluate(element =>
+    parseFloat(
+      element.ownerDocument.defaultView!.getComputedStyle(element)
+        .getPropertyValue("--content-section-gap")
+    )
+  );
+  expect(hashBox).not.toBeNull();
+  expect(instructionBox).not.toBeNull();
+  expect(entrypointBox).not.toBeNull();
+  expect(instructionBox!.y - hashBox!.y - hashBox!.height).toBeCloseTo(contentGap, 0);
+  expect(entrypointBox!.y - instructionBox!.y - instructionBox!.height).toBeCloseTo(contentGap, 0);
 });
 
 void test("insets unsectioned analysis content on phone-sized screens", async ({ page }) => {

@@ -181,9 +181,14 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .smallNote{color:var(--muted);font-size:12px;margin-top:4px}
 .mono{font-family:var(--mono)}
 .analysisPanel{margin:.2rem 0 .8rem 0;border:1px solid var(--border2);border-radius:14px;background:var(--info-bg)}
-#analysisValue > .analysisPanel,#analysisValue > .peSection{
+#analysisValue > .analysisPanel,
+#analysisValue > .peSection,
+#peInstructionSetsPanel,
+#peEntrypointDisassemblyPanel{
   margin:0 0 var(--content-section-gap)
 }
+#peInstructionSetsPanel > .analysisPanel,
+#peEntrypointDisassemblyPanel > .analysisPanel{margin:0}
 #analysisValue > :last-child{margin-bottom:0}
 .analysisPanelSummary{cursor:pointer;padding:.85rem 1rem}
 .analysisPanelSummary:hover{background:color-mix(in oklab,var(--accent) 10%,transparent)}
