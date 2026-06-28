@@ -40,6 +40,35 @@ void test("parseTlsDirectory warns when TLS Characteristics sets reserved bits",
   assert.ok(tls.warnings?.some(warning => /Characteristics|reserved/i.test(warning)));
 });
 
+void test("parseTlsDirectory accepts known TLS Characteristics alignment bits", async () => {
+  const { bytes, view, tlsRva } = createTlsSubject();
+  // Microsoft PE format, "The TLS Directory": bits [23:20] use IMAGE_SCN_ALIGN_*.
+  view.setUint32(tlsRva + 20, 0x00500000, true);
+
+  const tls = expectDefined(await parseTlsDirectory32(
+    new MockFile(bytes),
+    [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY32_SIZE }],
+    value => value,
+    0n
+  ));
+
+  assert.equal(tls.warnings?.some(warning => /Characteristics/i.test(warning)), false);
+});
+
+void test("parseTlsDirectory warns when TLS Characteristics alignment value is unknown", async () => {
+  const { bytes, view, tlsRva } = createTlsSubject();
+  view.setUint32(tlsRva + 20, 0x00f00000, true);
+
+  const tls = expectDefined(await parseTlsDirectory32(
+    new MockFile(bytes),
+    [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY32_SIZE }],
+    value => value,
+    0n
+  ));
+
+  assert.ok(tls.warnings?.some(warning => /Characteristics|unknown alignment/i.test(warning)));
+});
+
 void test("parseTlsDirectory warns when the TLS raw-data VA range is invalid", async () => {
   const { bytes, view, tlsRva } = createTlsSubject();
   view.setUint32(tlsRva + 0, 0x90, true);

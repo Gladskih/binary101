@@ -1,19 +1,21 @@
 "use strict";
 
 import type { FileRangeReader } from "../../file-range-reader.js";
+import {
+  formatTlsCharacteristicsReservedBits,
+  isKnownTlsCharacteristicsAlignment,
+  tlsCharacteristicsReservedBits
+} from "../tls-characteristics.js";
 import type { PeDataDirectory, PeSection, PeTlsDirectory, RvaToOffset } from "../types.js";
 import { isReadableMappedTlsVa, isTlsImageVa, toTlsRvaFromVa } from "./tls-addresses.js";
 
-// Microsoft PE format, "The TLS Directory": PE32 fields end at Characteristics
-// offset 20 with size 4.
+// Microsoft PE format, "The TLS Directory":
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#the-tls-directory
+// PE32 fields end at DWORD Characteristics offset 20; PE32+ ends at offset 36.
 const IMAGE_TLS_DIRECTORY32_SIZE = 0x18;
-// Microsoft PE format, "The TLS Directory": PE32+ fields end at Characteristics
-// offset 36 with size 4.
 const IMAGE_TLS_DIRECTORY64_SIZE = 0x28;
 const TLS_CALLBACK_ENTRY_SIZE32 = Uint32Array.BYTES_PER_ELEMENT;
 const TLS_CALLBACK_ENTRY_SIZE64 = BigUint64Array.BYTES_PER_ELEMENT;
-// Microsoft PE format, TLS Characteristics: only alignment bits 23:20 are defined.
-const TLS_CHARACTERISTICS_ALIGNMENT_MASK = 0x00f00000;
 const TLS_INDEX_STORAGE_SIZE = Uint32Array.BYTES_PER_ELEMENT;
 
 const createTlsWarningResult = (warnings: string[]): PeTlsDirectory => ({
@@ -62,8 +64,14 @@ const addTlsFieldWarnings = (
   fileSize: number,
   warnings: string[]
 ): void => {
-  const reservedBits = characteristics & ~TLS_CHARACTERISTICS_ALIGNMENT_MASK;
-  if (reservedBits !== 0) warnings.push("TLS Characteristics has reserved bits set.");
+  if (tlsCharacteristicsReservedBits(characteristics) !== 0) {
+    warnings.push(
+      `TLS Characteristics has reserved bits set: ${formatTlsCharacteristicsReservedBits(characteristics)}.`
+    );
+  }
+  if (!isKnownTlsCharacteristicsAlignment(characteristics)) {
+    warnings.push("TLS Characteristics uses an unknown alignment value.");
+  }
   addTlsRawDataWarnings(startAddressOfRawData, endAddressOfRawData, imageBase, rvaToOff, fileSize, warnings);
 };
 
@@ -232,7 +240,7 @@ export const parseTlsDirectory64 = async (
     return createTlsWarningResult(warnings);
   }
   if (dir.size < IMAGE_TLS_DIRECTORY64_SIZE) {
-    warnings.push("TLS directory is smaller than the 64-bit TLS header size (0x30 bytes).");
+    warnings.push("TLS directory is smaller than the 64-bit TLS header size (0x28 bytes).");
     return createTlsWarningResult(warnings);
   }
   const base = rvaToOff(dir.rva);

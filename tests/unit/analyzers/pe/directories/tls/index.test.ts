@@ -6,8 +6,10 @@ import { parseTlsDirectory32, parseTlsDirectory64 } from "../../../../../../anal
 import { MockFile } from "../../../../../helpers/mock-file.js";
 import { expectDefined } from "../../../../../helpers/expect-defined.js";
 
-const IMAGE_TLS_DIRECTORY32_SIZE = 0x18; // IMAGE_TLS_DIRECTORY32
-// Microsoft PE format, "The TLS Directory": PE32+ TLS directory is 0x28 bytes.
+// Microsoft PE format, "The TLS Directory":
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#the-tls-directory
+// PE32 TLS directory is 0x18 bytes; PE32+ TLS directory is 0x28 bytes.
+const IMAGE_TLS_DIRECTORY32_SIZE = 0x18;
 const IMAGE_TLS_DIRECTORY64_SIZE = 0x28;
 const TLS_CALLBACK_ENTRY_SIZE32 = Uint32Array.BYTES_PER_ELEMENT; // One 32-bit callback pointer
 
@@ -65,8 +67,8 @@ void test("parseTlsDirectory64 accepts the spec-sized TLS directory header", asy
   const tlsRva = 0x20;
   const bytes = new Uint8Array(tlsRva + 0x28).fill(0);
   const dv = new DataView(bytes.buffer);
-  // Microsoft PE format, "The TLS Directory": Characteristics is at PE32+
-  // offset 36 with size 4, so a complete PE32+ TLS directory is 0x28 bytes.
+  // Microsoft PE format, "The TLS Directory": Characteristics is the final
+  // DWORD field at PE32+ offset 36, so the complete directory is 0x28 bytes.
   dv.setBigUint64(tlsRva, 0x1800n, true);
   dv.setBigUint64(tlsRva + 8, 0x1810n, true);
   dv.setBigUint64(tlsRva + 16, 0x1820n, true);
@@ -139,7 +141,7 @@ void test("parseTlsDirectory warns when the declared data-directory size is too 
 
   const bytes64 = new Uint8Array(tlsRva + IMAGE_TLS_DIRECTORY64_SIZE).fill(0);
   const dv64 = new DataView(bytes64.buffer);
-  // IMAGE_TLS_DIRECTORY64 is 0x30 bytes, so any smaller declared directory cannot describe a valid header.
+  // IMAGE_TLS_DIRECTORY64 is 0x28 bytes, so any smaller declared directory cannot describe a valid header.
   dv64.setBigUint64(tlsRva + 24, 0x80n, true);
   const tls64 = expectDefined(await parseTlsDirectory64(
     new MockFile(bytes64),

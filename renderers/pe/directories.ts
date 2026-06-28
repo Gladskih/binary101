@@ -7,13 +7,25 @@ import type {
 } from "../../analyzers/pe/index.js";
 import type { PeImportParseResult } from "../../analyzers/pe/imports/index.js";
 import { peSectionNameValue } from "../../analyzers/pe/sections/name.js";
+import {
+  formatTlsCharacteristicsReservedBits,
+  isKnownTlsCharacteristicsAlignment,
+  TLS_CHARACTERISTICS_ALIGNMENT_VALUES,
+  tlsCharacteristicsAlignmentBits,
+  tlsCharacteristicsReservedBits
+} from "../../analyzers/pe/tls-characteristics.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 type PeImportsSection = PeImportParseResult;
 type PeExportSection = NonNullable<PeWindowsParseResult["exports"]>;
 type PeTlsSection = NonNullable<PeWindowsParseResult["tls"]>;
 type PeIatSection = NonNullable<PeWindowsParseResult["iat"]>;
-type TlsField = readonly [label: string, value: string, meaning: string];
+type TlsField = {
+  readonly label: string;
+  readonly valueHtml: string;
+  readonly numeric?: boolean;
+  readonly meaning: string;
+};
 // Microsoft PE format, "Section Flags":
 // IMAGE_SCN_GPREL marks sections whose data is referenced through the global pointer (GP).
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
@@ -29,31 +41,100 @@ const renderTlsCallbackRvas = (callbackRvas: number[] | undefined, out: string[]
   out.push(`</tbody></table></div>`);
 };
 
+const TLS_CHARACTERISTICS_MEANING =
+  "Bits 20-23 encode the preferred alignment for TLS data copied for each thread; " +
+  "all other bits are reserved.";
+
+const renderTlsReservedBitsChip = (characteristics: number): string => {
+  const reservedBits = tlsCharacteristicsReservedBits(characteristics);
+  if (reservedBits === 0) return "";
+  const reservedHex = formatTlsCharacteristicsReservedBits(characteristics);
+  return `<span class="opt sel" style="white-space:nowrap" data-accessible-tooltip ` +
+    `title="Reserved TLS Characteristics bits are set: ${reservedHex}.">` +
+    `RESERVED_BITS_${reservedHex}</span>`;
+};
+
+const renderTlsUnknownAlignmentChip = (characteristics: number): string => {
+  if (isKnownTlsCharacteristicsAlignment(characteristics)) return "";
+  const alignment = hex(tlsCharacteristicsAlignmentBits(characteristics), 8);
+  return `<span class="opt sel" style="white-space:nowrap" data-accessible-tooltip ` +
+    `title="Unknown TLS Characteristics alignment value ${alignment}.">` +
+    `UNKNOWN_ALIGNMENT_${alignment}</span>`;
+};
+
+const renderTlsAlignmentChips = (characteristics: number): string =>
+  TLS_CHARACTERISTICS_ALIGNMENT_VALUES.map(([value, name, byteBoundary]) => {
+    const selected = tlsCharacteristicsAlignmentBits(characteristics) === value;
+    const byteText = byteBoundary === 1 ? "1 byte" : `${byteBoundary} bytes`;
+    return `<span class="opt ${selected ? "sel" : "dim"}" style="white-space:nowrap" ` +
+      `data-accessible-tooltip ` +
+      `title="Align TLS data copied for each thread to ${byteText}.">` +
+      `${escapeHtml(name)}</span>`;
+  }).join("") + renderTlsUnknownAlignmentChip(characteristics);
+
+const renderTlsCharacteristicsValue = (characteristics: number): string =>
+  `<div class="mono">${hex(characteristics, 8)}</div>` +
+  `<div class="optionsRow" style="display:flex;flex-direction:column;align-items:flex-start;gap:.18rem">` +
+  `${renderTlsAlignmentChips(characteristics)}` +
+  `${renderTlsReservedBitsChip(characteristics)}</div>`;
+
+const renderTlsCharacteristics = (tls: PeTlsSection, out: string[]): void => {
+  out.push(`<tr><th scope="row">${escapeHtml("Characteristics")}</th>`);
+  out.push(`<td style="white-space:nowrap">${renderTlsCharacteristicsValue(tls.Characteristics || 0)}</td>`);
+  out.push(`<td class="smallNote">${escapeHtml(TLS_CHARACTERISTICS_MEANING)}</td></tr>`);
+};
+
 const renderTlsFields = (tls: PeTlsSection, out: string[]): void => {
   out.push(
-    `<div class="tableWrap"><table class="table"><thead><tr>` +
+    `<div class="tableWrap"><table class="table" data-sortable="false"><colgroup>` +
+    `<col style="width:11rem"><col style="width:1%"><col></colgroup><thead><tr>` +
     `<th>Field</th><th>Value</th><th>Meaning</th></tr></thead><tbody>`
   );
   ([
-    ["StartAddressOfRawData", `0x${BigInt(tls.StartAddressOfRawData).toString(16)}`,
-      "VA for beginning of TLS template data."],
-    ["EndAddressOfRawData", `0x${BigInt(tls.EndAddressOfRawData).toString(16)}`,
-      "VA for end of TLS template data."],
-    ["AddressOfIndex", `0x${BigInt(tls.AddressOfIndex).toString(16)}`,
-      "VA of TLS index used by the loader."],
-    ["AddressOfCallBacks", `0x${BigInt(tls.AddressOfCallBacks).toString(16)}`,
-      "VA of null-terminated array of TLS callbacks (if present)."],
-    ["CallbackCount", String(tls.CallbackCount ?? 0),
-      "Number of TLS callbacks found before the terminating NULL pointer."],
-    ["SizeOfZeroFill", String(tls.SizeOfZeroFill ?? 0), "Bytes of zero-fill padding (TLS)."],
-    ["Characteristics", hex(tls.Characteristics || 0, 8), "Reserved (should be 0)."]
-  ] satisfies TlsField[]).forEach(([label, value, meaning]) => {
+    {
+      label: "StartAddressOfRawData",
+      valueHtml: escapeHtml(`0x${BigInt(tls.StartAddressOfRawData).toString(16)}`),
+      numeric: true,
+      meaning: "VA for beginning of TLS template data."
+    },
+    {
+      label: "EndAddressOfRawData",
+      valueHtml: escapeHtml(`0x${BigInt(tls.EndAddressOfRawData).toString(16)}`),
+      numeric: true,
+      meaning: "VA for end of TLS template data."
+    },
+    {
+      label: "AddressOfIndex",
+      valueHtml: escapeHtml(`0x${BigInt(tls.AddressOfIndex).toString(16)}`),
+      numeric: true,
+      meaning: "VA of TLS index used by the loader."
+    },
+    {
+      label: "AddressOfCallBacks",
+      valueHtml: escapeHtml(`0x${BigInt(tls.AddressOfCallBacks).toString(16)}`),
+      numeric: true,
+      meaning: "VA of null-terminated array of TLS callbacks (if present)."
+    },
+    {
+      label: "CallbackCount",
+      valueHtml: escapeHtml(String(tls.CallbackCount ?? 0)),
+      numeric: true,
+      meaning: "Number of TLS callbacks found before the terminating NULL pointer."
+    },
+    {
+      label: "SizeOfZeroFill",
+      valueHtml: escapeHtml(String(tls.SizeOfZeroFill ?? 0)),
+      numeric: true,
+      meaning: "Bytes of zero-fill padding (TLS)."
+    }
+  ] satisfies TlsField[]).forEach(({ label, valueHtml, numeric, meaning }) => {
     out.push(
       `<tr><th scope="row">${escapeHtml(label)}</th>` +
-      `<td class="peNumeric">${escapeHtml(value)}</td>` +
+      `<td${numeric ? ` class="peNumeric"` : ""} style="white-space:nowrap">${valueHtml}</td>` +
       `<td class="smallNote">${escapeHtml(meaning)}</td></tr>`
     );
   });
+  renderTlsCharacteristics(tls, out);
   out.push(`</tbody></table></div>`);
 };
 

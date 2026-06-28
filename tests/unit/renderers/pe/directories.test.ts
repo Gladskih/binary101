@@ -62,15 +62,93 @@ void test("renderTls displays parsed callback RVAs", () => {
   const html = out.join("");
 
   assert.match(html, /<th>Field<\/th><th>Value<\/th><th>Meaning<\/th>/);
+  assert.ok(html.includes('<col style="width:11rem"><col style="width:1%"><col>'));
+  assert.ok(html.includes('<td class="peNumeric" style="white-space:nowrap">0x1000</td>'));
   assert.match(
     html,
-    /<th scope="row">StartAddressOfRawData<\/th><td class="peNumeric">0x1000<\/td>/
+    /<th scope="row">StartAddressOfRawData<\/th><td class="peNumeric" style="white-space:nowrap">0x1000<\/td>/
   );
   assert.ok(html.includes("VA for beginning of TLS template data."));
   assert.doesNotMatch(html, /<dl>/);
   assert.ok(html.includes("Callback RVAs"));
   assert.ok(html.includes("0x00002000"));
   assert.ok(html.includes("0x00002010"));
+});
+
+void test("renderTls explains TLS Characteristics alignment and reserved bits", () => {
+  const tls: Parameters<typeof renderTls>[0] = {
+    StartAddressOfRawData: 0x1000n,
+    EndAddressOfRawData: 0x1010n,
+    AddressOfIndex: 0x1020n,
+    AddressOfCallBacks: 0n,
+    SizeOfZeroFill: 0,
+    Characteristics: 0x00500001,
+    CallbackCount: 0,
+    CallbackRvas: [],
+    parsed: true
+  };
+  const out: string[] = [];
+  renderTls(tls, out);
+  const html = out.join("");
+
+  assert.ok(html.includes("0x00500001"));
+  assert.ok(html.includes("<th scope=\"row\">Characteristics</th>"));
+  assert.ok(html.includes('<td style="white-space:nowrap"><div class="mono">0x00500001</div>'));
+  assert.ok(html.includes("flex-direction:column"));
+  assert.ok(
+    html.includes(
+      'class="opt dim" style="white-space:nowrap" data-accessible-tooltip title="Align TLS data copied for each thread to 1 byte.'
+    )
+  );
+  assert.ok(
+    html.includes(
+      'class="opt sel" style="white-space:nowrap" data-accessible-tooltip title="Align TLS data copied for each thread to 16 bytes.'
+    )
+  );
+  assert.ok(html.includes(">IMAGE_SCN_ALIGN_8192BYTES</span>"));
+  assert.ok(
+    html.includes(
+      'class="opt sel" style="white-space:nowrap" data-accessible-tooltip title="Reserved TLS Characteristics bits are set: 0x00000001."'
+    )
+  );
+  assert.ok(
+    html.includes(
+      "Bits 20-23 encode the preferred alignment for TLS data copied for each thread; all other bits are reserved."
+    )
+  );
+  assert.ok(!html.includes("Requests 16-byte alignment."));
+  assert.ok(!html.includes("Other 28 bits are reserved and clear."));
+  assert.ok(html.includes(">RESERVED_BITS_0x00000001</span>"));
+  assert.ok(!html.includes("RESERVED_CLEAR"));
+  assert.doesNotMatch(
+    html,
+    /<td class="smallNote">[^<]*IMAGE_SCN_ALIGN_16BYTES/
+  );
+  assert.ok(!html.includes("Reserved (should be 0)."));
+});
+
+void test("renderTls shows an unknown TLS Characteristics alignment chip", () => {
+  const tls: Parameters<typeof renderTls>[0] = {
+    StartAddressOfRawData: 0x1000n,
+    EndAddressOfRawData: 0x1010n,
+    AddressOfIndex: 0x1020n,
+    AddressOfCallBacks: 0n,
+    SizeOfZeroFill: 0,
+    Characteristics: 0x00f00000,
+    CallbackCount: 0,
+    CallbackRvas: [],
+    parsed: true
+  };
+  const out: string[] = [];
+  renderTls(tls, out);
+  const html = out.join("");
+
+  assert.ok(
+    html.includes(
+      'class="opt sel" style="white-space:nowrap" data-accessible-tooltip title="Unknown TLS Characteristics alignment value 0x00f00000."'
+    )
+  );
+  assert.ok(html.includes("UNKNOWN_ALIGNMENT_0x00f00000"));
 });
 
 void test("renderExports renders entries directly without a nested show wrapper", () => {
