@@ -125,6 +125,13 @@ export interface PeEntrypointDisassemblyReport {
   issues: string[];
 }
 
+export interface PeEntrypointDisassemblyProgress {
+  stage: "loading" | "decoding" | "done";
+  bytesDecoded: number;
+  instructionCount: number;
+  pendingBlockCount: number;
+}
+
 export interface AnalyzePeInstructionSetOptions {
   coffMachine: number;
   is64Bit: boolean;
@@ -158,6 +165,8 @@ export interface AnalyzePeEntrypointDisassemblyOptions {
   loadcfg?: PeLoadConfig | null;
   rvaToOff: RvaToOffset;
   sections: PeSection[];
+  yieldEveryInstructions?: number;
+  onProgress?: (progress: PeEntrypointDisassemblyProgress) => void;
 }
 
 export interface PeInstructionSetProgress {

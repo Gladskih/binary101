@@ -1,3 +1,4 @@
+import { formatHumanSize } from "../binary-utils.js";
 import { createFileRangeReader, type FileRangeReader } from "../analyzers/file-range-reader.js";
 import type { ParseForUiResult } from "../analyzers/index.js";
 import {
@@ -9,6 +10,7 @@ import { getCanonicalPeMachine } from "../analyzers/pe/machine.js";
 import {
   analyzePeEntrypointDisassembly,
   type AnalyzePeEntrypointDisassemblyOptions,
+  type PeEntrypointDisassemblyProgress,
   type PeEntrypointDisassemblyReport
 } from "../analyzers/pe/disassembly/index.js";
 import { PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "../analyzers/pe/optional-header/magic.js";
@@ -32,6 +34,7 @@ export type PeEntrypointDisassemblyController = {
 };
 
 const ENTRYPOINT_BUTTON_ID = "peEntrypointDisassembleButton";
+const PROGRESS_TEXT_ID = "peEntrypointDisassemblyProgressText";
 
 const setEntrypointUiState = (state: "busy" | "idle"): void => {
   const isBusy = state === "busy";
@@ -39,6 +42,21 @@ const setEntrypointUiState = (state: "busy" | "idle"): void => {
   if (button && "disabled" in button) {
     (button as HTMLButtonElement).disabled = isBusy;
   }
+};
+
+const updateEntrypointProgress = (progress: PeEntrypointDisassemblyProgress): void => {
+  const text = document.getElementById(PROGRESS_TEXT_ID);
+  if (!(text instanceof HTMLElement)) return;
+  const stageLabel =
+    progress.stage === "loading"
+      ? "Loading disassembler..."
+      : progress.stage === "decoding"
+        ? "Disassembling..."
+        : "Done.";
+  text.textContent =
+    `${stageLabel} Instructions decoded: ${progress.instructionCount} ` +
+    `(${formatHumanSize(progress.bytesDecoded)}), ` +
+    `${progress.pendingBlockCount} queued target(s).`;
 };
 
 const buildFailureReport = (
@@ -68,6 +86,12 @@ export const createPeEntrypointDisassemblyController = (
     cancel();
     setEntrypointUiState("busy");
     const localRunId = ++runId;
+    updateEntrypointProgress({
+      stage: "loading",
+      bytesDecoded: 0,
+      instructionCount: 0,
+      pendingBlockCount: 0
+    });
     void (async () => {
       const windowsPe = isPeWindowsParseResult(pe) ? pe : null;
       if (!windowsPe) {
@@ -87,7 +111,11 @@ export const createPeEntrypointDisassemblyController = (
           delayImports: windowsPe.delayImports,
           loadcfg: windowsPe.loadcfg,
           rvaToOff: windowsPe.rvaToOff,
-          sections: windowsPe.sections
+          sections: windowsPe.sections,
+          yieldEveryInstructions: 64,
+          onProgress: progress => {
+            if (localRunId === runId) updateEntrypointProgress(progress);
+          }
         }
       ).catch(error => buildFailureReport(windowsPe, `Entrypoint disassembly failed (${String(error)})`));
       if (localRunId !== runId) return;

@@ -8,6 +8,7 @@ export type {
   PeApiStringReference,
   PeCodeStringReference,
   PeEntrypointDisassemblyBlock,
+  PeEntrypointDisassemblyProgress,
   PeEntrypointDisassemblyReport,
   PeEntrypointInstruction,
   PeEntrypointInstructionTarget,

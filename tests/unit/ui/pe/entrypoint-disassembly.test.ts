@@ -104,6 +104,37 @@ void test("pe entrypoint disassembly controller passes PE entrypoint options", a
   assert.equal(capturedOptions.imports, pe.imports);
   assert.equal(capturedOptions.delayImports, pe.delayImports);
   assert.equal(capturedOptions.loadcfg, pe.loadcfg);
+  assert.equal(capturedOptions.yieldEveryInstructions, 64);
+  dom.restore();
+});
+
+void test("pe entrypoint disassembly controller updates decoded instruction progress", async () => {
+  const progressText = new FakeHTMLElement();
+  const dom = installFakeDom({ peEntrypointDisassemblyProgressText: progressText });
+  const pe = createMinimalPe();
+  const file = new MockFile(new Uint8Array([0x90]), "pe.bin");
+  const parseResult: ParseForUiResult = { analyzer: "pe", parsed: pe };
+  const controller = createPeEntrypointDisassemblyController({
+    getCurrentFile: () => file,
+    getCurrentParseResult: () => parseResult,
+    renderResult: () => {},
+    analyze: async (_reader, opts) => {
+      opts.onProgress?.({
+        stage: "decoding",
+        bytesDecoded: 5,
+        instructionCount: 3,
+        pendingBlockCount: 2
+      });
+      return createFakeReport();
+    }
+  });
+
+  controller.start(file, pe);
+  await flushTimers();
+
+  assert.match(progressText.textContent ?? "", /Instructions decoded: 3/);
+  assert.match(progressText.textContent ?? "", /5 B \(5 bytes\)/);
+  assert.match(progressText.textContent ?? "", /2 queued/);
   dom.restore();
 });
 

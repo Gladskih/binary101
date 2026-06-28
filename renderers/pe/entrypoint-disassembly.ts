@@ -10,6 +10,7 @@ import type {
 } from "../../analyzers/pe/disassembly/index.js";
 
 const ENTRYPOINT_BUTTON_ID = "peEntrypointDisassembleButton";
+const PROGRESS_TEXT_ID = "peEntrypointDisassemblyProgressText";
 
 export const PE_ENTRYPOINT_DISASSEMBLY_PANEL_ID = "peEntrypointDisassemblyPanel";
 
@@ -204,7 +205,7 @@ const renderEntrypointBlock = (rendered: RenderBlock, out: string[]): void => {
 const renderEntrypointReport = (pe: PeWindowsParseResult, out: string[]): void => {
   const report = pe.entrypointDisassembly;
   if (!report) {
-    out.push(`<div class="smallNote dim">Not disassembled yet.</div>`);
+    out.push(`<div class="smallNote dim" id="${PROGRESS_TEXT_ID}">Not disassembled yet.</div>`);
     return;
   }
   out.push(

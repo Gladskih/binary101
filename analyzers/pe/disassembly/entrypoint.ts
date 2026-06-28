@@ -4,6 +4,7 @@ import type { FileRangeReader } from "../../file-range-reader.js";
 import { loadIcedX86 } from "#iced-x86-loader";
 import type {
   AnalyzePeEntrypointDisassemblyOptions,
+  PeEntrypointDisassemblyProgress,
   PeEntrypointDisassemblyReport
 } from "./types.js";
 import {
@@ -15,6 +16,18 @@ import { decodePreview } from "./entrypoint/preview.js";
 import { isIcedModule } from "./entrypoint/iced.js";
 
 type IcedLoader = () => Promise<unknown>;
+
+const reportProgress = (
+  opts: AnalyzePeEntrypointDisassemblyOptions,
+  progress: PeEntrypointDisassemblyProgress
+): void => {
+  if (!opts.onProgress) return;
+  try {
+    opts.onProgress(progress);
+  } catch {
+    // UI callbacks must not abort analysis.
+  }
+};
 
 export async function analyzePeEntrypointDisassembly(
   reader: FileRangeReader,
@@ -36,6 +49,12 @@ export async function analyzePeEntrypointDisassembly(
     issues.push("No file bytes are available at the mapped entry point.");
     return emptyReport(opts, issues);
   }
+  reportProgress(opts, {
+    stage: "loading",
+    bytesDecoded: 0,
+    instructionCount: 0,
+    pendingBlockCount: 1
+  });
   let loaded: unknown;
   try {
     loaded = await loader();

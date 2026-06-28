@@ -266,3 +266,13 @@ void test("renderEntrypointDisassembly hides entrypoint button when AddressOfEnt
 
   assert.ok(!out.join("").includes("peEntrypointDisassembleButton"));
 });
+
+void test("renderEntrypointDisassembly renders a live progress text placeholder", () => {
+  const out: string[] = [];
+  renderEntrypointDisassembly(createPe(), out);
+  const html = out.join("");
+
+  assert.ok(html.includes("peEntrypointDisassembleButton"));
+  assert.ok(html.includes("peEntrypointDisassemblyProgressText"));
+  assert.ok(html.includes("Not disassembled yet."));
+});

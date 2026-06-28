@@ -5,6 +5,7 @@ import type {
   AnalyzePeEntrypointDisassemblyOptions,
   PeEntrypointDisassemblyBlock,
   PeEntrypointDisassemblyReport,
+  PeEntrypointDisassemblyProgress,
   PeEntrypointInstruction
 } from "../types.js";
 import type { ValidMetadata } from "./metadata.js";
@@ -27,7 +28,49 @@ import type { IcedFormatter, IcedModule } from "./iced.js";
 type DecodeState = FollowQueueState & {
   bytesDecoded: number;
   instructionCount: number;
+  yieldEveryInstructions: number;
 };
+
+const yieldToEventLoop = async (): Promise<void> =>
+  new Promise<void>(resolve => setTimeout(resolve, 0));
+
+const reportProgress = (
+  opts: AnalyzePeEntrypointDisassemblyOptions,
+  progress: PeEntrypointDisassemblyProgress
+): void => {
+  if (!opts.onProgress) return;
+  try {
+    opts.onProgress(progress);
+  } catch {
+    // UI callbacks must not abort analysis.
+  }
+};
+
+const shouldYieldProgress = (state: DecodeState): boolean =>
+  state.yieldEveryInstructions > 0 &&
+  state.instructionCount % state.yieldEveryInstructions === 0;
+
+const reportDecodingProgress = async (
+  opts: AnalyzePeEntrypointDisassemblyOptions,
+  state: DecodeState
+): Promise<void> => {
+  reportProgress(opts, {
+    stage: "decoding",
+    bytesDecoded: state.bytesDecoded,
+    instructionCount: state.instructionCount,
+    pendingBlockCount: state.pending.length
+  });
+  await yieldToEventLoop();
+};
+
+const normalizedYieldEveryInstructions = (
+  opts: AnalyzePeEntrypointDisassemblyOptions
+): number =>
+  typeof opts.yieldEveryInstructions === "number" &&
+  Number.isSafeInteger(opts.yieldEveryInstructions) &&
+  opts.yieldEveryInstructions > 0
+    ? opts.yieldEveryInstructions
+    : 0;
 
 const safeFree = (resource: { free(): void } | null | undefined): void => {
   if (!resource) return;
@@ -93,6 +136,7 @@ const decodeBlock = async (
       instructions.push(instruction);
       state.bytesDecoded += instr.length;
       state.instructionCount += 1;
+      if (shouldYieldProgress(state)) await reportDecodingProgress(opts, state);
       if (instr.flowControl !== iced.FlowControl["Next"]) {
         state.issues.push(controlFlowIssue(instruction, targets));
         if (
@@ -146,6 +190,7 @@ export const decodePreview = async (
     issues,
     bytesDecoded: 0,
     instructionCount: 0,
+    yieldEveryInstructions: normalizedYieldEveryInstructions(opts),
     visitedBlocks: new Set(),
     emulationStatesByKey: new Map([[
       entryKey,
@@ -156,6 +201,12 @@ export const decodePreview = async (
     precisionLimitReportedRvas: new Set()
   };
   try {
+    reportProgress(opts, {
+      stage: "decoding",
+      bytesDecoded: state.bytesDecoded,
+      instructionCount: state.instructionCount,
+      pendingBlockCount: state.pending.length
+    });
     while (state.pending.length > 0) {
       const block = state.pending.shift();
       if (!block) break;
@@ -172,6 +223,12 @@ export const decodePreview = async (
       );
       if (decoded.instructions.length) state.blocks.push(decoded);
     }
+    reportProgress(opts, {
+      stage: "done",
+      bytesDecoded: state.bytesDecoded,
+      instructionCount: state.instructionCount,
+      pendingBlockCount: state.pending.length
+    });
     return {
       blocks: state.blocks,
       bytesDecoded: state.bytesDecoded,
