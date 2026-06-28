@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderInstructionSets } from "../../../../renderers/pe/disassembly.js";
 import { renderEntrypointDisassembly } from "../../../../renderers/pe/entrypoint-disassembly.js";
+import { renderEntrypointExplorer } from "../../../../renderers/pe/entrypoint-disassembly-explorer.js";
 import type { PeWindowsParseResult } from "../../../../analyzers/pe/index.js";
 import { inlinePeSectionName } from "../../../../analyzers/pe/sections/name.js";
 
@@ -117,9 +118,15 @@ void test("renderEntrypointDisassembly separates followed entrypoint blocks", ()
   const html = out.join("");
 
   assert.ok(html.includes("Entry point"));
-  assert.ok(html.includes("Followed call target from 0x00001000"));
+  assert.ok(html.includes("Call target"));
+  assert.ok(html.includes(`data-pe-entrypoint-block-select="1"`));
   assert.ok(html.includes("followed"));
   assert.ok(html.includes("0x00001010"));
+  assert.ok(renderEntrypointExplorer(pe.entrypointDisassembly, {
+    selectedBlockIndex: 1,
+    blockPageIndex: 0,
+    instructionPageIndex: 0
+  }).includes("Followed call target from 0x00001000"));
 });
 
 void test("renderEntrypointDisassembly labels followed conditional branch blocks", () => {
@@ -173,8 +180,13 @@ void test("renderEntrypointDisassembly labels followed conditional branch blocks
   assert.ok(html.includes("fallthrough followed"));
   assert.ok(html.includes("0x00001004"));
   assert.ok(html.includes("0x00001002"));
-  assert.ok(html.includes("Followed conditional branch target from 0x00001000"));
-  assert.ok(html.includes("Followed conditional fallthrough from 0x00001000"));
+  assert.ok(html.includes("Branch target"));
+  assert.ok(html.includes("Branch fallthrough"));
+  assert.ok(renderEntrypointExplorer(pe.entrypointDisassembly, {
+    selectedBlockIndex: 1,
+    blockPageIndex: 0,
+    instructionPageIndex: 0
+  }).includes("Followed conditional branch target from 0x00001000"));
 });
 
 void test("renderInstructionSets renders an empty-state message", () => {

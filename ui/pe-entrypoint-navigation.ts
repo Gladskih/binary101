@@ -1,5 +1,7 @@
 "use strict";
 
+import { selectPeEntrypointRva } from "./pe-entrypoint-explorer.js";
+
 const FLASH_CLASS = "peEntrypointTargetFlash";
 
 const findJumpButton = (targetElement: Element | null): HTMLElement | null => {
@@ -21,7 +23,7 @@ export const handlePeEntrypointJumpClick = (
   const button = findJumpButton(targetElement);
   const rva = button?.dataset["peEntrypointJump"];
   if (!button || !rva) return false;
-  const target = findJumpTarget(root, rva);
+  const target = findJumpTarget(root, rva) ?? selectAndFindTarget(root, rva);
   if (!target) return true;
   target.classList.remove(FLASH_CLASS);
   void target.offsetWidth;
@@ -29,4 +31,10 @@ export const handlePeEntrypointJumpClick = (
   target.focus({ preventScroll: true });
   target.scrollIntoView({ block: "center", inline: "nearest" });
   return true;
+};
+
+const selectAndFindTarget = (root: ParentNode, rva: string): HTMLElement | null => {
+  const parsed = Number(rva);
+  if (!selectPeEntrypointRva(root, parsed)) return null;
+  return findJumpTarget(root, rva);
 };

@@ -203,7 +203,32 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
   text-underline-offset:2px;
 }
 .peEntrypointJump:hover{filter:brightness(1.12)}
+.peEntrypointExplorer{margin-top:.5rem}
+.peEntrypointBlockIndex{margin-top:.55rem}
+.peEntrypointSelectedBlock{margin-top:.7rem}
 .peEntrypointBlock{margin-top:.7rem}
+.peEntrypointBlockIndexTable th:nth-child(1),
+.peEntrypointBlockIndexTable td:nth-child(1),
+.peEntrypointBlockIndexTable th:nth-child(4),
+.peEntrypointBlockIndexTable td:nth-child(4),
+.peEntrypointBlockIndexTable th:nth-child(5),
+.peEntrypointBlockIndexTable td:nth-child(5){white-space:nowrap}
+.peEntrypointBlockIndexRow[data-selected="true"] > td{
+  background:color-mix(in oklab,var(--accent) 13%,transparent)
+}
+.peEntrypointBlockSelect{
+  appearance:none;
+  border:0;
+  background:transparent;
+  color:var(--accent);
+  cursor:pointer;
+  font:inherit;
+  padding:0;
+  text-decoration:underline;
+  text-underline-offset:2px;
+}
+.peEntrypointBlockSelect:hover{filter:brightness(1.12)}
+.peEntrypointInstructionTable td:nth-child(3){white-space:nowrap}
 .peEntrypointBlock:focus,
 .peEntrypointInstructionRow:focus{
   outline:2px solid var(--accent);

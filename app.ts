@@ -17,7 +17,7 @@ import { copyManifestPreviewToClipboard } from "./ui/manifest-preview-copy.js";
 import { handleManifestTreeActionClick, syncManifestTreeControls } from "./ui/manifest-tree-controls.js";
 import { captureOpenDetails, restoreOpenDetails } from "./ui/details-open-state.js";
 import { enhanceSortableTables, handleSortableTableClick } from "./ui/sortable-tables.js";
-import { enhanceAnalysisPagedTables } from "./ui/analysis-paged-tables.js";
+import { enhanceAnalysisEntrypointExplorer, enhanceAnalysisPagedTables } from "./ui/analysis-paged-tables.js";
 import { capturePagedSortableTableState } from "./ui/paged-sortable-tables.js";
 import {
   createDirectoryInspectionController,
@@ -87,6 +87,7 @@ const renderResult = (result: ParseForUiResult): void => {
   });
   enhanceSortableTables(analysisValueElement);
   enhanceAnalysisPagedTables(analysisValueElement, result, pagedTables);
+  enhanceAnalysisEntrypointExplorer(analysisValueElement, result);
   enhanceAccessibleTooltips(fileInfoCardElement);
   restoreOpenDetails(analysisValueElement, openDetails, viewer => syncManifestTreeControls(viewer as Element));
 };

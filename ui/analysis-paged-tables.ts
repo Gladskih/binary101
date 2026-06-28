@@ -7,6 +7,7 @@ import {
   enhancePagedSortableTables,
   type PagedSortableTableSnapshot
 } from "./paged-sortable-tables.js";
+export { enhanceAnalysisEntrypointExplorer } from "./pe-entrypoint-explorer.js";
 
 export const enhancePeDisassemblyPagedTables = (
   root: ParentNode,

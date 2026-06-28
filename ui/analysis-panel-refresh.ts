@@ -28,6 +28,7 @@ import {
   capturePagedSortableTableState,
   type PagedSortableTableSnapshot
 } from "./paged-sortable-tables.js";
+import { enhancePeEntrypointExplorer } from "./pe-entrypoint-explorer.js";
 import {
   captureSortableTableState,
   enhanceSortableTables,
@@ -76,6 +77,8 @@ export const refreshPeDisassemblyPanels = (pe: PeWindowsParseResult): void => {
 
 export const refreshPeEntrypointDisassemblyPanel = (pe: PeWindowsParseResult): void => {
   replaceRenderedRegion(PE_ENTRYPOINT_DISASSEMBLY_PANEL_ID, renderEntrypointDisassemblyPanel(pe));
+  const panel = document.getElementById(PE_ENTRYPOINT_DISASSEMBLY_PANEL_ID);
+  if (panel instanceof HTMLElement) enhancePeEntrypointExplorer(panel, pe);
 };
 
 export const refreshPeOverlayPanel = (pe: PeParseResult): void => {

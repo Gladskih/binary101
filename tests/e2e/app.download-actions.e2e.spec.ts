@@ -180,17 +180,23 @@ test.describe("PE analysis actions", () => {
     await detailsValue.locator("#peEntrypointDisassembleButton").click();
     await expect(entrypointSection).toHaveJSProperty("open", true);
     await expect(detailsValue).toContainText("Entrypoint preview:");
-    await expect(detailsValue).toContainText("Followed call target");
+    await expect(detailsValue).toContainText("Call target");
     await expect(detailsValue.locator('[data-pe-entrypoint-jump="4102"]').first()).toBeVisible();
-    await expect(detailsValue.locator('[data-pe-entrypoint-jump="4106"]').first()).toBeVisible();
-    await expect(detailsValue.locator('[data-pe-entrypoint-jump="4104"]').first()).toBeVisible();
     await detailsValue.locator('[data-pe-entrypoint-jump="4102"]').first().click();
     const callTargetRow = detailsValue.locator(
       '.peEntrypointInstructionRow[data-pe-entrypoint-rva="4102"]'
     ).first();
     await expect(callTargetRow).toBeFocused();
     await expect(callTargetRow).toHaveClass(/peEntrypointTargetFlash/);
-    await expect(detailsValue).toContainText("Followed conditional branch target");
+    await expect(detailsValue).toContainText("Followed call target");
+    await expect(detailsValue).toContainText("Branch target");
+    await expect(detailsValue.locator('[data-pe-entrypoint-jump="4106"]').first()).toBeVisible();
+    await expect(detailsValue.locator('[data-pe-entrypoint-jump="4104"]').first()).toBeVisible();
+    await detailsValue.locator('[data-pe-entrypoint-jump="4104"]').first().click();
+    const fallthroughRow = detailsValue.locator(
+      '.peEntrypointInstructionRow[data-pe-entrypoint-rva="4104"]'
+    ).first();
+    await expect(fallthroughRow).toBeFocused();
     await expect(detailsValue).toContainText("Followed conditional fallthrough");
     await expect(detailsValue).toContainText("Instruction");
     await expect(detailsValue).not.toContainText("Failed to load iced-x86 disassembler");
