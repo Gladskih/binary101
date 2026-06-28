@@ -34,7 +34,10 @@ export type PeEntrypointDisassemblyController = {
 };
 
 const ENTRYPOINT_BUTTON_ID = "peEntrypointDisassembleButton";
-const PROGRESS_TEXT_ID = "peEntrypointDisassemblyProgressText";
+const PROGRESS_STAGE_ID = "peEntrypointDisassemblyProgressStage";
+const PROGRESS_DECODED_ID = "peEntrypointDisassemblyProgressDecoded";
+const PROGRESS_BYTES_ID = "peEntrypointDisassemblyProgressBytes";
+const PROGRESS_QUEUED_ID = "peEntrypointDisassemblyProgressQueued";
 
 const setEntrypointUiState = (state: "busy" | "idle"): void => {
   const isBusy = state === "busy";
@@ -45,18 +48,26 @@ const setEntrypointUiState = (state: "busy" | "idle"): void => {
 };
 
 const updateEntrypointProgress = (progress: PeEntrypointDisassemblyProgress): void => {
-  const text = document.getElementById(PROGRESS_TEXT_ID);
-  if (!(text instanceof HTMLElement)) return;
+  const stage = document.getElementById(PROGRESS_STAGE_ID);
+  const decoded = document.getElementById(PROGRESS_DECODED_ID);
+  const bytes = document.getElementById(PROGRESS_BYTES_ID);
+  const queued = document.getElementById(PROGRESS_QUEUED_ID);
   const stageLabel =
     progress.stage === "loading"
       ? "Loading disassembler..."
       : progress.stage === "decoding"
         ? "Disassembling..."
         : "Done.";
-  text.textContent =
-    `${stageLabel} Instructions decoded: ${progress.instructionCount} ` +
-    `(${formatHumanSize(progress.bytesDecoded)}), ` +
-    `${progress.pendingBlockCount} queued target(s).`;
+  if (stage instanceof HTMLElement) stage.textContent = stageLabel;
+  if (decoded instanceof HTMLElement) {
+    decoded.textContent = `Instructions decoded: ${progress.instructionCount}`;
+  }
+  if (bytes instanceof HTMLElement) {
+    bytes.textContent = `Bytes decoded: ${formatHumanSize(progress.bytesDecoded)}`;
+  }
+  if (queued instanceof HTMLElement) {
+    queued.textContent = `Queued targets: ${progress.pendingBlockCount}`;
+  }
 };
 
 const buildFailureReport = (

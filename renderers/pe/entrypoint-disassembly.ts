@@ -10,7 +10,11 @@ import type {
 } from "../../analyzers/pe/disassembly/index.js";
 
 const ENTRYPOINT_BUTTON_ID = "peEntrypointDisassembleButton";
-const PROGRESS_TEXT_ID = "peEntrypointDisassemblyProgressText";
+const PROGRESS_WRAP_ID = "peEntrypointDisassemblyProgress";
+const PROGRESS_STAGE_ID = "peEntrypointDisassemblyProgressStage";
+const PROGRESS_DECODED_ID = "peEntrypointDisassemblyProgressDecoded";
+const PROGRESS_BYTES_ID = "peEntrypointDisassemblyProgressBytes";
+const PROGRESS_QUEUED_ID = "peEntrypointDisassemblyProgressQueued";
 
 export const PE_ENTRYPOINT_DISASSEMBLY_PANEL_ID = "peEntrypointDisassemblyPanel";
 
@@ -205,7 +209,14 @@ const renderEntrypointBlock = (rendered: RenderBlock, out: string[]): void => {
 const renderEntrypointReport = (pe: PeWindowsParseResult, out: string[]): void => {
   const report = pe.entrypointDisassembly;
   if (!report) {
-    out.push(`<div class="smallNote dim" id="${PROGRESS_TEXT_ID}">Not disassembled yet.</div>`);
+    out.push(
+      `<div class="smallNote dim" id="${PROGRESS_WRAP_ID}">` +
+      `<div id="${PROGRESS_STAGE_ID}">Not disassembled yet.</div>` +
+      `<div id="${PROGRESS_DECODED_ID}"></div>` +
+      `<div id="${PROGRESS_BYTES_ID}"></div>` +
+      `<div id="${PROGRESS_QUEUED_ID}"></div>` +
+      `</div>`
+    );
     return;
   }
   out.push(

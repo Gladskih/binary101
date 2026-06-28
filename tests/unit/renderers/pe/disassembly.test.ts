@@ -273,6 +273,9 @@ void test("renderEntrypointDisassembly renders a live progress text placeholder"
   const html = out.join("");
 
   assert.ok(html.includes("peEntrypointDisassembleButton"));
-  assert.ok(html.includes("peEntrypointDisassemblyProgressText"));
+  assert.ok(html.includes("peEntrypointDisassemblyProgressStage"));
+  assert.ok(html.includes("peEntrypointDisassemblyProgressDecoded"));
+  assert.ok(html.includes("peEntrypointDisassemblyProgressBytes"));
+  assert.ok(html.includes("peEntrypointDisassemblyProgressQueued"));
   assert.ok(html.includes("Not disassembled yet."));
 });

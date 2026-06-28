@@ -109,8 +109,16 @@ void test("pe entrypoint disassembly controller passes PE entrypoint options", a
 });
 
 void test("pe entrypoint disassembly controller updates decoded instruction progress", async () => {
-  const progressText = new FakeHTMLElement();
-  const dom = installFakeDom({ peEntrypointDisassemblyProgressText: progressText });
+  const progressStage = new FakeHTMLElement();
+  const progressDecoded = new FakeHTMLElement();
+  const progressBytes = new FakeHTMLElement();
+  const progressQueued = new FakeHTMLElement();
+  const dom = installFakeDom({
+    peEntrypointDisassemblyProgressStage: progressStage,
+    peEntrypointDisassemblyProgressDecoded: progressDecoded,
+    peEntrypointDisassemblyProgressBytes: progressBytes,
+    peEntrypointDisassemblyProgressQueued: progressQueued
+  });
   const pe = createMinimalPe();
   const file = new MockFile(new Uint8Array([0x90]), "pe.bin");
   const parseResult: ParseForUiResult = { analyzer: "pe", parsed: pe };
@@ -132,9 +140,10 @@ void test("pe entrypoint disassembly controller updates decoded instruction prog
   controller.start(file, pe);
   await flushTimers();
 
-  assert.match(progressText.textContent ?? "", /Instructions decoded: 3/);
-  assert.match(progressText.textContent ?? "", /5 B \(5 bytes\)/);
-  assert.match(progressText.textContent ?? "", /2 queued/);
+  assert.equal(progressStage.textContent, "Disassembling...");
+  assert.equal(progressDecoded.textContent, "Instructions decoded: 3");
+  assert.equal(progressBytes.textContent, "Bytes decoded: 5 B (5 bytes)");
+  assert.equal(progressQueued.textContent, "Queued targets: 2");
   dom.restore();
 });
 
