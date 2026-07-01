@@ -140,6 +140,22 @@ void test("renderImports shows UCRT import metadata from generic API enrichment"
   assert.ok(html.includes("UCRT - cdecl, variadic"));
 });
 
+void test("renderImports surfaces warning-only parse results", () => {
+  const pe = createPeWithImportLinking();
+  pe.imports = {
+    thunkEntrySize: pe.imports.thunkEntrySize,
+    entries: [],
+    warning: "Import directory is smaller than one descriptor; file may be truncated."
+  };
+  const out: string[] = [];
+
+  renderImports(pe, out);
+
+  const html = out.join("");
+  assert.ok(html.includes("Import table"));
+  assert.ok(html.includes("file may be truncated"));
+});
+
 void test("renderIat shows inferred eager IAT ranges even when IMAGE_DIRECTORY_ENTRY_IAT is absent", () => {
   const pe = createPeWithInferredEagerIatOnly();
   const out: string[] = [];
@@ -156,6 +172,21 @@ void test("renderIat shows inferred eager IAT ranges even when IMAGE_DIRECTORY_E
       "IMAGE_DIRECTORY_ENTRY_IAT is absent, but eager IAT ranges were inferred from FirstThunk values in the import descriptors."
     )
   );
+});
+
+void test("renderIat displays declared IAT directory warnings", () => {
+  const pe = createPeWithImportLinking();
+  pe.iat = {
+    ...pe.iat!,
+    warnings: ["IAT directory RVA could not be mapped to a file offset."]
+  };
+  const out: string[] = [];
+
+  renderIat(pe, out);
+
+  const html = out.join("");
+  assert.match(html, /<summary[^>]*><b>Import Address Tables \(IAT\)<\/b> - [^<]+<\/summary>/);
+  assert.ok(html.includes("IAT directory RVA could not be mapped to a file offset."));
 });
 
 void test("renderBoundImports surfaces warning-only parse results", () => {

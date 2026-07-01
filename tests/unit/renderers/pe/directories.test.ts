@@ -6,14 +6,13 @@ import { inlinePeSectionName } from "../../../../analyzers/pe/sections/name.js";
 import {
   renderExports,
   renderTls,
-  renderIat,
   renderArchitectureDirectory,
   renderGlobalPtrDirectory
 } from "../../../../renderers/pe/directories.js";
 
 const GP_REL_TEST_SECTION_NAME = "GP_TEST";
 
-void test("renderTls and renderIat display local directory warnings", () => {
+void test("renderTls displays local directory warnings", () => {
   const tls: Parameters<typeof renderTls>[0] = {
     StartAddressOfRawData: 0n,
     EndAddressOfRawData: 0n,
@@ -26,23 +25,13 @@ void test("renderTls and renderIat display local directory warnings", () => {
     warnings: ["TLS directory RVA could not be mapped to a file offset."],
     parsed: false
   };
-  const iat: Parameters<typeof renderIat>[0] = {
-    // Renderer-only fixture: these RVA/Size values are incidental because the test asserts
-    // warning rendering, not directory geometry.
-    rva: 0x1000,
-    size: 0x20,
-    warnings: ["IAT directory RVA could not be mapped to a file offset."]
-  };
 
   const out: string[] = [];
   renderTls(tls, out);
-  renderIat(iat, out);
   const html = out.join("");
 
   assert.match(html, /<summary[^>]*><b>TLS directory<\/b> - unparsed<\/summary>/);
-  assert.match(html, /<summary[^>]*><b>Import Address Table \(IAT\)<\/b><\/summary>/);
   assert.ok(html.includes("TLS directory RVA could not be mapped to a file offset."));
-  assert.ok(html.includes("IAT directory RVA could not be mapped to a file offset."));
 });
 
 void test("renderTls displays parsed callback RVAs", () => {

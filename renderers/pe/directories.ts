@@ -5,7 +5,6 @@ import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import type {
   PeWindowsParseResult
 } from "../../analyzers/pe/index.js";
-import type { PeImportParseResult } from "../../analyzers/pe/imports/index.js";
 import { peSectionNameValue } from "../../analyzers/pe/sections/name.js";
 import {
   formatTlsCharacteristicsReservedBits,
@@ -16,10 +15,8 @@ import {
 } from "../../analyzers/pe/tls-characteristics.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
-type PeImportsSection = PeImportParseResult;
 type PeExportSection = NonNullable<PeWindowsParseResult["exports"]>;
 type PeTlsSection = NonNullable<PeWindowsParseResult["tls"]>;
-type PeIatSection = NonNullable<PeWindowsParseResult["iat"]>;
 type TlsField = {
   readonly label: string;
   readonly valueHtml: string;
@@ -138,30 +135,6 @@ const renderTlsFields = (tls: PeTlsSection, out: string[]): void => {
   out.push(`</tbody></table></div>`);
 };
 
-export function renderImports(imports: PeImportsSection, out: string[]): void {
-  if (!imports.entries.length && !imports.warning) return;
-  out.push(renderPeSectionStart("Import table"));
-  out.push(`<div class="smallNote">Imports list functions this file expects other modules to provide. Hint index speeds up runtime name lookup, and ordinal-only imports often point to more special or low-level routines.</div>`);
-  if (imports.warning) {
-    out.push(`<div class="smallNote" style="color:var(--warn-fg)">${escapeHtml(imports.warning)}</div>`);
-  }
-  for (const mod of imports.entries) {
-    const dll = escapeHtml(mod.dll || "(unknown DLL)");
-    out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${dll}</b> \u2014 ${mod.functions?.length || 0} function(s)</summary>`);
-    if (mod.functions?.length) {
-      out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Hint</th><th>Name / Ordinal</th></tr></thead><tbody>`);
-      mod.functions.forEach((fn, index) => {
-        const hint = fn.hint != null ? String(fn.hint) : "-";
-        const nm = fn.name ? escapeHtml(fn.name) : fn.ordinal != null ? "ORD " + fn.ordinal : "-";
-        out.push(`<tr><td>${index + 1}</td><td>${hint}</td><td>${nm}</td></tr>`);
-      });
-      out.push(`</tbody></table>`);
-    }
-    out.push(`</details>`);
-  }
-  out.push(renderPeSectionEnd());
-}
-
 export function renderExports(ex: PeExportSection, out: string[]): void {
   out.push(
     renderPeSectionStart(
@@ -215,20 +188,6 @@ export function renderTls(t: PeTlsSection, out: string[]): void {
 
 export { renderClr } from "./clr.js";
 export { renderSecurity } from "./security-view.js";
-
-export function renderIat(t: PeIatSection, out: string[]): void {
-  out.push(renderPeSectionStart("Import Address Table (IAT)"));
-  if (t.warnings?.length) {
-    out.push(`<ul class="smallNote">`);
-    t.warnings.forEach(warning => out.push(`<li>${escapeHtml(warning)}</li>`));
-    out.push(`</ul>`);
-  }
-  out.push(`<dl>`);
-  out.push(renderDefinitionRow("RVA", hex(t.rva, 8), "RVA of the runtime IAT used by the loader to place resolved addresses."));
-  out.push(renderDefinitionRow("Size", humanSize(t.size), "Total size of the IAT in bytes."));
-  out.push(`</dl>`);
-  out.push(renderPeSectionEnd());
-}
 
 export function renderArchitectureDirectory(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.architecture) return;
