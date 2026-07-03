@@ -21,6 +21,7 @@ test("updates direct IAT reference counts without losing import table state", as
     has: page.locator("summary", { hasText: /KERNEL32\.dll/ })
   });
   await moduleDetails.locator(":scope > summary").click();
+  await expect(moduleDetails.locator("[data-paged-sortable-table-root]")).toHaveCount(0);
   const sortButton = moduleDetails.getByRole("button", { name: "Sort by Direct CALL refs" });
   await sortButton.click();
   await expect(sortButton.locator("..")).toHaveAttribute("aria-sort", "ascending");

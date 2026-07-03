@@ -1,7 +1,7 @@
 "use strict";
 
 import { expect, test } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { createPeResourcePreviewFile } from "../fixtures/pe-resource-preview-file.js";
 import type { MockFile } from "../helpers/mock-file.js";
 
@@ -46,6 +46,12 @@ const openResourceGroup = async (page: Page, typeName: string) => {
   }).first();
   await details.locator(":scope > summary").click();
   return details;
+};
+
+const expectWidePreviewRowsAttached = async (root: Locator): Promise<void> => {
+  await expect.poll(async () =>
+    await root.locator(".peResourcePreviewWideRow > td[colspan='5']").count()
+  ).toBeGreaterThan(0);
 };
 
 const expectVisualResourcePreviews = async (page: Page): Promise<void> => {
@@ -104,6 +110,7 @@ const expectManifestAndMessageTablePreviews = async (page: Page): Promise<void> 
   await expect(manifest).toContainText("MANIFEST");
   await expect(manifest.getByRole("button", { name: "Copy manifest XML" })).toBeVisible();
   const messageTable = await openResourceGroup(page, "MESSAGETABLE");
+  await expect(messageTable.locator(".peResourcePreviewWideRow > td[colspan='5']")).toBeVisible();
   await expect(messageTable).toContainText("OK");
   await expect(messageTable).toContainText("Hi");
 };
@@ -113,7 +120,6 @@ test.describe("PE resource previews", () => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Local File Inspector" })).toBeVisible();
   });
-
   void test("renders a broad set of PE resource previews end-to-end", async ({ page }) => {
     const file = createPeResourcePreviewFile();
     await page.setInputFiles("#fileInput", toUpload(file));
@@ -123,6 +129,7 @@ test.describe("PE resource previews", () => {
     await expect(page.locator("#analysisValue")).toContainText("Resources");
     const resourcesSection = await openTopLevelSection(page, "Resources");
     await expect(resourcesSection).toHaveJSProperty("open", true);
+    await expectWidePreviewRowsAttached(resourcesSection);
     await expect(page.locator('#analysisValue img[alt="resource preview"]')).toHaveCount(5);
     await expectVisualResourcePreviews(page);
     await expectLegacyResourcePreviews(page);

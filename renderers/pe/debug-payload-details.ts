@@ -72,8 +72,12 @@ const renderCodeViewFields = (entry: PeDebugDirectoryEntry, out: string[]): void
   out.push(`</dl>`);
 };
 
-const renderCoffFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
-  if (entry.coff) renderCoffDebugInfo(entry.coff, out);
+const renderCoffFields = (
+  entry: PeDebugDirectoryEntry,
+  entryIndex: number,
+  out: string[]
+): void => {
+  if (entry.coff) renderCoffDebugInfo(entry.coff, out, `pe-debug-entry-${entryIndex}-coff`);
 };
 
 const renderFpoFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
@@ -250,16 +254,17 @@ export const renderDecodedEntryDetails = (
       `below explain each decoded payload in full.</div>`
   );
   decodedEntries.forEach(entry => {
+    const entryIndex = debug.entries?.indexOf(entry) ?? -1;
     const typeInfo = getDebugTypeInfo(entry.type >>> 0);
     const storageInfo = getDebugStorageInfo(pe, entry);
     out.push(
       `<details style="margin-top:.5rem"><summary style="cursor:pointer;padding:.25rem .5rem;` +
         `border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">` +
-        `Entry #${(debug.entries?.indexOf(entry) ?? -1) + 1}: ${escapeHtml(typeInfo.label)} ` +
+        `Entry #${entryIndex + 1}: ${escapeHtml(typeInfo.label)} ` +
         `(${escapeHtml(storageInfo.label)})</summary>`
     );
     renderEntryCommonFields(pe, entry, out);
-    renderCoffFields(entry, out);
+    renderCoffFields(entry, entryIndex, out);
     renderCodeViewFields(entry, out);
     renderFpoFields(entry, out);
     renderMiscFields(entry, out);

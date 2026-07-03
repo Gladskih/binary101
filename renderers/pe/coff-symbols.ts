@@ -14,6 +14,6 @@ export const renderCoffSymbols = (pe: PeWindowsParseResult, out: string[]): void
     `<div class="smallNote">Deprecated COFF symbol and line-number data referenced by ` +
       `PointerToSymbolTable/NumberOfSymbols in the COFF file header.</div>`
   );
-  renderCoffDebugInfo(pe.coffDebug, out);
+  renderCoffDebugInfo(pe.coffDebug, out, "pe-coff-symbols");
   out.push(renderPeSectionEnd());
 };

@@ -17,15 +17,19 @@ export type PagedSortableTableModel = {
   columns: PagedSortableTableColumn[];
   rowAt: (rowIndex: number) => PagedSortableTableRow | null;
   sortValueAt: (rowIndex: number, columnIndex: number) => string;
+  tableClassName?: string;
 };
 
 export type PagedSortableTableColumn = {
   label: string;
   className?: string;
+  tooltip?: string;
 };
 
 export type PagedSortableTableRow = {
+  additionalRowsHtml?: string;
   cells: PagedSortableTableCell[];
+  className?: string;
 };
 
 export type PagedSortableTableCell = {

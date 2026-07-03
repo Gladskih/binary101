@@ -4,44 +4,9 @@ import {
   isPeWindowsParseResult,
   type PeParseResult
 } from "../../analyzers/pe/index.js";
-import { renderHeaders } from "./headers.js";
 import { renderInstructionSets } from "./disassembly.js";
 import { renderEntrypointDisassembly } from "./entrypoint-disassembly.js";
-import { renderLoadConfig } from "./load-config.js";
-import {
-  renderExports,
-  renderTls,
-  renderClr,
-  renderSecurity,
-  renderArchitectureDirectory,
-  renderGlobalPtrDirectory
-} from "./directories.js";
-import { renderDebug } from "./debug-view.js";
-import { renderCoffSymbols } from "./coff-symbols.js";
-import {
-  renderImportLinking,
-  renderImports,
-  renderBoundImports,
-  renderDelayImports,
-  renderIat
-} from "./import-sections.js";
-import { renderResources } from "./resources.js";
-import { renderException } from "./exception.js";
-import { renderNativeAotCandidate } from "./native-aot.js";
-import { renderPackers } from "./packers.js";
-import { renderOverlay } from "./overlay.js";
-import {
-  renderReloc,
-  renderSanity
-} from "./layout.js";
-
-const renderIfPresent = <T>(
-  value: T | null | undefined,
-  render: (value: T, out: string[]) => void,
-  out: string[]
-): void => {
-  if (value != null) render(value, out);
-};
+import { renderPeLazySectionShells } from "./lazy-section-shells.js";
 
 export function renderPe(pe: PeParseResult | null | undefined): string {
   if (!pe) return "";
@@ -50,29 +15,6 @@ export function renderPe(pe: PeParseResult | null | undefined): string {
     renderInstructionSets(pe, out);
     renderEntrypointDisassembly(pe, out);
   }
-  renderHeaders(pe, out);
-  if (isPeWindowsParseResult(pe)) {
-    renderPackers(pe.packers, out);
-    renderLoadConfig(pe, out);
-    renderDebug(pe, out);
-    renderCoffSymbols(pe, out);
-    renderImportLinking(pe, out);
-    renderImports(pe, out);
-    renderIfPresent(pe.resources, renderResources, out);
-    renderIfPresent(pe.exports, renderExports, out);
-    renderIfPresent(pe.tls, renderTls, out);
-    renderIfPresent(pe.reloc, renderReloc, out);
-    renderIfPresent(pe.exception, renderException, out);
-    renderBoundImports(pe, out);
-    renderDelayImports(pe, out);
-    renderIfPresent(pe.clr, renderClr, out);
-    renderNativeAotCandidate(pe.nativeAotCandidate, out);
-    renderIfPresent(pe.security, renderSecurity, out);
-    renderIat(pe, out);
-    renderArchitectureDirectory(pe, out);
-    renderGlobalPtrDirectory(pe, out);
-  }
-  renderOverlay(pe, out);
-  renderSanity(pe, out);
+  renderPeLazySectionShells(pe, out);
   return out.join("");
 }

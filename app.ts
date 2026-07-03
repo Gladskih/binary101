@@ -19,10 +19,8 @@ import { captureOpenDetails, restoreOpenDetails } from "./ui/details-open-state.
 import { enhanceSortableTables, handleSortableTableClick } from "./ui/sortable-tables.js";
 import { enhanceAnalysisEntrypointExplorer, enhanceAnalysisPagedTables } from "./ui/analysis-paged-tables.js";
 import { capturePagedSortableTableState } from "./ui/paged-sortable-tables.js";
-import {
-  createDirectoryInspectionController,
-  type DirectoryInspectionController
-} from "./ui/directory-inspection.js";
+import { enhancePeLazySections } from "./ui/pe-lazy-sections.js";
+import { createDirectoryInspectionController, type DirectoryInspectionController } from "./ui/directory-inspection.js";
 import { createInspectionNavigationController } from "./ui/inspection-navigation.js";
 import { attachSelectionInputs } from "./ui/selection-inputs.js";
 import { createFileInspectionContext } from "./ui/file-inspection-context.js";
@@ -90,6 +88,7 @@ const renderResult = (result: ParseForUiResult): void => {
   enhanceAnalysisEntrypointExplorer(analysisValueElement, result);
   enhanceAccessibleTooltips(fileInfoCardElement);
   restoreOpenDetails(analysisValueElement, openDetails, viewer => syncManifestTreeControls(viewer as Element));
+  enhancePeLazySections(analysisValueElement, result.analyzer === "pe" && result.parsed ? result.parsed : null);
 };
 const getCurrentFile = (): File | null => currentFile;
 const getCurrentParseResult = (): ParseForUiResult => currentParseResult;

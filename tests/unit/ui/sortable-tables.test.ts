@@ -29,6 +29,11 @@ const fakeRow = (cellCount: number): FakeRow => ({
   cells: Array.from({ length: cellCount }, () => ({ colSpan: 1, rowSpan: 1 }))
 });
 
+type FakePathElement = {
+  children: ReturnType<typeof rowsWithItem<FakePathElement>>;
+  parentElement: FakePathElement | null;
+};
+
 const fakeSortableRoot = (bodyRowCount: number, table: { setAttributeCalls: number }) => ({
   querySelectorAll: () => [
     {
@@ -42,6 +47,15 @@ const fakeSortableRoot = (bodyRowCount: number, table: { setAttributeCalls: numb
     }
   ]
 });
+
+const createPathElement = (children: FakePathElement[] = []): FakePathElement => {
+  const element: FakePathElement = { children: rowsWithItem([]), parentElement: null };
+  children.forEach(child => {
+    child.parentElement = element;
+    element.children.push(child);
+  });
+  return element;
+};
 
 void test("compareSortValues sorts numeric strings numerically", () => {
   assert.ok(compareSortValues("16", "1024") < 0);
@@ -67,6 +81,12 @@ void test("enhanceSortableTables skips tables with fewer than two body rows", ()
 });
 
 const createStatefulTableDom = () => {
+  const shape = createStatefulTableShape(SORT_STATE_KEY);
+  const root = { querySelectorAll: () => [shape.table] };
+  return { ...shape, root };
+};
+
+const createStatefulTableShape = (sortStateKey?: string) => {
   const rows = ASCENDING_SORT_VALUES.map(value => ({
     cells: rowsWithItem([{
       colSpan: 1,
@@ -100,13 +120,12 @@ const createStatefulTableDom = () => {
     }
   };
   const table = {
-    dataset: { sortStateKey: SORT_STATE_KEY },
+    dataset: sortStateKey ? { sortStateKey } : {},
     tBodies: rowsWithItem([tbody]),
     querySelector: () => button,
     querySelectorAll: (selector: string) => selector === "th" ? [header] : [button]
   };
-  const root = { querySelectorAll: () => [table] };
-  return { button, headerAttributes, root, rows };
+  return { button, headerAttributes, rows, table };
 };
 
 void test("sortable table state restores keyed column, direction, and row order", () => {
@@ -130,4 +149,35 @@ void test("sortable table state restores keyed column, direction, and row order"
   );
   assert.equal(dom.button.dataset.sortDirection, "descending");
   assert.equal(dom.headerAttributes.get("aria-sort"), "descending");
+});
+
+void test("sortable table state restores keyless lazy tables by DOM path", () => {
+  const shape = createStatefulTableShape();
+  const table = Object.assign(
+    shape.table,
+    createPathElement()
+  ) as unknown as FakePathElement & typeof shape.table;
+  const wrapper = createPathElement([table]);
+  const root = Object.assign(createPathElement([wrapper]), {
+    querySelectorAll: () => [table]
+  });
+  const captured = captureSortableTableState(root as unknown as ParentNode);
+
+  assert.deepEqual(captured, [{
+    columnIndex: SORT_COLUMN_INDEX,
+    direction: "ascending",
+    path: "0.0"
+  }]);
+
+  restoreSortableTableState(
+    root as unknown as ParentNode,
+    [{ columnIndex: SORT_COLUMN_INDEX, direction: "descending", path: "0.0" }]
+  );
+
+  assert.deepEqual(
+    shape.rows.map(row => row.cells[SORT_COLUMN_INDEX]?.textContent),
+    [...ASCENDING_SORT_VALUES].reverse()
+  );
+  assert.equal(shape.button.dataset.sortDirection, "descending");
+  assert.equal(shape.headerAttributes.get("aria-sort"), "descending");
 });

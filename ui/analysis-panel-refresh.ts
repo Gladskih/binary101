@@ -21,6 +21,7 @@ import {
   renderEntrypointDisassemblyPanel
 } from "../renderers/pe/entrypoint-disassembly.js";
 import { PE_OVERLAY_PANEL_ID, renderOverlayPanel } from "../renderers/pe/overlay.js";
+import { PE_LAZY_SECTION_KEYS } from "../renderers/pe/lazy-section-shells.js";
 import { enhanceAccessibleTooltips } from "./accessible-tooltips.js";
 import { enhancePeDisassemblyPagedTables } from "./analysis-paged-tables.js";
 import { captureOpenDetails, restoreOpenDetails } from "./details-open-state.js";
@@ -29,6 +30,7 @@ import {
   type PagedSortableTableSnapshot
 } from "./paged-sortable-tables.js";
 import { enhancePeEntrypointExplorer } from "./pe-entrypoint-explorer.js";
+import { refreshPeLazySection } from "./pe-lazy-sections.js";
 import {
   captureSortableTableState,
   enhanceSortableTables,
@@ -71,8 +73,12 @@ export const refreshPeInstructionSetsPanel = (pe: PeWindowsParseResult): void =>
 
 export const refreshPeDisassemblyPanels = (pe: PeWindowsParseResult): void => {
   refreshPeInstructionSetsPanel(pe);
-  replaceRenderedRegion(PE_IMPORTS_PANEL_ID, renderImportsPanel(pe));
-  replaceRenderedRegion(PE_DELAY_IMPORTS_PANEL_ID, renderDelayImportsPanel(pe));
+  if (!refreshPeLazySection(PE_LAZY_SECTION_KEYS.imports, pe)) {
+    replaceRenderedRegion(PE_IMPORTS_PANEL_ID, renderImportsPanel(pe));
+  }
+  if (!refreshPeLazySection(PE_LAZY_SECTION_KEYS.delayImports, pe)) {
+    replaceRenderedRegion(PE_DELAY_IMPORTS_PANEL_ID, renderDelayImportsPanel(pe));
+  }
 };
 
 export const refreshPeEntrypointDisassemblyPanel = (pe: PeWindowsParseResult): void => {
@@ -82,7 +88,9 @@ export const refreshPeEntrypointDisassemblyPanel = (pe: PeWindowsParseResult): v
 };
 
 export const refreshPeOverlayPanel = (pe: PeParseResult): void => {
-  replaceRenderedRegion(PE_OVERLAY_PANEL_ID, renderOverlayPanel(pe));
+  if (!refreshPeLazySection(PE_LAZY_SECTION_KEYS.overlay, pe)) {
+    replaceRenderedRegion(PE_OVERLAY_PANEL_ID, renderOverlayPanel(pe));
+  }
 };
 
 export const refreshElfInstructionSetsPanel = (elf: ElfParseResult): void => {

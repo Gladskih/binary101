@@ -103,9 +103,10 @@ void test("renderImportLinking and related sections surface confirmed and non-ca
   assert.ok(html.includes("Name-based DLL note"));
   assert.ok(html.includes("Core Win32 file, process, thread, memory"));
   assert.ok(html.includes("Window manager, message, input, menu, dialog"));
-  assert.ok(html.includes("<td>Sleep</td>"));
-  assert.ok(html.includes("<td>MessageBoxW</td>"));
+  assert.match(html, /<td[^>]*>Sleep<\/td>/);
+  assert.match(html, /<td[^>]*>MessageBoxW<\/td>/);
   assert.ok(html.includes("<th>API</th>"));
+  assert.ok(!html.includes("Sort by API"));
   assert.ok(html.includes("Windows.Win32.System.Threading"));
   assert.ok(html.includes("void Sleep(u4 dwMilliseconds)"));
   assert.ok(!html.includes("learn.microsoft.com/search"));
@@ -261,7 +262,7 @@ void test("import panels render separate call and jump counters from the disasse
     new RegExp(`data-sort-value="${DIRECT_CALL_REFERENCE_COUNT}">` +
       `${DIRECT_CALL_REFERENCE_COUNT}</td>`)
   );
-  assert.match(importsHtml, /data-sort-value="0">—<\/td>/);
+  assert.match(importsHtml, /data-sort-value="0">&mdash;<\/td>/);
   assert.match(
     delayHtml,
     new RegExp(`data-sort-value="${DIRECT_JUMP_REFERENCE_COUNT}">` +
@@ -277,11 +278,11 @@ void test("import panels render dashes before Instruction-set, imports and strin
   const delayHtml = renderDelayImportsPanel(pe);
 
   assert.equal(
-    (importsHtml.match(/data-sort-value="0">—<\/td>/g) ?? []).length,
+    (importsHtml.match(/data-sort-value="0">&mdash;<\/td>/g) ?? []).length,
     pe.imports.entries.flatMap(entry => entry.functions).length * DIRECT_IAT_REFERENCE_COLUMN_COUNT
   );
   assert.equal(
-    (delayHtml.match(/data-sort-value="0">—<\/td>/g) ?? []).length,
+    (delayHtml.match(/data-sort-value="0">&mdash;<\/td>/g) ?? []).length,
     (pe.delayImports?.entries.flatMap(entry => entry.functions).length ?? 0) *
       DIRECT_IAT_REFERENCE_COLUMN_COUNT
   );

@@ -7,6 +7,20 @@ import { renderPeDiagnostics } from "./diagnostics.js";
 import { renderPreviewCell, renderPreviewSummary } from "./resource-preview-cell.js";
 import { formatWindowsLanguageName } from "./windows-language-names.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
+import {
+  renderAutoPagedSortableTable,
+  type PagedSortableTableCell,
+  type PagedSortableTableModel
+} from "../paged-sortable-table.js";
+
+export const PE_RESOURCE_DETAIL_PAGE_SIZE = 50;
+
+type ResourceDetailGroup = NonNullable<PeResources["detail"]>[number];
+type ResourceLangEntry = ResourceDetailGroup["entries"][number]["langs"][number];
+type ResourcePreviewRow = {
+  displayName: string;
+  langEntry: ResourceLangEntry;
+};
 
 const formatLang = (lang: number | null | undefined): string => {
   return formatWindowsLanguageName(lang);
@@ -42,6 +56,112 @@ const isWideResourcePreview = (
   langEntry.previewKind === "typeLibrary" ||
   langEntry.previewKind === "html" ||
   langEntry.previewKind === "text";
+
+const flattenResourcePreviewRows = (group: ResourceDetailGroup): ResourcePreviewRow[] =>
+  group.entries.flatMap(entry => {
+    const displayName = entry.name
+      ? entry.name
+      : entry.id != null
+        ? `ID ${entry.id}`
+        : "(unnamed)";
+    return (entry.langs || []).map(langEntry => ({ displayName, langEntry }));
+  });
+
+const resourceTableId = (groupIndex: number): string => `pe-resource-detail-${groupIndex}`;
+
+const renderResourcePreviewCellHtml = (langEntry: ResourceLangEntry): string => {
+  if (!isWideResourcePreview(langEntry)) return renderPreviewCell(langEntry);
+  return escapeHtml(renderPreviewSummary(langEntry));
+};
+
+const renderResourcePreviewAdditionalRowsHtml = (langEntry: ResourceLangEntry): string =>
+  isWideResourcePreview(langEntry)
+    ? `<tr class="peResourcePreviewWideRow"><td colspan="5">${renderPreviewCell(langEntry)}</td></tr>`
+    : "";
+
+const renderResourcePreviewCells = (row: ResourcePreviewRow): PagedSortableTableCell[] => [
+  { html: escapeHtml(row.displayName), sortValue: row.displayName },
+  {
+    html: formatLang(row.langEntry.lang),
+    sortValue: formatLang(row.langEntry.lang)
+  },
+  {
+    className: "peNumeric",
+    html: humanSize(row.langEntry.size || 0),
+    sortValue: String(row.langEntry.size || 0)
+  },
+  {
+    className: "peNumeric",
+    html: formatCodePage(row.langEntry.codePage),
+    sortValue: String(row.langEntry.codePage || 0)
+  },
+  {
+    html: renderResourcePreviewCellHtml(row.langEntry),
+    sortValue: renderPreviewSummary(row.langEntry)
+  }
+];
+
+const resourcePreviewSortValue = (row: ResourcePreviewRow, columnIndex: number): string => {
+  switch (columnIndex) {
+    case 0:
+      return row.displayName;
+    case 1:
+      return formatLang(row.langEntry.lang);
+    case 2:
+      return String(row.langEntry.size || 0);
+    case 3:
+      return String(row.langEntry.codePage || 0);
+    case 4:
+      return renderPreviewSummary(row.langEntry);
+    default:
+      return "";
+  }
+};
+
+export const createResourceDetailTableModel = (
+  group: ResourceDetailGroup,
+  groupIndex: number
+): PagedSortableTableModel => {
+  const rows = flattenResourcePreviewRows(group);
+  return {
+    columns: [
+      { label: "Name / ID" },
+      { label: "Lang" },
+      { className: "peNumeric", label: "Size" },
+      { className: "peNumeric", label: "CodePage" },
+      { label: "Preview" }
+    ],
+    id: resourceTableId(groupIndex),
+    pageSize: PE_RESOURCE_DETAIL_PAGE_SIZE,
+    rowAt: rowIndex => {
+      const row = rows[rowIndex];
+      if (!row) return null;
+      if (!isWideResourcePreview(row.langEntry)) return { cells: renderResourcePreviewCells(row) };
+      return {
+        additionalRowsHtml: renderResourcePreviewAdditionalRowsHtml(row.langEntry),
+        cells: renderResourcePreviewCells(row),
+        className: "peResourcePreviewMetaRow"
+      };
+    },
+    rowCount: rows.length,
+    sortValueAt: (rowIndex, columnIndex) =>
+      rows[rowIndex] ? resourcePreviewSortValue(rows[rowIndex], columnIndex) : "",
+    tableClassName: "peResourcePreviewTable"
+  };
+};
+
+export const getPeResourceTableModel = (
+  resources: PeResources | null | undefined,
+  tableId: string
+): PagedSortableTableModel | null => {
+  const match = tableId.match(/^pe-resource-detail-(\d+)$/);
+  if (!match?.[1]) return null;
+  const groupIndex = Number(match[1]);
+  const group = resources?.detail?.[groupIndex];
+  return group && Number.isInteger(groupIndex)
+    ? createResourceDetailTableModel(group, groupIndex)
+    : null;
+};
 
 const renderResourceIntro = (resources: PeResources, out: string[]): void => {
   const topRows = resources.top || [];
@@ -100,51 +220,19 @@ const renderResourceDirectories = (resources: PeResources, out: string[]): void 
   out.push(`</tbody></table></details>`);
 };
 
-const renderResourcePreviewRows = (
-  entry: NonNullable<PeResources["detail"]>[number]["entries"][number],
-  out: string[]
-): void => {
-  const displayName = entry.name
-    ? escapeHtml(entry.name)
-    : entry.id != null
-      ? `ID ${entry.id}`
-      : "(unnamed)";
-  for (const langEntry of entry.langs || []) {
-    const preview = renderPreviewCell(langEntry);
-    const widePreview = isWideResourcePreview(langEntry);
-    out.push(
-      `<tr class="${widePreview ? "peResourcePreviewMetaRow" : ""}">` +
-        `<td>${displayName}</td><td>${formatLang(langEntry.lang)}</td>` +
-        `<td class="peNumeric">${humanSize(langEntry.size || 0)}</td>` +
-        `<td class="peNumeric">${formatCodePage(langEntry.codePage)}</td>` +
-        `<td>${widePreview ? escapeHtml(renderPreviewSummary(langEntry)) : preview}` +
-        `</td></tr>`
-    );
-    if (widePreview) {
-      out.push(`<tr class="peResourcePreviewWideRow"><td colspan="5">${preview}</td></tr>`);
-    }
-  }
-};
-
 const renderResourceDetails = (resources: PeResources, out: string[]): void => {
   if (!resources.detail?.length) return;
-  for (const group of resources.detail) {
+  resources.detail.forEach((group, groupIndex) => {
     const typeName = escapeHtml(group.typeName || "(unknown)");
-    const entryCount = group.entries?.length || 0;
+    const entryCount = flattenResourcePreviewRows(group).length;
     out.push(
       `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${typeName}</b> - ${entryCount} entr${entryCount === 1 ? "y" : "ies"}</summary>`
     );
     if (entryCount) {
-      out.push(
-        `<div class="tableWrap"><table class="table peResourcePreviewTable" style="margin-top:.35rem">` +
-          `<thead><tr><th>Name / ID</th><th>Lang</th><th>Size</th><th>CodePage</th>` +
-          `<th>Preview</th></tr></thead><tbody>`
-      );
-      for (const entry of group.entries) renderResourcePreviewRows(entry, out);
-      out.push(`</tbody></table></div>`);
+      out.push(renderAutoPagedSortableTable(createResourceDetailTableModel(group, groupIndex)));
     }
     out.push(`</details>`);
-  }
+  });
 };
 
 const renderAdditionalResourcePaths = (resources: PeResources, out: string[]): void => {

@@ -70,3 +70,17 @@ export const renderPeSectionStart = (title: string, summary?: string, id?: strin
   }</summary><div class="peSectionBody">${renderPeSectionDescription(title)}`;
 
 export const renderPeSectionEnd = (): string => "</div></details></section>";
+
+export const renderPeSectionShell = (
+  key: string,
+  title: string,
+  summary?: string,
+  id?: string
+): string =>
+  `<section${id ? ` id="${escapeHtml(id)}"` : ""} class="peSection" ` +
+  `data-pe-lazy-section="${escapeHtml(key)}">` +
+  `<details class="peSectionDetails">` +
+  `<summary class="peSectionSummary"><b>${escapeHtml(title)}</b>${
+    summary ? ` - ${escapeHtml(summary)}` : ""
+  }</summary><div class="peSectionBody" data-pe-lazy-section-body></div>` +
+  `</details></section>`;

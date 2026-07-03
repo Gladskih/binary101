@@ -24,6 +24,37 @@ const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
 // https://learn.microsoft.com/en-us/cpp/build/reference/understanding-the-helper-function
 const DELAY_IMPORT_ATTRIBUTE_DLATTR_RVA = 0x1;
 
+const getEntrypointSanityIssue = (pe: PeParseResult): string | null => {
+  const entrypointRva = pe.opt?.AddressOfEntryPoint ? (pe.opt.AddressOfEntryPoint >>> 0) : 0;
+  const sections = Array.isArray(pe.sections) ? pe.sections : [];
+  if (!entrypointRva || !sections.length) return null;
+  const entrySection = sections.find(section => {
+    const start = section.virtualAddress >>> 0;
+    const size = (section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0);
+    const end = start + size;
+    return entrypointRva >= start && entrypointRva < end;
+  });
+  if (!entrySection) {
+    return `AddressOfEntryPoint points outside any section (RVA ${hex(entrypointRva, 8)}).`;
+  }
+  return (entrySection.characteristics & IMAGE_SCN_MEM_EXECUTE) === 0
+    ? `Entry point is in a non-executable section (${entrySection.name || "(unnamed)"}; missing IMAGE_SCN_MEM_EXECUTE).`
+    : null;
+};
+
+const singleIssue = (issue: string | null | undefined): string[] => issue ? [issue] : [];
+
+export const getPeSanityIssues = (pe: PeParseResult): string[] => [
+  ...(pe.warnings || []),
+  ...(
+    pe.imageSizeMismatch && !isPeRomParseResult(pe)
+      ? ["SizeOfImage does not match section layout."]
+      : []
+  ),
+  ...(isPeWindowsParseResult(pe) && pe.debug?.warning ? [pe.debug.warning] : []),
+  ...singleIssue(getEntrypointSanityIssue(pe))
+];
+
 const renderDelayImportAttributes = (attributes: number): string => {
   const normalized = attributes >>> 0;
   const unknownBits = normalized & ~DELAY_IMPORT_ATTRIBUTE_DLATTR_RVA;
@@ -129,30 +160,7 @@ export function renderDelayImports(di: PeDelayImportsSection, out: string[]): vo
 }
 
 export function renderSanity(pe: PeParseResult, out: string[]): void {
-  const issues = [...(pe.warnings || [])];
-  if (pe.imageSizeMismatch && !isPeRomParseResult(pe)) {
-    issues.push("SizeOfImage does not match section layout.");
-  }
-  if (isPeWindowsParseResult(pe) && pe.debug?.warning) {
-    issues.push(pe.debug.warning);
-  }
-  const entrypointRva = pe.opt?.AddressOfEntryPoint ? (pe.opt.AddressOfEntryPoint >>> 0) : 0;
-  const sections = Array.isArray(pe.sections) ? pe.sections : [];
-  if (entrypointRva && sections.length) {
-    const entrySection = sections.find(section => {
-      const start = section.virtualAddress >>> 0;
-      const size = (section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0);
-      const end = start + size;
-      return entrypointRva >= start && entrypointRva < end;
-    });
-    if (!entrySection) {
-      issues.push(`AddressOfEntryPoint points outside any section (RVA ${hex(entrypointRva, 8)}).`);
-    } else if ((entrySection.characteristics & IMAGE_SCN_MEM_EXECUTE) === 0) {
-      issues.push(
-        `Entry point is in a non-executable section (${entrySection.name || "(unnamed)"}; missing IMAGE_SCN_MEM_EXECUTE).`
-      );
-    }
-  }
+  const issues = getPeSanityIssues(pe);
   if (!issues.length) return;
   out.push(renderPeSectionStart("Sanity", `${issues.length} finding${issues.length === 1 ? "" : "s"}`));
   out.push(renderPeDiagnosticBody(issues));

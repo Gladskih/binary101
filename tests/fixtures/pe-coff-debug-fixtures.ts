@@ -2,6 +2,7 @@
 
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
+import { createPePlusWithSection } from "./sample-files-pe.js";
 
 // Microsoft PE/COFF IMAGE_SYMBOL records are fixed 18-byte entries.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#coff-symbol-table
@@ -137,4 +138,27 @@ export const createOffsetFile = (payload: Uint8Array): MockFile => {
   const bytes = new Uint8Array(payload.length + 1);
   bytes.set(payload, 1);
   return new MockFile(bytes);
+};
+
+export const createLargePeCoffSymbolFile = (symbolCount = 251): MockFile => {
+  const image = createPePlusWithSection();
+  const symbolTable = createSymbolTable(
+    Array.from({ length: symbolCount }, (_, index) => ({ name: `sym${index}` })),
+    []
+  );
+  const bytes = new Uint8Array(image.length + symbolTable.bytes.length);
+  bytes.set(image);
+  bytes.set(symbolTable.bytes, image.length);
+
+  const peHeaderOffset = 0x40;
+  const coffOffset = peHeaderOffset + Uint32Array.BYTES_PER_ELEMENT;
+  const view = new DataView(bytes.buffer);
+  view.setUint32(coffOffset + 8, image.length, true);
+  view.setUint32(coffOffset + 12, symbolTable.recordCount, true);
+
+  return new MockFile(
+    bytes,
+    "large-coff-symbols.exe",
+    "application/vnd.microsoft.portable-executable"
+  );
 };

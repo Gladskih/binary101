@@ -102,10 +102,43 @@ void test("renderResources gives large structured resource previews the full tab
   const html = out.join("");
 
   assert.equal(html.match(/peResourcePreviewWideRow/gu)?.length, resources.detail.length);
+  assert.equal(html.match(/peResourcePreviewMetaRow/gu)?.length, resources.detail.length);
+  assert.equal(html.match(/peResourcePreviewTable/gu)?.length, resources.detail.length);
+  assert.match(html, /<table class="table peResourcePreviewTable"/);
+  assert.match(html, /<tr class="peResourcePreviewWideRow"><td colspan="5">/);
+  assert.doesNotMatch(html, /<div class="peResourcePreviewWideRow">/);
+  assert.doesNotMatch(html, /data-paged-sortable-table-root/);
   assert.match(html, /MUI resource config/);
   assert.match(html, /MUI resource configuration/);
   assert.match(html, /XML\/Text \(heuristic\)/);
   assert.match(html, /&lt;duixml>/);
   assert.match(html, new RegExp(`${infPreview.sections.length} INF sections`));
   assert.match(html, /placeholder type library/);
+});
+
+void test("renderResources pages resource detail tables only above the inline limit", () => {
+  const resources: PeResources = {
+    top: [],
+    detail: [{
+      typeName: "RCDATA",
+      entries: Array.from({ length: 51 }, (_, index) => ({
+        id: index,
+        name: `payload-${index}`,
+        langs: [createPreviewLang({
+          previewKind: "text",
+          textPreview: `preview-${index}`
+        })]
+      }))
+    }]
+  };
+  const out: string[] = [];
+
+  renderResources(resources, out);
+  const html = out.join("");
+
+  assert.match(html, /data-paged-sortable-table-id="pe-resource-detail-0"/);
+  assert.match(html, /<table class="table peResourcePreviewTable"/);
+  assert.match(html, /Showing 1-50 of 51/);
+  assert.match(html, /<td[^>]*>payload-49<\/td>/);
+  assert.doesNotMatch(html, /<td[^>]*>payload-50<\/td>/);
 });

@@ -3,13 +3,7 @@ import { createHash } from "node:crypto";
 import type { Page } from "@playwright/test";
 import { createFb2File, createPdfFile } from "../fixtures/document-sample-files.js";
 import { createElfFile } from "../fixtures/elf-sample-file.js";
-import {
-  createBmpFile,
-  createGifFile,
-  createJpegFile,
-  createPngFile,
-  createWebpFile
-} from "../fixtures/image-sample-files.js";
+import { createBmpFile, createGifFile, createJpegFile, createPngFile, createWebpFile } from "../fixtures/image-sample-files.js";
 import { createLnkFile } from "../fixtures/lnk-sample-file.js";
 import { createMp3File } from "../fixtures/audio-sample-files.js";
 import { createPeFile, createPePlusFile } from "../fixtures/sample-files-pe.js";
@@ -209,7 +203,10 @@ test.describe("file hash actions", () => {
     );
     await page.keyboard.press("Escape");
     await expect(page.locator("#fileBinaryTypeDetail .accessibleTooltipPopup")).toBeHidden();
-    expect(await page.locator("#analysisValue .accessibleTooltipButton").count()).toBeGreaterThan(0);
+    await expect(page.locator("#analysisValue .accessibleTooltipButton")).toHaveCount(0);
+    await page.locator('[data-pe-lazy-section="pe-headers"] > details > summary').click();
+    await expect.poll(async () => await page.locator("#analysisValue .accessibleTooltipButton").count())
+      .toBeGreaterThan(0);
 
     const hashDetails = page.locator("#hashDetails");
     const nativeHashLabels = page.locator(".nativeHashLabel");

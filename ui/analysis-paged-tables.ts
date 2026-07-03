@@ -2,7 +2,7 @@
 
 import type { ParseForUiResult } from "../analyzers/index.js";
 import { isPeWindowsParseResult, type PeWindowsParseResult } from "../analyzers/pe/index.js";
-import { getPeDisassemblyStringTableModel } from "../renderers/pe/disassembly-strings.js";
+import { getPePagedTableModel } from "../renderers/pe/paged-tables.js";
 import {
   enhancePagedSortableTables,
   type PagedSortableTableSnapshot
@@ -16,7 +16,7 @@ export const enhancePeDisassemblyPagedTables = (
 ): void => {
   enhancePagedSortableTables(
     root,
-    tableId => getPeDisassemblyStringTableModel(pe, tableId),
+    tableId => getPePagedTableModel(pe, tableId),
     snapshots
   );
 };

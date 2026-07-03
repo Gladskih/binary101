@@ -219,9 +219,9 @@ void test("renderDebug renders COFF symbols from debug-directory entries only", 
     "Entry #1: COFF \\(UNMAPPED\\)",
     "COFF symbol table with 1 parsed symbols",
     "function NULL",
-    "EXTERNAL",
-    "<td>7</td>"
+    "EXTERNAL"
   ]);
+  assert.match(html, /<td[^>]*>7<\/td>/);
   assert.doesNotMatch(html, /COFF symbols from file header/);
 });
 
