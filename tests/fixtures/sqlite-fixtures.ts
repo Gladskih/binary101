@@ -101,7 +101,7 @@ export const createSqliteFile = (options?: SqliteFixtureOptions): MockFile =>
 export const createSqliteWalIndexSharedMemoryFile = (): MockFile => {
   // SQLite WAL-index docs define shm files as 32768-byte chunks and iVersion 3007000.
   // https://sqlite.org/walformat.html#the_wal_index_file_format
-  const bytes = new Uint8Array(32768).fill(0);
+  const bytes = new Uint8Array(32768);
   const view = new DataView(bytes.buffer);
   view.setUint32(0, 3007000, true);
   return new MockFile(bytes, "sample.sqlite-shm", "application/vnd.sqlite3");
