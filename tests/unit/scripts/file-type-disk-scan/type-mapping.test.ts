@@ -1,0 +1,45 @@
+"use strict";
+
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import {
+  normalizeAnalyzerLabel,
+  normalizeFileMimeType,
+  typesMatch
+} from "../../../../scripts/file-type-disk-scan/type-mapping.js";
+
+void test("typesMatch treats PE analyzer labels and file.exe MIME as the same type", () => {
+  assert.equal(typesMatch("PE32+ executable for x86-64 (AMD64)", "application/x-dosexec"), true);
+});
+
+void test("typesMatch maps ZIP-derived document refinements to ZIP MIME types", () => {
+  assert.equal(
+    typesMatch(
+      "Microsoft Word document (DOCX)",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ),
+    true
+  );
+});
+
+void test("typesMatch keeps genuine media mismatches visible", () => {
+  assert.equal(typesMatch("PNG image", "image/jpeg"), false);
+});
+
+void test("typesMatch treats JavaScript MIME as text-like shallow analyzer output", () => {
+  assert.equal(typesMatch("Text file", "application/javascript"), true);
+});
+
+void test("typesMatch maps newline-delimited JSON MIME to JSON analyzer output", () => {
+  assert.equal(typesMatch("JSON data", "application/x-ndjson"), true);
+});
+
+void test("typesMatch treats uncommon text subtypes as text-like", () => {
+  assert.equal(typesMatch("Text script (shebang)", "text/x-perl"), true);
+  assert.equal(typesMatch("Text file", "application/x-wine-extension-ini"), true);
+});
+
+void test("normalizers expose unmapped values for report diagnostics", () => {
+  assert.equal(normalizeAnalyzerLabel("Unexpected custom label"), "unmapped");
+  assert.equal(normalizeFileMimeType("application/x-custom-format"), "unmapped");
+});

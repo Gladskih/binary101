@@ -196,7 +196,7 @@ void test("detectBinaryType does not mislabel MPEG Program Stream as MP3", async
   assert.strictEqual(label, "MPEG Program Stream (MPG)");
 });
 
-void test("detectBinaryType keeps damaged MPEG-like streams as shallow MP3 candidates", async () => {
+void test("detectBinaryType rejects damaged single-frame MPEG-like streams", async () => {
   const full = createMp3File();
   const firstFrameLength = full.data.length / 2;
   const damaged = new Uint8Array(firstFrameLength + 16);
@@ -204,7 +204,7 @@ void test("detectBinaryType keeps damaged MPEG-like streams as shallow MP3 candi
   // Add some junk after the first frame to force a bad second header
   damaged.fill(0, firstFrameLength);
   const label = await detectBinaryType(new MockFile(damaged, "damaged.mp3", "audio/mpeg"));
-  assert.strictEqual(label, "MPEG audio stream (MP3/AAC)");
+  assert.strictEqual(label, "Unknown binary type");
 });
 
 void test("detectBinaryType recognises animated cursors (ANI)", async () => {

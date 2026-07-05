@@ -19,6 +19,7 @@
     "generate:api-metadata": "npm run generate:winapi-metadata && npm run generate:ucrt-metadata",
     "validate:api-metadata": "npm run validate:winapi-metadata && npm run validate:ucrt-metadata",
     "scan:pe-import-metadata": "tsx scripts/peImportMetadataScan.ts",
+    "scan:file-types": "tsx scripts/fileTypeDiskScan.ts",
     "predev": "npm run prepare:iced-x86",
     "dev": "vite",
     "lint": "eslint .",

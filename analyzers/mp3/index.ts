@@ -93,6 +93,20 @@ function findFirstFrameWithFallback(
   return null;
 }
 
+function hasMatchingNextFrame(dv: DataView, firstFrame: MpegFrameHeader): boolean {
+  if (!firstFrame.frameLengthBytes) return false;
+  const nextOffset = firstFrame.offset + firstFrame.frameLengthBytes;
+  if (nextOffset + 4 > dv.byteLength) return false;
+  const second = parseFrameHeader(dv, nextOffset);
+  if (!second) return false;
+  return second.versionBits === firstFrame.versionBits && second.layerBits === firstFrame.layerBits;
+}
+
+function isSingleFrameProbe(dv: DataView, frame: MpegFrameHeader): boolean {
+  if (frame.offset !== 0 || !frame.frameLengthBytes) return false;
+  return frame.frameLengthBytes >= dv.byteLength;
+}
+
 export function probeMp3(dv: DataView): boolean {
   if (dv.byteLength < 3) return false;
   // Avoid misclassifying common video/container headers as MP3.
@@ -168,7 +182,8 @@ export function probeMp3(dv: DataView): boolean {
   }
   const scanLimit = Math.min(dv.byteLength - 4, 65536);
   for (let offset = 0; offset <= scanLimit; offset += 1) {
-    if (parseFrameHeader(dv, offset)) return true;
+    const frame = parseFrameHeader(dv, offset);
+    if (frame && (hasMatchingNextFrame(dv, frame) || isSingleFrameProbe(dv, frame))) return true;
   }
   return false;
 }

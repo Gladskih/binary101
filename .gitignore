@@ -6,6 +6,7 @@ coverage/
 
 # Test runner artifacts
 test-results/
+scan-results/
 
 # Build output
 dist/

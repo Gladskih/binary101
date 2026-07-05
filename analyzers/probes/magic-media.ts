@@ -75,12 +75,6 @@ const detectMp3OrAac = (dv: DataView): ProbeResult => {
       String.fromCharCode(dv.getUint8(1)) +
       String.fromCharCode(dv.getUint8(2)) === "ID3";
   if (id3) return "MPEG audio with ID3 tag (MP3/AAC)";
-  const b0 = dv.getUint8(0);
-  const b1 = dv.getUint8(1);
-  if (b0 === 0xff && (b1 & 0xe0) === 0xe0) {
-    if (b1 === 0xfe) return null;
-    return "MPEG audio stream (MP3/AAC)";
-  }
   return null;
 };
 
