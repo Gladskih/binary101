@@ -25,7 +25,7 @@ const createSymbol = (index: number): PeCoffSymbol => ({
 
 const createCoffDebug = (): PeCoffDebugInfo => ({
   lineNumberBlocks: [],
-  source: "debug-directory",
+  source: "coff-header",
   stringTableOffset: null,
   symbolTableOffset: 0x80,
   symbols: [createSymbol(0), createSymbol(1)]
@@ -41,7 +41,7 @@ const createDebugEntry = (coff: PeCoffDebugInfo): PeDebugDirectoryEntry => ({
   typeName: "COFF"
 });
 
-void test("getPePagedTableModel resolves top-level COFF symbol tables", () => {
+void test("getPePagedTableModel resolves file-header COFF symbol tables", () => {
   const pe = createBasePe();
   pe.coffDebug = createCoffDebug();
 
@@ -55,7 +55,7 @@ void test("getPePagedTableModel resolves top-level COFF symbol tables", () => {
 void test("getPePagedTableModel resolves COFF tables inside debug entries", () => {
   const pe = createBasePe();
   pe.debug = {
-    entries: [createDebugEntry(createCoffDebug())],
+    entries: [createDebugEntry({ ...createCoffDebug(), source: "debug-directory" })],
     entry: null,
     rawDataRanges: []
   };

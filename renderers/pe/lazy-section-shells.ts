@@ -15,7 +15,6 @@ export const PE_LAZY_SECTION_KEYS = {
   architecture: "architecture",
   boundImports: "bound-imports",
   clr: "clr",
-  coffSymbols: "coff-symbols",
   dataDirectories: "data-directories",
   debug: "debug",
   delayImports: "delay-imports",
@@ -55,6 +54,11 @@ const compactCount = (count: number): string =>
 
 const plural = (count: number, one: string, many: string): string =>
   `${count} ${count === 1 ? one : many}`;
+
+const coffTailSummary = (pe: PeParseResult): string =>
+  (pe.coff.NumberOfSymbols >>> 0) > 0
+    ? plural(pe.coff.NumberOfSymbols >>> 0, "symbol-table record", "symbol-table records")
+    : "COFF string table";
 
 const pushIf = (
   descriptors: PeLazySectionDescriptor[],
@@ -110,7 +114,7 @@ const addHeaderDescriptors = (pe: PeParseResult, descriptors: PeLazySectionDescr
   });
   pushIf(descriptors, hasCoffTail(pe), {
     key: PE_LAZY_SECTION_KEYS.legacyCoffTail,
-    summary: `${pe.coff.NumberOfSymbols >>> 0} symbols`,
+    summary: coffTailSummary(pe),
     title: "Legacy COFF tail"
   });
 };
@@ -133,11 +137,6 @@ const addWindowsToolingDescriptors = (
     key: PE_LAZY_SECTION_KEYS.debug,
     summary: `debug: ${plural(pe.debug?.entries?.length ?? 0, "entry", "entries")}`,
     title: "Debug directory"
-  });
-  pushIf(descriptors, pe.coffDebug, {
-    key: PE_LAZY_SECTION_KEYS.coffSymbols,
-    summary: `COFF: ${plural(pe.coffDebug?.symbols.length ?? 0, "symbol", "symbols")}`,
-    title: "COFF symbols"
   });
 };
 

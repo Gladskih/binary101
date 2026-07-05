@@ -217,7 +217,7 @@ void test("renderDebug renders COFF symbols from debug-directory entries only", 
 
   assertIncludesAll(html, [
     "Entry #1: COFF \\(UNMAPPED\\)",
-    "COFF symbol table with 1 parsed symbols",
+    "COFF symbol table with 1 parsed primary symbol",
     "function NULL",
     "EXTERNAL"
   ]);

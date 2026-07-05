@@ -9,7 +9,6 @@ import { renderHeaders } from "../renderers/pe/headers.js";
 import { renderPackers } from "../renderers/pe/packers.js";
 import { renderLoadConfig } from "../renderers/pe/load-config.js";
 import { renderDebug } from "../renderers/pe/debug-view.js";
-import { renderCoffSymbols } from "../renderers/pe/coff-symbols.js";
 import { renderResources } from "../renderers/pe/resources.js";
 import { renderException } from "../renderers/pe/exception.js";
 import { renderNativeAotCandidate } from "../renderers/pe/native-aot.js";
@@ -90,8 +89,6 @@ const renderWindowsLazyMarkup = (
       return renderToString(out => renderLoadConfig(pe, out));
     case PE_LAZY_SECTION_KEYS.debug:
       return renderToString(out => renderDebug(pe, out));
-    case PE_LAZY_SECTION_KEYS.coffSymbols:
-      return renderToString(out => renderCoffSymbols(pe, out));
     case PE_LAZY_SECTION_KEYS.importLinking:
       return renderToString(out => renderImportLinking(pe, out));
     case PE_LAZY_SECTION_KEYS.imports:

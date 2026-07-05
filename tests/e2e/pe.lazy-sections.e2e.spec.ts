@@ -48,14 +48,14 @@ test.describe("PE lazy sections", () => {
     await expect(firstTreeDetails).toHaveJSProperty("open", true);
   });
 
-  void test("pages COFF symbols lazily and restores pager state after unmount", async ({ page }) => {
+  void test("pages legacy COFF tail symbols lazily and restores pager state", async ({ page }) => {
     const file = createLargePeCoffSymbolFile();
     await page.setInputFiles("#fileInput", toUpload(file));
 
-    const section = page.locator('[data-pe-lazy-section="coff-symbols"]');
+    const section = page.locator('[data-pe-lazy-section="legacy-coff-tail"]');
     const details = section.locator(":scope > details");
     const body = section.locator("[data-pe-lazy-section-body]");
-    await expect(section).toContainText("COFF: 251 symbols");
+    await expect(section).toContainText("251 symbol-table records");
     await expect(body).toHaveJSProperty("childElementCount", 0);
 
     await details.locator(":scope > summary").click();

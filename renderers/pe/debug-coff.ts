@@ -69,11 +69,31 @@ const getAuxSummary = (record: PeCoffAuxiliaryRecord): string => {
 const symbolTableId = (tableIdPrefix: string): string => `${tableIdPrefix}-symbols`;
 const lineNumberTableId = (tableIdPrefix: string): string => `${tableIdPrefix}-lines`;
 
+export const getCoffAuxiliaryRecordCount = (info: PeCoffDebugInfo): number =>
+  info.symbols.reduce((count, symbol) => count + symbol.auxiliaryRecords.length, 0);
+
+export const getCoffParsedRecordCount = (info: PeCoffDebugInfo): number =>
+  info.symbols.length + getCoffAuxiliaryRecordCount(info);
+
 const renderHeader = (info: PeCoffDebugInfo, out: string[]): void => {
   out.push(`<dl>`);
   out.push(renderDefinitionRow("Source", info.source === "debug-directory" ? "Debug directory" : "COFF file header"));
   out.push(renderDefinitionRow("Symbol table", escapeHtml(hex(info.symbolTableOffset, 8))));
-  out.push(renderDefinitionRow("Symbols parsed", escapeHtml(String(info.symbols.length))));
+  out.push(renderDefinitionRow(
+    "Primary symbols parsed",
+    escapeHtml(String(info.symbols.length)),
+    "Standard symbol-table records after grouping any auxiliary records that follow them."
+  ));
+  out.push(renderDefinitionRow(
+    "Auxiliary records parsed",
+    escapeHtml(String(getCoffAuxiliaryRecordCount(info))),
+    "Auxiliary symbol-table records attached to the preceding primary symbol."
+  ));
+  out.push(renderDefinitionRow(
+    "Symbol records parsed",
+    escapeHtml(String(getCoffParsedRecordCount(info))),
+    "Total 18-byte COFF symbol-table records consumed by the parsed rows above."
+  ));
   out.push(renderDefinitionRow(
     "String table",
     info.stringTableOffset == null
@@ -236,6 +256,14 @@ export const renderCoffDebugInfo = (
   tableIdPrefix = "pe-coff-debug"
 ): void => {
   renderHeader(info, out);
+  renderCoffDebugTables(info, out, tableIdPrefix);
+};
+
+export const renderCoffDebugTables = (
+  info: PeCoffDebugInfo,
+  out: string[],
+  tableIdPrefix = "pe-coff-debug"
+): void => {
   renderSymbols(info, out, tableIdPrefix);
   renderLineNumbers(info, out, tableIdPrefix);
   if (info.warnings?.length) {

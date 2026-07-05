@@ -43,6 +43,47 @@ void test("getPeLazySectionDescriptors keeps import counters in the section shel
   });
 });
 
+void test("getPeLazySectionDescriptors groups file-header COFF symbols into legacy tail", () => {
+  const pe = createBasePe();
+  pe.coff.PointerToSymbolTable = 0x300;
+  pe.coff.NumberOfSymbols = 2;
+  pe.coffDebug = {
+    lineNumberBlocks: [],
+    source: "coff-header",
+    stringTableOffset: null,
+    symbolTableOffset: 0x300,
+    symbols: []
+  };
+
+  const descriptors = getPeLazySectionDescriptors(pe);
+  const legacyCoffTail = descriptors.find(
+    section => section.key === PE_LAZY_SECTION_KEYS.legacyCoffTail
+  );
+
+  assert.deepEqual(legacyCoffTail, {
+    key: PE_LAZY_SECTION_KEYS.legacyCoffTail,
+    summary: "2 symbol-table records",
+    title: "Legacy COFF tail"
+  });
+  assert.equal(descriptors.some(section => section.title === "COFF symbols"), false);
+});
+
+void test("getPeLazySectionDescriptors renders singular COFF tail record summary", () => {
+  const pe = createBasePe();
+  pe.coff.PointerToSymbolTable = 0x300;
+  pe.coff.NumberOfSymbols = 1;
+
+  const legacyCoffTail = getPeLazySectionDescriptors(pe).find(
+    section => section.key === PE_LAZY_SECTION_KEYS.legacyCoffTail
+  );
+
+  assert.deepEqual(legacyCoffTail, {
+    key: PE_LAZY_SECTION_KEYS.legacyCoffTail,
+    summary: "1 symbol-table record",
+    title: "Legacy COFF tail"
+  });
+});
+
 void test("renderPe emits a sanity shell for entrypoint section issues", () => {
   const pe = createBasePe();
   pe.opt.AddressOfEntryPoint = 0x1000;

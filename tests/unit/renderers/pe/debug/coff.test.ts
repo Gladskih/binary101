@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PeCoffDebugInfo, PeCoffSymbol } from "../../../../../analyzers/pe/debug/directory.js";
 import {
+  getCoffAuxiliaryRecordCount,
+  getCoffParsedRecordCount,
   PE_COFF_SYMBOL_PAGE_SIZE,
   renderCoffDebugInfo
 } from "../../../../../renderers/pe/debug-coff.js";
@@ -44,7 +46,7 @@ void test("renderCoffDebugInfo renders headers, warnings, inline rows, and aux s
       { kind: "raw", bytes: [1, 2, 3] }
     ]
   });
-  const html = render({
+  const info: PeCoffDebugInfo = {
     source: "debug-directory",
     header: {
       numberOfSymbols: symbols.length,
@@ -69,8 +71,14 @@ void test("renderCoffDebugInfo renders headers, warnings, inline rows, and aux s
       }))
     }],
     warnings: ["COFF warning"]
-  });
+  };
+  const html = render(info);
 
+  assert.equal(getCoffAuxiliaryRecordCount(info), 4);
+  assert.equal(getCoffParsedRecordCount(info), 7);
+  assert.match(html, /Primary symbols parsed/);
+  assert.match(html, /Auxiliary records parsed/);
+  assert.match(html, /Symbol records parsed/);
   assert.match(html, /Code RVA range/);
   assert.match(html, /CLASS_0xee/);
   assert.match(html, /array CHAR/);

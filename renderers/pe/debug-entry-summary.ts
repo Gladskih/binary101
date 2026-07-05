@@ -58,8 +58,11 @@ export const getDebugStorageInfo = (
 const formatPogoRecordCount = (count: number): string =>
   `${count} record${count === 1 ? "" : "s"}`;
 
+const formatParsedPrimarySymbolCount = (count: number): string =>
+  `${count} parsed primary symbol${count === 1 ? "" : "s"}`;
+
 export const getEntrySummary = (entry: PeDebugDirectoryEntry): string => {
-  if (entry.coff) return `COFF symbol table with ${entry.coff.symbols.length} parsed symbols.`;
+  if (entry.coff) return `COFF symbol table with ${formatParsedPrimarySymbolCount(entry.coff.symbols.length)}.`;
   if (entry.codeView) {
     return entry.codeView.signature === "NB10"
       ? "CodeView NB10 record with PDB identity and path."
