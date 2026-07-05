@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { detectBinaryType } from "../../../../analyzers/index.js";
+import { IMAGE_FILE_MACHINE_I386 } from "../../../../analyzers/pe/machine.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 import { createMp3File } from "../../../fixtures/audio-sample-files.js";
 import { createMp4File } from "../../../fixtures/mp4-fixtures.js";
@@ -14,6 +15,7 @@ import { createSqliteFile } from "../../../fixtures/sqlite-fixtures.js";
 import { createSampleAsfFile } from "../../../fixtures/asf-fixtures.js";
 import { createMachOFile, createMachOUniversalFile } from "../../../fixtures/macho-fixtures.js";
 import { createPeFile, createPePlusFile, createPeRomFile } from "../../../fixtures/sample-files-pe.js";
+import { createZipFile } from "../../../fixtures/zip-fixtures.js";
 import { createSliceTrackingFile } from "../../../helpers/slice-tracking-file.js";
 
 const fromAscii = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "ascii"));
@@ -241,6 +243,18 @@ void test("detectBinaryType reports PE32, PE32+, and ROM labels without full par
 
   const peRomLabel = await detectBinaryType(createPeRomFile());
   assert.strictEqual(peRomLabel, "PE ROM image for MIPS R4000");
+});
+
+void test("detectBinaryType prefers PE headers over embedded ZIP EOCD signatures", async () => {
+  const pe = createMinimalPeLabelProbe(IMAGE_FILE_MACHINE_I386);
+  const zip = createZipFile();
+  const bytes = new Uint8Array(pe.data.length + zip.data.length);
+  bytes.set(pe.data);
+  bytes.set(zip.data, pe.data.length);
+
+  const label = await detectBinaryType(new MockFile(bytes, "pe-with-eocd.dll"));
+
+  assert.strictEqual(label, "PE32 executable for x86 (I386)");
 });
 
 void test("detectBinaryType uses the official Microsoft machine names for PE labels", async () => {

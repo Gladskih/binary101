@@ -84,11 +84,11 @@ const detectBinaryType = async (file: File): Promise<string> => {
   if (elf) return elf;
   const macho = probeMachO(dv, file.size);
   if (macho) return macho;
+  const mzLabel = await buildMzLabel(file, dv);
+  if (mzLabel) return mzLabel;
   const magic = probeByMagic(dv);
   if (magic) return refineMagicLabel(dv, magic);
   if (hasZipEocdSignature(dv)) return "ZIP archive";
-  const mzLabel = await buildMzLabel(file, dv);
-  if (mzLabel) return mzLabel;
   const tga = await detectTga(file, dv);
   if (tga) return tga;
   const text = probeTextLike(dv);
