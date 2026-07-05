@@ -57,6 +57,7 @@ const ANALYZER_RULES: TypeRule[] = [
     pattern: /^SQLite (?:3\.x database|WAL-index shared-memory file)$/,
     canonical: "sqlite"
   },
+  { pattern: /^MSDelta patch payload \(PA3[01]\)$/, canonical: "msdelta" },
   { pattern: /^Java class file$/, canonical: "java-class" },
   { pattern: /^DjVu document$/, canonical: "djvu" },
   { pattern: /^PCAP-NG capture file$/, canonical: "pcapng" },

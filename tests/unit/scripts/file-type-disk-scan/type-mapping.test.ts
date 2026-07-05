@@ -40,6 +40,14 @@ void test("typesMatch maps SQLite WAL-index shared-memory files to SQLite MIME",
   assert.equal(normalizeAnalyzerLabel("SQLite WAL-index shared-memory file suffix"), "unmapped");
 });
 
+void test("normalizer maps MSDelta patch payload labels", () => {
+  assert.equal(normalizeAnalyzerLabel("MSDelta patch payload (PA30)"), "msdelta");
+  assert.equal(normalizeAnalyzerLabel("MSDelta patch payload (PA31)"), "msdelta");
+  assert.equal(normalizeAnalyzerLabel("prefix MSDelta patch payload (PA31)"), "unmapped");
+  assert.equal(normalizeAnalyzerLabel("MSDelta patch payload (PA31) suffix"), "unmapped");
+  assert.equal(normalizeAnalyzerLabel("MSDelta patch payload (PA32)"), "unmapped");
+});
+
 void test("typesMatch treats uncommon text subtypes as text-like", () => {
   assert.equal(typesMatch("Text script (shebang)", "text/x-perl"), true);
   assert.equal(typesMatch("Text file", "application/x-wine-extension-ini"), true);

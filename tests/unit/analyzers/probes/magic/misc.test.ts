@@ -16,6 +16,15 @@ const sqliteWalIndexWithPaddingByte = (paddingOffset: number): Uint8Array => {
   bytes[paddingOffset] = 1;
   return bytes;
 };
+const msDeltaPayload = (marker: string): Uint8Array => {
+  const bytes = new Uint8Array(8);
+  const view = new DataView(bytes.buffer);
+  // MSDelta PA30 notes: the first 4 bytes are a checksum word before the PA30 marker.
+  // https://github.com/smilingthax/msdelta-pa30-format
+  view.setUint32(0, 0xfff6c947, false);
+  bytes.set([...marker].map(character => character.charCodeAt(0)), 4);
+  return bytes;
+};
 
 void test("detects documents, compound files and executables", () => {
   assert.strictEqual(run([0x25, 0x50, 0x44, 0x46, 0x2d]), "PDF document");
@@ -67,6 +76,17 @@ void test("rejects malformed SQLite WAL-index shared-memory headers", () => {
   const badSize = new Uint8Array(SQLITE_WAL_INDEX_TEST_CHUNK_SIZE + 1).fill(0);
   new DataView(badSize.buffer).setUint32(0, SQLITE_WAL_INDEX_TEST_VERSION, true);
   assert.strictEqual(run(badSize), null);
+});
+
+void test("detects MSDelta Windows servicing patch payload markers", () => {
+  assert.strictEqual(run(msDeltaPayload("PA30")), "MSDelta patch payload (PA30)");
+  assert.strictEqual(run(msDeltaPayload("PA31")), "MSDelta patch payload (PA31)");
+});
+
+void test("rejects malformed MSDelta patch payload markers", () => {
+  assert.strictEqual(run(msDeltaPayload("PA3").slice(0, 7)), null);
+  assert.strictEqual(run(msDeltaPayload("PA31").reverse()), null);
+  assert.strictEqual(run(msDeltaPayload("PA32")), null);
 });
 
 void test("returns null for unknown bytes", () => {

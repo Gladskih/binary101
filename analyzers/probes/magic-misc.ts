@@ -81,6 +81,21 @@ const detectSqliteWalIndex = (dv: DataView): ProbeResult => {
   return null;
 };
 
+const detectMsDelta = (dv: DataView): ProbeResult => {
+  // MSDelta is Microsoft's delta/patch API; Windows servicing payloads commonly
+  // carry a PA30/PA31 marker after a 4-byte checksum word.
+  // https://learn.microsoft.com/en-us/windows/win32/devnotes/msdelta
+  // https://github.com/smilingthax/msdelta-pa30-format
+  if (dv.byteLength < 8) return null;
+  const marker =
+    String.fromCharCode(dv.getUint8(4)) +
+    String.fromCharCode(dv.getUint8(5)) +
+    String.fromCharCode(dv.getUint8(6)) +
+    String.fromCharCode(dv.getUint8(7));
+  if (marker === "PA30" || marker === "PA31") return `MSDelta patch payload (${marker})`;
+  return null;
+};
+
 const detectJavaClass = (dv: DataView): ProbeResult => {
   if (dv.byteLength < 4) return null;
   const sig = dv.getUint32(0, false);
@@ -186,6 +201,7 @@ const miscProbes: Array<(dv: DataView) => ProbeResult> = [
   detectPdb,
   detectSqlite,
   detectSqliteWalIndex,
+  detectMsDelta,
   detectJavaClass,
   detectDjvu,
   detectPcapNg,
