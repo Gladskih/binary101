@@ -6,6 +6,16 @@ import { miscProbes } from "../../../../../analyzers/probes/magic-misc.js";
 
 const dvFrom = (bytes: ArrayLike<number>): DataView => new DataView(new Uint8Array(bytes).buffer);
 const run = (bytes: ArrayLike<number>): string | null => miscProbes.map(p => p(dvFrom(bytes))).find(Boolean) || null;
+// SQLite WAL-index docs define shm files as 32768-byte chunks and iVersion 3007000.
+// https://sqlite.org/walformat.html#the_wal_index_file_format
+const SQLITE_WAL_INDEX_TEST_CHUNK_SIZE = 32768;
+const SQLITE_WAL_INDEX_TEST_VERSION = 3007000;
+const sqliteWalIndexWithPaddingByte = (paddingOffset: number): Uint8Array => {
+  const bytes = new Uint8Array(SQLITE_WAL_INDEX_TEST_CHUNK_SIZE).fill(0);
+  new DataView(bytes.buffer).setUint32(0, SQLITE_WAL_INDEX_TEST_VERSION, true);
+  bytes[paddingOffset] = 1;
+  return bytes;
+};
 
 void test("detects documents, compound files and executables", () => {
   assert.strictEqual(run([0x25, 0x50, 0x44, 0x46, 0x2d]), "PDF document");
@@ -31,6 +41,32 @@ void test("detects pdb, dex, djvu and help file signatures", () => {
   const djvu = [..."AT&TFORM"].map(c => c.charCodeAt(0)).concat([0, 0, 0, 0], ..."DJVU".split("").map(c => c.charCodeAt(0)));
   assert.strictEqual(run(djvu), "DjVu document");
   assert.strictEqual(run([0x3f, 0x5f, 0x03, 0x00]), "Windows Help file (HLP)");
+});
+
+void test("detects SQLite WAL-index shared-memory headers", () => {
+  const littleEndian = new Uint8Array(SQLITE_WAL_INDEX_TEST_CHUNK_SIZE).fill(0);
+  const littleEndianView = new DataView(littleEndian.buffer);
+  littleEndianView.setUint32(0, SQLITE_WAL_INDEX_TEST_VERSION, true);
+  assert.strictEqual(run(littleEndian), "SQLite WAL-index shared-memory file");
+  const bigEndian = new Uint8Array(SQLITE_WAL_INDEX_TEST_CHUNK_SIZE).fill(0);
+  const bigEndianView = new DataView(bigEndian.buffer);
+  bigEndianView.setUint32(0, SQLITE_WAL_INDEX_TEST_VERSION, false);
+  assert.strictEqual(run(bigEndian), "SQLite WAL-index shared-memory file");
+});
+
+void test("rejects malformed SQLite WAL-index shared-memory headers", () => {
+  assert.strictEqual(run([]), null);
+  const badVersion = new Uint8Array(SQLITE_WAL_INDEX_TEST_CHUNK_SIZE).fill(0);
+  new DataView(badVersion.buffer).setUint32(0, 1234, true);
+  assert.strictEqual(run(badVersion), null);
+  // WAL-index header bytes 4..7 are padding and must stay zero.
+  assert.strictEqual(run(sqliteWalIndexWithPaddingByte(4)), null);
+  assert.strictEqual(run(sqliteWalIndexWithPaddingByte(5)), null);
+  assert.strictEqual(run(sqliteWalIndexWithPaddingByte(6)), null);
+  assert.strictEqual(run(sqliteWalIndexWithPaddingByte(7)), null);
+  const badSize = new Uint8Array(SQLITE_WAL_INDEX_TEST_CHUNK_SIZE + 1).fill(0);
+  new DataView(badSize.buffer).setUint32(0, SQLITE_WAL_INDEX_TEST_VERSION, true);
+  assert.strictEqual(run(badSize), null);
 });
 
 void test("returns null for unknown bytes", () => {

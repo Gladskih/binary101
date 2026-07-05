@@ -34,6 +34,12 @@ void test("typesMatch maps newline-delimited JSON MIME to JSON analyzer output",
   assert.equal(typesMatch("JSON data", "application/x-ndjson"), true);
 });
 
+void test("typesMatch maps SQLite WAL-index shared-memory files to SQLite MIME", () => {
+  assert.equal(typesMatch("SQLite WAL-index shared-memory file", "application/vnd.sqlite3"), true);
+  assert.equal(normalizeAnalyzerLabel("prefix SQLite WAL-index shared-memory file"), "unmapped");
+  assert.equal(normalizeAnalyzerLabel("SQLite WAL-index shared-memory file suffix"), "unmapped");
+});
+
 void test("typesMatch treats uncommon text subtypes as text-like", () => {
   assert.equal(typesMatch("Text script (shebang)", "text/x-perl"), true);
   assert.equal(typesMatch("Text file", "application/x-wine-extension-ini"), true);

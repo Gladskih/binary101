@@ -11,7 +11,10 @@ import { createMinimalJavaClassBytes } from "../../../fixtures/java-class-fixtur
 import { createTruncatedFatMachOBytes } from "../../../fixtures/macho-fixtures.js";
 import { createWebmFile } from "../../../fixtures/webm-base-fixtures.js";
 import { createFlacFile } from "../../../fixtures/flac-fixtures.js";
-import { createSqliteFile } from "../../../fixtures/sqlite-fixtures.js";
+import {
+  createSqliteFile,
+  createSqliteWalIndexSharedMemoryFile
+} from "../../../fixtures/sqlite-fixtures.js";
 import { createSampleAsfFile } from "../../../fixtures/asf-fixtures.js";
 import { createMachOFile, createMachOUniversalFile } from "../../../fixtures/macho-fixtures.js";
 import { createPeFile, createPePlusFile, createPeRomFile } from "../../../fixtures/sample-files-pe.js";
@@ -222,6 +225,11 @@ void test("detectBinaryType recognises animated cursors (ANI)", async () => {
 void test("detectBinaryType reports SQLite by signature without page parsing", async () => {
   const label = await detectBinaryType(createSqliteFile());
   assert.strictEqual(label, "SQLite 3.x database");
+});
+
+void test("detectBinaryType reports SQLite WAL-index shared-memory files", async () => {
+  const label = await detectBinaryType(createSqliteWalIndexSharedMemoryFile());
+  assert.strictEqual(label, "SQLite WAL-index shared-memory file");
 });
 
 void test("detectBinaryType avoids full media parsing during signature detection", async () => {

@@ -53,7 +53,10 @@ const ANALYZER_RULES: TypeRule[] = [
   { pattern: /^Microsoft Cabinet archive/, canonical: "cab" },
   { pattern: /^TAR archive$/, canonical: "tar" },
   { pattern: /^ISO-9660 CD\/DVD image/, canonical: "iso9660" },
-  { pattern: /^SQLite 3\.x database$/, canonical: "sqlite" },
+  {
+    pattern: /^SQLite (?:3\.x database|WAL-index shared-memory file)$/,
+    canonical: "sqlite"
+  },
   { pattern: /^Java class file$/, canonical: "java-class" },
   { pattern: /^DjVu document$/, canonical: "djvu" },
   { pattern: /^PCAP-NG capture file$/, canonical: "pcapng" },

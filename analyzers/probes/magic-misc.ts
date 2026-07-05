@@ -59,6 +59,28 @@ const detectSqlite = (dv: DataView): ProbeResult => {
   return prefix.startsWith("SQLite format 3") ? "SQLite 3.x database" : null;
 };
 
+const detectSqliteWalIndex = (dv: DataView): ProbeResult => {
+  // SQLite WAL-index docs define shm files as 32768-byte chunks.
+  // https://sqlite.org/walformat.html#the_wal_index_file_format
+  if (dv.byteLength === 0 || dv.byteLength % 32768 !== 0) return null;
+  // Header bytes 4..7 are separate unused padding after iVersion and must be zero.
+  if (
+    dv.getUint8(4) !== 0 ||
+    dv.getUint8(5) !== 0 ||
+    dv.getUint8(6) !== 0 ||
+    dv.getUint8(7) !== 0
+  ) return null;
+  // This is the WAL-index format version.
+  // SQLite WAL-index docs define iVersion as 3007000 in native byte order.
+  // https://sqlite.org/walformat.html#the_wal_index_file_format
+  const walIndexFormatVersion = 3007000;
+  if (
+    dv.getUint32(0, true) === walIndexFormatVersion ||
+    dv.getUint32(0, false) === walIndexFormatVersion
+  ) return "SQLite WAL-index shared-memory file";
+  return null;
+};
+
 const detectJavaClass = (dv: DataView): ProbeResult => {
   if (dv.byteLength < 4) return null;
   const sig = dv.getUint32(0, false);
@@ -163,6 +185,7 @@ const miscProbes: Array<(dv: DataView) => ProbeResult> = [
   detectCompoundFile,
   detectPdb,
   detectSqlite,
+  detectSqliteWalIndex,
   detectJavaClass,
   detectDjvu,
   detectPcapNg,
