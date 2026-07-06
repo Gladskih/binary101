@@ -2,10 +2,10 @@
 
 import {
   isPeImportMetadataEntry,
-  isPlainNumber,
-  isPlainRecord,
-  isPlainString,
-  isPlainStringArray,
+  isPlainNumber as isNumber,
+  isPlainRecord as isRecord,
+  isPlainString as isString,
+  isPlainStringArray as isStringArray,
   type PeImportMetadataEntry,
   type PeImportMetadataParameter
 } from "./pe-import-metadata-schema.js";
@@ -67,12 +67,6 @@ export interface WinapiMetadataEntrypointIndex {
   referenceCount: number;
   entries: Record<string, string[]>;
 }
-
-const isRecord = isPlainRecord;
-const isString = isPlainString;
-
-const isNumber = isPlainNumber;
-const isStringArray = isPlainStringArray;
 
 const isSource = (value: unknown): value is WinapiMetadataSource =>
   isRecord(value) &&

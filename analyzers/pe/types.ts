@@ -1,5 +1,6 @@
 "use strict";
 
+import type { CoffFileHeader } from "../coff/types.js";
 import type { PeSectionName } from "./sections/name.js";
 
 export type RvaToOffset = (rva: number) => number | null;
@@ -136,16 +137,6 @@ export interface PeDosHeader {
   rich?: PeRichHeader | null;
 }
 
-export interface PeCoffHeader {
-  Machine: number;
-  NumberOfSections: number;
-  TimeDateStamp: number;
-  PointerToSymbolTable: number;
-  NumberOfSymbols: number;
-  SizeOfOptionalHeader: number;
-  Characteristics: number;
-}
-
 export interface PeRomOptionalFields {
   BaseOfBss: number;
   GprMask: number;
@@ -209,7 +200,7 @@ export type PeOptionalHeader = Pe32OptionalHeader | PePlusOptionalHeader | PeRom
 
 interface PeCoreBase {
   dos: PeDosHeader;
-  coff: PeCoffHeader;
+  coff: CoffFileHeader;
   coffStringTableSize?: number;
   trailingAlignmentPaddingSize?: number;
   warnings?: string[];

@@ -9,7 +9,10 @@ export const inlinePeSectionName = (value: string): PeSectionName => ({
   value
 });
 
-export const coffStringTablePeSectionName = (value: string, offset: number): PeSectionName => ({
+export const peSectionNameFromStringTable = (
+  value: string,
+  offset: number
+): PeSectionName => ({
   kind: "coff-string-table",
   value,
   offset

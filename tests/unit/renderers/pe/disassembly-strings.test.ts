@@ -8,6 +8,7 @@ import {
   PE_DISASSEMBLY_STRING_PAGE_SIZE
 } from "../../../../renderers/pe/disassembly-strings.js";
 import type { PeWindowsParseResult } from "../../../../analyzers/pe/index.js";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../analyzers/coff/machine.js";
 import { inlinePeSectionName } from "../../../../analyzers/pe/sections/name.js";
 
 const STRING_RVA = 0x3000;
@@ -15,7 +16,7 @@ const ROWS_AFTER_INLINE_LIMIT = PE_DISASSEMBLY_STRING_INLINE_LIMIT + 1;
 
 const createPe = (overrides: Partial<PeWindowsParseResult> = {}): PeWindowsParseResult =>
   ({
-    coff: { Machine: 0x8664 },
+    coff: { Machine: IMAGE_FILE_MACHINE_AMD64 },
     opt: { AddressOfEntryPoint: 0x1000 },
     sections: [],
     ...overrides

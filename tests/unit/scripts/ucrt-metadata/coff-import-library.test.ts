@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../analyzers/coff/machine.js";
 import { readCoffImportLibraryEntries } from "../../../../scripts/ucrt-metadata/coff-import-library.js";
 
 const encoder = new TextEncoder();
@@ -36,7 +37,7 @@ const shortImportObject = (symbolName: string, dllName: string): Uint8Array => {
   view.setUint16(0, 0x0000, true);
   view.setUint16(2, 0xffff, true);
   view.setUint16(4, 0, true);
-  view.setUint16(6, 0x8664, true);
+  view.setUint16(6, IMAGE_FILE_MACHINE_AMD64, true);
   view.setUint32(8, 0, true);
   view.setUint32(12, strings.byteLength, true);
   view.setUint16(16, 7, true);

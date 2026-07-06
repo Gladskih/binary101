@@ -8,13 +8,13 @@ import type {
   PeInstructionSetReport
 } from "../../../../../analyzers/pe/disassembly/index.js";
 import type { PeWindowsParseResult } from "../../../../../analyzers/pe/index.js";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../analyzers/coff/machine.js";
 import { createPeDisassemblyController } from "../../../../../ui/pe-disassembly.js";
 import { expectDefined } from "../../../../helpers/expect-defined.js";
 import { flushTimers, installFakeDom } from "../../../../helpers/fake-dom.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
 
-// Microsoft PE format: AMD64 machine type and PE32+ optional-header magic.
-const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
+// Microsoft PE format: PE32+ optional-header magic.
 const PE32_PLUS_OPTIONAL_HEADER_MAGIC = 0x020b;
 const IMAGE_BASE = 0x140000000n;
 const ENTRYPOINT_RVA = 0x1000;

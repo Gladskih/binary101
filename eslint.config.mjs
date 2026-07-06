@@ -3,10 +3,65 @@ import globals from "globals";
 import tsParser from "@typescript-eslint/parser";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
 
+const constantAliasRestrictedSyntaxRules = [
+  {
+    selector:
+      'Program > VariableDeclaration[kind="const"] > VariableDeclarator[id.type="Identifier"][init.type="Identifier"]',
+    message: "Constant aliases are forbidden. Import with an alias or use the original name directly."
+  }
+];
+
+const restrictedSyntaxRules = [
+  {
+    selector: "ExportAllDeclaration[source]",
+    message: "Re-exports are forbidden. Import explicitly in the target file instead."
+  },
+  {
+    selector: "ExportNamedDeclaration[source]",
+    message: "Re-exports are forbidden. Import explicitly in the target file instead."
+  },
+  ...constantAliasRestrictedSyntaxRules
+];
+
+const existingReExportFiles = [
+  "analyzers/elf/disassembly.ts",
+  "analyzers/index.ts",
+  "analyzers/macho/index.ts",
+  "analyzers/mpegps/index.ts",
+  "analyzers/pcap/types.ts",
+  "analyzers/pcapng/index.ts",
+  "analyzers/pcapng/types.ts",
+  "analyzers/pe/authenticode/pkijs-runtime.js",
+  "analyzers/pe/clr/index.ts",
+  "analyzers/pe/debug/directory.ts",
+  "analyzers/pe/disassembly/entrypoint/iced.ts",
+  "analyzers/pe/disassembly/index.ts",
+  "analyzers/pe/exception/index.ts",
+  "analyzers/pe/imports/linking.ts",
+  "analyzers/pe/index.ts",
+  "analyzers/pe/packers/index.ts",
+  "analyzers/pe/resources/core.ts",
+  "analyzers/probes.ts",
+  "analyzers/rar/index.ts",
+  "analyzers/riff/index.ts",
+  "analyzers/sevenz/index.ts",
+  "analyzers/tar/index.ts",
+  "analyzers/zip/index.ts",
+  "renderers/paged-sortable-table.ts",
+  "renderers/index.ts",
+  "renderers/pe/directories.ts",
+  "renderers/pe/entrypoint-disassembly-explorer.ts",
+  "renderers/pe/import-sections.ts",
+  "tests/external/elf-wsl-readelf-fixtures.ts",
+  "tests/fixtures/pe-debug-view-subject.ts",
+  "ui/analysis-paged-tables.ts"
+];
+
 const sharedRules = {
   "prefer-const": "error",
   "no-var": "error",
   "no-param-reassign": "error",
+  "no-restricted-syntax": ["error", ...restrictedSyntaxRules],
   "max-len": [
     "error",
     {
@@ -160,6 +215,12 @@ export default [
     ],
     rules: {
       "@typescript-eslint/ban-ts-comment": "off"
+    }
+  },
+  {
+    files: existingReExportFiles,
+    rules: {
+      "no-restricted-syntax": ["error", ...constantAliasRestrictedSyntaxRules]
     }
   },
   {

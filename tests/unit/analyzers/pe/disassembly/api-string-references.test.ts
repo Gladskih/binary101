@@ -144,10 +144,9 @@ const importedCall = (
 );
 
 void test("collector resolves WinAPI UTF-16 string arguments from x64 register calls", async () => {
-  const textRva = RDATA_RVA;
   const captionRva = RDATA_RVA + SECOND_STRING_DELTA;
   const { reader, rvaToOff } = createReader([
-    { rva: textRva, bytes: utf16z("hello") },
+    { rva: RDATA_RVA, bytes: utf16z("hello") },
     { rva: captionRva, bytes: utf16z("caption") }
   ]);
   const metadata = metadataEntry("winapi", "USER32.dll", "MessageBoxW", [
@@ -164,7 +163,7 @@ void test("collector resolves WinAPI UTF-16 string arguments from x64 register c
   });
 
   [
-    leaArgument(IMAGE_BASE_AMD64, TEXT_RVA, "RDX", textRva),
+    leaArgument(IMAGE_BASE_AMD64, TEXT_RVA, "RDX", RDATA_RVA),
     leaArgument(IMAGE_BASE_AMD64, TEXT_RVA + 1, "R8", captionRva),
     importedCall(IMAGE_BASE_AMD64, TEXT_RVA + 2, "UInt64")
   ].forEach(decoded => collector.record(decoded));
@@ -181,7 +180,7 @@ void test("collector resolves WinAPI UTF-16 string arguments from x64 register c
     parameterName: reference.callSites[0]?.parameterName
   })), [
     {
-      rva: textRva,
+      rva: RDATA_RVA,
       encoding: "utf-16le",
       byteLength: 10,
       text: "hello",
@@ -204,10 +203,9 @@ void test("collector resolves WinAPI UTF-16 string arguments from x64 register c
 });
 
 void test("collector resolves UCRT narrow string arguments from x86 stack calls", async () => {
-  const fileNameRva = RDATA_RVA;
   const modeRva = RDATA_RVA + SECOND_STRING_DELTA;
   const { reader, rvaToOff } = createReader([
-    { rva: fileNameRva, bytes: asciiz("config.ini") },
+    { rva: RDATA_RVA, bytes: asciiz("config.ini") },
     { rva: modeRva, bytes: asciiz("rb") }
   ]);
   const metadata = metadataEntry("ucrt", "ucrtbase.dll", "fopen", [
@@ -223,7 +221,7 @@ void test("collector resolves UCRT narrow string arguments from x86 stack calls"
 
   [
     pushArgument(IMAGE_BASE_I386, TEXT_RVA, modeRva),
-    pushArgument(IMAGE_BASE_I386, TEXT_RVA + 1, fileNameRva),
+    pushArgument(IMAGE_BASE_I386, TEXT_RVA + 1, RDATA_RVA),
     importedCall(IMAGE_BASE_I386, TEXT_RVA + 2, "UInt32")
   ].forEach(decoded => collector.record(decoded));
   const references = await collector.references(reader);
@@ -238,7 +236,7 @@ void test("collector resolves UCRT narrow string arguments from x86 stack calls"
     parameterName: reference.callSites[0]?.parameterName
   })), [
     {
-      rva: fileNameRva,
+      rva: RDATA_RVA,
       encoding: "ascii",
       text: "config.ini",
       module: "ucrtbase.dll",

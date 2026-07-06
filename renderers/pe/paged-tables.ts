@@ -1,12 +1,16 @@
 "use strict";
 
-import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
+import {
+  isPeWindowsParseResult,
+  type PeParseResult,
+  type PeWindowsParseResult
+} from "../../analyzers/pe/index.js";
 import type { PagedSortableTableModel } from "../paged-sortable-table.js";
 import {
   directIatEntrySize,
   directIatReferenceCounts
 } from "./direct-iat-references.js";
-import { getCoffDebugTableModel } from "./debug-coff.js";
+import { getCoffDebugTableModel } from "../coff/debug.js";
 import { getPeDisassemblyStringTableModel } from "./disassembly-strings.js";
 import { createImportFunctionTableModel } from "./import-function-table.js";
 import { getPeResourceTableModel } from "./resources.js";
@@ -54,14 +58,15 @@ const getImportFunctionTableModel = (
     : null;
 };
 
-const getPeCoffDebugTableModel = (
-  pe: PeWindowsParseResult,
+const getPeDebugCoffTableModel = (
+  pe: PeParseResult,
   tableId: string
 ): PagedSortableTableModel | null => {
   const topLevel = pe.coffDebug
     ? getCoffDebugTableModel(pe.coffDebug, tableId, "pe-coff-symbols")
     : null;
   if (topLevel) return topLevel;
+  if (!isPeWindowsParseResult(pe)) return null;
   const match = tableId.match(/^pe-debug-entry-(\d+)-coff-/);
   if (!match?.[1]) return null;
   const entry = pe.debug?.entries?.[Number(match[1])];
@@ -69,10 +74,14 @@ const getPeCoffDebugTableModel = (
 };
 
 export const getPePagedTableModel = (
-  pe: PeWindowsParseResult,
+  pe: PeParseResult,
   tableId: string
 ): PagedSortableTableModel | null =>
-  getPeDisassemblyStringTableModel(pe, tableId) ??
-  getPeCoffDebugTableModel(pe, tableId) ??
-  getImportFunctionTableModel(pe, tableId) ??
-  getPeResourceTableModel(pe.resources, tableId);
+  getPeDebugCoffTableModel(pe, tableId) ??
+  (
+    isPeWindowsParseResult(pe)
+      ? getPeDisassemblyStringTableModel(pe, tableId) ??
+        getImportFunctionTableModel(pe, tableId) ??
+        getPeResourceTableModel(pe.resources, tableId)
+      : null
+  );

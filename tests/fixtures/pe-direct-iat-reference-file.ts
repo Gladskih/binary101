@@ -7,6 +7,7 @@ import {
   MemoryOperand,
   Register
 } from "iced-x86";
+import { COFF_FILE_HEADER_BYTE_LENGTH } from "../../analyzers/coff/layout.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { createPePlusWithSection } from "./sample-files-pe.js";
 
@@ -14,7 +15,6 @@ import { createPePlusWithSection } from "./sample-files-pe.js";
 // existing PE32+ fixture with one IMAGE_IMPORT_DESCRIPTOR and two named imports.
 const DOS_E_LFANEW_OFFSET = 0x3c;
 const PE_SIGNATURE_SIZE = 4;
-const COFF_HEADER_SIZE = 20;
 const COFF_OPTIONAL_HEADER_SIZE_OFFSET = 16;
 const PE32_PLUS_ENTRYPOINT_OFFSET = 16;
 const PE32_PLUS_IMAGE_BASE_OFFSET = 24;
@@ -63,7 +63,7 @@ export const createPePlusDirectIatReferenceFile = (): MockFile => {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const peOffset = view.getUint32(DOS_E_LFANEW_OFFSET, true);
   const coffOffset = peOffset + PE_SIGNATURE_SIZE;
-  const optionalOffset = coffOffset + COFF_HEADER_SIZE;
+  const optionalOffset = coffOffset + COFF_FILE_HEADER_BYTE_LENGTH;
   const optionalSize = view.getUint16(coffOffset + COFF_OPTIONAL_HEADER_SIZE_OFFSET, true);
   const sectionOffset = optionalOffset + optionalSize;
   const sectionRva = view.getUint32(sectionOffset + SECTION_VIRTUAL_ADDRESS_OFFSET, true);

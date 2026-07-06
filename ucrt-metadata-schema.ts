@@ -2,9 +2,9 @@
 
 import {
   isPeImportMetadataEntry,
-  isPlainNumber,
-  isPlainRecord,
-  isPlainString,
+  isPlainNumber as isNumber,
+  isPlainRecord as isRecord,
+  isPlainString as isString,
   type PeImportMetadataEntry
 } from "./pe-import-metadata-schema.js";
 
@@ -50,10 +50,6 @@ export interface UcrtMetadataChunk {
   entryCount: number;
   entries: Record<string, UcrtMetadataEntry>;
 }
-
-const isRecord = isPlainRecord;
-const isString = isPlainString;
-const isNumber = isPlainNumber;
 
 const hasFormatVersion = (value: Record<string, unknown>): boolean =>
   value["formatVersion"] === UCRT_METADATA_FORMAT_VERSION;

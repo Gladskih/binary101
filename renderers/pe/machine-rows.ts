@@ -2,7 +2,7 @@
 
 import { hex } from "../../binary-utils.js";
 import { renderDefinitionRow, renderOptionChips } from "../../html-utils.js";
-import { MACHINE } from "../../analyzers/pe/constants.js";
+import { IMAGE_FILE_MACHINE_TYPES } from "../../analyzers/coff/machine.js";
 import {
   decodePeMachine,
   getReadyToRunOsOverride,
@@ -14,7 +14,7 @@ export const renderMachineRows = (pe: PeParseResult, out: string[]): void => {
   const decoded = decodePeMachine(pe.coff.Machine);
   out.push(renderDefinitionRow(
     "Machine",
-    renderOptionChips(decoded.machine, MACHINE),
+    renderOptionChips(decoded.machine, IMAGE_FILE_MACHINE_TYPES),
     "Target CPU architecture after decoding any .NET ReadyToRun OS override."
   ));
   const override = getReadyToRunOsOverride(pe.coff.Machine);

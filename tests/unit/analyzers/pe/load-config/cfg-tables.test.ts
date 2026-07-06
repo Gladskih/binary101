@@ -46,7 +46,6 @@ void test("readGuardEhContinuationTableRvas reads RVAs and truncates at EOF", as
 
 void test("readGuardEhContinuationTableRvas supports 5-byte entries when GuardFlags encodes a stride", async () => {
   const tableVa = PE32_DEFAULT_IMAGE_BASE + BigInt(LOAD_CONFIG_TEST_TABLE_RVA);
-  const guardFlags = IMAGE_GUARD_CF_FUNCTION_TABLE_SIZE_5_BYTE_STRIDE;
 
   const bytes = new Uint8Array(0x200).fill(0);
   const dv = new DataView(bytes.buffer);
@@ -62,7 +61,7 @@ void test("readGuardEhContinuationTableRvas supports 5-byte entries when GuardFl
       PE32_DEFAULT_IMAGE_BASE,
       tableVa,
       2,
-      guardFlags
+      IMAGE_GUARD_CF_FUNCTION_TABLE_SIZE_5_BYTE_STRIDE
     ),
     [FIRST_CFG_TARGET_RVA, SECOND_CFG_TARGET_RVA]
   );

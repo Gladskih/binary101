@@ -209,7 +209,6 @@ function createWindowsOptionalHeaderResult(
   const ddStartRel = tail.nextPosition;
   warnings.push(...collectWindowsOptionalHeaderWarnings(
     viewInfo.sizeOfOptionalHeader,
-    standardFields.Magic,
     tail.NumberOfRvaAndSizes,
     ddStartRel
   ));

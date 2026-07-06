@@ -11,9 +11,7 @@ import {
   CHAR_FLAGS,
   DLL_FLAGS
 } from "../../analyzers/pe/constants.js";
-import {
-  type PeParseResult
-} from "../../analyzers/pe/index.js";
+import type { PeParseResult } from "../../analyzers/pe/index.js";
 import {
   PE32_OPTIONAL_HEADER_MAGIC,
   PE32_PLUS_OPTIONAL_HEADER_MAGIC,
@@ -130,7 +128,10 @@ const renderHeadersTail = (pe: PeParseResult, out: string[]): void => {
 
 const renderMissingOptionalHeader = (pe: PeParseResult, out: string[]): void => {
   out.push(`</dl>`);
-  out.push(`<div class="smallNote">Optional header fields are unavailable because the file did not declare a recognized PE32, PE32+, or ROM optional header.</div>`);
+  out.push(
+    `<div class="smallNote">Optional header fields are unavailable because the file did not ` +
+      `declare a recognized PE32, PE32+, or ROM optional header.</div>`
+  );
   out.push(renderPeSectionEnd());
   renderHeadersTail(pe, out);
 };
@@ -174,7 +175,7 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
   out.push(renderDefinitionRow("PointerToSymbolTable", hex(pe.coff.PointerToSymbolTable, 8), "COFF symbol table pointer (deprecated, usually 0)."));
   out.push(renderDefinitionRow("NumberOfSymbols", String(pe.coff.NumberOfSymbols), "COFF symbol count (deprecated)."));
   out.push(renderDefinitionRow("SizeOfOptionalHeader", `${pe.coff.SizeOfOptionalHeader} bytes`, "Size of the optional header (standard + Windows-specific)."));
-  out.push(renderDefinitionRow("Characteristics", renderFlagChips(pe.coff.Characteristics, CHAR_FLAGS), "Flags describing image traits (DLL, system file, etc.)."));
+  out.push(renderDefinitionRow("Characteristics", renderFlagChips(pe.coff.Characteristics, CHAR_FLAGS), "Flags describing COFF file traits."));
   out.push(`</dl>`);
 
   const oh = pe.opt;

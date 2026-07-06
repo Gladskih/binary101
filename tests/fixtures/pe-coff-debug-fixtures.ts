@@ -1,18 +1,20 @@
 "use strict";
 
+import {
+  COFF_AUX_FUNCTION_DEFINITION_FIELDS,
+  COFF_LINE_NUMBER_FIELDS,
+  COFF_LINE_NUMBER_RECORD_BYTE_LENGTH,
+  COFF_SHORT_NAME_BYTE_LENGTH,
+  COFF_STRING_TABLE_SIZE_FIELD_BYTE_LENGTH,
+  COFF_SYMBOL_FIELDS,
+  COFF_SYMBOL_NAME_FIELDS,
+  COFF_SYMBOL_RECORD_BYTE_LENGTH,
+  type CoffNumericField
+} from "../../analyzers/coff/layout.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { expectDefined } from "../helpers/expect-defined.js";
 import { createPePlusWithSection } from "./sample-files-pe.js";
 
-// Microsoft PE/COFF IMAGE_SYMBOL records are fixed 18-byte entries.
-// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#coff-symbol-table
-export const IMAGE_SYMBOL_SIZE = 18;
-// Microsoft PE/COFF line-number records are fixed 6-byte entries.
-// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#coff-line-numbers-deprecated
-export const IMAGE_LINENUMBER_SIZE = 6;
-// Microsoft IMAGE_COFF_SYMBOLS_HEADER is eight DWORDs.
-// https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_coff_symbols_header
-export const IMAGE_COFF_SYMBOLS_HEADER_SIZE = 32;
 // Microsoft PE/COFF storage-class values used by the test fixtures.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#storage-class
 export const TEST_COFF_STORAGE_CLASS = {
@@ -50,14 +52,38 @@ export const writeI16 = (bytes: Uint8Array, offset: number, value: number): void
 export const writeU32 = (bytes: Uint8Array, offset: number, value: number): void =>
   new DataView(bytes.buffer).setUint32(offset, value, true);
 
+const writeCoffField = (
+  bytes: Uint8Array,
+  recordOffset: number,
+  field: CoffNumericField,
+  value: number
+): void => {
+  const view = new DataView(bytes.buffer);
+  const offset = recordOffset + field.offset;
+  if (field.width === "u8") {
+    view.setUint8(offset, value);
+    return;
+  }
+  if (field.width === "u16") {
+    view.setUint16(offset, value, true);
+    return;
+  }
+  if (field.width === "i16") {
+    view.setInt16(offset, value, true);
+    return;
+  }
+  view.setUint32(offset, value, true);
+};
+
 const createStringTable = (names: string[]): { bytes: Uint8Array; offsets: Map<string, number> } => {
   const encoder = new TextEncoder();
   const encodedNames = names.map(name => ({ name, bytes: encoder.encode(`${name}\0`) }));
-  const size = 4 + encodedNames.reduce((sum, entry) => sum + entry.bytes.length, 0);
+  const size = COFF_STRING_TABLE_SIZE_FIELD_BYTE_LENGTH +
+    encodedNames.reduce((sum, entry) => sum + entry.bytes.length, 0);
   const bytes = new Uint8Array(size);
   const offsets = new Map<string, number>();
   writeU32(bytes, 0, size);
-  let cursor = 4;
+  let cursor = COFF_STRING_TABLE_SIZE_FIELD_BYTE_LENGTH;
   encodedNames.forEach(entry => {
     offsets.set(entry.name, cursor);
     bytes.set(entry.bytes, cursor);
@@ -72,16 +98,26 @@ const writeSymbol = (
   symbol: CoffSymbolInput,
   stringOffsets: Map<string, number>
 ): void => {
-  if (symbol.name.length <= 8) {
+  if (symbol.name.length <= COFF_SHORT_NAME_BYTE_LENGTH) {
     bytes.set(new TextEncoder().encode(symbol.name), offset);
   } else {
-    writeU32(bytes, offset + 4, expectDefined(stringOffsets.get(symbol.name)));
+    writeCoffField(
+      bytes,
+      offset,
+      COFF_SYMBOL_NAME_FIELDS.StringTableOffset,
+      expectDefined(stringOffsets.get(symbol.name))
+    );
   }
-  writeU32(bytes, offset + 8, symbol.value ?? 0);
-  writeI16(bytes, offset + 12, symbol.sectionNumber ?? 1);
-  writeU16(bytes, offset + 14, symbol.type ?? 0);
-  bytes[offset + 16] = symbol.storageClass ?? TEST_COFF_STORAGE_CLASS.EXTERNAL;
-  bytes[offset + 17] = symbol.auxRecords?.length ?? 0;
+  writeCoffField(bytes, offset, COFF_SYMBOL_FIELDS.Value, symbol.value ?? 0);
+  writeCoffField(bytes, offset, COFF_SYMBOL_FIELDS.SectionNumber, symbol.sectionNumber ?? 1);
+  writeCoffField(bytes, offset, COFF_SYMBOL_FIELDS.Type, symbol.type ?? 0);
+  writeCoffField(
+    bytes,
+    offset,
+    COFF_SYMBOL_FIELDS.StorageClass,
+    symbol.storageClass ?? TEST_COFF_STORAGE_CLASS.EXTERNAL
+  );
+  writeCoffField(bytes, offset, COFF_SYMBOL_FIELDS.NumberOfAuxSymbols, symbol.auxRecords?.length ?? 0);
 };
 
 export const createSymbolTable = (
@@ -90,14 +126,14 @@ export const createSymbolTable = (
 ): { bytes: Uint8Array; recordCount: number } => {
   const stringTable = createStringTable(stringNames);
   const recordCount = symbols.reduce((sum, symbol) => sum + 1 + (symbol.auxRecords?.length ?? 0), 0);
-  const bytes = new Uint8Array(recordCount * IMAGE_SYMBOL_SIZE + stringTable.bytes.length);
+  const bytes = new Uint8Array(recordCount * COFF_SYMBOL_RECORD_BYTE_LENGTH + stringTable.bytes.length);
   let cursor = 0;
   symbols.forEach(symbol => {
     writeSymbol(bytes, cursor, symbol, stringTable.offsets);
-    cursor += IMAGE_SYMBOL_SIZE;
+    cursor += COFF_SYMBOL_RECORD_BYTE_LENGTH;
     symbol.auxRecords?.forEach(auxRecord => {
       bytes.set(auxRecord, cursor);
-      cursor += IMAGE_SYMBOL_SIZE;
+      cursor += COFF_SYMBOL_RECORD_BYTE_LENGTH;
     });
   });
   bytes.set(stringTable.bytes, cursor);
@@ -105,31 +141,33 @@ export const createSymbolTable = (
 };
 
 export const createFileAuxRecord = (fileName: string): Uint8Array => {
-  const bytes = new Uint8Array(IMAGE_SYMBOL_SIZE);
+  const bytes = new Uint8Array(COFF_SYMBOL_RECORD_BYTE_LENGTH);
   bytes.set(new TextEncoder().encode(fileName));
   return bytes;
 };
 
 export const createFunctionAuxRecord = (): Uint8Array => {
-  const bytes = new Uint8Array(IMAGE_SYMBOL_SIZE);
-  // Microsoft auxiliary format 1: TagIndex, TotalSize, PointerToLinenumber,
-  // and PointerToNextFunction are DWORDs at offsets 0, 4, 8, and 12.
-  // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#auxiliary-format-1-function-definitions
-  writeU32(bytes, 0, 2);
-  writeU32(bytes, 4, 0x30);
-  writeU32(bytes, 8, 0x200);
-  writeU32(bytes, 12, 0);
+  const bytes = new Uint8Array(COFF_SYMBOL_RECORD_BYTE_LENGTH);
+  writeCoffField(bytes, 0, COFF_AUX_FUNCTION_DEFINITION_FIELDS.TagIndex, 2);
+  writeCoffField(bytes, 0, COFF_AUX_FUNCTION_DEFINITION_FIELDS.TotalSize, 0x30);
+  writeCoffField(bytes, 0, COFF_AUX_FUNCTION_DEFINITION_FIELDS.PointerToLineNumber, 0x200);
+  writeCoffField(bytes, 0, COFF_AUX_FUNCTION_DEFINITION_FIELDS.PointerToNextFunction, 0);
   return bytes;
 };
 
-export const createAuxRecord = (): Uint8Array => new Uint8Array(IMAGE_SYMBOL_SIZE);
+export const createAuxRecord = (): Uint8Array => new Uint8Array(COFF_SYMBOL_RECORD_BYTE_LENGTH);
 
 export const createLineNumbers = (): Uint8Array => {
-  const bytes = new Uint8Array(TEST_COFF_LINE_NUMBERS.length * IMAGE_LINENUMBER_SIZE);
+  const bytes = new Uint8Array(TEST_COFF_LINE_NUMBERS.length * COFF_LINE_NUMBER_RECORD_BYTE_LENGTH);
   TEST_COFF_LINE_NUMBERS.forEach((record, index) => {
-    const offset = index * IMAGE_LINENUMBER_SIZE;
-    writeU32(bytes, offset, record.symbolTableIndexOrVirtualAddress);
-    writeU16(bytes, offset + Uint32Array.BYTES_PER_ELEMENT, record.lineNumber);
+    const offset = index * COFF_LINE_NUMBER_RECORD_BYTE_LENGTH;
+    writeCoffField(
+      bytes,
+      offset,
+      COFF_LINE_NUMBER_FIELDS.SymbolTableIndexOrVirtualAddress,
+      record.symbolTableIndexOrVirtualAddress
+    );
+    writeCoffField(bytes, offset, COFF_LINE_NUMBER_FIELDS.LineNumber, record.lineNumber);
   });
   return bytes;
 };
@@ -140,7 +178,7 @@ export const createOffsetFile = (payload: Uint8Array): MockFile => {
   return new MockFile(bytes);
 };
 
-export const createLargePeCoffSymbolFile = (symbolCount = 251): MockFile => {
+export const createLargePeLegacyCoffSymbolFile = (symbolCount = 251): MockFile => {
   const image = createPePlusWithSection();
   const symbolTable = createSymbolTable(
     Array.from({ length: symbolCount }, (_, index) => ({ name: `sym${index}` })),

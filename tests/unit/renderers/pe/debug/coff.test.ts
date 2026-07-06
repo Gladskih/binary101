@@ -2,19 +2,19 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { PeCoffDebugInfo, PeCoffSymbol } from "../../../../../analyzers/pe/debug/directory.js";
+import type { CoffDebugInfo, CoffSymbol } from "../../../../../analyzers/coff/debug-types.js";
 import {
+  COFF_SYMBOL_PAGE_SIZE,
   getCoffAuxiliaryRecordCount,
   getCoffParsedRecordCount,
-  PE_COFF_SYMBOL_PAGE_SIZE,
   renderCoffDebugInfo
-} from "../../../../../renderers/pe/debug-coff.js";
+} from "../../../../../renderers/coff/debug.js";
 import { TEST_COFF_STORAGE_CLASS } from "../../../../fixtures/pe-coff-debug-fixtures.js";
 
 const createSymbol = (
   index: number,
-  overrides: Partial<PeCoffSymbol> = {}
-): PeCoffSymbol => ({
+  overrides: Partial<CoffSymbol> = {}
+): CoffSymbol => ({
   index,
   name: `s${index}`,
   nameSource: "short",
@@ -27,7 +27,7 @@ const createSymbol = (
   ...overrides
 });
 
-const render = (info: PeCoffDebugInfo): string => {
+const render = (info: CoffDebugInfo): string => {
   const out: string[] = [];
   renderCoffDebugInfo(info, out);
   return out.join("");
@@ -46,7 +46,7 @@ void test("renderCoffDebugInfo renders headers, warnings, inline rows, and aux s
       { kind: "raw", bytes: [1, 2, 3] }
     ]
   });
-  const info: PeCoffDebugInfo = {
+  const info: CoffDebugInfo = {
     source: "debug-directory",
     header: {
       numberOfSymbols: symbols.length,
@@ -94,7 +94,7 @@ void test("renderCoffDebugInfo renders headers, warnings, inline rows, and aux s
 });
 
 void test("renderCoffDebugInfo pages large COFF symbol and line tables", () => {
-  const rowCount = PE_COFF_SYMBOL_PAGE_SIZE + 1;
+  const rowCount = COFF_SYMBOL_PAGE_SIZE + 1;
   const html = render({
     source: "debug-directory",
     symbolTableOffset: 0x80,

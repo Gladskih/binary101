@@ -51,9 +51,8 @@ void test("readSafeSehHandlerTableRvas preserves handler RVAs that are numerical
 });
 
 void test("readSafeSehHandlerTableRvas does not rewrite valid RVAs that happen to be near ImageBase", async () => {
-  const imageBase = PE32_DEFAULT_IMAGE_BASE;
   const tableRva = Uint32Array.BYTES_PER_ELEMENT;
-  const tableVa = imageBase + BigInt(tableRva);
+  const tableVa = PE32_DEFAULT_IMAGE_BASE + BigInt(tableRva);
 
   const bytes = new Uint8Array(tableRva + Uint32Array.BYTES_PER_ELEMENT).fill(0);
   const dv = new DataView(bytes.buffer);
@@ -64,7 +63,7 @@ void test("readSafeSehHandlerTableRvas does not rewrite valid RVAs that happen t
   const rvas = await readSafeSehHandlerTableRvas(
     new MockFile(bytes, "safeseh-near-imagebase-rva.bin"),
     rva => rva,
-    imageBase,
+    PE32_DEFAULT_IMAGE_BASE,
     tableVa,
     1
   );

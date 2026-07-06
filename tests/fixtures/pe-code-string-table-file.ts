@@ -1,13 +1,18 @@
 "use strict";
 
+import {
+  COFF_FILE_CHARACTERISTICS,
+  COFF_FILE_HEADER_BYTE_LENGTH,
+  COFF_SECTION_HEADER_BYTE_LENGTH,
+  COFF_SHORT_NAME_BYTE_LENGTH
+} from "../../analyzers/coff/layout.js";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../analyzers/coff/machine.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const DOS_E_LFANEW_OFFSET = 0x3c;
 const PE_HEADER_OFFSET = 0x80;
 const PE_SIGNATURE_SIZE = 4;
-const COFF_HEADER_SIZE = 20;
 const OPTIONAL_HEADER_SIZE = 240;
-const SECTION_HEADER_SIZE = 40;
 const NUMBER_OF_SECTIONS = 2;
 const FILE_ALIGNMENT = 0x200;
 const SECTION_ALIGNMENT = 0x1000;
@@ -35,7 +40,7 @@ const alignUp = (value: number, alignment: number): number =>
   Math.ceil(value / alignment) * alignment;
 
 const writeAsciiName = (view: DataView, offset: number, name: string): void => {
-  for (let index = 0; index < Math.min(8, name.length); index += 1) {
+  for (let index = 0; index < Math.min(COFF_SHORT_NAME_BYTE_LENGTH, name.length); index += 1) {
     view.setUint8(offset + index, name.charCodeAt(index));
   }
 };
@@ -63,12 +68,12 @@ const writePeHeaders = (
   view.setUint32(DOS_E_LFANEW_OFFSET, PE_HEADER_OFFSET, true);
   view.setUint32(PE_HEADER_OFFSET, 0x00004550, true);
   const coffOffset = PE_HEADER_OFFSET + PE_SIGNATURE_SIZE;
-  view.setUint16(coffOffset, 0x8664, true);
+  view.setUint16(coffOffset, IMAGE_FILE_MACHINE_AMD64, true);
   view.setUint16(coffOffset + 2, NUMBER_OF_SECTIONS, true);
   view.setUint16(coffOffset + 16, OPTIONAL_HEADER_SIZE, true);
-  view.setUint16(coffOffset + 18, 0x0002, true);
-  writeOptionalHeader(view, coffOffset + COFF_HEADER_SIZE, textRawSize, rdataRawSize);
-  const sectionOffset = coffOffset + COFF_HEADER_SIZE + OPTIONAL_HEADER_SIZE;
+  view.setUint16(coffOffset + 18, COFF_FILE_CHARACTERISTICS.EXECUTABLE_IMAGE, true);
+  writeOptionalHeader(view, coffOffset + COFF_FILE_HEADER_BYTE_LENGTH, textRawSize, rdataRawSize);
+  const sectionOffset = coffOffset + COFF_FILE_HEADER_BYTE_LENGTH + OPTIONAL_HEADER_SIZE;
   writeSectionHeader(view, sectionOffset, {
     name: ".text",
     virtualSize: textRawSize,
@@ -77,7 +82,7 @@ const writePeHeaders = (
     rawOffset: TEXT_RAW_OFFSET,
     flags: IMAGE_SCN_CNT_CODE | IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ
   });
-  writeSectionHeader(view, sectionOffset + SECTION_HEADER_SIZE, {
+  writeSectionHeader(view, sectionOffset + COFF_SECTION_HEADER_BYTE_LENGTH, {
     name: ".rdata",
     virtualSize: rdataRawSize,
     virtualAddress: RDATA_RVA,

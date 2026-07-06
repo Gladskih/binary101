@@ -3,15 +3,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderPreviewCell } from "../../../../../../renderers/pe/resource-preview-cell.js";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../../analyzers/coff/machine.js";
 import type { ResourceLangWithPreview } from "../../../../../../analyzers/pe/resources/preview/types.js";
 import {
   createManifestInfoFixture,
   createManifestValidationFixture,
   createManifestTextFixture
 } from "../../../../../fixtures/pe-manifest-preview-fixture.js";
-
-// IMAGE_FILE_HEADER.Machine values are defined by the PE/COFF spec and winnt.h.
-const AMD64_MACHINE = 0x8664;
 
 const createBaseLang = (): ResourceLangWithPreview => ({
   lang: 1033,
@@ -158,7 +156,7 @@ void test("renderPreviewCell renders parsed manifest metadata alongside text pre
     textPreview: createManifestTextFixture(),
     manifestInfo,
     manifestValidation: createManifestValidationFixture(
-      AMD64_MACHINE,
+      IMAGE_FILE_MACHINE_AMD64,
       { processorArchitecture: "amd64" }
     )
   });

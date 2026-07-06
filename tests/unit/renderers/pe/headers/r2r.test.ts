@@ -8,7 +8,7 @@ import { createBasePe } from "../../../../fixtures/pe-renderer-headers-fixture.j
 
 void test("renderHeaders splits .NET ReadyToRun machine and OS override chips", () => {
   const pe: PeParseResult = createBasePe();
-  // .NET ReadyToRun: IMAGE_FILE_MACHINE_AMD64 0x8664 XOR Linux override 0x7B79.
+  // .NET ReadyToRun: IMAGE_FILE_MACHINE_AMD64 XOR Linux override 0x7B79.
   // https://github.com/dotnet/runtime/blob/main/src/coreclr/inc/pedecoder.h
   pe.coff.Machine = 0xfd1d;
 

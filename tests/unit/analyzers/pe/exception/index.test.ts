@@ -2,9 +2,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseExceptionDirectory } from "../../../../../analyzers/pe/exception/index.js";
+import { IMAGE_FILE_MACHINE_I386 } from "../../../../../analyzers/coff/machine.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
 const rvaToOff = (rva: number): number => rva;
-const IMAGE_FILE_MACHINE_I386 = 0x014c;
 // Microsoft x64 UNWIND_INFO stores version 1 in the low three bits of the header.
 const AMD64_UNWIND_INFO_VERSION_1 = 0x01;
 const writeRuntimeFunction = (

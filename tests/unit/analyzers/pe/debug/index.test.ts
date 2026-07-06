@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseDebugDirectory } from "../../../../../analyzers/pe/debug/directory.js";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../analyzers/coff/machine.js";
 import { expectDefined } from "../../../../helpers/expect-defined.js";
 import { createSliceTrackingFile } from "../../../../helpers/slice-tracking-file.js";
 import {
@@ -31,7 +32,6 @@ import {
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
 const IMAGE_DEBUG_TYPE_CODEVIEW = 2;
 const IMAGE_DEBUG_TYPE_MISC = 4;
-const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
 void test("parseDebugDirectory reads CodeView RSDS entry", async () => {
   const subject = createCodeViewSubject();
 

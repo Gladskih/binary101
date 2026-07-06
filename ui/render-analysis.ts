@@ -4,6 +4,7 @@ import type { ParseForUiResult } from "../analyzers/index.js";
 import { renderMachO } from "../renderers/macho/index.js";
 import {
   renderPe,
+  renderCoff,
   renderJpeg,
   renderElf,
   renderGif,
@@ -51,6 +52,9 @@ const renderExecutableAnalysis = (
   show: AnalysisPresenter
 ): boolean => {
   switch (result.analyzer) {
+    case "coff":
+      show("COFF object details", renderCoff(result.parsed));
+      return true;
     case "pe":
       show("PE/COFF details", renderPe(result.parsed));
       return true;

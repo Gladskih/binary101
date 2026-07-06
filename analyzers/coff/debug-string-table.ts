@@ -1,19 +1,42 @@
 "use strict";
 
-import type { FileRangeReader } from "../../file-range-reader.js";
-import type { PeCoffStringTable } from "./coff-types.js";
+import type { FileRangeReader } from "../file-range-reader.js";
+import type { CoffStringTable } from "./debug-types.js";
+import {
+  COFF_STRING_READ_CHUNK_BYTE_LENGTH,
+  COFF_STRING_TABLE_SIZE_FIELD_BYTE_LENGTH
+} from "./layout.js";
 
-const STRING_TABLE_SIZE_FIELD = 4;
-const stringDecoder = new TextDecoder("utf-8", { fatal: false });
+const stringDecoder = new TextDecoder("utf-8");
 
 const decodeChunks = (chunks: Uint8Array[], totalLength: number): string => {
   const bytes = new Uint8Array(totalLength);
-  let cursor = 0;
-  for (const part of chunks) {
+  chunks.reduce((cursor, part) => {
     bytes.set(part, cursor);
-    cursor += part.length;
-  }
+    return cursor + part.length;
+  }, 0);
   return stringDecoder.decode(bytes);
+};
+
+const readNullTerminatedStringChunks = async (
+  reader: FileRangeReader,
+  offset: number,
+  endExclusive: number,
+  chunks: Uint8Array[],
+  totalLength: number
+): Promise<{ value: string; terminated: boolean }> => {
+  if (offset >= endExclusive) return { value: decodeChunks(chunks, totalLength), terminated: false };
+  const chunk = await reader.readBytes(
+    offset,
+    Math.min(endExclusive - offset, COFF_STRING_READ_CHUNK_BYTE_LENGTH)
+  );
+  if (!chunk.length) return { value: decodeChunks(chunks, totalLength), terminated: false };
+  const zeroIndex = chunk.indexOf(0);
+  const usedChunk = zeroIndex === -1 ? chunk : chunk.subarray(0, zeroIndex);
+  const nextChunks = [...chunks, usedChunk];
+  const nextLength = totalLength + usedChunk.length;
+  if (zeroIndex !== -1) return { value: decodeChunks(nextChunks, nextLength), terminated: true };
+  return readNullTerminatedStringChunks(reader, offset + chunk.length, endExclusive, nextChunks, nextLength);
 };
 
 const readNullTerminatedString = async (
@@ -21,20 +44,7 @@ const readNullTerminatedString = async (
   start: number,
   endExclusive: number
 ): Promise<{ value: string; terminated: boolean }> => {
-  const chunks: Uint8Array[] = [];
-  let totalLength = 0;
-  let offset = start;
-  while (offset < endExclusive) {
-    const chunk = await reader.readBytes(offset, Math.min(endExclusive - offset, 256));
-    if (!chunk.length) break;
-    const zeroIndex = chunk.indexOf(0);
-    const usedChunk = zeroIndex === -1 ? chunk : chunk.subarray(0, zeroIndex);
-    chunks.push(usedChunk);
-    totalLength += usedChunk.length;
-    if (zeroIndex !== -1) return { value: decodeChunks(chunks, totalLength), terminated: true };
-    offset += chunk.length;
-  }
-  return { value: decodeChunks(chunks, totalLength), terminated: false };
+  return readNullTerminatedStringChunks(reader, start, endExclusive, [], 0);
 };
 
 const readStringTableEntry = async (
@@ -44,7 +54,7 @@ const readStringTableEntry = async (
   stringTableEntryOffset: number
 ): Promise<{ value: string; warning?: string }> => {
   if (
-    stringTableEntryOffset < STRING_TABLE_SIZE_FIELD ||
+    stringTableEntryOffset < COFF_STRING_TABLE_SIZE_FIELD_BYTE_LENGTH ||
     stringTableOffset + stringTableEntryOffset >= stringTableEnd
   ) {
     return {
@@ -69,15 +79,15 @@ export const createCoffDebugStringTable = async (
   reader: FileRangeReader,
   stringTableOffset: number,
   addWarning: (message: string) => void
-): Promise<PeCoffStringTable | null> => {
-  if (stringTableOffset + STRING_TABLE_SIZE_FIELD > reader.size) return null;
-  const sizeView = await reader.read(stringTableOffset, STRING_TABLE_SIZE_FIELD);
-  if (sizeView.byteLength < STRING_TABLE_SIZE_FIELD) {
+): Promise<CoffStringTable | null> => {
+  if (stringTableOffset + COFF_STRING_TABLE_SIZE_FIELD_BYTE_LENGTH > reader.size) return null;
+  const sizeView = await reader.read(stringTableOffset, COFF_STRING_TABLE_SIZE_FIELD_BYTE_LENGTH);
+  if (sizeView.byteLength < COFF_STRING_TABLE_SIZE_FIELD_BYTE_LENGTH) {
     addWarning("COFF string table size field is truncated.");
     return null;
   }
   const declaredSize = sizeView.getUint32(0, true);
-  if (declaredSize < STRING_TABLE_SIZE_FIELD) {
+  if (declaredSize < COFF_STRING_TABLE_SIZE_FIELD_BYTE_LENGTH) {
     addWarning("COFF string table is smaller than its 4-byte size field.");
     return null;
   }

@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { analyzePeInstructionSets } from "../../../../../analyzers/pe/disassembly/index.js";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../analyzers/coff/machine.js";
 import { inlinePeSectionName } from "../../../../../analyzers/pe/sections/name.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
 
@@ -16,7 +17,7 @@ void test("analyzePeInstructionSets reports AVX and AVX-512 requirements", async
   const file = new MockFile(bytes, "avx-pe.bin");
 
   const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x8664,
+    coffMachine: IMAGE_FILE_MACHINE_AMD64,
     is64Bit: true,
     imageBase: 0x140000000n,
     entrypointRva: 0x1000,
@@ -79,7 +80,7 @@ void test("analyzePeInstructionSets reports unmapped entrypoint RVAs", async () 
 void test("analyzePeInstructionSets falls back to .text when entrypoint is zero", async () => {
   const file = new MockFile(new Uint8Array([0x90, 0x90]), "fallback.bin");
   const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x8664,
+    coffMachine: IMAGE_FILE_MACHINE_AMD64,
     is64Bit: true,
     imageBase: 0x140000000n,
     entrypointRva: 0,
@@ -126,7 +127,7 @@ void test("analyzePeInstructionSets stops at the first invalid instruction", asy
 
   const file = new MockFile(bytes, "invalid.bin");
   const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x8664,
+    coffMachine: IMAGE_FILE_MACHINE_AMD64,
     is64Bit: true,
     imageBase: 0x140000000n,
     entrypointRva: 0x1000,
@@ -153,7 +154,7 @@ void test("analyzePeInstructionSets reports decoded bytes when returning early",
   const file = new MockFile(bytes, "cap.bin");
 
   const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x8664,
+    coffMachine: IMAGE_FILE_MACHINE_AMD64,
     is64Bit: true,
     imageBase: 0x140000000n,
     entrypointRva: 0x1000,
@@ -181,7 +182,7 @@ void test("analyzePeInstructionSets accepts a header-resident entrypoint when rv
   const file = new MockFile(new Uint8Array([0xc3]), "header-entrypoint.bin"); // ret
 
   const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x8664, // IMAGE_FILE_MACHINE_AMD64
+    coffMachine: IMAGE_FILE_MACHINE_AMD64,
     is64Bit: true,
     imageBase: 0x140000000n, // Conventional PE32+ image base
     entrypointRva: 0x80, // Header RVA: below SizeOfHeaders in the companion parsePe fixture
@@ -202,7 +203,7 @@ void test("analyzePeInstructionSets reports progress while decoding", async () =
   const stages: string[] = [];
 
   const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x8664,
+    coffMachine: IMAGE_FILE_MACHINE_AMD64,
     is64Bit: true,
     imageBase: 0x140000000n,
     entrypointRva: 0x1000,
@@ -241,7 +242,7 @@ void test("analyzePeInstructionSets reports known feature counts in progress sna
   const seen: Array<Record<string, number> | undefined> = [];
 
   const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x8664,
+    coffMachine: IMAGE_FILE_MACHINE_AMD64,
     is64Bit: true,
     imageBase: 0x140000000n,
     entrypointRva: 0x1000,
@@ -272,7 +273,7 @@ void test("analyzePeInstructionSets warns and skips entrypoints in non-executabl
   const file = new MockFile(bytes, "entrypoint-data.bin");
 
   const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x8664,
+    coffMachine: IMAGE_FILE_MACHINE_AMD64,
     is64Bit: true,
     imageBase: 0x140000000n,
     entrypointRva: 0x2000, // points into .data

@@ -1,12 +1,11 @@
 "use strict";
 
+import { IMAGE_FILE_MACHINE_I386 } from "../../analyzers/coff/machine.js";
 import { parseExceptionDirectory } from "../../analyzers/pe/exception/index.js";
 import type { PeNativeAotCandidate } from "../../analyzers/pe/native-aot.js";
 import { MockFile } from "./mock-file.js";
 
-// Microsoft PE format, Machine Types: IMAGE_FILE_MACHINE_I386.
-// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types
-export const IMAGE_FILE_MACHINE_I386 = 0x014c;
+export { IMAGE_FILE_MACHINE_I386 };
 // dotnet/runtime NativeAOT COFF writer emits I386 .pdata rows as three DWORDs.
 // https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/aot/ILCompiler.Compiler/Compiler/ObjectWriter/CoffObjectWriter.Aot.cs
 export const NATIVE_AOT_X86_RUNTIME_FUNCTION_ENTRY_SIZE = Uint32Array.BYTES_PER_ELEMENT * 3;

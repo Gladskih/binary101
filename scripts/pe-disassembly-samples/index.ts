@@ -14,7 +14,7 @@ import {
 import { getStepCommandLine, runStep } from "./command.js";
 import { buildSummary, buildSummaryMarkdown, writeCommandsFile } from "./report.js";
 import { discoverToolchains } from "./toolchains.js";
-import { validateNoPeCoffSymbolRecords } from "./pe-coff-symbols.js";
+import { validateNoPeLegacyCoffSymbolRecords } from "./pe-coff-symbols.js";
 import { buildBinarySizeMarkdown } from "./size-table.js";
 import { buildSampleVariants, buildCommandLines } from "./variants.js";
 
@@ -115,7 +115,7 @@ const compileVariant = async (variant: BuildVariant): Promise<SampleResult> => {
   }
   const output = await stat(variant.outputPath).catch(() => null);
   if (!output) return buildFailureResult(variant, durationMs, steps, `Output file was not created: ${variant.outputPath}`);
-  const symbolResult = await validateNoPeCoffSymbolRecords(variant.outputPath);
+  const symbolResult = await validateNoPeLegacyCoffSymbolRecords(variant.outputPath);
   if (symbolResult.warnings.length) {
     steps.push({
       code: 0,

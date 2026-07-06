@@ -1,14 +1,17 @@
 "use strict";
 
 import { readAsciiString, collectPrintableRuns } from "../../../binary-utils.js";
+import { readCoffFileHeaderFields } from "../../coff/file-header.js";
+import { COFF_FILE_HEADER_BYTE_LENGTH } from "../../coff/layout.js";
+import type { CoffFileHeader } from "../../coff/types.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
-export { parseOptionalHeaderAndDirectories } from "../optional-header/parse.js";
 import { parseRichHeaderFromDosStub } from "./rich-header.js";
 import { analyzePeDosStubCode } from "./dos-stub-code.js";
 import { parseValveIntegrityBlock } from "./valve-integrity.js";
-import type { PeCoffHeader, PeDosHeader } from "../types.js";
+import type { PeDosHeader } from "../types.js";
 
-const IMAGE_FILE_HEADER_SIZE = 20;
+const PE_SIGNATURE_BYTE_LENGTH = 4;
+const PE_SIGNATURE_AND_COFF_HEADER_BYTE_LENGTH = PE_SIGNATURE_BYTE_LENGTH + COFF_FILE_HEADER_BYTE_LENGTH;
 
 export async function parseDosHeaderAndStub(
   reader: FileRangeReader,
@@ -68,33 +71,15 @@ export async function parseDosHeaderAndStub(
 export async function parseCoffHeader(
   reader: FileRangeReader,
   peHeaderOffset: number
-): Promise<PeCoffHeader | null> {
-  const headerView = await reader.read(peHeaderOffset, 24);
-  if (headerView.byteLength < 4) return null;
+): Promise<CoffFileHeader | null> {
+  const headerView = await reader.read(peHeaderOffset, PE_SIGNATURE_AND_COFF_HEADER_BYTE_LENGTH);
+  if (headerView.byteLength < PE_SIGNATURE_BYTE_LENGTH) return null;
   const signature =
     String.fromCharCode(headerView.getUint8(0)) +
     String.fromCharCode(headerView.getUint8(1)) +
     String.fromCharCode(headerView.getUint8(2)) +
     String.fromCharCode(headerView.getUint8(3));
   if (signature !== "PE\0\0") return null;
-  if (headerView.byteLength < 4 + IMAGE_FILE_HEADER_SIZE) return null;
-  const coffOffset = 4;
-  const u16 = (off: number): number => headerView.getUint16(off, true);
-  const u32 = (off: number): number => headerView.getUint32(off, true);
-  const Machine = u16(coffOffset + 0);
-  const NumberOfSections = u16(coffOffset + 2);
-  const TimeDateStamp = u32(coffOffset + 4);
-  const PointerToSymbolTable = u32(coffOffset + 8);
-  const NumberOfSymbols = u32(coffOffset + 12);
-  const SizeOfOptionalHeader = u16(coffOffset + 16);
-  const Characteristics = u16(coffOffset + 18);
-  return {
-    Machine,
-    NumberOfSections,
-    TimeDateStamp,
-    PointerToSymbolTable,
-    NumberOfSymbols,
-    SizeOfOptionalHeader,
-    Characteristics
-  };
+  if (headerView.byteLength < PE_SIGNATURE_AND_COFF_HEADER_BYTE_LENGTH) return null;
+  return readCoffFileHeaderFields(headerView, PE_SIGNATURE_BYTE_LENGTH);
 }

@@ -7,6 +7,7 @@ import {
   normalizeRvaList,
   resolvePeDisassemblyEntrypoints
 } from "../../../../../analyzers/pe/disassembly/sampling.js";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../analyzers/coff/machine.js";
 import type { AnalyzePeInstructionSetOptions } from "../../../../../analyzers/pe/disassembly/index.js";
 import type { FileRangeReader } from "../../../../../analyzers/file-range-reader.js";
 import type { PeSection } from "../../../../../analyzers/pe/types.js";
@@ -41,7 +42,7 @@ void test("collectPeDisassemblySamples reads mapped section spans", async () => 
 });
 
 const createAnalyzeOptions = (entrypointRva: number): AnalyzePeInstructionSetOptions => ({
-  coffMachine: 0x8664,
+  coffMachine: IMAGE_FILE_MACHINE_AMD64,
   is64Bit: true,
   imageBase: 0n,
   entrypointRva,

@@ -3,11 +3,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PeWindowsParseResult } from "../../../../analyzers/pe/index.js";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../analyzers/coff/machine.js";
 import { renderEntrypointDisassembly } from "../../../../renderers/pe/entrypoint-disassembly.js";
 
 const createPe = (): PeWindowsParseResult =>
   ({
-    coff: { Machine: 0x8664 },
+    coff: { Machine: IMAGE_FILE_MACHINE_AMD64 },
     opt: { AddressOfEntryPoint: 0x1000 },
     sections: []
   }) as unknown as PeWindowsParseResult;

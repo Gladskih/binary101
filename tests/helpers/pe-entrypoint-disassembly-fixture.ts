@@ -3,13 +3,16 @@
 import { createFileRangeReader } from "../../analyzers/file-range-reader.js";
 import { analyzePeEntrypointDisassembly } from "../../analyzers/pe/disassembly/index.js";
 import type { AnalyzePeEntrypointDisassemblyOptions } from "../../analyzers/pe/disassembly/index.js";
+import {
+  IMAGE_FILE_MACHINE_AMD64,
+  IMAGE_FILE_MACHINE_I386
+} from "../../analyzers/coff/machine.js";
 import { inlinePeSectionName } from "../../analyzers/pe/sections/name.js";
 import type { PeSection } from "../../analyzers/pe/types.js";
 import { MockFile } from "./mock-file.js";
 
-// Microsoft PE format: machine types and section flags used by synthetic PE fixtures.
-export const IMAGE_FILE_MACHINE_I386 = 0x014c;
-export const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
+// Microsoft PE format: section flags used by synthetic PE fixtures.
+export { IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_I386 };
 export const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
 export const IMAGE_SCN_CNT_CODE = 0x00000020;
 export const testDecoderBitnesses: number[] = [];

@@ -8,15 +8,16 @@ import {
   collectManifestWarnings
 } from "../../../../analyzers/pe/resources/manifest-consistency.js";
 import {
+  IMAGE_FILE_MACHINE_AMD64,
+  IMAGE_FILE_MACHINE_I386
+} from "../../../../analyzers/coff/machine.js";
+import {
   createClrHeaderFixture,
   createManifestResourcesFixture
 } from "../../../fixtures/pe-manifest-preview-fixture.js";
 
-// IMAGE_FILE_HEADER.Machine values are defined by the PE/COFF spec and winnt.h.
-const AMD64_MACHINE = 0x8664;
-const I386_MACHINE = 0x014c;
 // This value is only used as a non-mapped synthetic machine for unhappy-path coverage.
-const SYNTHETIC_UNMAPPED_MACHINE = 0x7ffe;
+const SYNTHETIC_UNMAPPED_MACHINE_CODE = 0x7ffe;
 // COMIMAGE_FLAGS_ILONLY is defined by ECMA-335 II.25.3.3.1.
 const CLR_ILONLY_FLAG = 0x00000001;
 
@@ -27,7 +28,7 @@ void test("collectManifestWarnings reports manifest processorArchitecture mismat
   }]);
   const warnings = collectManifestWarnings(
     subject.resources,
-    AMD64_MACHINE,
+    IMAGE_FILE_MACHINE_AMD64,
     null
   );
 
@@ -43,10 +44,10 @@ void test("collectManifestWarnings requires IL-only CLR metadata for supportedAr
     supportedArchitectures: ["amd64", "arm64"]
   }]);
 
-  const withoutClr = collectManifestWarnings(subject.resources, I386_MACHINE, null);
+  const withoutClr = collectManifestWarnings(subject.resources, IMAGE_FILE_MACHINE_I386, null);
   const withIlOnlyClr = collectManifestWarnings(
     subject.resources,
-    I386_MACHINE,
+    IMAGE_FILE_MACHINE_I386,
     createClrHeaderFixture(CLR_ILONLY_FLAG)
   );
 
@@ -61,7 +62,7 @@ void test("analyzeManifestConsistency returns validated checks when the manifest
   }]);
   const validation = analyzeManifestConsistency(
     subject.resources,
-    AMD64_MACHINE,
+    IMAGE_FILE_MACHINE_AMD64,
     null
   );
 
@@ -84,7 +85,7 @@ void test("collectManifestWarnings reports conflicting embedded manifest metadat
   ]);
   const warnings = collectManifestWarnings(
     subject.resources,
-    AMD64_MACHINE,
+    IMAGE_FILE_MACHINE_AMD64,
     null
   );
 
@@ -101,7 +102,7 @@ void test("collectManifestWarnings formats neutral manifest entries and ignores 
   }]);
   const warnings = collectManifestWarnings(
     subject.resources,
-    SYNTHETIC_UNMAPPED_MACHINE,
+    SYNTHETIC_UNMAPPED_MACHINE_CODE,
     null
   );
 
@@ -112,7 +113,7 @@ void test("collectManifestWarnings formats neutral manifest entries and ignores 
 });
 
 void test("collectManifestWarnings returns no warnings when manifest resources are absent", () => {
-  assert.deepEqual(collectManifestWarnings(null, AMD64_MACHINE, null), []);
+  assert.deepEqual(collectManifestWarnings(null, IMAGE_FILE_MACHINE_AMD64, null), []);
 });
 
 void test("attachManifestValidation annotates manifest resource previews", () => {
@@ -120,7 +121,7 @@ void test("attachManifestValidation annotates manifest resource previews", () =>
     processorArchitecture: "amd64",
     requestedExecutionLevel: "asInvoker"
   }]);
-  const validation = analyzeManifestConsistency(subject.resources, AMD64_MACHINE, null);
+  const validation = analyzeManifestConsistency(subject.resources, IMAGE_FILE_MACHINE_AMD64, null);
   const annotated = attachManifestValidation(subject.resources, validation);
   const manifestLang = annotated?.detail[0]?.entries[0]?.langs[0];
 

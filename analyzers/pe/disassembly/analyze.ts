@@ -4,7 +4,8 @@ import type { AnalyzePeInstructionSetOptions, PeInstructionSetProgress, PeInstru
 import { disassembleControlFlowForInstructionSets } from "../../x86/disassembly-control-flow.js";
 import { isIcedX86Module, type IcedX86Module } from "../../x86/disassembly-iced.js";
 import { loadIcedX86 } from "#iced-x86-loader";
-import { IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_I386, getCanonicalPeMachine } from "../machine.js";
+import { IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_I386 } from "../../coff/machine.js";
+import { getCanonicalPeMachine } from "../machine.js";
 import { createX86InstructionSetUsageTracker } from "../../x86/instruction-set-usage.js";
 import {
   collectPeDisassemblySamples,

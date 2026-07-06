@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { decodeDebugEntryPayload } from "../../../../../analyzers/pe/debug/entry-decoders.js";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../analyzers/coff/machine.js";
 import {
   createExtraDebugPayloadSubject,
   encodeNullTerminatedAscii,
@@ -13,7 +14,6 @@ import {
 const IMAGE_DEBUG_TYPE_CODEVIEW = 2;
 const IMAGE_DEBUG_TYPE_REPRO = 16;
 const IMAGE_DEBUG_TYPE_R2R_PERFMAP = 21;
-const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
 const UNKNOWN_DEBUG_TYPE = 0xff;
 const RSDS_SIGNATURE = 0x53445352;
 const R2R_PERFMAP_MAGIC = 0x4d523252;

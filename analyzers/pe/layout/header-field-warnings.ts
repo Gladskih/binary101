@@ -3,6 +3,7 @@
 import type { PeParseResult } from "../core/parse-result.js";
 import { isPeWindowsParseResult } from "../core/parse-result.js";
 import { PE32_OPTIONAL_HEADER_MAGIC, PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "../optional-header/magic.js";
+import { COFF_FILE_CHARACTERISTICS } from "../../coff/layout.js";
 
 // Microsoft PE/COFF, "COFF File Header": the Windows loader limits images to 96 sections.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#coff-file-header-object-and-image
@@ -22,8 +23,6 @@ const MAXIMUM_PE32_PLUS_IMAGE_SIZE = 0x80000000;
 // Microsoft PE/COFF, "DLL Characteristics": bits 0x0001 through 0x0008 are reserved.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#dll-characteristics
 const RESERVED_DLL_CHARACTERISTICS_MASK = 0x000f;
-const IMAGE_FILE_RELOCS_STRIPPED = 0x0001;
-const IMAGE_FILE_EXECUTABLE_IMAGE = 0x0002;
 const IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA = 0x0020;
 const IMAGE_DLLCHARACTERISTICS_NO_BIND = 0x0800;
 // ECMA-335 II.25.3.3.1 ("Runtime flags"): COMIMAGE_FLAGS_ILONLY.
@@ -63,7 +62,7 @@ const addCoffWarnings = (pe: PeParseResult, warnings: string[]): void => {
       "NumberOfSections is greater than 96; the Windows loader limits image section count to 96."
     );
   }
-  if (((pe.coff.Characteristics >>> 0) & IMAGE_FILE_EXECUTABLE_IMAGE) === 0) {
+  if (((pe.coff.Characteristics >>> 0) & COFF_FILE_CHARACTERISTICS.EXECUTABLE_IMAGE) === 0) {
     warnings.push(
       "COFF Characteristics does not set IMAGE_FILE_EXECUTABLE_IMAGE; the PE spec says this indicates a linker error."
     );
@@ -168,7 +167,7 @@ const addDllCharacteristicWarnings = (pe: PeParseResult, warnings: string[]): vo
 const addDirectoryConflictWarnings = (pe: PeParseResult, warnings: string[]): void => {
   if (!isPeWindowsParseResult(pe)) return;
   if (
-    ((pe.coff.Characteristics >>> 0) & IMAGE_FILE_RELOCS_STRIPPED) !== 0 &&
+    ((pe.coff.Characteristics >>> 0) & COFF_FILE_CHARACTERISTICS.RELOCS_STRIPPED) !== 0 &&
     (hasDataDirectory(pe, "BASERELOC") || (pe.reloc?.totalEntries ?? 0) > 0)
   ) {
     warnings.push("RELOCS_STRIPPED is set, but the image declares base relocations.");

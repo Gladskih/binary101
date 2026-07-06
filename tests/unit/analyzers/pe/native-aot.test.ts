@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { detectNativeAotCandidate } from "../../../../analyzers/pe/native-aot.js";
-import { coffStringTablePeSectionName, inlinePeSectionName } from "../../../../analyzers/pe/sections/name.js";
+import { inlinePeSectionName, peSectionNameFromStringTable } from "../../../../analyzers/pe/sections/name.js";
 import type { PeSection } from "../../../../analyzers/pe/types.js";
 
 const section = (name: string): PeSection => ({
@@ -17,7 +17,7 @@ const section = (name: string): PeSection => ({
 
 const longNameSection = (name: string): PeSection => ({
   ...section(name),
-  name: coffStringTablePeSectionName(name, name.length)
+  name: peSectionNameFromStringTable(name, name.length)
 });
 
 const generatedExportName = (index: number): string => `export-${index.toString(36)}`;

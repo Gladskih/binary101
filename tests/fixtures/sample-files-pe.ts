@@ -1,5 +1,13 @@
 "use strict";
 
+import {
+  COFF_FILE_CHARACTERISTICS,
+  COFF_FILE_HEADER_BYTE_LENGTH
+} from "../../analyzers/coff/layout.js";
+import {
+  IMAGE_FILE_MACHINE_AMD64,
+  IMAGE_FILE_MACHINE_I386
+} from "../../analyzers/coff/machine.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 // IMAGE_FILE_MACHINE_R4000 and IMAGE_ROM_OPTIONAL_HDR_MAGIC from ntimage.h / IMAGE_ROM_OPTIONAL_HEADER:
@@ -9,7 +17,6 @@ const IMAGE_ROM_OPTIONAL_HDR_MAGIC = 0x107;
 
 export const createPeWithSectionAndIatFixture = () => {
   const peHeaderOffset = 0x40;
-  const coffHeaderSize = 20;
   const optionalHeaderSize = 224;
 
   const numberOfSections = 1;
@@ -36,15 +43,15 @@ export const createPeWithSectionAndIatFixture = () => {
   view.setUint32(peSignatureOffset, 0x00004550, true);
 
   const coffOffset = peSignatureOffset + 4;
-  view.setUint16(coffOffset, 0x014c, true);
+  view.setUint16(coffOffset, IMAGE_FILE_MACHINE_I386, true);
   view.setUint16(coffOffset + 2, numberOfSections, true);
   view.setUint32(coffOffset + 4, 0x65c0e6a0, true);
   view.setUint32(coffOffset + 8, 0, true);
   view.setUint32(coffOffset + 12, 0, true);
   view.setUint16(coffOffset + 16, optionalHeaderSize, true);
-  view.setUint16(coffOffset + 18, 0x0002, true);
+  view.setUint16(coffOffset + 18, COFF_FILE_CHARACTERISTICS.EXECUTABLE_IMAGE, true);
 
-  const optionalOffset = coffOffset + coffHeaderSize;
+  const optionalOffset = coffOffset + COFF_FILE_HEADER_BYTE_LENGTH;
   let optPos = optionalOffset;
   view.setUint16(optPos, 0x10b, true); optPos += 2;
   view.setUint8(optPos, 14); optPos += 1;
@@ -110,7 +117,6 @@ export const createPeFile = () =>
 
 export const createPePlusWithSection = () => {
   const peHeaderOffset = 0x40;
-  const coffHeaderSize = 20;
   const optionalHeaderSize = 240;
 
   const numberOfSections = 1;
@@ -136,15 +142,15 @@ export const createPePlusWithSection = () => {
   view.setUint32(peSignatureOffset, 0x00004550, true);
 
   const coffOffset = peSignatureOffset + 4;
-  view.setUint16(coffOffset, 0x8664, true);
+  view.setUint16(coffOffset, IMAGE_FILE_MACHINE_AMD64, true);
   view.setUint16(coffOffset + 2, numberOfSections, true);
   view.setUint32(coffOffset + 4, 0x65c0e6a0, true);
   view.setUint32(coffOffset + 8, 0, true);
   view.setUint32(coffOffset + 12, 0, true);
   view.setUint16(coffOffset + 16, optionalHeaderSize, true);
-  view.setUint16(coffOffset + 18, 0x0002, true);
+  view.setUint16(coffOffset + 18, COFF_FILE_CHARACTERISTICS.EXECUTABLE_IMAGE, true);
 
-  const optionalOffset = coffOffset + coffHeaderSize;
+  const optionalOffset = coffOffset + COFF_FILE_HEADER_BYTE_LENGTH;
   let optPos = optionalOffset;
   view.setUint16(optPos, 0x20b, true); optPos += 2;
   view.setUint8(optPos, 14); optPos += 1;
@@ -226,7 +232,6 @@ export const createPePlusEntrypointCallFile = () => {
 
 export const createPeRomWithSection = () => {
   const peHeaderOffset = 0x40;
-  const coffHeaderSize = 20;
   const optionalHeaderSize = 56;
   const numberOfSections = 1;
   const fileAlignment = 0x200;
@@ -250,9 +255,9 @@ export const createPeRomWithSection = () => {
   view.setUint32(coffOffset + 8, 0, true);
   view.setUint32(coffOffset + 12, 0, true);
   view.setUint16(coffOffset + 16, optionalHeaderSize, true);
-  view.setUint16(coffOffset + 18, 0x0002, true);
+  view.setUint16(coffOffset + 18, COFF_FILE_CHARACTERISTICS.EXECUTABLE_IMAGE, true);
 
-  const optionalOffset = coffOffset + coffHeaderSize;
+  const optionalOffset = coffOffset + COFF_FILE_HEADER_BYTE_LENGTH;
   let optPos = optionalOffset;
   view.setUint16(optPos, IMAGE_ROM_OPTIONAL_HDR_MAGIC, true); optPos += 2;
   view.setUint8(optPos, 2); optPos += 1;

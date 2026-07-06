@@ -7,6 +7,7 @@ import type {
   AnalyzePeEntrypointDisassemblyOptions,
   PeEntrypointDisassemblyReport
 } from "../../../../analyzers/pe/disassembly/index.js";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../analyzers/coff/machine.js";
 import { createPeEntrypointDisassemblyController } from "../../../../ui/pe-entrypoint-disassembly.js";
 import { FakeHTMLElement, installFakeDom, flushTimers } from "../../../helpers/fake-dom.js";
 import { expectDefined } from "../../../helpers/expect-defined.js";
@@ -14,7 +15,7 @@ import { MockFile } from "../../../helpers/mock-file.js";
 
 const createMinimalPe = (): PeWindowsParseResult =>
   ({
-    coff: { Machine: 0x8664 },
+    coff: { Machine: IMAGE_FILE_MACHINE_AMD64 },
     opt: {
       Magic: 0x20b,
       ImageBase: 0x140000000n,

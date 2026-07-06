@@ -3,11 +3,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { analyzePeInstructionSets } from "../../../../../analyzers/pe/disassembly/index.js";
+import {
+  IMAGE_FILE_MACHINE_AMD64,
+  IMAGE_FILE_MACHINE_I386
+} from "../../../../../analyzers/coff/machine.js";
 import { inlinePeSectionName } from "../../../../../analyzers/pe/sections/name.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
 
-const IMAGE_FILE_MACHINE_I386 = 0x014c;
-const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
 const IMAGE_BASE_I386 = 0x400000n;
 const IMAGE_BASE_AMD64 = 0x140000000n;
 const TEXT_SECTION_RVA = 0x1000;

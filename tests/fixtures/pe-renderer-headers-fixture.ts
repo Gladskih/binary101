@@ -3,8 +3,8 @@
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type { PeSection } from "../../analyzers/pe/types.js";
 import {
-  coffStringTablePeSectionName,
-  inlinePeSectionName
+  inlinePeSectionName,
+  peSectionNameFromStringTable
 } from "../../analyzers/pe/sections/name.js";
 
 export const createBasePe = (): PeWindowsParseResult =>
@@ -104,7 +104,7 @@ export const createPeSection = (
   return {
     name:
       coffStringTableOffset != null
-        ? coffStringTablePeSectionName(name, coffStringTableOffset)
+        ? peSectionNameFromStringTable(name, coffStringTableOffset)
         : inlinePeSectionName(name),
     virtualSize: 0x100,
     virtualAddress: 0x1000,

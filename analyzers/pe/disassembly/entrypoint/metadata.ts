@@ -4,11 +4,8 @@ import type {
   AnalyzePeEntrypointDisassemblyOptions,
   PeEntrypointDisassemblyReport
 } from "../types.js";
-import {
-  IMAGE_FILE_MACHINE_AMD64,
-  IMAGE_FILE_MACHINE_I386,
-  getCanonicalPeMachine
-} from "../../machine.js";
+import { IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_I386 } from "../../../coff/machine.js";
+import { getCanonicalPeMachine } from "../../machine.js";
 
 export type ValidMetadata = {
   bitness: 32 | 64;

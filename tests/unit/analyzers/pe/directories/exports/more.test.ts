@@ -166,18 +166,17 @@ void test("parseExportDirectory reports out-of-range entries in the export ordin
 });
 
 void test("parseExportDirectory reports missing export name and ordinal tables when NumberOfNames is non-zero", async () => {
-  const directoryRva = IMAGE_EXPORT_DIRECTORY_SIZE;
-  const eatRva = directoryRva + IMAGE_EXPORT_DIRECTORY_SIZE;
+  const eatRva = IMAGE_EXPORT_DIRECTORY_SIZE * 2;
   const bytes = new Uint8Array(eatRva + Uint32Array.BYTES_PER_ELEMENT).fill(0);
   const dv = new DataView(bytes.buffer);
-  dv.setUint32(directoryRva + 16, 1, true);
-  dv.setUint32(directoryRva + 20, 1, true);
-  dv.setUint32(directoryRva + 24, 1, true);
-  dv.setUint32(directoryRva + 28, eatRva, true);
+  dv.setUint32(IMAGE_EXPORT_DIRECTORY_SIZE + 16, 1, true);
+  dv.setUint32(IMAGE_EXPORT_DIRECTORY_SIZE + 20, 1, true);
+  dv.setUint32(IMAGE_EXPORT_DIRECTORY_SIZE + 24, 1, true);
+  dv.setUint32(IMAGE_EXPORT_DIRECTORY_SIZE + 28, eatRva, true);
   dv.setUint32(eatRva, 0x1000, true);
   const result = expectDefined(await parseExportFixture(
     bytes,
-    { rva: directoryRva, size: IMAGE_EXPORT_DIRECTORY_SIZE }
+    { rva: IMAGE_EXPORT_DIRECTORY_SIZE, size: IMAGE_EXPORT_DIRECTORY_SIZE }
   ));
   assert.equal(result.entries.length, 1);
   assert.ok(result.issues.some(issue => /name pointer|ordinal table/i.test(issue)));

@@ -35,17 +35,16 @@ const createClrHeaderFile = (flags: number, entryPointToken: number): MockFile =
 void test("parseClrDirectory parses metadata header and streams", async () => {
   const encoder = new TextEncoder();
   const fileBytes = new Uint8Array(0x400).fill(0);
-  const clrOffset = CLR_DIRECTORY_RVA;
   const metaOffset = 0x200;
   const metaSize = 0x80;
   const clrView = new DataView(fileBytes.buffer);
-  clrView.setUint32(clrOffset + 0, IMAGE_COR20_HEADER_SIZE, true);
-  clrView.setUint16(clrOffset + 4, 4, true);
-  clrView.setUint16(clrOffset + 6, 0, true);
-  clrView.setUint32(clrOffset + 8, metaOffset, true);
-  clrView.setUint32(clrOffset + 12, metaSize, true);
-  clrView.setUint32(clrOffset + 16, 0x01, true);
-  clrView.setUint32(clrOffset + 20, 0x06000001, true);
+  clrView.setUint32(CLR_DIRECTORY_RVA + 0, IMAGE_COR20_HEADER_SIZE, true);
+  clrView.setUint16(CLR_DIRECTORY_RVA + 4, 4, true);
+  clrView.setUint16(CLR_DIRECTORY_RVA + 6, 0, true);
+  clrView.setUint32(CLR_DIRECTORY_RVA + 8, metaOffset, true);
+  clrView.setUint32(CLR_DIRECTORY_RVA + 12, metaSize, true);
+  clrView.setUint32(CLR_DIRECTORY_RVA + 16, 0x01, true);
+  clrView.setUint32(CLR_DIRECTORY_RVA + 20, 0x06000001, true);
 
   const metaView = new DataView(fileBytes.buffer, metaOffset, metaSize);
   let cursor = 0;
@@ -82,7 +81,7 @@ void test("parseClrDirectory parses metadata header and streams", async () => {
   const nameBytes = encoder.encode("#Strings\0");
   fileBytes.set(nameBytes, metaOffset + cursor);
 
-  const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: 0x60 }];
+  const dirs = [{ name: "CLR_RUNTIME", rva: CLR_DIRECTORY_RVA, size: 0x60 }];
   const clr = await parseClrDirectory(new MockFile(fileBytes, "clr.bin"), dirs, rvaToOff);
 
   const definedClr = expectDefined(clr);
@@ -95,32 +94,31 @@ void test("parseClrDirectory parses metadata header and streams", async () => {
 
 void test("parseClrDirectory parses full IMAGE_COR20_HEADER directory fields", async () => {
   const bytes = new Uint8Array(0x600).fill(0);
-  const clrOffset = CLR_DIRECTORY_RVA;
   const metaOffset = 0x200;
   const dv = new DataView(bytes.buffer);
 
-  dv.setUint32(clrOffset + 0x00, IMAGE_COR20_HEADER_SIZE, true);
-  dv.setUint16(clrOffset + 0x04, 4, true);
-  dv.setUint16(clrOffset + 0x06, 0, true);
-  dv.setUint32(clrOffset + 0x08, metaOffset, true);
-  dv.setUint32(clrOffset + 0x0c, 0x80, true);
-  dv.setUint32(clrOffset + 0x10, 0, true);
-  dv.setUint32(clrOffset + 0x14, 0x06000001, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x00, IMAGE_COR20_HEADER_SIZE, true);
+  dv.setUint16(CLR_DIRECTORY_RVA + 0x04, 4, true);
+  dv.setUint16(CLR_DIRECTORY_RVA + 0x06, 0, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x08, metaOffset, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x0c, 0x80, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x10, 0, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x14, 0x06000001, true);
 
-  dv.setUint32(clrOffset + 0x18, 0x300, true);
-  dv.setUint32(clrOffset + 0x1c, 0x40, true);
-  dv.setUint32(clrOffset + 0x20, 0x340, true);
-  dv.setUint32(clrOffset + 0x24, 0x20, true);
-  dv.setUint32(clrOffset + 0x28, 0x360, true);
-  dv.setUint32(clrOffset + 0x2c, 0x10, true);
-  dv.setUint32(clrOffset + 0x30, 0x380, true);
-  dv.setUint32(clrOffset + 0x34, 0x10, true);
-  dv.setUint32(clrOffset + 0x38, 0x3a0, true);
-  dv.setUint32(clrOffset + 0x3c, 0x08, true);
-  dv.setUint32(clrOffset + 0x40, 0x3a8, true);
-  dv.setUint32(clrOffset + 0x44, 0x18, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x18, 0x300, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x1c, 0x40, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x20, 0x340, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x24, 0x20, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x28, 0x360, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x2c, 0x10, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x30, 0x380, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x34, 0x10, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x38, 0x3a0, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x3c, 0x08, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x40, 0x3a8, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x44, 0x18, true);
 
-  const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: IMAGE_COR20_HEADER_SIZE }];
+  const dirs = [{ name: "CLR_RUNTIME", rva: CLR_DIRECTORY_RVA, size: IMAGE_COR20_HEADER_SIZE }];
   const clr = await parseClrDirectory(new MockFile(bytes, "clr-full.bin"), dirs, rvaToOff);
   const definedClr = expectDefined(clr);
 
@@ -140,20 +138,19 @@ void test("parseClrDirectory parses full IMAGE_COR20_HEADER directory fields", a
 
 void test("parseClrDirectory parses VTableFixups entries", async () => {
   const bytes = new Uint8Array(0x500).fill(0);
-  const clrOffset = CLR_DIRECTORY_RVA;
   const vtOff = 0x200;
   const dv = new DataView(bytes.buffer);
 
-  dv.setUint32(clrOffset + 0x00, IMAGE_COR20_HEADER_SIZE, true);
-  dv.setUint16(clrOffset + 0x04, 4, true);
-  dv.setUint16(clrOffset + 0x06, 0, true);
-  dv.setUint32(clrOffset + 0x08, 0, true);
-  dv.setUint32(clrOffset + 0x0c, 0, true);
-  dv.setUint32(clrOffset + 0x10, 0, true);
-  dv.setUint32(clrOffset + 0x14, 0, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x00, IMAGE_COR20_HEADER_SIZE, true);
+  dv.setUint16(CLR_DIRECTORY_RVA + 0x04, 4, true);
+  dv.setUint16(CLR_DIRECTORY_RVA + 0x06, 0, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x08, 0, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x0c, 0, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x10, 0, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x14, 0, true);
 
-  dv.setUint32(clrOffset + 0x30, vtOff, true);
-  dv.setUint32(clrOffset + 0x34, 0x10, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x30, vtOff, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x34, 0x10, true);
 
   dv.setUint32(vtOff + 0x00, 0x1111, true);
   dv.setUint16(vtOff + 0x04, 2, true);
@@ -162,7 +159,7 @@ void test("parseClrDirectory parses VTableFixups entries", async () => {
   dv.setUint16(vtOff + 0x0c, 1, true);
   dv.setUint16(vtOff + 0x0e, 0x04, true);
 
-  const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: IMAGE_COR20_HEADER_SIZE }];
+  const dirs = [{ name: "CLR_RUNTIME", rva: CLR_DIRECTORY_RVA, size: IMAGE_COR20_HEADER_SIZE }];
   const clr = await parseClrDirectory(new MockFile(bytes, "clr-vt.bin"), dirs, rvaToOff);
   const definedClr = expectDefined(clr);
 
@@ -174,18 +171,17 @@ void test("parseClrDirectory parses VTableFixups entries", async () => {
 
 void test("parseClrDirectory returns issues when the CLR directory is truncated", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
-  const clrOffset = CLR_DIRECTORY_RVA;
   const dv = new DataView(bytes.buffer);
 
-  dv.setUint32(clrOffset + 0x00, IMAGE_COR20_HEADER_SIZE, true);
-  dv.setUint16(clrOffset + 0x04, 4, true);
-  dv.setUint16(clrOffset + 0x06, 0, true);
-  dv.setUint32(clrOffset + 0x08, 0, true);
-  dv.setUint32(clrOffset + 0x0c, 0, true);
-  dv.setUint32(clrOffset + 0x10, 0, true);
-  dv.setUint32(clrOffset + 0x14, 0, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x00, IMAGE_COR20_HEADER_SIZE, true);
+  dv.setUint16(CLR_DIRECTORY_RVA + 0x04, 4, true);
+  dv.setUint16(CLR_DIRECTORY_RVA + 0x06, 0, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x08, 0, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x0c, 0, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x10, 0, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x14, 0, true);
 
-  const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: 0x18 }];
+  const dirs = [{ name: "CLR_RUNTIME", rva: CLR_DIRECTORY_RVA, size: 0x18 }];
   const clr = await parseClrDirectory(new MockFile(bytes, "clr-truncated.bin"), dirs, rvaToOff);
   const definedClr = expectDefined(clr);
   const issues = expectDefined(definedClr.issues);
@@ -208,15 +204,14 @@ void test("parseClrDirectory returns partial header info even when the directory
 
 void test("parseClrDirectory reports metadata RVAs that cannot be mapped", async () => {
   const bytes = new Uint8Array(0x300).fill(0);
-  const clrOffset = CLR_DIRECTORY_RVA;
   const metaRva = 0x200;
   const dv = new DataView(bytes.buffer);
-  dv.setUint32(clrOffset + 0x00, IMAGE_COR20_HEADER_SIZE, true);
-  dv.setUint16(clrOffset + 0x04, 2, true);
-  dv.setUint16(clrOffset + 0x06, 5, true);
-  dv.setUint32(clrOffset + 0x08, metaRva, true);
-  dv.setUint32(clrOffset + 0x0c, 0x80, true);
-  const dirs = [{ name: "CLR_RUNTIME", rva: clrOffset, size: IMAGE_COR20_HEADER_SIZE }];
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x00, IMAGE_COR20_HEADER_SIZE, true);
+  dv.setUint16(CLR_DIRECTORY_RVA + 0x04, 2, true);
+  dv.setUint16(CLR_DIRECTORY_RVA + 0x06, 5, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x08, metaRva, true);
+  dv.setUint32(CLR_DIRECTORY_RVA + 0x0c, 0x80, true);
+  const dirs = [{ name: "CLR_RUNTIME", rva: CLR_DIRECTORY_RVA, size: IMAGE_COR20_HEADER_SIZE }];
   const mapWithHole = (rva: number): number | null => (rva === metaRva ? null : rva);
   const clr = await parseClrDirectory(new MockFile(bytes, "clr-meta-hole.bin"), dirs, mapWithHole);
   assert.ok(expectDefined(expectDefined(clr).issues).some(issue => issue.toLowerCase().includes("metadata rva")));

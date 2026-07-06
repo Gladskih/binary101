@@ -1,19 +1,19 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { isPeWindowsParseResult, parsePe } from "../../../../analyzers/pe/index.js";
+import { IMAGE_FILE_MACHINE_I386 } from "../../../../analyzers/coff/machine.js";
+import {
+  createHeadersOnlyPeWithAlignedImageSize,
+  createTinyPEHeader,
+  MINIMAL_PE32_IMAGE_BASE,
+  MINIMAL_PE32_OPTIONAL_HEADER_MAGIC
+} from "../../../fixtures/minimal-pe-headers.js";
 import {
   createPeWithSectionAndIat as createSamplePeWithSectionAndIat,
   createPeWithSectionAndIatFixture
 } from "../../../fixtures/sample-files-pe.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 
-const DOS_SIGNATURE = 0x5a4d;
-const PE_SIGNATURE = 0x00004550;
-const IMAGE_FILE_MACHINE_I386 = 0x014c;
-const IMAGE_FILE_EXECUTABLE_IMAGE = 0x0002;
-const IMAGE_NT_OPTIONAL_HDR32_MAGIC = 0x10b;
-// Conventional PE32 ImageBase used by these minimal parser fixtures.
-const TEST_PE32_IMAGE_BASE = 0x00400000n;
 // Microsoft PE/COFF: IMAGE_OPTIONAL_HEADER32.DataDirectory begins 96 bytes into the optional header.
 const PE32_DATA_DIRECTORIES_OFFSET = 0x60;
 // Microsoft PE format: data-directory indices for SECURITY, DEBUG, and IAT.
@@ -42,80 +42,6 @@ const INVALID_GLOBALPTR_SIZE = 4;
 // https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
 const ZIP_LOCAL_FILE_HEADER_SIGNATURE = [0x50, 0x4b, 0x03, 0x04];
 
-/**
- * Creates a byte array for a minimal valid PE32 header.
- * This is useful for testing the PE parser without requiring an actual file.
- * The structure includes a DOS header, PE signature, COFF header, and a minimal Optional header.
- * @returns {Uint8Array}
- */
-function createTinyPEHeader() {
-  const peSignatureOffset = 64;
-  const coffHeaderSize = 20;
-  const optionalHeaderSize = 224;
-  const totalHeaderSize = peSignatureOffset + 4 + coffHeaderSize + optionalHeaderSize;
-
-  const buffer = new ArrayBuffer(totalHeaderSize);
-  const view = new DataView(buffer);
-
-  // DOS Header
-  view.setUint16(0, DOS_SIGNATURE, true); // 'MZ'
-  view.setUint32(0x3c, peSignatureOffset, true); // e_lfanew
-
-  // PE Signature
-  view.setUint32(peSignatureOffset, PE_SIGNATURE, true); // 'PE\0\0'
-
-  // COFF File Header
-  const coffHeaderOffset = peSignatureOffset + 4;
-  view.setUint16(coffHeaderOffset, IMAGE_FILE_MACHINE_I386, true); // Machine: x86
-  view.setUint16(coffHeaderOffset + 2, 0, true); // NumberOfSections
-  view.setUint32(coffHeaderOffset + 4, 0, true); // TimeDateStamp
-  view.setUint32(coffHeaderOffset + 8, 0, true); // PointerToSymbolTable
-  view.setUint32(coffHeaderOffset + 12, 0, true); // NumberOfSymbols
-  view.setUint16(coffHeaderOffset + 16, optionalHeaderSize, true); // SizeOfOptionalHeader
-  view.setUint16(coffHeaderOffset + 18, IMAGE_FILE_EXECUTABLE_IMAGE, true); // Characteristics
-
-  // Optional Header (PE32)
-  const optionalHeaderOffset = coffHeaderOffset + coffHeaderSize;
-  view.setUint16(optionalHeaderOffset, IMAGE_NT_OPTIONAL_HDR32_MAGIC, true); // Magic: PE32
-  view.setUint32(optionalHeaderOffset + 28, Number(TEST_PE32_IMAGE_BASE), true); // ImageBase
-  view.setUint32(optionalHeaderOffset + 56, totalHeaderSize, true); // SizeOfHeaders
-
-  return new Uint8Array(buffer);
-}
-
-function createHeadersOnlyPeWithAlignedImageSize() {
-  const peSignatureOffset = 64;
-  const coffHeaderSize = 20;
-  const optionalHeaderSize = 224;
-  const fileAlignment = 0x200;
-  const sectionAlignment = 0x1000;
-  const sizeOfHeaders = fileAlignment;
-  const sizeOfImage = sectionAlignment;
-
-  const buffer = new ArrayBuffer(sizeOfHeaders);
-  const view = new DataView(buffer);
-
-  view.setUint16(0, DOS_SIGNATURE, true); // 'MZ'
-  view.setUint32(0x3c, peSignatureOffset, true); // e_lfanew
-  view.setUint32(peSignatureOffset, PE_SIGNATURE, true); // 'PE\0\0'
-
-  const coffHeaderOffset = peSignatureOffset + 4;
-  view.setUint16(coffHeaderOffset, IMAGE_FILE_MACHINE_I386, true); // Machine: x86
-  view.setUint16(coffHeaderOffset + 2, 0, true); // NumberOfSections
-  view.setUint16(coffHeaderOffset + 16, optionalHeaderSize, true);
-  view.setUint16(coffHeaderOffset + 18, IMAGE_FILE_EXECUTABLE_IMAGE, true);
-
-  const optionalHeaderOffset = coffHeaderOffset + coffHeaderSize;
-  view.setUint16(optionalHeaderOffset, IMAGE_NT_OPTIONAL_HDR32_MAGIC, true); // Magic: PE32
-  view.setUint32(optionalHeaderOffset + 28, Number(TEST_PE32_IMAGE_BASE), true); // ImageBase
-  view.setUint32(optionalHeaderOffset + 32, sectionAlignment, true);
-  view.setUint32(optionalHeaderOffset + 36, fileAlignment, true);
-  view.setUint32(optionalHeaderOffset + 56, sizeOfImage, true);
-  view.setUint32(optionalHeaderOffset + 60, sizeOfHeaders, true);
-
-  return new Uint8Array(buffer);
-}
-
 void test("parsePe correctly parses a minimal PE header", async () => {
   const peBytes = createTinyPEHeader();
   const mockFile = new MockFile(peBytes, "minimal.exe");
@@ -127,8 +53,8 @@ void test("parsePe correctly parses a minimal PE header", async () => {
   assert.strictEqual(result.coff.Machine, IMAGE_FILE_MACHINE_I386, "COFF header Machine should be x86");
   assert.strictEqual(result.coff.NumberOfSections, 0, "COFF header should report 0 sections");
   assert.ok(isPeWindowsParseResult(result));
-  assert.strictEqual(result.opt.Magic, IMAGE_NT_OPTIONAL_HDR32_MAGIC, "Optional header magic should be PE32");
-  assert.strictEqual(result.opt.ImageBase, TEST_PE32_IMAGE_BASE, "Optional header ImageBase should be parsed correctly");
+  assert.strictEqual(result.opt.Magic, MINIMAL_PE32_OPTIONAL_HEADER_MAGIC, "Optional header magic should be PE32");
+  assert.strictEqual(result.opt.ImageBase, MINIMAL_PE32_IMAGE_BASE, "Optional header ImageBase should be parsed correctly");
 });
 
 void test("parsePe does not treat a headers-only image as overlay data", async () => {

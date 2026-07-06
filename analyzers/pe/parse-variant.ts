@@ -10,7 +10,7 @@ import { parseImportDirectory32, parseImportDirectory64 } from "./imports/index.
 import { createLoadConfigEnricher } from "./load-config/enrich.js";
 import { parseLoadConfigDirectory32, parseLoadConfigDirectory64 } from "./load-config/index.js";
 import { readSafeSehHandlerTable } from "./load-config/tables.js";
-import { IMAGE_FILE_MACHINE_I386 } from "./machine.js";
+import { IMAGE_FILE_MACHINE_I386 } from "../coff/machine.js";
 import { PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "./optional-header/magic.js";
 
 export type PeVariantParsers = {

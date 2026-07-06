@@ -19,8 +19,7 @@ import {
   writeThunkTable64
 } from "../../delay-import-layout.js";
 
-const PACKED_DELAY_DIRECTORY_RVA = IMAGE_DELAYLOAD_DESCRIPTOR_SIZE;
-const PACKED_IMAGE_SIZE = PACKED_DELAY_DIRECTORY_RVA + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE;
+const PACKED_IMAGE_SIZE = IMAGE_DELAYLOAD_DESCRIPTOR_SIZE * 2;
 
 void test("parseDelayImports warns when the Delay Import Name Table cannot be mapped", async () => {
   const dllName = "delay.dll";
@@ -58,7 +57,7 @@ void test("parseDelayImports reports an unmappable directory base instead of sil
 void test("parseDelayImports does not warn when a packed delay directory is only present in the loaded image", async () => {
   const result = await parseDelayImports32(
     new MockFile(new Uint8Array(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE).fill(0)),
-    [{ name: "DELAY_IMPORT", rva: PACKED_DELAY_DIRECTORY_RVA, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
+    [{ name: "DELAY_IMPORT", rva: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
     () => null,
     { sizeOfImage: PACKED_IMAGE_SIZE }
   );

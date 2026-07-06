@@ -1,0 +1,88 @@
+"use strict";
+
+import { toHex32 } from "../../binary-utils.js";
+import {
+  IMAGE_FILE_MACHINE_AMD64,
+  IMAGE_FILE_MACHINE_ARM64,
+  IMAGE_FILE_MACHINE_I386
+} from "./machine.js";
+
+export const COFF_I386_RELOCATION_TYPES = {
+  REL32: 0x0014
+} as const;
+
+// Microsoft PE/COFF, "COFF Relocations (Object Only) / Type Indicators":
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#type-indicators
+const AMD64_RELOCATION_TYPE_NAMES: Record<number, string> = {
+  0x0000: "IMAGE_REL_AMD64_ABSOLUTE",
+  0x0001: "IMAGE_REL_AMD64_ADDR64",
+  0x0002: "IMAGE_REL_AMD64_ADDR32",
+  0x0003: "IMAGE_REL_AMD64_ADDR32NB",
+  0x0004: "IMAGE_REL_AMD64_REL32",
+  0x0005: "IMAGE_REL_AMD64_REL32_1",
+  0x0006: "IMAGE_REL_AMD64_REL32_2",
+  0x0007: "IMAGE_REL_AMD64_REL32_3",
+  0x0008: "IMAGE_REL_AMD64_REL32_4",
+  0x0009: "IMAGE_REL_AMD64_REL32_5",
+  0x000a: "IMAGE_REL_AMD64_SECTION",
+  0x000b: "IMAGE_REL_AMD64_SECREL",
+  0x000c: "IMAGE_REL_AMD64_SECREL7",
+  0x000d: "IMAGE_REL_AMD64_TOKEN",
+  0x000e: "IMAGE_REL_AMD64_SREL32",
+  0x000f: "IMAGE_REL_AMD64_PAIR",
+  0x0010: "IMAGE_REL_AMD64_SSPAN32"
+};
+
+const I386_RELOCATION_TYPE_NAMES: Record<number, string> = {
+  0x0000: "IMAGE_REL_I386_ABSOLUTE",
+  0x0001: "IMAGE_REL_I386_DIR16",
+  0x0002: "IMAGE_REL_I386_REL16",
+  0x0006: "IMAGE_REL_I386_DIR32",
+  0x0007: "IMAGE_REL_I386_DIR32NB",
+  0x0009: "IMAGE_REL_I386_SEG12",
+  0x000a: "IMAGE_REL_I386_SECTION",
+  0x000b: "IMAGE_REL_I386_SECREL",
+  0x000c: "IMAGE_REL_I386_TOKEN",
+  0x000d: "IMAGE_REL_I386_SECREL7",
+  [COFF_I386_RELOCATION_TYPES.REL32]: "IMAGE_REL_I386_REL32"
+};
+
+const ARM64_RELOCATION_TYPE_NAMES: Record<number, string> = {
+  0x0000: "IMAGE_REL_ARM64_ABSOLUTE",
+  0x0001: "IMAGE_REL_ARM64_ADDR32",
+  0x0002: "IMAGE_REL_ARM64_ADDR32NB",
+  0x0003: "IMAGE_REL_ARM64_BRANCH26",
+  0x0004: "IMAGE_REL_ARM64_PAGEBASE_REL21",
+  0x0005: "IMAGE_REL_ARM64_REL21",
+  0x0006: "IMAGE_REL_ARM64_PAGEOFFSET_12A",
+  0x0007: "IMAGE_REL_ARM64_PAGEOFFSET_12L",
+  0x0008: "IMAGE_REL_ARM64_SECREL",
+  0x0009: "IMAGE_REL_ARM64_SECREL_LOW12A",
+  0x000a: "IMAGE_REL_ARM64_SECREL_HIGH12A",
+  0x000b: "IMAGE_REL_ARM64_SECREL_LOW12L",
+  0x000c: "IMAGE_REL_ARM64_TOKEN",
+  0x000d: "IMAGE_REL_ARM64_SECTION",
+  0x000e: "IMAGE_REL_ARM64_ADDR64",
+  0x000f: "IMAGE_REL_ARM64_BRANCH19",
+  0x0010: "IMAGE_REL_ARM64_BRANCH14",
+  0x0011: "IMAGE_REL_ARM64_REL32"
+};
+
+const getMachineRelocationTypes = (machine: number): Record<number, string> | null => {
+  switch (machine & 0xffff) {
+    case IMAGE_FILE_MACHINE_I386:
+      return I386_RELOCATION_TYPE_NAMES;
+    case IMAGE_FILE_MACHINE_AMD64:
+      return AMD64_RELOCATION_TYPE_NAMES;
+    case IMAGE_FILE_MACHINE_ARM64:
+      return ARM64_RELOCATION_TYPE_NAMES;
+    default:
+      return null;
+  }
+};
+
+export const formatCoffRelocationType = (machine: number, type: number): string => {
+  const normalizedType = type & 0xffff;
+  return getMachineRelocationTypes(machine)?.[normalizedType] ??
+    `TYPE_${toHex32(normalizedType, 4)}`;
+};

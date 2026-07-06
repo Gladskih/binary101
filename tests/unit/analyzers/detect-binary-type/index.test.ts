@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { detectBinaryType } from "../../../../analyzers/index.js";
-import { IMAGE_FILE_MACHINE_I386 } from "../../../../analyzers/pe/machine.js";
+import { IMAGE_FILE_MACHINE_I386 } from "../../../../analyzers/coff/machine.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 import { createMp3File } from "../../../fixtures/audio-sample-files.js";
 import { createMp4File } from "../../../fixtures/mp4-fixtures.js";
@@ -282,7 +282,7 @@ void test("detectBinaryType uses the official Microsoft machine names for PE lab
 });
 
 void test("detectBinaryType labels .NET ReadyToRun OS-overridden PE machines", async () => {
-  // .NET ReadyToRun: IMAGE_FILE_MACHINE_AMD64 0x8664 XOR Linux override 0x7B79.
+  // .NET ReadyToRun: IMAGE_FILE_MACHINE_AMD64 XOR Linux override 0x7B79.
   // https://github.com/dotnet/runtime/blob/main/src/coreclr/inc/pedecoder.h
   const label = await detectBinaryType(createMinimalPeLabelProbe(0xfd1d, 0x20b));
   assert.strictEqual(label, "PE32+ executable for x86-64 (AMD64) ReadyToRun for Linux");

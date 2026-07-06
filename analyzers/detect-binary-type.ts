@@ -1,10 +1,12 @@
 "use strict";
 
 import { detectPdfVersion, hasZipEocdSignature, refineCompoundLabel, refineZipLabel } from "./detection-labels.js";
+import { DEFAULT_FILE_READ_WINDOW_BYTES } from "./file-range-reader.js";
 import { probeElf } from "./elf/probe.js";
 import { probeMachO } from "./macho/probe.js";
 import { probeMp3 } from "./mp3/index.js";
 import { probeMzFormat, type MzProbeResult } from "./mz-probe.js";
+import { buildCoffObjectLabel, probeCoffObject } from "./coff/probe.js";
 import { mapMachine } from "./pe/security/signature.js";
 import { probeByMagic, probeTextLike } from "./probes.js";
 import { hasTgaFooterSignature } from "./tga/footer.js";
@@ -18,7 +20,7 @@ const readSliceView = async (file: File, start: number, end: number): Promise<Da
 };
 
 const readProbeView = async (file: File): Promise<DataView> =>
-  readSliceView(file, 0, Math.min(file.size, 64 * 1024));
+  readSliceView(file, 0, Math.min(file.size, DEFAULT_FILE_READ_WINDOW_BYTES));
 
 const buildPeLabel = async (file: File, mz: MzProbeResult): Promise<string> => {
   const peHeaderOffset = mz.eLfanew >>> 0;
@@ -86,6 +88,8 @@ const detectBinaryType = async (file: File): Promise<string> => {
   if (macho) return macho;
   const mzLabel = await buildMzLabel(file, dv);
   if (mzLabel) return mzLabel;
+  const coffObject = probeCoffObject(dv, file.size);
+  if (coffObject) return buildCoffObjectLabel(coffObject);
   const magic = probeByMagic(dv);
   if (magic) return refineMagicLabel(dv, magic);
   if (hasZipEocdSignature(dv)) return "ZIP archive";

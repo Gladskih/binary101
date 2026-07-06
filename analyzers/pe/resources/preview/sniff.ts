@@ -15,7 +15,7 @@ import {
   hasWoffSignature,
   hasWoff2Signature,
   hasZipLocalFileHeader
-} from "./signatures.js";
+} from "../../../probes/file-signatures.js";
 import type {
   ResourcePreviewField,
   ResourcePreviewResult

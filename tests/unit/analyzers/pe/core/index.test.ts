@@ -7,6 +7,7 @@ import {
   PE32_OPTIONAL_HEADER_MAGIC,
   ROM_OPTIONAL_HEADER_MAGIC
 } from "../../../../../analyzers/pe/optional-header/magic.js";
+import { IMAGE_FILE_MACHINE_I386 } from "../../../../../analyzers/coff/machine.js";
 import type { PeOptionalHeader, PeWindowsOptionalHeader } from "../../../../../analyzers/pe/types.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
 import { createSliceTrackingFile } from "../../../../helpers/slice-tracking-file.js";
@@ -14,7 +15,6 @@ import { createSliceTrackingFile } from "../../../../helpers/slice-tracking-file
 const DOS_SIGNATURE_MZ = 0x5a4d;
 const DOS_E_LFANEW_OFFSET = 0x3c;
 const PE_SIGNATURE_OFFSET = 0x80;
-const IMAGE_FILE_MACHINE_I386 = 0x014c;
 
 const getWindowsOptionalHeader = (opt: PeOptionalHeader | null): PeWindowsOptionalHeader => {
   if (!opt || opt.Magic === ROM_OPTIONAL_HEADER_MAGIC) {

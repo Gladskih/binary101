@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_I386 } from "../../../../analyzers/pe/machine.js";
+import { IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_I386 } from "../../../../analyzers/coff/machine.js";
 import { PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "../../../../analyzers/pe/optional-header/magic.js";
 import { selectPeVariantParsers } from "../../../../analyzers/pe/parse-variant.js";
 

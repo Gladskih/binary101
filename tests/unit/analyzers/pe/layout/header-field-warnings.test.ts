@@ -5,7 +5,8 @@ import { test } from "node:test";
 import { collectPeHeaderFieldWarnings } from "../../../../../analyzers/pe/layout/header-field-warnings.js";
 import { createWindowsLayoutSubject } from "../../../../fixtures/pe-layout-warning-subject.js";
 
-// Microsoft PE/COFF file and DLL characteristic bits used by these header-warning fixtures.
+// Microsoft PE/COFF "Characteristics": IMAGE_FILE_EXECUTABLE_IMAGE.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#characteristics
 const IMAGE_FILE_EXECUTABLE_IMAGE = 0x0002;
 const IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA = 0x0020;
 const COMIMAGE_FLAGS_ILONLY = 0x00000001;

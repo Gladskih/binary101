@@ -70,8 +70,7 @@ const createBunPayload = (): Uint8Array => {
 const createPePlusWithBunSection = (): Uint8Array => {
   const base = createPePlusWithSection();
   const payload = createBunPayload();
-  const bunRawSize = FILE_ALIGNMENT;
-  const bytes = new Uint8Array(TEXT_SECTION_RAW_END + bunRawSize);
+  const bytes = new Uint8Array(TEXT_SECTION_RAW_END + FILE_ALIGNMENT);
   bytes.set(base);
   const view = new DataView(bytes.buffer);
   view.setUint16(COFF_HEADER_OFFSET + 2, 2, true);
@@ -86,7 +85,7 @@ const createPePlusWithBunSection = (): Uint8Array => {
     true
   );
   view.setUint32(headerOffset + PE_SECTION_VIRTUAL_ADDRESS_OFFSET, BUN_SECTION_VIRTUAL_ADDRESS, true);
-  view.setUint32(headerOffset + PE_SECTION_SIZE_OF_RAW_DATA_OFFSET, bunRawSize, true);
+  view.setUint32(headerOffset + PE_SECTION_SIZE_OF_RAW_DATA_OFFSET, FILE_ALIGNMENT, true);
   view.setUint32(headerOffset + PE_SECTION_POINTER_TO_RAW_DATA_OFFSET, TEXT_SECTION_RAW_END, true);
   view.setUint32(
     headerOffset + PE_SECTION_CHARACTERISTICS_OFFSET,

@@ -13,6 +13,7 @@ import { createIso9660PrimaryFile } from "../../fixtures/iso9660-fixtures.js";
 import { createMachOFile } from "../../fixtures/macho-fixtures.js";
 import { createMkvFile } from "../../fixtures/mkv-base-fixtures.js";
 import { createPcapNgFile } from "../../fixtures/pcapng-fixtures.js";
+import { createCoffObjectFile } from "../../fixtures/coff-object-fixture.js";
 
 void test("renderAnalysisIntoUi renders ELF output and updates visibility flags", () => {
   const elf = {
@@ -267,4 +268,25 @@ void test("renderAnalysisIntoUi renders PCAP-NG output", async () => {
   assert.equal(valueElement.hidden, false);
   assert.ok(valueElement.innerHTML.includes("Sections"));
   assert.ok(valueElement.innerHTML.includes("Interfaces"));
+});
+
+void test("renderAnalysisIntoUi renders COFF object output", async () => {
+  const parsed = await parseForUi(createCoffObjectFile());
+  assert.equal(parsed.analyzer, "coff");
+
+  const termElement = { textContent: "", hidden: true } as unknown as HTMLElement;
+  const valueElement = { innerHTML: "", hidden: true } as unknown as HTMLElement;
+
+  renderAnalysisIntoUi(parsed, {
+    buildPreview: () => null,
+    attachGuards: () => {},
+    termElement,
+    valueElement
+  });
+
+  assert.equal(termElement.hidden, true);
+  assert.equal(termElement.textContent, "COFF object details");
+  assert.equal(valueElement.hidden, false);
+  assert.ok(valueElement.innerHTML.includes("COFF file header"));
+  assert.ok(valueElement.innerHTML.includes("COFF symbol table"));
 });

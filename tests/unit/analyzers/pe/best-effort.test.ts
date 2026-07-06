@@ -3,22 +3,28 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parsePe } from "../../../../analyzers/pe/index.js";
+import { IMAGE_FILE_MACHINE_I386 } from "../../../../analyzers/coff/machine.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 
 const PE32_OPTIONAL_HEADER_MAGIC = 0x10b;
+// Microsoft PE/COFF section flags: CNT_CODE | MEM_EXECUTE | MEM_READ.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
 const PE_TEXT_SECTION_CHARACTERISTICS = 0x60000020;
+// Microsoft PE/COFF file characteristics: EXECUTABLE_IMAGE | MACHINE_32BIT.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#characteristics
+const IMAGE_FILE_EXECUTABLE_32BIT_CHARACTERISTICS = 0x0102;
 const EXPECTED_IMAGE_SIZE_WITH_0X600_SECTION_ALIGNMENT = 0x0c00;
 
 const writeSignatureAndCoff = (bytes: Uint8Array, peOffset: number, optionalSize: number, sections: number): void => {
   bytes.set([0x50, 0x45, 0x00, 0x00], peOffset); // "PE\0\0"
   const dv = new DataView(bytes.buffer, bytes.byteOffset + peOffset + 4, 20);
-  dv.setUint16(0, 0x014c, true); // IMAGE_FILE_MACHINE_I386
+  dv.setUint16(0, IMAGE_FILE_MACHINE_I386, true);
   dv.setUint16(2, sections, true);
   dv.setUint32(4, 0, true); // TimeDateStamp
   dv.setUint32(8, 0, true); // PointerToSymbolTable
   dv.setUint32(12, 0, true); // NumberOfSymbols
   dv.setUint16(16, optionalSize, true);
-  dv.setUint16(18, 0x0102, true); // Characteristics (executable)
+  dv.setUint16(18, IMAGE_FILE_EXECUTABLE_32BIT_CHARACTERISTICS, true);
 };
 
 void test("parsePe does not invent an optional header when SizeOfOptionalHeader is zero", async () => {

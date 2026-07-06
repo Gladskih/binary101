@@ -3,6 +3,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { collectLoadConfigChecks } from "../../../../../analyzers/pe/load-config/checks.js";
+import {
+  IMAGE_FILE_MACHINE_AMD64,
+  IMAGE_FILE_MACHINE_I386
+} from "../../../../../analyzers/coff/machine.js";
 import type {
   PeLoadConfig,
   PeLoadConfigCheck,
@@ -87,7 +91,7 @@ void test("collectLoadConfigChecks passes coherent CFG table metadata", () => {
       }
     }),
     makeOptionalHeader(0x4000 | 0x0040), // PE DllCharacteristics: GUARD_CF plus DYNAMIC_BASE.
-    0x014c, // Microsoft PE Machine Types: IMAGE_FILE_MACHINE_I386.
+    IMAGE_FILE_MACHINE_I386,
     [makeTextSection()],
     0,
     null
@@ -114,7 +118,7 @@ void test("collectLoadConfigChecks reports CFG metadata and header mismatches", 
       }
     }),
     makeOptionalHeader(0x4000), // PE DllCharacteristics: GUARD_CF.
-    0x8664, // Microsoft PE Machine Types: IMAGE_FILE_MACHINE_AMD64.
+    IMAGE_FILE_MACHINE_AMD64,
     [makeTextSection()],
     0,
     null
@@ -134,7 +138,7 @@ void test("collectLoadConfigChecks fails when a declared CFG table was not decod
       GuardCFFunctionCount: 1
     }),
     makeOptionalHeader(),
-    0x8664, // Microsoft PE Machine Types: IMAGE_FILE_MACHINE_AMD64.
+    IMAGE_FILE_MACHINE_AMD64,
     [makeTextSection()],
     0,
     null
@@ -149,7 +153,7 @@ void test("collectLoadConfigChecks rejects SafeSEH on non-x86 images and with NO
       SEHandlerCount: 1
     }),
     makeOptionalHeader(0x0400), // PE DllCharacteristics: NO_SEH.
-    0x8664, // Microsoft PE Machine Types: IMAGE_FILE_MACHINE_AMD64.
+    IMAGE_FILE_MACHINE_AMD64,
     [makeTextSection()],
     0,
     null
@@ -162,7 +166,7 @@ void test("collectLoadConfigChecks flags writable CFG pointer slots", () => {
   const checks = collectLoadConfigChecks(
     makeLoadConfig({ GuardCFCheckFunctionPointer: CFG_TABLE_VA }),
     makeOptionalHeader(),
-    0x8664, // Microsoft PE Machine Types: IMAGE_FILE_MACHINE_AMD64.
+    IMAGE_FILE_MACHINE_AMD64,
     [makeTextSection(0xe0000020)], // PE section flags: code/read/execute plus MEM_WRITE.
     0,
     null
@@ -189,7 +193,7 @@ void test("collectLoadConfigChecks rejects reserved metadata in non-GFIDS CFG ta
       }
     }),
     makeOptionalHeader(),
-    0x8664, // Microsoft PE Machine Types: IMAGE_FILE_MACHINE_AMD64.
+    IMAGE_FILE_MACHINE_AMD64,
     [makeTextSection()],
     0,
     null
@@ -218,7 +222,7 @@ void test("collectLoadConfigChecks fails unconfirmed protected delay-load IAT la
       GuardFlags: 0x00001000 | 0x00002000
     }),
     makeOptionalHeader(),
-    0x8664, // Microsoft PE Machine Types: IMAGE_FILE_MACHINE_AMD64.
+    IMAGE_FILE_MACHINE_AMD64,
     [makeTextSection()],
     1,
     importLinking

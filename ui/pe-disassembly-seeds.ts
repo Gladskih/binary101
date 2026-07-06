@@ -2,7 +2,8 @@ import { createFileRangeReader, type FileRangeReader } from "../analyzers/file-r
 import { isPeWindowsParseResult, type PeParseResult } from "../analyzers/pe/index.js";
 import type { PeWindowsParseResult } from "../analyzers/pe/core/parse-result.js";
 import { PE32_OPTIONAL_HEADER_MAGIC, PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "../analyzers/pe/optional-header/magic.js";
-import { IMAGE_FILE_MACHINE_I386, getCanonicalPeMachine } from "../analyzers/pe/machine.js";
+import { IMAGE_FILE_MACHINE_I386 } from "../analyzers/coff/machine.js";
+import { getCanonicalPeMachine } from "../analyzers/pe/machine.js";
 import { readLoadConfigPointerRva } from "../analyzers/pe/load-config/index.js";
 import {
   findSectionContainingRva,

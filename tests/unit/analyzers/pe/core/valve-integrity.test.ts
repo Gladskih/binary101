@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parsePeHeaders } from "../../../../../analyzers/pe/core/index.js";
 import { parseValveIntegrityBlock } from "../../../../../analyzers/pe/core/valve-integrity.js";
+import { IMAGE_FILE_MACHINE_I386 } from "../../../../../analyzers/coff/machine.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
 
 // Steam-like sample layout from https://face.0xff.re/posts/patching-steam-binaries/.
@@ -37,7 +38,7 @@ const createPeWithValveIntegrityBlock = (): Uint8Array => {
   view.setUint32(0x3c, VALVE_BLOCK_PE_OFFSET, true);
   bytes.set(createValveBlock(), FIXED_DOS_HEADER_SIZE);
   bytes.set([0x50, 0x45, 0x00, 0x00], VALVE_BLOCK_PE_OFFSET);
-  view.setUint16(VALVE_BLOCK_PE_OFFSET + 4, 0x014c, true); // Microsoft PE: IMAGE_FILE_MACHINE_I386.
+  view.setUint16(VALVE_BLOCK_PE_OFFSET + 4, IMAGE_FILE_MACHINE_I386, true);
   view.setUint16(VALVE_BLOCK_PE_OFFSET + 20, optionalHeaderSize, true);
   view.setUint16(VALVE_BLOCK_PE_OFFSET + 24, 0x10b, true);
   return bytes;

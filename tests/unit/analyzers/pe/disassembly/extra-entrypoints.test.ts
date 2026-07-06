@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { analyzePeInstructionSets } from "../../../../../analyzers/pe/disassembly/index.js";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../analyzers/coff/machine.js";
 import { inlinePeSectionName } from "../../../../../analyzers/pe/sections/name.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
 
@@ -14,7 +15,7 @@ void test("analyzePeInstructionSets uses extra entrypoints when provided", async
   const file = new MockFile(bytes, "extra-entry.bin");
 
   const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x8664,
+    coffMachine: IMAGE_FILE_MACHINE_AMD64,
     is64Bit: true,
     imageBase: 0x140000000n,
     entrypointRva: 0,
@@ -42,7 +43,7 @@ void test("analyzePeInstructionSets rejects extra entrypoints that exist only in
   const file = new MockFile(bytes, "raw-tail-entry.bin");
 
   const report = await analyzePeInstructionSets(file, {
-    coffMachine: 0x8664,
+    coffMachine: IMAGE_FILE_MACHINE_AMD64,
     is64Bit: true,
     imageBase: 0x140000000n,
     entrypointRva: 0,

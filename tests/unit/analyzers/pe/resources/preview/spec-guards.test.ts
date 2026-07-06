@@ -91,11 +91,16 @@ const buildSingleCodeUnitStringTable = (entryCount: number): Uint8Array => {
 void test("enrichResourcePreviews decodes MESSAGE_RESOURCE_DATA blocks using block offsets and entry lengths", async () => {
   const firstMessageId = 10;
   const messageTableBytes = buildMessageTable(firstMessageId, "OK", "Hi");
-  const messageTableOffset = RESOURCE_DIRECTORY_HEADER_SIZE;
-  const fileBytes = new Uint8Array(messageTableOffset + messageTableBytes.length).fill(0);
-  fileBytes.set(messageTableBytes, messageTableOffset);
+  const fileBytes = new Uint8Array(RESOURCE_DIRECTORY_HEADER_SIZE + messageTableBytes.length).fill(0);
+  fileBytes.set(messageTableBytes, RESOURCE_DIRECTORY_HEADER_SIZE);
   // 2057 = en-GB; any non-null LANGID is fine, this one is just explicit.
-  const tree = createIdentityResourceTree("MESSAGETABLE", messageTableOffset, messageTableBytes.length, 2057, 0);
+  const tree = createIdentityResourceTree(
+    "MESSAGETABLE",
+    RESOURCE_DIRECTORY_HEADER_SIZE,
+    messageTableBytes.length,
+    2057,
+    0
+  );
 
   const result = await enrichResourcePreviews(new MockFile(fileBytes), tree);
   const group = expectDefined(result.detail[0]);
@@ -114,13 +119,12 @@ void test("enrichResourcePreviews decodes MESSAGE_RESOURCE_DATA blocks using blo
 void test("enrichResourcePreviews limits STRING resources to one 16-string block", async () => {
   const entryCount = STRING_TABLE_ENTRY_COUNT + 1; // Deliberately 16 + 1 entries to catch over-read past one block.
   const stringTableBytes = buildSingleCodeUnitStringTable(entryCount);
-  const stringTableOffset = RESOURCE_DIRECTORY_HEADER_SIZE;
-  const fileBytes = new Uint8Array(stringTableOffset + stringTableBytes.length).fill(0);
-  fileBytes.set(stringTableBytes, stringTableOffset);
+  const fileBytes = new Uint8Array(RESOURCE_DIRECTORY_HEADER_SIZE + stringTableBytes.length).fill(0);
+  fileBytes.set(stringTableBytes, RESOURCE_DIRECTORY_HEADER_SIZE);
   // 1031 = de-DE; codePage 1200 matches UTF-16LE string tables.
   const tree = createIdentityResourceTree(
     "STRING",
-    stringTableOffset,
+    RESOURCE_DIRECTORY_HEADER_SIZE,
     stringTableBytes.length,
     1031,
     UTF16_CODE_PAGE
@@ -139,17 +143,16 @@ void test("enrichResourcePreviews limits STRING resources to one 16-string block
 });
 
 void test("enrichResourcePreviews preserves embedded NUL code units in counted STRING entries", async () => {
-  const stringTableOffset = RESOURCE_DIRECTORY_HEADER_SIZE;
   const stringTableBytes = new Uint8Array(8).fill(0);
   const view = new DataView(stringTableBytes.buffer);
   view.setUint16(0, 3, true);
   // Win32 string-table entries are counted UTF-16 strings, not NUL-terminated strings.
   writeUtf16(stringTableBytes, 2, "A\0B");
-  const fileBytes = new Uint8Array(stringTableOffset + stringTableBytes.length).fill(0);
-  fileBytes.set(stringTableBytes, stringTableOffset);
+  const fileBytes = new Uint8Array(RESOURCE_DIRECTORY_HEADER_SIZE + stringTableBytes.length).fill(0);
+  fileBytes.set(stringTableBytes, RESOURCE_DIRECTORY_HEADER_SIZE);
   const tree = createIdentityResourceTree(
     "STRING",
-    stringTableOffset,
+    RESOURCE_DIRECTORY_HEADER_SIZE,
     stringTableBytes.length,
     1033,
     UTF16_CODE_PAGE

@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../analyzers/coff/machine.js";
 import type { PeResources } from "../../../../analyzers/pe/resources/index.js";
 import { renderResources } from "../../../../renderers/pe/resources.js";
 import {
@@ -11,9 +12,6 @@ import {
   createManifestValidationMessageFixture,
   createManifestTextFixture
 } from "../../../fixtures/pe-manifest-preview-fixture.js";
-
-// IMAGE_FILE_HEADER.Machine values are defined by the PE/COFF spec and winnt.h.
-const AMD64_MACHINE = 0x8664;
 
 const createIconResourceGroup = (): NonNullable<PeResources["detail"]>[number] => ({
   typeName: "ICON",
@@ -68,14 +66,14 @@ const createManifestResourceGroup = (): NonNullable<PeResources["detail"]>[numbe
             ),
             manifestValidation: {
               ...createManifestValidationFixture(
-                AMD64_MACHINE,
+                IMAGE_FILE_MACHINE_AMD64,
                 { lang: null, processorArchitecture: "amd64", resourceId: 2 },
                 [],
                 validationIncidental
               ),
               validated: [
                 createManifestValidationMessageFixture(
-                  AMD64_MACHINE,
+                  IMAGE_FILE_MACHINE_AMD64,
                   { lang: null, processorArchitecture: "amd64", resourceId: 2 },
                   validationIncidental
                 )

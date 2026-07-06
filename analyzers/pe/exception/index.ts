@@ -14,7 +14,9 @@ import {
   IMAGE_FILE_MACHINE_ARM64,
   IMAGE_FILE_MACHINE_ARM64EC,
   IMAGE_FILE_MACHINE_ARM64X,
-  IMAGE_FILE_MACHINE_I386,
+  IMAGE_FILE_MACHINE_I386
+} from "../../coff/machine.js";
+import {
   getCanonicalPeMachine
 } from "../machine.js";
 

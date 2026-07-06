@@ -1,9 +1,10 @@
 "use strict";
 
 import type { FileRangeReader } from "../../file-range-reader.js";
+import type { CoffDebugInfo } from "../../coff/debug-types.js";
 import type { RvaToOffset } from "../types.js";
 import { parseCodeViewEntry, type PeCodeViewEntry } from "./codeview.js";
-import { parseCoffDebugInfo, type PeCoffDebugInfo } from "./coff.js";
+import { parseCoffDebugInfo } from "./coff.js";
 import {
   parseEmbeddedPortablePdbInfo,
   type PeEmbeddedPortablePdbInfo
@@ -39,7 +40,7 @@ import {
 import { parseVcFeatureInfo, type PeVcFeatureInfo } from "./vc-feature.js";
 
 export type PeDebugPayloads = {
-  coff?: PeCoffDebugInfo;
+  coff?: CoffDebugInfo;
   codeView?: PeCodeViewEntry;
   fpo?: PeFpoInfo;
   misc?: PeMiscDebugInfo;

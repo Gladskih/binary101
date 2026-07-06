@@ -174,9 +174,7 @@ const restoreMountedState = (
 ): void => {
   enhanceSortableTables(body);
   restoreSortableTableState(body, snapshot.sortableTables);
-  if (isPeWindowsParseResult(pe)) {
-    enhancePeDisassemblyPagedTables(body, pe, snapshot.pagedTables);
-  }
+  enhancePeDisassemblyPagedTables(body, pe, snapshot.pagedTables);
   enhanceAccessibleTooltips(body);
   restoreOpenDetails(
     body,

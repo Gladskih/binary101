@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { analyzePeDosStubCode } from "../../../../../analyzers/pe/core/dos-stub-code.js";
 import { parsePeHeaders } from "../../../../../analyzers/pe/core/index.js";
+import { IMAGE_FILE_MACHINE_I386 } from "../../../../../analyzers/coff/machine.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
 
 const FIXED_DOS_HEADER_SIZE = 0x40;
@@ -12,7 +13,6 @@ const encoder = new TextEncoder();
 const COMMON_STUB_MESSAGE = "This program cannot be run in DOS mode.\r\n";
 const DOS_SIGNATURE_MZ = 0x5a4d;
 const DOS_E_LFANEW_OFFSET = 0x3c;
-const IMAGE_FILE_MACHINE_I386 = 0x014c;
 
 const pushPopThenDxCode = (dxOffset: number, exitCode = 1): number[] => [
   0x0e, 0x1f, // 8086 opcodes: push cs; pop ds.

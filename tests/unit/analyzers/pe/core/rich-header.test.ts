@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { COFF_FILE_HEADER_BYTE_LENGTH } from "../../../../../analyzers/coff/layout.js";
 import { parsePe } from "../../../../../analyzers/pe/index.js";
 import { parseRichHeaderFromDosStub } from "../../../../../analyzers/pe/core/rich-header.js";
+import { IMAGE_FILE_MACHINE_I386 } from "../../../../../analyzers/coff/machine.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
+
+// Microsoft PE/COFF file characteristics: EXECUTABLE_IMAGE | MACHINE_32BIT.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#characteristics
+const IMAGE_FILE_EXECUTABLE_32BIT_CHARACTERISTICS = 0x0102;
 
 const writeAscii = (view: DataView, offset: number, text: string): void => {
   for (let index = 0; index < text.length; index += 1) {
@@ -12,9 +18,8 @@ const writeAscii = (view: DataView, offset: number, text: string): void => {
 
 const createPeWithRichHeader = (): { bytes: Uint8Array; xorKey: number } => {
   const peHeaderOffset = 0x200;
-  const coffHeaderSize = 20;
   const optionalHeaderSize = 0xe0;
-  const totalSize = peHeaderOffset + 4 + coffHeaderSize + optionalHeaderSize;
+  const totalSize = peHeaderOffset + 4 + COFF_FILE_HEADER_BYTE_LENGTH + optionalHeaderSize;
 
   const buffer = new ArrayBuffer(totalSize);
   const view = new DataView(buffer);
@@ -49,15 +54,15 @@ const createPeWithRichHeader = (): { bytes: Uint8Array; xorKey: number } => {
   view.setUint32(peHeaderOffset, 0x00004550, true); // "PE\0\0"
 
   const coffOffset = peHeaderOffset + 4;
-  view.setUint16(coffOffset, 0x014c, true); // Machine (x86)
+  view.setUint16(coffOffset, IMAGE_FILE_MACHINE_I386, true);
   view.setUint16(coffOffset + 2, 0, true); // NumberOfSections
   view.setUint32(coffOffset + 4, 0, true); // TimeDateStamp
   view.setUint32(coffOffset + 8, 0, true); // PointerToSymbolTable
   view.setUint32(coffOffset + 12, 0, true); // NumberOfSymbols
   view.setUint16(coffOffset + 16, optionalHeaderSize, true); // SizeOfOptionalHeader
-  view.setUint16(coffOffset + 18, 0x0102, true); // Characteristics
+  view.setUint16(coffOffset + 18, IMAGE_FILE_EXECUTABLE_32BIT_CHARACTERISTICS, true);
 
-  const optionalHeaderOffset = coffOffset + coffHeaderSize;
+  const optionalHeaderOffset = coffOffset + COFF_FILE_HEADER_BYTE_LENGTH;
   view.setUint16(optionalHeaderOffset, 0x10b, true); // Magic (PE32)
   view.setUint32(optionalHeaderOffset + 28, 0x00400000, true); // ImageBase
   view.setUint32(optionalHeaderOffset + 32, 0x1000, true); // SectionAlignment

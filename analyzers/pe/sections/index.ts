@@ -1,12 +1,11 @@
 "use strict";
 
 import type { FileRangeReader } from "../../file-range-reader.js";
+import { parseCoffSectionHeaders } from "../../coff/section-headers.js";
+import { COFF_SECTION_HEADER_BYTE_LENGTH } from "../../coff/layout.js";
 import type { PeSection, RvaToOffset } from "../types.js";
-import { createCoffStringTableResolver, resolveSectionName } from "./coff-string-table.js";
 import { PE_RVA_EXCLUSIVE_LIMIT } from "../layout/rva-limits.js";
 
-const IMAGE_SECTION_HEADER_SIZE = 40;
-const sectionNameDecoder = new TextDecoder("utf-8", { fatal: false });
 const LONG_SECTION_NAME_REFERENCE = /^\/\d+$/;
 const NON_STANDARD_IMAGE_SYMBOL_TABLE_WARNING =
   "PE image has a COFF symbol table even though Microsoft PE format says PointerToSymbolTable and NumberOfSymbols should be zero for images because COFF debugging information is deprecated.";
@@ -59,38 +58,25 @@ const createRvaToOffsetMapper = (
   };
 };
 
-const readSectionHeader = async (
-  sectionHeadersView: DataView,
-  baseOffset: number,
-  stringTableResolver: Awaited<ReturnType<typeof createCoffStringTableResolver>>["resolver"]
-): Promise<{ rawName: string; section: PeSection; warning?: string }> => {
-  const nameBytes = new Uint8Array(
-    sectionHeadersView.buffer,
-    sectionHeadersView.byteOffset + baseOffset,
-    8
-  );
-  const zeroIndex = nameBytes.indexOf(0);
-  const rawName = sectionNameDecoder.decode(nameBytes.subarray(0, zeroIndex === -1 ? 8 : zeroIndex));
-  const resolvedName = await resolveSectionName(rawName, stringTableResolver);
-  return {
-    rawName,
-    section: {
-      name: resolvedName.name,
-      virtualSize: sectionHeadersView.getUint32(baseOffset + 8, true),
-      virtualAddress: sectionHeadersView.getUint32(baseOffset + 12, true),
-      sizeOfRawData: sectionHeadersView.getUint32(baseOffset + 16, true),
-      pointerToRawData: sectionHeadersView.getUint32(baseOffset + 20, true),
-      pointerToRelocations: sectionHeadersView.getUint32(baseOffset + 24, true),
-      pointerToLinenumbers: sectionHeadersView.getUint32(baseOffset + 28, true),
-      numberOfRelocations: sectionHeadersView.getUint16(baseOffset + 32, true),
-      numberOfLinenumbers: sectionHeadersView.getUint16(baseOffset + 34, true),
-      characteristics: sectionHeadersView.getUint32(baseOffset + 36, true)
-    },
-    ...(resolvedName.warning ? { warning: resolvedName.warning } : {})
-  };
+const appendPeImageWarnings = (
+  warnings: string[],
+  pointerToSymbolTable: number,
+  numberOfSymbols: number,
+  rawNames: string[]
+): void => {
+  // Microsoft PE format, "COFF File Header (Object and Image)":
+  // PointerToSymbolTable and NumberOfSymbols should be zero for image files.
+  if ((pointerToSymbolTable >>> 0) !== 0 || (numberOfSymbols >>> 0) !== 0) {
+    warnings.push(NON_STANDARD_IMAGE_SYMBOL_TABLE_WARNING);
+  }
+  // Microsoft PE format, "Section Table (Section Headers)":
+  // Executable images do not use the COFF string table for section names.
+  if (rawNames.some(rawName => LONG_SECTION_NAME_REFERENCE.test(rawName))) {
+    warnings.push(NON_STANDARD_IMAGE_LONG_SECTION_NAME_WARNING);
+  }
 };
 
-const parseSectionHeaders = async (
+export const parseSectionHeaders = async (
   reader: FileRangeReader,
   optionalHeaderOffset: number,
   sizeOfOptionalHeader: number,
@@ -105,67 +91,27 @@ const parseSectionHeaders = async (
   coffStringTableSize?: number;
   warnings?: string[];
 }> => {
-  const sectionHeadersOffset = optionalHeaderOffset + sizeOfOptionalHeader;
-  const safeSectionCount = numberOfSections >>> 0;
-  const coffStringTable = await createCoffStringTableResolver(
+  const parsed = await parseCoffSectionHeaders(
     reader,
+    optionalHeaderOffset,
+    sizeOfOptionalHeader,
+    numberOfSections,
     pointerToSymbolTable,
     numberOfSymbols
   );
-  const sectionHeadersView = await reader.read(
-    sectionHeadersOffset,
-    safeSectionCount * IMAGE_SECTION_HEADER_SIZE
-  );
-  const sections: PeSection[] = [];
-  const warnings = coffStringTable?.warning ? [coffStringTable.warning] : [];
-  let sawLongSectionNameReference = false;
-  if (sectionHeadersView.byteLength < safeSectionCount * IMAGE_SECTION_HEADER_SIZE) {
-    warnings.push("Section header table is truncated by end of file.");
-  }
-  for (let sectionIndex = 0; sectionIndex < safeSectionCount; sectionIndex += 1) {
-    const baseOffset = sectionIndex * IMAGE_SECTION_HEADER_SIZE;
-    if (sectionHeadersView.byteLength < baseOffset + IMAGE_SECTION_HEADER_SIZE) break;
-    const { rawName, section, warning } = await readSectionHeader(
-      sectionHeadersView,
-      baseOffset,
-      coffStringTable.resolver
-    );
-    sawLongSectionNameReference ||= LONG_SECTION_NAME_REFERENCE.test(rawName);
-    if (warning) warnings.push(warning);
-    sections.push(section);
-  }
-  // Microsoft PE format, "COFF File Header (Object and Image)":
-  // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#coff-file-header-object-and-image
-  // PointerToSymbolTable and NumberOfSymbols should be zero for image files.
-  if ((pointerToSymbolTable >>> 0) !== 0 || (numberOfSymbols >>> 0) !== 0) {
-    warnings.push(NON_STANDARD_IMAGE_SYMBOL_TABLE_WARNING);
-  }
-  // Microsoft PE format, "Section Table (Section Headers)":
-  // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-table-section-headers
-  // Executable images do not use a string table for section names and do not support names longer than 8 chars.
-  if (sawLongSectionNameReference) {
-    warnings.push(NON_STANDARD_IMAGE_LONG_SECTION_NAME_WARNING);
-  }
-  const rvaToOff = createRvaToOffsetMapper(
+  const sections: PeSection[] = parsed.sections;
+  const warnings = [...(parsed.warnings ?? [])];
+  appendPeImageWarnings(warnings, pointerToSymbolTable, numberOfSymbols, parsed.rawNames);
+  return {
     sections,
-    reader.size,
-    sizeOfHeaders,
-    sectionHeadersOffset + safeSectionCount * IMAGE_SECTION_HEADER_SIZE
-  );
-  return warnings.length
-    ? {
-        sections,
-        rvaToOff,
-        sectOff: sectionHeadersOffset,
-        ...(coffStringTable.readableSize != null ? { coffStringTableSize: coffStringTable.readableSize } : {}),
-        warnings
-      }
-    : {
-        sections,
-        rvaToOff,
-        sectOff: sectionHeadersOffset,
-        ...(coffStringTable.readableSize != null ? { coffStringTableSize: coffStringTable.readableSize } : {})
-      };
+    rvaToOff: createRvaToOffsetMapper(
+      sections,
+      reader.size,
+      sizeOfHeaders,
+      parsed.sectionHeadersOffset + (numberOfSections >>> 0) * COFF_SECTION_HEADER_BYTE_LENGTH
+    ),
+    sectOff: parsed.sectionHeadersOffset,
+    ...(parsed.coffStringTableSize != null ? { coffStringTableSize: parsed.coffStringTableSize } : {}),
+    ...(warnings.length ? { warnings } : {})
+  };
 };
-
-export { parseSectionHeaders };

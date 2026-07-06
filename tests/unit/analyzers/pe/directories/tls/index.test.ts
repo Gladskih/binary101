@@ -125,27 +125,26 @@ void test("parseTlsDirectory preserves truncated TLS directory headers with warn
 });
 
 void test("parseTlsDirectory warns when the declared data-directory size is too small for a TLS header", async () => {
-  const tlsRva = IMAGE_TLS_DIRECTORY32_SIZE;
-  const bytes32 = new Uint8Array(tlsRva + IMAGE_TLS_DIRECTORY32_SIZE).fill(0);
+  const bytes32 = new Uint8Array(IMAGE_TLS_DIRECTORY32_SIZE * 2).fill(0);
   const dv32 = new DataView(bytes32.buffer);
   // IMAGE_TLS_DIRECTORY32 is 0x18 bytes, so any smaller declared directory cannot describe a valid header.
-  dv32.setUint32(tlsRva + 12, 0x40, true);
+  dv32.setUint32(IMAGE_TLS_DIRECTORY32_SIZE + 12, 0x40, true);
   const tls32 = expectDefined(await parseTlsDirectory32(
     new MockFile(bytes32),
-    [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY32_SIZE - 1 }],
+    [{ name: "TLS", rva: IMAGE_TLS_DIRECTORY32_SIZE, size: IMAGE_TLS_DIRECTORY32_SIZE - 1 }],
     value => value,
     0n
   ));
   assert.equal(tls32.parsed, false);
   assert.ok(tls32.warnings?.some(warning => /smaller than the 32-bit TLS header size/i.test(warning)));
 
-  const bytes64 = new Uint8Array(tlsRva + IMAGE_TLS_DIRECTORY64_SIZE).fill(0);
+  const bytes64 = new Uint8Array(IMAGE_TLS_DIRECTORY32_SIZE + IMAGE_TLS_DIRECTORY64_SIZE).fill(0);
   const dv64 = new DataView(bytes64.buffer);
   // IMAGE_TLS_DIRECTORY64 is 0x28 bytes, so any smaller declared directory cannot describe a valid header.
-  dv64.setBigUint64(tlsRva + 24, 0x80n, true);
+  dv64.setBigUint64(IMAGE_TLS_DIRECTORY32_SIZE + 24, 0x80n, true);
   const tls64 = expectDefined(await parseTlsDirectory64(
     new MockFile(bytes64),
-    [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY64_SIZE - 1 }],
+    [{ name: "TLS", rva: IMAGE_TLS_DIRECTORY32_SIZE, size: IMAGE_TLS_DIRECTORY64_SIZE - 1 }],
     value => value,
     0n
   ));
@@ -217,25 +216,24 @@ void test("parseTlsDirectory skips invalid callback pointers and tolerates out-o
 });
 
 void test("parseTlsDirectory does not read callback slots past an rvaToOff gap", async () => {
-  const tlsRva = IMAGE_TLS_DIRECTORY32_SIZE;
-  const callbackTableRva = tlsRva + IMAGE_TLS_DIRECTORY32_SIZE;
+  const callbackTableRva = IMAGE_TLS_DIRECTORY32_SIZE * 2;
   const firstCallbackRva = 0x2000;
   const secondCallbackRva = firstCallbackRva + 0x1000;
   const bytes = new Uint8Array(callbackTableRva + TLS_CALLBACK_ENTRY_SIZE32 * 3).fill(0);
   const dv = new DataView(bytes.buffer);
-  dv.setUint32(tlsRva + 12, callbackTableRva, true);
+  dv.setUint32(IMAGE_TLS_DIRECTORY32_SIZE + 12, callbackTableRva, true);
   dv.setUint32(callbackTableRva, firstCallbackRva, true);
   dv.setUint32(callbackTableRva + TLS_CALLBACK_ENTRY_SIZE32, secondCallbackRva, true);
   dv.setUint32(callbackTableRva + TLS_CALLBACK_ENTRY_SIZE32 * 2, 0, true);
 
   const sparseRvaToOff = (rva: number): number | null => {
-    if (rva === tlsRva || rva === callbackTableRva) return rva;
+    if (rva === IMAGE_TLS_DIRECTORY32_SIZE || rva === callbackTableRva) return rva;
     return null;
   };
 
   const tls = expectDefined(await parseTlsDirectory32(
     new MockFile(bytes),
-    [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY32_SIZE }],
+    [{ name: "TLS", rva: IMAGE_TLS_DIRECTORY32_SIZE, size: IMAGE_TLS_DIRECTORY32_SIZE }],
     sparseRvaToOff,
     0n
   ));
@@ -245,8 +243,7 @@ void test("parseTlsDirectory does not read callback slots past an rvaToOff gap",
 });
 
 void test("parseTlsDirectory walks the full null-terminated callback array without a hard 1024-entry cap", async () => {
-  const tlsRva = IMAGE_TLS_DIRECTORY32_SIZE;
-  const callbackTableRva = tlsRva + IMAGE_TLS_DIRECTORY32_SIZE;
+  const callbackTableRva = IMAGE_TLS_DIRECTORY32_SIZE * 2;
   const callbackCount = 1025; // Deliberately 1024 + 1 to prove the parser follows the null terminator instead of a cap.
   const firstCallbackRva = 0x2000;
   const bytes = new Uint8Array(
@@ -256,7 +253,7 @@ void test("parseTlsDirectory walks the full null-terminated callback array witho
 
   // Microsoft PE format, TLS Callback Functions:
   // the callback array is null-terminated; the format does not define a fixed maximum entry count.
-  dv.setUint32(tlsRva + 12, callbackTableRva, true);
+  dv.setUint32(IMAGE_TLS_DIRECTORY32_SIZE + 12, callbackTableRva, true);
   for (let index = 0; index < callbackCount; index += 1) {
     dv.setUint32(
       callbackTableRva + index * TLS_CALLBACK_ENTRY_SIZE32,
@@ -268,7 +265,7 @@ void test("parseTlsDirectory walks the full null-terminated callback array witho
 
   const tls = expectDefined(await parseTlsDirectory32(
     new MockFile(bytes),
-    [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY32_SIZE }],
+    [{ name: "TLS", rva: IMAGE_TLS_DIRECTORY32_SIZE, size: IMAGE_TLS_DIRECTORY32_SIZE }],
     value => value,
     0n
   ));
@@ -281,17 +278,16 @@ void test("parseTlsDirectory walks the full null-terminated callback array witho
 });
 
 void test("parseTlsDirectory counts callbacks through the null terminator", async () => {
-  const tlsRva = IMAGE_TLS_DIRECTORY32_SIZE;
-  const callbackTableRva = tlsRva + IMAGE_TLS_DIRECTORY32_SIZE;
+  const callbackTableRva = IMAGE_TLS_DIRECTORY32_SIZE * 2;
   const bytes = new Uint8Array(256).fill(0);
   const dv = new DataView(bytes.buffer);
-  dv.setUint32(tlsRva + 12, callbackTableRva, true);
+  dv.setUint32(IMAGE_TLS_DIRECTORY32_SIZE + 12, callbackTableRva, true);
   dv.setUint32(callbackTableRva, 0x2000, true);
   dv.setUint32(callbackTableRva + TLS_CALLBACK_ENTRY_SIZE32, 0, true);
 
   const tls = expectDefined(await parseTlsDirectory32(
     new MockFile(bytes),
-    [{ name: "TLS", rva: tlsRva, size: IMAGE_TLS_DIRECTORY32_SIZE }],
+    [{ name: "TLS", rva: IMAGE_TLS_DIRECTORY32_SIZE, size: IMAGE_TLS_DIRECTORY32_SIZE }],
     value => value,
     0n
   ));

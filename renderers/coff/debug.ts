@@ -2,24 +2,25 @@
 
 import { hex, humanSize } from "../../binary-utils.js";
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
-import { COFF_STORAGE_CLASS_NAMES } from "../../analyzers/pe/debug/coff-storage-classes.js";
+import { COFF_SYMBOL_RECORD_BYTE_LENGTH } from "../../analyzers/coff/layout.js";
+import { COFF_STORAGE_CLASS_NAMES } from "../../analyzers/coff/storage-classes.js";
 import type {
-  PeCoffAuxiliaryRecord,
-  PeCoffDebugInfo,
-  PeCoffLineNumberBlock,
-  PeCoffSymbol
-} from "../../analyzers/pe/debug/directory.js";
+  CoffAuxiliaryRecord,
+  CoffDebugInfo,
+  CoffLineNumberBlock,
+  CoffSymbol
+} from "../../analyzers/coff/debug-types.js";
 import {
   renderAutoPagedSortableTable,
   type PagedSortableTableCell,
   type PagedSortableTableModel
 } from "../paged-sortable-table.js";
 
-export const PE_COFF_SYMBOL_PAGE_SIZE = 250;
+export const COFF_SYMBOL_PAGE_SIZE = 250; // UI page size, not a COFF format value.
 
-type PeCoffLineNumberRow = {
-  block: PeCoffLineNumberBlock;
-  record: PeCoffLineNumberBlock["records"][number];
+type CoffLineNumberRow = {
+  block: CoffLineNumberBlock;
+  record: CoffLineNumberBlock["records"][number];
 };
 
 const BASE_TYPE_NAMES: Record<number, string> = {
@@ -57,7 +58,7 @@ const getTypeName = (type: number): string => {
   return `${derivedType} ${baseType}`;
 };
 
-const getAuxSummary = (record: PeCoffAuxiliaryRecord): string => {
+const getAuxSummary = (record: CoffAuxiliaryRecord): string => {
   if (record.kind === "function-definition") return `function ${humanSize(record.totalSize)}`;
   if (record.kind === "begin-end-function") return `line ${record.lineNumber}`;
   if (record.kind === "weak-external") return `weak -> #${record.tagIndex}`;
@@ -69,13 +70,13 @@ const getAuxSummary = (record: PeCoffAuxiliaryRecord): string => {
 const symbolTableId = (tableIdPrefix: string): string => `${tableIdPrefix}-symbols`;
 const lineNumberTableId = (tableIdPrefix: string): string => `${tableIdPrefix}-lines`;
 
-export const getCoffAuxiliaryRecordCount = (info: PeCoffDebugInfo): number =>
+export const getCoffAuxiliaryRecordCount = (info: CoffDebugInfo): number =>
   info.symbols.reduce((count, symbol) => count + symbol.auxiliaryRecords.length, 0);
 
-export const getCoffParsedRecordCount = (info: PeCoffDebugInfo): number =>
+export const getCoffParsedRecordCount = (info: CoffDebugInfo): number =>
   info.symbols.length + getCoffAuxiliaryRecordCount(info);
 
-const renderHeader = (info: PeCoffDebugInfo, out: string[]): void => {
+const renderHeader = (info: CoffDebugInfo, out: string[]): void => {
   out.push(`<dl>`);
   out.push(renderDefinitionRow("Source", info.source === "debug-directory" ? "Debug directory" : "COFF file header"));
   out.push(renderDefinitionRow("Symbol table", escapeHtml(hex(info.symbolTableOffset, 8))));
@@ -92,7 +93,7 @@ const renderHeader = (info: PeCoffDebugInfo, out: string[]): void => {
   out.push(renderDefinitionRow(
     "Symbol records parsed",
     escapeHtml(String(getCoffParsedRecordCount(info))),
-    "Total 18-byte COFF symbol-table records consumed by the parsed rows above."
+    `Total ${COFF_SYMBOL_RECORD_BYTE_LENGTH}-byte COFF symbol-table records consumed by the parsed rows above.`
   ));
   out.push(renderDefinitionRow(
     "String table",
@@ -107,7 +108,7 @@ const renderHeader = (info: PeCoffDebugInfo, out: string[]): void => {
   out.push(`</dl>`);
 };
 
-const renderSymbolCells = (symbol: PeCoffSymbol): PagedSortableTableCell[] => [
+const renderSymbolCells = (symbol: CoffSymbol): PagedSortableTableCell[] => [
   { html: String(symbol.index), sortValue: String(symbol.index) },
   { html: escapeHtml(symbol.name), sortValue: symbol.name },
   { html: hex(symbol.value, 8), sortValue: String(symbol.value) },
@@ -123,7 +124,7 @@ const renderSymbolCells = (symbol: PeCoffSymbol): PagedSortableTableCell[] => [
   }
 ];
 
-const symbolSortValue = (symbol: PeCoffSymbol, columnIndex: number): string => {
+const symbolSortValue = (symbol: CoffSymbol, columnIndex: number): string => {
   switch (columnIndex) {
     case 0:
       return String(symbol.index);
@@ -145,7 +146,7 @@ const symbolSortValue = (symbol: PeCoffSymbol, columnIndex: number): string => {
 };
 
 export const createCoffSymbolTableModel = (
-  info: PeCoffDebugInfo,
+  info: CoffDebugInfo,
   tableId: string
 ): PagedSortableTableModel => ({
   columns: [
@@ -158,7 +159,7 @@ export const createCoffSymbolTableModel = (
     { label: "Aux" }
   ],
   id: tableId,
-  pageSize: PE_COFF_SYMBOL_PAGE_SIZE,
+  pageSize: COFF_SYMBOL_PAGE_SIZE,
   rowAt: rowIndex => {
     const symbol = info.symbols[rowIndex];
     return symbol ? { cells: renderSymbolCells(symbol) } : null;
@@ -169,7 +170,7 @@ export const createCoffSymbolTableModel = (
 });
 
 const renderSymbols = (
-  info: PeCoffDebugInfo,
+  info: CoffDebugInfo,
   out: string[],
   tableIdPrefix: string
 ): void => {
@@ -179,10 +180,10 @@ const renderSymbols = (
   ));
 };
 
-const lineNumberRows = (info: PeCoffDebugInfo): PeCoffLineNumberRow[] =>
+const lineNumberRows = (info: CoffDebugInfo): CoffLineNumberRow[] =>
   info.lineNumberBlocks.flatMap(block => block.records.map(record => ({ block, record })));
 
-const renderLineNumberCells = (row: PeCoffLineNumberRow): PagedSortableTableCell[] => [
+const renderLineNumberCells = (row: CoffLineNumberRow): PagedSortableTableCell[] => [
   {
     html: escapeHtml(row.block.sectionName ?? hex(row.block.offset, 8)),
     sortValue: row.block.sectionName ?? String(row.block.offset)
@@ -194,7 +195,7 @@ const renderLineNumberCells = (row: PeCoffLineNumberRow): PagedSortableTableCell
   { html: String(row.record.lineNumber), sortValue: String(row.record.lineNumber) }
 ];
 
-const lineNumberSortValue = (row: PeCoffLineNumberRow, columnIndex: number): string => {
+const lineNumberSortValue = (row: CoffLineNumberRow, columnIndex: number): string => {
   switch (columnIndex) {
     case 0:
       return row.block.sectionName ?? String(row.block.offset);
@@ -208,14 +209,14 @@ const lineNumberSortValue = (row: PeCoffLineNumberRow, columnIndex: number): str
 };
 
 export const createCoffLineNumberTableModel = (
-  info: PeCoffDebugInfo,
+  info: CoffDebugInfo,
   tableId: string
 ): PagedSortableTableModel => {
   const rows = lineNumberRows(info);
   return {
     columns: [{ label: "Block" }, { label: "Type field" }, { label: "Line" }],
     id: tableId,
-    pageSize: PE_COFF_SYMBOL_PAGE_SIZE,
+    pageSize: COFF_SYMBOL_PAGE_SIZE,
     rowAt: rowIndex => {
       const row = rows[rowIndex];
       return row ? { cells: renderLineNumberCells(row) } : null;
@@ -227,7 +228,7 @@ export const createCoffLineNumberTableModel = (
 };
 
 const renderLineNumbers = (
-  info: PeCoffDebugInfo,
+  info: CoffDebugInfo,
   out: string[],
   tableIdPrefix: string
 ): void => {
@@ -239,7 +240,7 @@ const renderLineNumbers = (
 };
 
 export const getCoffDebugTableModel = (
-  info: PeCoffDebugInfo,
+  info: CoffDebugInfo,
   tableId: string,
   tableIdPrefix: string
 ): PagedSortableTableModel | null => {
@@ -251,7 +252,7 @@ export const getCoffDebugTableModel = (
 };
 
 export const renderCoffDebugInfo = (
-  info: PeCoffDebugInfo,
+  info: CoffDebugInfo,
   out: string[],
   tableIdPrefix = "pe-coff-debug"
 ): void => {
@@ -260,7 +261,7 @@ export const renderCoffDebugInfo = (
 };
 
 export const renderCoffDebugTables = (
-  info: PeCoffDebugInfo,
+  info: CoffDebugInfo,
   out: string[],
   tableIdPrefix = "pe-coff-debug"
 ): void => {

@@ -282,11 +282,10 @@ for (const [availableDirSize, fieldName] of [
     `parseImportDirectory names ${fieldName} when a descriptor ends before that field`,
     async () => {
       const bytes = new Uint8Array(IMPORT_DIRECTORY_SIZE + IMAGE_THUNK_DATA32_SIZE).fill(0);
-      const descriptorOffset = IMAGE_THUNK_DATA32_SIZE;
 
       const result = await parseImportDirectory32(
         new MockFile(bytes),
-        [{ name: "IMPORT", rva: descriptorOffset, size: availableDirSize }],
+        [{ name: "IMPORT", rva: IMAGE_THUNK_DATA32_SIZE, size: availableDirSize }],
         value => value
       );
 

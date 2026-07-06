@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { IMAGE_FILE_MACHINE_I386 } from "../../../../analyzers/coff/machine.js";
 import { renderDosHeader } from "../../../../renderers/pe/dos-header.js";
 import { createBasePe } from "../../../fixtures/pe-renderer-headers-fixture.js";
 
@@ -92,7 +93,7 @@ void test("renderDosHeader renders nested PE download controls", () => {
         offset: 0,
         endOffset: 0x2ce0,
         peHeaderOffset: 0xb0,
-        machine: 0x014c,
+        machine: IMAGE_FILE_MACHINE_I386,
         optionalMagic: 0x10b,
         entrypointRva: 0x314,
         subsystem: 16,

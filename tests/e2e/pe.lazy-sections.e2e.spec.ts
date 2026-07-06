@@ -1,7 +1,7 @@
 "use strict";
 
 import { expect, test } from "@playwright/test";
-import { createLargePeCoffSymbolFile } from "../fixtures/pe-coff-debug-fixtures.js";
+import { createLargePeLegacyCoffSymbolFile } from "../fixtures/pe-coff-debug-fixtures.js";
 import { createPeResourcePreviewFile } from "../fixtures/pe-resource-preview-file.js";
 import { createPePlusFile } from "../fixtures/sample-files-pe.js";
 import type { MockFile } from "../helpers/mock-file.js";
@@ -49,7 +49,7 @@ test.describe("PE lazy sections", () => {
   });
 
   void test("pages legacy COFF tail symbols lazily and restores pager state", async ({ page }) => {
-    const file = createLargePeCoffSymbolFile();
+    const file = createLargePeLegacyCoffSymbolFile();
     await page.setInputFiles("#fileInput", toUpload(file));
 
     const section = page.locator('[data-pe-lazy-section="legacy-coff-tail"]');

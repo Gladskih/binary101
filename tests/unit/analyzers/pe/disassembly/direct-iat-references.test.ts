@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { analyzePeInstructionSets } from "../../../../../analyzers/pe/disassembly/index.js";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../analyzers/coff/machine.js";
 import { inlinePeSectionName } from "../../../../../analyzers/pe/sections/name.js";
 import type { IcedInstructionObject } from "../../../../../analyzers/x86/disassembly-iced.js";
 import type { PeDelayImportEntry } from "../../../../../analyzers/pe/imports/delay.js";
@@ -15,8 +16,7 @@ import {
 import { createScriptedIced } from "../../../../helpers/pe-entrypoint-scripted-iced-fixture.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
 
-// Microsoft PE format: AMD64 machine type, RVA fields, and executable code-section flags.
-const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
+// Microsoft PE format: RVA fields and executable code-section flags.
 const IMAGE_SCN_CNT_CODE = 0x00000020;
 const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
 const IMAGE_SCN_MEM_READ = 0x40000000;

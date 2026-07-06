@@ -154,19 +154,18 @@ void test("direct IAT reference counter counts absolute memory calls", () => {
 });
 
 void test("direct IAT reference counter sorts slots by RVA", () => {
-  const lowerSlotRva = IAT_RVA;
   const higherSlotRva = IAT_RVA + BigUint64Array.BYTES_PER_ELEMENT;
   const counter = createDirectIatReferenceCounter(
     fixtureIced,
     IMAGE_BASE_AMD64,
-    new Set([lowerSlotRva, higherSlotRva])
+    new Set([IAT_RVA, higherSlotRva])
   );
 
   counter.record(ipRelativeCall(IMAGE_BASE_AMD64 + BigInt(higherSlotRva)));
-  counter.record(ipRelativeCall(IMAGE_BASE_AMD64 + BigInt(lowerSlotRva)));
+  counter.record(ipRelativeCall(IMAGE_BASE_AMD64 + BigInt(IAT_RVA)));
 
   assert.deepEqual(counter.references(), [
-    { slotRva: lowerSlotRva, callReferenceCount: 1, jumpReferenceCount: 0 },
+    { slotRva: IAT_RVA, callReferenceCount: 1, jumpReferenceCount: 0 },
     { slotRva: higherSlotRva, callReferenceCount: 1, jumpReferenceCount: 0 }
   ]);
 });

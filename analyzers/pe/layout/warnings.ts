@@ -12,20 +12,17 @@ import { isPeClrNativeImage, isPeWinmd } from "../subtype.js";
 import { isReadyToRunOsOverriddenMachine } from "../machine.js";
 import { peSectionNameValue } from "../sections/name.js";
 import type { PeSection } from "../types.js";
-// Microsoft PE/COFF: IMAGE_FILE_HEADER is 20 bytes. https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#coff-file-header-object-and-image
-const IMAGE_FILE_HEADER_SIZE = 20;
-// Microsoft PE/COFF: each IMAGE_SECTION_HEADER entry is 40 bytes. https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-table-section-headers
-const IMAGE_SECTION_HEADER_SIZE = 40;
+import {
+  COFF_FILE_HEADER_BYTE_LENGTH,
+  COFF_SECTION_CHARACTERISTICS,
+  COFF_SECTION_HEADER_BYTE_LENGTH
+} from "../../coff/layout.js";
+import { IMAGE_FILE_MACHINE_IA64 } from "../../coff/machine.js";
 // Microsoft PE format overview: the PE header is aligned on an 8-byte boundary. https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#overview
 const PE_HEADER_ALIGNMENT = 8;
 // Microsoft PE/COFF section-data rules call out 4 KiB pages for x86/MIPS and 8 KiB pages for Itanium when applying the low-SectionAlignment special case. https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-data
 const COMMON_ARCH_PAGE_SIZE = 0x1000;
 const ITANIUM_PAGE_SIZE = 0x2000;
-// Microsoft PE/COFF: IMAGE_FILE_MACHINE_IA64. https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types
-const IMAGE_FILE_MACHINE_IA64 = 0x0200;
-// Microsoft PE/COFF section characteristic bits. https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
-const IMAGE_SCN_CNT_CODE = 0x00000020, IMAGE_SCN_CNT_INITIALIZED_DATA = 0x00000040;
-const IMAGE_SCN_CNT_UNINITIALIZED_DATA = 0x00000080;
 type NamedSectionRange = {
   index: number; label: string; virtualAddress: number; virtualEndAligned: number | null;
   rawStart: number; rawEnd: number
@@ -36,8 +33,8 @@ const alignUp = (value: number, alignment: number): number =>
 const getSectionLabel = (section: PeSection, index: number): string =>
   peSectionNameValue(section.name) || `(unnamed #${index + 1})`;
 const getActualHeaderEnd = (pe: PeParseResult): number =>
-  pe.dos.e_lfanew + 4 + IMAGE_FILE_HEADER_SIZE + pe.coff.SizeOfOptionalHeader +
-  (pe.coff.NumberOfSections >>> 0) * IMAGE_SECTION_HEADER_SIZE;
+  pe.dos.e_lfanew + 4 + COFF_FILE_HEADER_BYTE_LENGTH + pe.coff.SizeOfOptionalHeader +
+  (pe.coff.NumberOfSections >>> 0) * COFF_SECTION_HEADER_BYTE_LENGTH;
 const getHeaderSpanEnd = (pe: PeParseResult): number =>
   !isPeWindowsParseResult(pe)
     ? getActualHeaderEnd(pe)
@@ -53,8 +50,9 @@ const usesLowSectionAlignmentLayout = (pe: PeParseResult): boolean =>
   (pe.opt.SectionAlignment >>> 0) > 0 &&
   (pe.opt.SectionAlignment >>> 0) < getArchitecturePageSize(pe.coff.Machine >>> 0);
 const isUninitializedDataOnlySection = (section: PeSection): boolean =>
-  ((section.characteristics >>> 0) & IMAGE_SCN_CNT_UNINITIALIZED_DATA) !== 0 &&
-  ((section.characteristics >>> 0) & (IMAGE_SCN_CNT_CODE | IMAGE_SCN_CNT_INITIALIZED_DATA)) === 0;
+  ((section.characteristics >>> 0) & COFF_SECTION_CHARACTERISTICS.CNT_UNINITIALIZED_DATA) !== 0 &&
+  ((section.characteristics >>> 0) &
+    (COFF_SECTION_CHARACTERISTICS.CNT_CODE | COFF_SECTION_CHARACTERISTICS.CNT_INITIALIZED_DATA)) === 0;
 const getUnmappedDebugRanges = (pe: PeWindowsParseResult, mappedRanges: ReturnType<typeof getMappedImageRanges>) =>
   getUnmappedFileRanges(pe.debug?.rawDataRanges ?? [], mappedRanges);
 const getMappedSectionSpan = (section: PeSection): number =>

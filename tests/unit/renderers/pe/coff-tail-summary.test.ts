@@ -2,12 +2,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { COFF_SYMBOL_RECORD_BYTE_LENGTH } from "../../../../analyzers/coff/layout.js";
 import { renderCoffTailSummary } from "../../../../renderers/pe/coff-tail-summary.js";
 import { createPeSection, createPeWithSections } from "../../../fixtures/pe-renderer-headers-fixture.js";
-import {
-  COFF_SYMBOL_RECORD_SIZE,
-  createSyntheticLegacyCoffStringTableFixture
-} from "../../../fixtures/pe-coff-tail-fixture.js";
+import { createSyntheticLegacyCoffStringTableFixture } from "../../../fixtures/pe-coff-tail-fixture.js";
 import { TEST_COFF_STORAGE_CLASS } from "../../../fixtures/pe-coff-debug-fixtures.js";
 
 const countMatches = (html: string, pattern: RegExp): number => [...html.matchAll(pattern)].length;
@@ -25,7 +23,8 @@ const createPeWithLegacyCoffTail = () => {
   if (!lastSection) assert.fail("expected legacy COFF tail test section");
   pe.coff.PointerToSymbolTable = lastSection.pointerToRawData + lastSection.sizeOfRawData;
   pe.coff.NumberOfSymbols = stringTable.entries.length;
-  const stringTableOffset = pe.coff.PointerToSymbolTable + pe.coff.NumberOfSymbols * COFF_SYMBOL_RECORD_SIZE;
+  const stringTableOffset = pe.coff.PointerToSymbolTable +
+    pe.coff.NumberOfSymbols * COFF_SYMBOL_RECORD_BYTE_LENGTH;
   pe.coffStringTableSize = stringTable.size;
   pe.trailingAlignmentPaddingSize = firstLongSection.offset;
   pe.coffDebug = {
@@ -52,8 +51,9 @@ const createPeWithLegacyCoffTail = () => {
 void test("renderCoffTailSummary renders a structured legacy COFF tail section", () => {
   const { pe, firstLongSection, secondLongSection } = createPeWithLegacyCoffTail();
   const symbolTableOffset = pe.coff.PointerToSymbolTable;
-  const symbolTableSize = pe.coff.NumberOfSymbols * COFF_SYMBOL_RECORD_SIZE;
-  const stringTableOffset = pe.coff.PointerToSymbolTable + pe.coff.NumberOfSymbols * COFF_SYMBOL_RECORD_SIZE;
+  const symbolTableSize = pe.coff.NumberOfSymbols * COFF_SYMBOL_RECORD_BYTE_LENGTH;
+  const stringTableOffset = pe.coff.PointerToSymbolTable +
+    pe.coff.NumberOfSymbols * COFF_SYMBOL_RECORD_BYTE_LENGTH;
   const trailingAlignmentPaddingSize = pe.trailingAlignmentPaddingSize;
   if (trailingAlignmentPaddingSize == null) assert.fail("expected trailing padding size");
 

@@ -173,13 +173,12 @@ export const createLateCodeViewSubject = (seed = 0) => {
 export const createMixedDebugDirectorySubject = (seed = 0) => {
   const path = createSyntheticPdbPath(seed);
   const entryCount = 2;
-  const miscSize = RSDS_HEADER_SIZE;
   const dataDir = createDebugDirectoryDataDir(seed, entryCount * IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE);
   const miscDataRva = dataDir.rva + dataDir.size;
-  const rsdsDataRva = miscDataRva + miscSize;
+  const rsdsDataRva = miscDataRva + RSDS_HEADER_SIZE;
   const bytes = new Uint8Array(rsdsDataRva + createRsdsRecordSize(path)).fill(0);
   const view = new DataView(bytes.buffer);
-  writeDebugDirectoryEntry(view, dataDir.rva, IMAGE_DEBUG_TYPE_MISC, miscSize, miscDataRva);
+  writeDebugDirectoryEntry(view, dataDir.rva, IMAGE_DEBUG_TYPE_MISC, RSDS_HEADER_SIZE, miscDataRva);
   writeRsdsRecord(
     view,
     bytes,
@@ -192,7 +191,7 @@ export const createMixedDebugDirectorySubject = (seed = 0) => {
     dataDir,
     file: createMockDebugFile(bytes, seed),
     miscDataRva,
-    miscSize,
+    miscSize: RSDS_HEADER_SIZE,
     path,
     rsdsDataRva
   };

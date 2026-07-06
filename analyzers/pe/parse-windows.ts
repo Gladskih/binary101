@@ -2,7 +2,7 @@
 
 import type { FileRangeReader } from "../file-range-reader.js";
 import { computePeAuthenticodeDigest, verifyAuthenticodeWithBundledTrust } from "./authenticode/verify.js";
-import { parseCoffDebugInfoFromFileHeader } from "./debug/coff.js";
+import { parseCoffDebugInfoFromFileHeader } from "../coff/debug.js";
 import { collectDebugExceptionConsistencyFindings } from "./debug/exception-consistency.js";
 import { parseDebugDirectory } from "./debug/directory.js";
 import { parseArchitectureDirectory } from "./directories/architecture-directory.js";

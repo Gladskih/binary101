@@ -2,18 +2,18 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { parseCoffDebugInfo } from "../../../../../../analyzers/pe/debug/coff.js";
+import { parseCoffDebugInfoFromFileHeader } from "../../../../../../analyzers/coff/debug.js";
+import { createCoffDebugStringTable } from "../../../../../../analyzers/coff/debug-string-table.js";
+import { parseCoffLineNumberBlock } from "../../../../../../analyzers/coff/lines.js";
 import {
-  parseCoffDebugInfo,
-  parseCoffDebugInfoFromFileHeader
-} from "../../../../../../analyzers/pe/debug/coff.js";
-import { createCoffDebugStringTable } from "../../../../../../analyzers/pe/debug/coff-string-table.js";
-import { parseCoffLineNumberBlock } from "../../../../../../analyzers/pe/debug/coff-lines.js";
+  COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH,
+  COFF_SYMBOL_RECORD_BYTE_LENGTH
+} from "../../../../../../analyzers/coff/layout.js";
 import type { FileRangeReader } from "../../../../../../analyzers/file-range-reader.js";
 import { inlinePeSectionName } from "../../../../../../analyzers/pe/sections/name.js";
 import { MockFile } from "../../../../../helpers/mock-file.js";
 import {
-  IMAGE_COFF_SYMBOLS_HEADER_SIZE,
-  IMAGE_SYMBOL_SIZE,
   TEST_COFF_STORAGE_CLASS,
   createOffsetFile,
   createSymbolTable,
@@ -21,12 +21,12 @@ import {
 } from "../../../../../fixtures/pe-coff-debug-fixtures.js";
 
 void test("parseCoffDebugInfoFromFileHeader warns for malformed string tables and line tables", async () => {
-  const bytes = new Uint8Array(IMAGE_SYMBOL_SIZE + 6);
+  const bytes = new Uint8Array(COFF_SYMBOL_RECORD_BYTE_LENGTH + 6);
   writeU32(bytes, 4, 4);
   bytes[16] = 2;
-  writeU32(bytes, IMAGE_SYMBOL_SIZE, 6);
-  bytes[IMAGE_SYMBOL_SIZE + 4] = 0x61;
-  bytes[IMAGE_SYMBOL_SIZE + 5] = 0x62;
+  writeU32(bytes, COFF_SYMBOL_RECORD_BYTE_LENGTH, 6);
+  bytes[COFF_SYMBOL_RECORD_BYTE_LENGTH + 4] = 0x61;
+  bytes[COFF_SYMBOL_RECORD_BYTE_LENGTH + 5] = 0x62;
   const warnings: string[] = [];
 
   const result = await parseCoffDebugInfoFromFileHeader(
@@ -79,15 +79,15 @@ void test("parseCoffDebugInfoFromFileHeader warns for unsafe and past-end symbol
 void test("parseCoffDebugInfo reports truncated headers and unmapped tables", async () => {
   const shortWarnings: string[] = [];
   const shortResult = await parseCoffDebugInfo(
-    new MockFile(new Uint8Array(IMAGE_COFF_SYMBOLS_HEADER_SIZE - 1)),
-    IMAGE_COFF_SYMBOLS_HEADER_SIZE - 1,
+    new MockFile(new Uint8Array(COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH - 1)),
+    COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH - 1,
     value => value,
     0,
     1,
-    IMAGE_COFF_SYMBOLS_HEADER_SIZE - 1,
+    COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH - 1,
     message => shortWarnings.push(message)
   );
-  const payload = new Uint8Array(IMAGE_COFF_SYMBOLS_HEADER_SIZE);
+  const payload = new Uint8Array(COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH);
   writeU32(payload, 0, 1);
   writeU32(payload, 4, 0xfff0);
   const unmappedWarnings: string[] = [];
@@ -109,12 +109,12 @@ void test("parseCoffDebugInfo reports truncated headers and unmapped tables", as
 
 void test("parseCoffDebugInfo reports unmapped line tables", async () => {
   const symbolTable = createSymbolTable([{ name: ".text", storageClass: TEST_COFF_STORAGE_CLASS.STATIC }], []);
-  const payload = new Uint8Array(IMAGE_COFF_SYMBOLS_HEADER_SIZE + symbolTable.bytes.length);
+  const payload = new Uint8Array(COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH + symbolTable.bytes.length);
   writeU32(payload, 0, symbolTable.recordCount);
-  writeU32(payload, 4, IMAGE_COFF_SYMBOLS_HEADER_SIZE);
+  writeU32(payload, 4, COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH);
   writeU32(payload, 8, 1);
   writeU32(payload, 12, 0xfff0);
-  payload.set(symbolTable.bytes, IMAGE_COFF_SYMBOLS_HEADER_SIZE);
+  payload.set(symbolTable.bytes, COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH);
   const warnings: string[] = [];
 
   const result = await parseCoffDebugInfo(
@@ -168,23 +168,23 @@ void test("COFF low-level readers warn for malformed string and line tables", as
 
 void test("parseCoffDebugInfo resolves mapped symbol LVAs and truncated header reads", async () => {
   const symbolTable = createSymbolTable([{ name: ".text", storageClass: TEST_COFF_STORAGE_CLASS.STATIC }], []);
-  const payload = new Uint8Array(IMAGE_COFF_SYMBOLS_HEADER_SIZE + symbolTable.bytes.length);
+  const payload = new Uint8Array(COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH + symbolTable.bytes.length);
   writeU32(payload, 0, symbolTable.recordCount);
   writeU32(payload, 4, 0x1000);
-  payload.set(symbolTable.bytes, IMAGE_COFF_SYMBOLS_HEADER_SIZE);
+  payload.set(symbolTable.bytes, COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH);
   const warnings: string[] = [];
   const mapped = await parseCoffDebugInfo(
     createOffsetFile(payload),
     payload.length + 1,
-    rva => rva === 0x1000 ? IMAGE_COFF_SYMBOLS_HEADER_SIZE + 1 : null,
+    rva => rva === 0x1000 ? COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH + 1 : null,
     0,
     1,
-    IMAGE_COFF_SYMBOLS_HEADER_SIZE,
+    COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH,
     message => warnings.push(message)
   );
   const shortReadReader: FileRangeReader = {
-    size: IMAGE_COFF_SYMBOLS_HEADER_SIZE + 1,
-    read: () => Promise.resolve(new DataView(new ArrayBuffer(IMAGE_COFF_SYMBOLS_HEADER_SIZE - 1))),
+    size: COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH + 1,
+    read: () => Promise.resolve(new DataView(new ArrayBuffer(COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH - 1))),
     readBytes: () => Promise.resolve(new Uint8Array())
   };
   const shortReadWarnings: string[] = [];
@@ -194,7 +194,7 @@ void test("parseCoffDebugInfo resolves mapped symbol LVAs and truncated header r
     value => value,
     0,
     1,
-    IMAGE_COFF_SYMBOLS_HEADER_SIZE,
+    COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH,
     message => shortReadWarnings.push(message)
   );
 
@@ -205,7 +205,7 @@ void test("parseCoffDebugInfo resolves mapped symbol LVAs and truncated header r
 });
 
 void test("parseCoffDebugInfoFromFileHeader warns when long symbol names lack a string table", async () => {
-  const symbol = new Uint8Array(IMAGE_SYMBOL_SIZE);
+  const symbol = new Uint8Array(COFF_SYMBOL_RECORD_BYTE_LENGTH);
   writeU32(symbol, 4, 4);
   symbol[16] = 2;
   const warnings: string[] = [];

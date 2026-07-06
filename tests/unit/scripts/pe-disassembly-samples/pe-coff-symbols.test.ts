@@ -5,7 +5,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { validateNoPeCoffSymbolRecords } from "../../../../scripts/pe-disassembly-samples/pe-coff-symbols.js";
+import { validateNoPeLegacyCoffSymbolRecords } from "../../../../scripts/pe-disassembly-samples/pe-coff-symbols.js";
 
 const createPeBytes = (pointerToSymbolTable: number, symbolCount: number): Buffer => {
   // PE fixture offsets follow IMAGE_DOS_HEADER.e_lfanew and IMAGE_FILE_HEADER:
@@ -31,9 +31,9 @@ const withTempFile = async (bytes: Buffer, action: (path: string) => Promise<voi
   }
 };
 
-void test("validateNoPeCoffSymbolRecords accepts a PE image without COFF symbols", async () => {
+void test("validateNoPeLegacyCoffSymbolRecords accepts a PE image without COFF symbols", async () => {
   await withTempFile(createPeBytes(0, 0), async path => {
-    const result = await validateNoPeCoffSymbolRecords(path);
+    const result = await validateNoPeLegacyCoffSymbolRecords(path);
 
     assert.equal(result.error, null);
     assert.equal(result.header?.pointerToSymbolTable, 0);
@@ -41,9 +41,9 @@ void test("validateNoPeCoffSymbolRecords accepts a PE image without COFF symbols
   });
 });
 
-void test("validateNoPeCoffSymbolRecords warns on a stale empty COFF pointer", async () => {
+void test("validateNoPeLegacyCoffSymbolRecords warns on a stale empty COFF pointer", async () => {
   await withTempFile(createPeBytes(0x1234, 0), async path => {
-    const result = await validateNoPeCoffSymbolRecords(path);
+    const result = await validateNoPeLegacyCoffSymbolRecords(path);
     const bytes = await readFile(path);
 
     assert.equal(result.error, null);
@@ -52,9 +52,9 @@ void test("validateNoPeCoffSymbolRecords warns on a stale empty COFF pointer", a
   });
 });
 
-void test("validateNoPeCoffSymbolRecords rejects real COFF symbols", async () => {
+void test("validateNoPeLegacyCoffSymbolRecords rejects real COFF symbols", async () => {
   await withTempFile(createPeBytes(0x1234, 5), async path => {
-    const result = await validateNoPeCoffSymbolRecords(path);
+    const result = await validateNoPeLegacyCoffSymbolRecords(path);
     const bytes = await readFile(path);
 
     assert.match(result.error ?? "", /COFF symbol table/);
@@ -62,19 +62,19 @@ void test("validateNoPeCoffSymbolRecords rejects real COFF symbols", async () =>
   });
 });
 
-void test("validateNoPeCoffSymbolRecords reports truncated files", async () => {
+void test("validateNoPeLegacyCoffSymbolRecords reports truncated files", async () => {
   await withTempFile(Buffer.from("MZ", "ascii"), async path => {
-    const result = await validateNoPeCoffSymbolRecords(path);
+    const result = await validateNoPeLegacyCoffSymbolRecords(path);
 
     assert.match(result.error ?? "", /too small/);
     assert.match(result.warnings.join(" "), /too small/);
   });
 });
 
-void test("validateNoPeCoffSymbolRecords reports missing files", async () => {
+void test("validateNoPeLegacyCoffSymbolRecords reports missing files", async () => {
   const directory = await mkdtemp(join(tmpdir(), "binary101-pe-coff-missing-"));
   try {
-    const result = await validateNoPeCoffSymbolRecords(join(directory, "missing.exe"));
+    const result = await validateNoPeLegacyCoffSymbolRecords(join(directory, "missing.exe"));
 
     assert.match(result.error ?? "", /Could not open/);
     assert.match(result.warnings.join(" "), /Could not open/);

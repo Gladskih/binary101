@@ -3,6 +3,10 @@
 import type { FileRangeReader } from "../file-range-reader.js";
 import type { PeDataDirectory, PeSection } from "./types.js";
 import { normalizeFileRanges, type FileRange } from "./layout/file-ranges.js";
+import {
+  COFF_SECTION_HEADER_BYTE_LENGTH,
+  COFF_SYMBOL_RECORD_BYTE_LENGTH
+} from "../coff/layout.js";
 
 export interface PeOverlayRange {
   start: number;
@@ -58,22 +62,18 @@ type PeOverlayInputs = {
   coffStringTableSize?: number;
 };
 
-// Microsoft PE/COFF: each symbol-table record is 18 bytes.
-// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#coff-symbol-table
-const IMAGE_SYMBOL_SIZE = 18;
-// Microsoft PE format, "Section Table": IMAGE_SECTION_HEADER records are 40 bytes.
-// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-table-section-headers
-const IMAGE_SECTION_HEADER_SIZE = 40;
 const getCoffStringTableOffset = (pointerToSymbolTable: number, numberOfSymbols: number): number | null => {
   if (!pointerToSymbolTable || !numberOfSymbols) return null;
-  const symbolTableEnd = pointerToSymbolTable + numberOfSymbols * IMAGE_SYMBOL_SIZE;
+  const symbolTableEnd = pointerToSymbolTable + numberOfSymbols * COFF_SYMBOL_RECORD_BYTE_LENGTH;
   return Number.isSafeInteger(symbolTableEnd) ? symbolTableEnd : null;
 };
 
 const computeCandidateTailRange = (inputs: PeOverlayInputs): FileRange | null => {
   const headerSpanEnd = Math.max(
     inputs.optionalHeaderOffset + inputs.optionalHeaderSize,
-    inputs.optionalHeaderOffset + inputs.optionalHeaderSize + (inputs.sectionCount >>> 0) * IMAGE_SECTION_HEADER_SIZE
+    inputs.optionalHeaderOffset +
+      inputs.optionalHeaderSize +
+      (inputs.sectionCount >>> 0) * COFF_SECTION_HEADER_BYTE_LENGTH
   );
   const normalizedSizeOfHeaders =
     Number.isSafeInteger(inputs.declaredSizeOfHeaders) && inputs.declaredSizeOfHeaders > 0
@@ -112,7 +112,8 @@ const getKnownTailRanges = (inputs: PeOverlayInputs, tailStart: number, tailEnd:
       ranges,
       {
         start: inputs.pointerToSymbolTable >>> 0,
-        end: (inputs.pointerToSymbolTable >>> 0) + (inputs.numberOfSymbols >>> 0) * IMAGE_SYMBOL_SIZE
+        end: (inputs.pointerToSymbolTable >>> 0) +
+          (inputs.numberOfSymbols >>> 0) * COFF_SYMBOL_RECORD_BYTE_LENGTH
       },
       tailStart,
       tailEnd

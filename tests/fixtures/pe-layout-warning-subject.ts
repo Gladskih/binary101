@@ -1,9 +1,14 @@
 "use strict";
 
+import {
+  COFF_FILE_HEADER_BYTE_LENGTH,
+  COFF_SECTION_HEADER_BYTE_LENGTH
+} from "../../analyzers/coff/layout.js";
 import type {
   PeHeaderParseResult,
   PeWindowsParseResult
 } from "../../analyzers/pe/index.js";
+import { IMAGE_FILE_MACHINE_I386 } from "../../analyzers/coff/machine.js";
 import { inlinePeSectionName } from "../../analyzers/pe/sections/name.js";
 import type { PeSection } from "../../analyzers/pe/types.js";
 
@@ -11,13 +16,6 @@ import type { PeSection } from "../../analyzers/pe/types.js";
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#overview
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#coff-file-header-object-and-image
 const PE_SIGNATURE_SIZE = 4;
-const COFF_HEADER_SIZE = 20;
-// Microsoft PE/COFF: IMAGE_FILE_MACHINE_I386.
-// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types
-const IMAGE_FILE_MACHINE_I386 = 0x014c;
-// Microsoft PE/COFF: each IMAGE_SECTION_HEADER entry is 40 bytes.
-// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-table-section-headers
-const SECTION_HEADER_SIZE = 40;
 // Microsoft PE/COFF: IMAGE_DEBUG_TYPE_CODEVIEW.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-type
 const IMAGE_DEBUG_TYPE_CODEVIEW = 2;
@@ -83,12 +81,12 @@ export const createIndexedSection = (
 export const getDeclaredHeaderSpan = (sectionCount: number): number =>
   DEFAULT_PE_HEADER_OFFSET +
   PE_SIGNATURE_SIZE +
-  COFF_HEADER_SIZE +
+  COFF_FILE_HEADER_BYTE_LENGTH +
   PE32_OPTIONAL_HEADER_SIZE +
-  sectionCount * SECTION_HEADER_SIZE;
+  sectionCount * COFF_SECTION_HEADER_BYTE_LENGTH;
 
 export const getHeaderSpanSmallerThanDeclared = (sectionCount: number): number =>
-  getDeclaredHeaderSpan(sectionCount) - COFF_HEADER_SIZE;
+  getDeclaredHeaderSpan(sectionCount) - COFF_FILE_HEADER_BYTE_LENGTH;
 
 export const getSectionRawEnd = (section: PeSection): number =>
   section.pointerToRawData + section.sizeOfRawData;

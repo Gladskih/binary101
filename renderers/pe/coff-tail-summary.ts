@@ -2,31 +2,30 @@
 
 import { humanSize, hex } from "../../binary-utils.js";
 import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
-import { isPeWindowsParseResult, type PeParseResult } from "../../analyzers/pe/index.js";
+import type { PeParseResult } from "../../analyzers/pe/index.js";
 import { peSectionNameOffset, peSectionNameValue } from "../../analyzers/pe/sections/name.js";
+import { COFF_SYMBOL_RECORD_BYTE_LENGTH } from "../../analyzers/coff/layout.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import {
   getCoffAuxiliaryRecordCount,
   getCoffParsedRecordCount,
   renderCoffDebugTables
-} from "./debug-coff.js";
+} from "../coff/debug.js";
 
-// Microsoft PE/COFF: IMAGE_SYMBOL records are fixed 18-byte entries.
-// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#coff-symbol-table
-const IMAGE_SYMBOL_SIZE = 18n;
+const COFF_SYMBOL_RECORD_BYTE_LENGTH_BIGINT = BigInt(COFF_SYMBOL_RECORD_BYTE_LENGTH);
 
 const formatBigByteSize = (value: bigint): string => value <= BigInt(Number.MAX_SAFE_INTEGER)
   ? humanSize(Number(value))
   : `${value} bytes (0x${value.toString(16)})`;
 
 const getCoffSymbolTableSize = (symbolCount: number): bigint =>
-  BigInt(symbolCount >>> 0) * IMAGE_SYMBOL_SIZE;
+  BigInt(symbolCount >>> 0) * COFF_SYMBOL_RECORD_BYTE_LENGTH_BIGINT;
 
 const getCoffStringTableOffset = (pe: PeParseResult): number | null => {
   const pointerToSymbolTable = pe.coff.PointerToSymbolTable >>> 0;
   const numberOfSymbols = pe.coff.NumberOfSymbols >>> 0;
   if (!pointerToSymbolTable || !numberOfSymbols) return null;
-  const symbolTableEnd = pointerToSymbolTable + numberOfSymbols * Number(IMAGE_SYMBOL_SIZE);
+  const symbolTableEnd = pointerToSymbolTable + numberOfSymbols * COFF_SYMBOL_RECORD_BYTE_LENGTH;
   return Number.isSafeInteger(symbolTableEnd) ? symbolTableEnd : null;
 };
 
@@ -39,7 +38,7 @@ const getRecoveredLongSectionNames = (pe: PeParseResult): Array<{ raw: string; r
   });
 
 const getFileHeaderCoffDebug = (pe: PeParseResult) =>
-  isPeWindowsParseResult(pe) && pe.coffDebug?.source === "coff-header" ? pe.coffDebug : null;
+  pe.coffDebug?.source === "coff-header" ? pe.coffDebug : null;
 
 const legacyCoffTailSummary = (recordCount: number): string =>
   recordCount === 1 ? "1 symbol-table record" : `${recordCount} symbol-table records`;

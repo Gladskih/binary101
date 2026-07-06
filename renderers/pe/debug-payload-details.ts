@@ -7,7 +7,7 @@ import type { PeDebugDirectoryEntry } from "../../analyzers/pe/debug/directory.j
 import { EX_DLL_CHARACTERISTICS_FLAGS } from "../../analyzers/pe/constants.js";
 import { getDebugTypeInfo } from "./debug-type-info.js";
 import { getDebugStorageInfo, getEntrySummary } from "./debug-entry-summary.js";
-import { renderCoffDebugInfo } from "./debug-coff.js";
+import { renderCoffDebugInfo } from "../coff/debug.js";
 import { renderException } from "./exception.js";
 
 const hasDecodedPayload = (entry: PeDebugDirectoryEntry): boolean =>

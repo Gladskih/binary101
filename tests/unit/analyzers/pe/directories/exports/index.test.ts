@@ -179,20 +179,19 @@ void test("parseExportDirectory ignores names beyond available name and ordinal 
   assert.ok(result.entries[1]?.name === null || result.entries[1]?.name === "");
 });
 void test("parseExportDirectory does not read EAT slots past an rvaToOff gap", async () => {
-  const directoryRva = IMAGE_EXPORT_DIRECTORY_SIZE;
-  const eatRva = directoryRva + IMAGE_EXPORT_DIRECTORY_SIZE;
+  const eatRva = IMAGE_EXPORT_DIRECTORY_SIZE * 2;
   const firstTargetRva = 0x1111;
   const bytes = new Uint8Array(eatRva + Uint32Array.BYTES_PER_ELEMENT * 2).fill(0);
   const dv = new DataView(bytes.buffer);
-  dv.setUint32(directoryRva + 16, 1, true);
-  dv.setUint32(directoryRva + 20, 2, true);
-  dv.setUint32(directoryRva + 28, eatRva, true);
+  dv.setUint32(IMAGE_EXPORT_DIRECTORY_SIZE + 16, 1, true);
+  dv.setUint32(IMAGE_EXPORT_DIRECTORY_SIZE + 20, 2, true);
+  dv.setUint32(IMAGE_EXPORT_DIRECTORY_SIZE + 28, eatRva, true);
   dv.setUint32(eatRva, firstTargetRva, true);
   dv.setUint32(eatRva + Uint32Array.BYTES_PER_ELEMENT, 0x2222, true);
   const result = expectDefined(await parseExportFixture(
     bytes,
-    { rva: directoryRva, size: IMAGE_EXPORT_DIRECTORY_SIZE },
-    rva => (rva === directoryRva || rva === eatRva ? rva : null)
+    { rva: IMAGE_EXPORT_DIRECTORY_SIZE, size: IMAGE_EXPORT_DIRECTORY_SIZE },
+    rva => (rva === IMAGE_EXPORT_DIRECTORY_SIZE || rva === eatRva ? rva : null)
   ));
   assert.equal(result.entries.length, 1);
   assert.equal(result.entries[0]?.rva, firstTargetRva);

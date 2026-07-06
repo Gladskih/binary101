@@ -1,6 +1,7 @@
 "use strict";
 
 import { isPeWindowsParseResult, parsePe } from "./pe/index.js";
+import { parseCoffObject } from "./coff/index.js";
 import { parseJpeg } from "./jpeg/index.js";
 import { parseElf } from "./elf/index.js";
 import { parseMachO } from "./macho/index.js";
@@ -30,6 +31,7 @@ import { parseAsf } from "./asf/index.js";
 import { ASF_HEADER_GUID } from "./asf/constants.js";
 import { guidToString as readAsfGuid } from "./asf/shared.js";
 import type { ParseForUiResult } from "./analyzer-types.js";
+import { DEFAULT_FILE_READ_WINDOW_BYTES } from "./file-range-reader.js";
 import { detectPdfVersion, hasZipEocdSignature, toAsciiFromWholeView } from "./detection-labels.js";
 import { probeElf } from "./elf/probe.js";
 import { isShortMp3WithoutSecond, isValidatedMp3 } from "./mp3-labels.js";
@@ -39,13 +41,11 @@ import { hasSqliteSignature, parseSqlite } from "./sqlite/index.js";
 import { parseMpegPs } from "./mpegps/index.js";
 import { parsePcap } from "./pcap/index.js";
 import { parsePcapNg } from "./pcapng/index.js";
-import { parseGzip } from "./gzip/index.js";
-import type { GzipParseResult } from "./gzip/types.js";
-import { enrichPeImportMetadata } from "./pe/imports/api-metadata.js";
+import { parseGzip as parseGzipFile } from "./gzip/index.js";
+import { enrichPeImportMetadata } from "./pe/imports/winapi-metadata.js";
+import { probeCoffObject } from "./coff/probe.js";
 
 type Fb2Parser = typeof parseFb2;
-type GzipParser = (file: File) => Promise<GzipParseResult | null>;
-const parseGzipFile: GzipParser = parseGzip;
 
 const tryContainerHeaderFormats = async (
   file: File,
@@ -82,6 +82,12 @@ const tryMzFormats = async (file: File, dv: DataView): Promise<ParseForUiResult 
   if (!mz) return null;
   if (mzKind.kind && mzKind.kind !== "mz") mz.nextHeader = mzKind.kind;
   return { analyzer: "mz", parsed: mz };
+};
+
+const tryCoffObjectFormat = async (file: File, dv: DataView): Promise<ParseForUiResult | null> => {
+  if (!probeCoffObject(dv, file.size)) return null;
+  const coffObject = await parseCoffObject(file);
+  return coffObject && { analyzer: "coff", parsed: coffObject };
 };
 
 const tryArchiveFormats = async (
@@ -265,15 +271,17 @@ const tryAudioAndDatabaseFormats = async (
   return null;
 };
 
-const createParseForUi = (parseFb2File: typeof parseFb2 = parseFb2) => {
-  return async (file: File): Promise<ParseForUiResult> => {
+const createParseForUi = (parseFb2File: typeof parseFb2 = parseFb2) =>
+  async (file: File): Promise<ParseForUiResult> => {
     const dv = new DataView(
-      await file.slice(0, Math.min(file.size, 65536)).arrayBuffer()
+      await file.slice(0, Math.min(file.size, DEFAULT_FILE_READ_WINDOW_BYTES)).arrayBuffer()
     );
     const earlyFormat = await tryContainerHeaderFormats(file, dv);
     if (earlyFormat) return earlyFormat;
     const mzFormat = await tryMzFormats(file, dv);
     if (mzFormat) return mzFormat;
+    const coffObjectFormat = await tryCoffObjectFormat(file, dv);
+    if (coffObjectFormat) return coffObjectFormat;
     const archiveFormat = await tryArchiveFormats(file, dv, parseFb2File);
     if (archiveFormat) return archiveFormat;
     const imageFormat = await tryImageFormats(file, dv);
@@ -284,8 +292,6 @@ const createParseForUi = (parseFb2File: typeof parseFb2 = parseFb2) => {
     if (audioOrDatabaseFormat) return audioOrDatabaseFormat;
     return { analyzer: null, parsed: null };
   };
-};
 
 const parseForUi = createParseForUi();
-
 export { createParseForUi, parseForUi };

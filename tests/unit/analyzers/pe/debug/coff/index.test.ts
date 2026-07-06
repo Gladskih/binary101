@@ -3,14 +3,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseDebugDirectory } from "../../../../../../analyzers/pe/debug/directory.js";
-import { parseCoffDebugInfoFromFileHeader } from "../../../../../../analyzers/pe/debug/coff.js";
+import { parseCoffDebugInfoFromFileHeader } from "../../../../../../analyzers/coff/debug.js";
+import {
+  COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH,
+  COFF_SYMBOL_RECORD_BYTE_LENGTH
+} from "../../../../../../analyzers/coff/layout.js";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../../analyzers/coff/machine.js";
 import { inlinePeSectionName } from "../../../../../../analyzers/pe/sections/name.js";
 import { MockFile } from "../../../../../helpers/mock-file.js";
 import { createDebugDirectorySubject } from "../../../../../fixtures/pe-debug-payload-subject.js";
 import { expectDefined } from "../../../../../helpers/expect-defined.js";
 import {
-  IMAGE_COFF_SYMBOLS_HEADER_SIZE,
-  IMAGE_SYMBOL_SIZE,
   TEST_COFF_LINE_NUMBERS,
   TEST_COFF_STORAGE_CLASS,
   createAuxRecord,
@@ -21,8 +24,6 @@ import {
   createSymbolTable,
   writeU32
 } from "../../../../../fixtures/pe-coff-debug-fixtures.js";
-
-const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
 
 void test("parseCoffDebugInfoFromFileHeader decodes symbols, aux records, strings, and line numbers", async () => {
   const symbolTable = createSymbolTable(
@@ -80,16 +81,16 @@ void test("parseDebugDirectory decodes IMAGE_DEBUG_TYPE_COFF payloads", async ()
   const symbolTable = createSymbolTable([{ name: ".text", storageClass: TEST_COFF_STORAGE_CLASS.STATIC }], []);
   const lineNumbers = createLineNumbers();
   const payload = new Uint8Array(
-    IMAGE_COFF_SYMBOLS_HEADER_SIZE + symbolTable.bytes.length + lineNumbers.length
+    COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH + symbolTable.bytes.length + lineNumbers.length
   );
   writeU32(payload, 0, symbolTable.recordCount);
-  writeU32(payload, 4, IMAGE_COFF_SYMBOLS_HEADER_SIZE);
+  writeU32(payload, 4, COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH);
   writeU32(payload, 8, TEST_COFF_LINE_NUMBERS.length);
-  writeU32(payload, 12, IMAGE_COFF_SYMBOLS_HEADER_SIZE + symbolTable.bytes.length);
+  writeU32(payload, 12, COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH + symbolTable.bytes.length);
   writeU32(payload, 16, 0x1000);
   writeU32(payload, 20, TEST_COFF_LINE_NUMBERS[1].symbolTableIndexOrVirtualAddress);
-  payload.set(symbolTable.bytes, IMAGE_COFF_SYMBOLS_HEADER_SIZE);
-  payload.set(lineNumbers, IMAGE_COFF_SYMBOLS_HEADER_SIZE + symbolTable.bytes.length);
+  payload.set(symbolTable.bytes, COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH);
+  payload.set(lineNumbers, COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH + symbolTable.bytes.length);
   // Microsoft PE/COFF debug type 1 is IMAGE_DEBUG_TYPE_COFF.
   // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-type
   const subject = createDebugDirectorySubject([{ payload, type: 1 }]);
@@ -112,7 +113,7 @@ void test("parseCoffDebugInfoFromFileHeader keeps whole symbols from truncated t
     { name: ".text", storageClass: TEST_COFF_STORAGE_CLASS.STATIC },
     { name: "missing", storageClass: TEST_COFF_STORAGE_CLASS.EXTERNAL }
   ], []);
-  const bytes = symbolTable.bytes.slice(0, IMAGE_SYMBOL_SIZE + 2);
+  const bytes = symbolTable.bytes.slice(0, COFF_SYMBOL_RECORD_BYTE_LENGTH + 2);
   const warnings: string[] = [];
 
   const result = await parseCoffDebugInfoFromFileHeader(

@@ -1,15 +1,7 @@
 "use strict";
 
 import { toHex32 } from "../../binary-utils.js";
-import { MACHINE } from "./constants.js";
-
-// Microsoft PE format, "Machine Types":
-// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types
-export const IMAGE_FILE_MACHINE_I386 = 0x014c;
-export const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
-export const IMAGE_FILE_MACHINE_ARM64 = 0xaa64;
-export const IMAGE_FILE_MACHINE_ARM64EC = 0xa641;
-export const IMAGE_FILE_MACHINE_ARM64X = 0xa64e;
+import { IMAGE_FILE_MACHINE_TYPES } from "../coff/machine.js";
 
 export type PeMachineOs = "Apple" | "FreeBSD" | "Linux" | "NetBSD" | "SunOS";
 
@@ -38,7 +30,7 @@ export const READY_TO_RUN_OS_OVERRIDE_OPTIONS: Array<[number, string, string?]> 
   ]);
 
 const machineName = (machine: number): string | null =>
-  MACHINE.find(([code]) => code === (machine >>> 0))?.[1] || null;
+  IMAGE_FILE_MACHINE_TYPES.find(([code]) => code === (machine >>> 0))?.[1] || null;
 
 const decodeReadyToRunMachine = (rawMachine: number): DecodedPeMachine | null => {
   for (const [override, os] of READY_TO_RUN_OS_OVERRIDES) {

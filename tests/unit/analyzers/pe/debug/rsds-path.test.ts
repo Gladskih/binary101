@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseDebugDirectory } from "../../../../../analyzers/pe/debug/directory.js";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../analyzers/coff/machine.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
 
 const encoder = new TextEncoder();
@@ -10,7 +11,6 @@ const encoder = new TextEncoder();
 const IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE = 28;
 // PE/COFF debug type 2 is the CodeView record family.
 const IMAGE_DEBUG_TYPE_CODEVIEW = 2;
-const IMAGE_FILE_MACHINE_AMD64 = 0x8664;
 // Microsoft CodeView RSDS records start with the ASCII signature "RSDS" in little-endian form.
 const RSDS_SIGNATURE = 0x53445352;
 // RSDS records use a fixed 24-byte header: signature, GUID, and age.

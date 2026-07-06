@@ -2,26 +2,18 @@
 
 import { toHex32 } from "../../../binary-utils.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
-import type { PeSection, RvaToOffset } from "../types.js";
+import type { RvaToOffset } from "../types.js";
 import { getReadableDebugData, type PeDebugDataLocation } from "./data.js";
-import { parseCoffLineNumberBlock, parseSectionCoffLineNumbers } from "./coff-lines.js";
-import { parseCoffSymbols } from "./coff-symbols.js";
+import { parseCoffLineNumberBlock } from "../../coff/lines.js";
+import { parseCoffSymbols } from "../../coff/symbols.js";
+import type { CoffDebugHeader, CoffDebugInfo } from "../../coff/debug-types.js";
 import {
-  IMAGE_COFF_SYMBOLS_HEADER_SIZE,
-  IMAGE_LINENUMBER_SIZE,
-  IMAGE_SYMBOL_SIZE,
-  type PeCoffDebugHeader,
-  type PeCoffDebugInfo
-} from "./coff-types.js";
-
-export type {
-  PeCoffAuxiliaryRecord,
-  PeCoffDebugHeader,
-  PeCoffDebugInfo,
-  PeCoffLineNumber,
-  PeCoffLineNumberBlock,
-  PeCoffSymbol
-} from "./coff-types.js";
+  COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH,
+  COFF_DEBUG_SYMBOLS_HEADER_FIELDS,
+  COFF_LINE_NUMBER_RECORD_BYTE_LENGTH,
+  COFF_SYMBOL_RECORD_BYTE_LENGTH,
+  readCoffField
+} from "../../coff/layout.js";
 
 const resolveDebugHeaderTableOffset = (
   lva: number,
@@ -43,7 +35,7 @@ const resolveDebugHeaderTableOffset = (
   );
   if (validPayloadCandidate != null) return validPayloadCandidate;
   const mappedOffset = lva ? rvaToOff(lva) : null;
-  const fallbackOffset = lva === 0 ? dataInfo.offset + IMAGE_COFF_SYMBOLS_HEADER_SIZE : null;
+  const fallbackOffset = lva === 0 ? dataInfo.offset + COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH : null;
   return [mappedOffset, fallbackOffset].find(candidate =>
     candidate != null &&
     candidate >= 0 &&
@@ -56,25 +48,25 @@ const readCoffSymbolsHeader = async (
   reader: FileRangeReader,
   dataInfo: PeDebugDataLocation,
   addWarning: (message: string) => void
-): Promise<PeCoffDebugHeader | null> => {
-  if (dataInfo.size < IMAGE_COFF_SYMBOLS_HEADER_SIZE) {
+): Promise<CoffDebugHeader | null> => {
+  if (dataInfo.size < COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH) {
     addWarning("COFF debug entry is smaller than IMAGE_COFF_SYMBOLS_HEADER.");
     return null;
   }
-  const view = await reader.read(dataInfo.offset, IMAGE_COFF_SYMBOLS_HEADER_SIZE);
-  if (view.byteLength < IMAGE_COFF_SYMBOLS_HEADER_SIZE) {
+  const view = await reader.read(dataInfo.offset, COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH);
+  if (view.byteLength < COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH) {
     addWarning("COFF debug symbols header is truncated.");
     return null;
   }
   return {
-    numberOfSymbols: view.getUint32(0, true),
-    lvaToFirstSymbol: view.getUint32(4, true),
-    numberOfLineNumbers: view.getUint32(8, true),
-    lvaToFirstLineNumber: view.getUint32(12, true),
-    rvaToFirstByteOfCode: view.getUint32(16, true),
-    rvaToLastByteOfCode: view.getUint32(20, true),
-    rvaToFirstByteOfData: view.getUint32(24, true),
-    rvaToLastByteOfData: view.getUint32(28, true)
+    numberOfSymbols: readCoffField(view, 0, COFF_DEBUG_SYMBOLS_HEADER_FIELDS.NumberOfSymbols),
+    lvaToFirstSymbol: readCoffField(view, 0, COFF_DEBUG_SYMBOLS_HEADER_FIELDS.LvaToFirstSymbol),
+    numberOfLineNumbers: readCoffField(view, 0, COFF_DEBUG_SYMBOLS_HEADER_FIELDS.NumberOfLineNumbers),
+    lvaToFirstLineNumber: readCoffField(view, 0, COFF_DEBUG_SYMBOLS_HEADER_FIELDS.LvaToFirstLineNumber),
+    rvaToFirstByteOfCode: readCoffField(view, 0, COFF_DEBUG_SYMBOLS_HEADER_FIELDS.RvaToFirstByteOfCode),
+    rvaToLastByteOfCode: readCoffField(view, 0, COFF_DEBUG_SYMBOLS_HEADER_FIELDS.RvaToLastByteOfCode),
+    rvaToFirstByteOfData: readCoffField(view, 0, COFF_DEBUG_SYMBOLS_HEADER_FIELDS.RvaToFirstByteOfData),
+    rvaToLastByteOfData: readCoffField(view, 0, COFF_DEBUG_SYMBOLS_HEADER_FIELDS.RvaToLastByteOfData)
   };
 };
 
@@ -88,7 +80,7 @@ const createWarningCollector = (
   };
 
 const resolveDebugSymbolTableOffset = (
-  header: PeCoffDebugHeader,
+  header: CoffDebugHeader,
   dataInfo: PeDebugDataLocation,
   addressOfRawDataRva: number,
   rvaToOff: RvaToOffset,
@@ -97,7 +89,7 @@ const resolveDebugSymbolTableOffset = (
 ): number | null => {
   const symbolTableOffset = resolveDebugHeaderTableOffset(
     header.lvaToFirstSymbol,
-    header.numberOfSymbols * IMAGE_SYMBOL_SIZE,
+    header.numberOfSymbols * COFF_SYMBOL_RECORD_BYTE_LENGTH,
     dataInfo,
     addressOfRawDataRva,
     rvaToOff,
@@ -111,7 +103,7 @@ const resolveDebugSymbolTableOffset = (
 
 const parseDebugLineNumberBlock = async (
   reader: FileRangeReader,
-  header: PeCoffDebugHeader,
+  header: CoffDebugHeader,
   dataInfo: PeDebugDataLocation,
   addressOfRawDataRva: number,
   rvaToOff: RvaToOffset,
@@ -120,7 +112,7 @@ const parseDebugLineNumberBlock = async (
 ) => {
   const lineNumberOffset = resolveDebugHeaderTableOffset(
     header.lvaToFirstLineNumber,
-    header.numberOfLineNumbers * IMAGE_LINENUMBER_SIZE,
+    header.numberOfLineNumbers * COFF_LINE_NUMBER_RECORD_BYTE_LENGTH,
     dataInfo,
     addressOfRawDataRva,
     rvaToOff,
@@ -150,7 +142,7 @@ export const parseCoffDebugInfo = async (
   pointerToRawDataOff: number,
   dataSize: number,
   addWarning: (message: string) => void
-): Promise<PeCoffDebugInfo | null> => {
+): Promise<CoffDebugInfo | null> => {
   const warnings: string[] = [];
   const collectWarning = createWarningCollector(warnings, addWarning);
   const dataInfo = getReadableDebugData(
@@ -196,44 +188,6 @@ export const parseCoffDebugInfo = async (
       fileSize,
       collectWarning
     ),
-    ...(warnings.length ? { warnings } : {})
-  };
-};
-
-export const parseCoffDebugInfoFromFileHeader = async (
-  reader: FileRangeReader,
-  pointerToSymbolTable: number,
-  numberOfSymbols: number,
-  sections: PeSection[],
-  addWarning: (message: string) => void
-): Promise<PeCoffDebugInfo | null> => {
-  if (!pointerToSymbolTable || !numberOfSymbols) return null;
-  const warnings: string[] = [];
-  const collectWarning = createWarningCollector(warnings, addWarning);
-  if (pointerToSymbolTable >= reader.size) {
-    collectWarning("COFF symbol table starts past end of file.");
-    return {
-      source: "coff-header",
-      symbolTableOffset: pointerToSymbolTable,
-      stringTableOffset: null,
-      symbols: [],
-      lineNumberBlocks: [],
-      warnings
-    };
-  }
-  const { symbols, stringTable } = await parseCoffSymbols(
-    reader,
-    pointerToSymbolTable,
-    numberOfSymbols,
-    collectWarning
-  );
-  return {
-    source: "coff-header",
-    symbolTableOffset: pointerToSymbolTable,
-    stringTableOffset: stringTable?.offset ?? null,
-    ...(stringTable ? { stringTableSize: stringTable.readableSize } : {}),
-    symbols,
-    lineNumberBlocks: await parseSectionCoffLineNumbers(reader, sections, collectWarning),
     ...(warnings.length ? { warnings } : {})
   };
 };

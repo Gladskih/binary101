@@ -41,7 +41,6 @@ void test("readGuardCFFunctionTableRvas reads RVAs from the CFG function table",
 
 void test("readGuardCFFunctionTableRvas supports 5-byte GFIDS entries when GuardFlags encodes a stride", async () => {
   const tableVa = PE32_DEFAULT_IMAGE_BASE + BigInt(LOAD_CONFIG_TEST_TABLE_RVA);
-  const guardFlags = IMAGE_GUARD_CF_FUNCTION_TABLE_SIZE_5_BYTE_STRIDE;
 
   const bytes = new Uint8Array(0x200).fill(0);
   const dv = new DataView(bytes.buffer);
@@ -56,7 +55,7 @@ void test("readGuardCFFunctionTableRvas supports 5-byte GFIDS entries when Guard
     PE32_DEFAULT_IMAGE_BASE,
     tableVa,
     2,
-    guardFlags
+    IMAGE_GUARD_CF_FUNCTION_TABLE_SIZE_5_BYTE_STRIDE
   );
   assert.deepEqual(rvas, [FIRST_CFG_TARGET_RVA, SECOND_CFG_TARGET_RVA]);
 });

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ParseForUiResult } from "../../../../analyzers/index.js";
 import type { PeParseResult } from "../../../../analyzers/pe/index.js";
+import { IMAGE_FILE_MACHINE_I386 } from "../../../../analyzers/coff/machine.js";
 import { createPeDosNestedDownloadClickHandler } from "../../../../ui/pe-dos-nested-download.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 import { expectDefined } from "../../../helpers/expect-defined.js";
@@ -80,7 +81,7 @@ const createParseResult = (): ParseForUiResult => ({
             offset: 0,
             endOffset: 4,
             peHeaderOffset: 2,
-            machine: 0x014c,
+            machine: IMAGE_FILE_MACHINE_I386,
             optionalMagic: 0x10b,
             entrypointRva: 0,
             subsystem: 16,

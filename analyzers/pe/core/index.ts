@@ -8,11 +8,12 @@ import {
 import { peProbe } from "../security/signature.js";
 import { computeEntrySection } from "./entry.js";
 import { PE_RVA_EXCLUSIVE_LIMIT } from "../layout/rva-limits.js";
+import { COFF_SECTION_HEADER_BYTE_LENGTH } from "../../coff/layout.js";
 import {
   parseCoffHeader,
-  parseDosHeaderAndStub,
-  parseOptionalHeaderAndDirectories
+  parseDosHeaderAndStub
 } from "./headers.js";
+import { parseOptionalHeaderAndDirectories } from "../optional-header/parse.js";
 import { parseSectionHeaders } from "../sections/index.js";
 import type { PeCore, PeHeaderCore, PeWindowsCore, PeWindowsOptionalHeader } from "../types.js";
 
@@ -31,6 +32,7 @@ const alignUpClamped = (value: number, alignment: number): number => {
 };
 
 const ZERO_SCAN_CHUNK_SIZE = 4096;
+const PE_HEADER_PROBE_BYTE_LENGTH = 0x400;
 
 const countTrailingZeroBytes = async (reader: FileRangeReader): Promise<number> => {
   let zeroCount = 0;
@@ -76,7 +78,7 @@ const computePeImageEnd = (
 ): number => {
   const headersEnd = Math.max(
     optionalHeaderOffset + optionalHeaderSize,
-    sectionHeadersOffset + sectionCount * 40
+    sectionHeadersOffset + sectionCount * COFF_SECTION_HEADER_BYTE_LENGTH
   );
   const normalizedSizeOfHeaders =
     Number.isSafeInteger(declaredSizeOfHeaders) && declaredSizeOfHeaders > 0
@@ -200,7 +202,7 @@ const buildWindowsCore = async (
 };
 
 export async function parsePeHeaders(reader: FileRangeReader): Promise<PeCore | null> {
-  const head = await reader.read(0, Math.min(reader.size, 0x400));
+  const head = await reader.read(0, Math.min(reader.size, PE_HEADER_PROBE_BYTE_LENGTH));
   const probe = peProbe(head);
   if (!probe) return null;
   const e_lfanew = probe.e_lfanew;

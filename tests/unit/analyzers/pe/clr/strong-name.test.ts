@@ -2,6 +2,11 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import {
+  COFF_FILE_HEADER_BYTE_LENGTH,
+  COFF_FILE_HEADER_FIELDS,
+  COFF_SECTION_HEADER_BYTE_LENGTH
+} from "../../../../../analyzers/coff/layout.js";
 import { formatPublicKeyToken, parseStrongName } from "../../../../../analyzers/pe/clr/strong-name.js";
 import type { PeClrHeader, PeClrMeta } from "../../../../../analyzers/pe/clr/types.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
@@ -16,7 +21,6 @@ type StrongNamePeLayout = {
   ntHeadersOffset: number;
   optionalHeaderOffset: number;
   sectionHeaderOffset: number;
-  sectionHeaderSize: number;
   sectionRawPointer: number;
   securityDirectoryIndex: number;
   signatureOffset: number;
@@ -31,6 +35,7 @@ const CLR_HEADER_SIZE = 0x48; // ECMA-335 II.25.3.3 current CLR header size.
 const TEST_RSA_KEY_BITS = 1024; // Smallest WebCrypto RSA size accepted by Node for fast tests.
 const STRONG_NAME_PUBLIC_KEY_ALGORITHM_ID = 0x00002400; // dnlib StrongNameKey RSA public-key blob.
 const WEBCRYPTO_STRONG_NAME_ALGORITHM = "RSASSA-PKCS1-v1_5";
+const PE_SIGNATURE_BYTE_LENGTH = Uint32Array.BYTES_PER_ELEMENT;
 
 const makeClr = (rva: number, size: number, publicKey: number[] = []): PeClrHeader => ({
   cb: CLR_HEADER_SIZE,
@@ -128,15 +133,12 @@ const makePublicKeyBlob = async (key: CryptoKey): Promise<number[]> => {
 const makeStrongNamePeFixture = (): StrongNamePeFixture => {
   const dosHeaderProbeSize = 0x40; // Verifier reads the DOS header through e_lfanew.
   const ntHeadersOffset = dosHeaderProbeSize * 2;
-  const coffHeaderSize = Uint32Array.BYTES_PER_ELEMENT * 5;
-  const peSignatureSize = "PE\0\0".length;
-  const optionalHeaderOffset = ntHeadersOffset + peSignatureSize + coffHeaderSize;
+  const optionalHeaderOffset = ntHeadersOffset + PE_SIGNATURE_BYTE_LENGTH + COFF_FILE_HEADER_BYTE_LENGTH;
   const pe32FixedOptionalHeaderSize = 0x60; // PE/COFF PE32 optional header before directories.
   const dataDirectoryCount = 16; // PE/COFF NumberOfRvaAndSizes for the standard directory array.
   const dataDirectorySize = Uint32Array.BYTES_PER_ELEMENT * 2;
   const dataDirectoriesOffset = optionalHeaderOffset + pe32FixedOptionalHeaderSize;
   const sectionHeaderOffset = dataDirectoriesOffset + dataDirectoryCount * dataDirectorySize;
-  const sectionHeaderSize = Uint32Array.BYTES_PER_ELEMENT * 10;
   const sectionRawPointer = ntHeadersOffset * 4;
   const sectionRawSize = sectionRawPointer / 2;
   const signatureSize = sectionRawSize / 2;
@@ -149,7 +151,6 @@ const makeStrongNamePeFixture = (): StrongNamePeFixture => {
     ntHeadersOffset,
     optionalHeaderOffset,
     sectionHeaderOffset,
-    sectionHeaderSize,
     sectionRawPointer,
     securityDirectoryIndex: 4, // PE/COFF IMAGE_DIRECTORY_ENTRY_SECURITY.
     signatureOffset,
@@ -161,10 +162,10 @@ const makeStrongNamePeFixture = (): StrongNamePeFixture => {
   view.setUint16(0, 0x5a4d, true); // PE/COFF DOS signature "MZ".
   view.setUint32(dosHeaderProbeSize - Uint32Array.BYTES_PER_ELEMENT, ntHeadersOffset, true);
   view.setUint32(ntHeadersOffset, 0x00004550, true); // PE/COFF signature "PE\0\0".
-  uint16(bytes, ntHeadersOffset + peSignatureSize + Uint16Array.BYTES_PER_ELEMENT, 1);
+  uint16(bytes, ntHeadersOffset + PE_SIGNATURE_BYTE_LENGTH + COFF_FILE_HEADER_FIELDS.NumberOfSections.offset, 1);
   uint16(
     bytes,
-    ntHeadersOffset + peSignatureSize + Uint32Array.BYTES_PER_ELEMENT * 4,
+    ntHeadersOffset + PE_SIGNATURE_BYTE_LENGTH + COFF_FILE_HEADER_FIELDS.SizeOfOptionalHeader.offset,
     pe32FixedOptionalHeaderSize + dataDirectoryCount * dataDirectorySize
   );
   uint16(bytes, optionalHeaderOffset, 0x010b); // PE/COFF PE32 optional header magic.
@@ -195,7 +196,7 @@ const strongNameInputForFixture = (fixture: StrongNamePeFixture): Uint8Array => 
     ...bytes.subarray(layout.ntHeadersOffset, layout.optionalHeaderOffset),
     ...optional,
     ...directories,
-    ...bytes.subarray(layout.sectionHeaderOffset, layout.sectionHeaderOffset + layout.sectionHeaderSize),
+    ...bytes.subarray(layout.sectionHeaderOffset, layout.sectionHeaderOffset + COFF_SECTION_HEADER_BYTE_LENGTH),
     ...bytes.subarray(layout.sectionRawPointer, layout.signatureOffset),
     ...bytes.subarray(layout.signatureEnd, layout.fileSize)
   ]);

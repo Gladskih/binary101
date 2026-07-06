@@ -1,15 +1,22 @@
 "use strict";
 
 import { readAsciiString } from "../../../binary-utils.js";
+import {
+  COFF_FILE_HEADER_BYTE_LENGTH,
+  COFF_FILE_HEADER_FIELDS,
+  COFF_SECTION_HEADER_BYTE_LENGTH,
+  COFF_SECTION_HEADER_FIELDS,
+  COFF_SHORT_NAME_BYTE_LENGTH,
+  readCoffField
+} from "../../coff/layout.js";
 import type { PeDosStubMleHeader, PeDosStubNestedPe, PeDosStubNestedPeSection } from "../types.js";
 
 const DOS_SIGNATURE_MZ = 0x5a4d;
 const PE_SIGNATURE = 0x0000_4550;
-const IMAGE_FILE_HEADER_SIZE = 20;
+const PE_SIGNATURE_BYTE_LENGTH = 4;
 const OPTIONAL_HEADER_STANDARD_FIELDS_SIZE = 24;
 const PE32_OPTIONAL_HEADER_MAGIC = 0x10b;
 const PE32_PLUS_OPTIONAL_HEADER_MAGIC = 0x20b;
-const SECTION_HEADER_SIZE = 40;
 const MAX_NESTED_SECTIONS_PREVIEW = 8;
 const IMAGE_DEBUG_TYPE_CODEVIEW = 2;
 const RSDS_SIGNATURE = 0x5344_5352;
@@ -41,16 +48,16 @@ const parseSections = (
   warnings: string[]
 ): PeDosStubNestedPeSection[] => {
   const sections: PeDosStubNestedPeSection[] = [];
-  const available = Math.max(0, Math.floor((view.byteLength - offset) / SECTION_HEADER_SIZE));
+  const available = Math.max(0, Math.floor((view.byteLength - offset) / COFF_SECTION_HEADER_BYTE_LENGTH));
   if (count > available) warnings.push("Nested PE section table is truncated.");
   for (let index = 0; index < Math.min(count, available, MAX_NESTED_SECTIONS_PREVIEW); index += 1) {
-    const sectionOffset = offset + index * SECTION_HEADER_SIZE;
+    const sectionOffset = offset + index * COFF_SECTION_HEADER_BYTE_LENGTH;
     sections.push({
-      name: readAsciiString(view, sectionOffset, 8).replace(/\0+$/u, ""),
-      virtualSize: readU32(view, sectionOffset + 8) ?? 0,
-      virtualAddress: readU32(view, sectionOffset + 12) ?? 0,
-      sizeOfRawData: readU32(view, sectionOffset + 16) ?? 0,
-      pointerToRawData: readU32(view, sectionOffset + 20) ?? 0
+      name: readAsciiString(view, sectionOffset, COFF_SHORT_NAME_BYTE_LENGTH).replace(/\0+$/u, ""),
+      virtualSize: readCoffField(view, sectionOffset, COFF_SECTION_HEADER_FIELDS.VirtualSize),
+      virtualAddress: readCoffField(view, sectionOffset, COFF_SECTION_HEADER_FIELDS.VirtualAddress),
+      sizeOfRawData: readCoffField(view, sectionOffset, COFF_SECTION_HEADER_FIELDS.SizeOfRawData),
+      pointerToRawData: readCoffField(view, sectionOffset, COFF_SECTION_HEADER_FIELDS.PointerToRawData)
     });
   }
   if (count > MAX_NESTED_SECTIONS_PREVIEW) warnings.push("Nested PE section list is abbreviated.");
@@ -116,13 +123,15 @@ export const parseNestedPeAtDosEntrypoint = (
   const view = new DataView(bytes.buffer, bytes.byteOffset + entryOffset, bytes.length - entryOffset);
   if (readU16(view, 0) !== DOS_SIGNATURE_MZ) return null;
   const eLfanew = readU32(view, 0x3c);
-  if (eLfanew == null || eLfanew + 4 + IMAGE_FILE_HEADER_SIZE > view.byteLength) return null;
+  if (eLfanew == null || eLfanew + PE_SIGNATURE_BYTE_LENGTH + COFF_FILE_HEADER_BYTE_LENGTH > view.byteLength) {
+    return null;
+  }
   if (readU32(view, eLfanew) !== PE_SIGNATURE) return null;
   const warnings: string[] = [];
-  const coffOffset = eLfanew + 4;
-  const sectionCount = readU16(view, coffOffset + 2) ?? 0;
-  const optionalHeaderSize = readU16(view, coffOffset + 16) ?? 0;
-  const optionalHeaderOffset = coffOffset + IMAGE_FILE_HEADER_SIZE;
+  const coffOffset = eLfanew + PE_SIGNATURE_BYTE_LENGTH;
+  const sectionCount = readCoffField(view, coffOffset, COFF_FILE_HEADER_FIELDS.NumberOfSections);
+  const optionalHeaderSize = readCoffField(view, coffOffset, COFF_FILE_HEADER_FIELDS.SizeOfOptionalHeader);
+  const optionalHeaderOffset = coffOffset + COFF_FILE_HEADER_BYTE_LENGTH;
   const optionalMagic = readU16(view, optionalHeaderOffset);
   const isPe32 = optionalMagic === PE32_OPTIONAL_HEADER_MAGIC;
   const isPe32Plus = optionalMagic === PE32_PLUS_OPTIONAL_HEADER_MAGIC;
@@ -137,12 +146,15 @@ export const parseNestedPeAtDosEntrypoint = (
     0
   );
   const declaredEnd = isPe32 || isPe32Plus ? readU32(view, optionalHeaderOffset + 60) ?? 0 : 0;
-  const endOffset = Math.min(bytes.length, entryOffset + Math.max(rawEnd, declaredEnd, eLfanew + 4));
+  const endOffset = Math.min(
+    bytes.length,
+    entryOffset + Math.max(rawEnd, declaredEnd, eLfanew + PE_SIGNATURE_BYTE_LENGTH)
+  );
   return {
     offset: entryOffset,
     endOffset,
     peHeaderOffset: entryOffset + eLfanew,
-    machine: readU16(view, coffOffset) ?? 0,
+    machine: readCoffField(view, coffOffset, COFF_FILE_HEADER_FIELDS.Machine),
     optionalMagic,
     entrypointRva: optionalHeaderSize >= OPTIONAL_HEADER_STANDARD_FIELDS_SIZE
       ? readU32(view, optionalHeaderOffset + 16)

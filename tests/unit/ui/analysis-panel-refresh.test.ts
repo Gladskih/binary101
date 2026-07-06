@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ElfParseResult } from "../../../analyzers/elf/types.js";
 import type { PeParseResult, PeWindowsParseResult } from "../../../analyzers/pe/index.js";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../analyzers/coff/machine.js";
 import { createPeWithImportLinking } from "../../fixtures/pe-import-linking-fixture.js";
 import {
   ELF_INSTRUCTION_SETS_PANEL_ID
@@ -67,7 +68,7 @@ const installPanelDom = () => {
 };
 
 const createPe = (): PeWindowsParseResult => ({
-  coff: { Machine: 0x8664 },
+  coff: { Machine: IMAGE_FILE_MACHINE_AMD64 },
   opt: { AddressOfEntryPoint: 0x1000 },
   sections: []
 }) as unknown as PeWindowsParseResult;

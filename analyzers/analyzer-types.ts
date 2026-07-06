@@ -1,6 +1,7 @@
 "use strict";
 
 import type { PeParseResult } from "./pe/index.js";
+import type { CoffObjectParseResult } from "./coff/types.js";
 import type { JpegParseResult } from "./jpeg/types.js";
 import type { ElfParseResult } from "./elf/types.js";
 import type { MachOParseResult } from "./macho/index.js";
@@ -37,6 +38,7 @@ export type AnalyzerName =
   | "sqlite"
   | "elf"
   | "macho"
+  | "coff"
   | "pe"
   | "mz"
   | "fb2"
@@ -71,6 +73,7 @@ type AnalyzerParseMap = {
   sqlite: SqliteParseResult;
   elf: ElfParseResult;
   macho: MachOParseResult;
+  coff: CoffObjectParseResult;
   pe: PeParseResult;
   mz: MzParseResult;
   fb2: Fb2ParseResult;

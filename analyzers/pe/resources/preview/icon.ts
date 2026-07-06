@@ -1,7 +1,7 @@
 "use strict";
 
 import { makeDataUrl } from "./data-url.js";
-import { hasPngSignature } from "./signatures.js";
+import { hasPngSignature } from "../../../probes/file-signatures.js";
 import type {
   ResourcePreviewData,
   ResourcePreviewResult

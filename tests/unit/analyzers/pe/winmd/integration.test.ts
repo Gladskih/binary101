@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { COFF_FILE_HEADER_BYTE_LENGTH } from "../../../../../analyzers/coff/layout.js";
 import { isPeWindowsParseResult, parsePe } from "../../../../../analyzers/pe/index.js";
 import { createPeWithSectionAndIat } from "../../../../fixtures/sample-files-pe.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
@@ -20,7 +21,6 @@ const IMAGE_DIRECTORY_ENTRY_IAT = 12;
 const IMAGE_DIRECTORY_ENTRY_CLR_RUNTIME = 14;
 // Microsoft PE/COFF: PE signature is 4 bytes and IMAGE_FILE_HEADER is 20 bytes.
 const PE_SIGNATURE_SIZE = 4;
-const COFF_HEADER_SIZE = 20;
 // Microsoft PE/COFF: IMAGE_OPTIONAL_HEADER32.DataDirectory begins 96 bytes into the optional header.
 const PE32_DATA_DIRECTORIES_OFFSET = 0x60;
 // ECMA-335 II.25.3.3: IMAGE_COR20_HEADER is 0x48 bytes.
@@ -52,7 +52,7 @@ const getDataDirectoryEntryOffset = (bytes: Uint8Array, index: number): number =
   return (
     view.getUint32(DOS_PE_HEADER_POINTER_OFFSET, true) +
     PE_SIGNATURE_SIZE +
-    COFF_HEADER_SIZE +
+    COFF_FILE_HEADER_BYTE_LENGTH +
     PE32_DATA_DIRECTORIES_OFFSET +
     index * 8
   );

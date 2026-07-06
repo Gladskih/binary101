@@ -67,10 +67,9 @@ const createReader = (
 const imageVa = (rva: number): bigint => IMAGE_BASE + BigInt(rva);
 
 void test("collector resolves direct ASCII and UTF-16 code string references", async () => {
-  const narrowRva = RDATA_RVA;
   const wideRva = RDATA_RVA + SECOND_STRING_DELTA;
   const { reader, rvaToOff } = createReader([
-    { rva: narrowRva, bytes: asciiz("steam://open") },
+    { rva: RDATA_RVA, bytes: asciiz("steam://open") },
     { rva: wideRva, bytes: utf16z("caption") }
   ]);
   const collector = createPeCodeStringReferenceCollector(fixtureIced, {
@@ -78,7 +77,7 @@ void test("collector resolves direct ASCII and UTF-16 code string references", a
     rvaToOff
   });
 
-  collector.record(instruction("Lea", [reg("RCX"), mem("UInt64", "RIP", imageVa(narrowRva))], {
+  collector.record(instruction("Lea", [reg("RCX"), mem("UInt64", "RIP", imageVa(RDATA_RVA))], {
     ip: imageVa(TEXT_RVA),
     length: 1
   }));
@@ -96,7 +95,7 @@ void test("collector resolves direct ASCII and UTF-16 code string references", a
     instructionRvas: reference.instructionRvas
   })), [
     {
-      rva: narrowRva,
+      rva: RDATA_RVA,
       encoding: "ascii",
       byteLength: 12,
       text: "steam://open",

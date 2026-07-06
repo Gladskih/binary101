@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PeWindowsParseResult } from "../../../../analyzers/pe/index.js";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../analyzers/coff/machine.js";
 import { renderEntrypointDisassembly } from "../../../../renderers/pe/entrypoint-disassembly.js";
 import {
   DEFAULT_PE_ENTRYPOINT_EXPLORER_STATE,
@@ -11,7 +12,7 @@ import {
 
 const createPe = (overrides: Partial<PeWindowsParseResult> = {}): PeWindowsParseResult =>
   ({
-    coff: { Machine: 0x8664 },
+    coff: { Machine: IMAGE_FILE_MACHINE_AMD64 },
     opt: { AddressOfEntryPoint: 0x1000 },
     sections: [],
     ...overrides

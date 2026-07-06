@@ -2,16 +2,13 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type {
-  PeCoffDebugInfo,
-  PeCoffSymbol,
-  PeDebugDirectoryEntry
-} from "../../../../analyzers/pe/debug/directory.js";
+import type { CoffDebugInfo, CoffSymbol } from "../../../../analyzers/coff/debug-types.js";
+import type { PeDebugDirectoryEntry } from "../../../../analyzers/pe/debug/directory.js";
 import { getPePagedTableModel } from "../../../../renderers/pe/paged-tables.js";
 import { TEST_COFF_STORAGE_CLASS } from "../../../fixtures/pe-coff-debug-fixtures.js";
 import { createBasePe } from "../../../fixtures/pe-renderer-headers-fixture.js";
 
-const createSymbol = (index: number): PeCoffSymbol => ({
+const createSymbol = (index: number): CoffSymbol => ({
   auxiliaryRecords: [],
   auxiliarySymbolCount: 0,
   index,
@@ -23,7 +20,7 @@ const createSymbol = (index: number): PeCoffSymbol => ({
   value: index
 });
 
-const createCoffDebug = (): PeCoffDebugInfo => ({
+const createCoffDebug = (): CoffDebugInfo => ({
   lineNumberBlocks: [],
   source: "coff-header",
   stringTableOffset: null,
@@ -31,7 +28,7 @@ const createCoffDebug = (): PeCoffDebugInfo => ({
   symbols: [createSymbol(0), createSymbol(1)]
 });
 
-const createDebugEntry = (coff: PeCoffDebugInfo): PeDebugDirectoryEntry => ({
+const createDebugEntry = (coff: CoffDebugInfo): PeDebugDirectoryEntry => ({
   addressOfRawData: 0,
   characteristics: 0,
   coff,

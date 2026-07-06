@@ -7,14 +7,6 @@ import { DEBUG_TYPE_NAMES } from "./types.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 
 export type { PeCodeViewEntry } from "./codeview.js";
-export type {
-  PeCoffAuxiliaryRecord,
-  PeCoffDebugHeader,
-  PeCoffDebugInfo,
-  PeCoffLineNumber,
-  PeCoffLineNumberBlock,
-  PeCoffSymbol
-} from "./coff.js";
 export type { PeEmbeddedPortablePdbInfo } from "./embedded-portable-pdb.js";
 export type { PeExDllCharacteristicsInfo } from "./ex-dll-characteristics.js";
 export type { PeFpoInfo, PeFpoRecord } from "./fpo.js";

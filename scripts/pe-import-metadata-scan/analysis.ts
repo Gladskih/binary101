@@ -13,8 +13,9 @@ import { analyzePeEntrypointDisassembly } from "../../analyzers/pe/disassembly/i
 import {
   createPeImportMetadataLookup,
   enrichPeImportMetadata
-} from "../../analyzers/pe/imports/api-metadata.js";
-import { IMAGE_FILE_MACHINE_I386, getCanonicalPeMachine } from "../../analyzers/pe/machine.js";
+} from "../../analyzers/pe/imports/winapi-metadata.js";
+import { IMAGE_FILE_MACHINE_I386 } from "../../analyzers/coff/machine.js";
+import { getCanonicalPeMachine } from "../../analyzers/pe/machine.js";
 import { PE32_OPTIONAL_HEADER_MAGIC } from "../../analyzers/pe/optional-header/magic.js";
 import type { ManifestXmlDocumentParser } from "../../analyzers/pe/resources/preview/manifest-xml.js";
 import type { PeImportMetadataEntry } from "../../pe-import-metadata-schema.js";

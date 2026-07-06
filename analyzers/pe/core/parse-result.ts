@@ -1,6 +1,7 @@
 "use strict";
 
-import type { PeCodeViewEntry, PeCoffDebugInfo, PeDebugDirectoryEntry } from "../debug/directory.js";
+import type { CoffDebugInfo } from "../../coff/debug-types.js";
+import type { PeCodeViewEntry, PeDebugDirectoryEntry } from "../debug/directory.js";
 import type { PeEntrypointDisassemblyReport, PeInstructionSetReport } from "../disassembly/index.js";
 import type { PeImportLinkingResult } from "../imports/linking.js";
 import type { PeImportParseResult } from "../imports/index.js";
@@ -43,6 +44,7 @@ interface PeParseResultBase {
   dos: PeCore["dos"];
   signature: "PE";
   coff: PeCore["coff"];
+  coffDebug?: CoffDebugInfo;
   coffStringTableSize?: number;
   trailingAlignmentPaddingSize?: number;
   subtype?: PeSubtype;
@@ -60,7 +62,6 @@ interface PeParseResultBase {
 
 export interface PeWindowsParseResult extends PeParseResultBase {
   debug: PeDebugSection | null;
-  coffDebug?: PeCoffDebugInfo;
   opt: PeWindowsOptionalHeader;
   imports: PeImportParseResult;
   loadcfg: PeLoadConfig | null;

@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../../analyzers/coff/machine.js";
 import { buildSummaryMarkdown } from "../../../../../../scripts/rustPeMatrix-report.js";
 import type { SummaryFile } from "../../../../../../scripts/rustPeMatrix-model.js";
 
@@ -23,7 +24,7 @@ const createSummary = (): SummaryFile => ({
       outputSize: 270848,
       durationMs: 1234,
       analyzer: {
-        machine: 0x8664,
+        machine: IMAGE_FILE_MACHINE_AMD64,
         optionalMagic: 0x20b,
         subsystem: 3,
         dllCharacteristics: 0x8160,

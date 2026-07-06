@@ -28,7 +28,6 @@ function mapFixtureRvaToStart(_value: number): number {
 }
 
 void test("buildResourceTree warns when a named resource entry appears after an ID entry", async () => {
-  const firstRootEntryOffset = IMAGE_RESOURCE_DIRECTORY_SIZE;
   const generatedName = generatedResourceLabel(0);
   // A one-character UTF-16 resource name needs 2 bytes for the length prefix
   // plus 2 bytes for the code unit payload.
@@ -49,12 +48,12 @@ void test("buildResourceTree warns when a named resource entry appears after an 
   // Zero target is enough here because this regression exercises only root-entry ordering,
   // not child directory traversal.
   fixture.writeDirectoryEntry(
-    firstRootEntryOffset,
+    IMAGE_RESOURCE_DIRECTORY_SIZE,
     5, // RT_DIALOG in Win32 resource type ids.
     0
   );
   fixture.writeDirectoryEntry(
-    firstRootEntryOffset + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE,
+    IMAGE_RESOURCE_DIRECTORY_SIZE + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE,
     resourceNameString(nameStringOffset),
     0
   );
@@ -104,7 +103,6 @@ void test("buildResourceTree preserves a non-zero directory that is smaller than
 });
 
 void test("buildResourceTree warns when ID entries are not sorted in ascending order", async () => {
-  const firstRootEntryOffset = IMAGE_RESOURCE_DIRECTORY_SIZE;
   const fixture = createResourceDirectoryFixture(
     IMAGE_RESOURCE_DIRECTORY_SIZE + 2 * IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE
   );
@@ -114,8 +112,12 @@ void test("buildResourceTree warns when ID entries are not sorted in ascending o
   // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#resource-directory-entries
   // Use values above the well-known RT_* range so the parser keeps TYPE_* labels
   // and the assertion stays focused on numeric ordering.
-  fixture.writeDirectoryEntry(firstRootEntryOffset, 0x00000101, 0);
-  fixture.writeDirectoryEntry(firstRootEntryOffset + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE, 0x00000100, 0);
+  fixture.writeDirectoryEntry(IMAGE_RESOURCE_DIRECTORY_SIZE, 0x00000101, 0);
+  fixture.writeDirectoryEntry(
+    IMAGE_RESOURCE_DIRECTORY_SIZE + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE,
+    0x00000100,
+    0
+  );
 
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
@@ -132,8 +134,6 @@ void test("buildResourceTree warns when ID entries are not sorted in ascending o
 });
 
 void test("buildResourceTree warns when named entries are not sorted by string value", async () => {
-  const firstRootEntryOffset = IMAGE_RESOURCE_DIRECTORY_SIZE;
-  const secondRootEntryOffset = firstRootEntryOffset + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE;
   const laterSortName = generatedResourceLabel(1);
   const earlierSortName = generatedResourceLabel(0);
   const firstNameStringOffset = IMAGE_RESOURCE_DIRECTORY_SIZE + 2 * IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE;
@@ -143,8 +143,12 @@ void test("buildResourceTree warns when named entries are not sorted by string v
   // Microsoft PE/COFF specification, "Resource Directory Entries":
   // name entries are sorted in ascending order by case-sensitive string.
   // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#resource-directory-entries
-  fixture.writeDirectoryEntry(firstRootEntryOffset, resourceNameString(firstNameStringOffset), 0);
-  fixture.writeDirectoryEntry(secondRootEntryOffset, resourceNameString(secondNameStringOffset), 0);
+  fixture.writeDirectoryEntry(IMAGE_RESOURCE_DIRECTORY_SIZE, resourceNameString(firstNameStringOffset), 0);
+  fixture.writeDirectoryEntry(
+    IMAGE_RESOURCE_DIRECTORY_SIZE + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE,
+    resourceNameString(secondNameStringOffset),
+    0
+  );
   fixture.writeUtf16Label(firstNameStringOffset, laterSortName);
   fixture.writeUtf16Label(secondNameStringOffset, earlierSortName);
 
@@ -163,7 +167,6 @@ void test("buildResourceTree warns when named entries are not sorted by string v
 });
 
 void test("buildResourceTree warns when resource directory Characteristics is non-zero", async () => {
-  const firstRootEntryOffset = IMAGE_RESOURCE_DIRECTORY_SIZE;
   const fixture = createResourceDirectoryFixture(
     IMAGE_RESOURCE_DIRECTORY_SIZE + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE
   );
@@ -173,7 +176,7 @@ void test("buildResourceTree warns when resource directory Characteristics is no
   // Characteristics are resource flags reserved for future use and currently set to zero.
   // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#the-rsrc-section
   view.setUint32(0, 1, true);
-  fixture.writeDirectoryEntry(firstRootEntryOffset, 0x00000100, 0);
+  fixture.writeDirectoryEntry(IMAGE_RESOURCE_DIRECTORY_SIZE, 0x00000100, 0);
 
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
@@ -186,14 +189,13 @@ void test("buildResourceTree warns when resource directory Characteristics is no
 });
 
 void test("buildResourceTree warns when a top-level type entry points directly to data", async () => {
-  const firstRootEntryOffset = IMAGE_RESOURCE_DIRECTORY_SIZE;
   const dataEntryOffset = IMAGE_RESOURCE_DIRECTORY_SIZE + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE;
   const fixture = createResourceDirectoryFixture(dataEntryOffset + IMAGE_RESOURCE_DATA_ENTRY_SIZE);
   fixture.writeDirectory(0, 0, 1);
   // Microsoft PE/COFF specification, "The .rsrc Section":
   // the first table lists top-level Type nodes, and its entries point to second-level tables.
   // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#the-rsrc-section
-  fixture.writeDirectoryEntry(firstRootEntryOffset, 3, dataEntryOffset); // RT_ICON
+  fixture.writeDirectoryEntry(IMAGE_RESOURCE_DIRECTORY_SIZE, 3, dataEntryOffset); // RT_ICON
   fixture.writeDataEntry(dataEntryOffset, 0x00002000, 0x10, 0x000004b0);
 
   const tree = await buildResourceTree(
@@ -208,7 +210,6 @@ void test("buildResourceTree warns when a top-level type entry points directly t
 });
 
 void test("buildResourceTree warns when a resource name string offset is not word-aligned", async () => {
-  const firstRootEntryOffset = IMAGE_RESOURCE_DIRECTORY_SIZE;
   const generatedName = generatedResourceLabel(0);
   const misalignedNameStringOffset =
     IMAGE_RESOURCE_DIRECTORY_SIZE + IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE + 1;
@@ -217,7 +218,7 @@ void test("buildResourceTree warns when a resource name string offset is not wor
   // Microsoft PE/COFF specification, "Resource Directory String":
   // these Unicode strings are word-aligned.
   // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#resource-directory-string
-  fixture.writeDirectoryEntry(firstRootEntryOffset, resourceNameString(misalignedNameStringOffset), 0);
+  fixture.writeDirectoryEntry(IMAGE_RESOURCE_DIRECTORY_SIZE, resourceNameString(misalignedNameStringOffset), 0);
   fixture.writeUtf16Label(misalignedNameStringOffset, generatedName);
 
   const tree = await buildResourceTree(

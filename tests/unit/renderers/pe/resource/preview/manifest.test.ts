@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../../analyzers/coff/machine.js";
 import {
   renderManifestPreview,
   renderManifestTree
@@ -13,9 +14,6 @@ import {
   createManifestTreeFixture,
   createManifestValidationFixture
 } from "../../../../../fixtures/pe-manifest-preview-fixture.js";
-
-// IMAGE_FILE_HEADER.Machine values are defined by the PE/COFF spec and winnt.h.
-const AMD64_MACHINE = 0x8664;
 
 void test("renderManifestTree renders nested manifest nodes with expand controls", () => {
   const incidental = createManifestIncidentalValues();
@@ -96,7 +94,7 @@ void test("renderManifestPreview renders manifest validation status and details"
     createManifestTextFixture(),
     undefined,
     createManifestTreeFixture({}, createManifestIncidentalValues()),
-    createManifestValidationFixture(AMD64_MACHINE, { processorArchitecture: "amd64" })
+    createManifestValidationFixture(IMAGE_FILE_MACHINE_AMD64, { processorArchitecture: "amd64" })
   );
 
   assert.match(html, /Manifest cross-check/);

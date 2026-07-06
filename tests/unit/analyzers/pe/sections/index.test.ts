@@ -2,14 +2,18 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import {
+  COFF_SECTION_HEADER_BYTE_LENGTH,
+  COFF_SECTION_HEADER_FIELDS,
+  COFF_SHORT_NAME_BYTE_LENGTH,
+  COFF_STRING_TABLE_SIZE_FIELD_BYTE_LENGTH,
+  COFF_SYMBOL_RECORD_BYTE_LENGTH,
+  type CoffNumericField
+} from "../../../../../analyzers/coff/layout.js";
 import { parseSectionHeaders } from "../../../../../analyzers/pe/sections/index.js";
 import { peSectionNameOffset, peSectionNameValue } from "../../../../../analyzers/pe/sections/name.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
 
-// Microsoft PE/COFF: IMAGE_SECTION_HEADER records are 40 bytes wide.
-const IMAGE_SECTION_HEADER_SIZE = 40;
-// Microsoft PE/COFF: each COFF symbol-table record is 18 bytes.
-const IMAGE_SYMBOL_SIZE = 18;
 const DEFAULT_OPTIONAL_HEADER_OFFSET = 0x80;
 // Full IMAGE_OPTIONAL_HEADER32 size used by these synthetic PE32 fixtures.
 const DEFAULT_OPTIONAL_HEADER_SIZE = 0xe0;
@@ -17,29 +21,46 @@ const UTF8_SECTION_NAME_MICRO_SIGN = Uint8Array.from([0x2e, 0xc2, 0xb5]);
 
 type SectionShape = { name: string; va: number; vs: number; rawSize: number; rawOff: number };
 
+const writeCoffField = (
+  view: DataView,
+  recordOffset: number,
+  field: CoffNumericField,
+  value: number
+): void => {
+  const offset = recordOffset + field.offset;
+  switch (field.width) {
+    case "u8": view.setUint8(offset, value); break;
+    case "u16": view.setUint16(offset, value, true); break;
+    case "i16": view.setInt16(offset, value, true); break;
+    case "u32": view.setUint32(offset, value, true); break;
+  }
+};
+
 const createSectionTable = (sections: SectionShape[]): Uint8Array => {
-  const buffer = new Uint8Array(sections.length * IMAGE_SECTION_HEADER_SIZE);
+  const buffer = new Uint8Array(sections.length * COFF_SECTION_HEADER_BYTE_LENGTH);
   const view = new DataView(buffer.buffer);
   sections.forEach((section, idx) => {
-    const base = idx * IMAGE_SECTION_HEADER_SIZE;
-    [...section.name].slice(0, 8).forEach((ch, i) => view.setUint8(base + i, ch.charCodeAt(0)));
-    view.setUint32(base + 8, section.vs, true);
-    view.setUint32(base + 12, section.va, true);
-    view.setUint32(base + 16, section.rawSize, true);
-    view.setUint32(base + 20, section.rawOff, true);
-    view.setUint32(base + 36, 0, true);
+    const base = idx * COFF_SECTION_HEADER_BYTE_LENGTH;
+    [...section.name].slice(0, COFF_SHORT_NAME_BYTE_LENGTH)
+      .forEach((ch, i) => view.setUint8(base + i, ch.charCodeAt(0)));
+    writeCoffField(view, base, COFF_SECTION_HEADER_FIELDS.VirtualSize, section.vs);
+    writeCoffField(view, base, COFF_SECTION_HEADER_FIELDS.VirtualAddress, section.va);
+    writeCoffField(view, base, COFF_SECTION_HEADER_FIELDS.SizeOfRawData, section.rawSize);
+    writeCoffField(view, base, COFF_SECTION_HEADER_FIELDS.PointerToRawData, section.rawOff);
+    writeCoffField(view, base, COFF_SECTION_HEADER_FIELDS.Characteristics, 0);
   });
   return buffer;
 };
 
 const createCoffStringTable = (names: string[]): { bytes: Uint8Array; offsets: number[] } => {
   const encodedNames = names.map(name => Uint8Array.from([...name, "\0"].map(ch => ch.charCodeAt(0))));
-  const size = 4 + encodedNames.reduce((sum, entry) => sum + entry.length, 0);
+  const size = COFF_STRING_TABLE_SIZE_FIELD_BYTE_LENGTH +
+    encodedNames.reduce((sum, entry) => sum + entry.length, 0);
   const bytes = new Uint8Array(size);
   const view = new DataView(bytes.buffer);
   view.setUint32(0, size, true);
   const offsets: number[] = [];
-  let offset = 4;
+  let offset = COFF_STRING_TABLE_SIZE_FIELD_BYTE_LENGTH;
   for (const entry of encodedNames) {
     offsets.push(offset);
     bytes.set(entry, offset);
@@ -74,7 +95,7 @@ const createSectionHeadersFixture = (
   const numberOfSymbols = options.numberOfSymbols ?? 0;
   const stringTableOffset =
     pointerToSymbolTable && numberOfSymbols
-      ? pointerToSymbolTable + numberOfSymbols * IMAGE_SYMBOL_SIZE
+      ? pointerToSymbolTable + numberOfSymbols * COFF_SYMBOL_RECORD_BYTE_LENGTH
       : null;
   const sectionTable = createSectionTable(sections);
   const fileSize = Math.max(
@@ -202,7 +223,7 @@ void test("parseSectionHeaders maps header RVA 0 to file offset 0 when SizeOfHea
 });
 
 void test("parseSectionHeaders decodes short section names as UTF-8", async () => {
-  const table = new Uint8Array(IMAGE_SECTION_HEADER_SIZE).fill(0);
+  const table = new Uint8Array(COFF_SECTION_HEADER_BYTE_LENGTH).fill(0);
   const view = new DataView(table.buffer);
   table.set(UTF8_SECTION_NAME_MICRO_SIGN, 0);
   view.setUint32(8, 0x40, true);
@@ -210,7 +231,7 @@ void test("parseSectionHeaders decodes short section names as UTF-8", async () =
   view.setUint32(16, 0x40, true);
   view.setUint32(20, 0x200, true);
   const fixture = createSectionHeadersFixture([]);
-  const fileBytes = new Uint8Array(fixture.sectionTableOffset + IMAGE_SECTION_HEADER_SIZE);
+  const fileBytes = new Uint8Array(fixture.sectionTableOffset + COFF_SECTION_HEADER_BYTE_LENGTH);
   fileBytes.set(table, fixture.sectionTableOffset);
 
   const { sections } = await parseSectionHeaders(

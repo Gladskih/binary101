@@ -4,6 +4,7 @@ import type { FileRangeReader } from "../../../../../analyzers/file-range-reader
 import { createPeDisassemblyController } from "../../../../../ui/pe-disassembly.js";
 import type { ParseForUiResult } from "../../../../../analyzers/index.js";
 import type { PeWindowsParseResult } from "../../../../../analyzers/pe/index.js";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../analyzers/coff/machine.js";
 import type { AnalyzePeInstructionSetOptions, PeInstructionSetReport } from "../../../../../analyzers/pe/disassembly/index.js";
 import { FakeHTMLElement, installFakeDom, flushTimers } from "../../../../helpers/fake-dom.js";
 import { expectDefined } from "../../../../helpers/expect-defined.js";
@@ -11,7 +12,7 @@ import { MockFile } from "../../../../helpers/mock-file.js";
 import { inlinePeSectionName } from "../../../../../analyzers/pe/sections/name.js";
 const createMinimalPe = (): PeWindowsParseResult =>
   ({
-    coff: { Machine: 0x8664 },
+    coff: { Machine: IMAGE_FILE_MACHINE_AMD64 },
     opt: { Magic: 0x20b, ImageBase: 0x140000000n, AddressOfEntryPoint: 0x1000 },
     rvaToOff: () => 0,
     sections: [{
