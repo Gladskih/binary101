@@ -132,9 +132,9 @@ const parseSymbolTableBytes = async (
 ): Promise<CoffSymbol[]> => {
   const view = await reader.read(symbolTableOffset, wholeRecordBytes);
   const recordCount = wholeRecordBytes / COFF_SYMBOL_RECORD_BYTE_LENGTH;
-  // This local mutable accumulator is deliberate: on LatticeLab.exe
-  // (94,947 COFF symbol records, 70,933 emitted symbols), the previous
-  // immutable recursive accumulator took about 8.7 s in parseForUi by repeatedly
+  // This local mutable accumulator is deliberate: on an example
+  // (94,947 COFF symbol records, 70,933 emitted symbols),
+  // the immutable recursive accumulator took about 8.7 s in parseForUi by repeatedly
   // copying growing arrays; this linear pass measured about 0.21-0.28 s.
   const symbols: CoffSymbol[] = [];
   let index = 0;
