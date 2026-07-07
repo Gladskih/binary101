@@ -16,6 +16,7 @@ import { addCorrelatedState } from "../../../../../../analyzers/pe/disassembly/e
 import { createEmulationState } from "../../../../../../analyzers/pe/disassembly/entrypoint/emulation/index.js";
 import {
   collectKnownValues,
+  importReturn,
   known
 } from "../../../../../../analyzers/pe/disassembly/entrypoint/emulation/state.js";
 import {
@@ -82,8 +83,8 @@ void test("createBlockKey ignores scratch registers and non-stack memory", () =>
   right.memory.set("4198400", known(4n, 64));
 
   assert.equal(
-    createBlockKey(0x1000, left, imageBase),
-    createBlockKey(0x1000, right, imageBase)
+    createBlockKey(0x1000, left),
+    createBlockKey(0x1000, right)
   );
 });
 
@@ -94,8 +95,8 @@ void test("createBlockKey distinguishes stack return targets", () => {
   right.memory.set("17592186044416", known(0x140002000n, 64));
 
   assert.notEqual(
-    createBlockKey(0x1000, left, imageBase),
-    createBlockKey(0x1000, right, imageBase)
+    createBlockKey(0x1000, left),
+    createBlockKey(0x1000, right)
   );
 });
 
@@ -108,8 +109,20 @@ void test("createBlockKey distinguishes stack arguments read by prolog helpers",
   right.memory.set("17592186044432", known(0x140004000n, 64));
 
   assert.notEqual(
-    createBlockKey(0x1000, left, imageBase),
-    createBlockKey(0x1000, right, imageBase)
+    createBlockKey(0x1000, left),
+    createBlockKey(0x1000, right)
+  );
+});
+
+void test("createBlockKey distinguishes precise top stack values restored by pops", () => {
+  const left = createEmulationState(32);
+  const right = createEmulationState(32);
+  left.memory.set("268435456", known(0x4080d0n, 32));
+  right.memory.set("268435456", importReturn("KERNEL32.dll!GetLastError"));
+
+  assert.notEqual(
+    createBlockKey(0x1000, left),
+    createBlockKey(0x1000, right)
   );
 });
 
@@ -122,8 +135,8 @@ void test("createBlockKey distinguishes frame-pointer return slots", () => {
   right.memory.set("17592186048504", known(0x140002000n, 64));
 
   assert.notEqual(
-    createBlockKey(0x1000, left, imageBase),
-    createBlockKey(0x1000, right, imageBase)
+    createBlockKey(0x1000, left),
+    createBlockKey(0x1000, right)
   );
 });
 
@@ -195,7 +208,7 @@ void test("queueFollowedBlock charges a complete new path state", async () => {
   const opts = createOptions();
   const targetRva = opts.entrypointRva;
   const { incoming, previous } = createPrecisionGrowthStates(targetRva);
-  const key = createBlockKey(targetRva, previous, imageBase);
+  const key = createBlockKey(targetRva, previous);
   const state = createQueueState([]);
   state.emulationStatesByKey.set(key, addCorrelatedState(undefined, previous));
   const precisionBefore = MAX_PRECISION_BUDGET_PER_RVA - MODELED_VALUES_PER_PATH;

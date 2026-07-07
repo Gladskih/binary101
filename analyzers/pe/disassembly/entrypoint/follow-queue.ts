@@ -8,7 +8,6 @@ import type {
 } from "../types.js";
 import { loadCodeBytes, type MappedCodeBlock } from "./code-bytes.js";
 import {
-  toRva,
   type ConditionalBranchTargets,
   type FollowedCodeTarget
 } from "./control-flow.js";
@@ -114,27 +113,25 @@ const stackKeyOffsets = (state: EmulationState): bigint[] => {
   return [0n, bytes, bytes * 2n, bytes * 3n];
 };
 
+// A few active stack cells are part of the control-flow context because
+// prologs/epilogs can restore saved registers before resolving later targets.
 const stackSlotKey = (
   state: EmulationState,
-  address: bigint,
-  imageBase: bigint
+  address: bigint
 ): string | null => {
   const value = state.memory.get(address.toString());
-  if (!value) return null;
-  const values = collectKnownValues(value);
-  if (!values.length) return null;
-  return values.every(candidate => toRva(candidate.value, imageBase) != null)
+  return value && value.kind !== "unknown"
     ? `${address.toString(16)}=${emulatedValueKey(value)}`
     : null;
 };
 
-const stackSlotKeys = (state: EmulationState, imageBase: bigint): string => {
+const stackSlotKeys = (state: EmulationState): string => {
   const keys = new Set<string>();
   for (const register of ["RSP", "RBP"] as const) {
     const value = state.registers.get(register);
     if (value?.kind !== "known") continue;
     for (const offset of stackKeyOffsets(state)) {
-      const key = stackSlotKey(state, value.value + offset, imageBase);
+      const key = stackSlotKey(state, value.value + offset);
       if (key) keys.add(key);
     }
   }
@@ -143,15 +140,14 @@ const stackSlotKeys = (state: EmulationState, imageBase: bigint): string => {
     .join("|");
 };
 
-const stackStateKey = (state: EmulationState, imageBase: bigint): string =>
-  `slots=${stackSlotKeys(state, imageBase)}`;
+const stackStateKey = (state: EmulationState): string =>
+  `slots=${stackSlotKeys(state)}`;
 
 export const createBlockKey = (
   rva: number,
-  state: EmulationState,
-  imageBase: bigint
+  state: EmulationState
 ): string =>
-  `${rva.toString(16)}|stack:${stackStateKey(state, imageBase)}`;
+  `${rva.toString(16)}|stack:${stackStateKey(state)}`;
 
 const stateToProcess = (
   correlated: CorrelatedEmulationStates
@@ -187,7 +183,7 @@ export const queueFollowedBlock = async (
   instructionRva: number,
   emulationState: EmulationState
 ): Promise<boolean> => {
-  const key = createBlockKey(follow.rva, emulationState, opts.imageBase);
+  const key = createBlockKey(follow.rva, emulationState);
   const knownStates = state.emulationStatesByKey.get(key);
   const nextStates = addCorrelatedState(knownStates, emulationState);
   if (knownStates === nextStates) return true;

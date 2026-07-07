@@ -27,6 +27,9 @@ export const emulatedValueKey = (value: EmulatedValue): string => {
     const subleaf = value.subleaf == null ? "" : `:${value.subleaf}`;
     return `cpuid:${value.leaf}${subleaf}:${value.register}`;
   }
+  if (value.kind === "partial-known") {
+    return `partial:${value.bits}:${value.mask.toString(16)}:${value.value.toString(16)}`;
+  }
   return "unknown";
 };
 

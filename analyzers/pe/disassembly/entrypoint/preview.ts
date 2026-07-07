@@ -197,7 +197,7 @@ export const decodePreview = async (
   // https://learn.microsoft.com/en-us/cpp/build/x64-software-conventions
   // https://learn.microsoft.com/en-us/cpp/c-runtime-library/direction-flag
   const entryState = createEmulationState(metadata.bitness, { DF: false });
-  const entryKey = createBlockKey(mapped.rvaStart, entryState, opts.imageBase);
+  const entryKey = createBlockKey(mapped.rvaStart, entryState);
   const entryBlock: PendingBlock = {
     kind: "entrypoint",
     mapped,
