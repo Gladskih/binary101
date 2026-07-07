@@ -26,9 +26,10 @@ const createEnumMap = <T extends string>(names: readonly T[]): EnumMap<T> => {
 
 const mnemonicNames = [
   "Adc", "Add", "And", "Bsf", "Bsr", "Bswap", "Bt", "Btc", "Btr", "Bts",
-  "Cbw", "Cdq", "Cdqe", "Clc", "Cmc", "Cmp", "Cmpxchg", "Cpuid", "Cqo",
+  "Cbw", "Cdq", "Cdqe", "Clc", "Cld", "Cmc", "Cmp", "Cmpxchg", "Cpuid", "Cqo",
   "Crc32", "Cwd", "Cwde", "Dec", "Div", "Enter", "Idiv", "Imul", "Inc",
-  "Lahf", "Lea", "Leave", "Lzcnt", "Mov", "Movbe", "Movsx", "Movsxd",
+  "Lahf", "Lea", "Leave", "Lodsb", "Lodsd", "Lodsq", "Lodsw", "Lzcnt",
+  "Mov", "Movbe", "Movsb", "Movsd", "Movsq", "Movsw", "Movsx", "Movsxd",
   "Movzx", "Mul", "Neg", "Not", "Or", "Pop", "Popa", "Popad", "Popcnt",
   "Popf", "Popfd", "Popfq", "Push", "Pusha", "Pushad", "Pushf", "Pushfd",
   "Pushfq", "Rcl", "Rcr", "Rol", "Ror", "Sahf", "Sal", "Sar", "Sbb",
@@ -36,7 +37,7 @@ const mnemonicNames = [
   "Tzcnt", "Xadd", "Xchg", "Xor", "Cmove", "Cmovne", "Ja", "Jae", "Jb",
   "Jbe", "Je", "Jg", "Jge", "Jl", "Jle", "Jne", "Jno", "Jnp", "Jns",
   "Jo", "Jp", "Js", "Jcxz", "Jecxz", "Jrcxz", "Jmp", "Loop", "Loope",
-  "Loopne", "Call", "Ret", "Retf"
+  "Loopne", "Call", "Ret", "Retf", "Std", "Stosb", "Stosd", "Stosq", "Stosw"
 ] as const;
 
 const registerNames = [
@@ -54,7 +55,8 @@ const opKindNames = [
   "Register", "NearBranch16", "NearBranch32", "NearBranch64", "Immediate8",
   "Immediate8_2nd", "Immediate16", "Immediate32", "Immediate64",
   "Immediate8to16", "Immediate8to32", "Immediate8to64", "Immediate32to64",
-  "Memory"
+  "MemorySegSI", "MemorySegESI", "MemorySegRSI", "MemorySegDI", "MemorySegEDI",
+  "MemorySegRDI", "MemoryESDI", "MemoryESEDI", "MemoryESRDI", "Memory"
 ] as const;
 
 const memorySizeNames = [
@@ -87,6 +89,7 @@ export type FixtureFlowControl = (typeof flowControlNames)[number];
 type FixtureOperand =
   | { kind: "register"; register: FixtureRegister }
   | { kind: "immediate"; value: bigint; opKind: FixtureOpKind }
+  | { kind: "implicit-memory"; opKind: FixtureOpKind; size: FixtureMemorySize }
   | {
       kind: "memory";
       base?: FixtureRegister;
@@ -97,12 +100,9 @@ type FixtureOperand =
     };
 
 type FixtureInstructionSpec = {
-  code?: FixtureCode;
-  flowControl?: FixtureFlowControl;
   indirectControlFlow?: "near-call" | "near-jump" | "far-call";
-  ip?: bigint;
-  length?: number;
-  nearBranchTarget?: bigint;
+  code?: FixtureCode; flowControl?: FixtureFlowControl; ip?: bigint; length?: number;
+  nearBranchTarget?: bigint; repeatPrefix?: "rep" | "repe" | "repne";
 };
 
 const fixtureCode = createEnumMap(codeNames);
@@ -120,23 +120,14 @@ class FixtureFormatter implements IcedFormatter {
 }
 
 class FixtureInstruction implements IcedInstructionObject {
-  readonly code: number;
-  readonly flowControl: number;
-  readonly length: number;
-  readonly memoryBase: number;
-  readonly memoryDisplacement: bigint;
-  readonly memoryIndex: number;
-  readonly memoryIndexScale: number;
-  readonly memorySize: number;
-  readonly mnemonic: number;
-  readonly nearBranchTarget: bigint;
-  readonly nextIP: bigint;
-  readonly op0Kind: number;
-  readonly opCount: number;
-  readonly ip: bigint;
-  readonly isCallNearIndirect: boolean;
-  readonly isIpRelMemoryOperand: boolean;
-  readonly isJmpNearIndirect: boolean;
+  readonly code: number; readonly flowControl: number; readonly length: number;
+  readonly hasRepPrefix: boolean; readonly hasRepePrefix: boolean;
+  readonly hasRepnePrefix: boolean; readonly memoryBase: number;
+  readonly memoryDisplacement: bigint; readonly memoryIndex: number;
+  readonly memoryIndexScale: number; readonly memorySize: number; readonly mnemonic: number;
+  readonly nearBranchTarget: bigint; readonly nextIP: bigint; readonly op0Kind: number;
+  readonly opCount: number; readonly ip: bigint; readonly isCallNearIndirect: boolean;
+  readonly isIpRelMemoryOperand: boolean; readonly isJmpNearIndirect: boolean;
   readonly ipRelMemoryAddress: bigint;
   constructor(
     mnemonic: FixtureMnemonic,
@@ -146,6 +137,9 @@ class FixtureInstruction implements IcedInstructionObject {
     const memory = operands.find(operand => operand.kind === "memory");
     this.code = fixtureCode[spec.code ?? "Valid"] ?? 0;
     this.flowControl = fixtureFlowControl[spec.flowControl ?? "Next"] ?? 0;
+    this.hasRepPrefix = spec.repeatPrefix === "rep" || spec.repeatPrefix === "repe";
+    this.hasRepePrefix = this.hasRepPrefix;
+    this.hasRepnePrefix = spec.repeatPrefix === "repne";
     this.ip = spec.ip ?? 0n;
     this.length = spec.length ?? 1;
     this.memoryBase = memory?.kind === "memory"
@@ -156,7 +150,12 @@ class FixtureInstruction implements IcedInstructionObject {
       ? fixtureRegister[memory.index ?? "None"] ?? 0
       : fixtureRegister["None"] ?? 0;
     this.memoryIndexScale = memory?.kind === "memory" ? memory.scale ?? 1 : 1;
-    this.memorySize = memory?.kind === "memory" ? fixtureMemorySize[memory.size] ?? 0 : 0;
+    const sizedMemory = operands.find(operand =>
+      operand.kind === "memory" || operand.kind === "implicit-memory"
+    );
+    this.memorySize = sizedMemory?.kind === "memory" || sizedMemory?.kind === "implicit-memory"
+      ? fixtureMemorySize[sizedMemory.size] ?? 0
+      : 0;
     this.mnemonic = fixtureMnemonic[mnemonic] ?? 0;
     this.nearBranchTarget = spec.nearBranchTarget ?? 0n;
     this.nextIP = this.ip + BigInt(this.length);
@@ -182,6 +181,7 @@ class FixtureInstruction implements IcedInstructionObject {
     if (!data) return 0;
     if (data.kind === "register") return fixtureOpKind["Register"] ?? 0;
     if (data.kind === "memory") return fixtureOpKind["Memory"] ?? 0;
+    if (data.kind === "implicit-memory") return fixtureOpKind[data.opKind] ?? 0;
     return fixtureOpKind[data.opKind] ?? 0;
   }
   opRegister(operand: number): number {
@@ -269,6 +269,12 @@ export const mem = (
   if (index != null) operand.index = index;
   return operand;
 };
+
+export const implicitMem = (
+  opKind: Extract<FixtureOpKind, `Memory${string}`>,
+  size: FixtureMemorySize
+): FixtureOperand =>
+  ({ kind: "implicit-memory", opKind, size });
 
 export const instruction = (
   mnemonic: FixtureMnemonic,

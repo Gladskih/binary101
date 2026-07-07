@@ -11,6 +11,7 @@ import {
 import { maskForBits } from "./integer/common.js";
 
 const FLAGS: readonly CpuFlag[] = ["CF", "PF", "AF", "ZF", "SF", "OF"];
+export const MODELED_FLAGS: readonly CpuFlag[] = [...FLAGS, "DF"];
 
 type Condition =
   | "a"
@@ -60,7 +61,7 @@ export const writeKnownFlags = (
   state: EmulationState,
   flags: Partial<Record<CpuFlag, boolean>>
 ): void => {
-  for (const flag of FLAGS) {
+  for (const flag of Object.keys(flags) as CpuFlag[]) {
     const value = flags[flag];
     if (value != null) state.flags[flag] = value;
   }

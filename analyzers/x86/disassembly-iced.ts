@@ -23,6 +23,9 @@ export type IcedInstructionObject = {
   readonly memoryIndexScale: number;
   readonly memorySize: number;
   readonly op0Kind: number;
+  readonly hasRepPrefix: boolean;
+  readonly hasRepePrefix: boolean;
+  readonly hasRepnePrefix: boolean;
   readonly isCallNearIndirect: boolean;
   readonly isIpRelMemoryOperand: boolean;
   readonly isJmpNearIndirect: boolean;

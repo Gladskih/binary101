@@ -10,6 +10,7 @@ import {
 import { resolveRegister } from "./registers.js";
 import { executeIntegerInstruction } from "./integer/index.js";
 import { executeStackInstruction } from "./stack.js";
+import { executeStringInstruction } from "./strings.js";
 import {
   UNKNOWN,
   createEmulationState,
@@ -83,5 +84,6 @@ export const emulateInstruction = (
     return;
   }
   if (executeIntegerInstruction(iced, state, decoded, instruction)) return;
+  if (executeStringInstruction(iced, state, decoded)) return;
   executeStackInstruction(iced, state, decoded);
 };

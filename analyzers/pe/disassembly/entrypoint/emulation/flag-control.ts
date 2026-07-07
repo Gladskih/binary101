@@ -18,8 +18,16 @@ export const executeFlagControl = (
     writeKnownFlags(state, { CF: false });
     return true;
   }
+  if (mnemonic === iced.Mnemonic?.["Cld"]) {
+    writeKnownFlags(state, { DF: false });
+    return true;
+  }
   if (mnemonic === iced.Mnemonic?.["Stc"]) {
     writeKnownFlags(state, { CF: true });
+    return true;
+  }
+  if (mnemonic === iced.Mnemonic?.["Std"]) {
+    writeKnownFlags(state, { DF: true });
     return true;
   }
   if (mnemonic !== iced.Mnemonic?.["Cmc"]) return false;

@@ -8,7 +8,7 @@ import type {
 
 export type KnownValueBits = 8 | 16 | 32 | 64;
 export type KnownValue = { kind: "known"; value: bigint; bits: KnownValueBits };
-export type CpuFlag = "CF" | "PF" | "AF" | "ZF" | "SF" | "OF";
+export type CpuFlag = "CF" | "PF" | "AF" | "ZF" | "SF" | "OF" | "DF";
 export type EmulationFlags = Partial<Record<CpuFlag, boolean>>;
 type UnknownValue = { kind: "unknown" };
 type ImportReturnValue = { kind: "import-return"; label: string };

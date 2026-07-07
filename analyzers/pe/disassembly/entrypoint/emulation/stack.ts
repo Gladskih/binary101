@@ -18,7 +18,7 @@ import {
   type EmulationState,
   type KnownValueBits
 } from "./state.js";
-import { clearFlags } from "./flags.js";
+import { MODELED_FLAGS, clearFlags } from "./flags.js";
 
 const isMnemonic = (
   iced: IcedModule,
@@ -223,7 +223,7 @@ export const executeStackInstruction = (
   const poppedFlagsBytes = flagPopBytes(iced, mnemonic);
   if (poppedFlagsBytes != null) {
     popStackValue(iced, state, poppedFlagsBytes);
-    clearFlags(state);
+    clearFlags(state, MODELED_FLAGS);
     return true;
   }
   if (mnemonic === iced.Mnemonic?.["Push"]) {
