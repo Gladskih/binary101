@@ -5,6 +5,14 @@ import type {
   CanonicalRegister,
   RegisterAccess
 } from "./registers.js";
+import {
+  accessMask,
+  bitMask,
+  readPartialKnownBits,
+  replaceRegisterBits,
+  type PartialKnownValue,
+  type RegisterStorageBits
+} from "./register-bit-ranges.js";
 
 export type KnownValueBits = 8 | 16 | 32 | 64;
 export type KnownValue = { kind: "known"; value: bigint; bits: KnownValueBits };
@@ -25,7 +33,8 @@ export type EmulatedValue =
   | UnknownValue
   | ImportReturnValue
   | CpuIdOutputValue
-  | ValueSetValue;
+  | ValueSetValue
+  | PartialKnownValue;
 
 export type EmulationState = {
   bitness: 32 | 64;
@@ -40,7 +49,6 @@ const MAX_VALUE_SET_VALUES = 4;
 // Synthetic stack anchors: only relative stack slots matter for this local model.
 const STACK_BASE_32 = 0x10000000n;
 const STACK_BASE_64 = 0x100000000000n;
-type RegisterStorageBits = 32 | 64;
 
 export const known = (value: bigint, bits: KnownValueBits): KnownValue => ({
   kind: "known",
@@ -65,6 +73,13 @@ const sameSpecialValue = (left: EmulatedValue, right: EmulatedValue): boolean =>
     left.leaf === right.leaf &&
     left.subleaf === right.subleaf &&
     left.register === right.register
+  ) ||
+  (
+    left.kind === "partial-known" &&
+    right.kind === "partial-known" &&
+    left.bits === right.bits &&
+    left.mask === right.mask &&
+    left.value === right.value
   );
 
 export const collectKnownValues = (value: EmulatedValue | undefined): KnownValue[] => {
@@ -123,6 +138,10 @@ export const readRegister = (
   if (!access) return UNKNOWN;
   const value = state.registers.get(access.canonical) ?? UNKNOWN;
   if (value.kind === "value-set") return readKnownValues(value.values, access);
+  if (value.kind === "partial-known") {
+    const bits = readPartialKnownBits(value, access);
+    return bits == null ? UNKNOWN : known(bits, access.accessBits);
+  }
   if (value.kind !== "known" && (access.accessBits < 32 || access.bitOffset !== 0)) return UNKNOWN;
   if (value.kind !== "known") return value;
   return readKnownValue(value, access);
@@ -155,21 +174,47 @@ const writeKnownRegister = (
   value: KnownValue
 ): void => {
   if (access.accessBits < 32) {
-    const current = state.registers.get(access.canonical);
-    if (current?.kind !== "known") {
-      state.registers.set(access.canonical, UNKNOWN);
-      return;
-    }
-    state.registers.set(
-      access.canonical,
-      known(replaceBits(current, access, value.value), current.bits)
-    );
+    writeKnownPartialRegister(state, access, value);
     return;
   }
   state.registers.set(
     access.canonical,
     known(known(value.value, access.accessBits).value, writeStorageBits(state, access))
   );
+};
+
+const writeKnownPartialRegister = (
+  state: EmulationState,
+  access: RegisterAccess,
+  value: KnownValue
+): void => {
+  const current = state.registers.get(access.canonical);
+  const currentBits = registerStorageBits(state, access, current);
+  const currentValue = current?.kind === "known" || current?.kind === "partial-known"
+    ? current.value
+    : 0n;
+  const currentMask = current?.kind === "known" ? bitMask(current.bits) :
+    current?.kind === "partial-known" ? current.mask : 0n;
+  const mask = accessMask(access);
+  const nextValue = replaceRegisterBits(currentValue, access, value.value);
+  const nextMask = (currentMask & ~mask) | mask;
+  state.registers.set(
+    access.canonical,
+    nextMask === bitMask(currentBits)
+      ? known(nextValue, currentBits)
+      : { kind: "partial-known", value: nextValue & nextMask, mask: nextMask, bits: currentBits }
+  );
+};
+
+const registerStorageBits = (
+  state: EmulationState,
+  access: RegisterAccess,
+  value: EmulatedValue | undefined
+): RegisterStorageBits => {
+  if (value?.kind === "known" || value?.kind === "partial-known") {
+    return value.bits === 64 ? 64 : 32;
+  }
+  return writeStorageBits(state, access);
 };
 
 const writeValueSetRegister = (
@@ -194,17 +239,6 @@ const writeStorageBits = (
   return state.bitness === 64 ? 64 : 32;
 };
 
-const replaceBits = (
-  current: KnownValue,
-  access: RegisterAccess,
-  value: bigint
-): bigint => {
-  const accessMask = (1n << BigInt(access.accessBits)) - 1n;
-  const shiftedMask = accessMask << BigInt(access.bitOffset);
-  return (current.value & ~shiftedMask) |
-    ((value & accessMask) << BigInt(access.bitOffset));
-};
-
 export const binaryKnown = (
   left: EmulatedValue,
   right: EmulatedValue,
@@ -219,10 +253,13 @@ export const binaryKnown = (
   ));
 };
 
-export const createEmulationState = (bitness: 32 | 64): EmulationState => {
+export const createEmulationState = (
+  bitness: 32 | 64,
+  flags: EmulationFlags = {}
+): EmulationState => {
   const registers = new Map<CanonicalRegister, EmulatedValue>();
   registers.set("RSP", known(bitness === 64 ? STACK_BASE_64 : STACK_BASE_32, bitness));
-  return { bitness, registers, memory: new Map(), flags: {} };
+  return { bitness, registers, memory: new Map(), flags: { ...flags } };
 };
 
 export const cloneEmulationState = (state: EmulationState): EmulationState => ({

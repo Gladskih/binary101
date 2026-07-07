@@ -13,8 +13,12 @@ import type { MappedCodeBlock } from "./code-bytes.js";
 import { toRva } from "./control-flow.js";
 import { buildImportTargetMap, type ImportTarget } from "./import-targets.js";
 import { createInstruction } from "./instruction.js";
-import { createEmulationState } from "./emulation/index.js";
+import { createEmulationState, emulateInstruction } from "./emulation/index.js";
 import { cloneEmulationState } from "./emulation/state.js";
+import {
+  invalidateTouchedMemory,
+  preloadImageMemoryForInstruction
+} from "./emulation/image-memory.js";
 import { applyInstructionTargets, controlFlowIssue } from "./targeting.js";
 import {
   createBlockKey,
@@ -120,9 +124,19 @@ const decodeBlock = async (
         instr,
         formatter,
         rva,
-        block.mapped.fileOffsetStart + offsetInPreview,
-        block.emulationState
+        block.mapped.fileOffsetStart + offsetInPreview
       );
+      const preloaded = await preloadImageMemoryForInstruction(
+        reader,
+        opts,
+        iced,
+        block.emulationState,
+        instr
+      );
+      const emulated = emulateInstruction(iced, instr, instruction, block.emulationState);
+      if (!emulated && instr.flowControl === iced.FlowControl["Next"]) {
+        invalidateTouchedMemory(block.emulationState, preloaded);
+      }
       const targets = await applyInstructionTargets(
         reader,
         iced,
@@ -176,7 +190,13 @@ export const decodePreview = async (
 ): Promise<Pick<PeEntrypointDisassemblyReport, "blocks" | "bytesDecoded" | "instructionCount">> => {
   const formatter = new iced.Formatter(iced.FormatterSyntax.Nasm);
   const importTargets = buildImportTargetMap(opts, metadata);
-  const entryState = createEmulationState(metadata.bitness);
+  // Microsoft documents that Windows x64 system calls and CRT entry/exit
+  // expect DF clear; the CRT direction-flag note says string/buffer routines
+  // assume the same. A local no-CRT PE32/PE32+ entrypoint probe also observed
+  // DF=0 on Windows; model PE startup that way until code executes STD/CLD.
+  // https://learn.microsoft.com/en-us/cpp/build/x64-software-conventions
+  // https://learn.microsoft.com/en-us/cpp/c-runtime-library/direction-flag
+  const entryState = createEmulationState(metadata.bitness, { DF: false });
   const entryKey = createBlockKey(mapped.rvaStart, entryState, opts.imageBase);
   const entryBlock: PendingBlock = {
     kind: "entrypoint",

@@ -159,6 +159,15 @@ void test("emulateInstruction computes concrete xor operations", () => {
   });
 });
 
+void test("emulateInstruction uses known byte writes for TEST flags", () => {
+  const { state } = emulateInstructionsWithState([
+    ins("Mov", [reg("BL"), imm(1, "Immediate8")]),
+    ins("Test", [reg("BL"), reg("BL")])
+  ], 32);
+
+  assert.equal(state.flags.ZF, false);
+});
+
 void test("emulateInstruction executes lea through the operand layer", () => {
   const { state } = emulateInstructionsWithState([
     ins("Mov", [reg("RBX"), imm(0x1000)]),

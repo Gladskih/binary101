@@ -28,12 +28,19 @@ const rvaToOff = (rva: number): number | null => {
 
 const dataSection = (sizeOfRawData: number): PeSection => ({
   name: inlinePeSectionName(".rdata"),
-  virtualSize: 4,
+  virtualSize: sizeOfRawData,
   virtualAddress: 0x2000,
   sizeOfRawData,
   pointerToRawData: 0x40,
   characteristics: IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ
 });
+
+const findCodeTargetInstruction = (
+  result: Awaited<ReturnType<typeof analyzePeEntrypointDisassembly>>,
+  rva: number
+) => result.blocks
+  .flatMap(block => block.instructions)
+  .find(instruction => instruction.target?.kind === "code" && instruction.target.rva === rva);
 
 void test("analyzePeEntrypointDisassembly follows indirect jumps through image slots", async () => {
   const bytes = new Uint8Array(0x44);
@@ -114,4 +121,67 @@ void test("analyzePeEntrypointDisassembly ignores truncated indirect image slots
 
   assert.equal(result.blocks[0]?.instructions[0]?.target, undefined);
   assert.ok(result.issues.some(issue => /stopped at control-flow instruction/i.test(issue)));
+});
+
+void test("analyzePeEntrypointDisassembly reads mapped image memory during emulation", async () => {
+  const bytes = new Uint8Array(0x44);
+  bytes.set([0xa1, 0x00, 0x20, 0x40, 0x00]);
+  bytes.set([0xa3, 0x00, 0x30, 0x40, 0x00], 0x05);
+  bytes.set([0xff, 0x15, 0x00, 0x30, 0x40, 0x00], 0x0a);
+  bytes.set([0x90, 0xc3], 0x30);
+  bytes.set([0x30, 0x10, 0x40, 0x00], 0x40);
+  const result = await analyzePeEntrypointDisassembly(
+    createFileRangeReader(new MockFile(bytes, "image-memory-emulation.exe"), 0, bytes.length),
+    {
+      coffMachine: IMAGE_FILE_MACHINE_I386,
+      is64Bit: false,
+      imageBase: 0x400000n,
+      entrypointRva: 0x1000,
+      rvaToOff,
+      sections: [
+        createExecutableSection({ virtualSize: 0x40, sizeOfRawData: 0x40 }),
+        dataSection(4)
+      ]
+    },
+    async () => realIcedModule
+  );
+  const instruction = findCodeTargetInstruction(result, 0x1030);
+
+  assert.deepEqual(instruction?.target, { kind: "code", rva: 0x1030, followed: true });
+  assert.equal(result.blocks.some(block => block.startRva === 0x1030), true);
+});
+
+void test("analyzePeEntrypointDisassembly follows targets copied by rep movsd", async () => {
+  const bytes = new Uint8Array(0x44);
+  bytes.set([0xb8, 0x00, 0x20, 0x40, 0x00]);
+  bytes.set([0xe8, 0x16, 0x00, 0x00, 0x00], 0x05);
+  bytes.set([0xc3], 0x0a);
+  bytes.set([0xbf, 0x00, 0x30, 0x40, 0x00], 0x20);
+  bytes.set([0x89, 0xc6], 0x25);
+  bytes.set([0xb9, 0x01, 0x00, 0x00, 0x00], 0x27);
+  bytes.set([0xf3, 0xa5], 0x2c);
+  bytes.set([0xff, 0x15, 0x00, 0x30, 0x40, 0x00], 0x2e);
+  bytes.set([0xc3], 0x34);
+  bytes.set([0x90, 0xc3], 0x38);
+  bytes.set([0x38, 0x10, 0x40, 0x00], 0x40);
+  const result = await analyzePeEntrypointDisassembly(
+    createFileRangeReader(new MockFile(bytes, "rep-movsd-target.exe"), 0, bytes.length),
+    {
+      coffMachine: IMAGE_FILE_MACHINE_I386,
+      is64Bit: false,
+      imageBase: 0x400000n,
+      entrypointRva: 0x1000,
+      rvaToOff,
+      sections: [
+        createExecutableSection({ virtualSize: 0x40, sizeOfRawData: 0x40 }),
+        dataSection(4)
+      ]
+    },
+    async () => realIcedModule
+  );
+  const instruction = findCodeTargetInstruction(result, 0x1038);
+
+  assert.deepEqual(instruction?.target, { kind: "code", rva: 0x1038, followed: true });
+  assert.equal(result.blocks.some(block => block.startRva === 0x1038), true);
+  assert.equal(result.issues.some(issue => /unknown indirect call/i.test(issue)), false);
 });

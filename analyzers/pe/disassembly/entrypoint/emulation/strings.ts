@@ -114,7 +114,7 @@ const repeatCounter = (
 ): RepeatCounter => ({
   name: addressBits === 16 ? "CX" : addressBits === 32 ? "ECX" : "RCX",
   bits: addressBits,
-  repeated: instruction.hasRepePrefix || instruction.hasRepnePrefix
+  repeated: instruction.hasRepPrefix || instruction.hasRepePrefix || instruction.hasRepnePrefix
 });
 
 const repeatedCount = (

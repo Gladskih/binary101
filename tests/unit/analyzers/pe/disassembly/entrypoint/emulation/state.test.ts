@@ -108,6 +108,29 @@ void test("writeRegister invalidates unknown partial register aliases", () => {
   assert.deepEqual(readRegister(state, rax), { kind: "unknown" });
 });
 
+void test("writeRegister remembers known low-byte aliases without inventing upper bits", () => {
+  const state = createEmulationState(32);
+  const ebx = resolveRegister(icedModule, iced.Register.EBX);
+  const bl = resolveRegister(icedModule, iced.Register.BL);
+
+  writeRegister(state, bl, known(1n, 8));
+
+  assert.deepEqual(readRegister(state, bl), { kind: "known", value: 1n, bits: 8 });
+  assert.deepEqual(readRegister(state, ebx), { kind: "unknown" });
+});
+
+void test("writeRegister combines known byte aliases when a wider alias is covered", () => {
+  const state = createEmulationState(32);
+  const bx = resolveRegister(icedModule, iced.Register.BX);
+  const bl = resolveRegister(icedModule, iced.Register.BL);
+  const bh = resolveRegister(icedModule, iced.Register.BH);
+
+  writeRegister(state, bl, known(0x34n, 8));
+  writeRegister(state, bh, known(0x12n, 8));
+
+  assert.deepEqual(readRegister(state, bx), { kind: "known", value: 0x1234n, bits: 16 });
+});
+
 void test("createEmulationState initializes abstract stack by bitness", () => {
   assert.deepEqual(createEmulationState(32).registers.get("RSP"), {
     kind: "known",
@@ -119,6 +142,15 @@ void test("createEmulationState initializes abstract stack by bitness", () => {
     value: 0x100000000000n,
     bits: 64
   });
+});
+
+void test("createEmulationState copies initial flags", () => {
+  const flags = { DF: false };
+  const state = createEmulationState(32, flags);
+
+  flags.DF = true;
+
+  assert.deepEqual(state.flags, { DF: false });
 });
 
 void test("mergeEmulationStates joins concrete register alternatives", () => {

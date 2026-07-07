@@ -75,15 +75,15 @@ export const emulateInstruction = (
   decoded: IcedInstructionObject,
   instruction: PeEntrypointInstruction,
   state: EmulationState
-): void => {
+): boolean => {
   appendNotes(instruction, collectCpuIdVendorChunkNotes(iced, decoded));
-  if (!iced.Mnemonic || !iced.Register) return;
+  if (!iced.Mnemonic || !iced.Register) return false;
   const mnemonic = decoded.mnemonic;
   if (mnemonic === iced.Mnemonic["Cpuid"]) {
     executeCpuId(iced, state, instruction);
-    return;
+    return true;
   }
-  if (executeIntegerInstruction(iced, state, decoded, instruction)) return;
-  if (executeStringInstruction(iced, state, decoded)) return;
-  executeStackInstruction(iced, state, decoded);
+  if (executeIntegerInstruction(iced, state, decoded, instruction)) return true;
+  if (executeStringInstruction(iced, state, decoded)) return true;
+  return executeStackInstruction(iced, state, decoded);
 };
