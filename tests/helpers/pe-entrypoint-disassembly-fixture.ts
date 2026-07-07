@@ -156,6 +156,16 @@ export const fakeIced = {
     Test: 751,
     Xor: 1518
   },
+  MemorySize: {
+    UInt8: 1,
+    "1": "UInt8",
+    UInt16: 2,
+    "2": "UInt16",
+    UInt32: 3,
+    "3": "UInt32",
+    UInt64: 4,
+    "4": "UInt64"
+  },
   OpKind: {
     Register: 0,
     NearBranch16: 1,

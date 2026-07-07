@@ -22,7 +22,7 @@ export type IcedFormatter = { format(instruction: IcedInstructionObject): string
 export type IcedModule = IcedX86Module & {
   Formatter: new (syntax: number) => IcedFormatter;
   FormatterSyntax: { Nasm: number };
-  MemorySize?: Record<string, number> & Record<number, string | undefined>;
+  MemorySize: Record<string, number> & Record<number, string | undefined>;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -32,8 +32,11 @@ export const isIcedModule = (value: unknown): value is IcedModule => {
   if (!isRecord(value) || !isIcedX86Module(value)) return false;
   const module = value as IcedX86Module & Record<string, unknown>;
   const formatterSyntax = module["FormatterSyntax"];
+  const memorySize = module["MemorySize"];
   return (
     isRecord(formatterSyntax) &&
+    isRecord(memorySize) &&
+    typeof memorySize["UInt32"] === "number" &&
     typeof formatterSyntax["Nasm"] === "number" &&
     typeof module["Formatter"] === "function"
   );
