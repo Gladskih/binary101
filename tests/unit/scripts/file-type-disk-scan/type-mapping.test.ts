@@ -177,6 +177,12 @@ void test("typesMatch maps TrueType font labels to file.exe font MIME", () => {
   assert.equal(normalizeFileMimeType("font/ttf suffix"), "unmapped");
 });
 
+void test("typesMatch maps OpenType font collections to file.exe font MIME", () => {
+  const label = "OpenType font collection (TTC/OTC shared font tables)";
+  assert.equal(typesMatch(label, "font/ttf"), true);
+  assert.equal(normalizeAnalyzerLabel(`prefix ${label}`), "unmapped");
+});
+
 void test("typesMatch maps WOFF2 font labels to file.exe WOFF2 MIME", () => {
   const label = "Web Open Font Format 2 font (WOFF2 compressed web font)";
   assert.equal(typesMatch(label, "font/woff2"), true);

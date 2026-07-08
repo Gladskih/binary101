@@ -76,6 +76,7 @@ const ANALYZER_RULES: TypeRule[] = [
   { pattern: /^Windows setup information file /, canonical: "setupscript" },
   { pattern: /^GNU gettext message catalog /, canonical: "gettext" },
   { pattern: /^Windows Application Compatibility Database /, canonical: "sdb" },
+  { pattern: /^OpenType font collection /, canonical: "font-ttf" },
   { pattern: /^TrueType\/OpenType font /, canonical: "font-ttf" },
   { pattern: /^Web Open Font Format 2 font /, canonical: "font-woff2" },
   { pattern: /^Web Open Font Format font /, canonical: "font-woff" },
