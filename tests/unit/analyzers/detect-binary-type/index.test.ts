@@ -27,6 +27,16 @@ const createMinimalPeLabelProbe = (machine: number, optionalHeaderMagic = 0x10b)
   return new MockFile(bytes, `machine-${machine.toString(16)}.exe`);
 };
 
+void test("detectBinaryType distinguishes empty files from unknown data", async () => {
+  const emptyLabel = await detectBinaryType(new MockFile(new Uint8Array(), "empty.bin"));
+  const unknownLabel = await detectBinaryType(
+    new MockFile(new Uint8Array([0x00, 0x01, 0x02, 0x03]), "unknown.bin")
+  );
+
+  assert.strictEqual(emptyLabel, "Empty file");
+  assert.strictEqual(unknownLabel, "Unknown binary type");
+});
+
 void test("detectBinaryType refines ZIP-based document labels", async () => {
   const zipSignature = [0x50, 0x4b, 0x03, 0x04];
   const docxPayload = "[Content_Types].xml word/document.xml";

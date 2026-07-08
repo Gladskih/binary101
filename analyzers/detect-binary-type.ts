@@ -81,6 +81,7 @@ const detectTga = async (file: File, dv: DataView): Promise<string | null> => {
 };
 
 const detectBinaryType = async (file: File): Promise<string> => {
+  if (file.size === 0) return "Empty file";
   const dv = await readProbeView(file);
   const elf = probeElf(dv);
   if (elf) return elf;

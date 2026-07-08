@@ -4,6 +4,7 @@ type TypeRule = { pattern: RegExp; canonical: string };
 
 const ANALYZER_RULES: TypeRule[] = [
   { pattern: /^Unknown binary type$/, canonical: "unknown" },
+  { pattern: /^Empty file$/, canonical: "empty" },
   { pattern: /^ELF\b/, canonical: "elf" },
   { pattern: /^Mach-O\b/, canonical: "macho" },
   { pattern: /^COFF object file\b/, canonical: "coff" },

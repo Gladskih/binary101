@@ -101,6 +101,10 @@ void test("typesMatch maps XHTML MIME to XML analyzer output", () => {
   assert.equal(normalizeFileMimeType("application/xhtml+xml suffix"), "unmapped");
 });
 
+void test("typesMatch maps empty files", () => {
+  assert.equal(typesMatch("Empty file", "inode/x-empty"), true);
+});
+
 void test("typesMatch maps ar archives to file.exe archive MIME", () => {
   assert.equal(typesMatch("Unix ar archive (static library)", "application/x-archive"), true);
   assert.equal(typesMatch("Unix ar archive (thin static library)", "application/x-archive"), true);
