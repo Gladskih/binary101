@@ -204,6 +204,16 @@ void test("detectBinaryType reports MP4 by ISO-BMFF signature", async () => {
   assert.strictEqual(label, "MP4/QuickTime container (ISO-BMFF)");
 });
 
+void test("detectBinaryType reports AVIF by ISO-BMFF brand", async () => {
+  const bytes = new Uint8Array(12);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(4, 0x66747970, false);
+  view.setUint32(8, 0x61766966, false);
+  const label = await detectBinaryType(new MockFile(bytes, "sample.avif", "image/avif"));
+
+  assert.strictEqual(label, "AVIF image (AV1 Image File Format, ISO-BMFF)");
+});
+
 void test("detectBinaryType reports ASF by GUID without parsing streams", async () => {
   const label = await detectBinaryType(createSampleAsfFile());
   assert.strictEqual(label, "ASF container (WMA/WMV)");

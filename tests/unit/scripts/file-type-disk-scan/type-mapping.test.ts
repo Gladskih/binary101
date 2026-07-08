@@ -46,6 +46,13 @@ void test("typesMatch keeps genuine media mismatches visible", () => {
   assert.equal(typesMatch("PNG image", "image/jpeg"), false);
 });
 
+void test("typesMatch maps AVIF image labels to file.exe AVIF MIME", () => {
+  const label = "AVIF image (AV1 Image File Format, ISO-BMFF)";
+  assert.equal(typesMatch(label, "image/avif"), true);
+  assert.equal(normalizeAnalyzerLabel("prefix AVIF image"), "unmapped");
+  assert.equal(normalizeFileMimeType("image/avif suffix"), "unmapped");
+});
+
 void test("typesMatch maps Windows bitmap cursor MIME to ICO/CUR icon labels", () => {
   assert.equal(typesMatch("ICO/CUR icon image", "image/x-win-bitmap"), true);
   assert.equal(normalizeFileMimeType("image/x-win-bitmap suffix"), "unmapped");

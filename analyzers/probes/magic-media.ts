@@ -126,6 +126,12 @@ const detectIsoBmff = (dv: DataView): ProbeResult => {
   if (ftyp !== 0x66747970) return null;
   const brand = dv.getUint32(8, false);
   if (
+    brand === 0x61766966 || // avif
+    brand === 0x61766973 // avis
+  ) {
+    return "AVIF image (AV1 Image File Format, ISO-BMFF)";
+  }
+  if (
     brand === 0x68656963 || // heic
     brand === 0x68656978 || // heix
     brand === 0x68657663 // hevc
