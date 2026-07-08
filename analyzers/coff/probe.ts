@@ -10,7 +10,6 @@ import {
   COFF_SHORT_NAME_BYTE_LENGTH,
   readCoffField
 } from "./layout.js";
-import { DEFAULT_FILE_READ_WINDOW_BYTES } from "../file-range-reader.js";
 import { formatCoffMachine, isKnownCoffMachine } from "./machine.js";
 
 type CoffObjectProbe = {
@@ -33,20 +32,18 @@ const hasPrintableSectionName = (dv: DataView, sectionOffset: number): boolean =
 };
 
 const hasPlausibleSectionTable = (dv: DataView, numberOfSections: number): boolean => {
-  const tableEnd = COFF_FILE_HEADER_BYTE_LENGTH + numberOfSections * COFF_SECTION_HEADER_BYTE_LENGTH;
-  if (tableEnd > dv.byteLength) return false;
-  return Array.from({ length: numberOfSections }, (_, index) =>
+  const availableSections = Math.min(
+    numberOfSections,
+    Math.floor(
+      Math.max(0, dv.byteLength - COFF_FILE_HEADER_BYTE_LENGTH) /
+      COFF_SECTION_HEADER_BYTE_LENGTH
+    )
+  );
+  if (availableSections === 0) return false;
+  return Array.from({ length: availableSections }, (_, index) =>
     COFF_FILE_HEADER_BYTE_LENGTH + index * COFF_SECTION_HEADER_BYTE_LENGTH
   ).some(sectionOffset => hasPrintableSectionName(dv, sectionOffset));
 };
-
-// Internal lightweight-detection budget, not a PE/COFF format limit. The
-// section table must fit the measured 64 KiB probe/read window documented in
-// FileRangeReader, even if a caller supplies a larger DataView.
-const sectionTableFitsDetectionBudget = (numberOfSections: number): boolean =>
-  numberOfSections <= Math.floor(
-    (DEFAULT_FILE_READ_WINDOW_BYTES - COFF_FILE_HEADER_BYTE_LENGTH) / COFF_SECTION_HEADER_BYTE_LENGTH
-  );
 
 const hasPlausibleSymbolTable = (
   fileSize: number,
@@ -69,7 +66,6 @@ export const probeCoffObject = (dv: DataView, fileSize: number): CoffObjectProbe
   const sizeOfOptionalHeader = readCoffField(dv, 0, COFF_FILE_HEADER_FIELDS.SizeOfOptionalHeader);
   const characteristics = readCoffField(dv, 0, COFF_FILE_HEADER_FIELDS.Characteristics);
   if (!isKnownCoffMachine(machine) || sizeOfOptionalHeader !== 0) return null;
-  if (!sectionTableFitsDetectionBudget(numberOfSections)) return null;
   if (
     (characteristics & (
       COFF_FILE_CHARACTERISTICS.EXECUTABLE_IMAGE |
@@ -78,8 +74,8 @@ export const probeCoffObject = (dv: DataView, fileSize: number): CoffObjectProbe
   ) {
     return null;
   }
-  if (!hasPlausibleSectionTable(dv, numberOfSections)) return null;
   const sectionTableEnd = COFF_FILE_HEADER_BYTE_LENGTH + numberOfSections * COFF_SECTION_HEADER_BYTE_LENGTH;
+  if (sectionTableEnd > fileSize || !hasPlausibleSectionTable(dv, numberOfSections)) return null;
   return hasPlausibleSymbolTable(fileSize, pointerToSymbolTable, numberOfSymbols, sectionTableEnd)
     ? { machine }
     : null;

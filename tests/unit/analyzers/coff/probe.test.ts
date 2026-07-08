@@ -190,7 +190,7 @@ void test("probeCoffObject accepts boundary symbol table positions", () => {
   assert.deepEqual(probe(atFileEnd), { machine: IMAGE_FILE_MACHINE_I386 });
 });
 
-void test("probeCoffObject treats the detection section-count limit as inclusive", () => {
+void test("probeCoffObject accepts the largest section table contained in the probe", () => {
   const bytes = new Uint8Array(
     COFF_FILE_HEADER_BYTE_LENGTH + COFF_SECTION_HEADER_BYTE_LENGTH * PROBE_SECTION_DETECTION_COUNT_LIMIT
   );
@@ -204,16 +204,18 @@ void test("probeCoffObject treats the detection section-count limit as inclusive
   assert.deepEqual(probe(bytes), { machine: IMAGE_FILE_MACHINE_I386 });
 });
 
-void test("probeCoffObject rejects above-limit section counts even when the table fits", () => {
-  const bytes = new Uint8Array(
-    COFF_FILE_HEADER_BYTE_LENGTH + COFF_SECTION_HEADER_BYTE_LENGTH * (PROBE_SECTION_DETECTION_COUNT_LIMIT + 1)
-  );
+void test("probeCoffObject accepts a partial large section table when it fits the file", () => {
+  const sectionCount = PROBE_SECTION_DETECTION_COUNT_LIMIT + 1;
+  const bytes = new Uint8Array(COFF_FILE_HEADER_BYTE_LENGTH + COFF_SECTION_HEADER_BYTE_LENGTH);
   const view = new DataView(bytes.buffer);
   writeField(view, 0, COFF_FILE_HEADER_FIELDS.Machine, IMAGE_FILE_MACHINE_I386);
-  writeField(view, 0, COFF_FILE_HEADER_FIELDS.NumberOfSections, PROBE_SECTION_DETECTION_COUNT_LIMIT + 1);
+  writeField(view, 0, COFF_FILE_HEADER_FIELDS.NumberOfSections, sectionCount);
   bytes[COFF_FILE_HEADER_BYTE_LENGTH] = 0x41;
 
-  assert.equal(probe(bytes), null);
+  assert.deepEqual(
+    probe(bytes, COFF_FILE_HEADER_BYTE_LENGTH + COFF_SECTION_HEADER_BYTE_LENGTH * sectionCount),
+    { machine: IMAGE_FILE_MACHINE_I386 }
+  );
 });
 
 void test("probeCoffObject scans beyond the first section for a printable section name", () => {
