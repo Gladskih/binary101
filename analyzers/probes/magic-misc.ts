@@ -256,6 +256,18 @@ const detectPythonBytecode = (dv: DataView): ProbeResult => {
   return flags <= 3 ? "Python bytecode cache (PYC compiled module)" : null;
 };
 
+const detectWindowsShimDatabase = (dv: DataView): ProbeResult => {
+  if (dv.byteLength < 12) return null;
+  const marker =
+    String.fromCharCode(dv.getUint8(8)) +
+    String.fromCharCode(dv.getUint8(9)) +
+    String.fromCharCode(dv.getUint8(10)) +
+    String.fromCharCode(dv.getUint8(11));
+  return marker === "sdbf"
+    ? "Windows Application Compatibility Database (SDB shim database)"
+    : null;
+};
+
 const miscProbes: Array<(dv: DataView) => ProbeResult> = [
   detectPdf,
   detectCompoundFile,
@@ -273,7 +285,8 @@ const miscProbes: Array<(dv: DataView) => ProbeResult> = [
   detectWinHelp,
   detectTerminfo,
   detectGettextMessageCatalog,
-  detectPythonBytecode
+  detectPythonBytecode,
+  detectWindowsShimDatabase
 ];
 
 export { miscProbes };

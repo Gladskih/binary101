@@ -324,6 +324,15 @@ void test("detectBinaryType reports GNU gettext message catalogs", async () => {
   assert.strictEqual(label, "GNU gettext message catalog (MO translations)");
 });
 
+void test("detectBinaryType reports Windows Application Compatibility databases", async () => {
+  const bytes = new Uint8Array(16);
+  bytes.set([0x03, 0x00, 0x00, 0x00]);
+  bytes.set(fromAscii("sdbf"), 8);
+  const label = await detectBinaryType(new MockFile(bytes, "sysmain.sdb"));
+
+  assert.strictEqual(label, "Windows Application Compatibility Database (SDB shim database)");
+});
+
 void test("detectBinaryType reports TrueType/OpenType sfnt fonts", async () => {
   const label = await detectBinaryType(
     new MockFile(new Uint8Array([0x00, 0x01, 0x00, 0x00]), "font.ttf")

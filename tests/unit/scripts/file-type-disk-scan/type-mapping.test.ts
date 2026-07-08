@@ -125,6 +125,13 @@ void test("typesMatch maps gettext message catalogs to file.exe gettext MIME", (
   assert.equal(normalizeFileMimeType("application/x-gettext-translation suffix"), "unmapped");
 });
 
+void test("typesMatch maps SDB labels to file.exe SDB MIME", () => {
+  const label = "Windows Application Compatibility Database (SDB shim database)";
+  assert.equal(typesMatch(label, "application/x-ms-sdb"), true);
+  assert.equal(normalizeAnalyzerLabel("prefix Windows Application Compatibility Database"), "unmapped");
+  assert.equal(normalizeFileMimeType("application/x-ms-sdb suffix"), "unmapped");
+});
+
 void test("typesMatch maps TrueType font labels to file.exe font MIME", () => {
   const label = "TrueType/OpenType font (sfnt glyph outlines)";
   assert.equal(typesMatch(label, "font/ttf"), true);

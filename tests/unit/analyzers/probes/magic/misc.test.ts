@@ -55,6 +55,12 @@ const pythonBytecode = (flags: number): Uint8Array => {
   view.setUint32(4, flags, true);
   return bytes;
 };
+const windowsShimDatabase = (): Uint8Array => {
+  const bytes = new Uint8Array(16);
+  bytes.set([0x03, 0x00, 0x00, 0x00], 0);
+  bytes.set([... "sdbf"].map(character => character.charCodeAt(0)), 8);
+  return bytes;
+};
 
 void test("detects documents, compound files and executables", () => {
   assert.strictEqual(run([0x25, 0x50, 0x44, 0x46, 0x2d]), "PDF document");
@@ -118,6 +124,13 @@ void test("detects CPython bytecode cache files", () => {
 void test("rejects malformed CPython bytecode cache headers", () => {
   assert.strictEqual(run(pythonBytecode(4)), null);
   assert.strictEqual(run(pythonBytecode(0).slice(0, 8)), null);
+});
+
+void test("detects Windows Application Compatibility Database files", () => {
+  assert.strictEqual(
+    run(windowsShimDatabase()),
+    "Windows Application Compatibility Database (SDB shim database)"
+  );
 });
 
 void test("rejects malformed compiled terminfo headers", () => {
