@@ -101,6 +101,7 @@ const FILE_MIME_RULES: TypeRule[] = [
   { pattern: /^application\/pdf$/, canonical: "pdf" },
   { pattern: /^application\/(x-ole-storage|CDFV2)$/, canonical: "compound" },
   { pattern: /^application\/vnd\.ms-/, canonical: "compound" },
+  { pattern: /^application\/x-msi$/, canonical: "compound" },
   { pattern: /^image\/png$/, canonical: "png" },
   { pattern: /^image\/jpeg$/, canonical: "jpeg" },
   { pattern: /^image\/gif$/, canonical: "gif" },

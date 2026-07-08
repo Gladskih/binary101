@@ -33,6 +33,15 @@ void test("typesMatch maps COFF object labels to file.exe COFF MIME", () => {
   assert.equal(normalizeFileMimeType("application/x-coff suffix"), "unmapped");
 });
 
+void test("typesMatch maps MSI MIME to Compound File labels", () => {
+  assert.equal(
+    typesMatch("Microsoft Compound File (e.g. Office 97-2003, MSI)", "application/x-msi"),
+    true
+  );
+  assert.equal(typesMatch("Windows Installer package (MSI)", "application/x-msi"), true);
+  assert.equal(normalizeFileMimeType("application/x-msi suffix"), "unmapped");
+});
+
 void test("typesMatch keeps genuine media mismatches visible", () => {
   assert.equal(typesMatch("PNG image", "image/jpeg"), false);
 });
