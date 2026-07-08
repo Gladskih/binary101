@@ -22,6 +22,12 @@ void test("typesMatch maps ZIP-derived document refinements to ZIP MIME types", 
   );
 });
 
+void test("typesMatch maps COFF object labels to file.exe COFF MIME", () => {
+  assert.equal(typesMatch("COFF object file for x86 (I386)", "application/x-coff"), true);
+  assert.equal(normalizeAnalyzerLabel("prefix COFF object file for x86 (I386)"), "unmapped");
+  assert.equal(normalizeFileMimeType("application/x-coff suffix"), "unmapped");
+});
+
 void test("typesMatch keeps genuine media mismatches visible", () => {
   assert.equal(typesMatch("PNG image", "image/jpeg"), false);
 });
