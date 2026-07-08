@@ -195,6 +195,50 @@ const detectWinHelp = (dv: DataView): ProbeResult => {
   return null;
 };
 
+const readTerminfoName = (dv: DataView, namesOffset: number, namesSize: number): string | null => {
+  let name = "";
+  const namesEnd = namesOffset + namesSize;
+  for (let offset = namesOffset; offset < namesEnd; offset += 1) {
+    const value = dv.getUint8(offset);
+    if (value === 0 || value === 0x7c) break;
+    if (value < 0x20 || value > 0x7e) return null;
+    name += String.fromCharCode(value);
+  }
+  return name || null;
+};
+
+const detectTerminfo = (dv: DataView): ProbeResult => {
+  // ncurses compiled terminfo entries start with little-endian magic 0432
+  // or 01036, followed by six 16-bit table sizes.
+  if (dv.byteLength < 12) return null;
+  const magic = dv.getUint16(0, true);
+  const numberByteLength = magic === 0x011a ? 2 : magic === 0x021e ? 4 : 0;
+  if (numberByteLength === 0) return null;
+  const namesSize = dv.getUint16(2, true);
+  const booleanCount = dv.getUint16(4, true);
+  const numberCount = dv.getUint16(6, true);
+  const stringCount = dv.getUint16(8, true);
+  const stringTableSize = dv.getUint16(10, true);
+  if (namesSize === 0 || namesSize > 4096 || booleanCount > 4096 || numberCount > 4096) {
+    return null;
+  }
+  if (stringCount > 8192 || stringTableSize > 65535) return null;
+  const namesOffset = 12;
+  const namesEnd = namesOffset + namesSize;
+  if (namesEnd > dv.byteLength || dv.getUint8(namesEnd - 1) !== 0) return null;
+  const afterBooleans = namesEnd + booleanCount;
+  const alignedNumbersOffset = afterBooleans + (afterBooleans % 2);
+  const tableEnd =
+    alignedNumbersOffset +
+    numberCount * numberByteLength +
+    stringCount * 2 +
+    stringTableSize;
+  if (tableEnd > dv.byteLength) return null;
+  const name = readTerminfoName(dv, namesOffset, namesSize);
+  if (!name) return null;
+  return `Compiled terminfo entry "${name}" (terminal capability database)`;
+};
+
 const miscProbes: Array<(dv: DataView) => ProbeResult> = [
   detectPdf,
   detectCompoundFile,
@@ -209,7 +253,8 @@ const miscProbes: Array<(dv: DataView) => ProbeResult> = [
   detectLnk,
   detectWasM,
   detectDex,
-  detectWinHelp
+  detectWinHelp,
+  detectTerminfo
 ];
 
 export { miscProbes };

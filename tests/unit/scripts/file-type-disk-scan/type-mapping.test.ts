@@ -57,6 +57,14 @@ void test("normalizer maps MSDelta patch payload labels", () => {
   assert.equal(normalizeAnalyzerLabel("MSDelta patch payload (PA32)"), "unmapped");
 });
 
+void test("typesMatch maps compiled terminfo entries to file.exe terminfo MIME types", () => {
+  const label = 'Compiled terminfo entry "vt100" (terminal capability database)';
+  assert.equal(typesMatch(label, "application/x-terminfo"), true);
+  assert.equal(typesMatch(label, "application/x-terminfo2"), true);
+  assert.equal(normalizeAnalyzerLabel("prefix Compiled terminfo entry"), "unmapped");
+  assert.equal(normalizeFileMimeType("application/x-terminfo3"), "unmapped");
+});
+
 void test("typesMatch treats uncommon text subtypes as text-like", () => {
   assert.equal(typesMatch("Text script (shebang)", "text/x-perl"), true);
   assert.equal(typesMatch("Text file", "application/x-wine-extension-ini"), true);

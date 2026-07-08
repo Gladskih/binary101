@@ -16,6 +16,26 @@ const sqliteWalIndexWithPaddingByte = (paddingOffset: number): Uint8Array => {
   bytes[paddingOffset] = 1;
   return bytes;
 };
+const terminfoEntry = (magic: number, nameList = "vt100|DEC VT100"): Uint8Array => {
+  const names = new TextEncoder().encode(`${nameList}\0`);
+  const numberByteLength = magic === 0x021e ? 4 : 2;
+  const booleanCount = 1;
+  const numberCount = 1;
+  const stringCount = 1;
+  const stringTableSize = 4;
+  const afterBooleans = 12 + names.length + booleanCount;
+  const numbersOffset = afterBooleans + (afterBooleans % 2);
+  const bytes = new Uint8Array(numbersOffset + numberCount * numberByteLength + stringCount * 2 + stringTableSize);
+  const view = new DataView(bytes.buffer);
+  view.setUint16(0, magic, true);
+  view.setUint16(2, names.length, true);
+  view.setUint16(4, booleanCount, true);
+  view.setUint16(6, numberCount, true);
+  view.setUint16(8, stringCount, true);
+  view.setUint16(10, stringTableSize, true);
+  bytes.set(names, 12);
+  return bytes;
+};
 const msDeltaPayload = (marker: string): Uint8Array => {
   const bytes = new Uint8Array(8);
   const view = new DataView(bytes.buffer);
@@ -50,6 +70,25 @@ void test("detects pdb, dex, djvu and help file signatures", () => {
   const djvu = [..."AT&TFORM"].map(c => c.charCodeAt(0)).concat([0, 0, 0, 0], ..."DJVU".split("").map(c => c.charCodeAt(0)));
   assert.strictEqual(run(djvu), "DjVu document");
   assert.strictEqual(run([0x3f, 0x5f, 0x03, 0x00]), "Windows Help file (HLP)");
+});
+
+void test("detects compiled terminfo terminal capability entries", () => {
+  assert.strictEqual(
+    run(terminfoEntry(0x011a)),
+    'Compiled terminfo entry "vt100" (terminal capability database)'
+  );
+  assert.strictEqual(
+    run(terminfoEntry(0x021e, "tmux|tmux terminal multiplexer")),
+    'Compiled terminfo entry "tmux" (terminal capability database)'
+  );
+});
+
+void test("rejects malformed compiled terminfo headers", () => {
+  const missingNameTerminator = terminfoEntry(0x011a);
+  missingNameTerminator[12 + "vt100|DEC VT100".length] = 0x41;
+  assert.strictEqual(run(missingNameTerminator), null);
+  const truncatedTables = terminfoEntry(0x021e).slice(0, 16);
+  assert.strictEqual(run(truncatedTables), null);
 });
 
 void test("detects SQLite WAL-index shared-memory headers", () => {

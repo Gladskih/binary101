@@ -23,6 +23,26 @@ import { createSliceTrackingFile } from "../../../helpers/slice-tracking-file.js
 
 const fromAscii = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "ascii"));
 
+const createTerminfoEntry = (nameList: string): Uint8Array => {
+  const names = fromAscii(`${nameList}\0`);
+  const booleanCount = 1;
+  const numberCount = 1;
+  const stringCount = 1;
+  const stringTableSize = 4;
+  const afterBooleans = 12 + names.length + booleanCount;
+  const numbersOffset = afterBooleans + (afterBooleans % 2);
+  const bytes = new Uint8Array(numbersOffset + numberCount * 2 + stringCount * 2 + stringTableSize);
+  const view = new DataView(bytes.buffer);
+  view.setUint16(0, 0x011a, true);
+  view.setUint16(2, names.length, true);
+  view.setUint16(4, booleanCount, true);
+  view.setUint16(6, numberCount, true);
+  view.setUint16(8, stringCount, true);
+  view.setUint16(10, stringTableSize, true);
+  bytes.set(names, 12);
+  return bytes;
+};
+
 const createMinimalPeLabelProbe = (machine: number, optionalHeaderMagic = 0x10b): MockFile => {
   const peHeaderOffset = 0x40;
   const coffHeaderSize = 20;
@@ -220,6 +240,14 @@ void test("detectBinaryType recognises animated cursors (ANI)", async () => {
   ]);
   const label = await detectBinaryType(new MockFile(bytes, "aero_busy.ani", "application/octet-stream"));
   assert.strictEqual(label, "Windows animated cursor (ANI)");
+});
+
+void test("detectBinaryType reports compiled terminfo entries", async () => {
+  const label = await detectBinaryType(
+    new MockFile(createTerminfoEntry("vt100|DEC VT100"), "vt100")
+  );
+
+  assert.strictEqual(label, 'Compiled terminfo entry "vt100" (terminal capability database)');
 });
 
 void test("detectBinaryType reports SQLite by signature without page parsing", async () => {
