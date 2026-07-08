@@ -109,6 +109,7 @@ const FILE_MIME_RULES: TypeRule[] = [
   { pattern: /^application\/x-chrome-extension$/, canonical: "zip" },
   { pattern: /^application\/pdf$/, canonical: "pdf" },
   { pattern: /^application\/(x-ole-storage|CDFV2)$/, canonical: "compound" },
+  { pattern: /^application\/msword$/, canonical: "compound" },
   { pattern: /^application\/vnd\.ms-/, canonical: "compound" },
   { pattern: /^application\/x-msi$/, canonical: "compound" },
   { pattern: /^image\/png$/, canonical: "png" },

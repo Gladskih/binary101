@@ -58,6 +58,15 @@ void test("typesMatch maps MSI MIME to Compound File labels", () => {
   assert.equal(normalizeFileMimeType("application/x-msi suffix"), "unmapped");
 });
 
+void test("typesMatch maps legacy Word MIME to Compound File labels", () => {
+  assert.equal(
+    typesMatch("Microsoft Compound File (e.g. Office 97-2003, MSI)", "application/msword"),
+    true
+  );
+  assert.equal(typesMatch("Microsoft Word binary document (DOC)", "application/msword"), true);
+  assert.equal(normalizeFileMimeType("application/msword suffix"), "unmapped");
+});
+
 void test("typesMatch keeps genuine media mismatches visible", () => {
   assert.equal(typesMatch("PNG image", "image/jpeg"), false);
 });
