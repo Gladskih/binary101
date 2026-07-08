@@ -107,6 +107,15 @@ function isSingleFrameProbe(dv: DataView, frame: MpegFrameHeader): boolean {
   return frame.frameLengthBytes >= dv.byteLength;
 }
 
+function hasPlausibleId3v2Header(dv: DataView): boolean {
+  if (dv.byteLength < 10) return false;
+  if (dv.getUint8(0) !== 0x49 || dv.getUint8(1) !== 0x44 || dv.getUint8(2) !== 0x33) return false;
+  const version = dv.getUint8(3);
+  if (version < 2 || version > 4 || dv.getUint8(4) === 0xff) return false;
+  return Array.from({ length: 4 }, (_, index) => dv.getUint8(6 + index))
+    .every(value => value < 0x80);
+}
+
 export function probeMp3(dv: DataView): boolean {
   if (dv.byteLength < 3) return false;
   // Avoid misclassifying common video/container headers as MP3.
@@ -177,15 +186,9 @@ export function probeMp3(dv: DataView): boolean {
       String.fromCharCode(dv.getUint8(2));
     if (flvSig === "FLV") return false;
   }
-  if (dv.getUint8(0) === 0x49 && dv.getUint8(1) === 0x44 && dv.getUint8(2) === 0x33) {
-    return true;
-  }
-  const scanLimit = Math.min(dv.byteLength - 4, 65536);
-  for (let offset = 0; offset <= scanLimit; offset += 1) {
-    const frame = parseFrameHeader(dv, offset);
-    if (frame && (hasMatchingNextFrame(dv, frame) || isSingleFrameProbe(dv, frame))) return true;
-  }
-  return false;
+  if (hasPlausibleId3v2Header(dv)) return true;
+  const frame = parseFrameHeader(dv, 0);
+  return Boolean(frame && (hasMatchingNextFrame(dv, frame) || isSingleFrameProbe(dv, frame)));
 }
 
 export async function parseMp3(file: File): Promise<Mp3ParseResult> {
