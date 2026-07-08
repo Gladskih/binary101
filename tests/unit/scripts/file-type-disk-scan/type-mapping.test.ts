@@ -99,6 +99,13 @@ void test("typesMatch maps WOFF2 font labels to file.exe WOFF2 MIME", () => {
   assert.equal(normalizeFileMimeType("font/woff2 suffix"), "unmapped");
 });
 
+void test("typesMatch maps Python bytecode labels to file.exe bytecode MIME", () => {
+  const label = "Python bytecode cache (PYC compiled module)";
+  assert.equal(typesMatch(label, "application/x-bytecode.python"), true);
+  assert.equal(normalizeAnalyzerLabel("prefix Python bytecode cache"), "unmapped");
+  assert.equal(normalizeFileMimeType("application/x-bytecode.python suffix"), "unmapped");
+});
+
 void test("typesMatch treats uncommon text subtypes as text-like", () => {
   assert.equal(typesMatch("Text script (shebang)", "text/x-perl"), true);
   assert.equal(typesMatch("Text file", "application/x-wine-extension-ini"), true);

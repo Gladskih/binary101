@@ -297,6 +297,17 @@ void test("detectBinaryType reports WOFF2 web fonts", async () => {
   assert.strictEqual(label, "Web Open Font Format 2 font (WOFF2 compressed web font)");
 });
 
+void test("detectBinaryType reports CPython bytecode cache files", async () => {
+  const bytes = new Uint8Array(16);
+  bytes[0] = 0xcb;
+  bytes[1] = 0x0d;
+  bytes[2] = 0x0d;
+  bytes[3] = 0x0a;
+  const label = await detectBinaryType(new MockFile(bytes, "module.cpython-312.pyc"));
+
+  assert.strictEqual(label, "Python bytecode cache (PYC compiled module)");
+});
+
 void test("detectBinaryType reports SQLite by signature without page parsing", async () => {
   const label = await detectBinaryType(createSqliteFile());
   assert.strictEqual(label, "SQLite 3.x database");

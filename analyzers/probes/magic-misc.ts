@@ -248,6 +248,14 @@ const detectGettextMessageCatalog = (dv: DataView): ProbeResult => {
   return null;
 };
 
+const detectPythonBytecode = (dv: DataView): ProbeResult => {
+  // Modern CPython .pyc files store a version-specific 2-byte magic followed
+  // by CR LF, then PEP 552 flags.
+  if (dv.byteLength < 16 || dv.getUint8(2) !== 0x0d || dv.getUint8(3) !== 0x0a) return null;
+  const flags = dv.getUint32(4, true);
+  return flags <= 3 ? "Python bytecode cache (PYC compiled module)" : null;
+};
+
 const miscProbes: Array<(dv: DataView) => ProbeResult> = [
   detectPdf,
   detectCompoundFile,
@@ -264,7 +272,8 @@ const miscProbes: Array<(dv: DataView) => ProbeResult> = [
   detectDex,
   detectWinHelp,
   detectTerminfo,
-  detectGettextMessageCatalog
+  detectGettextMessageCatalog,
+  detectPythonBytecode
 ];
 
 export { miscProbes };

@@ -45,6 +45,16 @@ const msDeltaPayload = (marker: string): Uint8Array => {
   bytes.set([...marker].map(character => character.charCodeAt(0)), 4);
   return bytes;
 };
+const pythonBytecode = (flags: number): Uint8Array => {
+  const bytes = new Uint8Array(16);
+  const view = new DataView(bytes.buffer);
+  bytes[0] = 0xcb;
+  bytes[1] = 0x0d;
+  bytes[2] = 0x0d;
+  bytes[3] = 0x0a;
+  view.setUint32(4, flags, true);
+  return bytes;
+};
 
 void test("detects documents, compound files and executables", () => {
   assert.strictEqual(run([0x25, 0x50, 0x44, 0x46, 0x2d]), "PDF document");
@@ -92,6 +102,22 @@ void test("detects GNU gettext compiled message catalogs", () => {
     run([0x95, 0x04, 0x12, 0xde]),
     "GNU gettext message catalog (MO translations)"
   );
+});
+
+void test("detects CPython bytecode cache files", () => {
+  assert.strictEqual(
+    run(pythonBytecode(0)),
+    "Python bytecode cache (PYC compiled module)"
+  );
+  assert.strictEqual(
+    run(pythonBytecode(3)),
+    "Python bytecode cache (PYC compiled module)"
+  );
+});
+
+void test("rejects malformed CPython bytecode cache headers", () => {
+  assert.strictEqual(run(pythonBytecode(4)), null);
+  assert.strictEqual(run(pythonBytecode(0).slice(0, 8)), null);
 });
 
 void test("rejects malformed compiled terminfo headers", () => {
