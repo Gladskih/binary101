@@ -5,12 +5,38 @@ import { test } from "node:test";
 import { probeTextLike } from "../../../../analyzers/probes/text-probes.js";
 
 const dvFrom = (text: string): DataView => new DataView(new TextEncoder().encode(text).buffer);
+const utf16LeDvFrom = (text: string): DataView => {
+  const bytes = new Uint8Array(2 + text.length * 2);
+  bytes[0] = 0xff;
+  bytes[1] = 0xfe;
+  const view = new DataView(bytes.buffer);
+  for (let index = 0; index < text.length; index += 1) {
+    view.setUint16(2 + index * 2, text.charCodeAt(index), true);
+  }
+  return view;
+};
 
 void test("probeTextLike identifies HTML, XML, JSON and plain text", () => {
   assert.strictEqual(probeTextLike(dvFrom("<!doctype html><html></html>")), "HTML document");
   assert.strictEqual(probeTextLike(dvFrom('<?xml version="1.0"?><svg></svg>')), "SVG image (XML)");
   assert.strictEqual(probeTextLike(dvFrom('{ "foo": "bar" }')), "JSON data");
   assert.strictEqual(probeTextLike(dvFrom("plain text with spaces")), "Text file");
+});
+
+void test("probeTextLike identifies Windows INF setup scripts", () => {
+  const inf = [
+    "; sample INF",
+    "[Version]",
+    'Signature="$Windows NT$"',
+    "Class=System"
+  ].join("\r\n");
+  const label = "Windows setup information file (INF, driver/install directives)";
+  assert.strictEqual(probeTextLike(dvFrom(inf)), label);
+  assert.strictEqual(probeTextLike(utf16LeDvFrom(inf)), label);
+});
+
+void test("probeTextLike treats UTF-16 text with BOM as text", () => {
+  assert.strictEqual(probeTextLike(utf16LeDvFrom("plain text")), "Text file");
 });
 
 void test("probeTextLike returns null for binary-looking data", () => {

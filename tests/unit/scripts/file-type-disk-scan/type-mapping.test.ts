@@ -71,6 +71,13 @@ void test("typesMatch maps compiled terminfo entries to file.exe terminfo MIME t
   assert.equal(normalizeFileMimeType("application/x-terminfo3"), "unmapped");
 });
 
+void test("typesMatch maps Windows INF setup scripts to file.exe setupscript MIME", () => {
+  const label = "Windows setup information file (INF, driver/install directives)";
+  assert.equal(typesMatch(label, "application/x-setupscript"), true);
+  assert.equal(normalizeAnalyzerLabel("prefix Windows setup information file"), "unmapped");
+  assert.equal(normalizeFileMimeType("application/x-setupscript suffix"), "unmapped");
+});
+
 void test("typesMatch treats uncommon text subtypes as text-like", () => {
   assert.equal(typesMatch("Text script (shebang)", "text/x-perl"), true);
   assert.equal(typesMatch("Text file", "application/x-wine-extension-ini"), true);

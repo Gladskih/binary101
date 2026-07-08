@@ -23,6 +23,17 @@ import { createSliceTrackingFile } from "../../../helpers/slice-tracking-file.js
 
 const fromAscii = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "ascii"));
 
+const fromUtf16Le = (text: string): Uint8Array => {
+  const bytes = new Uint8Array(2 + text.length * 2);
+  bytes[0] = 0xff;
+  bytes[1] = 0xfe;
+  const view = new DataView(bytes.buffer);
+  for (let index = 0; index < text.length; index += 1) {
+    view.setUint16(2 + index * 2, text.charCodeAt(index), true);
+  }
+  return bytes;
+};
+
 const createTerminfoEntry = (nameList: string): Uint8Array => {
   const names = fromAscii(`${nameList}\0`);
   const booleanCount = 1;
@@ -248,6 +259,18 @@ void test("detectBinaryType reports compiled terminfo entries", async () => {
   );
 
   assert.strictEqual(label, 'Compiled terminfo entry "vt100" (terminal capability database)');
+});
+
+void test("detectBinaryType reports Windows INF setup scripts", async () => {
+  const inf = [
+    "; sample INF",
+    "[Version]",
+    'Signature="$Windows NT$"',
+    "Class=System"
+  ].join("\r\n");
+  const label = await detectBinaryType(new MockFile(fromUtf16Le(inf), "sample.inf"));
+
+  assert.strictEqual(label, "Windows setup information file (INF, driver/install directives)");
 });
 
 void test("detectBinaryType reports SQLite by signature without page parsing", async () => {
