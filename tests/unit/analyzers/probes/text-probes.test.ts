@@ -5,6 +5,13 @@ import { test } from "node:test";
 import { probeTextLike } from "../../../../analyzers/probes/text-probes.js";
 
 const dvFrom = (text: string): DataView => new DataView(new TextEncoder().encode(text).buffer);
+const utf8BomDvFrom = (text: string): DataView => {
+  const encoded = new TextEncoder().encode(text);
+  const bytes = new Uint8Array(3 + encoded.length);
+  bytes.set([0xef, 0xbb, 0xbf]);
+  bytes.set(encoded, 3);
+  return new DataView(bytes.buffer);
+};
 const utf16LeDvFrom = (text: string): DataView => {
   const bytes = new Uint8Array(2 + text.length * 2);
   bytes[0] = 0xff;
@@ -19,8 +26,21 @@ const utf16LeDvFrom = (text: string): DataView => {
 void test("probeTextLike identifies HTML, XML, JSON and plain text", () => {
   assert.strictEqual(probeTextLike(dvFrom("<!doctype html><html></html>")), "HTML document");
   assert.strictEqual(probeTextLike(dvFrom('<?xml version="1.0"?><svg></svg>')), "SVG image (XML)");
+  assert.strictEqual(probeTextLike(dvFrom('<svg xmlns="http://www.w3.org/2000/svg"></svg>')), "SVG image (XML)");
+  assert.strictEqual(probeTextLike(dvFrom("<root><value>1</value></root>")), "XML document");
+  assert.strictEqual(probeTextLike(utf8BomDvFrom('<?xml version="1.0"?><root/>')), "XML document");
+  assert.strictEqual(
+    probeTextLike(utf8BomDvFrom(`<?xml version="1.0"?><!--${"x".repeat(300)}--><root/>`)),
+    "XML document"
+  );
   assert.strictEqual(probeTextLike(dvFrom('{ "foo": "bar" }')), "JSON data");
+  assert.strictEqual(probeTextLike(dvFrom('[{ "title": "日本語" }]')), "JSON data");
   assert.strictEqual(probeTextLike(dvFrom("plain text with spaces")), "Text file");
+});
+
+void test("probeTextLike does not confuse bracketed text with JSON", () => {
+  assert.strictEqual(probeTextLike(dvFrom("[core]\nrepositoryformatversion = 1")), "Text file");
+  assert.strictEqual(probeTextLike(dvFrom("[0619/221624.164:WARNING] message")), "Text file");
 });
 
 void test("probeTextLike identifies Windows INF setup scripts", () => {

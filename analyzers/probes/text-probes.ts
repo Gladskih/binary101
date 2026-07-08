@@ -1,5 +1,5 @@
 "use strict";
-import { isMostlyText, toAsciiPrefix, MAX_TEXT_INSPECT_BYTES } from "./text-heuristics.js";
+import { isMostlyText, MAX_TEXT_INSPECT_BYTES } from "./text-heuristics.js";
 import type { ProbeResult } from "./probe-types.js";
 
 const MAX_SETUP_SCRIPT_INSPECT_BYTES = 2048;
@@ -29,7 +29,10 @@ const toTextPrefix = (dv: DataView, maxBytes: number): string => {
   if (dv.byteLength >= 2 && dv.getUint8(0) === 0xfe && dv.getUint8(1) === 0xff) {
     return toUtf16Prefix(dv, maxBytes, false);
   }
-  return toAsciiPrefix(dv, maxBytes);
+  const limit = Math.min(dv.byteLength, maxBytes);
+  return new TextDecoder().decode(
+    new Uint8Array(dv.buffer, dv.byteOffset, limit)
+  );
 };
 
 const detectScriptShebang = (dv: DataView): ProbeResult => {
@@ -50,21 +53,72 @@ const detectHtml = (dv: DataView): ProbeResult => {
 
 const detectXmlOrSvg = (dv: DataView): ProbeResult => {
   const text = toTextPrefix(dv, MAX_TEXT_INSPECT_BYTES).trimStart();
-  const lower = text.toLowerCase();
-  if (!lower.startsWith("<?xml")) return null;
-  if (lower.includes("<svg")) return "SVG image (XML)";
-  return "XML document";
+  const rootName = findXmlRootName(text);
+  if (rootName?.split(":").at(-1)?.toLowerCase() === "svg") return "SVG image (XML)";
+  if (text.toLowerCase().startsWith("<?xml")) return "XML document";
+  return rootName ? "XML document" : null;
+};
+
+const skipXmlPreamble = (text: string): string | null => {
+  let remaining = text.trimStart();
+  for (;;) {
+    const closing = remaining.startsWith("<?")
+      ? "?>"
+      : remaining.startsWith("<!--")
+        ? "-->"
+        : remaining.toLowerCase().startsWith("<!doctype")
+          ? ">"
+          : null;
+    if (!closing) return remaining;
+    const end = remaining.indexOf(closing);
+    if (end < 0) return null;
+    remaining = remaining.slice(end + closing.length).trimStart();
+  }
+};
+
+const findXmlRootName = (text: string): string | null => {
+  const remaining = skipXmlPreamble(text);
+  if (!remaining) return null;
+  const match = /^<([A-Za-z_][\w:.-]*)(?:\s|\/?>)/u.exec(remaining);
+  return match?.[1] ?? null;
+};
+
+const findJsonStringEnd = (text: string, start: number): number => {
+  let escaped = false;
+  for (let index = start + 1; index < text.length; index += 1) {
+    if (!escaped && text[index] === "\"") return index;
+    if (!escaped && text[index] === "\\") escaped = true;
+    else escaped = false;
+  }
+  return -1;
+};
+
+const hasJsonObjectStart = (text: string): boolean => {
+  const content = text.slice(1).trimStart();
+  if (content.startsWith("}")) return true;
+  if (!content.startsWith("\"")) return false;
+  const stringEnd = findJsonStringEnd(content, 0);
+  return stringEnd >= 0 && content.slice(stringEnd + 1).trimStart().startsWith(":");
+};
+
+const hasJsonArrayStart = (text: string): boolean => {
+  const content = text.slice(1).trimStart();
+  if (!content || content.startsWith("]") || content.startsWith("{") || content.startsWith("[")) {
+    return Boolean(content);
+  }
+  if (content.startsWith("\"")) {
+    const stringEnd = findJsonStringEnd(content, 0);
+    return stringEnd >= 0 && /^[\s,\]]/u.test(content.slice(stringEnd + 1));
+  }
+  return /^(?:true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)(?=\s*[,\]])/u
+    .test(content);
 };
 
 const detectJson = (dv: DataView): ProbeResult => {
   const text = toTextPrefix(dv, MAX_TEXT_INSPECT_BYTES).trimStart();
-  if (!text) return null;
-  const first = text[0];
-  if (first !== "{" && first !== "[") return null;
-  const hasQuote = text.indexOf("\"") !== -1;
-  const hasColon = text.indexOf(":") !== -1;
-  if (!hasQuote && !hasColon) return null;
-  return "JSON data";
+  if (text.startsWith("{") && hasJsonObjectStart(text)) return "JSON data";
+  if (text.startsWith("[") && hasJsonArrayStart(text)) return "JSON data";
+  return null;
 };
 
 const detectRtf = (dv: DataView): ProbeResult => {

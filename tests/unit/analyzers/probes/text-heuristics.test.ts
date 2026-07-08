@@ -18,3 +18,11 @@ void test("isMostlyText flags printable-heavy buffers", () => {
   const binary = new Uint8Array([0x00, 0xff, 0x10, 0x00]);
   assert.strictEqual(isMostlyText(dvFrom(binary)), false);
 });
+
+void test("isMostlyText accepts UTF-8 text and rejects malformed binary bytes", () => {
+  const unicode = new TextEncoder().encode("日本語 Русский текст");
+  const malformed = Uint8Array.from([0xff, 0xfe, 0x00, 0x01, 0x80, 0x81]);
+
+  assert.strictEqual(isMostlyText(new DataView(unicode.buffer)), true);
+  assert.strictEqual(isMostlyText(new DataView(malformed.buffer)), false);
+});
