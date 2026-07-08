@@ -37,6 +37,11 @@ void test("typesMatch keeps genuine media mismatches visible", () => {
   assert.equal(typesMatch("PNG image", "image/jpeg"), false);
 });
 
+void test("typesMatch maps Windows bitmap cursor MIME to ICO/CUR icon labels", () => {
+  assert.equal(typesMatch("ICO/CUR icon image", "image/x-win-bitmap"), true);
+  assert.equal(normalizeFileMimeType("image/x-win-bitmap suffix"), "unmapped");
+});
+
 void test("typesMatch treats JavaScript MIME as text-like shallow analyzer output", () => {
   assert.equal(typesMatch("Text file", "application/javascript"), true);
 });

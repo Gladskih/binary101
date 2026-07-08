@@ -108,6 +108,7 @@ const FILE_MIME_RULES: TypeRule[] = [
   { pattern: /^image\/tiff$/, canonical: "tiff" },
   { pattern: /^image\/webp$/, canonical: "webp" },
   { pattern: /^image\/(vnd\.microsoft\.icon|x-icon)$/, canonical: "icon" },
+  { pattern: /^image\/x-win-bitmap$/, canonical: "icon" },
   { pattern: /^image\/x-tga$/, canonical: "tga" },
   { pattern: /^image\/(heif|heic)$/, canonical: "heif" },
   { pattern: /^audio\/flac$/, canonical: "flac" },

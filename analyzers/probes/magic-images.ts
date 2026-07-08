@@ -55,8 +55,7 @@ const detectIco = (dv: DataView): ProbeResult => {
   const bytesInRes = dv.getUint32(firstEntryOffset + 8, true);
   const imageOffset = dv.getUint32(firstEntryOffset + 12, true);
   if (entryReserved !== 0 || bytesInRes === 0) return null;
-  if (imageOffset < directoryBytes || imageOffset >= dv.byteLength) return null;
-  if (imageOffset + bytesInRes > dv.byteLength) return null;
+  if (imageOffset < directoryBytes) return null;
 
   return "ICO/CUR icon image";
 };

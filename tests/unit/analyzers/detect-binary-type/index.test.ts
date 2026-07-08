@@ -253,6 +253,22 @@ void test("detectBinaryType recognises animated cursors (ANI)", async () => {
   assert.strictEqual(label, "Windows animated cursor (ANI)");
 });
 
+void test("detectBinaryType reports large cursor files from ICO/CUR headers", async () => {
+  const cursor = new Uint8Array(22);
+  const view = new DataView(cursor.buffer);
+  view.setUint16(0, 0, true);
+  view.setUint16(2, 2, true);
+  view.setUint16(4, 1, true);
+  cursor[6] = 128;
+  cursor[7] = 128;
+  view.setUint16(10, 25, true);
+  view.setUint32(14, 128 * 1024, true);
+  view.setUint32(18, 22, true);
+  const label = await detectBinaryType(new MockFile(cursor, "large.cur"));
+
+  assert.strictEqual(label, "ICO/CUR icon image");
+});
+
 void test("detectBinaryType reports compiled terminfo entries", async () => {
   const label = await detectBinaryType(
     new MockFile(createTerminfoEntry("vt100|DEC VT100"), "vt100")
