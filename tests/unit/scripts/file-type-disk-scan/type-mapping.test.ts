@@ -12,6 +12,11 @@ void test("typesMatch treats PE analyzer labels and file.exe MIME as the same ty
   assert.equal(typesMatch("PE32+ executable for x86-64 (AMD64)", "application/x-dosexec"), true);
 });
 
+void test("typesMatch maps legacy NE executable MIME to PE-family labels", () => {
+  assert.equal(typesMatch("NE executable (16-bit Windows/OS/2)", "application/x-ms-ne-executable"), true);
+  assert.equal(normalizeFileMimeType("application/x-ms-ne-executable suffix"), "unmapped");
+});
+
 void test("typesMatch maps ZIP-derived document refinements to ZIP MIME types", () => {
   assert.equal(
     typesMatch(

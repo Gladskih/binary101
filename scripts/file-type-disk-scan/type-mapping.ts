@@ -88,6 +88,7 @@ const FILE_MIME_RULES: TypeRule[] = [
   { pattern: /^inode\/x-empty$/, canonical: "empty" },
   { pattern: /^application\/x-dosexec$/, canonical: "pe" },
   { pattern: /^application\/vnd\.microsoft\.portable-executable$/, canonical: "pe" },
+  { pattern: /^application\/x-ms-ne-executable$/, canonical: "pe" },
   { pattern: /^application\/x-(executable|sharedlib|object|pie-executable)$/, canonical: "elf" },
   { pattern: /^application\/x-mach-binary$/, canonical: "macho" },
   { pattern: /^application\/x-coff$/, canonical: "coff" },
