@@ -239,6 +239,15 @@ const detectTerminfo = (dv: DataView): ProbeResult => {
   return `Compiled terminfo entry "${name}" (terminal capability database)`;
 };
 
+const detectGettextMessageCatalog = (dv: DataView): ProbeResult => {
+  if (dv.byteLength < 4) return null;
+  const magic = dv.getUint32(0, false);
+  if (magic === 0xde120495 || magic === 0x950412de) {
+    return "GNU gettext message catalog (MO translations)";
+  }
+  return null;
+};
+
 const miscProbes: Array<(dv: DataView) => ProbeResult> = [
   detectPdf,
   detectCompoundFile,
@@ -254,7 +263,8 @@ const miscProbes: Array<(dv: DataView) => ProbeResult> = [
   detectWasM,
   detectDex,
   detectWinHelp,
-  detectTerminfo
+  detectTerminfo,
+  detectGettextMessageCatalog
 ];
 
 export { miscProbes };

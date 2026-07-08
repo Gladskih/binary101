@@ -83,6 +83,17 @@ void test("detects compiled terminfo terminal capability entries", () => {
   );
 });
 
+void test("detects GNU gettext compiled message catalogs", () => {
+  assert.strictEqual(
+    run([0xde, 0x12, 0x04, 0x95]),
+    "GNU gettext message catalog (MO translations)"
+  );
+  assert.strictEqual(
+    run([0x95, 0x04, 0x12, 0xde]),
+    "GNU gettext message catalog (MO translations)"
+  );
+});
+
 void test("rejects malformed compiled terminfo headers", () => {
   const missingNameTerminator = terminfoEntry(0x011a);
   missingNameTerminator[12 + "vt100|DEC VT100".length] = 0x41;

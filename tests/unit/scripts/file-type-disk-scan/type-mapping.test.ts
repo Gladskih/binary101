@@ -78,6 +78,13 @@ void test("typesMatch maps Windows INF setup scripts to file.exe setupscript MIM
   assert.equal(normalizeFileMimeType("application/x-setupscript suffix"), "unmapped");
 });
 
+void test("typesMatch maps gettext message catalogs to file.exe gettext MIME", () => {
+  const label = "GNU gettext message catalog (MO translations)";
+  assert.equal(typesMatch(label, "application/x-gettext-translation"), true);
+  assert.equal(normalizeAnalyzerLabel("prefix GNU gettext message catalog"), "unmapped");
+  assert.equal(normalizeFileMimeType("application/x-gettext-translation suffix"), "unmapped");
+});
+
 void test("typesMatch treats uncommon text subtypes as text-like", () => {
   assert.equal(typesMatch("Text script (shebang)", "text/x-perl"), true);
   assert.equal(typesMatch("Text file", "application/x-wine-extension-ini"), true);

@@ -273,6 +273,14 @@ void test("detectBinaryType reports Windows INF setup scripts", async () => {
   assert.strictEqual(label, "Windows setup information file (INF, driver/install directives)");
 });
 
+void test("detectBinaryType reports GNU gettext message catalogs", async () => {
+  const label = await detectBinaryType(
+    new MockFile(new Uint8Array([0xde, 0x12, 0x04, 0x95]), "messages.mo")
+  );
+
+  assert.strictEqual(label, "GNU gettext message catalog (MO translations)");
+});
+
 void test("detectBinaryType reports SQLite by signature without page parsing", async () => {
   const label = await detectBinaryType(createSqliteFile());
   assert.strictEqual(label, "SQLite 3.x database");
