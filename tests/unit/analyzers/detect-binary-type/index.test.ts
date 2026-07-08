@@ -327,6 +327,14 @@ void test("detectBinaryType reports PEM armor blocks", async () => {
   assert.strictEqual(label, "PEM armor block (certificate/key text encoding)");
 });
 
+void test("detectBinaryType reports PostScript documents", async () => {
+  const label = await detectBinaryType(
+    new MockFile(fromAscii("%!PS-Adobe-3.0\n%%Title: sample"), "sample.ps")
+  );
+
+  assert.strictEqual(label, "PostScript document (page description program)");
+});
+
 void test("detectBinaryType reports GNU gettext message catalogs", async () => {
   const label = await detectBinaryType(
     new MockFile(new Uint8Array([0xde, 0x12, 0x04, 0x95]), "messages.mo")

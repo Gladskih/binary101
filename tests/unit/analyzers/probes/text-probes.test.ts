@@ -48,6 +48,13 @@ void test("probeTextLike identifies PEM armor blocks", () => {
   assert.strictEqual(probeTextLike(dvFrom(pem)), "PEM armor block (certificate/key text encoding)");
 });
 
+void test("probeTextLike identifies PostScript documents", () => {
+  assert.strictEqual(
+    probeTextLike(dvFrom("%!PS-Adobe-3.0\n%%Title: sample")),
+    "PostScript document (page description program)"
+  );
+});
+
 void test("probeTextLike returns null for binary-looking data", () => {
   const binary = new Uint8Array([0x00, 0xff, 0x10, 0x00]);
   assert.strictEqual(probeTextLike(new DataView(binary.buffer)), null);

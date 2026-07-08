@@ -98,6 +98,11 @@ const detectPemArmor = (dv: DataView): ProbeResult => {
   return null;
 };
 
+const detectPostScript = (dv: DataView): ProbeResult => {
+  const text = toTextPrefix(dv, MAX_TEXT_INSPECT_BYTES).trimStart();
+  return text.startsWith("%!") ? "PostScript document (page description program)" : null;
+};
+
 const detectPlainText = (dv: DataView): ProbeResult => {
   if (!isMostlyText(dv) && !hasUtf16Bom(dv)) return null;
   return "Text file";
@@ -110,6 +115,7 @@ const TEXT_PROBES: Array<(dv: DataView) => ProbeResult> = [
   detectXmlOrSvg,
   detectWindowsSetupScript,
   detectPemArmor,
+  detectPostScript,
   detectRtf,
   detectJson,
   detectPlainText

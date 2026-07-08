@@ -176,6 +176,13 @@ void test("typesMatch maps PEM armor labels to file.exe PEM MIME", () => {
   assert.equal(normalizeFileMimeType("application/x-pem-file suffix"), "unmapped");
 });
 
+void test("typesMatch maps PostScript labels to file.exe PostScript MIME", () => {
+  const label = "PostScript document (page description program)";
+  assert.equal(typesMatch(label, "application/postscript"), true);
+  assert.equal(normalizeAnalyzerLabel("prefix PostScript document"), "unmapped");
+  assert.equal(normalizeFileMimeType("application/postscript suffix"), "unmapped");
+});
+
 void test("typesMatch treats uncommon text subtypes as text-like", () => {
   assert.equal(typesMatch("Text script (shebang)", "text/x-perl"), true);
   assert.equal(typesMatch("Text file", "application/x-wine-extension-ini"), true);
