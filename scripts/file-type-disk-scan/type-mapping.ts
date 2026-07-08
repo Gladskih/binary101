@@ -158,7 +158,7 @@ const FILE_MIME_RULES: TypeRule[] = [
   { pattern: /^application\/x-ms-shortcut$/, canonical: "lnk" },
   { pattern: /^application\/wasm$/, canonical: "wasm" },
   { pattern: /^application\/x-dex$/, canonical: "dex" },
-  { pattern: /^application\/winhlp$/, canonical: "hlp" },
+  { pattern: /^application\/(?:winhlp|x-winhelp)$/, canonical: "hlp" },
   { pattern: /^application\/x-terminfo2?$/, canonical: "terminfo" },
   { pattern: /^application\/x-setupscript$/, canonical: "setupscript" },
   { pattern: /^application\/x-gettext-translation$/, canonical: "gettext" },

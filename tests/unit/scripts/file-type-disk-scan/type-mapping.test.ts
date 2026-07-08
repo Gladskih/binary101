@@ -112,6 +112,12 @@ void test("normalizer maps MSDelta patch payload labels", () => {
   assert.equal(normalizeAnalyzerLabel("MSDelta patch payload (PA32)"), "unmapped");
 });
 
+void test("typesMatch maps Windows Help MIME aliases to HLP labels", () => {
+  assert.equal(typesMatch("Windows Help file (HLP)", "application/x-winhelp"), true);
+  assert.equal(typesMatch("Windows Help file (HLP)", "application/winhlp"), true);
+  assert.equal(normalizeFileMimeType("application/x-winhelp suffix"), "unmapped");
+});
+
 void test("typesMatch maps compiled terminfo entries to file.exe terminfo MIME types", () => {
   const label = 'Compiled terminfo entry "vt100" (terminal capability database)';
   assert.equal(typesMatch(label, "application/x-terminfo"), true);
