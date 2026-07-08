@@ -102,6 +102,7 @@ const FILE_MIME_RULES: TypeRule[] = [
   { pattern: /^application\/vnd\.openxmlformats-officedocument\./, canonical: "zip" },
   { pattern: /^application\/vnd\.oasis\.opendocument\./, canonical: "zip" },
   { pattern: /^application\/epub\+zip$/, canonical: "zip" },
+  { pattern: /^application\/vnd\.nuget\.package$/, canonical: "zip" },
   { pattern: /^application\/(java-archive|x-java-archive)$/, canonical: "zip" },
   { pattern: /^application\/x-chrome-extension$/, canonical: "zip" },
   { pattern: /^application\/pdf$/, canonical: "pdf" },

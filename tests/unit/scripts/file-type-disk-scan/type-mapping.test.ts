@@ -34,6 +34,15 @@ void test("typesMatch maps Chrome extension packages to ZIP-family MIME", () => 
   assert.equal(normalizeFileMimeType("application/x-chrome-extension suffix"), "unmapped");
 });
 
+void test("typesMatch maps NuGet package MIME to ZIP-family labels", () => {
+  assert.equal(typesMatch("ZIP archive", "application/vnd.nuget.package"), true);
+  assert.equal(
+    typesMatch("OpenXML Office document (DOCX/XLSX/PPTX)", "application/vnd.nuget.package"),
+    true
+  );
+  assert.equal(normalizeFileMimeType("application/vnd.nuget.package suffix"), "unmapped");
+});
+
 void test("typesMatch maps COFF object labels to file.exe COFF MIME", () => {
   assert.equal(typesMatch("COFF object file for x86 (I386)", "application/x-coff"), true);
   assert.equal(normalizeAnalyzerLabel("prefix COFF object file for x86 (I386)"), "unmapped");
