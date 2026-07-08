@@ -7,6 +7,23 @@ const DEFAULT_FILE_EXE = "C:\\Program Files\\Git\\usr\\bin\\file.exe";
 const splitOutputLines = (value: string): string[] =>
   value.split(/\r?\n/u).filter(line => line.length > 0);
 
+type FileCommandResult =
+  | { status: "ok"; mimeType: string }
+  | { status: "error"; message: string };
+
+const parseFileOutput = (line: string): FileCommandResult => {
+  const value = line.trim();
+  // RFC 6838 section 4.2 limits both names to 127 restricted-name characters.
+  // https://www.rfc-editor.org/rfc/rfc6838.html#section-4.2
+  if (/^[a-z0-9][a-z0-9!#$&^_.+-]{0,126}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$/iu.test(value)) {
+    return { status: "ok", mimeType: value };
+  }
+  return { status: "error", message: value || "file.exe returned empty output." };
+};
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
 const runFileCommand = async (fileExePath: string, paths: string[]): Promise<string[]> =>
   new Promise((resolve, reject) => {
     const child = spawn(fileExePath, ["-L", "-b", "--mime-type", "--", ...paths], {
@@ -30,21 +47,28 @@ const runFileCommand = async (fileExePath: string, paths: string[]): Promise<str
     });
   });
 
-const readSingleMimeType = async (fileExePath: string, path: string): Promise<string | null> => {
+const readSingleMimeType = async (
+  fileExePath: string,
+  path: string
+): Promise<FileCommandResult> => {
   try {
     const [mimeType] = await runFileCommand(fileExePath, [path]);
-    return mimeType ?? null;
-  } catch {
-    return null;
+    return parseFileOutput(mimeType ?? "");
+  } catch (error) {
+    return { status: "error", message: errorMessage(error) };
   }
 };
 
-const readFileMimeTypes = async (fileExePath: string, paths: string[]): Promise<Array<string | null>> => {
+const readFileMimeTypes = async (
+  fileExePath: string,
+  paths: string[]
+): Promise<FileCommandResult[]> => {
   try {
-    return await runFileCommand(fileExePath, paths);
+    return (await runFileCommand(fileExePath, paths)).map(parseFileOutput);
   } catch {
     return Promise.all(paths.map(path => readSingleMimeType(fileExePath, path)));
   }
 };
 
-export { DEFAULT_FILE_EXE, readFileMimeTypes };
+export { DEFAULT_FILE_EXE, parseFileOutput, readFileMimeTypes };
+export type { FileCommandResult };

@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  compareTypes,
   normalizeAnalyzerLabel,
   normalizeFileMimeType,
   typesMatch
@@ -133,6 +134,45 @@ void test("normalizer maps MSDelta patch payload labels", () => {
   assert.equal(normalizeAnalyzerLabel("prefix MSDelta patch payload (PA31)"), "unmapped");
   assert.equal(normalizeAnalyzerLabel("MSDelta patch payload (PA31) suffix"), "unmapped");
   assert.equal(normalizeAnalyzerLabel("MSDelta patch payload (PA32)"), "unmapped");
+});
+
+void test("comparison credits MSDelta when file.exe only reports generic binary data", () => {
+  assert.equal(
+    compareTypes("MSDelta patch payload (PA30)", "application/octet-stream"),
+    "analyzer-more-specific"
+  );
+  assert.equal(typesMatch("MSDelta patch payload (PA30)", "application/octet-stream"), true);
+});
+
+void test("comparison credits structured text detected more precisely than file.exe", () => {
+  assert.equal(compareTypes("XML document", "text/plain"), "analyzer-more-specific");
+  assert.equal(compareTypes("JSON data", "text/plain"), "analyzer-more-specific");
+  assert.equal(
+    compareTypes("SVG image (XML vector graphics)", "text/plain"),
+    "analyzer-more-specific"
+  );
+});
+
+void test("comparison does not hide unknown analyzer labels or specific MIME types", () => {
+  assert.equal(compareTypes("Unknown binary type", "application/octet-stream"), "match");
+  assert.equal(compareTypes("Unexpected custom label", "application/octet-stream"), "mismatch");
+  assert.equal(compareTypes("Text file", "application/etl"), "mismatch");
+});
+
+void test("file MIME mapping checks CAB before the generic Microsoft vendor family", () => {
+  assert.equal(normalizeFileMimeType("application/vnd.ms-cab-compressed"), "cab");
+  assert.equal(typesMatch("Microsoft Cabinet archive", "application/vnd.ms-cab-compressed"), true);
+});
+
+void test("file MIME mapping handles specific Microsoft font types before the vendor family", () => {
+  const label = "TrueType/OpenType font (sfnt glyph outlines)";
+  assert.equal(normalizeFileMimeType("application/vnd.ms-opentype"), "font-ttf");
+  assert.equal(normalizeFileMimeType("application/vnd.ms-fontobject"), "font-eot");
+  assert.equal(typesMatch(label, "application/vnd.ms-opentype"), true);
+});
+
+void test("typesMatch maps M4A MIME to the MP4 container family", () => {
+  assert.equal(typesMatch("MP4/QuickTime container (ISO-BMFF)", "audio/x-m4a"), true);
 });
 
 void test("typesMatch maps Windows Help MIME aliases to HLP labels", () => {

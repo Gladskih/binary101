@@ -10,7 +10,7 @@ import { AsyncQueue } from "./async-queue.js";
 import { createDiskBackedFile } from "../pe-import-metadata-scan/disk-file.js";
 import { discoverFiles, recordWarning, type DiscoveredFile, type WarningSink } from "./discovery.js";
 import { DEFAULT_FILE_EXE, readFileMimeTypes } from "./file-command.js";
-import { normalizeAnalyzerLabel, normalizeFileMimeType, typesMatch } from "./type-mapping.js";
+import { compareTypes, normalizeAnalyzerLabel, normalizeFileMimeType } from "./type-mapping.js";
 
 type ScanOptions = {
   roots: string[];
@@ -26,6 +26,7 @@ type ScanTotals = {
   filesDiscovered: number;
   filesScanned: number;
   matches: number;
+  analyzerAdvantages: number;
   mismatches: number;
   analyzerErrors: number;
   fileCommandErrors: number;
@@ -61,6 +62,7 @@ const initialTotals = (): ScanTotals => ({
   filesDiscovered: 0,
   filesScanned: 0,
   matches: 0,
+  analyzerAdvantages: 0,
   mismatches: 0,
   analyzerErrors: 0,
   fileCommandErrors: 0
@@ -106,24 +108,27 @@ const scanBatch = async (
   warnings: WarningSink
 ): Promise<void> => {
   const analyzerLabels = await Promise.all(batch.map(file => detectPath(file, warnings)));
-  const fileMimeTypes = await readFileMimeTypes(options.fileExePath, batch.map(file => file.path));
+  const fileResults = await readFileMimeTypes(options.fileExePath, batch.map(file => file.path));
   for (let index = 0; index < batch.length; index += 1) {
     const file = batch[index];
     const analyzerLabel = analyzerLabels[index];
-    const fileMimeType = fileMimeTypes[index];
+    const fileResult = fileResults[index];
     if (!file || !analyzerLabel) {
       totals.analyzerErrors += 1;
       continue;
     }
-    if (!fileMimeType) {
+    if (!fileResult || fileResult.status === "error") {
       totals.fileCommandErrors += 1;
+      recordWarning(warnings, file.path, fileResult?.message ?? "file.exe returned no result.");
       continue;
     }
     totals.filesScanned += 1;
-    if (typesMatch(analyzerLabel, fileMimeType)) totals.matches += 1;
+    const comparison = compareTypes(analyzerLabel, fileResult.mimeType);
+    if (comparison === "match") totals.matches += 1;
+    else if (comparison === "analyzer-more-specific") totals.analyzerAdvantages += 1;
     else {
       totals.mismatches += 1;
-      await writeMismatch(stream, file, analyzerLabel, fileMimeType);
+      await writeMismatch(stream, file, analyzerLabel, fileResult.mimeType);
     }
   }
 };

@@ -124,6 +124,7 @@ const writeEstimateSummary = async (
 const printSummary = (summary: ScanSummary): void => {
   process.stdout.write(
     `Scanned ${summary.totals.filesScanned}/${summary.totals.filesDiscovered} file(s), ` +
+    `${summary.totals.analyzerAdvantages} analyzer advantage(s), ` +
     `${summary.totals.mismatches} mismatch(es), ${summary.warningCount} warning(s): ` +
     `${summary.outputPath}\n`
   );

@@ -1,6 +1,7 @@
 "use strict";
 
 type TypeRule = { pattern: RegExp; canonical: string };
+type TypeComparison = "match" | "analyzer-more-specific" | "mismatch";
 
 const ANALYZER_RULES: TypeRule[] = [
   { pattern: /^Unknown binary type$/, canonical: "unknown" },
@@ -113,6 +114,9 @@ const FILE_MIME_RULES: TypeRule[] = [
   { pattern: /^application\/pdf$/, canonical: "pdf" },
   { pattern: /^application\/(x-ole-storage|CDFV2)$/, canonical: "compound" },
   { pattern: /^application\/msword$/, canonical: "compound" },
+  { pattern: /^application\/vnd\.ms-cab-compressed$/, canonical: "cab" },
+  { pattern: /^application\/vnd\.ms-opentype$/, canonical: "font-ttf" },
+  { pattern: /^application\/vnd\.ms-fontobject$/, canonical: "font-eot" },
   { pattern: /^application\/vnd\.ms-/, canonical: "compound" },
   { pattern: /^application\/x-msi$/, canonical: "compound" },
   { pattern: /^image\/png$/, canonical: "png" },
@@ -139,6 +143,7 @@ const FILE_MIME_RULES: TypeRule[] = [
   { pattern: /^video\/x-msvideo$/, canonical: "avi" },
   { pattern: /^video\/x-ms-asf$/, canonical: "asf" },
   { pattern: /^video\/(mp4|quicktime)$/, canonical: "mp4" },
+  { pattern: /^audio\/x-m4a$/, canonical: "mp4" },
   { pattern: /^video\/3gpp$/, canonical: "3gp" },
   { pattern: /^video\/mpeg$/, canonical: "mpeg-video" },
   { pattern: /^video\/mp2t$/, canonical: "mpeg-transport" },
@@ -151,7 +156,6 @@ const FILE_MIME_RULES: TypeRule[] = [
   { pattern: /^application\/x-lz4$/, canonical: "lz4" },
   { pattern: /^application\/zstd$/, canonical: "zstd" },
   { pattern: /^application\/x-rar$/, canonical: "rar" },
-  { pattern: /^application\/vnd\.ms-cab-compressed$/, canonical: "cab" },
   { pattern: /^application\/x-archive$/, canonical: "ar" },
   { pattern: /^application\/x-tar$/, canonical: "tar" },
   { pattern: /^application\/x-iso9660-image$/, canonical: "iso9660" },
@@ -202,7 +206,28 @@ const normalizeAnalyzerLabel = (label: string): string => applyRules(label, ANAL
 const normalizeFileMimeType = (mimeType: string): string =>
   applyRules(mimeType.trim(), FILE_MIME_RULES);
 
-const typesMatch = (analyzerLabel: string, fileMimeType: string): boolean =>
-  normalizeAnalyzerLabel(analyzerLabel) === normalizeFileMimeType(fileMimeType);
+const isTextRefinement = (canonical: string): boolean =>
+  ["html", "svg", "xml", "json", "rtf", "setupscript", "pem", "postscript", "ppd"].includes(
+    canonical
+  );
 
-export { normalizeAnalyzerLabel, normalizeFileMimeType, typesMatch };
+const compareTypes = (analyzerLabel: string, fileMimeType: string): TypeComparison => {
+  const analyzerCanonical = normalizeAnalyzerLabel(analyzerLabel);
+  const fileCanonical = normalizeFileMimeType(fileMimeType);
+  if (analyzerCanonical === fileCanonical) return "match";
+  if (
+    fileCanonical === "unknown" &&
+    analyzerCanonical !== "unknown" &&
+    analyzerCanonical !== "unmapped"
+  ) return "analyzer-more-specific";
+  if (fileCanonical === "text" && isTextRefinement(analyzerCanonical)) {
+    return "analyzer-more-specific";
+  }
+  return "mismatch";
+};
+
+const typesMatch = (analyzerLabel: string, fileMimeType: string): boolean =>
+  compareTypes(analyzerLabel, fileMimeType) !== "mismatch";
+
+export { compareTypes, normalizeAnalyzerLabel, normalizeFileMimeType, typesMatch };
+export type { TypeComparison };
