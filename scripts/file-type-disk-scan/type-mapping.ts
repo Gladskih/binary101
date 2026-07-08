@@ -179,6 +179,7 @@ const FILE_MIME_RULES: TypeRule[] = [
   { pattern: /^text\/html$/, canonical: "html" },
   { pattern: /^image\/svg\+xml$/, canonical: "svg" },
   { pattern: /^(text|application)\/xml$/, canonical: "xml" },
+  { pattern: /^application\/xhtml\+xml$/, canonical: "xml" },
   { pattern: /^application\/json$/, canonical: "json" },
   { pattern: /^application\/x-ndjson$/, canonical: "json" },
   { pattern: /^(text|application)\/rtf$/, canonical: "rtf" },

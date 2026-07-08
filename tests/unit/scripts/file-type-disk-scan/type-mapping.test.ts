@@ -96,6 +96,11 @@ void test("typesMatch maps newline-delimited JSON MIME to JSON analyzer output",
   assert.equal(typesMatch("JSON data", "application/x-ndjson"), true);
 });
 
+void test("typesMatch maps XHTML MIME to XML analyzer output", () => {
+  assert.equal(typesMatch("XML document", "application/xhtml+xml"), true);
+  assert.equal(normalizeFileMimeType("application/xhtml+xml suffix"), "unmapped");
+});
+
 void test("typesMatch maps ar archives to file.exe archive MIME", () => {
   assert.equal(typesMatch("Unix ar archive (static library)", "application/x-archive"), true);
   assert.equal(typesMatch("Unix ar archive (thin static library)", "application/x-archive"), true);
