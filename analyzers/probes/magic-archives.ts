@@ -17,6 +17,23 @@ const detectArArchive = (dv: DataView): ProbeResult => {
   return startsWithAscii(dv, "!<thin>\n") ? "Unix ar archive (thin static library)" : null;
 };
 
+const detectCompiledHtmlHelp = (dv: DataView): ProbeResult => {
+  // CHMLib ITSF layout: v2 uses a 0x58-byte header and v3 uses 0x60 bytes.
+  // https://sources.debian.org/src/chmlib/2%3A0.40a-9/src/chm_lib.c
+  if (dv.byteLength < 0x58 || !startsWithAscii(dv, "ITSF")) return null;
+  const version = dv.getUint32(4, true);
+  const expectedHeaderLength = version === 2 ? 0x58 : version === 3 ? 0x60 : 0;
+  if (dv.getUint32(8, true) !== expectedHeaderLength || dv.getUint32(12, true) !== 1) return null;
+  const directoryOffset = dv.getBigUint64(72, true);
+  if (dv.getBigUint64(80, true) === 0n || directoryOffset > BigInt(dv.byteLength - 4)) return null;
+  return startsWithAscii(
+    new DataView(dv.buffer, dv.byteOffset + Number(directoryOffset), 4),
+    "ITSP"
+  )
+    ? "Microsoft Compiled HTML Help (CHM)"
+    : null;
+};
+
 const detectZip = (dv: DataView): ProbeResult => {
   return hasZipLocalFileHeader(dv) ? "ZIP archive (PK-based, e.g. Office, JAR, APK)" : null;
 };
@@ -166,6 +183,7 @@ const detectWim = (dv: DataView): ProbeResult => {
 
 const archiveProbes: Array<(dv: DataView) => ProbeResult> = [
   detectArArchive,
+  detectCompiledHtmlHelp,
   detectChromeExtension,
   detectZip,
   detectGzip,

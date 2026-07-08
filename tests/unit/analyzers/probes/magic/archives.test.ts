@@ -7,6 +7,19 @@ import { archiveProbes } from "../../../../../analyzers/probes/magic-archives.js
 const dvFrom = (bytes: ArrayLike<number>): DataView => new DataView(new Uint8Array(bytes).buffer);
 const run = (bytes: ArrayLike<number>): string | null => archiveProbes.map(p => p(dvFrom(bytes))).find(Boolean) || null;
 const ascii = (value: string): number[] => [...value].map(ch => ch.charCodeAt(0));
+const chm = (): Uint8Array => {
+  const bytes = new Uint8Array(124);
+  const view = new DataView(bytes.buffer);
+  bytes.set(ascii("ITSF"));
+  view.setUint32(4, 3, true);
+  view.setUint32(8, 0x60, true);
+  view.setUint32(12, 1, true);
+  view.setBigUint64(72, 120n, true);
+  view.setBigUint64(80, 4n, true);
+  view.setBigUint64(88, 124n, true);
+  bytes.set(ascii("ITSP"), 120);
+  return bytes;
+};
 
 void test("detects common archive signatures", () => {
   assert.strictEqual(run(ascii("!<arch>\n")), "Unix ar archive (static library)");
@@ -33,6 +46,32 @@ void test("detects TAR and ISO-9660 at expected offsets", () => {
   const iso = new Uint8Array(0x9010).fill(0);
   iso.set([0x43, 0x44, 0x30, 0x30, 0x31], 0x9001);
   assert.strictEqual(run(iso), "ISO-9660 CD/DVD image (ISO)");
+});
+
+void test("detects Microsoft Compiled HTML Help containers", () => {
+  assert.strictEqual(run(chm()), "Microsoft Compiled HTML Help (CHM)");
+  const versionTwo = chm();
+  const versionTwoView = new DataView(versionTwo.buffer);
+  versionTwoView.setUint32(4, 2, true);
+  versionTwoView.setUint32(8, 0x58, true);
+  assert.strictEqual(run(versionTwo), "Microsoft Compiled HTML Help (CHM)");
+});
+
+void test("rejects malformed or truncated CHM headers", () => {
+  const wrongVersion = chm();
+  const wrongHeaderLength = chm();
+  const missingDirectory = chm();
+  const outOfBoundsDirectory = chm();
+  new DataView(wrongVersion.buffer).setUint32(4, 4, true);
+  new DataView(wrongHeaderLength.buffer).setUint32(8, 0x58, true);
+  missingDirectory.fill(0, 120);
+  new DataView(outOfBoundsDirectory.buffer).setBigUint64(72, 124n, true);
+
+  assert.strictEqual(run(chm().slice(0, 95)), null);
+  assert.strictEqual(run(wrongVersion), null);
+  assert.strictEqual(run(wrongHeaderLength), null);
+  assert.strictEqual(run(missingDirectory), null);
+  assert.strictEqual(run(outOfBoundsDirectory), null);
 });
 
 void test("returns null for short or unknown data", () => {
