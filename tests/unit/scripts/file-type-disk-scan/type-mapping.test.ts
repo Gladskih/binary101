@@ -118,6 +118,13 @@ void test("typesMatch maps WOFF2 font labels to file.exe WOFF2 MIME", () => {
   assert.equal(normalizeFileMimeType("font/woff2 suffix"), "unmapped");
 });
 
+void test("typesMatch maps WOFF font labels to file.exe WOFF MIME", () => {
+  const label = "Web Open Font Format font (WOFF compressed web font)";
+  assert.equal(typesMatch(label, "font/woff"), true);
+  assert.equal(normalizeAnalyzerLabel("prefix Web Open Font Format font"), "unmapped");
+  assert.equal(normalizeFileMimeType("font/woff suffix"), "unmapped");
+});
+
 void test("typesMatch maps Python bytecode labels to file.exe bytecode MIME", () => {
   const label = "Python bytecode cache (PYC compiled module)";
   assert.equal(typesMatch(label, "application/x-bytecode.python"), true);

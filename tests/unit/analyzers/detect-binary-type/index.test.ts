@@ -313,6 +313,14 @@ void test("detectBinaryType reports WOFF2 web fonts", async () => {
   assert.strictEqual(label, "Web Open Font Format 2 font (WOFF2 compressed web font)");
 });
 
+void test("detectBinaryType reports WOFF web fonts", async () => {
+  const label = await detectBinaryType(
+    new MockFile(new Uint8Array([0x77, 0x4f, 0x46, 0x46]), "font.woff")
+  );
+
+  assert.strictEqual(label, "Web Open Font Format font (WOFF compressed web font)");
+});
+
 void test("detectBinaryType reports CPython bytecode cache files", async () => {
   const bytes = new Uint8Array(16);
   bytes[0] = 0xcb;
