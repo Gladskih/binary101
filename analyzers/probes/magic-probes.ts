@@ -1,5 +1,6 @@
 "use strict";
 import { archiveProbes } from "./magic-archives.js";
+import { fontProbes } from "./magic-fonts.js";
 import { imageProbes } from "./magic-images.js";
 import { mediaProbes } from "./magic-media.js";
 import { miscProbes } from "./magic-misc.js";
@@ -9,6 +10,7 @@ const MAGIC_PROBES: Array<(dv: DataView) => ProbeResult> = [
   ...archiveProbes,
   ...imageProbes,
   ...mediaProbes,
+  ...fontProbes,
   ...miscProbes
 ];
 

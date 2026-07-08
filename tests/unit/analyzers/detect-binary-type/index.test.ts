@@ -281,6 +281,14 @@ void test("detectBinaryType reports GNU gettext message catalogs", async () => {
   assert.strictEqual(label, "GNU gettext message catalog (MO translations)");
 });
 
+void test("detectBinaryType reports TrueType/OpenType sfnt fonts", async () => {
+  const label = await detectBinaryType(
+    new MockFile(new Uint8Array([0x00, 0x01, 0x00, 0x00]), "font.ttf")
+  );
+
+  assert.strictEqual(label, "TrueType/OpenType font (sfnt glyph outlines)");
+});
+
 void test("detectBinaryType reports SQLite by signature without page parsing", async () => {
   const label = await detectBinaryType(createSqliteFile());
   assert.strictEqual(label, "SQLite 3.x database");

@@ -85,6 +85,13 @@ void test("typesMatch maps gettext message catalogs to file.exe gettext MIME", (
   assert.equal(normalizeFileMimeType("application/x-gettext-translation suffix"), "unmapped");
 });
 
+void test("typesMatch maps TrueType font labels to file.exe font MIME", () => {
+  const label = "TrueType/OpenType font (sfnt glyph outlines)";
+  assert.equal(typesMatch(label, "font/ttf"), true);
+  assert.equal(normalizeAnalyzerLabel("prefix TrueType/OpenType font"), "unmapped");
+  assert.equal(normalizeFileMimeType("font/ttf suffix"), "unmapped");
+});
+
 void test("typesMatch treats uncommon text subtypes as text-like", () => {
   assert.equal(typesMatch("Text script (shebang)", "text/x-perl"), true);
   assert.equal(typesMatch("Text file", "application/x-wine-extension-ini"), true);
