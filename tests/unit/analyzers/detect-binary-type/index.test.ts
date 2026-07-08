@@ -335,6 +335,14 @@ void test("detectBinaryType reports PostScript documents", async () => {
   assert.strictEqual(label, "PostScript document (page description program)");
 });
 
+void test("detectBinaryType reports PostScript Printer Description files", async () => {
+  const label = await detectBinaryType(
+    new MockFile(fromAscii("*PPD-Adobe: \"4.3\"\n*FormatVersion: \"4.3\""), "printer.ppd")
+  );
+
+  assert.strictEqual(label, "PostScript Printer Description file (PPD printer driver metadata)");
+});
+
 void test("detectBinaryType reports GNU gettext message catalogs", async () => {
   const label = await detectBinaryType(
     new MockFile(new Uint8Array([0xde, 0x12, 0x04, 0x95]), "messages.mo")

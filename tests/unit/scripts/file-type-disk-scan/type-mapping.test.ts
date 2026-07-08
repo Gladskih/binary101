@@ -208,6 +208,13 @@ void test("typesMatch maps PostScript labels to file.exe PostScript MIME", () =>
   assert.equal(normalizeFileMimeType("application/postscript suffix"), "unmapped");
 });
 
+void test("typesMatch maps PPD labels to file.exe PPD MIME", () => {
+  const label = "PostScript Printer Description file (PPD printer driver metadata)";
+  assert.equal(typesMatch(label, "application/vnd.cups-ppd"), true);
+  assert.equal(normalizeAnalyzerLabel("prefix PostScript Printer Description file"), "unmapped");
+  assert.equal(normalizeFileMimeType("application/vnd.cups-ppd suffix"), "unmapped");
+});
+
 void test("typesMatch treats uncommon text subtypes as text-like", () => {
   assert.equal(typesMatch("Text script (shebang)", "text/x-perl"), true);
   assert.equal(typesMatch("Text file", "application/x-wine-extension-ini"), true);

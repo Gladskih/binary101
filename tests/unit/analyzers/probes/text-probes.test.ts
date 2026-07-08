@@ -55,6 +55,13 @@ void test("probeTextLike identifies PostScript documents", () => {
   );
 });
 
+void test("probeTextLike identifies PostScript Printer Description files", () => {
+  assert.strictEqual(
+    probeTextLike(dvFrom("*PPD-Adobe: \"4.3\"\n*FormatVersion: \"4.3\"")),
+    "PostScript Printer Description file (PPD printer driver metadata)"
+  );
+});
+
 void test("probeTextLike returns null for binary-looking data", () => {
   const binary = new Uint8Array([0x00, 0xff, 0x10, 0x00]);
   assert.strictEqual(probeTextLike(new DataView(binary.buffer)), null);

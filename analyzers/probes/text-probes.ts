@@ -103,6 +103,13 @@ const detectPostScript = (dv: DataView): ProbeResult => {
   return text.startsWith("%!") ? "PostScript document (page description program)" : null;
 };
 
+const detectPostScriptPrinterDescription = (dv: DataView): ProbeResult => {
+  const text = toTextPrefix(dv, MAX_TEXT_INSPECT_BYTES).trimStart();
+  return text.startsWith("*PPD-Adobe:")
+    ? "PostScript Printer Description file (PPD printer driver metadata)"
+    : null;
+};
+
 const detectPlainText = (dv: DataView): ProbeResult => {
   if (!isMostlyText(dv) && !hasUtf16Bom(dv)) return null;
   return "Text file";
@@ -116,6 +123,7 @@ const TEXT_PROBES: Array<(dv: DataView) => ProbeResult> = [
   detectWindowsSetupScript,
   detectPemArmor,
   detectPostScript,
+  detectPostScriptPrinterDescription,
   detectRtf,
   detectJson,
   detectPlainText
