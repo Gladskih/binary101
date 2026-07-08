@@ -74,6 +74,11 @@ void test("typesMatch maps Windows bitmap cursor MIME to ICO/CUR icon labels", (
   assert.equal(normalizeFileMimeType("image/x-win-bitmap suffix"), "unmapped");
 });
 
+void test("typesMatch maps ANI MIME to animated cursor labels", () => {
+  assert.equal(typesMatch("Windows animated cursor (ANI)", "application/x-navi-animation"), true);
+  assert.equal(normalizeFileMimeType("application/x-navi-animation suffix"), "unmapped");
+});
+
 void test("typesMatch treats JavaScript MIME as text-like shallow analyzer output", () => {
   assert.equal(typesMatch("Text file", "application/javascript"), true);
 });
