@@ -39,6 +39,15 @@ void test("probeTextLike treats UTF-16 text with BOM as text", () => {
   assert.strictEqual(probeTextLike(utf16LeDvFrom("plain text")), "Text file");
 });
 
+void test("probeTextLike identifies PEM armor blocks", () => {
+  const pem = [
+    "-----BEGIN CERTIFICATE-----",
+    "QUJD",
+    "-----END CERTIFICATE-----"
+  ].join("\n");
+  assert.strictEqual(probeTextLike(dvFrom(pem)), "PEM armor block (certificate/key text encoding)");
+});
+
 void test("probeTextLike returns null for binary-looking data", () => {
   const binary = new Uint8Array([0x00, 0xff, 0x10, 0x00]);
   assert.strictEqual(probeTextLike(new DataView(binary.buffer)), null);

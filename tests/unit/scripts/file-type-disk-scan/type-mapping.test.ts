@@ -169,6 +169,13 @@ void test("typesMatch maps Python bytecode labels to file.exe bytecode MIME", ()
   assert.equal(normalizeFileMimeType("application/x-bytecode.python suffix"), "unmapped");
 });
 
+void test("typesMatch maps PEM armor labels to file.exe PEM MIME", () => {
+  const label = "PEM armor block (certificate/key text encoding)";
+  assert.equal(typesMatch(label, "application/x-pem-file"), true);
+  assert.equal(normalizeAnalyzerLabel("prefix PEM armor block"), "unmapped");
+  assert.equal(normalizeFileMimeType("application/x-pem-file suffix"), "unmapped");
+});
+
 void test("typesMatch treats uncommon text subtypes as text-like", () => {
   assert.equal(typesMatch("Text script (shebang)", "text/x-perl"), true);
   assert.equal(typesMatch("Text file", "application/x-wine-extension-ini"), true);

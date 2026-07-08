@@ -316,6 +316,17 @@ void test("detectBinaryType reports Windows INF setup scripts", async () => {
   assert.strictEqual(label, "Windows setup information file (INF, driver/install directives)");
 });
 
+void test("detectBinaryType reports PEM armor blocks", async () => {
+  const pem = [
+    "-----BEGIN CERTIFICATE-----",
+    "QUJD",
+    "-----END CERTIFICATE-----"
+  ].join("\n");
+  const label = await detectBinaryType(new MockFile(fromAscii(pem), "cert.pem"));
+
+  assert.strictEqual(label, "PEM armor block (certificate/key text encoding)");
+});
+
 void test("detectBinaryType reports GNU gettext message catalogs", async () => {
   const label = await detectBinaryType(
     new MockFile(new Uint8Array([0xde, 0x12, 0x04, 0x95]), "messages.mo")

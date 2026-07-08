@@ -90,6 +90,14 @@ const detectWindowsSetupScript = (dv: DataView): ProbeResult => {
   return null;
 };
 
+const detectPemArmor = (dv: DataView): ProbeResult => {
+  const text = toTextPrefix(dv, MAX_TEXT_INSPECT_BYTES).trimStart();
+  if (text.startsWith("-----BEGIN ") && text.includes("-----END ")) {
+    return "PEM armor block (certificate/key text encoding)";
+  }
+  return null;
+};
+
 const detectPlainText = (dv: DataView): ProbeResult => {
   if (!isMostlyText(dv) && !hasUtf16Bom(dv)) return null;
   return "Text file";
@@ -101,6 +109,7 @@ const TEXT_PROBES: Array<(dv: DataView) => ProbeResult> = [
   detectFb2Xml,
   detectXmlOrSvg,
   detectWindowsSetupScript,
+  detectPemArmor,
   detectRtf,
   detectJson,
   detectPlainText
