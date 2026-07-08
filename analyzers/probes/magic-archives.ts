@@ -2,6 +2,21 @@
 import type { ProbeResult } from "./probe-types.js";
 import { hasZipLocalFileHeader } from "./file-signatures.js";
 
+const startsWithAscii = (dv: DataView, value: string): boolean => {
+  if (dv.byteLength < value.length) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    if (dv.getUint8(index) !== value.charCodeAt(index)) return false;
+  }
+  return true;
+};
+
+const detectArArchive = (dv: DataView): ProbeResult => {
+  // GNU binutils include/aout/ar.h defines these global headers for regular and thin ar archives.
+  // https://raw.githubusercontent.com/rtems/sourceware-mirror-binutils-gdb/master/include/aout/ar.h
+  if (startsWithAscii(dv, "!<arch>\n")) return "Unix ar archive (static library)";
+  return startsWithAscii(dv, "!<thin>\n") ? "Unix ar archive (thin static library)" : null;
+};
+
 const detectZip = (dv: DataView): ProbeResult => {
   return hasZipLocalFileHeader(dv) ? "ZIP archive (PK-based, e.g. Office, JAR, APK)" : null;
 };
@@ -137,6 +152,7 @@ const detectIso9660 = (dv: DataView): ProbeResult => {
 };
 
 const archiveProbes: Array<(dv: DataView) => ProbeResult> = [
+  detectArArchive,
   detectZip,
   detectGzip,
   detectBzip2,

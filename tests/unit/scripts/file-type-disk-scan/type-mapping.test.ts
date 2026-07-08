@@ -34,6 +34,15 @@ void test("typesMatch maps newline-delimited JSON MIME to JSON analyzer output",
   assert.equal(typesMatch("JSON data", "application/x-ndjson"), true);
 });
 
+void test("typesMatch maps ar archives to file.exe archive MIME", () => {
+  assert.equal(typesMatch("Unix ar archive (static library)", "application/x-archive"), true);
+  assert.equal(typesMatch("Unix ar archive (thin static library)", "application/x-archive"), true);
+  assert.equal(normalizeAnalyzerLabel("prefix Unix ar archive (static library)"), "unmapped");
+  assert.equal(normalizeAnalyzerLabel("Unix ar archive (static library) suffix"), "unmapped");
+  assert.equal(normalizeFileMimeType("prefix application/x-archive"), "unmapped");
+  assert.equal(normalizeFileMimeType("application/x-archive suffix"), "unmapped");
+});
+
 void test("typesMatch maps SQLite WAL-index shared-memory files to SQLite MIME", () => {
   assert.equal(typesMatch("SQLite WAL-index shared-memory file", "application/vnd.sqlite3"), true);
   assert.equal(normalizeAnalyzerLabel("prefix SQLite WAL-index shared-memory file"), "unmapped");

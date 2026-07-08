@@ -6,8 +6,11 @@ import { archiveProbes } from "../../../../../analyzers/probes/magic-archives.js
 
 const dvFrom = (bytes: ArrayLike<number>): DataView => new DataView(new Uint8Array(bytes).buffer);
 const run = (bytes: ArrayLike<number>): string | null => archiveProbes.map(p => p(dvFrom(bytes))).find(Boolean) || null;
+const ascii = (value: string): number[] => [...value].map(ch => ch.charCodeAt(0));
 
 void test("detects common archive signatures", () => {
+  assert.strictEqual(run(ascii("!<arch>\n")), "Unix ar archive (static library)");
+  assert.strictEqual(run(ascii("!<thin>\n")), "Unix ar archive (thin static library)");
   assert.strictEqual(run([0x50, 0x4b, 0x03, 0x04]), "ZIP archive (PK-based, e.g. Office, JAR, APK)");
   assert.strictEqual(run([0x1f, 0x8b]), "gzip compressed data");
   assert.strictEqual(run([0x42, 0x5a, 0x68]), "bzip2 compressed data");

@@ -51,6 +51,7 @@ const ANALYZER_RULES: TypeRule[] = [
   { pattern: /^Zstandard compressed data/, canonical: "zstd" },
   { pattern: /^RAR archive$/, canonical: "rar" },
   { pattern: /^Microsoft Cabinet archive/, canonical: "cab" },
+  { pattern: /^Unix ar archive \((?:static|thin static) library\)$/, canonical: "ar" },
   { pattern: /^TAR archive$/, canonical: "tar" },
   { pattern: /^ISO-9660 CD\/DVD image/, canonical: "iso9660" },
   {
@@ -125,6 +126,7 @@ const FILE_MIME_RULES: TypeRule[] = [
   { pattern: /^application\/zstd$/, canonical: "zstd" },
   { pattern: /^application\/x-rar$/, canonical: "rar" },
   { pattern: /^application\/vnd\.ms-cab-compressed$/, canonical: "cab" },
+  { pattern: /^application\/x-archive$/, canonical: "ar" },
   { pattern: /^application\/x-tar$/, canonical: "tar" },
   { pattern: /^application\/x-iso9660-image$/, canonical: "iso9660" },
   { pattern: /^application\/(vnd\.sqlite3|x-sqlite3)$/, canonical: "sqlite" },
