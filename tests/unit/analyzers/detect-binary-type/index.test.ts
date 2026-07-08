@@ -115,6 +115,17 @@ void test("detectBinaryType reports Windows Imaging Format archives", async () =
   assert.strictEqual(label, "Windows Imaging Format archive (WIM/PPKG deployment image)");
 });
 
+void test("detectBinaryType reports Chrome CRX extension packages", async () => {
+  const bytes = new Uint8Array(fromAscii("Cr24").length + 8);
+  bytes.set(fromAscii("Cr24"));
+  const view = new DataView(bytes.buffer);
+  view.setUint32(4, 3, true);
+  view.setUint32(8, 4, true);
+  const label = await detectBinaryType(new MockFile(bytes, "extension.crx"));
+
+  assert.strictEqual(label, "Chrome extension package (CRX signed ZIP)");
+});
+
 void test("detectBinaryType refines additional ZIP-based formats", async () => {
   const zipSignature = [0x50, 0x4b, 0x03, 0x04];
   const cases = [

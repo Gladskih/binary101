@@ -21,6 +21,12 @@ const detectZip = (dv: DataView): ProbeResult => {
   return hasZipLocalFileHeader(dv) ? "ZIP archive (PK-based, e.g. Office, JAR, APK)" : null;
 };
 
+const detectChromeExtension = (dv: DataView): ProbeResult => {
+  if (dv.byteLength < 12 || !startsWithAscii(dv, "Cr24")) return null;
+  const version = dv.getUint32(4, true);
+  return version === 2 || version === 3 ? "Chrome extension package (CRX signed ZIP)" : null;
+};
+
 const detectGzip = (dv: DataView): ProbeResult => {
   if (dv.byteLength < 2) return null;
   const sig = dv.getUint16(0, true);
@@ -160,6 +166,7 @@ const detectWim = (dv: DataView): ProbeResult => {
 
 const archiveProbes: Array<(dv: DataView) => ProbeResult> = [
   detectArArchive,
+  detectChromeExtension,
   detectZip,
   detectGzip,
   detectBzip2,

@@ -27,6 +27,13 @@ void test("typesMatch maps ZIP-derived document refinements to ZIP MIME types", 
   );
 });
 
+void test("typesMatch maps Chrome extension packages to ZIP-family MIME", () => {
+  assert.equal(typesMatch("Chrome extension package (CRX signed ZIP)", "application/x-chrome-extension"), true);
+  assert.equal(typesMatch("ZIP archive", "application/x-chrome-extension"), true);
+  assert.equal(normalizeAnalyzerLabel("prefix Chrome extension package"), "unmapped");
+  assert.equal(normalizeFileMimeType("application/x-chrome-extension suffix"), "unmapped");
+});
+
 void test("typesMatch maps COFF object labels to file.exe COFF MIME", () => {
   assert.equal(typesMatch("COFF object file for x86 (I386)", "application/x-coff"), true);
   assert.equal(normalizeAnalyzerLabel("prefix COFF object file for x86 (I386)"), "unmapped");

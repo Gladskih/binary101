@@ -11,6 +11,8 @@ const ascii = (value: string): number[] => [...value].map(ch => ch.charCodeAt(0)
 void test("detects common archive signatures", () => {
   assert.strictEqual(run(ascii("!<arch>\n")), "Unix ar archive (static library)");
   assert.strictEqual(run(ascii("!<thin>\n")), "Unix ar archive (thin static library)");
+  const crx = new Uint8Array(ascii("Cr24").concat([3, 0, 0, 0, 4, 0, 0, 0]));
+  assert.strictEqual(run(crx), "Chrome extension package (CRX signed ZIP)");
   assert.strictEqual(run([0x50, 0x4b, 0x03, 0x04]), "ZIP archive (PK-based, e.g. Office, JAR, APK)");
   assert.strictEqual(run([0x1f, 0x8b]), "gzip compressed data");
   assert.strictEqual(run([0x42, 0x5a, 0x68]), "bzip2 compressed data");
