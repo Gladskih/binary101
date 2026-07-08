@@ -11,6 +11,13 @@ void test("detects TrueType/OpenType sfnt font signatures", () => {
   assert.strictEqual(run([0x00, 0x01, 0x00, 0x00]), "TrueType/OpenType font (sfnt glyph outlines)");
 });
 
+void test("detects WOFF2 web font signatures", () => {
+  assert.strictEqual(
+    run([0x77, 0x4f, 0x46, 0x32]),
+    "Web Open Font Format 2 font (WOFF2 compressed web font)"
+  );
+});
+
 void test("returns null for unknown font bytes", () => {
   assert.strictEqual(run([0x00, 0x01, 0x00]), null);
   assert.strictEqual(run([0x01, 0x00, 0x00, 0x00]), null);

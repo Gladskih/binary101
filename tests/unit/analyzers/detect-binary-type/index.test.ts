@@ -289,6 +289,14 @@ void test("detectBinaryType reports TrueType/OpenType sfnt fonts", async () => {
   assert.strictEqual(label, "TrueType/OpenType font (sfnt glyph outlines)");
 });
 
+void test("detectBinaryType reports WOFF2 web fonts", async () => {
+  const label = await detectBinaryType(
+    new MockFile(new Uint8Array([0x77, 0x4f, 0x46, 0x32]), "font.woff2")
+  );
+
+  assert.strictEqual(label, "Web Open Font Format 2 font (WOFF2 compressed web font)");
+});
+
 void test("detectBinaryType reports SQLite by signature without page parsing", async () => {
   const label = await detectBinaryType(createSqliteFile());
   assert.strictEqual(label, "SQLite 3.x database");
