@@ -1,6 +1,11 @@
 "use strict";
 import type { ProbeResult } from "./probe-types.js";
-import { hasTrueTypeSfntSignature, hasWoffSignature, hasWoff2Signature } from "./file-signatures.js";
+import {
+  hasOpenTypeCffSignature,
+  hasTrueTypeSfntSignature,
+  hasWoffSignature,
+  hasWoff2Signature
+} from "./file-signatures.js";
 
 const hasValidSfntDirectory = (dv: DataView, offset: number): boolean => {
   if (offset > dv.byteLength - 12) return false;
@@ -26,7 +31,9 @@ const detectFontCollection = (dv: DataView): ProbeResult => {
 };
 
 const detectTrueTypeFont = (dv: DataView): ProbeResult => {
-  return hasTrueTypeSfntSignature(dv) ? "TrueType/OpenType font (sfnt glyph outlines)" : null;
+  return hasTrueTypeSfntSignature(dv) || hasOpenTypeCffSignature(dv)
+    ? "TrueType/OpenType font (sfnt glyph outlines)"
+    : null;
 };
 
 const detectWoff2Font = (dv: DataView): ProbeResult => {

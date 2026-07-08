@@ -24,6 +24,10 @@ const fontCollection = (): Uint8Array => {
 
 void test("detects TrueType/OpenType sfnt font signatures", () => {
   assert.strictEqual(run([0x00, 0x01, 0x00, 0x00]), "TrueType/OpenType font (sfnt glyph outlines)");
+  assert.strictEqual(
+    run([0x4f, 0x54, 0x54, 0x4f]),
+    "TrueType/OpenType font (sfnt glyph outlines)"
+  );
 });
 
 void test("detects structurally valid OpenType font collections", () => {
