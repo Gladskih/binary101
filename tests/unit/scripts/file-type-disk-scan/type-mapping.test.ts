@@ -75,6 +75,13 @@ void test("typesMatch maps ar archives to file.exe archive MIME", () => {
   assert.equal(normalizeFileMimeType("application/x-archive suffix"), "unmapped");
 });
 
+void test("typesMatch maps WIM deployment images to file.exe WIM MIME", () => {
+  const label = "Windows Imaging Format archive (WIM/PPKG deployment image)";
+  assert.equal(typesMatch(label, "application/x-ms-wim"), true);
+  assert.equal(normalizeAnalyzerLabel("prefix Windows Imaging Format archive"), "unmapped");
+  assert.equal(normalizeFileMimeType("application/x-ms-wim suffix"), "unmapped");
+});
+
 void test("typesMatch maps SQLite WAL-index shared-memory files to SQLite MIME", () => {
   assert.equal(typesMatch("SQLite WAL-index shared-memory file", "application/vnd.sqlite3"), true);
   assert.equal(normalizeAnalyzerLabel("prefix SQLite WAL-index shared-memory file"), "unmapped");

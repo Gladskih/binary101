@@ -151,6 +151,13 @@ const detectIso9660 = (dv: DataView): ProbeResult => {
   return null;
 };
 
+const detectWim = (dv: DataView): ProbeResult => {
+  if (dv.byteLength < 8) return null;
+  return startsWithAscii(dv, "MSWIM\0\0\0")
+    ? "Windows Imaging Format archive (WIM/PPKG deployment image)"
+    : null;
+};
+
 const archiveProbes: Array<(dv: DataView) => ProbeResult> = [
   detectArArchive,
   detectZip,
@@ -163,7 +170,8 @@ const archiveProbes: Array<(dv: DataView) => ProbeResult> = [
   detectRar,
   detectCab,
   detectTar,
-  detectIso9660
+  detectIso9660,
+  detectWim
 ];
 
 export { archiveProbes };

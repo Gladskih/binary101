@@ -20,6 +20,7 @@ void test("detects common archive signatures", () => {
   assert.strictEqual(run([0x28, 0xb5, 0x2f, 0xfd]), "Zstandard compressed data (zstd)");
   assert.strictEqual(run([0x52, 0x61, 0x72, 0x21, 0x1a, 0x07, 0x00]), "RAR archive");
   assert.strictEqual(run([0x4d, 0x53, 0x43, 0x46]), "Microsoft Cabinet archive (CAB)");
+  assert.strictEqual(run(ascii("MSWIM\0\0\0")), "Windows Imaging Format archive (WIM/PPKG deployment image)");
 });
 
 void test("detects TAR and ISO-9660 at expected offsets", () => {

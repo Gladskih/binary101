@@ -109,6 +109,12 @@ void test("detectBinaryType reports EOCD-only ZIPs and PDF versions", async () =
   assert.strictEqual(pdfLabel, "PDF document (v1.5)");
 });
 
+void test("detectBinaryType reports Windows Imaging Format archives", async () => {
+  const label = await detectBinaryType(new MockFile(fromAscii("MSWIM\0\0\0"), "sample.ppkg"));
+
+  assert.strictEqual(label, "Windows Imaging Format archive (WIM/PPKG deployment image)");
+});
+
 void test("detectBinaryType refines additional ZIP-based formats", async () => {
   const zipSignature = [0x50, 0x4b, 0x03, 0x04];
   const cases = [
