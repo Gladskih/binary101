@@ -16,6 +16,7 @@ import type { parseDelayImports32 } from "./imports/delay.js";
 import { parseIatDirectory } from "./imports/iat.js";
 import type { parseImportDirectory32 } from "./imports/index.js";
 import { analyzeImportLinking } from "./imports/linking.js";
+import { parseLinuxBootProtocol } from "./linux-boot.js";
 import { collectLoadConfigChecks } from "./load-config/checks.js";
 import { getCanonicalPeMachine } from "./machine.js";
 import { detectNativeAotCandidate } from "./native-aot.js";
@@ -45,6 +46,7 @@ export type PeWindowsParseContext = {
   canonicalMachine: number;
   peVariant: PeVariantParsers;
   securityDir: PeDataDirectory | undefined;
+  linuxBoot: Awaited<ReturnType<typeof parseLinuxBootProtocol>>;
 };
 
 export type PeDebugArtifacts = {
@@ -103,7 +105,8 @@ export const parseWindowsPe = async (
     parseManifestXmlDocument,
     canonicalMachine,
     peVariant: selectPeVariantParsers(core.opt.Magic, canonicalMachine),
-    securityDir: core.dataDirs.find(d => d.name === "SECURITY")
+    securityDir: core.dataDirs.find(d => d.name === "SECURITY"),
+    linuxBoot: await parseLinuxBootProtocol(reader, file)
   };
   const debugArtifacts = await parsePeDebugArtifacts(context);
   const directories = await parsePeDirectoryArtifacts(context);

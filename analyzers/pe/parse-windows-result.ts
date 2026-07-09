@@ -63,6 +63,7 @@ export const buildWindowsPeResult = (
     importLinking,
     architecture: directories.architecture,
     globalPtr: directories.globalPtr,
+    linuxBoot: context.linuxBoot,
     nativeAotCandidate: directories.nativeAotCandidate,
     packers: overlayArtifacts.packers,
     resources: attachManifestValidation(directories.resources, directories.manifestValidation),

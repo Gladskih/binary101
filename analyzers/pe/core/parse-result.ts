@@ -6,6 +6,7 @@ import type { PeEntrypointDisassemblyReport, PeInstructionSetReport } from "../d
 import type { PeImportLinkingResult } from "../imports/linking.js";
 import type { PeImportParseResult } from "../imports/index.js";
 import type { PeIatDirectory } from "../imports/iat.js";
+import type { PeLinuxBootProtocol } from "../linux-boot.js";
 import type { PeArchitectureDirectory } from "../directories/architecture-directory.js";
 import type { PeGlobalPtrDirectory } from "../directories/globalptr-directory.js";
 import type { PeLoadConfig } from "../load-config/index.js";
@@ -82,6 +83,7 @@ export interface PeWindowsParseResult extends PeParseResultBase {
   disassembly?: PeInstructionSetReport;
   entrypointDisassembly?: PeEntrypointDisassemblyReport;
   nativeAotCandidate?: PeNativeAotCandidate | null;
+  linuxBoot?: PeLinuxBootProtocol | null;
 }
 
 export interface PeHeaderParseResult extends PeParseResultBase {

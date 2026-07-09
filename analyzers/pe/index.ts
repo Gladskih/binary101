@@ -18,6 +18,7 @@ export type {
   PeParseResult,
   PeWindowsParseResult
 } from "./core/parse-result.js";
+export type { PeLinuxBootProtocol } from "./linux-boot.js";
 import type { PeParseResult } from "./core/parse-result.js";
 
 const appendUniqueMessages = (existing: string[] | undefined, messages: string[]): string[] | undefined =>

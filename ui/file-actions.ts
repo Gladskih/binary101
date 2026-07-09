@@ -6,6 +6,7 @@ import { createGzipClickHandler } from "./gzip-actions.js";
 import { createIso9660EntryClickHandler } from "./iso9660-actions.js";
 import { createPeChecksumClickHandler } from "./pe-checksum-controls.js";
 import { createPeDosNestedDownloadClickHandler } from "./pe-dos-nested-download.js";
+import { createPeLinuxPayloadDownloadClickHandler } from "./pe-linux-payload-download.js";
 import { createPeOverlayDownloadClickHandler } from "./pe-overlay-download.js";
 import { createSevenZipEntryClickHandler } from "./sevenz-actions.js";
 import { createZipEntryClickHandler } from "./zip-actions.js";
@@ -29,6 +30,7 @@ export const createFileActionClickHandler = (deps: FileActionDeps) => {
   const gzipClickHandler = createGzipClickHandler(deps);
   const zipClickHandler = createZipEntryClickHandler(deps);
   const peDosNestedDownloadClickHandler = createPeDosNestedDownloadClickHandler(deps);
+  const peLinuxPayloadDownloadClickHandler = createPeLinuxPayloadDownloadClickHandler(deps);
   const peOverlayDownloadClickHandler = createPeOverlayDownloadClickHandler(deps);
   const certificateDownloadClickHandler = createCertificateDownloadClickHandler({
     setStatusMessage: deps.setStatusMessage
@@ -40,6 +42,7 @@ export const createFileActionClickHandler = (deps: FileActionDeps) => {
     runAsyncHandler(gzipClickHandler, event);
     runAsyncHandler(zipClickHandler, event);
     peDosNestedDownloadClickHandler(event);
+    peLinuxPayloadDownloadClickHandler(event);
     peOverlayDownloadClickHandler(event);
     certificateDownloadClickHandler(event);
   };

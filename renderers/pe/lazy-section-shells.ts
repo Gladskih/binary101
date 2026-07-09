@@ -8,6 +8,7 @@ import {
 } from "../../analyzers/pe/index.js";
 import { renderPeSectionShell } from "./collapsible-section.js";
 import { PE_DELAY_IMPORTS_PANEL_ID, PE_IMPORTS_PANEL_ID } from "./import-sections.js";
+import { getLinuxBootSummary } from "./linux-boot.js";
 import { PE_OVERLAY_PANEL_ID, getUnexplainedOverlaySize } from "./overlay.js";
 import { getPeSanityIssues } from "./layout.js";
 
@@ -26,6 +27,7 @@ export const PE_LAZY_SECTION_KEYS = {
   importLinking: "import-linking",
   imports: "imports",
   legacyCoffTail: "legacy-coff-tail",
+  linuxBoot: "linux-boot",
   loadConfig: "load-config",
   nativeAot: "native-aot",
   overlay: "overlay",
@@ -137,6 +139,11 @@ const addWindowsToolingDescriptors = (
     key: PE_LAZY_SECTION_KEYS.debug,
     summary: `debug: ${plural(pe.debug?.entries?.length ?? 0, "entry", "entries")}`,
     title: "Debug directory"
+  });
+  pushIf(descriptors, pe.linuxBoot, {
+    key: PE_LAZY_SECTION_KEYS.linuxBoot,
+    summary: pe.linuxBoot ? getLinuxBootSummary(pe.linuxBoot) : "",
+    title: "Linux boot protocol"
   });
 };
 
