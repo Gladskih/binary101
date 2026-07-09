@@ -1,5 +1,9 @@
 "use strict";
 
+import {
+  hasValidGzipDeflateHeaderView
+} from "../gzip/signature.js";
+
 const DOS_SIGNATURE_MZ = 0x5a4d;
 const DOS_E_LFANEW_OFFSET = 0x3c;
 const PE_SIGNATURE = 0x50450000;
@@ -10,11 +14,6 @@ const LX_SIGNATURE = 0x4c58;
 // https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
 const ZIP_LOCAL_FILE_HEADER_SIGNATURE = 0x504b0304;
 const ZIP_LOCAL_FILE_HEADER_BYTES = 30;
-// RFC 1952 gzip header: ID1 ID2 CM FLG MTIME XFL OS; CM=8 is deflate and FLG bits 5-7 reserved.
-// https://www.rfc-editor.org/rfc/rfc1952#section-2.3.1
-const GZIP_SIGNATURE = 0x1f8b;
-const GZIP_DEFLATE_METHOD = 8;
-const GZIP_RESERVED_FLAGS_MASK = 0xe0;
 // [MS-CAB] CFHEADER starts with "MSCF" and stores cbCabinet at byte offset 8.
 // https://download.microsoft.com/download/4/d/a/4da14f27-b4ef-4170-a6e6-5b1ef85b1baa/[ms-cab].pdf
 const CAB_SIGNATURE = 0x4d534346;
@@ -59,12 +58,6 @@ const hasExecutableMzSignature = (view: DataView): boolean => {
   if (signature === NE_SIGNATURE || signature === LE_SIGNATURE || signature === LX_SIGNATURE) return true;
   return headerOffset + 4 <= view.byteLength && view.getUint32(headerOffset, false) === PE_SIGNATURE;
 };
-
-const hasValidGzipHeader = (view: DataView): boolean =>
-  view.byteLength >= 10 &&
-  view.getUint16(0, false) === GZIP_SIGNATURE &&
-  view.getUint8(2) === GZIP_DEFLATE_METHOD &&
-  (view.getUint8(3) & GZIP_RESERVED_FLAGS_MASK) === 0;
 
 const hasZipLocalFileHeader = (view: DataView, remainingBytes: number): boolean => {
   if (view.byteLength < ZIP_LOCAL_FILE_HEADER_BYTES || remainingBytes < ZIP_LOCAL_FILE_HEADER_BYTES) return false;
@@ -186,7 +179,7 @@ export const detectEmbeddedCandidateType = (
 ): string | null => {
   if (!view.byteLength || !isEmbeddedCandidateStartByte(view.getUint8(0))) return null;
   // Overlay scanning walks arbitrary installer tails, so keep this allowlist deliberately small.
-  if (hasValidGzipHeader(view)) return EMBEDDED_GZIP_LABEL;
+  if (hasValidGzipDeflateHeaderView(view)) return EMBEDDED_GZIP_LABEL;
   if (hasZipLocalFileHeader(view, remainingBytes)) return EMBEDDED_ZIP_LABEL;
   if (readEmbeddedCabinetFileSize(view, remainingBytes) != null) return EMBEDDED_CAB_LABEL;
   if (readEmbeddedBmpFileSize(view, remainingBytes) != null) return EMBEDDED_BMP_LABEL;

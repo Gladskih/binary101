@@ -1,7 +1,16 @@
 "use strict";
 import type { GzipHeader, GzipHeaderFlags } from "./types.js";
+import {
+  GZIP_BASE_HEADER_BYTES,
+  GZIP_DEFLATE_COMPRESSION_METHOD,
+  GZIP_FLAG_FCOMMENT,
+  GZIP_FLAG_FEXTRA,
+  GZIP_FLAG_FHCRC,
+  GZIP_FLAG_FNAME,
+  GZIP_FLAG_FTEXT,
+  GZIP_RESERVED_FLAGS_MASK
+} from "./signature.js";
 
-const BASE_HEADER_SIZE = 10;
 const MAX_ISSUES = 200;
 const MAX_HEADER_SCAN_BYTES = 1024 * 1024;
 const OS_NAMES: Record<number, string> = {
@@ -22,9 +31,10 @@ const OS_NAMES: Record<number, string> = {
   255: "Unknown"
 };
 
-export type GzipHeaderScanState = { file: File; headerBytes: Uint8Array; issues: string[] };
+export type GzipHeaderScanState = { file: Blob; headerBytes: Uint8Array; issues: string[] };
 
-const describeCompressionMethod = (method: number): string | null => method === 8 ? "Deflate" : null;
+const describeCompressionMethod = (method: number): string | null =>
+  method === GZIP_DEFLATE_COMPRESSION_METHOD ? "Deflate" : null;
 const describeOs = (os: number): string | null => OS_NAMES[os] || null;
 
 export const pushGzipIssue = (issues: string[], message: string): void => {
@@ -110,12 +120,12 @@ export const createGzipHeader = (firstBytes: Uint8Array): GzipHeader => {
   const compressionMethod = firstBytes.length >= 3 ? firstBytes[2] ?? null : null;
   const flagsByte = firstBytes.length >= 4 ? firstBytes[3] ?? null : null;
   const flags: GzipHeaderFlags = {
-    ftext: flagsByte != null ? (flagsByte & 0x01) !== 0 : false,
-    fhcrc: flagsByte != null ? (flagsByte & 0x02) !== 0 : false,
-    fextra: flagsByte != null ? (flagsByte & 0x04) !== 0 : false,
-    fname: flagsByte != null ? (flagsByte & 0x08) !== 0 : false,
-    fcomment: flagsByte != null ? (flagsByte & 0x10) !== 0 : false,
-    reservedBits: flagsByte != null ? flagsByte & 0xe0 : 0
+    ftext: flagsByte != null ? (flagsByte & GZIP_FLAG_FTEXT) !== 0 : false,
+    fhcrc: flagsByte != null ? (flagsByte & GZIP_FLAG_FHCRC) !== 0 : false,
+    fextra: flagsByte != null ? (flagsByte & GZIP_FLAG_FEXTRA) !== 0 : false,
+    fname: flagsByte != null ? (flagsByte & GZIP_FLAG_FNAME) !== 0 : false,
+    fcomment: flagsByte != null ? (flagsByte & GZIP_FLAG_FCOMMENT) !== 0 : false,
+    reservedBits: flagsByte != null ? flagsByte & GZIP_RESERVED_FLAGS_MASK : 0
   };
   const os = firstBytes.length >= 10 ? (firstBytes[9] ?? null) : null;
   return {
@@ -139,7 +149,7 @@ export const parseGzipOptionalHeader = async (
   state: GzipHeaderScanState,
   header: GzipHeader
 ): Promise<void> => {
-  let cursor = BASE_HEADER_SIZE;
+  let cursor = GZIP_BASE_HEADER_BYTES;
   let headerParseFailed = false;
   if (header.flags.fextra) {
     headerParseFailed = await parseExtraField(state, header, cursor);

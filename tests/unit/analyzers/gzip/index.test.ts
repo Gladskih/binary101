@@ -8,11 +8,22 @@ import { createGzipFile, createGzipWithTruncatedExtra, createTruncatedGzipFile }
 import { crc32, encoder } from "../../../fixtures/archive-fixture-helpers.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 
+// RFC 1952, section 2.3.1 defines the fixed gzip header fields and FLG bits.
+// https://www.rfc-editor.org/rfc/rfc1952#section-2.3.1
+const RFC1952_GZIP_ID1 = 0x1f;
+const RFC1952_GZIP_ID2 = 0x8b;
+const RFC1952_DEFLATE_COMPRESSION_METHOD = 8;
+const RFC1952_BASE_HEADER_BYTES = 10;
+const RFC1952_FLAG_FEXTRA = 0x04;
+const RFC1952_FLAG_FHCRC = 0x02;
+const RFC1952_FLAG_FNAME = 0x08;
+const RFC1952_RESERVED_FLAGS_MASK = 0xe0;
+
 const makeBaseHeader = (opts: { compressionMethod?: number; flags?: number; os?: number } = {}): Uint8Array => {
-  const header = new Uint8Array(10).fill(0);
-  header[0] = 0x1f;
-  header[1] = 0x8b;
-  header[2] = opts.compressionMethod ?? 0x08;
+  const header = new Uint8Array(RFC1952_BASE_HEADER_BYTES).fill(0);
+  header[0] = RFC1952_GZIP_ID1;
+  header[1] = RFC1952_GZIP_ID2;
+  header[2] = opts.compressionMethod ?? RFC1952_DEFLATE_COMPRESSION_METHOD;
   header[3] = opts.flags ?? 0x00;
   header[9] = opts.os ?? 3;
   return header;
@@ -36,7 +47,7 @@ void test("parseGzip parses gzip header fields and trailer", async () => {
   assert.strictEqual(parsed.isGzip, true);
   assert.strictEqual(parsed.fileSize, file.size);
 
-  assert.strictEqual(parsed.header.compressionMethod, 8);
+  assert.strictEqual(parsed.header.compressionMethod, RFC1952_DEFLATE_COMPRESSION_METHOD);
   assert.match(parsed.header.compressionMethodName || "", /deflate/i);
   assert.strictEqual(parsed.header.flags.fextra, true);
   assert.strictEqual(parsed.header.flags.fname, true);
@@ -63,10 +74,10 @@ void test("parseGzip returns null for non-gzip signatures", async () => {
 
 void test("parseGzip reports reserved gzip flags", async () => {
   const payload = encoder.encode("x");
-  const file = createGzipFile({ payload, reservedFlagBits: 0xe0 });
+  const file = createGzipFile({ payload, reservedFlagBits: RFC1952_RESERVED_FLAGS_MASK });
   const parsed = await parseGzip(file);
   assert.ok(parsed);
-  assert.strictEqual(parsed.header.flags.reservedBits, 0xe0);
+  assert.strictEqual(parsed.header.flags.reservedBits, RFC1952_RESERVED_FLAGS_MASK);
   assert.ok(parsed.issues.some(issue => issue.toLowerCase().includes("reserved")));
 });
 
@@ -98,7 +109,7 @@ void test("parseGzip warns on unsupported compression methods", async () => {
 });
 
 void test("parseGzip reports missing XLEN when FEXTRA is set but header ends early", async () => {
-  const file = new MockFile(makeBaseHeader({ flags: 0x04 }), "missing-xlen.gz", "application/gzip");
+  const file = new MockFile(makeBaseHeader({ flags: RFC1952_FLAG_FEXTRA }), "missing-xlen.gz", "application/gzip");
   const parsed = await parseGzip(file);
   assert.ok(parsed);
   assert.strictEqual(parsed.header.flags.fextra, true);
@@ -108,7 +119,7 @@ void test("parseGzip reports missing XLEN when FEXTRA is set but header ends ear
 });
 
 void test("parseGzip reports missing CRC16 when FHCRC is set but bytes are missing", async () => {
-  const file = new MockFile(makeBaseHeader({ flags: 0x02 }), "missing-fhcrc.gz", "application/gzip");
+  const file = new MockFile(makeBaseHeader({ flags: RFC1952_FLAG_FHCRC }), "missing-fhcrc.gz", "application/gzip");
   const parsed = await parseGzip(file);
   assert.ok(parsed);
   assert.strictEqual(parsed.header.flags.fhcrc, true);
@@ -118,7 +129,7 @@ void test("parseGzip reports missing CRC16 when FHCRC is set but bytes are missi
 });
 
 void test("parseGzip reports unterminated filename", async () => {
-  const header = makeBaseHeader({ flags: 0x08 });
+  const header = makeBaseHeader({ flags: RFC1952_FLAG_FNAME });
   const nameBytes = encoder.encode("no-null-terminator");
   const bytes = new Uint8Array(header.length + nameBytes.length);
   bytes.set(header, 0);

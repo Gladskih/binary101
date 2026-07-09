@@ -7,12 +7,17 @@ import {
   pushGzipIssue,
   readGzipUint32le
 } from "./header-scan.js";
+import {
+  GZIP_BASE_HEADER_BYTES,
+  GZIP_DEFLATE_COMPRESSION_METHOD,
+  GZIP_ID1,
+  GZIP_ID2
+} from "./signature.js";
 
-const BASE_HEADER_SIZE = 10;
 const TRAILER_SIZE = 8;
 
 const readGzipTrailer = async (
-  file: File,
+  file: Blob,
   trailer: GzipTrailer,
   stream: GzipStreamLayout,
   issues: string[]
@@ -39,7 +44,7 @@ const readGzipTrailer = async (
 };
 
 const finalizeGzipLayout = (
-  file: File,
+  file: Blob,
   headerBytesTotal: number | null,
   trailer: GzipTrailer,
   stream: GzipStreamLayout,
@@ -67,13 +72,13 @@ const finalizeGzipLayout = (
   }
 };
 
-export const parseGzip = async (file: File): Promise<GzipParseResult | null> => {
+export const parseGzip = async (file: Blob): Promise<GzipParseResult | null> => {
   const issues: string[] = [];
   const firstBytes = new Uint8Array(
-    await file.slice(0, Math.min(file.size, BASE_HEADER_SIZE)).arrayBuffer()
+    await file.slice(0, Math.min(file.size, GZIP_BASE_HEADER_BYTES)).arrayBuffer()
   );
   if (firstBytes.length < 2) return null;
-  if (firstBytes[0] !== 0x1f || firstBytes[1] !== 0x8b) return null;
+  if (firstBytes[0] !== GZIP_ID1 || firstBytes[1] !== GZIP_ID2) return null;
   const state: GzipHeaderScanState = { file, headerBytes: firstBytes, issues };
   const header = createGzipHeader(firstBytes);
   const trailer: GzipTrailer = { crc32: null, isize: null, truncated: false };
@@ -83,17 +88,24 @@ export const parseGzip = async (file: File): Promise<GzipParseResult | null> => 
     trailerOffset: null,
     truncatedFile: false
   };
-  if (header.compressionMethod != null && header.compressionMethod !== 8) {
-    pushGzipIssue(issues, `Unsupported gzip compression method ${header.compressionMethod} (expected 8/Deflate).`);
+  if (header.compressionMethod != null && header.compressionMethod !== GZIP_DEFLATE_COMPRESSION_METHOD) {
+    pushGzipIssue(
+      issues,
+      `Unsupported gzip compression method ${header.compressionMethod} ` +
+        `(expected ${GZIP_DEFLATE_COMPRESSION_METHOD}/Deflate).`
+    );
   }
   if (header.flags.reservedBits !== 0) {
     pushGzipIssue(issues, `Gzip header has reserved flag bits set: 0x${header.flags.reservedBits.toString(16)}.`);
   }
-  if (firstBytes.length < BASE_HEADER_SIZE) {
+  if (firstBytes.length < GZIP_BASE_HEADER_BYTES) {
     header.truncated = true;
     trailer.truncated = true;
     stream.truncatedFile = true;
-    pushGzipIssue(issues, `Gzip base header is truncated (${firstBytes.length}/${BASE_HEADER_SIZE} bytes).`);
+    pushGzipIssue(
+      issues,
+      `Gzip base header is truncated (${firstBytes.length}/${GZIP_BASE_HEADER_BYTES} bytes).`
+    );
     return { isGzip: true, fileSize: file.size, header, trailer, stream, issues };
   }
   await parseGzipOptionalHeader(state, header);

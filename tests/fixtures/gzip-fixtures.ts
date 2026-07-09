@@ -5,6 +5,19 @@ import { deflateRawSync } from "node:zlib";
 import { MockFile } from "../helpers/mock-file.js";
 import { crc32, encoder, u32le } from "./archive-fixture-helpers.js";
 
+// RFC 1952, section 2.3.1: gzip ID1=0x1f, ID2=0x8b, CM=8 means "deflate",
+// base headers are 10 bytes, and FLG uses bits 1-4 for optional sections.
+// https://www.rfc-editor.org/rfc/rfc1952#section-2.3.1
+const RFC1952_GZIP_ID1 = 0x1f;
+const RFC1952_GZIP_ID2 = 0x8b;
+const RFC1952_DEFLATE_COMPRESSION_METHOD = 8;
+const RFC1952_BASE_HEADER_BYTES = 10;
+const RFC1952_FLAG_FHCRC = 0x02;
+const RFC1952_FLAG_FEXTRA = 0x04;
+const RFC1952_FLAG_FNAME = 0x08;
+const RFC1952_FLAG_FCOMMENT = 0x10;
+const RFC1952_RESERVED_FLAGS_MASK = 0xe0;
+
 const concatParts = (parts: Uint8Array[]): Uint8Array => {
   const total = parts.reduce((sum, part) => sum + part.length, 0);
   const out = new Uint8Array(total);
@@ -38,7 +51,7 @@ export const createGzipFile = (opts: {
     extra = new Uint8Array([1, 2, 3, 4, 5, 6]),
     includeHeaderCrc16 = true,
     reservedFlagBits = 0,
-    compressionMethod = 8,
+    compressionMethod = RFC1952_DEFLATE_COMPRESSION_METHOD,
     mtime = 1_700_000_000,
     xfl = 2,
     os = 3,
@@ -50,15 +63,15 @@ export const createGzipFile = (opts: {
   const hasComment = comment != null;
   const hasHcrc = includeHeaderCrc16;
   const flags =
-    (hasExtra ? 0x04 : 0) |
-    (hasName ? 0x08 : 0) |
-    (hasComment ? 0x10 : 0) |
-    (hasHcrc ? 0x02 : 0) |
-    (reservedFlagBits & 0xe0);
+    (hasExtra ? RFC1952_FLAG_FEXTRA : 0) |
+    (hasName ? RFC1952_FLAG_FNAME : 0) |
+    (hasComment ? RFC1952_FLAG_FCOMMENT : 0) |
+    (hasHcrc ? RFC1952_FLAG_FHCRC : 0) |
+    (reservedFlagBits & RFC1952_RESERVED_FLAGS_MASK);
 
-  const header = new Uint8Array(10);
-  header[0] = 0x1f;
-  header[1] = 0x8b;
+  const header = new Uint8Array(RFC1952_BASE_HEADER_BYTES);
+  header[0] = RFC1952_GZIP_ID1;
+  header[1] = RFC1952_GZIP_ID2;
   header[2] = compressionMethod & 0xff;
   header[3] = flags & 0xff;
   const dv = new DataView(header.buffer);
@@ -91,14 +104,18 @@ export const createGzipFile = (opts: {
 };
 
 export const createTruncatedGzipFile = (): MockFile =>
-  new MockFile(new Uint8Array([0x1f, 0x8b, 0x08]), "truncated.gz", "application/gzip");
+  new MockFile(
+    new Uint8Array([RFC1952_GZIP_ID1, RFC1952_GZIP_ID2, RFC1952_DEFLATE_COMPRESSION_METHOD]),
+    "truncated.gz",
+    "application/gzip"
+  );
 
 export const createGzipWithTruncatedExtra = (): MockFile => {
-  const header = new Uint8Array(10);
-  header[0] = 0x1f;
-  header[1] = 0x8b;
-  header[2] = 0x08;
-  header[3] = 0x04;
+  const header = new Uint8Array(RFC1952_BASE_HEADER_BYTES);
+  header[0] = RFC1952_GZIP_ID1;
+  header[1] = RFC1952_GZIP_ID2;
+  header[2] = RFC1952_DEFLATE_COMPRESSION_METHOD;
+  header[3] = RFC1952_FLAG_FEXTRA;
   const dv = new DataView(header.buffer);
   dv.setUint32(4, 0, true);
   header[8] = 0;
