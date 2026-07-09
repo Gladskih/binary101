@@ -33,10 +33,7 @@ import { addSecurityTailWarning } from "./security/tail-warning.js";
 import { detectPeSubtype } from "./subtype.js";
 import type { PeDataDirectory, PeWindowsCore } from "./types.js";
 import { buildWindowsPeResult, withWindowsPeLayoutWarnings } from "./parse-windows-result.js";
-import {
-  selectPeVariantParsers,
-  type PeVariantParsers
-} from "./parse-variant.js";
+import { selectPeVariantParsers, type PeVariantParsers } from "./parse-variant.js";
 
 export type PeWindowsParseContext = {
   file: File;
@@ -209,7 +206,8 @@ const parsePeDirectoryArtifacts = async (
     exception,
     boundImports,
     delayImports,
-    subtype: detectPeSubtype(clr, resources?.muiResourceConfiguration, core.opt.AddressOfEntryPoint, core.sections),
+    subtype: detectPeSubtype(clr, resources?.muiResourceConfiguration, core.opt.AddressOfEntryPoint, core.sections,
+      context.linuxBoot, core.dos),
     loadcfg,
     iat: parseIatDirectory(core.dataDirs, core.rvaToOff),
     architecture: parseArchitectureDirectory(core.dataDirs),

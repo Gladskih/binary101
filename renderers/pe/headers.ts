@@ -29,7 +29,6 @@ import { renderDosHeader } from "./dos-header.js";
 import { renderMachineRows } from "./machine-rows.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import { renderSections } from "./section-headers.js";
-import { peSubtypeLabel } from "../../analyzers/pe/subtype-labels.js";
 
 const DATA_DIRECTORY_MEANINGS: Record<string, string> = {
   EXPORT: "Function addresses and names exported by the image.",
@@ -59,9 +58,6 @@ const renderDataDirectoryStatus = (present: boolean): string =>
 
 const renderDataDirectorySize = (size: number): string =>
   `<span title="${size} bytes">${humanSize(size).replace(` (${size} bytes)`, "")}</span>`;
-
-const formatPeSubtype = (pe: PeParseResult): string =>
-  pe.subtype ? peSubtypeLabel(pe.subtype) : "-";
 
 const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
   if (!pe.dirs?.length) return;
@@ -160,7 +156,6 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
   out.push(renderInlineHeaderTitle("PE signature"));
   out.push(`<dl>`);
   out.push(renderDefinitionRow("Signature", "PE", "The PE\\0\\0 signature precedes the COFF file header and identifies the image as PE/COFF."));
-  out.push(renderDefinitionRow("Subtype", formatPeSubtype(pe), "Derived from specification-defined PE metadata when present."));
   out.push(`</dl>`);
   out.push(renderInlineHeaderTitle("COFF file header"));
   out.push(`<dl>`);

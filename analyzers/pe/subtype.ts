@@ -1,7 +1,10 @@
 "use strict";
 
 import type { PeClrHeader } from "./clr/types.js";
+import { BOOT_FLAG_MAGIC } from "./linux-boot-header.js";
+import type { PeLinuxBootProtocol } from "./linux-boot.js";
 import type { MuiResourceConfiguration } from "./resources/mui-config.js";
+import type { PeDosHeader } from "./types.js";
 import {
   detectPeClrNativeImageSubtypeFromClr,
   isPeClrNativeImage,
@@ -19,10 +22,14 @@ import {
 } from "./winmd.js";
 
 export type PeMuiResourceSubtype = "mui-resource-image";
+export type PeLinuxBootSubtype = "linux-boot-kernel";
+export type PeDosStubNestedPeSubtype = "intel-txt-mle-nested-pe" | "dos-stub-nested-pe";
 export type PeSubtype =
   PeWinmdSubtype |
   PeReferenceAssemblySubtype |
   PeClrNativeImageSubtype |
+  PeLinuxBootSubtype |
+  PeDosStubNestedPeSubtype |
   PeMuiResourceSubtype;
 
 export const detectPeSubtypeFromClr = (clr: PeClrHeader | null): PeSubtype | null => {
@@ -48,13 +55,30 @@ export const detectPeMuiResourceSubtype = (
   return "mui-resource-image";
 };
 
+export const detectPeLinuxBootSubtype = (
+  linuxBoot: PeLinuxBootProtocol | null | undefined
+): PeLinuxBootSubtype | null =>
+  linuxBoot?.bootFlag === BOOT_FLAG_MAGIC ? "linux-boot-kernel" : null;
+
+export const detectPeDosStubNestedPeSubtype = (
+  dos: Pick<PeDosHeader, "stub"> | null | undefined
+): PeDosStubNestedPeSubtype | null => {
+  const nestedPe = dos?.stub.code?.nestedPe;
+  if (!nestedPe) return null;
+  return nestedPe.mle ? "intel-txt-mle-nested-pe" : "dos-stub-nested-pe";
+};
+
 export const detectPeSubtype = (
   clr: PeClrHeader | null,
   muiResourceConfiguration: MuiResourceConfiguration | null | undefined,
   addressOfEntryPoint: number,
-  sections: Array<{ characteristics: number }>
+  sections: Array<{ characteristics: number }>,
+  linuxBoot: PeLinuxBootProtocol | null | undefined,
+  dos: Pick<PeDosHeader, "stub"> | null | undefined
 ): PeSubtype | null =>
   detectPeSubtypeFromClr(clr) ??
+  detectPeLinuxBootSubtype(linuxBoot) ??
+  detectPeDosStubNestedPeSubtype(dos) ??
   detectPeMuiResourceSubtype(muiResourceConfiguration, addressOfEntryPoint, sections);
 
 export { isPeClrNativeImage, isPeReferenceAssembly, isPeWinmd };

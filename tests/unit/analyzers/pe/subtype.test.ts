@@ -3,11 +3,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  detectPeDosStubNestedPeSubtype,
+  detectPeLinuxBootSubtype,
   detectPeMuiResourceSubtype,
   detectPeSubtypeFromClr
 } from "../../../../analyzers/pe/subtype.js";
 import type { PeClrHeader, PeClrMetadataTables } from "../../../../analyzers/pe/clr/types.js";
+import type { PeLinuxBootProtocol } from "../../../../analyzers/pe/linux-boot.js";
 import type { MuiResourceConfiguration } from "../../../../analyzers/pe/resources/mui-config.js";
+import type { PeDosHeader } from "../../../../analyzers/pe/types.js";
 
 const createClr = (values: Partial<PeClrHeader>): PeClrHeader => ({
   cb: 0,
@@ -51,6 +55,51 @@ const createMuiResourceConfiguration = (): MuiResourceConfiguration => ({
   languageName: "en-US",
   fallbackLanguageName: null,
   trailingByteCount: 0
+});
+
+const createLinuxBootProtocol = (bootFlag: number): PeLinuxBootProtocol => ({
+  setupSectorsRaw: 0,
+  setupSectors: 0,
+  bootFlag,
+  protocolVersion: 0,
+  kernelVersionOffset: 0,
+  loadFlags: 0
+});
+
+const createDosStubWithNestedPe = (includeMle = false): Pick<PeDosHeader, "stub"> => ({
+  stub: {
+    kind: "custom-or-unrecognized",
+    note: "",
+    code: {
+      kind: "custom-or-unrecognized",
+      instructions: [],
+      nestedPe: {
+        offset: 0,
+        endOffset: 0,
+        peHeaderOffset: 0,
+        machine: 0,
+        optionalMagic: null,
+        entrypointRva: null,
+        subsystem: null,
+        sizeOfImage: null,
+        sizeOfHeaders: null,
+        sections: [],
+        ...(includeMle
+          ? {
+              mle: {
+                offset: 0,
+                version: 0,
+                entryPoint: 0,
+                firstValidPage: 0,
+                mleStart: 0,
+                mleEnd: 0,
+                capabilities: 0
+              }
+            }
+          : {})
+      }
+    }
+  }
 });
 
 void test("detectPeSubtypeFromClr delegates to WinMD subtype detection first", () => {
@@ -116,6 +165,29 @@ void test("detectPeMuiResourceSubtype recognizes resource-only MUI images", () =
     ),
     "mui-resource-image"
   );
+});
+
+void test("detectPeLinuxBootSubtype recognizes confirmed Linux boot protocol images", () => {
+  const linuxBootFlagMagic = 0xaa55; // Linux/x86 Boot Protocol boot_flag magic.
+  assert.equal(
+    detectPeLinuxBootSubtype(createLinuxBootProtocol(linuxBootFlagMagic)),
+    "linux-boot-kernel"
+  );
+  assert.equal(detectPeLinuxBootSubtype(createLinuxBootProtocol(0)), null);
+  assert.equal(detectPeLinuxBootSubtype(null), null);
+});
+
+void test("detectPeDosStubNestedPeSubtype recognizes nested PE images in the DOS stub", () => {
+  assert.equal(detectPeDosStubNestedPeSubtype(createDosStubWithNestedPe()), "dos-stub-nested-pe");
+  assert.equal(
+    detectPeDosStubNestedPeSubtype(createDosStubWithNestedPe(true)),
+    "intel-txt-mle-nested-pe"
+  );
+  assert.equal(
+    detectPeDosStubNestedPeSubtype({ stub: { kind: "standard-print-exit", note: "" } }),
+    null
+  );
+  assert.equal(detectPeDosStubNestedPeSubtype(null), null);
 });
 
 void test("detectPeMuiResourceSubtype ignores MUI configs on executable images", () => {

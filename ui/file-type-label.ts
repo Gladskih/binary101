@@ -1,23 +1,17 @@
 "use strict";
 
-import { isPeWindowsParseResult, type PeParseResult } from "../analyzers/pe/index.js";
 import type { ParseForUiResult } from "../analyzers/index.js";
 import { peSubtypeLabel } from "../analyzers/pe/subtype-labels.js";
 
 type TooltipAdder = (element: HTMLElement, message: string) => void;
 
 const hasPortableExecutableLabel = (typeLabel: string): boolean =>
-  typeLabel.startsWith("PE") || typeLabel.includes("(PE") || typeLabel.includes(" PE ");
+  /^PE(?:32|\b)/.test(typeLabel);
 
-const refinePeBinaryTypeLabel = (typeLabel: string, pe: PeParseResult): string => {
-  if (!isPeWindowsParseResult(pe) || !pe.subtype) return typeLabel;
-  return `${peSubtypeLabel(pe.subtype)} (${typeLabel})`;
-};
-
-const refineFileBinaryTypeLabel = (typeLabel: string, result: ParseForUiResult): string =>
-  result.analyzer === "pe" && result.parsed
-    ? refinePeBinaryTypeLabel(typeLabel, result.parsed)
-    : typeLabel;
+const fileSubtypeLabel = (result: ParseForUiResult): string | null =>
+  result.analyzer === "pe" && result.parsed?.subtype
+    ? peSubtypeLabel(result.parsed.subtype)
+    : null;
 
 const setFileBinaryTypeLabel = (
   element: HTMLElement,
@@ -33,4 +27,15 @@ const setFileBinaryTypeLabel = (
   );
 };
 
-export { refineFileBinaryTypeLabel, setFileBinaryTypeLabel };
+const setFileSubtypeLabel = (
+  termElement: HTMLElement,
+  detailElement: HTMLElement,
+  result: ParseForUiResult
+): void => {
+  const label = fileSubtypeLabel(result);
+  termElement.hidden = label == null;
+  detailElement.hidden = label == null;
+  detailElement.textContent = label ?? "";
+};
+
+export { setFileBinaryTypeLabel, setFileSubtypeLabel };

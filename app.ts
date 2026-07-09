@@ -24,7 +24,7 @@ import { createDirectoryInspectionController, type DirectoryInspectionController
 import { createInspectionNavigationController } from "./ui/inspection-navigation.js";
 import { attachSelectionInputs } from "./ui/selection-inputs.js";
 import { createFileInspectionContext } from "./ui/file-inspection-context.js";
-import { refineFileBinaryTypeLabel, setFileBinaryTypeLabel } from "./ui/file-type-label.js";
+import { setFileBinaryTypeLabel, setFileSubtypeLabel } from "./ui/file-type-label.js";
 import { addAccessibleTooltip, addAccessibleTooltipToButton, enhanceAccessibleTooltips } from "./ui/accessible-tooltips.js";
 import { attachPeFileIconGuard, renderPeFileIcon } from "./ui/pe-file-icon.js";
 const getElement = (id: string) => document.getElementById(id)!;
@@ -38,6 +38,8 @@ const dropZoneElement = getElement("dropZone") as HTMLElement,
   fileTimestampDetailElement = getElement("fileTimestampDetail") as HTMLElement,
   fileAnalysisDurationDetailElement = getElement("fileAnalysisDurationDetail") as HTMLElement,
   fileBinaryTypeDetailElement = getElement("fileBinaryTypeDetail") as HTMLElement,
+  fileSubtypeTermElement = getElement("fileSubtypeTerm") as HTMLElement,
+  fileSubtypeDetailElement = getElement("fileSubtypeDetail") as HTMLElement,
   fileMimeTypeDetailElement = getElement("fileMimeTypeDetail") as HTMLElement,
   fileIconWrapElement = getElement("fileIconWrap") as HTMLElement,
   fileIconElement = getElement("fileIcon") as HTMLImageElement,
@@ -106,6 +108,7 @@ const resetFileInspectionView = (): void => {
   currentTypeLabel = "";
   currentParseResult = { analyzer: null, parsed: null };
   renderPeFileIcon(null, "", fileIconElement, fileIconWrapElement);
+  setFileSubtypeLabel(fileSubtypeTermElement, fileSubtypeDetailElement, currentParseResult);
   setPreviewUrl(null);
   fileInfoCardElement.hidden = true;
   analysisTermElement.hidden = true;
@@ -257,14 +260,14 @@ async function showFileInfo(file: File, context: Parameters<typeof fileInspectio
     fileTimestampDetailElement.textContent = timestampIso;
     fileInspectionContext.render(context);
     setFileBinaryTypeLabel(fileBinaryTypeDetailElement, typeLabel, addAccessibleTooltip);
+    setFileSubtypeLabel(fileSubtypeTermElement, fileSubtypeDetailElement, currentParseResult);
     fileMimeTypeDetailElement.textContent = mimeType;
     fileInfoCardElement.hidden = false;
     setStatusMessage("Parsing file details...");
     const analysisStart = performance.now();
     const parsedResult = await parseForUi(file);
     if (fileInspectionGeneration !== currentGeneration) return;
-    currentTypeLabel = refineFileBinaryTypeLabel(typeLabel, parsedResult);
-    setFileBinaryTypeLabel(fileBinaryTypeDetailElement, currentTypeLabel, addAccessibleTooltip);
+    setFileSubtypeLabel(fileSubtypeTermElement, fileSubtypeDetailElement, parsedResult);
     fileAnalysisDurationDetailElement.textContent = formatAnalysisDuration(performance.now() - analysisStart);
     currentParseResult = parsedResult;
     renderPeFileIcon(parsedResult, file.name, fileIconElement, fileIconWrapElement);

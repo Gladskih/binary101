@@ -3,8 +3,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  refineFileBinaryTypeLabel,
-  setFileBinaryTypeLabel
+  setFileBinaryTypeLabel,
+  setFileSubtypeLabel
 } from "../../../ui/file-type-label.js";
 import type { ParseForUiResult } from "../../../analyzers/index.js";
 
@@ -14,13 +14,20 @@ void test("file type labels add PE help only for PE formats", () => {
   setFileBinaryTypeLabel(element, "Text file", (_, message) => { messages.push(message); });
   assert.equal(element.textContent, "Text file");
   assert.equal(messages.length, 0);
+  setFileBinaryTypeLabel(
+    element,
+    "PEM armor block (certificate/key text encoding)",
+    (_, message) => { messages.push(message); }
+  );
+  assert.equal(messages.length, 0);
   setFileBinaryTypeLabel(element, "PE32 executable", (_, message) => { messages.push(message); });
   assert.equal(messages.length, 1);
   assert.match(messages[0] ?? "", /Portable Executable/);
 });
 
-void test("file type labels refine parsed PE subtypes", () => {
-  const baseLabel = "PE32 DLL for x86 (I386)";
+void test("file type labels show parsed PE subtypes separately", () => {
+  const termElement = { hidden: true } as HTMLElement;
+  const detailElement = { hidden: true, textContent: "" } as HTMLElement;
   const result = {
     analyzer: "pe",
     parsed: {
@@ -31,22 +38,24 @@ void test("file type labels refine parsed PE subtypes", () => {
     }
   } as unknown as ParseForUiResult;
 
-  assert.equal(
-    refineFileBinaryTypeLabel(baseLabel, result),
-    "Windows Metadata (WinMD) (PE32 DLL for x86 (I386))"
-  );
+  setFileSubtypeLabel(termElement, detailElement, result);
+
+  assert.equal(termElement.hidden, false);
+  assert.equal(detailElement.hidden, false);
+  assert.equal(detailElement.textContent, "Windows Metadata (WinMD)");
 });
 
-void test("file type labels add PE help for refined PE subtype labels", () => {
-  const element = { textContent: "" } as unknown as HTMLElement;
-  const messages: string[] = [];
+void test("file type labels hide subtype rows without a parsed subtype", () => {
+  const termElement = { hidden: false } as HTMLElement;
+  const detailElement = { hidden: false, textContent: "Windows Metadata (WinMD)" } as HTMLElement;
 
-  setFileBinaryTypeLabel(
-    element,
-    ".NET reference assembly (metadata-only) (PE32 DLL for x86 (I386))",
-    (_, message) => { messages.push(message); }
+  setFileSubtypeLabel(
+    termElement,
+    detailElement,
+    { analyzer: "pe", parsed: { dirs: [] } } as unknown as ParseForUiResult
   );
 
-  assert.equal(messages.length, 1);
-  assert.match(messages[0] ?? "", /Portable Executable/);
+  assert.equal(termElement.hidden, true);
+  assert.equal(detailElement.hidden, true);
+  assert.equal(detailElement.textContent, "");
 });

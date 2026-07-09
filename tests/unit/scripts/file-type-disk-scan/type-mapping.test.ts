@@ -13,20 +13,6 @@ void test("typesMatch treats PE analyzer labels and file.exe MIME as the same ty
   assert.equal(typesMatch("PE32+ executable for x86-64 (AMD64)", "application/x-dosexec"), true);
 });
 
-void test("typesMatch treats refined PE subtype labels as PE-family labels", () => {
-  assert.equal(
-    typesMatch("Windows Metadata (WinMD) (PE32 DLL for x86 (I386))", "application/x-dosexec"),
-    true
-  );
-  assert.equal(
-    typesMatch(
-      ".NET reference assembly (metadata-only) (PE32 DLL for x86 (I386))",
-      "application/vnd.microsoft.portable-executable"
-    ),
-    true
-  );
-});
-
 void test("typesMatch maps legacy NE executable MIME to PE-family labels", () => {
   assert.equal(typesMatch("NE executable (16-bit Windows/OS/2)", "application/x-ms-ne-executable"), true);
   assert.equal(normalizeFileMimeType("application/x-ms-ne-executable suffix"), "unmapped");
