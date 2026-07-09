@@ -6,7 +6,7 @@ import {
   detectPeMuiResourceSubtype,
   detectPeSubtypeFromClr
 } from "../../../../analyzers/pe/subtype.js";
-import type { PeClrHeader } from "../../../../analyzers/pe/clr/types.js";
+import type { PeClrHeader, PeClrMetadataTables } from "../../../../analyzers/pe/clr/types.js";
 import type { MuiResourceConfiguration } from "../../../../analyzers/pe/resources/mui-config.js";
 
 const createClr = (values: Partial<PeClrHeader>): PeClrHeader => ({
@@ -57,6 +57,34 @@ void test("detectPeSubtypeFromClr delegates to WinMD subtype detection first", (
   assert.equal(detectPeSubtypeFromClr(createClr({
     meta: { version: "WindowsRuntime 1.4", streams: [] }
   })), "winmd");
+});
+
+void test("detectPeSubtypeFromClr delegates to .NET reference assembly detection", () => {
+  const assemblyTableId = 0x20; // ECMA-335 II.22.2 Assembly table id.
+  assert.equal(detectPeSubtypeFromClr(createClr({
+    meta: {
+      streams: [],
+      tables: {
+        customAttributes: [{
+          row: 1,
+          parent: {
+            table: "Assembly",
+            tableId: assemblyTableId,
+            row: 1,
+            raw: 14 << 5,
+            valid: true
+          },
+          parentName: "ReferenceOnly",
+          constructor: null,
+          constructorName: ".ctor",
+          attributeType: "System.Runtime.CompilerServices.ReferenceAssemblyAttribute",
+          valueBlobIndex: 1,
+          fixedArguments: [],
+          namedArguments: []
+        }]
+      } as unknown as PeClrMetadataTables
+    }
+  })), "dotnet-reference-assembly");
 });
 
 void test("detectPeSubtypeFromClr delegates to CLR native image detection", () => {

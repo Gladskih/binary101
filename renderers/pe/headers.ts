@@ -29,6 +29,7 @@ import { renderDosHeader } from "./dos-header.js";
 import { renderMachineRows } from "./machine-rows.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import { renderSections } from "./section-headers.js";
+import { peSubtypeLabel } from "../../analyzers/pe/subtype-labels.js";
 
 const DATA_DIRECTORY_MEANINGS: Record<string, string> = {
   EXPORT: "Function addresses and names exported by the image.",
@@ -59,14 +60,8 @@ const renderDataDirectoryStatus = (present: boolean): string =>
 const renderDataDirectorySize = (size: number): string =>
   `<span title="${size} bytes">${humanSize(size).replace(` (${size} bytes)`, "")}</span>`;
 
-const PE_SUBTYPE_LABELS: Record<string, string> = {
-  "winmd": "Windows Metadata (WinMD)",
-  "clr-native-image": "CLR native image",
-  "mui-resource-image": "MUI resource-only image"
-};
-
 const formatPeSubtype = (pe: PeParseResult): string =>
-  pe.subtype ? PE_SUBTYPE_LABELS[pe.subtype] ?? pe.subtype : "-";
+  pe.subtype ? peSubtypeLabel(pe.subtype) : "-";
 
 const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
   if (!pe.dirs?.length) return;

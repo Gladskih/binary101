@@ -24,12 +24,8 @@ import { createDirectoryInspectionController, type DirectoryInspectionController
 import { createInspectionNavigationController } from "./ui/inspection-navigation.js";
 import { attachSelectionInputs } from "./ui/selection-inputs.js";
 import { createFileInspectionContext } from "./ui/file-inspection-context.js";
-import { setFileBinaryTypeLabel } from "./ui/file-type-label.js";
-import {
-  addAccessibleTooltip,
-  addAccessibleTooltipToButton,
-  enhanceAccessibleTooltips
-} from "./ui/accessible-tooltips.js";
+import { refineFileBinaryTypeLabel, setFileBinaryTypeLabel } from "./ui/file-type-label.js";
+import { addAccessibleTooltip, addAccessibleTooltipToButton, enhanceAccessibleTooltips } from "./ui/accessible-tooltips.js";
 import { attachPeFileIconGuard, renderPeFileIcon } from "./ui/pe-file-icon.js";
 const getElement = (id: string) => document.getElementById(id)!;
 const html = (id: string): HTMLElement => getElement(id) as HTMLElement;
@@ -267,6 +263,8 @@ async function showFileInfo(file: File, context: Parameters<typeof fileInspectio
     const analysisStart = performance.now();
     const parsedResult = await parseForUi(file);
     if (fileInspectionGeneration !== currentGeneration) return;
+    currentTypeLabel = refineFileBinaryTypeLabel(typeLabel, parsedResult);
+    setFileBinaryTypeLabel(fileBinaryTypeDetailElement, currentTypeLabel, addAccessibleTooltip);
     fileAnalysisDurationDetailElement.textContent = formatAnalysisDuration(performance.now() - analysisStart);
     currentParseResult = parsedResult;
     renderPeFileIcon(parsedResult, file.name, fileIconElement, fileIconWrapElement);

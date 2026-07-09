@@ -8,17 +8,30 @@ import {
   type PeClrNativeImageSubtype
 } from "./clr-native-image.js";
 import {
+  detectPeReferenceAssemblySubtypeFromClr,
+  isPeReferenceAssembly,
+  type PeReferenceAssemblySubtype
+} from "./reference-assembly.js";
+import {
   detectPeWinmdSubtypeFromClr,
   isPeWinmd,
   type PeWinmdSubtype
 } from "./winmd.js";
 
 export type PeMuiResourceSubtype = "mui-resource-image";
-export type PeSubtype = PeWinmdSubtype | PeClrNativeImageSubtype | PeMuiResourceSubtype;
+export type PeSubtype =
+  PeWinmdSubtype |
+  PeReferenceAssemblySubtype |
+  PeClrNativeImageSubtype |
+  PeMuiResourceSubtype;
 
 export const detectPeSubtypeFromClr = (clr: PeClrHeader | null): PeSubtype | null => {
   if (!clr) return null;
-  return detectPeWinmdSubtypeFromClr(clr) ?? detectPeClrNativeImageSubtypeFromClr(clr);
+  return (
+    detectPeWinmdSubtypeFromClr(clr) ??
+    detectPeReferenceAssemblySubtypeFromClr(clr) ??
+    detectPeClrNativeImageSubtypeFromClr(clr)
+  );
 };
 
 export const detectPeMuiResourceSubtype = (
@@ -44,4 +57,4 @@ export const detectPeSubtype = (
   detectPeSubtypeFromClr(clr) ??
   detectPeMuiResourceSubtype(muiResourceConfiguration, addressOfEntryPoint, sections);
 
-export { isPeClrNativeImage, isPeWinmd };
+export { isPeClrNativeImage, isPeReferenceAssembly, isPeWinmd };
