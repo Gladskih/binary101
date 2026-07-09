@@ -12,17 +12,28 @@ type PeLinuxBoot = NonNullable<PeWindowsParseResult["linuxBoot"]>;
 type PeLinuxPayload = NonNullable<PeLinuxBoot["payload"]>;
 
 // Linux/x86 Boot Protocol xloadflags bits:
+// docs.kernel.org documents bits 0-4; current Linux UAPI bootparam.h also
+// defines bits 5-7 as XLF_5LEVEL, XLF_5LEVEL_ENABLED, and XLF_MEM_ENCRYPTION.
 // https://docs.kernel.org/arch/x86/boot.html#details-of-header-fields
+// https://codebrowser.dev/linux/linux/arch/x86/include/uapi/asm/bootparam.h.html
 const XLOAD_FLAGS: Array<[number, string, string]> = [
   [0x01, "KERNEL_64", "Legacy 64-bit entry point at 0x200"],
   [0x02, "ABOVE_4G", "Kernel, boot params, command line, and ramdisk can be above 4G"],
   [0x04, "EFI_32", "32-bit EFI handover entry point is supported"],
   [0x08, "EFI_64", "64-bit EFI handover entry point is supported"],
-  [0x10, "EFI_KEXEC", "kexec EFI boot with EFI runtime support is supported"]
+  [0x10, "EFI_KEXEC", "kexec EFI boot with EFI runtime support is supported"],
+  [0x20, "5LEVEL", "Kernel supports 5-level paging"],
+  [0x40, "5LEVEL_ENABLED", "Kernel has 5-level paging enabled"],
+  [0x80, "MEM_ENCRYPTION", "Kernel supports memory encryption"]
 ];
 
+// Linux/x86 Boot Protocol loadflags bits:
+// https://docs.kernel.org/arch/x86/boot.html#details-of-header-fields
 const LOAD_FLAGS: Array<[number, string, string]> = [
   [0x01, "LOAD_HIGH", "bzImage kernel loaded in high memory"],
+  [0x02, "KASLR", "Kernel address space layout randomization is enabled"],
+  [0x20, "QUIET", "Suppress early messages"],
+  [0x40, "KEEP_SEGMENTS", "Obsolete boot-loader segment preservation flag"],
   [0x80, "CAN_USE_HEAP", "Heap fields are usable by the boot loader"]
 ];
 

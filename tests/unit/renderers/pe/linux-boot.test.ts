@@ -17,6 +17,19 @@ const gzipPayloadSummary = {
   stream: { compressedOffset: 10, compressedSize: 17201862, trailerOffset: 17201872 }
 } as unknown as GzipParseResult;
 
+const renderFlagOnlyLinuxBoot = (loadFlags: number, xloadFlags: number): string =>
+  render({
+    linuxBoot: {
+      setupSectorsRaw: 1,
+      setupSectors: 1,
+      bootFlag: 0xaa55,
+      protocolVersion: 0x020f,
+      kernelVersionOffset: 0,
+      loadFlags,
+      xloadFlags
+    }
+  } as PeWindowsParseResult);
+
 void test("renderLinuxBoot shows metadata and compressed payload download control", () => {
   const html = render({
     linuxBoot: {
@@ -65,4 +78,16 @@ void test("renderLinuxBoot shows metadata and compressed payload download contro
 
 void test("renderLinuxBoot skips absent Linux boot metadata", () => {
   assert.equal(render({ linuxBoot: null } as PeWindowsParseResult), "");
+});
+
+void test("renderLinuxBoot names Linux-defined 0x60 flag bits", () => {
+  // Linux/x86 Boot Protocol loadflags bits 5 and 6 are QUIET and KEEP_SEGMENTS;
+  // Linux UAPI bootparam.h xloadflags bits 5 and 6 are 5LEVEL and 5LEVEL_ENABLED.
+  const html = renderFlagOnlyLinuxBoot(0x60, 0x0060);
+
+  assert.match(html, /QUIET/);
+  assert.match(html, /KEEP_SEGMENTS/);
+  assert.match(html, /5LEVEL/);
+  assert.match(html, /5LEVEL_ENABLED/);
+  assert.doesNotMatch(html, /UNKNOWN_BITS_0x0060/);
 });
