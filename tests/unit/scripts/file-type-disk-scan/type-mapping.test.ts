@@ -115,11 +115,30 @@ void test("typesMatch maps ar archives to file.exe archive MIME", () => {
   assert.equal(normalizeFileMimeType("application/x-archive suffix"), "unmapped");
 });
 
+void test("typesMatch maps initramfs CPIO labels to cpio MIME", () => {
+  const label = "Linux initramfs (CPIO newc archive)";
+  assert.equal(typesMatch(label, "application/x-cpio"), true);
+  assert.equal(typesMatch("Linux initramfs (CPIO crc archive)", "application/x-svr4-cpio"), true);
+  assert.equal(normalizeAnalyzerLabel(`prefix ${label}`), "unmapped");
+  assert.equal(normalizeFileMimeType("application/x-cpio suffix"), "unmapped");
+});
+
 void test("typesMatch maps WIM deployment images to file.exe WIM MIME", () => {
   const label = "Windows Imaging Format archive (WIM/PPKG deployment image)";
   assert.equal(typesMatch(label, "application/x-ms-wim"), true);
   assert.equal(normalizeAnalyzerLabel("prefix Windows Imaging Format archive"), "unmapped");
   assert.equal(normalizeFileMimeType("application/x-ms-wim suffix"), "unmapped");
+});
+
+void test("typesMatch maps VHD labels to virtual disk MIME", () => {
+  assert.equal(typesMatch("Virtual Hard Disk image (VHD)", "application/x-vhd"), true);
+  assert.equal(typesMatch("Virtual Hard Disk v2 image (VHDX)", "application/x-vhdx"), true);
+  assert.equal(
+    compareTypes("Virtual Hard Disk image (VHD)", "application/octet-stream"),
+    "analyzer-more-specific"
+  );
+  assert.equal(normalizeAnalyzerLabel("prefix Virtual Hard Disk image"), "unmapped");
+  assert.equal(normalizeFileMimeType("application/x-vhd suffix"), "unmapped");
 });
 
 void test("typesMatch maps SQLite WAL-index shared-memory files to SQLite MIME", () => {

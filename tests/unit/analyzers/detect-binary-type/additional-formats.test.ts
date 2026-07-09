@@ -10,6 +10,13 @@ import {
 } from "../../../fixtures/sqlite-fixtures.js";
 
 const fromAscii = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "ascii"));
+// Linux initramfs buffer format: newc/crc CPIO magic strings.
+const CPIO_NEWC_MAGIC = "070701";
+const CPIO_CRC_MAGIC = "070702";
+// Linux initramfs buffer format: after magic, newc/crc headers contain thirteen
+// 8-hex-digit fields.
+const CPIO_HEADER_FIELD_COUNT = 13;
+const CPIO_HEADER_FIELD_HEX_DIGITS = 8;
 
 const fromUtf16Le = (text: string): Uint8Array => {
   const bytes = new Uint8Array(2 + text.length * 2);
@@ -21,6 +28,9 @@ const fromUtf16Le = (text: string): Uint8Array => {
   }
   return bytes;
 };
+
+const createCpioFixedHeader = (magic: string): Uint8Array =>
+  fromAscii(magic + "0".repeat(CPIO_HEADER_FIELD_COUNT * CPIO_HEADER_FIELD_HEX_DIGITS));
 
 const createTerminfoEntry = (nameList: string): Uint8Array => {
   const names = fromAscii(`${nameList}\0`);
@@ -104,6 +114,18 @@ void test("detectBinaryType reports PostScript Printer Description files", async
 void test("detectBinaryType reports GNU gettext message catalogs", async () => {
   const file = new MockFile(new Uint8Array([0xde, 0x12, 0x04, 0x95]), "messages.mo");
   assert.strictEqual(await detectBinaryType(file), "GNU gettext message catalog (MO translations)");
+});
+
+void test("detectBinaryType reports Linux initramfs CPIO archives", async () => {
+  // Linux initramfs buffer format accepts newc magic "070701" and crc magic "070702".
+  assert.strictEqual(
+    await detectBinaryType(new MockFile(createCpioFixedHeader(CPIO_NEWC_MAGIC), "initrd.img")),
+    "Linux initramfs (CPIO newc archive)"
+  );
+  assert.strictEqual(
+    await detectBinaryType(new MockFile(createCpioFixedHeader(CPIO_CRC_MAGIC), "initramfs.img")),
+    "Linux initramfs (CPIO crc archive)"
+  );
 });
 
 void test("detectBinaryType reports Windows Application Compatibility databases", async () => {

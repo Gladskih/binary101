@@ -12,6 +12,7 @@ import { probeByMagic, probeTextLike } from "./probes.js";
 import { hasTgaFooterSignature } from "./tga/footer.js";
 import { isTgaFileName } from "./tga/index.js";
 import { TGA_HEADER_SIZE } from "./tga/tga-parsing.js";
+import { detectVirtualHardDisk } from "./vhd/probe.js";
 
 const readSliceView = async (file: File, start: number, end: number): Promise<DataView> => {
   const safeStart = Math.max(0, Math.min(Math.trunc(start), file.size));
@@ -96,6 +97,8 @@ const detectBinaryType = async (file: File): Promise<string> => {
   if (hasZipEocdSignature(dv)) return "ZIP archive";
   const tga = await detectTga(file, dv);
   if (tga) return tga;
+  const virtualHardDisk = await detectVirtualHardDisk(file, dv);
+  if (virtualHardDisk) return virtualHardDisk;
   const text = probeTextLike(dv);
   if (text) return text;
   const mp3ProbeView = new DataView(dv.buffer, dv.byteOffset, Math.min(dv.byteLength, 16 * 1024));

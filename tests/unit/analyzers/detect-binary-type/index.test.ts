@@ -9,6 +9,23 @@ import { createPeFile, createPePlusFile, createPeRomFile } from "../../../fixtur
 import { createZipFile } from "../../../fixtures/zip-fixtures.js";
 
 const fromAscii = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "ascii"));
+// MS-VHDX 2.1: file identifier signature is ASCII "vhdxfile".
+const VHDX_FILE_IDENTIFIER_SIGNATURE = "vhdxfile";
+// Microsoft VHD Image Format Specification: the footer cookie is ASCII "conectix".
+const VHD_FOOTER_COOKIE = "conectix";
+// Microsoft VHD Image Format Specification: VHD footers are 512 bytes; older
+// images may use a 511-byte footer.
+const CURRENT_VHD_FOOTER_BYTE_LENGTH = 512;
+const LEGACY_VHD_FOOTER_BYTE_LENGTH = 511;
+const VHD_FIXTURE_PAYLOAD_BYTE_LENGTH = 1024;
+type VhdFooterByteLength =
+  typeof CURRENT_VHD_FOOTER_BYTE_LENGTH | typeof LEGACY_VHD_FOOTER_BYTE_LENGTH;
+
+const createFooterOnlyVhd = (footerSize: VhdFooterByteLength): MockFile => {
+  const bytes = new Uint8Array(VHD_FIXTURE_PAYLOAD_BYTE_LENGTH + footerSize).fill(0);
+  bytes.set(fromAscii(VHD_FOOTER_COOKIE), VHD_FIXTURE_PAYLOAD_BYTE_LENGTH);
+  return new MockFile(bytes, `sample-${footerSize}.vhd`);
+};
 
 const createMinimalPeLabelProbe = (machine: number, optionalHeaderMagic = 0x10b): MockFile => {
   const peHeaderOffset = 0x40;
@@ -90,6 +107,22 @@ void test("detectBinaryType reports Chrome CRX extension packages", async () => 
   const label = await detectBinaryType(new MockFile(bytes, "extension.crx"));
 
   assert.strictEqual(label, "Chrome extension package (CRX signed ZIP)");
+});
+
+void test("detectBinaryType reports Virtual Hard Disk images", async () => {
+  assert.strictEqual(
+    await detectBinaryType(createFooterOnlyVhd(CURRENT_VHD_FOOTER_BYTE_LENGTH)),
+    "Virtual Hard Disk image (VHD)"
+  );
+  assert.strictEqual(
+    await detectBinaryType(createFooterOnlyVhd(LEGACY_VHD_FOOTER_BYTE_LENGTH)),
+    "Virtual Hard Disk image (VHD)"
+  );
+  // MS-VHDX 2.1: file identifier signature is ASCII "vhdxfile".
+  assert.strictEqual(
+    await detectBinaryType(new MockFile(fromAscii(VHDX_FILE_IDENTIFIER_SIGNATURE), "sample.vhdx")),
+    "Virtual Hard Disk v2 image (VHDX)"
+  );
 });
 
 void test("detectBinaryType refines additional ZIP-based formats", async () => {

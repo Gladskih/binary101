@@ -58,8 +58,10 @@ const ANALYZER_RULES: TypeRule[] = [
   { pattern: /^Microsoft Cabinet archive/, canonical: "cab" },
   { pattern: /^Unix ar archive \((?:static|thin static) library\)$/, canonical: "ar" },
   { pattern: /^TAR archive$/, canonical: "tar" },
+  { pattern: /^Linux initramfs \(CPIO /, canonical: "cpio" },
   { pattern: /^ISO-9660 CD\/DVD image/, canonical: "iso9660" },
   { pattern: /^Windows Imaging Format archive /, canonical: "wim" },
+  { pattern: /^Virtual Hard Disk(?: v2)? image /, canonical: "vhd" },
   {
     pattern: /^SQLite (?:3\.x database|WAL-index shared-memory file)$/,
     canonical: "sqlite"
@@ -158,8 +160,10 @@ const FILE_MIME_RULES: TypeRule[] = [
   { pattern: /^application\/x-rar$/, canonical: "rar" },
   { pattern: /^application\/x-archive$/, canonical: "ar" },
   { pattern: /^application\/x-tar$/, canonical: "tar" },
+  { pattern: /^application\/x-(?:svr4-)?cpio$/, canonical: "cpio" },
   { pattern: /^application\/x-iso9660-image$/, canonical: "iso9660" },
   { pattern: /^application\/x-ms-wim$/, canonical: "wim" },
+  { pattern: /^application\/x-vhdx?$/, canonical: "vhd" },
   { pattern: /^application\/(vnd\.sqlite3|x-sqlite3)$/, canonical: "sqlite" },
   { pattern: /^application\/x-java-applet$/, canonical: "java-class" },
   { pattern: /^image\/vnd\.djvu$/, canonical: "djvu" },

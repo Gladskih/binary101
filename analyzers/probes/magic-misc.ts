@@ -2,6 +2,8 @@
 import { toAsciiPrefix } from "./text-heuristics.js";
 import type { ProbeResult } from "./probe-types.js";
 import { hasPdfHeader } from "./file-signatures.js";
+import { detectVirtualHardDiskHeader } from "../vhd/probe.js";
+import { detectCpioHeader } from "../cpio/probe.js";
 
 const detectPdf = (dv: DataView): ProbeResult => {
   return hasPdfHeader(dv) ? "PDF document" : null;
@@ -275,6 +277,8 @@ const miscProbes: Array<(dv: DataView) => ProbeResult> = [
   detectSqlite,
   detectSqliteWalIndex,
   detectMsDelta,
+  detectCpioHeader,
+  detectVirtualHardDiskHeader,
   detectJavaClass,
   detectDjvu,
   detectPcapNg,
