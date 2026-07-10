@@ -18,6 +18,7 @@ export const PE_LAZY_SECTION_KEYS = {
   clr: "clr",
   dataDirectories: "data-directories",
   debug: "debug",
+  dwarf: "dwarf",
   delayImports: "delay-imports",
   dosHeader: "dos-header",
   exception: "exception",
@@ -113,6 +114,11 @@ const addHeaderDescriptors = (pe: PeParseResult, descriptors: PeLazySectionDescr
     key: PE_LAZY_SECTION_KEYS.sectionHeaders,
     summary: plural(pe.sections?.length ?? 0, "section", "sections"),
     title: "Section headers"
+  });
+  pushIf(descriptors, pe.dwarf, {
+    key: PE_LAZY_SECTION_KEYS.dwarf,
+    summary: `${plural(pe.dwarf?.units.length ?? 0, "unit", "units")}`,
+    title: "DWARF debug information"
   });
   pushIf(descriptors, hasCoffTail(pe), {
     key: PE_LAZY_SECTION_KEYS.legacyCoffTail,

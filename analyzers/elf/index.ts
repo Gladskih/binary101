@@ -8,6 +8,7 @@ import {
 } from "./constants.js";
 import { parseElfComment } from "./comment.js";
 import { parseElfDebugLink } from "./debug-link.js";
+import { analyzeElfDwarf } from "./dwarf.js";
 import { parseElfDynamicInfo } from "./dynamic-info.js";
 import { parseElfDynamicSymbols } from "./dynamic-symbols.js";
 import { parseElfInterpreter } from "./interpreter.js";
@@ -128,13 +129,14 @@ export async function parseElf(file: File): Promise<ElfParseResult | null> {
   const programHeaders = await parseProgramHeadersWithGuards(file, header, is64, little, issues);
   const sections = await parseSectionHeadersWithNames(file, header, is64, little, issues, expectedSectionHeaderSize);
   const tls = parseElfTlsInfo(programHeaders, sections);
-  const [interpreter, dynamic, dynSymbols, notes, comment, debugLink] = await Promise.all([
+  const [interpreter, dynamic, dynSymbols, notes, comment, debugLink, dwarf] = await Promise.all([
     parseElfInterpreter(file, programHeaders),
     parseElfDynamicInfo({ file, programHeaders, sections, is64, littleEndian: little }),
     parseElfDynamicSymbols({ file, programHeaders, sections, is64, littleEndian: little }),
     parseElfNotes({ file, programHeaders, sections, littleEndian: little }),
     parseElfComment(file, sections),
-    parseElfDebugLink(file, sections, little)
+    parseElfDebugLink(file, sections, little),
+    analyzeElfDwarf(file, sections, little, issues)
   ]);
   const result = buildResult(header, programHeaders, sections);
   if (interpreter) result.interpreter = interpreter;
@@ -144,5 +146,6 @@ export async function parseElf(file: File): Promise<ElfParseResult | null> {
   if (notes) result.notes = notes;
   if (comment) result.comment = comment;
   if (debugLink) result.debugLink = debugLink;
+  if (dwarf) result.dwarf = dwarf;
   return result;
 }

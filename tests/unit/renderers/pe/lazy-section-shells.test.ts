@@ -100,3 +100,25 @@ void test("renderPe emits a sanity shell for entrypoint section issues", () => {
   );
   assert.ok(!html.includes("Entry point is in a non-executable section"));
 });
+
+void test("getPeLazySectionDescriptors exposes DWARF as a lazy section", () => {
+  const pe = createBasePe();
+  pe.dwarf = {
+    sections: [],
+    units: [],
+    issues: ["fixture notice"]
+  };
+
+  const descriptor = getPeLazySectionDescriptors(pe).find(
+    section => section.key === PE_LAZY_SECTION_KEYS.dwarf
+  );
+  const html = renderPe(pe);
+
+  assert.deepEqual(descriptor, {
+    key: PE_LAZY_SECTION_KEYS.dwarf,
+    summary: "0 units",
+    title: "DWARF debug information"
+  });
+  assert.ok(html.includes('data-pe-lazy-section="dwarf"'));
+  assert.ok(!html.includes("fixture notice"));
+});

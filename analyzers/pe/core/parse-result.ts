@@ -1,6 +1,7 @@
 "use strict";
 
 import type { CoffDebugInfo } from "../../coff/debug-types.js";
+import type { DwarfAnalysis } from "../../dwarf/types.js";
 import type { PeCodeViewEntry, PeDebugDirectoryEntry } from "../debug/directory.js";
 import type { PeEntrypointDisassemblyReport, PeInstructionSetReport } from "../disassembly/index.js";
 import type { PeImportLinkingResult } from "../imports/linking.js";
@@ -46,6 +47,7 @@ interface PeParseResultBase {
   signature: "PE";
   coff: PeCore["coff"];
   coffDebug?: CoffDebugInfo;
+  dwarf?: DwarfAnalysis;
   coffStringTableSize?: number;
   trailingAlignmentPaddingSize?: number;
   subtype?: PeSubtype;

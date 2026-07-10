@@ -8,6 +8,7 @@ import {
 import { buildHeaderOnlyPeParseResult } from "./core/header-only-result.js";
 import { collectPeLayoutWarnings } from "./layout/warnings.js";
 import { parseWindowsPe } from "./parse-windows.js";
+import { analyzePeDwarf } from "./dwarf.js";
 export {
   isPeRomParseResult,
   isPeWindowsParseResult
@@ -36,8 +37,9 @@ export async function parsePe(
   const reader = createFileRangeReader(file, 0, file.size);
   const core = await parsePeHeaders(reader);
   if (!core) return null;
-  if (!isPeWindowsCore(core)) {
-    return withLayoutWarnings(buildHeaderOnlyPeParseResult(core), file.size);
-  }
-  return parseWindowsPe(file, reader, core, parseManifestXmlDocument);
+  const parsed = !isPeWindowsCore(core)
+    ? withLayoutWarnings(buildHeaderOnlyPeParseResult(core), file.size)
+    : await parseWindowsPe(file, reader, core, parseManifestXmlDocument);
+  const dwarf = await analyzePeDwarf(reader, parsed.sections);
+  return dwarf ? { ...parsed, dwarf } : parsed;
 }

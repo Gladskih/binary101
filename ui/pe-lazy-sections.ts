@@ -10,6 +10,7 @@ import { renderPackers } from "../renderers/pe/packers.js";
 import { renderLoadConfig } from "../renderers/pe/load-config.js";
 import { renderLinuxBoot } from "../renderers/pe/linux-boot.js";
 import { renderDebug } from "../renderers/pe/debug-view.js";
+import { renderPeDwarf } from "../renderers/pe/dwarf.js";
 import { renderResources } from "../renderers/pe/resources.js";
 import { renderException } from "../renderers/pe/exception.js";
 import { renderNativeAotCandidate } from "../renderers/pe/native-aot.js";
@@ -135,6 +136,8 @@ const renderLazySectionMarkup = (pe: PeParseResult, key: PeLazySectionKey): stri
     case PE_LAZY_SECTION_KEYS.sectionHeaders:
     case PE_LAZY_SECTION_KEYS.legacyCoffTail:
       return renderToString(out => renderHeaders(pe, out));
+    case PE_LAZY_SECTION_KEYS.dwarf:
+      return renderToString(out => renderPeDwarf(pe, out));
     case PE_LAZY_SECTION_KEYS.overlay:
       return renderOverlayPanel(pe);
     case PE_LAZY_SECTION_KEYS.sanity:

@@ -1,6 +1,7 @@
 "use strict";
 
 import type { ElfInstructionSetReport } from "./disassembly-types.js";
+import type { DwarfAnalysis } from "../dwarf/types.js";
 
 export type ElfOptionEntry = [number, string, string?];
 
@@ -75,6 +76,7 @@ export interface ElfParseResult {
   notes?: ElfNotesInfo;
   comment?: ElfCommentInfo;
   debugLink?: ElfDebugLinkInfo;
+  dwarf?: DwarfAnalysis;
   is64: boolean;
   littleEndian: boolean;
   fileSize: number;

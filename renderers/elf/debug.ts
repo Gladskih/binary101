@@ -3,6 +3,7 @@
 import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import type { ElfCommentInfo, ElfDebugLinkInfo, ElfParseResult } from "../../analyzers/elf/types.js";
 import { formatElfHex } from "./value-format.js";
+import { renderDwarfAnalysis } from "../dwarf.js";
 
 const renderComment = (comment: ElfCommentInfo): string => {
   if (!comment.strings?.length) return "";
@@ -37,7 +38,8 @@ const renderDebugLink = (debugLink: ElfDebugLinkInfo, littleEndian: boolean): st
 export function renderElfDebug(elf: ElfParseResult, out: string[]): void {
   const comment = elf.comment;
   const debugLink = elf.debugLink;
-  if (!comment && !debugLink) return;
+  const dwarf = elf.dwarf;
+  if (!comment && !debugLink && !dwarf) return;
 
   out.push(`<section>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Build / debug</h4>`);
@@ -50,6 +52,16 @@ export function renderElfDebug(elf: ElfParseResult, out: string[]): void {
 
   if (debugLink) {
     out.push(renderDebugLink(debugLink, elf.littleEndian));
+  }
+
+  if (dwarf) {
+    out.push(`<details style="margin-top:.35rem"><summary style="cursor:pointer">`);
+    out.push(
+      `DWARF debug information (${dwarf.units.length} ` +
+      `unit${dwarf.units.length === 1 ? "" : "s"})</summary>`
+    );
+    out.push(renderDwarfAnalysis(dwarf));
+    out.push(`</details>`);
   }
 
   out.push(`</section>`);
