@@ -56,6 +56,8 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
   metadata, then build the static site.
 - PE import metadata details live in
   [`docs/pe-import-metadata.md`](docs/pe-import-metadata.md).
+- Microsoft C++ RTTI support and its strict relocation-backed detection contract are documented
+  in [`docs/msvc-rtti.md`](docs/msvc-rtti.md).
 
 ## Project Structure (high level)
 - `index.html` & `style.css` &mdash; Vite HTML entry and page styling.

@@ -14,6 +14,7 @@ import { getCoffDebugTableModel } from "../coff/debug.js";
 import { getPeDisassemblyStringTableModel } from "./disassembly-strings.js";
 import { createImportFunctionTableModel } from "./import-function-table.js";
 import { getPeResourceTableModel } from "./resources.js";
+import { getMsvcRttiPagedTableModel } from "./msvc-rtti-table.js";
 import {
   createGoRuntimeFunctionTableModel,
   GO_FUNCTION_TABLE_ID
@@ -88,6 +89,7 @@ export const getPePagedTableModel = (
         (tableId === GO_FUNCTION_TABLE_ID && pe.goRuntime
           ? createGoRuntimeFunctionTableModel(pe.goRuntime.functions)
           : null) ??
+        getMsvcRttiPagedTableModel(pe, tableId) ??
         getImportFunctionTableModel(pe, tableId) ??
         getPeResourceTableModel(pe.resources, tableId)
       : null

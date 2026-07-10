@@ -5,6 +5,7 @@ import { PE32_OPTIONAL_HEADER_MAGIC, PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "../
 import { IMAGE_FILE_MACHINE_I386 } from "../analyzers/coff/machine.js";
 import { getCanonicalPeMachine } from "../analyzers/pe/machine.js";
 import { readLoadConfigPointerRva } from "../analyzers/pe/load-config/index.js";
+import { PE_RVA_EXCLUSIVE_LIMIT } from "../analyzers/pe/layout/rva-limits.js";
 import {
   findSectionContainingRva,
   isMemoryExecutableSection
@@ -35,6 +36,43 @@ type ReadLoadConfigPointerSlotTargetRva = (
   pointerSlotVa: bigint
 ) => Promise<number | null>;
 
+const collectMsvcRttiFunctionRvas = (pe: PeWindowsParseResult | null): number[] => {
+  if (!pe?.msvcRtti) return [];
+  const imageSize = pe.opt.SizeOfImage >>> 0;
+  if (!imageSize) return [];
+  const seen = new Set<number>();
+  const rvas: number[] = [];
+  pe.msvcRtti.vftables.forEach(vftable => {
+    vftable.functionTargetRvas.forEach(rva => {
+      if (!Number.isSafeInteger(rva) || rva <= 0 || rva >= PE_RVA_EXCLUSIVE_LIMIT) return;
+      const normalized = rva >>> 0;
+      if (normalized >= imageSize || seen.has(normalized)) return;
+      const section = findSectionContainingRva(pe.sections, normalized);
+      if (!section || !isMemoryExecutableSection(section)) return;
+      seen.add(normalized);
+      rvas.push(normalized);
+    });
+  });
+  return rvas;
+};
+
+const collectBasicExtraEntrypoints = (
+  windowsPe: PeWindowsParseResult | null
+): Array<{ source: string; rvas: number[] }> => {
+  const extraEntrypoints: Array<{ source: string; rvas: number[] }> = [];
+  if (windowsPe?.goRuntime?.functions.length) {
+    extraEntrypoints.push({
+      source: "Go runtime functab",
+      rvas: windowsPe.goRuntime.functions.map(fn => Number(fn.start - windowsPe.opt.ImageBase))
+    });
+  }
+  const msvcRttiRvas = collectMsvcRttiFunctionRvas(windowsPe);
+  if (msvcRttiRvas.length) {
+    extraEntrypoints.push({ source: "MSVC RTTI vftables", rvas: msvcRttiRvas });
+  }
+  return extraEntrypoints;
+};
+
 const isExecutableExportRva = (pe: PeParseResult, rva: number): boolean => {
   const section = findSectionContainingRva(pe.sections, rva >>> 0);
   return section != null && isMemoryExecutableSection(section);
@@ -64,14 +102,7 @@ const collectBasicPeDisassemblySeeds = (
       : [],
     guardCFFunctionRvas: [],
     safeSehHandlerRvas: [],
-    extraEntrypoints: windowsPe?.goRuntime?.functions.length
-      ? [{
-          source: "Go runtime functab",
-          rvas: windowsPe.goRuntime.functions.map(fn =>
-            Number(fn.start - windowsPe.opt.ImageBase)
-          )
-        }]
-      : []
+    extraEntrypoints: collectBasicExtraEntrypoints(windowsPe)
   };
 };
 

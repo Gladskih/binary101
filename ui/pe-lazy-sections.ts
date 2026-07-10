@@ -14,6 +14,7 @@ import { renderPeDwarf } from "../renderers/pe/dwarf.js";
 import { renderResources } from "../renderers/pe/resources.js";
 import { renderException } from "../renderers/pe/exception.js";
 import { renderNativeAotCandidate } from "../renderers/pe/native-aot.js";
+import { renderMsvcRtti } from "../renderers/pe/msvc-rtti.js";
 import { renderOverlayPanel } from "../renderers/pe/overlay.js";
 import {
   PE_LAZY_SECTION_KEYS,
@@ -105,6 +106,8 @@ const renderWindowsLazyMarkup = (
       return pe.tls ? renderToString(out => renderTls(pe.tls!, out)) : "";
     case PE_LAZY_SECTION_KEYS.reloc:
       return pe.reloc ? renderToString(out => renderReloc(pe.reloc!, out)) : "";
+    case PE_LAZY_SECTION_KEYS.msvcRtti:
+      return pe.msvcRtti ? renderToString(out => renderMsvcRtti(pe, out)) : "";
     case PE_LAZY_SECTION_KEYS.exception:
       return pe.exception ? renderToString(out => renderException(pe.exception!, out)) : "";
     case PE_LAZY_SECTION_KEYS.boundImports:

@@ -6,6 +6,7 @@ import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../analyzers/coff/machine.
 import { PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "../../../../../analyzers/pe/optional-header/magic.js";
 import type { PeWindowsParseResult } from "../../../../../analyzers/pe/core/parse-result.js";
 import { inlinePeSectionName } from "../../../../../analyzers/pe/sections/name.js";
+import { MSVC_RTTI_LAYOUT } from "../../../../../analyzers/pe/msvc-rtti/layout.js";
 import { collectPeDisassemblySeeds } from "../../../../../ui/pe-disassembly-seeds.js";
 
 void test("collectPeDisassemblySeeds gathers basic Windows PE entry seeds", async () => {
@@ -42,6 +43,57 @@ void test("collectPeDisassemblySeeds exposes confirmed Go function starts", asyn
   }]);
 });
 
+void test("collectPeDisassemblySeeds exposes only unique executable MSVC RTTI targets", async () => {
+  const pe = createWindowsPe();
+  pe.sections.push({
+    name: inlinePeSectionName(".rdata"),
+    virtualAddress: 0x3000,
+    virtualSize: 0x1000,
+    sizeOfRawData: 0x1000,
+    pointerToRawData: 0x3000,
+    characteristics: 0x40000040
+  });
+  pe.msvcRtti = {
+    layout: MSVC_RTTI_LAYOUT,
+    classHierarchies: [],
+    completeObjectLocators: [],
+    types: [],
+    vftables: [
+      {
+        completeObjectLocatorRva: 0x5000,
+        functionTargetRvas: [
+          0x2000,
+          0x2010,
+          0x2000,
+          0x3000,
+          0x7000,
+          0x1_0000_0000,
+          -1,
+          1.5
+        ],
+        locatorSlotRva: 0x5100,
+        rva: 0x5108
+      },
+      {
+        completeObjectLocatorRva: 0x5200,
+        functionTargetRvas: [0x2010],
+        locatorSlotRva: 0x5300,
+        rva: 0x5308
+      }
+    ]
+  };
+
+  const seeds = await collectPeDisassemblySeeds(
+    new File([new Uint8Array(0)], "msvc-rtti-pe"),
+    pe
+  );
+
+  assert.deepEqual(seeds.extraEntrypoints, [{
+    source: "MSVC RTTI vftables",
+    rvas: [0x2000, 0x2010]
+  }]);
+});
+
 const createWindowsPe = (): PeWindowsParseResult => ({
   dos: {} as PeWindowsParseResult["dos"],
   signature: "PE",
@@ -50,6 +102,7 @@ const createWindowsPe = (): PeWindowsParseResult => ({
     Magic: PE32_PLUS_OPTIONAL_HEADER_MAGIC,
     AddressOfEntryPoint: 0x1234,
     ImageBase: 0x140000000n,
+    SizeOfImage: 0x8000,
     SizeOfHeaders: 0x400
   } as PeWindowsParseResult["opt"],
   dirs: [],
@@ -79,6 +132,7 @@ const createWindowsPe = (): PeWindowsParseResult => ({
   } as PeWindowsParseResult["exports"],
   tls: { CallbackRvas: [0x5000, 0] } as PeWindowsParseResult["tls"],
   reloc: null,
+  msvcRtti: null,
   exception: {
     beginRvas: [0x3000, 0],
     handlerRvas: [0x4000, 0]

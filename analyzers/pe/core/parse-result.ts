@@ -30,6 +30,7 @@ import type {
 import type { PeSubtype } from "../subtype.js";
 import type { parseExportDirectory } from "../directories/exports.js";
 import type { parseBaseRelocations } from "../directories/reloc.js";
+import type { MsvcRttiAnalysis } from "../msvc-rtti/types.js";
 import type { parseExceptionDirectory } from "../exception/index.js";
 import type { parseBoundImports } from "../imports/bound.js";
 import type { parseDelayImports32 } from "../imports/delay.js";
@@ -72,6 +73,7 @@ export interface PeWindowsParseResult extends PeParseResultBase {
   exports: Awaited<ReturnType<typeof parseExportDirectory>>;
   tls: PeTlsDirectory | null;
   reloc: Awaited<ReturnType<typeof parseBaseRelocations>>;
+  msvcRtti: MsvcRttiAnalysis | null;
   exception: Awaited<ReturnType<typeof parseExceptionDirectory>>;
   boundImports: Awaited<ReturnType<typeof parseBoundImports>>;
   delayImports: Awaited<ReturnType<typeof parseDelayImports32>>;

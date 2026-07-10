@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderPe } from "../../../../renderers/pe/index.js";
+import { MSVC_RTTI_LAYOUT } from "../../../../analyzers/pe/msvc-rtti/layout.js";
 import {
   getPeLazySectionDescriptors,
   PE_LAZY_SECTION_KEYS
@@ -121,4 +122,39 @@ void test("getPeLazySectionDescriptors exposes DWARF as a lazy section", () => {
   });
   assert.ok(html.includes('data-pe-lazy-section="dwarf"'));
   assert.ok(!html.includes("fixture notice"));
+});
+
+void test("getPeLazySectionDescriptors exposes Microsoft C++ RTTI without eager rows", () => {
+  const pe = createBasePe();
+  pe.msvcRtti = {
+    layout: MSVC_RTTI_LAYOUT,
+    classHierarchies: [],
+    completeObjectLocators: [{
+      cdOffset: 0,
+      classHierarchyDescriptorRva: 0x2200,
+      offset: 0,
+      rva: 0x2300,
+      typeDescriptorRva: 0x2100
+    }],
+    types: [{ decoratedName: ".?AVLazyType@@", rva: 0x2100 }],
+    vftables: [{
+      completeObjectLocatorRva: 0x2300,
+      functionTargetRvas: [0x1000],
+      locatorSlotRva: 0x2400,
+      rva: 0x2408
+    }]
+  };
+
+  const descriptor = getPeLazySectionDescriptors(pe).find(
+    section => section.key === PE_LAZY_SECTION_KEYS.msvcRtti
+  );
+  const html = renderPe(pe);
+
+  assert.deepEqual(descriptor, {
+    key: PE_LAZY_SECTION_KEYS.msvcRtti,
+    summary: "1 type / 1 COL / 1 vftable",
+    title: "Microsoft C++ RTTI"
+  });
+  assert.ok(html.includes('data-pe-lazy-section="msvc-rtti"'));
+  assert.ok(!html.includes(".?AVLazyType@@"));
 });

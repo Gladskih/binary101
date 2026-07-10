@@ -37,6 +37,8 @@ const PE_SECTION_DESCRIPTIONS: Record<string, string> = {
     "Imported DLLs and functions that the Windows loader resolves for the image.",
   "Load Config":
     "PE loader metadata for compiler and OS hardening features such as CFG, SafeSEH, GS cookies, Code Integrity hints, and dynamic relocations.",
+  "Microsoft C++ RTTI":
+    "Relocation-confirmed Microsoft C++ type hierarchies, complete object locators, vftables, and virtual function targets.",
   "Legacy COFF tail":
     "Deprecated COFF symbol and string-table data stored after mapped PE sections.",
   "Native AOT candidate":

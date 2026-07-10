@@ -82,6 +82,7 @@ export const createBasePe = (): PeWindowsParseResult =>
     exports: null as unknown,
     tls: null,
     reloc: null as unknown,
+    msvcRtti: null,
     exception: null as unknown,
     boundImports: null as unknown,
     delayImports: null as unknown,

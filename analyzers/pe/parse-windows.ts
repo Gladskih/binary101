@@ -34,6 +34,7 @@ import type { PeDataDirectory, PeWindowsCore } from "./types.js";
 import { buildWindowsPeResult, withWindowsPeLayoutWarnings } from "./parse-windows-result.js";
 import { selectPeVariantParsers, type PeVariantParsers } from "./parse-variant.js";
 import { analyzePeGoRuntime } from "./go-runtime.js";
+import { analyzePeMsvcRtti } from "./msvc-rtti/index.js";
 export type PeWindowsParseContext = {
   file: File;
   reader: FileRangeReader;
@@ -58,6 +59,7 @@ export type PeDirectoryArtifacts = {
   tls: Awaited<ReturnType<typeof parseTlsDirectory32>>;
   resources: Awaited<ReturnType<typeof parseResources>>;
   reloc: Awaited<ReturnType<typeof parseBaseRelocations>>;
+  msvcRtti: Awaited<ReturnType<typeof analyzePeMsvcRtti>>;
   clr: Awaited<ReturnType<typeof parseClrDirectory>>;
   nativeAotCandidate: ReturnType<typeof detectNativeAotCandidate>;
   exception: Awaited<ReturnType<typeof parseExceptionDirectory>>;
@@ -70,7 +72,6 @@ export type PeDirectoryArtifacts = {
   globalPtr: ReturnType<typeof parseGlobalPtrDirectory>;
   manifestValidation: ReturnType<typeof analyzeManifestConsistency>;
 };
-
 export type PeImageArtifacts = {
   overlay: Awaited<ReturnType<typeof analyzePeOverlay>>;
   packers: Awaited<ReturnType<typeof analyzePePackers>>;
@@ -78,15 +79,12 @@ export type PeImageArtifacts = {
 };
 const appendUniqueMessages = (existing: string[] | undefined, messages: string[]): string[] | undefined =>
   messages.length ? [...new Set([...(existing ?? []), ...messages])] : existing;
-
 const appendDebugWarnings = (existing: string | null, messages: string[]): string | null => {
   if (!messages.length) return existing;
   return [...new Set([...(existing ? existing.split(" | ") : []), ...messages])].join(" | ");
 };
-
 const digestCacheKey = (algorithm: AlgorithmIdentifier): string =>
   typeof algorithm === "string" ? algorithm : JSON.stringify(algorithm);
-
 export const parseWindowsPe = async (
   file: File,
   reader: FileRangeReader,
@@ -177,6 +175,7 @@ const parsePeDirectoryArtifacts = async (
   );
   const resources = await parseResources(reader, core.dataDirs, core.rvaToOff, parseManifestXmlDocument);
   const reloc = await parseBaseRelocations(reader, core.dataDirs, core.rvaToOff);
+  const msvcRtti = await analyzePeMsvcRtti(reader, core, reloc);
   const clr = await parseClrDirectory(reader, core.dataDirs, core.rvaToOff);
   const nativeAotCandidate = detectNativeAotCandidate(clr != null, exportsInfo, core.sections);
   const exception = await parseExceptionDirectory(
@@ -200,6 +199,7 @@ const parsePeDirectoryArtifacts = async (
     tls,
     resources,
     reloc,
+    msvcRtti,
     clr,
     nativeAotCandidate,
     exception,

@@ -5,10 +5,29 @@ import type { PeDataDirectory, RvaToOffset } from "../types.js";
 
 const IMAGE_REL_BASED_RESERVED = 6;
 const IMAGE_REL_BASED_HIGHADJ = 4;
+export const IMAGE_REL_BASED_DIR64 = 10;
 const BASE_RELOCATION_PAGE_SIZE = 0x1000;
 // Microsoft PE/COFF: IMAGE_BASE_RELOCATION consists of an 8-byte header followed by WORD entries.
 const IMAGE_BASE_RELOCATION_HEADER_SIZE = 8;
 const IMAGE_BASE_RELOCATION_ENTRY_SIZE = Uint16Array.BYTES_PER_ELEMENT;
+
+export interface PeBaseRelocationEntry {
+  type: number;
+  offset: number;
+}
+
+export interface PeBaseRelocationBlock {
+  pageRva: number;
+  size: number;
+  count: number;
+  entries: PeBaseRelocationEntry[];
+}
+
+export interface PeBaseRelocationResult {
+  blocks: PeBaseRelocationBlock[];
+  totalEntries: number;
+  warnings?: string[];
+}
 
 type RelocationEntrySpan = {
   firstEntryIndex: number;
@@ -82,8 +101,8 @@ const parseRelocationEntries = (
   availableEntries: number,
   spanViews: RelocationEntrySpanView[],
   addWarning: (message: string) => void
-): Array<{ type: number; offset: number }> => {
-  const entries: Array<{ type: number; offset: number }> = [];
+): PeBaseRelocationEntry[] => {
+  const entries: PeBaseRelocationEntry[] = [];
   let spanIndex = 0;
   let spanView = spanViews[spanIndex];
   for (let entryIndex = 0; entryIndex < availableEntries;) {
@@ -169,7 +188,7 @@ const parseBaseRelocationBlock = async (
   rel: number,
   addWarning: (message: string) => void
 ): Promise<{
-  block: { pageRva: number; size: number; count: number; entries: Array<{ type: number; offset: number }> } | null;
+  block: PeBaseRelocationBlock | null;
   nextRel: number;
   stop: boolean;
 }> => {
@@ -220,20 +239,11 @@ export async function parseBaseRelocations(
   reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset
-): Promise<{
-  blocks: Array<{ pageRva: number; size: number; count: number; entries: Array<{ type: number; offset: number }> }>;
-  totalEntries: number;
-  warnings?: string[];
-} | null> {
+): Promise<PeBaseRelocationResult | null> {
   const validation = validateBaseRelocationDirectory(reader, dataDirs, rvaToOff);
   if ("result" in validation) return validation.result;
   const { dir } = validation;
-  const blocks: Array<{
-    pageRva: number;
-    size: number;
-    count: number;
-    entries: Array<{ type: number; offset: number }>;
-  }> = [];
+  const blocks: PeBaseRelocationBlock[] = [];
   const warnings: string[] = [];
   const addWarning = (message: string): void => {
     if (!warnings.includes(message)) warnings.push(message);
@@ -250,6 +260,9 @@ export async function parseBaseRelocations(
       break;
     }
     rel = parsed.nextRel;
+  }
+  if (rel < dir.size && dir.size - rel < IMAGE_BASE_RELOCATION_HEADER_SIZE) {
+    addWarning("Base relocation directory ends with a truncated block header.");
   }
   return warnings.length ? { blocks, totalEntries, warnings } : { blocks, totalEntries };
 }

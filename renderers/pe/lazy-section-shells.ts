@@ -9,6 +9,7 @@ import {
 import { renderPeSectionShell } from "./collapsible-section.js";
 import { PE_DELAY_IMPORTS_PANEL_ID, PE_IMPORTS_PANEL_ID } from "./import-sections.js";
 import { getLinuxBootSummary } from "./linux-boot.js";
+import { getMsvcRttiSummaryCounts } from "./msvc-rtti.js";
 import { PE_OVERLAY_PANEL_ID, getUnexplainedOverlaySize } from "./overlay.js";
 import { getPeSanityIssues } from "./layout.js";
 
@@ -30,6 +31,7 @@ export const PE_LAZY_SECTION_KEYS = {
   legacyCoffTail: "legacy-coff-tail",
   linuxBoot: "linux-boot",
   loadConfig: "load-config",
+  msvcRtti: "msvc-rtti",
   nativeAot: "native-aot",
   overlay: "overlay",
   packers: "packers",
@@ -221,6 +223,14 @@ const addWindowsDirectoryDescriptors = (
     key: PE_LAZY_SECTION_KEYS.reloc,
     summary: `${plural(pe.reloc?.totalEntries ?? 0, "entry", "entries")}`,
     title: "Base relocations"
+  });
+  const rttiCounts = pe.msvcRtti ? getMsvcRttiSummaryCounts(pe.msvcRtti) : null;
+  pushIf(descriptors, rttiCounts, {
+    key: PE_LAZY_SECTION_KEYS.msvcRtti,
+    summary: `${plural(rttiCounts?.types ?? 0, "type", "types")} / ` +
+      `${plural(rttiCounts?.completeObjectLocators ?? 0, "COL", "COL")} / ` +
+      `${plural(rttiCounts?.vftables ?? 0, "vftable", "vftables")}`,
+    title: "Microsoft C++ RTTI"
   });
   pushIf(descriptors, pe.exception, {
     key: PE_LAZY_SECTION_KEYS.exception,
