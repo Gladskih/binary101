@@ -136,7 +136,7 @@ export async function parseElf(file: File): Promise<ElfParseResult | null> {
     parseElfNotes({ file, programHeaders, sections, littleEndian: little }),
     parseElfComment(file, sections),
     parseElfDebugLink(file, sections, little),
-    analyzeElfDwarf(file, sections, little, issues)
+    analyzeElfDwarf(file, sections, is64 ? "elf64" : "elf32", little, issues)
   ]);
   const result = buildResult(header, programHeaders, sections);
   if (interpreter) result.interpreter = interpreter;

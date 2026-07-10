@@ -1,5 +1,7 @@
 "use strict";
 
+import type { FileRangeReader } from "../file-range-reader.js";
+
 export type DwarfSectionInput = {
   name: string;
   offset: number;
@@ -17,6 +19,13 @@ export type DwarfSectionStatus =
 
 export type DwarfSectionSummary = DwarfSectionInput & {
   status: DwarfSectionStatus;
+};
+
+export type DwarfSectionSource = {
+  summary: DwarfSectionInput;
+  section: DwarfSectionInput;
+  reader: FileRangeReader;
+  decoded: boolean;
 };
 
 export type DwarfUnitRoot = {

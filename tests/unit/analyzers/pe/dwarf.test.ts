@@ -5,6 +5,9 @@ import { test } from "node:test";
 import { analyzePeDwarf } from "../../../../analyzers/pe/dwarf.js";
 import { createPeSection } from "../../../fixtures/pe-renderer-headers-fixture.js";
 import { createDwarf4SectionsFixture } from "../../../fixtures/dwarf-sections-fixture.js";
+import {
+  createCompressedDwarfSectionsFixture
+} from "../../../fixtures/dwarf-compressed-section-fixture.js";
 
 void test("analyzePeDwarf uses resolved COFF names and excludes raw alignment padding", async () => {
   const fixture = createDwarf4SectionsFixture();
@@ -18,6 +21,25 @@ void test("analyzePeDwarf uses resolved COFF names and excludes raw alignment pa
 
   assert.equal(dwarf?.units[0]?.root?.producer, "fixture compiler");
   assert.equal(dwarf?.sections[0]?.size, fixture.sections[0]?.size);
+});
+
+void test("analyzePeDwarf decodes GNU zlib sections", async () => {
+  const fixture = createCompressedDwarfSectionsFixture("gnu-zlib");
+  const sections = fixture.candidates.map(candidate => createPeSection(
+    candidate.section.name,
+    {
+      pointerToRawData: candidate.section.offset,
+      virtualSize: candidate.section.size,
+      sizeOfRawData: candidate.section.size
+    }
+  ));
+
+  const dwarf = await analyzePeDwarf(fixture.file, sections);
+
+  assert.equal(dwarf?.units[0]?.root?.name, "main.c");
+  assert.equal(dwarf?.units[0]?.root?.producer, "fixture compiler");
+  assert.equal(dwarf?.sections[0]?.status, "decoded");
+  assert.deepEqual(dwarf?.issues, []);
 });
 
 void test("analyzePeDwarf ignores ordinary PE sections and inventories .zdebug", async () => {

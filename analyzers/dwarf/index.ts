@@ -8,6 +8,7 @@ import type {
   DwarfAbbreviation,
   DwarfAnalysis,
   DwarfSectionInput,
+  DwarfSectionSource,
   DwarfSectionStatus,
   DwarfUnit
 } from "./types.js";
@@ -24,23 +25,28 @@ const referencedSectionNames = new Set<string>([
   DWARF_SECTION.stringOffsets
 ]);
 
-const sectionStatus = (section: DwarfSectionInput): DwarfSectionStatus => {
-  if (section.compressed) return "compressed-unsupported";
-  if (section.requiresRelocations) return "relocations-unsupported";
-  if (decodedSectionNames.has(section.name)) return "decoded";
-  if (referencedSectionNames.has(section.name)) return "referenced";
+const supportedSectionName = (name: string): boolean =>
+  decodedSectionNames.has(name) || referencedSectionNames.has(name);
+
+const sectionStatus = (source: DwarfSectionSource): DwarfSectionStatus => {
+  if (source.summary.requiresRelocations) return "relocations-unsupported";
+  if (!source.decoded && source.summary.compressed && supportedSectionName(source.section.name)) {
+    return "compressed-unsupported";
+  }
+  if (decodedSectionNames.has(source.section.name)) return "decoded";
+  if (referencedSectionNames.has(source.section.name)) return "referenced";
   return "inventory-only";
 };
 
-const normalizeSection = (
-  reader: FileRangeReader,
-  section: DwarfSectionInput,
+const normalizeSource = (
+  source: DwarfSectionSource,
   issues: string[]
-): DwarfSectionInput => {
+): DwarfSectionSource => {
+  const { reader, section } = source;
   if (!Number.isSafeInteger(section.offset) || !Number.isSafeInteger(section.size) ||
       section.offset < 0 || section.size < 0) {
     issues.push(`${section.name}: section file range is not a safe non-negative integer range.`);
-    return { ...section, offset: 0, size: 0 };
+    return { ...source, section: { ...section, offset: 0, size: 0 }, decoded: false };
   }
   const readableSize = section.offset < reader.size
     ? Math.min(section.size, reader.size - section.offset)
@@ -50,48 +56,55 @@ const normalizeSection = (
       `${section.name}: section data is truncated (${readableSize} of ${section.size} bytes readable).`
     );
   }
-  return { ...section, size: readableSize };
+  return { ...source, section: { ...section, size: readableSize } };
 };
 
 const buildSectionMap = (
-  sections: DwarfSectionInput[],
+  sources: DwarfSectionSource[],
   issues: string[]
-): Map<string, DwarfSectionInput> => {
-  const byName = new Map<string, DwarfSectionInput>();
-  for (const section of sections) {
-    if (byName.has(section.name)) {
-      issues.push(`${section.name}: duplicate DWARF section; the first section is used.`);
-    } else if (!section.compressed && !section.requiresRelocations) {
-      byName.set(section.name, section);
+): Map<string, DwarfSectionSource> => {
+  const byName = new Map<string, DwarfSectionSource>();
+  for (const source of sources) {
+    if (byName.has(source.section.name)) {
+      issues.push(`${source.section.name}: duplicate DWARF section; the first section is used.`);
+    } else if (source.decoded && !source.summary.requiresRelocations) {
+      byName.set(source.section.name, source);
     }
   }
   return byName;
 };
 
 const parseInfoSection = async (
-  reader: FileRangeReader,
-  section: DwarfSectionInput,
-  sections: Map<string, DwarfSectionInput>,
+  source: DwarfSectionSource,
+  sections: Map<string, DwarfSectionSource>,
   littleEndian: boolean,
   issues: string[],
   abbreviationCache: Map<string, Map<bigint, DwarfAbbreviation>>
 ): Promise<DwarfUnit[]> => {
-  const abbreviationSection = sections.get(DWARF_SECTION.abbreviations);
-  if (!abbreviationSection) {
-    issues.push(`${section.name}: ${DWARF_SECTION.abbreviations} is required to decode units.`);
+  const abbreviationSource = sections.get(DWARF_SECTION.abbreviations);
+  if (!abbreviationSource) {
+    issues.push(
+      `${source.section.name}: ${DWARF_SECTION.abbreviations} is required to decode units.`
+    );
     return [];
   }
   const units: DwarfUnit[] = [];
   let offset = 0;
-  while (offset < section.size) {
-    const header = await parseDwarfUnitHeader(reader, section, offset, littleEndian, issues);
+  while (offset < source.section.size) {
+    const header = await parseDwarfUnitHeader(
+      source.reader,
+      source.section,
+      offset,
+      littleEndian,
+      issues
+    );
     if (!header) break;
     const cacheKey = header.abbreviationOffset.toString();
     let abbreviations = abbreviationCache.get(cacheKey);
     if (!abbreviations) {
       const parsed = await parseAbbreviationTable(
-        reader,
-        abbreviationSection,
+        abbreviationSource.reader,
+        abbreviationSource.section,
         header.abbreviationOffset,
         littleEndian,
         issues
@@ -101,8 +114,8 @@ const parseInfoSection = async (
       abbreviationCache.set(cacheKey, parsed);
     }
     const dies = await parseDwarfDies(
-      reader,
-      section,
+      source.reader,
+      source.section,
       sections,
       header,
       abbreviations,
@@ -110,7 +123,7 @@ const parseInfoSection = async (
       issues
     );
     units.push({
-      sectionName: section.name,
+      sectionName: source.section.name,
       offset: header.offset,
       length: header.length,
       format: header.format,
@@ -128,36 +141,43 @@ const parseInfoSection = async (
   return units;
 };
 
-export const analyzeDwarf = async (
-  reader: FileRangeReader,
-  inputSections: DwarfSectionInput[],
-  littleEndian: boolean
+export const analyzeDwarfSources = async (
+  inputSources: DwarfSectionSource[],
+  byteOrder: "big" | "little"
 ): Promise<DwarfAnalysis> => {
   const issues: string[] = [];
-  const sections = inputSections.map(section => ({ ...section, status: sectionStatus(section) }));
-  inputSections.filter(section => section.compressed).forEach(section => {
-    issues.push(`Compressed DWARF section ${section.name} is inventoried but not decoded.`);
+  const littleEndian = byteOrder === "little";
+  const sections = inputSources.map(source => ({
+    ...source.summary,
+    status: sectionStatus(source)
+  }));
+  inputSources.filter(source =>
+    source.summary.compressed && !source.decoded && supportedSectionName(source.section.name)
+  ).forEach(source => {
+    issues.push(
+      `Compressed DWARF section ${source.summary.name} is inventoried but not decoded.`
+    );
   });
-  const relocationSections = inputSections.filter(section => section.requiresRelocations);
+  const relocationSections = inputSources.filter(source => source.summary.requiresRelocations);
   if (relocationSections.length) {
     issues.push(
       `ELF relocations are required but are not applied in this iteration: ` +
-      `${relocationSections.map(section => section.name).join(", ")}.`
+      `${relocationSections.map(source => source.summary.name).join(", ")}.`
     );
   }
-  const normalizedSections = inputSections.map(section => normalizeSection(reader, section, issues));
-  const sectionMap = buildSectionMap(normalizedSections, issues);
+  const normalizedSources = inputSources.map(source => normalizeSource(source, issues));
+  const sectionMap = buildSectionMap(normalizedSources, issues);
   const infoSections = [
     sectionMap.get(DWARF_SECTION.information),
     sectionMap.get(DWARF_SECTION.types)
   ]
-    .filter((section): section is DwarfSectionInput => section != null && section.size > 0);
+    .filter((source): source is DwarfSectionSource =>
+      source != null && source.section.size > 0);
   const abbreviationCache = new Map<string, Map<bigint, DwarfAbbreviation>>();
   const units: DwarfUnit[] = [];
-  for (const section of infoSections) {
+  for (const source of infoSections) {
     units.push(...await parseInfoSection(
-      reader,
-      section,
+      source,
       sectionMap,
       littleEndian,
       issues,
@@ -166,3 +186,14 @@ export const analyzeDwarf = async (
   }
   return { sections, units, issues };
 };
+
+export const analyzeDwarf = async (
+  reader: FileRangeReader,
+  inputSections: DwarfSectionInput[],
+  littleEndian: boolean
+): Promise<DwarfAnalysis> => analyzeDwarfSources(inputSections.map(section => ({
+  summary: section,
+  section,
+  reader,
+  decoded: !section.compressed && !section.requiresRelocations
+})), littleEndian ? "little" : "big");

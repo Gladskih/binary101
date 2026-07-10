@@ -12,6 +12,7 @@ import type {
   DwarfAbbreviation,
   DwarfFormValue,
   DwarfSectionInput,
+  DwarfSectionSource,
   DwarfTagCount,
   DwarfUnitContext,
   DwarfUnitRoot
@@ -35,8 +36,7 @@ const optionalString = (key: string, value: string | null): Record<string, strin
   value == null ? {} : { [key]: value };
 
 const buildRoot = async (
-  reader: FileRangeReader,
-  sections: Map<string, DwarfSectionInput>,
+  sections: Map<string, DwarfSectionSource>,
   tag: number,
   values: Map<number, DwarfFormValue>,
   context: DwarfUnitContext,
@@ -46,7 +46,6 @@ const buildRoot = async (
   const language = safeLanguage(values.get(DWARF_ATTRIBUTE.language));
   const [name, producer, compilationDirectory] = await Promise.all([
     resolveDwarfString(
-      reader,
       sections,
       values.get(DWARF_ATTRIBUTE.name),
       context,
@@ -54,7 +53,6 @@ const buildRoot = async (
       issues
     ),
     resolveDwarfString(
-      reader,
       sections,
       values.get(DWARF_ATTRIBUTE.producer),
       context,
@@ -62,7 +60,6 @@ const buildRoot = async (
       issues
     ),
     resolveDwarfString(
-      reader,
       sections,
       values.get(DWARF_ATTRIBUTE.compilationDirectory),
       context,
@@ -109,7 +106,7 @@ const toTagCounts = (counts: Map<number, number>): DwarfTagCount[] =>
 export const parseDwarfDies = async (
   reader: FileRangeReader,
   section: DwarfSectionInput,
-  sections: Map<string, DwarfSectionInput>,
+  sections: Map<string, DwarfSectionSource>,
   header: DwarfUnitHeader,
   abbreviations: Map<bigint, DwarfAbbreviation>,
   littleEndian: boolean,
@@ -152,7 +149,6 @@ export const parseDwarfDies = async (
     const values = await readAttributes(cursor, abbreviation, context, captureRoot);
     if (captureRoot && !cursor.failed) {
       root = await buildRoot(
-        reader,
         sections,
         abbreviation.tag,
         values,

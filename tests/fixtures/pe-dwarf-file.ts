@@ -1,6 +1,7 @@
 "use strict";
 
 import { createDwarf4SectionsFixture } from "./dwarf-sections-fixture.js";
+import { createCompressedDwarfSectionsFixture } from "./dwarf-compressed-section-fixture.js";
 import { createPeWithSectionAndIatFixture } from "./sample-files-pe.js";
 import { MockFile } from "../helpers/mock-file.js";
 
@@ -87,10 +88,13 @@ const writeSectionHeader = (
   );
 };
 
-export const createPeDwarfFile = (): MockFile => {
-  const dwarf = createDwarf4SectionsFixture();
-  const dwarfSections = [".debug_info", ".debug_abbrev", ".debug_str"]
-    .map(name => dwarf.sections.find(section => section.name === name)!);
+type DwarfPayloadFixture = {
+  file: MockFile;
+  sections: Array<{ name: string; offset: number; size: number }>;
+};
+
+const buildPeDwarfFile = (dwarf: DwarfPayloadFixture, fileName: string): MockFile => {
+  const dwarfSections = dwarf.sections;
   const stringTable = encodeCoffStringTable(dwarfSections.map(section => section.name));
   const symbolTableOffset = PE32.fileAlignment * (
     dwarfSections.length + PE32.section.firstRawFileIndex
@@ -134,5 +138,22 @@ export const createPeDwarfFile = (): MockFile => {
     );
   });
   bytes.set(stringTable.bytes, stringTableOffset);
-  return new MockFile(bytes, "dwarf-pe.exe", "application/vnd.microsoft.portable-executable");
+  return new MockFile(bytes, fileName, "application/vnd.microsoft.portable-executable");
+};
+
+export const createPeDwarfFile = (): MockFile => {
+  const dwarf = createDwarf4SectionsFixture();
+  return buildPeDwarfFile({
+    file: dwarf.file,
+    sections: [".debug_info", ".debug_abbrev", ".debug_str"]
+      .map(name => dwarf.sections.find(section => section.name === name)!)
+  }, "dwarf-pe.exe");
+};
+
+export const createPeCompressedDwarfFile = (): MockFile => {
+  const dwarf = createCompressedDwarfSectionsFixture("gnu-zlib");
+  return buildPeDwarfFile({
+    file: dwarf.file,
+    sections: dwarf.candidates.map(candidate => candidate.section)
+  }, "compressed-dwarf-pe.exe");
 };

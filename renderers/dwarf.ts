@@ -3,6 +3,7 @@
 import { escapeHtml } from "../html-utils.js";
 import type {
   DwarfAnalysis,
+  DwarfSectionSummary,
   DwarfSectionStatus,
   DwarfTagCount,
   DwarfUnit
@@ -22,6 +23,13 @@ const statusLabel = (status: DwarfSectionStatus): string => {
   return "inventory only";
 };
 
+const sectionStatusLabel = (section: DwarfSectionSummary): string => {
+  const label = statusLabel(section.status);
+  return section.compressed && section.status !== "compressed-unsupported"
+    ? `decompressed; ${label}`
+    : label;
+};
+
 const hexValue = (value: number | bigint): string => `0x${value.toString(16)}`;
 
 const dieCount = (unit: DwarfUnit): number =>
@@ -35,7 +43,7 @@ const renderSections = (dwarf: DwarfAnalysis): string => {
     `<tr><td class="mono">${escapeHtml(section.name)}</td>` +
     `<td class="dwarfTable__numeric">${escapeHtml(hexValue(section.offset))}</td>` +
     `<td class="dwarfTable__numeric">${section.size}</td>` +
-    `<td>${escapeHtml(statusLabel(section.status))}</td></tr>`
+    `<td>${escapeHtml(sectionStatusLabel(section))}</td></tr>`
   ).join("");
   return `<h5>Sections</h5><div class="tableWrap"><table class="table">` +
     `<thead><tr><th>Name</th><th>File offset</th><th>Bytes</th><th>Analysis</th>` +
@@ -109,7 +117,9 @@ const renderIssues = (dwarf: DwarfAnalysis): string => {
 export const renderDwarfAnalysis = (dwarf: DwarfAnalysis): string =>
   `<div class="smallNote">Compilation units and DIE structure from ` +
   `<span class="mono">.debug_info</span>/<span class="mono">.debug_types</span>. ` +
+  `Zlib-compressed ELF and GNU sections are decompressed before analysis. ` +
   `Line programs, ranges, locations, expressions, frames, macros, name indexes, split ` +
-  `supplementary DWARF, and relocatable ELF DWARF are inventoried but not decoded in ` +
+  `supplementary DWARF, Zstandard compression, and relocatable ELF DWARF are inventoried ` +
+  `but not decoded in ` +
   `this iteration.</div>` +
   renderSections(dwarf) + renderUnits(dwarf) + renderTags(dwarf) + renderIssues(dwarf);

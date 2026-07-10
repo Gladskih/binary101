@@ -130,6 +130,7 @@ export const DWARF_ENCODING = {
 export const DWARF_LIMIT = {
   maximumAddressBytes: 8,
   maximumCapturedStringBytes: 4096,
+  maximumDecompressedBytes: 256 * 1024 * 1024,
   maximumIndirectFormDepth: 8,
   maximumLebBytes: 10
 } as const;

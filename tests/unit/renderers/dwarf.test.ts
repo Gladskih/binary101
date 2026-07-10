@@ -25,6 +25,7 @@ void test("renderDwarfAnalysis renders inventory-only, compressed, and issue sta
     sections: [
       { name: ".debug_line", offset: 0, size: 0, compressed: false, status: "inventory-only" },
       { name: ".zdebug_info", offset: 0, size: 0, compressed: true, status: "compressed-unsupported" },
+      { name: ".zdebug_str", offset: 0, size: 0, compressed: true, status: "referenced" },
       {
         name: ".rela.debug_info",
         offset: 0,
@@ -40,6 +41,7 @@ void test("renderDwarfAnalysis renders inventory-only, compressed, and issue sta
 
   assert.ok(html.includes("inventory only"));
   assert.ok(html.includes("compressed; not decoded"));
+  assert.ok(html.includes("decompressed; used for references"));
   assert.ok(html.includes("relocations required; not decoded"));
   assert.ok(html.includes("bad &lt;value>"));
   assert.ok(!html.includes("<h5>Units</h5>"));

@@ -1,6 +1,7 @@
 "use strict";
 
 import { createDwarf4SectionsFixture } from "./dwarf-sections-fixture.js";
+import { createCompressedDwarfSectionsFixture } from "./dwarf-compressed-section-fixture.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 // Independent fixture values from System V ABI, chapters 4 and 5:
@@ -30,13 +31,15 @@ const ELF64 = {
   section: {
     nameOffset: 0,
     typeOffset: 4,
+    flagsOffset: 8,
     fileOffset: 24,
     sizeOffset: 32,
     alignmentOffset: 48,
     namesIndex: 1,
     firstContentIndex: 2,
     programBitsType: 1,
-    stringTableType: 3
+    stringTableType: 3,
+    compressedFlag: 0x800n
   },
   fileType: { executable: 2 },
   machine: { x86_64: 0x3e }
@@ -64,20 +67,29 @@ const writeSection = (
   nameOffset: number,
   type: number,
   fileOffset: number,
-  size: number
+  size: number,
+  flags = 0n
 ): void => {
   const offset = ELF64.headerSize + index * ELF64.sectionHeaderSize;
   view.setUint32(offset + ELF64.section.nameOffset, nameOffset, true);
   view.setUint32(offset + ELF64.section.typeOffset, type, true);
+  view.setBigUint64(offset + ELF64.section.flagsOffset, flags, true);
   view.setBigUint64(offset + ELF64.section.fileOffset, BigInt(fileOffset), true);
   view.setBigUint64(offset + ELF64.section.sizeOffset, BigInt(size), true);
   view.setBigUint64(offset + ELF64.section.alignmentOffset, 1n, true);
 };
 
-export const createElfDwarfFile = (): MockFile => {
-  const dwarf = createDwarf4SectionsFixture();
-  const dwarfSections = [".debug_info", ".debug_abbrev", ".debug_str"]
-    .map(name => dwarf.sections.find(section => section.name === name)!);
+type DwarfPayloadFixture = {
+  file: MockFile;
+  sections: Array<{ name: string; offset: number; size: number }>;
+};
+
+const buildElfDwarfFile = (
+  dwarf: DwarfPayloadFixture,
+  fileName: string,
+  sectionFlags: bigint
+): MockFile => {
+  const dwarfSections = dwarf.sections;
   const names = encodeStringTable([".shstrtab", ...dwarfSections.map(section => section.name)]);
   const sectionCount = ELF64.section.firstContentIndex + dwarfSections.length;
   const namesOffset = ELF64.headerSize + sectionCount * ELF64.sectionHeaderSize;
@@ -118,10 +130,28 @@ export const createElfDwarfFile = (): MockFile => {
       names.offsets[index + ELF64.section.namesIndex]!,
       ELF64.section.programBitsType,
       cursor,
-      section.size
+      section.size,
+      sectionFlags
     );
     bytes.set(dwarf.file.data.subarray(section.offset, section.offset + section.size), cursor);
     cursor += section.size;
   });
-  return new MockFile(bytes, "dwarf-elf", "application/x-elf");
+  return new MockFile(bytes, fileName, "application/x-elf");
+};
+
+export const createElfDwarfFile = (): MockFile => {
+  const dwarf = createDwarf4SectionsFixture();
+  return buildElfDwarfFile({
+    file: dwarf.file,
+    sections: [".debug_info", ".debug_abbrev", ".debug_str"]
+      .map(name => dwarf.sections.find(section => section.name === name)!)
+  }, "dwarf-elf", 0n);
+};
+
+export const createElfCompressedDwarfFile = (): MockFile => {
+  const dwarf = createCompressedDwarfSectionsFixture("elf64-little-zlib");
+  return buildElfDwarfFile({
+    file: dwarf.file,
+    sections: dwarf.candidates.map(candidate => candidate.section)
+  }, "compressed-dwarf-elf", ELF64.section.compressedFlag);
 };

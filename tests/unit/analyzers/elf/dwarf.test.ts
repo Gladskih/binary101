@@ -5,6 +5,9 @@ import { test } from "node:test";
 import { analyzeElfDwarf } from "../../../../analyzers/elf/dwarf.js";
 import type { ElfSectionHeader } from "../../../../analyzers/elf/types.js";
 import { createDwarf4SectionsFixture } from "../../../fixtures/dwarf-sections-fixture.js";
+import {
+  createCompressedDwarfSectionsFixture
+} from "../../../fixtures/dwarf-compressed-section-fixture.js";
 
 // Independent ELF values from System V ABI, section attributes and types:
 // https://refspecs.linuxfoundation.org/elf/gabi4+/ch4.sheader.html
@@ -41,12 +44,29 @@ void test("analyzeElfDwarf adapts ELF debug sections to the common analyzer", as
   const dwarf = await analyzeElfDwarf(
     fixture.file,
     fixture.sections.map((section, index) => toElfSection(section, index)),
+    "elf64",
     true,
     issues
   );
 
   assert.equal(dwarf?.units[0]?.root?.name, "main.c");
   assert.deepEqual(issues, []);
+});
+
+void test("analyzeElfDwarf decodes ELF64 SHF_COMPRESSED zlib sections", async () => {
+  const fixture = createCompressedDwarfSectionsFixture("elf64-little-zlib");
+  const sections = fixture.candidates.map((candidate, index) => toElfSection(
+    candidate.section,
+    index,
+    TEST_ELF.sectionFlag.compressed
+  ));
+
+  const dwarf = await analyzeElfDwarf(fixture.file, sections, "elf64", true, []);
+
+  assert.equal(dwarf?.units[0]?.root?.name, "main.c");
+  assert.equal(dwarf?.units[0]?.root?.producer, "fixture compiler");
+  assert.equal(dwarf?.sections[0]?.status, "decoded");
+  assert.deepEqual(dwarf?.issues, []);
 });
 
 void test("analyzeElfDwarf recognizes SHF_COMPRESSED and unsafe offsets", async () => {
@@ -62,7 +82,13 @@ void test("analyzeElfDwarf recognizes SHF_COMPRESSED and unsafe offsets", async 
     offset: BigInt(Number.MAX_SAFE_INTEGER) + 1n
   };
 
-  const dwarf = await analyzeElfDwarf(fixture.file, [compressed, unsafe], true, issues);
+  const dwarf = await analyzeElfDwarf(
+    fixture.file,
+    [compressed, unsafe],
+    "elf64",
+    true,
+    issues
+  );
 
   assert.equal(dwarf?.sections[0]?.status, "compressed-unsupported");
   assert.ok(issues.some(issue => issue.includes("too large to index")));
@@ -77,7 +103,7 @@ void test("analyzeElfDwarf does not decode relocation-backed ELF object DWARF", 
     size: Uint8Array.BYTES_PER_ELEMENT
   }, sections.length));
 
-  const dwarf = await analyzeElfDwarf(fixture.file, sections, true, []);
+  const dwarf = await analyzeElfDwarf(fixture.file, sections, "elf64", true, []);
 
   assert.equal(dwarf?.units.length, 0);
   assert.equal(
