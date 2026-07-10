@@ -19,6 +19,29 @@ void test("collectPeDisassemblySeeds gathers basic Windows PE entry seeds", asyn
   assert.deepEqual(seeds.extraEntrypoints, []);
 });
 
+void test("collectPeDisassemblySeeds exposes confirmed Go function starts", async () => {
+  const pe = createWindowsPe();
+  pe.goRuntime = {
+    layout: "go1.20+",
+    pointerSize: 8,
+    pcHeaderAddress: 0x140002000n,
+    moduleDataAddress: 0x140003000n,
+    fileCount: 1,
+    textRange: { start: 0x140002000n, end: 0x140002040n },
+    functions: [
+      { name: "runtime.main", start: 0x140002000n, end: 0x140002020n },
+      { name: "main.main", start: 0x140002020n, end: 0x140002040n }
+    ]
+  };
+
+  const seeds = await collectPeDisassemblySeeds(new File([new Uint8Array(0)], "go-pe"), pe);
+
+  assert.deepEqual(seeds.extraEntrypoints, [{
+    source: "Go runtime functab",
+    rvas: [0x2000, 0x2020]
+  }]);
+});
+
 const createWindowsPe = (): PeWindowsParseResult => ({
   dos: {} as PeWindowsParseResult["dos"],
   signature: "PE",

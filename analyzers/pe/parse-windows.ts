@@ -1,5 +1,4 @@
 "use strict";
-
 import type { FileRangeReader } from "../file-range-reader.js";
 import { computePeAuthenticodeDigest, verifyAuthenticodeWithBundledTrust } from "./authenticode/verify.js";
 import { parseCoffDebugInfoFromFileHeader } from "../coff/debug.js";
@@ -34,7 +33,7 @@ import { detectPeSubtype } from "./subtype.js";
 import type { PeDataDirectory, PeWindowsCore } from "./types.js";
 import { buildWindowsPeResult, withWindowsPeLayoutWarnings } from "./parse-windows-result.js";
 import { selectPeVariantParsers, type PeVariantParsers } from "./parse-variant.js";
-
+import { analyzePeGoRuntime } from "./go-runtime.js";
 export type PeWindowsParseContext = {
   file: File;
   reader: FileRangeReader;
@@ -72,11 +71,11 @@ export type PeDirectoryArtifacts = {
   manifestValidation: ReturnType<typeof analyzeManifestConsistency>;
 };
 
-export type PeOverlayArtifacts = {
+export type PeImageArtifacts = {
   overlay: Awaited<ReturnType<typeof analyzePeOverlay>>;
   packers: Awaited<ReturnType<typeof analyzePePackers>>;
+  goRuntime: Awaited<ReturnType<typeof analyzePeGoRuntime>>;
 };
-
 const appendUniqueMessages = (existing: string[] | undefined, messages: string[]): string[] | undefined =>
   messages.length ? [...new Set([...(existing ?? []), ...messages])] : existing;
 
@@ -108,7 +107,7 @@ export const parseWindowsPe = async (
   const debugArtifacts = await parsePeDebugArtifacts(context);
   const directories = await parsePeDirectoryArtifacts(context);
   const security = await parsePeSecurity(context, debugArtifacts.debugResult);
-  const overlayArtifacts = await parsePeOverlayArtifacts(context, debugArtifacts.debugResult);
+  const imageArtifacts = await parsePeImageArtifacts(context, debugArtifacts.debugResult);
   const importLinking = analyzeImportLinking(
     directories.importResult,
     directories.boundImports,
@@ -119,7 +118,7 @@ export const parseWindowsPe = async (
   );
   applyLoadConfigChecks(context, directories, importLinking);
   return withWindowsPeLayoutWarnings(
-    buildWindowsPeResult(context, debugArtifacts, directories, overlayArtifacts, security, importLinking),
+    buildWindowsPeResult(context, debugArtifacts, directories, imageArtifacts, security, importLinking),
     file.size
   );
 };
@@ -250,10 +249,10 @@ const parsePeSecurity = async (
   );
 };
 
-const parsePeOverlayArtifacts = async (
+const parsePeImageArtifacts = async (
   context: PeWindowsParseContext,
   debugResult: PeDebugArtifacts["debugResult"]
-): Promise<PeOverlayArtifacts> => {
+): Promise<PeImageArtifacts> => {
   const { file, reader, core } = context;
   const overlay = await analyzePeOverlay({
     file,
@@ -272,6 +271,7 @@ const parsePeOverlayArtifacts = async (
   });
   return {
     overlay,
+    goRuntime: await analyzePeGoRuntime(file, reader, core),
     packers: await analyzePePackers({
       reader,
       sections: core.sections,

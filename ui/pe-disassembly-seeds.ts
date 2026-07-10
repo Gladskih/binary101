@@ -64,7 +64,14 @@ const collectBasicPeDisassemblySeeds = (
       : [],
     guardCFFunctionRvas: [],
     safeSehHandlerRvas: [],
-    extraEntrypoints: []
+    extraEntrypoints: windowsPe?.goRuntime?.functions.length
+      ? [{
+          source: "Go runtime functab",
+          rvas: windowsPe.goRuntime.functions.map(fn =>
+            Number(fn.start - windowsPe.opt.ImageBase)
+          )
+        }]
+      : []
   };
 };
 

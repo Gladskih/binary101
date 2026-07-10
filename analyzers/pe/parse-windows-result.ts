@@ -5,7 +5,7 @@ import { collectPeLayoutWarnings } from "./layout/warnings.js";
 import type {
   PeDebugArtifacts,
   PeDirectoryArtifacts,
-  PeOverlayArtifacts,
+  PeImageArtifacts,
   PeWindowsParseContext
 } from "./parse-windows.js";
 import { attachManifestValidation } from "./resources/manifest-consistency.js";
@@ -25,7 +25,7 @@ export const buildWindowsPeResult = (
   context: PeWindowsParseContext,
   debugArtifacts: PeDebugArtifacts,
   directories: PeDirectoryArtifacts,
-  overlayArtifacts: PeOverlayArtifacts,
+  imageArtifacts: PeImageArtifacts,
   security: PeWindowsParseResult["security"],
   importLinking: PeWindowsParseResult["importLinking"]
 ): PeWindowsParseResult => {
@@ -65,9 +65,10 @@ export const buildWindowsPeResult = (
     globalPtr: directories.globalPtr,
     linuxBoot: context.linuxBoot,
     nativeAotCandidate: directories.nativeAotCandidate,
-    packers: overlayArtifacts.packers,
+    ...(imageArtifacts.goRuntime ? { goRuntime: imageArtifacts.goRuntime } : {}),
+    packers: imageArtifacts.packers,
     resources: attachManifestValidation(directories.resources, directories.manifestValidation),
-    ...(overlayArtifacts.overlay ? { overlay: overlayArtifacts.overlay } : {}),
+    ...(imageArtifacts.overlay ? { overlay: imageArtifacts.overlay } : {}),
     imageEnd: core.imageEnd,
     imageSizeMismatch: core.imageSizeMismatch,
     hasCert: !!security?.count

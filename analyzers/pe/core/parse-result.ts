@@ -2,6 +2,7 @@
 
 import type { CoffDebugInfo } from "../../coff/debug-types.js";
 import type { DwarfAnalysis } from "../../dwarf/types.js";
+import type { GoRuntimeMetadata } from "../../go-runtime/types.js";
 import type { PeCodeViewEntry, PeDebugDirectoryEntry } from "../debug/directory.js";
 import type { PeEntrypointDisassemblyReport, PeInstructionSetReport } from "../disassembly/index.js";
 import type { PeImportLinkingResult } from "../imports/linking.js";
@@ -86,6 +87,7 @@ export interface PeWindowsParseResult extends PeParseResultBase {
   entrypointDisassembly?: PeEntrypointDisassemblyReport;
   nativeAotCandidate?: PeNativeAotCandidate | null;
   linuxBoot?: PeLinuxBootProtocol | null;
+  goRuntime?: GoRuntimeMetadata;
 }
 
 export interface PeHeaderParseResult extends PeParseResultBase {

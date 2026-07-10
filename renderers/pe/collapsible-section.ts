@@ -25,6 +25,8 @@ const PE_SECTION_DESCRIPTIONS: Record<string, string> = {
     "Symbols this image exposes to other modules by name, ordinal, or forwarder string.",
   "Global pointer (GP)":
     "Machine-specific GLOBALPTR directory data for images that use GP-relative addressing.",
+  "Go runtime metadata":
+    "Strictly cross-validated Go pcHeader, moduledata, pclntab, functab, source-file, and function-name metadata.",
   "Import Address Table (IAT)":
     "Runtime thunk table that the loader patches with resolved imported function addresses.",
   "Import Address Tables (IAT)":

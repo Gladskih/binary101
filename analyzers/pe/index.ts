@@ -20,6 +20,11 @@ export type {
   PeWindowsParseResult
 } from "./core/parse-result.js";
 export type { PeLinuxBootProtocol } from "./linux-boot.js";
+export type {
+  GoRuntimeFunction,
+  GoRuntimeLayout,
+  GoRuntimeMetadata
+} from "../go-runtime/types.js";
 import type { PeParseResult } from "./core/parse-result.js";
 
 const appendUniqueMessages = (existing: string[] | undefined, messages: string[]): string[] | undefined =>

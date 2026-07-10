@@ -14,6 +14,10 @@ import { getCoffDebugTableModel } from "../coff/debug.js";
 import { getPeDisassemblyStringTableModel } from "./disassembly-strings.js";
 import { createImportFunctionTableModel } from "./import-function-table.js";
 import { getPeResourceTableModel } from "./resources.js";
+import {
+  createGoRuntimeFunctionTableModel,
+  GO_FUNCTION_TABLE_ID
+} from "./go-runtime.js";
 
 const eagerImportMatch = (tableId: string): number | null => {
   const match = tableId.match(/^eager-import-(\d+)$/);
@@ -81,6 +85,9 @@ export const getPePagedTableModel = (
   (
     isPeWindowsParseResult(pe)
       ? getPeDisassemblyStringTableModel(pe, tableId) ??
+        (tableId === GO_FUNCTION_TABLE_ID && pe.goRuntime
+          ? createGoRuntimeFunctionTableModel(pe.goRuntime.functions)
+          : null) ??
         getImportFunctionTableModel(pe, tableId) ??
         getPeResourceTableModel(pe.resources, tableId)
       : null
