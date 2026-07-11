@@ -3,6 +3,7 @@
 import {
   hasValidGzipDeflateHeaderView
 } from "../gzip/signature.js";
+import { hasRarSignature } from "../rar/utils.js";
 
 const DOS_SIGNATURE_MZ = 0x5a4d;
 const DOS_E_LFANEW_OFFSET = 0x3c;
@@ -41,6 +42,7 @@ export const EMBEDDED_CAB_LABEL = "Microsoft Cabinet archive (CAB)";
 export const EMBEDDED_EXECUTABLE_LABEL = "PE/NE/LX executable";
 export const EMBEDDED_GZIP_LABEL = "gzip compressed data";
 export const EMBEDDED_MIDI_LABEL = "MIDI audio";
+export const EMBEDDED_RAR_LABEL = "RAR archive";
 export const EMBEDDED_SEVEN_ZIP_LABEL = "7z archive";
 export const EMBEDDED_ZIP_LABEL = "ZIP archive";
 
@@ -171,7 +173,8 @@ export const isEmbeddedCandidateStartByte = (byteValue: number): boolean =>
   byteValue === 0x37 ||
   byteValue === 0x42 ||
   byteValue === 0x4d ||
-  byteValue === 0x50;
+  byteValue === 0x50 ||
+  byteValue === "R".charCodeAt(0);
 
 export const detectEmbeddedCandidateType = (
   view: DataView,
@@ -185,5 +188,6 @@ export const detectEmbeddedCandidateType = (
   if (readEmbeddedBmpFileSize(view, remainingBytes) != null) return EMBEDDED_BMP_LABEL;
   if (readEmbeddedMidiFileSize(view, remainingBytes) != null) return EMBEDDED_MIDI_LABEL;
   if (readEmbeddedSevenZipFileSize(view, remainingBytes) != null) return EMBEDDED_SEVEN_ZIP_LABEL;
+  if (hasRarSignature(view)) return EMBEDDED_RAR_LABEL;
   return hasExecutableMzSignature(view) ? EMBEDDED_EXECUTABLE_LABEL : null;
 };

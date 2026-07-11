@@ -2,6 +2,7 @@
 
 import { detectBinaryType } from "../detect-binary-type.js";
 import type { FileRangeReader } from "../file-range-reader.js";
+import { parseRar } from "../rar/index.js";
 import type { FileRange } from "./layout/file-ranges.js";
 import type { PeOverlayFinding, PeOverlayRange, PeOverlayScanOptions } from "./overlay.js";
 import {
@@ -10,6 +11,7 @@ import {
   EMBEDDED_CAB_LABEL,
   EMBEDDED_EXECUTABLE_LABEL,
   EMBEDDED_MIDI_LABEL,
+  EMBEDDED_RAR_LABEL,
   EMBEDDED_SEVEN_ZIP_LABEL,
   isEmbeddedCandidateStartByte,
   readEmbeddedBmpFileSize,
@@ -52,6 +54,28 @@ const detectRangeAtOffset = async (
   if (label === EMBEDDED_BMP_LABEL && readEmbeddedBmpFileSize(prefix, range.end - offset) == null) return null;
   if (label === EMBEDDED_MIDI_LABEL && readEmbeddedMidiFileSize(prefix, range.end - offset) == null) return null;
   return label;
+};
+
+const hasEmbeddedRarArchive = async (
+  file: File,
+  range: FileRange,
+  offset: number
+): Promise<boolean> => {
+  const rar = await parseRar(createOverlaySliceFile(file, { start: offset, end: range.end }));
+  return rar.isRar && rar.mainHeader != null;
+};
+
+const resolveEmbeddedCandidateType = async (
+  file: File,
+  range: FileRange,
+  offset: number,
+  candidateType: string
+): Promise<string | null> => {
+  if (candidateType === EMBEDDED_EXECUTABLE_LABEL) return detectRangeAtOffset(file, range, offset);
+  if (candidateType === EMBEDDED_RAR_LABEL && !await hasEmbeddedRarArchive(file, range, offset)) {
+    return null;
+  }
+  return candidateType;
 };
 
 const throwIfAborted = (signal: AbortSignal | undefined): void => {
@@ -185,9 +209,12 @@ const scanChunk = async (
     const candidateType = detectEmbeddedCandidateType(probeView, range.end - cursor - index);
     if (!candidateType) continue;
     const detectedOffset = cursor + index;
-    const detectedType = candidateType === EMBEDDED_EXECUTABLE_LABEL
-      ? await detectRangeAtOffset(file, range, detectedOffset)
-      : candidateType;
+    const detectedType = await resolveEmbeddedCandidateType(
+      file,
+      range,
+      detectedOffset,
+      candidateType
+    );
     if (!detectedType) continue;
     const finding = await createOverlayFinding(reader, range, detectedOffset, detectedType);
     findings.push(finding);

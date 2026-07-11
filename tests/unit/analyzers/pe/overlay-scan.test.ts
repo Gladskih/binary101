@@ -6,6 +6,7 @@ import { analyzePeOverlay } from "../../../../analyzers/pe/overlay.js";
 import { scanPeOverlayRange } from "../../../../analyzers/pe/overlay-scan.js";
 import { createBmpFile } from "../../../fixtures/bmp-fixtures.js";
 import { createBareMidiSignatureBytes, createMinimalMidiFileBytes } from "../../../fixtures/midi-fixtures.js";
+import { createOverlayInputsWithPayload } from "../../../fixtures/pe-overlay-fixtures.js";
 import { createPeWithSectionAndIat } from "../../../fixtures/sample-files-pe.js";
 import { createSevenZipFile } from "../../../fixtures/rar-sevenzip-fixtures.js";
 import { expectDefined } from "../../../helpers/expect-defined.js";
@@ -41,32 +42,6 @@ const createOverlayInputs = (overlayPrefixBytes = Uint8Array.of()) => {
       optionalHeaderSize: 0,
       sectionCount: 0,
       declaredSizeOfHeaders: fixture.overlayStart,
-      sections: [],
-      dataDirs: [],
-      pointerToSymbolTable: 0,
-      numberOfSymbols: 0
-    }
-  };
-};
-
-const createOverlayInputsWithPayload = (payloadBytes: Uint8Array) => {
-  const imagePrefixBytes = Uint8Array.of(0xaa, 0xbb, 0xcc, 0xdd);
-  const overlayStart = imagePrefixBytes.byteLength;
-  const overlayEnd = overlayStart + payloadBytes.byteLength;
-  const bytes = new Uint8Array(overlayEnd);
-  bytes.set(imagePrefixBytes);
-  bytes.set(payloadBytes, overlayStart);
-  const file = new MockFile(bytes, "carrier.exe");
-  return {
-    overlayEnd,
-    overlayStart,
-    inputs: {
-      file,
-      reader: file,
-      optionalHeaderOffset: 0,
-      optionalHeaderSize: 0,
-      sectionCount: 0,
-      declaredSizeOfHeaders: overlayStart,
       sections: [],
       dataDirs: [],
       pointerToSymbolTable: 0,
