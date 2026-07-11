@@ -68,7 +68,7 @@ void test("readGuardCFFunctionTable preserves metadata bytes and decodes GFIDS f
   // Microsoft CFG metadata documents bit 0 as FID_SUPPRESSED and bit 1 as EXPORT_SUPPRESSED.
   dv.setUint8(LOAD_CONFIG_TEST_TABLE_RVA + 4, 0x03);
   dv.setUint32(LOAD_CONFIG_TEST_TABLE_RVA + 5, SECOND_CFG_TARGET_RVA, true);
-  // Bits outside 0x03 are currently unsupported and must be surfaced as unknown.
+  // Windows SDK defines bit 2 as FID_LANGEXCPTHANDLER; only bit 7 stays unknown.
   dv.setUint8(LOAD_CONFIG_TEST_TABLE_RVA + 9, 0x84);
 
   const table = await readGuardCFFunctionTable(
@@ -83,7 +83,8 @@ void test("readGuardCFFunctionTable preserves metadata bytes and decodes GFIDS f
   assert.deepEqual(table.entries.map(entry => entry.rva), [FIRST_CFG_TARGET_RVA, SECOND_CFG_TARGET_RVA]);
   assert.deepEqual(table.entries[0]?.metadataBytes, [0x03]);
   assert.deepEqual(table.entries[0]?.gfidsFlags, ["FID_SUPPRESSED", "EXPORT_SUPPRESSED"]);
-  assert.equal(table.entries[1]?.unknownGfidsFlagBits, 0x84);
+  assert.deepEqual(table.entries[1]?.gfidsFlags, ["FID_LANGEXCPTHANDLER"]);
+  assert.equal(table.entries[1]?.unknownGfidsFlagBits, 0x80);
 });
 
 void test("readGuardCFFunctionTableRvas returns empty list for invalid or unmapped tables", async () => {

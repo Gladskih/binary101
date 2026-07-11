@@ -6,6 +6,7 @@ import { createLoadConfigEnricher } from "../../../../../analyzers/pe/load-confi
 import { createPeLoadConfigResult } from "../../../../../analyzers/pe/load-config/result.js";
 import type { PeDynamicRelocations } from "../../../../../analyzers/pe/dynamic-relocations/index.js";
 import type { PeLoadConfig, PeLoadConfigTable } from "../../../../../analyzers/pe/load-config/index.js";
+import { PE32_PLUS_POINTER_BYTES } from "../../../../../analyzers/pe/load-config/reference-reader.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
 
 // Microsoft PE format documents 0x00400000 as the historical PE32 executable ImageBase.
@@ -26,12 +27,14 @@ const parseWith = (
   createLoadConfigEnricher(
     async () => loadConfig,
     parseDynamicRelocations,
-    readSafeSehHandlerTable
+    readSafeSehHandlerTable,
+    PE32_PLUS_POINTER_BYTES
   )(
     reader,
     [],
     (rva: number) => rva,
     IMAGE_BASE,
+    MOCK_FILE_SIZE,
     MOCK_FILE_SIZE,
     []
   );
@@ -55,6 +58,18 @@ void test("parseAndEnrichLoadConfig attaches structured CFG table entries and dy
 
   assert.deepEqual(enriched?.tables?.guardFid?.entries.map(entry => entry.rva), [CFG_TARGET_RVA]);
   assert.equal(enriched?.dynamicRelocations?.version, 1);
+});
+
+void test("parseAndEnrichLoadConfig attaches data from referenced Load Config structures", async () => {
+  const bytes = new Uint8Array(MOCK_FILE_SIZE).fill(0);
+  new DataView(bytes.buffer).setBigUint64(TABLE_RVA, IMAGE_BASE + 0x100n, true);
+  const loadConfig = createPeLoadConfigResult();
+  loadConfig.LockPrefixTable = TABLE_VA;
+
+  const enriched = await parseWith(new MockFile(bytes, "loadcfg-references.bin"), loadConfig);
+
+  assert.deepEqual(enriched?.references?.lockPrefixTable?.values, [IMAGE_BASE + 0x100n]);
+  assert.equal(enriched?.references?.lockPrefixTable?.terminated, true);
 });
 
 void test("parseAndEnrichLoadConfig attaches each supported Load Config address table", async () => {

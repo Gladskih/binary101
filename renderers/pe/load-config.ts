@@ -13,6 +13,7 @@ import {
   renderLoadConfigDynamicRelocations,
   renderLoadConfigGuardFlags
 } from "./load-config-widgets.js";
+import { renderLoadConfigReferences } from "./load-config-references.js";
 const formatPointerHex = (value: bigint, width: number): string =>
   `0x${value.toString(16).padStart(width, "0")}`;
 
@@ -114,6 +115,7 @@ export function renderLoadConfig(pe: PeWindowsParseResult, out: string[]): void 
   if (lc.dynamicRelocations) {
     out.push(renderLoadConfigDynamicRelocations(lc.dynamicRelocations));
   }
+  if (lc.references) out.push(renderLoadConfigReferences(lc.references, pointerWidth));
   out.push(renderLoadConfigAddressTables([
     ...(lc.tables?.safeSehHandler && hasLoadConfigTableInfo(lc.tables.safeSehHandler)
       ? [[lc.tables.safeSehHandler, "SafeSEH handlers (x86 only)."] as const]

@@ -1,21 +1,20 @@
 "use strict";
 
 import type { FileRangeReader } from "../../file-range-reader.js";
+import { PE_RVA_EXCLUSIVE_LIMIT } from "../layout/rva-limits.js";
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import {
   readLoadConfigPointerRva,
   type PeLoadConfigTable,
   type PeLoadConfigTableKind
 } from "./index.js";
+import { decodeLoadConfigTableEntry } from "./table-record.js";
 import type { RvaToOffset } from "../types.js";
 
+// PE metadata defines CFG entries as an RVA plus the stride encoded in GuardFlags.
 // https://learn.microsoft.com/en-us/windows/win32/secbp/pe-metadata
-// The CFG target tables (GFIDS and related) store an RVA plus optional metadata bytes.
-// Entry size is 4 + n, where n is the "stride" subfield encoded in GuardFlags.
 const IMAGE_GUARD_CF_FUNCTION_TABLE_SIZE_MASK = 0xf000_0000;
 const IMAGE_GUARD_CF_FUNCTION_TABLE_SIZE_SHIFT = 28;
-const IMAGE_GUARD_FLAG_FID_SUPPRESSED = 0x01;
-const IMAGE_GUARD_FLAG_EXPORT_SUPPRESSED = 0x02;
-const GFIDS_FLAG_MASK = IMAGE_GUARD_FLAG_FID_SUPPRESSED | IMAGE_GUARD_FLAG_EXPORT_SUPPRESSED;
 export const getCfgTargetTableEntrySize = (guardFlags: number): number => {
   const flags = Number.isSafeInteger(guardFlags) ? (guardFlags >>> 0) : 0;
   const stride =
@@ -24,13 +23,33 @@ export const getCfgTargetTableEntrySize = (guardFlags: number): number => {
   return 4 + stride;
 };
 
-const decodeGfidsFlags = (flags: number): string[] => [
-  ...((flags & IMAGE_GUARD_FLAG_FID_SUPPRESSED) !== 0 ? ["FID_SUPPRESSED"] : []),
-  ...((flags & IMAGE_GUARD_FLAG_EXPORT_SUPPRESSED) !== 0 ? ["EXPORT_SUPPRESSED"] : [])
-];
-
 const readTableRvas = async (table: Promise<PeLoadConfigTable>): Promise<number[]> =>
   (await table).entries.map(entry => entry.rva);
+
+const createTableResult = (
+  kind: PeLoadConfigTableKind,
+  name: string,
+  tableVa: bigint,
+  tableRva: number | null,
+  count: number,
+  entrySize: number,
+  notes: string[],
+  warnings: string[]
+) => (
+  entries: PeLoadConfigTable["entries"],
+  truncated: boolean
+): PeLoadConfigTable => ({
+  kind,
+  name,
+  tableVa,
+  tableRva,
+  declaredCount: Number.isSafeInteger(count) && count > 0 ? count : 0,
+  entrySize: Number.isSafeInteger(entrySize) && entrySize > 0 ? entrySize : 0,
+  entries,
+  truncated,
+  ...(notes.length ? { notes } : {}),
+  ...(warnings.length ? { warnings } : {})
+});
 
 const readLoadConfigRvaTable = async (
   reader: FileRangeReader,
@@ -42,24 +61,11 @@ const readLoadConfigRvaTable = async (
   kind: PeLoadConfigTableKind,
   name: string
 ): Promise<PeLoadConfigTable> => {
-  const warnings: string[] = [];
-  const notes: string[] = [];
+  const warnings: string[] = [], notes: string[] = [];
   const tableRva = readLoadConfigPointerRva(imageBase, tableVa);
-  const result = (
-    entries: PeLoadConfigTable["entries"],
-    truncated: boolean
-  ): PeLoadConfigTable => ({
-    kind,
-    name,
-    tableVa,
-    tableRva,
-    declaredCount: Number.isSafeInteger(count) && count > 0 ? count : 0,
-    entrySize: Number.isSafeInteger(entrySize) && entrySize > 0 ? entrySize : 0,
-    entries,
-    truncated,
-    ...(notes.length ? { notes } : {}),
-    ...(warnings.length ? { warnings } : {})
-  });
+  const result = createTableResult(
+    kind, name, tableVa, tableRva, count, entrySize, notes, warnings
+  );
   if (!Number.isSafeInteger(count) || count <= 0) return result([], false);
   if (!Number.isSafeInteger(entrySize) || entrySize <= 0) {
     warnings.push(`${name}: invalid entry size.`);
@@ -78,38 +84,20 @@ const readLoadConfigRvaTable = async (
     warnings.push(`${name}: table RVA 0x${tableRva.toString(16)} maps outside file data.`);
     return result([], true);
   }
+  if (count > Math.floor((PE_RVA_EXCLUSIVE_LIMIT - tableRva) / entrySize)) {
+    warnings.push(`${name}: declared entries exceed the 32-bit RVA address space.`);
+    return result([], true);
+  }
   const entries: PeLoadConfigTable["entries"] = [];
   for (let index = 0; index < count; index += 1) {
-    const entryRva = (tableRva + index * entrySize) >>> 0;
-    const entryOff = rvaToOff(entryRva);
-    if (entryOff == null) {
-      notes.push(`${name}: entry ${index} RVA 0x${entryRva.toString(16)} is not backed by raw file data.`);
-      return result(entries, true);
-    }
-    if (entryOff < 0 || entryOff + entrySize > reader.size) {
-      warnings.push(`${name}: entry ${index} maps outside complete file data.`);
-      return result(entries, true);
-    }
-    const dv = await reader.read(entryOff, entrySize);
+    const entryRva = tableRva + index * entrySize;
+    const dv = await readMappedRvaPrefix(reader, entryRva, entrySize, rvaToOff);
     if (dv.byteLength < entrySize) {
-      warnings.push(`${name}: entry ${index} is truncated.`);
+      warnings.push(`${name}: entry ${index} is truncated or not fully backed by raw file data.`);
       return result(entries, true);
     }
-    const rva = dv.getUint32(0, true) >>> 0;
-    const metadataBytes = Array.from(
-      { length: Math.max(0, entrySize - Uint32Array.BYTES_PER_ELEMENT) },
-      (_, byteIndex) => dv.getUint8(Uint32Array.BYTES_PER_ELEMENT + byteIndex)
-    );
-    if (!rva) continue;
-    const gfidsByte = kind === "guardFid" && metadataBytes.length ? metadataBytes[0] ?? 0 : 0;
-    const unknownGfidsFlagBits = gfidsByte & ~GFIDS_FLAG_MASK;
-    entries.push({
-      index,
-      rva,
-      ...(metadataBytes.length ? { metadataBytes } : {}),
-      ...(kind === "guardFid" && gfidsByte ? { gfidsFlags: decodeGfidsFlags(gfidsByte) } : {}),
-      ...(kind === "guardFid" && unknownGfidsFlagBits ? { unknownGfidsFlagBits } : {})
-    });
+    const entry = decodeLoadConfigTableEntry(dv, index, kind);
+    if (entry) entries.push(entry);
   }
   return result(entries, false);
 };
@@ -204,7 +192,6 @@ export async function readGuardEhContinuationTable(
     "GuardEHContinuationTable"
   );
 }
-
 export async function readGuardEhContinuationTableRvas(
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
@@ -222,7 +209,6 @@ export async function readGuardEhContinuationTableRvas(
     guardFlags
   ));
 }
-
 export async function readGuardLongJumpTargetTable(
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
@@ -243,7 +229,6 @@ export async function readGuardLongJumpTargetTable(
     "GuardLongJumpTargetTable"
   );
 }
-
 export async function readGuardLongJumpTargetTableRvas(
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
@@ -261,7 +246,6 @@ export async function readGuardLongJumpTargetTableRvas(
     guardFlags
   ));
 }
-
 export async function readGuardAddressTakenIatEntryTable(
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
@@ -282,7 +266,6 @@ export async function readGuardAddressTakenIatEntryTable(
     "GuardAddressTakenIatEntryTable"
   );
 }
-
 export async function readGuardAddressTakenIatEntryTableRvas(
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,

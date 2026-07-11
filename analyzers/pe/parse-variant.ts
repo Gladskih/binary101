@@ -10,6 +10,10 @@ import { parseImportDirectory32, parseImportDirectory64 } from "./imports/index.
 import { createLoadConfigEnricher } from "./load-config/enrich.js";
 import { parseLoadConfigDirectory32, parseLoadConfigDirectory64 } from "./load-config/index.js";
 import { readSafeSehHandlerTable } from "./load-config/tables.js";
+import {
+  PE32_POINTER_BYTES,
+  PE32_PLUS_POINTER_BYTES
+} from "./load-config/reference-reader.js";
 import { IMAGE_FILE_MACHINE_I386 } from "../coff/machine.js";
 import { PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "./optional-header/magic.js";
 
@@ -29,7 +33,8 @@ export const selectPeVariantParsers = (
         parseAndEnrichLoadConfig: createLoadConfigEnricher(
           parseLoadConfigDirectory64,
           parseDynamicRelocationsFromLoadConfig64,
-          null
+          null,
+          PE32_PLUS_POINTER_BYTES
         ),
         parseImportDirectory: parseImportDirectory64,
         parseTlsDirectory: parseTlsDirectory64,
@@ -40,7 +45,8 @@ export const selectPeVariantParsers = (
           parseLoadConfigDirectory32,
           parseDynamicRelocationsFromLoadConfig32,
           // Microsoft PE format: SafeSEH applies only to IMAGE_FILE_MACHINE_I386 PE32 images.
-          canonicalMachine === IMAGE_FILE_MACHINE_I386 ? readSafeSehHandlerTable : null
+          canonicalMachine === IMAGE_FILE_MACHINE_I386 ? readSafeSehHandlerTable : null,
+          PE32_POINTER_BYTES
         ),
         parseImportDirectory: parseImportDirectory32,
         parseTlsDirectory: parseTlsDirectory32,

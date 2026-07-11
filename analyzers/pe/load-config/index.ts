@@ -2,12 +2,14 @@
 
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeDynamicRelocations } from "../dynamic-relocations/index.js";
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import {
   buildLoadConfig32,
   buildLoadConfig64,
   type LoadConfigFieldReader
 } from "./layouts.js";
 import { createPeLoadConfigResult } from "./result.js";
+import type { PeLoadConfigReferences } from "./reference-types.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 
 export type PeLoadConfigCodeIntegrity = {
@@ -115,15 +117,13 @@ export interface PeLoadConfig {
   GuardFlags: number;
   tables?: PeLoadConfigTables;
   dynamicRelocations?: PeDynamicRelocations | null;
+  references?: PeLoadConfigReferences;
   checks?: PeLoadConfigCheck[];
   notes?: string[];
   warnings?: string[];
 }
 
 const MAX_RVA_BIGINT = 0xffff_ffffn;
-// Local corruption guard, not a PE limit: Microsoft PE Load Configuration Layout and
-// Windows SDK 10.0.26100.0 winnt.h currently document structures far smaller than 64 KiB.
-const MAX_REASONABLE_LOAD_CONFIG_SIZE = 0x10000;
 
 const toRvaFromVa = (virtualAddress: bigint, imageBase: bigint): number | null => {
   if (virtualAddress === 0n || imageBase <= 0n) return null;
@@ -141,113 +141,88 @@ const toSafeCount = (fieldName: string, value: bigint, warnings: string[]): numb
   return 0;
 };
 
-const getContiguousMappedSize = (
-  startRva: number,
-  startOffset: number,
-  maximumSize: number,
-  rvaToOff: RvaToOffset
-): number => {
-  let low = 0;
-  let high = Math.max(0, maximumSize);
-  while (low < high) {
-    const middle = low + Math.ceil((high - low) / 2);
-    const endRva = startRva + middle - 1;
-    const endOffset = endRva <= Number(MAX_RVA_BIGINT) ? rvaToOff(endRva >>> 0) : null;
-    if (endOffset === startOffset + middle - 1) {
-      low = middle;
-    } else {
-      high = middle - 1;
-    }
+const readLoadConfigBytes = async (
+  reader: FileRangeReader,
+  directory: PeDataDirectory,
+  rvaToOff: RvaToOffset,
+  knownSize: number,
+  warnings: string[],
+  notes: string[]
+): Promise<DataView | null> => {
+  if (directory.size > 0 && directory.size < 0x40) {
+    warnings.push("LOAD_CONFIG directory is smaller than the minimum documented header size (0x40 bytes).");
   }
-  return low;
+  if (directory.size === 0) {
+    warnings.push("LOAD_CONFIG does not contain any readable bytes.");
+    return null;
+  }
+  const initialView = await readMappedRvaPrefix(
+    reader, directory.rva, Math.min(4, directory.size), rvaToOff
+  );
+  if (initialView.byteLength < 4) {
+    warnings.push("LOAD_CONFIG is truncated before the Size field.");
+    return null;
+  }
+  const declaredSize = initialView.getUint32(0, true);
+  if (Math.max(directory.size, declaredSize) > knownSize) {
+    notes.push(
+      `LOAD_CONFIG contains bytes beyond the ${knownSize}-byte layout published by the current Windows SDK.`
+    );
+  }
+  return readMappedRvaPrefix(
+    reader, directory.rva, Math.min(Math.max(directory.size, declaredSize), knownSize), rvaToOff
+  );
 };
 
-const getDeclaredLoadConfigSize = (view: DataView): number => {
-  if (view.byteLength < 4) return 0;
-  const Size = view.getUint32(0, true);
-  return Size > 0 && Size <= MAX_REASONABLE_LOAD_CONFIG_SIZE ? Size : 0;
+const createFieldReader = (view: DataView, warnings: string[]): LoadConfigFieldReader => {
+  const declaredSize = view.getUint32(0, true);
+  const withinDeclared = (endExclusive: number): boolean => !declaredSize || declaredSize >= endExclusive;
+  const has = (offset: number, byteLength: number): boolean =>
+    view.byteLength >= offset + byteLength && withinDeclared(offset + byteLength);
+  return {
+    Size: declaredSize,
+    TimeDateStamp: view.byteLength >= 8 ? view.getUint32(4, true) : 0,
+    Major: view.byteLength >= 10 ? view.getUint16(8, true) : 0,
+    Minor: view.byteLength >= 12 ? view.getUint16(10, true) : 0,
+    readU16: offset => (has(offset, 2) ? view.getUint16(offset, true) : 0),
+    readU32: offset => (has(offset, 4) ? view.getUint32(offset, true) : 0),
+    readU32AsBigInt: offset => (has(offset, 4) ? BigInt(view.getUint32(offset, true)) : 0n),
+    readU64: offset => (has(offset, 8) ? view.getBigUint64(offset, true) : 0n),
+    readU64Count: (offset, fieldName) =>
+      (has(offset, 8) ? toSafeCount(fieldName, view.getBigUint64(offset, true), warnings) : 0)
+  };
 };
 
 const parseLoadConfigDirectoryWithBuilder = async (
   reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
-  buildLoadConfig: (reader: LoadConfigFieldReader) => PeLoadConfig
+  buildLoadConfig: (reader: LoadConfigFieldReader) => PeLoadConfig,
+  knownSize: number
 ): Promise<PeLoadConfig | null> => {
-  const lcDir = dataDirs.find(d => d.name === "LOAD_CONFIG");
-  if (!lcDir || (lcDir.rva === 0 && lcDir.size === 0)) return null;
+  const directory = dataDirs.find(item => item.name === "LOAD_CONFIG");
+  if (!directory || (directory.rva === 0 && directory.size === 0)) return null;
   const warnings: string[] = [];
-  if (!lcDir.rva) {
-    warnings.push("LOAD_CONFIG has a non-zero size but RVA is 0.");
-    return createPeLoadConfigResult(warnings);
-  }
-  const base = rvaToOff(lcDir.rva);
-  if (base == null) {
-    warnings.push("LOAD_CONFIG RVA could not be mapped to a file offset.");
-    return createPeLoadConfigResult(warnings);
-  }
-  const fileSize = reader.size;
-  if (base >= fileSize) {
-    warnings.push("LOAD_CONFIG starts past end of file.");
-    return createPeLoadConfigResult(warnings);
-  }
-  const fileAvailableSize = Math.max(0, fileSize - base);
-  const directoryAvailableSize = Math.min(lcDir.size, fileAvailableSize);
-  if (directoryAvailableSize < lcDir.size) warnings.push("LOAD_CONFIG directory is truncated by end of file.");
-  if (lcDir.size > 0 && lcDir.size < 0x40) {
-    warnings.push("LOAD_CONFIG directory is smaller than the minimum documented header size (0x40 bytes).");
-  }
-  if (directoryAvailableSize === 0) {
-    warnings.push("LOAD_CONFIG does not contain any readable bytes.");
-    return createPeLoadConfigResult(warnings);
-  }
-  const initialView = await reader.read(
-    base,
-    getContiguousMappedSize(lcDir.rva, base, Math.min(4, directoryAvailableSize), rvaToOff)
-  );
-  if (initialView.byteLength < 4) {
-    warnings.push("LOAD_CONFIG is truncated before the Size field.");
-    return createPeLoadConfigResult(warnings);
-  }
-  const declaredSize = getDeclaredLoadConfigSize(initialView);
-  const requestedSize = Math.max(Math.min(lcDir.size, MAX_REASONABLE_LOAD_CONFIG_SIZE), declaredSize);
-  const mappedAvailableSize = getContiguousMappedSize(
-    lcDir.rva,
-    base,
-    Math.min(requestedSize, fileAvailableSize),
-    rvaToOff
-  );
-  const view = await reader.read(base, mappedAvailableSize);
+  const notes: string[] = [];
+  if (!directory.rva) return createPeLoadConfigResult(["LOAD_CONFIG has a non-zero size but RVA is 0."]);
+  const base = rvaToOff(directory.rva);
+  if (base == null) return createPeLoadConfigResult(["LOAD_CONFIG RVA could not be mapped to a file offset."]);
+  if (base >= reader.size) return createPeLoadConfigResult(["LOAD_CONFIG starts past end of file."]);
+  const view = await readLoadConfigBytes(reader, directory, rvaToOff, knownSize, warnings, notes);
+  if (!view) return createPeLoadConfigResult(warnings);
   if (view.byteLength < 12) {
     warnings.push("LOAD_CONFIG is truncated before the fixed header fields are complete.");
   }
-  const Size = view.getUint32(0, true);
-  const TimeDateStamp = view.byteLength >= 8 ? view.getUint32(4, true) : 0;
-  const Major = view.byteLength >= 10 ? view.getUint16(8, true) : 0;
-  const Minor = view.byteLength >= 12 ? view.getUint16(10, true) : 0;
+  const declaredSize = view.getUint32(0, true);
   if (declaredSize > 0 && declaredSize < 0x40) {
     warnings.push("LOAD_CONFIG Size field is smaller than the minimum documented header size (0x40 bytes).");
   }
-  if (declaredSize > 0 && view.byteLength < declaredSize) {
+  if (declaredSize > 0 && view.byteLength < Math.min(declaredSize, knownSize)) {
     warnings.push("LOAD_CONFIG bytes available in file are smaller than the Size field.");
   }
-  const withinDeclared = (endExclusive: number): boolean => !declaredSize || declaredSize >= endExclusive;
-  const has = (offset: number, byteLength: number): boolean =>
-    view.byteLength >= offset + byteLength && withinDeclared(offset + byteLength);
-  const fieldReader: LoadConfigFieldReader = {
-    Size,
-    TimeDateStamp,
-    Major,
-    Minor,
-    readU16: (offset: number): number => (has(offset, 2) ? view.getUint16(offset, true) : 0),
-    readU32: (offset: number): number => (has(offset, 4) ? view.getUint32(offset, true) : 0),
-    readU32AsBigInt: (offset: number): bigint => (has(offset, 4) ? BigInt(view.getUint32(offset, true)) : 0n),
-    readU64: (offset: number): bigint => (has(offset, 8) ? view.getBigUint64(offset, true) : 0n),
-    readU64Count: (offset: number, fieldName: string): number =>
-      (has(offset, 8) ? toSafeCount(fieldName, view.getBigUint64(offset, true), warnings) : 0)
-  };
-  const result = buildLoadConfig(fieldReader);
+  const result = buildLoadConfig(createFieldReader(view, warnings));
   if (warnings.length) result.warnings = warnings;
+  if (notes.length) result.notes = notes;
   return result;
 };
 
@@ -256,14 +231,16 @@ export const parseLoadConfigDirectory32 = async (
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset
 ): Promise<PeLoadConfig | null> =>
-  parseLoadConfigDirectoryWithBuilder(reader, dataDirs, rvaToOff, buildLoadConfig32);
+  // Windows SDK 10.0.26100.0 IMAGE_LOAD_CONFIG_DIRECTORY32 ends at byte 0xc4.
+  parseLoadConfigDirectoryWithBuilder(reader, dataDirs, rvaToOff, buildLoadConfig32, 0xc4);
 
 export const parseLoadConfigDirectory64 = async (
   reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset
 ): Promise<PeLoadConfig | null> =>
-  parseLoadConfigDirectoryWithBuilder(reader, dataDirs, rvaToOff, buildLoadConfig64);
+  // Windows SDK 10.0.26100.0 IMAGE_LOAD_CONFIG_DIRECTORY64 ends at byte 0x148.
+  parseLoadConfigDirectoryWithBuilder(reader, dataDirs, rvaToOff, buildLoadConfig64, 0x148);
 
 export function readLoadConfigPointerRva(imageBase: bigint, pointerVa: bigint): number | null {
   return toRvaFromVa(pointerVa, imageBase);

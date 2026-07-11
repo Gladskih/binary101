@@ -162,6 +162,7 @@ const parsePeDirectoryArtifacts = async (
     core.rvaToOff,
     core.opt.ImageBase,
     core.opt.SizeOfImage,
+    core.opt.SizeOfHeaders,
     core.sections
   );
   const importResult = await peVariant.parseImportDirectory(reader, core.dataDirs, core.rvaToOff);
@@ -282,7 +283,6 @@ const parsePeImageArtifacts = async (
     })
   };
 };
-
 const applyLoadConfigChecks = (
   context: PeWindowsParseContext,
   directories: PeDirectoryArtifacts,

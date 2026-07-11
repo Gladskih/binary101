@@ -15,6 +15,7 @@ import { getPeDisassemblyStringTableModel } from "./disassembly-strings.js";
 import { createImportFunctionTableModel } from "./import-function-table.js";
 import { getPeResourceTableModel } from "./resources.js";
 import { getMsvcRttiPagedTableModel } from "./msvc-rtti-table.js";
+import { getLoadConfigReferenceTableModel } from "./load-config-reference-tables.js";
 import {
   createGoRuntimeFunctionTableModel,
   GO_FUNCTION_TABLE_ID
@@ -88,6 +89,9 @@ export const getPePagedTableModel = (
       ? getPeDisassemblyStringTableModel(pe, tableId) ??
         (tableId === GO_FUNCTION_TABLE_ID && pe.goRuntime
           ? createGoRuntimeFunctionTableModel(pe.goRuntime.functions)
+          : null) ??
+        (pe.loadcfg?.references
+          ? getLoadConfigReferenceTableModel(pe.loadcfg.references, tableId)
           : null) ??
         getMsvcRttiPagedTableModel(pe, tableId) ??
         getImportFunctionTableModel(pe, tableId) ??

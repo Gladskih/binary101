@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { CoffDebugInfo, CoffSymbol } from "../../../../analyzers/coff/debug-types.js";
 import type { PeDebugDirectoryEntry } from "../../../../analyzers/pe/debug/directory.js";
+import { createPeLoadConfigResult } from "../../../../analyzers/pe/load-config/result.js";
+import { LOAD_CONFIG_REFERENCE_TABLE_IDS } from "../../../../renderers/pe/load-config-reference-tables.js";
 import { getPePagedTableModel } from "../../../../renderers/pe/paged-tables.js";
 import { MSVC_RTTI_LAYOUT } from "../../../../analyzers/pe/msvc-rtti/layout.js";
 import { TEST_COFF_STORAGE_CLASS } from "../../../fixtures/pe-coff-debug-fixtures.js";
@@ -92,4 +94,17 @@ void test("getPePagedTableModel resolves Microsoft C++ RTTI main and detail tabl
   assert.equal(main?.rowCount, 1);
   assert.equal(slots?.rowCount, 2);
   assert.equal(slots?.sortValueAt(1, 2), "4112");
+});
+
+void test("getPePagedTableModel resolves Load Config reference tables", () => {
+  const pe = createBasePe();
+  pe.loadcfg = createPeLoadConfigResult();
+  pe.loadcfg.references = {
+    lockPrefixTable: { tableRva: 0x1000, values: [0x140002000n], terminated: true }
+  };
+
+  const model = getPePagedTableModel(pe, LOAD_CONFIG_REFERENCE_TABLE_IDS.lockPrefixes);
+
+  assert.equal(model?.rowCount, 1);
+  assert.ok(model?.rowAt(0)?.cells[1]?.html.includes("140002000"));
 });
