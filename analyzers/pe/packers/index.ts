@@ -2,6 +2,7 @@
 
 import { detectBunStandalone } from "./bun-standalone.js";
 import { detectNsisInstaller } from "./nsis-installer.js";
+import { detectUpx } from "./upx.js";
 import type {
   PePackerAnalysis,
   PePackerAnalysisInput,
@@ -11,6 +12,11 @@ import type {
 type PePackerAnalyzer = (input: PePackerAnalysisInput) => Promise<PePackerDetectorResult>;
 
 const DETECTORS: readonly PePackerAnalyzer[] = [
+  input => detectUpx({
+    reader: input.reader,
+    sections: input.sections,
+    imagePointerBytes: input.imagePointerBytes
+  }),
   input => detectBunStandalone({
     reader: input.reader,
     sections: input.sections,
@@ -45,5 +51,6 @@ export type {
   PePackerConfidence,
   PePackerDetail,
   PePackerFinding,
-  PePackerKind
+  PePackerKind,
+  UpxDetectorInput
 } from "./types.js";

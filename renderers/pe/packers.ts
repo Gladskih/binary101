@@ -11,7 +11,9 @@ import { renderPeDiagnostics } from "./diagnostics.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 const kindLabel = (kind: PePackerFinding["kind"]): string =>
-  kind === "installer" ? "installer" : "runtime packager";
+  kind === "installer"
+    ? "installer"
+    : kind === "executable-packer" ? "executable packer" : "runtime packager";
 
 const formatDetailValue = (detail: PePackerDetail): string => {
   switch (detail.kind) {

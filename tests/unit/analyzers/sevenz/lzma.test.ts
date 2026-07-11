@@ -3,7 +3,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { SEVENZIP_LZMA_PROPERTY_BYTES } from "../../../../analyzers/sevenz/method-ids.js";
-import { decompressLzmaWithProperties } from "../../../../analyzers/sevenz/lzma.js";
+import {
+  decompressLzmaWithProperties,
+  decompressLzmaWithPropertiesTracked
+} from "../../../../analyzers/sevenz/lzma.js";
 
 const DECODED_TEXT = "DATA";
 const DECODED_TEXT_BYTES = BigInt(DECODED_TEXT.length);
@@ -17,6 +20,7 @@ const TRUNCATED_LZMA_PROPERTIES = LZMA_PROPERTIES.slice(0, SEVENZIP_LZMA_PROPERT
 const PACKED_DATA = Uint8Array.from([
   0x00, 0x22, 0x10, 0x46, 0xcd, 0x69, 0xa5, 0x3c, 0x7f, 0xff, 0xfa, 0x6f, 0xe0, 0x00
 ]);
+const CONSUMED_PACKED_DATA_BYTES = 9;
 
 void test("decompressLzmaWithProperties decodes raw 7z LZMA streams", async () => {
   const decoded = await decompressLzmaWithProperties(LZMA_PROPERTIES, PACKED_DATA, DECODED_TEXT_BYTES);
@@ -36,4 +40,18 @@ void test("decompressLzmaWithProperties rejects unsafe unpack sizes", async () =
     decompressLzmaWithProperties(LZMA_PROPERTIES, PACKED_DATA, TOO_LARGE_UNPACK_SIZE),
     /unpack size exceeds supported range/
   );
+});
+
+void test("decompressLzmaWithPropertiesTracked reports consumed compressed bytes", async () => {
+  const withTail = new Uint8Array(PACKED_DATA.byteLength + 1);
+  withTail.set(PACKED_DATA);
+
+  const result = await decompressLzmaWithPropertiesTracked(
+    LZMA_PROPERTIES,
+    withTail,
+    DECODED_TEXT_BYTES
+  );
+
+  assert.deepEqual(result.bytes, new TextEncoder().encode(DECODED_TEXT));
+  assert.equal(result.consumedPackedBytes, CONSUMED_PACKED_DATA_BYTES);
 });

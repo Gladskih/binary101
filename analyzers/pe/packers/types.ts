@@ -4,7 +4,7 @@ import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeOverlayAnalysis } from "../overlay.js";
 import type { PeSection } from "../types.js";
 
-export type PePackerKind = "installer" | "runtime-packager";
+export type PePackerKind = "executable-packer" | "installer" | "runtime-packager";
 export type PePackerConfidence = "high";
 
 export type PePackerDetail =
@@ -44,6 +44,12 @@ export interface BunStandaloneDetectorInput {
 export interface NsisInstallerDetectorInput {
   reader: FileRangeReader;
   overlay?: PeOverlayAnalysis | null;
+}
+
+export interface UpxDetectorInput {
+  reader: FileRangeReader;
+  sections: PeSection[];
+  imagePointerBytes: 4 | 8;
 }
 
 export interface PePackerDetectorResult {

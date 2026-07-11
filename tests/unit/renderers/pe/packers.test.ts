@@ -47,3 +47,13 @@ void test("renderPackers shows warning-only malformed packaging analysis", () =>
   const html = out.join("");
   assert.ok(html.includes("No high-confidence packaging signature was detected."));
 });
+
+void test("renderPackers labels executable packer findings", () => {
+  const packers = createPackers();
+  packers.findings[0]!.kind = "executable-packer";
+  const out: string[] = [];
+
+  renderPackers(packers, out);
+
+  assert.ok(out.join("").includes("executable packer"));
+});
