@@ -25,7 +25,7 @@ void test("renders PE DWARF analysis lazily from long COFF section names", async
   await expect(summary).toContainText("DWARF debug information");
   await expect(page.getByText("main.c", { exact: true })).toHaveCount(0);
   await summary.click();
-  await expect(page.getByText("main.c", { exact: true })).toBeVisible();
+  await expect(page.getByText("main.c", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("fixture compiler", { exact: true })).toBeVisible();
   await expect(page.getByText("DW_TAG_subprogram", { exact: true })).toBeAttached();
 });
@@ -37,7 +37,7 @@ void test("renders ELF DWARF analysis in the build/debug section", async ({ page
   const summary = page.getByText("DWARF debug information (1 unit)", { exact: true });
   await expect(summary).toBeVisible();
   await summary.click();
-  await expect(page.getByText("main.c", { exact: true })).toBeVisible();
+  await expect(page.getByText("main.c", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("fixture compiler", { exact: true })).toBeVisible();
 });
 
@@ -48,7 +48,8 @@ void test("decompresses and renders GNU zlib DWARF from PE", async ({ page }) =>
   const summary = page.locator('[data-pe-lazy-section="dwarf"] > details > summary');
   await expect(summary).toContainText("DWARF debug information");
   await summary.click();
-  await expect(page.getByText("main.c", { exact: true })).toBeVisible();
+  await expect(page.getByText("main.c", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Line programs" })).toBeVisible();
   await expect(page.getByText("decompressed; decoded", { exact: true }).first()).toBeVisible();
 });
 
@@ -59,6 +60,7 @@ void test("decompresses and renders ELF64 SHF_COMPRESSED DWARF", async ({ page }
   const summary = page.getByText("DWARF debug information (1 unit)", { exact: true });
   await expect(summary).toBeVisible();
   await summary.click();
-  await expect(page.getByText("main.c", { exact: true })).toBeVisible();
+  await expect(page.getByText("main.c", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Line programs" })).toBeVisible();
   await expect(page.getByText("decompressed; decoded", { exact: true }).first()).toBeVisible();
 });

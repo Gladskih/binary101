@@ -23,13 +23,32 @@ void test("analyzeDwarf parses DWARF 4 units, root metadata, and DIE counts", as
     tag: TEST_DWARF.tag.compileUnit,
     name: "main.c",
     producer: "fixture compiler",
-    language: TEST_DWARF.language.c99
+    language: TEST_DWARF.language.c99,
+    statementListOffset: BigInt(TEST_DWARF.sectionOffset.start)
   });
   assert.deepEqual(dwarf.units[0]?.tagCounts, [
     { tag: TEST_DWARF.tag.compileUnit, count: 1 },
     { tag: TEST_DWARF.tag.subprogram, count: 1 }
   ]);
   assert.equal(dwarf.units[0]?.maxDepth, 1);
+  assert.deepEqual(dwarf.linePrograms[0], {
+    offset: TEST_DWARF.sectionOffset.start,
+    length: BigInt(fixture.sections[3]!.size - Uint32Array.BYTES_PER_ELEMENT),
+    format: TEST_DWARF.format.dwarf32,
+    version: TEST_DWARF.version.four,
+    addressSize: TEST_DWARF.addressSize.x64,
+    directoryCount: TEST_DWARF.line.table.singleEntry,
+    fileCount: TEST_DWARF.line.table.singleEntry,
+    files: [{
+      path: "main.c",
+      directoryIndex: BigInt(TEST_DWARF.line.directoryIndex.legacyFirst)
+    }],
+    rowCount: TEST_DWARF.line.expected.fixtureRows,
+    sequenceCount: TEST_DWARF.line.expected.singleSequence,
+    minimumAddress: TEST_DWARF.line.address,
+    maximumAddress: TEST_DWARF.line.address +
+      BigInt(TEST_DWARF.line.firstAdvance + TEST_DWARF.line.fixedAdvance)
+  });
   assert.equal(dwarf.issues.length, 0);
 });
 
@@ -42,6 +61,11 @@ void test("analyzeDwarf parses DWARF 5 headers and implicit constants", async ()
   assert.equal(dwarf.units[0]?.unitType, TEST_DWARF.unitType.compile);
   assert.equal(dwarf.units[0]?.root?.language, TEST_DWARF.language.rust);
   assert.equal(dwarf.units[0]?.root?.name, "lib.rs");
+  assert.equal(dwarf.linePrograms[0]?.files[0]?.path, "lib.rs");
+  assert.equal(
+    dwarf.linePrograms[0]?.directoryCount,
+    TEST_DWARF.line.table.singleEntry
+  );
 });
 
 void test("analyzeDwarf inventories compressed sections without decoding them", async () => {

@@ -35,6 +35,7 @@ export const DWARF_UNIT_TYPE = {
 
 export const DWARF_ATTRIBUTE = {
   name: 0x03,
+  statementList: 0x10,
   language: 0x13,
   compilationDirectory: 0x1b,
   producer: 0x25,
@@ -109,6 +110,7 @@ export const DWARF_INITIAL_LENGTH = {
 export const DWARF_VERSION = {
   minimumSupported: 2,
   maximumSupported: 5,
+  maximumOperationsPerInstructionIntroduced: 4,
   referenceAddressUsesAddressSizeThrough: 2
 } as const;
 
@@ -132,16 +134,63 @@ export const DWARF_LIMIT = {
   maximumCapturedStringBytes: 4096,
   maximumDecompressedBytes: 256 * 1024 * 1024,
   maximumIndirectFormDepth: 8,
-  maximumLebBytes: 10
+  maximumLebBytes: 10,
+  // Browser-facing caps bound retained DOM/memory and CPU while counts remain exact.
+  maximumLineFilesStored: 1024,
+  maximumLineInstructions: 1_000_000,
+  maximumLineTableEntries: 100_000
 } as const;
 
 export const DWARF_SECTION = {
   abbreviations: ".debug_abbrev",
   information: ".debug_info",
+  lines: ".debug_line",
   lineStrings: ".debug_line_str",
   stringOffsets: ".debug_str_offsets",
   strings: ".debug_str",
   types: ".debug_types"
+} as const;
+
+// DWARF 5 line number program encodings, sections 6.2 and 7.22:
+// https://dwarfstd.org/doc/DWARF5.pdf
+export const DWARF_LINE_STANDARD_OPCODE = {
+  copy: 0x01,
+  advancePc: 0x02,
+  advanceLine: 0x03,
+  setFile: 0x04,
+  setColumn: 0x05,
+  negateStatement: 0x06,
+  setBasicBlock: 0x07,
+  constantAddPc: 0x08,
+  fixedAdvancePc: 0x09,
+  setPrologueEnd: 0x0a,
+  setEpilogueBegin: 0x0b,
+  setIsa: 0x0c
+} as const;
+
+export const DWARF_LINE_ENCODING = {
+  extendedOpcodeMarker: 0,
+  firstStandardOpcode: 1,
+  maximumOpcode: 0xff,
+  noSegmentSelectorBytes: 0,
+  unknownLegacyAddressSize: 0,
+  initialAddress: 0n,
+  initialOperationIndex: 0n
+} as const;
+
+export const DWARF_LINE_EXTENDED_OPCODE = {
+  endSequence: 0x01,
+  setAddress: 0x02,
+  defineFile: 0x03,
+  setDiscriminator: 0x04
+} as const;
+
+export const DWARF_LINE_CONTENT = {
+  path: 0x01,
+  directoryIndex: 0x02,
+  timestamp: 0x03,
+  size: 0x04,
+  md5: 0x05
 } as const;
 
 export const DWARF_LANGUAGE = {

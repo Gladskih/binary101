@@ -107,6 +107,7 @@ void test("getPeLazySectionDescriptors exposes DWARF as a lazy section", () => {
   pe.dwarf = {
     sections: [],
     units: [],
+    linePrograms: [],
     issues: ["fixture notice"]
   };
 

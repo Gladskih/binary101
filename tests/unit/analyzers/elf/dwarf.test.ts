@@ -64,6 +64,7 @@ void test("analyzeElfDwarf decodes ELF64 SHF_COMPRESSED zlib sections", async ()
   const dwarf = await analyzeElfDwarf(fixture.file, sections, "elf64", true, []);
 
   assert.equal(dwarf?.units[0]?.root?.name, "main.c");
+  assert.equal(dwarf?.linePrograms[0]?.files[0]?.path, "main.c");
   assert.equal(dwarf?.units[0]?.root?.producer, "fixture compiler");
   assert.equal(dwarf?.sections[0]?.status, "decoded");
   assert.deepEqual(dwarf?.issues, []);

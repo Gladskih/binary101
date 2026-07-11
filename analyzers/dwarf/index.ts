@@ -4,6 +4,7 @@ import type { FileRangeReader } from "../file-range-reader.js";
 import { DWARF_SECTION } from "./constants.js";
 import { parseAbbreviationTable } from "./abbreviations.js";
 import { parseDwarfDies } from "./dies.js";
+import { parseDwarfLines } from "./lines.js";
 import type {
   DwarfAbbreviation,
   DwarfAnalysis,
@@ -16,6 +17,7 @@ import { parseDwarfUnitHeader } from "./unit-header.js";
 
 const decodedSectionNames = new Set<string>([
   DWARF_SECTION.information,
+  DWARF_SECTION.lines,
   DWARF_SECTION.types,
   DWARF_SECTION.abbreviations
 ]);
@@ -184,7 +186,11 @@ export const analyzeDwarfSources = async (
       abbreviationCache
     ));
   }
-  return { sections, units, issues };
+  const lineSource = sectionMap.get(DWARF_SECTION.lines);
+  const linePrograms = lineSource && lineSource.section.size > 0
+    ? await parseDwarfLines(lineSource, sectionMap, littleEndian, issues)
+    : [];
+  return { sections, units, linePrograms, issues };
 };
 
 export const analyzeDwarf = async (

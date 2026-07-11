@@ -20,6 +20,8 @@ void test("analyzePeDwarf uses resolved COFF names and excludes raw alignment pa
   const dwarf = await analyzePeDwarf(fixture.file, sections);
 
   assert.equal(dwarf?.units[0]?.root?.producer, "fixture compiler");
+  assert.equal(dwarf?.linePrograms[0]?.files[0]?.path, "main.c");
+  assert.equal(dwarf?.linePrograms[0]?.sequenceCount, 1);
   assert.equal(dwarf?.sections[0]?.size, fixture.sections[0]?.size);
 });
 
@@ -39,6 +41,8 @@ void test("analyzePeDwarf decodes GNU zlib sections", async () => {
   assert.equal(dwarf?.units[0]?.root?.name, "main.c");
   assert.equal(dwarf?.units[0]?.root?.producer, "fixture compiler");
   assert.equal(dwarf?.sections[0]?.status, "decoded");
+  assert.equal(dwarf?.linePrograms[0]?.files[0]?.path, "main.c");
+  assert.equal(dwarf?.linePrograms[0]?.sequenceCount, 1);
   assert.deepEqual(dwarf?.issues, []);
 });
 

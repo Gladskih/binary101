@@ -35,6 +35,13 @@ const safeLanguage = (value: DwarfFormValue | undefined): number | null => {
 const optionalString = (key: string, value: string | null): Record<string, string> =>
   value == null ? {} : { [key]: value };
 
+const optionalStatementList = (
+  value: DwarfFormValue | undefined
+): { statementListOffset?: bigint } => {
+  const offset = numericValue(value);
+  return offset == null || offset < 0n ? {} : { statementListOffset: offset };
+};
+
 const buildRoot = async (
   sections: Map<string, DwarfSectionSource>,
   tag: number,
@@ -74,7 +81,8 @@ const buildRoot = async (
     ...(language == null
       ? {}
       : { language }),
-    ...optionalString("compilationDirectory", compilationDirectory)
+    ...optionalString("compilationDirectory", compilationDirectory),
+    ...optionalStatementList(values.get(DWARF_ATTRIBUTE.statementList))
   };
 };
 

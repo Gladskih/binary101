@@ -184,7 +184,7 @@ void test("prepareDwarfSectionSources handles unavailable browser decompression"
 });
 
 void test("prepareDwarfSectionSources skips unsupported inventory and relocatable data", async () => {
-  const invalid = candidate([], ".zdebug_line");
+  const invalid = candidate([], ".zdebug_ranges");
   const relocated = candidate([], ".zdebug_info");
   relocated.value.section.requiresRelocations = true;
 

@@ -17,6 +17,7 @@ export type DwarfSectionCandidate = {
 
 const supportedNames = new Set<string>([
   DWARF_SECTION.information,
+  DWARF_SECTION.lines,
   DWARF_SECTION.types,
   DWARF_SECTION.abbreviations,
   DWARF_SECTION.strings,

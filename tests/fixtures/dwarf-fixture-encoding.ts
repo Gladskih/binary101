@@ -8,13 +8,14 @@ export const TEST_DWARF = {
     bitsPerLebByte: 7,
     asciiNul: 0,
     paddingByte: 0,
+    maximumByte: 0xff,
     byteMask: 0xffn,
     lebContinuation: 0x80,
     lebPayloadMask: 0x7fn,
     lebSignBit: 0x40,
     lebTerminator: 0
   },
-  version: { four: 4, five: 5 },
+  version: { two: 2, four: 4, five: 5 },
   format: { dwarf32: 32, dwarf64: 64 },
   children: { no: 0, yes: 1 },
   flag: { present: 1 },
@@ -22,7 +23,7 @@ export const TEST_DWARF = {
   abbreviationTerminator: { attributeName: 0, attributeForm: 0, table: 0 },
   unitType: { compile: 0x01, type: 0x02 },
   tag: { compileUnit: 0x11, subprogram: 0x2e },
-  attribute: { name: 0x03, language: 0x13, producer: 0x25 },
+  attribute: { name: 0x03, statementList: 0x10, language: 0x13, producer: 0x25 },
   form: {
     address: 0x01,
     block2: 0x03,
@@ -65,15 +66,64 @@ export const TEST_DWARF = {
   sectionOffset: { start: 0 },
   encodedSize: { data16: 16 },
   addressSize: { x64: 8 },
+  line: {
+    minimumInstructionLength: 1,
+    maximumOperationsPerInstruction: 1,
+    defaultIsStatement: 1,
+    lineBase: -5,
+    lineRange: 14,
+    opcodeBase: 13,
+    standardOperandCounts: [0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1],
+    standardOpcode: {
+      copy: 1, advancePc: 2, advanceLine: 3,
+      setFile: 4, setColumn: 5, negateStatement: 6,
+      setBasicBlock: 7, constantAddPc: 8, fixedAdvancePc: 9,
+      setPrologueEnd: 10, setEpilogueBegin: 11,
+      setIsa: 12
+    },
+    extendedOpcode: {
+      marker: 0,
+      endSequence: 1,
+      setAddress: 2,
+      defineFile: 3,
+      setDiscriminator: 4,
+      testVendorExtension: 0x7f
+    },
+    content: { path: 1, directoryIndex: 2 },
+    table: { singleEntry: 1 },
+    directoryIndex: { legacyFirst: 1, versionFiveFirst: 0 },
+    offset: {
+      version: 4,
+      addressSize: 6,
+      segmentSelectorSize: 7,
+      versionFiveHeaderLength: 8,
+      versionFiveMinimumInstructionLength: 12
+    },
+    segmentSelectorSize: { none: 0, testUnsupported: 1 },
+    fileMetadata: { unavailable: 0 },
+    lineAdvance: { previous: -1, unchanged: 0 },
+    address: 0x1000n,
+    firstAdvance: 4,
+    fixedAdvance: 2,
+    discriminator: 7,
+    isa: 1,
+    expected: {
+      fixtureRows: 3,
+      broadProgramRows: 2,
+      broadProgramFiles: 2,
+      singleSequence: 1
+    }
+  },
   invalid: {
     abbreviationCode: 99,
     addressSize: 16,
     children: 2,
     form: 0xffff,
     unitType: 7,
-    version: 1
+    version: 1,
+    lineVersionHigh: 6
   },
-  limits: { displayedStringBytes: 4096, maximumLebBytes: 10 }
+  limits: { displayedStringBytes: 4096, maximumLebBytes: 10, storedLineFiles: 1024 }
 } as const;
 
 export const TEST_INTEGER = {

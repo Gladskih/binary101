@@ -3,6 +3,7 @@
 import { escapeHtml } from "../html-utils.js";
 import type {
   DwarfAnalysis,
+  DwarfLineProgram,
   DwarfSectionSummary,
   DwarfSectionStatus,
   DwarfTagCount,
@@ -77,12 +78,53 @@ const renderUnits = (dwarf: DwarfAnalysis): string => {
     )}</td>` +
     `<td class="dwarfTable__numeric">${dieCount(unit)}</td>` +
     `<td class="dwarfTable__numeric">${tagCount(unit, DWARF_TAG.subprogram)}</td>` +
-    `<td class="dwarfTable__numeric">${unit.maxDepth}</td></tr>`
+    `<td class="dwarfTable__numeric">${unit.maxDepth}</td>` +
+    `<td class="dwarfTable__numeric">${unit.root?.statementListOffset == null
+      ? "-"
+      : escapeHtml(hexValue(unit.root.statementListOffset))}</td></tr>`
   ).join("");
   return `<h5>Units</h5><div class="tableWrap"><table class="table">` +
     `<thead><tr><th>Offset</th><th>Version</th><th>Type</th><th>Addr bytes</th>` +
     `<th>Source</th><th>Producer</th><th>Language</th><th>DIEs</th>` +
-    `<th>Subprograms</th><th>Max depth</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    `<th>Subprograms</th><th>Max depth</th><th>Line table</th></tr></thead>` +
+    `<tbody>${rows}</tbody></table></div>`;
+};
+
+const renderAddressRange = (program: DwarfLineProgram): string =>
+  program.minimumAddress == null || program.maximumAddress == null
+    ? "-"
+    : `${escapeHtml(hexValue(program.minimumAddress))}–` +
+      `${escapeHtml(hexValue(program.maximumAddress))}`;
+
+const renderLineFiles = (program: DwarfLineProgram): string => {
+  if (!program.files.length) return "-";
+  const names = program.files.map(file =>
+    `<span class="mono">${escapeHtml(file.path || "(empty path)")}</span>` +
+    (file.directoryIndex == null ? "" : ` <span class="dim">(dir ${file.directoryIndex})</span>`)
+  ).join("<br>");
+  const truncated = program.fileCount > program.files.length
+    ? `<div class="smallNote dim">Showing ${program.files.length} of ${program.fileCount}</div>`
+    : "";
+  return `<details><summary style="cursor:pointer">${program.fileCount} files</summary>` +
+    `${names}${truncated}</details>`;
+};
+
+const renderLinePrograms = (dwarf: DwarfAnalysis): string => {
+  if (!dwarf.linePrograms.length) return "";
+  const rows = dwarf.linePrograms.map(program =>
+    `<tr><td class="dwarfTable__numeric">${escapeHtml(hexValue(program.offset))}</td>` +
+    `<td>DWARF ${program.version}<div class="smallNote">${program.format}-bit format</div></td>` +
+    `<td class="dwarfTable__numeric">${program.addressSize || "-"}</td>` +
+    `<td class="dwarfTable__numeric">${program.directoryCount}</td>` +
+    `<td>${renderLineFiles(program)}</td>` +
+    `<td class="dwarfTable__numeric">${program.rowCount}</td>` +
+    `<td class="dwarfTable__numeric">${program.sequenceCount}</td>` +
+    `<td class="mono">${renderAddressRange(program)}</td></tr>`
+  ).join("");
+  return `<h5>Line programs</h5><div class="tableWrap"><table class="table">` +
+    `<thead><tr><th>Offset</th><th>Version</th><th>Addr bytes</th><th>Directories</th>` +
+    `<th>Files</th><th>Rows</th><th>Sequences</th><th>Address range</th></tr></thead>` +
+    `<tbody>${rows}</tbody></table></div>`;
 };
 
 const aggregateTags = (dwarf: DwarfAnalysis): DwarfTagCount[] => {
@@ -118,8 +160,10 @@ export const renderDwarfAnalysis = (dwarf: DwarfAnalysis): string =>
   `<div class="smallNote">Compilation units and DIE structure from ` +
   `<span class="mono">.debug_info</span>/<span class="mono">.debug_types</span>. ` +
   `Zlib-compressed ELF and GNU sections are decompressed before analysis. ` +
-  `Line programs, ranges, locations, expressions, frames, macros, name indexes, split ` +
+  `Line programs are decoded into bounded file, row, sequence, and address summaries. ` +
+  `Ranges, locations, expressions, frames, macros, name indexes, split ` +
   `supplementary DWARF, Zstandard compression, and relocatable ELF DWARF are inventoried ` +
   `but not decoded in ` +
   `this iteration.</div>` +
-  renderSections(dwarf) + renderUnits(dwarf) + renderTags(dwarf) + renderIssues(dwarf);
+  renderSections(dwarf) + renderUnits(dwarf) + renderLinePrograms(dwarf) +
+  renderTags(dwarf) + renderIssues(dwarf);

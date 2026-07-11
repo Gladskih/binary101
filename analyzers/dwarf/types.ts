@@ -34,6 +34,27 @@ export type DwarfUnitRoot = {
   producer?: string;
   language?: number;
   compilationDirectory?: string;
+  statementListOffset?: bigint;
+};
+
+export type DwarfLineFile = {
+  path: string;
+  directoryIndex: bigint | null;
+};
+
+export type DwarfLineProgram = {
+  offset: number;
+  length: bigint;
+  format: 32 | 64;
+  version: number;
+  addressSize: number;
+  directoryCount: number;
+  fileCount: number;
+  files: DwarfLineFile[];
+  rowCount: number;
+  sequenceCount: number;
+  minimumAddress: bigint | null;
+  maximumAddress: bigint | null;
 };
 
 export type DwarfTagCount = {
@@ -58,6 +79,7 @@ export type DwarfUnit = {
 export type DwarfAnalysis = {
   sections: DwarfSectionSummary[];
   units: DwarfUnit[];
+  linePrograms: DwarfLineProgram[];
   issues: string[];
 };
 
