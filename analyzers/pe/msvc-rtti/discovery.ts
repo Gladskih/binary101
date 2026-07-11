@@ -80,7 +80,7 @@ export const discoverMsvcRtti = async (
   graph: MsvcRttiGraphParser
 ): Promise<MsvcRttiAnalysis | null> => {
   const accepted: AcceptedRtti[] = [];
-  for (const locatorSlotRva of [...dir64Sites].sort((left, right) => left - right)) {
+  for (const locatorSlotRva of dir64Sites) {
     const locatorRva = await image.readPreferredVaRva(locatorSlotRva);
     const completeObjectLocator = locatorRva == null
       ? null
@@ -96,4 +96,3 @@ export const discoverMsvcRtti = async (
   }
   return accepted.length ? buildResult(accepted, graph) : null;
 };
-

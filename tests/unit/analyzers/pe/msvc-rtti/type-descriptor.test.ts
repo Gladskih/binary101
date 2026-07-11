@@ -80,6 +80,45 @@ void test("parseMsvcRttiTypeDescriptor rejects a name longer than 1024 bytes", a
   assert.equal(parsed, null);
 });
 
+void test("parseMsvcRttiTypeDescriptor accepts a name at the 1024-byte limit", async () => {
+  const builder = new MsvcRttiPeFixtureBuilder();
+  const type = builder.addType(`.?AV${"A".repeat(1018)}@@`);
+
+  const parsed = await parseType(builder, type.rva);
+
+  assert.equal(parsed?.decoratedName.length, 1024);
+});
+
+void test("parseMsvcRttiTypeDescriptor rejects an empty class encoding", async () => {
+  const builder = new MsvcRttiPeFixtureBuilder();
+  const type = builder.addType(".?AV@@");
+
+  const parsed = await parseType(builder, type.rva);
+
+  assert.equal(parsed, null);
+});
+
+void test("parseMsvcRttiTypeDescriptor requires the complete name suffix", async () => {
+  const builder = new MsvcRttiPeFixtureBuilder();
+  const type = builder.addType(".?AVIncomplete@");
+
+  const parsed = await parseType(builder, type.rva);
+
+  assert.equal(parsed, null);
+});
+
+for (const [name, byte] of [["space", 0x20], ["DEL", 0x7f]] as const) {
+  void test(`parseMsvcRttiTypeDescriptor rejects a ${name} byte`, async () => {
+    const builder = new MsvcRttiPeFixtureBuilder();
+    const type = builder.addType(".?AVInvalid@@");
+    builder.patchByte(type.nameRva + 5, byte);
+
+    const parsed = await parseType(builder, type.rva);
+
+    assert.equal(parsed, null);
+  });
+}
+
 void test("parseMsvcRttiTypeDescriptor rejects a truncated fixed record", async () => {
   const builder = new MsvcRttiPeFixtureBuilder();
   const type = builder.addType(".?AVTruncated@@");
@@ -89,4 +128,3 @@ void test("parseMsvcRttiTypeDescriptor rejects a truncated fixed record", async 
 
   assert.equal(parsed, null);
 });
-

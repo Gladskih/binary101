@@ -37,6 +37,7 @@
     "test:mutation:pe:dry-run": "npm run test:mutation -- --dryRunOnly",
     "test:mutation:pe:bound-imports": "npm run test:mutation -- --mutate analyzers/pe/imports/bound.ts --testFiles tests/unit/analyzers/pe/imports/bound.test.ts --incrementalFile reports/mutation/stryker-incremental.pe.bound-imports.json",
     "test:mutation:pe:clr-metadata-root": "npm run test:mutation -- --mutate analyzers/pe/clr/metadata-root.ts --testFiles tests/unit/analyzers/pe/clr/metadata-root/index.test.ts --incrementalFile reports/mutation/stryker-incremental.pe.clr-metadata-root.json",
+    "test:mutation:pe:msvc-rtti": "npm run test:mutation -- --mutate analyzers/pe/msvc-rtti/**/*.ts --testFiles tests/unit/analyzers/pe/msvc-rtti/*.test.ts --incrementalFile reports/mutation/stryker-incremental.pe.msvc-rtti.json",
     "test:mutation:coff": "npm run test:mutation:coff:core",
     "test:mutation:coff:core": "npm run test:mutation -- --mutate analyzers/coff/debug-string-table.ts,analyzers/coff/file-header.ts,analyzers/coff/layout.ts,analyzers/coff/lines.ts,analyzers/coff/probe.ts,analyzers/coff/relocations.ts,analyzers/coff/section-headers.ts,analyzers/coff/section-string-table.ts,analyzers/coff/symbols.ts --testFiles tests/unit/**/*.ts --incrementalFile reports/mutation/stryker-incremental.coff.core.json",
     "test:mutation:coff:full": "npm run test:mutation -- --mutate analyzers/coff/**/*.ts,renderers/coff/**/*.ts --testFiles tests/unit/**/*.ts --incrementalFile reports/mutation/stryker-incremental.coff.json",

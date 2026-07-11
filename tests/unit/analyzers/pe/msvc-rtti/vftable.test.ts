@@ -82,12 +82,35 @@ void test("parseRelocationBackedVftable stops before a non-executable target", a
 });
 
 void test("parseRelocationBackedVftable rejects RVA overflow after the locator slot", async () => {
+  // PE/COFF RVAs are 32-bit; 0x1_0000_0000 is the first impossible RVA.
   const parsed = await parseRelocationBackedVftable(
     createImage(),
-    new Set([0xffff_ffff]),
+    new Set([0x1_0000_0000]),
     0xffff_fff8,
     0x3000
   );
 
   assert.equal(parsed, null);
+});
+
+void test("parseRelocationBackedVftable rejects an unaligned first slot", async () => {
+  const parsed = await parseRelocationBackedVftable(
+    createImage(),
+    new Set([0x2009]),
+    0x2001,
+    0x3000
+  );
+
+  assert.equal(parsed, null);
+});
+
+void test("parseRelocationBackedVftable stops before a slot crossing the RVA limit", async () => {
+  const parsed = await parseRelocationBackedVftable(
+    createImage(),
+    new Set([0xffff_fff8, 0x1_0000_0000]),
+    0xffff_fff0,
+    0x3000
+  );
+
+  assert.deepEqual(parsed?.functionTargetRvas, [0x1000]);
 });

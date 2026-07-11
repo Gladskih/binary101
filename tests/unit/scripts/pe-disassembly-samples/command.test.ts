@@ -28,5 +28,29 @@ void test("createVisualStudioStep wraps commands in vcvarsall setup", () => {
   assert.equal(step.executable, "cmd.exe");
   assert.deepEqual(step.args.slice(0, 3), ["/d", "/s", "/c"]);
   assert.match(step.display ?? "", /vcvarsall\.bat" x64 >nul/);
-  assert.match(step.display ?? "", /cl\.exe "C:\\source folder\\hello\.c"/);
+  assert.match(step.display ?? "", /"cl\.exe" "C:\\source folder\\hello\.c"/);
+});
+
+void test("createVisualStudioStep quotes shell parts without spaces", () => {
+  const step = createVisualStudioStep("compile", createVisualStudio(), "x64", [
+    ["cl.exe", "/nologo"]
+  ]);
+
+  assert.match(step.display ?? "", /"cl\.exe" "\/nologo"/);
+});
+
+for (const unsafePart of ["bad%PATH%", "bad!value", "bad\nvalue", "bad\"value"]) {
+  void test(`createVisualStudioStep rejects unsafe shell part ${JSON.stringify(unsafePart)}`, () => {
+    assert.throws(
+      () => createVisualStudioStep("compile", createVisualStudio(), "x64", [[unsafePart]]),
+      /unsafe for cmd\.exe/
+    );
+  });
+}
+
+void test("createVisualStudioStep rejects an unknown architecture", () => {
+  assert.throws(
+    () => createVisualStudioStep("compile", createVisualStudio(), "arm64", [["cl.exe"]]),
+    /Unsupported Visual Studio architecture/
+  );
 });

@@ -9,6 +9,16 @@ export const quoteCommandPart = (value: string): string =>
 export const toCommandLine = (executable: string, args: string[]): string =>
   [executable, ...args].map(quoteCommandPart).join(" ");
 
+const quoteWindowsShellPart = (value: string): string => {
+  if (!value || /[\0\r\n"%!]/u.test(value)) {
+    throw new Error("Visual Studio command contains a character unsafe for cmd.exe.");
+  }
+  return `"${value}"`;
+};
+
+const toWindowsShellCommandLine = (command: string[]): string =>
+  command.map(quoteWindowsShellPart).join(" ");
+
 const mergeEnv = (env: Record<string, string> | undefined): Record<string, string | undefined> => ({
   ...process.env,
   ...env
@@ -27,9 +37,12 @@ export const createVisualStudioStep = (
   architecture: string,
   commands: string[][]
 ): BuildStep => {
+  if (architecture !== "x64" && architecture !== "x86") {
+    throw new Error(`Unsupported Visual Studio architecture: ${architecture}`);
+  }
   const script = [
-    `call ${quoteCommandPart(visualStudio.vcvarsallPath)} ${architecture} >nul`,
-    ...commands.map(command => toCommandLine(command[0] ?? "", command.slice(1)))
+    `call ${quoteWindowsShellPart(visualStudio.vcvarsallPath)} ${architecture} >nul`,
+    ...commands.map(toWindowsShellCommandLine)
   ].join(" && ");
   return {
     label,

@@ -10,9 +10,9 @@ import {
   parseCompleteObjectLocator
 } from "../../../../../analyzers/pe/msvc-rtti/structure-parsers.js";
 import {
-  createSimpleMsvcRttiFixture,
-  MsvcRttiPeFixtureBuilder
+  createSimpleMsvcRttiFixture
 } from "../../../../fixtures/pe-msvc-rtti-fixture.js";
+import type { MsvcRttiPeFixtureBuilder } from "../../../../fixtures/pe-msvc-rtti-fixture.js";
 import { MSVC_RTTI_FIXTURE_IMAGE_BASE } from "../../../../fixtures/pe-msvc-rtti-pe.js";
 
 const imageFor = (builder: MsvcRttiPeFixtureBuilder) => {
@@ -137,4 +137,3 @@ void test("parseBaseClassDescriptor rejects a truncated 28-byte modern record", 
 
   assert.equal(parsed, null);
 });
-

@@ -32,6 +32,25 @@ void test("analyzePeMsvcRtti confirms a simple class and contiguous virtual slot
   assert.equal(result.classHierarchies[0]?.root.children.length, 0);
 });
 
+void test("analyzePeMsvcRtti does not let a mismatched COL poison a valid hierarchy", async () => {
+  const builder = new MsvcRttiPeFixtureBuilder();
+  const validType = builder.addType(".?AVValid@@");
+  const hierarchy = builder.addHierarchy(validType);
+  const mismatchedType = builder.addType(".?AVMismatched@@");
+  const falseCandidate = builder.addVftable(hierarchy, [builder.allocateFunctionTarget()]);
+  // MSVC rttidata.h places the image-relative TypeDescriptor reference at COL +12.
+  builder.patchUint32(falseCandidate.colRva, 12, mismatchedType.rva);
+  const valid = builder.addVftable(hierarchy, [builder.allocateFunctionTarget()]);
+
+  const result = await analyzeFixture(builder);
+
+  assert.ok(result);
+  assert.ok(falseCandidate.locatorSlotRva < valid.locatorSlotRva);
+  assert.deepEqual(result.completeObjectLocators.map(locator => locator.rva), [valid.colRva]);
+  assert.deepEqual(result.vftables.map(vftable => vftable.rva), [valid.rva]);
+  assert.deepEqual(result.types.map(type => type.decoratedName), [".?AVValid@@"]);
+});
+
 void test("analyzePeMsvcRtti reconstructs single inheritance as a tree", async () => {
   const builder = new MsvcRttiPeFixtureBuilder();
   const baseType = builder.addType(".?AVBase@@");
@@ -121,4 +140,3 @@ void test("analyzePeMsvcRtti retains independent types and repeated base subobje
   assert.equal(firstTree?.children[1]?.typeDescriptorRva, repeated.type.rva);
   assert.notEqual(firstTree?.children[0], firstTree?.children[1]);
 });
-

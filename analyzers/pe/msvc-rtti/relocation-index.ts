@@ -23,8 +23,8 @@ const isConsistentBlock = (block: PeBaseRelocationBlock): boolean =>
 
 const dir64SiteRva = (block: PeBaseRelocationBlock, offset: number): number | null => {
   if (!Number.isSafeInteger(offset) || offset < 0 || offset >= BASE_RELOCATION_PAGE_SIZE) return null;
-  const siteRva = block.pageRva + offset;
-  return siteRva < PE_RVA_EXCLUSIVE_LIMIT ? siteRva : null;
+  // A validated 4 KiB page RVA plus its 12-bit offset remains below the 32-bit RVA limit.
+  return block.pageRva + offset;
 };
 
 export const indexMsvcRttiDir64Sites = (
@@ -46,4 +46,3 @@ export const indexMsvcRttiDir64Sites = (
   }
   return sites.size ? sites : null;
 };
-

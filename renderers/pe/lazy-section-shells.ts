@@ -293,7 +293,6 @@ export const getPeLazySectionDescriptors = (pe: PeParseResult): PeLazySectionDes
   });
   return descriptors;
 };
-
 export const renderPeLazySectionShells = (pe: PeParseResult, out: string[]): void => {
   getPeLazySectionDescriptors(pe).forEach(section => {
     out.push(renderPeSectionShell(section.key, section.title, section.summary, section.id));

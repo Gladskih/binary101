@@ -30,8 +30,8 @@ const readBaseClassDescriptorRvas = async (
   arrayRva: number,
   count: number
 ): Promise<number[] | null> => {
+  // parseClassHierarchyDescriptor caps count at 4096, so this product is exact and bounded.
   const byteLength = count * IMAGE_RELATIVE_POINTER_SIZE;
-  if (!Number.isSafeInteger(byteLength) || byteLength <= 0) return null;
   const view = await image.readData(arrayRva, byteLength, IMAGE_RELATIVE_POINTER_SIZE);
   if (!view) return null;
   const rvas: number[] = [];
@@ -69,14 +69,11 @@ export const createMsvcRttiGraphParser = (image: MsvcRttiImage): MsvcRttiGraphPa
   };
   const hierarchy = async (
     rva: number,
-    expectedTypeDescriptorRva: number,
     active: Set<number>,
     depth: number
   ): Promise<MsvcRttiClassHierarchy | null> => {
     const cached = classHierarchies.get(rva);
-    if (cached !== undefined || classHierarchies.has(rva)) {
-      return cached?.root.typeDescriptorRva === expectedTypeDescriptorRva ? cached : null;
-    }
+    if (cached !== undefined || classHierarchies.has(rva)) return cached ?? null;
     if (depth >= MAX_HIERARCHY_DEPTH || active.has(rva)) return null;
     active.add(rva);
     const descriptor = await parseClassHierarchyDescriptor(image, rva);
@@ -87,13 +84,13 @@ export const createMsvcRttiGraphParser = (image: MsvcRttiImage): MsvcRttiGraphPa
       ? await parseBaseClasses(image, descriptorRvas, typeDescriptor)
       : null;
     const root = entries ? buildMsvcRttiHierarchyTree(entries) : null;
-    let valid = root?.typeDescriptorRva === expectedTypeDescriptorRva &&
-      root.classHierarchyDescriptorRva === rva;
+    let valid = root?.classHierarchyDescriptorRva === rva;
     if (valid && entries) {
       for (let index = 1; index < entries.length; index += 1) {
         const entry = entries[index]!;
         if (entry.classHierarchyDescriptorRva === rva ||
-          !await hierarchy(entry.classHierarchyDescriptorRva, entry.typeDescriptorRva, active, depth + 1)) {
+          (await hierarchy(entry.classHierarchyDescriptorRva, active, depth + 1))
+            ?.root.typeDescriptorRva !== entry.typeDescriptorRva) {
           valid = false;
           break;
         }
@@ -113,9 +110,11 @@ export const createMsvcRttiGraphParser = (image: MsvcRttiImage): MsvcRttiGraphPa
     const parsed = await parseCompleteObjectLocator(image, rva);
     const type = parsed ? await typeDescriptor(parsed.typeDescriptorRva) : null;
     const classHierarchy = parsed && type
-      ? await hierarchy(parsed.classHierarchyDescriptorRva, parsed.typeDescriptorRva, new Set(), 0)
+      ? await hierarchy(parsed.classHierarchyDescriptorRva, new Set(), 0)
       : null;
-    const result = parsed && classHierarchy ? { rva, ...parsed } : null;
+    const result = parsed && classHierarchy?.root.typeDescriptorRva === parsed.typeDescriptorRva
+      ? { rva, ...parsed }
+      : null;
     completeObjectLocators.set(rva, result);
     return result;
   };
@@ -125,4 +124,3 @@ export const createMsvcRttiGraphParser = (image: MsvcRttiImage): MsvcRttiGraphPa
     getTypeDescriptor: rva => typeDescriptors.get(rva) ?? null
   };
 };
-

@@ -6,6 +6,7 @@ import { createFileRangeReader } from "../../../../../analyzers/file-range-reade
 import type { PeBaseRelocationResult } from "../../../../../analyzers/pe/directories/reloc.js";
 import { createMsvcRttiImage } from "../../../../../analyzers/pe/msvc-rtti/image.js";
 import { indexMsvcRttiDir64Sites } from "../../../../../analyzers/pe/msvc-rtti/relocation-index.js";
+import type { MsvcRttiImage } from "../../../../../analyzers/pe/msvc-rtti/image.js";
 import { createSimpleMsvcRttiFixture } from "../../../../fixtures/pe-msvc-rtti-fixture.js";
 
 const relocationSubject = () => {
@@ -100,3 +101,55 @@ void test("indexMsvcRttiDir64Sites skips an unaligned DIR64 site", () => {
   assert.equal(sites, null);
 });
 
+const acceptingImage = (): MsvcRttiImage => ({
+  availableDataSize: () => 0,
+  isDataRange: () => true,
+  isExecutableRva: () => false,
+  preferredVaToRva: () => null,
+  readData: async () => null,
+  readPreferredVaRva: async () => null
+});
+
+for (const [name, mutate] of [
+  ["non-finite page RVA", (value: PeBaseRelocationResult) => {
+    value.blocks[0]!.pageRva = Number.NaN;
+  }],
+  ["negative page RVA", (value: PeBaseRelocationResult) => {
+    value.blocks[0]!.pageRva = -0x1000;
+  }],
+  ["out-of-range page RVA", (value: PeBaseRelocationResult) => {
+    value.blocks[0]!.pageRva = 0x1_0000_0000;
+  }],
+  ["undersized block", (value: PeBaseRelocationResult) => {
+    value.blocks[0]!.size = 4;
+  }],
+  ["non-finite block size", (value: PeBaseRelocationResult) => {
+    value.blocks[0]!.size = Number.NaN;
+  }]
+] as const) {
+  void test(`indexMsvcRttiDir64Sites rejects ${name}`, () => {
+    const { fixture } = relocationSubject();
+    assert.ok(fixture.relocations);
+    const relocations = cloneRelocations(fixture.relocations);
+    mutate(relocations);
+
+    assert.equal(indexMsvcRttiDir64Sites(relocations, acceptingImage()), null);
+  });
+}
+
+for (const [name, offset] of [
+  ["non-finite", Number.NaN],
+  ["negative", -1],
+  ["outside its 4 KiB page", 0x1000]
+] as const) {
+  void test(`indexMsvcRttiDir64Sites skips ${name} entry offset`, () => {
+    const { fixture } = relocationSubject();
+    assert.ok(fixture.relocations);
+    const relocations = cloneRelocations(fixture.relocations);
+    relocations.blocks[0]!.entries = [{ type: 10, offset }];
+    relocations.blocks[0]!.count = 1;
+    relocations.totalEntries = 1;
+
+    assert.equal(indexMsvcRttiDir64Sites(relocations, acceptingImage()), null);
+  });
+}
