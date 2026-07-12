@@ -97,6 +97,8 @@ const renderWindowsLazyMarkup = (
       return renderPackerById(pe, "upx");
     case PE_LAZY_SECTION_KEYS.nsisInstaller:
       return renderPackerById(pe, "nsis-installer");
+    case PE_LAZY_SECTION_KEYS.innoSetup:
+      return renderPackerById(pe, "inno-setup");
     case PE_LAZY_SECTION_KEYS.bunStandalone:
       return renderPackerById(pe, "bun-standalone");
     case PE_LAZY_SECTION_KEYS.loadConfig:

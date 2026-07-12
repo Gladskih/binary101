@@ -508,7 +508,7 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .pePackerFinding__details{margin-top:.45rem}
 .pePackerFinding__meaning{font-family:inherit;margin:0;white-space:normal}
 .peNsisTable__field,
-.peBunTable__field,.peUpxTable__field{white-space:nowrap;width:1%}
+.peBunTable__field,.peInnoTable__field,.peUpxTable__field{white-space:nowrap;width:1%}
 .pePayloadEntry{
   align-items:center;display:flex;gap:.75rem;justify-content:space-between;padding:.45rem .1rem
 }

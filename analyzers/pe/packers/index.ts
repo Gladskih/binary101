@@ -2,6 +2,7 @@
 
 import { detectBunStandalone } from "./bun-standalone.js";
 import { detectNsisInstaller } from "./nsis-installer.js";
+import { detectInnoSetup } from "./inno-setup.js";
 import { detectUpx } from "./upx.js";
 import type {
   PePackerAnalysis,
@@ -20,6 +21,11 @@ const DETECTORS: readonly PePackerAnalyzerRegistration[] = [{
     sections: input.sections,
     imagePointerBytes: input.imagePointerBytes
   })
+}, {
+  id: "inno-setup",
+  analyze: input => detectInnoSetup(input.resources == null
+    ? { reader: input.reader }
+    : { reader: input.reader, resources: input.resources })
 }, {
   id: "bun-standalone",
   analyze: input => detectBunStandalone({
@@ -55,8 +61,10 @@ export type {
   BunOffsetMetadata,
   BunPayloadStorage,
   BunStandaloneDetectorInput,
+  InnoSetupDetectorInput,
   NsisInstallerDetectorInput,
   PeBunPackerFinding,
+  PeInnoSetupFinding,
   PePackerAnalysis,
   PePackerConfidence,
   PePackerFinding,

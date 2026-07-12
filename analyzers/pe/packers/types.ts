@@ -3,11 +3,12 @@
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeOverlayAnalysis } from "../overlay.js";
 import type { PeSection } from "../types.js";
+import type { PeResources } from "../resources/index.js";
 import type { UpxPackHeader } from "./upx-pack-header.js";
 
 export type PePackerKind = "executable-packer" | "installer" | "runtime-packager";
 export type PePackerConfidence = "high";
-export type PePackerId = "bun-standalone" | "nsis-installer" | "upx";
+export type PePackerId = "bun-standalone" | "inno-setup" | "nsis-installer" | "upx";
 export type BunPayloadStorage = "length-prefixed" | "section-virtual-data";
 
 interface PePackerFindingBase {
@@ -23,6 +24,18 @@ export interface PeNsisPackerFinding extends PePackerFindingBase {
   firstHeaderOffset: number;
   flags: number;
   followingDataSize: number;
+}
+
+export interface PeInnoSetupFinding extends PePackerFindingBase {
+  id: "inno-setup";
+  dataOffset: number;
+  headerOffset: number;
+  offsetTableOffset: number;
+  setupExeCrc32: number;
+  setupExeOffset: number;
+  setupExeStoredSize: number;
+  setupExeUnpackedSize: number;
+  totalSize: number;
 }
 
 export interface BunOffsetMetadata {
@@ -52,6 +65,7 @@ export interface PeUpxPackerFinding extends PePackerFindingBase {
 
 export type PePackerFinding =
   | PeBunPackerFinding
+  | PeInnoSetupFinding
   | PeNsisPackerFinding
   | PeUpxPackerFinding;
 
@@ -69,6 +83,7 @@ export interface PePackerAnalysisInput {
   reader: FileRangeReader;
   sections: PeSection[];
   overlay?: PeOverlayAnalysis | null;
+  resources?: PeResources | null;
   imagePointerBytes: 4 | 8;
 }
 
@@ -81,6 +96,11 @@ export interface BunStandaloneDetectorInput {
 export interface NsisInstallerDetectorInput {
   reader: FileRangeReader;
   overlay?: PeOverlayAnalysis | null;
+}
+
+export interface InnoSetupDetectorInput {
+  reader: FileRangeReader;
+  resources?: PeResources | null;
 }
 
 export interface UpxDetectorInput {

@@ -13,6 +13,7 @@ import {
   createSevenZipFile
 } from "../../../fixtures/rar-sevenzip-fixtures.js";
 import { MockFile } from "../../../helpers/mock-file.js";
+import { createInnoFinding } from "../../../fixtures/inno-setup-fixture.js";
 
 const IMAGE_BYTES = 16;
 const PAYLOAD_PREFIX_BYTES = 128;
@@ -155,6 +156,18 @@ void test("subtractExplainedPeOverlay leaves only bytes beyond verified NSIS dat
 
   assert.deepEqual(result, {
     ranges: [{ start: 198, end: 200, size: 2, findings: [] }]
+  });
+});
+
+void test("subtractExplainedPeOverlay removes data explained by Inno Setup", () => {
+  const result = subtractExplainedPeOverlay({
+    ranges: [{ start: 80, end: 242, size: 162, findings: [] }]
+  }, {
+    reports: [{ id: "inno-setup", findings: [createInnoFinding()], warnings: [] }]
+  }, null);
+
+  assert.deepEqual(result, {
+    ranges: [{ start: 240, end: 242, size: 2, findings: [] }]
   });
 });
 

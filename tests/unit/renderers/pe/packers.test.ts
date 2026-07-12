@@ -9,6 +9,7 @@ import type {
   PeUpxPackerFinding
 } from "../../../../analyzers/pe/packers/types.js";
 import { renderPackerReport } from "../../../../renderers/pe/packers.js";
+import { createInnoFinding } from "../../../fixtures/inno-setup-fixture.js";
 
 const createBunFinding = (): PeBunPackerFinding => ({
   id: "bun-standalone",
@@ -145,6 +146,17 @@ void test("renderPackerReport routes NSIS findings to the NSIS-specific table", 
   assert.ok(html.includes(`<b>NSIS installer</b> - verified`));
   assert.ok(html.includes("Installer data start"));
   assert.doesNotMatch(html, /data-pe-overlay-download/);
+});
+
+void test("renderPackerReport routes Inno Setup findings to their dedicated section", () => {
+  const out: string[] = [];
+
+  renderPackerReport({ id: "inno-setup", findings: [createInnoFinding()], warnings: [] }, out);
+
+  const html = out.join("");
+  assert.ok(html.includes(`<b>Inno Setup installer</b> - verified`));
+  assert.ok(html.includes("Embedded data start"));
+  assert.ok(html.includes("data-pe-inno-engine-download"));
 });
 
 void test("renderPackerReport routes validated NSIS payload downloads", () => {

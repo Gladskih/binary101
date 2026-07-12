@@ -7,12 +7,13 @@ import type {
 } from "../../analyzers/pe/packers/index.js";
 
 export type PePackerSectionDefinition = {
-  key: "bun-standalone" | "nsis-installer" | "upx";
+  key: "bun-standalone" | "inno-setup" | "nsis-installer" | "upx";
   title: string;
 };
 
 export const PE_PACKER_SECTIONS: Readonly<Record<PePackerId, PePackerSectionDefinition>> = {
   "bun-standalone": { key: "bun-standalone", title: "Bun standalone executable" },
+  "inno-setup": { key: "inno-setup", title: "Inno Setup installer" },
   "nsis-installer": { key: "nsis-installer", title: "NSIS installer" },
   "upx": { key: "upx", title: "UPX executable packer" }
 };

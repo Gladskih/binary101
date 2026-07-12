@@ -31,6 +31,7 @@ export const PE_LAZY_SECTION_KEYS = {
   iat: "iat",
   importLinking: "import-linking",
   imports: "imports",
+  innoSetup: PE_PACKER_SECTIONS["inno-setup"].key,
   legacyCoffTail: "legacy-coff-tail",
   linuxBoot: "linux-boot",
   loadConfig: "load-config",
@@ -50,7 +51,6 @@ export const PE_LAZY_SECTION_KEYS = {
 } as const;
 
 export type PeLazySectionKey = typeof PE_LAZY_SECTION_KEYS[keyof typeof PE_LAZY_SECTION_KEYS];
-
 export type PeLazySectionDescriptor =
   { id?: string; key: PeLazySectionKey; summary?: string; title: string };
 

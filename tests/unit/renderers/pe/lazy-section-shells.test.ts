@@ -50,6 +50,7 @@ void test("getPeLazySectionDescriptors creates one section per packaging analyze
   pe.packers = {
     reports: [
       { id: "upx", findings: [], warnings: ["UPX warning"] },
+      { id: "inno-setup", findings: [], warnings: ["Inno warning"] },
       { id: "nsis-installer", findings: [], warnings: ["NSIS warning"] },
       { id: "bun-standalone", findings: [], warnings: ["Bun warning"] }
     ]
@@ -58,6 +59,7 @@ void test("getPeLazySectionDescriptors creates one section per packaging analyze
   const packaging = getPeLazySectionDescriptors(pe).filter(section =>
     ([
       PE_LAZY_SECTION_KEYS.upx,
+      PE_LAZY_SECTION_KEYS.innoSetup,
       PE_LAZY_SECTION_KEYS.nsisInstaller,
       PE_LAZY_SECTION_KEYS.bunStandalone
     ] as PeLazySectionKey[]).includes(section.key)
@@ -65,6 +67,7 @@ void test("getPeLazySectionDescriptors creates one section per packaging analyze
 
   assert.deepEqual(packaging, [
     { key: PE_LAZY_SECTION_KEYS.upx, summary: "1 warning", title: "UPX executable packer" },
+    { key: PE_LAZY_SECTION_KEYS.innoSetup, summary: "1 warning", title: "Inno Setup installer" },
     { key: PE_LAZY_SECTION_KEYS.nsisInstaller, summary: "1 warning", title: "NSIS installer" },
     {
       key: PE_LAZY_SECTION_KEYS.bunStandalone,

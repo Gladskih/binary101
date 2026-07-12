@@ -10,6 +10,7 @@ import { renderPeDiagnostics } from "./diagnostics.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import { PE_PACKER_SECTIONS, pePackerReportSummary } from "./packer-sections.js";
 import { renderBunFindingDetails } from "./bun-packer.js";
+import { renderInnoSetupFindingDetails } from "./inno-setup.js";
 import { renderNsisFindingDetails } from "./nsis-installer.js";
 import { renderUpxFindingDetails } from "./upx-packer.js";
 
@@ -48,7 +49,9 @@ const renderFinding = (
     ? renderUpxFindingDetails(finding)
     : finding.id === "bun-standalone"
       ? renderBunFindingDetails(finding)
-      : renderNsisFindingDetails(finding, findNsisPayloads(finding, payloads));
+      : finding.id === "inno-setup"
+        ? renderInnoSetupFindingDetails(finding)
+        : renderNsisFindingDetails(finding, findNsisPayloads(finding, payloads));
   return `<div class="pePackerFinding">${heading}${renderEvidence(finding)}${details}</div>`;
 };
 

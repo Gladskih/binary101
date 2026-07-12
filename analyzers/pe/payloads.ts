@@ -7,7 +7,11 @@ import {
   EMBEDDED_RAR_LABEL,
   EMBEDDED_SEVEN_ZIP_LABEL
 } from "./overlay-embedded.js";
-import type { PePackerAnalysis, PeNsisPackerFinding } from "./packers/index.js";
+import type {
+  PeInnoSetupFinding,
+  PePackerAnalysis,
+  PeNsisPackerFinding
+} from "./packers/index.js";
 import { subtractFileRanges, type FileRange } from "./layout/file-ranges.js";
 import type { PeResources } from "./resources/index.js";
 
@@ -66,6 +70,11 @@ const nsisFindings = (packers: PePackerAnalysis | null | undefined): PeNsisPacke
     .find(report => report.id === "nsis-installer")
     ?.findings.filter(finding => finding.id === "nsis-installer") ?? [];
 
+const innoFindings = (packers: PePackerAnalysis | null | undefined): PeInnoSetupFinding[] =>
+  packers?.reports
+    .find(report => report.id === "inno-setup")
+    ?.findings.filter(finding => finding.id === "inno-setup") ?? [];
+
 const payloadSource = (
   finding: PeOverlayFinding,
   installers: PeNsisPackerFinding[]
@@ -109,6 +118,10 @@ const explainedRanges = (
   packers: PePackerAnalysis | null | undefined,
   payloads: PePayloadAnalysis | null | undefined
 ): FileRange[] => [
+  ...innoFindings(packers).map(finding => ({
+    start: finding.dataOffset,
+    end: finding.totalSize
+  })),
   ...nsisFindings(packers).map(finding => ({
     start: finding.firstHeaderOffset,
     end: finding.firstHeaderOffset + finding.followingDataSize

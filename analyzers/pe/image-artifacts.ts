@@ -47,6 +47,7 @@ export const parsePeImageArtifacts = async (
     reader,
     sections: core.sections,
     overlay,
+    resources,
     // Bun's .bun Offsets.byte_count is a usize, so it follows the PE image pointer width.
     // https://github.com/oven-sh/bun/blob/main/src/standalone_graph/StandaloneModuleGraph.zig
     imagePointerBytes: core.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC ? 8 : 4

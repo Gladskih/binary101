@@ -42,6 +42,7 @@ const report = (findings: number, warnings: number): PePackerReport => ({
 void test("PE_PACKER_SECTIONS names every analyzer-specific section", () => {
   assert.deepEqual(PE_PACKER_SECTIONS, {
     "bun-standalone": { key: "bun-standalone", title: "Bun standalone executable" },
+    "inno-setup": { key: "inno-setup", title: "Inno Setup installer" },
     "nsis-installer": { key: "nsis-installer", title: "NSIS installer" },
     "upx": { key: "upx", title: "UPX executable packer" }
   });
