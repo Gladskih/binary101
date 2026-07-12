@@ -124,16 +124,17 @@ void test("detectBunStandalone reports a valid Bun .bun section with parsed offs
 
   assert.equal(result.warnings.length, 0);
   assert.equal(result.findings[0]?.id, "bun-standalone");
-  assert.deepEqual(result.findings[0]?.details?.find(detail => detail.label === "Graph byte_count"), {
-    label: "Graph byte_count",
-    kind: "bytes",
-    value: BUN_GRAPH_BYTES
+  assert.deepEqual(result.findings[0]?.offsetMetadata, {
+    byteCount: BUN_GRAPH_BYTES,
+    compileArgvBytes: BUN_COMPILE_ARGV_BYTES,
+    entryPointId: BUN_ENTRY_POINT_ID,
+    flags: BUN_FLAGS_DISABLE_ENV_AND_BUNFIG,
+    moduleListBytes: BUN_MODULE_LIST_BYTES
   });
-  assert.deepEqual(result.findings[0]?.details?.find(detail => detail.label === "Flags"), {
-    label: "Flags",
-    kind: "text",
-    value: "disable default env files, disable autoload bunfig"
-  });
+  assert.equal(result.findings[0]?.storage, "length-prefixed");
+  assert.equal(result.findings[0]?.sectionStart, SECTION_START);
+  assert.equal(result.findings[0]?.sectionSize, SECTION_RAW_SIZE);
+  assert.equal(result.findings[0]?.payloadStart, SECTION_START + BigUint64Array.BYTES_PER_ELEMENT);
 });
 
 void test("detectBunStandalone reports direct .bun payloads using VirtualSize", async () => {
@@ -143,27 +144,70 @@ void test("detectBunStandalone reports direct .bun payloads using VirtualSize", 
   );
 
   assert.equal(result.warnings.length, 0);
-  assert.deepEqual(result.findings[0]?.details?.find(detail => detail.label === "Storage"), {
-    label: "Storage",
-    kind: "text",
-    value: "PE section virtual data"
-  });
-  assert.deepEqual(result.findings[0]?.details?.find(detail => detail.label === "Graph byte_count"), {
-    label: "Graph byte_count",
-    kind: "bytes",
-    value: BUN_GRAPH_BYTES
-  });
+  assert.equal(result.findings[0]?.storage, "section-virtual-data");
+  assert.equal(result.findings[0]?.payloadStart, SECTION_START);
+  assert.equal(result.findings[0]?.payloadSize, fixture.virtualSize);
+  assert.equal(result.findings[0]?.offsetMetadata?.byteCount, BUN_GRAPH_BYTES);
 });
 
 void test("detectBunStandalone parses 32-bit Bun offset layouts", async () => {
   const result = await detectBunStandalone(createInput(createBunSection32(), 4));
 
   assert.equal(result.warnings.length, 0);
-  assert.deepEqual(result.findings[0]?.details?.find(detail => detail.label === "Entry point id"), {
-    label: "Entry point id",
-    kind: "number",
-    value: BUN_ENTRY_POINT_ID
-  });
+  assert.equal(result.findings[0]?.offsetMetadata?.entryPointId, BUN_ENTRY_POINT_ID);
+});
+
+void test("detectBunStandalone keeps a verified payload when its offsets block is absent", async () => {
+  const section = new Uint8Array(BUN_TRAILER.byteLength);
+  section.set(BUN_TRAILER);
+
+  const result = await detectBunStandalone(
+    createInput(section, 8, section.byteLength, section.byteLength)
+  );
+
+  assert.equal(result.findings.length, 1);
+  assert.equal(result.findings[0]?.offsetMetadata, undefined);
+  assert.deepEqual(result.warnings, [
+    "Bun .bun payload is too small to contain offsets before the trailer."
+  ]);
+});
+
+void test("detectBunStandalone omits unsafe offset metadata without rejecting the payload", async () => {
+  const section = createBunSection64();
+  const offsetsStart = BigUint64Array.BYTES_PER_ELEMENT + BUN_GRAPH_BYTES;
+  new DataView(section.buffer).setBigUint64(
+    offsetsStart + BUN_OFFSETS64.byteCount,
+    BigInt(Number.MAX_SAFE_INTEGER) + 1n,
+    true
+  );
+
+  const result = await detectBunStandalone(createInput(section));
+
+  assert.equal(result.findings.length, 1);
+  assert.equal(result.findings[0]?.offsetMetadata, undefined);
+  assert.deepEqual(result.warnings, [
+    "Bun .bun offsets byte_count exceeds Number.MAX_SAFE_INTEGER."
+  ]);
+});
+
+void test("detectBunStandalone reports invalid pointers and reserved flag bits", async () => {
+  const section = createBunSection64();
+  const offsetsStart = BigUint64Array.BYTES_PER_ELEMENT + BUN_GRAPH_BYTES;
+  const view = new DataView(section.buffer);
+  // Bun pointers must fit byte_count; 8 is smaller than both fixture ranges.
+  view.setBigUint64(offsetsStart + BUN_OFFSETS64.byteCount, 8n, true);
+  // StandaloneModuleGraph.Flags reserves every bit above the documented low four.
+  // https://github.com/oven-sh/bun/blob/main/src/standalone_graph/StandaloneModuleGraph.zig
+  view.setUint32(offsetsStart + BUN_OFFSETS64.flags, 0x10, true);
+
+  const result = await detectBunStandalone(createInput(section));
+
+  assert.equal(result.findings[0]?.offsetMetadata?.flags, 0x10);
+  assert.deepEqual(result.warnings, [
+    "Bun .bun module-list pointer is outside byte_count.",
+    "Bun .bun compile argv pointer is outside byte_count.",
+    "Bun .bun flags contain non-zero reserved bits."
+  ]);
 });
 
 void test("detectBunStandalone rejects truncated .bun length fields without throwing", async () => {

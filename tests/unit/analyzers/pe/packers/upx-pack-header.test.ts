@@ -112,6 +112,28 @@ void test("parseUpxPackHeader parses non-zero filter MRU fields", () => {
   assert.equal(result.header.filterMru, 8);
 });
 
+void test("parseUpxPackHeader rejects filters unsupported by the PE format", () => {
+  const bytes = createHeader();
+  bytes[28] = 0x26;
+  bytes[31] = upxPackHeaderChecksum(bytes.subarray(0, HEADER_BYTES - 1));
+
+  assert.deepEqual(parseUpxPackHeader(new DataView(bytes.buffer), 0, 8), {
+    error: "UPX PackHeader filter is incompatible with its PE format."
+  });
+});
+
+void test("parseUpxPackHeader accepts the x86 E8/E9 CTO filter for PE32", () => {
+  const bytes = createHeader();
+  bytes[5] = 9;
+  bytes[28] = 0x26;
+  bytes[31] = upxPackHeaderChecksum(bytes.subarray(0, HEADER_BYTES - 1));
+
+  const result = parseUpxPackHeader(new DataView(bytes.buffer), 0, 4);
+
+  assert.ok(result && "header" in result);
+  assert.equal(result.header.filter, 0x26);
+});
+
 const invalidHeaderCases = [
   { field: HEADER_FIELDS.version, value: 0xff, error: /version/ },
   { field: HEADER_FIELDS.method, value: 13, error: /method/ },

@@ -97,9 +97,24 @@ const createPePlusWithBunSection = (): Uint8Array => {
   return bytes;
 };
 
-void test("parsePe attaches high-confidence packaging signature analysis", async () => {
+void test("parsePe attaches a Bun-specific packaging report", async () => {
   const parsed = await parsePe(new MockFile(createPePlusWithBunSection(), "bun.exe"));
 
   assert.ok(parsed && isPeWindowsParseResult(parsed));
-  assert.equal(parsed?.packers?.findings[0]?.id, "bun-standalone");
+  assert.equal(parsed?.packers?.reports[0]?.id, "bun-standalone");
+  assert.equal(parsed?.packers?.reports[0]?.findings[0]?.id, "bun-standalone");
+});
+
+void test("parsePe keeps rejected Bun candidates in a Bun-specific warning report", async () => {
+  const bytes = createPePlusWithBunSection();
+  const trailerOffset = TEXT_SECTION_RAW_END + BigUint64Array.BYTES_PER_ELEMENT +
+    BUN_GRAPH_BYTES + BUN_OFFSETS64_BYTES;
+  bytes[trailerOffset] = 0;
+
+  const parsed = await parsePe(new MockFile(bytes, "broken-bun.exe"));
+
+  assert.ok(parsed && isPeWindowsParseResult(parsed));
+  assert.equal(parsed.packers?.reports[0]?.id, "bun-standalone");
+  assert.equal(parsed.packers?.reports[0]?.findings.length, 0);
+  assert.match(parsed.packers?.reports[0]?.warnings[0] ?? "", /trailer/);
 });

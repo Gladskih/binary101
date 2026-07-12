@@ -3,9 +3,12 @@
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeOverlayAnalysis } from "../overlay.js";
 import type { PeSection } from "../types.js";
+import type { UpxPackHeader } from "./upx-pack-header.js";
 
 export type PePackerKind = "executable-packer" | "installer" | "runtime-packager";
 export type PePackerConfidence = "high";
+export type PePackerId = "bun-standalone" | "nsis-installer" | "upx";
+export type BunPayloadStorage = "length-prefixed" | "section-virtual-data";
 
 export type PePackerDetail =
   | { label: string; kind: "bytes"; value: number }
@@ -14,18 +17,56 @@ export type PePackerDetail =
   | { label: string; kind: "range"; start: number; end: number }
   | { label: string; kind: "text"; value: string };
 
-export interface PePackerFinding {
-  id: string;
+interface PePackerFindingBase {
   name: string;
   kind: PePackerKind;
   confidence: PePackerConfidence;
   evidence: string[];
-  details?: PePackerDetail[];
+}
+
+export interface PeDetailedPackerFinding extends PePackerFindingBase {
+  id: "nsis-installer";
+  details: PePackerDetail[];
+}
+
+export interface BunOffsetMetadata {
+  byteCount: number;
+  compileArgvBytes: number;
+  entryPointId: number;
+  flags: number;
+  moduleListBytes: number;
+}
+
+export interface PeBunPackerFinding extends PePackerFindingBase {
+  id: "bun-standalone";
+  offsetMetadata?: BunOffsetMetadata;
+  payloadSize: number;
+  payloadStart: number;
+  sectionSize: number;
+  sectionStart: number;
+  storage: BunPayloadStorage;
+}
+
+export interface PeUpxPackerFinding extends PePackerFindingBase {
+  id: "upx";
+  packedFileSize: number;
+  packHeader: UpxPackHeader;
+  packHeaderOffset: number;
+}
+
+export type PePackerFinding =
+  | PeBunPackerFinding
+  | PeDetailedPackerFinding
+  | PeUpxPackerFinding;
+
+export interface PePackerReport {
+  id: PePackerId;
+  findings: PePackerFinding[];
+  warnings: string[];
 }
 
 export interface PePackerAnalysis {
-  findings: PePackerFinding[];
-  warnings?: string[];
+  reports: PePackerReport[];
 }
 
 export interface PePackerAnalysisInput {
@@ -52,8 +93,10 @@ export interface UpxDetectorInput {
   imagePointerBytes: 4 | 8;
 }
 
-export interface PePackerDetectorResult {
-  findings: PePackerFinding[];
+export interface PePackerDetectorResult<
+  TFinding extends PePackerFinding = PePackerFinding
+> {
+  findings: TFinding[];
   warnings: string[];
 }
 

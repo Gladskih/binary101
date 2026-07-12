@@ -6,51 +6,65 @@ import { detectUpx } from "./upx.js";
 import type {
   PePackerAnalysis,
   PePackerAnalysisInput,
-  PePackerDetectorResult
+  PePackerDetectorResult,
+  PePackerId
 } from "./types.js";
 
 type PePackerAnalyzer = (input: PePackerAnalysisInput) => Promise<PePackerDetectorResult>;
+type PePackerAnalyzerRegistration = { id: PePackerId; analyze: PePackerAnalyzer };
 
-const DETECTORS: readonly PePackerAnalyzer[] = [
-  input => detectUpx({
+const DETECTORS: readonly PePackerAnalyzerRegistration[] = [{
+  id: "upx",
+  analyze: input => detectUpx({
     reader: input.reader,
     sections: input.sections,
     imagePointerBytes: input.imagePointerBytes
-  }),
-  input => detectBunStandalone({
+  })
+}, {
+  id: "bun-standalone",
+  analyze: input => detectBunStandalone({
     reader: input.reader,
     sections: input.sections,
     imagePointerBytes: input.imagePointerBytes
-  }),
-  input => detectNsisInstaller(input.overlay == null
+  })
+}, {
+  id: "nsis-installer",
+  analyze: input => detectNsisInstaller(input.overlay == null
     ? { reader: input.reader }
     : { reader: input.reader, overlay: input.overlay })
-];
+}];
 
 export const analyzePePackers = async (
   input: PePackerAnalysisInput
 ): Promise<PePackerAnalysis | null> => {
-  const findings: PePackerAnalysis["findings"] = [];
-  const warnings: string[] = [];
+  const reports: PePackerAnalysis["reports"] = [];
   for (const detector of DETECTORS) {
-    const result = await detector(input);
-    findings.push(...result.findings);
-    warnings.push(...result.warnings);
+    const result = await detector.analyze(input);
+    if (result.findings.length || result.warnings.length) {
+      reports.push({
+        id: detector.id,
+        findings: result.findings,
+        warnings: [...new Set(result.warnings)]
+      });
+    }
   }
-  if (!findings.length && !warnings.length) return null;
-  return {
-    findings,
-    ...(warnings.length ? { warnings: [...new Set(warnings)] } : {})
-  };
+  return reports.length ? { reports } : null;
 };
 
 export type {
+  BunOffsetMetadata,
+  BunPayloadStorage,
   BunStandaloneDetectorInput,
   NsisInstallerDetectorInput,
+  PeDetailedPackerFinding,
+  PeBunPackerFinding,
   PePackerAnalysis,
   PePackerConfidence,
   PePackerDetail,
   PePackerFinding,
+  PePackerId,
   PePackerKind,
+  PePackerReport,
+  PeUpxPackerFinding,
   UpxDetectorInput
 } from "./types.js";

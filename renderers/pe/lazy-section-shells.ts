@@ -11,11 +11,13 @@ import { PE_DELAY_IMPORTS_PANEL_ID, PE_IMPORTS_PANEL_ID } from "./import-section
 import { getLinuxBootSummary } from "./linux-boot.js";
 import { getMsvcRttiSummaryCounts } from "./msvc-rtti.js";
 import { PE_OVERLAY_PANEL_ID, getUnexplainedOverlaySize } from "./overlay.js";
+import { PE_PACKER_SECTIONS, pePackerSectionDescriptors } from "./packer-sections.js";
 import { getPeSanityIssues } from "./layout.js";
 
 export const PE_LAZY_SECTION_KEYS = {
   architecture: "architecture",
   boundImports: "bound-imports",
+  bunStandalone: PE_PACKER_SECTIONS["bun-standalone"].key,
   clr: "clr",
   dataDirectories: "data-directories",
   debug: "debug",
@@ -33,15 +35,16 @@ export const PE_LAZY_SECTION_KEYS = {
   loadConfig: "load-config",
   msvcRtti: "msvc-rtti",
   nativeAot: "native-aot",
+  nsisInstaller: PE_PACKER_SECTIONS["nsis-installer"].key,
   overlay: "overlay",
-  packers: "packers",
   peHeaders: "pe-headers",
   reloc: "reloc",
   resources: "resources",
   sanity: "sanity",
   sectionHeaders: "section-headers",
   security: "security",
-  tls: "tls"
+  tls: "tls",
+  upx: PE_PACKER_SECTIONS.upx.key
 } as const;
 
 export type PeLazySectionKey =
@@ -133,11 +136,7 @@ const addWindowsToolingDescriptors = (
   pe: PeWindowsParseResult,
   descriptors: PeLazySectionDescriptor[]
 ): void => {
-  pushIf(descriptors, pe.packers?.findings.length || pe.packers?.warnings?.length, {
-    key: PE_LAZY_SECTION_KEYS.packers,
-    summary: `${pe.packers?.findings.length ?? 0} finding(s)`,
-    title: "Packaging signatures"
-  });
+  descriptors.push(...pePackerSectionDescriptors(pe.packers));
   pushIf(descriptors, pe.loadcfg, {
     key: PE_LAZY_SECTION_KEYS.loadConfig,
     summary: `v${pe.loadcfg?.Major ?? 0}.${pe.loadcfg?.Minor ?? 0}`,

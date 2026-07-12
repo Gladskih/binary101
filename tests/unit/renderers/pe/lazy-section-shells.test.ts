@@ -6,7 +6,8 @@ import { renderPe } from "../../../../renderers/pe/index.js";
 import { MSVC_RTTI_LAYOUT } from "../../../../analyzers/pe/msvc-rtti/layout.js";
 import {
   getPeLazySectionDescriptors,
-  PE_LAZY_SECTION_KEYS
+  PE_LAZY_SECTION_KEYS,
+  type PeLazySectionKey
 } from "../../../../renderers/pe/lazy-section-shells.js";
 import { createPeWithImportLinking } from "../../../fixtures/pe-import-linking-fixture.js";
 import {
@@ -42,6 +43,35 @@ void test("getPeLazySectionDescriptors keeps import counters in the section shel
     summary: "imports: 2 DLL / 2 functions",
     title: "Import table"
   });
+});
+
+void test("getPeLazySectionDescriptors creates one section per packaging analyzer", () => {
+  const pe = createPeWithImportLinking();
+  pe.packers = {
+    reports: [
+      { id: "upx", findings: [], warnings: ["UPX warning"] },
+      { id: "nsis-installer", findings: [], warnings: ["NSIS warning"] },
+      { id: "bun-standalone", findings: [], warnings: ["Bun warning"] }
+    ]
+  };
+
+  const packaging = getPeLazySectionDescriptors(pe).filter(section =>
+    ([
+      PE_LAZY_SECTION_KEYS.upx,
+      PE_LAZY_SECTION_KEYS.nsisInstaller,
+      PE_LAZY_SECTION_KEYS.bunStandalone
+    ] as PeLazySectionKey[]).includes(section.key)
+  );
+
+  assert.deepEqual(packaging, [
+    { key: PE_LAZY_SECTION_KEYS.upx, summary: "1 warning", title: "UPX executable packer" },
+    { key: PE_LAZY_SECTION_KEYS.nsisInstaller, summary: "1 warning", title: "NSIS installer" },
+    {
+      key: PE_LAZY_SECTION_KEYS.bunStandalone,
+      summary: "1 warning",
+      title: "Bun standalone executable"
+    }
+  ]);
 });
 
 void test("getPeLazySectionDescriptors groups file-header COFF symbols into legacy tail", () => {

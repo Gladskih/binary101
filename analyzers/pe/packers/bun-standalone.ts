@@ -2,10 +2,11 @@
 
 import { peSectionNameValue } from "../sections/name.js";
 import type {
+  BunOffsetMetadata,
+  BunPayloadStorage,
   BunStandaloneDetectorInput,
-  PePackerDetectorResult,
-  PePackerDetail,
-  PePackerFinding
+  PeBunPackerFinding,
+  PePackerDetectorResult
 } from "./types.js";
 
 type BunImagePointerBytes = BunStandaloneDetectorInput["imagePointerBytes"];
@@ -23,7 +24,7 @@ interface BunPayloadCandidate {
   payloadStart: number;
   payloadEnd: number;
   payloadSize: number;
-  storage: string;
+  storage: BunPayloadStorage;
 }
 
 type BunPayloadReadResult = { candidate: BunPayloadCandidate | null; warnings: string[] };
@@ -41,13 +42,7 @@ const BUN_FLAGS_BYTES = Uint32Array.BYTES_PER_ELEMENT;
 // Bun Offsets stores usize byte_count, two StringPointers, entry_point_id, and flags before the trailer.
 // Flags are currently the low four compile option bits.
 // https://github.com/oven-sh/bun/blob/main/src/standalone_graph/StandaloneModuleGraph.zig
-const BUN_FLAG_LABELS = [
-  "disable default env files",
-  "disable autoload bunfig",
-  "disable autoload tsconfig",
-  "disable autoload package.json"
-];
-const BUN_KNOWN_FLAGS_MASK = (1 << BUN_FLAG_LABELS.length) - 1;
+const BUN_KNOWN_FLAGS_MASK = 0x0f;
 
 const hasBytes = (readerSize: number, offset: number, size: number): boolean =>
   Number.isSafeInteger(offset) &&
@@ -78,11 +73,6 @@ const stringPointerFits = (
   byteCount: number
 ): boolean =>
   pointer.offset <= byteCount && pointer.length <= byteCount - pointer.offset;
-
-const decodeBunFlags = (flags: number): string =>
-  BUN_FLAG_LABELS
-    .filter((_, index) => (flags & (1 << index)) !== 0)
-    .join(", ") || "none";
 
 const createBunOffsetsLayout = (imagePointerBytes: BunImagePointerBytes): BunOffsetsLayout => {
   const modulesPointerOffset = imagePointerBytes;
@@ -163,7 +153,7 @@ const buildLengthPrefixedPayload = (
   ) {
     return { warning: "Bun .bun declared payload length extends past the section or EOF." };
   }
-  return { payload: { payloadStart, payloadEnd, payloadSize, storage: "length-prefixed PE section" } };
+  return { payload: { payloadStart, payloadEnd, payloadSize, storage: "length-prefixed" } };
 };
 
 const readLengthPrefixedPayload = async (
@@ -196,20 +186,19 @@ const readDirectPayload = async (
   }
   const payloadEnd = sectionStart + payloadSize;
   if (!(await readTrailerMatches(input, payloadEnd))) return null;
-  return { payloadStart: sectionStart, payloadEnd, payloadSize, storage: "PE section virtual data" };
+  return { payloadStart: sectionStart, payloadEnd, payloadSize, storage: "section-virtual-data" };
 };
 
-const appendOffsetDetails = (
+const parseOffsetMetadata = (
   view: DataView,
   layout: BunOffsetsLayout,
   payloadSize: number,
-  details: PePackerDetail[],
   warnings: string[]
-): void => {
+): BunOffsetMetadata | null => {
   const byteCount = readByteCount(view, layout);
   if (byteCount > BigInt(Number.MAX_SAFE_INTEGER)) {
     warnings.push("Bun .bun offsets byte_count exceeds Number.MAX_SAFE_INTEGER.");
-    return;
+    return null;
   }
   const byteCountNumber = Number(byteCount);
   const modulesPointer = readStringPointer(view, layout.modulesPointerOffset);
@@ -223,46 +212,41 @@ const appendOffsetDetails = (
   }
   const flags = view.getUint32(layout.flagsOffset, true);
   if ((flags & ~BUN_KNOWN_FLAGS_MASK) !== 0) warnings.push("Bun .bun flags contain non-zero reserved bits.");
-  details.push(
-    { label: "Graph byte_count", kind: "bytes", value: byteCountNumber },
-    {
-      label: "Entry point id",
-      kind: "number",
-      value: view.getUint32(layout.entryPointIdOffset, true)
-    },
-    { label: "Module-list bytes", kind: "bytes", value: modulesPointer.length },
-    { label: "Compile argv bytes", kind: "bytes", value: compileArgvPointer.length },
-    { label: "Flags", kind: "text", value: decodeBunFlags(flags) }
-  );
+  return {
+    byteCount: byteCountNumber,
+    compileArgvBytes: compileArgvPointer.length,
+    entryPointId: view.getUint32(layout.entryPointIdOffset, true),
+    flags,
+    moduleListBytes: modulesPointer.length
+  };
 };
 
-const readBunOffsetDetails = async (
+const readBunOffsetMetadata = async (
   input: BunStandaloneDetectorInput,
   payloadEnd: number,
   payloadSize: number,
-  details: PePackerDetail[],
   warnings: string[]
-): Promise<void> => {
+): Promise<BunOffsetMetadata | null> => {
   const layout = createBunOffsetsLayout(input.imagePointerBytes);
   const offsetsStart = payloadEnd - BUN_TRAILER_BYTES.byteLength - layout.offsetsSize;
   if (offsetsStart < 0 || payloadSize < layout.offsetsSize + BUN_TRAILER_BYTES.byteLength) {
     warnings.push("Bun .bun payload is too small to contain offsets before the trailer.");
-    return;
+    return null;
   }
   const view = await input.reader.read(offsetsStart, layout.offsetsSize);
   if (view.byteLength < layout.offsetsSize) {
     warnings.push("Bun .bun offsets are truncated by EOF.");
-    return;
+    return null;
   }
-  appendOffsetDetails(view, layout, payloadSize, details, warnings);
+  return parseOffsetMetadata(view, layout, payloadSize, warnings);
 };
 
 const createBunFinding = (
   sectionStart: number,
-  sectionEnd: number,
+  sectionSize: number,
   payload: BunPayloadCandidate,
-  details: PePackerDetail[]
-): PePackerFinding => ({
+  offsetMetadata: BunOffsetMetadata | null
+): PeBunPackerFinding => ({
   id: "bun-standalone",
   name: "Bun standalone executable",
   kind: "runtime-packager",
@@ -271,18 +255,18 @@ const createBunFinding = (
     "PE section table contains a .bun section.",
     "The .bun payload has Bun's standalone module-graph trailer."
   ],
-  details: [
-    { label: ".bun raw range", kind: "range", start: sectionStart, end: sectionEnd },
-    { label: "Payload range", kind: "range", start: payload.payloadStart, end: payload.payloadEnd },
-    { label: "Storage", kind: "text", value: payload.storage },
-    ...details
-  ]
+  sectionStart,
+  sectionSize,
+  payloadStart: payload.payloadStart,
+  payloadSize: payload.payloadSize,
+  storage: payload.storage,
+  ...(offsetMetadata ? { offsetMetadata } : {})
 });
 
 export const detectBunStandalone = async (
   input: BunStandaloneDetectorInput
-): Promise<PePackerDetectorResult> => {
-  const findings: PePackerFinding[] = [];
+): Promise<PePackerDetectorResult<PeBunPackerFinding>> => {
+  const findings: PeBunPackerFinding[] = [];
   const warnings: string[] = [];
   const bunSections = input.sections.filter(section => peSectionNameValue(section.name) === BUN_SECTION_NAME);
   for (const section of bunSections) {
@@ -295,9 +279,13 @@ export const detectBunStandalone = async (
       warnings.push(...prefixed.warnings);
       continue;
     }
-    const details: PePackerDetail[] = [];
-    await readBunOffsetDetails(input, payload.payloadEnd, payload.payloadSize, details, warnings);
-    findings.push(createBunFinding(sectionStart, sectionStart + sectionSize, payload, details));
+    const offsetMetadata = await readBunOffsetMetadata(
+      input,
+      payload.payloadEnd,
+      payload.payloadSize,
+      warnings
+    );
+    findings.push(createBunFinding(sectionStart, sectionSize, payload, offsetMetadata));
   }
   return { findings, warnings };
 };

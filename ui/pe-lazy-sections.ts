@@ -5,8 +5,9 @@ import {
   type PeParseResult,
   type PeWindowsParseResult
 } from "../analyzers/pe/index.js";
+import type { PePackerId } from "../analyzers/pe/packers/index.js";
 import { renderHeaders } from "../renderers/pe/headers.js";
-import { renderPackers } from "../renderers/pe/packers.js";
+import { renderPackerReport } from "../renderers/pe/packers.js";
 import { renderLoadConfig } from "../renderers/pe/load-config.js";
 import { renderLinuxBoot } from "../renderers/pe/linux-boot.js";
 import { renderDebug } from "../renderers/pe/debug-view.js";
@@ -81,13 +82,22 @@ const renderToString = (render: (out: string[]) => void): string => {
   return out.join("");
 };
 
+const renderPackerById = (pe: PeWindowsParseResult, id: PePackerId): string => {
+  const report = pe.packers?.reports.find(candidate => candidate.id === id);
+  return report ? renderToString(out => renderPackerReport(report, out)) : "";
+};
+
 const renderWindowsLazyMarkup = (
   pe: PeWindowsParseResult,
   key: PeLazySectionKey
 ): string => {
   switch (key) {
-    case PE_LAZY_SECTION_KEYS.packers:
-      return renderToString(out => renderPackers(pe.packers, out));
+    case PE_LAZY_SECTION_KEYS.upx:
+      return renderPackerById(pe, "upx");
+    case PE_LAZY_SECTION_KEYS.nsisInstaller:
+      return renderPackerById(pe, "nsis-installer");
+    case PE_LAZY_SECTION_KEYS.bunStandalone:
+      return renderPackerById(pe, "bun-standalone");
     case PE_LAZY_SECTION_KEYS.loadConfig:
       return renderToString(out => renderLoadConfig(pe, out));
     case PE_LAZY_SECTION_KEYS.debug:

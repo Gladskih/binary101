@@ -496,6 +496,15 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .peOverlayBarSegment{display:block;height:100%;position:absolute;top:0}
 .peOverlayBarSegment--found{background:var(--accent)}
 .peOverlayBarSegment--unknown{background:repeating-linear-gradient(45deg,var(--border2) 0 4px,transparent 4px 8px)}
+.pePackerFinding + .pePackerFinding{
+  border-top:1px solid var(--border2);margin-top:.7rem;padding-top:.55rem
+}
+.pePackerFinding__title{font-size:.85rem;margin:0 0 .35rem}
+.pePackerFinding__evidenceLabel{margin-top:.3rem}
+.pePackerFinding__evidence{margin:.15rem 0 0}
+.pePackerFinding__details{margin-top:.45rem}
+.pePackerFinding__meaning{font-family:inherit;margin:0;white-space:normal}
+.peBunTable__field,.peUpxTable__field{white-space:nowrap;width:1%}
 
 .table{width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:transparent;margin-top:6px}
 .table th,.table td{padding:8px 10px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px}

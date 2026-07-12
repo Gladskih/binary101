@@ -81,15 +81,14 @@ const createInput = (
 };
 
 void test("detectUpx verifies a PackHeader and LZMA stream without section names", async () => {
-  const result = await detectUpx(createInput());
+  const input = createInput();
+  const result = await detectUpx(input);
 
   assert.equal(result.warnings.length, 0);
   assert.equal(result.findings[0]?.id, "upx");
-  assert.deepEqual(result.findings[0]?.details?.find(detail => detail.label === "Compression"), {
-    label: "Compression",
-    kind: "text",
-    value: "LZMA"
-  });
+  assert.equal(result.findings[0]?.packHeader.method, 14);
+  assert.equal(result.findings[0]?.packHeaderOffset, HEADER_START);
+  assert.equal(result.findings[0]?.packedFileSize, input.reader.size);
 });
 
 void test("detectUpx verifies the standard NRV PE method", async () => {
@@ -102,11 +101,7 @@ void test("detectUpx verifies the standard NRV PE method", async () => {
   }));
 
   assert.equal(result.warnings.length, 0);
-  assert.deepEqual(result.findings[0]?.details?.find(detail => detail.label === "Compression"), {
-    label: "Compression",
-    kind: "text",
-    value: "NRV2B LE32"
-  });
+  assert.equal(result.findings[0]?.packHeader.method, 2);
 });
 
 void test("detectUpx accepts legacy PackHeaders without a checksum field", async () => {

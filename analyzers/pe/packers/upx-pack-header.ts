@@ -27,6 +27,17 @@ const OLD_HEADER_BYTES = 28;
 const CHECKSUM_VERSION = 10;
 const PE32_FORMATS = new Set([9, 21]);
 const PE32_PLUS_FORMATS = new Set([36, 43, 44]);
+// Format-specific filter lists come from the corresponding upstream PE packers.
+// https://github.com/upx/upx/blob/devel/src/p_w32pe_i386.cpp
+// https://github.com/upx/upx/blob/devel/src/p_w64pe_amd64.cpp
+// https://github.com/upx/upx/blob/devel/src/p_wince_arm.cpp
+const PE_FILTERS_BY_FORMAT: Readonly<Record<number, ReadonlySet<number>>> = {
+  9: new Set([0, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x24, 0x25, 0x26, 0x46, 0x49]),
+  21: new Set([0, 0x50]),
+  36: new Set([0, 0x49]),
+  43: new Set([0]),
+  44: new Set([0])
+};
 
 const hasMagic = (view: DataView, offset: number): boolean => {
   if (offset < 0 || offset > view.byteLength - UPX_MAGIC.byteLength) return false;
@@ -65,6 +76,9 @@ const validateHeader = (header: UpxPackHeader, imagePointerBytes: 4 | 8): string
   if (header.version === 0 || header.version === 0xff) return "UPX PackHeader version is invalid.";
   if (!isKnownMethod(header.method)) return "UPX PackHeader compression method is unsupported.";
   if (header.level < 1 || header.level > 10) return "UPX PackHeader compression level is invalid.";
+  if (!PE_FILTERS_BY_FORMAT[header.format]?.has(header.filter)) {
+    return "UPX PackHeader filter is incompatible with its PE format.";
+  }
   if (header.packedSize < 2 || header.unpackedSize < 2) return "UPX PackHeader sizes are too small.";
   if (header.packedSize >= header.unpackedSize) {
     return "UPX PackHeader packed size is not smaller than its unpacked size.";

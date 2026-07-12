@@ -7,7 +7,7 @@ import { decompressUpxNrv } from "./upx-nrv.js";
 import { parseUpxPackHeader, type UpxPackHeader } from "./upx-pack-header.js";
 import type {
   PePackerDetectorResult,
-  PePackerFinding,
+  PeUpxPackerFinding,
   UpxDetectorInput
 } from "./types.js";
 
@@ -112,19 +112,12 @@ const collectCandidates = async (
   return candidates;
 };
 
-const methodLabel = (method: number): string => {
-  if (method === 14) return "LZMA";
-  const family = method <= 4 ? "NRV2B" : method <= 7 ? "NRV2D" : "NRV2E";
-  const widths = ["LE32", "8-bit", "LE16"];
-  return `${family} ${widths[(method - 2) % 3] ?? "unknown"}`;
-};
-
 const unpackCandidate = async (candidate: UpxCandidate, packed: Uint8Array): Promise<Uint8Array> =>
   candidate.header.method === 14
     ? decompressUpxLzma(packed, candidate.header.unpackedSize, candidate.header.level)
     : decompressUpxNrv(packed, candidate.header.unpackedSize, candidate.header.method);
 
-const createFinding = (candidate: UpxCandidate): PePackerFinding => ({
+const createFinding = (candidate: UpxCandidate, packedFileSize: number): PeUpxPackerFinding => ({
   id: "upx",
   name: "UPX executable packer",
   kind: "executable-packer",
@@ -137,31 +130,16 @@ const createFinding = (candidate: UpxCandidate): PePackerFinding => ({
     "The declared compression method decoded the complete packed stream.",
     "Packed and unpacked Adler-32 values both match PackHeader."
   ],
-  details: [
-    { label: "PackHeader offset", kind: "offset", value: candidate.offset },
-    {
-      label: "Packed data range",
-      kind: "range",
-      start: candidate.packedStart,
-      end: candidate.packedEnd
-    },
-    { label: "UPX format", kind: "number", value: candidate.header.format },
-    { label: "UPX version", kind: "number", value: candidate.header.version },
-    { label: "Compression", kind: "text", value: methodLabel(candidate.header.method) },
-    { label: "Compression level", kind: "number", value: candidate.header.level },
-    { label: "Packed size", kind: "bytes", value: candidate.header.packedSize },
-    { label: "Unpacked size", kind: "bytes", value: candidate.header.unpackedSize },
-    { label: "Original file size", kind: "bytes", value: candidate.header.originalFileSize },
-    { label: "Filter", kind: "number", value: candidate.header.filter },
-    { label: "Filter parameter", kind: "number", value: candidate.header.filterParameter }
-  ]
+  packedFileSize,
+  packHeader: candidate.header,
+  packHeaderOffset: candidate.offset
 });
 
 const verifyCandidate = async (
   input: UpxDetectorInput,
   candidate: UpxCandidate,
   warnings: string[]
-): Promise<PePackerFinding | null> => {
+): Promise<PeUpxPackerFinding | null> => {
   if (candidate.header.unpackedSize > MAX_UPX_UNPACKED_BYTES) {
     warnings.push(`UPX unpacked size at ${formatOffset(candidate.offset)} exceeds the browser limit.`);
     return null;
@@ -181,7 +159,7 @@ const verifyCandidate = async (
       warnings.push(`UPX unpacked Adler-32 at ${formatOffset(candidate.offset)} does not match.`);
       return null;
     }
-    return createFinding(candidate);
+    return createFinding(candidate, input.reader.size);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     warnings.push(`UPX decompression at ${formatOffset(candidate.offset)} failed: ${message}`);
@@ -189,8 +167,10 @@ const verifyCandidate = async (
   }
 };
 
-export const detectUpx = async (input: UpxDetectorInput): Promise<PePackerDetectorResult> => {
-  const findings: PePackerFinding[] = [];
+export const detectUpx = async (
+  input: UpxDetectorInput
+): Promise<PePackerDetectorResult<PeUpxPackerFinding>> => {
+  const findings: PeUpxPackerFinding[] = [];
   const warnings: string[] = [];
   for (const candidate of await collectCandidates(input, warnings)) {
     const finding = await verifyCandidate(input, candidate, warnings);

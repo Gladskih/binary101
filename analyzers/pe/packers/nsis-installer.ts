@@ -2,8 +2,8 @@
 
 import type {
   NsisInstallerDetectorInput,
-  PePackerDetectorResult,
-  PePackerFinding
+  PeDetailedPackerFinding,
+  PePackerDetectorResult
 } from "./types.js";
 
 // NSIS firstheader contains seven 32-bit integer fields.
@@ -57,7 +57,7 @@ const createNsisFinding = (
   flags: number,
   lengthOfHeader: number,
   lengthOfAllFollowingData: number
-): PePackerFinding => ({
+): PeDetailedPackerFinding => ({
   id: "nsis-installer",
   name: "NSIS installer",
   kind: "installer",
@@ -80,7 +80,7 @@ const validateNsisFirstHeader = (
   start: number,
   end: number,
   warnings: string[]
-): PePackerFinding | null => {
+): PeDetailedPackerFinding | null => {
   if (view.byteLength < FIRSTHEADER_BYTES) {
     if (hasPartialNsisSignal(view)) warnings.push("NSIS firstheader is truncated by EOF.");
     return null;
@@ -115,8 +115,8 @@ const validateNsisFirstHeader = (
 
 export const detectNsisInstaller = async (
   input: NsisInstallerDetectorInput
-): Promise<PePackerDetectorResult> => {
-  const findings: PePackerFinding[] = [];
+): Promise<PePackerDetectorResult<PeDetailedPackerFinding>> => {
+  const findings: PeDetailedPackerFinding[] = [];
   const warnings: string[] = [];
   for (const range of input.overlay?.ranges ?? []) {
     const view = await input.reader.read(range.start, FIRSTHEADER_BYTES);

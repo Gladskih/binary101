@@ -43,8 +43,10 @@ const PE_SECTION_DESCRIPTIONS: Record<string, string> = {
     "Deprecated COFF symbol and string-table data stored after mapped PE sections.",
   "Native AOT candidate":
     "Conservative evidence for .NET Native AOT style images based on PE and CLR metadata.",
-  "Packaging signatures":
-    "High-confidence local evidence for installers and runtime packagers embedded in this PE image.",
+  "Bun standalone executable":
+    "Validated Bun standalone module graph and embedded executable payload metadata.",
+  "NSIS installer":
+    "Validated NSIS firstheader and installer-data bounds.",
   "PE/COFF headers":
     "Core PE signature, COFF file header, and optional header fields that define the image layout.",
   "Resources":
@@ -58,7 +60,9 @@ const PE_SECTION_DESCRIPTIONS: Record<string, string> = {
   "Section headers":
     "Section table entries describing named image regions, their RVAs, raw file ranges, sizes, and flags.",
   "TLS directory":
-    "Thread-local-storage template and optional callbacks that the loader runs for thread and process events."
+    "Thread-local-storage template and optional callbacks that the loader runs for thread and process events.",
+  "UPX executable packer":
+    "Validated UPX PackHeader, compressed stream, decompression, and Adler-32 checksums."
 };
 
 const renderPeSectionDescription = (title: string): string => {
