@@ -502,8 +502,12 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .pePackerFinding__title{font-size:.85rem;margin:0 0 .35rem}
 .pePackerFinding__evidenceLabel{margin-top:.3rem}
 .pePackerFinding__evidence{margin:.15rem 0 0}
+.pePackerFinding__actions{
+  align-items:center;display:flex;gap:.5rem;justify-content:flex-end;margin-top:.45rem
+}
 .pePackerFinding__details{margin-top:.45rem}
 .pePackerFinding__meaning{font-family:inherit;margin:0;white-space:normal}
+.peNsisTable__field,
 .peBunTable__field,.peUpxTable__field{white-space:nowrap;width:1%}
 
 .table{width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:transparent;margin-top:6px}

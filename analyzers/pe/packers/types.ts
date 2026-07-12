@@ -10,13 +10,6 @@ export type PePackerConfidence = "high";
 export type PePackerId = "bun-standalone" | "nsis-installer" | "upx";
 export type BunPayloadStorage = "length-prefixed" | "section-virtual-data";
 
-export type PePackerDetail =
-  | { label: string; kind: "bytes"; value: number }
-  | { label: string; kind: "number"; value: number }
-  | { label: string; kind: "offset"; value: number }
-  | { label: string; kind: "range"; start: number; end: number }
-  | { label: string; kind: "text"; value: string };
-
 interface PePackerFindingBase {
   name: string;
   kind: PePackerKind;
@@ -24,9 +17,12 @@ interface PePackerFindingBase {
   evidence: string[];
 }
 
-export interface PeDetailedPackerFinding extends PePackerFindingBase {
+export interface PeNsisPackerFinding extends PePackerFindingBase {
   id: "nsis-installer";
-  details: PePackerDetail[];
+  compressedHeaderSize: number;
+  firstHeaderOffset: number;
+  flags: number;
+  followingDataSize: number;
 }
 
 export interface BunOffsetMetadata {
@@ -56,7 +52,7 @@ export interface PeUpxPackerFinding extends PePackerFindingBase {
 
 export type PePackerFinding =
   | PeBunPackerFinding
-  | PeDetailedPackerFinding
+  | PeNsisPackerFinding
   | PeUpxPackerFinding;
 
 export interface PePackerReport {

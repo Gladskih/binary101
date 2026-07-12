@@ -1,46 +1,16 @@
 "use strict";
 
-import { hex, humanSize } from "../../binary-utils.js";
 import { escapeHtml } from "../../html-utils.js";
 import type {
-  PeDetailedPackerFinding,
-  PePackerDetail,
   PePackerFinding,
   PePackerReport
 } from "../../analyzers/pe/packers/index.js";
 import { renderPeDiagnostics } from "./diagnostics.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
-import { packerDetailMeaning } from "./packer-detail-meanings.js";
 import { PE_PACKER_SECTIONS, pePackerReportSummary } from "./packer-sections.js";
 import { renderBunFindingDetails } from "./bun-packer.js";
+import { renderNsisFindingDetails } from "./nsis-installer.js";
 import { renderUpxFindingDetails } from "./upx-packer.js";
-
-const formatDetailValue = (detail: PePackerDetail): string => {
-  switch (detail.kind) {
-    case "bytes":
-      return humanSize(detail.value);
-    case "number":
-      return String(detail.value);
-    case "offset":
-      return hex(detail.value, 8);
-    case "range":
-      return `${hex(detail.start, 8)}-${hex(detail.end, 8)} (` +
-        `${humanSize(detail.end - detail.start)})`;
-    case "text":
-      return detail.value;
-  }
-};
-
-const renderDetailTable = (finding: PeDetailedPackerFinding): string =>
-  `<div class="tableWrap"><table class="table pePackerFinding__details">` +
-  `<thead><tr><th>Field</th><th>Value</th><th>Meaning</th></tr></thead><tbody>` +
-  finding.details.map(detail =>
-    `<tr><th scope="row">${escapeHtml(detail.label)}</th>` +
-    `<td${detail.kind === "text" ? "" : ` class="peNumeric"`}>` +
-    `${escapeHtml(formatDetailValue(detail))}</td>` +
-    `<td class="smallNote pePackerFinding__meaning">` +
-    `${escapeHtml(packerDetailMeaning(detail.label))}</td></tr>`
-  ).join("") + `</tbody></table></div>`;
 
 const renderEvidence = (finding: PePackerFinding): string =>
   `<div class="smallNote pePackerFinding__evidenceLabel">Validation checks</div>` +
@@ -60,7 +30,7 @@ const renderFinding = (finding: PePackerFinding, index: number, total: number): 
     ? renderUpxFindingDetails(finding)
     : finding.id === "bun-standalone"
       ? renderBunFindingDetails(finding)
-      : renderDetailTable(finding);
+      : renderNsisFindingDetails(finding);
   return `<div class="pePackerFinding">${heading}${renderEvidence(finding)}${details}</div>`;
 };
 

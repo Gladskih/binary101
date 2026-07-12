@@ -63,10 +63,19 @@ void test("detectNsisInstaller reports a valid firstheader at a true overlay sta
 
   assert.equal(result.warnings.length, 0);
   assert.equal(result.findings[0]?.id, "nsis-installer");
-  assert.deepEqual(result.findings[0]?.details?.find(detail => detail.label === "Following data length"), {
-    label: "Following data length",
-    kind: "bytes",
-    value: NSIS_FOLLOWING_DATA_BYTES
+  assert.deepEqual(result.findings[0], {
+    id: "nsis-installer",
+    name: "NSIS installer",
+    kind: "installer",
+    confidence: "high",
+    evidence: [
+      "True overlay starts with the NSIS firstheader structure.",
+      "firstheader contains the NullsoftInst signature and bounded lengths."
+    ],
+    compressedHeaderSize: NSIS_COMPRESSED_HEADER_BYTES,
+    firstHeaderOffset: OVERLAY_START,
+    flags: 0,
+    followingDataSize: NSIS_FOLLOWING_DATA_BYTES
   });
 });
 

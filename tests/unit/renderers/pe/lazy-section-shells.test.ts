@@ -74,6 +74,35 @@ void test("getPeLazySectionDescriptors creates one section per packaging analyze
   ]);
 });
 
+void test("getPeLazySectionDescriptors omits overlay fully covered by NSIS", () => {
+  const pe = createBasePe();
+  pe.overlay = {
+    ranges: [{ start: 0x400, end: 0x500, size: 0x100, findings: [] }]
+  };
+  pe.packers = {
+    reports: [{
+      id: "nsis-installer",
+      findings: [{
+        id: "nsis-installer",
+        name: "NSIS installer",
+        kind: "installer",
+        confidence: "high",
+        evidence: ["NSIS verified"],
+        compressedHeaderSize: 16,
+        firstHeaderOffset: 0x400,
+        flags: 0,
+        followingDataSize: 0x100
+      }],
+      warnings: []
+    }]
+  };
+
+  const descriptors = getPeLazySectionDescriptors(pe);
+
+  assert.equal(descriptors.some(section => section.key === PE_LAZY_SECTION_KEYS.overlay), false);
+  assert.equal(descriptors.some(section => section.key === PE_LAZY_SECTION_KEYS.nsisInstaller), true);
+});
+
 void test("getPeLazySectionDescriptors groups file-header COFF symbols into legacy tail", () => {
   const pe = createBasePe();
   pe.coff.PointerToSymbolTable = 0x300;

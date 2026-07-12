@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type {
   PeBunPackerFinding,
-  PeDetailedPackerFinding,
+  PeNsisPackerFinding,
   PePackerReport,
   PeUpxPackerFinding
 } from "../../../../analyzers/pe/packers/types.js";
@@ -23,13 +23,16 @@ const createBunFinding = (): PeBunPackerFinding => ({
   storage: "length-prefixed"
 });
 
-const createNsisFinding = (): PeDetailedPackerFinding => ({
+const createNsisFinding = (): PeNsisPackerFinding => ({
   id: "nsis-installer",
   name: "NSIS installer",
   kind: "installer",
   confidence: "high",
   evidence: ["NSIS verified"],
-  details: [{ label: "Following data length", kind: "bytes", value: 16 }]
+  compressedHeaderSize: 8,
+  firstHeaderOffset: 0x100,
+  flags: 0,
+  followingDataSize: 0x40
 });
 
 const createBunReport = (): PePackerReport => ({
@@ -133,6 +136,17 @@ void test("renderPackerReport routes UPX findings to the UPX-specific table", ()
   assert.doesNotMatch(html, /executable packer<\/span>/);
 });
 
+void test("renderPackerReport routes NSIS findings to the NSIS-specific table", () => {
+  const out: string[] = [];
+
+  renderPackerReport({ id: "nsis-installer", findings: [createNsisFinding()], warnings: [] }, out);
+
+  const html = out.join("");
+  assert.ok(html.includes(`<b>NSIS installer</b> - verified`));
+  assert.ok(html.includes("Download NSIS installer data"));
+  assert.ok(html.includes("Installer data start"));
+});
+
 void test("renderPackerReport labels multiple findings without duplicating a single finding", () => {
   const report = createBunReport();
   report.warnings = [];
@@ -149,44 +163,4 @@ void test("renderPackerReport labels multiple findings without duplicating a sin
     `</tbody></table></div></div><div class="pePackerFinding">` +
     `<h4 class="pePackerFinding__title">Finding 2: Bun standalone executable</h4>`
   ));
-});
-
-void test("renderPackerReport gives future generic details a visible meaning", () => {
-  const finding = createNsisFinding();
-  finding.details = [{ label: "Future field", kind: "number", value: 7 }];
-  const report: PePackerReport = {
-    id: "nsis-installer",
-    findings: [finding],
-    warnings: []
-  };
-  const out: string[] = [];
-
-  renderPackerReport(report, out);
-
-  assert.ok(out.join("").includes("Additional analyzer-specific metadata."));
-});
-
-void test("renderPackerReport formats every generic detail value kind", () => {
-  const finding = createNsisFinding();
-  finding.details = [
-    { label: "Module-list bytes", kind: "bytes", value: 2048 },
-    { label: "firstheader offset", kind: "offset", value: 29 },
-    { label: "Flags", kind: "text", value: "silent" },
-    { label: "Installer data range", kind: "range", start: 0x10, end: 0x20 }
-  ];
-  const report: PePackerReport = {
-    id: "nsis-installer",
-    findings: [finding],
-    warnings: []
-  };
-  const out: string[] = [];
-
-  renderPackerReport(report, out);
-
-  const html = out.join("");
-  assert.ok(html.includes(`<td class="peNumeric">2 KB (2048 bytes)</td>`));
-  assert.ok(html.includes(`<td class="peNumeric">0x0000001d</td>`));
-  assert.ok(html.includes(`<td>silent</td>`));
-  assert.ok(html.includes(`0x00000010-0x00000020 (16 B (16 bytes))`));
-  assert.ok(html.includes(`</tr><tr>`));
 });

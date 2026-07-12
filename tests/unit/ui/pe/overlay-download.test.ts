@@ -116,6 +116,40 @@ const createPeOverlayParseResult = (fixture: OverlayDownloadFixture): ParseForUi
   } as PeParseResult
 });
 
+const createPeNsisParseResult = (fixture: OverlayDownloadFixture): ParseForUiResult => ({
+  analyzer: "pe",
+  parsed: {
+    opt: { Magic: 0x10b },
+    packers: {
+      reports: [{ id: "upx", findings: [], warnings: [] }, {
+        id: "nsis-installer",
+        findings: [{
+          id: "nsis-installer",
+          name: "Other NSIS installer",
+          kind: "installer",
+          confidence: "high",
+          evidence: ["Other NSIS range"],
+          compressedHeaderSize: 1,
+          firstHeaderOffset: 0,
+          flags: 0,
+          followingDataSize: 1
+        }, {
+          id: "nsis-installer",
+          name: "NSIS installer",
+          kind: "installer",
+          confidence: "high",
+          evidence: ["NSIS verified"],
+          compressedHeaderSize: 1,
+          firstHeaderOffset: fixture.range.start,
+          flags: 0,
+          followingDataSize: fixture.rangeSize
+        }],
+        warnings: []
+      }]
+    }
+  } as unknown as PeParseResult
+});
+
 const createHandler = (
   fixture: OverlayDownloadFixture,
   messages: Array<string | null | undefined>
@@ -173,6 +207,74 @@ void test("PE overlay download handler slices a validated detected payload range
       fixture.fileBytes.subarray(fixture.finding.start, fixture.finding.end)
     );
     assert.deepEqual(messages, [null]);
+  } finally {
+    stubs.restore();
+  }
+});
+
+void test("PE overlay download handler accepts a validated NSIS installer range", async () => {
+  const stubs = installOverlayDownloadStubs();
+  const messages: Array<string | null | undefined> = [];
+  const fixture = createOverlayDownloadFixture();
+  try {
+    setOverlayButtonRange(stubs.button, fixture, fixture.range.end);
+    const handler = createPeOverlayDownloadClickHandler({
+      getFile: () => new MockFile(fixture.fileBytes, fixture.fileName),
+      getParseResult: () => createPeNsisParseResult(fixture),
+      setStatusMessage: message => messages.push(message)
+    });
+
+    handler({ target: stubs.button } as unknown as Event);
+
+    assert.deepEqual(
+      new Uint8Array(await expectDefined(stubs.getCreatedBlob()).arrayBuffer()),
+      fixture.expectedBytes
+    );
+    assert.deepEqual(messages, [null]);
+  } finally {
+    stubs.restore();
+  }
+});
+
+void test("PE overlay download handler rejects a tampered NSIS installer range", () => {
+  const stubs = installOverlayDownloadStubs();
+  const messages: Array<string | null | undefined> = [];
+  const fixture = createOverlayDownloadFixture();
+  try {
+    setOverlayButtonRange(stubs.button, fixture, fixture.tamperedEnd);
+    const handler = createPeOverlayDownloadClickHandler({
+      getFile: () => new MockFile(fixture.fileBytes, fixture.fileName),
+      getParseResult: () => createPeNsisParseResult(fixture),
+      setStatusMessage: message => messages.push(message)
+    });
+
+    handler({ target: stubs.button } as unknown as Event);
+
+    assert.deepEqual(messages, [fixture.rangeUnavailableMessage]);
+    assert.equal(stubs.getAnchor(), null);
+  } finally {
+    stubs.restore();
+  }
+});
+
+void test("PE overlay download handler rejects a wrong NSIS start with a matching end", () => {
+  const stubs = installOverlayDownloadStubs();
+  const messages: Array<string | null | undefined> = [];
+  const fixture = createOverlayDownloadFixture();
+  try {
+    stubs.button.setAttribute("data-pe-overlay-download", "");
+    stubs.button.setAttribute("data-overlay-start", String(fixture.range.start + 1));
+    stubs.button.setAttribute("data-overlay-end", String(fixture.range.end));
+    const handler = createPeOverlayDownloadClickHandler({
+      getFile: () => new MockFile(fixture.fileBytes, fixture.fileName),
+      getParseResult: () => createPeNsisParseResult(fixture),
+      setStatusMessage: message => messages.push(message)
+    });
+
+    handler({ target: stubs.button } as unknown as Event);
+
+    assert.deepEqual(messages, [fixture.rangeUnavailableMessage]);
+    assert.equal(stubs.getAnchor(), null);
   } finally {
     stubs.restore();
   }

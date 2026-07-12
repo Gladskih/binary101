@@ -10,7 +10,7 @@ import { renderPeSectionShell } from "./collapsible-section.js";
 import { PE_DELAY_IMPORTS_PANEL_ID, PE_IMPORTS_PANEL_ID } from "./import-sections.js";
 import { getLinuxBootSummary } from "./linux-boot.js";
 import { getMsvcRttiSummaryCounts } from "./msvc-rtti.js";
-import { PE_OVERLAY_PANEL_ID, getUnexplainedOverlaySize } from "./overlay.js";
+import { PE_OVERLAY_PANEL_ID, getUnexplainedOverlaySize, isOverlayFullyExplainedByNsis } from "./overlay.js";
 import { PE_PACKER_SECTIONS, pePackerSectionDescriptors } from "./packer-sections.js";
 import { getPeSanityIssues } from "./layout.js";
 
@@ -279,7 +279,8 @@ export const getPeLazySectionDescriptors = (pe: PeParseResult): PeLazySectionDes
   const descriptors: PeLazySectionDescriptor[] = [];
   addHeaderDescriptors(pe, descriptors);
   if (isPeWindowsParseResult(pe)) addWindowsDescriptors(pe, descriptors);
-  pushIf(descriptors, pe.overlay?.ranges.length || pe.overlay?.warnings?.length, {
+  pushIf(descriptors,
+    (pe.overlay?.ranges.length || pe.overlay?.warnings?.length) && !isOverlayFullyExplainedByNsis(pe), {
     id: PE_OVERLAY_PANEL_ID,
     key: PE_LAZY_SECTION_KEYS.overlay,
     summary: `overlay: ${humanSize(getUnexplainedOverlaySize(pe))}`,

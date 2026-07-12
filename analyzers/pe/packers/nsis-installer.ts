@@ -2,7 +2,7 @@
 
 import type {
   NsisInstallerDetectorInput,
-  PeDetailedPackerFinding,
+  PeNsisPackerFinding,
   PePackerDetectorResult
 } from "./types.js";
 
@@ -28,15 +28,6 @@ const FH_INT1 = 0x6c6c754e;
 const FH_INT2 = 0x74666f73;
 const FH_INT3 = 0x74736e49;
 
-const decodeNsisFlags = (flags: number): string => {
-  const labels: string[] = [];
-  if ((flags & FH_FLAGS_UNINSTALL) !== 0) labels.push("uninstaller");
-  if ((flags & FH_FLAGS_SILENT) !== 0) labels.push("silent");
-  if ((flags & FH_FLAGS_NO_CRC) !== 0) labels.push("no CRC");
-  if ((flags & FH_FLAGS_FORCE_CRC) !== 0) labels.push("force CRC");
-  return labels.join(", ") || "none";
-};
-
 const hasNsisSignature = (view: DataView): boolean =>
   view.byteLength >= NSIS_LENGTH_OF_HEADER_OFFSET &&
   view.getUint32(NSIS_SIGINFO_OFFSET, true) === FH_SIG &&
@@ -53,11 +44,10 @@ const hasPartialNsisSignal = (view: DataView): boolean =>
 
 const createNsisFinding = (
   start: number,
-  dataEnd: number,
   flags: number,
   lengthOfHeader: number,
   lengthOfAllFollowingData: number
-): PeDetailedPackerFinding => ({
+): PeNsisPackerFinding => ({
   id: "nsis-installer",
   name: "NSIS installer",
   kind: "installer",
@@ -66,13 +56,10 @@ const createNsisFinding = (
     "True overlay starts with the NSIS firstheader structure.",
     "firstheader contains the NullsoftInst signature and bounded lengths."
   ],
-  details: [
-    { label: "firstheader offset", kind: "offset", value: start },
-    { label: "Installer data range", kind: "range", start, end: dataEnd },
-    { label: "Flags", kind: "text", value: decodeNsisFlags(flags) },
-    { label: "Compressed header length", kind: "bytes", value: lengthOfHeader },
-    { label: "Following data length", kind: "bytes", value: lengthOfAllFollowingData }
-  ]
+  compressedHeaderSize: lengthOfHeader,
+  firstHeaderOffset: start,
+  flags,
+  followingDataSize: lengthOfAllFollowingData
 });
 
 const validateNsisFirstHeader = (
@@ -80,7 +67,7 @@ const validateNsisFirstHeader = (
   start: number,
   end: number,
   warnings: string[]
-): PeDetailedPackerFinding | null => {
+): PeNsisPackerFinding | null => {
   if (view.byteLength < FIRSTHEADER_BYTES) {
     if (hasPartialNsisSignal(view)) warnings.push("NSIS firstheader is truncated by EOF.");
     return null;
@@ -110,13 +97,13 @@ const validateNsisFirstHeader = (
     warnings.push("NSIS firstheader length_of_all_following_data extends past the true overlay range.");
     return null;
   }
-  return createNsisFinding(start, dataEnd, flags, lengthOfHeader, lengthOfAllFollowingData);
+  return createNsisFinding(start, flags, lengthOfHeader, lengthOfAllFollowingData);
 };
 
 export const detectNsisInstaller = async (
   input: NsisInstallerDetectorInput
-): Promise<PePackerDetectorResult<PeDetailedPackerFinding>> => {
-  const findings: PeDetailedPackerFinding[] = [];
+): Promise<PePackerDetectorResult<PeNsisPackerFinding>> => {
+  const findings: PeNsisPackerFinding[] = [];
   const warnings: string[] = [];
   for (const range of input.overlay?.ranges ?? []) {
     const view = await input.reader.read(range.start, FIRSTHEADER_BYTES);

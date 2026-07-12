@@ -2,7 +2,10 @@
 
 import { humanSize, hex } from "../../binary-utils.js";
 import { escapeHtml } from "../../html-utils.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
+import {
+  isPeWindowsParseResult,
+  type PeParseResult
+} from "../../analyzers/pe/index.js";
 import type { PeOverlayRange } from "../../analyzers/pe/overlay.js";
 import { renderDownloadButton } from "../download-button.js";
 import { renderPeDiagnostics } from "./diagnostics.js";
@@ -10,10 +13,22 @@ import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.
 
 export const PE_OVERLAY_PANEL_ID = "peOverlayPanel";
 
+export const isOverlayFullyExplainedByNsis = (pe: PeParseResult): boolean => {
+  const ranges = pe.overlay?.ranges ?? [];
+  if (!ranges.length || pe.overlay?.warnings?.length || !isPeWindowsParseResult(pe)) return false;
+  const findings = pe.packers?.reports
+    .find(report => report.id === "nsis-installer")
+    ?.findings.filter(finding => finding.id === "nsis-installer") ?? [];
+  return ranges.every(range => findings.some(finding =>
+    finding.firstHeaderOffset === range.start &&
+    finding.firstHeaderOffset + finding.followingDataSize === range.end
+  ));
+};
+
 const getUnexplainedOverlaySize = (pe: PeParseResult): number =>
   pe.overlay?.ranges.reduce((total, range) => total + range.size, 0) ?? 0;
 
-const renderOverlayDownloadButton = (start: number, end: number, label: string): string =>
+export const renderOverlayDownloadButton = (start: number, end: number, label: string): string =>
   renderDownloadButton(label, [
     ["data-pe-overlay-download"],
     ["data-overlay-start", start],
@@ -78,6 +93,7 @@ const renderFindingRows = (range: PeOverlayRange): string =>
 
 const renderOverlayContent = (pe: PeParseResult, out: string[]): void => {
   if (!pe.overlay?.ranges.length && !pe.overlay?.warnings?.length) return;
+  if (isOverlayFullyExplainedByNsis(pe)) return;
   out.push(renderPeSectionStart("Overlay", `${getUnexplainedOverlaySize(pe)} byte(s)`));
   out.push(
     `<div class="smallNote">Only bytes not covered by sections, headers, certificates, debug raw data, COFF data, or trailing alignment padding are listed here.</div>`
