@@ -18,6 +18,11 @@ export type PeImageArtifacts = {
   goRuntime: Awaited<ReturnType<typeof analyzePeGoRuntime>>;
 };
 
+const certificateTableStart = (directories: PeWindowsParseContext["core"]["dataDirs"]): number | null => {
+  const security = directories.find(directory => directory.name === "SECURITY");
+  return security?.size ? security.rva >>> 0 : null;
+};
+
 export const parsePeImageArtifacts = async (
   context: PeWindowsParseContext,
   debugResult: PeDebugArtifacts["debugResult"],
@@ -54,7 +59,13 @@ export const parsePeImageArtifacts = async (
   }), analyzePeGoRuntime(file, reader, core)]);
   const payloads = await analyzePePayloads(file, reader, overlay, packers, resources);
   return {
-    overlay: subtractExplainedPeOverlay(overlay, packers, payloads),
+    overlay: await subtractExplainedPeOverlay(
+      reader,
+      certificateTableStart(core.dataDirs),
+      overlay,
+      packers,
+      payloads
+    ),
     packers,
     payloads,
     goRuntime

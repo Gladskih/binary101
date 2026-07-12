@@ -125,7 +125,9 @@ const decodeRar5HeaderEnvelope = (
     cursor += dataInfo.length;
     dataSizeBig = dataInfo.value || 0n;
   }
-  const headerLimit = Math.max(headerSizeNumber - extraSize, 0);
+  // RAR 5 Header size excludes its own vint, while headerDv includes it for CRC validation.
+  // https://www.rarlab.com/technote.htm
+  const headerLimit = Math.max(cursorStart + headerSizeNumber - extraSize, 0);
   if (cursor > headerLimit) {
     issues.push("RAR header fields exceed declared size.");
     return null;

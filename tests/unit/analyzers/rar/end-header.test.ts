@@ -27,3 +27,10 @@ void test("parseRar5 stops at the end-of-archive header", async () => {
   assert.ok(result.endHeader);
   assert.deepEqual(result.issues, baseline.issues);
 });
+
+void test("parseRar5 keeps every byte of a file name after its header-size vint", async () => {
+  const result = await parseRar(createRar5File());
+
+  assert.equal(result.entries[0]?.name, "note.txt");
+  assert.deepEqual(result.issues, []);
+});
