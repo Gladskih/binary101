@@ -74,7 +74,7 @@ void test("getPeLazySectionDescriptors creates one section per packaging analyze
   ]);
 });
 
-void test("getPeLazySectionDescriptors omits overlay fully covered by NSIS", () => {
+void test("getPeLazySectionDescriptors shows residual overlay supplied by the analyzer", () => {
   const pe = createBasePe();
   pe.overlay = {
     ranges: [{ start: 0x400, end: 0x500, size: 0x100, findings: [] }]
@@ -88,7 +88,7 @@ void test("getPeLazySectionDescriptors omits overlay fully covered by NSIS", () 
         kind: "installer",
         confidence: "high",
         evidence: ["NSIS verified"],
-        compressedHeaderSize: 16,
+        headerSize: 16,
         firstHeaderOffset: 0x400,
         flags: 0,
         followingDataSize: 0x100
@@ -99,8 +99,28 @@ void test("getPeLazySectionDescriptors omits overlay fully covered by NSIS", () 
 
   const descriptors = getPeLazySectionDescriptors(pe);
 
-  assert.equal(descriptors.some(section => section.key === PE_LAZY_SECTION_KEYS.overlay), false);
+  assert.equal(descriptors.some(section => section.key === PE_LAZY_SECTION_KEYS.overlay), true);
   assert.equal(descriptors.some(section => section.key === PE_LAZY_SECTION_KEYS.nsisInstaller), true);
+});
+
+void test("getPeLazySectionDescriptors exposes only standalone payload archives", () => {
+  const pe = createBasePe();
+  pe.payloads = {
+    entries: [
+      { start: 0x400, end: 0x500, format: "sevenzip", source: "nsis" },
+      { start: 0x600, end: 0x700, format: "rar", source: "overlay" }
+    ]
+  };
+
+  const descriptor = getPeLazySectionDescriptors(pe).find(
+    section => section.key === PE_LAZY_SECTION_KEYS.payloads
+  );
+
+  assert.deepEqual(descriptor, {
+    key: PE_LAZY_SECTION_KEYS.payloads,
+    summary: "1 validated archive(s)",
+    title: "Embedded payloads"
+  });
 });
 
 void test("getPeLazySectionDescriptors groups file-header COFF symbols into legacy tail", () => {

@@ -3,6 +3,7 @@
 import {
   hasValidGzipDeflateHeaderView
 } from "../gzip/signature.js";
+import { crc32 } from "../crc32.js";
 import { hasRarSignature } from "../rar/utils.js";
 
 const DOS_SIGNATURE_MZ = 0x5a4d;
@@ -129,6 +130,8 @@ export const readEmbeddedSevenZipFileSize = (
   remainingBytes: number
 ): number | null => {
   if (view.byteLength < SEVEN_ZIP_SIGNATURE_HEADER_BYTES || !hasSevenZipSignature(view)) return null;
+  const startHeaderBytes = new Uint8Array(view.buffer, view.byteOffset + 12, 20);
+  if (crc32(startHeaderBytes) !== view.getUint32(8, true)) return null;
   const nextHeaderOffset = view.getBigUint64(12, true);
   const nextHeaderSize = view.getBigUint64(20, true);
   const archiveSize = BigInt(SEVEN_ZIP_SIGNATURE_HEADER_BYTES) + nextHeaderOffset + nextHeaderSize;

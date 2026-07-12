@@ -192,6 +192,7 @@ export const parseRar4 = async (file: File): Promise<RarParseResult> => {
         flags,
         nextVolume: (flags & EHFL_NEXTVOLUME) !== 0
       };
+      break;
     } else if ((flags & LONG_BLOCK) !== 0) {
       if (headerDv.byteLength >= 11) {
         const dataSize = headerDv.getUint32(7, true);

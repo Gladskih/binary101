@@ -509,6 +509,9 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .pePackerFinding__meaning{font-family:inherit;margin:0;white-space:normal}
 .peNsisTable__field,
 .peBunTable__field,.peUpxTable__field{white-space:nowrap;width:1%}
+.pePayloadEntry{
+  align-items:center;display:flex;gap:.75rem;justify-content:space-between;padding:.45rem .1rem
+}
 
 .table{width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:transparent;margin-top:6px}
 .table th,.table td{padding:8px 10px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px}

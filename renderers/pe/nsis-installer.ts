@@ -3,7 +3,8 @@
 import { hex, humanSize } from "../../binary-utils.js";
 import { escapeHtml, renderFlagChips } from "../../html-utils.js";
 import type { PeNsisPackerFinding } from "../../analyzers/pe/packers/index.js";
-import { renderOverlayDownloadButton } from "./overlay.js";
+import type { PeExtractedPayload } from "../../analyzers/pe/payloads.js";
+import { renderPePayloadEntries } from "./payloads.js";
 
 // NSIS firstheader flags come from the upstream file format definition.
 // https://github.com/kichik/nsis/blob/master/Source/exehead/fileform.h
@@ -27,17 +28,12 @@ const renderNsisRow = (
   `<td${valueClass ? ` class="${valueClass}"` : ""}>${valueHtml}</td>` +
   `<td class="smallNote pePackerFinding__meaning">${escapeHtml(meaning)}</td></tr>`;
 
-export const renderNsisFindingDetails = (finding: PeNsisPackerFinding): string => {
+export const renderNsisFindingDetails = (
+  finding: PeNsisPackerFinding,
+  payloads: PeExtractedPayload[] = []
+): string => {
   const dataEnd = finding.firstHeaderOffset + finding.followingDataSize;
-  return `<div class="pePackerFinding__actions">` +
-    `<span class="smallNote">Validated NSIS installer data</span>` +
-    renderOverlayDownloadButton(
-      finding.firstHeaderOffset,
-      dataEnd,
-      "Download NSIS installer data"
-    ) +
-    `</div>` +
-    `<div class="tableWrap"><table class="table peNsisTable pePackerFinding__details">` +
+  return `<div class="tableWrap"><table class="table peNsisTable pePackerFinding__details">` +
     `<thead><tr><th>Field</th><th>Value</th><th>Meaning</th></tr></thead><tbody>` +
     renderNsisRow("Installer data start", hex(finding.firstHeaderOffset, 8),
       "File offset of the validated NSIS firstheader and installer data.") +
@@ -45,9 +41,9 @@ export const renderNsisFindingDetails = (finding: PeNsisPackerFinding): string =
       "Exclusive end derived from firstheader length_of_all_following_data.") +
     renderNsisRow("Installer data size", formatNsisBytes(finding.followingDataSize),
       "Validated length_of_all_following_data value from firstheader.") +
-    renderNsisRow("Compressed header size", formatNsisBytes(finding.compressedHeaderSize),
-      "Declared compressed size of the NSIS header block.") +
+    renderNsisRow("Unpacked header size", formatNsisBytes(finding.headerSize),
+      "Size allocated for decompressed NSIS headers (length_of_header).") +
     renderNsisRow("Flags", renderFlagChips(finding.flags, NSIS_FLAGS),
       "Validated firstheader flags; active options are highlighted.", "") +
-    `</tbody></table></div>`;
+    `</tbody></table></div>` + renderPePayloadEntries(payloads, "Embedded archive");
 };

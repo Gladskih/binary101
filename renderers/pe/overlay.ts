@@ -3,7 +3,6 @@
 import { humanSize, hex } from "../../binary-utils.js";
 import { escapeHtml } from "../../html-utils.js";
 import {
-  isPeWindowsParseResult,
   type PeParseResult
 } from "../../analyzers/pe/index.js";
 import type { PeOverlayRange } from "../../analyzers/pe/overlay.js";
@@ -12,18 +11,6 @@ import { renderPeDiagnostics } from "./diagnostics.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 export const PE_OVERLAY_PANEL_ID = "peOverlayPanel";
-
-export const isOverlayFullyExplainedByNsis = (pe: PeParseResult): boolean => {
-  const ranges = pe.overlay?.ranges ?? [];
-  if (!ranges.length || pe.overlay?.warnings?.length || !isPeWindowsParseResult(pe)) return false;
-  const findings = pe.packers?.reports
-    .find(report => report.id === "nsis-installer")
-    ?.findings.filter(finding => finding.id === "nsis-installer") ?? [];
-  return ranges.every(range => findings.some(finding =>
-    finding.firstHeaderOffset === range.start &&
-    finding.firstHeaderOffset + finding.followingDataSize === range.end
-  ));
-};
 
 const getUnexplainedOverlaySize = (pe: PeParseResult): number =>
   pe.overlay?.ranges.reduce((total, range) => total + range.size, 0) ?? 0;
@@ -91,9 +78,44 @@ const renderFindingRows = (range: PeOverlayRange): string =>
     `<td>${renderOverlayDownloadButton(finding.start, finding.end, `Download detected payload ${index + 1}`)}</td></tr>`
   ).join("");
 
+const renderOverlayRangeContent = (range: PeOverlayRange, index: number): string => {
+  const out: string[] = [];
+  out.push(`<div class="peOverlayRange">`);
+  out.push(
+    `<div class="peOverlayRangeHeader"><div><b>True overlay #${index + 1}</b>` +
+    `<div class="smallNote">${hex(range.start, 8)}-${hex(range.end, 8)}; ` +
+    `${humanSize(range.size)}</div></div>` +
+    renderOverlayDownloadButton(range.start, range.end, `Download complete overlay ${index + 1}`) +
+    `</div>`
+  );
+  out.push(renderCoverageBar(range));
+  out.push(renderScanControls(range));
+  out.push(
+    `<div class="smallNote">Detected payload coverage: ${humanSize(
+      range.findings.reduce((total, finding) => total + finding.size, 0)
+    )}; unclassified bytes are shown on the bar.</div>`
+  );
+  if (range.findings.length) {
+    out.push(
+      `<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th>` +
+      `<th>Overlay range</th><th>Size</th><th>Detected payload</th>` +
+      `<th>Action</th></tr></thead><tbody>`
+    );
+    out.push(renderFindingRows(range));
+    out.push(`</tbody></table>`);
+  } else {
+    out.push(
+      range.embeddedScan?.status === "complete"
+        ? `<div class="smallNote">No embedded payload signature was recognized inside this overlay range.</div>`
+        : `<div class="smallNote">Embedded payload signatures have not been scanned for this range.</div>`
+    );
+  }
+  out.push(`</div>`);
+  return out.join("");
+};
+
 const renderOverlayContent = (pe: PeParseResult, out: string[]): void => {
   if (!pe.overlay?.ranges.length && !pe.overlay?.warnings?.length) return;
-  if (isOverlayFullyExplainedByNsis(pe)) return;
   out.push(renderPeSectionStart("Overlay", `${getUnexplainedOverlaySize(pe)} byte(s)`));
   out.push(
     `<div class="smallNote">Only bytes not covered by sections, headers, certificates, debug raw data, COFF data, or trailing alignment padding are listed here.</div>`
@@ -101,32 +123,7 @@ const renderOverlayContent = (pe: PeParseResult, out: string[]): void => {
   if (pe.overlay.warnings?.length) out.push(renderPeDiagnostics("Overlay warnings", pe.overlay.warnings));
   if (pe.overlay.ranges.length) {
     pe.overlay.ranges.forEach((range, index) => {
-      out.push(`<div class="peOverlayRange">`);
-      out.push(
-        `<div class="peOverlayRangeHeader"><div><b>True overlay #${index + 1}</b>` +
-        `<div class="smallNote">${hex(range.start, 8)}-${hex(range.end, 8)}; ${humanSize(range.size)}</div></div>` +
-        renderOverlayDownloadButton(range.start, range.end, `Download complete overlay ${index + 1}`) +
-        `</div>`
-      );
-      out.push(renderCoverageBar(range));
-      out.push(renderScanControls(range));
-      out.push(
-        `<div class="smallNote">Detected payload coverage: ${humanSize(
-          range.findings.reduce((total, finding) => total + finding.size, 0)
-        )}; unclassified bytes are shown on the bar.</div>`
-      );
-      if (range.findings.length) {
-        out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Overlay range</th><th>Size</th><th>Detected payload</th><th>Action</th></tr></thead><tbody>`);
-        out.push(renderFindingRows(range));
-        out.push(`</tbody></table>`);
-      } else {
-        out.push(
-          range.embeddedScan?.status === "complete"
-            ? `<div class="smallNote">No embedded payload signature was recognized inside this overlay range.</div>`
-            : `<div class="smallNote">Embedded payload signatures have not been scanned for this range.</div>`
-        );
-      }
-      out.push(`</div>`);
+      out.push(renderOverlayRangeContent(range, index));
     });
   }
   out.push(renderPeSectionEnd());

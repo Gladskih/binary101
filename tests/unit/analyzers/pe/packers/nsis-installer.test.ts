@@ -9,11 +9,10 @@ import { MockFile } from "../../../../helpers/mock-file.js";
 const OVERLAY_START = 0x20;
 const OVERLAY_END = 0x80;
 const FIRSTHEADER_BYTES = 28;
-const NSIS_COMPRESSED_HEADER_BYTES = 10;
+const NSIS_HEADER_BYTES = 10;
 const NSIS_FOLLOWING_DATA_BYTES = 40;
 const NSIS_BAD_FLAGS_WITH_RESERVED_BIT = 0x10;
 const NSIS_TOO_SMALL_FOLLOWING_DATA_BYTES = FIRSTHEADER_BYTES - 1;
-const NSIS_TOO_LARGE_COMPRESSED_HEADER_BYTES = NSIS_FOLLOWING_DATA_BYTES - FIRSTHEADER_BYTES + 1;
 const NSIS_OVERSIZED_FOLLOWING_DATA_BYTES = 0x100;
 const NSIS_TRUNCATED_SIGNATURE_BYTES = 12;
 // firstheader field offsets follow NSIS fileform.h.
@@ -37,7 +36,7 @@ const createFirstHeader = (): Uint8Array => {
   view.setUint32(NSIS_FIRSTHEADER.nsinst, 0x6c6c754e, true);
   view.setUint32(NSIS_FIRSTHEADER.nsinst + Int32Array.BYTES_PER_ELEMENT, 0x74666f73, true);
   view.setUint32(NSIS_FIRSTHEADER.nsinst + Int32Array.BYTES_PER_ELEMENT * 2, 0x74736e49, true);
-  view.setInt32(NSIS_FIRSTHEADER.lengthOfHeader, NSIS_COMPRESSED_HEADER_BYTES, true);
+  view.setInt32(NSIS_FIRSTHEADER.lengthOfHeader, NSIS_HEADER_BYTES, true);
   view.setInt32(NSIS_FIRSTHEADER.lengthOfAllFollowingData, NSIS_FOLLOWING_DATA_BYTES, true);
   return bytes;
 };
@@ -72,7 +71,7 @@ void test("detectNsisInstaller reports a valid firstheader at a true overlay sta
       "True overlay starts with the NSIS firstheader structure.",
       "firstheader contains the NullsoftInst signature and bounded lengths."
     ],
-    compressedHeaderSize: NSIS_COMPRESSED_HEADER_BYTES,
+    headerSize: NSIS_HEADER_BYTES,
     firstHeaderOffset: OVERLAY_START,
     flags: 0,
     followingDataSize: NSIS_FOLLOWING_DATA_BYTES
@@ -121,18 +120,18 @@ void test("detectNsisInstaller warns when following data is smaller than firsthe
   ]);
 });
 
-void test("detectNsisInstaller warns when compressed header exceeds following data", async () => {
+void test("detectNsisInstaller accepts an unpacked header larger than following data", async () => {
   const header = createFirstHeader();
   new DataView(header.buffer).setInt32(
     NSIS_FIRSTHEADER.lengthOfHeader,
-    NSIS_TOO_LARGE_COMPRESSED_HEADER_BYTES,
+    NSIS_FOLLOWING_DATA_BYTES * 2,
     true
   );
 
   const result = await detectNsisInstaller(createInput(header));
 
-  assert.equal(result.findings.length, 0);
-  assert.deepEqual(result.warnings, ["NSIS firstheader length_of_header exceeds the following data span."]);
+  assert.equal(result.findings[0]?.headerSize, NSIS_FOLLOWING_DATA_BYTES * 2);
+  assert.deepEqual(result.warnings, []);
 });
 
 void test("detectNsisInstaller warns about data spans beyond the true overlay", async () => {

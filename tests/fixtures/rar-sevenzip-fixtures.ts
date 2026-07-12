@@ -14,6 +14,8 @@ export const createSevenZipFile = () => {
   view.setBigUint64(12, 0n, true); // next header offset
   view.setBigUint64(20, 2n, true); // next header size
   const nextHeader = new Uint8Array([0x01, 0x00]); // minimal header + terminator
+  view.setUint32(28, crc32(nextHeader), true);
+  view.setUint32(8, crc32(header.subarray(12, 32)), true);
   const combined = new Uint8Array(header.length + nextHeader.length);
   combined.set(header, 0);
   combined.set(nextHeader, header.length);

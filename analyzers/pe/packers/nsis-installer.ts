@@ -56,7 +56,7 @@ const createNsisFinding = (
     "True overlay starts with the NSIS firstheader structure.",
     "firstheader contains the NullsoftInst signature and bounded lengths."
   ],
-  compressedHeaderSize: lengthOfHeader,
+  headerSize: lengthOfHeader,
   firstHeaderOffset: start,
   flags,
   followingDataSize: lengthOfAllFollowingData
@@ -86,10 +86,6 @@ const validateNsisFirstHeader = (
   }
   if (lengthOfAllFollowingData < FIRSTHEADER_BYTES) {
     warnings.push("NSIS firstheader length_of_all_following_data is smaller than firstheader.");
-    return null;
-  }
-  if (lengthOfHeader > lengthOfAllFollowingData - FIRSTHEADER_BYTES) {
-    warnings.push("NSIS firstheader length_of_header exceeds the following data span.");
     return null;
   }
   const dataEnd = start + lengthOfAllFollowingData;

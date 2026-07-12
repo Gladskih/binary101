@@ -1,7 +1,6 @@
 "use strict";
 
 import type { ParseForUiResult } from "../analyzers/index.js";
-import { isPeWindowsParseResult } from "../analyzers/pe/index.js";
 
 type PeOverlayDownloadDeps = {
   getParseResult: () => ParseForUiResult;
@@ -42,15 +41,7 @@ const isKnownOverlayDownloadRange = (
     (range.start === start && range.end === end) ||
     range.findings.some(finding => finding.start === start && finding.end === end)
   );
-  const parsed = parseResult.analyzer === "pe" ? parseResult.parsed : null;
-  if (isOverlayRange || !parsed || !isPeWindowsParseResult(parsed)) return isOverlayRange;
-  return parsed.packers?.reports
-    .find(report => report.id === "nsis-installer")
-    ?.findings.some(finding =>
-      finding.id === "nsis-installer" &&
-      finding.firstHeaderOffset === start &&
-      finding.firstHeaderOffset + finding.followingDataSize === end
-    ) ?? false;
+  return isOverlayRange;
 };
 
 export const createPeOverlayDownloadClickHandler =

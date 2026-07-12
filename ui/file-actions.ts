@@ -8,6 +8,7 @@ import { createPeChecksumClickHandler } from "./pe-checksum-controls.js";
 import { createPeDosNestedDownloadClickHandler } from "./pe-dos-nested-download.js";
 import { createPeLinuxPayloadDownloadClickHandler } from "./pe-linux-payload-download.js";
 import { createPeOverlayDownloadClickHandler } from "./pe-overlay-download.js";
+import { createPePayloadDownloadClickHandler } from "./pe-payload-download.js";
 import { createSevenZipEntryClickHandler } from "./sevenz-actions.js";
 import { createZipEntryClickHandler } from "./zip-actions.js";
 
@@ -32,6 +33,7 @@ export const createFileActionClickHandler = (deps: FileActionDeps) => {
   const peDosNestedDownloadClickHandler = createPeDosNestedDownloadClickHandler(deps);
   const peLinuxPayloadDownloadClickHandler = createPeLinuxPayloadDownloadClickHandler(deps);
   const peOverlayDownloadClickHandler = createPeOverlayDownloadClickHandler(deps);
+  const pePayloadDownloadClickHandler = createPePayloadDownloadClickHandler(deps);
   const certificateDownloadClickHandler = createCertificateDownloadClickHandler({
     setStatusMessage: deps.setStatusMessage
   });
@@ -44,6 +46,7 @@ export const createFileActionClickHandler = (deps: FileActionDeps) => {
     peDosNestedDownloadClickHandler(event);
     peLinuxPayloadDownloadClickHandler(event);
     peOverlayDownloadClickHandler(event);
+    pePayloadDownloadClickHandler(event);
     certificateDownloadClickHandler(event);
   };
 };

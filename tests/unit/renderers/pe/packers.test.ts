@@ -29,7 +29,7 @@ const createNsisFinding = (): PeNsisPackerFinding => ({
   kind: "installer",
   confidence: "high",
   evidence: ["NSIS verified"],
-  compressedHeaderSize: 8,
+  headerSize: 8,
   firstHeaderOffset: 0x100,
   flags: 0,
   followingDataSize: 0x40
@@ -143,8 +143,20 @@ void test("renderPackerReport routes NSIS findings to the NSIS-specific table", 
 
   const html = out.join("");
   assert.ok(html.includes(`<b>NSIS installer</b> - verified`));
-  assert.ok(html.includes("Download NSIS installer data"));
   assert.ok(html.includes("Installer data start"));
+  assert.doesNotMatch(html, /data-pe-overlay-download/);
+});
+
+void test("renderPackerReport routes validated NSIS payload downloads", () => {
+  const out: string[] = [];
+
+  renderPackerReport(
+    { id: "nsis-installer", findings: [createNsisFinding()], warnings: [] },
+    out,
+    { entries: [{ start: 0x110, end: 0x130, format: "sevenzip", source: "nsis" }] }
+  );
+
+  assert.ok(out.join("").includes("Download 7z archive"));
 });
 
 void test("renderPackerReport labels multiple findings without duplicating a single finding", () => {

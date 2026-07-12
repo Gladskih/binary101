@@ -68,6 +68,7 @@ export const buildWindowsPeResult = (
     nativeAotCandidate: directories.nativeAotCandidate,
     ...(imageArtifacts.goRuntime ? { goRuntime: imageArtifacts.goRuntime } : {}),
     packers: imageArtifacts.packers,
+    payloads: imageArtifacts.payloads,
     resources: attachManifestValidation(directories.resources, directories.manifestValidation),
     ...(imageArtifacts.overlay ? { overlay: imageArtifacts.overlay } : {}),
     imageEnd: core.imageEnd,

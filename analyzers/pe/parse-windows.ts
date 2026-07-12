@@ -22,6 +22,7 @@ import { detectNativeAotCandidate } from "./native-aot.js";
 import { PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "./optional-header/magic.js";
 import { analyzePeOverlay } from "./overlay.js";
 import { analyzePePackers } from "./packers/index.js";
+import { analyzePePayloads, subtractExplainedPeOverlay } from "./payloads.js";
 import type { PeWindowsParseResult } from "./core/parse-result.js";
 import { analyzeManifestConsistency } from "./resources/manifest-consistency.js";
 import type { ManifestXmlDocumentParser } from "./resources/preview/manifest-xml.js";
@@ -75,6 +76,7 @@ export type PeDirectoryArtifacts = {
 export type PeImageArtifacts = {
   overlay: Awaited<ReturnType<typeof analyzePeOverlay>>;
   packers: Awaited<ReturnType<typeof analyzePePackers>>;
+  payloads: Awaited<ReturnType<typeof analyzePePayloads>>;
   goRuntime: Awaited<ReturnType<typeof analyzePeGoRuntime>>;
 };
 const appendUniqueMessages = (existing: string[] | undefined, messages: string[]): string[] | undefined =>
@@ -120,7 +122,6 @@ export const parseWindowsPe = async (
     file.size
   );
 };
-
 const parsePeDebugArtifacts = async (
   context: PeWindowsParseContext
 ): Promise<PeDebugArtifacts> => {
@@ -151,7 +152,6 @@ const parsePeDebugArtifacts = async (
     debugWarning: appendDebugWarnings(debugResult.warning, debugExceptionFindings.warnings)
   };
 };
-
 const parsePeDirectoryArtifacts = async (
   context: PeWindowsParseContext
 ): Promise<PeDirectoryArtifacts> => {
@@ -215,7 +215,6 @@ const parsePeDirectoryArtifacts = async (
     manifestValidation: analyzeManifestConsistency(resources, canonicalMachine, clr)
   };
 };
-
 const parsePeSecurity = async (
   context: PeWindowsParseContext,
   debugResult: PeDebugArtifacts["debugResult"]
@@ -270,17 +269,20 @@ const parsePeImageArtifacts = async (
     numberOfSymbols: core.coff.NumberOfSymbols,
     ...(core.coffStringTableSize != null ? { coffStringTableSize: core.coffStringTableSize } : {})
   });
-  return {
+  const [packers, goRuntime] = await Promise.all([analyzePePackers({
+    reader,
+    sections: core.sections,
     overlay,
-    goRuntime: await analyzePeGoRuntime(file, reader, core),
-    packers: await analyzePePackers({
-      reader,
-      sections: core.sections,
-      overlay,
-      // Bun's .bun Offsets.byte_count is a usize, so it follows the PE image pointer width.
-      // https://github.com/oven-sh/bun/blob/main/src/standalone_graph/StandaloneModuleGraph.zig
-      imagePointerBytes: core.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC ? 8 : 4
-    })
+    // Bun's .bun Offsets.byte_count is a usize, so it follows the PE image pointer width.
+    // https://github.com/oven-sh/bun/blob/main/src/standalone_graph/StandaloneModuleGraph.zig
+    imagePointerBytes: core.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC ? 8 : 4
+  }), analyzePeGoRuntime(file, reader, core)]);
+  const payloads = await analyzePePayloads(file, reader, overlay, packers);
+  return {
+    overlay: subtractExplainedPeOverlay(overlay, packers, payloads),
+    packers,
+    payloads,
+    goRuntime
   };
 };
 const applyLoadConfigChecks = (

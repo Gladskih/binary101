@@ -1,5 +1,6 @@
 "use strict";
 import { formatUnixSecondsOrDash } from "../../binary-utils.js";
+import { crc32 } from "../crc32.js";
 import {
   EHFL_NEXTVOLUME,
   FHFL_CRC32,
@@ -21,9 +22,8 @@ import {
   RAR5_METHODS,
   SIGNATURE_V5
 } from "./constants.js";
-import { crc32, decodeNameBytes, mapHostV5, readDataView, readVint, toSafeNumber } from "./utils.js";
+import { decodeNameBytes, mapHostV5, readDataView, readVint, toSafeNumber } from "./utils.js";
 import type { RarEntry, RarParseResult, RarMainHeader, RarEndHeader } from "./index.js";
-
 const computeRar5DictSize = (compInfo: number, algoVersion: number, isDirectory: boolean): bigint | null => {
   if (isDirectory || algoVersion > 1) return null;
   const basePower = (compInfo >> 10) & (algoVersion === 0 ? 0x0f : 0x1f);
@@ -151,7 +151,6 @@ const parseRar5MainHeader = (envelope: Rar5HeaderEnvelope): Rar5ParseState["main
     volumeNumber
   };
 };
-
 const parseRar5FileEntry = (envelope: Rar5HeaderEnvelope, entries: RarEntry[], issues: string[]): Rar5FileEntry => {
   let cursor = envelope.cursor;
   const fileFlagsInfo = readVint(envelope.headerDv, cursor);
@@ -281,6 +280,7 @@ export const parseRar5 = async (file: File): Promise<RarParseResult> => {
       state.entries.push(parseRar5FileEntry(envelope, state.entries, state.issues));
     } else if (envelope.headerType === 5) {
       state.endHeader = parseRar5EndHeader(envelope);
+      break;
     }
     const nextOffset = advanceRar5Offset(offset, fileSize, envelope, state.issues);
     if (nextOffset <= offset) {

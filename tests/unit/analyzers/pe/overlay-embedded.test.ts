@@ -95,6 +95,13 @@ void test("detectEmbeddedCandidateType accepts 7z only with bounded signature he
   assert.equal(detectEmbeddedCandidateType(dataViewFrom([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c]), 6), null);
 });
 
+void test("detectEmbeddedCandidateType rejects a 7z start-header CRC mismatch", () => {
+  const bytes = createSevenZipFile().data.slice();
+  bytes[8] = (bytes[8] ?? 0) ^ 0xff;
+
+  assert.equal(detectEmbeddedCandidateType(new DataView(bytes.buffer), bytes.byteLength), null);
+});
+
 void test("detectEmbeddedCandidateType rejects broad magic-only formats", () => {
   const tsBytes = new Uint8Array(188 * 5).fill(0);
   for (let offset = 0; offset < tsBytes.byteLength; offset += 188) {

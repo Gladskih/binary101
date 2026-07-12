@@ -19,7 +19,7 @@ interface PePackerFindingBase {
 
 export interface PeNsisPackerFinding extends PePackerFindingBase {
   id: "nsis-installer";
-  compressedHeaderSize: number;
+  headerSize: number;
   firstHeaderOffset: number;
   flags: number;
   followingDataSize: number;

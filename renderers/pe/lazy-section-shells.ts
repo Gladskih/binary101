@@ -10,8 +10,9 @@ import { renderPeSectionShell } from "./collapsible-section.js";
 import { PE_DELAY_IMPORTS_PANEL_ID, PE_IMPORTS_PANEL_ID } from "./import-sections.js";
 import { getLinuxBootSummary } from "./linux-boot.js";
 import { getMsvcRttiSummaryCounts } from "./msvc-rtti.js";
-import { PE_OVERLAY_PANEL_ID, getUnexplainedOverlaySize, isOverlayFullyExplainedByNsis } from "./overlay.js";
+import { PE_OVERLAY_PANEL_ID, getUnexplainedOverlaySize } from "./overlay.js";
 import { PE_PACKER_SECTIONS, pePackerSectionDescriptors } from "./packer-sections.js";
+import { getPePayloadSectionDescriptor } from "./payloads.js";
 import { getPeSanityIssues } from "./layout.js";
 
 export const PE_LAZY_SECTION_KEYS = {
@@ -37,6 +38,7 @@ export const PE_LAZY_SECTION_KEYS = {
   nativeAot: "native-aot",
   nsisInstaller: PE_PACKER_SECTIONS["nsis-installer"].key,
   overlay: "overlay",
+  payloads: "payloads",
   peHeaders: "pe-headers",
   reloc: "reloc",
   resources: "resources",
@@ -47,19 +49,13 @@ export const PE_LAZY_SECTION_KEYS = {
   upx: PE_PACKER_SECTIONS.upx.key
 } as const;
 
-export type PeLazySectionKey =
-  typeof PE_LAZY_SECTION_KEYS[keyof typeof PE_LAZY_SECTION_KEYS];
+export type PeLazySectionKey = typeof PE_LAZY_SECTION_KEYS[keyof typeof PE_LAZY_SECTION_KEYS];
 
-export type PeLazySectionDescriptor = {
-  id?: string;
-  key: PeLazySectionKey;
-  summary?: string;
-  title: string;
-};
+export type PeLazySectionDescriptor =
+  { id?: string; key: PeLazySectionKey; summary?: string; title: string };
 
 const compactCount = (count: number): string =>
   count >= 10_000 ? `${Math.round(count / 1000)}k` : String(count);
-
 const plural = (count: number, one: string, many: string): string =>
   `${count} ${count === 1 ? one : many}`;
 
@@ -278,9 +274,13 @@ const addWindowsDescriptors = (
 export const getPeLazySectionDescriptors = (pe: PeParseResult): PeLazySectionDescriptor[] => {
   const descriptors: PeLazySectionDescriptor[] = [];
   addHeaderDescriptors(pe, descriptors);
-  if (isPeWindowsParseResult(pe)) addWindowsDescriptors(pe, descriptors);
+  if (isPeWindowsParseResult(pe)) {
+    addWindowsDescriptors(pe, descriptors);
+    const payloadSection = getPePayloadSectionDescriptor(pe.payloads);
+    if (payloadSection) descriptors.push(payloadSection);
+  }
   pushIf(descriptors,
-    (pe.overlay?.ranges.length || pe.overlay?.warnings?.length) && !isOverlayFullyExplainedByNsis(pe), {
+    pe.overlay?.ranges.length || pe.overlay?.warnings?.length, {
     id: PE_OVERLAY_PANEL_ID,
     key: PE_LAZY_SECTION_KEYS.overlay,
     summary: `overlay: ${humanSize(getUnexplainedOverlaySize(pe))}`,

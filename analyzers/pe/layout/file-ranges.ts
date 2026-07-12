@@ -25,6 +25,28 @@ export const normalizeFileRanges = (ranges: FileRange[]): FileRange[] => {
   return merged;
 };
 
+export const subtractFileRanges = (
+  ranges: FileRange[],
+  coveredRanges: FileRange[]
+): FileRange[] => {
+  const covered = normalizeFileRanges(coveredRanges);
+  const remaining: FileRange[] = [];
+  for (const range of normalizeFileRanges(ranges)) {
+    let cursor = range.start;
+    for (const coverage of covered) {
+      if (coverage.end <= cursor) continue;
+      if (coverage.start >= range.end) break;
+      if (coverage.start > cursor) {
+        remaining.push({ start: cursor, end: Math.min(coverage.start, range.end) });
+      }
+      cursor = Math.max(cursor, coverage.end);
+      if (cursor >= range.end) break;
+    }
+    if (cursor < range.end) remaining.push({ start: cursor, end: range.end });
+  }
+  return remaining;
+};
+
 export const getMappedImageRanges = (
   headerSpanEnd: number,
   sections: PeSection[],

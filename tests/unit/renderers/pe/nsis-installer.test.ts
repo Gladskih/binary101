@@ -11,28 +11,16 @@ const createFinding = (): PeNsisPackerFinding => ({
   kind: "installer",
   confidence: "high",
   evidence: ["NSIS verified"],
-  compressedHeaderSize: 512,
+  headerSize: 512,
   firstHeaderOffset: 0x400,
   flags: 0x05,
   followingDataSize: 0x800
 });
 
-void test("renderNsisFindingDetails renders validated bounds and a guarded download", () => {
+void test("renderNsisFindingDetails renders validated bounds", () => {
   const html = renderNsisFindingDetails(createFinding());
 
   assert.ok(html.startsWith(
-    `<div class="pePackerFinding__actions">` +
-    `<span class="smallNote">Validated NSIS installer data</span>`
-  ));
-  assert.ok(html.includes(`aria-label="Download NSIS installer data"`));
-  assert.ok(html.includes(`data-pe-overlay-download`));
-  assert.ok(html.includes(`data-overlay-start="1024"`));
-  assert.ok(html.includes(`data-overlay-end="3072"`));
-  assert.ok(html.includes(
-    `</svg></button></div><div class="tableWrap"><table class="table peNsisTable ` +
-    `pePackerFinding__details">`
-  ));
-  assert.ok(html.includes(
     `<div class="tableWrap"><table class="table peNsisTable pePackerFinding__details">` +
     `<thead><tr><th>Field</th><th>Value</th><th>Meaning</th></tr></thead><tbody>`
   ));
@@ -47,20 +35,37 @@ void test("renderNsisFindingDetails renders validated bounds and a guarded downl
     "Validated length_of_all_following_data value from firstheader."
   ));
   assert.ok(html.includes(
-    `Compressed header size</th><td class="peNumeric">512 bytes</td>`
+    `Unpacked header size</th><td class="peNumeric">512 bytes</td>`
   ));
-  assert.ok(html.includes("Declared compressed size of the NSIS header block."));
+  assert.ok(html.includes("Size allocated for decompressed NSIS headers (length_of_header)."));
   assert.ok(html.includes("Validated firstheader flags; active options are highlighted."));
   assert.ok(html.includes(
     `<th scope="row" class="peNsisTable__field">Flags</th><td><div class="optionsRow">`
   ));
   assert.ok(html.endsWith(`</tbody></table></div>`));
+  assert.doesNotMatch(html, /data-pe-overlay-download|data-pe-overlay-scan/);
+});
+
+void test("renderNsisFindingDetails renders a validated archive download", () => {
+  const html = renderNsisFindingDetails(createFinding(), [{
+    start: 0x500,
+    end: 0xb00,
+    format: "sevenzip",
+    source: "nsis"
+  }]);
+
+  assert.ok(html.includes("Embedded archive"));
+  assert.ok(html.includes("7z archive"));
+  assert.ok(html.includes(`data-pe-payload-download`));
+  assert.ok(html.includes(`data-payload-start="1280"`));
+  assert.ok(html.includes(`data-payload-end="2816"`));
+  assert.doesNotMatch(html, /data-pe-overlay-download|data-pe-overlay-scan/);
 });
 
 void test("renderNsisFindingDetails changes byte formatting at one kibibyte", () => {
   const html = renderNsisFindingDetails({
     ...createFinding(),
-    compressedHeaderSize: 1023,
+    headerSize: 1023,
     followingDataSize: 1024
   });
 
@@ -68,7 +73,7 @@ void test("renderNsisFindingDetails changes byte formatting at one kibibyte", ()
     `Installer data size</th><td class="peNumeric">1 KB (1024 bytes)</td>`
   ));
   assert.ok(html.includes(
-    `Compressed header size</th><td class="peNumeric">1023 bytes</td>`
+    `Unpacked header size</th><td class="peNumeric">1023 bytes</td>`
   ));
 });
 

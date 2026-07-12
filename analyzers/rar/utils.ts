@@ -6,28 +6,6 @@ import { SIGNATURE_V4, SIGNATURE_V5 } from "./constants.js";
 const UTF8_DECODER = new TextDecoder("utf-8", { fatal: false });
 const LATIN1_DECODER = new TextDecoder("latin1", { fatal: false });
 
-const CRC32_TABLE = (() => {
-  const table = new Uint32Array(256);
-  for (let i = 0; i < 256; i += 1) {
-    let c = i;
-    for (let j = 0; j < 8; j += 1) {
-      c = (c & 1) !== 0 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    }
-    table[i] = c >>> 0;
-  }
-  return table;
-})();
-
-export const crc32 = (bytes: Uint8Array): number => {
-  let crc = 0xffffffff;
-  for (let i = 0; i < bytes.length; i += 1) {
-    const byte = bytes.at(i) ?? 0;
-    const tableValue = CRC32_TABLE.at((crc ^ byte) & 0xff) ?? 0;
-    crc = (crc >>> 8) ^ tableValue;
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-};
-
 export const toSafeNumber = (value: number | bigint | null | undefined): number | null => {
   if (typeof value === "number") return value;
   if (typeof value === "bigint") {

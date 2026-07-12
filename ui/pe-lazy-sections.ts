@@ -17,6 +17,7 @@ import { renderException } from "../renderers/pe/exception.js";
 import { renderNativeAotCandidate } from "../renderers/pe/native-aot.js";
 import { renderMsvcRtti } from "../renderers/pe/msvc-rtti.js";
 import { renderOverlayPanel } from "../renderers/pe/overlay.js";
+import { renderPePayloads } from "../renderers/pe/payloads.js";
 import {
   PE_LAZY_SECTION_KEYS,
   type PeLazySectionKey
@@ -84,7 +85,7 @@ const renderToString = (render: (out: string[]) => void): string => {
 
 const renderPackerById = (pe: PeWindowsParseResult, id: PePackerId): string => {
   const report = pe.packers?.reports.find(candidate => candidate.id === id);
-  return report ? renderToString(out => renderPackerReport(report, out)) : "";
+  return report ? renderToString(out => renderPackerReport(report, out, pe.payloads)) : "";
 };
 
 const renderWindowsLazyMarkup = (
@@ -136,6 +137,8 @@ const renderWindowsLazyMarkup = (
       return renderToString(out => renderArchitectureDirectory(pe, out));
     case PE_LAZY_SECTION_KEYS.globalPtr:
       return renderToString(out => renderGlobalPtrDirectory(pe, out));
+    case PE_LAZY_SECTION_KEYS.payloads:
+      return renderToString(out => renderPePayloads(pe.payloads, out));
     default:
       return "";
   }

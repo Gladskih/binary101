@@ -2,7 +2,6 @@
 
 import { detectBinaryType } from "../detect-binary-type.js";
 import type { FileRangeReader } from "../file-range-reader.js";
-import { parseRar } from "../rar/index.js";
 import type { FileRange } from "./layout/file-ranges.js";
 import type { PeOverlayFinding, PeOverlayRange, PeOverlayScanOptions } from "./overlay.js";
 import {
@@ -16,9 +15,9 @@ import {
   isEmbeddedCandidateStartByte,
   readEmbeddedBmpFileSize,
   readEmbeddedCabinetFileSize,
-  readEmbeddedMidiFileSize,
-  readEmbeddedSevenZipFileSize
+  readEmbeddedMidiFileSize
 } from "./overlay-embedded.js";
+import { readEmbeddedRarEnd, readEmbeddedSevenZipEnd } from "./overlay-archive-validation.js";
 
 // Match the project FileRangeReader cache window so scans reuse cached slices efficiently.
 const SCAN_CHUNK_BYTES = 64 * 1024;
@@ -56,15 +55,6 @@ const detectRangeAtOffset = async (
   return label;
 };
 
-const hasEmbeddedRarArchive = async (
-  file: File,
-  range: FileRange,
-  offset: number
-): Promise<boolean> => {
-  const rar = await parseRar(createOverlaySliceFile(file, { start: offset, end: range.end }));
-  return rar.isRar && rar.mainHeader != null;
-};
-
 const resolveEmbeddedCandidateType = async (
   file: File,
   range: FileRange,
@@ -72,9 +62,6 @@ const resolveEmbeddedCandidateType = async (
   candidateType: string
 ): Promise<string | null> => {
   if (candidateType === EMBEDDED_EXECUTABLE_LABEL) return detectRangeAtOffset(file, range, offset);
-  if (candidateType === EMBEDDED_RAR_LABEL && !await hasEmbeddedRarArchive(file, range, offset)) {
-    return null;
-  }
   return candidateType;
 };
 
@@ -127,27 +114,25 @@ const readMidiEnd = async (
   return midiSize == null ? null : start + midiSize;
 };
 
-const readSevenZipEnd = async (
-  reader: FileRangeReader,
-  range: FileRange,
-  start: number
-): Promise<number | null> => {
-  const view = await reader.read(start, Math.min(OVERLAY_PREFIX_VALIDATE_BYTES, range.end - start));
-  const archiveSize = readEmbeddedSevenZipFileSize(view, range.end - start);
-  return archiveSize == null ? null : start + archiveSize;
-};
-
 const createOverlayFinding = async (
+  file: File,
   reader: FileRangeReader,
   range: FileRange,
   start: number,
   detectedType: string
-): Promise<PeOverlayFinding> => {
+): Promise<PeOverlayFinding | null> => {
   const cabinetEnd = detectedType === EMBEDDED_CAB_LABEL ? await readCabinetEnd(reader, range, start) : null;
   const bitmapEnd = detectedType === EMBEDDED_BMP_LABEL ? await readBitmapEnd(reader, range, start) : null;
   const midiEnd = detectedType === EMBEDDED_MIDI_LABEL ? await readMidiEnd(reader, range, start) : null;
-  const sevenZipEnd = detectedType === EMBEDDED_SEVEN_ZIP_LABEL ? await readSevenZipEnd(reader, range, start) : null;
-  const end = cabinetEnd ?? bitmapEnd ?? midiEnd ?? sevenZipEnd ?? range.end;
+  const sevenZipEnd = detectedType === EMBEDDED_SEVEN_ZIP_LABEL
+    ? await readEmbeddedSevenZipEnd(reader, range, start)
+    : null;
+  const rarEnd = detectedType === EMBEDDED_RAR_LABEL
+    ? await readEmbeddedRarEnd(file, reader, range, start)
+    : null;
+  if (detectedType === EMBEDDED_SEVEN_ZIP_LABEL && sevenZipEnd == null) return null;
+  if (detectedType === EMBEDDED_RAR_LABEL && rarEnd == null) return null;
+  const end = cabinetEnd ?? bitmapEnd ?? midiEnd ?? sevenZipEnd ?? rarEnd ?? range.end;
   return {
     start,
     end,
@@ -161,7 +146,9 @@ const createOverlayFinding = async (
           ? "End comes from the Standard MIDI track chunk length fields."
           : sevenZipEnd
             ? "End comes from the 7z SignatureHeader NextHeaderOffset and NextHeaderSize fields."
-            : "End is the end of the true overlay range; exact embedded payload length is not known."
+            : rarEnd
+              ? "End comes from the validated RAR end-of-archive header."
+              : "End is the end of the true overlay range; exact embedded payload length is not known."
   };
 };
 
@@ -169,14 +156,15 @@ const findEmbeddedFindings = async (
   file: File,
   reader: FileRangeReader,
   range: FileRange,
-  options: PeOverlayScanOptions
+  options: PeOverlayScanOptions,
+  scanEnd = range.end
 ): Promise<PeOverlayFinding[]> => {
   const findings: PeOverlayFinding[] = [];
   let cursor = range.start;
   reportProgress(range, findings, 0, options);
-  while (cursor < range.end) {
+  while (cursor < scanEnd) {
     throwIfAborted(options.signal);
-    const searchableBytes = Math.min(SCAN_CHUNK_BYTES, range.end - cursor);
+    const searchableBytes = Math.min(SCAN_CHUNK_BYTES, scanEnd - cursor);
     const readBytes = Math.min(searchableBytes + PROBE_LOOKAHEAD_BYTES, range.end - cursor);
     const view = await reader.read(cursor, readBytes);
     const foundInChunk = await scanChunk(file, reader, range, view, cursor, searchableBytes, findings, options);
@@ -190,6 +178,22 @@ const findEmbeddedFindings = async (
     findingsFound: findings.length
   });
   return findings;
+};
+
+export const findEmbeddedPayloadsInRangePrefix = async (
+  file: File,
+  reader: FileRangeReader,
+  range: PeOverlayRange,
+  prefixBytes: number
+): Promise<PeOverlayFinding[]> => {
+  if (!Number.isSafeInteger(prefixBytes) || prefixBytes <= 0) return [];
+  return findEmbeddedFindings(
+    file,
+    reader,
+    range,
+    {},
+    range.start + Math.min(prefixBytes, range.size)
+  );
 };
 
 const scanChunk = async (
@@ -216,7 +220,8 @@ const scanChunk = async (
       candidateType
     );
     if (!detectedType) continue;
-    const finding = await createOverlayFinding(reader, range, detectedOffset, detectedType);
+    const finding = await createOverlayFinding(file, reader, range, detectedOffset, detectedType);
+    if (!finding) continue;
     findings.push(finding);
     return Math.max(detectedOffset + 1, finding.end);
   }
