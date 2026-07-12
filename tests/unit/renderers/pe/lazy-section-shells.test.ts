@@ -118,7 +118,7 @@ void test("getPeLazySectionDescriptors exposes only standalone payload archives"
 
   assert.deepEqual(descriptor, {
     key: PE_LAZY_SECTION_KEYS.payloads,
-    summary: "1 validated archive(s)",
+    summary: "1 validated payload(s)",
     title: "Embedded payloads"
   });
 });

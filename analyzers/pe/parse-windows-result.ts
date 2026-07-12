@@ -5,9 +5,9 @@ import { collectPeLayoutWarnings } from "./layout/warnings.js";
 import type {
   PeDebugArtifacts,
   PeDirectoryArtifacts,
-  PeImageArtifacts,
   PeWindowsParseContext
 } from "./parse-windows.js";
+import type { PeImageArtifacts } from "./image-artifacts.js";
 import { attachManifestValidation } from "./resources/manifest-consistency.js";
 
 const appendUniqueMessages = (existing: string[] | undefined, messages: string[]): string[] | undefined =>

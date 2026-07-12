@@ -124,6 +124,33 @@ void test("PE payload download rejects tampered bounds and formats", () => {
   }
 });
 
+void test("PE payload download gives resource executables an exe extension", () => {
+  const dom = installDownloadDom();
+  const messages: Array<string | null | undefined> = [];
+  try {
+    setPayloadAttributes(dom.button, 4, "pe");
+    const handler = createPePayloadDownloadClickHandler({
+      getFile: () => new MockFile(new Uint8Array(8), "bootstrap.exe"),
+      getParseResult: () => ({
+        analyzer: "pe",
+        parsed: {
+          opt: { Magic: 0x10b },
+          payloads: { entries: [{ start: 1, end: 4, format: "pe", source: "resource" }] }
+        } as PeParseResult
+      }),
+      setStatusMessage: message => messages.push(message)
+    });
+
+    handler({ target: dom.button } as unknown as Event);
+
+    assert.equal(expectDefined(dom.getAnchor()).download, "bootstrap.exe.payload-1.exe");
+    assert.equal(expectDefined(dom.getBlob()).type, "application/vnd.microsoft.portable-executable");
+    assert.deepEqual(messages, [null]);
+  } finally {
+    dom.restore();
+  }
+});
+
 void test("PE payload download reports a missing selected file", () => {
   const dom = installDownloadDom();
   const messages: Array<string | null | undefined> = [];

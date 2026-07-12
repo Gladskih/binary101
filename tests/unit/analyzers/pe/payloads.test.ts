@@ -98,6 +98,54 @@ void test("analyzePePayloads returns null without validated archive payloads", a
   assert.equal(result, null);
 });
 
+void test("analyzePePayloads finds a bounded PE executable in a resource leaf", async () => {
+  const bytes = new Uint8Array(256);
+  const resourceStart = 32;
+  const peHeaderOffset = 0x40;
+  const view = new DataView(bytes.buffer);
+  view.setUint16(resourceStart, 0x5a4d, true);
+  view.setUint32(resourceStart + 0x3c, peHeaderOffset, true);
+  view.setUint32(resourceStart + peHeaderOffset, 0x50450000, false);
+  const file = new MockFile(bytes, "resource-installer.exe");
+
+  const result = await analyzePePayloads(file, file, null, null, {
+    top: [],
+    detail: [],
+    paths: [{
+      nodes: [{ id: 10, name: null }, { id: 101, name: null }, { id: 1033, name: null }],
+      size: 128,
+      codePage: 0,
+      dataRVA: 0x2000,
+      dataFileOffset: resourceStart,
+      reserved: 0
+    }]
+  });
+
+  assert.deepEqual(result, {
+    entries: [{ start: resourceStart, end: resourceStart + 128, format: "pe", source: "resource" }]
+  });
+});
+
+void test("analyzePePayloads rejects malformed and out-of-bounds resource executables", async () => {
+  const file = new MockFile(new Uint8Array(128), "resource-installer.exe");
+  const createPath = (dataFileOffset: number | null, size: number) => ({
+    nodes: [{ id: 10, name: null }, { id: 101, name: null }, { id: 1033, name: null }],
+    size,
+    codePage: 0,
+    dataRVA: 0x2000,
+    dataFileOffset,
+    reserved: 0
+  });
+
+  const result = await analyzePePayloads(file, file, null, null, {
+    top: [],
+    detail: [],
+    paths: [createPath(null, 64), createPath(96, 64), createPath(0, 32), createPath(0, 64)]
+  });
+
+  assert.equal(result, null);
+});
+
 void test("subtractExplainedPeOverlay leaves only bytes beyond verified NSIS data", () => {
   const overlay: PeOverlayAnalysis = {
     ranges: [{ start: 100, end: 200, size: 100, findings: [] }]

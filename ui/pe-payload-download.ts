@@ -11,6 +11,7 @@ type PePayloadDownloadDeps = {
 };
 
 const FORMAT_DETAILS: Readonly<Record<PePayloadFormat, { extension: string; mediaType: string }>> = {
+  pe: { extension: "exe", mediaType: "application/vnd.microsoft.portable-executable" },
   rar: { extension: "rar", mediaType: "application/vnd.rar" },
   sevenzip: { extension: "7z", mediaType: "application/x-7z-compressed" }
 };
@@ -24,7 +25,7 @@ const parseOffset = (button: HTMLElement, name: string): number | null => {
 
 const parseFormat = (button: HTMLElement): PePayloadFormat | null => {
   const format = button.getAttribute("data-payload-format");
-  return format === "rar" || format === "sevenzip" ? format : null;
+  return format === "pe" || format === "rar" || format === "sevenzip" ? format : null;
 };
 
 const sanitizeBaseName = (name: string): string =>

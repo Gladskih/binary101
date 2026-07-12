@@ -10,6 +10,7 @@ import { renderDownloadButton } from "../download-button.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 const PAYLOAD_FORMAT_LABELS: Readonly<Record<PePayloadFormat, string>> = {
+  pe: "PE executable",
   rar: "RAR archive",
   sevenzip: "7z archive"
 };
@@ -36,7 +37,7 @@ export const renderPePayloadEntries = (
 
 export const getStandalonePePayloads = (
   analysis: PePayloadAnalysis | null | undefined
-): PeExtractedPayload[] => analysis?.entries.filter(payload => payload.source === "overlay") ?? [];
+): PeExtractedPayload[] => analysis?.entries.filter(payload => payload.source !== "nsis") ?? [];
 
 export const getPePayloadSectionDescriptor = (
   analysis: PePayloadAnalysis | null | undefined
@@ -44,7 +45,7 @@ export const getPePayloadSectionDescriptor = (
   const count = getStandalonePePayloads(analysis).length;
   return count ? {
     key: "payloads" as const,
-    summary: `${count} validated archive(s)`,
+    summary: `${count} validated payload(s)`,
     title: "Embedded payloads"
   } : null;
 };
@@ -57,7 +58,7 @@ export const renderPePayloads = (
   if (!payloads.length) return;
   out.push(renderPeSectionStart(
     "Embedded payloads",
-    `${payloads.length} validated ${payloads.length === 1 ? "archive" : "archives"}`
+    `${payloads.length} validated ${payloads.length === 1 ? "payload" : "payloads"}`
   ));
   out.push(renderPePayloadEntries(payloads));
   out.push(renderPeSectionEnd());

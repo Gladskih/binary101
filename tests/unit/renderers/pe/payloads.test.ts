@@ -27,6 +27,15 @@ void test("renderPePayloadEntries renders exact archive bounds and download meta
   assert.ok(html.includes("RAR archive"));
 });
 
+void test("renderPePayloadEntries labels resource-backed PE downloads", () => {
+  const html = renderPePayloadEntries([
+    { start: 0x100, end: 0x300, format: "pe", source: "resource" }
+  ]);
+
+  assert.ok(html.includes("PE executable"));
+  assert.ok(html.includes(`data-payload-format="pe"`));
+});
+
 void test("getStandalonePePayloads excludes archives owned by NSIS", () => {
   assert.deepEqual(getStandalonePePayloads(analysis), [analysis.entries[1]]);
   assert.deepEqual(getStandalonePePayloads(null), []);
@@ -35,7 +44,7 @@ void test("getStandalonePePayloads excludes archives owned by NSIS", () => {
 void test("getPePayloadSectionDescriptor summarizes standalone archives", () => {
   assert.deepEqual(getPePayloadSectionDescriptor(analysis), {
     key: "payloads",
-    summary: "1 validated archive(s)",
+    summary: "1 validated payload(s)",
     title: "Embedded payloads"
   });
   assert.equal(getPePayloadSectionDescriptor(null), null);
@@ -48,7 +57,7 @@ void test("renderPePayloads renders only standalone payloads in a dedicated sect
 
   const html = out.join("");
   assert.ok(html.includes("Embedded payloads"));
-  assert.ok(html.includes("1 validated archive"));
+  assert.ok(html.includes("1 validated payload"));
   assert.ok(html.includes("RAR archive"));
   assert.ok(!html.includes("7z archive"));
 });

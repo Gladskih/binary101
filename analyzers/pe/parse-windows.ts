@@ -19,10 +19,6 @@ import { parseLinuxBootProtocol } from "./linux-boot.js";
 import { collectLoadConfigChecks } from "./load-config/checks.js";
 import { getCanonicalPeMachine } from "./machine.js";
 import { detectNativeAotCandidate } from "./native-aot.js";
-import { PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "./optional-header/magic.js";
-import { analyzePeOverlay } from "./overlay.js";
-import { analyzePePackers } from "./packers/index.js";
-import { analyzePePayloads, subtractExplainedPeOverlay } from "./payloads.js";
 import type { PeWindowsParseResult } from "./core/parse-result.js";
 import { analyzeManifestConsistency } from "./resources/manifest-consistency.js";
 import type { ManifestXmlDocumentParser } from "./resources/preview/manifest-xml.js";
@@ -34,8 +30,8 @@ import { detectPeSubtype } from "./subtype.js";
 import type { PeDataDirectory, PeWindowsCore } from "./types.js";
 import { buildWindowsPeResult, withWindowsPeLayoutWarnings } from "./parse-windows-result.js";
 import { selectPeVariantParsers, type PeVariantParsers } from "./parse-variant.js";
-import { analyzePeGoRuntime } from "./go-runtime.js";
 import { analyzePeMsvcRtti } from "./msvc-rtti/index.js";
+import { parsePeImageArtifacts } from "./image-artifacts.js";
 export type PeWindowsParseContext = {
   file: File;
   reader: FileRangeReader;
@@ -73,12 +69,6 @@ export type PeDirectoryArtifacts = {
   globalPtr: ReturnType<typeof parseGlobalPtrDirectory>;
   manifestValidation: ReturnType<typeof analyzeManifestConsistency>;
 };
-export type PeImageArtifacts = {
-  overlay: Awaited<ReturnType<typeof analyzePeOverlay>>;
-  packers: Awaited<ReturnType<typeof analyzePePackers>>;
-  payloads: Awaited<ReturnType<typeof analyzePePayloads>>;
-  goRuntime: Awaited<ReturnType<typeof analyzePeGoRuntime>>;
-};
 const appendUniqueMessages = (existing: string[] | undefined, messages: string[]): string[] | undefined =>
   messages.length ? [...new Set([...(existing ?? []), ...messages])] : existing;
 const appendDebugWarnings = (existing: string | null, messages: string[]): string | null => {
@@ -107,7 +97,11 @@ export const parseWindowsPe = async (
   const debugArtifacts = await parsePeDebugArtifacts(context);
   const directories = await parsePeDirectoryArtifacts(context);
   const security = await parsePeSecurity(context, debugArtifacts.debugResult);
-  const imageArtifacts = await parsePeImageArtifacts(context, debugArtifacts.debugResult);
+  const imageArtifacts = await parsePeImageArtifacts(
+    context,
+    debugArtifacts.debugResult,
+    directories.resources
+  );
   const importLinking = analyzeImportLinking(
     directories.importResult,
     directories.boundImports,
@@ -249,42 +243,6 @@ const parsePeSecurity = async (
   );
 };
 
-const parsePeImageArtifacts = async (
-  context: PeWindowsParseContext,
-  debugResult: PeDebugArtifacts["debugResult"]
-): Promise<PeImageArtifacts> => {
-  const { file, reader, core } = context;
-  const overlay = await analyzePeOverlay({
-    file,
-    reader,
-    optionalHeaderOffset: core.optOff,
-    optionalHeaderSize: core.coff.SizeOfOptionalHeader,
-    sectionCount: core.coff.NumberOfSections,
-    declaredSizeOfHeaders: core.opt.SizeOfHeaders,
-    sections: core.sections,
-    ...(core.trailingAlignmentPaddingSize ? { trailingAlignmentPaddingSize: core.trailingAlignmentPaddingSize } : {}),
-    dataDirs: core.dataDirs,
-    debugRawDataRanges: debugResult.rawDataRanges,
-    pointerToSymbolTable: core.coff.PointerToSymbolTable,
-    numberOfSymbols: core.coff.NumberOfSymbols,
-    ...(core.coffStringTableSize != null ? { coffStringTableSize: core.coffStringTableSize } : {})
-  });
-  const [packers, goRuntime] = await Promise.all([analyzePePackers({
-    reader,
-    sections: core.sections,
-    overlay,
-    // Bun's .bun Offsets.byte_count is a usize, so it follows the PE image pointer width.
-    // https://github.com/oven-sh/bun/blob/main/src/standalone_graph/StandaloneModuleGraph.zig
-    imagePointerBytes: core.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC ? 8 : 4
-  }), analyzePeGoRuntime(file, reader, core)]);
-  const payloads = await analyzePePayloads(file, reader, overlay, packers);
-  return {
-    overlay: subtractExplainedPeOverlay(overlay, packers, payloads),
-    packers,
-    payloads,
-    goRuntime
-  };
-};
 const applyLoadConfigChecks = (
   context: PeWindowsParseContext,
   directories: PeDirectoryArtifacts,
