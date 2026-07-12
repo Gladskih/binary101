@@ -64,7 +64,17 @@ const createParseResult = (): ParseForUiResult => ({
   parsed: {
     opt: { Magic: 0x10b },
     payloads: {
-      entries: [{ start: 1, end: 4, format: "sevenzip", source: "nsis" }]
+      entries: [{
+        start: 1,
+        end: 4,
+        format: "sevenzip",
+        provenance: {
+          location: "overlay",
+          discovery: "archive-scan",
+          association: "nsis-installer-data",
+          validation: "sevenzip-next-header"
+        }
+      }]
     }
   } as PeParseResult
 });
@@ -124,7 +134,7 @@ void test("PE payload download rejects tampered bounds and formats", () => {
   }
 });
 
-void test("PE payload download gives resource executables an exe extension", () => {
+void test("PE-signature resource object download stays a neutral binary", () => {
   const dom = installDownloadDom();
   const messages: Array<string | null | undefined> = [];
   try {
@@ -135,16 +145,26 @@ void test("PE payload download gives resource executables an exe extension", () 
         analyzer: "pe",
         parsed: {
           opt: { Magic: 0x10b },
-          payloads: { entries: [{ start: 1, end: 4, format: "pe", source: "resource" }] }
-        } as PeParseResult
+          payloads: { entries: [{
+            start: 1,
+            end: 4,
+            format: "pe" as const,
+            provenance: {
+              location: "resource" as const,
+              discovery: "resource-leaf" as const,
+              resourcePath: [],
+              validation: "pe-signatures" as const
+            }
+          }] }
+        } as unknown as PeParseResult
       }),
       setStatusMessage: message => messages.push(message)
     });
 
     handler({ target: dom.button } as unknown as Event);
 
-    assert.equal(expectDefined(dom.getAnchor()).download, "bootstrap.exe.payload-1.exe");
-    assert.equal(expectDefined(dom.getBlob()).type, "application/vnd.microsoft.portable-executable");
+    assert.equal(expectDefined(dom.getAnchor()).download, "bootstrap.exe.payload-1.bin");
+    assert.equal(expectDefined(dom.getBlob()).type, "application/octet-stream");
     assert.deepEqual(messages, [null]);
   } finally {
     dom.restore();

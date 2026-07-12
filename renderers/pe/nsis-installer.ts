@@ -45,5 +45,5 @@ export const renderNsisFindingDetails = (
       "Size allocated for decompressed NSIS headers (length_of_header).") +
     renderNsisRow("Flags", renderFlagChips(finding.flags, NSIS_FLAGS),
       "Validated firstheader flags; active options are highlighted.", "") +
-    `</tbody></table></div>` + renderPePayloadEntries(payloads, "Embedded archive");
+    `</tbody></table></div>` + renderPePayloadEntries(payloads, "Archive in NSIS installer data");
 };

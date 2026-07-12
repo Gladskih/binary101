@@ -30,7 +30,8 @@ const findNsisPayloads = (
 ) =>
   finding.id === "nsis-installer"
     ? payloads?.entries.filter(payload =>
-      payload.source === "nsis" &&
+      payload.provenance.location === "overlay" &&
+      payload.provenance.association === "nsis-installer-data" &&
       payload.start >= finding.firstHeaderOffset &&
       payload.end <= finding.firstHeaderOffset + finding.followingDataSize
     ) ?? []

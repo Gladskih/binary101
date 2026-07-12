@@ -165,7 +165,17 @@ void test("renderPackerReport routes validated NSIS payload downloads", () => {
   renderPackerReport(
     { id: "nsis-installer", findings: [createNsisFinding()], warnings: [] },
     out,
-    { entries: [{ start: 0x110, end: 0x130, format: "sevenzip", source: "nsis" }] }
+    { entries: [{
+      start: 0x110,
+      end: 0x130,
+      format: "sevenzip",
+      provenance: {
+        location: "overlay",
+        discovery: "archive-scan",
+        association: "nsis-installer-data",
+        validation: "sevenzip-next-header"
+      }
+    }] }
   );
 
   assert.ok(out.join("").includes("Download 7z archive"));

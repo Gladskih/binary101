@@ -110,19 +110,39 @@ void test("getPeLazySectionDescriptors exposes only standalone payload archives"
   const pe = createBasePe();
   pe.payloads = {
     entries: [
-      { start: 0x400, end: 0x500, format: "sevenzip", source: "nsis" },
-      { start: 0x600, end: 0x700, format: "rar", source: "overlay" }
+      {
+        start: 0x400,
+        end: 0x500,
+        format: "sevenzip",
+        provenance: {
+          location: "overlay",
+          discovery: "archive-scan",
+          association: "nsis-installer-data",
+          validation: "sevenzip-next-header"
+        }
+      },
+      {
+        start: 0x600,
+        end: 0x700,
+        format: "rar",
+        provenance: {
+          location: "overlay",
+          discovery: "archive-scan",
+          association: "unattributed",
+          validation: "rar-end-archive"
+        }
+      }
     ]
   };
 
   const descriptor = getPeLazySectionDescriptors(pe).find(
-    section => section.key === PE_LAZY_SECTION_KEYS.payloads
+    section => section.key === PE_LAZY_SECTION_KEYS.appendedPayloads
   );
 
   assert.deepEqual(descriptor, {
-    key: PE_LAZY_SECTION_KEYS.payloads,
-    summary: "1 validated payload(s)",
-    title: "Embedded payloads"
+    key: PE_LAZY_SECTION_KEYS.appendedPayloads,
+    summary: "1 archive",
+    title: "Appended archive"
   });
 });
 

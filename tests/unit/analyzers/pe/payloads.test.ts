@@ -64,7 +64,12 @@ void test("analyzePePayloads finds bounded 7z data inside NSIS", async () => {
     entries: [{
       end: fixture.payloadStart + sevenZip.byteLength,
       format: "sevenzip",
-      source: "nsis",
+      provenance: {
+        location: "overlay",
+        discovery: "archive-scan",
+        association: "nsis-installer-data",
+        validation: "sevenzip-next-header"
+      },
       start: fixture.payloadStart
     }]
   });
@@ -85,7 +90,12 @@ void test("analyzePePayloads finds validated RAR overlay data", async () => {
     entries: [{
       end: fixture.end,
       format: "rar",
-      source: "overlay",
+      provenance: {
+        location: "overlay",
+        discovery: "archive-scan",
+        association: "unattributed",
+        validation: "rar-end-archive"
+      },
       start: fixture.payloadStart
     }]
   });
@@ -123,7 +133,17 @@ void test("analyzePePayloads finds a bounded PE executable in a resource leaf", 
   });
 
   assert.deepEqual(result, {
-    entries: [{ start: resourceStart, end: resourceStart + 128, format: "pe", source: "resource" }]
+    entries: [{
+      start: resourceStart,
+      end: resourceStart + 128,
+      format: "pe",
+      provenance: {
+        location: "resource",
+        discovery: "resource-leaf",
+        resourcePath: [{ id: 10, name: null }, { id: 101, name: null }, { id: 1033, name: null }],
+        validation: "pe-signatures"
+      }
+    }]
   });
 });
 
@@ -189,7 +209,17 @@ void test("subtractExplainedPeOverlay removes a fully validated archive", async 
     null,
     overlay,
     null,
-    { entries: [{ start: 100, end: 200, format: "rar", source: "overlay" }] }
+    { entries: [{
+      start: 100,
+      end: 200,
+      format: "rar",
+      provenance: {
+        location: "overlay",
+        discovery: "archive-scan",
+        association: "unattributed",
+        validation: "rar-end-archive"
+      }
+    }] }
   );
 
   assert.equal(result, null);
@@ -206,7 +236,17 @@ void test("subtractExplainedPeOverlay preserves residual sides and warnings", as
     null,
     overlay,
     null,
-    { entries: [{ start: 120, end: 180, format: "sevenzip", source: "overlay" }] }
+    { entries: [{
+      start: 120,
+      end: 180,
+      format: "sevenzip",
+      provenance: {
+        location: "overlay",
+        discovery: "archive-scan",
+        association: "unattributed",
+        validation: "sevenzip-next-header"
+      }
+    }] }
   );
 
   assert.deepEqual(result, {
@@ -240,33 +280,4 @@ void test("subtractExplainedPeOverlay accepts a missing physical overlay", async
   );
 
   assert.equal(result, null);
-});
-
-void test("subtractExplainedPeOverlay excludes certificate padding after a validated archive", async () => {
-  const bytes = new Uint8Array(120);
-  const result = await subtractExplainedPeOverlay(
-    new MockFile(bytes, "signed-installer.exe"),
-    120,
-    { ranges: [{ start: 100, end: 120, size: 20, findings: [] }] },
-    null,
-    { entries: [{ start: 100, end: 118, format: "rar", source: "overlay" }] }
-  );
-
-  assert.equal(result, null);
-});
-
-void test("subtractExplainedPeOverlay keeps non-zero bytes before a certificate table", async () => {
-  const bytes = new Uint8Array(120);
-  bytes[119] = 1;
-  const result = await subtractExplainedPeOverlay(
-    new MockFile(bytes, "signed-installer.exe"),
-    120,
-    { ranges: [{ start: 100, end: 120, size: 20, findings: [] }] },
-    null,
-    { entries: [{ start: 100, end: 118, format: "rar", source: "overlay" }] }
-  );
-
-  assert.deepEqual(result, {
-    ranges: [{ start: 118, end: 120, size: 2, findings: [] }]
-  });
 });

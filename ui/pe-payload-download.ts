@@ -11,7 +11,7 @@ type PePayloadDownloadDeps = {
 };
 
 const FORMAT_DETAILS: Readonly<Record<PePayloadFormat, { extension: string; mediaType: string }>> = {
-  pe: { extension: "exe", mediaType: "application/vnd.microsoft.portable-executable" },
+  pe: { extension: "bin", mediaType: "application/octet-stream" },
   rar: { extension: "rar", mediaType: "application/vnd.rar" },
   sevenzip: { extension: "7z", mediaType: "application/x-7z-compressed" }
 };

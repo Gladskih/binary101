@@ -14,14 +14,28 @@ import type {
 } from "./packers/index.js";
 import { subtractFileRanges, type FileRange } from "./layout/file-ranges.js";
 import type { PeResources } from "./resources/index.js";
+import type { ResourcePathNode } from "./resources/tree-types.js";
 
 export type PePayloadFormat = "pe" | "rar" | "sevenzip";
-export type PePayloadSource = "nsis" | "overlay" | "resource";
+
+export type PePayloadProvenance =
+  | {
+    location: "overlay";
+    discovery: "archive-scan";
+    association: "nsis-installer-data" | "unattributed";
+    validation: "rar-end-archive" | "sevenzip-next-header";
+  }
+  | {
+    location: "resource";
+    discovery: "resource-leaf";
+    resourcePath: ResourcePathNode[];
+    validation: "pe-signatures";
+  };
 
 export interface PeExtractedPayload {
   end: number;
   format: PePayloadFormat;
-  source: PePayloadSource;
+  provenance: PePayloadProvenance;
   start: number;
 }
 
@@ -53,7 +67,17 @@ const findResourcePePayloads = async (
     if (peOffset < DOS_HEADER_BYTES || peOffset > path.size - Uint32Array.BYTES_PER_ELEMENT) continue;
     const signature = await reader.read(start + peOffset, Uint32Array.BYTES_PER_ELEMENT);
     if (signature.byteLength === 4 && signature.getUint32(0, false) === PE_SIGNATURE) {
-      entries.push({ start, end, format: "pe", source: "resource" });
+      entries.push({
+        start,
+        end,
+        format: "pe",
+        provenance: {
+          location: "resource",
+          discovery: "resource-leaf",
+          resourcePath: path.nodes,
+          validation: "pe-signatures"
+        }
+      });
     }
   }
   return entries;
@@ -75,14 +99,28 @@ const innoFindings = (packers: PePackerAnalysis | null | undefined): PeInnoSetup
     .find(report => report.id === "inno-setup")
     ?.findings.filter(finding => finding.id === "inno-setup") ?? [];
 
-const payloadSource = (
+const overlayPayloadProvenance = (
   finding: PeOverlayFinding,
   installers: PeNsisPackerFinding[]
-): PePayloadSource =>
+): Extract<PePayloadProvenance, { location: "overlay" }> =>
   installers.some(installer =>
     finding.start >= installer.firstHeaderOffset &&
     finding.end <= installer.firstHeaderOffset + installer.followingDataSize
-  ) ? "nsis" : "overlay";
+  ) ? {
+      location: "overlay",
+      discovery: "archive-scan",
+      association: "nsis-installer-data",
+      validation: finding.detectedType === EMBEDDED_RAR_LABEL
+        ? "rar-end-archive"
+        : "sevenzip-next-header"
+    } : {
+      location: "overlay",
+      discovery: "archive-scan",
+      association: "unattributed",
+      validation: finding.detectedType === EMBEDDED_RAR_LABEL
+        ? "rar-end-archive"
+        : "sevenzip-next-header"
+    };
 
 export const analyzePePayloads = async (
   file: File,
@@ -106,7 +144,7 @@ export const analyzePePayloads = async (
       entries.push({
         end: finding.end,
         format,
-        source: payloadSource(finding, installers),
+        provenance: overlayPayloadProvenance(finding, installers),
         start: finding.start
       });
     }

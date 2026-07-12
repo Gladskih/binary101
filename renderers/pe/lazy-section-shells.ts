@@ -12,7 +12,7 @@ import { getLinuxBootSummary } from "./linux-boot.js";
 import { getMsvcRttiSummaryCounts } from "./msvc-rtti.js";
 import { PE_OVERLAY_PANEL_ID, getUnexplainedOverlaySize } from "./overlay.js";
 import { PE_PACKER_SECTIONS, pePackerSectionDescriptors } from "./packer-sections.js";
-import { getPePayloadSectionDescriptor } from "./payloads.js";
+import { getPePayloadLazySectionDescriptors } from "./payload-section-descriptors.js";
 import { getPeSanityIssues } from "./layout.js";
 
 export const PE_LAZY_SECTION_KEYS = {
@@ -39,10 +39,11 @@ export const PE_LAZY_SECTION_KEYS = {
   nativeAot: "native-aot",
   nsisInstaller: PE_PACKER_SECTIONS["nsis-installer"].key,
   overlay: "overlay",
-  payloads: "payloads",
+  appendedPayloads: "appended-payloads",
   peHeaders: "pe-headers",
   reloc: "reloc",
   resources: "resources",
+  resourcePayloads: "resource-payloads",
   sanity: "sanity",
   sectionHeaders: "section-headers",
   security: "security",
@@ -276,8 +277,7 @@ export const getPeLazySectionDescriptors = (pe: PeParseResult): PeLazySectionDes
   addHeaderDescriptors(pe, descriptors);
   if (isPeWindowsParseResult(pe)) {
     addWindowsDescriptors(pe, descriptors);
-    const payloadSection = getPePayloadSectionDescriptor(pe.payloads);
-    if (payloadSection) descriptors.push(payloadSection);
+    descriptors.push(...getPePayloadLazySectionDescriptors(pe.payloads));
   }
   pushIf(descriptors,
     pe.overlay?.ranges.length || pe.overlay?.warnings?.length, {

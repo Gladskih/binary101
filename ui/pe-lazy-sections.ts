@@ -139,8 +139,10 @@ const renderWindowsLazyMarkup = (
       return renderToString(out => renderArchitectureDirectory(pe, out));
     case PE_LAZY_SECTION_KEYS.globalPtr:
       return renderToString(out => renderGlobalPtrDirectory(pe, out));
-    case PE_LAZY_SECTION_KEYS.payloads:
-      return renderToString(out => renderPePayloads(pe.payloads, out));
+    case PE_LAZY_SECTION_KEYS.appendedPayloads:
+      return renderToString(out => renderPePayloads(pe.payloads, "appended", out));
+    case PE_LAZY_SECTION_KEYS.resourcePayloads:
+      return renderToString(out => renderPePayloads(pe.payloads, "resource", out));
     default:
       return "";
   }

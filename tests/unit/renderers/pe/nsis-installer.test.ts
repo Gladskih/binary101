@@ -51,10 +51,15 @@ void test("renderNsisFindingDetails renders a validated archive download", () =>
     start: 0x500,
     end: 0xb00,
     format: "sevenzip",
-    source: "nsis"
+    provenance: {
+      location: "overlay",
+      discovery: "archive-scan",
+      association: "nsis-installer-data",
+      validation: "sevenzip-next-header"
+    }
   }]);
 
-  assert.ok(html.includes("Embedded archive"));
+  assert.ok(html.includes("Archive in NSIS installer data"));
   assert.ok(html.includes("7z archive"));
   assert.ok(html.includes(`data-pe-payload-download`));
   assert.ok(html.includes(`data-payload-start="1280"`));
