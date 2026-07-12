@@ -9,7 +9,10 @@ import type { UpxPackHeader } from "./upx-pack-header.js";
 export type PePackerKind = "executable-packer" | "installer" | "runtime-packager";
 export type PePackerConfidence = "high";
 export type PePackerId = "bun-standalone" | "inno-setup" | "nsis-installer" | "upx";
-export type BunPayloadStorage = "length-prefixed" | "section-virtual-data";
+export type BunPayloadStorage =
+  | "u32-length-prefixed"
+  | "u64-length-prefixed"
+  | "section-virtual-data";
 
 interface PePackerFindingBase {
   name: string;

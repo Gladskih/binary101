@@ -21,7 +21,7 @@ const createBunFinding = (): PeBunPackerFinding => ({
   sectionSize: 0x40,
   payloadStart: 0x18,
   payloadSize: 0x20,
-  storage: "length-prefixed"
+  storage: "u64-length-prefixed"
 });
 
 const createNsisFinding = (): PeNsisPackerFinding => ({
@@ -110,7 +110,7 @@ void test("renderPackerReport renders one dedicated Bun section", () => {
     `<td class="smallNote pePackerFinding__meaning">` +
     `First raw file byte occupied by the .bun section.</td></tr>`
   ));
-  assert.ok(html.includes("Length-prefixed PE section"));
+  assert.ok(html.includes("64-bit length-prefixed PE section"));
   assert.ok(html.includes(`</tbody></table></div></div></div></details></section>`));
 });
 

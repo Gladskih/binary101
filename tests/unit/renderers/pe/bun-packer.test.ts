@@ -15,7 +15,7 @@ const createFinding = (): PeBunPackerFinding => ({
   sectionSize: 0x200,
   payloadStart: 0x408,
   payloadSize: 0x180,
-  storage: "length-prefixed",
+  storage: "u64-length-prefixed",
   offsetMetadata: {
     byteCount: 0x100,
     compileArgvBytes: 12,
@@ -70,10 +70,14 @@ void test("renderBunFindingDetails renders every storage choice and selects the 
   assert.ok(html.includes(
     `<th scope="row" class="peBunTable__field">Storage</th><td><div class="optionsRow">`
   ));
-  assert.match(html, /opt sel[^>]*>Length-prefixed PE section<\/span>/);
+  assert.match(html, /opt dim[^>]*>32-bit length-prefixed PE section<\/span>/);
+  assert.match(html, /opt sel[^>]*>64-bit length-prefixed PE section<\/span>/);
   assert.match(html, /opt dim[^>]*>PE section virtual data<\/span>/);
   assert.ok(html.includes(
-    "Length-prefixed PE section - An 8-byte little-endian payload length precedes the graph"
+    "32-bit length-prefixed PE section - A 4-byte little-endian payload length precedes the graph"
+  ));
+  assert.ok(html.includes(
+    "64-bit length-prefixed PE section - An 8-byte little-endian payload length precedes the graph"
   ));
   assert.ok(html.includes(
     "PE section virtual data - The payload occupies the meaningful virtual extent of the section"
@@ -87,8 +91,20 @@ void test("renderBunFindingDetails selects virtual-data storage", () => {
     storage: "section-virtual-data"
   });
 
-  assert.match(html, /opt dim[^>]*>Length-prefixed PE section<\/span>/);
+  assert.match(html, /opt dim[^>]*>32-bit length-prefixed PE section<\/span>/);
+  assert.match(html, /opt dim[^>]*>64-bit length-prefixed PE section<\/span>/);
   assert.match(html, /opt sel[^>]*>PE section virtual data<\/span>/);
+});
+
+void test("renderBunFindingDetails selects 32-bit length-prefixed storage", () => {
+  const html = renderBunFindingDetails({
+    ...createFinding(),
+    storage: "u32-length-prefixed"
+  });
+
+  assert.match(html, /opt sel[^>]*>32-bit length-prefixed PE section<\/span>/);
+  assert.match(html, /opt dim[^>]*>64-bit length-prefixed PE section<\/span>/);
+  assert.match(html, /opt dim[^>]*>PE section virtual data<\/span>/);
 });
 
 void test("renderBunFindingDetails renders known flags as active and inactive chips", () => {

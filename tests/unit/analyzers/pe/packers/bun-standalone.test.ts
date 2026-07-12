@@ -89,6 +89,14 @@ const createBunSection64 = (): Uint8Array =>
 const createBunSection32 = (): Uint8Array =>
   createBunSection(BUN_OFFSETS32_BYTES, writeBunOffsets32);
 
+const createBunSectionWithU32Length = (): Uint8Array => {
+  const payload = createBunPayload(BUN_OFFSETS64_BYTES, writeBunOffsets64);
+  const section = new Uint8Array(SECTION_RAW_SIZE);
+  new DataView(section.buffer).setUint32(0, payload.byteLength, true);
+  section.set(payload, Uint32Array.BYTES_PER_ELEMENT);
+  return section;
+};
+
 const createDirectBunSection64 = (): { section: Uint8Array; virtualSize: number } => {
   const payload = createBunPayload(BUN_OFFSETS64_BYTES, writeBunOffsets64);
   const section = new Uint8Array(SECTION_RAW_SIZE);
@@ -131,10 +139,20 @@ void test("detectBunStandalone reports a valid Bun .bun section with parsed offs
     flags: BUN_FLAGS_DISABLE_ENV_AND_BUNFIG,
     moduleListBytes: BUN_MODULE_LIST_BYTES
   });
-  assert.equal(result.findings[0]?.storage, "length-prefixed");
+  assert.equal(result.findings[0]?.storage, "u64-length-prefixed");
   assert.equal(result.findings[0]?.sectionStart, SECTION_START);
   assert.equal(result.findings[0]?.sectionSize, SECTION_RAW_SIZE);
   assert.equal(result.findings[0]?.payloadStart, SECTION_START + BigUint64Array.BYTES_PER_ELEMENT);
+});
+
+void test("detectBunStandalone accepts Bun 1.3 PE sections with a 32-bit length prefix", async () => {
+  const result = await detectBunStandalone(createInput(createBunSectionWithU32Length()));
+
+  assert.equal(result.warnings.length, 0);
+  assert.equal(result.findings[0]?.storage, "u32-length-prefixed");
+  assert.equal(result.findings[0]?.payloadStart, SECTION_START + Uint32Array.BYTES_PER_ELEMENT);
+  assert.equal(result.findings[0]?.payloadSize, BUN_GRAPH_BYTES + BUN_OFFSETS64_BYTES + BUN_TRAILER.byteLength);
+  assert.equal(result.findings[0]?.offsetMetadata?.byteCount, BUN_GRAPH_BYTES);
 });
 
 void test("detectBunStandalone reports direct .bun payloads using VirtualSize", async () => {
@@ -216,7 +234,10 @@ void test("detectBunStandalone rejects truncated .bun length fields without thro
   const result = await detectBunStandalone(input);
 
   assert.equal(result.findings.length, 0);
-  assert.deepEqual(result.warnings, ["Bun .bun section is truncated before its 8-byte payload length."]);
+  assert.deepEqual(result.warnings, [
+    "Bun .bun payload is too small to contain the Bun trailer.",
+    "Bun .bun section is truncated before its 8-byte payload length."
+  ]);
 });
 
 void test("detectBunStandalone does not read length fields past declared raw section data", async () => {
@@ -225,7 +246,10 @@ void test("detectBunStandalone does not read length fields past declared raw sec
   const result = await detectBunStandalone(createInput(physicallyAvailableLengthBytes, 8, 4));
 
   assert.equal(result.findings.length, 0);
-  assert.deepEqual(result.warnings, ["Bun .bun section is truncated before its 8-byte payload length."]);
+  assert.deepEqual(result.warnings, [
+    "Bun .bun payload is too small to contain the Bun trailer.",
+    "Bun .bun section is truncated before its 8-byte payload length."
+  ]);
 });
 
 void test("detectBunStandalone rejects oversized declared payloads", async () => {
@@ -245,7 +269,10 @@ void test("detectBunStandalone rejects unsafe declared payload ranges", async ()
   const result = await detectBunStandalone(createInput(section));
 
   assert.equal(result.findings.length, 0);
-  assert.deepEqual(result.warnings, ["Bun .bun declared payload range exceeds Number.MAX_SAFE_INTEGER."]);
+  assert.deepEqual(result.warnings, [
+    "Bun .bun declared payload length extends past the section or EOF.",
+    "Bun .bun declared payload range exceeds Number.MAX_SAFE_INTEGER."
+  ]);
 });
 
 void test("detectBunStandalone rejects .bun payloads with a missing trailer", async () => {

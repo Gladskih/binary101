@@ -14,9 +14,13 @@ const BUN_FLAGS: Array<[number, string, string]> = [
 ];
 
 const BUN_STORAGE_OPTIONS: Array<[number, string, string]> = [
-  [0, "Length-prefixed PE section", "An 8-byte little-endian payload length precedes the graph"],
-  [1, "PE section virtual data", "The payload occupies the meaningful virtual extent of the section"]
+  [0, "32-bit length-prefixed PE section", "A 4-byte little-endian payload length precedes the graph"],
+  [1, "64-bit length-prefixed PE section", "An 8-byte little-endian payload length precedes the graph"],
+  [2, "PE section virtual data", "The payload occupies the meaningful virtual extent of the section"]
 ];
+
+const bunStorageOption = (storage: PeBunPackerFinding["storage"]): number =>
+  storage === "u32-length-prefixed" ? 0 : storage === "u64-length-prefixed" ? 1 : 2;
 
 const formatBunBytes = (size: number): string =>
   size < 1024 ? `${size} bytes` : humanSize(size);
@@ -66,7 +70,7 @@ export const renderBunFindingDetails = (finding: PeBunPackerFinding): string =>
   renderBunRangeRows(finding) +
   renderBunRow(
     "Storage",
-    renderOptionChips(finding.storage === "length-prefixed" ? 0 : 1, BUN_STORAGE_OPTIONS),
+    renderOptionChips(bunStorageOption(finding.storage), BUN_STORAGE_OPTIONS),
     "How the embedded Bun payload is stored in the PE section."
   ) +
   renderBunMetadataRows(finding) +
