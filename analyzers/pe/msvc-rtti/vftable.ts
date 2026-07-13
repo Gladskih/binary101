@@ -14,21 +14,20 @@ export const parseRelocationBackedVftable = async (
   image: MsvcRttiImage,
   dir64Sites: Set<number>,
   locatorSlotRva: number,
-  completeObjectLocatorRva: number
+  completeObjectLocatorRva: number,
+  firstFunctionTargetRva: number
 ): Promise<MsvcRttiVftable | null> => {
   const vftableRva = locatorSlotRva + IMAGE_POINTER_SIZE;
   if (vftableRva >= PE_RVA_EXCLUSIVE_LIMIT || vftableRva % IMAGE_POINTER_SIZE !== 0) return null;
   if (!image.isDataRange(vftableRva, IMAGE_POINTER_SIZE, IMAGE_POINTER_SIZE)) return null;
-  const functionTargetRvas: number[] = [];
-  for (let index = 0; index < MAX_VFTABLE_SLOTS; index += 1) {
+  if (!dir64Sites.has(vftableRva) || !image.isExecutableRva(firstFunctionTargetRva)) return null;
+  const functionTargetRvas = [firstFunctionTargetRva];
+  for (let index = 1; index < MAX_VFTABLE_SLOTS; index += 1) {
     const slotRva = slotRvaAt(vftableRva, index);
     if (slotRva == null || !dir64Sites.has(slotRva)) break;
     const targetRva = await image.readPreferredVaRva(slotRva);
     if (targetRva == null || !image.isExecutableRva(targetRva)) break;
     functionTargetRvas.push(targetRva);
   }
-  return functionTargetRvas.length
-    ? { rva: vftableRva, locatorSlotRva, completeObjectLocatorRva, functionTargetRvas }
-    : null;
+  return { rva: vftableRva, locatorSlotRva, completeObjectLocatorRva, functionTargetRvas };
 };
-

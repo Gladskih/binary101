@@ -24,7 +24,8 @@ void test("parseRelocationBackedVftable enforces the 4096-slot hard limit", asyn
     createImage(),
     sites,
     locatorSlotRva,
-    0x3000
+    0x3000,
+    0x1000
   );
 
   assert.ok(parsed);
@@ -36,7 +37,8 @@ void test("parseRelocationBackedVftable requires mapped data for the first slot"
     createImage({ isDataRange: () => false }),
     new Set([0x2008]),
     0x2000,
-    0x3000
+    0x3000,
+    0x1000
   );
 
   assert.equal(parsed, null);
@@ -47,7 +49,8 @@ void test("parseRelocationBackedVftable requires a DIR64 first slot", async () =
     createImage(),
     new Set(),
     0x2000,
-    0x3000
+    0x3000,
+    0x1000
   );
 
   assert.equal(parsed, null);
@@ -57,11 +60,12 @@ void test("parseRelocationBackedVftable stops before an invalid preferred VA", a
   let readCount = 0;
   const parsed = await parseRelocationBackedVftable(
     createImage({
-      readPreferredVaRva: async () => (++readCount === 1 ? 0x1000 : null)
+      readPreferredVaRva: async () => (++readCount === 1 ? null : 0x1010)
     }),
     new Set([0x2008, 0x2010]),
     0x2000,
-    0x3000
+    0x3000,
+    0x1000
   );
 
   assert.deepEqual(parsed?.functionTargetRvas, [0x1000]);
@@ -75,7 +79,8 @@ void test("parseRelocationBackedVftable stops before a non-executable target", a
     }),
     new Set([0x2008, 0x2010]),
     0x2000,
-    0x3000
+    0x3000,
+    0x1000
   );
 
   assert.deepEqual(parsed?.functionTargetRvas, [0x1000]);
@@ -87,7 +92,8 @@ void test("parseRelocationBackedVftable rejects RVA overflow after the locator s
     createImage(),
     new Set([0x1_0000_0000]),
     0xffff_fff8,
-    0x3000
+    0x3000,
+    0x1000
   );
 
   assert.equal(parsed, null);
@@ -98,7 +104,8 @@ void test("parseRelocationBackedVftable rejects an unaligned first slot", async 
     createImage(),
     new Set([0x2009]),
     0x2001,
-    0x3000
+    0x3000,
+    0x1000
   );
 
   assert.equal(parsed, null);
@@ -109,7 +116,8 @@ void test("parseRelocationBackedVftable stops before a slot crossing the RVA lim
     createImage(),
     new Set([0xffff_fff8, 0x1_0000_0000]),
     0xffff_fff0,
-    0x3000
+    0x3000,
+    0x1000
   );
 
   assert.deepEqual(parsed?.functionTargetRvas, [0x1000]);

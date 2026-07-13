@@ -2,7 +2,11 @@
 
 import type { MsvcRttiGraphParser } from "./graph-parser.js";
 import type { MsvcRttiImage } from "./image.js";
-import { MSVC_RTTI_LAYOUT } from "./layout.js";
+import {
+  COMPLETE_OBJECT_LOCATOR_SIZE,
+  IMAGE_POINTER_SIZE,
+  MSVC_RTTI_LAYOUT
+} from "./layout.js";
 import type {
   MsvcRttiAnalysis,
   MsvcRttiBaseClass,
@@ -17,6 +21,30 @@ interface AcceptedRtti {
   completeObjectLocator: MsvcRttiCompleteObjectLocator;
   vftable: MsvcRttiVftable;
 }
+
+interface DiscoveryCandidate {
+  locatorRva: number;
+  firstFunctionTargetRva: number;
+}
+
+const readDiscoveryCandidate = async (
+  image: MsvcRttiImage,
+  dir64Sites: Set<number>,
+  locatorSlotRva: number
+): Promise<DiscoveryCandidate | null> => {
+  const firstFunctionSlotRva = locatorSlotRva + IMAGE_POINTER_SIZE;
+  if (!Number.isSafeInteger(firstFunctionSlotRva) ||
+    !dir64Sites.has(firstFunctionSlotRva) ||
+    !image.isDataRange(firstFunctionSlotRva, IMAGE_POINTER_SIZE, IMAGE_POINTER_SIZE)) return null;
+  // Keep these adjacent reads sequential so FileRangeReader's shared window can serve both.
+  const locatorRva = await image.readPreferredVaRva(locatorSlotRva);
+  if (locatorRva == null ||
+    !image.isDataRange(locatorRva, COMPLETE_OBJECT_LOCATOR_SIZE, 4)) return null;
+  const firstFunctionTargetRva = await image.readPreferredVaRva(firstFunctionSlotRva);
+  return firstFunctionTargetRva != null && image.isExecutableRva(firstFunctionTargetRva)
+    ? { locatorRva, firstFunctionTargetRva }
+    : null;
+};
 
 const collectBaseClassGraph = (
   graph: MsvcRttiGraphParser,
@@ -81,16 +109,16 @@ export const discoverMsvcRtti = async (
 ): Promise<MsvcRttiAnalysis | null> => {
   const accepted: AcceptedRtti[] = [];
   for (const locatorSlotRva of dir64Sites) {
-    const locatorRva = await image.readPreferredVaRva(locatorSlotRva);
-    const completeObjectLocator = locatorRva == null
-      ? null
-      : await graph.completeObjectLocator(locatorRva);
+    const candidate = await readDiscoveryCandidate(image, dir64Sites, locatorSlotRva);
+    if (!candidate) continue;
+    const completeObjectLocator = await graph.completeObjectLocator(candidate.locatorRva);
     if (!completeObjectLocator) continue;
     const vftable = await parseRelocationBackedVftable(
       image,
       dir64Sites,
       locatorSlotRva,
-      completeObjectLocator.rva
+      completeObjectLocator.rva,
+      candidate.firstFunctionTargetRva
     );
     if (vftable) accepted.push({ completeObjectLocator, vftable });
   }
