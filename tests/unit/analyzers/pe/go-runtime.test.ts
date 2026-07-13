@@ -145,6 +145,26 @@ void test("analyzePeGoRuntime parses PE32 preferred-VA pointers", async () => {
   assert.equal(result?.functions.length, 2);
 });
 
+void test("analyzePeGoRuntime aligns scans to mapped addresses for malformed section starts", async () => {
+  const fixture = createPeAdapterFixture();
+  for (const candidate of fixture.core.sections.slice(1)) {
+    candidate.virtualAddress -= 1;
+    candidate.pointerToRawData -= 1;
+    candidate.virtualSize += 1;
+    candidate.sizeOfRawData += 1;
+  }
+  const file = new File([fixture.bytes], "misaligned-sections.exe");
+
+  const result = await analyzePeGoRuntime(
+    file,
+    createFileRangeReader(file, 0, file.size),
+    fixture.core
+  );
+
+  assert.equal(result?.pcHeaderAddress, fixture.runtime.pcHeaderAddress);
+  assert.equal(result?.moduleDataAddress, fixture.runtime.moduleDataAddress);
+});
+
 void test("analyzePeGoRuntime rejects ambiguous valid moduledata instances", async () => {
   const fixture = createPeAdapterFixture();
   const duplicateOffset = 0x700;

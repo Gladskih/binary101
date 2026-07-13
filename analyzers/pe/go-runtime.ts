@@ -112,6 +112,25 @@ const pointerBytes = (value: bigint, pointerSize: 4 | 8): Uint8Array => {
 const fileOffsetToAddress = (section: MappedSection, fileOffset: number): bigint =>
   section.address + BigInt(fileOffset - section.fileOffset);
 
+const firstAlignedFileOffset = (section: MappedSection, alignment: 4 | 8): number => {
+  const rawRemainder = Number(section.address % BigInt(alignment));
+  const addressRemainder = (rawRemainder + alignment) % alignment;
+  return section.fileOffset + (alignment - addressRemainder) % alignment;
+};
+
+const scanMappedSectionForPatterns = (
+  file: File,
+  section: MappedSection,
+  patterns: readonly Uint8Array[],
+  alignment: 4 | 8
+): Promise<number[]> => {
+  const offset = firstAlignedFileOffset(section, alignment);
+  const skippedBytes = offset - section.fileOffset;
+  return skippedBytes < section.fileSize
+    ? scanFileRangeForPatterns(file, offset, section.fileSize - skippedBytes, patterns, alignment)
+    : Promise.resolve([]);
+};
+
 const findPcHeaders = async (
   file: File,
   sections: readonly MappedSection[],
@@ -120,12 +139,7 @@ const findPcHeaders = async (
   const patterns = SUPPORTED_GO_RUNTIME_LAYOUTS.map(layout => littleEndianBytes(layout.magic));
   const candidates: PcHeader[] = [];
   for (const section of sections.filter(candidate => !candidate.executable)) {
-    const offsets = await scanFileRangeForPatterns(
-      file,
-      section.fileOffset,
-      section.fileSize,
-      patterns
-    );
+    const offsets = await scanMappedSectionForPatterns(file, section, patterns, image.pointerSize);
     for (const offset of offsets) {
       const address = fileOffsetToAddress(section, offset);
       if (address % BigInt(image.pointerSize) !== 0n) continue;
@@ -150,12 +164,7 @@ const findModuleDataCandidates = async (
   const headersByAddress = new Map(headers.map(header => [header.address, header]));
   const patterns = headers.map(header => pointerBytes(header.address, pointerSize));
   for (const section of sections.filter(candidate => candidate.writable && !candidate.executable)) {
-    const offsets = await scanFileRangeForPatterns(
-      file,
-      section.fileOffset,
-      section.fileSize,
-      patterns
-    );
+    const offsets = await scanMappedSectionForPatterns(file, section, patterns, pointerSize);
     for (const offset of offsets) {
       const address = fileOffsetToAddress(section, offset);
       if (address % BigInt(pointerSize) !== 0n) continue;
