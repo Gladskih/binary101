@@ -8,6 +8,7 @@ import { renderAutoPagedSortableTable } from "../paged-sortable-table.js";
 import { renderCoffDebugInfo } from "./debug.js";
 import { renderCoffRelocations } from "./relocations.js";
 import { createCoffSectionTableModel } from "./sections.js";
+import { renderSectionEntropyControl } from "../section-entropy.js";
 
 const renderHeader = (coff: CoffObjectParseResult, out: string[]): void => {
   const header = coff.header;
@@ -31,8 +32,9 @@ const renderHeader = (coff: CoffObjectParseResult, out: string[]): void => {
 
 const renderSections = (coff: CoffObjectParseResult, out: string[]): void => {
   if (!coff.sections.length) return;
-  out.push(`<section>`);
+  out.push(`<section data-section-entropy-root>`);
   out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Section headers</h4>`);
+  out.push(renderSectionEntropyControl(coff.sections));
   out.push(renderAutoPagedSortableTable(createCoffSectionTableModel(coff)));
   out.push(`</section>`);
 };

@@ -5,6 +5,7 @@ import { createCertificateDownloadClickHandler } from "./certificate-download.js
 import { createGzipClickHandler } from "./gzip-actions.js";
 import { createIso9660EntryClickHandler } from "./iso9660-actions.js";
 import { createPeChecksumClickHandler } from "./pe-checksum-controls.js";
+import { createSectionEntropyClickHandler } from "./section-entropy-controls.js";
 import { createPeDosNestedDownloadClickHandler } from "./pe-dos-nested-download.js";
 import { createPeLinuxPayloadDownloadClickHandler } from "./pe-linux-payload-download.js";
 import { createPeOverlayDownloadClickHandler } from "./pe-overlay-download.js";
@@ -27,6 +28,7 @@ const runAsyncHandler = (handler: AsyncEventHandler, event: Event): void => {
 
 export const createFileActionClickHandler = (deps: FileActionDeps) => {
   const peChecksumClickHandler = createPeChecksumClickHandler(deps);
+  const sectionEntropyClickHandler = createSectionEntropyClickHandler(deps);
   const isoClickHandler = createIso9660EntryClickHandler(deps);
   const sevenZipClickHandler = createSevenZipEntryClickHandler(deps);
   const gzipClickHandler = createGzipClickHandler(deps);
@@ -41,6 +43,7 @@ export const createFileActionClickHandler = (deps: FileActionDeps) => {
   });
   return (event: Event): void => {
     runAsyncHandler(peChecksumClickHandler, event);
+    runAsyncHandler(sectionEntropyClickHandler, event);
     runAsyncHandler(isoClickHandler, event);
     runAsyncHandler(sevenZipClickHandler, event);
     runAsyncHandler(gzipClickHandler, event);

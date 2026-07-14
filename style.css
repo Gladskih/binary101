@@ -73,6 +73,7 @@ main{flex:1;display:flex;flex-direction:column;align-items:stretch}
 .directoryFolderTable,.directoryFileTable,.directoryWarningTable{table-layout:auto}
 .directoryPathCell{min-width:220px}
 .directoryNumericCell{text-align:right;white-space:nowrap}
+.sectionEntropy__value{text-align:right;white-space:nowrap}
 .dwarfTable__numeric{text-align:right;white-space:nowrap}
 .directoryActionRow{cursor:pointer}
 .directoryActionRow:hover{background:var(--chip-bg-light)}

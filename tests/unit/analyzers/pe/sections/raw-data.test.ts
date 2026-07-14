@@ -2,32 +2,13 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addSectionRawDataAnalysis } from "../../../../../analyzers/pe/sections/raw-data.js";
+import type { FileRangeReader } from "../../../../../analyzers/file-range-reader.js";
+import { addSectionRawTailAnalysis } from "../../../../../analyzers/pe/sections/raw-data.js";
 import { inlinePeSectionName } from "../../../../../analyzers/pe/sections/name.js";
 import type { PeSection } from "../../../../../analyzers/pe/types.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
 
-void test("addSectionRawDataAnalysis scans full sections for entropy", async () => {
-  const pointerToRawData = 0x200;
-  const sizeOfRawData = 100000;
-  const bytes = new Uint8Array(pointerToRawData + sizeOfRawData).fill(0);
-  bytes.fill(0xff, pointerToRawData + sizeOfRawData / 2, pointerToRawData + sizeOfRawData);
-
-  const file = new MockFile(bytes, "entropy.bin");
-  const section: PeSection = {
-    name: inlinePeSectionName(".text"),
-    virtualSize: sizeOfRawData,
-    virtualAddress: 0x1000,
-    sizeOfRawData,
-    pointerToRawData,
-    characteristics: 0x60000020
-  };
-
-  await addSectionRawDataAnalysis(file, [section]);
-  assert.equal(section.entropy, 1);
-});
-
-void test("addSectionRawDataAnalysis reports zero-filled raw section tails", async () => {
+void test("addSectionRawTailAnalysis reports zero-filled raw section tails", async () => {
   const bytes = new Uint8Array(0x400).fill(0);
   bytes.fill(0xaa, 0x100, 0x180);
   const file = new MockFile(bytes);
@@ -40,11 +21,112 @@ void test("addSectionRawDataAnalysis reports zero-filled raw section tails", asy
     characteristics: 0x60000020
   };
 
-  await addSectionRawDataAnalysis(file, [section]);
+  await addSectionRawTailAnalysis(file, [section]);
   assert.deepStrictEqual(section.rawTail, { zeroFilled: true, readableSize: 0x80 });
+  assert.equal(section.entropy, undefined);
 });
 
-void test("addSectionRawDataAnalysis reports non-zero raw section tails", async () => {
+void test("addSectionRawTailAnalysis reads only the raw tail", async () => {
+  const reads: Array<{ offset: number; size: number }> = [];
+  const reader: FileRangeReader = {
+    size: 0x400,
+    read: async () => new DataView(new ArrayBuffer(0)),
+    readBytes: async (offset, size) => {
+      reads.push({ offset, size });
+      return new Uint8Array(size);
+    }
+  };
+  const section: PeSection = {
+    name: inlinePeSectionName(".text"),
+    virtualSize: 0x80,
+    virtualAddress: 0x1000,
+    sizeOfRawData: 0x100,
+    pointerToRawData: 0x100,
+    characteristics: 0x60000020
+  };
+
+  await addSectionRawTailAnalysis(reader, [section]);
+
+  assert.deepEqual(reads, [{ offset: 0x180, size: 0x80 }]);
+});
+
+void test("addSectionRawTailAnalysis does not read a tail that starts at EOF", async () => {
+  const reads: Array<{ offset: number; size: number }> = [];
+  const reader: FileRangeReader = {
+    size: 0x180,
+    read: async () => new DataView(new ArrayBuffer(0)),
+    readBytes: async (offset, size) => {
+      reads.push({ offset, size });
+      return new Uint8Array(0);
+    }
+  };
+  const section: PeSection = {
+    name: inlinePeSectionName(".trunc"),
+    virtualSize: 0x80,
+    virtualAddress: 0x1000,
+    sizeOfRawData: 0x100,
+    pointerToRawData: 0x100,
+    characteristics: 0x40000040
+  };
+
+  await addSectionRawTailAnalysis(reader, [section]);
+
+  assert.deepEqual(reads, []);
+  assert.equal(section.rawTail?.readableSize, 0);
+  assert.equal(section.rawTail?.zeroFilled, null);
+});
+
+void test("addSectionRawTailAnalysis caps automatic scans of large zero-filled tails", async () => {
+  const chunkBytes = 1024 * 1024;
+  const reads: Array<{ offset: number; size: number }> = [];
+  const reader: FileRangeReader = {
+    size: 0x10 + chunkBytes + 2,
+    read: async () => new DataView(new ArrayBuffer(0)),
+    readBytes: async (offset, size) => {
+      reads.push({ offset, size });
+      return new Uint8Array(size);
+    }
+  };
+  const section: PeSection = {
+    name: inlinePeSectionName(".tail"),
+    virtualSize: 0x10,
+    virtualAddress: 0x1000,
+    sizeOfRawData: 0x10 + chunkBytes + 2,
+    pointerToRawData: 0,
+    characteristics: 0x40000040
+  };
+
+  await addSectionRawTailAnalysis(reader, [section]);
+
+  assert.deepEqual(reads, [{ offset: 0x10, size: chunkBytes }]);
+  assert.deepEqual(section.rawTail, {
+    zeroFilled: null,
+    readableSize: chunkBytes + 2,
+    warnings: ["Section raw tail exceeds the automatic 1 MiB zero-fill scan budget."]
+  });
+});
+
+void test("addSectionRawTailAnalysis fully checks a tail at the scan budget", async () => {
+  const scanBudgetBytes = 1024 * 1024;
+  const file = new MockFile(new Uint8Array(scanBudgetBytes));
+  const section: PeSection = {
+    name: inlinePeSectionName(".tail"),
+    virtualSize: 0,
+    virtualAddress: 0x1000,
+    sizeOfRawData: scanBudgetBytes,
+    pointerToRawData: 0,
+    characteristics: 0x40000040
+  };
+
+  await addSectionRawTailAnalysis(file, [section]);
+
+  assert.deepEqual(section.rawTail, {
+    zeroFilled: true,
+    readableSize: scanBudgetBytes
+  });
+});
+
+void test("addSectionRawTailAnalysis reports non-zero raw section tails", async () => {
   const bytes = new Uint8Array(0x400).fill(0);
   bytes[0x190] = 0x7f;
   const file = new MockFile(bytes);
@@ -57,11 +139,11 @@ void test("addSectionRawDataAnalysis reports non-zero raw section tails", async 
     characteristics: 0xc0000040
   };
 
-  await addSectionRawDataAnalysis(file, [section]);
+  await addSectionRawTailAnalysis(file, [section]);
   assert.deepStrictEqual(section.rawTail, { zeroFilled: false, readableSize: 0x80 });
 });
 
-void test("addSectionRawDataAnalysis keeps truncated raw section tails explicit", async () => {
+void test("addSectionRawTailAnalysis keeps truncated raw section tails explicit", async () => {
   const bytes = new Uint8Array(0x1c0).fill(0);
   const file = new MockFile(bytes);
   const section: PeSection = {
@@ -73,7 +155,7 @@ void test("addSectionRawDataAnalysis keeps truncated raw section tails explicit"
     characteristics: 0x40000040
   };
 
-  await addSectionRawDataAnalysis(file, [section]);
+  await addSectionRawTailAnalysis(file, [section]);
   assert.deepStrictEqual(section.rawTail, {
     zeroFilled: null,
     readableSize: 0x40,
@@ -81,7 +163,7 @@ void test("addSectionRawDataAnalysis keeps truncated raw section tails explicit"
   });
 });
 
-void test("addSectionRawDataAnalysis omits rawTail when raw data does not exceed virtual size", async () => {
+void test("addSectionRawTailAnalysis omits rawTail when raw data does not exceed virtual size", async () => {
   const bytes = new Uint8Array(0x200).fill(0);
   const file = new MockFile(bytes);
   const section: PeSection = {
@@ -93,12 +175,11 @@ void test("addSectionRawDataAnalysis omits rawTail when raw data does not exceed
     characteristics: 0x40000040
   };
 
-  await addSectionRawDataAnalysis(file, [section]);
+  await addSectionRawTailAnalysis(file, [section]);
   assert.equal(section.rawTail, undefined);
 });
 
-void test("addSectionRawDataAnalysis finds non-zero raw tails that start after the first chunk", async () => {
-  // The production entropy scan chunks at 1 MiB; this fixture forces raw-tail detection into chunk 2.
+void test("addSectionRawTailAnalysis reads a tail after a large section body", async () => {
   const chunkBoundary = 1024 * 1024;
   const pointerToRawData = 0x10;
   const virtualSize = chunkBoundary + 0x10;
@@ -115,39 +196,6 @@ void test("addSectionRawDataAnalysis finds non-zero raw tails that start after t
     characteristics: 0x40000040
   };
 
-  await addSectionRawDataAnalysis(file, [section]);
+  await addSectionRawTailAnalysis(file, [section]);
   assert.deepStrictEqual(section.rawTail, { zeroFilled: false, readableSize: 0x20 });
-});
-
-void test("addSectionRawDataAnalysis reports 0 entropy when no raw data is present", async () => {
-  const file = new MockFile(new Uint8Array([0]), "empty.bin");
-  const section: PeSection = {
-    name: inlinePeSectionName(".bss"),
-    virtualSize: 0x100,
-    virtualAddress: 0x1000,
-    sizeOfRawData: 0,
-    pointerToRawData: 0,
-    characteristics: 0x40000000
-  };
-
-  await addSectionRawDataAnalysis(file, [section]);
-  assert.equal(section.entropy, 0);
-});
-
-void test("addSectionRawDataAnalysis handles 1-byte sections", async () => {
-  const pointerToRawData = 1;
-  const sizeOfRawData = 1;
-  const bytes = new Uint8Array([0, 0xff]);
-  const file = new MockFile(bytes, "tiny.bin");
-  const section: PeSection = {
-    name: inlinePeSectionName(".tiny"),
-    virtualSize: 1,
-    virtualAddress: 0x1000,
-    sizeOfRawData,
-    pointerToRawData,
-    characteristics: 0x40000000
-  };
-
-  await addSectionRawDataAnalysis(file, [section]);
-  assert.equal(section.entropy, 0);
 });

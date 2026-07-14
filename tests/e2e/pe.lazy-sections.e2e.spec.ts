@@ -105,3 +105,30 @@ test.describe("PE lazy sections", () => {
     await expect(firstDirectoryCell).toHaveText("ARCHITECTURE");
   });
 });
+
+test.describe("PE section entropy", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Local File Inspector" })).toBeVisible();
+  });
+
+  void test("calculates all sections only after the explicit action", async ({ page }) => {
+    const file = createPePlusFile();
+    await page.setInputFiles("#fileInput", toUpload(file));
+
+    const section = page.locator('[data-pe-lazy-section="section-headers"]');
+    await section.locator(":scope > details > summary").click();
+    const entropyValue = section.locator('[data-section-entropy-index="0"]');
+    await expect(entropyValue).toHaveText("Not calculated");
+
+    await section.getByRole("button", { name: "Calculate entropy for all sections" }).click();
+
+    await expect(entropyValue).toHaveText(/^\d+\.\d{2}$/);
+    await expect(section.getByRole("button", {
+      name: "Recalculate entropy for all sections"
+    })).toBeVisible();
+    await expect(section.locator("[data-section-entropy-status]")).toHaveText(
+      "Calculated for 1 of 1 sections."
+    );
+  });
+});

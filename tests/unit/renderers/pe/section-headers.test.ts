@@ -32,6 +32,9 @@ void test("renderSections renders regular and COFF string-table section names", 
   assert.match(html, /\(unnamed\)/);
   assert.match(html, /LinePtr/);
   assert.match(html, /RelocPtr<\/th><th>Relocs<\/th><th>LinePtr<\/th><th>Lines/);
+  assert.match(html, /data-section-entropy-action/);
+  assert.match(html, /Calculate entropy/);
+  assert.match(html, /Not calculated/);
 });
 
 void test("renderSections shows COFF section relocation and line-number metadata", () => {

@@ -11,6 +11,11 @@ import type {
   PagedSortableTableCell,
   PagedSortableTableModel
 } from "../paged-sortable-table.js";
+import {
+  SECTION_ENTROPY_TOOLTIP,
+  renderSectionEntropyValue,
+  sectionEntropySortValue
+} from "../section-entropy.js";
 
 export const COFF_SECTION_TABLE_ID = "coff-sections";
 const COFF_SECTION_PAGE_SIZE = 200; // UI page size, not a COFF format value.
@@ -27,7 +32,7 @@ const sectionNameCell = (section: CoffSection): PagedSortableTableCell => {
   };
 };
 
-const sectionCells = (section: CoffSection): PagedSortableTableCell[] => [
+const sectionCells = (section: CoffSection, sectionIndex: number): PagedSortableTableCell[] => [
   sectionNameCell(section),
   { html: humanSize(section.virtualSize), sortValue: String(section.virtualSize) },
   { html: hex(section.virtualAddress, 8), sortValue: String(section.virtualAddress) },
@@ -37,7 +42,11 @@ const sectionCells = (section: CoffSection): PagedSortableTableCell[] => [
   { html: String(section.numberOfRelocations ?? 0), sortValue: String(section.numberOfRelocations ?? 0) },
   { html: hex(section.pointerToLinenumbers ?? 0, 8), sortValue: String(section.pointerToLinenumbers ?? 0) },
   { html: String(section.numberOfLinenumbers ?? 0), sortValue: String(section.numberOfLinenumbers ?? 0) },
-  { html: (section.entropy ?? 0).toFixed(2), sortValue: String(section.entropy ?? 0) },
+  {
+    className: "sectionEntropy__value",
+    html: renderSectionEntropyValue(section.entropy, sectionIndex),
+    sortValue: sectionEntropySortValue(section.entropy)
+  },
   { html: hex(section.characteristics, 8), sortValue: String(section.characteristics >>> 0) }
 ];
 
@@ -55,18 +64,22 @@ export const createCoffSectionTableModel = (
     { label: "Relocs" },
     { label: "LinePtr" },
     { label: "Lines" },
-    { label: "Entropy" },
+    {
+      className: "sectionEntropy__value",
+      label: "Entropy",
+      tooltip: SECTION_ENTROPY_TOOLTIP
+    },
     { label: "Flags" }
   ],
   id: tableId,
   pageSize: COFF_SECTION_PAGE_SIZE,
   rowAt: rowIndex => {
     const section = coff.sections[rowIndex];
-    return section ? { cells: sectionCells(section) } : null;
+    return section ? { cells: sectionCells(section, rowIndex) } : null;
   },
   rowCount: coff.sections.length,
   sortValueAt: (rowIndex, columnIndex) => {
     const section = coff.sections[rowIndex];
-    return section ? sectionCells(section)[columnIndex]?.sortValue ?? "" : "";
+    return section ? sectionCells(section, rowIndex)[columnIndex]?.sortValue ?? "" : "";
   }
 });

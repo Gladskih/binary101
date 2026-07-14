@@ -14,6 +14,9 @@ void test("renderCoff renders COFF object headers and symbol tables outside the 
 
   assert.match(html, /COFF file header/);
   assert.match(html, /Section headers/);
+  assert.match(html, /data-section-entropy-action/);
+  assert.match(html, /Calculate entropy/);
+  assert.match(html, /Not calculated/);
   assert.match(html, /COFF relocations/);
   assert.match(html, /IMAGE_REL_I386_REL32/);
   assert.match(html, /COFF symbol table/);

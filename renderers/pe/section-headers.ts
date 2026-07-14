@@ -8,6 +8,12 @@ import type { PeSection } from "../../analyzers/pe/types.js";
 import { peSectionNameOffset, peSectionNameValue } from "../../analyzers/pe/sections/name.js";
 import { knownSectionName } from "./header-format.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
+import {
+  SECTION_ENTROPY_TOOLTIP,
+  renderSectionEntropyControl,
+  renderSectionEntropyValue,
+  sectionEntropySortValue
+} from "../section-entropy.js";
 
 const getRawTailSize = (section: PeSection): number =>
   Math.max(0, (section.sizeOfRawData >>> 0) - (section.virtualSize >>> 0));
@@ -54,13 +60,16 @@ export const renderSections = (pe: PeParseResult, out: string[]): void => {
     "Section headers",
     `${sections.length} section${sections.length === 1 ? "" : "s"}`
   ));
+  out.push(`<div data-section-entropy-root>`);
+  out.push(renderSectionEntropyControl(sections));
   out.push(
     `<table class="table" style="margin-top:.35rem"><thead><tr>` +
     `<th>Name</th><th>VirtualSize</th><th>RVA</th><th>RawSize</th><th>FilePtr</th>` +
     (showCoffSectionTables ? `<th>RelocPtr</th><th>Relocs</th><th>LinePtr</th><th>Lines</th>` : "") +
-    `<th>Padding</th><th>Entropy</th><th>Flags</th></tr></thead><tbody>`
+    `<th>Padding</th><th class="sectionEntropy__value">Entropy</th>` +
+    `<th>Flags</th></tr></thead><tbody>`
   );
-  sections.forEach(section => {
+  sections.forEach((section, sectionIndex) => {
     const flags = formatSectionCharacteristicFlags(section.characteristics);
     const sectionName = peSectionNameValue(section.name);
     const coffStringTableOffset = peSectionNameOffset(section.name);
@@ -85,10 +94,13 @@ export const renderSections = (pe: PeParseResult, out: string[]): void => {
             `<td>${section.numberOfLinenumbers ?? 0}</td>`
           : ""}
         <td>${renderPaddingCell(section, fileAlignment)}</td>
-        <td title="Shannon entropy (0..8 bits/byte). Near 0 means very simple or empty, near 8 means very mixed data (often compressed or encrypted).">${(section.entropy ?? 0).toFixed(2)}</td>
+        <td class="sectionEntropy__value" title="${SECTION_ENTROPY_TOOLTIP}"
+          data-sort-value="${sectionEntropySortValue(section.entropy)}">
+          ${renderSectionEntropyValue(section.entropy, sectionIndex)}</td>
         <td>${flags.join(" &middot; ")}</td>
       </tr>`);
   });
   out.push(`</tbody></table>`);
+  out.push(`</div>`);
   out.push(renderPeSectionEnd());
 };

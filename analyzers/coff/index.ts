@@ -3,7 +3,6 @@
 import { createFileRangeReader } from "../file-range-reader.js";
 import { parseCoffFileHeaderAt } from "./file-header.js";
 import { parseCoffSectionHeaders } from "./section-headers.js";
-import { addCoffSectionEntropy } from "./raw-data.js";
 import { parseCoffRelocations } from "./relocations.js";
 import { parseCoffDebugInfoFromFileHeader } from "./debug.js";
 import { isKnownCoffMachine } from "./machine.js";
@@ -41,7 +40,6 @@ export async function parseCoffObject(file: File): Promise<CoffObjectParseResult
     header.PointerToSymbolTable,
     header.NumberOfSymbols
   );
-  await addCoffSectionEntropy(reader, sectionResult.sections);
   const warnings = [...(sectionResult.warnings ?? [])];
   const relocations = await parseCoffRelocations(
     reader,
