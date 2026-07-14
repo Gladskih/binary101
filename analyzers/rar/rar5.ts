@@ -1,6 +1,7 @@
 "use strict";
 import { formatUnixSecondsOrDash } from "../../binary-utils.js";
 import { crc32 } from "../crc32.js";
+import type { FileRangeReader } from "../file-range-reader.js";
 import {
   EHFL_NEXTVOLUME,
   FHFL_CRC32,
@@ -22,7 +23,7 @@ import {
   RAR5_METHODS,
   SIGNATURE_V5
 } from "./constants.js";
-import { decodeNameBytes, mapHostV5, readDataView, readVint, toSafeNumber } from "./utils.js";
+import { decodeNameBytes, mapHostV5, readVint, toSafeNumber } from "./utils.js";
 import type { RarEntry, RarParseResult, RarMainHeader, RarEndHeader } from "./index.js";
 const computeRar5DictSize = (compInfo: number, algoVersion: number, isDirectory: boolean): bigint | null => {
   if (isDirectory || algoVersion > 1) return null;
@@ -57,20 +58,14 @@ type Rar5FileEntry = RarEntry & {
   algoVersion: string;
   dictionarySize: bigint | null;
 };
-const createRar5ParseState = (): Rar5ParseState => ({
-  issues: [],
-  entries: [],
-  mainHeader: null,
-  endHeader: null
-});
 const readRar5HeaderEnvelope = async (
-  file: File,
+  reader: FileRangeReader,
   offset: number,
   fileSize: number,
   issues: string[]
 ): Promise<Rar5HeaderEnvelope | null> => {
-  const probe = await readDataView(file, offset, 32);
-  if (!probe || probe.byteLength < 5) {
+  const probe = await reader.read(offset, 32);
+  if (probe.byteLength < 5) {
     issues.push("RAR header is truncated.");
     return null;
   }
@@ -90,7 +85,7 @@ const readRar5HeaderEnvelope = async (
     issues.push("RAR header extends beyond file bounds.");
     return null;
   }
-  const headerBytes = new Uint8Array(await file.slice(offset + 4, offset + headerTotal).arrayBuffer());
+  const headerBytes = await reader.readBytes(offset + 4, headerTotal - 4);
   if (crc32(headerBytes) !== headerCrc) issues.push(`RAR header CRC mismatch at offset ${offset}.`);
   const headerDv = new DataView(headerBytes.buffer, headerBytes.byteOffset, headerBytes.byteLength);
   return decodeRar5HeaderEnvelope(offset, headerDv, headerSizeInfo.length, headerSizeNumber, headerTotal, issues);
@@ -267,14 +262,12 @@ const advanceRar5Offset = (
   return Number(next);
 };
 
-export const parseRar5 = async (file: File): Promise<RarParseResult> => {
-  const state = createRar5ParseState();
-  const fileSize = file.size || 0;
+export const parseRar5 = async (reader: FileRangeReader): Promise<RarParseResult> => {
+  const state: Rar5ParseState = { issues: [], entries: [], mainHeader: null, endHeader: null };
+  const fileSize = reader.size;
   let offset = SIGNATURE_V5.length;
-  let guard = 0;
-  while (offset + 7 <= fileSize && guard < 4096) {
-    guard += 1;
-    const envelope = await readRar5HeaderEnvelope(file, offset, fileSize, state.issues);
+  while (offset + 7 <= fileSize) {
+    const envelope = await readRar5HeaderEnvelope(reader, offset, fileSize, state.issues);
     if (!envelope) break;
     if (envelope.headerType === 1) {
       state.mainHeader = parseRar5MainHeader(envelope);

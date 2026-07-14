@@ -1,5 +1,6 @@
 "use strict";
 
+import type { FileRangeReader } from "../file-range-reader.js";
 import {
   EHFL_NEXTVOLUME,
   HEAD3_ENDARC,
@@ -31,7 +32,6 @@ import {
   decodeNameBytes,
   formatDosDateTime,
   mapHostV4,
-  readDataView,
   toSafeNumber
 } from "./utils.js";
 import type { RarEntry, RarParseResult, RarMainHeader, RarEndHeader } from "./index.js";
@@ -132,19 +132,17 @@ const parseRar4FileHeader = (
   return { entry, nextOffsetDelta: packSizeBig };
 };
 
-export const parseRar4 = async (file: File): Promise<RarParseResult> => {
+export const parseRar4 = async (reader: FileRangeReader): Promise<RarParseResult> => {
   const issues: string[] = [];
   const entries: RarEntry[] = [];
-  const fileSize = file.size || 0;
+  const fileSize = reader.size;
   let mainHeader: (RarMainHeader & { offset: number; flags: number }) | null = null;
   let endHeader: RarEndHeader | null = null;
   let offset = SIGNATURE_V4.length;
-  let guard = 0;
 
-  while (offset + 7 <= fileSize && guard < 4096) {
-    guard += 1;
-    const base = await readDataView(file, offset, 7);
-    if (!base || base.byteLength < 7) {
+  while (offset + 7 <= fileSize) {
+    const base = await reader.read(offset, 7);
+    if (base.byteLength < 7) {
       issues.push("RAR header is truncated.");
       break;
     }
@@ -155,8 +153,8 @@ export const parseRar4 = async (file: File): Promise<RarParseResult> => {
       issues.push("RAR header size is invalid.");
       break;
     }
-    const headerDv = await readDataView(file, offset, headSize);
-    if (!headerDv || headerDv.byteLength < headSize) {
+    const headerDv = await reader.read(offset, headSize);
+    if (headerDv.byteLength < headSize) {
       issues.push("RAR header could not be fully read.");
       break;
     }

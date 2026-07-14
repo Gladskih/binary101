@@ -1,5 +1,6 @@
 "use strict";
 
+import { createFileRangeReader } from "../file-range-reader.js";
 import { SIGNATURE_V5 } from "./constants.js";
 import { detectRarVersionBytes } from "./utils.js";
 import { parseRar4 } from "./rar4.js";
@@ -51,14 +52,12 @@ export interface RarParseResult {
   issues: string[];
 }
 
-const parseRar4Typed = async (file: File): Promise<RarParseResult> => parseRar4(file);
-const parseRar5Typed = async (file: File): Promise<RarParseResult> => parseRar5(file);
-
 export async function parseRar(file: File): Promise<RarParseResult> {
-  const signatureBytes = new Uint8Array(await file.slice(0, SIGNATURE_V5.length).arrayBuffer());
+  const reader = createFileRangeReader(file, 0, file.size);
+  const signatureBytes = await reader.readBytes(0, SIGNATURE_V5.length);
   const version = detectRarVersionBytes(signatureBytes);
-  if (version === 4) return parseRar4Typed(file);
-  if (version === 5) return parseRar5Typed(file);
+  if (version === 4) return parseRar4(reader);
+  if (version === 5) return parseRar5(reader);
   return {
     isRar: false,
     version: null,

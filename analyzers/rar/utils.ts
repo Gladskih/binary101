@@ -15,17 +15,6 @@ export const toSafeNumber = (value: number | bigint | null | undefined): number 
   return null;
 };
 
-export const readDataView = async (
-  file: File,
-  offset: number,
-  length: number
-): Promise<DataView | null> => {
-  if (offset >= (file.size || 0)) return null;
-  const clampedLength = Math.max(0, Math.min(length, (file.size || 0) - offset));
-  const buffer = await file.slice(offset, offset + clampedLength).arrayBuffer();
-  return new DataView(buffer);
-};
-
 export const readVint = (
   dv: DataView,
   offset: number
