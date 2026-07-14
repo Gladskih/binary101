@@ -41,8 +41,11 @@ const createLzmaAloneStream = (
   return stream;
 };
 
-const decodedBytes = (decoded: string | Uint8Array | null | undefined | void): Uint8Array => {
+const decodedBytes = (
+  decoded: string | Uint8Array | ArrayLike<number> | null | undefined | void
+): Uint8Array => {
   if (decoded == null) throw new Error("LZMA decompression returned no data.");
+  if (decoded instanceof Uint8Array) return decoded;
   return typeof decoded === "string"
     ? new TextEncoder().encode(decoded)
     : Uint8Array.from(decoded, value => value & Number(BYTE_MASK));

@@ -1,7 +1,8 @@
 "use strict";
 
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { mock, test } from "node:test";
+import { compress } from "lzma-web/compress";
 import { SEVENZIP_LZMA_PROPERTY_BYTES } from "../../../../analyzers/sevenz/method-ids.js";
 import {
   decompressLzmaWithProperties,
@@ -26,6 +27,27 @@ void test("decompressLzmaWithProperties decodes raw 7z LZMA streams", async () =
   const decoded = await decompressLzmaWithProperties(LZMA_PROPERTIES, PACKED_DATA, DECODED_TEXT_BYTES);
 
   assert.deepEqual(decoded, new TextEncoder().encode(DECODED_TEXT));
+});
+
+void test("decompressLzmaWithProperties does not renormalize binary Uint8Array output", async () => {
+  // Invalid UTF-8 forces lzma-web to return its decoded Uint8Array instead of a string.
+  const expected = Uint8Array.of(0xff, 0xfe, 0xfd);
+  const compressed = compress(expected, 1);
+  assert.ok(compressed instanceof Uint8Array);
+  const from = mock.method(Uint8Array, "from");
+
+  try {
+    const decoded = await decompressLzmaWithProperties(
+      [...compressed.subarray(0, SEVENZIP_LZMA_PROPERTY_BYTES)],
+      compressed.subarray(SEVENZIP_LZMA_PROPERTY_BYTES + BigUint64Array.BYTES_PER_ELEMENT),
+      BigInt(expected.byteLength)
+    );
+
+    assert.deepEqual(decoded, expected);
+    assert.equal(from.mock.callCount(), 0);
+  } finally {
+    from.mock.restore();
+  }
 });
 
 void test("decompressLzmaWithProperties rejects invalid property sizes", async () => {
