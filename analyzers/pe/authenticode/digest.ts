@@ -99,21 +99,20 @@ const hasParsedPeHashContext = (
   typeof (core as Partial<PeAuthenticodeParsedCore>).opt?.SizeOfHeaders === "number";
 
 const readRanges = async (reader: FileRangeReader, ranges: FileByteRange[]): Promise<ArrayBuffer> => {
-  const chunks: Uint8Array[] = [];
-  let totalLength = 0;
+  if (!reader.readInto) throw new Error("FileRangeReader does not support direct range reads");
+  const totalLength = ranges.reduce((total, range) => total + range.end - range.start, 0);
+  let out = new Uint8Array(totalLength);
+  let outputOffset = 0;
   for (const range of ranges) {
-    const chunk = await reader.readBytes(range.start, range.end - range.start);
-    if (!chunk.length) continue;
-    chunks.push(chunk);
-    totalLength += chunk.length;
+    const rangeLength = range.end - range.start;
+    const filled = await reader.readInto(
+      range.start,
+      out.subarray(outputOffset, outputOffset + rangeLength)
+    );
+    out = new Uint8Array(filled.buffer);
+    outputOffset += filled.byteLength;
   }
-  const out = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return out.buffer;
+  return outputOffset === out.byteLength ? out.buffer : out.slice(0, outputOffset).buffer;
 };
 
 export const computePeAuthenticodeDigestBestEffort = async (

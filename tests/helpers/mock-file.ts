@@ -2,11 +2,12 @@
 
 import {
   createFileRangeReader,
+  type DirectFileRangeReader,
   type FileRangeReader
 } from "../../analyzers/file-range-reader.js";
 
 export class MockFile extends Blob implements File, FileRangeReader {
-  #reader: FileRangeReader | null = null;
+  #reader: DirectFileRangeReader | null = null;
   readonly data: Uint8Array;
   readonly name: string;
   readonly lastModified: number;
@@ -33,6 +34,14 @@ export class MockFile extends Blob implements File, FileRangeReader {
   readBytes(offset: number, size: number): Promise<Uint8Array> {
     this.#reader ??= createFileRangeReader(this, 0, this.size, 0);
     return this.#reader.readBytes(offset, size);
+  }
+
+  readInto(
+    offset: number,
+    destination: Uint8Array<ArrayBuffer>
+  ): Promise<Uint8Array<ArrayBuffer>> {
+    this.#reader ??= createFileRangeReader(this, 0, this.size, 0);
+    return this.#reader.readInto(offset, destination);
   }
 }
 

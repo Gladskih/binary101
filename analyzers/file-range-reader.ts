@@ -1,10 +1,20 @@
 "use strict";
 
+// Browser BYOB reads detach the supplied view. The returned view restores
+// ownership of the same backing buffer and covers only the bytes read.
+type FileRangeReadInto = (
+  offset: number,
+  destination: Uint8Array<ArrayBuffer>
+) => Promise<Uint8Array<ArrayBuffer>>;
+
 export type FileRangeReader = {
   size: number;
   read: (offset: number, size: number) => Promise<DataView>;
   readBytes: (offset: number, size: number) => Promise<Uint8Array>;
+  readInto?: FileRangeReadInto;
 };
+
+export type DirectFileRangeReader = FileRangeReader & { readInto: FileRangeReadInto };
 
 type CachedWindow = {
   offset: number;
@@ -42,7 +52,7 @@ export const createFileRangeReader = (
   baseOffset: number,
   limit: number,
   windowBytes = DEFAULT_FILE_READ_WINDOW_BYTES
-): FileRangeReader => {
+): DirectFileRangeReader => {
   const size = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 0;
   let cachedWindow: CachedWindow | null = null;
   const cacheWindowBytes = Number.isFinite(windowBytes) && windowBytes > 0
@@ -75,5 +85,27 @@ export const createFileRangeReader = (
       : EMPTY_BYTES;
   };
 
-  return { size, read, readBytes };
+  const readInto = async (
+    offset: number,
+    destination: Uint8Array<ArrayBuffer>
+  ): Promise<Uint8Array<ArrayBuffer>> => {
+    const availableSize = clampRangeSize(size, offset, destination.byteLength);
+    if (availableSize === 0) return destination.subarray(0, 0);
+    const streamReader = file
+      .slice(baseOffset + offset, baseOffset + offset + availableSize)
+      .stream()
+      .getReader({ mode: "byob" });
+    try {
+      // A BYOB read detaches the supplied view and returns a new view over the
+      // same backing memory. Requiring the full range avoids consumer-side chunks.
+      const range = destination.subarray(0, availableSize);
+      const next = await streamReader.read(range, { min: availableSize });
+      if (!next.value) throw new Error("BYOB read did not return its destination buffer");
+      return next.value;
+    } finally {
+      streamReader.releaseLock();
+    }
+  };
+
+  return { size, read, readBytes, readInto };
 };

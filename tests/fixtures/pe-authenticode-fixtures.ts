@@ -6,6 +6,7 @@ import type {
   PeAuthenticodeParsedCore
 } from "../../analyzers/pe/authenticode/verify.js";
 import { inlinePeSectionName } from "../../analyzers/pe/sections/name.js";
+import type { FileRangeReader } from "../../analyzers/file-range-reader.js";
 
 // Microsoft PE format spec:
 // - PE32 Optional Header CheckSum field is at offset 0x40 from the optional header start.
@@ -31,6 +32,36 @@ const SECURITY_ENTRY_OFFSET =
 const AFTER_SECURITY_ENTRY = SECURITY_ENTRY_OFFSET + PE_DATA_DIRECTORY_SIZE;
 
 type ByteRange = { start: number; end: number };
+
+export const createAuthenticodeReadTrackingFixture = (
+  size: number,
+  maximumReturnedBytes = size
+) => {
+  const requests: Array<{ offset: number; length: number }> = [];
+  const readBytes = async (offset: number, length: number): Promise<Uint8Array> => {
+    requests.push({ offset, length });
+    return new Uint8Array(Math.max(0, Math.min(length, maximumReturnedBytes, size - offset)));
+  };
+  const readInto = async (
+    offset: number,
+    destination: Uint8Array<ArrayBuffer>
+  ): Promise<Uint8Array<ArrayBuffer>> => {
+    requests.push({ offset, length: destination.byteLength });
+    const written = Math.max(0, Math.min(destination.byteLength, maximumReturnedBytes, size - offset));
+    destination.fill(0, 0, written);
+    return destination.subarray(0, written);
+  };
+  const reader: FileRangeReader = {
+    size,
+    read: async (offset, length) => {
+      const bytes = await readBytes(offset, length);
+      return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    },
+    readBytes,
+    readInto
+  };
+  return { reader, requests };
+};
 
 const createNumberedBytes = (byteLength: number): Uint8Array => {
   const bytes = new Uint8Array(byteLength);

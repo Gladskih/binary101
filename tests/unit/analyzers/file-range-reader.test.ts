@@ -1,7 +1,7 @@
 "use strict";
 
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { mock, test } from "node:test";
 
 import { createFileRangeReader } from "../../../analyzers/file-range-reader.js";
 import { createSliceTrackingFile } from "../../helpers/slice-tracking-file.js";
@@ -16,6 +16,7 @@ const EXACT_WINDOW_END_OFFSET_BYTES = TEST_READER_WINDOW_BYTES - SMALL_READ_BYTE
 const OFFSET_PAST_CACHED_WINDOW_BYTES = EXACT_WINDOW_END_OFFSET_BYTES + 1;
 const INVALID_NEGATIVE_OFFSET_BYTES = -1;
 const EOF_TAIL_BYTES = 12;
+const MULTI_CHUNK_STREAM_BYTES = 4 * 1024 * 1024 + 1;
 
 const toViewBytes = (view: DataView): number[] =>
   Array.from(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
@@ -134,4 +135,74 @@ void test("createFileRangeReader does not cache oversized reads", async () => {
   assert.equal(largeView.byteLength, tracked.size);
   assert.equal(smallView.byteLength, SMALL_READ_BYTES);
   assert.deepEqual(tracked.requests.slice(0, 2), [tracked.size, TEST_READER_WINDOW_BYTES]);
+});
+
+void test("createFileRangeReader reads a range into supplied BYOB storage", async () => {
+  const tracked = createTrackedReaderFixture("file-reader-read-into");
+  const destination = new Uint8Array(EOF_TAIL_BYTES);
+
+  const filled = await tracked.reader.readInto(NEARBY_OFFSET_BYTES, destination);
+
+  assert.equal(destination.buffer.byteLength, 0);
+  assert.equal(filled.byteLength, EOF_TAIL_BYTES);
+  assert.deepEqual([...filled], Array.from(
+    { length: EOF_TAIL_BYTES },
+    (_value, index) => NEARBY_OFFSET_BYTES + index
+  ));
+  assert.deepEqual(tracked.requests, [EOF_TAIL_BYTES]);
+});
+
+void test("createFileRangeReader reports a short streamed file range", async () => {
+  const availableBytes = Uint8Array.of(1, 2, 3);
+  const tracked = createSliceTrackingFile(
+    availableBytes,
+    DEFAULT_FILE_BYTES,
+    "file-reader-short-read-into"
+  );
+  const reader = createFileRangeReader(tracked.file, 0, tracked.file.size);
+  const destination = new Uint8Array(EOF_TAIL_BYTES);
+
+  const filled = await reader.readInto(0, destination);
+
+  assert.equal(filled.byteLength, availableBytes.byteLength);
+  assert.deepEqual([...filled], [...availableBytes]);
+});
+
+void test("createFileRangeReader fills a large range with one BYOB request", async () => {
+  const tracked = createTrackedReaderFixture(
+    "file-reader-multiple-byob-reads",
+    MULTI_CHUNK_STREAM_BYTES
+  );
+  const destination = new Uint8Array(tracked.size);
+  const read = mock.method(ReadableStreamBYOBReader.prototype, "read");
+  const releaseLock = mock.method(ReadableStreamBYOBReader.prototype, "releaseLock");
+
+  try {
+    const filled = await tracked.reader.readInto(0, destination);
+
+    assert.equal(filled.byteLength, tracked.size);
+    assert.equal(filled.at(-1), (tracked.size - 1) & 0xff);
+    assert.equal(read.mock.callCount(), 1);
+    assert.deepEqual(read.mock.calls[0]?.arguments[1], { min: tracked.size });
+    assert.equal(releaseLock.mock.callCount(), 1);
+  } finally {
+    read.mock.restore();
+    releaseLock.mock.restore();
+  }
+});
+
+void test("createFileRangeReader does not stream invalid or empty ranges", async () => {
+  const tracked = createTrackedReaderFixture("file-reader-invalid-read-into");
+
+  const negative = await tracked.reader.readInto(
+    INVALID_NEGATIVE_OFFSET_BYTES,
+    new Uint8Array(SMALL_READ_BYTES)
+  );
+  const eof = await tracked.reader.readInto(tracked.size, new Uint8Array(SMALL_READ_BYTES));
+  const empty = await tracked.reader.readInto(0, new Uint8Array());
+
+  assert.equal(negative.byteLength, 0);
+  assert.equal(eof.byteLength, 0);
+  assert.equal(empty.byteLength, 0);
+  assert.deepEqual(tracked.requests, []);
 });
