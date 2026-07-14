@@ -3,7 +3,6 @@
 import { decompress } from "lzma-web/decompress";
 import { SEVENZIP_LZMA_PROPERTY_BYTES } from "./method-ids.js";
 
-// Keep bytes unsigned when lzma-web returns a signed/number array.
 const BYTE_MASK = 0xffn;
 const BITS_PER_BYTE = 8;
 const LZMA_ALONE_SIZE_BYTES = BigUint64Array.BYTES_PER_ELEMENT;
@@ -41,14 +40,10 @@ const createLzmaAloneStream = (
   return stream;
 };
 
-const decodedBytes = (
-  decoded: string | Uint8Array | ArrayLike<number> | null | undefined | void
-): Uint8Array => {
-  if (decoded == null) throw new Error("LZMA decompression returned no data.");
+const decodedBytes = (decoded: string | Uint8Array | void): Uint8Array => {
   if (decoded instanceof Uint8Array) return decoded;
-  return typeof decoded === "string"
-    ? new TextEncoder().encode(decoded)
-    : Uint8Array.from(decoded, value => value & Number(BYTE_MASK));
+  if (typeof decoded === "string") return new TextEncoder().encode(decoded);
+  throw new Error("LZMA decompression returned no data.");
 };
 
 export const decompressLzmaWithProperties = async (
