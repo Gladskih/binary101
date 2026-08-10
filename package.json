@@ -71,7 +71,7 @@
     "vite": "^8.0.0"
   },
   "dependencies": {
-    "@noble/hashes": "2.2.0",
+    "@noble/hashes": "2.3.0",
     "lzma-web": "^4.0.0-rc.5",
     "pkijs": "^3.4.0"
   }
