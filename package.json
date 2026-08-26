@@ -52,9 +52,9 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.58.2",
-    "@stryker-mutator/core": "^9.6.0",
-    "@stryker-mutator/tap-runner": "^9.6.0",
-    "@stryker-mutator/typescript-checker": "^9.6.0",
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/tap-runner": "^10.0.0",
+    "@stryker-mutator/typescript-checker": "^10.0.0",
     "@stylistic/stylelint-plugin": "^5.2.1",
     "@types/node": "^24.12.0",
     "@typescript-eslint/eslint-plugin": "^8.58.0",

@@ -36,7 +36,8 @@
     ]
   },
   "mutate": [
-    "analyzers/pe/**/*.ts"
+    "analyzers/pe/**/*.ts",
+    "!analyzers/pe/**/*.d.ts"
   ],
   "testFiles": [
     "tests/unit/analyzers/pe/**/*.test.ts"
