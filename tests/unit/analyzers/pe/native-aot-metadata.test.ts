@@ -12,8 +12,11 @@ import {
 } from "../../../../analyzers/pe/native-aot/format.js";
 import {
   createNativeAotMetadataFixture,
-  parseNativeAotMetadataFixture
+  parseNativeAotMetadataFixture,
+  setNativeAotReflectionMetadata
 } from "../../../helpers/pe-native-aot-metadata-fixture.js";
+import { createNativeFormatMetadataFixture } from
+  "../../../helpers/native-format-metadata-fixture.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 import type { PeWindowsCore } from "../../../../analyzers/pe/types.js";
 
@@ -48,6 +51,28 @@ void test("analyzePeNativeAotMetadata confirms x86 pointer-range metadata", asyn
 
   assert.ok(parsed);
   assert.equal(parsed.layout, "nativeaot-readytorun-pointer-range-v1");
+});
+
+void test("analyzePeNativeAotMetadata decodes embedded reflection names", async () => {
+  const fixture = createNativeAotMetadataFixture();
+  setNativeAotReflectionMetadata(fixture, createNativeFormatMetadataFixture());
+
+  const parsed = await parseNativeAotMetadataFixture(fixture);
+
+  assert.deepEqual(parsed?.reflection?.scopes[0], {
+    name: "HelloCSharp",
+    moduleName: "HelloCSharp.dll",
+    version: { major: 1, minor: 2, build: 3, revision: 4 },
+    types: [{ namespace: "Demo", name: "Program", methods: ["Main"] }, {
+      namespace: "Demo",
+      name: "Program+Nested",
+      methods: ["Work"]
+    }, {
+      namespace: "Demo.Inner",
+      name: "Worker",
+      methods: ["Run"]
+    }]
+  });
 });
 
 void test("analyzePeNativeAotMetadata confirms size-pointer metadata", async () => {

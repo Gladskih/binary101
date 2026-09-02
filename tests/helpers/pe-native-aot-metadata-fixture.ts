@@ -246,6 +246,29 @@ export const parseNativeAotMetadataFixture = (fixture: NativeAotMetadataFixture)
     fixture.relocations
   );
 
+export const setNativeAotReflectionMetadata = (
+  fixture: NativeAotMetadataFixture,
+  metadata: Uint8Array
+): void => {
+  const offset = fixture.embeddedMetadataRva - SECTION_RVA;
+  if (offset + metadata.byteLength > fixture.bytes.byteLength) {
+    throw new Error("NativeFormat fixture does not fit in the PE section.");
+  }
+  fixture.bytes.set(metadata, offset);
+  fixture.metadataSize = metadata.byteLength;
+  const entryOffset = fixture.headerRva - SECTION_RVA + HEADER_SIZE + fixture.entrySize;
+  if (fixture.layout === "size-pointer") {
+    fixture.view.setUint32(entryOffset + 4, metadata.byteLength, true);
+    return;
+  }
+  writePointer(
+    fixture.view,
+    entryOffset + 8 + fixture.pointerSize,
+    fixture.core.opt.ImageBase + BigInt(fixture.embeddedMetadataRva + metadata.byteLength),
+    fixture.pointerSize
+  );
+};
+
 export const insertNativeAotPointerRangeSection = (
   fixture: NativeAotMetadataFixture,
   type: number

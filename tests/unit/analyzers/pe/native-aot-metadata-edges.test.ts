@@ -9,6 +9,7 @@ import {
   insertNativeAotPointerRangeSection,
   parseNativeAotMetadataFixture
 } from "../../../helpers/pe-native-aot-metadata-fixture.js";
+import { MockFile } from "../../../helpers/mock-file.js";
 
 const HEADER_OFFSET = 0x100;
 
@@ -126,4 +127,24 @@ void test("analyzePeNativeAotMetadata contains unexpected reader failures", asyn
   );
 
   assert.equal(parsed, null);
+});
+
+void test("deep metadata read failures preserve confirmed NativeAOT", async () => {
+  const fixture = createNativeAotMetadataFixture();
+  const backing = new MockFile(fixture.bytes);
+  const reader: FileRangeReader = {
+    size: backing.size,
+    read: (offset, size) => size === fixture.metadataSize
+      ? Promise.reject(new Error("deep read failure"))
+      : backing.read(offset, size),
+    readBytes: (offset, size) => backing.readBytes(offset, size)
+  };
+
+  const parsed = await analyzePeNativeAotMetadata(reader, fixture.core, fixture.relocations);
+
+  assert.equal(parsed?.status, "confirmed");
+  assert.deepEqual(parsed?.reflection, {
+    scopes: [],
+    warnings: ["NativeFormat metadata could not be read."]
+  });
 });

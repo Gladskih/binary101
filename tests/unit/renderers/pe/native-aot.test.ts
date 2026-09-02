@@ -57,8 +57,12 @@ void test("renderNativeAotCandidate renders confirmed metadata as a table", () =
 
   const html = out.join("");
   assert.ok(html.includes("NativeAOT metadata"));
+  assert.ok(html.includes("turns managed code into native machine code"));
   assert.ok(html.includes("nativeaot-readytorun-pointer-range-v1"));
+  assert.ok(html.includes("ReadyToRun header format version"));
   assert.ok(html.includes("Embedded reflection metadata"));
+  assert.ok(html.includes("one address rather than a byte range"));
   assert.ok(html.includes("0x00001400"));
-  assert.ok(html.includes('<td class="num">-</td>'));
+  assert.ok(html.includes('class="table peNativeAotSectionsTable"'));
+  assert.ok(html.includes('class="peNativeAotTable__compact peNumeric">-</td>'));
 });

@@ -108,3 +108,33 @@ void test("getPePagedTableModel resolves Load Config reference tables", () => {
   assert.equal(model?.rowCount, 1);
   assert.ok(model?.rowAt(0)?.cells[1]?.html.includes("140002000"));
 });
+
+void test("getPePagedTableModel resolves NativeAOT reflection types", () => {
+  const pe = createBasePe();
+  pe.nativeAotCandidate = {
+    status: "confirmed",
+    layout: "nativeaot-readytorun-pointer-range-v1",
+    modulePointerRva: 0x1000,
+    headerRva: 0x1100,
+    majorVersion: 1,
+    minorVersion: 0,
+    sections: [],
+    reflection: {
+      scopes: [{
+        name: "DemoAssembly",
+        moduleName: "DemoAssembly.dll",
+        version: { major: 1, minor: 0, build: 0, revision: 0 },
+        types: [{ namespace: "Demo", name: "Program", methods: ["Main"] }]
+      }]
+    }
+  };
+
+  const model = getPePagedTableModel(pe, "pe-native-aot-reflection-types");
+
+  assert.equal(model?.rowCount, 1);
+  assert.equal(model?.sortValueAt(0, 1), "Demo.Program");
+  assert.equal(model?.rowAt(0)?.cells[2]?.html, "Main");
+  assert.equal(model?.rowAt(1), null);
+  assert.equal(model?.sortValueAt(1, 1), "");
+  assert.equal(getPePagedTableModel(pe, "other-native-aot-table"), null);
+});

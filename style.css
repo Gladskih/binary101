@@ -641,6 +641,9 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .peDataDirectoryTable__rva,
 .peDataDirectoryTable__size{white-space:nowrap;width:1%}
 .peDataDirectoryTable__meaning{white-space:normal}
+.peNativeAotTable__compact{white-space:nowrap;width:1%}
+.peNativeAotTypesTable__identity{white-space:nowrap}
+.peNativeAotTypesTable__methods{min-width:12rem;overflow-wrap:anywhere;white-space:normal}
 .peDataDirectoryTable__row--absent{opacity:.62}
 .peDataDirectoryStatus{
   align-items:center;

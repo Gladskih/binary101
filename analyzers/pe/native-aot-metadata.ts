@@ -20,6 +20,10 @@ import {
   readNativeAotPointerRva,
   type NativeAotImage
 } from "./native-aot/image.js";
+import {
+  MAX_NATIVE_AOT_REFLECTION_METADATA_BYTES,
+  parseNativeAotReflectionMetadata
+} from "./native-aot/reflection-metadata.js";
 import type { PeWindowsCore } from "./types.js";
 
 interface ParsedHeader {
@@ -28,6 +32,7 @@ interface ParsedHeader {
   majorVersion: number;
   minorVersion: number;
   sections: PeNativeAotMetadataSection[];
+  reflection: NonNullable<PeNativeAotMetadata["reflection"]>;
 }
 
 const parsePointerRangeEntry = async (
@@ -118,6 +123,28 @@ const hasValidEmbeddedMetadata = async (
   return view?.getUint32(0, true) === NATIVE_AOT_METADATA_SIGNATURE;
 };
 
+const parseEmbeddedReflectionMetadata = async (
+  image: NativeAotImage,
+  sections: PeNativeAotMetadataSection[]
+): Promise<NonNullable<PeNativeAotMetadata["reflection"]>> => {
+  const metadata = sections.find(section => section.type === NATIVE_AOT_EMBEDDED_METADATA_SECTION);
+  if (metadata?.size == null || metadata.size > MAX_NATIVE_AOT_REFLECTION_METADATA_BYTES) {
+    return {
+      scopes: [],
+      warnings: ["NativeFormat metadata exceeds its 32 MiB handle range."]
+    };
+  }
+  try {
+    const view = await image.readData(metadata.rva, metadata.size, 4);
+    if (!view) return { scopes: [], warnings: ["NativeFormat metadata could not be read."] };
+    return parseNativeAotReflectionMetadata(
+      new Uint8Array(view.buffer, view.byteOffset, view.byteLength)
+    );
+  } catch {
+    return { scopes: [], warnings: ["NativeFormat metadata could not be read."] };
+  }
+};
+
 const parseNativeAotHeader = async (
   image: NativeAotImage,
   sites: Set<number>,
@@ -142,7 +169,8 @@ const parseNativeAotHeader = async (
     headerRva,
     majorVersion: header.getUint16(4, true),
     minorVersion: header.getUint16(6, true),
-    sections
+    sections,
+    reflection: await parseEmbeddedReflectionMetadata(image, sections)
   };
 };
 

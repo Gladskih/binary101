@@ -20,6 +20,7 @@ import {
   createGoRuntimeFunctionTableModel,
   GO_FUNCTION_TABLE_ID
 } from "./go-runtime.js";
+import { getNativeAotReflectionTypeTableModel } from "./native-aot-reflection.js";
 
 const eagerImportMatch = (tableId: string): number | null => {
   const match = tableId.match(/^eager-import-(\d+)$/);
@@ -95,6 +96,12 @@ export const getPePagedTableModel = (
           : null) ??
         getMsvcRttiPagedTableModel(pe, tableId) ??
         getImportFunctionTableModel(pe, tableId) ??
+        getNativeAotReflectionTypeTableModel(
+          pe.nativeAotCandidate?.status === "confirmed"
+            ? pe.nativeAotCandidate.reflection
+            : undefined,
+          tableId
+        ) ??
         getPeResourceTableModel(pe.resources, tableId)
       : null
   );

@@ -30,22 +30,39 @@ The layouts and constants were checked against the .NET runtime sources:
 - [`MetadataBlob.cs`](https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/Runtime/MetadataBlob.cs)
   assigns `EmbeddedMetadata` blob ID 13 within the section range beginning at 300;
 - [`NativeMetadataReader.cs`](https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs)
-  validates `0xDEADDFFD` as the NativeFormat metadata header signature.
+  validates `0xDEADDFFD` as the NativeFormat metadata header signature;
+- [`NativeFormatReaderCommonGen.cs`](https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderCommonGen.cs)
+  defines NativeFormat handle kinds;
+- [`NativeFormatReaderGen.cs`](https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs)
+  defines the generated scope, namespace, type, and method record layouts;
+- [`NativeFormatReader.cs`](https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/NativeFormat/NativeFormatReader.cs)
+  defines compressed integers, typed handles, and polymorphic handles.
 
-Rejected relocation candidates are expected and remain invisible. A malformed or truncated graph
-does not throw and is not reported as confirmed NativeAOT metadata. If only weaker evidence exists,
-the existing `Native AOT candidate` result remains explicitly labelled as conservative.
+Rejected relocation candidates are expected and remain invisible. A malformed or truncated
+relocation/header graph does not throw and is not reported as confirmed NativeAOT metadata. If only
+weaker evidence exists, the existing `Native AOT candidate` result remains explicitly labelled as
+conservative.
 
 ## Result and limitations
 
 The `NativeAOT metadata` section reports the header layout and version, the relocation-backed
 module pointer, and the ordered ReadyToRun section table, including the embedded reflection
-metadata RVA and size.
+metadata RVA and size. It also walks the embedded NativeFormat graph and reports:
 
-Binary101 deliberately does not yet decode the NativeFormat record graph into type and method
-names. NativeFormat is an internal format that has changed between .NET releases without a separate
-compatible format-version field. Reliable deep decoding therefore needs explicitly versioned
-decoders and independent fixtures for every supported runtime generation.
+- reflection scopes with assembly name, module name, and assembly version;
+- namespace-qualified type definitions, including nested type names;
+- method names retained for reflection.
+
+NativeFormat is an internal format without a separate compatible format-version field. The deep
+decoder therefore validates every compressed value, handle kind, offset, collection count, UTF-8
+string, and traversal limit that it consumes. It deliberately stops reading each record after the
+last field needed for the reported result, so an unsupported unused tail cannot hide useful names.
+A malformed or unsupported consumed field produces visible warnings but does not retract the
+independently confirmed NativeAOT result.
+
+Only metadata retained by NativeAOT for reflection can be shown. Trimmed types or methods are not
+recoverable from this blob. Signatures, fields, properties, events, custom attributes, and method
+code addresses are not decoded yet.
 
 The analyzer currently does not confirm ARM/ARM64, files with stripped or malformed base
 relocations, metadata that is not fully file-backed, or NativeAOT images whose header layout uses an

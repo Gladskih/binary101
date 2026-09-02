@@ -31,6 +31,25 @@ export interface PeNativeAotMetadata {
   majorVersion: number;
   minorVersion: number;
   sections: PeNativeAotMetadataSection[];
+  reflection?: PeNativeAotReflectionMetadata;
+}
+
+export interface PeNativeAotReflectionType {
+  namespace: string;
+  name: string;
+  methods: string[];
+}
+
+export interface PeNativeAotReflectionScope {
+  name: string;
+  moduleName: string;
+  version: { major: number; minor: number; build: number; revision: number };
+  types: PeNativeAotReflectionType[];
+}
+
+export interface PeNativeAotReflectionMetadata {
+  scopes: PeNativeAotReflectionScope[];
+  warnings?: string[];
 }
 
 const SECTION_NAMES: Readonly<Record<number, string>> = {

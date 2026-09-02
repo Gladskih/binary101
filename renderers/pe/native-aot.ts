@@ -8,27 +8,46 @@ import {
   type PeNativeAotMetadata
 } from "../../analyzers/pe/native-aot/format.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
+import { renderNativeAotReflection } from "./native-aot-reflection.js";
 
 const renderMetadataSections = (metadata: PeNativeAotMetadata): string => {
   const rows = metadata.sections.map(section =>
-    `<tr><td>${section.type}</td><td>${escapeHtml(nativeAotSectionName(section.type))}</td>` +
-    `<td class="num">${hex(section.rva, 8)}</td>` +
-    `<td class="num">${section.size == null ? "-" : humanSize(section.size)}</td></tr>`
+    `<tr><td class="peNativeAotTable__compact">${section.type}</td>` +
+    `<td>${escapeHtml(nativeAotSectionName(section.type))}</td>` +
+    `<td class="peNativeAotTable__compact peNumeric">${hex(section.rva, 8)}</td>` +
+    `<td class="peNativeAotTable__compact peNumeric">` +
+    `${section.size == null ? "-" : humanSize(section.size)}</td></tr>`
   ).join("");
-  return `<div class="tableScroll"><table><thead><tr><th>Type</th><th>Name</th>` +
-    `<th class="num">RVA</th><th class="num">Size</th></tr></thead>` +
+  return `<p class="smallNote">Each row is an internal NativeAOT runtime payload. ` +
+    `RVA is its address relative to the loaded image. A dash for Size means the header names ` +
+    `one address rather than a byte range; generic blob names are IDs without a stable ` +
+    `description in this analyzer.</p>` +
+    `<div class="tableWrap"><table class="table peNativeAotSectionsTable">` +
+    `<thead><tr><th>Type</th><th>Name</th>` +
+    `<th class="peNumeric">RVA</th><th class="peNumeric">Size</th></tr></thead>` +
     `<tbody>${rows}</tbody></table></div>`;
 };
 
 const renderConfirmedMetadata = (metadata: PeNativeAotMetadata, out: string[]): void => {
   out.push(renderPeSectionStart("NativeAOT metadata", `${metadata.sections.length} sections`));
-  out.push(`<p class="smallNote">Confirmed from a relocation-backed NativeAOT ReadyToRun ` +
-    `header and the NativeFormat reflection-metadata signature.</p><dl>`);
-  out.push(renderDefinitionRow("Layout", escapeHtml(metadata.layout)));
+  out.push(`<p class="smallNote">NativeAOT turns managed code into native machine code before ` +
+    `deployment. This is the runtime directory and the reflection information retained in the ` +
+    `native image; it is not the usual CLR metadata table from an IL assembly.</p><dl>`);
+  out.push(renderDefinitionRow(
+    "Layout",
+    escapeHtml(metadata.layout),
+    "How each ReadyToRun directory entry stores its payload address and extent."
+  ));
   out.push(renderDefinitionRow("Header", hex(metadata.headerRva, 8),
-    `Referenced by relocated pointer at ${hex(metadata.modulePointerRva, 8)}.`));
-  out.push(renderDefinitionRow("Version", `${metadata.majorVersion}.${metadata.minorVersion}`));
+    `Image-relative address of the ReadyToRun header. A relocated module pointer at ` +
+    `${hex(metadata.modulePointerRva, 8)} refers to it.`));
+  out.push(renderDefinitionRow(
+    "Version",
+    `${metadata.majorVersion}.${metadata.minorVersion}`,
+    "ReadyToRun header format version, not the application or installed .NET version."
+  ));
   out.push(`</dl><h4>ReadyToRun sections</h4>${renderMetadataSections(metadata)}`);
+  if (metadata.reflection) out.push(renderNativeAotReflection(metadata.reflection));
   out.push(renderPeSectionEnd());
 };
 
