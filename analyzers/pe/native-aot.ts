@@ -2,12 +2,15 @@
 
 import type { PeSection } from "./types.js";
 import { peSectionNameValue } from "./sections/name.js";
+import type { PeNativeAotMetadata } from "./native-aot/format.js";
 
 export interface PeNativeAotCandidate {
   status: "candidate";
   evidence: string[];
   note: string;
 }
+
+export type PeNativeAotAnalysis = PeNativeAotCandidate | PeNativeAotMetadata;
 
 export const detectNativeAotCandidate = (
   clrPresent: boolean,

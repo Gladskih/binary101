@@ -1,7 +1,7 @@
 "use strict";
 
 import type { FileRangeReader } from "../../file-range-reader.js";
-import type { PeNativeAotCandidate } from "../native-aot.js";
+import type { PeNativeAotAnalysis } from "../native-aot.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 import { collectRuntimeFunctionSpans, readRuntimeFunctionSpan } from "./runtime-spans.js";
 import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./types.js";
@@ -178,9 +178,9 @@ export const parseNativeAotX86ExceptionDirectory = async (
   reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
-  nativeAotCandidate: PeNativeAotCandidate | null | undefined
+  nativeAotCandidate: PeNativeAotAnalysis | null | undefined
 ): Promise<PeExceptionDirectory | null> => {
-  if (nativeAotCandidate?.status !== "candidate") return null;
+  if (!nativeAotCandidate) return null;
   const directory = dataDirs.find(candidate => candidate.name === "EXCEPTION");
   if (!directory || (directory.rva === 0 && directory.size === 0)) return null;
   if (directory.rva === 0) {

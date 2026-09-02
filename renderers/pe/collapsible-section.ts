@@ -43,6 +43,8 @@ const PE_SECTION_DESCRIPTIONS: Record<string, string> = {
     "Deprecated COFF symbol and string-table data stored after mapped PE sections.",
   "Native AOT candidate":
     "Conservative evidence for .NET Native AOT style images based on PE and CLR metadata.",
+  "NativeAOT metadata":
+    "Relocation-confirmed NativeAOT ReadyToRun sections and embedded reflection metadata.",
   "Bun standalone executable":
     "Validated Bun standalone module graph and embedded executable payload metadata.",
   "NSIS installer":

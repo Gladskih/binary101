@@ -8,7 +8,7 @@ import { parseReadyToRunX86ExceptionDirectory } from "./ready-to-run-x86.js";
 import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./types.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 import type { PeClrReadyToRun } from "../clr/ready-to-run-types.js";
-import type { PeNativeAotCandidate } from "../native-aot.js";
+import type { PeNativeAotAnalysis } from "../native-aot.js";
 import {
   IMAGE_FILE_MACHINE_AMD64,
   IMAGE_FILE_MACHINE_ARM64,
@@ -33,7 +33,7 @@ export async function parseExceptionDirectory(
   rvaToOff: RvaToOffset,
   machine = IMAGE_FILE_MACHINE_AMD64,
   readyToRun?: PeClrReadyToRun | null,
-  nativeAotCandidate?: PeNativeAotCandidate | null
+  nativeAotCandidate?: PeNativeAotAnalysis | null
 ): Promise<PeExceptionDirectory | null> {
   const canonicalMachine = getCanonicalPeMachine(machine);
   if (canonicalMachine === IMAGE_FILE_MACHINE_I386) {

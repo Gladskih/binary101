@@ -58,6 +58,8 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
   [`docs/pe-import-metadata.md`](docs/pe-import-metadata.md).
 - Microsoft C++ RTTI support and its strict relocation-backed detection contract are documented
   in [`docs/msvc-rtti.md`](docs/msvc-rtti.md).
+- NativeAOT reflection-metadata detection and its strict relocation-backed validation contract are
+  documented in [`docs/native-aot-metadata.md`](docs/native-aot-metadata.md).
 
 ## Project Structure (high level)
 - `index.html` & `style.css` &mdash; Vite HTML entry and page styling.

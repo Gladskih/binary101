@@ -19,6 +19,7 @@ import { parseLinuxBootProtocol } from "./linux-boot.js";
 import { collectLoadConfigChecks } from "./load-config/checks.js";
 import { getCanonicalPeMachine } from "./machine.js";
 import { detectNativeAotCandidate } from "./native-aot.js";
+import { analyzePeNativeAotMetadata } from "./native-aot-metadata.js";
 import type { PeWindowsParseResult } from "./core/parse-result.js";
 import { analyzeManifestConsistency } from "./resources/manifest-consistency.js";
 import type { ManifestXmlDocumentParser } from "./resources/preview/manifest-xml.js";
@@ -58,7 +59,8 @@ export type PeDirectoryArtifacts = {
   reloc: Awaited<ReturnType<typeof parseBaseRelocations>>;
   msvcRtti: Awaited<ReturnType<typeof analyzePeMsvcRtti>>;
   clr: Awaited<ReturnType<typeof parseClrDirectory>>;
-  nativeAotCandidate: ReturnType<typeof detectNativeAotCandidate>;
+  nativeAotCandidate: Awaited<ReturnType<typeof analyzePeNativeAotMetadata>> |
+    ReturnType<typeof detectNativeAotCandidate>;
   exception: Awaited<ReturnType<typeof parseExceptionDirectory>>;
   boundImports: Awaited<ReturnType<typeof parseBoundImports>>;
   delayImports: Awaited<ReturnType<typeof parseDelayImports32>>;
@@ -172,7 +174,11 @@ const parsePeDirectoryArtifacts = async (
   const reloc = await parseBaseRelocations(reader, core.dataDirs, core.rvaToOff);
   const msvcRtti = await analyzePeMsvcRtti(reader, core, reloc);
   const clr = await parseClrDirectory(reader, core.dataDirs, core.rvaToOff);
-  const nativeAotCandidate = detectNativeAotCandidate(clr != null, exportsInfo, core.sections);
+  const nativeAotMetadata = clr == null
+    ? await analyzePeNativeAotMetadata(reader, core, reloc)
+    : null;
+  const nativeAotCandidate = nativeAotMetadata ??
+    detectNativeAotCandidate(clr != null, exportsInfo, core.sections);
   const exception = await parseExceptionDirectory(
     reader,
     core.dataDirs,

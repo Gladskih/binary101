@@ -10,6 +10,7 @@ import { renderPeSectionShell } from "./collapsible-section.js";
 import { PE_DELAY_IMPORTS_PANEL_ID, PE_IMPORTS_PANEL_ID } from "./import-sections.js";
 import { getLinuxBootSummary } from "./linux-boot.js";
 import { getMsvcRttiSummaryCounts } from "./msvc-rtti.js";
+import { getNativeAotSectionDescriptor } from "./native-aot-section-descriptor.js";
 import { PE_OVERLAY_PANEL_ID, getUnexplainedOverlaySize } from "./overlay.js";
 import { PE_PACKER_SECTIONS, pePackerSectionDescriptors } from "./packer-sections.js";
 import { getPePayloadLazySectionDescriptors } from "./payload-section-descriptors.js";
@@ -241,11 +242,8 @@ const addWindowsDirectoryDescriptors = (
       : `runtime v${pe.clr?.MajorRuntimeVersion ?? 0}.${pe.clr?.MinorRuntimeVersion ?? 0}`,
     title: "CLR (.NET) header"
   });
-  pushIf(descriptors, pe.nativeAotCandidate, {
-    key: PE_LAZY_SECTION_KEYS.nativeAot,
-    summary: "conservative evidence",
-    title: "Native AOT candidate"
-  });
+  pushIf(descriptors, pe.nativeAotCandidate,
+    getNativeAotSectionDescriptor(pe.nativeAotCandidate));
   pushIf(descriptors, pe.security, {
     key: PE_LAZY_SECTION_KEYS.security,
     summary: `Authenticode: ${plural(pe.security?.count ?? 0, "record", "records")}`,

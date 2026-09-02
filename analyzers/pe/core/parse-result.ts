@@ -12,7 +12,7 @@ import type { PeLinuxBootProtocol } from "../linux-boot.js";
 import type { PeArchitectureDirectory } from "../directories/architecture-directory.js";
 import type { PeGlobalPtrDirectory } from "../directories/globalptr-directory.js";
 import type { PeLoadConfig } from "../load-config/index.js";
-import type { PeNativeAotCandidate } from "../native-aot.js";
+import type { PeNativeAotAnalysis } from "../native-aot.js";
 import type { PeOverlayAnalysis } from "../overlay.js";
 import type { PePayloadAnalysis } from "../payloads.js";
 import type { PePackerAnalysis } from "../packers/index.js";
@@ -89,7 +89,7 @@ export interface PeWindowsParseResult extends PeParseResultBase {
   payloads?: PePayloadAnalysis | null;
   disassembly?: PeInstructionSetReport;
   entrypointDisassembly?: PeEntrypointDisassemblyReport;
-  nativeAotCandidate?: PeNativeAotCandidate | null;
+  nativeAotCandidate?: PeNativeAotAnalysis | null;
   linuxBoot?: PeLinuxBootProtocol | null;
   goRuntime?: GoRuntimeMetadata;
 }
