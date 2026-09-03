@@ -11,7 +11,7 @@ import {
   NATIVE_AOT_EMBEDDED_METADATA_SECTION,
   NATIVE_AOT_METADATA_SIGNATURE,
   NATIVE_AOT_READY_TO_RUN_SIGNATURE
-} from "../../analyzers/pe/native-aot/format.js";
+} from "../../analyzers/native-aot/format.js";
 import type { PeWindowsCore } from "../../analyzers/pe/types.js";
 import { inlinePeSectionName } from "../../analyzers/pe/sections/name.js";
 import { MockFile } from "./mock-file.js";

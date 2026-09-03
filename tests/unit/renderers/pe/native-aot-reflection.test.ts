@@ -4,11 +4,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderNativeAotReflection } from
   "../../../../renderers/pe/native-aot-reflection.js";
-import type { PeNativeAotReflectionMetadata } from
-  "../../../../analyzers/pe/native-aot/format.js";
+import type { NativeAotReflectionMetadata } from
+  "../../../../analyzers/native-aot/format.js";
 
 void test("renderNativeAotReflection renders scope, type, and method names", () => {
-  const metadata: PeNativeAotReflectionMetadata = {
+  const metadata: NativeAotReflectionMetadata = {
     scopes: [{
       name: "Demo<Assembly>",
       moduleName: "Demo.dll",

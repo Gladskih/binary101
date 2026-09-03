@@ -3,13 +3,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseNativeAotReflectionMetadata } from
-  "../../../../../analyzers/pe/native-aot/reflection-metadata.js";
+  "../../../../analyzers/native-aot/reflection-metadata.js";
 import {
   createNativeFormatMetadataFixture,
   createNativeFormatMetadataWithDuplicateReferencesFixture,
   createNativeFormatMetadataWithNamespaceCycleFixture
 } from
-  "../../../../helpers/native-format-metadata-fixture.js";
+  "../../../helpers/native-format-metadata-fixture.js";
 
 const corruptString = (value: string): Uint8Array => {
   const metadata = createNativeFormatMetadataFixture();

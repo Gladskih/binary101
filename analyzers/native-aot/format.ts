@@ -11,44 +11,44 @@ export const NATIVE_AOT_EMBEDDED_METADATA_SECTION = 313;
 // https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs
 export const NATIVE_AOT_METADATA_SIGNATURE = 0xdead_dffd;
 export const NATIVE_AOT_HEADER_SIZE = 16;
-export const MAX_NATIVE_AOT_SECTIONS = 256;
 
-export type PeNativeAotMetadataLayout =
+export type NativeAotMetadataLayout =
   | "nativeaot-readytorun-pointer-range-v1"
   | "nativeaot-readytorun-size-pointer-v1";
 
-export interface PeNativeAotMetadataSection {
+// Addresses are image-relative values normalized by the container adapter.
+export interface NativeAotMetadataSection {
   type: number;
   rva: number;
   size: number | null;
 }
 
-export interface PeNativeAotMetadata {
+export interface NativeAotMetadata {
   status: "confirmed";
-  layout: PeNativeAotMetadataLayout;
+  layout: NativeAotMetadataLayout;
   modulePointerRva: number;
   headerRva: number;
   majorVersion: number;
   minorVersion: number;
-  sections: PeNativeAotMetadataSection[];
-  reflection?: PeNativeAotReflectionMetadata;
+  sections: NativeAotMetadataSection[];
+  reflection?: NativeAotReflectionMetadata;
 }
 
-export interface PeNativeAotReflectionType {
+export interface NativeAotReflectionType {
   namespace: string;
   name: string;
   methods: string[];
 }
 
-export interface PeNativeAotReflectionScope {
+export interface NativeAotReflectionScope {
   name: string;
   moduleName: string;
   version: { major: number; minor: number; build: number; revision: number };
-  types: PeNativeAotReflectionType[];
+  types: NativeAotReflectionType[];
 }
 
-export interface PeNativeAotReflectionMetadata {
-  scopes: PeNativeAotReflectionScope[];
+export interface NativeAotReflectionMetadata {
+  scopes: NativeAotReflectionScope[];
   warnings?: string[];
 }
 

@@ -5,12 +5,12 @@ import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import type { PeNativeAotAnalysis } from "../../analyzers/pe/native-aot.js";
 import {
   nativeAotSectionName,
-  type PeNativeAotMetadata
-} from "../../analyzers/pe/native-aot/format.js";
+  type NativeAotMetadata
+} from "../../analyzers/native-aot/format.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import { renderNativeAotReflection } from "./native-aot-reflection.js";
 
-const renderMetadataSections = (metadata: PeNativeAotMetadata): string => {
+const renderMetadataSections = (metadata: NativeAotMetadata): string => {
   const rows = metadata.sections.map(section =>
     `<tr><td class="peNativeAotTable__compact">${section.type}</td>` +
     `<td>${escapeHtml(nativeAotSectionName(section.type))}</td>` +
@@ -28,7 +28,7 @@ const renderMetadataSections = (metadata: PeNativeAotMetadata): string => {
     `<tbody>${rows}</tbody></table></div>`;
 };
 
-const renderConfirmedMetadata = (metadata: PeNativeAotMetadata, out: string[]): void => {
+const renderConfirmedMetadata = (metadata: NativeAotMetadata, out: string[]): void => {
   out.push(renderPeSectionStart("NativeAOT metadata", `${metadata.sections.length} sections`));
   out.push(`<p class="smallNote">NativeAOT turns managed code into native machine code before ` +
     `deployment. This is the runtime directory and the reflection information retained in the ` +

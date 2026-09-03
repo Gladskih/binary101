@@ -1,6 +1,6 @@
 "use strict";
 
-import type { PeNativeAotReflectionScope } from "./format.js";
+import type { NativeAotReflectionScope } from "./format.js";
 import {
   NativeFormatError,
   type NativeFormatReader,
@@ -62,7 +62,7 @@ export interface NativeFormatScopeRecord {
   name: NativeFormatHandle;
   moduleName: NativeFormatHandle;
   rootNamespace: NativeFormatHandle;
-  version: PeNativeAotReflectionScope["version"];
+  version: NativeAotReflectionScope["version"];
 }
 
 export interface NativeFormatNamespaceRecord {

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderNativeAotCandidate } from "../../../../renderers/pe/native-aot.js";
 import type { PeNativeAotCandidate } from "../../../../analyzers/pe/native-aot.js";
-import type { PeNativeAotMetadata } from "../../../../analyzers/pe/native-aot/format.js";
+import type { NativeAotMetadata } from "../../../../analyzers/native-aot/format.js";
 
 const generatedText = (index: number): string => `value-${index.toString(36)}`;
 
@@ -34,7 +34,7 @@ void test("renderNativeAotCandidate renders escaped conservative evidence", () =
 });
 
 void test("renderNativeAotCandidate renders confirmed metadata as a table", () => {
-  const metadata: PeNativeAotMetadata = {
+  const metadata: NativeAotMetadata = {
     status: "confirmed",
     layout: "nativeaot-readytorun-pointer-range-v1",
     modulePointerRva: 0x1080,

@@ -3,6 +3,7 @@
 import { COFF_SECTION_CHARACTERISTICS } from "../../coff/layout.js";
 import { IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_I386 } from "../../coff/machine.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
+import type { NativeAotVirtualImage } from "../../native-aot/virtual-image-types.js";
 import {
   IMAGE_REL_BASED_DIR64,
   type PeBaseRelocationBlock,
@@ -19,17 +20,16 @@ const IMAGE_REL_BASED_HIGHLOW = 3;
 const BASE_RELOCATION_PAGE_SIZE = 0x1000;
 const PE_RVA_LIMIT = 0x1_0000_0000;
 
-export interface NativeAotImage {
-  pointerSize: 4 | 8;
+export interface PeNativeAotImage extends NativeAotVirtualImage {
   relocationType: number;
-  isDataRange: (rva: number, size: number, alignment: number) => boolean;
-  isMappedRange: (rva: number, size: number) => boolean;
-  readData: (rva: number, size: number, alignment: number) => Promise<DataView | null>;
-  readPointerValue: (rva: number) => Promise<bigint | null>;
   preferredVaToRva: (value: bigint) => number | null;
 }
 
-export const isNativeAotRvaRange = (rva: number, size: number, sizeOfImage: number): boolean => {
+export const isPeNativeAotRvaRange = (
+  rva: number,
+  size: number,
+  sizeOfImage: number
+): boolean => {
   if (!Number.isSafeInteger(rva) || rva < 0 || !Number.isSafeInteger(size) || size <= 0) {
     return false;
   }
@@ -67,18 +67,18 @@ const isMappedSectionRange = (sections: PeSection[], rva: number, size: number):
   return delta >= 0 && delta + size <= getMappedSectionSpan(section);
 };
 
-export const createNativeAotImage = (
+export const createPeNativeAotImage = (
   reader: FileRangeReader,
   core: PeWindowsCore,
   pointerSize: 4 | 8,
   relocationType: number
-): NativeAotImage => {
+): PeNativeAotImage => {
   const sizeOfImage = Number.isSafeInteger(core.opt.SizeOfImage) && core.opt.SizeOfImage > 0
     ? Math.min(core.opt.SizeOfImage, PE_RVA_LIMIT)
     : 0;
   const isDataRange = (rva: number, size: number, alignment: number): boolean =>
     Number.isSafeInteger(alignment) && alignment > 0 && rva % alignment === 0 &&
-    isNativeAotRvaRange(rva, size, sizeOfImage) &&
+    isPeNativeAotRvaRange(rva, size, sizeOfImage) &&
     findDataSection(core.sections, rva, size, reader.size) != null;
   const readData = async (
     rva: number,
@@ -101,14 +101,20 @@ export const createNativeAotImage = (
     const delta = value - core.opt.ImageBase;
     return delta < BigInt(sizeOfImage) && delta < BigInt(PE_RVA_LIMIT) ? Number(delta) : null;
   };
+  const readPointerTarget = async (rva: number): Promise<number | null> => {
+    const value = await readPointerValue(rva);
+    return value == null ? null : preferredVaToRva(value);
+  };
   return {
     pointerSize,
     relocationType,
     isDataRange,
     isMappedRange: (rva, size) =>
-      isNativeAotRvaRange(rva, size, sizeOfImage) && isMappedSectionRange(core.sections, rva, size),
+      isPeNativeAotRvaRange(rva, size, sizeOfImage) &&
+      isMappedSectionRange(core.sections, rva, size),
     readData,
     readPointerValue,
+    readPointerTarget,
     preferredVaToRva
   };
 };
@@ -123,9 +129,9 @@ const isConsistentRelocationBlock = (block: PeBaseRelocationBlock): boolean =>
   block.size % 4 === 0 &&
   block.count === block.entries.length;
 
-export const indexNativeAotPointerSites = (
+export const indexPeNativeAotPointerSites = (
   relocations: PeBaseRelocationResult | null,
-  image: NativeAotImage
+  image: PeNativeAotImage
 ): Set<number> | null => {
   if (!relocations || relocations.warnings?.length) return null;
   if (relocations.blocks.some(block => !isConsistentRelocationBlock(block))) return null;
@@ -147,15 +153,7 @@ export const indexNativeAotPointerSites = (
   return sites.size ? sites : null;
 };
 
-export const readNativeAotPointerRva = async (
-  image: NativeAotImage,
-  rva: number
-): Promise<number | null> => {
-  const value = await image.readPointerValue(rva);
-  return value == null ? null : image.preferredVaToRva(value);
-};
-
-export const getNativeAotArchitecture = (
+export const getPeNativeAotArchitecture = (
   core: PeWindowsCore
 ): { pointerSize: 4 | 8; relocationType: number } | null => {
   if (core.coff.Machine === IMAGE_FILE_MACHINE_AMD64 &&

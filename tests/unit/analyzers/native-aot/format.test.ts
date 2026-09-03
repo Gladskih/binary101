@@ -5,7 +5,7 @@ import { test } from "node:test";
 import {
   isSupportedNativeAotSectionType,
   nativeAotSectionName
-} from "../../../../../analyzers/pe/native-aot/format.js";
+} from "../../../../analyzers/native-aot/format.js";
 
 void test("NativeAOT section IDs stay within documented ranges", () => {
   assert.equal(isSupportedNativeAotSectionType(123), false);

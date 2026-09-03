@@ -5,7 +5,7 @@ import { test } from "node:test";
 import {
   NativeFormatError,
   NativeFormatReader
-} from "../../../../../analyzers/pe/native-aot/native-format-reader.js";
+} from "../../../../analyzers/native-aot/native-format-reader.js";
 
 void test("NativeFormatReader decodes all unsigned integer widths", () => {
   // NativePrimitiveDecoder.DecodeUnsigned in dotnet/runtime defines these five encodings.

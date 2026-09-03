@@ -2,9 +2,9 @@
 
 import {
   NATIVE_AOT_METADATA_SIGNATURE,
-  type PeNativeAotReflectionMetadata,
-  type PeNativeAotReflectionScope,
-  type PeNativeAotReflectionType
+  type NativeAotReflectionMetadata,
+  type NativeAotReflectionScope,
+  type NativeAotReflectionType
 } from "./format.js";
 import {
   NativeFormatReader,
@@ -72,7 +72,7 @@ const walkType = (
   handle: NativeFormatHandle,
   namespaceName: string,
   enclosingName: string,
-  output: PeNativeAotReflectionType[]
+  output: NativeAotReflectionType[]
 ): void => {
   if (state.visitedTypes.has(handle.offset)) return;
   if (state.visitedTypes.size >= state.limits.types) {
@@ -96,7 +96,7 @@ const walkNamespace = (
   handle: NativeFormatHandle,
   parentName: string,
   depth: number,
-  output: PeNativeAotReflectionType[]
+  output: NativeAotReflectionType[]
 ): void => {
   if (state.visitedNamespaces.has(handle.offset)) return;
   if (depth > state.limits.namespaceDepth ||
@@ -125,10 +125,10 @@ const errorMessage = (error: unknown): string =>
 const parseScope = (
   state: ParseState,
   handle: NativeFormatHandle
-): PeNativeAotReflectionScope | null => {
+): NativeAotReflectionScope | null => {
   try {
     const record = parseNativeFormatScopeRecord(state.reader, handle);
-    const types: PeNativeAotReflectionType[] = [];
+    const types: NativeAotReflectionType[] = [];
     if (record.rootNamespace.offset) {
       walkNamespace(state, record.rootNamespace, "", 0, types);
     }
@@ -147,7 +147,7 @@ const parseScope = (
 export const parseNativeAotReflectionMetadata = (
   bytes: Uint8Array,
   limits: NativeAotReflectionTraversalLimits = DEFAULT_TRAVERSAL_LIMITS
-): PeNativeAotReflectionMetadata => {
+): NativeAotReflectionMetadata => {
   const warnings: string[] = [];
   if (bytes.byteLength > MAX_NATIVE_AOT_REFLECTION_METADATA_BYTES) {
     return { scopes: [], warnings: ["NativeFormat metadata exceeds its 32 MiB handle range."] };
@@ -167,7 +167,7 @@ export const parseNativeAotReflectionMetadata = (
       limits
     };
     const scopes = decoded.value.map(handle => parseScope(state, handle))
-      .filter((scope): scope is PeNativeAotReflectionScope => scope != null);
+      .filter((scope): scope is NativeAotReflectionScope => scope != null);
     return warnings.length ? { scopes, warnings } : { scopes };
   } catch (error) {
     return { scopes: [], warnings: [`Could not decode NativeFormat root: ${errorMessage(error)}`] };

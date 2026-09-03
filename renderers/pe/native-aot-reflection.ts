@@ -2,10 +2,10 @@
 
 import { escapeHtml } from "../../html-utils.js";
 import type {
-  PeNativeAotReflectionMetadata,
-  PeNativeAotReflectionScope,
-  PeNativeAotReflectionType
-} from "../../analyzers/pe/native-aot/format.js";
+  NativeAotReflectionMetadata,
+  NativeAotReflectionScope,
+  NativeAotReflectionType
+} from "../../analyzers/native-aot/format.js";
 import {
   renderAutoPagedSortableTable,
   type PagedSortableTableCell,
@@ -14,15 +14,15 @@ import {
 
 const NATIVE_AOT_REFLECTION_TYPES_TABLE_ID = "pe-native-aot-reflection-types";
 
-const scopeVersion = (scope: PeNativeAotReflectionScope): string => {
+const scopeVersion = (scope: NativeAotReflectionScope): string => {
   const version = scope.version;
   return `${version.major}.${version.minor}.${version.build}.${version.revision}`;
 };
 
-const methodCount = (scope: PeNativeAotReflectionScope): number =>
+const methodCount = (scope: NativeAotReflectionScope): number =>
   scope.types.reduce((count, type) => count + type.methods.length, 0);
 
-const renderScopes = (scopes: PeNativeAotReflectionScope[]): string => {
+const renderScopes = (scopes: NativeAotReflectionScope[]): string => {
   if (!scopes.length) return "";
   const rows = scopes.map(scope => `<tr><td>${escapeHtml(scope.name)}</td>` +
     `<td>${escapeHtml(scope.moduleName)}</td>` +
@@ -41,12 +41,12 @@ const renderScopes = (scopes: PeNativeAotReflectionScope[]): string => {
     `<tbody>${rows}</tbody></table></div>`;
 };
 
-const qualifiedTypeName = (type: PeNativeAotReflectionType): string =>
+const qualifiedTypeName = (type: NativeAotReflectionType): string =>
   type.namespace ? `${type.namespace}.${type.name}` : type.name;
 
 const typeTableCells = (
-  scope: PeNativeAotReflectionScope,
-  type: PeNativeAotReflectionType
+  scope: NativeAotReflectionScope,
+  type: NativeAotReflectionType
 ): PagedSortableTableCell[] => {
   const qualifiedName = qualifiedTypeName(type);
   const methodNames = type.methods.join(", ");
@@ -66,7 +66,7 @@ const typeTableCells = (
 };
 
 export const createNativeAotReflectionTypeTableModel = (
-  scopes: PeNativeAotReflectionScope[]
+  scopes: NativeAotReflectionScope[]
 ): PagedSortableTableModel => {
   const rows = scopes.flatMap(scope => scope.types.map(type => typeTableCells(scope, type)));
   return {
@@ -88,14 +88,14 @@ export const createNativeAotReflectionTypeTableModel = (
 };
 
 export const getNativeAotReflectionTypeTableModel = (
-  metadata: PeNativeAotReflectionMetadata | undefined,
+  metadata: NativeAotReflectionMetadata | undefined,
   tableId: string
 ): PagedSortableTableModel | null =>
   metadata && tableId === NATIVE_AOT_REFLECTION_TYPES_TABLE_ID
     ? createNativeAotReflectionTypeTableModel(metadata.scopes)
     : null;
 
-const renderTypes = (scopes: PeNativeAotReflectionScope[]): string => {
+const renderTypes = (scopes: NativeAotReflectionScope[]): string => {
   const model = createNativeAotReflectionTypeTableModel(scopes);
   if (!model.rowCount) return "";
   return `<h4>Reflected types and methods</h4>` +
@@ -112,6 +112,6 @@ const renderWarnings = (warnings: string[] | undefined): string => {
 };
 
 export const renderNativeAotReflection = (
-  metadata: PeNativeAotReflectionMetadata
+  metadata: NativeAotReflectionMetadata
 ): string => renderScopes(metadata.scopes) + renderTypes(metadata.scopes) +
   renderWarnings(metadata.warnings);

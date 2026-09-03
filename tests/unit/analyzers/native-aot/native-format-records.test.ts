@@ -3,16 +3,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { NativeFormatReader } from
-  "../../../../../analyzers/pe/native-aot/native-format-reader.js";
+  "../../../../analyzers/native-aot/native-format-reader.js";
 import {
   NATIVE_FORMAT_SCOPE_HANDLE,
   parseNativeFormatMethodName,
   parseNativeFormatNamespaceRecord,
   parseNativeFormatScopeRecord,
   parseNativeFormatTypeRecord
-} from "../../../../../analyzers/pe/native-aot/native-format-records.js";
+} from "../../../../analyzers/native-aot/native-format-records.js";
 import { createNativeFormatMetadataFixture } from
-  "../../../../helpers/native-format-metadata-fixture.js";
+  "../../../helpers/native-format-metadata-fixture.js";
 
 const fixtureRoot = (majorVersion = 1) => {
   const reader = new NativeFormatReader(createNativeFormatMetadataFixture(majorVersion));
