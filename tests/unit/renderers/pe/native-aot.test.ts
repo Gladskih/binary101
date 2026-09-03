@@ -58,6 +58,7 @@ void test("renderNativeAotCandidate renders confirmed metadata as a table", () =
   const html = out.join("");
   assert.ok(html.includes("NativeAOT metadata"));
   assert.ok(html.includes("turns managed code into native machine code"));
+  assert.ok(html.includes("names alone are not accepted as evidence"));
   assert.ok(html.includes("nativeaot-readytorun-pointer-range-v1"));
   assert.ok(html.includes("ReadyToRun header format version"));
   assert.ok(html.includes("Embedded reflection metadata"));

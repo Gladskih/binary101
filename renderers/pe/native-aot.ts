@@ -32,7 +32,9 @@ const renderConfirmedMetadata = (metadata: PeNativeAotMetadata, out: string[]): 
   out.push(renderPeSectionStart("NativeAOT metadata", `${metadata.sections.length} sections`));
   out.push(`<p class="smallNote">NativeAOT turns managed code into native machine code before ` +
     `deployment. This is the runtime directory and the reflection information retained in the ` +
-    `native image; it is not the usual CLR metadata table from an IL assembly.</p><dl>`);
+    `native image; it is not the usual CLR metadata table from an IL assembly. Confirmation ` +
+    `requires a relocation-backed ReadyToRun header and NativeFormat signature; names alone are ` +
+    `not accepted as evidence.</p><dl>`);
   out.push(renderDefinitionRow(
     "Layout",
     escapeHtml(metadata.layout),
