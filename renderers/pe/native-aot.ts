@@ -8,21 +8,21 @@ import {
   type NativeAotMetadata
 } from "../../analyzers/native-aot/format.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
-import { renderNativeAotReflection } from "./native-aot-reflection.js";
+import { renderNativeAotReflection } from "../native-aot/reflection.js";
 
 const renderMetadataSections = (metadata: NativeAotMetadata): string => {
   const rows = metadata.sections.map(section =>
-    `<tr><td class="peNativeAotTable__compact">${section.type}</td>` +
+    `<tr><td class="nativeAotTable__compact">${section.type}</td>` +
     `<td>${escapeHtml(nativeAotSectionName(section.type))}</td>` +
-    `<td class="peNativeAotTable__compact peNumeric">${hex(section.rva, 8)}</td>` +
-    `<td class="peNativeAotTable__compact peNumeric">` +
+    `<td class="nativeAotTable__compact peNumeric">${hex(section.rva, 8)}</td>` +
+    `<td class="nativeAotTable__compact peNumeric">` +
     `${section.size == null ? "-" : humanSize(section.size)}</td></tr>`
   ).join("");
   return `<p class="smallNote">Each row is an internal NativeAOT runtime payload. ` +
     `RVA is its address relative to the loaded image. A dash for Size means the header names ` +
     `one address rather than a byte range; generic blob names are IDs without a stable ` +
     `description in this analyzer.</p>` +
-    `<div class="tableWrap"><table class="table peNativeAotSectionsTable">` +
+    `<div class="tableWrap"><table class="table nativeAotSectionsTable">` +
     `<thead><tr><th>Type</th><th>Name</th>` +
     `<th class="peNumeric">RVA</th><th class="peNumeric">Size</th></tr></thead>` +
     `<tbody>${rows}</tbody></table></div>`;

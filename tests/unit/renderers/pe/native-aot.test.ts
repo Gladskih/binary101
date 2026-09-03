@@ -64,6 +64,6 @@ void test("renderNativeAotCandidate renders confirmed metadata as a table", () =
   assert.ok(html.includes("Embedded reflection metadata"));
   assert.ok(html.includes("one address rather than a byte range"));
   assert.ok(html.includes("0x00001400"));
-  assert.ok(html.includes('class="table peNativeAotSectionsTable"'));
-  assert.ok(html.includes('class="peNativeAotTable__compact peNumeric">-</td>'));
+  assert.ok(html.includes('class="table nativeAotSectionsTable"'));
+  assert.ok(html.includes('class="nativeAotTable__compact peNumeric">-</td>'));
 });

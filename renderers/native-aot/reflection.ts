@@ -12,7 +12,7 @@ import {
   type PagedSortableTableModel
 } from "../paged-sortable-table.js";
 
-const NATIVE_AOT_REFLECTION_TYPES_TABLE_ID = "pe-native-aot-reflection-types";
+const NATIVE_AOT_REFLECTION_TYPES_TABLE_ID = "native-aot-reflection-types";
 
 const scopeVersion = (scope: NativeAotReflectionScope): string => {
   const version = scope.version;
@@ -26,18 +26,18 @@ const renderScopes = (scopes: NativeAotReflectionScope[]): string => {
   if (!scopes.length) return "";
   const rows = scopes.map(scope => `<tr><td>${escapeHtml(scope.name)}</td>` +
     `<td>${escapeHtml(scope.moduleName)}</td>` +
-    `<td class="peNativeAotTable__compact">${scopeVersion(scope)}</td>` +
-    `<td class="peNativeAotTable__compact peNumeric">${scope.types.length}</td>` +
-    `<td class="peNativeAotTable__compact peNumeric">${methodCount(scope)}</td></tr>`).join("");
+    `<td class="nativeAotTable__compact">${scopeVersion(scope)}</td>` +
+    `<td class="nativeAotTable__compact peNumeric">${scope.types.length}</td>` +
+    `<td class="nativeAotTable__compact peNumeric">${methodCount(scope)}</td></tr>`).join("");
   return `<h4>Reflection scopes</h4>` +
     `<p class="smallNote">A scope identifies one managed assembly and module represented in ` +
     `the NativeFormat blob. Counts cover only definitions retained for runtime reflection, not ` +
     `everything compiled into the executable.</p><div class="tableWrap">` +
-    `<table class="table peNativeAotScopesTable"><thead><tr>` +
+    `<table class="table nativeAotScopesTable"><thead><tr>` +
     `<th>Assembly</th><th>Module</th>` +
-    `<th class="peNativeAotTable__compact">Assembly version</th>` +
-    `<th class="peNativeAotTable__compact peNumeric">Types</th>` +
-    `<th class="peNativeAotTable__compact peNumeric">Methods</th></tr></thead>` +
+    `<th class="nativeAotTable__compact">Assembly version</th>` +
+    `<th class="nativeAotTable__compact peNumeric">Types</th>` +
+    `<th class="nativeAotTable__compact peNumeric">Methods</th></tr></thead>` +
     `<tbody>${rows}</tbody></table></div>`;
 };
 
@@ -51,15 +51,15 @@ const typeTableCells = (
   const qualifiedName = qualifiedTypeName(type);
   const methodNames = type.methods.join(", ");
   return [{
-    className: "peNativeAotTypesTable__identity",
+    className: "nativeAotTypesTable__identity",
     html: escapeHtml(scope.name),
     sortValue: scope.name
   }, {
-    className: "peNativeAotTypesTable__identity",
+    className: "nativeAotTypesTable__identity",
     html: escapeHtml(qualifiedName),
     sortValue: qualifiedName
   }, {
-    className: "peNativeAotTypesTable__methods",
+    className: "nativeAotTypesTable__methods",
     html: methodNames ? escapeHtml(methodNames) : "-",
     sortValue: methodNames
   }];
@@ -73,11 +73,11 @@ export const createNativeAotReflectionTypeTableModel = (
     id: NATIVE_AOT_REFLECTION_TYPES_TABLE_ID,
     pageSize: 100, // UI page size, not a NativeFormat analysis limit.
     rowCount: rows.length,
-    tableClassName: "peNativeAotTypesTable",
+    tableClassName: "nativeAotTypesTable",
     columns: [
-      { className: "peNativeAotTypesTable__identity", label: "Assembly" },
-      { className: "peNativeAotTypesTable__identity", label: "Type" },
-      { className: "peNativeAotTypesTable__methods", label: "Methods" }
+      { className: "nativeAotTypesTable__identity", label: "Assembly" },
+      { className: "nativeAotTypesTable__identity", label: "Type" },
+      { className: "nativeAotTypesTable__methods", label: "Methods" }
     ],
     rowAt: index => {
       const cells = rows[index];

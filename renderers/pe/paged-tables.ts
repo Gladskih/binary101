@@ -20,7 +20,7 @@ import {
   createGoRuntimeFunctionTableModel,
   GO_FUNCTION_TABLE_ID
 } from "./go-runtime.js";
-import { getNativeAotReflectionTypeTableModel } from "./native-aot-reflection.js";
+import { getNativeAotReflectionTypeTableModel } from "../native-aot/reflection.js";
 
 const eagerImportMatch = (tableId: string): number | null => {
   const match = tableId.match(/^eager-import-(\d+)$/);

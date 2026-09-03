@@ -129,7 +129,7 @@ void test("getPePagedTableModel resolves NativeAOT reflection types", () => {
     }
   };
 
-  const model = getPePagedTableModel(pe, "pe-native-aot-reflection-types");
+  const model = getPePagedTableModel(pe, "native-aot-reflection-types");
 
   assert.equal(model?.rowCount, 1);
   assert.equal(model?.sortValueAt(0, 1), "Demo.Program");

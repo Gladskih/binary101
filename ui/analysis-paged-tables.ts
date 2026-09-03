@@ -3,8 +3,10 @@
 import type { ParseForUiResult } from "../analyzers/index.js";
 import type { CoffObjectParseResult } from "../analyzers/coff/types.js";
 import type { PeParseResult } from "../analyzers/pe/index.js";
+import type { ElfParseResult } from "../analyzers/elf/types.js";
 import { getCoffPagedTableModel } from "../renderers/coff/paged-tables.js";
 import { getPePagedTableModel } from "../renderers/pe/paged-tables.js";
+import { getElfPagedTableModel } from "../renderers/elf/paged-tables.js";
 import {
   enhancePagedSortableTables,
   type PagedSortableTableSnapshot
@@ -35,6 +37,18 @@ const enhanceCoffPagedTables = (
   );
 };
 
+const enhanceElfPagedTables = (
+  root: ParentNode,
+  elf: ElfParseResult,
+  snapshots: readonly PagedSortableTableSnapshot[] = []
+): void => {
+  enhancePagedSortableTables(
+    root,
+    tableId => getElfPagedTableModel(elf, tableId),
+    snapshots
+  );
+};
+
 export const enhanceAnalysisPagedTables = (
   root: ParentNode,
   result: ParseForUiResult,
@@ -44,5 +58,7 @@ export const enhanceAnalysisPagedTables = (
     enhancePeDisassemblyPagedTables(root, result.parsed, snapshots);
   } else if (result.analyzer === "coff") {
     enhanceCoffPagedTables(root, result.parsed, snapshots);
+  } else if (result.analyzer === "elf") {
+    enhanceElfPagedTables(root, result.parsed, snapshots);
   }
 };

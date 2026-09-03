@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderNativeAotReflection } from
-  "../../../../renderers/pe/native-aot-reflection.js";
+  "../../../../renderers/native-aot/reflection.js";
 import type { NativeAotReflectionMetadata } from
   "../../../../analyzers/native-aot/format.js";
 
@@ -32,11 +32,11 @@ void test("renderNativeAotReflection renders scope, type, and method names", () 
   assert.ok(html.includes("Run&lt;Wait>"));
   assert.ok(html.includes("Main, Run&lt;Wait>"));
   assert.ok(html.includes("do not include signatures or code addresses"));
-  assert.ok(html.includes('class="table peNativeAotScopesTable"'));
-  assert.ok(html.includes('class="peNativeAotTable__compact peNumeric">Methods</th>'));
-  assert.ok(html.includes('class="table peNativeAotTypesTable"'));
-  assert.match(html, /peNativeAotTypesTable__identity"[^>]*>Marker<\/td>/);
-  assert.match(html, /peNativeAotTypesTable__methods"[^>]*>-<\/td>/);
+  assert.ok(html.includes('class="table nativeAotScopesTable"'));
+  assert.ok(html.includes('class="nativeAotTable__compact peNumeric">Methods</th>'));
+  assert.ok(html.includes('class="table nativeAotTypesTable"'));
+  assert.match(html, /nativeAotTypesTable__identity"[^>]*>Marker<\/td>/);
+  assert.match(html, /nativeAotTypesTable__methods"[^>]*>-<\/td>/);
 });
 
 void test("renderNativeAotReflection renders warnings without empty tables", () => {
@@ -68,7 +68,7 @@ void test("renderNativeAotReflection pages a long type list", () => {
     }]
   });
 
-  assert.ok(html.includes('data-paged-sortable-table-id="pe-native-aot-reflection-types"'));
+  assert.ok(html.includes('data-paged-sortable-table-id="native-aot-reflection-types"'));
   assert.ok(html.includes("Showing 1-100 of 101"));
   assert.ok(html.includes("Demo.Type99"));
   assert.ok(!html.includes("Demo.Type100"));

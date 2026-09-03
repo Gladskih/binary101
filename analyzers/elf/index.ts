@@ -13,6 +13,7 @@ import { parseElfDynamicInfo } from "./dynamic-info.js";
 import { parseElfDynamicSymbols } from "./dynamic-symbols.js";
 import { parseElfInterpreter } from "./interpreter.js";
 import { parseElfNotes } from "./notes.js";
+import { analyzeElfNativeAot } from "./native-aot.js";
 import { parseElfTlsInfo } from "./tls.js";
 import {
   parseProgramHeadersWithGuards,
@@ -129,15 +130,17 @@ export async function parseElf(file: File): Promise<ElfParseResult | null> {
   const programHeaders = await parseProgramHeadersWithGuards(file, header, is64, little, issues);
   const sections = await parseSectionHeadersWithNames(file, header, is64, little, issues, expectedSectionHeaderSize);
   const tls = parseElfTlsInfo(programHeaders, sections);
-  const [interpreter, dynamic, dynSymbols, notes, comment, debugLink, dwarf] = await Promise.all([
-    parseElfInterpreter(file, programHeaders),
-    parseElfDynamicInfo({ file, programHeaders, sections, is64, littleEndian: little }),
-    parseElfDynamicSymbols({ file, programHeaders, sections, is64, littleEndian: little }),
-    parseElfNotes({ file, programHeaders, sections, littleEndian: little }),
-    parseElfComment(file, sections),
-    parseElfDebugLink(file, sections, little),
-    analyzeElfDwarf(file, sections, is64 ? "elf64" : "elf32", little, issues)
-  ]);
+  const [interpreter, dynamic, dynSymbols, notes, comment, debugLink, dwarf, nativeAot] =
+    await Promise.all([
+      parseElfInterpreter(file, programHeaders),
+      parseElfDynamicInfo({ file, programHeaders, sections, is64, littleEndian: little }),
+      parseElfDynamicSymbols({ file, programHeaders, sections, is64, littleEndian: little }),
+      parseElfNotes({ file, programHeaders, sections, littleEndian: little }),
+      parseElfComment(file, sections),
+      parseElfDebugLink(file, sections, little),
+      analyzeElfDwarf(file, sections, is64 ? "elf64" : "elf32", little, issues),
+      analyzeElfNativeAot(file, header, programHeaders, sections, is64, little, issues)
+    ]);
   const result = buildResult(header, programHeaders, sections);
   if (interpreter) result.interpreter = interpreter;
   if (dynamic) result.dynamic = dynamic;
@@ -147,5 +150,6 @@ export async function parseElf(file: File): Promise<ElfParseResult | null> {
   if (comment) result.comment = comment;
   if (debugLink) result.debugLink = debugLink;
   if (dwarf) result.dwarf = dwarf;
+  if (nativeAot) result.nativeAot = nativeAot;
   return result;
 }

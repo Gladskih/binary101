@@ -19,6 +19,7 @@ import { renderInstructionSets } from "./disassembly.js";
 import { renderElfDebug } from "./debug.js";
 import { renderElfLinking } from "./linking.js";
 import { renderElfNotes } from "./notes.js";
+import { renderElfNativeAot } from "./native-aot.js";
 import { renderElfSymbols } from "./symbols.js";
 import { renderElfTls } from "./tls.js";
 import { formatElfHex, formatElfList, formatElfMaybeHumanSize } from "./value-format.js";
@@ -265,6 +266,7 @@ export function renderElf(elf: ElfParseResult | null): string {
   renderElfSymbols(elf, out);
   renderElfTls(elf, out);
   renderElfNotes(elf, out);
+  renderElfNativeAot(elf, out);
   renderElfDebug(elf, out);
   renderInstructionSets(elf, out);
   renderProgramHeaders(elf, out);
