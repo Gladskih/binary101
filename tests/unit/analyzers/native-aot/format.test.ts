@@ -49,3 +49,45 @@ void test("nativeAotSectionName labels known sections and reserved IDs", () => {
   assert.equal(nativeAotSectionName(314), "NativeAOT blob 14");
   assert.equal(nativeAotSectionName(203), "NativeAOT section 203");
 });
+
+void test("nativeAotSectionName labels every published reflection-map blob", () => {
+  // ReflectionMapBlob IDs are offset by 300 in the ReadyToRun section table:
+  // https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/Runtime/MetadataBlob.cs
+  assert.deepEqual(
+    [
+      301, 302, 303, 304, 306, 307, 308, 309, 310, 311, 316, 317, 318, 319, 321,
+      322, 324, 325, 326, 327, 328, 329, 330, 331, 332, 333, 334, 335, 336
+    ].map(nativeAotSectionName),
+    [
+      "Type map",
+      "Array map",
+      "Pointer-type map",
+      "Function-pointer-type map",
+      "Invoke map",
+      "Virtual-invoke map",
+      "Common fixups table",
+      "Field-access map",
+      "Class-constructor context map",
+      "By-reference-type map",
+      "Struct marshalling-stub map",
+      "Delegate marshalling-stub map",
+      "Generic virtual-method table",
+      "Interface generic virtual-method table",
+      "Type-template map",
+      "Generic-methods template map",
+      "Resource index",
+      "Resource data",
+      "Stack-trace embedded metadata",
+      "Stack-trace method-RVA-to-token map",
+      "Stack-trace line numbers",
+      "Stack-trace documents",
+      "Native-layout info",
+      "Native references",
+      "Generics hash table",
+      "Native statics",
+      "Statics-info hash table",
+      "Generic-methods hash table",
+      "Exact-method-instantiations hash table"
+    ]
+  );
+});

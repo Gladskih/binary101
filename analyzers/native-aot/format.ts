@@ -4,7 +4,7 @@
 // https://github.com/dotnet/runtime/blob/main/src/coreclr/nativeaot/Runtime/inc/ModuleHeaders.h
 // https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/aot/ILCompiler.Compiler/Compiler/DependencyAnalysis/ReadyToRunHeaderNode.cs
 export const NATIVE_AOT_READY_TO_RUN_SIGNATURE = 0x0052_5452;
-// MetadataBlob.cs maps EmbeddedMetadata (13) into the reserved blob range beginning at 300.
+// MetadataBlob.cs defines ReflectionMapBlob IDs in the reserved range beginning at 300.
 // https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/Runtime/MetadataBlob.cs
 export const NATIVE_AOT_EMBEDDED_METADATA_SECTION = 313;
 // NativeMetadataReader.cs MetadataHeader.Signature identifies NativeFormat reflection metadata.
@@ -70,7 +70,38 @@ const SECTION_NAMES: Readonly<Record<number, string>> = {
   213: "Module initializers",
   214: "GVM dispatch-cell info",
   215: "GVM dispatch cells",
-  313: "Embedded reflection metadata"
+  // ReflectionMapBlob IDs below are offset by 300 in the ReadyToRun section table:
+  // https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/Runtime/MetadataBlob.cs
+  301: "Type map",
+  302: "Array map",
+  303: "Pointer-type map",
+  304: "Function-pointer-type map",
+  306: "Invoke map",
+  307: "Virtual-invoke map",
+  308: "Common fixups table",
+  309: "Field-access map",
+  310: "Class-constructor context map",
+  311: "By-reference-type map",
+  [NATIVE_AOT_EMBEDDED_METADATA_SECTION]: "Embedded reflection metadata",
+  316: "Struct marshalling-stub map",
+  317: "Delegate marshalling-stub map",
+  318: "Generic virtual-method table",
+  319: "Interface generic virtual-method table",
+  321: "Type-template map",
+  322: "Generic-methods template map",
+  324: "Resource index",
+  325: "Resource data",
+  326: "Stack-trace embedded metadata",
+  327: "Stack-trace method-RVA-to-token map",
+  328: "Stack-trace line numbers",
+  329: "Stack-trace documents",
+  330: "Native-layout info",
+  331: "Native references",
+  332: "Generics hash table",
+  333: "Native statics",
+  334: "Statics-info hash table",
+  335: "Generic-methods hash table",
+  336: "Exact-method-instantiations hash table"
 };
 
 export const isSupportedNativeAotSectionType = (type: number): boolean =>
