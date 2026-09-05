@@ -13,7 +13,7 @@ void test("getElfPagedTableModel exposes NativeAOT reflection rows", () => {
           name: "App",
           moduleName: "App.dll",
           version: { major: 1, minor: 0, build: 0, revision: 0 },
-          types: [{ namespace: "", name: "Program", methods: ["Main"] }]
+          types: [{ namespace: "", name: "Program", methods: ["Main"], fields: ["Count"] }]
         }]
       }
     }
@@ -23,5 +23,7 @@ void test("getElfPagedTableModel exposes NativeAOT reflection rows", () => {
 
   assert.equal(model?.rowCount, 1);
   assert.equal(model?.rowAt(0)?.cells[1]?.sortValue, "Program");
+  assert.equal(model?.rowAt(0)?.cells[3]?.html, "Count");
+  assert.equal(model?.sortValueAt(0, 3), "Count");
   assert.equal(getElfPagedTableModel(elf, "unknown"), null);
 });

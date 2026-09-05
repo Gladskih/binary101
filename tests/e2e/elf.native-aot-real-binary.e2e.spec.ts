@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createElfNativeAotFixture, createElfNativeAotInitializerFixture } from
   "../helpers/elf-native-aot-fixture.js";
+import { createNativeAotMetadataFixture, setNativeAotReflectionMetadata } from
+  "../helpers/pe-native-aot-metadata-fixture.js";
+import { createNativeFormatMetadataFixture } from "../helpers/native-format-metadata-fixture.js";
 
 const REAL_NATIVE_AOT_ELF = join(tmpdir(), "binary101-nativeaot-elf", "HelloElfAot");
 
@@ -36,6 +39,28 @@ test("renders relocation-confirmed NativeAOT from ELF in the browser", async ({ 
   await expect(analysis).toContainText("relative REL/RELA relocations");
   await expect(analysis.locator(".nativeAotSectionsTable tbody tr")).toHaveCount(2);
   await expect(analysis).toContainText("Embedded reflection metadata");
+});
+
+test("renders and sorts reflected NativeAOT fields", async ({ page }) => {
+  const nativeAot = createNativeAotMetadataFixture();
+  setNativeAotReflectionMetadata(nativeAot, createNativeFormatMetadataFixture());
+  const fixture = createElfNativeAotFixture(nativeAot);
+  await page.goto("/");
+
+  await page.setInputFiles("#fileInput", {
+    name: "fields.elf", mimeType: "application/x-elf", buffer: Buffer.from(fixture.bytes)
+  });
+
+  const table = page.locator(".nativeAotTypesTable");
+  await expect(table.getByRole("button", { name: "Sort by Fields", exact: true })).toBeVisible();
+  await expect(table.locator(".nativeAotTypesTable__fields").filter({
+    hasText: "Count, <Name>k__BackingField"
+  })).toBeVisible();
+  await expect(page.locator(".nativeAotScopesTable tbody tr td").last()).toHaveText("3");
+  await table.getByRole("button", { name: "Sort by Fields", exact: true }).click();
+  await expect(table.locator("tbody tr").first()).toContainText("Demo.Inner.Worker");
+  await table.getByRole("button", { name: "Sort by Fields", exact: true }).click();
+  await expect(table.locator("tbody tr").first()).toContainText("Value");
 });
 
 test("renders NativeAOT metadata from a real ELF binary in the browser", async ({ page }) => {

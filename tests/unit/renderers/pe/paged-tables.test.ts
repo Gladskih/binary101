@@ -124,7 +124,7 @@ void test("getPePagedTableModel resolves NativeAOT reflection types", () => {
         name: "DemoAssembly",
         moduleName: "DemoAssembly.dll",
         version: { major: 1, minor: 0, build: 0, revision: 0 },
-        types: [{ namespace: "Demo", name: "Program", methods: ["Main"] }]
+        types: [{ namespace: "Demo", name: "Program", methods: ["Main"], fields: ["Count"] }]
       }]
     }
   };
@@ -134,6 +134,8 @@ void test("getPePagedTableModel resolves NativeAOT reflection types", () => {
   assert.equal(model?.rowCount, 1);
   assert.equal(model?.sortValueAt(0, 1), "Demo.Program");
   assert.equal(model?.rowAt(0)?.cells[2]?.html, "Main");
+  assert.equal(model?.rowAt(0)?.cells[3]?.html, "Count");
+  assert.equal(model?.sortValueAt(0, 3), "Count");
   assert.equal(model?.rowAt(1), null);
   assert.equal(model?.sortValueAt(1, 1), "");
   assert.equal(getPePagedTableModel(pe, "other-native-aot-table"), null);

@@ -19,8 +19,8 @@ const scopeVersion = (scope: NativeAotReflectionScope): string => {
   return `${version.major}.${version.minor}.${version.build}.${version.revision}`;
 };
 
-const methodCount = (scope: NativeAotReflectionScope): number =>
-  scope.types.reduce((count, type) => count + type.methods.length, 0);
+const memberCount = (scope: NativeAotReflectionScope, member: "methods" | "fields"): number =>
+  scope.types.reduce((count, type) => count + type[member].length, 0);
 
 const renderScopes = (scopes: NativeAotReflectionScope[]): string => {
   if (!scopes.length) return "";
@@ -28,7 +28,9 @@ const renderScopes = (scopes: NativeAotReflectionScope[]): string => {
     `<td>${escapeHtml(scope.moduleName)}</td>` +
     `<td class="nativeAotTable__compact">${scopeVersion(scope)}</td>` +
     `<td class="nativeAotTable__compact peNumeric">${scope.types.length}</td>` +
-    `<td class="nativeAotTable__compact peNumeric">${methodCount(scope)}</td></tr>`).join("");
+    `<td class="nativeAotTable__compact peNumeric">${memberCount(scope, "methods")}</td>` +
+    `<td class="nativeAotTable__compact peNumeric">${memberCount(scope, "fields")}</td></tr>`
+  ).join("");
   return `<h4>Reflection scopes</h4>` +
     `<p class="smallNote">A scope identifies one managed assembly and module represented in ` +
     `the NativeFormat blob. Counts cover only definitions retained for runtime reflection, not ` +
@@ -37,7 +39,8 @@ const renderScopes = (scopes: NativeAotReflectionScope[]): string => {
     `<th>Assembly</th><th>Module</th>` +
     `<th class="nativeAotTable__compact">Assembly version</th>` +
     `<th class="nativeAotTable__compact peNumeric">Types</th>` +
-    `<th class="nativeAotTable__compact peNumeric">Methods</th></tr></thead>` +
+    `<th class="nativeAotTable__compact peNumeric">Methods</th>` +
+    `<th class="nativeAotTable__compact peNumeric">Fields</th></tr></thead>` +
     `<tbody>${rows}</tbody></table></div>`;
 };
 
@@ -50,6 +53,7 @@ const typeTableCells = (
 ): PagedSortableTableCell[] => {
   const qualifiedName = qualifiedTypeName(type);
   const methodNames = type.methods.join(", ");
+  const fieldNames = type.fields.join(", ");
   return [{
     className: "nativeAotTypesTable__identity",
     html: escapeHtml(scope.name),
@@ -62,6 +66,10 @@ const typeTableCells = (
     className: "nativeAotTypesTable__methods",
     html: methodNames ? escapeHtml(methodNames) : "-",
     sortValue: methodNames
+  }, {
+    className: "nativeAotTypesTable__fields",
+    html: fieldNames ? escapeHtml(fieldNames) : "-",
+    sortValue: fieldNames
   }];
 };
 
@@ -77,7 +85,8 @@ export const createNativeAotReflectionTypeTableModel = (
     columns: [
       { className: "nativeAotTypesTable__identity", label: "Assembly" },
       { className: "nativeAotTypesTable__identity", label: "Type" },
-      { className: "nativeAotTypesTable__methods", label: "Methods" }
+      { className: "nativeAotTypesTable__methods", label: "Methods" },
+      { className: "nativeAotTypesTable__fields", label: "Fields" }
     ],
     rowAt: index => {
       const cells = rows[index];
@@ -98,10 +107,11 @@ export const getNativeAotReflectionTypeTableModel = (
 const renderTypes = (scopes: NativeAotReflectionScope[]): string => {
   const model = createNativeAotReflectionTypeTableModel(scopes);
   if (!model.rowCount) return "";
-  return `<h4>Reflected types and methods</h4>` +
+  return `<h4>Reflected types, methods and fields</h4>` +
     `<p class="smallNote">Type names include their namespace and enclosing type. Method names ` +
-    `do not include signatures or code addresses. Missing names may have been trimmed, so an ` +
-    `empty list does not mean that the type has no native methods.</p>` +
+    `do not include signatures or code addresses. Field names do not include types, values or ` +
+    `storage offsets. Counts include only decoded names. Missing names may have been trimmed ` +
+    `or could not be decoded; an empty list does not prove that a type has no members.</p>` +
     renderAutoPagedSortableTable(model);
 };
 

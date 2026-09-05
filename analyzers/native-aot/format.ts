@@ -49,6 +49,7 @@ export interface NativeAotReflectionType {
   namespace: string;
   name: string;
   methods: string[];
+  fields: string[];
 }
 
 export interface NativeAotReflectionScope {

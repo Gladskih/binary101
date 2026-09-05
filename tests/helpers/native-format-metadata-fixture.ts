@@ -2,6 +2,7 @@
 
 const HANDLE_TYPES = {
   constantString: 0x1a,
+  field: 0x23, // NativeFormatReaderCommonGen.cs, HandleType.Field (.NET 10).
   method: 0x28,
   namespace: 0x2f,
   scope: 0x38,
@@ -100,7 +101,8 @@ const writeType = (
   namespaceLabel: string,
   enclosingLabel: string | null,
   nestedTypes: string[],
-  methods: string[]
+  methods: string[],
+  fields: string[] = []
 ): void => {
   writer.label(label);
   writer.unsigned(1);
@@ -112,18 +114,13 @@ const writeType = (
   enclosingLabel ? writer.handle(HANDLE_TYPES.type, enclosingLabel) : nilHandle(writer);
   writer.collection(nestedTypes.map(item => [HANDLE_TYPES.type, item]));
   writer.collection(methods.map(item => [HANDLE_TYPES.method, item]));
-  for (let index = 0; index < 6; index += 1) emptyCollection(writer);
+  writer.collection(fields.map(item => [HANDLE_TYPES.field, item]));
+  for (let index = 0; index < 5; index += 1) emptyCollection(writer);
   writer.string(`${label}-name`, name);
 };
 
-const buildNativeFormatMetadataFixture = (
-  majorVersion: number,
-  rootChildren: string[],
-  nestedTypes: string[],
-  demoChildren: string[]
-): Uint8Array => {
-  const writer = new MetadataFixtureWriter();
-  writer.collection([[HANDLE_TYPES.scope, "scope"]]);
+const writeScope = (writer: MetadataFixtureWriter, majorVersion: number, scopeCount: number): void => {
+  writer.collection(Array.from({ length: scopeCount }, () => [HANDLE_TYPES.scope, "scope"]));
   writer.label("scope");
   writer.unsigned(0);
   writer.handle(HANDLE_TYPES.constantString, "assembly-name");
@@ -139,6 +136,13 @@ const buildNativeFormatMetadataFixture = (
   writer.unsigned(16);
   for (let index = 0; index < 16; index += 1) writer.bytes.push(index);
   emptyCollection(writer);
+};
+
+const writeNamespaces = (
+  writer: MetadataFixtureWriter,
+  rootChildren: string[],
+  demoChildren: string[]
+): void => {
   writer.label("root-namespace");
   writer.variantHandle(HANDLE_TYPES.scope, "scope");
   writer.handle(HANDLE_TYPES.constantString, "empty-name");
@@ -157,14 +161,31 @@ const buildNativeFormatMetadataFixture = (
   writer.collection([[HANDLE_TYPES.type, "worker-type"]]);
   emptyCollection(writer);
   emptyCollection(writer);
-  writeType(writer, "program-type", "Program", "demo-namespace", null,
-    nestedTypes, ["main-method"]);
-  writeType(writer, "nested-type", "Nested", "demo-namespace", "program-type", [],
-    ["work-method"]);
-  writeType(writer, "worker-type", "Worker", "inner-namespace", null, [], ["run-method"]);
+};
+
+const buildNativeFormatMetadataFixture = (
+  majorVersion: number,
+  rootChildren: string[],
+  nestedTypes: string[],
+  demoChildren: string[],
+  methods: string[] = ["main-method"],
+  fields: string[] = ["count-field", "name-field"],
+  scopeCount = 1
+): Uint8Array => {
+  const writer = new MetadataFixtureWriter();
+  writeScope(writer, majorVersion, scopeCount);
+  writeNamespaces(writer, rootChildren, demoChildren);
   writeMethod(writer, "main-method", "Main");
   writeMethod(writer, "work-method", "Work");
   writeMethod(writer, "run-method", "Run");
+  writeField(writer, "count-field", "Count");
+  writeField(writer, "name-field", "<Name>k__BackingField");
+  writeField(writer, "value-field", "Value");
+  writeType(writer, "program-type", "Program", "demo-namespace", null,
+    nestedTypes, methods, fields);
+  writeType(writer, "nested-type", "Nested", "demo-namespace", "program-type", [],
+    ["work-method"], ["value-field"]);
+  writeType(writer, "worker-type", "Worker", "inner-namespace", null, [], ["run-method"]);
   writer.string("assembly-name", "HelloCSharp");
   writer.string("module-name", "HelloCSharp.dll");
   writer.string("empty-name", "");
@@ -181,6 +202,18 @@ export const createNativeFormatMetadataFixture = (majorVersion = 1): Uint8Array 
     ["nested-type"],
     ["inner-namespace"]
   );
+
+export const createNativeFormatMetadataWithRepeatedMembersFixture = (count: number): Uint8Array =>
+  buildNativeFormatMetadataFixture(1, ["demo-namespace"], ["nested-type"], ["inner-namespace"],
+    Array.from({ length: count }, () => "main-method"),
+    Array.from({ length: count }, () => "count-field"));
+
+export const createNativeFormatMetadataWithRepeatedScopesFixture = (count: number): Uint8Array =>
+  buildNativeFormatMetadataFixture(1, ["demo-namespace"], ["nested-type"], ["inner-namespace"],
+    ["main-method"], ["count-field", "name-field"], count);
+
+export const createNativeFormatMetadataWithTypeCycleFixture = (): Uint8Array =>
+  buildNativeFormatMetadataFixture(1, ["demo-namespace"], ["program-type"], ["inner-namespace"]);
 
 export const createNativeFormatMetadataWithDuplicateReferencesFixture = (): Uint8Array =>
   buildNativeFormatMetadataFixture(
@@ -200,4 +233,17 @@ export const createNativeFormatMetadataWithNamespaceCycleFixture = (): Uint8Arra
 
 const assertFixtureComplete = (writer: MetadataFixtureWriter): void => {
   if (writer.patches.size) throw new Error(`Unresolved fixture labels: ${[...writer.patches.keys()]}`);
+};
+
+const writeField = (writer: MetadataFixtureWriter, label: string, name: string): void => {
+  // Field: flags, name, signature, default value, offset, custom attributes.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs
+  writer.label(label);
+  writer.unsigned(0x16); // FieldAttributes.Public | Static.
+  writer.handle(HANDLE_TYPES.constantString, `${label}-name`);
+  nilHandle(writer);
+  nilHandle(writer);
+  writer.unsigned(0);
+  emptyCollection(writer);
+  writer.string(`${label}-name`, name);
 };

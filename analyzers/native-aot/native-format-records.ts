@@ -24,9 +24,6 @@ const HANDLE = {
 } as const;
 
 export const NATIVE_FORMAT_SCOPE_HANDLE = HANDLE.scope;
-const MAX_COLLECTION_ITEMS = 100_000;
-// Defensive per-record cap; NativeFormat itself has no smaller byte-collection limit.
-const MAX_BYTE_COLLECTION = 0x10_0000;
 
 class RecordCursor {
   offset: number;
@@ -48,13 +45,13 @@ class RecordCursor {
   }
 
   handles(...types: number[]): NativeFormatHandle[] {
-    const decoded = this.reader.handles(this.offset, types, MAX_COLLECTION_ITEMS);
+    const decoded = this.reader.handles(this.offset, types);
     this.offset = decoded.nextOffset;
     return decoded.value;
   }
 
   bytes(): void {
-    this.offset = this.reader.bytes(this.offset, MAX_BYTE_COLLECTION).nextOffset;
+    this.offset = this.reader.bytes(this.offset).nextOffset;
   }
 }
 
@@ -75,6 +72,7 @@ export interface NativeFormatTypeRecord {
   name: NativeFormatHandle;
   nestedTypes: NativeFormatHandle[];
   methods: NativeFormatHandle[];
+  fieldsOffset: number;
 }
 
 const readVersionPart = (cursor: RecordCursor): number => {
@@ -133,7 +131,7 @@ export const parseNativeFormatTypeRecord = (
   cursor.handle(HANDLE.typeDefinition);
   const nestedTypes = cursor.handles(HANDLE.typeDefinition);
   const methods = cursor.handles(HANDLE.method);
-  return { name, nestedTypes, methods };
+  return { name, nestedTypes, methods, fieldsOffset: cursor.offset };
 };
 
 export const parseNativeFormatMethodName = (
@@ -145,4 +143,15 @@ export const parseNativeFormatMethodName = (
   cursor.unsigned();
   const name = cursor.handle(HANDLE.string);
   return reader.string(name);
+};
+
+export const parseNativeFormatFieldName = (
+  reader: NativeFormatReader,
+  handle: NativeFormatHandle
+): string => {
+  // Field starts with flags and a typed ConstantStringValue handle; its unused tail is skipped.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs
+  const cursor = new RecordCursor(reader, handle.offset);
+  cursor.unsigned();
+  return reader.string(cursor.handle(HANDLE.string));
 };

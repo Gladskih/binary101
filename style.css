@@ -643,7 +643,8 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .peDataDirectoryTable__meaning{white-space:normal}
 .nativeAotTable__compact{white-space:nowrap;width:1%}
 .nativeAotTypesTable__identity{white-space:nowrap}
-.nativeAotTypesTable__methods{min-width:12rem;overflow-wrap:anywhere;white-space:normal}
+.nativeAotTypesTable__methods,
+.nativeAotTypesTable__fields{min-width:12rem;overflow-wrap:anywhere;white-space:normal}
 .peDataDirectoryTable__row--absent{opacity:.62}
 .peDataDirectoryStatus{
   align-items:center;

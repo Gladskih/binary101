@@ -16,12 +16,11 @@ export interface NativeFormatValue<T> {
 
 export class NativeFormatError extends Error {}
 
-const MAX_STRING_BYTES = 1024 * 1024;
-
 export class NativeFormatReader {
   readonly #bytes: Uint8Array;
   readonly #view: DataView;
   readonly #decoder = new TextDecoder("utf-8", { fatal: true });
+  readonly #strings = new Map<number, { value: string } | { error: unknown }>();
 
   constructor(bytes: Uint8Array) {
     this.#bytes = bytes;
@@ -83,15 +82,18 @@ export class NativeFormatReader {
     return { nextOffset: decoded.nextOffset, value: handle };
   }
 
+  collectionCount(offset: number): NativeFormatValue<number> {
+    const count = this.unsigned(offset);
+    // Every compressed integer occupies at least one byte (DecodeUnsigned in the source above).
+    this.#requireRange(count.nextOffset, count.value);
+    return count;
+  }
+
   handles(
     offset: number,
-    permittedTypes: readonly number[],
-    maximumCount: number
+    permittedTypes: readonly number[]
   ): NativeFormatValue<NativeFormatHandle[]> {
-    const count = this.unsigned(offset);
-    if (count.value > maximumCount) {
-      throw new NativeFormatError(`Collection count ${count.value} exceeds the safety limit.`);
-    }
+    const count = this.collectionCount(offset);
     const values: NativeFormatHandle[] = [];
     let nextOffset = count.nextOffset;
     for (let index = 0; index < count.value; index += 1) {
@@ -102,12 +104,8 @@ export class NativeFormatReader {
     return { nextOffset, value: values };
   }
 
-  bytes(offset: number, maximumCount: number): NativeFormatValue<Uint8Array> {
-    const count = this.unsigned(offset);
-    if (count.value > maximumCount) {
-      throw new NativeFormatError(`Byte collection size ${count.value} exceeds the safety limit.`);
-    }
-    this.#requireRange(count.nextOffset, count.value);
+  bytes(offset: number): NativeFormatValue<Uint8Array> {
+    const count = this.collectionCount(offset);
     return {
       nextOffset: count.nextOffset + count.value,
       value: this.#bytes.subarray(count.nextOffset, count.nextOffset + count.value)
@@ -116,11 +114,27 @@ export class NativeFormatReader {
 
   string(handle: NativeFormatHandle): string {
     if (!handle.offset) return "";
-    const encoded = this.bytes(handle.offset, MAX_STRING_BYTES).value;
+    const cached = this.#strings.get(handle.offset);
+    if (cached) {
+      if ("error" in cached) throw cached.error;
+      return cached.value;
+    }
+    try {
+      const value = this.#decodeString(handle.offset);
+      this.#strings.set(handle.offset, { value });
+      return value;
+    } catch (error) {
+      this.#strings.set(handle.offset, { error });
+      throw error;
+    }
+  }
+
+  #decodeString(offset: number): string {
+    const encoded = this.bytes(offset).value;
     try {
       return this.#decoder.decode(encoded);
     } catch {
-      throw new NativeFormatError(`String at offset ${handle.offset} is not valid UTF-8.`);
+      throw new NativeFormatError(`String at offset ${offset} is not valid UTF-8.`);
     }
   }
 

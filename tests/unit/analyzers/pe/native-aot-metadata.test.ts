@@ -86,14 +86,17 @@ void test("analyzePeNativeAotMetadata decodes embedded reflection names", async 
     name: "HelloCSharp",
     moduleName: "HelloCSharp.dll",
     version: { major: 1, minor: 2, build: 3, revision: 4 },
-    types: [{ namespace: "Demo", name: "Program", methods: ["Main"] }, {
+    types: [{ namespace: "Demo", name: "Program", methods: ["Main"],
+      fields: ["Count", "<Name>k__BackingField"] }, {
       namespace: "Demo",
       name: "Program+Nested",
-      methods: ["Work"]
+      methods: ["Work"],
+      fields: ["Value"]
     }, {
       namespace: "Demo.Inner",
       name: "Worker",
-      methods: ["Run"]
+      methods: ["Run"],
+      fields: []
     }]
   });
 });

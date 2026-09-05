@@ -19,7 +19,7 @@ const subject = (): ElfParseResult => ({
         name: "Sample",
         moduleName: "Sample.dll",
         version: { major: 1, minor: 0, build: 0, revision: 0 },
-        types: [{ namespace: "Demo", name: "Program", methods: ["Main"] }]
+        types: [{ namespace: "Demo", name: "Program", methods: ["Main"], fields: ["Count"] }]
       }]
     }
   },

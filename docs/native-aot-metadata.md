@@ -51,18 +51,51 @@ metadata RVA and size. It also walks the embedded NativeFormat graph and reports
 
 - reflection scopes with assembly name, module name, and assembly version;
 - namespace-qualified type definitions, including nested type names;
-- method names retained for reflection.
+- method and field names retained for reflection, with separate per-assembly counts and sortable
+  columns for methods and fields.
 
 NativeFormat is an internal format without a separate compatible format-version field. The deep
-decoder therefore validates every compressed value, handle kind, offset, collection count, UTF-8
-string, and traversal limit that it consumes. It deliberately stops reading each record after the
+decoder therefore validates every compressed value, handle kind, offset, collection count, and UTF-8
+string that it consumes. It deliberately stops reading each record after the
 last field needed for the reported result, so an unsupported unused tail cannot hide useful names.
 A malformed or unsupported consumed field produces visible warnings but does not retract the
 independently confirmed NativeAOT result.
 
 Only metadata retained by NativeAOT for reflection can be shown. Trimmed types or methods are not
-recoverable from this blob. Signatures, fields, properties, events, custom attributes, and mappings
+recoverable from this blob. Signatures, field types/values/storage offsets, properties, events,
+custom attributes, and mappings
 from reflection method names to code addresses are not decoded yet.
+
+Field decoding follows the `TypeDefinition.Fields` collection and the `Field` record's flags/name
+prefix in the [.NET 10 generated reader](https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs).
+The typed field handle ID is `0x23`, as defined in
+[`NativeFormatReaderCommonGen.cs`](https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderCommonGen.cs).
+Only the prefix needed to read a name is consumed. Fields of nested types are shown with their
+declaring type. The common decoder and renderer serve both PE and ELF images.
+
+A malformed field list produces a warning without removing the type, its methods, or nested types.
+An invalid individual field name is skipped while valid siblings remain available.
+Counts represent successfully decoded names, not all compiled fields.
+
+### File-derived bounds instead of record-count cutoffs
+
+NativeFormat reflection traversal has no arbitrary maximum number of methods, fields, types,
+namespaces, or scopes. Collection counts are checked against the remaining blob bytes before any
+element is read: every encoded handle needs at least one byte. Each subsequent handle still has
+its own encoding and offset checks. Byte collections and strings likewise need to fit in the blob.
+This follows the unsigned encoding in the
+[upstream reader](https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/NativeFormat/NativeFormatReader.cs).
+
+The graph uses an explicit stack rather than recursive calls, preserving depth-first record order
+without imposing a namespace-depth cutoff. Visited offsets prevent cycles and repeated scope,
+namespace, or type decoding. Method and field names, including decoding failures, are cached per
+record offset and kind for the duration of one parse. Shared strings and their decoding failures
+are cached by string offset as well. Warnings are deduplicated with a set.
+
+These checks guarantee finite traversal of the bounded input; they are not a latency or memory
+budget. Large valid metadata can still require substantial processing and output memory. The
+existing 32 MiB supported blob extent remains separate from record counts. No new replacement
+cutoff or automatic truncation is introduced.
 
 ## Initializer entry points for disassembly
 
