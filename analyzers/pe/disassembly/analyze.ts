@@ -18,6 +18,7 @@ import {
 } from "./import-references.js";
 import { createPeApiStringReferenceCollector } from "./api-string-references.js";
 import { createPeCodeStringReferenceCollector } from "./code-string-references.js";
+import { createPeSpecialInstructionCollector } from "./special-instructions.js";
 
 type PeInstructionSetDecodeRun = {
   reader: FileRangeReader;
@@ -34,6 +35,7 @@ type PeInstructionSetDecodeRun = {
 };
 
 type PeInstructionSetDecodeResult = {
+  specialInstructions: PeInstructionSetReport["specialInstructions"];
   bytesDecoded: number;
   instructionCount: number;
   invalidInstructionCount: number;
@@ -72,6 +74,7 @@ const emptyInstructionSetReport = (
   codeStringReferences: [],
   apiStringReferences: [],
   instructionSets: [],
+  specialInstructions: [],
   issues
 });
 
@@ -164,6 +167,7 @@ export async function analyzePeInstructionSets(
     codeStringReferences: decoded.codeStringReferences,
     apiStringReferences: decoded.apiStringReferences,
     instructionSets: decoded.instructionSets,
+    specialInstructions: decoded.specialInstructions,
     issues
   };
 }
@@ -173,6 +177,7 @@ const decodePeInstructionSetUsage = async (
 ): Promise<PeInstructionSetDecodeResult> => {
   const { iced, bitness, imageBase, sampledSections, resolvedEntrypoints } = run;
   const instructionSetUsage = createX86InstructionSetUsageTracker(iced.CpuidFeature);
+  const specialInstructions = createPeSpecialInstructionCollector(iced);
   const directIatReferences = createDirectIatReferenceCounter(
     iced,
     imageBase,
@@ -212,6 +217,7 @@ const decodePeInstructionSetUsage = async (
       issues: run.issues,
       ...(run.opts.signal ? { signal: run.opts.signal } : {}),
       onInstruction: instruction => {
+        specialInstructions.record(instruction);
         directIatReferences.record(instruction);
         codeStringReferences.record(instruction);
         apiStringReferences.record(instruction);
@@ -254,5 +260,6 @@ const decodePeInstructionSetUsage = async (
     codeStringReferences: await codeStringReferences.references(run.reader, apiReferences),
     apiStringReferences: apiReferences,
     instructionSets: instructionSetUsage.instructionSets(),
+    specialInstructions: specialInstructions.findings(),
   };
 };

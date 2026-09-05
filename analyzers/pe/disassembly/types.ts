@@ -5,6 +5,7 @@ import type { PeImportParseResult } from "../imports/index.js";
 import type { PeLoadConfig } from "../load-config/index.js";
 import type { PeSection, RvaToOffset } from "../types.js";
 import type { PeImportMetadataSourceKind } from "../../../pe-import-metadata-schema.js";
+import type { PeSpecialInstructionFinding } from "./special-instructions.js";
 
 export interface PeInstructionSetUsage {
   id: string;
@@ -47,6 +48,7 @@ export interface PeCodeStringReference {
 }
 
 export interface PeInstructionSetReport {
+  specialInstructions: PeSpecialInstructionFinding[];
   bitness: 32 | 64;
   bytesSampled: number;
   bytesDecoded: number;

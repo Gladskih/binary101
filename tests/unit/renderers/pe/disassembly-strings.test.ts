@@ -47,6 +47,7 @@ void test("renderInstructionSets renders code string references", () => {
       text: `https://<host>`,
       instructionRvas: [0x1000, 0x1010]
     }],
+    specialInstructions: [],
     apiStringReferences: [],
     issues: [],
     instructionSets: []
@@ -85,6 +86,7 @@ void test("renderInstructionSets pages large code string reference tables", () =
       text: `value-${String(ROWS_AFTER_INLINE_LIMIT - index).padStart(4, "0")}`,
       instructionRvas: [0x1000 + index]
     })),
+    specialInstructions: [],
     apiStringReferences: [],
     issues: [],
     instructionSets: []

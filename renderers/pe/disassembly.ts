@@ -2,6 +2,7 @@
 
 import { formatHumanSize } from "../../binary-utils.js";
 import { escapeHtml } from "../../html-utils.js";
+import { renderSpecialInstructions } from "./disassembly-special-instructions.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import {
   KNOWN_CPUID_FEATURES,
@@ -114,6 +115,7 @@ const renderInstructionSetsContent = (pe: PeWindowsParseResult, out: string[]): 
   }
 
   renderCodeStringReferences(pe, out);
+  out.push(renderSpecialInstructions(disasm.specialInstructions));
   renderApiStringReferences(pe, out);
 
   const countsById = new Map<string, number>();

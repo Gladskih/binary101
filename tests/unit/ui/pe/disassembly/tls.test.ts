@@ -27,6 +27,7 @@ const createFakeReport = (): PeInstructionSetReport => ({
   invalidInstructionCount: 1,
   directIatReferences: [],
   codeStringReferences: [],
+  specialInstructions: [],
   apiStringReferences: [],
   instructionSets: [],
   issues: []

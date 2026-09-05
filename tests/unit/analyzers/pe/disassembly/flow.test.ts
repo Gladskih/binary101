@@ -29,6 +29,30 @@ const createTextSection = (rawSize: number, virtualSize = rawSize) => [
 const mapTextRvaToOffset = (rawSize: number) => (rva: number): number | null =>
   rva >= TEXT_SECTION_RVA && rva < TEXT_SECTION_RVA + rawSize ? rva - TEXT_SECTION_RVA : null;
 
+void test("ISA analysis collects special instructions once and distinguishes UD1 from bad decoding", async () => {
+  // Intel SDM Vol. 2: SYSCALL, SYSENTER, RDMSR, CLI, UD1 encodings.
+  const bytes = new Uint8Array([0x0f, 0x05, 0x0f, 0x34, 0x0f, 0x32, 0xfa, 0x0f, 0xb9, 0xc0]);
+  const report = await analyzePeInstructionSets(new MockFile(bytes, "special.bin"), {
+    coffMachine: IMAGE_FILE_MACHINE_AMD64,
+    is64Bit: true,
+    imageBase: IMAGE_BASE_AMD64,
+    entrypointRva: TEXT_SECTION_RVA,
+    exportRvas: [TEXT_SECTION_RVA],
+    rvaToOff: mapTextRvaToOffset(bytes.length),
+    sections: createTextSection(bytes.length)
+  });
+
+  assert.deepEqual(report.specialInstructions, [
+    { category: "syscall", instruction: "SYSCALL", count: 1 },
+    { category: "syscall", instruction: "SYSENTER", count: 1 },
+    { category: "privileged", instruction: "RDMSR", count: 1 },
+    { category: "io-privilege", instruction: "CLI", count: 1 },
+    { category: "trap", instruction: "UD1", count: 1 }
+  ]);
+  assert.equal(report.invalidInstructionCount, 0);
+  assert.ok(report.instructionSets.length > 0);
+});
+
 
 void test("analyzePeInstructionSets follows unconditional jumps and skips invalid bytes", async () => {
   const bytes = new Uint8Array([

@@ -33,7 +33,7 @@ void test("renderInstructionSets renders a chip table", () => {
     invalidInstructionCount: 0,
     directIatReferences: [],
     codeStringReferences: [],
-    apiStringReferences: [],
+    specialInstructions: [], apiStringReferences: [],
     issues: [],
     instructionSets: [
       { id: "AVX", label: "AVX", description: "Advanced Vector Extensions", instructionCount: 1 }
@@ -66,7 +66,7 @@ void test("renderInstructionSets escapes user-controlled strings", () => {
     invalidInstructionCount: 0,
     directIatReferences: [],
     codeStringReferences: [],
-    apiStringReferences: [],
+    specialInstructions: [], apiStringReferences: [],
     issues: ["note <b>unsafe</b>"],
     instructionSets: [
       {
@@ -205,7 +205,7 @@ void test("renderInstructionSets renders an empty-state message", () => {
     invalidInstructionCount: 0,
     directIatReferences: [],
     codeStringReferences: [],
-    apiStringReferences: [],
+    specialInstructions: [], apiStringReferences: [],
     issues: [],
     instructionSets: []
   };
@@ -237,7 +237,7 @@ void test("renderInstructionSets renders API string references", () => {
     invalidInstructionCount: 0,
     directIatReferences: [],
     codeStringReferences: [],
-    apiStringReferences: [{
+    specialInstructions: [], apiStringReferences: [{
       rva: STRING_RVA,
       encoding: "ascii",
       byteLength: 12,

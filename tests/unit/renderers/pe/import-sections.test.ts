@@ -245,6 +245,7 @@ void test("import panels render separate call and jump counters from the disasse
       }
     ],
     codeStringReferences: [],
+    specialInstructions: [],
     apiStringReferences: [],
     instructionSets: [],
     issues: []

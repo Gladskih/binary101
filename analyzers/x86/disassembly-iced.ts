@@ -10,6 +10,7 @@
  */
 export type IcedInstructionObject = {
   readonly code: number;
+  readonly isPrivileged?: boolean;
   readonly length: number;
   readonly ip: bigint;
   readonly nextIP: bigint;

@@ -122,12 +122,15 @@ const decodeLinearRun = async (
     const isInvalidDecode = instr.code === state.iced.Code["INVALID"];
     const isUd2Trap = instr.code === state.iced.Code["Ud2"];
     const isHardException = instr.flowControl === state.iced.FlowControl["Exception"] && !isUd2Trap;
-    if (isInvalidDecode || isHardException) {
+    if (isInvalidDecode) {
       state.invalidInstructionCount += 1;
       state.recordDecodeStopIssue(`Stopping at an invalid instruction at RVA 0x${instrRva.toString(16)}.`);
       break;
     }
     state.onInstruction?.(instr);
+    // Explicit exception instructions are valid decodes and observable trap sites.
+    // iced FlowControl::Exception: https://docs.rs/iced-x86/1.21.0/iced_x86/enum.FlowControl.html
+    if (isHardException) break;
     if (!isUd2Trap) countInstructionFeatures(state, instr);
     if (state.iced.FlowControl["UnconditionalBranch"] === instr.flowControl) {
       const target = getNearBranchTarget(instr, state.iced.OpKind);
