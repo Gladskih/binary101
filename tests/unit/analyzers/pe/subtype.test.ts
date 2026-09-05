@@ -12,6 +12,7 @@ import type { PeClrHeader, PeClrMetadataTables } from "../../../../analyzers/pe/
 import type { PeLinuxBootProtocol } from "../../../../analyzers/pe/linux-boot.js";
 import type { MuiResourceConfiguration } from "../../../../analyzers/pe/resources/mui-config.js";
 import type { PeDosHeader } from "../../../../analyzers/pe/types.js";
+import { detectPeAppHostSubtype } from "../../../../analyzers/pe/subtype.js";
 
 const createClr = (values: Partial<PeClrHeader>): PeClrHeader => ({
   cb: 0,
@@ -154,6 +155,11 @@ void test("detectPeSubtypeFromClr delegates to CLR native image detection", () =
 void test("detectPeSubtypeFromClr returns null without confirmed subtype markers", () => {
   assert.equal(detectPeSubtypeFromClr(createClr({})), null);
   assert.equal(detectPeSubtypeFromClr(null), null);
+});
+
+void test("detectPeAppHostSubtype recognizes parsed apphost metadata", () => {
+  assert.equal(detectPeAppHostSubtype({ locators: [], bindings: [], issues: [] }), "dotnet-apphost");
+  assert.equal(detectPeAppHostSubtype(null), null);
 });
 
 void test("detectPeMuiResourceSubtype recognizes resource-only MUI images", () => {

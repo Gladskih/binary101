@@ -59,3 +59,15 @@ void test("file type labels hide subtype rows without a parsed subtype", () => {
   assert.equal(detailElement.hidden, true);
   assert.equal(detailElement.textContent, "");
 });
+
+void test("file type labels describe parsed .NET apphost subtypes", () => {
+  const termElement = { hidden: true } as HTMLElement;
+  const detailElement = { hidden: true, textContent: "" } as HTMLElement;
+
+  setFileSubtypeLabel(termElement, detailElement, {
+    analyzer: "pe",
+    parsed: { subtype: "dotnet-apphost", dirs: [] }
+  } as unknown as ParseForUiResult);
+
+  assert.equal(detailElement.textContent, ".NET apphost");
+});

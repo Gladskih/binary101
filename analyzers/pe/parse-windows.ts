@@ -27,7 +27,6 @@ import { parseResources } from "./resources/index.js";
 import { parseClrDirectory } from "./clr/index.js";
 import { parseSecurityDirectory } from "./security/index.js";
 import { addSecurityTailWarning } from "./security/tail-warning.js";
-import { detectPeSubtype } from "./subtype.js";
 import type { PeDataDirectory, PeWindowsCore } from "./types.js";
 import { buildWindowsPeResult, withWindowsPeLayoutWarnings } from "./parse-windows-result.js";
 import { selectPeVariantParsers, type PeVariantParsers } from "./parse-variant.js";
@@ -64,7 +63,6 @@ export type PeDirectoryArtifacts = {
   exception: Awaited<ReturnType<typeof parseExceptionDirectory>>;
   boundImports: Awaited<ReturnType<typeof parseBoundImports>>;
   delayImports: Awaited<ReturnType<typeof parseDelayImports32>>;
-  subtype: ReturnType<typeof detectPeSubtype>;
   loadcfg: Awaited<ReturnType<PeVariantParsers["parseAndEnrichLoadConfig"]>>;
   iat: ReturnType<typeof parseIatDirectory>;
   architecture: ReturnType<typeof parseArchitectureDirectory>;
@@ -148,70 +146,48 @@ const parsePeDebugArtifacts = async (
     debugWarning: appendDebugWarnings(debugResult.warning, debugExceptionFindings.warnings)
   };
 };
+const parsePeLoaderDirectories = async (context: PeWindowsParseContext) => {
+  const { reader, core, peVariant } = context;
+  return {
+    importResult: await peVariant.parseImportDirectory(reader, core.dataDirs, core.rvaToOff),
+    tls: await peVariant.parseTlsDirectory(
+      reader, core.dataDirs, core.rvaToOff, core.opt.ImageBase, core.sections
+    ),
+    boundImports: await parseBoundImports(reader, core.dataDirs, core.rvaToOff),
+    delayImports: await peVariant.parseDelayImports(
+      reader, core.dataDirs, core.rvaToOff, { sizeOfImage: core.opt.SizeOfImage }
+    ),
+    loadcfg: await peVariant.parseAndEnrichLoadConfig(
+      reader, core.dataDirs, core.rvaToOff, core.opt.ImageBase,
+      core.opt.SizeOfImage, core.opt.SizeOfHeaders, core.sections
+    ),
+    iat: parseIatDirectory(core.dataDirs, core.rvaToOff),
+    architecture: parseArchitectureDirectory(core.dataDirs),
+    globalPtr: parseGlobalPtrDirectory(core.dataDirs, core.opt.SizeOfImage)
+  };
+};
 const parsePeDirectoryArtifacts = async (
   context: PeWindowsParseContext
 ): Promise<PeDirectoryArtifacts> => {
-  const { reader, core, peVariant, parseManifestXmlDocument, canonicalMachine } = context;
-  const loadcfg = await peVariant.parseAndEnrichLoadConfig(
-    reader,
-    core.dataDirs,
-    core.rvaToOff,
-    core.opt.ImageBase,
-    core.opt.SizeOfImage,
-    core.opt.SizeOfHeaders,
-    core.sections
-  );
-  const importResult = await peVariant.parseImportDirectory(reader, core.dataDirs, core.rvaToOff);
+  const { reader, core, parseManifestXmlDocument, canonicalMachine } = context;
   const exportsInfo = await parseExportDirectory(reader, core.dataDirs, core.rvaToOff);
-  const tls = await peVariant.parseTlsDirectory(
-    reader,
-    core.dataDirs,
-    core.rvaToOff,
-    core.opt.ImageBase,
-    core.sections
-  );
   const resources = await parseResources(reader, core.dataDirs, core.rvaToOff, parseManifestXmlDocument);
   const reloc = await parseBaseRelocations(reader, core.dataDirs, core.rvaToOff);
-  const msvcRtti = await analyzePeMsvcRtti(reader, core, reloc);
   const clr = await parseClrDirectory(reader, core.dataDirs, core.rvaToOff);
-  const nativeAotMetadata = clr == null
-    ? await analyzePeNativeAotMetadata(reader, core, reloc)
-    : null;
-  const nativeAotCandidate = nativeAotMetadata ??
+  const nativeAotCandidate = (clr == null
+    ? await analyzePeNativeAotMetadata(reader, core, reloc) : null) ??
     detectNativeAotCandidate(clr != null, exportsInfo, core.sections);
-  const exception = await parseExceptionDirectory(
-    reader,
-    core.dataDirs,
-    core.rvaToOff,
-    canonicalMachine,
-    clr?.readyToRun,
-    nativeAotCandidate
-  );
-  const boundImports = await parseBoundImports(reader, core.dataDirs, core.rvaToOff);
-  const delayImports = await peVariant.parseDelayImports(
-    reader,
-    core.dataDirs,
-    core.rvaToOff,
-    { sizeOfImage: core.opt.SizeOfImage }
-  );
   return {
-    importResult,
+    ...await parsePeLoaderDirectories(context),
     exportsInfo,
-    tls,
     resources,
     reloc,
-    msvcRtti,
+    msvcRtti: await analyzePeMsvcRtti(reader, core, reloc),
     clr,
     nativeAotCandidate,
-    exception,
-    boundImports,
-    delayImports,
-    subtype: detectPeSubtype(clr, resources?.muiResourceConfiguration, core.opt.AddressOfEntryPoint, core.sections,
-      context.linuxBoot, core.dos),
-    loadcfg,
-    iat: parseIatDirectory(core.dataDirs, core.rvaToOff),
-    architecture: parseArchitectureDirectory(core.dataDirs),
-    globalPtr: parseGlobalPtrDirectory(core.dataDirs, core.opt.SizeOfImage),
+    exception: await parseExceptionDirectory(
+      reader, core.dataDirs, core.rvaToOff, canonicalMachine, clr?.readyToRun, nativeAotCandidate
+    ),
     manifestValidation: analyzeManifestConsistency(resources, canonicalMachine, clr)
   };
 };

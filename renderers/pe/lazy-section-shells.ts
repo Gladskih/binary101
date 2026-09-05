@@ -9,8 +9,9 @@ import {
 import { renderPeSectionShell } from "./collapsible-section.js";
 import { PE_DELAY_IMPORTS_PANEL_ID, PE_IMPORTS_PANEL_ID } from "./import-sections.js";
 import { getLinuxBootSummary } from "./linux-boot.js";
-import { getMsvcRttiSummaryCounts } from "./msvc-rtti.js";
+import { getMsvcRttiSectionDescriptor } from "./msvc-rtti-section-descriptor.js";
 import { getNativeAotSectionDescriptor } from "./native-aot-section-descriptor.js";
+import { getPeAppHostSectionDescriptor } from "./apphost-section-descriptor.js";
 import { PE_OVERLAY_PANEL_ID, getUnexplainedOverlaySize } from "./overlay.js";
 import { PE_PACKER_SECTIONS, pePackerSectionDescriptors } from "./packer-sections.js";
 import { getPePayloadLazySectionDescriptors } from "./payload-section-descriptors.js";
@@ -18,6 +19,7 @@ import { getPeSanityIssues } from "./layout.js";
 
 export const PE_LAZY_SECTION_KEYS = {
   architecture: "architecture",
+  appHost: "apphost",
   boundImports: "bound-imports",
   bunStandalone: PE_PACKER_SECTIONS["bun-standalone"].key,
   clr: "clr",
@@ -55,17 +57,14 @@ export const PE_LAZY_SECTION_KEYS = {
 export type PeLazySectionKey = typeof PE_LAZY_SECTION_KEYS[keyof typeof PE_LAZY_SECTION_KEYS];
 export type PeLazySectionDescriptor =
   { id?: string; key: PeLazySectionKey; summary?: string; title: string };
-
 const compactCount = (count: number): string =>
   count >= 10_000 ? `${Math.round(count / 1000)}k` : String(count);
 const plural = (count: number, one: string, many: string): string =>
   `${count} ${count === 1 ? one : many}`;
-
 const coffTailSummary = (pe: PeParseResult): string =>
   (pe.coff.NumberOfSymbols >>> 0) > 0
     ? plural(pe.coff.NumberOfSymbols >>> 0, "symbol-table record", "symbol-table records")
     : "COFF string table";
-
 const pushIf = (
   descriptors: PeLazySectionDescriptor[],
   condition: unknown,
@@ -73,13 +72,10 @@ const pushIf = (
 ): void => {
   if (condition) descriptors.push(descriptor);
 };
-
 const importFunctionCount = (pe: PeWindowsParseResult): number =>
   pe.imports.entries.reduce((count, entry) => count + (entry.functions?.length ?? 0), 0);
-
 const delayImportFunctionCount = (pe: PeWindowsParseResult): number =>
   pe.delayImports?.entries.reduce((count, entry) => count + (entry.functions?.length ?? 0), 0) ?? 0;
-
 const resourceLeafCount = (pe: PeWindowsParseResult): number =>
   pe.resources?.top?.reduce((count, row) => count + (row.leafCount ?? 0), 0) ??
   pe.resources?.paths?.length ??
@@ -87,13 +83,10 @@ const resourceLeafCount = (pe: PeWindowsParseResult): number =>
     count + group.entries.reduce((entryCount, entry) => entryCount + entry.langs.length, 0), 0
   ) ??
   0;
-
 const metadataRowCount = (pe: PeWindowsParseResult): number =>
   pe.clr?.meta?.tables?.rowCounts.reduce((count, row) => count + row.rows, 0) ?? 0;
-
 const hasCoffTail = (pe: PeParseResult): boolean =>
   (pe.coff.NumberOfSymbols >>> 0) !== 0 || pe.coffStringTableSize != null;
-
 const hasSanity = (pe: PeParseResult): boolean =>
   getPeSanityIssues(pe).length > 0;
 
@@ -204,9 +197,9 @@ const addWindowsDirectoryDescriptors = (
     summary: `resources: ${resourceLeafCount(pe)} leaves`,
     title: "Resources"
   });
-  pushIf(descriptors, pe.exports, {
+  if (pe.exports) descriptors.push({
     key: PE_LAZY_SECTION_KEYS.exports,
-    summary: `${plural(pe.exports?.entries?.length ?? 0, "entry", "entries")}`,
+    summary: plural(pe.exports.entries.length, "entry", "entries"),
     title: "Export directory"
   });
   pushIf(descriptors, pe.tls, {
@@ -216,32 +209,34 @@ const addWindowsDirectoryDescriptors = (
       : `${plural(pe.tls?.CallbackCount ?? 0, "callback", "callbacks")}`,
     title: "TLS directory"
   });
-  pushIf(descriptors, pe.reloc, {
+  if (pe.reloc) descriptors.push({
     key: PE_LAZY_SECTION_KEYS.reloc,
-    summary: `${plural(pe.reloc?.totalEntries ?? 0, "entry", "entries")}`,
+    summary: plural(pe.reloc.totalEntries, "entry", "entries"),
     title: "Base relocations"
   });
-  const rttiCounts = pe.msvcRtti ? getMsvcRttiSummaryCounts(pe.msvcRtti) : null;
-  pushIf(descriptors, rttiCounts, {
-    key: PE_LAZY_SECTION_KEYS.msvcRtti,
-    summary: `${plural(rttiCounts?.types ?? 0, "type", "types")} / ` +
-      `${plural(rttiCounts?.completeObjectLocators ?? 0, "COL", "COL")} / ` +
-      `${plural(rttiCounts?.vftables ?? 0, "vftable", "vftables")}`,
-    title: "Microsoft C++ RTTI"
-  });
-  pushIf(descriptors, pe.exception, {
+  if (pe.msvcRtti) descriptors.push(getMsvcRttiSectionDescriptor(pe.msvcRtti));
+  if (pe.exception) descriptors.push({
     key: PE_LAZY_SECTION_KEYS.exception,
-    summary: `${plural(pe.exception?.functionCount ?? 0, "function", "functions")}`,
+    summary: plural(pe.exception.functionCount, "function", "functions"),
     title: "Exception directory (.pdata)"
   });
   addWindowsDeferredImportDescriptors(pe, descriptors);
+  addWindowsRuntimeDescriptors(pe, descriptors);
+};
+
+const addWindowsRuntimeDescriptors = (
+  pe: PeWindowsParseResult,
+  descriptors: PeLazySectionDescriptor[]
+): void => {
+  const rowCount = metadataRowCount(pe);
   pushIf(descriptors, pe.clr, {
     key: PE_LAZY_SECTION_KEYS.clr,
-    summary: metadataRowCount(pe) > 0
-      ? `CLR metadata: ${compactCount(metadataRowCount(pe))} rows`
+    summary: rowCount > 0
+      ? `CLR metadata: ${compactCount(rowCount)} rows`
       : `runtime v${pe.clr?.MajorRuntimeVersion ?? 0}.${pe.clr?.MinorRuntimeVersion ?? 0}`,
     title: "CLR (.NET) header"
   });
+  if (pe.appHost) descriptors.push(getPeAppHostSectionDescriptor(pe.appHost));
   pushIf(descriptors, pe.nativeAotCandidate,
     getNativeAotSectionDescriptor(pe.nativeAotCandidate));
   pushIf(descriptors, pe.security, {

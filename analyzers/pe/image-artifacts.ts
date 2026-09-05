@@ -1,6 +1,7 @@
 "use strict";
 
 import { analyzePeGoRuntime } from "./go-runtime.js";
+import { analyzePeAppHost } from "./apphost/index.js";
 import { PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "./optional-header/magic.js";
 import { analyzePeOverlay } from "./overlay.js";
 import { analyzePePackers } from "./packers/index.js";
@@ -16,6 +17,7 @@ export type PeImageArtifacts = {
   packers: Awaited<ReturnType<typeof analyzePePackers>>;
   payloads: Awaited<ReturnType<typeof analyzePePayloads>>;
   goRuntime: Awaited<ReturnType<typeof analyzePeGoRuntime>>;
+  appHost: Awaited<ReturnType<typeof analyzePeAppHost>>;
 };
 
 const certificateTableStart = (directories: PeWindowsParseContext["core"]["dataDirs"]): number | null => {
@@ -48,7 +50,7 @@ export const parsePeImageArtifacts = async (
       ? { coffStringTableSize: core.coffStringTableSize }
       : {})
   });
-  const [packers, goRuntime] = await Promise.all([analyzePePackers({
+  const [packers, goRuntime, appHost] = await Promise.all([analyzePePackers({
     reader,
     sections: core.sections,
     overlay,
@@ -56,7 +58,7 @@ export const parsePeImageArtifacts = async (
     // Bun's .bun Offsets.byte_count is a usize, so it follows the PE image pointer width.
     // https://github.com/oven-sh/bun/blob/main/src/standalone_graph/StandaloneModuleGraph.zig
     imagePointerBytes: core.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC ? 8 : 4
-  }), analyzePeGoRuntime(file, reader, core)]);
+  }), analyzePeGoRuntime(file, reader, core), analyzePeAppHost(file, reader, core.sections)]);
   const payloads = await analyzePePayloads(file, reader, overlay, packers, resources);
   return {
     overlay: await subtractExplainedPeOverlay(
@@ -68,6 +70,7 @@ export const parsePeImageArtifacts = async (
     ),
     packers,
     payloads,
-    goRuntime
+    goRuntime,
+    appHost
   };
 };

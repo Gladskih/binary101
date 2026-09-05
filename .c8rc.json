@@ -2,6 +2,7 @@
   "all": true,
   "excludeAfterRemap": true,
   "exclude": [
+    ".stryker-tmp/**",
     "dist/**",
     "playwright.config.mjs",
     "eslint.config.mjs",

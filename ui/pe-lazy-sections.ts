@@ -16,6 +16,7 @@ import { renderResources } from "../renderers/pe/resources.js";
 import { renderException } from "../renderers/pe/exception.js";
 import { renderNativeAotCandidate } from "../renderers/pe/native-aot.js";
 import { renderMsvcRtti } from "../renderers/pe/msvc-rtti.js";
+import { renderPeAppHost } from "../renderers/pe/apphost.js";
 import { renderOverlayPanel } from "../renderers/pe/overlay.js";
 import { renderPePayloads } from "../renderers/pe/payloads.js";
 import {
@@ -88,65 +89,65 @@ const renderPackerById = (pe: PeWindowsParseResult, id: PePackerId): string => {
   return report ? renderToString(out => renderPackerReport(report, out, pe.payloads)) : "";
 };
 
-const renderWindowsLazyMarkup = (
-  pe: PeWindowsParseResult,
-  key: PeLazySectionKey
-): string => {
-  switch (key) {
-    case PE_LAZY_SECTION_KEYS.upx:
-      return renderPackerById(pe, "upx");
-    case PE_LAZY_SECTION_KEYS.nsisInstaller:
-      return renderPackerById(pe, "nsis-installer");
-    case PE_LAZY_SECTION_KEYS.innoSetup:
-      return renderPackerById(pe, "inno-setup");
-    case PE_LAZY_SECTION_KEYS.bunStandalone:
-      return renderPackerById(pe, "bun-standalone");
-    case PE_LAZY_SECTION_KEYS.loadConfig:
-      return renderToString(out => renderLoadConfig(pe, out));
-    case PE_LAZY_SECTION_KEYS.debug:
-      return renderToString(out => renderDebug(pe, out));
-    case PE_LAZY_SECTION_KEYS.linuxBoot:
-      return renderToString(out => renderLinuxBoot(pe, out));
-    case PE_LAZY_SECTION_KEYS.importLinking:
-      return renderToString(out => renderImportLinking(pe, out));
-    case PE_LAZY_SECTION_KEYS.imports:
-      return renderImportsPanel(pe);
-    case PE_LAZY_SECTION_KEYS.resources:
-      return pe.resources ? renderToString(out => renderResources(pe.resources!, out)) : "";
-    case PE_LAZY_SECTION_KEYS.exports:
-      return pe.exports ? renderToString(out => renderExports(pe.exports!, out)) : "";
-    case PE_LAZY_SECTION_KEYS.tls:
-      return pe.tls ? renderToString(out => renderTls(pe.tls!, out)) : "";
-    case PE_LAZY_SECTION_KEYS.reloc:
-      return pe.reloc ? renderToString(out => renderReloc(pe.reloc!, out)) : "";
-    case PE_LAZY_SECTION_KEYS.msvcRtti:
-      return pe.msvcRtti ? renderToString(out => renderMsvcRtti(pe, out)) : "";
-    case PE_LAZY_SECTION_KEYS.exception:
-      return pe.exception ? renderToString(out => renderException(pe.exception!, out)) : "";
-    case PE_LAZY_SECTION_KEYS.boundImports:
-      return renderToString(out => renderBoundImports(pe, out));
-    case PE_LAZY_SECTION_KEYS.delayImports:
-      return renderToString(out => renderDelayImports(pe, out));
-    case PE_LAZY_SECTION_KEYS.clr:
-      return pe.clr ? renderToString(out => renderClr(pe.clr!, out)) : "";
-    case PE_LAZY_SECTION_KEYS.nativeAot:
-      return renderToString(out => renderNativeAotCandidate(pe.nativeAotCandidate, out));
-    case PE_LAZY_SECTION_KEYS.security:
-      return pe.security ? renderToString(out => renderSecurity(pe.security!, out)) : "";
-    case PE_LAZY_SECTION_KEYS.iat:
-      return renderToString(out => renderIat(pe, out));
-    case PE_LAZY_SECTION_KEYS.architecture:
-      return renderToString(out => renderArchitectureDirectory(pe, out));
-    case PE_LAZY_SECTION_KEYS.globalPtr:
-      return renderToString(out => renderGlobalPtrDirectory(pe, out));
-    case PE_LAZY_SECTION_KEYS.appendedPayloads:
-      return renderToString(out => renderPePayloads(pe.payloads, "appended", out));
-    case PE_LAZY_SECTION_KEYS.resourcePayloads:
-      return renderToString(out => renderPePayloads(pe.payloads, "resource", out));
-    default:
-      return "";
-  }
+const WINDOWS_LAZY_RENDERERS: Partial<Record<
+  PeLazySectionKey, (pe: PeWindowsParseResult) => string
+>> = {
+  [PE_LAZY_SECTION_KEYS.upx]: (pe: PeWindowsParseResult) =>
+    renderPackerById(pe, "upx"),
+  [PE_LAZY_SECTION_KEYS.nsisInstaller]: (pe: PeWindowsParseResult) =>
+    renderPackerById(pe, "nsis-installer"),
+  [PE_LAZY_SECTION_KEYS.innoSetup]: (pe: PeWindowsParseResult) =>
+    renderPackerById(pe, "inno-setup"),
+  [PE_LAZY_SECTION_KEYS.bunStandalone]: (pe: PeWindowsParseResult) =>
+    renderPackerById(pe, "bun-standalone"),
+  [PE_LAZY_SECTION_KEYS.loadConfig]: (pe: PeWindowsParseResult) =>
+    renderToString(out => renderLoadConfig(pe, out)),
+  [PE_LAZY_SECTION_KEYS.debug]: (pe: PeWindowsParseResult) =>
+    renderToString(out => renderDebug(pe, out)),
+  [PE_LAZY_SECTION_KEYS.linuxBoot]: (pe: PeWindowsParseResult) =>
+    renderToString(out => renderLinuxBoot(pe, out)),
+  [PE_LAZY_SECTION_KEYS.importLinking]: (pe: PeWindowsParseResult) =>
+    renderToString(out => renderImportLinking(pe, out)),
+  [PE_LAZY_SECTION_KEYS.imports]: (pe: PeWindowsParseResult) =>
+    renderImportsPanel(pe),
+  [PE_LAZY_SECTION_KEYS.resources]: (pe: PeWindowsParseResult) =>
+    pe.resources ? renderToString(out => renderResources(pe.resources!, out)) : "",
+  [PE_LAZY_SECTION_KEYS.exports]: (pe: PeWindowsParseResult) =>
+    pe.exports ? renderToString(out => renderExports(pe.exports!, out)) : "",
+  [PE_LAZY_SECTION_KEYS.tls]: (pe: PeWindowsParseResult) =>
+    pe.tls ? renderToString(out => renderTls(pe.tls!, out)) : "",
+  [PE_LAZY_SECTION_KEYS.reloc]: (pe: PeWindowsParseResult) =>
+    pe.reloc ? renderToString(out => renderReloc(pe.reloc!, out)) : "",
+  [PE_LAZY_SECTION_KEYS.msvcRtti]: (pe: PeWindowsParseResult) =>
+    pe.msvcRtti ? renderToString(out => renderMsvcRtti(pe, out)) : "",
+  [PE_LAZY_SECTION_KEYS.exception]: (pe: PeWindowsParseResult) =>
+    pe.exception ? renderToString(out => renderException(pe.exception!, out)) : "",
+  [PE_LAZY_SECTION_KEYS.boundImports]: (pe: PeWindowsParseResult) =>
+    renderToString(out => renderBoundImports(pe, out)),
+  [PE_LAZY_SECTION_KEYS.delayImports]: (pe: PeWindowsParseResult) =>
+    renderToString(out => renderDelayImports(pe, out)),
+  [PE_LAZY_SECTION_KEYS.clr]: (pe: PeWindowsParseResult) =>
+    pe.clr ? renderToString(out => renderClr(pe.clr!, out)) : "",
+  [PE_LAZY_SECTION_KEYS.appHost]: (pe: PeWindowsParseResult) =>
+    renderToString(out => renderPeAppHost(pe, out)),
+  [PE_LAZY_SECTION_KEYS.nativeAot]: (pe: PeWindowsParseResult) =>
+    renderToString(out => renderNativeAotCandidate(pe.nativeAotCandidate, out)),
+  [PE_LAZY_SECTION_KEYS.security]: (pe: PeWindowsParseResult) =>
+    pe.security ? renderToString(out => renderSecurity(pe.security!, out)) : "",
+  [PE_LAZY_SECTION_KEYS.iat]: (pe: PeWindowsParseResult) =>
+    renderToString(out => renderIat(pe, out)),
+  [PE_LAZY_SECTION_KEYS.architecture]: (pe: PeWindowsParseResult) =>
+    renderToString(out => renderArchitectureDirectory(pe, out)),
+  [PE_LAZY_SECTION_KEYS.globalPtr]: (pe: PeWindowsParseResult) =>
+    renderToString(out => renderGlobalPtrDirectory(pe, out)),
+  [PE_LAZY_SECTION_KEYS.appendedPayloads]: (pe: PeWindowsParseResult) =>
+    renderToString(out => renderPePayloads(pe.payloads, "appended", out)),
+  [PE_LAZY_SECTION_KEYS.resourcePayloads]: (pe: PeWindowsParseResult) =>
+    renderToString(out => renderPePayloads(pe.payloads, "resource", out)),
 };
+
+const renderWindowsLazyMarkup = (pe: PeWindowsParseResult, key: PeLazySectionKey): string =>
+  WINDOWS_LAZY_RENDERERS[key]?.(pe) ?? "";
 
 const renderLazySectionMarkup = (pe: PeParseResult, key: PeLazySectionKey): string => {
   switch (key) {

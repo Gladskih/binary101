@@ -35,6 +35,8 @@ const PE_SECTION_DESCRIPTIONS: Record<string, string> = {
     "Cross-checks relationships between normal imports, bound imports, delay-load imports, IAT ranges, and section layout.",
   "Import table":
     "Imported DLLs and functions that the Windows loader resolves for the image.",
+  ".NET apphost":
+    "Native .NET launcher metadata: the bundle locator, optional single-file header, and managed application binding.",
   "Load Config":
     "PE loader metadata for compiler and OS hardening features such as CFG, SafeSEH, GS cookies, Code Integrity hints, and dynamic relocations.",
   "Microsoft C++ RTTI":

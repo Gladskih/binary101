@@ -261,3 +261,40 @@ void test("getPeLazySectionDescriptors exposes Microsoft C++ RTTI without eager 
   assert.ok(html.includes('data-pe-lazy-section="msvc-rtti"'));
   assert.ok(!html.includes(".?AVLazyType@@"));
 });
+
+void test("getPeLazySectionDescriptors exposes .NET apphost without eager details", () => {
+  const pe = createBasePe();
+  pe.appHost = {
+    locators: [{ rva: 0x2000, bundleHeaderOffset: 0n }],
+    bindings: [{ rva: 0x2100, kind: "managed-assembly", value: "App.dll" }],
+    issues: []
+  };
+
+  const descriptor = getPeLazySectionDescriptors(pe).find(
+    section => section.key === PE_LAZY_SECTION_KEYS.appHost
+  );
+  const html = renderPe(pe);
+
+  assert.deepEqual(descriptor, {
+    key: PE_LAZY_SECTION_KEYS.appHost,
+    summary: "native .NET launcher",
+    title: ".NET apphost"
+  });
+  assert.ok(html.includes('data-pe-lazy-section="apphost"'));
+  assert.ok(!html.includes("App.dll"));
+});
+
+void test("getPeLazySectionDescriptors identifies bundled .NET apphosts", () => {
+  const pe = createBasePe();
+  pe.appHost = {
+    locators: [{ rva: 0x2000, bundleHeaderOffset: 0x800n }],
+    bindings: [],
+    issues: []
+  };
+
+  const descriptor = getPeLazySectionDescriptors(pe).find(
+    section => section.key === PE_LAZY_SECTION_KEYS.appHost
+  );
+
+  assert.equal(descriptor?.summary, "single-file bundle");
+});

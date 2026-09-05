@@ -9,6 +9,7 @@ import type {
 } from "./parse-windows.js";
 import type { PeImageArtifacts } from "./image-artifacts.js";
 import { attachManifestValidation } from "./resources/manifest-consistency.js";
+import { detectPeSubtype } from "./subtype.js";
 
 const appendUniqueMessages = (existing: string[] | undefined, messages: string[]): string[] | undefined =>
   messages.length ? [...new Set([...(existing ?? []), ...messages])] : existing;
@@ -21,6 +22,42 @@ export const withWindowsPeLayoutWarnings = <T extends PeWindowsParseResult>(
   return mergedWarnings?.length ? { ...result, warnings: mergedWarnings } : result;
 };
 
+const buildWindowsPeIdentity = (
+  context: PeWindowsParseContext,
+  directories: PeDirectoryArtifacts,
+  imageArtifacts: PeImageArtifacts
+) => {
+  const { core } = context;
+  const warnings = appendUniqueMessages(
+    core.warnings,
+    directories.manifestValidation?.warnings ?? []
+  );
+  const subtype = detectPeSubtype(
+    directories.clr,
+    directories.resources?.muiResourceConfiguration,
+    core.opt.AddressOfEntryPoint,
+    core.sections,
+    context.linuxBoot,
+    core.dos,
+    imageArtifacts.appHost
+  );
+  return {
+    dos: core.dos,
+    signature: "PE" as const,
+    coff: core.coff,
+    ...(subtype ? { subtype } : {}),
+    ...(core.coffStringTableSize != null ? { coffStringTableSize: core.coffStringTableSize } : {}),
+    ...(core.trailingAlignmentPaddingSize
+      ? { trailingAlignmentPaddingSize: core.trailingAlignmentPaddingSize } : {}),
+    opt: core.opt,
+    ...(warnings?.length ? { warnings } : {}),
+    dirs: core.dataDirs,
+    sections: core.sections,
+    entrySection: core.entrySection,
+    rvaToOff: core.rvaToOff
+  };
+};
+
 export const buildWindowsPeResult = (
   context: PeWindowsParseContext,
   debugArtifacts: PeDebugArtifacts,
@@ -29,26 +66,10 @@ export const buildWindowsPeResult = (
   security: PeWindowsParseResult["security"],
   importLinking: PeWindowsParseResult["importLinking"]
 ): PeWindowsParseResult => {
-  const { core } = context;
-  const warnings = appendUniqueMessages(
-    core.warnings,
-    directories.manifestValidation?.warnings ?? []
-  );
   return {
+    ...buildWindowsPeIdentity(context, directories, imageArtifacts),
     debug: buildPeDebugSection(debugArtifacts),
     ...(debugArtifacts.coffDebug ? { coffDebug: debugArtifacts.coffDebug } : {}),
-    dos: core.dos,
-    signature: "PE",
-    coff: core.coff,
-    ...(directories.subtype ? { subtype: directories.subtype } : {}),
-    ...(core.coffStringTableSize != null ? { coffStringTableSize: core.coffStringTableSize } : {}),
-    ...(core.trailingAlignmentPaddingSize ? { trailingAlignmentPaddingSize: core.trailingAlignmentPaddingSize } : {}),
-    opt: core.opt,
-    ...(warnings?.length ? { warnings } : {}),
-    dirs: core.dataDirs,
-    sections: core.sections,
-    entrySection: core.entrySection,
-    rvaToOff: core.rvaToOff,
     imports: directories.importResult,
     loadcfg: directories.loadcfg,
     exports: directories.exportsInfo,
@@ -67,12 +88,13 @@ export const buildWindowsPeResult = (
     linuxBoot: context.linuxBoot,
     nativeAotCandidate: directories.nativeAotCandidate,
     ...(imageArtifacts.goRuntime ? { goRuntime: imageArtifacts.goRuntime } : {}),
+    ...(imageArtifacts.appHost ? { appHost: imageArtifacts.appHost } : {}),
     packers: imageArtifacts.packers,
     payloads: imageArtifacts.payloads,
     resources: attachManifestValidation(directories.resources, directories.manifestValidation),
     ...(imageArtifacts.overlay ? { overlay: imageArtifacts.overlay } : {}),
-    imageEnd: core.imageEnd,
-    imageSizeMismatch: core.imageSizeMismatch,
+    imageEnd: context.core.imageEnd,
+    imageSizeMismatch: context.core.imageSizeMismatch,
     hasCert: !!security?.count
   };
 };

@@ -32,6 +32,7 @@ import type { PeSubtype } from "../subtype.js";
 import type { parseExportDirectory } from "../directories/exports.js";
 import type { parseBaseRelocations } from "../directories/reloc.js";
 import type { MsvcRttiAnalysis } from "../msvc-rtti/types.js";
+import type { PeAppHostAnalysis } from "../apphost/types.js";
 import type { parseExceptionDirectory } from "../exception/index.js";
 import type { parseBoundImports } from "../imports/bound.js";
 import type { parseDelayImports32 } from "../imports/delay.js";
@@ -92,6 +93,7 @@ export interface PeWindowsParseResult extends PeParseResultBase {
   nativeAotCandidate?: PeNativeAotAnalysis | null;
   linuxBoot?: PeLinuxBootProtocol | null;
   goRuntime?: GoRuntimeMetadata;
+  appHost?: PeAppHostAnalysis;
 }
 
 export interface PeHeaderParseResult extends PeParseResultBase {
