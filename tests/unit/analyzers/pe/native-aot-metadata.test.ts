@@ -19,8 +19,31 @@ import { createNativeFormatMetadataFixture } from
   "../../../helpers/native-format-metadata-fixture.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 import type { PeWindowsCore } from "../../../../analyzers/pe/types.js";
+import { createPeNativeAotInitializerFixture } from
+  "../../../helpers/pe-native-aot-initializer-fixture.js";
 
 const HEADER_OFFSET = 0x100;
+
+// PE32/x86 and PE32+/AMD64 use native pointers of 4 and 8 bytes respectively.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#optional-header-standard-fields-image-only
+for (const pointerSize of [4, 8] as const) {
+  void test(`confirmed PE${pointerSize * 8} parses initializer targets and retains warnings`, async () => {
+    const fixture = createPeNativeAotInitializerFixture(pointerSize);
+
+    const parsed = await parseNativeAotMetadataFixture(fixture);
+    // A later slot points to non-executable data; the preceding slot remains valid.
+    fixture.setInitializerTarget(1, fixture.core.sections[0]!.virtualAddress);
+    const damaged = await parseNativeAotMetadataFixture(fixture);
+
+    // ModuleHeaders.cs: EagerCctor = 205 (independent of the production constants).
+    // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Runtime/ModuleHeaders.cs
+    assert.deepEqual(parsed?.initializers,
+      [{ sectionType: 205, targetRvas: [fixture.codeRva], warnings: [] }]);
+    assert.equal(damaged?.status, "confirmed");
+    assert.deepEqual(damaged.initializers?.[0]?.targetRvas, []);
+    assert.equal(damaged.initializers?.[0]?.warnings.length, 1);
+  });
+}
 
 void test("analyzePeNativeAotMetadata confirms x64 pointer-range metadata", async () => {
   const fixture = createNativeAotMetadataFixture();

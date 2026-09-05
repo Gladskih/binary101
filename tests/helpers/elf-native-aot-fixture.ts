@@ -2,6 +2,7 @@
 
 import { MockFile } from "./mock-file.js";
 import { createNativeAotMetadataFixture } from "./pe-native-aot-metadata-fixture.js";
+import { createPeNativeAotInitializerFixture } from "./pe-native-aot-initializer-fixture.js";
 
 const ELF_HEADER_SIZE = 64;
 const PROGRAM_HEADER_SIZE = 56;
@@ -75,8 +76,22 @@ const writeSectionNames = (bytes: Uint8Array, sectionHeaderOffset: number): void
   bytes.set(SECTION_NAMES, namesOffset);
 };
 
-export const createElfNativeAotFixture = (): ElfNativeAotFixture => {
-  const nativeAot = createNativeAotMetadataFixture();
+export const createElfNativeAotInitializerFixture = () => {
+  const nativeAot = createPeNativeAotInitializerFixture();
+  const fixture = createElfNativeAotFixture(nativeAot);
+  const view = new DataView(fixture.bytes.buffer);
+  // ELF64 Phdr: p_flags follows uint32 p_type; PF_R | PF_X = 5.
+  // https://gabi.xinuos.com/elf/07-pheader.html
+  view.setUint32(ELF_HEADER_SIZE + Uint32Array.BYTES_PER_ELEMENT, 5, true);
+  // Intel SDM Vol. 2, RET: C3 is a near return; the seed is one complete instruction.
+  fixture.bytes[nativeAot.codeRva] = 0xc3;
+  return { ...fixture, initializerTargetRva: nativeAot.codeRva,
+    file: new MockFile(fixture.bytes, "native-aot.elf", "application/x-elf") };
+};
+
+export const createElfNativeAotFixture = (
+  nativeAot = createNativeAotMetadataFixture()
+): ElfNativeAotFixture => {
   const relocationSites = nativeAot.relocations.blocks[0]!.entries
     .filter(entry => entry.type !== 0)
     .map(entry => nativeAot.relocations.blocks[0]!.pageRva + entry.offset);

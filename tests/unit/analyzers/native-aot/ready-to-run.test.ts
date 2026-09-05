@@ -52,6 +52,7 @@ const createVirtualImage = (fixture: NativeAotMetadataFixture): NativeAotVirtual
     isDataRange: (address, size, alignment) =>
       alignment > 0 && address % alignment === 0 && isMappedRange(address, size),
     isMappedRange,
+    isExecutableAddress: () => false,
     readData,
     readPointerValue,
     readPointerTarget

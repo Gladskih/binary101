@@ -37,6 +37,7 @@ export const collectElfInstructionSetSeeds = async (
   for (const group of await collectElfDisassemblySeedGroups({
     file,
     programHeaders: opts.programHeaders,
+    nativeAot: opts.nativeAot ?? null,
     sections: opts.sections,
     is64: opts.is64Bit,
     littleEndian: opts.littleEndian,

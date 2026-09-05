@@ -7,6 +7,10 @@ export const NATIVE_AOT_READY_TO_RUN_SIGNATURE = 0x0052_5452;
 // MetadataBlob.cs defines ReflectionMapBlob IDs in the reserved range beginning at 300.
 // https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/Runtime/MetadataBlob.cs
 export const NATIVE_AOT_EMBEDDED_METADATA_SECTION = 313;
+// ModuleHeaders.cs: ReadyToRunSectionType.EagerCctor and ModuleInitializerList.
+// https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Runtime/ModuleHeaders.cs
+export const NATIVE_AOT_EAGER_CCTOR_SECTION = 205;
+export const NATIVE_AOT_MODULE_INITIALIZER_LIST_SECTION = 213;
 // NativeMetadataReader.cs MetadataHeader.Signature identifies NativeFormat reflection metadata.
 // https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs
 export const NATIVE_AOT_METADATA_SIGNATURE = 0xdead_dffd;
@@ -32,6 +36,13 @@ export interface NativeAotMetadata {
   minorVersion: number;
   sections: NativeAotMetadataSection[];
   reflection?: NativeAotReflectionMetadata;
+  initializers?: NativeAotInitializerTable[];
+}
+
+export interface NativeAotInitializerTable {
+  sectionType: number;
+  targetRvas: number[];
+  warnings: string[];
 }
 
 export interface NativeAotReflectionType {
@@ -60,14 +71,14 @@ const SECTION_NAMES: Readonly<Record<number, string>> = {
   201: "GC static region",
   202: "Thread-static region",
   204: "Type-manager indirection",
-  205: "Eager class constructors",
+  [NATIVE_AOT_EAGER_CCTOR_SECTION]: "Eager class constructors",
   206: "Frozen-object region",
   207: "Dehydrated data",
   208: "Thread-static offsets",
   209: "Interface dispatch-cell info",
   210: "Interface dispatch cells",
   212: "Import address tables",
-  213: "Module initializers",
+  [NATIVE_AOT_MODULE_INITIALIZER_LIST_SECTION]: "Module initializers",
   214: "GVM dispatch-cell info",
   215: "GVM dispatch cells",
   // ReflectionMapBlob IDs below are offset by 300 in the ReadyToRun section table:

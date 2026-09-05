@@ -24,6 +24,26 @@ const loadSegment = (overrides: Partial<ElfProgramHeader> = {}): ElfProgramHeade
   ...overrides
 });
 
+void test("ELF NativeAOT executable targets require PF_X, file bytes and mapped memory", () => {
+  const segment = loadSegment();
+  const file = new File([new Uint8Array(Number(segment.offset + segment.filesz))], "code.elf");
+  const image = createElfNativeAotImage(createFileRangeReader(file, 0, file.size), [segment], new Map());
+  // A single LOAD's image base is vaddr - offset, so its first image-relative address is offset.
+  const start = Number(segment.offset);
+  assert.equal(image?.isExecutableAddress(start), false);
+  // ELF gABI PF_R | PF_X = 5.
+  // https://gabi.xinuos.com/elf/07-pheader.html
+  segment.flags = 5;
+
+  assert.equal(image?.isExecutableAddress(start), true);
+  assert.equal(image?.isExecutableAddress(start + Number(segment.filesz) - 1), true);
+  assert.equal(image?.isExecutableAddress(start + Number(segment.filesz)), false);
+  assert.equal(image?.isExecutableAddress(-1), false);
+  assert.equal(image?.isExecutableAddress(Number.MAX_SAFE_INTEGER + 1), false);
+  segment.memsz = 1n; // Only the first byte remains mapped, though more bytes exist in the file.
+  assert.equal(image?.isExecutableAddress(start + Number(segment.memsz)), false);
+});
+
 void test("ELF NativeAOT image normalizes virtual addresses and separates file data from BSS", async () => {
   const bytes = new Uint8Array(0x200);
   const view = new DataView(bytes.buffer);

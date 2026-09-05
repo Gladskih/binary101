@@ -67,6 +67,16 @@ const isMappedSectionRange = (sections: PeSection[], rva: number, size: number):
   return delta >= 0 && delta + size <= getMappedSectionSpan(section);
 };
 
+const isExecutableAddress = (
+  sections: PeSection[], rva: number, fileSize: number, sizeOfImage: number
+): boolean => {
+  if (!isPeNativeAotRvaRange(rva, 1, sizeOfImage)) return false;
+  const section = findSectionContainingRva(sections, rva);
+  return section != null &&
+    (section.characteristics & COFF_SECTION_CHARACTERISTICS.MEM_EXECUTE) !== 0 &&
+    rva - section.virtualAddress < fileBackedSize(section, fileSize);
+};
+
 export const createPeNativeAotImage = (
   reader: FileRangeReader,
   core: PeWindowsCore,
@@ -109,6 +119,8 @@ export const createPeNativeAotImage = (
     pointerSize,
     relocationType,
     isDataRange,
+    isExecutableAddress: rva =>
+      isExecutableAddress(core.sections, rva, reader.size, sizeOfImage),
     isMappedRange: (rva, size) =>
       isPeNativeAotRvaRange(rva, size, sizeOfImage) &&
       isMappedSectionRange(core.sections, rva, size),

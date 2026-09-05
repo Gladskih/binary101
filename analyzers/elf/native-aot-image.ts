@@ -75,6 +75,13 @@ export const createElfNativeAotImage = (
     const view = await reader.read(offset, size);
     return view.byteLength === size ? view : null;
   };
+  const isExecutableAddress = (address: number): boolean => {
+    if (!isDataRange(address, 1, 1)) return false;
+    const segment = findLoadRange(programHeaders, imageBase + BigInt(address), 1, "file");
+    // ELF gABI p_flags: PF_X = 1; require a byte in both file and mapped memory.
+    // https://gabi.xinuos.com/elf/07-pheader.html
+    return segment != null && (segment.flags & 1) !== 0 && isMappedRange(address, 1);
+  };
   const readPointerValue = async (address: number): Promise<bigint | null> => {
     const view = await readData(address, 8, 8);
     if (!view) return null;
@@ -91,6 +98,7 @@ export const createElfNativeAotImage = (
     imageBase,
     toImageAddress,
     isDataRange,
+    isExecutableAddress,
     isMappedRange,
     readData,
     readPointerValue,

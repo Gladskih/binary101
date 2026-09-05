@@ -1,6 +1,7 @@
 "use strict";
 
 import type { NativeAotVirtualImage } from "./virtual-image-types.js";
+import { parseNativeAotInitializers } from "./initializers.js";
 import {
   NATIVE_AOT_EMBEDDED_METADATA_SECTION,
   NATIVE_AOT_HEADER_SIZE,
@@ -176,7 +177,10 @@ export const findNativeAotMetadata = async (
     if (headerRva == null || checkedHeaders.has(headerRva)) continue;
     checkedHeaders.add(headerRva);
     const header = await parseNativeAotReadyToRunHeader(image, sites, headerRva);
-    if (header) return { status: "confirmed", modulePointerRva, ...header };
+    if (header) return {
+      status: "confirmed", modulePointerRva, ...header,
+      initializers: await parseNativeAotInitializers(image, header)
+    };
   }
   return null;
 };

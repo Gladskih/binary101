@@ -61,8 +61,46 @@ A malformed or unsupported consumed field produces visible warnings but does not
 independently confirmed NativeAOT result.
 
 Only metadata retained by NativeAOT for reflection can be shown. Trimmed types or methods are not
-recoverable from this blob. Signatures, fields, properties, events, custom attributes, and method
-code addresses are not decoded yet.
+recoverable from this blob. Signatures, fields, properties, events, custom attributes, and mappings
+from reflection method names to code addresses are not decoded yet.
+
+## Initializer entry points for disassembly
+
+Confirmed PE (x86/AMD64) and ELF (x86-64) NativeAOT images now provide disassembly seeds from:
+
+- section 205, `EagerCctor`: eager class constructors;
+- section 213, `ModuleInitializerList`: module constructors.
+
+Both contain signed little-endian 32-bit displacements relative to the address of each slot,
+including on 64-bit targets. The parser follows the runtime's `RunInitializers` implementation;
+it does not scan for pointer-shaped values or infer function prologues.
+
+Decoding is deliberately restricted to the exact verified header versions **10.1 (.NET 9)** and
+**16.0 (.NET 10)**. Sources checked at the release tags:
+
+- [v9.0.0 ModuleHeaders.cs](https://github.com/dotnet/runtime/blob/v9.0.0/src/coreclr/tools/Common/Internal/Runtime/ModuleHeaders.cs)
+  and [v10.0.0 ModuleHeaders.cs](https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Runtime/ModuleHeaders.cs): versions and section IDs;
+- [v9.0.0 StartupCodeHelpers.cs](https://github.com/dotnet/runtime/blob/v9.0.0/src/coreclr/nativeaot/Common/src/Internal/Runtime/CompilerHelpers/StartupCodeHelpers.cs)
+  and [v10.0.0 StartupCodeHelpers.cs](https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/nativeaot/Common/src/Internal/Runtime/CompilerHelpers/StartupCodeHelpers.cs): runtime interpretation of both tables;
+- [v9.0.0 TargetDetails.cs](https://github.com/dotnet/runtime/blob/v9.0.0/src/coreclr/tools/Common/TypeSystem/Common/TargetDetails.cs)
+  and [v10.0.0 TargetDetails.cs](https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/TypeSystem/Common/TargetDetails.cs): relative pointers on supported targets;
+- [ModuleInitializerListNode.cs](https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/aot/ILCompiler.Compiler/Compiler/DependencyAnalysis/ModuleInitializerListNode.cs): compiler emission of method entry-point references.
+
+.NET 8 header version 9.1 is intentionally excluded: its
+[TargetDetails.cs](https://github.com/dotnet/runtime/blob/v8.0.0/src/coreclr/tools/Common/TypeSystem/Common/TargetDetails.cs)
+also permits CppCodegen with absolute pointers, which the header does not distinguish. Unknown
+versions produce a visible warning for each initializer table, without guessing its encoding.
+
+Each table needs an explicit, aligned, fully file-backed extent divisible by four. Each target must
+resolve to executable bytes within both the file and mapped image. A bad extent, unreadable chunk,
+or invalid target rejects the entire table's seeds, while other valid tables remain available.
+Warnings remain visible without retracting independently confirmed NativeAOT metadata. The parser
+limits each table to 1 MiB and reads at most 4 KiB at a time through the existing range reader.
+
+Targets are deduplicated per table. PE and ELF disassembly reuse the parsed addresses, retain their
+source labels, and apply the existing cross-source deduplication. The NativeAOT panel shows counts
+and warnings. This does not recover method names or all compiled methods: reflection invoke maps,
+stack-trace maps, general fixup tables, and hydrated runtime structures are not seed sources here.
 
 The analyzer currently does not confirm ARM/ARM64, files with stripped or malformed base
 relocations, metadata that is not fully file-backed, or NativeAOT images whose header layout uses an

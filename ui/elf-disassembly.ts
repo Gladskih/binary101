@@ -149,6 +149,7 @@ export const createElfDisassemblyController = (
           littleEndian: elf.littleEndian,
           entrypointVaddr: elf.header.entry,
           programHeaders: elf.programHeaders,
+          nativeAot: elf.nativeAot ?? null,
           sections: elf.sections,
           yieldEveryInstructions: 1024,
           signal: localAbortController.signal,

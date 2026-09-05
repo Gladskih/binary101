@@ -1,6 +1,7 @@
 "use strict";
 
 import type { ElfProgramHeader, ElfSectionHeader } from "./types.js";
+import type { NativeAotMetadata } from "../native-aot/format.js";
 
 export interface ElfInstructionSetUsage {
   id: string;
@@ -43,6 +44,7 @@ export interface AnalyzeElfInstructionSetOptions {
   entrypointVaddr: bigint;
   programHeaders: ElfProgramHeader[];
   sections: ElfSectionHeader[];
+  nativeAot?: NativeAotMetadata | null;
   yieldEveryInstructions?: number;
   signal?: AbortSignal;
   onProgress?: (progress: ElfInstructionSetProgress) => void;

@@ -8,6 +8,28 @@ import type { PeWindowsParseResult } from "../../../../../analyzers/pe/core/pars
 import { inlinePeSectionName } from "../../../../../analyzers/pe/sections/name.js";
 import { MSVC_RTTI_LAYOUT } from "../../../../../analyzers/pe/msvc-rtti/layout.js";
 import { collectPeDisassemblySeeds } from "../../../../../ui/pe-disassembly-seeds.js";
+import { createNativeAotInitializerFixture } from
+  "../../../../helpers/native-aot-initializer-fixture.js";
+
+void test("collectPeDisassemblySeeds reuses confirmed NativeAOT initializer targets", async () => {
+  const pe = createWindowsPe();
+  const fixture = createNativeAotInitializerFixture();
+  // ModuleHeaders.cs: EagerCctor = 205, ModuleInitializerList = 213.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Runtime/ModuleHeaders.cs
+  pe.nativeAotCandidate = {
+    ...fixture.header, initializers: [
+      { sectionType: 205, targetRvas: [fixture.codeRvas[0]], warnings: [] },
+      { sectionType: 213, targetRvas: [fixture.codeRvas[1]], warnings: [] }
+    ]
+  };
+
+  const seeds = await collectPeDisassemblySeeds(new File([], "aot-pe"), pe);
+
+  assert.deepEqual(seeds.extraEntrypoints, [
+    { source: "NativeAOT Eager class constructors", rvas: [fixture.codeRvas[0]] },
+    { source: "NativeAOT Module initializers", rvas: [fixture.codeRvas[1]] }
+  ]);
+});
 
 void test("collectPeDisassemblySeeds gathers basic Windows PE entry seeds", async () => {
   const seeds = await collectPeDisassemblySeeds(new File([new Uint8Array(0)], "empty-pe"), createWindowsPe());

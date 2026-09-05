@@ -6,6 +6,7 @@ import { nativeAotSectionName, type NativeAotMetadata } from
   "../../analyzers/native-aot/format.js";
 import type { ElfParseResult } from "../../analyzers/elf/types.js";
 import { renderNativeAotReflection } from "../native-aot/reflection.js";
+import { renderNativeAotInitializers } from "../native-aot/initializers.js";
 
 const renderSections = (metadata: NativeAotMetadata): string => {
   const rows = metadata.sections.map(section =>
@@ -49,5 +50,6 @@ export const renderElfNativeAot = (elf: ElfParseResult, out: string[]): void => 
   ));
   out.push(`</dl>${renderSections(metadata)}`);
   if (metadata.reflection) out.push(renderNativeAotReflection(metadata.reflection));
+  out.push(renderNativeAotInitializers(metadata.initializers));
   out.push(`</section>`);
 };

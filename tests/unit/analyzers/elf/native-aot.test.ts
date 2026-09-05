@@ -4,11 +4,35 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseElf } from "../../../../analyzers/elf/index.js";
 import { analyzeElfNativeAot } from "../../../../analyzers/elf/native-aot.js";
-import { createElfNativeAotFixture } from "../../../helpers/elf-native-aot-fixture.js";
+import { createElfNativeAotFixture, createElfNativeAotInitializerFixture } from
+  "../../../helpers/elf-native-aot-fixture.js";
+import { analyzeElfInstructionSets } from "../../../../analyzers/elf/disassembly-analyze.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 
 const parseFixture = async (bytes: Uint8Array) =>
   parseElf(new MockFile(bytes, "native-aot.elf", "application/x-elf"));
+
+void test("ELF NativeAOT initializers reach the disassembler from confirmed metadata", async () => {
+  const fixture = createElfNativeAotInitializerFixture();
+  const parsed = await parseElf(fixture.file);
+  assert.ok(parsed);
+
+  const report = await analyzeElfInstructionSets(fixture.file, {
+    machine: parsed.header.machine, is64Bit: parsed.is64, littleEndian: parsed.littleEndian,
+    entrypointVaddr: parsed.header.entry, programHeaders: parsed.programHeaders,
+    sections: parsed.sections, nativeAot: parsed.nativeAot ?? null
+  });
+
+  // ModuleHeaders.cs: EagerCctor = 205, independently of the parser's constants.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Runtime/ModuleHeaders.cs
+  assert.deepEqual(parsed.nativeAot?.initializers,
+    [{ sectionType: 205, targetRvas: [fixture.initializerTargetRva], warnings: [] }]);
+  // The fixture's sole initializer is a RET, so exactly one instruction must be decoded.
+  assert.equal(report.instructionCount, 1);
+  assert.equal(report.invalidInstructionCount, 0);
+  assert.equal(report.seedSummary?.sources[0]?.source, "NativeAOT Eager class constructors");
+  assert.equal(report.seedSummary?.sources[0]?.added, 1);
+});
 
 const useDynamicRelaTable = (
   fixture: ReturnType<typeof createElfNativeAotFixture>,

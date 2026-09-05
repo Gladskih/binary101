@@ -2,9 +2,23 @@ import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createElfNativeAotFixture } from "../helpers/elf-native-aot-fixture.js";
+import { createElfNativeAotFixture, createElfNativeAotInitializerFixture } from
+  "../helpers/elf-native-aot-fixture.js";
 
 const REAL_NATIVE_AOT_ELF = join(tmpdir(), "binary101-nativeaot-elf", "HelloElfAot");
+
+test("uses NativeAOT initializers as disassembly seeds in the browser", async ({ page }) => {
+  const fixture = createElfNativeAotInitializerFixture();
+  await page.goto("/");
+
+  await page.setInputFiles("#fileInput", {
+    name: "initializers.elf", mimeType: "application/x-elf", buffer: Buffer.from(fixture.bytes)
+  });
+  await expect(page.locator("#analysisValue")).toContainText("NativeAOT initializer entry points");
+  await page.locator("#elfInstructionSetsAnalyzeButton").click();
+
+  await expect(page.locator("#analysisValue")).toContainText("NativeAOT Eager class constructors");
+});
 
 test("renders relocation-confirmed NativeAOT from ELF in the browser", async ({ page }) => {
   const fixture = createElfNativeAotFixture();

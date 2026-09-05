@@ -26,6 +26,29 @@ const makeImage = (pointerSize: 4 | 8 = 8) => {
   return { fixture, image };
 };
 
+void test("NativeAOT executable addresses require code backed by file bytes", () => {
+  const { fixture, image } = makeImage();
+  const section = fixture.core.sections[0]!;
+  const start = section.virtualAddress;
+  assert.equal(image.isExecutableAddress(start), false);
+  // PE spec: IMAGE_SCN_MEM_EXECUTE = 0x20000000.
+  // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
+  section.characteristics |= 0x20000000;
+  // Leave a mapped, zero-filled tail after a small file-backed prefix.
+  section.sizeOfRawData = fixture.pointerSize;
+
+  assert.equal(image.isExecutableAddress(start), true);
+  assert.equal(image.isExecutableAddress(start + section.sizeOfRawData - 1), true);
+  assert.equal(image.isExecutableAddress(start + section.sizeOfRawData), false);
+  assert.equal(image.isExecutableAddress(0), false);
+  assert.equal(image.isExecutableAddress(-1), false);
+  // PE RVAs are unsigned 32-bit values: 2^32 is the first unrepresentable RVA.
+  assert.equal(image.isExecutableAddress(0x100000000), false);
+  assert.equal(image.isExecutableAddress(NaN), false);
+  section.pointerToRawData = fixture.bytes.length;
+  assert.equal(image.isExecutableAddress(start), false);
+});
+
 void test("NativeAOT RVA ranges reject malformed arithmetic and accept exact bounds", () => {
   assert.equal(isPeNativeAotRvaRange(0, 1, 1), true);
   assert.equal(isPeNativeAotRvaRange(-1, 1, 1), false);
