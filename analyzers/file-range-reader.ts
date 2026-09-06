@@ -47,22 +47,28 @@ const isCachedWindowHit = (cachedWindow: CachedWindow, offset: number, size: num
   offset >= cachedWindow.offset &&
   offset <= cachedWindow.offset + cachedWindow.view.byteLength - size;
 
-export const createFileRangeReader = (
-  file: File,
-  baseOffset: number,
-  limit: number,
-  windowBytes = DEFAULT_FILE_READ_WINDOW_BYTES
-): DirectFileRangeReader => {
-  const size = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 0;
-  let cachedWindow: CachedWindow | null = null;
-  const cacheWindowBytes = Number.isFinite(windowBytes) && windowBytes > 0
-    ? Math.floor(windowBytes)
-    : 0;
+const findCachedWindow = (
+  windows: CachedWindow[], offset: number, size: number
+): CachedWindow | undefined => {
+  const index = windows.findIndex(window => isCachedWindowHit(window, offset, size));
+  if (index < 0) return undefined;
+  const cached = windows[index]!;
+  // Reorder the existing window list to avoid copying it on every cache hit.
+  windows.splice(index, 1);
+  windows.unshift(cached);
+  return cached;
+};
 
-  const read = async (offset: number, byteLength: number): Promise<DataView> => {
+const createWindowedRead = (
+  file: File, baseOffset: number, size: number, cacheWindowBytes: number
+): FileRangeReader["read"] => {
+  // Pointer walks revisit distant ranges; retaining windows avoids repeated file reads.
+  const cachedWindows: CachedWindow[] = [];
+  return async (offset: number, byteLength: number): Promise<DataView> => {
     const availableSize = clampRangeSize(size, offset, byteLength);
     if (availableSize === 0) return EMPTY_VIEW;
-    if (cachedWindow && isCachedWindowHit(cachedWindow, offset, availableSize)) {
+    const cachedWindow = findCachedWindow(cachedWindows, offset, availableSize);
+    if (cachedWindow) {
       return subView(cachedWindow.view, offset - cachedWindow.offset, availableSize);
     }
     const shouldCache = cacheWindowBytes > 0 && availableSize <= cacheWindowBytes;
@@ -74,21 +80,20 @@ export const createFileRangeReader = (
         .slice(baseOffset + offset, baseOffset + offset + readSize)
         .arrayBuffer()
     );
-    cachedWindow = shouldCache && view.byteLength ? { offset, view } : null;
+    if (shouldCache && view.byteLength) {
+      cachedWindows.unshift({ offset, view });
+      // This is a working default, not a proven optimum:
+      // nearby cache sizes performed similarly in browser benchmarks. 
+      if (cachedWindows.length > 16) cachedWindows.pop();
+    }
     return subView(view, 0, Math.min(availableSize, view.byteLength));
   };
+};
 
-  const readBytes = async (offset: number, byteLength: number): Promise<Uint8Array> => {
-    const view = await read(offset, byteLength);
-    return view.byteLength
-      ? new Uint8Array(view.buffer, view.byteOffset, view.byteLength)
-      : EMPTY_BYTES;
-  };
-
-  const readInto = async (
-    offset: number,
-    destination: Uint8Array<ArrayBuffer>
-  ): Promise<Uint8Array<ArrayBuffer>> => {
+const createReadInto = (
+  file: File, baseOffset: number, size: number
+): FileRangeReadInto =>
+  async (offset, destination) => {
     const availableSize = clampRangeSize(size, offset, destination.byteLength);
     if (availableSize === 0) return destination.subarray(0, 0);
     const streamReader = file
@@ -107,5 +112,20 @@ export const createFileRangeReader = (
     }
   };
 
-  return { size, read, readBytes, readInto };
+export const createFileRangeReader = (
+  file: File,
+  baseOffset: number,
+  limit: number,
+  windowBytes = DEFAULT_FILE_READ_WINDOW_BYTES
+): DirectFileRangeReader => {
+  const size = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 0;
+  const read = createWindowedRead(file, baseOffset, size,
+    Number.isFinite(windowBytes) && windowBytes > 0 ? Math.floor(windowBytes) : 0);
+  const readBytes = async (offset: number, byteLength: number): Promise<Uint8Array> => {
+    const view = await read(offset, byteLength);
+    return view.byteLength
+      ? new Uint8Array(view.buffer, view.byteOffset, view.byteLength)
+      : EMPTY_BYTES;
+  };
+  return { size, read, readBytes, readInto: createReadInto(file, baseOffset, size) };
 };

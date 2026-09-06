@@ -206,3 +206,71 @@ void test("createFileRangeReader does not stream invalid or empty ranges", async
   assert.equal(empty.byteLength, 0);
   assert.deepEqual(tracked.requests, []);
 });
+
+void test("createFileRangeReader retains windows when following pointers to distant data", async () => {
+  const tracked = createTrackedReaderFixture("file-reader-pointer-walk");
+
+  await tracked.reader.read(0, SMALL_READ_BYTES);
+  await tracked.reader.read(TEST_READER_WINDOW_BYTES, SMALL_READ_BYTES);
+  const returned = await tracked.reader.read(NEARBY_OFFSET_BYTES, SMALL_READ_BYTES);
+
+  assert.deepEqual(toViewBytes(returned), [16, 17, 18, 19]);
+  assert.deepEqual(tracked.requests, [TEST_READER_WINDOW_BYTES, TEST_READER_WINDOW_BYTES]);
+});
+
+void test("createFileRangeReader preserves small windows across an oversized read", async () => {
+  const tracked = createTrackedReaderFixture("file-reader-large-read-between-pointers");
+
+  await tracked.reader.read(0, SMALL_READ_BYTES);
+  await tracked.reader.read(0, tracked.size);
+  await tracked.reader.read(NEARBY_OFFSET_BYTES, SMALL_READ_BYTES);
+
+  assert.deepEqual(tracked.requests, [TEST_READER_WINDOW_BYTES, tracked.size]);
+});
+
+const fillReaderWindows = async (reader: ReturnType<typeof createFileRangeReader>): Promise<void> => {
+  // The cache budget is 16 windows; touching each one fills it without eviction.
+  for (let index = 0; index < 16; index++) {
+    await reader.read(index * TEST_READER_WINDOW_BYTES, SMALL_READ_BYTES);
+  }
+};
+
+void test("createFileRangeReader evicts the least recently used window at its memory limit", async () => {
+  const tracked = createTrackedReaderFixture("file-reader-eviction", TEST_READER_WINDOW_BYTES * 17);
+
+  await fillReaderWindows(tracked.reader);
+  await tracked.reader.read(0, SMALL_READ_BYTES);
+  await tracked.reader.read(TEST_READER_WINDOW_BYTES * 16, SMALL_READ_BYTES);
+  await tracked.reader.read(0, SMALL_READ_BYTES);
+  await tracked.reader.read(TEST_READER_WINDOW_BYTES * 2, SMALL_READ_BYTES);
+  const evicted = await tracked.reader.read(TEST_READER_WINDOW_BYTES, SMALL_READ_BYTES);
+
+  assert.deepEqual(toViewBytes(evicted), [64, 65, 66, 67]);
+  assert.deepEqual(tracked.requests, Array.from({ length: 18 }, () => TEST_READER_WINDOW_BYTES));
+});
+
+void test("createFileRangeReader bounds cached views by actual bytes in a truncated file", async () => {
+  const tracked = createSliceTrackingFile(Uint8Array.of(10, 20, 30), DEFAULT_FILE_BYTES);
+  const reader = createFileRangeReader(tracked.file, 0, tracked.file.size, TEST_READER_WINDOW_BYTES);
+
+  const first = await reader.read(0, SMALL_READ_BYTES);
+  const cached = await reader.read(1, 2);
+  const missing = await reader.read(3, SMALL_READ_BYTES);
+
+  assert.deepEqual(toViewBytes(first), [10, 20, 30]);
+  assert.deepEqual(toViewBytes(cached), [20, 30]);
+  assert.equal(missing.byteLength, 0);
+  assert.deepEqual(tracked.requests, [TEST_READER_WINDOW_BYTES, TEST_READER_WINDOW_BYTES]);
+});
+
+void test("createFileRangeReader keeps cache offsets relative to an embedded file", async () => {
+  const tracked = createSliceTrackingFile(Uint8Array.of(90, 80, 10, 20, 30, 40), 6);
+  const reader = createFileRangeReader(tracked.file, 2, 4, 2);
+
+  await reader.read(0, 1);
+  await reader.read(2, 1);
+  const cached = await reader.readBytes(1, 1);
+
+  assert.deepEqual([...cached], [20]);
+  assert.deepEqual(tracked.requests, [2, 2]);
+});
