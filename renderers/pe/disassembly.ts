@@ -93,6 +93,12 @@ const renderInstructionSetsContent = (pe: PeWindowsParseResult, out: string[]): 
     return;
   }
 
+  if (disasm.bytesSampled === 0) {
+    out.push(`<div class="smallNote">Disassembly skipped: no code bytes were analyzed.</div>`);
+    out.push(`<ul>${disasm.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul>`);
+    out.push(renderInstructionPanelEnd());
+    return;
+  }
   const mode = disasm.bitness === 64 ? "64-bit" : "32-bit";
   out.push(
     `<div class="smallNote">Disassembly sample (${mode}): ` +

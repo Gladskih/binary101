@@ -18,7 +18,7 @@ void test("getDebugTypeInfo returns LLVM-backed toolchain metadata for POGO", ()
 
   assert.deepEqual(info, {
     label: "POGO",
-    description: "Profile-guided optimization metadata emitted by the linker."
+    description: "POGO (profile-guided optimization) linker layout metadata; may describe code or data."
   });
 });
 

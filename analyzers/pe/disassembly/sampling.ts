@@ -31,11 +31,14 @@ export const findSectionContainingRva = (sections: PeSection[], rva: number): Pe
   return null;
 };
 
-export const findBestCodeSection = (sections: PeSection[]): PeSection | null =>
-  sections.find(section => peSectionNameValue(section.name).toLowerCase() === ".text") ||
-  sections.find(isExecutableSection) ||
-  sections[0] ||
-  null;
+export const findBestCodeSection = (sections: PeSection[]): PeSection | null => {
+  // Section names and CNT_CODE do not grant execution permission (PE/COFF section flags).
+  // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
+  const executable = sections.filter(section =>
+    isMemoryExecutableSection(section) && section.sizeOfRawData > 0);
+  return executable.find(section => peSectionNameValue(section.name).toLowerCase() === ".text") ||
+    executable[0] || null;
+};
 
 export const normalizeRvaList = (values: unknown): number[] =>
   uniqueU32s(
@@ -136,7 +139,7 @@ const addFallbackEntrypoint = (
 ): void => {
   const fallback = findBestCodeSection(sections);
   if (!fallback) {
-    issues.push("No section headers available to locate code bytes.");
+    issues.push("No executable section with code bytes found.");
     return;
   }
   resolvedEntrypoints.push(fallback.virtualAddress >>> 0);

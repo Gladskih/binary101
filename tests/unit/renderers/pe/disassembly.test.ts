@@ -195,7 +195,7 @@ void test("renderEntrypointDisassembly labels followed conditional branch blocks
   }).includes("Followed conditional branch target from 0x00001000"));
 });
 
-void test("renderInstructionSets renders an empty-state message", () => {
+void test("renderInstructionSets shows skipped analysis and its escaped reason without tables", () => {
   const pe = createPe();
   pe.disassembly = {
     bitness: 64,
@@ -206,16 +206,16 @@ void test("renderInstructionSets renders an empty-state message", () => {
     directIatReferences: [],
     codeStringReferences: [],
     specialInstructions: [], apiStringReferences: [],
-    issues: [],
-    instructionSets: []
+    issues: ["No executable section <code> found.", "No code bytes."], instructionSets: []
   };
 
   const out: string[] = [];
   renderInstructionSets(pe, out);
   const html = out.join("");
 
-  assert.ok(html.includes("No instruction-set requirements were detected"));
-  assert.ok(html.includes("CpuidFeature.SSE"));
+  assert.match(html, /Disassembly skipped[\s\S]*<\/ul><\/div><\/details><\/section>$/);
+  assert.match(html, /No executable section &lt;code> found\.<\/li><li>No code bytes\.<\/li>/);
+  assert.doesNotMatch(html, /<table|Special instructions|Disassembly sample/);
 });
 
 void test("renderInstructionSets renders API string references", () => {

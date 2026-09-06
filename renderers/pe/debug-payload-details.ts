@@ -141,8 +141,10 @@ const renderVcFeatureFields = (entry: PeDebugDirectoryEntry, out: string[]): voi
 const renderPogoFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
   if (!entry.pogo) return;
   out.push(
-    `<div class="smallNote">POGO records describe linker chunks used by profile-guided optimization ` +
-      `or link-time code generation.</div>`
+    `<div class="smallNote">POGO (profile-guided optimization) / ` +
+      `LTCG (link-time code generation) records describe regions placed by the linker. ` +
+      `These regions can contain code or data; the presence of these records alone ` +
+      `does not prove that profiling was used.</div>`
   );
   out.push(`<dl>`);
   out.push(renderDefinitionRow(

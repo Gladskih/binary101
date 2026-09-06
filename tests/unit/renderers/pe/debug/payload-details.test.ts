@@ -63,7 +63,10 @@ void test("renderDecodedEntryDetails renders tabular FPO and POGO payloads", () 
 
   assert.match(html, /FPO/);
   assert.match(html, /0x00001000/);
-  assert.match(html, /POGO records describe linker chunks/);
+  assert.match(html, /POGO \(profile-guided optimization\)/);
+  assert.match(html, /LTCG \(link-time code generation\)/);
+  assert.match(html, /code or data/);
+  assert.match(html, /does not prove that profiling was used/);
   assert.match(html, /\.text\$mn/);
 });
 

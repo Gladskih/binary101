@@ -64,13 +64,18 @@ void test("getEntrySummary describes decoded payload families", () => {
     getEntrySummary({
       ...createDebugViewEntry(10, 0, 1),
       rawPayload: { previewBytes: [0xbb] }
+    }),
+    getEntrySummary({
+      ...createDebugViewEntry(13, 0, 1),
+      pogo: { signature: 0x4c544347, signatureName: "LTCG", entries: [] }
     })
   ];
 
   assert.deepEqual(summaries, [
     "CodeView NB10 record with PDB identity and path.",
     "SHA256 checksum.",
-    "Raw debug payload preview for a reserved or unrecognized format."
+    "Raw debug payload preview for a reserved or unrecognized format.",
+    "Linker layout map with 0 records."
   ]);
 });
 

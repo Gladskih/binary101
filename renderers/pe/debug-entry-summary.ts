@@ -72,7 +72,7 @@ export const getEntrySummary = (entry: PeDebugDirectoryEntry): string => {
   if (entry.misc) return "Legacy DBG-file location record.";
   if (entry.vcFeature) return "MSVC toolchain counters such as /GS, /sdl, and guardN.";
   if (entry.pogo) {
-    return `${entry.pogo.signatureName} profile-guided optimization map with ` +
+    return `Linker layout map with ` +
       `${formatPogoRecordCount(entry.pogo.entries.length)}.`;
   }
   if (entry.repro) return "Deterministic build marker.";

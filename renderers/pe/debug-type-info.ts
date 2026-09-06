@@ -45,7 +45,7 @@ const DEBUG_TYPE_INFOS: Record<number, DebugTypeInfo> = {
   },
   13: {
     label: "POGO",
-    description: "Profile-guided optimization metadata emitted by the linker."
+    description: "POGO (profile-guided optimization) linker layout metadata; may describe code or data."
   },
   14: {
     label: "ILTCG",
