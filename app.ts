@@ -9,8 +9,7 @@ import { isPeWindowsParseResult } from "./analyzers/pe/index.js";
 import { handlePeEntrypointJumpClick } from "./ui/pe-entrypoint-navigation.js";
 import { createAnalysisPanelActions } from "./ui/analysis-panel-actions.js";
 import {
-  refreshElfInstructionSetsPanel,
-  refreshPeEntrypointDisassemblyPanel,
+  refreshElfInstructionSetsPanel, refreshPeEntrypointDisassemblyPanel,
   refreshPeInstructionSetsPanel
 } from "./ui/analysis-panel-refresh.js";
 import { copyManifestPreviewToClipboard } from "./ui/manifest-preview-copy.js";
@@ -170,6 +169,7 @@ analysisValueElement.addEventListener("click", event => {
   if (handleManifestTreeActionClick(targetElement)) { event.preventDefault(); return; }
   if (handleSortableTableClick(targetElement)) { event.preventDefault(); return; }
   if (handlePeEntrypointJumpClick(targetElement, analysisValueElement)) { event.preventDefault(); return; }
+  if (peEntrypointDisassembly.handleClick(targetElement)) { event.preventDefault(); return; }
   const peAnalyzeButton = targetElement?.closest("#peInstructionSetsAnalyzeButton");
   const peCancelButton = targetElement?.closest("#peInstructionSetsCancelButton");
   const peEntrypointButton = targetElement?.closest("#peEntrypointDisassembleButton");

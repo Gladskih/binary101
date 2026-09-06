@@ -1,4 +1,5 @@
 import { formatHumanSize } from "../binary-utils.js";
+import { handlePeSpecialInstructionClick } from "./pe-special-instructions.js";
 import { createFileRangeReader, type FileRangeReader } from "../analyzers/file-range-reader.js";
 import type { ParseForUiResult } from "../analyzers/index.js";
 import {
@@ -30,7 +31,8 @@ type PeEntrypointDisassemblyControllerOptions = {
 
 export type PeEntrypointDisassemblyController = {
   cancel: () => void;
-  start: (file: File, pe: PeParseResult) => void;
+  start: (file: File, pe: PeParseResult, requestedRva?: number) => void;
+  handleClick: (target: Element | null) => boolean;
 };
 
 const ENTRYPOINT_BUTTON_ID = "peEntrypointDisassembleButton";
@@ -72,14 +74,31 @@ const updateEntrypointProgress = (progress: PeEntrypointDisassemblyProgress): vo
 
 const buildFailureReport = (
   pe: PeWindowsParseResult,
-  message: string
+  message: string,
+  requestedRva?: number
 ): PeEntrypointDisassemblyReport => ({
   bitness: pe.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC ? 64 : 32,
-  entrypointRva: pe.opt.AddressOfEntryPoint >>> 0,
+  entrypointRva: requestedRva ?? (pe.opt.AddressOfEntryPoint >>> 0),
   bytesDecoded: 0,
   instructionCount: 0,
   blocks: [],
   issues: [message]
+});
+
+const disassemblyOptions = (
+  pe: PeWindowsParseResult, requestedRva: number | undefined
+): AnalyzePeEntrypointDisassemblyOptions => ({
+  coffMachine: getCanonicalPeMachine(pe.coff.Machine),
+  is64Bit: pe.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC,
+  imageBase: pe.opt.ImageBase,
+  entrypointRva: requestedRva ?? pe.opt.AddressOfEntryPoint,
+  headerRvaLimit: pe.opt.SizeOfHeaders,
+  imports: pe.imports,
+  delayImports: pe.delayImports,
+  loadcfg: pe.loadcfg,
+  rvaToOff: pe.rvaToOff,
+  sections: pe.sections,
+  yieldEveryInstructions: 64
 });
 
 export const createPeEntrypointDisassemblyController = (
@@ -93,7 +112,7 @@ export const createPeEntrypointDisassemblyController = (
     setEntrypointUiState("idle");
   };
 
-  const start = (file: File, pe: PeParseResult): void => {
+  const start = (file: File, pe: PeParseResult, requestedRva?: number): void => {
     cancel();
     setEntrypointUiState("busy");
     const localRunId = ++runId;
@@ -113,22 +132,14 @@ export const createPeEntrypointDisassemblyController = (
       const report = await analyze(
         reader,
         {
-          coffMachine: getCanonicalPeMachine(windowsPe.coff.Machine),
-          is64Bit: windowsPe.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC,
-          imageBase: windowsPe.opt.ImageBase,
-          entrypointRva: windowsPe.opt.AddressOfEntryPoint,
-          headerRvaLimit: windowsPe.opt.SizeOfHeaders,
-          imports: windowsPe.imports,
-          delayImports: windowsPe.delayImports,
-          loadcfg: windowsPe.loadcfg,
-          rvaToOff: windowsPe.rvaToOff,
-          sections: windowsPe.sections,
-          yieldEveryInstructions: 64,
+          ...disassemblyOptions(windowsPe, requestedRva),
           onProgress: progress => {
             if (localRunId === runId) updateEntrypointProgress(progress);
           }
         }
-      ).catch(error => buildFailureReport(windowsPe, `Entrypoint disassembly failed (${String(error)})`));
+      ).catch(error => buildFailureReport(
+        windowsPe, `Entrypoint disassembly failed (${String(error)})`, requestedRva
+      ));
       if (localRunId !== runId) return;
       setEntrypointUiState("idle");
       if (opts.getCurrentFile() !== file) return;
@@ -140,8 +151,24 @@ export const createPeEntrypointDisassemblyController = (
       } else {
         opts.renderResult?.(current);
       }
+      if (requestedRva != null) revealSelectedDisassembly();
     })();
   };
 
-  return { cancel, start };
+  return {
+    cancel, start,
+    handleClick: target => handlePeSpecialInstructionClick(
+      target, opts.getCurrentFile(), opts.getCurrentParseResult(), { start }
+    )
+  };
+};
+
+const revealSelectedDisassembly = (): void => {
+  const panel = document.getElementById("peEntrypointDisassemblyPanel");
+  const details = panel?.querySelector("details");
+  if (!details || !(details instanceof HTMLDetailsElement)) return;
+  details.open = true;
+  const summary = details.querySelector("summary");
+  summary?.focus({ preventScroll: true });
+  summary?.scrollIntoView({ block: "start" });
 };

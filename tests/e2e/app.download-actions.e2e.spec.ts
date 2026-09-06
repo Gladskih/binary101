@@ -179,7 +179,7 @@ test.describe("PE analysis actions", () => {
 
     await detailsValue.locator("#peEntrypointDisassembleButton").click();
     await expect(entrypointSection).toHaveJSProperty("open", true);
-    await expect(detailsValue).toContainText("Entrypoint preview:");
+    await expect(detailsValue).toContainText("Disassembly preview:");
     await expect(detailsValue).toContainText("Call target");
     const sortByInstructions = entrypointSection.locator(
       '[data-pe-entrypoint-block-sort="3"]'
@@ -231,7 +231,7 @@ test.describe("PE analysis actions", () => {
 
     await entrypointSection.locator(":scope > summary").click();
     await detailsValue.locator("#peEntrypointDisassembleButton").click();
-    await expect(entrypointSection).toContainText("Entrypoint preview:");
+    await expect(entrypointSection).toContainText("Disassembly preview:");
     await expect(sortSetButton.locator("..")).toHaveAttribute("aria-sort", "ascending");
   });
 });

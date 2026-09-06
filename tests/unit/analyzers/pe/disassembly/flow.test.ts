@@ -43,11 +43,11 @@ void test("ISA analysis collects special instructions once and distinguishes UD1
   });
 
   assert.deepEqual(report.specialInstructions, [
-    { category: "syscall", instruction: "SYSCALL", count: 1 },
-    { category: "syscall", instruction: "SYSENTER", count: 1 },
-    { category: "privileged", instruction: "RDMSR", count: 1 },
-    { category: "io-privilege", instruction: "CLI", count: 1 },
-    { category: "trap", instruction: "UD1", count: 1 }
+    { categories: ["syscall"], instruction: "SYSCALL", count: 1, sampleRvas: [0x1000] },
+    { categories: ["syscall"], instruction: "SYSENTER", count: 1, sampleRvas: [0x1002] },
+    { categories: ["system-state", "privileged"], instruction: "RDMSR", count: 1, sampleRvas: [0x1004] },
+    { categories: ["io-privilege"], instruction: "CLI", count: 1, sampleRvas: [0x1006] },
+    { categories: ["trap"], instruction: "UD1", count: 1, sampleRvas: [0x1007] }
   ]);
   assert.equal(report.invalidInstructionCount, 0);
   assert.ok(report.instructionSets.length > 0);

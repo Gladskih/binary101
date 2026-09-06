@@ -199,3 +199,63 @@ void test("pe entrypoint disassembly controller renders analyzer failures as not
   assert.ok(pe.entrypointDisassembly?.issues.some(issue => /boom/i.test(issue)));
   dom.restore();
 });
+
+void test("a selected RVA overrides the PE entrypoint and survives analyzer failure", async context => {
+  context.after(installFakeDom().restore);
+  const pe = createMinimalPe();
+  const file = new MockFile(new Uint8Array(), "selected.exe");
+  const requested: number[] = [];
+  const controller = createPeEntrypointDisassemblyController({
+    getCurrentFile: () => file,
+    getCurrentParseResult: () => ({ analyzer: "pe", parsed: pe }),
+    analyze: async (_reader, options) => {
+      requested.push(options.entrypointRva);
+      throw new Error("Selected code is unavailable");
+    }
+  });
+  controller.start(file, pe, 0x1234);
+  assert.equal(controller.handleClick(null), false);
+  await flushTimers();
+  assert.deepEqual(requested, [0x1234]);
+  assert.equal(pe.entrypointDisassembly?.entrypointRva, 0x1234);
+  assert.match(pe.entrypointDisassembly?.issues.join(" ") ?? "", /Selected code is unavailable/);
+});
+
+class SelectedSummary extends FakeHTMLElement {
+  focused = false;
+  scrolled = false;
+  focus(): void { this.focused = true; }
+  scrollIntoView(): void { this.scrolled = true; }
+}
+
+class SelectedDetails extends FakeHTMLElement {
+  open = false;
+  readonly summary = new SelectedSummary();
+  querySelector(): SelectedSummary { return this.summary; }
+}
+
+class SelectedPanel extends FakeHTMLElement {
+  readonly details = new SelectedDetails();
+  querySelector(): SelectedDetails { return this.details; }
+}
+
+void test("selected-RVA disassembly opens and focuses its result panel", async context => {
+  const globals = globalThis as unknown as { HTMLDetailsElement?: unknown };
+  const previous = globals.HTMLDetailsElement;
+  globals.HTMLDetailsElement = SelectedDetails;
+  context.after(() => { globals.HTMLDetailsElement = previous; });
+  const panel = new SelectedPanel();
+  context.after(installFakeDom({ peEntrypointDisassemblyPanel: panel }).restore);
+  const pe = createMinimalPe();
+  const file = new MockFile(new Uint8Array(), "selected.exe");
+  const controller = createPeEntrypointDisassemblyController({
+    getCurrentFile: () => file,
+    getCurrentParseResult: () => ({ analyzer: "pe", parsed: pe }),
+    analyze: async () => createFakeReport()
+  });
+  controller.start(file, pe, 0x1234);
+  await flushTimers();
+  assert.equal(panel.details.open, true);
+  assert.equal(panel.details.summary.focused, true);
+  assert.equal(panel.details.summary.scrolled, true);
+});

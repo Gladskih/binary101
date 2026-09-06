@@ -42,7 +42,7 @@ const renderEntrypointReport = (pe: PeWindowsParseResult, out: string[]): void =
     return;
   }
   out.push(
-    `<div class="smallNote">Entrypoint preview: ` +
+    `<div class="smallNote">Disassembly preview: ` +
     `${report.instructionCount} instruction(s), ${formatHumanSize(report.bytesDecoded)}, ` +
     `RVA ${hex(report.entrypointRva, 8)}.</div>`
   );
@@ -57,7 +57,9 @@ const renderEntrypointDisassemblyContent = (pe: PeWindowsParseResult, out: strin
   if (!hasEntrypoint(pe) && !pe.entrypointDisassembly) return;
   out.push(
     `<details class="analysisPanel"><summary class="analysisPanelSummary">` +
-    `<span class="detailsSummaryTitle">Entrypoint disassembly</span></summary>` +
+    `<span class="detailsSummaryTitle">${pe.entrypointDisassembly &&
+      pe.entrypointDisassembly.entrypointRva !== pe.opt.AddressOfEntryPoint
+      ? "Disassembly from selected RVA" : "Entrypoint disassembly"}</span></summary>` +
     `<div class="analysisPanelBody"><div class="analysisPanelActions">`
   );
   renderEntrypointActions(pe, out);

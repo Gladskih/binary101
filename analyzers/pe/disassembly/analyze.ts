@@ -177,7 +177,7 @@ const decodePeInstructionSetUsage = async (
 ): Promise<PeInstructionSetDecodeResult> => {
   const { iced, bitness, imageBase, sampledSections, resolvedEntrypoints } = run;
   const instructionSetUsage = createX86InstructionSetUsageTracker(iced.CpuidFeature);
-  const specialInstructions = createPeSpecialInstructionCollector(iced);
+  const specialInstructions = createPeSpecialInstructionCollector(iced, imageBase);
   const directIatReferences = createDirectIatReferenceCounter(
     iced,
     imageBase,

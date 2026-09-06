@@ -38,7 +38,7 @@ test.describe("PE entrypoint disassembly on a real C drive binary", () => {
       await expect(entrypointSection).toHaveJSProperty("open", true);
 
       await detailsValue.locator("#peEntrypointDisassembleButton").click();
-      await expect(entrypointSection).toContainText("Entrypoint preview:");
+      await expect(entrypointSection).toContainText("Disassembly preview:");
       await expect(entrypointSection.locator(".peEntrypointBlockIndexTable")).toBeVisible();
       await expect(entrypointSection.locator(".peEntrypointInstructionTable")).toBeVisible();
       await expect(entrypointSection).toContainText("Block index");
