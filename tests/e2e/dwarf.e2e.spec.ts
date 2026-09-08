@@ -34,6 +34,7 @@ void test("renders ELF DWARF analysis in the build/debug section", async ({ page
   await page.goto("/");
   await page.setInputFiles("#fileInput", toUpload(createElfDwarfFile()));
 
+  await page.locator(".peSectionSummary").filter({ hasText: "Build / debug" }).click();
   const summary = page.getByText("DWARF debug information (1 unit)", { exact: true });
   await expect(summary).toBeVisible();
   await summary.click();
@@ -57,6 +58,7 @@ void test("decompresses and renders ELF64 SHF_COMPRESSED DWARF", async ({ page }
   await page.goto("/");
   await page.setInputFiles("#fileInput", toUpload(createElfCompressedDwarfFile()));
 
+  await page.locator(".peSectionSummary").filter({ hasText: "Build / debug" }).click();
   const summary = page.getByText("DWARF debug information (1 unit)", { exact: true });
   await expect(summary).toBeVisible();
   await summary.click();

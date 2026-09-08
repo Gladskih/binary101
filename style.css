@@ -231,10 +231,12 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 }
 #analysisValue > .analysisPanel,
 #analysisValue > .peSection,
+#elfInstructionSetsPanel,
 #peInstructionSetsPanel,
 #peEntrypointDisassemblyPanel{
   margin:0 0 var(--content-section-gap)
 }
+#elfInstructionSetsPanel > .analysisPanel,
 #peInstructionSetsPanel > .analysisPanel,
 #peEntrypointDisassemblyPanel > .analysisPanel{margin:0}
 #analysisValue > :last-child{margin-bottom:0}

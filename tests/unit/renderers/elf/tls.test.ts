@@ -14,7 +14,7 @@ void test("renderElfTls renders TLS segments and sections", async () => {
   const out: string[] = [];
   renderElfTls(elf, out);
   const html = out.join("");
-  assert.ok(html.includes("<h4"));
+  assert.ok(html.includes('<summary class="peSectionSummary"><b>TLS</b></summary>'));
   assert.ok(html.includes("TLS"));
   assert.ok(html.includes(".tdata"));
   assert.ok(html.includes("PT_TLS"));

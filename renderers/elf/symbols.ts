@@ -1,5 +1,6 @@
 "use strict";
 
+import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { escapeHtml } from "../../html-utils.js";
 import type { ElfDynamicSymbol, ElfDynamicSymbolInfo, ElfParseResult } from "../../analyzers/elf/types.js";
 import { formatElfHex } from "./value-format.js";
@@ -46,8 +47,7 @@ export function renderElfSymbols(elf: ElfParseResult, out: string[]): void {
   const exports = dyn.exportSymbols.length;
   const total = dyn.total;
 
-  out.push(`<section>`);
-  out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Imports / exports</h4>`);
+  out.push(renderElfSectionStart(`Imports / exports`));
   out.push(
     `<div class="smallNote">Dynamic symbols describe the interface exposed to (and required from) the dynamic loader. Imports are undefined symbols (SHN_UNDEF); exports are defined non-local symbols.</div>`
   );
@@ -60,6 +60,6 @@ export function renderElfSymbols(elf: ElfParseResult, out: string[]): void {
   out.push(renderSymbolTable("Imported symbols", dyn.importSymbols));
   out.push(renderSymbolTable("Exported symbols", dyn.exportSymbols));
   out.push(renderIssues(dyn));
-  out.push(`</section>`);
+  out.push(renderElfSectionEnd());
 }
 

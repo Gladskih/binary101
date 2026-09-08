@@ -98,8 +98,8 @@ const createRendererElfSubject = (): ElfParseResult =>
 void test("renderElf (ELF) renders collapsible program/section tables with hints", () => {
   const html = renderElf(createRendererElfSubject());
 
-  assert.ok(html.includes("Show program headers (1)"));
-  assert.ok(html.includes("Show section headers (3)"));
+  assert.ok(html.includes("Program headers (1)"));
+  assert.ok(html.includes("Section headers (3)"));
   assert.ok(html.includes('class="tableWrap"'));
   assert.ok(html.includes('title="PT_LOAD - Loadable segment."'));
   assert.ok(html.includes('title="Executable code (instructions)."'));
@@ -113,4 +113,18 @@ void test("renderElf (ELF) renders collapsible program/section tables with hints
   assert.ok(html.includes("1 (.dynstr)"));
   assert.ok(html.includes("2 (symbol index after last local symbol)"));
   assert.ok(html.includes("24 bytes"));
+});
+
+void test("places the collapsed instruction panel before collapsed ELF metadata", () => {
+  const html = renderElf(createRendererElfSubject());
+
+  assert.ok(html.startsWith(`<section id="elfInstructionSetsPanel"><details class="analysisPanel">`));
+  assert.ok(!html.includes(`<b>Identification</b>`));
+  assert.ok(html.includes("<dt>Class</dt>"));
+  assert.ok(html.includes("<dt>OS ABI</dt>"));
+  assert.ok(html.includes(`<summary class="peSectionSummary"><b>ELF header</b></summary>`));
+  assert.ok(!html.includes("Show program headers"));
+  assert.ok(!html.includes("Show section headers"));
+  assert.ok(!html.includes("<details open"));
+  assert.ok(!html.includes("Big picture"));
 });

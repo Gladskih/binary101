@@ -1,5 +1,6 @@
 "use strict";
 
+import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import type { ElfCommentInfo, ElfDebugLinkInfo, ElfParseResult } from "../../analyzers/elf/types.js";
 import { formatElfHex } from "./value-format.js";
@@ -41,8 +42,7 @@ export function renderElfDebug(elf: ElfParseResult, out: string[]): void {
   const dwarf = elf.dwarf;
   if (!comment && !debugLink && !dwarf) return;
 
-  out.push(`<section>`);
-  out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Build / debug</h4>`);
+  out.push(renderElfSectionStart(`Build / debug`));
   out.push(`<div class="smallNote">Non-code metadata useful for attribution and external debug info.</div>`);
 
   if (comment) {
@@ -64,6 +64,6 @@ export function renderElfDebug(elf: ElfParseResult, out: string[]): void {
     out.push(`</details>`);
   }
 
-  out.push(`</section>`);
+  out.push(renderElfSectionEnd());
 }
 

@@ -39,9 +39,8 @@ const renderFeatureTableStart = (out: string[]): void => {
 };
 
 const renderInstructionSetHeader = (disasm: ElfParseResult["disassembly"], out: string[]): void => {
-  out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Instruction sets</h4>`);
   const analyzeLabel = disasm ? "Re-analyze instruction sets" : "Analyze instruction sets";
-  out.push(`<div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">`);
+  out.push(`<div class="analysisPanelActions">`);
   out.push(
     `<button type="button" class="actionButton" id="${ANALYZE_BUTTON_ID}">${escapeHtml(analyzeLabel)}</button>`
   );
@@ -161,7 +160,10 @@ const renderInstructionSetsContent = (elf: ElfParseResult, out: string[]): void 
 export const renderInstructionSetsPanel = (elf: ElfParseResult): string => {
   const out: string[] = [];
   renderInstructionSetsContent(elf, out);
-  return `<section id="${ELF_INSTRUCTION_SETS_PANEL_ID}">${out.join("")}</section>`;
+  return `<section id="${ELF_INSTRUCTION_SETS_PANEL_ID}">` +
+    `<details class="analysisPanel"><summary class="analysisPanelSummary">` +
+    `<span class="detailsSummaryTitle">Instruction sets</span></summary>` +
+    `<div class="analysisPanelBody">${out.join("")}</div></details></section>`;
 };
 
 export const renderInstructionSets = (elf: ElfParseResult, out: string[]): void => {

@@ -1,3 +1,4 @@
+import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { escapeHtml } from "../../html-utils.js";
 import { elfRelocationTypeName } from "../../analyzers/elf/relocation-names.js";
 import type { ElfRelocation } from "../../analyzers/elf/relocation-types.js";
@@ -60,7 +61,7 @@ export const createElfRelocationTableModel = (elf: ElfParseResult): PagedSortabl
 export const renderElfRelocations = (elf: ElfParseResult, out: string[]): void => {
   const relocations = elf.relocations;
   if (!relocations) return;
-  out.push(`<section><h4>Relocations (${relocations.entries.length})</h4>`);
+  out.push(renderElfSectionStart(`Relocations (${relocations.entries.length})`));
   out.push(`<p class="smallNote">Targets identify where the loader or linker applies each ` +
     `relocation. REL and RELR addends remain in the target bytes; runtime symbol binding ` +
     `and load addresses are not resolved here.</p>`);
@@ -68,5 +69,5 @@ export const renderElfRelocations = (elf: ElfParseResult, out: string[]): void =
   if (relocations.issues.length) {
     out.push(`<ul>${relocations.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul>`);
   }
-  out.push(`</section>`);
+  out.push(renderElfSectionEnd());
 };

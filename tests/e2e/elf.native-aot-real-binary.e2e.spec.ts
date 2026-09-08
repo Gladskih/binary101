@@ -18,6 +18,7 @@ test("uses NativeAOT initializers as disassembly seeds in the browser", async ({
     name: "initializers.elf", mimeType: "application/x-elf", buffer: Buffer.from(fixture.bytes)
   });
   await expect(page.locator("#analysisValue")).toContainText("NativeAOT initializer entry points");
+  await page.locator("#elfInstructionSetsPanel > details > summary").click();
   await page.locator("#elfInstructionSetsAnalyzeButton").click();
 
   await expect(page.locator("#analysisValue")).toContainText("NativeAOT Eager class constructors");
@@ -51,6 +52,7 @@ test("renders and sorts reflected NativeAOT fields", async ({ page }) => {
     name: "fields.elf", mimeType: "application/x-elf", buffer: Buffer.from(fixture.bytes)
   });
 
+  await page.locator(".peSectionSummary").filter({ hasText: "NativeAOT metadata" }).click();
   const table = page.locator(".nativeAotTypesTable");
   await expect(table.getByRole("button", { name: "Sort by Fields", exact: true })).toBeVisible();
   await expect(table.locator(".nativeAotTypesTable__fields").filter({
@@ -80,6 +82,7 @@ test("renders NativeAOT metadata from a real ELF binary in the browser", async (
   await expect(analysis.locator(".nativeAotScopesTable tbody tr")).toHaveCount(6);
   await expect(analysis).toContainText("System.Private.CoreLib.dll");
   await expect(analysis).toContainText("Showing 1-100 of 399");
+  await page.locator(".peSectionSummary").filter({ hasText: "NativeAOT metadata" }).click();
   await analysis.locator(
     '[data-paged-sortable-table-id="native-aot-reflection-types"] ' +
     '[data-paged-sortable-action="next"]'

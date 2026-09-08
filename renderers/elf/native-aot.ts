@@ -1,5 +1,6 @@
 "use strict";
 
+import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { hex, humanSize } from "../../binary-utils.js";
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import { nativeAotSectionName, type NativeAotMetadata } from
@@ -28,7 +29,7 @@ const renderSections = (metadata: NativeAotMetadata): string => {
 export const renderElfNativeAot = (elf: ElfParseResult, out: string[]): void => {
   const metadata = elf.nativeAot;
   if (!metadata) return;
-  out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">NativeAOT metadata</h4>`);
+  out.push(renderElfSectionStart(`NativeAOT metadata`));
   out.push(`<p class="smallNote">NativeAOT compiled managed code into this ELF executable. ` +
     `Confirmation follows relative REL/RELA relocations or packed RELR to a ReadyToRun header and checks ` +
     `the embedded NativeFormat signature; section names alone are not treated as proof.</p><dl>`);
@@ -51,5 +52,5 @@ export const renderElfNativeAot = (elf: ElfParseResult, out: string[]): void => 
   out.push(`</dl>${renderSections(metadata)}`);
   if (metadata.reflection) out.push(renderNativeAotReflection(metadata.reflection));
   out.push(renderNativeAotInitializers(metadata.initializers));
-  out.push(`</section>`);
+  out.push(renderElfSectionEnd());
 };

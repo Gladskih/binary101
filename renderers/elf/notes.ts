@@ -1,5 +1,6 @@
 "use strict";
 
+import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import type { ElfNoteEntry, ElfNotesInfo, ElfParseResult } from "../../analyzers/elf/types.js";
 
@@ -52,8 +53,7 @@ export function renderElfNotes(elf: ElfParseResult, out: string[]): void {
   const buildId = findFirst(notes.entries, entry => entry.typeName === "NT_GNU_BUILD_ID" && entry.value != null);
   const abiTag = findFirst(notes.entries, entry => entry.typeName === "NT_GNU_ABI_TAG" && entry.value != null);
 
-  out.push(`<section>`);
-  out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Notes</h4>`);
+  out.push(renderElfSectionStart(`Notes`));
   out.push(`<div class="smallNote">Notes are small metadata blocks used for build IDs, ABI tags, platform features, and more.</div>`);
   out.push(`<dl>`);
   out.push(renderDefinitionRow("Total notes", escapeHtml(String(notes.entries.length))));
@@ -62,6 +62,6 @@ export function renderElfNotes(elf: ElfParseResult, out: string[]): void {
   out.push(`</dl>`);
   out.push(renderNotesTable(notes));
   out.push(renderIssues(notes));
-  out.push(`</section>`);
+  out.push(renderElfSectionEnd());
 }
 

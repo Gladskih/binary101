@@ -1,5 +1,6 @@
 "use strict";
 
+import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import { DYNAMIC_FLAGS, DYNAMIC_FLAGS_1 } from "../../analyzers/elf/constants.js";
 import type {
@@ -57,8 +58,7 @@ export function renderElfLinking(elf: ElfParseResult, out: string[]): void {
   const dynamic = elf.dynamic;
   if (!interpreter && !dynamic) return;
 
-  out.push(`<section>`);
-  out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Dynamic linking</h4>`);
+  out.push(renderElfSectionStart(`Dynamic linking`));
   out.push(
     `<div class="smallNote">Interpreter and DT_* tags describe how the dynamic loader resolves shared libraries and startup routines.</div>`
   );
@@ -105,5 +105,5 @@ export function renderElfLinking(elf: ElfParseResult, out: string[]): void {
     );
   }
 
-  out.push(`</section>`);
+  out.push(renderElfSectionEnd());
 }

@@ -1,5 +1,6 @@
 "use strict";
 
+import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import type { ElfParseResult, ElfTlsInfo } from "../../analyzers/elf/types.js";
 import { formatElfHex, formatElfList, formatElfMaybeHumanSize } from "./value-format.js";
@@ -48,8 +49,7 @@ export function renderElfTls(elf: ElfParseResult, out: string[]): void {
   const tls = elf.tls;
   if (!tls) return;
 
-  out.push(`<section>`);
-  out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">TLS</h4>`);
+  out.push(renderElfSectionStart(`TLS`));
   out.push(
     `<div class="smallNote">Thread-local storage describes per-thread variables and the template copied into each new thread.</div>`
   );
@@ -59,6 +59,6 @@ export function renderElfTls(elf: ElfParseResult, out: string[]): void {
   out.push(`</dl>`);
   out.push(renderSegmentsTable(tls));
   out.push(renderSectionsTable(tls));
-  out.push(`</section>`);
+  out.push(renderElfSectionEnd());
 }
 

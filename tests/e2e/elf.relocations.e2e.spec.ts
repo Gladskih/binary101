@@ -25,6 +25,7 @@ test("ELF relocation rows paginate and sort in the browser", async ({ page }) =>
   await page.setInputFiles("#fileInput", {
     name: "relocations.elf", mimeType: "application/x-elf", buffer: pagedRelocations()
   });
+  await page.locator(".peSectionSummary").filter({ hasText: "Relocations" }).click();
   const table = page.locator('[data-paged-sortable-table-id="elf-relocations"]');
 
   await expect(table).toContainText("R_X86_64_RELATIVE");

@@ -1,5 +1,6 @@
 "use strict";
 
+import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { renderDefinitionRow, renderOptionChips, escapeHtml } from "../../html-utils.js";
 import {
   ELF_CLASS,
@@ -117,41 +118,14 @@ const formatSectionEntSize = (section: ElfSectionHeader): string => {
   return `<span title="sh_entsize: fixed size of one entry in this section table.">${value}</span>`;
 };
 
-function renderOverview(elf: ElfParseResult, out: string[]): void {
-  const bits = elf.is64 ? "64-bit" : "32-bit";
-  const endian = elf.littleEndian ? "little-endian" : "big-endian";
-  const machine = elf.header.machineName || `machine ${elf.header.machine}`;
-  const type = elf.header.typeName || `type ${elf.header.type}`;
-  const entry = formatElfHex(elf.header.entry, elf.is64 ? 16 : 8);
-  out.push(`<section>`);
-  out.push(
-    `<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Big picture</h4>`
-  );
-  const summary =
-    `${bits} ${endian} ELF ${escapeHtml(type)} targeting ${escapeHtml(machine)}. ` +
-    `Entry point at ${entry}. Program and section headers describe how the loader maps ` +
-    `segments and named sections into memory.`;
-  out.push(`<div class="smallNote">${summary}</div>`);
-  out.push(`</section>`);
-}
-
-function renderIdent(elf: ElfParseResult, out: string[]): void {
-  out.push(`<section>`);
-  out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Identification</h4>`);
+function renderHeader(elf: ElfParseResult, out: string[]): void {
+  const h = elf.header;
+  out.push(renderElfSectionStart(`ELF header`));
   out.push(`<dl>`);
   out.push(renderDefinitionRow("Class", renderOptionChips(elf.ident.classByte, ELF_CLASS)));
   out.push(renderDefinitionRow("Data", renderOptionChips(elf.ident.dataByte, ELF_DATA)));
   out.push(renderDefinitionRow("OS ABI", escapeHtml(elf.ident.osabi)));
   out.push(renderDefinitionRow("ABI version", escapeHtml(elf.ident.abiVersion)));
-  out.push(`</dl>`);
-  out.push(`</section>`);
-}
-
-function renderHeader(elf: ElfParseResult, out: string[]): void {
-  const h = elf.header;
-  out.push(`<section>`);
-  out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">ELF header</h4>`);
-  out.push(`<dl>`);
   out.push(renderDefinitionRow("Type", renderOptionChips(h.type, ELF_TYPE)));
   out.push(renderDefinitionRow("Machine", renderOptionChips(h.machine, ELF_MACHINE)));
   out.push(renderDefinitionRow("Entry", formatElfHex(h.entry)));
@@ -163,16 +137,12 @@ function renderHeader(elf: ElfParseResult, out: string[]): void {
   out.push(renderDefinitionRow("PH entry size", `${h.phentsize} bytes`));
   out.push(renderDefinitionRow("SH entry size", `${h.shentsize} bytes`));
   out.push(`</dl>`);
-  out.push(`</section>`);
+  out.push(renderElfSectionEnd());
 }
 
 function renderProgramHeaders(elf: ElfParseResult, out: string[]): void {
   if (!elf.programHeaders?.length) return;
-  out.push(`<section>`);
-  out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Program headers</h4>`);
-  out.push(
-    `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show program headers (${elf.programHeaders.length})</summary>`
-  );
+  out.push(renderElfSectionStart(`Program headers (${elf.programHeaders.length})`));
   out.push(`<div class="tableWrap">`);
   out.push(
     `<table class="table"><thead><tr>` +
@@ -196,20 +166,17 @@ function renderProgramHeaders(elf: ElfParseResult, out: string[]): void {
     );
   });
   out.push(`</tbody></table>`);
-  out.push(`</div></details></section>`);
+  out.push(`</div>`);
+  out.push(renderElfSectionEnd());
 }
 
 function renderSectionHeaders(elf: ElfParseResult, out: string[]): void {
   if (!elf.sections?.length) return;
-  out.push(`<section>`);
-  out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Section headers</h4>`);
+  out.push(renderElfSectionStart(`Section headers (${elf.sections.length})`));
   out.push(
     `<div class="smallNote"><span class="mono">sh_link</span> is section-type specific, ` +
       `<span class="mono">sh_info</span> meaning depends on section type, and ` +
       `<span class="mono">sh_entsize</span> is the fixed record size (0 for variable/non-table data).</div>`
-  );
-  out.push(
-    `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show section headers (${elf.sections.length})</summary>`
   );
   out.push(`<div class="tableWrap">`);
   out.push(
@@ -244,24 +211,23 @@ function renderSectionHeaders(elf: ElfParseResult, out: string[]): void {
     );
   });
   out.push(`</tbody></table>`);
-  out.push(`</div></details></section>`);
+  out.push(`</div>`);
+  out.push(renderElfSectionEnd());
 }
 
 function renderIssues(elf: ElfParseResult, out: string[]): void {
   if (!elf.issues?.length) return;
-  out.push(`<section>`);
-  out.push(`<h4 style="margin:0 0 .5rem 0;font-size:.9rem">Notices</h4>`);
+  out.push(renderElfSectionStart(`Notices`));
   out.push(`<ul>`);
   elf.issues.forEach(issue => out.push(`<li>${escapeHtml(issue)}</li>`));
   out.push(`</ul>`);
-  out.push(`</section>`);
+  out.push(renderElfSectionEnd());
 }
 
 export function renderElf(elf: ElfParseResult | null): string {
   if (!elf) return "";
   const out: string[] = [];
-  renderOverview(elf, out);
-  renderIdent(elf, out);
+  renderInstructionSets(elf, out);
   renderHeader(elf, out);
   renderElfLinking(elf, out);
   renderElfSymbols(elf, out);
@@ -270,7 +236,6 @@ export function renderElf(elf: ElfParseResult | null): string {
   renderElfNotes(elf, out);
   renderElfNativeAot(elf, out);
   renderElfDebug(elf, out);
-  renderInstructionSets(elf, out);
   renderProgramHeaders(elf, out);
   renderSectionHeaders(elf, out);
   renderIssues(elf, out);
