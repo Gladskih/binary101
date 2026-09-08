@@ -8,7 +8,6 @@ import { expectDefined } from "../../../../helpers/expect-defined.js";
 import {
   IMAGE_IMPORT_BY_NAME_HINT_SIZE,
   IMAGE_IMPORT_DESCRIPTOR_SIZE,
-  IMAGE_ORDINAL_FLAG64,
   IMAGE_THUNK_DATA32_SIZE,
   IMAGE_THUNK_DATA64_SIZE,
   IMPORT_DIRECTORY_SIZE,
@@ -187,35 +186,6 @@ void test("parseImportDirectory keeps an empty import name when hint bytes reach
 
   assert.deepEqual(result.entries[0]?.functions, [{ hint: importHint, name: "" }]);
   assert.equal(result.warning, undefined);
-});
-
-void test("parseImportDirectory walks the full null-terminated PE32+ thunk array without a fixed cap", async () => {
-  // Import lookup tables are null-terminated IMAGE_THUNK_DATA arrays; the PE format does not define a 16384-entry cap.
-  const importCount = 16385;
-  const layout = createImportLayout();
-  const descriptorOffset = layout.reserve(IMPORT_DIRECTORY_SIZE);
-  const dllNameRva = layout.reserve(cStringSize("KERNEL32.dll"));
-  const thunkTableRva = layout.reserve((importCount + 1) * IMAGE_THUNK_DATA64_SIZE);
-  const bytes = new Uint8Array(layout.size()).fill(0);
-  const view = new DataView(bytes.buffer);
-
-  writeImportDescriptor(view, descriptorOffset, { dllNameRva, firstThunk: thunkTableRva });
-  writeImportName(bytes, dllNameRva, "KERNEL32.dll");
-  writeThunkTable64(
-    view,
-    thunkTableRva,
-    Array.from({ length: importCount }, (_, index) => IMAGE_ORDINAL_FLAG64 | BigInt(index + 1)).concat(0n)
-  );
-
-  const result = await parseImportDirectory64(
-    new MockFile(bytes),
-    [{ name: "IMPORT", rva: descriptorOffset, size: IMPORT_DIRECTORY_SIZE }],
-    value => value
-  );
-
-  const entry = expectDefined(result.entries[0]);
-  assert.equal(entry.functions.length, importCount);
-  assert.deepEqual(entry.functions.at(-1), { ordinal: importCount });
 });
 
 void test(

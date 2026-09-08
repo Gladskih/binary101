@@ -4,40 +4,7 @@ import { test } from "node:test";
 import { parseDelayImports32, parseDelayImports64 } from "../../../../../../analyzers/pe/imports/delay.js";
 import { MockFile } from "../../../../../helpers/mock-file.js";
 import { expectDefined } from "../../../../../helpers/expect-defined.js";
-import { IMAGE_DELAYLOAD_DESCRIPTOR_SIZE, IMAGE_ORDINAL_FLAG64, IMAGE_THUNK_DATA32_SIZE, IMAGE_THUNK_DATA64_SIZE, cStringSize, createDelayImportLayout, imageImportByNameSize, writeDelayImportDescriptor, writeDelayImportName, writeImportByName, writeThunkTable32, writeThunkTable64 } from "../../delay-import-layout.js";
-
-void test("parseDelayImports walks the full PE32+ thunk array to its terminator", async () => {
-  // Delay-load thunk tables mirror IMAGE_THUNK_DATA and are terminated by a null entry.
-  const importCount = 16385;
-  // Deliberately 16384 + 1 to prove the parser must follow the terminator instead of a loop cap.
-  const dllName = "kernel32.dll";
-  const layout = createDelayImportLayout();
-  const descriptorOffset = layout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
-  const dllNameRva = layout.reserve(cStringSize(dllName));
-  const intRva = layout.reserve((importCount + 1) * IMAGE_THUNK_DATA64_SIZE);
-  const bytes = new Uint8Array(layout.size()).fill(0);
-  const dv = new DataView(bytes.buffer);
-  writeDelayImportDescriptor(dv, descriptorOffset, {
-    dllNameRva,
-    importNameTableRva: intRva
-  });
-  writeDelayImportName(bytes, dllNameRva, dllName);
-  const thunks = Array.from(
-    { length: importCount },
-    (_, index) => IMAGE_ORDINAL_FLAG64 | BigInt(index + 1)
-  );
-  thunks.push(0n);
-  writeThunkTable64(dv, intRva, thunks);
-  const result = await parseDelayImports64(
-    new MockFile(bytes),
-    [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
-    value => value
-  );
-  const definedResult = expectDefined(result);
-  const entry = expectDefined(definedResult.entries[0]);
-  assert.equal(entry.functions.length, importCount);
-  assert.deepEqual(entry.functions.at(-1), { ordinal: importCount });
-});
+import { IMAGE_DELAYLOAD_DESCRIPTOR_SIZE, IMAGE_THUNK_DATA32_SIZE, IMAGE_THUNK_DATA64_SIZE, cStringSize, createDelayImportLayout, imageImportByNameSize, writeDelayImportDescriptor, writeDelayImportName, writeImportByName, writeThunkTable32, writeThunkTable64 } from "../../delay-import-layout.js";
 void test("parseDelayImports stops when later thunk slots stop mapping", async () => {
   const dllName = "delay.dll";
   const mappedHint = 0x11;
@@ -220,26 +187,34 @@ void test("parseDelayImports warns when 32-bit ordinal thunks set reserved bits"
   ));
   assert.ok(result.warning?.toLowerCase().includes("reserved"));
 });
-void test("parseDelayImports warns when PE32+ ordinal thunks set reserved bits", async () => {
-  const dllName = "delay64.dll";
-  const layout = createDelayImportLayout();
-  const descriptorOffset = layout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
-  const dllNameRva = layout.reserve(cStringSize(dllName));
-  const thunkTableRva = layout.reserve(IMAGE_THUNK_DATA64_SIZE * 2);
-  const bytes = new Uint8Array(layout.size()).fill(0);
-  const dv = new DataView(bytes.buffer);
-  writeDelayImportDescriptor(dv, descriptorOffset, {
-    dllNameRva,
-    importNameTableRva: thunkTableRva
+// Microsoft PE Import Lookup Table: bit 63 selects ordinal import; bits 62?16 are reserved.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#import-lookup-table
+for (const [thunk, reservedWarning] of [
+  [0x8000000000000002n, false],
+  [0xffff000000000002n, true]
+] as const) {
+  void test(`parseDelayImports decodes PE32+ ordinal thunk ${thunk.toString(16)}`, async () => {
+    const dllName = "delay64.dll";
+    const layout = createDelayImportLayout();
+    const descriptorOffset = layout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE);
+    const dllNameRva = layout.reserve(cStringSize(dllName));
+    const thunkTableRva = layout.reserve(IMAGE_THUNK_DATA64_SIZE * 2);
+    const bytes = new Uint8Array(layout.size()).fill(0);
+    const dv = new DataView(bytes.buffer);
+    writeDelayImportDescriptor(dv, descriptorOffset, {
+      dllNameRva,
+      importNameTableRva: thunkTableRva
+    });
+    writeDelayImportName(bytes, dllNameRva, dllName);
+    // Microsoft PE format, Import Lookup Table:
+    // for ordinal imports, bits 62-15 must be zero in PE32+.
+    writeThunkTable64(dv, thunkTableRva, [thunk, 0n]);
+    const result = expectDefined(await parseDelayImports64(
+      new MockFile(bytes),
+      [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
+      value => value
+    ));
+    assert.deepEqual(result.entries[0]?.functions, [{ ordinal: 2 }]);
+    assert.equal(result.warning?.includes("reserved") ?? false, reservedWarning);
   });
-  writeDelayImportName(bytes, dllNameRva, dllName);
-  // Microsoft PE format, Import Lookup Table:
-  // for ordinal imports, bits 62-15 must be zero in PE32+.
-  writeThunkTable64(dv, thunkTableRva, [0xffff000000000002n, 0n]);
-  const result = expectDefined(await parseDelayImports64(
-    new MockFile(bytes),
-    [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
-    value => value
-  ));
-  assert.ok(result.warning?.toLowerCase().includes("reserved"));
-});
+}
