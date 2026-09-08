@@ -53,6 +53,18 @@ void test("analyzeElfDwarf adapts ELF debug sections to the common analyzer", as
   assert.deepEqual(issues, []);
 });
 
+void test("analyzeElfDwarf follows relocation sh_info even when the section has an unrelated name", async () => {
+  const fixture = createDwarf4SectionsFixture();
+  const sections = fixture.sections.map((section, index) => toElfSection(section, index));
+  sections.push({ ...toElfSection({ name: ".custom_fixups", offset: 0, size: 24 }, sections.length),
+    type: 4, info: sections.find(section => section.name === ".debug_info")!.index });
+
+  const dwarf = await analyzeElfDwarf(fixture.file, sections, "elf64", true, []);
+
+  assert.equal(dwarf?.sections.find(section => section.name === ".debug_info")?.status,
+    "relocations-unsupported");
+});
+
 void test("analyzeElfDwarf decodes ELF64 SHF_COMPRESSED zlib sections", async () => {
   const fixture = createCompressedDwarfSectionsFixture("elf64-little-zlib");
   const sections = fixture.candidates.map((candidate, index) => toElfSection(

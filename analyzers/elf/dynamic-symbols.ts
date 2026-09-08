@@ -4,11 +4,20 @@ import { readAsciiString } from "../../binary-utils.js";
 import type { ElfDynamicSymbol, ElfDynamicSymbolInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import { readDynsymCountFromGnuHash, readDynsymCountFromSysvHash } from "./dynsym-count.js";
 import { vaddrToFileOffset } from "./vaddr-to-file-offset.js";
+import { readElfDynamicEntries, type ElfDynamicEntry } from "./dynamic-entries.js";
+import { createFileRangeReader } from "../file-range-reader.js";
+import type { ElfRelocationSymbol } from "./relocation-types.js";
+import { selectElfBinaryLayout } from "./binary-layout.js";
+import type { ElfBinaryLayout } from "./binary-layout-types.js";
+import { ELF_SYMBOL_INDEX } from "./abi-constants.js";
 
+// gABI p_type/sh_type and d_tag definitions:
+// https://gabi.xinuos.com/elf/03-sheader.html
+// https://gabi.xinuos.com/elf/07-pheader.html
+// https://gabi.xinuos.com/elf/08-dynamic.html
 const PT_DYNAMIC = 2;
 const SHT_DYNSYM = 11;
 
-const DT_NULL = 0;
 const DT_HASH = 4;
 const DT_GNU_HASH = 0x6ffffef5;
 const DT_STRTAB = 5;
@@ -16,6 +25,10 @@ const DT_SYMTAB = 6;
 const DT_STRSZ = 10;
 const DT_SYMENT = 11;
 
+// gABI symbol binding, type, visibility and section-index encodings:
+// https://gabi.xinuos.com/elf/05-symtab.html
+// GNU additions (STT_GNU_IFUNC, STB_GNU_UNIQUE, DT_GNU_HASH):
+// https://raw.githubusercontent.com/bminor/glibc/master/elf/elf.h
 const SHN_UNDEF = 0;
 
 const STT_NOTYPE = 0;
@@ -31,8 +44,6 @@ const STV_INTERNAL = 1;
 const STV_HIDDEN = 2;
 const STV_PROTECTED = 3;
 
-type DynEntry = { tag: number; value: bigint };
-
 const toSafeIndex = (value: bigint, label: string, issues: string[]): number | null => {
   const num = Number(value);
   if (!Number.isSafeInteger(num) || num < 0) {
@@ -40,23 +51,6 @@ const toSafeIndex = (value: bigint, label: string, issues: string[]): number | n
     return null;
   }
   return num;
-};
-
-const parseDynamicEntries = (bytes: Uint8Array, is64: boolean, littleEndian: boolean): DynEntry[] => {
-  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const entrySize = is64 ? 16 : 8;
-  const count = Math.floor(dv.byteLength / entrySize);
-  const out: DynEntry[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const base = index * entrySize;
-    const tagBig = is64 ? dv.getBigInt64(base, littleEndian) : BigInt(dv.getInt32(base, littleEndian));
-    const tag = Number(tagBig);
-    if (!Number.isSafeInteger(tag)) break;
-    const value = is64 ? dv.getBigUint64(base + 8, littleEndian) : BigInt(dv.getUint32(base + 4, littleEndian));
-    if (tag === DT_NULL) break;
-    out.push({ tag, value });
-  }
-  return out;
 };
 
 const readString = (table: DataView | null, offset: number): string => {
@@ -99,12 +93,12 @@ const isDisplayableType = (type: number): boolean =>
 const parseDynsym = (
   symtab: DataView,
   strtab: DataView | null,
-  is64: boolean,
-  littleEndian: boolean,
-  issues: string[]
+  layout: ElfBinaryLayout,
+  issues: string[],
+  tableOffset: number,
+  symbolCache: Map<number, ElfRelocationSymbol>
 ): ElfDynamicSymbol[] => {
-  const defaultEntrySize = is64 ? 24 : 16;
-  const entrySize = defaultEntrySize;
+  const entrySize = layout.symbolEntrySize;
   const count = Math.floor(symtab.byteLength / entrySize);
   if (symtab.byteLength % entrySize !== 0) {
     issues.push(`.dynsym size is not aligned to entry size (${entrySize} bytes).`);
@@ -113,30 +107,20 @@ const parseDynsym = (
   for (let index = 0; index < count; index += 1) {
     const base = index * entrySize;
     if (base + entrySize > symtab.byteLength) break;
-    const nameOff = symtab.getUint32(base, littleEndian);
-    let value: bigint;
-    let size: bigint;
-    let info: number;
-    let other: number;
-    let shndx: number;
-    if (is64) {
-      info = symtab.getUint8(base + 4);
-      other = symtab.getUint8(base + 5);
-      shndx = symtab.getUint16(base + 6, littleEndian);
-      value = symtab.getBigUint64(base + 8, littleEndian);
-      size = symtab.getBigUint64(base + 16, littleEndian);
-    } else {
-      value = BigInt(symtab.getUint32(base + 4, littleEndian));
-      size = BigInt(symtab.getUint32(base + 8, littleEndian));
-      info = symtab.getUint8(base + 12);
-      other = symtab.getUint8(base + 13);
-      shndx = symtab.getUint16(base + 14, littleEndian);
-    }
+    const { nameOffset: nameOff, value, size, info, other, sectionIndex: shndx } =
+      layout.readSymbol(new DataView(symtab.buffer, symtab.byteOffset + base, entrySize))!;
+    // ELF*_ST_BIND/TYPE/VISIBILITY: high/low st_info nibbles and low two st_other bits.
+    // https://gabi.xinuos.com/elf/05-symtab.html
     const bind = info >> 4;
     const type = info & 0x0f;
     if (!isDisplayableType(type)) continue;
     const visibility = other & 0x03;
     const name = readString(strtab, nameOff);
+    // Reuse only names terminated within the table.
+    if (strtab && nameOff + name.length < strtab.byteLength &&
+      shndx !== ELF_SYMBOL_INDEX.XINDEX) {
+      symbolCache.set(tableOffset + base, { name, value, sectionIndex: shndx });
+    }
     out.push({
       index,
       name,
@@ -177,7 +161,7 @@ const parseDynsymFromSections = async (opts: {
   is64: boolean;
   littleEndian: boolean;
   issues: string[];
-}): Promise<{ symtab: DataView; strtab: DataView | null } | null> => {
+}): Promise<{ symtab: DataView; strtab: DataView | null; offset: number } | null> => {
   const dynsym = opts.sections.find(sec => sec.type === SHT_DYNSYM && sec.size > 0n);
   if (!dynsym) return null;
   const symtab = await readDataViewSlice(opts.file, dynsym.offset, dynsym.size, ".dynsym", opts.issues);
@@ -187,7 +171,7 @@ const parseDynsymFromSections = async (opts: {
   const dynstr =
     (linked && linked.size > 0n ? linked : null) ?? opts.sections.find(sec => sec.name === ".dynstr" && sec.size > 0n) ?? null;
   const strtab = dynstr ? await readDataViewSlice(opts.file, dynstr.offset, dynstr.size, ".dynstr", opts.issues) : null;
-  return { symtab, strtab };
+  return { symtab, strtab, offset: Number(dynsym.offset) };
 };
 
 const parseDynsymFromDynamicTags = async (opts: {
@@ -197,16 +181,12 @@ const parseDynsymFromDynamicTags = async (opts: {
   is64: boolean;
   littleEndian: boolean;
   issues: string[];
-}): Promise<{ symtab: DataView; strtab: DataView | null } | null> => {
+}, parsedEntries?: ElfDynamicEntry[]):
+Promise<{ symtab: DataView; strtab: DataView | null; offset: number } | null> => {
   const dynamicPh = opts.programHeaders.find(ph => ph.type === PT_DYNAMIC && ph.filesz > 0n);
   if (!dynamicPh) return null;
-  const dynamicBytes = await readDataViewSlice(opts.file, dynamicPh.offset, dynamicPh.filesz, "PT_DYNAMIC", opts.issues);
-  if (!dynamicBytes) return null;
-  const entries = parseDynamicEntries(
-    new Uint8Array(dynamicBytes.buffer, dynamicBytes.byteOffset, dynamicBytes.byteLength),
-    opts.is64,
-    opts.littleEndian
-  );
+  const entries = parsedEntries ?? await readElfDynamicEntries(
+    createFileRangeReader(opts.file, 0, opts.file.size), opts, opts.issues);
 
   const symtabVaddr = entries.find(entry => entry.tag === DT_SYMTAB)?.value ?? 0n;
   const syment = entries.find(entry => entry.tag === DT_SYMENT)?.value ?? 0n;
@@ -265,7 +245,7 @@ const parseDynsymFromDynamicTags = async (opts: {
   const symtab = await readDataViewSlice(opts.file, symtabOff, symtabByteSize, "DT_SYMTAB", opts.issues);
   const strtab = await readDataViewSlice(opts.file, strtabOff, strsz, "DT_STRTAB", opts.issues);
   if (!symtab) return null;
-  return { symtab, strtab };
+  return { symtab, strtab, offset: Number(symtabOff) };
 };
 
 export async function parseElfDynamicSymbols(opts: {
@@ -274,15 +254,18 @@ export async function parseElfDynamicSymbols(opts: {
   sections: ElfSectionHeader[];
   is64: boolean;
   littleEndian: boolean;
-}): Promise<ElfDynamicSymbolInfo | null> {
+}, parsedEntries?: ElfDynamicEntry[], symbolCache = new Map<number, ElfRelocationSymbol>(),
+layout = selectElfBinaryLayout(opts)):
+Promise<ElfDynamicSymbolInfo | null> {
   const issues: string[] = [];
 
   const sectionTables = await parseDynsymFromSections({ ...opts, issues });
-  const tagTables = sectionTables ? null : await parseDynsymFromDynamicTags({ ...opts, issues });
+  const tagTables = sectionTables ? null : await parseDynsymFromDynamicTags({ ...opts, issues }, parsedEntries);
   const tables = sectionTables ?? tagTables;
   if (!tables) return null;
 
-  const symbols = parseDynsym(tables.symtab, tables.strtab, opts.is64, opts.littleEndian, issues);
+  const symbols = parseDynsym(tables.symtab, tables.strtab, layout,
+    issues, tables.offset, symbolCache);
   const importSymbols = symbols.filter(sym => sym.shndx === SHN_UNDEF && sym.bind !== STB_LOCAL && sym.name.length > 0);
   const exportSymbols = symbols.filter(sym => sym.shndx !== SHN_UNDEF && sym.bind !== STB_LOCAL && sym.name.length > 0);
 

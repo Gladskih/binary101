@@ -8,6 +8,7 @@ import {
 import { analyzeDwarfSources } from "../dwarf/index.js";
 import type { DwarfAnalysis } from "../dwarf/types.js";
 import type { ElfSectionHeader } from "./types.js";
+import { ELF_SECTION_TYPE } from "./abi-constants.js";
 
 // ELF gABI section flag SHF_COMPRESSED:
 // https://www.sco.com/developers/gabi/latest/ch4.sheader.html
@@ -76,6 +77,12 @@ export const analyzeElfDwarf = async (
       .map(section => relocationTargetName(section.name ?? ""))
       .filter((name): name is string => name != null)
   );
+  // gABI sh_info identifies targets independently of relocation section names.
+  for (const section of sections) {
+    if (section.type !== ELF_SECTION_TYPE.RELA && section.type !== ELF_SECTION_TYPE.REL) continue;
+    const target = sections.find(item => item.index === section.info);
+    if (target?.name) relocationTargets.add(target.name);
+  }
   const dwarfSections = sections
     .map(section => toDwarfSection(
       section,

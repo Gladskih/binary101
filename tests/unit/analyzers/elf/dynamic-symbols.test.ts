@@ -8,6 +8,8 @@ import { createElfGnuHashDynamicFixture } from "../../../fixtures/elf-gnu-hash-f
 import { createElfFile } from "../../../fixtures/elf-sample-file.js";
 import { createElfMetadataFile } from "../../../fixtures/elf-metadata-file.js";
 import { expectDefined } from "../../../helpers/expect-defined.js";
+import { relocationFixture } from "../../../fixtures/elf-relocations.js";
+import type { ElfRelocationSymbol } from "../../../../analyzers/elf/relocation-types.js";
 
 void test("parseElfDynamicSymbols returns imports and exports from .dynsym/.dynstr", async () => {
   const { file, expected } = createElfMetadataFile();
@@ -53,5 +55,16 @@ void test("parseElfDynamicSymbols reads sectionless GNU-hash dynsym tables", asy
   assert.equal(info.exportSymbols.length, 1);
   assert.equal(info.exportSymbols[0]?.name, fixture.symbolName);
   assert.equal(info.exportSymbols[0]?.value, fixture.symbolVaddr);
+});
+
+void test("shared relocation cache excludes unterminated dynamic symbol names", async () => {
+  const fixture = relocationFixture();
+  fixture.elf.sections[2]!.type = 11; // SHT_DYNSYM.
+  fixture.bytes[391] = 65; // Replace the final string-table NUL.
+  const cache = new Map<number, ElfRelocationSymbol>();
+
+  await parseElfDynamicSymbols({ file: fixture.file(), ...fixture.elf }, [], cache);
+
+  assert.equal(cache.has(280), false);
 });
 

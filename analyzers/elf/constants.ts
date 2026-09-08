@@ -1,6 +1,7 @@
 "use strict";
 
 import type { ElfOptionEntry } from "./types.js";
+import { ELF_SECTION_TYPE } from "./abi-constants.js";
 
 export const decodeOption = (value: number, options: ElfOptionEntry[]): string | null =>
   options.find(entry => entry[0] === value)?.[1] || null;
@@ -71,6 +72,8 @@ export const SECTION_TYPES: ElfOptionEntry[] = [
   [9, "SHT_REL", "Relocation entries without addends."],
   [10, "SHT_SHLIB", "Reserved (should not appear)."],
   [11, "SHT_DYNSYM", "Dynamic symbol table."],
+  // ELF gABI §3: https://gabi.xinuos.com/elf/03-sheader.html
+  [ELF_SECTION_TYPE.RELR, "SHT_RELR", "Packed relative relocations."],
   [0x6ffffff6, "GNU_HASH", "GNU-style hash table."],
   [0x6ffffff7, "GNU_LIBLIST", "Prelink library list."],
   [0x6ffffffd, "GNU_VERDEF", "Version definitions."],

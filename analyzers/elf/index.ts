@@ -15,6 +15,11 @@ import { parseElfInterpreter } from "./interpreter.js";
 import { parseElfNotes } from "./notes.js";
 import { analyzeElfNativeAot } from "./native-aot.js";
 import { parseElfTlsInfo } from "./tls.js";
+import { parseElfRelocations } from "./relocations.js";
+import { readElfDynamicEntries } from "./dynamic-entries.js";
+import { createFileRangeReader } from "../file-range-reader.js";
+import type { ElfRelocationSymbol } from "./relocation-types.js";
+import { selectElfBinaryLayout } from "./binary-layout.js";
 import {
   parseProgramHeadersWithGuards,
   parseSectionHeadersWithNames,
@@ -130,18 +135,29 @@ export async function parseElf(file: File): Promise<ElfParseResult | null> {
   const programHeaders = await parseProgramHeadersWithGuards(file, header, is64, little, issues);
   const sections = await parseSectionHeadersWithNames(file, header, is64, little, issues, expectedSectionHeaderSize);
   const tls = parseElfTlsInfo(programHeaders, sections);
-  const [interpreter, dynamic, dynSymbols, notes, comment, debugLink, dwarf, nativeAot] =
+  const result = buildResult(header, programHeaders, sections);
+  const layout = selectElfBinaryLayout(result);
+  const dynamicIssues: string[] = [];
+  const dynamicEntries = await readElfDynamicEntries(
+    createFileRangeReader(file, 0, file.size), result, dynamicIssues, layout);
+  const symbolCache = new Map<number, ElfRelocationSymbol>();
+  const [interpreter, dynamic, dynSymbols, notes, comment, debugLink, dwarf] =
     await Promise.all([
       parseElfInterpreter(file, programHeaders),
-      parseElfDynamicInfo({ file, programHeaders, sections, is64, littleEndian: little }),
-      parseElfDynamicSymbols({ file, programHeaders, sections, is64, littleEndian: little }),
+      parseElfDynamicInfo({ file, programHeaders, sections, is64, littleEndian: little }, dynamicEntries),
+      parseElfDynamicSymbols({ file, programHeaders, sections, is64, littleEndian: little },
+        dynamicEntries, symbolCache, layout),
       parseElfNotes({ file, programHeaders, sections, littleEndian: little }),
       parseElfComment(file, sections),
       parseElfDebugLink(file, sections, little),
-      analyzeElfDwarf(file, sections, is64 ? "elf64" : "elf32", little, issues),
-      analyzeElfNativeAot(file, header, programHeaders, sections, is64, little, issues)
+      analyzeElfDwarf(file, sections, is64 ? "elf64" : "elf32", little, issues)
     ]);
-  const result = buildResult(header, programHeaders, sections);
+  const relocations = await parseElfRelocations(file, result, dynamicEntries, symbolCache, layout);
+  if (relocations) relocations.issues.unshift(...dynamicIssues);
+  else issues.push(...dynamicIssues);
+  const nativeAot = dynamicIssues.length ? null : await analyzeElfNativeAot(
+    file, result, issues, relocations, layout);
+  if (relocations) result.relocations = relocations;
   if (interpreter) result.interpreter = interpreter;
   if (dynamic) result.dynamic = dynamic;
   if (dynSymbols) result.dynSymbols = dynSymbols;

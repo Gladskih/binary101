@@ -22,6 +22,7 @@ import { renderElfNotes } from "./notes.js";
 import { renderElfNativeAot } from "./native-aot.js";
 import { renderElfSymbols } from "./symbols.js";
 import { renderElfTls } from "./tls.js";
+import { renderElfRelocations } from "./relocations.js";
 import { formatElfHex, formatElfList, formatElfMaybeHumanSize } from "./value-format.js";
 
 const SECTION_HINTS: Record<string, string> = {
@@ -264,6 +265,7 @@ export function renderElf(elf: ElfParseResult | null): string {
   renderHeader(elf, out);
   renderElfLinking(elf, out);
   renderElfSymbols(elf, out);
+  renderElfRelocations(elf, out);
   renderElfTls(elf, out);
   renderElfNotes(elf, out);
   renderElfNativeAot(elf, out);

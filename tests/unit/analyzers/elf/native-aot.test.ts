@@ -9,8 +9,7 @@ import { createElfNativeAotFixture, createElfNativeAotInitializerFixture } from
 import { analyzeElfInstructionSets } from "../../../../analyzers/elf/disassembly-analyze.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 
-const parseFixture = async (bytes: Uint8Array) =>
-  parseElf(new MockFile(bytes, "native-aot.elf", "application/x-elf"));
+const parseFixture = (bytes: Uint8Array) => parseElf(new MockFile(bytes, "native-aot.elf", "application/x-elf"));
 
 void test("ELF NativeAOT initializers reach the disassembler from confirmed metadata", async () => {
   const fixture = createElfNativeAotInitializerFixture();
@@ -71,6 +70,29 @@ void test("parseElf confirms NativeAOT through ELF64 RELA relocations", async ()
   assert.deepEqual(parsed?.issues, []);
 });
 
+void test("parseElf confirms NativeAOT using the common RELR model", async () => {
+  const fixture = createElfNativeAotFixture();
+  const view = new DataView(fixture.bytes.buffer);
+  const pointers = Array.from({ length: fixture.relocationCount }, (_, index) => ({
+    site: view.getBigUint64(fixture.relocationOffset + index * 24, true),
+    value: view.getBigInt64(fixture.relocationOffset + index * 24 + 16, true)
+  }));
+  pointers.forEach(({ site, value }, index) => {
+    view.setBigUint64(Number(site), value, true);
+    view.setBigUint64(fixture.relocationOffset + index * 8, site, true);
+  });
+  const section = fixture.sectionHeaderOffset + 64;
+  view.setUint32(section + 4, 19, true); // ELF gABI SHT_RELR.
+  view.setBigUint64(section + 32, BigInt(pointers.length * 8), true);
+  view.setBigUint64(section + 56, 8n, true);
+
+  const parsed = await parseFixture(fixture.bytes);
+
+  assert.equal(parsed?.nativeAot?.status, "confirmed");
+  assert.equal(parsed?.relocations?.entries.length, fixture.relocationCount);
+  assert.deepEqual(parsed?.relocations?.issues, []);
+});
+
 void test("parseElf resolves implicit addends from ELF64 REL relocations", async () => {
   const fixture = createElfNativeAotFixture();
   const view = new DataView(fixture.bytes.buffer);
@@ -109,7 +131,7 @@ void test("parseElf reports a malformed dynamic relocation table", async () => {
   const parsed = await parseFixture(fixture.bytes);
 
   assert.equal(parsed?.nativeAot, undefined);
-  assert.ok(parsed?.issues.some(issue => issue.includes("dynamic RELA table")));
+  assert.ok(parsed?.relocations?.issues.some(issue => issue.includes("DT_RELA")));
 });
 
 void test("parseElf reports malformed PT_DYNAMIC geometry", async () => {
@@ -120,7 +142,7 @@ void test("parseElf reports malformed PT_DYNAMIC geometry", async () => {
   const parsed = await parseFixture(fixture.bytes);
 
   assert.equal(parsed?.nativeAot, undefined);
-  assert.ok(parsed?.issues.some(issue => issue.includes("PT_DYNAMIC table")));
+  assert.ok(parsed?.relocations?.issues.some(issue => issue.includes("partial entry")));
 });
 
 void test("parseElf rejects conflicting dynamic relocation tags", async () => {
@@ -133,7 +155,7 @@ void test("parseElf rejects conflicting dynamic relocation tags", async () => {
   const parsed = await parseFixture(fixture.bytes);
 
   assert.equal(parsed?.nativeAot, undefined);
-  assert.ok(parsed?.issues.some(issue => issue.includes("conflicting relocation tags")));
+  assert.ok(parsed?.relocations?.issues.some(issue => issue.includes("Conflicting")));
 });
 
 void test("parseElf ignores relocation sections that are not loaded", async () => {
@@ -175,7 +197,7 @@ void test("parseElf reports malformed relocation tables without throwing", async
   const parsed = await parseFixture(fixture.bytes);
 
   assert.equal(parsed?.nativeAot, undefined);
-  assert.ok(parsed?.issues.some(issue => issue.includes("relocation section")));
+  assert.ok(parsed?.relocations?.issues.some(issue => issue.includes("entry size")));
 });
 
 void test("parseElf does not accept non-relative or symbol-backed relocation evidence", async () => {
@@ -249,13 +271,7 @@ void test("ELF NativeAOT analysis contains file read failures", async () => {
   const issues: string[] = [];
 
   const metadata = await analyzeElfNativeAot(
-    new FailingFile(fixture.bytes),
-    parsed.header,
-    parsed.programHeaders,
-    parsed.sections,
-    parsed.is64,
-    parsed.littleEndian,
-    issues
+    new FailingFile(fixture.bytes), parsed, issues
   );
 
   assert.equal(metadata, null);
@@ -268,13 +284,7 @@ void test("ELF NativeAOT analysis requires a loadable image", async () => {
   assert.ok(parsed);
 
   const metadata = await analyzeElfNativeAot(
-    fixture.file,
-    parsed.header,
-    [],
-    parsed.sections,
-    parsed.is64,
-    parsed.littleEndian,
-    []
+    fixture.file, { ...parsed, programHeaders: [] }, []
   );
 
   assert.equal(metadata, null);

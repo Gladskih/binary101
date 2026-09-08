@@ -3,6 +3,7 @@
 import type { ElfInstructionSetReport } from "./disassembly-types.js";
 import type { DwarfAnalysis } from "../dwarf/types.js";
 import type { NativeAotMetadata } from "../native-aot/format.js";
+import type { ElfRelocationInfo } from "./relocation-types.js";
 
 export type ElfOptionEntry = [number, string, string?];
 
@@ -79,6 +80,7 @@ export interface ElfParseResult {
   debugLink?: ElfDebugLinkInfo;
   dwarf?: DwarfAnalysis;
   nativeAot?: NativeAotMetadata;
+  relocations?: ElfRelocationInfo;
   is64: boolean;
   littleEndian: boolean;
   fileSize: number;

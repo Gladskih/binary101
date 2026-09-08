@@ -3,11 +3,17 @@
 import { readAsciiString } from "../../binary-utils.js";
 import type { ElfDynamicInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import { vaddrToFileOffset } from "./vaddr-to-file-offset.js";
+import { readElfDynamicEntries, type ElfDynamicEntry } from "./dynamic-entries.js";
+import { createFileRangeReader } from "../file-range-reader.js";
 
+// gABI p_type/sh_type and dynamic tags; GNU DT_FLAGS_1 from glibc's ELF declarations.
+// https://gabi.xinuos.com/elf/07-pheader.html
+// https://gabi.xinuos.com/elf/03-sheader.html
+// https://gabi.xinuos.com/elf/08-dynamic.html
+// https://raw.githubusercontent.com/bminor/glibc/master/elf/elf.h
 const PT_DYNAMIC = 2;
 const SHT_DYNAMIC = 6;
 
-const DT_NULL = 0;
 const DT_NEEDED = 1;
 const DT_INIT = 12;
 const DT_FINI = 13;
@@ -34,23 +40,6 @@ const toSafeIndex = (value: bigint, label: string, issues: string[]): number | n
     return null;
   }
   return num;
-};
-
-const parseDynamicEntries = (bytes: Uint8Array, is64: boolean, littleEndian: boolean): DynEntry[] => {
-  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const entrySize = is64 ? 16 : 8;
-  const count = Math.floor(dv.byteLength / entrySize);
-  const out: DynEntry[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const base = index * entrySize;
-    const tagBig = is64 ? dv.getBigInt64(base, littleEndian) : BigInt(dv.getInt32(base, littleEndian));
-    const tag = Number(tagBig);
-    if (!Number.isSafeInteger(tag)) break;
-    const value = is64 ? dv.getBigUint64(base + 8, littleEndian) : BigInt(dv.getUint32(base + 4, littleEndian));
-    if (tag === DT_NULL) break;
-    out.push({ tag, value });
-  }
-  return out;
 };
 
 const readString = (table: DataView | null, offset: number): string => {
@@ -107,7 +96,7 @@ export async function parseElfDynamicInfo(opts: {
   sections: ElfSectionHeader[];
   is64: boolean;
   littleEndian: boolean;
-}): Promise<ElfDynamicInfo | null> {
+}, parsedEntries?: ElfDynamicEntry[]): Promise<ElfDynamicInfo | null> {
   const issues: string[] = [];
 
   const dynamicPh = opts.programHeaders.find(ph => ph.type === PT_DYNAMIC && ph.filesz > 0n);
@@ -123,9 +112,8 @@ export async function parseElfDynamicInfo(opts: {
   const end = Math.min(opts.file.size, start + byteSize);
   if (start >= opts.file.size || end <= start) return null;
   if (end !== start + byteSize) issues.push("Dynamic section is truncated.");
-  const bytes = new Uint8Array(await opts.file.slice(start, end).arrayBuffer());
-
-  const entries = parseDynamicEntries(bytes, opts.is64, opts.littleEndian);
+  const entries = parsedEntries ?? await readElfDynamicEntries(
+    createFileRangeReader(opts.file, 0, opts.file.size), opts, issues);
   const strtab = await locateDynStringTable({ ...opts, entries, issues });
 
   const needed = getTagValues(entries, DT_NEEDED)

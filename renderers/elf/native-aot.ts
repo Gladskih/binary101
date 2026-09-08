@@ -30,7 +30,7 @@ export const renderElfNativeAot = (elf: ElfParseResult, out: string[]): void => 
   if (!metadata) return;
   out.push(`<section><h4 style="margin:0 0 .5rem 0;font-size:.9rem">NativeAOT metadata</h4>`);
   out.push(`<p class="smallNote">NativeAOT compiled managed code into this ELF executable. ` +
-    `Confirmation follows relative REL/RELA relocations to a ReadyToRun header and then checks ` +
+    `Confirmation follows relative REL/RELA relocations or packed RELR to a ReadyToRun header and checks ` +
     `the embedded NativeFormat signature; section names alone are not treated as proof.</p><dl>`);
   out.push(renderDefinitionRow(
     "Layout",
@@ -40,7 +40,7 @@ export const renderElfNativeAot = (elf: ElfParseResult, out: string[]): void => 
   out.push(renderDefinitionRow(
     "Header",
     hex(metadata.headerRva, 8),
-    `Image-relative ReadyToRun header address. REL/RELA slot ${hex(metadata.modulePointerRva, 8)} ` +
+    `Image-relative ReadyToRun header address. Relocation slot ${hex(metadata.modulePointerRva, 8)} ` +
     `refers to it.`
   ));
   out.push(renderDefinitionRow(
