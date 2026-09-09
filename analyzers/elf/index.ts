@@ -52,6 +52,12 @@ function parseIdent(dv: DataView, issues: string[]): ElfIdent {
   const abiVersion = dv.getUint8(8);
   const className = decodeOption(cls, ELF_CLASS) || "Unknown";
   const dataName = decodeOption(data, ELF_DATA) || "Unknown";
+  // gABI 2.2: only ELFCLASS32/64 and ELFDATA2LSB/MSB define supported layouts.
+  // https://gabi.xinuos.com/elf/02-eheader.html
+  if (cls !== 1 && cls !== 2) issues.push(`Unsupported ELF class ${cls}; layout is unknown.`);
+  if (data !== 1 && data !== 2) {
+    issues.push(`Unsupported ELF data encoding ${data}; byte order is unknown.`);
+  }
   if (version !== 1) issues.push(`Unexpected ELF version ${version}.`);
   return { classByte: cls, className, dataByte: data, dataName, osabi, abiVersion };
 }
@@ -115,6 +121,10 @@ export async function parseElf(file: File): Promise<ElfParseResult | null> {
   });
   // ELF header size from spec: sizeof(Elf32_Ehdr)=0x34, sizeof(Elf64_Ehdr)=0x40.
   const minHeaderSize = is64 ? 0x40 : 0x34;
+  if ((ident.classByte !== 1 && ident.classByte !== 2) ||
+      (ident.dataByte !== 1 && ident.dataByte !== 2)) {
+    return buildResult(emptyElfHeader(), [], []);
+  }
   // ELF section header size from spec: sizeof(Elf32_Shdr)=0x28, sizeof(Elf64_Shdr)=0x40.
   const expectedSectionHeaderSize = is64 ? 0x40 : 0x28;
   if (dv.byteLength < minHeaderSize) {

@@ -60,6 +60,26 @@ void test("parseElf returns null for non-ELF files", async () => {
   assert.strictEqual(parsed, null);
 });
 
+void test("parseElf stops before decoding an unsupported ELF class", async () => {
+  const bytes = new Uint8Array(64);
+  writeElfHeader(bytes);
+  bytes[4] = 0; // gABI ELFCLASSNONE is invalid.
+  const parsed = expectDefined(await parseElf(new MockFile(bytes)));
+  assert.match(parsed.issues.join(" "), /Unsupported ELF class 0/);
+  assert.equal(parsed.header.machine, 0);
+  assert.deepEqual(parsed.sections, []);
+});
+
+void test("parseElf stops before decoding an unsupported data encoding", async () => {
+  const bytes = new Uint8Array(64);
+  writeElfHeader(bytes);
+  bytes[5] = 3; // gABI reserves encodings other than ELFDATA2LSB/ELFDATA2MSB.
+  const parsed = expectDefined(await parseElf(new MockFile(bytes)));
+  assert.match(parsed.issues.join(" "), /Unsupported ELF data encoding 3/);
+  assert.equal(parsed.header.machine, 0);
+  assert.deepEqual(parsed.programHeaders, []);
+});
+
 void test("parseElf notes program headers that sit outside the file", async () => {
   const bytes = new Uint8Array(64).fill(0);
   writeElfHeader(bytes, { phoff: 200n, phnum: 1, shnum: 0 });
