@@ -23,7 +23,10 @@ const analyzeRelocatedImage = async (
     general, sections, architecture, provisionalImage, issues);
   if (!relocations) return null;
   const image = createElfNativeAotImage(reader, programHeaders, relocations.targets);
-  return image ? await findNativeAotMetadata(image, relocations.sites) : null;
+  // Visit nearby targets together so the bounded range cache can reuse their bytes.
+  const orderedSites = new Set([...relocations.sites].sort((left, right) =>
+    relocations.targets.get(left)! - relocations.targets.get(right)!));
+  return image ? await findNativeAotMetadata(image, orderedSites) : null;
 };
 
 export const analyzeElfNativeAot = async (
