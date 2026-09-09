@@ -6,6 +6,7 @@ import type { NativeAotMetadata } from "../native-aot/format.js";
 import type { ElfRelocationInfo } from "./relocation-types.js";
 import type { ElfSymbolVersions } from "./version-types.js";
 import type { ElfSymbolTable } from "./symbol-tables.js";
+import type { ElfGnuProperty } from "./gnu-properties.js";
 
 export type ElfOptionEntry = [number, string, string?];
 
@@ -137,6 +138,7 @@ export interface ElfTlsInfo {
 }
 
 export interface ElfNoteEntry {
+  properties?: ElfGnuProperty[];
   source: string;
   name: string;
   type: number;

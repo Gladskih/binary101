@@ -1,4 +1,5 @@
 "use strict";
+import { renderElfGnuProperties } from "./gnu-properties.js";
 
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
@@ -61,7 +62,7 @@ export function renderElfNotes(elf: ElfParseResult, out: string[]): void {
   if (abiTag) out.push(renderDefinitionRow("ABI tag", escapeHtml(abiTag.value || "")));
   out.push(`</dl>`);
   out.push(renderNotesTable(notes));
+  renderElfGnuProperties(elf, out);
   out.push(renderIssues(notes));
   out.push(renderElfSectionEnd());
 }
-

@@ -2,6 +2,7 @@
 
 import { alignUpTo, bufferToHex, readAsciiString } from "../../binary-utils.js";
 import type { ElfNoteEntry, ElfNotesInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
+import { parseElfGnuProperties } from "./gnu-properties.js";
 
 const PT_NOTE = 4;
 const SHT_NOTE = 7;
@@ -73,7 +74,8 @@ const parseNotesFromBytes = (
   littleEndian: boolean,
   source: string,
   issues: string[],
-  fileOffsetStart: bigint
+  fileOffsetStart: bigint,
+  wordSize: 4 | 8
 ): ParsedNote[] => {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const entries: ParsedNote[] = [];
@@ -124,7 +126,10 @@ const parseNotesFromBytes = (
         typeName,
         description,
         value,
-        descSize: descsz
+        descSize: descsz,
+        ...(name === "GNU" && type === NT_GNU_PROPERTY_TYPE_0
+          ? { properties: parseElfGnuProperties(desc, wordSize,
+            littleEndian ? "little" : "big", issues) } : {})
       }
     });
   }
@@ -136,6 +141,7 @@ export async function parseElfNotes(opts: {
   programHeaders: ElfProgramHeader[];
   sections: ElfSectionHeader[];
   littleEndian: boolean;
+  is64?: boolean;
 }): Promise<ElfNotesInfo | null> {
   const issues: string[] = [];
   const ranges: Array<{ offset: bigint; size: bigint; source: string }> = [];
@@ -145,7 +151,7 @@ export async function parseElfNotes(opts: {
     .forEach(sec => ranges.push({ offset: sec.offset, size: sec.size, source: sec.name ? `Section "${sec.name}"` : `SHT_NOTE section #${sec.index}` }));
 
   opts.programHeaders
-    .filter(ph => ph.type === PT_NOTE && ph.filesz > 0n)
+    .filter(ph => (ph.type === PT_NOTE || ph.type === 0x6474e553) && ph.filesz > 0n)
     .forEach(ph => ranges.push({ offset: ph.offset, size: ph.filesz, source: `PT_NOTE segment #${ph.index}` }));
 
   if (!ranges.length) return null;
@@ -168,7 +174,8 @@ export async function parseElfNotes(opts: {
     }
     if (end !== start + size) issues.push(`${range.source} is truncated.`);
     const bytes = new Uint8Array(await opts.file.slice(start, end).arrayBuffer());
-    const parsedNotes = parseNotesFromBytes(bytes, opts.littleEndian, range.source, issues, range.offset);
+    const parsedNotes = parseNotesFromBytes(bytes, opts.littleEndian, range.source, issues,
+      range.offset, opts.is64 ? 8 : 4);
     for (const parsed of parsedNotes) {
       if (seenNotes.has(parsed.fileOffsetKey)) continue;
       seenNotes.add(parsed.fileOffsetKey);
