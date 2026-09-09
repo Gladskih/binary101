@@ -270,7 +270,7 @@ Promise<ElfDynamicSymbolInfo | null> {
   const exportSymbols = symbols.filter(sym => sym.shndx !== SHN_UNDEF && sym.bind !== STB_LOCAL && sym.name.length > 0);
 
   return {
-    total: symbols.length,
+    total: Math.floor(tables.symtab.byteLength / layout.symbolEntrySize),
     importSymbols,
     exportSymbols,
     issues

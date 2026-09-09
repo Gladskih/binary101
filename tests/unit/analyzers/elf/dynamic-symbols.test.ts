@@ -11,6 +11,16 @@ import { expectDefined } from "../../../helpers/expect-defined.js";
 import { relocationFixture } from "../../../fixtures/elf-relocations.js";
 import type { ElfRelocationSymbol } from "../../../../analyzers/elf/relocation-types.js";
 
+void test("dynamic symbol total includes types omitted from import/export tables", async () => {
+  const fixture = relocationFixture();
+  fixture.elf.sections[2]!.type = 11; // SHT_DYNSYM, gABI 3.
+  fixture.bytes[284] = 3; // ELF64 st_info: STB_LOCAL / STT_SECTION, gABI 5.
+  const result = await parseElfDynamicSymbols({ file: fixture.file(), ...fixture.elf });
+  assert.equal(result?.total, 2);
+  assert.deepEqual(result?.importSymbols, []);
+  assert.deepEqual(result?.exportSymbols, []);
+});
+
 void test("parseElfDynamicSymbols returns imports and exports from .dynsym/.dynstr", async () => {
   const { file, expected } = createElfMetadataFile();
   const parsed = await parseElf(file);
