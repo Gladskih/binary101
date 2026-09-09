@@ -5,6 +5,7 @@ import type { PagedSortableTableModel } from "../paged-sortable-table.js";
 import { getNativeAotReflectionTypeTableModel } from "../native-aot/reflection.js";
 import { createElfRelocationTableModel } from "./relocations.js";
 import { createElfSymbolTableModel } from "./symbol-tables.js";
+import { createElfUnwindTableModel } from "./unwind.js";
 
 export const getElfPagedTableModel = (
   elf: ElfParseResult,
@@ -12,6 +13,8 @@ export const getElfPagedTableModel = (
 ): PagedSortableTableModel | null => {
   const symbols = elf.symbolTables?.find(table => tableId === `elf-symbols-${table.sectionIndex}`);
   if (symbols) return createElfSymbolTableModel(symbols);
+  const unwind = elf.unwind?.find(section => tableId === `elf-unwind-${section.sectionIndex}`);
+  if (unwind) return createElfUnwindTableModel(unwind);
   return tableId === "elf-relocations" && elf.relocations
     ? createElfRelocationTableModel(elf)
     : getNativeAotReflectionTypeTableModel(elf.nativeAot?.reflection, tableId);

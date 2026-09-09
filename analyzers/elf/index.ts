@@ -14,6 +14,7 @@ import { parseElfDynamicSymbols } from "./dynamic-symbols.js";
 import { parseElfSymbolVersions } from "./symbol-versions.js";
 import { parseElfSymbolTables } from "./symbol-tables.js";
 import { parseElfSectionGroups } from "./section-groups.js";
+import { parseElfUnwind } from "./unwind.js";
 import { parseElfInterpreter } from "./interpreter.js";
 import { parseElfNotes } from "./notes.js";
 import { analyzeElfNativeAot } from "./native-aot.js";
@@ -169,6 +170,8 @@ export async function parseElf(file: File): Promise<ElfParseResult | null> {
   if (symbolTables.length) result.symbolTables = symbolTables;
   const sectionGroups = await parseElfSectionGroups(file, result);
   if (sectionGroups.length) result.sectionGroups = sectionGroups;
+  const unwind = await parseElfUnwind(file, result);
+  if (unwind.length) result.unwind = unwind;
   const relocations = await parseElfRelocations(file, result, dynamicEntries, symbolCache, layout);
   const symbolVersions = await parseElfSymbolVersions(file, result, dynamicEntries,
     dynSymbols?.total ?? 0);

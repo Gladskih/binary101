@@ -8,6 +8,7 @@ import type { ElfSymbolVersions } from "./version-types.js";
 import type { ElfSymbolTable } from "./symbol-tables.js";
 import type { ElfGnuProperty } from "./gnu-properties.js";
 import type { ElfSectionGroup } from "./section-groups.js";
+import type { ElfUnwindSection } from "./unwind-types.js";
 
 export type ElfOptionEntry = [number, string, string?];
 
@@ -81,6 +82,7 @@ export interface ElfParseResult {
   symbolVersions?: ElfSymbolVersions;
   symbolTables?: ElfSymbolTable[];
   sectionGroups?: ElfSectionGroup[];
+  unwind?: ElfUnwindSection[];
   tls?: ElfTlsInfo;
   notes?: ElfNotesInfo;
   comment?: ElfCommentInfo;
