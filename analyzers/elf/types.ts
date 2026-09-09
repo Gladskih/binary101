@@ -7,6 +7,7 @@ import type { ElfRelocationInfo } from "./relocation-types.js";
 import type { ElfSymbolVersions } from "./version-types.js";
 import type { ElfSymbolTable } from "./symbol-tables.js";
 import type { ElfGnuProperty } from "./gnu-properties.js";
+import type { ElfSectionGroup } from "./section-groups.js";
 
 export type ElfOptionEntry = [number, string, string?];
 
@@ -79,6 +80,7 @@ export interface ElfParseResult {
   dynSymbols?: ElfDynamicSymbolInfo;
   symbolVersions?: ElfSymbolVersions;
   symbolTables?: ElfSymbolTable[];
+  sectionGroups?: ElfSectionGroup[];
   tls?: ElfTlsInfo;
   notes?: ElfNotesInfo;
   comment?: ElfCommentInfo;

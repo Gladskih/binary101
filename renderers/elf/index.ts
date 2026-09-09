@@ -1,6 +1,7 @@
 "use strict";
 import { renderElfSymbolVersions } from "./symbol-versions.js";
 import { renderElfSymbolTables } from "./symbol-tables.js";
+import { renderElfSectionGroups } from "./section-groups.js";
 
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { renderDefinitionRow, renderOptionChips, escapeHtml } from "../../html-utils.js";
@@ -235,6 +236,7 @@ export function renderElf(elf: ElfParseResult | null): string {
   renderElfSymbols(elf, out);
   renderElfSymbolVersions(elf, out);
   renderElfSymbolTables(elf, out);
+  renderElfSectionGroups(elf, out);
   renderElfRelocations(elf, out);
   renderElfTls(elf, out);
   renderElfNotes(elf, out);
