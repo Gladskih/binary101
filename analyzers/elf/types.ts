@@ -4,6 +4,7 @@ import type { ElfInstructionSetReport } from "./disassembly-types.js";
 import type { DwarfAnalysis } from "../dwarf/types.js";
 import type { NativeAotMetadata } from "../native-aot/format.js";
 import type { ElfRelocationInfo } from "./relocation-types.js";
+import type { ElfSymbolVersions } from "./version-types.js";
 
 export type ElfOptionEntry = [number, string, string?];
 
@@ -74,6 +75,7 @@ export interface ElfParseResult {
   interpreter?: ElfInterpreterInfo;
   dynamic?: ElfDynamicInfo;
   dynSymbols?: ElfDynamicSymbolInfo;
+  symbolVersions?: ElfSymbolVersions;
   tls?: ElfTlsInfo;
   notes?: ElfNotesInfo;
   comment?: ElfCommentInfo;

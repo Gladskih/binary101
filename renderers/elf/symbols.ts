@@ -4,17 +4,19 @@ import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-sectio
 import { escapeHtml } from "../../html-utils.js";
 import type { ElfDynamicSymbol, ElfDynamicSymbolInfo, ElfParseResult } from "../../analyzers/elf/types.js";
 import { formatElfHex } from "./value-format.js";
+import { createElfVersionedSymbolName } from "./symbol-versions.js";
 
-const renderSymbolTable = (title: string, symbols: ElfDynamicSymbol[]): string => {
+const renderSymbolTable = (title: string, symbols: ElfDynamicSymbol[], elf: ElfParseResult): string => {
   if (!symbols.length) return `<div class="smallNote dim">${escapeHtml(title)}: none.</div>`;
   const limit = 2000;
   const slice = symbols.slice(0, limit);
   const truncated = symbols.length > limit;
+  const versionedName = createElfVersionedSymbolName(elf);
   const caption = truncated ? `${title} (showing ${limit} of ${symbols.length})` : `${title} (${symbols.length})`;
 
   const rows = slice
     .map(sym => {
-      const name = sym.name ? escapeHtml(sym.name) : "-";
+      const name = sym.name ? escapeHtml(versionedName(sym)) : "-";
       const bind = escapeHtml(sym.bindName);
       const type = escapeHtml(sym.typeName);
       const vis = escapeHtml(sym.visibilityName);
@@ -57,9 +59,8 @@ export function renderElfSymbols(elf: ElfParseResult, out: string[]): void {
     )}.</div>`
   );
 
-  out.push(renderSymbolTable("Imported symbols", dyn.importSymbols));
-  out.push(renderSymbolTable("Exported symbols", dyn.exportSymbols));
+  out.push(renderSymbolTable("Imported symbols", dyn.importSymbols, elf));
+  out.push(renderSymbolTable("Exported symbols", dyn.exportSymbols, elf));
   out.push(renderIssues(dyn));
   out.push(renderElfSectionEnd());
 }
-
