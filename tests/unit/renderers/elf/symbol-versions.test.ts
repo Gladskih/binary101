@@ -42,4 +42,3 @@ void test("omits absent version metadata", () => {
   assert.deepEqual(out, []);
   assert.equal(createElfVersionedSymbolName(fixture.elf)(symbol), "example");
 });
-

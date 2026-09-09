@@ -1,6 +1,27 @@
 import { escapeHtml } from "../../html-utils.js";
-import type { ElfParseResult } from "../../analyzers/elf/types.js";
+import type { ElfParseResult, ElfSectionHeader } from "../../analyzers/elf/types.js";
+import type { ElfSymbolTable } from "../../analyzers/elf/symbol-tables.js";
+import type { ElfSectionGroup } from "../../analyzers/elf/section-groups.js";
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
+
+const groupSignature = (
+  header: ElfSectionHeader | undefined, sections: Map<number, ElfSectionHeader>,
+  tables: Map<number, ElfSymbolTable>
+): string => {
+  const symbol = header ? tables.get(header.link)?.entries[header.info] : null;
+  return symbol?.name || sections.get(symbol?.sectionIndex ?? -1)?.name || "Unresolved";
+};
+
+const groupFlags = (flags: number | null): string => flags == null ? "Unknown" :
+  `${flags & 1 ? "COMDAT " : ""}0x${flags.toString(16)}`;
+
+const groupRow = (
+  group: ElfSectionGroup, sections: Map<number, ElfSectionHeader>, tables: Map<number, ElfSymbolTable>
+): string => `<tr><td class="peNumeric">${group.sectionIndex}</td>` +
+  `<td>${groupFlags(group.flags)}</td>` +
+  `<td>${escapeHtml(groupSignature(sections.get(group.sectionIndex), sections, tables))}</td>` +
+  `<td>${group.members.map(index =>
+    escapeHtml(`#${index} ${sections.get(index)?.name ?? ""}`)).join(", ")}</td></tr>`;
 
 export const renderElfSectionGroups = (elf: ElfParseResult, out: string[]): void => {
   if (!elf.sectionGroups?.length) return;
@@ -10,13 +31,7 @@ export const renderElfSectionGroups = (elf: ElfParseResult, out: string[]): void
   out.push(`<div class="tableWrap"><table class="table"><thead><tr>` +
     `<th>Group section</th><th>Flags</th><th>Signature</th><th>Member sections</th></tr></thead><tbody>`);
   for (const group of elf.sectionGroups) {
-    const header = sections.get(group.sectionIndex);
-    const symbol = header ? tables.get(header.link)?.entries[header.info] : null;
-    const signature = symbol?.name || sections.get(symbol?.sectionIndex ?? -1)?.name || "Unresolved";
-    out.push(`<tr><td class="peNumeric">${group.sectionIndex}</td>` +
-      `<td>${group.flags == null ? "Unknown" : `${group.flags & 1 ? "COMDAT " : ""}0x${group.flags.toString(16)}`}</td>` +
-      `<td>${escapeHtml(signature)}</td><td>${group.members.map(index =>
-        escapeHtml(`#${index} ${sections.get(index)?.name ?? ""}`)).join(", ")}</td></tr>`);
+    out.push(groupRow(group, sections, tables));
   }
   out.push(`</tbody></table></div>`);
   const issues = elf.sectionGroups.flatMap(group => group.issues.map(issue =>

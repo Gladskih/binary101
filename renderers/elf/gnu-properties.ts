@@ -22,14 +22,17 @@ export const describeElfGnuProperty = (property: ElfGnuProperty, machine: number
   if (machine === 183 && type === 0xc0000000) {
     return `AArch64 features: ${featureDescription(value, ["BTI", "PAC", "GCS"])}`;
   }
-  if (machine === 3 || machine === 62) {
-    if (type === 0xc0000002) {
-      return `Compatible with: ${featureDescription(value, ["IBT", "SHSTK"])}`;
-    }
-    if (type === 0xc0008002 || type === 0xc0010002) {
-      return `ISA ${type === 0xc0008002 ? "required" : "used"}: ` +
-        featureDescription(value, ["x86-64-baseline", "x86-64-v2", "x86-64-v3", "x86-64-v4"]);
-    }
+  if (machine === 3 || machine === 62) return describeX86Property(type, value);
+  return `0x${value.toString(16)}`;
+};
+
+const describeX86Property = (type: number, value: bigint): string => {
+  if (type === 0xc0000002) {
+    return `Compatible with: ${featureDescription(value, ["IBT", "SHSTK"])}`;
+  }
+  if (type === 0xc0008002 || type === 0xc0010002) {
+    return `ISA ${type === 0xc0008002 ? "required" : "used"}: ` +
+      featureDescription(value, ["x86-64-baseline", "x86-64-v2", "x86-64-v3", "x86-64-v4"]);
   }
   return `0x${value.toString(16)}`;
 };

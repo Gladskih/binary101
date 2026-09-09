@@ -42,17 +42,13 @@ const readSectionGroup = async (
 ): Promise<ElfSectionGroup> => {
   const group: ElfSectionGroup = { sectionIndex: section.index, flags: null, members: [], issues: [] };
   validateGroupHeader(section, elf, group.issues);
-  const range = elfFileRange(section.offset, section.size, reader.size);
-  if (!range) {
-    group.issues.push("Group data is outside the file.");
-    return group;
-  }
-  if (section.entsize !== 4n || range.size < 4 || range.size % 4) {
-    group.issues.push("Group data has an invalid size or entry size.");
-    return group;
-  }
+  const range = groupRange(section, reader.size, group.issues);
+  if (!range) return group;
   const header = await reader.read(range.offset, 4);
-  if (header.byteLength < 4) return group;
+  if (header.byteLength < 4) {
+    group.issues.push("Group flag word is truncated.");
+    return group;
+  }
   group.flags = header.getUint32(0, elf.littleEndian);
   if ((group.flags & ~0xfff00001) !== 0) group.issues.push("Group has unknown flags.");
   // More members than sections cannot be valid; avoid retaining unbounded duplicate indices.
@@ -69,6 +65,21 @@ const readSectionGroup = async (
     group.members.push(member);
   }
   return group;
+};
+
+const groupRange = (
+  section: ElfSectionHeader, fileSize: number, issues: string[]
+): { offset: number; size: number } | null => {
+  const range = elfFileRange(section.offset, section.size, fileSize);
+  if (!range) {
+    issues.push("Group data is outside the file.");
+    return null;
+  }
+  if (section.entsize !== 4n || range.size < 4 || range.size % 4) {
+    issues.push("Group data has an invalid size or entry size.");
+    return null;
+  }
+  return range;
 };
 
 export const parseElfSectionGroups = async (
