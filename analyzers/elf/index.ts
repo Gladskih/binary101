@@ -12,6 +12,7 @@ import { analyzeElfDwarf } from "./dwarf.js";
 import { parseElfDynamicInfo } from "./dynamic-info.js";
 import { parseElfDynamicSymbols } from "./dynamic-symbols.js";
 import { parseElfSymbolVersions } from "./symbol-versions.js";
+import { parseElfSymbolTables } from "./symbol-tables.js";
 import { parseElfInterpreter } from "./interpreter.js";
 import { parseElfNotes } from "./notes.js";
 import { analyzeElfNativeAot } from "./native-aot.js";
@@ -163,6 +164,8 @@ export async function parseElf(file: File): Promise<ElfParseResult | null> {
       parseElfDebugLink(file, sections, little),
       analyzeElfDwarf(file, sections, is64 ? "elf64" : "elf32", little, issues)
     ]);
+  const symbolTables = await parseElfSymbolTables(file, result, symbolCache);
+  if (symbolTables.length) result.symbolTables = symbolTables;
   const relocations = await parseElfRelocations(file, result, dynamicEntries, symbolCache, layout);
   const symbolVersions = await parseElfSymbolVersions(file, result, dynamicEntries,
     dynSymbols?.total ?? 0);

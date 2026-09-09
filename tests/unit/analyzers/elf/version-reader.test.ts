@@ -1,7 +1,8 @@
+import { createElfStringTableReader } from "../../../../analyzers/elf/string-table.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createFileRangeReader } from "../../../../analyzers/file-range-reader.js";
-import { createVersionStringReader, locateElfVersionTable,
+import { locateElfVersionTable,
   readVersionBytes } from "../../../../analyzers/elf/version-reader.js";
 import { elfVersionFixture } from "../../../fixtures/elf-versions.js";
 
@@ -12,7 +13,7 @@ void test("reads bounded version bytes and caches decoded strings", async contex
   const reader = createFileRangeReader(fixture.file(), 0, fixture.bytes.length);
   const read = context.mock.fn(reader.read);
   const issues: string[] = [];
-  const readString = createVersionStringReader({ ...reader, read }, table, issues);
+  const readString = createElfStringTableReader({ ...reader, read }, table.strings, issues);
   assert.equal(await readString(1), "LIB_1");
   const calls = read.mock.callCount();
   assert.equal(await readString(1), "LIB_1");
@@ -35,8 +36,8 @@ void test("reports missing string tables and out-of-bounds string references", a
   const fixture = elfVersionFixture();
   const reader = createFileRangeReader(fixture.file(), 0, fixture.bytes.length);
   const issues: string[] = [];
-  assert.equal(await createVersionStringReader(reader, { ...table, strings: null }, issues)(0), "");
-  assert.equal(await createVersionStringReader(reader, table, issues)(26), "");
+  assert.equal(await createElfStringTableReader(reader, null, issues)(0), "");
+  assert.equal(await createElfStringTableReader(reader, table.strings, issues)(26), "");
   assert.equal(issues.length, 2);
 });
 
@@ -44,8 +45,8 @@ void test("reports unterminated strings", async () => {
   const fixture = elfVersionFixture();
   const reader = createFileRangeReader(fixture.file(), 0, fixture.bytes.length);
   const issues: string[] = [];
-  const read = createVersionStringReader(reader,
-    { ...table, strings: { offset: 385, size: 3 } }, issues);
+  const read = createElfStringTableReader(reader,
+    { offset: 385, size: 3 }, issues);
   assert.equal(await read(0), "");
   assert.match(issues.join(" "), /unterminated/);
 });

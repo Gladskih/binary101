@@ -1,6 +1,7 @@
+import { createElfStringTableReader } from "./string-table.js";
 import type { FileRangeReader } from "../file-range-reader.js";
 import type { ElfVersionDefinition, ElfVersionRequirement } from "./version-types.js";
-import { createVersionStringReader, readVersionBytes } from "./version-reader.js";
+import { readVersionBytes } from "./version-reader.js";
 import type { ElfVersionTable } from "./version-reader.js";
 
 // Fixed record sizes/offsets: LSB 10.7.3 and 10.7.4; identical for ELF32/64.
@@ -43,7 +44,7 @@ export const readElfVersionDefinitions = async (
   reader: FileRangeReader, table: ElfVersionTable, little: boolean, issues: string[]
 ): Promise<ElfVersionDefinition[]> => {
   const definitions: ElfVersionDefinition[] = [];
-  const readString = createVersionStringReader(reader, table, issues);
+  const readString = createElfStringTableReader(reader, table.strings, issues);
   for await (const { view, offset } of versionChain(reader, table, 0, table.count, 20, little, issues)) {
     if (view.getUint16(0, little) !== 1) {
       issues.push("Unsupported version definition revision.");
@@ -68,7 +69,7 @@ export const readElfVersionRequirements = async (
   reader: FileRangeReader, table: ElfVersionTable, little: boolean, issues: string[]
 ): Promise<ElfVersionRequirement[]> => {
   const requirements: ElfVersionRequirement[] = [];
-  const readString = createVersionStringReader(reader, table, issues);
+  const readString = createElfStringTableReader(reader, table.strings, issues);
   for await (const { view, offset } of versionChain(reader, table, 0, table.count, 16, little, issues)) {
     if (view.getUint16(0, little) !== 1) {
       issues.push("Unsupported version requirement revision.");

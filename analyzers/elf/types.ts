@@ -5,6 +5,7 @@ import type { DwarfAnalysis } from "../dwarf/types.js";
 import type { NativeAotMetadata } from "../native-aot/format.js";
 import type { ElfRelocationInfo } from "./relocation-types.js";
 import type { ElfSymbolVersions } from "./version-types.js";
+import type { ElfSymbolTable } from "./symbol-tables.js";
 
 export type ElfOptionEntry = [number, string, string?];
 
@@ -76,6 +77,7 @@ export interface ElfParseResult {
   dynamic?: ElfDynamicInfo;
   dynSymbols?: ElfDynamicSymbolInfo;
   symbolVersions?: ElfSymbolVersions;
+  symbolTables?: ElfSymbolTable[];
   tls?: ElfTlsInfo;
   notes?: ElfNotesInfo;
   comment?: ElfCommentInfo;
