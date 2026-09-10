@@ -10,6 +10,7 @@ import type { ElfRelocationSymbol } from "./relocation-types.js";
 import { selectElfBinaryLayout } from "./binary-layout.js";
 import type { ElfBinaryLayout } from "./binary-layout-types.js";
 import { ELF_SYMBOL_INDEX } from "./abi-constants.js";
+import type { ElfHashTable } from "./hash-types.js";
 
 // gABI p_type/sh_type and d_tag definitions:
 // https://gabi.xinuos.com/elf/03-sheader.html
@@ -181,7 +182,7 @@ const parseDynsymFromDynamicTags = async (opts: {
   is64: boolean;
   littleEndian: boolean;
   issues: string[];
-}, parsedEntries?: ElfDynamicEntry[]):
+}, parsedEntries?: ElfDynamicEntry[], hashes?: ElfHashTable[]):
 Promise<{ symtab: DataView; strtab: DataView | null; offset: number } | null> => {
   const dynamicPh = opts.programHeaders.find(ph => ph.type === PT_DYNAMIC && ph.filesz > 0n);
   if (!dynamicPh) return null;
@@ -197,8 +198,8 @@ Promise<{ symtab: DataView; strtab: DataView | null; offset: number } | null> =>
 
   const hashVaddr = entries.find(entry => entry.tag === DT_HASH)?.value ?? 0n;
   const gnuHashVaddr = entries.find(entry => entry.tag === DT_GNU_HASH)?.value ?? 0n;
-  let symbolCount: number | null = null;
-  if (hashVaddr !== 0n) {
+  let symbolCount: number | null = hashSymbolCount(hashes);
+  if (hashes == null && hashVaddr !== 0n) {
     symbolCount = await readDynsymCountFromSysvHash({
       file: opts.file,
       programHeaders: opts.programHeaders,
@@ -207,7 +208,7 @@ Promise<{ symtab: DataView; strtab: DataView | null; offset: number } | null> =>
       issues: opts.issues
     });
   }
-  if (symbolCount == null && gnuHashVaddr !== 0n) {
+  if (hashes == null && symbolCount == null && gnuHashVaddr !== 0n) {
     symbolCount = await readDynsymCountFromGnuHash({
       file: opts.file,
       programHeaders: opts.programHeaders,
@@ -255,12 +256,12 @@ export async function parseElfDynamicSymbols(opts: {
   is64: boolean;
   littleEndian: boolean;
 }, parsedEntries?: ElfDynamicEntry[], symbolCache = new Map<number, ElfRelocationSymbol>(),
-layout = selectElfBinaryLayout(opts)):
+layout = selectElfBinaryLayout(opts), hashes?: ElfHashTable[]):
 Promise<ElfDynamicSymbolInfo | null> {
   const issues: string[] = [];
 
   const sectionTables = await parseDynsymFromSections({ ...opts, issues });
-  const tagTables = sectionTables ? null : await parseDynsymFromDynamicTags({ ...opts, issues }, parsedEntries);
+  const tagTables = sectionTables ? null : await parseDynsymFromDynamicTags({ ...opts, issues }, parsedEntries, hashes);
   const tables = sectionTables ?? tagTables;
   if (!tables) return null;
 
@@ -276,3 +277,11 @@ Promise<ElfDynamicSymbolInfo | null> {
     issues
   };
 }
+
+const hashSymbolCount = (tables: ElfHashTable[] | undefined): number | null => {
+  const valid = tables?.filter(table => !table.issues.length);
+  const sysv = valid?.find(table => table.kind === "sysv");
+  if (sysv) return sysv.chains.length;
+  const gnu = valid?.find(table => table.kind === "gnu");
+  return gnu?.kind === "gnu" ? gnu.symbolOffset + gnu.chains.length : null;
+};

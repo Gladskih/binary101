@@ -6,6 +6,7 @@ import { getNativeAotReflectionTypeTableModel } from "../native-aot/reflection.j
 import { createElfRelocationTableModel } from "./relocations.js";
 import { createElfSymbolTableModel } from "./symbol-tables.js";
 import { createElfUnwindTableModel } from "./unwind.js";
+import { createElfHashTableModel } from "./hash-tables.js";
 
 export const getElfPagedTableModel = (
   elf: ElfParseResult,
@@ -15,6 +16,8 @@ export const getElfPagedTableModel = (
   if (symbols) return createElfSymbolTableModel(symbols);
   const unwind = elf.unwind?.find(section => tableId === `elf-unwind-${section.sectionIndex}`);
   if (unwind) return createElfUnwindTableModel(unwind);
+  const hash = elf.hashTables?.find(table => tableId === `elf-hash-${table.kind}-${table.offset}`);
+  if (hash) return createElfHashTableModel(hash);
   return tableId === "elf-relocations" && elf.relocations
     ? createElfRelocationTableModel(elf)
     : getNativeAotReflectionTypeTableModel(elf.nativeAot?.reflection, tableId);

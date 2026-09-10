@@ -15,6 +15,8 @@ import { parseElfSymbolVersions } from "./symbol-versions.js";
 import { parseElfSymbolTables } from "./symbol-tables.js";
 import { parseElfSectionGroups } from "./section-groups.js";
 import { parseElfUnwind } from "./unwind.js";
+import { parseElfHashTables } from "./hash-tables.js";
+import { validateElfHashSymbols } from "./hash-symbols.js";
 import { parseElfInterpreter } from "./interpreter.js";
 import { parseElfNotes } from "./notes.js";
 import { analyzeElfNativeAot } from "./native-aot.js";
@@ -155,17 +157,20 @@ export async function parseElf(file: File): Promise<ElfParseResult | null> {
   const dynamicEntries = await readElfDynamicEntries(
     createFileRangeReader(file, 0, file.size), result, dynamicIssues, layout);
   const symbolCache = new Map<number, ElfRelocationSymbol>();
+  const hashes = await parseElfHashTables(file, result, dynamicEntries);
+  if (hashes.length) result.hashTables = hashes;
   const [interpreter, dynamic, dynSymbols, notes, comment, debugLink, dwarf] =
     await Promise.all([
       parseElfInterpreter(file, programHeaders),
       parseElfDynamicInfo({ file, programHeaders, sections, is64, littleEndian: little }, dynamicEntries),
       parseElfDynamicSymbols({ file, programHeaders, sections, is64, littleEndian: little },
-        dynamicEntries, symbolCache, layout),
+        dynamicEntries, symbolCache, layout, hashes),
       parseElfNotes({ file, programHeaders, sections, is64, littleEndian: little }),
       parseElfComment(file, sections),
       parseElfDebugLink(file, sections, little),
       analyzeElfDwarf(file, sections, is64 ? "elf64" : "elf32", little, issues)
     ]);
+  validateElfHashSymbols(hashes, dynSymbols, is64 ? 64 : 32);
   const symbolTables = await parseElfSymbolTables(file, result, symbolCache);
   if (symbolTables.length) result.symbolTables = symbolTables;
   const sectionGroups = await parseElfSectionGroups(file, result);

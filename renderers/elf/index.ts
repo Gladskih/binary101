@@ -3,6 +3,7 @@ import { renderElfSymbolVersions } from "./symbol-versions.js";
 import { renderElfSymbolTables } from "./symbol-tables.js";
 import { renderElfSectionGroups } from "./section-groups.js";
 import { renderElfUnwind } from "./unwind.js";
+import { renderElfHashTables } from "./hash-tables.js";
 
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { renderDefinitionRow, renderOptionChips, escapeHtml } from "../../html-utils.js";
@@ -239,6 +240,7 @@ export function renderElf(elf: ElfParseResult | null): string {
   renderElfSymbolTables(elf, out);
   renderElfSectionGroups(elf, out);
   renderElfUnwind(elf, out);
+  renderElfHashTables(elf, out);
   renderElfRelocations(elf, out);
   renderElfTls(elf, out);
   renderElfNotes(elf, out);

@@ -18,6 +18,12 @@ The browser parses ELF locally. The metadata views include:
 
 ## Unwind boundaries
 
+System V `.hash` and GNU `.gnu.hash` tables expose buckets, chains and Bloom words,
+including tables found through dynamic tags without section headers. Validation
+reports truncated arrays, invalid indices, cycles and malformed GNU chains. GNU
+hashes and Bloom membership are checked against decoded dynamic symbol names.
+The external hash test compares the bucket histogram with WSL libc's `readelf -I` output.
+
 The unwind view describes stored metadata; it does not execute CFI against a live
 register/memory state. DWARF expression operands remain hex bytes. Indirect pointers
 identify pointer storage and are not dereferenced through a runtime loader.
