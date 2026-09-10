@@ -22,6 +22,12 @@ reports truncated arrays, invalid indices, cycles and malformed GNU chains. GNU
 hashes and Bloom membership are checked against decoded dynamic symbol names.
 The external hash test compares the bucket histogram with WSL libc's `readelf -I` output.
 
+ARM `.ARM.attributes` and RISC-V `.riscv.attributes` decode vendor records,
+file/section/symbol scopes, index lists and integer/string attributes. ARM
+compatibility tuples retain both values. Unsupported vendors/scopes and unknown
+mandatory RISC-V tags produce notices. Cross-compiled WSL Clang objects are
+compared with `readelf -A` for both architectures.
+
 Linux `ET_CORE` files decode `NT_PRSTATUS`, `NT_PRPSINFO`, `NT_AUXV`, `NT_FILE`
 and the signal/errno/code fields of `NT_SIGINFO`. General registers and process
 layouts cover i386, x86-64 and AArch64. Floating point registers cover x86-64

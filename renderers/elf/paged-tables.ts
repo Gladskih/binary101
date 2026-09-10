@@ -7,6 +7,7 @@ import { createElfRelocationTableModel } from "./relocations.js";
 import { createElfSymbolTableModel } from "./symbol-tables.js";
 import { createElfUnwindTableModel } from "./unwind.js";
 import { createElfHashTableModel } from "./hash-tables.js";
+import { createElfAttributeTableModel } from "./attributes.js";
 import { createElfCoreTableModel, createElfCoreMappingModel } from "./core-notes.js";
 
 export const getElfPagedTableModel = (
@@ -19,6 +20,8 @@ export const getElfPagedTableModel = (
     if (tableId === `elf-core-mappings-${index}`) return createElfCoreMappingModel(note.core, index);
   }
   const symbols = elf.symbolTables?.find(table => tableId === `elf-symbols-${table.sectionIndex}`);
+  const attributes = elf.attributes?.find(section => tableId === `elf-attributes-${section.sectionIndex}`);
+  if (attributes) return createElfAttributeTableModel(attributes);
   if (symbols) return createElfSymbolTableModel(symbols);
   const unwind = elf.unwind?.find(section => tableId === `elf-unwind-${section.sectionIndex}`);
   if (unwind) return createElfUnwindTableModel(unwind);

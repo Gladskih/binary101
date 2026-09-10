@@ -2,6 +2,7 @@
 
 import type { ElfInstructionSetReport } from "./disassembly-types.js";
 import type { ElfCoreNote } from "./core-note-types.js";
+import type { ElfAttributeSection } from "./attribute-types.js";
 import type { DwarfAnalysis } from "../dwarf/types.js";
 import type { NativeAotMetadata } from "../native-aot/format.js";
 import type { ElfRelocationInfo } from "./relocation-types.js";
@@ -72,6 +73,7 @@ export interface ElfSectionHeader {
 }
 
 export interface ElfParseResult {
+  attributes?: ElfAttributeSection[];
   ident: ElfIdent;
   header: ElfHeader;
   programHeaders: ElfProgramHeader[];
