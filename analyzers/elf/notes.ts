@@ -3,6 +3,7 @@
 import { alignUpTo, bufferToHex, readAsciiString } from "../../binary-utils.js";
 import type { ElfNoteEntry, ElfNotesInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import { parseElfGnuProperties } from "./gnu-properties.js";
+import { elfCoreNoteNames, parseElfCoreNote } from "./core-notes.js";
 
 const PT_NOTE = 4;
 const SHT_NOTE = 7;
@@ -75,7 +76,9 @@ const parseNotesFromBytes = (
   source: string,
   issues: string[],
   fileOffsetStart: bigint,
-  wordSize: 4 | 8
+  wordSize: 4 | 8,
+  coreMachine: number | undefined,
+  seenNotes: ReadonlySet<string>
 ): ParsedNote[] => {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const entries: ParsedNote[] = [];
@@ -103,6 +106,7 @@ const parseNotesFromBytes = (
     }
     const desc = bytes.subarray(offset, descEnd);
     offset = alignUpTo(descEnd, 4);
+    if (seenNotes.has(noteStart.toString())) continue;
 
     const typeName = decodeNoteType(name, type);
     const value = describeNoteValue(name, type, desc, littleEndian);
@@ -123,10 +127,14 @@ const parseNotesFromBytes = (
         source,
         name,
         type,
-        typeName,
+        typeName: coreMachine != null && (name === "CORE" || name === "LINUX")
+          ? elfCoreNoteNames[type] ?? null : typeName,
         description,
         value,
         descSize: descsz,
+        ...(coreMachine != null && (name === "CORE" || name === "LINUX")
+          ? { core: parseElfCoreNote(desc, type, wordSize,
+            littleEndian ? "little" : "big", coreMachine) } : {}),
         ...(name === "GNU" && type === NT_GNU_PROPERTY_TYPE_0
           ? { properties: parseElfGnuProperties(desc, wordSize,
             littleEndian ? "little" : "big", issues) } : {})
@@ -142,6 +150,7 @@ export async function parseElfNotes(opts: {
   sections: ElfSectionHeader[];
   littleEndian: boolean;
   is64?: boolean;
+  coreMachine?: number;
 }): Promise<ElfNotesInfo | null> {
   const issues: string[] = [];
   const ranges: Array<{ offset: bigint; size: bigint; source: string }> = [];
@@ -167,15 +176,16 @@ export async function parseElfNotes(opts: {
     const start = toSafeIndex(range.offset, `${range.source} offset`, issues);
     const size = toSafeIndex(range.size, `${range.source} size`, issues);
     if (start == null || size == null || size <= 0) continue;
-    const end = Math.min(opts.file.size, start + size);
+    // Bound individual metadata reads even when a malformed note claims a huge segment.
+    const end = Math.min(opts.file.size, start + size, start + 16 * 1024 * 1024);
     if (start >= opts.file.size || end <= start) {
       issues.push(`${range.source} falls outside the file.`);
       continue;
     }
-    if (end !== start + size) issues.push(`${range.source} is truncated.`);
+    if (end !== start + size) issues.push(`${range.source} is truncated or exceeds the 16 MiB note limit.`);
     const bytes = new Uint8Array(await opts.file.slice(start, end).arrayBuffer());
     const parsedNotes = parseNotesFromBytes(bytes, opts.littleEndian, range.source, issues,
-      range.offset, opts.is64 ? 8 : 4);
+      range.offset, opts.is64 ? 8 : 4, opts.coreMachine, seenNotes);
     for (const parsed of parsedNotes) {
       if (seenNotes.has(parsed.fileOffsetKey)) continue;
       seenNotes.add(parsed.fileOffsetKey);

@@ -26,6 +26,23 @@ const makeSection = (partial: Partial<ElfSectionHeader>): ElfSectionHeader =>
     ...partial
   }) as ElfSectionHeader;
 
+void test("decodes CORE descriptors only with explicit core ABI context", async () => {
+  const bytes = new Uint8Array(36);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 5, true);
+  view.setUint32(4, 16, true);
+  view.setUint32(8, 6, true); // NT_AUXV, two zero words form AT_NULL in ELF64.
+  bytes.set(new TextEncoder().encode("CORE\0"), 12);
+  const file = new File([bytes], "core-note");
+  const sections = [makeSection({ type: 7, size: 36n })];
+  const plain = await parseElfNotes({ file, sections, programHeaders: [], littleEndian: true });
+  assert.equal(plain?.entries[0]?.core, undefined);
+  const core = await parseElfNotes({ file, sections, programHeaders: [],
+    littleEndian: true, is64: true, coreMachine: 62 });
+  assert.equal(core?.entries[0]?.typeName, "NT_AUXV");
+  assert.deepEqual(core?.entries[0]?.core?.auxv, [{ tag: 0n, value: 0n }]);
+});
+
 void test("parseElfNotes decodes GNU build-id", async () => {
   const { file, expected } = createElfMetadataFile();
   const parsed = await parseElf(file);

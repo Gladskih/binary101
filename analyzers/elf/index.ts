@@ -138,7 +138,8 @@ export async function parseElf(file: File): Promise<ElfParseResult | null> {
       parseElfDynamicInfo({ file, programHeaders, sections, is64, littleEndian: little }, dynamicEntries),
       parseElfDynamicSymbols({ file, programHeaders, sections, is64, littleEndian: little },
         dynamicEntries, symbolCache, layout, hashes),
-      parseElfNotes({ file, programHeaders, sections, is64, littleEndian: little }),
+      parseElfNotes({ file, programHeaders, sections, is64, littleEndian: little,
+        ...(header.type === 4 ? { coreMachine: header.machine } : {}) }),
       parseElfComment(file, sections),
       parseElfDebugLink(file, sections, little),
       analyzeElfDwarf(file, sections, is64 ? "elf64" : "elf32", little, issues)

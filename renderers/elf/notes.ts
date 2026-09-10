@@ -1,5 +1,6 @@
 "use strict";
 import { renderElfGnuProperties } from "./gnu-properties.js";
+import { renderElfCoreNotes } from "./core-notes.js";
 
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
@@ -63,6 +64,7 @@ export function renderElfNotes(elf: ElfParseResult, out: string[]): void {
   out.push(`</dl>`);
   out.push(renderNotesTable(notes));
   renderElfGnuProperties(elf, out);
+  renderElfCoreNotes(elf, out);
   out.push(renderIssues(notes));
   out.push(renderElfSectionEnd());
 }

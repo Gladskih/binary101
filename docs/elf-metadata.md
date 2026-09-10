@@ -16,13 +16,20 @@ The browser parses ELF locally. The metadata views include:
 - `.eh_frame` and `.debug_frame` CIE/FDE records, PC ranges, personality and LSDA
   pointers, and decoded CFI instructions with their encoded operands.
 
-## Unwind boundaries
-
 System V `.hash` and GNU `.gnu.hash` tables expose buckets, chains and Bloom words,
 including tables found through dynamic tags without section headers. Validation
 reports truncated arrays, invalid indices, cycles and malformed GNU chains. GNU
 hashes and Bloom membership are checked against decoded dynamic symbol names.
 The external hash test compares the bucket histogram with WSL libc's `readelf -I` output.
+
+Linux `ET_CORE` files decode `NT_PRSTATUS`, `NT_PRPSINFO`, `NT_AUXV`, `NT_FILE`
+and the signal/errno/code fields of `NT_SIGINFO`. General registers and process
+layouts cover i386, x86-64 and AArch64. Floating point registers cover x86-64
+FXSAVE and AArch64 FPSIMD. XSAVE feature masks are decoded, while extended
+component payloads and unsupported core ABIs produce explicit notices. Metadata,
+registers and mappings have paged tables. Note reads are bounded to 16 MiB.
+
+## Unwind boundaries
 
 The unwind view describes stored metadata; it does not execute CFI against a live
 register/memory state. DWARF expression operands remain hex bytes. Indirect pointers
