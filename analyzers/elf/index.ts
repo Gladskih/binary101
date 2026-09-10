@@ -17,6 +17,7 @@ import { parseElfSectionGroups } from "./section-groups.js";
 import { parseElfUnwind } from "./unwind.js";
 import { parseElfHashTables } from "./hash-tables.js";
 import { parseElfAttributes } from "./attributes.js";
+import { parseElfMips } from "./mips.js";
 import { validateElfHashSymbols } from "./hash-symbols.js";
 import { parseElfInterpreter } from "./interpreter.js";
 import { parseElfNotes } from "./notes.js";
@@ -129,6 +130,8 @@ export async function parseElf(file: File): Promise<ElfParseResult | null> {
   const result = buildResult(header, programHeaders, sections);
   const attributes = await parseElfAttributes(file, result);
   if (attributes.length) result.attributes = attributes;
+  const mips = await parseElfMips(file, result);
+  if (mips.length) result.mips = mips;
   const dynamicIssues: string[] = [];
   const dynamicEntries = await readElfDynamicEntries(
     createFileRangeReader(file, 0, file.size), result, dynamicIssues, layout);

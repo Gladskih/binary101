@@ -28,6 +28,12 @@ compatibility tuples retain both values. Unsupported vendors/scopes and unknown
 mandatory RISC-V tags produce notices. Cross-compiled WSL Clang objects are
 compared with `readelf -A` for both architectures.
 
+MIPS `.MIPS.abiflags`, `.reginfo` and `.MIPS.options` expose ABI flags, register
+masks and GP values. Register layouts are separate for ELF32 and ELF64. ABI flags
+and register info can also be located through their program headers. Options
+decode REGINFO payloads and report other payload kinds explicitly. WSL Clang
+MIPS32/MIPS64 objects are compared with `readelf -A`.
+
 Linux `ET_CORE` files decode `NT_PRSTATUS`, `NT_PRPSINFO`, `NT_AUXV`, `NT_FILE`
 and the signal/errno/code fields of `NT_SIGINFO`. General registers and process
 layouts cover i386, x86-64 and AArch64. Floating point registers cover x86-64

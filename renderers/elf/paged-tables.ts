@@ -8,12 +8,15 @@ import { createElfSymbolTableModel } from "./symbol-tables.js";
 import { createElfUnwindTableModel } from "./unwind.js";
 import { createElfHashTableModel } from "./hash-tables.js";
 import { createElfAttributeTableModel } from "./attributes.js";
+import { createElfMipsOptionModel } from "./mips.js";
 import { createElfCoreTableModel, createElfCoreMappingModel } from "./core-notes.js";
 
 export const getElfPagedTableModel = (
   elf: ElfParseResult,
   tableId: string
 ): PagedSortableTableModel | null => {
+  const mipsIndex = elf.mips?.findIndex((_, index) => tableId === `elf-mips-options-${index}`) ?? -1;
+  if (mipsIndex >= 0) return createElfMipsOptionModel(elf.mips![mipsIndex]!, mipsIndex);
   for (const [index, note] of (elf.notes?.entries ?? []).entries()) {
     if (!note.core) continue;
     if (tableId === `elf-core-${index}`) return createElfCoreTableModel(note.core, index);
