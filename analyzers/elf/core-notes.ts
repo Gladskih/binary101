@@ -4,26 +4,32 @@ import { parseElfCoreProcess, parseElfCoreStatus } from "./core-process.js";
 import { parseElfCoreAuxv, parseElfCoreMappings } from "./core-mappings.js";
 import { parseElfCoreFloatingPoint, parseElfCoreXstate } from "./core-floating-point.js";
 
+const parseCoreSignal = (reader: ElfCoreNoteReader): ElfCoreNote => ({
+  fields: ["Signal", "Errno", "Code"].flatMap((name, index) =>
+    reader.contains(index * 4, 4) ? [{ name, value: reader.signed(index * 4, 4) }] : []),
+  issues: reader.issues
+});
+
 // NT_*: https://raw.githubusercontent.com/torvalds/linux/master/include/uapi/linux/elf.h
-export const elfCoreNoteNames: Readonly<Record<number, string>> = {
-  1: "NT_PRSTATUS", 2: "NT_FPREGSET", 3: "NT_PRPSINFO", 6: "NT_AUXV",
-  0x202: "NT_X86_XSTATE", 0x53494749: "NT_SIGINFO", 0x46494c45: "NT_FILE"
+const coreNoteRegistry: Readonly<Record<number, {
+  name: string;
+  decode: (reader: ElfCoreNoteReader, machine: number) => ElfCoreNote;
+}>> = {
+  1: { name: "NT_PRSTATUS", decode: parseElfCoreStatus },
+  2: { name: "NT_FPREGSET", decode: parseElfCoreFloatingPoint },
+  3: { name: "NT_PRPSINFO", decode: parseElfCoreProcess },
+  6: { name: "NT_AUXV", decode: parseElfCoreAuxv },
+  0x202: { name: "NT_X86_XSTATE", decode: parseElfCoreXstate },
+  0x53494749: { name: "NT_SIGINFO", decode: parseCoreSignal },
+  0x46494c45: { name: "NT_FILE", decode: parseElfCoreMappings }
 };
+
+export const elfCoreNoteName = (type: number): string | null => coreNoteRegistry[type]?.name ?? null;
 
 export const parseElfCoreNote = (
   bytes: Uint8Array, type: number, wordSize: 4 | 8, byteOrder: "little" | "big", machine: number
 ): ElfCoreNote => {
-  const reader = new ElfCoreNoteReader(bytes, wordSize, byteOrder);
-  switch (type) {
-    case 1: return parseElfCoreStatus(reader, machine);
-    case 2: return parseElfCoreFloatingPoint(reader, machine);
-    case 3: return parseElfCoreProcess(reader, machine);
-    case 6: return parseElfCoreAuxv(reader);
-    case 0x202: return parseElfCoreXstate(reader, machine);
-    case 0x46494c45: return parseElfCoreMappings(reader);
-    case 0x53494749: return { fields: ["Signal", "Errno", "Code"].flatMap((name, index) =>
-      reader.contains(index * 4, 4) ? [{ name, value: reader.signed(index * 4, 4) }] : []),
-    issues: reader.issues };
-    default: return { fields: [], issues: [`Unsupported core note type 0x${type.toString(16)}.`] };
-  }
+  const descriptor = coreNoteRegistry[type];
+  return descriptor ? descriptor.decode(new ElfCoreNoteReader(bytes, wordSize, byteOrder), machine)
+    : { fields: [], issues: [`Unsupported core note type 0x${type.toString(16)}.`] };
 };

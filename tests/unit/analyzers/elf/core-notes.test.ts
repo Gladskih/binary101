@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { elfCoreNoteNames, parseElfCoreNote } from "../../../../analyzers/elf/core-notes.js";
+import { elfCoreNoteName, parseElfCoreNote } from "../../../../analyzers/elf/core-notes.js";
 
 void test("decodes Linux signal info with errno before code", () => {
   const bytes = new Uint8Array(128);
@@ -38,6 +38,7 @@ void test("dispatches process and mapping notes without confusing their layouts"
   assert.deepEqual(parseElfCoreNote(new Uint8Array(16), 0x46494c45, 8, "little", 62).mappings, []);
   assert.deepEqual(parseElfCoreNote(new Uint8Array(0), 0x53494749, 8, "little", 62).fields, []);
   assert.equal(parseElfCoreNote(new Uint8Array(336), 1, 8, "little", 62).registers?.length, 27);
-  assert.deepEqual(elfCoreNoteNames, { 1: "NT_PRSTATUS", 2: "NT_FPREGSET", 3: "NT_PRPSINFO",
-    6: "NT_AUXV", 0x202: "NT_X86_XSTATE", 0x53494749: "NT_SIGINFO", 0x46494c45: "NT_FILE" });
+  assert.deepEqual([1, 2, 3, 6, 0x202, 0x53494749, 0x46494c45, 999].map(elfCoreNoteName),
+    ["NT_PRSTATUS", "NT_FPREGSET", "NT_PRPSINFO", "NT_AUXV", "NT_X86_XSTATE",
+      "NT_SIGINFO", "NT_FILE", null]);
 });

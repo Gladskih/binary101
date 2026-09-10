@@ -3,7 +3,7 @@
 import { alignUpTo, bufferToHex, readAsciiString } from "../../binary-utils.js";
 import type { ElfNoteEntry, ElfNotesInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import { parseElfGnuProperties } from "./gnu-properties.js";
-import { elfCoreNoteNames, parseElfCoreNote } from "./core-notes.js";
+import { elfCoreNoteName, parseElfCoreNote } from "./core-notes.js";
 
 const PT_NOTE = 4;
 const SHT_NOTE = 7;
@@ -128,7 +128,7 @@ const parseNotesFromBytes = (
         name,
         type,
         typeName: coreMachine != null && (name === "CORE" || name === "LINUX")
-          ? elfCoreNoteNames[type] ?? null : typeName,
+          ? elfCoreNoteName(type) : typeName,
         description,
         value,
         descSize: descsz,
