@@ -1,4 +1,9 @@
+import type { ElfHeader } from "./types.js";
+
 export type ElfByteOrder = "little" | "big";
+
+export type ElfFileHeaderRecord =
+  Omit<ElfHeader, "typeName" | "machineName"> & { version: number };
 
 export interface ElfSymbolRecord {
   nameOffset: number;
@@ -17,6 +22,9 @@ export interface ElfSymbolicRelocationRecord {
 }
 
 export interface ElfBinaryLayout {
+  headerSize: number;
+  sectionHeaderSize: number;
+  readHeader: (view: DataView) => ElfFileHeaderRecord | null;
   byteOrder: ElfByteOrder;
   wordSize: number;
   dynamicEntrySize: number;

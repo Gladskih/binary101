@@ -1,7 +1,19 @@
 import { ELF_INTEGER_READERS, type ElfIntegerReader } from "./byte-order.js";
-import type { ElfBinaryLayout, ElfByteOrder, ElfSymbolRecord,
+import type { ElfBinaryLayout, ElfByteOrder, ElfSymbolRecord, ElfFileHeaderRecord,
   ElfSymbolicRelocationRecord } from "./binary-layout-types.js";
 import { ELF_SYMBOL_INDEX } from "./abi-constants.js";
+
+// Elf32_Ehdr: https://gabi.xinuos.com/elf/02-eheader.html
+const readHeader = (view: DataView, integers: ElfIntegerReader): ElfFileHeaderRecord | null =>
+  view.byteLength < 52 ? null : {
+    type: integers.u16(view, 0x10), machine: integers.u16(view, 0x12),
+    version: integers.u32(view, 0x14), entry: BigInt(integers.u32(view, 0x18)),
+    phoff: BigInt(integers.u32(view, 0x1c)), shoff: BigInt(integers.u32(view, 0x20)),
+    flags: integers.u32(view, 0x24), ehsize: integers.u16(view, 0x28),
+    phentsize: integers.u16(view, 0x2a), phnum: integers.u16(view, 0x2c),
+    shentsize: integers.u16(view, 0x2e), shnum: integers.u16(view, 0x30),
+    shstrndx: integers.u16(view, 0x32)
+  };
 
 // Fixed Elf32 layouts, field byte offsets and ELF32_R_SYM/TYPE masks:
 // https://gabi.xinuos.com/elf/05-symtab.html (Elf32_Sym, 16 bytes)
@@ -33,6 +45,7 @@ const readRela = (
 export const createElf32Layout = (byteOrder: ElfByteOrder): ElfBinaryLayout => {
   const integers = ELF_INTEGER_READERS[byteOrder];
   return {
+    headerSize: 52, sectionHeaderSize: 40, readHeader: view => readHeader(view, integers),
     byteOrder, wordSize: 4, dynamicEntrySize: 8, symbolEntrySize: 16,
     readWord: view => view.byteLength < 4 ? null : BigInt(integers.u32(view, 0)),
     readDynamic: view => view.byteLength < 8 ? null :
