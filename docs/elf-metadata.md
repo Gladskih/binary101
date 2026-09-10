@@ -43,8 +43,9 @@ registers and mappings have paged tables. Note reads are bounded to 16 MiB.
 
 ## Unwind boundaries
 
-The unwind view describes stored metadata; it does not execute CFI against a live
-register/memory state. DWARF expression operands remain hex bytes. Indirect pointers
+The unwind view evaluates CFI into virtual CFA/register rules for PC ranges,
+including CIE defaults, alignment factors, saved states and register restores.
+It does not unwind a live register/memory state. DWARF expression operands remain hex bytes. Indirect pointers
 identify pointer storage and are not dereferenced through a runtime loader.
 
 Supported CIE revisions are 1, 3 and 4, with 4- or 8-byte unsegmented addresses and
@@ -55,7 +56,7 @@ Unknown encodings, revisions or instructions produce notices.
 Compressed unwind sections and sections requiring relocations are reported but
 not decoded. Full unwind parsing currently requires section headers; the existing
 instruction-set analysis can still use `PT_GNU_EH_FRAME` as a source of entry points.
-LSDA payloads, ARM EHABI tables, SFrame and a CFI interpreter remain unsupported.
+LSDA payloads, ARM EHABI tables and SFrame remain unsupported.
 
 Reads use bounded ranges. Resource limits also bound retained entries and individual
 names, expressions and CFI instruction sequences; reaching a limit produces a notice.

@@ -5,6 +5,7 @@ import type { ElfCfiInstruction, ElfUnwindPointer, ElfUnwindSection } from
 import type { PagedSortableTableModel } from "../../ui/paged-sortable-table-state.js";
 import { renderAutoPagedSortableTable } from "../paged-sortable-table.js";
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
+import { renderElfCfiState } from "./cfi-state.js";
 
 const pointerText = (pointer: ElfUnwindPointer | null): string => pointer
   ? `${pointer.indirect ? "Indirect at " : ""}0x${pointer.address.toString(16)}` : "—";
@@ -19,6 +20,15 @@ const instructionsHtml = (instructions: ElfCfiInstruction[]): string => {
 };
 
 export const createElfUnwindTableModel = (section: ElfUnwindSection): PagedSortableTableModel => {
+  const rules = new Map<number, string>();
+  const ruleHtml = (index: number): string => {
+    if (rules.has(index)) return rules.get(index)!;
+    const fde = section.fdes[index]!;
+    const cie = section.cies.find(item => item.offset === fde.cieOffset);
+    const html = cie ? renderElfCfiState(cie, fde) : "Missing CIE";
+    rules.set(index, html);
+    return html;
+  };
   const values = (index: number): string[] => {
     const fde = section.fdes[index];
     return fde ? [`0x${fde.offset.toString(16)}`, `0x${fde.cieOffset.toString(16)}`,
@@ -28,7 +38,7 @@ export const createElfUnwindTableModel = (section: ElfUnwindSection): PagedSorta
     columns: ["FDE offset", "CIE offset", "PC start", "PC bytes", "LSDA", "CFI"]
       .map(label => ({ label, className: "peNumeric" })),
     rowAt: index => section.fdes[index] ? { cells: values(index).map((value, column) => ({
-      html: column === 5 ? instructionsHtml(section.fdes[index]!.instructions) : escapeHtml(value),
+      html: column === 5 ? instructionsHtml(section.fdes[index]!.instructions) + ruleHtml(index) : escapeHtml(value),
       sortValue: value, className: "peNumeric"
     })) } : null,
     sortValueAt: (index, column) => values(index)[column] ?? ""
