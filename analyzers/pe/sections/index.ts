@@ -44,14 +44,16 @@ const createRvaToOffsetMapper = (
     const normalized = relativeVirtualAddress >>> 0;
     const headerSpan =
       (sizeOfHeaders >>> 0) >= (minimumHeaderSpan >>> 0)
-        ? Math.max(0, Math.min(sizeOfHeaders >>> 0, fileSize >>> 0))
+        ? Math.max(0, Math.min(sizeOfHeaders >>> 0, fileSize))
         : 0;
     if (normalized < headerSpan) return normalized;
     for (const span of spans) {
       if (normalized >= span.vaStart && normalized < span.vaEnd) {
         const delta = normalized - span.vaStart;
         if (delta >= span.rawSize) return null;
-        return (span.fileOffset + delta) >>> 0;
+        // PE/COFF section fields are DWORDs, but their sum is a file offset, not an RVA.
+        const offset = span.fileOffset + delta;
+        return offset < fileSize ? offset : null;
       }
     }
     return null;

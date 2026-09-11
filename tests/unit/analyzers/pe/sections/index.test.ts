@@ -131,17 +131,30 @@ const createSectionHeadersFixtureWithCoffSymbols = (
     ...(stringTable ? { stringTable } : {})
   });
 
+void test("parseSectionHeaders rejects raw offsets that overflow or reach EOF", async () => {
+  const fixture = createSectionHeadersFixture([
+    // PE/COFF section fields are DWORDs; their sum must not wrap to a header offset.
+    { name: ".bad", va: 0x1000, vs: 0x40, rawSize: 0x40, rawOff: 0xfffffff0 },
+    { name: ".tail", va: 0x2000, vs: 0x40, rawSize: 0x40, rawOff: 0x3f0 }
+  ], { minimumFileSize: 0x400 });
+  const { rvaToOff } = await parseSectionHeaders(
+    fixture.file, fixture.optionalHeaderOffset, fixture.sizeOfOptionalHeader,
+    fixture.numberOfSections, fixture.sectionTableOffset
+  );
+
+  assert.equal(rvaToOff(0x1020), null);
+  assert.equal(rvaToOff(0x200f), 0x3ff);
+  assert.equal(rvaToOff(0x2010), null);
+});
+
 void test("parseSectionHeaders reads section entries and maps RVAs to offsets", async () => {
   const fixture = createSectionHeadersFixture([
     { name: ".text", va: 0x1000, vs: 0x200, rawSize: 0x200, rawOff: 0x400 },
     { name: ".rdata", va: 0x2000, vs: 0x180, rawSize: 0x200, rawOff: 0x800 }
-  ]);
+  ], { minimumFileSize: 0xa00 });
   const { sections, rvaToOff, sectOff } = await parseSectionHeaders(
-    fixture.file,
-    fixture.optionalHeaderOffset,
-    fixture.sizeOfOptionalHeader,
-    fixture.numberOfSections,
-    fixture.sectionTableOffset
+    fixture.file, fixture.optionalHeaderOffset, fixture.sizeOfOptionalHeader,
+    fixture.numberOfSections, fixture.sectionTableOffset
   );
 
   assert.strictEqual(sectOff, fixture.sectionTableOffset);
@@ -157,13 +170,10 @@ void test("parseSectionHeaders reads section entries and maps RVAs to offsets", 
 void test("parseSectionHeaders does not map zero-filled virtual tail beyond raw section bytes", async () => {
   const fixture = createSectionHeadersFixture([
     { name: ".data", va: 0x1000, vs: 0x300, rawSize: 0x200, rawOff: 0x400 }
-  ]);
+  ], { minimumFileSize: 0x600 });
   const { rvaToOff } = await parseSectionHeaders(
-    fixture.file,
-    fixture.optionalHeaderOffset,
-    fixture.sizeOfOptionalHeader,
-    fixture.numberOfSections,
-    fixture.sectionTableOffset
+    fixture.file, fixture.optionalHeaderOffset, fixture.sizeOfOptionalHeader,
+    fixture.numberOfSections, fixture.sectionTableOffset
   );
 
   assert.strictEqual(rvaToOff(0x1000 + 0x1ff), 0x400 + 0x1ff);
@@ -177,13 +187,10 @@ void test("parseSectionHeaders does not map zero-filled virtual tail beyond raw 
 void test("parseSectionHeaders does not map raw-file padding beyond VirtualSize into the loaded image", async () => {
   const fixture = createSectionHeadersFixture([
     { name: ".text", va: 0x1000, vs: 0x80, rawSize: 0x200, rawOff: 0x400 }
-  ]);
+  ], { minimumFileSize: 0x600 });
   const { rvaToOff } = await parseSectionHeaders(
-    fixture.file,
-    fixture.optionalHeaderOffset,
-    fixture.sizeOfOptionalHeader,
-    fixture.numberOfSections,
-    fixture.sectionTableOffset
+    fixture.file, fixture.optionalHeaderOffset, fixture.sizeOfOptionalHeader,
+    fixture.numberOfSections, fixture.sectionTableOffset
   );
 
   assert.strictEqual(rvaToOff(0x1000 + 0x7f), 0x400 + 0x7f);
@@ -197,13 +204,10 @@ void test("parseSectionHeaders does not map raw-file padding beyond VirtualSize 
 void test("parseSectionHeaders does not wrap section RVAs past 0xffffffff back to low addresses", async () => {
   const fixture = createSectionHeadersFixture([
     { name: ".text", va: 0xfffffff0, vs: 0x40, rawSize: 0x40, rawOff: 0x200 }
-  ]);
+  ], { minimumFileSize: 0x240 });
   const { rvaToOff } = await parseSectionHeaders(
-    fixture.file,
-    fixture.optionalHeaderOffset,
-    fixture.sizeOfOptionalHeader,
-    fixture.numberOfSections,
-    fixture.sectionTableOffset
+    fixture.file, fixture.optionalHeaderOffset, fixture.sizeOfOptionalHeader,
+    fixture.numberOfSections, fixture.sectionTableOffset
   );
 
   // RVAs are 32-bit values; a section near the top of the address space must clamp at 0xffffffff instead of
@@ -256,11 +260,8 @@ void test("parseSectionHeaders resolves long section names from the COFF string 
     stringTable
   );
   const { sections, warnings } = await parseSectionHeaders(
-    fixture.file,
-    fixture.optionalHeaderOffset,
-    fixture.sizeOfOptionalHeader,
-    fixture.numberOfSections,
-    fixture.sectionTableOffset,
+    fixture.file, fixture.optionalHeaderOffset, fixture.sizeOfOptionalHeader,
+    fixture.numberOfSections, fixture.sectionTableOffset,
     fixture.pointerToSymbolTable,
     fixture.numberOfSymbols
   );
@@ -280,11 +281,8 @@ void test("parseSectionHeaders keeps raw long names when the COFF string table i
     { name: "/4", va: 0x1000, vs: 0x40, rawSize: 0x40, rawOff: 0x200 }
   ]);
   const { sections, warnings } = await parseSectionHeaders(
-    fixture.file,
-    fixture.optionalHeaderOffset,
-    fixture.sizeOfOptionalHeader,
-    fixture.numberOfSections,
-    fixture.sectionTableOffset,
+    fixture.file, fixture.optionalHeaderOffset, fixture.sizeOfOptionalHeader,
+    fixture.numberOfSections, fixture.sectionTableOffset,
     fixture.pointerToSymbolTable,
     fixture.numberOfSymbols
   );
