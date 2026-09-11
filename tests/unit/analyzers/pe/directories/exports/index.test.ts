@@ -54,7 +54,7 @@ void test("parseExportDirectory extracts names and forwarders", async () => {
   assert.equal(result.dllName, "demo.dll");
   assert.equal(result.entries.length, 2);
   assert.equal(expectDefined(result.entries[1]).forwarder, "KERNEL32.Forward");
-  assert.equal(expectDefined(result.entries[1]).name, "FuncB");
+  assert.deepEqual(expectDefined(result.entries[1]).names, ["FuncB"]);
 });
 void test("parseExportDirectory does not read forwarder strings past the export-directory range", async () => {
   const bytes = new Uint8Array(0x100).fill(0);
@@ -175,8 +175,8 @@ void test("parseExportDirectory ignores names beyond available name and ordinal 
   encoder.encodeInto("OnlyName\0", new Uint8Array(bytes.buffer, 0xc0));
   const result = expectDefined(await parseExportFixture(bytes, { rva: directoryRva, size: 80 }));
   assert.equal(result.entries.length, 2);
-  assert.equal(result.entries[0]?.name, "OnlyName");
-  assert.ok(result.entries[1]?.name === null || result.entries[1]?.name === "");
+  assert.deepEqual(result.entries[0]?.names, ["OnlyName"]);
+  assert.deepEqual(result.entries[1]?.names, [""]);
 });
 void test("parseExportDirectory does not read EAT slots past an rvaToOff gap", async () => {
   const eatRva = IMAGE_EXPORT_DIRECTORY_SIZE * 2;
@@ -191,7 +191,7 @@ void test("parseExportDirectory does not read EAT slots past an rvaToOff gap", a
   const result = expectDefined(await parseExportFixture(
     bytes,
     { rva: IMAGE_EXPORT_DIRECTORY_SIZE, size: IMAGE_EXPORT_DIRECTORY_SIZE },
-    rva => (rva === IMAGE_EXPORT_DIRECTORY_SIZE || rva === eatRva ? rva : null)
+    rva => rva >= IMAGE_EXPORT_DIRECTORY_SIZE && rva < eatRva + 4 ? rva : null
   ));
   assert.equal(result.entries.length, 1);
   assert.equal(result.entries[0]?.rva, firstTargetRva);
@@ -274,7 +274,7 @@ void test("parseExportDirectory reports when a mapped DLL name offset falls past
   const result = expectDefined(await parseExportFixture(
     bytes,
     { rva: directoryRva, size: 40 },
-    value => (value === directoryRva || value === 0x60 ? value : value === 0 ? null : value + 0x200)
+    value => value === 0x40 ? bytes.length : value
   ));
   assert.ok(result.issues.some(issue => /name/i.test(issue)));
 });

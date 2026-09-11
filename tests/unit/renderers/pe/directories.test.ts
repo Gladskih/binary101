@@ -151,7 +151,7 @@ void test("renderExports renders entries directly without a nested show wrapper"
     NumberOfNames: 1,
     namePointerTable: 0,
     ordinalTable: 0,
-    entries: [{ ordinal: 1, name: "Demo", rva: 0x1234, forwarder: null }],
+    entries: [{ ordinal: 1, names: ["Demo", "Alias<demo>"], rva: 0x1234, forwarder: null }],
     issues: []
   };
   const out: string[] = [];
@@ -160,6 +160,7 @@ void test("renderExports renders entries directly without a nested show wrapper"
 
   assert.ok(html.includes("Export directory"));
   assert.ok(html.includes("Demo"));
+  assert.ok(html.includes("Alias&lt;demo>"));
   assert.ok(!html.includes("Show entries"));
 });
 

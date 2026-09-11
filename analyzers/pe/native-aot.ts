@@ -14,11 +14,11 @@ export type PeNativeAotAnalysis = PeNativeAotCandidate | NativeAotMetadata;
 
 export const detectNativeAotCandidate = (
   clrPresent: boolean,
-  exportsInfo: { entries: Array<{ name: string | null }> } | null,
+  exportsInfo: { entries: Array<{ names: string[] }> } | null,
   sections: PeSection[]
 ): PeNativeAotCandidate | null => {
   const evidence: string[] = [];
-  if (exportsInfo?.entries.some(entry => entry.name === "DotNetRuntimeDebugHeader")) {
+  if (exportsInfo?.entries.some(entry => entry.names.includes("DotNetRuntimeDebugHeader"))) {
     evidence.push("Export named DotNetRuntimeDebugHeader is present.");
   }
   const sectionNames = new Set(sections.map(section => peSectionNameValue(section.name)));

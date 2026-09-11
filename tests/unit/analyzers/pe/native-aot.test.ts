@@ -23,7 +23,9 @@ const longNameSection = (name: string): PeSection => ({
 const generatedExportName = (index: number): string => `export-${index.toString(36)}`;
 
 void test("detectNativeAotCandidate detects DotNetRuntimeDebugHeader export evidence", () => {
-  const parsed = detectNativeAotCandidate(true, { entries: [{ name: "DotNetRuntimeDebugHeader" }] }, []);
+  const parsed = detectNativeAotCandidate(true, {
+    entries: [{ names: ["Alias", "DotNetRuntimeDebugHeader"] }]
+  }, []);
 
   assert.strictEqual(parsed?.status, "candidate");
   assert.deepStrictEqual(parsed.evidence, ["Export named DotNetRuntimeDebugHeader is present."]);
@@ -42,7 +44,7 @@ void test("detectNativeAotCandidate detects no-CLR section evidence conservative
 void test("detectNativeAotCandidate combines independent evidence", () => {
   const parsed = detectNativeAotCandidate(
     false,
-    { entries: [{ name: "DotNetRuntimeDebugHeader" }] },
+    { entries: [{ names: ["DotNetRuntimeDebugHeader"] }] },
     [section(".managed"), longNameSection(".hydrated")]
   );
 
@@ -61,7 +63,7 @@ void test("detectNativeAotCandidate ignores section evidence when CLR is present
 });
 
 void test("detectNativeAotCandidate ignores missing and unrelated export names", () => {
-  const parsed = detectNativeAotCandidate(false, { entries: [{ name: null }, { name: generatedExportName(0) }] }, []);
+  const parsed = detectNativeAotCandidate(false, { entries: [{ names: [] }, { names: [generatedExportName(0)] }] }, []);
 
   assert.strictEqual(parsed, null);
 });

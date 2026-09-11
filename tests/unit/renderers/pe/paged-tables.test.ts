@@ -23,6 +23,22 @@ const createSymbol = (index: number): CoffSymbol => ({
   value: index
 });
 
+void test("getPePagedTableModel resolves exports for paging and sorting", () => {
+  const pe = createBasePe();
+  pe.exports = {
+    flags: 0, timestamp: 0, version: 0, dllName: "demo", Base: 1,
+    NumberOfFunctions: 1, NumberOfNames: 2, namePointerTable: 0, ordinalTable: 0,
+    entries: [{ ordinal: 1, rva: 4096, names: ["Alpha", "Beta"] }], issues: []
+  };
+
+  const model = getPePagedTableModel(pe, "pe-exports");
+
+  assert.equal(model?.rowCount, 1);
+  assert.equal(model?.sortValueAt(0, 2), "Alpha\nBeta");
+  assert.equal(getPePagedTableModel(createBasePe(), "pe-exports"), null);
+  assert.equal(getPePagedTableModel(pe, "missing-table"), null);
+});
+
 const createCoffDebug = (): CoffDebugInfo => ({
   lineNumberBlocks: [],
   source: "coff-header",

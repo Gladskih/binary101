@@ -38,8 +38,8 @@ const createMsvcRttiPe = (): PeWindowsParseResult => {
   })];
   pe.exports = {
     entries: [
-      { forwarder: null, name: "export<target>", ordinal: 1, rva: 0x1010 },
-      { forwarder: "other.dll.Target", name: "forwarded", ordinal: 2, rva: 0x1020 }
+      { forwarder: null, names: ["export<target>"], ordinal: 1, rva: 0x1010 },
+      { forwarder: "other.dll.Target", names: ["forwarded"], ordinal: 2, rva: 0x1020 }
     ]
   } as PeWindowsParseResult["exports"];
   pe.debug = {

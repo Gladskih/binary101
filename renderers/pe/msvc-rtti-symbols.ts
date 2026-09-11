@@ -21,7 +21,7 @@ const addExportNames = (
   names: Map<number, string[]>
 ): void => {
   pe.exports?.entries.forEach(entry => {
-    if (!entry.forwarder) addName(names, entry.rva, entry.name);
+    if (!entry.forwarder) entry.names.forEach(name => addName(names, entry.rva, name));
   });
 };
 

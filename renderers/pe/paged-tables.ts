@@ -21,6 +21,7 @@ import {
   GO_FUNCTION_TABLE_ID
 } from "./go-runtime.js";
 import { getNativeAotReflectionTypeTableModel } from "../native-aot/reflection.js";
+import { createExportTableModel, EXPORT_TABLE_ID } from "./export-table.js";
 
 const eagerImportMatch = (tableId: string): number | null => {
   const match = tableId.match(/^eager-import-(\d+)$/);
@@ -88,6 +89,9 @@ export const getPePagedTableModel = (
   (
     isPeWindowsParseResult(pe)
       ? getPeDisassemblyStringTableModel(pe, tableId) ??
+        (tableId === EXPORT_TABLE_ID && pe.exports
+          ? createExportTableModel(pe.exports.entries)
+          : null) ??
         (tableId === GO_FUNCTION_TABLE_ID && pe.goRuntime
           ? createGoRuntimeFunctionTableModel(pe.goRuntime.functions)
           : null) ??

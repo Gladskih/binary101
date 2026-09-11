@@ -14,6 +14,8 @@ import {
   tlsCharacteristicsReservedBits
 } from "../../analyzers/pe/tls-characteristics.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
+import { createExportTableModel } from "./export-table.js";
+import { renderAutoPagedSortableTable } from "../paged-sortable-table.js";
 
 type PeExportSection = NonNullable<PeWindowsParseResult["exports"]>;
 type PeTlsSection = NonNullable<PeWindowsParseResult["tls"]>;
@@ -154,11 +156,7 @@ export function renderExports(ex: PeExportSection, out: string[]): void {
     out.push(`</ul>`);
   }
   if (ex.entries?.length) {
-    out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Ordinal</th><th>Name</th><th>RVA</th><th>Forwarder</th></tr></thead><tbody>`);
-    ex.entries.forEach((e, index) => {
-      out.push(`<tr><td>${index + 1}</td><td>${e.ordinal}</td><td>${e.name ? escapeHtml(e.name) : "-"}</td><td>${hex(e.rva, 8)}</td><td>${e.forwarder ? escapeHtml(e.forwarder) : "-"}</td></tr>`);
-    });
-    out.push(`</tbody></table>`);
+    out.push(renderAutoPagedSortableTable(createExportTableModel(ex.entries)));
   }
   out.push(renderPeSectionEnd());
 }

@@ -143,7 +143,7 @@ void test("parseExportDirectory warns when an exported name stops mapping before
     sparseRvaToOff
   ));
 
-  assert.equal(result.entries[0]?.name, exportedName);
+  assert.deepEqual(result.entries[0]?.names, [exportedName]);
   assert.ok(result.issues.some(issue => /truncated|string/i.test(issue)));
 });
 

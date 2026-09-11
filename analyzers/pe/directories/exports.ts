@@ -1,8 +1,16 @@
 "use strict";
 
 import type { FileRangeReader } from "../../file-range-reader.js";
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import { readMappedNullTerminatedAsciiString } from "../strings/mapped-ascii-string.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
+
+export type PeExportEntry = {
+  ordinal: number;
+  rva: number;
+  names: string[];
+  forwarder?: string | null;
+};
 
 type PeExportDirectoryResult = {
   flags: number;
@@ -14,7 +22,7 @@ type PeExportDirectoryResult = {
   NumberOfNames: number;
   namePointerTable: number;
   ordinalTable: number;
-  entries: Array<{ ordinal: number; rva: number; name: string | null; forwarder?: string | null }>;
+  entries: PeExportEntry[];
   issues: string[];
 };
 
@@ -66,8 +74,8 @@ const readExportNameMap = async (
   readMappedU32: (tableRva: number, index: number) => Promise<number | null>,
   readMappedU16: (tableRva: number, index: number) => Promise<number | null>,
   issues: string[]
-): Promise<Map<number, string>> => {
-  const functionNames = new Map<number, string>();
+): Promise<Map<number, string[]>> => {
+  const functionNames = new Map<number, string[]>();
   let previousExportName: string | null = null;
   let canCheckNameSorting = header.NumberOfNames > 1;
   let namePointerTableIsSorted = true;
@@ -89,7 +97,11 @@ const readExportNameMap = async (
       issues.push(`Export ordinal table entry ${funcIndex} is out of range for ${header.NumberOfFunctions} functions.`);
       continue;
     }
-    if (exportName != null) functionNames.set(funcIndex, exportName.text);
+    if (exportName != null) {
+      const names = functionNames.get(funcIndex);
+      if (names) names.push(exportName.text);
+      else functionNames.set(funcIndex, [exportName.text]);
+    }
   }
   if (canCheckNameSorting && !namePointerTableIsSorted) {
     issues.push("Export name pointer table is not sorted lexically; the PE loader expects it to support binary search.");
@@ -116,15 +128,15 @@ const readExportFunctionName = async (
 
 const readExportEntries = async (
   header: ExportDirectoryHeader,
-  functionNames: Map<number, string>,
+  functionNames: Map<number, string[]>,
   readMappedU32: (tableRva: number, index: number) => Promise<number | null>,
   readForwarderStr: (rva: number) => Promise<{ text: string; issue?: string }>,
   rvaToOff: RvaToOffset,
   dir: PeDataDirectory,
   isReadableOffset: (offset: number | null) => offset is number,
   issues: string[]
-): Promise<Array<{ ordinal: number; rva: number; name: string | null; forwarder?: string | null }>> => {
-  const entries: Array<{ ordinal: number; rva: number; name: string | null; forwarder?: string | null }> = [];
+): Promise<PeExportEntry[]> => {
+  const entries: PeExportEntry[] = [];
   for (let idx = 0; idx < header.NumberOfFunctions; idx += 1) {
     const funcRva = await readMappedU32(header.AddressOfFunctions, idx);
     if (funcRva == null) {
@@ -145,7 +157,7 @@ const readExportEntries = async (
     entries.push({
       ordinal: header.OrdinalBase + idx,
       rva: funcRva,
-      name: functionNames.get(idx) ?? null,
+      names: functionNames.get(idx) ?? [],
       forwarder
     });
   }
@@ -180,14 +192,18 @@ const getExportDirectoryView = async (
   const base = rvaToOff(dir.rva);
   if (base == null) return { view: new DataView(new ArrayBuffer(0)), issue: "Export directory RVA does not map to file data." };
   if (base < 0 || base >= reader.size) return { view: new DataView(new ArrayBuffer(0)), issue: "Export directory starts outside file data." };
-  const availableDirSize = Math.max(0, Math.min(dir.size, reader.size - base));
-  if (availableDirSize < 40) {
+  if (dir.size < 40) {
     return {
       view: new DataView(new ArrayBuffer(0)),
       issue: "Export directory is smaller than the 40-byte IMAGE_EXPORT_DIRECTORY header."
     };
   }
-  return { view: await reader.read(base, 40), issue: null };
+  // Microsoft PE/COFF, Export Directory Table: the fixed header occupies 40 bytes.
+  const view = await readMappedRvaPrefix(reader, dir.rva, 40, rvaToOff);
+  return {
+    view,
+    issue: view.byteLength < 40 ? "Export directory header is truncated or no longer maps to file data." : null
+  };
 };
 
 const readExportForwarderString = async (
@@ -236,56 +252,12 @@ export async function parseExportDirectory(
   }
   const directoryView = await getExportDirectoryView(reader, dir, rvaToOff);
   if (directoryView.issue) return createEmptyExportDirectory([directoryView.issue]);
-  const isReadableOffset = (offset: number | null): offset is number =>
-    offset != null && offset >= 0 && offset < reader.size;
-  const readForwarderStr = (rva: number): Promise<{ text: string; issue?: string }> =>
-    readExportForwarderString(reader, rvaToOff, dir.rva, dir.size, rva);
-  const readMappedU32 = async (tableRva: number, index: number): Promise<number | null> => {
-    const entryRva = tableRva + index * 4;
-    const entryOff = rvaToOff(entryRva >>> 0);
-    if (!isReadableOffset(entryOff) || entryOff + 4 > reader.size) return null;
-    const entryView = await reader.read(entryOff, 4);
-    if (entryView.byteLength < 4) return null;
-    return entryView.getUint32(0, true);
-  };
-  const readMappedU16 = async (tableRva: number, index: number): Promise<number | null> => {
-    const entryRva = tableRva + index * 2;
-    const entryOff = rvaToOff(entryRva >>> 0);
-    if (!isReadableOffset(entryOff) || entryOff + 2 > reader.size) return null;
-    const entryView = await reader.read(entryOff, 2);
-    if (entryView.byteLength < 2) return null;
-    return entryView.getUint16(0, true);
-  };
   const header = readExportHeader(directoryView.view);
   const issues: string[] = [];
-  const entries: Array<{ ordinal: number; rva: number; name: string | null; forwarder?: string | null }> = [];
   if (header.Characteristics !== 0) issues.push("Export directory flags are reserved and must be zero.");
-  const name = await readExportDllName(reader, rvaToOff, header.NameRva, isReadableOffset, issues);
-  const funcTableOff = header.AddressOfFunctions ? rvaToOff(header.AddressOfFunctions) : null;
-  const nameTableOff = header.AddressOfNames ? rvaToOff(header.AddressOfNames) : null;
-  const ordTableOff = header.AddressOfNameOrdinals ? rvaToOff(header.AddressOfNameOrdinals) : null;
-  if (header.NumberOfFunctions === 0 && header.NumberOfNames === 0) {
-    // Empty export directories can still carry a DLL name; there is no EAT slot to map.
-  } else if (isReadableOffset(funcTableOff)) {
-    let functionNames = new Map<number, string>();
-    if (canReadExportNameTables(header, nameTableOff, ordTableOff, isReadableOffset, issues)) {
-      functionNames = await readExportNameMap(reader, rvaToOff, header, readMappedU32, readMappedU16, issues);
-    }
-    entries.push(
-      ...await readExportEntries(
-        header,
-        functionNames,
-        readMappedU32,
-        readForwarderStr,
-        rvaToOff,
-        dir,
-        isReadableOffset,
-        issues
-      )
-    );
-  } else {
-    issues.push("Export address table does not map to file offset.");
-  }
+  const name = await readExportDllName(reader, rvaToOff, header.NameRva,
+    (offset): offset is number => offset != null && offset >= 0 && offset < reader.size, issues);
+  const entries = await readDirectoryEntries(reader, header, dir, rvaToOff, issues);
   return {
     flags: header.Characteristics, timestamp: header.TimeDateStamp,
     version: ((header.MajorVersion << 16) | header.MinorVersion) >>> 0,
@@ -295,3 +267,35 @@ export async function parseExportDirectory(
     entries, issues
   };
 }
+
+const readDirectoryEntries = async (
+  reader: FileRangeReader,
+  header: ExportDirectoryHeader,
+  dir: PeDataDirectory,
+  rvaToOff: RvaToOffset,
+  issues: string[]
+): Promise<PeExportEntry[]> => {
+  const isReadableOffset = (offset: number | null): offset is number =>
+    offset != null && offset >= 0 && offset < reader.size;
+  // Microsoft PE/COFF: name/address pointers are DWORDs; ordinal indexes are WORDs.
+  const readMappedU32 = async (tableRva: number, index: number): Promise<number | null> => {
+    const view = await readMappedRvaPrefix(reader, tableRva + index * 4, 4, rvaToOff);
+    return view.byteLength === 4 ? view.getUint32(0, true) : null;
+  };
+  const readMappedU16 = async (tableRva: number, index: number): Promise<number | null> => {
+    const view = await readMappedRvaPrefix(reader, tableRva + index * 2, 2, rvaToOff);
+    return view.byteLength === 2 ? view.getUint16(0, true) : null;
+  };
+  if (header.NumberOfFunctions === 0 && header.NumberOfNames === 0) return [];
+  if (!header.AddressOfFunctions || !isReadableOffset(rvaToOff(header.AddressOfFunctions))) {
+    issues.push("Export address table does not map to file offset.");
+    return [];
+  }
+  const functionNames = canReadExportNameTables(header, rvaToOff(header.AddressOfNames),
+    rvaToOff(header.AddressOfNameOrdinals), isReadableOffset, issues)
+    ? await readExportNameMap(reader, rvaToOff, header, readMappedU32, readMappedU16, issues)
+    : new Map<number, string[]>();
+  return readExportEntries(header, functionNames, readMappedU32,
+    rva => readExportForwarderString(reader, rvaToOff, dir.rva, dir.size, rva),
+    rvaToOff, dir, isReadableOffset, issues);
+};
