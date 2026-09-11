@@ -120,3 +120,68 @@ void test("parseElfNotes deduplicates notes when PT_NOTE overlaps SHT_NOTE range
     1
   );
 });
+void test("rejects note ranges outside the file or safe integer space", async () => {
+  const parsed = await parseElfNotes({ file: new File([new Uint8Array(16)], "note-ranges"),
+    programHeaders: [], littleEndian: true, sections: [
+      makeSection({ type: 7, offset: 1n << 60n, size: 16n }),
+      makeSection({ type: 7, offset: 0n, size: 1n << 60n }),
+      makeSection({ type: 7, offset: 16n, size: 16n })
+    ] });
+  assert.deepEqual(parsed?.entries, []);
+  assert.equal(parsed?.issues.filter(issue => issue.includes("too large")).length, 2);
+  assert.match(parsed!.issues.join(" "), /outside the file/);
+});
+
+const bigEndianNotes = (): File => {
+  // A GNU build ID with padding, followed by an empty 12-byte note header (gABI notes).
+  const bytes = new Uint8Array(32);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 4, false);
+  view.setUint32(4, 3, false);
+  view.setUint32(8, 3, false);
+  bytes.set([71, 78, 85, 0, 0xab, 0xcd, 0xef, 0], 12);
+  return new File([bytes], "big-endian-notes");
+};
+
+void test("preserves complete note records, padding and empty headers at the exact boundary", async () => {
+  const parsed = await parseElfNotes({ file: bigEndianNotes(), programHeaders: [], littleEndian: false,
+    sections: [makeSection({ type: 7, size: 32n, index: 7 }),
+      makeSection({ type: 7, size: 32n, name: "duplicate" }), makeSection({ type: 1, size: 32n })] });
+  assert.deepEqual(parsed, { issues: [], entries: [
+    { source: "SHT_NOTE section #7", name: "GNU", type: 3, typeName: "NT_GNU_BUILD_ID",
+      description: "GNU build ID", value: "abcdef", descSize: 3 },
+    { source: "SHT_NOTE section #7", name: "", type: 0, typeName: null,
+      description: null, value: null, descSize: 0 }
+  ] });
+});
+
+const noteSegment = (type: number, filesz: bigint): ElfProgramHeader => ({
+  type, filesz, index: 5, typeName: null, offset: 0n, vaddr: 0n, paddr: 0n,
+  memsz: filesz, flags: 4, flagNames: [], align: 4n
+});
+
+void test("discovers notes through program headers and ignores unrelated or empty ranges", async () => {
+  const parsed = await parseElfNotes({ file: bigEndianNotes(), sections: [], littleEndian: false,
+    programHeaders: [noteSegment(4, 32n), noteSegment(1, 20n), noteSegment(4, 0n)] });
+  assert.equal(parsed?.entries.length, 2);
+  assert.equal(parsed?.entries[0]?.source, "PT_NOTE segment #5");
+  assert.deepEqual(parsed?.issues, []);
+  assert.equal(await parseElfNotes({ file: bigEndianNotes(), littleEndian: false,
+    programHeaders: [noteSegment(1, 32n)], sections: [makeSection({ type: 7, size: 0n })] }), null);
+});
+
+void test("reports truncated names, preserves exact-end names and warns about clipped ranges", async () => {
+  const bytes = new Uint8Array(16);
+  new DataView(bytes.buffer).setUint32(0, 4, true);
+  bytes.set([65, 66, 67, 68], 12);
+  const exact = await parseElfNotes({ file: new File([bytes], "exact"), littleEndian: true,
+    programHeaders: [], sections: [makeSection({ type: 7, size: 16n, name: "exact" })] });
+  assert.equal(exact?.entries[0]?.name, "ABCD");
+  assert.equal(exact?.entries[0]?.source, "Section \"exact\"");
+  assert.deepEqual(exact?.issues, []);
+  const clipped = await parseElfNotes({ file: new File([bytes.subarray(0, 15)], "clipped"),
+    littleEndian: true, programHeaders: [], sections: [makeSection({ type: 7, size: 16n })] });
+  assert.deepEqual(clipped?.entries, []);
+  assert.equal(clipped?.issues.length, 2);
+  assert.match(clipped!.issues.join(" "), /note name is truncated/);
+});

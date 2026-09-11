@@ -188,65 +188,57 @@ Promise<{ symtab: DataView; strtab: DataView | null; offset: number } | null> =>
   if (!dynamicPh) return null;
   const entries = parsedEntries ?? await readElfDynamicEntries(
     createFileRangeReader(opts.file, 0, opts.file.size), opts, opts.issues);
-
-  const symtabVaddr = entries.find(entry => entry.tag === DT_SYMTAB)?.value ?? 0n;
-  const syment = entries.find(entry => entry.tag === DT_SYMENT)?.value ?? 0n;
-  const strtabVaddr = entries.find(entry => entry.tag === DT_STRTAB)?.value ?? 0n;
-  const strsz = entries.find(entry => entry.tag === DT_STRSZ)?.value ?? 0n;
-
-  if (symtabVaddr === 0n || syment === 0n || strtabVaddr === 0n || strsz === 0n) return null;
-
-  const hashVaddr = entries.find(entry => entry.tag === DT_HASH)?.value ?? 0n;
-  const gnuHashVaddr = entries.find(entry => entry.tag === DT_GNU_HASH)?.value ?? 0n;
-  let symbolCount: number | null = hashSymbolCount(hashes);
-  if (hashes == null && hashVaddr !== 0n) {
-    symbolCount = await readDynsymCountFromSysvHash({
-      file: opts.file,
-      programHeaders: opts.programHeaders,
-      hashVaddr,
-      littleEndian: opts.littleEndian,
-      issues: opts.issues
-    });
-  }
-  if (hashes == null && symbolCount == null && gnuHashVaddr !== 0n) {
-    symbolCount = await readDynsymCountFromGnuHash({
-      file: opts.file,
-      programHeaders: opts.programHeaders,
-      hashVaddr: gnuHashVaddr,
-      is64: opts.is64,
-      littleEndian: opts.littleEndian,
-      issues: opts.issues
-    });
-  }
-
-  const entrySize = Number(syment);
-  if (!Number.isSafeInteger(entrySize) || entrySize <= 0) return null;
-
-  if (symbolCount == null) {
-    if (strtabVaddr > symtabVaddr) {
-      const inferredBytes = strtabVaddr - symtabVaddr;
-      const inferredCount = Number(inferredBytes / BigInt(entrySize));
-      if (Number.isSafeInteger(inferredCount) && inferredCount > 0) {
-        symbolCount = inferredCount;
-        if (inferredBytes % BigInt(entrySize) !== 0n) {
-          opts.issues.push("Inferred .dynsym size is not aligned to entry size.");
-        }
-        opts.issues.push("Dynsym count inferred from DT_STRTAB - DT_SYMTAB; may be imprecise.");
-      }
-    }
-  }
-
+  const tags = dynsymTags(entries);
+  if (!tags) return null;
+  const symbolCount = await dynamicHashCount(opts, entries, hashes) ??
+    inferDynsymCount(tags.symtabVaddr, tags.strtabVaddr, tags.entrySize, opts.issues);
   if (symbolCount == null || symbolCount <= 0) return null;
+  return readDynamicSymbolTables(opts, tags, symbolCount);
+};
 
+const readDynamicSymbolTables = async (opts: Parameters<typeof parseDynsymFromDynamicTags>[0],
+  tags: NonNullable<ReturnType<typeof dynsymTags>>, symbolCount: number) => {
+  const { symtabVaddr, strtabVaddr, strsz, entrySize } = tags;
   const symtabOff = vaddrToFileOffset(opts.programHeaders, symtabVaddr);
   const strtabOff = vaddrToFileOffset(opts.programHeaders, strtabVaddr);
   if (symtabOff == null || strtabOff == null) return null;
-
   const symtabByteSize = BigInt(symbolCount) * BigInt(entrySize);
   const symtab = await readDataViewSlice(opts.file, symtabOff, symtabByteSize, "DT_SYMTAB", opts.issues);
   const strtab = await readDataViewSlice(opts.file, strtabOff, strsz, "DT_STRTAB", opts.issues);
   if (!symtab) return null;
   return { symtab, strtab, offset: Number(symtabOff) };
+};
+
+const dynsymTags = (entries: ElfDynamicEntry[]) => {
+  const value = (tag: number): bigint => entries.find(entry => entry.tag === tag)?.value ?? 0n;
+  const symtabVaddr = value(DT_SYMTAB);
+  const strtabVaddr = value(DT_STRTAB);
+  const strsz = value(DT_STRSZ);
+  const entrySize = Number(value(DT_SYMENT));
+  if ([symtabVaddr, strtabVaddr, strsz].includes(0n) ||
+    !Number.isSafeInteger(entrySize) || entrySize <= 0) return null;
+  return { symtabVaddr, strtabVaddr, strsz, entrySize };
+};
+
+const dynamicHashCount = async (opts: Parameters<typeof parseDynsymFromDynamicTags>[0],
+  entries: ElfDynamicEntry[], hashes: ElfHashTable[] | undefined): Promise<number | null> => {
+  if (hashes != null) return hashSymbolCount(hashes);
+  const hashVaddr = entries.find(entry => entry.tag === DT_HASH)?.value ?? 0n;
+  const gnuHashVaddr = entries.find(entry => entry.tag === DT_GNU_HASH)?.value ?? 0n;
+  const count = hashVaddr === 0n ? null : await readDynsymCountFromSysvHash({ ...opts, hashVaddr });
+  if (count != null || gnuHashVaddr === 0n) return count;
+  return readDynsymCountFromGnuHash({ ...opts, hashVaddr: gnuHashVaddr });
+};
+
+const inferDynsymCount = (symtab: bigint, strtab: bigint, entrySize: number,
+  issues: string[]): number | null => {
+  if (strtab <= symtab) return null;
+  const size = strtab - symtab;
+  const count = Number(size / BigInt(entrySize));
+  if (!Number.isSafeInteger(count) || count <= 0) return null;
+  if (size % BigInt(entrySize) !== 0n) issues.push("Inferred .dynsym size is not aligned to entry size.");
+  issues.push("Dynsym count inferred from DT_STRTAB - DT_SYMTAB; may be imprecise.");
+  return count;
 };
 
 export async function parseElfDynamicSymbols(opts: {
