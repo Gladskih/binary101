@@ -30,4 +30,16 @@ test("real WSL ELF shows version suffixes, GNU properties and paged unwind recor
   }).first();
   await instructionDetails.locator("summary").click();
   await expect(instructionDetails).toContainText("def_cfa");
+  const rules = unwind.locator("details").filter({
+    has: page.locator(":scope > summary", { hasText: /\d+ unwind rule rows/ })
+  }).first();
+  await rules.locator("summary").click();
+  await expect(rules).toContainText("CFA");
+  await expect(rules).toContainText(/r7 \+ \(\d+\)/);
+  const hashes = page.locator("#analysisValue > section").filter({
+    has: page.locator(".peSectionSummary", { hasText: "GNU symbol hash table" })
+  });
+  await hashes.locator("summary").first().click();
+  await expect(hashes).toContainText("Bloom shift");
+  await expect(hashes.locator("tbody tr")).toHaveCount(100);
 });

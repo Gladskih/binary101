@@ -5,6 +5,7 @@ import type { ElfCoreNote } from "./core-note-types.js";
 import type { ElfAttributeSection } from "./attribute-types.js";
 import type { ElfMipsMetadata } from "./mips-types.js";
 import type { ElfLsda } from "./lsda-types.js";
+import type { ArmEhabiTable } from "./arm-ehabi-types.js";
 import type { DwarfAnalysis } from "../dwarf/types.js";
 import type { NativeAotMetadata } from "../native-aot/format.js";
 import type { ElfRelocationInfo } from "./relocation-types.js";
@@ -76,6 +77,7 @@ export interface ElfSectionHeader {
 
 export interface ElfParseResult {
   lsdas?: ElfLsda[];
+  armEhabi?: ArmEhabiTable[];
   mips?: ElfMipsMetadata[];
   attributes?: ElfAttributeSection[];
   ident: ElfIdent;

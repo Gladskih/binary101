@@ -19,6 +19,7 @@ import { parseElfHashTables } from "./hash-tables.js";
 import { parseElfAttributes } from "./attributes.js";
 import { parseElfMips } from "./mips.js";
 import { parseElfLsda } from "./lsda.js";
+import { parseElfArmEhabi } from "./arm-ehabi.js";
 import { validateElfHashSymbols } from "./hash-symbols.js";
 import { parseElfInterpreter } from "./interpreter.js";
 import { parseElfNotes } from "./notes.js";
@@ -84,6 +85,8 @@ const parseUnwindMetadata = async (file: File, result: ElfParseResult): Promise<
   if (unwind.length) result.unwind = unwind;
   const lsdas = await parseElfLsda(file, result);
   if (lsdas.length) result.lsdas = lsdas;
+  const armEhabi = await parseElfArmEhabi(file, result);
+  if (armEhabi.length) result.armEhabi = armEhabi;
 };
 
 export async function parseElf(file: File): Promise<ElfParseResult | null> {

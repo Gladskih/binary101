@@ -60,7 +60,14 @@ GCC/LLVM LSDA payloads in `.gcc_except_table` decode call sites, action chains,
 reverse type pointers and exception-specification index lists. Reads are bounded
 by the next LSDA or the section end. Other language-specific payload formats and
 indirect LSDA addresses produce notices. Indirect type pointers remain storage
-addresses; exception matching is not executed. ARM EHABI tables and SFrame remain unsupported.
+addresses; exception matching is not executed. SFrame remains unsupported.
+
+ARM EHABI decodes `.ARM.exidx` (or `PT_ARM_EXIDX`), PREL31 references to `.ARM.extab`,
+compact personalities 0–2 and their stack/register instructions. Compact cleanup,
+catch and exception-specification scopes have a separate paged table. TARGET2 type
+words retain their platform-dependent encoding. Generic personalities and unresolved
+addresses in relocatable objects produce notices. WSL Clang ARM bytecode is compared
+with `readelf -u`; no live register or memory state is executed.
 
 Reads use bounded ranges. Resource limits also bound retained entries and individual
 names, expressions and CFI instruction sequences; reaching a limit produces a notice.
