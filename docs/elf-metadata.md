@@ -56,7 +56,11 @@ Unknown encodings, revisions or instructions produce notices.
 Compressed unwind sections and sections requiring relocations are reported but
 not decoded. Full unwind parsing currently requires section headers; the existing
 instruction-set analysis can still use `PT_GNU_EH_FRAME` as a source of entry points.
-LSDA payloads, ARM EHABI tables and SFrame remain unsupported.
+GCC/LLVM LSDA payloads in `.gcc_except_table` decode call sites, action chains,
+reverse type pointers and exception-specification index lists. Reads are bounded
+by the next LSDA or the section end. Other language-specific payload formats and
+indirect LSDA addresses produce notices. Indirect type pointers remain storage
+addresses; exception matching is not executed. ARM EHABI tables and SFrame remain unsupported.
 
 Reads use bounded ranges. Resource limits also bound retained entries and individual
 names, expressions and CFI instruction sequences; reaching a limit produces a notice.

@@ -18,6 +18,7 @@ import { parseElfUnwind } from "./unwind.js";
 import { parseElfHashTables } from "./hash-tables.js";
 import { parseElfAttributes } from "./attributes.js";
 import { parseElfMips } from "./mips.js";
+import { parseElfLsda } from "./lsda.js";
 import { validateElfHashSymbols } from "./hash-symbols.js";
 import { parseElfInterpreter } from "./interpreter.js";
 import { parseElfNotes } from "./notes.js";
@@ -78,6 +79,13 @@ function describeElfHeader(record: ElfFileHeaderRecord, issues: string[]): ElfHe
     machineName: decodeOption(header.machine, ELF_MACHINE) || null
   };
 }
+const parseUnwindMetadata = async (file: File, result: ElfParseResult): Promise<void> => {
+  const unwind = await parseElfUnwind(file, result);
+  if (unwind.length) result.unwind = unwind;
+  const lsdas = await parseElfLsda(file, result);
+  if (lsdas.length) result.lsdas = lsdas;
+};
+
 export async function parseElf(file: File): Promise<ElfParseResult | null> {
   const buffer = await file.slice(0, Math.min(file.size, 4096)).arrayBuffer();
   const dv = new DataView(buffer);
@@ -155,8 +163,7 @@ export async function parseElf(file: File): Promise<ElfParseResult | null> {
   if (symbolTables.length) result.symbolTables = symbolTables;
   const sectionGroups = await parseElfSectionGroups(file, result);
   if (sectionGroups.length) result.sectionGroups = sectionGroups;
-  const unwind = await parseElfUnwind(file, result);
-  if (unwind.length) result.unwind = unwind;
+  await parseUnwindMetadata(file, result);
   const relocations = await parseElfRelocations(file, result, dynamicEntries, symbolCache, layout);
   const symbolVersions = await parseElfSymbolVersions(file, result, dynamicEntries,
     dynSymbols?.total ?? 0);

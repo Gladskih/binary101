@@ -6,6 +6,7 @@ import { renderElfUnwind } from "./unwind.js";
 import { renderElfHashTables } from "./hash-tables.js";
 import { renderElfAttributes } from "./attributes.js";
 import { renderElfMips } from "./mips.js";
+import { renderElfLsda } from "./lsda.js";
 
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { renderDefinitionRow, renderOptionChips, escapeHtml } from "../../html-utils.js";
@@ -242,6 +243,7 @@ export function renderElf(elf: ElfParseResult | null): string {
   renderElfSymbolTables(elf, out);
   renderElfSectionGroups(elf, out);
   renderElfUnwind(elf, out);
+  renderElfLsda(elf, out);
   renderElfHashTables(elf, out);
   renderElfAttributes(elf, out);
   renderElfMips(elf, out);
