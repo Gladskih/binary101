@@ -206,7 +206,8 @@ const addWindowsDirectoryDescriptors = (
     key: PE_LAZY_SECTION_KEYS.tls,
     summary: pe.tls?.parsed === false
       ? "unparsed"
-      : `${plural(pe.tls?.CallbackCount ?? 0, "callback", "callbacks")}`,
+      : plural(pe.tls?.CallbackCount ?? 0, "callback", "callbacks") +
+        (pe.tls?.callbackTableStatus === "incomplete" ? " (incomplete list)" : ""),
     title: "TLS directory"
   });
   if (pe.reloc) descriptors.push({

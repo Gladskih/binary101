@@ -235,6 +235,8 @@ export interface PeTlsDirectory {
   Characteristics: number;
   CallbackCount: number;
   CallbackRvas?: number[];
+  // Complete requires a NULL terminator and no skipped invalid callback VAs.
+  callbackTableStatus?: "absent" | "complete" | "incomplete";
   warnings?: string[];
   parsed?: boolean;
 }

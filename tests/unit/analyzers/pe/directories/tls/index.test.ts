@@ -50,7 +50,7 @@ void test("parseTlsDirectory handles 32-bit and 64-bit callbacks", async () => {
   const tls64 = expectDefined(await parseTlsDirectory64(
     new MockFile(bytes64),
     [{ name: "TLS", rva: 0x10, size: IMAGE_TLS_DIRECTORY64_SIZE }],
-    value => (value === 0x10 ? 0 : value),
+    value => value >= 0x10 && value < 0x10 + IMAGE_TLS_DIRECTORY64_SIZE ? value - 0x10 : value,
     0n
   ));
   assert.equal(tls64.CallbackCount, 1);
@@ -203,7 +203,8 @@ void test("parseTlsDirectory skips invalid callback pointers and tolerates out-o
   const bytesOutOfRange = new Uint8Array(64).fill(0);
   const dvOutOfRange = new DataView(bytesOutOfRange.buffer);
   dvOutOfRange.setUint32(tlsRva + 12, 0x1000, true);
-  const rvaToOff = (rva: number): number => (rva === tlsRva ? tlsRva : bytesOutOfRange.length + 4);
+  const rvaToOff = (rva: number): number =>
+    rva >= tlsRva && rva < tlsRva + IMAGE_TLS_DIRECTORY32_SIZE ? rva : bytesOutOfRange.length + 4;
   const tlsOutOfRange = expectDefined(await parseTlsDirectory32(
     new MockFile(bytesOutOfRange),
     [{ name: "TLS", rva: tlsRva, size: 0x18 }],
@@ -227,7 +228,9 @@ void test("parseTlsDirectory does not read callback slots past an rvaToOff gap",
   dv.setUint32(callbackTableRva + TLS_CALLBACK_ENTRY_SIZE32 * 2, 0, true);
 
   const sparseRvaToOff = (rva: number): number | null => {
-    if (rva === IMAGE_TLS_DIRECTORY32_SIZE || rva === callbackTableRva) return rva;
+    if (rva >= IMAGE_TLS_DIRECTORY32_SIZE && rva < callbackTableRva + TLS_CALLBACK_ENTRY_SIZE32) {
+      return rva;
+    }
     return null;
   };
 

@@ -118,7 +118,7 @@ const renderTlsFields = (tls: PeTlsSection, out: string[]): void => {
       label: "CallbackCount",
       valueHtml: escapeHtml(String(tls.CallbackCount ?? 0)),
       numeric: true,
-      meaning: "Number of TLS callbacks found before the terminating NULL pointer."
+      meaning: "Number of recovered TLS callback RVAs. An incomplete list may omit callbacks."
     },
     {
       label: "SizeOfZeroFill",
@@ -167,7 +167,8 @@ export function renderTls(t: PeTlsSection, out: string[]): void {
       "TLS directory",
       t.parsed === false
         ? "unparsed"
-        : `${t.CallbackCount ?? 0} callback${(t.CallbackCount ?? 0) === 1 ? "" : "s"}`
+        : `${t.CallbackCount ?? 0} callback${(t.CallbackCount ?? 0) === 1 ? "" : "s"}` +
+          (t.callbackTableStatus === "incomplete" ? " (incomplete list)" : "")
     )
   );
   if (t.warnings?.length) {

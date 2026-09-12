@@ -1,6 +1,7 @@
 "use strict";
 
 import type { PeSection, RvaToOffset } from "../types.js";
+import { PE_RVA_EXCLUSIVE_LIMIT } from "../layout/rva-limits.js";
 
 const MAX_RVA_BIGINT = 0xffff_ffffn;
 
@@ -41,11 +42,12 @@ export const isTlsImageVa = (
   imageBase: bigint,
   sections: PeSection[]
 ): boolean => {
+  if (!Number.isSafeInteger(byteLength) || byteLength <= 0) return false;
   const rva = toTlsRvaFromVa(virtualAddress, imageBase);
-  if (rva == null) return false;
+  if (rva == null || rva > PE_RVA_EXCLUSIVE_LIMIT - byteLength) return false;
   const section = findSectionContainingRva(sections, rva);
   if (!section) return false;
   const sectionStart = section.virtualAddress >>> 0;
   const sectionSize = (section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0);
-  return rva - sectionStart <= Math.max(0, sectionSize - byteLength);
+  return rva - sectionStart <= sectionSize - byteLength;
 };

@@ -3,6 +3,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { inlinePeSectionName } from "../../../../analyzers/pe/sections/name.js";
+import { getPeLazySectionDescriptors } from "../../../../renderers/pe/lazy-section-shells.js";
+import { createBasePe } from "../../../fixtures/pe-renderer-headers-fixture.js";
 import {
   renderExports,
   renderTls,
@@ -11,6 +13,25 @@ import {
 } from "../../../../renderers/pe/directories.js";
 
 const GP_REL_TEST_SECTION_NAME = "GP_TEST";
+
+void test("TLS marks an incomplete callback list in both collapsed and expanded summaries", () => {
+  const pe = createBasePe();
+  pe.tls = {
+    StartAddressOfRawData: 0n, EndAddressOfRawData: 0n, AddressOfIndex: 0n,
+    AddressOfCallBacks: 0x1000n, SizeOfZeroFill: 0, Characteristics: 0,
+    CallbackCount: 1, CallbackRvas: [0x2000], parsed: true,
+    callbackTableStatus: "incomplete"
+  };
+  const out: string[] = [];
+
+  renderTls(pe.tls, out);
+
+  assert.match(out.join(""), /1 callback \(incomplete list\)/);
+  assert.ok(out.join("").includes("0x00002000"));
+  assert.doesNotMatch(out.join(""), /found before the terminating NULL/);
+  assert.equal(getPeLazySectionDescriptors(pe).find(section => section.key === "tls")?.summary,
+    "1 callback (incomplete list)");
+});
 
 void test("renderTls displays local directory warnings", () => {
   const tls: Parameters<typeof renderTls>[0] = {

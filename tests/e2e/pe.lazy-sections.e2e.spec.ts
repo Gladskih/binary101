@@ -4,6 +4,7 @@ import { expect, test } from "@playwright/test";
 import { createLargePeLegacyCoffSymbolFile } from "../fixtures/pe-coff-debug-fixtures.js";
 import { createPeResourcePreviewFile } from "../fixtures/pe-resource-preview-file.js";
 import { createPePlusFile } from "../fixtures/sample-files-pe.js";
+import { createPeWithPartialTlsCallback } from "../fixtures/pe-tls-file.js";
 import type { MockFile } from "../helpers/mock-file.js";
 
 const toUpload = (file: MockFile) => ({
@@ -131,4 +132,25 @@ test.describe("PE section entropy", () => {
       "Calculated for 1 of 1 sections."
     );
   });
+});
+
+void test("keeps a partial TLS callback list marked across lazy remounts", async ({ page }) => {
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", toUpload(createPeWithPartialTlsCallback()));
+  const section = page.locator('[data-pe-lazy-section="tls"]');
+  const summary = section.locator(":scope > details > summary");
+  const body = section.locator("[data-pe-lazy-section-body]");
+  await expect(summary).toContainText("1 callback (incomplete list)");
+  await expect(body).toHaveJSProperty("childElementCount", 0);
+
+  await summary.click();
+
+  await expect(body).toContainText("TLS callback table is truncated or unmapped");
+  await expect(body.getByRole("cell", { name: "0x00001100", exact: true })).toBeVisible();
+  await expect(body.getByRole("cell", { name: "0x00001180", exact: true })).toHaveCount(0);
+  await summary.click();
+  await expect(body).toHaveJSProperty("childElementCount", 0);
+  await expect(summary).toContainText("1 callback (incomplete list)");
+  await summary.click();
+  await expect(body.getByRole("cell", { name: "0x00001100", exact: true })).toBeVisible();
 });
