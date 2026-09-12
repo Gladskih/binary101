@@ -1,7 +1,8 @@
 "use strict";
 
-import { contiguousRvaOffset } from "../rva-mapping.js";
+import { mappedRvaSpan } from "../rva-mapping.js";
 import { readMappedRvaBytes } from "../rva-byte-reader.js";
+import type { FileRange } from "../layout/file-ranges.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
 import type { PeClrHeader } from "./types.js";
@@ -20,26 +21,38 @@ export const formatPublicKeyToken = async (publicKey: number[] | undefined): Pro
 
 const isAllZero = (bytes: Uint8Array): boolean => bytes.every(byte => byte === 0);
 
+const signatureFileRanges = (
+  reader: FileRangeReader, rvaToOff: RvaToOffset, rva: number, size: number
+): FileRange[] => {
+  const ranges: FileRange[] = [];
+  for (let consumed = 0; consumed < size;) {
+    const span = mappedRvaSpan(rvaToOff, rva + consumed, size - consumed, reader.size);
+    if (!span) break;
+    ranges.push({ start: span.offset, end: span.offset + span.size });
+    consumed += span.size;
+  }
+  return ranges;
+};
+
 const readSignature = async (
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
   rva: number,
   size: number,
   issues: string[]
-): Promise<{ bytes: Uint8Array | null; offset: number | null; status: PeClrStrongName["status"] }> => {
-  if (rva === 0 && size === 0) return { bytes: null, offset: null, status: "absent" };
+): Promise<{ bytes: Uint8Array | null; ranges: FileRange[]; status: PeClrStrongName["status"] }> => {
+  if (rva === 0 && size === 0) return { bytes: null, ranges: [], status: "absent" };
   const offset = rvaToOff(rva);
   if (offset == null || offset < 0 || offset >= reader.size) {
-    return { bytes: null, offset: null, status: "unmapped" };
+    return { bytes: null, ranges: [], status: "unmapped" };
   }
   const bytes = await readMappedRvaBytes(reader, rva, size, rvaToOff);
   if (bytes.length < size) {
-    issues.push("StrongNameSignature extends past end of file.");
-    return { bytes, offset, status: "truncated" };
+    issues.push("StrongNameSignature is truncated or not fully mapped to file data.");
+    return { bytes, ranges: [], status: "truncated" };
   }
-  const signatureOffset = contiguousRvaOffset(rvaToOff, rva, size, reader.size);
-  if (signatureOffset == null) issues.push("Strong-name hash verification requires a contiguous signature file range.");
-  return { bytes, offset: signatureOffset, status: isAllZero(bytes) ? "delay-signed" : "present" };
+  return { bytes, ranges: signatureFileRanges(reader, rvaToOff, rva, size),
+    status: isAllZero(bytes) ? "delay-signed" : "present" };
 };
 
 const verificationNote = (
@@ -66,7 +79,8 @@ export const parseStrongName = async (
   clr: PeClrHeader
 ): Promise<PeClrStrongName> => {
   const issues: string[] = [];
-  const publicKey = clr.meta?.tables?.assembly?.publicKey;
+  const assembly = clr.meta?.tables?.assembly;
+  const publicKey = assembly?.publicKey;
   const signature = await readSignature(
     reader,
     rvaToOff,
@@ -74,20 +88,19 @@ export const parseStrongName = async (
     clr.StrongNameSignatureSize,
     issues
   );
-  const publicKeyToken = await formatPublicKeyToken(publicKey);
-  const verified = signature.status === "present" && signature.bytes && signature.offset != null
+  const verified = signature.status === "present" && signature.bytes
     ? await verifyStrongNameSignature(
       reader,
       publicKey,
       signature.bytes,
-      signature.offset,
-      clr.meta?.tables?.assembly?.hashAlgorithm ?? 0,
+      signature.ranges,
+      assembly?.hashAlgorithm ?? 0,
       issues
     )
     : null;
   return {
     status: signature.status,
-    publicKeyToken,
+    publicKeyToken: await formatPublicKeyToken(publicKey),
     verification: verificationStatus(verified),
     verificationNote: verificationNote(signature.status, verified),
     issues
