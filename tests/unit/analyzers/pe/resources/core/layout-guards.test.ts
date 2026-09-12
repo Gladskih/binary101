@@ -25,8 +25,8 @@ const buildFixtureResourceDirectory = (size: number) => [
   { name: "RESOURCE", rva: FIXTURE_RESOURCE_RVA, size }
 ];
 
-function mapFixtureRvaToStart(_value: number): number {
-  return 0;
+function mapFixtureRvaToStart(value: number): number {
+  return value - FIXTURE_RESOURCE_RVA;
 }
 
 // 512 bytes is enough for the synthetic `.rsrc` trees in this file because offsets are
@@ -190,6 +190,7 @@ void test("buildResourceTree warns when a resource data payload RVA cannot be ma
   const nameDirectory = fixture.allocateDirectoryTable(0, 1);
   const languageDirectory = fixture.allocateDirectoryTable(0, 1);
   const dataEntryOffset = fixture.allocateDataEntry();
+  fixture.writeDataEntry(dataEntryOffset, fixture.bytes.length + 1, 4, 0);
   // Microsoft PE/COFF specification, "Resource Data Entry":
   // Data RVA points at the actual unit of resource data in the Resource Data area.
   // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#resource-data-entry
@@ -204,7 +205,9 @@ void test("buildResourceTree warns when a resource data payload RVA cannot be ma
   const tree = await buildResourceTree(
     new MockFile(fixture.bytes),
     buildFixtureResourceDirectory(fixture.bytes.length),
-    value => value === FIXTURE_RESOURCE_RVA ? 0 : null
+    value => value >= FIXTURE_RESOURCE_RVA &&
+      value < FIXTURE_RESOURCE_RVA + dataEntryOffset + IMAGE_RESOURCE_DATA_ENTRY_SIZE
+      ? value - FIXTURE_RESOURCE_RVA : null
   );
   assert.ok(tree);
 

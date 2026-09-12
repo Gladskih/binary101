@@ -1,5 +1,6 @@
 "use strict";
 
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import { addHeuristicResourcePreview } from "../resources/preview/sniff.js";
 import type { ResourcePreviewData } from "../resources/preview/types.js";
@@ -47,7 +48,7 @@ const readEmbeddedPayload = async (
   }
   const offset = rvaToOff(resourceRva);
   if (offset == null) return { storage: "unmapped", bytes: null, size: null };
-  const lengthView = await reader.read(offset, 4);
+  const lengthView = await readMappedRvaPrefix(reader, resourceRva, 4, rvaToOff);
   if (lengthView.byteLength < 4) return { storage: "truncated", bytes: null, size: null };
   const size = lengthView.getUint32(0, true);
   if (row.offset + 4 + size > clr.ResourcesSize) {
@@ -59,7 +60,8 @@ const readEmbeddedPayload = async (
     issues.push(`Managed resource payload is ${size} bytes; preview is capped.`);
     return { storage: "embedded", bytes: null, size };
   }
-  const bytes = await reader.readBytes(offset + 4, size);
+  const view = await readMappedRvaPrefix(reader, resourceRva + 4, size, rvaToOff);
+  const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
   if (bytes.length < size) return { storage: "truncated", bytes, size };
   return { storage: "embedded", bytes, size };
 };

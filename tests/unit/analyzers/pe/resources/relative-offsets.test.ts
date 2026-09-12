@@ -58,7 +58,7 @@ void test("resource span resolver rejects offsets outside the declared resource 
 });
 
 void test(
-  "resource span resolver falls back only when the mapped RVA aliases the resource base",
+  "resource span resolver never guesses offsets for missing mapping bytes",
   () => {
   const resolver = createResolver(0x20, 0x100, 0x200, rva => {
     if (rva === 0x1000) return 0x100;
@@ -67,15 +67,16 @@ void test(
     return null;
   });
 
-  assert.equal(resolver.resolveRelOffset(0, 4), 0x100);
-  assert.equal(resolver.resolveRelOffset(4, 4), 0x104);
-  assert.equal(resolver.resolveRelOffset(8, 4), 0x108);
+  assert.equal(resolver.resolveRelOffset(0, 4), null);
+  assert.equal(resolver.resolveRelOffset(4, 4), null);
+  assert.equal(resolver.resolveRelOffset(8, 4), null);
   }
 );
 
 void test("resource span resolver accepts mapped zero offsets and exact EOF boundaries", () => {
-  const zeroMapped = createResolver(0x20, 0x100, 0x200, rva => rva === 0x1004 ? 0 : null);
-  const eofMapped = createResolver(0x20, 0x100, 0x200, rva => rva === 0x1008 ? 0x1fc : null);
+  const zeroMapped = createResolver(0x20, 0x100, 0x200, rva => rva >= 0x1004 && rva < 0x1008 ? rva - 0x1004 : null);
+  const eofMapped = createResolver(0x20, 0x100, 0x200,
+    rva => rva >= 0x1008 && rva < 0x100c ? 0x1fc + rva - 0x1008 : null);
 
   assert.equal(zeroMapped.resolveRelOffset(4, 4), 0);
   assert.equal(eofMapped.resolveRelOffset(8, 4), 0x1fc);
@@ -94,8 +95,8 @@ void test("resource span resolver distinguishes mapped offsets from fallback ali
     return null;
   });
 
-  assert.equal(resolver.resolveRelOffset(4, 4), 0x120);
-  assert.equal(resolver.resolveRelOffset(8, 4), 0x108);
+  assert.equal(resolver.resolveRelOffset(4, 4), null);
+  assert.equal(resolver.resolveRelOffset(8, 4), null);
 });
 
 void test(

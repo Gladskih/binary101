@@ -21,8 +21,8 @@ const buildFixtureResourceDirectory = (size: number) => [
   { name: "RESOURCE", rva: FIXTURE_RESOURCE_RVA, size }
 ];
 
-function mapFixtureRvaToStart(_value: number): number {
-  return 0;
+function mapFixtureRvaToStart(value: number): number {
+  return value - FIXTURE_RESOURCE_RVA;
 }
 
 void test("buildResourceTree warns when a subdirectory target points into the string area", async () => {
@@ -112,7 +112,7 @@ void test("buildResourceTree skips repeated traversal when multiple parents re-e
         { id: 0x00000409, name: null }
       ],
       dataRVA: 0x00002000,
-      dataFileOffset: 0,
+      dataFileOffset: null,
       size: 0x10,
       codePage: 0x000004b0,
       reserved: 0
@@ -236,7 +236,7 @@ void test("buildResourceTree preserves valid resource paths deeper than the Wind
         { id: 0x200, name: null }
       ],
       dataRVA: 0x00002000,
-      dataFileOffset: 0,
+      dataFileOffset: null,
       size: 0x10,
       codePage: 0x000004b0,
       reserved: 0

@@ -23,8 +23,8 @@ const buildFixtureResourceDirectory = (size: number) => [
   { name: "RESOURCE", rva: FIXTURE_RESOURCE_RVA, size }
 ];
 
-function mapFixtureRvaToStart(_value: number): number {
-  return 0;
+function mapFixtureRvaToStart(value: number): number {
+  return value - FIXTURE_RESOURCE_RVA;
 }
 
 void test("buildResourceTree warns when a named resource entry appears after an ID entry", async () => {

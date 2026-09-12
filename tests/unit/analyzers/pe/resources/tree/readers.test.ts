@@ -18,6 +18,7 @@ const createResolver = (
   resolveRelOffset: (rel: number, len: number) => number | null = rel => rel,
   resolveRvaOffset: (rva: number) => number | null = rva => rva
 ): ResourceSpanResolver => ({
+  readRelative: (view, rel, length) => view(rel, length),
   describeRelOffsetFailure: (rel, len, subject) => `${subject} failed at ${rel}:${len}`,
   formatRelOffset: rel => `0x${rel.toString(16)}`,
   resolveRvaOffset,

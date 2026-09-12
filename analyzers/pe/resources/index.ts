@@ -1,5 +1,6 @@
 "use strict";
 
+import { createResourcePayloadReader } from "./payload-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import { buildResourceTree } from "./core.js";
 import { enrichResourcePreviews } from "./preview/index.js";
@@ -29,5 +30,5 @@ export async function parseResources(
 ): Promise<PeResources | null> {
   const tree = await buildResourceTree(reader, dataDirs, rvaToOff);
   if (!tree) return null;
-  return enrichResourcePreviews(reader, tree, parseManifestXmlDocument);
+  return enrichResourcePreviews(createResourcePayloadReader(reader, rvaToOff), tree, parseManifestXmlDocument);
 }

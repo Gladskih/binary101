@@ -1,5 +1,6 @@
 "use strict";
 
+import { readDebugPayloadBytes } from "./payload-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
 import { getReadableDebugData } from "./data.js";
@@ -52,7 +53,9 @@ export const parseMiscDebugInfo = async (
     addWarning("MISC debug entry is smaller than IMAGE_DEBUG_MISC.");
     return null;
   }
-  const payload = await reader.readBytes(dataInfo.offset, dataInfo.size);
+  const payload = await readDebugPayloadBytes(
+    reader, rvaToOff, addressOfRawDataRva, pointerToRawDataOff,
+    0, dataInfo.size);
   const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
   const length = view.getUint32(IMAGE_DEBUG_MISC_OFF_LENGTH, true);
   if (length > dataInfo.size) addWarning("MISC debug entry length exceeds SizeOfData.");

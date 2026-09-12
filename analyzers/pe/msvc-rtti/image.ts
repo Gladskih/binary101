@@ -1,5 +1,7 @@
 "use strict";
 
+import { createRvaToOffsetMapper } from "../sections/rva-mapper.js";
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import { COFF_SECTION_CHARACTERISTICS } from "../../coff/layout.js";
 import {
@@ -54,15 +56,13 @@ const findDataSection = (
   return delta >= 0 && delta + size <= fileBackedSize(section, fileSize) ? section : null;
 };
 
-const fileOffsetForRva = (section: PeSection, rva: number): number =>
-  (section.pointerToRawData >>> 0) + rva - (section.virtualAddress >>> 0);
-
 export const createMsvcRttiImage = (
   reader: FileRangeReader,
   sections: PeSection[],
   imageBase: bigint,
   sizeOfImage: number
 ): MsvcRttiImage => {
+  const rvaToOff = createRvaToOffsetMapper(sections, reader.size, 0, 0);
   const normalizedImageSize = Number.isSafeInteger(sizeOfImage) && sizeOfImage > 0
     ? Math.min(sizeOfImage, PE_RVA_EXCLUSIVE_LIMIT)
     : 0;
@@ -79,9 +79,7 @@ export const createMsvcRttiImage = (
   };
   const readData = async (rva: number, size: number, alignment: number): Promise<DataView | null> => {
     if (!isDataRange(rva, size, alignment)) return null;
-    const section = findDataSection(sections, rva, size, reader.size);
-    if (!section) return null;
-    const view = await reader.read(fileOffsetForRva(section, rva), size);
+    const view = await readMappedRvaPrefix(reader, rva, size, rvaToOff);
     return view.byteLength === size ? view : null;
   };
   const preferredVaToRva = (value: bigint): number | null => {

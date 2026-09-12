@@ -104,7 +104,7 @@ void test("parseExceptionDirectory reports incomplete NativeAOT x86 directories"
   const parsed = await parseNativeAotX86Fixture(
     fixture,
     NATIVE_AOT_X86_RUNTIME_FUNCTION_ENTRY_SIZE,
-    () => fixture.bytes.length - Uint8Array.BYTES_PER_ELEMENT
+    rva => rva === fixture.directoryRva ? fixture.bytes.length - Uint8Array.BYTES_PER_ELEMENT : null
   );
 
   assert.ok(parsed);

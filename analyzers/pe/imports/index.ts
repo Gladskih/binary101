@@ -1,5 +1,6 @@
 "use strict";
 
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeImportMetadataEntry } from "../../../pe-import-metadata-schema.js";
@@ -61,11 +62,12 @@ const createImportParseWarning = (warnings: Set<string>): string | undefined =>
 
 const readImportDescriptor = async (
   reader: FileRangeReader,
+  rvaToOff: RvaToOffset,
   offset: number,
   descriptorSize: number,
   warnings: Set<string>
 ): Promise<ImportDescriptor> => {
-  const desc = await reader.read(offset, descriptorSize);
+  const desc = await readMappedRvaPrefix(reader, offset, descriptorSize, rvaToOff);
   const readDescriptorField = (fieldOffset: number, fieldName: string): number | null => {
     if (desc.byteLength < fieldOffset + 4) {
       warnings.add(`Import descriptor is truncated before the ${fieldName} field.`);
@@ -84,7 +86,7 @@ const readImportDescriptor = async (
     forwarderChain,
     nameRva,
     firstThunk,
-    truncated: descriptorSize < IMAGE_IMPORT_DESCRIPTOR_SIZE,
+    truncated: desc.byteLength < IMAGE_IMPORT_DESCRIPTOR_SIZE,
     allZero: !originalFirstThunk && !timeDateStamp && !forwarderChain && !nameRva && !firstThunk
   };
 };
@@ -168,12 +170,12 @@ const parseImportDirectoryWithThunkReader = async (
   if (start == null || start < 0 || start >= reader.size) {
     return { entries: imports, thunkEntrySize, warning: "Import directory RVA does not map to file data." };
   }
-  const availableDirSize = Math.max(0, Math.min(impDir.size, reader.size - start));
+  const availableDirSize = impDir.size;
   const maxDescriptors = Math.ceil(availableDirSize / IMAGE_IMPORT_DESCRIPTOR_SIZE);
   let descriptorTableTerminated = false;
   let descriptorScanStopped = false;
   for (let index = 0; index < maxDescriptors; index += 1) {
-    const descriptorRva = (impDir.rva + index * IMAGE_IMPORT_DESCRIPTOR_SIZE) >>> 0;
+    const descriptorRva = impDir.rva + index * IMAGE_IMPORT_DESCRIPTOR_SIZE;
     const offset = rvaToOff(descriptorRva);
     const descriptorSize = Math.min(
       IMAGE_IMPORT_DESCRIPTOR_SIZE,
@@ -185,7 +187,7 @@ const parseImportDirectoryWithThunkReader = async (
       descriptorScanStopped = true;
       break;
     }
-    const descriptor = await readImportDescriptor(reader, offset, descriptorSize, warnings);
+    const descriptor = await readImportDescriptor(reader, rvaToOff, descriptorRva, descriptorSize, warnings);
     if (descriptor.allZero) {
       descriptorTableTerminated = true;
       break;

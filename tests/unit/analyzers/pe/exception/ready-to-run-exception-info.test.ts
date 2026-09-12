@@ -14,6 +14,7 @@ import {
   writeExceptionClause,
   writeExceptionLookup
 } from "../../../../helpers/pe-ready-to-run-x86-fixture.js";
+import { createPeRvaFragments } from "../../../../helpers/pe-rva-fragments.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
 
 class ShortClauseReadMockFile extends MockFile {
@@ -149,4 +150,16 @@ void test("parseExceptionDirectory reports truncated ReadyToRun ExceptionInfo cl
 
   assert.ok(parsed);
   assert.ok(parsed.issues.some(issue => issue.includes("clause array is truncated")));
+});
+
+void test("ReadyToRun exception clauses follow split fields across file fragments", async () => {
+  const fixture = createReadyToRunX86Fixture();
+  const fragments = createPeRvaFragments(0, fixture.bytes, fixture.clauseArrayRva + 13);
+  const parsed = await parseExceptionDirectory(fragments.reader,
+    [{ name: "EXCEPTION", rva: fixture.runtimeFunctionRva, size: 16 }],
+    fragments.mapping, IMAGE_FILE_MACHINE_I386, fixture.readyToRun);
+  assert.equal(parsed?.exceptionClauseCount, 2);
+  assert.equal(parsed?.catchClauseCount, 1);
+  assert.equal(parsed?.finallyClauseCount, 1);
+  assert.deepEqual(parsed?.handlerRvas, [fixture.catchHandlerRva, fixture.finallyHandlerRva]);
 });

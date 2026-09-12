@@ -1,5 +1,6 @@
 "use strict";
 
+import { readMappedRvaPrefix } from "../../../rva-byte-reader.js";
 import type { FileRangeReader } from "../../../../file-range-reader.js";
 import type { AnalyzePeEntrypointDisassemblyOptions } from "../../types.js";
 import { MAX_RVA, RVA_EXCLUSIVE_LIMIT } from "../metadata.js";
@@ -145,9 +146,8 @@ const readImageValue = async (
   const offset = rva == null ? null : opts.rvaToOff(rva);
   const size = bits / 8;
   if (rva != null && offset == null && isZeroFilledRvaRange(opts, rva, size)) return 0n;
-  if (offset == null || !Number.isSafeInteger(offset) || offset < 0) return null;
-  if (offset > reader.size - size) return null;
-  const view = await reader.read(offset, size);
+  if (rva == null || offset == null) return null;
+  const view = await readMappedRvaPrefix(reader, rva, size, opts.rvaToOff);
   if (view.byteLength !== size) return null;
   return readLittleEndian(view);
 };

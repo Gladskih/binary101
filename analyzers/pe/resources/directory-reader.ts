@@ -56,10 +56,10 @@ const emptyDirectoryResult = (issues: string[]): ResourceDirectoryReadResult => 
 const readResourceDirectoryHeader = async (
   reader: FileRangeReader,
   resolver: ResourceSpanResolver,
-  offset: number,
   rel: number
 ): Promise<{ header: ResourceDirectoryHeader | null; issues: string[] }> => {
-  const view = await reader.read(offset, IMAGE_RESOURCE_DIRECTORY_SIZE);
+  const view = await resolver.readRelative((offset, size) => reader.read(offset, size),
+    rel, IMAGE_RESOURCE_DIRECTORY_SIZE);
   if (view.byteLength < IMAGE_RESOURCE_DIRECTORY_SIZE) {
     return {
       header: null,
@@ -191,7 +191,7 @@ export const readResourceDirectory = async (
 ): Promise<ResourceDirectoryReadResult> => {
   const resolved = resolveResourceDirectoryOffset(resolver, rel);
   if (resolved.offset == null) return emptyDirectoryResult([resolved.issue]);
-  const headerResult = await readResourceDirectoryHeader(reader, resolver, resolved.offset, rel);
+  const headerResult = await readResourceDirectoryHeader(reader, resolver, rel);
   if (!headerResult.header) return emptyDirectoryResult(headerResult.issues);
   const entriesResult = await readEntriesForDirectoryHeader(
     reader,

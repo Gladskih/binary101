@@ -11,6 +11,12 @@ const constantAliasRestrictedSyntaxRules = [
   }
 ];
 
+const peRvaArithmeticRule = {
+  selector: "BinaryExpression[operator='>>>'] > BinaryExpression.left[operator=/^[+-]$/]" +
+    ":has(Identifier[name=/[Rr][Vv][Aa]/])",
+  message: "Do not wrap computed PE RVAs. Validate the untruncated sum with the shared RVA reader."
+};
+
 const restrictedSyntaxRules = [
   {
     selector: "ExportAllDeclaration[source]",
@@ -238,6 +244,19 @@ export default [
       }
     },
     rules: sharedRules
+  },
+  {
+    files: ["analyzers/pe/**/*.ts"],
+    ignores: existingReExportFiles,
+    rules: {
+      "no-restricted-syntax": ["error", ...restrictedSyntaxRules, peRvaArithmeticRule]
+    }
+  },
+  {
+    files: existingReExportFiles.filter(file => file.startsWith("analyzers/pe/")),
+    rules: {
+      "no-restricted-syntax": ["error", ...constantAliasRestrictedSyntaxRules, peRvaArithmeticRule]
+    }
   },
   {
     ignores: [

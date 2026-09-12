@@ -96,9 +96,7 @@ const readReadyToRunX86RuntimeFunctions = async (
     issues
   );
   for (const span of spans) {
-    const spanView = await readRuntimeFunctionSpan(
-      reader,
-      span,
+    const spanView = await readRuntimeFunctionSpan(reader, span, rvaToOff,
       R2R_X86_RUNTIME_FUNCTION_ENTRY_SIZE,
       "Exception directory is truncated; some ReadyToRun x86 RuntimeFunction entries are missing.",
       issues

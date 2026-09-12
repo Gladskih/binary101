@@ -123,7 +123,7 @@ void test("buildResourceTree warns when a resource payload RVA lies outside the 
   assert.match((tree.issues || []).join(" "), /outside the declared \.rsrc RVA span/i);
 });
 
-void test("buildResourceTree warns when a resource payload maps outside the .rsrc file span", async () => {
+void test("buildResourceTree accepts a payload within the resource RVA span stored elsewhere in the file", async () => {
   const fixture = createLocalityFixture();
   const rootDirectory = fixture.allocateDirectoryTable(0, 1);
   const nameDirectory = fixture.allocateDirectoryTable(0, 1);
@@ -144,5 +144,5 @@ void test("buildResourceTree warns when a resource payload maps outside the .rsr
   );
   assert.ok(tree);
 
-  assert.match((tree.issues || []).join(" "), /maps outside the \.rsrc file span/i);
+  assert.deepEqual(tree.issues ?? [], []);
 });

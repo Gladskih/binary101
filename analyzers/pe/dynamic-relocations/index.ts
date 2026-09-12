@@ -1,5 +1,7 @@
 "use strict";
 
+import { isRvaRange } from "../rva-mapping.js";
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import {
   parseDynamicRelocationEntriesV132,
@@ -31,7 +33,7 @@ export type PeDynamicRelocations = {
   warnings?: string[];
 };
 
-const resolveDynamicRelocTableOffset = (
+const resolveDynamicRelocTableRva = (
   fileSize: number,
   sections: PeSection[],
   rvaToOff: RvaToOffset,
@@ -65,10 +67,8 @@ const resolveDynamicRelocTableOffset = (
           `DynamicRelocations: DynamicValueRelocTableSection=${sectionIndex} does not map to a section header.`
         );
       } else {
-        sectionOff = rvaToOff((section.virtualAddress + sectionOffset) >>> 0);
-        if (sectionOff == null && Number.isSafeInteger(section.pointerToRawData)) {
-          sectionOff = (section.pointerToRawData + sectionOffset) >>> 0;
-        }
+        sectionOff = isRvaRange(section.virtualAddress + sectionOffset, 1)
+          ? rvaToOff(section.virtualAddress + sectionOffset) : null;
       }
     }
   }
@@ -79,7 +79,7 @@ const resolveDynamicRelocTableOffset = (
       warnings.push(`DynamicRelocations: ${source} offset 0x${(candidate >>> 0).toString(16)} is not in file.`);
       return null;
     }
-    return candidate >>> 0;
+    return candidate;
   };
 
   const pointerCandidate = chooseInFileOffset(pointerOff, "DynamicValueRelocTable");
@@ -91,27 +91,33 @@ const resolveDynamicRelocTableOffset = (
     );
   }
 
-  return pointerCandidate ?? sectionCandidate;
+  if (pointerCandidate != null) return pointerRva;
+  if (sectionCandidate != null) return sections[sectionIndex - 1]!.virtualAddress + sectionOffset;
+  if (loadConfig.DynamicValueRelocTable !== 0n || sectionIndex > 0) {
+    warnings.push("DynamicRelocations: table address does not map to file data.");
+  }
+  return null;
 };
 
 const readDynamicRelocationTable = async (
   reader: FileRangeReader,
-  tableOffset: number,
+  tableRva: number,
+  rvaToOff: RvaToOffset,
   warnings: string[]
 ): Promise<{ version: number; dataSize: number; dataEnd: number; view: DataView }> => {
-  if (reader.size - tableOffset < DYNAMIC_RELOCATION_TABLE_HEADER_SIZE) {
+  const header = await readMappedRvaPrefix(reader, tableRva,
+    DYNAMIC_RELOCATION_TABLE_HEADER_SIZE, rvaToOff);
+  if (header.byteLength < DYNAMIC_RELOCATION_TABLE_HEADER_SIZE) {
     warnings.push("DynamicRelocations: truncated header.");
     return { version: 0, dataSize: 0, dataEnd: 0, view: new DataView(new ArrayBuffer(0)) };
   }
-
-  const header = await reader.read(tableOffset, DYNAMIC_RELOCATION_TABLE_HEADER_SIZE);
   const version = header.getUint32(0, true);
   const dataSize = header.getUint32(Uint32Array.BYTES_PER_ELEMENT, true);
   const readableSize = Math.min(
     DYNAMIC_RELOCATION_TABLE_HEADER_SIZE + dataSize,
-    Math.max(0, reader.size - tableOffset)
+    reader.size
   );
-  const view = await reader.read(tableOffset, readableSize);
+  const view = await readMappedRvaPrefix(reader, tableRva, readableSize, rvaToOff);
   const dataEnd = Math.min(view.byteLength, DYNAMIC_RELOCATION_TABLE_HEADER_SIZE + dataSize);
 
   if (dataEnd < DYNAMIC_RELOCATION_TABLE_HEADER_SIZE + dataSize) {
@@ -139,7 +145,7 @@ const parseDynamicRelocationsWithVariant = async (
   ) => PeDynamicRelocationEntry[]
 ): Promise<PeDynamicRelocations | null> => {
   const warnings: string[] = [];
-  const tableOffset = resolveDynamicRelocTableOffset(
+  const tableOffset = resolveDynamicRelocTableRva(
     reader.size,
     sections,
     rvaToOff,
@@ -147,11 +153,13 @@ const parseDynamicRelocationsWithVariant = async (
     loadConfig,
     warnings
   );
-  if (tableOffset == null) return null;
+  if (tableOffset == null) return warnings.length
+    ? { version: 0, dataSize: 0, entries: [], warnings } : null;
 
   const { version, dataSize, dataEnd, view } = await readDynamicRelocationTable(
     reader,
     tableOffset,
+    rvaToOff,
     warnings
   );
 

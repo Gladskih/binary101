@@ -1,7 +1,7 @@
 "use strict";
 
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
-import { PE_RVA_EXCLUSIVE_LIMIT } from "../layout/rva-limits.js";
 import type { RvaToOffset } from "../types.js";
 import type { PeApiStringEncoding } from "./types.js";
 import {
@@ -57,23 +57,6 @@ const decodeWideString = (bytes: Uint8Array): string | null => {
   }
 };
 
-const mappedContiguousChunkSize = (
-  reader: FileRangeReader,
-  rvaToOff: RvaToOffset,
-  startRva: number,
-  startOffset: number,
-  consumed: number,
-  unitSize: number
-): number => {
-  const rva = startRva + consumed;
-  if (rva > PE_RVA_EXCLUSIVE_LIMIT - unitSize) return 0;
-  const offset = rvaToOff(rva >>> 0);
-  if (offset == null || offset < 0 || offset !== startOffset + consumed) return 0;
-  if (offset >= reader.size) return 0;
-  const maxSize = Math.min(READ_CHUNK_BYTES, MAX_STRING_BYTES - consumed, reader.size - offset);
-  return Math.floor(maxSize / unitSize) * unitSize;
-};
-
 const findTerminatorOffset = (bytes: Uint8Array, unitSize: number): number | null => {
   const alignedLength = bytes.byteLength - (bytes.byteLength % unitSize);
   for (let offset = 0; offset < alignedLength; offset += unitSize) {
@@ -104,23 +87,15 @@ const readMappedBytes = async (
   if (startOffset == null || startOffset < 0 || startOffset >= reader.size) return null;
   const bytes: number[] = [];
   for (let consumed = 0; consumed < MAX_STRING_BYTES;) {
-    const size = mappedContiguousChunkSize(
-      reader,
-      rvaToOff,
-      startRva,
-      startOffset,
-      consumed,
-      unitSize
-    );
-    if (size <= 0) return null;
-    const view = await reader.read(startOffset + consumed, size);
-    if (view.byteLength < size) return null;
+    const size = Math.min(READ_CHUNK_BYTES, MAX_STRING_BYTES - consumed);
+    const view = await readMappedRvaPrefix(reader, startRva + consumed, size, rvaToOff);
     const chunk = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
     const terminatorOffset = findTerminatorOffset(chunk, unitSize);
     if (terminatorOffset != null) {
       appendBytes(bytes, chunk, terminatorOffset);
       return Uint8Array.from(bytes);
     }
+    if (view.byteLength < size) return null;
     appendBytes(bytes, chunk, size);
     consumed += size;
   }

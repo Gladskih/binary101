@@ -42,6 +42,7 @@ const createReader = (bytes: Uint8Array): FileRangeReader & { readOffsets: numbe
 const createResolver = (
   resolveRelOffset: (rel: number, len: number) => number | null = rel => rel
 ): ResourceSpanResolver => ({
+  readRelative: (view, rel, length) => view(rel, length),
   describeRelOffsetFailure: rel => `failure:${rel.toString(16)}`,
   formatRelOffset: rel => `0x${rel.toString(16)}`,
   resolveRvaOffset: rva => rva,

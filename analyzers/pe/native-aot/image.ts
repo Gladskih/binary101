@@ -1,5 +1,6 @@
 "use strict";
 
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import { COFF_SECTION_CHARACTERISTICS } from "../../coff/layout.js";
 import { IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_I386 } from "../../coff/machine.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
@@ -98,7 +99,7 @@ export const createPeNativeAotImage = (
     if (!isDataRange(rva, size, alignment)) return null;
     const offset = core.rvaToOff(rva);
     if (offset == null || offset < 0 || offset + size > reader.size) return null;
-    const view = await reader.read(offset, size);
+    const view = await readMappedRvaPrefix(reader, rva, size, core.rvaToOff);
     return view.byteLength === size ? view : null;
   };
   const readPointerValue = async (rva: number): Promise<bigint | null> => {

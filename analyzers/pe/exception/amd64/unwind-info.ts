@@ -1,5 +1,6 @@
 "use strict";
 
+import { createRvaRangeReader } from "../../rva-range-reader.js";
 import type { FileRangeReader } from "../../../file-range-reader.js";
 import type { RvaToOffset } from "../../types.js";
 import {
@@ -174,20 +175,23 @@ export const scanAmd64UnwindInfos = async (
     const unwindInfoRva = unwindQueue[unwindQueueIndex]!;
     unwindQueueIndex += 1;
     const unwindOffset = getUnwindOffset(unwindInfoRva);
-    const header = unwindOffset == null ? null : await readUnwindHeader(reader, unwindOffset);
+    // UNWIND_INFO: BYTE CountOfCodes bounds slots to 255; trailing data is at most 12 bytes.
+    // https://learn.microsoft.com/en-us/cpp/build/exception-handling-x64#struct-unwind_info
+    const unwindReader = createRvaRangeReader(reader, rvaToOff, unwindInfoRva, 528);
+    const header = unwindOffset == null ? null : await readUnwindHeader(unwindReader, 0);
     if (!header) {
       state.unreadableUnwindCount += 1;
       continue;
     }
     recordVersion(header.version, state);
-    await recordUnwindCodeAnalysis(reader, header, state);
+    await recordUnwindCodeAnalysis(unwindReader, header, state);
     if ((header.flags & UNW_FLAG_CHAININFO) !== 0) {
       state.chainedUnwindInfoCount += 1;
       if ((header.flags & (UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER)) !== 0) {
         issues.push("UNWIND_INFO sets CHAININFO together with EHANDLER/UHANDLER.");
       }
       const chainedRva = await readTrailingUint32(
-        reader,
+        unwindReader,
         header.offset + alignTo4(UNWIND_INFO_HEADER_SIZE + header.countOfCodes * 2) + 8,
         "UNWIND_INFO declares CHAININFO, but the trailing chained RUNTIME_FUNCTION is truncated.",
         issues
@@ -198,7 +202,7 @@ export const scanAmd64UnwindInfos = async (
     if ((header.flags & (UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER)) === 0) continue;
     state.handlerUnwindInfoCount += 1;
     const handlerRva = await readTrailingUint32(
-      reader,
+      unwindReader,
       header.offset + alignTo4(UNWIND_INFO_HEADER_SIZE + header.countOfCodes * 2),
       "UNWIND_INFO declares EHANDLER/UHANDLER, but the trailing handler RVA is truncated.",
       issues

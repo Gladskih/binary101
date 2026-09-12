@@ -5,6 +5,7 @@ import type { ResourceDetailGroup, ResourceLangWithPreview } from "./types.js";
 export interface ResourceLeafRecord {
   lang: number | null;
   dataFileOffset: number | null;
+  dataRVA?: number;
   size: number;
 }
 
@@ -25,6 +26,7 @@ export const buildResourceLeafIndex = (
       records.push({
         lang: langEntry.lang ?? null,
         dataFileOffset: langEntry.dataFileOffset,
+        dataRVA: langEntry.dataRVA,
         size: langEntry.size
       });
     }

@@ -1,10 +1,12 @@
 "use strict";
 
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
+import { mappedRvaSize } from "../rva-mapping.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
 
 export interface RuntimeFunctionSpan {
-  fileOffset: number;
+  rva: number;
   entryCount: number;
 }
 
@@ -18,19 +20,14 @@ export const collectRuntimeFunctionSpans = (
   issues: string[]
 ): RuntimeFunctionSpan[] => {
   const spans: RuntimeFunctionSpan[] = [];
-  for (let index = 0; index < declaredCount; index += 1) {
-    const entryRva = (directoryRva + index * entrySize) >>> 0;
-    const entryOff = rvaToOff(entryRva);
-    if (entryOff == null || entryOff < 0 || entryOff + entrySize > fileSize) {
-      issues.push(truncatedIssue);
-      break;
-    }
-    const previousSpan = spans[spans.length - 1];
-    if (previousSpan && entryOff === previousSpan.fileOffset + previousSpan.entryCount * entrySize) {
-      previousSpan.entryCount += 1;
-      continue;
-    }
-    spans.push({ fileOffset: entryOff, entryCount: 1 });
+  const readableBytes = mappedRvaSize(rvaToOff, directoryRva, declaredCount * entrySize, fileSize);
+  const count = Math.floor(readableBytes / entrySize);
+  if (count < declaredCount) issues.push(truncatedIssue);
+  for (let index = 0; index < count;) {
+    // Match the shared reader window; no entire-directory allocation for large .pdata tables.
+    const entryCount = Math.min(count - index, Math.max(1, Math.floor(65536 / entrySize)));
+    spans.push({ rva: directoryRva + index * entrySize, entryCount });
+    index += entryCount;
   }
   return spans;
 };
@@ -38,12 +35,13 @@ export const collectRuntimeFunctionSpans = (
 export const readRuntimeFunctionSpan = async (
   reader: FileRangeReader,
   span: RuntimeFunctionSpan,
+  rvaToOff: RvaToOffset,
   entrySize: number,
   truncatedIssue: string,
   issues: string[]
 ): Promise<DataView | null> => {
   const byteLength = span.entryCount * entrySize;
-  const view = await reader.read(span.fileOffset, byteLength);
+  const view = await readMappedRvaPrefix(reader, span.rva, byteLength, rvaToOff);
   const availableEntries = Math.floor(view.byteLength / entrySize);
   if (availableEntries < span.entryCount) {
     issues.push(truncatedIssue);

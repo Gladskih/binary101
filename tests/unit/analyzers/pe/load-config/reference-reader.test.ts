@@ -244,14 +244,14 @@ void test("mappedRawSpan rejects every header and section boundary failure mode"
   const rawEnd = mappedRawSpan(0x100, [createTestSection(0x1000, 0x80, 0x40)], 0, () => 0x70, 0x1050);
   const exactVirtualEnd = mappedRawSpan(0x100, [createTestSection(0x1000, 0x20, 0x40)], 0, () => 0x40, 0x1020);
   const exactRawEnd = mappedRawSpan(0x100, [createTestSection(0x1000, 0x80, 0x40)], 0, () => 0x60, 0x1040);
-  const rawFallback = mappedRawSpan(0x100, [createTestSection(0x1000, 0, 0x40)], 0, () => 0x30, 0x1010);
-  const fileClamp = mappedRawSpan(0x30, [createTestSection(0x1000, 0x40, 0x40)], 0, () => 0x28, 0x1008);
+  const rawFallback = mappedRawSpan(0x100, [createTestSection(0x1000, 0, 0x40)], 0, rva => 0x30 + rva - 0x1010, 0x1010);
+  const fileClamp = mappedRawSpan(0x30, [createTestSection(0x1000, 0x40, 0x40)], 0, rva => 0x28 + rva - 0x1008, 0x1008);
   const shiftedHeader = mappedRawSpan(0x100, [], 0x80, () => 1, 0);
   const headerEnd = mappedRawSpan(0x100, [], 0x80, value => value, 0x80);
   const negativeOffset = mappedRawSpan(0x100, [], 0x80, () => -1, 0);
   const nonIntegerOffset = mappedRawSpan(0x100, [], 0x80, () => Number.NaN, 0);
   const endOffset = mappedRawSpan(0x100, [], 0x80, () => 0x100, 0);
-  const zeroOffset = mappedRawSpan(0x100, [], 0x80, () => 0, 0);
+  const zeroOffset = mappedRawSpan(0x100, [], 0x80, rva => rva, 0);
   const negativeSectionOffset = mappedRawSpan(
     0x100, [createTestSection(0x1000, 0x20, 0x20)], 0, () => -1, 0x1000
   );

@@ -178,7 +178,7 @@ void test("parseDelayImports warns when an import-by-name string stops mapping b
     if (rva >= intRva && rva < intRva + IMAGE_THUNK_DATA32_SIZE * 2) {
       return thunkOffset + (rva - intRva);
     }
-    if (rva === hintNameRva || rva === hintNameRva + 2 || rva === hintNameRva + 3) {
+    if (rva >= hintNameRva && rva < hintNameRva + 4) {
       // Hint bytes map, and only the first two name bytes map. The trailing NUL does not.
       return hintNameOffset + (rva - hintNameRva);
     }

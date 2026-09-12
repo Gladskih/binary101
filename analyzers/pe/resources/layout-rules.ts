@@ -1,5 +1,7 @@
 "use strict";
 
+import { mappedRvaSize } from "../rva-mapping.js";
+import type { RvaToOffset } from "../types.js";
 import {
   IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE,
   IMAGE_RESOURCE_DIRECTORY_SIZE
@@ -111,8 +113,7 @@ const getDataPayloadSpanIssues = (
   resourceDataEntry: ResourceDataEntryLayout,
   resourceRva: number,
   resourceSize: number,
-  resourceBase: number,
-  resourceLimitEnd: number,
+  rvaToOff: RvaToOffset,
   fileSize: number
 ): string[] => {
   if (resourceDataEntry.size === 0) return [];
@@ -135,22 +136,14 @@ const getDataPayloadSpanIssues = (
   }
   if (
     resourceDataEntry.dataFileOffset < 0 ||
-    resourceDataEntry.dataFileOffset + resourceDataEntry.size > fileSize
+    mappedRvaSize(rvaToOff, resourceDataEntry.dataRva, resourceDataEntry.size, fileSize) <
+      resourceDataEntry.size
   ) {
     return [
       ...issues,
       `Resource data payload at RVA ${formatRelOffset(resourceDataEntry.dataRva)} is ` +
-        "truncated by end of file."
+        "truncated or not fully mapped to file data."
     ];
-  }
-  if (
-    resourceDataEntry.dataFileOffset < resourceBase ||
-    resourceDataEntry.dataFileOffset + resourceDataEntry.size > resourceLimitEnd
-  ) {
-    issues.push(
-      `Resource data payload at RVA ${formatRelOffset(resourceDataEntry.dataRva)} maps ` +
-        "outside the .rsrc file span."
-    );
   }
   return issues;
 };
@@ -180,10 +173,9 @@ export const validateResourceLayout = (
   resourceSubdirectoryTargets: number[],
   resourceRva: number,
   resourceSize: number,
-  resourceBase: number,
+  rvaToOff: RvaToOffset,
   fileSize: number
 ): string[] => {
-  const resourceLimitEnd = resourceBase + resourceSize;
   const firstDataEntryStart = resourceDataEntries.length
     ? Math.min(...resourceDataEntries.map(entry => entry.start))
     : Number.POSITIVE_INFINITY;
@@ -204,8 +196,7 @@ export const validateResourceLayout = (
       resourceDataEntry,
       resourceRva,
       resourceSize,
-      resourceBase,
-      resourceLimitEnd,
+      rvaToOff,
       fileSize
     )),
     ...getDataPayloadOverlapIssues(resourceDataEntries)

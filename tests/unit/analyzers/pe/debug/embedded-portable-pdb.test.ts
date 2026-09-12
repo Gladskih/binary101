@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createPeRvaFragments } from "../../../../helpers/pe-rva-fragments.js";
 import { parseEmbeddedPortablePdbInfo } from "../../../../../analyzers/pe/debug/embedded-portable-pdb.js";
 import { createExtraDebugPayloadSubject, identityRvaToOff, writeU32 } from "../../../../fixtures/pe-debug-extra-payloads.js";
 
@@ -62,4 +63,13 @@ void test("parseEmbeddedPortablePdbInfo reports truncated declared payloads", as
 
   assert.deepEqual(result, { signature: "MPDB", uncompressedSize: 4, compressedSize: 0 });
   assert.match(warnings.join(" | "), /shorter than its declared SizeOfData/i);
+});
+
+void test("Embedded Portable PDB headers follow fragmented RVA mappings", async () => {
+  const fixture = createPeRvaFragments(0x1000, createPayload(MPDB_SIGNATURE, 4, [0x78, 0x9c]), 5);
+  const warnings: string[] = [];
+  const result = await parseEmbeddedPortablePdbInfo(fixture.reader, fixture.reader.size,
+    fixture.mapping, 0x1000, 0, 10, message => warnings.push(message));
+  assert.deepEqual(result, { signature: "MPDB", uncompressedSize: 4, compressedSize: 2 });
+  assert.deepEqual(warnings, []);
 });

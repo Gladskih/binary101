@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readMappedRvaPrefix } from "../../../../analyzers/pe/rva-byte-reader.js";
+import { readMappedRvaPrefix, readMappedRvaBytes } from "../../../../analyzers/pe/rva-byte-reader.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 
 void test("readMappedRvaPrefix joins adjacent RVAs with noncontiguous raw offsets", async () => {
@@ -77,4 +77,23 @@ void test("readMappedRvaPrefix stops at the PE RVA limit and short file reads", 
   assert.deepEqual(Array.from(new Uint8Array(atLimit.buffer)), [1, 2]);
   assert.deepEqual(Array.from(new Uint8Array(short.buffer)), [1]);
   assert.equal(readCount, 1);
+});
+
+void test("one mapped fragment retains the range reader view and its nonzero byte offset", async () => {
+  const bytes = Uint8Array.of(99, 1, 2, 3, 99);
+  const original = new DataView(bytes.buffer, 1, 3);
+  const reader = { size: 3, read: async () => original };
+  const result = await readMappedRvaPrefix(reader, 0, 3, rva => rva);
+  assert.strictEqual(result, original);
+  assert.equal(result.byteOffset, 1);
+  assert.equal(result.byteLength, 3);
+});
+
+void test("mapped byte arrays expose only the view's range", async () => {
+  const bytes = Uint8Array.of(99, 1, 2, 3, 99);
+  const reader = {
+    size: 3, read: async () => new DataView(bytes.buffer, 1, 3),
+    readBytes: async () => bytes.subarray(1, 4)
+  };
+  assert.deepEqual([...await readMappedRvaBytes(reader, 0, 3, rva => rva)], [1, 2, 3]);
 });

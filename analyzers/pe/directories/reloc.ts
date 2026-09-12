@@ -1,5 +1,6 @@
 "use strict";
 
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 
@@ -29,156 +30,84 @@ export interface PeBaseRelocationResult {
   warnings?: string[];
 }
 
-type RelocationEntrySpan = {
-  firstEntryIndex: number;
-  fileOffset: number;
-  wordCount: number;
-};
-
-type RelocationEntrySpanView = RelocationEntrySpan & {
-  view: DataView;
-};
-
-const collectRelocationEntrySpans = (
-  availableEntries: number,
-  blockRva: number,
-  rvaToOff: RvaToOffset,
-  fileSize: number,
+const parseRelocationEntries = async (
+  reader: FileRangeReader, rvaToOff: RvaToOffset, rva: number, wordCount: number,
   addWarning: (message: string) => void
-): RelocationEntrySpan[] | null => {
-  const spans: RelocationEntrySpan[] = [];
-  for (let entryIndex = 0; entryIndex < availableEntries; entryIndex += 1) {
-    // Chromium profiling showed that reading each WORD relocation entry
-    // separately made `.reloc` alone issue 132,746 tiny
-    // File.slice().arrayBuffer() calls. Keep per-entry RVA validation, but
-    // collapse contiguous file offsets into spans and read each span once.
-    const entryRva =
-      (blockRva +
-        IMAGE_BASE_RELOCATION_HEADER_SIZE +
-        entryIndex * IMAGE_BASE_RELOCATION_ENTRY_SIZE) >>>
-      0;
-    const entryOffset = rvaToOff(entryRva);
-    if (entryOffset == null || entryOffset < 0 || entryOffset + IMAGE_BASE_RELOCATION_ENTRY_SIZE > fileSize) {
-      addWarning("Base relocation entries are truncated or no longer map to file data.");
-      return null;
-    }
-    const previousSpan = spans[spans.length - 1];
-    if (
-      previousSpan &&
-      entryOffset === previousSpan.fileOffset + previousSpan.wordCount * IMAGE_BASE_RELOCATION_ENTRY_SIZE
-    ) {
-      previousSpan.wordCount += 1;
-      continue;
-    }
-    spans.push({
-      firstEntryIndex: entryIndex,
-      fileOffset: entryOffset,
-      wordCount: 1
-    });
-  }
-  return spans;
-};
-
-const readRelocationEntrySpans = async (
-  reader: FileRangeReader,
-  spans: RelocationEntrySpan[],
-  addWarning: (message: string) => void
-): Promise<RelocationEntrySpanView[] | null> => {
-  const spanViews: RelocationEntrySpanView[] = [];
-  for (const span of spans) {
-    const byteLength = span.wordCount * IMAGE_BASE_RELOCATION_ENTRY_SIZE;
-    const view = await reader.read(span.fileOffset, byteLength);
-    if (view.byteLength < byteLength) {
-      addWarning("Base relocation entry is truncated.");
-      return null;
-    }
-    spanViews.push({ ...span, view });
-  }
-  return spanViews;
-};
-
-const parseRelocationEntries = (
-  availableEntries: number,
-  spanViews: RelocationEntrySpanView[],
-  addWarning: (message: string) => void
-): PeBaseRelocationEntry[] => {
+): Promise<PeBaseRelocationEntry[]> => {
   const entries: PeBaseRelocationEntry[] = [];
-  let spanIndex = 0;
-  let spanView = spanViews[spanIndex];
-  for (let entryIndex = 0; entryIndex < availableEntries;) {
-    while (
-      spanView &&
-      entryIndex >= spanView.firstEntryIndex + spanView.wordCount
-    ) {
-      spanIndex += 1;
-      spanView = spanViews[spanIndex];
+  let skipPayload = false;
+  for (let index = 0; index < wordCount;) {
+    // Bound temporary memory to the shared reader's 64 KiB window.
+    const requestedWords = Math.min(wordCount - index, 32768);
+    const view = await readMappedRvaPrefix(reader, rva + index * 2, requestedWords * 2, rvaToOff);
+    for (let offset = 0; offset + 2 <= view.byteLength; offset += 2) {
+      if (skipPayload) { skipPayload = false; continue; }
+      const raw = view.getUint16(offset, true);
+      const type = raw >>> 12;
+      if (type === IMAGE_REL_BASED_RESERVED) addWarning("Base relocation entry uses reserved type 6.");
+      entries.push({ type, offset: raw & 0xfff });
+      skipPayload = type === IMAGE_REL_BASED_HIGHADJ;
     }
-    if (!spanView) {
+    if (view.byteLength < requestedWords * 2) {
       addWarning("Base relocation entries are truncated or no longer map to file data.");
       break;
     }
-    const raw = spanView.view.getUint16(
-      (entryIndex - spanView.firstEntryIndex) * IMAGE_BASE_RELOCATION_ENTRY_SIZE,
-      true
-    );
-    const type = (raw >> 12) & 0xf;
-    if (type === IMAGE_REL_BASED_RESERVED) {
-      addWarning("Base relocation entry uses reserved type 6.");
-    }
-    entries.push({ type, offset: raw & 0xfff });
-    if (type === IMAGE_REL_BASED_HIGHADJ) {
-      if (entryIndex + 1 >= availableEntries) {
-        addWarning("Base relocation HIGHADJ entry is missing its second WORD payload.");
-      }
-      entryIndex += 2;
-      continue;
-    }
-    entryIndex += 1;
+    index += requestedWords;
   }
+  if (skipPayload) addWarning("Base relocation HIGHADJ entry is missing its second WORD payload.");
   return entries;
 };
 
+const emptyRelocations = (warning: string): { result: PeBaseRelocationResult } => ({
+  result: { blocks: [], totalEntries: 0, warnings: [warning] }
+});
+
 const validateBaseRelocationDirectory = (
-  reader: FileRangeReader,
-  dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset
-): { dir: PeDataDirectory; base: number } | { result: {
-  blocks: [];
-  totalEntries: 0;
-  warnings?: string[];
-} | null } => {
-  const dir = dataDirs.find(d => d.name === "BASERELOC");
+  reader: FileRangeReader, dataDirs: PeDataDirectory[], rvaToOff: RvaToOffset
+): { dir: PeDataDirectory } | { result: PeBaseRelocationResult | null } => {
+  const dir = dataDirs.find(directory => directory.name === "BASERELOC");
   if (!dir || (dir.rva === 0 && dir.size === 0)) return { result: null };
   if (dir.rva === 0) {
-    return { result: {
-      blocks: [],
-      totalEntries: 0,
-      warnings: ["Base relocation directory has a non-zero size but RVA is 0."]
-    } };
+    return emptyRelocations("Base relocation directory has a non-zero size but RVA is 0.");
   }
   if (dir.size < IMAGE_BASE_RELOCATION_HEADER_SIZE) {
-    return { result: {
-      blocks: [],
-      totalEntries: 0,
-      warnings: ["Base relocation directory is smaller than the 8-byte IMAGE_BASE_RELOCATION header."]
-    } };
+    return emptyRelocations("Base relocation directory is smaller than the 8-byte IMAGE_BASE_RELOCATION header.");
   }
   const base = rvaToOff(dir.rva);
-  if (base == null) {
-    return { result: {
-      blocks: [],
-      totalEntries: 0,
-      warnings: ["Base relocation directory RVA does not map to file data."]
-    } };
-  }
+  if (base == null) return emptyRelocations("Base relocation directory RVA does not map to file data.");
   if (base < 0 || base >= reader.size) {
-    return { result: {
-      blocks: [],
-      totalEntries: 0,
-      warnings: ["Base relocation directory starts outside file data."]
-    } };
+    return emptyRelocations("Base relocation directory starts outside file data.");
   }
-  return { dir, base };
+  return { dir };
+};
+
+const readRelocationHeader = async (
+  reader: FileRangeReader, rvaToOff: RvaToOffset, blockRva: number,
+  addWarning: (message: string) => void
+): Promise<{ pageRva: number; blockSize: number } | null> => {
+  if (rvaToOff(blockRva) == null) {
+    addWarning("Base relocation block RVA does not map to file data.");
+    return null;
+  }
+  const view = await readMappedRvaPrefix(reader, blockRva, IMAGE_BASE_RELOCATION_HEADER_SIZE, rvaToOff);
+  if (view.byteLength < IMAGE_BASE_RELOCATION_HEADER_SIZE) {
+    addWarning("Base relocation block header is truncated.");
+    return null;
+  }
+  const pageRva = view.getUint32(0, true);
+  const blockSize = view.getUint32(4, true);
+  if ((pageRva & (BASE_RELOCATION_PAGE_SIZE - 1)) !== 0) {
+    addWarning("Base relocation PageRVA is not aligned to a 4 KiB page.");
+  }
+  if (!blockSize) {
+    addWarning("Base relocation block size is 0, so parsing stops at an invalid terminator.");
+    return null;
+  }
+  if (blockSize < IMAGE_BASE_RELOCATION_HEADER_SIZE) {
+    addWarning("Base relocation block size is smaller than the 8-byte IMAGE_BASE_RELOCATION header.");
+    return null;
+  }
+  return { pageRva, blockSize };
 };
 
 const parseBaseRelocationBlock = async (
@@ -192,30 +121,10 @@ const parseBaseRelocationBlock = async (
   nextRel: number;
   stop: boolean;
 }> => {
-  const blockRva = (dir.rva + rel) >>> 0;
-  const blockOff = rvaToOff(blockRva >>> 0);
-  if (blockOff == null) {
-    addWarning("Base relocation block RVA does not map to file data.");
-    return { block: null, nextRel: rel, stop: true };
-  }
-  const dv = await reader.read(blockOff, IMAGE_BASE_RELOCATION_HEADER_SIZE);
-  if (dv.byteLength < IMAGE_BASE_RELOCATION_HEADER_SIZE) {
-    addWarning("Base relocation block header is truncated.");
-    return { block: null, nextRel: rel, stop: true };
-  }
-  const pageRva = dv.getUint32(0, true);
-  const blockSize = dv.getUint32(4, true);
-  if ((pageRva & (BASE_RELOCATION_PAGE_SIZE - 1)) !== 0) {
-    addWarning("Base relocation PageRVA is not aligned to a 4 KiB page.");
-  }
-  if (!blockSize) {
-    addWarning("Base relocation block size is 0, so parsing stops at an invalid terminator.");
-    return { block: null, nextRel: rel, stop: true };
-  }
-  if (blockSize < IMAGE_BASE_RELOCATION_HEADER_SIZE) {
-    addWarning("Base relocation block size is smaller than the 8-byte IMAGE_BASE_RELOCATION header.");
-    return { block: null, nextRel: rel, stop: true };
-  }
+  const blockRva = dir.rva + rel;
+  const header = await readRelocationHeader(reader, rvaToOff, blockRva, addWarning);
+  if (!header) return { block: null, nextRel: rel, stop: true };
+  const { pageRva, blockSize } = header;
   if (blockSize > dir.size - rel) {
     addWarning("Base relocation block is truncated by the declared relocation directory size.");
   }
@@ -224,9 +133,8 @@ const parseBaseRelocationBlock = async (
     Math.max(0, availableBlockBytes - IMAGE_BASE_RELOCATION_HEADER_SIZE) /
       IMAGE_BASE_RELOCATION_ENTRY_SIZE
   );
-  const entrySpans = collectRelocationEntrySpans(availableEntries, blockRva, rvaToOff, reader.size, addWarning);
-  const spanViews = entrySpans ? await readRelocationEntrySpans(reader, entrySpans, addWarning) : null;
-  const entries = spanViews ? parseRelocationEntries(availableEntries, spanViews, addWarning) : [];
+  const entries = await parseRelocationEntries(reader, rvaToOff,
+    blockRva + IMAGE_BASE_RELOCATION_HEADER_SIZE, availableEntries, addWarning);
   const nextRel = rel + blockSize;
   return {
     block: { pageRva, size: blockSize, count: entries.length, entries },

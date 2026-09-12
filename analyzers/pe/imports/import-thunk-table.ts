@@ -1,5 +1,6 @@
 "use strict";
 
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import { readMappedNullTerminatedAsciiString } from "../strings/mapped-ascii-string.js";
 import type { RvaToOffset } from "../types.js";
@@ -45,7 +46,7 @@ const readImportByName = async (
     addWarning("Import hint/name RVA does not map to file data.");
     return { name: "<bad RVA>" };
   }
-  const hintView = await reader.read(hintNameOffset, IMAGE_IMPORT_BY_NAME_HINT_SIZE);
+  const hintView = await readMappedRvaPrefix(reader, hintNameRva, IMAGE_IMPORT_BY_NAME_HINT_SIZE, rvaToOff);
   if (hintView.byteLength < IMAGE_IMPORT_BY_NAME_HINT_SIZE) {
     addWarning("Import hint/name table truncated.");
     return { name: "" };
@@ -55,7 +56,7 @@ const readImportByName = async (
     reader,
     fileSize,
     rvaToOff,
-    (hintNameRva + IMAGE_IMPORT_BY_NAME_HINT_SIZE) >>> 0,
+    hintNameRva + IMAGE_IMPORT_BY_NAME_HINT_SIZE,
     fileSize
   );
   if (hintName && !hintName.terminated) addWarning("Import name string truncated.");
@@ -74,12 +75,12 @@ export const readImportThunkFunctions32: ReadImportThunkFunctions = async (
   const functions: PeImportFunction[] = [];
   for (let thunkIndex = 0; thunkIndex < maxThunkEntries(IMAGE_THUNK_DATA32_SIZE); thunkIndex += 1) {
     const thunkEntryRva = thunkRva + thunkIndex * IMAGE_THUNK_DATA32_SIZE;
-    const thunkEntryOffset = rvaToOff(thunkEntryRva >>> 0);
+    const thunkEntryOffset = rvaToOff(thunkEntryRva);
     if (!isReadableOffset(thunkEntryOffset)) {
       addWarning("Import thunk RVA does not map to file data.");
       break;
     }
-    const view = await reader.read(thunkEntryOffset, IMAGE_THUNK_DATA32_SIZE);
+    const view = await readMappedRvaPrefix(reader, thunkEntryRva, IMAGE_THUNK_DATA32_SIZE, rvaToOff);
     if (view.byteLength < IMAGE_THUNK_DATA32_SIZE) {
       addWarning("Import thunks truncated (32-bit).");
       break;
@@ -112,12 +113,12 @@ export const readImportThunkFunctions64: ReadImportThunkFunctions = async (
   const functions: PeImportFunction[] = [];
   for (let thunkIndex = 0; thunkIndex < maxThunkEntries(IMAGE_THUNK_DATA64_SIZE); thunkIndex += 1) {
     const thunkEntryRva = thunkRva + thunkIndex * IMAGE_THUNK_DATA64_SIZE;
-    const thunkEntryOffset = rvaToOff(thunkEntryRva >>> 0);
+    const thunkEntryOffset = rvaToOff(thunkEntryRva);
     if (!isReadableOffset(thunkEntryOffset)) {
       addWarning("Import thunk RVA does not map to file data.");
       break;
     }
-    const view = await reader.read(thunkEntryOffset, IMAGE_THUNK_DATA64_SIZE);
+    const view = await readMappedRvaPrefix(reader, thunkEntryRva, IMAGE_THUNK_DATA64_SIZE, rvaToOff);
     if (view.byteLength < IMAGE_THUNK_DATA64_SIZE) {
       addWarning("Import thunks truncated (64-bit).");
       break;

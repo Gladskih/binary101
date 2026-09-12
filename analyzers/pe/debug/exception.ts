@@ -29,7 +29,7 @@ export const parseExceptionDebugInfo = async (
     return null;
   }
   const debugPayloadRvaToOff = (rva: number): number | null => {
-    if (rva >= addressOfRawDataRva && rva < addressOfRawDataRva + dataSize) {
+    if (pointerToRawDataOff && rva >= addressOfRawDataRva && rva < addressOfRawDataRva + dataSize) {
       return payloadOffset + rva - addressOfRawDataRva;
     }
     return rvaToOff(rva);

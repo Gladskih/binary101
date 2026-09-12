@@ -1,8 +1,10 @@
 "use strict";
 
+import { mappedRvaSize } from "../rva-mapping.js";
+import { createRvaRangeReader } from "../rva-range-reader.js";
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
-
 import {
   buildCor20Issues,
   COR20_HEADER_MIN_BYTES,
@@ -86,8 +88,8 @@ const addOptionalDirIssues = (
     issues.push(`${name} location is outside the file.`);
     return;
   }
-  if (off + size > fileSize) {
-    issues.push(`${name} data is truncated; spills past end of file.`);
+  if (mappedRvaSize(rvaToOff, rva, size, fileSize) < size) {
+    issues.push(`${name} data is truncated or not fully mapped to file data.`);
   }
 };
 
@@ -139,7 +141,10 @@ const attachClrMetadata = async (
     issues.push("Metadata RVA could not be mapped to a file offset.");
     return;
   }
-  const meta = await parseClrMetadataRoot(reader, metaOffset, clr.MetaDataSize, issues);
+  const meta = await parseClrMetadataRoot(
+    createRvaRangeReader(reader, rvaToOff, clr.MetaDataRVA, clr.MetaDataSize),
+    0, clr.MetaDataSize, issues
+  );
   if (meta) clr.meta = meta;
 };
 
@@ -187,11 +192,11 @@ export async function parseClrDirectory(
     issues.push("CLR directory location is outside the file.");
     return createEmptyClrHeader(issues);
   }
-  const availableSize = Math.min(dir.size, Math.max(0, fileSize - base));
+  const header = await readMappedRvaPrefix(reader, dir.rva,
+    Math.min(dir.size, COR20_HEADER_SIZE_BYTES), rvaToOff);
+  const availableSize = header.byteLength;
   issues.push(...buildCor20Issues(dir.size, availableSize));
-  const clr = readCor20Header(
-    await reader.read(base, Math.min(availableSize, COR20_HEADER_SIZE_BYTES))
-  );
+  const clr = readCor20Header(header);
   validateCor20Header(clr, dir.size, issues);
   validateEntryPointToken(clr, issues);
   await attachClrMetadata(reader, rvaToOff, clr, issues);

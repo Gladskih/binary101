@@ -1,5 +1,6 @@
 "use strict";
 
+import { createRvaRangeReader } from "../rva-range-reader.js";
 import { readAsciiString } from "../../../binary-utils.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
@@ -95,19 +96,21 @@ export async function parseBoundImports(
   if (base < 0 || base >= reader.size) {
     return { entries: [], warning: "Bound import directory starts outside file data." };
   }
-  const availableDirSize = Math.max(0, Math.min(dir.size, reader.size - base));
+  const directoryReader = createRvaRangeReader(reader, rvaToOff, dir.rva, dir.size);
+  const directoryStart = 0;
+  const availableDirSize = directoryReader.size;
   if (availableDirSize < IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE) {
     return {
       entries: [],
       warning: "Bound import directory is smaller than one descriptor; file may be truncated."
     };
   }
-  const end = base + availableDirSize;
+  const end = directoryStart + availableDirSize;
   const entries: PeBoundImportEntry[] = [];
   const warnings = new Set<string>();
-  let off = base;
+  let off = directoryStart;
   while (off + IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE <= end) {
-    const record = await readBoundImportRecord(reader, off);
+    const record = await readBoundImportRecord(directoryReader, off);
     if (!record) {
       warnings.add("Bound import descriptor truncated.");
       break;
@@ -129,7 +132,7 @@ export async function parseBoundImports(
     for (let forwarderIndex = 0; forwarderIndex < readableForwarderRefCount; forwarderIndex += 1) {
       const forwarderOffset =
         off + IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE + forwarderIndex * IMAGE_BOUND_IMPORT_DESCRIPTOR_SIZE;
-      const forwarderRef = await readBoundImportRecord(reader, forwarderOffset);
+      const forwarderRef = await readBoundImportRecord(directoryReader, forwarderOffset);
       if (!forwarderRef) {
         warnings.add("Bound import forwarder ref truncated.");
         break;
@@ -137,9 +140,9 @@ export async function parseBoundImports(
       forwarderRefs.push({
         name: forwarderRef.OffsetModuleName
           ? await readBoundImportName(
-              reader,
-              base + forwarderRef.OffsetModuleName,
-              base,
+              directoryReader,
+              directoryStart + forwarderRef.OffsetModuleName,
+              directoryStart,
               end,
               warnings
             )
@@ -149,7 +152,7 @@ export async function parseBoundImports(
     }
     entries.push({
       name: OffsetModuleName
-        ? await readBoundImportName(reader, base + OffsetModuleName, base, end, warnings)
+        ? await readBoundImportName(directoryReader, directoryStart + OffsetModuleName, directoryStart, end, warnings)
         : "",
       TimeDateStamp,
       NumberOfModuleForwarderRefs,

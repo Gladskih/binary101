@@ -2,6 +2,7 @@
 
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
+import { readDebugPayload } from "./payload-reader.js";
 import { getReadableDebugData } from "./data.js";
 
 export interface PeEmbeddedPortablePdbInfo {
@@ -40,7 +41,8 @@ export const parseEmbeddedPortablePdbInfo = async (
     addWarning("Embedded Portable PDB debug entry is smaller than the fixed header.");
     return null;
   }
-  const view = await reader.read(dataInfo.offset, EMBEDDED_PORTABLE_PDB_FIXED_SIZE);
+  const view = await readDebugPayload(reader, rvaToOff, addressOfRawDataRva,
+    pointerToRawDataOff, 0, EMBEDDED_PORTABLE_PDB_FIXED_SIZE);
   if (view.byteLength < EMBEDDED_PORTABLE_PDB_FIXED_SIZE) {
     addWarning("Embedded Portable PDB debug entry is truncated.");
     return null;

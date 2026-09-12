@@ -32,7 +32,9 @@ void test("parseDelayImports stops when later thunk slots stop mapping", async (
   const sparseRvaToOff = (rva: number): number | null => {
     // Only the first thunk slot maps. A parser that assumes contiguous file
     // offsets will read the second thunk from raw bytes instead of the mapper.
-    if (rva === descriptorOffset || rva === dllNameRva || rva === thunkTableRva) return rva;
+    if (rva >= descriptorOffset && rva < descriptorOffset + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) return rva;
+    if (rva >= dllNameRva && rva < dllNameRva + cStringSize(dllName)) return rva;
+    if (rva >= thunkTableRva && rva < thunkTableRva + IMAGE_THUNK_DATA32_SIZE) return rva;
     if (rva >= mappedHintNameRva && rva < mappedEnd) return rva;
     if (rva >= unmappedHintNameRva && rva < unmappedEnd) return rva;
     return null;

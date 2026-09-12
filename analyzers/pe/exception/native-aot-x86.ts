@@ -1,5 +1,6 @@
 "use strict";
 
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeNativeAotAnalysis } from "../native-aot.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
@@ -65,10 +66,7 @@ const readX86UnwindFunctionLength = async (
   if (unwindOffset < 0 || unwindOffset >= reader.size) {
     return `UnwindData ${formatHex(unwindRva)} maps outside the file`;
   }
-  if (unwindOffset + NATIVE_AOT_X86_UNWIND_INFO_HEADER_SIZE > reader.size) {
-    return `UnwindData ${formatHex(unwindRva)} is truncated`;
-  }
-  const view = await reader.read(unwindOffset, NATIVE_AOT_X86_UNWIND_INFO_HEADER_SIZE);
+  const view = await readMappedRvaPrefix(reader, unwindRva, NATIVE_AOT_X86_UNWIND_INFO_HEADER_SIZE, rvaToOff);
   if (view.byteLength < NATIVE_AOT_X86_UNWIND_INFO_HEADER_SIZE) {
     return `UnwindData ${formatHex(unwindRva)} is truncated`;
   }
@@ -88,7 +86,7 @@ const validateNativeAotX86RuntimeFunction = async (
     return issues;
   }
   const beginIssue = getMappedRvaIssue("BeginAddress", beginRva, rvaToOff, reader.size);
-  const endIssue = getMappedRvaIssue("EndAddress", (endRva - 1) >>> 0, rvaToOff, reader.size);
+  const endIssue = getMappedRvaIssue("EndAddress", endRva - 1, rvaToOff, reader.size);
   if (beginIssue) issues.push(beginIssue);
   if (endIssue) issues.push(endIssue);
   const functionLength = await readX86UnwindFunctionLength(reader, unwindRva, rvaToOff);
@@ -129,9 +127,7 @@ const readNativeAotX86RuntimeFunctions = async (
     issues
   );
   for (const span of spans) {
-    const spanView = await readRuntimeFunctionSpan(
-      reader,
-      span,
+    const spanView = await readRuntimeFunctionSpan(reader, span, rvaToOff,
       NATIVE_AOT_X86_RUNTIME_FUNCTION_ENTRY_SIZE,
       TRUNCATED_NATIVE_AOT_X86_RUNTIME_FUNCTION_ISSUE,
       issues

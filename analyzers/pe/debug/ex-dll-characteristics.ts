@@ -1,5 +1,6 @@
 "use strict";
 
+import { readDebugPayload } from "./payload-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import { toHex32 } from "../../../binary-utils.js";
 import { EX_DLL_CHARACTERISTICS_KNOWN_MASK } from "../constants.js";
@@ -41,7 +42,9 @@ export const parseExDllCharacteristicsInfo = async (
   if (dataInfo.size > EX_DLL_CHARACTERISTICS_SIZE) {
     addWarning("EX_DLLCHARACTERISTICS debug entry has trailing bytes after the 4-byte bit field.");
   }
-  const view = await reader.read(dataInfo.offset, EX_DLL_CHARACTERISTICS_SIZE);
+  const view = await readDebugPayload(
+    reader, rvaToOff, addressOfRawDataRva, pointerToRawDataOff,
+    0, EX_DLL_CHARACTERISTICS_SIZE);
   if (view.byteLength < EX_DLL_CHARACTERISTICS_SIZE) {
     addWarning("EX_DLLCHARACTERISTICS debug entry is truncated.");
     return null;

@@ -46,7 +46,7 @@ const createDetail = (): ResourceDetailGroup[] => [
 void test("buildResourceLeafIndex records only numeric leaves for the selected type", () => {
   const index = buildResourceLeafIndex(createDetail(), "ICON");
 
-  assert.deepStrictEqual(index.get(1), [{ lang: 1033, dataFileOffset: 0x40, size: 4 }]);
+  assert.deepStrictEqual(index.get(1), [{ lang: 1033, dataRVA: 0x2000, dataFileOffset: 0x40, size: 4 }]);
   assert.equal(index.has(2), false);
 });
 

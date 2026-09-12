@@ -35,8 +35,12 @@ const createReader = (bytes: Uint8Array): FileRangeReader & { getReadByteCalls: 
 };
 
 const createRvaToOff = (): RvaToOffset => rva => {
-  if (rva === MAIN_EXCEPTION_RVA) return MAIN_EXCEPTION_OFFSET;
-  if (rva === DEBUG_EXCEPTION_RVA) return DEBUG_EXCEPTION_OFFSET;
+  if (rva >= MAIN_EXCEPTION_RVA && rva < MAIN_EXCEPTION_RVA + 0x20) {
+    return MAIN_EXCEPTION_OFFSET + rva - MAIN_EXCEPTION_RVA;
+  }
+  if (rva >= DEBUG_EXCEPTION_RVA && rva < DEBUG_EXCEPTION_RVA + 0x20) {
+    return DEBUG_EXCEPTION_OFFSET + rva - DEBUG_EXCEPTION_RVA;
+  }
   return null;
 };
 

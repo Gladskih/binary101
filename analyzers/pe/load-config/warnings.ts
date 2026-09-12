@@ -1,5 +1,6 @@
 "use strict";
 
+import { mappedRvaSize } from "../rva-mapping.js";
 import { readLoadConfigPointerRva, type PeLoadConfig } from "./index.js";
 import { getCfgTargetTableEntrySize } from "./tables.js";
 import type { RvaToOffset } from "../types.js";
@@ -55,8 +56,9 @@ const collectTableDiagnostic = (
     context.warnings.push(`LOAD_CONFIG: ${name} RVA 0x${tableRva.toString(16)} maps outside file data.`);
     return;
   }
-  const maxFile = Math.floor((context.fileSize - off) / entrySize);
-  if (count > maxFile) context.warnings.push(`LOAD_CONFIG: ${name} spills past EOF (${count} > ${maxFile}).`);
+  const maxFile = Math.floor(mappedRvaSize(context.rvaToOff,
+    tableRva, count * entrySize, context.fileSize) / entrySize);
+  if (count > maxFile) context.warnings.push(`LOAD_CONFIG: ${name} spills past EOF or mapped file data (${count} > ${maxFile}).`);
 };
 
 const collectPointerDiagnostic = (

@@ -1,5 +1,6 @@
 "use strict";
 
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
 import type { PeClrHeader } from "./types.js";
@@ -71,7 +72,8 @@ export const parseReadyToRun = async (
     return emptyReadyToRun("unmapped", ["ManagedNativeHeader RVA could not be mapped to a file offset."]);
   }
   // ReadyToRunCoreHeader fixed fields through NumberOfSections occupy 16 bytes.
-  const header = await reader.read(offset, Math.min(clr.ManagedNativeHeaderSize, 16));
+  const header = await readMappedRvaPrefix(reader, clr.ManagedNativeHeaderRVA,
+    Math.min(clr.ManagedNativeHeaderSize, 16), rvaToOff);
   if (header.byteLength < 16) return emptyReadyToRun("truncated", ["ManagedNativeHeader is shorter than 16 bytes."]);
   const signature = header.getUint32(0, true);
   const majorVersion = header.getUint16(4, true);
@@ -112,7 +114,8 @@ export const parseReadyToRun = async (
     };
   }
   const declaredTableBytes = Math.max(0, clr.ManagedNativeHeaderSize - 16);
-  const table = await reader.read(offset + 16, Math.min(sectionBytes, declaredTableBytes));
+  const table = await readMappedRvaPrefix(reader, clr.ManagedNativeHeaderRVA + 16,
+    Math.min(sectionBytes, declaredTableBytes), rvaToOff);
   if (table.byteLength < sectionBytes) issues.push("ReadyToRun section table is truncated.");
   const sections: PeClrReadyToRunSection[] = [];
   for (let sectionOffset = 0; sectionOffset + 12 <= table.byteLength; sectionOffset += 12) {

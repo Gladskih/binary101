@@ -24,7 +24,8 @@ const utf16CodeUnits = (text: string): number[] =>
 const readUtf16 = (codeUnits: readonly number[]) =>
   readPeApiStringCandidate(
     new MockFile(utf16zFromCodeUnits(codeUnits)),
-    rva => rva === STRING_RVA ? 0 : null,
+    rva => rva >= STRING_RVA && rva < STRING_RVA + (codeUnits.length + 1) * 2
+      ? rva - STRING_RVA : null,
     IMAGE_BASE,
     { address: IMAGE_BASE + BigInt(STRING_RVA), encoding: "utf-16le" }
   );

@@ -78,10 +78,10 @@ const readEntryTable = async (
   resolver: ResourceSpanResolver,
   rel: number,
   entryCount: number,
-  localDirectoryEnd: number,
-  offset: number
+  localDirectoryEnd: number
 ): Promise<ResourceDirectoryEntryTable> => {
-  const view = await reader.read(offset, entryCount * IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE);
+  const view = await resolver.readRelative((offset, size) => reader.read(offset, size),
+    rel + IMAGE_RESOURCE_DIRECTORY_SIZE, entryCount * IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE);
   const readableEntries = Math.min(
     entryCount,
     Math.floor(view.byteLength / IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE)
@@ -126,7 +126,8 @@ const readEntriesIndividually = async (
         ]
       };
     }
-    const view = await reader.read(entryOff, IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE);
+    const view = await resolver.readRelative((offset, size) => reader.read(offset, size),
+      entryRel, IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE);
     if (view.byteLength < IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE) {
       return {
         ...table,
@@ -162,5 +163,5 @@ export const readResourceDirectoryEntries = async (
   if (entriesOff == null) {
     return await readEntriesIndividually(reader, resolver, rel, entryCount, localDirectoryEnd);
   }
-  return await readEntryTable(reader, resolver, rel, entryCount, localDirectoryEnd, entriesOff);
+  return await readEntryTable(reader, resolver, rel, entryCount, localDirectoryEnd);
 };

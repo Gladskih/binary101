@@ -124,7 +124,8 @@ const decodeBlock = async (
         instr,
         formatter,
         rva,
-        block.mapped.fileOffsetStart + offsetInPreview
+        // The loaded RVA bytes may come from separate physical fragments.
+        opts.rvaToOff(rva)!
       );
       const preloaded = await preloadImageMemoryForInstruction(
         reader,

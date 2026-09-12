@@ -19,7 +19,7 @@ export const isValidArm64FunctionRange = (
   const endRva = computeFunctionEndRva(beginRva, functionLengthBytes);
   if (endRva == null) return false;
   const beginOff = rvaToOff(beginRva);
-  const endOff = rvaToOff((endRva - 1) >>> 0);
+  const endOff = rvaToOff(endRva - 1);
   return beginOff != null && beginOff >= 0 && endOff != null && endOff >= 0 && endOff < fileSize;
 };
 

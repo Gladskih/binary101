@@ -1,5 +1,6 @@
 "use strict";
 
+import { readMappedRvaPrefix } from "../../rva-byte-reader.js";
 import type { FileRangeReader } from "../../../file-range-reader.js";
 import type { RvaToOffset } from "../../types.js";
 import { AMD64_RUNTIME_FUNCTION_ENTRY_SIZE } from "./directory.js";
@@ -68,11 +69,8 @@ const readIndirectUnwindInfoRva = async (
   indirectRuntimeFunctionRva: number,
   rvaToOff: RvaToOffset
 ): Promise<number | null> => {
-  const indirectRuntimeFunctionOff = rvaToOff(indirectRuntimeFunctionRva);
-  if (indirectRuntimeFunctionOff == null || indirectRuntimeFunctionOff < 0) return null;
-  const unwindDataOff = indirectRuntimeFunctionOff + Uint32Array.BYTES_PER_ELEMENT * 2;
-  if (unwindDataOff + Uint32Array.BYTES_PER_ELEMENT > reader.size) return null;
-  const view = await reader.read(unwindDataOff, Uint32Array.BYTES_PER_ELEMENT);
+  const view = await readMappedRvaPrefix(reader, indirectRuntimeFunctionRva + 8,
+    Uint32Array.BYTES_PER_ELEMENT, rvaToOff);
   return view.byteLength === Uint32Array.BYTES_PER_ELEMENT
     ? view.getUint32(0, true) >>> 0
     : null;
@@ -154,7 +152,7 @@ const validateRuntimeFunctionEntry = async (
   }
   const beginIssue = getMappedRvaIssue(beginRva, rvaToOff, fileSize);
   if (beginIssue) return { issue: `BeginAddress ${beginIssue}`, unwindInfoRva: null };
-  const endIssue = getMappedRvaIssue((endRva - 1) >>> 0, rvaToOff, fileSize);
+  const endIssue = getMappedRvaIssue(endRva - 1, rvaToOff, fileSize);
   if (endIssue) return { issue: `EndAddress ${endIssue}`, unwindInfoRva: null };
   // Leaf functions without unwind state are omitted from .pdata; once a
   // RUNTIME_FUNCTION record exists, the unwind data is required.
@@ -227,9 +225,7 @@ export const readAmd64RuntimeFunctions = async (
     issues
   );
   for (const span of spans) {
-    const spanView = await readRuntimeFunctionSpan(
-      reader,
-      span,
+    const spanView = await readRuntimeFunctionSpan(reader, span, rvaToOff,
       AMD64_RUNTIME_FUNCTION_ENTRY_SIZE,
       TRUNCATED_RUNTIME_FUNCTION_ISSUE,
       issues

@@ -1,5 +1,6 @@
 "use strict";
 
+import { isRvaRange, mappedRvaSize } from "../rva-mapping.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 
 export interface PeIatDirectory {
@@ -28,8 +29,8 @@ export const parseIatDirectory = (
       warnings: ["IAT directory has an RVA but size is 0."]
     };
   }
-  const offset = rvaToOff(dir.rva);
-  if (offset == null || offset < 0) {
+  if (!isRvaRange(dir.rva, dir.size) ||
+      mappedRvaSize(rvaToOff, dir.rva, dir.size, Number.MAX_SAFE_INTEGER) < dir.size) {
     return {
       rva: dir.rva,
       size: dir.size,

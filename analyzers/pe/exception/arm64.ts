@@ -1,5 +1,7 @@
 "use strict";
 
+import { mappedRvaSize } from "../rva-mapping.js";
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import {
   isMappedArm64FunctionBegin,
@@ -47,11 +49,8 @@ type Arm64UnwindInfo = {
   version: number | null;
 };
 
-const readUint32 = async (reader: FileRangeReader, offset: number): Promise<number | null> => {
-  if (offset < 0 || offset + Uint32Array.BYTES_PER_ELEMENT > reader.size) {
-    return null;
-  }
-  const view = await reader.read(offset, Uint32Array.BYTES_PER_ELEMENT);
+const readUint32 = async (reader: FileRangeReader, rvaToOff: RvaToOffset, offset: number): Promise<number | null> => {
+  const view = await readMappedRvaPrefix(reader, offset, Uint32Array.BYTES_PER_ELEMENT, rvaToOff);
   return view.byteLength === Uint32Array.BYTES_PER_ELEMENT ? view.getUint32(0, true) >>> 0 : null;
 };
 
@@ -76,7 +75,7 @@ const readXdataUnwindInfo = async (
     issues.push("ARM64 .pdata entry points to an .xdata RVA that does not map to file data.");
     return null;
   }
-  const headerWord = await readUint32(reader, xdataOff);
+  const headerWord = await readUint32(reader, rvaToOff, xdataRva);
   if (headerWord == null) {
     issues.push("ARM64 .xdata header is truncated.");
     return null;
@@ -87,7 +86,7 @@ const readXdataUnwindInfo = async (
   // Extended Code Words fields.
   const usesExtendedHeader = (headerWord >>> 22) === 0;
   const extendedHeader = usesExtendedHeader
-    ? await readUint32(reader, xdataOff + Uint32Array.BYTES_PER_ELEMENT)
+    ? await readUint32(reader, rvaToOff, xdataRva + Uint32Array.BYTES_PER_ELEMENT)
     : 0;
   if (usesExtendedHeader && extendedHeader == null) {
     issues.push("ARM64 .xdata extended header is truncated.");
@@ -104,13 +103,13 @@ const readXdataUnwindInfo = async (
     ((headerWord & ARM64_XDATA_SINGLE_EPILOG) === 0 ? epilogScopeCount * 4 : 0) +
     unwindWordCount * 4 +
     ((headerWord & ARM64_XDATA_HAS_EXCEPTION_DATA) !== 0 ? 4 : 0);
-  if (xdataOff + recordSize > reader.size) {
+  if (mappedRvaSize(rvaToOff, xdataRva, recordSize, reader.size) < recordSize) {
     issues.push("ARM64 .xdata record is truncated before its unwind metadata ends.");
     return null;
   }
   const hasHandler = (headerWord & ARM64_XDATA_HAS_EXCEPTION_DATA) !== 0;
   const handlerRva = hasHandler
-    ? await readUint32(reader, xdataOff + recordSize - Uint32Array.BYTES_PER_ELEMENT)
+    ? await readUint32(reader, rvaToOff, xdataRva + recordSize - Uint32Array.BYTES_PER_ELEMENT)
     : null;
   if (hasHandler && handlerRva == null) {
     issues.push("ARM64 .xdata declares exception data, but the handler RVA is truncated.");
@@ -147,7 +146,8 @@ const readArm64UnwindInfo = async (
       issues.push("ARM64 chained .pdata target RVA does not map to file data.");
       return null;
     }
-    const chainedEntry = await reader.read(targetPdataOff, ARM64_RUNTIME_FUNCTION_ENTRY_SIZE);
+    const chainedEntry = await readMappedRvaPrefix(reader, targetPdataRva >>> 0,
+      ARM64_RUNTIME_FUNCTION_ENTRY_SIZE, rvaToOff);
     if (chainedEntry.byteLength < ARM64_RUNTIME_FUNCTION_ENTRY_SIZE) {
       issues.push("ARM64 chained .pdata target is truncated.");
       return null;
@@ -256,9 +256,7 @@ export async function parseArm64ExceptionDirectory(
     issues
   );
   for (const span of spans) {
-    const spanView = await readRuntimeFunctionSpan(
-      reader,
-      span,
+    const spanView = await readRuntimeFunctionSpan(reader, span, rvaToOff,
       ARM64_RUNTIME_FUNCTION_ENTRY_SIZE,
       "Exception directory is truncated; some ARM64 .pdata entries are missing.",
       issues

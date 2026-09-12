@@ -1,5 +1,6 @@
 "use strict";
 
+import { readDebugPayloadBytes } from "./payload-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
 import { getReadableDebugData } from "./data.js";
@@ -34,7 +35,9 @@ export const parsePdbChecksumInfo = async (
     addWarning
   );
   if (!dataInfo) return null;
-  const payload = await reader.readBytes(dataInfo.offset, dataInfo.size);
+  const payload = await readDebugPayloadBytes(
+    reader, rvaToOff, addressOfRawDataRva, pointerToRawDataOff,
+    0, dataInfo.size);
   const zeroIndex = payload.indexOf(0);
   if (zeroIndex === -1) {
     addWarning("PDB checksum algorithm name is not NUL-terminated within SizeOfData.");

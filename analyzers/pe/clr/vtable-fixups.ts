@@ -1,5 +1,7 @@
 "use strict";
 
+import { mappedRvaSize } from "../rva-mapping.js";
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeClrVTableFixup } from "./types.js";
 import type { RvaToOffset } from "../types.js";
@@ -37,7 +39,7 @@ export const parseVTableFixups = async (
     issues.push("VTableFixups location is outside the file.");
     return null;
   }
-  const availableBytes = Math.min(size, Math.max(0, fileSize - fileOffset));
+  const availableBytes = mappedRvaSize(rvaToOff, rva, size, fileSize);
   const declaredCount = Math.floor(size / VTABLE_FIXUP_ENTRY_SIZE_BYTES);
   const parsedCount = Math.floor(availableBytes / VTABLE_FIXUP_ENTRY_SIZE_BYTES);
   if (size % VTABLE_FIXUP_ENTRY_SIZE_BYTES !== 0) {
@@ -48,9 +50,12 @@ export const parseVTableFixups = async (
   }
   const entryCount = parsedCount;
   if (entryCount === 0) return null;
-  const fixupView = await reader.read(fileOffset, entryCount * VTABLE_FIXUP_ENTRY_SIZE_BYTES);
+  const fixupView = await readMappedRvaPrefix(reader, rva, entryCount * VTABLE_FIXUP_ENTRY_SIZE_BYTES, rvaToOff);
+  if (fixupView.byteLength < entryCount * VTABLE_FIXUP_ENTRY_SIZE_BYTES) {
+    issues.push("VTableFixups data is truncated or unmapped; some entries are missing.");
+  }
   const entries: PeClrVTableFixup[] = [];
-  for (let index = 0; index < entryCount; index += 1) {
+  for (let index = 0; index < Math.floor(fixupView.byteLength / VTABLE_FIXUP_ENTRY_SIZE_BYTES); index += 1) {
     const entryOffset = index * VTABLE_FIXUP_ENTRY_SIZE_BYTES;
     entries.push({
       RVA: fixupView.getUint32(entryOffset + 0, true) >>> 0,

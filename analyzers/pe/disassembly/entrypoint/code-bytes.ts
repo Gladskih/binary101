@@ -1,5 +1,6 @@
 "use strict";
 
+import { readMappedRvaBytes } from "../../rva-byte-reader.js";
 import type { FileRangeReader } from "../../../file-range-reader.js";
 import { peSectionNameValue } from "../../sections/name.js";
 import type { PeSection } from "../../types.js";
@@ -58,7 +59,7 @@ const loadSectionCodeBytes = async (
   return {
     fileOffsetStart,
     rvaStart: rva >>> 0,
-    data: await reader.readBytes(fileOffsetStart, readableSize)
+    data: await readMappedRvaBytes(reader, rva, readableSize, opts.rvaToOff)
   };
 };
 
@@ -89,7 +90,7 @@ const loadHeaderCodeBytes = async (
   return {
     fileOffsetStart,
     rvaStart: rva >>> 0,
-    data: await reader.readBytes(fileOffsetStart, readableSize)
+    data: await readMappedRvaBytes(reader, rva, readableSize, opts.rvaToOff)
   };
 };
 

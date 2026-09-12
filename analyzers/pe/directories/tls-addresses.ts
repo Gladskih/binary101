@@ -1,5 +1,6 @@
 "use strict";
 
+import { mappedRvaSize, isRvaRange } from "../rva-mapping.js";
 import type { PeSection, RvaToOffset } from "../types.js";
 import { PE_RVA_EXCLUSIVE_LIMIT } from "../layout/rva-limits.js";
 
@@ -22,8 +23,8 @@ export const isReadableMappedTlsVa = (
 ): boolean => {
   const rva = toTlsRvaFromVa(virtualAddress, imageBase);
   if (rva == null) return false;
-  const offset = rvaToOff(rva);
-  return offset != null && offset >= 0 && offset + byteLength <= fileSize;
+  return isRvaRange(rva, byteLength) &&
+    mappedRvaSize(rvaToOff, rva, byteLength, fileSize) === byteLength;
 };
 
 const findSectionContainingRva = (sections: PeSection[], rva: number): PeSection | null => {

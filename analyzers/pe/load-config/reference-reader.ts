@@ -1,5 +1,6 @@
 "use strict";
 
+import { mappedRvaSpan } from "../rva-mapping.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import { PE_RVA_EXCLUSIVE_LIMIT } from "../layout/rva-limits.js";
 import type { PeSection, RvaToOffset } from "../types.js";
@@ -146,7 +147,7 @@ const mappedSectionBytesAvailable = (
     const mappedSize = (section.virtualSize >>> 0) || (section.sizeOfRawData >>> 0);
     const delta = rva - sectionRva;
     if (delta < 0 || delta >= mappedSize || delta >= (section.sizeOfRawData >>> 0)) continue;
-    return Math.max(0, Math.min((section.sizeOfRawData >>> 0) - delta, readerSize - offset));
+    return Math.max(0, Math.min(mappedSize - delta, (section.sizeOfRawData >>> 0) - delta, readerSize - offset));
   }
   return null;
 };
@@ -161,9 +162,11 @@ export const mappedRawSpan = (
   const offset = rvaToOff(rva);
   if (offset == null || !Number.isSafeInteger(offset) || offset < 0 || offset >= readerSize) return null;
   const headerEnd = Math.max(0, Math.min(sizeOfHeaders >>> 0, readerSize));
-  if (rva < headerEnd && offset === rva) return [offset, headerEnd - rva];
-  const byteLength = mappedSectionBytesAvailable(readerSize, sections, rva, offset);
-  return byteLength == null ? null : [offset, byteLength];
+  const byteLength = rva < headerEnd && offset === rva
+    ? headerEnd - rva : mappedSectionBytesAvailable(readerSize, sections, rva, offset);
+  if (byteLength == null) return null;
+  const span = mappedRvaSpan(rvaToOff, rva, byteLength, readerSize);
+  return span ? [span.offset, span.size] : null;
 };
 
 const rawChunks = (

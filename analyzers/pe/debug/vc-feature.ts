@@ -1,5 +1,6 @@
 "use strict";
 
+import { readDebugPayload } from "./payload-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
 import { getReadableDebugData } from "./data.js";
@@ -48,7 +49,9 @@ export const parseVcFeatureInfo = async (
   if (dataInfo.size < VC_FEATURE_FIXED_SIZE) {
     addWarning("VC_FEATURE debug entry uses a legacy four-counter layout without guardN.");
   }
-  const view = await reader.read(dataInfo.offset, Math.min(dataInfo.size, VC_FEATURE_FIXED_SIZE));
+  const view = await readDebugPayload(
+    reader, rvaToOff, addressOfRawDataRva, pointerToRawDataOff,
+    0, Math.min(dataInfo.size, VC_FEATURE_FIXED_SIZE));
   if (view.byteLength < VC_FEATURE_LEGACY_SIZE) {
     addWarning("VC_FEATURE debug entry is truncated.");
     return null;

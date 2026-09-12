@@ -40,7 +40,9 @@ void test("parseImportDirectory stops when later thunk slots no longer map throu
   writeImportByName(bytes, view, unmappedHintNameRva, 0, "UnmappedThunk");
 
   const sparseRvaToOff = (rva: number): number | null => {
-    if (rva === descriptorOffset || rva === dllNameRva || rva === thunkTableRva) return rva;
+    if (rva >= descriptorOffset && rva < descriptorOffset + IMAGE_IMPORT_DESCRIPTOR_SIZE) return rva;
+    if (rva >= dllNameRva && rva < dllNameRva + cStringSize("KERNEL32.dll")) return rva;
+    if (rva >= thunkTableRva && rva < thunkTableRva + IMAGE_THUNK_DATA32_SIZE) return rva;
     if (rva >= mappedHintNameRva && rva < mappedEnd) return rva;
     if (rva >= unmappedHintNameRva && rva < unmappedEnd) return rva;
     return null;
@@ -173,7 +175,7 @@ void test("parseImportDirectory warns when an import-by-name string stops mappin
     if (rva >= thunkRva && rva < thunkRva + IMAGE_THUNK_DATA32_SIZE * 2) {
       return thunkOffset + (rva - thunkRva);
     }
-    if (rva === hintNameRva || rva === hintNameRva + 2 || rva === hintNameRva + 3) {
+    if (rva >= hintNameRva && rva < hintNameRva + 4) {
       // Hint bytes map, and only the first two name bytes map. The trailing NUL does not.
       return hintNameOffset + (rva - hintNameRva);
     }

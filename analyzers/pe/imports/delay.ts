@@ -1,5 +1,6 @@
 "use strict";
 
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import { toHex32 } from "../../../binary-utils.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import { isRvaRangeInsideSizeOfImage } from "../layout/rva-limits.js";
@@ -95,10 +96,11 @@ export interface PeDelayImportEntry {
 
 const readDelayImportDescriptor = async (
   reader: FileRangeReader,
+  rvaToOff: RvaToOffset,
   descriptorOff: number,
   descriptorSize: number
 ): Promise<DelayImportDescriptor | null> => {
-  const dv = await reader.read(descriptorOff, descriptorSize);
+  const dv = await readMappedRvaPrefix(reader, descriptorOff, descriptorSize, rvaToOff);
   if (dv.byteLength < IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) return null;
   const Attributes = dv.getUint32(0, true);
   const DllNameRVA = dv.getUint32(4, true);
@@ -165,8 +167,8 @@ const parseDelayImportsWithThunkReader = async (
 ): Promise<{ entries: PeDelayImportEntry[]; warning?: string } | null> => {
   const validation = validateDelayImportDirectory(reader, dataDirs, rvaToOff, mapping);
   if ("result" in validation) return validation.result;
-  const { dir, base } = validation;
-  const availableDirSize = Math.max(0, Math.min(dir.size, Math.max(0, reader.size - base)));
+  const { dir } = validation;
+  const availableDirSize = dir.size;
   const entries: PeDelayImportEntry[] = [];
   const warnings = new Set<string>();
   const state = { reader, rvaToOff, readDelayThunkFunctions, warnings };
@@ -178,7 +180,7 @@ const parseDelayImportsWithThunkReader = async (
   let descriptorTableTerminated = false;
   let descriptorScanStopped = false;
   for (let index = 0; index < maxDescriptors; index += 1) {
-    const descriptorRva = (dir.rva + index * IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) >>> 0;
+    const descriptorRva = dir.rva + index * IMAGE_DELAYLOAD_DESCRIPTOR_SIZE;
     const descriptorOff = rvaToOff(descriptorRva);
     const remaining = dir.size - index * IMAGE_DELAYLOAD_DESCRIPTOR_SIZE;
     if (descriptorOff == null || descriptorOff < 0) {
@@ -188,7 +190,7 @@ const parseDelayImportsWithThunkReader = async (
     }
     if (remaining <= 0) break;
     const descriptorSize = Math.min(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE, remaining);
-    const descriptor = await readDelayImportDescriptor(reader, descriptorOff, descriptorSize);
+    const descriptor = await readDelayImportDescriptor(reader, rvaToOff, descriptorRva, descriptorSize);
     if (!descriptor) {
       warnings.add("Delay import descriptor truncated.");
       descriptorScanStopped = true;

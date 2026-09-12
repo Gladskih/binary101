@@ -1,5 +1,6 @@
 "use strict";
 
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import {
   READY_TO_RUN_SECTION_EXCEPTION_INFO,
@@ -80,8 +81,7 @@ const readMappedSection = async (
     issues.push(`${label} location is outside the file.`);
     return null;
   }
-  const readableSize = Math.min(section.size, reader.size - offset);
-  const view = await reader.read(offset, readableSize);
+  const view = await readMappedRvaPrefix(reader, section.rva, section.size, rvaToOff);
   if (view.byteLength < section.size) {
     issues.push(`${label} is truncated.`);
   }
@@ -177,8 +177,7 @@ const countClausesForEntry = async (
     issues.push(`ReadyToRun exception clause array ${formatHex(startRva)} does not map to file data.`);
     return;
   }
-  const readableSize = Math.min(byteLength, reader.size - offset);
-  const view = await reader.read(offset, readableSize);
+  const view = await readMappedRvaPrefix(reader, startRva, byteLength, rvaToOff);
   if (view.byteLength < byteLength) {
     issues.push("ReadyToRun exception clause array is truncated.");
     return;
@@ -190,7 +189,7 @@ const countClausesForEntry = async (
     const handlerStartPc = view.getUint32(clauseOffset + Uint32Array.BYTES_PER_ELEMENT * 3, true) >>> 0;
     stats.exceptionClauseCount += 1;
     addClauseKind(flags, stats, issues);
-    const handlerRva = (current.methodStartRva + handlerStartPc) >>> 0;
+    const handlerRva = current.methodStartRva + handlerStartPc;
     if (getMappedRvaIssue("HandlerStartPC", handlerRva, rvaToOff, reader.size) == null) {
       addUniqueRva(stats.handlerRvas, handlerRvasSeen, handlerRva);
     }

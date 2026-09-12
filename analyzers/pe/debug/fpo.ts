@@ -1,5 +1,6 @@
 "use strict";
 
+import { readDebugPayloadBytes } from "./payload-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
 import { getReadableDebugData } from "./data.js";
@@ -70,9 +71,9 @@ export const parseFpoInfo = async (
   if (dataInfo.size % FPO_RECORD_SIZE !== 0) {
     addWarning("FPO debug entry has trailing bytes after whole FPO_DATA records.");
   }
-  const payload = await reader.readBytes(
-    dataInfo.offset,
-    Math.floor(dataInfo.size / FPO_RECORD_SIZE) * FPO_RECORD_SIZE
+  const payload = await readDebugPayloadBytes(
+    reader, rvaToOff, addressOfRawDataRva, pointerToRawDataOff,
+    0, Math.floor(dataInfo.size / FPO_RECORD_SIZE) * FPO_RECORD_SIZE
   );
   const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
   const records = Array.from({ length: payload.byteLength / FPO_RECORD_SIZE }, (_, index) =>

@@ -1,8 +1,9 @@
 "use strict";
 
+import { readDebugPayloadBytes } from "./payload-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
-import { getReadableDebugData, readDebugBytes } from "./data.js";
+import { getReadableDebugData } from "./data.js";
 
 export interface PeRawDebugPayload {
   previewBytes: number[];
@@ -29,5 +30,6 @@ export const parseRawDebugPayload = async (
     dataSize,
     addWarning
   );
-  return dataInfo ? { previewBytes: await readDebugBytes(reader, dataInfo, RAW_PAYLOAD_PREVIEW_SIZE) } : null;
+  return dataInfo ? { previewBytes: [...await readDebugPayloadBytes(reader, rvaToOff, addressOfRawDataRva,
+    pointerToRawDataOff, 0, Math.min(dataInfo.size, RAW_PAYLOAD_PREVIEW_SIZE))] } : null;
 };

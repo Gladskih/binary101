@@ -1,5 +1,6 @@
 "use strict";
 
+import { readDebugPayload, readDebugPayloadBytes } from "./payload-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
 import { getReadableDebugData } from "./data.js";
@@ -35,7 +36,9 @@ export const parseReproInfo = async (
     addWarning("REPRO debug entry is smaller than the hash-length field.");
     return { hashLength: null, hashBytes: [] };
   }
-  const header = await reader.read(dataInfo.offset, REPRO_HASH_LENGTH_SIZE);
+  const header = await readDebugPayload(
+    reader, rvaToOff, addressOfRawDataRva, pointerToRawDataOff,
+    0, REPRO_HASH_LENGTH_SIZE);
   if (header.byteLength < REPRO_HASH_LENGTH_SIZE) {
     addWarning("REPRO debug entry is truncated before the hash-length field.");
     return { hashLength: null, hashBytes: [] };
@@ -46,9 +49,9 @@ export const parseReproInfo = async (
   if (hashLength < availableHashBytes) addWarning("REPRO debug entry has trailing bytes after the hash.");
   return {
     hashLength,
-    hashBytes: [...await reader.readBytes(
-      dataInfo.offset + REPRO_HASH_LENGTH_SIZE,
-      Math.min(hashLength, availableHashBytes)
+    hashBytes: [...await readDebugPayloadBytes(
+    reader, rvaToOff, addressOfRawDataRva, pointerToRawDataOff,
+    REPRO_HASH_LENGTH_SIZE, Math.min(hashLength, availableHashBytes)
     )]
   };
 };

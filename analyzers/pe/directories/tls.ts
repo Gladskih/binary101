@@ -39,12 +39,10 @@ const addTlsRawDataWarnings = (
     warnings.push("TLS raw data VA range is invalid.");
     return;
   }
-  const lastRawDataByteVa = endAddressOfRawData > startAddressOfRawData
-    ? endAddressOfRawData - 1n
-    : endAddressOfRawData;
+  const rawSize = endAddressOfRawData - startAddressOfRawData;
   if (
-    !isReadableMappedTlsVa(startAddressOfRawData, 1, imageBase, rvaToOff, fileSize) ||
-    !isReadableMappedTlsVa(lastRawDataByteVa, 1, imageBase, rvaToOff, fileSize)
+    !isReadableMappedTlsVa(startAddressOfRawData, Number(rawSize || 1n),
+      imageBase, rvaToOff, fileSize)
   ) {
     warnings.push("TLS raw data VA range does not map to file data.");
   }

@@ -133,7 +133,7 @@ void test("parseExceptionDirectory stops when later RUNTIME_FUNCTION slots no lo
   bytes[0xa0] = 0x01;
   const sparseRvaToOff = (rva: number): number | null => {
     // Only the first pdata slot is actually mapped; the second logical slot must not be read from flat bytes.
-    if (rva === exRva) return 0;
+    if (rva >= exRva && rva < exRva + 12) return rva - exRva;
     if (rva >= 0x1000 && rva < 0x1010) return 0x20 + (rva - 0x1000);
     if (rva >= 0x1200 && rva < 0x1210) return 0x40 + (rva - 0x1200);
     if (rva === 0x2000) return 0x60;
@@ -216,7 +216,7 @@ void test("parseExceptionDirectory does not parse aligned-down UNWIND_INFO after
   bytes[0x2000] = 0x09;
   dv.setUint32(0x2004, 0x1500, true);
   const alignedOnlyRvaToOff = (rva: number): number | null => {
-    if (rva === exOff) return exOff;
+    if (rva >= exOff && rva < exOff + 12) return rva;
     // 0x2002 is invalid, but 0x2000 is mapped; the parser must not invent a handler by rounding down.
     if (rva >= 0x1000 && rva < 0x1010) return 0x1000 + (rva - 0x1000);
     if (rva === 0x2000) return 0x2000;
@@ -286,10 +286,10 @@ void test("parseExceptionDirectory does not invent handler RVAs from chained unw
   dv.setUint32(0x20c, chainedUnwindInfoRva, true); // chained UnwindInfoAddress
   bytes[0x240] = 0x01; // secondary unwind info version 1, no flags
   const mappedRvaToOff = (rva: number): number | null => {
-    if (rva === exOff) return exOff;
+    if (rva >= exOff && rva < exOff + 12) return rva;
     if (rva >= 0x1000 && rva < 0x1010) return 0x100 + (rva - 0x1000);
-    if (rva === unwindInfoRva) return 0x200;
-    if (rva === chainedUnwindInfoRva) return 0x240;
+    if (rva >= unwindInfoRva && rva < unwindInfoRva + 16) return 0x200 + rva - unwindInfoRva;
+    if (rva >= chainedUnwindInfoRva && rva < chainedUnwindInfoRva + 4) return 0x240 + rva - chainedUnwindInfoRva;
     return null;
   };
   const parsed = await parseExceptionFixture(

@@ -26,11 +26,12 @@ export interface ResourceLeafPathReadResult {
 
 const readResourceLabelPayload = async (
   reader: FileRangeReader,
-  textOff: number,
+  resolver: ResourceSpanResolver,
+  rel: number,
   bytesLength: number,
   utf16Decoder: TextDecoder
 ): Promise<string> => {
-  const bytesView = await reader.read(textOff, bytesLength);
+  const bytesView = await resolver.readRelative((offset, size) => reader.read(offset, size), rel, bytesLength);
   const bytes = new Uint8Array(
     bytesView.buffer,
     bytesView.byteOffset,
@@ -81,7 +82,7 @@ const readUncachedResourceLabel = async (
       resourceStringRanges: []
     };
   }
-  const view = await reader.read(headerOff, 2);
+  const view = await resolver.readRelative((offset, size) => reader.read(offset, size), rel, 2);
   if (view.byteLength < 2) {
     return {
       text: "",
@@ -135,7 +136,7 @@ const readMappedResourceLabel = async (
     };
   }
   return {
-    text: await readResourceLabelPayload(reader, textOff, bytesLength, utf16Decoder),
+    text: await readResourceLabelPayload(reader, resolver, rel + 2, bytesLength, utf16Decoder),
     issues: [...inheritedIssues, ...truncationIssues],
     resourceStringRanges: [range]
   };
@@ -182,7 +183,7 @@ export const createResourceLeafPathReader = (
         ]
       };
     }
-    const dataEntry = await readResourceDataEntry(view, resolver, target, dataEntryOff, nodes);
+    const dataEntry = await readResourceDataEntry(view, resolver, target, nodes);
     if (!dataEntry.leaf) return dataEntry;
     return dataEntry.leaf.reserved === 0
       ? dataEntry
@@ -199,10 +200,9 @@ const readResourceDataEntry = async (
   view: (offset: number, length: number) => Promise<DataView>,
   resolver: ResourceSpanResolver,
   target: number,
-  dataEntryOff: number,
   nodes: ResourcePathNode[]
 ): Promise<ResourceLeafPathReadResult> => {
-  const data = await view(dataEntryOff, IMAGE_RESOURCE_DATA_ENTRY_SIZE);
+  const data = await resolver.readRelative(view, target, IMAGE_RESOURCE_DATA_ENTRY_SIZE);
   if (data.byteLength < IMAGE_RESOURCE_DATA_ENTRY_SIZE) {
     return {
       leaf: null,

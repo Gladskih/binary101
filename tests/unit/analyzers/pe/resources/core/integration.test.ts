@@ -18,7 +18,7 @@ import {
 
 void test("buildResourceTree returns null for missing resource trees and preserves unmapped ones", async () => {
   const file = new MockFile(new Uint8Array(0));
-  const noDir = await buildResourceTree(file, [], () => 0);
+  const noDir = await buildResourceTree(file, [], value => value - 1);
   assert.strictEqual(noDir, null);
   const unmapped = await buildResourceTree(
     file,
@@ -36,7 +36,7 @@ void test("buildResourceTree reports a truncated root directory header at EOF", 
     bytes,
     1,
     IMAGE_RESOURCE_DIRECTORY_SIZE,
-    () => 0,
+    value => value - 1,
     "resource-root-truncated.bin"
   );
 
@@ -66,7 +66,7 @@ void test("buildResourceTree preserves full numeric resource IDs", async () => {
   // Use a value above 0xffff so truncation to 16 bits is immediately visible (0x12345 = 74565).
   fixture.writeDirectoryEntry(IMAGE_RESOURCE_DIRECTORY_SIZE, 0x00012345, 0);
 
-  const tree = await parseResourceTreeFixture(fixture.bytes, 1, fixture.bytes.length, () => 0);
+  const tree = await parseResourceTreeFixture(fixture.bytes, 1, fixture.bytes.length, value => value - 1);
   assert.deepStrictEqual(tree.top, [{ typeName: "TYPE_74565", kind: "id", leafCount: 0 }]);
 });
 
@@ -87,7 +87,7 @@ void test("buildResourceTree preserves embedded NUL code units in length-prefixe
     fixture.bytes,
     1,
     fixture.bytes.length,
-    () => 0,
+    value => value - 1,
     "resource-name-embedded-nul.bin"
   );
 
@@ -107,7 +107,7 @@ void test("buildResourceTree ignores entries outside the declared resource span"
     fixture.bytes,
     1,
     IMAGE_RESOURCE_DIRECTORY_SIZE,
-    () => 0,
+    value => value - 1,
     "resource-oob-root.bin"
   );
 
@@ -132,7 +132,7 @@ void test("buildResourceTree parses nested directories and skips truncated label
     fixture.bytes,
     1,
     0x120,
-    () => 0,
+    value => value - 1,
     "pe-resources.bin"
   );
 
@@ -149,7 +149,7 @@ void test("buildResourceTree parses nested directories and skips truncated label
     size: 0x10,
     codePage: 0x4b0,
     dataRVA: 0x2000,
-    dataFileOffset: 0,
+    dataFileOffset: null,
     reserved: 0
   });
   assert.match((tree.issues || []).join(" "), /string name/i);
@@ -169,7 +169,7 @@ void test("buildResourceTree accepts data entries ending at the resource boundar
     fixture.bytes,
     1,
     fixture.bytes.length,
-    () => 0,
+    value => value - 1,
     "resource-boundary.bin"
   );
 
@@ -193,7 +193,7 @@ void test("buildResourceTree reports non-zero reserved fields in IMAGE_RESOURCE_
     fixture.bytes,
     1,
     fixture.bytes.length,
-    () => 0,
+    value => value - 1,
     "resource-reserved-nonzero.bin"
   );
 

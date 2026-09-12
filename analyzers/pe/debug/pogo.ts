@@ -1,5 +1,7 @@
 "use strict";
 
+import { readDebugPayloadBytes } from "./payload-reader.js";
+import { getReadableDebugData } from "./data.js";
 import { alignUpTo, readAsciiString, toHex32 } from "../../../binary-utils.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
@@ -39,36 +41,6 @@ const POGO_ENTRY_OFF_SIZE = 4;
 const POGO_ENTRY_NAME_OFFSET = 8;
 const POGO_ENTRY_PREFIX_SIZE = 8;
 
-const getReadableDebugData = (
-  fileSize: number,
-  rvaToOff: RvaToOffset,
-  addressOfRawDataRva: number,
-  pointerToRawDataOff: number,
-  dataSize: number,
-  addWarning: (message: string) => void
-): { offset: number; size: number } | null => {
-  const offset = pointerToRawDataOff || (
-    addressOfRawDataRva ? rvaToOff(addressOfRawDataRva) : null
-  );
-  if (offset == null || offset < 0) {
-    addWarning(
-      pointerToRawDataOff || addressOfRawDataRva
-        ? "POGO debug entry does not map to file data."
-        : "POGO debug entry has no PointerToRawData/AddressOfRawData."
-    );
-    return null;
-  }
-  if (offset >= fileSize) {
-    addWarning("POGO debug entry starts past end of file.");
-    return null;
-  }
-  const size = Math.min(dataSize, Math.max(0, fileSize - offset));
-  if (size < dataSize) {
-    addWarning("POGO debug entry is shorter than its declared SizeOfData.");
-  }
-  return { offset, size };
-};
-
 const getPogoSignatureName = (signature: number): string =>
   POGO_SIGNATURE_NAMES[signature >>> 0] ?? `UNKNOWN_${toHex32(signature, 8)}`;
 
@@ -82,7 +54,7 @@ export const parsePogoInfo = async (
   addWarning: (message: string) => void
 ): Promise<PePogoInfo | null> => {
   const dataInfo = getReadableDebugData(
-    fileSize,
+    "POGO", fileSize,
     rvaToOff,
     addressOfRawDataRva,
     pointerToRawDataOff,
@@ -94,7 +66,9 @@ export const parsePogoInfo = async (
     addWarning("POGO debug entry is smaller than the signature header.");
     return null;
   }
-  const payload = await reader.readBytes(dataInfo.offset, dataInfo.size);
+  const payload = await readDebugPayloadBytes(
+    reader, rvaToOff, addressOfRawDataRva, pointerToRawDataOff,
+    0, dataInfo.size);
   const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
   const signature = view.getUint32(POGO_OFF_SIGNATURE, true);
   const signatureName = getPogoSignatureName(signature);

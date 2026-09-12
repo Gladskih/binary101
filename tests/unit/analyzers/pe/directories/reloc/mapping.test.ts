@@ -68,7 +68,8 @@ void test("parseBaseRelocations stops when later blocks no longer map through rv
     fileOffset: directoryRva + firstBlockSize
   });
 
-  const mapOnlyFirstBlock = (rva: number): number | null => (rva === directoryRva ? directoryRva : null);
+  const mapOnlyFirstBlock = (rva: number): number | null =>
+    rva >= directoryRva && rva < directoryRva + firstBlockSize ? rva : null;
   const parsed = await parseBaseRelocations(
     new MockFile(bytes, "reloc-gap.bin"),
     [{ name: "BASERELOC", rva: directoryRva, size: firstBlockSize * 2 }],

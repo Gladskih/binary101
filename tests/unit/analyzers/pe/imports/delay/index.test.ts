@@ -216,7 +216,8 @@ void test("parseDelayImports warns when a mapped DLL name offset falls past EOF"
   const result = expectDefined(await parseDelayImports32(
     new MockFile(bytes),
     [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE }],
-    value => (value === descriptorOffset ? descriptorOffset : value === 0 ? null : value + 0x200)
+    value => (value >= descriptorOffset && value < descriptorOffset + IMAGE_DELAYLOAD_DESCRIPTOR_SIZE
+      ? value : value === 0 ? null : value + 0x200)
   ));
 
   assert.ok(result.warning?.toLowerCase().includes("name rva"));

@@ -1,5 +1,6 @@
 "use strict";
 
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeImportMetadataEntry } from "../../../pe-import-metadata-schema.js";
 import type { WinapiMetadataEntry } from "../../../winapi-metadata-schema.js";
@@ -45,7 +46,7 @@ const readDelayImportHintName = async (
     warnings.add("Delay import hint/name RVA does not map to file data.");
     return { name: "<bad RVA>" };
   }
-  const hintView = await reader.read(hintNameOff, IMAGE_IMPORT_BY_NAME_HINT_SIZE);
+  const hintView = await readMappedRvaPrefix(reader, hintNameRva, IMAGE_IMPORT_BY_NAME_HINT_SIZE, rvaToOff);
   if (hintView.byteLength < IMAGE_IMPORT_BY_NAME_HINT_SIZE) {
     warnings.add("Delay import hint/name table truncated.");
     return { name: "" };
@@ -55,7 +56,7 @@ const readDelayImportHintName = async (
     reader,
     reader.size,
     rvaToOff,
-    (hintNameRva + IMAGE_IMPORT_BY_NAME_HINT_SIZE) >>> 0,
+    hintNameRva + IMAGE_IMPORT_BY_NAME_HINT_SIZE,
     reader.size
   );
   if (!result) {
@@ -76,16 +77,12 @@ export const readDelayThunkFunctions32: ReadDelayThunkFunctions = async (
   const functions: PeDelayImportFunction[] = [];
   for (let index = 0; index < maxThunkEntries(IMAGE_THUNK_DATA32_SIZE); index += 1) {
     const thunkEntryRva = importNameTableRva + index * IMAGE_THUNK_DATA32_SIZE;
-    const thunkEntryOff = rvaToOff(thunkEntryRva >>> 0);
+    const thunkEntryOff = rvaToOff(thunkEntryRva);
     if (thunkEntryOff == null) {
       warnings.add("Delay import thunk RVA does not map to file data.");
       break;
     }
-    if (thunkEntryOff < 0 || thunkEntryOff + IMAGE_THUNK_DATA32_SIZE > reader.size) {
-      warnings.add("Delay import thunk table truncated (32-bit).");
-      break;
-    }
-    const thunkView = await reader.read(thunkEntryOff, IMAGE_THUNK_DATA32_SIZE);
+    const thunkView = await readMappedRvaPrefix(reader, thunkEntryRva, IMAGE_THUNK_DATA32_SIZE, rvaToOff);
     if (thunkView.byteLength < IMAGE_THUNK_DATA32_SIZE) {
       warnings.add("Delay import thunk table truncated (32-bit).");
       break;
@@ -114,16 +111,12 @@ export const readDelayThunkFunctions64: ReadDelayThunkFunctions = async (
   const functions: PeDelayImportFunction[] = [];
   for (let index = 0; index < maxThunkEntries(IMAGE_THUNK_DATA64_SIZE); index += 1) {
     const thunkEntryRva = importNameTableRva + index * IMAGE_THUNK_DATA64_SIZE;
-    const thunkEntryOff = rvaToOff(thunkEntryRva >>> 0);
+    const thunkEntryOff = rvaToOff(thunkEntryRva);
     if (thunkEntryOff == null) {
       warnings.add("Delay import thunk RVA does not map to file data.");
       break;
     }
-    if (thunkEntryOff < 0 || thunkEntryOff + IMAGE_THUNK_DATA64_SIZE > reader.size) {
-      warnings.add("Delay import thunk table truncated (64-bit).");
-      break;
-    }
-    const thunkView = await reader.read(thunkEntryOff, IMAGE_THUNK_DATA64_SIZE);
+    const thunkView = await readMappedRvaPrefix(reader, thunkEntryRva, IMAGE_THUNK_DATA64_SIZE, rvaToOff);
     if (thunkView.byteLength < IMAGE_THUNK_DATA64_SIZE) {
       warnings.add("Delay import thunk table truncated (64-bit).");
       break;

@@ -1,5 +1,6 @@
 "use strict";
 
+import { readMappedRvaPrefix } from "../../rva-byte-reader.js";
 import type { FileRangeReader } from "../../../file-range-reader.js";
 import {
   getNearBranchEdges,
@@ -124,16 +125,9 @@ export const getImageMemoryIndirectControlFlowTarget = async (
   if (slotAddress == null) return null;
   const slotRva = toRva(slotAddress, opts.imageBase);
   if (slotRva == null) return null;
-  const fileOffset = opts.rvaToOff(slotRva);
   const size = pointerBytes(opts);
-  if (
-    fileOffset == null ||
-    !Number.isSafeInteger(fileOffset) ||
-    fileOffset < 0 ||
-    fileOffset > reader.size - size
-  ) return null;
   try {
-    const view = await reader.read(fileOffset, size);
+    const view = await readMappedRvaPrefix(reader, slotRva, size, opts.rvaToOff);
     if (view.byteLength !== size) return null;
     const rva = toRva(readPointerValue(view), opts.imageBase);
     return rva == null ? null : { kind: indirectCall ? "followed-call" : "followed-jump", rva };

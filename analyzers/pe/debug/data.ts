@@ -1,5 +1,6 @@
 "use strict";
 
+import { mappedRvaSize } from "../rva-mapping.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
 
@@ -7,6 +8,10 @@ export type PeDebugDataLocation = {
   offset: number;
   size: number;
 };
+
+const unmappedDebugWarning = (label: string, address: number): string => address
+  ? `${label} debug entry does not map to file data.`
+  : `${label} debug entry has no PointerToRawData/AddressOfRawData.`;
 
 export const getReadableDebugData = (
   label: string,
@@ -21,18 +26,16 @@ export const getReadableDebugData = (
     addressOfRawDataRva ? rvaToOff(addressOfRawDataRva) : null
   );
   if (offset == null || offset < 0) {
-    addWarning(
-      pointerToRawDataOff || addressOfRawDataRva
-        ? `${label} debug entry does not map to file data.`
-        : `${label} debug entry has no PointerToRawData/AddressOfRawData.`
-    );
+    addWarning(unmappedDebugWarning(label, pointerToRawDataOff || addressOfRawDataRva));
     return null;
   }
   if (offset >= fileSize) {
     addWarning(`${label} debug entry starts past end of file.`);
     return null;
   }
-  const size = Math.min(dataSize, Math.max(0, fileSize - offset));
+  const size = pointerToRawDataOff
+    ? Math.min(dataSize, Math.max(0, fileSize - offset))
+    : mappedRvaSize(rvaToOff, addressOfRawDataRva, dataSize, fileSize);
   if (size < dataSize) addWarning(`${label} debug entry is shorter than its declared SizeOfData.`);
   return { offset, size };
 };

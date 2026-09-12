@@ -27,7 +27,11 @@ const collectIssues = (
     resourceSubdirectoryTargets,
     RESOURCE_RVA,
     RESOURCE_SIZE,
-    RESOURCE_BASE,
+    rva => {
+      const entry = resourceDataEntries.find(data =>
+        rva >= data.dataRva && rva < data.dataRva + data.size);
+      return entry?.dataFileOffset == null ? null : entry.dataFileOffset + rva - entry.dataRva;
+    },
     fileSize
   );
 
@@ -75,7 +79,7 @@ void test("validateResourceLayout uses parsed payload file offsets for mapping c
   assert.match(issues.join(" "), /data entry area begins/i);
   assert.match(issues.join(" "), /outside the declared \.rsrc RVA span/i);
   assert.match(issues.join(" "), /could not be mapped/i);
-  assert.match(issues.join(" "), /maps outside the \.rsrc file span/i);
+  assert.doesNotMatch(issues.join(" "), /file span/i);
 });
 
 void test("validateResourceLayout reports exact data-entry area ordering diagnostics", () => {
@@ -103,7 +107,7 @@ void test("validateResourceLayout reports truncated and overlapping resource pay
     []
   );
 
-  assert.match(issues.join(" "), /truncated by end of file/i);
+  assert.match(issues.join(" "), /truncated or not fully mapped to file data/i);
   assert.match(issues.join(" "), /payload ranges overlap/i);
 });
 
@@ -124,7 +128,7 @@ void test("validateResourceLayout reports each payload span issue independently"
     dataFileOffset: -1,
     size: 1
   }], []), [
-    "Resource data payload at RVA 0x1001 is truncated by end of file."
+    "Resource data payload at RVA 0x1001 is truncated or not fully mapped to file data."
   ]);
   assert.deepStrictEqual(collectIssues(0x10, [], [{
     start: 0x20,
@@ -132,9 +136,7 @@ void test("validateResourceLayout reports each payload span issue independently"
     dataRva: RESOURCE_RVA + 1,
     dataFileOffset: RESOURCE_LIMIT_END,
     size: 1
-  }], [], RESOURCE_LIMIT_END + 1), [
-    "Resource data payload at RVA 0x1001 maps outside the .rsrc file span."
-  ]);
+  }], [], RESOURCE_LIMIT_END + 1), []);
 });
 
 void test("validateResourceLayout reports exact interleaved string and data-entry layout", () => {
@@ -198,7 +200,7 @@ void test("validateResourceLayout accepts payloads exactly on file and resource 
   assert.deepStrictEqual(issues, []);
 });
 
-void test("validateResourceLayout reports payload file offsets before the resource file span", () => {
+void test("validateResourceLayout accepts mapped payloads stored before the resource directory in the file", () => {
   const issues = validateResourceLayout(
     0x10,
     [],
@@ -206,13 +208,11 @@ void test("validateResourceLayout reports payload file offsets before the resour
     [],
     RESOURCE_RVA,
     RESOURCE_SIZE,
-    0x40,
+    rva => rva === RESOURCE_RVA + 1 ? 0x20 : null,
     0x200
   );
 
-  assert.deepStrictEqual(issues, [
-    "Resource data payload at RVA 0x1001 maps outside the .rsrc file span."
-  ]);
+  assert.deepStrictEqual(issues, []);
 });
 
 void test("validateResourceLayout ignores zero-sized payloads for span and overlap checks", () => {
@@ -256,4 +256,20 @@ void test("validateResourceLayout ignores zero-sized payloads inside non-empty p
   );
 
   assert.deepStrictEqual(issues, []);
+});
+
+void test("validateResourceLayout accepts a payload continuing from EOF into earlier file data", () => {
+  const issues = validateResourceLayout(0, [], [{
+    start: 0, end: 16, dataRva: RESOURCE_RVA, dataFileOffset: 127, size: 2
+  }], [], RESOURCE_RVA, RESOURCE_SIZE,
+  rva => rva === RESOURCE_RVA ? 127 : rva === RESOURCE_RVA + 1 ? 0 : null, 128);
+  assert.deepEqual(issues, []);
+});
+
+void test("validateResourceLayout reports an interior gap even when endpoints fit in the file", () => {
+  const issues = validateResourceLayout(0, [], [{
+    start: 0, end: 16, dataRva: RESOURCE_RVA, dataFileOffset: 0, size: 3
+  }], [], RESOURCE_RVA, RESOURCE_SIZE,
+  rva => rva === RESOURCE_RVA + 1 ? null : rva - RESOURCE_RVA, 128);
+  assert.match(issues.join(" "), /not fully mapped/);
 });

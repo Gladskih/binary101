@@ -1,5 +1,6 @@
 "use strict";
 
+import { readDebugPayloadBytes } from "./payload-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
 import { getReadableDebugData } from "./data.js";
@@ -62,7 +63,9 @@ export const parseR2rPerfMapInfo = async (
     addWarning("R2R_PERFMAP debug entry is smaller than the fixed header.");
     return null;
   }
-  const payload = await reader.readBytes(dataInfo.offset, dataInfo.size);
+  const payload = await readDebugPayloadBytes(
+    reader, rvaToOff, addressOfRawDataRva, pointerToRawDataOff,
+    0, dataInfo.size);
   if (payload.byteLength < R2R_PERFMAP_FIXED_SIZE) {
     addWarning("R2R_PERFMAP debug entry is truncated.");
     return null;

@@ -1,5 +1,7 @@
 "use strict";
 
+import { contiguousRvaOffset, mappedRvaSize } from "../rva-mapping.js";
+import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeCodeViewEntry } from "./codeview.js";
 import { decodeDebugEntryPayload, type PeDebugPayloads } from "./entry-decoders.js";
@@ -64,7 +66,8 @@ const resolveDebugRawSpan = (
   dataSize: number
 ): FileRange | null => {
   if (dataSize <= 0) return null;
-  const start = pointerToRawDataOff || (addressOfRawDataRva ? rvaToOff(addressOfRawDataRva) : null);
+  const start = pointerToRawDataOff || (addressOfRawDataRva
+    ? contiguousRvaOffset(rvaToOff, addressOfRawDataRva, dataSize, fileSize) : null);
   if (start == null || start < 0 || start >= fileSize) return null;
   const end = start + dataSize;
   if (end > fileSize) return null;
@@ -79,16 +82,12 @@ const readDebugDirectoryEntry = async (
   addWarning: (message: string | null) => void
 ): Promise<DataView | null> => {
   const entryRva = debugDirectoryRva + index * IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE;
-  const entryOffset = rvaToOff(entryRva >>> 0);
+  const entryOffset = rvaToOff(entryRva);
   if (entryOffset == null || entryOffset < 0) {
     addWarning("Debug directory no longer maps through rvaToOff.");
     return null;
   }
-  if (entryOffset + IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE > reader.size) {
-    addWarning("Debug directory extends beyond end of file (possible truncation).");
-    return null;
-  }
-  const view = await reader.read(entryOffset, IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE);
+  const view = await readMappedRvaPrefix(reader, entryRva, IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE, rvaToOff);
   if (view.byteLength < IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE) {
     addWarning("Debug directory entry is truncated.");
     return null;
@@ -190,7 +189,7 @@ export async function parseDebugDirectory(
   if (baseOffset >= fileSize) {
     return { entry: null, entries: [], warning: "Debug directory starts past end of file.", rawDataRanges: [] };
   }
-  const availableDirSize = Math.min(debugDir.size, Math.max(0, fileSize - baseOffset));
+  const availableDirSize = mappedRvaSize(rvaToOff, debugDir.rva, debugDir.size, fileSize);
   if (availableDirSize < IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE) {
     return {
       entry: null,

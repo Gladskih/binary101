@@ -176,7 +176,8 @@ void test("parseCoffDebugInfo resolves mapped symbol LVAs and truncated header r
   const mapped = await parseCoffDebugInfo(
     createOffsetFile(payload),
     payload.length + 1,
-    rva => rva === 0x1000 ? COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH + 1 : null,
+    rva => rva >= 0x1000 && rva < 0x1000 + symbolTable.bytes.length
+      ? COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH + 1 + rva - 0x1000 : null,
     0,
     1,
     COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH,

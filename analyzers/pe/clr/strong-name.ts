@@ -1,5 +1,7 @@
 "use strict";
 
+import { contiguousRvaOffset } from "../rva-mapping.js";
+import { readMappedRvaBytes } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
 import type { PeClrHeader } from "./types.js";
@@ -30,12 +32,14 @@ const readSignature = async (
   if (offset == null || offset < 0 || offset >= reader.size) {
     return { bytes: null, offset: null, status: "unmapped" };
   }
-  const bytes = await reader.readBytes(offset, size);
+  const bytes = await readMappedRvaBytes(reader, rva, size, rvaToOff);
   if (bytes.length < size) {
     issues.push("StrongNameSignature extends past end of file.");
     return { bytes, offset, status: "truncated" };
   }
-  return { bytes, offset, status: isAllZero(bytes) ? "delay-signed" : "present" };
+  const signatureOffset = contiguousRvaOffset(rvaToOff, rva, size, reader.size);
+  if (signatureOffset == null) issues.push("Strong-name hash verification requires a contiguous signature file range.");
+  return { bytes, offset: signatureOffset, status: isAllZero(bytes) ? "delay-signed" : "present" };
 };
 
 const verificationNote = (

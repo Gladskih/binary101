@@ -74,7 +74,7 @@ void test("TLS VA conversion distinguishes null from a nonzero VA at the image b
 
 for (const [offset, expected] of [[null, false], [-1, false], [0, true], [1, false]] as const) {
   void test(`TLS mapped VA checks offset ${offset} against file boundaries`, () => {
-    assert.equal(isReadableMappedTlsVa(1n, 4, 0n, () => offset, 4), expected);
+    assert.equal(isReadableMappedTlsVa(1n, 4, 0n, rva => offset == null ? null : offset + rva - 1, 4), expected);
   });
 }
 

@@ -1,5 +1,6 @@
 "use strict";
 
+import { contiguousRvaOffset } from "../rva-mapping.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 import type { PeDebugDirectoryEntry } from "./directory.js";
@@ -25,7 +26,8 @@ const resolveMainExceptionRange = (
 ): MainExceptionRange => {
   const exceptionDir = dataDirs.find(directory => directory.name === "EXCEPTION");
   if (!exceptionDir || (exceptionDir.rva === 0 && exceptionDir.size === 0)) return { kind: "absent" };
-  const start = exceptionDir.rva ? rvaToOff(exceptionDir.rva) : null;
+  const start = exceptionDir.rva
+    ? contiguousRvaOffset(rvaToOff, exceptionDir.rva, exceptionDir.size, fileSize) : null;
   if (start == null || start < 0 || start >= fileSize) return { kind: "invalid" };
   if (exceptionDir.size <= 0 || exceptionDir.size > fileSize - start) return { kind: "invalid" };
   return { kind: "valid", range: { start, size: exceptionDir.size } };
@@ -37,7 +39,8 @@ const resolveDebugExceptionRange = (
   fileSize: number
 ): FileRange | null => {
   if (entry.sizeOfData <= 0) return null;
-  const mappedStart = entry.addressOfRawData ? rvaToOff(entry.addressOfRawData) : null;
+  const mappedStart = entry.addressOfRawData
+    ? contiguousRvaOffset(rvaToOff, entry.addressOfRawData, entry.sizeOfData, fileSize) : null;
   const start = entry.pointerToRawData || mappedStart;
   if (start == null || start < 0 || start >= fileSize) return null;
   if (entry.sizeOfData > fileSize - start) return null;

@@ -1,5 +1,6 @@
 "use strict";
 
+import { contiguousRvaOffset } from "../rva-mapping.js";
 import { toHex32 } from "../../../binary-utils.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
@@ -34,7 +35,7 @@ const resolveDebugHeaderTableOffset = (
     candidate + Math.min(minimumBytes, 1) <= payloadEnd
   );
   if (validPayloadCandidate != null) return validPayloadCandidate;
-  const mappedOffset = lva ? rvaToOff(lva) : null;
+  const mappedOffset = lva ? contiguousRvaOffset(rvaToOff, lva, Math.max(1, minimumBytes), fileSize) : null;
   const fallbackOffset = lva === 0 ? dataInfo.offset + COFF_DEBUG_SYMBOLS_HEADER_BYTE_LENGTH : null;
   return [mappedOffset, fallbackOffset].find(candidate =>
     candidate != null &&
@@ -155,6 +156,11 @@ export const parseCoffDebugInfo = async (
     collectWarning
   );
   if (!dataInfo) return null;
+  if (!pointerToRawDataOff && contiguousRvaOffset(rvaToOff,
+    addressOfRawDataRva, dataInfo.size, fileSize) == null) {
+    collectWarning("COFF debug payload does not have a contiguous mapped file range.");
+    return null;
+  }
   const header = await readCoffSymbolsHeader(reader, dataInfo, collectWarning);
   if (!header) return null;
   const symbolTableOffset = resolveDebugSymbolTableOffset(
