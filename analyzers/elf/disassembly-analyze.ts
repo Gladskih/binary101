@@ -50,6 +50,18 @@ export async function analyzeElfInstructionSets(
   file: File,
   opts: AnalyzeElfInstructionSetOptions
 ): Promise<ElfInstructionSetReport> {
+  // AAELF64, ELF Header: EM_AARCH64 = 183.
+  // https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst
+  if (opts.machine === 183) {
+    const { analyzeAarch64InstructionSets } = await import("./disassembly-aarch64.js");
+    return analyzeAarch64InstructionSets(file, opts);
+  }
+  return analyzeX86InstructionSets(file, opts);
+}
+
+async function analyzeX86InstructionSets(
+  file: File, opts: AnalyzeElfInstructionSetOptions
+): Promise<ElfInstructionSetReport> {
   const issues: string[] = [];
   const machine = opts.machine >>> 0;
   const supported = machine === ELF_MACHINE_I386 || machine === ELF_MACHINE_X86_64;
@@ -71,7 +83,7 @@ export async function analyzeElfInstructionSets(
     ...(seedSummary ? { seedSummary } : {})
   });
   if (!supported) {
-    issues.push(`Disassembly is only supported for x86/x86-64 (e_machine ${machine}).`);
+    issues.push(`Disassembly is only supported for x86/x86-64 and AArch64 (e_machine ${machine}).`);
     return emptyReport(0);
   }
   if (!opts.littleEndian) {

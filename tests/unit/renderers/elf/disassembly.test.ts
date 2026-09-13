@@ -5,6 +5,42 @@ import { test } from "node:test";
 import { renderInstructionSets } from "../../../../renderers/elf/disassembly.js";
 import type { ElfParseResult } from "../../../../analyzers/elf/types.js";
 
+void test("AArch64 pending panel does not show x86 CPUID features", () => {
+  const out: string[] = [];
+  renderInstructionSets({ header: { machine: 183 } } as ElfParseResult, out);
+
+  assert.ok(out.join("").includes("AArch64"));
+  assert.ok(out.join("").includes("elfInstructionSetsProgress"));
+  assert.ok(!out.join("").includes("CpuidFeature"));
+});
+
+void test("AArch64 renders LLVM requirements and version with escaped labels", () => {
+  const out: string[] = [];
+  renderInstructionSets({
+    header: { machine: 183 },
+    disassembly: {
+      bitness: 64, decoderVersion: "LLVM 21.1.8", bytesSampled: 4, bytesDecoded: 4,
+      instructionCount: 1, invalidInstructionCount: 0, issues: [],
+      instructionSets: [{ id: "test", label: "<SVE or SME>", description: "<gate>", instructionCount: 1 }]
+    }
+  } as unknown as ElfParseResult, out);
+
+  const html = out.join("");
+  assert.ok(html.includes("LLVM 21.1.8"));
+  assert.ok(html.includes("&lt;SVE or SME&gt;") || html.includes("&lt;SVE or SME>"));
+  assert.ok(!html.includes("CpuidFeature"));
+});
+
+void test("AArch64 renders an empty report without a decoder version", () => {
+  const out: string[] = [];
+  renderInstructionSets({ header: { machine: 183 }, disassembly: {
+    bitness: 64, bytesSampled: 0, bytesDecoded: 0, instructionCount: 0,
+    invalidInstructionCount: 0, issues: [], instructionSets: []
+  } } as unknown as ElfParseResult, out);
+
+  assert.ok(out.join("").includes("No instruction-set requirements"));
+});
+
 void test("renderInstructionSets (ELF) renders a chip table", () => {
   const elf = {
     disassembly: {

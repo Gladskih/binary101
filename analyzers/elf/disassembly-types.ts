@@ -27,6 +27,7 @@ export interface ElfDisassemblySeedSummary {
 }
 
 export interface ElfInstructionSetReport {
+  decoderVersion?: string;
   bitness: 32 | 64;
   bytesSampled: number;
   bytesDecoded: number;

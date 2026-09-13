@@ -48,11 +48,15 @@ const renderInstructionSetHeader = (disasm: ElfParseResult["disassembly"], out: 
   out.push(`</div>`);
 };
 
-const renderPendingInstructionSets = (out: string[]): void => {
+const renderPendingProgress = (out: string[]): void => {
   out.push(
     `<div class="smallNote dim" id="${PROGRESS_TEXT_ID}">Not analyzed yet. Click the button above to start (may use CPU).</div>` +
       `<progress id="${PROGRESS_BAR_ID}" style="width:100%" hidden></progress>`
   );
+};
+
+const renderPendingInstructionSets = (out: string[]): void => {
+  renderPendingProgress(out);
   renderFeatureTableStart(out);
   for (const id of KNOWN_CPUID_FEATURES) out.push(renderFeatureRow(id, null));
   out.push(`</tbody></table>`);
@@ -147,6 +151,11 @@ const renderOtherFeatureCounts = (disasm: NonNullable<ElfParseResult["disassembl
 const renderInstructionSetsContent = (elf: ElfParseResult, out: string[]): void => {
   const disasm = elf.disassembly;
   renderInstructionSetHeader(disasm, out);
+  // AAELF64 ELF Header: EM_AARCH64.
+  if (elf.header?.machine === 183) {
+    renderAarch64InstructionSets(disasm, out);
+    return;
+  }
   if (!disasm) {
     renderPendingInstructionSets(out);
     return;
@@ -155,6 +164,31 @@ const renderInstructionSetsContent = (elf: ElfParseResult, out: string[]): void 
   renderSeedSummary(disasm, out);
   renderKnownFeatureCounts(disasm, out);
   renderOtherFeatureCounts(disasm, out);
+};
+
+const renderAarch64InstructionSets = (disasm: ElfParseResult["disassembly"], out: string[]): void => {
+  out.push(`<div class="smallNote">AArch64 instruction-set requirements</div>`);
+  out.push(`<div class="smallNote dim">LLVM opcode feature gates preserve “and” / “or” alternatives. ` +
+    `Grouped Arm labels are not separate requirements. No recorded gate does not prove base-ISA validity; ` +
+    `operand restrictions, execution modes and implied dependencies are not expanded here.</div>`);
+  if (!disasm) {
+    renderPendingProgress(out);
+    return;
+  }
+  renderDisassemblySummary(disasm, out);
+  renderSeedSummary(disasm, out);
+  if (disasm.decoderVersion) out.push(`<div class="smallNote dim">${escapeHtml(disasm.decoderVersion)}</div>`);
+  if (!disasm.instructionSets.length) {
+    out.push(`<div class="smallNote dim">No instruction-set requirements were detected in the sampled bytes.</div>`);
+    return;
+  }
+  out.push(`<div class="tableWrap"><table class="table"><thead><tr>` +
+    `<th>Requirement</th><th class="isaTable__count">Instr.</th></tr></thead><tbody>`);
+  for (const set of disasm.instructionSets) {
+    out.push(`<tr><td>${escapeHtml(set.label)}</td>` +
+      `<td class="isaTable__count">${set.instructionCount}</td></tr>`);
+  }
+  out.push(`</tbody></table></div>`);
 };
 
 export const renderInstructionSetsPanel = (elf: ElfParseResult): string => {

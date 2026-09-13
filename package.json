@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "imports": {
+    "#aarch64-disassembler-loader": "./analyzers/aarch64/load-disassembler.node.ts",
     "#iced-x86-loader": "./analyzers/x86/load-iced-x86.node.ts"
   },
   "license": "MIT",
@@ -75,6 +76,7 @@
   },
   "dependencies": {
     "@noble/hashes": "2.4.0",
+    "llvm-aarch64-disasm": "^0.1.0",
     "lzma-web": "^4.0.0-rc.5",
     "pkijs": "^3.4.0"
   }

@@ -632,6 +632,7 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .table tr:last-child td{border-bottom:none}
 .peNumeric{text-align:right}
 .tableWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;min-width:0}
+.table .isaTable__count{text-align:right}
 .tableWrap > .table{min-width:600px}
 .tableWrap > .directoryFolderTable{min-width:680px}
 .tableWrap > .directoryFileTable{min-width:860px}

@@ -23,7 +23,7 @@ export const collectElfInstructionSetSeeds = async (
   file: File,
   opts: AnalyzeElfInstructionSetOptions,
   regions: ElfExecutableRegion[],
-  sampledSections: ElfSampledSection[],
+  sampledSections: Pick<ElfSampledSection, "vaddrStart" | "label">[],
   issues: string[]
 ): Promise<ElfInstructionSetSeeds | null> => {
   const requestedEntrypointVaddr = typeof opts.entrypointVaddr === "bigint" ? opts.entrypointVaddr : 0n;
@@ -53,7 +53,9 @@ export const collectElfInstructionSetSeeds = async (
     const fallback = sampledSections[0];
     if (!fallback) return null;
     fallbackSource = fallback.label;
-    addSeedVaddr(fallback.vaddrStart);
+    // Zero in metadata can mean "absent", but a validated executable range may start at zero.
+    if (fallback.vaddrStart === 0n) entrypoints.push(0n);
+    else addSeedVaddr(fallback.vaddrStart);
     issues.push(`Falling back to ${fallback.label} for disassembly sample.`);
   }
   return {
