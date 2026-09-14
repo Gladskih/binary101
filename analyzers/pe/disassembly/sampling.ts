@@ -3,6 +3,7 @@
 import { readMappedRvaBytes } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import { peSectionNameValue } from "../sections/name.js";
+import { isRvaField } from "../layout/rva-limits.js";
 import type { PeSection } from "../types.js";
 import type { AnalyzePeInstructionSetOptions } from "./types.js";
 
@@ -44,7 +45,9 @@ export const findBestCodeSection = (sections: PeSection[]): PeSection | null => 
 export const normalizeRvaList = (values: unknown): number[] =>
   uniqueU32s(
     (Array.isArray(values) ? values : []).filter(
-      (rva): rva is number => Number.isSafeInteger(rva) && rva > 0
+      // Omit zero-valued seeds (AddressOfEntryPoint convention; see layout/rva-limits.ts).
+      // Reject overflow before uniqueU32s can wrap it into unrelated code.
+      (rva): rva is number => typeof rva === "number" && isRvaField(rva) && rva > 0
     )
   );
 
@@ -115,7 +118,7 @@ const createPeEntrypointGroups = (
   opts: AnalyzePeInstructionSetOptions
 ): Array<{ source: string; rvas: number[] }> => {
   const requestedEntrypointRva =
-    Number.isSafeInteger(opts.entrypointRva) && opts.entrypointRva > 0 ? (opts.entrypointRva >>> 0) : 0;
+    normalizeRvaList([opts.entrypointRva])[0] ?? 0;
   const groups: Array<{ source: string; rvas: number[] }> = [
     ...(requestedEntrypointRva ? [{ source: "Entry point", rvas: [requestedEntrypointRva] }] : []),
     { source: "Export", rvas: normalizeRvaList(opts.exportRvas) },

@@ -1,10 +1,10 @@
 "use strict";
 
-// Microsoft PE format: section VirtualAddress values and RVAs are 32-bit fields.
-// Use 2^32 as the exclusive upper bound so high-RVA spans clamp instead of wrapping to 0.
+// PE32/PE32+ RVAs are unsigned 32-bit values; 2^32 is the exclusive upper bound.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#optional-header-standard-fields-image-only
 export const PE_RVA_EXCLUSIVE_LIMIT = 0x1_0000_0000;
 
-const isRvaField = (value: number): boolean =>
+export const isRvaField = (value: number): boolean =>
   Number.isInteger(value) && value >= 0 && value < PE_RVA_EXCLUSIVE_LIMIT;
 
 export const isRvaRangeInsideSizeOfImage = (

@@ -6,7 +6,7 @@ import type {
 import { recordAarch64Requirements } from "./instruction-set-usage.js";
 
 export const notifyAarch64Progress = (
-  opts: AnalyzeElfInstructionSetOptions,
+  opts: Pick<AnalyzeElfInstructionSetOptions, "signal" | "onProgress" | "yieldEveryInstructions">,
   report: ElfInstructionSetReport,
   stage: ElfInstructionSetProgress["stage"]
 ): void => {
@@ -51,7 +51,7 @@ export const walkAarch64ControlFlow = async (
   decoder: Disassembler,
   readCode: (address: bigint) => Promise<Uint8Array>,
   entrypoints: bigint[],
-  opts: AnalyzeElfInstructionSetOptions,
+  opts: Pick<AnalyzeElfInstructionSetOptions, "signal" | "onProgress" | "yieldEveryInstructions">,
   report: ElfInstructionSetReport
 ): Promise<void> => {
   const pending = [...entrypoints];

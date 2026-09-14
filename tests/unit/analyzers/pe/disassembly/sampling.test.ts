@@ -17,6 +17,12 @@ import { analyzePeInstructionSets } from "../../../../../analyzers/pe/disassembl
 
 const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
 
+void test("PE seed RVAs do not wrap oversized addresses into code", () => {
+  // PE/COFF RVAs are unsigned DWORDs, not modulo-2^32 arbitrary numbers.
+  // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#optional-header-standard-fields-image-only
+  assert.deepEqual(normalizeRvaList([0x1_0000_1000, -1, NaN, 1.5]), []);
+});
+
 void test("fallback never guesses code from section names or data/code-content flags", () => {
   // PE/COFF: CNT_CODE describes contents; MEM_EXECUTE grants execution permission.
   // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags

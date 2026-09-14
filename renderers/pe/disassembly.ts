@@ -2,6 +2,9 @@
 
 import { formatHumanSize } from "../../binary-utils.js";
 import { escapeHtml } from "../../html-utils.js";
+import { IMAGE_FILE_MACHINE_ARM64 } from "../../analyzers/coff/machine.js";
+import { getCanonicalPeMachine } from "../../analyzers/pe/machine.js";
+import { renderPeAarch64InstructionSets } from "./disassembly-aarch64.js";
 import { renderSpecialInstructions } from "./disassembly-special-instructions.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import {
@@ -166,6 +169,10 @@ const renderInstructionSetsContent = (pe: PeWindowsParseResult, out: string[]): 
 };
 
 export const renderInstructionSetsPanel = (pe: PeWindowsParseResult): string => {
+  if (getCanonicalPeMachine(pe.coff.Machine) === IMAGE_FILE_MACHINE_ARM64) {
+    return `<section id="${PE_INSTRUCTION_SETS_PANEL_ID}">` +
+      renderPeAarch64InstructionSets(pe.disassembly) + `</section>`;
+  }
   const out: string[] = [];
   renderInstructionSetsContent(pe, out);
   return `<section id="${PE_INSTRUCTION_SETS_PANEL_ID}">${out.join("")}</section>`;

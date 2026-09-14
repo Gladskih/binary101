@@ -48,6 +48,7 @@ export interface PeCodeStringReference {
 }
 
 export interface PeInstructionSetReport {
+  decoderVersion?: string;
   specialInstructions: PeSpecialInstructionFinding[];
   bitness: 32 | 64;
   bytesSampled: number;

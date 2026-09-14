@@ -4,7 +4,9 @@ import type { AnalyzePeInstructionSetOptions, PeInstructionSetProgress, PeInstru
 import { disassembleControlFlowForInstructionSets } from "../../x86/disassembly-control-flow.js";
 import { isIcedX86Module, type IcedX86Module } from "../../x86/disassembly-iced.js";
 import { loadIcedX86 } from "#iced-x86-loader";
-import { IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_I386 } from "../../coff/machine.js";
+import { IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_I386,
+  IMAGE_FILE_MACHINE_ARM64 } from "../../coff/machine.js";
+import { analyzePeAarch64InstructionSets } from "./aarch64.js";
 import { getCanonicalPeMachine } from "../machine.js";
 import { createX86InstructionSetUsageTracker } from "../../x86/instruction-set-usage.js";
 import {
@@ -85,6 +87,7 @@ export async function analyzePeInstructionSets(
 ): Promise<PeInstructionSetReport> {
   const issues: string[] = [];
   const coffMachine = getCanonicalPeMachine(opts.coffMachine);
+  if (coffMachine === IMAGE_FILE_MACHINE_ARM64) return analyzePeAarch64InstructionSets(reader, opts);
   const supported = coffMachine === IMAGE_FILE_MACHINE_I386 || coffMachine === IMAGE_FILE_MACHINE_AMD64;
   const bitness: 32 | 64 = opts.is64Bit ? 64 : 32;
   const yieldEveryInstructions =
@@ -95,7 +98,7 @@ export async function analyzePeInstructionSets(
       : 0;
   const emptyReport = (bytesSampled: number): PeInstructionSetReport =>
     emptyInstructionSetReport(bitness, bytesSampled, issues);
-  if (!supported) return (issues.push(`Disassembly is only supported for x86/x86-64 (Machine ${coffMachine.toString(16)}).`), emptyReport(0));
+  if (!supported) return (issues.push(`Disassembly is only supported for x86/x86-64 and ARM64 (Machine ${coffMachine.toString(16)}).`), emptyReport(0));
   if (coffMachine === IMAGE_FILE_MACHINE_AMD64 && bitness !== 64) {
     issues.push("Machine is AMD64 but optional header reports 32-bit mode.");
   } else if (coffMachine === IMAGE_FILE_MACHINE_I386 && bitness !== 32) {
