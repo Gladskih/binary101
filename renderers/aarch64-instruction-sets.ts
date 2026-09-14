@@ -20,7 +20,7 @@ const streamingNote = (set: ElfInstructionSetUsage): string => {
 };
 
 const renderDetectedRow = (set: ElfInstructionSetUsage): string => {
-  return `<tr><td>${escapeAarch64Text(set.label)}</td>` +
+  return `<tr data-requirement-id="${escapeAarch64Text(set.id)}"><td>${escapeAarch64Text(set.label)}</td>` +
     `<td class="isaTable__count">${set.instructionCount}</td>` +
     `<td>${escapeAarch64Text(streamingNote(set))}</td>` +
     `<td>${escapeAarch64Text(set.description)}</td></tr>`;

@@ -40,7 +40,7 @@ void test("ARM64 result escapes requirements, decoder version and issues", () =>
   assert.ok(html.includes("<ul><li>&lt;bad></li></ul>"));
   assert.ok(html.includes('<div class="tableWrap"><table class="table aarch64IsaTable"><thead><tr>'));
   assert.ok(html.includes('<th>Requirement</th><th class="isaTable__count">Instr.</th>'));
-  assert.ok(html.includes("</tr></thead><tbody><tr><td>SVE or &lt;SME></td>"));
+  assert.ok(html.includes('data-requirement-id="test"><td>SVE or &lt;SME></td>'));
   assert.ok(html.includes("</tbody></table></div>"));
 });
 

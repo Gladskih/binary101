@@ -27,8 +27,9 @@ const createCodeReader = (file: File, regions: ElfExecutableRegion[]) => {
     const offset = address - region.vaddr;
     // A64 words are always little endian, even for big endian ELF data.
     // https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst
+    // Match the file-range reader's measured 64 KiB window, bounded by this region.
     return reader.readBytes(Number(region.fileOffset + offset),
-      Number(region.fileSize - offset < 4n ? region.fileSize - offset : 4n));
+      Number(region.fileSize - offset < 65536n ? region.fileSize - offset : 65536n));
   };
 };
 

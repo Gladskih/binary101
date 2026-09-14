@@ -1,4 +1,7 @@
-import type { DecodeResult, Disassembler } from "llvm-aarch64-disasm";
+import type { Disassembler } from "llvm-aarch64-disasm";
+import { createAarch64VisitedTracker } from "./visited-addresses.js";
+import { createAarch64CodeWindow } from "./code-window.js";
+import { createAarch64SampleDecoder, type Aarch64InstructionSample } from "./sample-decoder.js";
 import type {
   AnalyzeElfInstructionSetOptions, ElfInstructionSetReport, ElfInstructionSetProgress,
   ElfInstructionSetUsage
@@ -21,7 +24,7 @@ export const notifyAarch64Progress = (
   }
 };
 
-const nextAddresses = (instruction: DecodeResult): bigint[] => {
+const nextAddresses = (instruction: Aarch64InstructionSample): bigint[] => {
   if (instruction.status === "invalid") return [];
   const targets = instruction.target === undefined ? [] : [instruction.target];
   switch (instruction.controlFlow) {
@@ -32,7 +35,7 @@ const nextAddresses = (instruction: DecodeResult): bigint[] => {
 };
 
 const recordInstruction = (
-  instruction: DecodeResult,
+  instruction: Aarch64InstructionSample,
   report: ElfInstructionSetReport,
   usage: Map<string, ElfInstructionSetUsage>
 ): void => {
@@ -56,21 +59,30 @@ export const walkAarch64ControlFlow = async (
   report: ElfInstructionSetReport
 ): Promise<void> => {
   const pending = [...entrypoints];
-  const visited = new Set<bigint>();
+  const visit = createAarch64VisitedTracker();
+  const readWindow = createAarch64CodeWindow(readCode);
+  const decode = createAarch64SampleDecoder(decoder);
+  let visitedCount = 0;
+  let lastYield = performance.now();
   const usage = new Map<string, ElfInstructionSetUsage>();
   const interval = Number.isSafeInteger(opts.yieldEveryInstructions) && opts.yieldEveryInstructions! > 0
     ? opts.yieldEveryInstructions! : 1024;
   notifyAarch64Progress(opts, report, "decoding");
   try {
-    while (pending.length && !opts.signal?.aborted) {
-      const address = pending.pop()!;
-      if (visited.has(address)) continue;
-      visited.add(address);
-      await decodeAddress(decoder, readCode, address, pending, report, usage);
-      if (visited.size % interval === 0) {
+    while (!opts.signal?.aborted) {
+      const address = nextUnvisitedAddress(pending, visit, report.issues);
+      if (address === undefined) break;
+      const bytes = readWindow(address);
+      recordBytes(decode, bytes instanceof Uint8Array ? bytes : await bytes,
+        address, pending, report, usage);
+      if (++visitedCount % interval === 0) {
         report.instructionSets = [...usage.values()];
         notifyAarch64Progress(opts, report, "decoding");
-        await new Promise<void>(resolve => setTimeout(resolve, 0));
+        // A frame-sized work budget avoids browser timer clamping on every 1024 words.
+        if (performance.now() - lastYield >= 16) {
+          await new Promise<void>(resolve => setTimeout(resolve, 0));
+          lastYield = performance.now();
+        }
       }
     }
   } finally {
@@ -79,24 +91,33 @@ export const walkAarch64ControlFlow = async (
   }
 };
 
-const decodeAddress = async (
-  decoder: Disassembler,
-  readCode: (address: bigint) => Promise<Uint8Array>,
+const nextUnvisitedAddress = (
+  pending: bigint[], visit: ReturnType<typeof createAarch64VisitedTracker>, issues: string[]
+): bigint | undefined => {
+  while (pending.length) {
+    const address = pending.pop()!;
+    const status = visit(address);
+    if (status === "new") return address;
+    if (status === "limit") {
+      issues.push("AArch64 sampling stopped at the visited-address memory budget (32 MiB).");
+      return undefined;
+    }
+    if (status === "invalid") issues.push(`Skipped invalid or unaligned AArch64 code address ${address}.`);
+  }
+  return undefined;
+};
+
+const recordBytes = (
+  decode: ReturnType<typeof createAarch64SampleDecoder>,
+  bytes: Uint8Array,
   address: bigint,
   pending: bigint[],
   report: ElfInstructionSetReport,
   usage: Map<string, ElfInstructionSetUsage>
-): Promise<void> => {
-  // A64 instructions are four-byte aligned (AAELF64, Mapping symbols).
-  if (address < 0n || address > 0xffffffffffffffffn || address % 4n !== 0n) {
-    report.issues.push(`Skipped invalid or unaligned AArch64 code address ${address}.`);
-    return;
-  }
-  const bytes = await readCode(address);
+): void => {
   if (!bytes.length) return;
   if (bytes.length < 4) report.issues.push(`Truncated AArch64 instruction at 0x${address.toString(16)}.`);
-  const instruction = decoder.decode(bytes, { address })[0];
-  if (!instruction) throw new Error("AArch64 decoder returned no instruction.");
+  const instruction = decode(bytes, address);
   recordInstruction(instruction, report, usage);
   pending.push(...nextAddresses(instruction));
 };

@@ -35,8 +35,9 @@ const createCodeReader = (
   const offset = Number(rva) - section.virtualAddress;
   // Windows ARM64 is little endian; A64 instructions occupy four bytes.
   // https://learn.microsoft.com/en-us/cpp/build/arm64-windows-abi-conventions
+  // Match the file-range reader's measured 64 KiB window, bounded by this section.
   return reader.readBytes(section.pointerToRawData + offset,
-    Math.min(4, section.sizeOfRawData - offset));
+    Math.min(65536, section.sizeOfRawData - offset));
 };
 
 const resolveSeeds = (

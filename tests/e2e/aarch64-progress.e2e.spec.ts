@@ -4,7 +4,7 @@ import { createElfFile } from "../fixtures/elf-sample-file.js";
 import { createPePlusWithSection } from "../fixtures/sample-files-pe.js";
 
 // Enough words for many progress intervals (1024 instructions), followed by ret.
-const code = aarch64Code([0x04a00000, ...Array<number>(32768).fill(0xd503201f), 0xd65f03c0]).data;
+const code = aarch64Code([0x04a00000, ...Array<number>(262144).fill(0xd503201f), 0xd65f03c0]).data;
 
 const elfExecutable = (): Buffer => {
   const header = createElfFile().data;

@@ -2,6 +2,9 @@ import { featureDefinitions, type FeatureExpression, type FeatureRequirements } 
 import type { ElfInstructionSetUsage } from "../elf/disassembly-types.js";
 import { describeAarch64Features } from "./feature-descriptions.js";
 
+// Decoder requirements are immutable shared metadata; avoid serializing them per instruction.
+const requirementIds = new WeakMap<FeatureRequirements, string>();
+
 // Preserve Boolean gates and grouped Arm labels exactly; never turn OR into AND.
 // https://github.com/Gladskih/llvm-aarch64-disasm/blob/main/docs/metadata.md
 export const formatAarch64FeatureExpression = (expression: FeatureExpression): string => {
@@ -20,7 +23,9 @@ export const recordAarch64Requirements = (
   requirements: FeatureRequirements,
   usage: Map<string, ElfInstructionSetUsage>
 ): void => {
-  const id = requirements.known ? JSON.stringify(requirements.predicates) : "unknown";
+  const id = requirementIds.get(requirements) ??
+    (requirements.known ? JSON.stringify(requirements.predicates) : "unknown");
+  requirementIds.set(requirements, id);
   const previous = usage.get(id);
   if (previous) {
     previous.instructionCount += 1;

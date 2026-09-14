@@ -14,6 +14,14 @@ Unavailable targets stop a path. Invalid words stop their path; truncated words,
 unaligned seeds, malformed ranges, decoder failures and LLVM soft-fail instructions
 produce visible notes or invalid-decode counts. Progress yields permit cancellation.
 
+Visited addresses use paged bitmaps (one bit per four-byte instruction), capped at
+32 MiB of bitmap storage. Reaching this budget stops sampling with a visible warning
+and retains partial results instead of overflowing a JavaScript Set. Reads use bounded
+64 KiB code windows; a 4096-word cache reuses decoded instruction samples, relocating
+PC-relative branch targets for each address. Text and operands are not reused.
+The event loop yields after roughly 16 ms of work, checked at the progress interval.
+Existing table rows update their count cells without rebuilding descriptions.
+
 A64 instructions remain little endian regardless of ELF data endianness. ELF32
 (ILP32) still contains A64 instructions; the report's bitness describes the ISA,
 while ELF class continues to control parsing of metadata.

@@ -70,7 +70,7 @@ void test("NEON predicate variants retain separate counts and streaming informat
   assert.equal((html.match(/>FEAT_AdvSIMD</g) ?? []).length, 2);
   assert.ok(html.includes("Not guaranteed"));
   assert.ok(html.includes("Allowed in either mode"));
-  assert.ok(!html.includes("HasNEONandIsStreamingSafe"));
+  assert.ok(!tableRows(html).some(row => row.textContent!.includes("HasNEONandIsStreamingSafe")));
   assert.ok(html.includes('<td class="isaTable__count">2</td>'));
   assert.ok(html.includes('<td class="isaTable__count">1</td>'));
   assert.deepEqual(Array.from(tableRows(html)[1]!.childNodes).map(cell => cell.textContent),
@@ -99,7 +99,7 @@ void test("nested alternatives and negation keep their gate and describe each re
   assert.ok(html.includes("FEAT_SVE: Scalable Vector Extension"));
   assert.ok(html.includes("FEAT_SME: Scalable Matrix Extension"));
   assert.ok(html.includes("No description available"));
-  assert.ok(!html.includes("&lt;predicate>"));
+  assert.ok(!tableRows(html).some(row => row.textContent!.includes("<predicate>")));
   assert.ok(!html.includes("<unknown>"));
   assert.ok(!html.includes(">FEAT_SVE</td>"));
 });
