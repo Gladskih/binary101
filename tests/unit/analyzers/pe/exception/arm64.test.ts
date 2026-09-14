@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseExceptionDirectory } from "../../../../../analyzers/pe/exception/index.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
+import { createFileRangeReader } from "../../../../../analyzers/file-range-reader.js";
 
 // Microsoft PE format, "Machine Types":
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types
@@ -14,6 +15,95 @@ const ARM64_RUNTIME_FUNCTION_ENTRY_SIZE = 8;
 const ARM64_XDATA_HEADER_HAS_EXCEPTION_HANDLER = 1 << 20;
 const ARM64_XDATA_HEADER_SINGLE_EPILOG = 1 << 21;
 const ARM64_XDATA_HEADER_ONE_UNWIND_WORD = 1 << 27;
+
+// Incidental fixture layout: keep the directory, function bodies and unwind data disjoint.
+const SHARED_XDATA_LAYOUT = {
+  fileSize: 0x400,
+  directoryRva: 0x80,
+  firstFunctionRva: 0x100,
+  secondFunctionRva: 0x104,
+  xdataRva: 0x200
+};
+
+const createSharedXdataFixture = (
+  xdataRva = SHARED_XDATA_LAYOUT.xdataRva,
+  secondBegin = SHARED_XDATA_LAYOUT.secondFunctionRva
+) => {
+  const bytes = new Uint8Array(SHARED_XDATA_LAYOUT.fileSize);
+  const view = new DataView(bytes.buffer);
+  // Microsoft ARM64 .pdata: independent function starts may reference the same .xdata RVA.
+  // https://learn.microsoft.com/en-us/cpp/build/arm64-exception-handling
+  writeArm64RuntimeFunction(
+    view, SHARED_XDATA_LAYOUT.directoryRva, SHARED_XDATA_LAYOUT.firstFunctionRva, xdataRva
+  );
+  writeArm64RuntimeFunction(
+    view, SHARED_XDATA_LAYOUT.directoryRva + ARM64_RUNTIME_FUNCTION_ENTRY_SIZE, secondBegin, xdataRva
+  );
+  // Function Length = 1 instruction, with one unwind word (ARM64 .xdata header).
+  view.setUint32(SHARED_XDATA_LAYOUT.xdataRva, 1 | ARM64_XDATA_HEADER_ONE_UNWIND_WORD, true);
+  const reader = createFileRangeReader(new MockFile(bytes), 0, bytes.length);
+  const offsets: number[] = [];
+  return { offsets, parse: () => parseExceptionDirectory({
+    size: reader.size,
+    readBytes: reader.readBytes,
+    read: async (offset: number, size: number) => {
+      offsets.push(offset);
+      return reader.read(offset, size);
+    }
+  }, [{
+    name: "EXCEPTION", rva: SHARED_XDATA_LAYOUT.directoryRva,
+    size: 2 * ARM64_RUNTIME_FUNCTION_ENTRY_SIZE
+  }],
+    value => value, IMAGE_FILE_MACHINE_ARM64
+  ) };
+};
+
+void test("ARM64 shared xdata is decoded once per parse", async () => {
+  const fixture = createSharedXdataFixture();
+
+  const parsed = await fixture.parse();
+
+  assert.equal(parsed?.functionCount, 2);
+  assert.deepEqual(parsed?.beginRvas, [
+    SHARED_XDATA_LAYOUT.firstFunctionRva, SHARED_XDATA_LAYOUT.secondFunctionRva
+  ]);
+  assert.equal(parsed?.uniqueUnwindInfoCount, 1);
+  assert.equal(fixture.offsets.filter(offset => offset === SHARED_XDATA_LAYOUT.xdataRva).length, 1);
+});
+
+void test("ARM64 unwind cache is local to a single parse", async () => {
+  const fixture = createSharedXdataFixture();
+
+  await fixture.parse();
+  await fixture.parse();
+
+  assert.equal(fixture.offsets.filter(offset => offset === SHARED_XDATA_LAYOUT.xdataRva).length, 2);
+});
+
+void test("ARM64 cached unwind information still validates each function range", async () => {
+  const fixture = createSharedXdataFixture(SHARED_XDATA_LAYOUT.xdataRva, SHARED_XDATA_LAYOUT.fileSize);
+
+  const parsed = await fixture.parse();
+
+  assert.equal(parsed?.functionCount, 2);
+  assert.equal(parsed?.invalidEntryCount, 1);
+  assert.deepEqual(parsed?.beginRvas, [SHARED_XDATA_LAYOUT.firstFunctionRva]);
+});
+
+void test("ARM64 cached invalid xdata preserves diagnostics for every reference", async () => {
+  // The zero header requires an extension word, which lies beyond EOF.
+  const truncatedXdataRva = SHARED_XDATA_LAYOUT.fileSize - Uint32Array.BYTES_PER_ELEMENT;
+  const fixture = createSharedXdataFixture(truncatedXdataRva);
+
+  const parsed = await fixture.parse();
+
+  assert.equal(parsed?.invalidEntryCount, 2);
+  assert.deepEqual(parsed?.issues, [
+    "ARM64 .xdata extended header is truncated.",
+    "ARM64 .xdata extended header is truncated."
+  ]);
+  assert.equal(fixture.offsets.filter(offset => offset === truncatedXdataRva).length, 1);
+});
 
 const writeArm64RuntimeFunction = (
   view: DataView,

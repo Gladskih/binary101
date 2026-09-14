@@ -175,16 +175,37 @@ const readArm64UnwindInfo = async (
   return readPackedUnwindInfo(unwindWord);
 };
 
+const createUnwindInfoReader = (reader: FileRangeReader, rvaToOff: RvaToOffset) => {
+  // The second .pdata word describes unwind data independently of the function start.
+  // https://learn.microsoft.com/en-us/cpp/build/arm64-exception-handling#pdata-records
+  const cache = new Map<number, { info: Arm64UnwindInfo | null; issues: string[] }>();
+  return async (word: number, issues: string[]): Promise<Arm64UnwindInfo | null> => {
+    const cached = cache.get(word);
+    if (cached) {
+      issues.push(...cached.issues);
+      return cached.info;
+    }
+    const recordIssues: string[] = [];
+    const info = await readArm64UnwindInfo(reader, rvaToOff, word, recordIssues);
+    // Repeated references to shared .xdata can otherwise thrash the file-window cache.
+    // Cache decoded records locally; retain diagnostics for every referencing entry.
+    cache.set(word, { info, issues: recordIssues });
+    issues.push(...recordIssues);
+    return info;
+  };
+};
+
 const processArm64RuntimeFunction = async (
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
   beginRva: number,
   unwindWord: number,
   issues: string[],
-  state: Arm64ExceptionState
+  state: Arm64ExceptionState,
+  readUnwindInfo: ReturnType<typeof createUnwindInfoReader>
 ): Promise<void> => {
   state.functionCount += 1;
-  const unwindInfo = await readArm64UnwindInfo(reader, rvaToOff, unwindWord, issues);
+  const unwindInfo = await readUnwindInfo(unwindWord, issues);
   if (unwindInfo?.key) state.uniqueUnwindInfos.add(unwindInfo.key);
   if (unwindInfo?.version != null && unwindInfo.version !== 0) state.unexpectedXdataVersionCount += 1;
   if (unwindInfo?.hasHandler) state.handlerUnwindInfoCount += 1;
@@ -246,6 +267,7 @@ export async function parseArm64ExceptionDirectory(
     issues.push("Exception directory size is not a multiple of ARM64 .pdata entry size (8 bytes).");
   }
   const state = createArm64ExceptionState();
+  const readUnwindInfo = createUnwindInfoReader(reader, rvaToOff);
   const spans = collectRuntimeFunctionSpans(
     dir.rva,
     Math.floor(dir.size / ARM64_RUNTIME_FUNCTION_ENTRY_SIZE),
@@ -269,7 +291,9 @@ export async function parseArm64ExceptionDirectory(
       const entryOffset = index * ARM64_RUNTIME_FUNCTION_ENTRY_SIZE;
       const beginRva = spanView.getUint32(entryOffset, true) >>> 0;
       const unwindWord = spanView.getUint32(entryOffset + Uint32Array.BYTES_PER_ELEMENT, true) >>> 0;
-      await processArm64RuntimeFunction(reader, rvaToOff, beginRva, unwindWord, issues, state);
+      await processArm64RuntimeFunction(
+        reader, rvaToOff, beginRva, unwindWord, issues, state, readUnwindInfo
+      );
     }
   }
   if (state.functionCount === 0) {
