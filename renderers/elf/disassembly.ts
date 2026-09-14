@@ -3,6 +3,7 @@
 import { formatHumanSize } from "../../binary-utils.js";
 import { escapeHtml } from "../../html-utils.js";
 import type { ElfParseResult } from "../../analyzers/elf/types.js";
+import { renderAarch64RequirementTable } from "../aarch64-instruction-sets.js";
 import {
   KNOWN_CPUID_FEATURES,
   describeCpuidFeature,
@@ -173,6 +174,7 @@ const renderAarch64InstructionSets = (disasm: ElfParseResult["disassembly"], out
     `operand restrictions, execution modes and implied dependencies are not expanded here.</div>`);
   if (!disasm) {
     renderPendingProgress(out);
+    out.push(`<div id="elfAarch64Requirements"></div>`);
     return;
   }
   renderDisassemblySummary(disasm, out);
@@ -180,15 +182,9 @@ const renderAarch64InstructionSets = (disasm: ElfParseResult["disassembly"], out
   if (disasm.decoderVersion) out.push(`<div class="smallNote dim">${escapeHtml(disasm.decoderVersion)}</div>`);
   if (!disasm.instructionSets.length) {
     out.push(`<div class="smallNote dim">No instruction-set requirements were detected in the sampled bytes.</div>`);
-    return;
   }
-  out.push(`<div class="tableWrap"><table class="table"><thead><tr>` +
-    `<th>Requirement</th><th class="isaTable__count">Instr.</th></tr></thead><tbody>`);
-  for (const set of disasm.instructionSets) {
-    out.push(`<tr><td>${escapeHtml(set.label)}</td>` +
-      `<td class="isaTable__count">${set.instructionCount}</td></tr>`);
-  }
-  out.push(`</tbody></table></div>`);
+  out.push(`<div id="elfAarch64Requirements">` +
+    renderAarch64RequirementTable(disasm.instructionSets) + `</div>`);
 };
 
 export const renderInstructionSetsPanel = (elf: ElfParseResult): string => {

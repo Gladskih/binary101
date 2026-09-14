@@ -1,4 +1,5 @@
 import { formatHumanSize } from "../binary-utils.js";
+import { updateAarch64InstructionSets } from "./aarch64-instruction-sets.js";
 import { createFileRangeReader, type FileRangeReader } from "../analyzers/file-range-reader.js";
 import type { ParseForUiResult } from "../analyzers/index.js";
 import {
@@ -57,6 +58,7 @@ const setDisassemblyUiState = (state: "busy" | "idle"): void => {
 };
 
 const updatePeDisassemblyProgress = (progress: PeInstructionSetProgress): void => {
+  updateAarch64InstructionSets("peAarch64Requirements", progress);
   const bar = document.getElementById(PROGRESS_BAR_ID);
   const text = document.getElementById(PROGRESS_TEXT_ID);
 

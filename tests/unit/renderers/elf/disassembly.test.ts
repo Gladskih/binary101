@@ -12,6 +12,7 @@ void test("AArch64 pending panel does not show x86 CPUID features", () => {
   assert.ok(out.join("").includes("AArch64"));
   assert.ok(out.join("").includes("elfInstructionSetsProgress"));
   assert.ok(!out.join("").includes("CpuidFeature"));
+  assert.ok(!out.join("").includes("FEAT_AdvSIMD"));
 });
 
 void test("AArch64 renders LLVM requirements and version with escaped labels", () => {

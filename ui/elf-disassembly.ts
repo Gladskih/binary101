@@ -1,4 +1,5 @@
 import { formatHumanSize } from "../binary-utils.js";
+import { updateAarch64InstructionSets } from "./aarch64-instruction-sets.js";
 import type { ParseForUiResult } from "../analyzers/index.js";
 import type { ElfParseResult } from "../analyzers/elf/types.js";
 import {
@@ -51,6 +52,7 @@ const setDisassemblyUiRunning = (running: boolean): void => {
 };
 
 const updateElfDisassemblyProgress = (progress: ElfInstructionSetProgress): void => {
+  updateAarch64InstructionSets("elfAarch64Requirements", progress);
   const bar = document.getElementById(PROGRESS_BAR_ID);
   const text = document.getElementById(PROGRESS_TEXT_ID);
 

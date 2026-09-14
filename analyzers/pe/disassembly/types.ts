@@ -6,8 +6,10 @@ import type { PeLoadConfig } from "../load-config/index.js";
 import type { PeSection, RvaToOffset } from "../types.js";
 import type { PeImportMetadataSourceKind } from "../../../pe-import-metadata-schema.js";
 import type { PeSpecialInstructionFinding } from "./special-instructions.js";
+import type { FeatureRequirements } from "llvm-aarch64-disasm";
 
 export interface PeInstructionSetUsage {
+  aarch64Predicates?: FeatureRequirements["predicates"];
   id: string;
   label: string;
   description: string;
@@ -173,6 +175,7 @@ export interface AnalyzePeEntrypointDisassemblyOptions {
 }
 
 export interface PeInstructionSetProgress {
+  aarch64InstructionSets?: PeInstructionSetUsage[];
   stage: "loading" | "decoding" | "done";
   bytesSampled: number;
   bytesDecoded: number;

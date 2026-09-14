@@ -2,13 +2,34 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createDisassembler, type Disassembler } from "llvm-aarch64-disasm";
 import { walkAarch64ControlFlow } from "../../../../analyzers/aarch64/control-flow.js";
-import type { ElfInstructionSetReport } from "../../../../analyzers/elf/disassembly-types.js";
+import type {
+  ElfInstructionSetReport, ElfInstructionSetProgress
+} from "../../../../analyzers/elf/disassembly-types.js";
 import { aarch64Code, aarch64Options } from "../../../fixtures/aarch64-code.js";
 
 const decoder = await createDisassembler();
 const emptyReport = (): ElfInstructionSetReport => ({
   bitness: 64, bytesSampled: 0, bytesDecoded: 0, instructionCount: 0,
   invalidInstructionCount: 0, instructionSets: [], issues: []
+});
+
+void test("AArch64 publishes independent requirement counts before decoding finishes", async () => {
+  const file = aarch64Code([0x04a00000, 0x04a00000, 0xd65f03c0]); // SVE/SME add twice; ret
+  const updates: ElfInstructionSetProgress[] = [];
+  const report = emptyReport();
+  await walkAarch64ControlFlow(decoder, async address => {
+    const offset = Number(address - 0x1000n);
+    return file.data.subarray(offset, offset + 4);
+  }, [0x1000n], { ...aarch64Options(file.size), yieldEveryInstructions: 1,
+    onProgress: progress => { updates.push(progress); } }, report);
+
+  assert.deepEqual(updates[0]?.aarch64InstructionSets, []);
+  assert.equal(updates[1]?.stage, "decoding");
+  assert.equal(updates[1]?.aarch64InstructionSets?.[0]?.label, "(FEAT_SVE or FEAT_SME)");
+  assert.equal(updates[1]?.aarch64InstructionSets?.[0]?.instructionCount, 1);
+  assert.equal(updates[2]?.aarch64InstructionSets?.[0]?.instructionCount, 2);
+  assert.equal(updates[3]?.aarch64InstructionSets?.length, 2);
+  assert.equal(report.instructionCount, 3);
 });
 
 const walkWords = async (words: number[], seeds = [0x1000n]): Promise<ElfInstructionSetReport> => {

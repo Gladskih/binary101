@@ -2,8 +2,10 @@
 
 import type { ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import type { NativeAotMetadata } from "../native-aot/format.js";
+import type { FeatureRequirements } from "llvm-aarch64-disasm";
 
 export interface ElfInstructionSetUsage {
+  aarch64Predicates?: FeatureRequirements["predicates"];
   id: string;
   label: string;
   description: string;
@@ -52,6 +54,7 @@ export interface AnalyzeElfInstructionSetOptions {
 }
 
 export interface ElfInstructionSetProgress {
+  aarch64InstructionSets?: ElfInstructionSetUsage[];
   stage: "loading" | "decoding" | "done";
   bytesSampled: number;
   bytesDecoded: number;

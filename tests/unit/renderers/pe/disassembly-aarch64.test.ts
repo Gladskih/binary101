@@ -20,6 +20,7 @@ void test("ARM64 pending panel provides analysis, cancellation and progress cont
   assert.ok(html.includes("peInstructionSetsProgressText"));
   assert.ok(html.includes('id="peInstructionSetsProgress"'));
   assert.ok(!html.includes("CpuidFeature"));
+  assert.ok(!html.includes("FEAT_AdvSIMD"));
 });
 
 void test("ARM64 result escapes requirements, decoder version and issues", () => {
@@ -37,7 +38,7 @@ void test("ARM64 result escapes requirements, decoder version and issues", () =>
   assert.ok(!html.includes("<bad>"));
   assert.ok(html.includes('<div class="smallNote dim">LLVM &lt;version></div>'));
   assert.ok(html.includes("<ul><li>&lt;bad></li></ul>"));
-  assert.ok(html.includes('<div class="tableWrap"><table class="table"><thead><tr>'));
+  assert.ok(html.includes('<div class="tableWrap"><table class="table aarch64IsaTable"><thead><tr>'));
   assert.ok(html.includes('<th>Requirement</th><th class="isaTable__count">Instr.</th>'));
   assert.ok(html.includes("</tr></thead><tbody><tr><td>SVE or &lt;SME></td>"));
   assert.ok(html.includes("</tbody></table></div>"));
@@ -54,7 +55,7 @@ void test("PE ARM64 dispatch shows ISA requirements without x86 feature chips", 
   assert.ok(!html.includes("imports and strings"));
 });
 
-void test("ARM64 empty result has no empty table or issues list", () => {
+void test("ARM64 empty result has no table or empty issues list", () => {
   const html = renderPeAarch64InstructionSets(report());
 
   assert.ok(html.includes("No instruction-set requirements were detected"));

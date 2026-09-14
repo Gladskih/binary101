@@ -35,5 +35,6 @@ void test("AArch64 usage distinguishes unknown metadata, empty gates and conjunc
   assert.equal(values[1]?.id, "unknown");
   assert.match(values[1]!.description, /no extracted feature record/);
   assert.equal(values[2]?.label, "FEAT_AdvSIMD and FEAT_FP");
-  assert.match(values[2]!.description, /LLVM opcode assembler gates/);
+  assert.equal(values[2]!.description,
+    "FEAT_AdvSIMD: Advanced SIMD instructions; FEAT_FP: Armv8.0-A Floating Point Extensions");
 });

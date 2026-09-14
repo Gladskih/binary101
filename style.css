@@ -633,6 +633,11 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .peNumeric{text-align:right}
 .tableWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;min-width:0}
 .table .isaTable__count{text-align:right}
+.aarch64IsaTable th{white-space:nowrap}
+.aarch64IsaTable{table-layout:fixed}
+.aarch64IsaTable th:first-child{width:25%}
+.aarch64IsaTable th:nth-child(2){width:10%}
+.aarch64IsaTable th:nth-child(3){width:25%;white-space:normal}
 .tableWrap > .table{min-width:600px}
 .tableWrap > .directoryFolderTable{min-width:680px}
 .tableWrap > .directoryFileTable{min-width:860px}

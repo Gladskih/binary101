@@ -12,6 +12,7 @@ export const notifyAarch64Progress = (
 ): void => {
   try {
     opts.onProgress?.({
+      aarch64InstructionSets: report.instructionSets.map(set => ({ ...set })),
       stage, bytesSampled: report.bytesSampled, bytesDecoded: report.bytesDecoded,
       instructionCount: report.instructionCount, invalidInstructionCount: report.invalidInstructionCount
     });
@@ -67,6 +68,7 @@ export const walkAarch64ControlFlow = async (
       visited.add(address);
       await decodeAddress(decoder, readCode, address, pending, report, usage);
       if (visited.size % interval === 0) {
+        report.instructionSets = [...usage.values()];
         notifyAarch64Progress(opts, report, "decoding");
         await new Promise<void>(resolve => setTimeout(resolve, 0));
       }

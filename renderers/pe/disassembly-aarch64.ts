@@ -1,6 +1,7 @@
 import { escapeHtml } from "../../html-utils.js";
 import { formatHumanSize } from "../../binary-utils.js";
 import type { PeInstructionSetReport } from "../../analyzers/pe/disassembly/types.js";
+import { renderAarch64RequirementTable } from "../aarch64-instruction-sets.js";
 
 const renderResults = (report: PeInstructionSetReport): string => {
   const issues = report.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("");
@@ -10,19 +11,9 @@ const renderResults = (report: PeInstructionSetReport): string => {
     `Invalid decodes: ${report.invalidInstructionCount}.</div>` +
     (report.decoderVersion
       ? `<div class="smallNote dim">${escapeHtml(report.decoderVersion)}</div>` : "") +
-    (issues ? `<ul>${issues}</ul>` : "") + renderRequirements(report);
-};
-
-const renderRequirements = (report: PeInstructionSetReport): string => {
-  if (!report.instructionSets.length) {
-    return `<div class="smallNote dim">` +
-      `No instruction-set requirements were detected in the sampled bytes.</div>`;
-  }
-  return `<div class="tableWrap"><table class="table"><thead><tr>` +
-    `<th>Requirement</th><th class="isaTable__count">Instr.</th></tr></thead><tbody>` +
-    report.instructionSets.map(set => `<tr><td>${escapeHtml(set.label)}</td>` +
-      `<td class="isaTable__count">${set.instructionCount}</td></tr>`).join("") +
-    `</tbody></table></div>`;
+    (issues ? `<ul>${issues}</ul>` : "") +
+    (report.instructionSets.length ? "" : `<div class="smallNote dim">` +
+      `No instruction-set requirements were detected in the sampled bytes.</div>`);
 };
 
 export const renderPeAarch64InstructionSets = (report?: PeInstructionSetReport): string =>
@@ -43,4 +34,6 @@ export const renderPeAarch64InstructionSets = (report?: PeInstructionSetReport):
   `<div class="smallNote dim" id="peInstructionSetsProgressText">` +
   `${report ? "Done." : "Not analyzed yet. Start analysis to detect instruction-set requirements."}` +
   `</div><progress id="peInstructionSetsProgress" style="width:100%" hidden></progress>` +
-  (report ? renderResults(report) : "") + `</div></details>`;
+  (report ? renderResults(report) : "") +
+  `<div id="peAarch64Requirements">${renderAarch64RequirementTable(report?.instructionSets)}</div>` +
+  `</div></details>`;

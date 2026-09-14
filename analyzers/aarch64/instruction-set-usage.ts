@@ -1,5 +1,6 @@
 import { featureDefinitions, type FeatureExpression, type FeatureRequirements } from "llvm-aarch64-disasm";
 import type { ElfInstructionSetUsage } from "../elf/disassembly-types.js";
+import { describeAarch64Features } from "./feature-descriptions.js";
 
 // Preserve Boolean gates and grouped Arm labels exactly; never turn OR into AND.
 // https://github.com/Gladskih/llvm-aarch64-disasm/blob/main/docs/metadata.md
@@ -27,9 +28,10 @@ export const recordAarch64Requirements = (
   }
   usage.set(id, {
     id,
+    ...(requirements.known ? { aarch64Predicates: requirements.predicates } : {}),
     label: requirements.known ? formatPredicates(requirements) : "Unknown requirements",
     description: requirements.known
-      ? "LLVM opcode assembler gates; grouped Arm labels are preserved."
+      ? describeAarch64Features(requirements.predicates.map(predicate => predicate.expression))
       : "LLVM has no extracted feature record for this opcode.",
     instructionCount: 1
   });
