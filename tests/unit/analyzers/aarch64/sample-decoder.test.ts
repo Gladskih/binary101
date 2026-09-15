@@ -25,17 +25,36 @@ void test("cached A64 words relocate forward and backward branches at every addr
   assert.equal(decode(aarch64Code([0xd65f03c0]).data, 0n).status, "success");
 });
 
-void test("word cache is bounded and empty decoder output remains an explicit error", () => {
+void test("colliding words replace one slot and empty decoder output remains an explicit error", () => {
   let calls = 0;
   const decode = createAarch64SampleDecoder({ decode: () => {
     calls++;
     return [{ status: "invalid", address: 0n, offset: 0, length: 0, bytesConsumed: 4 }];
   } });
-  // Exceed the bounded 4096-word cache, then request its oldest word again.
-  Array.from({ length: 4097 }, (_, word) => decode(aarch64Code([word]).data, 0n));
+  // 0 and 112044 collide under the multiplicative hash's high 16 bits.
+  decode(aarch64Code([0]).data, 0n);
+  decode(aarch64Code([112044]).data, 0n);
+  decode(aarch64Code([0]).data, 0n);
   decode(aarch64Code([0]).data, 0n);
 
-  assert.equal(calls, 4098);
+  assert.equal(calls, 3);
   assert.throws(() => createAarch64SampleDecoder({ decode: () => [] })(new Uint8Array(4), 0n),
     /returned no instruction/);
+});
+
+void test("hot words survive more than 4096 distinct decodes without a whole-cache flush", () => {
+  let calls = 0;
+  const decode = createAarch64SampleDecoder({ decode: () => {
+    calls++;
+    return [{ status: "invalid", address: 0n, offset: 0, length: 0, bytesConsumed: 4 }];
+  } });
+  const hot = aarch64Code([0]).data;
+
+  decode(hot, 0n);
+  Array.from({ length: 4097 }, (_, index) => {
+    decode(aarch64Code([index + 1]).data, 0n);
+    decode(hot, 0n);
+  });
+
+  assert.equal(calls, 4098);
 });

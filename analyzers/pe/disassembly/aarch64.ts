@@ -32,12 +32,16 @@ const createCodeReader = (
   const section = sections.find(entry => rva >= BigInt(entry.virtualAddress) &&
     rva < BigInt(entry.virtualAddress + entry.sizeOfRawData));
   if (!section) return new Uint8Array();
-  const offset = Number(rva) - section.virtualAddress;
+  const pageStart = Math.floor(Number(rva) / 65536) * 65536;
+  const offset = Math.max(0, pageStart - section.virtualAddress);
   // Windows ARM64 is little endian; A64 instructions occupy four bytes.
   // https://learn.microsoft.com/en-us/cpp/build/arm64-windows-abi-conventions
-  // Match the file-range reader's measured 64 KiB window, bounded by this section.
-  return reader.readBytes(section.pointerToRawData + offset,
-    Math.min(65536, section.sizeOfRawData - offset));
+  // Stable 64 KiB pages let descending function seeds reuse the range reader's cache.
+  // Align in RVA space so even a malformed unaligned section cannot split an A64 word.
+  const bytes = await reader.readBytes(section.pointerToRawData + offset,
+    Math.min(pageStart + 65536 - section.virtualAddress - offset,
+      section.sizeOfRawData - offset));
+  return bytes.subarray(Number(rva) - section.virtualAddress - offset);
 };
 
 const resolveSeeds = (

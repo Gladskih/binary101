@@ -251,3 +251,47 @@ void test("PE ARM64 visibly skips mapped seeds outside executable raw bytes", as
   assert.equal(report.instructionCount, 1);
   assert.ok(report.issues.some(issue => /0x100.*executable.*bytes/.test(issue)));
 });
+
+void test("PE ARM64 reuses file windows for descending function seeds", async () => {
+  // RET encoding: LLVM AArch64 RET in aarch64-code.ts. Span three 64 KiB windows.
+  const file = aarch64Code(Array.from({ length: 49152 }, () => 0xd65f03c0));
+  const opts = options(file.size);
+  const reads: number[][] = [];
+  const trackedFile = { size: file.size, slice: (start: number, end: number) => {
+    reads.push([start, end]);
+    return file.slice(start, end);
+  } } as File;
+
+  const report = await analyzePeAarch64InstructionSets(
+    createFileRangeReader(trackedFile, 0, file.size), {
+      ...opts, exportRvas: [0x1004, 0x1008, 0x10000, 0x11000, 0x11004]
+    });
+
+  assert.equal(report.instructionCount, 6);
+  assert.deepEqual(report.issues, []);
+  assert.deepEqual(reads, [[61440, 126976], [0, 65536]]);
+});
+
+void test("PE ARM64 page reads preserve words in unaligned sections and truncated tails", async () => {
+  // NOP; RET, with the final RET truncated. Encodings: aarch64-code.ts.
+  const file = new File([new Uint8Array(3), aarch64Code([0xd503201f, 0xd65f03c0]).data
+    .slice(0, 7)], "unaligned.exe");
+  const opts = options(file.size);
+  opts.sections[0]!.virtualAddress = 0xfff9;
+  opts.entrypointRva = 0xfffc;
+  opts.rvaToOff = rva => rva - 0xfff9;
+  const reader = createFileRangeReader(file, 0, file.size);
+  const reads: number[][] = [];
+
+  const report = await analyzePeAarch64InstructionSets({ ...reader,
+    readBytes: async (offset, size) => {
+      reads.push([offset, size]);
+      return reader.readBytes(offset, size);
+    }
+  }, opts);
+
+  assert.equal(report.instructionCount, 1);
+  assert.equal(report.invalidInstructionCount, 1);
+  assert.deepEqual(reads, [[0, 7], [7, 3]]);
+  assert.deepEqual(report.issues, ["Truncated AArch64 instruction at 0x140010000."]);
+});
