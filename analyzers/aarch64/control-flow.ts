@@ -98,10 +98,6 @@ const nextUnvisitedAddress = (
     const address = pending.pop()!;
     const status = visit(address);
     if (status === "new") return address;
-    if (status === "limit") {
-      issues.push("AArch64 sampling stopped at the visited-address memory budget (32 MiB).");
-      return undefined;
-    }
     if (status === "invalid") issues.push(`Skipped invalid or unaligned AArch64 code address ${address}.`);
   }
   return undefined;
