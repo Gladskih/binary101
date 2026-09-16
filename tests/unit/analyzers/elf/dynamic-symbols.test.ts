@@ -147,3 +147,30 @@ void test("rejects dynamic strings extending beyond their load segment", async (
   assert.match(result!.issues.join(" "), /DT_STRTAB.*PT_LOAD/);
 });
 
+// gABI 5.4: DEFAULT/PROTECTED are externally visible; INTERNAL/HIDDEN are not.
+// https://gabi.xinuos.com/elf/05-symtab.html#symbol-visibility
+for (const [visibility, exports] of [[0, 1], [1, 0], [2, 0], [3, 1]] as const) {
+  void test(`classifies dynamic export visibility ${visibility}`, async () => {
+    const fixture = relocationFixture();
+    fixture.elf.sections[2]!.type = 11;
+    fixture.bytes[284] = 0x12; // STB_GLOBAL | STT_FUNC.
+    fixture.bytes[285] = visibility;
+
+    const result = await parseElfDynamicSymbols({ file: fixture.file(), ...fixture.elf });
+
+    assert.equal(result?.exportSymbols.length, exports);
+    assert.deepEqual(result?.issues, []);
+  });
+}
+
+void test("includes allocated STT_COMMON definitions in dynamic exports", async () => {
+  const fixture = relocationFixture();
+  fixture.elf.sections[2]!.type = 11;
+  fixture.bytes[284] = 0x15; // STB_GLOBAL | STT_COMMON, gABI 5.3.
+
+  const result = await parseElfDynamicSymbols({ file: fixture.file(), ...fixture.elf });
+
+  assert.equal(result?.exportSymbols[0]?.name, "target");
+  assert.equal(result?.exportSymbols[0]?.typeName, "COMMON");
+});
+

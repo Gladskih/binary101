@@ -32,12 +32,6 @@ const DT_SYMENT = 11;
 // https://raw.githubusercontent.com/bminor/glibc/master/elf/elf.h
 const SHN_UNDEF = 0;
 
-const STT_NOTYPE = 0;
-const STT_OBJECT = 1;
-const STT_FUNC = 2;
-const STT_TLS = 6;
-const STT_GNU_IFUNC = 10;
-
 const STB_LOCAL = 0;
 
 const STV_DEFAULT = 0;
@@ -89,7 +83,8 @@ const decodeVisibility = (vis: number): string => {
 };
 
 const isDisplayableType = (type: number): boolean =>
-  type === STT_NOTYPE || type === STT_OBJECT || type === STT_FUNC || type === STT_TLS || type === STT_GNU_IFUNC;
+  // NOTYPE, OBJECT, FUNC, COMMON, TLS (gABI 5.3), GNU_IFUNC (glibc elf.h).
+  [0, 1, 2, 5, 6, 10].includes(type);
 
 const parseDynsym = (
   symtab: DataView,
@@ -271,7 +266,9 @@ Promise<ElfDynamicSymbolInfo | null> {
   const symbols = parseDynsym(tables.symtab, tables.strtab, layout,
     issues, tables.offset, symbolCache);
   const importSymbols = symbols.filter(sym => sym.shndx === SHN_UNDEF && sym.bind !== STB_LOCAL && sym.name.length > 0);
-  const exportSymbols = symbols.filter(sym => sym.shndx !== SHN_UNDEF && sym.bind !== STB_LOCAL && sym.name.length > 0);
+  const exportSymbols = symbols.filter(sym => sym.shndx !== SHN_UNDEF &&
+    sym.bind !== STB_LOCAL && sym.name.length > 0 &&
+    sym.visibility !== STV_HIDDEN && sym.visibility !== STV_INTERNAL);
 
   return {
     total: Math.floor(tables.symtab.byteLength / layout.symbolEntrySize),

@@ -51,7 +51,7 @@ export function renderElfSymbols(elf: ElfParseResult, out: string[]): void {
 
   out.push(renderElfSectionStart(`Imports / exports`));
   out.push(
-    `<div class="smallNote">Dynamic symbols describe the interface exposed to (and required from) the dynamic loader. Imports are undefined symbols (SHN_UNDEF); exports are defined non-local symbols.</div>`
+    `<div class="smallNote">Dynamic symbols describe the interface exposed to (and required from) the dynamic loader. Imports are undefined symbols (SHN_UNDEF); exports are named, defined non-local symbols with external visibility.</div>`
   );
   out.push(
     `<div class="smallNote">Total dynamic symbols: ${escapeHtml(String(total))}; imports: ${escapeHtml(String(imports))}; exports: ${escapeHtml(
