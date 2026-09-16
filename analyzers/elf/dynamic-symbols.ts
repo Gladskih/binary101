@@ -3,7 +3,7 @@
 import { readAsciiString } from "../../binary-utils.js";
 import type { ElfDynamicSymbol, ElfDynamicSymbolInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import { readDynsymCountFromGnuHash, readDynsymCountFromSysvHash } from "./dynsym-count.js";
-import { vaddrToFileOffset } from "./vaddr-to-file-offset.js";
+import { elfVirtualRange } from "./relocation-reader.js";
 import { readElfDynamicEntries, type ElfDynamicEntry } from "./dynamic-entries.js";
 import { createFileRangeReader } from "../file-range-reader.js";
 import type { ElfRelocationSymbol } from "./relocation-types.js";
@@ -203,14 +203,18 @@ Promise<{ symtab: DataView; strtab: DataView | null; offset: number } | null> =>
 const readDynamicSymbolTables = async (opts: Parameters<typeof parseDynsymFromDynamicTags>[0],
   tags: NonNullable<ReturnType<typeof dynsymTags>>, symbolCount: number) => {
   const { symtabVaddr, strtabVaddr, strsz, entrySize } = tags;
-  const symtabOff = vaddrToFileOffset(opts.programHeaders, symtabVaddr);
-  const strtabOff = vaddrToFileOffset(opts.programHeaders, strtabVaddr);
-  if (symtabOff == null || strtabOff == null) return null;
   const symtabByteSize = BigInt(symbolCount) * BigInt(entrySize);
-  const symtab = await readDataViewSlice(opts.file, symtabOff, symtabByteSize, "DT_SYMTAB", opts.issues);
-  const strtab = await readDataViewSlice(opts.file, strtabOff, strsz, "DT_STRTAB", opts.issues);
+  const symbols = elfVirtualRange(opts.programHeaders, symtabVaddr, symtabByteSize, opts.file.size);
+  const strings = elfVirtualRange(opts.programHeaders, strtabVaddr, strsz, opts.file.size);
+  if (!symbols) opts.issues.push("DT_SYMTAB is outside a file-backed PT_LOAD range.");
+  if (!strings) opts.issues.push("DT_STRTAB is outside a file-backed PT_LOAD range.");
+  if (!symbols || !strings) return null;
+  const symtab = await readDataViewSlice(opts.file, BigInt(symbols.offset), symtabByteSize,
+    "DT_SYMTAB", opts.issues);
+  const strtab = await readDataViewSlice(opts.file, BigInt(strings.offset), strsz,
+    "DT_STRTAB", opts.issues);
   if (!symtab) return null;
-  return { symtab, strtab, offset: Number(symtabOff) };
+  return { symtab, strtab, offset: symbols.offset };
 };
 
 const dynsymTags = (entries: ElfDynamicEntry[], expectedSize: number, issues: string[]) => {

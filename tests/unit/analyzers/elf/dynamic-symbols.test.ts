@@ -111,3 +111,39 @@ void test("shared relocation cache excludes unterminated dynamic symbol names", 
   assert.equal(cache.has(280), false);
 });
 
+void test("rejects dynamic symbols extending beyond their load segment", async () => {
+  const fixture = createElfGnuHashDynamicFixture();
+  // Fixture .dynsym ends at 0xf0; PT_LOAD starts at 0x40. Clip its last byte.
+  fixture.programHeaders[0]!.filesz = 0xafn;
+
+  const result = await parseElfDynamicSymbols({ file: fixture.file,
+    programHeaders: fixture.programHeaders, sections: [], is64: true, littleEndian: true });
+
+  assert.deepEqual(result?.exportSymbols, []);
+  assert.match(result!.issues.join(" "), /DT_SYMTAB.*PT_LOAD/);
+});
+
+void test("accepts dynamic symbols ending exactly at the load segment boundary", async () => {
+  const fixture = createElfGnuHashDynamicFixture();
+  fixture.programHeaders[0]!.filesz = 0xb0n;
+
+  const result = await parseElfDynamicSymbols({ file: fixture.file,
+    programHeaders: fixture.programHeaders, sections: [], is64: true, littleEndian: true });
+
+  assert.equal(result?.exportSymbols[0]?.name, fixture.symbolName);
+  assert.deepEqual(result?.issues, []);
+});
+
+void test("rejects dynamic strings extending beyond their load segment", async () => {
+  const fixture = createElfGnuHashDynamicFixture();
+  const bytes = await fixture.file.arrayBuffer();
+  // Fixture's second Elf64_Dyn is DT_STRSZ; extend beyond PT_LOAD and EOF.
+  new DataView(bytes).setBigUint64(0x120 + 16 + 8, BigInt(bytes.byteLength), true);
+
+  const result = await parseElfDynamicSymbols({ file: new File([bytes], "strings.elf"),
+    programHeaders: fixture.programHeaders, sections: [], is64: true, littleEndian: true });
+
+  assert.deepEqual(result?.exportSymbols, []);
+  assert.match(result!.issues.join(" "), /DT_STRTAB.*PT_LOAD/);
+});
+
