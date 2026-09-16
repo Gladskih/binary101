@@ -11,6 +11,39 @@ import { expectDefined } from "../../../helpers/expect-defined.js";
 import { relocationFixture } from "../../../fixtures/elf-relocations.js";
 import type { ElfRelocationSymbol } from "../../../../analyzers/elf/relocation-types.js";
 
+// gABI 3/5/8: Elf32_Sym is 16 bytes, Elf64_Sym is 24 bytes.
+// https://gabi.xinuos.com/elf/08-dynamic.html#dynamic-section
+for (const bits of [32, 64] as const) {
+  for (const size of [0n, 1n, 48n]) {
+    void test(`rejects ELF${bits} dynamic section symbol stride ${size}`, async () => {
+      const fixture = relocationFixture(bits);
+      fixture.elf.sections[2]!.type = 11;
+      fixture.elf.sections[2]!.entsize = size;
+
+      const result = await parseElfDynamicSymbols({ file: fixture.file(), ...fixture.elf });
+
+      assert.equal(result?.total, 0);
+      assert.deepEqual(result?.exportSymbols, []);
+      assert.match(result!.issues.join(" "), /entry size/);
+    });
+  }
+}
+
+for (const size of [0n, 16n, 48n, 0xffffffffffffffffn]) {
+  void test(`rejects invalid DT_SYMENT ${size}`, async () => {
+    const fixture = createElfGnuHashDynamicFixture();
+    const bytes = await fixture.file.arrayBuffer();
+    // Fixture's fourth Elf64_Dyn: d_val at +8.
+    new DataView(bytes).setBigUint64(0x120 + 3 * 16 + 8, size, true);
+
+    const result = await parseElfDynamicSymbols({ file: new File([bytes], "stride.elf"),
+      programHeaders: fixture.programHeaders, sections: [], is64: true, littleEndian: true });
+
+    assert.equal(result?.total, 0);
+    assert.match(result!.issues.join(" "), /DT_SYMENT/);
+  });
+}
+
 void test("dynamic symbol total includes types omitted from import/export tables", async () => {
   const fixture = relocationFixture();
   fixture.elf.sections[2]!.type = 11; // SHT_DYNSYM, gABI 3.

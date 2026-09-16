@@ -165,6 +165,10 @@ const parseDynsymFromSections = async (opts: {
 }): Promise<{ symtab: DataView; strtab: DataView | null; offset: number } | null> => {
   const dynsym = opts.sections.find(sec => sec.type === SHT_DYNSYM && sec.size > 0n);
   if (!dynsym) return null;
+  if (dynsym.entsize !== BigInt(selectElfBinaryLayout(opts).symbolEntrySize)) {
+    opts.issues.push(".dynsym has an invalid entry size.");
+    return null;
+  }
   const symtab = await readDataViewSlice(opts.file, dynsym.offset, dynsym.size, ".dynsym", opts.issues);
   if (!symtab) return null;
 
@@ -188,7 +192,7 @@ Promise<{ symtab: DataView; strtab: DataView | null; offset: number } | null> =>
   if (!dynamicPh) return null;
   const entries = parsedEntries ?? await readElfDynamicEntries(
     createFileRangeReader(opts.file, 0, opts.file.size), opts, opts.issues);
-  const tags = dynsymTags(entries);
+  const tags = dynsymTags(entries, selectElfBinaryLayout(opts).symbolEntrySize, opts.issues);
   if (!tags) return null;
   const symbolCount = await dynamicHashCount(opts, entries, hashes) ??
     inferDynsymCount(tags.symtabVaddr, tags.strtabVaddr, tags.entrySize, opts.issues);
@@ -209,14 +213,17 @@ const readDynamicSymbolTables = async (opts: Parameters<typeof parseDynsymFromDy
   return { symtab, strtab, offset: Number(symtabOff) };
 };
 
-const dynsymTags = (entries: ElfDynamicEntry[]) => {
+const dynsymTags = (entries: ElfDynamicEntry[], expectedSize: number, issues: string[]) => {
   const value = (tag: number): bigint => entries.find(entry => entry.tag === tag)?.value ?? 0n;
   const symtabVaddr = value(DT_SYMTAB);
   const strtabVaddr = value(DT_STRTAB);
   const strsz = value(DT_STRSZ);
   const entrySize = Number(value(DT_SYMENT));
-  if ([symtabVaddr, strtabVaddr, strsz].includes(0n) ||
-    !Number.isSafeInteger(entrySize) || entrySize <= 0) return null;
+  if (entrySize !== expectedSize) {
+    issues.push("DT_SYMENT has an invalid symbol entry size.");
+    return null;
+  }
+  if ([symtabVaddr, strtabVaddr, strsz].includes(0n)) return null;
   return { symtabVaddr, strtabVaddr, strsz, entrySize };
 };
 
@@ -255,7 +262,7 @@ Promise<ElfDynamicSymbolInfo | null> {
   const sectionTables = await parseDynsymFromSections({ ...opts, issues });
   const tagTables = sectionTables ? null : await parseDynsymFromDynamicTags({ ...opts, issues }, parsedEntries, hashes);
   const tables = sectionTables ?? tagTables;
-  if (!tables) return null;
+  if (!tables) return issues.length ? { total: 0, importSymbols: [], exportSymbols: [], issues } : null;
 
   const symbols = parseDynsym(tables.symtab, tables.strtab, layout,
     issues, tables.offset, symbolCache);
