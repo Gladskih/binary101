@@ -251,7 +251,7 @@ void test("preserves ordinary e_shnum while resolving PN_XNUM", async () => {
 
 for (const [size, offset, diagnostic] of [
   [64, 64n, /outside the file/], [127, 64n, /truncated/],
-  [128, 1n << 60n, /too large/]
+  [128, 1n << 60n, /Section header offset.*too large/]
 ] as const) {
   void test(`bounds-checks section zero: ${diagnostic}`, async () => {
     const issues: string[] = [];
@@ -265,3 +265,14 @@ for (const [size, offset, diagnostic] of [
     assert.match(issues.join(" "), diagnostic);
   });
 }
+
+void test("accepts absent section tables without attempting extended numbering", async () => {
+  const issues: string[] = [];
+  const header = baseHeader({ shoff: 0n, shnum: 0 });
+
+  const result = await resolveExtendedHeaderCounts(new File([], "sectionless.elf"),
+    header, true, true, issues, 64);
+
+  assert.deepEqual(result, header);
+  assert.deepEqual(issues, []);
+});
