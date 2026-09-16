@@ -152,6 +152,23 @@ async function loadSectionNameTable(
   return dv;
 }
 
+const readSectionZero = async (
+  file: File, header: ElfHeader, expectedSize: number, issues: string[]
+): Promise<DataView | null> => {
+  const tableOffset = toSafeNumber(header.shoff, "Section header offset", issues);
+  if (tableOffset == null) return null;
+  const view = await sliceView(file, tableOffset, expectedSize);
+  if (!view) {
+    issues.push("Section header #0 falls outside the file; cannot resolve extended numbering.");
+    return null;
+  }
+  if (view.byteLength < expectedSize) {
+    issues.push("Section header #0 is truncated; cannot resolve extended numbering.");
+    return null;
+  }
+  return view;
+};
+
 export async function resolveExtendedHeaderCounts(
   file: File,
   header: ElfHeader,
@@ -187,17 +204,8 @@ export async function resolveExtendedHeaderCounts(
     );
     return unresolvedHeader();
   }
-  const tableOffset = toSafeNumber(header.shoff, "Section header offset", issues);
-  if (tableOffset == null) return unresolvedHeader();
-  const dv = await sliceView(file, tableOffset, expectedSectionHeaderSize);
-  if (!dv) {
-    issues.push("Section header #0 falls outside the file; cannot resolve extended numbering.");
-    return unresolvedHeader();
-  }
-  if (dv.byteLength < expectedSectionHeaderSize) {
-    issues.push("Section header #0 is truncated; cannot resolve extended numbering.");
-    return unresolvedHeader();
-  }
+  const dv = await readSectionZero(file, header, expectedSectionHeaderSize, issues);
+  if (!dv) return unresolvedHeader();
   const sectionZero = is64 ? parseSectionHeader64(dv, littleEndian) : parseSectionHeader32(dv, littleEndian);
   const resolvedShnum = needsShnum
     ? (toSafeNumber(sectionZero.size, "Section count from section header #0", issues) ?? 0)
