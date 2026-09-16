@@ -152,6 +152,34 @@ void test("parseSectionHeadersWithNames rejects undersized section entries", asy
   assert.ok(issues.some(issue => issue.includes("Section header entry size (16)")));
 });
 
+// gABI 2/3: e_shnum >= SHN_LORESERVE (0xff00) must use the zero escape value.
+// https://gabi.xinuos.com/elf/02-eheader.html
+for (const shnum of [0xff00, 0xfffe, 0xffff]) {
+  void test(`rejects reserved e_shnum ${shnum} without interpreting section zero`, async () => {
+    const bytes = new Uint8Array(128);
+    new DataView(bytes.buffer).setBigUint64(64 + 32, 7n, true);
+    const issues: string[] = [];
+
+    const result = await resolveExtendedHeaderCounts(new File([bytes], "count.elf"),
+      baseHeader({ shoff: 64n, shnum }), true, true, issues, 64);
+
+    assert.equal(result.shnum, 0);
+    assert.match(issues.join(" "), /e_shnum.*reserved/);
+  });
+}
+
+void test("resolves extended section counts at SHN_LORESERVE", async () => {
+  const bytes = new Uint8Array(128);
+  new DataView(bytes.buffer).setBigUint64(64 + 32, 0xff00n, true);
+  const issues: string[] = [];
+
+  const result = await resolveExtendedHeaderCounts(new File([bytes], "extended.elf"),
+    baseHeader({ shoff: 64n, shnum: 0 }), true, true, issues, 64);
+
+  assert.equal(result.shnum, 0xff00);
+  assert.deepEqual(issues, []);
+});
+
 void test("accepts SHN_UNDEF when section names are absent", async () => {
   const bytes = await createElfFile().arrayBuffer();
   // Elf64_Ehdr.e_shstrndx at 62; SHN_UNDEF=0 (gABI 2).

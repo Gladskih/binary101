@@ -159,9 +159,15 @@ export async function resolveExtendedHeaderCounts(
   issues: string[],
   expectedSectionHeaderSize: number
 ): Promise<ElfHeader> {
+  // gABI 2: e_shnum uses zero, not SHN_XINDEX, for extended numbering.
+  // https://gabi.xinuos.com/elf/02-eheader.html
+  if (header.shnum >= 0xff00) {
+    issues.push("ELF e_shnum uses a reserved value; extended counts require e_shnum=0.");
+    return { ...header, shnum: 0 };
+  }
   // ELF extended-numbering sentinels: PN_XNUM/SHN_XINDEX=0xffff, SHN_UNDEF=0.
   const needsPhnum = header.phnum === 0xffff;
-  const needsShnum = (header.shnum === 0 && header.shoff !== 0n) || header.shnum === 0xffff;
+  const needsShnum = header.shnum === 0 && header.shoff !== 0n;
   const needsShstrndx = header.shstrndx === 0xffff;
   if (!needsPhnum && !needsShnum && !needsShstrndx) return header;
   const unresolvedHeader = (): ElfHeader => ({
