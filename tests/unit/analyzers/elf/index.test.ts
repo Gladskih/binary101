@@ -90,29 +90,29 @@ void test("parseElf notes program headers that sit outside the file", async () =
 });
 
 void test("parseElf surfaces version mismatches and truncated section name table", async () => {
-  const bytes = new Uint8Array(160).fill(0);
-  // Section table starts after the ELF header, one entry pointing to a truncated name table.
+  const bytes = new Uint8Array(256).fill(0);
+  // gABI 2/3: reserve SHT_NULL at index zero; use index one for SHT_STRTAB.
   writeElfHeader(bytes, {
     phoff: 0n,
     phnum: 0,
     shoff: 64n,
-    shnum: 1,
+    shnum: 2,
     shentsize: 64,
-    shstrndx: 0,
+    shstrndx: 1,
     headerVersion: 2,
     identVersion: 2
   });
-  const sectionOffset = 64;
+  const sectionOffset = 128;
   const dv = new DataView(bytes.buffer);
   dv.setUint32(sectionOffset + 0, 0, true); // nameOff
-  dv.setUint32(sectionOffset + 4, 1, true); // type
-  dv.setBigUint64(sectionOffset + 24, 120n, true); // offset to names
+  dv.setUint32(sectionOffset + 4, 3, true); // SHT_STRTAB
+  dv.setBigUint64(sectionOffset + 24, 240n, true); // offset to names
   dv.setBigUint64(sectionOffset + 32, 50n, true); // size of names (truncated)
 
   const parsed = await parseElf(new MockFile(bytes, "elf-truncated.bin", "application/x-elf"));
   const definedParsed = expectDefined(parsed);
-  assert.strictEqual(definedParsed.sections.length, 1);
-  const section = expectDefined(definedParsed.sections[0]);
+  assert.strictEqual(definedParsed.sections.length, 2);
+  const section = expectDefined(definedParsed.sections[1]);
   assert.strictEqual(section.name, "");
   assert.ok(definedParsed.issues.some(msg => msg.includes("Unexpected ELF version")));
   assert.ok(definedParsed.issues.some(msg => msg.includes("Section name table is truncated.")));
