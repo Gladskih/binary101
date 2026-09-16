@@ -58,3 +58,23 @@ void test("hot words survive more than 4096 distinct decodes without a whole-cac
 
   assert.equal(calls, 4098);
 });
+
+void test("ISA sampling prefers metadata decoding and reuses cached requirements", () => {
+  let calls = 0;
+  const features = { source: "llvm-tablegen", scope: "opcode", known: true,
+    predicates: [], nonAssemblerPredicates: [] } as const;
+  const decode = createAarch64SampleDecoder({
+    decode: () => { throw new Error("Full formatting must not run"); },
+    decodeMetadata: () => {
+      calls++;
+      return [{ status: "success", address: 0n, length: 4, features,
+        controlFlow: "unconditional-branch", target: 8n }];
+    }
+  });
+  const bytes = aarch64Code([0x14000002]).data;
+
+  assert.deepEqual(decode(bytes, 16n), { status: "success", address: 16n, length: 4,
+    features, controlFlow: "unconditional-branch", target: 24n });
+  assert.equal((decode(bytes, 32n) as { target: bigint }).target, 40n);
+  assert.equal(calls, 1);
+});

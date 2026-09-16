@@ -76,7 +76,7 @@
   },
   "dependencies": {
     "@noble/hashes": "2.4.0",
-    "llvm-aarch64-disasm": "^0.1.0",
+    "llvm-aarch64-disasm": "^0.2.0",
     "lzma-web": "^4.0.0-rc.5",
     "pkijs": "^3.4.0"
   }

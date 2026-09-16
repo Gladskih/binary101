@@ -5,8 +5,14 @@ type CachedInstruction = { status: "invalid" } |
 
 export type Aarch64InstructionSample = CachedInstruction & { address: bigint };
 
-const decodeSample = (decoder: Disassembler, bytes: Uint8Array): CachedInstruction => {
-  const instruction = decoder.decode(bytes.subarray(0, 4), { address: 0n })[0];
+// Optional capability keeps the published 0.1.0 package and existing decoder adapters working.
+type SampleDisassembler = Disassembler & {
+  decodeMetadata?: (bytes: Uint8Array, options: { address: bigint }) => CachedInstruction[];
+};
+
+const decodeSample = (decoder: SampleDisassembler, bytes: Uint8Array): CachedInstruction => {
+  const instruction = (decoder.decodeMetadata ?? decoder.decode)
+    .call(decoder, bytes.subarray(0, 4), { address: 0n })[0];
   if (!instruction) throw new Error("AArch64 decoder returned no instruction.");
   if (instruction.status === "invalid") return { status: "invalid" };
   return { status: instruction.status, length: instruction.length,
@@ -17,7 +23,7 @@ const decodeSample = (decoder: Disassembler, bytes: Uint8Array): CachedInstructi
 // The fixed A64 decoder's feature gates depend on the word, not its PC. Only the branch
 // target needs relocating; formatted operands/text are deliberately absent from this sample API.
 // https://github.com/Gladskih/llvm-aarch64-disasm/blob/main/src/index.ts
-export const createAarch64SampleDecoder = (decoder: Disassembler) => {
+export const createAarch64SampleDecoder = (decoder: SampleDisassembler) => {
   // LM Studio ARM64, first 1M words: 242k misses versus 392k with the old 4096-word
   // flushing cache. Keep only ISA/flow metadata; replace collisions without flushing hot words.
   const words = new Uint32Array(65536);
