@@ -9,6 +9,8 @@ import {
 } from "../../../../analyzers/elf/header-tables.js";
 import type { ElfHeader } from "../../../../analyzers/elf/types.js";
 import { MockFile } from "../../../helpers/mock-file.js";
+import { createElfFile } from "../../../fixtures/elf-sample-file.js";
+import { parseElf } from "../../../../analyzers/elf/index.js";
 
 const baseHeader = (partial: Partial<ElfHeader>): ElfHeader => ({
   type: 2,
@@ -148,4 +150,35 @@ void test("parseSectionHeadersWithNames rejects undersized section entries", asy
 
   assert.deepEqual(sections, []);
   assert.ok(issues.some(issue => issue.includes("Section header entry size (16)")));
+});
+
+void test("accepts SHN_UNDEF when section names are absent", async () => {
+  const bytes = await createElfFile().arrayBuffer();
+  // Elf64_Ehdr.e_shstrndx at 62; SHN_UNDEF=0 (gABI 2).
+  new DataView(bytes).setUint16(62, 0, true);
+
+  const result = await parseElf(new File([bytes], "unnamed.elf"));
+
+  assert.deepEqual(result?.issues, []);
+  assert.equal(result?.sections[1]?.name, undefined);
+});
+
+void test("reports an out-of-range section name table index", async () => {
+  const bytes = await createElfFile().arrayBuffer();
+  new DataView(bytes).setUint16(62, 2, true); // Fixture has two section headers.
+
+  const result = await parseElf(new File([bytes], "bad-index.elf"));
+
+  assert.match(result!.issues.join(" "), /Section name table header is missing/);
+});
+
+void test("rejects a section name table of the wrong type", async () => {
+  const bytes = await createElfFile().arrayBuffer();
+  // Fixture's second Elf64_Shdr.sh_type: SHT_PROGBITS instead of SHT_STRTAB.
+  new DataView(bytes).setUint32(120 + 64 + 4, 1, true);
+
+  const result = await parseElf(new File([bytes], "bad-type.elf"));
+
+  assert.match(result!.issues.join(" "), /Section name table.*SHT_STRTAB/);
+  assert.equal(result?.sections[1]?.name, undefined);
 });

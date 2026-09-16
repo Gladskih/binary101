@@ -127,10 +127,16 @@ async function loadSectionNameTable(
   header: ElfHeader,
   issues: string[]
 ): Promise<DataView | null> {
-  if (!sections.length || header.shstrndx >= sections.length) return null;
+  // gABI 2: SHN_UNDEF means that the file has no section name table.
+  // https://gabi.xinuos.com/elf/02-eheader.html
+  if (header.shstrndx === 0) return null;
   const shstr = sections[header.shstrndx];
   if (!shstr) {
     issues.push("Section name table header is missing.");
+    return null;
+  }
+  if (shstr.type !== 3) { // SHT_STRTAB, gABI 3.
+    issues.push("Section name table must have type SHT_STRTAB.");
     return null;
   }
   const off = toSafeNumber(shstr.offset, "Section name table offset", issues);
