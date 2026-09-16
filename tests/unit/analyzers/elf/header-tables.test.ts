@@ -223,3 +223,45 @@ void test("validates load segment semantics after parsing headers", async () => 
   assert.match(result!.issues.join(" "), /p_align/);
   assert.equal(result?.programHeaders.length, 1);
 });
+
+void test("does not read section zero when no extended field is present", async () => {
+  const issues: string[] = [];
+  const header = baseHeader({ shoff: 64n, shnum: 2, shstrndx: 1 });
+
+  const result = await resolveExtendedHeaderCounts(new File([], "unused.elf"),
+    header, true, true, issues, 64);
+
+  assert.deepEqual(result, header);
+  assert.deepEqual(issues, []);
+});
+
+void test("preserves ordinary e_shnum while resolving PN_XNUM", async () => {
+  const bytes = new Uint8Array(128);
+  new DataView(bytes.buffer).setBigUint64(64 + 32, 7n, true);
+  new DataView(bytes.buffer).setUint32(64 + 44, 5, true);
+  const issues: string[] = [];
+
+  const result = await resolveExtendedHeaderCounts(new File([bytes], "phnum.elf"),
+    baseHeader({ shoff: 64n, shnum: 2, phnum: 0xffff }), true, true, issues, 64);
+
+  assert.equal(result.shnum, 2);
+  assert.equal(result.phnum, 5);
+  assert.deepEqual(issues, []);
+});
+
+for (const [size, offset, diagnostic] of [
+  [64, 64n, /outside the file/], [127, 64n, /truncated/],
+  [128, 1n << 60n, /too large/]
+] as const) {
+  void test(`bounds-checks section zero: ${diagnostic}`, async () => {
+    const issues: string[] = [];
+
+    const result = await resolveExtendedHeaderCounts(new File([new Uint8Array(size)], "short.elf"),
+      baseHeader({ shoff: offset, phnum: 0xffff, shstrndx: 0xffff }), true, true, issues, 64);
+
+    assert.equal(result.shnum, 0);
+    assert.equal(result.phnum, 0);
+    assert.equal(result.shstrndx, 0);
+    assert.match(issues.join(" "), diagnostic);
+  });
+}

@@ -229,3 +229,50 @@ void test("reports dynamic name offsets at the end of the string table", async (
   assert.equal(cache.has(280), false);
 });
 
+for (const [bits, order, offset] of [
+  [32, "little", 272], [32, "big", 272], [64, "little", 280], [64, "big", 280]
+] as const) {
+  void test(`caches valid ELF${bits} ${order} symbols at their file offsets`, async () => {
+    const fixture = relocationFixture(bits, order);
+    fixture.elf.sections[2]!.type = 11;
+    fixture.bytes[284] = 0x12; // Fixture st_info offset for both classes.
+    const cache = new Map<number, ElfRelocationSymbol>();
+
+    const result = await parseElfDynamicSymbols({ file: fixture.file(), ...fixture.elf }, [], cache);
+
+    assert.equal(result?.exportSymbols[0]?.name, "target");
+    assert.deepEqual(cache.get(offset), { name: "target", value: 4n, sectionIndex: 1 });
+    assert.deepEqual(result?.issues, []);
+  });
+}
+
+void test("does not cache unresolved SHN_XINDEX dynamic symbols", async () => {
+  const fixture = relocationFixture();
+  fixture.elf.sections[2]!.type = 11;
+  fixture.view.setUint16(286, 0xffff, true); // SHN_XINDEX, gABI 5.5.
+  const cache = new Map<number, ElfRelocationSymbol>();
+
+  await parseElfDynamicSymbols({ file: fixture.file(), ...fixture.elf }, [], cache);
+
+  assert.equal(cache.has(280), false);
+});
+
+// gABI 5: st_info binding nibble, SHN_UNDEF=0, string offset zero names nothing.
+for (const [info, section, name, imports, exports] of [
+  [0x12, 0, 1, 1, 0], [0x12, 1, 1, 0, 1], [0x02, 0, 1, 0, 0],
+  [0x02, 1, 1, 0, 0], [0x12, 0, 0, 0, 0], [0x12, 1, 0, 0, 0]
+] as const) {
+  void test(`classifies symbols with info=${info}, section=${section}, name=${name}`, async () => {
+    const fixture = relocationFixture();
+    fixture.elf.sections[2]!.type = 11;
+    fixture.bytes[284] = info;
+    fixture.view.setUint16(286, section, true);
+    fixture.view.setUint32(280, name, true);
+
+    const result = await parseElfDynamicSymbols({ file: fixture.file(), ...fixture.elf });
+
+    assert.equal(result?.importSymbols.length, imports);
+    assert.equal(result?.exportSymbols.length, exports);
+  });
+}
+

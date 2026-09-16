@@ -60,6 +60,16 @@ void test("accepts equal and ascending PT_LOAD addresses", () => {
   assert.deepEqual(issues, []);
 });
 
+void test("ignores non-load addresses and positions when checking segment ordering", () => {
+  const issues: string[] = [];
+
+  validateElfProgramHeaders([segment({ type: 4 }), segment({ index: 1, type: 3 }),
+    segment({ index: 2 }), segment({ index: 3, type: 4, vaddr: 0n }),
+    segment({ index: 4, vaddr: 0x2000n })], 128, issues);
+
+  assert.deepEqual(issues, []);
+});
+
 for (const type of [3, 6]) {
   void test(`reports duplicate segment type ${type}`, () => {
     const issues: string[] = [];
