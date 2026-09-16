@@ -48,9 +48,19 @@ const toSafeIndex = (value: bigint, label: string, issues: string[]): number | n
   return num;
 };
 
-const readString = (table: DataView | null, offset: number): string => {
-  if (!table || offset < 0 || offset >= table.byteLength) return "";
-  return readAsciiString(table, offset, table.byteLength - offset);
+const readString = (table: DataView | null, offset: number, issues: string[]): string | null => {
+  // gABI 4: offsets must identify a NUL-terminated string within the linked table.
+  // https://gabi.xinuos.com/elf/04-strtab.html
+  if (!table || offset >= table.byteLength) {
+    issues.push("Dynamic symbol has an invalid string table offset.");
+    return null;
+  }
+  const name = readAsciiString(table, offset, table.byteLength - offset);
+  if (offset + name.length >= table.byteLength) {
+    issues.push("Dynamic symbol name is unterminated.");
+    return null;
+  }
+  return name;
 };
 
 const decodeBind = (bind: number): string => {
@@ -111,10 +121,9 @@ const parseDynsym = (
     const type = info & 0x0f;
     if (!isDisplayableType(type)) continue;
     const visibility = other & 0x03;
-    const name = readString(strtab, nameOff);
-    // Reuse only names terminated within the table.
-    if (strtab && nameOff + name.length < strtab.byteLength &&
-      shndx !== ELF_SYMBOL_INDEX.XINDEX) {
+    const name = readString(strtab, nameOff, issues);
+    if (name == null) continue;
+    if (shndx !== ELF_SYMBOL_INDEX.XINDEX) {
       symbolCache.set(tableOffset + base, { name, value, sectionIndex: shndx });
     }
     out.push({
@@ -168,9 +177,12 @@ const parseDynsymFromSections = async (opts: {
   if (!symtab) return null;
 
   const linked = opts.sections[dynsym.link];
-  const dynstr =
-    (linked && linked.size > 0n ? linked : null) ?? opts.sections.find(sec => sec.name === ".dynstr" && sec.size > 0n) ?? null;
-  const strtab = dynstr ? await readDataViewSlice(opts.file, dynstr.offset, dynstr.size, ".dynstr", opts.issues) : null;
+  // gABI 3: SHT_DYNSYM.sh_link identifies the associated SHT_STRTAB, regardless of names.
+  if (!linked || linked.type !== 3) {
+    opts.issues.push(".dynsym sh_link does not reference SHT_STRTAB.");
+    return { symtab, strtab: null, offset: Number(dynsym.offset) };
+  }
+  const strtab = await readDataViewSlice(opts.file, linked.offset, linked.size, ".dynstr", opts.issues);
   return { symtab, strtab, offset: Number(dynsym.offset) };
 };
 

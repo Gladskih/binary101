@@ -174,3 +174,58 @@ void test("includes allocated STT_COMMON definitions in dynamic exports", async 
   assert.equal(result?.exportSymbols[0]?.typeName, "COMMON");
 });
 
+for (const link of [0, 1, 99]) {
+  void test(`rejects invalid dynamic string table link ${link} without name fallback`, async () => {
+    const fixture = relocationFixture();
+    fixture.elf.sections[2]!.type = 11;
+    fixture.elf.sections[2]!.link = link;
+    fixture.elf.sections[3]!.name = ".dynstr";
+    fixture.bytes[284] = 0x12;
+
+    const result = await parseElfDynamicSymbols({ file: fixture.file(), ...fixture.elf });
+
+    assert.deepEqual(result?.exportSymbols, []);
+    assert.match(result!.issues.join(" "), /sh_link.*SHT_STRTAB/);
+  });
+}
+
+void test("rejects a nonempty PROGBITS section used as dynamic strings", async () => {
+  const fixture = relocationFixture();
+  fixture.elf.sections[2]!.type = 11;
+  fixture.elf.sections[3]!.type = 1;
+  fixture.bytes[284] = 0x12;
+
+  const result = await parseElfDynamicSymbols({ file: fixture.file(), ...fixture.elf });
+
+  assert.deepEqual(result?.exportSymbols, []);
+  assert.match(result!.issues.join(" "), /sh_link.*SHT_STRTAB/);
+});
+
+void test("reports unterminated dynamic names without exporting or caching them", async () => {
+  const fixture = relocationFixture();
+  fixture.elf.sections[2]!.type = 11;
+  fixture.bytes[284] = 0x12;
+  fixture.bytes[391] = 65;
+  const cache = new Map<number, ElfRelocationSymbol>();
+
+  const result = await parseElfDynamicSymbols({ file: fixture.file(), ...fixture.elf }, [], cache);
+
+  assert.deepEqual(result?.exportSymbols, []);
+  assert.match(result!.issues.join(" "), /unterminated/);
+  assert.equal(cache.has(280), false);
+});
+
+void test("reports dynamic name offsets at the end of the string table", async () => {
+  const fixture = relocationFixture();
+  fixture.elf.sections[2]!.type = 11;
+  fixture.bytes[284] = 0x12;
+  fixture.view.setUint32(280, 8, true); // Fixture string table has eight bytes.
+  const cache = new Map<number, ElfRelocationSymbol>();
+
+  const result = await parseElfDynamicSymbols({ file: fixture.file(), ...fixture.elf }, [], cache);
+
+  assert.deepEqual(result?.exportSymbols, []);
+  assert.match(result!.issues.join(" "), /string table offset/);
+  assert.equal(cache.has(280), false);
+});
+
