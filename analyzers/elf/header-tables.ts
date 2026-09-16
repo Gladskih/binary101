@@ -10,6 +10,7 @@ import {
   decodeOption
 } from "./constants.js";
 import type { ElfHeader, ElfProgramHeader, ElfSectionHeader } from "./types.js";
+import { validateElfProgramHeaders } from "./program-header-validation.js";
 
 const bigFrom32 = (value: number): bigint => BigInt.asUintN(32, BigInt(value));
 
@@ -242,6 +243,7 @@ export async function parseProgramHeadersWithGuards(
     const parsed = is64 ? parseProgramHeader64(view, littleEndian) : parseProgramHeader32(view, littleEndian);
     entries.push({ ...parsed, index });
   }
+  validateElfProgramHeaders(entries, file.size, issues);
   return entries;
 }
 

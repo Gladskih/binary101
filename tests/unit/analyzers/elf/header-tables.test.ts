@@ -210,3 +210,16 @@ void test("rejects a section name table of the wrong type", async () => {
   assert.match(result!.issues.join(" "), /Section name table.*SHT_STRTAB/);
   assert.equal(result?.sections[1]?.name, undefined);
 });
+
+void test("validates load segment semantics after parsing headers", async () => {
+  const bytes = await createElfFile().arrayBuffer();
+  // Elf64_Phdr.p_memsz and p_align, gABI 7.1; fixture header starts at 64.
+  new DataView(bytes).setBigUint64(64 + 40, 1n, true);
+  new DataView(bytes).setBigUint64(64 + 48, 3n, true);
+
+  const result = await parseElf(new File([bytes], "bad-load.elf"));
+
+  assert.match(result!.issues.join(" "), /p_filesz.*p_memsz/);
+  assert.match(result!.issues.join(" "), /p_align/);
+  assert.equal(result?.programHeaders.length, 1);
+});
