@@ -185,3 +185,65 @@ void test("reports truncated names, preserves exact-end names and warns about cl
   assert.equal(clipped?.issues.length, 2);
   assert.match(clipped!.issues.join(" "), /note name is truncated/);
 });
+const alignedNotes = (alignment: number): File => {
+  // ELF note header: three Words, GNU owner includes NUL, descriptor is a build ID.
+  // https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/Object/ELFTypes.h
+  const stride = Math.ceil(20 / alignment) * alignment;
+  const bytes = new Uint8Array(stride * 2);
+  const view = new DataView(bytes.buffer);
+  for (const offset of [0, stride]) {
+    view.setUint32(offset, 4, true);
+    view.setUint32(offset + 4, 4, true);
+    view.setUint32(offset + 8, 3, true);
+    bytes.set([71, 78, 85, 0, 0x11, 0x22, 0x33, 0x44], offset + 12);
+  }
+  return new File([bytes], "aligned-notes");
+};
+
+for (const alignment of [4, 8]) {
+  void test(`honors section note alignment ${alignment}`, async () => {
+    const file = alignedNotes(alignment);
+    const result = await parseElfNotes({ file, programHeaders: [], littleEndian: true,
+      is64: true, sections: [makeSection({ type: 7, size: BigInt(file.size),
+        addralign: BigInt(alignment) })] });
+    assert.deepEqual(result?.entries.map(entry => entry.value), ["11223344", "11223344"]);
+    assert.deepEqual(result?.issues, []);
+  });
+
+  void test(`honors segment note alignment ${alignment}`, async () => {
+    const file = alignedNotes(alignment);
+    const result = await parseElfNotes({ file, sections: [], littleEndian: true,
+      is64: true, programHeaders: [{ ...noteSegment(4, BigInt(file.size)),
+        align: BigInt(alignment) }] });
+    assert.deepEqual(result?.entries.map(entry => entry.value), ["11223344", "11223344"]);
+    assert.deepEqual(result?.issues, []);
+  });
+}
+
+void test("rejects unsupported note alignment visibly", async () => {
+  const result = await parseElfNotes({ file: alignedNotes(4), programHeaders: [],
+    littleEndian: true, sections: [makeSection({ type: 7, size: 40n, addralign: 3n })] });
+  assert.deepEqual(result?.entries, []);
+  assert.match(result!.issues.join(" "), /alignment/);
+});
+
+void test("aligns the descriptor after a five-byte note owner", async () => {
+  // 12-byte header + CORE NUL = 17 bytes, padded to 24 for sh_addralign=8.
+  // LLVM ELFTypes.h Elf_Note_Impl::getDesc; Linux NT_AUXV=6.
+  const bytes = new Uint8Array(56);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 5, true);
+  view.setUint32(4, 32, true);
+  view.setUint32(8, 6, true);
+  bytes.set(new TextEncoder().encode("CORE\0"), 12);
+  view.setBigUint64(24, 6n, true);
+  view.setBigUint64(32, 4096n, true);
+
+  const result = await parseElfNotes({ file: new File([bytes], "aligned-core"),
+    is64: true, littleEndian: true, coreMachine: 62, programHeaders: [],
+    sections: [makeSection({ type: 7, size: 56n, addralign: 8n })] });
+
+  assert.deepEqual(result?.entries[0]?.core?.auxv,
+    [{ tag: 6n, value: 4096n }, { tag: 0n, value: 0n }]);
+  assert.deepEqual(result?.issues, []);
+});

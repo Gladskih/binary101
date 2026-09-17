@@ -14,36 +14,40 @@ const toSafeIndex = (value: bigint, label: string, issues: string[]): number | n
   return num;
 };
 
-// gABI note records: three 32-bit words followed by 4-byte-aligned name and descriptor.
-// https://gabi.xinuos.com/elf/07-pheader.html#note-section
+// Note descriptor and next-record alignment follow sh_addralign / p_align.
+// ELF64 producers also use 4-byte alignment; class alone is insufficient.
+// https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/Object/ELFTypes.h
 const noteBounds = (view: DataView, offset: number, littleEndian: boolean,
-  source: string, issues: string[]) => {
+  source: string, issues: string[], alignment: number) => {
   const namesz = view.getUint32(offset, littleEndian);
   const descsz = view.getUint32(offset + 4, littleEndian);
   const nameStart = offset + 12;
   const nameEnd = nameStart + namesz;
   if (nameEnd > view.byteLength) { issues.push(`${source}: note name is truncated.`); return null; }
-  const descStart = alignUpTo(nameEnd, 4);
+  const descStart = alignUpTo(nameEnd, alignment);
   const descEnd = descStart + descsz;
   if (descEnd > view.byteLength) { issues.push(`${source}: note desc is truncated.`); return null; }
   return { nameStart, nameEnd, descStart, descEnd };
 };
 
-const parseNotesFromBytes = (bytes: Uint8Array, littleEndian: boolean, source: string,
-  issues: string[], fileOffsetStart: bigint, wordSize: 4 | 8,
+const parseNotesFromBytes = (bytes: Uint8Array, littleEndian: boolean,
+  range: ReturnType<typeof noteRanges>[number], issues: string[], wordSize: 4 | 8,
   coreMachine: number | undefined, seenNotes: Set<string>): ElfNoteEntry[] => {
+  const { source } = range;
+  const alignment = noteAlignment(range.align, source, issues);
+  if (alignment == null) return [];
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const entries: ElfNoteEntry[] = [];
   let offset = 0;
   while (offset + 12 <= view.byteLength) {
-    const key = (fileOffsetStart + BigInt(offset)).toString();
-    const bounds = noteBounds(view, offset, littleEndian, source, issues);
+    const key = (range.offset + BigInt(offset)).toString();
+    const bounds = noteBounds(view, offset, littleEndian, source, issues, alignment);
     if (!bounds) break;
     const type = view.getUint32(offset + 8, littleEndian);
-    offset = alignUpTo(bounds.descEnd, 4);
+    offset = alignUpTo(bounds.descEnd, alignment);
     if (seenNotes.has(key)) continue;
     seenNotes.add(key);
-    const name = readAsciiString(view, bounds.nameStart, bounds.nameEnd - bounds.nameStart).replace(/\0.*$/, "");
+    const name = readAsciiString(view, bounds.nameStart, bounds.nameEnd - bounds.nameStart);
     const desc = bytes.subarray(bounds.descStart, bounds.descEnd);
     const entry: ElfNoteEntry = { source, name, type, descSize: desc.length,
       typeName: null, description: null, value: null };
@@ -53,13 +57,22 @@ const parseNotesFromBytes = (bytes: Uint8Array, littleEndian: boolean, source: s
   return entries;
 };
 
+const noteAlignment = (align: bigint, source: string, issues: string[]): number | null => {
+  // Treat unspecified/byte alignment as the traditional four-byte note layout.
+  if ([0n, 1n, 2n, 4n].includes(align)) return 4;
+  if (align === 8n) return 8;
+  issues.push(`${source}: unsupported note alignment ${align}.`);
+  return null;
+};
+
 const noteRanges = (sections: ElfSectionHeader[], headers: ElfProgramHeader[]) => {
   const ranges = sections.filter(section => section.type === 7 && section.size > 0n)
-    .map(section => ({ offset: section.offset, size: section.size,
+    .map(section => ({ offset: section.offset, size: section.size, align: section.addralign,
       source: section.name ? `Section "${section.name}"` : `SHT_NOTE section #${section.index}` }));
   // SHT_NOTE=7; PT_NOTE=4; PT_GNU_PROPERTY=0x6474e553 (glibc elf.h).
   ranges.push(...headers.filter(header => [4, 0x6474e553].includes(header.type) && header.filesz > 0n)
-    .map(header => ({ offset: header.offset, size: header.filesz, source: `PT_NOTE segment #${header.index}` })));
+    .map(header => ({ offset: header.offset, size: header.filesz, align: header.align,
+      source: `PT_NOTE segment #${header.index}` })));
   return ranges;
 };
 
@@ -95,8 +108,8 @@ export async function parseElfNotes(opts: {
     dedupe.add(key);
     const bytes = await readNoteRange(reader, range, issues);
     if (!bytes) continue;
-    const parsed = parseNotesFromBytes(bytes, opts.littleEndian, range.source, issues,
-      range.offset, opts.is64 ? 8 : 4, opts.coreMachine, seenNotes);
+    const parsed = parseNotesFromBytes(bytes, opts.littleEndian, range, issues,
+      opts.is64 ? 8 : 4, opts.coreMachine, seenNotes);
     for (const entry of parsed) entries.push(entry);
   }
   return { entries, issues };
