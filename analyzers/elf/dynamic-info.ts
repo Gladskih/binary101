@@ -2,7 +2,7 @@
 
 import { readAsciiString } from "../../binary-utils.js";
 import type { ElfDynamicInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
-import { elfVirtualRange } from "./relocation-reader.js";
+import { elfFileRange, elfVirtualRange } from "./relocation-reader.js";
 import { readElfDynamicEntries, type ElfDynamicEntry } from "./dynamic-entries.js";
 import { createFileRangeReader } from "../file-range-reader.js";
 
@@ -68,15 +68,22 @@ const locateDynStringTable = async (opts: {
     }
   }
 
-  const dynstr = opts.sections.find(sec => sec.name === ".dynstr" && sec.size > 0n);
-  if (!dynstr) return null;
-  const start = toSafeIndex(dynstr.offset, ".dynstr offset", opts.issues);
-  const size = toSafeIndex(dynstr.size, ".dynstr size", opts.issues);
-  if (start == null || size == null || size <= 0) return null;
-  const end = Math.min(opts.file.size, start + size);
-  if (end !== start + size) opts.issues.push(".dynstr extends past end of file; truncating.");
-  const bytes = new Uint8Array(await opts.file.slice(start, end).arrayBuffer());
-  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  // gABI 3.5: SHT_DYNAMIC.sh_link identifies its string table, independent of names.
+  const segment = opts.programHeaders.find(ph => ph.type === PT_DYNAMIC && ph.filesz > 0n);
+  const dynamic = opts.sections.find(section => section.type === SHT_DYNAMIC &&
+    (!segment || section.offset === segment.offset));
+  if (!dynamic) return null;
+  const strings = opts.sections.find(section => section.index === dynamic.link);
+  if (!strings || strings.type !== 3) {
+    opts.issues.push("SHT_DYNAMIC sh_link does not reference SHT_STRTAB.");
+    return null;
+  }
+  const range = elfFileRange(strings.offset, strings.size, opts.file.size);
+  if (!range) {
+    opts.issues.push("Dynamic string table is truncated or outside the file.");
+    return null;
+  }
+  return new DataView(await opts.file.slice(range.offset, range.offset + range.size).arrayBuffer());
 };
 
 const getTagValue = (entries: DynEntry[], tag: number): bigint | null =>

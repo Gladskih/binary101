@@ -37,7 +37,7 @@ void test("parseElfDynamicInfo reads DT_NEEDED / DT_SONAME / DT_RUNPATH", async 
   assert.equal(parsed.dynamic.init, 0x401000n);
 });
 
-void test("parseElfDynamicInfo falls back to .dynstr when DT_STRTAB doesn't map", async () => {
+void test("parseElfDynamicInfo falls back to linked strings when DT_STRTAB doesn't map", async () => {
   const dynstrText = "\0libc.so.6\0";
   const dynstrBytes = new TextEncoder().encode(dynstrText);
   const dynEntrySize = 16;
@@ -59,7 +59,8 @@ void test("parseElfDynamicInfo falls back to .dynstr when DT_STRTAB doesn't map"
   bytes.set(dynstrBytes, dynamicBytes.length);
   const file = new MockFile(bytes, "dyninfo.bin", "application/x-elf");
   const sections: ElfSectionHeader[] = [
-    makeSection({ index: 0, type: 6, name: ".dynamic", offset: 0n, size: BigInt(dynamicBytes.length) }),
+    makeSection({ index: 0, type: 6, name: ".dynamic", offset: 0n,
+      size: BigInt(dynamicBytes.length), link: 1 }),
     makeSection({
       index: 1,
       type: 3,
@@ -118,5 +119,17 @@ void test("accepts dynamic strings ending exactly at the load boundary", async (
   assert.deepEqual(result?.needed, ["libtest.so"]);
   assert.deepEqual(result?.issues, []);
 });
+void test("follows SHT_DYNAMIC sh_link regardless of string table name", async () => {
+  const fixture = dynamicStringsFixture();
+  const result = await parseElfDynamicInfo({ ...fixture, programHeaders: [] }, fixture.entries);
+  assert.deepEqual(result?.needed, ["libtest.so"]);
+});
 
-
+void test("does not substitute a named dynstr for an invalid dynamic sh_link", async () => {
+  const fixture = dynamicStringsFixture();
+  fixture.sections[1]!.link = 99;
+  fixture.sections[2]!.name = ".dynstr";
+  const result = await parseElfDynamicInfo({ ...fixture, programHeaders: [] }, fixture.entries);
+  assert.deepEqual(result?.needed, []);
+  assert.match(result!.issues.join(" "), /sh_link/);
+});
