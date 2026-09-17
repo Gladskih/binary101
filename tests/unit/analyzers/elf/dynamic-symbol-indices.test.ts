@@ -1,3 +1,4 @@
+import { parseElfDynamicSymbols } from "../../../../analyzers/elf/dynamic-symbols.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createElfDynamicIndexReader } from "../../../../analyzers/elf/dynamic-symbol-indices.js";
@@ -59,6 +60,39 @@ void test("reads DT_SYMTAB_SHNDX through a bounded load mapping", async () => {
   assert.deepEqual(issues, []);
   assert.equal(await read(2, 0xffff), null);
   assert.match(issues.join(" "), /SHN_XINDEX/);
+});
+
+for (const [bits, order, shndxOffset] of [
+  [32, "little", 286], [32, "big", 286], [64, "little", 286], [64, "big", 286]
+] as const) {
+  void test(`resolves ELF${bits} ${order} dynamic SHN_XINDEX`, async () => {
+    const fixture = relocationFixture(bits, order);
+    fixture.elf.sections[2]!.type = 11;
+    fixture.bytes[284] = 0x12;
+    fixture.view.setUint16(shndxOffset, 0xffff, fixture.elf.littleEndian);
+    fixture.elf.sections.push({ ...fixture.elf.sections[3]!, index: 4, type: 18,
+      link: 2, offset: 640n, size: 8n, entsize: 4n });
+    // gABI 5.5: SHN_XINDEX -> corresponding Elf32_Word in SHT_SYMTAB_SHNDX.
+    // https://gabi.xinuos.com/elf/05-symtab.html
+    fixture.view.setUint32(644, 0x10000, fixture.elf.littleEndian);
+
+    const result = await parseElfDynamicSymbols({ file: fixture.file(), ...fixture.elf });
+
+    assert.equal(result?.exportSymbols[0]?.shndx, 0x10000);
+    assert.deepEqual(result?.issues, []);
+  });
+}
+
+void test("warns and omits dynamic exports with unresolved SHN_XINDEX", async () => {
+  const fixture = relocationFixture();
+  fixture.elf.sections[2]!.type = 11;
+  fixture.bytes[284] = 0x12;
+  fixture.view.setUint16(286, 0xffff, true);
+
+  const result = await parseElfDynamicSymbols({ file: fixture.file(), ...fixture.elf });
+
+  assert.deepEqual(result?.exportSymbols, []);
+  assert.match(result!.issues.join(" "), /SHN_XINDEX/);
 });
 for (const [type, offset, tag] of [[2, 256, 34], [11, 257, 34], [11, 256, 35]]) {
   void test(`selects only the matching dynamic index source ${type}/${offset}/${tag}`, async () => {

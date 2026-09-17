@@ -1,7 +1,7 @@
 "use strict";
 
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { mock, test } from "node:test";
 import {
   parseProgramHeadersWithGuards,
   parseSectionHeadersWithNames,
@@ -13,23 +13,10 @@ import { createElfFile } from "../../../fixtures/elf-sample-file.js";
 import { parseElf } from "../../../../analyzers/elf/index.js";
 
 const baseHeader = (partial: Partial<ElfHeader>): ElfHeader => ({
-  type: 2,
-  typeName: "Executable",
-  machine: 0x3e,
-  machineName: "x86-64",
-  entry: 0n,
-  phoff: 0n,
-  shoff: 0n,
-  flags: 0,
-  ehsize: 64,
-  phentsize: 56,
-  phnum: 0,
-  shentsize: 64,
-  shnum: 0,
-  shstrndx: 0,
-  ...partial
+  type: 2, typeName: "Executable", machine: 0x3e, machineName: "x86-64",
+  entry: 0n, phoff: 0n, shoff: 0n, flags: 0, ehsize: 64, phentsize: 56,
+  phnum: 0, shentsize: 64, shnum: 0, shstrndx: 0, ...partial
 });
-
 void test("resolveExtendedHeaderCounts reads values from section header #0", async () => {
   const bytes = new Uint8Array(256).fill(0);
   const sectionZero = new DataView(bytes.buffer, 64, 64);
@@ -53,7 +40,6 @@ void test("resolveExtendedHeaderCounts reads values from section header #0", asy
   assert.equal(resolved.shstrndx, 3);
   assert.deepEqual(issues, []);
 });
-
 void test("resolveExtendedHeaderCounts reports missing section table for extended numbering", async () => {
   const file = new MockFile(new Uint8Array(64), "ext-missing.elf", "application/x-elf");
   const issues: string[] = [];
@@ -71,7 +57,6 @@ void test("resolveExtendedHeaderCounts reports missing section table for extende
   assert.equal(resolved.shstrndx, 0);
   assert.ok(issues.some(issue => issue.includes("requires section header #0")));
 });
-
 void test("parseProgramHeadersWithGuards rejects undersized entries", async () => {
   const file = new MockFile(new Uint8Array(256), "ph-small.elf", "application/x-elf");
   const issues: string[] = [];
@@ -86,7 +71,6 @@ void test("parseProgramHeadersWithGuards rejects undersized entries", async () =
   assert.deepEqual(entries, []);
   assert.ok(issues.some(issue => issue.includes("Program header entry size (16)")));
 });
-
 void test("parseProgramHeadersWithGuards parses available program headers", async () => {
   const bytes = new Uint8Array(256).fill(0);
   new DataView(bytes.buffer).setUint32(64, 1, true);
@@ -102,7 +86,6 @@ void test("parseProgramHeadersWithGuards parses available program headers", asyn
   assert.equal(entries.length, 1);
   assert.equal(entries[0]?.type, 1);
 });
-
 void test("parseSectionHeadersWithNames resolves section names from string table", async () => {
   const headerSize = 64;
   const tableOffset = headerSize;
@@ -135,7 +118,6 @@ void test("parseSectionHeadersWithNames resolves section names from string table
   assert.equal(sections[0]?.name, ".sec0");
   assert.equal(sections[1]?.name, ".shstrtab");
 });
-
 void test("parseSectionHeadersWithNames rejects undersized section entries", async () => {
   const file = new MockFile(new Uint8Array(256), "sections-small.elf", "application/x-elf");
   const issues: string[] = [];
@@ -167,7 +149,6 @@ for (const shnum of [0xff00, 0xfffe, 0xffff]) {
     assert.match(issues.join(" "), /e_shnum.*reserved/);
   });
 }
-
 void test("resolves extended section counts at SHN_LORESERVE", async () => {
   const bytes = new Uint8Array(128);
   new DataView(bytes.buffer).setBigUint64(64 + 32, 0xff00n, true);
@@ -179,7 +160,6 @@ void test("resolves extended section counts at SHN_LORESERVE", async () => {
   assert.equal(result.shnum, 0xff00);
   assert.deepEqual(issues, []);
 });
-
 void test("accepts SHN_UNDEF when section names are absent", async () => {
   const bytes = await createElfFile().arrayBuffer();
   // Elf64_Ehdr.e_shstrndx at 62; SHN_UNDEF=0 (gABI 2).
@@ -190,7 +170,6 @@ void test("accepts SHN_UNDEF when section names are absent", async () => {
   assert.deepEqual(result?.issues, []);
   assert.equal(result?.sections[1]?.name, undefined);
 });
-
 void test("reports an out-of-range section name table index", async () => {
   const bytes = await createElfFile().arrayBuffer();
   new DataView(bytes).setUint16(62, 2, true); // Fixture has two section headers.
@@ -199,7 +178,6 @@ void test("reports an out-of-range section name table index", async () => {
 
   assert.match(result!.issues.join(" "), /Section name table header is missing/);
 });
-
 void test("rejects a section name table of the wrong type", async () => {
   const bytes = await createElfFile().arrayBuffer();
   // Fixture's second Elf64_Shdr.sh_type: SHT_PROGBITS instead of SHT_STRTAB.
@@ -210,7 +188,6 @@ void test("rejects a section name table of the wrong type", async () => {
   assert.match(result!.issues.join(" "), /Section name table.*SHT_STRTAB/);
   assert.equal(result?.sections[1]?.name, undefined);
 });
-
 void test("validates load segment semantics after parsing headers", async () => {
   const bytes = await createElfFile().arrayBuffer();
   // Elf64_Phdr.p_memsz and p_align, gABI 7.1; fixture header starts at 64.
@@ -223,7 +200,6 @@ void test("validates load segment semantics after parsing headers", async () => 
   assert.match(result!.issues.join(" "), /p_align/);
   assert.equal(result?.programHeaders.length, 1);
 });
-
 void test("does not read section zero when no extended field is present", async () => {
   const issues: string[] = [];
   const header = baseHeader({ shoff: 64n, shnum: 2, shstrndx: 1 });
@@ -234,7 +210,6 @@ void test("does not read section zero when no extended field is present", async 
   assert.deepEqual(result, header);
   assert.deepEqual(issues, []);
 });
-
 void test("preserves ordinary e_shnum while resolving PN_XNUM", async () => {
   const bytes = new Uint8Array(128);
   new DataView(bytes.buffer).setBigUint64(64 + 32, 7n, true);
@@ -265,7 +240,6 @@ for (const [size, offset, diagnostic] of [
     assert.match(issues.join(" "), diagnostic);
   });
 }
-
 void test("accepts absent section tables without attempting extended numbering", async () => {
   const issues: string[] = [];
   const header = baseHeader({ shoff: 0n, shnum: 0 });
@@ -285,7 +259,6 @@ void test("reports unterminated section names", async () => {
   assert.equal(result?.sections[1]?.name, "");
   assert.match(result!.issues.join(" "), /unterminated|NUL/);
 });
-
 void test("reports out-of-range section name offsets", async () => {
   const bytes = await createElfFile().arrayBuffer();
   // Fixture second Elf64_Shdr.sh_name, gABI 3.2.
@@ -296,7 +269,6 @@ void test("reports out-of-range section name offsets", async () => {
   assert.equal(result?.sections[1]?.name, "");
   assert.match(result!.issues.join(" "), /reference|offset/);
 });
-
 void test("validates section file ranges and alignment", async () => {
   const bytes = await createElfFile().arrayBuffer();
   const view = new DataView(bytes);
@@ -311,4 +283,21 @@ void test("validates section file ranges and alignment", async () => {
 
   assert.match(result!.issues.join(" "), /Section #1.*outside the file/);
   assert.match(result!.issues.join(" "), /sh_addralign/);
+});
+void test("reads a large section table through bounded file windows", async () => {
+  // Elf64_Shdr is 64 bytes; enough entries to exceed a 64 KiB read window.
+  const file = new File([new Uint8Array(64 + 1200 * 64)], "large-headers");
+  const slice = file.slice.bind(file);
+  const sizes: number[] = [];
+  mock.method(file, "slice", (start = 0, end = file.size) => {
+    sizes.push(end - start);
+    return slice(start, end);
+  });
+
+  const sections = await parseSectionHeadersWithNames(file,
+    baseHeader({ shoff: 64n, shnum: 1200 }), true, true, [], 64);
+
+  assert.equal(sections.length, 1200);
+  assert.ok(sizes.length > 1);
+  assert.ok(sizes.every(size => size <= 65536));
 });

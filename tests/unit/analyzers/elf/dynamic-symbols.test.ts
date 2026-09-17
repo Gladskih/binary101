@@ -1,7 +1,7 @@
 "use strict";
 
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { mock, test } from "node:test";
 import { parseElf } from "../../../../analyzers/elf/index.js";
 import { parseElfDynamicSymbols } from "../../../../analyzers/elf/dynamic-symbols.js";
 import { createElfGnuHashDynamicFixture } from "../../../fixtures/elf-gnu-hash-file.js";
@@ -276,37 +276,26 @@ for (const [info, section, name, imports, exports] of [
   });
 }
 
-for (const [bits, order, shndxOffset] of [
-  [32, "little", 286], [32, "big", 286], [64, "little", 286], [64, "big", 286]
-] as const) {
-  void test(`resolves ELF${bits} ${order} dynamic SHN_XINDEX`, async () => {
-    const fixture = relocationFixture(bits, order);
-    fixture.elf.sections[2]!.type = 11;
-    fixture.bytes[284] = 0x12;
-    fixture.view.setUint16(shndxOffset, 0xffff, fixture.elf.littleEndian);
-    fixture.elf.sections.push({ ...fixture.elf.sections[3]!, index: 4, type: 18,
-      link: 2, offset: 640n, size: 8n, entsize: 4n });
-    // gABI 5.5: SHN_XINDEX -> corresponding Elf32_Word in SHT_SYMTAB_SHNDX.
-    // https://gabi.xinuos.com/elf/05-symtab.html
-    fixture.view.setUint32(644, 0x10000, fixture.elf.littleEndian);
-
-    const result = await parseElfDynamicSymbols({ file: fixture.file(), ...fixture.elf });
-
-    assert.equal(result?.exportSymbols[0]?.shndx, 0x10000);
-    assert.deepEqual(result?.issues, []);
-  });
-}
-
-void test("warns and omits dynamic exports with unresolved SHN_XINDEX", async () => {
+void test("reads large dynamic tables with bounded slices", async () => {
   const fixture = relocationFixture();
+  // Elf64_Sym is 24 bytes; synthetic placement keeps strings after the symbol table.
+  const bytes = new Uint8Array(256 + 5000 * 24 + 8);
+  bytes.set(fixture.bytes.subarray(256, 304), 256);
+  bytes.set(fixture.bytes.subarray(384, 392), bytes.length - 8);
   fixture.elf.sections[2]!.type = 11;
-  fixture.bytes[284] = 0x12;
-  fixture.view.setUint16(286, 0xffff, true);
+  fixture.elf.sections[2]!.size = 5000n * 24n;
+  fixture.elf.sections[3]!.offset = BigInt(bytes.length - 8);
+  const file = new File([bytes], "large-symbols");
+  const slice = file.slice.bind(file);
+  const sizes: number[] = [];
+  mock.method(file, "slice", (start = 0, end = file.size) => {
+    sizes.push(end - start);
+    return slice(start, end);
+  });
 
-  const result = await parseElfDynamicSymbols({ file: fixture.file(), ...fixture.elf });
+  const result = await parseElfDynamicSymbols({ ...fixture.elf, file });
 
-  assert.deepEqual(result?.exportSymbols, []);
-  assert.match(result!.issues.join(" "), /SHN_XINDEX/);
+  assert.equal(result?.total, 5000);
+  assert.deepEqual(result?.issues, []);
+  assert.ok(sizes.every(size => size <= 65536));
 });
-
-

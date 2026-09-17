@@ -1,6 +1,7 @@
 "use strict";
 
-import { readAsciiString } from "../../binary-utils.js";
+import { createElfStringTableReader } from "./string-table.js";
+import type { FileRangeReader } from "../file-range-reader.js";
 import type { ElfDynamicSymbol, ElfDynamicSymbolInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import { readDynsymCountFromGnuHash, readDynsymCountFromSysvHash } from "./dynsym-count.js";
 import { elfVirtualRange } from "./relocation-reader.js";
@@ -39,29 +40,8 @@ const STV_INTERNAL = 1;
 const STV_HIDDEN = 2;
 const STV_PROTECTED = 3;
 
-const toSafeIndex = (value: bigint, label: string, issues: string[]): number | null => {
-  const num = Number(value);
-  if (!Number.isSafeInteger(num) || num < 0) {
-    issues.push(`${label} (${value.toString()}) is too large to index into the file.`);
-    return null;
-  }
-  return num;
-};
-
-const readString = (table: DataView | null, offset: number, issues: string[]): string | null => {
-  // gABI 4: offsets must identify a NUL-terminated string within the linked table.
-  // https://gabi.xinuos.com/elf/04-strtab.html
-  if (!table || offset >= table.byteLength) {
-    issues.push("Dynamic symbol has an invalid string table offset.");
-    return null;
-  }
-  const name = readAsciiString(table, offset, table.byteLength - offset);
-  if (offset + name.length >= table.byteLength) {
-    issues.push("Dynamic symbol name is unterminated.");
-    return null;
-  }
-  return name;
-};
+type TableRange = { offset: number; size: number };
+type DynamicSymbolTables = { symtab: TableRange; strtab: TableRange | null };
 
 const decodeBind = (bind: number): string => {
   const map: Record<number, string> = { 0: "LOCAL", 1: "GLOBAL", 2: "WEAK", 10: "GNU_UNIQUE" };
@@ -97,68 +77,56 @@ const isDisplayableType = (type: number): boolean =>
   [0, 1, 2, 5, 6, 10].includes(type);
 
 const parseDynsym = async (
-  symtab: DataView,
-  strtab: DataView | null,
+  symtab: TableRange,
+  strtab: TableRange | null,
   layout: ElfBinaryLayout,
   issues: string[],
-  tableOffset: number,
   symbolCache: Map<number, ElfRelocationSymbol>,
-  readSectionIndex: ReturnType<typeof createElfDynamicIndexReader>
+  readSectionIndex: ReturnType<typeof createElfDynamicIndexReader>,
+  reader: FileRangeReader
 ): Promise<ElfDynamicSymbol[]> => {
   const entrySize = layout.symbolEntrySize;
-  const count = Math.floor(symtab.byteLength / entrySize);
-  if (symtab.byteLength % entrySize !== 0) {
+  const count = Math.min(Math.floor(symtab.size / entrySize), 1000000);
+  if (symtab.size / entrySize > 1000000) {
+    issues.push("Dynamic symbol table exceeds the 1000000 entry resource limit.");
+  }
+  const readName = createElfStringTableReader(reader, strtab, issues);
+  if (symtab.size % entrySize !== 0) {
     issues.push(`.dynsym size is not aligned to entry size (${entrySize} bytes).`);
   }
   const out: ElfDynamicSymbol[] = [];
   for (let index = 0; index < count; index += 1) {
     const base = index * entrySize;
-    if (base + entrySize > symtab.byteLength) break;
-    const { nameOffset: nameOff, value, size, info, other, sectionIndex } =
-      layout.readSymbol(new DataView(symtab.buffer, symtab.byteOffset + base, entrySize))!;
+    const record = layout.readSymbol(await reader.read(symtab.offset + base, entrySize));
+    if (!record) { issues.push(`Dynamic symbol #${index} is truncated.`); break; }
+    const { nameOffset: nameOff, value, size, info, other, sectionIndex } = record;
     // ELF*_ST_BIND/TYPE/VISIBILITY: high/low st_info nibbles and low two st_other bits.
     // https://gabi.xinuos.com/elf/05-symtab.html
     const bind = info >> 4;
     const type = info & 0x0f;
     if (!isDisplayableType(type)) continue;
     const visibility = other & 0x03;
-    const name = readString(strtab, nameOff, issues);
+    const name = await readName(nameOff);
     if (name == null) continue;
     const shndx = await readSectionIndex(index, sectionIndex);
     if (shndx == null) continue;
-    symbolCache.set(tableOffset + base, { name, value, sectionIndex: shndx });
-    out.push({
-      index,
-      name,
-      value,
-      size,
-      bind,
-      bindName: decodeBind(bind),
-      type,
-      typeName: decodeType(type),
-      visibility,
-      visibilityName: decodeVisibility(visibility),
-      shndx
-    });
+    symbolCache.set(symtab.offset + base, { name, value, sectionIndex: shndx });
+    out.push({ index, name, value, size, bind, bindName: decodeBind(bind),
+      type, typeName: decodeType(type), visibility,
+      visibilityName: decodeVisibility(visibility), shndx });
   }
   return out;
 };
 
-const readDataViewSlice = async (
-  file: File,
-  offset: bigint,
-  size: bigint,
-  label: string,
-  issues: string[]
-): Promise<DataView | null> => {
-  const start = toSafeIndex(offset, `${label} offset`, issues);
-  const byteSize = toSafeIndex(size, `${label} size`, issues);
-  if (start == null || byteSize == null || byteSize <= 0) return null;
-  const end = Math.min(file.size, start + byteSize);
-  if (start >= file.size || end <= start) return null;
-  if (end !== start + byteSize) issues.push(`${label} is truncated.`);
-  const bytes = new Uint8Array(await file.slice(start, end).arrayBuffer());
-  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+const readTableRange = (file: File, offset: bigint, size: bigint,
+  label: string, issues: string[]): TableRange | null => {
+  if (offset < 0n || offset >= BigInt(file.size) || size <= 0n) {
+    issues.push(`${label} is outside the file or empty.`);
+    return null;
+  }
+  const available = BigInt(file.size) - offset;
+  if (size > available) issues.push(`${label} is truncated.`);
+  return { offset: Number(offset), size: Number(size > available ? available : size) };
 };
 
 const parseDynsymFromSections = async (opts: {
@@ -167,24 +135,24 @@ const parseDynsymFromSections = async (opts: {
   is64: boolean;
   littleEndian: boolean;
   issues: string[];
-}): Promise<{ symtab: DataView; strtab: DataView | null; offset: number } | null> => {
+}): Promise<DynamicSymbolTables | null> => {
   const dynsym = opts.sections.find(sec => sec.type === SHT_DYNSYM && sec.size > 0n);
   if (!dynsym) return null;
   if (dynsym.entsize !== BigInt(selectElfBinaryLayout(opts).symbolEntrySize)) {
     opts.issues.push(".dynsym has an invalid entry size.");
     return null;
   }
-  const symtab = await readDataViewSlice(opts.file, dynsym.offset, dynsym.size, ".dynsym", opts.issues);
+  const symtab = readTableRange(opts.file, dynsym.offset, dynsym.size, ".dynsym", opts.issues);
   if (!symtab) return null;
 
   const linked = opts.sections[dynsym.link];
   // gABI 3: SHT_DYNSYM.sh_link identifies the associated SHT_STRTAB, regardless of names.
   if (!linked || linked.type !== 3) {
     opts.issues.push(".dynsym sh_link does not reference SHT_STRTAB.");
-    return { symtab, strtab: null, offset: Number(dynsym.offset) };
+    return { symtab, strtab: null };
   }
-  const strtab = await readDataViewSlice(opts.file, linked.offset, linked.size, ".dynstr", opts.issues);
-  return { symtab, strtab, offset: Number(dynsym.offset) };
+  const strtab = readTableRange(opts.file, linked.offset, linked.size, ".dynstr", opts.issues);
+  return { symtab, strtab };
 };
 
 const parseDynsymFromDynamicTags = async (opts: {
@@ -195,7 +163,7 @@ const parseDynsymFromDynamicTags = async (opts: {
   littleEndian: boolean;
   issues: string[];
 }, parsedEntries?: ElfDynamicEntry[], hashes?: ElfHashTable[]):
-Promise<{ symtab: DataView; strtab: DataView | null; offset: number } | null> => {
+Promise<DynamicSymbolTables | null> => {
   const dynamicPh = opts.programHeaders.find(ph => ph.type === PT_DYNAMIC && ph.filesz > 0n);
   if (!dynamicPh) return null;
   const entries = parsedEntries ?? await readElfDynamicEntries(
@@ -217,12 +185,12 @@ const readDynamicSymbolTables = async (opts: Parameters<typeof parseDynsymFromDy
   if (!symbols) opts.issues.push("DT_SYMTAB is outside a file-backed PT_LOAD range.");
   if (!strings) opts.issues.push("DT_STRTAB is outside a file-backed PT_LOAD range.");
   if (!symbols || !strings) return null;
-  const symtab = await readDataViewSlice(opts.file, BigInt(symbols.offset), symtabByteSize,
+  const symtab = readTableRange(opts.file, BigInt(symbols.offset), symtabByteSize,
     "DT_SYMTAB", opts.issues);
-  const strtab = await readDataViewSlice(opts.file, BigInt(strings.offset), strsz,
+  const strtab = readTableRange(opts.file, BigInt(strings.offset), strsz,
     "DT_STRTAB", opts.issues);
   if (!symtab) return null;
-  return { symtab, strtab, offset: symbols.offset };
+  return { symtab, strtab };
 };
 
 const dynsymTags = (entries: ElfDynamicEntry[], expectedSize: number, issues: string[]) => {
@@ -280,15 +248,16 @@ Promise<ElfDynamicSymbolInfo | null> {
   if (!tables) return issues.length ? { total: 0, importSymbols: [], exportSymbols: [], issues } : null;
 
   const symbols = await parseDynsym(tables.symtab, tables.strtab, layout,
-    issues, tables.offset, symbolCache,
-    createElfDynamicIndexReader(opts.file, opts, tables.offset, entries, issues));
+    issues, symbolCache,
+    createElfDynamicIndexReader(opts.file, opts, tables.symtab.offset, entries, issues),
+    createFileRangeReader(opts.file, 0, opts.file.size));
   const importSymbols = symbols.filter(sym => sym.shndx === SHN_UNDEF && sym.bind !== STB_LOCAL && sym.name.length > 0);
   const exportSymbols = symbols.filter(sym => sym.shndx !== SHN_UNDEF &&
     sym.bind !== STB_LOCAL && sym.name.length > 0 &&
     sym.visibility !== STV_HIDDEN && sym.visibility !== STV_INTERNAL);
 
   return {
-    total: Math.floor(tables.symtab.byteLength / layout.symbolEntrySize),
+    total: Math.floor(tables.symtab.size / layout.symbolEntrySize),
     importSymbols,
     exportSymbols,
     issues

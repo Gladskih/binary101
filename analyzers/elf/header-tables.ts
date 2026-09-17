@@ -3,6 +3,7 @@
 import { createFileRangeReader } from "../file-range-reader.js";
 import { createElfStringTableReader } from "./string-table.js";
 import { elfFileRange } from "./relocation-reader.js";
+import { locateElfHeaderTable } from "./header-table-range.js";
 import {
   PROGRAM_FLAGS,
   PROGRAM_TYPES,
@@ -216,29 +217,19 @@ export async function parseProgramHeadersWithGuards(
   littleEndian: boolean,
   issues: string[]
 ): Promise<ElfProgramHeader[]> {
-  if (!header.phoff || !header.phnum) return [];
   // ELF program header size from spec: sizeof(Elf32_Phdr)=0x20, sizeof(Elf64_Phdr)=0x38.
   const expectedProgramHeaderSize = is64 ? 0x38 : 0x20;
-  if (header.phentsize < expectedProgramHeaderSize) {
-    issues.push(
-      `Program header entry size (${header.phentsize}) is smaller than ELF${is64 ? "64" : "32"} minimum (${expectedProgramHeaderSize}).`
-    );
-    return [];
-  }
-  const tableOffset = toSafeNumber(header.phoff, "Program header offset", issues);
-  if (tableOffset == null) return [];
-  const tableSize = header.phentsize * header.phnum;
-  const dv = await sliceView(file, tableOffset, tableSize);
-  if (!dv) {
-    issues.push("Program header table falls outside the file.");
-    return [];
-  }
-  if (dv.byteLength < tableSize) issues.push("Program header table is truncated.");
+  const table = locateElfHeaderTable(file.size, header.phoff, header.phnum,
+    header.phentsize, expectedProgramHeaderSize, "Program header", issues);
+  if (!table) return [];
+  const reader = createFileRangeReader(file, 0, file.size);
   const entries: ElfProgramHeader[] = [];
-  const usableCount = Math.min(header.phnum, Math.floor(dv.byteLength / header.phentsize));
-  for (let index = 0; index < usableCount; index += 1) {
-    const begin = index * header.phentsize;
-    const view = new DataView(dv.buffer, begin, Math.min(header.phentsize, dv.byteLength - begin));
+  for (let index = 0; index < table.count; index += 1) {
+    const view = await reader.read(table.offset + index * header.phentsize, expectedProgramHeaderSize);
+    if (view.byteLength < expectedProgramHeaderSize) {
+      issues.push(`Program header #${index} is truncated.`);
+      break;
+    }
     const parsed = is64 ? parseProgramHeader64(view, littleEndian) : parseProgramHeader32(view, littleEndian);
     entries.push({ ...parsed, index });
   }
@@ -254,35 +245,24 @@ export async function parseSectionHeadersWithNames(
   issues: string[],
   expectedSectionHeaderSize: number
 ): Promise<ElfSectionHeader[]> {
-  if (!header.shoff || !header.shnum) return [];
-  if (header.shentsize < expectedSectionHeaderSize) {
-    issues.push(
-      `Section header entry size (${header.shentsize}) is smaller than ELF${is64 ? "64" : "32"} minimum (${expectedSectionHeaderSize}).`
-    );
-    return [];
-  }
-  const tableOffset = toSafeNumber(header.shoff, "Section header offset", issues);
-  if (tableOffset == null) return [];
-  const tableSize = header.shentsize * header.shnum;
-  const dv = await sliceView(file, tableOffset, tableSize);
-  if (!dv) {
-    issues.push("Section header table falls outside the file.");
-    return [];
-  }
-  if (dv.byteLength < tableSize) issues.push("Section header table is truncated.");
+  const table = locateElfHeaderTable(file.size, header.shoff, header.shnum,
+    header.shentsize, expectedSectionHeaderSize, "Section header", issues);
+  if (!table) return [];
+  const reader = createFileRangeReader(file, 0, file.size);
   const sections: ElfSectionHeader[] = [];
-  const usableCount = Math.min(header.shnum, Math.floor(dv.byteLength / header.shentsize));
-  for (let index = 0; index < usableCount; index += 1) {
-    const begin = index * header.shentsize;
-    const view = new DataView(dv.buffer, begin, Math.min(header.shentsize, dv.byteLength - begin));
+  for (let index = 0; index < table.count; index += 1) {
+    const view = await reader.read(table.offset + index * header.shentsize, expectedSectionHeaderSize);
+    if (view.byteLength < expectedSectionHeaderSize) {
+      issues.push(`Section header #${index} is truncated.`);
+      break;
+    }
     const parsed = is64 ? parseSectionHeader64(view, littleEndian) : parseSectionHeader32(view, littleEndian);
     sections.push({ ...parsed, index });
   }
   validateElfSectionHeaders(sections, file.size, issues);
   const namesTable = locateSectionNameTable(file, sections, header, issues);
   if (namesTable) {
-    const readName = createElfStringTableReader(createFileRangeReader(file, 0, file.size),
-      namesTable, issues);
+    const readName = createElfStringTableReader(reader, namesTable, issues);
     for (const section of sections) section.name = await readName(section.nameOff) ?? "";
   }
   return sections;
