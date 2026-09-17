@@ -1,7 +1,7 @@
 "use strict";
 
 import type { FileRangeReader } from "../file-range-reader.js";
-import { DWARF_ENCODING, DWARF_LIMIT } from "./constants.js";
+import { DWARF_ENCODING } from "./constants.js";
 import type { DwarfSectionInput } from "./types.js";
 
 export class DwarfCursor {
@@ -61,22 +61,22 @@ export class DwarfCursor {
     return null;
   }
 
+  // DWARF 5, 7.6: LEB128 ends at a byte without the continuation bit.
+  // https://dwarfstd.org/doc/DWARF5.pdf
   async uleb(): Promise<bigint | null> {
     let value = 0n;
-    for (let index = 0; index < DWARF_LIMIT.maximumLebBytes; index += 1) {
+    for (let index = 0; ; index += 1) {
       const byte = await this.uint8();
       if (byte == null) return null;
       value |= BigInt(byte & DWARF_ENCODING.lebPayloadMask) <<
         BigInt(index * DWARF_ENCODING.lebPayloadBits);
       if ((byte & DWARF_ENCODING.lebContinuationBit) === 0) return value;
     }
-    this.fail(`ULEB128 value exceeds ${DWARF_LIMIT.maximumLebBytes} bytes`);
-    return null;
   }
 
   async sleb(): Promise<bigint | null> {
     let value = 0n;
-    for (let index = 0; index < DWARF_LIMIT.maximumLebBytes; index += 1) {
+    for (let index = 0; ; index += 1) {
       const byte = await this.uint8();
       if (byte == null) return null;
       const shift = BigInt(index * DWARF_ENCODING.lebPayloadBits);
@@ -87,30 +87,17 @@ export class DwarfCursor {
           : value;
       }
     }
-    this.fail(`SLEB128 value exceeds ${DWARF_LIMIT.maximumLebBytes} bytes`);
-    return null;
   }
 
   async cstring(): Promise<string | null> {
     const captured: number[] = [];
-    let truncated = false;
     while (this.position < this.end) {
       const byte = await this.uint8();
       if (byte == null) return null;
       if (byte === DWARF_ENCODING.nullByte) {
-        if (truncated) {
-          this.notice(
-            `String value was truncated to ${DWARF_LIMIT.maximumCapturedStringBytes} ` +
-            `decoded bytes`
-          );
-        }
         return new TextDecoder().decode(Uint8Array.from(captured));
       }
-      if (captured.length < DWARF_LIMIT.maximumCapturedStringBytes) {
-        captured.push(byte);
-      } else {
-        truncated = true;
-      }
+      captured.push(byte);
     }
     this.fail("Unterminated DWARF string");
     return null;

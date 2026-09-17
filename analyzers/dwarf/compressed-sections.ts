@@ -7,7 +7,7 @@ import {
   type DwarfCompressionPayload,
   type DwarfSectionCompression
 } from "./compression-headers.js";
-import { DWARF_LIMIT, DWARF_SECTION } from "./constants.js";
+import { DWARF_SECTION } from "./constants.js";
 import type { DwarfSectionInput, DwarfSectionSource } from "./types.js";
 
 export type DwarfSectionCandidate = {
@@ -107,13 +107,12 @@ const readCompressedBytes = async (
 const decompressCandidate = async (
   reader: FileRangeReader,
   candidate: DwarfSectionCandidate,
-  remainingBytes: number,
   issues: string[]
-): Promise<{ source: DwarfSectionSource; consumedBytes: number }> => {
+): Promise<DwarfSectionSource> => {
   const canonicalName = canonicalDwarfSectionName(candidate.section.name);
   const unavailable = unavailableSource(reader, candidate.section, canonicalName);
   if (candidate.section.requiresRelocations || !supportedNames.has(canonicalName)) {
-    return { source: unavailable, consumedBytes: 0 };
+    return unavailable;
   }
   const payload = await readDwarfCompressionPayload(
     reader,
@@ -121,25 +120,18 @@ const decompressCandidate = async (
     candidate.compression!,
     issues
   );
-  if (!payload) return { source: unavailable, consumedBytes: 0 };
-  if (payload.uncompressedSize > remainingBytes) {
-    issues.push(
-      `${candidate.section.name}: uncompressed size ${payload.uncompressedSize} exceeds ` +
-      `the remaining DWARF decompression budget ${remainingBytes}.`
-    );
-    return { source: unavailable, consumedBytes: 0 };
-  }
+  if (!payload) return unavailable;
   const compressed = await readCompressedBytes(reader, candidate.section, payload, issues);
-  if (!compressed) return { source: unavailable, consumedBytes: 0 };
+  if (!compressed) return unavailable;
   try {
     const bytes = await inflateZlib(compressed, payload.uncompressedSize);
-    return { source: decodedSource(candidate.section, payload, bytes), consumedBytes: bytes.length };
+    return decodedSource(candidate.section, payload, bytes);
   } catch (error) {
     issues.push(
       `${candidate.section.name}: zlib decompression failed: ` +
       `${error instanceof Error ? error.message : String(error)}.`
     );
-    return { source: unavailable, consumedBytes: 0 };
+    return unavailable;
   }
 };
 
@@ -155,20 +147,16 @@ const regularSource = (
 
 export const prepareDwarfSectionSources = async (
   reader: FileRangeReader,
-  candidates: DwarfSectionCandidate[],
-  maximumDecompressedBytes = DWARF_LIMIT.maximumDecompressedBytes
+  candidates: DwarfSectionCandidate[]
 ): Promise<{ sources: DwarfSectionSource[]; issues: string[] }> => {
   const issues: string[] = [];
   const sources: DwarfSectionSource[] = [];
-  let remainingBytes = maximumDecompressedBytes;
   for (const candidate of candidates) {
     if (!candidate.compression) {
       sources.push(regularSource(reader, candidate.section));
       continue;
     }
-    const result = await decompressCandidate(reader, candidate, remainingBytes, issues);
-    sources.push(result.source);
-    remainingBytes -= result.consumedBytes;
+    sources.push(await decompressCandidate(reader, candidate, issues));
   }
   return { sources, issues };
 };

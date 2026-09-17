@@ -12,8 +12,7 @@ export const TEST_DWARF = {
     byteMask: 0xffn,
     lebContinuation: 0x80,
     lebPayloadMask: 0x7fn,
-    lebSignBit: 0x40,
-    lebTerminator: 0
+    lebSignBit: 0x40
   },
   version: { two: 2, four: 4, five: 5 },
   format: { dwarf32: 32, dwarf64: 64 },
@@ -122,8 +121,7 @@ export const TEST_DWARF = {
     unitType: 7,
     version: 1,
     lineVersionHigh: 6
-  },
-  limits: { displayedStringBytes: 4096, maximumLebBytes: 10, storedLineFiles: 1024 }
+  }
 } as const;
 
 export const TEST_INTEGER = {
@@ -154,12 +152,6 @@ export const encodeRepeatedByte = (value: number, count: number): number[] =>
 
 export const encodeUnterminatedLeb = (byteCount: number): number[] =>
   encodeRepeatedByte(TEST_DWARF.encoding.lebContinuation, byteCount);
-
-export const encodeLebTerminatedAfter = (continuationCount: number): number[] =>
-  concatenateBytes(
-    encodeUnterminatedLeb(continuationCount),
-    encodeUint8(TEST_DWARF.encoding.lebTerminator)
-  );
 
 export const encodeSequence = (count: number, first = 1): number[] =>
   Array.from({ length: count }, (_, index) => first + index);

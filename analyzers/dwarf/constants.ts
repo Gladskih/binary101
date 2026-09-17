@@ -131,14 +131,6 @@ export const DWARF_ENCODING = {
 
 export const DWARF_LIMIT = {
   maximumAddressBytes: 8,
-  maximumCapturedStringBytes: 4096,
-  maximumDecompressedBytes: 256 * 1024 * 1024,
-  maximumIndirectFormDepth: 8,
-  maximumLebBytes: 10,
-  // Browser-facing caps bound retained DOM/memory and CPU while counts remain exact.
-  maximumLineFilesStored: 1024,
-  maximumLineInstructions: 1_000_000,
-  maximumLineTableEntries: 100_000
 } as const;
 
 export const DWARF_SECTION = {

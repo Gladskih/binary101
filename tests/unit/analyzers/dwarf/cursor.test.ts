@@ -9,7 +9,6 @@ import {
   concatenateBytes,
   encodeBigEndianUnsigned,
   encodeCString,
-  encodeLebTerminatedAfter,
   encodeSequence,
   encodeSleb,
   encodeText,
@@ -118,28 +117,16 @@ void test("DwarfCursor reports truncated and unsupported reads once", async () =
   assert.equal(issues.length, 1);
 });
 
-void test("DwarfCursor bounds skips and rejects overlong LEB128", async () => {
+void test("DwarfCursor bounds skips and rejects unterminated LEB128", async () => {
   const issues: string[] = [];
   const cursor = createCursor(
-    encodeUnterminatedLeb(TEST_DWARF.limits.maximumLebBytes + 1),
+    encodeUnterminatedLeb(2),
     issues
   );
 
   assert.equal(await cursor.uleb(), null);
   assert.equal(cursor.skip(1), false);
-  assert.ok(issues[0]?.includes("exceeds 10 bytes"));
-});
-
-void test("DwarfCursor rejects a ULEB128 terminator beyond its tenth byte", async () => {
-  const issues: string[] = [];
-  const cursor = createCursor(
-    encodeLebTerminatedAfter(TEST_DWARF.limits.maximumLebBytes),
-    issues
-  );
-
-  assert.equal(await cursor.uleb(), null);
-  assert.equal(cursor.position, cursor.end);
-  assert.ok(issues[0]?.includes("exceeds 10 bytes"));
+  assert.ok(issues[0]?.includes("Truncated value"));
 });
 
 void test("DwarfCursor advances valid skips and accepts the exact remaining length", () => {
@@ -185,18 +172,6 @@ void test("DwarfCursor decodes strings and reports unterminated strings", async 
   assert.equal(valid.failed, false);
   assert.equal(await invalid.cstring(), null);
   assert.ok(issues[0]?.includes("Unterminated"));
-});
-
-void test("DwarfCursor truncates exceptionally long displayed strings with a notice", async () => {
-  const issues: string[] = [];
-  const cursor = createCursor(encodeCString(
-    "a".repeat(TEST_DWARF.limits.displayedStringBytes + Uint32Array.BYTES_PER_ELEMENT)
-  ), issues);
-
-  const value = await cursor.cstring();
-
-  assert.equal(value?.length, TEST_DWARF.limits.displayedStringBytes);
-  assert.ok(issues[0]?.includes(`truncated to ${TEST_DWARF.limits.displayedStringBytes}`));
 });
 
 void test("DwarfCursor enforces an end below the containing section size", async () => {

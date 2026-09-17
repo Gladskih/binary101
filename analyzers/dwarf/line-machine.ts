@@ -124,7 +124,7 @@ const readExtendedOpcode = async (
     const file = await readLegacyFile(payload);
     if (!file) return false;
     context.fileCount += 1;
-    if (context.files.length < DWARF_LIMIT.maximumLineFilesStored) context.files.push(file);
+    context.files.push(file);
   } else if (opcode === DWARF_LINE_EXTENDED_OPCODE.setDiscriminator) {
     if (await payload.uleb() == null) return false;
   }
@@ -225,13 +225,7 @@ export const executeDwarfLineProgram = async (
     littleEndian,
     issues
   };
-  let instructionCount = 0;
   while (!cursor.failed && cursor.position < cursor.end) {
-    instructionCount += 1;
-    if (instructionCount > DWARF_LIMIT.maximumLineInstructions) {
-      cursor.fail(`Line program exceeds ${DWARF_LIMIT.maximumLineInstructions} instructions`);
-      break;
-    }
     const opcode = await cursor.uint8();
     if (opcode == null) break;
     const succeeded = opcode === DWARF_LINE_ENCODING.extendedOpcodeMarker

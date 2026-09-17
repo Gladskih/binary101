@@ -15,7 +15,6 @@ import { createDwarf4SectionsFixture } from "./dwarf-sections-fixture.js";
 // https://www.sco.com/developers/gabi/latest/ch4.sheader.html
 // https://gnu.googlesource.com/binutils-gdb/+/refs/heads/gdb-15-branch/bfd/compress.c
 export const TEST_DWARF_COMPRESSION = {
-  maximumDecompressedBytes: 256 * 1024 * 1024,
   gnu: { headerBytes: 12, magic: 0x5a4c4942 },
   elf: {
     zlibType: 1,

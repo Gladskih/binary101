@@ -3,7 +3,6 @@
 import {
   DWARF_ENCODING,
   DWARF_FORM,
-  DWARF_LIMIT,
   DWARF_LINE_CONTENT,
   DWARF_SECTION,
   DWARF_VERSION
@@ -33,8 +32,8 @@ const FIXED_FORM_BYTE_LENGTHS = new Map<number, number>([
 ]);
 
 const safeCount = (cursor: DwarfCursor, value: bigint, label: string): number | null => {
-  if (value > BigInt(DWARF_LIMIT.maximumLineTableEntries)) {
-    cursor.fail(`${label} count ${value.toString()} exceeds the analysis limit`);
+  if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
+    cursor.fail(`${label} count ${value.toString()} cannot be represented exactly`);
     return null;
   }
   return Number(value);
@@ -129,7 +128,7 @@ const readVersionFiveEntries = async (
         directoryIndex = value;
       }
     }
-    if (entryKind === "files" && files.length < DWARF_LIMIT.maximumLineFilesStored) {
+    if (entryKind === "files") {
       files.push({ path, directoryIndex });
     }
   }
@@ -143,10 +142,6 @@ const readLegacyTables = async (cursor: DwarfCursor): Promise<DwarfLineTables | 
     if (directory == null) return null;
     if (!directory.length) break;
     directoryCount += 1;
-    if (directoryCount > DWARF_LIMIT.maximumLineTableEntries) {
-      cursor.fail("Directory count exceeds the analysis limit");
-      return null;
-    }
   }
   let fileCount = 0;
   const files: DwarfLineFile[] = [];
@@ -159,11 +154,7 @@ const readLegacyTables = async (cursor: DwarfCursor): Promise<DwarfLineTables | 
     const size = await cursor.uleb();
     if (directoryIndex == null || timestamp == null || size == null) return null;
     fileCount += 1;
-    if (fileCount > DWARF_LIMIT.maximumLineTableEntries) {
-      cursor.fail("File count exceeds the analysis limit");
-      return null;
-    }
-    if (files.length < DWARF_LIMIT.maximumLineFilesStored) files.push({ path, directoryIndex });
+    files.push({ path, directoryIndex });
   }
   return { directoryCount, fileCount, files };
 };

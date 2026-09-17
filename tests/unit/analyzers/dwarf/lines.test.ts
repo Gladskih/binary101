@@ -16,7 +16,6 @@ import {
 } from "../../../fixtures/dwarf-fixture-encoding.js";
 import {
   createDwarf4LineSectionWithProgram,
-  createDwarf4LineSectionWithFileCount,
   createDwarf5LineSection,
   createDwarf2LineSection,
   createDwarf64LineSection,
@@ -101,17 +100,6 @@ void test("line parser supports DWARF 2 and DWARF64 line headers", async () => {
   assert.equal(versionTwo.linePrograms[0]?.addressSize, TEST_DWARF.addressSize.x64);
   assert.equal(dwarf64.linePrograms[0]?.format, TEST_DWARF.format.dwarf64);
   assert.equal(dwarf64.linePrograms[0]?.rowCount, TEST_DWARF.line.expected.fixtureRows);
-});
-
-void test("line parser counts all files while bounding retained file metadata", async () => {
-  const declaredFileCount = TEST_DWARF.limits.storedLineFiles + 1;
-
-  const dwarf = await analyzeLineSection(
-    createDwarf4LineSectionWithFileCount(declaredFileCount)
-  );
-
-  assert.equal(dwarf.linePrograms[0]?.fileCount, declaredFileCount);
-  assert.equal(dwarf.linePrograms[0]?.files.length, TEST_DWARF.limits.storedLineFiles);
 });
 
 void test("version 5 line tables report unavailable referenced strings", async () => {

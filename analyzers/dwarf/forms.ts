@@ -4,7 +4,6 @@ import type { DwarfCursor } from "./cursor.js";
 import {
   DWARF_ENCODING,
   DWARF_FORM,
-  DWARF_LIMIT,
   DWARF_SECTION,
   DWARF_VERSION
 } from "./constants.js";
@@ -169,34 +168,28 @@ const readIndexedValue = async (
 export const readDwarfForm = async (
   cursor: DwarfCursor,
   attribute: DwarfAbbreviationAttribute,
-  context: DwarfUnitContext,
-  indirectDepth = 0
+  context: DwarfUnitContext
 ): Promise<DwarfFormValue | null> => {
-  const fixedBytes = fixedUnsignedBytes(attribute.form, context);
-  if (fixedBytes != null) return readUnsigned(cursor, fixedBytes);
-  if (attribute.form === DWARF_FORM.stringPointer) {
-    return readStringOffset(cursor, context, DWARF_SECTION.strings);
-  }
-  if (attribute.form === DWARF_FORM.lineStringPointer) {
-    return readStringOffset(cursor, context, DWARF_SECTION.lineStrings);
-  }
-  const variable = await readVariableValue(cursor, attribute);
-  if (variable !== undefined) return variable;
-  const block = await readBlock(cursor, attribute.form);
-  if (block !== undefined) return block;
-  const indexed = await readIndexedValue(cursor, attribute.form);
-  if (indexed !== undefined) return indexed;
-  if (attribute.form === DWARF_FORM.indirect &&
-      indirectDepth < DWARF_LIMIT.maximumIndirectFormDepth) {
+  let resolved = attribute;
+  while (resolved.form === DWARF_FORM.indirect) {
     const form = await cursor.uleb();
     if (form == null || form > BigInt(Number.MAX_SAFE_INTEGER)) return null;
-    return readDwarfForm(
-      cursor,
-      { name: attribute.name, form: Number(form), implicitConstant: null },
-      context,
-      indirectDepth + 1
-    );
+    resolved = { name: resolved.name, form: Number(form), implicitConstant: null };
   }
-  cursor.fail(`Unsupported DWARF form 0x${attribute.form.toString(16)}`);
+  const fixedBytes = fixedUnsignedBytes(resolved.form, context);
+  if (fixedBytes != null) return readUnsigned(cursor, fixedBytes);
+  if (resolved.form === DWARF_FORM.stringPointer) {
+    return readStringOffset(cursor, context, DWARF_SECTION.strings);
+  }
+  if (resolved.form === DWARF_FORM.lineStringPointer) {
+    return readStringOffset(cursor, context, DWARF_SECTION.lineStrings);
+  }
+  const variable = await readVariableValue(cursor, resolved);
+  if (variable !== undefined) return variable;
+  const block = await readBlock(cursor, resolved.form);
+  if (block !== undefined) return block;
+  const indexed = await readIndexedValue(cursor, resolved.form);
+  if (indexed !== undefined) return indexed;
+  cursor.fail(`Unsupported DWARF form 0x${resolved.form.toString(16)}`);
   return null;
 };

@@ -12,10 +12,7 @@ import {
   createCompressedDwarfSectionsFixture,
   encodeGnuCompressedSection
 } from "../../../fixtures/dwarf-compressed-section-fixture.js";
-import {
-  TEST_DWARF,
-  concatenateBytes
-} from "../../../fixtures/dwarf-fixture-encoding.js";
+import { TEST_DWARF } from "../../../fixtures/dwarf-fixture-encoding.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 
 const candidate = (
@@ -129,48 +126,6 @@ void test("prepareDwarfSectionSources reports corrupt and truncated payloads", a
     `bytes readable).`
   );
   assert.ok(emptyPayloadResult.issues[0]?.includes("zlib decompression failed"));
-});
-
-void test("prepareDwarfSectionSources enforces the total decompression budget", async () => {
-  const contents = new TextEncoder().encode("DWARF");
-  const oversized = candidate(encodeGnuCompressedSection(
-    contents,
-    BigInt(
-      TEST_DWARF_COMPRESSION.maximumDecompressedBytes + Uint8Array.BYTES_PER_ELEMENT
-    )
-  ));
-
-  const prepared = await prepareDwarfSectionSources(oversized.file, [oversized.value]);
-
-  assert.equal(
-    prepared.issues[0],
-    `.zdebug_info: uncompressed size ` +
-    `${TEST_DWARF_COMPRESSION.maximumDecompressedBytes + Uint8Array.BYTES_PER_ELEMENT} ` +
-    `exceeds the remaining DWARF decompression budget ` +
-    `${TEST_DWARF_COMPRESSION.maximumDecompressedBytes}.`
-  );
-  assert.equal(prepared.sources[0]?.decoded, false);
-});
-
-void test("prepareDwarfSectionSources consumes an exact custom budget across sections", async () => {
-  const contents = new TextEncoder().encode("DWARF");
-  const encoded = encodeGnuCompressedSection(contents);
-  const file = new MockFile(Uint8Array.from(concatenateBytes(encoded, encoded)));
-  const first = candidate(encoded).value;
-  const second = candidate(encoded, ".zdebug_abbrev").value;
-  second.section.offset = encoded.length;
-
-  const exact = await prepareDwarfSectionSources(file, [first], contents.length);
-  const exhausted = await prepareDwarfSectionSources(
-    file,
-    [first, second],
-    contents.length
-  );
-
-  assert.deepEqual(exact.issues, []);
-  assert.equal(exact.sources[0]?.decoded, true);
-  assert.ok(exhausted.issues[0]?.includes("remaining DWARF decompression budget 0"));
-  assert.equal(exhausted.sources[1]?.decoded, false);
 });
 
 void test("prepareDwarfSectionSources handles unavailable browser decompression", async () => {

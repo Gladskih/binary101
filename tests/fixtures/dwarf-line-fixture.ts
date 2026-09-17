@@ -85,26 +85,6 @@ export const createDwarf4LineSectionWithProgram = (program: number[]): number[] 
   ));
 };
 
-export const createDwarf4LineSectionWithFileCount = (fileCount: number): number[] => {
-  const fileEntries = Array.from({ length: fileCount }, () => concatenateBytes(
-    encodeCString("repeated.c"),
-    encodeUleb(TEST_DWARF.line.directoryIndex.legacyFirst),
-    encodeUleb(TEST_DWARF.line.fileMetadata.unavailable),
-    encodeUleb(TEST_DWARF.line.fileMetadata.unavailable)
-  ));
-  const tables = concatenateBytes(
-    encodeCString(""),
-    ...fileEntries,
-    encodeCString("")
-  );
-  const header = concatenateBytes(encodeVersionFourCommonHeader(), tables);
-  return encodeDwarf32Unit(concatenateBytes(
-    encodeUint16(TEST_DWARF.version.four),
-    encodeUint32(header.length),
-    header
-  ));
-};
-
 export const createDwarf4LineSection = (): number[] =>
   createDwarf4LineSectionWithProgram(encodeProgram());
 
