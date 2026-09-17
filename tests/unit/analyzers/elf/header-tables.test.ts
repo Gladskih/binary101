@@ -297,4 +297,18 @@ void test("reports out-of-range section name offsets", async () => {
   assert.match(result!.issues.join(" "), /reference|offset/);
 });
 
+void test("validates section file ranges and alignment", async () => {
+  const bytes = await createElfFile().arrayBuffer();
+  const view = new DataView(bytes);
+  // Elf64_Ehdr.e_shstrndx; Elf64_Shdr sh_type/offset/size/addralign, gABI 2/3.
+  view.setUint16(62, 0, true);
+  view.setUint32(184 + 4, 1, true);
+  view.setBigUint64(184 + 24, BigInt(bytes.byteLength), true);
+  view.setBigUint64(184 + 32, 1n, true);
+  view.setBigUint64(184 + 48, 3n, true);
 
+  const result = await parseElf(new File([bytes], "bad-section"));
+
+  assert.match(result!.issues.join(" "), /Section #1.*outside the file/);
+  assert.match(result!.issues.join(" "), /sh_addralign/);
+});

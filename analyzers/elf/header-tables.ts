@@ -13,6 +13,7 @@ import {
 } from "./constants.js";
 import type { ElfHeader, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import { validateElfProgramHeaders } from "./program-header-validation.js";
+import { validateElfSectionHeaders } from "./section-header-validation.js";
 
 const bigFrom32 = (value: number): bigint => BigInt.asUintN(32, BigInt(value));
 
@@ -277,6 +278,7 @@ export async function parseSectionHeadersWithNames(
     const parsed = is64 ? parseSectionHeader64(view, littleEndian) : parseSectionHeader32(view, littleEndian);
     sections.push({ ...parsed, index });
   }
+  validateElfSectionHeaders(sections, file.size, issues);
   const namesTable = locateSectionNameTable(file, sections, header, issues);
   if (namesTable) {
     const readName = createElfStringTableReader(createFileRangeReader(file, 0, file.size),
