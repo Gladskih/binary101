@@ -8,11 +8,7 @@ const headerTableCount = (fileSize: number, offset: number, stride: number,
   }
   const available = Math.floor((fileSize - offset) / stride);
   if (count > available) issues.push(`${label} table is truncated.`);
-  // Resource policy: bound retained header objects independently of file size.
-  if (Math.min(count, available) > 1000000) {
-    issues.push(`${label} table exceeds the 1000000 entry resource limit.`);
-  }
-  return Math.min(count, available, 1000000);
+  return Math.min(count, available);
 };
 
 export const locateElfHeaderTable = (fileSize: number, offset: bigint, count: number,

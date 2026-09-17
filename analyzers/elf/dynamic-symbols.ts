@@ -86,10 +86,7 @@ const parseDynsym = async (
   reader: FileRangeReader
 ): Promise<ElfDynamicSymbol[]> => {
   const entrySize = layout.symbolEntrySize;
-  const count = Math.min(Math.floor(symtab.size / entrySize), 1000000);
-  if (symtab.size / entrySize > 1000000) {
-    issues.push("Dynamic symbol table exceeds the 1000000 entry resource limit.");
-  }
+  const count = Math.floor(symtab.size / entrySize);
   const readName = createElfStringTableReader(reader, strtab, issues);
   if (symtab.size % entrySize !== 0) {
     issues.push(`.dynsym size is not aligned to entry size (${entrySize} bytes).`);

@@ -28,8 +28,8 @@ void test("retains complete symbols from a truncated or partial table", async ()
   assert.match(partial!.issues.join(" "), /aligned/);
 });
 
-for (const [count, exceedsLimit] of [[1000000, false], [1000001, true]] as const) {
-  void test(`bounds dynamic symbols at the resource limit ${count}`, async () => {
+for (const count of [1000000, 1000001]) {
+  void test(`reports short reads in a dynamic table of ${count} entries`, async () => {
     const fixture = relocationFixture();
     fixture.elf.sections[2]!.type = 11;
     fixture.elf.sections[2]!.size = BigInt(count) * 24n; // Elf64_Sym, gABI 5.
@@ -40,6 +40,33 @@ for (const [count, exceedsLimit] of [[1000000, false], [1000001, true]] as const
     assert.equal(result?.total, count);
     assert.deepEqual(result?.exportSymbols, []);
     assert.match(result!.issues.join(" "), /symbol #0 is truncated/);
-    assert.equal(result?.issues.some(issue => issue.includes("resource limit")), exceedsLimit);
+    assert.equal(result?.issues.some(issue => issue.includes("resource limit")), false);
   });
 }
+
+const largeDynamicSymbolTable = () => {
+  const fixture = relocationFixture();
+  // Former implementation cap + 1, not an ELF format limit.
+  const count = 1000001;
+  // Elf64_Sym: 24 bytes, st_info at +4, STT_SECTION=3 (gABI 5).
+  // https://gabi.xinuos.com/elf/05-symtab.html
+  const bytes = new Uint8Array(256 + count * 24 + 8);
+  for (let index = 1; index < count; index += 1) bytes[256 + index * 24 + 4] = 3;
+  bytes.set(fixture.bytes.subarray(280, 304), 256 + (count - 1) * 24);
+  bytes[256 + (count - 1) * 24 + 4] = 0x12; // STB_GLOBAL | STT_FUNC.
+  bytes.set(fixture.bytes.subarray(384, 392), bytes.length - 8);
+  fixture.elf.sections[2]!.type = 11;
+  fixture.elf.sections[2]!.size = BigInt(count * 24);
+  fixture.elf.sections[3]!.offset = BigInt(bytes.length - 8);
+  return { ...fixture.elf, file: new File([bytes], "large-dynsym") };
+};
+
+void test("reads dynamic symbols beyond the former one-million entry cap", async () => {
+  const result = await parseElfDynamicSymbols(largeDynamicSymbolTable());
+
+  assert.equal(result?.total, 1000001);
+  assert.equal(result?.exportSymbols.length, 1);
+  assert.equal(result?.exportSymbols[0]?.index, 1000000);
+  assert.equal(result?.exportSymbols[0]?.name, "target");
+  assert.deepEqual(result?.issues, []);
+});
