@@ -80,8 +80,7 @@ const readUnwindSection = async (
     position, end, elf.littleEndian, result.issues);
   const cursor = cursorAt(0, Number(section.size));
   const pending: FrameRecord[] = [];
-  // Resource policy: cap the number of retained frame records.
-  while (cursor.position < cursor.end && pending.length + result.cies.length < 100000) {
+  while (cursor.position < cursor.end) {
     const record = await readFrameRecord(cursor, section.name!);
     if (!record) break;
     if (record.cieOffset == null) {
@@ -91,7 +90,6 @@ const readUnwindSection = async (
     } else pending.push(record);
     cursor.position = record.end;
   }
-  if (pending.length + result.cies.length === 100000) result.issues.push("Unwind record limit reached.");
   await readPendingFdes(pending, result, cursorAt, section, elf.header.machine);
   return result;
 };

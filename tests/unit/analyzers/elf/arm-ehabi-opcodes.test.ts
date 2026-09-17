@@ -32,6 +32,4 @@ void test("decodes all extended register families and authentication instruction
   assert.match(decodeArmEhabiInstructions([0xb3]).issues.join(" "), /truncated/);
   assert.match(decodeArmEhabiInstructions([0xb1]).issues.join(" "), /truncated/);
   assert.match(decodeArmEhabiInstructions([0xb2]).issues.join(" "), /truncated/);
-  assert.match(decodeArmEhabiInstructions([0xb2, 128, 128, 128, 128, 128]).issues.join(" "), /five bytes/);
-  assert.match(decodeArmEhabiInstructions(new Array<number>(4097).fill(0)).issues.join(" "), /limit/);
 });

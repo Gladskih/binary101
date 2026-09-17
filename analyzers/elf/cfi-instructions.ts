@@ -21,8 +21,8 @@ const expression = async (cursor: DwarfCursor): Promise<string | null> => {
   const size = await cursor.uleb();
   if (size == null) return null;
   // Retain expression bytes for inspection; expression execution needs register/memory state.
-  if (size > 65536n || size > BigInt(cursor.end - cursor.position)) {
-    cursor.fail("CFI expression is truncated or exceeds the 64 KiB expression limit");
+  if (size > BigInt(cursor.end - cursor.position)) {
+    cursor.fail("CFI expression is truncated");
     return null;
   }
   const bytes: string[] = [];
@@ -78,12 +78,10 @@ export const readElfCfiInstructions = async (
   cursor: DwarfCursor, addressSize: number, machine: number
 ): Promise<ElfCfiInstruction[]> => {
   const result: ElfCfiInstruction[] = [];
-  // Resource policy: limit expanded instruction objects per CIE/FDE.
-  while (cursor.position < cursor.end && !cursor.failed && result.length < 4096) {
+  while (cursor.position < cursor.end && !cursor.failed) {
     const next = await instruction(cursor, addressSize, machine);
     if (!next) break;
     result.push(next);
   }
-  if (result.length === 4096 && cursor.position < cursor.end) cursor.fail("CFI instruction limit reached");
   return result;
 };

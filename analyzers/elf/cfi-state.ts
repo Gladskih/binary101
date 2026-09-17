@@ -22,7 +22,6 @@ const updateState = (rules: ElfCfiRules, defaults: ElfCfiRules, stack: ElfCfiRul
   instruction: ElfCfiInstruction, alignment: bigint, issues: string[]): boolean => {
   switch (instruction.operation) {
     case "remember_state":
-      if (stack.length >= 4096) { issues.push("CFI state stack limit reached."); return false; }
       stack.push(copyRules(rules));
       return true;
     case "restore_state": {
@@ -89,7 +88,6 @@ const evaluateFde = (cie: ElfUnwindCie, fde: ElfUnwindFde, start: bigint,
       result.issues.push(`Unsupported or invalid CFI instruction ${instruction.operation}.`);
       return result;
     }
-    if (result.rows.length >= 4096) { result.issues.push("CFI row limit reached."); return result; }
   }
   if (row.location < end) result.rows.push(row);
   return result;

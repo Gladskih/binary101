@@ -79,8 +79,7 @@ const readTable = async (reader: FileRangeReader, elf: ElfParseResult,
     return table;
   }
   if (range.size % 8) table.issues.push("EHABI index size is not a multiple of 8.");
-  const count = Math.min(Math.floor(range.size / 8), 100000); // Bound hostile table expansion.
-  if (range.size / 8 > 100000) table.issues.push("EHABI index entry limit reached.");
+  const count = Math.floor(range.size / 8);
   let previous: bigint | null = null;
   for (let index = 0; index < count; index++) {
     const entry = await readEntry(reader, elf, range.offset + index * 8, source.address + BigInt(index * 8));

@@ -18,7 +18,6 @@ const readActionRoots = async (
   for (const site of result.callSites) {
     if (site.action === 0n) continue;
     await readActionChain(cursorAt, BigInt(actionStart) + site.action - 1n, actionStart, actionEnd, complete, result);
-    if (result.actions.length >= 100000) return;
   }
 };
 
@@ -41,7 +40,6 @@ const readActionChain = async (
     const nextOffset = await cursor.sleb();
     if (typeFilter == null || nextOffset == null) break;
     result.actions.push({ offset: Number(offset), typeFilter, nextOffset });
-    if (result.actions.length >= 100000) { result.issues.push("LSDA action limit reached."); break; }
     if (nextOffset === 0n) break;
     offset = BigInt(displacementOffset) + nextOffset;
   }

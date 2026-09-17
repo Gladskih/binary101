@@ -64,10 +64,3 @@ void test("does not add a row past the FDE end or duplicate zero advance rows", 
   assert.deepEqual(result.rows.map(row => row.location), [4096n]);
   assert.deepEqual(result.issues, []);
 });
-
-void test("bounds saved state depth and expanded row count", () => {
-  assert.match(evaluateElfCfi(cie, fde(Array.from({ length: 4097 }, () => ["remember_state", []])))
-    .issues.join(" "), /stack limit/);
-  assert.match(evaluateElfCfi(cie, { ...fde(Array.from({ length: 4096 }, () => ["advance_loc", [1n]])),
-    range: 10000n }).issues.join(" "), /row limit/);
-});

@@ -64,9 +64,3 @@ void test("recognizes architecture-specific state operations", async () => {
   const second = unwindCursor([0x2d]);
   assert.equal((await readElfCfiInstructions(second.cursor, 4, 2))[0]?.operation, "GNU_window_save");
 });
-
-void test("bounds expanded CFI instructions", async () => {
-  const { cursor, issues } = unwindCursor(Array.from({ length: 4097 }, () => 0));
-  assert.equal((await readElfCfiInstructions(cursor, 8, 62)).length, 4096);
-  assert.match(issues.join(" "), /limit/);
-});

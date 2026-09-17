@@ -9,16 +9,16 @@ export class ArmEhabiBytecode {
     }
     return this.bytes[this.position++]!;
   }
+  // EHABI32 table 4 uses ULEB128 for the 0xb2 stack adjustment operand.
+  // https://github.com/ARM-software/abi-aa/blob/main/ehabi32/ehabi32.rst
   uleb(): bigint | null {
     let value = 0n;
-    for (let index = 0; index < 5; index += 1) {
+    for (let index = 0; ; index += 1) {
       const byte = this.byte();
       if (byte == null) return null;
       value |= BigInt(byte & 127) << BigInt(index * 7);
       if (byte < 128) return value;
     }
-    this.issues.push("EHABI stack adjustment ULEB128 exceeds five bytes.");
-    return null;
   }
 }
 

@@ -52,7 +52,7 @@ const decodeOpcode = (code: ArmEhabiBytecode, byte: number): string | null => {
 export const decodeArmEhabiInstructions = (bytes: number[]): ArmEhabiProgram => {
   const code = new ArmEhabiBytecode(bytes);
   const result: ArmEhabiProgram = { instructions: [], issues: code.issues };
-  while (code.position < bytes.length && result.instructions.length < 4096) {
+  while (code.position < bytes.length) {
     const offset = code.position;
     const byte = code.byte()!;
     const text = decodeOpcode(code, byte);
@@ -63,7 +63,6 @@ export const decodeArmEhabiInstructions = (bytes: number[]): ArmEhabiProgram => 
     result.instructions.push({ offset, text });
     if (text === "finish" || text === "refuse to unwind") return result;
   }
-  if (code.position < bytes.length) code.issues.push("EHABI instruction limit reached.");
-  else result.instructions.push({ offset: code.position, text: "finish (implicit)" });
+  result.instructions.push({ offset: code.position, text: "finish (implicit)" });
   return result;
 };

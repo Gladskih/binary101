@@ -17,8 +17,8 @@ const readSpecification = async (cursor: DwarfCursor, address: bigint,
   const word = await cursor.uint32();
   if (word == null) return;
   const count = word & 0x7fffffff;
-  if (count > 100000 || count > Math.floor((cursor.end - cursor.position) / 4)) {
-    cursor.fail("EHABI exception specification exceeds bounds or type limit");
+  if (count > Math.floor((cursor.end - cursor.position) / 4)) {
+    cursor.fail("EHABI exception specification exceeds bounds");
     return;
   }
   for (let index = 0; index < count; index++) {
@@ -55,7 +55,7 @@ export const readArmEhabiDescriptors = async (
   cursor: DwarfCursor, personality: number, address: bigint
 ): Promise<ArmEhabiDescriptor[]> => {
   const descriptors: ArmEhabiDescriptor[] = [];
-  while (!cursor.failed && descriptors.length < 100000) {
+  while (!cursor.failed) {
     const scope = await readScope(cursor, personality);
     if (!scope) return descriptors;
     const decoder = descriptorReaders[(scope.length & 1) | ((scope.start & 1) << 1)];
@@ -65,6 +65,5 @@ export const readArmEhabiDescriptors = async (
     await decoder.read(cursor, address, descriptor);
     if (!cursor.failed) descriptors.push(descriptor);
   }
-  if (!cursor.failed) cursor.notice("EHABI descriptor limit reached");
   return descriptors;
 };

@@ -16,7 +16,6 @@ export const readElfLsdaCallSites = async (
     const action = await cursor.uleb();
     if (!start || !length || !landingPad || action == null) break;
     result.callSites.push({ start: start.address, length: length.address, landingPad: landingPad.address, action });
-    if (result.callSites.length === 100000) { cursor.fail("LSDA call-site limit reached"); break; }
   }
   validateCallSites(result);
 };
@@ -63,13 +62,12 @@ const readSpecifications = async (
     const offset = BigInt(typeBase) - filter - 1n;
     const cursor = cursorAt(Number(offset));
     const typeIndices: bigint[] = [];
-    while (!cursor.failed && typeIndices.length < 100000) {
+    while (!cursor.failed) {
       const index = await cursor.uleb();
       if (index == null || index === 0n) break;
       typeIndices.push(index);
       indices.add(index);
     }
-    if (typeIndices.length === 100000) cursor.fail("LSDA exception specification limit reached");
     result.specifications.push({ filter, typeIndices });
   }
 };

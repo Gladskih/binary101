@@ -148,13 +148,3 @@ void test("decodes scopes once for shared extab records", async () => {
   source.word(72, 0x7fffffb8n); // Duplicate function address is invalid.
   assert.match((await parseElfArmEhabi(source.file(), source.elf))[0]!.issues.join(" "), /order/);
 });
-
-void test("bounds retained index entries", async () => {
-  const source = fixture();
-  const bytes = new Uint8Array(800008); // One entry above the 100000-entry resource ceiling.
-  source.elf.sections = [relocationSection(0, { type: 0x70000001, size: BigInt(bytes.length) })];
-  source.elf.header.type = 1;
-  const table = (await parseElfArmEhabi(new File([bytes], "large-exidx"), source.elf))[0]!;
-  assert.equal(table.entries.length, 100000);
-  assert.match(table.issues.join(" "), /entry limit/);
-});
