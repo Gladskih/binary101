@@ -2,7 +2,7 @@
 
 import { readAsciiString } from "../../binary-utils.js";
 import type { ElfDynamicInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
-import { vaddrToFileOffset } from "./vaddr-to-file-offset.js";
+import { elfVirtualRange } from "./relocation-reader.js";
 import { readElfDynamicEntries, type ElfDynamicEntry } from "./dynamic-entries.js";
 import { createFileRangeReader } from "../file-range-reader.js";
 
@@ -58,19 +58,13 @@ const locateDynStringTable = async (opts: {
 }): Promise<DataView | null> => {
   const strtabEntry = opts.entries.find(entry => entry.tag === DT_STRTAB);
   const strszEntry = opts.entries.find(entry => entry.tag === DT_STRSZ);
-  if (strtabEntry && strtabEntry.value !== 0n) {
-    const fileOffset = vaddrToFileOffset(opts.programHeaders, strtabEntry.value);
-    if (fileOffset != null) {
-      const start = toSafeIndex(fileOffset, "DT_STRTAB file offset", opts.issues);
-      const size = strszEntry ? toSafeIndex(strszEntry.value, "DT_STRSZ", opts.issues) : null;
-      if (start != null && size != null && size > 0) {
-        const end = Math.min(opts.file.size, start + size);
-        if (end !== start + size) opts.issues.push("DT_STRTAB extends past end of file; truncating.");
-        const bytes = new Uint8Array(await opts.file.slice(start, end).arrayBuffer());
-        return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-      }
+  if (strtabEntry) {
+    const range = strszEntry ? elfVirtualRange(opts.programHeaders,
+      strtabEntry.value, strszEntry.value, opts.file.size) : null;
+    if (range) {
+      return new DataView(await opts.file.slice(range.offset, range.offset + range.size).arrayBuffer());
     } else {
-      opts.issues.push("DT_STRTAB does not map into a PT_LOAD segment.");
+      opts.issues.push("DT_STRTAB does not map into a PT_LOAD segment for the full DT_STRSZ range.");
     }
   }
 
