@@ -9,7 +9,6 @@ const scopeIndices = async (cursor: DwarfCursor): Promise<bigint[]> => {
     const index = await cursor.uleb();
     if (index == null || index === 0n) return indices;
     indices.push(index);
-    if (indices.length === 100000) cursor.fail("Attribute index limit reached");
   }
   return indices;
 };
@@ -41,7 +40,6 @@ const readAttributes = async (scope: DwarfCursor, vendor: string): Promise<ElfBu
     const attribute = await readElfBuildAttribute(scope, vendor);
     if (!attribute) break;
     attributes.push(attribute);
-    if (attributes.length === 100000) scope.fail("Attribute count limit reached");
   }
   return attributes;
 };
@@ -78,7 +76,6 @@ const readScopes = async (
     const scope = await readScope(vendor, cursorAt, name);
     if (!scope) break;
     scopes.push(scope);
-    if (scopes.length === 100000) vendor.fail("Attribute scope limit reached");
   }
   return scopes;
 };

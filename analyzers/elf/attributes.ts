@@ -26,7 +26,6 @@ const readAttributeSection = async (
     const vendor = await readElfAttributeVendor(cursor, cursorAt);
     if (!vendor) break;
     result.vendors.push(vendor);
-    if (result.vendors.length === 100000) cursor.fail("Attribute vendor limit reached");
   }
   return result;
 };

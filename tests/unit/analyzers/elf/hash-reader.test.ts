@@ -32,9 +32,7 @@ void test("reports short backing reads even when source claims a complete header
   assert.match((await read([1, 1, 1, 5, 0, 1], "gnu", 28)).issues.join(" "), /truncated/);
 });
 
-void test("rejects bucket and chain allocations above the resource limit", async () => {
-  assert.match((await read([1000001, 0], "sysv", 8000008)).issues.join(" "), /limit/);
-  assert.match((await read([0, 1000001], "sysv", 8000008)).issues.join(" "), /limit/);
+void test("rejects hash dimensions outside the source range", async () => {
   assert.match((await read([1, 1], "sysv", 8)).issues.join(" "), /dimensions/);
 });
 

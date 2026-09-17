@@ -32,14 +32,3 @@ for (const offset of [100n, 101n]) {
     assert.match(issues.join(" "), /outside the file/);
   });
 }
-
-void test("accepts header counts above the former one-million entry cap", () => {
-  const issues: string[] = [];
-  // Regression boundaries around the removed implementation limit, not ELF limits.
-  assert.deepEqual(locateElfHeaderTable(16000017, 1n, 1000000, 16, 16, "Headers", issues),
-    { offset: 1, count: 1000000 });
-  assert.deepEqual(issues, []);
-  assert.deepEqual(locateElfHeaderTable(16000017, 1n, 1000001, 16, 16, "Headers", issues),
-    { offset: 1, count: 1000001 });
-  assert.deepEqual(issues, []);
-});

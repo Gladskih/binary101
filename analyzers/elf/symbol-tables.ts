@@ -45,11 +45,7 @@ const staticTableRange = (
     return null;
   }
   if (range.size % stride) issues.push("Symbol table size is not aligned.");
-  // Resource policy: bound retained symbols to one million entries per table.
-  if (range.size > stride * 1000000) {
-    issues.push("Symbol table exceeds the 1000000 entry resource limit.");
-  }
-  return { offset: range.offset, size: Math.min(range.size, stride * 1000000) };
+  return range;
 };
 
 const readStaticTable = async (

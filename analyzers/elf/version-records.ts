@@ -11,10 +11,7 @@ async function* versionChain(
   size: number, little: boolean, issues: string[]
 ): AsyncGenerator<{ view: DataView; offset: number }> {
   let offset = start;
-  // Resource policy: bound result memory for maliciously large tables.
-  const limit = Math.min(count, 100000);
-  if (limit !== count) issues.push("Version records exceed the 100000 record limit.");
-  for (let index = 0; index < limit; index += 1) {
+  for (let index = 0; index < count; index += 1) {
     const view = await readVersionBytes(reader, table, offset, size, issues);
     if (!view) return;
     yield { view, offset };

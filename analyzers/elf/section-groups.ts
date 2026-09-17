@@ -51,9 +51,8 @@ const readSectionGroup = async (
   }
   group.flags = header.getUint32(0, elf.littleEndian);
   if ((group.flags & ~0xfff00001) !== 0) group.issues.push("Group has unknown flags.");
-  // More members than sections cannot be valid; avoid retaining unbounded duplicate indices.
-  const count = Math.min(range.size / 4 - 1, elf.sections.length);
-  if (count !== range.size / 4 - 1) group.issues.push("Group member count exceeds the section count.");
+  const count = range.size / 4 - 1;
+  if (count > elf.sections.length) group.issues.push("Group member count exceeds the section count.");
   for (let index = 0; index < count; index += 1) {
     const view = await reader.read(range.offset + 4 + index * 4, 4);
     if (view.byteLength < 4) {

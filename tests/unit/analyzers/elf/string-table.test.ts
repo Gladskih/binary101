@@ -66,19 +66,6 @@ void test("decodes UTF-8 across read chunks", async () => {
   assert.equal(await strings(`\0${name}\0`, issues)(1), name);
   assert.deepEqual(issues, []);
 });
-
-void test("caps names at the documented 64 KiB resource limit", async () => {
-  const issues: string[] = [];
-  assert.equal(await strings(`\0${"a".repeat(65536)}\0`, issues)(1), null);
-  assert.match(issues.join(" "), /64 KiB/);
-});
-
-void test("accepts a name with its NUL at the resource boundary", async () => {
-  const issues: string[] = [];
-  const name = "a".repeat(65535);
-  assert.equal(await strings(`\0${name}\0`, issues)(1), name);
-  assert.deepEqual(issues, []);
-});
 void test("does not consume a terminator beyond the declared string table", async () => {
   const file = new MockFile(new TextEncoder().encode(`\0${"a".repeat(4100)}\0`));
   const issues: string[] = [];

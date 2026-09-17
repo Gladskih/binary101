@@ -12,9 +12,9 @@ const readSymbolIndices = async (
 ): Promise<number[]> => {
   const symbols: number[] = [];
   // LSB 10.7.2: one Elf*_Half per dynamic symbol. Limit bounds output memory.
-  const count = Math.min(table.count, Math.floor(table.size / 2), 1000000);
+  const count = Math.min(table.count, Math.floor(table.size / 2));
   if (count !== table.count || table.size % 2) {
-    issues.push("Symbol version table is truncated, misaligned or exceeds the 1000000 entry limit.");
+    issues.push("Symbol version table is truncated or misaligned.");
   }
   for (let index = 0; index < count; index += 1) {
     const view = await readVersionBytes(reader, table, index * 2, 2, issues);

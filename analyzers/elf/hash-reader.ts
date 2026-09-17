@@ -24,7 +24,7 @@ const readGnuChains = async (
 ): Promise<void> => {
   const maximumBucket = table.buckets.reduce((maximum, bucket) => Math.max(maximum, bucket), 0);
   if (!maximumBucket) return;
-  const available = Math.min(Math.floor((source.size - chainOffset) / 4), 1000000);
+  const available = Math.floor((source.size - chainOffset) / 4);
   for (let index = 0; index < available; index += 1) {
     const view = await reader.read(source.offset + chainOffset + index * 4, 4);
     if (view.byteLength < 4) break;
@@ -32,7 +32,7 @@ const readGnuChains = async (
     table.chains.push(value);
     if (index >= maximumBucket - table.symbolOffset && (value & 1)) return;
   }
-  table.issues.push("GNU hash chain is unterminated, truncated or exceeds the entry limit.");
+  table.issues.push("GNU hash chain is unterminated or truncated.");
 };
 
 export const readElfHashTable = async (
@@ -55,8 +55,8 @@ export const readElfHashTable = async (
   const bucketCount = Number(header[0]);
   const extraCount = Number(header[table.kind === "gnu" ? 2 : 1]);
   const extraWidth = table.kind === "gnu" ? layout.wordSize : 4;
-  if (!validDimensions(bucketCount, extraCount, headerSize + bucketCount * 4 + extraCount * extraWidth, source.size)) {
-    table.issues.push("Hash table dimensions exceed the file range or the 1000000 entry limit.");
+  if (headerSize + bucketCount * 4 + extraCount * extraWidth > source.size) {
+    table.issues.push("Hash table dimensions exceed the file range.");
     return table;
   }
   await readHashArrays(reader, source, table, header, layout);
@@ -70,9 +70,6 @@ export const readElfHashTable = async (
 const completeArrays = (table: ElfHashTable, buckets: number, extra: number): boolean =>
   table.buckets.length === buckets &&
   (table.kind === "gnu" ? table.bloom.length : table.chains.length) === extra;
-
-const validDimensions = (buckets: number, extra: number, size: number, available: number): boolean =>
-  buckets <= 1000000 && extra <= 1000000 && size <= available;
 
 const readHashArrays = async (
   reader: FileRangeReader, source: ElfHashSource, table: ElfHashTable,

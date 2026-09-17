@@ -9,9 +9,9 @@ export const parseElfCoreMappings = (reader: ElfCoreNoteReader): ElfCoreNote => 
   if (!reader.contains(0, reader.wordSize * 2)) return result;
   const count = reader.unsigned(0);
   result.fields.push({ name: "Page size", value: reader.unsigned(reader.wordSize) });
-  if (count > 100000n || count * BigInt(3 * reader.wordSize) >
+  if (count * BigInt(3 * reader.wordSize) >
     BigInt(reader.bytes.length - reader.wordSize * 2)) {
-    reader.issues.push("NT_FILE mapping count exceeds the descriptor or 100000 entry limit.");
+    reader.issues.push("NT_FILE mapping count exceeds the descriptor.");
     return result;
   }
   let pathOffset = (2 + Number(count) * 3) * reader.wordSize;
@@ -40,8 +40,7 @@ export const parseElfCoreAuxv = (reader: ElfCoreNoteReader): ElfCoreNote => {
     const tag = reader.unsigned(offset);
     auxv.push({ tag, value: reader.unsigned(offset + reader.wordSize) });
     if (tag === 0n) return { fields: [], auxv, issues: reader.issues };
-    if (auxv.length === 100000) break;
   }
-  reader.issues.push("NT_AUXV has no AT_NULL terminator within the descriptor or entry limit.");
+  reader.issues.push("NT_AUXV has no AT_NULL terminator within the descriptor.");
   return { fields: [], auxv, issues: reader.issues };
 };

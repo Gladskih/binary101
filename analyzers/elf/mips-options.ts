@@ -28,10 +28,6 @@ export const readMipsOptions = async (
     } else issues.push(`MIPS option kind ${option.kind} has no decoded payload.`);
     options.push(option);
     offset += size;
-    if (options.length === 100000) {
-      issues.push("MIPS option count exceeds the 100000 entry limit.");
-      break;
-    }
   }
   return options;
 };

@@ -32,13 +32,3 @@ void test("reports incomplete REGINFO and unknown option payloads", async () => 
   assert.deepEqual(unknown.options, [{ kind: 9, section: 0, info: 0 }]);
   assert.match(unknown.issues.join(" "), /kind 9/);
 });
-
-const oversizedOptions = (): Uint8Array<ArrayBuffer> => {
-  const bytes = new Uint8Array(800008);
-  for (let offset = 0; offset < bytes.length; offset += 8) bytes[offset + 1] = 8;
-  return bytes;
-};
-
-void test("limits retained options", async () => {
-  assert.match((await read(oversizedOptions())).issues.at(-1)!, /limit/);
-});

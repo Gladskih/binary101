@@ -40,8 +40,7 @@ const readTableString = async (
   if (offset === 0) return "";
   const decoder = new TextDecoder();
   const parts: string[] = [];
-  // Resource policy: retain at most 64 KiB per name, reading at most 4 KiB at a time.
-  const limit = Math.min(strings.size - offset, 65536);
+  const limit = strings.size - offset;
   for (let consumed = 0; consumed < limit;) {
     const bytes = await reader.readBytes(strings.offset + offset + consumed,
       Math.min(limit - consumed, 4096));
@@ -51,7 +50,7 @@ const readTableString = async (
     parts.push(decoder.decode(bytes, { stream: true }));
     consumed += bytes.length;
   }
-  issues.push("ELF string is unterminated or exceeds the 64 KiB name limit.");
+  issues.push("ELF string is unterminated.");
   return null;
 };
 

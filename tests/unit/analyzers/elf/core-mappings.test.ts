@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ElfCoreNoteReader } from "../../../../analyzers/elf/core-note-reader.js";
-import { parseElfCoreMappings, parseElfCoreAuxv } from "../../../../analyzers/elf/core-mappings.js";
+import { parseElfCoreMappings } from "../../../../analyzers/elf/core-mappings.js";
 
 const mapping = () => {
   const bytes = new Uint8Array(48);
@@ -38,11 +38,4 @@ void test("warns about inverted ranges and missing filename terminators", () => 
     .issues.join(" "), /inverted/);
   assert.match(parseElfCoreMappings(new ElfCoreNoteReader(bytes.subarray(0, 45), 8, "little"))
     .issues.join(" "), /NUL/);
-});
-
-void test("bounds auxiliary vectors that exceed the resource limit", () => {
-  const bytes = new Uint8Array(800008).fill(1);
-  const note = parseElfCoreAuxv(new ElfCoreNoteReader(bytes, 4, "little"));
-  assert.equal(note.auxv?.length, 100000);
-  assert.match(note.issues.join(" "), /limit/);
 });
