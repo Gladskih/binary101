@@ -276,3 +276,25 @@ void test("accepts absent section tables without attempting extended numbering",
   assert.deepEqual(result, header);
   assert.deepEqual(issues, []);
 });
+void test("reports unterminated section names", async () => {
+  const bytes = new Uint8Array(await createElfFile().arrayBuffer());
+  bytes[bytes.length - 1] = 65;
+
+  const result = await parseElf(new File([bytes], "unterminated"));
+
+  assert.equal(result?.sections[1]?.name, "");
+  assert.match(result!.issues.join(" "), /unterminated|NUL/);
+});
+
+void test("reports out-of-range section name offsets", async () => {
+  const bytes = await createElfFile().arrayBuffer();
+  // Fixture second Elf64_Shdr.sh_name, gABI 3.2.
+  new DataView(bytes).setUint32(184, 1000, true);
+
+  const result = await parseElf(new File([bytes], "bad-name"));
+
+  assert.equal(result?.sections[1]?.name, "");
+  assert.match(result!.issues.join(" "), /reference|offset/);
+});
+
+

@@ -133,3 +133,38 @@ void test("does not substitute a named dynstr for an invalid dynamic sh_link", a
   assert.deepEqual(result?.needed, []);
   assert.match(result!.issues.join(" "), /sh_link/);
 });
+for (const [text, index, warning] of [
+  ["\0libtest.so", 1n, /unterminated|NUL/],
+  ["\0libtest.so\0", 12n, /reference|offset/],
+  ["\0libtest.so\0", 1n << 60n, /reference|offset/]
+] as const) {
+  void test(`reports malformed dynamic strings: ${index} ${text.length}`, async () => {
+    const fixture = dynamicStringsFixture(text);
+    fixture.entries[2]!.value = index;
+    const result = await parseElfDynamicInfo({ ...fixture, programHeaders: [fixture.load] },
+      fixture.entries);
+    assert.deepEqual(result?.needed, []);
+    assert.match(result!.issues.join(" "), warning);
+  });
+}
+void test("does not use an unrelated dynamic section as the segment fallback", async () => {
+  const fixture = dynamicStringsFixture();
+  fixture.sections[1]!.offset = 16n;
+  const result = await parseElfDynamicInfo({ ...fixture,
+    programHeaders: [{ ...fixture.load, type: 2, offset: 0n, filesz: 64n }] }, fixture.entries);
+  assert.deepEqual(result?.needed, []);
+  assert.match(result!.issues.join(" "), /DT_STRTAB/);
+});
+
+void test("validates the type and file range of linked dynamic strings", async () => {
+  const fixture = dynamicStringsFixture();
+  fixture.sections[2]!.type = 1;
+  const wrongType = await parseElfDynamicInfo({ ...fixture, programHeaders: [] }, fixture.entries);
+  assert.deepEqual(wrongType?.needed, []);
+  assert.match(wrongType!.issues.join(" "), /sh_link/);
+  fixture.sections[2]!.type = 3;
+  fixture.sections[2]!.offset = BigInt(fixture.file.size);
+  const outside = await parseElfDynamicInfo({ ...fixture, programHeaders: [] }, fixture.entries);
+  assert.deepEqual(outside?.needed, []);
+  assert.match(outside!.issues.join(" "), /outside the file/);
+});

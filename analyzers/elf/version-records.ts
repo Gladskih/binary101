@@ -56,7 +56,7 @@ export const readElfVersionDefinitions = async (
     if (!count) issues.push("Version definition has no auxiliary name.");
     if (auxiliary != null) {
       for await (const item of versionChain(reader, table, auxiliary, count, 8, little, issues)) {
-        names.push(await readString(item.view.getUint32(0, little)));
+        names.push(await readString(item.view.getUint32(0, little)) ?? "");
       }
     }
     definitions.push({ index: view.getUint16(4, little), flags: view.getUint16(2, little),
@@ -82,10 +82,10 @@ export const readElfVersionRequirements = async (
         view.getUint16(2, little), 16, little, issues)) {
         versions.push({ hash: item.view.getUint32(0, little),
           flags: item.view.getUint16(4, little), index: item.view.getUint16(6, little),
-          name: await readString(item.view.getUint32(8, little)) });
+          name: await readString(item.view.getUint32(8, little)) ?? "" });
       }
     }
-    requirements.push({ file: await readString(view.getUint32(4, little)), versions });
+    requirements.push({ file: await readString(view.getUint32(4, little)) ?? "", versions });
   }
   return requirements;
 };

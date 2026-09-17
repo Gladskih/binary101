@@ -72,7 +72,7 @@ const readStaticTable = async (
       result.issues.push(`Symbol #${index} is truncated.`);
       break;
     }
-    const symbol = { name: await readName(record.nameOffset), value: record.value,
+    const symbol = { name: await readName(record.nameOffset) ?? "", value: record.value,
       sectionIndex: record.sectionIndex === 0xffff
         ? await readExtendedIndex(reader, extended, index, elf, result.issues) : record.sectionIndex };
     cache.set(offset, symbol);

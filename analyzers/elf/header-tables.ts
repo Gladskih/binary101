@@ -1,6 +1,8 @@
 "use strict";
 
-import { readAsciiString } from "../../binary-utils.js";
+import { createFileRangeReader } from "../file-range-reader.js";
+import { createElfStringTableReader } from "./string-table.js";
+import { elfFileRange } from "./relocation-reader.js";
 import {
   PROGRAM_FLAGS,
   PROGRAM_TYPES,
@@ -117,17 +119,12 @@ function parseSectionHeader32(view: DataView, littleEndian: boolean): Omit<ElfSe
   };
 }
 
-function readStringFromTable(tableDv: DataView | null, offset: number): string {
-  if (!tableDv || offset >= tableDv.byteLength) return "";
-  return readAsciiString(tableDv, offset, tableDv.byteLength - offset);
-}
-
-async function loadSectionNameTable(
+function locateSectionNameTable(
   file: File,
   sections: ElfSectionHeader[],
   header: ElfHeader,
   issues: string[]
-): Promise<DataView | null> {
+): { offset: number; size: number } | null {
   // gABI 2: SHN_UNDEF means that the file has no section name table.
   // https://gabi.xinuos.com/elf/02-eheader.html
   if (header.shstrndx === 0) return null;
@@ -140,16 +137,9 @@ async function loadSectionNameTable(
     issues.push("Section name table must have type SHT_STRTAB.");
     return null;
   }
-  const off = toSafeNumber(shstr.offset, "Section name table offset", issues);
-  const size = toSafeNumber(shstr.size, "Section name table size", issues);
-  if (off == null || size == null) return null;
-  const dv = await sliceView(file, off, size);
-  if (!dv) {
-    issues.push("Section name table falls outside the file.");
-    return null;
-  }
-  if (dv.byteLength < size) issues.push("Section name table is truncated.");
-  return dv;
+  const range = elfFileRange(shstr.offset, shstr.size, file.size);
+  if (!range) issues.push("Section name table is truncated or falls outside the file.");
+  return range;
 }
 
 const readSectionZero = async (
@@ -287,11 +277,11 @@ export async function parseSectionHeadersWithNames(
     const parsed = is64 ? parseSectionHeader64(view, littleEndian) : parseSectionHeader32(view, littleEndian);
     sections.push({ ...parsed, index });
   }
-  const namesTable = await loadSectionNameTable(file, sections, header, issues);
+  const namesTable = locateSectionNameTable(file, sections, header, issues);
   if (namesTable) {
-    sections.forEach(section => {
-      section.name = readStringFromTable(namesTable, section.nameOff);
-    });
+    const readName = createElfStringTableReader(createFileRangeReader(file, 0, file.size),
+      namesTable, issues);
+    for (const section of sections) section.name = await readName(section.nameOff) ?? "";
   }
   return sections;
 }

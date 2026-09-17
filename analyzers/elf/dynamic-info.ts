@@ -1,6 +1,6 @@
 "use strict";
 
-import { readAsciiString } from "../../binary-utils.js";
+import { createElfStringTableReader } from "./string-table.js";
 import type { ElfDynamicInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import { elfFileRange, elfVirtualRange } from "./relocation-reader.js";
 import { readElfDynamicEntries, type ElfDynamicEntry } from "./dynamic-entries.js";
@@ -33,21 +33,18 @@ const DT_FLAGS_1 = 0x6ffffffb;
 
 type DynEntry = { tag: number; value: bigint };
 
-const toSafeIndex = (value: bigint, label: string, issues: string[]): number | null => {
-  const num = Number(value);
-  if (!Number.isSafeInteger(num) || num < 0) {
-    issues.push(`${label} (${value.toString()}) is too large to index into the file.`);
-    return null;
-  }
-  return num;
+const hasDynamicTable = (file: File, headers: ElfProgramHeader[], sections: ElfSectionHeader[],
+  issues: string[]): boolean => {
+  const segment = headers.find(ph => ph.type === PT_DYNAMIC && ph.filesz > 0n);
+  const source = segment ? { offset: segment.offset, size: segment.filesz } :
+    sections.find(section => section.type === SHT_DYNAMIC && section.size > 0n);
+  if (!source) return false;
+  if (source.offset < 0n || source.offset >= BigInt(file.size)) return false;
+  if (source.offset + source.size > BigInt(file.size)) issues.push("Dynamic section is truncated.");
+  return true;
 };
 
-const readString = (table: DataView | null, offset: number): string => {
-  if (!table || offset < 0 || offset >= table.byteLength) return "";
-  return readAsciiString(table, offset, table.byteLength - offset);
-};
-
-const locateDynStringTable = async (opts: {
+const locateDynStringTable = (opts: {
   file: File;
   programHeaders: ElfProgramHeader[];
   sections: ElfSectionHeader[];
@@ -55,41 +52,65 @@ const locateDynStringTable = async (opts: {
   littleEndian: boolean;
   entries: DynEntry[];
   issues: string[];
-}): Promise<DataView | null> => {
+}): { offset: number; size: number } | null => {
   const strtabEntry = opts.entries.find(entry => entry.tag === DT_STRTAB);
   const strszEntry = opts.entries.find(entry => entry.tag === DT_STRSZ);
   if (strtabEntry) {
     const range = strszEntry ? elfVirtualRange(opts.programHeaders,
       strtabEntry.value, strszEntry.value, opts.file.size) : null;
     if (range) {
-      return new DataView(await opts.file.slice(range.offset, range.offset + range.size).arrayBuffer());
+      return range;
     } else {
       opts.issues.push("DT_STRTAB does not map into a PT_LOAD segment for the full DT_STRSZ range.");
     }
   }
 
+  return linkedDynamicStrings(opts.sections, opts.programHeaders, opts.file.size, opts.issues);
+};
+
+const linkedDynamicStrings = (sections: ElfSectionHeader[], programHeaders: ElfProgramHeader[],
+  fileSize: number, issues: string[]): { offset: number; size: number } | null => {
   // gABI 3.5: SHT_DYNAMIC.sh_link identifies its string table, independent of names.
-  const segment = opts.programHeaders.find(ph => ph.type === PT_DYNAMIC && ph.filesz > 0n);
-  const dynamic = opts.sections.find(section => section.type === SHT_DYNAMIC &&
+  const segment = programHeaders.find(ph => ph.type === PT_DYNAMIC && ph.filesz > 0n);
+  const dynamic = sections.find(section => section.type === SHT_DYNAMIC &&
     (!segment || section.offset === segment.offset));
   if (!dynamic) return null;
-  const strings = opts.sections.find(section => section.index === dynamic.link);
+  const strings = sections.find(section => section.index === dynamic.link);
   if (!strings || strings.type !== 3) {
-    opts.issues.push("SHT_DYNAMIC sh_link does not reference SHT_STRTAB.");
+    issues.push("SHT_DYNAMIC sh_link does not reference SHT_STRTAB.");
     return null;
   }
-  const range = elfFileRange(strings.offset, strings.size, opts.file.size);
+  const range = elfFileRange(strings.offset, strings.size, fileSize);
   if (!range) {
-    opts.issues.push("Dynamic string table is truncated or outside the file.");
+    issues.push("Dynamic string table is truncated or outside the file.");
     return null;
   }
-  return new DataView(await opts.file.slice(range.offset, range.offset + range.size).arrayBuffer());
+  return range;
 };
 
 const getTagValue = (entries: DynEntry[], tag: number): bigint | null =>
   entries.find(entry => entry.tag === tag)?.value ?? null;
 const getTagValues = (entries: DynEntry[], tag: number): bigint[] =>
   entries.filter(entry => entry.tag === tag).map(entry => entry.value);
+
+const dynamicFlags = (entries: DynEntry[], tag: number): number | null => {
+  const value = getTagValue(entries, tag);
+  return value != null && value <= 0xffffffffn ? Number(value) : null;
+};
+
+const readNamedTag = async (entries: DynEntry[], tag: number,
+  readString: ReturnType<typeof createElfStringTableReader>): Promise<string | null> => {
+  const value = getTagValue(entries, tag);
+  return value == null ? null : await readString(Number(value)) || null;
+};
+
+const readArrayTag = (entries: DynEntry[], baseTag: number, sizeTag: number):
+{ vaddr: bigint; size: bigint } | null => {
+  const base = getTagValue(entries, baseTag);
+  const byteCount = getTagValue(entries, sizeTag);
+  if (base == null || byteCount == null || base === 0n || byteCount === 0n) return null;
+  return { vaddr: base, size: byteCount };
+};
 
 export async function parseElfDynamicInfo(opts: {
   file: File;
@@ -99,62 +120,25 @@ export async function parseElfDynamicInfo(opts: {
   littleEndian: boolean;
 }, parsedEntries?: ElfDynamicEntry[]): Promise<ElfDynamicInfo | null> {
   const issues: string[] = [];
-
-  const dynamicPh = opts.programHeaders.find(ph => ph.type === PT_DYNAMIC && ph.filesz > 0n);
-  const dynamicSection =
-    dynamicPh == null ? opts.sections.find(sec => sec.type === SHT_DYNAMIC && sec.size > 0n) : null;
-  const offset = dynamicPh?.offset ?? dynamicSection?.offset ?? 0n;
-  const size = dynamicPh?.filesz ?? dynamicSection?.size ?? 0n;
-  if (size <= 0n) return null;
-
-  const start = toSafeIndex(offset, "Dynamic section offset", issues);
-  const byteSize = toSafeIndex(size, "Dynamic section size", issues);
-  if (start == null || byteSize == null || byteSize <= 0) return null;
-  const end = Math.min(opts.file.size, start + byteSize);
-  if (start >= opts.file.size || end <= start) return null;
-  if (end !== start + byteSize) issues.push("Dynamic section is truncated.");
-  const entries = parsedEntries ?? await readElfDynamicEntries(
-    createFileRangeReader(opts.file, 0, opts.file.size), opts, issues);
-  const strtab = await locateDynStringTable({ ...opts, entries, issues });
-
-  const needed = getTagValues(entries, DT_NEEDED)
-    .map(value => readString(strtab, Number(value)))
-    .filter(name => name.length > 0);
-
-  const readNamedTag = (tag: number): string | null => {
-    const value = getTagValue(entries, tag);
-    if (value == null || value === 0n) return null;
-    const offsetNum = Number(value);
-    if (!Number.isSafeInteger(offsetNum) || offsetNum < 0) return null;
-    const text = readString(strtab, offsetNum);
-    return text.length ? text : null;
-  };
-
-  const readArrayTag = (baseTag: number, sizeTag: number): { vaddr: bigint; size: bigint } | null => {
-    const base = getTagValue(entries, baseTag);
-    const byteCount = getTagValue(entries, sizeTag);
-    if (base == null || byteCount == null) return null;
-    if (base === 0n || byteCount === 0n) return null;
-    return { vaddr: base, size: byteCount };
-  };
-
-  const flagsValue = getTagValue(entries, DT_FLAGS);
-  const flags1Value = getTagValue(entries, DT_FLAGS_1);
-  const flags = flagsValue != null && flagsValue <= 0xffffffffn ? Number(flagsValue) : null;
-  const flags1 = flags1Value != null && flags1Value <= 0xffffffffn ? Number(flags1Value) : null;
-
+  if (!hasDynamicTable(opts.file, opts.programHeaders, opts.sections, issues)) return null;
+  const reader = createFileRangeReader(opts.file, 0, opts.file.size);
+  const entries = parsedEntries ?? await readElfDynamicEntries(reader, opts, issues);
+  const readString = createElfStringTableReader(reader,
+    locateDynStringTable({ ...opts, entries, issues }), issues);
+  const needed = (await Promise.all(getTagValues(entries, DT_NEEDED)
+    .map(value => readString(Number(value))))).filter((name): name is string => !!name);
   return {
     needed,
-    soname: readNamedTag(DT_SONAME),
-    rpath: readNamedTag(DT_RPATH),
-    runpath: readNamedTag(DT_RUNPATH),
+    soname: await readNamedTag(entries, DT_SONAME, readString),
+    rpath: await readNamedTag(entries, DT_RPATH, readString),
+    runpath: await readNamedTag(entries, DT_RUNPATH, readString),
     init: getTagValue(entries, DT_INIT),
     fini: getTagValue(entries, DT_FINI),
-    preinitArray: readArrayTag(DT_PREINIT_ARRAY, DT_PREINIT_ARRAYSZ),
-    initArray: readArrayTag(DT_INIT_ARRAY, DT_INIT_ARRAYSZ),
-    finiArray: readArrayTag(DT_FINI_ARRAY, DT_FINI_ARRAYSZ),
-    flags,
-    flags1,
+    preinitArray: readArrayTag(entries, DT_PREINIT_ARRAY, DT_PREINIT_ARRAYSZ),
+    initArray: readArrayTag(entries, DT_INIT_ARRAY, DT_INIT_ARRAYSZ),
+    finiArray: readArrayTag(entries, DT_FINI_ARRAY, DT_FINI_ARRAYSZ),
+    flags: dynamicFlags(entries, DT_FLAGS),
+    flags1: dynamicFlags(entries, DT_FLAGS_1),
     issues
   };
 }
