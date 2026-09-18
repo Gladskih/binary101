@@ -17,6 +17,7 @@ test("uses NativeAOT initializers as disassembly seeds in the browser", async ({
   await page.setInputFiles("#fileInput", {
     name: "initializers.elf", mimeType: "application/x-elf", buffer: Buffer.from(fixture.bytes)
   });
+  await page.locator(".peSectionSummary").filter({ hasText: "NativeAOT metadata" }).click();
   await expect(page.locator("#analysisValue")).toContainText("NativeAOT initializer entry points");
   await page.locator("#elfInstructionSetsPanel > details > summary").click();
   await page.locator("#elfInstructionSetsAnalyzeButton").click();
@@ -37,6 +38,7 @@ test("renders relocation-confirmed NativeAOT from ELF in the browser", async ({ 
   await expect(page.locator("#fileBinaryTypeDetail")).toContainText("ELF 64-bit LSB");
   const analysis = page.locator("#analysisValue");
   await expect(analysis).toContainText("NativeAOT metadata");
+  await page.locator(".peSectionSummary").filter({ hasText: "NativeAOT metadata" }).click();
   await expect(analysis).toContainText("relative REL/RELA relocations");
   await expect(analysis.locator(".nativeAotSectionsTable tbody tr")).toHaveCount(2);
   await expect(analysis).toContainText("Embedded reflection metadata");
@@ -77,12 +79,12 @@ test("renders NativeAOT metadata from a real ELF binary in the browser", async (
   await expect(page.locator("#fileBinaryTypeDetail")).toContainText("ELF 64-bit LSB");
   const analysis = page.locator("#analysisValue");
   await expect(analysis).toContainText("NativeAOT metadata");
+  await page.locator(".peSectionSummary").filter({ hasText: "NativeAOT metadata" }).click();
   await expect(analysis).toContainText("relative REL/RELA relocations");
   await expect(analysis.locator(".nativeAotSectionsTable tbody tr")).toHaveCount(34);
   await expect(analysis.locator(".nativeAotScopesTable tbody tr")).toHaveCount(6);
   await expect(analysis).toContainText("System.Private.CoreLib.dll");
   await expect(analysis).toContainText("Showing 1-100 of 399");
-  await page.locator(".peSectionSummary").filter({ hasText: "NativeAOT metadata" }).click();
   await analysis.locator(
     '[data-paged-sortable-table-id="native-aot-reflection-types"] ' +
     '[data-paged-sortable-action="next"]'
