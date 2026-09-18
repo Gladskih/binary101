@@ -185,13 +185,13 @@ void test("reports truncated names, preserves exact-end names and warns about cl
   assert.equal(clipped?.issues.length, 2);
   assert.match(clipped!.issues.join(" "), /note name is truncated/);
 });
-const alignedNotes = (alignment: number): File => {
+const alignedNotes = (alignment: number, count = 2): File => {
   // ELF note header: three Words, GNU owner includes NUL, descriptor is a build ID.
   // https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/Object/ELFTypes.h
   const stride = Math.ceil(20 / alignment) * alignment;
-  const bytes = new Uint8Array(stride * 2);
+  const bytes = new Uint8Array(stride * count);
   const view = new DataView(bytes.buffer);
-  for (const offset of [0, stride]) {
+  for (let offset = 0; offset < bytes.length; offset += stride) {
     view.setUint32(offset, 4, true);
     view.setUint32(offset + 4, 4, true);
     view.setUint32(offset + 8, 3, true);
@@ -199,6 +199,36 @@ const alignedNotes = (alignment: number): File => {
   }
   return new File([bytes], "aligned-notes");
 };
+
+void test("reads dense notes in bounded blocks instead of opening a stream per field", async context => {
+  const file = alignedNotes(4, 10000);
+  const reads = context.mock.method(file, "slice");
+
+  const result = await parseElfNotes({ file, programHeaders: [], littleEndian: true,
+    sections: [makeSection({ type: 7, size: BigInt(file.size), addralign: 4n })] });
+
+  assert.deepEqual(result?.entries.map(entry => entry.value), Array(10000).fill("11223344"));
+  assert.deepEqual(result?.issues, []);
+  // Allow boundary overlap, but require block-scale I/O for this 200 KB table.
+  assert.ok(reads.mock.callCount() <= 8, `${reads.mock.callCount()} file reads`);
+  assert.ok(reads.mock.calls.every(call =>
+    Number(call.arguments[1]) - Number(call.arguments[0]) <= 64 * 1024));
+});
+
+// The fixture's 12-byte header is followed by a 4-byte owner and a 4-byte descriptor.
+for (const available of [14, 18]) {
+  void test(`reports a short payload read with only ${available} bytes available`, async context => {
+    const file = alignedNotes(4);
+    context.mock.method(file, "slice", (start?: number, end?: number) =>
+      Blob.prototype.slice.call(file, start, Math.min(end ?? file.size, available)));
+
+    const result = await parseElfNotes({ file, programHeaders: [], littleEndian: true,
+      sections: [makeSection({ type: 7, size: BigInt(file.size), addralign: 4n })] });
+
+    assert.deepEqual(result?.entries, []);
+    assert.deepEqual(result?.issues, ["SHT_NOTE section #0: note payload is truncated."]);
+  });
+}
 
 for (const alignment of [4, 8]) {
   void test(`honors section note alignment ${alignment}`, async () => {

@@ -1,7 +1,7 @@
 "use strict";
 
 import { readAsciiString } from "../../binary-utils.js";
-import { createFileRangeReader, type DirectFileRangeReader } from "../file-range-reader.js";
+import { createFileRangeReader, type FileRangeReader } from "../file-range-reader.js";
 import type { ElfNoteEntry, ElfNotesInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import { decodeElfNotePayload } from "./note-payload.js";
 
@@ -30,7 +30,7 @@ const noteBounds = (view: DataView, offset: number, littleEndian: boolean,
   return { nameStart, nameEnd, descStart, descEnd };
 };
 
-const parseNotesFromRange = async (reader: DirectFileRangeReader, littleEndian: boolean,
+const parseNotesFromRange = async (reader: FileRangeReader, littleEndian: boolean,
   range: ReturnType<typeof noteRanges>[number], issues: string[], wordSize: 4 | 8,
   coreMachine: number | undefined, seenNotes: Set<string>): Promise<ElfNoteEntry[]> => {
   const { source } = range;
@@ -48,10 +48,8 @@ const parseNotesFromRange = async (reader: DirectFileRangeReader, littleEndian: 
     offset = Math.ceil(bounds.descEnd / alignment) * alignment;
     if (seenNotes.has(key)) continue;
     seenNotes.add(key);
-    const nameBytes = await reader.readInto(bounds.nameStart,
-      new Uint8Array(bounds.nameEnd - bounds.nameStart));
-    const desc = await reader.readInto(bounds.descStart,
-      new Uint8Array(bounds.descEnd - bounds.descStart));
+    const nameBytes = await reader.readBytes(bounds.nameStart, bounds.nameEnd - bounds.nameStart);
+    const desc = await reader.readBytes(bounds.descStart, bounds.descEnd - bounds.descStart);
     if (nameBytes.length !== bounds.nameEnd - bounds.nameStart ||
       desc.length !== bounds.descEnd - bounds.descStart) {
       issues.push(`${source}: note payload is truncated.`);
@@ -86,7 +84,7 @@ const noteRanges = (sections: ElfSectionHeader[], headers: ElfProgramHeader[]) =
 };
 
 const readNoteRange = (file: File,
-  range: ReturnType<typeof noteRanges>[number], issues: string[]): DirectFileRangeReader | null => {
+  range: ReturnType<typeof noteRanges>[number], issues: string[]): FileRangeReader | null => {
   const start = toSafeIndex(range.offset, `${range.source} offset`, issues);
   const size = toSafeIndex(range.size, `${range.source} size`, issues);
   if (start == null || size == null || size <= 0) return null;
