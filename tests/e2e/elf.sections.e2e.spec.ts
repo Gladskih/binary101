@@ -3,6 +3,8 @@ import { createElfFile } from "../fixtures/elf-sample-file.js";
 
 for (const width of [390, 1280]) {
   test(`ELF sections collapse and follow hashes at width ${width}`, async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
     const file = createElfFile();
     await page.setViewportSize({ width, height: 720 });
     await page.goto("/");
@@ -21,16 +23,24 @@ for (const width of [390, 1280]) {
     const headers = page.locator("#analysisValue > section").filter({
       has: page.locator(".peSectionSummary", { hasText: "Section headers" })
     });
-    await expect(headers.locator("table")).toBeHidden();
+    await expect(headers.locator(".peSectionBody")).toBeEmpty();
     await headers.locator("summary").click();
     await expect(headers.locator("table")).toBeVisible();
     await expect(headers.locator("details")).toHaveCount(1);
     await headers.locator("summary").click();
-    await expect(headers.locator("table")).toBeHidden();
+    await expect(headers.locator(".peSectionBody")).toBeEmpty();
+    await headers.locator("summary").click();
+    await expect(headers.locator("table")).toBeVisible();
     await panel.locator("summary").first().click();
     await page.locator("#elfInstructionSetsAnalyzeButton").click();
     await expect(page.locator("#elfInstructionSetsAnalyzeButton"))
       .toHaveText("Re-analyze instruction sets");
     await expect(page.locator("#elfInstructionSetsPanel > details")).toHaveAttribute("open", "");
+    await panel.locator("summary").first().click();
+    await expect(panel.locator(".peSectionBody")).toBeEmpty();
+    await panel.locator("summary").first().click();
+    await expect(page.locator("#elfInstructionSetsAnalyzeButton"))
+      .toHaveText("Re-analyze instruction sets");
+    expect(errors).toEqual([]);
   });
 }
