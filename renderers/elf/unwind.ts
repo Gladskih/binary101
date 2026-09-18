@@ -45,8 +45,9 @@ export const createElfUnwindTableModel = (section: ElfUnwindSection): PagedSorta
   };
 };
 
-export const renderElfUnwind = (elf: ElfParseResult, out: string[]): void => {
-  for (const section of elf.unwind ?? []) {
+export const renderElfUnwind = (elf: ElfParseResult, out: string[], onlyIndex?: number): void => {
+  for (const [index, section] of (elf.unwind ?? []).entries()) {
+    if (onlyIndex != null && index !== onlyIndex) continue;
     const name = elf.sections.find(item => item.index === section.sectionIndex)?.name ?? "Unwind";
     out.push(renderElfSectionStart(`${name}: call frame information`));
     out.push(`<p class="smallNote">CFI operands are encoded values; offsets use the CIE alignment factors. ` +

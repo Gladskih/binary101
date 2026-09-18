@@ -35,8 +35,9 @@ export const createElfAttributeTableModel = (section: ElfAttributeSection): Page
   };
 };
 
-export const renderElfAttributes = (elf: ElfParseResult, out: string[]): void => {
-  for (const section of elf.attributes ?? []) {
+export const renderElfAttributes = (elf: ElfParseResult, out: string[], onlyIndex?: number): void => {
+  for (const [index, section] of (elf.attributes ?? []).entries()) {
+    if (onlyIndex != null && index !== onlyIndex) continue;
     out.push(renderElfSectionStart(`Architecture attributes (section #${section.sectionIndex})`));
     out.push(renderAutoPagedSortableTable(createElfAttributeTableModel(section)));
     if (section.issues.length) out.push(`<ul>${section.issues.map(issue =>

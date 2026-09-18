@@ -34,8 +34,9 @@ export const createElfArmScopeModel = (table: ArmEhabiTable, index: number): Pag
   };
 };
 
-export const renderElfArmEhabi = (elf: ElfParseResult, out: string[]): void => {
+export const renderElfArmEhabi = (elf: ElfParseResult, out: string[], onlyIndex?: number): void => {
   for (const [index, table] of (elf.armEhabi ?? []).entries()) {
+    if (onlyIndex != null && index !== onlyIndex) continue;
     out.push(renderElfSectionStart(`ARM exception handling (${table.source})`));
     out.push(renderAutoPagedSortableTable(createElfArmEhabiModel(table, index)));
     const scopes = createElfArmScopeModel(table, index);

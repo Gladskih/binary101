@@ -35,8 +35,9 @@ const metadataFields = (metadata: ElfMipsMetadata): [string, string][] => {
   ];
 };
 
-export const renderElfMips = (elf: ElfParseResult, out: string[]): void => {
+export const renderElfMips = (elf: ElfParseResult, out: string[], onlyIndex?: number): void => {
   for (const [index, metadata] of (elf.mips ?? []).entries()) {
+    if (onlyIndex != null && index !== onlyIndex) continue;
     out.push(renderElfSectionStart(`MIPS ABI metadata (${metadata.source})`));
     const fields = metadataFields(metadata);
     if (fields.length) out.push(`<div class="tableWrap"><table class="table"><thead>` +

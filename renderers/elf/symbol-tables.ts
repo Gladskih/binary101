@@ -32,8 +32,9 @@ export const createElfSymbolTableModel = (table: ElfSymbolTable): PagedSortableT
   sortValueAt: (index, column) => symbolValues(table, index)[column] ?? ""
 });
 
-export const renderElfSymbolTables = (elf: ElfParseResult, out: string[]): void => {
-  for (const table of elf.symbolTables ?? []) {
+export const renderElfSymbolTables = (elf: ElfParseResult, out: string[], onlyIndex?: number): void => {
+  for (const [index, table] of (elf.symbolTables ?? []).entries()) {
+    if (onlyIndex != null && index !== onlyIndex) continue;
     const section = elf.sections.find(item => item.index === table.sectionIndex);
     out.push(renderElfSectionStart(`Symbols: ${section?.name || `section #${table.sectionIndex}`}`));
     out.push(renderAutoPagedSortableTable(createElfSymbolTableModel(table)));

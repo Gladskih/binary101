@@ -149,7 +149,7 @@ const renderOtherFeatureCounts = (disasm: NonNullable<ElfParseResult["disassembl
   out.push(`</tbody></table></details>`);
 };
 
-const renderInstructionSetsContent = (elf: ElfParseResult, out: string[]): void => {
+export const renderInstructionSetsContent = (elf: ElfParseResult, out: string[]): void => {
   const disasm = elf.disassembly;
   renderInstructionSetHeader(disasm, out);
   // AAELF64 ELF Header: EM_AARCH64.

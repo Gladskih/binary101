@@ -8,10 +8,8 @@ import { createFileActionClickHandler } from "./ui/file-actions.js";
 import { isPeWindowsParseResult } from "./analyzers/pe/index.js";
 import { handlePeEntrypointJumpClick } from "./ui/pe-entrypoint-navigation.js";
 import { createAnalysisPanelActions } from "./ui/analysis-panel-actions.js";
-import {
-  refreshElfInstructionSetsPanel, refreshPeEntrypointDisassemblyPanel,
-  refreshPeInstructionSetsPanel
-} from "./ui/analysis-panel-refresh.js";
+import { refreshElfInstructionSetsPanel, refreshPeEntrypointDisassemblyPanel,
+  refreshPeInstructionSetsPanel } from "./ui/analysis-panel-refresh.js";
 import { copyManifestPreviewToClipboard } from "./ui/manifest-preview-copy.js";
 import { handleManifestTreeActionClick, syncManifestTreeControls } from "./ui/manifest-tree-controls.js";
 import { captureOpenDetails, restoreOpenDetails } from "./ui/details-open-state.js";
@@ -19,6 +17,7 @@ import { enhanceSortableTables, handleSortableTableClick } from "./ui/sortable-t
 import { enhanceAnalysisEntrypointExplorer, enhanceAnalysisPagedTables } from "./ui/analysis-paged-tables.js";
 import { capturePagedSortableTableState } from "./ui/paged-sortable-tables.js";
 import { enhancePeLazySections } from "./ui/pe-lazy-sections.js";
+import { enhanceElfLazySections } from "./ui/elf-lazy-sections.js";
 import { createDirectoryInspectionController, type DirectoryInspectionController } from "./ui/directory-inspection.js";
 import { createInspectionNavigationController } from "./ui/inspection-navigation.js";
 import { attachSelectionInputs } from "./ui/selection-inputs.js";
@@ -86,6 +85,7 @@ const renderResult = (result: ParseForUiResult): void => {
   enhanceAccessibleTooltips(fileInfoCardElement);
   restoreOpenDetails(analysisValueElement, openDetails, viewer => syncManifestTreeControls(viewer as Element));
   enhancePeLazySections(analysisValueElement, result.analyzer === "pe" && result.parsed ? result.parsed : null);
+  enhanceElfLazySections(analysisValueElement, result.analyzer === "elf" ? result.parsed : null);
 };
 const getCurrentFile = (): File | null => currentFile;
 const getCurrentParseResult = (): ParseForUiResult => currentParseResult;

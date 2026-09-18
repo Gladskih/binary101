@@ -26,8 +26,9 @@ export const createElfHashTableModel = (table: ElfHashTable): PagedSortableTable
   sortValueAt: (index, column) => hashRow(table, index)[column] ?? ""
 });
 
-export const renderElfHashTables = (elf: ElfParseResult, out: string[]): void => {
-  for (const table of elf.hashTables ?? []) {
+export const renderElfHashTables = (elf: ElfParseResult, out: string[], onlyIndex?: number): void => {
+  for (const [index, table] of (elf.hashTables ?? []).entries()) {
+    if (onlyIndex != null && index !== onlyIndex) continue;
     out.push(renderElfSectionStart(`${table.kind === "gnu" ? "GNU" : "System V"} symbol hash table`));
     out.push(`<p>${table.buckets.length} buckets; ${table.chains.length} chain words.</p>`);
     if (table.kind === "gnu") out.push(`<p>First hashed symbol: ${table.symbolOffset}; ` +

@@ -31,6 +31,7 @@ import {
 } from "./paged-sortable-tables.js";
 import { enhancePeEntrypointExplorer } from "./pe-entrypoint-explorer.js";
 import { refreshPeLazySection } from "./pe-lazy-sections.js";
+import { refreshElfLazySection } from "./elf-lazy-sections.js";
 import {
   captureSortableTableState,
   enhanceSortableTables,
@@ -94,5 +95,6 @@ export const refreshPeOverlayPanel = (pe: PeParseResult): void => {
 };
 
 export const refreshElfInstructionSetsPanel = (elf: ElfParseResult): void => {
+  if (refreshElfLazySection("instruction-sets", elf)) return;
   replaceRenderedRegion(ELF_INSTRUCTION_SETS_PANEL_ID, renderElfInstructionSetsPanel(elf));
 };

@@ -127,7 +127,7 @@ const formatSectionEntSize = (section: ElfSectionHeader): string => {
   return `<span title="sh_entsize: fixed size of one entry in this section table.">${value}</span>`;
 };
 
-function renderHeader(elf: ElfParseResult, out: string[]): void {
+export function renderHeader(elf: ElfParseResult, out: string[]): void {
   const h = elf.header;
   out.push(renderElfSectionStart(`ELF header`));
   out.push(`<dl>`);
@@ -149,7 +149,7 @@ function renderHeader(elf: ElfParseResult, out: string[]): void {
   out.push(renderElfSectionEnd());
 }
 
-function renderProgramHeaders(elf: ElfParseResult, out: string[]): void {
+export function renderProgramHeaders(elf: ElfParseResult, out: string[]): void {
   if (!elf.programHeaders?.length) return;
   out.push(renderElfSectionStart(`Program headers (${elf.programHeaders.length})`));
   out.push(`<div class="tableWrap">`);
@@ -179,7 +179,7 @@ function renderProgramHeaders(elf: ElfParseResult, out: string[]): void {
   out.push(renderElfSectionEnd());
 }
 
-function renderSectionHeaders(elf: ElfParseResult, out: string[]): void {
+export function renderSectionHeaders(elf: ElfParseResult, out: string[]): void {
   if (!elf.sections?.length) return;
   out.push(renderElfSectionStart(`Section headers (${elf.sections.length})`));
   out.push(
@@ -224,7 +224,7 @@ function renderSectionHeaders(elf: ElfParseResult, out: string[]): void {
   out.push(renderElfSectionEnd());
 }
 
-function renderIssues(elf: ElfParseResult, out: string[]): void {
+export function renderIssues(elf: ElfParseResult, out: string[]): void {
   if (!elf.issues?.length) return;
   out.push(renderElfSectionStart(`Notices`));
   out.push(`<ul>`);

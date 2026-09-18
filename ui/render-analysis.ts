@@ -6,7 +6,6 @@ import {
   renderPe,
   renderCoff,
   renderJpeg,
-  renderElf,
   renderGif,
   renderPng,
   renderBmp,
@@ -37,6 +36,7 @@ import {
   renderPcapNg
 } from "../renderers/index.js";
 import type { PreviewRender } from "./preview.js";
+import { renderElfLazy } from "../renderers/elf/lazy-sections.js";
 
 type RenderContext = {
   buildPreview: () => PreviewRender | null;
@@ -62,7 +62,7 @@ const renderExecutableAnalysis = (
       show("MS-DOS MZ details", renderMz(result.parsed));
       return true;
     case "elf":
-      show("ELF details", renderElf(result.parsed));
+      show("ELF details", renderElfLazy(result.parsed));
       return true;
     case "macho":
       show("Mach-O details", renderMachO(result.parsed));
