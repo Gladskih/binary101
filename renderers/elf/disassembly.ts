@@ -190,11 +190,14 @@ const renderAarch64InstructionSets = (disasm: ElfParseResult["disassembly"], out
 export const renderInstructionSetsPanel = (elf: ElfParseResult): string => {
   const out: string[] = [];
   renderInstructionSetsContent(elf, out);
-  return `<section id="${ELF_INSTRUCTION_SETS_PANEL_ID}">` +
+  return renderInstructionSetsShell(out.join(""));
+};
+
+export const renderInstructionSetsShell = (content = ""): string =>
+  `<section id="${ELF_INSTRUCTION_SETS_PANEL_ID}">` +
     `<details class="analysisPanel"><summary class="analysisPanelSummary">` +
     `<span class="detailsSummaryTitle">Instruction sets</span></summary>` +
-    `<div class="analysisPanelBody">${out.join("")}</div></details></section>`;
-};
+    `<div class="analysisPanelBody">${content}</div></details></section>`;
 
 export const renderInstructionSets = (elf: ElfParseResult, out: string[]): void => {
   out.push(renderInstructionSetsPanel(elf));

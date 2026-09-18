@@ -7,6 +7,10 @@ import { captureLazyDomState, restoreLazyDomState } from "./lazy-section-dom-sta
 import { capturePagedSortableTableState, enhancePagedSortableTables } from "./paged-sortable-tables.js";
 import { captureSortableTableState, enhanceSortableTables, restoreSortableTableState } from "./sortable-tables.js";
 
+const sectionBody = (section: HTMLElement): HTMLElement | null =>
+  section.querySelector<HTMLElement>(".peSectionBody") ??
+  section.querySelector<HTMLElement>(".analysisPanelBody");
+
 const captureState = (body: HTMLElement) => ({
   details: captureOpenDetails(body),
   dom: captureLazyDomState(body),
@@ -46,7 +50,7 @@ const enhanceSection = (
   section: HTMLElement, elf: ElfParseResult, descriptor: ElfLazySection
 ): void => {
   const details = section.querySelector<HTMLDetailsElement>(":scope > details");
-  const body = section.querySelector<HTMLElement>(".peSectionBody");
+  const body = sectionBody(section);
   if (!details || !body) return;
   const previous = states.get(section);
   if (previous) { previous.elf = elf; previous.descriptor = descriptor; return; }
@@ -74,7 +78,7 @@ export const refreshElfLazySection = (key: string, elf: ElfParseResult): boolean
   const section = document.querySelector<HTMLElement>(`[data-elf-lazy-section="${key}"]`);
   if (!section) return false;
   const state = states.get(section);
-  const body = section.querySelector<HTMLElement>(".peSectionBody");
+  const body = sectionBody(section);
   const descriptor = getElfLazySections(elf).find(candidate => candidate.key === key);
   if (!state || !body || !descriptor) return false;
   unmount(body, state);

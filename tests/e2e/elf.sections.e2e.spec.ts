@@ -13,6 +13,8 @@ for (const width of [390, 1280]) {
     });
     const panel = page.locator("#elfInstructionSetsPanel > details");
     await expect(panel).not.toHaveAttribute("open");
+    await expect(panel).toHaveClass("analysisPanel");
+    await expect(panel.locator("summary")).toHaveClass("analysisPanelSummary");
     const hashBox = await page.locator("#hashDetails").boundingBox();
     const panelBox = await panel.boundingBox();
     const gap = await page.locator("#fileInfoCard").evaluate(element =>
@@ -37,7 +39,7 @@ for (const width of [390, 1280]) {
       .toHaveText("Re-analyze instruction sets");
     await expect(page.locator("#elfInstructionSetsPanel > details")).toHaveAttribute("open", "");
     await panel.locator("summary").first().click();
-    await expect(panel.locator(".peSectionBody")).toBeEmpty();
+    await expect(panel.locator(".analysisPanelBody")).toBeEmpty();
     await panel.locator("summary").first().click();
     await expect(page.locator("#elfInstructionSetsAnalyzeButton"))
       .toHaveText("Re-analyze instruction sets");

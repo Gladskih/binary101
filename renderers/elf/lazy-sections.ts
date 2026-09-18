@@ -1,7 +1,7 @@
 import type { ElfParseResult } from "../../analyzers/elf/types.js";
 import { renderHeader, renderProgramHeaders, renderSectionHeaders, renderIssues } from "./index.js";
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
-import { ELF_INSTRUCTION_SETS_PANEL_ID, renderInstructionSetsContent } from "./disassembly.js";
+import { renderInstructionSetsShell, renderInstructionSetsContent } from "./disassembly.js";
 import { renderElfLinking } from "./linking.js";
 import { renderElfSymbols } from "./symbols.js";
 import { renderElfSymbolVersions } from "./symbol-versions.js";
@@ -92,8 +92,8 @@ const addBuildMetadata = (elf: ElfParseResult, add: AddSection): void => {
 };
 
 export const renderElfLazy = (elf: ElfParseResult | null): string => elf
-  ? getElfLazySections(elf).map(section => renderElfSectionStart(section.title)
-    .replace("<section ", `<section data-elf-lazy-section="${section.key}" ` +
-      (section.key === "instruction-sets" ? `id="${ELF_INSTRUCTION_SETS_PANEL_ID}" ` : "")) +
-    renderElfSectionEnd()).join("")
+  ? getElfLazySections(elf).map(section => (section.key === "instruction-sets"
+    ? renderInstructionSetsShell()
+    : renderElfSectionStart(section.title) + renderElfSectionEnd())
+    .replace("<section ", `<section data-elf-lazy-section="${section.key}" `)).join("")
   : "";
