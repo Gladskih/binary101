@@ -113,9 +113,9 @@ void test("parseElf surfaces version mismatches and truncated section name table
   const definedParsed = expectDefined(parsed);
   assert.strictEqual(definedParsed.sections.length, 2);
   const section = expectDefined(definedParsed.sections[1]);
-  assert.strictEqual(section.name, "");
+  assert.strictEqual(section.name, undefined);
   assert.ok(definedParsed.issues.some(msg => msg.includes("Unexpected ELF version")));
-  assert.ok(definedParsed.issues.some(msg => msg.includes("Section name table is truncated.")));
+  assert.ok(definedParsed.issues.some(msg => msg.includes("Section name table is truncated or falls outside the file.")));
 });
 
 void test("parseElf reports truncated ELF64 headers instead of throwing", async () => {

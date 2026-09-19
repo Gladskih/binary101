@@ -36,19 +36,20 @@ void test("reports missing string tables and out-of-bounds string references", a
   const fixture = elfVersionFixture();
   const reader = createFileRangeReader(fixture.file(), 0, fixture.bytes.length);
   const issues: string[] = [];
-  assert.equal(await createElfStringTableReader(reader, null, issues)(0), "");
-  assert.equal(await createElfStringTableReader(reader, table.strings, issues)(26), "");
+  assert.equal(await createElfStringTableReader(reader, null, issues)(0), null);
+  assert.equal(await createElfStringTableReader(reader, table.strings, issues)(26), null);
   assert.equal(issues.length, 2);
 });
 
-void test("reports unterminated strings", async () => {
+void test("reports missing string-table boundary terminators", async () => {
   const fixture = elfVersionFixture();
   const reader = createFileRangeReader(fixture.file(), 0, fixture.bytes.length);
   const issues: string[] = [];
   const read = createElfStringTableReader(reader,
     { offset: 385, size: 3 }, issues);
   assert.equal(await read(0), "");
-  assert.match(issues.join(" "), /unterminated/);
+  assert.match(issues.join(" "), /must begin with NUL/);
+  assert.match(issues.join(" "), /must end with NUL/);
 });
 
 void test("locates version records and strings through dynamic tags", () => {
