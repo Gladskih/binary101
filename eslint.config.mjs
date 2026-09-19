@@ -263,9 +263,9 @@ export default [
       "dist/**",
       "coverage/**",
       "test-results/**",
+      "scan-results/**",
       ".stryker-tmp/**",
       "public/vendor/**"
     ]
   }
 ];
-
