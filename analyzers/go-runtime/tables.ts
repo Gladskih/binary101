@@ -94,45 +94,62 @@ export const parseGoFunctions = async (
   const functionNames = moduleData.slices[0];
   const pclnTable = moduleData.slices[4];
   if (!functionNames || !pclnTable) return null;
+  return parseGoFunctionTable(image, header, functionNames, pclnTable, moduleData.text);
+};
+
+export const parseGoFunctionTable = async (
+  image: GoRuntimeAddressSpace, header: PcHeader,
+  functionNames: Pick<GoSlice, "address" | "length">,
+  pclnTable: Pick<GoSlice, "address" | "length">, text: bigint
+): Promise<GoRuntimeFunction[] | null> => {
+  if (functionNames.length > GO_RUNTIME_MAX_TABLE_BYTE_LENGTH ||
+    pclnTable.length > GO_RUNTIME_MAX_TABLE_BYTE_LENGTH) return null;
   const names = await readExact(image, functionNames.address, functionNames.length);
   if (!names) return null;
   const fieldSize = header.layout.functabFieldSize(image.pointerSize);
   const tableSize = header.functionCount * fieldSize * 2 + fieldSize;
+  if (tableSize > pclnTable.length) return null;
   const table = await readExact(image, pclnTable.address, tableSize);
   if (!table) return null;
-  return parseGoFunctionRows(image, header, moduleData, names, toView(table), fieldSize);
+  return parseGoFunctionRows(image, header, pclnTable, text, names, toView(table));
 };
 
-const parseGoFunctionRows = async (
+async function readFunctionNameOffset(image: GoRuntimeAddressSpace, header: PcHeader,
+  pclnTable: Pick<GoSlice, "address" | "length">,
+  functionOffset: bigint, entryValue: bigint): Promise<number | null> {
+  const namePosition = header.layout.relativeFunctionEntries ? 4 : image.pointerSize;
+  if (functionOffset > BigInt(pclnTable.length - namePosition - 4)) return null;
+  const metadata = await readExact(image, pclnTable.address + functionOffset, namePosition + 4);
+  if (!metadata) return null;
+  const view = toView(metadata);
+  if ((header.layout.relativeFunctionEntries ? BigInt(view.getUint32(0, true)) :
+    readWord(view, 0, image.pointerSize)) !== entryValue) return null;
+  return view.getInt32(namePosition, true);
+}
+
+async function parseGoFunctionRows(
   image: GoRuntimeAddressSpace,
   header: PcHeader,
-  moduleData: ModuleDataPrefix,
-  names: Uint8Array,
-  table: DataView,
-  fieldSize: number
-): Promise<GoRuntimeFunction[] | null> => {
-  const pclnTable = moduleData.slices[4];
-  if (!pclnTable) return null;
+  pclnTable: Pick<GoSlice, "address" | "length">,
+  text: bigint, names: Uint8Array, table: DataView
+): Promise<GoRuntimeFunction[] | null> {
+  const fieldSize = header.layout.functabFieldSize(image.pointerSize);
   const functions: GoRuntimeFunction[] = [];
   for (let index = 0; index < header.functionCount; index += 1) {
     const pairOffset = index * fieldSize * 2;
     const entryValue = readFunctionEntry(table, pairOffset, fieldSize);
-    const nextValue = readFunctionEntry(table, pairOffset + fieldSize * 2, fieldSize);
     const functionOffset = readFunctionEntry(table, pairOffset + fieldSize, fieldSize);
-    const start = functionAddress(header, moduleData.text, entryValue);
-    const end = functionAddress(header, moduleData.text, nextValue);
-    if (start >= end || functionOffset > BigInt(pclnTable.length - 8)) return null;
-    const namePosition = header.layout.relativeFunctionEntries ? 4 : image.pointerSize;
-    const metadata = await readExact(image, pclnTable.address + functionOffset, namePosition + 4);
-    if (!metadata) return null;
-    const metadataView = toView(metadata);
-    const metadataEntry = header.layout.relativeFunctionEntries
-      ? BigInt(metadataView.getUint32(0, true))
-      : readWord(metadataView, 0, image.pointerSize);
-    const name = decodeNullTerminated(names, metadataView.getInt32(namePosition, true))?.text;
-    if (metadataEntry !== entryValue || name == null) return null;
+    const start = functionAddress(header, text, entryValue);
+    const end = functionAddress(header, text,
+      readFunctionEntry(table, pairOffset + fieldSize * 2, fieldSize));
+    if (start >= end) return null;
+    if (functionOffset < BigInt(table.byteLength)) return null;
+    const nameOffset = await readFunctionNameOffset(image, header, pclnTable, functionOffset, entryValue);
+    if (nameOffset == null) return null;
+    const name = decodeNullTerminated(names, nameOffset)?.text;
+    if (name == null) return null;
     if (!image.isExecutableRange(start, end)) return null;
     functions.push({ name, start, end });
   }
   return functions;
-};
+}

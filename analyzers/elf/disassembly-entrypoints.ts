@@ -92,6 +92,7 @@ const addElfHeaderEntrypoint = (
 ): void => {
   if (requestedEntrypointVaddr === 0n) return;
   const stats: ElfDisassemblySeedSourceStats = createSeedStats("ELF header entry point");
+  stats.candidates = 1;
   const result = addSeedVaddr(requestedEntrypointVaddr);
   if (result === "added") stats.added += 1;
   else if (result === "duplicate") stats.skippedDuplicate += 1;

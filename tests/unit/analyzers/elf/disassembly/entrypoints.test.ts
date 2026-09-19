@@ -64,6 +64,7 @@ void test("NativeAOT initializer seeds use the ELF load base and deduplicate", a
   );
 
   assert.deepEqual(seeds?.entrypoints, expectedVaddrs);
+  assert.equal(seeds?.seedSummary.sources[0]?.candidates, 1);
   assert.equal(seeds?.seedSummary.sources[1]?.source, "NativeAOT Module initializers");
   assert.equal(seeds?.seedSummary.sources[1]?.skippedDuplicate, 1);
 });

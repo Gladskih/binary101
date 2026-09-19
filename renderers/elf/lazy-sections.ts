@@ -88,7 +88,7 @@ const addMetadata = (elf: ElfParseResult, add: AddSection): void => {
 
 const addBuildMetadata = (elf: ElfParseResult, add: AddSection): void => {
   if (elf.nativeAot) add("native-aot", "NativeAOT metadata", renderElfNativeAot);
-  if (elf.comment || elf.debugLink || elf.dwarf) add("debug", "Build / debug", renderElfDebug);
+  if (elf.comment || elf.debugLink || elf.dwarf || elf.goBuildInfo) add("debug", "Build / debug", renderElfDebug);
 };
 
 export const renderElfLazy = (elf: ElfParseResult | null): string => elf

@@ -15,6 +15,7 @@ import type { ElfGnuProperty } from "./gnu-properties.js";
 import type { ElfSectionGroup } from "./section-groups.js";
 import type { ElfUnwindSection } from "./unwind-types.js";
 import type { ElfHashTable } from "./hash-types.js";
+import type { GoBuildInfo } from "./go-build-info.js";
 
 export type ElfOptionEntry = [number, string, string?];
 
@@ -76,6 +77,7 @@ export interface ElfSectionHeader {
 }
 
 export interface ElfParseResult {
+  goBuildInfo?: GoBuildInfo;
   lsdas?: ElfLsda[];
   armEhabi?: ArmEhabiTable[];
   mips?: ElfMipsMetadata[];

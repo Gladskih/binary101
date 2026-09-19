@@ -7,6 +7,7 @@ import type { ElfDisassemblySeedGroup } from "./disassembly-seeds-types.js";
 import { collectElfDisassemblySeedsFromSections } from "./disassembly-seeds-sections.js";
 import { collectElfDisassemblySeedsFromDynamic } from "./disassembly-seeds-dynamic.js";
 import { collectElfDisassemblySeedsFromEhFrameHdr } from "./disassembly-seeds-eh-frame-hdr.js";
+import { collectGoFunctionSeeds } from "./go-function-seeds.js";
 
 export async function collectElfDisassemblySeedGroups(opts: {
   file: File;
@@ -28,6 +29,7 @@ export async function collectElfDisassemblySeedGroups(opts: {
     }
   }
   groups.push(
+    ...(await collectGoFunctionSeeds(opts.file, opts.sections, opts.issues)),
     ...(await collectElfDisassemblySeedsFromDynamic(opts).catch(() => [])),
     ...(await collectElfDisassemblySeedsFromSections(opts).catch(() => [])),
     ...(await collectElfDisassemblySeedsFromEhFrameHdr(opts).catch(() => []))

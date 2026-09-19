@@ -36,24 +36,33 @@ const renderDebugLink = (debugLink: ElfDebugLinkInfo, littleEndian: boolean): st
   return parts.join("");
 };
 
+function renderGoBuildInfo(info: NonNullable<ElfParseResult["goBuildInfo"]>, out: string[]): void {
+  out.push(`<p>Go toolchain: ${escapeHtml(info.version)}</p>`);
+  out.push(`<div class="tableWrap"><table class="table"><thead><tr>` +
+    `<th>Record</th><th>Module / setting</th><th>Version / details</th></tr></thead><tbody>`);
+  out.push(info.moduleInfo.trim().split("\n").filter(Boolean).map(line => {
+    const [kind, name, ...details] = line.split("\t");
+    return `<tr><td>${escapeHtml(kind ?? "")}</td><td>${escapeHtml(name ?? "")}</td>` +
+      `<td>${escapeHtml(details.join(" "))}</td></tr>`;
+  }).join(""));
+  out.push(`</tbody></table></div>`);
+}
+
 export function renderElfDebug(elf: ElfParseResult, out: string[]): void {
   const comment = elf.comment;
   const debugLink = elf.debugLink;
   const dwarf = elf.dwarf;
-  if (!comment && !debugLink && !dwarf) return;
-
+  if (![comment, debugLink, dwarf, elf.goBuildInfo].some(Boolean)) return;
   out.push(renderElfSectionStart(`Build / debug`));
   out.push(`<div class="smallNote">Non-code metadata useful for attribution and external debug info.</div>`);
-
+  if (elf.goBuildInfo) renderGoBuildInfo(elf.goBuildInfo, out);
   if (comment) {
     out.push(renderComment(comment));
     out.push(renderCommentIssues(comment));
   }
-
   if (debugLink) {
     out.push(renderDebugLink(debugLink, elf.littleEndian));
   }
-
   if (dwarf) {
     out.push(`<details style="margin-top:.35rem"><summary style="cursor:pointer">`);
     out.push(
@@ -63,7 +72,5 @@ export function renderElfDebug(elf: ElfParseResult, out: string[]): void {
     out.push(renderDwarfAnalysis(dwarf));
     out.push(`</details>`);
   }
-
   out.push(renderElfSectionEnd());
 }
-

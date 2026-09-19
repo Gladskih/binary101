@@ -23,6 +23,7 @@ import { parseElfTlsInfo } from "./tls.js";
 import { parseElfUnwind } from "./unwind.js";
 import { parseElfLsda } from "./lsda.js";
 import { parseElfArmEhabi } from "./arm-ehabi.js";
+import { parseGoBuildInfo } from "./go-build-info.js";
 
 const retainMetadata = <Key extends keyof ElfParseResult>(result: ElfParseResult,
   key: Key, value: ElfParseResult[Key] | null): void => {
@@ -60,6 +61,7 @@ const parseLinkingMetadata = async (file: File, result: ElfParseResult, layout: 
 };
 
 const parseAuxiliaryMetadata = async (file: File, result: ElfParseResult): Promise<void> => {
+  retainMetadata(result, "goBuildInfo", await parseGoBuildInfo(file, result.sections, result.issues));
   const [interpreter, notes, comment, debugLink, dwarf] = await Promise.all([
     parseElfInterpreter(file, result.programHeaders),
     parseElfNotes({ file, ...result, ...(result.header.type === 4 ? { coreMachine: result.header.machine } : {}) }),

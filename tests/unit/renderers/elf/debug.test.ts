@@ -22,6 +22,17 @@ void test("renderElfDebug renders .comment and .gnu_debuglink", async () => {
   assert.ok(html.includes(expected.debugLinkFileName));
 });
 
+void test("renders escaped Go version and module records", async () => {
+  const elf = expectDefined(await parseElf(createElfMetadataFile().file));
+  elf.goBuildInfo = { version: "go<version>", moduleInfo: "path\t<module>\nmod\tmain\tv1\thash\n" };
+  const out: string[] = [];
+  renderElfDebug(elf, out);
+  assert.match(out.join(""), /Go toolchain: go&lt;version>/);
+  assert.match(out.join(""), /<td>path<\/td><td>&lt;module><\/td>/);
+  assert.match(out.join(""), /<td>v1 hash<\/td>/);
+  assert.doesNotMatch(out.join(""), /<module>|<version>/);
+});
+
 void test("renderElfDebug renders common DWARF analysis", async () => {
   const { file } = createElfMetadataFile();
   const elf = expectDefined(await parseElf(file));
