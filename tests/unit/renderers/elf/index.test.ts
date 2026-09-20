@@ -113,6 +113,7 @@ void test("renderElf (ELF) renders collapsible program/section tables with hints
   assert.ok(html.includes("1 (.dynstr)"));
   assert.ok(html.includes("2 (symbol index after last local symbol)"));
   assert.ok(html.includes("24 bytes"));
+  assert.ok(!html.includes("Unknown ("));
 });
 
 void test("places the collapsed instruction panel before collapsed ELF metadata", () => {
@@ -177,3 +178,23 @@ for (const [code, label] of [[2, "SPARC"], [22, "S390"], [83, "AVR"],
     assert.ok(machineHtml.endsWith("</details>"));
   });
 }
+
+void test("ELF header preserves unknown class, data and object type codes", () => {
+  const elf = createRendererElfSubject();
+  // gABI reserves class/data 255 and e_type 5; retain the exact unrecognized codes.
+  // https://gabi.xinuos.com/elf/02-eheader.html
+  elf.ident.classByte = 255;
+  elf.ident.dataByte = 255;
+  elf.header.type = 5;
+  const out: string[] = [];
+
+  renderHeader(elf, out);
+
+  const html = out.join("");
+  assert.match(/Class<\/dt><dd>([\s\S]*?)<\/dd>/.exec(html)?.[1] ?? "",
+    /class="opt sel" data-accessible-tooltip[^>]*>Unknown \(255\)<\/span>/);
+  assert.match(/Data<\/dt><dd>([\s\S]*?)<\/dd>/.exec(html)?.[1] ?? "",
+    /class="opt sel" data-accessible-tooltip[^>]*>Unknown \(255\)<\/span>/);
+  assert.match(/Type<\/dt><dd>([\s\S]*?)<\/dd>/.exec(html)?.[1] ?? "",
+    /class="opt sel" data-accessible-tooltip[^>]*>Unknown \(5\)<\/span>/);
+});

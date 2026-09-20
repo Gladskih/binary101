@@ -132,13 +132,13 @@ export function renderHeader(elf: ElfParseResult, out: string[]): void {
   const h = elf.header;
   out.push(renderElfSectionStart(`ELF header`));
   out.push(`<dl>`);
-  out.push(renderDefinitionRow("Class", renderOptionChips(elf.ident.classByte, ELF_CLASS)));
-  out.push(renderDefinitionRow("Data", renderOptionChips(elf.ident.dataByte, ELF_DATA)));
+  out.push(renderDefinitionRow("Class", renderHeaderOptions(elf.ident.classByte, ELF_CLASS)));
+  out.push(renderDefinitionRow("Data", renderHeaderOptions(elf.ident.dataByte, ELF_DATA)));
   out.push(renderDefinitionRow("OS ABI", renderOsAbi(elf.ident.osabi),
     "EI_OSABI identifies the ABI. Chip tooltips show its numeric code, not the ABI version."));
   out.push(renderDefinitionRow("ABI version", escapeHtml(elf.ident.abiVersion),
     "EI_ABIVERSION is a separate version byte interpreted according to EI_OSABI."));
-  out.push(renderDefinitionRow("Type", renderOptionChips(h.type, ELF_TYPE)));
+  out.push(renderDefinitionRow("Type", renderHeaderOptions(h.type, ELF_TYPE)));
   out.push(renderDefinitionRow("Machine", renderMachine(h.machine)));
   out.push(renderDefinitionRow("Entry", formatElfHex(h.entry)));
   const phText = `${h.phnum} entries @ ${formatElfHex(h.phoff)}`;
@@ -280,4 +280,10 @@ function renderMachine(code: number): string {
     [code, `Unknown machine (${code})`, "Unassigned or vendor-specific e_machine value."]]) +
     `<details><summary>Other machine values</summary>` +
     renderOptionChips(code, ELF_MACHINE.filter(([value]) => value !== code)) + `</details>`;
+}
+
+function renderHeaderOptions(code: number, options: ElfOptionEntry[]): string {
+  if (options.some(([value]) => value === code)) return renderOptionChips(code, options);
+  return renderOptionChips(code, [...options, [code, `Unknown (${code})`,
+    "This numeric code is not in the recognized values for this field."]]);
 }
