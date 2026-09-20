@@ -46,7 +46,8 @@ export const createElfRelocationTableModel = (elf: ElfParseResult): PagedSortabl
       return entry ? { cells: values.map((read, column) => {
         const value = read(entry);
         return {
-          html: escapeHtml(typeof value === "bigint" && column !== 5 ? formatElfHex(value) : value),
+          html: escapeHtml(typeof value === "bigint" ?
+            (value < 0n ? `-0x${(-value).toString(16)}` : formatElfHex(value)) : value),
           sortValue: String(value), className: [2, 5, 7].includes(column) ? "peNumeric" : ""
         };
       }) } : null;

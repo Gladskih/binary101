@@ -7,6 +7,7 @@ import {
   setFileSubtypeLabel
 } from "../../../ui/file-type-label.js";
 import type { ParseForUiResult } from "../../../analyzers/index.js";
+import { relocationFixture } from "../../fixtures/elf-relocations.js";
 
 void test("file type labels add PE help only for PE formats", () => {
   const element = { textContent: "" } as unknown as HTMLElement;
@@ -23,6 +24,25 @@ void test("file type labels add PE help only for PE formats", () => {
   setFileBinaryTypeLabel(element, "PE32 executable", (_, message) => { messages.push(message); });
   assert.equal(messages.length, 1);
   assert.match(messages[0] ?? "", /Portable Executable/);
+});
+
+void test("ELF subtypes distinguish PIE from unmarked shared objects", () => {
+  const elf = relocationFixture().elf;
+  elf.header.type = 3;
+  const term = { hidden: true } as HTMLElement;
+  const detail = { hidden: true, textContent: "" } as HTMLElement;
+  setFileSubtypeLabel(term, detail, { analyzer: "elf", parsed: elf });
+  assert.equal(term.hidden, true);
+  // DF_1_PIE from glibc elf.h; ET_DYN alone cannot distinguish executables.
+  elf.dynamic = { needed: [], flags1: 0x08000000, soname: null, rpath: null, runpath: null,
+    init: null, fini: null, preinitArray: null, initArray: null, finiArray: null,
+    flags: null, issues: [] };
+  setFileSubtypeLabel(term, detail, { analyzer: "elf", parsed: elf });
+  assert.equal(term.hidden, false);
+  assert.equal(detail.textContent, "Position-independent executable (PIE)");
+  elf.header.type = 2;
+  setFileSubtypeLabel(term, detail, { analyzer: "elf", parsed: elf });
+  assert.equal(term.hidden, true);
 });
 
 void test("file type labels show parsed PE subtypes separately", () => {

@@ -27,6 +27,7 @@ void test("renders concise escaped cells, precise sort values and relocation war
   assert.doesNotMatch(out.join(""), /<target>|<rela>/);
   assert.equal(model.sortValueAt(0, 2), "8");
   assert.equal(model.sortValueAt(0, 5), "-4");
+  assert.equal(model.rowAt(0)?.cells[5]?.html, "-0x4");
   assert.equal(model.sortValueAt(0, 7), "520");
   assert.equal(model.sortValueAt(0, 99), "");
   assert.equal(model.sortValueAt(99, 0), "");

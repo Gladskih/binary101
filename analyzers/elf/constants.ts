@@ -25,7 +25,7 @@ export const ELF_TYPE: ElfOptionEntry[] = [
   [0, "No type", "Unspecified."],
   [1, "Relocatable", "Object file used for linking."],
   [2, "Executable", "Loadable image with an entry point."],
-  [3, "Shared object", "Position-independent library."],
+  [3, "Shared object / PIE", "ET_DYN: shared library or position-independent executable."],
   [4, "Core dump", "Process image captured after a crash."]
 ];
 

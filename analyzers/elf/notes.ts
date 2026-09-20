@@ -4,6 +4,8 @@ import { readAsciiString } from "../../binary-utils.js";
 import { createFileRangeReader, type FileRangeReader } from "../file-range-reader.js";
 import type { ElfNoteEntry, ElfNotesInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import { decodeElfNotePayload } from "./note-payload.js";
+import type { ElfByteOrder } from "./binary-layout-types.js";
+import { decodeBuildAttributeNote } from "./build-attribute-note.js";
 
 const toSafeIndex = (value: bigint, label: string, issues: string[]): number | null => {
   const num = Number(value);
@@ -32,7 +34,8 @@ const noteBounds = (view: DataView, offset: number, littleEndian: boolean,
 
 const parseNotesFromRange = async (reader: FileRangeReader, littleEndian: boolean,
   range: ReturnType<typeof noteRanges>[number], issues: string[], wordSize: 4 | 8,
-  coreMachine: number | undefined, seenNotes: Set<string>): Promise<ElfNoteEntry[]> => {
+  coreMachine: number | undefined, seenNotes: Set<string>,
+  attributeRanges: Map<number, string>): Promise<ElfNoteEntry[]> => {
   const { source } = range;
   const alignment = noteAlignment(range.align, source, issues);
   if (alignment == null) return [];
@@ -59,7 +62,8 @@ const parseNotesFromRange = async (reader: FileRangeReader, littleEndian: boolea
       nameBytes.byteLength), 0, nameBytes.length);
     const entry: ElfNoteEntry = { source, name, type, descSize: desc.length,
       typeName: null, description: null, value: null };
-    decodeElfNotePayload(entry, desc, wordSize, littleEndian ? "little" : "big", coreMachine, issues);
+    decodeNote(entry, nameBytes, desc, wordSize, littleEndian ? "little" : "big",
+      coreMachine, attributeRanges, issues);
     entries.push(entry);
   }
   return entries;
@@ -114,8 +118,18 @@ export async function parseElfNotes(opts: {
     const reader = readNoteRange(opts.file, range, issues);
     if (!reader) continue;
     const parsed = await parseNotesFromRange(reader, opts.littleEndian, range, issues,
-      opts.is64 ? 8 : 4, opts.coreMachine, seenNotes);
+      opts.is64 ? 8 : 4, opts.coreMachine, seenNotes, new Map());
     for (const entry of parsed) entries.push(entry);
   }
   return { entries, issues };
+}
+
+function decodeNote(entry: ElfNoteEntry, nameBytes: Uint8Array, desc: Uint8Array,
+  wordSize: 4 | 8, order: ElfByteOrder, coreMachine: number | undefined,
+  attributeRanges: Map<number, string>, issues: string[]): void {
+  if ((entry.type === 0x100 || entry.type === 0x101) &&
+    (entry.name.startsWith("GA") || /^[*$+!]/.test(entry.name))) {
+    decodeBuildAttributeNote(entry, nameBytes, desc, order,
+      attributeRanges, issues);
+  } else decodeElfNotePayload(entry, desc, wordSize, order, coreMachine, issues);
 }

@@ -4,6 +4,7 @@ import type { ElfParseResult } from "../../analyzers/elf/types.js";
 import type { PagedSortableTableModel } from "../paged-sortable-table.js";
 import { getNativeAotReflectionTypeTableModel } from "../native-aot/reflection.js";
 import { createElfRelocationTableModel } from "./relocations.js";
+import { createElfNotesTableModel } from "./notes.js";
 import { createElfSymbolTableModel } from "./symbol-tables.js";
 import { createElfUnwindTableModel } from "./unwind.js";
 import { createElfHashTableModel } from "./hash-tables.js";
@@ -41,7 +42,7 @@ const tableResolvers: TableResolver[] = [
   },
   (elf, id) => {
     const table = elf.symbolTables?.find(table => id === `elf-symbols-${table.sectionIndex}`);
-    return table ? createElfSymbolTableModel(table) : null;
+    return table ? createElfSymbolTableModel(table, elf.sections) : null;
   },
   (elf, id) => {
     const section = elf.attributes?.find(section => id === `elf-attributes-${section.sectionIndex}`);
@@ -53,11 +54,14 @@ const tableResolvers: TableResolver[] = [
   },
   (elf, id) => {
     const table = elf.hashTables?.find(table => id === `elf-hash-${table.kind}-${table.offset}`);
-    return table ? createElfHashTableModel(table) : null;
+    return table ? createElfHashTableModel(table, new Map(
+      [...(elf.dynSymbols?.importSymbols ?? []), ...(elf.dynSymbols?.exportSymbols ?? [])]
+        .map(symbol => [symbol.index, symbol.name]))) : null;
   }
 ];
 
 export const getElfPagedTableModel: TableResolver = (elf, tableId) => {
+  if (tableId === "elf-notes" && elf.notes) return createElfNotesTableModel(elf.notes);
   for (const resolve of tableResolvers) {
     const table = resolve(elf, tableId);
     if (table) return table;

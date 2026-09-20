@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { createElfSymbolTableModel, renderElfSymbolTables } from
   "../../../../renderers/elf/symbol-tables.js";
 import { getElfPagedTableModel } from "../../../../renderers/elf/paged-tables.js";
-import { relocationFixture } from "../../../fixtures/elf-relocations.js";
+import { relocationFixture, relocationSection } from "../../../fixtures/elf-relocations.js";
 import { parseElfSymbolTables } from "../../../../analyzers/elf/symbol-tables.js";
 
 void test("renders static symbols and supports paging and sorting", async () => {
@@ -20,6 +20,15 @@ void test("renders static symbols and supports paging and sorting", async () => 
   renderElfSymbolTables(fixture.elf, out);
   assert.match(out.join(""), /target/);
   assert.match(out.join(""), /Symbols:/);
+});
+
+void test("resolves section symbols and escapes section names", () => {
+  const model = createElfSymbolTableModel({ sectionIndex: 2, issues: [], entries: [
+    // STT_SECTION=3 uses its section's name when st_name is empty (gABI 5).
+    { name: "", value: 0n, size: 0n, info: 3, other: 0, sectionIndex: 1 }
+  ] }, [relocationSection(1, { name: "<text>" })]);
+  assert.equal(model.rowAt(0)?.cells[1]?.html, "&lt;text>");
+  assert.equal(model.sortValueAt(0, 7), "1 (<text>)");
 });
 
 void test("renders unknown symbol encodings and escapes names and warnings", () => {

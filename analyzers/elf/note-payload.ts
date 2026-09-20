@@ -4,6 +4,7 @@ import type { ElfByteOrder } from "./binary-layout-types.js";
 import { ELF_INTEGER_READERS } from "./byte-order.js";
 import { parseElfGnuProperties } from "./gnu-properties.js";
 import { elfCoreNoteName, parseElfCoreNote } from "./core-notes.js";
+import { decodeSystemTapNote } from "./systemtap-note.js";
 
 const abiVersion = (bytes: Uint8Array, order: ElfByteOrder): string | null => {
   if (bytes.length < 16) return null;
@@ -30,15 +31,34 @@ const gnuNotes: Readonly<Record<number, {
 
 export const decodeElfNotePayload = (entry: ElfNoteEntry, bytes: Uint8Array,
   wordSize: 4 | 8, order: ElfByteOrder, coreMachine: number | undefined, issues: string[]): void => {
+  // Go's build ID uses owner Go and type 4, not GNU's type-4 gold version.
+  // https://go.dev/src/cmd/internal/buildid/note.go
+  if (entry.name === "Go" && entry.type === 4) {
+    entry.typeName = "GO_BUILD_ID";
+    entry.description = "Go build ID";
+    entry.value = new TextDecoder().decode(bytes);
+    return;
+  }
+  if (entry.name === "stapsdt" && entry.type === 3) {
+    entry.typeName = "NT_STAPSDT";
+    entry.description = "SystemTap probe";
+    entry.value = decodeSystemTapNote(bytes, wordSize, order, issues);
+    return;
+  }
   if (coreMachine != null && (entry.name === "CORE" || entry.name === "LINUX")) {
     entry.typeName = elfCoreNoteName(entry.type);
     entry.core = parseElfCoreNote(bytes, entry.type, wordSize, order, coreMachine);
     return;
   }
+  decodeGnuNote(entry, bytes, wordSize, order, issues);
+};
+
+function decodeGnuNote(entry: ElfNoteEntry, bytes: Uint8Array, wordSize: 4 | 8,
+  order: ElfByteOrder, issues: string[]): void {
   const descriptor = entry.name === "GNU" ? gnuNotes[entry.type] : undefined;
   if (!descriptor) return;
   entry.typeName = descriptor.name;
   entry.description = descriptor.description;
   entry.value = descriptor.value?.(bytes, order) ?? null;
   if (descriptor.properties) entry.properties = descriptor.properties(bytes, wordSize, order, issues);
-};
+}

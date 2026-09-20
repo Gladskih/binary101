@@ -133,9 +133,16 @@ export function renderHeader(elf: ElfParseResult, out: string[]): void {
   out.push(`<dl>`);
   out.push(renderDefinitionRow("Class", renderOptionChips(elf.ident.classByte, ELF_CLASS)));
   out.push(renderDefinitionRow("Data", renderOptionChips(elf.ident.dataByte, ELF_DATA)));
-  out.push(renderDefinitionRow("OS ABI", escapeHtml(elf.ident.osabi)));
+  out.push(renderDefinitionRow("OS ABI", escapeHtml(
+    ({ 0: "System V (0)", 3: "GNU/Linux (3)" } as Record<number, string>)[elf.ident.osabi]
+      ?? String(elf.ident.osabi))));
   out.push(renderDefinitionRow("ABI version", escapeHtml(elf.ident.abiVersion)));
   out.push(renderDefinitionRow("Type", renderOptionChips(h.type, ELF_TYPE)));
+  // DF_1_PIE explicitly identifies an executable; ET_DYN alone is ambiguous.
+  // https://github.com/bminor/glibc/blob/master/elf/elf.h
+  if (h.type === 3 && ((elf.dynamic?.flags1 ?? 0) & 0x08000000) !== 0) {
+    out.push(renderDefinitionRow("Object role", "Position-independent executable (PIE)"));
+  }
   out.push(renderDefinitionRow("Machine", renderOptionChips(h.machine, ELF_MACHINE)));
   out.push(renderDefinitionRow("Entry", formatElfHex(h.entry)));
   const phText = `${h.phnum} entries @ ${formatElfHex(h.phoff)}`;
@@ -182,6 +189,8 @@ export function renderProgramHeaders(elf: ElfParseResult, out: string[]): void {
 export function renderSectionHeaders(elf: ElfParseResult, out: string[]): void {
   if (!elf.sections?.length) return;
   out.push(renderElfSectionStart(`Section headers (${elf.sections.length})`));
+  out.push(`<p class="smallNote">SHT_NOBITS sizes describe memory, not stored file bytes. ` +
+    `A large .bss section therefore need not increase the file size.</p>`);
   out.push(
     `<div class="smallNote"><span class="mono">sh_link</span> is section-type specific, ` +
       `<span class="mono">sh_info</span> meaning depends on section type, and ` +

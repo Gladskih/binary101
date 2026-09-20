@@ -48,8 +48,10 @@ export const createElfUnwindTableModel = (section: ElfUnwindSection): PagedSorta
 export const renderElfUnwind = (elf: ElfParseResult, out: string[], onlyIndex?: number): void => {
   for (const [index, section] of (elf.unwind ?? []).entries()) {
     if (onlyIndex != null && index !== onlyIndex) continue;
-    const name = elf.sections.find(item => item.index === section.sectionIndex)?.name ?? "Unwind";
-    out.push(renderElfSectionStart(`${name}: call frame information`));
+    out.push(renderElfSectionStart(`${unwindSectionName(elf, section.sectionIndex)}: call frame information`));
+    // https://github.com/ARM-software/abi-aa/blob/main/aadwarf64/aadwarf64.rst#dwarf-register-names
+    if (elf.header.machine === 183) out.push(`<p class="smallNote">AArch64 DWARF registers: ` +
+      `r0–r30 = x0–x30; r30 = link register; r31 = sp; r64–r95 = v0–v31.</p>`);
     out.push(`<p class="smallNote">CFI operands are encoded values; offsets use the CIE alignment factors. ` +
       `Indirect pointers identify pointer storage. DWARF expressions are shown as bytes.</p>`);
     if (section.cies.length) {
@@ -70,3 +72,7 @@ export const renderElfUnwind = (elf: ElfParseResult, out: string[], onlyIndex?: 
     out.push(renderElfSectionEnd());
   }
 };
+
+function unwindSectionName(elf: ElfParseResult, index: number): string {
+  return elf.sections.find(item => item.index === index)?.name ?? "Unwind";
+}

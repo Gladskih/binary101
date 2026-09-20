@@ -24,7 +24,7 @@ const probeElf = (dv: DataView): string | null => {
     type === 2
       ? "executable"
       : type === 3
-        ? "shared object"
+        ? "shared object or PIE"
         : type === 1
           ? "relocatable"
           : `type=${type.toString(16)}`;

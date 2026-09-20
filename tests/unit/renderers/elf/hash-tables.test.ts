@@ -19,3 +19,13 @@ void test("renders all hash arrays with page model and escaped warnings", () => 
   assert.match(out.join(""), /Bloom/);
   assert.match(out.join(""), /&lt;invalid>/);
 });
+
+void test("explains System V links using symbol names and distinguishes zero values", () => {
+  const model = createElfHashTableModel({ kind: "sysv", offset: 0,
+    buckets: [0, 1, 2], chains: [0], issues: [] }, new Map([[1, "<symbol>"]]));
+  assert.equal(model.sortValueAt(0, 3), "Empty bucket");
+  assert.equal(model.rowAt(1)?.cells[3]?.html, "Symbol #1 &lt;symbol>");
+  assert.equal(model.sortValueAt(2, 3), "Symbol #2 (name unavailable)");
+  assert.equal(model.sortValueAt(3, 3), "End of chain");
+  assert.equal(model.sortValueAt(4, 3), "");
+});

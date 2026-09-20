@@ -30,7 +30,7 @@ const renderSymbolTable = (title: string, symbols: ElfDynamicSymbol[], elf: ElfP
       caption
     )}</summary>` +
       `<div class="tableWrap"><table class="table" style="margin-top:.35rem"><thead><tr>` +
-      `<th>Name</th><th>Bind</th><th>Type</th><th>Vis</th><th>Value</th>` +
+      `<th>Name</th><th>Bind</th><th title="Symbol type recorded in ELF, not inferred from its name.">ELF type</th><th>Vis</th><th>Value</th>` +
       `</tr></thead><tbody>${rows}</tbody></table></div></details>`
   );
 };

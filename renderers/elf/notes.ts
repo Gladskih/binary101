@@ -1,4 +1,6 @@
 "use strict";
+import { renderAutoPagedSortableTable } from "../paged-sortable-table.js";
+import type { PagedSortableTableModel } from "../../ui/paged-sortable-table-state.js";
 import { renderElfGnuProperties } from "./gnu-properties.js";
 import { renderElfCoreNotes } from "./core-notes.js";
 
@@ -13,34 +15,34 @@ const findFirst = (entries: ElfNoteEntry[], predicate: (entry: ElfNoteEntry) => 
   return null;
 };
 
-const renderNotesTable = (notes: ElfNotesInfo): string => {
-  if (!notes.entries.length) return `<div class="smallNote dim">No note entries parsed.</div>`;
-  const limit = 2000;
-  const slice = notes.entries.slice(0, limit);
-  const truncated = notes.entries.length > limit;
-  const summary = truncated ? `Show notes (${limit} of ${notes.entries.length})` : `Show notes (${notes.entries.length})`;
+const noteValues = (entry: ElfNoteEntry): string[] => [
+  entry.source, entry.name, entry.typeName ?? `0x${entry.type.toString(16)}`,
+  entry.description ?? "—", entry.value ?? "—", String(entry.descSize)
+];
 
-  const rows = slice
-    .map(entry => {
-      const src = escapeHtml(entry.source);
-      const name = escapeHtml(entry.name || "");
-      const typeLabel = entry.typeName ? escapeHtml(entry.typeName) : escapeHtml(`0x${entry.type.toString(16)}`);
-      const desc = entry.description ? escapeHtml(entry.description) : "<span class=\"dim\">-</span>";
-      const value = entry.value ? escapeHtml(entry.value) : "<span class=\"dim\">-</span>";
-      const size = escapeHtml(String(entry.descSize));
-      return `<tr><td>${src}</td><td>${name}</td><td>${typeLabel}</td><td>${desc}</td><td>${value}</td><td>${size}</td></tr>`;
-    })
-    .join("");
+function visibleText(value: string): string {
+  return Array.from(value, character => {
+    const code = character.charCodeAt(0);
+    return code < 32 || (code >= 127 && code <= 159)
+      ? `\\x${code.toString(16).padStart(2, "0")}` : character;
+  }).join("");
+}
 
-  return (
-    `<details style="margin-top:.35rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">${escapeHtml(
-      summary
-    )}</summary>` +
-      `<div class="tableWrap"><table class="table" style="margin-top:.35rem"><thead><tr>` +
-      `<th>Source</th><th>Name</th><th>Type</th><th>Description</th><th>Value</th><th>DescSz</th>` +
-      `</tr></thead><tbody>${rows}</tbody></table></div></details>`
-  );
-};
+export const createElfNotesTableModel = (notes: ElfNotesInfo): PagedSortableTableModel => ({
+  id: "elf-notes", pageSize: 100, rowCount: notes.entries.length,
+  columns: ["Source", "Owner / attribute", "Type", "Description", "Value", "Descriptor bytes"]
+    .map((label, index) => ({ label,
+      className: index === 5 ? "peNumeric elfNote__value" : "elfNote__value" })),
+  rowAt: index => {
+    const entry = notes.entries[index];
+    return entry ? { cells: noteValues(entry).map((value, column) => ({
+      html: escapeHtml(visibleText(value)), sortValue: value,
+      className: column === 5 ? "peNumeric" : "elfNote__value"
+    })) } : null;
+  },
+  sortValueAt: (index, column) => notes.entries[index]
+    ? noteValues(notes.entries[index]!)[column] ?? "" : ""
+});
 
 const renderIssues = (notes: ElfNotesInfo): string => {
   if (!notes.issues?.length) return "";
@@ -62,7 +64,7 @@ export function renderElfNotes(elf: ElfParseResult, out: string[]): void {
   if (buildId) out.push(renderDefinitionRow("Build ID", `<span class="mono">${escapeHtml(buildId.value || "")}</span>`));
   if (abiTag) out.push(renderDefinitionRow("ABI tag", escapeHtml(abiTag.value || "")));
   out.push(`</dl>`);
-  out.push(renderNotesTable(notes));
+  out.push(renderAutoPagedSortableTable(createElfNotesTableModel(notes)));
   renderElfGnuProperties(elf, out);
   renderElfCoreNotes(elf, out);
   out.push(renderIssues(notes));

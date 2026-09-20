@@ -15,15 +15,28 @@ const hashRow = (table: ElfHashTable, index: number): string[] => {
     ? ["Bloom word", String(bloom), `0x${table.bloom[bloom]!.toString(16)}`] : [];
 };
 
-export const createElfHashTableModel = (table: ElfHashTable): PagedSortableTableModel => ({
+const hashMeaning = (table: ElfHashTable, cells: string[], symbols: Map<number, string>): string => {
+  if (!cells.length || table.kind !== "sysv") return "";
+  const target = Number(cells[2]);
+  if (target === 0) return cells[0] === "Bucket" ? "Empty bucket" : "End of chain";
+  return "Symbol #" + target + " " + (symbols.get(target) ?? "(name unavailable)");
+};
+
+export const createElfHashTableModel = (table: ElfHashTable,
+  symbols: Map<number, string> = new Map()): PagedSortableTableModel => ({
   id: `elf-hash-${table.kind}-${table.offset}`, pageSize: 100,
   rowCount: table.buckets.length + table.chains.length + (table.kind === "gnu" ? table.bloom.length : 0),
-  columns: ["Array", "Index", "Value"].map(label => ({ label, className: "peNumeric" })),
+  columns: ["Array", "Index", "Value", "Meaning"].map((label, index) => ({
+    label, className: [1, 2].includes(index) ? "peNumeric" : ""
+  })),
   rowAt: index => {
     const cells = hashRow(table, index);
-    return cells.length ? { cells: cells.map(value => ({ html: escapeHtml(value), sortValue: value })) } : null;
+    if (cells.length) cells.push(hashMeaning(table, cells, symbols));
+    return cells.length ? { cells: cells.map((value, column) => ({ html: escapeHtml(value), sortValue: value,
+      className: [1, 2].includes(column) ? "peNumeric" : "" })) } : null;
   },
-  sortValueAt: (index, column) => hashRow(table, index)[column] ?? ""
+  sortValueAt: (index, column) => column === 3
+    ? hashMeaning(table, hashRow(table, index), symbols) : hashRow(table, index)[column] ?? ""
 });
 
 export const renderElfHashTables = (elf: ElfParseResult, out: string[], onlyIndex?: number): void => {
@@ -33,8 +46,15 @@ export const renderElfHashTables = (elf: ElfParseResult, out: string[], onlyInde
     out.push(`<p>${table.buckets.length} buckets; ${table.chains.length} chain words.</p>`);
     if (table.kind === "gnu") out.push(`<p>First hashed symbol: ${table.symbolOffset}; ` +
       `Bloom shift: ${table.bloomShift}; Bloom words: ${table.bloom.length}.</p>`);
-    out.push(renderAutoPagedSortableTable(createElfHashTableModel(table)));
+    out.push(`<p class="smallNote">Buckets identify the first symbol. System V chains link ` +
+      `to the next symbol index; zero ends a chain. GNU chains store hashes, not symbol indices.</p>`);
+    out.push(renderAutoPagedSortableTable(createElfHashTableModel(table, symbolNames(elf))));
     if (table.issues.length) out.push(`<ul>${table.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul>`);
     out.push(renderElfSectionEnd());
   }
 };
+
+function symbolNames(elf: ElfParseResult): Map<number, string> {
+  return new Map([...(elf.dynSymbols?.importSymbols ?? []), ...(elf.dynSymbols?.exportSymbols ?? [])]
+    .map(symbol => [symbol.index, symbol.name]));
+}

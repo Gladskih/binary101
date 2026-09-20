@@ -34,5 +34,5 @@ test("ELF relocation rows paginate and sort in the browser", async ({ page }) =>
   await expect(table).toContainText("Showing 101-200 of 201");
   await table.getByRole("button", { name: "Sort by Addend", exact: true }).click();
   await table.getByRole("button", { name: "Sort by Addend", exact: true }).click();
-  await expect(table.locator("tbody tr").first().locator("td").nth(5)).toHaveText("200");
+  await expect(table.locator("tbody tr").first().locator("td").nth(5)).toHaveText("0xc8");
 });

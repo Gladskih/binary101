@@ -6,6 +6,31 @@ import type { ElfNoteEntry } from "../../../../analyzers/elf/types.js";
 const note = (name: string, type: number): ElfNoteEntry => ({ name, type, source: "fixture",
   descSize: 0, typeName: null, description: null, value: null });
 
+void test("decodes Go build IDs and warns on truncated SystemTap descriptors", () => {
+  const go = note("Go", 4);
+  decodeElfNotePayload(go, new TextEncoder().encode("build/id"), 8, "little", undefined, []);
+  assert.equal(go.value, "build/id");
+  assert.equal(go.typeName, "GO_BUILD_ID");
+  assert.equal(go.description, "Go build ID");
+  const stap = note("stapsdt", 3);
+  const issues: string[] = [];
+  decodeElfNotePayload(stap, new Uint8Array(23), 8, "little", undefined, issues);
+  assert.equal(stap.typeName, "NT_STAPSDT");
+  assert.equal(stap.description, "SystemTap probe");
+  assert.match(issues.join(""), /SystemTap.*truncated/);
+});
+
+void test("decodes SystemTap addresses and all three terminated strings", () => {
+  const bytes = new Uint8Array(48);
+  new DataView(bytes.buffer).setBigUint64(0, 0x4053d4n, false);
+  bytes.set(new TextEncoder().encode("libc\0setjmp\0" + "8@x0\0"), 24);
+  const entry = note("stapsdt", 3);
+  decodeElfNotePayload(entry, bytes, 8, "big", undefined, []);
+  assert.match(entry.value!, /libc:setjmp/);
+  assert.match(entry.value!, /0x4053d4/);
+  assert.match(entry.value!, /8@x0/);
+});
+
 void test("decodes GNU ABI versions with either byte order and unknown operating systems", () => {
   const bytes = new Uint8Array(16);
   const view = new DataView(bytes.buffer);
