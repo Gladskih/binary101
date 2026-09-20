@@ -51,21 +51,7 @@ export const ELF_TYPE: ElfOptionEntry[] = [
   [4, "Core dump", "Process image captured after a crash."]
 ];
 
-export const ELF_MACHINE: ElfOptionEntry[] = [
-  [0, "No machine"],
-  [3, "Intel 80386"],
-  [7, "Intel 80860"],
-  [8, "MIPS"],
-  [20, "PowerPC"],
-  [21, "PowerPC64"],
-  [40, "ARM"],
-  [50, "IA-64"],
-  [62, "x86-64"],
-  [183, "AArch64"],
-  [243, "RISC-V"],
-  [247, "BPF"],
-  [257, "LoongArch"]
-];
+
 
 export const PROGRAM_TYPES: ElfOptionEntry[] = [
   [0, "PT_NULL", "Unused program header entry."],

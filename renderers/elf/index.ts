@@ -1,4 +1,5 @@
 "use strict";
+import { ELF_MACHINE } from "../../analyzers/elf/machine-types.js";
 import { renderElfSymbolVersions } from "./symbol-versions.js";
 import { renderElfSymbolTables } from "./symbol-tables.js";
 import { renderElfSectionGroups } from "./section-groups.js";
@@ -16,7 +17,6 @@ import {
   ELF_DATA,
   ELF_OSABI,
   ELF_TYPE,
-  ELF_MACHINE,
   PROGRAM_TYPES,
   SECTION_TYPES
 } from "../../analyzers/elf/constants.js";
@@ -139,7 +139,7 @@ export function renderHeader(elf: ElfParseResult, out: string[]): void {
   out.push(renderDefinitionRow("ABI version", escapeHtml(elf.ident.abiVersion),
     "EI_ABIVERSION is a separate version byte interpreted according to EI_OSABI."));
   out.push(renderDefinitionRow("Type", renderOptionChips(h.type, ELF_TYPE)));
-  out.push(renderDefinitionRow("Machine", renderOptionChips(h.machine, ELF_MACHINE)));
+  out.push(renderDefinitionRow("Machine", renderMachine(h.machine)));
   out.push(renderDefinitionRow("Entry", formatElfHex(h.entry)));
   const phText = `${h.phnum} entries @ ${formatElfHex(h.phoff)}`;
   const shText = `${h.shnum} entries @ ${formatElfHex(h.shoff)}`;
@@ -273,4 +273,11 @@ export function renderElf(elf: ElfParseResult | null): string {
   renderSectionHeaders(elf, out);
   renderIssues(elf, out);
   return out.join("");
+}
+
+function renderMachine(code: number): string {
+  return renderOptionChips(code, [ELF_MACHINE.find(([value]) => value === code) ??
+    [code, `Unknown machine (${code})`, "Unassigned or vendor-specific e_machine value."]]) +
+    `<details><summary>Other machine values</summary>` +
+    renderOptionChips(code, ELF_MACHINE.filter(([value]) => value !== code)) + `</details>`;
 }

@@ -155,3 +155,25 @@ for (const [code, label] of [
     assert.match(html, /<dt[^>]*>ABI version<\/dt><dd>0<\/dd>/);
   });
 }
+
+// gABI Appendix A assigns SPARC=2, S390=22, AVR=83 and AIECTRLCODE=269.
+// 65535 is outside the registry. https://gabi.xinuos.com/elf/a-emachine.html
+for (const [code, label] of [[2, "SPARC"], [22, "S390"], [83, "AVR"],
+  [269, "AIECTRLCODE"], [65535, "Unknown machine (65535)"]] as const) {
+  void test(`ELF machine chips preserve machine ${code}`, () => {
+    const elf = createRendererElfSubject();
+    elf.header.machine = code;
+    const out: string[] = [];
+
+    renderHeader(elf, out);
+
+    const machineHtml = /Machine<\/dt><dd>([\s\S]*?)<\/dd>/.exec(out.join(""))?.[1] ?? "";
+    assert.equal(machineHtml.match(/class="opt sel"/g)?.length, 1);
+    assert.ok(machineHtml.includes(`>${label}</span>`));
+    assert.ok(machineHtml.indexOf('class="opt sel"') < machineHtml.indexOf("<details>"));
+    assert.ok(machineHtml.includes("Other machine values"));
+    assert.match(machineHtml, /class="opt sel" data-accessible-tooltip/);
+    assert.match(machineHtml, /class="opt dim"[^>]*>x86-64<\/span>/);
+    assert.ok(machineHtml.endsWith("</details>"));
+  });
+}

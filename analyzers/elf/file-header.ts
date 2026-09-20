@@ -1,4 +1,5 @@
-import { ELF_CLASS, ELF_DATA, ELF_TYPE, ELF_MACHINE, decodeOption } from "./constants.js";
+import { ELF_MACHINE } from "./machine-types.js";
+import { ELF_CLASS, ELF_DATA, ELF_TYPE, decodeOption } from "./constants.js";
 import { selectElfBinaryLayout } from "./binary-layout.js";
 import type { ElfFileHeaderRecord } from "./binary-layout-types.js";
 import type { ElfHeader, ElfIdent, ElfParseResult } from "./types.js";
