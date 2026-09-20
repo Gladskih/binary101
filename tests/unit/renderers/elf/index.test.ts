@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { renderElf } from "../../../../renderers/elf/index.js";
+import { renderElf, renderHeader } from "../../../../renderers/elf/index.js";
 import type { ElfParseResult } from "../../../../analyzers/elf/types.js";
 
 const createRendererElfSubject = (): ElfParseResult =>
@@ -121,10 +121,37 @@ void test("places the collapsed instruction panel before collapsed ELF metadata"
   assert.ok(html.startsWith(`<section id="elfInstructionSetsPanel"><details class="analysisPanel">`));
   assert.ok(!html.includes(`<b>Identification</b>`));
   assert.ok(html.includes("<dt>Class</dt>"));
-  assert.ok(html.includes("<dt>OS ABI</dt>"));
+  assert.match(html, /<dt[^>]*>OS ABI<\/dt>/);
   assert.ok(html.includes(`<summary class="peSectionSummary"><b>ELF header</b></summary>`));
   assert.ok(!html.includes("Show program headers"));
   assert.ok(!html.includes("Show section headers"));
   assert.ok(!html.includes("<details open"));
   assert.ok(!html.includes("Big picture"));
 });
+
+// Assigned EI_OSABI values and the processor-specific range: gABI Appendix B.
+// https://gabi.xinuos.com/elf/b-osabi.html
+for (const [code, label] of [
+  [0, "System V / unspecified"], [1, "HP-UX"], [2, "NetBSD"], [3, "GNU/Linux"],
+  [6, "Solaris"], [7, "AIX"], [8, "IRIX"], [9, "FreeBSD"], [10, "Tru64"],
+  [11, "Modesto"], [12, "OpenBSD"], [13, "OpenVMS"], [14, "NonStop"],
+  [15, "AROS"], [16, "FenixOS"], [17, "CloudABI"], [63, "Unrecognized (63)"],
+  [18, "OpenVOS"], [4, "Unrecognized (4)"], [64, "Architecture-specific (64)"],
+  [255, "Architecture-specific (255)"]
+] as const) {
+  void test(`ELF header selects OS ABI ${label} separately from ABI version`, () => {
+    const elf = createRendererElfSubject();
+    elf.ident.osabi = code;
+    elf.ident.abiVersion = 0;
+    const out: string[] = [];
+
+    renderHeader(elf, out);
+
+    const html = out.join("");
+    const osAbiHtml = /OS ABI<\/dt><dd>([\s\S]*?)<\/dd>/.exec(html)?.[1] ?? "";
+    assert.equal(osAbiHtml.match(/class="opt sel"/g)?.length, 1);
+    assert.match(osAbiHtml, new RegExp(`class="opt sel"[^>]*>${label.replace(/[()]/g, "\\$&")}<`));
+    assert.match(osAbiHtml, /class="opt sel" data-accessible-tooltip/);
+    assert.match(html, /<dt[^>]*>ABI version<\/dt><dd>0<\/dd>/);
+  });
+}

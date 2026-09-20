@@ -21,6 +21,28 @@ export const ELF_DATA: ElfOptionEntry[] = [
   [2, "Big endian", "Most-significant byte first (MSB)."]
 ];
 
+// Assigned EI_OSABI values: https://gabi.xinuos.com/elf/b-osabi.html
+// GNU and Linux share code 3; 64..255 are architecture-specific, not global OS codes.
+export const ELF_OSABI: ElfOptionEntry[] = [
+  [0, "System V / unspecified", "ELFOSABI_NONE: no ABI extensions or unspecified."],
+  [1, "HP-UX", "ELFOSABI_HPUX: Hewlett-Packard HP-UX."],
+  [2, "NetBSD", "ELFOSABI_NETBSD."],
+  [3, "GNU/Linux", "ELFOSABI_GNU: GNU extensions; ELFOSABI_LINUX is a historical alias."],
+  [6, "Solaris", "ELFOSABI_SOLARIS."],
+  [7, "AIX", "ELFOSABI_AIX."],
+  [8, "IRIX", "ELFOSABI_IRIX."],
+  [9, "FreeBSD", "ELFOSABI_FREEBSD."],
+  [10, "Tru64", "ELFOSABI_TRU64."],
+  [11, "Modesto", "ELFOSABI_MODESTO."],
+  [12, "OpenBSD", "ELFOSABI_OPENBSD."],
+  [13, "OpenVMS", "ELFOSABI_OPENVMS."],
+  [14, "NonStop", "ELFOSABI_NSK: Hewlett-Packard Non-Stop Kernel."],
+  [15, "AROS", "ELFOSABI_AROS: Amiga Research OS."],
+  [16, "FenixOS", "ELFOSABI_FENIXOS."],
+  [17, "CloudABI", "ELFOSABI_CLOUDABI."],
+  [18, "OpenVOS", "ELFOSABI_OPENVOS."]
+];
+
 export const ELF_TYPE: ElfOptionEntry[] = [
   [0, "No type", "Unspecified."],
   [1, "Relocatable", "Object file used for linking."],

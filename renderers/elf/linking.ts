@@ -1,7 +1,7 @@
 "use strict";
 
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
-import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
+import { renderDefinitionRow, renderFlagChips, escapeHtml } from "../../html-utils.js";
 import { DYNAMIC_FLAGS, DYNAMIC_FLAGS_1 } from "../../analyzers/elf/constants.js";
 import type {
   ElfDynamicInfo,
@@ -25,85 +25,59 @@ const collectIssues = (interpreter?: ElfInterpreterInfo, dynamic?: ElfDynamicInf
   return issues;
 };
 
-const toUint32 = (value: number): number => value >>> 0;
-
-const describeDynamicFlags = (value: number, knownFlags: ElfOptionEntry[]): string => {
-  const normalized = toUint32(value);
-  const enabledFlags = knownFlags.filter(([bit]) => (normalized & toUint32(bit)) !== 0);
-  const knownMask = knownFlags.reduce((mask, [bit]) => (mask | toUint32(bit)) >>> 0, 0);
-  const unknownMask = (normalized & (~knownMask >>> 0)) >>> 0;
-  const items = enabledFlags.length
-    ? enabledFlags
-        .map(([, name, explanation]) => {
-          const details = explanation ? `: ${escapeHtml(explanation)}` : "";
-          return `<li><span class="mono">${escapeHtml(name)}</span>${details}</li>`;
-        })
-        .join("")
-    : `<li>No known flags set.</li>`;
-  const unknownItem =
-    unknownMask !== 0
-      ? `<li><span class="mono">Unknown bits: ${escapeHtml(formatElfHex(unknownMask, 8))}</span></li>`
-      : "";
-  return (
-    `<div><span class="mono">${escapeHtml(formatElfHex(normalized, 8))}</span></div>` +
-    `<ul style="margin:.35rem 0 0 1.1rem">${items}${unknownItem}</ul>`
-  );
-};
-
-const formatDynamicFlags = (value: number | null | undefined, knownFlags: ElfOptionEntry[]): string =>
-  value != null ? describeDynamicFlags(value, knownFlags) : "-";
+function formatDynamicFlags(value: number | null | undefined, knownFlags: ElfOptionEntry[]): string {
+  if (value == null) return "-";
+  return `<div class="mono">${escapeHtml(formatElfHex(value >>> 0, 8))}</div>` +
+    renderFlagChips(value, knownFlags);
+}
 
 export function renderElfLinking(elf: ElfParseResult, out: string[]): void {
   const interpreter = elf.interpreter;
   const dynamic = elf.dynamic;
   if (!interpreter && !dynamic) return;
-
   out.push(renderElfSectionStart(`Dynamic linking`));
   out.push(
     `<div class="smallNote">Interpreter and DT_* tags describe how the dynamic loader resolves shared libraries and startup routines.</div>`
   );
   out.push(`<dl>`);
-
   if (interpreter) {
-    const path = interpreter.path ? `<span class="mono">${escapeHtml(interpreter.path)}</span>` : "-";
-    out.push(renderDefinitionRow("Interpreter (PT_INTERP)", path));
+    out.push(renderDefinitionRow("Interpreter (PT_INTERP)",
+      interpreter.path ? `<span class="mono">${escapeHtml(interpreter.path)}</span>` : "-"));
   }
-
-  if (dynamic) {
-    out.push(renderDefinitionRow("Needed (DT_NEEDED)", formatElfList(dynamic.needed)));
-    out.push(renderDefinitionRow("SONAME (DT_SONAME)", dynamic.soname ? escapeHtml(dynamic.soname) : "-"));
-    out.push(renderDefinitionRow("RPATH (DT_RPATH)", dynamic.rpath ? escapeHtml(dynamic.rpath) : "-"));
-    out.push(renderDefinitionRow("RUNPATH (DT_RUNPATH)", dynamic.runpath ? escapeHtml(dynamic.runpath) : "-"));
-    out.push(renderDefinitionRow("Init (DT_INIT)", formatAddrOrDash(dynamic.init)));
-    out.push(renderDefinitionRow("Fini (DT_FINI)", formatAddrOrDash(dynamic.fini)));
-    out.push(renderDefinitionRow("Preinit array", formatRangeOrDash(dynamic.preinitArray)));
-    out.push(renderDefinitionRow("Init array", formatRangeOrDash(dynamic.initArray)));
-    out.push(renderDefinitionRow("Fini array", formatRangeOrDash(dynamic.finiArray)));
-    out.push(
-      renderDefinitionRow(
-        "Flags (DT_FLAGS)",
-        formatDynamicFlags(dynamic.flags, DYNAMIC_FLAGS),
-        "Base dynamic-loader behavior flags. Known bits are decoded below."
-      )
-    );
-    out.push(
-      renderDefinitionRow(
-        "Flags_1 (DT_FLAGS_1)",
-        formatDynamicFlags(dynamic.flags1, DYNAMIC_FLAGS_1),
-        "Extended dynamic-loader behavior flags. Known bits are decoded below."
-      )
-    );
-  }
-
+  if (dynamic) renderDynamic(dynamic, out);
   out.push(`</dl>`);
-
   const issues = collectIssues(interpreter, dynamic);
   if (issues.length) {
-    const items = issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("");
     out.push(
-      `<details style="margin-top:.35rem"><summary class="dim" style="cursor:pointer">Notes</summary><ul>${items}</ul></details>`
+      `<details style="margin-top:.35rem"><summary class="dim" style="cursor:pointer">Notes</summary>` +
+      `<ul>${issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul></details>`
     );
   }
-
   out.push(renderElfSectionEnd());
+}
+
+function renderDynamic(dynamic: ElfDynamicInfo, out: string[]): void {
+  out.push(renderDefinitionRow("Needed (DT_NEEDED)", formatElfList(dynamic.needed)));
+  out.push(renderDefinitionRow("SONAME (DT_SONAME)", dynamic.soname ? escapeHtml(dynamic.soname) : "-"));
+  out.push(renderDefinitionRow("RPATH (DT_RPATH)", dynamic.rpath ? escapeHtml(dynamic.rpath) : "-"));
+  out.push(renderDefinitionRow("RUNPATH (DT_RUNPATH)", dynamic.runpath ? escapeHtml(dynamic.runpath) : "-"));
+  out.push(renderDefinitionRow("Init (DT_INIT)", formatAddrOrDash(dynamic.init)));
+  out.push(renderDefinitionRow("Fini (DT_FINI)", formatAddrOrDash(dynamic.fini)));
+  out.push(renderDefinitionRow("Preinit array", formatRangeOrDash(dynamic.preinitArray)));
+  out.push(renderDefinitionRow("Init array", formatRangeOrDash(dynamic.initArray)));
+  out.push(renderDefinitionRow("Fini array", formatRangeOrDash(dynamic.finiArray)));
+  out.push(
+    renderDefinitionRow(
+      "Flags (DT_FLAGS)",
+      formatDynamicFlags(dynamic.flags, DYNAMIC_FLAGS),
+      "Base dynamic-loader behavior flags. Selected chips indicate set flags."
+    )
+  );
+  out.push(
+    renderDefinitionRow(
+      "Flags_1 (DT_FLAGS_1)",
+      formatDynamicFlags(dynamic.flags1, DYNAMIC_FLAGS_1),
+      "Extended dynamic-loader behavior flags. Selected chips indicate set flags."
+    )
+  );
 }

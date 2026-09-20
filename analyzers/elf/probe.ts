@@ -1,5 +1,16 @@
 "use strict";
 
+// gABI e_type: ET_DYN (3) alone cannot identify a library versus PIE.
+// https://gabi.xinuos.com/elf/02-eheader.html
+function elfTypeSuffix(type: number): string {
+  switch (type) {
+    case 1: return " relocatable";
+    case 2: return " executable";
+    case 3: return "";
+    default: return ` type=${type.toString(16)}`;
+  }
+}
+
 const probeElf = (dv: DataView): string | null => {
   if (dv.byteLength < 0x14) return null;
   if (dv.getUint32(0, false) !== 0x7f454c46) return null;
@@ -20,15 +31,7 @@ const probeElf = (dv: DataView): string | null => {
           : machine === 0x28
             ? "ARM"
             : `machine=${machine.toString(16)}`;
-  const typeLabel =
-    type === 2
-      ? "executable"
-      : type === 3
-        ? "shared object or PIE"
-        : type === 1
-          ? "relocatable"
-          : `type=${type.toString(16)}`;
-  return `ELF ${bitness} ${endian} ${typeLabel}, ${machineLabel}`;
+  return `ELF ${bitness} ${endian}${elfTypeSuffix(type)}, ${machineLabel}`;
 };
 
 export { probeElf };

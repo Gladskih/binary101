@@ -14,6 +14,7 @@ import { renderDefinitionRow, renderOptionChips, escapeHtml } from "../../html-u
 import {
   ELF_CLASS,
   ELF_DATA,
+  ELF_OSABI,
   ELF_TYPE,
   ELF_MACHINE,
   PROGRAM_TYPES,
@@ -133,16 +134,11 @@ export function renderHeader(elf: ElfParseResult, out: string[]): void {
   out.push(`<dl>`);
   out.push(renderDefinitionRow("Class", renderOptionChips(elf.ident.classByte, ELF_CLASS)));
   out.push(renderDefinitionRow("Data", renderOptionChips(elf.ident.dataByte, ELF_DATA)));
-  out.push(renderDefinitionRow("OS ABI", escapeHtml(
-    ({ 0: "System V (0)", 3: "GNU/Linux (3)" } as Record<number, string>)[elf.ident.osabi]
-      ?? String(elf.ident.osabi))));
-  out.push(renderDefinitionRow("ABI version", escapeHtml(elf.ident.abiVersion)));
+  out.push(renderDefinitionRow("OS ABI", renderOsAbi(elf.ident.osabi),
+    "EI_OSABI identifies the ABI. Chip tooltips show its numeric code, not the ABI version."));
+  out.push(renderDefinitionRow("ABI version", escapeHtml(elf.ident.abiVersion),
+    "EI_ABIVERSION is a separate version byte interpreted according to EI_OSABI."));
   out.push(renderDefinitionRow("Type", renderOptionChips(h.type, ELF_TYPE)));
-  // DF_1_PIE explicitly identifies an executable; ET_DYN alone is ambiguous.
-  // https://github.com/bminor/glibc/blob/master/elf/elf.h
-  if (h.type === 3 && ((elf.dynamic?.flags1 ?? 0) & 0x08000000) !== 0) {
-    out.push(renderDefinitionRow("Object role", "Position-independent executable (PIE)"));
-  }
   out.push(renderDefinitionRow("Machine", renderOptionChips(h.machine, ELF_MACHINE)));
   out.push(renderDefinitionRow("Entry", formatElfHex(h.entry)));
   const phText = `${h.phnum} entries @ ${formatElfHex(h.phoff)}`;
@@ -154,6 +150,16 @@ export function renderHeader(elf: ElfParseResult, out: string[]): void {
   out.push(renderDefinitionRow("SH entry size", `${h.shentsize} bytes`));
   out.push(`</dl>`);
   out.push(renderElfSectionEnd());
+}
+
+function renderOsAbi(code: number): string {
+  if (ELF_OSABI.some(([value]) => value === code)) return renderOptionChips(code, ELF_OSABI);
+  // gABI Appendix B reserves 64..255 for e_machine-specific ABI assignments.
+  // https://gabi.xinuos.com/elf/b-osabi.html
+  return renderOptionChips(code, [...ELF_OSABI, [code,
+    code >= 64 ? `Architecture-specific (${code})` : `Unrecognized (${code})`,
+    "This value is outside the global OS ABI list; consult the target architecture ABI."
+  ]]);
 }
 
 export function renderProgramHeaders(elf: ElfParseResult, out: string[]): void {
