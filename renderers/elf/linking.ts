@@ -26,7 +26,7 @@ const collectIssues = (interpreter?: ElfInterpreterInfo, dynamic?: ElfDynamicInf
 };
 
 function formatDynamicFlags(value: number | null | undefined, knownFlags: ElfOptionEntry[]): string {
-  if (value == null) return "-";
+  if (value == null) return `<div class="dim">Tag absent</div>` + renderFlagChips(0, knownFlags);
   return `<div class="mono">${escapeHtml(formatElfHex(value >>> 0, 8))}</div>` +
     renderFlagChips(value, knownFlags);
 }

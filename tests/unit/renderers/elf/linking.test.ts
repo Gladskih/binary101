@@ -37,7 +37,7 @@ void test("renderElfLinking renders interpreter and DT_NEEDED libraries", async 
 // glibc elf.h defines DF_* and DF_1_* below the high bit; preserve unknown bit 31.
 // https://github.com/bminor/glibc/blob/master/elf/elf.h
 for (const [flags, expected] of [
-  [null, "-"], [0, '<div class="mono">0x00000000</div>'],
+  [null, '<div class="dim">Tag absent</div>'], [0, '<div class="mono">0x00000000</div>'],
   [0x80000000, '<div class="mono">0x80000000</div>']
 ] as const) {
   void test(`dynamic flag chips preserve absent, zero and unknown values: ${flags}`, () => {
@@ -52,6 +52,8 @@ for (const [flags, expected] of [
     assert.ok(out.join("").includes(`>Flags (DT_FLAGS)</dt><dd>${expected}`));
     assert.ok(out.join("").includes(`>Flags_1 (DT_FLAGS_1)</dt><dd>${expected}`));
     assert.doesNotMatch(out.join(""), /class="opt sel"[^>]*>DF_/);
+    assert.match(out.join(""), /class="opt dim"[^>]*>DF_ORIGIN<\/span>/);
+    assert.match(out.join(""), /class="opt dim"[^>]*>DF_1_NOW<\/span>/);
   });
 }
 
