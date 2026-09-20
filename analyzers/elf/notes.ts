@@ -5,7 +5,7 @@ import { createFileRangeReader, type FileRangeReader } from "../file-range-reade
 import type { ElfNoteEntry, ElfNotesInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import { decodeElfNotePayload } from "./note-payload.js";
 import type { ElfByteOrder } from "./binary-layout-types.js";
-import { decodeBuildAttributeNote } from "./build-attribute-note.js";
+import { decodeBuildAttributeNote, gnuBuildAttributeTypes } from "./build-attribute-note.js";
 
 const toSafeIndex = (value: bigint, label: string, issues: string[]): number | null => {
   const num = Number(value);
@@ -127,7 +127,7 @@ export async function parseElfNotes(opts: {
 function decodeNote(entry: ElfNoteEntry, nameBytes: Uint8Array, desc: Uint8Array,
   wordSize: 4 | 8, order: ElfByteOrder, coreMachine: number | undefined,
   attributeRanges: Map<number, string>, issues: string[]): void {
-  if ((entry.type === 0x100 || entry.type === 0x101) &&
+  if (gnuBuildAttributeTypes[entry.type] != null &&
     (entry.name.startsWith("GA") || /^[*$+!]/.test(entry.name))) {
     decodeBuildAttributeNote(entry, nameBytes, desc, order,
       attributeRanges, issues);

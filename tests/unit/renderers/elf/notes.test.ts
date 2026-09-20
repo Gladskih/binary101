@@ -15,6 +15,34 @@ function summaryNotes(values: Array<[string | null, string | null]>): ElfNotesIn
     name: "GNU", type: 0, typeName, value, description: null, descSize: 0 })) };
 }
 
+// GNU build-attribute note types: Watermark, "Proposed Specification for non-loaded notes".
+// https://fedoraproject.org/wiki/Toolchain/Watermark
+for (const [type, label] of [
+  [0x100, "GNU_BUILD_ATTRIBUTE_OPEN"],
+  [0x101, "GNU_BUILD_ATTRIBUTE_FUNC"],
+  [0x102, "0x102"]
+] as const) {
+  void test(`note renderer derives GNU build attribute type ${label}`, () => {
+    const model = createElfNotesTableModel({ issues: [], entries: [{
+      source: "fixture", kind: "gnu-build-attribute", name: "Stack size", type,
+      typeName: null, value: "0x10", description: null, descSize: 0
+    }] });
+
+    assert.equal(model.rowAt(0)?.cells[2]?.html, label);
+    assert.equal(model.sortValueAt(0, 2), label);
+  });
+}
+
+void test("note renderer does not interpret unrelated owners as GNU build attributes", () => {
+  const model = createElfNotesTableModel({ issues: [], entries: [{
+    source: "fixture", name: "other owner", type: 0x100,
+    typeName: null, value: null, description: null, descSize: 0
+  }] });
+
+  assert.equal(model.rowAt(0)?.cells[2]?.html, "0x100");
+  assert.equal(model.sortValueAt(0, 2), "0x100");
+});
+
 void test("renderElfNotes renders GNU build-id", async () => {
   const { file, expected } = createElfMetadataFile();
   const parsed = await parseElf(file);

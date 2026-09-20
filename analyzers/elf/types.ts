@@ -155,6 +155,8 @@ export interface ElfTlsInfo {
 }
 
 export interface ElfNoteEntry {
+  // Retain the note family when the decoded attribute name replaces the owner.
+  kind?: "gnu-build-attribute";
   core?: ElfCoreNote;
   properties?: ElfGnuProperty[];
   source: string;

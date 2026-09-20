@@ -26,6 +26,27 @@ const makeSection = (partial: Partial<ElfSectionHeader>): ElfSectionHeader =>
     ...partial
   }) as ElfSectionHeader;
 
+void test("routes GNU build notes and preserves their identity for rendering", async () => {
+  // ELF note header: namesz, descsz, type; 12 bytes, with four-byte alignment.
+  // Watermark: 0x100 is OPEN, '*' is numeric, tag 2 is stack protection, 3 is strong.
+  // https://fedoraproject.org/wiki/Toolchain/Watermark
+  const bytes = new Uint8Array(20);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 6, true);
+  view.setUint32(8, 0x100, true);
+  bytes.set([71, 65, 42, 2, 3, 0], 12);
+
+  const result = await parseElfNotes({ file: new File([bytes], "build-note"),
+    littleEndian: true, programHeaders: [],
+    sections: [makeSection({ type: 7, size: BigInt(bytes.length) })] });
+
+  assert.equal(result?.entries[0]?.kind, "gnu-build-attribute");
+  assert.equal(result?.entries[0]?.name, "Stack protector");
+  assert.equal(result?.entries[0]?.value, "strong");
+  assert.equal(result?.entries[0]?.typeName, null);
+  assert.deepEqual(result?.issues, []);
+});
+
 void test("decodes CORE descriptors only with explicit core ABI context", async () => {
   const bytes = new Uint8Array(36);
   const view = new DataView(bytes.buffer);

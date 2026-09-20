@@ -7,6 +7,7 @@ import { renderElfCoreNotes } from "./core-notes.js";
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import type { ElfNoteEntry, ElfNotesInfo, ElfParseResult } from "../../analyzers/elf/types.js";
+import { gnuBuildAttributeTypes } from "../../analyzers/elf/build-attribute-note.js";
 
 const findFirst = (entries: ElfNoteEntry[], predicate: (entry: ElfNoteEntry) => boolean): ElfNoteEntry | null => {
   for (const entry of entries) {
@@ -16,9 +17,16 @@ const findFirst = (entries: ElfNoteEntry[], predicate: (entry: ElfNoteEntry) => 
 };
 
 const noteValues = (entry: ElfNoteEntry): string[] => [
-  entry.source, entry.name, entry.typeName ?? `0x${entry.type.toString(16)}`,
+  entry.source, entry.name, noteTypeName(entry),
   entry.description ?? "—", entry.value ?? "—", String(entry.descSize)
 ];
+
+function noteTypeName(entry: ElfNoteEntry): string {
+  if (entry.kind === "gnu-build-attribute") {
+    return gnuBuildAttributeTypes[entry.type] ?? `0x${entry.type.toString(16)}`;
+  }
+  return entry.typeName ?? `0x${entry.type.toString(16)}`;
+}
 
 function visibleText(value: string): string {
   return Array.from(value, character => {

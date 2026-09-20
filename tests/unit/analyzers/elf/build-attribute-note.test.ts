@@ -12,6 +12,123 @@ const range = (): Uint8Array => {
   return bytes;
 };
 
+// GNU build attribute kinds and tag types: binutils readelf.c,
+// print_gnu_build_attribute_name; Watermark's name-field examples.
+// https://fedoraproject.org/wiki/Toolchain/Watermark#Proposed_Specification_for_non-loaded_notes
+for (const name of [
+  "GA$custom\0", "GA*custom\0", "GA+enabled\0junk\0",
+  "GA$custom\0value\0junk\0", "GA+\x04\0", "GA*\x03\xff\0",
+  "GA$\x07text\0", "GA+\x7f\0", "GA+\xff\0", "GA?custom\0value\0",
+  "GA+\x03x\0", "GA!\x03x\0", "GA$\x05gcc\0junk\0", "GA+\0", "GA+\x03x"
+]) {
+  void test(`GNU attributes report malformed payload ${JSON.stringify(name)}`, () => {
+    const entry = note();
+    const issues: string[] = [];
+
+    decodeBuildAttributeNote(entry, new TextEncoder().encode(name),
+      new Uint8Array(), "little", new Map(), issues);
+
+    assert.equal(entry.value, null);
+    assert.equal(issues.length, 1);
+  });
+}
+
+void test("GNU string attributes distinguish an empty value from a missing value", () => {
+  const entry = note();
+  const issues: string[] = [];
+
+  decodeBuildAttributeNote(entry, new TextEncoder().encode("GA$custom\0\0"),
+    new Uint8Array(), "little", new Map(), issues);
+
+  assert.equal(entry.name, "custom");
+  assert.equal(entry.value, "");
+  assert.deepEqual(issues, []);
+});
+
+void test("GNU rejects unrelated note types without changing entries or inherited ranges", () => {
+  const entry = { ...note(), type: 0x102 };
+  const ranges = new Map([[entry.type, "existing range"]]);
+  const issues: string[] = [];
+
+  // Watermark only defines note types 0x100 and 0x101; 0x102 is outside that pair.
+  decodeBuildAttributeNote(entry, new TextEncoder().encode("GA+enabled\0"),
+    range(), "little", ranges, issues);
+
+  assert.deepEqual(entry, { ...note(), type: 0x102 });
+  assert.deepEqual([...ranges], [[entry.type, "existing range"]]);
+  assert.match(issues.join(" "), /note type/);
+});
+
+// All fixed tag names and allowed legacy kinds follow readelf's
+// print_gnu_build_attribute_name (source cited above).
+for (const [name, expectedName, expectedValue] of [
+  ["GA$\x01v2\0", "Version", "v2"],
+  ["GA+\x02\0", "Stack protector", "true"],
+  ["GA!\x02\0", "Stack protector", "false"],
+  ["GA$\x06abi\0", "ABI", "abi"],
+  ["GA*\x06\x01\0", "ABI", "0x1"],
+  ["GA*\x04\x01\0", "Stack size", "0x1"],
+  ["+\x03\0", "RELRO", "true"],
+  ["GA+\x08\0", "Short enums", "true"],
+  ["GA!enabled\0", "enabled", "false"],
+  ["GA*custom\0\x01\0", "custom", "0x1"],
+  ["GA*custom\0\0", "custom", "0x0"],
+  ["GA+ \0", " ", "true"],
+  ["GA+~\0", "~", "true"]
+] as const) {
+  void test(`GNU attribute definition ${JSON.stringify(name)}`, () => {
+    const entry = note();
+    const issues: string[] = [];
+
+    decodeBuildAttributeNote(entry, new TextEncoder().encode(name),
+      new Uint8Array(), "little", new Map(), issues);
+
+    assert.equal(entry.name, expectedName);
+    assert.equal(entry.value, expectedValue);
+    assert.deepEqual(issues, []);
+  });
+}
+
+void test("GNU numeric attributes reject nine bytes, immediately beyond uint64", () => {
+  const entry = note();
+  const issues: string[] = [];
+
+  // '*' and tag 4 mean numeric stack size; nine payload bytes exceed readelf's uint64_t.
+  decodeBuildAttributeNote(entry, new Uint8Array([71, 65, 42, 4, ...new Array<number>(9).fill(1), 0]),
+    new Uint8Array(), "little", new Map(), issues);
+
+  assert.equal(entry.value, null);
+  assert.equal(issues.length, 1);
+});
+
+void test("GNU reads little-endian uint32 ranges from a bounded subarray", () => {
+  const entry = note();
+  const issues: string[] = [];
+  const bytes = new Uint8Array(16).fill(255);
+  const view = new DataView(bytes.buffer);
+  // readelf accepts two uint32 addresses; asymmetric bytes expose byte-order errors.
+  view.setUint32(4, 0x01020304, true);
+  view.setUint32(8, 0x05060708, true);
+
+  decodeBuildAttributeNote(entry, new TextEncoder().encode("GA+enabled\0"),
+    bytes.subarray(4, 12), "little", new Map(), issues);
+
+  assert.equal(entry.description, "0x1020304–0x5060708 (end exclusive)");
+  assert.deepEqual(issues, []);
+});
+
+for (const name of [new Uint8Array(), new Uint8Array([71]), new Uint8Array([71, 65])]) {
+  void test(`GNU rejects incomplete prefix of length ${name.length}`, () => {
+    const entry = note();
+    const issues: string[] = [];
+
+    decodeBuildAttributeNote(entry, name, new Uint8Array(), "little", new Map(), issues);
+
+    assert.equal(entry.value, null);
+    assert.equal(issues.length, 1);
+  });
+}
+
 void test("GNU attributes decode binary values and inherit ranges of the same type", () => {
   const entry = note();
   const ranges = new Map<number, string>();
@@ -109,7 +226,8 @@ for (const [bytes, name, value] of [
     decodeBuildAttributeNote(entry, new Uint8Array(bytes), range(), "little", new Map(), issues);
     assert.equal(entry.name, name);
     assert.equal(entry.value, value);
-    assert.equal(entry.typeName, "GNU_BUILD_ATTRIBUTE_OPEN");
+    assert.equal(entry.kind, "gnu-build-attribute");
+    assert.equal(entry.typeName, null);
     assert.equal(entry.description, "0x1000–0x1100 (end exclusive)");
     assert.deepEqual(issues, []);
   });
@@ -123,7 +241,8 @@ void test("GNU function attributes isolate scope and invalidate broken inherited
   new DataView(bytes.buffer).setUint32(0, 16, false);
   new DataView(bytes.buffer).setUint32(4, 32, false);
   decodeBuildAttributeNote(entry, new TextEncoder().encode("GA+enabled\0"), bytes, "big", ranges, issues);
-  assert.equal(entry.typeName, "GNU_BUILD_ATTRIBUTE_FUNC");
+  assert.equal(entry.kind, "gnu-build-attribute");
+  assert.equal(entry.typeName, null);
   assert.equal(entry.description, "0x10–0x20 (end exclusive)");
   decodeBuildAttributeNote(entry, new TextEncoder().encode("GA+enabled\0"), bytes.subarray(0, 4),
     "big", ranges, issues);
