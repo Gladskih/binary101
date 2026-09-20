@@ -1,5 +1,5 @@
 "use strict";
-import { ELF_MACHINE } from "../../analyzers/elf/machine-types.js";
+import { ELF_MACHINE_OPTIONS } from "../../analyzers/elf/legacy-machine-types.js";
 import { renderElfSymbolVersions } from "./symbol-versions.js";
 import { renderElfSymbolTables } from "./symbol-tables.js";
 import { renderElfSectionGroups } from "./section-groups.js";
@@ -276,10 +276,10 @@ export function renderElf(elf: ElfParseResult | null): string {
 }
 
 function renderMachine(code: number): string {
-  return renderOptionChips(code, [ELF_MACHINE.find(([value]) => value === code) ??
+  return renderOptionChips(code, [ELF_MACHINE_OPTIONS.find(([value]) => value === code) ??
     [code, `Unknown machine (${code})`, "Unassigned or vendor-specific e_machine value."]]) +
     `<details><summary>Other machine values</summary>` +
-    renderOptionChips(code, ELF_MACHINE.filter(([value]) => value !== code)) + `</details>`;
+    renderOptionChips(code, ELF_MACHINE_OPTIONS.filter(([value]) => value !== code)) + `</details>`;
 }
 
 function renderHeaderOptions(code: number, options: ElfOptionEntry[]): string {

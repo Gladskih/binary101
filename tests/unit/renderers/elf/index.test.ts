@@ -159,7 +159,10 @@ for (const [code, label] of [
 
 // gABI Appendix A assigns SPARC=2, S390=22, AVR=83 and AIECTRLCODE=269.
 // 65535 is outside the registry. https://gabi.xinuos.com/elf/a-emachine.html
+// Legacy Alpha/FR-V: https://github.com/torvalds/linux/blob/master/include/uapi/linux/elf-em.h
 for (const [code, label] of [[2, "SPARC"], [22, "S390"], [83, "AVR"],
+  [257, "65816"], [258, "LOONGARCH"], [0x9026, "ALPHA (legacy/unofficial)"],
+  [0x5441, "CYGNUS_FRV (legacy/unofficial)"],
   [269, "AIECTRLCODE"], [65535, "Unknown machine (65535)"]] as const) {
   void test(`ELF machine chips preserve machine ${code}`, () => {
     const elf = createRendererElfSubject();

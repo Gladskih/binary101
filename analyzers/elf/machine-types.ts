@@ -199,7 +199,7 @@ export const ELF_MACHINE: ElfOptionEntry[] = [
   [254, "MCS6502", "MOS Technology MCS 6502 processor"],
   [255, "ARC_COMPACT3", "Synopsys ARCv2.3 32-bit"],
   [256, "KVX", "Kalray VLIW core of the MPPA processor family"],
-  [257, "LoongArch", "WDC 65816/65C816"],
+  [257, "65816", "WDC 65816/65C816"],
   [258, "LOONGARCH", "Loongson Loongarch"],
   [259, "KF32", "ChipON KungFu32"],
   [260, "U16_U8CORE", "LAPIS nX-U16/U8"],

@@ -1,4 +1,4 @@
-import { ELF_MACHINE } from "./machine-types.js";
+import { ELF_MACHINE_OPTIONS } from "./legacy-machine-types.js";
 import { ELF_CLASS, ELF_DATA, ELF_TYPE, decodeOption } from "./constants.js";
 import { selectElfBinaryLayout } from "./binary-layout.js";
 import type { ElfFileHeaderRecord } from "./binary-layout-types.js";
@@ -44,7 +44,7 @@ function describeElfHeader(record: ElfFileHeaderRecord, issues: string[]): ElfHe
   return {
     ...header,
     typeName: decodeOption(header.type, ELF_TYPE) || null,
-    machineName: decodeOption(header.machine, ELF_MACHINE) || null
+    machineName: decodeOption(header.machine, ELF_MACHINE_OPTIONS) || null
   };
 }
 
