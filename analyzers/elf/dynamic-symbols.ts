@@ -76,6 +76,25 @@ const isDisplayableType = (type: number): boolean =>
   // NOTYPE, OBJECT, FUNC, COMMON, TLS (gABI 5.3), GNU_IFUNC (glibc elf.h).
   [0, 1, 2, 5, 6, 10].includes(type);
 
+const readDynsymRecords = async (
+  symtab: TableRange, layout: ElfBinaryLayout, issues: string[], reader: FileRangeReader
+) => {
+  const records = [];
+  const count = Math.floor(symtab.size / layout.symbolEntrySize);
+  if (symtab.size % layout.symbolEntrySize !== 0) {
+    issues.push(`.dynsym size is not aligned to entry size (${layout.symbolEntrySize} bytes).`);
+  }
+  for (let index = 0; index < count; index += 1) {
+    const record = layout.readSymbol(await reader.read(
+      symtab.offset + index * layout.symbolEntrySize, layout.symbolEntrySize));
+    if (!record) { issues.push(`Dynamic symbol #${index} is truncated.`); break; }
+    if (isDisplayableType(record.info & 0x0f)) records.push({ index, record });
+  }
+  // The lto-dump profile repeatedly reloads .dynstr blocks when resolving names in symbol order.
+  // Sort this private list to read names sequentially without growing the byte cache.
+  return records.sort((left, right) => left.record.nameOffset - right.record.nameOffset);
+};
+
 const parseDynsym = async (
   symtab: TableRange,
   strtab: TableRange | null,
@@ -85,34 +104,26 @@ const parseDynsym = async (
   readSectionIndex: ReturnType<typeof createElfDynamicIndexReader>,
   reader: FileRangeReader
 ): Promise<ElfDynamicSymbol[]> => {
-  const entrySize = layout.symbolEntrySize;
-  const count = Math.floor(symtab.size / entrySize);
   const readName = createElfStringTableReader(reader, strtab, issues);
-  if (symtab.size % entrySize !== 0) {
-    issues.push(`.dynsym size is not aligned to entry size (${entrySize} bytes).`);
-  }
   const out: ElfDynamicSymbol[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const base = index * entrySize;
-    const record = layout.readSymbol(await reader.read(symtab.offset + base, entrySize));
-    if (!record) { issues.push(`Dynamic symbol #${index} is truncated.`); break; }
+  for (const { index, record } of await readDynsymRecords(symtab, layout, issues, reader)) {
     const { nameOffset: nameOff, value, size, info, other, sectionIndex } = record;
     // ELF*_ST_BIND/TYPE/VISIBILITY: high/low st_info nibbles and low two st_other bits.
     // https://gabi.xinuos.com/elf/05-symtab.html
     const bind = info >> 4;
     const type = info & 0x0f;
-    if (!isDisplayableType(type)) continue;
     const visibility = other & 0x03;
     const name = await readName(nameOff);
     if (name == null) continue;
     const shndx = await readSectionIndex(index, sectionIndex);
     if (shndx == null) continue;
-    symbolCache.set(symtab.offset + base, { name, value, sectionIndex: shndx });
+    symbolCache.set(symtab.offset + index * layout.symbolEntrySize,
+      { name, value, sectionIndex: shndx });
     out.push({ index, name, value, size, bind, bindName: decodeBind(bind),
       type, typeName: decodeType(type), visibility,
       visibilityName: decodeVisibility(visibility), shndx });
   }
-  return out;
+  return out.sort((left, right) => left.index - right.index);
 };
 
 const readTableRange = (file: File, offset: bigint, size: bigint,
