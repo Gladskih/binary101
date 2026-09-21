@@ -7,10 +7,11 @@ import type {
   ElfInstructionSetUsage
 } from "../elf/disassembly-types.js";
 import { recordAarch64Requirements } from "./instruction-set-usage.js";
+import { createAarch64SpecialInstructionCollector } from "./special-instructions.js";
 
 type Aarch64ControlFlowReport = Pick<ElfInstructionSetReport,
   "bytesSampled" | "bytesDecoded" | "instructionCount" | "invalidInstructionCount" |
-  "instructionSets" | "issues">;
+  "instructionSets" | "aarch64SpecialInstructions" | "issues">;
 
 export const notifyAarch64Progress = (
   opts: Pick<AnalyzeElfInstructionSetOptions, "signal" | "onProgress" | "yieldEveryInstructions">,
@@ -55,6 +56,9 @@ const recordInstruction = (
   recordAarch64Requirements(instruction.features, usage);
 };
 
+const resolveYieldInterval = (interval: number | undefined): number =>
+  Number.isSafeInteger(interval) && interval! > 0 ? interval! : 1024;
+
 export const walkAarch64ControlFlow = async (
   decoder: Disassembler,
   readCode: (address: bigint) => Promise<Uint8Array>,
@@ -69,8 +73,8 @@ export const walkAarch64ControlFlow = async (
   let visitedCount = 0;
   let lastYield = performance.now();
   const usage = new Map<string, ElfInstructionSetUsage>();
-  const interval = Number.isSafeInteger(opts.yieldEveryInstructions) && opts.yieldEveryInstructions! > 0
-    ? opts.yieldEveryInstructions! : 1024;
+  const special = createAarch64SpecialInstructionCollector();
+  const interval = resolveYieldInterval(opts.yieldEveryInstructions);
   notifyAarch64Progress(opts, report, "decoding");
   try {
     while (!opts.signal?.aborted) {
@@ -78,7 +82,7 @@ export const walkAarch64ControlFlow = async (
       if (address === undefined) break;
       const bytes = readWindow(address);
       recordBytes(decode, bytes instanceof Uint8Array ? bytes : await bytes,
-        address, pending, report, usage);
+        address, pending, report, usage, special);
       if (++visitedCount % interval === 0) {
         report.instructionSets = [...usage.values()];
         notifyAarch64Progress(opts, report, "decoding");
@@ -91,6 +95,7 @@ export const walkAarch64ControlFlow = async (
     }
   } finally {
     report.instructionSets = [...usage.values()];
+    report.aarch64SpecialInstructions = special.findings();
     if (opts.signal?.aborted) report.issues.push("Disassembly cancelled.");
   }
 };
@@ -113,11 +118,13 @@ const recordBytes = (
   address: bigint,
   pending: bigint[],
   report: Aarch64ControlFlowReport,
-  usage: Map<string, ElfInstructionSetUsage>
+  usage: Map<string, ElfInstructionSetUsage>,
+  special: ReturnType<typeof createAarch64SpecialInstructionCollector>
 ): void => {
   if (!bytes.length) return;
   if (bytes.length < 4) report.issues.push(`Truncated AArch64 instruction at 0x${address.toString(16)}.`);
   const instruction = decode(bytes, address);
   recordInstruction(instruction, report, usage);
+  if (instruction.specialInstruction) special.record(instruction.specialInstruction, address);
   pending.push(...nextAddresses(instruction));
 };

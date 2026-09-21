@@ -4,6 +4,18 @@ import { analyzeElfInstructionSets } from "../../../../analyzers/elf/disassembly
 import { aarch64Code, aarch64Options } from "../../../fixtures/aarch64-code.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 
+void test("ELF A64 counts privileged reachable sites and keeps exact high virtual addresses", async () => {
+  // MRS SCTLR_EL1 twice; RET; unreachable HVC (QEMU a64.decode).
+  const file = aarch64Code([0xd5381000, 0xd5381001, 0xd65f03c0, 0xd4000002]);
+  const opts = aarch64Options(file.size);
+  opts.entrypointVaddr = 0xffff800000000000n;
+  opts.programHeaders[0]!.vaddr = opts.entrypointVaddr;
+  const report = await analyzeElfInstructionSets(file, opts);
+
+  assert.deepEqual(report.aarch64SpecialInstructions, [{ instruction: "MRS SCTLR_EL1",
+    access: "EL1+", count: 2, sampleAddresses: [opts.entrypointVaddr, opts.entrypointVaddr + 4n] }]);
+});
+
 void test("AArch64 follows branches and preserves SVE or SME requirements", async () => {
   // b +8; invalid (unreachable); add z0.s,z0.s,z0.s; ret.
   const file = aarch64Code([0x14000002, 0xffffffff, 0x04a00000, 0xd65f03c0]);

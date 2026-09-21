@@ -94,6 +94,9 @@ export const analyzePeAarch64InstructionSets = async (
   } catch (error) {
     report.issues.push(`AArch64 disassembly failed (${String(error)}).`);
   }
+  report.aarch64SpecialInstructions = (report.aarch64SpecialInstructions ?? []).map(finding => ({
+    ...finding, sampleAddresses: finding.sampleAddresses.map(address => address - opts.imageBase)
+  }));
   notifyAarch64Progress(opts, report, "done");
   return report;
 };

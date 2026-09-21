@@ -4,6 +4,7 @@ import type { X86SpecialInstructionFinding } from "../x86/special-instructions.j
 import type { ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import type { NativeAotMetadata } from "../native-aot/format.js";
 import type { FeatureRequirements } from "llvm-aarch64-disasm";
+import type { Aarch64SpecialInstructionFinding } from "../aarch64/special-instructions.js";
 
 export interface ElfInstructionSetUsage {
   aarch64Predicates?: FeatureRequirements["predicates"];
@@ -30,6 +31,7 @@ export interface ElfDisassemblySeedSummary {
 }
 
 export interface ElfInstructionSetReport {
+  aarch64SpecialInstructions?: Aarch64SpecialInstructionFinding[];
   specialInstructions?: X86SpecialInstructionFinding[];
   decoderVersion?: string;
   bitness: 32 | 64;

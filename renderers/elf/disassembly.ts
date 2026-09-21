@@ -10,6 +10,7 @@ import {
   formatCpuidLabel
 } from "../../analyzers/x86/cpuid-features.js";
 import { renderX86SpecialInstructions } from "../x86-special-instructions.js";
+import { renderAarch64SpecialInstructions } from "../aarch64-special-instructions.js";
 
 const ANALYZE_BUTTON_ID = "elfInstructionSetsAnalyzeButton";
 const CANCEL_BUTTON_ID = "elfInstructionSetsCancelButton";
@@ -185,6 +186,8 @@ const renderAarch64InstructionSets = (disasm: ElfParseResult["disassembly"], out
   renderDisassemblySummary(disasm, out);
   renderSeedSummary(disasm, out);
   if (disasm.decoderVersion) out.push(`<div class="smallNote dim">${escapeHtml(disasm.decoderVersion)}</div>`);
+  out.push(renderAarch64SpecialInstructions(disasm.aarch64SpecialInstructions ?? [],
+    "Example virtual addresses"));
   if (!disasm.instructionSets.length) {
     out.push(`<div class="smallNote dim">No instruction-set requirements were detected in the sampled bytes.</div>`);
   }

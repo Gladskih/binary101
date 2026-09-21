@@ -7,6 +7,7 @@ import type { PeSection, RvaToOffset } from "../types.js";
 import type { PeImportMetadataSourceKind } from "../../../pe-import-metadata-schema.js";
 import type { PeSpecialInstructionFinding } from "./special-instructions.js";
 import type { FeatureRequirements } from "llvm-aarch64-disasm";
+import type { Aarch64SpecialInstructionFinding } from "../../aarch64/special-instructions.js";
 
 export interface PeInstructionSetUsage {
   aarch64Predicates?: FeatureRequirements["predicates"];
@@ -50,6 +51,8 @@ export interface PeCodeStringReference {
 }
 
 export interface PeInstructionSetReport {
+  /** Sample addresses are RVAs, as with x86 specialInstructions. */
+  aarch64SpecialInstructions?: Aarch64SpecialInstructionFinding[];
   decoderVersion?: string;
   specialInstructions: PeSpecialInstructionFinding[];
   bitness: 32 | 64;

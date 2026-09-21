@@ -2,6 +2,7 @@ import { escapeHtml } from "../../html-utils.js";
 import { formatHumanSize } from "../../binary-utils.js";
 import type { PeInstructionSetReport } from "../../analyzers/pe/disassembly/types.js";
 import { renderAarch64RequirementTable } from "../aarch64-instruction-sets.js";
+import { renderAarch64SpecialInstructions } from "../aarch64-special-instructions.js";
 
 const renderResults = (report: PeInstructionSetReport): string => {
   const issues = report.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("");
@@ -34,6 +35,7 @@ export const renderPeAarch64InstructionSets = (report?: PeInstructionSetReport):
   `<div class="smallNote dim" id="peInstructionSetsProgressText">` +
   `${report ? "Done." : "Not analyzed yet. Start analysis to detect instruction-set requirements."}` +
   `</div><progress id="peInstructionSetsProgress" style="width:100%" hidden></progress>` +
-  (report ? renderResults(report) : "") +
+  (report ? renderResults(report) + renderAarch64SpecialInstructions(
+    report.aarch64SpecialInstructions ?? [], "Example RVAs") : "") +
   `<div id="peAarch64Requirements">${renderAarch64RequirementTable(report?.instructionSets)}</div>` +
   `</div></details>`;

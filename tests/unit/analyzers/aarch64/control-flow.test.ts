@@ -13,6 +13,44 @@ const emptyReport = (): ElfInstructionSetReport => ({
   invalidInstructionCount: 0, instructionSets: [], issues: []
 });
 
+void test("A64 preserves privilege findings after cancellation without visiting further sites", async () => {
+  // MRS SCTLR_EL1; HVC (QEMU a64.decode).
+  const file = aarch64Code([0xd5381000, 0xd4000002]);
+  const report = emptyReport();
+  const controller = new AbortController();
+  await walkAarch64ControlFlow(decoder, async () => file.data, [0n], {
+    signal: controller.signal, yieldEveryInstructions: 1,
+    onProgress: progress => { if (progress.instructionCount) controller.abort(); }
+  }, report);
+
+  assert.deepEqual(report.aarch64SpecialInstructions, [{ instruction: "MRS SCTLR_EL1",
+    access: "EL1+", count: 1, sampleAddresses: [0n] }]);
+  assert.deepEqual(report.issues, ["Disassembly cancelled."]);
+});
+
+void test("A64 retains privileged sites when the next instruction is truncated", async () => {
+  const bytes = aarch64Code([0xd5381000, 0xd5381000]).data.subarray(0, 7);
+  const report = emptyReport();
+  await walkAarch64ControlFlow(decoder, async address => bytes.subarray(Number(address)),
+    [0n, 0n], {}, report);
+
+  assert.deepEqual(report.aarch64SpecialInstructions, [{ instruction: "MRS SCTLR_EL1",
+    access: "EL1+", count: 1, sampleAddresses: [0n] }]);
+  assert.deepEqual(report.issues, ["Truncated AArch64 instruction at 0x4."]);
+  assert.equal(report.invalidInstructionCount, 1);
+});
+
+void test("A64 retains privileged sites if a subsequent read fails", async () => {
+  const report = emptyReport();
+  await assert.rejects(walkAarch64ControlFlow(decoder, async address => {
+    if (address === 0n) return aarch64Code([0xd5381000]).data;
+    throw new Error("read failed");
+  }, [0n], {}, report), /read failed/);
+
+  assert.deepEqual(report.aarch64SpecialInstructions, [{ instruction: "MRS SCTLR_EL1",
+    access: "EL1+", count: 1, sampleAddresses: [0n] }]);
+});
+
 void test("AArch64 publishes independent requirement counts before decoding finishes", async () => {
   const file = aarch64Code([0x04a00000, 0x04a00000, 0xd65f03c0]); // SVE/SME add twice; ret
   const updates: ElfInstructionSetProgress[] = [];

@@ -16,6 +16,16 @@ const options = (size: number): AnalyzePeInstructionSetOptions => ({
     sizeOfRawData: size, pointerToRawData: 0, characteristics: 0x20000000 }]
 });
 
+void test("PE A64 counts privileged instructions and stores RVAs", async () => {
+  // MRS SCTLR_EL1 twice; RET; unreachable HVC (QEMU a64.decode).
+  const file = aarch64Code([0xd5381000, 0xd5381001, 0xd65f03c0, 0xd4000002]);
+  const report = await analyzePeInstructionSets(createFileRangeReader(file, 0, file.size),
+    options(file.size));
+
+  assert.deepEqual(report.aarch64SpecialInstructions, [{ instruction: "MRS SCTLR_EL1",
+    access: "EL1+", count: 2, sampleAddresses: [0x1000n, 0x1004n] }]);
+});
+
 void test("PE ARM64 uses metadata seeds once", async () => {
   const file = aarch64Code([0xd65f03c0, 0x04a00000, 0xd65f03c0]);
   const opts = options(file.size);

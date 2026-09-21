@@ -5,6 +5,23 @@ import { test } from "node:test";
 import { renderInstructionSets } from "../../../../renderers/elf/disassembly.js";
 import type { ElfParseResult } from "../../../../analyzers/elf/types.js";
 
+void test("ELF A64 includes privileged instructions with full virtual addresses", () => {
+  const out: string[] = [];
+  renderInstructionSets({ header: { machine: 183 }, disassembly: {
+    bitness: 64, bytesSampled: 4, bytesDecoded: 4, instructionCount: 1,
+    invalidInstructionCount: 0, issues: [], instructionSets: [], aarch64SpecialInstructions: [
+      { instruction: "MRS SCTLR_EL1", access: "EL1+", count: 1,
+        sampleAddresses: [0xffff800000001000n] }
+    ]
+  } } as unknown as ElfParseResult, out);
+
+  assert.match(out.join(""), /MRS SCTLR_EL1/);
+  assert.match(out.join(""), /Kernel privilege \(EL1\+\)/);
+  assert.match(out.join(""), /Example virtual addresses/);
+  assert.match(out.join(""), /0xffff800000001000/);
+  assert.doesNotMatch(out.join(""), /Intel|AMD|Example RVAs/);
+});
+
 void test("ELF renders special instruction explanations and full virtual addresses", () => {
   const out: string[] = [];
   renderInstructionSets({ disassembly: {

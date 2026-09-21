@@ -11,6 +11,18 @@ const report = (): PeInstructionSetReport => ({
   directIatReferences: [], codeStringReferences: [], apiStringReferences: [], specialInstructions: []
 });
 
+void test("PE A64 includes privileged instructions in the completed ISA panel", () => {
+  const html = renderPeAarch64InstructionSets({ ...report(), aarch64SpecialInstructions: [
+    { instruction: "MRS SCTLR_EL1", access: "EL1+", count: 1, sampleAddresses: [0x1000n] }
+  ] });
+
+  assert.match(html, /Special instructions/);
+  assert.match(html, /MRS SCTLR_EL1/);
+  assert.match(html, /Example RVAs/);
+  assert.match(html, /0x1000/);
+  assert.doesNotMatch(renderPeAarch64InstructionSets(), /None detected/);
+});
+
 void test("ARM64 pending panel provides analysis, cancellation and progress controls", () => {
   const html = renderPeAarch64InstructionSets();
 
