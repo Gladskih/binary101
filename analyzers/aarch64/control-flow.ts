@@ -8,9 +8,13 @@ import type {
 } from "../elf/disassembly-types.js";
 import { recordAarch64Requirements } from "./instruction-set-usage.js";
 
+type Aarch64ControlFlowReport = Pick<ElfInstructionSetReport,
+  "bytesSampled" | "bytesDecoded" | "instructionCount" | "invalidInstructionCount" |
+  "instructionSets" | "issues">;
+
 export const notifyAarch64Progress = (
   opts: Pick<AnalyzeElfInstructionSetOptions, "signal" | "onProgress" | "yieldEveryInstructions">,
-  report: ElfInstructionSetReport,
+  report: Aarch64ControlFlowReport,
   stage: ElfInstructionSetProgress["stage"]
 ): void => {
   try {
@@ -36,7 +40,7 @@ const nextAddresses = (instruction: Aarch64InstructionSample): bigint[] => {
 
 const recordInstruction = (
   instruction: Aarch64InstructionSample,
-  report: ElfInstructionSetReport,
+  report: Aarch64ControlFlowReport,
   usage: Map<string, ElfInstructionSetUsage>
 ): void => {
   if (instruction.status === "invalid") {
@@ -56,7 +60,7 @@ export const walkAarch64ControlFlow = async (
   readCode: (address: bigint) => Promise<Uint8Array>,
   entrypoints: bigint[],
   opts: Pick<AnalyzeElfInstructionSetOptions, "signal" | "onProgress" | "yieldEveryInstructions">,
-  report: ElfInstructionSetReport
+  report: Aarch64ControlFlowReport
 ): Promise<void> => {
   const pending = [...entrypoints];
   const visit = createAarch64VisitedTracker();
@@ -108,7 +112,7 @@ const recordBytes = (
   bytes: Uint8Array,
   address: bigint,
   pending: bigint[],
-  report: ElfInstructionSetReport,
+  report: Aarch64ControlFlowReport,
   usage: Map<string, ElfInstructionSetUsage>
 ): void => {
   if (!bytes.length) return;

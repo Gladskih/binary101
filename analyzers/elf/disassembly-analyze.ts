@@ -13,6 +13,7 @@ import { loadIcedX86 } from "#iced-x86-loader";
 import { createX86InstructionSetUsageTracker } from "../x86/instruction-set-usage.js";
 import { collectElfInstructionSetSeeds } from "./disassembly-entrypoints.js";
 import { sampleElfExecutableRegions, type ElfSampledSection } from "./disassembly-sampling.js";
+import { createX86SpecialInstructionCollector } from "../x86/special-instructions.js";
 
 const ELF_MACHINE_I386 = 3;
 const ELF_MACHINE_X86_64 = 62;
@@ -33,6 +34,7 @@ type ElfInstructionSetDecodeResult = {
   instructionCount: number;
   invalidInstructionCount: number;
   instructionSets: ElfInstructionSetReport["instructionSets"];
+  specialInstructions: NonNullable<ElfInstructionSetReport["specialInstructions"]>;
 };
 
 const reportProgress = (opts: AnalyzeElfInstructionSetOptions, progress: ElfInstructionSetProgress): void => {
@@ -79,6 +81,7 @@ async function analyzeX86InstructionSets(
     instructionCount: 0,
     invalidInstructionCount: 0,
     instructionSets: [],
+    specialInstructions: [],
     issues,
     ...(seedSummary ? { seedSummary } : {})
   });
@@ -149,6 +152,7 @@ async function analyzeX86InstructionSets(
     instructionCount: decoded.instructionCount,
     invalidInstructionCount: decoded.invalidInstructionCount,
     instructionSets: decoded.instructionSets,
+    specialInstructions: decoded.specialInstructions,
     issues,
     seedSummary
   };
@@ -157,6 +161,7 @@ async function analyzeX86InstructionSets(
 const decodeElfInstructionSetUsage = async (
   run: ElfInstructionSetDecodeRun
 ): Promise<ElfInstructionSetDecodeResult> => {
+  const specialInstructions = createX86SpecialInstructionCollector(run.iced, address => address);
   const instructionSetUsage = createX86InstructionSetUsageTracker(run.iced.CpuidFeature);
   let bytesDecoded = 0;
   let instructionCount = 0;
@@ -180,6 +185,7 @@ const decodeElfInstructionSetUsage = async (
       entrypoints: run.entrypoints,
       yieldEveryInstructions: run.yieldEveryInstructions,
       featureCounts: instructionSetUsage.featureCounts,
+      onInstruction: specialInstructions.record,
       issues: run.issues,
       ...(run.opts.signal ? { signal: run.opts.signal } : {}),
       onYield: async snapshot => {
@@ -208,6 +214,7 @@ const decodeElfInstructionSetUsage = async (
     bytesDecoded,
     instructionCount,
     invalidInstructionCount,
-    instructionSets: instructionSetUsage.instructionSets()
+    instructionSets: instructionSetUsage.instructionSets(),
+    specialInstructions: specialInstructions.findings()
   };
 };

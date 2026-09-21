@@ -17,10 +17,10 @@ export const SPECIAL_INSTRUCTION_CATEGORIES = {
   transaction: ["Transactional memory", "Controls speculative memory transactions and their abort paths; presence does not prove transactions succeed."]
 } as const;
 
-export type PeSpecialInstructionCategory = keyof typeof SPECIAL_INSTRUCTION_CATEGORIES;
+export type X86SpecialInstructionCategory = keyof typeof SPECIAL_INSTRUCTION_CATEGORIES;
 
 export const SPECIAL_INSTRUCTION_CATALOG: Readonly<Record<
-  string, readonly [PeSpecialInstructionCategory, string]
+  string, readonly [X86SpecialInstructionCategory, string]
 >> = {
   SYSCALL: ["syscall", "Transfers to an OS handler using model-specific register configuration; inspect registers to identify the service."],
   SYSENTER: ["syscall", "Enters an OS handler through the SYSENTER registers; used by fast system-call gateways."],

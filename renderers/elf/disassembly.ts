@@ -9,6 +9,7 @@ import {
   describeCpuidFeature,
   formatCpuidLabel
 } from "../../analyzers/x86/cpuid-features.js";
+import { renderX86SpecialInstructions } from "../x86-special-instructions.js";
 
 const ANALYZE_BUTTON_ID = "elfInstructionSetsAnalyzeButton";
 const CANCEL_BUTTON_ID = "elfInstructionSetsCancelButton";
@@ -163,6 +164,10 @@ export const renderInstructionSetsContent = (elf: ElfParseResult, out: string[])
   }
   renderDisassemblySummary(disasm, out);
   renderSeedSummary(disasm, out);
+  out.push(renderX86SpecialInstructions(disasm.specialInstructions ?? [], finding =>
+    finding.sampleAddresses.map(address => `<code>0x${address.toString(16)}</code>`).join(" ") ||
+      "Unavailable", "Example virtual addresses",
+    "Virtual address examples show up to three locations per instruction."));
   renderKnownFeatureCounts(disasm, out);
   renderOtherFeatureCounts(disasm, out);
 };

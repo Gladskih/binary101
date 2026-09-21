@@ -4,7 +4,7 @@ import * as iced from "iced-x86";
 import {
   SPECIAL_INSTRUCTION_CATALOG,
   SPECIAL_INSTRUCTION_CATEGORIES
-} from "../../../../../analyzers/pe/disassembly/special-instruction-catalog.js";
+} from "../../../../analyzers/x86/special-instruction-catalog.js";
 
 void test("every educational entry names a decoded mnemonic or an intentional operand family", () => {
   const mnemonics = new Set(Object.keys(iced.Mnemonic).map(name => name.toUpperCase()));

@@ -1,5 +1,6 @@
 "use strict";
 
+import type { X86SpecialInstructionFinding } from "../x86/special-instructions.js";
 import type { ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import type { NativeAotMetadata } from "../native-aot/format.js";
 import type { FeatureRequirements } from "llvm-aarch64-disasm";
@@ -29,6 +30,7 @@ export interface ElfDisassemblySeedSummary {
 }
 
 export interface ElfInstructionSetReport {
+  specialInstructions?: X86SpecialInstructionFinding[];
   decoderVersion?: string;
   bitness: 32 | 64;
   bytesSampled: number;

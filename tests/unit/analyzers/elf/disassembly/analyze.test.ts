@@ -22,6 +22,52 @@ const ph = (overrides: Partial<ElfProgramHeader>): ElfProgramHeader =>
     ...overrides
   }) as unknown as ElfProgramHeader;
 
+// Intel SDM Vol. 2 encodings: RDMSR, CLI, RET, NOP, truncated two-byte opcode.
+// https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
+const analyzeSpecialBytes = (bytes: number[], address: bigint, machine = 62) =>
+  analyzeElfInstructionSets(new MockFile(Uint8Array.from(bytes), "special.elf"), {
+    machine, is64Bit: machine === 62, littleEndian: true, entrypointVaddr: address,
+    programHeaders: [ph({ flags: 1, vaddr: address, filesz: BigInt(bytes.length) })], sections: []
+  });
+
+void test("ELF64 collects privileges with exact high addresses and skips unreachable sites", async () => {
+  const report = await analyzeSpecialBytes([0x0f, 0x32, 0xfa, 0xc3, 0xfa], 0xffff800000001000n);
+
+  assert.deepEqual(report.specialInstructions, [
+    { categories: ["system-state", "privileged"], instruction: "RDMSR", count: 1,
+      sampleAddresses: [0xffff800000001000n] },
+    { categories: ["io-privilege"], instruction: "CLI", count: 1,
+      sampleAddresses: [0xffff800000001002n] }
+  ]);
+});
+
+void test("ELF32 counts sites and limits examples to three addresses", async () => {
+  const report = await analyzeSpecialBytes([0xfa, 0xfa, 0xfa, 0xfa, 0xc3], 0x1000n, 3);
+
+  assert.deepEqual(report.specialInstructions, [
+    { categories: ["io-privilege"], instruction: "CLI", count: 4,
+      sampleAddresses: [0x1000n, 0x1001n, 0x1002n] }
+  ]);
+});
+
+void test("ELF retains findings before truncated instructions and ignores ordinary code", async () => {
+  const report = await analyzeSpecialBytes([0x90, 0xfa, 0x0f], 0x1000n);
+
+  assert.deepEqual(report.specialInstructions, [
+    { categories: ["io-privilege"], instruction: "CLI", count: 1, sampleAddresses: [0x1001n] }
+  ]);
+  assert.equal(report.invalidInstructionCount, 1);
+  assert.ok(report.issues.some(issue => issue.includes("invalid instruction")));
+});
+
+void test("ELF reports no special instructions for ordinary code or empty input", async () => {
+  const ordinary = await analyzeSpecialBytes([0x90, 0xc3], 0x1000n);
+  const empty = await analyzeSpecialBytes([], 0x1000n);
+
+  assert.deepEqual(ordinary.specialInstructions, []);
+  assert.deepEqual(empty.specialInstructions, []);
+});
+
 void test("analyzeElfInstructionSets returns an empty report for unsupported machines", async () => {
   const file = new MockFile(new Uint8Array([0x90]), "elf.bin");
   const report = await analyzeElfInstructionSets(file, {

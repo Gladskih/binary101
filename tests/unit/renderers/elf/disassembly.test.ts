@@ -5,6 +5,36 @@ import { test } from "node:test";
 import { renderInstructionSets } from "../../../../renderers/elf/disassembly.js";
 import type { ElfParseResult } from "../../../../analyzers/elf/types.js";
 
+void test("ELF renders special instruction explanations and full virtual addresses", () => {
+  const out: string[] = [];
+  renderInstructionSets({ disassembly: {
+    bitness: 64, bytesSampled: 1, bytesDecoded: 1, instructionCount: 1,
+    invalidInstructionCount: 0, issues: [], instructionSets: [], specialInstructions: [
+      { categories: ["privileged"], instruction: "HLT", count: 1,
+        sampleAddresses: [0xffff800000001000n] }
+    ]
+  } } as unknown as ElfParseResult, out);
+
+  const html = out.join("");
+  assert.match(html, /Special instructions/);
+  assert.match(html, /Kernel privilege/);
+  assert.match(html, /administrator rights alone do not suffice/);
+  assert.match(html, /Halts instruction execution/);
+  assert.match(html, /Example virtual addresses/);
+  assert.match(html, /0xffff800000001000/);
+  assert.doesNotMatch(html, /data-pe-special-rva|Example RVAs/);
+});
+
+void test("ELF renders an explicit empty special instruction result", () => {
+  const out: string[] = [];
+  renderInstructionSets({ disassembly: {
+    bitness: 32, bytesSampled: 0, bytesDecoded: 0, instructionCount: 0,
+    invalidInstructionCount: 0, issues: [], instructionSets: [], specialInstructions: []
+  } } as unknown as ElfParseResult, out);
+
+  assert.match(out.join(""), /None detected in the sampled code/);
+});
+
 void test("AArch64 pending panel does not show x86 CPUID features", () => {
   const out: string[] = [];
   renderInstructionSets({ header: { machine: 183 } } as ElfParseResult, out);
