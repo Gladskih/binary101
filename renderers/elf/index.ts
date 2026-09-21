@@ -129,25 +129,38 @@ const formatSectionEntSize = (section: ElfSectionHeader): string => {
 };
 
 export function renderHeader(elf: ElfParseResult, out: string[]): void {
+  // Field meanings: System V gABI, sections 2.1 and 2.2.
+  // https://gabi.xinuos.com/elf/02-eheader.html
   const h = elf.header;
   out.push(renderElfSectionStart(`ELF header`));
   out.push(`<dl>`);
-  out.push(renderDefinitionRow("Class", renderHeaderOptions(elf.ident.classByte, ELF_CLASS)));
-  out.push(renderDefinitionRow("Data", renderHeaderOptions(elf.ident.dataByte, ELF_DATA)));
+  out.push(renderDefinitionRow("Class", renderHeaderOptions(elf.ident.classByte, ELF_CLASS),
+    "Selects the 32-bit or 64-bit layout of ELF structures."));
+  out.push(renderDefinitionRow("Data", renderHeaderOptions(elf.ident.dataByte, ELF_DATA),
+    "Specifies byte order for decoding multibyte numbers: little-endian or big-endian."));
   out.push(renderDefinitionRow("OS ABI", renderOsAbi(elf.ident.osabi),
-    "EI_OSABI identifies the ABI. Chip tooltips show its numeric code, not the ABI version."));
+    "Identifies operating system and binary interface conventions used by this file."));
   out.push(renderDefinitionRow("ABI version", escapeHtml(elf.ident.abiVersion),
-    "EI_ABIVERSION is a separate version byte interpreted according to EI_OSABI."));
-  out.push(renderDefinitionRow("Type", renderHeaderOptions(h.type, ELF_TYPE)));
-  out.push(renderDefinitionRow("Machine", renderMachine(h.machine)));
-  out.push(renderDefinitionRow("Entry", formatElfHex(h.entry)));
+    "Distinguishes binary interface revisions; its meaning depends on the selected OS ABI."));
+  out.push(renderDefinitionRow("Type", renderHeaderOptions(h.type, ELF_TYPE),
+    "Identifies the file's role: relocatable object, executable, shared object or core dump."));
+  out.push(renderDefinitionRow("Machine", renderMachine(h.machine),
+    "Identifies the target processor architecture used to interpret machine code."));
+  out.push(renderDefinitionRow("Entry", formatElfHex(h.entry),
+    "Virtual address where execution starts. Zero means no entry point."));
   const phText = `${h.phnum} entries @ ${formatElfHex(h.phoff)}`;
   const shText = `${h.shnum} entries @ ${formatElfHex(h.shoff)}`;
-  out.push(renderDefinitionRow("Program headers", phText));
-  out.push(renderDefinitionRow("Section headers", shText));
-  out.push(renderDefinitionRow("Header size", `${h.ehsize} bytes`));
-  out.push(renderDefinitionRow("PH entry size", `${h.phentsize} bytes`));
-  out.push(renderDefinitionRow("SH entry size", `${h.shentsize} bytes`));
+  out.push(renderDefinitionRow("Program headers", phText,
+    "Segment descriptions for loading. Shows the number of entries @ byte offset in the file."));
+  out.push(renderDefinitionRow("Section headers", shText,
+    "Section descriptions for linking and analysis. " +
+    "Shows the number of entries @ byte offset in the file."));
+  out.push(renderDefinitionRow("Header size", `${h.ehsize} bytes`,
+    "Size of the ELF header itself."));
+  out.push(renderDefinitionRow("PH entry size", `${h.phentsize} bytes`,
+    "Size of one program header record, used to locate successive records."));
+  out.push(renderDefinitionRow("SH entry size", `${h.shentsize} bytes`,
+    "Size of one section header record, used to locate successive records."));
   out.push(`</dl>`);
   out.push(renderElfSectionEnd());
 }

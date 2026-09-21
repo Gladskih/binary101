@@ -121,7 +121,13 @@ void test("places the collapsed instruction panel before collapsed ELF metadata"
 
   assert.ok(html.startsWith(`<section id="elfInstructionSetsPanel"><details class="analysisPanel">`));
   assert.ok(!html.includes(`<b>Identification</b>`));
-  assert.ok(html.includes("<dt>Class</dt>"));
+  assert.match(html, /<dt data-accessible-tooltip title="[^"]+">Class<\/dt>/);
+  assert.deepEqual(
+    Array.from(html.slice(html.indexOf("<b>ELF header</b>"), html.indexOf("</dl>"))
+      .matchAll(/<dt data-accessible-tooltip title="[^"]+">([^<]+)<\/dt>/g), match => match[1]),
+    ["Class", "Data", "OS ABI", "ABI version", "Type", "Machine", "Entry",
+      "Program headers", "Section headers", "Header size", "PH entry size", "SH entry size"]
+  );
   assert.match(html, /<dt[^>]*>OS ABI<\/dt>/);
   assert.ok(html.includes(`<summary class="peSectionSummary"><b>ELF header</b></summary>`));
   assert.ok(!html.includes("Show program headers"));
