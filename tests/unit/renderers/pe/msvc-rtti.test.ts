@@ -47,6 +47,9 @@ const createMsvcRttiPe = (): PeWindowsParseResult => {
     entries: [{
       addressOfRawData: 0,
       characteristics: 0,
+      timeDateStamp: 0,
+      majorVersion: 0,
+      minorVersion: 0,
       pointerToRawData: 0,
       pogo: {
         entries: [{ name: "pogo<target>", size: 16, startRva: 0x1020 }],

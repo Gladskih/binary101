@@ -22,8 +22,11 @@ const formatEntryType = (entry: PeDebugDirectoryEntry): string => {
 const renderEntryTable = (pe: PeWindowsParseResult, out: string[]): void => {
   if (!pe.debug?.entries?.length) return;
   out.push(
-    `<table class="table" style="margin-top:.35rem"><thead><tr>` +
+    `<div class="tableWrap"><table class="table" style="margin-top:.35rem"><thead><tr>` +
       `<th>#</th><th>Type</th><th>Storage</th><th>Payload</th>` +
+      `<th>Characteristics</th><th>TimeDateStamp</th>` +
+      `<th style="text-align:right">MajorVersion</th>` +
+      `<th style="text-align:right">MinorVersion</th>` +
       `<th>Raw RVA</th><th>Raw file ptr</th><th>What it contains</th></tr></thead><tbody>`
   );
   pe.debug.entries.forEach((entry, index) => {
@@ -31,12 +34,16 @@ const renderEntryTable = (pe: PeWindowsParseResult, out: string[]): void => {
     out.push(
       `<tr><td>${index + 1}</td><td>${formatEntryType(entry)}</td>` +
         `<td title="${escapeHtml(storageInfo.description)}">${escapeHtml(storageInfo.label)}</td>` +
-        `<td>${humanSize(entry.sizeOfData)}</td><td>${hex(entry.addressOfRawData, 8)}</td>` +
+        `<td>${humanSize(entry.sizeOfData)}</td>` +
+        `<td>${hex(entry.characteristics, 8)}</td><td>${hex(entry.timeDateStamp, 8)}</td>` +
+        `<td style="text-align:right">${entry.majorVersion}</td>` +
+        `<td style="text-align:right">${entry.minorVersion}</td>` +
+        `<td>${hex(entry.addressOfRawData, 8)}</td>` +
         `<td>${hex(entry.pointerToRawData, 8)}</td>` +
         `<td>${escapeHtml(getEntrySummary(entry))}</td></tr>`
     );
   });
-  out.push(`</tbody></table>`);
+  out.push(`</tbody></table></div>`);
 };
 
 const renderDebugIntro = (out: string[]): void => {

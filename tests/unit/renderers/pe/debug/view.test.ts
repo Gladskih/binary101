@@ -32,6 +32,23 @@ const assertIncludesAll = (html: string, snippets: string[]): void => {
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const countMatches = (html: string, pattern: RegExp): number => [...html.matchAll(pattern)].length;
+void test("renderDebug shows directory characteristics, timestamp and both versions", () => {
+  const pe = createBasePe();
+  pe.debug = { entry: null, entries: [{
+    ...createDebugViewEntry(0, 0, 0),
+    characteristics: 1, timeDateStamp: 0xfedcba98, majorVersion: 43981, minorVersion: 61202
+  }] };
+
+  const html = renderDebugHtml(pe);
+
+  assertIncludesAll(html, [
+    "<th>Characteristics</th><th>TimeDateStamp</th>",
+    '<th style="text-align:right">MajorVersion</th>',
+    '<th style="text-align:right">MinorVersion</th>',
+    ">0x00000001</td><td>0xfedcba98</td>", ">43981</td>", ">61202</td>"
+  ]);
+  assert.match(html, /<div class="tableWrap"><table/);
+});
 
 void test("renderDebug renders CodeView summary and plain entry values", () => {
   const pe = createPeWithDebugViewSection();

@@ -56,6 +56,9 @@ const createDebugEntry = (
   pointerToRawData = DEBUG_EXCEPTION_OFFSET
 ): PeDebugDirectoryEntry => ({
   characteristics: 0,
+  timeDateStamp: 0,
+  majorVersion: 0,
+  minorVersion: 0,
   type,
   typeName: type === IMAGE_DEBUG_TYPE_EXCEPTION ? "EXCEPTION" : `TYPE_${type}`,
   sizeOfData,

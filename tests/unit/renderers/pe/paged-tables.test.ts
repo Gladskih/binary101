@@ -50,6 +50,9 @@ const createCoffDebug = (): CoffDebugInfo => ({
 const createDebugEntry = (coff: CoffDebugInfo): PeDebugDirectoryEntry => ({
   addressOfRawData: 0,
   characteristics: 0,
+  timeDateStamp: 0,
+  majorVersion: 0,
+  minorVersion: 0,
   coff,
   pointerToRawData: 0,
   sizeOfData: 0,

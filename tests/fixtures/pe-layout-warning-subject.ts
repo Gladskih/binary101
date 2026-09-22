@@ -39,6 +39,9 @@ const createDebugEntry = (
   addressOfRawData: number
 ) => ({
   characteristics: 0,
+  timeDateStamp: 0,
+  majorVersion: 0,
+  minorVersion: 0,
   type: IMAGE_DEBUG_TYPE_CODEVIEW,
   typeName: "CODEVIEW",
   sizeOfData,

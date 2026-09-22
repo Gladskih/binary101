@@ -24,6 +24,8 @@ export type { PeVcFeatureInfo } from "./vc-feature.js";
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
 // IMAGE_DEBUG_DIRECTORY entry layout (28 bytes, file form):
 // - Characteristics (DWORD, reserved, must be 0) at +0x00
+// - TimeDateStamp (DWORD) at +0x04
+// - MajorVersion and MinorVersion (WORD each) at +0x08 and +0x0a
 // - Type (DWORD) at +0x0c
 // - SizeOfData (DWORD) at +0x10
 // - AddressOfRawData (DWORD, RVA) at +0x14
@@ -39,6 +41,9 @@ type FileRange = { start: number; end: number };
 
 export interface PeDebugDirectoryEntry extends PeDebugPayloads {
   characteristics: number;
+  timeDateStamp: number;
+  majorVersion: number;
+  minorVersion: number;
   type: number;
   typeName: string;
   sizeOfData: number;
@@ -115,6 +120,9 @@ const decodeDebugDirectoryEntry = async (
   if (rawDataRange) appendFileRange(rawDataRanges, rawDataRange.start, rawDataRange.end, reader.size);
   const currentEntry: PeDebugDirectoryEntry = {
     characteristics,
+    timeDateStamp: view.getUint32(0x04, true),
+    majorVersion: view.getUint16(0x08, true),
+    minorVersion: view.getUint16(0x0a, true),
     type,
     typeName: DEBUG_TYPE_NAMES[type] || `TYPE_${type}`,
     sizeOfData: dataSize,

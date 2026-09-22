@@ -50,6 +50,9 @@ export const createDebugViewEntry = (
   sizeOfData = createSyntheticDebugSize(type)
 ): PeDebugDirectoryEntry => ({
   characteristics: 0,
+  timeDateStamp: 0,
+  majorVersion: 0,
+  minorVersion: 0,
   type,
   typeName: `TYPE_${type}`,
   sizeOfData,
