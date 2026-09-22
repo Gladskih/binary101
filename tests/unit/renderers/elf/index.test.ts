@@ -157,7 +157,7 @@ for (const [code, label] of [
     const html = out.join("");
     const osAbiHtml = /OS ABI<\/dt><dd>([\s\S]*?)<\/dd>/.exec(html)?.[1] ?? "";
     assert.equal(osAbiHtml.match(/class="opt sel"/g)?.length, 1);
-    assert.match(osAbiHtml, new RegExp(`class="opt sel"[^>]*>${label.replace(/[()]/g, "\\$&")}<`));
+    assert.equal(osAbiHtml.match(/class="opt sel"[^>]*>([^<]*)</)?.[1], label);
     assert.match(osAbiHtml, /class="opt sel" data-accessible-tooltip/);
     assert.match(html, /<dt[^>]*>ABI version<\/dt><dd>0<\/dd>/);
   });
