@@ -9,6 +9,7 @@ import { getDebugTypeInfo } from "./debug-type-info.js";
 import { getDebugStorageInfo, getEntrySummary } from "./debug-entry-summary.js";
 import { renderCoffDebugInfo } from "../coff/debug.js";
 import { renderException } from "./exception.js";
+import { renderOmap } from "./omap.js";
 
 const hasDecodedPayload = (entry: PeDebugDirectoryEntry): boolean =>
   !!(
@@ -16,6 +17,7 @@ const hasDecodedPayload = (entry: PeDebugDirectoryEntry): boolean =>
     entry.codeView ||
     entry.fpo ||
     entry.misc ||
+    entry.omap ||
     entry.vcFeature ||
     entry.pogo ||
     entry.repro ||
@@ -270,6 +272,7 @@ export const renderDecodedEntryDetails = (
     renderCodeViewFields(entry, out);
     renderFpoFields(entry, out);
     renderMiscFields(entry, out);
+    renderOmap(entry, entryIndex, out);
     renderVcFeatureFields(entry, out);
     renderPogoFields(entry, out);
     renderReproFields(entry, out);

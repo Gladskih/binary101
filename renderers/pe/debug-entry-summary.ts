@@ -70,6 +70,7 @@ export const getEntrySummary = (entry: PeDebugDirectoryEntry): string => {
   }
   if (entry.fpo) return `Frame-pointer omission table with ${entry.fpo.records.length} records.`;
   if (entry.misc) return "Legacy DBG-file location record.";
+  if (entry.omap) return `Address map with ${entry.omap.records.length} records.`;
   if (entry.vcFeature) return "MSVC toolchain counters such as /GS, /sdl, and guardN.";
   if (entry.pogo) {
     return `Linker layout map with ` +

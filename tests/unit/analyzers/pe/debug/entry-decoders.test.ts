@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { decodeDebugEntryPayload } from "../../../../../analyzers/pe/debug/entry-decoders.js";
 import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../analyzers/coff/machine.js";
+import { createOmapPayload } from "../../../../fixtures/pe-omap.js";
 import {
   createExtraDebugPayloadSubject,
   encodeNullTerminatedAscii,
@@ -15,6 +16,17 @@ const IMAGE_DEBUG_TYPE_CODEVIEW = 2;
 const IMAGE_DEBUG_TYPE_REPRO = 16;
 const IMAGE_DEBUG_TYPE_R2R_PERFMAP = 21;
 const UNKNOWN_DEBUG_TYPE = 0xff;
+
+// PE Debug Type: 7 maps image -> source; 8 maps source -> image.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-type
+for (const type of [7, 8]) {
+  void test(`decodeDebugEntryPayload decodes OMAP type ${type}`, async () => {
+    const { result, warnings } = await createDecodeSubject(type, createOmapPayload([[1, 2]]));
+
+    assert.deepEqual(result, { omap: { records: [{ rva: 1, rvaTo: 2 }] } });
+    assert.deepEqual(warnings, []);
+  });
+}
 const RSDS_SIGNATURE = 0x53445352;
 const R2R_PERFMAP_MAGIC = 0x4d523252;
 
