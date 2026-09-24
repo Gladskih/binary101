@@ -24,6 +24,16 @@ void test("renderDynamicControlTransfers shows instruction RVAs and transfer met
   assert.match(html, /register 9/);
 });
 
+void test("renderDynamicControlTransfers escapes resolved import names", () => {
+  const html = renderDynamicControlTransfers([{ kind: "v1", symbol: 3n,
+    baseRelocSize: 0, availableBytes: 0,
+    controlTransfers: [{ kind: "import", rva: 0x1010, indirectCall: true,
+      iatIndex: 17, importName: "evil<script>.dll!A&B" }] }]);
+
+  assert.match(html, /IAT index 17, evil&lt;script&gt;\.dll!A&amp;B/);
+  assert.doesNotMatch(html, /<script>/);
+});
+
 void test("renderDynamicControlTransfers describes ARM64 delayed imports", () => {
   const html = renderDynamicControlTransfers([{ kind: "v1", symbol: 8n,
     baseRelocSize: 0, availableBytes: 0,

@@ -6,7 +6,8 @@
 const BLOCK_HEADER_SIZE = 8;
 
 export type PeControlTransferRecord =
-  | { kind: "import"; rva: number; indirectCall: boolean; iatIndex: number }
+  | { kind: "import"; rva: number; indirectCall: boolean; iatIndex: number;
+      importName?: string }
   | { kind: "arm64Import"; rva: number; indirectCall: boolean;
       registerIndex: number; delayImport: boolean; iatIndex: number | null }
   | { kind: "indirect"; rva: number; indirectCall: boolean;

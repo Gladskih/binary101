@@ -1,6 +1,7 @@
 "use strict";
 
 import { hex } from "../../binary-utils.js";
+import { escapeHtmlText } from "../../html-utils.js";
 import type { PeDynamicRelocationEntry } from
   "../../analyzers/pe/dynamic-relocations/index.js";
 import type { PeControlTransferRecord } from
@@ -12,7 +13,10 @@ const RENDER_LIMIT = 512;
 const describeRecord = (record: PeControlTransferRecord): [string, string] => {
   switch (record.kind) {
     case "import":
-      return [record.indirectCall ? "call" : "branch", `IAT index ${record.iatIndex}`];
+      return [record.indirectCall ? "call" : "branch", [
+        `IAT index ${record.iatIndex}`,
+        ...(record.importName ? [record.importName] : [])
+      ].join(", ")];
     case "arm64Import":
       return [record.indirectCall ? "BLR" : "BR", [
         `register ${record.registerIndex}`, record.delayImport ? "delay import" : "static import",
@@ -37,7 +41,7 @@ export const renderDynamicControlTransfers = (entries: PeDynamicRelocationEntry[
       if (rows.length >= RENDER_LIMIT) break;
       const [transfer, detail] = describeRecord(record);
       rows.push(`<tr><td>${getDynamicRelocationSymbolName(entry.symbol)}</td>` +
-        `<td>${hex(record.rva, 8)}</td><td>${transfer}</td><td>${detail}</td></tr>`);
+        `<td>${hex(record.rva, 8)}</td><td>${transfer}</td><td>${escapeHtmlText(detail)}</td></tr>`);
     }
     if (rows.length >= RENDER_LIMIT) break;
   }

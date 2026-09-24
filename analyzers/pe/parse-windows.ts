@@ -13,11 +13,13 @@ import { parseExceptionDirectory } from "./exception/index.js";
 import { parseBoundImports } from "./imports/bound.js";
 import type { parseDelayImports32 } from "./imports/delay.js";
 import { parseIatDirectory } from "./imports/iat.js";
+import { linkDynamicImportControlTransfers } from "./dynamic-relocations/import-links.js";
 import type { parseImportDirectory32 } from "./imports/index.js";
 import { analyzeImportLinking } from "./imports/linking.js";
 import { parseLinuxBootProtocol } from "./linux-boot.js";
 import { collectLoadConfigChecks } from "./load-config/checks.js";
 import { getCanonicalPeMachine } from "./machine.js";
+import { IMAGE_FILE_MACHINE_AMD64 } from "../coff/machine.js";
 import { detectNativeAotCandidate } from "./native-aot.js";
 import { analyzePeNativeAotMetadata } from "./native-aot-metadata.js";
 import type { PeWindowsParseResult } from "./core/parse-result.js";
@@ -96,6 +98,12 @@ export const parseWindowsPe = async (
   };
   const debugArtifacts = await parsePeDebugArtifacts(context);
   const directories = await parsePeDirectoryArtifacts(context);
+  if (canonicalMachine === IMAGE_FILE_MACHINE_AMD64 && directories.loadcfg?.dynamicRelocations) {
+    directories.loadcfg.dynamicRelocations = await linkDynamicImportControlTransfers(
+      directories.loadcfg.dynamicRelocations,
+      reader, core.rvaToOff, directories.iat, directories.importResult
+    );
+  }
   const security = await parsePeSecurity(context, debugArtifacts.debugResult);
   const imageArtifacts = await parsePeImageArtifacts(
     context,
