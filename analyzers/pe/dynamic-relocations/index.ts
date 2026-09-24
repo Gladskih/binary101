@@ -15,6 +15,8 @@ import type { PeFunctionOverride } from "./function-override.js";
 import type { PeControlTransferRecord } from "./control-transfers.js";
 
 const DYNAMIC_RELOCATION_TABLE_HEADER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 2;
+// Bound untrusted DVRT allocation and mapped-RVA scanning in the browser.
+const MAX_DYNAMIC_RELOCATION_TABLE_BYTES = 16 * 1024 * 1024;
 
 export type PeDynamicRelocationEntry =
   | { kind: "v1"; symbol: bigint; baseRelocSize: number; availableBytes: number;
@@ -120,12 +122,18 @@ const readDynamicRelocationTable = async (
   const dataSize = header.getUint32(Uint32Array.BYTES_PER_ELEMENT, true);
   const readableSize = Math.min(
     DYNAMIC_RELOCATION_TABLE_HEADER_SIZE + dataSize,
-    reader.size
+    reader.size,
+    MAX_DYNAMIC_RELOCATION_TABLE_BYTES
   );
+  const limited = DYNAMIC_RELOCATION_TABLE_HEADER_SIZE + dataSize >
+    MAX_DYNAMIC_RELOCATION_TABLE_BYTES;
+  if (limited) {
+    warnings.push("DynamicRelocations: table exceeds the 16 MiB read limit; parsed prefix only.");
+  }
   const view = await readMappedRvaPrefix(reader, tableRva, readableSize, rvaToOff);
   const dataEnd = Math.min(view.byteLength, DYNAMIC_RELOCATION_TABLE_HEADER_SIZE + dataSize);
 
-  if (dataEnd < DYNAMIC_RELOCATION_TABLE_HEADER_SIZE + dataSize) {
+  if (dataEnd < readableSize || (!limited && dataEnd < DYNAMIC_RELOCATION_TABLE_HEADER_SIZE + dataSize)) {
     warnings.push(`DynamicRelocations: declared size 0x${dataSize.toString(16)} is truncated by EOF.`);
   }
 
