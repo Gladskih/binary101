@@ -55,3 +55,18 @@ void test("V2 does not use incomplete Function Override data", () => {
   assert.equal(entries[0]?.fixup, undefined);
   assert.ok(warnings.some(warning => /FixupInfoSize/.test(warning)));
 });
+
+void test("V2 does not decode a Function Override behind an undersized header", () => {
+  const view = new DataView(new ArrayBuffer(8 + 24 + 12));
+  view.setUint32(8, 4, true); // Smaller than the fixed PE32+ V2 header.
+  view.setUint32(12, 12, true);
+  view.setBigUint64(16, 7n, true);
+  view.setUint32(32, 0, true);
+  view.setUint32(36, 1, true);
+  const warnings: string[] = [];
+
+  const entries = parseDynamicRelocationEntriesV264(view, view.byteLength, warnings);
+
+  assert.equal(entries[0]?.fixup, undefined);
+  assert.ok(warnings.some(warning => /smaller than the fixed/.test(warning)));
+});

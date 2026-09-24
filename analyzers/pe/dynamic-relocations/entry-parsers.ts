@@ -115,7 +115,9 @@ export const parseDynamicRelocationEntriesV232 = (
     }
     const fixupStart = cursor + Math.max(DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE32, headerSize);
     const availableBytes = Math.min(fixupInfoSize, Math.max(0, dataEnd - fixupStart));
-    const fixup = parseKnownFixup(view, symbol, fixupStart, availableBytes, fixupInfoSize, warnings);
+    const fixup = headerSize >= DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE32
+      ? parseKnownFixup(view, symbol, fixupStart, availableBytes, fixupInfoSize, warnings)
+      : undefined;
 
     entries.push({
       kind: "v2",
@@ -171,7 +173,9 @@ export const parseDynamicRelocationEntriesV264 = (
     }
     const fixupStart = cursor + Math.max(DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE64, headerSize);
     const availableBytes = Math.min(fixupInfoSize, Math.max(0, dataEnd - fixupStart));
-    const fixup = parseKnownFixup(view, symbol, fixupStart, availableBytes, fixupInfoSize, warnings);
+    const fixup = headerSize >= DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE64
+      ? parseKnownFixup(view, symbol, fixupStart, availableBytes, fixupInfoSize, warnings)
+      : undefined;
 
     entries.push({
       kind: "v2",
