@@ -42,6 +42,25 @@ void test("collectPeDisassemblySeeds gathers basic Windows PE entry seeds", asyn
   assert.deepEqual(seeds.extraEntrypoints, []);
 });
 
+void test("collectPeDisassemblySeeds includes decoded DVRT function overrides", async () => {
+  const pe = createWindowsPe();
+  pe.rvaToOff = rva => rva;
+  pe.loadcfg = { dynamicRelocations: { version: 1, dataSize: 0, entries: [{
+    kind: "v1", symbol: 7n, baseRelocSize: 0, availableBytes: 0,
+    fixup: { functions: [{ originalRva: 0x2010, bddOffset: 0,
+      overridingRvas: [0x2020], baseRelocations: [] }], bddInfos: [] }
+  }] } } as unknown as PeWindowsParseResult["loadcfg"];
+
+  const seeds = await collectPeDisassemblySeeds(
+    new File([new Uint8Array(0x3000)], "override-pe"), pe
+  );
+
+  assert.deepEqual(seeds.extraEntrypoints, [
+    { source: "DVRT original function", rvas: [0x2010] },
+    { source: "DVRT override function", rvas: [0x2020] }
+  ]);
+});
+
 void test("collectPeDisassemblySeeds exposes confirmed Go function starts", async () => {
   const pe = createWindowsPe();
   pe.goRuntime = {

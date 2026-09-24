@@ -17,6 +17,7 @@ import {
   readGuardLongJumpTargetTableRvas,
   readSafeSehHandlerTableRvas
 } from "../analyzers/pe/load-config/tables.js";
+import { collectFunctionOverrideEntrypoints } from "./pe-disassembly-function-override-seeds.js";
 
 type PeDisassemblySeedSet = {
   canonicalMachine: number;
@@ -274,6 +275,9 @@ const collectPeDisassemblySeeds = async (
   const reader = createFileRangeReader(file, 0, file.size);
   const windowsPe = isPeWindowsParseResult(pe) ? pe : null;
   const seeds = collectBasicPeDisassemblySeeds(pe, windowsPe);
+  if (windowsPe) {
+    seeds.extraEntrypoints.push(...collectFunctionOverrideEntrypoints(windowsPe, file.size));
+  }
   await addLoadConfigPointerSeeds(
     seeds,
     reader,
