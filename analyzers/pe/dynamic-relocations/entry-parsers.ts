@@ -92,6 +92,10 @@ export const parseDynamicRelocationEntriesV232 = (
         `DynamicRelocations: V2 entry header size 0x${headerSize.toString(16)} is smaller than the fixed 0x${DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE32.toString(16)}-byte structure.`
       );
     }
+    if (headerSize > entryBodySize) {
+      warnings.push("DynamicRelocations: V2 entry header is truncated by the table boundary.");
+      break;
+    }
     if (entryBodySize <= DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE32) {
       warnings.push(
         "DynamicRelocations: V2 entry body is no larger than the fixed header, so fixup payload is missing or truncated."
@@ -141,6 +145,10 @@ export const parseDynamicRelocationEntriesV264 = (
       warnings.push(
         `DynamicRelocations: V2 entry header size 0x${headerSize.toString(16)} is smaller than the fixed 0x${DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE64.toString(16)}-byte structure.`
       );
+    }
+    if (headerSize > entryBodySize) {
+      warnings.push("DynamicRelocations: V2 entry header is truncated by the table boundary.");
+      break;
     }
     if (entryBodySize <= DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE64) {
       warnings.push(
