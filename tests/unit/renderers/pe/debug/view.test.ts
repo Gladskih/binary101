@@ -150,7 +150,7 @@ void test("renderDebug renders supported debug-format labels and descriptions", 
     "Reserved CLSID debug type\\.",
     "Visual C\\+\\+ feature metadata emitted by the toolchain\\.",
     "linker layout metadata; may describe code or data\\.",
-    "Link-time code generation metadata emitted by the toolchain\\.",
+    "Incremental Link-Time Code Generation",
     "Intel MPX metadata emitted by the toolchain\\.",
     "PE determinism or reproducibility metadata\\.",
     "Crypto hash of the symbol file content used to build the PE/COFF file\\.",
@@ -160,14 +160,14 @@ void test("renderDebug renders supported debug-format labels and descriptions", 
   assert.doesNotMatch(html, /<span class="opt sel"/);
 });
 
-void test("renderDebug shows fallback types and unresolved storage when payload location is missing", () => {
+void test("renderDebug shows fallback types and empty storage without a payload", () => {
   const pe = createBasePe();
   pe.debug = createUnresolvedDebugViewSection();
 
   const html = renderDebugHtml(pe);
 
   assert.match(html, />TYPE_255<div class="valueHint">0x000000ff<\/div>/);
-  assert.match(html, />UNRESOLVED</);
+  assert.match(html, />NO PAYLOAD</);
   assert.match(html, /Undocumented or unsupported IMAGE_DEBUG_DIRECTORY\.Type 0x000000ff\./);
 });
 

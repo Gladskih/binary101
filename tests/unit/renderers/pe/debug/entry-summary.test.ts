@@ -13,13 +13,29 @@ import {
   createPeWithSections
 } from "../../../../fixtures/pe-renderer-headers-fixture.js";
 
-void test("getDebugStorageInfo reports unresolved payloads", () => {
+void test("getDebugStorageInfo distinguishes empty entries from unresolved payloads", () => {
   const pe = createBasePe();
 
-  const result = getDebugStorageInfo(pe, createDebugViewEntry(0xff, 0, 0, 0));
+  const empty = getDebugStorageInfo(pe, createDebugViewEntry(14, 0, 0, 0));
+  const unresolved = getDebugStorageInfo(pe, createDebugViewEntry(0xff, 0, 0, 4));
 
-  assert.equal(result.label, "UNRESOLVED");
-  assert.match(result.description, /does not resolve/i);
+  assert.equal(empty.label, "NO PAYLOAD");
+  assert.match(empty.description, /zero/i);
+  assert.equal(unresolved.label, "UNRESOLVED");
+  assert.match(unresolved.description, /does not resolve/i);
+});
+
+void test("getEntrySummary explains empty and nonempty ILTCG entries", () => {
+  const empty = getEntrySummary(createDebugViewEntry(14, 0, 0, 0));
+  const nonempty = getEntrySummary(createDebugViewEntry(14, 0, 0x80, 4));
+
+  assert.match(empty, /Incremental Link-Time Code Generation/);
+  assert.match(empty, /\/LTCG:INCREMENTAL/);
+  assert.match(empty, /reoptimizes files affected by edits during linking/);
+  assert.match(empty, /no payload/i);
+  assert.match(nonempty, /Incremental Link-Time Code Generation/);
+  assert.match(nonempty, /Payload format is not documented here/);
+  assert.doesNotMatch(nonempty, /no payload/i);
 });
 
 void test("getDebugStorageInfo reports mapped section-backed payloads", () => {

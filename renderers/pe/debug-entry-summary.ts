@@ -2,6 +2,7 @@
 
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type { PeDebugDirectoryEntry } from "../../analyzers/pe/debug/directory.js";
+import { IMAGE_DEBUG_TYPE_ILTCG } from "../../analyzers/pe/debug/types.js";
 import { getDebugTypeInfo } from "./debug-type-info.js";
 
 type DebugStorageInfo = { label: string; description: string };
@@ -28,11 +29,17 @@ export const getDebugStorageInfo = (
   pe: PeWindowsParseResult,
   entry: PeDebugDirectoryEntry
 ): DebugStorageInfo => {
+  if (entry.sizeOfData === 0) {
+    return {
+      label: "NO PAYLOAD",
+      description: "SizeOfData is zero; this debug entry has no payload to locate."
+    };
+  }
   const rawRange = getDebugRawRange(pe, entry);
   if (!rawRange) {
     return {
       label: "UNRESOLVED",
-      description: "Payload size is zero or the raw data location does not resolve to a file range."
+      description: "The raw data location does not resolve to a file range."
     };
   }
   const hasRva = (entry.addressOfRawData >>> 0) !== 0;
@@ -62,6 +69,10 @@ const formatParsedPrimarySymbolCount = (count: number): string =>
   `${count} parsed primary symbol${count === 1 ? "" : "s"}`;
 
 export const getEntrySummary = (entry: PeDebugDirectoryEntry): string => {
+  if (entry.type === IMAGE_DEBUG_TYPE_ILTCG) {
+    return getDebugTypeInfo(entry.type).description +
+      (entry.sizeOfData === 0 ? " This entry has no payload." : " Payload format is not documented here.");
+  }
   if (entry.coff) return `COFF symbol table with ${formatParsedPrimarySymbolCount(entry.coff.symbols.length)}.`;
   if (entry.codeView) {
     return entry.codeView.signature === "NB10"

@@ -8,6 +8,8 @@ type DebugTypeInfo = { label: string; description: string };
 // LLVM COFF DebugType enum fills in additional toolchain-defined names such as
 // VC_FEATURE / POGO / ILTCG / MPX:
 // https://llvm.org/doxygen/namespacellvm_1_1COFF.html
+// MSVC /LTCG:INCREMENTAL behavior:
+// https://learn.microsoft.com/en-us/cpp/build/reference/ltcg-link-time-code-generation
 const DEBUG_TYPE_INFOS: Record<number, DebugTypeInfo> = {
   0: { label: "UNKNOWN", description: "Unknown debug format ignored by tools." },
   1: {
@@ -49,7 +51,8 @@ const DEBUG_TYPE_INFOS: Record<number, DebugTypeInfo> = {
   },
   14: {
     label: "ILTCG",
-    description: "Link-time code generation metadata emitted by the toolchain."
+    description: "Incremental Link-Time Code Generation: MSVC /LTCG:INCREMENTAL " +
+      "reoptimizes files affected by edits during linking."
   },
   15: { label: "MPX", description: "Intel MPX metadata emitted by the toolchain." },
   16: { label: "REPRO", description: "PE determinism or reproducibility metadata." },
