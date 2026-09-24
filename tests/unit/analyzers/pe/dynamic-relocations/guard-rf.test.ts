@@ -90,3 +90,90 @@ void test("Guard RF rejects invalid spans and unsupported symbols", () => {
   assert.ok(warnings.some(warning => warning.includes("bounds")));
   assert.ok(warnings.some(warning => warning.includes("unsupported symbol")));
 });
+
+void test("Guard RF reports truncated blocks and skips padding entries", () => {
+  const view = new DataView(new ArrayBuffer(14));
+  view.setUint32(0, 0x2000, true);
+  view.setUint32(4, 12, true);
+  view.setUint16(8, 0, true); // IMAGE_REL_BASED_ABSOLUTE padding.
+  view.setUint16(10, 0x1123, true);
+  const warnings: string[] = [];
+
+  const parsed = parseGuardRf(view, 1n, 0, 0, 0, 14, warnings);
+
+  assert.deepEqual(parsed?.sites, [{ rva: 0x2123, type: 1 }]);
+  assert.ok(warnings.some(warning => warning.includes("truncated base relocation block header")));
+});
+
+void test("Guard RF reports an unaligned page and extra prologue header bytes", () => {
+  const view = new DataView(new ArrayBuffer(12));
+  view.setUint8(0, 1);
+  view.setUint8(1, 0x90);
+  view.setUint8(2, 0xee);
+  view.setUint32(4, 0x1234, true);
+  view.setUint32(8, 8, true);
+  const warnings: string[] = [];
+
+  const parsed = parseGuardRf(view, 1n, 0, 4, 4, 12, warnings);
+
+  assert.deepEqual(parsed, { kind: "prologue", prologueBytes: [0x90], sites: [] });
+  assert.ok(warnings.some(warning => warning.includes("unexpected bytes")));
+  assert.ok(warnings.some(warning => warning.includes("unaligned")));
+});
+
+void test("Guard RF reports a truncated epilogue header", () => {
+  const warnings: string[] = [];
+
+  assert.equal(parseGuardRf(new DataView(new ArrayBuffer(4)),
+    2n, 0, 4, 4, 4, warnings), null);
+  assert.ok(warnings.some(warning => warning.includes("truncated epilogue header")));
+});
+
+void test("Guard RF validates small and odd relocation block sizes", () => {
+  const view = new DataView(new ArrayBuffer(10));
+  view.setUint32(0, 0x1000, true);
+  const warnings: string[] = [];
+
+  view.setUint32(4, 6, true);
+  assert.deepEqual(parseGuardRf(view, 1n, 0, 0, 0, 10, warnings)?.sites, []);
+  view.setUint32(4, 9, true);
+  assert.deepEqual(parseGuardRf(view, 1n, 0, 0, 0, 10, warnings)?.sites, []);
+  assert.equal(warnings.filter(warning => warning.includes("block size")).length, 2);
+});
+
+void test("Guard RF respects DataView byte offsets for metadata", () => {
+  const bytes = new Uint8Array(20).fill(0xff);
+  const view = new DataView(bytes.buffer, 4, 12);
+  view.setUint8(0, 1);
+  view.setUint8(1, 0x90);
+  view.setUint32(2, 0x1000, true);
+  view.setUint32(6, 10, true);
+  view.setUint16(10, 0x123, true);
+  const warnings: string[] = [];
+
+  const parsed = parseGuardRf(view, 1n, 0, 2, 2, 12, warnings);
+
+  assert.deepEqual(parsed, { kind: "prologue", prologueBytes: [0x90],
+    sites: [{ rva: 0x1123, type: 0 }] });
+  assert.deepEqual(warnings, []);
+});
+
+void test("Guard RF rejects zero-size branch descriptor elements", () => {
+  const view = new DataView(new ArrayBuffer(8));
+  view.setUint16(6, 1, true);
+  const warnings: string[] = [];
+
+  assert.equal(parseGuardRf(view, 2n, 0, 8, 8, 8, warnings), null);
+  assert.ok(warnings.some(warning => warning.includes("branch descriptors")));
+});
+
+void test("Guard RF validates every span before reading", () => {
+  const view = new DataView(new ArrayBuffer(8));
+  const warnings: string[] = [];
+
+  assert.equal(parseGuardRf(view, 1n, 0, 9, 9, 9, warnings), null);
+  assert.equal(parseGuardRf(view, 1n, 4, 3, 3, 8, warnings), null);
+  assert.equal(parseGuardRf(view, 1n, 0, 2, 1, 8, warnings), null);
+  assert.equal(parseGuardRf(view, 1n, 0, 0, 5, 4, warnings), null);
+  assert.equal(warnings.filter(warning => warning.includes("bounds")).length, 4);
+});

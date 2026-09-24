@@ -36,12 +36,7 @@ const parseSites = (
     for (let offset = cursor + BLOCK_HEADER_SIZE; offset < cursor + blockSize; offset += 2) {
       const raw = view.getUint16(offset, true);
       if (raw === 0) continue; // IMAGE_REL_BASED_ABSOLUTE padding.
-      const rva = pageRva + (raw & 0xfff);
-      if (rva > 0xffff_ffff) {
-        warnings.push("Guard RF: relocation RVA exceeds 32 bits.");
-        continue;
-      }
-      sites.push({ rva, type: raw >>> 12 });
+      sites.push({ rva: pageRva + (raw & 0xfff), type: raw >>> 12 });
     }
     cursor += blockSize;
   }

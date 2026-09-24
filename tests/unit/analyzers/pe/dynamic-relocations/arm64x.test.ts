@@ -23,8 +23,8 @@ void test("ARM64X decodes zero fill, value and signed delta records", () => {
   assert.deepEqual(fixups, [
     { kind: "zeroFill", rva: 0x2800, size: 4 },
     { kind: "value", rva: 0x2004, size: 2, value: 0xbeefn },
-    { kind: "delta", rva: 0x2008, size: 4, delta: -12 },
-    { kind: "delta", rva: 0x200c, size: 4, delta: 16 },
+    { kind: "delta", rva: 0x2008, delta: -12 },
+    { kind: "delta", rva: 0x200c, delta: 16 },
     { kind: "zeroFill", rva: 0x200e, size: 2 }
   ]);
   assert.deepEqual(warnings, []);
@@ -78,4 +78,85 @@ void test("ARM64X rejects unsupported record types and unsafe spans", () => {
   assert.deepEqual(parseArm64xFixups(view, -1, 12, warnings), []);
   assert.ok(warnings.some(warning => warning.includes("invalid fixup record")));
   assert.ok(warnings.some(warning => warning.includes("bounds")));
+});
+
+void test("ARM64X reports an incomplete block header", () => {
+  const warnings: string[] = [];
+
+  assert.deepEqual(parseArm64xFixups(new DataView(new ArrayBuffer(4)), 0, 4, warnings), []);
+  assert.ok(warnings.some(warning => warning.includes("truncated block header")));
+});
+
+void test("ARM64X rejects an invalid block size and unaligned fixup RVA", () => {
+  const view = new DataView(new ArrayBuffer(12));
+  view.setUint32(0, 0x1000, true);
+  view.setUint32(4, 8, true);
+  const warnings: string[] = [];
+  assert.deepEqual(parseArm64xFixups(view, 0, 12, warnings), []);
+  assert.ok(warnings.some(warning => warning.includes("block size")));
+
+  view.setUint32(4, 12, true);
+  view.setUint16(8, 0x4101, true); // Two-byte zero fill at odd RVA.
+  warnings.length = 0;
+  assert.deepEqual(parseArm64xFixups(view, 0, 12, warnings), []);
+  assert.ok(warnings.some(warning => warning.includes("unaligned fixup RVA")));
+});
+
+void test("ARM64X rejects an unaligned delta and a truncated delta", () => {
+  const view = new DataView(new ArrayBuffer(12));
+  view.setUint32(0, 0x1000, true);
+  view.setUint32(4, 12, true);
+  view.setUint16(8, 0x2002, true); // DELTA writes a 4-byte word.
+  view.setUint16(10, 1, true);
+  const warnings: string[] = [];
+
+  assert.deepEqual(parseArm64xFixups(view, 0, 12, warnings), []);
+  assert.ok(warnings.some(warning => warning.includes("unaligned fixup RVA")));
+
+  view.setUint16(8, 0x100, true);
+  view.setUint16(10, 0x2000, true);
+  warnings.length = 0;
+  assert.deepEqual(parseArm64xFixups(view, 0, 12, warnings),
+    [{ kind: "zeroFill", rva: 0x1100, size: 1 }]);
+  assert.ok(warnings.some(warning => warning.includes("truncated fixup value")));
+});
+
+void test("ARM64X rejects zero terminators and zero-width value fixups", () => {
+  const view = new DataView(new ArrayBuffer(12));
+  view.setUint32(0, 0x1000, true);
+  view.setUint32(4, 12, true);
+  const warnings: string[] = [];
+
+  assert.deepEqual(parseArm64xFixups(view, 0, 12, warnings), []);
+  assert.ok(warnings.some(warning => warning.includes("terminator")));
+
+  view.setUint16(8, 0x1000, true); // VALUE with reserved size argument zero.
+  warnings.length = 0;
+  assert.deepEqual(parseArm64xFixups(view, 0, 12, warnings), []);
+  assert.ok(warnings.some(warning => warning.includes("invalid fixup")));
+});
+
+void test("ARM64X validates all block size constraints", () => {
+  const view = new DataView(new ArrayBuffer(12));
+  view.setUint32(0, 0x1000, true);
+  const warnings: string[] = [];
+
+  view.setUint32(4, 10, true);
+  assert.deepEqual(parseArm64xFixups(view, 0, 12, warnings), []);
+  view.setUint32(4, 16, true);
+  assert.deepEqual(parseArm64xFixups(view, 0, 12, warnings), []);
+
+  assert.equal(warnings.filter(warning => warning.includes("block size")).length, 2);
+});
+
+void test("ARM64X validates all payload bounds", () => {
+  const view = new DataView(new ArrayBuffer(8));
+  const warnings: string[] = [];
+
+  assert.deepEqual(parseArm64xFixups(view, 0, 9, warnings), []);
+  assert.deepEqual(parseArm64xFixups(view, 4, 3, warnings), []);
+  assert.deepEqual(parseArm64xFixups(view, 0.5, 8, warnings), []);
+  assert.deepEqual(parseArm64xFixups(view, 0, -1, warnings), []);
+
+  assert.equal(warnings.length, 4);
 });

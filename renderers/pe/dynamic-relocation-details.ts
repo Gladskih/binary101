@@ -43,9 +43,12 @@ const fixupValue = (fixup: PeArm64xFixup): string =>
     fixup.kind === "delta" ? String(fixup.delta) : "-";
 
 const renderArm64x = (fixups: PeArm64xFixup[]): string => {
+  // LLVM Arm64XRelocRef::getSize(): DELTA always modifies a 32-bit word.
+  // https://github.com/llvm/llvm-project/blob/main/llvm/lib/Object/COFFObjectFile.cpp
   const rows = fixups.slice(0, ROW_LIMIT).map(fixup =>
     `<tr><td>${hex(fixup.rva, 8)}</td><td>${fixup.kind}</td>` +
-    `<td class="num">${fixup.size}</td><td class="num">${fixupValue(fixup)}</td></tr>`).join("");
+    `<td class="num">${fixup.kind === "delta" ? 4 : fixup.size}</td>` +
+    `<td class="num">${fixupValue(fixup)}</td></tr>`).join("");
   const hidden = fixups.length - Math.min(fixups.length, ROW_LIMIT);
   return `<section class="loadConfigDynamicDetail"><h4>ARM64X fixups</h4>` +
     `<p>Decoded records: ${fixups.length}` +

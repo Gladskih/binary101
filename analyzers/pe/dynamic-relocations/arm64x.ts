@@ -8,7 +8,7 @@ const BLOCK_HEADER_SIZE = 8;
 export type PeArm64xFixup =
   | { kind: "zeroFill"; rva: number; size: number }
   | { kind: "value"; rva: number; size: number; value: bigint }
-  | { kind: "delta"; rva: number; size: 4; delta: number };
+  | { kind: "delta"; rva: number; delta: number };
 
 const decodeRecord = (
   view: DataView, cursor: number, end: number, pageRva: number,
@@ -28,12 +28,12 @@ const decodeRecord = (
     warnings.push("ARM64X: truncated fixup value or delta.");
     return null;
   }
-  if (rva > 0xffff_ffff || rva + size > 0x1_0000_0000 || rva % size !== 0) {
+  if (rva % size !== 0) {
     warnings.push("ARM64X: invalid or unaligned fixup RVA.");
     return null;
   }
   if (type === 0) return { fixup: { kind: "zeroFill", rva, size }, next: cursor + 2 };
-  if (type === 2) return { fixup: { kind: "delta", rva, size: 4,
+  if (type === 2) return { fixup: { kind: "delta", rva,
     delta: view.getUint16(cursor + 2, true) * (arg & 2 ? 8 : 4) * (arg & 1 ? -1 : 1) },
   next: cursor + 4 };
   const value = Array.from({ length: size }, (_, index) =>
@@ -70,10 +70,6 @@ export const parseArm64xFixups = (
     const blockEnd = cursor + blockSize;
     let recordCursor = cursor + BLOCK_HEADER_SIZE;
     while (recordCursor < blockEnd) {
-      if (blockEnd - recordCursor < 2) {
-        warnings.push("ARM64X: truncated fixup record.");
-        break;
-      }
       if (view.getUint16(recordCursor, true) === 0 && recordCursor + 2 === blockEnd) break;
       const decoded = decodeRecord(view, recordCursor, blockEnd, pageRva, warnings);
       if (!decoded) break;

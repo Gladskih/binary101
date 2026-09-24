@@ -218,3 +218,14 @@ void test("renderLoadConfigDynamicRelocations includes Guard RF and ARM64X recor
   assert.match(html, /0x00001234/);
   assert.match(html, /0x00002000/);
 });
+
+void test("renderLoadConfigDynamicRelocations shows decoded single-entry ARM64X data", () => {
+  const html = renderLoadConfigDynamicRelocations({ version: 1, dataSize: 24,
+    entries: [{ kind: "v1", symbol: 6n, baseRelocSize: 12, availableBytes: 12,
+      arm64xFixups: [{ kind: "delta", rva: 0x3000, delta: -8 }] }] });
+
+  assert.match(html, /DynamicRelocations/);
+  assert.match(html, /ARM64X fixups/);
+  assert.match(html, /0x00003000/);
+  assert.match(html, /-8/);
+});
