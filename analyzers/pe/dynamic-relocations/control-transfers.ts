@@ -4,7 +4,6 @@
 // IMAGE_SWITCHTABLE_BRANCH_DYNAMIC_RELOCATION and IMAGE_BASE_RELOCATION.
 // https://github.com/microsoft/win32metadata/blob/main/generation/WinSDK/RecompiledIdlHeaders/um/winnt.h
 const BLOCK_HEADER_SIZE = 8;
-const PAGE_SIZE = 0x1000;
 
 export type PeControlTransferRecord =
   | { kind: "import"; rva: number; indirectCall: boolean; iatIndex: number }
@@ -76,7 +75,8 @@ export const parseControlTransfers = (
       warnings.push("DynamicRelocations: invalid control transfer block size.");
       break;
     }
-    if (pageRva % PAGE_SIZE !== 0) {
+    // IMAGE_BASE_RELOCATION.VirtualAddress names a 4 KiB page in PE/COFF.
+    if (pageRva % 0x1000 !== 0) {
       warnings.push("DynamicRelocations: control transfer page RVA is not aligned.");
       break;
     }

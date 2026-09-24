@@ -19,14 +19,13 @@ const readU64Maybe = (view: DataView, offset: number): bigint => {
   return view.getBigUint64(offset, true);
 };
 
-// IMAGE_DYNAMIC_RELOCATION_FUNCTION_OVERRIDE in Windows SDK winnt.h.
-const FUNCTION_OVERRIDE_SYMBOL = 7n;
 const parseKnownPayload = (
   view: DataView, symbol: bigint, start: number, available: number,
   declared: number, warnings: string[]
 ): Pick<PeDynamicRelocationEntry, "fixup" | "controlTransfers"> => {
   if (available !== declared) return {};
-  if (symbol === FUNCTION_OVERRIDE_SYMBOL) {
+  // Windows SDK winnt.h: IMAGE_DYNAMIC_RELOCATION_FUNCTION_OVERRIDE is 7.
+  if (symbol === 7n) {
     const fixup = parseFunctionOverride(view, start, start + available, warnings);
     return fixup ? { fixup } : {};
   }
