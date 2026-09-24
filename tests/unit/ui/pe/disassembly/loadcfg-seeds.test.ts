@@ -64,6 +64,8 @@ void test("pe disassembly controller includes extra entrypoints from LOAD_CONFIG
   dv.setBigUint64(0x38, TEST_IMAGE_BASE + 0x2200n, true);
   dv.setBigUint64(0x40, TEST_IMAGE_BASE + 0x2300n, true);
   dv.setBigUint64(0x48, TEST_IMAGE_BASE + 0x2400n, true);
+  dv.setBigUint64(0x70, TEST_IMAGE_BASE + 0x2600n, true);
+  dv.setBigUint64(0x78, TEST_IMAGE_BASE + 0x2700n, true);
   dv.setUint32(0x50, 0x1111, true);
   dv.setUint32(0x54, 0x2222, true);
   dv.setUint32(0x60, 0x3333, true);
@@ -78,6 +80,9 @@ void test("pe disassembly controller includes extra entrypoints from LOAD_CONFIG
     GuardXFGDispatchFunctionPointer: TEST_IMAGE_BASE + 0x38n,
     GuardXFGTableDispatchFunctionPointer: TEST_IMAGE_BASE + 0x40n,
     GuardMemcpyFunctionPointer: TEST_IMAGE_BASE + 0x48n,
+    GuardRFFailureRoutine: TEST_IMAGE_BASE + 0x2500n,
+    GuardRFFailureRoutineFunctionPointer: TEST_IMAGE_BASE + 0x70n,
+    GuardRFVerifyStackPointerFunctionPointer: TEST_IMAGE_BASE + 0x78n,
     GuardEHContinuationTable: TEST_IMAGE_BASE + 0x50n,
     GuardEHContinuationCount: 2,
     GuardLongJumpTargetTable: TEST_IMAGE_BASE + 0x60n,
@@ -107,6 +112,9 @@ void test("pe disassembly controller includes extra entrypoints from LOAD_CONFIG
   assert.deepEqual(findSeeds(capturedOptions, "GuardXFG dispatch function"), [0x2200]);
   assert.deepEqual(findSeeds(capturedOptions, "GuardXFG table dispatch function"), [0x2300]);
   assert.deepEqual(findSeeds(capturedOptions, "Guard memcpy function"), [0x2400]);
+  assert.deepEqual(findSeeds(capturedOptions, "GuardRF failure routine"), [0x2500]);
+  assert.deepEqual(findSeeds(capturedOptions, "GuardRF failure function"), [0x2600]);
+  assert.deepEqual(findSeeds(capturedOptions, "GuardRF verify stack pointer function"), [0x2700]);
   assert.deepEqual(findSeeds(capturedOptions, "GuardEH continuation"), [0x1111, 0x2222]);
   assert.deepEqual(findSeeds(capturedOptions, "Guard longjmp target"), [0x3333]);
 
@@ -124,7 +132,8 @@ void test("pe disassembly controller reads 32-bit LOAD_CONFIG pointer slots", as
   addTextSection(pe);
   pe.loadcfg = {
     GuardCFCheckFunctionPointer: TEST_IMAGE_BASE + 0x20n,
-    GuardCFDispatchFunctionPointer: TEST_IMAGE_BASE + 0x3dn
+    GuardCFDispatchFunctionPointer: TEST_IMAGE_BASE + 0x3dn,
+    GuardRFFailureRoutine: TEST_IMAGE_BASE + 0x5000n
   } as unknown as PeWindowsParseResult["loadcfg"];
   const parseResult: ParseForUiResult = { analyzer: "pe", parsed: pe };
 
@@ -145,6 +154,7 @@ void test("pe disassembly controller reads 32-bit LOAD_CONFIG pointer slots", as
   const capturedOptions = expectDefined<AnalyzePeInstructionSetOptions>(captured);
   assert.deepEqual(findSeeds(capturedOptions, "GuardCF check function"), [0x2000]);
   assert.deepEqual(findSeeds(capturedOptions, "GuardCF dispatch function"), []);
+  assert.deepEqual(findSeeds(capturedOptions, "GuardRF failure routine"), []);
 
   dom.restore();
 });
