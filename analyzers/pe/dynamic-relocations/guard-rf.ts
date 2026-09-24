@@ -1,7 +1,8 @@
 "use strict";
 
 // Windows SDK winnt.h: IMAGE_{PROLOGUE,EPILOGUE}_DYNAMIC_RELOCATION_HEADER
-// and IMAGE_BASE_RELOCATION. The variable header precedes V2 FixupInfo.
+// and IMAGE_BASE_RELOCATION. The SDK names BranchDescriptorBitMap but does not define
+// its bit semantics, so preserve the remaining header bytes without interpreting them.
 // https://github.com/microsoft/win32metadata/blob/main/generation/WinSDK/RecompiledIdlHeaders/um/winnt.h
 const BLOCK_HEADER_SIZE = 8;
 const EPILOGUE_HEADER_SIZE = 8;

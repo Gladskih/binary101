@@ -11,7 +11,14 @@ const DYNAMIC_RELOCATION_TABLE_HEADER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 2;
 const DYNAMIC_RELOCATION_V1_ENTRY_SIZE32 = Uint32Array.BYTES_PER_ELEMENT * 2;
 const DYNAMIC_RELOCATION_V1_ENTRY_SIZE64 =
   BigUint64Array.BYTES_PER_ELEMENT + Uint32Array.BYTES_PER_ELEMENT;
-// Version 2 entry header: HeaderSize + FixupInfoSize + Symbol + SymbolGroup + Flags.
+// The Microsoft SDK defines the V2 fields and says variable header fields precede FixupInfo.
+// https://github.com/microsoft/wdkmetadata/blob/main/generation/WDK/IdlHeaders/km/ntimage.h
+// In redplait's ImagingDevices.exe dump, Guard RF prologue metadata starts just after the
+// fixed 0x18-byte entry header; the first relocation block starts at entry + HeaderSize.
+// https://redplait.blogspot.com/2017/03/imagedynamicrelocationtableversion-2.html
+// System Informer instead reads Guard RF metadata after each block header. For that dump,
+// this lands on the first type/offset word, so we follow the published byte layout here.
+// https://github.com/winsiderss/systeminformer/blob/master/phlib/mapimg.c
 const DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE32 = Uint32Array.BYTES_PER_ELEMENT * 5;
 const DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE64 =
   Uint32Array.BYTES_PER_ELEMENT * 4 + BigUint64Array.BYTES_PER_ELEMENT;
