@@ -9,7 +9,10 @@ const BASE_RELOCATION_HEADER_SIZE = 8;
 const BDD_HEADER_SIZE = 8;
 const BDD_NODE_SIZE = 8;
 
-export type PeFunctionOverrideRelocation = { pageRva: number; typeOffsets: number[] };
+export type PeFunctionOverrideRelocation = {
+  pageRva: number;
+  entries: Array<{ type: number; offset: number }>;
+};
 export type PeFunctionOverrideRecord = {
   originalRva: number;
   bddOffset: number;
@@ -44,11 +47,16 @@ const parseRelocationBlocks = (
       warnings.push("FunctionOverride: invalid base relocation block size.");
       return null;
     }
-    const typeOffsets: number[] = [];
+    const entries: PeFunctionOverrideRelocation["entries"] = [];
     for (let offset = cursor + BASE_RELOCATION_HEADER_SIZE; offset < cursor + size; offset += 2) {
-      typeOffsets.push(view.getUint16(offset, true));
+      const value = view.getUint16(offset, true);
+      entries.push({ type: value >>> 12, offset: value & 0x0fff });
     }
-    blocks.push({ pageRva: view.getUint32(cursor, true), typeOffsets });
+    const pageRva = view.getUint32(cursor, true);
+    if (entries.some(entry => pageRva + entry.offset > 0xffff_ffff)) {
+      warnings.push("FunctionOverride: relocation RVA exceeds the PE address space.");
+    }
+    blocks.push({ pageRva, entries });
     cursor += size;
   }
   return blocks;

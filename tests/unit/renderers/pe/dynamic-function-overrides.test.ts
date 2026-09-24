@@ -10,7 +10,9 @@ void test("renderDynamicFunctionOverrides shows function mappings and BDD nodes"
     originalRva: 0x1010,
     bddOffset: 0,
     overridingRvas: [0x2010, 0x3010],
-    baseRelocations: [{ pageRva: 0x1000, typeOffsets: [0x1010] }]
+    baseRelocations: [{ pageRva: 0x1000, entries: [
+      { type: 1, offset: 0x010 }, { type: 2, offset: 0x020 }, { type: 3, offset: 0x030 }
+    ] }]
   }], bddInfos: [{ offset: 0, version: 1, nodes: [{ left: 0, right: 1, value: 2 }] }] });
 
   assert.match(html, /Original RVA/);
@@ -19,6 +21,10 @@ void test("renderDynamicFunctionOverrides shows function mappings and BDD nodes"
   assert.match(html, /BDD \+0x00000000, v1, 1 node/);
   assert.match(html, /0x00001010.*0x00002010/s);
   assert.match(html, /<th>Left<\/th><th>Right<\/th><th>Value<\/th>/);
+  assert.match(html, /X64_REL32/);
+  assert.match(html, /ARM64_BRANCH26/);
+  assert.match(html, /ARM64_THUNK/);
+  assert.match(html, /0x00001020/);
 });
 
 void test("renderLoadConfigDynamicRelocations includes decoded function overrides", async () => {
