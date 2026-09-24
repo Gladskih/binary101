@@ -161,6 +161,7 @@ export const createPeDisassemblyController = (
         guardCFFunctionRvas: seeds.guardCFFunctionRvas,
         safeSehHandlerRvas: seeds.safeSehHandlerRvas,
         tlsCallbackRvas: seeds.tlsCallbackRvas,
+        instructionHintRvas: seeds.instructionHintRvas,
         ...(seeds.extraEntrypoints.length ? { extraEntrypoints: seeds.extraEntrypoints } : {}),
         ...(windowsOpt ? { headerRvaLimit: windowsOpt.SizeOfHeaders } : {}),
         rvaToOff: pe.rvaToOff,

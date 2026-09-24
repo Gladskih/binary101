@@ -148,3 +148,34 @@ void test("pe disassembly controller reads 32-bit LOAD_CONFIG pointer slots", as
 
   dom.restore();
 });
+
+void test("pe disassembly controller passes DVRT instruction hints to analysis", async () => {
+  const dom = installFakeDom();
+  const file = new MockFile(new Uint8Array(0x2000), "dvrt-instruction-hints.bin");
+  const pe = createMinimalPe();
+  pe.opt.SizeOfImage = 0x4000;
+  addTextSection(pe);
+  pe.loadcfg = { dynamicRelocations: { version: 1, dataSize: 0, entries: [{
+    kind: "v1", symbol: 3n, baseRelocSize: 0, availableBytes: 0,
+    controlTransfers: [{ kind: "import", rva: 0x1010,
+      indirectCall: true, iatIndex: 2 }]
+  }] } } as unknown as PeWindowsParseResult["loadcfg"];
+  const parseResult: ParseForUiResult = { analyzer: "pe", parsed: pe };
+  let captured: AnalyzePeInstructionSetOptions | null = null;
+  const controller = createPeDisassemblyController({
+    getCurrentFile: () => file,
+    getCurrentParseResult: () => parseResult,
+    renderResult: () => {},
+    analyze: async (_reader, opts: AnalyzePeInstructionSetOptions) => {
+      captured = opts;
+      return createFakeReport();
+    }
+  });
+
+  controller.start(file, pe);
+  await flushTimers();
+
+  assert.deepEqual(expectDefined<AnalyzePeInstructionSetOptions>(captured).instructionHintRvas,
+    [0x1010]);
+  dom.restore();
+});

@@ -78,6 +78,17 @@ void test("resolvePeDisassemblyEntrypoints warns for non-executable sections and
   assert.match(issues.join("\n"), /Falling back to section \.text/);
 });
 
+void test("resolvePeDisassemblyEntrypoints treats DVRT sites as code roots", () => {
+  const issues: string[] = [];
+  const roots = resolvePeDisassemblyEntrypoints({
+    ...createAnalyzeOptions(0), instructionHintRvas: [0x1001, 0x1001, 0x3000]
+  }, issues);
+
+  assert.deepEqual(roots, [0x1001]);
+  assert.ok(issues.some(issue => issue.includes("DVRT instruction site") &&
+    issue.includes("non-executable")));
+});
+
 void test("collectPeDisassemblySamples reads mapped section spans", async () => {
   const samples = await collectPeDisassemblySamples(
     createMemoryReader(new Uint8Array([0, 1, 2, 3, 4, 5])),

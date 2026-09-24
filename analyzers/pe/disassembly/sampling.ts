@@ -126,7 +126,8 @@ const createPeEntrypointGroups = (
     { source: "Unwind handler", rvas: normalizeRvaList(opts.unwindHandlerRvas) },
     { source: "GuardCF function", rvas: normalizeRvaList(opts.guardCFFunctionRvas) },
     { source: "SafeSEH handler", rvas: normalizeRvaList(opts.safeSehHandlerRvas) },
-    { source: "TLS callback", rvas: normalizeRvaList(opts.tlsCallbackRvas) }
+    { source: "TLS callback", rvas: normalizeRvaList(opts.tlsCallbackRvas) },
+    { source: "DVRT instruction site", rvas: normalizeRvaList(opts.instructionHintRvas) }
   ];
   for (const entry of Array.isArray(opts.extraEntrypoints) ? opts.extraEntrypoints : []) {
     if (!entry || typeof entry.source !== "string" || !entry.source) continue;

@@ -154,6 +154,8 @@ export interface AnalyzePeInstructionSetOptions {
   guardCFFunctionRvas?: number[];
   safeSehHandlerRvas?: number[];
   tlsCallbackRvas?: number[];
+  /** Validated instruction sites; these may be inside functions. */
+  instructionHintRvas?: number[];
   extraEntrypoints?: Array<{ source: string; rvas: number[] }>;
   rvaToOff: RvaToOffset;
   sections: PeSection[];

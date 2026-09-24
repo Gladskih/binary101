@@ -61,6 +61,23 @@ void test("collectPeDisassemblySeeds includes decoded DVRT function overrides", 
   ]);
 });
 
+void test("collectPeDisassemblySeeds exposes DVRT instruction sites separately", async () => {
+  const pe = createWindowsPe();
+  pe.rvaToOff = rva => rva;
+  pe.loadcfg = { dynamicRelocations: { version: 1, dataSize: 0, entries: [{
+    kind: "v1", symbol: 3n, baseRelocSize: 0, availableBytes: 0,
+    controlTransfers: [{ kind: "import", rva: 0x2010,
+      indirectCall: true, iatIndex: 3 }]
+  }] } } as unknown as PeWindowsParseResult["loadcfg"];
+
+  const seeds = await collectPeDisassemblySeeds(
+    new File([new Uint8Array(0x3000)], "control-transfer-pe"), pe
+  );
+
+  assert.deepEqual(seeds.instructionHintRvas, [0x2010]);
+  assert.deepEqual(seeds.extraEntrypoints, []);
+});
+
 void test("collectPeDisassemblySeeds exposes confirmed Go function starts", async () => {
   const pe = createWindowsPe();
   pe.goRuntime = {

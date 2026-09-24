@@ -18,6 +18,7 @@ import {
   readSafeSehHandlerTableRvas
 } from "../analyzers/pe/load-config/tables.js";
 import { collectFunctionOverrideEntrypoints } from "./pe-disassembly-function-override-seeds.js";
+import { collectControlTransferInstructionRvas } from "./pe-disassembly-control-transfer-hints.js";
 
 type PeDisassemblySeedSet = {
   canonicalMachine: number;
@@ -28,6 +29,7 @@ type PeDisassemblySeedSet = {
   tlsCallbackRvas: number[];
   guardCFFunctionRvas: number[];
   safeSehHandlerRvas: number[];
+  instructionHintRvas: number[];
   extraEntrypoints: Array<{ source: string; rvas: number[] }>;
 };
 
@@ -111,6 +113,7 @@ const collectBasicPeDisassemblySeeds = (
       : [],
     guardCFFunctionRvas: [],
     safeSehHandlerRvas: [],
+    instructionHintRvas: [],
     extraEntrypoints: collectBasicExtraEntrypoints(windowsPe)
   };
 };
@@ -277,6 +280,7 @@ const collectPeDisassemblySeeds = async (
   const seeds = collectBasicPeDisassemblySeeds(pe, windowsPe);
   if (windowsPe) {
     seeds.extraEntrypoints.push(...collectFunctionOverrideEntrypoints(windowsPe, file.size));
+    seeds.instructionHintRvas = collectControlTransferInstructionRvas(windowsPe, file.size);
   }
   await addLoadConfigPointerSeeds(
     seeds,
