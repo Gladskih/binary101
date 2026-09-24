@@ -17,6 +17,7 @@ void test("renders Guard RF header fields and relocation sites", () => {
     `<p>Epilogue count: 2; epilogue byte count: 5; `,
     `branch descriptor element size: 1; branch descriptor count: 2; `,
     `branch descriptors: aa | bb; branch descriptor bitmap: 01</p>`,
+    `<p>Bitmap bytes are shown raw; the Windows SDK header does not define their bits.</p>`,
     `<p>Relocation sites: 1</p><div class="tableWrap"><table class="table">`,
     `<thead><tr><th scope="col">RVA</th><th scope="col" class="num">Type</th></tr></thead>`,
     `<tbody><tr><td>0x00001234</td><td class="num">0</td></tr></tbody>`,

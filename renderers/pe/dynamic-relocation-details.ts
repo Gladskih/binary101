@@ -22,7 +22,8 @@ const renderGuardRfMetadata = (guardRf: PeGuardRf): string => {
     `branch descriptor element size: ${guardRf.branchDescriptorElementSize}; ` +
     `branch descriptor count: ${guardRf.branchDescriptors?.length ?? 0}; ` +
     `branch descriptors: ${guardRf.branchDescriptors?.map(bytesHex).join(" | ") || "-"}; ` +
-    `branch descriptor bitmap: ${bytesHex(guardRf.branchDescriptorBitmap ?? [])}</p>`;
+    `branch descriptor bitmap: ${bytesHex(guardRf.branchDescriptorBitmap ?? [])}</p>` +
+    `<p>Bitmap bytes are shown raw; the Windows SDK header does not define their bits.</p>`;
 };
 
 const renderGuardRf = (guardRf: PeGuardRf): string => {
