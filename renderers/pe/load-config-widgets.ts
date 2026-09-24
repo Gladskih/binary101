@@ -10,16 +10,10 @@ import type {
 } from "../../analyzers/pe/dynamic-relocations/index.js";
 import { peSectionNameValue } from "../../analyzers/pe/sections/name.js";
 import type { PeSection } from "../../analyzers/pe/types.js";
+import { renderDynamicFunctionOverrides } from "./dynamic-function-overrides.js";
+import { getDynamicRelocationSymbolName as getSymbolName } from "./dynamic-relocation-symbols.js";
 
 const ADDRESS_TABLE_RENDER_LIMIT = 512;
-const DYNAMIC_RELOCATION_SYMBOLS = new Map<bigint, string>([
-  [1n, "GUARD_RF_PROLOGUE"],
-  [2n, "GUARD_RF_EPILOGUE"],
-  [3n, "GUARD_IMPORT_CONTROL_TRANSFER"],
-  [4n, "GUARD_INDIR_CONTROL_TRANSFER"],
-  [5n, "GUARD_SWITCHTABLE_BRANCH"],
-  [6n, "ARM64X"]
-]);
 
 const findSectionContainingRva = (sections: PeSection[], rva: number): PeSection | null => {
   const normalizedRva = rva >>> 0;
@@ -40,6 +34,7 @@ const formatDynamicRelocationSymbol = (entry: PeDynamicRelocationEntry): string 
   entry.symbol === 0n ? "-" : formatWideHex(entry.symbol);
 const formatDynamicRelocationSymbolName = (entry: PeDynamicRelocationEntry): string =>
   entry.symbol === 0n ? "-" : getDynamicRelocationSymbolName(entry.symbol);
+export const getDynamicRelocationSymbolName = (symbol: bigint): string => getSymbolName(symbol);
 const dynamicRelocationPayloadSize = (entry: PeDynamicRelocationEntry): number =>
   entry.kind === "v1" ? entry.baseRelocSize : entry.fixupInfoSize;
 const dynamicRelocationIsComplete = (entry: PeDynamicRelocationEntry): boolean =>
@@ -96,9 +91,6 @@ const renderAddressTableAggregate = (
   `<th scope="col" class="num">Entry size</th><th scope="col">Table RVA</th></tr></thead>` +
   `<tbody>${tables.map(table => renderAddressTableSummaryRow(table, sections)).join("")}</tbody>` +
   `</table></div>${warningHtml.join("")}`;
-
-export const getDynamicRelocationSymbolName = (symbol: bigint): string =>
-  DYNAMIC_RELOCATION_SYMBOLS.get(symbol) ?? "UNKNOWN";
 
 const renderDynamicRelocationMeta = (dr: PeDynamicRelocations, types: bigint[]): string =>
   `<div class="loadConfigDynamicMeta">` +
@@ -185,11 +177,13 @@ export const renderLoadConfigDynamicRelocations = (dr: PeDynamicRelocations): st
     ? `<div class="smallNote" style="margin:.35rem 0 0 0;color:var(--warn-fg)">` +
       `${escapeHtml(dr.warnings.join("; "))}</div>`
     : "";
-  if (dr.entries.length <= 1) return renderDynamicRelocationFlatSummary(dr, warningHtml);
+  const overrides = dr.entries.flatMap(entry => entry.fixup
+    ? [renderDynamicFunctionOverrides(entry.fixup)] : []).join("");
+  if (dr.entries.length <= 1) return renderDynamicRelocationFlatSummary(dr, warningHtml) + overrides;
   return `<details class="loadConfigDynamicRelocations"><summary class="loadConfigNestedSummary">` +
     escapeHtml(renderDynamicRelocationTitle(dr)) +
     `</summary>${warningHtml}${renderDynamicRelocationMeta(dr, types)}` +
-    `${renderDynamicRelocationEntries(dr.entries)}</details>`;
+    `${renderDynamicRelocationEntries(dr.entries)}${overrides}</details>`;
 };
 
 export const renderLoadConfigGuardFlags = (lc: PeLoadConfig): string => {

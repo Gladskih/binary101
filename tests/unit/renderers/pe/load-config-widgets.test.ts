@@ -139,6 +139,8 @@ void test("renderLoadConfigAddressTable aggregates uniform rows without metadata
 void test("getDynamicRelocationSymbolName labels known and unknown symbols", () => {
   // LLVM COFF IMAGE_DYNAMIC_RELOCATION_ARM64X currently uses symbol value 6.
   assert.equal(getDynamicRelocationSymbolName(6n), "ARM64X");
+  // Windows SDK winnt.h: IMAGE_DYNAMIC_RELOCATION_FUNCTION_OVERRIDE is 7.
+  assert.equal(getDynamicRelocationSymbolName(7n), "FUNCTION_OVERRIDE");
   // 0xffff is outside the documented dynamic relocation symbol set and should stay explicit.
   assert.equal(getDynamicRelocationSymbolName(0xffffn), "UNKNOWN");
 });
@@ -149,7 +151,7 @@ void test("renderLoadConfigDynamicRelocations summarizes a single entry without 
     dataSize: 80,
     entries: [{
       kind: "v1",
-      symbol: 7n,
+      symbol: 0x123n,
       baseRelocSize: 68,
       availableBytes: 68
     }]
@@ -159,7 +161,7 @@ void test("renderLoadConfigDynamicRelocations summarizes a single entry without 
   assert.ok(html.includes("80 B (80 bytes)"));
   assert.ok(html.includes("<th scope=\"col\">Symbol</th>"));
   assert.ok(html.includes("<th scope=\"col\">Name</th>"));
-  assert.ok(html.includes("<td>0x7</td>"));
+  assert.ok(html.includes("<td>0x123</td>"));
   assert.ok(html.includes("<td>UNKNOWN</td>"));
   assert.ok(!html.includes("<th scope=\"col\">Type</th>"));
   assert.ok(!html.includes("<th scope=\"col\">Entry</th>"));
