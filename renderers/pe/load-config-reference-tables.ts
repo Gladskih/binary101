@@ -51,6 +51,19 @@ const hexCell = (value: number): PagedSortableTableCell => ({
 
 const bytesText = (bytes: number[]): string => bytes.map(value => hex(value, 2)).join(" ");
 
+// Windows SDK winnt.h IMAGE_HOT_PATCH_BASE_* flags.
+// https://github.com/microsoft/win32metadata/blob/main/generation/WinSDK/RecompiledIdlHeaders/um/winnt.h
+const hotPatchBaseFlagNames = (flags: number): string[] => ([
+  [0x01, "OBLIGATORY"], [0x02, "CAN_ROLL_BACK"], [0x04, "MACHINE_I386"],
+  [0x08, "MACHINE_ARM64"], [0x10, "MACHINE_AMD64"]
+] as const).filter(([bit]) => (flags & bit) !== 0).map(([, name]) => name);
+
+const hotPatchBaseFlagCell = (flags: number): PagedSortableTableCell => ({
+  className: "num",
+  html: escapeHtml(`${hex(flags, 8)} ${hotPatchBaseFlagNames(flags).join(", ")}`.trim()),
+  sortValue: String(flags)
+});
+
 const sortValue = (cells: PagedSortableTableCell[], columnIndex: number): string =>
   cells[columnIndex]?.sortValue ?? "";
 
@@ -202,7 +215,7 @@ const enclaveImportModel = (references: PeLoadConfigReferences): PagedSortableTa
 };
 
 const hotPatchBaseCells = (entry: PeHotPatchBase, index: number): PagedSortableTableCell[] => [
-  numberCell(index), numberCell(entry.sequenceNumber), hexCell(entry.flags),
+  numberCell(index), numberCell(entry.sequenceNumber), hotPatchBaseFlagCell(entry.flags),
   hexCell(entry.originalTimeDateStamp), hexCell(entry.originalCheckSum),
   hexCell(entry.codeIntegrityInfoOffset), numberCell(entry.codeIntegritySize),
   textCell(entry.codeIntegrityHashes ? bytesText(entry.codeIntegrityHashes.sha256) : "-"),

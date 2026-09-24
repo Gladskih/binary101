@@ -203,5 +203,14 @@ export const GUARD_FLAGS: OptionEntry[] = [
   [0x00004000, "CF_EXPORT_SUPPRESSION_INFO_PRESENT", "Export-suppression metadata is present"],
   [0x00008000, "CF_ENABLE_EXPORT_SUPPRESSION", "Process opts into CFG export suppression"],
   [0x00010000, "CF_LONGJUMP_TABLE_PRESENT", "Longjmp target table is present"],
-  [0x00400000, "EH_CONTINUATION_TABLE_PRESENT", "EH continuation target table is present"]
+  // Windows SDK winnt.h IMAGE_GUARD_* definitions.
+  // https://github.com/microsoft/win32metadata/blob/main/generation/WinSDK/RecompiledIdlHeaders/um/winnt.h
+  [0x00020000, "RF_INSTRUMENTED", "Return-flow instrumentation and metadata are present"],
+  [0x00040000, "RF_ENABLE", "Module requests OS return-flow protection"],
+  [0x00080000, "RF_STRICT", "Module requests strict return-flow protection"],
+  [0x00100000, "RETPOLINE_PRESENT", "Module was built with retpoline support"],
+  [0x00400000, "EH_CONTINUATION_TABLE_PRESENT", "EH continuation target table is present"],
+  [0x00800000, "XFG_ENABLED", "Module was built with XFG (deprecated)"],
+  [0x01000000, "CASTGUARD_PRESENT", "CastGuard instrumentation is present"],
+  [0x02000000, "MEMCPY_PRESENT", "Guarded memcpy instrumentation is present"]
 ];

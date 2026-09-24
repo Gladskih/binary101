@@ -127,6 +127,8 @@ const parseBase = async (
   const codeIntegritySize = view.getUint32(BASE_OFFSETS.codeIntegritySize, true);
   const patchTableOffset = view.getUint32(BASE_OFFSETS.patchTable, true);
   if (patchTableOffset !== 0) {
+    // winnt.h names chunk bit masks and types, but not the PatchTable framing or record stride.
+    // https://github.com/microsoft/win32metadata/blob/main/generation/WinSDK/RecompiledIdlHeaders/um/winnt.h
     await readTableView(
       reader, mapping, warnings, notes, table, patchTableOffset, 4,
       `HotPatch base image ${index} PatchTable`

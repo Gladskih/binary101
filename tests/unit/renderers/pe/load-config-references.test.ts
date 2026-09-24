@@ -51,7 +51,7 @@ const createReferences = (): PeLoadConfigReferences => ({
       rva: 0x8000,
       size: 0x50,
       minimumRequiredConfigSize: 0x4c,
-      policyFlags: 1,
+      policyFlags: 3,
       numberOfImports: 1,
       importListRva: 0x8100,
       importEntrySize: 0x50,
@@ -123,6 +123,9 @@ void test("renderLoadConfigReferences renders decoded structures and labels opaq
   assert.ok(html.includes("Extra ARM64 runtime functions"));
   assert.ok(html.includes("Enclave configuration"));
   assert.ok(html.includes("enclave.dll"));
+  assert.ok(html.includes("DEBUGGABLE"));
+  assert.ok(html.includes("STRICT_MEMORY"));
+  assert.ok(html.includes("PRIMARY_IMAGE"));
   assert.ok(html.includes("Hot patch information"));
   assert.ok(html.includes("Volatile metadata"));
   assert.ok(html.includes("Volatile access RVAs"));

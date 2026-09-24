@@ -19,6 +19,17 @@ const formatVa = (value: bigint, pointerWidth: number): string =>
 
 const formatBytes = (bytes: number[]): string => bytes.map(value => hex(value, 2)).join(" ");
 
+// Windows SDK IMAGE_ENCLAVE_POLICY_* and IMAGE_ENCLAVE_FLAG_*.
+// https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_enclave_config32
+const enclavePolicyFlags = (flags: number): string => [
+  hex(flags, 8),
+  ...(flags & 1 ? ["DEBUGGABLE"] : []),
+  ...(flags & 2 ? ["STRICT_MEMORY"] : [])
+].join(" ");
+
+const enclaveImageFlags = (flags: number): string =>
+  `${hex(flags, 8)}${flags & 1 ? " PRIMARY_IMAGE" : ""}`;
+
 const renderRows = (rows: ReferenceRow[]): string =>
   `<dl>${rows.map(([name, value]) => `<dt>${escapeHtml(name)}</dt><dd>${escapeHtml(value)}</dd>`).join("")}</dl>`;
 
@@ -120,13 +131,16 @@ const renderEnclaveConfiguration = (references: PeLoadConfigReferences, pointerW
   const rows: ReferenceRow[] = [
     ["RVA", hex(config.rva, 8)], ["Size", hex(config.size, 8)],
     ["MinimumRequiredConfigSize", hex(config.minimumRequiredConfigSize, 8)],
-    ["PolicyFlags", hex(config.policyFlags, 8)], ["NumberOfImports", String(config.numberOfImports)],
+    ["PolicyFlags", enclavePolicyFlags(config.policyFlags)],
+    ["NumberOfImports", String(config.numberOfImports)],
     ["ImportList RVA", hex(config.importListRva, 8)], ["ImportEntrySize", String(config.importEntrySize)],
     ["FamilyID", formatBytes(config.familyId)], ["ImageID", formatBytes(config.imageId)],
     ["ImageVersion", hex(config.imageVersion, 8)], ["SecurityVersion", hex(config.securityVersion, 8)],
     ["EnclaveSize", formatVa(config.enclaveSize, pointerWidth)],
     ["NumberOfThreads", String(config.numberOfThreads)],
-    ...(config.enclaveFlags == null ? [] : [["EnclaveFlags", hex(config.enclaveFlags, 8)] as const])
+    ...(config.enclaveFlags == null ? [] : [[
+      "EnclaveFlags", enclaveImageFlags(config.enclaveFlags)
+    ] as const])
   ];
   const imports = renderReferenceTable(references, LOAD_CONFIG_REFERENCE_TABLE_IDS.enclaveImports);
   return `<h4>Enclave configuration</h4>${renderRows(rows)}` +

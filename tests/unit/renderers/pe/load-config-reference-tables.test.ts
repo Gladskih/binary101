@@ -124,7 +124,9 @@ void test("getLoadConfigReferenceTableModel renders HotPatch hashes and rejects 
       baseImageCount: 1,
       baseImages: [{
         sequenceNumber: 2,
-        flags: 0,
+        // Windows SDK IMAGE_HOT_PATCH_BASE_* bits:
+        // https://github.com/microsoft/win32metadata/blob/main/generation/WinSDK/RecompiledIdlHeaders/um/winnt.h
+        flags: 0x1f,
         originalTimeDateStamp: 3,
         originalCheckSum: 4,
         offset: 0x220,
@@ -155,6 +157,8 @@ void test("getLoadConfigReferenceTableModel renders HotPatch hashes and rejects 
   );
 
   assert.ok(model?.rowAt(0)?.cells.some(cell => cell.html.includes("0xaa 0xaa")));
+  assert.match(model?.rowAt(0)?.cells[2]?.html ?? "", /OBLIGATORY.*CAN_ROLL_BACK/);
+  assert.match(model?.rowAt(0)?.cells[2]?.html ?? "", /MACHINE_I386.*MACHINE_ARM64.*MACHINE_AMD64/);
   assert.equal(getLoadConfigReferenceTableModel(references, "unknown"), null);
 });
 

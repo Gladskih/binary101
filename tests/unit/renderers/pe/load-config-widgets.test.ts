@@ -62,6 +62,21 @@ void test("renderLoadConfigGuardFlags renders decoded chips and inline explanati
   assert.ok(html.includes("Module contains compiler-inserted CFG checks"));
 });
 
+void test("renderLoadConfigGuardFlags names RF, retpoline, XFG, CastGuard and memcpy", () => {
+  const loadConfig = createPeLoadConfigResult();
+  // Windows SDK winnt.h IMAGE_GUARD_* bits:
+  // https://github.com/microsoft/win32metadata/blob/main/generation/WinSDK/RecompiledIdlHeaders/um/winnt.h
+  loadConfig.GuardFlags = 0x00020000 | 0x00040000 | 0x00080000 | 0x00100000 |
+    0x00800000 | 0x01000000 | 0x02000000;
+
+  const html = renderLoadConfigGuardFlags(loadConfig);
+
+  for (const name of ["RF_INSTRUMENTED", "RF_ENABLE", "RF_STRICT", "RETPOLINE_PRESENT",
+    "XFG_ENABLED", "CASTGUARD_PRESENT", "MEMCPY_PRESENT"]) {
+    assert.match(html, new RegExp(name));
+  }
+});
+
 void test("renderLoadConfigChecks escapes checklist text and maps fail status", () => {
   const loadConfig = createPeLoadConfigResult();
   loadConfig.checks = [{
