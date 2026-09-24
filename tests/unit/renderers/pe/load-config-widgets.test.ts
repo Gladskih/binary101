@@ -189,3 +189,14 @@ void test("renderLoadConfigDynamicRelocations keeps truncated single-entry statu
   assert.ok(html.includes("<td>32 B (32 bytes)</td>"));
   assert.ok(html.includes("<td class=\"loadConfigStatusWarn\">truncated</td>"));
 });
+
+void test("renderLoadConfigDynamicRelocations shows decoded control transfer sites", () => {
+  const html = renderLoadConfigDynamicRelocations({ version: 1, dataSize: 20,
+    entries: [{ kind: "v1", symbol: 3n, baseRelocSize: 12, availableBytes: 12,
+      controlTransfers: [{ kind: "import", rva: 0x1010,
+        indirectCall: true, iatIndex: 17 }] }] });
+
+  assert.match(html, /Control-transfer fixups \(1\)/);
+  assert.match(html, /0x00001010/);
+  assert.match(html, /IAT index 17/);
+});

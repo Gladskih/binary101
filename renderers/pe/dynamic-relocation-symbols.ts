@@ -9,7 +9,8 @@ const SYMBOL_NAMES = new Map<bigint, string>([
   [4n, "GUARD_INDIR_CONTROL_TRANSFER"],
   [5n, "GUARD_SWITCHTABLE_BRANCH"],
   [6n, "ARM64X"],
-  [7n, "FUNCTION_OVERRIDE"]
+  [7n, "FUNCTION_OVERRIDE"],
+  [8n, "ARM64_KERNEL_IMPORT_CALL_TRANSFER"]
 ]);
 
 export const getDynamicRelocationSymbolName = (symbol: bigint): string =>

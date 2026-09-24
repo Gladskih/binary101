@@ -11,6 +11,7 @@ import type {
 import { peSectionNameValue } from "../../analyzers/pe/sections/name.js";
 import type { PeSection } from "../../analyzers/pe/types.js";
 import { renderDynamicFunctionOverrides } from "./dynamic-function-overrides.js";
+import { renderDynamicControlTransfers } from "./dynamic-control-transfers.js";
 import { getDynamicRelocationSymbolName as getSymbolName } from "./dynamic-relocation-symbols.js";
 
 const ADDRESS_TABLE_RENDER_LIMIT = 512;
@@ -179,11 +180,12 @@ export const renderLoadConfigDynamicRelocations = (dr: PeDynamicRelocations): st
     : "";
   const overrides = dr.entries.flatMap(entry => entry.fixup
     ? [renderDynamicFunctionOverrides(entry.fixup)] : []).join("");
-  if (dr.entries.length <= 1) return renderDynamicRelocationFlatSummary(dr, warningHtml) + overrides;
+  const controls = renderDynamicControlTransfers(dr.entries);
+  if (dr.entries.length <= 1) return renderDynamicRelocationFlatSummary(dr, warningHtml) + overrides + controls;
   return `<details class="loadConfigDynamicRelocations"><summary class="loadConfigNestedSummary">` +
     escapeHtml(renderDynamicRelocationTitle(dr)) +
     `</summary>${warningHtml}${renderDynamicRelocationMeta(dr, types)}` +
-    `${renderDynamicRelocationEntries(dr.entries)}${overrides}</details>`;
+    `${renderDynamicRelocationEntries(dr.entries)}${overrides}${controls}</details>`;
 };
 
 export const renderLoadConfigGuardFlags = (lc: PeLoadConfig): string => {
