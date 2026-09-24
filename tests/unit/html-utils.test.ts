@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   escapeHtml,
+  escapeHtmlText,
   renderDefinitionRow,
   renderFlagChips,
   renderOptionChips
@@ -12,6 +13,11 @@ void test("escapeHtml replaces risky characters while leaving safe ones alone", 
   const raw = `5 < 6 && "quote"`;
   const escaped = escapeHtml(raw);
   assert.strictEqual(escaped, "5 &lt; 6 && &quot;quote&quot;");
+});
+
+void test("escapeHtmlText encodes complete text including ampersands and greater-than signs", () => {
+  assert.equal(escapeHtmlText('evil<script>.dll!A&B "name"'),
+    "evil&lt;script&gt;.dll!A&amp;B &quot;name&quot;");
 });
 
 void test("renderDefinitionRow emits tooltip-escaped definition pairs", () => {

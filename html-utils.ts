@@ -7,6 +7,9 @@ export const escapeHtml = (input: unknown): string =>
     .replace(/"/g, "&quot;")
     .replace(/</g, "&lt;");
 
+export const escapeHtmlText = (input: unknown): string =>
+  escapeHtml(String(input).replace(/&/g, "&amp;").replace(/>/g, "&gt;"));
+
 export const renderDefinitionRow = (
   label: string,
   valueHtml: string,
