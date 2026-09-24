@@ -35,3 +35,29 @@ void test("renderLoadConfigDynamicRelocations includes decoded function override
   assert.match(html, /0x00001010/);
   assert.match(html, /0x00002010/);
 });
+
+void test("renderDynamicFunctionOverrides handles empty mappings", () => {
+  const html = renderDynamicFunctionOverrides({ functions: [{ originalRva: 0x1010,
+    bddOffset: 0, overridingRvas: [], baseRelocations: [] }], bddInfos: [] });
+
+  assert.match(html, /<td>0x00001010<\/td><td>-<\/td><td>-<\/td>/);
+  assert.doesNotMatch(html, /BDD nodes/);
+});
+
+void test("renderDynamicFunctionOverrides limits large tables", () => {
+  // The UI displays at most 512 rows per dense table.
+  const functions = Array.from({ length: 513 }, (_, index) => ({
+    originalRva: 0x1000 + index, bddOffset: 0,
+    overridingRvas: [0x2000 + index], baseRelocations: []
+  }));
+  const nodes = Array.from({ length: 513 }, (_, index) =>
+    ({ left: 0, right: 1, value: index }));
+
+  const html = renderDynamicFunctionOverrides({ functions,
+    bddInfos: [{ offset: 0, version: 1, nodes }] });
+
+  assert.match(html, /1 more functions hidden/);
+  assert.match(html, /BDD nodes \(513\)/);
+  assert.match(html, /1 more nodes hidden/);
+  assert.doesNotMatch(html, /0x00002200/);
+});
