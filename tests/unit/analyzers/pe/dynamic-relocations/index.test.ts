@@ -84,7 +84,7 @@ void test("parseDynamicRelocationsFromLoadConfig parses a V1 table referenced by
   dv.setUint32(tableOff + 0x00, 1, true); // Version
   // Dynamic relocation V1 for PE32 uses 4-byte Symbol + 4-byte BaseRelocSize.
   dv.setUint32(tableOff + 0x04, 0x4c, true); // Size (bytes after header)
-  dv.setUint32(tableOff + 0x08, 7, true); // Symbol/type
+  dv.setUint32(tableOff + 0x08, 0x123, true); // Unknown symbol: payload remains opaque.
   dv.setUint32(tableOff + 0x0c, 0x44, true); // BaseRelocSize
   bytes.fill(0xaa, tableOff + 0x10, tableOff + 0x10 + 0x44);
 
@@ -105,7 +105,7 @@ void test("parseDynamicRelocationsFromLoadConfig parses a V1 table referenced by
   const entry = expectDefined(parsed.entries[0]);
   assert.equal(entry.kind, "v1");
   if (entry.kind !== "v1") throw new Error("Expected v1 entry.");
-  assert.equal(entry.symbol, 7n);
+  assert.equal(entry.symbol, 0x123n);
   assert.equal(entry.baseRelocSize, 0x44);
   assert.equal(entry.availableBytes, 0x44);
   assert.equal(parsed.warnings?.length ?? 0, 0);
@@ -264,4 +264,31 @@ void test(
 
   assert.equal(parsed.version, 2);
   assert.ok(parsed.warnings?.some(warning => /header|undersized|invalid/i.test(warning)));
+});
+
+void test("parseDynamicRelocationsFromLoadConfig decodes V1 function overrides", async () => {
+  const bytes = new Uint8Array(0x100);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0x80, 1, true);
+  view.setUint32(0x84, 40, true); // V1 entry header plus 32-byte fixup.
+  view.setUint32(0x88, 7, true); // IMAGE_DYNAMIC_RELOCATION_FUNCTION_OVERRIDE.
+  view.setUint32(0x8c, 32, true);
+  view.setUint32(0x90, 20, true); // FuncOverrideSize: 16-byte record plus one RVA.
+  view.setUint32(0x94, 0x1010, true);
+  view.setUint32(0x98, 0, true); // BDDOffset.
+  view.setUint32(0x9c, 4, true); // RvaSize.
+  view.setUint32(0xa0, 0, true); // BaseRelocSize.
+  view.setUint32(0xa4, 0x2010, true);
+  view.setUint32(0xa8, 1, true); // BDD version.
+  view.setUint32(0xac, 0, true); // No BDD nodes.
+
+  const parsed = expectDefined(await parseDynamicRelocationsFromLoadConfig32(
+    new MockFile(bytes, "function-override.bin"), makeSingleSection(), rva => rva,
+    0x400000n, makeLoadConfig({ DynamicValueRelocTableSection: 1,
+      DynamicValueRelocTableOffset: 0x80 })
+  ));
+
+  assert.deepEqual(parsed.entries[0]?.fixup?.functions[0]?.overridingRvas, [0x2010]);
+  assert.deepEqual(parsed.entries[0]?.fixup?.bddInfos, [{ offset: 0, version: 1, nodes: [] }]);
+  assert.deepEqual(parsed.warnings, undefined);
 });

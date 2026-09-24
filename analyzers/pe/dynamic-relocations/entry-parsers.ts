@@ -1,6 +1,7 @@
 "use strict";
 
 import type { PeDynamicRelocationEntry } from "./index.js";
+import { parseFunctionOverride } from "./function-override.js";
 
 const DYNAMIC_RELOCATION_TABLE_HEADER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 2;
 // Microsoft PE dynamic relocation table version 1: Symbol followed by BaseRelocSize.
@@ -17,6 +18,15 @@ const readU64Maybe = (view: DataView, offset: number): bigint => {
   return view.getBigUint64(offset, true);
 };
 
+// IMAGE_DYNAMIC_RELOCATION_FUNCTION_OVERRIDE in Windows SDK winnt.h.
+const FUNCTION_OVERRIDE_SYMBOL = 7n;
+const parseKnownFixup = (
+  view: DataView, symbol: bigint, start: number, available: number,
+  declared: number, warnings: string[]
+) => symbol === FUNCTION_OVERRIDE_SYMBOL && available === declared
+  ? parseFunctionOverride(view, start, start + available, warnings) ?? undefined
+  : undefined;
+
 export const parseDynamicRelocationEntriesV132 = (
   view: DataView,
   dataEnd: number,
@@ -29,8 +39,9 @@ export const parseDynamicRelocationEntriesV132 = (
     const baseRelocSize = view.getUint32(cursor + Uint32Array.BYTES_PER_ELEMENT, true);
     const relocStart = cursor + DYNAMIC_RELOCATION_V1_ENTRY_SIZE32;
     const availableBytes = Math.min(baseRelocSize, Math.max(0, dataEnd - relocStart));
-
-    entries.push({ kind: "v1", symbol, baseRelocSize, availableBytes });
+    const fixup = parseKnownFixup(view, symbol, relocStart, availableBytes, baseRelocSize, warnings);
+    entries.push({ kind: "v1", symbol, baseRelocSize, availableBytes,
+      ...(fixup ? { fixup } : {}) });
     cursor = relocStart + availableBytes;
     if (availableBytes < baseRelocSize) {
       warnings.push(
@@ -57,8 +68,9 @@ export const parseDynamicRelocationEntriesV164 = (
     const baseRelocSize = view.getUint32(cursor + BigUint64Array.BYTES_PER_ELEMENT, true);
     const relocStart = cursor + DYNAMIC_RELOCATION_V1_ENTRY_SIZE64;
     const availableBytes = Math.min(baseRelocSize, Math.max(0, dataEnd - relocStart));
-
-    entries.push({ kind: "v1", symbol, baseRelocSize, availableBytes });
+    const fixup = parseKnownFixup(view, symbol, relocStart, availableBytes, baseRelocSize, warnings);
+    entries.push({ kind: "v1", symbol, baseRelocSize, availableBytes,
+      ...(fixup ? { fixup } : {}) });
     cursor = relocStart + availableBytes;
     if (availableBytes < baseRelocSize) {
       warnings.push(
@@ -103,6 +115,7 @@ export const parseDynamicRelocationEntriesV232 = (
     }
     const fixupStart = cursor + Math.max(DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE32, headerSize);
     const availableBytes = Math.min(fixupInfoSize, Math.max(0, dataEnd - fixupStart));
+    const fixup = parseKnownFixup(view, symbol, fixupStart, availableBytes, fixupInfoSize, warnings);
 
     entries.push({
       kind: "v2",
@@ -111,7 +124,8 @@ export const parseDynamicRelocationEntriesV232 = (
       symbol,
       symbolGroup,
       flags,
-      availableBytes
+      availableBytes,
+      ...(fixup ? { fixup } : {})
     });
     cursor = fixupStart + availableBytes;
     if (availableBytes < fixupInfoSize) {
@@ -157,6 +171,7 @@ export const parseDynamicRelocationEntriesV264 = (
     }
     const fixupStart = cursor + Math.max(DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE64, headerSize);
     const availableBytes = Math.min(fixupInfoSize, Math.max(0, dataEnd - fixupStart));
+    const fixup = parseKnownFixup(view, symbol, fixupStart, availableBytes, fixupInfoSize, warnings);
 
     entries.push({
       kind: "v2",
@@ -165,7 +180,8 @@ export const parseDynamicRelocationEntriesV264 = (
       symbol,
       symbolGroup,
       flags,
-      availableBytes
+      availableBytes,
+      ...(fixup ? { fixup } : {})
     });
     cursor = fixupStart + availableBytes;
     if (availableBytes < fixupInfoSize) {

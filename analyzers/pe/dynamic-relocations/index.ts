@@ -11,11 +11,13 @@ import {
 } from "./entry-parsers.js";
 import { readLoadConfigPointerRva, type PeLoadConfig } from "../load-config/index.js";
 import type { PeSection, RvaToOffset } from "../types.js";
+import type { PeFunctionOverride } from "./function-override.js";
 
 const DYNAMIC_RELOCATION_TABLE_HEADER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 2;
 
 export type PeDynamicRelocationEntry =
-  | { kind: "v1"; symbol: bigint; baseRelocSize: number; availableBytes: number }
+  | { kind: "v1"; symbol: bigint; baseRelocSize: number; availableBytes: number;
+      fixup?: PeFunctionOverride }
   | {
       kind: "v2";
       headerSize: number;
@@ -24,6 +26,7 @@ export type PeDynamicRelocationEntry =
       symbolGroup: number;
       flags: number;
       availableBytes: number;
+      fixup?: PeFunctionOverride;
     };
 
 export type PeDynamicRelocations = {
