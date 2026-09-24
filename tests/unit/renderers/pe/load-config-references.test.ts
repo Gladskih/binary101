@@ -127,9 +127,32 @@ void test("renderLoadConfigReferences renders decoded structures and labels opaq
   assert.ok(html.includes("STRICT_MEMORY"));
   assert.ok(html.includes("PRIMARY_IMAGE"));
   assert.ok(html.includes("Hot patch information"));
+  assert.match(html, /<dt>Flags<\/dt><dd>0x00000002 HOTSWAP<\/dd>/);
   assert.ok(html.includes("Volatile metadata"));
   assert.ok(html.includes("Volatile access RVAs"));
   assert.ok(html.includes("UmaFunctionPointers"));
+});
+
+void test("renderLoadConfigReferences names HotPatch info flags and preserves unknown bits", () => {
+  // Windows SDK winnt.h: PATCHORDERCRITICAL=1 and HOTSWAP=2.
+  // https://github.com/microsoft/win32metadata/blob/main/generation/WinSDK/RecompiledIdlHeaders/um/winnt.h
+  const html = renderLoadConfigReferences({ hotPatch: {
+    rva: 0x1000, version: 4, size: 36, sequenceNumber: 1,
+    baseImageListOffset: 0, baseImageCount: 0, minSequenceNumber: 0,
+    flags: 0x83, baseImages: []
+  } }, 16);
+
+  assert.match(html, /<dt>Flags<\/dt><dd>0x00000083 PATCHORDERCRITICAL HOTSWAP<\/dd>/);
+});
+
+void test("renderLoadConfigReferences keeps zero HotPatch info flags numeric", () => {
+  const references = createReferences();
+  assert.ok(references.hotPatch);
+  references.hotPatch.flags = 0;
+
+  const html = renderLoadConfigReferences(references, 16);
+
+  assert.match(html, /<dt>Flags<\/dt><dd>0x00000000<\/dd>/);
 });
 
 void test("renderLoadConfigReferences renders x86 metadata and omits absent optional sections", () => {

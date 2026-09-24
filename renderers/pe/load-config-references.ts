@@ -30,6 +30,14 @@ const enclavePolicyFlags = (flags: number): string => [
 const enclaveImageFlags = (flags: number): string =>
   `${hex(flags, 8)}${flags & 1 ? " PRIMARY_IMAGE" : ""}`;
 
+// Windows SDK winnt.h IMAGE_HOT_PATCH_INFO_FLAG_* definitions.
+// https://github.com/microsoft/win32metadata/blob/main/generation/WinSDK/RecompiledIdlHeaders/um/winnt.h
+const hotPatchInfoFlags = (flags: number): string => [
+  hex(flags, 8),
+  ...(flags & 1 ? ["PATCHORDERCRITICAL"] : []),
+  ...(flags & 2 ? ["HOTSWAP"] : [])
+].join(" ");
+
 const renderRows = (rows: ReferenceRow[]): string =>
   `<dl>${rows.map(([name, value]) => `<dt>${escapeHtml(name)}</dt><dd>${escapeHtml(value)}</dd>`).join("")}</dl>`;
 
@@ -158,7 +166,7 @@ const renderHotPatch = (references: PeLoadConfigReferences): string => {
     ...(info.bufferOffset == null ? [] : [["BufferOffset", hex(info.bufferOffset, 8)] as const]),
     ...(info.extraPatchSize == null ? [] : [["ExtraPatchSize", hex(info.extraPatchSize, 8)] as const]),
     ...(info.minSequenceNumber == null ? [] : [["MinSequenceNumber", String(info.minSequenceNumber)] as const]),
-    ...(info.flags == null ? [] : [["Flags", hex(info.flags, 8)] as const])
+    ...(info.flags == null ? [] : [["Flags", hotPatchInfoFlags(info.flags)] as const])
   ];
   const bases = renderReferenceTable(references, LOAD_CONFIG_REFERENCE_TABLE_IDS.hotPatchBases);
   return `<h4>Hot patch information</h4>${renderRows(rows)}` +
