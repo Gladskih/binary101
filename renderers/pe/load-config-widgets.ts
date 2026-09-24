@@ -13,10 +13,9 @@ import type { PeSection } from "../../analyzers/pe/types.js";
 import type { PeImportParseResult } from "../../analyzers/pe/imports/index.js";
 import { renderDynamicFunctionOverrides } from "./dynamic-function-overrides.js";
 import { renderDynamicControlTransfers } from "./dynamic-control-transfers.js";
+import { renderDynamicRelocationDetails } from "./dynamic-relocation-details.js";
 import { getDynamicRelocationSymbolName as getSymbolName } from "./dynamic-relocation-symbols.js";
-
 const ADDRESS_TABLE_RENDER_LIMIT = 512;
-
 const findSectionContainingRva = (sections: PeSection[], rva: number): PeSection | null => {
   const normalizedRva = rva >>> 0;
   for (const section of sections) {
@@ -184,11 +183,13 @@ export const renderLoadConfigDynamicRelocations = (
   const overrides = dr.entries.flatMap(entry => entry.fixup
     ? [renderDynamicFunctionOverrides(entry.fixup)] : []).join("");
   const controls = renderDynamicControlTransfers(dr.entries, imports);
-  if (dr.entries.length <= 1) return renderDynamicRelocationFlatSummary(dr, warningHtml) + overrides + controls;
+  if (dr.entries.length <= 1) return renderDynamicRelocationFlatSummary(dr, warningHtml) +
+    renderDynamicRelocationDetails(dr.entries) + overrides + controls;
   return `<details class="loadConfigDynamicRelocations"><summary class="loadConfigNestedSummary">` +
     escapeHtml(renderDynamicRelocationTitle(dr)) +
     `</summary>${warningHtml}${renderDynamicRelocationMeta(dr, types)}` +
-    `${renderDynamicRelocationEntries(dr.entries)}${overrides}${controls}</details>`;
+    `${renderDynamicRelocationEntries(dr.entries)}` +
+    `${renderDynamicRelocationDetails(dr.entries)}${overrides}${controls}</details>`;
 };
 
 export const renderLoadConfigGuardFlags = (lc: PeLoadConfig): string => {

@@ -200,3 +200,21 @@ void test("renderLoadConfigDynamicRelocations shows decoded control transfer sit
   assert.match(html, /0x00001010/);
   assert.match(html, /IAT index 17/);
 });
+
+void test("renderLoadConfigDynamicRelocations includes Guard RF and ARM64X records", () => {
+  const html = renderLoadConfigDynamicRelocations({ version: 2, dataSize: 32,
+    entries: [
+      { kind: "v2", headerSize: 24, fixupInfoSize: 8, symbol: 1n,
+        symbolGroup: 0, flags: 0, availableBytes: 8,
+        guardRf: { kind: "prologue", prologueBytes: [0x90],
+          sites: [{ rva: 0x1234, type: 0 }] } },
+      { kind: "v2", headerSize: 24, fixupInfoSize: 8, symbol: 6n,
+        symbolGroup: 0, flags: 0, availableBytes: 8,
+        arm64xFixups: [{ kind: "zeroFill", rva: 0x2000, size: 4 }] }
+    ] });
+
+  assert.match(html, /Guard RF prologue/);
+  assert.match(html, /ARM64X fixups/);
+  assert.match(html, /0x00001234/);
+  assert.match(html, /0x00002000/);
+});
