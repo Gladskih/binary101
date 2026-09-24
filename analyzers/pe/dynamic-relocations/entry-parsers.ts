@@ -3,6 +3,8 @@
 import type { PeDynamicRelocationEntry } from "./index.js";
 import { parseFunctionOverride } from "./function-override.js";
 import { parseControlTransfers } from "./control-transfers.js";
+import { parseGuardRf } from "./guard-rf.js";
+import { parseArm64xFixups } from "./arm64x.js";
 
 const DYNAMIC_RELOCATION_TABLE_HEADER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 2;
 // Microsoft PE dynamic relocation table version 1: Symbol followed by BaseRelocSize.
@@ -21,8 +23,17 @@ const readU64Maybe = (view: DataView, offset: number): bigint => {
 
 const parseKnownPayload = (
   view: DataView, symbol: bigint, start: number, available: number,
-  declared: number, warnings: string[]
-): Pick<PeDynamicRelocationEntry, "fixup" | "controlTransfers"> => {
+  declared: number, warnings: string[], headerStart = start, headerEnd = start
+): Pick<PeDynamicRelocationEntry, "fixup" | "controlTransfers" |
+  "guardRf" | "arm64xFixups"> => {
+  if (symbol === 1n || symbol === 2n) {
+    const guardRf = parseGuardRf(view, symbol, headerStart, headerEnd,
+      start, start + available, warnings);
+    return guardRf ? { guardRf } : {};
+  }
+  if (symbol === 6n) {
+    return { arm64xFixups: parseArm64xFixups(view, start, start + available, warnings) };
+  }
   if (available !== declared) return {};
   // Windows SDK winnt.h: IMAGE_DYNAMIC_RELOCATION_FUNCTION_OVERRIDE is 7.
   if (symbol === 7n) {
@@ -127,7 +138,8 @@ export const parseDynamicRelocationEntriesV232 = (
     const fixupStart = cursor + Math.max(DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE32, headerSize);
     const availableBytes = Math.min(fixupInfoSize, Math.max(0, dataEnd - fixupStart));
     const payload = headerSize >= DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE32
-      ? parseKnownPayload(view, symbol, fixupStart, availableBytes, fixupInfoSize, warnings)
+      ? parseKnownPayload(view, symbol, fixupStart, availableBytes, fixupInfoSize, warnings,
+        cursor + DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE32, cursor + headerSize)
       : {};
 
     entries.push({
@@ -185,7 +197,8 @@ export const parseDynamicRelocationEntriesV264 = (
     const fixupStart = cursor + Math.max(DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE64, headerSize);
     const availableBytes = Math.min(fixupInfoSize, Math.max(0, dataEnd - fixupStart));
     const payload = headerSize >= DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE64
-      ? parseKnownPayload(view, symbol, fixupStart, availableBytes, fixupInfoSize, warnings)
+      ? parseKnownPayload(view, symbol, fixupStart, availableBytes, fixupInfoSize, warnings,
+        cursor + DYNAMIC_RELOCATION_V2_ENTRY_HEADER_SIZE64, cursor + headerSize)
       : {};
 
     entries.push({

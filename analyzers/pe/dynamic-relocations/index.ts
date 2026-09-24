@@ -13,6 +13,8 @@ import { readLoadConfigPointerRva, type PeLoadConfig } from "../load-config/inde
 import type { PeSection, RvaToOffset } from "../types.js";
 import type { PeFunctionOverride } from "./function-override.js";
 import type { PeControlTransferRecord } from "./control-transfers.js";
+import type { PeGuardRf } from "./guard-rf.js";
+import type { PeArm64xFixup } from "./arm64x.js";
 
 const DYNAMIC_RELOCATION_TABLE_HEADER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 2;
 // Bound untrusted DVRT allocation and mapped-RVA scanning in the browser.
@@ -20,7 +22,8 @@ const MAX_DYNAMIC_RELOCATION_TABLE_BYTES = 16 * 1024 * 1024;
 
 export type PeDynamicRelocationEntry =
   | { kind: "v1"; symbol: bigint; baseRelocSize: number; availableBytes: number;
-      fixup?: PeFunctionOverride; controlTransfers?: PeControlTransferRecord[] }
+      fixup?: PeFunctionOverride; controlTransfers?: PeControlTransferRecord[];
+      guardRf?: PeGuardRf; arm64xFixups?: PeArm64xFixup[] }
   | {
       kind: "v2";
       headerSize: number;
@@ -31,6 +34,8 @@ export type PeDynamicRelocationEntry =
       availableBytes: number;
       fixup?: PeFunctionOverride;
       controlTransfers?: PeControlTransferRecord[];
+      guardRf?: PeGuardRf;
+      arm64xFixups?: PeArm64xFixup[];
     };
 
 export type PeDynamicRelocations = {

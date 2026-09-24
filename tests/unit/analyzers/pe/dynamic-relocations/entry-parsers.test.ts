@@ -105,3 +105,39 @@ void test("V2 does not decode a Function Override behind an undersized header", 
   assert.equal(entries[0]?.fixup, undefined);
   assert.ok(warnings.some(warning => /smaller than the fixed/.test(warning)));
 });
+
+void test("PE32+ V2 passes Guard RF variable header and fixup info to decoder", () => {
+  const view = new DataView(new ArrayBuffer(8 + 24 + 3 + 10));
+  view.setUint32(8, 27, true); // Fixed V2 header plus 3-byte prologue header.
+  view.setUint32(12, 10, true);
+  view.setBigUint64(16, 1n, true); // Guard RF prologue.
+  view.setUint8(32, 2);
+  view.setUint8(33, 0x90);
+  view.setUint8(34, 0xcc);
+  view.setUint32(35, 0x1000, true);
+  view.setUint32(39, 10, true);
+  view.setUint16(43, 0x123, true);
+  const warnings: string[] = [];
+
+  const entries = parseDynamicRelocationEntriesV264(view, view.byteLength, warnings);
+
+  assert.deepEqual(entries[0]?.guardRf, { kind: "prologue", prologueBytes: [0x90, 0xcc],
+    sites: [{ rva: 0x1123, type: 0 }] });
+  assert.deepEqual(warnings, []);
+});
+
+void test("PE32 V1 decodes ARM64X fixup blocks", () => {
+  const view = new DataView(new ArrayBuffer(8 + 8 + 12));
+  view.setUint32(8, 6, true); // ARM64X.
+  view.setUint32(12, 12, true);
+  view.setUint32(16, 0x3000, true);
+  view.setUint32(20, 12, true);
+  view.setUint16(24, 0x4100, true); // Two-byte zero fill.
+  const warnings: string[] = [];
+
+  const entries = parseDynamicRelocationEntriesV132(view, view.byteLength, warnings);
+
+  assert.deepEqual(entries[0]?.arm64xFixups,
+    [{ kind: "zeroFill", rva: 0x3100, size: 2 }]);
+  assert.deepEqual(warnings, []);
+});
