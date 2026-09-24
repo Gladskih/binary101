@@ -10,6 +10,7 @@ import type {
 } from "../../analyzers/pe/dynamic-relocations/index.js";
 import { peSectionNameValue } from "../../analyzers/pe/sections/name.js";
 import type { PeSection } from "../../analyzers/pe/types.js";
+import type { PeImportParseResult } from "../../analyzers/pe/imports/index.js";
 import { renderDynamicFunctionOverrides } from "./dynamic-function-overrides.js";
 import { renderDynamicControlTransfers } from "./dynamic-control-transfers.js";
 import { getDynamicRelocationSymbolName as getSymbolName } from "./dynamic-relocation-symbols.js";
@@ -170,7 +171,9 @@ const renderDynamicRelocationEntries = (entries: PeDynamicRelocationEntry[]): st
     `<th>Available</th><th>Status</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
 };
 
-export const renderLoadConfigDynamicRelocations = (dr: PeDynamicRelocations): string => {
+export const renderLoadConfigDynamicRelocations = (
+  dr: PeDynamicRelocations, imports?: PeImportParseResult
+): string => {
   const types = [
     ...new Set(dr.entries.map(entry => entry.symbol).filter(symbol => symbol !== 0n))
   ].sort(compareWideInt);
@@ -180,7 +183,7 @@ export const renderLoadConfigDynamicRelocations = (dr: PeDynamicRelocations): st
     : "";
   const overrides = dr.entries.flatMap(entry => entry.fixup
     ? [renderDynamicFunctionOverrides(entry.fixup)] : []).join("");
-  const controls = renderDynamicControlTransfers(dr.entries);
+  const controls = renderDynamicControlTransfers(dr.entries, imports);
   if (dr.entries.length <= 1) return renderDynamicRelocationFlatSummary(dr, warningHtml) + overrides + controls;
   return `<details class="loadConfigDynamicRelocations"><summary class="loadConfigNestedSummary">` +
     escapeHtml(renderDynamicRelocationTitle(dr)) +

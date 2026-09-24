@@ -34,7 +34,7 @@ void test("linkDynamicImportControlTransfers verifies the instruction and IAT sl
 
   assert.deepEqual(linked.entries[0]?.controlTransfers?.[0], {
     kind: "import", rva: 0x1010, indirectCall: true, iatIndex: 1,
-    importName: "example.dll!ExampleFunction"
+    importLink: { entryIndex: 0, functionIndex: 0 }
   });
 });
 
@@ -68,7 +68,7 @@ void test("linkDynamicImportControlTransfers handles indirect jump imports", asy
   assert.equal(linked.entries[0]?.controlTransfers?.[0]?.kind, "import");
   assert.deepEqual(linked.entries[0]?.controlTransfers?.[0], {
     kind: "import", rva: 0x1010, indirectCall: false, iatIndex: 1,
-    importName: "example.dll!ExampleFunction"
+    importLink: { entryIndex: 0, functionIndex: 0 }
   });
 });
 
@@ -164,7 +164,7 @@ void test("linkDynamicImportControlTransfers links ordinal imports", async () =>
 
   assert.deepEqual(linked.entries[0]?.controlTransfers?.[0], {
     kind: "import", rva: 0x1010, indirectCall: true, iatIndex: 1,
-    importName: "example.dll!#42"
+    importLink: { entryIndex: 0, functionIndex: 0 }
   });
 });
 
@@ -202,7 +202,7 @@ void test("linkDynamicImportControlTransfers indexes later import thunks", async
 
   assert.deepEqual(linked.entries[0]?.controlTransfers?.[0], {
     kind: "import", rva: 0x1010, indirectCall: true, iatIndex: 2,
-    importName: "example.dll!SecondFunction"
+    importLink: { entryIndex: 0, functionIndex: 1 }
   });
 });
 
@@ -212,7 +212,7 @@ void test("linkDynamicImportControlTransfers accepts the last complete IAT slot"
 
   assert.deepEqual(linked.entries[0]?.controlTransfers?.[0], {
     kind: "import", rva: 0x1010, indirectCall: true, iatIndex: 1,
-    importName: "example.dll!ExampleFunction"
+    importLink: { entryIndex: 0, functionIndex: 0 }
   });
 });
 

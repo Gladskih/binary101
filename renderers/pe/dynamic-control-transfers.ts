@@ -6,17 +6,25 @@ import type { PeDynamicRelocationEntry } from
   "../../analyzers/pe/dynamic-relocations/index.js";
 import type { PeControlTransferRecord } from
   "../../analyzers/pe/dynamic-relocations/control-transfers.js";
+import type { PeImportParseResult } from "../../analyzers/pe/imports/index.js";
 import { getDynamicRelocationSymbolName } from "./dynamic-relocation-symbols.js";
 
 const RENDER_LIMIT = 512;
 
-const describeRecord = (record: PeControlTransferRecord): [string, string] => {
+const describeRecord = (
+  record: PeControlTransferRecord,
+  imports?: PeImportParseResult
+): [string, string] => {
   switch (record.kind) {
-    case "import":
+    case "import": {
+      const entry = record.importLink ? imports?.entries[record.importLink.entryIndex] : undefined;
+      const fn = entry?.functions[record.importLink?.functionIndex ?? -1];
+      const name = fn?.name || (fn?.ordinal != null ? `#${fn.ordinal}` : "");
       return [record.indirectCall ? "call" : "branch", [
         `IAT index ${record.iatIndex}`,
-        ...(record.importName ? [record.importName] : [])
+        ...(entry?.dll && name ? [`${entry.dll}!${name}`] : [])
       ].join(", ")];
+    }
     case "arm64Import":
       return [record.indirectCall ? "BLR" : "BR", [
         `register ${record.registerIndex}`, record.delayImport ? "delay import" : "static import",
@@ -32,14 +40,17 @@ const describeRecord = (record: PeControlTransferRecord): [string, string] => {
   }
 };
 
-export const renderDynamicControlTransfers = (entries: PeDynamicRelocationEntry[]): string => {
+export const renderDynamicControlTransfers = (
+  entries: PeDynamicRelocationEntry[],
+  imports?: PeImportParseResult
+): string => {
   const count = entries.reduce((sum, entry) => sum + (entry.controlTransfers?.length ?? 0), 0);
   if (!count) return "";
   const rows: string[] = [];
   for (const entry of entries) {
     for (const record of entry.controlTransfers ?? []) {
       if (rows.length >= RENDER_LIMIT) break;
-      const [transfer, detail] = describeRecord(record);
+      const [transfer, detail] = describeRecord(record, imports);
       rows.push(`<tr><td>${getDynamicRelocationSymbolName(entry.symbol)}</td>` +
         `<td>${hex(record.rva, 8)}</td><td>${transfer}</td><td>${escapeHtmlText(detail)}</td></tr>`);
     }

@@ -113,7 +113,7 @@ export function renderLoadConfig(pe: PeWindowsParseResult, out: string[]): void 
   out.push(renderLoadConfigChecks(lc));
 
   if (lc.dynamicRelocations) {
-    out.push(renderLoadConfigDynamicRelocations(lc.dynamicRelocations));
+    out.push(renderLoadConfigDynamicRelocations(lc.dynamicRelocations, pe.imports));
   }
   if (lc.references) out.push(renderLoadConfigReferences(lc.references, pointerWidth));
   out.push(renderLoadConfigAddressTables([

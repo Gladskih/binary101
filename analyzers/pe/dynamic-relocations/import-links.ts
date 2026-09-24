@@ -9,26 +9,28 @@ import type { PeImportParseResult } from "../imports/index.js";
 import type { PeControlTransferRecord } from "./control-transfers.js";
 import type { PeDynamicRelocations } from "./index.js";
 
-const buildImportSlotNames = (imports: PeImportParseResult): Map<number, string | null> => {
-  const names = new Map<number, string | null>();
-  for (const entry of imports.entries) {
+type ImportLink = NonNullable<Extract<PeControlTransferRecord, { kind: "import" }>["importLink"]>;
+
+const buildImportSlotLinks = (imports: PeImportParseResult): Map<number, ImportLink | null> => {
+  const links = new Map<number, ImportLink | null>();
+  for (const [entryIndex, entry] of imports.entries.entries()) {
     for (const [index, fn] of entry.functions.entries()) {
       const slotRva = entry.firstThunkRva + index * imports.thunkEntrySize;
-      const name = fn.name || (fn.ordinal != null ? `#${fn.ordinal}` : "");
-      if (!entry.dll || !name || !isRvaRange(slotRva, imports.thunkEntrySize)) continue;
-      names.set(slotRva, names.has(slotRva) ? null : `${entry.dll}!${name}`);
+      if (!entry.dll || (!fn.name && fn.ordinal == null) ||
+        !isRvaRange(slotRva, imports.thunkEntrySize)) continue;
+      links.set(slotRva, links.has(slotRva) ? null : { entryIndex, functionIndex: index });
     }
   }
-  return names;
+  return links;
 };
 
-const resolveImportName = async (
+const resolveImportLink = async (
   record: Extract<PeControlTransferRecord, { kind: "import" }>,
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
   iat: PeIatDirectory,
-  slotNames: Map<number, string | null>
-): Promise<string | null> => {
+  slotLinks: Map<number, ImportLink | null>
+): Promise<ImportLink | null> => {
   // Windows SDK winnt.h calls this IATIndex; PE32+ import thunks are 8 bytes.
   // https://github.com/microsoft/win32metadata/blob/main/generation/WinSDK/RecompiledIdlHeaders/um/winnt.h
   // x64 FF /2 and FF /4 with ModRM 15/25 are RIP-relative CALL/JMP [disp32].
@@ -39,15 +41,15 @@ const resolveImportName = async (
     !isRvaRange(record.rva, 1)) return null;
   const slotRva = iat.rva + slotOffset;
   if (!isRvaRange(slotRva, 8)) return null;
-  const name = slotNames.get(slotRva);
-  if (!name) return null;
+  const link = slotLinks.get(slotRva);
+  if (!link) return null;
   const view = await readMappedRvaPrefix(reader, record.rva, 7, rvaToOff);
   if (view.byteLength < 6) return null;
   const prefixSize = (view.getUint8(0) & 0xf0) === 0x40 ? 1 : 0;
   if (view.byteLength < prefixSize + 6 || view.getUint8(prefixSize) !== 0xff) return null;
   if (view.getUint8(prefixSize + 1) !== (record.indirectCall ? 0x15 : 0x25)) return null;
   const targetRva = record.rva + prefixSize + 6 + view.getInt32(prefixSize + 2, true);
-  return targetRva === slotRva ? name : null;
+  return targetRva === slotRva ? link : null;
 };
 
 export const linkDynamicImportControlTransfers = async (
@@ -59,8 +61,8 @@ export const linkDynamicImportControlTransfers = async (
 ): Promise<PeDynamicRelocations> => {
   if (!iat || iat.warnings?.length || !isRvaRange(iat.rva, iat.size) ||
     imports.thunkEntrySize !== 8) return relocations;
-  const slotNames = buildImportSlotNames(imports);
-  if (!slotNames.size) return relocations;
+  const slotLinks = buildImportSlotLinks(imports);
+  if (!slotLinks.size) return relocations;
   let changed = false;
   let readFailed = false;
   const entries = [];
@@ -72,14 +74,14 @@ export const linkDynamicImportControlTransfers = async (
     const controlTransfers: PeControlTransferRecord[] = [];
     for (const record of entry.controlTransfers) {
       if (record.kind === "import") {
-        let name: string | null = null;
+        let link: ImportLink | null = null;
         try {
-          name = await resolveImportName(record, reader, rvaToOff, iat, slotNames);
+          link = await resolveImportLink(record, reader, rvaToOff, iat, slotLinks);
         } catch {
           readFailed = true;
         }
-        if (name) changed = true;
-        controlTransfers.push(name ? { ...record, importName: name } : record);
+        if (link) changed = true;
+        controlTransfers.push(link ? { ...record, importLink: link } : record);
       } else {
         controlTransfers.push(record);
       }
