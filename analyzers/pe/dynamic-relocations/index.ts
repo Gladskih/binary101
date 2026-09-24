@@ -12,12 +12,13 @@ import {
 import { readLoadConfigPointerRva, type PeLoadConfig } from "../load-config/index.js";
 import type { PeSection, RvaToOffset } from "../types.js";
 import type { PeFunctionOverride } from "./function-override.js";
+import type { PeControlTransferRecord } from "./control-transfers.js";
 
 const DYNAMIC_RELOCATION_TABLE_HEADER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 2;
 
 export type PeDynamicRelocationEntry =
   | { kind: "v1"; symbol: bigint; baseRelocSize: number; availableBytes: number;
-      fixup?: PeFunctionOverride }
+      fixup?: PeFunctionOverride; controlTransfers?: PeControlTransferRecord[] }
   | {
       kind: "v2";
       headerSize: number;
@@ -27,6 +28,7 @@ export type PeDynamicRelocationEntry =
       flags: number;
       availableBytes: number;
       fixup?: PeFunctionOverride;
+      controlTransfers?: PeControlTransferRecord[];
     };
 
 export type PeDynamicRelocations = {

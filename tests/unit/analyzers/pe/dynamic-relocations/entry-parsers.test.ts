@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  parseDynamicRelocationEntriesV132,
   parseDynamicRelocationEntriesV232,
   parseDynamicRelocationEntriesV264
 } from "../../../../../analyzers/pe/dynamic-relocations/entry-parsers.js";
@@ -24,6 +25,40 @@ for (const [name, headerSize, parser] of [
     assert.ok(warnings.some(warning => /header.*truncated/i.test(warning)));
   });
 }
+
+void test("V1 exposes import control transfers from a relocation block", () => {
+  const view = new DataView(new ArrayBuffer(8 + 8 + 12));
+  view.setUint32(8, 3, true); // GUARD_IMPORT_CONTROL_TRANSFER.
+  view.setUint32(12, 12, true);
+  view.setUint32(16, 0x1000, true);
+  view.setUint32(20, 12, true);
+  view.setUint32(24, 0x123 | (7 << 13), true);
+  const warnings: string[] = [];
+
+  const entries = parseDynamicRelocationEntriesV132(view, view.byteLength, warnings);
+
+  assert.deepEqual(entries[0]?.controlTransfers,
+    [{ kind: "import", rva: 0x1123, indirectCall: false, iatIndex: 7 }]);
+  assert.deepEqual(warnings, []);
+});
+
+void test("V2 exposes indirect control transfers from a relocation block", () => {
+  const view = new DataView(new ArrayBuffer(8 + 24 + 10));
+  view.setUint32(8, 24, true);
+  view.setUint32(12, 10, true);
+  view.setBigUint64(16, 4n, true); // GUARD_INDIR_CONTROL_TRANSFER.
+  view.setUint32(32, 0x2000, true);
+  view.setUint32(36, 10, true);
+  view.setUint16(40, 0x345, true);
+  const warnings: string[] = [];
+
+  const entries = parseDynamicRelocationEntriesV264(view, view.byteLength, warnings);
+
+  assert.deepEqual(entries[0]?.controlTransfers,
+    [{ kind: "indirect", rva: 0x2345, indirectCall: false,
+      rexWPrefix: false, cfgCheck: false }]);
+  assert.deepEqual(warnings, []);
+});
 
 void test("PE32+ V2 decodes a complete function override fixup", () => {
   const view = new DataView(new ArrayBuffer(8 + 24 + 12));
