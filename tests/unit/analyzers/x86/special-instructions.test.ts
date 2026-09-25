@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import * as iced from "iced-x86";
+import * as iced from "iced-x86-disasm";
 import { isIcedX86Module } from "../../../../analyzers/x86/disassembly-iced.js";
 import { createX86SpecialInstructionCollector } from
   "../../../../analyzers/x86/special-instructions.js";
@@ -76,9 +76,11 @@ for (const [name, bytes] of [
 void test("tolerates missing mnemonic metadata", () => {
   assert.ok(isIcedX86Module(iced));
   const collector = createX86SpecialInstructionCollector({ ...iced, Mnemonic: {} }, Number);
-  const instruction = iced.Instruction.create(iced.Code.Syscall);
+  const decoder = new iced.Decoder(64, Uint8Array.of(0x0f, 0x05), iced.DecoderOptions.None);
+  const instruction = decoder.decode();
   collector.record(instruction);
   instruction.free();
+  decoder.free();
   assert.deepEqual(collector.findings(), []);
 });
 
@@ -157,7 +159,7 @@ void test("missing register metadata does not turn every MOV into a system opera
 void test("invalid instructions are rejected even with a recognizable mnemonic", () => {
   assert.ok(isIcedX86Module(iced));
   const collector = createX86SpecialInstructionCollector(iced, Number);
-  const instruction = iced.Instruction.create(iced.Code.INVALID);
+  const instruction = new iced.Instruction();
   Object.defineProperty(instruction, "mnemonic", { value: iced.Mnemonic.Syscall });
   collector.record(instruction);
   instruction.free();

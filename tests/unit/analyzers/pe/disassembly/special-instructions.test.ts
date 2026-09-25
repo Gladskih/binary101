@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import * as iced from "iced-x86";
+import * as iced from "iced-x86-disasm";
 import { isIcedX86Module } from "../../../../../analyzers/x86/disassembly-iced.js";
 import { createPeSpecialInstructionCollector } from
   "../../../../../analyzers/pe/disassembly/special-instructions.js";
@@ -34,10 +34,12 @@ for (const [address, expected] of [
   void test(`checks PE RVA boundaries for address ${address}`, () => {
     assert.ok(isIcedX86Module(iced));
     const collector = createPeSpecialInstructionCollector(iced, 0x140000000n);
-    const instruction = iced.Instruction.create(iced.Code.Syscall);
-    instruction.ip = address;
+    const decoder = new iced.Decoder(64, Uint8Array.of(0x0f, 0x05), iced.DecoderOptions.None);
+    decoder.ip = address;
+    const instruction = decoder.decode();
     collector.record(instruction);
     instruction.free();
+    decoder.free();
     assert.equal(collector.findings()[0]?.count, 1);
     assert.deepEqual(collector.findings()[0]?.sampleRvas, expected);
   });

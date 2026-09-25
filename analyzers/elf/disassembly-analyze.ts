@@ -9,7 +9,6 @@ import type {
 import { getElfExecutableRegions } from "./executable-regions.js";
 import { disassembleControlFlowForInstructionSetsVaddr } from "../x86/disassembly-control-flow-vaddr.js";
 import { isIcedX86Module, type IcedX86Module } from "../x86/disassembly-iced.js";
-import { loadIcedX86 } from "#iced-x86-loader";
 import { createX86InstructionSetUsageTracker } from "../x86/instruction-set-usage.js";
 import { collectElfInstructionSetSeeds } from "./disassembly-entrypoints.js";
 import { sampleElfExecutableRegions, type ElfSampledSection } from "./disassembly-sampling.js";
@@ -126,7 +125,7 @@ async function analyzeX86InstructionSets(
 
   let iced: unknown;
   try {
-    iced = await loadIcedX86();
+    iced = await import("iced-x86-disasm");
   } catch (err) {
     issues.push(`Failed to load iced-x86 disassembler (${String(err)})`);
     return emptyReport(bytesSampled, seedSummary);

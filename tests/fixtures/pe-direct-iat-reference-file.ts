@@ -1,12 +1,5 @@
 "use strict";
 
-import {
-  Code,
-  Encoder,
-  Instruction,
-  MemoryOperand,
-  Register
-} from "iced-x86";
 import { COFF_FILE_HEADER_BYTE_LENGTH } from "../../analyzers/coff/layout.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { createPePlusWithSection } from "./sample-files-pe.js";
@@ -27,7 +20,6 @@ const SECTION_RAW_DATA_POINTER_OFFSET = 20;
 const IMAGE_IMPORT_DESCRIPTOR_SIZE = 20;
 const IMPORT_DESCRIPTOR_COUNT_WITH_TERMINATOR = 2;
 const ASCII_NUL = 0;
-const AMD64_BITNESS = 64;
 const DATA_ALIGNMENT = BigUint64Array.BYTES_PER_ELEMENT;
 const IMPORT_NAMES = ["Sleep", "ExitProcess"] as const;
 
@@ -41,21 +33,16 @@ const encodeDirectIatCall = (
   instructionVa: bigint,
   iatVa: bigint
 ): Uint8Array => {
-  const call = Instruction.createMem(
-    Code.Call_rm64,
-    MemoryOperand.createBaseDispl(Register.RIP, iatVa)
-  );
-  const nearReturn = Instruction.create(Code.Retnq);
-  const encoder = new Encoder(AMD64_BITNESS);
-  try {
-    const callLength = encoder.encode(call, instructionVa);
-    encoder.encode(nearReturn, instructionVa + BigInt(callLength));
-    return encoder.takeBuffer();
-  } finally {
-    call.free();
-    nearReturn.free();
-    encoder.free();
+  // Intel SDM Vol. 2: FF /2 is CALL r/m64; ModRM 15 encodes RIP + disp32.
+  // The six-byte CALL is followed by C3 (RET).
+  // https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
+  const displacement = iatVa - instructionVa - 6n;
+  if (displacement < -0x80000000n || displacement > 0x7fffffffn) {
+    throw new RangeError("Fixture IAT target exceeds RIP-relative disp32 range");
   }
+  const bytes = Uint8Array.of(0xff, 0x15, 0, 0, 0, 0, 0xc3);
+  new DataView(bytes.buffer).setInt32(2, Number(displacement), true);
+  return bytes;
 };
 
 export const createPePlusDirectIatReferenceFile = (): MockFile => {

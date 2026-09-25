@@ -4,16 +4,26 @@ import { readFileSync } from "node:fs";
 
 export default defineConfig({
   plugins: [{
-    name: "llvm-aarch64-notices",
+    name: "disassembler-notices",
     generateBundle() {
-      for (const name of ["LICENSE", "THIRD_PARTY_NOTICES.md", "upstream.json",
-        "licenses/LLVM.txt", "licenses/compiler-rt.txt", "licenses/emscripten-AUTHORS.txt",
-        "licenses/emscripten-LICENSE.txt", "licenses/libcxx.txt", "licenses/musl.txt"]) {
-        this.emitFile({
-          type: "asset",
-          fileName: `vendor/llvm-aarch64-disasm/${name}`,
-          source: readFileSync(new URL(`./node_modules/llvm-aarch64-disasm/${name}`, import.meta.url))
-        });
+      for (const [packageName, names] of Object.entries({
+        "llvm-aarch64-disasm": [
+          "LICENSE", "THIRD_PARTY_NOTICES.md", "upstream.json", "licenses/LLVM.txt",
+          "licenses/compiler-rt.txt", "licenses/emscripten-AUTHORS.txt",
+          "licenses/emscripten-LICENSE.txt", "licenses/libcxx.txt", "licenses/musl.txt"
+        ],
+        "iced-x86-disasm": [
+          "LICENSE", "THIRD_PARTY_NOTICES.md", "upstream.json", "licenses/iced.txt",
+          "licenses/wasm-bindgen-MIT.txt"
+        ]
+      })) {
+        for (const name of names) {
+          this.emitFile({
+            type: "asset",
+            fileName: `vendor/${packageName}/${name}`,
+            source: readFileSync(new URL(`./node_modules/${packageName}/${name}`, import.meta.url))
+          });
+        }
       }
     }
   }],
@@ -22,11 +32,11 @@ export default defineConfig({
     alias: {
       "#aarch64-disassembler-loader": fileURLToPath(
         new URL("./analyzers/aarch64/load-disassembler.browser.ts", import.meta.url)
-      ),
-      "#iced-x86-loader": fileURLToPath(
-        new URL("./analyzers/x86/load-iced-x86.browser.ts", import.meta.url)
       )
     }
+  },
+  optimizeDeps: {
+    entries: ["index.html"]
   },
   build: {
     target: "esnext"

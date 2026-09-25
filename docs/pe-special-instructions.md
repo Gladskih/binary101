@@ -52,11 +52,18 @@ The CLI appends timestamped reports with file sizes, SHA-256, parse warnings, an
 
 ## References and interpretation
 
-Instruction semantics follow [Intel SDM, volumes 2 and 3](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html), [Intel instruction extensions](https://cdrdv2-public.intel.com/671368/architecture-instruction-set-extensions-programming-reference.pdf) and [AMD APM, volume 3](https://docs.amd.com/v/u/en-US/24594_3.37). Privilege tags use iced-x86 1.21.0 metadata, which separates CPL=0/IOPL restrictions and excludes VMCALL from its privileged flag.
+Instruction semantics follow [Intel SDM, volumes 2 and 3](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html),
+[Intel instruction extensions](https://cdrdv2-public.intel.com/671368/architecture-instruction-set-extensions-programming-reference.pdf)
+and [AMD APM, volume 3](https://docs.amd.com/v/u/en-US/24594_3.37). Privilege tags use the
+iced-x86 metadata bundled in
+[iced-x86-disasm](https://github.com/Gladskih/iced-x86-disasm/blob/main/upstream.json),
+which separates CPL=0/IOPL restrictions and excludes VMCALL from its privileged flag.
+Production builds include its license and third-party notices under
+`vendor/iced-x86-disasm/`.
 
 MOV control/debug-register accesses are recognized from validated register operands. INT 2Eh is labelled as the historical Windows syscall gateway. Uncatalogued privileged instructions remain visible with an explicit statement that their exact operation is not yet described; they are not assigned guessed semantics.
 
-## Verification and CONTRIBUTING.md audit
+## Original ISA feature verification and CONTRIBUTING.md audit
 
 - Lint, typecheck, production build and all 81 browser tests pass.
 - Coverage: 96.17% statements/lines, 83.98% branches, 96.60% functions (baseline 96.16%, 83.94%, 96.57%). The classifier, catalog, special-instruction renderer and navigation handler have 100% coverage on all metrics.

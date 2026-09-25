@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CpuidFeature } from "iced-x86";
+import { CpuidFeature } from "iced-x86-disasm";
 import { describeCpuidFeature } from "../../../../analyzers/x86/cpuid-features.js";
 
 void test("describeCpuidFeature explains every CpuidFeature exported by iced-x86", () => {

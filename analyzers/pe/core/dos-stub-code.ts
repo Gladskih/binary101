@@ -1,7 +1,6 @@
 "use strict";
 
 import { isPrintableByte } from "../../../binary-utils.js";
-import { loadIcedX86 } from "#iced-x86-loader";
 import type { PeDosHeader, PeDosStubCode, PeDosStubInstruction } from "../types.js";
 import { parseNestedPeAtDosEntrypoint } from "./dos-stub-nested-pe.js";
 type DosStubPattern = "push-pop-then-dx" | "dx-then-push-pop";
@@ -240,7 +239,7 @@ export const analyzePeDosStubCode = async (
   dos: Pick<PeDosHeader, "e_cparhdr" | "e_cs" | "e_ip">,
   stubBytesAfterFixedHeader: Uint8Array,
   peHeaderOffset: number,
-  loader: IcedLoader = loadIcedX86
+  loader: IcedLoader = () => import("iced-x86-disasm")
 ): Promise<PeDosStubCode> => {
   const dosHeaderBytes = dos.e_cparhdr * 16;
   if (dosHeaderBytes < DOS_FIXED_HEADER_BYTES) {

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import * as iced from "iced-x86";
+import * as iced from "iced-x86-disasm";
 import {
   collectCpuIdVendorChunkNotes,
   describeCpuIdFeatureBits,

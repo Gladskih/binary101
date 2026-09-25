@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import * as iced from "iced-x86";
+import * as iced from "iced-x86-disasm";
 import { resolveRegister } from "../../../../../../../analyzers/pe/disassembly/entrypoint/emulation/registers.js";
 import type { IcedModule } from "../../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";
 

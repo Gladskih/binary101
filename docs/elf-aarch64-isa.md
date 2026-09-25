@@ -1,6 +1,6 @@
 # AArch64 ISA analysis
 
-ELF `EM_AARCH64` (183) uses `llvm-aarch64-disasm` 0.1.0, based on LLVM 21.1.8.
+ELF `EM_AARCH64` (183) uses `llvm-aarch64-disasm` 0.2.0, based on LLVM 21.1.8.
 The decoder and its WASM load on demand from the application's own assets.
 No file bytes leave the browser. Production builds include the package's license
 and third-party notices under `vendor/llvm-aarch64-disasm/`.

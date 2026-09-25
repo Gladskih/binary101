@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import * as realIced from "iced-x86";
+import * as realIced from "iced-x86-disasm";
 import { createFileRangeReader } from "../../../../../../analyzers/file-range-reader.js";
 import { analyzePeEntrypointDisassembly } from "../../../../../../analyzers/pe/disassembly/index.js";
 import type { IcedModule } from "../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";

@@ -1,7 +1,6 @@
 "use strict";
 
 import type { FileRangeReader } from "../../file-range-reader.js";
-import { loadIcedX86 } from "#iced-x86-loader";
 import type {
   AnalyzePeEntrypointDisassemblyOptions,
   PeEntrypointDisassemblyProgress,
@@ -32,7 +31,7 @@ const reportProgress = (
 export async function analyzePeEntrypointDisassembly(
   reader: FileRangeReader,
   opts: AnalyzePeEntrypointDisassemblyOptions,
-  loader: IcedLoader = loadIcedX86
+  loader: IcedLoader = () => import("iced-x86-disasm")
 ): Promise<PeEntrypointDisassemblyReport> {
   const issues: string[] = [];
   const metadata = validateMetadata(opts, issues);

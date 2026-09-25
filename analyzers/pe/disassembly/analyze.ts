@@ -3,7 +3,6 @@ import type { FileRangeReader } from "../../file-range-reader.js";
 import type { AnalyzePeInstructionSetOptions, PeInstructionSetProgress, PeInstructionSetReport } from "./types.js";
 import { disassembleControlFlowForInstructionSets } from "../../x86/disassembly-control-flow.js";
 import { isIcedX86Module, type IcedX86Module } from "../../x86/disassembly-iced.js";
-import { loadIcedX86 } from "#iced-x86-loader";
 import { IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_I386,
   IMAGE_FILE_MACHINE_ARM64 } from "../../coff/machine.js";
 import { analyzePeAarch64InstructionSets } from "./aarch64.js";
@@ -83,7 +82,7 @@ const emptyInstructionSetReport = (
 export async function analyzePeInstructionSets(
   reader: FileRangeReader,
   opts: AnalyzePeInstructionSetOptions,
-  loadIced: () => Promise<unknown> = loadIcedX86
+  loadIced: () => Promise<unknown> = () => import("iced-x86-disasm")
 ): Promise<PeInstructionSetReport> {
   const issues: string[] = [];
   const coffMachine = getCanonicalPeMachine(opts.coffMachine);
