@@ -7,7 +7,6 @@ import {
   applyReturningImportEffects
 } from "../../../../../../analyzers/pe/disassembly/entrypoint/import-effects.js";
 import { pushStackValue } from "../../../../../../analyzers/pe/disassembly/entrypoint/emulation/stack.js";
-import type { IcedModule } from "../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";
 import { resolveRegister } from "../../../../../../analyzers/pe/disassembly/entrypoint/emulation/registers.js";
 import {
   createEmulationState,
@@ -17,7 +16,6 @@ import {
 } from "../../../../../../analyzers/pe/disassembly/entrypoint/emulation/state.js";
 import type { PeImportMetadataEntry } from "../../../../../../pe-import-metadata-schema.js";
 
-const icedModule = iced as unknown as IcedModule;
 const X86_BITNESS = 32 as const;
 const X86_STACK_SLOT_BYTES = BigInt(Uint32Array.BYTES_PER_ELEMENT);
 
@@ -52,19 +50,19 @@ const metadata = (
 
 void test("applyReturningImportEffects models ABI volatile registers and return value", () => {
   const state = createEmulationState(64);
-  writeRegister(state, resolveRegister(icedModule, iced.Register.RCX), known(0xfffffff5n, 64));
-  writeRegister(state, resolveRegister(icedModule, iced.Register.RBX), known(0x1234n, 64));
+  writeRegister(state, resolveRegister(iced, iced.Register.RCX), known(0xfffffff5n, 64));
+  writeRegister(state, resolveRegister(iced, iced.Register.RBX), known(0x1234n, 64));
 
-  applyReturningImportEffects(icedModule, state, { label: "KERNEL32.dll!GetStdHandle" });
+  applyReturningImportEffects(iced, state, { label: "KERNEL32.dll!GetStdHandle" });
 
-  assert.deepEqual(readRegister(state, resolveRegister(icedModule, iced.Register.RAX)), {
+  assert.deepEqual(readRegister(state, resolveRegister(iced, iced.Register.RAX)), {
     kind: "import-return",
     label: "KERNEL32.dll!GetStdHandle"
   });
-  assert.deepEqual(readRegister(state, resolveRegister(icedModule, iced.Register.RCX)), {
+  assert.deepEqual(readRegister(state, resolveRegister(iced, iced.Register.RCX)), {
     kind: "unknown"
   });
-  assert.deepEqual(readRegister(state, resolveRegister(icedModule, iced.Register.RBX)), {
+  assert.deepEqual(readRegister(state, resolveRegister(iced, iced.Register.RBX)), {
     kind: "known",
     value: 0x1234n,
     bits: 64
@@ -73,19 +71,19 @@ void test("applyReturningImportEffects models ABI volatile registers and return 
 
 void test("applyReturningImportEffects cleans x86 winapi import arguments from metadata", () => {
   const state = createEmulationState(X86_BITNESS);
-  pushStackValue(icedModule, state, known(0x1234n, X86_BITNESS), X86_STACK_SLOT_BYTES);
+  pushStackValue(iced, state, known(0x1234n, X86_BITNESS), X86_STACK_SLOT_BYTES);
 
-  applyReturningImportEffects(icedModule, state, {
+  applyReturningImportEffects(iced, state, {
     label: "USER32.dll!ShowCursor",
     apiMetadata: metadata("winapi", [4])
   });
 
-  assert.deepEqual(readRegister(state, resolveRegister(icedModule, iced.Register.ESP)), {
+  assert.deepEqual(readRegister(state, resolveRegister(iced, iced.Register.ESP)), {
     kind: "known",
     value: 0x10000000n,
     bits: 32
   });
-  assert.deepEqual(readRegister(state, resolveRegister(icedModule, iced.Register.EAX)), {
+  assert.deepEqual(readRegister(state, resolveRegister(iced, iced.Register.EAX)), {
     kind: "import-return",
     label: "USER32.dll!ShowCursor"
   });
@@ -94,15 +92,15 @@ void test("applyReturningImportEffects cleans x86 winapi import arguments from m
 
 void test("applyReturningImportEffects cleans multiple x86 stdcall import arguments", () => {
   const state = createEmulationState(X86_BITNESS);
-  pushStackValue(icedModule, state, known(0x2222n, X86_BITNESS), X86_STACK_SLOT_BYTES);
-  pushStackValue(icedModule, state, known(0x1111n, X86_BITNESS), X86_STACK_SLOT_BYTES);
+  pushStackValue(iced, state, known(0x2222n, X86_BITNESS), X86_STACK_SLOT_BYTES);
+  pushStackValue(iced, state, known(0x1111n, X86_BITNESS), X86_STACK_SLOT_BYTES);
 
-  applyReturningImportEffects(icedModule, state, {
+  applyReturningImportEffects(iced, state, {
     label: "TEST.dll!TwoArgs",
     apiMetadata: metadata("stdcall", [4, 4])
   });
 
-  assert.deepEqual(readRegister(state, resolveRegister(icedModule, iced.Register.ESP)), {
+  assert.deepEqual(readRegister(state, resolveRegister(iced, iced.Register.ESP)), {
     kind: "known",
     value: 0x10000000n,
     bits: 32
@@ -112,12 +110,12 @@ void test("applyReturningImportEffects cleans multiple x86 stdcall import argume
 
 void test("applyReturningImportEffects preserves x86 cdecl caller-cleaned arguments", () => {
   const state = createEmulationState(X86_BITNESS);
-  const stackPointer = resolveRegister(icedModule, iced.Register.ESP);
+  const stackPointer = resolveRegister(iced, iced.Register.ESP);
   const initialStackPointer = readRegister(state, stackPointer);
-  pushStackValue(icedModule, state, known(0n, X86_BITNESS), X86_STACK_SLOT_BYTES);
-  pushStackValue(icedModule, state, known(0n, X86_BITNESS), X86_STACK_SLOT_BYTES);
+  pushStackValue(iced, state, known(0n, X86_BITNESS), X86_STACK_SLOT_BYTES);
+  pushStackValue(iced, state, known(0n, X86_BITNESS), X86_STACK_SLOT_BYTES);
 
-  applyReturningImportEffects(icedModule, state, {
+  applyReturningImportEffects(iced, state, {
     label: "ucrtbase.dll!printf",
     apiMetadata: metadata("cdecl", [4, 4])
   });
@@ -128,11 +126,11 @@ void test("applyReturningImportEffects preserves x86 cdecl caller-cleaned argume
 
 void test("applyReturningImportEffects preserves arguments with unknown metadata sizes", () => {
   const state = createEmulationState(X86_BITNESS);
-  const stackPointer = resolveRegister(icedModule, iced.Register.ESP);
-  pushStackValue(icedModule, state, known(0n, X86_BITNESS), X86_STACK_SLOT_BYTES);
+  const stackPointer = resolveRegister(iced, iced.Register.ESP);
+  pushStackValue(iced, state, known(0n, X86_BITNESS), X86_STACK_SLOT_BYTES);
   const currentStackPointer = readRegister(state, stackPointer);
 
-  applyReturningImportEffects(icedModule, state, {
+  applyReturningImportEffects(iced, state, {
     label: "TEST.dll!UnknownStruct",
     apiMetadata: metadata("winapi", [null])
   });

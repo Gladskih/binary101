@@ -1,6 +1,7 @@
 "use strict";
 
 import type { IcedModule } from "../iced.js";
+import { lookupIcedEnumValue } from "../../../../x86/disassembly-iced.js";
 import {
   collectKnownValues,
   type CpuFlag,
@@ -71,7 +72,7 @@ export const readFlag = (state: EmulationState, flag: CpuFlag): boolean | null =
   state.flags[flag] ?? null;
 
 const isMnemonic = (iced: IcedModule, mnemonic: number, name: string): boolean =>
-  iced.Mnemonic?.[name] === mnemonic;
+  lookupIcedEnumValue(iced.Mnemonic, name) === mnemonic;
 
 export const conditionForMnemonic = (
   iced: IcedModule,

@@ -5,7 +5,6 @@ import { test } from "node:test";
 import * as realIced from "iced-x86-disasm";
 import { createFileRangeReader } from "../../../../../../analyzers/file-range-reader.js";
 import { analyzePeEntrypointDisassembly } from "../../../../../../analyzers/pe/disassembly/index.js";
-import type { IcedModule } from "../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";
 import { inlinePeSectionName } from "../../../../../../analyzers/pe/sections/name.js";
 import type { PeSection } from "../../../../../../analyzers/pe/types.js";
 import {
@@ -15,7 +14,6 @@ import {
 } from "../../../../../helpers/pe-entrypoint-disassembly-fixture.js";
 import { MockFile } from "../../../../../helpers/mock-file.js";
 
-const realIcedModule = realIced as unknown as IcedModule;
 // Microsoft PE section flags for initialized, readable data in synthetic fixtures.
 const IMAGE_SCN_CNT_INITIALIZED_DATA = 0x00000040;
 const IMAGE_SCN_MEM_READ = 0x40000000;
@@ -60,7 +58,7 @@ void test("analyzePeEntrypointDisassembly follows indirect jumps through image s
         dataSection(4)
       ]
     },
-    async () => realIcedModule
+    async () => realIced
   );
   const target = result.blocks[0]?.instructions[0]?.target;
 
@@ -91,7 +89,7 @@ void test("analyzePeEntrypointDisassembly follows RIP-relative indirect image sl
         dataSection(8)
       ]
     },
-    async () => realIcedModule
+    async () => realIced
   );
   const target = result.blocks[0]?.instructions[0]?.target;
 
@@ -116,7 +114,7 @@ void test("analyzePeEntrypointDisassembly ignores truncated indirect image slots
         dataSection(4)
       ]
     },
-    async () => realIcedModule
+    async () => realIced
   );
 
   assert.equal(result.blocks[0]?.instructions[0]?.target, undefined);
@@ -143,7 +141,7 @@ void test("analyzePeEntrypointDisassembly reads mapped image memory during emula
         dataSection(4)
       ]
     },
-    async () => realIcedModule
+    async () => realIced
   );
   const instruction = findCodeTargetInstruction(result, 0x1030);
 
@@ -177,7 +175,7 @@ void test("analyzePeEntrypointDisassembly follows targets copied by rep movsd", 
         dataSection(4)
       ]
     },
-    async () => realIcedModule
+    async () => realIced
   );
   const instruction = findCodeTargetInstruction(result, 0x1038);
 

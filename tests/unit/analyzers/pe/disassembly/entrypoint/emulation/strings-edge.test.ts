@@ -3,10 +3,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as iced from "iced-x86-disasm";
-import type {
-  IcedInstructionObject,
-  IcedModule
-} from "../../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";
+import type { IcedInstructionObject } from
+  "../../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";
 import { createEmulationState } from "../../../../../../../analyzers/pe/disassembly/entrypoint/emulation/index.js";
 import {
   UNKNOWN,
@@ -27,8 +25,6 @@ import {
   fixtureValue,
   repeatCountRequiringRcx,
 } from "../../../../../../helpers/pe-entrypoint-emulation-values.js";
-
-const realIced = iced as unknown as IcedModule;
 
 const movsd = () =>
   ins("Movsd", [
@@ -124,7 +120,7 @@ void test("executeStringInstruction treats real iced REP MOVSD as repeated", () 
 
   try {
     assert.equal(instruction.hasRepPrefix, true);
-    assert.equal(executeStringInstruction(realIced, state, instruction), true);
+    assert.equal(executeStringInstruction(iced, state, instruction), true);
     assert.deepEqual(
       state.memory.get(pointers.destination.toString()),
       known(0x11223344n, bitsOf("UInt32"))

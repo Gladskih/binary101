@@ -1,74 +1,32 @@
 "use strict";
 
-/**
- * Runtime `iced-x86` instruction object shape consumed by Binary101 analyzers.
- *
- * This is an adapter type for the JS/WASM API, not Binary101's own immutable
- * instruction model. iced-x86 decodes into a reusable `Instruction` object via
- * `Decoder.decodeOut()` and exposes operands through accessor methods, so this
- * type mirrors that object API. Analyzer code treats decoded fields as read-only.
- */
-export type IcedInstructionObject = {
-  readonly code: number;
-  readonly isPrivileged?: boolean;
-  readonly length: number;
-  readonly ip: bigint;
-  readonly nextIP: bigint;
-  readonly mnemonic: number;
-  readonly flowControl: number;
-  readonly opCount: number;
-  readonly nearBranchTarget: bigint;
-  readonly memoryBase: number;
-  readonly memoryDisplacement: bigint;
-  readonly memoryIndex: number;
-  readonly memoryIndexScale: number;
-  readonly memorySize: number;
-  readonly op0Kind: number;
-  readonly hasRepPrefix: boolean;
-  readonly hasRepePrefix: boolean;
-  readonly hasRepnePrefix: boolean;
-  readonly isCallNearIndirect: boolean;
-  readonly isIpRelMemoryOperand: boolean;
-  readonly isJmpNearIndirect: boolean;
-  readonly ipRelMemoryAddress: bigint;
-  opKind(operand: number): number;
-  opRegister(operand: number): number;
-  immediate(operand: number): bigint;
-  cpuidFeatures(): Int32Array;
-  free(): void;
-};
+import type * as IcedPackage from "iced-x86-disasm";
 
-type IcedInstructionInfo = {
-  readonly op0Access: number;
-  free(): void;
-};
+/** Fields consumed by analyzers, with their types taken from the installed package. */
+export type IcedInstructionObject = Pick<IcedPackage.Instruction,
+  "code" | "length" | "ip" | "nextIP" | "mnemonic" | "flowControl" | "opCount" |
+  "nearBranchTarget" | "memoryBase" | "memoryDisplacement" | "memoryIndex" |
+  "memoryIndexScale" | "memorySize" | "op0Kind" | "hasRepPrefix" |
+  "hasRepePrefix" | "hasRepnePrefix" | "isCallNearIndirect" |
+  "isIpRelMemoryOperand" | "isJmpNearIndirect" | "ipRelMemoryAddress" |
+  "opKind" | "opRegister" | "immediate" | "cpuidFeatures" | "free"
+> & Partial<Pick<IcedPackage.Instruction, "isPrivileged">>;
 
-type IcedInstructionInfoFactory = {
-  info(instruction: IcedInstructionObject): IcedInstructionInfo;
-  free(): void;
-};
+export type IcedX86Module = Pick<typeof IcedPackage,
+  "Code" | "CpuidFeature" | "Decoder" | "DecoderOptions" | "FlowControl" |
+  "OpKind" | "Instruction"
+> & Partial<Pick<typeof IcedPackage,
+  "InstructionInfoFactory" | "Mnemonic" | "MemorySize" | "OpAccess" | "Register"
+>>;
 
-type IcedDecoder = {
-  ip: bigint;
-  canDecode: boolean;
-  position: number;
-  decodeOut(instruction: IcedInstructionObject): void;
-  free(): void;
-};
-
-export type IcedX86Module = {
-  Code: Record<string, number> & Record<number, string | undefined>;
-  CpuidFeature: Record<string, number> & Record<number, string | undefined>;
-  Decoder: new (bitness: number, data: Uint8Array<ArrayBufferLike>, options: number) => IcedDecoder;
-  DecoderOptions: { None: number };
-  FlowControl: Record<string, number> & Record<number, string | undefined>;
-  InstructionInfoFactory?: new () => IcedInstructionInfoFactory;
-  Mnemonic?: Record<string, number> & Record<number, string | undefined>;
-  MemorySize?: Record<string, number> & Record<number, string | undefined>;
-  OpAccess?: Record<string, number> & Record<number, string | undefined>;
-  OpKind: Record<string, number> & Record<number, string | undefined>;
-  Register?: Record<string, number> & Record<number, string | undefined>;
-  Instruction: new () => IcedInstructionObject;
+export const lookupIcedEnumValue = (table: object | undefined, name: string): number | undefined => {
+  if (!table) return undefined;
+  try {
+    const value: unknown = Reflect.get(table, name);
+    return typeof value === "number" ? value : undefined;
+  } catch {
+    return undefined;
+  }
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;

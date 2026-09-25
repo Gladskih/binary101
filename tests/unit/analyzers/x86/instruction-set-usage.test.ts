@@ -17,8 +17,6 @@ void test("createX86InstructionSetUsageTracker reports known and unknown feature
 });
 
 const createCpuidFeatureTable = (): IcedX86Module["CpuidFeature"] => {
-  const table = { SSE2: 1, AVX: 2 } as unknown as IcedX86Module["CpuidFeature"];
-  table[1] = "SSE2";
-  table[2] = "AVX";
-  return table;
+  return { SSE2: 1, AVX: 2, 1: "SSE2", 2: "AVX" } as unknown as
+    IcedX86Module["CpuidFeature"];
 };

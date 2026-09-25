@@ -1,6 +1,10 @@
 "use strict";
 
-type X86OpKinds = Record<string, number> & Record<number, string | undefined>;
+import type * as IcedPackage from "iced-x86-disasm";
+
+type X86OpKinds = Pick<typeof IcedPackage.OpKind,
+  "NearBranch16" | "NearBranch32" | "NearBranch64"
+>;
 
 type NearBranchInstruction = {
   op0Kind: number;

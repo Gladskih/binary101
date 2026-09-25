@@ -1,31 +1,15 @@
 "use strict";
 
 import { isPrintableByte } from "../../../binary-utils.js";
+import type * as IcedPackage from "iced-x86-disasm";
 import type { PeDosHeader, PeDosStubCode, PeDosStubInstruction } from "../types.js";
 import { parseNestedPeAtDosEntrypoint } from "./dos-stub-nested-pe.js";
+
 type DosStubPattern = "push-pop-then-dx" | "dx-then-push-pop";
-type IcedInstruction = {
-  code: number;
-  length: number;
-  ip: bigint;
-  nextIP: bigint;
-  flowControl: number;
-  free(): void;
-};
-type IcedDecoder = {
-  ip: bigint; canDecode: boolean; position: number;
-  decodeOut(instruction: IcedInstruction): void; free(): void;
-};
-type IcedFormatter = { format(instruction: IcedInstruction): string; free(): void };
-type DosStubIcedModule = {
-  Code: Record<string, number>;
-  Decoder: new (bitness: number, data: Uint8Array<ArrayBufferLike>, options: number) => IcedDecoder;
-  DecoderOptions: { None: number };
-  FlowControl: Record<string, number>;
-  Formatter: new (syntax: number) => IcedFormatter;
-  FormatterSyntax: { Nasm: number };
-  Instruction: new () => IcedInstruction;
-};
+type DosStubIcedModule = Pick<typeof IcedPackage,
+  "Code" | "Decoder" | "DecoderOptions" | "FlowControl" | "Formatter" |
+  "FormatterSyntax" | "Instruction"
+>;
 type IcedLoader = () => Promise<unknown>;
 
 interface MatchResult {
@@ -163,9 +147,9 @@ const appendNote = (code: PeDosStubCode, note: string): PeDosStubCode => ({
 });
 
 const decodeAt = (
-  decoder: IcedDecoder,
-  formatter: IcedFormatter,
-  instructionObject: IcedInstruction,
+  decoder: IcedPackage.Decoder,
+  formatter: IcedPackage.Formatter,
+  instructionObject: IcedPackage.Instruction,
   offset: number
 ): PreviewInstruction | null => {
   if (!Number.isSafeInteger(offset) || offset < 0) return null;

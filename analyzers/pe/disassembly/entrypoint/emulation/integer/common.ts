@@ -1,6 +1,7 @@
 "use strict";
 
 import type { IcedInstructionObject, IcedModule } from "../../iced.js";
+import { lookupIcedEnumValue } from "../../../../../x86/disassembly-iced.js";
 import { operandBits, readOperand, writeOperand } from "../operands.js";
 import { resolveRegister } from "../registers.js";
 import {
@@ -15,7 +16,7 @@ import {
 } from "../state.js";
 
 export const isMnemonic = (iced: IcedModule, mnemonic: number, name: string): boolean =>
-  iced.Mnemonic?.[name] === mnemonic;
+  lookupIcedEnumValue(iced.Mnemonic, name) === mnemonic;
 
 export const isAnyMnemonic = (
   iced: IcedModule,
@@ -70,14 +71,16 @@ export const registerValue = (
   iced: IcedModule,
   state: EmulationState,
   name: string
-): EmulatedValue => readRegister(state, resolveRegister(iced, iced.Register?.[name] ?? 0));
+): EmulatedValue => readRegister(state,
+  resolveRegister(iced, lookupIcedEnumValue(iced.Register, name) ?? 0));
 
 export const writeRegisterByName = (
   iced: IcedModule,
   state: EmulationState,
   name: string,
   value: EmulatedValue
-): void => writeRegister(state, resolveRegister(iced, iced.Register?.[name] ?? 0), value);
+): void => writeRegister(state,
+  resolveRegister(iced, lookupIcedEnumValue(iced.Register, name) ?? 0), value);
 
 export const knownBooleanByte = (): EmulatedValue => ({
   kind: "value-set",

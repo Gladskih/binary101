@@ -3,7 +3,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as iced from "iced-x86-disasm";
-import type { IcedModule } from "../../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";
 import { resolveRegister } from "../../../../../../../analyzers/pe/disassembly/entrypoint/emulation/registers.js";
 import {
   collectKnownValues,
@@ -16,12 +15,10 @@ import {
   writeRegister
 } from "../../../../../../../analyzers/pe/disassembly/entrypoint/emulation/state.js";
 
-const icedModule = iced as unknown as IcedModule;
-
 void test("writeRegister zero-extends 32-bit writes in 64-bit mode", () => {
   const state = createEmulationState(64);
-  const rax = resolveRegister(icedModule, iced.Register.RAX);
-  const eax = resolveRegister(icedModule, iced.Register.EAX);
+  const rax = resolveRegister(iced, iced.Register.RAX);
+  const eax = resolveRegister(iced, iced.Register.EAX);
 
   writeRegister(state, rax, known(0xffff_ffff_ffff_ffffn, 64));
   writeRegister(state, eax, known(1n, 32));
@@ -31,8 +28,8 @@ void test("writeRegister zero-extends 32-bit writes in 64-bit mode", () => {
 
 void test("writeRegister truncates oversized values before 32-bit zero-extension", () => {
   const state = createEmulationState(64);
-  const rax = resolveRegister(icedModule, iced.Register.RAX);
-  const eax = resolveRegister(icedModule, iced.Register.EAX);
+  const rax = resolveRegister(iced, iced.Register.RAX);
+  const eax = resolveRegister(iced, iced.Register.EAX);
 
   writeRegister(state, rax, known(0n, 64));
   writeRegister(state, eax, known(0x1122_3344_5566_7788n, 64));
@@ -46,7 +43,7 @@ void test("writeRegister truncates oversized values before 32-bit zero-extension
 
 void test("writeRegister keeps 32-bit state width in 32-bit mode", () => {
   const state = createEmulationState(32);
-  const eax = resolveRegister(icedModule, iced.Register.EAX);
+  const eax = resolveRegister(iced, iced.Register.EAX);
 
   writeRegister(state, eax, known(0xffff_ffffn, 32));
 
@@ -64,10 +61,10 @@ void test("writeRegister keeps 32-bit state width in 32-bit mode", () => {
 
 void test("readRegister extracts known partial register aliases", () => {
   const state = createEmulationState(64);
-  const rax = resolveRegister(icedModule, iced.Register.RAX);
-  const ax = resolveRegister(icedModule, iced.Register.AX);
-  const al = resolveRegister(icedModule, iced.Register.AL);
-  const ah = resolveRegister(icedModule, iced.Register.AH);
+  const rax = resolveRegister(iced, iced.Register.RAX);
+  const ax = resolveRegister(iced, iced.Register.AX);
+  const al = resolveRegister(iced, iced.Register.AL);
+  const ah = resolveRegister(iced, iced.Register.AH);
 
   writeRegister(state, rax, known(0x1122_3344_5566_7788n, 64));
 
@@ -78,11 +75,11 @@ void test("readRegister extracts known partial register aliases", () => {
 
 void test("writeRegister updates known partial register aliases", () => {
   const state = createEmulationState(64);
-  const rax = resolveRegister(icedModule, iced.Register.RAX);
-  const ax = resolveRegister(icedModule, iced.Register.AX);
-  const ah = resolveRegister(icedModule, iced.Register.AH);
-  const r8 = resolveRegister(icedModule, iced.Register.R8);
-  const r8b = resolveRegister(icedModule, iced.Register.R8L);
+  const rax = resolveRegister(iced, iced.Register.RAX);
+  const ax = resolveRegister(iced, iced.Register.AX);
+  const ah = resolveRegister(iced, iced.Register.AH);
+  const r8 = resolveRegister(iced, iced.Register.R8);
+  const r8b = resolveRegister(iced, iced.Register.R8L);
 
   writeRegister(state, rax, known(0x1122_3344_5566_7788n, 64));
   writeRegister(state, ax, known(0xaabbn, 16));
@@ -100,8 +97,8 @@ void test("writeRegister updates known partial register aliases", () => {
 
 void test("writeRegister invalidates unknown partial register aliases", () => {
   const state = createEmulationState(64);
-  const rax = resolveRegister(icedModule, iced.Register.RAX);
-  const ax = resolveRegister(icedModule, iced.Register.AX);
+  const rax = resolveRegister(iced, iced.Register.RAX);
+  const ax = resolveRegister(iced, iced.Register.AX);
 
   writeRegister(state, ax, known(1n, 16));
 
@@ -110,8 +107,8 @@ void test("writeRegister invalidates unknown partial register aliases", () => {
 
 void test("writeRegister remembers known low-byte aliases without inventing upper bits", () => {
   const state = createEmulationState(32);
-  const ebx = resolveRegister(icedModule, iced.Register.EBX);
-  const bl = resolveRegister(icedModule, iced.Register.BL);
+  const ebx = resolveRegister(iced, iced.Register.EBX);
+  const bl = resolveRegister(iced, iced.Register.BL);
 
   writeRegister(state, bl, known(1n, 8));
 
@@ -121,9 +118,9 @@ void test("writeRegister remembers known low-byte aliases without inventing uppe
 
 void test("writeRegister combines known byte aliases when a wider alias is covered", () => {
   const state = createEmulationState(32);
-  const bx = resolveRegister(icedModule, iced.Register.BX);
-  const bl = resolveRegister(icedModule, iced.Register.BL);
-  const bh = resolveRegister(icedModule, iced.Register.BH);
+  const bx = resolveRegister(iced, iced.Register.BX);
+  const bl = resolveRegister(iced, iced.Register.BL);
+  const bh = resolveRegister(iced, iced.Register.BH);
 
   writeRegister(state, bl, known(0x34n, 8));
   writeRegister(state, bh, known(0x12n, 8));
@@ -156,7 +153,7 @@ void test("createEmulationState copies initial flags", () => {
 void test("mergeEmulationStates joins concrete register alternatives", () => {
   const left = createEmulationState(64);
   const right = createEmulationState(64);
-  const r11 = resolveRegister(icedModule, iced.Register.R11);
+  const r11 = resolveRegister(iced, iced.Register.R11);
 
   writeRegister(left, r11, known(0x140001010n, 64));
   writeRegister(right, r11, known(0x140002020n, 64));
@@ -183,7 +180,7 @@ void test("mapKnownValues transforms bounded value-set alternatives", () => {
 void test("mergeEmulationStates widens missing path-only values to unknown", () => {
   const left = createEmulationState(64);
   const right = createEmulationState(64);
-  const r11 = resolveRegister(icedModule, iced.Register.R11);
+  const r11 = resolveRegister(iced, iced.Register.R11);
 
   writeRegister(left, r11, known(0x140001010n, 64));
 

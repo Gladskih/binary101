@@ -1,6 +1,7 @@
 "use strict";
 
 import type { IcedInstructionObject, IcedModule } from "../iced.js";
+import { lookupIcedEnumValue } from "../../../../x86/disassembly-iced.js";
 import {
   operandBits,
   readOperand,
@@ -24,7 +25,7 @@ const isMnemonic = (
   iced: IcedModule,
   mnemonic: number,
   name: string
-): boolean => iced.Mnemonic?.[name] === mnemonic;
+): boolean => lookupIcedEnumValue(iced.Mnemonic, name) === mnemonic;
 
 const byteCountBits = (byteCount: bigint): KnownValueBits | null => {
   if (byteCount === 1n) return 8;
@@ -115,14 +116,16 @@ const registerValue = (
   iced: IcedModule,
   state: EmulationState,
   name: string
-): EmulatedValue => readRegister(state, resolveRegister(iced, iced.Register?.[name] ?? 0));
+): EmulatedValue => readRegister(state,
+  resolveRegister(iced, lookupIcedEnumValue(iced.Register, name) ?? 0));
 
 const writeRegisterByName = (
   iced: IcedModule,
   state: EmulationState,
   name: string,
   value: EmulatedValue
-): void => writeRegister(state, resolveRegister(iced, iced.Register?.[name] ?? 0), value);
+): void => writeRegister(state,
+  resolveRegister(iced, lookupIcedEnumValue(iced.Register, name) ?? 0), value);
 
 const pushAllRegisterNames = (bytes: bigint): readonly string[] =>
   bytes === 2n

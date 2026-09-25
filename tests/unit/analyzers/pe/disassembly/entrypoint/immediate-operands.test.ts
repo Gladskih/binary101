@@ -4,12 +4,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as iced from "iced-x86-disasm";
 import { collectImmediateOperands } from "../../../../../../analyzers/pe/disassembly/entrypoint/immediate-operands.js";
-import type {
-  IcedInstructionObject,
-  IcedModule,
-} from "../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";
-
-const icedModule = iced as unknown as IcedModule;
+import type { IcedInstructionObject } from
+  "../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";
 
 const instructionWithKinds = (
   kinds: number[],
@@ -36,7 +32,7 @@ void test("collectImmediateOperands returns immediate values with operand indexe
   const instruction = new iced.Instruction();
   try {
     decoder.decodeOut(instruction);
-    assert.deepEqual(collectImmediateOperands(icedModule, instruction), [{
+    assert.deepEqual(collectImmediateOperands(iced, instruction), [{
       operand: 1,
       value: 0xbb40e64en
     }]);
@@ -48,7 +44,7 @@ void test("collectImmediateOperands returns immediate values with operand indexe
 
 void test("collectImmediateOperands returns all iced immediate operand kinds", () => {
   assert.deepEqual(
-    collectImmediateOperands(icedModule, instructionWithKinds([
+    collectImmediateOperands(iced, instructionWithKinds([
       iced.OpKind.Immediate8,
       iced.OpKind.Immediate8_2nd,
       iced.OpKind.Immediate16,
@@ -76,7 +72,7 @@ void test("collectImmediateOperands returns all iced immediate operand kinds", (
 void test("collectImmediateOperands ignores non-immediate operands without over-reading", () => {
   assert.deepEqual(
     collectImmediateOperands(
-      icedModule,
+      iced,
       instructionWithKinds([iced.OpKind.Register, iced.OpKind.Immediate32], [99n, 7n])
     ),
     [{ operand: 1, value: 7n }]
@@ -85,7 +81,7 @@ void test("collectImmediateOperands ignores non-immediate operands without over-
 
 void test("collectImmediateOperands ignores immediate accessor failures", () => {
   assert.deepEqual(
-    collectImmediateOperands(icedModule, {
+    collectImmediateOperands(iced, {
       opCount: 1,
       opKind: () => iced.OpKind.Immediate32,
       immediate: () => {

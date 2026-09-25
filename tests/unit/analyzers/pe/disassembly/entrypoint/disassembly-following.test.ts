@@ -15,10 +15,7 @@ import {
   type TestInstruction
 } from "../../../../../helpers/pe-entrypoint-disassembly-fixture.js";
 import type { PeEntrypointInstructionTarget } from "../../../../../../analyzers/pe/disassembly/index.js";
-import type { IcedModule } from "../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";
 import { MockFile } from "../../../../../helpers/mock-file.js";
-
-const realIcedModule = realIced as unknown as IcedModule;
 
 const assertBranchTarget = (
   target: PeEntrypointInstructionTarget | undefined
@@ -143,7 +140,7 @@ void test(
           createExecutableSection({ virtualSize: bytes.length, sizeOfRawData: bytes.length })
         ]
       },
-      async () => realIcedModule
+      async () => realIced
     );
 
     assert.equal(result.blocks.length, 3);

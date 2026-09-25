@@ -6,6 +6,7 @@ import {
   getNearBranchEdges,
   getNearBranchTarget
 } from "../../../x86/disassembly-branch-targets.js";
+import { lookupIcedEnumValue } from "../../../x86/disassembly-iced.js";
 import { MAX_RVA } from "./metadata.js";
 import type { ImportTarget } from "./import-targets.js";
 import type { IcedInstructionObject, IcedModule } from "./iced.js";
@@ -223,7 +224,7 @@ const counterValueIs = (
   zero: boolean
 ): boolean | null => {
   const values = collectKnownValues(
-    readRegister(state, resolveRegister(iced, iced.Register?.[register] ?? 0))
+    readRegister(state, resolveRegister(iced, lookupIcedEnumValue(iced.Register, register) ?? 0))
   );
   return values.length === 1 ? (values[0]?.value === 0n) === zero : null;
 };

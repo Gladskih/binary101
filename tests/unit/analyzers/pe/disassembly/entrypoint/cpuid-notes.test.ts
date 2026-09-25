@@ -8,9 +8,6 @@ import {
   describeCpuIdFeatureBits,
   describeCpuIdLeaf
 } from "../../../../../../analyzers/pe/disassembly/entrypoint/cpuid-notes.js";
-import type { IcedModule } from "../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";
-
-const icedModule = iced as unknown as IcedModule;
 
 const decodeOne = (bytes: number[]): iced.Instruction => {
   const decoder = new iced.Decoder(32, new Uint8Array(bytes), iced.DecoderOptions.None);
@@ -34,7 +31,7 @@ void test("collectCpuIdVendorChunkNotes marks Intel and AMD vendor chunks", () =
   const instructions = chunks.map(decodeOne);
   try {
     assert.deepEqual(instructions.flatMap(instruction =>
-      collectCpuIdVendorChunkNotes(icedModule, instruction)
+      collectCpuIdVendorChunkNotes(iced, instruction)
     ), [
       "CPUID vendor string chunk 'Genu' (GenuineIntel).",
       "CPUID vendor string chunk 'ineI' (GenuineIntel).",

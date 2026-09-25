@@ -5,15 +5,12 @@ import { test } from "node:test";
 import * as realIced from "iced-x86-disasm";
 import { createFileRangeReader } from "../../../../../../analyzers/file-range-reader.js";
 import { analyzePeEntrypointDisassembly } from "../../../../../../analyzers/pe/disassembly/index.js";
-import type { IcedModule } from "../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";
 import type { PeImportMetadataEntry } from "../../../../../../pe-import-metadata-schema.js";
 import {
   IMAGE_FILE_MACHINE_I386,
   createExecutableSection
 } from "../../../../../helpers/pe-entrypoint-disassembly-fixture.js";
 import { MockFile } from "../../../../../helpers/mock-file.js";
-
-const realIcedModule = realIced as unknown as IcedModule;
 
 const freeLibraryMetadata = (): PeImportMetadataEntry => ({
   sourceKind: "winapi",
@@ -88,7 +85,7 @@ void test("analyzePeEntrypointDisassembly cleans x86 stdcall import arguments", 
         }]
       }
     },
-    async () => realIcedModule
+    async () => realIced
   );
   const calleeReturn = result.blocks[1]?.instructions.at(-1)?.target;
 

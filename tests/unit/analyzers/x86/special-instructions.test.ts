@@ -75,7 +75,10 @@ for (const [name, bytes] of [
 
 void test("tolerates missing mnemonic metadata", () => {
   assert.ok(isIcedX86Module(iced));
-  const collector = createX86SpecialInstructionCollector({ ...iced, Mnemonic: {} }, Number);
+  const collector = createX86SpecialInstructionCollector(
+    { ...iced, Mnemonic: {} } as unknown as typeof iced,
+    Number
+  );
   const decoder = new iced.Decoder(64, Uint8Array.of(0x0f, 0x05), iced.DecoderOptions.None);
   const instruction = decoder.decode();
   collector.record(instruction);

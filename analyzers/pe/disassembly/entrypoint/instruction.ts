@@ -1,7 +1,8 @@
 "use strict";
 
 import type { PeEntrypointInstruction } from "../types.js";
-import type { IcedModule, IcedFormatter, IcedInstructionObject } from "./iced.js";
+import type { Instruction } from "iced-x86-disasm";
+import type { IcedModule, IcedFormatter } from "./iced.js";
 import { collectSecurityCookieOperandNotes } from "./security-cookie-notes.js";
 import {
   emulateInstruction,
@@ -10,7 +11,7 @@ import {
 
 export const createInstruction = (
   iced: IcedModule,
-  instruction: IcedInstructionObject,
+  instruction: Instruction,
   formatter: IcedFormatter,
   rva: number,
   fileOffset: number,

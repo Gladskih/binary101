@@ -37,5 +37,5 @@ export const createScriptedIced = (
     }
     free(): void {}
   }
-  return { ...fixtureIced, Decoder: ScriptedDecoder };
+  return { ...fixtureIced, Decoder: ScriptedDecoder as unknown as IcedModule["Decoder"] };
 };

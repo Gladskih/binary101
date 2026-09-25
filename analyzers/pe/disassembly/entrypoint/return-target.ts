@@ -1,6 +1,7 @@
 "use strict";
 
 import type { FileRangeReader } from "../../../file-range-reader.js";
+import { lookupIcedEnumValue } from "../../../x86/disassembly-iced.js";
 import type {
   AnalyzePeEntrypointDisassemblyOptions,
   PeEntrypointInstructionTarget
@@ -58,7 +59,7 @@ const isCode = (
   iced: IcedModule,
   instruction: IcedInstructionObject,
   name: string
-): boolean => instruction.code === iced.Code[name];
+): boolean => instruction.code === lookupIcedEnumValue(iced.Code, name);
 
 const isAnyCode = (
   iced: IcedModule,

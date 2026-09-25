@@ -4,16 +4,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as iced from "iced-x86-disasm";
 import { collectSecurityCookieOperandNotes } from "../../../../../../analyzers/pe/disassembly/entrypoint/security-cookie-notes.js";
-import type { IcedModule } from "../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";
-
-const icedModule = iced as unknown as IcedModule;
 
 const collectNotesFromBytes = (bitness: number, bytes: number[]): string[] => {
   const decoder = new iced.Decoder(bitness, new Uint8Array(bytes), iced.DecoderOptions.None);
   const instruction = new iced.Instruction();
   try {
     decoder.decodeOut(instruction);
-    return collectSecurityCookieOperandNotes(icedModule, instruction);
+    return collectSecurityCookieOperandNotes(iced, instruction);
   } finally {
     instruction.free();
     decoder.free();

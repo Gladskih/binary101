@@ -4,9 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as iced from "iced-x86-disasm";
 import { resolveRegister } from "../../../../../../../analyzers/pe/disassembly/entrypoint/emulation/registers.js";
-import type { IcedModule } from "../../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";
 
-const icedModule = iced as unknown as IcedModule;
 const registers = iced.Register as unknown as Record<string, number>;
 
 void test("resolveRegister maps supported x86 register aliases", () => {
@@ -46,7 +44,7 @@ void test("resolveRegister maps supported x86 register aliases", () => {
   ];
 
   for (const [name, canonical, accessBits, bitOffset] of expected) {
-    assert.deepEqual(resolveRegister(icedModule, registers[name] ?? 0), {
+    assert.deepEqual(resolveRegister(iced, registers[name] ?? 0), {
       canonical,
       accessBits,
       bitOffset

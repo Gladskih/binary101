@@ -5,7 +5,6 @@ import { test } from "node:test";
 import * as realIced from "iced-x86-disasm";
 import { createFileRangeReader } from "../../../../../../analyzers/file-range-reader.js";
 import { analyzePeEntrypointDisassembly } from "../../../../../../analyzers/pe/disassembly/index.js";
-import type { IcedModule } from "../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";
 import {
   IMAGE_FILE_MACHINE_AMD64,
   TestDecoder,
@@ -21,8 +20,6 @@ import {
 } from "../../../../../helpers/pe-entrypoint-emulation-fixture.js";
 import { createScriptedIced } from "../../../../../helpers/pe-entrypoint-scripted-iced-fixture.js";
 import { MockFile } from "../../../../../helpers/mock-file.js";
-
-const realIcedModule = realIced as unknown as IcedModule;
 
 void test("analyzePeEntrypointDisassembly annotates indirect calls through the IAT", async () => {
   const result = await analyzeEntrypoint(
@@ -142,7 +139,7 @@ void test("analyzePeEntrypointDisassembly follows concrete register indirect cal
         createExecutableSection({ virtualSize: bytes.length, sizeOfRawData: bytes.length })
       ]
     },
-    async () => realIcedModule
+    async () => realIced
   );
   const target = result.blocks[0]?.instructions[1]?.target;
 

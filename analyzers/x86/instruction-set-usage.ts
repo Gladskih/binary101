@@ -5,7 +5,7 @@ import {
   describeCpuidFeature,
   formatCpuidLabel
 } from "./cpuid-features.js";
-import type { IcedX86Module } from "./disassembly-iced.js";
+import { lookupIcedEnumValue, type IcedX86Module } from "./disassembly-iced.js";
 
 export type X86InstructionSetUsage = {
   id: string;
@@ -25,7 +25,7 @@ export const createX86InstructionSetUsageTracker = (
 ): X86InstructionSetUsageTracker => {
   const featureCounts = new Map<number, number>();
   const knownFeatures = KNOWN_CPUID_FEATURES
-    .map(id => ({ id, value: cpuidFeature[id] }))
+    .map(id => ({ id, value: lookupIcedEnumValue(cpuidFeature, id) }))
     .filter((entry): entry is { id: string; value: number } => typeof entry.value === "number");
   const knownFeatureCounts = (): Record<string, number> => {
     const out: Record<string, number> = {};

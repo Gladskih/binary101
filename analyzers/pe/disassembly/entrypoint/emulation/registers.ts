@@ -1,6 +1,7 @@
 "use strict";
 
 import type { IcedModule } from "../iced.js";
+import { lookupIcedEnumValue } from "../../../../x86/disassembly-iced.js";
 
 /**
  * Canonical general-purpose registers modeled by the entrypoint micro-emulator.
@@ -129,7 +130,7 @@ export const resolveRegister = (
 ): RegisterAccess | null => {
   if (!iced.Register) return null;
   for (const alias of ALIASES) {
-    if (alias.names.some(name => iced.Register?.[name] === register)) {
+    if (alias.names.some(name => lookupIcedEnumValue(iced.Register, name) === register)) {
       return {
         canonical: alias.canonical,
         accessBits: alias.accessBits,

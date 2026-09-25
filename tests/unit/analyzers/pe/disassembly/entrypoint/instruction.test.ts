@@ -4,9 +4,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as iced from "iced-x86-disasm";
 import { createInstruction } from "../../../../../../analyzers/pe/disassembly/entrypoint/instruction.js";
-import type { IcedModule } from "../../../../../../analyzers/pe/disassembly/entrypoint/iced.js";
-
-const icedModule = iced as unknown as IcedModule;
 
 void test("createInstruction includes formatted text and operand notes", () => {
   const decoder = new iced.Decoder(
@@ -19,7 +16,7 @@ void test("createInstruction includes formatted text and operand notes", () => {
     decoder.decodeOut(decoded);
     assert.deepEqual(
       createInstruction(
-        icedModule,
+        iced,
         decoded,
         { format: () => "mov eax,cookie", free: () => {} },
         0x1000,

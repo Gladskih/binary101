@@ -2,6 +2,7 @@
 
 import { readMappedRvaPrefix } from "../../../rva-byte-reader.js";
 import type { FileRangeReader } from "../../../../file-range-reader.js";
+import { lookupIcedEnumValue } from "../../../../x86/disassembly-iced.js";
 import type { AnalyzePeEntrypointDisassemblyOptions } from "../../types.js";
 import { MAX_RVA, RVA_EXCLUSIVE_LIMIT } from "../metadata.js";
 import type { IcedInstructionObject, IcedModule } from "../iced.js";
@@ -66,7 +67,8 @@ const knownSingleValue = (
   registerName: string
 ): bigint | null => {
   const values = collectKnownValues(
-    readRegister(state, resolveRegister(iced, iced.Register?.[registerName] ?? 0))
+    readRegister(state, resolveRegister(iced,
+      lookupIcedEnumValue(iced.Register, registerName) ?? 0))
   );
   return values.length === 1 ? values[0]?.value ?? null : null;
 };

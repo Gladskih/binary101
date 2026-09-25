@@ -10,6 +10,7 @@ import {
   reg
 } from "../../../../../../helpers/pe-entrypoint-emulation-fixture.js";
 import { resolveRegister } from "../../../../../../../analyzers/pe/disassembly/entrypoint/emulation/registers.js";
+import { lookupIcedEnumValue } from "../../../../../../../analyzers/x86/disassembly-iced.js";
 import {
   isSameRegisterOperand,
   operandBits,
@@ -26,7 +27,7 @@ import {
 } from "../../../../../../../analyzers/pe/disassembly/entrypoint/emulation/state.js";
 
 const access = (name: string) =>
-  resolveRegister(fixtureIced, fixtureIced.Register?.[name] ?? 0);
+  resolveRegister(fixtureIced, lookupIcedEnumValue(fixtureIced.Register, name) ?? 0);
 
 void test("isSameRegisterOperand compares decoded register operands", () => {
   const same = ins("Xor", [reg("EAX"), reg("EAX")]);

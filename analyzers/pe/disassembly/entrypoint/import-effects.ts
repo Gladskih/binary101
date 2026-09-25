@@ -1,6 +1,7 @@
 "use strict";
 
 import type { ImportTarget } from "./import-targets.js";
+import { lookupIcedEnumValue } from "../../../x86/disassembly-iced.js";
 import type { IcedModule } from "./iced.js";
 import { resolveRegister } from "./emulation/registers.js";
 import {
@@ -25,7 +26,7 @@ const writeRegisterByName = (
   name: string,
   value: EmulatedValue
 ): void => {
-  writeRegister(state, resolveRegister(iced, iced.Register?.[name] ?? 0), value);
+  writeRegister(state, resolveRegister(iced, lookupIcedEnumValue(iced.Register, name) ?? 0), value);
 };
 
 const volatileRegisters = (state: EmulationState): readonly string[] =>
