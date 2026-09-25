@@ -39,7 +39,7 @@ void test("renderDynamicControlTransfers escapes resolved import names", () => {
       iatIndex: 17, importLink: { entryIndex: 0, functionIndex: 0 } }] }], linkedImports);
 
   assert.match(html, /IAT index 17, evil&lt;script&gt;\.dll!A&amp;B/);
-  assert.doesNotMatch(html, /<script>/);
+  assert.doesNotMatch(html, /<script>/i);
 });
 
 void test("renderDynamicControlTransfers keeps an invalid import link numeric", () => {
