@@ -23,6 +23,8 @@ import {
 import { getNativeAotReflectionTypeTableModel } from "../native-aot/reflection.js";
 import { createExportTableModel, EXPORT_TABLE_ID } from "./export-table.js";
 import { getOmapTableModel } from "./omap.js";
+import { createDRuntimeModuleTableModel, D_MODULE_TABLE_ID } from "./d-runtime.js";
+import { createDRuntimeReferenceTableModel, D_REFERENCE_TABLE_ID } from "./d-runtime-references.js";
 
 const eagerImportMatch = (tableId: string): number | null => {
   const match = tableId.match(/^eager-import-(\d+)$/);
@@ -96,6 +98,12 @@ export const getPePagedTableModel = (
           : null) ??
         (tableId === GO_FUNCTION_TABLE_ID && pe.goRuntime
           ? createGoRuntimeFunctionTableModel(pe.goRuntime.functions)
+          : null) ??
+        (tableId === D_MODULE_TABLE_ID && pe.dRuntime
+          ? createDRuntimeModuleTableModel(pe.dRuntime.modules)
+          : null) ??
+        (tableId === D_REFERENCE_TABLE_ID && pe.dRuntime
+          ? createDRuntimeReferenceTableModel(pe.dRuntime.modules)
           : null) ??
         (pe.loadcfg?.references
           ? getLoadConfigReferenceTableModel(pe.loadcfg.references, tableId)

@@ -7,7 +7,10 @@ import type { PeDataDirectory, RvaToOffset } from "../types.js";
 const IMAGE_REL_BASED_RESERVED = 6;
 const IMAGE_REL_BASED_HIGHADJ = 4;
 export const IMAGE_REL_BASED_DIR64 = 10;
-const BASE_RELOCATION_PAGE_SIZE = 0x1000;
+// Microsoft PE "Base Relocation Types" and "Base Relocation Block":
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#base-relocation-types
+export const IMAGE_REL_BASED_HIGHLOW = 3;
+export const BASE_RELOCATION_PAGE_SIZE = 0x1000;
 // Microsoft PE/COFF: IMAGE_BASE_RELOCATION consists of an 8-byte header followed by WORD entries.
 const IMAGE_BASE_RELOCATION_HEADER_SIZE = 8;
 const IMAGE_BASE_RELOCATION_ENTRY_SIZE = Uint16Array.BYTES_PER_ELEMENT;

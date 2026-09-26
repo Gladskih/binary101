@@ -88,6 +88,7 @@ export const buildWindowsPeResult = (
     linuxBoot: context.linuxBoot,
     nativeAotCandidate: directories.nativeAotCandidate,
     ...(imageArtifacts.goRuntime ? { goRuntime: imageArtifacts.goRuntime } : {}),
+    ...(imageArtifacts.dRuntime ? { dRuntime: imageArtifacts.dRuntime } : {}),
     ...(imageArtifacts.appHost ? { appHost: imageArtifacts.appHost } : {}),
     packers: imageArtifacts.packers,
     payloads: imageArtifacts.payloads,

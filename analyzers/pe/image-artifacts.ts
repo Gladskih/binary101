@@ -1,6 +1,7 @@
 "use strict";
 
 import { analyzePeGoRuntime } from "./go-runtime.js";
+import { analyzePeDRuntime } from "./d-runtime.js";
 import { analyzePeAppHost } from "./apphost/index.js";
 import { PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "./optional-header/magic.js";
 import { analyzePeOverlay } from "./overlay.js";
@@ -17,6 +18,7 @@ export type PeImageArtifacts = {
   packers: Awaited<ReturnType<typeof analyzePePackers>>;
   payloads: Awaited<ReturnType<typeof analyzePePayloads>>;
   goRuntime: Awaited<ReturnType<typeof analyzePeGoRuntime>>;
+  dRuntime: Awaited<ReturnType<typeof analyzePeDRuntime>>;
   appHost: Awaited<ReturnType<typeof analyzePeAppHost>>;
 };
 
@@ -28,7 +30,8 @@ const certificateTableStart = (directories: PeWindowsParseContext["core"]["dataD
 export const parsePeImageArtifacts = async (
   context: PeWindowsParseContext,
   debugResult: PeDebugArtifacts["debugResult"],
-  resources: PeDirectoryArtifacts["resources"]
+  resources: PeDirectoryArtifacts["resources"],
+  relocations: PeDirectoryArtifacts["reloc"]
 ): Promise<PeImageArtifacts> => {
   const { file, reader, core } = context;
   const overlay = await analyzePeOverlay({
@@ -50,7 +53,7 @@ export const parsePeImageArtifacts = async (
       ? { coffStringTableSize: core.coffStringTableSize }
       : {})
   });
-  const [packers, goRuntime, appHost] = await Promise.all([analyzePePackers({
+  const [packers, goRuntime, appHost, dRuntime] = await Promise.all([analyzePePackers({
     reader,
     sections: core.sections,
     overlay,
@@ -58,7 +61,8 @@ export const parsePeImageArtifacts = async (
     // Bun's .bun Offsets.byte_count is a usize, so it follows the PE image pointer width.
     // https://github.com/oven-sh/bun/blob/main/src/standalone_graph/StandaloneModuleGraph.zig
     imagePointerBytes: core.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC ? 8 : 4
-  }), analyzePeGoRuntime(file, reader, core), analyzePeAppHost(file, reader, core.sections)]);
+  }), analyzePeGoRuntime(file, reader, core), analyzePeAppHost(file, reader, core.sections),
+  analyzePeDRuntime(file, reader, core, relocations)]);
   const payloads = await analyzePePayloads(file, reader, overlay, packers, resources);
   return {
     overlay: await subtractExplainedPeOverlay(
@@ -71,6 +75,7 @@ export const parsePeImageArtifacts = async (
     packers,
     payloads,
     goRuntime,
+    dRuntime,
     appHost
   };
 };

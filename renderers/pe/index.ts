@@ -8,12 +8,14 @@ import { renderInstructionSets } from "./disassembly.js";
 import { renderEntrypointDisassembly } from "./entrypoint-disassembly.js";
 import { renderPeLazySectionShells } from "./lazy-section-shells.js";
 import { renderGoRuntime } from "./go-runtime.js";
+import { renderDRuntime } from "./d-runtime.js";
 
 export function renderPe(pe: PeParseResult | null | undefined): string {
   if (!pe) return "";
   const out: string[] = [];
   if (isPeWindowsParseResult(pe)) {
     renderGoRuntime(pe, out);
+    renderDRuntime(pe, out);
     renderInstructionSets(pe, out);
     renderEntrypointDisassembly(pe, out);
   }

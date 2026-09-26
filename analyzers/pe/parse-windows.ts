@@ -108,7 +108,8 @@ export const parseWindowsPe = async (
   const imageArtifacts = await parsePeImageArtifacts(
     context,
     debugArtifacts.debugResult,
-    directories.resources
+    directories.resources,
+    directories.reloc
   );
   const importLinking = analyzeImportLinking(
     directories.importResult,

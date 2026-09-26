@@ -7,6 +7,8 @@ import type { FileRangeReader } from "../../file-range-reader.js";
 import type { NativeAotVirtualImage } from "../../native-aot/virtual-image-types.js";
 import {
   IMAGE_REL_BASED_DIR64,
+  IMAGE_REL_BASED_HIGHLOW,
+  BASE_RELOCATION_PAGE_SIZE,
   type PeBaseRelocationBlock,
   type PeBaseRelocationResult
 } from "../directories/reloc.js";
@@ -17,8 +19,6 @@ import {
 } from "../optional-header/magic.js";
 import type { PeSection, PeWindowsCore } from "../types.js";
 
-const IMAGE_REL_BASED_HIGHLOW = 3;
-const BASE_RELOCATION_PAGE_SIZE = 0x1000;
 const PE_RVA_LIMIT = 0x1_0000_0000;
 
 export interface PeNativeAotImage extends NativeAotVirtualImage {
