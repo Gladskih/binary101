@@ -57,6 +57,8 @@ const PE_SECTION_DESCRIPTIONS: Record<string, string> = {
     "Core PE signature, COFF file header, and optional header fields that define the image layout.",
   "Resources":
     "Hierarchical resource tree containing dialogs, icons, manifests, version data, strings, and other embedded assets.",
+  "Type libraries (COM)":
+    "Embedded COM contracts: library identity, imported libraries, interfaces, methods, parameters, constants, and custom data.",
   "Rich header":
     "Microsoft linker/toolchain fingerprint stored in the DOS stub area before the PE signature.",
   "Sanity":

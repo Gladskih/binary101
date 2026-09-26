@@ -1,0 +1,63 @@
+// Packed SLTG layouts from Wine typelib.h; no proprietary fixture bytes.
+// https://github.com/wine-mirror/wine/blob/master/dlls/oleaut32/typelib.h
+export const createSltgLibrary = (): Uint8Array => {
+  const data = new Uint8Array(1014);
+  const view = new DataView(data.buffer);
+  const write = (offset: number, text: string): void => {
+    data.set(new TextEncoder().encode(text), offset);
+  };
+  write(0, "SLTG");
+  view.setUint16(4, 3, true);
+  view.setUint16(10, 1, true);
+  view.setUint32(36, 129, true);
+  view.setUint16(42, 2, true);
+  view.setUint32(44, 800, true);
+  write(52, "\x01CompObj\0dir\0");
+  const type = 85;
+  view.setUint16(type, 0x0501, true);
+  view.setUint32(type + 2, 0xffffffff, true);
+  view.setUint32(type + 10, 34, true);
+  view.setUint16(type + 18, 1, true);
+  view.setUint8(type + 26, 2);
+  view.setUint8(type + 29, 3);
+  view.setUint32(type + 39, 32, true);
+  const members = type + 43;
+  view.setUint8(members, 0x4c);
+  view.setUint8(members + 1, 0x12);
+  view.setUint16(members + 2, 0xffff, true);
+  view.setUint16(members + 4, 4, true);
+  view.setInt32(members + 6, 7, true);
+  view.setUint16(members + 10, 0xfffe, true);
+  view.setUint16(members + 12, 0xffff, true);
+  view.setUint16(members + 14, 22, true);
+  view.setUint8(members + 16, (1 << 3) | 4);
+  view.setUint8(members + 17, 0x82);
+  view.setUint16(members + 18, 25, true);
+  view.setUint16(members + 20, 8, true);
+  view.setUint16(members + 22, 11, true); // offset 10 | inline type flag
+  view.setUint16(members + 24, 3, true);
+  const tail = type + 75;
+  view.setUint16(tail, 1, true);
+  view.setUint16(tail + 10, 0xffff, true);
+  view.setUint16(tail + 12, 0xffff, true);
+  view.setUint16(tail + 32, 4, true);
+  view.setUint16(tail + 34, 4, true);
+  view.setUint16(tail + 40, 12, true);
+  const library = 214;
+  view.setUint16(library, 0x51cc, true);
+  view.setUint16(library + 6, 0xffff, true);
+  view.setUint16(library + 10, 0xffff, true);
+  view.setUint16(library + 16, 1, true);
+  view.setUint16(library + 18, 0x409, true);
+  view.setUint16(library + 26, 1, true);
+  view.setUint16(library + 110, 1, true);
+  view.setUint16(library + 112, 0xffff, true);
+  view.setUint16(library + 114, 0xffff, true);
+  view.setUint16(library + 118, 4, true);
+  view.setUint32(library + 148, 200, true);
+  view.setUint16(library + 152, 32, true);
+  view.setUint32(library + 154, 2, true);
+  view.setUint16(library + 200, 0xffff, true);
+  write(library + 736, "Lib\0ITest\0arg\0");
+  return data;
+};

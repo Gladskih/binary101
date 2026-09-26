@@ -28,7 +28,8 @@ const renderSegments = (typeLibrary: ResourceTypeLibraryPreview): string => {
     )
     .join("");
   return `<table class="table peResourceNestedTable"><thead><tr>` +
-    `<th>MSFT segment</th><th>Offset</th><th>Length</th></tr></thead><tbody>${rows}</tbody></table>`;
+    `<th>${escapeHtml(typeLibrary.format)} segment / block</th><th>Offset</th><th>Length</th>` +
+    `</tr></thead><tbody>${rows}</tbody></table>`;
 };
 
 export const renderTypeLibraryPreview = (

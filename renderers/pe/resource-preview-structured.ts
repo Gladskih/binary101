@@ -2,7 +2,7 @@
 
 import type { ResourceLangWithPreview } from "../../analyzers/pe/resources/preview/types.js";
 import { renderInfPreview } from "./resource-preview-inf.js";
-import { renderTypeLibraryPreview } from "./resource-preview-type-library.js";
+import { escapeHtml } from "../../html-utils.js";
 import { renderXmlPreview } from "./resource-preview-xml.js";
 
 export const renderStructuredPreviewSummary = (
@@ -30,7 +30,10 @@ export const renderStructuredPreview = (
     return renderXmlPreview(langEntry.textPreview, langEntry.xmlTree);
   }
   if (langEntry.previewKind === "typeLibrary" && langEntry.typeLibrary) {
-    return renderTypeLibraryPreview(langEntry.typeLibrary);
+    return `<p>${escapeHtml(langEntry.typeLibrary.format)} type library` +
+      `${langEntry.typeLibrary.analysis?.name
+        ? `: ${escapeHtml(langEntry.typeLibrary.analysis.name)}` : ""}. ` +
+      `<a href="#pe-type-libraries">Detailed analysis in Type libraries (COM).</a></p>`;
   }
   return null;
 };

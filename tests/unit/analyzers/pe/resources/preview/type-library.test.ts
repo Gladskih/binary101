@@ -135,7 +135,7 @@ void test(
     assert.equal(readHeaderFieldValue(result, "LCID"), "0x00000409");
     assert.equal(readSegment(result, "TypeInfoTab")?.offset, 0x14c);
     assert.equal(readSegment(result, "TypeInfoTab")?.length, MSFT_FIXTURE_SEGMENT_PAYLOAD_SIZE);
-    assert.equal(result?.issues, undefined);
+    assert.ok(result?.issues?.includes("TYPELIB type information table is truncated."));
   }
 );
 
@@ -143,7 +143,7 @@ void test("addTypeLibraryPreview skips optional MSFT help-string DLL offset", ()
   const result = addTypeLibraryPreview(buildMsftTypeLibraryWithHelpStringDllOffset(), "TYPELIB", null);
 
   assert.equal(readSegment(result, "TypeInfoTab")?.offset, 0x150);
-  assert.equal(result?.issues, undefined);
+  assert.ok(result?.issues?.includes("TYPELIB type information table is truncated."));
 });
 
 void test("addTypeLibraryPreview reports truncated MSFT headers", () => {

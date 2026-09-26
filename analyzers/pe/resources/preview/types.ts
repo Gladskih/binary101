@@ -2,6 +2,7 @@
 
 import type { ResourceLangEntry } from "../core.js";
 import type { MuiResourceConfiguration } from "../mui-config.js";
+import type { TypeLibraryAnalysis } from "../../type-library/types.js";
 
 export interface ResourcePreviewField {
   label: string;
@@ -141,6 +142,7 @@ export interface ResourceTypeLibraryPreview {
   format: "MSFT" | "SLTG" | "placeholder" | "unknown";
   headerFields: ResourcePreviewField[];
   segments: ResourceTypeLibrarySegmentPreview[];
+  analysis?: TypeLibraryAnalysis;
 }
 
 export interface ResourcePreviewData {

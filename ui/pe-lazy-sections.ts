@@ -13,6 +13,8 @@ import { renderLinuxBoot } from "../renderers/pe/linux-boot.js";
 import { renderDebug } from "../renderers/pe/debug-view.js";
 import { renderPeDwarf } from "../renderers/pe/dwarf.js";
 import { renderResources } from "../renderers/pe/resources.js";
+import { renderTypeLibraries } from "../renderers/pe/type-libraries.js";
+import { openPeTypeLibrarySection } from "./pe-type-library-navigation.js";
 import { renderException } from "../renderers/pe/exception.js";
 import { renderNativeAotCandidate } from "../renderers/pe/native-aot.js";
 import { renderMsvcRtti } from "../renderers/pe/msvc-rtti.js";
@@ -112,6 +114,8 @@ const WINDOWS_LAZY_RENDERERS: Partial<Record<
     renderImportsPanel(pe),
   [PE_LAZY_SECTION_KEYS.resources]: (pe: PeWindowsParseResult) =>
     pe.resources ? renderToString(out => renderResources(pe.resources!, out)) : "",
+  [PE_LAZY_SECTION_KEYS.typeLibraries]: (pe: PeWindowsParseResult) =>
+    renderTypeLibraries(pe.resources),
   [PE_LAZY_SECTION_KEYS.exports]: (pe: PeWindowsParseResult) =>
     pe.exports ? renderToString(out => renderExports(pe.exports!, out)) : "",
   [PE_LAZY_SECTION_KEYS.tls]: (pe: PeWindowsParseResult) =>
@@ -259,6 +263,11 @@ export const enhancePeLazySections = (root: ParentNode, pe: PeParseResult | null
   parseResultByRoot.set(root, pe);
   if (!enhancedRoots.has(root)) {
     root.addEventListener("toggle", handleToggle, true);
+    root.addEventListener("click", event => {
+      const current = parseResultByRoot.get(root);
+      const section = openPeTypeLibrarySection(event, root);
+      if (section && current) mountSection(section, current);
+    });
     enhancedRoots.add(root);
   }
   mountOpenSections(root, pe);

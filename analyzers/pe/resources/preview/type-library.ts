@@ -1,6 +1,9 @@
 "use strict";
 
 import { isAsciiPlaceholderPayload } from "./mui-placeholder.js";
+import { parseMsftAnalysis } from "../../type-library/msft.js";
+import { parseSltgLibrary } from "../../type-library/sltg.js";
+import { validateTypeLibraryReferences } from "../../type-library/references.js";
 import type {
   ResourcePreviewField,
   ResourcePreviewResult,
@@ -193,25 +196,26 @@ const parseMsftTypeLibrary = (data: Uint8Array): ResourcePreviewResult => {
     return { issues: ["TYPELIB MSFT header is truncated."] };
   }
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const segments = readMsftSegments(view, data.length, issues);
+  const analysis = parseMsftAnalysis(data, segments, issues);
+  validateTypeLibraryReferences(analysis, issues);
   return buildTypeLibraryPreview(
     {
       format: "MSFT",
       headerFields: readMsftHeaderFields(view),
-      segments: readMsftSegments(view, data.length, issues)
+      segments,
+      analysis
     },
     [...new Set(issues)]
   );
 };
 
-const parseSltgTypeLibrary = (data: Uint8Array): ResourcePreviewResult =>
-  buildTypeLibraryPreview({
-    format: "SLTG",
-    headerFields: [
-      { label: "Signature", value: readAsciiSignature(data) },
-      { label: "Size", value: `${data.length} bytes` }
-    ],
-    segments: []
-  });
+const parseSltgTypeLibrary = (data: Uint8Array): ResourcePreviewResult => {
+  const issues: string[] = [];
+  const library = parseSltgLibrary(data, issues);
+  if (library.analysis) validateTypeLibraryReferences(library.analysis, issues);
+  return buildTypeLibraryPreview(library, issues);
+};
 
 export function addTypeLibraryPreview(
   data: Uint8Array,

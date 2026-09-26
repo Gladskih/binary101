@@ -51,6 +51,7 @@ export const PE_LAZY_SECTION_KEYS = {
   sectionHeaders: "section-headers",
   security: "security",
   tls: "tls",
+  typeLibraries: "type-libraries",
   upx: PE_PACKER_SECTIONS.upx.key
 } as const;
 
@@ -197,6 +198,10 @@ const addWindowsDirectoryDescriptors = (
     summary: `resources: ${resourceLeafCount(pe)} leaves`,
     title: "Resources"
   });
+  if (pe.resources?.detail?.some(group => group.typeName === "TYPELIB")) {
+    descriptors.push({ id: "pe-type-libraries", key: PE_LAZY_SECTION_KEYS.typeLibraries,
+      title: "Type libraries (COM)" });
+  }
   if (pe.exports) descriptors.push({
     key: PE_LAZY_SECTION_KEYS.exports,
     summary: plural(pe.exports.entries.length, "entry", "entries"),

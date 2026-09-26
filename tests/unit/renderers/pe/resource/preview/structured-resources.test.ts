@@ -99,7 +99,6 @@ void test("renderPreviewCell renders TYPELIB previews", () => {
 
   assert.equal(renderPreviewSummary(lang), "MSFT type library");
   assert.match(html, /MSFT type library/);
-  assert.match(html, /TypeInfoTab/);
-  // 0x144 is the first segment payload offset above, rendered as eight hex digits.
-  assert.match(html, /0x00000144/);
+  assert.match(html, /href="#pe-type-libraries"/);
+  assert.match(html, /Detailed analysis/);
 });
