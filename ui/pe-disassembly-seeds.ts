@@ -70,6 +70,11 @@ const collectBasicExtraEntrypoints = (
       rvas: windowsPe.goRuntime.functions.map(fn => Number(fn.start - windowsPe.opt.ImageBase))
     });
   }
+  const dCallbackRvas = windowsPe?.dRuntime?.modules.flatMap(module =>
+    module.callbacks.map(callback => Number(callback.address - windowsPe.opt.ImageBase))) ?? [];
+  if (dCallbackRvas.length) {
+    extraEntrypoints.push({ source: "D runtime callbacks", rvas: dCallbackRvas });
+  }
   const msvcRttiRvas = collectMsvcRttiFunctionRvas(windowsPe);
   if (msvcRttiRvas.length) {
     extraEntrypoints.push({ source: "MSVC RTTI vftables", rvas: msvcRttiRvas });

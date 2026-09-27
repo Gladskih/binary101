@@ -8,6 +8,9 @@ import type { PeWindowsParseResult } from "../../../../../analyzers/pe/core/pars
 import { inlinePeSectionName } from "../../../../../analyzers/pe/sections/name.js";
 import { MSVC_RTTI_LAYOUT } from "../../../../../analyzers/pe/msvc-rtti/layout.js";
 import { collectPeDisassemblySeeds } from "../../../../../ui/pe-disassembly-seeds.js";
+import { resolvePeDisassemblyEntrypoints } from
+  "../../../../../analyzers/pe/disassembly/sampling.js";
+import { createDTestModule } from "../../../../fixtures/d-runtime.js";
 import { createNativeAotInitializerFixture } from
   "../../../../helpers/native-aot-initializer-fixture.js";
 
@@ -151,6 +154,63 @@ void test("collectPeDisassemblySeeds exposes only unique executable MSVC RTTI ta
     rvas: [0x2000, 0x2010]
   }]);
 });
+
+void test("collectPeDisassemblySeeds exposes D callbacks from every module without file reads", async () => {
+  const { pe, callbackRvas, file } = createDSeedFixture();
+
+  const seeds = await collectPeDisassemblySeeds(file, pe);
+
+  assert.deepEqual(seeds.extraEntrypoints, [{ source: "D runtime callbacks", rvas: callbackRvas }]);
+});
+
+void test("D callback seeds preserve RVAs when ImageBase exceeds Number precision", async () => {
+  const { pe, callbackRvas, file } = createDSeedFixture(BigInt(Number.MAX_SAFE_INTEGER) + 1n);
+
+  const seeds = await collectPeDisassemblySeeds(file, pe);
+  const issues: string[] = [];
+  const entrypoints = resolvePeDisassemblyEntrypoints({
+    coffMachine: pe.coff.Machine, is64Bit: true, imageBase: pe.opt.ImageBase,
+    entrypointRva: 0, sections: pe.sections, rvaToOff: pe.rvaToOff,
+    extraEntrypoints: seeds.extraEntrypoints
+  }, issues);
+
+  assert.deepEqual(entrypoints, [...new Set(callbackRvas)]);
+  assert.deepEqual(issues, []);
+});
+
+void test("collectPeDisassemblySeeds omits D metadata with no modules", async () => {
+  const { pe, file } = createDSeedFixture();
+  pe.dRuntime!.modules = [];
+
+  const seeds = await collectPeDisassemblySeeds(file, pe);
+
+  assert.deepEqual(seeds.extraEntrypoints, []);
+});
+
+void test("collectPeDisassemblySeeds omits D modules without callbacks", async () => {
+  const { pe, file } = createDSeedFixture();
+  pe.dRuntime!.modules.forEach(module => { module.callbacks = []; });
+
+  const seeds = await collectPeDisassemblySeeds(file, pe);
+
+  assert.deepEqual(seeds.extraEntrypoints, []);
+});
+
+const createDSeedFixture = (imageBase = createWindowsPe().opt.ImageBase) => {
+  const pe = createWindowsPe();
+  pe.opt.ImageBase = imageBase;
+  pe.rvaToOff = rva => rva;
+  const module = createDTestModule();
+  const callbackRvas = module.callbacks.map((callback, index) => Number(callback.address) + index + 1);
+  pe.dRuntime = { warnings: [], modules: [
+    { ...module, callbacks: module.callbacks.map((callback, index) =>
+      ({ ...callback, address: imageBase + BigInt(callbackRvas[index]!) })) },
+    { ...module, callbacks: [{ ...module.callbacks[0]!, address: imageBase + BigInt(callbackRvas[0]!) }] }
+  ] };
+  const file = new File([], "d-pe");
+  file.slice = () => assert.fail("D seeds must reuse parsed metadata without file reads");
+  return { pe, file, callbackRvas: [...callbackRvas, callbackRvas[0]!] };
+};
 
 const createWindowsPe = (): PeWindowsParseResult => ({
   dos: {} as PeWindowsParseResult["dos"],
