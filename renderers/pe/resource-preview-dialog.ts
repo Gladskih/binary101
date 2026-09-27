@@ -5,16 +5,26 @@ import type {
   ResourceDialogPreview
 } from "../../analyzers/pe/resources/preview/types.js";
 import { escapeHtml } from "../../html-utils.js";
+import { formatControlStyle, formatDialogStyle, formatExtendedStyle } from "./dialog-style-values.js";
+
+const renderCreationData = (data: Uint8Array | undefined): string => data?.length
+  ? `${data.length} bytes: ${Array.from(data.subarray(0, 32), byte =>
+    byte.toString(16).padStart(2, "0")).join(" ")}${data.length > 32 ? " …" : ""}` : "-";
 
 const renderDialogControls = (controls: ResourceDialogControlPreview[]): string => {
   const rows = controls.map(control =>
     `<tr><td>${escapeHtml(control.kind)}</td><td>${escapeHtml(control.title || "")}</td>` +
       `<td class="mono peNumeric">${control.id != null ? escapeHtml(control.id) : "-"}</td>` +
       `<td class="mono peNumeric">${control.x},${control.y} ` +
-      `${control.width}x${control.height}</td></tr>`
+      `${control.width}x${control.height}</td>` +
+      `<td class="mono peNumeric">${control.helpId ?? "-"}</td>` +
+      `<td>${escapeHtml(formatControlStyle(control.style, control.kind))}</td>` +
+      `<td>${escapeHtml(formatExtendedStyle(control.exStyle))}</td>` +
+      `<td class="mono">${renderCreationData(control.creationData)}</td></tr>`
   ).join("");
   return `<table class="table peResourceNestedTable peDialogControlsTable">` +
-    `<thead><tr><th>Kind</th><th>Title</th><th>ID</th><th>Bounds</th></tr></thead>` +
+    `<thead><tr><th>Kind</th><th>Title</th><th>ID</th><th>Bounds (DLU)</th>` +
+    `<th>Help ID</th><th>Style</th><th>Extended style</th><th>Creation data</th></tr></thead>` +
     `<tbody>${rows}</tbody></table>`;
 };
 
@@ -67,6 +77,9 @@ export const renderDialogPreview = (dialog: ResourceDialogPreview): string => {
   return [
     '<div style="margin-top:.25rem">',
     `<div class="smallNote">${meta}</div>`,
+    `<div class="smallNote">Style: ${escapeHtml(formatDialogStyle(dialog.style))}</div>`,
+    `<div class="smallNote">Extended style: ${escapeHtml(formatExtendedStyle(dialog.exStyle))}</div>`,
+    dialog.helpId != null ? `<div class="smallNote">Help ID: ${dialog.helpId}</div>` : "",
     renderDialogFont(dialog),
     `<div style="position:relative;margin-top:.25rem;width:${Math.max(220, Math.min(320, dialog.width * 2))}px;height:${Math.max(140, Math.min(240, dialog.height * 2))}px;border:1px solid var(--border2);border-radius:8px;background:var(--card);color:var(--text);overflow:hidden">`,
     `<div style="padding:.2rem .4rem;border-bottom:1px solid var(--border2);background:var(--bg);color:var(--text)">${escapeHtml(dialog.title || "(untitled dialog)")}</div>`,

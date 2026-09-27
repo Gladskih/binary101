@@ -8,6 +8,7 @@ import {
   writeUtf16Z
 } from "../../../../../helpers/pe-resource-preview-fixture.js";
 import { expectDefined } from "../../../../../helpers/expect-defined.js";
+import { buildDialogWithCreationData } from "../../../../../fixtures/pe-dialog-creation.js";
 
 // DS_SETFONT requests font metadata after the dialog title. Source:
 // https://learn.microsoft.com/en-us/windows/win32/menurc/dialog-resource
@@ -97,4 +98,34 @@ void test("addDialogPreview parses extended dialog headers and font metadata", (
   assert.strictEqual(preview.font?.weight, 400);
   assert.strictEqual(preview.font?.charset, 1);
   assert.strictEqual(preview.font?.typeface, "Segoe UI");
+  assert.strictEqual(preview.helpId, 0);
+});
+
+void test("reports every truncated prefix instead of throwing or silently dropping controls", () => {
+  const bytes = buildStandardDialogTemplate();
+  for (let length = 0; length < bytes.length; length += 1) {
+    assert.ok(addDialogPreview(bytes.subarray(0, length), "DIALOG")?.issues?.length, `${length}`);
+  }
+});
+
+for (const kind of ["standard", "extended"] as const) {
+  void test(`preserves ${kind} creation data and advances to the following control`, () => {
+    const result = addDialogPreview(buildDialogWithCreationData(kind), "DIALOG");
+    const dialog = expectDefined(result?.preview?.dialogPreview);
+
+    assert.equal(result?.issues, undefined);
+    assert.equal(dialog.helpId, kind === "extended" ? 123 : null);
+    assert.equal(dialog.controls.length, 2);
+    assert.equal(dialog.controls[0]?.helpId, kind === "extended" ? 456 : null);
+    assert.equal(dialog.controls[1]?.id, 101);
+    assert.equal(dialog.controls[0]?.title, "#128");
+    assert.deepEqual(dialog.controls[0]?.creationData, new Uint8Array([0xaa, 0xbb]));
+  });
+}
+
+void test("reports a truncated extended header and creation payload", () => {
+  const bytes = buildDialogWithCreationData("extended");
+  assert.ok(addDialogPreview(bytes.subarray(0, 24), "DIALOG")?.issues?.length);
+  assert.ok(addDialogPreview(bytes.subarray(0, bytes.length - 1), "DIALOG")?.issues?.length);
+  assert.equal(addDialogPreview(bytes, "other"), null);
 });

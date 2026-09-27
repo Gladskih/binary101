@@ -69,6 +69,8 @@ export interface ResourceDialogFontPreview {
 }
 
 export interface ResourceDialogControlPreview {
+  helpId?: number | null;
+  creationData?: Uint8Array;
   id: number | null;
   kind: string;
   title: string | null;
@@ -81,6 +83,7 @@ export interface ResourceDialogControlPreview {
 }
 
 export interface ResourceDialogPreview {
+  helpId?: number | null;
   templateKind: "standard" | "extended";
   title: string | null;
   menu: string | null;
