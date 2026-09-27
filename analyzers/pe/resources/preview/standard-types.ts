@@ -3,6 +3,7 @@
 import { addHeuristicResourcePreview } from "./sniff.js";
 import { decodeTextResource } from "./text.js";
 import type { ResourcePreviewField, ResourcePreviewResult } from "./types.js";
+import { addLegacyFontPreview } from "./legacy-font.js";
 
 const buildSummaryPreview = (
   previewFields: ResourcePreviewField[],
@@ -55,17 +56,11 @@ export const addFontPreview = async (
   typeName: string
 ): Promise<ResourcePreviewResult | null> => {
   if (typeName !== "FONT") return null;
+  const legacy = addLegacyFontPreview(data);
+  if (legacy) return legacy;
   const heuristic = await addHeuristicResourcePreview(data, 0);
   if (heuristic?.preview) return prependTypeField(typeName, heuristic);
   return buildBinarySummary(typeName, data.length, "Legacy FONT resource payload.");
-};
-
-export const addFontDirectoryPreview = (
-  data: Uint8Array,
-  typeName: string
-): ResourcePreviewResult | null => {
-  if (typeName !== "FONTDIR") return null;
-  return buildBinarySummary(typeName, data.length, "Font-directory resource table.");
 };
 
 export const addDialogIncludePreview = (

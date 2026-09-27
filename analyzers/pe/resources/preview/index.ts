@@ -4,6 +4,8 @@ import type { FileRangeReader } from "../../../file-range-reader.js";
 import { addBitmapPreview } from "./bitmap.js";
 import { addCursorPreview, addGroupCursorPreview } from "./cursor.js";
 import { addDialogPreview } from "./dialog.js";
+import { addFontDirectoryPreview } from "./font-directory.js";
+import { validateFontReferences } from "./font-reference-validation.js";
 import { addAcceleratorPreview } from "./accelerator.js";
 import { buildResourceLeafIndex } from "./leaf-index.js";
 import { createGroupLeafLoader, readResourceLeafBytes } from "./leaf-data.js";
@@ -18,7 +20,6 @@ import {
 } from "./manifest-xml.js";
 import {
   addDialogIncludePreview,
-  addFontDirectoryPreview,
   addFontPreview,
   addPlugPlayPreview,
   addRcDataPreview,
@@ -274,7 +275,7 @@ export async function enrichResourcePreviews(
   const issues = [...(tree.issues || [])];
   return {
     top: tree.top,
-    detail: attachDetailPreviews(detail, decodedGroups),
+    detail: validateFontReferences(attachDetailPreviews(detail, decodedGroups)),
     ...(tree.directories?.length ? { directories: tree.directories } : {}),
     ...(tree.paths?.length ? { paths: tree.paths } : {}),
     ...(muiResource?.result.configuration

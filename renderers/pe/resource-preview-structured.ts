@@ -4,10 +4,13 @@ import type { ResourceLangWithPreview } from "../../analyzers/pe/resources/previ
 import { renderInfPreview } from "./resource-preview-inf.js";
 import { escapeHtml } from "../../html-utils.js";
 import { renderXmlPreview } from "./resource-preview-xml.js";
+import { renderFontDirectoryPreview, renderLegacyFontPreview } from "./resource-preview-font.js";
 
 export const renderStructuredPreviewSummary = (
   langEntry: ResourceLangWithPreview
 ): string | null => {
+  if (langEntry.fontDirectory) return `${langEntry.fontDirectory.entries.length} fonts`;
+  if (langEntry.legacyFont) return `FNT ${langEntry.legacyFont.faceName || "font"}`;
   if (langEntry.previewKind === "inf" && langEntry.infPreview) {
     return `${langEntry.infPreview.sections.length} INF sections`;
   }
@@ -23,6 +26,8 @@ export const renderStructuredPreviewSummary = (
 export const renderStructuredPreview = (
   langEntry: ResourceLangWithPreview
 ): string | null => {
+  if (langEntry.fontDirectory) return renderFontDirectoryPreview(langEntry.fontDirectory);
+  if (langEntry.legacyFont) return renderLegacyFontPreview(langEntry.legacyFont);
   if (langEntry.previewKind === "inf" && langEntry.infPreview) {
     return renderInfPreview(langEntry.infPreview);
   }

@@ -3,6 +3,7 @@
 import type { ResourceLangEntry } from "../core.js";
 import type { MuiResourceConfiguration } from "../mui-config.js";
 import type { TypeLibraryAnalysis } from "../../type-library/types.js";
+import type { ResourceFontDirectory, ResourceFontPreview } from "./font-types.js";
 
 export interface ResourcePreviewField {
   label: string;
@@ -156,6 +157,8 @@ export interface ResourceTypeLibraryPreview {
 }
 
 export interface ResourcePreviewData {
+  fontDirectory?: ResourceFontDirectory;
+  legacyFont?: ResourceFontPreview;
   previewKind: string;
   textPreview?: string;
   textEncoding?: string | null;

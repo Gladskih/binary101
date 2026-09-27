@@ -4,12 +4,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   addDialogIncludePreview,
-  addFontDirectoryPreview,
   addFontPreview,
   addPlugPlayPreview,
   addRcDataPreview,
   addVxdPreview
 } from "../../../../../../analyzers/pe/resources/preview/standard-types.js";
+import { addFontDirectoryPreview } from "../../../../../../analyzers/pe/resources/preview/font-directory.js";
 
 const encoder = new TextEncoder();
 
@@ -32,7 +32,7 @@ void test("standard PE resource decoders cover long-tail standard resource types
 
   assert.strictEqual(rcdata?.preview?.previewKind, "text");
   assert.strictEqual(font?.preview?.previewKind, "font");
-  assert.strictEqual(fontDir?.preview?.previewKind, "summary");
+  assert.strictEqual(fontDir?.preview?.previewKind, "fontDirectory");
   assert.strictEqual(dlgInclude?.preview?.previewKind, "text");
   assert.strictEqual(plugPlay?.preview?.previewKind, "summary");
   assert.strictEqual(vxd?.preview?.previewKind, "summary");

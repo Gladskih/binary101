@@ -49,6 +49,8 @@ const isWideResourcePreview = (
   langEntry.previewKind === "menu" ||
   langEntry.previewKind === "accelerator" ||
   langEntry.previewKind === "font" ||
+  langEntry.previewKind === "fontDirectory" ||
+  langEntry.previewKind === "legacyFont" ||
   langEntry.previewKind === "audio" ||
   langEntry.previewKind === "muiConfig" ||
   langEntry.previewKind === "inf" ||
