@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { versionFixedRows } from "../../../../renderers/pe/version-fixed-values.js";
 import { renderVersionPreview } from "../../../../renderers/pe/resource-preview-version.js";
 
-const base = { structVersionRaw: 0, structVersionMajor: 0, structVersionMinor: 0 };
+const base = { structVersionRaw: 0 };
 
 void test("renders flags, mask, OS, type, subtype and full binary date", () => {
   const html = renderVersionPreview({ fixedFileInfo: { ...base,

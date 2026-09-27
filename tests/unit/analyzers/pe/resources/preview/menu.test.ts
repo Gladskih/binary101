@@ -1,3 +1,4 @@
+import { assertResourcePrefixWarnings } from "../../../../../helpers/resource-prefix-warnings.js";
 "use strict";
 
 import assert from "node:assert/strict";
@@ -52,6 +53,13 @@ const buildExtendedMenuTemplate = (): Uint8Array => {
   return bytes.subarray(0, offset);
 };
 
+const buildDeeplyNestedMenu = (): Uint8Array => {
+  const bytes = new Uint8Array(4 + 65 * 4);
+  const view = new DataView(bytes.buffer);
+  for (let index = 0; index < 65; index += 1) view.setUint16(4 + index * 4, 0x90, true);
+  return bytes;
+};
+
 void test("addMenuPreview parses standard menu templates", () => {
   const result = addMenuPreview(buildStandardMenuTemplate(), "MENU");
 
@@ -73,6 +81,19 @@ void test("addMenuPreview parses MENUEX templates", () => {
   assert.strictEqual(preview.items[0]?.children[0]?.id, 200);
 });
 
+void test("preserves distinct MENUEX header and popup help IDs", () => {
+  const bytes = buildExtendedMenuTemplate();
+  const view = new DataView(bytes.buffer);
+  view.setUint32(4, 123, true);
+  // Popup help ID follows the DWORD-aligned UTF-16 title, per MENUEX_TEMPLATE_ITEM.
+  view.setUint32(36, 456, true);
+
+  const preview = expectDefined(addMenuPreview(bytes, "MENU")?.preview?.menuPreview);
+  assert.equal(preview.helpId, 123);
+  assert.ok(preview.items[0]?.flags.includes("help:456"));
+  assert.equal(preview.items[0]?.children[0]?.text, "Run");
+});
+
 void test("decodes MENUEX type and state flags", () => {
   const bytes = buildExtendedMenuTemplate();
   const view = new DataView(bytes.buffer);
@@ -89,17 +110,14 @@ void test("decodes MENUEX type and state flags", () => {
 
 void test("warns for every truncated menu prefix and unknown versions", () => {
   const bytes = buildStandardMenuTemplate();
-  for (let length = 0; length < bytes.length; length += 1) {
-    assert.ok(addMenuPreview(bytes.subarray(0, length), "MENU")?.issues?.length, `${length}`);
-  }
+  assertResourcePrefixWarnings(bytes, prefix => addMenuPreview(prefix, "MENU"));
   new DataView(bytes.buffer).setUint16(0, 2, true);
   assert.ok(addMenuPreview(bytes, "MENU")?.issues?.length);
 });
 
 void test("bounds popup nesting and rejects bad extended offsets", () => {
-  const bytes = new Uint8Array(4 + 65 * 4);
+  const bytes = buildDeeplyNestedMenu();
   const view = new DataView(bytes.buffer);
-  for (let index = 0; index < 65; index += 1) view.setUint16(4 + index * 4, 0x90, true);
   assert.ok(addMenuPreview(bytes, "MENU")?.issues?.some(issue => issue.includes("nesting")));
   view.setUint16(0, 1, true);
   view.setUint16(2, 0, true);

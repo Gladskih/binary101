@@ -42,8 +42,6 @@ export interface ResourceXmlTreeNode {
 
 export interface ResourceVersionFixedFileInfo {
   structVersionRaw: number;
-  structVersionMajor: number;
-  structVersionMinor: number;
   fileFlagsMask?: number;
   fileFlags?: number;
   fileOS?: number;

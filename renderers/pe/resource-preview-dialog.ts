@@ -22,10 +22,10 @@ const renderDialogControls = (controls: ResourceDialogControlPreview[]): string 
       `<td>${escapeHtml(formatExtendedStyle(control.exStyle))}</td>` +
       `<td class="mono">${renderCreationData(control.creationData)}</td></tr>`
   ).join("");
-  return `<table class="table peResourceNestedTable peDialogControlsTable">` +
+  return `<div style="overflow-x:auto"><table class="table peResourceNestedTable peDialogControlsTable">` +
     `<thead><tr><th>Kind</th><th>Title</th><th>ID</th><th>Bounds (DLU)</th>` +
     `<th>Help ID</th><th>Style</th><th>Extended style</th><th>Creation data</th></tr></thead>` +
-    `<tbody>${rows}</tbody></table>`;
+    `<tbody>${rows}</tbody></table></div>`;
 };
 
 const renderDialogFont = (dialog: ResourceDialogPreview): string => {
@@ -64,14 +64,18 @@ const renderDialogControlBox = (
   return `<div style="${shared};z-index:2;padding:.1rem .2rem;border:1px solid var(--border2);border-radius:4px;background:var(--card);display:flex;align-items:center;justify-content:center">${label}</div>`;
 };
 
-export const renderDialogPreview = (dialog: ResourceDialogPreview): string => {
-  const meta = [
+const renderDialogMetadata = (dialog: ResourceDialogPreview): string => {
+  return [
     `<b>${escapeHtml(dialog.title || "(untitled dialog)")}</b>`,
     `${dialog.controls.length} controls`,
     dialog.templateKind === "extended" ? "DLGTEMPLATEEX" : "DLGTEMPLATE",
     dialog.menu ? `Menu: ${escapeHtml(dialog.menu)}` : "",
     dialog.className ? `Class: ${escapeHtml(dialog.className)}` : ""
   ].filter(Boolean).join(" - ");
+};
+
+export const renderDialogPreview = (dialog: ResourceDialogPreview): string => {
+  const meta = renderDialogMetadata(dialog);
   const topOffset = dialog.menu ? "3.1rem" : "1.75rem";
   const controls = dialog.controls.map(control => renderDialogControlBox(control, dialog)).join("");
   return [

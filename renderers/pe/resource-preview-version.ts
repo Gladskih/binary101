@@ -14,11 +14,12 @@ const renderDefinitionRows = (rows: Array<{ label: string; value: string }>): st
   if (!rows.length) return "";
   const cells = rows
     .map(row =>
-      `<div><span class="mono">${escapeHtml(row.label)}</span></div>` +
-      `<div style="min-width:0;overflow-wrap:anywhere">${escapeHtml(row.value)}</div>`
+      `<tr><td class="mono">${escapeHtml(row.label)}</td>` +
+      `<td style="overflow-wrap:anywhere">${escapeHtml(row.value)}</td></tr>`
     )
     .join("");
-  return `<div class="smallNote" style="display:grid;grid-template-columns:max-content 1fr;gap:.15rem .55rem;margin-top:.2rem">${cells}</div>`;
+  return `<table class="table peResourceNestedTable"><thead><tr><th>Field</th><th>Value</th>` +
+    `</tr></thead><tbody>${cells}</tbody></table>`;
 };
 
 const parseVersionTableTranslation = (
@@ -78,7 +79,7 @@ const renderVersionFixedInfo = (info: ResourceVersionPreview): string => {
     info.fixedFileInfo
       ? {
           label: "StructVersion",
-          value: `${info.fixedFileInfo.structVersionMajor}.${info.fixedFileInfo.structVersionMinor} `
+          value: `${info.fixedFileInfo.structVersionRaw >>> 16}.${info.fixedFileInfo.structVersionRaw & 0xffff} `
             + `(${formatDwordHex(info.fixedFileInfo.structVersionRaw)})`
         }
       : null,

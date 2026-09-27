@@ -9,10 +9,11 @@ export const readFontHeader = (data: Uint8Array, offset: number): ResourceFontPr
   if (!Number.isSafeInteger(offset) || offset < 0 || offset + 113 > data.length) return null;
   const view = new DataView(data.buffer, data.byteOffset + offset, 113);
   const copyright = data.subarray(offset + 6, offset + 66);
+  const copyrightEnd = copyright.indexOf(0);
   return {
     version: view.getUint16(0, true), fileSize: view.getUint32(2, true),
     copyright: new TextDecoder("windows-1252").decode(
-      copyright.subarray(0, copyright.indexOf(0) < 0 ? copyright.length : copyright.indexOf(0))),
+      copyright.subarray(0, copyrightEnd < 0 ? copyright.length : copyrightEnd)),
     type: view.getUint16(66, true), pointSize: view.getUint16(68, true),
     verticalResolution: view.getUint16(70, true), horizontalResolution: view.getUint16(72, true),
     ascent: view.getUint16(74, true), internalLeading: view.getUint16(76, true),

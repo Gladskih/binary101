@@ -41,11 +41,7 @@ const readDirectory = (
   return { directory: { headerSize, entries }, issues, end: pos };
 };
 
-export const addFontDirectoryPreview = (
-  data: Uint8Array, typeName: string
-): ResourcePreviewResult | null => {
-  if (typeName !== "FONTDIR") return null;
-  if (data.length < 2) return { issues: ["FONTDIR count is truncated."] };
+const chooseDirectoryLayout = (data: Uint8Array): ReturnType<typeof readDirectory> => {
   // Documented packed prefix vs Win32 rc.exe's full FNT v3 prefix. Select by
   // complete structural consumption, not dfSize (which describes the original FONT).
   // https://squeek502.github.io/resinator/windows/resources/font.html
@@ -55,6 +51,15 @@ export const addFontDirectoryPreview = (
   if (documented && win32 && chosen.directory.entries.length) {
     chosen.issues.push("FONTDIR layout is ambiguous; displaying the documented 113-byte prefix.");
   }
+  return chosen;
+};
+
+export const addFontDirectoryPreview = (
+  data: Uint8Array, typeName: string
+): ResourcePreviewResult | null => {
+  if (typeName !== "FONTDIR") return null;
+  if (data.length < 2) return { issues: ["FONTDIR count is truncated."] };
+  const chosen = chooseDirectoryLayout(data);
   if (chosen.end < data.length) chosen.issues.push("FONTDIR contains unparsed or truncated entry bytes.");
   return { preview: { previewKind: "fontDirectory", fontDirectory: chosen.directory },
     ...(chosen.issues.length ? { issues: chosen.issues } : {}) };

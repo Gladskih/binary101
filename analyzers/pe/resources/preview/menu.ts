@@ -42,20 +42,19 @@ const readUtf16Z = (
 };
 
 const describeStandardFlags = (options: number): string[] => {
-  const flags: string[] = [];
-  if ((options & MF_POPUP) !== 0) flags.push("popup");
-  if ((options & MF_SEPARATOR) !== 0) flags.push("separator");
-  if ((options & MF_GRAYED) !== 0) flags.push("grayed");
-  if (options & 0x0002) flags.push("MF_DISABLED");
-  if (options & 0x0004) flags.push("MF_BITMAP");
-  if (options & 0x0100) flags.push("MF_OWNERDRAW");
-  if (options & 0x1000) flags.push("MF_DEFAULT");
-  if (options & 0x4000) flags.push("MF_RIGHTJUSTIFY");
-  if ((options & MF_CHECKED) !== 0) flags.push("checked");
-  if ((options & MF_MENUBREAK) !== 0) flags.push("menu-break");
-  if ((options & MF_MENUBARBREAK) !== 0) flags.push("menu-bar-break");
-  return flags;
+  // Standard menu flags from WinUser.h; MF_END is structural in a template.
+  // https://github.com/microsoft/win32metadata/blob/main/generation/WinSDK/RecompiledIdlHeaders/um/WinUser.h
+  const names = [
+    [MF_POPUP, "popup"], [MF_SEPARATOR, "separator"], [MF_GRAYED, "grayed"],
+    [MF_CHECKED, "checked"], [MF_MENUBREAK, "menu-break"], [MF_MENUBARBREAK, "menu-bar-break"],
+    [0x2, "MF_DISABLED"], [0x4, "MF_BITMAP"], [0x100, "MF_OWNERDRAW"],
+    [0x1000, "MF_DEFAULT"], [0x4000, "MF_RIGHTJUSTIFY"]
+  ] as const;
+  return names.filter(([mask]) => options & mask).map(([, name]) => name);
 };
+
+const readStandardId = (view: DataView, offset: number, end: number): number | null =>
+  offset + 2 <= end ? view.getUint16(offset, true) : null;
 
 const describeExtendedFlags = (type: number, state: number, resInfo: number): string[] => {
   const flags: string[] = [];
@@ -95,7 +94,7 @@ const parseStandardItems = (
     pos += 2;
     const isPopup = (options & MF_POPUP) !== 0;
     const isEnd = (options & MF_END) !== 0;
-    const id = isPopup || pos + 1 >= end ? null : view.getUint16(pos, true);
+    const id = isPopup ? null : readStandardId(view, pos, end);
     if (!isPopup) pos += 2;
     const text = readUtf16Z(view, pos, end, issues);
     pos = text.nextOffset;
@@ -119,6 +118,35 @@ const parseStandardItems = (
   return { items, nextOffset: pos };
 };
 
+const readExtendedItem = (
+  view: DataView, offset: number, end: number, issues: string[]
+): { item: ResourceMenuItemPreview; nextOffset: number; resInfo: number } => {
+  const type = view.getUint32(offset, true);
+  const state = view.getUint32(offset + 4, true);
+  const id = view.getUint32(offset + 8, true);
+  const resInfo = view.getUint16(offset + 12, true);
+  let pos = offset + 14;
+  const text = readUtf16Z(view, pos, end, issues);
+  pos = alignDword(text.nextOffset);
+  const isPopup = (resInfo & MFR_POPUP) !== 0;
+  if (isPopup && pos + 4 > end) issues.push("MENUEX popup help ID is truncated.");
+  let helpId: number | null = null;
+  if (isPopup && pos + 3 < end) {
+    helpId = view.getUint32(pos, true);
+    pos += 4;
+  }
+  const item: ResourceMenuItemPreview = {
+    text: text.text || null,
+    id: isPopup ? (id || null) : id,
+    type,
+    state,
+    flags: describeExtendedFlags(type, state, resInfo),
+    children: []
+  };
+  if (helpId != null) item.flags.push(`help:${helpId}`);
+  return { item, nextOffset: pos, resInfo };
+};
+
 const parseExtendedItems = (
   view: DataView,
   offset: number,
@@ -135,30 +163,10 @@ const parseExtendedItems = (
   let pos = offset;
   // MENUEX_TEMPLATE_ITEM has a fixed 14-byte prefix before the UTF-16 item text.
   while (pos + 13 < end) {
-    const type = view.getUint32(pos, true);
-    const state = view.getUint32(pos + 4, true);
-    const id = view.getUint32(pos + 8, true);
-    const resInfo = view.getUint16(pos + 12, true);
-    pos += 14;
-    const text = readUtf16Z(view, pos, end, issues);
-    pos = alignDword(text.nextOffset);
+    const { item, nextOffset, resInfo } = readExtendedItem(view, pos, end, issues);
+    pos = nextOffset;
     const isPopup = (resInfo & MFR_POPUP) !== 0;
     const isEnd = (resInfo & MFR_END) !== 0;
-    if (isPopup && pos + 4 > end) issues.push("MENUEX popup help ID is truncated.");
-    let helpId: number | null = null;
-    if (isPopup && pos + 3 < end) {
-      helpId = view.getUint32(pos, true);
-      pos += 4;
-    }
-    const item: ResourceMenuItemPreview = {
-      text: text.text || null,
-      id: isPopup ? (id || null) : id,
-      type,
-      state,
-      flags: describeExtendedFlags(type, state, resInfo),
-      children: []
-    };
-    if (helpId != null) item.flags.push(`help:${helpId}`);
     if (isPopup) {
       const child = parseExtendedItems(view, pos, end, issues, depth + 1);
       item.children = child.items;

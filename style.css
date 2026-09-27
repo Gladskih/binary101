@@ -795,7 +795,7 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .peResourceNestedTable{background:var(--bg);border-color:var(--border2);margin-top:0;min-width:0}
 .peResourceNestedTable th:first-child,
 .peResourceNestedTable td:first-child{width:10rem;white-space:nowrap}
-.peDialogControlsTable{table-layout:fixed}
+.peDialogControlsTable{table-layout:auto;min-width:70rem}
 .peDialogControlsTable th:first-child,
 .peDialogControlsTable td:first-child{width:8rem}
 .peDialogControlsTable th:nth-child(3),

@@ -12,7 +12,7 @@ const writeUtf16Z = (bytes: Uint8Array, offset: number, text: string): number =>
   return offset + text.length * 2 + 2;
 };
 
-const encodeUtf16Z = (text: string): Uint8Array => {
+export const encodeUtf16Z = (text: string): Uint8Array => {
   const bytes = new Uint8Array((text.length + 1) * 2);
   writeUtf16Z(bytes, 0, text);
   return bytes;
@@ -29,7 +29,7 @@ const concatBytes = (parts: Uint8Array[]): Uint8Array => {
   return bytes;
 };
 
-const buildVersionNode = (
+export const buildVersionNode = (
   key: string,
   valueBytes: Uint8Array,
   valueType: 0 | 1,

@@ -1,3 +1,4 @@
+import { assertResourcePrefixWarnings } from "../../../../../helpers/resource-prefix-warnings.js";
 "use strict";
 
 import assert from "node:assert/strict";
@@ -103,9 +104,7 @@ void test("addDialogPreview parses extended dialog headers and font metadata", (
 
 void test("reports every truncated prefix instead of throwing or silently dropping controls", () => {
   const bytes = buildStandardDialogTemplate();
-  for (let length = 0; length < bytes.length; length += 1) {
-    assert.ok(addDialogPreview(bytes.subarray(0, length), "DIALOG")?.issues?.length, `${length}`);
-  }
+  assertResourcePrefixWarnings(bytes, prefix => addDialogPreview(prefix, "DIALOG"));
 });
 
 for (const kind of ["standard", "extended"] as const) {

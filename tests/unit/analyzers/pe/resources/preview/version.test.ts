@@ -1,8 +1,26 @@
+import { assertResourcePrefixWarnings } from "../../../../../helpers/resource-prefix-warnings.js";
 "use strict";
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { addVersionPreview } from "../../../../../../analyzers/pe/resources/preview/version.js";
+import { buildVersionNode, encodeUtf16Z } from "../../../../../fixtures/pe-resource-metadata-payloads.js";
+
+const buildVersionWithStrings = (versionText: string): Uint8Array => {
+  const fixed = buildVersionResource(0x10000, createGeneratedVersion()).slice(-52);
+  return buildVersionNode("VS_VERSION_INFO", fixed, 0, [
+    buildVersionNode("StringFileInfo", new Uint8Array(), 1, [
+      buildVersionNode("040904B0", new Uint8Array(), 1, [
+        buildVersionNode("FileVersion", encodeUtf16Z(versionText), 1, []),
+        buildVersionNode("ProductVersion", encodeUtf16Z("1, 2, 3, 4"), 1, []),
+        buildVersionNode("CompanyName", encodeUtf16Z("fixture"), 1, [])
+      ])
+    ]),
+    buildVersionNode("VarFileInfo", new Uint8Array(), 1, [
+      buildVersionNode("Translation", new Uint8Array([9, 4, 176, 4]), 0, [])
+    ])
+  ]);
+};
 
 const DWORD_SIZE = Uint32Array.BYTES_PER_ELEMENT;
 const alignDword = (offset: number): number => (offset + DWORD_SIZE - 1) & ~(DWORD_SIZE - 1);
@@ -82,8 +100,6 @@ void test("addVersionPreview keeps version preview without warning on non-standa
   assert.strictEqual(preview.preview?.previewKind, "version");
   assert.deepStrictEqual(preview.preview?.versionInfo?.fixedFileInfo, {
     structVersionRaw: 0,
-    structVersionMajor: 0,
-    structVersionMinor: 0,
     fileFlagsMask: 0,
     fileFlags: 0,
     fileOS: 0,
@@ -112,9 +128,7 @@ void test("preserves every remaining fixed-info DWORD without applying the mask 
 
 void test("warns for all truncated prefixes and respects typed-array byte offsets", () => {
   const bytes = buildVersionResource(0x10000, createGeneratedVersion());
-  for (let length = 0; length < bytes.length; length += 1) {
-    assert.ok(addVersionPreview(bytes.subarray(0, length), "VERSION")?.issues?.length);
-  }
+  assertResourcePrefixWarnings(bytes, prefix => addVersionPreview(prefix, "VERSION"));
   const padded = new Uint8Array(bytes.length + 2);
   padded.set(bytes, 2);
   assert.equal(addVersionPreview(padded.subarray(2), "VERSION")?.issues, undefined);
@@ -127,4 +141,28 @@ void test("rejects an invalid fixed-info signature or root key", () => {
   assert.match(addVersionPreview(bytes, "VERSION")?.issues?.[0] ?? "", /signature/);
   bytes[6] = 0;
   assert.match(addVersionPreview(bytes, "VERSION")?.issues?.[0] ?? "", /key/);
+});
+
+void test("reads version strings and translations and reports a numeric mismatch", () => {
+  const result = addVersionPreview(buildVersionWithStrings("1.2.3.5"), "VERSION");
+  assert.deepEqual(result?.preview?.versionInfo?.stringValues, [
+    { table: "040904B0", key: "FileVersion", value: "1.2.3.5" },
+    { table: "040904B0", key: "ProductVersion", value: "1, 2, 3, 4" },
+    { table: "040904B0", key: "CompanyName", value: "fixture" }
+  ]);
+  assert.deepEqual(result?.preview?.versionInfo?.translations, [{ languageId: 0x409, codePage: 1200 }]);
+  assert.deepEqual(result?.issues, ["040904B0 FileVersion (1.2.3.5) differs from fixed version 1.2.3.4."]);
+  assert.equal(addVersionPreview(buildVersionWithStrings("1.2.3.4"), "VERSION")?.issues, undefined);
+});
+
+void test("reports malformed child lengths and invalid value types", () => {
+  const bytes = buildVersionWithStrings("1.2.3.4");
+  const view = new DataView(bytes.buffer);
+  view.setUint16(4, 2, true);
+  assert.ok(addVersionPreview(bytes, "VERSION")?.issues?.includes("VERSION block value type is invalid."));
+  view.setUint16(4, 0, true);
+  view.setUint16(92, 0, true); // Root prefix is 40 bytes plus 52 bytes fixed info.
+  assert.ok(addVersionPreview(bytes, "VERSION")?.issues?.includes("VERSION child block is malformed."));
+  view.setUint16(0, 6, true);
+  assert.ok(addVersionPreview(bytes, "VERSION")?.issues?.length);
 });

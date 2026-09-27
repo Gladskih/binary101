@@ -113,8 +113,6 @@ void test("renderPreviewCell renders grouped VERSION details with human-readable
     versionInfo: {
       fixedFileInfo: {
         structVersionRaw: 0x00010000,
-        structVersionMajor: 1,
-        structVersionMinor: 0
       },
       fileVersionString: "1.2.3.4",
       productVersionString: "5.6.7.8",
