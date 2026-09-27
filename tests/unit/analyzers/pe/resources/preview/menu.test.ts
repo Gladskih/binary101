@@ -72,3 +72,45 @@ void test("addMenuPreview parses MENUEX templates", () => {
   assert.strictEqual(preview.items[0]?.children[0]?.text, "Run");
   assert.strictEqual(preview.items[0]?.children[0]?.id, 200);
 });
+
+void test("decodes MENUEX type and state flags", () => {
+  const bytes = buildExtendedMenuTemplate();
+  const view = new DataView(bytes.buffer);
+  // MFT_OWNERDRAW | MFT_RADIOCHECK | MFT_RIGHTORDER | MFT_RIGHTJUSTIFY.
+  view.setUint32(8, 0x6300, true);
+  // MFS_GRAYED | MFS_CHECKED | MFS_HILITE | MFS_DEFAULT.
+  view.setUint32(12, 0x108b, true);
+  const flags = addMenuPreview(bytes, "MENU")?.preview?.menuPreview?.items[0]?.flags ?? [];
+
+  assert.ok(flags.includes("MFT_RADIOCHECK"));
+  assert.ok(flags.includes("MFS_DEFAULT"));
+  assert.ok(flags.includes("MFS_HILITE"));
+});
+
+void test("warns for every truncated menu prefix and unknown versions", () => {
+  const bytes = buildStandardMenuTemplate();
+  for (let length = 0; length < bytes.length; length += 1) {
+    assert.ok(addMenuPreview(bytes.subarray(0, length), "MENU")?.issues?.length, `${length}`);
+  }
+  new DataView(bytes.buffer).setUint16(0, 2, true);
+  assert.ok(addMenuPreview(bytes, "MENU")?.issues?.length);
+});
+
+void test("bounds popup nesting and rejects bad extended offsets", () => {
+  const bytes = new Uint8Array(4 + 65 * 4);
+  const view = new DataView(bytes.buffer);
+  for (let index = 0; index < 65; index += 1) view.setUint16(4 + index * 4, 0x90, true);
+  assert.ok(addMenuPreview(bytes, "MENU")?.issues?.some(issue => issue.includes("nesting")));
+  view.setUint16(0, 1, true);
+  view.setUint16(2, 0, true);
+  assert.ok(addMenuPreview(bytes, "MENU")?.issues?.length);
+  view.setUint16(2, 0xffff, true);
+  assert.ok(addMenuPreview(bytes, "MENU")?.issues?.length);
+  assert.equal(addMenuPreview(bytes, "other"), null);
+});
+
+void test("warns on incomplete extended text and popup help IDs", () => {
+  const bytes = buildExtendedMenuTemplate();
+  assert.ok(addMenuPreview(bytes.subarray(0, 20), "MENU")?.issues?.length);
+  assert.ok(addMenuPreview(bytes.subarray(0, 34), "MENU")?.issues?.length);
+});

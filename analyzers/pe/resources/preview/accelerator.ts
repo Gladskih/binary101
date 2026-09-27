@@ -4,6 +4,7 @@ import type {
   ResourceAcceleratorEntryPreview,
   ResourcePreviewResult
 } from "./types.js";
+import { formatVirtualKey } from "./virtual-key.js";
 
 // ACCELTABLEENTRY.fFlags bits. Sources:
 // Microsoft Learn, ACCELTABLEENTRY / https://learn.microsoft.com/en-us/windows/win32/menurc/acceltableentry
@@ -14,28 +15,6 @@ const FSHIFT = 0x04;
 const FCONTROL = 0x08;
 const FALT = 0x10;
 const FLAST = 0x80;
-
-const formatVirtualKey = (key: number): string => {
-  // VK_F1..VK_F24 occupy 0x70..0x87 in the Win32 virtual-key table.
-  if (key >= 0x70 && key <= 0x87) return `F${key - 0x6f}`;
-  // ASCII digits and uppercase Latin letters share the same values as their virtual-key codes.
-  if (key >= 0x30 && key <= 0x39) return String.fromCharCode(key);
-  if (key >= 0x41 && key <= 0x5a) return String.fromCharCode(key);
-  const names = new Map<number, string>([
-    [0x08, "Backspace"],
-    [0x09, "Tab"],
-    [0x0d, "Enter"],
-    [0x1b, "Esc"],
-    [0x20, "Space"],
-    [0x25, "Left"],
-    [0x26, "Up"],
-    [0x27, "Right"],
-    [0x28, "Down"],
-    [0x2d, "Insert"],
-    [0x2e, "Delete"]
-  ]);
-  return names.get(key) || `VK_0x${key.toString(16).padStart(2, "0")}`;
-};
 
 const formatAcceleratorKey = (flags: number, key: number): string =>
   (flags & FVIRTKEY) !== 0 ? formatVirtualKey(key) : String.fromCharCode(key & 0xff);
@@ -50,23 +29,26 @@ const describeAcceleratorFlags = (flags: number): string[] => {
   return out;
 };
 
-const parseAcceleratorEntries = (view: DataView): ResourceAcceleratorEntryPreview[] => {
+const parseAcceleratorEntries = (view: DataView, issues: string[]): ResourceAcceleratorEntryPreview[] => {
   const entries: ResourceAcceleratorEntryPreview[] = [];
-  // ACCELTABLEENTRY is DWORD-aligned in the resource format (8 bytes); keep a 6-byte fallback
-  // for resilience when malformed data omits the trailing padding word.
-  const recordSize = view.byteLength % 8 === 0 ? 8 : 6;
-  for (let offset = 0; offset + recordSize <= view.byteLength; offset += recordSize) {
-    const flags = view.getUint8(offset);
+  // ACCELTABLEENTRY always has an eight-byte stride. Recover a final six-byte prefix
+  // without changing the stride of earlier entries. Source: ACCELTABLEENTRY, cited above.
+  for (let offset = 0; offset + 6 <= view.byteLength; offset += 8) {
+    const flags = view.getUint16(offset, true);
     const key = view.getUint16(offset + 2, true);
     const id = view.getUint16(offset + 4, true);
+    const described = describeAcceleratorFlags(flags);
+    if (flags & ~0x9f) issues.push("ACCELERATOR entry contains unknown flag bits.");
+    if (offset + 8 > view.byteLength) issues.push("ACCELERATOR final entry padding is truncated.");
     entries.push({
       id,
       key: formatAcceleratorKey(flags, key),
-      modifiers: describeAcceleratorFlags(flags).filter(flag => flag === "Shift" || flag === "Ctrl" || flag === "Alt"),
-      flags: describeAcceleratorFlags(flags)
+      modifiers: described.filter(flag => flag === "Shift" || flag === "Ctrl" || flag === "Alt"),
+      flags: described
     });
-    if ((flags & FLAST) !== 0) break;
+    if ((flags & FLAST) !== 0) return entries;
   }
+  issues.push("ACCELERATOR table is truncated or lacks a final-entry marker.");
   return entries;
 };
 
@@ -74,8 +56,9 @@ export const addAcceleratorPreview = (
   data: Uint8Array,
   typeName: string
 ): ResourcePreviewResult | null => {
-  if (typeName !== "ACCELERATOR" || data.byteLength < 6) return null;
-  const entries = parseAcceleratorEntries(new DataView(data.buffer, data.byteOffset, data.byteLength));
+  if (typeName !== "ACCELERATOR") return null;
+  const issues: string[] = [];
+  const entries = parseAcceleratorEntries(new DataView(data.buffer, data.byteOffset, data.byteLength), issues);
   if (!entries.length) {
     return { issues: ["ACCELERATOR resource is truncated or malformed."] };
   }
@@ -83,6 +66,7 @@ export const addAcceleratorPreview = (
     preview: {
       previewKind: "accelerator",
       acceleratorPreview: { entries }
-    }
+    },
+    ...(issues.length ? { issues } : {})
   };
 };

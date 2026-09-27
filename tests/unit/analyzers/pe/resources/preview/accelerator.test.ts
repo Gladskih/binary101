@@ -36,3 +36,29 @@ void test("addAcceleratorPreview renders shortcut entries from ACCELERATOR resou
     flags: ["Shift", "VirtualKey"]
   });
 });
+
+void test("keeps eight-byte stride when a final record loses its padding", () => {
+  const result = addAcceleratorPreview(buildAcceleratorTable().subarray(0, 14), "ACCELERATOR");
+  assert.equal(result?.preview?.acceleratorPreview?.entries[1]?.id, 200);
+  assert.ok(result?.issues?.length);
+});
+
+void test("decodes navigation virtual keys", () => {
+  const bytes = buildAcceleratorTable();
+  new DataView(bytes.buffer).setUint16(2, 0x21, true); // VK_PRIOR (Page Up).
+  assert.equal(addAcceleratorPreview(bytes, "ACCELERATOR")?.preview?.acceleratorPreview?.entries[0]?.key,
+    "VK_PRIOR");
+});
+
+void test("handles empty, incomplete and unterminated tables and WORD-sized flags", () => {
+  const bytes = buildAcceleratorTable();
+  const view = new DataView(bytes.buffer);
+  view.setUint16(8, 0x100, true); // Unknown flag in the high byte; final marker absent.
+  assert.equal(addAcceleratorPreview(bytes, "other"), null);
+  assert.ok(addAcceleratorPreview(new Uint8Array(), "ACCELERATOR")?.issues?.length);
+  assert.ok(addAcceleratorPreview(bytes.subarray(0, 5), "ACCELERATOR")?.issues?.length);
+  assert.equal(addAcceleratorPreview(bytes, "ACCELERATOR")?.issues?.length, 2);
+  view.setUint16(0, 0x92, true); // ASCII, FNOINVERT, FALT, FLAST.
+  view.setUint16(2, 65, true);
+  assert.equal(addAcceleratorPreview(bytes, "ACCELERATOR")?.preview?.acceleratorPreview?.entries[0]?.key, "A");
+});
