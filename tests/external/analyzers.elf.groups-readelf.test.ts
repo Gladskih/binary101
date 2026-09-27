@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { test } from "node:test";
 import { parseElf } from "../../analyzers/elf/index.js";
+import type { ElfSectionHeader } from "../../analyzers/elf/types.js";
 import { probeWslReadelf } from "./elf-wsl-readelf-fixtures.js";
 
 void test("COMDAT groups match a real WSL libstdc++ archive member", async context => {
@@ -25,8 +26,10 @@ void test("COMDAT groups match a real WSL libstdc++ archive member", async conte
       count: group.members.length })), expected);
     assert.deepEqual(elf.sectionGroups.flatMap(group => group.issues), []);
     for (const group of elf.sectionGroups) {
-      const section = elf.sections.find(item => item.index === group.sectionIndex)!;
-      const name = elf.symbolTables?.find(table => table.sectionIndex === section.link)
+      const section: ElfSectionHeader | undefined = elf.sections.find(
+        item => item.index === group.sectionIndex);
+      assert.ok(section);
+      const name: string | undefined = elf.symbolTables?.find(table => table.sectionIndex === section.link)
         ?.entries[section.info]?.name;
       assert.ok(name && dump.includes(`[${name}]`));
     }

@@ -23,6 +23,7 @@ const checkBuiltImage = async (directory: string, flags: string[]): Promise<void
   assert.deepEqual(parsed.dRuntime.warnings, []);
   assert.equal(parsed.dRuntime.modules.length, built.modules.length);
   for (const [name, flagsValue, imports, classes] of built.modules) {
+    assert.ok(name, "D runtime output must contain a module name");
     const module: DModuleInfo | undefined =
       parsed.dRuntime.modules.find(candidate => candidate.name === name);
     assert.ok(module, name);

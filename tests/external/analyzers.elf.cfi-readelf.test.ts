@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { test } from "node:test";
 import { parseElf } from "../../analyzers/elf/index.js";
 import { evaluateElfCfi } from "../../analyzers/elf/cfi-state.js";
-import type { ElfUnwindFde } from "../../analyzers/elf/unwind-types.js";
+import type { ElfUnwindCie, ElfUnwindFde } from "../../analyzers/elf/unwind-types.js";
 import { probeWslReadelf } from "./elf-wsl-readelf-fixtures.js";
 
 const frameBlocks = (dump: string): { offset: number; lines: string[] }[] => {
@@ -36,7 +36,7 @@ void test("computed CFA rows match readelf frames-interp on WSL ls", async conte
   for (const block of expected) {
     const fde: ElfUnwindFde | undefined = section.fdes.find(item => item.offset === block.offset);
     assert.ok(fde);
-    const cie = section.cies.find(item => item.offset === fde.cieOffset);
+    const cie: ElfUnwindCie | undefined = section.cies.find(item => item.offset === fde.cieOffset);
     assert.ok(cie);
     const evaluation = evaluateElfCfi(cie, fde);
     assert.deepEqual(evaluation.issues, [], `FDE ${fde.offset}`);
