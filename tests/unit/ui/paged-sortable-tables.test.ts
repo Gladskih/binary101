@@ -8,7 +8,7 @@ import {
 } from "../../../ui/paged-sortable-tables.js";
 import type { PagedSortableTableModel } from "../../../ui/paged-sortable-table-state.js";
 
-type Listener = (event: { target: FakeElement; preventDefault: () => void }) => void;
+type Listener = (event: { target: unknown; preventDefault: () => void }) => void;
 type GlobalDom = { Element?: unknown; HTMLElement?: unknown; HTMLInputElement?: unknown };
 
 class FakeElement {
@@ -17,19 +17,28 @@ class FakeElement {
   innerHTML = "";
   outerHTML = "";
   value = "";
-  private listeners = new Map<string, Listener>();
+  tables: FakeElement[] | null = null;
+  body: FakeElement | null = null;
+  toolbar: FakeElement | null = null;
+  headers: FakeElement[] | null = null;
+  buttons: FakeElement[] | null = null;
+  private listeners = new Map<string, Listener[]>();
   constructor(readonly role: string, readonly parent: FakeElement | null = null) {}
+  get parentElement(): FakeElement | null { return this.parent; }
   addEventListener(type: string, listener: Listener): void {
-    this.listeners.set(type, listener);
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
   }
-  dispatch(type: string, target: FakeElement): void {
-    this.listeners.get(type)?.({ target, preventDefault: () => {} });
+  dispatch(type: string, target: unknown): void {
+    this.listeners.get(type)?.forEach(listener => listener({ target, preventDefault: () => {} }));
   }
   matches(selector: string): boolean {
     return selector === "[data-paged-sortable-page-input]" &&
       this.role === "pageInput";
   }
   closest(selector: string): FakeElement | null {
+    if (selector === "[data-paged-sortable-table-root]") {
+      return this.role === "root" ? this : this.parent?.closest(selector) ?? null;
+    }
     if (selector === "[data-paged-sortable-column]") {
       return this.dataset["pagedSortableColumn"] == null ? null : this;
     }
@@ -48,15 +57,15 @@ class FakeElement {
   }
   querySelector(selector: string): FakeElement | null {
     return selector === "[data-paged-sortable-table-body]"
-      ? fakeBody
+      ? this.body ?? fakeBody
       : selector === ".pagedSortableTableToolbar"
-        ? fakeToolbar
+        ? this.toolbar ?? fakeToolbar
         : null;
   }
   querySelectorAll(selector: string): FakeElement[] {
-    if (selector === "[data-paged-sortable-table-root]") return [fakeRoot];
-    if (selector === "th") return [fakeHeader];
-    if (selector === "[data-paged-sortable-column]") return [fakeSortButton];
+    if (selector === "[data-paged-sortable-table-root]") return this.tables ?? (this.role === "container" ? [fakeRoot] : []);
+    if (selector === "th") return this.headers ?? [fakeHeader];
+    if (selector === "[data-paged-sortable-column]") return this.buttons ?? [fakeSortButton];
     return [];
   }
 }
@@ -90,6 +99,106 @@ const createModel = (): PagedSortableTableModel => ({
   }
 });
 
+const createNestedTable = (parent: FakeElement, id: string): FakeElement => {
+  const table = new FakeElement("root", parent);
+  table.dataset = { pagedSortableTableId: id };
+  table.body = new FakeElement("body", table);
+  table.toolbar = new FakeElement("toolbar", table);
+  table.headers = [new FakeElement("header", table)];
+  table.buttons = [new FakeElement("sort", table.headers[0]!)];
+  table.buttons[0]!.dataset = { pagedSortableColumn: "1" };
+  return table;
+};
+
+void test("nested tables keep their page and sort state without changing their parent", () => {
+  withFakeDom(() => {
+    const outer = createNestedTable(new FakeElement("container"), "outer");
+    const inner = createNestedTable(outer, "inner");
+    const container = new FakeElement("container");
+    container.tables = [outer, inner];
+    outer.tables = [inner];
+    outer.headers = [outer.headers![0]!, inner.headers![0]!];
+    outer.buttons = [outer.buttons![0]!, inner.buttons![0]!];
+    outer.headers[0]!.attributes.set("aria-sort", "descending");
+    outer.buttons[0]!.dataset = { pagedSortableColumn: "0" };
+    enhancePagedSortableTables(container as unknown as ParentNode, id => ({ ...createModel(), id }));
+    inner.dispatch("click", inner.buttons![0]!);
+    outer.dispatch("click", inner.buttons![0]!);
+    assert.equal(inner.headers![0]!.attributes.get("aria-sort"), "ascending");
+    assert.equal(outer.headers![0]!.attributes.has("aria-sort"), false);
+    const last = new FakeElement("action", inner);
+    last.dataset = { pagedSortableAction: "last" };
+    inner.dispatch("click", last);
+    outer.dispatch("click", last);
+    assert.equal(inner.dataset["pagedSortablePageIndex"], "1");
+    assert.equal(outer.dataset["pagedSortablePageIndex"], "0");
+    const input = new FakeInputElement("pageInput", inner);
+    input.value = "2";
+    inner.dispatch("change", input);
+    outer.dispatch("change", input);
+    assert.equal(inner.dataset["pagedSortablePageIndex"], "1");
+    assert.equal(outer.dataset["pagedSortablePageIndex"], "0");
+    input.value = "1";
+    inner.dispatch("change", input);
+    outer.dispatch("change", input);
+    assert.equal(inner.dataset["pagedSortablePageIndex"], "0");
+    assert.equal(outer.dataset["pagedSortablePageIndex"], "0");
+    inner.dispatch("click", last);
+    outer.tables = [];
+    container.tables = [outer];
+    assert.deepEqual(capturePagedSortableTableState(container as unknown as ParentNode).find(entry => entry.key === "inner"),
+      { key: "inner", state: { pageIndex: 1, sortColumnIndex: 1, sortDirection: "ascending" } });
+    const remounted = createNestedTable(outer, "inner");
+    outer.tables = [remounted];
+    outer.headers = [outer.headers[0]!, remounted.headers![0]!];
+    outer.buttons = [outer.buttons[0]!, remounted.buttons![0]!];
+    outer.dispatch("click", outer.buttons![0]!);
+    assert.equal(remounted.dataset["pagedSortablePageIndex"], "1");
+    assert.equal(remounted.headers![0]!.attributes.get("aria-sort"), "ascending");
+    assert.equal(remounted.buttons![0]!.dataset["sortDirection"], "ascending");
+    assert.match(remounted.body!.innerHTML, /charlie/);
+  });
+});
+
+void test("table snapshots restore initial state and retain temporarily unmounted tables", () => {
+  withFakeDom(() => {
+    const table = createNestedTable(new FakeElement("container"), "table");
+    const container = new FakeElement("container");
+    container.tables = [table];
+    enhancePagedSortableTables(container as unknown as ParentNode, id => ({ ...createModel(), id }), [
+      { key: "table", state: { pageIndex: 1, sortColumnIndex: 1, sortDirection: "ascending" } },
+      { key: "hidden", state: { pageIndex: 0, sortColumnIndex: null, sortDirection: null } }
+    ]);
+    assert.equal(table.dataset["pagedSortablePageIndex"], "1");
+    assert.match(table.body!.innerHTML, /charlie/);
+    assert.equal(capturePagedSortableTableState(container as unknown as ParentNode).length, 2);
+    const noKey = new FakeElement("root");
+    container.tables = [noKey];
+    assert.deepEqual(capturePagedSortableTableState(container as unknown as ParentNode), []);
+    noKey.dataset = { pagedSortableTableId: "offline", pagedSortablePageIndex: "1",
+      pagedSortableSortColumn: "", pagedSortableSortDirection: "" };
+    assert.deepEqual(capturePagedSortableTableState(container as unknown as ParentNode), [{
+      key: "offline", state: { pageIndex: 1, sortColumnIndex: null, sortDirection: null }
+    }]);
+    noKey.dataset = {};
+    enhancePagedSortableTables(container as unknown as ParentNode, () => null);
+    assert.deepEqual(capturePagedSortableTableState(container as unknown as ParentNode), []);
+  });
+});
+
+void test("paged table handlers ignore events whose target is not a DOM element", () => {
+  withFakeDom(() => {
+    const table = createNestedTable(new FakeElement("container"), "table");
+    const container = new FakeElement("container");
+    container.tables = [table];
+    enhancePagedSortableTables(container as unknown as ParentNode, id => ({ ...createModel(), id }));
+    assert.doesNotThrow(() => table.dispatch("click", null));
+    assert.doesNotThrow(() => table.dispatch("click", {}));
+    assert.doesNotThrow(() => table.dispatch("change", {}));
+    assert.equal(table.dataset["pagedSortablePageIndex"], "0");
+  });
+});
+
 const withFakeDom = (callback: () => void): void => {
   const globals = globalThis as unknown as GlobalDom;
   const originalElement = globals.Element;
@@ -109,12 +218,13 @@ const withFakeDom = (callback: () => void): void => {
 
 void test("enhancePagedSortableTables sorts, pages, and captures state", () => {
   withFakeDom(() => {
+    const container = new FakeElement("container");
     fakeRoot.dataset = { pagedSortableTableId: "strings" };
     fakeBody.innerHTML = "";
     fakeSortButton.dataset = { pagedSortableColumn: "1" };
     fakeHeader.attributes.clear();
     enhancePagedSortableTables(
-      fakeRoot as unknown as ParentNode,
+      container as unknown as ParentNode,
       tableId => tableId === "strings" ? createModel() : null
     );
 
@@ -129,7 +239,7 @@ void test("enhancePagedSortableTables sorts, pages, and captures state", () => {
     lastButton.dataset["pagedSortableAction"] = "last";
     fakeRoot.dispatch("click", lastButton);
     assert.match(fakeBody.innerHTML, /charlie/);
-    assert.deepEqual(capturePagedSortableTableState(fakeRoot as unknown as ParentNode), [{
+    assert.deepEqual(capturePagedSortableTableState(container as unknown as ParentNode), [{
       key: "strings",
       state: { pageIndex: 1, sortColumnIndex: 1, sortDirection: "ascending" }
     }]);

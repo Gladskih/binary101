@@ -117,7 +117,9 @@ export const renderPreviewSummary = (
   }
   return langEntry.previewKind;
 };
-const renderTailPreview = (langEntry: ResourceLangWithPreview): string | null => {
+const renderTailPreview = (
+  langEntry: ResourceLangWithPreview, registryTableId?: string
+): string | null => {
   if (langEntry.previewKind === "dialog" && langEntry.dialogPreview) {
     return renderDialogPreview(langEntry.dialogPreview) + renderFields(langEntry) + renderIssues(langEntry);
   }
@@ -129,13 +131,15 @@ const renderTailPreview = (langEntry: ResourceLangWithPreview): string | null =>
       renderFields(langEntry) +
       renderIssues(langEntry);
   }
-  const structuredPreview = renderStructuredPreview(langEntry);
+  const structuredPreview = renderStructuredPreview(langEntry, registryTableId);
   if (structuredPreview) return structuredPreview + renderFields(langEntry) + renderIssues(langEntry);
   if (langEntry.previewKind === "summary") return renderFields(langEntry) + renderIssues(langEntry) || "-";
   return null;
 };
 
-export const renderPreviewCell = (langEntry: ResourceLangWithPreview | null | undefined): string => {
+export const renderPreviewCell = (
+  langEntry: ResourceLangWithPreview | null | undefined, registryTableId?: string
+): string => {
   if (!langEntry) return "-";
   if (langEntry.previewKind === "image" && langEntry.previewDataUrl) {
     return [
@@ -194,7 +198,7 @@ export const renderPreviewCell = (langEntry: ResourceLangWithPreview | null | un
   if (langEntry.previewKind === "muiConfig" && langEntry.muiConfig) {
     return renderMuiConfigPreview(langEntry.muiConfig) + renderFields(langEntry) + renderIssues(langEntry);
   }
-  const tailPreview = renderTailPreview(langEntry);
+  const tailPreview = renderTailPreview(langEntry, registryTableId);
   if (tailPreview) return tailPreview;
   return renderIssues(langEntry) || renderManifestTree(langEntry.manifestInfo, langEntry.manifestTree) || renderFields(langEntry) || "-";
 };

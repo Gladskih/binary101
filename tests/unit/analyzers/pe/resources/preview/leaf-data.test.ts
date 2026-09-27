@@ -38,6 +38,39 @@ void test("readResourceLeafBytes reads payloads from the parsed file offset", as
   assert.equal(loaded.issues, undefined);
 });
 
+void test("readResourceLeafBytes reads the complete declared resource", async () => {
+  const file = new MockFile(new Uint8Array([1, 2, 3, 4]));
+  const loaded = await readResourceLeafBytes(file, createLangEntry(0, 4));
+  assert.deepEqual([...expectDefined(loaded.data)], [1, 2, 3, 4]);
+  assert.equal(loaded.issues, undefined);
+});
+
+void test("readResourceLeafBytes accepts the empty declared range", async () => {
+  assert.deepEqual(await readResourceLeafBytes(new MockFile(new Uint8Array(2)), createLangEntry(0, 0)),
+    { data: null });
+});
+
+for (const size of [-1, Number.NaN, Number.POSITIVE_INFINITY, 1.5]) {
+  void test(`readResourceLeafBytes rejects an invalid resource size ${size}`, async () => {
+    const loaded = await readResourceLeafBytes(
+      new MockFile(new Uint8Array([1, 2])), createLangEntry(0, size));
+    assert.equal(loaded.data, null);
+    assert.match(loaded.issues?.join(" ") ?? "", /invalid.*size/i);
+  });
+}
+
+void test("readResourceLeafBytes uses the declared size with an RVA payload reader", async () => {
+  const file = new MockFile(new Uint8Array([1, 2, 3]));
+  const sizes: number[] = [];
+  const reader = Object.assign(file, { readResourceBytes: (_rva: number, size: number) => {
+    sizes.push(size);
+    return file.readBytes(0, size);
+  } });
+  const loaded = await readResourceLeafBytes(reader, createLangEntry(0, 3));
+  assert.deepEqual(sizes, [3]);
+  assert.deepEqual([...expectDefined(loaded.data)], [1, 2, 3]);
+});
+
 void test("readResourceLeafBytes accepts payloads at file offset zero", async () => {
   const loaded = await readResourceLeafBytes(
     new MockFile(new Uint8Array([0xaa, 0xbb, 0xcc])),

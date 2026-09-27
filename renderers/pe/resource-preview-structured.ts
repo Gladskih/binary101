@@ -2,6 +2,7 @@
 
 import type { ResourceLangWithPreview } from "../../analyzers/pe/resources/preview/types.js";
 import { renderInfPreview } from "./resource-preview-inf.js";
+import { renderRegistryPreview } from "./resource-preview-registry.js";
 import { escapeHtml } from "../../html-utils.js";
 import { renderXmlPreview } from "./resource-preview-xml.js";
 import { renderFontDirectoryPreview, renderLegacyFontPreview } from "./resource-preview-font.js";
@@ -20,6 +21,7 @@ export const renderStructuredPreviewSummary = (
 ): string | null => {
   const additional = renderFontAndMfcSummary(langEntry);
   if (additional) return additional;
+  if (langEntry.registry) return "ATL registry script";
   if (langEntry.previewKind === "inf" && langEntry.infPreview) {
     return `${langEntry.infPreview.sections.length} INF sections`;
   }
@@ -41,10 +43,11 @@ const renderFontAndMfcPreview = (langEntry: ResourceLangWithPreview): string | n
 };
 
 export const renderStructuredPreview = (
-  langEntry: ResourceLangWithPreview
+  langEntry: ResourceLangWithPreview, registryTableId?: string
 ): string | null => {
   const additional = renderFontAndMfcPreview(langEntry);
   if (additional) return additional;
+  if (langEntry.registry) return renderRegistryPreview(langEntry, registryTableId);
   if (langEntry.previewKind === "inf" && langEntry.infPreview) {
     return renderInfPreview(langEntry.infPreview);
   }

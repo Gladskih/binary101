@@ -28,6 +28,7 @@ import {
   addVxdPreview
 } from "./standard-types.js";
 import { addRegInstPreview } from "./inf.js";
+import { createRegistryResourceReader } from "./registry-resource.js";
 import { addTypeLibraryPreview } from "./type-library.js";
 import { addXmlResourcePreviewWithParser } from "./xml.js";
 import { addAniCursorPreview, addAniIconPreview } from "./ani.js";
@@ -49,6 +50,30 @@ type ResourceGroupPreviewDecode = ResourceEntryPreviewDecode[];
 const combineIssues = (...lists: Array<string[] | undefined>): string[] | undefined => {
   const issues = lists.flatMap(list => list || []);
   return issues.length ? issues : undefined;
+};
+
+const isRegistryResource = (typeName: string): boolean =>
+  ["REGISTRY", "RGS"].includes(typeName.toUpperCase());
+
+const matchesMuiResource = (
+  typeName: string, entry: ResourceLangWithPreview, resource: MuiResourceCandidate | null
+): resource is MuiResourceCandidate => typeName === "MUI" && resource !== null &&
+  resource.dataRVA === entry.dataRVA && resource.size === entry.size;
+
+const withLeafIssues = (
+  leafIssues: string[] | undefined, result: ResourcePreviewResult
+): ResourcePreviewResult => {
+  const issues = combineIssues(leafIssues, result.issues);
+  return { ...result, ...(issues ? { issues } : {}) };
+};
+
+const finishResourcePreview = async (
+  data: Uint8Array, leafIssues: string[] | undefined,
+  typed: ResourcePreviewResult | null, codePage: number | undefined
+): Promise<ResourcePreviewResult> => {
+  if (typed?.preview) return withLeafIssues(leafIssues, typed);
+  const heuristic = await runAsyncPreviewDecoder(() => addHeuristicResourcePreview(data, codePage));
+  return withLeafIssues(combineIssues(leafIssues, typed?.issues), heuristic ?? {});
 };
 
 const simplePreviewDecoders = new Map<string,
@@ -105,16 +130,12 @@ const decodeResourceLeafPreview = async (
   parseManifestXmlDocument: ManifestXmlDocumentParser
 ): Promise<ResourcePreviewResult> => {
   if (!langEntry.size || !langEntry.dataRVA) return {};
-  if (
-    groupTypeName === "MUI" &&
-    muiResource?.dataRVA === langEntry.dataRVA &&
-    muiResource.size === langEntry.size
-  ) {
+  if (matchesMuiResource(groupTypeName, langEntry, muiResource)) {
     return createMuiConfigPreview(muiResource.result);
   }
   try {
     const leaf = await readResourceLeafBytes(reader, langEntry);
-    if (!leaf.data?.length) return leaf.issues?.length ? { issues: leaf.issues } : {};
+    if (!leaf.data?.length) return { issues: leaf.issues ?? [] };
     const leafData = leaf.data;
     const typedPreview = await decodeSpecificResourcePreview(
       leafData,
@@ -126,21 +147,7 @@ const decodeResourceLeafPreview = async (
       muiResource,
       parseManifestXmlDocument
     );
-    if (typedPreview?.preview) {
-      const issues = combineIssues(leaf.issues, typedPreview.issues);
-      return {
-        preview: typedPreview.preview,
-        ...(issues ? { issues } : {})
-      };
-    }
-    const heuristicPreview = await runAsyncPreviewDecoder(() =>
-      addHeuristicResourcePreview(leafData, langEntry.codePage)
-    );
-    const issues = combineIssues(leaf.issues, typedPreview?.issues, heuristicPreview?.issues);
-    return {
-      ...(heuristicPreview?.preview ? { preview: heuristicPreview.preview } : {}),
-      ...(issues ? { issues } : {})
-    };
+    return await finishResourcePreview(leafData, leaf.issues, typedPreview, langEntry.codePage);
   } catch {
     return { issues: ["Resource bytes could not be read for preview."] };
   }
@@ -153,11 +160,15 @@ const decodeDetailPreviews = async (
   loadCursorLeafData: LoadResourceLeafData,
   muiResource: MuiResourceCandidate | null,
   parseManifestXmlDocument: ManifestXmlDocumentParser
-): Promise<ResourceGroupPreviewDecode[]> =>
-  Promise.all(detail.map(group =>
+): Promise<ResourceGroupPreviewDecode[]> => {
+  const readRegistry = createRegistryResourceReader(reader);
+  return Promise.all(detail.map(group =>
     Promise.all(group.entries.map(entry =>
       Promise.all(entry.langs.map(langEntry =>
-        decodeResourceLeafPreview(
+        isRegistryResource(group.typeName) ||
+          (group.typeName === "RCDATA" && entry.name?.toLowerCase().endsWith(".rgs"))
+          ? readRegistry(langEntry as ResourceLangWithPreview)
+          : decodeResourceLeafPreview(
           reader,
           group.typeName,
           entry.id,
@@ -170,6 +181,7 @@ const decodeDetailPreviews = async (
       ))
     ))
   ));
+};
 
 const attachLangPreview = (
   langEntry: ResourceLangWithPreview,

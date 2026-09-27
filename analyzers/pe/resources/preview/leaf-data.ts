@@ -48,6 +48,11 @@ export const createGroupLeafLoader = (
   };
 };
 
+const readLeafPayload = (
+  reader: ResourcePayloadReader, rva: number, offset: number, size: number
+): Promise<Uint8Array> => reader.readResourceBytes
+  ? reader.readResourceBytes(rva, size) : reader.readBytes(offset, size);
+
 export const readResourceLeafBytes = async (
   reader: ResourcePayloadReader,
   langEntry: ResourceLangWithPreview
@@ -58,13 +63,16 @@ export const readResourceLeafBytes = async (
       issues: ["Resource RVA could not be mapped to a file offset."]
     };
   }
-  const data = reader.readResourceBytes
-    ? await reader.readResourceBytes(langEntry.dataRVA, langEntry.size)
-    : await reader.readBytes(langEntry.dataFileOffset, langEntry.size);
+  if (!Number.isSafeInteger(langEntry.size) || langEntry.size < 0) {
+    return { data: null, issues: ["Resource preview has an invalid size."] };
+  }
+  const issues: string[] = [];
+  const data = await readLeafPayload(reader, langEntry.dataRVA, langEntry.dataFileOffset, langEntry.size);
+  if (data.byteLength < langEntry.size) {
+    issues.push("Resource preview read fewer bytes than the declared data size.");
+  }
   return {
     data: data.byteLength ? data : null,
-    ...(data.byteLength < langEntry.size
-      ? { issues: ["Resource preview read fewer bytes than the declared data size."] }
-      : {})
+    ...(issues.length ? { issues } : {})
   };
 };

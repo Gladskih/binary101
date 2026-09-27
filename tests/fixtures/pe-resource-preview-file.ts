@@ -15,7 +15,8 @@ const OPTIONAL_HEADER_SIZE = 240;
 const FILE_ALIGNMENT = 0x200;
 const SECTION_ALIGNMENT = 0x1000;
 const TEXT_SECTION_RVA = 0x1000;
-const RESOURCE_SECTION_RAW_OFFSET = FILE_ALIGNMENT * 2;
+// Fixture layout reserves one FileAlignment block for headers and one for .text.
+export const RESOURCE_SECTION_RAW_OFFSET = FILE_ALIGNMENT * 2;
 
 const align = (value: number, alignment: number): number =>
   Math.ceil(value / alignment) * alignment;

@@ -5,6 +5,7 @@ import type { PeResources } from "../../analyzers/pe/resources/index.js";
 import { escapeHtml } from "../../html-utils.js";
 import { renderPeDiagnostics } from "./diagnostics.js";
 import { renderPreviewCell, renderPreviewSummary } from "./resource-preview-cell.js";
+import { createRegistryTableModel } from "./resource-registry-table.js";
 import { formatWindowsLanguageName } from "./windows-language-names.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import {
@@ -43,7 +44,7 @@ const isWideResourcePreview = (
 ): boolean =>
   ["dialog", "image", "stringTable", "messageTable", "version", "menu", "accelerator",
     "font", "fontDirectory", "legacyFont", "dialogInit", "toolbar", "audio", "muiConfig",
-    "inf", "xml", "typeLibrary", "html", "text"].includes(langEntry.previewKind ?? "");
+    "inf", "xml", "typeLibrary", "html", "text", "registry"].includes(langEntry.previewKind ?? "");
 
 const flattenResourcePreviewRows = (group: ResourceDetailGroup): ResourcePreviewRow[] =>
   group.entries.flatMap(entry => {
@@ -62,9 +63,12 @@ const renderResourcePreviewCellHtml = (langEntry: ResourceLangEntry): string => 
   return escapeHtml(renderPreviewSummary(langEntry));
 };
 
-const renderResourcePreviewAdditionalRowsHtml = (langEntry: ResourceLangEntry): string =>
+const renderResourcePreviewAdditionalRowsHtml = (
+  langEntry: ResourceLangEntry, registryTableId: string
+): string =>
   isWideResourcePreview(langEntry)
-    ? `<tr class="peResourcePreviewWideRow"><td colspan="5">${renderPreviewCell(langEntry)}</td></tr>`
+    ? `<tr class="peResourcePreviewWideRow"><td colspan="5">` +
+      `${renderPreviewCell(langEntry, registryTableId)}</td></tr>`
     : "";
 
 const renderResourcePreviewCells = (row: ResourcePreviewRow): PagedSortableTableCell[] => [
@@ -126,7 +130,8 @@ export const createResourceDetailTableModel = (
       if (!row) return null;
       if (!isWideResourcePreview(row.langEntry)) return { cells: renderResourcePreviewCells(row) };
       return {
-        additionalRowsHtml: renderResourcePreviewAdditionalRowsHtml(row.langEntry),
+        additionalRowsHtml: renderResourcePreviewAdditionalRowsHtml(
+          row.langEntry, `pe-registry-${groupIndex}-${rowIndex}`),
         cells: renderResourcePreviewCells(row),
         className: "peResourcePreviewMetaRow"
       };
@@ -142,6 +147,12 @@ export const getPeResourceTableModel = (
   resources: PeResources | null | undefined,
   tableId: string
 ): PagedSortableTableModel | null => {
+  const registryMatch = tableId.match(/^pe-registry-(\d+)-(\d+)$/u);
+  if (registryMatch) {
+    const group = resources?.detail?.[Number(registryMatch[1])];
+    const script = group && flattenResourcePreviewRows(group)[Number(registryMatch[2])]?.langEntry.registry;
+    return script ? createRegistryTableModel(script, tableId) : null;
+  }
   const match = tableId.match(/^pe-resource-detail-(\d+)$/);
   if (!match?.[1]) return null;
   const groupIndex = Number(match[1]);

@@ -29,26 +29,43 @@ type PagedSortableTableRuntime = {
   state: PagedSortableTableState;
   sortedIndexes: number[] | null;
   sortedKey: string;
+  provider: PagedSortableTableProvider;
+  nestedSnapshots: Map<string, PagedSortableTableState>;
 };
 
 const ROOT_SELECTOR = "[data-paged-sortable-table-root]";
 const runtimeByElement = new WeakMap<HTMLElement, PagedSortableTableRuntime>();
+const snapshotsByProvider = new WeakMap<PagedSortableTableProvider, Map<string, PagedSortableTableState>>();
+
+const providerSnapshots = (
+  provider: PagedSortableTableProvider, snapshots: readonly PagedSortableTableSnapshot[]
+): Map<string, PagedSortableTableState> => {
+  const states = snapshotsByProvider.get(provider) ?? new Map<string, PagedSortableTableState>();
+  for (const snapshot of snapshots) states.set(snapshot.key, snapshot.state);
+  snapshotsByProvider.set(provider, states);
+  return states;
+};
 
 export const enhancePagedSortableTables = (
   root: ParentNode,
   provider: PagedSortableTableProvider,
   snapshots: readonly PagedSortableTableSnapshot[] = []
 ): void => {
+  const states = providerSnapshots(provider, snapshots);
   root.querySelectorAll<HTMLElement>(ROOT_SELECTOR).forEach(element => {
+    const parent = element.parentElement?.closest(ROOT_SELECTOR);
+    if (parent && parent !== root) return;
     const model = provider(element.dataset["pagedSortableTableId"] ?? "");
     if (!model) return;
-    const state = snapshots.find(snapshot => snapshot.key === model.id)?.state ??
+    const state = states.get(model.id) ??
       readPagedSortableTableState(element);
     const runtime = {
       model,
       state: normalizePagedSortableTableState(state, model),
       sortedIndexes: null,
-      sortedKey: ""
+      sortedKey: "",
+      provider,
+      nestedSnapshots: states
     };
     runtimeByElement.set(element, runtime);
     renderRuntime(element, runtime);
@@ -59,16 +76,26 @@ export const enhancePagedSortableTables = (
 
 export const capturePagedSortableTableState = (
   root: ParentNode
-): PagedSortableTableSnapshot[] =>
-  Array.from(root.querySelectorAll<HTMLElement>(ROOT_SELECTOR))
-    .map(element => {
-      const key = element.dataset["pagedSortableTableId"] ?? "";
-      return key ? { key, state: readPagedSortableTableState(element) } : null;
-    })
-    .filter((entry): entry is PagedSortableTableSnapshot => entry != null);
+): PagedSortableTableSnapshot[] => {
+  const elements = Array.from(root.querySelectorAll<HTMLElement>(ROOT_SELECTOR));
+  const states = new Map<string, PagedSortableTableState>();
+  const seen = new Set<Map<string, PagedSortableTableState>>();
+  for (const element of elements) {
+    const saved = runtimeByElement.get(element)?.nestedSnapshots;
+    if (!saved || seen.has(saved)) continue;
+    for (const [key, state] of saved) states.set(key, state);
+    seen.add(saved);
+  }
+  for (const element of elements) {
+    const key = element.dataset["pagedSortableTableId"] ?? "";
+    if (key) states.set(key, readPagedSortableTableState(element));
+  }
+  return Array.from(states, ([key, state]) => ({ key, state }));
+};
 
 const handleClick = (element: HTMLElement, event: Event): void => {
   const target = event.target instanceof Element ? event.target : null;
+  if (target?.closest(ROOT_SELECTOR) !== element) return;
   const column = target?.closest<HTMLElement>("[data-paged-sortable-column]");
   if (column) {
     event.preventDefault();
@@ -84,6 +111,7 @@ const handleClick = (element: HTMLElement, event: Event): void => {
 const handleChange = (element: HTMLElement, event: Event): void => {
   const target = event.target;
   if (!(target instanceof HTMLInputElement)) return;
+  if (target.closest(ROOT_SELECTOR) !== element) return;
   if (!target.matches("[data-paged-sortable-page-input]")) return;
   const runtime = runtimeByElement.get(element);
   if (!runtime) return;
@@ -117,6 +145,7 @@ const renderRuntime = (
 ): void => {
   runtime.state = normalizePagedSortableTableState(runtime.state, runtime.model);
   updatePagedSortableTableStateAttributes(element, runtime.state);
+  runtime.nestedSnapshots.set(runtime.model.id, runtime.state);
   const body = element.querySelector<HTMLElement>("[data-paged-sortable-table-body]");
   if (body) {
     body.innerHTML = renderPagedSortableTableRows(
@@ -124,6 +153,7 @@ const renderRuntime = (
       runtime.state,
       sortedIndexes(runtime) ?? undefined
     );
+    enhancePagedSortableTables(element, runtime.provider);
   }
   const toolbar = element.querySelector<HTMLElement>(".pagedSortableTableToolbar");
   if (toolbar) toolbar.outerHTML = renderPagedSortableToolbar(runtime.model, runtime.state);
@@ -154,8 +184,11 @@ const updateHeaderState = (
   element: HTMLElement,
   state: PagedSortableTableState
 ): void => {
-  element.querySelectorAll("th").forEach(header => header.removeAttribute("aria-sort"));
+  element.querySelectorAll("th").forEach(header => {
+    if (header.closest(ROOT_SELECTOR) === element) header.removeAttribute("aria-sort");
+  });
   element.querySelectorAll<HTMLElement>("[data-paged-sortable-column]").forEach(button => {
+    if (button.closest(ROOT_SELECTOR) !== element) return;
     button.removeAttribute("data-sort-direction");
     if (Number(button.dataset["pagedSortableColumn"]) !== state.sortColumnIndex) return;
     if (!state.sortDirection) return;
@@ -171,6 +204,7 @@ const readPagedSortableTableState = (element: HTMLElement): PagedSortableTableSt
 });
 
 const readSortColumn = (value: string | undefined): number | null => {
+  if (value == null || value === "") return null;
   const columnIndex = Number(value);
   return Number.isInteger(columnIndex) && columnIndex >= 0 ? columnIndex : null;
 };
