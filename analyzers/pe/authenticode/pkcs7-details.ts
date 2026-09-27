@@ -227,12 +227,25 @@ export const parseSignerInfos = (
   bytes: Uint8Array,
   signerSet: DerElement,
   warnings: string[]
-): AuthenticodeSignerInfo[] => {
+): { signers: AuthenticodeSignerInfo[]; complete: boolean } => {
   const signers: AuthenticodeSignerInfo[] = [];
-  for (const signerEl of readDerChildren(bytes, signerSet)) {
-    if (signerEl.tag !== TAG_SEQUENCE) continue;
+  const elements = readDerChildren(bytes, signerSet);
+  let complete = (elements.at(-1)?.end ?? signerSet.start + signerSet.header) === signerSet.end;
+  if (!complete) {
+    warnings.push("SignerInfos SET contains malformed or truncated entries.");
+  }
+  for (const signerEl of elements) {
+    if (signerEl.cls !== "universal" || signerEl.tag !== TAG_SEQUENCE || !signerEl.constructed) {
+      warnings.push("SignerInfos SET contains a malformed SignerInfo entry.");
+      complete = false;
+      continue;
+    }
     const signer = parseSignerInfo(bytes, signerEl, warnings);
     if (signer) signers.push(signer);
+    else {
+      warnings.push("SignerInfos SET contains an unparseable SignerInfo entry.");
+      complete = false;
+    }
   }
-  return signers;
+  return { signers, complete };
 };

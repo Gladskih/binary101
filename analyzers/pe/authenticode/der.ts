@@ -177,7 +177,7 @@ export const parseAlgorithmIdentifier = (
 ): { oid?: string; name?: string } => {
   if (!element || element.tag !== TAG_SEQUENCE) return {};
   const oidEl = readDerElement(bytes, element.start + element.header);
-  if (!oidEl || oidEl.tag !== TAG_OID) {
+  if (!oidEl || oidEl.tag !== TAG_OID || oidEl.end > element.end) {
     warnings.push("AlgorithmIdentifier missing OID.");
     return {};
   }

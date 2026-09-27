@@ -12,23 +12,46 @@ import {
 import { describeOid, SPC_INDIRECT_DATA_OID } from "./pkcs7-oids.js";
 import { parseCertificateContext, parseSignerInfos, parseSpcIndirectDataContent } from "./pkcs7-details.js";
 import type { AuthenticodeInfo } from "./index.js";
+import { collectDigestAlgorithmConsistencyWarnings } from "./digest-algorithm-consistency.js";
 
-const parseAlgorithmSet = (bytes: Uint8Array, element: DerElement, warnings: string[]): string[] => {
+const readDigestAlgorithm = (
+  bytes: Uint8Array,
+  sequence: DerElement,
+  warnings: string[]
+): string | null => {
+  const oid = readDerElement(bytes, sequence.start + sequence.header);
+  if (!oid || oid.cls !== "universal" || oid.tag !== TAG_OID || oid.end > sequence.end) {
+    warnings.push("SignedData digestAlgorithms contains an AlgorithmIdentifier with a missing or out-of-bounds OID.");
+    return null;
+  }
+  const decoded = decodeOid(bytes, oid.start + oid.header, oid.length);
+  if (!decoded) warnings.push("SignedData digestAlgorithms contains a malformed OID.");
+  return decoded ? describeOid(decoded)! : null;
+};
+
+const parseAlgorithmSet = (
+  bytes: Uint8Array,
+  element: DerElement,
+  warnings: string[]
+): { algorithms: string[]; complete: boolean } => {
   const algorithms: string[] = [];
+  let complete = true;
   let pos = element.start + element.header;
   while (pos < element.end) {
     const seq = readDerElement(bytes, pos);
-    if (!seq || seq.end > element.end || seq.tag !== TAG_SEQUENCE) break;
-    const oid = readDerElement(bytes, seq.start + seq.header);
-    if (oid?.tag === TAG_OID) {
-      const decoded = decodeOid(bytes, oid.start + oid.header, oid.length);
-      if (decoded) algorithms.push(describeOid(decoded) || decoded);
+    if (!seq || seq.end > element.end || seq.cls !== "universal" ||
+        seq.tag !== TAG_SEQUENCE || !seq.constructed) {
+      warnings.push("SignedData digestAlgorithms contains a malformed or truncated AlgorithmIdentifier.");
+      complete = false;
+      break;
     }
-    if (seq.end <= pos) break;
+    const algorithm = readDigestAlgorithm(bytes, seq, warnings);
+    if (algorithm) algorithms.push(algorithm);
+    else complete = false;
     pos = seq.end;
   }
   if (!algorithms.length) warnings.push("No digest algorithms listed.");
-  return algorithms;
+  return { algorithms, complete };
 };
 
 const countConstructedChildren = (bytes: Uint8Array, element: DerElement): number => {
@@ -69,57 +92,38 @@ const parseContentInfo = (
   return contentType ? { contentType } : {};
 };
 
-const parseSignedData = (bytes: Uint8Array, warnings: string[]): Partial<AuthenticodeInfo> => {
-  const seq = readDerElement(bytes, 0);
-  if (!seq || seq.tag !== TAG_SEQUENCE) {
-    warnings.push("SignedData is not a DER SEQUENCE.");
-    return {};
-  }
-  let pos = seq.start + seq.header;
-  const version = readDerElement(bytes, pos);
-  if (!version || version.tag !== TAG_INTEGER) {
-    warnings.push("SignedData missing version.");
-    return {};
-  }
-  pos = version.end;
-  const digestSet = readDerElement(bytes, pos);
-  let digestAlgorithms: string[] | undefined;
-  if (digestSet && digestSet.tag === TAG_SET) {
-    digestAlgorithms = parseAlgorithmSet(bytes, digestSet, warnings);
-    pos = digestSet.end;
-  } else {
-    warnings.push("SignedData missing digestAlgorithms SET.");
-  }
-  const contentInfoEl = readDerElement(bytes, pos);
-  let payloadContentType: string | undefined;
-  let payloadBytes: Uint8Array | undefined;
-  if (contentInfoEl && contentInfoEl.tag === TAG_SEQUENCE) {
-    const { contentType, payload } = parseContentInfo(bytes, contentInfoEl, warnings);
-    payloadContentType = contentType;
-    payloadBytes = payload;
-    pos = contentInfoEl.end;
-  } else {
-    warnings.push("SignedData missing encapContentInfo.");
-  }
+const parseSignedContent = (
+  bytes: Uint8Array,
+  element: DerElement,
+  warnings: string[]
+): Partial<AuthenticodeInfo> => {
+  const { contentType, payload } = parseContentInfo(bytes, element, warnings);
   const result: Partial<AuthenticodeInfo> = {};
-  if (digestAlgorithms) result.digestAlgorithms = digestAlgorithms;
-  if (payloadContentType) {
-    result.payloadContentType = payloadContentType;
-    const name = describeOid(payloadContentType);
+  if (contentType) {
+    result.payloadContentType = contentType;
+    const name = describeOid(contentType);
     if (name) result.payloadContentTypeName = name;
   }
-  if (payloadContentType === SPC_INDIRECT_DATA_OID && payloadBytes?.length) {
-    const spc = parseSpcIndirectDataContent(payloadBytes, warnings);
+  if (contentType === SPC_INDIRECT_DATA_OID && payload?.length) {
+    const spc = parseSpcIndirectDataContent(payload, warnings);
     if (spc.algorithmOid) result.fileDigestAlgorithm = spc.algorithmOid;
     if (spc.algorithmName) result.fileDigestAlgorithmName = spc.algorithmName;
     if (spc.digestHex) result.fileDigest = spc.digestHex;
   }
-  let certificateCount: number | undefined;
+  return result;
+};
+
+const parseSignedCertificates = (
+  bytes: Uint8Array,
+  offset: number,
+  warnings: string[]
+): { info: Partial<AuthenticodeInfo>; end: number } => {
+  const result: Partial<AuthenticodeInfo> = {};
+  let pos = offset;
   const maybeCerts = readDerElement(bytes, pos);
   if (maybeCerts && maybeCerts.cls === "context" && maybeCerts.tag === 0) {
-    const start = maybeCerts.start + maybeCerts.header;
-    const firstChild = readDerElement(bytes, start);
-    certificateCount =
+    const firstChild = readDerElement(bytes, maybeCerts.start + maybeCerts.header);
+    result.certificateCount =
       firstChild && firstChild.tag === TAG_SET && firstChild.end <= maybeCerts.end
         ? countConstructedChildren(bytes, firstChild)
         : countConstructedChildren(bytes, maybeCerts);
@@ -127,21 +131,75 @@ const parseSignedData = (bytes: Uint8Array, warnings: string[]): Partial<Authent
     if (certs.length) result.certificates = certs;
     pos = maybeCerts.end;
   }
+  return { info: result, end: pos };
+};
+
+const parseSignedDataTail = (
+  bytes: Uint8Array,
+  offset: number,
+  warnings: string[]
+): { info: Partial<AuthenticodeInfo>; complete: boolean } => {
+  const certificates = parseSignedCertificates(bytes, offset, warnings);
+  const result = certificates.info;
+  let pos = certificates.end;
   const maybeCrl = readDerElement(bytes, pos);
   if (maybeCrl && maybeCrl.cls === "context" && maybeCrl.tag === 1) {
     pos = maybeCrl.end;
   }
   const signerSet = readDerElement(bytes, pos);
-  let signerCount: number | undefined;
+  let complete = false;
   if (signerSet && signerSet.tag === TAG_SET) {
-    signerCount = countConstructedChildren(bytes, signerSet);
-    const signers = parseSignerInfos(bytes, signerSet, warnings);
-    if (signers.length) result.signers = signers;
+    result.signerCount = countConstructedChildren(bytes, signerSet);
+    const parsed = parseSignerInfos(bytes, signerSet, warnings);
+    if (parsed.signers.length) result.signers = parsed.signers;
+    complete = parsed.complete;
   } else {
     warnings.push("SignerInfos SET missing or malformed.");
   }
-  if (signerCount !== undefined) result.signerCount = signerCount;
-  if (certificateCount !== undefined) result.certificateCount = certificateCount;
+  return { info: result, complete };
+};
+
+const readSignedDataVersion = (bytes: Uint8Array, warnings: string[]): DerElement | null => {
+  const seq = readDerElement(bytes, 0);
+  if (!seq || seq.tag !== TAG_SEQUENCE) {
+    warnings.push("SignedData is not a DER SEQUENCE.");
+    return null;
+  }
+  const version = readDerElement(bytes, seq.start + seq.header);
+  if (!version || version.tag !== TAG_INTEGER) {
+    warnings.push("SignedData missing version.");
+    return null;
+  }
+  return version;
+};
+
+const parseSignedData = (bytes: Uint8Array, warnings: string[]): Partial<AuthenticodeInfo> => {
+  const version = readSignedDataVersion(bytes, warnings);
+  if (!version) return {};
+  const result: Partial<AuthenticodeInfo> = {};
+  let pos = version.end;
+  const digestSet = readDerElement(bytes, pos);
+  let digestComplete = false;
+  if (digestSet && digestSet.tag === TAG_SET) {
+    const digest = parseAlgorithmSet(bytes, digestSet, warnings);
+    result.digestAlgorithms = digest.algorithms;
+    digestComplete = digest.complete;
+    pos = digestSet.end;
+  } else {
+    warnings.push("SignedData missing digestAlgorithms SET.");
+  }
+  const contentInfoEl = readDerElement(bytes, pos);
+  if (contentInfoEl && contentInfoEl.tag === TAG_SEQUENCE) {
+    Object.assign(result, parseSignedContent(bytes, contentInfoEl, warnings));
+    pos = contentInfoEl.end;
+  } else {
+    warnings.push("SignedData missing encapContentInfo.");
+  }
+  const tail = parseSignedDataTail(bytes, pos, warnings);
+  Object.assign(result, tail.info);
+  if (digestComplete && tail.complete) {
+    warnings.push(...collectDigestAlgorithmConsistencyWarnings(result));
+  }
   return result;
 };
 

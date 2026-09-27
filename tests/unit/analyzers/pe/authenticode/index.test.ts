@@ -62,7 +62,7 @@ const buildSignedData = (): Uint8Array => {
   const signerInfo = seq(
     int(1),
     seq(int(1), int(2)),
-    seq(oid("1.3.14.3.2.26"), nul()),
+    digestAlgorithm,
     seq(oid("1.2.840.113549.1.1.1"), nul()),
     octet(Uint8Array.of(0x00))
   );

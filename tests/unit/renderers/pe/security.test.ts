@@ -3,6 +3,26 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderSecurity } from "../../../../renderers/pe/security-view.js";
+import { decodeWinCertificate } from "../../../../analyzers/pe/authenticode/index.js";
+import {
+  createCmsDigestAlgorithmFixture,
+  wrapCmsDigestWinCertificate
+} from "../../../fixtures/cms-digest-algorithms.js";
+
+void test("renderSecurity displays parsed CMS digest consistency warnings", () => {
+  // NIST CSOR: SHA-256 and SHA-512 hash algorithm OIDs.
+  // https://csrc.nist.gov/projects/computer-security-objects-register/algorithm-registration
+  const bytes = wrapCmsDigestWinCertificate(createCmsDigestAlgorithmFixture(
+    ["2.16.840.1.101.3.4.2.1", "2.16.840.1.101.3.4.2.3"],
+    ["2.16.840.1.101.3.4.2.1"]
+  ));
+  const out: string[] = [];
+
+  renderSecurity({ count: 1, certs: [decodeWinCertificate(bytes, bytes.length, 0)] }, out);
+
+  assert.ok(out.join("").includes("Structural warnings"));
+  assert.ok(out.join("").includes("SignedData digestAlgorithms lists sha512, but no SignerInfo uses it"));
+});
 
 const EXPANDED_AUTHENTICODE_SECURITY: Parameters<typeof renderSecurity>[0] = {
   count: 1,

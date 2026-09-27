@@ -2,7 +2,27 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decodeOid, parseDerTime, readDerElement } from "../../../../../analyzers/pe/authenticode/der.js";
+import {
+  decodeOid, parseAlgorithmIdentifier, parseDerTime, readDerElement
+} from "../../../../../analyzers/pe/authenticode/der.js";
+
+void test("parseAlgorithmIdentifier does not borrow an OID after an empty SEQUENCE", () => {
+  // X.690: SEQUENCE length zero, followed by a separate OBJECT IDENTIFIER {1 2}.
+  const bytes = Uint8Array.of(0x30, 0x00, 0x06, 0x01, 0x2a);
+  const warnings: string[] = [];
+
+  assert.deepEqual(parseAlgorithmIdentifier(bytes, readDerElement(bytes, 0), warnings), {});
+  assert.deepEqual(warnings, ["AlgorithmIdentifier missing OID."]);
+});
+
+void test("parseAlgorithmIdentifier rejects an OID whose contents cross the SEQUENCE boundary", () => {
+  // X.690: the SEQUENCE holds the OID header but excludes its declared content octet.
+  const bytes = Uint8Array.of(0x30, 0x02, 0x06, 0x01, 0x2a);
+  const warnings: string[] = [];
+
+  assert.deepEqual(parseAlgorithmIdentifier(bytes, readDerElement(bytes, 0), warnings), {});
+  assert.deepEqual(warnings, ["AlgorithmIdentifier missing OID."]);
+});
 
 void test("readDerElement accepts valid long-form lengths that require four subsequent octets", () => {
   // ITU-T X.690 8.1.3.5 allows one or more subsequent length octets.
