@@ -43,6 +43,13 @@ export interface ResourceVersionFixedFileInfo {
   structVersionRaw: number;
   structVersionMajor: number;
   structVersionMinor: number;
+  fileFlagsMask?: number;
+  fileFlags?: number;
+  fileOS?: number;
+  fileType?: number;
+  fileSubtype?: number;
+  fileDateMS?: number;
+  fileDateLS?: number;
 }
 
 export interface ResourceVersionPreview {

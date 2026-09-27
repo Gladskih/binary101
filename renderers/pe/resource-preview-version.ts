@@ -2,6 +2,7 @@
 import { escapeHtml } from "../../html-utils.js";
 import type { ResourceVersionPreview } from "../../analyzers/pe/resources/preview/types.js";
 import { formatWindowsLanguageName } from "./windows-language-names.js";
+import { versionFixedRows } from "./version-fixed-values.js";
 
 // Number.prototype.toString uses radix 16 for hexadecimal output; each byte is
 // represented by two hex digits when formatting fixed-width DWORD values.
@@ -88,6 +89,7 @@ const renderVersionFixedInfo = (info: ResourceVersionPreview): string => {
       ? { label: "ProductVersion", value: info.productVersionString }
       : null
   ].filter((row): row is { label: string; value: string } => Boolean(row));
+  if (info.fixedFileInfo) rows.push(...versionFixedRows(info.fixedFileInfo));
   return rows.length
     ? `<div class="smallNote"><b>Fixed version info</b>${renderDefinitionRows(rows)}</div>`
     : "";

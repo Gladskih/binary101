@@ -4,6 +4,7 @@ import type {
   ResourcePreviewResult,
   ResourceVersionPreview
 } from "./types.js";
+import { validateVersionInfo } from "./version-validation.js";
 
 // JavaScript typed-array element sizes are byte counts; PE WORD/DWORD bit
 // splits require the conventional 8-bit byte used by the PE/COFF spec.
@@ -125,7 +126,15 @@ const parseFixedFileInfo = (
       fixedFileInfo: {
         structVersionRaw: structVersion,
         structVersionMajor: highWord(structVersion),
-        structVersionMinor: lowWord(structVersion)
+        structVersionMinor: lowWord(structVersion),
+        // Remaining DWORDs follow the order in VS_FIXEDFILEINFO (verrsrc.h), cited above.
+        fileFlagsMask: view.getUint32(root.valueOffset + 24, true),
+        fileFlags: view.getUint32(root.valueOffset + 28, true),
+        fileOS: view.getUint32(root.valueOffset + 32, true),
+        fileType: view.getUint32(root.valueOffset + 36, true),
+        fileSubtype: view.getUint32(root.valueOffset + 40, true),
+        fileDateMS: view.getUint32(root.valueOffset + 44, true),
+        fileDateLS: view.getUint32(root.valueOffset + 48, true)
       },
       fileVersionString: formatVersionPair(
         view.getUint32(root.valueOffset + DWORD_SIZE * VS_FIXEDFILEINFO_FILE_VERSION_MS_DWORD_INDEX, true),
@@ -195,7 +204,7 @@ export const addVersionPreview = (
   data: Uint8Array,
   typeName: string
 ): ResourcePreviewResult | null => {
-  if (typeName !== "VERSION" || data.byteLength < VERSION_HEADER_SIZE) return null;
+  if (typeName !== "VERSION") return null;
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const root = parseVersionNode(view, 0, data.byteLength);
   if (!root) {
@@ -216,11 +225,13 @@ export const addVersionPreview = (
     }
     pos = alignDword(child.end);
   }
+  const issues = [...(fixed.issues || []), ...validateVersionInfo(versionInfo)];
+  if (root.length > data.byteLength) issues.push("VERSION resource length exceeds available bytes.");
   return {
     preview: {
       previewKind: "version",
       versionInfo
     },
-    ...(fixed.issues?.length ? { issues: fixed.issues } : {})
+    ...(issues.length ? { issues } : {})
   };
 };

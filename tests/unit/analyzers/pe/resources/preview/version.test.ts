@@ -83,9 +83,48 @@ void test("addVersionPreview keeps version preview without warning on non-standa
   assert.deepStrictEqual(preview.preview?.versionInfo?.fixedFileInfo, {
     structVersionRaw: 0,
     structVersionMajor: 0,
-    structVersionMinor: 0
+    structVersionMinor: 0,
+    fileFlagsMask: 0,
+    fileFlags: 0,
+    fileOS: 0,
+    fileType: 0,
+    fileSubtype: 0,
+    fileDateMS: 0,
+    fileDateLS: 0
   });
   assert.strictEqual(preview.preview?.versionInfo?.fileVersionString, expectedVersion.text);
   assert.strictEqual(preview.preview?.versionInfo?.productVersionString, expectedVersion.text);
   assert.deepStrictEqual(preview.issues, undefined);
+});
+
+void test("preserves every remaining fixed-info DWORD without applying the mask to raw flags", () => {
+  const bytes = buildVersionResource(0x10000, createGeneratedVersion());
+  const view = new DataView(bytes.buffer);
+  const fields = [0x3f, 0x80000001, 0x40004, 3, 4, 0x12345678, 0xabcdef01];
+  const valueStart = bytes.length - 52;
+  fields.forEach((value, index) => view.setUint32(valueStart + 24 + index * 4, value, true));
+
+  const info = addVersionPreview(bytes, "VERSION")?.preview?.versionInfo?.fixedFileInfo;
+
+  assert.deepEqual([info?.fileFlagsMask, info?.fileFlags, info?.fileOS, info?.fileType,
+    info?.fileSubtype, info?.fileDateMS, info?.fileDateLS], fields);
+});
+
+void test("warns for all truncated prefixes and respects typed-array byte offsets", () => {
+  const bytes = buildVersionResource(0x10000, createGeneratedVersion());
+  for (let length = 0; length < bytes.length; length += 1) {
+    assert.ok(addVersionPreview(bytes.subarray(0, length), "VERSION")?.issues?.length);
+  }
+  const padded = new Uint8Array(bytes.length + 2);
+  padded.set(bytes, 2);
+  assert.equal(addVersionPreview(padded.subarray(2), "VERSION")?.issues, undefined);
+  assert.equal(addVersionPreview(bytes, "other"), null);
+});
+
+void test("rejects an invalid fixed-info signature or root key", () => {
+  const bytes = buildVersionResource(0x10000, createGeneratedVersion());
+  new DataView(bytes.buffer).setUint32(bytes.length - 52, 0, true);
+  assert.match(addVersionPreview(bytes, "VERSION")?.issues?.[0] ?? "", /signature/);
+  bytes[6] = 0;
+  assert.match(addVersionPreview(bytes, "VERSION")?.issues?.[0] ?? "", /key/);
 });
