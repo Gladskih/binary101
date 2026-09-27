@@ -4,6 +4,8 @@ import type { FileRangeReader } from "../../../file-range-reader.js";
 import { addBitmapPreview } from "./bitmap.js";
 import { addCursorPreview, addGroupCursorPreview } from "./cursor.js";
 import { addDialogPreview } from "./dialog.js";
+import { addDialogInitPreview } from "./dialog-init.js";
+import { addToolbarPreview } from "./toolbar.js";
 import { addFontDirectoryPreview } from "./font-directory.js";
 import { validateFontReferences } from "./font-reference-validation.js";
 import { addAcceleratorPreview } from "./accelerator.js";
@@ -33,7 +35,7 @@ import { addVersionPreview } from "./version.js";
 import { addMessageTableResourcePreview } from "./message-table.js";
 import { addMuiConfigPreview, createMuiConfigPreview } from "./mui-config.js";
 import { readMuiResource, type MuiResourceCandidate } from "./mui-resource.js";
-import { runAsyncPreviewDecoder, runSyncPreviewDecoder } from "./safe-preview-decoder.js";
+import { runAsyncPreviewDecoder } from "./safe-preview-decoder.js";
 import type { MuiResourceConfiguration } from "../mui-config.js";
 import type {
   ResourceDetailGroup,
@@ -49,6 +51,17 @@ const combineIssues = (...lists: Array<string[] | undefined>): string[] | undefi
   return issues.length ? issues : undefined;
 };
 
+const simplePreviewDecoders = new Map<string,
+  (data: Uint8Array, typeName: string) => ResourcePreviewResult | null | Promise<ResourcePreviewResult | null>
+>([
+  ["ICON", addIconPreview], ["CURSOR", addCursorPreview], ["BITMAP", addBitmapPreview],
+  ["MUI", addMuiConfigPreview], ["VERSION", addVersionPreview], ["DIALOG", addDialogPreview],
+  ["DLGINIT", addDialogInitPreview], ["TOOLBAR", addToolbarPreview], ["FONTDIR", addFontDirectoryPreview],
+  ["FONT", addFontPreview], ["MENU", addMenuPreview], ["ACCELERATOR", addAcceleratorPreview],
+  ["PLUGPLAY", addPlugPlayPreview], ["VXD", addVxdPreview],
+  ["ANICURSOR", addAniCursorPreview], ["ANIICON", addAniIconPreview]
+]);
+
 const decodeSpecificResourcePreview = async (
   data: Uint8Array,
   typeName: string,
@@ -59,83 +72,26 @@ const decodeSpecificResourcePreview = async (
   muiResource: MuiResourceCandidate | null,
   parseManifestXmlDocument: ManifestXmlDocumentParser
 ): Promise<ResourcePreviewResult | null> => {
-  switch (typeName) {
-    case "ICON":
-      return runSyncPreviewDecoder(() => addIconPreview(data, typeName));
-    case "GROUP_ICON":
-      return runAsyncPreviewDecoder(() =>
-        addGroupIconPreview(data, typeName, loadIconLeafData, langEntry.lang)
-      );
-    case "CURSOR":
-      return runSyncPreviewDecoder(() => addCursorPreview(data, typeName));
-    case "GROUP_CURSOR":
-      return runAsyncPreviewDecoder(() =>
-        addGroupCursorPreview(data, typeName, loadCursorLeafData, langEntry.lang)
-      );
-    case "BITMAP":
-      return runSyncPreviewDecoder(() => addBitmapPreview(data, typeName));
-    case "MUI":
-      return runSyncPreviewDecoder(() => addMuiConfigPreview(data, typeName));
-    case "REGINST":
-      return runSyncPreviewDecoder(() => addRegInstPreview(data, typeName, langEntry.codePage));
-    case "TYPELIB":
-      return runSyncPreviewDecoder(() =>
-        addTypeLibraryPreview(data, typeName, muiResource?.result.configuration ?? null)
-      );
-    case "XMLFILE":
-    case "UIFILE":
-      return runSyncPreviewDecoder(() =>
-        addXmlResourcePreviewWithParser(data, typeName, langEntry.codePage, parseManifestXmlDocument)
-      );
-    case "MANIFEST":
-      return runSyncPreviewDecoder(() => (
-        addMuiManifestPlaceholderPreview(
-          data,
-          typeName,
-          muiResource?.result.configuration ?? null
-        ) ||
-        addManifestPreviewWithXmlParser(
-          data,
-          typeName,
-          langEntry.codePage,
-          parseManifestXmlDocument
-        )
-      ));
-    case "HTML":
-      return runSyncPreviewDecoder(() => addHtmlPreview(data, typeName, langEntry.codePage));
-    case "RCDATA":
-      return runAsyncPreviewDecoder(() => addRcDataPreview(data, typeName, langEntry.codePage));
-    case "VERSION":
-      return runSyncPreviewDecoder(() => addVersionPreview(data, typeName));
-    case "STRING":
-      return runSyncPreviewDecoder(() => addStringTablePreview(data, typeName, entryId));
-    case "DIALOG":
-      return runSyncPreviewDecoder(() => addDialogPreview(data, typeName));
-    case "FONTDIR":
-      return runSyncPreviewDecoder(() => addFontDirectoryPreview(data, typeName));
-    case "FONT":
-      return runAsyncPreviewDecoder(() => addFontPreview(data, typeName));
-    case "MENU":
-      return runSyncPreviewDecoder(() => addMenuPreview(data, typeName));
-    case "ACCELERATOR":
-      return runSyncPreviewDecoder(() => addAcceleratorPreview(data, typeName));
-    case "MESSAGETABLE":
-      return runSyncPreviewDecoder(() =>
-        addMessageTableResourcePreview(data, typeName, langEntry.codePage)
-      );
-    case "DLGINCLUDE":
-      return runSyncPreviewDecoder(() => addDialogIncludePreview(data, typeName, langEntry.codePage));
-    case "PLUGPLAY":
-      return runSyncPreviewDecoder(() => addPlugPlayPreview(data, typeName));
-    case "VXD":
-      return runSyncPreviewDecoder(() => addVxdPreview(data, typeName));
-    case "ANICURSOR":
-      return runAsyncPreviewDecoder(() => addAniCursorPreview(data, typeName));
-    case "ANIICON":
-      return runAsyncPreviewDecoder(() => addAniIconPreview(data, typeName));
-    default:
-      return null;
-  }
+  const simple = simplePreviewDecoders.get(typeName);
+  if (simple) return runAsyncPreviewDecoder(async () => simple(data, typeName));
+  const decoders = new Map<string, () => ResourcePreviewResult | null | Promise<ResourcePreviewResult | null>>([
+    ["GROUP_ICON", () => addGroupIconPreview(data, typeName, loadIconLeafData, langEntry.lang)],
+    ["GROUP_CURSOR", () => addGroupCursorPreview(data, typeName, loadCursorLeafData, langEntry.lang)],
+    ["REGINST", () => addRegInstPreview(data, typeName, langEntry.codePage)],
+    ["TYPELIB", () => addTypeLibraryPreview(data, typeName, muiResource?.result.configuration ?? null)],
+    ["XMLFILE", () => addXmlResourcePreviewWithParser(
+      data, typeName, langEntry.codePage, parseManifestXmlDocument)],
+    ["MANIFEST", () => addMuiManifestPlaceholderPreview(
+      data, typeName, muiResource?.result.configuration ?? null) || addManifestPreviewWithXmlParser(
+      data, typeName, langEntry.codePage, parseManifestXmlDocument)],
+    ["HTML", () => addHtmlPreview(data, typeName, langEntry.codePage)],
+    ["RCDATA", () => addRcDataPreview(data, typeName, langEntry.codePage)],
+    ["STRING", () => addStringTablePreview(data, typeName, entryId)],
+    ["MESSAGETABLE", () => addMessageTableResourcePreview(data, typeName, langEntry.codePage)],
+    ["DLGINCLUDE", () => addDialogIncludePreview(data, typeName, langEntry.codePage)]
+  ]);
+  const decode = decoders.get(typeName === "UIFILE" ? "XMLFILE" : typeName);
+  return decode ? runAsyncPreviewDecoder(async () => decode()) : null;
 };
 
 const decodeResourceLeafPreview = async (

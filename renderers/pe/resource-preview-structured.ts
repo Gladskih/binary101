@@ -5,12 +5,21 @@ import { renderInfPreview } from "./resource-preview-inf.js";
 import { escapeHtml } from "../../html-utils.js";
 import { renderXmlPreview } from "./resource-preview-xml.js";
 import { renderFontDirectoryPreview, renderLegacyFontPreview } from "./resource-preview-font.js";
+import { renderDialogInitPreview, renderToolbarPreview } from "./resource-preview-mfc.js";
+
+const renderFontAndMfcSummary = (langEntry: ResourceLangWithPreview): string | null => {
+  if (langEntry.fontDirectory) return `${langEntry.fontDirectory.entries.length} fonts`;
+  if (langEntry.legacyFont) return `FNT ${langEntry.legacyFont.faceName || "font"}`;
+  if (langEntry.dialogInit) return `${langEntry.dialogInit.entries.length} initialization records`;
+  if (langEntry.toolbar) return `${langEntry.toolbar.items.length} toolbar items`;
+  return null;
+};
 
 export const renderStructuredPreviewSummary = (
   langEntry: ResourceLangWithPreview
 ): string | null => {
-  if (langEntry.fontDirectory) return `${langEntry.fontDirectory.entries.length} fonts`;
-  if (langEntry.legacyFont) return `FNT ${langEntry.legacyFont.faceName || "font"}`;
+  const additional = renderFontAndMfcSummary(langEntry);
+  if (additional) return additional;
   if (langEntry.previewKind === "inf" && langEntry.infPreview) {
     return `${langEntry.infPreview.sections.length} INF sections`;
   }
@@ -23,11 +32,19 @@ export const renderStructuredPreviewSummary = (
   return null;
 };
 
+const renderFontAndMfcPreview = (langEntry: ResourceLangWithPreview): string | null => {
+  if (langEntry.fontDirectory) return renderFontDirectoryPreview(langEntry.fontDirectory);
+  if (langEntry.legacyFont) return renderLegacyFontPreview(langEntry.legacyFont);
+  if (langEntry.dialogInit) return renderDialogInitPreview(langEntry.dialogInit);
+  if (langEntry.toolbar) return renderToolbarPreview(langEntry.toolbar);
+  return null;
+};
+
 export const renderStructuredPreview = (
   langEntry: ResourceLangWithPreview
 ): string | null => {
-  if (langEntry.fontDirectory) return renderFontDirectoryPreview(langEntry.fontDirectory);
-  if (langEntry.legacyFont) return renderLegacyFontPreview(langEntry.legacyFont);
+  const additional = renderFontAndMfcPreview(langEntry);
+  if (additional) return additional;
   if (langEntry.previewKind === "inf" && langEntry.infPreview) {
     return renderInfPreview(langEntry.infPreview);
   }

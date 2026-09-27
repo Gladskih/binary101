@@ -157,6 +157,8 @@ export interface ResourceTypeLibraryPreview {
 }
 
 export interface ResourcePreviewData {
+  dialogInit?: { entries: Array<{ controlId: number; message: number; data: Uint8Array }> };
+  toolbar?: { version: number; width: number; height: number; items: number[] };
   fontDirectory?: ResourceFontDirectory;
   legacyFont?: ResourceFontPreview;
   previewKind: string;

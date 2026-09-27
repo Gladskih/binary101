@@ -1,4 +1,5 @@
 "use strict";
+import { buildFontDirectory, buildLegacyFont } from "./pe-font-resources.js";
 
 import { createBmpFile, createVisiblePngFile } from "./image-sample-files.js";
 import {
@@ -109,9 +110,7 @@ const buildAcceleratorTable = (): Uint8Array => {
 };
 
 const buildFontDirectoryResource = (): Uint8Array => {
-  const bytes = new Uint8Array(8).fill(0);
-  new DataView(bytes.buffer).setUint16(0, 1, true);
-  return bytes;
+  return buildFontDirectory();
 };
 
 const buildTrueTypeSignatureResource = (): Uint8Array =>
@@ -155,98 +154,58 @@ const buildStandardDialogTemplate = (): Uint8Array => {
   return bytes.subarray(0, next + 2);
 };
 
-export const createPeResourceSpecs = (): ResourceSpec[] => {
+const createMfcResourceSpecs = (): ResourceSpec[] => [
+  { typeId: 240, entryId: 1, langId: 1033, codePage: 0,
+    data: new Uint8Array([100, 0, 3, 4, 3, 0, 0, 0, 65, 66, 0, 0, 0]) },
+  { typeId: 241, entryId: 1, langId: 1033, codePage: 0,
+    data: new Uint8Array([1, 0, 16, 0, 15, 0, 3, 0, 100, 0, 0, 0, 101, 0]) }
+];
+
+const createVisualResourceSpecs = (): ResourceSpec[] => {
   const png = createVisiblePngFile().data;
-  const cursorLeaf = buildCursorResource(7, 9, png);
-  const manifest = createManifestXmlFixture(
-    {
-      processorArchitecture: "amd64",
-      requestedExecutionLevel: "asInvoker",
-      supportedOsIds: WELL_KNOWN_SUPPORTED_OS_IDS
-    },
-    createManifestIncidentalValues()
-  );
+  const cursor = buildCursorResource(7, 9, png);
   return [
-    { typeId: RESOURCE_TYPE_CURSOR, entryId: 4, langId: 1033, codePage: 0, data: cursorLeaf },
-    {
-      typeId: RESOURCE_TYPE_BITMAP,
-      entryId: 1,
-      langId: 1033,
-      codePage: 0,
-      data: createBmpFile().data.subarray(14)
-    },
+    { typeId: RESOURCE_TYPE_CURSOR, entryId: 4, langId: 1033, codePage: 0, data: cursor },
+    { typeId: RESOURCE_TYPE_BITMAP, entryId: 1, langId: 1033, codePage: 0,
+      data: createBmpFile().data.subarray(14) },
     { typeId: RESOURCE_TYPE_ICON, entryId: 1, langId: 1033, codePage: 0, data: png },
-    { typeId: RESOURCE_TYPE_MENU, entryId: 1, langId: 1033, codePage: 0, data: buildStandardMenuTemplate() },
-    { typeId: RESOURCE_TYPE_DIALOG, entryId: 1, langId: 1033, codePage: 0, data: buildStandardDialogTemplate() },
-    { typeId: RESOURCE_TYPE_STRING, entryId: 1, langId: 1033, codePage: 1200, data: buildStringTableResource() },
-    { typeId: RESOURCE_TYPE_FONTDIR, entryId: 1, langId: 1033, codePage: 0, data: buildFontDirectoryResource() },
-    { typeId: RESOURCE_TYPE_FONT, entryId: 1, langId: 1033, codePage: 0, data: buildTrueTypeSignatureResource() },
-    { typeId: RESOURCE_TYPE_ACCELERATOR, entryId: 1, langId: 1033, codePage: 0, data: buildAcceleratorTable() },
-    {
-      typeId: RESOURCE_TYPE_RCDATA,
-      entryId: 1,
-      langId: 1033,
-      codePage: 65001,
-      data: new TextEncoder().encode("{\"kind\":\"rcdata\"}\n")
-    },
-    {
-      typeId: RESOURCE_TYPE_MESSAGETABLE,
-      entryId: 1,
-      langId: 2057,
-      codePage: 1252,
-      data: buildMessageTableResource()
-    },
-    {
-      typeId: RESOURCE_TYPE_GROUP_CURSOR,
-      entryId: 1,
-      langId: 1033,
-      codePage: 0,
-      data: buildGroupCursorResource(cursorLeaf.length, 4)
-    },
-    {
-      typeId: RESOURCE_TYPE_GROUP_ICON,
-      entryId: 1,
-      langId: 1033,
-      codePage: 0,
-      data: buildGroupIconResource(png.length, 1)
-    },
-    { typeId: RESOURCE_TYPE_VERSION, entryId: 1, langId: 1033, codePage: 1200, data: buildVersionResource() },
-    {
-      typeId: RESOURCE_TYPE_DLGINCLUDE,
-      entryId: 1,
-      langId: 1033,
-      codePage: 65001,
-      data: new TextEncoder().encode("#include \"preview-dialog.h\"\n")
-    },
-    {
-      typeId: RESOURCE_TYPE_PLUGPLAY,
-      entryId: 1,
-      langId: 1033,
-      codePage: 0,
-      data: new Uint8Array([0x50, 0x4e, 0x50, 0x00])
-    },
-    {
-      typeId: RESOURCE_TYPE_VXD,
-      entryId: 1,
-      langId: 1033,
-      codePage: 0,
-      data: new Uint8Array([0x56, 0x58, 0x44, 0x00])
-    },
+    { typeId: RESOURCE_TYPE_GROUP_CURSOR, entryId: 1, langId: 1033, codePage: 0,
+      data: buildGroupCursorResource(cursor.length, 4) },
+    { typeId: RESOURCE_TYPE_GROUP_ICON, entryId: 1, langId: 1033, codePage: 0,
+      data: buildGroupIconResource(png.length, 1) },
     { typeId: RESOURCE_TYPE_ANICURSOR, entryId: 1, langId: 1033, codePage: 0, data: createAniFile().data },
-    { typeId: RESOURCE_TYPE_ANIICON, entryId: 1, langId: 1033, codePage: 0, data: createAniFile().data },
-    {
-      typeId: RESOURCE_TYPE_HTML,
-      entryId: 1,
-      langId: 1033,
-      codePage: 65001,
-      data: new TextEncoder().encode("<html><body>resource</body></html>")
-    },
-    {
-      typeId: RESOURCE_TYPE_MANIFEST,
-      entryId: 1,
-      langId: 1033,
-      codePage: 65001,
-      data: new TextEncoder().encode(manifest.xml)
-    }
-  ].sort((left, right) => left.typeId - right.typeId);
+    { typeId: RESOURCE_TYPE_ANIICON, entryId: 1, langId: 1033, codePage: 0, data: createAniFile().data }
+  ];
 };
+
+const createTextResourceSpecs = (): ResourceSpec[] => [
+  { typeId: RESOURCE_TYPE_RCDATA, entryId: 1, langId: 1033, codePage: 65001,
+    data: new TextEncoder().encode("{\"kind\":\"rcdata\"}\n") },
+  { typeId: RESOURCE_TYPE_DLGINCLUDE, entryId: 1, langId: 1033, codePage: 65001,
+    data: new TextEncoder().encode("#include \"preview-dialog.h\"\n") },
+  { typeId: RESOURCE_TYPE_HTML, entryId: 1, langId: 1033, codePage: 65001,
+    data: new TextEncoder().encode("<html><body>resource</body></html>") },
+  { typeId: RESOURCE_TYPE_MANIFEST, entryId: 1, langId: 1033, codePage: 65001,
+    data: new TextEncoder().encode(createManifestXmlFixture({ processorArchitecture: "amd64",
+      requestedExecutionLevel: "asInvoker", supportedOsIds: WELL_KNOWN_SUPPORTED_OS_IDS
+    }, createManifestIncidentalValues()).xml) }
+];
+
+export const createPeResourceSpecs = (): ResourceSpec[] => [
+  ...createVisualResourceSpecs(), ...createTextResourceSpecs(), ...createMfcResourceSpecs(),
+  { typeId: RESOURCE_TYPE_MENU, entryId: 1, langId: 1033, codePage: 0, data: buildStandardMenuTemplate() },
+  { typeId: RESOURCE_TYPE_DIALOG, entryId: 1, langId: 1033, codePage: 0, data: buildStandardDialogTemplate() },
+  { typeId: RESOURCE_TYPE_STRING, entryId: 1, langId: 1033, codePage: 1200, data: buildStringTableResource() },
+  { typeId: RESOURCE_TYPE_FONTDIR, entryId: 1, langId: 1033, codePage: 0, data: buildFontDirectoryResource() },
+  { typeId: RESOURCE_TYPE_FONT, entryId: 1, langId: 1033, codePage: 0, data: buildTrueTypeSignatureResource() },
+  { typeId: RESOURCE_TYPE_FONT, entryId: 100, langId: 1033, codePage: 0, data: buildLegacyFont() },
+  { typeId: RESOURCE_TYPE_FONT, entryId: 101, langId: 1033, codePage: 0, data: buildLegacyFont() },
+  { typeId: RESOURCE_TYPE_ACCELERATOR, entryId: 1, langId: 1033, codePage: 0, data: buildAcceleratorTable() },
+  { typeId: RESOURCE_TYPE_MESSAGETABLE, entryId: 1, langId: 2057, codePage: 1252,
+    data: buildMessageTableResource() },
+  { typeId: RESOURCE_TYPE_VERSION, entryId: 1, langId: 1033, codePage: 1200, data: buildVersionResource() },
+  { typeId: RESOURCE_TYPE_PLUGPLAY, entryId: 1, langId: 1033, codePage: 0,
+    data: new Uint8Array([0x50, 0x4e, 0x50, 0]) },
+  { typeId: RESOURCE_TYPE_VXD, entryId: 1, langId: 1033, codePage: 0,
+    data: new Uint8Array([0x56, 0x58, 0x44, 0]) }
+].sort((left, right) => left.typeId - right.typeId);

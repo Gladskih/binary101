@@ -74,9 +74,17 @@ const expectVisualResourcePreviews = async (page: Page): Promise<void> => {
 
 const expectLegacyResourcePreviews = async (page: Page): Promise<void> => {
   const fontDir = await openResourceGroup(page, "FONTDIR");
-  expect(await fontDir.innerHTML()).toContain("Font-directory resource table.");
+  await expect(fontDir).toContainText("FONT #100");
+  await expect(fontDir).toContainText("Sample");
   const font = await openResourceGroup(page, "FONT");
   expect(await font.innerHTML()).toContain("TrueType font (heuristic)");
+  await expect(font).toContainText("Fixture copyright");
+  const dialogInit = await openResourceGroup(page, "DLGINIT");
+  await expect(dialogInit).toContainText("CB_ADDSTRING (Win16)");
+  await expect(dialogInit).toContainText("AB");
+  const toolbar = await openResourceGroup(page, "TOOLBAR");
+  await expect(toolbar).toContainText("Separator");
+  await expect(toolbar).toContainText("#101");
   const version = await openResourceGroup(page, "VERSION");
   await expect(version).toContainText("CompanyName");
   await expect(version).toContainText("Binary101");

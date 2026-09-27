@@ -41,23 +41,9 @@ const formatResourcePathNode = (node: { id: number | null; name: string | null }
 const isWideResourcePreview = (
   langEntry: NonNullable<PeResources["detail"]>[number]["entries"][number]["langs"][number]
 ): boolean =>
-  langEntry.previewKind === "dialog" ||
-  langEntry.previewKind === "image" ||
-  langEntry.previewKind === "stringTable" ||
-  langEntry.previewKind === "messageTable" ||
-  langEntry.previewKind === "version" ||
-  langEntry.previewKind === "menu" ||
-  langEntry.previewKind === "accelerator" ||
-  langEntry.previewKind === "font" ||
-  langEntry.previewKind === "fontDirectory" ||
-  langEntry.previewKind === "legacyFont" ||
-  langEntry.previewKind === "audio" ||
-  langEntry.previewKind === "muiConfig" ||
-  langEntry.previewKind === "inf" ||
-  langEntry.previewKind === "xml" ||
-  langEntry.previewKind === "typeLibrary" ||
-  langEntry.previewKind === "html" ||
-  langEntry.previewKind === "text";
+  ["dialog", "image", "stringTable", "messageTable", "version", "menu", "accelerator",
+    "font", "fontDirectory", "legacyFont", "dialogInit", "toolbar", "audio", "muiConfig",
+    "inf", "xml", "typeLibrary", "html", "text"].includes(langEntry.previewKind ?? "");
 
 const flattenResourcePreviewRows = (group: ResourceDetailGroup): ResourcePreviewRow[] =>
   group.entries.flatMap(entry => {
