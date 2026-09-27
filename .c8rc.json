@@ -2,6 +2,7 @@
   "all": true,
   "excludeAfterRemap": true,
   "exclude": [
+    "scan-results/**",
     ".stryker-tmp/**",
     "dist/**",
     "playwright.config.mjs",
