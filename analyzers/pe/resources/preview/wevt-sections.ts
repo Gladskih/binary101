@@ -15,6 +15,7 @@ const signature = (bytes: Uint8Array, offset: number): string =>
 const readName = (
   bytes: Uint8Array, view: DataView, offset: number, end: number, issues: string[]
 ): string | null => {
+  // libfwevt sections 4.2, 5.2 and 7.3: u32 total size plus UTF-16LE string and NUL.
   if (offset === 0) return null;
   if (!within(offset, 4, end)) {
     issues.push("WEVT name offset is invalid.");
@@ -29,6 +30,7 @@ const readName = (
   return text.replace(/\0.*/su, "");
 };
 
+// libfwevt sections 4.1, 5.1, 7.1, 10.1 and 11.1 give each record size and field offset.
 const metadataShape = (kind: string): { size: number; name: number; message: number } | null => {
   switch (kind) {
     case "CHAN": return { size: 16, name: 4, message: 12 };
@@ -66,6 +68,7 @@ const readFields = (
   bytes: Uint8Array, view: DataView, offset: number, count: number,
   manifestEnd: number, issues: string[]
 ): ResourceWevtTemplate["fields"] => {
+  // libfwevt section 12.3: each template item descriptor is 20 bytes.
   if (!count) return [];
   if (offset === 0 || !within(offset, count * 20, manifestEnd)) {
     issues.push("WEVT TEMP field descriptors are truncated.");
@@ -83,6 +86,7 @@ const readTemplates = (
   bytes: Uint8Array, view: DataView, offset: number, tableEnd: number,
   manifestEnd: number, issues: string[]
 ): ResourceWevtTemplate[] => {
+  // libfwevt section 12.1: TEMP has a 40-byte header followed by binary XML and items.
   const count = view.getUint32(offset + 8, true);
   const templates: ResourceWevtTemplate[] = [];
   let cursor = offset + 12;
@@ -111,6 +115,7 @@ export function parseWevtSection(
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.length);
   const kind = signature(bytes, offset);
   const size = view.getUint32(offset + 4, true);
+  // libfwevt sections 5 and 10 allow zero size for empty LEVL and OPCO tables.
   if (size === 0 && ["LEVL", "OPCO"].includes(kind) && view.getUint32(offset + 8, true) === 0) {
     return empty;
   }

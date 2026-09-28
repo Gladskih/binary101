@@ -12,7 +12,7 @@ import type { ResourcePreviewResult } from "./types.js";
 const looksLikeXmlText = (text: string): boolean => text.trimStart().startsWith("<");
 
 const isCompiledRibbon = (data: Uint8Array): boolean =>
-  // UIRibbon-Reversing/new.ksy describes a nine-byte preamble and "SCBin" magic.
+  // new.ksy: nine-byte preamble, five-byte ASCII "SCBin", then LE u32 size at offset 14.
   // https://github.com/DarkShadow44/UIRibbon-Reversing/blob/master/new.ksy
   data.length >= 14 && [0, 18, 0, 0, 0, 0, 0, 1, 0, 83, 67, 66, 105, 110]
     .every((byte, index) => data[index] === byte);

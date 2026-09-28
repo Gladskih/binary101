@@ -27,6 +27,7 @@ const parseEvents = (
     return [];
   }
   const tableEnd = offset + size;
+  // libfwevt sections 8 and 8.1: 16-byte EVNT header, then 48-byte event records.
   const available = Math.floor((tableEnd - offset - 16) / 48);
   if (count > available) issues.push("WEVT event definitions are truncated.");
   return Array.from({ length: Math.min(count, available) }, (_, index) => {
@@ -64,6 +65,7 @@ const parseProvider = (
     issues.push("WEVT provider size is invalid.");
     return null;
   }
+  // libfwevt sections 3 and 3.1: 20-byte WEVT header, then 8-byte descriptors.
   const available = Math.floor((size - 20) / 8);
   if (count > available) issues.push("WEVT provider element directory is truncated.");
   const events: ResourceWevtEvent[] = [];
@@ -87,6 +89,7 @@ const parseProvider = (
       templates.push(...section.templates);
     }
   }
+  // libfwevt section 3 uses all-one bits for an absent provider message ID.
   const messageId = view.getUint32(offset + 8, true);
   return { guid, messageId: messageId === 0xffffffff ? null : messageId,
     elements, events, metadata, templates };
@@ -108,6 +111,7 @@ export function addWevtTemplatePreview(
     issues.push("WEVT_TEMPLATE has nonzero trailing bytes outside CRIM.");
   }
   const manifestEnd = size >= 16 ? Math.min(size, data.length) : data.length;
+  // libfwevt sections 2 and 2.1: 16-byte CRIM header, then 20-byte providers.
   const available = Math.floor((manifestEnd - 16) / 20);
   if (count > available) issues.push("WEVT_TEMPLATE provider directory is truncated.");
   const providers: ResourceWevtProvider[] = [];

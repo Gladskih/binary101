@@ -6,6 +6,8 @@ export function addDialogLayoutPreview(
   data: Uint8Array, typeName: string
 ): ResourcePreviewResult | null {
   if (typeName !== "AFX_DIALOG_LAYOUT") return null;
+  // MFC ReadResource: a WORD version, then four WORD ratios per control.
+  // AfxClamp treats each ratio as signed and clamps it to 0..100.
   // https://github.com/adzm/atlmfc/blob/master/src/mfc/afxlayout.cpp
   if (data.length < 2) return { issues: ["AFX_DIALOG_LAYOUT version is truncated."] };
   const view = new DataView(data.buffer, data.byteOffset, data.length);
