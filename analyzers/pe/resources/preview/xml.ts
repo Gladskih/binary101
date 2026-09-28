@@ -7,6 +7,7 @@ import {
 } from "./manifest-xml.js";
 import { decodeTextResource } from "./text.js";
 import { parseXmlTree } from "./xml-tree.js";
+import { parseRibbonBml } from "./ribbon-bml.js";
 import type { ResourcePreviewResult } from "./types.js";
 
 const looksLikeXmlText = (text: string): boolean => text.trimStart().startsWith("<");
@@ -37,15 +38,12 @@ export function addXmlResourcePreviewWithParser(
   if (!["XMLFILE", "UIFILE", "RIBBON_XML"].includes(typeName)) return null;
   if (typeName === "UIFILE" && isCompiledRibbon(data)) {
     const issues: string[] = [];
-    if (data.length < 18) issues.push("Compiled BML header is truncated.");
-    else if (new DataView(data.buffer, data.byteOffset, data.length).getUint32(14, true) !== data.length) {
-      issues.push("Compiled BML declared length differs from resource size.");
-    }
+    const ribbonBml = parseRibbonBml(data, issues);
     return { preview: { previewKind: "summary", previewFields: [
       { label: "Type", value: typeName },
       { label: "Format", value: "Windows Ribbon compiled BML" },
       { label: "Size", value: `${data.length} bytes` }
-    ] }, ...(issues.length ? { issues } : {}) };
+    ], ...(ribbonBml ? { ribbonBml } : {}) }, ...(issues.length ? { issues } : {}) };
   }
   const issues: string[] = [];
   const { text, error, encoding, terminated } = decodeTextResource(data, codePage);
@@ -59,7 +57,7 @@ export function addXmlResourcePreviewWithParser(
     const xmlTree = parseXmlTree(doc);
     return {
       preview: {
-        previewKind: "xml",
+        previewKind: typeName === "RIBBON_XML" ? "ribbonXml" : "xml",
         textPreview: text,
         ...(encoding ? { textEncoding: encoding } : {}),
         ...(xmlTree ? { xmlTree } : {}),
@@ -73,7 +71,7 @@ export function addXmlResourcePreviewWithParser(
   } catch (error) {
     return {
       preview: {
-        previewKind: "xml",
+        previewKind: typeName === "RIBBON_XML" ? "ribbonXml" : "xml",
         textPreview: text,
         ...(encoding ? { textEncoding: encoding } : {}),
         previewFields: [

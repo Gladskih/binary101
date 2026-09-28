@@ -51,7 +51,7 @@ void test("routes MFC dialog layout and numeric ribbon XML to structured preview
   assert.equal(layoutLang?.previewKind, "dialogLayout");
   assert.equal(renderPreviewSummary(layoutLang), "1 layout controls");
   assert.match(renderPreviewCell(layoutLang), /Move X %/);
-  assert.equal(ribbonLang?.previewKind, "xml");
+  assert.equal(ribbonLang?.previewKind, "ribbonXml");
   assert.equal(renderPreviewSummary(ribbonLang), "XML <RIBBON_BAR>");
 });
 

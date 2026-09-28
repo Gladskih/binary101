@@ -8,6 +8,8 @@ import { renderXmlPreview } from "./resource-preview-xml.js";
 import { renderFontDirectoryPreview, renderLegacyFontPreview } from "./resource-preview-font.js";
 import { renderDialogInitPreview, renderDialogLayoutPreview, renderToolbarPreview } from "./resource-preview-mfc.js";
 import { renderWevtTemplatePreview } from "./resource-preview-wevt.js";
+import { renderRibbonBmlPreview } from "./resource-preview-ribbon-bml.js";
+import { renderRibbonXmlPreview } from "./resource-preview-ribbon-xml.js";
 import { renderBinaryMofPreview } from "./resource-preview-mof.js";
 
 const renderFontAndMfcSummary = (langEntry: ResourceLangWithPreview): string | null => {
@@ -22,6 +24,7 @@ const renderFontAndMfcSummary = (langEntry: ResourceLangWithPreview): string | n
 export const renderStructuredPreviewSummary = (
   langEntry: ResourceLangWithPreview
 ): string | null => {
+  if (langEntry.ribbonBml) return `${langEntry.ribbonBml.commands.length} Ribbon commands`;
   if (langEntry.binaryMof) return `${langEntry.binaryMof.classes.length} WMI classes`;
   const additional = renderFontAndMfcSummary(langEntry);
   if (additional) return additional;
@@ -29,7 +32,8 @@ export const renderStructuredPreviewSummary = (
   if (langEntry.previewKind === "inf" && langEntry.infPreview) {
     return `${langEntry.infPreview.sections.length} INF sections`;
   }
-  if (langEntry.previewKind === "xml" && langEntry.xmlTree) {
+  if ((langEntry.previewKind === "xml" || langEntry.previewKind === "ribbonXml") &&
+    langEntry.xmlTree) {
     return `XML <${langEntry.xmlTree.name}>`;
   }
   if (langEntry.previewKind === "typeLibrary" && langEntry.typeLibrary) {
@@ -53,12 +57,16 @@ const renderFontAndMfcPreview = (langEntry: ResourceLangWithPreview): string | n
 export const renderStructuredPreview = (
   langEntry: ResourceLangWithPreview, registryTableId?: string
 ): string | null => {
+  if (langEntry.ribbonBml) return renderRibbonBmlPreview(langEntry.ribbonBml);
   if (langEntry.binaryMof) return renderBinaryMofPreview(langEntry.binaryMof);
   const additional = renderFontAndMfcPreview(langEntry);
   if (additional) return additional;
   if (langEntry.registry) return renderRegistryPreview(langEntry, registryTableId);
   if (langEntry.previewKind === "inf" && langEntry.infPreview) {
     return renderInfPreview(langEntry.infPreview);
+  }
+  if (langEntry.previewKind === "ribbonXml") {
+    return renderRibbonXmlPreview(langEntry.textPreview, langEntry.xmlTree);
   }
   if (langEntry.previewKind === "xml") {
     return renderXmlPreview(langEntry.textPreview, langEntry.xmlTree);
