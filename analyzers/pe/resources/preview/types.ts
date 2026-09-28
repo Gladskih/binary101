@@ -156,6 +156,7 @@ export interface ResourceTypeLibraryPreview {
 }
 
 export interface ResourcePreviewData {
+  wevtTemplate?: { version: string; providers: ResourceWevtProvider[] };
   registry?: RegistryScript;
   dialogInit?: { entries: Array<{ controlId: number; message: number; data: Uint8Array }> };
   toolbar?: { version: number; width: number; height: number; items: number[] };
@@ -183,6 +184,42 @@ export interface ResourcePreviewData {
   acceleratorPreview?: ResourceAcceleratorPreview;
   previewMime?: string;
   previewDataUrl?: string;
+}
+
+export interface ResourceWevtEvent {
+  id: number;
+  version: number;
+  channel: number;
+  level: number;
+  opcode: number;
+  task: number;
+  keywords: string;
+  messageId: number | null;
+  messageText?: string;
+  templateOffset: number | null;
+}
+
+export interface ResourceWevtProvider {
+  guid: string;
+  messageId: number | null;
+  elements: Array<{ kind: string; offset: number }>;
+  events: ResourceWevtEvent[];
+  metadata: ResourceWevtMetadata[];
+  templates: ResourceWevtTemplate[];
+}
+
+export interface ResourceWevtMetadata {
+  kind: string;
+  id: string;
+  name: string | null;
+  messageId: number | null;
+}
+
+export interface ResourceWevtTemplate {
+  offset: number;
+  guid: string;
+  fields: Array<{ name: string | null; inputType: number; outputType: number;
+    count: number; length: number }>;
 }
 
 export interface ResourcePreviewResult {

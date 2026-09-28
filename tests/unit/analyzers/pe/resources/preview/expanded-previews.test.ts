@@ -54,3 +54,21 @@ void test("routes MFC dialog layout and numeric ribbon XML to structured preview
   assert.equal(ribbonLang?.previewKind, "xml");
   assert.equal(renderPreviewSummary(ribbonLang), "XML <RIBBON_BAR>");
 });
+
+void test("routes WEVT_TEMPLATE through the resource preview and renderer", async () => {
+  const fixture = createPreviewFixture(256);
+  const bytes = new Uint8Array(16);
+  bytes.set(new TextEncoder().encode("CRIM"));
+  const view = new DataView(bytes.buffer);
+  view.setUint32(4, bytes.length, true);
+  view.setUint16(8, 3, true);
+  view.setUint16(10, 1, true);
+  const range = fixture.appendData(bytes);
+  const detail = [createPreviewDetailGroup("WEVT_TEMPLATE", 1,
+    createPreviewLangEntry(range.offset, range.size))];
+  const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes),
+    createPreviewTree(detail));
+  const lang = result.detail[0]?.entries[0]?.langs[0];
+  assert.equal(lang?.previewKind, "wevtTemplate");
+  assert.match(renderPreviewCell(lang), /Windows Event manifest v3.1/);
+});

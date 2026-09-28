@@ -7,6 +7,7 @@ import { escapeHtml } from "../../html-utils.js";
 import { renderXmlPreview } from "./resource-preview-xml.js";
 import { renderFontDirectoryPreview, renderLegacyFontPreview } from "./resource-preview-font.js";
 import { renderDialogInitPreview, renderDialogLayoutPreview, renderToolbarPreview } from "./resource-preview-mfc.js";
+import { renderWevtTemplatePreview } from "./resource-preview-wevt.js";
 
 const renderFontAndMfcSummary = (langEntry: ResourceLangWithPreview): string | null => {
   if (langEntry.fontDirectory) return `${langEntry.fontDirectory.entries.length} fonts`;
@@ -31,6 +32,9 @@ export const renderStructuredPreviewSummary = (
   }
   if (langEntry.previewKind === "typeLibrary" && langEntry.typeLibrary) {
     return `${langEntry.typeLibrary.format} type library`;
+  }
+  if (langEntry.wevtTemplate) {
+    return `${langEntry.wevtTemplate.providers.length} event providers`;
   }
   return null;
 };
@@ -62,5 +66,6 @@ export const renderStructuredPreview = (
         ? `: ${escapeHtml(langEntry.typeLibrary.analysis.name)}` : ""}. ` +
       `<a href="#pe-type-libraries">Detailed analysis in Type libraries (COM).</a></p>`;
   }
+  if (langEntry.wevtTemplate) return renderWevtTemplatePreview(langEntry.wevtTemplate);
   return null;
 };

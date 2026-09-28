@@ -44,7 +44,8 @@ const isWideResourcePreview = (
 ): boolean =>
   ["dialog", "image", "stringTable", "messageTable", "version", "menu", "accelerator",
     "font", "fontDirectory", "legacyFont", "dialogInit", "dialogLayout", "toolbar", "audio", "muiConfig",
-    "inf", "xml", "typeLibrary", "html", "text", "registry"].includes(langEntry.previewKind ?? "");
+    "inf", "xml", "typeLibrary", "wevtTemplate", "html", "text", "registry"]
+    .includes(langEntry.previewKind ?? "");
 
 const flattenResourcePreviewRows = (group: ResourceDetailGroup): ResourcePreviewRow[] =>
   group.entries.flatMap(entry => {

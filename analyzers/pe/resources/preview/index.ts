@@ -32,6 +32,8 @@ import { addRegInstPreview } from "./inf.js";
 import { createRegistryResourceReader } from "./registry-resource.js";
 import { addTypeLibraryPreview } from "./type-library.js";
 import { addXmlResourcePreviewWithParser } from "./xml.js";
+import { addWevtTemplatePreview } from "./wevt-template.js";
+import { linkWevtMessages } from "./wevt-message-links.js";
 import { addAniCursorPreview, addAniIconPreview } from "./ani.js";
 import { addVersionPreview } from "./version.js";
 import { addMessageTableResourcePreview } from "./message-table.js";
@@ -84,6 +86,7 @@ const simplePreviewDecoders = new Map<string,
   ["MUI", addMuiConfigPreview], ["VERSION", addVersionPreview], ["DIALOG", addDialogPreview],
   ["DLGINIT", addDialogInitPreview], ["AFX_DIALOG_LAYOUT", addDialogLayoutPreview],
   ["TOOLBAR", addToolbarPreview], ["FONTDIR", addFontDirectoryPreview],
+  ["WEVT_TEMPLATE", addWevtTemplatePreview],
   ["FONT", addFontPreview], ["MENU", addMenuPreview], ["ACCELERATOR", addAcceleratorPreview],
   ["PLUGPLAY", addPlugPlayPreview], ["VXD", addVxdPreview],
   ["ANICURSOR", addAniCursorPreview], ["ANIICON", addAniIconPreview]
@@ -249,7 +252,7 @@ export async function enrichResourcePreviews(
   const issues = [...(tree.issues || [])];
   return {
     top: tree.top,
-    detail: validateFontReferences(attachDetailPreviews(detail, decodedGroups)),
+    detail: linkWevtMessages(validateFontReferences(attachDetailPreviews(detail, decodedGroups))),
     ...(tree.directories?.length ? { directories: tree.directories } : {}),
     ...(tree.paths?.length ? { paths: tree.paths } : {}),
     ...(muiResource?.result.configuration

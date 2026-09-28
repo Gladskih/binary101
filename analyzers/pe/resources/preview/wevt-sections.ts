@@ -1,0 +1,125 @@
+"use strict";
+
+import { readGuid } from "../../type-library/reader.js";
+import type { ResourceWevtMetadata, ResourceWevtTemplate } from "./types.js";
+
+// Element layouts: libfwevt, Windows Event manifest binary format, §§4–12.
+// https://github.com/libyal/libfwevt/blob/main/documentation/Windows%20Event%20manifest%20binary%20format.asciidoc
+const within = (offset: number, size: number, end: number): boolean =>
+  Number.isSafeInteger(offset) && Number.isSafeInteger(size) &&
+  offset >= 0 && size >= 0 && offset <= end && size <= end - offset;
+
+const signature = (bytes: Uint8Array, offset: number): string =>
+  within(offset, 4, bytes.length)
+    ? String.fromCharCode(...bytes.subarray(offset, offset + 4)) : "";
+
+const readName = (
+  bytes: Uint8Array, view: DataView, offset: number, end: number, issues: string[]
+): string | null => {
+  if (offset === 0) return null;
+  if (!within(offset, 4, end)) {
+    issues.push("WEVT name offset is invalid.");
+    return null;
+  }
+  const size = view.getUint32(offset, true);
+  if (size < 6 || !within(offset, size, end) || size % 2) {
+    issues.push("WEVT UTF-16 name is invalid or truncated.");
+    return null;
+  }
+  const text = new TextDecoder("utf-16le").decode(bytes.subarray(offset + 4, offset + size));
+  return text.replace(/\0.*$/su, "");
+};
+
+const metadataShape = (kind: string): { size: number; name: number; message: number } | null => {
+  switch (kind) {
+    case "CHAN": return { size: 16, name: 4, message: 12 };
+    case "KEYW": return { size: 16, name: 12, message: 8 };
+    case "LEVL":
+    case "OPCO": return { size: 12, name: 8, message: 4 };
+    case "TASK": return { size: 28, name: 24, message: 4 };
+    default: return null;
+  }
+};
+
+const readMetadata = (
+  bytes: Uint8Array, view: DataView, offset: number, tableEnd: number,
+  manifestEnd: number, kind: string, issues: string[]
+): ResourceWevtMetadata[] => {
+  const shape = metadataShape(kind);
+  if (!shape) return [];
+  const count = view.getUint32(offset + 8, true);
+  const available = Math.floor((tableEnd - offset - 12) / shape.size);
+  if (count > available) issues.push(`WEVT ${kind} definitions are truncated.`);
+  return Array.from({ length: Math.min(count, available) }, (_, index) => {
+    const base = offset + 12 + index * shape.size;
+    const messageId = view.getUint32(base + shape.message, true);
+    return {
+      kind,
+      id: kind === "KEYW" ? `0x${view.getBigUint64(base, true).toString(16)}`
+        : String(view.getUint32(base, true)),
+      name: readName(bytes, view, view.getUint32(base + shape.name, true), manifestEnd, issues),
+      messageId: messageId === 0xffffffff ? null : messageId
+    };
+  });
+};
+
+const readFields = (
+  bytes: Uint8Array, view: DataView, offset: number, count: number,
+  manifestEnd: number, issues: string[]
+): ResourceWevtTemplate["fields"] => {
+  if (!count) return [];
+  if (offset === 0 || !within(offset, count * 20, manifestEnd)) {
+    issues.push("WEVT TEMP field descriptors are truncated.");
+    return [];
+  }
+  return Array.from({ length: count }, (_, index) => {
+    const base = offset + index * 20;
+    return { name: readName(bytes, view, view.getUint32(base + 16, true), manifestEnd, issues),
+      inputType: view.getUint8(base + 4), outputType: view.getUint8(base + 5),
+      count: view.getUint16(base + 12, true), length: view.getUint16(base + 14, true) };
+  });
+};
+
+const readTemplates = (
+  bytes: Uint8Array, view: DataView, offset: number, tableEnd: number,
+  manifestEnd: number, issues: string[]
+): ResourceWevtTemplate[] => {
+  const count = view.getUint32(offset + 8, true);
+  const templates: ResourceWevtTemplate[] = [];
+  let cursor = offset + 12;
+  for (let index = 0; index < count && within(cursor, 40, tableEnd); index += 1) {
+    if (!within(cursor, 40, tableEnd) || signature(bytes, cursor) !== "TEMP") break;
+    const size = view.getUint32(cursor + 4, true);
+    if (size < 40 || !within(cursor, size, tableEnd)) break;
+    const guid = readGuid(view, cursor + 24);
+    if (guid) templates.push({ offset: cursor, guid,
+      fields: readFields(bytes, view, view.getUint32(cursor + 16, true),
+        view.getUint32(cursor + 8, true), manifestEnd, issues) });
+    cursor += size;
+  }
+  if (templates.length !== count) issues.push("WEVT TTBL templates are truncated or invalid.");
+  return templates;
+};
+
+export function parseWevtSection(
+  bytes: Uint8Array, offset: number, manifestEnd: number, issues: string[]
+): { metadata: ResourceWevtMetadata[]; templates: ResourceWevtTemplate[] } {
+  const empty = { metadata: [], templates: [] };
+  if (!within(offset, 12, manifestEnd) || manifestEnd > bytes.length) {
+    issues.push("WEVT section header is truncated.");
+    return empty;
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.length);
+  const kind = signature(bytes, offset);
+  const size = view.getUint32(offset + 4, true);
+  if (size === 0 && ["LEVL", "OPCO"].includes(kind) && view.getUint32(offset + 8, true) === 0) {
+    return empty;
+  }
+  if (size < 12 || !within(offset, size, manifestEnd)) {
+    issues.push(`WEVT ${kind} section size is invalid.`);
+    return empty;
+  }
+  return { metadata: readMetadata(bytes, view, offset, offset + size, manifestEnd, kind, issues),
+    templates: kind === "TTBL"
+      ? readTemplates(bytes, view, offset, offset + size, manifestEnd, issues) : [] };
+}
