@@ -34,3 +34,15 @@ export const renderToolbarPreview = (toolbar: NonNullable<ResourcePreviewData["t
   `<table class="table peResourceNestedTable"><thead><tr><th>Position</th><th>Command</th></tr></thead>` +
   `<tbody>${toolbar.items.map((id, index) => `<tr><td class="peNumeric">${index + 1}</td>` +
     `<td class="mono">${id ? `#${id}` : "Separator"}</td></tr>`).join("")}</tbody></table>`;
+
+export const renderDialogLayoutPreview = (
+  layout: NonNullable<ResourcePreviewData["dialogLayout"]>
+): string =>
+  `<p>MFC dialog layout v${layout.version}; controls follow child window order.</p>` +
+  `<div style="overflow-x:auto"><table class="table peResourceNestedTable"><thead><tr>` +
+  `<th>Position</th><th>Move X %</th><th>Move Y %</th>` +
+  `<th>Size X %</th><th>Size Y %</th></tr></thead><tbody>` +
+  layout.controls.map((control, index) => `<tr><td class="peNumeric">${index + 1}</td>` +
+    `<td class="peNumeric">${control.moveX}</td><td class="peNumeric">${control.moveY}</td>` +
+    `<td class="peNumeric">${control.sizeX}</td><td class="peNumeric">${control.sizeY}</td>` +
+    `</tr>`).join("") + `</tbody></table></div>`;

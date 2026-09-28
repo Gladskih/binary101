@@ -6,12 +6,13 @@ import { renderRegistryPreview } from "./resource-preview-registry.js";
 import { escapeHtml } from "../../html-utils.js";
 import { renderXmlPreview } from "./resource-preview-xml.js";
 import { renderFontDirectoryPreview, renderLegacyFontPreview } from "./resource-preview-font.js";
-import { renderDialogInitPreview, renderToolbarPreview } from "./resource-preview-mfc.js";
+import { renderDialogInitPreview, renderDialogLayoutPreview, renderToolbarPreview } from "./resource-preview-mfc.js";
 
 const renderFontAndMfcSummary = (langEntry: ResourceLangWithPreview): string | null => {
   if (langEntry.fontDirectory) return `${langEntry.fontDirectory.entries.length} fonts`;
   if (langEntry.legacyFont) return `FNT ${langEntry.legacyFont.faceName || "font"}`;
   if (langEntry.dialogInit) return `${langEntry.dialogInit.entries.length} initialization records`;
+  if (langEntry.dialogLayout) return `${langEntry.dialogLayout.controls.length} layout controls`;
   if (langEntry.toolbar) return `${langEntry.toolbar.items.length} toolbar items`;
   return null;
 };
@@ -38,6 +39,7 @@ const renderFontAndMfcPreview = (langEntry: ResourceLangWithPreview): string | n
   if (langEntry.fontDirectory) return renderFontDirectoryPreview(langEntry.fontDirectory);
   if (langEntry.legacyFont) return renderLegacyFontPreview(langEntry.legacyFont);
   if (langEntry.dialogInit) return renderDialogInitPreview(langEntry.dialogInit);
+  if (langEntry.dialogLayout) return renderDialogLayoutPreview(langEntry.dialogLayout);
   if (langEntry.toolbar) return renderToolbarPreview(langEntry.toolbar);
   return null;
 };

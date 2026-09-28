@@ -159,6 +159,9 @@ export interface ResourcePreviewData {
   registry?: RegistryScript;
   dialogInit?: { entries: Array<{ controlId: number; message: number; data: Uint8Array }> };
   toolbar?: { version: number; width: number; height: number; items: number[] };
+  dialogLayout?: { version: number; controls: Array<{
+    moveX: number; moveY: number; sizeX: number; sizeY: number
+  }> };
   fontDirectory?: ResourceFontDirectory;
   legacyFont?: ResourceFontPreview;
   previewKind: string;

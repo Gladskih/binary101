@@ -43,7 +43,7 @@ const isWideResourcePreview = (
   langEntry: NonNullable<PeResources["detail"]>[number]["entries"][number]["langs"][number]
 ): boolean =>
   ["dialog", "image", "stringTable", "messageTable", "version", "menu", "accelerator",
-    "font", "fontDirectory", "legacyFont", "dialogInit", "toolbar", "audio", "muiConfig",
+    "font", "fontDirectory", "legacyFont", "dialogInit", "dialogLayout", "toolbar", "audio", "muiConfig",
     "inf", "xml", "typeLibrary", "html", "text", "registry"].includes(langEntry.previewKind ?? "");
 
 const flattenResourcePreviewRows = (group: ResourceDetailGroup): ResourcePreviewRow[] =>

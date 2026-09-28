@@ -67,3 +67,30 @@ void test("addXmlResourcePreviewWithParser ignores unrelated resource types", ()
     null
   );
 });
+
+void test("recognizes MFC ribbon XML by numeric resource type", () => {
+  const result = addXmlResourcePreviewWithParser(
+    encoder.encode("<RIBBON_BAR><CATEGORY/></RIBBON_BAR>"),
+    "RIBBON_XML",
+    WINDOWS_UTF8_CODE_PAGE,
+    parseManifestTestXmlDocument
+  );
+  assert.equal(result?.preview?.xmlTree?.name, "RIBBON_BAR");
+});
+
+void test("recognizes compiled UIFILE without decoding it as XML", () => {
+  // UIRibbon-Reversing/new.ksy: nine-byte preamble, SCBin, then total length.
+  const bytes = new Uint8Array([0, 18, 0, 0, 0, 0, 0, 1, 0,
+    83, 67, 66, 105, 110, 18, 0, 0, 0]);
+  const result = addXmlResourcePreviewWithParser(
+    bytes, "UIFILE", WINDOWS_UTF8_CODE_PAGE, parseManifestTestXmlDocument
+  );
+  assert.equal(result?.preview?.previewKind, "summary");
+  assert.ok(result?.preview?.previewFields?.some(field => field.value.includes("compiled BML")));
+  assert.equal(result?.issues, undefined);
+  assert.match(addXmlResourcePreviewWithParser(bytes.subarray(0, 14), "UIFILE",
+    WINDOWS_UTF8_CODE_PAGE, parseManifestTestXmlDocument)?.issues?.[0] ?? "", /truncated/);
+  bytes[14] = 19;
+  assert.match(addXmlResourcePreviewWithParser(bytes, "UIFILE", WINDOWS_UTF8_CODE_PAGE,
+    parseManifestTestXmlDocument)?.issues?.[0] ?? "", /length differs/);
+});

@@ -6,5 +6,5 @@ export const knownResourceType = (id: number): string | null => ({
   20: "VXD", 21: "ANICURSOR", 22: "ANIICON", 23: "HTML", 24: "MANIFEST",
   // MFC conventions for application-defined types, rather than Win32 standard RT_* IDs.
   // https://github.com/adzm/atlmfc/blob/master/include/afxres.h
-  240: "DLGINIT", 241: "TOOLBAR"
+  28: "RIBBON_XML", 240: "DLGINIT", 241: "TOOLBAR"
 })[id] || null;

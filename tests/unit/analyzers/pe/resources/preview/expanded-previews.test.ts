@@ -7,6 +7,7 @@ import { createPreviewDetailGroup, createPreviewFixture, createPreviewLangEntry,
   createPreviewTree } from "../../../../../helpers/pe-resource-preview-fixture.js";
 import { buildFontDirectory, buildLegacyFont } from "../../../../../fixtures/pe-font-resources.js";
 import { MockFile } from "../../../../../helpers/mock-file.js";
+import { parseManifestTestXmlDocument } from "../../../../../helpers/manifest-test-parser.js";
 
 void test("routes FONTDIR, FONT and numeric MFC types through the browser preview contract", async () => {
   const fixture = createPreviewFixture(2048);
@@ -31,4 +32,25 @@ void test("routes FONTDIR, FONT and numeric MFC types through the browser previe
   assert.equal(renderPreviewSummary(langs[2]), "0 initialization records");
   assert.match(renderPreviewCell(langs[3]), /#100/);
   assert.equal(renderPreviewSummary(langs[3]), "1 toolbar items");
+});
+
+void test("routes MFC dialog layout and numeric ribbon XML to structured previews", async () => {
+  const fixture = createPreviewFixture(512);
+  const layout = fixture.appendData(new Uint8Array([0, 0, 10, 0, 20, 0, 30, 0, 40, 0]));
+  const ribbon = fixture.appendData(new TextEncoder().encode("<RIBBON_BAR/>"));
+  const detail = [
+    createPreviewDetailGroup("AFX_DIALOG_LAYOUT", 1,
+      createPreviewLangEntry(layout.offset, layout.size)),
+    createPreviewDetailGroup(knownResourceType(28)!, 1,
+      createPreviewLangEntry(ribbon.offset, ribbon.size))
+  ];
+  const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes),
+    createPreviewTree(detail), parseManifestTestXmlDocument);
+  const layoutLang = result.detail[0]?.entries[0]?.langs[0];
+  const ribbonLang = result.detail[1]?.entries[0]?.langs[0];
+  assert.equal(layoutLang?.previewKind, "dialogLayout");
+  assert.equal(renderPreviewSummary(layoutLang), "1 layout controls");
+  assert.match(renderPreviewCell(layoutLang), /Move X %/);
+  assert.equal(ribbonLang?.previewKind, "xml");
+  assert.equal(renderPreviewSummary(ribbonLang), "XML <RIBBON_BAR>");
 });

@@ -5,6 +5,7 @@ import { addBitmapPreview } from "./bitmap.js";
 import { addCursorPreview, addGroupCursorPreview } from "./cursor.js";
 import { addDialogPreview } from "./dialog.js";
 import { addDialogInitPreview } from "./dialog-init.js";
+import { addDialogLayoutPreview } from "./dialog-layout.js";
 import { addToolbarPreview } from "./toolbar.js";
 import { addFontDirectoryPreview } from "./font-directory.js";
 import { validateFontReferences } from "./font-reference-validation.js";
@@ -81,7 +82,8 @@ const simplePreviewDecoders = new Map<string,
 >([
   ["ICON", addIconPreview], ["CURSOR", addCursorPreview], ["BITMAP", addBitmapPreview],
   ["MUI", addMuiConfigPreview], ["VERSION", addVersionPreview], ["DIALOG", addDialogPreview],
-  ["DLGINIT", addDialogInitPreview], ["TOOLBAR", addToolbarPreview], ["FONTDIR", addFontDirectoryPreview],
+  ["DLGINIT", addDialogInitPreview], ["AFX_DIALOG_LAYOUT", addDialogLayoutPreview],
+  ["TOOLBAR", addToolbarPreview], ["FONTDIR", addFontDirectoryPreview],
   ["FONT", addFontPreview], ["MENU", addMenuPreview], ["ACCELERATOR", addAcceleratorPreview],
   ["PLUGPLAY", addPlugPlayPreview], ["VXD", addVxdPreview],
   ["ANICURSOR", addAniCursorPreview], ["ANIICON", addAniIconPreview]
@@ -106,6 +108,10 @@ const decodeSpecificResourcePreview = async (
     ["TYPELIB", () => addTypeLibraryPreview(data, typeName, muiResource?.result.configuration ?? null)],
     ["XMLFILE", () => addXmlResourcePreviewWithParser(
       data, typeName, langEntry.codePage, parseManifestXmlDocument)],
+    ["UIFILE", () => addXmlResourcePreviewWithParser(
+      data, typeName, langEntry.codePage, parseManifestXmlDocument)],
+    ["RIBBON_XML", () => addXmlResourcePreviewWithParser(
+      data, typeName, langEntry.codePage, parseManifestXmlDocument)],
     ["MANIFEST", () => addMuiManifestPlaceholderPreview(
       data, typeName, muiResource?.result.configuration ?? null) || addManifestPreviewWithXmlParser(
       data, typeName, langEntry.codePage, parseManifestXmlDocument)],
@@ -115,7 +121,7 @@ const decodeSpecificResourcePreview = async (
     ["MESSAGETABLE", () => addMessageTableResourcePreview(data, typeName, langEntry.codePage)],
     ["DLGINCLUDE", () => addDialogIncludePreview(data, typeName, langEntry.codePage)]
   ]);
-  const decode = decoders.get(typeName === "UIFILE" ? "XMLFILE" : typeName);
+  const decode = decoders.get(typeName);
   return decode ? runAsyncPreviewDecoder(async () => decode()) : null;
 };
 

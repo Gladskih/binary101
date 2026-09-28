@@ -11,6 +11,12 @@ import type { ResourcePreviewResult } from "./types.js";
 
 const looksLikeXmlText = (text: string): boolean => text.trimStart().startsWith("<");
 
+const isCompiledRibbon = (data: Uint8Array): boolean =>
+  // UIRibbon-Reversing/new.ksy describes a nine-byte preamble and "SCBin" magic.
+  // https://github.com/DarkShadow44/UIRibbon-Reversing/blob/master/new.ksy
+  data.length >= 14 && [0, 18, 0, 0, 0, 0, 0, 1, 0, 83, 67, 66, 105, 110]
+    .every((byte, index) => data[index] === byte);
+
 const buildXmlSummaryPreview = (typeName: string, dataLength: number): ResourcePreviewResult => ({
   preview: {
     previewKind: "summary",
@@ -28,7 +34,19 @@ export function addXmlResourcePreviewWithParser(
   codePage: number | undefined,
   parseXmlDocument: ManifestXmlDocumentParser
 ): ResourcePreviewResult | null {
-  if (typeName !== "XMLFILE" && typeName !== "UIFILE") return null;
+  if (!["XMLFILE", "UIFILE", "RIBBON_XML"].includes(typeName)) return null;
+  if (typeName === "UIFILE" && isCompiledRibbon(data)) {
+    const issues: string[] = [];
+    if (data.length < 18) issues.push("Compiled BML header is truncated.");
+    else if (new DataView(data.buffer, data.byteOffset, data.length).getUint32(14, true) !== data.length) {
+      issues.push("Compiled BML declared length differs from resource size.");
+    }
+    return { preview: { previewKind: "summary", previewFields: [
+      { label: "Type", value: typeName },
+      { label: "Format", value: "Windows Ribbon compiled BML" },
+      { label: "Size", value: `${data.length} bytes` }
+    ] }, ...(issues.length ? { issues } : {}) };
+  }
   const issues: string[] = [];
   const { text, error, encoding, terminated } = decodeTextResource(data, codePage);
   if (error) issues.push(`${typeName} text could not be fully decoded.`);
