@@ -5,6 +5,7 @@ import type { MuiResourceConfiguration } from "../mui-config.js";
 import type { TypeLibraryAnalysis } from "../../type-library/types.js";
 import type { ResourceFontDirectory, ResourceFontPreview } from "./font-types.js";
 import type { RegistryScript } from "./registry-types.js";
+import type { BinaryMofClass } from "./mof-classes.js";
 
 export interface ResourcePreviewField {
   label: string;
@@ -156,6 +157,10 @@ export interface ResourceTypeLibraryPreview {
 }
 
 export interface ResourcePreviewData {
+  binaryMof?: { classes: BinaryMofClass[]; flavorCount: number };
+  ribbonBml?: { strings: string[]; commands: Array<{ id: number; resources: Array<{
+    kind: string; resourceId: number; minimumDpi?: number
+  }> }> };
   wevtTemplate?: { version: string; providers: ResourceWevtProvider[] };
   registry?: RegistryScript;
   dialogInit?: { entries: Array<{ controlId: number; message: number; data: Uint8Array }> };

@@ -34,6 +34,7 @@ import { createRegistryResourceReader } from "./registry-resource.js";
 import { addTypeLibraryPreview } from "./type-library.js";
 import { addXmlResourcePreviewWithParser } from "./xml.js";
 import { addWevtTemplatePreview } from "./wevt-template.js";
+import { addBinaryMofPreview } from "./binary-mof.js";
 import { linkWevtMessages } from "./wevt-message-links.js";
 import { addAniCursorPreview, addAniIconPreview } from "./ani.js";
 import { addVersionPreview } from "./version.js";
@@ -88,6 +89,8 @@ const simplePreviewDecoders = new Map<string,
   ["DLGINIT", addDialogInitPreview], ["AFX_DIALOG_LAYOUT", addDialogLayoutPreview],
   ["TOOLBAR", addToolbarPreview], ["FONTDIR", addFontDirectoryPreview],
   ["WEVT_TEMPLATE", addWevtTemplatePreview],
+  ["MOFDATA", addBinaryMofPreview], ["FOMB", addBinaryMofPreview],
+  ["BMOF", addBinaryMofPreview],
   ["FONT", addFontPreview], ["MENU", addMenuPreview], ["ACCELERATOR", addAcceleratorPreview],
   ["PLUGPLAY", addPlugPlayPreview], ["VXD", addVxdPreview],
   ["ANICURSOR", addAniCursorPreview], ["ANIICON", addAniIconPreview]

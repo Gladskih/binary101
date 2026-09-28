@@ -8,6 +8,7 @@ import { renderXmlPreview } from "./resource-preview-xml.js";
 import { renderFontDirectoryPreview, renderLegacyFontPreview } from "./resource-preview-font.js";
 import { renderDialogInitPreview, renderDialogLayoutPreview, renderToolbarPreview } from "./resource-preview-mfc.js";
 import { renderWevtTemplatePreview } from "./resource-preview-wevt.js";
+import { renderBinaryMofPreview } from "./resource-preview-mof.js";
 
 const renderFontAndMfcSummary = (langEntry: ResourceLangWithPreview): string | null => {
   if (langEntry.fontDirectory) return `${langEntry.fontDirectory.entries.length} fonts`;
@@ -21,6 +22,7 @@ const renderFontAndMfcSummary = (langEntry: ResourceLangWithPreview): string | n
 export const renderStructuredPreviewSummary = (
   langEntry: ResourceLangWithPreview
 ): string | null => {
+  if (langEntry.binaryMof) return `${langEntry.binaryMof.classes.length} WMI classes`;
   const additional = renderFontAndMfcSummary(langEntry);
   if (additional) return additional;
   if (langEntry.registry) return "ATL registry script";
@@ -51,6 +53,7 @@ const renderFontAndMfcPreview = (langEntry: ResourceLangWithPreview): string | n
 export const renderStructuredPreview = (
   langEntry: ResourceLangWithPreview, registryTableId?: string
 ): string | null => {
+  if (langEntry.binaryMof) return renderBinaryMofPreview(langEntry.binaryMof);
   const additional = renderFontAndMfcPreview(langEntry);
   if (additional) return additional;
   if (langEntry.registry) return renderRegistryPreview(langEntry, registryTableId);
