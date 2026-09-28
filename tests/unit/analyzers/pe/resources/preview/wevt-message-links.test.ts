@@ -65,3 +65,14 @@ void test("keeps undecoded WEVT leaves and events without message IDs", () => {
     undefined);
   assert.equal(linked[1]?.entries[0]?.langs[2]?.wevtTemplate, undefined);
 });
+
+void test("joins multiple message strings and leaves other resource groups intact", () => {
+  const detail = fixture();
+  const message = detail[0]?.entries[0]?.langs[0]?.messageTable?.messages[0];
+  assert.ok(message);
+  message.strings.push("World");
+  const linked = linkWevtMessages(detail);
+  assert.strictEqual(linked[0], detail[0]);
+  assert.equal(linked[1]?.entries[0]?.langs[0]?.wevtTemplate?.providers[0]?.events[0]
+    ?.messageText, "Hello | World");
+});

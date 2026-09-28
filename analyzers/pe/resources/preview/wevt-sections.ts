@@ -6,12 +6,11 @@ import type { ResourceWevtMetadata, ResourceWevtTemplate } from "./types.js";
 // Element layouts: libfwevt, Windows Event manifest binary format, §§4–12.
 // https://github.com/libyal/libfwevt/blob/main/documentation/Windows%20Event%20manifest%20binary%20format.asciidoc
 const within = (offset: number, size: number, end: number): boolean =>
-  Number.isSafeInteger(offset) && Number.isSafeInteger(size) &&
-  offset >= 0 && size >= 0 && offset <= end && size <= end - offset;
+  // Public offsets are checked here; sizes come from fixed layouts or unsigned fields.
+  Number.isSafeInteger(offset) && offset >= 0 && size <= end - offset;
 
 const signature = (bytes: Uint8Array, offset: number): string =>
-  within(offset, 4, bytes.length)
-    ? String.fromCharCode(...bytes.subarray(offset, offset + 4)) : "";
+  String.fromCharCode(...bytes.subarray(offset, offset + 4));
 
 const readName = (
   bytes: Uint8Array, view: DataView, offset: number, end: number, issues: string[]
@@ -27,7 +26,7 @@ const readName = (
     return null;
   }
   const text = new TextDecoder("utf-16le").decode(bytes.subarray(offset + 4, offset + size));
-  return text.replace(/\0.*$/su, "");
+  return text.replace(/\0.*/su, "");
 };
 
 const metadataShape = (kind: string): { size: number; name: number; message: number } | null => {
@@ -88,7 +87,7 @@ const readTemplates = (
   const templates: ResourceWevtTemplate[] = [];
   let cursor = offset + 12;
   for (let index = 0; index < count && within(cursor, 40, tableEnd); index += 1) {
-    if (!within(cursor, 40, tableEnd) || signature(bytes, cursor) !== "TEMP") break;
+    if (signature(bytes, cursor) !== "TEMP") break;
     const size = view.getUint32(cursor + 4, true);
     if (size < 40 || !within(cursor, size, tableEnd)) break;
     const guid = readGuid(view, cursor + 24);

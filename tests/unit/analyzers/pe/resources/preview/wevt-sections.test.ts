@@ -22,7 +22,6 @@ void test("reads named WEVT metadata with message ID", () => {
   ]);
   assert.deepEqual(issues, []);
 });
-
 void test("rejects malformed counts and name offsets without throwing", () => {
   const bytes = fixture();
   const issues: string[] = [];
@@ -41,13 +40,14 @@ void test("reads TEMP field descriptors from a TTBL", () => {
   view.setUint32(16, 60, true); view.setUint32(20, 1, true);
   view.setUint32(28, 52, true);
   bytes[56] = 7; bytes[57] = 8; view.setUint16(64, 1, true);
+  view.setUint16(66, 4, true);
   view.setUint32(68, 96, true);
   view.setUint32(96, 8, true);
   bytes.set(new TextEncoder().encode("I\0D\0"), 100);
   const issues: string[] = [];
   const section = parseWevtSection(bytes, 0, 128, issues);
   assert.deepEqual(section.templates[0]?.fields, [
-    { name: "ID", inputType: 7, outputType: 8, count: 1, length: 0 }
+    { name: "ID", inputType: 7, outputType: 8, count: 1, length: 4 }
   ]);
   assert.deepEqual(issues, []);
 });
@@ -186,4 +186,83 @@ void test("rejects malformed TEMP signature and size", () => {
   const invalidSignature: string[] = [];
   assert.deepEqual(parseWevtSection(bytes, 0, 52, invalidSignature).templates, []);
   assert.deepEqual(invalidSignature, ["WEVT TTBL templates are truncated or invalid."]);
+});
+
+void test("walks two metadata records with separate names", () => {
+  const bytes = new Uint8Array(128);
+  const view = new DataView(bytes.buffer);
+  bytes.set(new TextEncoder().encode("LEVL"));
+  view.setUint32(4, 36, true); view.setUint32(8, 2, true);
+  view.setUint32(12, 4, true); view.setUint32(16, 41, true);
+  view.setUint32(20, 96, true);
+  view.setUint32(24, 5, true); view.setUint32(28, 42, true);
+  view.setUint32(32, 112, true);
+  view.setUint32(96, 12, true); view.setUint32(112, 12, true);
+  bytes.set(new TextEncoder().encode("O\0n\0e\0\0\0"), 100);
+  bytes.set(new TextEncoder().encode("T\0w\0o\0\0\0"), 116);
+  const issues: string[] = [];
+  assert.deepEqual(parseWevtSection(bytes, 0, 128, issues).metadata, [
+    { kind: "LEVL", id: "4", name: "One", messageId: 41 },
+    { kind: "LEVL", id: "5", name: "Two", messageId: 42 }
+  ]);
+  assert.deepEqual(issues, []);
+});
+
+void test("walks two TEMP field descriptors", () => {
+  const bytes = new Uint8Array(128);
+  const view = new DataView(bytes.buffer);
+  bytes.set(new TextEncoder().encode("TTBL"));
+  view.setUint32(4, 92, true); view.setUint32(8, 1, true);
+  bytes.set(new TextEncoder().encode("TEMP"), 12);
+  view.setUint32(16, 80, true); view.setUint32(20, 2, true);
+  view.setUint32(28, 52, true);
+  bytes[56] = 7; view.setUint32(68, 96, true);
+  bytes[76] = 8; view.setUint32(88, 112, true);
+  view.setUint32(96, 8, true); view.setUint32(112, 8, true);
+  bytes.set(new TextEncoder().encode("A\0\0\0"), 100);
+  bytes.set(new TextEncoder().encode("B\0\0\0"), 116);
+  const issues: string[] = [];
+  assert.deepEqual(parseWevtSection(bytes, 0, 128, issues).templates[0]?.fields, [
+    { name: "A", inputType: 7, outputType: 0, count: 0, length: 0 },
+    { name: "B", inputType: 8, outputType: 0, count: 0, length: 0 }
+  ]);
+  assert.deepEqual(issues, []);
+});
+
+void test("rejects negative, fractional and extreme public section offsets", () => {
+  const bytes = fixture();
+  for (const offset of [-1, 0.5, Number.MAX_SAFE_INTEGER]) {
+    const issues: string[] = [];
+    assert.deepEqual(parseWevtSection(bytes, offset, 128, issues),
+      { metadata: [], templates: [] });
+    assert.deepEqual(issues, ["WEVT section header is truncated."]);
+  }
+});
+
+void test("accepts the shortest UTF-16 name and rejects odd byte lengths", () => {
+  const bytes = fixture();
+  const view = new DataView(bytes.buffer);
+  view.setUint32(96, 6, true);
+  bytes[100] = 0; bytes[101] = 0;
+  const validIssues: string[] = [];
+  assert.equal(parseWevtSection(bytes, 0, 128, validIssues).metadata[0]?.name, "");
+  assert.deepEqual(validIssues, []);
+  view.setUint32(96, 7, true);
+  const oddIssues: string[] = [];
+  assert.equal(parseWevtSection(bytes, 0, 128, oddIssues).metadata[0]?.name, null);
+  assert.deepEqual(oddIssues, ["WEVT UTF-16 name is invalid or truncated."]);
+});
+
+void test("respects TTBL count when extra valid TEMP bytes follow", () => {
+  const bytes = new Uint8Array(92);
+  const view = new DataView(bytes.buffer);
+  bytes.set(new TextEncoder().encode("TTBL"));
+  view.setUint32(4, 92, true); view.setUint32(8, 1, true);
+  bytes.set(new TextEncoder().encode("TEMP"), 12);
+  view.setUint32(16, 40, true);
+  bytes.set(new TextEncoder().encode("TEMP"), 52);
+  view.setUint32(56, 40, true);
+  const issues: string[] = [];
+  assert.deepEqual(parseWevtSection(bytes, 0, 92, issues).templates.map(item => item.offset), [12]);
+  assert.deepEqual(issues, []);
 });

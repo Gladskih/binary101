@@ -7,17 +7,16 @@ import { parseWevtSection } from "./wevt-sections.js";
 // CRIM, WEVT and EVNT layouts:
 // https://github.com/libyal/libfwevt/blob/main/documentation/Windows%20Event%20manifest%20binary%20format.asciidoc
 const signature = (data: Uint8Array, offset: number): string =>
-  offset >= 0 && offset + 4 <= data.length
-    ? String.fromCharCode(...data.subarray(offset, offset + 4)) : "";
+  String.fromCharCode(...data.subarray(offset, offset + 4));
 
+// Callers pass unsigned offsets and positive fixed or unsigned sizes.
 const within = (offset: number, size: number, end: number): boolean =>
-  Number.isSafeInteger(offset) && Number.isSafeInteger(size) &&
-  offset >= 0 && size >= 0 && offset <= end && size <= end - offset;
+  size <= end - offset;
 
 const parseEvents = (
-  data: Uint8Array, view: DataView, offset: number, manifestEnd: number, issues: string[]
+  view: DataView, offset: number, manifestEnd: number, issues: string[]
 ): ResourceWevtEvent[] => {
-  if (!within(offset, 16, manifestEnd) || signature(data, offset) !== "EVNT") {
+  if (!within(offset, 16, manifestEnd)) {
     issues.push("WEVT EVNT table is invalid or truncated.");
     return [];
   }
@@ -73,14 +72,14 @@ const parseProvider = (
   const templates: ResourceWevtProvider["templates"] = [];
   for (let index = 0; index < Math.min(count, available); index += 1) {
     const elementOffset = view.getUint32(offset + 20 + index * 8, true);
-    const kind = signature(data, elementOffset);
     if (!within(elementOffset, 12, manifestEnd)) {
       issues.push("WEVT provider element offset is invalid.");
       continue;
     }
+    const kind = signature(data, elementOffset);
     elements.push({ kind, offset: elementOffset });
     if (kind === "EVNT") {
-      events.push(...parseEvents(data, view, elementOffset, manifestEnd, issues));
+      events.push(...parseEvents(view, elementOffset, manifestEnd, issues));
     }
     if (["CHAN", "KEYW", "LEVL", "OPCO", "TASK", "MAPS", "TTBL"].includes(kind)) {
       const section = parseWevtSection(data, elementOffset, manifestEnd, issues);
@@ -105,10 +104,10 @@ export function addWevtTemplatePreview(
   const count = view.getUint32(12, true);
   const issues: string[] = [];
   if (size < 16 || size > data.length) issues.push("WEVT_TEMPLATE CRIM size is invalid.");
-  if (size < data.length && data.subarray(size).some(byte => byte !== 0)) {
+  if (size >= 16 && data.subarray(size).some(byte => byte !== 0)) {
     issues.push("WEVT_TEMPLATE has nonzero trailing bytes outside CRIM.");
   }
-  const manifestEnd = size >= 16 && size <= data.length ? size : data.length;
+  const manifestEnd = size >= 16 ? Math.min(size, data.length) : data.length;
   const available = Math.floor((manifestEnd - 16) / 20);
   if (count > available) issues.push("WEVT_TEMPLATE provider directory is truncated.");
   const providers: ResourceWevtProvider[] = [];
