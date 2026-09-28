@@ -20,14 +20,21 @@ const indexMessages = (detail: ResourceDetailGroup[]): Map<number, Map<number, s
   return messages;
 };
 
+const linkMessage = <Value extends { messageId: number | null }>(
+  value: Value, messages: Map<number, string>
+): Value => {
+  const messageText = value.messageId === null ? undefined : messages.get(value.messageId);
+  return { ...value, ...(messageText !== undefined ? { messageText } : {}) };
+};
+
 const linkProvider = (
   provider: ResourceWevtProvider, messages: Map<number, string>
 ): ResourceWevtProvider => ({
-  ...provider,
-  events: provider.events.map(event => {
-    const messageText = event.messageId === null ? undefined : messages.get(event.messageId);
-    return { ...event, ...(messageText !== undefined ? { messageText } : {}) };
-  })
+  ...linkMessage(provider, messages),
+  metadata: provider.metadata.map(entry => linkMessage(entry, messages)),
+  events: provider.events.map(event => linkMessage(event, messages)),
+  ...(provider.maps ? { maps: provider.maps.map(map => ({ ...map,
+    entries: map.entries.map(entry => linkMessage(entry, messages)) })) } : {})
 });
 
 const linkLanguage = (

@@ -1,7 +1,9 @@
 "use strict";
 
 import { readGuid } from "../../type-library/reader.js";
-import type { ResourceWevtMetadata, ResourceWevtTemplate } from "./types.js";
+import type { ResourceWevtMap, ResourceWevtMetadata, ResourceWevtTemplate } from "./types.js";
+import { parseWevtBinXml } from "./wevt-binxml.js";
+import { parseWevtMaps } from "./wevt-maps.js";
 
 // Element layouts: libfwevt, Windows Event manifest binary format, §§4–12.
 // https://github.com/libyal/libfwevt/blob/main/documentation/Windows%20Event%20manifest%20binary%20format.asciidoc
@@ -95,9 +97,16 @@ const readTemplates = (
     const size = view.getUint32(cursor + 4, true);
     if (size < 40 || !within(cursor, size, tableEnd)) break;
     const guid = readGuid(view, cursor + 24);
-    if (guid) templates.push({ offset: cursor, guid,
-      fields: readFields(bytes, view, view.getUint32(cursor + 16, true),
-        view.getUint32(cursor + 8, true), manifestEnd, issues) });
+    if (guid) {
+      const itemsOffset = view.getUint32(cursor + 16, true);
+      const fragmentEnd = itemsOffset >= cursor + 40 && itemsOffset <= cursor + size
+        ? itemsOffset : cursor + size;
+      const xmlTree = bytes[cursor + 40] === 0x0f
+        ? parseWevtBinXml(bytes, cursor + 40, fragmentEnd, issues) : null;
+      templates.push({ offset: cursor, guid, ...(xmlTree ? { xmlTree } : {}),
+        fields: readFields(bytes, view, itemsOffset,
+          view.getUint32(cursor + 8, true), manifestEnd, issues) });
+    }
     cursor += size;
   }
   if (templates.length !== count) issues.push("WEVT TTBL templates are truncated or invalid.");
@@ -106,7 +115,8 @@ const readTemplates = (
 
 export function parseWevtSection(
   bytes: Uint8Array, offset: number, manifestEnd: number, issues: string[]
-): { metadata: ResourceWevtMetadata[]; templates: ResourceWevtTemplate[] } {
+): { metadata: ResourceWevtMetadata[]; templates: ResourceWevtTemplate[];
+  maps?: ResourceWevtMap[] } {
   const empty = { metadata: [], templates: [] };
   if (!within(offset, 12, manifestEnd) || manifestEnd > bytes.length) {
     issues.push("WEVT section header is truncated.");
@@ -123,7 +133,9 @@ export function parseWevtSection(
     issues.push(`WEVT ${kind} section size is invalid.`);
     return empty;
   }
+  const maps = kind === "MAPS" ? parseWevtMaps(bytes, offset, size, manifestEnd, issues) : [];
   return { metadata: readMetadata(bytes, view, offset, offset + size, manifestEnd, kind, issues),
     templates: kind === "TTBL"
-      ? readTemplates(bytes, view, offset, offset + size, manifestEnd, issues) : [] };
+      ? readTemplates(bytes, view, offset, offset + size, manifestEnd, issues) : [],
+    ...(maps.length ? { maps } : {}) };
 }

@@ -202,10 +202,19 @@ export interface ResourceWevtEvent {
 export interface ResourceWevtProvider {
   guid: string;
   messageId: number | null;
+  messageText?: string;
   elements: Array<{ kind: string; offset: number }>;
   events: ResourceWevtEvent[];
   metadata: ResourceWevtMetadata[];
+  maps?: ResourceWevtMap[];
   templates: ResourceWevtTemplate[];
+}
+
+export interface ResourceWevtMap {
+  offset: number;
+  kind: "VMAP" | "BMAP";
+  name: string | null;
+  entries: Array<{ value: number; messageId: number | null; messageText?: string }>;
 }
 
 export interface ResourceWevtMetadata {
@@ -213,11 +222,13 @@ export interface ResourceWevtMetadata {
   id: string;
   name: string | null;
   messageId: number | null;
+  messageText?: string;
 }
 
 export interface ResourceWevtTemplate {
   offset: number;
   guid: string;
+  xmlTree?: ResourceXmlTreeNode;
   fields: Array<{ name: string | null; inputType: number; outputType: number;
     count: number; length: number }>;
 }

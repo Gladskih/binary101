@@ -94,3 +94,19 @@ void test("counts metadata entries relative to a nonzero table offset", () => {
     [{ kind: "OPCO", id: "9", name: null, messageId: 0 }]);
   assert.deepEqual(issues, ["WEVT OPCO definitions are truncated."]);
 });
+
+void test("decodes a BinXML fragment inside a TEMP definition", () => {
+  const bytes = new Uint8Array(80);
+  const view = new DataView(bytes.buffer);
+  bytes.set(new TextEncoder().encode("TTBL"));
+  view.setUint32(4, 80, true); view.setUint32(8, 1, true);
+  bytes.set(new TextEncoder().encode("TEMP"), 12);
+  view.setUint32(16, 68, true);
+  // MS-EVEN6 §2.2.12: fragment, empty <A/>, NameHash(A) = 0x41.
+  bytes.set([0x0f, 1, 1, 0, 0x01, 0xff, 0xff, 9, 0, 0, 0,
+    0x41, 0, 1, 0, 0x41, 0, 0, 0, 0x03], 52);
+  const issues: string[] = [];
+  assert.deepEqual(parseWevtSection(bytes, 0, 80, issues).templates[0]?.xmlTree,
+    { name: "A", attributes: [], text: null, children: [] });
+  assert.deepEqual(issues, []);
+});

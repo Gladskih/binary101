@@ -71,6 +71,7 @@ const parseProvider = (
   const events: ResourceWevtEvent[] = [];
   const elements: Array<{ kind: string; offset: number }> = [];
   const metadata: ResourceWevtProvider["metadata"] = [];
+  const maps: NonNullable<ResourceWevtProvider["maps"]> = [];
   const templates: ResourceWevtProvider["templates"] = [];
   for (let index = 0; index < Math.min(count, available); index += 1) {
     const elementOffset = view.getUint32(offset + 20 + index * 8, true);
@@ -86,13 +87,14 @@ const parseProvider = (
     if (["CHAN", "KEYW", "LEVL", "OPCO", "TASK", "MAPS", "TTBL"].includes(kind)) {
       const section = parseWevtSection(data, elementOffset, manifestEnd, issues);
       metadata.push(...section.metadata);
+      maps.push(...(section.maps ?? []));
       templates.push(...section.templates);
     }
   }
   // libfwevt section 3 uses all-one bits for an absent provider message ID.
   const messageId = view.getUint32(offset + 8, true);
   return { guid, messageId: messageId === 0xffffffff ? null : messageId,
-    elements, events, metadata, templates };
+    elements, events, metadata, ...(maps.length ? { maps } : {}), templates };
 };
 
 export function addWevtTemplatePreview(

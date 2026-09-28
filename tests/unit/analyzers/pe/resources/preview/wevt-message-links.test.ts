@@ -76,3 +76,32 @@ void test("joins multiple message strings and leaves other resource groups intac
   assert.equal(linked[1]?.entries[0]?.langs[0]?.wevtTemplate?.providers[0]?.events[0]
     ?.messageText, "Hello | World");
 });
+
+void test("links provider and metadata message IDs in the matching language", () => {
+  const detail = fixture();
+  const table = detail[0]?.entries[0]?.langs[0]?.messageTable;
+  const provider = detail[1]?.entries[0]?.langs[0]?.wevtTemplate?.providers[0];
+  assert.ok(table && provider);
+  table.messages.push({ id: 43, strings: ["Provider name"] });
+  table.messages.push({ id: 44, strings: ["Level name"] });
+  table.messages.push({ id: 45, strings: ["Map value"] });
+  provider.messageId = 43;
+  provider.metadata.push({ kind: "LEVL", id: "4", name: "Level", messageId: 44 });
+  provider.maps = [{ offset: 16, kind: "VMAP", name: "Map",
+    entries: [{ value: 7, messageId: 45 }] }];
+  const linked = linkWevtMessages(detail);
+  const result = linked[1]?.entries[0]?.langs[0]?.wevtTemplate?.providers[0];
+  assert.equal(result?.messageText, "Provider name");
+  assert.equal(result?.metadata[0]?.messageText, "Level name");
+  assert.equal(result?.maps?.[0]?.entries[0]?.messageText, "Map value");
+});
+
+void test("does not add messageText when an ID has no message", () => {
+  const detail = fixture();
+  const provider = detail[1]?.entries[0]?.langs[0]?.wevtTemplate?.providers[0];
+  assert.ok(provider);
+  provider.messageId = 999;
+  const linked = linkWevtMessages(detail);
+  const result = linked[1]?.entries[0]?.langs[0]?.wevtTemplate?.providers[0];
+  assert.equal(Object.hasOwn(result ?? {}, "messageText"), false);
+});
