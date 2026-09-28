@@ -6,6 +6,7 @@ import { addCursorPreview, addGroupCursorPreview } from "./cursor.js";
 import { addDialogPreview } from "./dialog.js";
 import { addDialogInitPreview } from "./dialog-init.js";
 import { addDialogLayoutPreview } from "./dialog-layout.js";
+import { linkDialogLayouts } from "./dialog-layout-links.js";
 import { addToolbarPreview } from "./toolbar.js";
 import { addFontDirectoryPreview } from "./font-directory.js";
 import { validateFontReferences } from "./font-reference-validation.js";
@@ -252,7 +253,8 @@ export async function enrichResourcePreviews(
   const issues = [...(tree.issues || [])];
   return {
     top: tree.top,
-    detail: linkWevtMessages(validateFontReferences(attachDetailPreviews(detail, decodedGroups))),
+    detail: linkDialogLayouts(linkWevtMessages(
+      validateFontReferences(attachDetailPreviews(detail, decodedGroups)))),
     ...(tree.directories?.length ? { directories: tree.directories } : {}),
     ...(tree.paths?.length ? { paths: tree.paths } : {}),
     ...(muiResource?.result.configuration

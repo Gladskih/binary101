@@ -40,9 +40,12 @@ export const renderDialogLayoutPreview = (
 ): string =>
   `<p>MFC dialog layout v${layout.version}; controls follow child window order.</p>` +
   `<div style="overflow-x:auto"><table class="table peResourceNestedTable"><thead><tr>` +
-  `<th>Position</th><th>Move X %</th><th>Move Y %</th>` +
+  `<th>Position</th><th>Dialog control</th><th>Move X %</th><th>Move Y %</th>` +
   `<th>Size X %</th><th>Size Y %</th></tr></thead><tbody>` +
   layout.controls.map((control, index) => `<tr><td class="peNumeric">${index + 1}</td>` +
+    `<td>${control.dialogControl ? escapeHtml(
+      `#${control.dialogControl.id ?? "?"} ${control.dialogControl.title ?? control.dialogControl.kind}`
+    ) : "–"}</td>` +
     `<td class="peNumeric">${control.moveX}</td><td class="peNumeric">${control.moveY}</td>` +
     `<td class="peNumeric">${control.sizeX}</td><td class="peNumeric">${control.sizeY}</td>` +
     `</tr>`).join("") + `</tbody></table></div>`;

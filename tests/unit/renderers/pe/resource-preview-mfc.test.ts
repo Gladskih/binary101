@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { renderDialogInitPreview, renderToolbarPreview } from "../../../../renderers/pe/resource-preview-mfc.js";
+import { renderDialogInitPreview, renderDialogLayoutPreview,
+  renderToolbarPreview } from "../../../../renderers/pe/resource-preview-mfc.js";
 
 void test("renders MFC string initialization and unknown payload bytes safely", () => {
   const html = renderDialogInitPreview({ entries: [
@@ -24,4 +25,15 @@ void test("renders toolbar command order and separators", () => {
   const html = renderToolbarPreview({ version: 1, width: 16, height: 15, items: [100, 0, 101] });
   assert.match(html, /16×15/);
   assert.match(html, /#100.*Separator.*#101/);
+});
+
+void test("renders linked MFC dialog controls safely", () => {
+  const html = renderDialogLayoutPreview({ version: 0, controls: [
+    { moveX: 10, moveY: 0, sizeX: 20, sizeY: 0,
+      dialogControl: { id: 12, kind: "BUTTON", title: "<OK>" } },
+    { moveX: 0, moveY: 0, sizeX: 0, sizeY: 0 }
+  ] });
+  assert.match(html, /Dialog control/);
+  assert.match(html, /#12 &lt;OK>/);
+  assert.match(html, /<td>–<\/td>/);
 });
