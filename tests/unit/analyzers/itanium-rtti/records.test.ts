@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createItaniumRecords, isSupportedTypeName } from
   "../../../../analyzers/itanium-rtti/records.js";
-import { createItaniumFixture } from "../../../fixtures/itanium-rtti.js";
+import { createItaniumFixture, setOrdinaryItaniumSlots } from "../../../fixtures/itanium-rtti.js";
 
 for (const name of ["4Base", "N2ns4BaseE", "St9type_info", "NSt2ns4BaseE"]) {
   void test(`accepts supported encoding ${name}`, () => assert.equal(isSupportedTypeName(name), true));
@@ -26,8 +26,8 @@ void test("caches name and vtable reads", async () => {
   });
 });
 
-for (const available of [16, 17]) {
-  void test(`requires backing at the address point, not function slots (${available} bytes)`, async () => {
+for (const available of [16, 17, 23, 24]) {
+  void test(`requires one complete first slot (${available} bytes available)`, async () => {
     const fixture = createItaniumFixture();
     const read = fixture.image.read;
     fixture.image.read = (address, size) => read(address,
@@ -35,8 +35,37 @@ for (const available of [16, 17]) {
 
     const result = await createItaniumRecords(fixture.image).table(fixture.addresses.table);
 
-    assert.equal(result != null, available === 17);
+    assert.equal(result != null, available === 24);
   });
+}
+
+type Fixture = ReturnType<typeof createItaniumFixture>;
+for (const width of [4, 8] as const) {
+  for (const [label, edit] of Object.entries({
+    dataPointer: (fixture: Fixture) => fixture.pointer(fixture.addresses.table, fixture.addresses.base),
+    scalar: (fixture: Fixture) => fixture.word(fixture.addresses.table, 1n),
+    relocatedNull: (fixture: Fixture) => fixture.image.relocations.add(fixture.addresses.table),
+    indexedNull: (fixture: Fixture) => {
+      fixture.pointer(fixture.addresses.table, fixture.addresses.code);
+      fixture.word(fixture.addresses.table, 0n);
+    },
+    unindexedRelocation: (fixture: Fixture) => {
+      fixture.word(fixture.addresses.table, BigInt(fixture.addresses.code));
+      fixture.image.relocations.add(fixture.addresses.table);
+    },
+    missingRelocation: (fixture: Fixture) => {
+      fixture.pointer(fixture.addresses.table, fixture.addresses.code);
+      fixture.image.relocations.delete(fixture.addresses.table);
+    }
+  })) {
+    void test(`rejects ${width}-byte first slot with ${label}`, async () => {
+      const fixture = createItaniumFixture(width);
+      setOrdinaryItaniumSlots(fixture, "first null");
+      edit(fixture);
+
+      assert.equal(await createItaniumRecords(fixture.image).table(fixture.addresses.table), null);
+    });
+  }
 }
 
 void test("rejects truncated bootstrap function slots even with indexed pointers", async () => {

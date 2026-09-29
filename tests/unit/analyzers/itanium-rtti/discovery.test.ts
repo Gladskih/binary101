@@ -4,7 +4,7 @@ import { discoverItaniumRtti } from "../../../../analyzers/itanium-rtti/discover
 import { createItaniumFixture, setOrdinaryItaniumSlots } from "../../../fixtures/itanium-rtti.js";
 
 for (const width of [4, 8] as const) {
-  for (const slots of ["one function", "first null", "only data"] as const) {
+  for (const slots of ["one function", "first null"] as const) {
     void test(`recognizes ${width}-byte ordinary vtable with ${slots}`, async () => {
       const fixture = createItaniumFixture(width);
       const { table, base } = fixture.addresses;
@@ -18,9 +18,78 @@ for (const width of [4, 8] as const) {
       assert.deepEqual(result?.warnings, []);
     });
   }
+  void test(`rejects ${width}-byte ordinary vtable with first data pointer`, async () => {
+    const fixture = createItaniumFixture(width);
+    setOrdinaryItaniumSlots(fixture, "first data");
+
+    const result = await discoverItaniumRtti(fixture.image);
+
+    assert.ok(result);
+    assert.equal(result.vtables.some(row => row.address === fixture.addresses.table), false);
+  });
+  for (const secondOffsetFlags of [0n, 2050n]) {
+    void test(`omits vtable inside ${width}-byte VMI base array (${secondOffsetFlags})`, async () => {
+      const fixture = createItaniumFixture(width);
+      const { multiple, classTable, vmiObjectTable } = fixture.addresses;
+      // ABI 2.9.5: two base descriptors, each {type_info*, offset_flags}.
+      // 0 = private nonvirtual base at offset 0; 2050 = public base at offset 8.
+      const array = multiple + 2 * width + 8;
+      fixture.type(1024, classTable, "6EmptyA");
+      fixture.type(1056, classTable, "6EmptyB");
+      fixture.view.setUint32(multiple + 2 * width + 4, 2, true);
+      fixture.pointer(array, 1024);
+      fixture.word(array + width, 0n);
+      fixture.pointer(array + 2 * width, 1056);
+      fixture.word(array + 3 * width, secondOffsetFlags);
+      // File order can differ from RVA order; the overlap sweep must sort independently.
+      fixture.image.readOrder = address => fixture.bytes.length - address;
+
+      const result = await discoverItaniumRtti(fixture.image);
+
+      assert.ok(result);
+      assert.ok(result.vtables.some(row => row.address === vmiObjectTable));
+      assert.deepEqual(result.types.find(row => row.address === multiple)?.bases, [
+        { typeAddress: 1024, offset: 0, isVirtual: false, isPublic: false },
+        { typeAddress: 1056, offset: Number(secondOffsetFlags >> 8n),
+          isVirtual: false, isPublic: secondOffsetFlags !== 0n }
+      ]);
+      assert.equal(result.vtables.some(row => row.address === array + 3 * width), false);
+      assert.deepEqual(result.warnings, []);
+    });
+  }
 }
 
 type Fixture = ReturnType<typeof createItaniumFixture>;
+void test("rejects a header that overlaps only the final VMI offset field", async () => {
+  const fixture = createItaniumFixture();
+  const { multiple, base, vmiObjectTable } = fixture.addresses;
+  // A one-base x64 VMI object occupies 40 bytes; its last offset_flags is at +32.
+  fixture.word(multiple + 32, 0n);
+  fixture.pointer(multiple + 40, base);
+
+  const result = await discoverItaniumRtti(fixture.image);
+
+  assert.ok(result?.vtables.some(table => table.address === vmiObjectTable));
+  assert.equal(result?.vtables.some(table => table.address === multiple + 48), false);
+});
+
+for (const [kind, key, size] of [
+  ["class", "base", 16], ["si", "derived", 24], ["vmi", "multiple", 40]
+] as const) {
+  for (const side of ["before", "after"] as const) {
+    void test(`accepts a null first slot adjacent to ${kind} RTTI (${side})`, async () => {
+      const fixture = createItaniumFixture();
+      // x64 ABI records: 2 pointers, 3 pointers, or 2 pointers + flags/count + one base.
+      const address = fixture.addresses[key] + (side === "before" ? -8 : size + 16);
+      fixture.pointer(address - 8, fixture.addresses.base);
+
+      const result = await discoverItaniumRtti(fixture.image);
+
+      assert.ok(result?.vtables.some(table => table.address === address));
+    });
+  }
+}
+
 for (const [corruption, edit] of Object.entries({
   unknownRuntime: (fixture: Fixture) => fixture.pointer(fixture.addresses.base, fixture.addresses.table),
   malformedName: (fixture: Fixture) => fixture.type(fixture.addresses.base, fixture.addresses.classTable, "0"),

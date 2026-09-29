@@ -71,6 +71,15 @@ const createNames = (image: ItaniumRttiImage) => {
   };
 };
 
+const hasFirstEntry = (image: ItaniumRttiImage, address: number, raw: bigint): boolean => {
+  // ABI 3.2.4 permits null pure/deleted entries. This conservative PE subset accepts
+  // only raw null or relocated code; it neither identifies a method nor bounds the table.
+  // https://itanium-cxx-abi.github.io/cxx-abi/abi.html#vcall
+  if (!image.relocations.has(address)) return raw === 0n;
+  const target = image.pointers.get(address);
+  return raw !== 0n && target != null && image.isExecutable(target);
+};
+
 const readTable = async (image: ItaniumRttiImage, address: number): Promise<ItaniumVtable | null> => {
   const width = image.pointerSize;
   if (address < 2 * width || address % width !== 0) return null;
@@ -78,9 +87,9 @@ const readTable = async (image: ItaniumRttiImage, address: number): Promise<Itan
   if (typeAddress == null || !image.relocations.has(address - width)) return null;
   if (image.relocations.has(address - 2 * width)) return null;
   // ABI 2.5.2: offset-to-top, typeinfo pointer, then the address point.
-  // The extra byte checks that the address point is file-backed data; its value is ignored.
-  const header = await image.read(address - 2 * width, 2 * width + 1);
-  if (header.byteLength !== 2 * width + 1 || readSignedWord(header, 0, width) !== 0n) return null;
+  const header = await image.read(address - 2 * width, 3 * width);
+  if (header.byteLength !== 3 * width || readSignedWord(header, 0, width) !== 0n) return null;
+  if (!hasFirstEntry(image, address, readSignedWord(header, 2 * width, width))) return null;
   return { address, typeAddress, offsetToTop: 0 };
 };
 
@@ -120,7 +129,7 @@ export const createItaniumRecords = (image: ItaniumRttiImage) => {
     return tables.get(address)!;
   };
   const runtimeTable = async (address: number): Promise<ItaniumVtable | null> => {
-    // Bootstrap evidence only: never use these slots to classify ordinary user vtables.
+    // Bootstrap still requires two code pointers; ordinary tables only check their first entry.
     if (!hasRuntimeFunctions(image, address)) return null;
     if ((await image.read(address, 2 * image.pointerSize)).byteLength !== 2 * image.pointerSize) {
       return null;

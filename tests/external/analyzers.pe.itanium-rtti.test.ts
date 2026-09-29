@@ -28,6 +28,14 @@ for (const optimization of ["-O0", "-O2"]) {
       assert.equal(types.get("7Derived")?.kind, "si");
       assert.equal(types.get("8Multiple")?.bases.length, 2);
       assert.equal(types.get("7Virtual")?.bases[0]?.isVirtual, true);
+      const collision = types.get("9Collision");
+      assert.ok(collision);
+      assert.deepEqual(collision.bases, [
+        { typeAddress: types.get("6EmptyA")!.address, offset: 0, isVirtual: false, isPublic: false },
+        { typeAddress: types.get("6EmptyB")!.address, offset: 0, isVirtual: false, isPublic: false }
+      ]);
+      // x64 VMI +48 is base1.offset_flags, not a vtable address point.
+      assert.equal(parsed.itaniumRtti.vtables.some(table => table.address === collision.address + 48), false);
       assert.deepEqual(parsed.itaniumRtti.warnings, []);
     } finally {
       await rm(directory, { recursive: true, force: true });

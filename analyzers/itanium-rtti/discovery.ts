@@ -2,7 +2,7 @@ import { readItaniumBases } from "./bases.js";
 import { createItaniumRecords, readSignedWord, type ItaniumRecords } from "./records.js";
 import { findItaniumRuntime } from "./runtime.js";
 import type {
-  ItaniumClassKind, ItaniumRttiAnalysis, ItaniumRttiImage, ItaniumType
+  ItaniumClassKind, ItaniumRttiAnalysis, ItaniumRttiImage, ItaniumType, ItaniumVtable
 } from "./types.js";
 
 const createGraphParser = (
@@ -70,6 +70,27 @@ const hasVirtualBaseSlots = async (
   return true;
 };
 
+const omitRttiOverlaps = (
+  tables: ItaniumVtable[], types: ItaniumType[], width: number
+): ItaniumVtable[] => {
+  // ABI 2.9.5: fixed class/SI records and a counted trailing VMI base array.
+  // Reject overlap of either header or first slot with already validated metadata.
+  const ranges = types.map(type => ({ start: type.address, end: type.address +
+    (type.kind === "class" ? 2 * width : type.kind === "si" ? 3 * width :
+      2 * width + 8 + type.bases.length * 2 * width)
+  })).sort((left, right) => left.start - right.start);
+  const rejected = new Set<number>();
+  let index = 0;
+  // Two ordered passes avoid comparing every vtable against every RTTI object.
+  for (const table of [...tables].sort((left, right) => left.address - right.address)) {
+    while (index < ranges.length && ranges[index]!.end <= table.address - 2 * width) index++;
+    if (index < ranges.length && ranges[index]!.start < table.address + width) {
+      rejected.add(table.address);
+    }
+  }
+  return tables.filter(table => !rejected.has(table.address));
+};
+
 export const discoverItaniumRtti = async (
   image: ItaniumRttiImage
 ): Promise<ItaniumRttiAnalysis | null> => {
@@ -85,6 +106,9 @@ export const discoverItaniumRtti = async (
     const type = await graph.parse(table.typeAddress);
     if (type && await hasVirtualBaseSlots(image, address, type)) vtables.push(table);
   }
-  const types = reachableTypes(vtables.map(table => table.typeAddress), graph.cache);
-  return vtables.length ? { types, vtables, warnings: [...warnings] } : null;
+  // Wait until the whole graph is parsed: an enclosing RTTI object may be encountered later.
+  const confirmed = omitRttiOverlaps(vtables,
+    [...graph.cache.values()].filter(type => type != null), image.pointerSize);
+  const types = reachableTypes(confirmed.map(table => table.typeAddress), graph.cache);
+  return confirmed.length ? { types, vtables: confirmed, warnings: [...warnings] } : null;
 };

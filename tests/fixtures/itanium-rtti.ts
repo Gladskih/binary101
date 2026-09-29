@@ -66,7 +66,7 @@ export const createItaniumFixture = (pointerSize: 4 | 8 = 8) => {
 };
 
 export const setOrdinaryItaniumSlots = (
-  fixture: ReturnType<typeof createItaniumFixture>, slots: "one function" | "first null" | "only data"
+  fixture: ReturnType<typeof createItaniumFixture>, slots: "one function" | "first null" | "first data"
 ): void => {
   const { table, base, code } = fixture.addresses;
   fixture.pointer(table, slots === "one function" ? code : base);

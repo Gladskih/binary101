@@ -25,7 +25,7 @@ void test("batches sparse names physically and never repeats the preparation pas
   const reader = createFileRangeReader(file, 0, file.size);
   const image: ItaniumRttiImage = { pointers, pointerSize: 8, relocations: new Set(pointers.keys()),
     readOrder: address => address, read: reader.read,
-    isExecutable: () => assert.fail("Ordinary header preparation must not inspect function slots") };
+    isExecutable: () => assert.fail("Null first slots do not require executable targets") };
   const records = createItaniumRecords(image);
   assert.equal((await records.prepare()).length, 512);
   assert.ok(physicalReads <= 36, `Expected one read per physical window, got ${physicalReads}`);
