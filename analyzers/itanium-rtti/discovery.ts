@@ -1,15 +1,19 @@
 import { readItaniumBases } from "./bases.js";
-import { createItaniumRecords, readSignedWord, type ItaniumRecords } from "./records.js";
+import { createItaniumRecords, isSupportedTypeName, readSignedWord, type ItaniumRecords } from "./records.js";
 import { findItaniumRuntime } from "./runtime.js";
 import type {
   ItaniumClassKind, ItaniumRttiAnalysis, ItaniumRttiImage, ItaniumType, ItaniumVtable
 } from "./types.js";
+
+const hasSupportedHierarchy = (type: ItaniumType, publishable: Set<number>): boolean =>
+  isSupportedTypeName(type.name) && type.bases.every(base => publishable.has(base.typeAddress));
 
 const createGraphParser = (
   image: ItaniumRttiImage, records: ItaniumRecords,
   kinds: Map<number, ItaniumClassKind>, warnings: Set<string>
 ) => {
   const cache = new Map<number, ItaniumType | null>();
+  const publishable = new Set<number>();
   const active = new Set<number>();
   const parse = async (address: number): Promise<ItaniumType | null> => {
     if (cache.has(address)) return cache.get(address)!;
@@ -35,9 +39,12 @@ const createGraphParser = (
     active.delete(address);
     const result = { address, name, kind, ...body };
     cache.set(address, result);
+    // Unknown name syntax never invalidates structural metadata, including its bases.
+    // Preserve publication of supported hierarchies only, with no dangling base references.
+    if (hasSupportedHierarchy(result, publishable)) publishable.add(address);
     return result;
   };
-  return { parse, cache };
+  return { parse, cache, publishable };
 };
 
 const reachableTypes = (
@@ -111,7 +118,8 @@ export const discoverItaniumRtti = async (
     const table = await records.table(address);
     if (!table) continue;
     const type = await graph.parse(table.typeAddress);
-    if (type && await hasVirtualBaseSlots(image, address, type)) vtables.push(table);
+    if (!type || !graph.publishable.has(type.address)) continue;
+    if (await hasVirtualBaseSlots(image, address, type)) vtables.push(table);
   }
   // Wait until the whole graph is parsed: an enclosing RTTI object may be encountered later.
   const confirmed = omitRttiOverlaps(vtables,

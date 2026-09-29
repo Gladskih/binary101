@@ -22,7 +22,7 @@ type RttiOnlyFixture = ReturnType<typeof createRttiOnlyFixture>;
 for (const [label, edit] of Object.entries({
   missingRelocation: (fixture: RttiOnlyFixture) => fixture.image.relocations.delete(fixture.addresses.multiple),
   unknownRuntime: (fixture: RttiOnlyFixture) => fixture.pointer(fixture.addresses.multiple, fixture.addresses.table),
-  invalidName: (fixture: RttiOnlyFixture) => fixture.type(fixture.addresses.multiple, fixture.addresses.vmiTable, "0"),
+  emptyName: (fixture: RttiOnlyFixture) => fixture.type(fixture.addresses.multiple, fixture.addresses.vmiTable, ""),
   invalidCount: (fixture: RttiOnlyFixture) => fixture.view.setUint32(fixture.addresses.multiple + 20, 0, true),
   invalidBase: (fixture: RttiOnlyFixture) => fixture.pointer(fixture.addresses.multiple + 24, 4000),
   truncatedHeader: (fixture: RttiOnlyFixture) => {

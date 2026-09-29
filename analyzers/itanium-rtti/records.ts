@@ -53,12 +53,12 @@ const createNames = (image: ItaniumRttiImage) => {
   };
   const readString = async (target: number): Promise<string | null> => {
     // Resource policy: bound strings, including their NUL terminator, to 512 bytes.
+    // Structural NTBS validation is independent of the supported mangling grammar.
     const view = await image.read(target, 512);
     let name = "";
     for (let index = 0; index < view.byteLength; index++) {
       const value = view.getUint8(index);
-      if (value === 0) return isSupportedTypeName(name) ? name : null;
-      if (value < 33 || value > 126) return null;
+      if (value === 0) return name || null;
       name += String.fromCharCode(value);
     }
     return null;

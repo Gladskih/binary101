@@ -16,6 +16,9 @@ struct Collision : private EmptyA, private EmptyB {
 Collision collision;
 struct RttiOnly : private EmptyA, private EmptyB {};
 const std::type_info* forceRtti = &typeid(RttiOnly);
+template<typename T>
+struct RttiOnlyTemplate : private EmptyA, private EmptyB {};
+const std::type_info* forceTemplateRtti = &typeid(RttiOnlyTemplate<int>);
 
 int main(int argc, char**) {
   Derived derived;

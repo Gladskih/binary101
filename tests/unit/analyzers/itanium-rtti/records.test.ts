@@ -7,6 +7,23 @@ import { createItaniumFixture, setOrdinaryItaniumSlots } from "../../../fixtures
 for (const name of ["4Base", "N2ns4BaseE", "St9type_info", "NSt2ns4BaseE"]) {
   void test(`accepts supported encoding ${name}`, () => assert.equal(isSupportedTypeName(name), true));
 }
+for (const name of ["3FooIiE", "0", "with spaces", "\u00ff"]) {
+  void test(`reads structurally backed NTBS independently of supported grammar (${name})`, async () => {
+    const fixture = createItaniumFixture();
+    const target = fixture.image.pointers.get(fixture.addresses.base + 8)!;
+    fixture.bytes.set([...name].map(character => character.charCodeAt(0)).concat(0), target);
+
+    const result = await createItaniumRecords(fixture.image).name(fixture.addresses.base);
+
+    assert.equal(result, name);
+    assert.equal(isSupportedTypeName(result!), false);
+  });
+}
+void test("rejects an empty structurally backed name", async () => {
+  const fixture = createItaniumFixture();
+  fixture.type(fixture.addresses.base, fixture.addresses.classTable, "");
+  assert.equal(await createItaniumRecords(fixture.image).name(fixture.addresses.base), null);
+});
 for (const name of ["", "N", "NE", "St", "0", "04Base", "5Base", "1!", "4BasÃ©",
   "x4Base", "4!ase", "4Bas!", "14BaseE", "N14Base", "NE4BasE", "4Bas\u00e9",
   "4Base1X", "N4Base", "N4BaseEE", "999999999999999999999X", "3FooIiE"]) {
@@ -96,9 +113,9 @@ void test("rejects truncated bootstrap function slots even with indexed pointers
 for (const [label, edit] of Object.entries({
   missingName: (fixture: ReturnType<typeof createItaniumFixture>) =>
     fixture.image.pointers.delete(fixture.addresses.base + 8),
-  nonAscii: (fixture: ReturnType<typeof createItaniumFixture>) =>
+  unterminatedNonAscii: (fixture: ReturnType<typeof createItaniumFixture>) =>
     fixture.bytes.fill(255, fixture.image.pointers.get(fixture.addresses.base + 8)!),
-  whitespace: (fixture: ReturnType<typeof createItaniumFixture>) =>
+  unterminatedWhitespace: (fixture: ReturnType<typeof createItaniumFixture>) =>
     fixture.bytes.fill(32, fixture.image.pointers.get(fixture.addresses.base + 8)!),
   unterminated: (fixture: ReturnType<typeof createItaniumFixture>) =>
     fixture.bytes.fill(65, fixture.image.pointers.get(fixture.addresses.base + 8)!)

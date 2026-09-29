@@ -10,11 +10,13 @@ import type { PeWindowsParseResult } from "../../analyzers/pe/core/parse-result.
 import { MockFile } from "../helpers/mock-file.js";
 
 const compiler = process.env["MINGW_CXX"] ?? "C:/msys64/ucrt64/bin/g++.exe";
-const assertRttiOnlyOmitted = (parsed: PeWindowsParseResult, bytes: Buffer, map: string): void => {
+const assertRttiOnlyOmitted = (
+  parsed: PeWindowsParseResult, bytes: Buffer, map: string, encodedName: string
+): void => {
   // The link map is an independent oracle; the analyzed PE itself remains stripped.
-  const match = /^\s*(0x[0-9a-f]+)\s+_ZTI8RttiOnly\s*$/m.exec(map);
+  const match = new RegExp(`^\\s*(0x[0-9a-f]+)\\s+_ZTI${encodedName}\\s*$`, "m").exec(map);
   assert.ok(match, "The compiler must emit RTTI for the non-polymorphic class");
-  assert.doesNotMatch(map, /\b_ZTV8RttiOnly\b/);
+  assert.doesNotMatch(map, new RegExp(`\\b_ZTV${encodedName}\\b`));
   const rva = Number(BigInt(match[1]!) - parsed.opt.ImageBase);
   const section = parsed.sections.find(section => rva >= section.virtualAddress &&
     rva + 56 <= section.virtualAddress + section.sizeOfRawData);
@@ -45,7 +47,9 @@ for (const optimization of ["-O0", "-O2"]) {
       const parsed = await parsePe(new MockFile(bytes));
       assert.ok(parsed && isPeWindowsParseResult(parsed));
       assert.ok(parsed.itaniumRtti);
-      assertRttiOnlyOmitted(parsed, bytes, await readFile(mapPath, "utf8"));
+      const map = await readFile(mapPath, "utf8");
+      assertRttiOnlyOmitted(parsed, bytes, map, "8RttiOnly");
+      assertRttiOnlyOmitted(parsed, bytes, map, "16RttiOnlyTemplateIiE");
       const types = new Map(parsed.itaniumRtti.types.map(type => [type.name, type]));
       assert.equal(types.get("4Base")?.kind, "class");
       assert.equal(types.get("7Derived")?.kind, "si");
