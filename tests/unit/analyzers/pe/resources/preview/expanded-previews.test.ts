@@ -8,6 +8,7 @@ import { createPreviewDetailGroup, createPreviewFixture, createPreviewLangEntry,
 import { buildFontDirectory, buildLegacyFont } from "../../../../../fixtures/pe-font-resources.js";
 import { MockFile } from "../../../../../helpers/mock-file.js";
 import { parseManifestTestXmlDocument } from "../../../../../helpers/manifest-test-parser.js";
+import { compressedMofFixture } from "../../../../../helpers/binary-mof-fixture.js";
 
 void test("routes FONTDIR, FONT and numeric MFC types through the browser preview contract", async () => {
   const fixture = createPreviewFixture(2048);
@@ -71,4 +72,18 @@ void test("routes WEVT_TEMPLATE through the resource preview and renderer", asyn
   const lang = result.detail[0]?.entries[0]?.langs[0];
   assert.equal(lang?.previewKind, "wevtTemplate");
   assert.match(renderPreviewCell(lang), /Windows Event manifest v3.1/);
+});
+
+void test("routes MOFDATA through the browser preview contract", async () => {
+  const fixture = createPreviewFixture(512);
+  const range = fixture.appendData(compressedMofFixture());
+  const detail = [createPreviewDetailGroup("MOFDATA", 1,
+    createPreviewLangEntry(range.offset, range.size))];
+  const result = await enrichResourcePreviews(new MockFile(fixture.fileBytes),
+    createPreviewTree(detail));
+  const lang = result.detail[0]?.entries[0]?.langs[0];
+  assert.equal(lang?.previewKind, "binaryMof");
+  assert.equal(renderPreviewSummary(lang), "1 WMI classes");
+  assert.match(renderPreviewCell(lang), /TestClass/);
+  assert.match(renderPreviewCell(lang), /12345678-1234-1234-1234-123456789abc/);
 });

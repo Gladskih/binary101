@@ -195,3 +195,94 @@ void test("survives every truncation point of a class section", () => {
       Math.min(firstPartEnd(fixture), length), issues));
   }
 });
+
+void test("rejects short records before reading their fixed headers", () => {
+  // bmfparse.c: class, variable, and method headers are 20 bytes; qualifier headers are 16.
+  // https://github.com/pali/bmfdec/blob/master/bmfparse.c
+  const shortClass = parse(changeWord(() => classStart, 19));
+  const shortQualifier = parse(changeWord(() => qualifiersStart + 8, 15));
+  const shortVariable = parse(changeWord(bytes => variableStart(bytes) + 8, 19));
+  const shortMethod = parse(changeWord(bytes => methodStart(bytes) + 8, 19));
+  assert.match(shortClass.issues.join(" "), /class records/);
+  assert.match(shortQualifier.issues.join(" "), /qualifier records/);
+  assert.match(shortVariable.issues.join(" "), /variable records/);
+  assert.match(shortMethod.issues.join(" "), /method records/);
+});
+
+void test("rejects inconsistent class data and qualifier block lengths", () => {
+  const shortQualifiers = parse(changeWord(() => classStart + 8, 7));
+  const reversed = parse(changeWord(() => classStart + 12, 7));
+  const oversized = parse(changeWord(() => classStart + 12, 0xffffffff));
+  const unknownKind = parse(changeWord(() => classStart + 16, 2));
+  for (const result of [shortQualifiers, reversed, oversized, unknownKind]) {
+    assert.deepEqual(result.classes, []);
+    assert.match(result.issues.join(" "), /class data/);
+  }
+});
+
+void test("accepts alternate encoded name lengths in variables and methods", () => {
+  const source = decodedMofFixture();
+  const variable = changeWord(bytes => secondVariableStart(bytes) + 12,
+    new DataView(source.buffer).getUint32(secondVariableStart(source) + 16, true));
+  const method = changeWord(bytes => methodStart(bytes) + 8 + 12, 0xffffffff);
+  const parsedVariable = parse(variable);
+  const parsedMethod = parse(method);
+  assert.deepEqual(parsedVariable.classes[0]?.properties,
+    [{ name: "Payload", type: "UInt32" }]);
+  assert.deepEqual(parsedMethod.classes[0]?.methods, ["Refresh"]);
+  assert.deepEqual(parsedVariable.issues, []);
+  assert.deepEqual(parsedMethod.issues, []);
+});
+
+void test("rejects malformed GUID values and the second root version field", () => {
+  const source = decodedMofFixture();
+  const recordSize = new DataView(source.buffer).getUint32(qualifiersStart + 8, true);
+  const guid = parse(changeWord(() => qualifiersStart + 8, recordSize - 1));
+  const version = parse(changeWord(() => 12, 2));
+  assert.match(guid.issues.join(" "), /qualifier records/);
+  assert.deepEqual(version.classes, []);
+  assert.deepEqual(version.issues, ["Binary MOF class root version is unsupported."]);
+});
+
+void test("checks class and nested table counts independently of byte lengths", () => {
+  const noClasses = parse(changeWord(() => 16, 0));
+  const extraClass = parse(changeWord(() => 16, 2));
+  const noQualifiers = parse(changeWord(() => qualifiersStart + 4, 0));
+  const noVariables = parse(changeWord(bytes => variableStart(bytes) + 4, 0));
+  const noMethods = parse(changeWord(bytes => methodStart(bytes) + 4, 0));
+  assert.deepEqual(noClasses.classes, []);
+  assert.match(noClasses.issues.join(" "), /class records/);
+  assert.equal(extraClass.classes.length, 1);
+  assert.match(extraClass.issues.join(" "), /class records/);
+  assert.match(noQualifiers.issues.join(" "), /qualifier records/);
+  assert.match(noVariables.issues.join(" "), /variable records/);
+  assert.match(noMethods.issues.join(" "), /method records/);
+});
+
+void test("reports a class data block with no variable table header", () => {
+  const source = decodedMofFixture();
+  const qualifierSize = new DataView(source.buffer).getUint32(classStart + 8, true);
+  const result = parse(changeWord(() => classStart + 12, qualifierSize));
+  assert.match(result.issues.join(" "), /variable table is truncated/);
+});
+
+void test("does not expose fields from records that exceed their table", () => {
+  // An oversized record must stay inside its declared table, even when the file has later bytes.
+  const qualifier = parse(changeWord(() => qualifiersStart + 8, 0xfffffffe));
+  const variable = parse(changeWord(bytes => variableStart(bytes) + 8, 0xfffffffe));
+  const method = parse(changeWord(bytes => methodStart(bytes) + 8, 0xfffffffe));
+  assert.equal(qualifier.classes[0]?.guid, null);
+  assert.equal(variable.classes[0]?.name, null);
+  assert.deepEqual(method.classes[0]?.methods, []);
+  assert.match(qualifier.issues.join(" "), /qualifier records/);
+  assert.match(variable.issues.join(" "), /variable records/);
+  assert.match(method.issues.join(" "), /method records/);
+});
+
+void test("reports a class property with a valid name and truncated value", () => {
+  const source = decodedMofFixture();
+  const recordSize = new DataView(source.buffer).getUint32(variableStart(source) + 8, true);
+  const result = parse(changeWord(bytes => variableStart(bytes) + 8, recordSize - 1));
+  assert.equal(result.classes[0]?.name, null);
+  assert.match(result.issues.join(" "), /property string/);
+});
