@@ -62,3 +62,14 @@ void test("export table pages the DOM while retaining every entry in its model",
   assert.match(lastPage, /export-250/);
   assert.doesNotMatch(lastPage, /export-249/);
 });
+
+void test("marks an export named explicitly by a type library module", () => {
+  const model = createExportTableModel([
+    { ordinal: 12, rva: 4096, names: ["RunExport"] },
+    { ordinal: 13, rva: 8192, names: ["Other"] }
+  ], [{ ordinal: 12, library: "Lib<", module: "Module", function: "Run", entry: "RunExport" }]);
+  assert.equal(model.columns.at(-1)?.label, "TYPELIB module");
+  assert.match(model.rowAt(0)?.cells.at(-1)?.html ?? "", /Lib&lt; \/ Module\.Run/u);
+  assert.equal(model.rowAt(1)?.cells.at(-1)?.html, "-");
+  assert.equal(model.sortValueAt(0, 5), "Lib< / Module.Run");
+});

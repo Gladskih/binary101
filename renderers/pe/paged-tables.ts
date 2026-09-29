@@ -22,6 +22,8 @@ import {
 } from "./go-runtime.js";
 import { getNativeAotReflectionTypeTableModel } from "../native-aot/reflection.js";
 import { createExportTableModel, EXPORT_TABLE_ID } from "./export-table.js";
+import { analyzeTypeLibraryExports } from
+  "../../analyzers/pe/resources/type-library-export-links.js";
 import { getOmapTableModel } from "./omap.js";
 import { createDRuntimeModuleTableModel, D_MODULE_TABLE_ID } from "./d-runtime.js";
 import { createDRuntimeReferenceTableModel, D_REFERENCE_TABLE_ID } from "./d-runtime-references.js";
@@ -94,7 +96,8 @@ export const getPePagedTableModel = (
       ? getPeDisassemblyStringTableModel(pe, tableId) ??
         getOmapTableModel(pe, tableId) ??
         (tableId === EXPORT_TABLE_ID && pe.exports
-          ? createExportTableModel(pe.exports.entries)
+          ? createExportTableModel(pe.exports.entries,
+            analyzeTypeLibraryExports(pe.resources, pe.exports).matches)
           : null) ??
         (tableId === GO_FUNCTION_TABLE_ID && pe.goRuntime
           ? createGoRuntimeFunctionTableModel(pe.goRuntime.functions)

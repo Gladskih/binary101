@@ -15,6 +15,8 @@ import {
 } from "../../analyzers/pe/tls-characteristics.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import { createExportTableModel } from "./export-table.js";
+import type { TypeLibraryExportMatch } from
+  "../../analyzers/pe/resources/type-library-export-links.js";
 import { renderAutoPagedSortableTable } from "../paged-sortable-table.js";
 
 type PeExportSection = NonNullable<PeWindowsParseResult["exports"]>;
@@ -137,7 +139,9 @@ const renderTlsFields = (tls: PeTlsSection, out: string[]): void => {
   out.push(`</tbody></table></div>`);
 };
 
-export function renderExports(ex: PeExportSection, out: string[]): void {
+export function renderExports(
+  ex: PeExportSection, out: string[], typeLibraryMatches: TypeLibraryExportMatch[] = []
+): void {
   out.push(
     renderPeSectionStart(
       "Export directory",
@@ -156,7 +160,7 @@ export function renderExports(ex: PeExportSection, out: string[]): void {
     out.push(`</ul>`);
   }
   if (ex.entries?.length) {
-    out.push(renderAutoPagedSortableTable(createExportTableModel(ex.entries)));
+    out.push(renderAutoPagedSortableTable(createExportTableModel(ex.entries, typeLibraryMatches)));
   }
   out.push(renderPeSectionEnd());
 }

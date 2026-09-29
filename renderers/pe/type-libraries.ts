@@ -1,5 +1,9 @@
 import type { PeResources } from "../../analyzers/pe/resources/index.js";
 import type { ResourceTypeLibraryPreview } from "../../analyzers/pe/resources/preview/types.js";
+import type { TypeLibraryExportAnalysis } from
+  "../../analyzers/pe/resources/type-library-export-links.js";
+import type { TypeLibraryRegistrationLink } from
+  "../../analyzers/pe/resources/type-library-registry-links.js";
 import type { TypeLibraryAnalysis, TypeLibraryType } from "../../analyzers/pe/type-library/types.js";
 import { escapeHtml } from "../../html-utils.js";
 import { renderPeSectionStart, renderPeSectionEnd } from "./collapsible-section.js";
@@ -55,7 +59,19 @@ const renderAnalysis = (library: ResourceTypeLibraryPreview): string => {
     renderTypeLibraryPreview(library) + `</details>`;
 };
 
-export const renderTypeLibraries = (resources: PeResources | null | undefined): string => {
+const renderExportAnalysis = (analysis: TypeLibraryExportAnalysis): string =>
+  renderTypeLibraryTable("DLL entry cross-check",
+    ["Library", "Module function", "Declared entry", "PE export ordinal"],
+    analysis.matches.map(match => [match.library, `${match.module}.${match.function}`,
+      match.entry, match.ordinal])) +
+  (analysis.warnings.length ? `<ul class="smallNote">${analysis.warnings.map(warning =>
+    `<li>${escapeHtml(warning)}</li>`).join("")}</ul>` : "");
+
+export const renderTypeLibraries = (
+  resources: PeResources | null | undefined,
+  exportAnalysis: TypeLibraryExportAnalysis = { matches: [], warnings: [] },
+  registrationLinks: TypeLibraryRegistrationLink[] = []
+): string => {
   const groups = resources?.detail?.filter(group => group.typeName === "TYPELIB") ?? [];
   if (!groups.length) return "";
   return renderPeSectionStart("Type libraries (COM)") +
@@ -66,5 +82,9 @@ export const renderTypeLibraries = (resources: PeResources | null | undefined): 
       : `<p>Type library could not be decoded.</p>`) +
     (lang.previewIssues?.length ? `<ul class="smallNote">${lang.previewIssues.map(issue =>
       `<li>${escapeHtml(issue)}</li>`).join("")}</ul>` : "") + `</article>`
-  ))).join("") + renderPeSectionEnd();
+  ))).join("") + renderExportAnalysis(exportAnalysis) +
+    renderTypeLibraryTable("Embedded COM registrations",
+      ["Library", "Kind", "Contract", "GUID", "RGS resource"],
+      registrationLinks.map(link => [link.library, link.kind, link.name,
+        link.guid, link.registryResource])) + renderPeSectionEnd();
 };

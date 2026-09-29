@@ -14,6 +14,10 @@ import { renderDebug } from "../renderers/pe/debug-view.js";
 import { renderPeDwarf } from "../renderers/pe/dwarf.js";
 import { renderResources } from "../renderers/pe/resources.js";
 import { renderTypeLibraries } from "../renderers/pe/type-libraries.js";
+import { analyzeTypeLibraryExports } from
+  "../analyzers/pe/resources/type-library-export-links.js";
+import { analyzeTypeLibraryRegistrations } from
+  "../analyzers/pe/resources/type-library-registry-links.js";
 import { openPeTypeLibrarySection } from "./pe-type-library-navigation.js";
 import { renderException } from "../renderers/pe/exception.js";
 import { renderNativeAotCandidate } from "../renderers/pe/native-aot.js";
@@ -115,9 +119,11 @@ const WINDOWS_LAZY_RENDERERS: Partial<Record<
   [PE_LAZY_SECTION_KEYS.resources]: (pe: PeWindowsParseResult) =>
     pe.resources ? renderToString(out => renderResources(pe.resources!, out)) : "",
   [PE_LAZY_SECTION_KEYS.typeLibraries]: (pe: PeWindowsParseResult) =>
-    renderTypeLibraries(pe.resources),
+    renderTypeLibraries(pe.resources, analyzeTypeLibraryExports(pe.resources, pe.exports),
+      analyzeTypeLibraryRegistrations(pe.resources)),
   [PE_LAZY_SECTION_KEYS.exports]: (pe: PeWindowsParseResult) =>
-    pe.exports ? renderToString(out => renderExports(pe.exports!, out)) : "",
+    pe.exports ? renderToString(out => renderExports(pe.exports!, out,
+      analyzeTypeLibraryExports(pe.resources, pe.exports).matches)) : "",
   [PE_LAZY_SECTION_KEYS.tls]: (pe: PeWindowsParseResult) =>
     pe.tls ? renderToString(out => renderTls(pe.tls!, out)) : "",
   [PE_LAZY_SECTION_KEYS.reloc]: (pe: PeWindowsParseResult) =>

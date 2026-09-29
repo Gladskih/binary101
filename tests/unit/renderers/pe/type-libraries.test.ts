@@ -53,3 +53,23 @@ void test("SLTG imported type kinds are shown as unavailable rather than guessed
   data.detail[0]!.entries[0]!.langs[0]!.typeLibrary!.analysis!.importedTypes[0]!.flags = null;
   assert.match(renderTypeLibraries(data), /Not recorded/);
 });
+
+void test("shows explicit module export matches and unresolved entries", () => {
+  const html = renderTypeLibraries(resources(), { matches: [
+    { ordinal: 7, library: "Lib", module: "Module", function: "Run", entry: "RunExport" }
+  ], warnings: ["Missing <entry>"] });
+  assert.match(html, /DLL entry cross-check/);
+  assert.match(html, /Module\.Run/);
+  assert.match(html, /RunExport/);
+  assert.match(html, /Missing &lt;entry>/);
+});
+
+void test("shows RGS registrations linked by exact LIBID, CLSID, and IID", () => {
+  const html = renderTypeLibraries(resources(), { matches: [], warnings: [] }, [
+    { kind: "CLSID", guid: "12345678-1234-1234-1234-123456789abc", library: "Lib",
+      name: "Class", registryResource: "test<.rgs" }
+  ]);
+  assert.match(html, /Embedded COM registrations/);
+  assert.match(html, /CLSID/);
+  assert.match(html, /test&lt;\.rgs/);
+});
