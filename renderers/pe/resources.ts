@@ -184,6 +184,19 @@ const renderResourceIntro = (resources: PeResources, out: string[]): void => {
   }
 };
 
+const renderResourceCrossChecks = (resources: PeResources, out: string[]): void => {
+  if (!resources.crossChecks?.length) return;
+  out.push(`<details style="margin-top:.75rem"><summary><b>Resource cross-checks</b> - ` +
+    `${resources.crossChecks.length}</summary>`);
+  out.push(`<div style="overflow-x:auto"><table class="table"><thead><tr>` +
+    `<th>Status</th><th>Resource</th><th>Finding</th></tr></thead><tbody>`);
+  for (const check of resources.crossChecks) {
+    out.push(`<tr><td>${check.status === "confirmed" ? "Confirmed" : "Warning"}</td>` +
+      `<td>${escapeHtml(check.subject)}</td><td>${escapeHtml(check.detail)}</td></tr>`);
+  }
+  out.push(`</tbody></table></div></details>`);
+};
+
 const renderTopResourceKinds = (resources: PeResources, out: string[]): void => {
   const topRows = resources.top || [];
   if (!topRows.length) return;
@@ -254,6 +267,7 @@ const renderAdditionalResourcePaths = (resources: PeResources, out: string[]): v
 
 export function renderResources(resources: PeResources, out: string[]): void {
   renderResourceIntro(resources, out);
+  renderResourceCrossChecks(resources, out);
   renderTopResourceKinds(resources, out);
   renderResourceDirectories(resources, out);
   renderResourceDetails(resources, out);

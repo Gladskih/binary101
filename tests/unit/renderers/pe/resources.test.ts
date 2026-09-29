@@ -275,3 +275,17 @@ void test("renderResources renders preview cells for common resource types", () 
   assert.match(html, /European Spanish/);
   assert.match(html, /Resource bytes could not be read/);
 });
+
+void test("renders resource cross-checks as escaped status rows", () => {
+  const out: string[] = [];
+  renderResources({ top: [], detail: [], crossChecks: [
+    { status: "confirmed", subject: "Dialog <7>", detail: "MENU matches" },
+    { status: "warning", subject: "Dialog 8", detail: "Missing <MENU>" }
+  ] }, out);
+  const html = out.join("");
+  assert.match(html, /Resource cross-checks/);
+  assert.match(html, /Dialog &lt;7>/);
+  assert.match(html, /Missing &lt;MENU>/);
+  assert.match(html, /Confirmed/);
+  assert.match(html, /Warning/);
+});

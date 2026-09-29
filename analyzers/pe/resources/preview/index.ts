@@ -7,6 +7,7 @@ import { addDialogPreview } from "./dialog.js";
 import { addDialogInitPreview } from "./dialog-init.js";
 import { addDialogLayoutPreview } from "./dialog-layout.js";
 import { linkDialogLayouts } from "./dialog-layout-links.js";
+import { collectResourceCrossChecks } from "../resource-consistency.js";
 import { addToolbarPreview } from "./toolbar.js";
 import { addFontDirectoryPreview } from "./font-directory.js";
 import { validateFontReferences } from "./font-reference-validation.js";
@@ -232,6 +233,7 @@ export async function enrichResourcePreviews(
   directories?: ResourceTree["directories"];
   paths?: ResourceTree["paths"];
   muiResourceConfiguration?: MuiResourceConfiguration;
+  crossChecks?: ReturnType<typeof collectResourceCrossChecks>;
   issues?: string[];
 }> {
   const detail = tree.detail as ResourceDetailGroup[];
@@ -254,10 +256,13 @@ export async function enrichResourcePreviews(
     parseManifestXmlDocument
   );
   const issues = [...(tree.issues || [])];
+  const enrichedDetail = linkDialogLayouts(linkWevtMessages(
+    validateFontReferences(attachDetailPreviews(detail, decodedGroups))));
+  const crossChecks = collectResourceCrossChecks(enrichedDetail);
   return {
     top: tree.top,
-    detail: linkDialogLayouts(linkWevtMessages(
-      validateFontReferences(attachDetailPreviews(detail, decodedGroups)))),
+    detail: enrichedDetail,
+    ...(crossChecks.length ? { crossChecks } : {}),
     ...(tree.directories?.length ? { directories: tree.directories } : {}),
     ...(tree.paths?.length ? { paths: tree.paths } : {}),
     ...(muiResource?.result.configuration

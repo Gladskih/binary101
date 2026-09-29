@@ -11,6 +11,7 @@ import {
 import type { MuiResourceConfiguration } from "./mui-config.js";
 import type { ResourceDetailGroup } from "./preview/types.js";
 import type { ResourceTree } from "./tree-types.js";
+import type { ResourceCrossCheck } from "./resource-consistency.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 
 export interface PeResources {
@@ -20,6 +21,7 @@ export interface PeResources {
   paths?: ResourceTree["paths"];
   muiResourceConfiguration?: MuiResourceConfiguration;
   issues?: string[];
+  crossChecks?: ResourceCrossCheck[];
 }
 
 export async function parseResources(
