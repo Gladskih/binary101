@@ -1,6 +1,7 @@
 "use strict";
 
 import type { ResourcePreviewData } from "./types.js";
+import { parseRibbonBmlTree } from "./ribbon-bml-tree.js";
 
 type RibbonBml = NonNullable<ResourcePreviewData["ribbonBml"]>;
 
@@ -46,10 +47,10 @@ const readStrings = (
 
 const readCommands = (
   bytes: Uint8Array, view: DataView, start: number, issues: string[]
-): RibbonBml["commands"] => {
+): { commands: RibbonBml["commands"]; end: number } => {
   if (!within(start, 4, bytes.length)) {
     issues.push("Compiled BML command table is truncated.");
-    return [];
+    return { commands: [], end: bytes.length };
   }
   const count = view.getUint32(start, true);
   const commands: RibbonBml["commands"] = [];
@@ -57,7 +58,7 @@ const readCommands = (
   for (let index = 0; index < count; index += 1) {
     if (!within(cursor, 5, bytes.length)) {
       issues.push("Compiled BML command record is truncated.");
-      break;
+      return { commands, end: bytes.length };
     }
     const id = view.getUint32(cursor, true);
     const resourceCount = bytes[cursor + 4] ?? 0;
@@ -66,7 +67,7 @@ const readCommands = (
     for (let item = 0; item < resourceCount; item += 1) {
       if (!within(cursor, 5, bytes.length)) {
         issues.push("Compiled BML command resource is truncated.");
-        return commands;
+        return { commands, end: bytes.length };
       }
       const type = bytes[cursor] ?? 0;
       const resourceId = view.getUint32(cursor + 1, true);
@@ -75,7 +76,7 @@ const readCommands = (
       if (type >= 3 && type <= 6) {
         if (!within(cursor, 2, bytes.length)) {
           issues.push("Compiled BML image DPI is truncated.");
-          return commands;
+          return { commands, end: bytes.length };
         }
         resources.push({ kind, resourceId, minimumDpi: view.getUint16(cursor, true) });
         cursor += 2;
@@ -83,7 +84,7 @@ const readCommands = (
     }
     commands.push({ id, resources });
   }
-  return commands;
+  return { commands, end: cursor };
 };
 
 export const parseRibbonBml = (
@@ -107,6 +108,8 @@ export const parseRibbonBml = (
     return { strings: [], commands: [] };
   }
   const end = 19 + size;
+  const { commands, end: treeStart } = readCommands(bytes, view, end, issues);
+  const tree = treeStart < bytes.length ? parseRibbonBmlTree(bytes, treeStart, issues) : null;
   return { strings: readStrings(bytes, view, 23, end, issues),
-    commands: readCommands(bytes, view, end, issues) };
+    commands, ...(tree ? { tree } : {}) };
 };

@@ -6,6 +6,7 @@ import type { TypeLibraryAnalysis } from "../../type-library/types.js";
 import type { ResourceFontDirectory, ResourceFontPreview } from "./font-types.js";
 import type { RegistryScript } from "./registry-types.js";
 import type { BinaryMofClass } from "./mof-classes.js";
+import type { RibbonBmlControl } from "./ribbon-bml-tree.js";
 
 export interface ResourcePreviewField {
   label: string;
@@ -158,7 +159,7 @@ export interface ResourceTypeLibraryPreview {
 
 export interface ResourcePreviewData {
   binaryMof?: { classes: BinaryMofClass[]; flavorCount: number };
-  ribbonBml?: { strings: string[]; commands: Array<{ id: number; resources: Array<{
+  ribbonBml?: { strings: string[]; tree?: RibbonBmlControl; commands: Array<{ id: number; resources: Array<{
     kind: string; resourceId: number; minimumDpi?: number
   }> }> };
   wevtTemplate?: { version: string; providers: ResourceWevtProvider[] };

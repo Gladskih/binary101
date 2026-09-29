@@ -24,6 +24,17 @@ void test("parses compiled Ribbon strings and command resources", () => {
   assert.deepEqual(issues, []);
 });
 
+void test("links the command table to a compiled control tree", () => {
+  const bytes = Uint8Array.from([...fixture(),
+    // new.ksy type_tree_entry_node: node type 22, control type 15 = button.
+    22, 0, 15, 0, 16, 0, 0, 0]);
+  new DataView(bytes.buffer).setUint32(14, bytes.length, true);
+  const issues: string[] = [];
+  assert.deepEqual(parseRibbonBml(bytes, issues)?.tree,
+    { kind: "Button", commandId: null, children: [] });
+  assert.deepEqual(issues, []);
+});
+
 void test("bounds checks the header and declared string-section size", () => {
   const bytes = fixture();
   const truncated: string[] = [];
