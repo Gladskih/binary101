@@ -14,6 +14,8 @@ struct Collision : private EmptyA, private EmptyB {
   virtual int value() const { return 4; }
 };
 Collision collision;
+struct RttiOnly : private EmptyA, private EmptyB {};
+const std::type_info* forceRtti = &typeid(RttiOnly);
 
 int main(int argc, char**) {
   Derived derived;

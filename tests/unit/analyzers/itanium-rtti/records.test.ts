@@ -26,6 +26,23 @@ void test("caches name and vtable reads", async () => {
   });
 });
 
+void test("prepares standalone type names once, including failed and duplicate candidates", async () => {
+  const fixture = createItaniumFixture();
+  const read = fixture.image.read;
+  let reads = 0;
+  fixture.image.read = (address, size) => { reads++; return read(address, size); };
+  const records = createItaniumRecords(fixture.image);
+  const addresses = [fixture.addresses.base, fixture.addresses.base, 4088];
+  await records.prepareTypes(addresses);
+  assert.equal(await records.name(fixture.addresses.base), "4Base");
+  assert.equal(await records.name(4088), null);
+  const before = reads;
+
+  await records.prepareTypes(addresses);
+
+  assert.equal(reads, before);
+});
+
 for (const available of [16, 17, 23, 24]) {
   void test(`requires one complete first slot (${available} bytes available)`, async () => {
     const fixture = createItaniumFixture();

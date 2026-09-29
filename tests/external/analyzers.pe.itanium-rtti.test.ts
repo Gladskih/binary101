@@ -6,9 +6,28 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { isPeWindowsParseResult, parsePe } from "../../analyzers/pe/index.js";
+import type { PeWindowsParseResult } from "../../analyzers/pe/core/parse-result.js";
 import { MockFile } from "../helpers/mock-file.js";
 
 const compiler = process.env["MINGW_CXX"] ?? "C:/msys64/ucrt64/bin/g++.exe";
+const assertRttiOnlyOmitted = (parsed: PeWindowsParseResult, bytes: Buffer, map: string): void => {
+  // The link map is an independent oracle; the analyzed PE itself remains stripped.
+  const match = /^\s*(0x[0-9a-f]+)\s+_ZTI8RttiOnly\s*$/m.exec(map);
+  assert.ok(match, "The compiler must emit RTTI for the non-polymorphic class");
+  assert.doesNotMatch(map, /\b_ZTV8RttiOnly\b/);
+  const rva = Number(BigInt(match[1]!) - parsed.opt.ImageBase);
+  const section = parsed.sections.find(section => rva >= section.virtualAddress &&
+    rva + 56 <= section.virtualAddress + section.sizeOfRawData);
+  assert.ok(section);
+  const offset = section.pointerToRawData + rva - section.virtualAddress;
+  // x64 VMI: 2 bases at +20, private zero offsets at +32 and +48.
+  assert.equal(bytes.readUInt32LE(offset + 20), 2);
+  assert.equal(bytes.readBigUInt64LE(offset + 32), 0n);
+  assert.equal(bytes.readBigUInt64LE(offset + 48), 0n);
+  assert.equal(parsed.itaniumRtti!.vtables.some(table => table.address >= rva &&
+    table.address < rva + 56), false);
+  assert.equal(parsed.itaniumRtti!.types.some(type => type.address === rva), false);
+};
 for (const optimization of ["-O0", "-O2"]) {
   void test(`recognizes real stripped static MinGW RTTI (${optimization})`, {
     skip: !existsSync(compiler)
@@ -16,13 +35,17 @@ for (const optimization of ["-O0", "-O2"]) {
     const directory = await mkdtemp(join(tmpdir(), "binary101-itanium-"));
     try {
       const executable = join(directory, "fixture.exe");
+      const mapPath = join(directory, "fixture.map");
       execFileSync(compiler, [resolve("samples/pe-disassembly/cpp/itanium-rtti.cpp"),
-        "-o", executable, optimization, "-static", "-s", "-Wl,--dynamicbase"], {
+        "-o", executable, optimization, "-static", "-s", "-Wl,--dynamicbase",
+        `-Wl,-Map=${mapPath},--no-demangle`], {
         env: { ...process.env, PATH: dirname(compiler) + ";" + process.env["PATH"] }
       });
-      const parsed = await parsePe(new MockFile(await readFile(executable)));
+      const bytes = await readFile(executable);
+      const parsed = await parsePe(new MockFile(bytes));
       assert.ok(parsed && isPeWindowsParseResult(parsed));
       assert.ok(parsed.itaniumRtti);
+      assertRttiOnlyOmitted(parsed, bytes, await readFile(mapPath, "utf8"));
       const types = new Map(parsed.itaniumRtti.types.map(type => [type.name, type]));
       assert.equal(types.get("4Base")?.kind, "class");
       assert.equal(types.get("7Derived")?.kind, "si");

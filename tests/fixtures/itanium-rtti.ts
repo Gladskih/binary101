@@ -76,3 +76,21 @@ export const setOrdinaryItaniumSlots = (
   fixture.image.relocations.delete(table);
   fixture.word(table, 0n);
 };
+
+export const createRttiOnlyFixture = (width: 4 | 8) => {
+  const fixture = createItaniumFixture(width);
+  const { multiple, vmiTable, vmiObjectTable, classTable } = fixture.addresses;
+  fixture.type(multiple, vmiTable, "8RttiOnly");
+  fixture.type(1024, classTable, "6EmptyA");
+  fixture.type(1056, classTable, "6EmptyB");
+  fixture.view.setUint32(multiple + 2 * width + 4, 2, true);
+  // ABI 2.9.5: two private empty bases, each at offset zero.
+  const array = multiple + 2 * width + 8;
+  fixture.pointer(array, 1024);
+  fixture.word(array + width, 0n);
+  fixture.pointer(array + 2 * width, 1056);
+  fixture.word(array + 3 * width, 0n);
+  fixture.image.pointers.delete(vmiObjectTable - width);
+  fixture.image.relocations.delete(vmiObjectTable - width);
+  return { ...fixture, falseAddressPoint: array + 3 * width };
+};

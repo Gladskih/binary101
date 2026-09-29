@@ -99,6 +99,13 @@ export const discoverItaniumRtti = async (
   if (!kinds.size) return null;
   const warnings = new Set<string>();
   const graph = createGraphParser(image, records, kinds, warnings);
+  // ABI 2.9.2: typeid/exceptions can emit RTTI without any user vtable.
+  // Validate every relocated runtime vptr before using RTTI ranges to exclude overlaps.
+  const typeAddresses = [...image.pointers].filter(([site, target]) =>
+    image.relocations.has(site) && kinds.has(target)
+  ).map(([site]) => site).sort((left, right) => image.readOrder(left) - image.readOrder(right));
+  await records.prepareTypes(typeAddresses);
+  for (const address of typeAddresses) await graph.parse(address);
   const vtables: ItaniumRttiAnalysis["vtables"] = [];
   for (const address of await records.prepare()) {
     const table = await records.table(address);

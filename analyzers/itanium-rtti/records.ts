@@ -63,10 +63,19 @@ const createNames = (image: ItaniumRttiImage) => {
     }
     return null;
   };
-  return { header,
-    name: (address: number): Promise<string | null> => {
-      if (!names.has(address)) names.set(address, readName(address));
-      return names.get(address)!;
+  const name = (address: number): Promise<string | null> => {
+    if (!names.has(address)) names.set(address, readName(address));
+    return names.get(address)!;
+  };
+  return { name,
+    prepare: async (addresses: Iterable<number>): Promise<void> => {
+      const ordered = [...new Set(addresses)].filter(address => !names.has(address))
+        .sort((left, right) => image.readOrder(left) - image.readOrder(right));
+      // Separate physical passes avoid bouncing between type records and distant names.
+      for (const address of ordered) await header(address);
+      ordered.sort((left, right) => image.readOrder(image.pointers.get(left + image.pointerSize)!) -
+        image.readOrder(image.pointers.get(right + image.pointerSize)!));
+      for (const address of ordered) await name(address);
     }
   };
 };
@@ -109,12 +118,7 @@ const createPreparation = (
       const entry = await table(address);
       if (entry) typeAddresses.add(entry.typeAddress);
     }
-    // Separate physical passes avoid bouncing between type records and distant names.
-    const ordered = [...typeAddresses].sort((left, right) => image.readOrder(left) - image.readOrder(right));
-    for (const address of ordered) await names.header(address);
-    ordered.sort((left, right) => image.readOrder(image.pointers.get(left + image.pointerSize)!) -
-      image.readOrder(image.pointers.get(right + image.pointerSize)!));
-    for (const address of ordered) await names.name(address);
+    await names.prepare(typeAddresses);
     prepared = candidates;
     return prepared;
   };
@@ -138,6 +142,7 @@ export const createItaniumRecords = (image: ItaniumRttiImage) => {
   };
   return {
     prepare: createPreparation(image, names, table),
+    prepareTypes: names.prepare,
     name: names.name,
     table,
     runtimeTable: (address: number): Promise<ItaniumVtable | null> => {

@@ -1,7 +1,49 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { discoverItaniumRtti } from "../../../../analyzers/itanium-rtti/discovery.js";
-import { createItaniumFixture, setOrdinaryItaniumSlots } from "../../../fixtures/itanium-rtti.js";
+import { createItaniumFixture, createRttiOnlyFixture, setOrdinaryItaniumSlots } from
+  "../../../fixtures/itanium-rtti.js";
+
+for (const width of [4, 8] as const) {
+  void test(`reserves ${width}-byte RTTI without a user vtable but does not publish orphan types`, async () => {
+    const fixture = createRttiOnlyFixture(width);
+    fixture.image.readOrder = address => fixture.bytes.length - address;
+
+    const result = await discoverItaniumRtti(fixture.image);
+
+    assert.ok(result);
+    assert.equal(result.vtables.some(table => table.address === fixture.falseAddressPoint), false);
+    assert.equal(result.types.some(type => ["8RttiOnly", "6EmptyA", "6EmptyB"].includes(type.name)), false);
+    assert.deepEqual(result.warnings, []);
+  });
+}
+
+type RttiOnlyFixture = ReturnType<typeof createRttiOnlyFixture>;
+for (const [label, edit] of Object.entries({
+  missingRelocation: (fixture: RttiOnlyFixture) => fixture.image.relocations.delete(fixture.addresses.multiple),
+  unknownRuntime: (fixture: RttiOnlyFixture) => fixture.pointer(fixture.addresses.multiple, fixture.addresses.table),
+  invalidName: (fixture: RttiOnlyFixture) => fixture.type(fixture.addresses.multiple, fixture.addresses.vmiTable, "0"),
+  invalidCount: (fixture: RttiOnlyFixture) => fixture.view.setUint32(fixture.addresses.multiple + 20, 0, true),
+  invalidBase: (fixture: RttiOnlyFixture) => fixture.pointer(fixture.addresses.multiple + 24, 4000),
+  truncatedHeader: (fixture: RttiOnlyFixture) => {
+    const read = fixture.image.read;
+    fixture.image.read = (address, size) => read(address,
+      address === fixture.addresses.multiple ? 8 : size);
+  }
+})) {
+  void test(`does not reserve unvalidated standalone RTTI bytes (${label})`, async () => {
+    const fixture = createRttiOnlyFixture(8);
+    edit(fixture);
+
+    const result = await discoverItaniumRtti(fixture.image);
+
+    assert.ok(result);
+    // These bytes meet the vtable predicate; only fully validated metadata may exclude them.
+    assert.ok(result.vtables.some(table => table.address === fixture.falseAddressPoint));
+    assert.equal(result.types.some(type => type.name === "8RttiOnly"), false);
+    assert.deepEqual(result.warnings, []);
+  });
+}
 
 for (const width of [4, 8] as const) {
   for (const slots of ["one function", "first null"] as const) {
