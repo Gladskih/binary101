@@ -76,6 +76,7 @@ export const buildWindowsPeResult = (
     tls: directories.tls,
     reloc: directories.reloc,
     msvcRtti: directories.msvcRtti,
+    itaniumRtti: directories.itaniumRtti,
     exception: directories.exception,
     boundImports: directories.boundImports,
     delayImports: directories.delayImports,

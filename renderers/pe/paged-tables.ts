@@ -15,6 +15,7 @@ import { getPeDisassemblyStringTableModel } from "./disassembly-strings.js";
 import { createImportFunctionTableModel } from "./import-function-table.js";
 import { getPeResourceTableModel } from "./resources.js";
 import { getMsvcRttiPagedTableModel } from "./msvc-rtti-table.js";
+import { getItaniumRttiTableModel } from "./itanium-rtti.js";
 import { getLoadConfigReferenceTableModel } from "./load-config-reference-tables.js";
 import {
   createGoRuntimeFunctionTableModel,
@@ -112,6 +113,7 @@ export const getPePagedTableModel = (
           ? getLoadConfigReferenceTableModel(pe.loadcfg.references, tableId)
           : null) ??
         getMsvcRttiPagedTableModel(pe, tableId) ??
+        getItaniumRttiTableModel(pe.itaniumRtti, tableId) ??
         getImportFunctionTableModel(pe, tableId) ??
         getNativeAotReflectionTypeTableModel(
           pe.nativeAotCandidate?.status === "confirmed"

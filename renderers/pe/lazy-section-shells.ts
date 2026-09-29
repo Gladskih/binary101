@@ -1,5 +1,4 @@
 "use strict";
-
 import { hex, humanSize } from "../../binary-utils.js";
 import {
   isPeWindowsParseResult,
@@ -16,7 +15,6 @@ import { PE_OVERLAY_PANEL_ID, getUnexplainedOverlaySize } from "./overlay.js";
 import { PE_PACKER_SECTIONS, pePackerSectionDescriptors } from "./packer-sections.js";
 import { getPePayloadLazySectionDescriptors } from "./payload-section-descriptors.js";
 import { getPeSanityIssues } from "./layout.js";
-
 export const PE_LAZY_SECTION_KEYS = {
   architecture: "architecture",
   appHost: "apphost",
@@ -39,6 +37,7 @@ export const PE_LAZY_SECTION_KEYS = {
   linuxBoot: "linux-boot",
   loadConfig: "load-config",
   msvcRtti: "msvc-rtti",
+  itaniumRtti: "itanium-rtti",
   nativeAot: "native-aot",
   nsisInstaller: PE_PACKER_SECTIONS["nsis-installer"].key,
   overlay: "overlay",
@@ -54,7 +53,6 @@ export const PE_LAZY_SECTION_KEYS = {
   typeLibraries: "type-libraries",
   upx: PE_PACKER_SECTIONS.upx.key
 } as const;
-
 export type PeLazySectionKey = typeof PE_LAZY_SECTION_KEYS[keyof typeof PE_LAZY_SECTION_KEYS];
 export type PeLazySectionDescriptor =
   { id?: string; key: PeLazySectionKey; summary?: string; title: string };
@@ -221,6 +219,9 @@ const addWindowsDirectoryDescriptors = (
     title: "Base relocations"
   });
   if (pe.msvcRtti) descriptors.push(getMsvcRttiSectionDescriptor(pe.msvcRtti));
+  if (pe.itaniumRtti) descriptors.push({ key: PE_LAZY_SECTION_KEYS.itaniumRtti,
+    title: "Itanium C++ RTTI", summary: `${pe.itaniumRtti.types.length} types`
+  });
   if (pe.exception) descriptors.push({
     key: PE_LAZY_SECTION_KEYS.exception,
     summary: plural(pe.exception.functionCount, "function", "functions"),

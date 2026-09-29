@@ -1,5 +1,4 @@
 "use strict";
-
 import {
   isPeWindowsParseResult,
   type PeParseResult,
@@ -22,6 +21,7 @@ import { openPeTypeLibrarySection } from "./pe-type-library-navigation.js";
 import { renderException } from "../renderers/pe/exception.js";
 import { renderNativeAotCandidate } from "../renderers/pe/native-aot.js";
 import { renderMsvcRtti } from "../renderers/pe/msvc-rtti.js";
+import { renderItaniumRtti } from "../renderers/pe/itanium-rtti.js";
 import { renderPeAppHost } from "../renderers/pe/apphost.js";
 import { renderOverlayPanel } from "../renderers/pe/overlay.js";
 import { renderPePayloads } from "../renderers/pe/payloads.js";
@@ -76,7 +76,6 @@ type LazySectionSnapshot = {
 const enhancedRoots = new WeakSet<ParentNode>();
 const parseResultByRoot = new WeakMap<ParentNode, PeParseResult>();
 const snapshotBySection = new WeakMap<HTMLElement, LazySectionSnapshot>();
-
 const emptySnapshot = (): LazySectionSnapshot => ({
   domState: emptyLazyDomState(),
   openDetails: new Set(),
@@ -130,6 +129,8 @@ const WINDOWS_LAZY_RENDERERS: Partial<Record<
     pe.reloc ? renderToString(out => renderReloc(pe.reloc!, out)) : "",
   [PE_LAZY_SECTION_KEYS.msvcRtti]: (pe: PeWindowsParseResult) =>
     pe.msvcRtti ? renderToString(out => renderMsvcRtti(pe, out)) : "",
+  [PE_LAZY_SECTION_KEYS.itaniumRtti]: (pe: PeWindowsParseResult) =>
+    renderItaniumRtti(pe.itaniumRtti),
   [PE_LAZY_SECTION_KEYS.exception]: (pe: PeWindowsParseResult) =>
     pe.exception ? renderToString(out => renderException(pe.exception!, out)) : "",
   [PE_LAZY_SECTION_KEYS.boundImports]: (pe: PeWindowsParseResult) =>

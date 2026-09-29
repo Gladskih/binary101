@@ -34,6 +34,7 @@ import type { PeDataDirectory, PeWindowsCore } from "./types.js";
 import { buildWindowsPeResult, withWindowsPeLayoutWarnings } from "./parse-windows-result.js";
 import { selectPeVariantParsers, type PeVariantParsers } from "./parse-variant.js";
 import { analyzePeMsvcRtti } from "./msvc-rtti/index.js";
+import { analyzePeItaniumRtti } from "./itanium-rtti.js";
 import { parsePeImageArtifacts } from "./image-artifacts.js";
 export type PeWindowsParseContext = {
   file: File;
@@ -60,6 +61,7 @@ export type PeDirectoryArtifacts = {
   resources: Awaited<ReturnType<typeof parseResources>>;
   reloc: Awaited<ReturnType<typeof parseBaseRelocations>>;
   msvcRtti: Awaited<ReturnType<typeof analyzePeMsvcRtti>>;
+  itaniumRtti: Awaited<ReturnType<typeof analyzePeItaniumRtti>>;
   clr: Awaited<ReturnType<typeof parseClrDirectory>>;
   nativeAotCandidate: Awaited<ReturnType<typeof analyzePeNativeAotMetadata>> |
     ReturnType<typeof detectNativeAotCandidate>;
@@ -196,6 +198,7 @@ const parsePeDirectoryArtifacts = async (
     resources,
     reloc,
     msvcRtti: await analyzePeMsvcRtti(reader, core, reloc),
+    itaniumRtti: await analyzePeItaniumRtti(reader, core, reloc),
     clr,
     nativeAotCandidate,
     exception: await parseExceptionDirectory(

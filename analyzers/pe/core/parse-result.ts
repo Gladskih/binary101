@@ -33,6 +33,7 @@ import type { PeSubtype } from "../subtype.js";
 import type { parseExportDirectory } from "../directories/exports.js";
 import type { parseBaseRelocations } from "../directories/reloc.js";
 import type { MsvcRttiAnalysis } from "../msvc-rtti/types.js";
+import type { ItaniumRttiAnalysis } from "../../itanium-rtti/types.js";
 import type { PeAppHostAnalysis } from "../apphost/types.js";
 import type { parseExceptionDirectory } from "../exception/index.js";
 import type { parseBoundImports } from "../imports/bound.js";
@@ -77,6 +78,7 @@ export interface PeWindowsParseResult extends PeParseResultBase {
   tls: PeTlsDirectory | null;
   reloc: Awaited<ReturnType<typeof parseBaseRelocations>>;
   msvcRtti: MsvcRttiAnalysis | null;
+  itaniumRtti?: ItaniumRttiAnalysis | null;
   exception: Awaited<ReturnType<typeof parseExceptionDirectory>>;
   boundImports: Awaited<ReturnType<typeof parseBoundImports>>;
   delayImports: Awaited<ReturnType<typeof parseDelayImports32>>;
