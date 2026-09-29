@@ -27,11 +27,11 @@ export const isSupportedTypeName = (name: string): boolean => {
 export const readSignedWord = (view: DataView, offset: number, width: 4 | 8): bigint =>
   width === 8 ? view.getBigInt64(offset, true) : BigInt(view.getInt32(offset, true));
 
-const functionPrefix = (image: ItaniumRttiImage, address: number): number[] | null => {
+const hasRuntimeFunctions = (image: ItaniumRttiImage, address: number): boolean => {
   const first = image.pointers.get(address);
   const second = image.pointers.get(address + image.pointerSize);
-  if (first == null || second == null) return null;
-  return image.isExecutable(first) && image.isExecutable(second) ? [first, second] : null;
+  if (first == null || second == null) return false;
+  return image.isExecutable(first) && image.isExecutable(second);
 };
 
 const createNames = (image: ItaniumRttiImage) => {
@@ -72,47 +72,68 @@ const createNames = (image: ItaniumRttiImage) => {
 };
 
 const readTable = async (image: ItaniumRttiImage, address: number): Promise<ItaniumVtable | null> => {
-    const width = image.pointerSize;
-    if (address < 2 * width || address % width !== 0) return null;
-    const typeAddress = image.pointers.get(address - width);
-    const prefix = functionPrefix(image, address);
-    if (typeAddress == null || !prefix) return null;
-    // ABI 2.5.2: offset-to-top, typeinfo pointer, then the address point.
-    const header = await image.read(address - 2 * width, 4 * width);
-    if (header.byteLength !== 4 * width || readSignedWord(header, 0, width) !== 0n) return null;
-    if (image.relocations.has(address - 2 * width)) return null;
-    return { address, typeAddress, functionPrefix: prefix };
+  const width = image.pointerSize;
+  if (address < 2 * width || address % width !== 0) return null;
+  const typeAddress = image.pointers.get(address - width);
+  if (typeAddress == null || !image.relocations.has(address - width)) return null;
+  if (image.relocations.has(address - 2 * width)) return null;
+  // ABI 2.5.2: offset-to-top, typeinfo pointer, then the address point.
+  // The extra byte checks that the address point is file-backed data; its value is ignored.
+  const header = await image.read(address - 2 * width, 2 * width + 1);
+  if (header.byteLength !== 2 * width + 1 || readSignedWord(header, 0, width) !== 0n) return null;
+  return { address, typeAddress, offsetToTop: 0 };
+};
+
+const createPreparation = (
+  image: ItaniumRttiImage, names: ReturnType<typeof createNames>,
+  table: (address: number) => Promise<ItaniumVtable | null>
+) => {
+  let prepared: number[] | null = null;
+  return async (): Promise<number[]> => {
+    if (prepared) return prepared;
+    const candidates = [...image.pointers].filter(([, target]) =>
+      image.pointers.has(target + image.pointerSize)
+    ).map(([site]) => site + image.pointerSize)
+      .sort((left, right) => image.readOrder(left) - image.readOrder(right));
+    const typeAddresses = new Set<number>();
+    for (const address of candidates) {
+      const entry = await table(address);
+      if (entry) typeAddresses.add(entry.typeAddress);
+    }
+    // Separate physical passes avoid bouncing between type records and distant names.
+    const ordered = [...typeAddresses].sort((left, right) => image.readOrder(left) - image.readOrder(right));
+    for (const address of ordered) await names.header(address);
+    ordered.sort((left, right) => image.readOrder(image.pointers.get(left + image.pointerSize)!) -
+      image.readOrder(image.pointers.get(right + image.pointerSize)!));
+    for (const address of ordered) await names.name(address);
+    prepared = candidates;
+    return prepared;
+  };
 };
 
 export const createItaniumRecords = (image: ItaniumRttiImage) => {
   const names = createNames(image);
   const tables = new Map<number, Promise<ItaniumVtable | null>>();
-  let prepared: number[] | null = null;
+  const runtimeTables = new Map<number, Promise<ItaniumVtable | null>>();
+  const table = (address: number): Promise<ItaniumVtable | null> => {
+    if (!tables.has(address)) tables.set(address, readTable(image, address));
+    return tables.get(address)!;
+  };
+  const runtimeTable = async (address: number): Promise<ItaniumVtable | null> => {
+    // Bootstrap evidence only: never use these slots to classify ordinary user vtables.
+    if (!hasRuntimeFunctions(image, address)) return null;
+    if ((await image.read(address, 2 * image.pointerSize)).byteLength !== 2 * image.pointerSize) {
+      return null;
+    }
+    return table(address);
+  };
   return {
-    prepare: async (): Promise<number[]> => {
-      if (prepared) return prepared;
-      const candidates = [...image.pointers.keys()].filter(address =>
-        image.pointers.has(address - image.pointerSize) && functionPrefix(image, address) != null
-      ).sort((left, right) => image.readOrder(left) - image.readOrder(right));
-      const typeAddresses = new Set<number>();
-      for (const address of candidates) {
-        const table = await readTable(image, address);
-        tables.set(address, Promise.resolve(table));
-        if (table) typeAddresses.add(table.typeAddress);
-      }
-      // Separate physical passes avoid bouncing between type records and distant names.
-      const ordered = [...typeAddresses].sort((left, right) => image.readOrder(left) - image.readOrder(right));
-      for (const address of ordered) await names.header(address);
-      ordered.sort((left, right) => image.readOrder(image.pointers.get(left + image.pointerSize)!) -
-        image.readOrder(image.pointers.get(right + image.pointerSize)!));
-      for (const address of ordered) await names.name(address);
-      prepared = candidates;
-      return prepared;
-    },
+    prepare: createPreparation(image, names, table),
     name: names.name,
-    table: (address: number): Promise<ItaniumVtable | null> => {
-      if (!tables.has(address)) tables.set(address, readTable(image, address));
-      return tables.get(address)!;
+    table,
+    runtimeTable: (address: number): Promise<ItaniumVtable | null> => {
+      if (!runtimeTables.has(address)) runtimeTables.set(address, runtimeTable(address));
+      return runtimeTables.get(address)!;
     }
   };
 };

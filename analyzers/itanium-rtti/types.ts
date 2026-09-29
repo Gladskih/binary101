@@ -28,8 +28,7 @@ export interface ItaniumType {
 export interface ItaniumVtable {
   address: number;
   typeAddress: number;
-  /** A verified prefix, never a claim about the complete vtable length. */
-  functionPrefix: number[];
+  offsetToTop: number;
 }
 export interface ItaniumRttiAnalysis {
   types: ItaniumType[];

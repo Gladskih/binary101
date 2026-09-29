@@ -25,6 +25,8 @@ void test("renders type, base, vtable and warning data safely", async () => {
   assert.match(html, /Non-public/);
   assert.match(html, /peNumeric/);
   assert.doesNotMatch(html, /<script>/);
+  assert.doesNotMatch(html, /Function prefix|verified prefix/);
+  assert.match(html, /Offset to top/);
 });
 void test("provides paginated rows, sort values and PE registry integration", async () => {
   const pe = createBasePe();

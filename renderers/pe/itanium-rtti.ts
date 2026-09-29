@@ -10,7 +10,7 @@ const tableModel = (
   id: string, headings: string[], rows: string[][]
 ): PagedSortableTableModel => {
   const columns = headings.map(label => ({ label,
-    className: /RVA|^Offset$|flags/.test(label) ? "peNumeric" : "" }));
+    className: /RVA|^Offset(?: to top)?$|flags/.test(label) ? "peNumeric" : "" }));
   return { id, columns, rowCount: rows.length, pageSize: 250,
     rowAt: index => rows[index] ? { cells: rows[index].map((cell, column) => ({
       html: escapeHtml(cell), sortValue: cell, className: columns[column]!.className
@@ -35,9 +35,9 @@ export const getItaniumRttiTableModel = (
         base.isVirtual ? "Virtual: vtable slot" : "Object", String(base.offset)
       ])));
     case "pe-itanium-vtables": return tableModel(id,
-      ["Address point RVA", "Type RVA", "Function prefix RVAs"],
+      ["Address point RVA", "Type RVA", "Offset to top"],
       analysis.vtables.map(entry => [address(entry.address), address(entry.typeAddress),
-        entry.functionPrefix.map(address).join(", ")]));
+        String(entry.offsetToTop)]));
     default: return null;
   }
 };
@@ -47,7 +47,7 @@ export const renderItaniumRtti = (analysis: ItaniumRttiAnalysis | null | undefin
   return renderPeSectionStart("Itanium C++ RTTI", `${analysis.types.length} types`) +
     `<p class="smallNote">Conservative subset: primary vtables with relocation-backed pointers ` +
     `and a closed runtime type graph. Names retain their ABI encoding. ` +
-    `Function addresses show only a verified prefix, not the full vtable.</p>` +
+    `Virtual-function entries and vtable lengths are not inferred.</p>` +
     analysis.warnings.map(warning => `<p class="smallNote">${escapeHtml(warning)}</p>`).join("") +
     [["pe-itanium-types", "Class types"], ["pe-itanium-bases", "Direct bases"],
       ["pe-itanium-vtables", "Primary vtables"]].map(([id, label]) =>

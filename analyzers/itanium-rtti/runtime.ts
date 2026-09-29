@@ -10,7 +10,7 @@ const VMI_NAME = "N10__cxxabiv121__vmi_class_type_infoE";
 const runtimeTable = async (
   image: ItaniumRttiImage, records: ItaniumRecords, address: number, name: string
 ): Promise<ItaniumVtable | null> => {
-  const table = await records.table(address);
+  const table = await records.runtimeTable(address);
   if (!table || await records.name(table.typeAddress) !== name) return null;
   return (await image.read(table.typeAddress, 3 * image.pointerSize)).byteLength ===
     3 * image.pointerSize ? table : null;
@@ -47,7 +47,7 @@ const hasVmiBase = async (
   if (!table) return false;
   const single = image.pointers.get(table.typeAddress);
   if (single == null || kinds.get(single) !== "si") return false;
-  const singleTable = (await records.table(single))!;
+  const singleTable = (await records.runtimeTable(single))!;
   return image.pointers.get(table.typeAddress + 2 * image.pointerSize) ===
     image.pointers.get(singleTable.typeAddress + 2 * image.pointerSize);
 };
@@ -60,7 +60,9 @@ export const findItaniumRuntime = async (
   for (const address of await records.prepare()) {
     const table = await records.table(address);
     if (!table) continue;
-    if (await records.name(table.typeAddress) === VMI_NAME) candidates.push(address);
+    const name = await records.name(table.typeAddress);
+    if (name === VMI_NAME) candidates.push(address);
+    if (name !== CLASS_NAME) continue;
     const single = await closedRuntime(image, records, address);
     if (single == null) continue;
     kinds.set(address, "class");

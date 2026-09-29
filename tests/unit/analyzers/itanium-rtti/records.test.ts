@@ -18,9 +18,34 @@ void test("caches name and vtable reads", async () => {
   const records = createItaniumRecords(fixture.image);
   assert.equal(records.name(fixture.addresses.base), records.name(fixture.addresses.base));
   assert.equal(records.table(fixture.addresses.table), records.table(fixture.addresses.table));
+  assert.equal(records.runtimeTable(fixture.addresses.classTable),
+    records.runtimeTable(fixture.addresses.classTable));
   assert.equal(await records.name(fixture.addresses.base), "4Base");
-  assert.deepEqual((await records.table(fixture.addresses.table))?.functionPrefix,
-    [fixture.addresses.code, fixture.addresses.code + 16]);
+  assert.deepEqual(await records.table(fixture.addresses.table), {
+    address: fixture.addresses.table, typeAddress: fixture.addresses.base, offsetToTop: 0
+  });
+});
+
+for (const available of [16, 17]) {
+  void test(`requires backing at the address point, not function slots (${available} bytes)`, async () => {
+    const fixture = createItaniumFixture();
+    const read = fixture.image.read;
+    fixture.image.read = (address, size) => read(address,
+      address === fixture.addresses.table - 16 ? Math.min(size, available) : size);
+
+    const result = await createItaniumRecords(fixture.image).table(fixture.addresses.table);
+
+    assert.equal(result != null, available === 17);
+  });
+}
+
+void test("rejects truncated bootstrap function slots even with indexed pointers", async () => {
+  const fixture = createItaniumFixture();
+  const read = fixture.image.read;
+  fixture.image.read = (address, size) => read(address,
+    address === fixture.addresses.classTable ? 8 : size);
+
+  assert.equal(await createItaniumRecords(fixture.image).runtimeTable(fixture.addresses.classTable), null);
 });
 for (const [label, edit] of Object.entries({
   missingName: (fixture: ReturnType<typeof createItaniumFixture>) =>
@@ -53,14 +78,8 @@ void test("rejects unaligned or truncated type headers", async () => {
 for (const [label, edit] of Object.entries({
   noType: (fixture: ReturnType<typeof createItaniumFixture>) =>
     fixture.image.pointers.delete(fixture.addresses.table - 8),
-  noFirst: (fixture: ReturnType<typeof createItaniumFixture>) =>
-    fixture.image.pointers.delete(fixture.addresses.table),
-  noSecond: (fixture: ReturnType<typeof createItaniumFixture>) =>
-    fixture.image.pointers.delete(fixture.addresses.table + 8),
-  dataFirst: (fixture: ReturnType<typeof createItaniumFixture>) =>
-    fixture.pointer(fixture.addresses.table, fixture.addresses.base),
-  dataSecond: (fixture: ReturnType<typeof createItaniumFixture>) =>
-    fixture.pointer(fixture.addresses.table + 8, fixture.addresses.base),
+  noTypeRelocation: (fixture: ReturnType<typeof createItaniumFixture>) =>
+    fixture.image.relocations.delete(fixture.addresses.table - 8),
   secondary: (fixture: ReturnType<typeof createItaniumFixture>) =>
     fixture.word(fixture.addresses.table - 16, -8n),
   relocatedOffset: (fixture: ReturnType<typeof createItaniumFixture>) =>

@@ -11,8 +11,19 @@ import { collectPeDisassemblySeeds } from "../../../../../ui/pe-disassembly-seed
 import { resolvePeDisassemblyEntrypoints } from
   "../../../../../analyzers/pe/disassembly/sampling.js";
 import { createDTestModule } from "../../../../fixtures/d-runtime.js";
+import { discoverItaniumRtti } from "../../../../../analyzers/itanium-rtti/discovery.js";
+import { createItaniumFixture } from "../../../../fixtures/itanium-rtti.js";
 import { createNativeAotInitializerFixture } from
   "../../../../helpers/native-aot-initializer-fixture.js";
+
+void test("Itanium vtables do not contribute disassembly seeds", async () => {
+  const pe = createWindowsPe();
+  const file = new File([], "itanium-pe");
+  const before = await collectPeDisassemblySeeds(file, pe);
+  pe.itaniumRtti = await discoverItaniumRtti(createItaniumFixture().image);
+  assert.ok(pe.itaniumRtti?.vtables.length);
+  assert.deepEqual(await collectPeDisassemblySeeds(file, pe), before);
+});
 
 void test("collectPeDisassemblySeeds reuses confirmed NativeAOT initializer targets", async () => {
   const pe = createWindowsPe();

@@ -5,6 +5,21 @@ import { findItaniumRuntime } from "../../../../analyzers/itanium-rtti/runtime.j
 import { createItaniumFixture } from "../../../fixtures/itanium-rtti.js";
 
 type Fixture = ReturnType<typeof createItaniumFixture>;
+for (const slot of [0, 8]) {
+  for (const [target, edit] of Object.entries({
+    missing: (fixture: Fixture, site: number) => fixture.image.pointers.delete(site),
+    data: (fixture: Fixture, site: number) => fixture.pointer(site, fixture.addresses.base)
+  })) {
+    void test(`bootstrap still rejects ${target} function evidence at slot ${slot}`, async () => {
+      const fixture = createItaniumFixture();
+      edit(fixture, fixture.addresses.classTable + slot);
+
+      const kinds = await findItaniumRuntime(fixture.image, createItaniumRecords(fixture.image));
+
+      assert.equal(kinds.size, 0);
+    });
+  }
+}
 void test("identifies runtime kinds through their closed metadata graph", async () => {
   const fixture = createItaniumFixture();
   assert.deepEqual(await findItaniumRuntime(fixture.image, createItaniumRecords(fixture.image)),

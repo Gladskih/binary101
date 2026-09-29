@@ -64,3 +64,15 @@ export const createItaniumFixture = (pointerSize: 4 | 8 = 8) => {
   };
   return { bytes, view, addresses, image, pointer, word, type, table };
 };
+
+export const setOrdinaryItaniumSlots = (
+  fixture: ReturnType<typeof createItaniumFixture>, slots: "one function" | "first null" | "only data"
+): void => {
+  const { table, base, code } = fixture.addresses;
+  fixture.pointer(table, slots === "one function" ? code : base);
+  fixture.pointer(table + fixture.image.pointerSize, base);
+  if (slots !== "first null") return;
+  fixture.image.pointers.delete(table);
+  fixture.image.relocations.delete(table);
+  fixture.word(table, 0n);
+};

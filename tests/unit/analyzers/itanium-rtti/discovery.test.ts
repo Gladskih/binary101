@@ -1,7 +1,44 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { discoverItaniumRtti } from "../../../../analyzers/itanium-rtti/discovery.js";
-import { createItaniumFixture } from "../../../fixtures/itanium-rtti.js";
+import { createItaniumFixture, setOrdinaryItaniumSlots } from "../../../fixtures/itanium-rtti.js";
+
+for (const width of [4, 8] as const) {
+  for (const slots of ["one function", "first null", "only data"] as const) {
+    void test(`recognizes ${width}-byte ordinary vtable with ${slots}`, async () => {
+      const fixture = createItaniumFixture(width);
+      const { table, base } = fixture.addresses;
+      setOrdinaryItaniumSlots(fixture, slots);
+
+      const result = await discoverItaniumRtti(fixture.image);
+
+      assert.deepEqual(result?.vtables.find(row => row.address === table), {
+        address: table, typeAddress: base, offsetToTop: 0
+      });
+      assert.deepEqual(result?.warnings, []);
+    });
+  }
+}
+
+type Fixture = ReturnType<typeof createItaniumFixture>;
+for (const [corruption, edit] of Object.entries({
+  unknownRuntime: (fixture: Fixture) => fixture.pointer(fixture.addresses.base, fixture.addresses.table),
+  malformedName: (fixture: Fixture) => fixture.type(fixture.addresses.base, fixture.addresses.classTable, "0"),
+  secondary: (fixture: Fixture) => fixture.word(fixture.addresses.table - 16, -8n),
+  offsetRelocation: (fixture: Fixture) => fixture.image.relocations.add(fixture.addresses.table - 16),
+  missingTypeRelocation: (fixture: Fixture) => fixture.image.relocations.delete(fixture.addresses.table - 8)
+})) {
+  void test(`rejects ordinary vtable with ${corruption}`, async () => {
+    const fixture = createItaniumFixture();
+    edit(fixture);
+
+    const result = await discoverItaniumRtti(fixture.image);
+
+    assert.ok(result);
+    assert.equal(result.vtables.some(row => row.address === fixture.addresses.table), false);
+    assert.deepEqual(result.warnings, []);
+  });
+}
 
 for (const width of [4, 8] as const) {
   void test(`parses a closed runtime and class graph with ${width}-byte pointers`, async () => {
