@@ -23,7 +23,11 @@ for (const [label, edit] of Object.entries({
   missingRelocation: (fixture: RttiOnlyFixture) => fixture.image.relocations.delete(fixture.addresses.multiple),
   unknownRuntime: (fixture: RttiOnlyFixture) => fixture.pointer(fixture.addresses.multiple, fixture.addresses.table),
   emptyName: (fixture: RttiOnlyFixture) => fixture.type(fixture.addresses.multiple, fixture.addresses.vmiTable, ""),
-  invalidCount: (fixture: RttiOnlyFixture) => fixture.view.setUint32(fixture.addresses.multiple + 20, 0, true),
+  invalidCount: (fixture: RttiOnlyFixture) => {
+    // Nonzero flags prevent the flags/count word from becoming an overlapping vtable header.
+    fixture.view.setUint32(fixture.addresses.multiple + 16, 1, true);
+    fixture.view.setUint32(fixture.addresses.multiple + 20, 0, true);
+  },
   invalidBase: (fixture: RttiOnlyFixture) => fixture.pointer(fixture.addresses.multiple + 24, 4000),
   truncatedHeader: (fixture: RttiOnlyFixture) => {
     const read = fixture.image.read;
@@ -222,6 +226,7 @@ void test("bounds deep inheritance without overflowing the stack", async () => {
   assert.ok(result);
   assert.equal(result.types.some(type => type.name === "4Deep"), false);
   assert.match(result.warnings.join(), /depth limit/);
+  assert.deepEqual(result.vtables, []);
 });
 
 void test("requires a file-backed virtual base offset slot in the referencing vtable", async () => {

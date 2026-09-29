@@ -10,6 +10,13 @@ import type { PeWindowsParseResult } from "../../analyzers/pe/core/parse-result.
 import { MockFile } from "../helpers/mock-file.js";
 
 const compiler = process.env["MINGW_CXX"] ?? "C:/msys64/ucrt64/bin/g++.exe";
+const assertUnambiguousPrefixes = (parsed: PeWindowsParseResult): void => {
+  const addresses = parsed.itaniumRtti!.vtables.map(table => table.address).sort((left, right) => left - right);
+  // Detector policy: header + first pointer-sized slot, not an inferred full table size.
+  for (let index = 1; index < addresses.length; index++) {
+    assert.ok(addresses[index]! - addresses[index - 1]! >= 24, "Overlapping x64 vtable candidates");
+  }
+};
 const assertRttiOnlyOmitted = (
   parsed: PeWindowsParseResult, bytes: Buffer, map: string, encodedName: string
 ): void => {
@@ -47,9 +54,13 @@ for (const optimization of ["-O0", "-O2"]) {
       const parsed = await parsePe(new MockFile(bytes));
       assert.ok(parsed && isPeWindowsParseResult(parsed));
       assert.ok(parsed.itaniumRtti);
+      assertUnambiguousPrefixes(parsed);
       const map = await readFile(mapPath, "utf8");
       assertRttiOnlyOmitted(parsed, bytes, map, "8RttiOnly");
       assertRttiOnlyOmitted(parsed, bytes, map, "16RttiOnlyTemplateIiE");
+      const longName = /\b_ZTI(16RttiOnlyTemplateISt16integer_sequence\w+)\b/.exec(map)?.[1];
+      assert.ok(longName && longName.length > 511);
+      assertRttiOnlyOmitted(parsed, bytes, map, longName);
       const types = new Map(parsed.itaniumRtti.types.map(type => [type.name, type]));
       assert.equal(types.get("4Base")?.kind, "class");
       assert.equal(types.get("7Derived")?.kind, "si");

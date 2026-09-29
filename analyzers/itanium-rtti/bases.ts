@@ -2,7 +2,7 @@ import { readSignedWord } from "./records.js";
 import type { ItaniumBase, ItaniumClassKind, ItaniumRttiImage } from "./types.js";
 
 const readMultipleHeader = async (
-  image: ItaniumRttiImage, address: number
+  image: ItaniumRttiImage, address: number, warnings: Set<string> | undefined
 ): Promise<{ count: number; flags: number } | null> => {
   const width = image.pointerSize;
   const header = await image.read(address, 2 * width + 8);
@@ -12,7 +12,11 @@ const readMultipleHeader = async (
   if (image.relocations.has(address + 2 * width) ||
       image.relocations.has(address + 2 * width + 4)) return null;
   // ABI 2.9.5: only repeat/diamond bits; bound work to 256 direct bases.
-  if ((flags & ~3) !== 0 || count === 0 || count > 256) return null;
+  if ((flags & ~3) !== 0 || count === 0) return null;
+  if (count > 256) {
+    warnings?.add("Itanium RTTI base count limit reached; vtables omitted.");
+    return null;
+  }
   return { count, flags };
 };
 
@@ -32,9 +36,9 @@ const decodeBase = (
 };
 
 const readMultipleBases = async (
-  image: ItaniumRttiImage, address: number
+  image: ItaniumRttiImage, address: number, warnings: Set<string> | undefined
 ): Promise<{ bases: ItaniumBase[]; flags: number } | null> => {
-  const header = await readMultipleHeader(image, address);
+  const header = await readMultipleHeader(image, address, warnings);
   if (!header) return null;
   const width = image.pointerSize;
   const start = address + 2 * width + 8;
@@ -51,10 +55,10 @@ const readMultipleBases = async (
 };
 
 export const readItaniumBases = async (
-  image: ItaniumRttiImage, address: number, kind: ItaniumClassKind
+  image: ItaniumRttiImage, address: number, kind: ItaniumClassKind, warnings?: Set<string>
 ): Promise<{ bases: ItaniumBase[]; flags?: number } | null> => {
   if (kind === "class") return { bases: [] };
-  if (kind === "vmi") return readMultipleBases(image, address);
+  if (kind === "vmi") return readMultipleBases(image, address, warnings);
   if ((await image.read(address, 3 * image.pointerSize)).byteLength !== 3 * image.pointerSize) {
     return null;
   }

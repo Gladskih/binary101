@@ -1,4 +1,5 @@
 #include <typeinfo>
+#include <utility>
 
 struct Base {
   virtual ~Base() = default;
@@ -19,6 +20,8 @@ const std::type_info* forceRtti = &typeid(RttiOnly);
 template<typename T>
 struct RttiOnlyTemplate : private EmptyA, private EmptyB {};
 const std::type_info* forceTemplateRtti = &typeid(RttiOnlyTemplate<int>);
+const std::type_info* forceLongTemplateRtti =
+  &typeid(RttiOnlyTemplate<std::make_integer_sequence<int, 128>>);
 
 int main(int argc, char**) {
   Derived derived;

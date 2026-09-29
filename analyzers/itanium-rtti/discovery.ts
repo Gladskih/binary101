@@ -5,29 +5,33 @@ import type {
   ItaniumClassKind, ItaniumRttiAnalysis, ItaniumRttiImage, ItaniumType, ItaniumVtable
 } from "./types.js";
 
-const hasSupportedHierarchy = (type: ItaniumType, publishable: Set<number>): boolean =>
-  isSupportedTypeName(type.name) && type.bases.every(base => publishable.has(base.typeAddress));
+type StructuralType = Omit<ItaniumType, "name"> & { name: string | null };
+
+const hasSupportedHierarchy = (
+  type: StructuralType, publishable: Map<number, ItaniumType>
+): type is ItaniumType => type.name != null && isSupportedTypeName(type.name) &&
+  type.bases.every(base => publishable.has(base.typeAddress));
 
 const createGraphParser = (
   image: ItaniumRttiImage, records: ItaniumRecords,
   kinds: Map<number, ItaniumClassKind>, warnings: Set<string>
 ) => {
-  const cache = new Map<number, ItaniumType | null>();
-  const publishable = new Set<number>();
+  const cache = new Map<number, StructuralType | null>();
+  const publishable = new Map<number, ItaniumType>();
   const active = new Set<number>();
-  const parse = async (address: number): Promise<ItaniumType | null> => {
+  const parse = async (address: number): Promise<StructuralType | null> => {
     if (cache.has(address)) return cache.get(address)!;
     // Resource policy: bound recursion independently of the size of hostile input.
     if (active.size >= 64) {
-      warnings.add("Itanium RTTI inheritance depth limit reached; some types were omitted.");
+      warnings.add("Itanium RTTI inheritance depth limit reached; vtables omitted.");
       return null;
     }
     cache.set(address, null);
     const kind = kinds.get(image.pointers.get(address)!);
     if (!kind) return null;
-    const name = await records.name(address);
+    const name = await records.structuralName(address);
     if (!name) return null;
-    const body = await readItaniumBases(image, address, kind);
+    const body = await readItaniumBases(image, address, kind, warnings);
     if (!body) return null;
     active.add(address);
     for (const base of body.bases) {
@@ -37,18 +41,18 @@ const createGraphParser = (
       return null;
     }
     active.delete(address);
-    const result = { address, name, kind, ...body };
+    const result = { address, name: name.value, kind, ...body };
     cache.set(address, result);
     // Unknown name syntax never invalidates structural metadata, including its bases.
     // Preserve publication of supported hierarchies only, with no dangling base references.
-    if (hasSupportedHierarchy(result, publishable)) publishable.add(address);
+    if (hasSupportedHierarchy(result, publishable)) publishable.set(address, result);
     return result;
   };
   return { parse, cache, publishable };
 };
 
 const reachableTypes = (
-  roots: number[], cache: Map<number, ItaniumType | null>
+  roots: number[], cache: Map<number, ItaniumType>
 ): ItaniumType[] => {
   const types = new Map<number, ItaniumType>();
   const pending = [...roots];
@@ -63,7 +67,7 @@ const reachableTypes = (
 };
 
 const hasVirtualBaseSlots = async (
-  image: ItaniumRttiImage, address: number, type: ItaniumType
+  image: ItaniumRttiImage, address: number, type: StructuralType
 ): Promise<boolean> => {
   for (const base of type.bases) {
     if (!base.isVirtual) continue;
@@ -78,7 +82,7 @@ const hasVirtualBaseSlots = async (
 };
 
 const omitRttiOverlaps = (
-  tables: ItaniumVtable[], types: ItaniumType[], width: number
+  tables: ItaniumVtable[], types: StructuralType[], width: number
 ): ItaniumVtable[] => {
   // ABI 2.9.5: fixed class/SI records and a counted trailing VMI base array.
   // Reject overlap of either header or first slot with already validated metadata.
@@ -89,13 +93,39 @@ const omitRttiOverlaps = (
   const rejected = new Set<number>();
   let index = 0;
   // Two ordered passes avoid comparing every vtable against every RTTI object.
-  for (const table of [...tables].sort((left, right) => left.address - right.address)) {
+  for (const table of tables) {
     while (index < ranges.length && ranges[index]!.end <= table.address - 2 * width) index++;
     if (index < ranges.length && ranges[index]!.start < table.address + width) {
       rejected.add(table.address);
     }
   }
   return tables.filter(table => !rejected.has(table.address));
+};
+
+const omitAmbiguousVtables = (tables: ItaniumVtable[], width: number): ItaniumVtable[] =>
+  // Conservative ordinary-vtable policy, not an ABI prohibition on interleaving.
+  // https://clang.llvm.org/docs/ControlFlowIntegrityDesign.html#interleave-virtual-tables
+  // Sorted minimum ranges [address - 2*width, address + width) must not overlap.
+  // Compare original neighbors so every member of an overlapping chain is omitted.
+  tables.filter((table, index) => {
+    const previous = tables[index - 1];
+    const next = tables[index + 1];
+    return (!previous || table.address - previous.address >= 3 * width) &&
+      (!next || next.address - table.address >= 3 * width);
+  });
+
+const readVtables = async (
+  image: ItaniumRttiImage, records: ItaniumRecords, graph: ReturnType<typeof createGraphParser>
+): Promise<ItaniumVtable[]> => {
+  const vtables: ItaniumVtable[] = [];
+  for (const address of await records.prepare()) {
+    const table = await records.table(address);
+    if (!table) continue;
+    const type = await graph.parse(table.typeAddress);
+    if (!type) continue;
+    if (await hasVirtualBaseSlots(image, address, type)) vtables.push(table);
+  }
+  return vtables;
 };
 
 export const discoverItaniumRtti = async (
@@ -113,17 +143,17 @@ export const discoverItaniumRtti = async (
   ).map(([site]) => site).sort((left, right) => image.readOrder(left) - image.readOrder(right));
   await records.prepareTypes(typeAddresses);
   for (const address of typeAddresses) await graph.parse(address);
-  const vtables: ItaniumRttiAnalysis["vtables"] = [];
-  for (const address of await records.prepare()) {
-    const table = await records.table(address);
-    if (!table) continue;
-    const type = await graph.parse(table.typeAddress);
-    if (!type || !graph.publishable.has(type.address)) continue;
-    if (await hasVirtualBaseSlots(image, address, type)) vtables.push(table);
+  const vtables = await readVtables(image, records, graph);
+  if (records.nameValidationIncomplete) {
+    warnings.add("Itanium RTTI name validation budget exhausted; vtables omitted.");
   }
+  if (warnings.size) return { types: [], vtables: [], warnings: [...warnings] };
   // Wait until the whole graph is parsed: an enclosing RTTI object may be encountered later.
-  const confirmed = omitRttiOverlaps(vtables,
-    [...graph.cache.values()].filter(type => type != null), image.pointerSize);
-  const types = reachableTypes(confirmed.map(table => table.typeAddress), graph.cache);
+  // Sort once for both overlap passes; physical read order is unaffected.
+  vtables.sort((left, right) => left.address - right.address);
+  const confirmed = omitAmbiguousVtables(omitRttiOverlaps(vtables,
+    [...graph.cache.values()].filter(type => type != null), image.pointerSize), image.pointerSize)
+    .filter(table => graph.publishable.has(table.typeAddress));
+  const types = reachableTypes(confirmed.map(table => table.typeAddress), graph.publishable);
   return confirmed.length ? { types, vtables: confirmed, warnings: [...warnings] } : null;
 };

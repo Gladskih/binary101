@@ -1,3 +1,4 @@
+import { createNames } from "./names.js";
 import type { ItaniumRttiImage, ItaniumVtable } from "./types.js";
 
 // Itanium ABI 2.9.5, 5.1.2: https://itanium-cxx-abi.github.io/cxx-abi/abi.html
@@ -32,52 +33,6 @@ const hasRuntimeFunctions = (image: ItaniumRttiImage, address: number): boolean 
   const second = image.pointers.get(address + image.pointerSize);
   if (first == null || second == null) return false;
   return image.isExecutable(first) && image.isExecutable(second);
-};
-
-const createNames = (image: ItaniumRttiImage) => {
-  const names = new Map<number, Promise<string | null>>();
-  const headers = new Map<number, boolean>();
-  const strings = new Map<number, Promise<string | null>>();
-  const header = async (address: number): Promise<boolean> => {
-    if (!headers.has(address)) headers.set(address,
-      (await image.read(address, 2 * image.pointerSize)).byteLength === 2 * image.pointerSize);
-    return headers.get(address)!;
-  };
-  const readName = async (address: number): Promise<string | null> => {
-    if (address % image.pointerSize !== 0) return null;
-    const target = image.pointers.get(address + image.pointerSize);
-    if (target == null) return null;
-    if (!await header(address)) return null;
-    if (!strings.has(target)) strings.set(target, readString(target));
-    return strings.get(target)!;
-  };
-  const readString = async (target: number): Promise<string | null> => {
-    // Resource policy: bound strings, including their NUL terminator, to 512 bytes.
-    // Structural NTBS validation is independent of the supported mangling grammar.
-    const view = await image.read(target, 512);
-    let name = "";
-    for (let index = 0; index < view.byteLength; index++) {
-      const value = view.getUint8(index);
-      if (value === 0) return name || null;
-      name += String.fromCharCode(value);
-    }
-    return null;
-  };
-  const name = (address: number): Promise<string | null> => {
-    if (!names.has(address)) names.set(address, readName(address));
-    return names.get(address)!;
-  };
-  return { name,
-    prepare: async (addresses: Iterable<number>): Promise<void> => {
-      const ordered = [...new Set(addresses)].filter(address => !names.has(address))
-        .sort((left, right) => image.readOrder(left) - image.readOrder(right));
-      // Separate physical passes avoid bouncing between type records and distant names.
-      for (const address of ordered) await header(address);
-      ordered.sort((left, right) => image.readOrder(image.pointers.get(left + image.pointerSize)!) -
-        image.readOrder(image.pointers.get(right + image.pointerSize)!));
-      for (const address of ordered) await name(address);
-    }
-  };
 };
 
 const hasFirstEntry = (image: ItaniumRttiImage, address: number, raw: bigint): boolean => {
@@ -144,6 +99,8 @@ export const createItaniumRecords = (image: ItaniumRttiImage) => {
     prepare: createPreparation(image, names, table),
     prepareTypes: names.prepare,
     name: names.name,
+    structuralName: names.structuralName,
+    get nameValidationIncomplete(): boolean { return names.exhausted; },
     table,
     runtimeTable: (address: number): Promise<ItaniumVtable | null> => {
       if (!runtimeTables.has(address)) runtimeTables.set(address, runtimeTable(address));

@@ -71,6 +71,8 @@ export const setOrdinaryItaniumSlots = (
   const { table, base, code } = fixture.addresses;
   fixture.pointer(table, slots === "one function" ? code : base);
   fixture.pointer(table + fixture.image.pointerSize, base);
+  // A following scalar prevents the data pointer from creating another null-first candidate.
+  fixture.word(table + 2 * fixture.image.pointerSize, 1n);
   if (slots !== "first null") return;
   fixture.image.pointers.delete(table);
   fixture.image.relocations.delete(table);
