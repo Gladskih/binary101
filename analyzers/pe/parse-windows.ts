@@ -24,6 +24,7 @@ import { detectNativeAotCandidate } from "./native-aot.js";
 import { analyzePeNativeAotMetadata } from "./native-aot-metadata.js";
 import type { PeWindowsParseResult } from "./core/parse-result.js";
 import { analyzeManifestConsistency } from "./resources/manifest-consistency.js";
+import { attachVersionFileTypeChecks } from "./resources/version-file-type-checks.js";
 import type { ManifestXmlDocumentParser } from "./resources/preview/manifest-xml.js";
 import { parseResources } from "./resources/index.js";
 import { parseClrDirectory } from "./clr/index.js";
@@ -180,7 +181,10 @@ const parsePeDirectoryArtifacts = async (
 ): Promise<PeDirectoryArtifacts> => {
   const { reader, core, parseManifestXmlDocument, canonicalMachine } = context;
   const exportsInfo = await parseExportDirectory(reader, core.dataDirs, core.rvaToOff);
-  const resources = await parseResources(reader, core.dataDirs, core.rvaToOff, parseManifestXmlDocument);
+  const resources = attachVersionFileTypeChecks(
+    await parseResources(reader, core.dataDirs, core.rvaToOff, parseManifestXmlDocument),
+    core.coff.Characteristics
+  );
   const reloc = await parseBaseRelocations(reader, core.dataDirs, core.rvaToOff);
   const clr = await parseClrDirectory(reader, core.dataDirs, core.rvaToOff);
   const nativeAotCandidate = (clr == null
