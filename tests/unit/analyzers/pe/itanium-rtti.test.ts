@@ -10,8 +10,7 @@ for (const width of [4, 8] as const) {
     const result = await analyzePeItaniumRtti(fixture.reader(), fixture.core, fixture.relocations);
     assert.equal(result?.types.find(type => type.name === "4Base")?.address,
       fixture.resultAddress(fixture.addresses.base));
-    assert.ok(result?.vtables.some(table =>
-      table.address === fixture.resultAddress(fixture.addresses.table)));
+    assert.deepEqual(Object.keys(result!).sort(), ["types", "warnings"]);
   });
 }
 void test("exposes RTTI through the full PE parser", async () => {

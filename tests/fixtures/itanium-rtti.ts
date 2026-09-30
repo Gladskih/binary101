@@ -65,20 +65,6 @@ export const createItaniumFixture = (pointerSize: 4 | 8 = 8) => {
   return { bytes, view, addresses, image, pointer, word, type, table };
 };
 
-export const setOrdinaryItaniumSlots = (
-  fixture: ReturnType<typeof createItaniumFixture>, slots: "one function" | "first null" | "first data"
-): void => {
-  const { table, base, code } = fixture.addresses;
-  fixture.pointer(table, slots === "one function" ? code : base);
-  fixture.pointer(table + fixture.image.pointerSize, base);
-  // A following scalar prevents the data pointer from creating another null-first candidate.
-  fixture.word(table + 2 * fixture.image.pointerSize, 1n);
-  if (slots !== "first null") return;
-  fixture.image.pointers.delete(table);
-  fixture.image.relocations.delete(table);
-  fixture.word(table, 0n);
-};
-
 export const createRttiOnlyFixture = (width: 4 | 8) => {
   const fixture = createItaniumFixture(width);
   const { multiple, vmiTable, vmiObjectTable, classTable } = fixture.addresses;
@@ -94,5 +80,5 @@ export const createRttiOnlyFixture = (width: 4 | 8) => {
   fixture.word(array + 3 * width, 0n);
   fixture.image.pointers.delete(vmiObjectTable - width);
   fixture.image.relocations.delete(vmiObjectTable - width);
-  return { ...fixture, falseAddressPoint: array + 3 * width };
+  return fixture;
 };

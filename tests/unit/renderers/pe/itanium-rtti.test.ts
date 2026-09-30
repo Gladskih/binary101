@@ -6,13 +6,41 @@ import { getPePagedTableModel } from "../../../../renderers/pe/paged-tables.js";
 import { discoverItaniumRtti } from "../../../../analyzers/itanium-rtti/discovery.js";
 import { createItaniumFixture } from "../../../fixtures/itanium-rtti.js";
 import { createBasePe } from "../../../fixtures/pe-renderer-headers-fixture.js";
+import type { ItaniumRttiAnalysis } from "../../../../analyzers/itanium-rtti/types.js";
+
+void test("keeps encoded class names and RTTI base offsets in their labeled columns", () => {
+  const analysis: ItaniumRttiAnalysis = { warnings: [], types: [
+    { address: 0x1234, name: "4Type", kind: "vmi", flags: 3, bases: [
+      { typeAddress: 0x5678, offset: -24, isVirtual: true, isPublic: false },
+      { typeAddress: 0x9010, offset: 16, isVirtual: false, isPublic: true }
+    ] },
+    { address: 0x5678, name: "4Base", kind: "class", bases: [] }
+  ] };
+  const types = getItaniumRttiTableModel(analysis, "pe-itanium-types")!;
+  const bases = getItaniumRttiTableModel(analysis, "pe-itanium-bases")!;
+
+  assert.deepEqual(types.columns.map(column => column.label),
+    ["RVA", "Encoded name", "Kind", "Hierarchy flags"]);
+  assert.deepEqual(types.rowAt(0)!.cells.map(cell => cell.html), ["0x1234", "4Type", "vmi", "0x3"]);
+  assert.equal(types.rowAt(1)!.cells[3]!.html, "—");
+  assert.deepEqual(bases.columns.map(column => column.label),
+    ["Type RVA", "Base RVA", "Access", "Offset kind", "Offset"]);
+  assert.deepEqual(bases.rowAt(0)!.cells.map(cell => cell.html),
+    ["0x1234", "0x5678", "Non-public", "Virtual: vtable slot", "-24"]);
+  assert.deepEqual(bases.rowAt(1)!.cells.map(cell => cell.html),
+    ["0x1234", "0x9010", "Public", "Object", "16"]);
+  assert.equal(bases.columns[3]!.className, "");
+  assert.equal(bases.columns[4]!.className, "peNumeric");
+  assert.match(renderItaniumRtti(analysis), /<h4>Class types<\/h4>/);
+  assert.match(renderItaniumRtti(analysis), /<h4>Direct bases<\/h4>/);
+});
 
 void test("omits absent RTTI and unrelated tables", () => {
   assert.equal(renderItaniumRtti(null), "");
   assert.equal(getItaniumRttiTableModel(undefined, "pe-itanium-types"), null);
-  assert.equal(getItaniumRttiTableModel({ types: [], vtables: [], warnings: [] }, "other"), null);
+  assert.equal(getItaniumRttiTableModel({ types: [], warnings: [] }, "other"), null);
 });
-void test("renders type, base, vtable and warning data safely", async () => {
+void test("renders class names, bases and warnings without vtables or methods", async () => {
   const analysis = (await discoverItaniumRtti(createItaniumFixture().image))!;
   analysis.types[0]!.name = "<script>";
   analysis.types[0]!.bases.push({ typeAddress: 1, offset: 16, isPublic: false, isVirtual: false });
@@ -26,7 +54,8 @@ void test("renders type, base, vtable and warning data safely", async () => {
   assert.match(html, /peNumeric/);
   assert.doesNotMatch(html, /<script>/);
   assert.doesNotMatch(html, /Function prefix|verified prefix/);
-  assert.match(html, /Offset to top/);
+  assert.doesNotMatch(html, /Offset to top|Primary vtables|Address point RVA/);
+  assert.equal(getItaniumRttiTableModel(analysis, "pe-itanium-vtables"), null);
 });
 void test("provides paginated rows, sort values and PE registry integration", async () => {
   const pe = createBasePe();

@@ -11,7 +11,7 @@ test("PE Itanium RTTI opens and survives lazy section remount", async ({ page })
   await section.locator("summary").click();
   await expect(section).toContainText("7Derived");
   await expect(section).toContainText("Virtual: vtable slot");
-  await expect(section.locator("table")).toHaveCount(3);
+  await expect(section.locator("table")).toHaveCount(2);
   await section.locator("summary").click();
   await section.locator("summary").click();
   await expect(section).toContainText("8Multiple");

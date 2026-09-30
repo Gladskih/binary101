@@ -25,13 +25,7 @@ export interface ItaniumType {
   bases: ItaniumBase[];
   flags?: number;
 }
-export interface ItaniumVtable {
-  address: number;
-  typeAddress: number;
-  offsetToTop: number;
-}
 export interface ItaniumRttiAnalysis {
   types: ItaniumType[];
-  vtables: ItaniumVtable[];
   warnings: string[];
 }

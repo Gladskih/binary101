@@ -26,7 +26,7 @@ export const createNameStrings = (image: ItaniumRttiImage) => {
         ? value + String.fromCharCode(...bytes.subarray(0, count)) : null;
       if (end >= 0) return length ? { value } : null;
     }
-    // Incomplete negative-space metadata must never permit positive vtable output.
+    // Report resource exhaustion separately from an invalid or unpublishable name.
     exhausted = true;
     return null;
   };

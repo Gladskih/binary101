@@ -10,7 +10,7 @@ const tableModel = (
   id: string, headings: string[], rows: string[][]
 ): PagedSortableTableModel => {
   const columns = headings.map(label => ({ label,
-    className: /RVA|^Offset(?: to top)?$|flags/.test(label) ? "peNumeric" : "" }));
+    className: /RVA|^Offset$|flags/.test(label) ? "peNumeric" : "" }));
   return { id, columns, rowCount: rows.length, pageSize: 250,
     rowAt: index => rows[index] ? { cells: rows[index].map((cell, column) => ({
       html: escapeHtml(cell), sortValue: cell, className: columns[column]!.className
@@ -34,10 +34,6 @@ export const getItaniumRttiTableModel = (
         address(type.address), address(base.typeAddress), base.isPublic ? "Public" : "Non-public",
         base.isVirtual ? "Virtual: vtable slot" : "Object", String(base.offset)
       ])));
-    case "pe-itanium-vtables": return tableModel(id,
-      ["Address point RVA", "Type RVA", "Offset to top"],
-      analysis.vtables.map(entry => [address(entry.address), address(entry.typeAddress),
-        String(entry.offsetToTop)]));
     default: return null;
   }
 };
@@ -45,12 +41,11 @@ export const getItaniumRttiTableModel = (
 export const renderItaniumRtti = (analysis: ItaniumRttiAnalysis | null | undefined): string => {
   if (!analysis) return "";
   return renderPeSectionStart("Itanium C++ RTTI", `${analysis.types.length} types`) +
-    `<p class="smallNote">Conservative subset: primary vtables with relocation-backed pointers ` +
+    `<p class="smallNote">Conservative subset: class RTTI with relocation-backed pointers ` +
     `and a closed runtime type graph. Names retain their ABI encoding. ` +
-    `Virtual-function entries and vtable lengths are not inferred.</p>` +
+    `User vtables and virtual methods are not inferred.</p>` +
     analysis.warnings.map(warning => `<p class="smallNote">${escapeHtml(warning)}</p>`).join("") +
-    [["pe-itanium-types", "Class types"], ["pe-itanium-bases", "Direct bases"],
-      ["pe-itanium-vtables", "Primary vtables"]].map(([id, label]) =>
+    [["pe-itanium-types", "Class types"], ["pe-itanium-bases", "Direct bases"]].map(([id, label]) =>
       `<h4>${label}</h4>` + renderAutoPagedSortableTable(getItaniumRttiTableModel(analysis, id!)!)
     ).join("") + renderPeSectionEnd();
 };

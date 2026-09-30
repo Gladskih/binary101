@@ -1,5 +1,5 @@
-import type { ItaniumRecords } from "./records.js";
-import type { ItaniumClassKind, ItaniumRttiImage, ItaniumVtable } from "./types.js";
+import type { ItaniumRecords, ItaniumRuntimeVtable } from "./records.js";
+import type { ItaniumClassKind, ItaniumRttiImage } from "./types.js";
 
 // GCC's runtime inheritance graph: libstdc++-v3/libsupc++/cxxabi.h.
 // https://github.com/gcc-mirror/gcc/blob/master/libstdc++-v3/libsupc++/cxxabi.h
@@ -9,7 +9,7 @@ const VMI_NAME = "N10__cxxabiv121__vmi_class_type_infoE";
 
 const runtimeTable = async (
   image: ItaniumRttiImage, records: ItaniumRecords, address: number, name: string
-): Promise<ItaniumVtable | null> => {
+): Promise<ItaniumRuntimeVtable | null> => {
   const table = await records.runtimeTable(address);
   if (!table || await records.name(table.typeAddress) !== name) return null;
   return (await image.read(table.typeAddress, 3 * image.pointerSize)).byteLength ===
@@ -57,8 +57,8 @@ export const findItaniumRuntime = async (
 ): Promise<Map<number, ItaniumClassKind>> => {
   const kinds = new Map<number, ItaniumClassKind>();
   const candidates: number[] = [];
-  for (const address of await records.prepare()) {
-    const table = await records.table(address);
+  for (const address of await records.prepareRuntime()) {
+    const table = await records.runtimeTable(address);
     if (!table) continue;
     const name = await records.name(table.typeAddress);
     if (name === VMI_NAME) candidates.push(address);

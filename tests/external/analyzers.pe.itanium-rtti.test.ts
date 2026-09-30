@@ -10,15 +10,8 @@ import type { PeWindowsParseResult } from "../../analyzers/pe/core/parse-result.
 import { MockFile } from "../helpers/mock-file.js";
 
 const compiler = process.env["MINGW_CXX"] ?? "C:/msys64/ucrt64/bin/g++.exe";
-const assertUnambiguousPrefixes = (parsed: PeWindowsParseResult): void => {
-  const addresses = parsed.itaniumRtti!.vtables.map(table => table.address).sort((left, right) => left - right);
-  // Detector policy: header + first pointer-sized slot, not an inferred full table size.
-  for (let index = 1; index < addresses.length; index++) {
-    assert.ok(addresses[index]! - addresses[index - 1]! >= 24, "Overlapping x64 vtable candidates");
-  }
-};
-const assertRttiOnlyOmitted = (
-  parsed: PeWindowsParseResult, bytes: Buffer, map: string, encodedName: string
+const assertRttiOnlyType = (
+  parsed: PeWindowsParseResult, bytes: Buffer, map: string, encodedName: string, publishedName: string | null
 ): void => {
   // The link map is an independent oracle; the analyzed PE itself remains stripped.
   const match = new RegExp(`^\\s*(0x[0-9a-f]+)\\s+_ZTI${encodedName}\\s*$`, "m").exec(map);
@@ -33,9 +26,7 @@ const assertRttiOnlyOmitted = (
   assert.equal(bytes.readUInt32LE(offset + 20), 2);
   assert.equal(bytes.readBigUInt64LE(offset + 32), 0n);
   assert.equal(bytes.readBigUInt64LE(offset + 48), 0n);
-  assert.equal(parsed.itaniumRtti!.vtables.some(table => table.address >= rva &&
-    table.address < rva + 56), false);
-  assert.equal(parsed.itaniumRtti!.types.some(type => type.address === rva), false);
+  assert.equal(parsed.itaniumRtti!.types.find(type => type.address === rva)?.name ?? null, publishedName);
 };
 for (const optimization of ["-O0", "-O2"]) {
   void test(`recognizes real stripped static MinGW RTTI (${optimization})`, {
@@ -54,13 +45,13 @@ for (const optimization of ["-O0", "-O2"]) {
       const parsed = await parsePe(new MockFile(bytes));
       assert.ok(parsed && isPeWindowsParseResult(parsed));
       assert.ok(parsed.itaniumRtti);
-      assertUnambiguousPrefixes(parsed);
+      assert.deepEqual(Object.keys(parsed.itaniumRtti).sort(), ["types", "warnings"]);
       const map = await readFile(mapPath, "utf8");
-      assertRttiOnlyOmitted(parsed, bytes, map, "8RttiOnly");
-      assertRttiOnlyOmitted(parsed, bytes, map, "16RttiOnlyTemplateIiE");
+      assertRttiOnlyType(parsed, bytes, map, "8RttiOnly", "8RttiOnly");
+      assertRttiOnlyType(parsed, bytes, map, "16RttiOnlyTemplateIiE", null);
       const longName = /\b_ZTI(16RttiOnlyTemplateISt16integer_sequence\w+)\b/.exec(map)?.[1];
       assert.ok(longName && longName.length > 511);
-      assertRttiOnlyOmitted(parsed, bytes, map, longName);
+      assertRttiOnlyType(parsed, bytes, map, longName, null);
       const types = new Map(parsed.itaniumRtti.types.map(type => [type.name, type]));
       assert.equal(types.get("4Base")?.kind, "class");
       assert.equal(types.get("7Derived")?.kind, "si");
@@ -72,8 +63,6 @@ for (const optimization of ["-O0", "-O2"]) {
         { typeAddress: types.get("6EmptyA")!.address, offset: 0, isVirtual: false, isPublic: false },
         { typeAddress: types.get("6EmptyB")!.address, offset: 0, isVirtual: false, isPublic: false }
       ]);
-      // x64 VMI +48 is base1.offset_flags, not a vtable address point.
-      assert.equal(parsed.itaniumRtti.vtables.some(table => table.address === collision.address + 48), false);
       assert.deepEqual(parsed.itaniumRtti.warnings, []);
     } finally {
       await rm(directory, { recursive: true, force: true });

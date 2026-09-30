@@ -11,12 +11,17 @@ void test("batches sparse names physically and never repeats the preparation pas
   // 32 distant name windows exceed the shared reader's cache; candidate order zigzags.
   const bytes = new Uint8Array(34 * 65536);
   const pointers = new Map<number, number>();
+  const view = new DataView(bytes.buffer);
   const names = new TextEncoder().encode("4Base\0");
   for (let index = 0; index < 512; index++) {
     const table = 32 + (511 - index) * 32;
     const type = 65536 + index * 16;
     const name = (2 + index % 32) * 65536 + Math.floor(index / 32) * 16;
     pointers.set(table - 8, type);
+    pointers.set(table, 0x800000);
+    pointers.set(table + 8, 0x800010);
+    view.setBigUint64(table, 0x800000n, true);
+    view.setBigUint64(table + 8, 0x800010n, true);
     pointers.set(type + 8, name);
     bytes.set(names, name);
   }
@@ -27,12 +32,12 @@ void test("batches sparse names physically and never repeats the preparation pas
   const reader = createFileRangeReader(file, 0, file.size);
   const image: ItaniumRttiImage = { pointers, pointerSize: 8, relocations: new Set(pointers.keys()),
     readOrder: address => address, read: reader.read,
-    isExecutable: () => assert.fail("Null first slots do not require executable targets") };
+    isExecutable: address => address === 0x800000 || address === 0x800010 };
   const records = createItaniumRecords(image);
-  assert.equal((await records.prepare()).length, 512);
+  assert.equal((await records.prepareRuntime()).length, 512);
   assert.ok(physicalReads <= 36, `Expected one read per physical window, got ${physicalReads}`);
   const before = physicalReads;
-  for (const address of await records.prepare()) await records.table(address);
+  for (const address of await records.prepareRuntime()) await records.runtimeTable(address);
   assert.equal(physicalReads, before);
 });
 
@@ -67,7 +72,7 @@ void test("batches standalone RTTI headers and names independently of user vtabl
   const result = await discoverItaniumRtti(fixture.image);
 
   assert.ok(result);
-  assert.equal(result.types.some(type => type.name === "6Sparse"), false);
+  assert.equal(result.types.filter(type => type.name === "6Sparse").length, 512);
   assert.ok(physicalReads <= 36, `Expected ordered RTTI reads, got ${physicalReads}`);
 });
 
@@ -102,7 +107,7 @@ void test("parses standalone SI bodies in physical order after preparing their n
   const result = await discoverItaniumRtti(fixture.image);
 
   assert.ok(result);
-  assert.equal(result.types.some(type => type.name === "6Sparse"), false);
+  assert.equal(result.types.filter(type => type.name === "6Sparse").length, 512);
   // At most four 32-window passes (candidates, headers, names, bodies), plus bootstrap.
   assert.ok(physicalReads <= 135, `Expected ordered RTTI body reads, got ${physicalReads}`);
 });

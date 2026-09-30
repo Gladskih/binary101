@@ -14,7 +14,7 @@ const readMultipleHeader = async (
   // ABI 2.9.5: only repeat/diamond bits; bound work to 256 direct bases.
   if ((flags & ~3) !== 0 || count === 0) return null;
   if (count > 256) {
-    warnings?.add("Itanium RTTI base count limit reached; vtables omitted.");
+    warnings?.add("Itanium RTTI base count limit reached; some types were omitted.");
     return null;
   }
   return { count, flags };

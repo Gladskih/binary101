@@ -74,7 +74,7 @@ const readAnalysis = async (
     await indexPointers(image, sites, core);
     return await discoverItaniumRtti(image);
   } catch {
-    return { types: [], vtables: [], warnings: ["Itanium RTTI analysis could not read file data."] };
+    return { types: [], warnings: ["Itanium RTTI analysis could not read file data."] };
   }
 };
 
@@ -86,7 +86,7 @@ export const analyzePeItaniumRtti = async (
   if (!relocations || relocations.warnings?.length) return null;
   // Resource policy: limit pointer-index memory and candidate work on hostile input.
   if (relocations.totalEntries > 250_000) return {
-    types: [], vtables: [], warnings: ["Itanium RTTI relocation limit reached; analysis skipped."]
+    types: [], warnings: ["Itanium RTTI relocation limit reached; analysis skipped."]
   };
   return readAnalysis(reader, core, relocations, width);
 };

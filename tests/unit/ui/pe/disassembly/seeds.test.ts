@@ -16,12 +16,12 @@ import { createItaniumFixture } from "../../../../fixtures/itanium-rtti.js";
 import { createNativeAotInitializerFixture } from
   "../../../../helpers/native-aot-initializer-fixture.js";
 
-void test("Itanium vtables do not contribute disassembly seeds", async () => {
+void test("Itanium RTTI classes do not contribute disassembly seeds", async () => {
   const pe = createWindowsPe();
   const file = new File([], "itanium-pe");
   const before = await collectPeDisassemblySeeds(file, pe);
   pe.itaniumRtti = await discoverItaniumRtti(createItaniumFixture().image);
-  assert.ok(pe.itaniumRtti?.vtables.length);
+  assert.ok(pe.itaniumRtti?.types.length);
   assert.deepEqual(await collectPeDisassemblySeeds(file, pe), before);
 });
 
