@@ -28,7 +28,7 @@ const assertRttiOnlyType = (
   assert.equal(bytes.readBigUInt64LE(offset + 48), 0n);
   assert.equal(parsed.itaniumRtti!.types.find(type => type.address === rva)?.name ?? null, publishedName);
 };
-for (const optimization of ["-O0", "-O2"]) {
+for (const optimization of ["-O0", "-O2", "-O3"]) {
   void test(`recognizes real stripped static MinGW RTTI (${optimization})`, {
     skip: !existsSync(compiler)
   }, async () => {
