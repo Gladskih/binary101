@@ -3,6 +3,9 @@
   "excludeAfterRemap": true,
   "exclude": [
     "scan-results/**",
+    "coverage/**",
+    "reports/**",
+    "test-results/**",
     ".stryker-tmp/**",
     "dist/**",
     "playwright.config.mjs",
