@@ -1,6 +1,9 @@
 "use strict";
 
 import { escapeHtml } from "../../html-utils.js";
+import { renderMetadataValue } from "./clr-metadata-values.js";
+import { createClrTableModel } from "./clr-table-model.js";
+import { renderAutoPagedSortableTable, type PagedSortableTableModel } from "../paged-sortable-table.js";
 import type {
   PeClrAdditionalCell, PeClrMetadataTables, PeClrMethodSignature
 } from "../../analyzers/pe/clr/types.js";
@@ -21,59 +24,58 @@ export const renderMetadataCell = (cell: PeClrAdditionalCell): string => {
   if (cell == null) return "-";
   if (typeof cell !== "object") return escapeHtml(String(cell));
   if (Array.isArray(cell)) {
-    // Local preview budget: retain full blob bytes in analysis but format only the first 64.
-    return escapeHtml(cell.slice(0, 64).map(byte => byte.toString(16).padStart(2, "0")).join(" ")) +
-      (cell.length > 64 ? ` … (${cell.length} bytes)` : "");
+    return escapeHtml(cell.map(byte => byte.toString(16).padStart(2, "0")).join(" "));
   }
   if ("table" in cell) {
     return escapeHtml(`${cell.table} #${cell.row}${cell.valid ? "" : " (invalid)"}`);
   }
+  if ("kind" in cell) return renderMetadataValue(cell) + renderSignatureIssues(cell.issues);
   return renderSignatureCell(cell);
 };
 
 const renderSignatureCell = (
-  cell: Exclude<PeClrAdditionalCell, number | string | null | number[] | { table: string }>
+  cell: Exclude<PeClrAdditionalCell, number | string | null | number[] | { table: string } | { kind: string }>
 ): string => {
   return escapeHtml("parameterTypes" in cell ? methodSignatureText(cell)
     : "types" in cell ? cell.types.join(", ") : cell.type ?? "?") + renderSignatureIssues(cell.issues);
 };
 
-const renderAdditionalRows = (
+const additionalTableModel = (
   rows: Record<string, PeClrAdditionalCell>[],
-  columns: string[]
-): string =>
-  rows.slice(0, 80).map((row, index) =>
-    `<tr><td class="peNumeric">${index + 1}</td>` + columns.map(column => {
-      const value = row[column] ?? null;
-      return `<td${typeof value === "number" ? ' class="peNumeric"' : ""}>` +
-        `${renderMetadataCell(value)}</td>`;
-    }).join("") + "</tr>"
-  ).join("");
-
-const renderAdditionalTable = (
-  table: NonNullable<PeClrMetadataTables["additionalTables"]>[number],
   name: string
-): string => {
-  const firstRow = table.rows[0];
-  if (!firstRow) return "";
+): PagedSortableTableModel => {
+  const firstRow = rows[0] ?? {};
   const columns = Object.keys(firstRow);
-  // Same display budget as the existing CLR tables; slice before formatting rows.
-  return `<details><summary>${escapeHtml(name)} (${table.rows.length})</summary>` +
-    (table.rows.length > 80 ? `<p class="smallNote">Showing first 80 of ${table.rows.length} rows.</p>` : "") +
-    `<div class="tableWrap"><table class="table"><thead><tr><th>RID</th>` +
-    columns.map(column => `<th>${escapeHtml(column)}</th>`).join("") +
-    `</tr></thead><tbody>${renderAdditionalRows(table.rows, columns)}</tbody></table></div></details>`;
+  return createClrTableModel(name, ["RID", ...columns], rows.length, index => {
+    const row = rows[index];
+    return row ? [String(index + 1), ...columns.map(column => renderMetadataCell(row[column] ?? null))] : null;
+  });
 };
 
 export const renderAdditionalMetadataTables = (metadata: PeClrMetadataTables): string =>
-  (metadata.additionalTables ?? []).map(table => renderAdditionalTable(table,
+  (metadata.additionalTables ?? []).filter(table => table.rows.length).map(table => renderTableModel(table.rows,
     metadata.rowCounts.find(count => count.tableId === table.tableId)?.name ?? `Table ${table.tableId}`
   )).join("");
 
+const renderTableModel = (rows: Record<string, PeClrAdditionalCell>[], name: string): string =>
+  rows.length ? `<details><summary>${escapeHtml(name)} (${rows.length})</summary>` +
+    renderAutoPagedSortableTable(additionalTableModel(rows, name)) + "</details>" : "";
+
 export const renderFieldsAndMembers = (metadata: PeClrMetadataTables): string =>
-  renderAdditionalTable({ tableId: 4, rows: (metadata.fields ?? []).map(field => ({
+  renderTableModel((metadata.fields ?? []).map(field => ({
     Name: field.name, Flags: field.flags, Signature: field.signature ?? null
-  })) }, "Field definitions") +
-  renderAdditionalTable({ tableId: 10, rows: metadata.memberRefs.map(member => ({
+  })), "Field definitions") +
+  renderTableModel(metadata.memberRefs.map(member => ({
     Parent: member.parentName ?? member.parent, Name: member.name, Signature: member.signature ?? null
-  })) }, "Member references");
+  })), "Member references");
+
+export const createAdditionalMetadataTableModels = (metadata: PeClrMetadataTables): PagedSortableTableModel[] => [
+  ...(metadata.additionalTables ?? []).map(table => additionalTableModel(table.rows,
+    metadata.rowCounts.find(count => count.tableId === table.tableId)?.name ?? `Table ${table.tableId}`)),
+  additionalTableModel((metadata.fields ?? []).map(field => ({
+    Name: field.name, Flags: field.flags, Signature: field.signature ?? null
+  })), "Field definitions"),
+  additionalTableModel(metadata.memberRefs.map(member => ({
+    Parent: member.parentName ?? member.parent, Name: member.name, Signature: member.signature ?? null
+  })), "Member references")
+];

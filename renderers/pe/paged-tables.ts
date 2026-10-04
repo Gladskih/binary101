@@ -28,6 +28,11 @@ import { analyzeTypeLibraryExports } from
 import { getOmapTableModel } from "./omap.js";
 import { createDRuntimeModuleTableModel, D_MODULE_TABLE_ID } from "./d-runtime.js";
 import { createDRuntimeReferenceTableModel, D_REFERENCE_TABLE_ID } from "./d-runtime-references.js";
+import { createClrMetadataTableModels } from "./clr-metadata.js";
+
+const getClrTableModel = (pe: PeWindowsParseResult, tableId: string): PagedSortableTableModel | null =>
+  tableId.startsWith("pe-clr-") && pe.clr?.meta?.tables
+    ? createClrMetadataTableModels(pe.clr.meta.tables).find(model => model.id === tableId) ?? null : null;
 
 const eagerImportMatch = (tableId: string): number | null => {
   const match = tableId.match(/^eager-import-(\d+)$/);
@@ -96,6 +101,7 @@ export const getPePagedTableModel = (
     isPeWindowsParseResult(pe)
       ? getPeDisassemblyStringTableModel(pe, tableId) ??
         getOmapTableModel(pe, tableId) ??
+        getClrTableModel(pe, tableId) ??
         (tableId === EXPORT_TABLE_ID && pe.exports
           ? createExportTableModel(pe.exports.entries,
             analyzeTypeLibraryExports(pe.resources, pe.exports).matches)

@@ -12,7 +12,7 @@ void test("renders scalar cells, blobs and token validity", () => {
   assert.equal(renderMetadataCell(42), "42");
   assert.equal(renderMetadataCell("<img>"), "&lt;img>");
   assert.equal(renderMetadataCell([0, 255]), "00 ff");
-  assert.match(renderMetadataCell(new Array<number>(65).fill(0)), /65 bytes/);
+  assert.equal(renderMetadataCell(new Array<number>(65).fill(0)), new Array<string>(65).fill("00").join(" "));
   assert.equal(renderMetadataCell({ table: "Field", tableId: 4, row: 1, raw: 1, valid: true }), "Field #1");
   assert.match(renderMetadataCell({ table: "Field", tableId: 4, row: 2, raw: 2, valid: false }), /invalid/);
 });
@@ -26,6 +26,9 @@ void test("renders all signature kinds and their warnings", () => {
   assert.equal(renderSignatureIssues([]), "");
   assert.equal(renderSignatureIssues(undefined), "");
   assert.match(renderMetadataCell({ types: [], issues: ["<bad>"] }), /&lt;bad>/);
+  assert.equal(renderMetadataCell({ kind: "constant", value: 1 }), "1");
+  assert.match(renderMetadataCell({ kind: "marshal", nativeType: "unknown", parameters: {}, issues: ["<bad>"] }),
+    /unknown.*&lt;bad>/);
 });
 
 void test("bounds additional tables before formatting and labels missing names", () => {
@@ -34,7 +37,7 @@ void test("bounds additional tables before formatting and labels missing names",
     { tableId: 98, rows: [] }];
   const html = renderAdditionalMetadataTables(metadata);
   assert.match(html, /Table 99 \(81\)/);
-  assert.match(html, /Showing first 80 of 81/);
+  assert.match(html, /data-paged-sortable-table-root/);
   assert.equal((html.match(/<tr>/g) ?? []).length, 81);
   assert.doesNotMatch(html, /Table 98/);
 });

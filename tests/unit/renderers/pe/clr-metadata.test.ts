@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createClrMetadataTablesWithParameterNames } from "../../../fixtures/pe-clr-metadata-tables.js";
-import { renderClrMetadataTables } from "../../../../renderers/pe/clr-metadata.js";
+import { createClrMetadataTableModels, renderClrMetadataTables } from "../../../../renderers/pe/clr-metadata.js";
 
 void test("renderClrMetadataTables renders CLR parameter names without shifting return parameters", () => {
   const out: string[] = [];
@@ -12,13 +12,38 @@ void test("renderClrMetadataTables renders CLR parameter names without shifting 
   assert.match(html, /Demo\.Buffer::Copy/);
   assert.match(html, /bool returnValue \(string source, i4 length\)/);
   assert.match(html, /\? \(\? value\)/);
-  assert.match(html, /NoSignature<\/td><td>0x00001236<\/td><td>0x0006<\/td><td>-<\/td>/);
+  assert.match(html, /NoSignature<\/td><td class="peNumeric">0x00001236<\/td><td class="peNumeric">0x0006/);
   assert.match(html, /Parameter rows/);
-  assert.match(html, /<th>RID<\/th><th>Sequence<\/th><th>Name<\/th><th>Flags<\/th>/);
-  assert.match(html, /<td>1<\/td><td>0<\/td><td>returnValue<\/td><td>0x0002<\/td>/);
-  assert.match(html, /<td>2<\/td><td>1<\/td><td>source<\/td><td>0x0001<\/td>/);
-  assert.match(html, /<td>3<\/td><td>2<\/td><td>length<\/td><td>0x0000<\/td>/);
+  assert.match(html, /<th class="peNumeric">RID<\/th><th class="peNumeric">Sequence<\/th><th>Name/);
+  assert.match(html, /<td class="peNumeric">1<\/td><td class="peNumeric">0<\/td><td>returnValue/);
+  assert.match(html, /<td class="peNumeric">2<\/td><td class="peNumeric">1<\/td><td>source/);
+  assert.match(html, /<td class="peNumeric">3<\/td><td class="peNumeric">2<\/td><td>length/);
   assert.doesNotMatch(html, /string returnValue, i4 source/);
+});
+
+void test("makes rows beyond the first page available and reuses table models", () => {
+  const metadata = createClrMetadataTablesWithParameterNames();
+  metadata.typeDefs = Array.from({ length: 81 }, (_, index) => ({ ...metadata.typeDefs[0]!,
+    row: index + 1, name: `T${index}`, fullName: `Demo.T${index}` }));
+  const models = createClrMetadataTableModels(metadata);
+  const model = models.find(entry => entry.id === "pe-clr-Type%20definitions")!;
+  assert.equal(model.rowCount, 81);
+  assert.equal(model.rowAt(80)?.cells[0]?.html, "Demo.T80");
+  assert.equal(model.rowAt(81), null);
+  assert.equal(createClrMetadataTableModels(metadata), models);
+  const out: string[] = [];
+  renderClrMetadataTables(metadata, out);
+  assert.match(out.join(""), /data-paged-sortable-table-root/);
+  assert.doesNotMatch(out.join(""), /Showing first/);
+});
+
+void test("does not render absent metadata or empty tables", () => {
+  const out: string[] = [];
+  renderClrMetadataTables(undefined, out);
+  assert.deepEqual(out, []);
+  const metadata = createClrMetadataTablesWithParameterNames();
+  metadata.parameters = [];
+  assert.equal(createClrMetadataTableModels(metadata).find(model => model.id === "pe-clr-Parameter%20rows")?.rowAt(0), null);
 });
 
 void test("shows additional table columns, signature issues and escaped heap values", () => {
@@ -33,7 +58,7 @@ void test("shows additional table columns, signature issues and escaped heap val
   renderClrMetadataTables(metadata, out);
   const html = out.join("");
   assert.match(html, /Property/);
-  assert.match(html, /<th>RID<\/th><th>Flags<\/th><th>Name<\/th><th>Type<\/th>/);
+  assert.match(html, /<th class="peNumeric">RID<\/th><th class="peNumeric">Flags<\/th><th>Name<\/th><th>Type/);
   assert.match(html, /&lt;Item>/);
   assert.match(html, /&lt;truncated>/);
   assert.match(html, /Method signature is truncated\./);

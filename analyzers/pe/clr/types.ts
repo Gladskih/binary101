@@ -3,6 +3,7 @@
 import type { PeClrManagedResources } from "./managed-resource-types.js";
 import type { PeClrReadyToRun } from "./ready-to-run-types.js";
 import type { PeClrStrongName } from "./strong-name-types.js";
+import type { PeClrConstantValue, PeClrMarshallingDescriptor, PeClrPermissionSet } from "./metadata-value-types.js";
 
 export interface PeClrStreamInfo {
   name: string;
@@ -227,7 +228,8 @@ export interface PeClrSequenceSignature {
 }
 
 export type PeClrAdditionalCell = number | string | null | number[] | PeClrMetadataIndex |
-  PeClrMethodSignature | PeClrTypeSignature | PeClrSequenceSignature;
+  PeClrMethodSignature | PeClrTypeSignature | PeClrSequenceSignature | PeClrConstantValue |
+  PeClrMarshallingDescriptor | PeClrPermissionSet;
 
 export interface PeClrAdditionalTable {
   tableId: number;

@@ -3,7 +3,7 @@
 import { hex } from "../../binary-utils.js";
 import { renderDefinitionRow, renderFlagChips, escapeHtml } from "../../html-utils.js";
 import {
-  renderAdditionalMetadataTables, renderFieldsAndMembers, renderSignatureIssues
+  renderSignatureIssues
 } from "./clr-metadata-cells.js";
 import type {
   PeClrCustomAttributeInfo,
@@ -14,7 +14,9 @@ import type {
   PeClrTypeDefinitionInfo
 } from "../../analyzers/pe/clr/types.js";
 
-const MAX_RENDERED_ROWS = 80;
+import { createClrTableModel } from "./clr-table-model.js";
+import { renderAutoPagedSortableTable, type PagedSortableTableModel } from "../paged-sortable-table.js";
+import { createAdditionalMetadataTableModels } from "./clr-metadata-cells.js";
 
 // ECMA-335 II.24.2.6 defines the low three HeapSizes bits. CoreCLR's
 // CMiniMdSchemaBase adds the remaining named schema flags in m_heaps:
@@ -60,26 +62,12 @@ const methodCount = (typeDef: PeClrTypeDefinitionInfo): string => {
   return String(typeDef.methodEnd - typeDef.methodStart + 1);
 };
 
-const limitNote = (total: number): string =>
-  total > MAX_RENDERED_ROWS
-    ? `<div class="smallNote">Showing first ${MAX_RENDERED_ROWS} of ${total} row(s).</div>`
-    : "";
+const createSimpleTableModel = (title: string, headers: string[], rows: string[][]): PagedSortableTableModel =>
+  createClrTableModel(title, headers, rows.length, index => rows[index] ?? null);
 
-const renderSimpleTable = (
-  title: string,
-  headers: string[],
-  rows: string[][]
-): string => {
-  if (!rows.length) return "";
-  const body = rows.slice(0, MAX_RENDERED_ROWS)
-    .map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join("")}</tr>`)
-    .join("");
-  return `<details style="margin-top:.35rem"><summary>${escapeHtml(title)} (${rows.length})</summary>` +
-    limitNote(rows.length) +
-    `<table class="table" style="margin-top:.35rem"><thead><tr>` +
-    headers.map(header => `<th>${escapeHtml(header)}</th>`).join("") +
-    `</tr></thead><tbody>${body}</tbody></table></details>`;
-};
+const renderSimpleTable = (title: string, headers: string[], rows: string[][]): string =>
+  rows.length ? `<details><summary>${escapeHtml(title)} (${rows.length})</summary>` +
+    renderAutoPagedSortableTable(createSimpleTableModel(title, headers, rows)) + "</details>" : "";
 
 const targetFrameworkAttribute = (
   metadata: PeClrMetadataTables
@@ -140,8 +128,8 @@ const renderTableStreamSummary = (metadata: PeClrMetadataTables): string =>
     ])
   );
 
-const renderReferences = (metadata: PeClrMetadataTables): string =>
-  renderSimpleTable(
+const createReferenceModels = (metadata: PeClrMetadataTables): PagedSortableTableModel[] => [
+  createSimpleTableModel(
     "Assembly references",
     ["Name", "Version", "Culture", "Flags"],
     metadata.assemblyRefs.map(row => [
@@ -150,15 +138,15 @@ const renderReferences = (metadata: PeClrMetadataTables): string =>
       dash(row.culture),
       hex(row.flags, 8)
     ])
-  ) +
-  renderSimpleTable(
+  ),
+  createSimpleTableModel(
     "Type references",
     ["Type", "Resolution scope"],
     metadata.typeRefs.map(row => [dash(row.fullName), escapeHtml(indexText(row.resolutionScope))])
-  );
+  )];
 
-const renderTypesAndMethods = (metadata: PeClrMetadataTables): string =>
-  renderSimpleTable(
+const createDefinitionModels = (metadata: PeClrMetadataTables): PagedSortableTableModel[] => [
+  createSimpleTableModel(
     "Type definitions",
     ["Type", "Extends", "Flags", "Methods"],
     metadata.typeDefs.map(row => [
@@ -167,8 +155,8 @@ const renderTypesAndMethods = (metadata: PeClrMetadataTables): string =>
       hex(row.flags, 8),
       methodCount(row)
     ])
-  ) +
-  renderSimpleTable(
+  ),
+  createSimpleTableModel(
     "Method definitions",
     ["Method", "RVA", "Flags", "Signature"],
     metadata.methodDefs.map(row => [
@@ -177,8 +165,8 @@ const renderTypesAndMethods = (metadata: PeClrMetadataTables): string =>
       hex(row.flags, 4),
       escapeHtml(signatureText(row)) + renderSignatureIssues(row.signature?.issues)
     ])
-  ) +
-  renderSimpleTable(
+  ),
+  createSimpleTableModel(
     "Parameter rows",
     ["RID", "Sequence", "Name", "Flags"],
     metadata.parameters.map(row => [
@@ -187,10 +175,10 @@ const renderTypesAndMethods = (metadata: PeClrMetadataTables): string =>
       dash(row.name),
       hex(row.flags, 4)
     ])
-  );
+  )];
 
-const renderCustomAttributes = (metadata: PeClrMetadataTables): string =>
-  renderSimpleTable(
+const createAttributeModel = (metadata: PeClrMetadataTables): PagedSortableTableModel =>
+  createSimpleTableModel(
     "Custom attributes",
     ["Parent", "Attribute", "Constructor", "Arguments"],
     metadata.customAttributes.map(row => {
@@ -205,8 +193,8 @@ const renderCustomAttributes = (metadata: PeClrMetadataTables): string =>
     })
   );
 
-const renderManagedNativeAndResources = (metadata: PeClrMetadataTables): string =>
-  renderSimpleTable(
+const createInteropModels = (metadata: PeClrMetadataTables): PagedSortableTableModel[] => [
+  createSimpleTableModel(
     "P/Invoke map",
     ["Member", "Import", "Module", "Flags"],
     metadata.implMaps.map(row => [
@@ -215,8 +203,8 @@ const renderManagedNativeAndResources = (metadata: PeClrMetadataTables): string 
       dash(row.importScopeName),
       hex(row.mappingFlags, 4)
     ])
-  ) +
-  renderSimpleTable(
+  ),
+  createSimpleTableModel(
     "Files and exported types",
     ["Kind", "Name", "Flags", "Implementation"],
     [
@@ -228,7 +216,20 @@ const renderManagedNativeAndResources = (metadata: PeClrMetadataTables): string 
         escapeHtml(indexText(row.implementation))
       ])
     ]
-  );
+  )];
+
+// Pagination reuses formatted cells for the same parsed metadata instead of rebuilding them.
+const modelCache = new WeakMap<PeClrMetadataTables, PagedSortableTableModel[]>();
+export const createClrMetadataTableModels = (metadata: PeClrMetadataTables): PagedSortableTableModel[] => {
+  const cached = modelCache.get(metadata);
+  if (cached) return cached;
+  const models = [...createReferenceModels(metadata), ...createDefinitionModels(metadata),
+    createAttributeModel(metadata), ...createInteropModels(metadata), ...createAdditionalMetadataTableModels(metadata),
+    createSimpleTableModel("Metadata tables", ["Table", "Rows", "Sorted"],
+      metadata.rowCounts.map(row => [escapeHtml(row.name), String(row.rows), row.sorted ? "Yes" : "No"]))];
+  modelCache.set(metadata, models);
+  return models;
+};
 
 export const renderClrMetadataTables = (
   metadata: PeClrMetadataTables | undefined,
@@ -238,10 +239,8 @@ export const renderClrMetadataTables = (
   out.push(renderTargetFramework(metadata));
   out.push(renderAssembly(metadata));
   out.push(renderTableStreamSummary(metadata));
-  out.push(renderReferences(metadata));
-  out.push(renderTypesAndMethods(metadata));
-  out.push(renderFieldsAndMembers(metadata));
-  out.push(renderCustomAttributes(metadata));
-  out.push(renderManagedNativeAndResources(metadata));
-  out.push(renderAdditionalMetadataTables(metadata));
+  out.push(createClrMetadataTableModels(metadata).filter(model =>
+    model.rowCount && model.id !== "pe-clr-Metadata%20tables").map(model =>
+      `<details><summary>${escapeHtml(decodeURIComponent(model.id.slice(7)))} (${model.rowCount})</summary>` +
+      renderAutoPagedSortableTable(model) + "</details>").join(""));
 };

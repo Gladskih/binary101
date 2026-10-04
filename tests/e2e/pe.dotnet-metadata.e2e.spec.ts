@@ -35,5 +35,12 @@ test("shows additional CLR metadata from an installed assembly in the browser", 
   await expect(properties.locator("tbody tr").first()).toContainText("ResourceManager");
   await expect(clr.locator("summary").filter({ hasText: /^GenericParam \(/ })).toBeVisible();
   await expect(clr.locator("summary").filter({ hasText: /^TypeSpec \(/ })).toBeVisible();
+  const specifications = clr.locator("details").filter({
+    has: page.locator(":scope > summary", { hasText: /^TypeSpec \(/ })
+  });
+  await specifications.locator(":scope > summary").click();
+  await expect(specifications.locator("tbody tr").first().locator("td").first()).toHaveText("1");
+  await specifications.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(specifications.locator("tbody tr").first().locator("td").first()).toHaveText("81");
   expect(errors).toEqual([]);
 });
