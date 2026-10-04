@@ -88,6 +88,14 @@ void test("discards completed work when the inspected file changes", async conte
   assert.equal(input.disabled, false);
 });
 
+void test("reports invalid dependency files when the source has no existing diagnostics", async context => {
+  const input = installInput(context);
+  input.files = [new MockFile(new Uint8Array(), "bad.dll")];
+  const pe = currentPe();
+  await createClrDependencyChangeHandler(() => pe, () => {}, () => {})(changeEvent(input));
+  assert.deepEqual(pe.clr!.meta!.tables!.issues, ["bad.dll: no Windows PE headers were found."]);
+});
+
 void test("ignores unrelated changes, empty selection and unavailable metadata", async context => {
   const input = installInput(context);
   const pe = createBasePe();

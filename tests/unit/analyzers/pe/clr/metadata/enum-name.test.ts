@@ -35,6 +35,7 @@ void test("uses .NET whitespace rules while preserving a leading byte-order mark
   // Char.IsWhiteSpace includes NEXT LINE U+0085 and excludes ZERO WIDTH NO-BREAK SPACE U+FEFF.
   // https://learn.microsoft.com/en-us/dotnet/api/system.char.iswhitespace
   assert.deepEqual(parseSerializedEnumName("\u0085Demo.Mode"), { typeName: "Demo.Mode", assembly: null });
+  assert.deepEqual(parseSerializedEnumName("\t\u0085Demo.Mode"), { typeName: "Demo.Mode", assembly: null });
   assert.deepEqual(parseSerializedEnumName("\ufeffDemo.Mode"), { typeName: "\ufeffDemo.Mode", assembly: null });
   assert.deepEqual(parseSerializedEnumName("Demo. Mode"), { typeName: "Demo. Mode", assembly: null });
 });
