@@ -16,7 +16,9 @@ import { createCustomAttributes } from "./metadata-custom-attributes.js";
 import { createAdditionalTables } from "./metadata-additional-tables.js";
 import { createMetadataOwnership } from "./metadata-list-ownership.js";
 import { createEnumUnderlyingTypes } from "./metadata-enums.js";
-import { resolveDefinitionNames, resolveReferenceNames } from "./metadata-nested-names.js";
+import { resolveDefinitionNames, resolveReferenceNames, resolveExportedTypeNames } from "./metadata-nested-names.js";
+import { attachClrResolutionSession } from "./metadata-redecode.js";
+import { clrTypeFullName } from "./metadata-type-names.js";
 import {
   createFields,
   createMethodDefs,
@@ -63,10 +65,6 @@ const versionText = (row: ClrMetadataRow): string =>
   `${cellNumber(row, "MajorVersion")}.${cellNumber(row, "MinorVersion")}.` +
   `${cellNumber(row, "BuildNumber")}.${cellNumber(row, "RevisionNumber")}`;
 
-const fullName = (namespaceName: string | null, name: string | null): string | null => {
-  if (!name) return null;
-  return namespaceName ? `${namespaceName}.${name}` : name;
-};
 
 const getString = (
   heaps: ClrHeapReaders,
@@ -75,12 +73,15 @@ const getString = (
   context: string
 ): string | null => heaps.getString(cellNumber(row, fieldName), `${context}.${fieldName}`);
 
-const blobSize = (
+const blobBytes = (
   heaps: ClrHeapReaders,
   row: ClrMetadataRow,
   fieldName: string,
   context: string
-): number | null => heaps.getBlobSize(cellNumber(row, fieldName), `${context}.${fieldName}`);
+): number[] | null => {
+  const bytes = heaps.getBlob(cellNumber(row, fieldName), `${context}.${fieldName}`);
+  return bytes ? Array.from(bytes) : null;
+};
 
 const createModules = (rows: ClrMetadataRow[], heaps: ClrHeapReaders): PeClrModuleInfo[] =>
   rows.map((row, index) => ({
@@ -117,8 +118,8 @@ const createAssemblyRefs = (
     culture: getString(heaps, row, "Culture", `AssemblyRef row ${index + 1}`),
     version: versionText(row),
     flags: cellNumber(row, "Flags"),
-    publicKeyOrTokenSize: blobSize(heaps, row, "PublicKeyOrToken", `AssemblyRef row ${index + 1}`),
-    hashValueSize: blobSize(heaps, row, "HashValue", `AssemblyRef row ${index + 1}`)
+    publicKeyOrToken: blobBytes(heaps, row, "PublicKeyOrToken", `AssemblyRef row ${index + 1}`),
+    hashValue: blobBytes(heaps, row, "HashValue", `AssemblyRef row ${index + 1}`)
   }));
 
 const createTypeRefs = (
@@ -133,7 +134,7 @@ const createTypeRefs = (
       name,
       namespace: namespaceName,
       resolutionScope: cellIndex(row, "ResolutionScope"),
-      fullName: fullName(namespaceName, name)
+      fullName: clrTypeFullName(namespaceName, name)
     };
   });
 
@@ -184,7 +185,7 @@ export const buildClrMetadataTables = (
   const additionalTables = createAdditionalTables(parsed, heaps, enumTypes);
   const typeSpecifications = new Map((additionalTables.find(table => table.tableId === 0x1b)?.rows ?? [])
     .map((row, index) => [index + 1, row["Signature"] as PeClrTypeSignature]));
-  return {
+  const tables: PeClrMetadataTables = {
     streamName: parsed.streamName,
     majorVersion: parsed.majorVersion,
     minorVersion: parsed.minorVersion,
@@ -199,10 +200,13 @@ export const buildClrMetadataTables = (
     memberRefs,
     implMaps: createImplMaps(tableRows(parsed, TABLE_IMPL_MAP), heaps, references),
     files: createFiles(tableRows(parsed, TABLE_FILE), heaps),
-    exportedTypes: createExportedTypes(tableRows(parsed, TABLE_EXPORTED_TYPE), heaps),
+    exportedTypes: resolveExportedTypeNames(
+      createExportedTypes(tableRows(parsed, TABLE_EXPORTED_TYPE), heaps), heaps.issues),
     manifestResources: createManifestResources(tableRows(parsed, TABLE_MANIFEST_RESOURCE), heaps),
     customAttributes: createCustomAttributes(tableRows(parsed, TABLE_CUSTOM_ATTRIBUTE),
       heaps, { ...references, memberRefs, enumTypes, typeSpecifications }),
     additionalTables
   };
+  attachClrResolutionSession(tables, parsed, heaps, { ...references, memberRefs, enumTypes, typeSpecifications });
+  return tables;
 };
