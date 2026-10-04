@@ -191,7 +191,10 @@ export const buildClrMetadataTables = (
     exportedTypes: createExportedTypes(tableRows(parsed, TABLE_EXPORTED_TYPE), heaps),
     manifestResources: createManifestResources(tableRows(parsed, TABLE_MANIFEST_RESOURCE), heaps),
     customAttributes: createCustomAttributes(tableRows(parsed, TABLE_CUSTOM_ATTRIBUTE),
-      heaps, { ...references, memberRefs }),
+      heaps, { ...references, memberRefs,
+        // ECMA-335 II.22.37/II.24.2.6: #- FieldList can index FieldPtr (0x03), not Field.
+        // Until pointer ownership is resolved, do not infer enum widths from direct field ranges.
+        fields: parsed.tables.has(0x03) ? [] : references.fields }),
     additionalTables: createAdditionalTables(parsed, heaps)
   };
 };

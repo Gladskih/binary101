@@ -23,7 +23,7 @@ const u32le = (value: number): number[] => [
 
 const u64le = (low: number, high: number): number[] => [...u32le(low), ...u32le(high)];
 
-void test("decodeCustomAttributeValue infers boxed fixed enum values before named count", () => {
+void test("decodeCustomAttributeValue uses resolved boxed fixed enum values before named count", () => {
   const decoded = decodeCustomAttributeValue(
     Uint8Array.of(
       ...CUSTOM_ATTRIBUTE_PROLOG,
@@ -33,7 +33,8 @@ void test("decodeCustomAttributeValue infers boxed fixed enum values before name
       0, 0
     ),
     ["object"],
-    "DefaultValueAttribute"
+    "DefaultValueAttribute",
+    new Map([["System.Data.SQLite.SQLiteConnectionFlags", "u8"]])
   );
 
   assert.strictEqual(decoded.fixedArguments[0]?.value, "0x00000c0000004008");
@@ -52,7 +53,8 @@ void test("decodeCustomAttributeValue keeps compact enum values before named pro
       ...u32le(1)
     ),
     ["System.Security.SecurityRuleSet"],
-    "SecurityRulesAttribute"
+    "SecurityRulesAttribute",
+    new Map([["System.Security.SecurityRuleSet", "u1"]])
   );
 
   assert.strictEqual(decoded.fixedArguments[0]?.value, 2);
@@ -62,7 +64,7 @@ void test("decodeCustomAttributeValue keeps compact enum values before named pro
   assert.strictEqual(decoded.issues, undefined);
 });
 
-void test("decodeCustomAttributeValue infers compact boxed named enum values", () => {
+void test("decodeCustomAttributeValue uses resolved compact boxed named enum values", () => {
   const decoded = decodeCustomAttributeValue(
     Uint8Array.of(
       ...CUSTOM_ATTRIBUTE_PROLOG,
@@ -75,7 +77,8 @@ void test("decodeCustomAttributeValue infers compact boxed named enum values", (
       0x1f
     ),
     [],
-    "ConstantExpectedAttribute"
+    "ConstantExpectedAttribute",
+    new Map([["System.Runtime.Intrinsics.X86.FloatComparisonMode", "u1"]])
   );
 
   assert.strictEqual(decoded.namedArguments[0]?.kind, "property");
@@ -102,7 +105,8 @@ void test("decodeCustomAttributeValue keeps compact named enums before more enum
       12
     ),
     ["i4"],
-    "EventAttribute"
+    "EventAttribute",
+    new Map([["System.Diagnostics.Tracing.EventLevel", "u1"], ["System.Diagnostics.Tracing.EventChannel", "u1"]])
   );
 
   assert.strictEqual(decoded.namedArguments[0]?.name, "Level");
@@ -110,4 +114,22 @@ void test("decodeCustomAttributeValue keeps compact named enums before more enum
   assert.strictEqual(decoded.namedArguments[1]?.name, "Channel");
   assert.strictEqual(decoded.namedArguments[1]?.value, 12);
   assert.strictEqual(decoded.issues, undefined);
+});
+
+void test("does not guess an unresolved enum's underlying type from byte boundaries", () => {
+  const decoded = decodeCustomAttributeValue(
+    Uint8Array.of(...CUSTOM_ATTRIBUTE_PROLOG, ...u32le(2), 0, 0), ["External.Mode"], "Unknown enum"
+  );
+  assert.equal(decoded.fixedArguments[0]?.value, null);
+  assert.match(decoded.issues?.[0] ?? "", /underlying type.*unresolved/);
+  assert.deepEqual(decoded.namedArguments, []);
+});
+
+void test("reads signed fixed arguments as signed values", () => {
+  const decoded = decodeCustomAttributeValue(
+    Uint8Array.of(...CUSTOM_ATTRIBUTE_PROLOG, 0xff, 0xff, 0xff, ...u32le(0xffffffff), 0, 0),
+    ["i1", "i2", "i4"], "Signed"
+  );
+  assert.deepEqual(decoded.fixedArguments.map(argument => argument.value), [-1, -1, -1]);
+  assert.equal(decoded.issues, undefined);
 });

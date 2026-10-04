@@ -43,12 +43,26 @@ const elementTypeName = (elementType: number): string | null => {
   return names[elementType] || null;
 };
 
-export const readFieldOrPropType = (cursor: AttributeCursor): string | null => {
-  const elementType = cursor.readU8();
+const readScalarType = (cursor: AttributeCursor, elementType: number | null): string | null => {
   if (elementType == null) return null;
   // ECMA-335 II.23.3: FieldOrPropType 0x55 is enum followed by a TypeName.
-  if (elementType === 0x55) return `${TYPE_ENUM_PREFIX}${cursor.readSerString() || "?"}`;
-  // ECMA-335 II.23.3: FieldOrPropType 0x1d is SZARRAY followed by an element type.
-  if (elementType === 0x1d) return `${readFieldOrPropType(cursor) || "?"}${TYPE_ARRAY_SUFFIX}`;
-  return elementTypeName(elementType) || `ELEMENT_TYPE_${elementType.toString(16).padStart(2, "0")}`;
+  if (elementType === 0x55) {
+    const name = cursor.readSerString();
+    if (name) return `${TYPE_ENUM_PREFIX}${name}`;
+    cursor.addIssue("enum type name is absent.");
+    return null;
+  }
+  const type = elementTypeName(elementType);
+  if (type) return type;
+  cursor.addIssue(`unsupported FieldOrPropType code 0x${elementType.toString(16)}.`);
+  return null;
+};
+
+export const readFieldOrPropType = (cursor: AttributeCursor): string | null => {
+  const elementType = cursor.readU8();
+  if (elementType !== 0x1d) return readScalarType(cursor, elementType);
+  // ECMA-335 II.23.3 disallows jagged attribute arrays. Read one scalar element without recursion.
+  // https://github.com/dotnet/runtime/blob/main/src/libraries/System.Reflection.Metadata/src/System/Reflection/Metadata/Ecma335/CustomAttributeDecoder.cs
+  const type = readScalarType(cursor, cursor.readU8());
+  return type ? `${type}${TYPE_ARRAY_SUFFIX}` : null;
 };
