@@ -1,6 +1,7 @@
 "use strict";
 
 import { readCompressedUInt } from "./metadata-heaps.js";
+import { decodeMetadataUtf8 } from "./metadata-utf8.js";
 
 // ECMA-335 II.23.3 defines CustomAttrib serialization, SerString, and named-argument tags.
 // Spec: https://docs.ecma-international.org/ecma-335/Ecma-335-part-i-iv.pdf
@@ -109,8 +110,8 @@ export class AttributeCursor {
       this.issues.push(`${this.context} custom attribute string extends past the blob.`);
       return null;
     }
-    const text = new TextDecoder("utf-8", { fatal: false })
-      .decode(this.bytes.subarray(this.offset, this.offset + length.value));
+    const text = decodeMetadataUtf8(this.bytes.subarray(this.offset, this.offset + length.value),
+      this.issues, `${this.context} custom attribute`);
     this.offset += length.value;
     return text;
   }

@@ -46,13 +46,14 @@ void test("exposes generic method instantiations and standalone local signatures
   assert.deepEqual(locals.additionalTables?.[0]?.rows, [{ Signature: { types: ["i4 pinned"] } }]);
 });
 
-void test("retains uninterpreted marshal blobs and missing-heap warnings", () => {
+void test("decodes marshal blobs and preserves missing-heap warnings", () => {
   // ECMA-335 II.22.17 FieldMarshal (0x0d) NativeType is a blob.
   const parent = { table: "Field", tableId: 4, row: 1, raw: 2, valid: true };
   const issues: string[] = [];
   const metadata = buildClrMetadataTables(streamWithRows(0x0d, [{ Parent: parent, NativeType: 1 }]),
     heaps([0, 2, 0x2a, 8], issues));
-  assert.deepEqual(metadata.additionalTables?.[0]?.rows, [{ Parent: parent, NativeType: [0x2a, 8] }]);
+  assert.deepEqual(metadata.additionalTables?.[0]?.rows, [{ Parent: parent,
+    NativeType: { kind: "marshal", nativeType: "ARRAY", parameters: { elementType: 8 } } }]);
   assert.deepEqual(issues, []);
 });
 

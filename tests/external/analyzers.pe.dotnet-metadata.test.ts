@@ -15,6 +15,11 @@ type ReferenceAssembly = {
   metadataSize: number;
   counts: { tableId: number; rows: number }[];
   signatures: Record<string, PeClrAdditionalCell>;
+  blobs: {
+    constants: { row: number; value: unknown }[];
+    marshal: { row: number; nativeType: string; parameters: Record<string, string | number> }[];
+    security: { row: number; attributes: { namedArguments: { kind: string; name: string; value: unknown }[] }[] }[];
+  };
   attributes: {
     row: number;
     fixedArguments: Array<string | number | boolean | null>;
@@ -38,7 +43,9 @@ const collectSignatures = (tables: PeClrMetadataTables): Map<string, PeClrAdditi
   return signatures;
 };
 
-const compareAssembly = async (reference: ReferenceAssembly): Promise<number> => {
+const compareAssembly = async (reference: ReferenceAssembly): Promise<{
+  signatures: number; unresolvedSecurity: number
+}> => {
   const disk = await openDiskFileRangeReader(reference.path, (await stat(reference.path)).size);
   try {
     const issues: string[] = [];
@@ -53,10 +60,58 @@ const compareAssembly = async (reference: ReferenceAssembly): Promise<number> =>
       assert.deepEqual(signatures.get(key), expected, `${reference.path}: signature ${key}`);
     }
     compareAttributes(reference, tables);
-    return signatures.size;
+    return { signatures: signatures.size, unresolvedSecurity: compareBlobs(reference, tables) };
   } finally {
     await disk.close();
   }
+};
+
+const compareBlobs = (reference: ReferenceAssembly, tables: PeClrMetadataTables): number => {
+  for (const expected of reference.blobs.constants) {
+    const actual = tables.additionalTables?.find(table => table.tableId === 0x0b)?.rows[expected.row - 1]?.["Value"];
+    assert.ok(actual && typeof actual === "object" && "kind" in actual && actual.kind === "constant");
+    assert.deepEqual(normalizeConstant(actual.value, expected.value), expected.value,
+      `${reference.path}: constant ${expected.row}`);
+    assert.equal(actual.issues, undefined, `${reference.path}: constant ${expected.row} warnings`);
+  }
+  for (const expected of reference.blobs.marshal) {
+    const actual = tables.additionalTables?.find(table => table.tableId === 0x0d)?.rows[expected.row - 1]?.["NativeType"];
+    assert.ok(actual && typeof actual === "object" && "kind" in actual && actual.kind === "marshal");
+    assert.equal(actual.nativeType === "INTERFACE" ? "INTF" : actual.nativeType, expected.nativeType,
+      `${reference.path}: marshal ${expected.row} type`);
+    assert.deepEqual({ ...actual.parameters,
+      ...(typeof actual.parameters["marshalerType"] === "string"
+        ? { marshalerType: actual.parameters["marshalerType"].split(",")[0] } : {}) }, expected.parameters,
+      `${reference.path}: marshal ${expected.row} parameters`);
+    assert.equal(actual.issues, undefined, `${reference.path}: marshal ${expected.row} warnings`);
+  }
+  return compareSecurity(reference, tables);
+};
+
+const normalizeConstant = (actual: unknown, expected: unknown): unknown => {
+  if (expected && typeof expected === "object" && "utf16" in expected && typeof actual === "string") {
+    return { utf16: actual.split("").map(unit => unit.charCodeAt(0)) };
+  }
+  return typeof actual === "number" && !Number.isFinite(actual) ? String(actual) : actual;
+};
+
+const compareSecurity = (reference: ReferenceAssembly, tables: PeClrMetadataTables): number => {
+  let unresolved = 0;
+  for (const expected of reference.blobs.security) {
+    const actual = tables.additionalTables?.find(table => table.tableId === 0x0e)?.rows[expected.row - 1]?.["PermissionSet"];
+    assert.ok(actual && typeof actual === "object" && "kind" in actual && actual.kind === "security"
+      && actual.encoding === "binary");
+    if (actual.attributes.some(attribute => attribute.issues?.some(issue => /underlying type is unresolved/.test(issue)))) {
+      // dnlib searches installed dependencies; a single-file browser parse cannot access them.
+      unresolved += 1;
+      continue;
+    }
+    assert.deepEqual(actual.attributes.map(attribute => ({ namedArguments:
+      attribute.namedArguments.map(({ kind, name, value }) => ({ kind, name, value })) })), expected.attributes,
+      `${reference.path}: security ${expected.row}`);
+    assert.equal(actual.issues, undefined, `${reference.path}: security ${expected.row} warnings`);
+  }
+  return unresolved;
 };
 
 const compareAttributes = (reference: ReferenceAssembly, tables: PeClrMetadataTables): void => {
@@ -72,20 +127,30 @@ const compareAttributes = (reference: ReferenceAssembly, tables: PeClrMetadataTa
 };
 
 const compareCorpus = async (manifest: string): Promise<{
-  assemblies: number; signatures: number; attributes: number
+  assemblies: number; signatures: number; attributes: number;
+  constants: number; marshal: number; security: number; unresolvedSecurity: number
 }> => {
   const lines = createInterface({ input: createReadStream(manifest), crlfDelay: Infinity });
   let assemblies = 0;
   let signatures = 0;
   let attributes = 0;
+  let constants = 0;
+  let marshal = 0;
+  let security = 0;
+  let unresolvedSecurity = 0;
   for await (const line of lines) {
     const reference = JSON.parse(line) as ReferenceAssembly;
-    signatures += await compareAssembly(reference);
+    const checked = await compareAssembly(reference);
+    signatures += checked.signatures;
+    unresolvedSecurity += checked.unresolvedSecurity;
     attributes += reference.attributes.length;
+    constants += reference.blobs.constants.length;
+    marshal += reference.blobs.marshal.length;
+    security += reference.blobs.security.length - checked.unresolvedSecurity;
     assemblies += 1;
   }
   assert.ok(assemblies > 0, "Reference corpus is empty");
-  return { assemblies, signatures, attributes };
+  return { assemblies, signatures, attributes, constants, marshal, security, unresolvedSecurity };
 };
 
 void test("matches System.Reflection.Metadata on installed assemblies", {

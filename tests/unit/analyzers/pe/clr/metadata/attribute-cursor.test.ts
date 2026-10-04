@@ -13,6 +13,14 @@ const boxedArrayBlob = (depth: number): Uint8Array => Uint8Array.of(
   0, 0 // NumNamed.
 );
 
+void test("preserves a UTF-8 BOM in SerString values and reports malformed UTF-8", () => {
+  const issues: string[] = [];
+  assert.equal(new AttributeCursor(Uint8Array.of(4, 0xef, 0xbb, 0xbf, 65), issues, "String")
+    .readSerString(), "\ufeffA");
+  assert.equal(new AttributeCursor(Uint8Array.of(1, 0x80), issues, "String").readSerString(), null);
+  assert.match(issues[0]!, /valid UTF-8/);
+});
+
 void test("decodes deeply nested boxed attribute arrays without a stack overflow", () => {
   const decoded = decodeCustomAttributeValue(boxedArrayBlob(10000), ["object"], "Deep boxes");
   assert.equal(decoded.issues, undefined);

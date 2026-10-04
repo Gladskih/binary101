@@ -6,6 +6,16 @@ import { ClrHeapReaders, readCompressedUInt } from "../../../../../../analyzers/
 
 const encoder = new TextEncoder();
 
+void test("preserves UTF-8 BOMs in heap strings and caches malformed string warnings", () => {
+  const issues: string[] = [];
+  const readers = new ClrHeapReaders({ strings: Uint8Array.of(0, 0xef, 0xbb, 0xbf, 65, 0, 0x80, 0),
+    guid: null, blob: null, userString: null }, issues);
+  assert.equal(readers.getString(1, "Name"), "\ufeffA");
+  assert.equal(readers.getString(6, "Invalid"), null);
+  assert.equal(readers.getString(6, "Cached"), null);
+  assert.deepEqual(issues, ["Invalid: string is not valid UTF-8."]);
+});
+
 const makeReaders = (strings: Uint8Array | null, guid: Uint8Array | null, blob: Uint8Array | null) => {
   const issues: string[] = [];
   const readers = new ClrHeapReaders({ strings, guid, blob, userString: null }, issues);

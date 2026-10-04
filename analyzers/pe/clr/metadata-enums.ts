@@ -15,10 +15,20 @@ const enumBaseName = (
   return null;
 };
 
-const underlyingType = (type: PeClrTypeDefinitionInfo, fields: PeClrFieldInfo[]): string | null => {
+const underlyingType = (
+  type: PeClrTypeDefinitionInfo,
+  fields: PeClrFieldInfo[],
+  fieldRows: ReadonlyMap<number, readonly number[]> | undefined
+): string | null => {
   // ECMA-335 I.8.5.2, II.14.3: exactly one instance field, named value__, of an integer type.
-  if (type.fieldEnd == null || type.fieldStart < 1 || type.fieldEnd > fields.length) return null;
-  const instanceFields = fields.slice(type.fieldStart - 1, type.fieldEnd)
+  if (!fieldRows && (type.fieldEnd == null || type.fieldStart < 1 || type.fieldEnd > fields.length)) return null;
+  return ownedFieldType(fieldRows ? (fieldRows.get(type.row) ?? []).map(row => fields[row - 1])
+    : fields.slice(type.fieldStart - 1, type.fieldEnd!));
+};
+
+const ownedFieldType = (ownedFields: Array<PeClrFieldInfo | undefined>): string | null => {
+  if (ownedFields.some(field => !field)) return null;
+  const instanceFields = (ownedFields as PeClrFieldInfo[])
     .filter(field => (field.flags & 0x10) === 0); // II.23.1.5 FieldAttributes.Static.
   const field = instanceFields[0];
   if (instanceFields.length !== 1 || !field) return null;
@@ -34,12 +44,13 @@ const enumFieldType = (field: PeClrFieldInfo): string | null => {
 export const createEnumUnderlyingTypes = (
   definitions: PeClrTypeDefinitionInfo[],
   references: PeClrTypeReferenceInfo[],
-  fields: PeClrFieldInfo[]
+  fields: PeClrFieldInfo[],
+  fieldRows?: ReadonlyMap<number, readonly number[]>
 ): ReadonlyMap<string, string> => {
   const result = new Map<string, string>();
   for (const definition of definitions) {
     if (!definition.fullName || enumBaseName(definition, definitions, references) !== "System.Enum") continue;
-    const primitive = underlyingType(definition, fields);
+    const primitive = underlyingType(definition, fields, fieldRows);
     if (primitive) result.set(definition.fullName, primitive);
   }
   return result;

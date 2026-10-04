@@ -65,6 +65,7 @@ static class MetadataReference
                 signatures.Add($"{(int)table}:{row}", Signature(reader, table, row));
         }
         return new { path = Path.GetFullPath(path), metadataOffset = image.PEHeaders.MetadataStartOffset,
-            metadataSize = image.PEHeaders.MetadataSize, counts, signatures, attributes = AttributeReference.Read(reader) };
+            metadataSize = image.PEHeaders.MetadataSize, counts, signatures,
+            attributes = AttributeReference.Read(reader), blobs = BlobReference.Read(path, reader) };
     }
 }

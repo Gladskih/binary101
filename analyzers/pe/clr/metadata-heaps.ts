@@ -1,6 +1,6 @@
 "use strict";
 
-const utf8Decoder = new TextDecoder("utf-8", { fatal: false });
+import { decodeMetadataUtf8 } from "./metadata-utf8.js";
 
 export interface ClrCompressedUInt {
   value: number;
@@ -74,7 +74,7 @@ export class ClrHeapReaders {
 
   constructor(
     private readonly heaps: ClrMetadataHeapData,
-    private readonly issues: string[]
+    readonly issues: string[]
   ) {}
 
   getString(index: number, context: string): string | null {
@@ -134,7 +134,7 @@ export class ClrHeapReaders {
     if (terminator === -1) {
       this.issues.push(`${context} string at #Strings index ${index} is not null-terminated.`);
     }
-    return utf8Decoder.decode(this.heaps.strings.subarray(index, end));
+    return decodeMetadataUtf8(this.heaps.strings.subarray(index, end), this.issues, context);
   }
 
   private readGuid(index: number, context: string): string | null {

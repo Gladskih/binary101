@@ -6,9 +6,21 @@ using System.Reflection.Metadata.Ecma335;
 sealed class AttributeNames(MetadataReader metadata) : ICustomAttributeTypeProvider<string>
 {
     readonly Dictionary<string, TypeDefinition> definitions = metadata.TypeDefinitions
-        .Select(handle => metadata.GetTypeDefinition(handle))
-        .GroupBy(type => FullName(metadata, type.Namespace, type.Name))
-        .Where(group => group.Count() == 1).ToDictionary(group => group.Key, group => group.Single());
+        .GroupBy(handle => DefinitionName(metadata, handle))
+        .Where(group => group.Count() == 1).ToDictionary(group => group.Key,
+            group => metadata.GetTypeDefinition(group.Single()));
+
+    static string DefinitionName(MetadataReader reader, TypeDefinitionHandle handle)
+    {
+        var names = new List<string>();
+        while (!handle.IsNil) {
+            var type = reader.GetTypeDefinition(handle);
+            handle = type.GetDeclaringType();
+            names.Add(handle.IsNil ? FullName(reader, type.Namespace, type.Name) : reader.GetString(type.Name));
+        }
+        names.Reverse();
+        return string.Join("+", names);
+    }
 
     static string FullName(MetadataReader reader, StringHandle space, StringHandle name) =>
         reader.GetString(space) is { Length: > 0 } prefix ? prefix + "." + reader.GetString(name) : reader.GetString(name);
@@ -19,8 +31,7 @@ sealed class AttributeNames(MetadataReader metadata) : ICustomAttributeTypeProvi
     public string GetSZArrayType(string element) => element + "[]";
     public string GetTypeFromDefinition(MetadataReader reader, TypeDefinitionHandle handle, byte kind)
     {
-        var definition = reader.GetTypeDefinition(handle);
-        return FullName(reader, definition.Namespace, definition.Name);
+        return DefinitionName(reader, handle);
     }
     public string GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte kind)
     {

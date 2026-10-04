@@ -10,6 +10,7 @@ import type {
 import type { ClrHeapReaders } from "./metadata-heaps.js";
 import { parseFieldSignature, parseMethodSignature } from "./metadata-signatures.js";
 import type { ClrMetadataRow } from "./metadata-table-reader.js";
+import type { ClrMetadataOwnership } from "./metadata-list-ownership.js";
 
 const cellNumber = (row: ClrMetadataRow, name: string): number =>
   typeof row[name] === "number" ? row[name] : 0;
@@ -120,17 +121,22 @@ export const createMethodDefs = (
   rows: ClrMetadataRow[],
   heaps: ClrHeapReaders,
   typeDefs: PeClrTypeDefinitionInfo[],
-  parameters: PeClrParameterInfo[]
-): PeClrMethodDefinitionInfo[] =>
-  rows.map((row, index) => {
-    const methodParameters = parametersForMethod(row, rows[index + 1], parameters);
+  parameters: PeClrParameterInfo[],
+  ownership?: ClrMetadataOwnership
+): PeClrMethodDefinitionInfo[] => {
+  const owners = ownership ? new Map(typeDefs.flatMap(type =>
+    (ownership.methods.get(type.row) ?? []).map(row => [row, type.fullName] as const))) : undefined;
+  return rows.map((row, index) => {
+    const methodParameters = ownership
+      ? (ownership.parameters.get(index + 1) ?? []).map(rowNumber => parameters[rowNumber - 1]!)
+      : parametersForMethod(row, rows[index + 1], parameters);
     const signatureBlobIndex = cellNumber(row, "Signature");
     const context = `MethodDef row ${index + 1}.Signature`;
     const signature = heaps.decodeBlob(signatureBlobIndex, context, parseMethodSignature);
     return {
       row: index + 1,
       name: getString(heaps, row, "Name", `MethodDef row ${index + 1}`),
-      ownerType: ownerForMethod(index + 1, typeDefs),
+      ownerType: owners ? owners.get(index + 1) ?? null : ownerForMethod(index + 1, typeDefs),
       rva: cellNumber(row, "RVA"),
       implFlags: cellNumber(row, "ImplFlags"),
       flags: cellNumber(row, "Flags"),
@@ -139,3 +145,4 @@ export const createMethodDefs = (
       ...(methodParameters.length ? { parameters: methodParameters } : {})
     };
   });
+};

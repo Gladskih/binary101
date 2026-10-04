@@ -34,10 +34,10 @@ const enumHeaps = (): ClrHeapReaders => new ClrHeapReaders({
   blob: Uint8Array.of(0, 2, 6, 4, 5, 0x20, 1, 1, 0x11, 4, 5, 1, 0, 0xff, 0, 0)
 }, []);
 
-void test("does not infer enum width from a FieldList that indexes FieldPtr", () => {
+void test("resolves enum width through FieldPtr", () => {
   const tables = buildClrMetadataTables(enumTables(), enumHeaps());
-  assert.match(tables.customAttributes[0]?.issues?.[0] ?? "", /underlying type is unresolved/);
-  assert.equal(tables.customAttributes[0]?.fixedArguments[0]?.value, null);
+  assert.equal(tables.customAttributes[0]?.issues, undefined);
+  assert.equal(tables.customAttributes[0]?.fixedArguments[0]?.value, -1);
 });
 
 void test("resolves enum width when FieldList indexes Field directly", () => {
@@ -47,4 +47,21 @@ void test("resolves enum width when FieldList indexes Field directly", () => {
   const tables = buildClrMetadataTables(parsed, enumHeaps());
   assert.equal(tables.customAttributes[0]?.fixedArguments[0]?.value, -1);
   assert.equal(tables.customAttributes[0]?.issues, undefined);
+});
+
+void test("assigns MethodPtr owners and ParamPtr parameters to the actual definition rows", () => {
+  const parsed = enumTables();
+  parsed.tables.get(2)!.rows[0]!["MethodList"] = index(5, 1);
+  parsed.tables.get(2)!.rows.push({ TypeName: 6, TypeNamespace: 0, Flags: 0,
+    Extends: index(1, 1), FieldList: index(3, 2), MethodList: index(5, 2) });
+  parsed.tables.set(...metadataTable(5, [{ Method: index(6, 2) }, { Method: index(6, 1) }]));
+  parsed.tables.get(6)!.rows[0]!["ParamList"] = index(7, 1);
+  parsed.tables.get(6)!.rows.push({ Name: 26, Flags: 0, ImplFlags: 0, RVA: 0,
+    Signature: 4, ParamList: index(7, 2) });
+  parsed.tables.set(...metadataTable(7, [{ Param: index(8, 2) }, { Param: index(8, 1) }]));
+  parsed.tables.set(...metadataTable(8, [{ Name: 13, Flags: 0, Sequence: 1 }, { Name: 6, Flags: 0, Sequence: 1 }]));
+  const tables = buildClrMetadataTables(parsed, enumHeaps());
+  assert.deepEqual(tables.methodDefs.map(method => method.ownerType), ["System", "Mode"]);
+  assert.deepEqual(tables.methodDefs.map(method => method.parameters?.map(parameter => parameter.row)), [[2], [1]]);
+  assert.equal(tables.customAttributes[0]?.fixedArguments[0]?.value, -1);
 });

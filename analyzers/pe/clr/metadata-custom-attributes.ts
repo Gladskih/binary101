@@ -11,7 +11,8 @@ import type {
   PeClrModuleReferenceInfo,
   PeClrTypeDefinitionInfo,
   PeClrTypeReferenceInfo,
-  PeClrMethodSignature
+  PeClrMethodSignature,
+  PeClrTypeSignature
 } from "./types.js";
 import type { ClrHeapReaders } from "./metadata-heaps.js";
 import type { ClrMetadataRow } from "./metadata-table-reader.js";
@@ -19,6 +20,7 @@ import { decodeCustomAttributeValue } from "./metadata-attributes.js";
 import { TABLE_MEMBER_REF, TABLE_METHOD_DEF } from "./metadata-schema.js";
 import { resolveMetadataIndexName } from "./metadata-name-resolver.js";
 import { createEnumUnderlyingTypes } from "./metadata-enums.js";
+import { resolveAttributeGenericParameters } from "./metadata-generic-context.js";
 
 const cellNumber = (row: ClrMetadataRow, name: string): number =>
   typeof row[name] === "number" ? row[name] : 0;
@@ -75,6 +77,9 @@ export type ClrMetadataReferenceGraph = {
   memberRefs: PeClrMemberReferenceInfo[];
   moduleRefs: PeClrModuleReferenceInfo[];
   fields?: PeClrFieldInfo[];
+  fieldRows?: ReadonlyMap<number, readonly number[]>;
+  enumTypes?: ReadonlyMap<string, string>;
+  typeSpecifications?: ReadonlyMap<number, PeClrTypeSignature>;
 };
 
 export const createCustomAttributes = (
@@ -82,13 +87,14 @@ export const createCustomAttributes = (
   heaps: ClrHeapReaders,
   references: ClrMetadataReferenceGraph
 ): PeClrCustomAttributeInfo[] => {
-  const enumTypes = createEnumUnderlyingTypes(references.typeDefs, references.typeRefs, references.fields ?? []);
+  const enumTypes = references.enumTypes ?? createEnumUnderlyingTypes(references.typeDefs, references.typeRefs,
+    references.fields ?? [], references.fieldRows);
   return rows.map((row, index): PeClrCustomAttributeInfo => {
     const parent = cellIndex(row, "Parent");
     const constructor = cellIndex(row, "Type");
     const target = resolveConstructor(constructor, references);
     const valueBlobIndex = cellNumber(row, "Value");
-    const decoded = decodeAttribute(row, heaps, references, target?.signature, enumTypes, index + 1);
+    const decoded = decodeAttribute(row, heaps, references, target, enumTypes, index + 1);
     return {
       row: index + 1,
       parent,
@@ -134,17 +140,20 @@ const decodeAttribute = (
   row: ClrMetadataRow,
   heaps: ClrHeapReaders,
   references: ClrMetadataReferenceGraph,
-  signature: PeClrMethodSignature | undefined,
+  target: PeClrMemberReferenceInfo | PeClrMethodDefinitionInfo | undefined,
   enumTypes: ReadonlyMap<string, string>,
   rowNumber: number
 ) => {
+  const signature = target?.signature;
   if (!signature || !validConstructorSignature(signature)) {
     return { fixedArguments: [], namedArguments: [],
       issues: ["Constructor signature is unavailable or malformed; custom attribute value was not decoded."] };
   }
   return decodeCustomAttributeValue(
     heaps.getBlob(cellNumber(row, "Value"), `CustomAttribute row ${rowNumber}.Value`),
-    resolveSignatureParameterTypes(signature.parameterTypes, references.typeRefs, references.typeDefs),
+    resolveSignatureParameterTypes(resolveAttributeGenericParameters(signature.parameterTypes,
+      target && "parent" in target ? target.parent : undefined, references.typeSpecifications),
+    references.typeRefs, references.typeDefs),
     `CustomAttribute row ${rowNumber}`, enumTypes
   );
 };

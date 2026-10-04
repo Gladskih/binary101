@@ -7,12 +7,16 @@ import type {
   PeClrMetadataTables,
   PeClrModuleInfo,
   PeClrModuleReferenceInfo,
-  PeClrTypeReferenceInfo
+  PeClrTypeReferenceInfo,
+  PeClrTypeSignature
 } from "./types.js";
 import type { ClrHeapReaders } from "./metadata-heaps.js";
 import type { ClrMetadataRow, ClrParsedTableStream } from "./metadata-table-reader.js";
 import { createCustomAttributes } from "./metadata-custom-attributes.js";
 import { createAdditionalTables } from "./metadata-additional-tables.js";
+import { createMetadataOwnership } from "./metadata-list-ownership.js";
+import { createEnumUnderlyingTypes } from "./metadata-enums.js";
+import { resolveDefinitionNames, resolveReferenceNames } from "./metadata-nested-names.js";
 import {
   createFields,
   createMethodDefs,
@@ -146,33 +150,40 @@ const createReferenceTables = (
   parsed: ClrParsedTableStream,
   heaps: ClrHeapReaders
 ) => {
+  const ownership = createMetadataOwnership(parsed, heaps.issues);
   const modules = createModules(tableRows(parsed, TABLE_MODULE), heaps);
   const moduleRefs = createModuleRefs(tableRows(parsed, TABLE_MODULE_REF), heaps);
   const assembly = createAssembly(tableRows(parsed, TABLE_ASSEMBLY), heaps);
   const assemblyRefs = createAssemblyRefs(tableRows(parsed, TABLE_ASSEMBLY_REF), heaps);
-  const typeRefs = createTypeRefs(tableRows(parsed, TABLE_TYPE_REF), heaps);
+  const typeRefs = resolveReferenceNames(createTypeRefs(tableRows(parsed, TABLE_TYPE_REF), heaps), heaps.issues);
   const fields = createFields(tableRows(parsed, TABLE_FIELD), heaps);
-  const typeDefs = createTypeDefs(
+  const typeDefs = resolveDefinitionNames(createTypeDefs(
     tableRows(parsed, TABLE_TYPE_DEF),
     heaps,
-    fields.length,
-    tableRows(parsed, TABLE_METHOD_DEF).length
-  );
+    parsed.tables.get(3)?.rows.length || fields.length,
+    parsed.tables.get(5)?.rows.length || tableRows(parsed, TABLE_METHOD_DEF).length
+  ), tableRows(parsed, 0x29), heaps.issues); // ECMA-335 II.22.32 NestedClass.
   const parameters = createParameters(tableRows(parsed, TABLE_PARAM), heaps);
-  const methodDefs = createMethodDefs(tableRows(parsed, TABLE_METHOD_DEF), heaps, typeDefs, parameters);
-  return { modules, assembly, assemblyRefs, typeRefs, typeDefs, fields, methodDefs, parameters, moduleRefs };
+  const methodDefs = createMethodDefs(
+    tableRows(parsed, TABLE_METHOD_DEF), heaps, typeDefs, parameters, ownership);
+  return { ownership, modules, assembly, assemblyRefs, typeRefs, typeDefs, fields, methodDefs, parameters, moduleRefs };
 };
 
 export const buildClrMetadataTables = (
   parsed: ClrParsedTableStream,
   heaps: ClrHeapReaders
 ): PeClrMetadataTables => {
-  const references = createReferenceTables(parsed, heaps);
+  const { ownership, ...references } = createReferenceTables(parsed, heaps);
+  const enumTypes = createEnumUnderlyingTypes(
+    references.typeDefs, references.typeRefs, references.fields, ownership.fields);
   const memberRefs = createMemberRefs(
     tableRows(parsed, TABLE_MEMBER_REF),
     heaps,
     references
   );
+  const additionalTables = createAdditionalTables(parsed, heaps, enumTypes);
+  const typeSpecifications = new Map((additionalTables.find(table => table.tableId === 0x1b)?.rows ?? [])
+    .map((row, index) => [index + 1, row["Signature"] as PeClrTypeSignature]));
   return {
     streamName: parsed.streamName,
     majorVersion: parsed.majorVersion,
@@ -191,10 +202,7 @@ export const buildClrMetadataTables = (
     exportedTypes: createExportedTypes(tableRows(parsed, TABLE_EXPORTED_TYPE), heaps),
     manifestResources: createManifestResources(tableRows(parsed, TABLE_MANIFEST_RESOURCE), heaps),
     customAttributes: createCustomAttributes(tableRows(parsed, TABLE_CUSTOM_ATTRIBUTE),
-      heaps, { ...references, memberRefs,
-        // ECMA-335 II.22.37/II.24.2.6: #- FieldList can index FieldPtr (0x03), not Field.
-        // Until pointer ownership is resolved, do not infer enum widths from direct field ranges.
-        fields: parsed.tables.has(0x03) ? [] : references.fields }),
-    additionalTables: createAdditionalTables(parsed, heaps)
+      heaps, { ...references, memberRefs, enumTypes, typeSpecifications }),
+    additionalTables
   };
 };
