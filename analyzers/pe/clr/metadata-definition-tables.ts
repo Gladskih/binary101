@@ -8,7 +8,7 @@ import type {
   PeClrTypeDefinitionInfo
 } from "./types.js";
 import type { ClrHeapReaders } from "./metadata-heaps.js";
-import { parseMemberRefSignature, parseMethodSignature } from "./metadata-signatures.js";
+import { parseFieldSignature, parseMethodSignature } from "./metadata-signatures.js";
 import type { ClrMetadataRow } from "./metadata-table-reader.js";
 
 const cellNumber = (row: ClrMetadataRow, name: string): number =>
@@ -95,7 +95,7 @@ export const createFields = (
   rows.map((row, index) => {
     const signatureBlobIndex = cellNumber(row, "Signature");
     const context = `Field row ${index + 1}.Signature`;
-    const signature = parseMemberRefSignature(heaps.getBlob(signatureBlobIndex, context), context);
+    const signature = heaps.decodeBlob(signatureBlobIndex, context, parseFieldSignature);
     return {
       row: index + 1,
       name: getString(heaps, row, "Name", `Field row ${index + 1}`),
@@ -126,7 +126,7 @@ export const createMethodDefs = (
     const methodParameters = parametersForMethod(row, rows[index + 1], parameters);
     const signatureBlobIndex = cellNumber(row, "Signature");
     const context = `MethodDef row ${index + 1}.Signature`;
-    const signature = parseMethodSignature(heaps.getBlob(signatureBlobIndex, context), context);
+    const signature = heaps.decodeBlob(signatureBlobIndex, context, parseMethodSignature);
     return {
       row: index + 1,
       name: getString(heaps, row, "Name", `MethodDef row ${index + 1}`),

@@ -96,6 +96,7 @@ export interface PeClrMethodSignature {
   parameterCount: number;
   returnType: string | null;
   parameterTypes: Array<string | null>;
+  sentinelIndex?: number;
   issues?: string[];
 }
 
@@ -212,6 +213,25 @@ export interface PeClrMetadataTables {
   exportedTypes: PeClrExportedTypeInfo[];
   manifestResources: PeClrManifestResourceInfo[];
   customAttributes: PeClrCustomAttributeInfo[];
+  additionalTables?: PeClrAdditionalTable[];
+}
+
+export interface PeClrTypeSignature {
+  type: string | null;
+  issues?: string[];
+}
+
+export interface PeClrSequenceSignature {
+  types: string[];
+  issues?: string[];
+}
+
+export type PeClrAdditionalCell = number | string | null | number[] | PeClrMetadataIndex |
+  PeClrMethodSignature | PeClrTypeSignature | PeClrSequenceSignature;
+
+export interface PeClrAdditionalTable {
+  tableId: number;
+  rows: Record<string, PeClrAdditionalCell>[];
 }
 
 export interface PeClrMeta {

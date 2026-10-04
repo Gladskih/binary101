@@ -20,3 +20,21 @@ void test("renderClrMetadataTables renders CLR parameter names without shifting 
   assert.match(html, /<td>3<\/td><td>2<\/td><td>length<\/td><td>0x0000<\/td>/);
   assert.doesNotMatch(html, /string returnValue, i4 source/);
 });
+
+void test("shows additional table columns, signature issues and escaped heap values", () => {
+  const metadata = createClrMetadataTablesWithParameterNames();
+  metadata.rowCounts.push({ tableId: 0x17, name: "Property", rows: 1, known: true, sorted: false });
+  metadata.additionalTables = [{ tableId: 0x17, rows: [{ Flags: 0, Name: "<Item>", Type: {
+    callingConvention: 0x28, parameterCount: 0, returnType: "i4", parameterTypes: [],
+    issues: ["<truncated>"]
+  } }] }];
+  metadata.methodDefs[0]!.signature!.issues = ["Method signature is truncated."];
+  const out: string[] = [];
+  renderClrMetadataTables(metadata, out);
+  const html = out.join("");
+  assert.match(html, /Property/);
+  assert.match(html, /<th>RID<\/th><th>Flags<\/th><th>Name<\/th><th>Type<\/th>/);
+  assert.match(html, /&lt;Item>/);
+  assert.match(html, /&lt;truncated>/);
+  assert.match(html, /Method signature is truncated\./);
+});

@@ -12,6 +12,7 @@ import type {
 import type { ClrHeapReaders } from "./metadata-heaps.js";
 import type { ClrMetadataRow, ClrParsedTableStream } from "./metadata-table-reader.js";
 import { createCustomAttributes } from "./metadata-custom-attributes.js";
+import { createAdditionalTables } from "./metadata-additional-tables.js";
 import {
   createFields,
   createMethodDefs,
@@ -141,10 +142,10 @@ const createModuleRefs = (
     name: getString(heaps, row, "Name", `ModuleRef row ${index + 1}`)
   }));
 
-export const buildClrMetadataTables = (
+const createReferenceTables = (
   parsed: ClrParsedTableStream,
   heaps: ClrHeapReaders
-): PeClrMetadataTables => {
+) => {
   const modules = createModules(tableRows(parsed, TABLE_MODULE), heaps);
   const moduleRefs = createModuleRefs(tableRows(parsed, TABLE_MODULE_REF), heaps);
   const assembly = createAssembly(tableRows(parsed, TABLE_ASSEMBLY), heaps);
@@ -159,29 +160,18 @@ export const buildClrMetadataTables = (
   );
   const parameters = createParameters(tableRows(parsed, TABLE_PARAM), heaps);
   const methodDefs = createMethodDefs(tableRows(parsed, TABLE_METHOD_DEF), heaps, typeDefs, parameters);
-  const resolutionTables = {
-    modules, assembly, assemblyRefs, typeRefs, typeDefs, methodDefs, moduleRefs
-  };
+  return { modules, assembly, assemblyRefs, typeRefs, typeDefs, fields, methodDefs, parameters, moduleRefs };
+};
+
+export const buildClrMetadataTables = (
+  parsed: ClrParsedTableStream,
+  heaps: ClrHeapReaders
+): PeClrMetadataTables => {
+  const references = createReferenceTables(parsed, heaps);
   const memberRefs = createMemberRefs(
     tableRows(parsed, TABLE_MEMBER_REF),
     heaps,
-    resolutionTables
-  );
-  const implMaps = createImplMaps(
-    tableRows(parsed, TABLE_IMPL_MAP),
-    heaps,
-    resolutionTables
-  );
-  const files = createFiles(tableRows(parsed, TABLE_FILE), heaps);
-  const exportedTypes = createExportedTypes(tableRows(parsed, TABLE_EXPORTED_TYPE), heaps);
-  const manifestResources = createManifestResources(tableRows(parsed, TABLE_MANIFEST_RESOURCE), heaps);
-  const customAttributes = createCustomAttributes(
-    tableRows(parsed, TABLE_CUSTOM_ATTRIBUTE),
-    heaps,
-    {
-      modules, assembly, assemblyRefs, typeRefs,
-      typeDefs, methodDefs, memberRefs, moduleRefs
-    }
+    references
   );
   return {
     streamName: parsed.streamName,
@@ -194,20 +184,14 @@ export const buildClrMetadataTables = (
     sortedMask: maskHex(parsed.sortedMask),
     heapIndexSizes: parsed.heapIndexSizes,
     rowCounts: parsed.rowCounts,
-    modules,
-    assembly,
-    assemblyRefs,
-    typeRefs,
-    typeDefs,
-    fields,
-    methodDefs,
-    parameters,
+    ...references,
     memberRefs,
-    moduleRefs,
-    implMaps,
-    files,
-    exportedTypes,
-    manifestResources,
-    customAttributes
+    implMaps: createImplMaps(tableRows(parsed, TABLE_IMPL_MAP), heaps, references),
+    files: createFiles(tableRows(parsed, TABLE_FILE), heaps),
+    exportedTypes: createExportedTypes(tableRows(parsed, TABLE_EXPORTED_TYPE), heaps),
+    manifestResources: createManifestResources(tableRows(parsed, TABLE_MANIFEST_RESOURCE), heaps),
+    customAttributes: createCustomAttributes(tableRows(parsed, TABLE_CUSTOM_ATTRIBUTE),
+      heaps, { ...references, memberRefs }),
+    additionalTables: createAdditionalTables(parsed, heaps)
   };
 };

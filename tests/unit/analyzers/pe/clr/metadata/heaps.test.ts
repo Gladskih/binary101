@@ -12,6 +12,21 @@ const makeReaders = (strings: Uint8Array | null, guid: Uint8Array | null, blob: 
   return { readers, issues };
 };
 
+void test("decodes a shared blob once per decoder and caches absent results", () => {
+  const { readers } = makeReaders(null, null, Uint8Array.of(0, 1, 8));
+  const calls: string[] = [];
+  const decode = (bytes: Uint8Array | null, context: string) => {
+    calls.push(context);
+    return bytes ? [...bytes] : undefined;
+  };
+  const first = readers.decodeBlob(1, "First", decode);
+  assert.strictEqual(readers.decodeBlob(1, "Second", decode), first);
+  assert.equal(readers.decodeBlob(99, "Absent", decode), undefined);
+  assert.equal(readers.decodeBlob(99, "Absent again", decode), undefined);
+  assert.deepEqual(calls, ["First", "Absent"]);
+  assert.equal(readers.decodeBlob(1, "Different decoder", bytes => bytes?.length), 1);
+});
+
 void test("readCompressedUInt decodes ECMA-335 PackedLen forms and rejects malformed tags", () => {
   assert.deepStrictEqual(readCompressedUInt(Uint8Array.of(0x7f), 0), { value: 0x7f, size: 1 });
   assert.deepStrictEqual(readCompressedUInt(Uint8Array.of(0x81, 0x23), 0), { value: 0x123, size: 2 });

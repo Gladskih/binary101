@@ -2,6 +2,9 @@
 
 import { hex } from "../../binary-utils.js";
 import { renderDefinitionRow, renderFlagChips, escapeHtml } from "../../html-utils.js";
+import {
+  renderAdditionalMetadataTables, renderFieldsAndMembers, renderSignatureIssues
+} from "./clr-metadata-cells.js";
 import type {
   PeClrCustomAttributeInfo,
   PeClrMetadataIndex,
@@ -43,10 +46,10 @@ const typedParameterText = (type: string | null, parameter?: PeClrParameterInfo)
 const signatureText = (method: PeClrMethodDefinitionInfo): string => {
   if (!method.signature) return "-";
   const args = method.signature.parameterTypes
-    .map((type, index) => typedParameterText(type, parameterForSequence(method.parameters, index + 1)))
-    .join(", ");
+    .map((type, index) => typedParameterText(type, parameterForSequence(method.parameters, index + 1)));
+  if (method.signature.sentinelIndex != null) args.splice(method.signature.sentinelIndex, 0, "...");
   return typedParameterText(method.signature.returnType, parameterForSequence(method.parameters, 0)) +
-    ` (${args})`;
+    ` (${args.join(", ")})`;
 };
 
 const fullMethodName = (ownerType: string | null, methodName: string | null): string =>
@@ -172,7 +175,7 @@ const renderTypesAndMethods = (metadata: PeClrMetadataTables): string =>
       escapeHtml(fullMethodName(row.ownerType, row.name)),
       hex(row.rva, 8),
       hex(row.flags, 4),
-      escapeHtml(signatureText(row))
+      escapeHtml(signatureText(row)) + renderSignatureIssues(row.signature?.issues)
     ])
   ) +
   renderSimpleTable(
@@ -197,7 +200,7 @@ const renderCustomAttributes = (metadata: PeClrMetadataTables): string =>
         dash(row.parentName || indexText(row.parent)),
         dash(row.attributeType),
         dash(row.constructorName),
-        escapeHtml([...fixed, ...named].join("; ") || "-")
+        escapeHtml([...fixed, ...named].join("; ") || "-") + renderSignatureIssues(row.issues)
       ];
     })
   );
@@ -237,6 +240,8 @@ export const renderClrMetadataTables = (
   out.push(renderTableStreamSummary(metadata));
   out.push(renderReferences(metadata));
   out.push(renderTypesAndMethods(metadata));
+  out.push(renderFieldsAndMembers(metadata));
   out.push(renderCustomAttributes(metadata));
   out.push(renderManagedNativeAndResources(metadata));
+  out.push(renderAdditionalMetadataTables(metadata));
 };
