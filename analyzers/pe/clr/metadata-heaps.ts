@@ -68,7 +68,8 @@ export class ClrHeapReaders {
   private readonly stringCache = new Map<number, string | null>();
   private readonly guidCache = new Map<number, string | null>();
   private readonly blobCache = new Map<number, Uint8Array | null>();
-  private readonly decodedBlobCache = new Map<
+  // Dependency re-resolution creates new decoders; previous contexts must remain collectible.
+  private readonly decodedBlobCache = new WeakMap<
     (bytes: Uint8Array | null, context: string) => unknown, Map<number, unknown>
   >();
 
