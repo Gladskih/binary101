@@ -215,7 +215,8 @@ void test("parseMetadataTableStream keeps invalid table indexes visible", () => 
   const methodList = parsed?.tables.get(TABLE_TYPE_DEF)?.rows[0]?.["MethodList"];
 
   assert.strictEqual(typeof methodList, "object");
-  if (typeof methodList === "object") assert.strictEqual(methodList.valid, false);
+  // II.22.37: a list start of targetCount + 1 is valid for an empty list.
+  if (typeof methodList === "object") assert.strictEqual(methodList.valid, true);
   assert.deepStrictEqual(issues, []);
 });
 
@@ -227,4 +228,20 @@ void test("parseMetadataTableStream reports truncated and unsupported table stre
   const unsupportedIssues: string[] = [];
   parseMetadataTableStream(createTableStream(tableMask(0x3f), [1], []), "#~", unsupportedIssues);
   assert.ok(unsupportedIssues.some(issue => /unsupported/i.test(issue)));
+});
+
+void test("uses the pointer-table row count to size a TypeDef FieldList index", () => {
+  // ECMA-335 II.24.2.6: width belongs to the indexed table; #- redirects FieldList to FieldPtr.
+  const issues: string[] = [];
+  const wide = parseMetadataTableStream(createTableStream(tableMask(2, 3, 4), [1, 0x10000, 2],
+    new TableBytes().u32(0).u16(0).u16(0).u16(0).u32(0x10000).u16(1).bytes), "#-", issues)!;
+  assert.equal(wide.tables.get(2)?.rowSize, 16);
+  assert.deepEqual(wide.tables.get(2)?.rows[0]?.["FieldList"], {
+    table: "FieldPtr", tableId: 3, row: 0x10000, raw: 0x10000, valid: true, token: 0x03010000
+  });
+  const narrow = parseMetadataTableStream(createTableStream(tableMask(2, 3, 4), [1, 1, 0x10000],
+    new TableBytes().u32(0).u16(0).u16(0).u16(0).u16(2).u16(1).bytes), "#-", [])!;
+  assert.equal(narrow.tables.get(2)?.rowSize, 14);
+  assert.equal(typeof narrow.tables.get(2)?.rows[0]?.["FieldList"], "object");
+  assert.ok(issues.some(issue => /FieldPtr is truncated/.test(issue)));
 });

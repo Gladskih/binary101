@@ -1,6 +1,6 @@
 "use strict";
 
-const utf8Decoder = new TextDecoder("utf-8", { fatal: false });
+import { decodeMetadataUtf8 } from "./metadata-utf8.js";
 
 export interface ClrCompressedUInt {
   value: number;
@@ -29,16 +29,22 @@ export const readCompressedUInt = (
     return { value: ((first & 0x3f) << 8) | second, size: 2 };
   }
   if ((first & 0xe0) === 0xc0) {
-    const second = bytes[offset + 1];
-    const third = bytes[offset + 2];
-    const fourth = bytes[offset + 3];
-    if (second == null || third == null || fourth == null) return null;
-    return {
-      value: ((first & 0x1f) << 24) | (second << 16) | (third << 8) | fourth,
-      size: 4
-    };
+    return readFourByteCompressedUInt(bytes, offset, first);
   }
   return null;
+};
+
+const readFourByteCompressedUInt = (
+  bytes: Uint8Array,
+  offset: number,
+  first: number
+): ClrCompressedUInt | null => {
+  if (offset + 4 > bytes.length) return null;
+  return {
+    value: ((first & 0x1f) << 24) | (bytes[offset + 1]! << 16) |
+      (bytes[offset + 2]! << 8) | bytes[offset + 3]!,
+    size: 4
+  };
 };
 
 const toHexByte = (byteValue: number): string => byteValue.toString(16).padStart(2, "0");
@@ -62,10 +68,13 @@ export class ClrHeapReaders {
   private readonly stringCache = new Map<number, string | null>();
   private readonly guidCache = new Map<number, string | null>();
   private readonly blobCache = new Map<number, Uint8Array | null>();
+  private readonly decodedBlobCache = new Map<
+    (bytes: Uint8Array | null, context: string) => unknown, Map<number, unknown>
+  >();
 
   constructor(
     private readonly heaps: ClrMetadataHeapData,
-    private readonly issues: string[]
+    readonly issues: string[]
   ) {}
 
   getString(index: number, context: string): string | null {
@@ -96,6 +105,20 @@ export class ClrHeapReaders {
     return this.getBlob(index, context)?.length ?? null;
   }
 
+  decodeBlob<Value>(
+    index: number,
+    context: string,
+    decode: (bytes: Uint8Array | null, context: string) => Value
+  ): Value {
+    const entries = this.decodedBlobCache.get(decode) ?? new Map<number, unknown>();
+    if (entries.has(index)) return entries.get(index) as Value;
+    // Share interpretations within this parse, including absent blobs and undefined results.
+    const value = decode(this.getBlob(index, context), context);
+    entries.set(index, value);
+    this.decodedBlobCache.set(decode, entries);
+    return value;
+  }
+
   private readString(index: number, context: string): string | null {
     if (index === 0) return "";
     if (!this.heaps.strings) {
@@ -111,7 +134,7 @@ export class ClrHeapReaders {
     if (terminator === -1) {
       this.issues.push(`${context} string at #Strings index ${index} is not null-terminated.`);
     }
-    return utf8Decoder.decode(this.heaps.strings.subarray(index, end));
+    return decodeMetadataUtf8(this.heaps.strings.subarray(index, end), this.issues, context);
   }
 
   private readGuid(index: number, context: string): string | null {

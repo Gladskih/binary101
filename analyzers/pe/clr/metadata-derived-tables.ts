@@ -15,7 +15,7 @@ import type {
 } from "./types.js";
 import type { ClrHeapReaders } from "./metadata-heaps.js";
 import type { ClrMetadataRow } from "./metadata-table-reader.js";
-import { parseMemberRefSignature } from "./metadata-signatures.js";
+import { parseFieldSignature, parseMethodSignature } from "./metadata-signatures.js";
 import { resolveMetadataIndexName } from "./metadata-name-resolver.js";
 
 export type ClrMetadataResolutionTables = {
@@ -74,7 +74,9 @@ export const createMemberRefs = (
       tables.moduleRefs
     );
     const context = `MemberRef row ${index + 1}.Signature`;
-    const signature = parseMemberRefSignature(heaps.getBlob(signatureBlobIndex, context), context);
+    const signature = heaps.decodeBlob(signatureBlobIndex, context,
+      heaps.getBlob(signatureBlobIndex, context)?.[0] === 0x06
+        ? parseFieldSignature : parseMethodSignature); // ECMA-335 II.23.2.4 FIELD header.
     return {
       row: index + 1,
       name: getString(heaps, row, "Name", `MemberRef row ${index + 1}`),

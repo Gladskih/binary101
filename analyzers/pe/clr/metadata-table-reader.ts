@@ -1,6 +1,7 @@
 "use strict";
 
 import type { PeClrMetadataIndex, PeClrTableRowCount } from "./types.js";
+import { listColumnTable, LIST_POINTER_TABLES } from "./metadata-list-columns.js";
 import {
   codedIndexSchemaByName,
   CLRMETADATA_TABLES,
@@ -35,7 +36,6 @@ export interface ClrParsedTableStream {
 }
 
 interface ReaderState { view: DataView; offset: number; }
-
 const isPresent = (mask: bigint, tableId: number): boolean =>
   ((mask >> BigInt(tableId)) & 1n) !== 0n;
 
@@ -51,7 +51,6 @@ const readUnsigned = (state: ReaderState, size: number): number | null => {
 };
 
 const knownTableIds = new Set(CLRMETADATA_TABLES.map(table => table.id));
-
 // ECMA-335 II.24.2.6 defines the low three HeapSizes bits. CoreCLR's
 // CMiniMdSchemaBase persists the same byte as m_heaps and adds schema flags:
 // https://github.com/dotnet/runtime/blob/main/src/coreclr/md/inc/metamodel.h
@@ -98,13 +97,13 @@ const columnSize = (
   heapIndexSizes: ClrParsedTableStream["heapIndexSizes"],
   issues: string[]
 ): number => {
-  if (column.kind === "u8") return 1;
-  if (column.kind === "u16") return 2;
-  if (column.kind === "u32") return 4;
-  if (column.kind === "string") return heapIndexSizes.string;
-  if (column.kind === "guid") return heapIndexSizes.guid;
-  if (column.kind === "blob") return heapIndexSizes.blob;
-  if (column.kind === "table" && column.table != null) return tableIndexSize(rowCounts, column.table);
+  if (column.kind === "u8" || column.kind === "u16" || column.kind === "u32") {
+    return { u8: 1, u16: 2, u32: 4 }[column.kind];
+  }
+  if (column.kind === "string" || column.kind === "guid" || column.kind === "blob") {
+    return heapIndexSizes[column.kind];
+  }
+  if (column.kind === "table" && column.table != null) return tableIndexSize(rowCounts, listColumnTable(column, rowCounts));
   if (column.kind === "coded" && column.coded) return codedIndexSize(rowCounts, column.coded, issues);
   issues.push(`Column ${column.name} has an incomplete CLR metadata schema.`);
   return 4;
@@ -162,7 +161,11 @@ const readCell = (
   const size = columnSize(column, rowCounts, heapIndexSizes, issues);
   const raw = readUnsigned(state, size) ?? 0;
   if (column.kind === "table" && column.table != null) {
-    return decodeTableIndex(raw, column.table, rowCounts);
+    const index = decodeTableIndex(raw, listColumnTable(column, rowCounts), rowCounts);
+    if (Object.hasOwn(LIST_POINTER_TABLES, column.name)) {
+      index.valid = raw > 0 && raw <= rowCountFor(rowCounts, index.tableId) + 1;
+    }
+    return index;
   }
   if (column.kind === "coded" && column.coded) {
     return decodeCodedIndex(raw, column.coded, rowCounts, issues);
@@ -245,16 +248,10 @@ const parseTables = (
   return tables;
 };
 
-export const parseMetadataTableStream = (
-  bytes: Uint8Array,
-  streamName: "#~" | "#-",
+const readTableHeader = (
+  state: ReaderState,
   issues: string[]
-): ClrParsedTableStream | null => {
-  if (bytes.length < 24) {
-    issues.push(`CLR metadata ${streamName} stream is smaller than the ECMA-335 table header.`);
-    return null;
-  }
-  const state: ReaderState = { view: new DataView(bytes.buffer, bytes.byteOffset, bytes.length), offset: 0 };
+) => {
   const reserved = readUnsigned(state, 4) ?? 0;
   const majorVersion = readUnsigned(state, 1) ?? 0;
   const minorVersion = readUnsigned(state, 1) ?? 0;
@@ -276,6 +273,21 @@ export const parseMetadataTableStream = (
     guid: (heapSizes & HEAP_GUID_4) !== 0 ? 4 : 2,
     blob: (heapSizes & HEAP_BLOB_4) !== 0 ? 4 : 2
   };
+  return { majorVersion, minorVersion, heapSizes, largestRidLog2, validMask, sortedMask, heapIndexSizes };
+};
+
+export const parseMetadataTableStream = (
+  bytes: Uint8Array,
+  streamName: "#~" | "#-",
+  issues: string[]
+): ClrParsedTableStream | null => {
+  if (bytes.length < 24) {
+    issues.push(`CLR metadata ${streamName} stream is smaller than the ECMA-335 table header.`);
+    return null;
+  }
+  const state: ReaderState = { view: new DataView(bytes.buffer, bytes.byteOffset, bytes.length), offset: 0 };
+  const header = readTableHeader(state, issues);
+  const { validMask, sortedMask, heapSizes, heapIndexSizes } = header;
   const rowCounts = readRowCounts(state, validMask, sortedMask, issues);
   const extraData = (heapSizes & HEAP_EXTRA_DATA) !== 0
     ? readUnsigned(state, 4)
@@ -285,14 +297,8 @@ export const parseMetadataTableStream = (
   }
   return {
     streamName,
-    majorVersion,
-    minorVersion,
-    heapSizes,
-    largestRidLog2,
+    ...header,
     ...(typeof extraData === "number" ? { extraData } : {}),
-    validMask,
-    sortedMask,
-    heapIndexSizes,
     rowCounts: rowCounts.rowCountList,
     tables: parseTables(state, rowCounts.rowCountMap, heapIndexSizes, issues)
   };

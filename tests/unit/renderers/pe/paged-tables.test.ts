@@ -10,6 +10,7 @@ import { getPePagedTableModel } from "../../../../renderers/pe/paged-tables.js";
 import { MSVC_RTTI_LAYOUT } from "../../../../analyzers/pe/msvc-rtti/layout.js";
 import { TEST_COFF_STORAGE_CLASS } from "../../../fixtures/pe-coff-debug-fixtures.js";
 import { createBasePe } from "../../../fixtures/pe-renderer-headers-fixture.js";
+import { createClrMetadataTablesWithParameterNames } from "../../../fixtures/pe-clr-metadata-tables.js";
 
 const createSymbol = (index: number): CoffSymbol => ({
   auxiliaryRecords: [],
@@ -37,6 +38,14 @@ void test("getPePagedTableModel resolves exports for paging and sorting", () => 
   assert.equal(model?.sortValueAt(0, 2), "Alpha\nBeta");
   assert.equal(getPePagedTableModel(createBasePe(), "pe-exports"), null);
   assert.equal(getPePagedTableModel(pe, "missing-table"), null);
+});
+
+void test("resolves CLR table models including rows beyond the first page", () => {
+  const pe = createBasePe();
+  pe.clr = { ...pe.clr!, meta: { streams: [], tables: createClrMetadataTablesWithParameterNames() } };
+  assert.equal(getPePagedTableModel(pe, "pe-clr-Parameter%20rows")?.rowCount, 4);
+  assert.equal(getPePagedTableModel(pe, "pe-clr-missing"), null);
+  assert.equal(getPePagedTableModel(createBasePe(), "pe-clr-Parameter%20rows"), null);
 });
 
 const createCoffDebug = (): CoffDebugInfo => ({

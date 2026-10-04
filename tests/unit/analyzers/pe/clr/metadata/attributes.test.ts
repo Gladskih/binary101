@@ -3,10 +3,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { decodeCustomAttributeValue } from "../../../../../../analyzers/pe/clr/metadata-attributes.js";
-import { createCustomAttributes } from "../../../../../../analyzers/pe/clr/metadata-custom-attributes.js";
-import { ClrHeapReaders } from "../../../../../../analyzers/pe/clr/metadata-heaps.js";
-import { TABLE_MEMBER_REF } from "../../../../../../analyzers/pe/clr/metadata-schema.js";
-import type { PeClrMemberReferenceInfo, PeClrMetadataIndex, PeClrTypeReferenceInfo } from "../../../../../../analyzers/pe/clr/types.js";
 
 const encoder = new TextEncoder();
 const CUSTOM_ATTRIBUTE_PROLOG = [0x01, 0x00]; // ECMA-335 II.23.3 CustomAttrib prolog.
@@ -79,7 +75,8 @@ void test("decodeCustomAttributeValue decodes fixed System.Type and string array
       ...serString("Microsoft.CodeAnalysis.SymbolKey"),
       ...u32le(2),
       ...serString("Declaration"),
-      ...serString("Assembly")
+      ...serString("Assembly"),
+      0, 0
     ),
     ["System.Type", "string[]"],
     "ObjectTypeAttribute"
@@ -105,7 +102,8 @@ void test("decodeCustomAttributeValue decodes enum and boxed object arguments", 
       ...u32le(1)
     ),
     ["System.ComponentModel.EditorBrowsableState", "object"],
-    "EditorBrowsableAttribute"
+    "EditorBrowsableAttribute",
+    new Map([["System.ComponentModel.EditorBrowsableState", "i4"]])
   );
 
   assert.strictEqual(decoded.fixedArguments[0]?.value, 2);
@@ -129,8 +127,8 @@ void test("decodeCustomAttributeValue decodes boxed 64-bit object arguments", ()
     "ValidateRangeAttribute"
   );
 
-  assert.strictEqual(decoded.fixedArguments[0]?.value, "0x0000000000000001");
-  assert.strictEqual(decoded.fixedArguments[1]?.value, "0x7fffffffffffffff");
+  assert.strictEqual(decoded.fixedArguments[0]?.value, "1");
+  assert.strictEqual(decoded.fixedArguments[1]?.value, "9223372036854775807");
   assert.strictEqual(decoded.issues, undefined);
 });
 
@@ -154,18 +152,19 @@ void test("decodeCustomAttributeValue decodes boxed array object arguments", () 
   assert.strictEqual(decoded.issues, undefined);
 });
 
-void test("decodeCustomAttributeValue infers compact trailing fixed enum values", () => {
+void test("decodeCustomAttributeValue uses resolved compact trailing fixed enum values", () => {
   const decoded = decodeCustomAttributeValue(
     Uint8Array.of(...CUSTOM_ATTRIBUTE_PROLOG, 2, 0, 0),
     ["System.Security.SecurityRuleSet"],
-    "SecurityRulesAttribute"
+    "SecurityRulesAttribute",
+    new Map([["System.Security.SecurityRuleSet", "u1"]])
   );
 
   assert.strictEqual(decoded.fixedArguments[0]?.value, 2);
   assert.strictEqual(decoded.issues, undefined);
 });
 
-void test("decodeCustomAttributeValue infers 64-bit named enum values from argument boundaries", () => {
+void test("decodeCustomAttributeValue uses resolved 64-bit named enum values", () => {
   const decoded = decodeCustomAttributeValue(
     Uint8Array.of(
       ...CUSTOM_ATTRIBUTE_PROLOG,
@@ -188,7 +187,9 @@ void test("decodeCustomAttributeValue infers 64-bit named enum values from argum
       ...u32le(1)
     ),
     ["i4"],
-    "EventAttribute"
+    "EventAttribute",
+    new Map([["System.Diagnostics.Tracing.EventLevel", "i4"],
+      ["System.Diagnostics.Tracing.EventKeywords", "u8"], ["System.Diagnostics.Tracing.EventOpcode", "i4"]])
   );
 
   assert.strictEqual(decoded.namedArguments[0]?.value, 4);
@@ -232,64 +233,50 @@ void test("decodeCustomAttributeValue stops arrays when an element is malformed"
   assert.ok(decoded.issues?.some(issue => /fixed arguments are incomplete/.test(issue)));
 });
 
-void test("createCustomAttributes resolves constructor TypeRef parameters before decoding", () => {
-  const issues: string[] = [];
-  const memberRef: PeClrMemberReferenceInfo = {
-    row: 1,
-    name: ".ctor",
-    parent: nullIndex(),
-    parentName: "Microsoft.CodeAnalysis.ObjectTypeAttribute",
-    signatureBlobIndex: 0,
-    signature: {
-      callingConvention: 0,
-      parameterCount: 2,
-      returnType: "void",
-      parameterTypes: ["class TypeRef#1", "string[]"]
-    }
-  };
-  const attributes = createCustomAttributes(
-    [{
-      Parent: nullIndex(),
-      Type: { ...nullIndex(), table: "MemberRef", tableId: TABLE_MEMBER_REF, row: 1 },
-      Value: 1
-    }],
-    createBlobHeapReaders([
-      ...CUSTOM_ATTRIBUTE_PROLOG,
-      ...serString("Microsoft.CodeAnalysis.SymbolKey"),
-      ...u32le(1),
-      ...serString("Declaration")
-    ], issues),
-    {
-      modules: [], assembly: null, assemblyRefs: [], typeRefs: [systemTypeRef()],
-      typeDefs: [], methodDefs: [], memberRefs: [memberRef], moduleRefs: []
-    }
-  );
-
-  assert.strictEqual(attributes[0]?.fixedArguments[0]?.value, "Microsoft.CodeAnalysis.SymbolKey");
-  assert.strictEqual(attributes[0]?.fixedArguments[1]?.value, "Declaration");
-  assert.strictEqual(attributes[0]?.issues, undefined);
+void test("reports missing mandatory NumNamed and truncated array counts", () => {
+  assert.match(decodeCustomAttributeValue(Uint8Array.of(...CUSTOM_ATTRIBUTE_PROLOG), [], "No count")
+    .issues?.[0] ?? "", /missing NumNamed/);
+  assert.match(decodeCustomAttributeValue(Uint8Array.of(...CUSTOM_ATTRIBUTE_PROLOG), ["string[]"], "No array count")
+    .issues?.[0] ?? "", /truncated/);
 });
 
-const nullIndex = (): PeClrMetadataIndex => ({
-  table: "null",
-  tableId: -1,
-  row: 0,
-  raw: 0,
-  valid: true
+void test("rejects a named OBJECT whose serialized value is another OBJECT", () => {
+  // CustomAttributeDecoder.DecodeArgument unwraps TaggedObject once, then requires a concrete type.
+  const decoded = decodeCustomAttributeValue(Uint8Array.of(
+    ...CUSTOM_ATTRIBUTE_PROLOG, 1, 0, PROPERTY_NAMED_ARGUMENT,
+    0x51, ...serString("Value"), 0x51, ELEMENT_TYPE_I4, ...u32le(7)
+  ), [], "Invalid box");
+  assert.deepEqual(decoded.namedArguments, []);
+  assert.match(decoded.issues?.[0] ?? "", /no concrete serialized type/);
 });
 
-const systemTypeRef = (): PeClrTypeReferenceInfo => ({
-  row: 1,
-  name: "Type",
-  namespace: "System",
-  resolutionScope: nullIndex(),
-  fullName: "System.Type"
+void test("decodes named boxed primitives, arrays and resolved enums", () => {
+  const decoded = decodeCustomAttributeValue(Uint8Array.of(
+    ...CUSTOM_ATTRIBUTE_PROLOG, 3, 0,
+    PROPERTY_NAMED_ARGUMENT, 0x51, ...serString("Number"), ELEMENT_TYPE_I4, ...u32le(7),
+    PROPERTY_NAMED_ARGUMENT, 0x51, ...serString("Array"), 0x1d, ELEMENT_TYPE_STRING,
+    ...u32le(1), ...serString("entry"),
+    PROPERTY_NAMED_ARGUMENT, 0x51, ...serString("Enum"), ELEMENT_TYPE_ENUM,
+    ...serString("Example.Enum"), 0xff
+  ), [], "Boxes", new Map([["Example.Enum", "i1"]]));
+  assert.deepEqual(decoded.namedArguments.map(argument => argument.value), [7, "entry", -1]);
+  assert.equal(decoded.issues, undefined);
 });
 
-const createBlobHeapReaders = (payload: number[], issues: string[]): ClrHeapReaders =>
-  new ClrHeapReaders({
-    strings: null,
-    guid: null,
-    blob: Uint8Array.of(0, payload.length, ...payload),
-    userString: null
-  }, issues);
+void test("reports absent blobs and unsupported fixed types", () => {
+  assert.match(decodeCustomAttributeValue(null, [], "Absent").issues?.[0] ?? "", /blob is absent/);
+  assert.match(decodeCustomAttributeValue(Uint8Array.of(1, 0, 0, 0), ["native int"], "Unsupported")
+    .issues?.[0] ?? "", /not supported/);
+});
+
+void test("reports truncated boxed types and oversized strings", () => {
+  assert.match(decodeCustomAttributeValue(Uint8Array.of(1, 0), ["object"], "Box")
+    .issues?.[0] ?? "", /truncated/);
+  assert.match(decodeCustomAttributeValue(Uint8Array.of(1, 0, 4, 0x41), ["string"], "String")
+    .issues?.[0] ?? "", /extends past the blob/);
+});
+
+void test("rejects invalid named argument kinds", () => {
+  assert.match(decodeCustomAttributeValue(Uint8Array.of(1, 0, 1, 0, 0xff), [], "Kind")
+    .issues?.[0] ?? "", /not FIELD or PROPERTY/);
+});
