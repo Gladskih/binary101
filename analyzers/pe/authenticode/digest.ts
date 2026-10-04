@@ -35,69 +35,6 @@ const pushRange = (ranges: FileByteRange[], reader: FileRangeReader, start: numb
   if (safeEnd > safeStart) ranges.push({ start: safeStart, end: safeEnd });
 };
 
-const pushRangeExcludingRange = (
-  ranges: FileByteRange[],
-  reader: FileRangeReader,
-  start: number,
-  end: number,
-  excludedStart: number,
-  excludedEnd: number
-): void => {
-  const safeStart = Math.max(0, Math.min(start, reader.size));
-  const safeEnd = Math.max(0, Math.min(end, reader.size));
-  if (safeEnd <= safeStart) return;
-  if (excludedEnd <= safeStart || excludedStart >= safeEnd) {
-    pushRange(ranges, reader, safeStart, safeEnd);
-    return;
-  }
-  pushRange(ranges, reader, safeStart, Math.max(safeStart, excludedStart));
-  pushRange(ranges, reader, Math.min(safeEnd, excludedEnd), safeEnd);
-};
-
-const compareSectionHashOrder = (left: PeSection, right: PeSection): number => {
-  // Microsoft Authenticode PE signature format, "Calculating the PE Image Hash":
-  // section data is sorted by IMAGE_SECTION_HEADER.PointerToRawData before hashing.
-  return (left.pointerToRawData >>> 0) - (right.pointerToRawData >>> 0) ||
-    (left.virtualAddress >>> 0) - (right.virtualAddress >>> 0);
-};
-
-const listSectionHashRegions = (
-  fileSize: number,
-  sections: PeSection[]
-): Array<{ start: number; end: number }> =>
-  sections
-    .filter(section => (section.sizeOfRawData >>> 0) > 0)
-    .slice()
-    .sort(compareSectionHashOrder)
-    .map(section => {
-      const start = section.pointerToRawData >>> 0;
-      const end = Math.min(fileSize, start + (section.sizeOfRawData >>> 0));
-      return { start, end };
-    })
-    .filter(region => region.end > region.start);
-
-const computeHeaderHashEnd = (
-  fileSize: number,
-  sizeOfHeaders: number,
-  afterSecurityEntry: number,
-  sections: PeSection[]
-): number => {
-  const sectionRegions = listSectionHashRegions(fileSize, sections);
-  const firstSectionStart =
-    sectionRegions.length ? Math.min(...sectionRegions.map(region => region.start)) : undefined;
-  const normalizedHeadersSize =
-    Number.isSafeInteger(sizeOfHeaders) && sizeOfHeaders > 0 ? Math.min(fileSize, sizeOfHeaders) : fileSize;
-  const limitedHeaderEnd =
-    firstSectionStart != null ? Math.min(normalizedHeadersSize, firstSectionStart) : normalizedHeadersSize;
-  return Math.max(afterSecurityEntry, limitedHeaderEnd);
-};
-
-const hasParsedPeHashContext = (
-  core: PeAuthenticodeBestEffortCore | PeAuthenticodeParsedCore
-): core is PeAuthenticodeParsedCore =>
-  Array.isArray((core as Partial<PeAuthenticodeParsedCore>).sections) &&
-  typeof (core as Partial<PeAuthenticodeParsedCore>).opt?.SizeOfHeaders === "number";
-
 const readRanges = async (reader: FileRangeReader, ranges: FileByteRange[]): Promise<ArrayBuffer> => {
   if (!reader.readInto) throw new Error("FileRangeReader does not support direct range reads");
   const totalLength = ranges.reduce((total, range) => total + range.end - range.start, 0);
@@ -122,6 +59,11 @@ export const computePeAuthenticodeDigestBestEffort = async (
   algorithm: AlgorithmIdentifier,
   digestFunction?: DigestFunction
 ): Promise<string | null> => {
+  // PE Optional Header: CheckSum is at +64; Certificate Table is directory slot 4 (8 bytes).
+  // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format
+  // Hash physical file ranges, including gaps, as verified against the Windows PE SIP:
+  // https://learn.microsoft.com/en-us/windows/win32/api/mssip/nf-mssip-cryptsipcreateindirectdata
+  // Reconstructing the image from sections skips signed bytes and can hash overlaps twice.
   const checksumOff = core.optOff + 64;
   const securityIndex =
     securityDir != null ? securityDir.index ?? 4 : core.dataDirs.find(d => d.name === "SECURITY")?.index;
@@ -130,14 +72,12 @@ export const computePeAuthenticodeDigestBestEffort = async (
   const certOff = securityDir?.rva ?? 0;
   const certEnd = certOff + (securityDir?.size ?? 0);
   if (checksumOff >= reader.size) return null;
-
   const ranges: FileByteRange[] = [];
   const afterSecurityEntry = securityIndex == null ? securityEntryOff : securityEntryOff + 8;
   pushRange(ranges, reader, 0, checksumOff);
   pushRange(ranges, reader, checksumOff + 4, securityEntryOff);
   pushRange(ranges, reader, afterSecurityEntry, certOff);
   pushRange(ranges, reader, certEnd > afterSecurityEntry ? certEnd : afterSecurityEntry, reader.size);
-
   const data = await readRanges(reader, ranges);
   const digest = digestFunction ?? computeDigest;
   return bufferToHex(await digest(algorithm, data));
@@ -149,37 +89,8 @@ export const computePeAuthenticodeDigestFromParsedPe = async (
   securityDir: PeDataDirectory | undefined,
   algorithm: AlgorithmIdentifier,
   digestFunction?: DigestFunction
-): Promise<string | null> => {
-  const checksumOff = core.optOff + 64;
-  const securityIndex = securityDir?.index ?? core.dataDirs.find(d => d.name === "SECURITY")?.index;
-  const securityEntryOff =
-    securityIndex == null ? checksumOff + 4 : core.optOff + core.ddStartRel + securityIndex * 8;
-  const certOff = securityDir?.rva ?? 0;
-  const certEnd = certOff + (securityDir?.size ?? 0);
-  if (checksumOff >= reader.size) return null;
-
-  const ranges: FileByteRange[] = [];
-  const afterSecurityEntry = securityIndex == null ? securityEntryOff : securityEntryOff + 8;
-  const sectionHashRegions = listSectionHashRegions(reader.size, core.sections);
-  const headerHashEnd = computeHeaderHashEnd(
-    reader.size,
-    core.opt.SizeOfHeaders,
-    afterSecurityEntry,
-    core.sections
-  );
-  pushRange(ranges, reader, 0, checksumOff);
-  pushRange(ranges, reader, checksumOff + 4, securityEntryOff);
-  pushRangeExcludingRange(ranges, reader, afterSecurityEntry, headerHashEnd, certOff, certEnd);
-  sectionHashRegions.forEach(sectionRegion =>
-    pushRangeExcludingRange(ranges, reader, sectionRegion.start, sectionRegion.end, certOff, certEnd)
-  );
-  const trailingStart = sectionHashRegions.reduce((maxEnd, region) => Math.max(maxEnd, region.end), headerHashEnd);
-  pushRangeExcludingRange(ranges, reader, trailingStart, reader.size, certOff, certEnd);
-
-  const data = await readRanges(reader, ranges);
-  const digest = digestFunction ?? computeDigest;
-  return bufferToHex(await digest(algorithm, data));
-};
+): Promise<string | null> =>
+  computePeAuthenticodeDigestBestEffort(reader, core, securityDir, algorithm, digestFunction);
 
 export const computePeAuthenticodeDigest = async (
   reader: FileRangeReader,
@@ -188,9 +99,7 @@ export const computePeAuthenticodeDigest = async (
   algorithm: AlgorithmIdentifier,
   digestFunction?: DigestFunction
 ): Promise<string | null> =>
-  hasParsedPeHashContext(core)
-    ? computePeAuthenticodeDigestFromParsedPe(reader, core, securityDir, algorithm, digestFunction)
-    : computePeAuthenticodeDigestBestEffort(reader, core, securityDir, algorithm, digestFunction);
+  computePeAuthenticodeDigestBestEffort(reader, core, securityDir, algorithm, digestFunction);
 
 export const verifyAuthenticodeFileDigest = async (
   reader: FileRangeReader,

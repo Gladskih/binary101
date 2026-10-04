@@ -61,7 +61,7 @@ void test("computePeAuthenticodeDigest includes trailing bytes beyond the last s
   assert.strictEqual(computed, expectedDigest);
 });
 
-void test("computePeAuthenticodeDigestFromParsedPe falls back to hashing through EOF when SizeOfHeaders is invalid and no sections exist", async () => {
+void test("computePeAuthenticodeDigestFromParsedPe hashes through EOF with invalid SizeOfHeaders and no sections", async () => {
   const { bytes, file } = createBestEffortAuthenticodeFixture();
   const core = {
     optOff: 0,
@@ -70,8 +70,7 @@ void test("computePeAuthenticodeDigestFromParsedPe falls back to hashing through
     opt: { SizeOfHeaders: 0 },
     sections: []
   };
-  // With no declared SECURITY entry, Authenticode still excludes only the 4-byte CheckSum field even if the strict
-  // helper falls back to hashing through EOF because SizeOfHeaders is invalid.
+  // Without a SECURITY entry, only CheckSum is excluded. SizeOfHeaders does not limit the file hash.
   const expectedBytes = collectFixtureBytes(
     bytes,
     listBestEffortAuthenticodeHashRangesWithoutSecurityEntry(bytes.length)
@@ -82,7 +81,7 @@ void test("computePeAuthenticodeDigestFromParsedPe falls back to hashing through
   assert.strictEqual(computed, expectedDigest);
 });
 
-void test("computePeAuthenticodeDigestFromParsedPe tolerates empty header hash ranges created by clamping", async () => {
+void test("computePeAuthenticodeDigestFromParsedPe tolerates undersized headers and an overlapping certificate", async () => {
   const { bytes, file } = createBestEffortAuthenticodeFixture();
   const securityDir = { name: "SECURITY", index: 4, rva: 120, size: 40 };
   const core = {
@@ -92,9 +91,7 @@ void test("computePeAuthenticodeDigestFromParsedPe tolerates empty header hash r
     opt: { SizeOfHeaders: 1 },
     sections: []
   };
-  // SizeOfHeaders=1 collapses the strict header range to the first byte, so the post-directory header hash range
-  // becomes empty after clamping and must not produce a bogus slice. The strict path still has to hash the
-  // remaining trailing file bytes after the certificate table.
+  // Malformed SizeOfHeaders must not limit hashing of the remaining file after the certificate.
   const expectedBytes = collectFixtureBytes(bytes, [
     { start: 0, end: 64 },
     { start: 68, end: 132 },
@@ -136,6 +133,18 @@ void test("computePeAuthenticodeDigest uses SECURITY index from data directories
 
   const computed = await computePeAuthenticodeDigest(file, core, undefined, "SHA-256");
   assert.strictEqual(computed, expectedDigest);
+});
+
+void test("computePeAuthenticodeDigest finds SECURITY after other directory entries", async () => {
+  const { bytes, core, file } = createBestEffortAuthenticodeFixture();
+  const prefixedCore = {
+    ...core, dataDirs: [{ name: "EXPORT", index: 0, rva: 0, size: 0 }, ...core.dataDirs]
+  };
+  const expectedBytes = collectFixtureBytes(bytes, listLegacyBestEffortAuthenticodeHashRanges(bytes.length));
+
+  const computed = await computePeAuthenticodeDigest(file, prefixedCore, undefined, "SHA-256");
+
+  assert.equal(computed, toHex(await crypto.subtle.digest("SHA-256", expectedBytes)));
 });
 
 void test(
@@ -204,7 +213,7 @@ void test(
   }
 );
 
-void test("computePeAuthenticodeDigest dispatches to the strict parsed-PE path when section context is available", async () => {
+void test("computePeAuthenticodeDigest uses the same physical hash with parsed section context", async () => {
   const { core, file, securityDir } = createStrictAuthenticodeFixture();
   const strictDigest = await computePeAuthenticodeDigestFromParsedPe(file, core, securityDir, "SHA-256");
   const dispatchedDigest = await computePeAuthenticodeDigest(file, core, securityDir, "SHA-256");
@@ -235,7 +244,7 @@ void test("computePeAuthenticodeDigestFromParsedPe does not exclude a phantom SE
   assert.strictEqual(computed, expectedDigest);
 });
 
-void test("computePeAuthenticodeDigestFromParsedPe orders sections by raw file offset before hashing", async () => {
+void test("computePeAuthenticodeDigestFromParsedPe hashes in physical file order regardless of section RVAs", async () => {
   const { bytes, core, file } = createStrictAuthenticodeFixture();
   const originalSection = core.sections[0];
   assert.ok(originalSection);
@@ -263,9 +272,7 @@ void test("computePeAuthenticodeDigestFromParsedPe orders sections by raw file o
       }
     ]
   };
-  // Microsoft Authenticode PE signature format:
-  // sections are sorted by PointerToRawData before hashing, even if RVA order differs,
-  // and still includes trailing file bytes after the last section when no certificate is declared.
+  // Hash physical bytes in file order, including the trailing bytes when no certificate is declared.
   const expectedBytes = collectFixtureBytes(bytes, [
     ...listBestEffortAuthenticodeHashRangesWithoutSecurityEntry(reorderedCore.opt.SizeOfHeaders),
     { start: laterRvaRawOffset, end: laterRvaRawOffset + splitRawSize },
@@ -283,7 +290,7 @@ void test("computePeAuthenticodeDigestFromParsedPe orders sections by raw file o
   assert.strictEqual(computed, expectedDigest);
 });
 
-void test("computePeAuthenticodeDigest dispatches to the legacy best-effort path when parsed section context is absent", async () => {
+void test("computePeAuthenticodeDigest uses the same physical hash without parsed section context", async () => {
   const { core, file, securityDir } = createBestEffortAuthenticodeFixture();
   const bestEffortDigest = await computePeAuthenticodeDigestBestEffort(file, core, securityDir, "SHA-256");
   const dispatchedDigest = await computePeAuthenticodeDigest(file, core, securityDir, "SHA-256");
