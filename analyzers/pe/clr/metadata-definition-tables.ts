@@ -11,6 +11,7 @@ import type { ClrHeapReaders } from "./metadata-heaps.js";
 import { parseFieldSignature, parseMethodSignature } from "./metadata-signatures.js";
 import type { ClrMetadataRow } from "./metadata-table-reader.js";
 import type { ClrMetadataOwnership } from "./metadata-list-ownership.js";
+import { clrTypeFullName } from "./metadata-type-names.js";
 
 const cellNumber = (row: ClrMetadataRow, name: string): number =>
   typeof row[name] === "number" ? row[name] : 0;
@@ -20,10 +21,6 @@ const cellIndex = (row: ClrMetadataRow, name: string): PeClrMetadataIndex =>
     ? row[name] as PeClrMetadataIndex
     : { table: "null", tableId: -1, row: 0, raw: 0, valid: false };
 
-const fullName = (namespaceName: string | null, name: string | null): string | null => {
-  if (!name) return null;
-  return namespaceName ? `${namespaceName}.${name}` : name;
-};
 
 const getString = (
   heaps: ClrHeapReaders,
@@ -60,7 +57,7 @@ export const createTypeDefs = (
       row: index + 1,
       name,
       namespace: namespaceName,
-      fullName: fullName(namespaceName, name),
+      fullName: clrTypeFullName(namespaceName, name),
       flags: cellNumber(row, "Flags"),
       extends: cellIndex(row, "Extends"),
       fieldStart,

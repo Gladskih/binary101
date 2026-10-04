@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { resolveDefinitionNames, resolveReferenceNames }
+import { resolveDefinitionNames, resolveReferenceNames, resolveExportedTypeNames }
   from "../../../../../../analyzers/pe/clr/metadata-nested-names.js";
 import type { PeClrTypeDefinitionInfo, PeClrTypeReferenceInfo }
   from "../../../../../../analyzers/pe/clr/types.js";
@@ -14,6 +14,24 @@ const definition = (row: number, name: string | null): PeClrTypeDefinitionInfo =
 });
 const reference = (row: number, parent: number): PeClrTypeReferenceInfo => ({
   row, name: `T${row}`, namespace: "Demo", fullName: `Demo.T${row}`, resolutionScope: index(1, parent)
+});
+
+void test("resolves nested exported types through their Implementation chain", () => {
+  assert.deepEqual(resolveExportedTypeNames([
+    { row: 1, name: "Child", namespace: "", fullName: "Child", flags: 0, typeDefId: 0, implementation: index(39, 2) },
+    { row: 2, name: "Parent", namespace: "Demo", fullName: "Demo.Parent", flags: 0, typeDefId: 0,
+      implementation: index(35, 1) }
+  ], []).map(type => type.fullName), ["Demo.Parent+Child", "Demo.Parent"]);
+  assert.equal(resolveExportedTypeNames([
+    { row: 1, name: "Child", namespace: "", fullName: "Child", flags: 0, typeDefId: 0,
+      implementation: { ...index(39, 1), valid: false } }
+  ], [])[0]!.fullName, null);
+});
+
+void test("preserves the distinction between literal plus signs and nested-name separators", () => {
+  const types = [definition(1, "Outer"), definition(2, "Child+Literal")];
+  assert.equal(resolveDefinitionNames(types,
+    [{ NestedClass: index(2, 2), EnclosingClass: index(2, 1) }], [])[1]!.fullName, "Demo.Outer+Child\\+Literal");
 });
 
 void test("resolves nesting declared out of order and preserves top-level names", () => {

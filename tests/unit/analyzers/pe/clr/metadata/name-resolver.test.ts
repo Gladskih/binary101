@@ -43,8 +43,8 @@ const assemblyRefs: PeClrAssemblyRefInfo[] = [{
   culture: "",
   version: generatedName(3),
   flags: 0,
-  publicKeyOrTokenSize: 8,
-  hashValueSize: 0
+  publicKeyOrToken: new Array<number>(8).fill(0),
+  hashValue: []
 }];
 
 const typeRefs: PeClrTypeReferenceInfo[] = [{

@@ -89,12 +89,13 @@ export const createCustomAttributes = (
 ): PeClrCustomAttributeInfo[] => {
   const enumTypes = references.enumTypes ?? createEnumUnderlyingTypes(references.typeDefs, references.typeRefs,
     references.fields ?? [], references.fieldRows);
+  const decode = createAttributeValueDecoder(heaps, references, enumTypes);
   return rows.map((row, index): PeClrCustomAttributeInfo => {
     const parent = cellIndex(row, "Parent");
     const constructor = cellIndex(row, "Type");
     const target = resolveConstructor(constructor, references);
     const valueBlobIndex = cellNumber(row, "Value");
-    const decoded = decodeAttribute(row, heaps, references, target, enumTypes, index + 1);
+    const decoded = decode(row, target, index + 1);
     return {
       row: index + 1,
       parent,
@@ -136,26 +137,39 @@ const constructorTypeName = (
   return "parentName" in target ? target.parentName : target.ownerType;
 };
 
-const decodeAttribute = (
-  row: ClrMetadataRow,
+type AttributeConstructor = PeClrMemberReferenceInfo | PeClrMethodDefinitionInfo;
+type AttributeValueDecoder = (bytes: Uint8Array | null, context: string) =>
+  ReturnType<typeof decodeCustomAttributeValue>;
+
+const createAttributeValueDecoder = (
   heaps: ClrHeapReaders,
   references: ClrMetadataReferenceGraph,
-  target: PeClrMemberReferenceInfo | PeClrMethodDefinitionInfo | undefined,
-  enumTypes: ReadonlyMap<string, string>,
-  rowNumber: number
+  enumTypes: ReadonlyMap<string, string>
 ) => {
-  const signature = target?.signature;
-  if (!signature || !validConstructorSignature(signature)) {
-    return { fixedArguments: [], namedArguments: [],
-      issues: ["Constructor signature is unavailable or malformed; custom attribute value was not decoded."] };
-  }
-  return decodeCustomAttributeValue(
-    heaps.getBlob(cellNumber(row, "Value"), `CustomAttribute row ${rowNumber}.Value`),
-    resolveSignatureParameterTypes(resolveAttributeGenericParameters(signature.parameterTypes,
-      target && "parent" in target ? target.parent : undefined, references.typeSpecifications),
-    references.typeRefs, references.typeDefs),
-    `CustomAttribute row ${rowNumber}`, enumTypes
-  );
+  // Repeated attribute blobs are common (e.g. CompilerGeneratedAttribute). Cache within this
+  // resolution context; equivalent constructor parameter types share the same blob decoder.
+  const constructors = new WeakMap<AttributeConstructor, AttributeValueDecoder>();
+  const decoders = new Map<string, AttributeValueDecoder>();
+  return (row: ClrMetadataRow, target: AttributeConstructor | undefined, rowNumber: number) => {
+    if (!target?.signature || !validConstructorSignature(target.signature)) {
+      return { fixedArguments: [], namedArguments: [],
+        issues: ["Constructor signature is unavailable or malformed; custom attribute value was not decoded."] };
+    }
+    if (!constructors.has(target)) {
+      const parameters = resolveSignatureParameterTypes(
+        resolveAttributeGenericParameters(target.signature.parameterTypes,
+          "parent" in target ? target.parent : undefined, references.typeSpecifications),
+        references.typeRefs, references.typeDefs);
+      const key = JSON.stringify(parameters);
+      if (!decoders.has(key)) decoders.set(key,
+        bytes => decodeCustomAttributeValue(bytes, parameters, "", enumTypes));
+      constructors.set(target, decoders.get(key)!);
+    }
+    const decoded = heaps.decodeBlob(cellNumber(row, "Value"), `CustomAttribute row ${rowNumber}.Value`,
+      constructors.get(target)!);
+    return decoded.issues ? { ...decoded, issues: decoded.issues.map(issue =>
+      `CustomAttribute row ${rowNumber} ${issue.trimStart()}`) } : decoded;
+  };
 };
 
 const validConstructorSignature = (signature: PeClrMethodSignature): boolean =>

@@ -71,6 +71,9 @@ static class AttributeReference
             string.Join(", ", array.Select(argument => Value(argument.Value)?.ToString() ?? "null")),
         long integer => integer.ToString(System.Globalization.CultureInfo.InvariantCulture),
         ulong integer => $"0x{integer:x16}", char character => character.ToString(),
+        double number when !double.IsFinite(number) => number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        float number when !float.IsFinite(number) => number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        float number => (double)number,
         _ => value
     };
 

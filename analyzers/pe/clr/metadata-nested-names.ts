@@ -1,8 +1,9 @@
 "use strict";
 
-import type { PeClrTypeDefinitionInfo, PeClrTypeReferenceInfo } from "./types.js";
+import type { PeClrTypeDefinitionInfo, PeClrTypeReferenceInfo, PeClrExportedTypeInfo } from "./types.js";
 import type { PeClrMetadataIndex } from "./types.js";
 import type { ClrMetadataRow, ClrMetadataCell } from "./metadata-table-reader.js";
+import { escapeClrTypeNamePart } from "./metadata-type-names.js";
 
 type NamedType = { row: number; name: string | null; fullName: string | null };
 
@@ -27,6 +28,9 @@ const enclosingDefinitions = (rows: ClrMetadataRow[], count: number, issues: str
   return parents;
 };
 
+const nestedFullName = (parent: string | null | undefined, name: string | null): string | null =>
+  parent && name ? `${parent}+${escapeClrTypeNamePart(name)}` : null;
+
 const namePath = (
   start: number, types: NamedType[], parents: ReadonlyMap<number, number>,
   names: Map<number, string | null>, issues: string[]
@@ -48,7 +52,7 @@ const namePath = (
   for (const nested of path.reverse()) {
     if (names.has(nested)) continue;
     const parent = names.get(parents.get(nested)!);
-    names.set(nested, parent && types[nested - 1]!.name ? `${parent}+${types[nested - 1]!.name}` : null);
+    names.set(nested, nestedFullName(parent, types[nested - 1]!.name));
   }
 };
 
@@ -70,3 +74,9 @@ export const resolveReferenceNames = (
   types: PeClrTypeReferenceInfo[], issues: string[]
 ): PeClrTypeReferenceInfo[] => nestedNames(types, new Map(types.filter(type => type.resolutionScope.tableId === 1)
   .map(type => [type.row, type.resolutionScope.valid ? type.resolutionScope.row : 0])), issues);
+
+// ECMA-335 II.22.14: an ExportedType Implementation can name its enclosing ExportedType.
+export const resolveExportedTypeNames = (
+  types: PeClrExportedTypeInfo[], issues: string[]
+): PeClrExportedTypeInfo[] => nestedNames(types, new Map(types.filter(type => type.implementation.tableId === 39)
+  .map(type => [type.row, type.implementation.valid ? type.implementation.row : 0])), issues);

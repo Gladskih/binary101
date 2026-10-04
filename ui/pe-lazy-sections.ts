@@ -53,6 +53,7 @@ import {
   type PagedSortableTableSnapshot
 } from "./paged-sortable-tables.js";
 import { syncManifestTreeControls } from "./manifest-tree-controls.js";
+import { attachClrDependencyInputs } from "./pe-clr-dependencies.js";
 import {
   captureSortableTableState,
   enhanceSortableTables,
@@ -161,13 +162,12 @@ const renderWindowsLazyMarkup = (pe: PeWindowsParseResult, key: PeLazySectionKey
   WINDOWS_LAZY_RENDERERS[key]?.(pe) ?? "";
 
 const renderLazySectionMarkup = (pe: PeParseResult, key: PeLazySectionKey): string => {
+  if ([PE_LAZY_SECTION_KEYS.dosHeader, PE_LAZY_SECTION_KEYS.peHeaders,
+    PE_LAZY_SECTION_KEYS.dataDirectories, PE_LAZY_SECTION_KEYS.sectionHeaders,
+    PE_LAZY_SECTION_KEYS.legacyCoffTail].some(header => header === key)) {
+    return renderToString(out => renderHeaders(pe, out));
+  }
   switch (key) {
-    case PE_LAZY_SECTION_KEYS.dosHeader:
-    case PE_LAZY_SECTION_KEYS.peHeaders:
-    case PE_LAZY_SECTION_KEYS.dataDirectories:
-    case PE_LAZY_SECTION_KEYS.sectionHeaders:
-    case PE_LAZY_SECTION_KEYS.legacyCoffTail:
-      return renderToString(out => renderHeaders(pe, out));
     case PE_LAZY_SECTION_KEYS.dwarf:
       return renderToString(out => renderPeDwarf(pe, out));
     case PE_LAZY_SECTION_KEYS.overlay:
@@ -243,19 +243,15 @@ const rootForSection = (section: HTMLElement): ParentNode | null =>
   section.closest("#analysisValue") ?? section.parentElement;
 
 const handleToggle = (event: Event): void => {
-  const details = event.target instanceof HTMLElement && event.target.tagName === "DETAILS"
-    ? event.target as HTMLDetailsElement
-    : null;
-  const section = details?.closest<HTMLElement>("[data-pe-lazy-section]");
-  if (!details || !section || details !== sectionDetails(section)) return;
+  if (!(event.target instanceof HTMLElement) || event.target.tagName !== "DETAILS") return;
+  const details = event.target as HTMLDetailsElement;
+  const section = details.closest<HTMLElement>("[data-pe-lazy-section]");
+  if (!section || details !== sectionDetails(section)) return;
   const root = rootForSection(section);
   const pe = root ? parseResultByRoot.get(root) : undefined;
   if (!pe) return;
-  if (details.open) {
-    mountSection(section, pe);
-  } else {
-    unmountSection(section);
-  }
+  if (details.open) return mountSection(section, pe);
+  unmountSection(section);
 };
 
 const mountOpenSections = (root: ParentNode, pe: PeParseResult): void => {
@@ -269,6 +265,8 @@ export const enhancePeLazySections = (root: ParentNode, pe: PeParseResult | null
   if (!pe) return;
   parseResultByRoot.set(root, pe);
   if (!enhancedRoots.has(root)) {
+    attachClrDependencyInputs(root, () => parseResultByRoot.get(root),
+      current => { refreshPeLazySection(PE_LAZY_SECTION_KEYS.clr, current); });
     root.addEventListener("toggle", handleToggle, true);
     root.addEventListener("click", event => {
       const current = parseResultByRoot.get(root);

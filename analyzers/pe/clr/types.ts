@@ -51,8 +51,8 @@ export interface PeClrAssemblyRefInfo {
   culture: string | null;
   version: string;
   flags: number;
-  publicKeyOrTokenSize: number | null;
-  hashValueSize: number | null;
+  publicKeyOrToken: number[] | null;
+  hashValue: number[] | null;
 }
 
 export interface PeClrTypeReferenceInfo {
@@ -185,6 +185,7 @@ export interface PeClrCustomAttributeInfo {
 }
 
 export interface PeClrMetadataTables {
+  issues?: string[];
   streamName: "#~" | "#-";
   majorVersion: number;
   minorVersion: number;

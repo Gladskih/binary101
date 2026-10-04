@@ -136,7 +136,11 @@ void test("resolves MethodDef constructors and preserves malformed cell warnings
   ], createBlobHeapReaders([1, 0, 0, 0], []), references);
   assert.equal(attributes[0]?.attributeType, "Example.Attribute");
   assert.equal(attributes[0]?.issues, undefined);
+  assert.deepEqual(attributes[0]?.parent, nullIndex());
   assert.equal(attributes[1]?.constructor?.valid, false);
+  assert.deepEqual(attributes[1]?.parent, { ...nullIndex(), valid: false });
+  assert.deepEqual(attributes.map(attribute => attribute.row), [1, 2]);
+  assert.deepEqual(attributes.map(attribute => attribute.valueBlobIndex), [1, 0]);
 });
 
 void test("keeps external enums unresolved and does not mistake names for primitive types", () => {
@@ -177,4 +181,78 @@ void test("keeps invalid class references unresolved", () => {
   const attributes = createCustomAttributes([attributeRow(memberIndex())],
     createBlobHeapReaders([1, 0, 0, 0], []), referenceGraph(constructorMember(["class TypeRef#2"])));
   assert.match(attributes[0]?.issues?.[0] ?? "", /not supported/);
+});
+
+void test("reuses values for shared blobs and equivalent constructor parameter types", () => {
+  const graph = referenceGraph(constructorMember(["i4"]));
+  graph.memberRefs.push({ ...constructorMember(["i4"]), row: 2 }, { ...constructorMember(["u4"]), row: 3 });
+  const attributes = createCustomAttributes([
+    attributeRow(memberIndex()), attributeRow({ ...memberIndex(), row: 2 }),
+    attributeRow({ ...memberIndex(), row: 3 }), attributeRow(memberIndex())
+  ], createBlobHeapReaders([1, 0, ...u32le(254), 0, 0], []), graph);
+  assert.strictEqual(attributes[0]!.fixedArguments, attributes[1]!.fixedArguments);
+  assert.strictEqual(attributes[0]!.fixedArguments, attributes[3]!.fixedArguments);
+  assert.deepEqual(attributes[0]!.fixedArguments, [{ type: "i4", value: 254 }]);
+  assert.deepEqual(attributes[2]!.fixedArguments, [{ type: "u4", value: 254 }]);
+});
+
+void test("attributes cached malformed values to the correct metadata rows", () => {
+  const graph = referenceGraph(constructorMember(["i4"]));
+  const attributes = createCustomAttributes([attributeRow(memberIndex()), attributeRow(memberIndex())],
+    createBlobHeapReaders([1, 0], []), graph);
+  assert.match(attributes[0]!.issues![0]!, /CustomAttribute row 1.*truncated/);
+  assert.match(attributes[1]!.issues![0]!, /CustomAttribute row 2.*truncated/);
+});
+
+void test("resolves shared constructor parameter types once within the parse", () => {
+  const member = constructorMember(["i4"]);
+  let reads = 0;
+  Object.defineProperty(member.signature, "parameterTypes", { get: () => { reads++; return ["i4"]; } });
+  const attributes = createCustomAttributes([attributeRow(memberIndex()), attributeRow(memberIndex())],
+    createBlobHeapReaders([1, 0, ...u32le(7), 0, 0], []), referenceGraph(member));
+  assert.deepEqual(attributes[0]!.fixedArguments, [{ type: "i4", value: 7 }]);
+  assert.equal(reads, 1);
+});
+
+void test("keeps missing external enum reference identity in array diagnostics", () => {
+  const attributes = createCustomAttributes([attributeRow(memberIndex())],
+    createBlobHeapReaders([1, 0, ...u32le(1), 0, 0], []),
+    referenceGraph(constructorMember(["valuetype TypeRef#2[]"])));
+  assert.equal(attributes[0]!.fixedArguments[0]!.type, "enum TypeRef#2 (unresolved)[]");
+  assert.match(attributes[0]!.issues![0]!, /underlying type is unresolved/);
+});
+
+void test("rejects unexpected constructor tables even when a MethodDef is available", () => {
+  const graph = referenceGraph(constructorMember([]));
+  graph.methodDefs = [{ row: 1, name: ".ctor", ownerType: "A", rva: 0, flags: 0,
+    implFlags: 0, signatureBlobIndex: 1, signature: constructorMember([]).signature! }];
+  const attributes = createCustomAttributes([attributeRow({ ...memberIndex(), tableId: 4 })],
+    createBlobHeapReaders([1, 0, 0, 0], []), graph);
+  assert.equal(attributes[0]!.attributeType, null);
+  assert.match(attributes[0]!.issues![0]!, /signature is unavailable or malformed/);
+});
+
+void test("attributes absent blob warnings to the correct attribute field", () => {
+  const issues: string[] = [];
+  createCustomAttributes([{ ...attributeRow(memberIndex()), Value: 99 }],
+    createBlobHeapReaders([1, 0, 0, 0], issues), referenceGraph(constructorMember([])));
+  assert.deepEqual(issues, ["CustomAttribute row 1.Value has #Blob index 99, outside the heap."]);
+});
+
+for (const type of ["prefix class TypeRef#1", "class TypeRef#1 suffix"]) {
+  void test(`rejects extra text around the attribute parameter type ${type}`, () => {
+    const attributes = createCustomAttributes([attributeRow(memberIndex())],
+      createBlobHeapReaders([1, 0, 0xff, 0, 0], []), referenceGraph(constructorMember([type])));
+    assert.equal(attributes[0]!.fixedArguments[0]!.type, type);
+    assert.match(attributes[0]!.issues![0]!, /not supported/);
+  });
+}
+
+void test("resolves multiple-digit TypeRef rows for System.Type parameters", () => {
+  const graph = referenceGraph(constructorMember(["class TypeRef#12"]));
+  graph.typeRefs = Array.from({ length: 12 }, (_, index) => ({ ...systemTypeRef(), row: index + 1 }));
+  const attributes = createCustomAttributes([attributeRow(memberIndex())],
+    createBlobHeapReaders([1, 0, 0, 0, 0], []), graph);
+  assert.deepEqual(attributes[0]!.fixedArguments, [{ type: "System.Type", value: "" }]);
+  assert.equal(attributes[0]!.issues, undefined);
 });

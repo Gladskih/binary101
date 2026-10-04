@@ -17,6 +17,7 @@ import type { ClrHeapReaders } from "./metadata-heaps.js";
 import type { ClrMetadataRow } from "./metadata-table-reader.js";
 import { parseFieldSignature, parseMethodSignature } from "./metadata-signatures.js";
 import { resolveMetadataIndexName } from "./metadata-name-resolver.js";
+import { clrTypeFullName } from "./metadata-type-names.js";
 
 export type ClrMetadataResolutionTables = {
   modules: PeClrModuleInfo[];
@@ -50,10 +51,6 @@ const blobSize = (
   context: string
 ): number | null => heaps.getBlobSize(cellNumber(row, fieldName), `${context}.${fieldName}`);
 
-const fullName = (namespaceName: string | null, name: string | null): string | null => {
-  if (!name) return null;
-  return namespaceName ? `${namespaceName}.${name}` : name;
-};
 
 export const createMemberRefs = (
   rows: ClrMetadataRow[],
@@ -135,7 +132,7 @@ export const createExportedTypes = (
       row: index + 1,
       name,
       namespace: namespaceName,
-      fullName: fullName(namespaceName, name),
+      fullName: clrTypeFullName(namespaceName, name),
       flags: cellNumber(row, "Flags"),
       typeDefId: cellNumber(row, "TypeDefId"),
       implementation: cellIndex(row, "Implementation")

@@ -236,6 +236,9 @@ export const renderClrMetadataTables = (
   out: string[]
 ): void => {
   if (!metadata) return;
+  out.push(`<p><label for="clr-dependencies">Load assembly dependencies</label> ` +
+    `<input id="clr-dependencies" type="file" multiple accept=".dll,.exe,.winmd" data-clr-dependencies></p>`);
+  out.push(renderSignatureIssues(metadata.issues));
   out.push(renderTargetFramework(metadata));
   out.push(renderAssembly(metadata));
   out.push(renderTableStreamSummary(metadata));
