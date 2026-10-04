@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseMemberRefSignature, parseMethodSignature } from "../../../../../../analyzers/pe/clr/metadata-signatures.js";
 import { SignatureCursor } from "../../../../../../analyzers/pe/clr/signature-cursor.js";
-import { parseFieldSignatureCore } from "../../../../../../analyzers/pe/clr/signature-grammar.js";
+import { parseFieldSignatureCore } from "../../../../../../analyzers/pe/clr/signature-method.js";
 
 // ECMA-335 II.23.1.16 / II.23.2: test oracles encode the specified element values directly.
 for (const [bytes, expected] of [
@@ -72,11 +72,11 @@ void test("separate parameter types do not accumulate recursive depth", () => {
   assert.equal(signature?.issues, undefined);
 });
 
-void test("enforces the nesting budget exactly at the recursive boundary", () => {
+void test("accepts types on either side of the former nesting boundary", () => {
   assert.equal(parseMethodSignature(Uint8Array.of(0, 0, ...new Array<number>(63).fill(0x0f), 8), "Limit")?.issues,
     undefined);
-  assert.match(parseMethodSignature(Uint8Array.of(0, 0, ...new Array<number>(64).fill(0x0f), 8), "Limit")
-    ?.issues?.[0] ?? "", /nesting limit \(64\)/);
+  assert.equal(parseMethodSignature(Uint8Array.of(0, 0, ...new Array<number>(64).fill(0x0f), 8), "Limit")
+    ?.issues, undefined);
 });
 
 void test("decodes generic value types and CoreCLR native vararg signatures", () => {

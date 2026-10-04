@@ -4,7 +4,6 @@ import { readCompressedUInt } from "./metadata-heaps.js";
 
 export class SignatureCursor {
   private offset = 0;
-  private depth = 0;
   private failed = false;
 
   constructor(
@@ -52,18 +51,6 @@ export class SignatureCursor {
     // Every encoded item occupies at least one byte; never allocate by an unchecked count.
     return count <= this.remaining ? count : this.fail("count exceeds the remaining bytes");
   }
-
-  enterType(): boolean {
-    // Local analysis budget, not a CLI format limit: bound recursive stack usage to 64 types.
-    if (this.depth >= 64) {
-      this.fail("exceeds the analysis nesting limit (64)");
-      return false;
-    }
-    this.depth += 1;
-    return true;
-  }
-
-  leaveType(): void { this.depth -= 1; }
 
   finish(): void {
     if (this.remaining) this.fail("has trailing bytes");

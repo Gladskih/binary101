@@ -2,7 +2,8 @@
 
 import type { PeClrMethodSignature, PeClrSequenceSignature, PeClrTypeSignature } from "./types.js";
 import { SignatureCursor } from "./signature-cursor.js";
-import { parseMethodSignatureCore, parseSignatureType, parseTypeSequence } from "./signature-grammar.js";
+import { parseSignatureType, parseTypeSequence } from "./signature-grammar.js";
+import { parseMethodSignatureCore } from "./signature-method.js";
 
 export const parseTypeSpecSignature = (
   blob: Uint8Array,

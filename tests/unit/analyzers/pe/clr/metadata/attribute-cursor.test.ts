@@ -13,11 +13,11 @@ const boxedArrayBlob = (depth: number): Uint8Array => Uint8Array.of(
   0, 0 // NumNamed.
 );
 
-void test("reports deeply nested boxed attribute arrays without a stack overflow", () => {
-  const decoded = decodeCustomAttributeValue(boxedArrayBlob(80), ["object"], "Deep boxes");
-  assert.match(decoded.issues?.[0] ?? "", /nesting limit/);
+void test("decodes deeply nested boxed attribute arrays without a stack overflow", () => {
+  const decoded = decodeCustomAttributeValue(boxedArrayBlob(10000), ["object"], "Deep boxes");
+  assert.equal(decoded.issues, undefined);
   assert.deepEqual(decoded.namedArguments, []);
-  assert.equal(decoded.fixedArguments[0]?.value, "");
+  assert.equal(decoded.fixedArguments[0]?.value, "0");
 });
 
 void test("allows ordinary boxed arrays and independent arguments", () => {
@@ -26,11 +26,10 @@ void test("allows ordinary boxed arrays and independent arguments", () => {
   assert.equal(decoded.issues, undefined);
 });
 
-void test("bounds boxed values exactly at the documented analysis budget", () => {
-  // An outer OBJECT, N arrays and one primitive require N+2 value frames.
+void test("accepts boxed values on both sides of the former depth limit", () => {
   assert.equal(decodeCustomAttributeValue(boxedArrayBlob(62), ["object"], "Boundary").issues, undefined);
-  assert.match(decodeCustomAttributeValue(boxedArrayBlob(63), ["object"], "Beyond")
-    .issues?.[0] ?? "", /nesting limit \(64\)/);
+  assert.equal(decodeCustomAttributeValue(boxedArrayBlob(63), ["object"], "Beyond")
+    .issues, undefined);
 });
 
 void test("releases depth between independent boxed arguments", () => {

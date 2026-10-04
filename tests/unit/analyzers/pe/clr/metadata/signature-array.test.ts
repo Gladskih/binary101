@@ -7,7 +7,7 @@ import { SignatureCursor } from "../../../../../../analyzers/pe/clr/signature-cu
 
 // ECMA-335 II.23.2.13 ArrayShape encodes rank, sizes and signed lower bounds.
 for (const [bytes, expected] of [
-  [[2, 0, 0], "[,]"], [[1, 1, 3, 0], "[size 3]"], [[1, 0, 1, 4], "[2...]"],
+  [[2, 0, 0], "[rank 2; sizes (); lower bounds ()]"], [[1, 1, 3, 0], "[size 3]"], [[1, 0, 1, 4], "[2...]"],
   [[1, 1, 0, 1, 0], "[0...-1]"], [[1, 1, 3, 1, 0x7f], "[-1...1]"]
 ] as const) {
   void test(`array shape ${bytes.join(",")}`, () => {
@@ -39,7 +39,7 @@ void test("retains a large array's explicitly declared sizes and bounds", () => 
   assert.equal(parseArrayShape(new SignatureCursor(Uint8Array.of(65, 1, 3, 1, 0x7f), [], "Large")),
     "[rank 65; sizes (3); lower bounds (-1)]");
   assert.equal(parseArrayShape(new SignatureCursor(Uint8Array.of(64, 0, 0), [], "Boundary")),
-    `[${",".repeat(63)}]`);
+    "[rank 64; sizes (); lower bounds ()]");
 });
 
 void test("distinguishes invalid rank and counts from truncation in diagnostics", () => {

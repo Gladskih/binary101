@@ -96,10 +96,11 @@ void test("bounds extreme parameter counts without allocating an array", () => {
   assert.match(signature?.issues?.[0] ?? "", /count exceeds/);
 });
 
-void test("bounds deeply nested signatures", () => {
-  const signature = parseMethodSignature(Uint8Array.of(0, 0, ...new Array<number>(1000).fill(0x0f), 8), "Deep");
-  assert.equal(signature?.returnType, null);
-  assert.match(signature?.issues?.[0] ?? "", /nesting limit/);
+void test("decodes deeply nested signatures without an artificial depth limit", () => {
+  const depth = 20000;
+  const signature = parseMethodSignature(Uint8Array.of(0, 0, ...new Array<number>(depth).fill(0x0f), 8), "Deep");
+  assert.equal(signature?.returnType, `i4${"*".repeat(depth)}`);
+  assert.equal(signature?.issues, undefined);
 });
 
 void test("does not manufacture a type when a pointer is truncated", () => {

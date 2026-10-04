@@ -8,6 +8,9 @@ sealed class SignatureNames : ISignatureTypeProvider<string, object?>
 {
     public string GetArrayType(string element, ArrayShape shape)
     {
+        if (shape.Rank == 1 && shape.Sizes.Length == 0 && shape.LowerBounds.Length == 0) return element + "[*]";
+        if (shape.Rank > Math.Max(shape.Sizes.Length, shape.LowerBounds.Length))
+            return $"{element}[rank {shape.Rank}; sizes ({string.Join(",", shape.Sizes)}); lower bounds ({string.Join(",", shape.LowerBounds)})]";
         var dimensions = Enumerable.Range(0, shape.Rank).Select(index =>
         {
             int? size = index < shape.Sizes.Length ? shape.Sizes[index] : null;
@@ -15,12 +18,18 @@ sealed class SignatureNames : ISignatureTypeProvider<string, object?>
             if (size == null) return bound == null ? "" : $"{bound}...";
             return bound == null ? $"size {size}" : $"{bound}...{bound + size - 1}";
         }).ToArray();
-        return $"{element}[{(shape.Rank == 1 && dimensions[0] == "" ? "*" : string.Join(",", dimensions))}]";
+        return $"{element}[{string.Join(",", dimensions)}]";
     }
 
     public string GetByReferenceType(string element) => element + "&";
-    public string GetFunctionPointerType(MethodSignature<string> signature) =>
-        $"fnptr ({string.Join(", ", signature.ParameterTypes)}) -> {signature.ReturnType}";
+    public string GetFunctionPointerType(MethodSignature<string> signature)
+    {
+        var parameters = signature.ParameterTypes.ToList();
+        if (signature.RequiredParameterCount < parameters.Count) parameters.Insert(signature.RequiredParameterCount, "...");
+        var convention = signature.Header.RawValue == 0 ? "" : $" [cc=0x{signature.Header.RawValue:x}" +
+            (signature.Header.IsGeneric ? $"; generic={signature.GenericParameterCount}" : "") + "]";
+        return $"fnptr{convention} ({string.Join(", ", parameters)}) -> {signature.ReturnType}";
+    }
     public string GetGenericInstantiation(string type, ImmutableArray<string> arguments) =>
         $"{type}<{string.Join(", ", arguments)}>";
     public string GetGenericMethodParameter(object? context, int index) => $"mvar {index}";

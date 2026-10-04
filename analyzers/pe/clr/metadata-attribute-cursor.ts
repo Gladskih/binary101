@@ -15,7 +15,6 @@ export const BYTE_WIDTH_F64 = Float64Array.BYTES_PER_ELEMENT;
 
 export class AttributeCursor {
   offset = 0;
-  private valueDepth = 0;
 
   constructor(
     private readonly bytes: Uint8Array,
@@ -35,18 +34,6 @@ export class AttributeCursor {
   enumUnderlyingType(name: string): string | null {
     return this.enumTypes.get(name) ?? null;
   }
-
-  enterValue(): boolean {
-    // Local analysis budget, not a CLI limit; boxed object arrays can nest recursively.
-    if (this.valueDepth >= 64) {
-      this.addIssue("custom attribute value exceeds the analysis nesting limit (64).");
-      return false;
-    }
-    this.valueDepth += 1;
-    return true;
-  }
-
-  leaveValue(): void { this.valueDepth -= 1; }
 
   readU8(): number | null {
     const value = this.bytes[this.offset];

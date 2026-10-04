@@ -42,11 +42,12 @@ export const parseArrayShape = (cursor: SignatureCursor): string | null => {
   if (!sizes) return null;
   const bounds = readBounds(cursor, rank);
   if (!bounds) return null;
-  // Local formatting threshold only: preserve large ranks without allocating one item per dimension.
-  if (rank > 64) {
+  if (rank === 1 && !sizes.length && !bounds.length) return "[*]";
+  // Expand only encoded dimensions; an arbitrary rank must not manufacture gigabytes of commas.
+  if (rank > Math.max(sizes.length, bounds.length)) {
     return `[rank ${rank}; sizes (${sizes.join(",")}); lower bounds (${bounds.join(",")})]`;
   }
   const dimensions = Array.from({ length: rank }, (_, index) =>
     dimensionText(sizes[index], bounds[index]));
-  return `[${rank === 1 && !dimensions[0] ? "*" : dimensions.join(",")}]`;
+  return `[${dimensions.join(",")}]`;
 };
