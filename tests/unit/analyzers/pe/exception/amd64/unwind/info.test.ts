@@ -10,6 +10,7 @@ import {
   createChainedAmd64ExceptionFixture,
   createRvaAllocator,
   epilogScopeSlot,
+  parseAmd64ExceptionFixture,
   writePrimaryHandlerRva
 } from "../../../../../../helpers/pe-amd64-unwind-fixture.js";
 
@@ -67,3 +68,24 @@ void test("scanAmd64UnwindInfos reports unreadable unwind records", async () => 
   assert.strictEqual(table.unwindInfoVersion2Count, 0);
   assert.ok(issues.some(issue => /could not be read/i.test(issue)));
 });
+
+// Microsoft x64 exception handling specifies UWOP_ALLOC_LARGE (1).
+// OpInfo=1 requires two operand slots; padding and handler data are outside CountOfCodes.
+// https://learn.microsoft.com/en-us/cpp/build/exception-handling-x64
+// LLVM shares getNumUsedSlots for versions 1/2:
+// https://github.com/llvm/llvm-project/blob/main/llvm/tools/llvm-readobj/Win64EHDumper.cpp
+for (const version of [1, 2]) {
+  void test(`exception parsing warns for v${version} ALLOC_LARGE without operands`, async () => {
+    const fixture = createAmd64ExceptionFixtureWithSlots(
+      [[1, 0x11]],
+      { version, flags: UNW_FLAG_EHANDLER, trailingBytes: Uint32Array.BYTES_PER_ELEMENT }
+    );
+    writePrimaryHandlerRva(fixture, fixture.functionEndRva);
+    const parsed = await parseAmd64ExceptionFixture(fixture);
+    assert.ok(parsed);
+    assert.deepEqual(parsed.issues, [
+      "1 UNWIND_INFO block(s) have a truncated unwind-code array."
+    ]);
+    assert.deepEqual(parsed.handlerRvas, [fixture.functionEndRva]);
+  });
+}

@@ -38,6 +38,8 @@ const regularUnwindSlotCount = (operationCode: number, operationInfo: number): n
   // trailing UNWIND_CODE slots as operands; those operand slots are raw data
   // and must not be decoded as independent operations.
   // https://learn.microsoft.com/en-us/cpp/build/exception-handling-x64
+  // LLVM uses these same slot counts for v1/v2 (getNumUsedSlots):
+  // https://github.com/llvm/llvm-project/blob/main/llvm/tools/llvm-readobj/Win64EHDumper.cpp
   switch (operationCode) {
     case 1:
       return operationInfo === 0 ? 2 : 3;
@@ -61,6 +63,45 @@ const isUnwindCodeArrayTruncated = (
 const readUnwindOperationByte = (codeView: DataView, codeIndex: number): number =>
   codeView.getUint8(codeIndex * Uint16Array.BYTES_PER_ELEMENT + 1);
 
+const analyzeUnwindOperations = (
+  codeView: DataView,
+  countOfCodes: number,
+  version: number
+): Amd64UnwindCodeAnalysis => {
+  let epilogScopeCount = 0;
+  let codeIndex = 0;
+  let hasRegularCode = false;
+  let hasLateEpilogCode = false;
+  let isTruncated = false;
+  while (codeIndex < countOfCodes) {
+    const operationByte = readUnwindOperationByte(codeView, codeIndex);
+    const operationCode = operationByte & 0x0f;
+    if (version === AMD64_UNWIND_INFO_VERSION_2 && operationCode === AMD64_UNWIND_V2_UOP_EPILOG) {
+      if (hasRegularCode) hasLateEpilogCode = true;
+      else if (codeView.getUint8(codeIndex * Uint16Array.BYTES_PER_ELEMENT) !== 0 ||
+        operationByte >> 4 !== 0) epilogScopeCount += 1;
+      codeIndex += 1;
+      continue;
+    }
+    hasRegularCode = true;
+    const slotCount = regularUnwindSlotCount(operationCode, operationByte >> 4);
+    // CountOfCodes excludes alignment padding and handler/chained data: those
+    // bytes must never satisfy missing operands, even when present in the file.
+    // Microsoft x64 exception handling, "Count of unwind codes" / "Unwind codes array".
+    if (codeIndex + slotCount > countOfCodes) {
+      isTruncated = true;
+      break;
+    }
+    codeIndex += slotCount;
+  }
+  return {
+    epilogScopeCount,
+    hasEpilogInfo: epilogScopeCount > 0,
+    hasLateEpilogCode,
+    isTruncated
+  };
+};
+
 export const analyzeAmd64UnwindCodeSlots = async (
   reader: FileRangeReader,
   offset: number,
@@ -74,32 +115,8 @@ export const analyzeAmd64UnwindCodeSlots = async (
   }
   const codeView = await reader.read(offset + Uint32Array.BYTES_PER_ELEMENT, codeBytes);
   if (codeView.byteLength < codeBytes) return TRUNCATED_UNWIND_CODE_ANALYSIS;
-  if (version !== AMD64_UNWIND_INFO_VERSION_2) return NO_UNWIND_CODE_ANALYSIS;
-  let epilogScopeCount = 0;
-  let codeIndex = 0;
-  while (codeIndex < countOfCodes) {
-    const operationByte = readUnwindOperationByte(codeView, codeIndex);
-    if ((operationByte & 0x0f) !== AMD64_UNWIND_V2_UOP_EPILOG) break;
-    const codeOffset = codeView.getUint8(codeIndex * Uint16Array.BYTES_PER_ELEMENT);
-    if (codeOffset !== 0 || operationByte >> 4 !== 0) {
-      epilogScopeCount += 1;
-    }
-    codeIndex += 1;
+  if (version !== AMD64_UNWIND_INFO_VERSION_1 && version !== AMD64_UNWIND_INFO_VERSION_2) {
+    return NO_UNWIND_CODE_ANALYSIS;
   }
-  let hasLateEpilogCode = false;
-  while (codeIndex < countOfCodes) {
-    const operationByte = readUnwindOperationByte(codeView, codeIndex);
-    const operationCode = operationByte & 0x0f;
-    if (operationCode === AMD64_UNWIND_V2_UOP_EPILOG) {
-      hasLateEpilogCode = true;
-      break;
-    }
-    codeIndex += regularUnwindSlotCount(operationCode, operationByte >> 4);
-  }
-  return {
-    epilogScopeCount,
-    hasEpilogInfo: epilogScopeCount > 0,
-    hasLateEpilogCode,
-    isTruncated: false
-  };
+  return analyzeUnwindOperations(codeView, countOfCodes, version);
 };
