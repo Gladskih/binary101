@@ -58,14 +58,20 @@ static class MetadataReference
             tableId = (int)table, rows = reader.GetTableRowCount(table)
         }).Where(count => count.rows != 0).ToArray();
         var signatures = new Dictionary<string, object>();
+        var signatureErrors = new Dictionary<string, string>();
         foreach (var table in new[] { TableIndex.MethodDef, TableIndex.Field, TableIndex.MemberRef,
             TableIndex.Property, TableIndex.TypeSpec, TableIndex.MethodSpec, TableIndex.StandAloneSig })
         {
-            for (var row = 1; row <= reader.GetTableRowCount(table); row++)
-                signatures.Add($"{(int)table}:{row}", Signature(reader, table, row));
+            for (var row = 1; row <= reader.GetTableRowCount(table); row++) {
+                try { signatures.Add($"{(int)table}:{row}", Signature(reader, table, row)); }
+                catch (BadImageFormatException error) {
+                    signatureErrors.Add($"{(int)table}:{row}", error.Message);
+                    Console.Error.WriteLine($"Skip signature {path} {table} {row}: {error.Message}");
+                }
+            }
         }
         return new { path = Path.GetFullPath(path), metadataOffset = image.PEHeaders.MetadataStartOffset,
-            metadataSize = image.PEHeaders.MetadataSize, counts, signatures,
+            metadataSize = image.PEHeaders.MetadataSize, counts, signatures, signatureErrors,
             attributes = AttributeReference.Read(reader), blobs = BlobReference.Read(path, reader) };
     }
 }

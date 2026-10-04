@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { parseClrMetadataRoot } from "../../analyzers/pe/clr/metadata-root.js";
 import type { PeClrAdditionalCell, PeClrMetadataTables } from "../../analyzers/pe/clr/types.js";
 import { openDiskFileRangeReader } from "../../scripts/disk-file-range-reader.js";
+import { resolveClrMetadataDependencies } from "../../analyzers/pe/clr/metadata-dependencies.js";
 
 type ReferenceAssembly = {
   path: string;
@@ -15,6 +16,7 @@ type ReferenceAssembly = {
   metadataSize: number;
   counts: { tableId: number; rows: number }[];
   signatures: Record<string, PeClrAdditionalCell>;
+  signatureErrors?: Record<string, string>;
   blobs: {
     constants: { row: number; value: unknown }[];
     marshal: { row: number; nativeType: string; parameters: Record<string, string | number> }[];
@@ -43,21 +45,31 @@ const collectSignatures = (tables: PeClrMetadataTables): Map<string, PeClrAdditi
   return signatures;
 };
 
-const compareAssembly = async (reference: ReferenceAssembly): Promise<{
+const compareAssembly = async (
+  reference: ReferenceAssembly, dependencies: ReadonlyMap<string, PeClrMetadataTables>
+): Promise<{
   signatures: number; unresolvedSecurity: number
 }> => {
   const disk = await openDiskFileRangeReader(reference.path, (await stat(reference.path)).size);
   try {
     const issues: string[] = [];
-    const tables = (await parseClrMetadataRoot(disk.reader, reference.metadataOffset,
+    const parsed = dependencies.get(reference.path) ?? (await parseClrMetadataRoot(
+      disk.reader, reference.metadataOffset,
       reference.metadataSize, issues))?.tables;
-    assert.ok(tables, `${reference.path}: missing metadata tables; ${issues.join("; ")}`);
+    assert.ok(parsed, `${reference.path}: missing metadata tables; ${issues.join("; ")}`);
+    const tables = resolveClrMetadataDependencies(parsed, [...dependencies.values()]);
     assert.deepEqual(tables.rowCounts.map(({ tableId, rows }) => ({ tableId, rows })), reference.counts,
       `${reference.path}: table counts`);
     const signatures = collectSignatures(tables);
-    assert.equal(signatures.size, Object.keys(reference.signatures).length, `${reference.path}: signature count`);
+    assert.equal(signatures.size, Object.keys(reference.signatures).length +
+      Object.keys(reference.signatureErrors ?? {}).length, `${reference.path}: signature count`);
     for (const [key, expected] of Object.entries(reference.signatures)) {
       assert.deepEqual(signatures.get(key), expected, `${reference.path}: signature ${key}`);
+    }
+    for (const key of Object.keys(reference.signatureErrors ?? {})) {
+      const signature = signatures.get(key);
+      assert.ok(signature && typeof signature === "object" && "issues" in signature && signature.issues?.length,
+        `${reference.path}: rejected reference signature ${key} must report a warning`);
     }
     compareAttributes(reference, tables);
     return { signatures: signatures.size, unresolvedSecurity: compareBlobs(reference, tables) };
@@ -102,7 +114,7 @@ const compareSecurity = (reference: ReferenceAssembly, tables: PeClrMetadataTabl
     assert.ok(actual && typeof actual === "object" && "kind" in actual && actual.kind === "security"
       && actual.encoding === "binary");
     if (actual.attributes.some(attribute => attribute.issues?.some(issue => /underlying type is unresolved/.test(issue)))) {
-      // dnlib searches installed dependencies; a single-file browser parse cannot access them.
+      // Missing selected dependencies remain visible and are counted separately.
       unresolved += 1;
       continue;
     }
@@ -118,9 +130,11 @@ const compareAttributes = (reference: ReferenceAssembly, tables: PeClrMetadataTa
   for (const expected of reference.attributes) {
     const actual = tables.customAttributes[expected.row - 1];
     assert.ok(actual, `${reference.path}: missing attribute ${expected.row}`);
-    assert.deepEqual(actual.fixedArguments.map(argument => argument.value), expected.fixedArguments,
+    assert.deepEqual(actual.fixedArguments.map(argument => normalizeConstant(argument.value, null)),
+      expected.fixedArguments,
       `${reference.path}: attribute ${expected.row} fixed arguments; ${actual.issues?.join("; ") ?? ""}`);
-    assert.deepEqual(actual.namedArguments.map(({ kind, name, value }) => ({ kind, name, value })),
+    assert.deepEqual(actual.namedArguments.map(({ kind, name, value }) => ({ kind, name,
+      value: normalizeConstant(value, null) })),
       expected.namedArguments, `${reference.path}: attribute ${expected.row} named arguments`);
     assert.equal(actual.issues, undefined, `${reference.path}: attribute ${expected.row} issues`);
   }
@@ -130,6 +144,7 @@ const compareCorpus = async (manifest: string): Promise<{
   assemblies: number; signatures: number; attributes: number;
   constants: number; marshal: number; security: number; unresolvedSecurity: number
 }> => {
+  const dependencies = await readDependencies(manifest);
   const lines = createInterface({ input: createReadStream(manifest), crlfDelay: Infinity });
   let assemblies = 0;
   let signatures = 0;
@@ -140,7 +155,7 @@ const compareCorpus = async (manifest: string): Promise<{
   let unresolvedSecurity = 0;
   for await (const line of lines) {
     const reference = JSON.parse(line) as ReferenceAssembly;
-    const checked = await compareAssembly(reference);
+    const checked = await compareAssembly(reference, dependencies);
     signatures += checked.signatures;
     unresolvedSecurity += checked.unresolvedSecurity;
     attributes += reference.attributes.length;
@@ -151,6 +166,26 @@ const compareCorpus = async (manifest: string): Promise<{
   }
   assert.ok(assemblies > 0, "Reference corpus is empty");
   return { assemblies, signatures, attributes, constants, marshal, security, unresolvedSecurity };
+};
+
+const readDependencies = async (manifest: string): Promise<ReadonlyMap<string, PeClrMetadataTables>> => {
+  const dependencies = new Map<string, PeClrMetadataTables>();
+  const lines = createInterface({ input: createReadStream(manifest), crlfDelay: Infinity });
+  for await (const line of lines) {
+    const reference = JSON.parse(line) as ReferenceAssembly;
+    if (!/[\\/]Framework64[\\/].*[\\/](mscorlib|System)\.dll$/i.test(reference.path) &&
+      !/[\\/]GAC_MSIL[\\/]System\.Drawing[\\/].*[\\/]System\.Drawing\.dll$/i.test(reference.path) &&
+      !/[\\/]Microsoft\.NETCore\.App[\\/].*[\\/](System\.Private\.CoreLib|System\.Runtime)\.dll$/i
+        .test(reference.path)) continue;
+    const disk = await openDiskFileRangeReader(reference.path, (await stat(reference.path)).size);
+    try {
+      const tables = (await parseClrMetadataRoot(
+        disk.reader, reference.metadataOffset, reference.metadataSize, []))?.tables;
+      assert.ok(tables);
+      dependencies.set(reference.path, tables);
+    } finally { await disk.close(); }
+  }
+  return dependencies;
 };
 
 void test("matches System.Reflection.Metadata on installed assemblies", {
