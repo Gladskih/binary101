@@ -186,7 +186,7 @@ export const createPeDisassemblyController = (
       ) {
         return;
       }
-      current.parsed.disassembly = report;
+      current.parsed.disassembly = { ...report, issues: [...seeds.issues, ...report.issues] };
       setDisassemblyUiState("idle");
       abortController = null;
       if (opts.renderPanel) {

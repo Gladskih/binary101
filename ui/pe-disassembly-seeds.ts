@@ -19,6 +19,7 @@ import {
 import { collectFunctionOverrideEntrypoints } from "./pe-disassembly-function-override-seeds.js";
 import { collectControlTransferInstructionRvas } from "./pe-disassembly-control-transfer-hints.js";
 import { collectLoadConfigPointerSeeds } from "./pe-disassembly-load-config-pointer-seeds.js";
+import { collectReadyToRunMethodRvas } from "../analyzers/pe/clr/ready-to-run-seeds.js";
 
 type PeDisassemblySeedSet = {
   canonicalMachine: number;
@@ -31,6 +32,7 @@ type PeDisassemblySeedSet = {
   safeSehHandlerRvas: number[];
   instructionHintRvas: number[];
   extraEntrypoints: Array<{ source: string; rvas: number[] }>;
+  issues: string[];
 };
 
 const collectMsvcRttiFunctionRvas = (pe: PeWindowsParseResult | null): number[] => {
@@ -112,7 +114,8 @@ const collectBasicPeDisassemblySeeds = (
     guardCFFunctionRvas: [],
     safeSehHandlerRvas: [],
     instructionHintRvas: [],
-    extraEntrypoints: collectBasicExtraEntrypoints(windowsPe)
+    extraEntrypoints: collectBasicExtraEntrypoints(windowsPe),
+    issues: []
   };
 };
 
@@ -199,6 +202,8 @@ const collectPeDisassemblySeeds = async (
   const windowsPe = isPeWindowsParseResult(pe) ? pe : null;
   const seeds = collectBasicPeDisassemblySeeds(pe, windowsPe);
   if (windowsPe) {
+    const rvas = await collectReadyToRunMethodRvas(reader, windowsPe, seeds.issues);
+    if (rvas.length) seeds.extraEntrypoints.push({ source: "ReadyToRun MethodDef entry points", rvas });
     seeds.extraEntrypoints.push(...collectFunctionOverrideEntrypoints(windowsPe, file.size));
     seeds.instructionHintRvas = collectControlTransferInstructionRvas(windowsPe, file.size);
   }
