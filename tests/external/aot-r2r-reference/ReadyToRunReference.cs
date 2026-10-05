@@ -24,12 +24,18 @@ static class ReadyToRunReference
         {
             int offset = 16 + index * 12;
             uint type = UInt32(header, offset), rva = UInt32(header, offset + 4);
-            if (type is not (100 or 101 or 103 or 116)) continue;
+            if (type is not (100 or 101 or 103 or 109 or 116)) continue;
             var bytes = Data(pe, rva, UInt32(header, offset + 8));
             if (type == 100 || type == 116) sections.Add(new { type, text = Text(bytes) });
             else if (type == 103)
             {
                 var methods = ReadyToRunMethods.Read(bytes);
+                foreach (var method in methods) indices.Add(method.runtimeFunctionIndex);
+                sections.Add(new { type, methods });
+            }
+            else if (type == 109)
+            {
+                var methods = ReadyToRunInstanceMethods.Read(bytes);
                 foreach (var method in methods) indices.Add(method.runtimeFunctionIndex);
                 sections.Add(new { type, methods });
             }
