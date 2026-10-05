@@ -36,6 +36,19 @@ export class NativeFormatReader {
     return this.#view.getUint32(offset, true);
   }
 
+  uint8(offset: number): NativeFormatValue<number> {
+    this.#requireRange(offset, 1);
+    return { nextOffset: offset + 1, value: this.#view.getUint8(offset) };
+  }
+
+  signed(offset: number): NativeFormatValue<number> {
+    const decoded = this.unsigned(offset);
+    // DecodeSigned uses a signed final byte in the 7/14/21/28-bit short forms.
+    // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/NativeFormat/NativeFormatReader.cs
+    const bits = Math.min(32, (decoded.nextOffset - offset) * 7);
+    return { nextOffset: decoded.nextOffset, value: decoded.value << (32 - bits) >> (32 - bits) };
+  }
+
   unsigned(offset: number): NativeFormatValue<number> {
     this.#requireRange(offset, 1);
     const first = this.#bytes[offset]!;
@@ -71,7 +84,7 @@ export class NativeFormatReader {
   handle(offset: number, permittedTypes: readonly number[]): NativeFormatValue<NativeFormatHandle> {
     const decoded = this.unsigned(offset);
     const handle = permittedTypes.length === 1
-      ? { type: permittedTypes[0]!, offset: decoded.value }
+      ? this.#typedHandle(decoded.value, permittedTypes[0]!)
       : { type: decoded.value & 0x7f, offset: decoded.value >>> 7 };
     if (handle.offset && !permittedTypes.includes(handle.type)) {
       throw new NativeFormatError(`Unexpected handle type ${handle.type}.`);
@@ -80,6 +93,16 @@ export class NativeFormatReader {
       throw new NativeFormatError(`Handle offset ${handle.offset} is outside the metadata.`);
     }
     return { nextOffset: decoded.nextOffset, value: handle };
+  }
+
+  #typedHandle(value: number, expectedType: number): NativeFormatHandle {
+    // Generated typed-handle constructors accept an untagged offset or their own tag.
+    // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs
+    const type = value >>> 25;
+    if (type !== 0 && type !== expectedType) {
+      throw new NativeFormatError(`Unexpected typed handle type ${type}.`);
+    }
+    return { type: expectedType, offset: value & 0x01ffffff };
   }
 
   collectionCount(offset: number): NativeFormatValue<number> {

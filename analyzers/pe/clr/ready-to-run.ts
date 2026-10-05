@@ -4,6 +4,9 @@ import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
 import type { PeClrHeader } from "./types.js";
+import { decodeReadyToRunSections } from "./ready-to-run-sections.js";
+import { readyToRunPointerSize } from "./ready-to-run-target.js";
+import { validateReadyToRunReferences } from "./ready-to-run-references.js";
 import {
   READY_TO_RUN_SECTION_EXCEPTION_INFO,
   READY_TO_RUN_SECTION_RUNTIME_FUNCTIONS,
@@ -11,40 +14,23 @@ import {
   type PeClrReadyToRunSection
 } from "./ready-to-run-types.js";
 
-const readyToRunSectionName = (type: number): string => {
-  // Section type ids come from CoreCLR readytorun.h:
-  // https://github.com/dotnet/runtime/blob/main/src/coreclr/inc/readytorun.h
-  switch (type) {
-    case 100: return "CompilerIdentifier";
-    case 101: return "ImportSections";
-    case READY_TO_RUN_SECTION_RUNTIME_FUNCTIONS: return "RuntimeFunctions";
-    case 103: return "MethodDefEntryPoints";
-    case READY_TO_RUN_SECTION_EXCEPTION_INFO: return "ExceptionInfo";
-    case 105: return "DebugInfo";
-    case 106: return "DelayLoadMethodCallThunks";
-    case 108: return "AvailableTypes";
-    case 109: return "InstanceMethodEntryPoints";
-    case 110: return "InliningInfo";
-    case 111: return "ProfileDataInfo";
-    case 112: return "ManifestMetadata";
-    case 113: return "AttributePresence";
-    case 114: return "InliningInfo2";
-    case 115: return "ComponentAssemblies";
-    case 116: return "OwnerCompositeExecutable";
-    case 117: return "PgoInstrumentationData";
-    case 118: return "ManifestAssemblyMvids";
-    case 119: return "CrossModuleInlineInfo";
-    case 120: return "HotColdMap";
-    case 121: return "MethodIsGenericMap";
-    case 122: return "EnclosingTypeMap";
-    case 123: return "TypeGenericInfoMap";
-    case 124: return "ExternalTypeMaps";
-    case 125: return "ProxyTypeMaps";
-    case 126: return "TypeMapAssemblyTargets";
-    default: return `Unknown(${type})`;
-  }
+// Section IDs are defined by CoreCLR readytorun.h.
+// https://github.com/dotnet/runtime/blob/main/src/coreclr/inc/readytorun.h
+const readyToRunSectionNames: Readonly<Record<number, string>> = {
+  100: "CompilerIdentifier", 101: "ImportSections",
+  [READY_TO_RUN_SECTION_RUNTIME_FUNCTIONS]: "RuntimeFunctions", 103: "MethodDefEntryPoints",
+  [READY_TO_RUN_SECTION_EXCEPTION_INFO]: "ExceptionInfo", 105: "DebugInfo",
+  106: "DelayLoadMethodCallThunks", 108: "AvailableTypes", 109: "InstanceMethodEntryPoints",
+  110: "InliningInfo", 111: "ProfileDataInfo", 112: "ManifestMetadata",
+  113: "AttributePresence", 114: "InliningInfo2", 115: "ComponentAssemblies",
+  116: "OwnerCompositeExecutable", 117: "PgoInstrumentationData", 118: "ManifestAssemblyMvids",
+  119: "CrossModuleInlineInfo", 120: "HotColdMap", 121: "MethodIsGenericMap",
+  122: "EnclosingTypeMap", 123: "TypeGenericInfoMap", 124: "ExternalTypeMaps",
+  125: "ProxyTypeMaps", 126: "TypeMapAssemblyTargets"
 };
 
+const readyToRunSectionName = (type: number): string =>
+  readyToRunSectionNames[type] ?? `Unknown(${type})`;
 const emptyReadyToRun = (
   status: PeClrReadyToRun["status"],
   issues: string[]
@@ -59,10 +45,41 @@ const emptyReadyToRun = (
   issues
 });
 
+const parseSections = async (
+  reader: FileRangeReader, rvaToOff: RvaToOffset, clr: PeClrHeader,
+  sectionCount: number, issues: string[]
+): Promise<PeClrReadyToRunSection[]> => {
+  // READYTORUN_SECTION is a uint32 type followed by IMAGE_DATA_DIRECTORY (12 bytes).
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/inc/readytorun.h
+  const sectionBytes = sectionCount * 12;
+  const declaredTableBytes = Math.max(0, clr.ManagedNativeHeaderSize - 16);
+  const table = await readMappedRvaPrefix(reader, clr.ManagedNativeHeaderRVA + 16,
+    Math.min(sectionBytes, declaredTableBytes), rvaToOff);
+  if (table.byteLength < sectionBytes) issues.push("ReadyToRun section table is truncated.");
+  const sections: PeClrReadyToRunSection[] = [];
+  for (let offset = 0; offset + 12 <= table.byteLength; offset += 12) {
+    const type = table.getUint32(offset, true);
+    sections.push({ type, name: readyToRunSectionName(type),
+      rva: table.getUint32(offset + 4, true), size: table.getUint32(offset + 8, true) });
+  }
+  if (sections.some((section, index) => index > 0 && section.type <= sections[index - 1]!.type)) {
+    issues.push("ReadyToRun section types are not in strictly increasing order.");
+  }
+  return sections;
+};
+
+const classifyNativeHeader = (signature: number): PeClrReadyToRun => ({
+  // NGen's version-specific CORCOMPILE_HEADER must not be read as ReadyToRun.
+  // https://raw.githubusercontent.com/dotnet/coreclr/master/src/inc/corcompile.h
+  ...emptyReadyToRun(signature === 0x0045474e ? "ngen" : "unknown-managed-native-header", []),
+  signature
+});
+
 export const parseReadyToRun = async (
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
-  clr: PeClrHeader
+  clr: PeClrHeader,
+  machine?: number
 ): Promise<PeClrReadyToRun> => {
   if (clr.ManagedNativeHeaderRVA === 0 && clr.ManagedNativeHeaderSize === 0) {
     return emptyReadyToRun("absent", []);
@@ -81,52 +98,11 @@ export const parseReadyToRun = async (
   const flags = header.getUint32(8, true);
   const sectionCount = header.getUint32(12, true);
   // READYTORUN_SIGNATURE is ASCII "RTR" stored little-endian as 0x00525452.
-  if (signature !== 0x00525452) {
-    // CoreCLR corcompile.h defines CORCOMPILE_SIGNATURE as 0x0045474e for
-    // CORCOMPILE_HEADER, which IMAGE_COR20_HEADER.ManagedNativeHeader points to
-    // in NGen images. Do not parse its version-specific CORCOMPILE_HEADER layout
-    // as ReadyToRun.
-    // https://raw.githubusercontent.com/dotnet/coreclr/master/src/inc/corcompile.h
-    return {
-      status: signature === 0x0045474e ? "ngen" : "unknown-managed-native-header",
-      signature,
-      majorVersion: null,
-      minorVersion: null,
-      flags: null,
-      sectionCount: 0,
-      sections: [],
-      issues: []
-    };
-  }
-  const sectionBytes = sectionCount * 12;
+  if (signature !== 0x00525452) return classifyNativeHeader(signature);
   const issues: string[] = [];
-  // Defensive local cap; real section counts are small, malformed files can claim billions.
-  if (sectionCount > 4096) {
-    return {
-      status: "ready-to-run",
-      signature,
-      majorVersion,
-      minorVersion,
-      flags,
-      sectionCount,
-      sections: [],
-      issues: ["ReadyToRun section count is unreasonable; section table was not parsed."]
-    };
-  }
-  const declaredTableBytes = Math.max(0, clr.ManagedNativeHeaderSize - 16);
-  const table = await readMappedRvaPrefix(reader, clr.ManagedNativeHeaderRVA + 16,
-    Math.min(sectionBytes, declaredTableBytes), rvaToOff);
-  if (table.byteLength < sectionBytes) issues.push("ReadyToRun section table is truncated.");
-  const sections: PeClrReadyToRunSection[] = [];
-  for (let sectionOffset = 0; sectionOffset + 12 <= table.byteLength; sectionOffset += 12) {
-    const type = table.getUint32(sectionOffset, true);
-    sections.push({
-      type,
-      name: readyToRunSectionName(type),
-      rva: table.getUint32(sectionOffset + 4, true),
-      size: table.getUint32(sectionOffset + 8, true)
-    });
-  }
+  const sections = await parseSections(reader, rvaToOff, clr, sectionCount, issues);
+  await decodeReadyToRunSections(reader, rvaToOff, sections, readyToRunPointerSize(machine), issues);
+  validateReadyToRunReferences(sections, machine, issues);
   return {
     status: "ready-to-run",
     signature,

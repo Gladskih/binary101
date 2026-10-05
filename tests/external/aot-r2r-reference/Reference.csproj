@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <!-- Source directories contain unmodified dotnet/runtime v10.0.0 reader files.
+       Supply them with -p:NativeFormatSourceDirectory=... -p:ReadyToRunSourceDirectory=... .
+       The reference executable is a developer test tool, never a browser dependency. -->
+  <ItemGroup>
+    <Compile Include="$(NativeFormatSourceDirectory)/MdBinaryReader*.cs" />
+    <Compile Include="$(NativeFormatSourceDirectory)/NativeFormat*.cs" />
+    <Compile Include="$(NativeFormatSourceDirectory)/NativeMetadataReader.cs" />
+    <Compile Include="$(ReadyToRunSourceDirectory)/NativeReader.cs" />
+    <Compile Include="$(ReadyToRunSourceDirectory)/NativeArray.cs" />
+  </ItemGroup>
+  <Target Name="RequireUpstreamSources" BeforeTargets="BeforeBuild">
+    <Error Condition="'$(NativeFormatSourceDirectory)' == '' or '$(ReadyToRunSourceDirectory)' == ''"
+      Text="Supply NativeFormatSourceDirectory and ReadyToRunSourceDirectory with .NET v10.0.0 reader sources." />
+  </Target>
+</Project>

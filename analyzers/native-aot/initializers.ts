@@ -41,10 +41,9 @@ const parseInitializerTable = async (
   section: NativeAotMetadataSection
 ): Promise<number[] | string> => {
   const { rva, size } = section;
-  // Resource policy, not a format constraint: at most 1 MiB (262144 entries) per table.
   if (size == null || !Number.isSafeInteger(size) || size < 0 ||
-    size > 1024 * 1024 || size % ENTRY_SIZE !== 0) {
-    return "Initializer table has an unknown, invalid, or excessive byte size.";
+    size % ENTRY_SIZE !== 0) {
+    return "Initializer table has an unknown or invalid byte size.";
   }
   if (size === 0) return [];
   if (!image.isDataRange(rva, size, ENTRY_SIZE)) {

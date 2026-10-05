@@ -1,4 +1,5 @@
 "use strict";
+import type { NativeAotMethodSignature } from "./native-format-signatures.js";
 
 // ModuleHeaders.h and ReadyToRunHeaderNode.cs define this header and its emitted layout:
 // https://github.com/dotnet/runtime/blob/main/src/coreclr/nativeaot/Runtime/inc/ModuleHeaders.h
@@ -48,8 +49,41 @@ export interface NativeAotInitializerTable {
 export interface NativeAotReflectionType {
   namespace: string;
   name: string;
-  methods: string[];
-  fields: string[];
+  methods: NativeAotReflectionMethod[];
+  fields: NativeAotReflectionField[];
+  definition?: {
+    flags: number; size: number; packingSize: number; baseType: string;
+    interfaces: string[]; genericParameters: NativeAotGenericParameter[];
+    properties: NativeAotReflectionProperty[]; events: NativeAotReflectionEvent[];
+  };
+}
+
+export interface NativeAotParameter {
+  flags: number; sequence: number; name: string;
+}
+
+export interface NativeAotGenericParameter {
+  number: number; flags: number; kind: number; name: string; constraints: string[];
+}
+
+export interface NativeAotReflectionMethod {
+  name: string; flags?: number; implementationFlags?: number;
+  signature?: NativeAotMethodSignature;
+  parameters?: NativeAotParameter[]; genericParameters?: NativeAotGenericParameter[];
+}
+
+export interface NativeAotReflectionField {
+  name: string; flags?: number; type?: string; offset?: number;
+}
+
+export interface NativeAotReflectionProperty {
+  name: string; flags?: number; callingConvention?: number; type?: string;
+  parameters?: string[]; semantics?: { attributes: number; method: string }[];
+}
+
+export interface NativeAotReflectionEvent {
+  name: string; flags?: number; type?: string;
+  semantics?: { attributes: number; method: string }[];
 }
 
 export interface NativeAotReflectionScope {

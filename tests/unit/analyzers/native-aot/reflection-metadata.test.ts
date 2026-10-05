@@ -5,8 +5,10 @@ import { test } from "node:test";
 import { NativeFormatReader } from "../../../../analyzers/native-aot/native-format-reader.js";
 import { createNativeFormatTraversalFixture } from
   "../../../helpers/native-format-traversal-fixture.js";
-import { parseNativeAotReflectionMetadata } from
+import { parseNativeAotReflectionMetadata as parseMetadata } from
   "../../../../analyzers/native-aot/reflection-metadata.js";
+import { nativeAotReflectionNames, syntheticNativeAotScope } from
+  "../../../helpers/native-aot-reflection-names.js";
 import {
   createNativeFormatFieldFixture,
   patchNativeFormatFieldSlot
@@ -21,6 +23,9 @@ import {
 } from
   "../../../helpers/native-format-metadata-fixture.js";
 
+const parseNativeAotReflectionMetadata = (bytes: Uint8Array) =>
+  nativeAotReflectionNames(parseMetadata(bytes));
+
 const corruptString = (value: string, metadata = createNativeFormatMetadataFixture()): Uint8Array => {
   const needle = new TextEncoder().encode(value);
   const offset = metadata.findIndex((_, index) =>
@@ -33,25 +38,7 @@ const corruptString = (value: string, metadata = createNativeFormatMetadataFixtu
 void test("parseNativeAotReflectionMetadata reads scopes, nested types, and method names", () => {
   const parsed = parseNativeAotReflectionMetadata(createNativeFormatMetadataFixture());
 
-  assert.deepEqual(parsed, {
-    scopes: [{
-      name: "HelloCSharp",
-      moduleName: "HelloCSharp.dll",
-      version: { major: 1, minor: 2, build: 3, revision: 4 },
-      types: [{ namespace: "Demo", name: "Program", methods: ["Main"],
-        fields: ["Count", "<Name>k__BackingField"] }, {
-        namespace: "Demo",
-        name: "Program+Nested",
-        methods: ["Work"],
-        fields: ["Value"]
-      }, {
-        namespace: "Demo.Inner",
-        name: "Worker",
-        methods: ["Run"],
-        fields: []
-      }]
-    }]
-  });
+  assert.deepEqual(parsed, { scopes: [syntheticNativeAotScope] });
 });
 
 void test("parseNativeAotReflectionMetadata reports malformed and truncated input", () => {
@@ -81,9 +68,10 @@ void test("parseNativeAotReflectionMetadata accepts an empty graph and rejects e
   );
 });
 
-void test("parseNativeAotReflectionMetadata rejects oversized blobs and truncated root lists", () => {
-  // NativeFormat handles have a 25-bit offset field, so a 32 MiB blob is the hard boundary.
+void test("parses blobs beyond 32 MiB and rejects truncated root lists", () => {
+  // Record offsets have 25 bits; the whole buffer need not be rejected on that basis.
   const oversized = new Uint8Array(0x0200_0001);
+  oversized.set(createNativeFormatMetadataFixture());
   // NativePrimitiveDecoder's one-byte form declares one scope, but its handle is missing.
   // https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/NativeFormat/NativeFormatReader.cs
   const truncatedScopes = Uint8Array.from([0xfd, 0xdf, 0xad, 0xde, 0x02]);
@@ -92,8 +80,9 @@ void test("parseNativeAotReflectionMetadata rejects oversized blobs and truncate
   const boundaryResult = parseNativeAotReflectionMetadata(oversized.subarray(0, 0x0200_0000));
   const countResult = parseNativeAotReflectionMetadata(truncatedScopes);
 
-  assert.match(oversizedResult.warnings?.[0] ?? "", /32 MiB/);
-  assert.match(boundaryResult.warnings?.[0] ?? "", /signature/i);
+  assert.deepEqual(oversizedResult, parseNativeAotReflectionMetadata(
+    createNativeFormatMetadataFixture()));
+  assert.deepEqual(boundaryResult, oversizedResult);
   assert.match(countResult.warnings?.[0] ?? "", /outside the metadata/i);
 });
 
@@ -156,7 +145,7 @@ void test("reflection preserves types and methods when a field list is malformed
   assert.deepEqual(parsed.scopes[0]?.types[0]?.fields, []);
   assert.deepEqual(parsed.scopes[0]?.types[0]?.methods, ["Main"]);
   assert.deepEqual(parsed.scopes[0]?.types[1]?.fields, ["Value"]);
-  assert.match(parsed.warnings?.[0] ?? "", /field list.*compressed integer/);
+  assert.match(parsed.warnings?.[0] ?? "", /fields.*compressed integer/);
 });
 
 void test("reflection rejects a field list with an out-of-bounds handle", () => {
@@ -167,7 +156,7 @@ void test("reflection rejects a field list with an out-of-bounds handle", () => 
 
   assert.deepEqual(parsed.scopes[0]?.types[0]?.fields, []);
   assert.deepEqual(parsed.scopes[0]?.types[0]?.methods, ["Main"]);
-  assert.match(parsed.warnings?.[0] ?? "", /field list.*outside the metadata/);
+  assert.match(parsed.warnings?.[0] ?? "", /fields.*outside the metadata/);
 });
 
 void test("reflection contains a truncated field record", () => {
@@ -209,15 +198,15 @@ void test("reflection caches failed field records and reports them once", contex
   assert.equal(reads.mock.calls.filter(call => call.arguments[0] === fields[0]!.offset).length, 1);
 });
 
-void test("reflection stops at the declared field count without reading the unused type tail", () => {
+void test("reflection preserves fields and warns about a malformed property collection", () => {
   const { bytes, type } = createNativeFormatFieldFixture();
-  // One count byte + two reserved five-byte handles; the property collection is not consumed.
+  // One count byte + two reserved five-byte handles precede the property collection.
   bytes[type.fieldsOffset + 11] = 0xff;
 
   const parsed = parseNativeAotReflectionMetadata(bytes);
 
   assert.deepEqual(parsed.scopes[0]?.types[0]?.fields, ["Count", "<Name>k__BackingField"]);
-  assert.equal(parsed.warnings, undefined);
+  assert.match(parsed.warnings?.join(" ") ?? "", /properties.*compressed integer/);
 });
 
 void test("parseNativeAotReflectionMetadata ignores duplicate graph references", () => {
@@ -237,7 +226,7 @@ void test("parseNativeAotReflectionMetadata contains namespace cycles", () => {
     createNativeFormatMetadataWithNamespaceCycleFixture()
   );
 
-  assert.equal(parsed.warnings, undefined);
+  assert.match(parsed.warnings?.join(" ") ?? "", /namespace.*cycle/);
   assert.deepEqual(parsed.scopes[0]?.types.map(type => type.name), [
     "Program",
     "Program+Nested",
@@ -285,7 +274,7 @@ void test("reflection decodes repeated scopes once", context => {
 void test("reflection terminates on a nested type cycle without losing sibling namespaces", () => {
   const parsed = parseNativeAotReflectionMetadata(createNativeFormatMetadataWithTypeCycleFixture());
 
-  assert.equal(parsed.warnings, undefined);
+  assert.match(parsed.warnings?.join(" ") ?? "", /type.*cycle/);
   assert.deepEqual(parsed.scopes[0]?.types.map(type => type.name), ["Program", "Worker"]);
 });
 

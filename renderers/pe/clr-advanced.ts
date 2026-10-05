@@ -7,6 +7,7 @@ import type { PeClrManagedResourceEntry } from "../../analyzers/pe/clr/managed-r
 import type { PeClrMetadataIndex } from "../../analyzers/pe/clr/types.js";
 import type { ResourceLangWithPreview } from "../../analyzers/pe/resources/preview/types.js";
 import { renderPreviewCell } from "./resource-preview-cell.js";
+import { renderReadyToRunData } from "./ready-to-run-tables.js";
 
 const formatClrDirectory = (rva: number, size: number): string =>
   rva || size ? `RVA ${hex(rva, 8)} Size ${humanSize(size)}` : "-";
@@ -120,9 +121,7 @@ export const renderReadyToRun = (clrHeader: PeClrHeader, out: string[]): void =>
   }
   out.push(`</dl>`);
   if (readyToRun.status === "ready-to-run" && readyToRun.sections.length) {
-    out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>Type</th><th>Name</th><th>RVA</th><th>Size</th></tr></thead><tbody>`);
-    readyToRun.sections.forEach(section => out.push(`<tr><td>${section.type}</td><td>${escapeHtml(section.name)}</td><td>${hex(section.rva, 8)}</td><td>${humanSize(section.size)}</td></tr>`));
-    out.push(`</tbody></table>`);
+    out.push(renderReadyToRunData(readyToRun));
   }
   out.push(`${renderWarningList(readyToRun.issues)}</details>`);
 };

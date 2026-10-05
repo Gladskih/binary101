@@ -7,6 +7,10 @@ coverage/
 # Test runner artifacts
 test-results/
 scan-results/
+tests/external/aot-r2r-reference/bin/
+tests/external/aot-r2r-reference/obj/
+tests/external/aot-r2r-sample/bin/
+tests/external/aot-r2r-sample/obj/
 
 # Build output
 dist/

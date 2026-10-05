@@ -34,8 +34,8 @@ export const createNativeFormatTraversalFixture = (
   const childList = kind === "type" ? program.fieldsOffset - 12 : namespaceChildrenOffset(reader, demo.offset);
   const childSlot = reader.collectionCount(childList).nextOffset;
   const next = reader.handle(childSlot, [0x3a]).value.offset;
-  // TypeDefinition has 11 encoded values through fields; NamespaceDefinition has 6 through children.
-  const stride = (kind === "type" ? 11 : 6) * 5;
+  // TypeDefinition includes five collection tails after fields; NamespaceDefinition has six values.
+  const stride = (kind === "type" ? 16 : 6) * 5;
   const strings = names.map(name => new TextEncoder().encode(name));
   let stringOffset = original.length + names.length * stride;
   const bytes = new Uint8Array(stringOffset + strings.reduce((size, name) => size + 5 + name.length, 0));
@@ -44,7 +44,8 @@ export const createNativeFormatTraversalFixture = (
   for (let index = 0; index < names.length; index += 1) {
     const target = index === names.length - 1 ? next : original.length + (index + 1) * stride;
     writeUnsignedSequence(bytes, original.length + index * stride, kind === "type"
-      ? [0, 0, 0, stringOffset, 0, 0, 0, 1, target, 0, 0] : [0, stringOffset, 0, 0, 1, target]);
+      ? [0, 0, 0, stringOffset, 0, 0, 0, 1, target, 0, 0, 0, 0, 0, 0, 0]
+      : [0, stringOffset, 0, 0, 1, target]);
     writeUnsignedSequence(bytes, stringOffset, [strings[index]!.length]);
     bytes.set(strings[index]!, stringOffset + 5);
     stringOffset += 5 + strings[index]!.length;

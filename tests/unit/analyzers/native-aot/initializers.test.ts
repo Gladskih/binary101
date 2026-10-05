@@ -4,9 +4,20 @@ import { parseNativeAotInitializers } from "../../../../analyzers/native-aot/ini
 import { createNativeAotInitializerFixture, createChunkedInitializerFixture } from
   "../../../helpers/native-aot-initializer-fixture.js";
 
-// Independent oracles for the analyzer's documented resource policy, not format constants.
-const TABLE_LIMIT_BYTES = 1024 * 1024;
+// Chunk size bounds I/O, not the total number of entries parsed.
 const READ_CHUNK_BYTES = 4096;
+
+void test("parses initializer tables larger than the former 1 MiB cap in bounded chunks", async () => {
+  const reads: number[] = [];
+  const fixture = createChunkedInitializerFixture(1024 * 1024 + 4, reads);
+
+  const result = await parseNativeAotInitializers(fixture.image, fixture.header);
+
+  assert.deepEqual(result[0]?.targetRvas, [fixture.codeRvas[0]]);
+  assert.deepEqual(result[0]?.warnings, []);
+  assert.equal(reads.reduce((sum, count) => sum + count, 0), 1024 * 1024 + 4);
+  assert.ok(reads.every(count => count <= READ_CHUNK_BYTES));
+});
 
 // ModuleHeaders.cs: EagerCctor = 205, ModuleInitializerList = 213.
 // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Runtime/ModuleHeaders.cs
@@ -56,8 +67,7 @@ for (const [name, size] of [
   ["incomplete int32 entry", Int32Array.BYTES_PER_ELEMENT - 1],
   ["NaN extent", NaN],
   ["fractional byte count", Int32Array.BYTES_PER_ELEMENT + 0.5],
-  ["extreme extent", Number.MAX_SAFE_INTEGER],
-  ["one entry over resource limit", TABLE_LIMIT_BYTES + Int32Array.BYTES_PER_ELEMENT]
+  ["extreme extent", Number.MAX_SAFE_INTEGER]
 ] as const) {
   void test(`rejects initializer table with ${name}`, async () => {
     const fixture = createNativeAotInitializerFixture();
@@ -67,7 +77,7 @@ for (const [name, size] of [
 
     assert.deepEqual(result[0]?.targetRvas, []);
     assert.deepEqual(result[0]?.warnings,
-      ["Initializer table has an unknown, invalid, or excessive byte size."]);
+      ["Initializer table has an unknown or invalid byte size."]);
   });
 }
 
@@ -134,14 +144,14 @@ void test("discards a whole table when a later target is not executable", async 
   assert.match(result[0]?.warnings.join(" ") ?? "", /executable/i);
 });
 
-void test("reads the maximum accepted table in bounded chunks", async () => {
+void test("reads a large table in bounded chunks", async () => {
   const reads: number[] = [];
-  const fixture = createChunkedInitializerFixture(TABLE_LIMIT_BYTES, reads);
+  const fixture = createChunkedInitializerFixture(1024 * 1024, reads);
 
   const result = await parseNativeAotInitializers(fixture.image, fixture.header);
 
   assert.deepEqual(result[0]?.targetRvas, [fixture.codeRvas[0]]);
-  assert.equal(reads.length, TABLE_LIMIT_BYTES / READ_CHUNK_BYTES);
+  assert.equal(reads.length, 1024 * 1024 / READ_CHUNK_BYTES);
   assert.equal(Math.max(...reads), READ_CHUNK_BYTES);
 });
 

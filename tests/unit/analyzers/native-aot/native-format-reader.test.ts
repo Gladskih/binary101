@@ -7,6 +7,26 @@ import {
   NativeFormatReader
 } from "../../../../analyzers/native-aot/native-format-reader.js";
 
+void test("NativeFormatReader sign-extends each compressed width and respects view offsets", () => {
+  // NativePrimitiveDecoder.DecodeSigned uses signed final bytes, not zig-zag encoding.
+  const reader = new NativeFormatReader(Uint8Array.of(0,
+    0xfe, 0xfd, 0xff, 0xfb, 0xff, 0xff, 0xf7, 0xff, 0xff, 0xff,
+    0x0f, 0xff, 0xff, 0xff, 0xff, 0x0f, 0, 0, 0, 0x80).subarray(1));
+
+  assert.deepEqual(reader.signed(0), { value: -1, nextOffset: 1 });
+  assert.deepEqual(reader.signed(1), { value: -1, nextOffset: 3 });
+  assert.deepEqual(reader.signed(3), { value: -1, nextOffset: 6 });
+  assert.deepEqual(reader.signed(6), { value: -1, nextOffset: 10 });
+  assert.deepEqual(reader.signed(10), { value: -1, nextOffset: 15 });
+  assert.deepEqual(reader.signed(15), { value: -2147483648, nextOffset: 20 });
+  assert.deepEqual(reader.uint8(0), { value: 254, nextOffset: 1 });
+  assert.throws(() => reader.uint8(reader.size), /range/i);
+  assert.throws(() => reader.uint8(reader.size), NativeFormatError);
+  assert.throws(() => reader.uint8(0.5), NativeFormatError);
+  assert.throws(() => reader.uint8(Number.NaN), NativeFormatError);
+  assert.throws(() => reader.signed(reader.size), /range/i);
+});
+
 void test("NativeFormatReader decodes all unsigned integer widths", () => {
   // NativePrimitiveDecoder.DecodeUnsigned in dotnet/runtime defines these five encodings.
   const reader = new NativeFormatReader(Uint8Array.from([
@@ -34,6 +54,17 @@ void test("NativeFormatReader distinguishes typed and polymorphic handles", () =
   assert.deepEqual(reader.handle(1, [0x2f, 0x38]).value, { type: 0x2f, offset: 10 });
   assert.throws(() => reader.handle(1, [0x38, 0x3a]), NativeFormatError);
   assert.throws(() => reader.handle(1, [0x38, 0x3a]), /Unexpected handle type 47/);
+});
+
+void test("NativeFormatReader separates typed-handle tag bits from its record offset", () => {
+  // TypeDefinitionHandle(int), NativeFormatReaderGen.cs: high seven bits are HandleType;
+  // low 25 bits are Offset. Its constructor accepts its own tag or an untagged offset.
+  const bytes = new Uint8Array(16);
+  bytes.set([0x0f, 7, 0, 0, 0x74]); // (0x3a << 25) | 7, encoded with DecodeUnsigned.
+  const reader = new NativeFormatReader(bytes);
+
+  assert.deepEqual(reader.handle(0, [0x3a]), { nextOffset: 5, value: { type: 0x3a, offset: 7 } });
+  assert.throws(() => reader.handle(0, [0x2f]), /Unexpected typed handle type 58/);
 });
 
 void test("NativeFormatReader bounds-checks integers, collections, handles, and UTF-8", () => {

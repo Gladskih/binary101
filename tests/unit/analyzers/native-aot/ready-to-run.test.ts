@@ -9,9 +9,6 @@ import {
   parseNativeAotReadyToRunHeader
 } from "../../../../analyzers/native-aot/ready-to-run.js";
 import {
-  MAX_NATIVE_AOT_REFLECTION_METADATA_BYTES
-} from "../../../../analyzers/native-aot/reflection-metadata.js";
-import {
   createNativeAotMetadataFixture,
   type NativeAotMetadataFixture
 } from "../../../helpers/pe-native-aot-metadata-fixture.js";
@@ -144,22 +141,36 @@ const setSizePointerMetadataSize = (
   fixture.view.setUint32(metadataEntry + 4, metadataSize, true);
 };
 
-void test("logical ReadyToRun parsing distinguishes the NativeFormat size boundary", async () => {
+void test("preserves a short reflection prefix and reports a truncated metadata read", async () => {
+  const fixture = createNativeAotMetadataFixture();
+  const image = createVirtualImage(fixture);
+  const shortImage: NativeAotVirtualImage = { ...image,
+    readData: async (address, size, alignment) => address === fixture.embeddedMetadataRva && size > 4
+      ? image.readData(address, 5, alignment) : image.readData(address, size, alignment)
+  };
+
+  const parsed = await findNativeAotMetadata(shortImage, fixturePointerSites(fixture));
+
+  assert.equal(parsed?.status, "confirmed");
+  assert.match(parsed?.reflection?.warnings?.join(" ") ?? "", /truncated/);
+});
+
+void test("logical ReadyToRun attempts a file-backed read beyond the former size cap", async () => {
   const oversized = createNativeAotMetadataFixture(8, "size-pointer");
-  const oversizedBytes = MAX_NATIVE_AOT_REFLECTION_METADATA_BYTES + 1;
+  const oversizedBytes = 0x0200_0001;
   setSizePointerMetadataSize(oversized, oversizedBytes);
   const boundary = createNativeAotMetadataFixture(8, "size-pointer");
-  setSizePointerMetadataSize(boundary, MAX_NATIVE_AOT_REFLECTION_METADATA_BYTES);
+  setSizePointerMetadataSize(boundary, 0x0200_0000);
 
   const oversizedResult = await findNativeAotMetadata(
     imageAllowingMetadataSize(oversized, oversizedBytes),
     fixturePointerSites(oversized)
   );
   const boundaryResult = await findNativeAotMetadata(
-    imageAllowingMetadataSize(boundary, MAX_NATIVE_AOT_REFLECTION_METADATA_BYTES),
+    imageAllowingMetadataSize(boundary, 0x0200_0000),
     fixturePointerSites(boundary)
   );
 
-  assert.match(oversizedResult?.reflection?.warnings?.[0] ?? "", /32 MiB/);
+  assert.match(oversizedResult?.reflection?.warnings?.[0] ?? "", /could not be read/i);
   assert.match(boundaryResult?.reflection?.warnings?.[0] ?? "", /could not be read/i);
 });

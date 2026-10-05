@@ -152,7 +152,7 @@ void test("getPePagedTableModel resolves NativeAOT reflection types", () => {
         name: "DemoAssembly",
         moduleName: "DemoAssembly.dll",
         version: { major: 1, minor: 0, build: 0, revision: 0 },
-        types: [{ namespace: "Demo", name: "Program", methods: ["Main"], fields: ["Count"] }]
+        types: [{ namespace: "Demo", name: "Program", methods: ["Main"].map(name => ({ name })), fields: ["Count"].map(name => ({ name })) }]
       }]
     }
   };

@@ -1,6 +1,10 @@
 "use strict";
 
 import { escapeHtml } from "../../html-utils.js";
+import { nativeAotFieldSignature, nativeAotMethodSignature } from "./member-signatures.js";
+import {
+  createNativeAotDefinitionTable, createNativeAotMemberTable, getNativeAotDefinitionTable
+} from "./member-tables.js";
 import type {
   NativeAotReflectionMetadata,
   NativeAotReflectionScope,
@@ -52,8 +56,8 @@ const typeTableCells = (
   type: NativeAotReflectionType
 ): PagedSortableTableCell[] => {
   const qualifiedName = qualifiedTypeName(type);
-  const methodNames = type.methods.join(", ");
-  const fieldNames = type.fields.join(", ");
+  const methodNames = type.methods.map(nativeAotMethodSignature).join(", ");
+  const fieldNames = type.fields.map(nativeAotFieldSignature).join(", ");
   return [{
     className: "nativeAotTypesTable__identity",
     html: escapeHtml(scope.name),
@@ -100,17 +104,17 @@ export const getNativeAotReflectionTypeTableModel = (
   metadata: NativeAotReflectionMetadata | undefined,
   tableId: string
 ): PagedSortableTableModel | null =>
-  metadata && tableId === NATIVE_AOT_REFLECTION_TYPES_TABLE_ID
+  !metadata ? null : tableId === NATIVE_AOT_REFLECTION_TYPES_TABLE_ID
     ? createNativeAotReflectionTypeTableModel(metadata.scopes)
-    : null;
+    : getNativeAotDefinitionTable(metadata.scopes, tableId);
 
 const renderTypes = (scopes: NativeAotReflectionScope[]): string => {
   const model = createNativeAotReflectionTypeTableModel(scopes);
   if (!model.rowCount) return "";
   return `<h4>Reflected types, methods and fields</h4>` +
-    `<p class="smallNote">Type names include their namespace and enclosing type. Method names ` +
-    `do not include signatures or code addresses. Field names do not include types, values or ` +
-    `storage offsets. Counts include only decoded names. Missing names may have been trimmed ` +
+    `<p class="smallNote">Type names include their namespace and enclosing type. Method and ` +
+    `field signatures describe retained reflection metadata; code addresses are not recovered ` +
+    `from these definitions. Counts include decoded members. Missing members may have been trimmed ` +
     `or could not be decoded; an empty list does not prove that a type has no members.</p>` +
     renderAutoPagedSortableTable(model);
 };
@@ -121,7 +125,15 @@ const renderWarnings = (warnings: string[] | undefined): string => {
   return `<h4>Warnings</h4><ul class="issueList">${items}</ul>`;
 };
 
+const renderDefinitions = (scopes: NativeAotReflectionScope[]): string => {
+  const types = createNativeAotDefinitionTable(scopes);
+  const members = createNativeAotMemberTable(scopes);
+  return (types.rowCount ? `<h4>Type definitions and layout</h4>` +
+    renderAutoPagedSortableTable(types) : "") +
+    (members.rowCount ? `<h4>Member definitions</h4>` + renderAutoPagedSortableTable(members) : "");
+};
+
 export const renderNativeAotReflection = (
   metadata: NativeAotReflectionMetadata
 ): string => renderScopes(metadata.scopes) + renderTypes(metadata.scopes) +
-  renderWarnings(metadata.warnings);
+  renderDefinitions(metadata.scopes) + renderWarnings(metadata.warnings);

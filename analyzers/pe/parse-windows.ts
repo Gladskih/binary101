@@ -188,7 +188,8 @@ const parsePeDirectoryArtifacts = async (
     core.coff.Characteristics
   );
   const reloc = await parseBaseRelocations(reader, core.dataDirs, core.rvaToOff);
-  const clr = await parseClrDirectory(reader, core.dataDirs, core.rvaToOff);
+  const clr = await parseClrDirectory(reader, core.dataDirs, core.rvaToOff,
+    core.coff.Machine);
   const nativeAotCandidate = (clr == null
     ? await analyzePeNativeAotMetadata(reader, core, reloc) : null) ??
     detectNativeAotCandidate(clr != null, exportsInfo, core.sections);
