@@ -20,6 +20,7 @@ import { collectFunctionOverrideEntrypoints } from "./pe-disassembly-function-ov
 import { collectControlTransferInstructionRvas } from "./pe-disassembly-control-transfer-hints.js";
 import { collectLoadConfigPointerSeeds } from "./pe-disassembly-load-config-pointer-seeds.js";
 import { collectReadyToRunMethodRvas } from "../analyzers/pe/clr/ready-to-run-seeds.js";
+import { collectNativeAotMapSeeds } from "../analyzers/native-aot/disassembly-seeds.js";
 
 type PeDisassemblySeedSet = {
   canonicalMachine: number;
@@ -60,6 +61,7 @@ const collectBasicExtraEntrypoints = (
 ): Array<{ source: string; rvas: number[] }> => {
   const extraEntrypoints: Array<{ source: string; rvas: number[] }> = [];
   if (windowsPe?.nativeAotCandidate?.status === "confirmed") {
+    extraEntrypoints.push(...collectNativeAotMapSeeds(windowsPe.nativeAotCandidate));
     for (const table of windowsPe.nativeAotCandidate.initializers ?? []) {
       extraEntrypoints.push({
         source: `NativeAOT ${nativeAotSectionName(table.sectionType)}`, rvas: table.targetRvas
@@ -203,7 +205,7 @@ const collectPeDisassemblySeeds = async (
   const seeds = collectBasicPeDisassemblySeeds(pe, windowsPe);
   if (windowsPe) {
     const rvas = await collectReadyToRunMethodRvas(reader, windowsPe, seeds.issues);
-    if (rvas.length) seeds.extraEntrypoints.push({ source: "ReadyToRun MethodDef entry points", rvas });
+    if (rvas.length) seeds.extraEntrypoints.push({ source: "ReadyToRun method entry points", rvas });
     seeds.extraEntrypoints.push(...collectFunctionOverrideEntrypoints(windowsPe, file.size));
     seeds.instructionHintRvas = collectControlTransferInstructionRvas(windowsPe, file.size);
   }

@@ -44,6 +44,10 @@ const sectionModels = (
     ["MethodDef RID", "Runtime function index", "Fixups RVA"], decoded.methods.map(method =>
       [method.methodRid, method.runtimeFunctionIndex,
         method.fixupOffset === null ? "" : hex(section.rva + method.fixupOffset, 8)]))];
+  if (decoded.kind === "instance-methods") return [model(`${id}-instance-methods`,
+    ["Signature RVA", "Runtime function index", "Fixups RVA"], decoded.methods.map(method =>
+      [hex(section.rva + method.signatureOffset, 8), method.runtimeFunctionIndex,
+        method.fixupOffset === null ? "" : hex(section.rva + method.fixupOffset, 8)]))];
   if (decoded.kind === "hot-cold") return [model(`${id}-hot-cold`,
     ["Cold runtime function", "Hot runtime function"], decoded.entries.map(entry =>
       [entry.coldRuntimeFunction, entry.hotRuntimeFunction]))];

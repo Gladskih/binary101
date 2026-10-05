@@ -3,6 +3,7 @@ import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { RvaToOffset } from "../types.js";
 import { parseReadyToRunImports } from "./ready-to-run-imports.js";
 import { parseReadyToRunMethods } from "./ready-to-run-methods.js";
+import { parseReadyToRunInstanceMethods } from "./ready-to-run-instance-methods.js";
 import type { PeClrReadyToRunSection, PeClrReadyToRunSectionData } from "./ready-to-run-types.js";
 
 // These layouts follow readytorun.h and ReadyToRunReader at the same release tag.
@@ -51,6 +52,8 @@ const fixedDecoders: Readonly<Record<number,
   // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/aot/ILCompiler.ReadyToRun/Compiler/DependencyAnalysis/ReadyToRun/CompilerIdentifierNode.cs
   100: view => ({ kind: "text", text: readText(view) }),
   103: (view, issues) => ({ kind: "methods", methods: parseReadyToRunMethods(
+    new Uint8Array(view.buffer, view.byteOffset, view.byteLength), issues) }),
+  109: (view, issues) => ({ kind: "instance-methods", methods: parseReadyToRunInstanceMethods(
     new Uint8Array(view.buffer, view.byteOffset, view.byteLength), issues) }),
   115: readComponents,
   116: readOwnerName,

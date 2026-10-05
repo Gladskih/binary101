@@ -22,6 +22,8 @@ import {
   GO_FUNCTION_TABLE_ID
 } from "./go-runtime.js";
 import { getNativeAotReflectionTypeTableModel } from "../native-aot/reflection.js";
+import { getNativeAotInvokeTableModel } from "../native-aot/invoke-map.js";
+import { getNativeAotStackTraceTableModel } from "../native-aot/stack-trace-map.js";
 import { createExportTableModel, EXPORT_TABLE_ID } from "./export-table.js";
 import { analyzeTypeLibraryExports } from
   "../../analyzers/pe/resources/type-library-export-links.js";
@@ -93,42 +95,46 @@ const getPeDebugCoffTableModel = (
   return entry?.coff ? getCoffDebugTableModel(entry.coff, tableId, match[0].slice(0, -1)) : null;
 };
 
+const getNativeAotTableModel = (
+  pe: PeWindowsParseResult, tableId: string
+): PagedSortableTableModel | null => {
+  const metadata = pe.nativeAotCandidate?.status === "confirmed" ? pe.nativeAotCandidate : undefined;
+  return getNativeAotReflectionTypeTableModel(metadata?.reflection, tableId) ??
+    getNativeAotInvokeTableModel(metadata?.invokeMap, tableId) ??
+    getNativeAotStackTraceTableModel(metadata?.stackTraceMap, tableId);
+};
+
+type TableResolver = (pe: PeWindowsParseResult, tableId: string) => PagedSortableTableModel | null;
+
+const windowsTableResolvers: TableResolver[] = [
+  getPeDisassemblyStringTableModel, getOmapTableModel, getClrTableModel,
+  (pe, id) => getReadyToRunTableModel(pe.clr, id),
+  (pe, id) => id === EXPORT_TABLE_ID && pe.exports
+    ? createExportTableModel(pe.exports.entries,
+      analyzeTypeLibraryExports(pe.resources, pe.exports).matches) : null,
+  (pe, id) => id === GO_FUNCTION_TABLE_ID && pe.goRuntime
+    ? createGoRuntimeFunctionTableModel(pe.goRuntime.functions) : null,
+  (pe, id) => id === D_MODULE_TABLE_ID && pe.dRuntime
+    ? createDRuntimeModuleTableModel(pe.dRuntime.modules) : null,
+  (pe, id) => id === D_REFERENCE_TABLE_ID && pe.dRuntime
+    ? createDRuntimeReferenceTableModel(pe.dRuntime.modules) : null,
+  (pe, id) => pe.loadcfg?.references
+    ? getLoadConfigReferenceTableModel(pe.loadcfg.references, id) : null,
+  getMsvcRttiPagedTableModel,
+  (pe, id) => getItaniumRttiTableModel(pe.itaniumRtti, id),
+  getImportFunctionTableModel, getNativeAotTableModel,
+  (pe, id) => getPeResourceTableModel(pe.resources, id)
+];
+
 export const getPePagedTableModel = (
-  pe: PeParseResult,
-  tableId: string
-): PagedSortableTableModel | null =>
-  getPeDebugCoffTableModel(pe, tableId) ??
-  (
-    isPeWindowsParseResult(pe)
-      ? getPeDisassemblyStringTableModel(pe, tableId) ??
-        getOmapTableModel(pe, tableId) ??
-        getClrTableModel(pe, tableId) ??
-        getReadyToRunTableModel(pe.clr, tableId) ??
-        (tableId === EXPORT_TABLE_ID && pe.exports
-          ? createExportTableModel(pe.exports.entries,
-            analyzeTypeLibraryExports(pe.resources, pe.exports).matches)
-          : null) ??
-        (tableId === GO_FUNCTION_TABLE_ID && pe.goRuntime
-          ? createGoRuntimeFunctionTableModel(pe.goRuntime.functions)
-          : null) ??
-        (tableId === D_MODULE_TABLE_ID && pe.dRuntime
-          ? createDRuntimeModuleTableModel(pe.dRuntime.modules)
-          : null) ??
-        (tableId === D_REFERENCE_TABLE_ID && pe.dRuntime
-          ? createDRuntimeReferenceTableModel(pe.dRuntime.modules)
-          : null) ??
-        (pe.loadcfg?.references
-          ? getLoadConfigReferenceTableModel(pe.loadcfg.references, tableId)
-          : null) ??
-        getMsvcRttiPagedTableModel(pe, tableId) ??
-        getItaniumRttiTableModel(pe.itaniumRtti, tableId) ??
-        getImportFunctionTableModel(pe, tableId) ??
-        getNativeAotReflectionTypeTableModel(
-          pe.nativeAotCandidate?.status === "confirmed"
-            ? pe.nativeAotCandidate.reflection
-            : undefined,
-          tableId
-        ) ??
-        getPeResourceTableModel(pe.resources, tableId)
-      : null
-  );
+  pe: PeParseResult, tableId: string
+): PagedSortableTableModel | null => {
+  const debug = getPeDebugCoffTableModel(pe, tableId);
+  if (debug) return debug;
+  if (!isPeWindowsParseResult(pe)) return null;
+  for (const resolve of windowsTableResolvers) {
+    const table = resolve(pe, tableId);
+    if (table) return table;
+  }
+  return null;
+};

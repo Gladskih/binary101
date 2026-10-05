@@ -11,7 +11,7 @@ export const validateReadyToRunReferences = (
   const count = Math.floor(functions.size / width);
   const invalid = sections.some(section => {
     const decoded = section.decoded;
-    if (decoded?.kind === "methods") {
+    if (decoded?.kind === "methods" || decoded?.kind === "instance-methods") {
       return decoded.methods.some(method => method.runtimeFunctionIndex >= count);
     }
     return decoded?.kind === "hot-cold" && decoded.entries.some(entry =>

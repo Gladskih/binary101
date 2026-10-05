@@ -15,6 +15,32 @@ import { discoverItaniumRtti } from "../../../../../analyzers/itanium-rtti/disco
 import { createItaniumFixture } from "../../../../fixtures/itanium-rtti.js";
 import { createNativeAotInitializerFixture } from
   "../../../../helpers/native-aot-initializer-fixture.js";
+import { createNativeAotInvokeFixture } from "../../../../helpers/native-aot-invoke-fixture.js";
+import { createNativeAotStackTraceFixture } from "../../../../helpers/native-aot-stack-trace-fixture.js";
+import { parseNativeAotInvokeMap } from "../../../../../analyzers/native-aot/invoke-map.js";
+import { parseNativeAotStackTraceMap } from "../../../../../analyzers/native-aot/stack-trace-map.js";
+
+void test("PE seeds reuse parsed NativeAOT method maps without reading or decoding them again", async context => {
+  const pe = createWindowsPe();
+  const invoke = createNativeAotInvokeFixture();
+  const stack = createNativeAotStackTraceFixture();
+  pe.nativeAotCandidate = { ...createNativeAotInitializerFixture().header,
+    invokeMap: (await parseNativeAotInvokeMap(invoke.image, invoke.sections))!,
+    stackTraceMap: (await parseNativeAotStackTraceMap(stack.image, [stack.section]))! };
+  const file = new File([], "aot-pe");
+  const read = context.mock.method(file, "slice");
+
+  const seeds = await collectPeDisassemblySeeds(file, pe);
+
+  assert.deepEqual(seeds.extraEntrypoints, [
+    { source: "NativeAOT invoke methods", rvas: [invoke.codeRvas[0]] },
+    { source: "NativeAOT invoke stubs", rvas: [invoke.codeRvas[1]] },
+    { source: "NativeAOT stack-trace methods", rvas: stack.codeRvas }
+  ]);
+  assert.equal(read.mock.callCount(), 0);
+  assert.deepEqual(await collectPeDisassemblySeeds(file, pe), seeds);
+  assert.equal(read.mock.callCount(), 0);
+});
 
 void test("Itanium RTTI classes do not contribute disassembly seeds", async () => {
   const pe = createWindowsPe();

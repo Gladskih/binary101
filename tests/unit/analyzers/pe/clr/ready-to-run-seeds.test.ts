@@ -166,6 +166,17 @@ void test("R2R does not require a runtime table when there are no compiled Metho
   assert.deepEqual(fixture.issues, []);
 });
 
+void test("R2R generic instance indices contribute native roots even without MethodDef entrypoints", async () => {
+  const fixture = createReadyToRunSeedFixture(0x8664, []);
+  fixture.pe.clr!.readyToRun!.sections.push({ type: 109, name: "InstanceMethodEntryPoints", rva: 0, size: 0,
+    decoded: { kind: "instance-methods", methods: [
+      { signatureOffset: 9, runtimeFunctionIndex: 1, fixupOffset: null }
+    ] } });
+
+  assert.deepEqual(await resolveFixture(fixture), [fixture.codeRvas[1]]);
+  assert.deepEqual(fixture.issues, []);
+});
+
 void test("R2R preserves valid starts when a runtime read throws", async () => {
   const fixture = createReadyToRunSeedFixture();
   const read = fixture.reader.read;

@@ -2,6 +2,8 @@
 
 import type { NativeAotVirtualImage } from "./virtual-image-types.js";
 import { parseNativeAotInitializers } from "./initializers.js";
+import { parseNativeAotInvokeMap } from "./invoke-map.js";
+import { parseNativeAotStackTraceMap } from "./stack-trace-map.js";
 import {
   NATIVE_AOT_EMBEDDED_METADATA_SECTION,
   NATIVE_AOT_HEADER_SIZE,
@@ -189,10 +191,13 @@ export const findNativeAotMetadata = async (
     if (headerRva == null || checkedHeaders.has(headerRva)) continue;
     checkedHeaders.add(headerRva);
     const header = await parseNativeAotReadyToRunHeader(image, sites, headerRva);
-    if (header) return {
-      status: "confirmed", modulePointerRva, ...header,
-      initializers: await parseNativeAotInitializers(image, header)
-    };
+    if (header) {
+      const invokeMap = await parseNativeAotInvokeMap(image, header.sections);
+      const stackTraceMap = await parseNativeAotStackTraceMap(image, header.sections);
+      return { status: "confirmed", modulePointerRva, ...header,
+        initializers: await parseNativeAotInitializers(image, header),
+        ...(invokeMap ? { invokeMap } : {}), ...(stackTraceMap ? { stackTraceMap } : {}) };
+    }
   }
   return null;
 };

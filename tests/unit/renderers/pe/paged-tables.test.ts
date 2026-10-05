@@ -11,6 +11,7 @@ import { MSVC_RTTI_LAYOUT } from "../../../../analyzers/pe/msvc-rtti/layout.js";
 import { TEST_COFF_STORAGE_CLASS } from "../../../fixtures/pe-coff-debug-fixtures.js";
 import { createBasePe } from "../../../fixtures/pe-renderer-headers-fixture.js";
 import { createClrMetadataTablesWithParameterNames } from "../../../fixtures/pe-clr-metadata-tables.js";
+import { createNativeAotInitializerFixture } from "../../../helpers/native-aot-initializer-fixture.js";
 
 const createSymbol = (index: number): CoffSymbol => ({
   auxiliaryRecords: [],
@@ -22,6 +23,18 @@ const createSymbol = (index: number): CoffSymbol => ({
   storageClass: TEST_COFF_STORAGE_CLASS.EXTERNAL,
   type: 0,
   value: index
+});
+
+void test("PE paging resolves NativeAOT invoke and stack-trace map tables", () => {
+  const pe = createBasePe();
+  pe.nativeAotCandidate = { ...createNativeAotInitializerFixture().header,
+    invokeMap: { entries: [{ flags: 0, metadataOffset: 1, declaringTypeIndex: 2,
+      entrypointRva: 16, invokeStubRva: null, genericArgumentIndices: [] }], warnings: [] },
+    stackTraceMap: { entries: [{ command: 0, methodRva: 32 }], warnings: [] }
+  };
+
+  assert.equal(getPePagedTableModel(pe, "native-aot-invoke-map")?.rowCount, 1);
+  assert.equal(getPePagedTableModel(pe, "native-aot-stack-trace-map")?.rowCount, 1);
 });
 
 void test("getPePagedTableModel resolves exports for paging and sorting", () => {

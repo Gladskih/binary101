@@ -10,6 +10,8 @@ import {
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import { renderNativeAotReflection } from "../native-aot/reflection.js";
 import { renderNativeAotInitializers } from "../native-aot/initializers.js";
+import { renderNativeAotInvokeMap } from "../native-aot/invoke-map.js";
+import { renderNativeAotStackTraceMap } from "../native-aot/stack-trace-map.js";
 
 const renderMetadataSections = (metadata: NativeAotMetadata): string => {
   const rows = metadata.sections.map(section =>
@@ -52,6 +54,8 @@ const renderConfirmedMetadata = (metadata: NativeAotMetadata, out: string[]): vo
   out.push(`</dl><h4>ReadyToRun sections</h4>${renderMetadataSections(metadata)}`);
   if (metadata.reflection) out.push(renderNativeAotReflection(metadata.reflection));
   out.push(renderNativeAotInitializers(metadata.initializers));
+  out.push(renderNativeAotInvokeMap(metadata.invokeMap));
+  out.push(renderNativeAotStackTraceMap(metadata.stackTraceMap));
   out.push(renderPeSectionEnd());
 };
 

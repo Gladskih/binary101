@@ -39,6 +39,8 @@ test("renders ReadyToRun compiler, import cells and sparse MethodDef entry point
 
   await expect(analysis).toContainText("Crossgen2");
   await expect(analysis.locator('[data-sort-state-key$="-methods"]')).toContainText("MethodDef RID");
+  await expect(analysis.locator('[data-paged-sortable-table-id$="-instance-methods"]'))
+    .toContainText("Signature RVA");
   await expect(analysis.locator('[data-sort-state-key$="-imports"]')).toContainText("Signatures RVA");
   const cells = analysis.locator('[data-paged-sortable-table-id$="-cells"]');
   await expect(cells).toContainText("Signature RVA");

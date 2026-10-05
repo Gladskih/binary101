@@ -38,6 +38,36 @@ export interface NativeAotMetadata {
   sections: NativeAotMetadataSection[];
   reflection?: NativeAotReflectionMetadata;
   initializers?: NativeAotInitializerTable[];
+  invokeMap?: NativeAotInvokeMap;
+  stackTraceMap?: NativeAotStackTraceMap;
+}
+
+export interface NativeAotStackTraceMap {
+  entries: NativeAotStackTraceMethod[];
+  warnings: string[];
+}
+
+export interface NativeAotStackTraceMethod {
+  command: number;
+  methodRva: number | null;
+  owningTypeToken?: number;
+  nameOffset?: number;
+  signatureOffset?: number;
+  genericSignature?: { signatureOffset: number; argumentCollectionOffset: number };
+}
+
+export interface NativeAotInvokeMap {
+  entries: NativeAotInvokeEntry[];
+  warnings: string[];
+}
+
+export interface NativeAotInvokeEntry {
+  metadataOffset: number;
+  flags: number;
+  declaringTypeIndex: number;
+  entrypointRva: number | null;
+  invokeStubRva: number | null;
+  genericArgumentIndices: number[];
 }
 
 export interface NativeAotInitializerTable {

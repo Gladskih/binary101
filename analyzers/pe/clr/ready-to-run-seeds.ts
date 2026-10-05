@@ -58,9 +58,10 @@ const collectRuntimeFunctionStarts = async (
 
 const collectMethodIndices = (sections: PeClrReadyToRunSection[]): Set<number> => {
   const indices = new Set<number>();
-  // readytorun.h: MethodDefEntryPoints = 103.
+  // readytorun.h: MethodDefEntryPoints = 103, InstanceMethodEntryPoints = 109.
   for (const section of sections) {
-    if (section.type === 103 && section.decoded?.kind === "methods") {
+    if ((section.type === 103 || section.type === 109) &&
+      (section.decoded?.kind === "methods" || section.decoded?.kind === "instance-methods")) {
       section.decoded.methods.forEach(method => indices.add(method.runtimeFunctionIndex));
     }
   }

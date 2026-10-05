@@ -14,6 +14,12 @@ export interface PeClrReadyToRunMethod {
   fixupOffset: number | null;
 }
 
+export interface PeClrReadyToRunInstanceMethod {
+  signatureOffset: number;
+  runtimeFunctionIndex: number;
+  fixupOffset: number | null;
+}
+
 export interface PeClrReadyToRunImport {
   rva: number;
   size: number;
@@ -28,6 +34,7 @@ export interface PeClrReadyToRunImport {
 export type PeClrReadyToRunSectionData =
   | { kind: "text"; text: string }
   | { kind: "methods"; methods: PeClrReadyToRunMethod[] }
+  | { kind: "instance-methods"; methods: PeClrReadyToRunInstanceMethod[] }
   | { kind: "imports"; imports: PeClrReadyToRunImport[] }
   | { kind: "hot-cold"; entries: { coldRuntimeFunction: number; hotRuntimeFunction: number }[] }
   | { kind: "components"; entries: {

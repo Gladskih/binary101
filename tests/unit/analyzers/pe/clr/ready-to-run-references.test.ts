@@ -25,6 +25,18 @@ void test("accepts valid method and hot/cold indices", () => {
   assert.deepEqual(issues, []);
 });
 
+void test("validates generic instance indices against the shared runtime-function table", () => {
+  const issues: string[] = [];
+  const instance: PeClrReadyToRunSection = { type: 109, name: "Instances", rva: 0, size: 0,
+    decoded: { kind: "instance-methods", methods: [
+      { signatureOffset: 9, runtimeFunctionIndex: 2, fixupOffset: null }
+    ] } };
+
+  validateReadyToRunReferences([functions, instance], 0x8664, issues);
+
+  assert.match(issues.join(" "), /missing runtime-function index/);
+});
+
 void test("reports missing indices including the exact exclusive boundary", () => {
   const methodIssues: string[] = [];
   const coldIssues: string[] = [];

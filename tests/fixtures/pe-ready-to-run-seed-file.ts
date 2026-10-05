@@ -1,5 +1,6 @@
 import { createPePlusWithSection } from "./sample-files-pe.js";
 import { MockFile } from "../helpers/mock-file.js";
+import { createNativeHashtableFixture } from "../helpers/native-hashtable-fixture.js";
 
 export const createPeReadyToRunSeedFile = (runtimeIndex = 0): MockFile => {
   const bytes = createPePlusWithSection();
@@ -41,4 +42,15 @@ export const createPeReadyToRunSeedFile = (runtimeIndex = 0): MockFile => {
   bytes[0x200] = 0xc3;
   bytes.set([0x0f, 0x05, 0xc3], 0x220);
   return new MockFile(bytes, "r2r-method-seed.dll");
+};
+
+export const createPeReadyToRunInstanceSeedFile = (): MockFile => {
+  const bytes = new Uint8Array(createPeReadyToRunSeedFile().data);
+  const view = new DataView(bytes.buffer);
+  // A generic method with one Int32 argument followed by runtime-function index zero.
+  const instances = createNativeHashtableFixture([Uint8Array.of(4, 1, 1, 8, 0)]);
+  view.setUint32(0x31c, 109, true); // ReadyToRunSectionType.InstanceMethodEntryPoints.
+  view.setUint32(0x324, instances.length, true);
+  bytes.set(instances, 0x360);
+  return new MockFile(bytes, "r2r-generic-seed.dll");
 };

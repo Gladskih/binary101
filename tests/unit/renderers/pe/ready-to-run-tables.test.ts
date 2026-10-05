@@ -97,3 +97,23 @@ void test("labels every table and right-aligns numeric headers and cells", () =>
     ["0x00000100", "72", "0x00000200", "32"]);
   assert.deepEqual(models[5]?.rowAt(0)?.cells.map(cell => cell.html), ["3", "1"]);
 });
+
+void test("renders generic instance signatures and fixups as RVAs with numeric alignment", () => {
+  const data = fixture();
+  data.sections = [{ type: 109, name: "InstanceMethodEntryPoints", rva: 256, size: 32,
+    decoded: { kind: "instance-methods", methods: [
+      { signatureOffset: 9, runtimeFunctionIndex: 3, fixupOffset: 18 },
+      { signatureOffset: 20, runtimeFunctionIndex: 5, fixupOffset: null }
+    ] } }];
+  const table = createReadyToRunTableModels(data)[1]!;
+
+  assert.equal(table.id, "pe-r2r-0-instance-methods");
+  assert.deepEqual(table.columns.map(column => column.label),
+    ["Signature RVA", "Runtime function index", "Fixups RVA"]);
+  assert.deepEqual(table.rowAt(0)?.cells.map(cell => cell.html),
+    ["0x00000109", "3", "0x00000112"]);
+  assert.deepEqual(table.rowAt(1)?.cells.map(cell => cell.html), ["0x00000114", "5", "-"]);
+  assert.ok(table.columns.every(column => column.className === "peNumeric"));
+  assert.ok(table.rowAt(0)?.cells.every(cell => cell.className === "peNumeric"));
+  assert.match(renderReadyToRunData(data), /Signature RVA/);
+});

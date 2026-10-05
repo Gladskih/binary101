@@ -1,24 +1,10 @@
 import { NativeArrayReader } from "../../native-aot/native-array.js";
 import { NativeFormatReader } from "../../native-aot/native-format-reader.js";
 import type { PeClrReadyToRunMethod } from "./ready-to-run-types.js";
+import { decodeReadyToRunEntrypoint } from "./ready-to-run-entrypoint.js";
 
 // Entry encoding: low bit signals fixups, next bit a backward reference to shared fixups.
 // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/aot/ILCompiler.Reflection.ReadyToRun/ReadyToRunReader.cs#L1605
-const decodeMethod = (
-  reader: NativeFormatReader, offset: number
-): Omit<PeClrReadyToRunMethod, "methodRid"> => {
-  const entry = reader.unsigned(offset);
-  if ((entry.value & 1) === 0) {
-    return { runtimeFunctionIndex: entry.value >>> 1, fixupOffset: null };
-  }
-  const fixupOffset = (entry.value & 2) === 0 ? entry.nextOffset
-    : entry.nextOffset - reader.unsigned(entry.nextOffset).value;
-  if (fixupOffset < 0 || fixupOffset >= reader.size) {
-    throw new Error("Method fixup offset is outside the section.");
-  }
-  return { runtimeFunctionIndex: entry.value >>> 2, fixupOffset };
-};
-
 const cachedMethod = (
   reader: NativeFormatReader, offset: number,
   cache: Map<number, Omit<PeClrReadyToRunMethod, "methodRid"> | Error>
@@ -27,7 +13,7 @@ const cachedMethod = (
   if (cached instanceof Error) throw cached;
   if (cached) return cached;
   try {
-    const decoded = decodeMethod(reader, offset);
+    const decoded = decodeReadyToRunEntrypoint(reader, offset);
     cache.set(offset, decoded);
     return decoded;
   } catch (error) {

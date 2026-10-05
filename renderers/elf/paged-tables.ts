@@ -3,6 +3,8 @@
 import type { ElfParseResult } from "../../analyzers/elf/types.js";
 import type { PagedSortableTableModel } from "../paged-sortable-table.js";
 import { getNativeAotReflectionTypeTableModel } from "../native-aot/reflection.js";
+import { getNativeAotInvokeTableModel } from "../native-aot/invoke-map.js";
+import { getNativeAotStackTraceTableModel } from "../native-aot/stack-trace-map.js";
 import { createElfRelocationTableModel } from "./relocations.js";
 import { createElfNotesTableModel } from "./notes.js";
 import { createElfSymbolTableModel } from "./symbol-tables.js";
@@ -60,6 +62,11 @@ const tableResolvers: TableResolver[] = [
   }
 ];
 
+const getNativeAotTable: TableResolver = (elf, tableId) =>
+  getNativeAotReflectionTypeTableModel(elf.nativeAot?.reflection, tableId) ??
+  getNativeAotInvokeTableModel(elf.nativeAot?.invokeMap, tableId) ??
+  getNativeAotStackTraceTableModel(elf.nativeAot?.stackTraceMap, tableId);
+
 export const getElfPagedTableModel: TableResolver = (elf, tableId) => {
   if (tableId === "elf-notes" && elf.notes) return createElfNotesTableModel(elf.notes);
   for (const resolve of tableResolvers) {
@@ -68,5 +75,5 @@ export const getElfPagedTableModel: TableResolver = (elf, tableId) => {
   }
   return tableId === "elf-relocations" && elf.relocations
     ? createElfRelocationTableModel(elf)
-    : getNativeAotReflectionTypeTableModel(elf.nativeAot?.reflection, tableId);
+    : getNativeAotTable(elf, tableId);
 };

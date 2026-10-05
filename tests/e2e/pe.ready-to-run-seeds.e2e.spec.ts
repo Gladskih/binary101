@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createPeReadyToRunSeedFile } from "../fixtures/pe-ready-to-run-seed-file.js";
+import { createPeReadyToRunSeedFile, createPeReadyToRunInstanceSeedFile } from "../fixtures/pe-ready-to-run-seed-file.js";
 
 test("R2R MethodDef seeds reveal code unreachable from the PE entrypoint without an exception directory", async ({ page }) => {
   const file = createPeReadyToRunSeedFile();
@@ -14,6 +14,20 @@ test("R2R MethodDef seeds reveal code unreachable from the PE entrypoint without
   await expect(syscall.getByRole("cell").nth(2)).toHaveText("1");
   await expect(syscall).toContainText("0x00001020");
   await expect(panel).not.toContainText("ReadyToRun disassembly seeds:");
+});
+
+test("R2R generic instance roots reveal code absent from MethodDef entrypoints and exception directories", async ({ page }) => {
+  const file = createPeReadyToRunInstanceSeedFile();
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name,
+    mimeType: "application/octet-stream", buffer: Buffer.from(file.data) });
+  const panel = page.locator("#peInstructionSetsPanel");
+  await panel.locator(":scope > details > summary").click();
+  await panel.getByRole("button", { name: "Analyze instruction sets", exact: true }).click();
+
+  const syscall = panel.getByRole("row").filter({ has: page.locator("summary", { hasText: /^SYSCALL$/ }) });
+  await expect(syscall.getByRole("cell").nth(2)).toHaveText("1");
+  await expect(syscall).toContainText("0x00001020");
 });
 
 test("R2R seed failures remain visible after instruction-set analysis", async ({ page }) => {

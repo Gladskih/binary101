@@ -8,6 +8,7 @@ import { collectElfDisassemblySeedsFromSections } from "./disassembly-seeds-sect
 import { collectElfDisassemblySeedsFromDynamic } from "./disassembly-seeds-dynamic.js";
 import { collectElfDisassemblySeedsFromEhFrameHdr } from "./disassembly-seeds-eh-frame-hdr.js";
 import { collectGoFunctionSeeds } from "./go-function-seeds.js";
+import { collectNativeAotMapSeeds } from "../native-aot/disassembly-seeds.js";
 
 export async function collectElfDisassemblySeedGroups(opts: {
   file: File;
@@ -21,6 +22,9 @@ export async function collectElfDisassemblySeedGroups(opts: {
   const groups: ElfDisassemblySeedGroup[] = [];
   const imageBase = getElfImageBase(opts.programHeaders);
   if (imageBase != null) {
+    for (const group of opts.nativeAot ? collectNativeAotMapSeeds(opts.nativeAot) : []) {
+      groups.push({ source: group.source, vaddrs: group.rvas.map(rva => imageBase + BigInt(rva)) });
+    }
     for (const table of opts.nativeAot?.initializers ?? []) {
       groups.push({
         source: `NativeAOT ${nativeAotSectionName(table.sectionType)}`,
