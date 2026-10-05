@@ -35,6 +35,7 @@ export const parseAmd64ExceptionDirectory = async (
   return {
     functionCount: runtimeFunctions.functionCount,
     beginRvas: runtimeFunctions.beginRvas,
+    rangeLengths: runtimeFunctions.rangeLengths,
     handlerRvas: unwindInfo.handlerRvas,
     uniqueUnwindInfoCount: unwindInfo.uniqueUnwindInfoCount,
     unwindInfoVersion1Count: unwindInfo.unwindInfoVersion1Count,

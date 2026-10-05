@@ -3,6 +3,8 @@
 export interface PeExceptionDirectory {
   functionCount: number;
   beginRvas: number[];
+  /** Byte lengths of validated ranges; absent when the format has no known end. */
+  rangeLengths?: number[];
   handlerRvas: number[];
   uniqueUnwindInfoCount: number;
   unwindInfoVersion1Count?: number;

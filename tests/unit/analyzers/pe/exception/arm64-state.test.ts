@@ -11,6 +11,7 @@ void test("createArm64ExceptionState initializes empty counters and collections"
   const state = createArm64ExceptionState();
 
   assert.deepEqual(state.beginRvas, []);
+  assert.deepEqual(state.rangeLengths, []);
   assert.deepEqual(state.handlerRvas, []);
   assert.equal(state.functionCount, 0);
   assert.equal(state.invalidEntryCount, 0);

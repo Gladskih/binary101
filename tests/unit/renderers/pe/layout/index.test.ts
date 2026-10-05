@@ -29,6 +29,7 @@ void test("renderException renders pdata stats", () => {
   const exception: Parameters<typeof renderException>[0] = {
     functionCount: 1,
     beginRvas: [0x1000],
+    rangeLengths: [16],
     handlerRvas: [],
     uniqueUnwindInfoCount: 1,
     unwindInfoVersion1Count: 0,
@@ -54,6 +55,8 @@ void test("renderException renders pdata stats", () => {
   assert.ok(html.includes("UNWIND_INFO v2 epilog scopes"));
   assert.ok(html.includes("x64 .pdata maps code ranges"));
   assert.ok(html.includes("Microsoft Learn still documents v1"));
+  assert.match(html, /Range length distribution/);
+  assert.match(html, /16–31 bytes: 1 ranges/);
   assert.ok(html.includes("Handlers present (EHANDLER/UHANDLER)"));
   assert.ok(html.includes("Chained (CHAININFO)"));
   assert.ok(html.includes("Missing/invalid ranges"));

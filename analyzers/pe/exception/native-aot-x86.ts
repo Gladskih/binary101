@@ -19,6 +19,7 @@ const NATIVE_AOT_X86_UNWIND_INFO_HEADER_SIZE = Uint32Array.BYTES_PER_ELEMENT;
 
 type NativeAotX86RuntimeFunctionTable = {
   beginRvas: number[];
+  rangeLengths: number[];
   functionCount: number;
   invalidEntryCount: number;
   unwindRvas: Set<number>;
@@ -110,6 +111,7 @@ const readNativeAotX86RuntimeFunctions = async (
   issues: string[]
 ): Promise<NativeAotX86RuntimeFunctionTable> => {
   const beginRvas: number[] = [];
+  const rangeLengths: number[] = [];
   const unwindRvas = new Set<number>();
   const invalidEntryIssues = new Map<string, number>();
   let functionCount = 0;
@@ -158,6 +160,7 @@ const readNativeAotX86RuntimeFunctions = async (
         continue;
       }
       beginRvas.push(beginRva);
+      rangeLengths.push(endRva - beginRva);
       unwindRvas.add(unwindRva);
       if (previousBeginRva != null && beginRva < previousBeginRva && !reportedUnsortedEntries) {
         issues.push("NativeAOT x86 RuntimeFunction entries are not sorted by BeginAddress.");
@@ -167,7 +170,7 @@ const readNativeAotX86RuntimeFunctions = async (
     }
   }
   reportCountedIssues(invalidEntryIssues, issues);
-  return { beginRvas, functionCount, invalidEntryCount, unwindRvas };
+  return { beginRvas, rangeLengths, functionCount, invalidEntryCount, unwindRvas };
 };
 
 export const parseNativeAotX86ExceptionDirectory = async (
@@ -224,6 +227,7 @@ export const parseNativeAotX86ExceptionDirectory = async (
   return {
     functionCount: runtimeTable.functionCount,
     beginRvas: runtimeTable.beginRvas,
+    rangeLengths: runtimeTable.rangeLengths,
     handlerRvas: [],
     uniqueUnwindInfoCount: runtimeTable.unwindRvas.size,
     handlerUnwindInfoCount: 0,

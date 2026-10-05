@@ -229,6 +229,8 @@ const processArm64RuntimeFunction = async (
   }
   state.previousBegin = beginRva;
   state.beginRvas.push(beginRva);
+  // Chained entries validate only the start; their target's length is not this range's length.
+  if (unwindInfo && !unwindInfo.chained) state.rangeLengths.push(unwindInfo.functionLengthBytes);
 };
 
 export async function parseArm64ExceptionDirectory(
@@ -306,6 +308,7 @@ export async function parseArm64ExceptionDirectory(
   return {
     functionCount: state.functionCount,
     beginRvas: state.beginRvas,
+    rangeLengths: state.rangeLengths,
     handlerRvas: state.handlerRvas,
     uniqueUnwindInfoCount: state.uniqueUnwindInfos.size,
     handlerUnwindInfoCount: state.handlerUnwindInfoCount,

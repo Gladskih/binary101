@@ -55,6 +55,7 @@ void test("readAmd64RuntimeFunctions reads valid entries and unique unwind RVAs"
   assert.strictEqual(table.functionCount, 2);
   assert.strictEqual(table.invalidEntryCount, 0);
   assert.deepEqual(table.beginRvas, fixture.beginRvas);
+  assert.deepEqual(table.rangeLengths, [fixture.functionSizeBytes, fixture.functionSizeBytes]);
   assert.deepEqual([...table.unwindRvas], [fixture.unwindInfoRva]);
   assert.deepEqual(issues, []);
 });
@@ -86,6 +87,7 @@ void test("readAmd64RuntimeFunctions reports unsorted valid entries once", async
     issues
   );
   assert.deepEqual(table.beginRvas, [laterFunctionRva, earlierFunctionRva]);
+  assert.deepEqual(table.rangeLengths, [fixture.functionSizeBytes, fixture.functionSizeBytes]);
   assert.strictEqual(issues.filter(issue => /not sorted/i.test(issue)).length, 1);
 });
 
@@ -112,6 +114,7 @@ void test("readAmd64RuntimeFunctions skips invalid begin ranges and ignores thei
   assert.strictEqual(table.functionCount, 2);
   assert.strictEqual(table.invalidEntryCount, 1);
   assert.deepEqual(table.beginRvas, [validFunctionRva]);
+  assert.deepEqual(table.rangeLengths, [fixture.functionSizeBytes]);
   assert.deepEqual([...table.unwindRvas], [fixture.unwindInfoRva]);
   assert.ok(issues.some(issue => /RUNTIME_FUNCTION.*BeginAddress/i.test(issue)));
 });
@@ -209,5 +212,6 @@ void test("readAmd64RuntimeFunctions stops when declared entries stop mapping", 
     issues
   );
   assert.strictEqual(table.functionCount, 1);
+  assert.deepEqual(table.rangeLengths, [Uint8Array.BYTES_PER_ELEMENT]);
   assert.ok(issues.some(issue => /truncated/i.test(issue)));
 });

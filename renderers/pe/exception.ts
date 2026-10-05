@@ -3,6 +3,7 @@
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import { renderPeDiagnostics } from "./diagnostics.js";
+import { renderExceptionRangeHistogram } from "./exception-range-histogram.js";
 
 type PeExceptionSection = NonNullable<PeWindowsParseResult["exception"]>;
 type PeExceptionFormat = PeExceptionSection["format"];
@@ -121,6 +122,7 @@ export function renderException(ex: PeExceptionSection, out: string[]): void {
   out.push(`<dt>Missing/invalid ranges</dt><dd>${ex.invalidEntryCount ?? 0}</dd>`);
   out.push(`</dl>`);
   profile.renderFormatNote(ex, out);
+  out.push(renderExceptionRangeHistogram(ex));
   if (ex.issues?.length) {
     out.push(renderPeDiagnostics("Exception directory warnings", ex.issues));
   }

@@ -1,0 +1,65 @@
+.rangeHistogram {
+  margin: 18px 0 12px;
+  padding: 16px 12px 12px;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-chip);
+}
+
+.rangeHistogram__caption {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 8px;
+}
+
+.rangeHistogram__caption span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.rangeHistogram__scroll {
+  overflow-x: auto;
+  margin-top: 14px;
+}
+
+.rangeHistogram__plot {
+  display: block;
+  width: 100%;
+  min-width: 640px;
+  font-family: var(--mono);
+}
+
+.rangeHistogram__grid {
+  fill: none;
+  stroke: var(--border2);
+  stroke-dasharray: 3 4;
+}
+
+.rangeHistogram__tick {
+  fill: var(--muted);
+  font-size: 10px;
+}
+
+.rangeHistogram__axis {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.rangeHistogram__bar {
+  fill: var(--accent);
+}
+
+.rangeHistogram__bar:hover {
+  fill: var(--text);
+}
+
+.rangeHistogram__count {
+  fill: var(--text);
+  font-size: 11px;
+}
+
+.rangeHistogram__note {
+  margin: 8px 8px 0;
+  color: var(--muted);
+  font-size: 12px;
+}

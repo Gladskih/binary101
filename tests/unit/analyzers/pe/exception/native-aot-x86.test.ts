@@ -35,7 +35,8 @@ const createReaderWithShortUnwindRead = (fixture: NativeAotX86Fixture): FileRang
 };
 
 void test("parseExceptionDirectory decodes NativeAOT x86 RuntimeFunctions", async () => {
-  const fixture = createNativeAotX86Fixture();
+  const lengths = [5, 19];
+  const fixture = createNativeAotX86Fixture(lengths);
 
   const parsed = await parseNativeAotX86Fixture(fixture);
 
@@ -43,6 +44,7 @@ void test("parseExceptionDirectory decodes NativeAOT x86 RuntimeFunctions", asyn
   assert.equal(parsed.format, "native-aot-x86");
   assert.equal(parsed.functionCount, fixture.beginRvas.length);
   assert.deepEqual(parsed.beginRvas, fixture.beginRvas);
+  assert.deepEqual(parsed.rangeLengths, lengths);
   assert.equal(parsed.uniqueUnwindInfoCount, fixture.unwindRvas.length);
   assert.deepEqual(parsed.issues, []);
 });
@@ -154,7 +156,8 @@ void test("parseExceptionDirectory reports malformed NativeAOT x86 directory siz
 });
 
 void test("parseExceptionDirectory reports invalid NativeAOT x86 runtime ranges", async () => {
-  const fixture = createNativeAotX86Fixture();
+  const lengths = [5, 19];
+  const fixture = createNativeAotX86Fixture(lengths);
   writeNativeAotX86RuntimeFunction(
     fixture.view,
     fixture.directoryRva,
@@ -168,6 +171,7 @@ void test("parseExceptionDirectory reports invalid NativeAOT x86 runtime ranges"
   assert.ok(parsed);
   assert.equal(parsed.invalidEntryCount, 1);
   assert.ok(parsed.issues.some(issue => issue.includes("BeginAddress")));
+  assert.deepEqual(parsed.rangeLengths, lengths.slice(1));
 });
 
 void test("parseExceptionDirectory reports NativeAOT x86 runtime RVAs outside file", async () => {

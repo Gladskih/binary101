@@ -21,6 +21,7 @@ type RuntimeFunctionEntryValidation = {
 
 export interface Amd64RuntimeFunctionTable {
   beginRvas: number[];
+  rangeLengths: number[];
   functionCount: number;
   invalidEntryCount: number;
   unwindRvas: Set<number>;
@@ -209,6 +210,7 @@ export const readAmd64RuntimeFunctions = async (
   issues: string[]
 ): Promise<Amd64RuntimeFunctionTable> => {
   const beginRvas: number[] = [];
+  const rangeLengths: number[] = [];
   const unwindRvas = new Set<number>();
   let functionCount = 0;
   let invalidEntryCount = 0;
@@ -254,6 +256,7 @@ export const readAmd64RuntimeFunctions = async (
         continue;
       }
       if (validation.unwindInfoRva) unwindRvas.add(validation.unwindInfoRva);
+      rangeLengths.push(endRva - beginRva);
       if (reportedUnsortedEntries) {
         beginRvas.push(beginRva);
         previousBeginRva = beginRva;
@@ -265,5 +268,5 @@ export const readAmd64RuntimeFunctions = async (
     }
   }
   reportInvalidEntryIssues(invalidEntryIssues, issues);
-  return { beginRvas, functionCount, invalidEntryCount, unwindRvas };
+  return { beginRvas, rangeLengths, functionCount, invalidEntryCount, unwindRvas };
 };

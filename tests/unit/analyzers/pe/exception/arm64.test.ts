@@ -68,6 +68,8 @@ void test("ARM64 shared xdata is decoded once per parse", async () => {
     SHARED_XDATA_LAYOUT.firstFunctionRva, SHARED_XDATA_LAYOUT.secondFunctionRva
   ]);
   assert.equal(parsed?.uniqueUnwindInfoCount, 1);
+  // ARM64 Function Length = 1 instruction, i.e. 4 bytes (Microsoft ARM64 exception handling).
+  assert.deepEqual(parsed?.rangeLengths, [4, 4]);
   assert.equal(fixture.offsets.filter(offset => offset === SHARED_XDATA_LAYOUT.xdataRva).length, 1);
 });
 
@@ -87,6 +89,7 @@ void test("ARM64 cached unwind information still validates each function range",
 
   assert.equal(parsed?.functionCount, 2);
   assert.equal(parsed?.invalidEntryCount, 1);
+  assert.deepEqual(parsed?.rangeLengths, [4]);
   assert.deepEqual(parsed?.beginRvas, [SHARED_XDATA_LAYOUT.firstFunctionRva]);
 });
 
@@ -98,6 +101,7 @@ void test("ARM64 cached invalid xdata preserves diagnostics for every reference"
   const parsed = await fixture.parse();
 
   assert.equal(parsed?.invalidEntryCount, 2);
+  assert.deepEqual(parsed?.rangeLengths, []);
   assert.deepEqual(parsed?.issues, [
     "ARM64 .xdata extended header is truncated.",
     "ARM64 .xdata extended header is truncated."
@@ -196,6 +200,7 @@ void test("parseExceptionDirectory accepts ARM64 packed unwind pdata entries", a
   assert.deepEqual(parsed.beginRvas, [0x100]);
   assert.strictEqual(parsed.uniqueUnwindInfoCount, 1);
   assert.strictEqual(parsed.handlerUnwindInfoCount, 0);
+  assert.deepEqual(parsed.rangeLengths, [4]);
   assert.strictEqual(parsed.invalidEntryCount, 0);
   assert.deepEqual(parsed.issues, []);
 });
@@ -224,6 +229,8 @@ void test("parseExceptionDirectory accepts ARM64 chained pdata entries", async (
   assert.strictEqual(parsed.functionCount, 2);
   assert.deepEqual(parsed.beginRvas, [0x100, 0x180]);
   assert.strictEqual(parsed.chainedUnwindInfoCount, 1);
+  // The chained entry validates only its start; the target's length must not be reused for it.
+  assert.deepEqual(parsed.rangeLengths, [4]);
   assert.strictEqual(parsed.invalidEntryCount, 0);
   assert.deepEqual(parsed.issues, []);
 });

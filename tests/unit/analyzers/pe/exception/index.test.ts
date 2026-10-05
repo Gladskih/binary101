@@ -44,6 +44,7 @@ void test("parseExceptionDirectory parses pdata entries and unwind info stats", 
   assert.ok(parsed);
   assert.strictEqual(parsed.functionCount, 2);
   assert.deepEqual(parsed.beginRvas, [0x1000, 0x1100]);
+  assert.deepEqual(parsed.rangeLengths, [0x10, 0x20]);
   assert.strictEqual(parsed.uniqueUnwindInfoCount, 2);
   assert.strictEqual(parsed.handlerUnwindInfoCount, 1);
   assert.strictEqual(parsed.chainedUnwindInfoCount, 1);

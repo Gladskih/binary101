@@ -2,6 +2,7 @@
 
 export type Arm64ExceptionState = {
   beginRvas: number[];
+  rangeLengths: number[];
   handlerRvas: number[];
   handlerRvasSet: Set<number>;
   uniqueUnwindInfos: Set<string>;
@@ -16,6 +17,7 @@ export type Arm64ExceptionState = {
 
 export const createArm64ExceptionState = (): Arm64ExceptionState => ({
   beginRvas: [],
+  rangeLengths: [],
   handlerRvas: [],
   handlerRvasSet: new Set<number>(),
   uniqueUnwindInfos: new Set<string>(),
