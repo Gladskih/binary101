@@ -17,7 +17,7 @@ static class ReadyToRunReference
         return Encoding.UTF8.GetString(bytes, 0, length < 0 ? bytes.Length : length);
     }
 
-    static List<object> Sections(PEReader pe, byte[] header)
+    static List<object> Sections(PEReader pe, byte[] header, SortedSet<uint> indices)
     {
         var sections = new List<object>();
         for (int index = 0; index < UInt32(header, 12); index++)
@@ -27,7 +27,12 @@ static class ReadyToRunReference
             if (type is not (100 or 101 or 103 or 116)) continue;
             var bytes = Data(pe, rva, UInt32(header, offset + 8));
             if (type == 100 || type == 116) sections.Add(new { type, text = Text(bytes) });
-            else if (type == 103) sections.Add(new { type, methods = ReadyToRunMethods.Read(bytes) });
+            else if (type == 103)
+            {
+                var methods = ReadyToRunMethods.Read(bytes);
+                foreach (var method in methods) indices.Add(method.runtimeFunctionIndex);
+                sections.Add(new { type, methods });
+            }
             else if (type == 101) sections.Add(new { type, imports = ReadyToRunImports.Read(pe, bytes) });
         }
         return sections;
@@ -48,7 +53,10 @@ static class ReadyToRunReference
                 if (directory == null || directory.Value.Size < 16) continue;
                 var header = Data(pe, (uint)directory.Value.RelativeVirtualAddress, (uint)directory.Value.Size);
                 if (UInt32(header, 0) != 0x00525452) continue;
-                output.WriteLine(JsonSerializer.Serialize(new { path, sections = Sections(pe, header) }));
+                var indices = new SortedSet<uint>();
+                var sections = Sections(pe, header, indices);
+                output.WriteLine(JsonSerializer.Serialize(new { path, sections,
+                    methodRvas = ReadyToRunSeeds.Read(pe, header, indices) }));
                 count++;
             }
         }

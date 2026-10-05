@@ -13,5 +13,6 @@ void test("ReadyToRun entry points and imports match the independent .NET refere
   assert.ok(counts.files > 0);
   assert.ok(counts.methods > 0);
   assert.ok(counts.cells > 0);
+  assert.ok(counts.seeds > 0);
   context.diagnostic(JSON.stringify(counts));
 });
