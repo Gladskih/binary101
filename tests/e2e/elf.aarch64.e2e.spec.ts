@@ -52,6 +52,6 @@ test("ELF AArch64 analyzes using local WASM and displays architecture requiremen
   await page.locator("#elfInstructionSetsAnalyzeButton").click();
   await expect(row.getByRole("cell").nth(2)).toHaveText("2");
   expect(requests.some(url => /llvm-aarch64.*\.wasm$/.test(url))).toBe(true);
-  expect(requests.every(url => new URL(url).origin === "http://127.0.0.1:4173")).toBe(true);
+  expect(requests.every(url => new URL(url).origin === new URL(page.url()).origin)).toBe(true);
   expect(errors).toEqual([]);
 });
