@@ -91,6 +91,28 @@ const makeReadyToRunFixture = (sections: ReadyToRunSectionSpec[] = []): ReadyToR
   };
 };
 
+void test("parses all file-backed sections beyond the former local cap", async () => {
+  const sections = Array.from({ length: 4097 }, (_, index) => ({
+    type: 100 + index, rva: 0, size: 0
+  }));
+  const fixture = makeReadyToRunFixture(sections);
+
+  const parsed = await parseReadyToRun(new MockFile(fixture.bytes), rva => rva, fixture.clr);
+
+  assert.equal(parsed.sections.length, sections.length);
+  assert.deepEqual(parsed.issues, []);
+});
+
+void test("bounds an extreme section count by readable bytes and preserves complete rows", async () => {
+  const fixture = makeReadyToRunFixture([{ type: 100, rva: 0, size: 0 }]);
+  new DataView(fixture.bytes.buffer).setUint32(fixture.layout.headerRva + 12, 0xffffffff, true);
+
+  const parsed = await parseReadyToRun(new MockFile(fixture.bytes), rva => rva, fixture.clr);
+
+  assert.equal(parsed.sections.length, 1);
+  assert.match(parsed.issues.join(" "), /truncated/);
+});
+
 void test("parseReadyToRun parses RTR headers and named section entries", async () => {
   const fixture = makeReadyToRunFixture([
     {

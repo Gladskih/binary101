@@ -14,7 +14,6 @@ import {
   type NativeAotReflectionMetadata
 } from "./format.js";
 import {
-  MAX_NATIVE_AOT_REFLECTION_METADATA_BYTES,
   parseNativeAotReflectionMetadata
 } from "./reflection-metadata.js";
 
@@ -125,8 +124,8 @@ const parseEmbeddedReflectionMetadata = async (
   sections: NativeAotMetadataSection[]
 ): Promise<NativeAotReflectionMetadata> => {
   const metadata = findEmbeddedMetadata(sections);
-  if (metadata?.size == null || metadata.size > MAX_NATIVE_AOT_REFLECTION_METADATA_BYTES) {
-    return { scopes: [], warnings: ["NativeFormat metadata exceeds its 32 MiB handle range."] };
+  if (metadata?.size == null) {
+    return { scopes: [], warnings: ["NativeFormat metadata has an unknown extent."] };
   }
   try {
     const view = await image.readData(metadata.rva, metadata.size, 4);

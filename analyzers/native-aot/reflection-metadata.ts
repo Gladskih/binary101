@@ -16,9 +16,6 @@ import {
   parseNativeFormatTypeRecord
 } from "./native-format-records.js";
 
-// Existing supported blob extent; independent of the number of records in the graph.
-export const MAX_NATIVE_AOT_REFLECTION_METADATA_BYTES = 0x0200_0000;
-
 type MemberKind = "method" | "field";
 
 interface TraversalEntry {
@@ -160,9 +157,6 @@ const parseScope = (
 };
 
 export const parseNativeAotReflectionMetadata = (bytes: Uint8Array): NativeAotReflectionMetadata => {
-  if (bytes.byteLength > MAX_NATIVE_AOT_REFLECTION_METADATA_BYTES) {
-    return { scopes: [], warnings: ["NativeFormat metadata exceeds its 32 MiB handle range."] };
-  }
   const reader = new NativeFormatReader(bytes);
   if (reader.size < 4 || reader.uint32(0) !== NATIVE_AOT_METADATA_SIGNATURE) {
     return { scopes: [], warnings: ["NativeFormat metadata signature is missing or truncated."] };

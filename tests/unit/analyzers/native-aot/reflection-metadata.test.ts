@@ -81,9 +81,10 @@ void test("parseNativeAotReflectionMetadata accepts an empty graph and rejects e
   );
 });
 
-void test("parseNativeAotReflectionMetadata rejects oversized blobs and truncated root lists", () => {
-  // NativeFormat handles have a 25-bit offset field, so a 32 MiB blob is the hard boundary.
+void test("parses blobs beyond 32 MiB and rejects truncated root lists", () => {
+  // Record offsets have 25 bits; the whole buffer need not be rejected on that basis.
   const oversized = new Uint8Array(0x0200_0001);
+  oversized.set(createNativeFormatMetadataFixture());
   // NativePrimitiveDecoder's one-byte form declares one scope, but its handle is missing.
   // https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/NativeFormat/NativeFormatReader.cs
   const truncatedScopes = Uint8Array.from([0xfd, 0xdf, 0xad, 0xde, 0x02]);
@@ -92,8 +93,9 @@ void test("parseNativeAotReflectionMetadata rejects oversized blobs and truncate
   const boundaryResult = parseNativeAotReflectionMetadata(oversized.subarray(0, 0x0200_0000));
   const countResult = parseNativeAotReflectionMetadata(truncatedScopes);
 
-  assert.match(oversizedResult.warnings?.[0] ?? "", /32 MiB/);
-  assert.match(boundaryResult.warnings?.[0] ?? "", /signature/i);
+  assert.deepEqual(oversizedResult, parseNativeAotReflectionMetadata(
+    createNativeFormatMetadataFixture()));
+  assert.deepEqual(boundaryResult, oversizedResult);
   assert.match(countResult.warnings?.[0] ?? "", /outside the metadata/i);
 });
 

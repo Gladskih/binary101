@@ -100,19 +100,6 @@ export const parseReadyToRun = async (
   }
   const sectionBytes = sectionCount * 12;
   const issues: string[] = [];
-  // Defensive local cap; real section counts are small, malformed files can claim billions.
-  if (sectionCount > 4096) {
-    return {
-      status: "ready-to-run",
-      signature,
-      majorVersion,
-      minorVersion,
-      flags,
-      sectionCount,
-      sections: [],
-      issues: ["ReadyToRun section count is unreasonable; section table was not parsed."]
-    };
-  }
   const declaredTableBytes = Math.max(0, clr.ManagedNativeHeaderSize - 16);
   const table = await readMappedRvaPrefix(reader, clr.ManagedNativeHeaderRVA + 16,
     Math.min(sectionBytes, declaredTableBytes), rvaToOff);
