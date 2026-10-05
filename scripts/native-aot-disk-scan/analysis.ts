@@ -28,7 +28,8 @@ export const scanNativeAotReader = async (
   const core = await parsePeHeaders(reader);
   if (!core || !isPeWindowsCore(core)) return { match: null, pe: false };
   const [clr, exportsInfo, relocations] = await Promise.all([
-    parseClrDirectory(reader, core.dataDirs, core.rvaToOff),
+    parseClrDirectory(reader, core.dataDirs, core.rvaToOff,
+      core.coff.Machine),
     parseExportDirectory(reader, core.dataDirs, core.rvaToOff),
     parseBaseRelocations(reader, core.dataDirs, core.rvaToOff)
   ]);

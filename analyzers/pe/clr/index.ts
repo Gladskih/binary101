@@ -153,7 +153,8 @@ const attachClrSubdirectories = async (
   rvaToOff: RvaToOffset,
   fileSize: number,
   clr: PeClrHeader,
-  issues: string[]
+  issues: string[],
+  machine?: number
 ): Promise<void> => {
   addOptionalDirIssues("Resources", clr.ResourcesRVA, clr.ResourcesSize, fileSize, rvaToOff, issues);
   addOptionalDirIssues("StrongNameSignature", clr.StrongNameSignatureRVA, clr.StrongNameSignatureSize, fileSize, rvaToOff, issues);
@@ -165,13 +166,14 @@ const attachClrSubdirectories = async (
   clr.strongName = await parseStrongName(reader, rvaToOff, clr);
   const managedResources = await parseManagedResources(reader, rvaToOff, clr);
   if (managedResources) clr.managedResources = managedResources;
-  clr.readyToRun = await parseReadyToRun(reader, rvaToOff, clr);
+  clr.readyToRun = await parseReadyToRun(reader, rvaToOff, clr, machine);
 };
 
 export async function parseClrDirectory(
   reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
-  rvaToOff: RvaToOffset
+  rvaToOff: RvaToOffset,
+  machine?: number
 ): Promise<PeClrHeader | null> {
   const dir = dataDirs.find(d => d.name === "CLR_RUNTIME");
   if (!dir) return null;
@@ -200,7 +202,7 @@ export async function parseClrDirectory(
   validateCor20Header(clr, dir.size, issues);
   validateEntryPointToken(clr, issues);
   await attachClrMetadata(reader, rvaToOff, clr, issues);
-  await attachClrSubdirectories(reader, rvaToOff, fileSize, clr, issues);
+  await attachClrSubdirectories(reader, rvaToOff, fileSize, clr, issues, machine);
   if (issues.length) clr.issues = issues;
   return clr;
 }

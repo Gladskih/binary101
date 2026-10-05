@@ -93,7 +93,7 @@ const makeReadyToRunFixture = (sections: ReadyToRunSectionSpec[] = []): ReadyToR
 
 void test("parses all file-backed sections beyond the former local cap", async () => {
   const sections = Array.from({ length: 4097 }, (_, index) => ({
-    type: 100 + index, rva: 0, size: 0
+    type: 10000 + index, rva: 0, size: 0
   }));
   const fixture = makeReadyToRunFixture(sections);
 
@@ -101,6 +101,18 @@ void test("parses all file-backed sections beyond the former local cap", async (
 
   assert.equal(parsed.sections.length, sections.length);
   assert.deepEqual(parsed.issues, []);
+});
+
+void test("retains sections and warns about duplicate or unordered section types", async () => {
+  const fixture = makeReadyToRunFixture([
+    { type: 10001, rva: 0, size: 0 }, { type: 10000, rva: 0, size: 0 },
+    { type: 10000, rva: 0, size: 0 }
+  ]);
+
+  const parsed = await parseReadyToRun(new MockFile(fixture.bytes), rva => rva, fixture.clr);
+
+  assert.equal(parsed.sections.length, 3);
+  assert.match(parsed.issues.join(" "), /strictly increasing/);
 });
 
 void test("bounds an extreme section count by readable bytes and preserves complete rows", async () => {
@@ -131,6 +143,7 @@ void test("parseReadyToRun parses RTR headers and named section entries", async 
 
   assert.strictEqual(parsed.status, "ready-to-run");
   assert.strictEqual(parsed.majorVersion, READY_TO_RUN_MAJOR_VERSION);
+  assert.strictEqual(parsed.minorVersion, 5);
   assert.strictEqual(parsed.flags, READY_TO_RUN_STRIPPED_IL_BODIES);
   assert.deepStrictEqual(parsed.sections.map(section => section.name), ["CompilerIdentifier", "OwnerCompositeExecutable"]);
 });
@@ -193,5 +206,57 @@ void test("parseReadyToRun reports absent and unmapped headers", async () => {
   const unmapped = await parseReadyToRun(new MockFile(fixture.bytes), () => null, fixture.clr);
 
   assert.strictEqual(absent.status, "absent");
+  assert.deepEqual(absent.issues, []);
   assert.strictEqual(unmapped.status, "unmapped");
+  assert.match(unmapped.issues.join(), /could not be mapped/);
+});
+
+void test("names the CoreCLR section IDs without losing raw directory values", async () => {
+  // Section IDs from dotnet/runtime v10.0.0 src/coreclr/inc/readytorun.h.
+  const names = ["CompilerIdentifier", "ImportSections", "RuntimeFunctions", "MethodDefEntryPoints",
+    "ExceptionInfo", "DebugInfo", "DelayLoadMethodCallThunks", "Unknown(107)", "AvailableTypes",
+    "InstanceMethodEntryPoints", "InliningInfo", "ProfileDataInfo", "ManifestMetadata",
+    "AttributePresence", "InliningInfo2", "ComponentAssemblies", "OwnerCompositeExecutable",
+    "PgoInstrumentationData", "ManifestAssemblyMvids", "CrossModuleInlineInfo", "HotColdMap",
+    "MethodIsGenericMap", "EnclosingTypeMap", "TypeGenericInfoMap", "ExternalTypeMaps",
+    "ProxyTypeMaps", "TypeMapAssemblyTargets"];
+  const fixture = makeReadyToRunFixture(names.map((_, index) => ({ type: 100 + index, rva: 0, size: 0 })));
+  const raw = makeReadyToRunFixture([{ type: 10000, rva: 0x11223344, size: 0x55667788 }]);
+
+  const parsed = await parseReadyToRun(new MockFile(fixture.bytes), rva => rva, fixture.clr);
+  const directory = await parseReadyToRun(new MockFile(raw.bytes), rva => rva, raw.clr);
+
+  assert.deepEqual(parsed.sections.map(section => section.name), names);
+  assert.deepEqual(directory.sections, [
+    { type: 10000, name: "Unknown(10000)", rva: 0x11223344, size: 0x55667788 }
+  ]);
+});
+
+void test("distinguishes empty directories from incomplete or unmapped headers", async () => {
+  const fixture = makeReadyToRunFixture();
+  const file = new MockFile(fixture.bytes);
+
+  const noSize = await parseReadyToRun(file, rva => rva, makeClr(fixture.layout.headerRva, 0));
+  const noRva = await parseReadyToRun(file, rva => rva, makeClr(0, 16));
+  const short = await parseReadyToRun(file, rva => rva, makeClr(fixture.layout.headerRva, 15));
+  const negative = await parseReadyToRun(file, () => -1, fixture.clr);
+  const boundary = await parseReadyToRun(file, () => fixture.bytes.length, fixture.clr);
+
+  assert.equal(noSize.status, "truncated");
+  assert.equal(noRva.status, "unknown-managed-native-header");
+  assert.equal(short.status, "truncated");
+  assert.match(short.issues.join(), /shorter than 16/);
+  assert.equal(negative.status, "unmapped");
+  assert.equal(boundary.status, "unmapped");
+});
+
+void test("validates decoded method maps against the target runtime-function table", async () => {
+  const fixture = makeReadyToRunFixture([
+    { type: 102, rva: 0, size: 12 }, { type: 103, rva: 0, size: 4 }
+  ]);
+  fixture.bytes.set([8, 1, 0, 12]);
+
+  const parsed = await parseReadyToRun(new MockFile(fixture.bytes), rva => rva, fixture.clr, 0x8664);
+
+  assert.match(parsed.issues.join(), /missing runtime-function index/);
 });
