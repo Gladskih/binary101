@@ -17,7 +17,7 @@ const encodeUnsigned = (value: number): number[] => {
   return [0x0f, value & 0xff, value >>> 8 & 0xff, value >>> 16 & 0xff, value >>> 24];
 };
 
-class MetadataFixtureWriter {
+export class NativeFormatFixtureWriter {
   readonly bytes: number[] = [0xfd, 0xdf, 0xad, 0xde];
   readonly patches = new Map<string, HandlePatch[]>();
   readonly labels = new Map<string, number>();
@@ -79,10 +79,10 @@ class MetadataFixtureWriter {
   }
 }
 
-const emptyCollection = (writer: MetadataFixtureWriter): void => writer.unsigned(0);
-const nilHandle = (writer: MetadataFixtureWriter): void => writer.unsigned(0);
+const emptyCollection = (writer: NativeFormatFixtureWriter): void => writer.unsigned(0);
+const nilHandle = (writer: NativeFormatFixtureWriter): void => writer.unsigned(0);
 
-const writeMethod = (writer: MetadataFixtureWriter, label: string, name: string): void => {
+const writeMethod = (writer: NativeFormatFixtureWriter, label: string, name: string): void => {
   writer.label(label);
   writer.unsigned(0x16);
   writer.unsigned(0);
@@ -95,7 +95,7 @@ const writeMethod = (writer: MetadataFixtureWriter, label: string, name: string)
 };
 
 const writeType = (
-  writer: MetadataFixtureWriter,
+  writer: NativeFormatFixtureWriter,
   label: string,
   name: string,
   namespaceLabel: string,
@@ -119,7 +119,7 @@ const writeType = (
   writer.string(`${label}-name`, name);
 };
 
-const writeScope = (writer: MetadataFixtureWriter, majorVersion: number, scopeCount: number): void => {
+const writeScope = (writer: NativeFormatFixtureWriter, majorVersion: number, scopeCount: number): void => {
   writer.collection(Array.from({ length: scopeCount }, () => [HANDLE_TYPES.scope, "scope"]));
   writer.label("scope");
   writer.unsigned(0);
@@ -139,7 +139,7 @@ const writeScope = (writer: MetadataFixtureWriter, majorVersion: number, scopeCo
 };
 
 const writeNamespaces = (
-  writer: MetadataFixtureWriter,
+  writer: NativeFormatFixtureWriter,
   rootChildren: string[],
   demoChildren: string[]
 ): void => {
@@ -172,7 +172,7 @@ const buildNativeFormatMetadataFixture = (
   fields: string[] = ["count-field", "name-field"],
   scopeCount = 1
 ): Uint8Array => {
-  const writer = new MetadataFixtureWriter();
+  const writer = new NativeFormatFixtureWriter();
   writeScope(writer, majorVersion, scopeCount);
   writeNamespaces(writer, rootChildren, demoChildren);
   writeMethod(writer, "main-method", "Main");
@@ -231,11 +231,11 @@ export const createNativeFormatMetadataWithNamespaceCycleFixture = (): Uint8Arra
     ["inner-namespace", "root-namespace"]
   );
 
-const assertFixtureComplete = (writer: MetadataFixtureWriter): void => {
+const assertFixtureComplete = (writer: NativeFormatFixtureWriter): void => {
   if (writer.patches.size) throw new Error(`Unresolved fixture labels: ${[...writer.patches.keys()]}`);
 };
 
-const writeField = (writer: MetadataFixtureWriter, label: string, name: string): void => {
+const writeField = (writer: NativeFormatFixtureWriter, label: string, name: string): void => {
   // Field: flags, name, signature, default value, offset, custom attributes.
   // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs
   writer.label(label);

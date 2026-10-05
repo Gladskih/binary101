@@ -13,7 +13,7 @@ void test("getElfPagedTableModel exposes NativeAOT reflection rows", () => {
           name: "App",
           moduleName: "App.dll",
           version: { major: 1, minor: 0, build: 0, revision: 0 },
-          types: [{ namespace: "", name: "Program", methods: ["Main"], fields: ["Count"] }]
+          types: [{ namespace: "", name: "Program", methods: ["Main"].map(name => ({ name })), fields: ["Count"].map(name => ({ name })) }]
         }]
       }
     }

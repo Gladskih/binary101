@@ -26,6 +26,24 @@ export interface NativeAotReadyToRunHeader {
   reflection: NativeAotReflectionMetadata;
 }
 
+const parseClosedPointerRange = async (
+  image: NativeAotVirtualImage, sites: ReadonlySet<number>, endSlotRva: number, rva: number
+): Promise<{ rva: number; size: number } | null> => {
+  if (!sites.has(endSlotRva)) return null;
+  const endRva = await image.readPointerTarget(endSlotRva);
+  if (endRva == null || endRva < rva) return null;
+  const size = endRva - rva;
+  return image.isMappedRange(rva, size || 1) ? { rva, size } : null;
+};
+
+const parseOpenPointerRange = async (
+  image: NativeAotVirtualImage, sites: ReadonlySet<number>, endSlotRva: number, rva: number
+): Promise<{ rva: number; size: null } | null> => {
+  const endValue = await image.readPointerValue(endSlotRva);
+  return !sites.has(endSlotRva) && endValue === 0n && image.isMappedRange(rva, 1)
+    ? { rva, size: null } : null;
+};
+
 const parsePointerRangeEntry = async (
   image: NativeAotVirtualImage,
   sites: ReadonlySet<number>,
@@ -38,17 +56,8 @@ const parsePointerRangeEntry = async (
   if ((flags !== 0 && flags !== 1) || !sites.has(startSlotRva)) return null;
   const rva = await image.readPointerTarget(startSlotRva);
   if (rva == null) return null;
-  if (flags === 0) {
-    const endValue = await image.readPointerValue(endSlotRva);
-    return !sites.has(endSlotRva) && endValue === 0n && image.isMappedRange(rva, 1)
-      ? { rva, size: null }
-      : null;
-  }
-  if (!sites.has(endSlotRva)) return null;
-  const endRva = await image.readPointerTarget(endSlotRva);
-  if (endRva == null || endRva < rva) return null;
-  if (endRva === rva) return image.isMappedRange(rva, 1) ? { rva, size: 0 } : null;
-  return image.isMappedRange(rva, endRva - rva) ? { rva, size: endRva - rva } : null;
+  return flags === 0 ? parseOpenPointerRange(image, sites, endSlotRva, rva)
+    : parseClosedPointerRange(image, sites, endSlotRva, rva);
 };
 
 const parseSizePointerEntry = async (
@@ -76,7 +85,7 @@ const parseHeaderSections = async (
 ): Promise<NativeAotMetadataSection[] | null> => {
   const tableRva = headerRva + NATIVE_AOT_HEADER_SIZE;
   const table = await image.readData(tableRva, count * entrySize, 4);
-  if (!table) return null;
+  if (!table || table.byteLength < count * entrySize) return null;
   const sections: NativeAotMetadataSection[] = [];
   let previousType = 0;
   for (let index = 0; index < count; index += 1) {
@@ -108,35 +117,41 @@ const findEmbeddedMetadata = (
 ): NativeAotMetadataSection | undefined =>
   sections.find(section => section.type === NATIVE_AOT_EMBEDDED_METADATA_SECTION);
 
-const hasValidEmbeddedMetadata = async (
+const findValidatedEmbeddedMetadata = async (
   image: NativeAotVirtualImage,
   sections: NativeAotMetadataSection[]
-): Promise<boolean> => {
+): Promise<(NativeAotMetadataSection & { size: number }) | null> => {
   const metadata = findEmbeddedMetadata(sections);
-  if (metadata?.size == null || metadata.size < 4) return false;
-  if (!image.isDataRange(metadata.rva, metadata.size, 4)) return false;
+  if (metadata?.size == null || metadata.size < 4) return null;
+  if (!image.isDataRange(metadata.rva, metadata.size, 4)) return null;
   const view = await image.readData(metadata.rva, 4, 4);
-  return view?.getUint32(0, true) === NATIVE_AOT_METADATA_SIGNATURE;
+  return view != null && view.byteLength >= 4 &&
+    view.getUint32(0, true) === NATIVE_AOT_METADATA_SIGNATURE
+    ? metadata as NativeAotMetadataSection & { size: number } : null;
 };
 
 const parseEmbeddedReflectionMetadata = async (
   image: NativeAotVirtualImage,
-  sections: NativeAotMetadataSection[]
+  metadata: NativeAotMetadataSection & { size: number }
 ): Promise<NativeAotReflectionMetadata> => {
-  const metadata = findEmbeddedMetadata(sections);
-  if (metadata?.size == null) {
-    return { scopes: [], warnings: ["NativeFormat metadata has an unknown extent."] };
-  }
   try {
     const view = await image.readData(metadata.rva, metadata.size, 4);
     if (!view) return { scopes: [], warnings: ["NativeFormat metadata could not be read."] };
-    return parseNativeAotReflectionMetadata(
+    const reflection = parseNativeAotReflectionMetadata(
       new Uint8Array(view.buffer, view.byteOffset, view.byteLength)
     );
+    if (view.byteLength < metadata.size) {
+      reflection.warnings = [...reflection.warnings ?? [], "NativeFormat metadata is truncated."];
+    }
+    return reflection;
   } catch {
     return { scopes: [], warnings: ["NativeFormat metadata could not be read."] };
   }
 };
+
+const isKnownHeaderEncoding = (header: DataView): boolean =>
+  header.getUint16(4, true) !== 0 && header.getUint32(8, true) === 0 &&
+  header.getUint16(12, true) !== 0 && header.getUint8(15) === 1;
 
 export const parseNativeAotReadyToRunHeader = async (
   image: NativeAotVirtualImage,
@@ -144,25 +159,23 @@ export const parseNativeAotReadyToRunHeader = async (
   headerRva: number
 ): Promise<NativeAotReadyToRunHeader | null> => {
   const header = await image.readData(headerRva, NATIVE_AOT_HEADER_SIZE, image.pointerSize);
-  if (!header || header.getUint32(0, true) !== NATIVE_AOT_READY_TO_RUN_SIGNATURE) return null;
-  const flags = header.getUint32(8, true);
+  if (!header || header.byteLength < NATIVE_AOT_HEADER_SIZE ||
+    header.getUint32(0, true) !== NATIVE_AOT_READY_TO_RUN_SIGNATURE) return null;
   const count = header.getUint16(12, true);
   const entrySize = header.getUint8(14);
-  const entryType = header.getUint8(15);
   const layout = layoutForEntrySize(entrySize, image.pointerSize);
-  if (!header.getUint16(4, true) || flags !== 0 || !count || entryType !== 1 || !layout) {
-    return null;
-  }
+  if (!isKnownHeaderEncoding(header) || !layout) return null;
   const sections = await parseHeaderSections(image, sites, headerRva, count, entrySize, layout);
   if (!sections?.some(section => section.type >= 201 && section.type <= 215)) return null;
-  if (!await hasValidEmbeddedMetadata(image, sections)) return null;
+  const metadata = await findValidatedEmbeddedMetadata(image, sections);
+  if (!metadata) return null;
   return {
     layout,
     headerRva,
     majorVersion: header.getUint16(4, true),
     minorVersion: header.getUint16(6, true),
     sections,
-    reflection: await parseEmbeddedReflectionMetadata(image, sections)
+    reflection: await parseEmbeddedReflectionMetadata(image, metadata)
   };
 };
 

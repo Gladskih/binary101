@@ -141,6 +141,20 @@ const setSizePointerMetadataSize = (
   fixture.view.setUint32(metadataEntry + 4, metadataSize, true);
 };
 
+void test("preserves a short reflection prefix and reports a truncated metadata read", async () => {
+  const fixture = createNativeAotMetadataFixture();
+  const image = createVirtualImage(fixture);
+  const shortImage: NativeAotVirtualImage = { ...image,
+    readData: async (address, size, alignment) => address === fixture.embeddedMetadataRva && size > 4
+      ? image.readData(address, 5, alignment) : image.readData(address, size, alignment)
+  };
+
+  const parsed = await findNativeAotMetadata(shortImage, fixturePointerSites(fixture));
+
+  assert.equal(parsed?.status, "confirmed");
+  assert.match(parsed?.reflection?.warnings?.join(" ") ?? "", /truncated/);
+});
+
 void test("logical ReadyToRun attempts a file-backed read beyond the former size cap", async () => {
   const oversized = createNativeAotMetadataFixture(8, "size-pointer");
   const oversizedBytes = 0x0200_0001;

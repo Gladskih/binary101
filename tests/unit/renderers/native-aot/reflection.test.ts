@@ -14,8 +14,8 @@ void test("renderNativeAotReflection renders scope, type, and method names", () 
       name: "Demo<Assembly>",
       moduleName: "Demo.dll",
       version: { major: 1, minor: 2, build: 3, revision: 4 },
-      types: [{ namespace: "Example", name: "Program", methods: ["Main", "Run<Wait>"],
-        fields: ["Count", "<Name>k__BackingField"] }, {
+      types: [{ namespace: "Example", name: "Program", methods: ["Main", "Run<Wait>"].map(name => ({ name })),
+        fields: ["Count", "<Name>k__BackingField"].map(name => ({ name })) }, {
         namespace: "",
         name: "Marker",
         methods: [],
@@ -38,7 +38,7 @@ void test("renderNativeAotReflection renders scope, type, and method names", () 
   assert.ok(html.includes('class="nativeAotTable__compact peNumeric">Fields</th>'));
   assert.match(html, /peNumeric">2<\/td><\/tr>/);
   assert.match(html, /nativeAotTypesTable__fields"[^>]*>-<\/td>/);
-  assert.ok(html.includes("do not include signatures or code addresses"));
+  assert.ok(html.includes("field signatures describe retained reflection metadata"));
   assert.ok(html.includes('class="table nativeAotScopesTable"'));
   assert.ok(html.includes('class="nativeAotTable__compact peNumeric">Methods</th>'));
   assert.ok(html.includes('class="table nativeAotTypesTable"'));
@@ -86,7 +86,7 @@ void test("reflection tables keep headers and counts aligned across multiple sco
   const scopes = [{
     name: "First", moduleName: "First.dll",
     version: { major: 1, minor: 2, build: 3, revision: 4 },
-    types: [{ namespace: "", name: "Record", methods: ["Run"], fields: ["Count", "Name"] }]
+    types: [{ namespace: "", name: "Record", methods: ["Run"].map(name => ({ name })), fields: ["Count", "Name"].map(name => ({ name })) }]
   }, {
     name: "Second", moduleName: "Second.dll",
     version: { major: 4, minor: 3, build: 2, revision: 1 }, types: []
@@ -104,7 +104,7 @@ void test("reflection tables keep headers and counts aligned across multiple sco
     ["First", "First.dll", "1.2.3.4", "1", "1", "2"],
     ["Second", "Second.dll", "4.3.2.1", "0", "0", "0"]
   ]);
-  assert.equal(tables.length, 2);
+  assert.equal(tables.length, 3);
   assert.deepEqual(Array.from(tables[1]!.getElementsByTagName("th")).map(cell => cell.textContent),
     ["Assembly", "Type", "Methods", "Fields"]);
 });
@@ -113,7 +113,7 @@ void test("reflection table model exposes sortable field names with matching col
   const model = createNativeAotReflectionTypeTableModel([{
     name: "App", moduleName: "App.dll",
     version: { major: 1, minor: 0, build: 0, revision: 0 },
-    types: [{ namespace: "", name: "Record", methods: ["Run"], fields: ["<Count>", "Name"] }]
+    types: [{ namespace: "", name: "Record", methods: ["Run"].map(name => ({ name })), fields: ["<Count>", "Name"].map(name => ({ name })) }]
   }]);
 
   assert.deepEqual(model.columns, [

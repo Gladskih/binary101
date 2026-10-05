@@ -1,22 +1,10 @@
-﻿"use strict";
-
 import {
-  NATIVE_AOT_METADATA_SIGNATURE,
-  type NativeAotReflectionMetadata,
-  type NativeAotReflectionScope,
-  type NativeAotReflectionType
+  NATIVE_AOT_METADATA_SIGNATURE, type NativeAotReflectionMetadata,
+  type NativeAotReflectionScope, type NativeAotReflectionType
 } from "./format.js";
 import { NativeFormatReader, type NativeFormatHandle } from "./native-format-reader.js";
-import {
-  NATIVE_FORMAT_SCOPE_HANDLE,
-  parseNativeFormatFieldName,
-  parseNativeFormatMethodName,
-  parseNativeFormatNamespaceRecord,
-  parseNativeFormatScopeRecord,
-  parseNativeFormatTypeRecord
-} from "./native-format-records.js";
-
-type MemberKind = "method" | "field";
+import { NativeFormatStore, type NativeFormatRecord } from "./native-format-store.js";
+import { NativeFormatMembers } from "./native-format-members.js";
 
 interface TraversalEntry {
   kind: "namespace" | "type";
@@ -26,134 +14,118 @@ interface TraversalEntry {
 }
 
 interface ParseState {
-  reader: NativeFormatReader;
-  warnings: Set<string>;
+  store: NativeFormatStore;
+  members: NativeFormatMembers;
   visited: Record<"scope" | "namespace" | "type", Set<number>>;
-  memberNames: Record<MemberKind, Map<number, string | null>>;
 }
 
-const recordWarning = (kind: string, offset: number, error: unknown): string =>
-  `Could not decode NativeFormat ${kind} at 0x${offset.toString(16)}: ${errorMessage(error)}`;
+const handles = (record: NativeFormatRecord, name: string): NativeFormatHandle[] =>
+  record.values[name] ? record.handles(name) : [];
 
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : "unknown decoding error";
-
-const parseMemberName = (
-  state: ParseState, handle: NativeFormatHandle, kind: MemberKind
-): string | null => {
-  const cache = state.memberNames[kind];
-  const cached = cache.get(handle.offset);
-  if (cached !== undefined) return cached;
-  try {
-    const name = kind === "method"
-      ? parseNativeFormatMethodName(state.reader, handle)
-      : parseNativeFormatFieldName(state.reader, handle);
-    cache.set(handle.offset, name);
-    return name;
-  } catch (error) {
-    cache.set(handle.offset, null);
-    state.warnings.add(recordWarning(kind, handle.offset, error));
-    return null;
-  }
+const warning = (state: ParseState, kind: string, offset: number, error: unknown): void => {
+  state.store.warnings.add(`Could not decode NativeFormat ${kind} at 0x${offset.toString(16)}: ` +
+    `${error instanceof Error ? error.message : "unknown decoding error"}`);
 };
 
-const readFieldList = (state: ParseState, offset: number, count: number): string[] => {
-  const names: string[] = [];
-  let nextOffset = offset;
-  for (let index = 0; index < count; index += 1) {
-    // HandleType.Field = 0x23; typed collections store offsets, not polymorphic tokens.
-    // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderCommonGen.cs
-    const handle = state.reader.handle(nextOffset, [0x23]);
-    nextOffset = handle.nextOffset;
-    if (!handle.value.offset) continue;
-    const name = parseMemberName(state, handle.value, "field");
-    if (name !== null) names.push(name);
-  }
-  return names;
-};
-
-const parseFields = (state: ParseState, offset: number): string[] => {
-  try {
-    const count = state.reader.collectionCount(offset);
-    return readFieldList(state, count.nextOffset, count.value);
-  } catch (error) {
-    state.warnings.add(recordWarning("field list", offset, error));
-    return [];
-  }
-};
+const typeDefinition = (
+  state: ParseState, record: NativeFormatRecord
+): NonNullable<NativeAotReflectionType["definition"]> => ({
+  flags: record.number("flags"), size: record.number("size"),
+  packingSize: record.number("packingSize"),
+  baseType: state.members.signatures.type(record.handle("baseType")),
+  interfaces: handles(record, "interfaces").map(handle => state.members.signatures.type(handle)),
+  genericParameters: state.members.generics(handles(record, "genericParameters")),
+  properties: handles(record, "properties").map(handle => state.members.property(handle))
+    .filter(property => property !== null),
+  events: handles(record, "events").map(handle => state.members.event(handle))
+    .filter(event => event !== null)
+});
 
 const readType = (
   state: ParseState, entry: TraversalEntry, output: NativeAotReflectionType[]
 ): TraversalEntry[] => {
-  const record = parseNativeFormatTypeRecord(state.reader, entry.handle);
-  const ownName = state.reader.string(record.name);
+  const record = state.store.record(entry.handle);
+  const ownName = state.store.reader.string(record.handle("name"));
   const name = entry.enclosingName ? `${entry.enclosingName}+${ownName}` : ownName;
-  output.push({
+  const type: NativeAotReflectionType = {
     namespace: entry.namespaceName, name,
-    methods: record.methods.map(handle => parseMemberName(state, handle, "method"))
-      .filter((method): method is string => method !== null),
-    fields: parseFields(state, record.fieldsOffset)
-  });
-  return record.nestedTypes.map(handle => ({
+    methods: handles(record, "methods").map(handle => state.members.method(handle))
+      .filter(method => method !== null),
+    fields: handles(record, "fields").map(handle => state.members.field(handle))
+      .filter(field => field !== null)
+  };
+  output.push(type);
+  try { type.definition = typeDefinition(state, record); }
+  catch (error) { warning(state, "type definition", entry.handle.offset, error); }
+  return handles(record, "nestedTypes").map(handle => ({
     kind: "type", handle, namespaceName: entry.namespaceName, enclosingName: name
   }));
 };
 
 const readNamespace = (state: ParseState, entry: TraversalEntry): TraversalEntry[] => {
-  const record = parseNativeFormatNamespaceRecord(state.reader, entry.handle);
-  const ownName = state.reader.string(record.name);
+  const record = state.store.record(entry.handle);
+  const ownName = state.store.reader.string(record.handle("name"));
   const name = ownName && entry.namespaceName
     ? `${entry.namespaceName}.${ownName}` : ownName || entry.namespaceName;
   return [
-    ...record.types.map((handle): TraversalEntry => ({
+    ...handles(record, "types").map((handle): TraversalEntry => ({
       kind: "type", handle, namespaceName: name, enclosingName: ""
     })),
-    ...record.children.map((handle): TraversalEntry => ({
+    ...handles(record, "children").map((handle): TraversalEntry => ({
       kind: "namespace", handle, namespaceName: name, enclosingName: ""
     }))
   ];
 };
 
 const walkGraph = (
-  state: ParseState, rootNamespace: NativeFormatHandle, output: NativeAotReflectionType[]
+  state: ParseState, root: NativeFormatHandle, output: NativeAotReflectionType[]
 ): void => {
-  const pending: TraversalEntry[] = [{
-    kind: "namespace", handle: rootNamespace, namespaceName: "", enclosingName: ""
+  const pending: (TraversalEntry | { leave: string })[] = [{
+    kind: "namespace", handle: root, namespaceName: "", enclosingName: ""
   }];
+  const active = new Set<string>();
   while (pending.length) {
     const entry = pending.pop()!;
+    if ("leave" in entry) { active.delete(entry.leave); continue; }
+    const key = `${entry.kind}:${entry.handle.offset}`;
+    if (active.has(key)) {
+      warning(state, entry.kind, entry.handle.offset, new Error("Metadata graph contains a cycle."));
+      continue;
+    }
     if (state.visited[entry.kind].has(entry.handle.offset)) continue;
     state.visited[entry.kind].add(entry.handle.offset);
+    active.add(key);
+    pending.push({ leave: key });
     try {
       const children = entry.kind === "type"
         ? readType(state, entry, output) : readNamespace(state, entry);
-      // Reverse push preserves the existing depth-first metadata order without recursive calls.
       for (let index = children.length - 1; index >= 0; index -= 1) pending.push(children[index]!);
-    } catch (error) {
-      state.warnings.add(recordWarning(entry.kind, entry.handle.offset, error));
-    }
+    } catch (error) { warning(state, entry.kind, entry.handle.offset, error); }
   }
 };
 
-const parseScope = (
-  state: ParseState, handle: NativeFormatHandle
-): NativeAotReflectionScope | null => {
+const scopeVersion = (record: NativeFormatRecord): NativeAotReflectionScope["version"] => {
+  const version = { major: record.number("major"), minor: record.number("minor"),
+    build: record.number("build"), revision: record.number("revision") };
+  if (Object.values(version).some(value => value > 0xffff)) {
+    throw new Error("Version component exceeds UInt16.");
+  }
+  return version;
+};
+
+const parseScope = (state: ParseState, handle: NativeFormatHandle): NativeAotReflectionScope | null => {
   if (state.visited.scope.has(handle.offset)) return null;
   state.visited.scope.add(handle.offset);
   try {
-    const record = parseNativeFormatScopeRecord(state.reader, handle);
+    const record = state.store.record(handle);
     const types: NativeAotReflectionType[] = [];
-    if (record.rootNamespace.offset) walkGraph(state, record.rootNamespace, types);
-    return {
-      name: state.reader.string(record.name),
-      moduleName: state.reader.string(record.moduleName),
-      version: record.version,
-      types
-    };
-  } catch (error) {
-    state.warnings.add(recordWarning("scope", handle.offset, error));
-    return null;
-  }
+    const scope = { name: state.store.reader.string(record.handle("name")),
+      moduleName: state.store.reader.string(record.handle("moduleName")),
+      version: scopeVersion(record), types };
+    const root = record.handle("rootNamespace");
+    if (root.offset) walkGraph(state, root, types);
+    return scope;
+  } catch (error) { warning(state, "scope", handle.offset, error); return null; }
 };
 
 export const parseNativeAotReflectionMetadata = (bytes: Uint8Array): NativeAotReflectionMetadata => {
@@ -162,17 +134,17 @@ export const parseNativeAotReflectionMetadata = (bytes: Uint8Array): NativeAotRe
     return { scopes: [], warnings: ["NativeFormat metadata signature is missing or truncated."] };
   }
   try {
-    const decoded = reader.handles(4, [NATIVE_FORMAT_SCOPE_HANDLE]);
-    const state: ParseState = {
-      reader,
-      warnings: new Set<string>(),
-      visited: { scope: new Set<number>(), namespace: new Set<number>(), type: new Set<number>() },
-      memberNames: { method: new Map<number, string | null>(), field: new Map<number, string | null>() }
-    };
+    // MetadataReader root contains a typed ScopeDefinition collection after its signature.
+    // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs
+    const decoded = reader.handles(4, [0x38]);
+    const store = new NativeFormatStore(reader, new Set<string>());
+    const state: ParseState = { store, members: new NativeFormatMembers(store),
+      visited: { scope: new Set(), namespace: new Set(), type: new Set() } };
     const scopes = decoded.value.map(handle => parseScope(state, handle))
-      .filter((scope): scope is NativeAotReflectionScope => scope != null);
-    return state.warnings.size ? { scopes, warnings: [...state.warnings] } : { scopes };
+      .filter(scope => scope !== null);
+    return store.warnings.size ? { scopes, warnings: [...store.warnings] } : { scopes };
   } catch (error) {
-    return { scopes: [], warnings: [`Could not decode NativeFormat root: ${errorMessage(error)}`] };
+    return { scopes: [], warnings: ["Could not decode NativeFormat root: " +
+      `${error instanceof Error ? error.message : "unknown decoding error"}`] };
   }
 };

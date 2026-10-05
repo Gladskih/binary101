@@ -1,6 +1,8 @@
 "use strict";
 
 import assert from "node:assert/strict";
+import { nativeAotReflectionNames, syntheticNativeAotScope } from
+  "../../../helpers/native-aot-reflection-names.js";
 import { test } from "node:test";
 import {
   analyzePeNativeAotMetadata
@@ -82,23 +84,8 @@ void test("analyzePeNativeAotMetadata decodes embedded reflection names", async 
 
   const parsed = await parseNativeAotMetadataFixture(fixture);
 
-  assert.deepEqual(parsed?.reflection?.scopes[0], {
-    name: "HelloCSharp",
-    moduleName: "HelloCSharp.dll",
-    version: { major: 1, minor: 2, build: 3, revision: 4 },
-    types: [{ namespace: "Demo", name: "Program", methods: ["Main"],
-      fields: ["Count", "<Name>k__BackingField"] }, {
-      namespace: "Demo",
-      name: "Program+Nested",
-      methods: ["Work"],
-      fields: ["Value"]
-    }, {
-      namespace: "Demo.Inner",
-      name: "Worker",
-      methods: ["Run"],
-      fields: []
-    }]
-  });
+  assert.ok(parsed?.reflection);
+  assert.deepEqual(nativeAotReflectionNames(parsed.reflection).scopes[0], syntheticNativeAotScope);
 });
 
 void test("analyzePeNativeAotMetadata confirms size-pointer metadata", async () => {
