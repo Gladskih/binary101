@@ -27,6 +27,11 @@ export class DwarfCursor {
     this.end = Math.min(end, section.size);
     this.#littleEndian = littleEndian;
     this.#issues = issues;
+    if (![section.offset, section.size, position, end].every(Number.isSafeInteger) ||
+        section.offset < 0 || section.size < 0 || position < 0 || end < position ||
+        position > section.size || section.offset > reader.size) {
+      this.fail("Invalid DWARF cursor range");
+    }
   }
 
   get failed(): boolean {
@@ -57,6 +62,14 @@ export class DwarfCursor {
     if (byteLength === Uint16Array.BYTES_PER_ELEMENT) return this.#toBigInt(await this.uint16());
     if (byteLength === Uint32Array.BYTES_PER_ELEMENT) return this.#toBigInt(await this.uint32());
     if (byteLength === BigUint64Array.BYTES_PER_ELEMENT) return this.uint64();
+    // DWARF 5 Table 7.5: strx3/addrx3 use three-byte integers.
+    if (byteLength === 3) {
+      const view = await this.#view(byteLength);
+      if (!view) return null;
+      return BigInt(this.#littleEndian
+        ? view.getUint16(0, true) + view.getUint8(2) * 0x10000
+        : view.getUint16(1, false) + view.getUint8(0) * 0x10000);
+    }
     this.fail(`Unsupported ${byteLength}-byte integer`);
     return null;
   }
@@ -141,6 +154,7 @@ export class DwarfCursor {
   }
 
   async #view(byteLength: number): Promise<DataView | null> {
+    if (this.#failed) return null;
     if (byteLength > this.end - this.position) {
       this.fail(`Truncated value needs ${byteLength} bytes`);
       return null;

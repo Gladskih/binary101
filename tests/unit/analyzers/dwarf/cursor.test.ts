@@ -43,6 +43,26 @@ const createBigEndianCursor = (bytes: number[]): DwarfCursor => new DwarfCursor(
   []
 );
 
+void test("DwarfCursor reads three-byte indexed forms in both byte orders", async () => {
+  // DWARF 5 Table 7.5: strx3 and addrx3 contain a three-byte unsigned integer.
+  assert.equal(await createCursor([0x56, 0x34, 0x12]).unsigned(3), 0x123456n);
+  assert.equal(await createBigEndianCursor([0x12, 0x34, 0x56]).unsigned(3), 0x123456n);
+  assert.equal(await createCursor([0x56]).unsigned(3), null);
+});
+
+void test("DwarfCursor rejects invalid cursor ranges before reading", async () => {
+  const issues: string[] = [];
+  const cursor = new DwarfCursor(
+    new MockFile(Uint8Array.of(1)),
+    { name: ".debug_info", offset: 0, size: 1, compressed: false },
+    -1, 1, true, issues
+  );
+
+  assert.equal(await cursor.uint8(), null);
+  assert.equal(cursor.failed, true);
+  assert.match(issues.join(" "), /Invalid DWARF cursor range/);
+});
+
 void test("DwarfCursor reads fixed-width integers in both byte orders", async () => {
   const little = createCursor(concatenateBytes(
     encodeUint16(TEST_INTEGER.uint16),
