@@ -29,11 +29,14 @@ const elfSymbol = (elf: ElfParseResult, sections: ReadonlyMap<number, ElfSection
   name: string, info: number, sectionIndex: number, value: bigint,
   source: string): SanitizerSymbol | null => {
   if (!SANITIZER_ABI_SYMBOLS.has(name)) return null;
-  // STT_NOTYPE=0, STT_FUNC=2; undefined local symbols are not loader references (gABI 5).
+  // STT_NOTYPE=0, STT_FUNC=2; STB_LOCAL/GLOBAL/WEAK=0/1/2 (gABI 5).
+  // https://gabi.xinuos.com/elf/05-symtab.html
+  // Undefined local symbols are not loader references.
   if (sectionIndex === 0 && [0, 2].includes(info & 15) && [1, 2].includes(info >> 4)) {
     return { name, source, kind: "reference" };
   }
-  return (info & 15) === 2 && definitionIsMapped(elf, sections, sectionIndex, value)
+  return (info & 15) === 2 && [0, 1, 2].includes(info >> 4) &&
+    definitionIsMapped(elf, sections, sectionIndex, value)
     ? { name, source, kind: "definition" } : null;
 };
 

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { analyzePeSanitizers } from "../../../../analyzers/pe/sanitizers.js";
+import { parsePe, isPeWindowsParseResult } from "../../../../analyzers/pe/index.js";
+import { createSanitizerPeFile } from "../../../fixtures/sanitizer-pe-file.js";
 import { sanitizerPe, sanitizerImport, sanitizerCoffDebug, sanitizerExports } from
   "../../../fixtures/sanitizer-metadata.js";
 
@@ -8,8 +10,12 @@ void test("reports PE runtime DLL dependencies and imported ABI symbols separate
   const pe = sanitizerPe();
   pe.imports.entries = [sanitizerImport("clang_rt.asan_dynamic-x86_64.dll",
     ["__asan_init", "__asan_report_load4"])];
-  assert.deepEqual(analyzePeSanitizers(pe).map(row => row.kind),
-    ["dependency", "reference", "reference"]);
+  assert.deepEqual(analyzePeSanitizers(pe), [
+    { tool: "ASan", kind: "dependency", source: "PE import DLL",
+      name: "clang_rt.asan_dynamic-x86_64.dll" },
+    ...["__asan_init", "__asan_report_load4"].map(name => ({ tool: "ASan", kind: "reference",
+      source: "PE imports: clang_rt.asan_dynamic-x86_64.dll", name }))
+  ]);
 });
 
 void test("does not infer instrumentation from malformed imports or bound names", () => {
@@ -38,8 +44,12 @@ void test("reports delayed imports while ignoring ordinals and unnamed entries",
     Attributes: 1, ModuleHandleRVA: 0, ImportAddressTableRVA: 0, ImportNameTableRVA: 0,
     BoundImportAddressTableRVA: 0, UnloadInformationTableRVA: 0, TimeDateStamp: 0,
     functions: [{ ordinal: 1 }, {}, { name: "__asan_init" }, { name: "__asan_report_load4" }] }] };
-  assert.deepEqual(analyzePeSanitizers(pe).map(row => row.kind),
-    ["dependency", "reference", "reference"]);
+  assert.deepEqual(analyzePeSanitizers(pe), [
+    { tool: "ASan", kind: "dependency", source: "PE delay-load DLL",
+      name: "clang_rt.asan_dynamic-x86_64.dll" },
+    ...["__asan_init", "__asan_report_load4"].map(name => ({ tool: "ASan", kind: "reference",
+      source: "PE delay imports: clang_rt.asan_dynamic-x86_64.dll", name }))
+  ]);
   pe.delayImports.warning = "truncated";
   assert.deepEqual(analyzePeSanitizers(pe), []);
 });
@@ -67,7 +77,8 @@ void test("preserves the actual decorated spelling of i386 evidence", () => {
 void test("recognizes mapped exports without claiming that the runtime is active", () => {
   const pe = sanitizerPe();
   pe.exports = sanitizerExports();
-  assert.deepEqual(analyzePeSanitizers(pe).map(row => row.kind), ["definition", "definition"]);
+  assert.deepEqual(analyzePeSanitizers(pe), ["__asan_init", "__asan_report_load4"].map(name =>
+    ({ name, tool: "ASan", kind: "definition", source: "PE exports" })));
   pe.exports.issues.push("truncated");
   assert.deepEqual(analyzePeSanitizers(pe), []);
 });
@@ -131,10 +142,66 @@ void test("uses race-only Go entry points and ignores race0.go stubs", () => {
     fileCount: 1, textRange: { start: 4096n, end: 4160n }, functions:
     ["runtime.raceread", "runtime.racewrite", "main.main"].map((name, index) =>
       ({ name, start: 4096n + BigInt(index), end: 4097n + BigInt(index) })) };
-  assert.deepEqual(analyzePeSanitizers(pe).map(row => row.tool),
-    ["Go race detector", "Go race detector"]);
+  assert.deepEqual(analyzePeSanitizers(pe), ["runtime.raceread", "runtime.racewrite"].map(name =>
+    ({ tool: "Go race detector", kind: "definition", source: "Validated Go function metadata", name })));
   pe.goRuntime.functions[0]!.name = "runtime.raceinit";
   assert.deepEqual(analyzePeSanitizers(pe), []);
   pe.goRuntime.functions[1]!.name = "runtime.racefini";
   assert.deepEqual(analyzePeSanitizers(pe), []);
+  pe.goRuntime.functions[0]!.name = "runtime.raceread";
+  assert.deepEqual(analyzePeSanitizers(pe), []);
+});
+
+void test("does not treat a COFF FILE storage-class record as a runtime function", () => {
+  const pe = sanitizerPe();
+  pe.coffDebug = sanitizerCoffDebug();
+  pe.coffDebug.symbols[0]!.storageClass = 103; // IMAGE_SYM_CLASS_FILE (PE/COFF spec).
+  assert.deepEqual(analyzePeSanitizers(pe), []);
+});
+
+void test("accepts executable exports among other sections", () => {
+  const pe = sanitizerPe();
+  pe.exports = sanitizerExports();
+  pe.sections.push({ ...pe.sections[0]!, characteristics: 0 });
+  assert.equal(analyzePeSanitizers(pe).length, 2);
+  pe.rvaToOff = () => null;
+  assert.deepEqual(analyzePeSanitizers(pe), []);
+});
+
+for (const rva of [0, 4095, 4160]) {
+  void test(`requires executable section bounds even if RVA ${rva} maps elsewhere`, () => {
+    const pe = sanitizerPe();
+    pe.exports = sanitizerExports();
+    pe.rvaToOff = () => 512; // A mapper alone cannot establish executable code.
+    pe.exports.entries[0]!.rva = rva;
+    assert.deepEqual(analyzePeSanitizers(pe), []);
+  });
+}
+
+void test("does not treat RVA zero as a function even in a malformed section starting at zero", () => {
+  const pe = sanitizerPe();
+  pe.sections[0]!.virtualAddress = 0;
+  pe.exports = sanitizerExports();
+  pe.exports.entries[0]!.rva = 0;
+  pe.exports.entries[1]!.rva = 1;
+  pe.rvaToOff = () => 512;
+  assert.deepEqual(analyzePeSanitizers(pe), []);
+});
+
+void test("accepts static COFF functions alongside external functions", () => {
+  const pe = sanitizerPe();
+  pe.coffDebug = sanitizerCoffDebug();
+  pe.coffDebug.symbols[0]!.storageClass = 3; // IMAGE_SYM_CLASS_STATIC (PE/COFF spec).
+  assert.equal(analyzePeSanitizers(pe).length, 2);
+});
+
+void test("recognizes import evidence through the real PE parser", async () => {
+  const pe = await parsePe(new File([createSanitizerPeFile()], "asan.exe"));
+  assert.ok(pe && isPeWindowsParseResult(pe));
+  assert.deepEqual(analyzePeSanitizers(pe), [
+    { tool: "ASan", kind: "dependency", source: "PE import DLL",
+      name: "clang_rt.asan_dynamic-i386.dll" },
+    ...["__asan_init", "__asan_report_load4"].map(name => ({ tool: "ASan", kind: "reference",
+      source: "PE imports: clang_rt.asan_dynamic-i386.dll", name }))
+  ]);
 });

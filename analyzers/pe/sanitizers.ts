@@ -37,6 +37,8 @@ function* importedSymbols(pe: PeWindowsParseResult): IterableIterator<SanitizerS
 }
 
 const isExecutableRva = (pe: PeWindowsParseResult, rva: number): boolean =>
+  // IMAGE_SCN_MEM_EXECUTE=0x20000000 (PE/COFF section flags).
+  // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
   Number.isSafeInteger(rva) && rva > 0 && pe.rvaToOff(rva) != null &&
   pe.sections.some(section => (section.characteristics & 0x20000000) !== 0 &&
     rva >= section.virtualAddress && rva - section.virtualAddress < section.sizeOfRawData);
@@ -49,8 +51,10 @@ function* coffSymbols(pe: PeWindowsParseResult, debug: CoffDebugInfo | undefined
     const name = normalizedName(pe, record.name);
     if (!SANITIZER_ABI_SYMBOLS.has(name)) continue;
     const section = pe.sections[record.sectionNumber - 1];
-    // IMAGE_SYM_DTYPE_FUNCTION=2 occupies bits 4..5 of COFF Type (PE/COFF spec).
-    if (section && (record.type & 0x30) === 0x20 && record.value >= 0 &&
+    // Function Type=0x20; EXTERNAL/STATIC storage classes=2/3 (PE/COFF spec).
+    // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#coff-symbol-table
+    if (section && [2, 3].includes(record.storageClass) &&
+      (record.type & 0x30) === 0x20 && record.value >= 0 &&
       record.value < section.sizeOfRawData &&
       isExecutableRva(pe, section.virtualAddress + record.value)) {
       yield { name: record.name, kind: "definition", source };

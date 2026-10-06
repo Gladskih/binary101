@@ -24,6 +24,24 @@ export const sanitizerDynamicSymbol = (name: string): ElfDynamicSymbol => ({
   typeName: "FUNC", visibility: 0, visibilityName: "DEFAULT", shndx: 0
 });
 
+export const sanitizerElfDefinitions = (): ElfParseResult => {
+  const elf = sanitizerElf();
+  elf.symbolTables = [{ sectionIndex: 2, issues: [],
+    entries: ["__asan_init", "__asan_report_load4"].map(sanitizerStaticSymbol) }];
+  return elf;
+};
+
+export const sanitizerElfSegmentDefinitions = (): ElfParseResult => {
+  const elf = sanitizerElfDefinitions();
+  elf.sections = [];
+  elf.header.type = 2;
+  elf.programHeaders = [{ index: 0, type: 1, typeName: "PT_LOAD", offset: 0n,
+    vaddr: 4096n, paddr: 4096n, filesz: 64n, memsz: 128n, flags: 1,
+    flagNames: ["X"], align: 1n }];
+  elf.symbolTables![0]!.entries.forEach(record => { record.value = 4096n; });
+  return elf;
+};
+
 export const sanitizerImport = (dll: string, names: string[]): PeImportEntry => ({
   dll, originalFirstThunkRva: 0, timeDateStamp: 0, forwarderChain: 0, firstThunkRva: 0,
   lookupSource: "import-lookup-table", thunkTableTerminated: true,
