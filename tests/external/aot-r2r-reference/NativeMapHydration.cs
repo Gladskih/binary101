@@ -59,6 +59,22 @@ sealed class NativeMapHydration(NativeMapImage image, NativeMapReference.Blob? s
         return image.Absolute(address);
     }
 
+    byte ScalarByte(long address)
+    {
+        if (!loaded) Load();
+        foreach (var run in runs)
+            if (address >= run.address && address < run.address + run.size)
+                return run.source.HasValue ? image.Bytes(run.source.Value + address - run.address, 1)[0] : (byte)0;
+        return image.Bytes(address, 1)[0];
+    }
+
+    public uint Unsigned(long address, int size)
+    {
+        uint value = 0;
+        for (int index = 0; index < size; index++) value |= (uint)ScalarByte(address + index) << (index * 8);
+        return value;
+    }
+
     public long? Function(long? target)
     {
         if (!target.HasValue) return null;
