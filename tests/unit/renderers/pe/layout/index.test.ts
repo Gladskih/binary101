@@ -47,6 +47,7 @@ void test("renderException renders pdata stats", () => {
   const html = out.join("");
   assert.match(html, /<summary[^>]*><b>Exception directory \(.pdata\)<\/b> - 1 function<\/summary>/);
   assert.ok(html.includes("Functions (RUNTIME_FUNCTION entries)"));
+  assert.match(html, /<dl class="peExceptionStats">/);
   assert.ok(html.includes("<dd>1</dd>"));
   assert.ok(html.includes("Unique UNWIND_INFO blocks"));
   assert.ok(html.includes("UNWIND_INFO v1 blocks"));

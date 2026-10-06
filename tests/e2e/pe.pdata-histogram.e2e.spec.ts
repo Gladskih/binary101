@@ -35,6 +35,10 @@ void test("pdata histogram renders parsed byte ranges and survives reopening the
 
 void test("pdata histogram scrolls within its panel on a narrow screen", async ({ page }) => {
   await page.setViewportSize(NARROW_LAYOUT_VIEWPORT);
+  // Use a wide generic font so Windows font metrics cannot hide Linux's label overflow.
+  await page.addStyleTag({
+    content: `[data-pe-lazy-section="exception"] { font-family: monospace; }`
+  });
   const histogram = page.locator(".rangeHistogram__scroll");
   await expect(histogram).toBeVisible();
 
@@ -47,6 +51,13 @@ void test("pdata histogram scrolls within its panel on a narrow screen", async (
 
   expect(widths.plot).toBeGreaterThan(widths.panel);
   expect(widths.page).toBe(widths.viewport);
+  const statistics = page.locator('[data-pe-lazy-section="exception"] .peSectionBody > dl');
+  const bounds = await statistics.evaluate(element => ({
+    right: element.getBoundingClientRect().right,
+    cellRight: Math.max(...Array.from(element.children,
+      child => child.getBoundingClientRect().right))
+  }));
+  expect(bounds.cellRight).toBeLessThanOrEqual(bounds.right);
   await histogram.scrollIntoViewIfNeeded();
   await histogram.evaluate(element => { element.scrollLeft = element.scrollWidth; });
   await expect(histogram.locator("svg text").filter({ hasText: /^16$/ })).toBeInViewport();
