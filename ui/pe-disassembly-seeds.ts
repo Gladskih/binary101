@@ -205,7 +205,7 @@ const collectPeDisassemblySeeds = async (
   const seeds = collectBasicPeDisassemblySeeds(pe, windowsPe);
   if (windowsPe) {
     const rvas = await collectReadyToRunMethodRvas(reader, windowsPe, seeds.issues);
-    if (rvas.length) seeds.extraEntrypoints.push({ source: "ReadyToRun method entry points", rvas });
+    if (rvas.length) seeds.extraEntrypoints.push({ source: "ReadyToRun runtime functions", rvas });
     seeds.extraEntrypoints.push(...collectFunctionOverrideEntrypoints(windowsPe, file.size));
     seeds.instructionHintRvas = collectControlTransferInstructionRvas(windowsPe, file.size);
   }

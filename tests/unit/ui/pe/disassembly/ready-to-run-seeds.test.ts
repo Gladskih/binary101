@@ -21,7 +21,7 @@ void test("full PE parsing supplies R2R method roots without an exception direct
 
   // Fixture's native method is separate from its RET-only PE entrypoint.
   assert.deepEqual(seeds.extraEntrypoints, [
-    { source: "ReadyToRun method entry points", rvas: [0x1020] }
+    { source: "ReadyToRun runtime functions", rvas: [0x1020] }
   ]);
   assert.deepEqual(seeds.unwindBeginRvas, []);
   assert.deepEqual(seeds.issues, []);
@@ -34,7 +34,7 @@ void test("full PE parsing reports invalid R2R references to the disassembly see
 
   const seeds = await collectPeDisassemblySeeds(file, pe);
 
-  assert.deepEqual(seeds.extraEntrypoints, []);
+  assert.deepEqual(seeds.extraEntrypoints, [{ source: "ReadyToRun runtime functions", rvas: [0x1020] }]);
   assert.match(seeds.issues.join(" "), /missing runtime-function index/);
   assert.match(pe.clr!.readyToRun!.issues.join(" "), /missing runtime-function index/);
 });
@@ -47,7 +47,7 @@ void test("full PE parsing forwards generic instance roots when there is no Meth
   const seeds = await collectPeDisassemblySeeds(file, pe);
 
   assert.deepEqual(seeds.extraEntrypoints, [
-    { source: "ReadyToRun method entry points", rvas: [0x1020] }
+    { source: "ReadyToRun runtime functions", rvas: [0x1020] }
   ]);
   assert.equal(pe.clr?.readyToRun?.sections.some(section => section.type === 103), false);
   assert.deepEqual(seeds.issues, []);
@@ -59,7 +59,7 @@ void test("PE seed collection forwards R2R native roots without exception metada
   const seeds = await collectPeDisassemblySeeds(fixture.file, fixture.pe);
 
   assert.deepEqual(seeds.extraEntrypoints, [
-    { source: "ReadyToRun method entry points", rvas: fixture.codeRvas }
+    { source: "ReadyToRun runtime functions", rvas: fixture.codeRvas }
   ]);
   assert.deepEqual(seeds.unwindBeginRvas, []);
   assert.deepEqual(seeds.issues, []);
@@ -100,7 +100,7 @@ void test("PE controller forwards valid R2R roots and renders seed warnings with
   await flushTimers();
 
   assert.deepEqual(captured[0]!.extraEntrypoints, [
-    { source: "ReadyToRun method entry points", rvas: [fixture.codeRvas[0]] }
+    { source: "ReadyToRun runtime functions", rvas: fixture.codeRvas }
   ]);
   assert.deepEqual(fixture.pe.disassembly?.issues, [
     "ReadyToRun disassembly seeds: method map references a missing runtime-function index.",

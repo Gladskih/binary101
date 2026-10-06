@@ -26,7 +26,8 @@ static class ReadyToRunSeeds
             if (ReadyToRunReference.UInt32(header, offset) != 102) continue;
             var table = ReadyToRunReference.Data(pe, ReadyToRunReference.UInt32(header, offset + 4),
                 ReadyToRunReference.UInt32(header, offset + 8));
-            return indices.Select(entry => ReadyToRunReference.UInt32(table, checked((int)entry * width)))
+            return Enumerable.Range(0, table.Length / width)
+                .Select(entry => ReadyToRunReference.UInt32(table, entry * width))
                 .Select(rva => machine == 0x1c4 ? rva & ~1U : rva).Distinct().ToArray();
         }
         return Array.Empty<uint>();

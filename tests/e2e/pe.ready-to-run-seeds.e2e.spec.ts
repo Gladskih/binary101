@@ -30,7 +30,7 @@ test("R2R generic instance roots reveal code absent from MethodDef entrypoints a
   await expect(syscall).toContainText("0x00001020");
 });
 
-test("R2R seed failures remain visible after instruction-set analysis", async ({ page }) => {
+test("R2R index warnings stay visible while valid runtime rows still seed instructions", async ({ page }) => {
   const file = createPeReadyToRunSeedFile(1);
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name,
@@ -41,5 +41,5 @@ test("R2R seed failures remain visible after instruction-set analysis", async ({
 
   await expect(panel).toContainText(
     "ReadyToRun disassembly seeds: method map references a missing runtime-function index.");
-  await expect(panel.locator("summary", { hasText: /^SYSCALL$/ })).toHaveCount(0);
+  await expect(panel.locator("summary", { hasText: /^SYSCALL$/ })).toHaveCount(1);
 });

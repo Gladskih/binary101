@@ -40,3 +40,23 @@ export const createReadyToRunSeedFixture = (machine = 0x8664, indices = [1, 0, 1
   return { bytes, view, pe, file, reader,
     codeRvas, tableRva, width, issues: [] as string[] };
 };
+
+export const createLargeRuntimeTableFixture = () => {
+  const fixture = createReadyToRunSeedFixture();
+  const count = 6000;
+  const bytes = new Uint8Array(fixture.tableRva + count * fixture.width);
+  const view = new DataView(bytes.buffer);
+  for (let index = 0; index < count; index += 1) {
+    view.setUint32(fixture.tableRva + index * fixture.width,
+      fixture.codeRvas[index % fixture.codeRvas.length]!, true);
+  }
+  fixture.pe.clr!.readyToRun!.sections[0]!.size = count * fixture.width;
+  fixture.pe.opt.SizeOfImage = bytes.length;
+  const calls: number[][] = [];
+  const reader = { size: bytes.length, readBytes: async (offset: number, size: number) =>
+    bytes.subarray(offset, offset + size), read: async (offset: number, size: number) => {
+    calls.push([offset, size]);
+    return new DataView(bytes.buffer, offset, size);
+  } };
+  return { ...fixture, bytes, view, reader, calls, count };
+};
