@@ -4,6 +4,7 @@ import type { NativeAotVirtualImage } from "./virtual-image-types.js";
 import { parseNativeAotInitializers } from "./initializers.js";
 import { parseNativeAotInvokeMap } from "./invoke-map.js";
 import { parseNativeAotStackTraceMap } from "./stack-trace-map.js";
+import { parseNativeAotFunctionMaps } from "./function-maps.js";
 import {
   NATIVE_AOT_EMBEDDED_METADATA_SECTION,
   NATIVE_AOT_HEADER_SIZE,
@@ -25,7 +26,7 @@ export interface NativeAotReadyToRunHeader {
   majorVersion: number;
   minorVersion: number;
   sections: NativeAotMetadataSection[];
-  reflection: NativeAotReflectionMetadata;
+  reflection?: NativeAotReflectionMetadata;
 }
 
 const parseClosedPointerRange = async (
@@ -155,6 +156,13 @@ const isKnownHeaderEncoding = (header: DataView): boolean =>
   header.getUint16(4, true) !== 0 && header.getUint32(8, true) === 0 &&
   header.getUint16(12, true) !== 0 && header.getUint8(15) === 1;
 
+const hasNativeRuntimeSections = (sections: NativeAotMetadataSection[] | null):
+  sections is NativeAotMetadataSection[] =>
+  sections !== null && sections.some(section => section.type >= 201 && section.type <= 215);
+
+const isInvalidEmbeddedMetadata = (metadata: NativeAotMetadataSection | null,
+  sections: NativeAotMetadataSection[]): boolean => !metadata && findEmbeddedMetadata(sections) !== undefined;
+
 export const parseNativeAotReadyToRunHeader = async (
   image: NativeAotVirtualImage,
   sites: ReadonlySet<number>,
@@ -168,16 +176,19 @@ export const parseNativeAotReadyToRunHeader = async (
   const layout = layoutForEntrySize(entrySize, image.pointerSize);
   if (!isKnownHeaderEncoding(header) || !layout) return null;
   const sections = await parseHeaderSections(image, sites, headerRva, count, entrySize, layout);
-  if (!sections?.some(section => section.type >= 201 && section.type <= 215)) return null;
+  if (!hasNativeRuntimeSections(sections)) return null;
   const metadata = await findValidatedEmbeddedMetadata(image, sections);
-  if (!metadata) return null;
+  // Reflection metadata is optional; the validated runtime header and pointer ranges
+  // establish NativeAOT even when compilation omits reflection support.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/nativeaot/Runtime/inc/ModuleHeaders.h
+  if (isInvalidEmbeddedMetadata(metadata, sections)) return null;
   return {
     layout,
     headerRva,
     majorVersion: header.getUint16(4, true),
     minorVersion: header.getUint16(6, true),
     sections,
-    reflection: await parseEmbeddedReflectionMetadata(image, metadata)
+    ...(metadata ? { reflection: await parseEmbeddedReflectionMetadata(image, metadata) } : {})
   };
 };
 
@@ -194,9 +205,11 @@ export const findNativeAotMetadata = async (
     if (header) {
       const invokeMap = await parseNativeAotInvokeMap(image, header.sections);
       const stackTraceMap = await parseNativeAotStackTraceMap(image, header.sections);
+      const functionMaps = await parseNativeAotFunctionMaps(image, header.sections);
       return { status: "confirmed", modulePointerRva, ...header,
         initializers: await parseNativeAotInitializers(image, header),
-        ...(invokeMap ? { invokeMap } : {}), ...(stackTraceMap ? { stackTraceMap } : {}) };
+        ...(invokeMap ? { invokeMap } : {}), ...(stackTraceMap ? { stackTraceMap } : {}),
+        ...(functionMaps ? { functionMaps } : {}) };
     }
   }
   return null;

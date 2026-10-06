@@ -12,6 +12,7 @@ import { renderNativeAotReflection } from "../native-aot/reflection.js";
 import { renderNativeAotInitializers } from "../native-aot/initializers.js";
 import { renderNativeAotInvokeMap } from "../native-aot/invoke-map.js";
 import { renderNativeAotStackTraceMap } from "../native-aot/stack-trace-map.js";
+import { renderNativeAotFunctionMaps } from "../native-aot/function-maps.js";
 
 const renderMetadataSections = (metadata: NativeAotMetadata): string => {
   const rows = metadata.sections.map(section =>
@@ -56,6 +57,7 @@ const renderConfirmedMetadata = (metadata: NativeAotMetadata, out: string[]): vo
   out.push(renderNativeAotInitializers(metadata.initializers));
   out.push(renderNativeAotInvokeMap(metadata.invokeMap));
   out.push(renderNativeAotStackTraceMap(metadata.stackTraceMap));
+  out.push(renderNativeAotFunctionMaps(metadata.functionMaps));
   out.push(renderPeSectionEnd());
 };
 

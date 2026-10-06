@@ -1,5 +1,6 @@
 "use strict";
 import type { NativeAotMethodSignature } from "./native-format-signatures.js";
+import type { NativeAotFunctionMaps } from "./function-map-types.js";
 
 // ModuleHeaders.h and ReadyToRunHeaderNode.cs define this header and its emitted layout:
 // https://github.com/dotnet/runtime/blob/main/src/coreclr/nativeaot/Runtime/inc/ModuleHeaders.h
@@ -40,6 +41,7 @@ export interface NativeAotMetadata {
   initializers?: NativeAotInitializerTable[];
   invokeMap?: NativeAotInvokeMap;
   stackTraceMap?: NativeAotStackTraceMap;
+  functionMaps?: NativeAotFunctionMaps;
 }
 
 export interface NativeAotStackTraceMap {

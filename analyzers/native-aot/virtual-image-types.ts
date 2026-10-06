@@ -9,4 +9,5 @@ export interface NativeAotVirtualImage {
   readData: (address: number, size: number, alignment: number) => Promise<DataView | null>;
   readPointerValue: (address: number) => Promise<bigint | null>;
   readPointerTarget: (address: number) => Promise<number | null>;
+  toImageAddress?: (value: bigint) => number | null;
 }

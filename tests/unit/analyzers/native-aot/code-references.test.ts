@@ -3,6 +3,33 @@ import test from "node:test";
 import { NativeAotCodeReferences } from "../../../../analyzers/native-aot/code-references.js";
 import { createNativeAotInvokeFixture } from "../../../helpers/native-aot-invoke-fixture.js";
 
+void test("resolves data references without promoting executable-looking type indices", async context => {
+  const fixture = createNativeAotInvokeFixture();
+  const issues = new Set<string>();
+  const reads = context.mock.method(fixture.image, "readData");
+  const refs = new NativeAotCodeReferences(fixture.image, fixture.sections, issues);
+  refs.validateDataIndex(0);
+  refs.validateDataIndex(-1);
+
+  assert.equal(reads.mock.callCount(), 0);
+  assert.equal(await refs.resolveData(1), fixture.codeRvas[1]);
+  assert.equal(await refs.resolve(1), fixture.codeRvas[1]);
+  assert.equal(reads.mock.callCount(), 1);
+  assert.deepEqual([...issues], ["Common fixups data index is outside the table."]);
+});
+
+void test("missing data tables resolve to null and preserve table-specific warnings", async () => {
+  const fixture = createNativeAotInvokeFixture();
+  const issues = new Set<string>();
+  const native = new NativeAotCodeReferences(fixture.image, [], issues, 331);
+  const statics = new NativeAotCodeReferences(fixture.image, [], issues, 333);
+
+  assert.equal(await native.resolveData(0), null);
+  assert.equal(await statics.resolveData(0), null);
+  assert.deepEqual([...issues], ["Native references table is missing or ambiguous.",
+    "Native statics table is missing or ambiguous."]);
+});
+
 void test("resolves backward and forward signed common fixups once per index", async context => {
   const fixture = createNativeAotInvokeFixture();
   const issues = new Set<string>();

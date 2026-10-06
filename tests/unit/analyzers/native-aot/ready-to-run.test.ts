@@ -61,6 +61,17 @@ const fixturePointerSites = (fixture: NativeAotMetadataFixture): Set<number> =>
     .filter(entry => entry.type !== 0)
     .map(entry => block.pageRva + entry.offset)));
 
+void test("NativeAOT runtime header remains usable without reflection metadata", async () => {
+  const fixture = createNativeAotMetadataFixture();
+  fixture.view.setUint16(fixture.headerRva - SECTION_RVA + 12, 1, true);
+
+  const parsed = await findNativeAotMetadata(createVirtualImage(fixture), fixturePointerSites(fixture));
+
+  assert.equal(parsed?.status, "confirmed");
+  assert.equal(parsed?.reflection, undefined);
+  assert.equal(parsed?.sections.length, 1);
+});
+
 void test("logical ReadyToRun parsing uses a container-provided virtual image", async () => {
   const fixture = createNativeAotMetadataFixture();
   const image = createVirtualImage(fixture);

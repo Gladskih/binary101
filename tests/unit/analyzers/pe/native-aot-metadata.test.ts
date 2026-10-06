@@ -237,7 +237,7 @@ void test("analyzePeNativeAotMetadata validates section ranges", async () => {
   assert.equal(parsed, null);
 });
 
-void test("analyzePeNativeAotMetadata requires runtime and metadata sections", async () => {
+void test("analyzePeNativeAotMetadata requires runtime sections and accepts omitted reflection", async () => {
   const noRuntime = createNativeAotMetadataFixture();
   noRuntime.view.setUint32(HEADER_OFFSET + 16, 124, true);
   const noMetadata = createNativeAotMetadataFixture();
@@ -248,7 +248,9 @@ void test("analyzePeNativeAotMetadata requires runtime and metadata sections", a
     parseNativeAotMetadataFixture(noMetadata)
   ]);
 
-  assert.deepEqual(results, [null, null]);
+  assert.equal(results[0], null);
+  assert.equal(results[1]?.status, "confirmed");
+  assert.equal(results[1]?.reflection, undefined);
 });
 
 void test("analyzePeNativeAotMetadata validates the NativeFormat metadata signature", async () => {

@@ -78,6 +78,13 @@ const isExecutableAddress = (
     rva - section.virtualAddress < fileBackedSize(section, fileSize);
 };
 
+const readPointerScalar = async (readData: NativeAotVirtualImage["readData"], pointerSize: 4 | 8,
+  rva: number): Promise<bigint | null> => {
+  const view = await readData(rva, pointerSize, pointerSize);
+  if (!view) return null;
+  return pointerSize === 8 ? view.getBigUint64(0, true) : BigInt(view.getUint32(0, true));
+};
+
 export const createPeNativeAotImage = (
   reader: FileRangeReader,
   core: PeWindowsCore,
@@ -102,11 +109,7 @@ export const createPeNativeAotImage = (
     const view = await readMappedRvaPrefix(reader, rva, size, core.rvaToOff);
     return view.byteLength === size ? view : null;
   };
-  const readPointerValue = async (rva: number): Promise<bigint | null> => {
-    const view = await readData(rva, pointerSize, pointerSize);
-    if (!view) return null;
-    return pointerSize === 8 ? view.getBigUint64(0, true) : BigInt(view.getUint32(0, true));
-  };
+  const readPointerValue = (rva: number): Promise<bigint | null> => readPointerScalar(readData, pointerSize, rva);
   const preferredVaToRva = (value: bigint): number | null => {
     if (core.opt.ImageBase < 0n || value < core.opt.ImageBase) return null;
     const delta = value - core.opt.ImageBase;
@@ -128,6 +131,7 @@ export const createPeNativeAotImage = (
     readData,
     readPointerValue,
     readPointerTarget,
+    toImageAddress: preferredVaToRva,
     preferredVaToRva
   };
 };

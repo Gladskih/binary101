@@ -1,4 +1,5 @@
 import type { NativeAotMetadata } from "./format.js";
+import { collectNativeAotFunctionMapSeeds } from "./function-map-seeds.js";
 
 const uniqueGroup = (source: string, addresses: (number | null)[]) => {
   const rvas = [...new Set(addresses.filter(address => address !== null))];
@@ -13,6 +14,7 @@ export const collectNativeAotMapSeeds = (
     ...uniqueGroup("NativeAOT invoke methods", invokes.map(entry => entry.entrypointRva)),
     ...uniqueGroup("NativeAOT invoke stubs", invokes.map(entry => entry.invokeStubRva)),
     ...uniqueGroup("NativeAOT stack-trace methods",
-      (metadata.stackTraceMap?.entries ?? []).map(entry => entry.methodRva))
+      (metadata.stackTraceMap?.entries ?? []).map(entry => entry.methodRva)),
+    ...collectNativeAotFunctionMapSeeds(metadata.functionMaps)
   ];
 };

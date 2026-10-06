@@ -24,6 +24,7 @@ import {
 import { getNativeAotReflectionTypeTableModel } from "../native-aot/reflection.js";
 import { getNativeAotInvokeTableModel } from "../native-aot/invoke-map.js";
 import { getNativeAotStackTraceTableModel } from "../native-aot/stack-trace-map.js";
+import { getNativeAotFunctionTableModel } from "../native-aot/function-maps.js";
 import { createExportTableModel, EXPORT_TABLE_ID } from "./export-table.js";
 import { analyzeTypeLibraryExports } from
   "../../analyzers/pe/resources/type-library-export-links.js";
@@ -98,10 +99,12 @@ const getPeDebugCoffTableModel = (
 const getNativeAotTableModel = (
   pe: PeWindowsParseResult, tableId: string
 ): PagedSortableTableModel | null => {
-  const metadata = pe.nativeAotCandidate?.status === "confirmed" ? pe.nativeAotCandidate : undefined;
-  return getNativeAotReflectionTypeTableModel(metadata?.reflection, tableId) ??
-    getNativeAotInvokeTableModel(metadata?.invokeMap, tableId) ??
-    getNativeAotStackTraceTableModel(metadata?.stackTraceMap, tableId);
+  if (pe.nativeAotCandidate?.status !== "confirmed") return null;
+  const metadata = pe.nativeAotCandidate;
+  return getNativeAotReflectionTypeTableModel(metadata.reflection, tableId) ??
+    getNativeAotInvokeTableModel(metadata.invokeMap, tableId) ??
+    getNativeAotStackTraceTableModel(metadata.stackTraceMap, tableId) ??
+    getNativeAotFunctionTableModel(metadata.functionMaps, tableId);
 };
 
 type TableResolver = (pe: PeWindowsParseResult, tableId: string) => PagedSortableTableModel | null;
