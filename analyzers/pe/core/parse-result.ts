@@ -19,6 +19,7 @@ import type { PePayloadAnalysis } from "../payloads.js";
 import type { PePackerAnalysis } from "../packers/index.js";
 import type { PeResources } from "../resources/index.js";
 import type { PeClrHeader } from "../clr/index.js";
+import type { PeClrReadyToRun } from "../clr/ready-to-run-types.js";
 import type { ParsedSecurityDirectory } from "../security/index.js";
 import type {
   PeCore,
@@ -83,6 +84,7 @@ export interface PeWindowsParseResult extends PeParseResultBase {
   boundImports: Awaited<ReturnType<typeof parseBoundImports>>;
   delayImports: Awaited<ReturnType<typeof parseDelayImports32>>;
   clr: PeClrHeader | null;
+  readyToRun?: PeClrReadyToRun;
   security: ParsedSecurityDirectory | null;
   iat: PeIatDirectory | null;
   importLinking: PeImportLinkingResult | null;

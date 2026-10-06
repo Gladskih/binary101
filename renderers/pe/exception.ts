@@ -113,7 +113,7 @@ export function renderException(ex: PeExceptionSection, out: string[]): void {
     )
   );
   out.push(`<div class="smallNote">${profile.introNote}</div>`);
-  out.push(`<dl>`);
+  out.push(`<dl class="peExceptionStats">`);
   out.push(`<dt>Functions (RUNTIME_FUNCTION entries)</dt><dd>${ex.functionCount ?? 0}</dd>`);
   out.push(`<dt>${profile.unwindLabel}</dt><dd>${ex.uniqueUnwindInfoCount ?? 0}</dd>`);
   profile.renderFormatStats(ex, out);

@@ -1,4 +1,5 @@
 "use strict";
+import { renderElfSanitizers } from "./sanitizers.js";
 import { ELF_MACHINE_OPTIONS } from "../../analyzers/elf/legacy-machine-types.js";
 import { renderElfSymbolVersions } from "./symbol-versions.js";
 import { renderElfSymbolTables } from "./symbol-tables.js";
@@ -268,6 +269,7 @@ export function renderElf(elf: ElfParseResult | null): string {
   renderHeader(elf, out);
   renderElfLinking(elf, out);
   renderElfSymbols(elf, out);
+  renderElfSanitizers(elf, out);
   renderElfSymbolVersions(elf, out);
   renderElfSymbolTables(elf, out);
   renderElfSectionGroups(elf, out);

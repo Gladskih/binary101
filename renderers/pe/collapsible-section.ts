@@ -3,6 +3,8 @@
 import { escapeHtml } from "../../html-utils.js";
 
 const PE_SECTION_DESCRIPTIONS: Record<string, string> = {
+  "Sanitizer evidence":
+    "Runtime dependencies, ABI references and definitions, and recorded sanitizer build settings.",
   "Architecture directory":
     "Reserved PE data-directory slot; non-zero values are mainly useful as anomaly signals.",
   "Base relocations":

@@ -63,11 +63,11 @@ type ElfSectionHeader = {
   addralign: bigint;
   entsize: bigint;
 };
-const createFixtureNames = (): ElfMetadataFixtureNames => {
+const createFixtureNames = (needed: string[]): ElfMetadataFixtureNames => {
   const buildIdBytes = new Uint8Array(20).map((_, index) => index & 0xff);
   return {
     interpreter: "/lib64/ld-linux-x86-64.so.2",
-    needed: ["libc.so.6", "libm.so.6"],
+    needed,
     soname: "soname.so",
     runpath: "runpath",
     importSymbol: "puts",
@@ -281,8 +281,10 @@ const writePayloadSections = (bytes: Uint8Array, layout: ElfMetadataFixtureLayou
   bytes.set(encoder.encode("GNU\0"), layout.offsets.note + 12);
   bytes.set(new Uint8Array(20).map((_, index) => index & 0xff), layout.offsets.note + 16);
 };
-export const createElfMetadataFile = (): ElfMetadataFixture => {
-  const names = createFixtureNames();
+export const createElfMetadataFile = (
+  needed: string[] = ["libc.so.6", "libm.so.6"]
+): ElfMetadataFixture => {
+  const names = createFixtureNames(needed);
   const layout = createElfMetadataLayout(names);
   const bytes = new Uint8Array(layout.fileSize).fill(0);
   const dataView = new DataView(bytes.buffer);

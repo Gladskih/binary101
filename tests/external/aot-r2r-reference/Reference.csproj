@@ -16,6 +16,9 @@
     <Compile Include="$(ReadyToRunSourceDirectory)/NativeReader.cs" />
     <Compile Include="$(ReadyToRunSourceDirectory)/NativeArray.cs" />
     <Compile Include="$(ReadyToRunSourceDirectory)/NativeHashtable.cs" />
+    <Compile Include="$(ReadyToRunSourceDirectory)/PEReaderExtensions.cs" />
+    <Compile Include="$(ReadyToRunSourceDirectory)/ReadyToRunConstants.cs" />
+    <Compile Include="$(ReadyToRunSourceDirectory)/ModuleHeaders.cs" />
   </ItemGroup>
   <Target Name="RequireUpstreamSources" BeforeTargets="BeforeBuild">
     <Error Condition="'$(NativeFormatSourceDirectory)' == '' or '$(ReadyToRunSourceDirectory)' == ''"

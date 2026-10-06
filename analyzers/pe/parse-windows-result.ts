@@ -81,6 +81,7 @@ export const buildWindowsPeResult = (
     boundImports: directories.boundImports,
     delayImports: directories.delayImports,
     clr: directories.clr,
+    ...(directories.readyToRun ? { readyToRun: directories.readyToRun } : {}),
     security,
     iat: directories.iat,
     importLinking,

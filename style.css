@@ -324,6 +324,12 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
   padding-left:.75rem;
   border-left:1px solid color-mix(in oklab,var(--accent) 30%,var(--border2));
 }
+.peExceptionStats{
+  /* Cap labels at 80% to reserve room for counts; fit-content preserves desktop sizing.
+     https://www.w3.org/TR/css-grid-2/#valdef-grid-template-columns-fit-content */
+  grid-template-columns:fit-content(80%) minmax(0,1fr);
+}
+.peExceptionStats > dt{overflow-wrap:anywhere}
 .peSectionBody details[open]{
   position:relative;
   padding-bottom:.1rem;

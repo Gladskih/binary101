@@ -8,6 +8,11 @@ import { parseReadyToRun } from "../../analyzers/pe/clr/ready-to-run.js";
 import type { PeClrHeader } from "../../analyzers/pe/clr/types.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/core/parse-result.js";
 import { collectReadyToRunMethodRvas } from "../../analyzers/pe/clr/ready-to-run-seeds.js";
+import { parseExportDirectory } from "../../analyzers/pe/directories/exports.js";
+import { parseExportedReadyToRun } from "../../analyzers/pe/clr/ready-to-run-export.js";
+import type { PeClrReadyToRun, PeClrReadyToRunSection } from "../../analyzers/pe/clr/ready-to-run-types.js";
+import type { PeWindowsCore } from "../../analyzers/pe/types.js";
+import type { FileRangeReader } from "../../analyzers/file-range-reader.js";
 
 interface ReferenceSection {
   type: number;
@@ -15,6 +20,37 @@ interface ReferenceSection {
   methods?: unknown[];
   imports?: { entries: unknown[] }[];
 }
+
+interface ReferenceComponent {
+  flags: number;
+  sectionCount: number;
+  sections: ReferenceSection[];
+}
+
+const compareSections = (actualSections: PeClrReadyToRunSection[],
+  sections: ReferenceSection[], path: string): void => {
+  for (const { type, ...expected } of sections) {
+    const actual = actualSections.find(section => section.type === type)?.decoded;
+    assert.ok(actual);
+    const { kind: _, ...normalized } = JSON.parse(JSON.stringify(actual, (_key, value: unknown) =>
+      value instanceof Uint8Array ? [...value] : value)) as Record<string, unknown>;
+    assert.deepEqual(normalized, expected, `${path} section ${type}`);
+  }
+};
+
+const compareComponents = (data: PeClrReadyToRun, components: ReferenceComponent[], path: string): void => {
+  if (!components.length) return;
+  const table = data.sections.find(section => section.type === 115)?.decoded;
+  assert.ok(table?.kind === "components");
+  assert.equal(table.entries.length, components.length);
+  components.forEach((expected, index) => {
+    const core = table.entries[index]?.coreHeader;
+    assert.ok(core);
+    assert.equal(core.flags, expected.flags);
+    assert.equal(core.sectionCount, expected.sectionCount);
+    compareSections(core.sections, expected.sections, `${path} component ${index + 1}`);
+  });
+};
 
 const compareMethodRvas = async (
   reader: Parameters<typeof collectReadyToRunMethodRvas>[0],
@@ -26,51 +62,60 @@ const compareMethodRvas = async (
   assert.deepEqual(issues, [], path);
 };
 
+const readManagedReadyToRun = async (reader: FileRangeReader, core: PeWindowsCore) => {
+  const directory = core.dataDirs.find(directory => directory.name === "CLR_RUNTIME");
+  const offset = directory?.rva ? core.rvaToOff(directory.rva) : null;
+  const header = offset === null ? null : await reader.read(offset, 72);
+  return parseReadyToRun(reader, core.rvaToOff, {
+    ManagedNativeHeaderRVA: header?.getUint32(64, true) ?? 0,
+    ManagedNativeHeaderSize: header?.getUint32(68, true) ?? 0
+  } as PeClrHeader, core.coff.Machine);
+};
+
 const compareFile = async (
-  path: string, sections: ReferenceSection[], methodRvas: number[]
+  path: string, sections: ReferenceSection[], methodRvas: number[], components: ReferenceComponent[]
 ): Promise<void> => {
   const disk = await openDiskFileRangeReader(path, (await stat(path)).size);
   try {
     const core = await parsePeHeaders(disk.reader);
     assert.ok(core && isPeWindowsCore(core));
-    const directory = core.dataDirs.find(directory => directory.name === "CLR_RUNTIME");
-    assert.ok(directory);
-    const offset = core.rvaToOff(directory.rva);
-    assert.ok(offset !== null);
-    const header = await disk.reader.read(offset, 72);
-    const parsed = await parseReadyToRun(disk.reader, core.rvaToOff, {
-      ManagedNativeHeaderRVA: header.getUint32(64, true),
-      ManagedNativeHeaderSize: header.getUint32(68, true)
-    } as PeClrHeader, core.coff.Machine);
-    assert.deepEqual(parsed.issues, [], path);
-    for (const { type, ...expected } of sections) {
-      const actual = parsed.sections.find(section => section.type === type)?.decoded;
-      assert.ok(actual);
-      const { kind: _, ...normalized } = JSON.parse(JSON.stringify(actual, (_key, value: unknown) =>
-        value instanceof Uint8Array ? [...value] : value)) as Record<string, unknown>;
-      assert.deepEqual(normalized, expected, `${path} section ${type}`);
+    let parsed = await readManagedReadyToRun(disk.reader, core);
+    if (parsed.status !== "ready-to-run") {
+      const exports = await parseExportDirectory(disk.reader, core.dataDirs, core.rvaToOff);
+      parsed = await parseExportedReadyToRun(disk.reader, core.rvaToOff,
+        exports?.entries ?? [], core.coff.Machine) ?? parsed;
     }
+    assert.deepEqual(parsed.issues, [], path);
+    compareSections(parsed.sections, sections, path);
+    compareComponents(parsed, components, path);
     await compareMethodRvas(disk.reader, {
       ...core, clr: { readyToRun: parsed }
     } as unknown as PeWindowsParseResult, methodRvas, path);
   } finally { await disk.close(); }
 };
 
+const countSections = (sections: ReferenceSection[]) => sections.reduce((counts, section) => ({
+  methods: counts.methods + (section.methods?.length ?? 0),
+  imports: counts.imports + (section.imports?.length ?? 0),
+  cells: counts.cells + (section.imports?.reduce((count, table) => count + table.entries.length, 0) ?? 0)
+}), { methods: 0, imports: 0, cells: 0 });
+
 export const compareReadyToRunReference = async (referencePath: string) => {
   const lines = createInterface({ input: createReadStream(referencePath), crlfDelay: Infinity });
-  const counts = { files: 0, methods: 0, imports: 0, cells: 0, seeds: 0 };
+  const counts = { files: 0, methods: 0, imports: 0, cells: 0, seeds: 0, components: 0 };
   for await (const line of lines) {
     const reference = JSON.parse(line) as {
-      path: string; sections: ReferenceSection[]; methodRvas: number[]
+      path: string; sections: ReferenceSection[]; methodRvas: number[]; components?: ReferenceComponent[]
     };
-    await compareFile(reference.path, reference.sections, reference.methodRvas);
+    await compareFile(reference.path, reference.sections, reference.methodRvas, reference.components ?? []);
     counts.files += 1;
     counts.seeds += reference.methodRvas.length;
-    for (const section of reference.sections) {
-      counts.methods += section.methods?.length ?? 0;
-      counts.imports += section.imports?.length ?? 0;
-      counts.cells += section.imports?.reduce((count, table) => count + table.entries.length, 0) ?? 0;
-    }
+    counts.components += reference.components?.length ?? 0;
+    const sections = countSections([...reference.sections,
+      ...(reference.components ?? []).flatMap(component => component.sections)]);
+    counts.methods += sections.methods;
+    counts.imports += sections.imports;
+    counts.cells += sections.cells;
   }
   return counts;
 };

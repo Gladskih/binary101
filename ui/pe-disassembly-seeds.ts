@@ -20,6 +20,7 @@ import { collectFunctionOverrideEntrypoints } from "./pe-disassembly-function-ov
 import { collectControlTransferInstructionRvas } from "./pe-disassembly-control-transfer-hints.js";
 import { collectLoadConfigPointerSeeds } from "./pe-disassembly-load-config-pointer-seeds.js";
 import { collectReadyToRunMethodRvas } from "../analyzers/pe/clr/ready-to-run-seeds.js";
+import { collectReadyToRunThunkRvas } from "../analyzers/pe/clr/ready-to-run-thunk-image.js";
 import { collectNativeAotMapSeeds } from "../analyzers/native-aot/disassembly-seeds.js";
 
 type PeDisassemblySeedSet = {
@@ -196,6 +197,15 @@ const addLoadConfigTableSeeds = async (
   await addGuardLongJumpTargetSeeds(seeds, reader, pe, windowsPe);
 };
 
+const addReadyToRunSeeds = async (
+  seeds: PeDisassemblySeedSet, reader: FileRangeReader, pe: PeWindowsParseResult
+): Promise<void> => {
+  const rvas = await collectReadyToRunMethodRvas(reader, pe, seeds.issues);
+  if (rvas.length) seeds.extraEntrypoints.push({ source: "ReadyToRun runtime functions", rvas });
+  const thunkRvas = collectReadyToRunThunkRvas(pe, reader.size, seeds.issues);
+  if (thunkRvas.length) seeds.extraEntrypoints.push({ source: "ReadyToRun import thunks", rvas: thunkRvas });
+};
+
 const collectPeDisassemblySeeds = async (
   file: File,
   pe: PeParseResult
@@ -204,8 +214,7 @@ const collectPeDisassemblySeeds = async (
   const windowsPe = isPeWindowsParseResult(pe) ? pe : null;
   const seeds = collectBasicPeDisassemblySeeds(pe, windowsPe);
   if (windowsPe) {
-    const rvas = await collectReadyToRunMethodRvas(reader, windowsPe, seeds.issues);
-    if (rvas.length) seeds.extraEntrypoints.push({ source: "ReadyToRun runtime functions", rvas });
+    await addReadyToRunSeeds(seeds, reader, windowsPe);
     seeds.extraEntrypoints.push(...collectFunctionOverrideEntrypoints(windowsPe, file.size));
     seeds.instructionHintRvas = collectControlTransferInstructionRvas(windowsPe, file.size);
   }

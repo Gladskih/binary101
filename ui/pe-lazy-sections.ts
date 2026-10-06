@@ -1,4 +1,5 @@
 "use strict";
+import { renderPeSanitizers } from "../renderers/pe/sanitizers.js";
 import {
   isPeWindowsParseResult,
   type PeParseResult,
@@ -20,6 +21,7 @@ import { analyzeTypeLibraryRegistrations } from
 import { openPeTypeLibrarySection } from "./pe-type-library-navigation.js";
 import { renderException } from "../renderers/pe/exception.js";
 import { renderNativeAotCandidate } from "../renderers/pe/native-aot.js";
+import { renderCompositeReadyToRun } from "../renderers/pe/clr-advanced.js";
 import { renderMsvcRtti } from "../renderers/pe/msvc-rtti.js";
 import { renderItaniumRtti } from "../renderers/pe/itanium-rtti.js";
 import { renderPeAppHost } from "../renderers/pe/apphost.js";
@@ -98,6 +100,7 @@ const renderPackerById = (pe: PeWindowsParseResult, id: PePackerId): string => {
 const WINDOWS_LAZY_RENDERERS: Partial<Record<
   PeLazySectionKey, (pe: PeWindowsParseResult) => string
 >> = {
+  [PE_LAZY_SECTION_KEYS.sanitizers]: renderPeSanitizers,
   [PE_LAZY_SECTION_KEYS.upx]: (pe: PeWindowsParseResult) =>
     renderPackerById(pe, "upx"),
   [PE_LAZY_SECTION_KEYS.nsisInstaller]: (pe: PeWindowsParseResult) =>
@@ -139,7 +142,8 @@ const WINDOWS_LAZY_RENDERERS: Partial<Record<
   [PE_LAZY_SECTION_KEYS.delayImports]: (pe: PeWindowsParseResult) =>
     renderToString(out => renderDelayImports(pe, out)),
   [PE_LAZY_SECTION_KEYS.clr]: (pe: PeWindowsParseResult) =>
-    pe.clr ? renderToString(out => renderClr(pe.clr!, out)) : "",
+    pe.clr ? renderToString(out => renderClr(pe.clr!, out))
+      : renderToString(out => renderCompositeReadyToRun(pe, out)),
   [PE_LAZY_SECTION_KEYS.appHost]: (pe: PeWindowsParseResult) =>
     renderToString(out => renderPeAppHost(pe, out)),
   [PE_LAZY_SECTION_KEYS.nativeAot]: (pe: PeWindowsParseResult) =>

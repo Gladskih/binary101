@@ -60,23 +60,41 @@ const fixedDecoders: Readonly<Record<number,
   120: readHotColdMap
 };
 
+export type ReadyToRunSectionCache = Map<string, {
+  decoded?: PeClrReadyToRunSectionData; warnings: string[]
+}>;
+
+const decodeSection = async (
+  reader: FileRangeReader, mapper: RvaToOffset, section: PeClrReadyToRunSection,
+  pointerSize: 4 | 8 | undefined
+): Promise<{ decoded?: PeClrReadyToRunSectionData; warnings: string[] }> => {
+  const warnings = new Set<string>();
+  try {
+    const view = await readMappedRvaPrefix(reader, section.rva, section.size, mapper);
+    if (view.byteLength < section.size) warnings.add(`${section.name} section is truncated.`);
+    return { decoded: section.type === 101
+      ? { kind: "imports", imports: await parseReadyToRunImports(
+        view, reader, mapper, pointerSize, warnings) }
+      : fixedDecoders[section.type]!(view, warnings), warnings: [...warnings] };
+  } catch (error) {
+    warnings.add(`${section.name}: ${error instanceof Error ? error.message : "decoding failed"}`);
+    return { warnings: [...warnings] };
+  }
+};
+
 export const decodeReadyToRunSections = async (
   reader: FileRangeReader, mapper: RvaToOffset, sections: PeClrReadyToRunSection[],
-  pointerSize: 4 | 8 | undefined, issues: string[]
+  pointerSize: 4 | 8 | undefined, issues: string[], cache: ReadyToRunSectionCache = new Map()
 ): Promise<void> => {
   const warnings = new Set<string>();
   for (const section of sections) {
     if (!fixedDecoders[section.type] && section.type !== 101) continue;
-    try {
-      const view = await readMappedRvaPrefix(reader, section.rva, section.size, mapper);
-      if (view.byteLength < section.size) warnings.add(`${section.name} section is truncated.`);
-      section.decoded = section.type === 101
-        ? { kind: "imports", imports: await parseReadyToRunImports(
-          view, reader, mapper, pointerSize, warnings) }
-        : fixedDecoders[section.type]!(view, warnings);
-    } catch (error) {
-      warnings.add(`${section.name}: ${error instanceof Error ? error.message : "decoding failed"}`);
-    }
+    // Composite core headers can reference identical sections; decode their bytes once per image.
+    const key = `${section.type}/${section.rva}/${section.size}`;
+    const result = cache.get(key) ?? await decodeSection(reader, mapper, section, pointerSize);
+    cache.set(key, result);
+    if (result.decoded) section.decoded = result.decoded;
+    result.warnings.forEach(message => warnings.add(message));
   }
   issues.push(...warnings);
 };
