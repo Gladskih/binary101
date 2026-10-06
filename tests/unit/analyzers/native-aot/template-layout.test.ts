@@ -5,7 +5,7 @@ import { NativeAotFunctionReferences } from "../../../../analyzers/native-aot/fu
 import { createFunctionEntryFixture } from "../../../helpers/native-aot-function-map-fixture.js";
 
 void test("template bags expose cctor and dictionary method pointers, ignoring data fields", async () => {
-  // Bag: ClassConstructorPointer(index1), DictionaryLayout(relative+4), BaseType(index1), End.
+  // Bag: ClassConstructorPointer(index1), DictionaryLayout(relative+4), GcStaticData(index1), End.
   // Dictionary: one Method cell with explicit pointer(index0).
   const fixture = createFunctionEntryFixture(Uint8Array.of(156, 2, 128, 8, 134, 2, 0, 2, 26, 8, 0, 12, 20));
   fixture.sections.push({ ...fixture.sections[1]!, type: 331 }, { ...fixture.sections[1]!, type: 333 });
@@ -43,6 +43,20 @@ void test("data-valued bag elements are skipped and never resolved as functions"
 
   assert.equal((await layouts.read(0)).classConstructorRva, fixture.codeRvas[0]);
   assert.equal(reads.mock.callCount(), 1);
+  assert.equal(fixture.issues.size, 0);
+});
+
+void test("data-only bags never invent class constructors from NativeStatics indices", async context => {
+  // GcStaticData=0x43, encoded as 134, holds a data index; zero terminates the bag.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/NativeFormat/NativeFormat.cs
+  const fixture = createFunctionEntryFixture(Uint8Array.of(134, 0, 0));
+  fixture.sections.push({ ...fixture.sections[1]!, type: 333 });
+  const reads = context.mock.method(fixture.image, "readData");
+  const layouts = new NativeAotTemplateLayouts(fixture.cursor,
+    new NativeAotFunctionReferences(fixture.image, fixture.sections, fixture.issues), fixture.issues);
+
+  assert.deepEqual(await layouts.read(0), { classConstructorRva: null, dictionaryMethods: [] });
+  assert.equal(reads.mock.callCount(), 0);
   assert.equal(fixture.issues.size, 0);
 });
 
