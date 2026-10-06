@@ -18,7 +18,7 @@ export const createDwarfSectionFile = (contents: Array<{ name: string; bytes: nu
     sections };
 };
 
-export const createDwarfSemanticFixture = () => {
+export const createDwarfSemanticFixture = (parameterCount = 1) => {
   const root = concatenateBytes(encodeUleb(1), encodeCString("main.c"),
     encodeCString("/project"), encodeUint32(0));
   // A DWARF32 v4 compilation-unit header occupies 11 bytes (7.5.1.1).
@@ -27,12 +27,14 @@ export const createDwarfSemanticFixture = () => {
   const functionOffset = typeOffset + baseType.length;
   const subprogram = concatenateBytes(encodeUleb(3), encodeCString("calculate"),
     encodeUint32(typeOffset), encodeUint64(0x1000), encodeUint32(6), encodeUleb(1), encodeUleb(7));
-  const parameter = concatenateBytes(encodeUleb(4), encodeCString("input"),
-    encodeUint32(typeOffset), encodeUleb(2), encodeUint8(0x91), encodeSleb(-8));
+  const parameters = Array.from({ length: parameterCount }, (_, index) => concatenateBytes(
+    encodeUleb(4), encodeCString(index ? "input" + index : "input"),
+    encodeUint32(typeOffset), encodeUleb(2), encodeUint8(0x91), encodeSleb(-8)
+  )).flat();
   return { typeOffset, functionOffset, ...createDwarfSectionFile([
     { name: ".debug_info", bytes: encodeDwarf32Unit(concatenateBytes(
       encodeUint16(4), encodeUint32(0), encodeUint8(8), root, baseType, subprogram,
-      parameter, encodeUleb(0), encodeUleb(0)
+      parameters, encodeUleb(0), encodeUleb(0)
     )) },
     { name: ".debug_abbrev", bytes: encodeAbbreviationTable([
       { code: 1, tag: 0x11, children: 1, attributes: [

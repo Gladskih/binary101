@@ -89,3 +89,27 @@ void test("ELF DWARF shows complete program entities without address arithmetic"
   await expect(page.getByRole("cell", { name: "calculate::input", exact: true })).toBeVisible();
   await expect(page.getByRole("cell", { name: "/project/src/main.c:7", exact: true })).toBeVisible();
 });
+
+void test("PE DWARF page navigation reaches every entity", async ({ page }) => {
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", toUpload(createPeSemanticDwarfFile(201)));
+  await page.locator('[data-pe-lazy-section="dwarf"] > details > summary').click();
+  const table = page.locator('[data-paged-sortable-table-id="dwarf-entities"]');
+
+  await expect(table.getByRole("cell", { name: "calculate::input200", exact: true })).toHaveCount(0);
+  await table.getByRole("button", { name: "Last", exact: true }).click();
+  await expect(table.getByRole("cell", { name: "calculate::input200", exact: true })).toBeVisible();
+  await table.getByRole("button", { name: "First", exact: true }).click();
+  await expect(table.getByRole("cell", { name: "int", exact: true }).first()).toBeVisible();
+});
+
+void test("ELF DWARF page navigation reaches every entity", async ({ page }) => {
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", toUpload(createElfSemanticDwarfFile(201)));
+  await page.locator(".peSectionSummary").filter({ hasText: "Build / debug" }).click();
+  await page.getByText("DWARF debug information (1 unit)", { exact: true }).click();
+  const table = page.locator('[data-paged-sortable-table-id="dwarf-entities"]');
+
+  await table.getByRole("button", { name: "Last", exact: true }).click();
+  await expect(table.getByRole("cell", { name: "calculate::input200", exact: true })).toBeVisible();
+});

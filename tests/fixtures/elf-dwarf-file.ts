@@ -140,8 +140,8 @@ const buildElfDwarfFile = (
   return new MockFile(bytes, fileName, "application/x-elf");
 };
 
-export const createElfSemanticDwarfFile = (): MockFile =>
-  buildElfDwarfFile(createDwarfSemanticFixture(), "semantic.elf", 0n);
+export const createElfSemanticDwarfFile = (parameterCount = 1): MockFile =>
+  buildElfDwarfFile(createDwarfSemanticFixture(parameterCount), "semantic.elf", 0n);
 
 export const createElfDwarfFile = (): MockFile => {
   const dwarf = createDwarf4SectionsFixture();

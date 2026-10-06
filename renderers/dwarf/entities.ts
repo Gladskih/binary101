@@ -1,3 +1,4 @@
+import { renderAutoPagedSortableTable, type PagedSortableTableModel } from "../paged-sortable-table.js";
 import { escapeHtml } from "../../html-utils.js";
 import { DWARF_ATTRIBUTE, DWARF_TAG } from "../../analyzers/dwarf/constants.js";
 import { dwarfNumericValue, dwarfStringValue, dwarfUnitRoot } from "../../analyzers/dwarf/attribute-values.js";
@@ -112,26 +113,44 @@ const declarationSource = (
   return path + (line == null ? "" : `:${line}`) + (column == null ? "" : `:${column}`);
 };
 
-const renderEntity = (dwarf: DwarfAnalysis, index: DwarfDieIndex, record: DwarfDieRecord): string => {
+const entityType = (index: DwarfDieIndex, record: DwarfDieRecord): string => {
   const type = inheritedDwarfAttribute(index, record, DWARF_ATTRIBUTE.type);
   const referenced = type ? resolveDwarfReference(index, type.record, type.attribute) : null;
-  const typeName = referenced ? dwarfTypeName(index, referenced) : type ? "unresolved type" : "-";
-  return `<tr><td>${escapeHtml(dwarfTagLabel(record.die.tag).replaceAll("_", " "))}</td>` +
-    `<td class="mono">${escapeHtml(qualifiedName(index, record))}</td>` +
-    `<td>${escapeHtml(typeName)}</td>` +
-    `<td class="mono">${escapeHtml(declarationSource(dwarf, index, record))}</td>` +
-    `<td class="dwarfTable__numeric">${dwarfCodeSize(record.die) ?? "-"}</td>` +
-    `<td>${renderAttributes(index, record)}</td></tr>`;
+  return referenced ? dwarfTypeName(index, referenced) : type ? "unresolved type" : "-";
 };
 
-export const renderDwarfEntities = (dwarf: DwarfAnalysis): string => {
+export const createDwarfEntityTableModel = (dwarf: DwarfAnalysis): PagedSortableTableModel => {
   const index = createDwarfDieIndex(dwarf.units);
   const entities = index.records.filter(record => record.die.parentOffset != null &&
     (nameOf(index, record) || record.die.tag === DWARF_TAG.inlinedSubroutine));
-  if (!entities.length) return "";
-  return `<h5>Program entities</h5><div class="tableWrap"><table class="table"><thead><tr>` +
-    `<th>Kind</th><th>Name / scope</th><th>Type</th><th>Declaration</th>` +
-    `<th>Code bytes</th><th>Details</th>` +
-    `</tr></thead><tbody>${entities.map(record => renderEntity(dwarf, index, record)).join("")}` +
-    `</tbody></table></div>`;
+  const values: Array<(record: DwarfDieRecord) => string> = [
+    record => dwarfTagLabel(record.die.tag).replaceAll("_", " "),
+    record => qualifiedName(index, record), record => entityType(index, record),
+    record => declarationSource(dwarf, index, record),
+    record => String(dwarfCodeSize(record.die) ?? "-")
+  ];
+  return {
+    id: "dwarf-entities", rowCount: entities.length,
+    pageSize: 100, // Display pagination only; every parsed entity remains accessible.
+    columns: [{ label: "Kind" }, { label: "Name / scope" }, { label: "Type" },
+      { label: "Declaration" }, { label: "Code bytes", className: "dwarfTable__numeric" },
+      { label: "Details" }],
+    rowAt: rowIndex => {
+      const record = entities[rowIndex];
+      return record ? { cells: [...values.map((value, columnIndex) => ({
+        html: escapeHtml(value(record)),
+        className: columnIndex === 4 ? "dwarfTable__numeric" : ""
+      })),
+        { html: renderAttributes(index, record) }] } : null;
+    },
+    sortValueAt: (rowIndex, columnIndex) => {
+      const record = entities[rowIndex];
+      return record ? values[columnIndex]?.(record) ?? "" : "";
+    }
+  };
+};
+
+export const renderDwarfEntities = (dwarf: DwarfAnalysis): string => {
+  const model = createDwarfEntityTableModel(dwarf);
+  return model.rowCount ? "<h5>Program entities</h5>" + renderAutoPagedSortableTable(model) : "";
 };
