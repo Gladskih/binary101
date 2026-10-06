@@ -205,3 +205,15 @@ void test("recognizes import evidence through the real PE parser", async () => {
       source: "PE imports: clang_rt.asan_dynamic-i386.dll", name }))
   ]);
 });
+
+void test("does not let out-of-section COFF offsets borrow a neighboring code section", () => {
+  const pe = sanitizerPe();
+  pe.coffDebug = sanitizerCoffDebug();
+  pe.sections.push({ ...pe.sections[0]!, virtualAddress: 4032 },
+    { ...pe.sections[0]!, virtualAddress: 4160 }); // Adjacent executable ranges, 64 bytes each.
+  pe.rvaToOff = () => 512; // Mapping alone must not validate the symbol's own section.
+  pe.coffDebug.symbols[0]!.value = -1;
+  assert.deepEqual(analyzePeSanitizers(pe), []);
+  pe.coffDebug.symbols[0]!.value = 64;
+  assert.deepEqual(analyzePeSanitizers(pe), []);
+});

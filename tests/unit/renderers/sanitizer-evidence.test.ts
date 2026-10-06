@@ -59,6 +59,7 @@ void test("produces valid table structure with all evidence fields in separate c
   assert.deepEqual(errors, []);
   assert.equal(document.getElementsByTagName("div")[0]!.getAttribute("class"), "tableWrap");
   const table = document.getElementsByTagName("table")[0]!;
+  assert.equal(document.documentElement!.childNodes.length, 2); // Explanation and table wrapper.
   assert.equal(table.getElementsByTagName("thead").length, 1);
   assert.deepEqual(Array.from(table.getElementsByTagName("th")).map(cell => cell.textContent),
     ["Tool", "Evidence kind", "Source", "Name / setting"]);
@@ -71,4 +72,13 @@ void test("produces valid table structure with all evidence fields in separate c
     ["ASan", "ABI reference", "ELF symbols", "__asan_init"],
     ["ASan", "ABI reference", "ELF symbols", "__asan_report_load4"]
   ]);
+});
+
+void test("keeps an empty result in a visible explanatory paragraph", () => {
+  const document = new DOMParser({ onError: (_level, message) => assert.fail(message) })
+    .parseFromString(`<main>${renderSanitizerEvidence([])}</main>`, "text/html");
+  const paragraphs = document.getElementsByTagName("p");
+  assert.equal(paragraphs.length, 2);
+  assert.equal(paragraphs[1]!.getAttribute("class"), "smallNote dim");
+  assert.match(paragraphs[1]!.textContent!, /No supported sanitizer evidence/);
 });

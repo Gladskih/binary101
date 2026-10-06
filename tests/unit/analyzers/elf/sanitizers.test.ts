@@ -193,3 +193,12 @@ void test("rejects a non-load segment, a negative file offset and a function bef
   elf.symbolTables![0]!.entries[0]!.value = 4095n;
   assert.deepEqual(analyzeElfSanitizers(elf), []);
 });
+
+void test("does not promote undefined local functions to sectionless runtime definitions", () => {
+  const elf = sanitizerElfSegmentDefinitions();
+  elf.symbolTables![0]!.entries.forEach(record => {
+    record.info = 2; // STB_LOCAL | STT_FUNC: an undefined local is not a loader reference.
+    record.sectionIndex = 0; // SHN_UNDEF cannot designate an executable mapping.
+  });
+  assert.deepEqual(analyzeElfSanitizers(elf), []);
+});
