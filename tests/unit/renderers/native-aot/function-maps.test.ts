@@ -3,6 +3,8 @@ import test from "node:test";
 import { getNativeAotFunctionTableModel, renderNativeAotFunctionMaps } from
   "../../../../renderers/native-aot/function-maps.js";
 import { createFunctionMapModels } from "../../../helpers/native-aot-function-map-models.js";
+import { createNativeAotTypeMapFixture } from "../../../helpers/native-aot-runtime-type-fixture.js";
+import { parseNativeAotFunctionMaps } from "../../../../analyzers/native-aot/function-maps.js";
 
 void test("function maps render semantic tables and escape fields and warnings", () => {
   const html = renderNativeAotFunctionMaps(createFunctionMapModels());
@@ -14,6 +16,40 @@ void test("function maps render semantic tables and escape fields and warnings",
   assert.match(html, /0x00000300/);
   assert.match(html, /Native size/);
   assert.equal(renderNativeAotFunctionMaps(undefined), "");
+});
+
+void test("runtime type tables expose counts and distinguish method, data and null slots", async () => {
+  const fixture = createNativeAotTypeMapFixture();
+  const data = await parseNativeAotFunctionMaps(fixture.image, fixture.sections);
+  const types = getNativeAotFunctionTableModel(data, "native-aot-function-map-301")!;
+  const slots = getNativeAotFunctionTableModel(data, "native-aot-function-map-301-slots")!;
+
+  assert.deepEqual(types.rowAt(0)?.cells.map(cell => cell.html),
+    ["0", "0x0000000a", "0x00000180", "0x04000000", "24", "3", "1", "0x12345678"]);
+  assert.deepEqual(slots.rowAt(0)?.cells.map(cell => cell.html), ["0", "0", "method", "0x00000040"]);
+  assert.deepEqual(slots.rowAt(1)?.cells.map(cell => cell.html), ["0", "1", "data", "0x00000220"]);
+  assert.deepEqual(slots.rowAt(2)?.cells.map(cell => cell.html), ["0", "2", "null", "-"]);
+  assert.equal(types.rowAt(-1), null);
+  assert.equal(slots.rowAt(-1), null);
+  assert.equal(slots.columns[2]?.className, "");
+  assert.equal(slots.rowAt(0)?.cells[2]?.className, "");
+  assert.deepEqual(types.columns.map(column => column.label),
+    ["Type index", "Metadata handle", "MethodTable RVA", "Flags", "Base size", "Vtable slots", "Interfaces", "Hash"]);
+  assert.deepEqual(slots.columns.map(column => column.label), ["Type index", "Slot", "Kind", "Target RVA"]);
+});
+
+void test("unresolved types preserve the raw handle and visibly omit unavailable runtime fields", () => {
+  const data = { warnings: [], maps: [{ type: 301 as const, warnings: [], entries: [
+    { typeIndex: 1, metadataHandle: 10, runtimeType: null }
+  ] }] };
+  const model = getNativeAotFunctionTableModel(data, "native-aot-function-map-301")!;
+
+  assert.deepEqual(model.rowAt(0)?.cells.map(cell => cell.html), ["1", "0x0000000a", "-", "-", "-", "-", "-", "-"]);
+  assert.match(renderNativeAotFunctionMaps(data), /MethodTable RVA/);
+  assert.match(renderNativeAotFunctionMaps(data), /<h4>NativeAOT function maps<\/h4>/);
+  assert.match(renderNativeAotFunctionMaps(data), /Validated thunk and method addresses/);
+  assert.match(renderNativeAotFunctionMaps(data), /supply disassembly seeds/);
+  assert.doesNotMatch(renderNativeAotFunctionMaps(data), /Stryker was here/);
 });
 
 for (const type of [310, 316, 317, 321, 322, 336]) {

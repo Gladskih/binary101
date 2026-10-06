@@ -12,11 +12,12 @@ import { readStructMarshallingEntry } from "./struct-marshalling.js";
 import { readDelegateMarshallingEntry } from "./delegate-marshalling.js";
 import { readExactMethodEntry } from "./exact-methods.js";
 import { readTemplateMethodEntry } from "./generic-templates.js";
+import { NativeAotRuntimeTypes } from "./runtime-type-map.js";
 
 // ReflectionMapBlob IDs are shifted by 300 in the NativeAOT ReadyToRun directory.
 // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Runtime/MetadataBlob.cs
 const isFunctionMapType = (type: number): type is NativeAotFunctionMap["type"] =>
-  [310, 316, 317, 321, 322, 336].includes(type);
+  [301, 310, 316, 317, 321, 322, 336].includes(type);
 
 const loadLayout = async (
   image: NativeAotVirtualImage, sections: NativeAotMetadataSection[], issues: Set<string>
@@ -34,15 +35,19 @@ class FunctionMapReader {
   readonly #references: NativeAotFunctionReferences;
   readonly #layouts: NativeAotTemplateLayouts | undefined;
   readonly #types = new Map<number, number>();
+  readonly #runtimeTypes: NativeAotRuntimeTypes;
 
   constructor(image: NativeAotVirtualImage, sections: NativeAotMetadataSection[],
     readonly layout: NativeFormatCursor | undefined, issues: Set<string>) {
     this.#references = new NativeAotFunctionReferences(image, sections, issues);
+    this.#runtimeTypes = new NativeAotRuntimeTypes(this.#references);
     this.#layouts = layout ? new NativeAotTemplateLayouts(layout, this.#references, issues) : undefined;
   }
 
   async read(type: NativeAotFunctionMap["type"], bytes: Uint8Array, issues: Set<string>):
   Promise<NativeAotFunctionMap> {
+    if (type === 301) return { type, entries: await readNativeAotHashEntries(bytes,
+      cursor => this.#runtimeTypes.read(cursor), issues), warnings: [...issues] };
     if (type === 310) return { type, entries: await readNativeAotHashEntries(bytes,
       cursor => readClassConstructor(cursor, this.#references), issues), warnings: [...issues] };
     if (type === 316) return { type, entries: await readNativeAotHashEntries(bytes,

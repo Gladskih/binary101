@@ -3,20 +3,9 @@ import type { NativeAotVirtualImage } from "./virtual-image-types.js";
 import type { NativeAotHydratedRun } from "./dehydrated-stream-types.js";
 import { readNativeAotSectionBytes } from "./section-bytes.js";
 import { readNativeAotDehydratedRuns } from "./dehydrated-stream.js";
+import { findNativeAotHydratedRun, readNativeAotHydratedUnsigned } from "./hydrated-scalars.js";
 
-const findRun = (runs: NativeAotHydratedRun[], address: number): NativeAotHydratedRun | undefined => {
-  let left = 0;
-  let right = runs.length;
-  while (left < right) {
-    const middle = Math.floor((left + right) / 2);
-    if (runs[middle]!.rva <= address) left = middle + 1;
-    else right = middle;
-  }
-  const run = runs[left - 1];
-  return run && address < run.rva + run.size ? run : undefined;
-};
-
-/** Restores only the pointer requested by a typed map, never treats arbitrary relocations as code. */
+/** Restores typed fields without materializing the whole hydrated image. */
 export class NativeAotDehydratedData {
   readonly #cache = new Map<number, Promise<number | null>>();
   #loaded: Promise<NativeAotHydratedRun[]> | undefined;
@@ -31,6 +20,16 @@ export class NativeAotDehydratedData {
     return result;
   }
 
+  async unsigned(address: number, size: 2 | 4): Promise<number | null> {
+    try {
+      this.#loaded ??= this.#load();
+      return await readNativeAotHydratedUnsigned(this.image, await this.#loaded, address, size);
+    } catch (error) {
+      this.issues.add(error instanceof Error ? error.message : "NativeAOT scalar read failed.");
+      return null;
+    }
+  }
+
   async #load(): Promise<NativeAotHydratedRun[]> {
     const streams = this.sections.filter(section => section.type === 207);
     if (!streams.length) return [];
@@ -41,24 +40,24 @@ export class NativeAotDehydratedData {
 
   async #storedPointer(address: number): Promise<number | null> {
     if (!this.image.isDataRange(address, this.image.pointerSize, this.image.pointerSize)) {
-      throw new Error("Class constructor pointer is not readable in the image or DehydratedData.");
+      throw new Error("NativeAOT absolute pointer is not readable in the image or DehydratedData.");
     }
     const value = await this.image.readPointerValue(address);
     if (value === 0n) return null;
     const target = await this.image.readPointerTarget(address);
-    if (target === null) throw new Error("Class constructor pointer is unreadable or unresolved.");
+    if (target === null) throw new Error("NativeAOT absolute pointer is unreadable or unresolved.");
     return target;
   }
 
   async #target(address: number): Promise<number | null> {
     this.#loaded ??= this.#load();
-    const run = findRun(await this.#loaded, address);
+    const run = findNativeAotHydratedRun(await this.#loaded, address);
     if (!run) return this.#storedPointer(address);
     if (run.kind === "relative") {
-      throw new Error("Class constructor field is not an absolute pointer in DehydratedData.");
+      throw new Error("NativeAOT absolute pointer field is not an absolute pointer in DehydratedData.");
     }
     if (address + this.image.pointerSize > run.rva + run.size) {
-      throw new Error("Class constructor field crosses a dehydrated run boundary.");
+      throw new Error("NativeAOT absolute pointer field crosses a dehydrated run boundary.");
     }
     if (run.kind === "zero") return null;
     if (run.kind === "copy") return this.#copiedPointer(run.sourceRva + address - run.rva);
@@ -81,7 +80,7 @@ export class NativeAotDehydratedData {
     try {
       return await this.#target(address);
     } catch (error) {
-      this.issues.add(error instanceof Error ? error.message : "Class constructor pointer read failed.");
+      this.issues.add(error instanceof Error ? error.message : "NativeAOT absolute pointer read failed.");
       return null;
     }
   }

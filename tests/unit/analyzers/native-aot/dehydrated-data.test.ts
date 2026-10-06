@@ -27,6 +27,28 @@ void test("dehydration restores sparse absolute pointers and skips zero/data run
   assert.equal(fixture.issues.size, 0);
 });
 
+void test("fixed scalars restore mixed Copy/ZeroFill fields and share the loaded stream", async context => {
+  const fixture = fixtureWithStream([8, 7, 25]);
+  const reads = context.mock.method(fixture.image, "readData");
+  const data = new NativeAotDehydratedData(fixture.image, fixture.sections, fixture.issues);
+
+  assert.equal(await data.unsigned(fixture.destination, 4), 7);
+  assert.equal(await data.unsigned(fixture.destination + 2, 2), 0);
+  assert.equal(reads.mock.callCount(), 2);
+  assert.deepEqual([...fixture.issues], []);
+});
+
+void test("scalar failures become visible warnings instead of escaping", async context => {
+  const fixture = fixtureWithStream([3]);
+  const data = new NativeAotDehydratedData(fixture.image, fixture.sections, fixture.issues);
+
+  assert.equal(await data.unsigned(fixture.destination, 4), null);
+  assert.match([...fixture.issues].join(), /overlaps/);
+  context.mock.method(fixture.image, "readData", async () => { throw "failure"; });
+  assert.equal(await data.unsigned(0x200, 4), null);
+  assert.match([...fixture.issues].join(), /scalar read failed/);
+});
+
 void test("dehydration restores inline absolute and relative relocations", async () => {
   // InlinePtrReloc(count1), inline target, InlineRelPtr32Reloc(count1), inline target.
   const fixture = fixtureWithStream([13, 0, 0, 0, 0, 12, 0, 0, 0, 0]);
@@ -36,7 +58,7 @@ void test("dehydration restores inline absolute and relative relocations", async
 
   assert.equal(await data.pointer(fixture.destination), fixture.codeRvas[0]);
   assert.equal(await data.pointer(fixture.destination + 8), null);
-  assert.match([...fixture.issues].join(" "), /absolute pointer/);
+  assert.match([...fixture.issues].join(" "), /not an absolute pointer/);
 });
 
 void test("dehydration preserves a decoded pointer before a malformed command", async () => {
@@ -103,7 +125,7 @@ void test("stored pointers require a file-backed aligned field and preserve zero
   assert.equal(fixture.issues.size, 0);
   assert.equal(await data.pointer(-8), null);
   assert.deepEqual([...fixture.issues],
-    ["Class constructor pointer is not readable in the image or DehydratedData."]);
+    ["NativeAOT absolute pointer is not readable in the image or DehydratedData."]);
 });
 
 void test("partially addressed pointer runs are rejected even if enough destination bytes remain", async context => {
@@ -144,5 +166,5 @@ void test("untyped stored pointer failures produce warnings", async () => {
   fixture.image.readPointerValue = async () => { throw "untyped I/O error"; };
 
   assert.equal(await new NativeAotDehydratedData(fixture.image, fixture.sections, fixture.issues).pointer(0x180), null);
-  assert.deepEqual([...fixture.issues], ["Class constructor pointer read failed."]);
+  assert.deepEqual([...fixture.issues], ["NativeAOT absolute pointer read failed."]);
 });
