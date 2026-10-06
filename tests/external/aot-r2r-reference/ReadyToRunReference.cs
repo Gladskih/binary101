@@ -17,12 +17,13 @@ static class ReadyToRunReference
         return Encoding.UTF8.GetString(bytes, 0, length < 0 ? bytes.Length : length);
     }
 
-    static List<object> Sections(PEReader pe, byte[] header, SortedSet<uint> indices)
+    internal static List<object> Sections(PEReader pe, byte[] header, SortedSet<uint> indices,
+        int start = 16, int countOffset = 12)
     {
         var sections = new List<object>();
-        for (int index = 0; index < UInt32(header, 12); index++)
+        for (int index = 0; index < UInt32(header, countOffset); index++)
         {
-            int offset = 16 + index * 12;
+            int offset = start + index * 12;
             uint type = UInt32(header, offset), rva = UInt32(header, offset + 4);
             if (type is not (100 or 101 or 103 or 109 or 116)) continue;
             var bytes = Data(pe, rva, UInt32(header, offset + 8));
@@ -55,13 +56,13 @@ static class ReadyToRunReference
             foreach (var path in paths)
             {
                 using var pe = new PEReader(File.OpenRead(path));
-                var directory = pe.PEHeaders.CorHeader?.ManagedNativeHeaderDirectory;
-                if (directory == null || directory.Value.Size < 16) continue;
-                var header = Data(pe, (uint)directory.Value.RelativeVirtualAddress, (uint)directory.Value.Size);
+                var header = ReadyToRunComposite.Header(pe);
+                if (header.Length < 16) continue;
                 if (UInt32(header, 0) != 0x00525452) continue;
                 var indices = new SortedSet<uint>();
                 var sections = Sections(pe, header, indices);
-                output.WriteLine(JsonSerializer.Serialize(new { path, sections,
+                var components = ReadyToRunComposite.Components(pe, header, indices);
+                output.WriteLine(JsonSerializer.Serialize(new { path, sections, components,
                     methodRvas = ReadyToRunSeeds.Read(pe, header, indices) }));
                 count++;
             }
