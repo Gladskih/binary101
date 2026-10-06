@@ -1,4 +1,5 @@
 "use strict";
+import { renderPeSanitizers } from "../renderers/pe/sanitizers.js";
 import {
   isPeWindowsParseResult,
   type PeParseResult,
@@ -99,6 +100,7 @@ const renderPackerById = (pe: PeWindowsParseResult, id: PePackerId): string => {
 const WINDOWS_LAZY_RENDERERS: Partial<Record<
   PeLazySectionKey, (pe: PeWindowsParseResult) => string
 >> = {
+  [PE_LAZY_SECTION_KEYS.sanitizers]: renderPeSanitizers,
   [PE_LAZY_SECTION_KEYS.upx]: (pe: PeWindowsParseResult) =>
     renderPackerById(pe, "upx"),
   [PE_LAZY_SECTION_KEYS.nsisInstaller]: (pe: PeWindowsParseResult) =>

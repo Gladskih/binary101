@@ -1,9 +1,7 @@
 "use strict";
 import { hex, humanSize } from "../../binary-utils.js";
 import {
-  isPeWindowsParseResult,
-  type PeParseResult,
-  type PeWindowsParseResult
+  isPeWindowsParseResult, type PeParseResult, type PeWindowsParseResult
 } from "../../analyzers/pe/index.js";
 import { renderPeSectionShell } from "./collapsible-section.js";
 import { PE_DELAY_IMPORTS_PANEL_ID, PE_IMPORTS_PANEL_ID } from "./import-sections.js";
@@ -48,6 +46,7 @@ export const PE_LAZY_SECTION_KEYS = {
   resources: "resources",
   resourcePayloads: "resource-payloads",
   sanity: "sanity",
+  sanitizers: "sanitizers",
   sectionHeaders: "section-headers",
   security: "security",
   tls: "tls",
@@ -267,11 +266,11 @@ export const getPeLazySectionDescriptors = (pe: PeParseResult): PeLazySectionDes
   const descriptors: PeLazySectionDescriptor[] = [];
   addHeaderDescriptors(pe, descriptors);
   if (isPeWindowsParseResult(pe)) {
+    descriptors.push({ key: PE_LAZY_SECTION_KEYS.sanitizers, title: "Sanitizer evidence" });
     addWindowsDescriptors(pe, descriptors);
     descriptors.push(...getPePayloadLazySectionDescriptors(pe.payloads));
   }
-  pushIf(descriptors,
-    pe.overlay?.ranges.length || pe.overlay?.warnings?.length, {
+  pushIf(descriptors, pe.overlay?.ranges.length || pe.overlay?.warnings?.length, {
     id: PE_OVERLAY_PANEL_ID,
     key: PE_LAZY_SECTION_KEYS.overlay,
     summary: `overlay: ${humanSize(getUnexplainedOverlaySize(pe))}`,
