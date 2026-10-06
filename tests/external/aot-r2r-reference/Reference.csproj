@@ -12,6 +12,7 @@
     <Compile Include="$(NativeFormatSourceDirectory)/MdBinaryReader*.cs" />
     <Compile Include="$(NativeFormatSourceDirectory)/NativeFormat*.cs" />
     <Compile Include="$(NativeFormatSourceDirectory)/NativeMetadataReader.cs" />
+    <Compile Include="$(NativeFormatSourceDirectory)/DehydratedData.cs" />
     <Compile Include="$(ReadyToRunSourceDirectory)/NativeReader.cs" />
     <Compile Include="$(ReadyToRunSourceDirectory)/NativeArray.cs" />
     <Compile Include="$(ReadyToRunSourceDirectory)/NativeHashtable.cs" />

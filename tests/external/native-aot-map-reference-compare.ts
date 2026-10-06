@@ -21,15 +21,17 @@ const parseNativeFile = async (path: string): Promise<NativeAotMetadata> => {
 
 export const compareNativeAotMapReference = async (referencePath: string) => {
   const references = JSON.parse(await readFile(referencePath, "utf8")) as
-    (Pick<NativeAotMetadata, "invokeMap" | "stackTraceMap"> & { path: string })[];
-  const counts = { files: 0, invokes: 0, stackTraceMethods: 0, seeds: 0 };
+    (Pick<NativeAotMetadata, "invokeMap" | "stackTraceMap" | "functionMaps"> & { path: string })[];
+  const counts = { files: 0, invokes: 0, stackTraceMethods: 0, functionEntries: 0, seeds: 0 };
   for (const reference of references) {
     const actual = await parseNativeFile(reference.path);
     assert.deepEqual(actual.invokeMap, reference.invokeMap, `${reference.path} invoke map`);
     assert.deepEqual(actual.stackTraceMap, reference.stackTraceMap, `${reference.path} stack trace map`);
+    assert.deepEqual(actual.functionMaps, reference.functionMaps, `${reference.path} function maps`);
     counts.files += 1;
     counts.invokes += actual.invokeMap?.entries.length ?? 0;
     counts.stackTraceMethods += actual.stackTraceMap?.entries.length ?? 0;
+    counts.functionEntries += actual.functionMaps?.maps.reduce((sum, map) => sum + map.entries.length, 0) ?? 0;
     counts.seeds += new Set(collectNativeAotMapSeeds(actual).flatMap(group => group.rvas)).size;
   }
   return counts;

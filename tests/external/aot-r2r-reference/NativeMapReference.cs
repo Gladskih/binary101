@@ -4,8 +4,8 @@ using System.Text.Json;
 
 static class NativeMapReference
 {
-    record Blob(long rva, byte[] bytes);
-    static List<int> Entries(byte[] bytes)
+    internal record Blob(long rva, byte[] bytes);
+    internal static List<int> Entries(byte[] bytes)
     {
         var reader = new NativeReader(new MemoryStream(bytes));
         var table = new NativeHashtable(reader, new NativeParser(reader, 0), (uint)bytes.Length);
@@ -15,7 +15,7 @@ static class NativeMapReference
             offsets.Add((int)parser.Offset);
         return offsets.ToList();
     }
-    static long Fixup(Blob table, uint index)
+    internal static long Fixup(Blob table, uint index)
     {
         int offset = checked((int)index * 4);
         return table.rva + offset + (int)ReadyToRunReference.UInt32(table.bytes, offset);
@@ -74,6 +74,8 @@ static class NativeMapReference
             var result = new Dictionary<string, object?> { ["path"] = item.GetProperty("path").GetString() };
             if (blobs.TryGetValue(306, out var invoke)) result["invokeMap"] = Invoke(invoke, blobs[308]);
             if (blobs.TryGetValue(327, out var stack)) result["stackTraceMap"] = StackTrace(stack);
+            using var image = new NativeMapImage(item.GetProperty("path").GetString()!);
+            result["functionMaps"] = new NativeFunctionMapReference(blobs, image).Read();
             results.Add(result);
         }
         File.WriteAllText(outputPath, JsonSerializer.Serialize(results));
