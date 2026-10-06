@@ -22,6 +22,7 @@ const addMemoryInterfaces = (catalog: Map<string, SanitizerTool>): void => {
     "warning_with_origin", "warning_with_origin_noreturn", "maybe_warning_1",
     "maybe_warning_2", "maybe_warning_4", "maybe_warning_8", "chain_origin"]);
   // https://github.com/llvm/llvm-project/blob/main/compiler-rt/lib/hwasan/hwasan_interface_internal.h
+  // tag_mismatch_v2: compiler-rt/lib/hwasan/hwasan_tag_mismatch_aarch64.S in the same project.
   addNames(catalog, "HWASan", "__hwasan_", ["init", "tag_mismatch", "tag_mismatch_v2",
     "tag_memory", "generate_tag", "loadN", "storeN"]);
   for (const size of ["1", "2", "4", "8", "16"]) {
@@ -43,6 +44,7 @@ const addThreadInterfaces = (catalog: Map<string, SanitizerTool>): void => {
 
 const addUndefinedInterfaces = (catalog: Map<string, SanitizerTool>): void => {
   // Full ABI: https://github.com/llvm/llvm-project/blob/main/compiler-rt/lib/ubsan/ubsan_handlers.h
+  // dynamic_type_cache_miss: compiler-rt/lib/ubsan/ubsan_handlers_cxx.h in the same project.
   // Minimal ABI differs (type_mismatch, not type_mismatch_v1):
   // https://github.com/llvm/llvm-project/blob/main/compiler-rt/lib/ubsan_minimal/ubsan_minimal_handlers.cpp
   const shared = ["alignment_assumption", "add_overflow", "sub_overflow", "mul_overflow",
