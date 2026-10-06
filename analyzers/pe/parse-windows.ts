@@ -28,6 +28,8 @@ import { attachVersionFileTypeChecks } from "./resources/version-file-type-check
 import type { ManifestXmlDocumentParser } from "./resources/preview/manifest-xml.js";
 import { parseResources } from "./resources/index.js";
 import { parseClrDirectory } from "./clr/index.js";
+import { parseExportedReadyToRun } from "./clr/ready-to-run-export.js";
+import { decodeReadyToRunThunks } from "./clr/ready-to-run-thunk-image.js";
 import { parseSecurityDirectory } from "./security/index.js";
 import { addSecurityTailWarning } from "./security/tail-warning.js";
 import type { PeDataDirectory, PeWindowsCore } from "./types.js";
@@ -63,6 +65,7 @@ export type PeDirectoryArtifacts = {
   msvcRtti: Awaited<ReturnType<typeof analyzePeMsvcRtti>>;
   itaniumRtti: Awaited<ReturnType<typeof analyzePeItaniumRtti>>;
   clr: Awaited<ReturnType<typeof parseClrDirectory>>;
+  readyToRun?: Awaited<ReturnType<typeof parseExportedReadyToRun>>;
   nativeAotCandidate: Awaited<ReturnType<typeof analyzePeNativeAotMetadata>> |
     ReturnType<typeof detectNativeAotCandidate>;
   exception: Awaited<ReturnType<typeof parseExceptionDirectory>>;
@@ -123,10 +126,9 @@ export const parseWindowsPe = async (
     core.sections
   );
   applyLoadConfigChecks(context, directories, importLinking);
-  return withWindowsPeLayoutWarnings(
-    buildWindowsPeResult(context, debugArtifacts, directories, imageArtifacts, security, importLinking),
-    file.size
-  );
+  const result = buildWindowsPeResult(context, debugArtifacts, directories, imageArtifacts, security, importLinking);
+  await decodeReadyToRunThunks(reader, result);
+  return withWindowsPeLayoutWarnings(result, file.size);
 };
 const parsePeDebugArtifacts = async (
   context: PeWindowsParseContext
@@ -188,11 +190,7 @@ const parsePeDirectoryArtifacts = async (
     core.coff.Characteristics
   );
   const reloc = await parseBaseRelocations(reader, core.dataDirs, core.rvaToOff);
-  const clr = await parseClrDirectory(reader, core.dataDirs, core.rvaToOff,
-    core.coff.Machine);
-  const nativeAotCandidate = (clr == null
-    ? await analyzePeNativeAotMetadata(reader, core, reloc) : null) ??
-    detectNativeAotCandidate(clr != null, exportsInfo, core.sections);
+  const runtime = await parsePeRuntimeDirectories(context, exportsInfo, reloc);
   return {
     ...await parsePeLoaderDirectories(context),
     exportsInfo,
@@ -200,13 +198,34 @@ const parsePeDirectoryArtifacts = async (
     reloc,
     msvcRtti: await analyzePeMsvcRtti(reader, core, reloc),
     itaniumRtti: await analyzePeItaniumRtti(reader, core, reloc),
-    clr,
-    nativeAotCandidate,
+    ...runtime,
     exception: await parseExceptionDirectory(
-      reader, core.dataDirs, core.rvaToOff, canonicalMachine, clr?.readyToRun, nativeAotCandidate
+      reader, core.dataDirs, core.rvaToOff, canonicalMachine,
+      runtime.clr?.readyToRun ?? runtime.readyToRun, runtime.nativeAotCandidate
     ),
-    manifestValidation: analyzeManifestConsistency(resources, canonicalMachine, clr)
+    manifestValidation: analyzeManifestConsistency(resources, canonicalMachine, runtime.clr)
   };
+};
+const parsePeRuntimeDirectories = async (
+  context: PeWindowsParseContext, exportsInfo: PeDirectoryArtifacts["exportsInfo"],
+  reloc: PeDirectoryArtifacts["reloc"]
+) => {
+  const { reader, core } = context;
+  const clr = await parseClrDirectory(reader, core.dataDirs, core.rvaToOff, core.coff.Machine);
+  const readyToRun = await attachCompositeReadyToRun(context, exportsInfo, clr);
+  return { clr, ...(readyToRun ? { readyToRun } : {}),
+    nativeAotCandidate: (clr == null ? await analyzePeNativeAotMetadata(reader, core, reloc) : null) ??
+      detectNativeAotCandidate(clr != null, exportsInfo, core.sections) };
+};
+const attachCompositeReadyToRun = async (
+  context: PeWindowsParseContext, exportsInfo: PeDirectoryArtifacts["exportsInfo"],
+  clr: PeDirectoryArtifacts["clr"]
+) => {
+  if (clr?.readyToRun?.status === "ready-to-run") return undefined;
+  const { reader, core } = context;
+  const data = await parseExportedReadyToRun(reader, core.rvaToOff, exportsInfo?.entries ?? [], core.coff.Machine);
+  if (clr) { if (data) clr.readyToRun = data; return undefined; }
+  return data ?? undefined;
 };
 const parsePeSecurity = async (
   context: PeWindowsParseContext,

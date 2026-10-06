@@ -11,6 +11,48 @@ import { installFakeDom, flushTimers } from "../../../../helpers/fake-dom.js";
 import { parsePe, isPeWindowsParseResult } from "../../../../../analyzers/pe/index.js";
 import { createPeReadyToRunSeedFile, createPeReadyToRunInstanceSeedFile } from
   "../../../../fixtures/pe-ready-to-run-seed-file.js";
+import { createPeReadyToRunThunkFile, createPeExportedReadyToRunFile,
+  createPeClrFreeReadyToRunFile } from "../../../../fixtures/pe-ready-to-run-thunk-file.js";
+
+void test("full parsing supplies instruction starts from thunks while excluding import data cells", async () => {
+  const file = createPeReadyToRunThunkFile();
+  const pe = await parsePe(file);
+  assert.ok(pe && isPeWindowsParseResult(pe));
+
+  const seeds = await collectPeDisassemblySeeds(file, pe);
+
+  assert.deepEqual(seeds.extraEntrypoints, [
+    { source: "ReadyToRun runtime functions", rvas: [0x1020] },
+    { source: "ReadyToRun import thunks", rvas: [0x1040] }
+  ]);
+  assert.deepEqual(pe.clr?.readyToRun?.issues, []);
+  assert.deepEqual(seeds.issues, []);
+});
+
+void test("full parsing follows RTR_HEADER exports when ManagedNativeHeader is absent", async () => {
+  const pe = await parsePe(createPeExportedReadyToRunFile());
+  assert.ok(pe && isPeWindowsParseResult(pe));
+
+  assert.equal(pe.clr?.readyToRun?.status, "ready-to-run");
+  assert.equal(pe.clr?.readyToRun?.sections[2]?.decoded?.kind, "thunks");
+  assert.equal(pe.readyToRun, undefined);
+});
+
+void test("CLR-free exported R2R headers feed native seeds without fabricating a CLR header", async () => {
+  const file = createPeClrFreeReadyToRunFile();
+  const pe = await parsePe(file);
+  assert.ok(pe && isPeWindowsParseResult(pe));
+
+  const seeds = await collectPeDisassemblySeeds(file, pe);
+
+  assert.equal(pe.clr, null);
+  assert.equal(pe.readyToRun?.status, "ready-to-run");
+  assert.equal(pe.readyToRun?.sections[2]?.decoded?.kind, "thunks");
+  assert.deepEqual(seeds.extraEntrypoints, [
+    { source: "ReadyToRun runtime functions", rvas: [0x1020] },
+    { source: "ReadyToRun import thunks", rvas: [0x1040] }
+  ]);
+});
 
 void test("full PE parsing supplies R2R method roots without an exception directory", async () => {
   const file = createPeReadyToRunSeedFile();

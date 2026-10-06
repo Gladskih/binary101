@@ -20,6 +20,18 @@ void test("reads counted compiler text and NUL-terminated owner names", async ()
   assert.deepEqual(issues, []);
 });
 
+void test("reports incomplete component and hot/cold records and untyped read failures", async () => {
+  const file = new MockFile(new Uint8Array(17));
+  const issues: string[] = [];
+
+  await decodeReadyToRunSections(file, rva => rva, [section(115, 17), section(120, 9)], 8, issues);
+  assert.match(issues.join(), /ComponentAssemblies ends with an incomplete entry/);
+  assert.match(issues.join(), /HotColdMap ends with an incomplete entry/);
+  file.read = async () => { throw "I/O failed"; };
+  await decodeReadyToRunSections(file, rva => rva, [section(100, 2)], 8, issues);
+  assert.match(issues.join(), /Section100: decoding failed/);
+});
+
 void test("accepts unterminated compiler text but warns for an unterminated owner name", async () => {
   const sections = [section(100, 2), section(116, 2)];
   const issues: string[] = [];

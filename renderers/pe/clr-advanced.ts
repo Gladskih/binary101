@@ -8,6 +8,7 @@ import type { PeClrMetadataIndex } from "../../analyzers/pe/clr/types.js";
 import type { ResourceLangWithPreview } from "../../analyzers/pe/resources/preview/types.js";
 import { renderPreviewCell } from "./resource-preview-cell.js";
 import { renderReadyToRunData } from "./ready-to-run-tables.js";
+import { renderPeSectionStart, renderPeSectionEnd } from "./collapsible-section.js";
 
 const formatClrDirectory = (rva: number, size: number): string =>
   rva || size ? `RVA ${hex(rva, 8)} Size ${humanSize(size)}` : "-";
@@ -95,7 +96,7 @@ export const renderManagedResources = (clrHeader: PeClrHeader, out: string[]): v
   out.push(`</div>${renderWarningList(resources.issues)}</details>`);
 };
 
-export const renderReadyToRun = (clrHeader: PeClrHeader, out: string[]): void => {
+export const renderReadyToRun = (clrHeader: Pick<PeClrHeader, "readyToRun">, out: string[]): void => {
   const readyToRun = clrHeader.readyToRun;
   if (!readyToRun || readyToRun.status === "absent") return;
   out.push(`<details style="margin-top:.35rem" open><summary>ReadyToRun / managed native header</summary><dl>`);
@@ -124,4 +125,12 @@ export const renderReadyToRun = (clrHeader: PeClrHeader, out: string[]): void =>
     out.push(renderReadyToRunData(readyToRun));
   }
   out.push(`${renderWarningList(readyToRun.issues)}</details>`);
+};
+
+export const renderCompositeReadyToRun = (
+  image: Pick<PeClrHeader, "readyToRun">, out: string[]
+): void => {
+  out.push(renderPeSectionStart("ReadyToRun composite header"));
+  renderReadyToRun(image, out);
+  out.push(renderPeSectionEnd());
 };

@@ -10,6 +10,7 @@ import { PE_DELAY_IMPORTS_PANEL_ID, PE_IMPORTS_PANEL_ID } from "./import-section
 import { getLinuxBootSummary } from "./linux-boot.js";
 import { getMsvcRttiSectionDescriptor } from "./msvc-rtti-section-descriptor.js";
 import { getNativeAotSectionDescriptor } from "./native-aot-section-descriptor.js";
+import { getPeClrSectionDescriptor } from "./clr-section-descriptor.js";
 import { getPeAppHostSectionDescriptor } from "./apphost-section-descriptor.js";
 import { PE_OVERLAY_PANEL_ID, getUnexplainedOverlaySize } from "./overlay.js";
 import { PE_PACKER_SECTIONS, pePackerSectionDescriptors } from "./packer-sections.js";
@@ -56,8 +57,6 @@ export const PE_LAZY_SECTION_KEYS = {
 export type PeLazySectionKey = typeof PE_LAZY_SECTION_KEYS[keyof typeof PE_LAZY_SECTION_KEYS];
 export type PeLazySectionDescriptor =
   { id?: string; key: PeLazySectionKey; summary?: string; title: string };
-const compactCount = (count: number): string =>
-  count >= 10_000 ? `${Math.round(count / 1000)}k` : String(count);
 const plural = (count: number, one: string, many: string): string =>
   `${count} ${count === 1 ? one : many}`;
 const coffTailSummary = (pe: PeParseResult): string =>
@@ -82,8 +81,6 @@ const resourceLeafCount = (pe: PeWindowsParseResult): number =>
     count + group.entries.reduce((entryCount, entry) => entryCount + entry.langs.length, 0), 0
   ) ??
   0;
-const metadataRowCount = (pe: PeWindowsParseResult): number =>
-  pe.clr?.meta?.tables?.rowCounts.reduce((count, row) => count + row.rows, 0) ?? 0;
 const hasCoffTail = (pe: PeParseResult): boolean =>
   (pe.coff.NumberOfSymbols >>> 0) !== 0 || pe.coffStringTableSize != null;
 const hasSanity = (pe: PeParseResult): boolean =>
@@ -235,14 +232,8 @@ const addWindowsRuntimeDescriptors = (
   pe: PeWindowsParseResult,
   descriptors: PeLazySectionDescriptor[]
 ): void => {
-  const rowCount = metadataRowCount(pe);
-  pushIf(descriptors, pe.clr, {
-    key: PE_LAZY_SECTION_KEYS.clr,
-    summary: rowCount > 0
-      ? `CLR metadata: ${compactCount(rowCount)} rows`
-      : `runtime v${pe.clr?.MajorRuntimeVersion ?? 0}.${pe.clr?.MinorRuntimeVersion ?? 0}`,
-    title: "CLR (.NET) header"
-  });
+  const clr = getPeClrSectionDescriptor(pe);
+  if (clr) descriptors.push(clr);
   if (pe.appHost) descriptors.push(getPeAppHostSectionDescriptor(pe.appHost));
   pushIf(descriptors, pe.nativeAotCandidate,
     getNativeAotSectionDescriptor(pe.nativeAotCandidate));

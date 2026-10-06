@@ -7,6 +7,7 @@ import { isRvaRange, mappedRvaSpan } from "../rva-mapping.js";
 import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { PeClrReadyToRunSection } from "./ready-to-run-types.js";
 import { readyToRunRuntimeFunctionSize } from "./ready-to-run-target.js";
+import { readyToRunImageSections } from "./ready-to-run-image-sections.js";
 
 const isFileBackedCode = (rva: number, pe: PeWindowsParseResult, fileSize: number): boolean => {
   if (!rva || rva >= pe.opt.SizeOfImage) return false;
@@ -112,11 +113,11 @@ const collectMethodIndices = (sections: PeClrReadyToRunSection[]): Set<number> =
 export const collectReadyToRunMethodRvas = async (
   reader: FileRangeReader, pe: PeWindowsParseResult, issues: string[]
 ): Promise<number[]> => {
-  const readyToRun = pe.clr?.readyToRun;
+  const readyToRun = pe.clr?.readyToRun ?? pe.readyToRun;
   if (readyToRun?.status !== "ready-to-run") return [];
   // readytorun.h: MethodDefEntryPoints = 103, RuntimeFunctions = 102.
   // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/inc/readytorun.h
-  const indices = collectMethodIndices(readyToRun.sections);
+  const indices = collectMethodIndices(readyToRunImageSections(readyToRun));
   const table = runtimeTable(readyToRun.sections, indices.size, issues);
   if (!table) return [];
   const width = readyToRunRuntimeFunctionSize(pe.coff.Machine);

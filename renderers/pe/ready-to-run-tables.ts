@@ -1,20 +1,23 @@
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import type { PeClrHeader } from "../../analyzers/pe/clr/types.js";
-import type { PeClrReadyToRun, PeClrReadyToRunImport, PeClrReadyToRunSection } from
+import type { PeClrReadyToRun, PeClrReadyToRunComponent, PeClrReadyToRunImport, PeClrReadyToRunSection } from
   "../../analyzers/pe/clr/ready-to-run-types.js";
 import { hex } from "../../binary-utils.js";
 import { renderAutoPagedSortableTable, type PagedSortableTableModel } from
   "../paged-sortable-table.js";
 
+const columnClass = (label: string | undefined): string =>
+  ["Name", "Bytes", "Kind"].includes(label ?? "") ? "" : "peNumeric";
+
 const model = (id: string, columns: string[], rows: (string | number)[][]):
 PagedSortableTableModel => ({
   id, columns: columns.map(label => ({ label,
-    className: label === "Name" || label === "Bytes" ? "" : "peNumeric" })),
+    className: columnClass(label) })),
   rowCount: rows.length, pageSize: 100,
   tableClassName: "readyToRunTable",
   rowAt: index => rows[index] ? { cells: rows[index]!.map((value, column) => ({
     html: value === "" ? "-" : escapeHtml(String(value)), sortValue: String(value),
-    className: columns[column] === "Name" || columns[column] === "Bytes" ? "" : "peNumeric"
+    className: columnClass(columns[column])
   })) } : null,
   sortValueAt: (row, column) => String(rows[row]?.[column] ?? "")
 });
@@ -34,11 +37,16 @@ const importModels = (imports: PeClrReadyToRunImport[], id: string): PagedSortab
 };
 
 const sectionModels = (
-  section: PeClrReadyToRunSection, index: number
+  section: PeClrReadyToRunSection, index: number, prefix = "pe-r2r"
 ): PagedSortableTableModel[] => {
-  const id = `pe-r2r-${index}`;
+  const id = `${prefix}-${index}`;
   const decoded = section.decoded;
   if (!decoded || decoded.kind === "text") return [];
+  if (decoded.kind === "thunks") return [model(`${id}-thunks`,
+    ["RVA", "Size", "Kind", "Helper cell RVA", "Module cell RVA", "Import section"],
+    decoded.entries.map(entry => [hex(entry.rva, 8), entry.size, entry.kind,
+      entry.helperCellRva === null ? "" : hex(entry.helperCellRva, 8),
+      entry.moduleCellRva == null ? "" : hex(entry.moduleCellRva, 8), entry.importSectionIndex ?? ""]))];
   if (decoded.kind === "imports") return importModels(decoded.imports, id);
   if (decoded.kind === "methods") return [model(`${id}-methods`,
     ["MethodDef RID", "Runtime function index", "Fixups RVA"], decoded.methods.map(method =>
@@ -51,19 +59,30 @@ const sectionModels = (
   if (decoded.kind === "hot-cold") return [model(`${id}-hot-cold`,
     ["Cold runtime function", "Hot runtime function"], decoded.entries.map(entry =>
       [entry.coldRuntimeFunction, entry.hotRuntimeFunction]))];
-  return [model(`${id}-components`,
-    ["CLR RVA", "CLR size", "Core header RVA", "Core header size"], decoded.entries.map(entry =>
-      [hex(entry.clrRva, 8), entry.clrSize, hex(entry.coreHeaderRva, 8), entry.coreHeaderSize]))];
+  return componentModels(decoded.entries, id);
 };
+
+const componentModels = (entries: PeClrReadyToRunComponent[], id: string):
+PagedSortableTableModel[] => [model(`${id}-components`,
+    ["CLR RVA", "CLR size", "Core header RVA", "Core header size", "Flags", "Sections"],
+    entries.map(entry => [hex(entry.clrRva, 8), entry.clrSize, hex(entry.coreHeaderRva, 8),
+      entry.coreHeaderSize, entry.coreHeader ? hex(entry.coreHeader.flags, 8) : "",
+      entry.coreHeader?.sectionCount ?? ""])),
+  ...entries.flatMap((entry, component) => entry.coreHeader ? [
+    model(`${id}-component-${component}-sections`, ["Type", "Name", "RVA", "Size"],
+      entry.coreHeader.sections.map(section => [section.type, section.name, hex(section.rva, 8), section.size])),
+    ...entry.coreHeader.sections.flatMap((section, child) => sectionModels(section, child,
+      `${id}-component-${component}`))
+  ] : [])];
 
 export const createReadyToRunTableModels = (data: PeClrReadyToRun): PagedSortableTableModel[] => [
   model("pe-r2r-sections", ["Type", "Name", "RVA", "Size"], data.sections.map(section =>
     [section.type, section.name, hex(section.rva, 8), section.size])),
-  ...data.sections.flatMap(sectionModels)
+  ...data.sections.flatMap((section, index) => sectionModels(section, index))
 ];
 
 export const getReadyToRunTableModel = (
-  clr: PeClrHeader | null | undefined, id: string
+  clr: Pick<PeClrHeader, "readyToRun"> | null | undefined, id: string
 ): PagedSortableTableModel | null => id.startsWith("pe-r2r-") && clr?.readyToRun
   ? createReadyToRunTableModels(clr.readyToRun).find(model => model.id === id) ?? null : null;
 
@@ -72,5 +91,9 @@ export const renderReadyToRunData = (data: PeClrReadyToRun): string => {
     ? [renderDefinitionRow(section.name, escapeHtml(section.decoded.text),
       "Decoded ReadyToRun text section.")] : []).join("");
   return (text ? `<dl>${text}</dl>` : "") + createReadyToRunTableModels(data)
-    .filter(table => table.rowCount).map(table => renderAutoPagedSortableTable(table)).join("");
+    .filter(table => table.rowCount).map(table => {
+      const component = /-component-(\d+)-sections$/.exec(table.id);
+      return (component ? `<h5>Component assembly ${Number(component[1]) + 1}</h5>` : "") +
+        renderAutoPagedSortableTable(table);
+    }).join("");
 };

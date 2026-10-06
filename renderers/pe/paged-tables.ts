@@ -111,7 +111,7 @@ type TableResolver = (pe: PeWindowsParseResult, tableId: string) => PagedSortabl
 
 const windowsTableResolvers: TableResolver[] = [
   getPeDisassemblyStringTableModel, getOmapTableModel, getClrTableModel,
-  (pe, id) => getReadyToRunTableModel(pe.clr, id),
+  (pe, id) => getReadyToRunTableModel(pe.clr ?? pe, id),
   (pe, id) => id === EXPORT_TABLE_ID && pe.exports
     ? createExportTableModel(pe.exports.entries,
       analyzeTypeLibraryExports(pe.resources, pe.exports).matches) : null,

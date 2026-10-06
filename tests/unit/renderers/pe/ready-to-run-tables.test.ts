@@ -60,6 +60,7 @@ void test("exposes sections, import cells, method entry points and composite dir
   assert.equal(models[0]?.columns[0]?.className, "peNumeric");
   assert.equal(models[0]?.rowAt(0)?.cells[0]?.className, "peNumeric");
   assert.equal(models[0]?.rowAt(0)?.cells[1]?.className, "");
+  assert.equal(models[0]!.tableClassName, "readyToRunTable");
 });
 
 void test("routes pagination and escapes compiler text within valid definition lists", () => {
@@ -74,6 +75,8 @@ void test("routes pagination and escapes compiler text within valid definition l
   assert.doesNotMatch(renderReadyToRunData(fixture()), /<compiler>/);
   assert.equal(renderReadyToRunData({ ...fixture(), sections: [] }), "");
   assert.match(renderReadyToRunData(fixture()), /<table[\s\S]*MethodDef RID/);
+  assert.match(renderReadyToRunData(fixture()), /Decoded ReadyToRun text section\./);
+  assert.doesNotMatch(renderReadyToRunData(fixture()), /Stryker was here/);
 });
 
 void test("labels every table and right-aligns numeric headers and cells", () => {
@@ -84,7 +87,7 @@ void test("labels every table and right-aligns numeric headers and cells", () =>
     ["Index", "Cells RVA", "Size", "Flags", "Type", "Entry size", "Signatures RVA", "Auxiliary RVA"],
     ["Import", "Cell", "RVA", "Bytes", "Signature RVA"],
     ["MethodDef RID", "Runtime function index", "Fixups RVA"],
-    ["CLR RVA", "CLR size", "Core header RVA", "Core header size"],
+    ["CLR RVA", "CLR size", "Core header RVA", "Core header size", "Flags", "Sections"],
     ["Cold runtime function", "Hot runtime function"]
   ]);
   assert.equal(models[0]?.columns[1]?.className, "");
@@ -94,7 +97,7 @@ void test("labels every table and right-aligns numeric headers and cells", () =>
     ["0", "0x00000080", "8", "0x0001", "2", "4", "0x00000090", "0x000000a0"]);
   assert.deepEqual(models[3]?.rowAt(0)?.cells.map(cell => cell.html), ["1", "2", "0x00000044"]);
   assert.deepEqual(models[4]?.rowAt(0)?.cells.map(cell => cell.html),
-    ["0x00000100", "72", "0x00000200", "32"]);
+    ["0x00000100", "72", "0x00000200", "32", "-", "-"]);
   assert.deepEqual(models[5]?.rowAt(0)?.cells.map(cell => cell.html), ["3", "1"]);
 });
 
@@ -116,4 +119,46 @@ void test("renders generic instance signatures and fixups as RVAs with numeric a
   assert.ok(table.columns.every(column => column.className === "peNumeric"));
   assert.ok(table.rowAt(0)?.cells.every(cell => cell.className === "peNumeric"));
   assert.match(renderReadyToRunData(data), /Signature RVA/);
+});
+
+void test("component tables retain their own directories, method maps, flags and pagination IDs", () => {
+  const data = fixture();
+  const decoded = data.sections[3]!.decoded;
+  assert.ok(decoded?.kind === "components");
+  decoded.entries[0]!.coreHeader = { flags: 32, sectionCount: 1, sections: [data.sections[2]!] };
+
+  const models = createReadyToRunTableModels(data);
+  const table = models.find(model => model.id === "pe-r2r-3-component-0-0-methods")!;
+
+  assert.equal(table.rowCount, 2);
+  assert.deepEqual(table.rowAt(0)?.cells.map(cell => cell.html), ["1", "2", "0x00000044"]);
+  assert.deepEqual(models.find(model => model.id === "pe-r2r-3-components")?.rowAt(0)?.cells.map(cell => cell.html),
+    ["0x00000100", "72", "0x00000200", "32", "0x00000020", "1"]);
+  assert.match(renderReadyToRunData(data), /Component assembly 1/);
+  assert.match(renderReadyToRunData(data), /pe-r2r-3-component-0-sections/);
+  assert.equal(getReadyToRunTableModel({ readyToRun: data }, table.id)?.rowCount, 2);
+  const directory = models.find(model => model.id === "pe-r2r-3-component-0-sections")!;
+  assert.deepEqual(directory.columns.map(column => column.label), ["Type", "Name", "RVA", "Size"]);
+  assert.deepEqual(directory.rowAt(0)?.cells.map(cell => cell.html),
+    ["103", "MethodDefEntryPoints", "0x00000040", "8"]);
+});
+
+void test("thunk tables distinguish entrypoints from data cells and render missing operands", () => {
+  const data = fixture();
+  data.sections = [{ type: 106, name: "DelayLoadMethodCallThunks", rva: 256, size: 32,
+    decoded: { kind: "thunks", entries: [
+      { rva: 256, size: 16, kind: "delay-load", helperCellRva: 512, moduleCellRva: 768, importSectionIndex: 0 },
+      { rva: 272, size: 6, kind: "eager", helperCellRva: null }
+    ] } }];
+
+  const table = createReadyToRunTableModels(data)[1]!;
+
+  assert.deepEqual(table.columns.map(column => column.label),
+    ["RVA", "Size", "Kind", "Helper cell RVA", "Module cell RVA", "Import section"]);
+  assert.deepEqual(table.rowAt(0)?.cells.map(cell => cell.html),
+    ["0x00000100", "16", "delay-load", "0x00000200", "0x00000300", "0"]);
+  assert.deepEqual(table.rowAt(1)?.cells.map(cell => cell.html), ["0x00000110", "6", "eager", "-", "-", "-"]);
+  assert.equal(table.columns[2]?.className, "");
+  assert.equal(table.rowAt(0)?.cells[2]?.className, "");
+  assert.equal(table.id, "pe-r2r-0-thunks");
 });

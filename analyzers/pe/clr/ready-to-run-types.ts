@@ -31,15 +31,37 @@ export interface PeClrReadyToRunImport {
   entries: { value: Uint8Array; signatureRva: number | null }[];
 }
 
+export interface PeClrReadyToRunThunk {
+  rva: number;
+  size: number;
+  kind: "eager" | "lazy" | "delay-load" | "tailcall" | "virtual-dispatch" | "delay-load family";
+  helperCellRva: number | null;
+  moduleCellRva?: number | null;
+  importSectionIndex?: number;
+}
+
 export type PeClrReadyToRunSectionData =
   | { kind: "text"; text: string }
+  | { kind: "thunks"; entries: PeClrReadyToRunThunk[] }
   | { kind: "methods"; methods: PeClrReadyToRunMethod[] }
   | { kind: "instance-methods"; methods: PeClrReadyToRunInstanceMethod[] }
   | { kind: "imports"; imports: PeClrReadyToRunImport[] }
   | { kind: "hot-cold"; entries: { coldRuntimeFunction: number; hotRuntimeFunction: number }[] }
-  | { kind: "components"; entries: {
-    clrRva: number; clrSize: number; coreHeaderRva: number; coreHeaderSize: number
-  }[] };
+  | { kind: "components"; entries: PeClrReadyToRunComponent[] };
+
+export interface PeClrReadyToRunCoreHeader {
+  flags: number;
+  sectionCount: number;
+  sections: PeClrReadyToRunSection[];
+}
+
+export interface PeClrReadyToRunComponent {
+  clrRva: number;
+  clrSize: number;
+  coreHeaderRva: number;
+  coreHeaderSize: number;
+  coreHeader?: PeClrReadyToRunCoreHeader;
+}
 
 // CoreCLR readytorun.h ReadyToRunSectionType values.
 // https://github.com/dotnet/runtime/blob/main/src/coreclr/inc/readytorun.h
