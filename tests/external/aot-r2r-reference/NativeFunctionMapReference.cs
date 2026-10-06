@@ -7,6 +7,7 @@ sealed class NativeFunctionMapReference
     readonly Dictionary<uint, Blob> blobs;
     readonly NativeMapImage image;
     readonly NativeMapHydration hydration;
+    readonly NativeRuntimeTypeReference runtimeTypes;
     readonly Dictionary<uint, object> layouts = new();
 
     public NativeFunctionMapReference(Dictionary<uint, Blob> blobs, NativeMapImage image)
@@ -15,6 +16,7 @@ sealed class NativeFunctionMapReference
         this.image = image;
         blobs.TryGetValue(207, out var dehydrated);
         hydration = new(image, dehydrated);
+        runtimeTypes = new(image, hydration);
     }
     long? Function(uint table, uint index) => hydration.Function(NativeMapReference.Fixup(blobs[table], index));
 
@@ -121,15 +123,23 @@ sealed class NativeFunctionMapReference
 
     object Entry(uint type, NativeMapCursor cursor) => type switch
     {
+        301 => TypeMetadata(cursor),
         310 => Cctor(cursor), 316 => Struct(cursor), 317 => Delegate(cursor), 322 => Template(cursor),
         321 => TypeTemplate(cursor),
         336 => Exact(cursor), _ => throw new InvalidDataException()
     };
 
+    object TypeMetadata(NativeMapCursor cursor)
+    {
+        uint typeIndex = cursor.UInt(), metadataHandle = cursor.UInt();
+        return new { typeIndex, metadataHandle,
+            runtimeType = runtimeTypes.Read(NativeMapReference.Fixup(blobs[308], typeIndex)) };
+    }
+
     public object? Read()
     {
         var maps = new List<object>();
-        foreach (uint type in new uint[] { 310, 316, 317, 321, 322, 336 })
+        foreach (uint type in new uint[] { 301, 310, 316, 317, 321, 322, 336 })
         {
             if (!blobs.TryGetValue(type, out var blob)) continue;
             var reader = new NativeReader(new MemoryStream(blob.bytes));

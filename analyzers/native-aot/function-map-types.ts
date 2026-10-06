@@ -1,4 +1,5 @@
 import type { NativeAotTemplateLayout } from "./template-layout.js";
+import type { NativeAotTypeMapEntry } from "./runtime-type-map.js";
 
 export interface NativeAotStructMarshallingEntry {
   typeIndex: number;
@@ -38,6 +39,7 @@ export interface NativeAotTemplateTypeEntry {
 }
 
 export type NativeAotFunctionMap =
+  | { type: 301; entries: NativeAotTypeMapEntry[]; warnings: string[] }
   | { type: 310; entries: { typeIndex: number; staticBaseIndex: number;
     entrypointRva: number | null }[]; warnings: string[] }
   | { type: 316; entries: NativeAotStructMarshallingEntry[]; warnings: string[] }

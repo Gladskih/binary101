@@ -25,10 +25,8 @@ import { renderItaniumRtti } from "../renderers/pe/itanium-rtti.js";
 import { renderPeAppHost } from "../renderers/pe/apphost.js";
 import { renderOverlayPanel } from "../renderers/pe/overlay.js";
 import { renderPePayloads } from "../renderers/pe/payloads.js";
-import {
-  PE_LAZY_SECTION_KEYS,
-  type PeLazySectionKey
-} from "../renderers/pe/lazy-section-shells.js";
+import { PE_LAZY_SECTION_KEYS, type PeLazySectionKey } from
+  "../renderers/pe/lazy-section-shells.js";
 import {
   renderArchitectureDirectory,
   renderClr,

@@ -3,8 +3,9 @@ import test from "node:test";
 import { parseNativeAotFunctionMaps } from "../../../../analyzers/native-aot/function-maps.js";
 import { createNativeAotFunctionMapFixture, createNativeAotTemplateFixture } from
   "../../../helpers/native-aot-function-map-fixture.js";
+import { createNativeAotTypeMapFixture } from "../../../helpers/native-aot-runtime-type-fixture.js";
 
-for (const type of [310, 316, 317, 321, 322, 336]) {
+for (const type of [301, 310, 316, 317, 321, 322, 336]) {
   void test(`function map ${type} forwards malformed entry warnings`, async () => {
     const fixture = createNativeAotFunctionMapFixture(type, [new Uint8Array()]);
 
@@ -14,6 +15,16 @@ for (const type of [310, 316, 317, 321, 322, 336]) {
     assert.match(parsed!.maps[0]!.warnings.join(" "), /out of bounds/);
   });
 }
+
+void test("TypeMap connects metadata handles to runtime vtables without requiring NativeLayout", async () => {
+  const fixture = createNativeAotTypeMapFixture();
+
+  const parsed = await parseNativeAotFunctionMaps(fixture.image, fixture.sections);
+
+  assert.equal(parsed?.maps[0]?.type, 301);
+  assert.equal(parsed?.maps[0]?.entries.length, 1);
+  assert.deepEqual(parsed?.warnings, []);
+});
 
 void test("NativeAOT function maps decode struct, delegate and exact method records", async () => {
   const struct = createNativeAotFunctionMapFixture(316, [Uint8Array.of(0, 10, 64, 2, 2, 2, 2, 65, 8)]);

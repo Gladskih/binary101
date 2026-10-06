@@ -2,6 +2,8 @@ import type { NativeAotFunctionMap, NativeAotFunctionMaps } from "./function-map
 import { nativeAotSectionName } from "./format.js";
 
 const codeFields = (map: NativeAotFunctionMap): (number | null)[] => {
+  if (map.type === 301) return map.entries.flatMap(entry =>
+    (entry.runtimeType?.slots ?? []).flatMap(slot => slot.kind === "method" ? [slot.rva] : []));
   if (map.type === 316) return map.entries.flatMap(entry =>
     [entry.marshalRva, entry.unmarshalRva, entry.cleanupRva]);
   if (map.type === 317) return map.entries.flatMap(entry =>

@@ -92,7 +92,12 @@ const getPeDebugCoffTableModel = (
   if (topLevel) return topLevel;
   if (!isPeWindowsParseResult(pe)) return null;
   const dwarf = getDwarfPagedTableModel(pe.dwarf, tableId);
-  if (dwarf) return dwarf;
+  return dwarf ?? getPeEmbeddedDebugCoffTableModel(pe, tableId);
+};
+
+const getPeEmbeddedDebugCoffTableModel = (
+  pe: PeWindowsParseResult, tableId: string
+): PagedSortableTableModel | null => {
   const match = tableId.match(/^pe-debug-entry-(\d+)-coff-/);
   if (!match?.[1]) return null;
   const entry = pe.debug?.entries?.[Number(match[1])];
