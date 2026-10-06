@@ -1,4 +1,5 @@
 import type { ElfParseResult } from "../../analyzers/elf/types.js";
+import { renderElfSanitizers } from "./sanitizers.js";
 import { renderHeader, renderProgramHeaders, renderSectionHeaders, renderIssues } from "./index.js";
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { renderInstructionSetsShell, renderInstructionSetsContent } from "./disassembly.js";
@@ -42,6 +43,7 @@ export const getElfLazySections = (elf: ElfParseResult): ElfLazySection[] => {
     return out.join("");
   } });
   add("header", "ELF header", renderHeader);
+  add("sanitizers", "Sanitizer evidence", renderElfSanitizers);
   if (elf.interpreter || elf.dynamic) add("linking", "Dynamic linking", renderElfLinking);
   if (elf.dynSymbols) add("symbols", "Imports / exports", renderElfSymbols);
   if (elf.symbolVersions) add("versions", "Symbol versions", renderElfSymbolVersions);
