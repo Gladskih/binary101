@@ -128,26 +128,26 @@ void test("readDwarfForm reads inline, offset, variable, flag, and implicit valu
   )).value, { kind: "signed", value: TEST_INTEGER.implicitConstant });
 });
 
-void test("readDwarfForm skips all standard block encodings", async () => {
+void test("readDwarfForm preserves all standard block encodings", async () => {
   const payload = encodeSequence(Uint16Array.BYTES_PER_ELEMENT);
 
   assert.deepEqual((await readForm(TEST_DWARF.form.block2, encodeBlock2(payload))).value,
-    { kind: "empty" });
+    { kind: "block", value: Uint8Array.from(payload) });
   assert.deepEqual((await readForm(TEST_DWARF.form.block4, encodeBlock4(payload))).value,
-    { kind: "empty" });
+    { kind: "block", value: Uint8Array.from(payload) });
   assert.deepEqual((await readForm(TEST_DWARF.form.block, encodeVariableBlock(payload))).value,
-    { kind: "empty" });
+    { kind: "block", value: Uint8Array.from(payload) });
   assert.deepEqual((await readForm(TEST_DWARF.form.block1, encodeBlock1(payload))).value,
-    { kind: "empty" });
+    { kind: "block", value: Uint8Array.from(payload) });
   assert.deepEqual((await readForm(
     TEST_DWARF.form.expressionLocation,
     encodeVariableBlock(payload)
-  )).value, { kind: "empty" });
+  )).value, { kind: "block", value: Uint8Array.from(payload) });
   assert.deepEqual((await readForm(
     TEST_DWARF.form.data16,
     encodeRepeatedByte(TEST_DWARF.encoding.paddingByte, TEST_DWARF.encodedSize.data16)
   )).value,
-    { kind: "empty" });
+    { kind: "block", value: new Uint8Array(TEST_DWARF.encodedSize.data16) });
 });
 
 void test("readDwarfForm reads standard and GNU indexed forms", async () => {
@@ -166,11 +166,11 @@ void test("readDwarfForm reads standard and GNU indexed forms", async () => {
   assert.deepEqual((await readForm(
     TEST_DWARF.form.addressIndex1,
     encodeUint8(TEST_INTEGER.uint8)
-  )).value, { kind: "unsigned", value: BigInt(TEST_INTEGER.uint8) });
+  )).value, { kind: "address-index", value: BigInt(TEST_INTEGER.uint8) });
   assert.deepEqual((await readForm(
     TEST_DWARF.form.addressIndex4,
     encodeUint32(TEST_INTEGER.uint8)
-  )).value, { kind: "unsigned", value: BigInt(TEST_INTEGER.uint8) });
+  )).value, { kind: "address-index", value: BigInt(TEST_INTEGER.uint8) });
   assert.deepEqual((await readForm(
     TEST_DWARF.form.gnuStringIndex,
     encodeUleb(TEST_INTEGER.uint8)
@@ -178,7 +178,7 @@ void test("readDwarfForm reads standard and GNU indexed forms", async () => {
   assert.deepEqual((await readForm(
     TEST_DWARF.form.gnuAddressIndex,
     encodeUleb(TEST_INTEGER.uint8)
-  )).value, { kind: "unsigned", value: BigInt(TEST_INTEGER.uint8) });
+  )).value, { kind: "address-index", value: BigInt(TEST_INTEGER.uint8) });
 });
 
 void test("readDwarfForm follows indirect forms and rejects unknown forms", async () => {
@@ -190,4 +190,16 @@ void test("readDwarfForm follows indirect forms and rejects unknown forms", asyn
   const unsupported = await readForm(TEST_DWARF.invalid.form, []);
   assert.equal(unsupported.value, null);
   assert.ok(unsupported.issues[0]?.includes("Unsupported DWARF form"));
+});
+
+void test("supplementary forms retain their external-file provenance", async () => {
+  assert.deepEqual((await readForm(0x1d, encodeUint32(7))).value,
+    { kind: "string-offset", sectionName: "supplementary .debug_str", value: 7n });
+  assert.deepEqual((await readForm(0x1f21, encodeUint32(7))).value,
+    { kind: "string-offset", sectionName: "supplementary .debug_str", value: 7n });
+  assert.deepEqual((await readForm(0x1f20, encodeUint32(7))).value,
+    { kind: "unsigned", value: 7n });
+  const missing = await readForm(0x21, []);
+  assert.equal(missing.value, null);
+  assert.match(missing.issues.join(" "), /Missing implicit constant/);
 });

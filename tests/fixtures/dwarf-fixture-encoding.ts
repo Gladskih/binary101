@@ -115,7 +115,7 @@ export const TEST_DWARF = {
   },
   invalid: {
     abbreviationCode: 99,
-    addressSize: 16,
+    addressSize: 0,
     children: 2,
     form: 0xffff,
     unitType: 7,

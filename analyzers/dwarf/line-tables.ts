@@ -1,3 +1,4 @@
+import { DwarfStringReader } from "./strings.js";
 "use strict";
 
 import {
@@ -7,20 +8,20 @@ import {
   DWARF_SECTION,
   DWARF_VERSION
 } from "./constants.js";
-import { DwarfCursor } from "./cursor.js";
+import type { DwarfCursor } from "./cursor.js";
 import type { DwarfLineFile, DwarfSectionSource } from "./types.js";
 
 type EntryFormat = { content: bigint; form: bigint };
-type EntryValue = string | bigint | null;
+type EntryValue = string | bigint | Uint8Array | null;
 type TableReadContext = {
   sections: Map<string, DwarfSectionSource>;
   littleEndian: boolean;
   issues: string[];
   dwarfFormat: 32 | 64;
+  strings?: DwarfStringReader;
 };
 export type DwarfLineTables = {
-  directoryCount: number;
-  fileCount: number;
+  directories: string[];
   files: DwarfLineFile[];
 };
 
@@ -44,25 +45,11 @@ const readReferencedString = async (
   sectionName: string,
   offset: bigint
 ): Promise<string | null> => {
-  const source = context.sections.get(sectionName);
-  if (!source) {
-    context.issues.push(`${sectionName}: required by a line table but not available.`);
-    return null;
-  }
-  if (offset > BigInt(Number.MAX_SAFE_INTEGER) || offset >= BigInt(source.section.size)) {
-    context.issues.push(
-      `${sectionName}: line table string offset ${offset.toString()} is outside the section.`
-    );
-    return null;
-  }
-  return new DwarfCursor(
-    source.reader,
-    source.section,
-    Number(offset),
-    source.section.size,
-    context.littleEndian,
-    context.issues
-  ).cstring();
+  const strings = context.strings ?? new DwarfStringReader(context.sections,
+    context.littleEndian ? "little" : "big", context.issues);
+  return strings.resolve({ kind: "string-offset", sectionName, value: offset }, {
+    version: 5, format: context.dwarfFormat, addressSize: 0, stringOffsetsBase: null
+  });
 };
 
 const readEntryValue = async (
@@ -76,19 +63,22 @@ const readEntryValue = async (
   const fixedBytes = FIXED_FORM_BYTE_LENGTHS.get(form);
   if (fixedBytes != null) return (await cursor.unsigned(fixedBytes)) ?? undefined;
   if (form === DWARF_FORM.data16) {
-    return cursor.skip(DWARF_ENCODING.data16Bytes) ? null : undefined;
+    return (await cursor.bytes(DWARF_ENCODING.data16Bytes)) ?? undefined;
   }
-  if (form === DWARF_FORM.lineStringPointer || form === DWARF_FORM.stringPointer) {
-    const offset = await cursor.unsigned(context.dwarfFormat / DWARF_ENCODING.bitsPerByte);
-    if (offset == null) return undefined;
-    return readReferencedString(
-      context,
-      form === DWARF_FORM.lineStringPointer ? DWARF_SECTION.lineStrings : DWARF_SECTION.strings,
-      offset
-    );
+  return readEntryStringPointer(cursor, form, context);
+};
+
+const readEntryStringPointer = async (
+  cursor: DwarfCursor, form: number, context: TableReadContext
+): Promise<EntryValue | undefined> => {
+  if (form !== DWARF_FORM.lineStringPointer && form !== DWARF_FORM.stringPointer) {
+    cursor.fail(`Unsupported line table form 0x${form.toString(16)}`);
+    return undefined;
   }
-  cursor.fail(`Unsupported line table form 0x${form.toString(16)}`);
-  return undefined;
+  const offset = await cursor.unsigned(context.dwarfFormat / DWARF_ENCODING.bitsPerByte);
+  if (offset == null) return undefined;
+  return readReferencedString(context,
+    form === DWARF_FORM.lineStringPointer ? DWARF_SECTION.lineStrings : DWARF_SECTION.strings, offset);
 };
 
 const readFormats = async (cursor: DwarfCursor): Promise<EntryFormat[] | null> => {
@@ -104,46 +94,61 @@ const readFormats = async (cursor: DwarfCursor): Promise<EntryFormat[] | null> =
   return formats;
 };
 
+const numericContent = new Map<bigint, "directoryIndex" | "timestamp" | "size">([
+  [BigInt(DWARF_LINE_CONTENT.directoryIndex), "directoryIndex"],
+  [BigInt(DWARF_LINE_CONTENT.timestamp), "timestamp"], [BigInt(DWARF_LINE_CONTENT.size), "size"]
+]);
+
+const assignLineContent = (file: DwarfLineFile, content: bigint, value: EntryValue): void => {
+  if (typeof value === "bigint") {
+    const key = numericContent.get(content);
+    if (key) file[key] = value;
+  } else if (content === BigInt(DWARF_LINE_CONTENT.path) && typeof value === "string") file.path = value;
+  else if (content === BigInt(DWARF_LINE_CONTENT.md5) && value instanceof Uint8Array) file.md5 = value;
+};
+
+const readVersionFiveEntry = async (cursor: DwarfCursor, formats: EntryFormat[],
+  context: TableReadContext): Promise<DwarfLineFile | null> => {
+  const file: DwarfLineFile = { path: "", directoryIndex: null };
+  for (const format of formats) {
+    const value = await readEntryValue(cursor, format, context);
+    if (value === undefined) return null;
+    assignLineContent(file, format.content, value);
+  }
+  return file;
+};
+
 const readVersionFiveEntries = async (
   cursor: DwarfCursor,
   formats: EntryFormat[],
   context: TableReadContext,
   entryKind: "directories" | "files"
-): Promise<{ count: number; files: DwarfLineFile[] } | null> => {
+): Promise<DwarfLineFile[] | null> => {
   const encodedCount = await cursor.uleb();
   if (encodedCount == null) return null;
   const count = safeCount(cursor, encodedCount, "Line table entry");
   if (count == null) return null;
+  if (count > cursor.end - cursor.position || (count > 0 && !formats.length)) {
+    cursor.fail(`Line ${entryKind} count cannot fit in the remaining header bytes`);
+    return null;
+  }
   const files: DwarfLineFile[] = [];
   for (let entryIndex = 0; entryIndex < count; entryIndex += 1) {
-    let path = "";
-    let directoryIndex: bigint | null = null;
-    for (const format of formats) {
-      const value = await readEntryValue(cursor, format, context);
-      if (value === undefined) return null;
-      if (format.content === BigInt(DWARF_LINE_CONTENT.path) && typeof value === "string") {
-        path = value;
-      } else if (format.content === BigInt(DWARF_LINE_CONTENT.directoryIndex) &&
-                 typeof value === "bigint") {
-        directoryIndex = value;
-      }
-    }
-    if (entryKind === "files") {
-      files.push({ path, directoryIndex });
-    }
+    const entry = await readVersionFiveEntry(cursor, formats, context);
+    if (!entry) return null;
+    files.push(entry);
   }
-  return { count, files };
+  return files;
 };
 
 const readLegacyTables = async (cursor: DwarfCursor): Promise<DwarfLineTables | null> => {
-  let directoryCount = 0;
+  const directories: string[] = [];
   while (true) {
     const directory = await cursor.cstring();
     if (directory == null) return null;
     if (!directory.length) break;
-    directoryCount += 1;
+    directories.push(directory);
   }
-  let fileCount = 0;
   const files: DwarfLineFile[] = [];
   while (true) {
     const path = await cursor.cstring();
@@ -152,11 +157,10 @@ const readLegacyTables = async (cursor: DwarfCursor): Promise<DwarfLineTables | 
     const directoryIndex = await cursor.uleb();
     const timestamp = await cursor.uleb();
     const size = await cursor.uleb();
-    if (directoryIndex == null || timestamp == null || size == null) return null;
-    fileCount += 1;
-    files.push({ path, directoryIndex });
+    if ([directoryIndex, timestamp, size].includes(null)) return null;
+    files.push({ path, directoryIndex, timestamp: timestamp!, size: size! });
   }
-  return { directoryCount, fileCount, files };
+  return { directories, files };
 };
 
 export const readDwarfLineTables = async (
@@ -173,5 +177,5 @@ export const readDwarfLineTables = async (
   const fileFormats = await readFormats(cursor);
   if (!directories || !fileFormats) return null;
   const files = await readVersionFiveEntries(cursor, fileFormats, context, "files");
-  return files && { directoryCount: directories.count, fileCount: files.count, files: files.files };
+  return files && { directories: directories.map(entry => entry.path), files };
 };

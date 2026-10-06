@@ -20,16 +20,27 @@ const toSafeOffset = (value: bigint, section: DwarfSectionInput, issues: string[
   return offset;
 };
 
+const isAttributeTerminator = (name: bigint, form: bigint): boolean =>
+  name === DWARF_SENTINEL.attributeListEnd && form === DWARF_SENTINEL.attributeListEnd;
+
+const validAttributePair = (cursor: DwarfCursor, name: bigint, form: bigint): boolean => {
+  if (name === 0n || form === 0n) {
+    cursor.fail("Invalid abbreviation attribute/form pair");
+    return false;
+  }
+  if ([name, form].some(value => value > BigInt(Number.MAX_SAFE_INTEGER))) {
+    cursor.fail("Abbreviation attribute or form exceeds the safe integer range");
+    return false;
+  }
+  return true;
+};
+
 const readAttribute = async (cursor: DwarfCursor): Promise<DwarfAbbreviationAttribute | null> => {
   const name = await cursor.uleb();
   const form = await cursor.uleb();
   if (name == null || form == null) return null;
-  if (name === DWARF_SENTINEL.attributeListEnd &&
-      form === DWARF_SENTINEL.attributeListEnd) return null;
-  if (name > BigInt(Number.MAX_SAFE_INTEGER) || form > BigInt(Number.MAX_SAFE_INTEGER)) {
-    cursor.fail("Abbreviation attribute or form exceeds the safe integer range");
-    return null;
-  }
+  if (isAttributeTerminator(name, form)) return null;
+  if (!validAttributePair(cursor, name, form)) return null;
   // DW_FORM_implicit_const is followed by an SLEB128 value in .debug_abbrev.
   // DWARF 5, section 7.5.3: https://dwarfstd.org/doc/DWARF5.pdf
   const implicitConstant = form === BigInt(DWARF_FORM.implicitConstant)
@@ -44,10 +55,28 @@ const readAttributes = async (cursor: DwarfCursor): Promise<DwarfAbbreviationAtt
   while (!cursor.failed && cursor.position < cursor.end) {
     const start = cursor.position;
     const attribute = await readAttribute(cursor);
-    if (attribute) attributes.push(attribute);
-    if (cursor.failed || cursor.position === start || !attribute) break;
+    if (!attribute) return attributes;
+    attributes.push(attribute);
+    if (cursor.position === start) break;
   }
+  cursor.fail("Unterminated abbreviation attribute list");
   return attributes;
+};
+
+const readEntry = async (cursor: DwarfCursor): Promise<DwarfAbbreviation | null> => {
+  const tag = await cursor.uleb();
+  const children = await cursor.uint8();
+  if (tag == null || children == null) return null;
+  if (children > DWARF_CHILDREN.yes) {
+    cursor.fail(`Invalid DW_CHILDREN value ${children}`);
+    return null;
+  }
+  if (tag > BigInt(Number.MAX_SAFE_INTEGER)) {
+    cursor.fail("Abbreviation tag exceeds the safe integer range");
+    return null;
+  }
+  return { tag: Number(tag), hasChildren: children !== DWARF_CHILDREN.no,
+    attributes: await readAttributes(cursor) };
 };
 
 export const parseAbbreviationTable = async (
@@ -61,29 +90,18 @@ export const parseAbbreviationTable = async (
   if (offset == null) return null;
   const cursor = new DwarfCursor(reader, section, offset, section.size, littleEndian, issues);
   const entries = new Map<bigint, DwarfAbbreviation>();
-  while (!cursor.failed && cursor.position < cursor.end) {
+  while (cursor.position < cursor.end) {
     const code = await cursor.uleb();
-    if (code == null || code === DWARF_SENTINEL.abbreviationTableEnd) break;
-    const tag = await cursor.uleb();
-    const children = await cursor.uint8();
-    if (tag == null || children == null) break;
-    if (children > DWARF_CHILDREN.yes) {
-      cursor.fail(`Invalid DW_CHILDREN value ${children}`);
-      break;
-    }
-    if (tag > BigInt(Number.MAX_SAFE_INTEGER)) {
-      cursor.fail("Abbreviation tag exceeds the safe integer range");
-      break;
-    }
+    if (code == null) break;
+    if (code === DWARF_SENTINEL.abbreviationTableEnd) return entries;
     if (entries.has(code)) {
       cursor.fail(`Duplicate abbreviation code ${code.toString()}`);
       break;
     }
-    entries.set(code, {
-      tag: Number(tag),
-      hasChildren: children !== DWARF_CHILDREN.no,
-      attributes: await readAttributes(cursor)
-    });
+    const entry = await readEntry(cursor);
+    if (!entry) break;
+    entries.set(code, entry);
   }
+  if (!cursor.failed) cursor.notice("Unterminated abbreviation table");
   return cursor.failed ? null : entries;
 };

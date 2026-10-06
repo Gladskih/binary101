@@ -1,3 +1,4 @@
+import { createDwarfSemanticFixture } from "./dwarf-semantic-fixture.js";
 "use strict";
 
 import { createDwarf4SectionsFixture } from "./dwarf-sections-fixture.js";
@@ -138,6 +139,9 @@ const buildElfDwarfFile = (
   });
   return new MockFile(bytes, fileName, "application/x-elf");
 };
+
+export const createElfSemanticDwarfFile = (parameterCount = 1): MockFile =>
+  buildElfDwarfFile(createDwarfSemanticFixture(parameterCount), "semantic.elf", 0n);
 
 export const createElfDwarfFile = (): MockFile => {
   const dwarf = createDwarf4SectionsFixture();

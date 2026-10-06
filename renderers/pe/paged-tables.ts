@@ -6,6 +6,7 @@ import {
   type PeWindowsParseResult
 } from "../../analyzers/pe/index.js";
 import type { PagedSortableTableModel } from "../paged-sortable-table.js";
+import { getDwarfPagedTableModel } from "../dwarf/paged-tables.js";
 import {
   directIatEntrySize,
   directIatReferenceCounts
@@ -90,6 +91,8 @@ const getPeDebugCoffTableModel = (
     : null;
   if (topLevel) return topLevel;
   if (!isPeWindowsParseResult(pe)) return null;
+  const dwarf = getDwarfPagedTableModel(pe.dwarf, tableId);
+  if (dwarf) return dwarf;
   const match = tableId.match(/^pe-debug-entry-(\d+)-coff-/);
   if (!match?.[1]) return null;
   const entry = pe.debug?.entries?.[Number(match[1])];

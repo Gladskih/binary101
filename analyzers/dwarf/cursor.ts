@@ -27,6 +27,11 @@ export class DwarfCursor {
     this.end = Math.min(end, section.size);
     this.#littleEndian = littleEndian;
     this.#issues = issues;
+    if (![section.offset, section.size, position, end].every(Number.isSafeInteger) ||
+        section.offset < 0 || section.size < 0 || position < 0 || end < position ||
+        position > section.size || section.offset > reader.size) {
+      this.fail("Invalid DWARF cursor range");
+    }
   }
 
   get failed(): boolean {
@@ -57,8 +62,23 @@ export class DwarfCursor {
     if (byteLength === Uint16Array.BYTES_PER_ELEMENT) return this.#toBigInt(await this.uint16());
     if (byteLength === Uint32Array.BYTES_PER_ELEMENT) return this.#toBigInt(await this.uint32());
     if (byteLength === BigUint64Array.BYTES_PER_ELEMENT) return this.uint64();
-    this.fail(`Unsupported ${byteLength}-byte integer`);
-    return null;
+    return this.#arbitraryUnsigned(byteLength);
+  }
+
+  async #arbitraryUnsigned(byteLength: number): Promise<bigint | null> {
+    // DWARF 5 Table 7.5 also defines three-byte strx3/addrx3 operands.
+    if (!Number.isSafeInteger(byteLength) || byteLength <= 0) {
+      this.fail(`Invalid ${byteLength}-byte integer`);
+      return null;
+    }
+    const view = await this.#view(byteLength);
+    if (!view) return null;
+    let value = 0n;
+    for (let index = 0; index < byteLength; index += 1) {
+      const offset = this.#littleEndian ? byteLength - 1 - index : index;
+      value = (value << BigInt(DWARF_ENCODING.bitsPerByte)) | BigInt(view.getUint8(offset));
+    }
+    return value;
   }
 
   // DWARF 5, 7.6: LEB128 ends at a byte without the continuation bit.
@@ -103,6 +123,16 @@ export class DwarfCursor {
     return null;
   }
 
+  async bytes(byteLength: bigint | number): Promise<Uint8Array | null> {
+    const length = Number(byteLength);
+    if (!Number.isSafeInteger(length) || length < 0) {
+      this.fail(`Invalid block length ${byteLength.toString()}`);
+      return null;
+    }
+    const view = await this.#view(length);
+    return view ? new Uint8Array(view.buffer, view.byteOffset, view.byteLength).slice() : null;
+  }
+
   skip(byteLength: bigint | number): boolean {
     const length = typeof byteLength === "bigint" ? Number(byteLength) : byteLength;
     if (!Number.isSafeInteger(length) || length < 0 || length > this.end - this.position) {
@@ -141,6 +171,7 @@ export class DwarfCursor {
   }
 
   async #view(byteLength: number): Promise<DataView | null> {
+    if (this.#failed) return null;
     if (byteLength > this.end - this.position) {
       this.fail(`Truncated value needs ${byteLength} bytes`);
       return null;

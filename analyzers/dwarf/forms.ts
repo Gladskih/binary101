@@ -9,6 +9,7 @@ import {
 } from "./constants.js";
 import type {
   DwarfAbbreviationAttribute,
+  DwarfAttribute,
   DwarfFormValue,
   DwarfUnitContext
 } from "./types.js";
@@ -33,15 +34,21 @@ const FIXED_FORM_BYTE_LENGTHS = new Map<number, number>([
 const ULEB_FORMS = new Set<number>([
   DWARF_FORM.unsignedData,
   DWARF_FORM.referenceUnsigned,
-  DWARF_FORM.addressIndex,
   DWARF_FORM.locationListIndex,
   DWARF_FORM.rangeListIndex
+]);
+
+// Supplementary strings belong to a different file; never resolve them against this file.
+const stringSections = new Map<number, string>([
+  [DWARF_FORM.stringPointer, DWARF_SECTION.strings],
+  [DWARF_FORM.lineStringPointer, DWARF_SECTION.lineStrings],
+  [DWARF_FORM.stringPointerSupplementary, "supplementary .debug_str"],
+  [DWARF_FORM.gnuStringPointerAlternate, "supplementary .debug_str"]
 ]);
 
 const offsetByteLength = (context: DwarfUnitContext): number =>
   context.format / DWARF_ENCODING.bitsPerByte;
 
-const emptyValue = (): DwarfFormValue => ({ kind: "empty" });
 const unsignedValue = (value: bigint): DwarfFormValue => ({ kind: "unsigned", value });
 
 const readUnsigned = async (
@@ -52,14 +59,16 @@ const readUnsigned = async (
   return value == null ? null : unsignedValue(value);
 };
 
-const skipBlock = async (
+const readSizedBlock = async (
   cursor: DwarfCursor,
   lengthBytes: number | "uleb"
 ): Promise<DwarfFormValue | null> => {
   const length = lengthBytes === "uleb"
     ? await cursor.uleb()
     : await cursor.unsigned(lengthBytes);
-  return length != null && cursor.skip(length) ? emptyValue() : null;
+  if (length == null) return null;
+  const value = await cursor.bytes(length);
+  return value == null ? null : { kind: "block", value };
 };
 
 const readStringOffset = async (
@@ -71,16 +80,6 @@ const readStringOffset = async (
   return value == null ? null : { kind: "string-offset", value, sectionName };
 };
 
-const readStringIndex = async (
-  cursor: DwarfCursor,
-  byteLength: number | "uleb"
-): Promise<DwarfFormValue | null> => {
-  const value = byteLength === "uleb"
-    ? await cursor.uleb()
-    : await cursor.unsigned(byteLength);
-  return value == null ? null : { kind: "string-index", value };
-};
-
 const fixedUnsignedBytes = (form: number, context: DwarfUnitContext): number | null => {
   if (form === DWARF_FORM.address) return context.addressSize;
   if (form === DWARF_FORM.referenceAddress) {
@@ -88,7 +87,7 @@ const fixedUnsignedBytes = (form: number, context: DwarfUnitContext): number | n
       ? context.addressSize
       : offsetByteLength(context);
   }
-  if (form === DWARF_FORM.sectionOffset || form === DWARF_FORM.stringPointerSupplementary) {
+  if (form === DWARF_FORM.sectionOffset || form === DWARF_FORM.gnuReferenceAlternate) {
     return offsetByteLength(context);
   }
   return FIXED_FORM_BYTE_LENGTHS.get(form) ?? null;
@@ -110,12 +109,19 @@ const readVariableValue = async (
     const value = await cursor.uleb();
     return value == null ? null : unsignedValue(value);
   }
+  return readFlagValue(cursor, attribute);
+};
+
+const readFlagValue = async (
+  cursor: DwarfCursor, attribute: DwarfAbbreviationAttribute
+): Promise<DwarfFormValue | null | undefined> => {
   if (attribute.form === DWARF_FORM.flag) {
     const value = await cursor.uint8();
     return value == null ? null : { kind: "flag", value: value !== 0 };
   }
   if (attribute.form === DWARF_FORM.flagPresent) return { kind: "flag", value: true };
   if (attribute.form === DWARF_FORM.implicitConstant) {
+    if (attribute.implicitConstant == null) cursor.fail("Missing implicit constant in abbreviation");
     return attribute.implicitConstant == null
       ? null
       : { kind: "signed", value: attribute.implicitConstant };
@@ -127,63 +133,54 @@ const readBlock = async (
   cursor: DwarfCursor,
   form: number
 ): Promise<DwarfFormValue | null | undefined> => {
-  if (form === DWARF_FORM.block2) return skipBlock(cursor, Uint16Array.BYTES_PER_ELEMENT);
-  if (form === DWARF_FORM.block4) return skipBlock(cursor, Uint32Array.BYTES_PER_ELEMENT);
+  if (form === DWARF_FORM.block2) return readSizedBlock(cursor, Uint16Array.BYTES_PER_ELEMENT);
+  if (form === DWARF_FORM.block4) return readSizedBlock(cursor, Uint32Array.BYTES_PER_ELEMENT);
   if (form === DWARF_FORM.block || form === DWARF_FORM.expressionLocation) {
-    return skipBlock(cursor, "uleb");
+    return readSizedBlock(cursor, "uleb");
   }
-  if (form === DWARF_FORM.block1) return skipBlock(cursor, Uint8Array.BYTES_PER_ELEMENT);
+  if (form === DWARF_FORM.block1) return readSizedBlock(cursor, Uint8Array.BYTES_PER_ELEMENT);
   if (form === DWARF_FORM.data16) {
-    return cursor.skip(DWARF_ENCODING.data16Bytes) ? emptyValue() : null;
+    const value = await cursor.bytes(DWARF_ENCODING.data16Bytes);
+    return value == null ? null : { kind: "block", value };
   }
   return undefined;
+};
+
+const indexedWidths = (form: number): { kind: "string-index" | "address-index"; width: number | "uleb" } | null => {
+  if (form === DWARF_FORM.addressIndex || form === DWARF_FORM.gnuAddressIndex) {
+    return { kind: "address-index", width: "uleb" };
+  }
+  if (form === DWARF_FORM.stringIndex || form === DWARF_FORM.gnuStringIndex) {
+    return { kind: "string-index", width: "uleb" };
+  }
+  if (form >= DWARF_FORM.stringIndex1 && form <= DWARF_FORM.stringIndex4) {
+    return { kind: "string-index", width: form - DWARF_FORM.stringIndex1 + 1 };
+  }
+  if (form >= DWARF_FORM.addressIndex1 && form <= DWARF_FORM.addressIndex4) {
+    return { kind: "address-index", width: form - DWARF_FORM.addressIndex1 + 1 };
+  }
+  return null;
 };
 
 const readIndexedValue = async (
-  cursor: DwarfCursor,
-  form: number
+  cursor: DwarfCursor, form: number
 ): Promise<DwarfFormValue | null | undefined> => {
-  if (form === DWARF_FORM.stringIndex || form === DWARF_FORM.gnuStringIndex) {
-    return readStringIndex(cursor, "uleb");
-  }
-  if (form >= DWARF_FORM.stringIndex1 && form <= DWARF_FORM.stringIndex4) {
-    return readStringIndex(
-      cursor,
-      form - DWARF_FORM.stringIndex1 + Uint8Array.BYTES_PER_ELEMENT
-    );
-  }
-  if (form >= DWARF_FORM.addressIndex1 && form <= DWARF_FORM.addressIndex4) {
-    return readUnsigned(
-      cursor,
-      form - DWARF_FORM.addressIndex1 + Uint8Array.BYTES_PER_ELEMENT
-    );
-  }
-  if (form === DWARF_FORM.gnuAddressIndex) {
-    const value = await cursor.uleb();
-    return value == null ? null : unsignedValue(value);
-  }
-  return undefined;
+  const encoding = indexedWidths(form);
+  if (!encoding) return undefined;
+  const value = encoding.width === "uleb" ? await cursor.uleb() : await cursor.unsigned(encoding.width);
+  return value == null ? null : { kind: encoding.kind, value };
 };
 
-export const readDwarfForm = async (
+const readDirectForm = async (
   cursor: DwarfCursor,
   attribute: DwarfAbbreviationAttribute,
   context: DwarfUnitContext
 ): Promise<DwarfFormValue | null> => {
-  let resolved = attribute;
-  while (resolved.form === DWARF_FORM.indirect) {
-    const form = await cursor.uleb();
-    if (form == null || form > BigInt(Number.MAX_SAFE_INTEGER)) return null;
-    resolved = { name: resolved.name, form: Number(form), implicitConstant: null };
-  }
+  const resolved = attribute;
   const fixedBytes = fixedUnsignedBytes(resolved.form, context);
   if (fixedBytes != null) return readUnsigned(cursor, fixedBytes);
-  if (resolved.form === DWARF_FORM.stringPointer) {
-    return readStringOffset(cursor, context, DWARF_SECTION.strings);
-  }
-  if (resolved.form === DWARF_FORM.lineStringPointer) {
-    return readStringOffset(cursor, context, DWARF_SECTION.lineStrings);
-  }
+  const stringSection = stringSections.get(resolved.form);
+  if (stringSection) return readStringOffset(cursor, context, stringSection);
   const variable = await readVariableValue(cursor, resolved);
   if (variable !== undefined) return variable;
   const block = await readBlock(cursor, resolved.form);
@@ -193,3 +190,29 @@ export const readDwarfForm = async (
   cursor.fail(`Unsupported DWARF form 0x${resolved.form.toString(16)}`);
   return null;
 };
+
+export const readDwarfAttribute = async (
+  cursor: DwarfCursor,
+  attribute: DwarfAbbreviationAttribute,
+  context: DwarfUnitContext
+): Promise<DwarfAttribute | null> => {
+  let resolved = attribute;
+  while (resolved.form === DWARF_FORM.indirect) {
+    const form = await cursor.uleb();
+    if (form == null) return null;
+    if (form > BigInt(Number.MAX_SAFE_INTEGER)) {
+      cursor.fail("Indirect DWARF form cannot be represented exactly");
+      return null;
+    }
+    resolved = { name: resolved.name, form: Number(form), implicitConstant: null };
+  }
+  const value = await readDirectForm(cursor, resolved, context);
+  return value == null ? null : { name: resolved.name, form: resolved.form, value };
+};
+
+export const readDwarfForm = async (
+  cursor: DwarfCursor,
+  attribute: DwarfAbbreviationAttribute,
+  context: DwarfUnitContext
+): Promise<DwarfFormValue | null> =>
+  (await readDwarfAttribute(cursor, attribute, context))?.value ?? null;

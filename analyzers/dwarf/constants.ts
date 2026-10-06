@@ -1,5 +1,7 @@
 "use strict";
 
+import { dwarfTagLabel } from "./tag-names.js";
+
 // DWARF 5 encoding tables, sections 7.3 through 7.5:
 // https://dwarfstd.org/doc/DWARF5.pdf
 export const DWARF_TAG = {
@@ -7,6 +9,14 @@ export const DWARF_TAG = {
   classType: 0x02,
   enumerationType: 0x04,
   formalParameter: 0x05,
+  enumerator: 0x28,
+  inlinedSubroutine: 0x1d,
+  namespace: 0x39,
+  constType: 0x26,
+  volatileType: 0x35,
+  restrictType: 0x37,
+  referenceType: 0x10,
+  rvalueReferenceType: 0x42,
   member: 0x0d,
   pointerType: 0x0f,
   compileUnit: 0x11,
@@ -34,12 +44,45 @@ export const DWARF_UNIT_TYPE = {
 } as const;
 
 export const DWARF_ATTRIBUTE = {
+  location: 0x02,
   name: 0x03,
+  byteSize: 0x0b,
+  bitSize: 0x0d,
   statementList: 0x10,
+  lowPc: 0x11,
+  highPc: 0x12,
   language: 0x13,
+  constantValue: 0x1c,
   compilationDirectory: 0x1b,
+  lowerBound: 0x22,
   producer: 0x25,
-  stringOffsetsBase: 0x72
+  upperBound: 0x2f,
+  abstractOrigin: 0x31,
+  accessibility: 0x32,
+  artificial: 0x34,
+  count: 0x37,
+  dataMemberLocation: 0x38,
+  declarationColumn: 0x39,
+  declarationFile: 0x3a,
+  declarationLine: 0x3b,
+  declaration: 0x3c,
+  encoding: 0x3e,
+  external: 0x3f,
+  frameBase: 0x40,
+  specification: 0x47,
+  type: 0x49,
+  ranges: 0x55,
+  callColumn: 0x57,
+  callFile: 0x58,
+  callLine: 0x59,
+  dataBitOffset: 0x6b,
+  linkageName: 0x6e,
+  stringOffsetsBase: 0x72,
+  addressBase: 0x73,
+  rangeListsBase: 0x74,
+  dwoName: 0x76,
+  macros: 0x79,
+  locationListsBase: 0x8c
 } as const;
 
 export const DWARF_FORM = {
@@ -87,7 +130,9 @@ export const DWARF_FORM = {
   addressIndex3: 0x2b,
   addressIndex4: 0x2c,
   gnuAddressIndex: 0x1f01,
-  gnuStringIndex: 0x1f02
+  gnuStringIndex: 0x1f02,
+  gnuReferenceAlternate: 0x1f20,
+  gnuStringPointerAlternate: 0x1f21
 } as const;
 
 export const DWARF_CHILDREN = {
@@ -127,10 +172,6 @@ export const DWARF_ENCODING = {
   lebPayloadMask: 0x7f,
   lebSignBit: 0x40,
   nullByte: 0
-} as const;
-
-export const DWARF_LIMIT = {
-  maximumAddressBytes: 8,
 } as const;
 
 export const DWARF_SECTION = {
@@ -210,28 +251,6 @@ export const DWARF_LANGUAGE = {
   c23: 0x003e
 } as const;
 
-const TAG_NAMES = new Map<number, string>([
-  [DWARF_TAG.arrayType, "DW_TAG_array_type"],
-  [DWARF_TAG.classType, "DW_TAG_class_type"],
-  [DWARF_TAG.enumerationType, "DW_TAG_enumeration_type"],
-  [DWARF_TAG.formalParameter, "DW_TAG_formal_parameter"],
-  [DWARF_TAG.member, "DW_TAG_member"],
-  [DWARF_TAG.pointerType, "DW_TAG_pointer_type"],
-  [DWARF_TAG.compileUnit, "DW_TAG_compile_unit"],
-  [DWARF_TAG.structureType, "DW_TAG_structure_type"],
-  [DWARF_TAG.subroutineType, "DW_TAG_subroutine_type"],
-  [DWARF_TAG.typedef, "DW_TAG_typedef"],
-  [DWARF_TAG.unionType, "DW_TAG_union_type"],
-  [DWARF_TAG.subrangeType, "DW_TAG_subrange_type"],
-  [DWARF_TAG.baseType, "DW_TAG_base_type"],
-  [DWARF_TAG.subprogram, "DW_TAG_subprogram"],
-  [DWARF_TAG.variable, "DW_TAG_variable"],
-  [DWARF_TAG.unspecifiedType, "DW_TAG_unspecified_type"],
-  [DWARF_TAG.typeUnit, "DW_TAG_type_unit"],
-  [DWARF_TAG.skeletonUnit, "DW_TAG_skeleton_unit"],
-  [DWARF_TAG.immutableType, "DW_TAG_immutable_type"]
-]);
-
 const UNIT_TYPE_NAMES = new Map<number, string>([
   [DWARF_UNIT_TYPE.compile, "DW_UT_compile"],
   [DWARF_UNIT_TYPE.type, "DW_UT_type"],
@@ -263,7 +282,7 @@ const hexName = (prefix: string, value: number): string =>
   `${prefix}_0x${value.toString(16)}`;
 
 export const dwarfTagName = (tag: number): string =>
-  TAG_NAMES.get(tag) ?? hexName("DW_TAG", tag);
+  dwarfTagLabel(tag).startsWith("DW_TAG_") ? dwarfTagLabel(tag) : `DW_TAG_${dwarfTagLabel(tag)}`;
 
 export const dwarfUnitTypeName = (unitType: number): string =>
   UNIT_TYPE_NAMES.get(unitType) ?? hexName("DW_UT", unitType);

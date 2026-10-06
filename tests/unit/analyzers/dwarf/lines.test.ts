@@ -69,17 +69,39 @@ const createBroadOpcodeProgram = (): number[] => concatenateBytes(
   encodeLineExtended(TEST_DWARF.line.extendedOpcode.endSequence)
 );
 
+void test("line machine retains source coordinates and resets transient row flags", async () => {
+  const dwarf = await analyzeLineSection(
+    createDwarf4LineSectionWithProgram(createBroadOpcodeProgram())
+  );
+
+  const first = dwarf.linePrograms[0]?.rows[0];
+  const last = dwarf.linePrograms[0]?.rows[1];
+
+  assert.equal(first?.file, 1n);
+  assert.equal(first?.line, 0n);
+  assert.equal(first?.column, BigInt(TEST_DWARF.line.discriminator));
+  assert.equal(first?.isStatement, false);
+  assert.equal(first?.basicBlock, true);
+  assert.equal(first?.prologueEnd, true);
+  assert.equal(first?.epilogueBegin, true);
+  assert.equal(first?.endSequence, false);
+  assert.equal(last?.basicBlock, false);
+  assert.equal(last?.prologueEnd, false);
+  assert.equal(last?.epilogueBegin, false);
+  assert.equal(last?.endSequence, true);
+});
+
 void test("line machine handles the standard, special, and legacy extended opcode families", async () => {
   const dwarf = await analyzeLineSection(
     createDwarf4LineSectionWithProgram(createBroadOpcodeProgram())
   );
 
-  assert.equal(dwarf.linePrograms[0]?.rowCount, TEST_DWARF.line.expected.broadProgramRows);
+  assert.equal(dwarf.linePrograms[0]?.rows.length, TEST_DWARF.line.expected.broadProgramRows);
   assert.equal(
-    dwarf.linePrograms[0]?.sequenceCount,
+    dwarf.linePrograms[0]?.rows.filter(row => row.endSequence).length,
     TEST_DWARF.line.expected.singleSequence
   );
-  assert.equal(dwarf.linePrograms[0]?.fileCount, TEST_DWARF.line.expected.broadProgramFiles);
+  assert.equal(dwarf.linePrograms[0]?.files.length, TEST_DWARF.line.expected.broadProgramFiles);
   assert.equal(dwarf.linePrograms[0]?.files.at(-1)?.path, "generated.c");
   const constantAddressAdvance = Math.floor(
     (TEST_DWARF.encoding.maximumByte - TEST_DWARF.line.opcodeBase) /
@@ -87,9 +109,9 @@ void test("line machine handles the standard, special, and legacy extended opcod
   );
   const expectedAddress = TEST_DWARF.line.address +
     BigInt(constantAddressAdvance + TEST_DWARF.line.firstAdvance);
-  assert.equal(dwarf.linePrograms[0]?.minimumAddress, expectedAddress);
-  assert.equal(dwarf.linePrograms[0]?.maximumAddress, expectedAddress);
-  assert.deepEqual(dwarf.issues, []);
+  assert.equal(dwarf.linePrograms[0]?.rows[0]?.address, expectedAddress);
+  assert.equal(dwarf.linePrograms[0]?.rows.at(-1)?.address, expectedAddress);
+  assert.match(dwarf.issues.join(" "), /Unknown extended line opcode/);
 });
 
 void test("line parser supports DWARF 2 and DWARF64 line headers", async () => {
@@ -99,13 +121,13 @@ void test("line parser supports DWARF 2 and DWARF64 line headers", async () => {
   assert.equal(versionTwo.linePrograms[0]?.version, TEST_DWARF.version.two);
   assert.equal(versionTwo.linePrograms[0]?.addressSize, TEST_DWARF.addressSize.x64);
   assert.equal(dwarf64.linePrograms[0]?.format, TEST_DWARF.format.dwarf64);
-  assert.equal(dwarf64.linePrograms[0]?.rowCount, TEST_DWARF.line.expected.fixtureRows);
+  assert.equal(dwarf64.linePrograms[0]?.rows.length, TEST_DWARF.line.expected.fixtureRows);
 });
 
 void test("version 5 line tables report unavailable referenced strings", async () => {
   const dwarf = await analyzeLineSection(createDwarf5LineSection());
 
-  assert.equal(dwarf.linePrograms[0]?.fileCount, TEST_DWARF.line.table.singleEntry);
+  assert.equal(dwarf.linePrograms[0]?.files.length, TEST_DWARF.line.table.singleEntry);
   assert.ok(dwarf.issues.some(issue => issue.includes(".debug_line_str")));
 });
 

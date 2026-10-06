@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { resolveDwarfString } from "../../../../analyzers/dwarf/strings.js";
+import { DwarfStringReader, resolveDwarfString } from "../../../../analyzers/dwarf/strings.js";
 import type {
   DwarfFormValue,
   DwarfSectionInput,
@@ -13,7 +13,7 @@ import {
   TEST_DWARF,
   concatenateBytes,
   encodeCString,
-  encodeUint32
+  encodeUint32, encodeUint16, encodeDwarf32Unit
 } from "../../../fixtures/dwarf-fixture-encoding.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 
@@ -24,10 +24,11 @@ const createSections = (): {
   const contents = [
     {
       name: ".debug_str_offsets",
-      bytes: concatenateBytes(
+      bytes: encodeDwarf32Unit(concatenateBytes(
+        encodeUint16(5), encodeUint16(0),
         encodeUint32(TEST_DWARF.sectionOffset.start),
         encodeUint32(Uint32Array.BYTES_PER_ELEMENT)
-      )
+      ))
     },
     {
       name: ".debug_str",
@@ -91,7 +92,7 @@ void test("resolveDwarfString resolves indexed strings through .debug_str_offset
   assert.equal(await resolve({
     kind: "string-index",
     value: BigInt(TEST_DWARF.stringIndex.foo)
-  }, 0n), "foo");
+  }, 8n), "foo");
 });
 
 void test("resolveDwarfString reports missing bases, sections, and out-of-range offsets", async () => {
@@ -125,4 +126,33 @@ void test("resolveDwarfString reports missing bases, sections, and out-of-range 
 void test("resolveDwarfString ignores non-string form values", async () => {
   assert.equal(await resolve(undefined, null), null);
   assert.equal(await resolve({ kind: "unsigned", value: 1n }, null), null);
+});
+
+void test("string indices reject the next contribution and cache failed resolutions", async () => {
+  const fixture = createSections();
+  const issues: string[] = [];
+  const reader = new DwarfStringReader(fixture.sections, "little", issues);
+  const context: DwarfUnitContext = { version: 5, format: 32, addressSize: 8, stringOffsetsBase: 8n };
+
+  assert.equal(await reader.resolve({ kind: "string-index", value: 2n }, context), null);
+  assert.equal(await reader.resolve({ kind: "string-index", value: 2n }, context), null);
+  assert.equal(issues.length, 1);
+  assert.match(issues[0]!, /outside.*contribution/);
+  assert.equal(await reader.resolve({ kind: "string-index", value: -1n }, context), null);
+  assert.equal(await reader.resolve({ kind: "string-offset", sectionName: ".debug_str", value: -1n }, context), null);
+  assert.equal(await reader.resolve({ kind: "string-index", value: 0n }, { ...context, format: 64 }), null);
+  assert.equal(await reader.resolve({ kind: "string-index", value: 0n }, { ...context, stringOffsetsBase: 0n }), null);
+});
+
+void test("cached string offsets share the same resolution across DIE and line tables", async () => {
+  const fixture = createSections();
+  const issues: string[] = [];
+  const reader = new DwarfStringReader(fixture.sections, "little", issues);
+  const context: DwarfUnitContext = { version: 5, format: 32, addressSize: 8, stringOffsetsBase: 8n };
+  const value: DwarfFormValue = { kind: "string-offset", sectionName: ".debug_line_str", value: 0n };
+
+  assert.equal(await reader.resolve(value, context), "bar");
+  fixture.sections.delete(".debug_line_str");
+  assert.equal(await reader.resolve(value, context), "bar");
+  assert.deepEqual(issues, []);
 });

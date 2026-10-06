@@ -1,19 +1,20 @@
+import { DwarfStringReader } from "./strings.js";
 "use strict";
 
 import type { FileRangeReader } from "../file-range-reader.js";
 import { DWARF_SECTION } from "./constants.js";
-import { parseAbbreviationTable } from "./abbreviations.js";
-import { parseDwarfDies } from "./dies.js";
+import { readDwarfInformation } from "./information.js";
 import { parseDwarfLines } from "./lines.js";
+import { validateDwarfLines } from "./line-validation.js";
+import { createDwarfDieIndex, validateDwarfReferences } from "./references.js";
+import { decodeDwarfDieExpressions } from "./die-expressions.js";
+import { decodeDwarfDieLists } from "./die-lists.js";
 import type {
-  DwarfAbbreviation,
   DwarfAnalysis,
   DwarfSectionInput,
   DwarfSectionSource,
-  DwarfSectionStatus,
-  DwarfUnit
+  DwarfSectionStatus
 } from "./types.js";
-import { parseDwarfUnitHeader } from "./unit-header.js";
 
 const decodedSectionNames = new Set<string>([
   DWARF_SECTION.information,
@@ -24,7 +25,8 @@ const decodedSectionNames = new Set<string>([
 const referencedSectionNames = new Set<string>([
   DWARF_SECTION.strings,
   DWARF_SECTION.lineStrings,
-  DWARF_SECTION.stringOffsets
+  DWARF_SECTION.stringOffsets,
+  ".debug_addr", ".debug_ranges", ".debug_rnglists", ".debug_loc", ".debug_loclists"
 ]);
 
 const supportedSectionName = (name: string): boolean =>
@@ -35,6 +37,7 @@ const sectionStatus = (source: DwarfSectionSource): DwarfSectionStatus => {
   if (!source.decoded && source.summary.compressed && supportedSectionName(source.section.name)) {
     return "compressed-unsupported";
   }
+  if (!source.decoded) return "unavailable";
   if (decodedSectionNames.has(source.section.name)) return "decoded";
   if (referencedSectionNames.has(source.section.name)) return "referenced";
   return "inventory-only";
@@ -76,80 +79,14 @@ const buildSectionMap = (
   return byName;
 };
 
-const parseInfoSection = async (
-  source: DwarfSectionSource,
-  sections: Map<string, DwarfSectionSource>,
-  littleEndian: boolean,
-  issues: string[],
-  abbreviationCache: Map<string, Map<bigint, DwarfAbbreviation>>
-): Promise<DwarfUnit[]> => {
-  const abbreviationSource = sections.get(DWARF_SECTION.abbreviations);
-  if (!abbreviationSource) {
-    issues.push(
-      `${source.section.name}: ${DWARF_SECTION.abbreviations} is required to decode units.`
-    );
-    return [];
-  }
-  const units: DwarfUnit[] = [];
-  let offset = 0;
-  while (offset < source.section.size) {
-    const header = await parseDwarfUnitHeader(
-      source.reader,
-      source.section,
-      offset,
-      littleEndian,
-      issues
-    );
-    if (!header) break;
-    const cacheKey = header.abbreviationOffset.toString();
-    let abbreviations = abbreviationCache.get(cacheKey);
-    if (!abbreviations) {
-      const parsed = await parseAbbreviationTable(
-        abbreviationSource.reader,
-        abbreviationSource.section,
-        header.abbreviationOffset,
-        littleEndian,
-        issues
-      );
-      if (!parsed) break;
-      abbreviations = parsed;
-      abbreviationCache.set(cacheKey, parsed);
-    }
-    const dies = await parseDwarfDies(
-      source.reader,
-      source.section,
-      sections,
-      header,
-      abbreviations,
-      littleEndian,
-      issues
-    );
-    units.push({
-      sectionName: source.section.name,
-      offset: header.offset,
-      length: header.length,
-      format: header.format,
-      version: header.version,
-      unitType: header.unitType,
-      addressSize: header.addressSize,
-      abbreviationOffset: header.abbreviationOffset,
-      root: dies.root,
-      tagCounts: dies.tagCounts,
-      maxDepth: dies.maxDepth
-    });
-    if (header.end <= offset) break;
-    offset = header.end;
-  }
-  return units;
-};
-
 export const analyzeDwarfSources = async (
   inputSources: DwarfSectionSource[],
   byteOrder: "big" | "little"
 ): Promise<DwarfAnalysis> => {
   const issues: string[] = [];
   const littleEndian = byteOrder === "little";
-  const sections = inputSources.map(source => ({
+  const normalizedSources = inputSources.map(source => normalizeSource(source, issues));
+  const sections = normalizedSources.map(source => ({
     ...source.summary,
     status: sectionStatus(source)
   }));
@@ -167,7 +104,6 @@ export const analyzeDwarfSources = async (
       `${relocationSections.map(source => source.summary.name).join(", ")}.`
     );
   }
-  const normalizedSources = inputSources.map(source => normalizeSource(source, issues));
   const sectionMap = buildSectionMap(normalizedSources, issues);
   const infoSections = [
     sectionMap.get(DWARF_SECTION.information),
@@ -175,22 +111,16 @@ export const analyzeDwarfSources = async (
   ]
     .filter((source): source is DwarfSectionSource =>
       source != null && source.section.size > 0);
-  const abbreviationCache = new Map<string, Map<bigint, DwarfAbbreviation>>();
-  const units: DwarfUnit[] = [];
-  for (const source of infoSections) {
-    units.push(...await parseInfoSection(
-      source,
-      sectionMap,
-      littleEndian,
-      issues,
-      abbreviationCache
-    ));
-  }
+  const strings = new DwarfStringReader(sectionMap, byteOrder, issues);
+  const units = await readDwarfInformation(infoSections, sectionMap, byteOrder, issues, strings);
   const lineSource = sectionMap.get(DWARF_SECTION.lines);
+  validateDwarfReferences(createDwarfDieIndex(units), issues);
   const linePrograms = lineSource && lineSource.section.size > 0
-    ? await parseDwarfLines(lineSource, sectionMap, littleEndian, issues)
+    ? await parseDwarfLines(lineSource, sectionMap, littleEndian, issues, strings)
     : [];
-  return { sections, units, linePrograms, issues };
+  const decodedUnits = await decodeDwarfDieLists(units, sectionMap, byteOrder, issues);
+  validateDwarfLines(linePrograms, units, issues);
+  return { sections, units: await decodeDwarfDieExpressions(decodedUnits, byteOrder, issues), linePrograms, issues };
 };
 
 export const analyzeDwarf = async (

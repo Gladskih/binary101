@@ -1,9 +1,7 @@
 "use strict";
 import { renderPeSanitizers } from "../renderers/pe/sanitizers.js";
 import {
-  isPeWindowsParseResult,
-  type PeParseResult,
-  type PeWindowsParseResult
+  isPeWindowsParseResult, type PeParseResult, type PeWindowsParseResult
 } from "../analyzers/pe/index.js";
 import type { PePackerId } from "../analyzers/pe/packers/index.js";
 import { renderHeaders } from "../renderers/pe/headers.js";

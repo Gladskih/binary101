@@ -1,3 +1,4 @@
+import { dwarfUnitRoot } from "../../../../analyzers/dwarf/attribute-values.js";
 "use strict";
 
 import assert from "node:assert/strict";
@@ -50,8 +51,8 @@ void test("prepareDwarfSectionSources decodes GNU zlib sections for common analy
   const dwarf = await analyzeDwarfSources(prepared.sources, "little");
 
   assert.deepEqual(prepared.issues, []);
-  assert.equal(dwarf.units[0]?.root?.name, "main.c");
-  assert.equal(dwarf.units[0]?.root?.producer, "fixture compiler");
+  assert.equal(dwarfUnitRoot(dwarf.units[0])?.name, "main.c");
+  assert.equal(dwarfUnitRoot(dwarf.units[0])?.producer, "fixture compiler");
   assert.equal(dwarf.sections[0]?.compressed, true);
   assert.equal(dwarf.sections[0]?.status, "decoded");
   assert.equal(prepared.sources[0]?.section.compressed, false);
@@ -139,7 +140,7 @@ void test("prepareDwarfSectionSources handles unavailable browser decompression"
 });
 
 void test("prepareDwarfSectionSources skips unsupported inventory and relocatable data", async () => {
-  const invalid = candidate([], ".zdebug_ranges");
+  const invalid = candidate([], ".zdebug_names");
   const relocated = candidate([], ".zdebug_info");
   relocated.value.section.requiresRelocations = true;
 
