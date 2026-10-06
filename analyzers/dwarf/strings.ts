@@ -1,7 +1,8 @@
 "use strict";
 
 import type { FileRangeReader } from "../file-range-reader.js";
-import { DWARF_ENCODING, DWARF_SECTION } from "./constants.js";
+import { DWARF_SECTION } from "./constants.js";
+import { DwarfIndexedReader } from "./indexed-tables.js";
 import { DwarfCursor } from "./cursor.js";
 import type {
   DwarfFormValue,
@@ -52,34 +53,40 @@ const readStringAt = async (
   ).cstring();
 };
 
-const indexedStringOffset = async (
-  sections: Map<string, DwarfSectionSource>,
-  index: bigint,
-  context: DwarfUnitContext,
-  littleEndian: boolean,
-  issues: string[]
-): Promise<bigint | null> => {
-  const source = findSection(sections, DWARF_SECTION.stringOffsets, issues);
-  if (!source || context.stringOffsetsBase == null) {
-    if (context.stringOffsetsBase == null) {
-      issues.push("DW_FORM_strx requires DW_AT_str_offsets_base in the unit root.");
-    }
-    return null;
+export class DwarfStringReader {
+  readonly #sections: Map<string, DwarfSectionSource>;
+  readonly #byteOrder: "little" | "big";
+  readonly #issues: string[];
+  readonly #indexed: DwarfIndexedReader;
+  readonly #strings = new Map<string, Promise<string | null>>();
+
+  constructor(sections: Map<string, DwarfSectionSource>, byteOrder: "little" | "big", issues: string[]) {
+    this.#sections = sections;
+    this.#byteOrder = byteOrder;
+    this.#issues = issues;
+    this.#indexed = new DwarfIndexedReader(sections, byteOrder, issues);
   }
-  const entryByteLength = context.format / DWARF_ENCODING.bitsPerByte;
-  const offsetValue = context.stringOffsetsBase + index * BigInt(entryByteLength);
-  const offset = safeSectionOffset(offsetValue, source.section, issues);
-  if (offset == null) return null;
-  const cursor = new DwarfCursor(
-    source.reader,
-    source.section,
-    offset,
-    source.section.size,
-    littleEndian,
-    issues
-  );
-  return cursor.unsigned(entryByteLength);
-};
+
+  #read(name: string, offset: bigint): Promise<string | null> {
+    const key = `${name}:${offset}`;
+    if (!this.#strings.has(key)) {
+      const source = findSection(this.#sections, name, this.#issues);
+      this.#strings.set(key, source
+        ? readStringAt(source.reader, source.section, offset, this.#byteOrder === "little", this.#issues)
+        : Promise.resolve(null));
+    }
+    return this.#strings.get(key)!;
+  }
+
+  async resolve(value: DwarfFormValue | undefined, context: DwarfUnitContext): Promise<string | null> {
+    if (!value) return null;
+    if (value.kind === "string") return value.value;
+    if (value.kind === "string-offset") return this.#read(value.sectionName, value.value);
+    if (value.kind !== "string-index") return null;
+    const offset = await this.#indexed.stringOffset(context, value.value);
+    return offset == null ? null : this.#read(DWARF_SECTION.strings, offset);
+  }
+}
 
 export const resolveDwarfString = async (
   sections: Map<string, DwarfSectionSource>,
@@ -87,25 +94,5 @@ export const resolveDwarfString = async (
   context: DwarfUnitContext,
   littleEndian: boolean,
   issues: string[]
-): Promise<string | null> => {
-  if (!value) return null;
-  if (value.kind === "string") return value.value;
-  if (value.kind === "string-offset") {
-    const source = findSection(sections, value.sectionName, issues);
-    return source
-      ? readStringAt(source.reader, source.section, value.value, littleEndian, issues)
-      : null;
-  }
-  if (value.kind !== "string-index") return null;
-  const offset = await indexedStringOffset(
-    sections,
-    value.value,
-    context,
-    littleEndian,
-    issues
-  );
-  const strings = findSection(sections, DWARF_SECTION.strings, issues);
-  return offset != null && strings
-    ? readStringAt(strings.reader, strings.section, offset, littleEndian, issues)
-    : null;
-};
+): Promise<string | null> =>
+  new DwarfStringReader(sections, littleEndian ? "little" : "big", issues).resolve(value, context);

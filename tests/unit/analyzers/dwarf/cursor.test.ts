@@ -63,6 +63,14 @@ void test("DwarfCursor rejects invalid cursor ranges before reading", async () =
   assert.match(issues.join(" "), /Invalid DWARF cursor range/);
 });
 
+void test("DwarfCursor reads arbitrary address widths without a 64-bit cap", async () => {
+  // DWARF 5 7.5.1: address_size is a byte count, independent of the DWARF format.
+  assert.equal(await createCursor([1, ...new Array<number>(15).fill(0)]).unsigned(16), 1n);
+  assert.equal(await createBigEndianCursor([...new Array<number>(15).fill(0), 1]).unsigned(16), 1n);
+  assert.equal(await createCursor([]).unsigned(0), null);
+  assert.equal(await createCursor([]).unsigned(-1), null);
+});
+
 void test("DwarfCursor reads fixed-width integers in both byte orders", async () => {
   const little = createCursor(concatenateBytes(
     encodeUint16(TEST_INTEGER.uint16),

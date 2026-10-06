@@ -11,6 +11,7 @@ export type DwarfSectionInput = {
 };
 
 export type DwarfSectionStatus =
+  | "unavailable"
   | "decoded"
   | "referenced"
   | "inventory-only"
@@ -40,6 +41,24 @@ export type DwarfUnitRoot = {
 export type DwarfLineFile = {
   path: string;
   directoryIndex: bigint | null;
+  timestamp?: bigint;
+  size?: bigint;
+  md5?: Uint8Array;
+};
+
+export type DwarfLineRow = {
+  address: bigint;
+  operationIndex: bigint;
+  file: bigint;
+  line: bigint;
+  column: bigint;
+  isStatement: boolean;
+  basicBlock: boolean;
+  endSequence: boolean;
+  prologueEnd: boolean;
+  epilogueBegin: boolean;
+  isa: bigint;
+  discriminator: bigint;
 };
 
 export type DwarfLineProgram = {
@@ -48,13 +67,9 @@ export type DwarfLineProgram = {
   format: 32 | 64;
   version: number;
   addressSize: number;
-  directoryCount: number;
-  fileCount: number;
+  directories: string[];
   files: DwarfLineFile[];
-  rowCount: number;
-  sequenceCount: number;
-  minimumAddress: bigint | null;
-  maximumAddress: bigint | null;
+  rows: DwarfLineRow[];
 };
 
 export type DwarfTagCount = {
@@ -71,9 +86,10 @@ export type DwarfUnit = {
   unitType: number | null;
   addressSize: number;
   abbreviationOffset: bigint;
-  root: DwarfUnitRoot | null;
-  tagCounts: DwarfTagCount[];
-  maxDepth: number;
+  typeSignature?: bigint;
+  typeOffset?: bigint;
+  dwoId?: bigint;
+  dies: DwarfDie[];
 };
 
 export type DwarfAnalysis = {
@@ -108,5 +124,36 @@ export type DwarfFormValue =
   | { kind: "string"; value: string }
   | { kind: "string-offset"; value: bigint; sectionName: string }
   | { kind: "string-index"; value: bigint }
+  | { kind: "address-index"; value: bigint }
   | { kind: "flag"; value: boolean }
+  | { kind: "block"; value: Uint8Array }
+  | { kind: "expression"; operations: DwarfExpressionOperation[] }
+  | { kind: "ranges"; entries: DwarfAddressRange[] }
+  | { kind: "locations"; entries: DwarfLocationEntry[] }
   | { kind: "empty" };
+
+export type DwarfAttribute = {
+  name: number;
+  form: number;
+  value: DwarfFormValue;
+};
+
+export type DwarfDie = {
+  offset: number;
+  tag: number;
+  parentOffset: number | null;
+  attributes: DwarfAttribute[];
+};
+
+export type DwarfExpressionOperation = {
+  offset: number;
+  opcode: number;
+  operands: Array<bigint | Uint8Array | DwarfExpressionOperation[]>;
+  incomplete?: true;
+};
+
+export type DwarfAddressRange = { start: bigint; end: bigint };
+export type DwarfLocationEntry = {
+  range: DwarfAddressRange | null;
+  operations: DwarfExpressionOperation[];
+};

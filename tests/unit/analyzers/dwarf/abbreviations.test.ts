@@ -10,6 +10,29 @@ import {
 } from "../../../fixtures/dwarf-fixture-encoding.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 
+void test("abbreviation tables report missing table and attribute terminators", async () => {
+  const issues: string[] = [];
+  // Abbrev code 1, compile_unit, no children, name/string, without the 0/0 pair.
+  // DWARF 5 7.5.3: both the attribute list and table require terminators.
+  const bytes = Uint8Array.of(1, 0x11, 0, 3, 8);
+  const table = await parseAbbreviationTable(new MockFile(bytes), {
+    name: ".debug_abbrev", offset: 0, size: bytes.length, compressed: false
+  }, 0n, true, issues);
+
+  assert.equal(table, null);
+  assert.match(issues.join(" "), /Unterminated abbreviation attribute list/);
+});
+
+void test("abbreviation tables reject half-zero attribute/form pairs", async () => {
+  const issues: string[] = [];
+  const bytes = Uint8Array.of(1, 0x11, 0, 0, 8, 0, 0, 0);
+
+  assert.equal(await parseAbbreviationTable(new MockFile(bytes), {
+    name: ".debug_abbrev", offset: 0, size: bytes.length, compressed: false
+  }, 0n, true, issues), null);
+  assert.match(issues.join(" "), /Invalid abbreviation attribute\/form pair/);
+});
+
 const parse = async (bytes: number[], offset = 0, issues: string[] = []) => {
   const file = new MockFile(Uint8Array.from(bytes));
   const section: DwarfSectionInput = {

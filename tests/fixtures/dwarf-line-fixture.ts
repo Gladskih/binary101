@@ -54,7 +54,8 @@ const encodeProgram = (): number[] => concatenateBytes(
   encodeUint8(TEST_DWARF.line.standardOpcode.copy),
   encodeUint8(TEST_DWARF.line.standardOpcode.advancePc),
   encodeUleb(TEST_DWARF.line.firstAdvance),
-  encodeUint8(TEST_DWARF.line.opcodeBase),
+  // Special opcode with zero line advance (DWARF 5 6.2.5.1).
+  encodeUint8(TEST_DWARF.line.opcodeBase - TEST_DWARF.line.lineBase),
   encodeUint8(TEST_DWARF.line.standardOpcode.fixedAdvancePc),
   encodeUint16(TEST_DWARF.line.fixedAdvance),
   encodeLineExtended(
@@ -146,7 +147,8 @@ export const createDwarf5LineSection = (): number[] => {
     encodeUint8(TEST_DWARF.line.segmentSelectorSize.none),
     encodeUint32(header.length),
     header,
-    encodeProgram()
+    // The default file register is 1 even in DWARF 5 (Table 6.4). Select file 0.
+    encodeUint8(TEST_DWARF.line.standardOpcode.setFile), encodeUleb(0), encodeProgram()
   ));
 };
 

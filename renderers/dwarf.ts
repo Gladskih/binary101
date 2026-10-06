@@ -1,22 +1,14 @@
 "use strict";
 
 import { escapeHtml } from "../html-utils.js";
-import type {
-  DwarfAnalysis,
-  DwarfLineProgram,
-  DwarfSectionSummary,
-  DwarfSectionStatus,
-  DwarfTagCount,
-  DwarfUnit
-} from "../analyzers/dwarf/types.js";
-import {
-  DWARF_TAG,
-  dwarfLanguageName,
-  dwarfTagName,
-  dwarfUnitTypeName
-} from "../analyzers/dwarf/constants.js";
+import type { DwarfAnalysis, DwarfSectionSummary, DwarfSectionStatus, DwarfUnit } from "../analyzers/dwarf/types.js";
+import { dwarfLanguageName, dwarfTagName, dwarfUnitTypeName } from "../analyzers/dwarf/constants.js";
+import { dwarfUnitRoot } from "../analyzers/dwarf/attribute-values.js";
+import { renderDwarfEntities } from "./dwarf/entities.js";
+import { renderDwarfSourceLines } from "./dwarf/source-lines.js";
 
 const statusLabel = (status: DwarfSectionStatus): string => {
+  if (status === "unavailable") return "unavailable; not decoded";
   if (status === "decoded") return "decoded";
   if (status === "referenced") return "used for references";
   if (status === "compressed-unsupported") return "compressed; not decoded";
@@ -27,143 +19,69 @@ const statusLabel = (status: DwarfSectionStatus): string => {
 const sectionStatusLabel = (section: DwarfSectionSummary): string => {
   const label = statusLabel(section.status);
   return section.compressed && section.status !== "compressed-unsupported"
-    ? `decompressed; ${label}`
-    : label;
+    ? `decompressed; ${label}` : label;
 };
-
-const hexValue = (value: number | bigint): string => `0x${value.toString(16)}`;
-
-const dieCount = (unit: DwarfUnit): number =>
-  unit.tagCounts.reduce((count, tag) => count + tag.count, 0);
-
-const tagCount = (unit: DwarfUnit, tag: number): number =>
-  unit.tagCounts.find(entry => entry.tag === tag)?.count ?? 0;
 
 const renderSections = (dwarf: DwarfAnalysis): string => {
   const rows = dwarf.sections.map(section =>
     `<tr><td class="mono">${escapeHtml(section.name)}</td>` +
-    `<td class="dwarfTable__numeric">${escapeHtml(hexValue(section.offset))}</td>` +
     `<td class="dwarfTable__numeric">${section.size}</td>` +
     `<td>${escapeHtml(sectionStatusLabel(section))}</td></tr>`
   ).join("");
   return `<h5>Sections</h5><div class="tableWrap"><table class="table">` +
-    `<thead><tr><th>Name</th><th>File offset</th><th>Bytes</th><th>Analysis</th>` +
+    `<thead><tr><th>Name</th><th>Bytes</th><th>Analysis</th>` +
     `</tr></thead><tbody>${rows}</tbody></table></div>`;
 };
 
-const renderSource = (unit: DwarfUnit): string => {
-  if (!unit.root?.name) return "-";
-  const directory = unit.root.compilationDirectory
-    ? `<div class="smallNote dim mono">${escapeHtml(unit.root.compilationDirectory)}</div>`
-    : "";
-  return `<span class="mono">${escapeHtml(unit.root.name)}</span>${directory}`;
-};
+const unitLanguage = (root: ReturnType<typeof dwarfUnitRoot>): string =>
+  root?.language == null ? "-" : dwarfLanguageName(root.language);
 
-const unitTypeLabel = (unit: DwarfUnit): string => {
-  if (unit.unitType != null) return dwarfUnitTypeName(unit.unitType);
-  return unit.root ? dwarfTagName(unit.root.tag) : "legacy unit";
+const unitType = (unit: DwarfUnit, root: ReturnType<typeof dwarfUnitRoot>): string =>
+  unit.unitType == null ? dwarfTagName(root?.tag ?? 0) : dwarfUnitTypeName(unit.unitType);
+
+const renderUnitRow = (unit: DwarfUnit): string => {
+  const root = dwarfUnitRoot(unit);
+    const directory = root?.compilationDirectory
+      ? `<div class="smallNote dim mono">${escapeHtml(root.compilationDirectory)}</div>` : "";
+    return `<tr><td class="mono">${escapeHtml(root?.name ?? "(unnamed unit)")}${directory}</td>` +
+      `<td>${escapeHtml(root?.producer ?? "-")}</td>` +
+      `<td>${escapeHtml(unitLanguage(root))}</td>` +
+      `<td>DWARF ${unit.version}; ${unit.format}-bit format; ${unit.addressSize}-byte addresses</td>` +
+      `<td>${escapeHtml(unitType(unit, root))}</td>` +
+      `<td class="dwarfTable__numeric">${unit.dies.length}</td></tr>`;
 };
 
 const renderUnits = (dwarf: DwarfAnalysis): string => {
   if (!dwarf.units.length) return "";
-  const rows = dwarf.units.map(unit =>
-    `<tr><td class="dwarfTable__numeric">${escapeHtml(hexValue(unit.offset))}</td>` +
-    `<td>DWARF ${unit.version}<div class="smallNote">${unit.format}-bit format</div></td>` +
-    `<td>${escapeHtml(unitTypeLabel(unit))}</td>` +
-    `<td class="dwarfTable__numeric">${unit.addressSize}</td>` +
-    `<td>${renderSource(unit)}</td>` +
-    `<td>${escapeHtml(unit.root?.producer ?? "-")}</td>` +
-    `<td>${escapeHtml(
-      unit.root?.language == null ? "-" : dwarfLanguageName(unit.root.language)
-    )}</td>` +
-    `<td class="dwarfTable__numeric">${dieCount(unit)}</td>` +
-    `<td class="dwarfTable__numeric">${tagCount(unit, DWARF_TAG.subprogram)}</td>` +
-    `<td class="dwarfTable__numeric">${unit.maxDepth}</td>` +
-    `<td class="dwarfTable__numeric">${unit.root?.statementListOffset == null
-      ? "-"
-      : escapeHtml(hexValue(unit.root.statementListOffset))}</td></tr>`
-  ).join("");
-  return `<h5>Units</h5><div class="tableWrap"><table class="table">` +
-    `<thead><tr><th>Offset</th><th>Version</th><th>Type</th><th>Addr bytes</th>` +
-    `<th>Source</th><th>Producer</th><th>Language</th><th>DIEs</th>` +
-    `<th>Subprograms</th><th>Max depth</th><th>Line table</th></tr></thead>` +
-    `<tbody>${rows}</tbody></table></div>`;
-};
-
-const renderAddressRange = (program: DwarfLineProgram): string =>
-  program.minimumAddress == null || program.maximumAddress == null
-    ? "-"
-    : `${escapeHtml(hexValue(program.minimumAddress))}–` +
-      `${escapeHtml(hexValue(program.maximumAddress))}`;
-
-const renderLineFiles = (program: DwarfLineProgram): string => {
-  if (!program.files.length) return "-";
-  const names = program.files.map(file =>
-    `<span class="mono">${escapeHtml(file.path || "(empty path)")}</span>` +
-    (file.directoryIndex == null ? "" : ` <span class="dim">(dir ${file.directoryIndex})</span>`)
-  ).join("<br>");
-  const truncated = program.fileCount > program.files.length
-    ? `<div class="smallNote dim">Showing ${program.files.length} of ${program.fileCount}</div>`
-    : "";
-  return `<details><summary style="cursor:pointer">${program.fileCount} files</summary>` +
-    `${names}${truncated}</details>`;
-};
-
-const renderLinePrograms = (dwarf: DwarfAnalysis): string => {
-  if (!dwarf.linePrograms.length) return "";
-  const rows = dwarf.linePrograms.map(program =>
-    `<tr><td class="dwarfTable__numeric">${escapeHtml(hexValue(program.offset))}</td>` +
-    `<td>DWARF ${program.version}<div class="smallNote">${program.format}-bit format</div></td>` +
-    `<td class="dwarfTable__numeric">${program.addressSize || "-"}</td>` +
-    `<td class="dwarfTable__numeric">${program.directoryCount}</td>` +
-    `<td>${renderLineFiles(program)}</td>` +
-    `<td class="dwarfTable__numeric">${program.rowCount}</td>` +
-    `<td class="dwarfTable__numeric">${program.sequenceCount}</td>` +
-    `<td class="mono">${renderAddressRange(program)}</td></tr>`
-  ).join("");
-  return `<h5>Line programs</h5><div class="tableWrap"><table class="table">` +
-    `<thead><tr><th>Offset</th><th>Version</th><th>Addr bytes</th><th>Directories</th>` +
-    `<th>Files</th><th>Rows</th><th>Sequences</th><th>Address range</th></tr></thead>` +
-    `<tbody>${rows}</tbody></table></div>`;
-};
-
-const aggregateTags = (dwarf: DwarfAnalysis): DwarfTagCount[] => {
-  const counts = new Map<number, DwarfTagCount>();
-  dwarf.units.forEach(unit => unit.tagCounts.forEach(tag => {
-    const existing = counts.get(tag.tag);
-    counts.set(tag.tag, { ...tag, count: tag.count + (existing?.count ?? 0) });
-  }));
-  return [...counts.values()].sort((left, right) => right.count - left.count);
+  const rows = dwarf.units.map(renderUnitRow).join("");
+  return `<h5>Units</h5><div class="tableWrap"><table class="table"><thead><tr>` +
+    `<th>Source</th><th>Producer</th><th>Language</th><th>Encoding</th><th>Type</th><th>DIEs</th>` +
+    `</tr></thead><tbody>${rows}</tbody></table></div>`;
 };
 
 const renderTags = (dwarf: DwarfAnalysis): string => {
-  const tags = aggregateTags(dwarf);
-  if (!tags.length) return "";
-  const rows = tags.map(tag =>
-    `<tr><td class="mono">${escapeHtml(dwarfTagName(tag.tag))}</td>` +
-    `<td class="dwarfTable__numeric">${tag.count}</td></tr>`
+  const counts = new Map<number, number>();
+  for (const unit of dwarf.units) {
+    for (const die of unit.dies) counts.set(die.tag, (counts.get(die.tag) ?? 0) + 1);
+  }
+  if (!counts.size) return "";
+  const rows = [...counts].sort((left, right) => right[1] - left[1]).map(([tag, count]) =>
+    `<tr><td class="mono">${escapeHtml(dwarfTagName(tag))}</td>` +
+    `<td class="dwarfTable__numeric">${count}</td></tr>`
   ).join("");
-  return `<details><summary style="cursor:pointer">DIE tag statistics (${tags.length} kinds)` +
-    `</summary><div class="tableWrap"><table class="table"><thead><tr>` +
+  return `<details><summary>DIE tag statistics (${counts.size} kinds)</summary>` +
+    `<div class="tableWrap"><table class="table"><thead><tr>` +
     `<th>Tag</th><th>Count</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
 };
 
 const renderIssues = (dwarf: DwarfAnalysis): string => {
   if (!dwarf.issues.length) return "";
-  return `<details open><summary style="cursor:pointer">DWARF notices ` +
-    `(${dwarf.issues.length})</summary><ul>` +
-    dwarf.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("") +
-    `</ul></details>`;
+  return `<details open><summary>DWARF notices (${dwarf.issues.length})</summary><ul>` +
+    dwarf.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("") + `</ul></details>`;
 };
 
 export const renderDwarfAnalysis = (dwarf: DwarfAnalysis): string =>
-  `<div class="smallNote">Compilation units and DIE structure from ` +
-  `<span class="mono">.debug_info</span>/<span class="mono">.debug_types</span>. ` +
-  `Zlib-compressed ELF and GNU sections are decompressed before analysis. ` +
-  `Line programs are decoded into bounded file, row, sequence, and address summaries. ` +
-  `Ranges, locations, expressions, frames, macros, name indexes, split ` +
-  `supplementary DWARF, Zstandard compression, and relocatable ELF DWARF are inventoried ` +
-  `but not decoded in ` +
-  `this iteration.</div>` +
-  renderSections(dwarf) + renderUnits(dwarf) + renderLinePrograms(dwarf) +
-  renderTags(dwarf) + renderIssues(dwarf);
+  `<p class="smallNote">Compilation units, program entities, types, variables, and source lines ` +
+  `from DWARF. Sections marked inventory only are not decoded; unresolved data is reported below.</p>` +
+  renderSections(dwarf) + renderUnits(dwarf) + renderDwarfEntities(dwarf) +
+  renderDwarfSourceLines(dwarf) + renderTags(dwarf) + renderIssues(dwarf);

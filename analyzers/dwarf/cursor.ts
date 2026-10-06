@@ -62,16 +62,23 @@ export class DwarfCursor {
     if (byteLength === Uint16Array.BYTES_PER_ELEMENT) return this.#toBigInt(await this.uint16());
     if (byteLength === Uint32Array.BYTES_PER_ELEMENT) return this.#toBigInt(await this.uint32());
     if (byteLength === BigUint64Array.BYTES_PER_ELEMENT) return this.uint64();
-    // DWARF 5 Table 7.5: strx3/addrx3 use three-byte integers.
-    if (byteLength === 3) {
-      const view = await this.#view(byteLength);
-      if (!view) return null;
-      return BigInt(this.#littleEndian
-        ? view.getUint16(0, true) + view.getUint8(2) * 0x10000
-        : view.getUint16(1, false) + view.getUint8(0) * 0x10000);
+    return this.#arbitraryUnsigned(byteLength);
+  }
+
+  async #arbitraryUnsigned(byteLength: number): Promise<bigint | null> {
+    // DWARF 5 Table 7.5 also defines three-byte strx3/addrx3 operands.
+    if (!Number.isSafeInteger(byteLength) || byteLength <= 0) {
+      this.fail(`Invalid ${byteLength}-byte integer`);
+      return null;
     }
-    this.fail(`Unsupported ${byteLength}-byte integer`);
-    return null;
+    const view = await this.#view(byteLength);
+    if (!view) return null;
+    let value = 0n;
+    for (let index = 0; index < byteLength; index += 1) {
+      const offset = this.#littleEndian ? byteLength - 1 - index : index;
+      value = (value << BigInt(DWARF_ENCODING.bitsPerByte)) | BigInt(view.getUint8(offset));
+    }
+    return value;
   }
 
   // DWARF 5, 7.6: LEB128 ends at a byte without the continuation bit.
@@ -114,6 +121,16 @@ export class DwarfCursor {
     }
     this.fail("Unterminated DWARF string");
     return null;
+  }
+
+  async bytes(byteLength: bigint | number): Promise<Uint8Array | null> {
+    const length = Number(byteLength);
+    if (!Number.isSafeInteger(length) || length < 0) {
+      this.fail(`Invalid block length ${byteLength.toString()}`);
+      return null;
+    }
+    const view = await this.#view(length);
+    return view ? new Uint8Array(view.buffer, view.byteOffset, view.byteLength).slice() : null;
   }
 
   skip(byteLength: bigint | number): boolean {

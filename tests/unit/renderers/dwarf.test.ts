@@ -18,7 +18,8 @@ void test("renderDwarfAnalysis renders sections, units, producers, and tag count
   assert.ok(html.includes("DW_LANG_C99"));
   assert.ok(html.includes("DW_TAG_subprogram"));
   assert.ok(html.includes("<h5>Line programs</h5>"));
-  assert.ok(html.includes("0x1000–0x1006"));
+  assert.ok(html.includes("src/main.c"));
+  assert.ok(!html.includes("Address range"));
   assert.ok(html.includes("Line programs are decoded"));
 });
 

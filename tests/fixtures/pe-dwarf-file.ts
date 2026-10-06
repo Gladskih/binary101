@@ -4,6 +4,7 @@ import { createDwarf4SectionsFixture } from "./dwarf-sections-fixture.js";
 import { createCompressedDwarfSectionsFixture } from "./dwarf-compressed-section-fixture.js";
 import { createPeWithSectionAndIatFixture } from "./sample-files-pe.js";
 import { MockFile } from "../helpers/mock-file.js";
+import { createDwarfSemanticFixture } from "./dwarf-semantic-fixture.js";
 
 // Independent fixture values from the Microsoft PE/COFF specification:
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format
@@ -140,6 +141,9 @@ const buildPeDwarfFile = (dwarf: DwarfPayloadFixture, fileName: string): MockFil
   bytes.set(stringTable.bytes, stringTableOffset);
   return new MockFile(bytes, fileName, "application/vnd.microsoft.portable-executable");
 };
+
+export const createPeSemanticDwarfFile = (): MockFile =>
+  buildPeDwarfFile(createDwarfSemanticFixture(), "semantic.exe");
 
 export const createPeDwarfFile = (): MockFile => {
   const dwarf = createDwarf4SectionsFixture();
