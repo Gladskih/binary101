@@ -1,3 +1,4 @@
+import { createDwarfFrameFixture } from "./dwarf-frame-fixture.js";
 import { createDwarfSemanticFixture } from "./dwarf-semantic-fixture.js";
 import { createDwarfSemanticMacroFixture } from "./dwarf-macro-fixture.js";
 "use strict";
@@ -163,3 +164,5 @@ export const createElfCompressedDwarfFile = (): MockFile => {
     sections: dwarf.candidates.map(candidate => candidate.section)
   }, "compressed-dwarf-elf", ELF64.section.compressedFlag);
 };
+
+export const createElfFrameDwarfFile = (): MockFile => buildElfDwarfFile(createDwarfFrameFixture(), "frame-dwarf", 0n);

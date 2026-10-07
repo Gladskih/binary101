@@ -4,6 +4,7 @@ import { createDwarfEntityTableModel } from "./entities.js";
 import { createDwarfSourceLineTableModel } from "./source-lines.js";
 import { createDwarfMacroTableModel } from "./macros.js";
 import { getDwarfLookupTableModel } from "./lookups.js";
+import { getDwarfFrameTableModel } from "./frames.js";
 
 export const getDwarfPagedTableModel = (
   dwarf: DwarfAnalysis | undefined, tableId: string
@@ -14,6 +15,8 @@ export const getDwarfPagedTableModel = (
   if (macro) return createDwarfMacroTableModel(dwarf, macro);
   const lookup = getDwarfLookupTableModel(dwarf, tableId);
   if (lookup) return lookup;
+  const frame = getDwarfFrameTableModel(dwarf, tableId);
+  if (frame) return frame;
   const program = dwarf.linePrograms.find(program => tableId === "dwarf-lines-" + program.offset);
   return program ? createDwarfSourceLineTableModel(dwarf, program) : null;
 };

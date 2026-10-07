@@ -1,3 +1,5 @@
+import { dwarfExpressionText } from "../dwarf/expressions.js";
+import { renderDwarfFrames } from "../dwarf/frames.js";
 import { escapeHtml } from "../../html-utils.js";
 import type { ElfParseResult } from "../../analyzers/elf/types.js";
 import type { ElfCfiInstruction, ElfUnwindPointer, ElfUnwindSection } from
@@ -15,7 +17,7 @@ const instructionsHtml = (instructions: ElfCfiInstruction[]): string => {
   return `<details><summary>${instructions.length} instructions</summary><table class="table">` +
     `<thead><tr><th>Offset</th><th>Operation</th><th>Encoded operands</th></tr></thead><tbody>` +
     instructions.map(item => `<tr><td class="peNumeric">0x${item.offset.toString(16)}</td>` +
-      `<td>${escapeHtml(item.operation)}</td><td>${escapeHtml(item.operands.map(String).join(", "))}</td></tr>`)
+      `<td>${escapeHtml(item.operation)}</td><td>${escapeHtml(item.operands.map(operand => Array.isArray(operand) ? dwarfExpressionText(operand) : String(operand)).join(", "))}</td></tr>`)
       .join("") + `</tbody></table></details>`;
 };
 
@@ -45,31 +47,39 @@ export const createElfUnwindTableModel = (section: ElfUnwindSection): PagedSorta
   };
 };
 
+const renderUnwindSection = (elf: ElfParseResult, section: ElfUnwindSection, out: string[]): void => {
+  out.push(renderElfSectionStart(`${unwindSectionName(elf, section.sectionIndex)}: call frame information`));
+  if (unwindSectionName(elf, section.sectionIndex) === ".debug_frame" && elf.dwarf?.frames) {
+    out.push(renderDwarfFrames(elf.dwarf), renderElfSectionEnd());
+    return;
+  }
+  // https://github.com/ARM-software/abi-aa/blob/main/aadwarf64/aadwarf64.rst#dwarf-register-names
+  if (elf.header.machine === 183) out.push(`<p class="smallNote">AArch64 DWARF registers: ` +
+    `r0–r30 = x0–x30; r30 = link register; r31 = sp; r64–r95 = v0–v31.</p>`);
+  out.push(`<p class="smallNote">CFI operands are encoded values; offsets use the CIE alignment factors. ` +
+    `Indirect pointers identify pointer storage. DWARF expressions are shown as bytes.</p>`);
+  if (section.cies.length) {
+    out.push(`<div class="tableWrap"><table class="table"><thead><tr>` +
+      `<th>CIE offset</th><th>Version</th><th>Augmentation</th><th>Code alignment</th>` +
+      `<th>Data alignment</th><th>Return register</th><th>Personality</th><th>CFI</th></tr></thead><tbody>` +
+      section.cies.map(cie => `<tr><td class="peNumeric">0x${cie.offset.toString(16)}</td>` +
+        `<td class="peNumeric">${cie.version}</td>` +
+        `<td>${escapeHtml(cie.augmentation)}</td><td class="peNumeric">${cie.codeAlignment}</td>` +
+        `<td class="peNumeric">${cie.dataAlignment}</td><td class="peNumeric">${cie.returnRegister}</td>` +
+        `<td>${escapeHtml(pointerText(cie.personality))}</td>` +
+        `<td>${instructionsHtml(cie.instructions)}</td></tr>`).join("") + `</tbody></table></div>`);
+  }
+  if (section.fdes.length) out.push(renderAutoPagedSortableTable(createElfUnwindTableModel(section)));
+  if (section.issues.length) {
+    out.push(`<ul>${section.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul>`);
+  }
+  out.push(renderElfSectionEnd());
+};
+
 export const renderElfUnwind = (elf: ElfParseResult, out: string[], onlyIndex?: number): void => {
   for (const [index, section] of (elf.unwind ?? []).entries()) {
     if (onlyIndex != null && index !== onlyIndex) continue;
-    out.push(renderElfSectionStart(`${unwindSectionName(elf, section.sectionIndex)}: call frame information`));
-    // https://github.com/ARM-software/abi-aa/blob/main/aadwarf64/aadwarf64.rst#dwarf-register-names
-    if (elf.header.machine === 183) out.push(`<p class="smallNote">AArch64 DWARF registers: ` +
-      `r0–r30 = x0–x30; r30 = link register; r31 = sp; r64–r95 = v0–v31.</p>`);
-    out.push(`<p class="smallNote">CFI operands are encoded values; offsets use the CIE alignment factors. ` +
-      `Indirect pointers identify pointer storage. DWARF expressions are shown as bytes.</p>`);
-    if (section.cies.length) {
-      out.push(`<div class="tableWrap"><table class="table"><thead><tr>` +
-        `<th>CIE offset</th><th>Version</th><th>Augmentation</th><th>Code alignment</th>` +
-        `<th>Data alignment</th><th>Return register</th><th>Personality</th><th>CFI</th></tr></thead><tbody>` +
-        section.cies.map(cie => `<tr><td class="peNumeric">0x${cie.offset.toString(16)}</td>` +
-          `<td class="peNumeric">${cie.version}</td>` +
-          `<td>${escapeHtml(cie.augmentation)}</td><td class="peNumeric">${cie.codeAlignment}</td>` +
-          `<td class="peNumeric">${cie.dataAlignment}</td><td class="peNumeric">${cie.returnRegister}</td>` +
-          `<td>${escapeHtml(pointerText(cie.personality))}</td>` +
-          `<td>${instructionsHtml(cie.instructions)}</td></tr>`).join("") + `</tbody></table></div>`);
-    }
-    if (section.fdes.length) out.push(renderAutoPagedSortableTable(createElfUnwindTableModel(section)));
-    if (section.issues.length) {
-      out.push(`<ul>${section.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul>`);
-    }
-    out.push(renderElfSectionEnd());
+    renderUnwindSection(elf, section, out);
   }
 };
 

@@ -1,3 +1,4 @@
+import { dwarfExpressionText } from "../dwarf/expressions.js";
 import { escapeHtml } from "../../html-utils.js";
 import { evaluateElfCfi } from "../../analyzers/elf/cfi-state.js";
 import type { ElfCfaRule, ElfCfiRegisterRule } from "../../analyzers/elf/cfi-state-types.js";
@@ -5,11 +6,11 @@ import type { ElfUnwindCie, ElfUnwindFde } from "../../analyzers/elf/unwind-type
 
 const cfaText = (cfa: ElfCfaRule): string => {
   if (!cfa) return "Unspecified";
-  return "expression" in cfa ? `Expression: ${cfa.expression}` : `r${cfa.register} + (${cfa.offset})`;
+  return "expression" in cfa ? `Expression: ${typeof cfa.expression === "string" ? cfa.expression : dwarfExpressionText(cfa.expression)}` : `r${cfa.register} + (${cfa.offset})`;
 };
 const registerText = (rule: ElfCfiRegisterRule): string => {
   if ("offset" in rule) return `${rule.kind}: CFA + (${rule.offset})`;
-  if ("expression" in rule) return `${rule.kind}: ${rule.expression}`;
+  if ("expression" in rule) return `${rule.kind}: ${typeof rule.expression === "string" ? rule.expression : dwarfExpressionText(rule.expression)}`;
   if ("register" in rule) return `r${rule.register}`;
   return rule.kind;
 };

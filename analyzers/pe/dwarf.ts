@@ -32,13 +32,13 @@ const toDwarfSection = (section: PeSection): DwarfSectionCandidate | null => {
 
 export const analyzePeDwarf = async (
   reader: FileRangeReader,
-  sections: PeSection[]
+  sections: PeSection[], addressSize = 0, machine = 0
 ): Promise<DwarfAnalysis | null> => {
   const dwarfSections = sections
     .map(toDwarfSection)
     .filter((section): section is DwarfSectionCandidate => section != null);
   if (!dwarfSections.length) return null;
   const prepared = await prepareDwarfSectionSources(reader, dwarfSections);
-  const dwarf = await analyzeDwarfSources(prepared.sources, "little");
+  const dwarf = await analyzeDwarfSources(prepared.sources, "little", addressSize, machine);
   return { ...dwarf, issues: [...prepared.issues, ...dwarf.issues] };
 };

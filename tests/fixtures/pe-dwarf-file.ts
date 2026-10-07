@@ -1,3 +1,4 @@
+import { createDwarfFrameFixture } from "./dwarf-frame-fixture.js";
 "use strict";
 
 import { createDwarf4SectionsFixture } from "./dwarf-sections-fixture.js";
@@ -168,3 +169,5 @@ export const createPeCompressedDwarfFile = (): MockFile => {
     sections: dwarf.candidates.map(candidate => candidate.section)
   }, "compressed-dwarf-pe.exe");
 };
+
+export const createPeFrameDwarfFile = (): MockFile => buildPeDwarfFile(createDwarfFrameFixture(), "frame-dwarf");

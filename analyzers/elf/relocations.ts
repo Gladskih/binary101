@@ -15,17 +15,18 @@ import type { ElfRelocationTable } from "./relocation-types.js";
 const resolveEntry = async (
   entry: ElfRelocation, table: ElfRelocationTable, elf: ElfRelocationImage,
   readSymbol: ReturnType<typeof createElfRelocationSymbolReader>, issues: string[],
-  layout: ElfBinaryLayout
+  layout: ElfBinaryLayout, logicalSizes: Map<number, bigint>
 ): Promise<ElfRelocation> => ({
   ...entry,
   symbol: entry.symbolIndex != null && entry.symbolIndex !== ELF_SYMBOL_INDEX.UNDEF
     ? await readSymbol(table, entry.symbolIndex) : null,
-  target: locateElfRelocationTarget(elf, table, entry.offset, issues, layout)
+  target: locateElfRelocationTarget(elf, table, entry.offset, issues, layout, logicalSizes)
 });
 
 export const parseElfRelocations = async (
   file: File, elf: ElfRelocationImage, dynamicEntries?: ElfDynamicEntry[],
-  symbolCache?: Map<number, ElfRelocationSymbol>, layout = selectElfBinaryLayout(elf)
+  symbolCache?: Map<number, ElfRelocationSymbol>, layout = selectElfBinaryLayout(elf),
+  logicalSizes = new Map<number, bigint>()
 ): Promise<ElfRelocationInfo | null> => {
   const reader = createFileRangeReader(file, 0, file.size);
   const issues: string[] = [];
@@ -41,7 +42,7 @@ export const parseElfRelocations = async (
       const key = `${table.encoding}:${entry.recordOffset}:${entry.offset}`;
       if (visited.has(key)) continue;
       visited.add(key);
-      entries.push(await resolveEntry(entry, table, elf, readSymbol, issues, layout));
+      entries.push(await resolveEntry(entry, table, elf, readSymbol, issues, layout, logicalSizes));
     }
   }
   return { tables, entries, issues: [...new Set(issues)] };

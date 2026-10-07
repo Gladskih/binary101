@@ -8,6 +8,7 @@ import { renderDwarfEntities } from "./dwarf/entities.js";
 import { renderDwarfSourceLines } from "./dwarf/source-lines.js";
 import { renderDwarfMacros } from "./dwarf/macros.js";
 import { renderDwarfLookups } from "./dwarf/lookups.js";
+import { renderDwarfFrames } from "./dwarf/frames.js";
 
 const statusLabel = (status: DwarfSectionStatus): string => {
   if (status === "unavailable") return "unavailable; not decoded";
@@ -87,4 +88,4 @@ export const renderDwarfAnalysis = (dwarf: DwarfAnalysis): string =>
   `from DWARF. Sections marked inventory only are not decoded; unresolved data is reported below.</p>` +
   renderSections(dwarf) + renderUnits(dwarf) + renderDwarfEntities(dwarf) +
   renderDwarfSourceLines(dwarf) + renderDwarfMacros(dwarf) + renderDwarfLookups(dwarf) +
-  renderTags(dwarf) + renderIssues(dwarf);
+  renderDwarfFrames(dwarf) + renderTags(dwarf) + renderIssues(dwarf);

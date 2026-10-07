@@ -1,13 +1,11 @@
+import type { DwarfCfiInstruction } from "../dwarf/frame-types.js";
+import type { DwarfCfiExpression } from "../dwarf/cfi-state-types.js";
 export interface ElfUnwindPointer {
   address: bigint;
   indirect: boolean;
 }
 
-export interface ElfCfiInstruction {
-  offset: number;
-  operation: string;
-  operands: Array<bigint | string>;
-}
+export type ElfCfiInstruction = DwarfCfiInstruction<DwarfCfiExpression>;
 
 export interface ElfUnwindCie {
   offset: number;
