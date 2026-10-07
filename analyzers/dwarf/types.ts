@@ -5,6 +5,8 @@ import type { DwarfMacroUnit } from "./macro-types.js";
 import type { DwarfPublicNames, DwarfAddressLookup } from "./lookup-types.js";
 import type { DwarfNameIndex } from "./name-index-types.js";
 import type { DwarfFrames } from "./frame-types.js";
+import type { DwarfPackageIndex } from "./package-types.js";
+import type { DwarfAlternateFile, DwarfSupplementaryFile } from "./supplementary.js";
 
 export type DwarfSectionInput = {
   name: string;
@@ -66,6 +68,7 @@ export type DwarfLineRow = {
 };
 
 export type DwarfLineProgram = {
+  sectionName?: string;
   offset: number;
   length: bigint;
   format: 32 | 64;
@@ -105,6 +108,9 @@ export type DwarfAnalysis = {
   addressLookup?: DwarfAddressLookup[];
   nameIndexes?: DwarfNameIndex[];
   frames?: DwarfFrames;
+  packageIndexes?: DwarfPackageIndex[];
+  supplementaryFile?: DwarfSupplementaryFile;
+  alternateFile?: DwarfAlternateFile;
   issues: string[];
 };
 
@@ -137,7 +143,7 @@ export type DwarfFormValue =
   | { kind: "flag"; value: boolean }
   | { kind: "block"; value: Uint8Array }
   | { kind: "expression"; operations: DwarfExpressionOperation[] }
-  | { kind: "ranges"; entries: DwarfAddressRange[] }
+  | { kind: "ranges"; entries: DwarfRangeEntry[] }
   | { kind: "locations"; entries: DwarfLocationEntry[] }
   | { kind: "empty" };
 
@@ -162,7 +168,8 @@ export type DwarfExpressionOperation = {
 };
 
 export type DwarfAddressRange = { start: bigint; end: bigint };
+export type DwarfRangeEntry = DwarfAddressRange | { kind: "unresolved" };
 export type DwarfLocationEntry = {
-  range: DwarfAddressRange | null;
+  range: DwarfAddressRange | "unresolved" | null;
   operations: DwarfExpressionOperation[];
 };

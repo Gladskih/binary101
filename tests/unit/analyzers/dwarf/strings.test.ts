@@ -140,7 +140,8 @@ void test("string indices reject the next contribution and cache failed resoluti
   assert.match(issues[0]!, /outside.*contribution/);
   assert.equal(await reader.resolve({ kind: "string-index", value: -1n }, context), null);
   assert.equal(await reader.resolve({ kind: "string-offset", sectionName: ".debug_str", value: -1n }, context), null);
-  assert.equal(await reader.resolve({ kind: "string-index", value: 0n }, { ...context, format: 64 }), null);
+  // The table header determines entry width independently of the unit's format (LLVM DWARFUnit.cpp).
+  assert.equal(await reader.resolve({ kind: "string-index", value: 1n }, { ...context, format: 64 }), "foo");
   assert.equal(await reader.resolve({ kind: "string-index", value: 0n }, { ...context, stringOffsetsBase: 0n }), null);
 });
 

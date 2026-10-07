@@ -1,7 +1,5 @@
 import type { DwarfCursor } from "./cursor.js";
 import type { DwarfAddressEntry } from "./address-entries.js";
-import { DWARF_ATTRIBUTE } from "./constants.js";
-import { dwarfAttributeValue, dwarfNumericValue } from "./attribute-values.js";
 import {
   readDwarfListAddressEntry, validatedDwarfRange,
   type DwarfAddressEncoding
@@ -23,11 +21,15 @@ const readLocationExpression = async (cursor: DwarfCursor, entry: DwarfAddressEn
   const bytes = length == null ? null : await cursor.bytes(length);
   if (!bytes) return null;
   const range = validatedDwarfRange(cursor, entry, unit.addressSize);
-  if (entry.kind !== "default" && !range) return null;
-  return { range, operations: await decodeDwarfExpression(bytes, {
+  if (!range && isResolvedRange(entry)) return null;
+  return { range: entry.kind === "range" && !range ? "unresolved" : range,
+    operations: await decodeDwarfExpression(bytes, {
     version: unit.version, format: unit.format, addressSize: unit.addressSize, stringOffsetsBase: null
   }, byteOrder, issues) };
 };
+
+const isResolvedRange = (entry: DwarfAddressEntry): boolean =>
+  entry.kind === "range" && entry.start != null && entry.end != null;
 
 export const readDwarfLocationList = async (
   reader: DwarfIndexedReader, unit: DwarfUnit, attribute: DwarfAttribute,
@@ -37,7 +39,7 @@ export const readDwarfLocationList = async (
     unit.version >= 5 ? ".debug_loclists" : ".debug_loc");
   if (!cursor) return null;
   const locations: DwarfLocationEntry[] = [];
-  let base: bigint | null = dwarfNumericValue(dwarfAttributeValue(unit.dies[0], DWARF_ATTRIBUTE.lowPc)) ?? 0n;
+  let base = reader.baseAddress(unit);
   while (cursor.position < cursor.end) {
     const entry = await readDwarfListAddressEntry(cursor, unit, reader, base, encodings, "location");
     if (!entry) break;

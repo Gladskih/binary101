@@ -58,24 +58,40 @@ export class DwarfStringReader {
   readonly #byteOrder: "little" | "big";
   readonly #issues: string[];
   readonly #indexed: DwarfIndexedReader;
-  readonly #strings = new Map<string, Promise<string | null>>();
+  readonly #strings: Map<DwarfSectionSource, Map<bigint, Promise<string | null>>>;
+  readonly #missing = new Map<string, Promise<string | null>>();
 
-  constructor(sections: Map<string, DwarfSectionSource>, byteOrder: "little" | "big", issues: string[]) {
-    this.#sections = sections;
+  constructor(sections: Map<string, DwarfSectionSource>, byteOrder: "little" | "big", issues: string[],
+    cache = new Map<DwarfSectionSource, Map<bigint, Promise<string | null>>>()) {
+    this.#sections = new Map(sections);
     this.#byteOrder = byteOrder;
     this.#issues = issues;
     this.#indexed = new DwarfIndexedReader(sections, byteOrder, issues);
+    this.#strings = cache;
+  }
+
+  scoped(sections: Map<string, DwarfSectionSource>): DwarfStringReader {
+    return new DwarfStringReader(sections, this.#byteOrder, this.#issues, this.#strings);
+  }
+
+  splitStringOffsetsBase(version: number): Promise<bigint | null> {
+    return this.#indexed.splitStringOffsetsBase(version);
   }
 
   #read(name: string, offset: bigint): Promise<string | null> {
-    const key = `${name}:${offset}`;
-    if (!this.#strings.has(key)) {
-      const source = findSection(this.#sections, name, this.#issues);
-      this.#strings.set(key, source
-        ? readStringAt(source.reader, source.section, offset, this.#byteOrder === "little", this.#issues)
-        : Promise.resolve(null));
+    const source = this.#sections.get(name);
+    if (!source) {
+      if (!this.#missing.has(name)) {
+        findSection(this.#sections, name, this.#issues);
+        this.#missing.set(name, Promise.resolve(null));
+      }
+      return this.#missing.get(name)!;
     }
-    return this.#strings.get(key)!;
+    if (!this.#strings.has(source)) this.#strings.set(source, new Map());
+    const cache = this.#strings.get(source)!;
+    if (!cache.has(offset)) cache.set(offset,
+      readStringAt(source.reader, source.section, offset, this.#byteOrder === "little", this.#issues));
+    return cache.get(offset)!;
   }
 
   async resolve(value: DwarfFormValue | undefined, context: DwarfUnitContext): Promise<string | null> {

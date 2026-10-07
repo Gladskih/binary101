@@ -38,7 +38,7 @@ export const resolveDwarfDieStrings = async (
   context: DwarfUnitContext,
   strings: DwarfStringReader
 ): Promise<DwarfDie[]> => {
-  context.stringOffsetsBase = stringBase(dies);
+  context.stringOffsetsBase = stringBase(dies) ?? context.stringOffsetsBase;
   const resolved: DwarfDie[] = [];
   for (const die of dies) {
     const attributes: DwarfAttribute[] = [];

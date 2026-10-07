@@ -1,6 +1,6 @@
 import { renderAutoPagedSortableTable, type PagedSortableTableModel } from "../paged-sortable-table.js";
 import { escapeHtml } from "../../html-utils.js";
-import { dwarfUnitRoot } from "../../analyzers/dwarf/attribute-values.js";
+import { dwarfLineProgramForUnit } from "../../analyzers/dwarf/unit-sections.js";
 import type { DwarfAnalysis, DwarfLineProgram, DwarfLineRow } from "../../analyzers/dwarf/types.js";
 import { dwarfLineFile, dwarfSourcePath } from "./source-paths.js";
 
@@ -15,7 +15,7 @@ const rowFlags = (row: DwarfLineRow): string => [
 export const createDwarfSourceLineTableModel = (
   dwarf: DwarfAnalysis, program: DwarfLineProgram
 ): PagedSortableTableModel => {
-  const unit = dwarf.units.find(item => dwarfUnitRoot(item)?.statementListOffset === BigInt(program.offset));
+  const unit = dwarf.units.find(item => dwarfLineProgramForUnit(dwarf, item) === program);
   const rows = program.rows.filter(row => !row.endSequence);
   const values: Array<(row: DwarfLineRow) => string> = [
     row => {
@@ -25,7 +25,7 @@ export const createDwarfSourceLineTableModel = (
     row => row.line.toString(), row => row.column ? row.column.toString() : "-", rowFlags
   ];
   return {
-    id: "dwarf-lines-" + program.offset, rowCount: rows.length,
+    id: dwarfSourceLineTableId(program), rowCount: rows.length,
     pageSize: 100, // Page navigation covers all source mappings; no records are dropped.
     columns: [{ label: "Source file" }, { label: "Line", className: "dwarfTable__numeric" },
       { label: "Column", className: "dwarfTable__numeric" }, { label: "Meaning" }],
@@ -50,13 +50,16 @@ const renderProgramRows = (dwarf: DwarfAnalysis, program: DwarfLineProgram): str
 };
 
 const renderProgramFiles = (dwarf: DwarfAnalysis, program: DwarfLineProgram): string => {
-  const unit = dwarf.units.find(item => dwarfUnitRoot(item)?.statementListOffset === BigInt(program.offset));
+  const unit = dwarf.units.find(item => dwarfLineProgramForUnit(dwarf, item) === program);
   return program.files.map(file => `<tr><td class="mono">${escapeHtml(
     dwarfSourcePath(program, file, unit) || "(empty path)"
   )}</td><td class="dwarfTable__numeric">${file.size ?? "-"}</td>` +
     `<td>${file.md5 ? Array.from(file.md5, byte => byte.toString(16).padStart(2, "0")).join("") : "-"}` +
     `</td></tr>`).join("");
 };
+
+export const dwarfSourceLineTableId = (program: DwarfLineProgram): string =>
+  `dwarf-lines-${program.sectionName ? program.sectionName + "-" : ""}${program.offset}`;
 
 export const renderDwarfSourceLines = (dwarf: DwarfAnalysis): string => {
   if (!dwarf.linePrograms.length) return "";

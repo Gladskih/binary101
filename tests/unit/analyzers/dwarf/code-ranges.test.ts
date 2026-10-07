@@ -22,6 +22,13 @@ void test("code ranges distinguish constant high_pc from absolute addresses", ()
   assert.equal(dwarfCodeSize(pcDie(0x06, 6n, -1n)), null);
 });
 
+void test("unresolved split ranges cannot produce a misleading partial code size", () => {
+  const die = dieWith([{ name: 0x55, form: 0x17, value: { kind: "ranges",
+    entries: [{ start: 0x1000n, end: 0x1004n }, { kind: "unresolved" }] } }]);
+  assert.deepEqual(dwarfCodeRanges(die), [{ start: 0x1000n, end: 0x1004n }]);
+  assert.equal(dwarfCodeSize(die), null);
+});
+
 void test("code size counts overlapping and repeated ranges only once", () => {
   const die = dieWith([{ name: 0x55, form: 0x17, value: { kind: "ranges", entries: [
     { start: 9n, end: 12n }, { start: 0n, end: 8n }, { start: 4n, end: 6n },

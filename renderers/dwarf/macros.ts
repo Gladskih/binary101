@@ -1,5 +1,7 @@
 import { escapeHtml } from "../../html-utils.js";
-import { dwarfAttributeValue, dwarfNumericValue, dwarfUnitRoot } from "../../analyzers/dwarf/attribute-values.js";
+import { dwarfAttributeValue, dwarfNumericValue } from "../../analyzers/dwarf/attribute-values.js";
+import { dwarfLineProgramForUnit, dwarfSectionContributionAt,
+  dwarfUnitContribution } from "../../analyzers/dwarf/unit-sections.js";
 import type { DwarfMacroEntry, DwarfMacroUnit } from "../../analyzers/dwarf/macro-types.js";
 import type { DwarfAnalysis, DwarfFormValue, DwarfLineProgram, DwarfUnit } from "../../analyzers/dwarf/types.js";
 import { renderAutoPagedSortableTable, type PagedSortableTableModel } from "../paged-sortable-table.js";
@@ -7,10 +9,13 @@ import { dwarfLineFile, dwarfSourcePath } from "./source-paths.js";
 
 const macroOwner = (dwarf: DwarfAnalysis, macro: DwarfMacroUnit): DwarfUnit | undefined =>
   dwarf.units.find(unit => {
+    if (unit.sectionName.endsWith(".dwo") !== macro.sectionName.endsWith(".dwo")) return false;
     const root = unit.dies[0];
     const reference = macro.version == null ? dwarfAttributeValue(root, 0x43)
       : dwarfAttributeValue(root, 0x79) ?? dwarfAttributeValue(root, 0x2119);
-    return dwarfNumericValue(reference) === BigInt(macro.offset);
+    const offset = dwarfNumericValue(reference);
+    const base = dwarfUnitContribution(dwarf, unit, macro.sectionName.replace(/\.dwo$/, ""))?.offset ?? 0;
+    return offset != null && offset + BigInt(base) === BigInt(macro.offset);
   });
 
 const operandText = (value: DwarfFormValue | undefined): string => {
@@ -32,15 +37,17 @@ const action = (opcode: number): string => {
   return "vendor directive";
 };
 
-const importedText = (dwarf: DwarfAnalysis, entry: DwarfMacroEntry): string => {
+const importedText = (dwarf: DwarfAnalysis, owner: DwarfMacroUnit, entry: DwarfMacroEntry): string => {
   const offset = dwarfNumericValue(entry.operands[0]);
-  const target = dwarf.macros?.find(macro => macro.version != null && BigInt(macro.offset) === offset);
+  const base = dwarfSectionContributionAt(dwarf, owner.sectionName, owner.offset)?.offset ?? 0;
+  const target = offset == null ? null : dwarf.macros?.find(macro => macro.version != null &&
+    macro.sectionName === owner.sectionName && BigInt(macro.offset) === offset + BigInt(base));
   return target ? `${target.entries.length} directives in shared sequence`
     : "unresolved macro sequence";
 };
 
-const entryText = (dwarf: DwarfAnalysis, entry: DwarfMacroEntry): string => {
-  if (entry.opcode === 7) return importedText(dwarf, entry);
+const entryText = (dwarf: DwarfAnalysis, owner: DwarfMacroUnit, entry: DwarfMacroEntry): string => {
+  if (entry.opcode === 7) return importedText(dwarf, owner, entry);
   if (entry.opcode === 10) return "external debug file required";
   if (entry.opcode === 3 || entry.opcode === 4) return "";
   return entry.opcode === 255 ? entry.operands.map(operandText).join("; ")
@@ -49,8 +56,7 @@ const entryText = (dwarf: DwarfAnalysis, entry: DwarfMacroEntry): string => {
 
 const sourceNames = (dwarf: DwarfAnalysis, macro: DwarfMacroUnit): string[] => {
   const owner = macroOwner(dwarf, macro);
-  const offset = macro.lineOffset ?? dwarfUnitRoot(owner)?.statementListOffset;
-  const program = dwarf.linePrograms.find(program => BigInt(program.offset) === offset);
+  const program = macroLineProgram(dwarf, macro, owner);
   const files: bigint[] = [];
   return macro.entries.map(entry => {
     if (entry.opcode === 4) { files.pop(); return ""; }
@@ -63,6 +69,15 @@ const sourceNames = (dwarf: DwarfAnalysis, macro: DwarfMacroUnit): string[] => {
   });
 };
 
+const macroLineProgram = (dwarf: DwarfAnalysis, macro: DwarfMacroUnit,
+  owner: DwarfUnit | undefined): DwarfLineProgram | undefined => {
+  if (macro.lineOffset == null) return owner ? dwarfLineProgramForUnit(dwarf, owner) : undefined;
+  const name = macro.sectionName.replace(/macro|macinfo/, "line");
+  const base = dwarfSectionContributionAt(dwarf, macro.sectionName, macro.offset, name)?.offset ?? 0;
+  return dwarf.linePrograms.find(program => (program.sectionName ?? ".debug_line") === name &&
+    BigInt(program.offset) === macro.lineOffset! + BigInt(base));
+};
+
 const sourcePath = (program: DwarfLineProgram | undefined, index: bigint,
   owner: DwarfUnit | undefined): string => {
   const file = program ? dwarfLineFile(program, index) : undefined;
@@ -73,7 +88,7 @@ export const createDwarfMacroTableModel = (dwarf: DwarfAnalysis, macro: DwarfMac
   const sources = sourceNames(dwarf, macro);
   const values = (index: number): string[] => {
     const entry = macro.entries[index];
-    return entry ? [action(entry.opcode), entryText(dwarf, entry), sources[index] ?? ""] : [];
+    return entry ? [action(entry.opcode), entryText(dwarf, macro, entry), sources[index] ?? ""] : [];
   };
   return {
     id: `dwarf-macros-${macro.sectionName}-${macro.offset}`, pageSize: 100,

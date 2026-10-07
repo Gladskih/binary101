@@ -61,9 +61,9 @@ const readLists = async (
 
 export const decodeDwarfDieLists = async (
   units: DwarfUnit[], sections: Map<string, DwarfSectionSource>,
-  byteOrder: "little" | "big", issues: string[]
+  byteOrder: "little" | "big", issues: string[], skeletons: DwarfUnit[] = []
 ): Promise<DwarfUnit[]> => {
-  const reader = new DwarfIndexedReader(sections, byteOrder, issues);
+  const reader = new DwarfIndexedReader(sections, byteOrder, issues, skeletons);
   const decoded: DwarfUnit[] = [];
   for (const unit of units) {
     decoded.push(await readLists(await resolveAddresses(unit, reader), reader, byteOrder, issues));

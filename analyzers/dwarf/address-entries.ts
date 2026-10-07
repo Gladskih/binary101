@@ -38,7 +38,8 @@ const readAddressOperand = async (
 const readEndOperand = (
   cursor: DwarfCursor, encoding: DwarfAddressEncoding, unit: DwarfUnit, reader: DwarfIndexedReader
 ): Promise<bigint | null> => encoding === "length" || encoding === "indexed-length"
-  ? cursor.uleb() : readAddressOperand(cursor, encoding, unit, reader);
+  ? (unit.version < 5 && encoding === "indexed-length" ? cursor.unsigned(4) : cursor.uleb())
+  : readAddressOperand(cursor, encoding, unit, reader);
 
 const offsetRange = (start: bigint, end: bigint, base: bigint | null): DwarfAddressEntry =>
   base == null ? { kind: "range", start: null, end: null }
@@ -65,7 +66,11 @@ export const readDwarfListAddressEntry = async (
   cursor: DwarfCursor, unit: DwarfUnit, reader: DwarfIndexedReader, base: bigint | null,
   encodings: DwarfAddressEncoding[], kind: string
 ): Promise<DwarfAddressEntry | null> => {
-  if (unit.version < 5) return readLegacyDwarfAddressEntry(cursor, unit.addressSize, base);
+  // GNU .debug_loc.dwo uses LLE opcodes before DWARF 5; its indexed length is u32.
+  // https://raw.githubusercontent.com/llvm/llvm-project/main/llvm/lib/DebugInfo/DWARF/DWARFDebugLoc.cpp
+  if (unit.version < 5 && !(kind === "location" && unit.sectionName.endsWith(".dwo"))) {
+    return readLegacyDwarfAddressEntry(cursor, unit.addressSize, base);
+  }
   const code = await cursor.uint8();
   if (code == null) return null;
   const encoding = encodings[code];

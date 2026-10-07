@@ -4,7 +4,7 @@ import { readDwarfLocationList } from "../../../../analyzers/dwarf/location-list
 import {
   createListUnit, listAttribute, createDwarfListReader, encodeListContribution, encodeAddressContribution
 } from "../../../fixtures/dwarf-lists-fixture.js";
-import { concatenateBytes, encodeUint64, encodeUint16, encodeUleb } from "../../../fixtures/dwarf-fixture-encoding.js";
+import { concatenateBytes, encodeUint64, encodeUint32, encodeUint16, encodeUleb } from "../../../fixtures/dwarf-fixture-encoding.js";
 
 void test("legacy location lists decode base-relative lifetimes and register expressions", async () => {
   const issues: string[] = [];
@@ -86,4 +86,27 @@ void test("an unterminated location list reports its missing terminator without 
     listAttribute(0x02, 0x17, 0n), "little", issues))?.length, 1);
   assert.equal(issues.length, 1);
   assert.match(issues[0]!, /Location list has no end-of-list terminator/);
+});
+
+void test("GNU split v4 locations use LLE opcodes, u32 lengths and u16 expression sizes", async () => {
+  const issues: string[] = [];
+  const reader = createDwarfListReader([
+    { name: ".debug_addr", bytes: encodeUint64(0x1000) },
+    { name: ".debug_loc", bytes: concatenateBytes([3, 0], encodeUint32(128),
+      encodeUint16(1), [0x50, 0]) }
+  ], issues);
+  const unit = { ...createListUnit(4, [listAttribute(0x2133, 0x17, 0n)]), sectionName: ".debug_info.dwo" };
+  const locations = await readDwarfLocationList(reader, unit, listAttribute(0x02, 0x17, 0n), "little", issues);
+  assert.deepEqual(locations, [{ range: { start: 0x1000n, end: 0x1080n },
+    operations: [{ offset: 0, opcode: 0x50, operands: [] }] }]);
+  assert.deepEqual(issues, []);
+});
+
+void test("missing skeleton addresses preserve split location expressions without inventing a default location", async () => {
+  const issues: string[] = [];
+  const reader = createDwarfListReader([{ name: ".debug_loclists", bytes: encodeListContribution([3, 0, 2, 1, 0x50, 0]) }], issues);
+  const unit = { ...createListUnit(5), sectionName: ".debug_info.dwo" };
+  const locations = await readDwarfLocationList(reader, unit, listAttribute(0x02, 0x17, 12n), "little", issues);
+  assert.deepEqual(locations, [{ range: "unresolved", operations: [{ offset: 0, opcode: 0x50, operands: [] }] }]);
+  assert.match(issues.join(" "), /indexed address or base is unavailable/);
 });

@@ -7,6 +7,7 @@ import { createPeWithSectionAndIatFixture } from "./sample-files-pe.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { createDwarfSemanticFixture } from "./dwarf-semantic-fixture.js";
 import { createDwarfSemanticMacroFixture } from "./dwarf-macro-fixture.js";
+import { createDwarfSplitFixture } from "./dwarf-split-fixture.js";
 
 // Independent fixture values from the Microsoft PE/COFF specification:
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format
@@ -27,6 +28,7 @@ const PE32 = {
     headerSize: 224,
     entryPointOffset: 16,
     imageSizeOffset: 56,
+    headersSizeOffset: 60,
     dataDirectoriesOffset: 96
   },
   section: {
@@ -100,19 +102,17 @@ type DwarfPayloadFixture = {
 
 const buildPeDwarfFile = (dwarf: DwarfPayloadFixture, fileName: string): MockFile => {
   const dwarfSections = dwarf.sections;
+  const firstRawOffset = Math.ceil((SECTION_HEADER_OFFSET + dwarfSections.length *
+    PE32.section.headerSize) / PE32.fileAlignment) * PE32.fileAlignment;
   const stringTable = encodeCoffStringTable(dwarfSections.map(section => section.name));
   const rawSizes = dwarfSections.map(section =>
     Math.ceil(section.size / PE32.fileAlignment) * PE32.fileAlignment);
-  const symbolTableOffset = PE32.fileAlignment + rawSizes.reduce((size, value) => size + value, 0);
+  const symbolTableOffset = firstRawOffset + rawSizes.reduce((size, value) => size + value, 0);
   const stringTableOffset = symbolTableOffset + PE32.coff.symbolRecordSize;
   const bytes = new Uint8Array(stringTableOffset + stringTable.bytes.length);
   bytes.set(createPeWithSectionAndIatFixture().bytes.subarray(0, PE32.fileAlignment));
   const view = new DataView(bytes.buffer);
-  view.setUint16(
-    COFF_HEADER_OFFSET + PE32.coff.sectionCountOffset,
-    dwarfSections.length,
-    true
-  );
+  view.setUint16(COFF_HEADER_OFFSET + PE32.coff.sectionCountOffset, dwarfSections.length, true);
   view.setUint32(
     COFF_HEADER_OFFSET + PE32.coff.symbolTableOffset,
     symbolTableOffset,
@@ -124,6 +124,7 @@ const buildPeDwarfFile = (dwarf: DwarfPayloadFixture, fileName: string): MockFil
     true
   );
   view.setUint32(OPTIONAL_HEADER_OFFSET + PE32.optional.entryPointOffset, 0, true);
+  view.setUint32(OPTIONAL_HEADER_OFFSET + PE32.optional.headersSizeOffset, firstRawOffset, true);
   view.setUint32(
     OPTIONAL_HEADER_OFFSET + PE32.optional.imageSizeOffset,
     symbolTableOffset / PE32.fileAlignment * PE32.section.virtualAddressStride,
@@ -134,7 +135,7 @@ const buildPeDwarfFile = (dwarf: DwarfPayloadFixture, fileName: string): MockFil
     OPTIONAL_HEADER_OFFSET + PE32.optional.dataDirectoriesOffset,
     OPTIONAL_HEADER_OFFSET + PE32.optional.headerSize
   );
-  let rawOffset = PE32.fileAlignment;
+  let rawOffset = firstRawOffset;
   dwarfSections.forEach((section, index) => {
     writeSectionHeader(view, index, stringTable.offsets[index]!, section.size, rawOffset);
     bytes.set(
@@ -171,3 +172,6 @@ export const createPeCompressedDwarfFile = (): MockFile => {
 };
 
 export const createPeFrameDwarfFile = (): MockFile => buildPeDwarfFile(createDwarfFrameFixture(), "frame-dwarf");
+
+export const createPeSplitDwarfFile = (): MockFile =>
+  buildPeDwarfFile(createDwarfSplitFixture(), "split-dwarf.exe");

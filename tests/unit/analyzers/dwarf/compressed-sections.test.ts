@@ -15,6 +15,7 @@ import {
 } from "../../../fixtures/dwarf-compressed-section-fixture.js";
 import { TEST_DWARF } from "../../../fixtures/dwarf-fixture-encoding.js";
 import { MockFile } from "../../../helpers/mock-file.js";
+import { splitInformation } from "../../../fixtures/dwarf-split-fixture.js";
 
 const candidate = (
   bytes: number[],
@@ -25,6 +26,16 @@ const candidate = (
     section: { name, offset: 0, size: bytes.length, compressed: true },
     compression: { kind: "gnu-zlib" }
   }
+});
+
+void test("GNU-compressed split information keeps its DWO namespace and is decoded locally", async () => {
+  const contents = candidate(encodeGnuCompressedSection(Uint8Array.from(splitInformation())), ".zdebug_info.dwo");
+  const prepared = await prepareDwarfSectionSources(contents.file, [contents.value]);
+  assert.equal(prepared.sources[0]?.decoded, true);
+  assert.equal(prepared.sources[0]?.section.name, ".debug_info.dwo");
+  assert.deepEqual(Array.from(await prepared.sources[0]!.reader.readBytes(0, splitInformation().length)),
+    splitInformation());
+  assert.deepEqual(prepared.issues, []);
 });
 
 const prepareWithoutDecompressionStream = async (

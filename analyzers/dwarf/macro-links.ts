@@ -1,7 +1,7 @@
 import { dwarfAttributeValue, dwarfNumericValue } from "./attribute-values.js";
 import type { DwarfMacroUnit } from "./macro-types.js";
 import type { DwarfStringReader } from "./strings.js";
-import type { DwarfUnit } from "./types.js";
+import type { DwarfUnit, DwarfUnitContext } from "./types.js";
 
 const imports = (unit: DwarfMacroUnit): bigint[] => unit.entries.flatMap(entry => {
   const offset = entry.opcode === 7 ? dwarfNumericValue(entry.operands[0]) : null;
@@ -62,14 +62,22 @@ const linkOwners = (macros: DwarfMacroUnit[], units: DwarfUnit[]): Map<DwarfMacr
   return owners;
 };
 
+const stringContexts = async (owners: Set<DwarfUnit> | undefined,
+  strings: DwarfStringReader): Promise<Map<string, DwarfUnitContext>> => {
+  const contexts = new Map<string, DwarfUnitContext>();
+  for (const owner of owners ?? []) {
+    const base = dwarfNumericValue(dwarfAttributeValue(owner.dies[0], 0x72)) ??
+      (owner.sectionName.endsWith(".dwo") ? await strings.splitStringOffsetsBase(owner.version) : null);
+    contexts.set(`${owner.version}:${owner.format}:${base}`, { version: owner.version,
+      format: owner.format, addressSize: owner.addressSize, stringOffsetsBase: base });
+  }
+  return contexts;
+};
+
 const resolveIndexedStrings = async (macro: DwarfMacroUnit, owners: Set<DwarfUnit> | undefined,
   strings: DwarfStringReader, issues: string[]): Promise<void> => {
   if (!macro.entries.some(entry => entry.operands.some(operand => operand.kind === "string-index"))) return;
-  const contexts = new Map([...owners ?? []].map(owner => {
-    const base = dwarfNumericValue(dwarfAttributeValue(owner.dies[0], 0x72));
-    return [`${owner.version}:${owner.format}:${base}`, { version: owner.version,
-      format: owner.format, addressSize: owner.addressSize, stringOffsetsBase: base }];
-  }));
+  const contexts = await stringContexts(owners, strings);
   if (contexts.size !== 1) {
     issues.push(`${macro.sectionName}: indexed macro strings have no unique importing unit context.`);
     return;
