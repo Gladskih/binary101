@@ -6,9 +6,12 @@ import {
   type DwarfSectionCandidate
 } from "../dwarf/compressed-sections.js";
 import { analyzeDwarfSources } from "../dwarf/index.js";
+import type { DwarfSectionSource } from "../dwarf/types.js";
 import type { DwarfAnalysis } from "../dwarf/types.js";
 import type { ElfSectionHeader } from "./types.js";
 import { ELF_SECTION_TYPE } from "./abi-constants.js";
+import { applyElfDwarfRelocations } from "./dwarf-relocations.js";
+import type { ElfRelocationImage, ElfRelocationInfo } from "./relocation-types.js";
 
 // ELF gABI section flag SHF_COMPRESSED:
 // https://www.sco.com/developers/gabi/latest/ch4.sheader.html
@@ -53,7 +56,7 @@ const toDwarfSection = (
       offset,
       size,
       compressed: gnuCompressed || elfCompressed,
-      ...(relocationTargetName(name) != null || relocationTargets.has(name)
+      ...(relocationTargets.has(name)
         ? { requiresRelocations: true }
         : {})
     },
@@ -65,13 +68,8 @@ const toDwarfSection = (
   };
 };
 
-export const analyzeElfDwarf = async (
-  file: File,
-  sections: ElfSectionHeader[],
-  elfClass: "elf32" | "elf64",
-  littleEndian: boolean,
-  issues: string[]
-): Promise<DwarfAnalysis | null> => {
+const collectDwarfSections = (sections: ElfSectionHeader[], elfClass: "elf32" | "elf64",
+  byteOrder: "little" | "big", issues: string[]): DwarfSectionCandidate[] => {
   const relocationTargets = new Set(
     sections
       .map(section => relocationTargetName(section.name ?? ""))
@@ -83,23 +81,51 @@ export const analyzeElfDwarf = async (
     const target = sections.find(item => item.index === section.info);
     if (target?.name) relocationTargets.add(target.name);
   }
-  const dwarfSections = sections
+  return sections
     .map(section => toDwarfSection(
       section,
       relocationTargets,
       elfClass,
-      littleEndian ? "little" : "big",
+      byteOrder,
       issues
     ))
     .filter((section): section is DwarfSectionCandidate => section != null);
-  if (!dwarfSections.length) return null;
-  const prepared = await prepareDwarfSectionSources(
-    createFileRangeReader(file, 0, file.size),
-    dwarfSections
-  );
-  const dwarf = await analyzeDwarfSources(
-    prepared.sources,
-    littleEndian ? "little" : "big"
-  );
+};
+
+export type ElfDwarfSources = { sources: DwarfSectionSource[]; issues: string[] };
+
+export const prepareElfDwarfSources = async (file: File, sections: ElfSectionHeader[],
+  elfClass: "elf32" | "elf64", littleEndian: boolean, issues: string[]): Promise<ElfDwarfSources | null> => {
+  const candidates = collectDwarfSections(sections, elfClass, littleEndian ? "little" : "big", issues);
+  if (!candidates.length) return null;
+  const prepared = await prepareDwarfSectionSources(createFileRangeReader(file, 0, file.size),
+    candidates.map(candidate => ({ ...candidate, section: { ...candidate.section, requiresRelocations: false } })));
+  return { sources: prepared.sources.map((source, index) => ({ ...source, summary: candidates[index]!.section })),
+    issues: prepared.issues };
+};
+
+export const elfDwarfLogicalSizes = (sections: ElfSectionHeader[],
+  prepared: ElfDwarfSources | null): Map<number, bigint> => {
+  const sizes = new Map<number, bigint>();
+  for (const section of sections) {
+    const source = prepared?.sources.find(source => source.summary.name === section.name &&
+      BigInt(source.summary.offset) === section.offset);
+    if (source?.decoded && source.summary.compressed) sizes.set(section.index, BigInt(source.section.size));
+  }
+  return sizes;
+};
+
+const relocatedDwarfSources = async (prepared: ElfDwarfSources,
+  elf: ElfRelocationImage | undefined, relocations: ElfRelocationInfo | undefined): Promise<DwarfSectionSource[]> =>
+  elf && relocations ? applyElfDwarfRelocations(prepared.sources, elf, relocations, prepared.issues) : prepared.sources;
+
+export const analyzeElfDwarf = async (file: File, sections: ElfSectionHeader[],
+  elfClass: "elf32" | "elf64", littleEndian: boolean, issues: string[],
+  elf?: ElfRelocationImage, relocations?: ElfRelocationInfo,
+  preparedSources?: ElfDwarfSources): Promise<DwarfAnalysis | null> => {
+  const prepared = preparedSources ?? await prepareElfDwarfSources(file, sections, elfClass, littleEndian, issues);
+  if (!prepared) return null;
+  const dwarf = await analyzeDwarfSources(await relocatedDwarfSources(prepared, elf, relocations),
+    littleEndian ? "little" : "big", elfClass === "elf64" ? 8 : 4, elf?.header.machine ?? 0);
   return { ...dwarf, issues: [...prepared.issues, ...dwarf.issues] };
 };

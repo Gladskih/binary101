@@ -45,6 +45,7 @@ export async function parsePe(
   const parsed = !isPeWindowsCore(core)
     ? withLayoutWarnings(buildHeaderOnlyPeParseResult(core), file.size)
     : await parseWindowsPe(file, reader, core, parseManifestXmlDocument);
-  const dwarf = await analyzePeDwarf(reader, parsed.sections);
+  const dwarf = await analyzePeDwarf(reader, parsed.sections,
+    parsed.opt?.Magic === 0x20b ? 8 : 4, parsed.coff.Machine === 0xaa64 ? 183 : 0);
   return dwarf ? { ...parsed, dwarf } : parsed;
 }

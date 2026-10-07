@@ -9,6 +9,9 @@ import { validateDwarfLines } from "./line-validation.js";
 import { createDwarfDieIndex, validateDwarfReferences } from "./references.js";
 import { decodeDwarfDieExpressions } from "./die-expressions.js";
 import { decodeDwarfDieLists } from "./die-lists.js";
+import { readDwarfMacros } from "./macros.js";
+import { readDwarfLookups } from "./lookups.js";
+import { readDwarfFrames } from "./frames.js";
 import type {
   DwarfAnalysis,
   DwarfSectionInput,
@@ -20,7 +23,8 @@ const decodedSectionNames = new Set<string>([
   DWARF_SECTION.information,
   DWARF_SECTION.lines,
   DWARF_SECTION.types,
-  DWARF_SECTION.abbreviations
+  DWARF_SECTION.abbreviations, ".debug_macro", ".debug_macinfo", ".debug_pubnames",
+  ".debug_pubtypes", ".debug_gnu_pubnames", ".debug_gnu_pubtypes", ".debug_aranges", ".debug_names", ".debug_frame"
 ]);
 const referencedSectionNames = new Set<string>([
   DWARF_SECTION.strings,
@@ -81,7 +85,7 @@ const buildSectionMap = (
 
 export const analyzeDwarfSources = async (
   inputSources: DwarfSectionSource[],
-  byteOrder: "big" | "little"
+  byteOrder: "big" | "little", addressSize = 0, machine = 0
 ): Promise<DwarfAnalysis> => {
   const issues: string[] = [];
   const littleEndian = byteOrder === "little";
@@ -100,7 +104,7 @@ export const analyzeDwarfSources = async (
   const relocationSections = inputSources.filter(source => source.summary.requiresRelocations);
   if (relocationSections.length) {
     issues.push(
-      `ELF relocations are required but are not applied in this iteration: ` +
+      `ELF relocations are required and remain unresolved in these DWARF sections: ` +
       `${relocationSections.map(source => source.summary.name).join(", ")}.`
     );
   }
@@ -120,7 +124,13 @@ export const analyzeDwarfSources = async (
     : [];
   const decodedUnits = await decodeDwarfDieLists(units, sectionMap, byteOrder, issues);
   validateDwarfLines(linePrograms, units, issues);
-  return { sections, units: await decodeDwarfDieExpressions(decodedUnits, byteOrder, issues), linePrograms, issues };
+  const macros = await readDwarfMacros(sectionMap, units, byteOrder, issues, strings);
+  const frameSource = sectionMap.get(".debug_frame");
+  const frames = frameSource ? await readDwarfFrames(frameSource, byteOrder,
+    addressSize, machine, issues) : null;
+  return { sections, units: await decodeDwarfDieExpressions(decodedUnits, byteOrder, issues),
+    linePrograms, ...(macros.length ? { macros } : {}), ...(frames ? { frames } : {}),
+    ...await readDwarfLookups(sectionMap, units, byteOrder, strings, issues), issues };
 };
 
 export const analyzeDwarf = async (

@@ -23,6 +23,23 @@ void test("ET_REL target can be file-backed or NOBITS, but must lie inside sh_in
   assert.match(issues.join(" "), /outside the file/);
 });
 
+void test("compressed target offsets are bounded against decoded bytes and have no direct file offset", () => {
+  const fixture = dynamicRelocationFixture();
+  fixture.elf.header.type = 1;
+  fixture.elf.sections[1]!.flags = 0x800n; // ELF gABI 3.7: SHF_COMPRESSED.
+  const issues: string[] = [];
+
+  assert.deepEqual(locateElfRelocationTarget(fixture.elf, relocationTable(), 40n, issues,
+    undefined, new Map([[1, 64n]])), { sectionIndex: 1, sectionOffset: 40n, fileOffset: null });
+  assert.deepEqual(issues, []);
+  assert.equal(locateElfRelocationTarget(fixture.elf, relocationTable(), 64n, issues,
+    undefined, new Map([[1, 64n]])), null);
+  assert.equal(locateElfRelocationTarget(fixture.elf, relocationTable(), -1n, issues,
+    undefined, new Map([[1, 64n]])), null);
+  assert.equal(locateElfRelocationTarget(fixture.elf, relocationTable(), 0n, issues), null);
+  assert.match(issues.join(" "), /Compressed|outside/);
+});
+
 void test("ET_DYN targets use PT_LOAD virtual addresses including BSS", () => {
   const fixture = dynamicRelocationFixture();
   fixture.elf.sections[1]!.addr = 0x1200n;

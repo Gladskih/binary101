@@ -3,7 +3,7 @@ import { dwarfUnitRoot } from "../../../../analyzers/dwarf/attribute-values.js";
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { analyzeElfDwarf } from "../../../../analyzers/elf/dwarf.js";
+import { analyzeElfDwarf, prepareElfDwarfSources, elfDwarfLogicalSizes } from "../../../../analyzers/elf/dwarf.js";
 import type { ElfSectionHeader } from "../../../../analyzers/elf/types.js";
 import { createDwarf4SectionsFixture } from "../../../fixtures/dwarf-sections-fixture.js";
 import {
@@ -125,4 +125,23 @@ void test("analyzeElfDwarf does not decode relocation-backed ELF object DWARF", 
     "relocations-unsupported"
   );
   assert.ok(dwarf?.issues.some(issue => issue.includes("relocations are required")));
+});
+
+void test("ELF DWARF preparation reuses inflated sources and exposes only validated logical sizes", async () => {
+  const fixture = createCompressedDwarfSectionsFixture("elf64-little-zlib");
+  const sections = fixture.candidates.map((candidate, index) => toElfSection(candidate.section,
+    index, TEST_ELF.sectionFlag.compressed));
+  const prepared = (await prepareElfDwarfSources(fixture.file, sections, "elf64", true, []))!;
+
+  const sizes = elfDwarfLogicalSizes(sections, prepared);
+  const dwarf = await analyzeElfDwarf(new File([], "prepared.elf"), sections, "elf64", true,
+    [], undefined, undefined, prepared);
+
+  assert.equal(sizes.get(0), BigInt(createDwarf4SectionsFixture().sections[0]!.size));
+  assert.equal(dwarfUnitRoot(dwarf?.units[0])?.name, "main.c");
+  assert.deepEqual(dwarf?.issues, []);
+  prepared.sources[0]!.decoded = false;
+  assert.equal(elfDwarfLogicalSizes(sections, prepared).has(0), false);
+  assert.equal(elfDwarfLogicalSizes(sections, null).size, 0);
+  assert.equal(await prepareElfDwarfSources(fixture.file, [], "elf64", true, []), null);
 });

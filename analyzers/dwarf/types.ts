@@ -1,6 +1,10 @@
 "use strict";
 
 import type { FileRangeReader } from "../file-range-reader.js";
+import type { DwarfMacroUnit } from "./macro-types.js";
+import type { DwarfPublicNames, DwarfAddressLookup } from "./lookup-types.js";
+import type { DwarfNameIndex } from "./name-index-types.js";
+import type { DwarfFrames } from "./frame-types.js";
 
 export type DwarfSectionInput = {
   name: string;
@@ -96,6 +100,11 @@ export type DwarfAnalysis = {
   sections: DwarfSectionSummary[];
   units: DwarfUnit[];
   linePrograms: DwarfLineProgram[];
+  macros?: DwarfMacroUnit[];
+  publicNames?: DwarfPublicNames[];
+  addressLookup?: DwarfAddressLookup[];
+  nameIndexes?: DwarfNameIndex[];
+  frames?: DwarfFrames;
   issues: string[];
 };
 

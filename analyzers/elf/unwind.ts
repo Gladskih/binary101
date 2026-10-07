@@ -6,6 +6,7 @@ import type { ElfUnwindSection } from "./unwind-types.js";
 import { elfFileRange } from "./relocation-reader.js";
 import { readElfUnwindCie } from "./unwind-cie.js";
 import { readElfUnwindFde } from "./unwind-fde.js";
+import { elfDwarfFrames } from "./dwarf-frames.js";
 
 interface FrameRecord {
   offset: number;
@@ -116,7 +117,9 @@ export const parseElfUnwind = async (file: File, elf: ElfParseResult): Promise<E
   const reader = createFileRangeReader(file, 0, file.size);
   const result: ElfUnwindSection[] = [];
   for (const section of elf.sections.filter(item => item.name === ".eh_frame" || item.name === ".debug_frame")) {
-    result.push(await readUnwindSection(reader, elf, section));
+    result.push(section.name === ".debug_frame" && elf.dwarf
+      ? elfDwarfFrames(elf.dwarf.frames ?? { cies: [], fdes: [] }, section.index)
+      : await readUnwindSection(reader, elf, section));
   }
   return result;
 };
