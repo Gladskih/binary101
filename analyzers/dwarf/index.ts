@@ -9,6 +9,8 @@ import { validateDwarfLines } from "./line-validation.js";
 import { createDwarfDieIndex, validateDwarfReferences } from "./references.js";
 import { decodeDwarfDieExpressions } from "./die-expressions.js";
 import { decodeDwarfDieLists } from "./die-lists.js";
+import { readDwarfMacros } from "./macros.js";
+import { readDwarfLookups } from "./lookups.js";
 import type {
   DwarfAnalysis,
   DwarfSectionInput,
@@ -20,7 +22,8 @@ const decodedSectionNames = new Set<string>([
   DWARF_SECTION.information,
   DWARF_SECTION.lines,
   DWARF_SECTION.types,
-  DWARF_SECTION.abbreviations
+  DWARF_SECTION.abbreviations, ".debug_macro", ".debug_macinfo", ".debug_pubnames",
+  ".debug_pubtypes", ".debug_gnu_pubnames", ".debug_gnu_pubtypes", ".debug_aranges", ".debug_names"
 ]);
 const referencedSectionNames = new Set<string>([
   DWARF_SECTION.strings,
@@ -120,7 +123,10 @@ export const analyzeDwarfSources = async (
     : [];
   const decodedUnits = await decodeDwarfDieLists(units, sectionMap, byteOrder, issues);
   validateDwarfLines(linePrograms, units, issues);
-  return { sections, units: await decodeDwarfDieExpressions(decodedUnits, byteOrder, issues), linePrograms, issues };
+  const macros = await readDwarfMacros(sectionMap, units, byteOrder, issues, strings);
+  return { sections, units: await decodeDwarfDieExpressions(decodedUnits, byteOrder, issues),
+    linePrograms, ...(macros.length ? { macros } : {}),
+    ...await readDwarfLookups(sectionMap, units, byteOrder, strings, issues), issues };
 };
 
 export const analyzeDwarf = async (

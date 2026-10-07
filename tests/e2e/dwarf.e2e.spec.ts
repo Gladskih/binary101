@@ -3,11 +3,11 @@
 import { expect, test } from "@playwright/test";
 import {
   createPeCompressedDwarfFile,
-  createPeDwarfFile, createPeSemanticDwarfFile
+  createPeDwarfFile, createPeSemanticDwarfFile, createPeMacroDwarfFile
 } from "../fixtures/pe-dwarf-file.js";
 import {
   createElfCompressedDwarfFile,
-  createElfDwarfFile, createElfSemanticDwarfFile
+  createElfDwarfFile, createElfSemanticDwarfFile, createElfMacroDwarfFile
 } from "../fixtures/elf-dwarf-file.js";
 
 const toUpload = (file: ReturnType<typeof createPeDwarfFile>) => ({
@@ -112,4 +112,25 @@ void test("ELF DWARF page navigation reaches every entity", async ({ page }) => 
 
   await table.getByRole("button", { name: "Last", exact: true }).click();
   await expect(table.getByRole("cell", { name: "calculate::input200", exact: true })).toBeVisible();
+});
+
+void test("PE macros show definitions and their original source lines", async ({ page }) => {
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", toUpload(createPeMacroDwarfFile()));
+  await page.locator('[data-pe-lazy-section="dwarf"] > details > summary').click();
+  await page.getByText("Macro sequence 1: 5 directives", { exact: true }).click();
+
+  await expect(page.getByRole("cell", { name: "LIMIT 42", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "src/main.c:7", exact: true })).toBeVisible();
+});
+
+void test("ELF macros show compiler definitions without exposing address-only data", async ({ page }) => {
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", toUpload(createElfMacroDwarfFile()));
+  await page.locator(".peSectionSummary").filter({ hasText: "Build / debug" }).click();
+  await page.getByText("DWARF debug information (1 unit)", { exact: true }).click();
+  await page.getByText("Macro sequence 1: 5 directives", { exact: true }).click();
+
+  await expect(page.getByRole("cell", { name: "LIMIT 42", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "SHARED(x) ((x) + 1)", exact: true })).toBeVisible();
 });

@@ -23,7 +23,9 @@ const supportedNames = new Set<string>([
   DWARF_SECTION.strings,
   DWARF_SECTION.lineStrings,
   DWARF_SECTION.stringOffsets,
-  ".debug_addr", ".debug_ranges", ".debug_rnglists", ".debug_loc", ".debug_loclists"
+  ".debug_addr", ".debug_ranges", ".debug_rnglists", ".debug_loc", ".debug_loclists",
+  ".debug_macro", ".debug_macinfo", ".debug_pubnames", ".debug_pubtypes",
+  ".debug_gnu_pubnames", ".debug_gnu_pubtypes", ".debug_aranges", ".debug_names"
 ]);
 
 const memoryReader = (bytes: Uint8Array): FileRangeReader => {

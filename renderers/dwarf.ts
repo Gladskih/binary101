@@ -6,6 +6,8 @@ import { dwarfLanguageName, dwarfTagName, dwarfUnitTypeName } from "../analyzers
 import { dwarfUnitRoot } from "../analyzers/dwarf/attribute-values.js";
 import { renderDwarfEntities } from "./dwarf/entities.js";
 import { renderDwarfSourceLines } from "./dwarf/source-lines.js";
+import { renderDwarfMacros } from "./dwarf/macros.js";
+import { renderDwarfLookups } from "./dwarf/lookups.js";
 
 const statusLabel = (status: DwarfSectionStatus): string => {
   if (status === "unavailable") return "unavailable; not decoded";
@@ -84,4 +86,5 @@ export const renderDwarfAnalysis = (dwarf: DwarfAnalysis): string =>
   `<p class="smallNote">Compilation units, program entities, types, variables, and source lines ` +
   `from DWARF. Sections marked inventory only are not decoded; unresolved data is reported below.</p>` +
   renderSections(dwarf) + renderUnits(dwarf) + renderDwarfEntities(dwarf) +
-  renderDwarfSourceLines(dwarf) + renderTags(dwarf) + renderIssues(dwarf);
+  renderDwarfSourceLines(dwarf) + renderDwarfMacros(dwarf) + renderDwarfLookups(dwarf) +
+  renderTags(dwarf) + renderIssues(dwarf);
