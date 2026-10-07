@@ -4,6 +4,7 @@ import { analyzeDwarf } from "../../../../analyzers/dwarf/index.js";
 import { createDwarfMacroTableModel, renderDwarfMacros } from "../../../../renderers/dwarf/macros.js";
 import { getDwarfPagedTableModel } from "../../../../renderers/dwarf/paged-tables.js";
 import { createDwarfMacroFixture } from "../../../fixtures/dwarf-macro-fixture.js";
+import { createDwarfPackageFixture } from "../../../fixtures/dwarf-split-fixture.js";
 
 void test("macro tables show definitions and includes without raw import addresses", async () => {
   const fixture = createDwarfMacroFixture();
@@ -44,4 +45,14 @@ void test("macro tables escape text and distinguish imports, vendor data, and co
   assert.match(html, /external debug file required/);
   assert.match(html, /1-byte vendor data/);
   assert.match(html, /unresolved macro text/);
+});
+
+void test("DWP macro definitions use the owning contribution's original source file", async () => {
+  const fixture = createDwarfPackageFixture();
+  const dwarf = await analyzeDwarf(fixture.file, fixture.sections, true);
+  const first = createDwarfMacroTableModel(dwarf, dwarf.macros![0]!);
+  const second = createDwarfMacroTableModel(dwarf, dwarf.macros![1]!);
+  assert.match(first.rowAt(1)!.cells[2]!.html, /src\/main.c/);
+  assert.match(second.rowAt(1)!.cells[2]!.html, /src\/other.c/);
+  assert.equal(second.rowAt(1)!.cells[1]!.html, "COUNT 42");
 });

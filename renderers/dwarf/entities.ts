@@ -1,7 +1,8 @@
 import { renderAutoPagedSortableTable, type PagedSortableTableModel } from "../paged-sortable-table.js";
 import { escapeHtml } from "../../html-utils.js";
 import { DWARF_ATTRIBUTE, DWARF_TAG } from "../../analyzers/dwarf/constants.js";
-import { dwarfNumericValue, dwarfStringValue, dwarfUnitRoot } from "../../analyzers/dwarf/attribute-values.js";
+import { dwarfNumericValue, dwarfStringValue } from "../../analyzers/dwarf/attribute-values.js";
+import { dwarfLineProgramForUnit } from "../../analyzers/dwarf/unit-sections.js";
 import { dwarfTagLabel } from "../../analyzers/dwarf/tag-names.js";
 import { dwarfAttributeName } from "../../analyzers/dwarf/attribute-names.js";
 import {
@@ -49,11 +50,14 @@ const attributeText = (
 
 const listAttributeText = (attribute: DwarfAttribute): string | null => {
   if (attribute.value.kind === "ranges") {
-    return `${attribute.value.entries.length} code ranges`;
+    const unavailable = attribute.value.entries.filter(range => "kind" in range).length;
+    return `${attribute.value.entries.length} code ranges` +
+      (unavailable ? `; ${unavailable} address ranges unavailable` : "");
   }
   if (attribute.value.kind === "locations") {
     return attribute.value.entries.map(entry =>
-      `${entry.range == null ? "default location" : `${entry.range.end - entry.range.start} code bytes`}: ` +
+      `${entry.range == null ? "default location" : entry.range === "unresolved"
+        ? "address range unavailable" : `${entry.range.end - entry.range.start} code bytes`}: ` +
       dwarfExpressionText(entry.operations)
     ).join("; ");
   }
@@ -64,7 +68,7 @@ const listAttributeText = (attribute: DwarfAttribute): string | null => {
 // Infrastructure offsets and raw machine addresses are retained by the analyzer.
 // The entity table focuses on source-level facts instead of requiring address arithmetic.
 const infrastructureAttributes = new Set<number>([
-  DWARF_ATTRIBUTE.lowPc, DWARF_ATTRIBUTE.highPc, DWARF_ATTRIBUTE.ranges,
+  DWARF_ATTRIBUTE.lowPc, DWARF_ATTRIBUTE.highPc,
   DWARF_ATTRIBUTE.statementList, DWARF_ATTRIBUTE.stringOffsetsBase,
   DWARF_ATTRIBUTE.addressBase, DWARF_ATTRIBUTE.rangeListsBase, DWARF_ATTRIBUTE.locationListsBase,
   DWARF_ATTRIBUTE.declarationFile, DWARF_ATTRIBUTE.declarationLine, DWARF_ATTRIBUTE.declarationColumn,
@@ -88,9 +92,9 @@ const renderAttributes = (index: DwarfDieIndex, record: DwarfDieRecord): string 
 };
 
 const declarationFilePath = (dwarf: DwarfAnalysis, owner: DwarfDieRecord,
-  fileIndex: bigint | null, statementListOffset: bigint | undefined): string => {
+  fileIndex: bigint | null): string => {
   if (fileIndex == null) return "file not recorded";
-  const program = dwarf.linePrograms.find(item => BigInt(item.offset) === statementListOffset);
+  const program = dwarfLineProgramForUnit(dwarf, owner.unit);
   if (!program) return `unresolved file ${fileIndex}`;
   const file = dwarfLineFile(program, fileIndex);
   return file ? dwarfSourcePath(program, file, owner.unit) : `unresolved file ${fileIndex}`;
@@ -102,14 +106,13 @@ const declarationSource = (
   const source = inheritedDwarfAttribute(index, record, DWARF_ATTRIBUTE.declarationFile);
   const owner = source?.record ?? record;
   const fileIndex = dwarfNumericValue(source?.attribute.value);
-  const root = dwarfUnitRoot(owner.unit);
   const line = dwarfNumericValue(
     inheritedDwarfAttribute(index, record, DWARF_ATTRIBUTE.declarationLine)?.attribute.value
   );
   const column = dwarfNumericValue(
     inheritedDwarfAttribute(index, record, DWARF_ATTRIBUTE.declarationColumn)?.attribute.value
   );
-  const path = declarationFilePath(dwarf, owner, fileIndex, root?.statementListOffset);
+  const path = declarationFilePath(dwarf, owner, fileIndex);
   return path + (line == null ? "" : `:${line}`) + (column == null ? "" : `:${column}`);
 };
 

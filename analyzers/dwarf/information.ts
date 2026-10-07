@@ -42,7 +42,10 @@ class InformationReader {
       ...(header.dwoId == null ? {} : { dwoId: header.dwoId }),
       dies: await resolveDwarfDieStrings(dies, {
         version: header.version, format: header.format,
-        addressSize: header.addressSize, stringOffsetsBase: null
+        addressSize: header.addressSize,
+        stringOffsetsBase: source.section.name.endsWith(".dwo") &&
+          dies.some(die => die.attributes.some(attribute => attribute.value.kind === "string-index"))
+          ? await this.#strings.splitStringOffsetsBase(header.version) : null
       }, this.#strings)
     };
   }

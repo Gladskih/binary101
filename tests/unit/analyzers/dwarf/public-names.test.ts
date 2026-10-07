@@ -61,3 +61,21 @@ void test("public names warn for missing CU, mismatched CU lengths, and missing 
   assert.match(issues.join(" "), /length mismatch/);
   assert.match(issues.join(" "), /Truncated/);
 });
+
+void test("skeleton public names require their split unit instead of reporting every external DIE as malformed", async () => {
+  const source = dwarfMacroSources([{ name: ".debug_pubnames", bytes: publicTable(concatenateBytes(
+    encodeUint32(12), encodeCString("compute"), encodeUint32(0)
+  )) }]).get(".debug_pubnames")!;
+  const skeleton = { ...createListUnit(5), unitType: 4, dwoId: 2n };
+  const missing: string[] = [];
+  const available: string[] = [];
+  const noId: string[] = [];
+  await readDwarfPublicNames(source, [skeleton], "little", missing);
+  await readDwarfPublicNames(source, [skeleton,
+    { ...createListUnit(5), sectionName: ".debug_info.dwo", dwoId: 2n }], "little", available);
+  await readDwarfPublicNames(source, [{ ...createListUnit(5), unitType: 4 }], "little", noId);
+  assert.equal(missing.length, 1);
+  assert.match(missing[0]!, /external split compilation unit/);
+  assert.deepEqual(available, []);
+  assert.match(noId.join(" "), /external split/);
+});

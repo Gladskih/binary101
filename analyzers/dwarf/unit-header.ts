@@ -11,6 +11,7 @@ import {
 import { readDwarfInitialLength } from "./initial-length.js";
 import { DwarfCursor } from "./cursor.js";
 import type { DwarfSectionInput } from "./types.js";
+import { dwarfSplitBaseName } from "./package-sections.js";
 
 export type DwarfUnitHeader = {
   offset: number;
@@ -67,7 +68,7 @@ const readLegacyHeader = async (
   const abbreviationOffset = await cursor.unsigned(format / DWARF_ENCODING.bitsPerByte);
   const addressSize = await cursor.uint8();
   if (addressSize == null || abbreviationOffset == null) return null;
-  const unitType = section.name === DWARF_SECTION.types ? DWARF_UNIT_TYPE.type : null;
+  const unitType = dwarfSplitBaseName(section.name) === DWARF_SECTION.types ? DWARF_UNIT_TYPE.type : null;
   return { unitType, addressSize, abbreviationOffset,
     ...await readTypedUnitFields(cursor, unitType ?? DWARF_UNIT_TYPE.compile, format) };
 };

@@ -67,11 +67,11 @@ const encodeProgram = (): number[] => concatenateBytes(
   encodeLineExtended(TEST_DWARF.line.extendedOpcode.endSequence)
 );
 
-export const createDwarf4LineSectionWithProgram = (program: number[]): number[] => {
+export const createDwarf4LineSectionWithProgram = (program: number[], filename = "main.c"): number[] => {
   const tables = concatenateBytes(
     encodeCString("src"),
     encodeCString(""),
-    encodeCString("main.c"),
+    encodeCString(filename),
     encodeUleb(TEST_DWARF.line.directoryIndex.legacyFirst),
     encodeUleb(TEST_DWARF.line.fileMetadata.unavailable),
     encodeUleb(TEST_DWARF.line.fileMetadata.unavailable),

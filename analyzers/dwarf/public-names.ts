@@ -2,6 +2,7 @@ import { dwarfSectionContributions } from "./section-contributions.js";
 import type { DwarfCursor } from "./cursor.js";
 import type { DwarfPublicName, DwarfPublicNames } from "./lookup-types.js";
 import type { DwarfSectionSource, DwarfUnit } from "./types.js";
+import { dwarfSplitFilename, dwarfSplitIdentity } from "./external-files.js";
 
 // DWARF 4 6.1.1/6.1.2; GNU descriptor byte from LLVM DWARFDebugPubTable.cpp.
 // https://dwarfstd.org/doc/DWARF4.pdf
@@ -25,8 +26,8 @@ const readEntries = async (cursor: DwarfCursor, format: 32 | 64,
 };
 
 const validateUnit = (cursor: DwarfCursor, table: DwarfPublicNames, units: DwarfUnit[]): void => {
-  const unit = units.find(unit => unit.sectionName === ".debug_info" && BigInt(unit.offset) === table.unitOffset);
-  if (!unit) { cursor.notice("Public names reference a missing compilation unit"); return; }
+  const unit = lookupUnit(cursor, table, units);
+  if (!unit) return;
   // unit_length includes the initial length field; DWARF 4 Figure 34.
   const actualLength = unit.length + BigInt(unit.format === 32 ? 4 : 12);
   if (actualLength !== table.unitLength) cursor.notice("Public names compilation-unit length mismatch");
@@ -34,6 +35,17 @@ const validateUnit = (cursor: DwarfCursor, table: DwarfPublicNames, units: Dwarf
   for (const entry of table.entries) {
     if (!offsets.has(entry.dieOffset)) cursor.notice(`Public name ${entry.name} references a missing DIE`);
   }
+};
+
+const lookupUnit = (cursor: DwarfCursor, table: DwarfPublicNames, units: DwarfUnit[]): DwarfUnit | null => {
+  const unit = units.find(unit => unit.sectionName === ".debug_info" && BigInt(unit.offset) === table.unitOffset);
+  if (!unit) { cursor.notice("Public names reference a missing compilation unit"); return null; }
+  if (unit.unitType !== 4 && !dwarfSplitFilename(unit)) return unit;
+  const id = dwarfSplitIdentity(unit);
+  const split = id == null ? null : units.find(candidate => candidate.sectionName === ".debug_info.dwo" &&
+    dwarfSplitIdentity(candidate) === id);
+  if (!split) cursor.notice("Public names refer to the external split compilation unit");
+  return split ?? null;
 };
 
 export const readDwarfPublicNames = async (source: DwarfSectionSource, units: DwarfUnit[],

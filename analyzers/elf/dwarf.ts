@@ -18,7 +18,7 @@ import type { ElfRelocationImage, ElfRelocationInfo } from "./relocation-types.j
 const SHF_COMPRESSED = 0x800n;
 
 const isDwarfSectionName = (name: string): boolean =>
-  name.startsWith(".debug_") || name.startsWith(".zdebug_") ||
+  name === ".gnu_debugaltlink" || name.startsWith(".debug_") || name.startsWith(".zdebug_") ||
   name.startsWith(".rel.debug_") || name.startsWith(".rela.debug_");
 
 const relocationTargetName = (name: string): string | null => {

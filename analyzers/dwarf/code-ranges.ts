@@ -15,7 +15,7 @@ const rangeEnd = (start: bigint, high: DwarfAttribute): bigint | null => {
 
 export const dwarfCodeRanges = (die: DwarfDie): DwarfAddressRange[] => {
   const ranges = dwarfAttributeValue(die, 0x55); // DW_AT_ranges, Table 7.3.
-  if (ranges?.kind === "ranges") return ranges.entries;
+  if (ranges?.kind === "ranges") return ranges.entries.filter(range => "start" in range);
   const start = dwarfNumericValue(dwarfAttributeValue(die, 0x11)); // DW_AT_low_pc.
   const high = die.attributes.find(attribute => attribute.name === 0x12); // DW_AT_high_pc.
   if (start == null || !high) return [];
@@ -24,6 +24,8 @@ export const dwarfCodeRanges = (die: DwarfDie): DwarfAddressRange[] => {
 };
 
 export const dwarfCodeSize = (die: DwarfDie): bigint | null => {
+  const listed = dwarfAttributeValue(die, 0x55);
+  if (listed?.kind === "ranges" && listed.entries.some(range => "kind" in range)) return null;
   const ranges = [...dwarfCodeRanges(die)].sort((left, right) =>
     left.start < right.start ? -1 : left.start > right.start ? 1 : 0);
   if (!ranges.length) return null;

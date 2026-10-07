@@ -64,21 +64,24 @@ const validIndexedHeader = (
   return false;
 };
 
-const validStringOffset = (table: Contribution, format: 32 | 64, offset: bigint): boolean =>
-  table.format === format && offset + BigInt(format / 8) <= BigInt(table.end);
+const validStringOffset = (table: Contribution, offset: bigint): boolean =>
+  offset + BigInt(table.format / 8) <= BigInt(table.end);
 
 export class DwarfIndexedReader {
   readonly #sections: Map<string, DwarfSectionSource>;
   readonly #byteOrder: "little" | "big";
   readonly #issues: string[];
+  readonly #skeletons: DwarfUnit[];
   readonly #contributions = new Map<string, Promise<Contribution[]>>();
   readonly #addresses = new Map<string, Promise<bigint | null>>();
   readonly #stringOffsets = new Map<string, Promise<bigint | null>>();
 
-  constructor(sections: Map<string, DwarfSectionSource>, byteOrder: "little" | "big", issues: string[]) {
+  constructor(sections: Map<string, DwarfSectionSource>, byteOrder: "little" | "big",
+    issues: string[], skeletons: DwarfUnit[] = []) {
     this.#sections = sections;
     this.#byteOrder = byteOrder;
     this.#issues = issues;
+    this.#skeletons = skeletons;
   }
 
   cursor(name: string, offset: bigint, end?: number): DwarfCursor | null {
@@ -92,10 +95,32 @@ export class DwarfIndexedReader {
   }
 
   address(unit: DwarfUnit, index: bigint): Promise<bigint | null> {
-    const base = dwarfNumericValue(dwarfAttributeValue(unit.dies[0], DWARF_ATTRIBUTE.addressBase));
+    const owner = this.skeleton(unit) ?? unit;
+    const base = dwarfNumericValue(dwarfAttributeValue(owner.dies[0], DWARF_ATTRIBUTE.addressBase)) ??
+      dwarfNumericValue(dwarfAttributeValue(owner.dies[0], 0x2133)); // DW_AT_GNU_addr_base.
     const key = `${unit.version}:${unit.addressSize}:${base}:${index}`;
     if (!this.#addresses.has(key)) this.#addresses.set(key, this.#readAddress(unit, index, base));
     return this.#addresses.get(key)!;
+  }
+
+  skeleton(unit: DwarfUnit): DwarfUnit | null {
+    if (!unit.sectionName.endsWith(".dwo")) return null;
+    const id = unit.dwoId ?? dwarfNumericValue(dwarfAttributeValue(unit.dies[0], 0x2131));
+    if (id == null) return null;
+    return this.#skeletons.find(candidate => !candidate.sectionName.endsWith(".dwo") &&
+      (candidate.dwoId ?? dwarfNumericValue(dwarfAttributeValue(candidate.dies[0], 0x2131))) === id) ?? null;
+  }
+
+  baseAddress(unit: DwarfUnit): bigint | null {
+    const owner = this.skeleton(unit) ?? unit;
+    return dwarfNumericValue(dwarfAttributeValue(owner.dies[0], DWARF_ATTRIBUTE.lowPc)) ??
+      (unit.sectionName.endsWith(".dwo") && owner === unit ? null : 0n);
+  }
+
+  async splitStringOffsetsBase(version: number): Promise<bigint | null> {
+    // DWO contributions have implicit bases: LLVM DWARFUnit.cpp, determineStringOffsetsTableContribution.
+    if (version < 5) return 0n;
+    return BigInt((await this.#tables(".debug_str_offsets"))[0]?.entriesOffset ?? -1);
   }
 
   stringOffset(context: DwarfUnitContext, index: bigint): Promise<bigint | null> {
@@ -110,13 +135,19 @@ export class DwarfIndexedReader {
     const checkedBase = base!;
     const table = context.version >= 5 ? await this.#byBase(".debug_str_offsets", checkedBase) : null;
     if (context.version >= 5 && !table) return null;
-    const offset = checkedBase + index * BigInt(context.format / 8);
-    if (table && !validStringOffset(table, context.format, offset)) {
-      this.#issues.push(".debug_str_offsets: index outside its contribution or offset-size mismatch.");
+    return this.#stringEntry(table, checkedBase, index, context.format);
+  }
+
+  async #stringEntry(table: Contribution | null, base: bigint,
+    index: bigint, format: 32 | 64): Promise<bigint | null> {
+    const width = (table?.format ?? format) / 8;
+    const offset = base + index * BigInt(width);
+    if (table && !validStringOffset(table, offset)) {
+      this.#issues.push(".debug_str_offsets: index outside its contribution.");
       return null;
     }
     const cursor = this.cursor(".debug_str_offsets", offset, table?.end);
-    return cursor ? cursor.unsigned(context.format / 8) : null;
+    return cursor ? cursor.unsigned(width) : null;
   }
 
   #validStringIndex(base: bigint | null, index: bigint): boolean {
@@ -186,12 +217,13 @@ export class DwarfIndexedReader {
     return offset;
   }
 
-  #listContribution(unit: DwarfUnit, name: string): Promise<Contribution | null> {
+  async #listContribution(unit: DwarfUnit, name: string): Promise<Contribution | null> {
     const base = dwarfNumericValue(dwarfAttributeValue(unit.dies[0],
       name === ".debug_rnglists" ? DWARF_ATTRIBUTE.rangeListsBase : DWARF_ATTRIBUTE.locationListsBase));
     if (base == null) {
+      if (unit.sectionName.endsWith(".dwo")) return (await this.#tables(name))[0] ?? null;
       this.#issues.push(`${name}: indexed list requires a base attribute in the unit root.`);
-      return Promise.resolve(null);
+      return null;
     }
     return this.#byBase(name, base);
   }

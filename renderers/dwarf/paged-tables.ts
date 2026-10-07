@@ -1,7 +1,7 @@
 import type { DwarfAnalysis } from "../../analyzers/dwarf/types.js";
 import type { PagedSortableTableModel } from "../paged-sortable-table.js";
 import { createDwarfEntityTableModel } from "./entities.js";
-import { createDwarfSourceLineTableModel } from "./source-lines.js";
+import { createDwarfSourceLineTableModel, dwarfSourceLineTableId } from "./source-lines.js";
 import { createDwarfMacroTableModel } from "./macros.js";
 import { getDwarfLookupTableModel } from "./lookups.js";
 import { getDwarfFrameTableModel } from "./frames.js";
@@ -17,6 +17,6 @@ export const getDwarfPagedTableModel = (
   if (lookup) return lookup;
   const frame = getDwarfFrameTableModel(dwarf, tableId);
   if (frame) return frame;
-  const program = dwarf.linePrograms.find(program => tableId === "dwarf-lines-" + program.offset);
+  const program = dwarf.linePrograms.find(program => tableId === dwarfSourceLineTableId(program));
   return program ? createDwarfSourceLineTableModel(dwarf, program) : null;
 };

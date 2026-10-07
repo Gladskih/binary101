@@ -1,6 +1,7 @@
 import { createDwarfFrameFixture } from "./dwarf-frame-fixture.js";
 import { createDwarfSemanticFixture } from "./dwarf-semantic-fixture.js";
 import { createDwarfSemanticMacroFixture } from "./dwarf-macro-fixture.js";
+import { createDwarfPackageFixture } from "./dwarf-split-fixture.js";
 "use strict";
 
 import { createDwarf4SectionsFixture } from "./dwarf-sections-fixture.js";
@@ -109,21 +110,11 @@ const buildElfDwarfFile = (
   view.setUint32(ELF64.header.versionOffset, ELF64.identification.currentVersion, true);
   view.setBigUint64(ELF64.header.sectionHeadersOffset, BigInt(ELF64.headerSize), true);
   view.setUint16(ELF64.header.headerSizeOffset, ELF64.headerSize, true);
-  view.setUint16(
-    ELF64.header.sectionHeaderSizeOffset,
-    ELF64.sectionHeaderSize,
-    true
-  );
+  view.setUint16(ELF64.header.sectionHeaderSizeOffset, ELF64.sectionHeaderSize, true);
   view.setUint16(ELF64.header.sectionCountOffset, sectionCount, true);
   view.setUint16(ELF64.header.sectionNamesIndexOffset, ELF64.section.namesIndex, true);
-  writeSection(
-    view,
-    ELF64.section.namesIndex,
-    names.offsets[0]!,
-    ELF64.section.stringTableType,
-    namesOffset,
-    names.bytes.length
-  );
+  writeSection(view, ELF64.section.namesIndex, names.offsets[0]!,
+    ELF64.section.stringTableType, namesOffset, names.bytes.length);
   bytes.set(names.bytes, namesOffset);
   let cursor = dataOffset;
   dwarfSections.forEach((section, index) => {
@@ -166,3 +157,6 @@ export const createElfCompressedDwarfFile = (): MockFile => {
 };
 
 export const createElfFrameDwarfFile = (): MockFile => buildElfDwarfFile(createDwarfFrameFixture(), "frame-dwarf", 0n);
+
+export const createElfPackageDwarfFile = (): MockFile =>
+  buildElfDwarfFile(createDwarfPackageFixture(), "split-package.elf", 0n);

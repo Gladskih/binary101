@@ -7,6 +7,7 @@ import {
 } from "../../../fixtures/dwarf-fixture-encoding.js";
 import { createDwarfListReader, createListUnit, encodeListContribution, listAttribute } from "../../../fixtures/dwarf-lists-fixture.js";
 import type { DwarfUnit } from "../../../../analyzers/dwarf/types.js";
+import { dwarfMacroSources } from "../../../fixtures/dwarf-macro-fixture.js";
 
 const unit: DwarfUnit = {
   sectionName: ".debug_info", offset: 0, length: 0n, format: 32, version: 5, unitType: 1,
@@ -93,4 +94,47 @@ void test("string offsets validate contribution headers and support headerless l
   assert.match(issues.join(" "), /Invalid string offsets header/);
   assert.equal(await raw.stringOffset({ ...context, version: 4, stringOffsetsBase: 0n }, 0n), 7n);
   assert.equal(await raw.stringOffset({ ...context, version: 4, stringOffsetsBase: 0n }, 1n), null);
+});
+
+void test("split address indexes inherit only the matching skeleton's address base", async () => {
+  const sections = dwarfMacroSources([{ name: ".debug_addr", bytes: addressContribution(0x1000n) }]);
+  const skeleton = { ...unit, dwoId: 2n, unitType: 4 };
+  const split = { ...createListUnit(5), sectionName: ".debug_info.dwo", dwoId: 2n };
+  const issues: string[] = [];
+  const reader = new DwarfIndexedReader(sections, "little", issues, [skeleton]);
+  assert.equal(reader.skeleton(split), skeleton);
+  assert.equal(await reader.address(split, 0n), 0x1000n);
+  assert.equal(reader.skeleton({ ...split, dwoId: 3n }), null);
+  assert.equal(reader.skeleton(createListUnit(5)), null);
+  assert.equal(reader.skeleton({ ...createListUnit(5), sectionName: ".debug_info.dwo" }), null);
+  assert.deepEqual(issues, []);
+});
+
+void test("GNU split identities and bases work in headerless legacy address tables", async () => {
+  const skeleton = createListUnit(4, [listAttribute(0x2131, 7, 2n), listAttribute(0x2133, 0x17, 0n)]);
+  const split = { ...createListUnit(4, [listAttribute(0x2131, 7, 2n)]), sectionName: ".debug_info.dwo" };
+  const issues: string[] = [];
+  const reader = new DwarfIndexedReader(dwarfMacroSources([{ name: ".debug_addr", bytes: encodeUint64(7) }]),
+    "little", issues, [skeleton]);
+  assert.equal(await reader.address(split, 0n), 7n);
+  assert.deepEqual(issues, []);
+});
+
+void test("split lists use their contribution header as the implicit index base", async () => {
+  const issues: string[] = [];
+  const reader = createDwarfListReader([{ name: ".debug_rnglists", bytes: encodeListContribution([0], [4]) }], issues);
+  const split = { ...createListUnit(5), sectionName: ".debug_info.dwo" };
+  assert.equal((await reader.listCursor(split, listAttribute(0x55, 0x23, 0n), ".debug_rnglists"))?.position, 16);
+  assert.deepEqual(issues, []);
+  const absent = new DwarfIndexedReader(new Map(), "little", issues);
+  assert.equal(await absent.listCursor(split, listAttribute(0x55, 0x23, 0n), ".debug_rnglists"), null);
+  assert.match(issues.join(" "), /no matching contribution/);
+});
+
+void test("split base addresses remain unavailable without a skeleton instead of defaulting to zero", () => {
+  const reader = new DwarfIndexedReader(new Map(), "little", []);
+  assert.equal(reader.baseAddress(createListUnit(5)), 0n);
+  assert.equal(reader.baseAddress({ ...createListUnit(5), sectionName: ".debug_info.dwo" }), null);
+  assert.equal(reader.baseAddress({ ...createListUnit(5, [listAttribute(0x11, 0x01, 7n)]),
+    sectionName: ".debug_info.dwo" }), 7n);
 });

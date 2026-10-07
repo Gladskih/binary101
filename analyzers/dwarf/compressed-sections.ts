@@ -8,6 +8,7 @@ import {
   type DwarfSectionCompression
 } from "./compression-headers.js";
 import { DWARF_SECTION } from "./constants.js";
+import { isDwarfSplitSection } from "./package-sections.js";
 import type { DwarfSectionInput, DwarfSectionSource } from "./types.js";
 
 export type DwarfSectionCandidate = {
@@ -25,7 +26,8 @@ const supportedNames = new Set<string>([
   DWARF_SECTION.stringOffsets,
   ".debug_addr", ".debug_ranges", ".debug_rnglists", ".debug_loc", ".debug_loclists",
   ".debug_macro", ".debug_macinfo", ".debug_pubnames", ".debug_pubtypes",
-  ".debug_gnu_pubnames", ".debug_gnu_pubtypes", ".debug_aranges", ".debug_names", ".debug_frame"
+  ".debug_gnu_pubnames", ".debug_gnu_pubtypes", ".debug_aranges", ".debug_names", ".debug_frame",
+  ".debug_cu_index", ".debug_tu_index", ".debug_sup", ".gnu_debugaltlink"
 ]);
 
 const memoryReader = (bytes: Uint8Array): FileRangeReader => {
@@ -114,7 +116,8 @@ const decompressCandidate = async (
 ): Promise<DwarfSectionSource> => {
   const canonicalName = canonicalDwarfSectionName(candidate.section.name);
   const unavailable = unavailableSource(reader, candidate.section, canonicalName);
-  if (candidate.section.requiresRelocations || !supportedNames.has(canonicalName)) {
+  if (candidate.section.requiresRelocations ||
+      (!supportedNames.has(canonicalName) && !isDwarfSplitSection(canonicalName))) {
     return unavailable;
   }
   const payload = await readDwarfCompressionPayload(

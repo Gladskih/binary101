@@ -67,3 +67,12 @@ void test("range lists reject missing sections, invalid indexes, and unknown ent
   assert.match(issues.join(" "), /outside/);
   assert.match(issues.join(" "), /Unknown range-list entry/);
 });
+
+void test("split range lists retain unavailable ranges when the skeleton address table is absent", async () => {
+  const issues: string[] = [];
+  const reader = createDwarfListReader([{ name: ".debug_rnglists", bytes: encodeListContribution([3, 0, 2, 0]) }], issues);
+  const split = { ...createListUnit(5), sectionName: ".debug_info.dwo" };
+  const ranges = await readDwarfRangeList(reader, split, listAttribute(0x55, 0x17, 12n));
+  assert.deepEqual(ranges, [{ kind: "unresolved" }]);
+  assert.match(issues.join(" "), /indexed address or base is unavailable/);
+});

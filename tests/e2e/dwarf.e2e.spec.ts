@@ -3,11 +3,13 @@
 import { expect, test } from "@playwright/test";
 import {
   createPeCompressedDwarfFile,
-  createPeDwarfFile, createPeSemanticDwarfFile, createPeMacroDwarfFile, createPeFrameDwarfFile
+  createPeDwarfFile, createPeSemanticDwarfFile, createPeMacroDwarfFile, createPeFrameDwarfFile,
+  createPeSplitDwarfFile
 } from "../fixtures/pe-dwarf-file.js";
 import {
   createElfCompressedDwarfFile,
-  createElfDwarfFile, createElfSemanticDwarfFile, createElfMacroDwarfFile, createElfFrameDwarfFile
+  createElfDwarfFile, createElfSemanticDwarfFile, createElfMacroDwarfFile, createElfFrameDwarfFile,
+  createElfPackageDwarfFile
 } from "../fixtures/elf-dwarf-file.js";
 
 const toUpload = (file: ReturnType<typeof createPeDwarfFile>) => ({
@@ -155,4 +157,25 @@ void test("ELF DWARF shares decoded frame records with the unwind analyzer", asy
 
   await expect(page.locator('[data-sort-state-key="dwarf-frames"]').getByText("calculate", { exact: true })).toBeVisible();
   await expect(page.getByRole("cell", { name: "+4 bytes", exact: true })).toBeVisible();
+});
+
+void test("PE split DWARF resolves program names and indexed macro definitions", async ({ page }) => {
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", toUpload(createPeSplitDwarfFile()));
+  await page.locator('[data-pe-lazy-section="dwarf"] > details > summary').click();
+  await expect(page.getByRole("cell", { name: "calculate", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "src/main.c:7", exact: true })).toBeVisible();
+  await page.getByText("Macro sequence 1: 3 directives", { exact: true }).click();
+  await expect(page.getByRole("cell", { name: "COUNT 42", exact: true })).toBeVisible();
+});
+
+void test("ELF DWP keeps names, types and source files of different units separate", async ({ page }) => {
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", toUpload(createElfPackageDwarfFile()));
+  await page.locator(".peSectionSummary").filter({ hasText: "Build / debug" }).click();
+  await page.getByText("DWARF debug information (2 units)", { exact: true }).click();
+  await expect(page.getByRole("cell", { name: "calculate", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "otherFunction", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "src/other.c:7", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "DWARF package version 5", exact: true })).toBeVisible();
 });
