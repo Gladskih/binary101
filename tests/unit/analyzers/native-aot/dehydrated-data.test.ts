@@ -17,6 +17,42 @@ const fixtureWithStream = (commands: number[]) => {
   return { ...fixture, destination, streamRva };
 };
 
+void test("relative relocation reads share hydration and cache success and failure independently of absolute fields", async context => {
+  const fixture = fixtureWithStream([2]);
+  const data = new NativeAotDehydratedData(fixture.image, fixture.sections, fixture.issues);
+  const reads = context.mock.method(fixture.image, "readData");
+
+  assert.equal(await data.relative(fixture.destination), fixture.codeRvas[1]);
+  const count = reads.mock.callCount();
+  assert.equal(await data.relative(fixture.destination), fixture.codeRvas[1]);
+  assert.equal(reads.mock.callCount(), count);
+  assert.equal(await data.pointer(fixture.destination), null);
+  assert.match([...fixture.issues].join(), /not an absolute pointer/);
+  assert.equal(await data.relative(-4), null);
+  assert.equal(await data.relative(-4), null);
+  assert.match([...fixture.issues].join(), /relative pointer has an invalid mapped range/);
+  context.mock.method(fixture.image, "readData", async () => { throw "failure"; });
+  assert.equal(await data.relative(0x200), null);
+  assert.match([...fixture.issues].join(), /relative pointer read failed/);
+});
+
+void test("cached relative storage avoids rereading both valid and failed file-backed fields", async context => {
+  const fixture = createFunctionEntryFixture(new Uint8Array());
+  fixture.view.setInt32(0x180, fixture.codeRvas[0]! - 0x180, true);
+  const data = new NativeAotDehydratedData(fixture.image, fixture.sections, fixture.issues);
+  const reads = context.mock.method(fixture.image, "readData");
+
+  assert.equal(await data.relative(0x180), fixture.codeRvas[0]);
+  assert.equal(reads.mock.callCount(), 4);
+  assert.equal(await data.relative(0x180), fixture.codeRvas[0]);
+  assert.equal(reads.mock.callCount(), 4);
+  context.mock.method(fixture.image, "readData", async () => null);
+  assert.equal(await data.relative(0x184), null);
+  const failures = context.mock.method(fixture.image, "readData");
+  assert.equal(await data.relative(0x184), null);
+  assert.equal(failures.mock.callCount(), 0);
+});
+
 void test("dehydration restores sparse absolute pointers and skips zero/data runs", async () => {
   // ZeroFill8, PtrReloc(index0), Copy2 literal bytes.
   const fixture = fixtureWithStream([65, 3, 16, 11, 22]);
