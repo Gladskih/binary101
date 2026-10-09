@@ -19,6 +19,7 @@
     <Compile Include="$(ReadyToRunSourceDirectory)/PEReaderExtensions.cs" />
     <Compile Include="$(ReadyToRunSourceDirectory)/ReadyToRunConstants.cs" />
     <Compile Include="$(ReadyToRunSourceDirectory)/ModuleHeaders.cs" />
+    <Compile Include="$(ReadyToRunSourceDirectory)/RuntimeConstants.cs" />
   </ItemGroup>
   <Target Name="RequireUpstreamSources" BeforeTargets="BeforeBuild">
     <Error Condition="'$(NativeFormatSourceDirectory)' == '' or '$(ReadyToRunSourceDirectory)' == ''"

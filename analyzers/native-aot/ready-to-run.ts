@@ -205,7 +205,7 @@ export const findNativeAotMetadata = async (
     if (header) {
       const invokeMap = await parseNativeAotInvokeMap(image, header.sections);
       const stackTraceMap = await parseNativeAotStackTraceMap(image, header.sections);
-      const functionMaps = await parseNativeAotFunctionMaps(image, header.sections);
+      const functionMaps = await parseNativeAotFunctionMaps(image, header.sections, header);
       return { status: "confirmed", modulePointerRva, ...header,
         initializers: await parseNativeAotInitializers(image, header),
         ...(invokeMap ? { invokeMap } : {}), ...(stackTraceMap ? { stackTraceMap } : {}),

@@ -15,7 +15,7 @@ test("import thunks appear as instructions without runtime-function or exception
   await expect(panel).not.toContainText("ReadyToRun import thunks:");
 });
 
-test("CLR-free exported R2R headers expose parsed thunk tables", async ({ page }) => {
+test("CLR-free exported R2R headers explain thunk counts without dumping their addresses", async ({ page }) => {
   const file = createPeClrFreeReadyToRunFile();
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name,
@@ -26,7 +26,8 @@ test("CLR-free exported R2R headers expose parsed thunk tables", async ({ page }
 
   await expect(panel).toContainText("ReadyToRun composite header");
   await expect(panel).toContainText("DelayLoadMethodCallThunks");
-  await expect(panel.getByRole("columnheader", { name: "Helper cell RVA", exact: true })).toBeVisible();
-  await expect(panel.getByRole("row").filter({ hasText: "eager" })).toContainText("0x00001040");
+  await expect(panel.getByRole("button", { name: "Sort by Why it matters", exact: true })).toBeVisible();
+  await expect(panel.getByRole("row").filter({ hasText: "eager thunks" })).toContainText("1");
+  await expect(panel.getByRole("columnheader", { name: "Helper cell RVA", exact: true })).toHaveCount(0);
   await expect(panel).not.toContainText("Unrecognized thunk");
 });

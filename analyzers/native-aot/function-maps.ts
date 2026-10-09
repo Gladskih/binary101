@@ -1,5 +1,5 @@
 import type { NativeAotFunctionMap, NativeAotFunctionMaps } from "./function-map-types.js";
-import type { NativeAotMetadataSection } from "./format.js";
+import type { NativeAotMetadata, NativeAotMetadataSection } from "./format.js";
 import type { NativeAotVirtualImage } from "./virtual-image-types.js";
 import { NativeFormatCursor } from "./native-format-cursor.js";
 import { NativeFormatReader } from "./native-format-reader.js";
@@ -38,9 +38,10 @@ class FunctionMapReader {
   readonly #runtimeTypes: NativeAotRuntimeTypes;
 
   constructor(image: NativeAotVirtualImage, sections: NativeAotMetadataSection[],
-    readonly layout: NativeFormatCursor | undefined, issues: Set<string>) {
+    readonly layout: NativeFormatCursor | undefined, issues: Set<string>,
+    version?: Pick<NativeAotMetadata, "majorVersion" | "minorVersion">) {
     this.#references = new NativeAotFunctionReferences(image, sections, issues);
-    this.#runtimeTypes = new NativeAotRuntimeTypes(this.#references);
+    this.#runtimeTypes = new NativeAotRuntimeTypes(this.#references, version);
     this.#layouts = layout ? new NativeAotTemplateLayouts(layout, this.#references, issues) : undefined;
   }
 
@@ -82,13 +83,14 @@ const groupMaps = (sections: NativeAotMetadataSection[]) => {
 };
 
 export const parseNativeAotFunctionMaps = async (
-  image: NativeAotVirtualImage, sections: NativeAotMetadataSection[]
+  image: NativeAotVirtualImage, sections: NativeAotMetadataSection[],
+  version?: Pick<NativeAotMetadata, "majorVersion" | "minorVersion">
 ): Promise<NativeAotFunctionMaps | undefined> => {
   const groups = groupMaps(sections);
   if (!groups.size) return undefined;
   const issues = new Set<string>();
   const layout = groups.has(321) || groups.has(322) ? await loadLayout(image, sections, issues) : undefined;
-  const reader = new FunctionMapReader(image, sections, layout, issues);
+  const reader = new FunctionMapReader(image, sections, layout, issues, version);
   const maps: NativeAotFunctionMap[] = [];
   for (const [type, group] of groups) {
     if (group.length !== 1) {

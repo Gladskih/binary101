@@ -36,6 +36,6 @@ void test("ELF paging resolves NativeAOT invoke and stack-trace map tables", () 
     stackTraceMap: { entries: [{ command: 0, methodRva: 32 }], warnings: [] }
   } } as unknown as ElfParseResult;
 
-  assert.equal(getElfPagedTableModel(elf, "native-aot-invoke-map")?.rowCount, 1);
-  assert.equal(getElfPagedTableModel(elf, "native-aot-stack-trace-map")?.rowCount, 1);
+  assert.equal(getElfPagedTableModel(elf, "native-aot-invoke-map")?.rowCount, 4);
+  assert.equal(getElfPagedTableModel(elf, "native-aot-stack-trace-map")?.rowCount, 5);
 });

@@ -4,10 +4,12 @@ import type { NativeAotHydratedRun } from "./dehydrated-stream-types.js";
 import { readNativeAotSectionBytes } from "./section-bytes.js";
 import { readNativeAotDehydratedRuns } from "./dehydrated-stream.js";
 import { findNativeAotHydratedRun, readNativeAotHydratedUnsigned } from "./hydrated-scalars.js";
+import { readNativeAotHydratedRelative } from "./hydrated-relative.js";
 
 /** Restores typed fields without materializing the whole hydrated image. */
 export class NativeAotDehydratedData {
   readonly #cache = new Map<number, Promise<number | null>>();
+  readonly #relativeCache = new Map<number, Promise<number | null>>();
   #loaded: Promise<NativeAotHydratedRun[]> | undefined;
   constructor(readonly image: NativeAotVirtualImage, readonly sections: NativeAotMetadataSection[],
     readonly issues: Set<string>) {}
@@ -26,6 +28,22 @@ export class NativeAotDehydratedData {
       return await readNativeAotHydratedUnsigned(this.image, await this.#loaded, address, size);
     } catch (error) {
       this.issues.add(error instanceof Error ? error.message : "NativeAOT scalar read failed.");
+      return null;
+    }
+  }
+
+  relative(address: number): Promise<number | null> {
+    let result = this.#relativeCache.get(address);
+    if (!result) { result = this.#relative(address); this.#relativeCache.set(address, result); }
+    return result;
+  }
+
+  async #relative(address: number): Promise<number | null> {
+    try {
+      this.#loaded ??= this.#load();
+      return await readNativeAotHydratedRelative(this.image, await this.#loaded, address);
+    } catch (error) {
+      this.issues.add(error instanceof Error ? error.message : "NativeAOT relative pointer read failed.");
       return null;
     }
   }

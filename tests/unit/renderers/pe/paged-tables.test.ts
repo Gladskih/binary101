@@ -33,8 +33,8 @@ void test("PE paging resolves NativeAOT invoke and stack-trace map tables", () =
     stackTraceMap: { entries: [{ command: 0, methodRva: 32 }], warnings: [] }
   };
 
-  assert.equal(getPePagedTableModel(pe, "native-aot-invoke-map")?.rowCount, 1);
-  assert.equal(getPePagedTableModel(pe, "native-aot-stack-trace-map")?.rowCount, 1);
+  assert.equal(getPePagedTableModel(pe, "native-aot-invoke-map")?.rowCount, 4);
+  assert.equal(getPePagedTableModel(pe, "native-aot-stack-trace-map")?.rowCount, 5);
 });
 
 void test("getPePagedTableModel resolves exports for paging and sorting", () => {

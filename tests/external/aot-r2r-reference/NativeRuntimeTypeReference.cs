@@ -2,6 +2,7 @@
 sealed class NativeRuntimeTypeReference(NativeMapImage image, NativeMapHydration hydration)
 {
     readonly Dictionary<long, object> cache = new();
+    readonly NativeRuntimeTailReference tails = new(image, hydration);
 
     public object Read(long rva)
     {
@@ -18,7 +19,10 @@ sealed class NativeRuntimeTypeReference(NativeMapImage image, NativeMapHydration
             if (target == null) slots.Add(new { kind = "null" });
             else slots.Add(new { kind = image.Executable(target.Value) ? "method" : "data", rva = target.Value });
         }
-        var type = new { rva, flags, baseSize, numVtableSlots, numInterfaces, hashCode, slots };
+        var type = new Dictionary<string, object> { ["rva"] = rva, ["flags"] = flags,
+            ["baseSize"] = baseSize, ["numVtableSlots"] = numVtableSlots,
+            ["numInterfaces"] = numInterfaces, ["hashCode"] = hashCode, ["slots"] = slots };
+        if ((flags & 0x540000) != 0) type["tail"] = tails.Read(rva, flags, numVtableSlots, numInterfaces);
         cache.Add(rva, type);
         return type;
     }

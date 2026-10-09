@@ -29,7 +29,7 @@ test("renders retained NativeAOT signatures and paginates definition tables", as
   await expect(members).toContainText("Showing 1-100");
 });
 
-test("renders ReadyToRun compiler, import cells and sparse MethodDef entry points", async ({ page }) => {
+test("explains ReadyToRun methods and imports without dumping their encoded addresses", async ({ page }) => {
   test.skip(!readyToRunFile || !existsSync(readyToRunFile), "Set BINARY101_R2R_PE to System.Collections.dll.");
   await page.goto("/");
   await page.setInputFiles("#fileInput", readyToRunFile!);
@@ -38,12 +38,10 @@ test("renders ReadyToRun compiler, import cells and sparse MethodDef entry point
   await analysis.locator("summary").filter({ hasText: "ReadyToRun / managed native header" }).click();
 
   await expect(analysis).toContainText("Crossgen2");
-  await expect(analysis.locator('[data-sort-state-key$="-methods"]')).toContainText("MethodDef RID");
-  await expect(analysis.locator('[data-paged-sortable-table-id$="-instance-methods"]'))
-    .toContainText("Signature RVA");
-  await expect(analysis.locator('[data-sort-state-key$="-imports"]')).toContainText("Signatures RVA");
-  const cells = analysis.locator('[data-paged-sortable-table-id$="-cells"]');
-  await expect(cells).toContainText("Signature RVA");
-  await cells.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(cells).toContainText("Showing 101-200");
+  const statistics = analysis.locator('[data-sort-state-key="pe-r2r-statistics"]');
+  await expect(statistics).toContainText("Method-definition entry points");
+  await expect(statistics).toContainText("Instantiated method entry points");
+  await expect(statistics).toContainText("Import cells with signatures");
+  await expect(statistics).not.toContainText(/RVA|0x[0-9a-f]+/i);
+  await expect(analysis.locator('[data-paged-sortable-table-id$="-cells"]')).toHaveCount(0);
 });

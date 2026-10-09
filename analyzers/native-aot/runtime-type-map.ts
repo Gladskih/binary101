@@ -1,5 +1,7 @@
 import type { NativeAotFunctionReferences } from "./function-references.js";
 import type { NativeFormatCursor } from "./native-format-cursor.js";
+import type { NativeAotMetadata } from "./format.js";
+import { NativeAotRuntimeTails, type NativeAotRuntimeTail } from "./runtime-type-tail.js";
 
 export type NativeAotVirtualSlot = { kind: "method" | "data"; rva: number } | { kind: "null" };
 export interface NativeAotRuntimeType {
@@ -10,6 +12,7 @@ export interface NativeAotRuntimeType {
   numInterfaces: number;
   hashCode: number;
   slots: NativeAotVirtualSlot[];
+  tail?: NativeAotRuntimeTail;
 }
 export interface NativeAotTypeMapEntry {
   typeIndex: number;
@@ -19,7 +22,11 @@ export interface NativeAotTypeMapEntry {
 
 export class NativeAotRuntimeTypes {
   readonly #cache = new Map<number, Promise<NativeAotRuntimeType | null>>();
-  constructor(readonly references: NativeAotFunctionReferences) {}
+  readonly #tails: NativeAotRuntimeTails;
+  constructor(readonly references: NativeAotFunctionReferences,
+    version?: Pick<NativeAotMetadata, "majorVersion" | "minorVersion">) {
+    this.#tails = new NativeAotRuntimeTails(references, version);
+  }
   async read(cursor: NativeFormatCursor): Promise<NativeAotTypeMapEntry> {
     // TypeMetadataMapNode writes (CommonFixups type index, NativeMetadata handle).
     // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/aot/ILCompiler.Compiler/Compiler/DependencyAnalysis/TypeMetadataMapNode.cs
@@ -52,8 +59,11 @@ export class NativeAotRuntimeTypes {
       const numVtableSlots = await this.#scalar(rva + 8 + image.pointerSize, 2);
       const numInterfaces = await this.#scalar(rva + 10 + image.pointerSize, 2);
       const hashCode = await this.#scalar(rva + 12 + image.pointerSize, 4);
-      return { rva, flags, baseSize, numVtableSlots, numInterfaces, hashCode,
+      const type: NativeAotRuntimeType = { rva, flags, baseSize, numVtableSlots, numInterfaces, hashCode,
         slots: await this.#slots(rva + 16 + image.pointerSize, numVtableSlots) };
+      const tail = await this.#tails.read(type);
+      if (tail) type.tail = tail;
+      return type;
     } catch (error) {
       this.references.issues.add(error instanceof Error ? error.message : "MethodTable decoding failed.");
       return null;

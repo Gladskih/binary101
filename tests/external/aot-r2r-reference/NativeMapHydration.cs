@@ -5,6 +5,7 @@ using Internal.Runtime;
 sealed class NativeMapHydration(NativeMapImage image, NativeMapReference.Blob? stream)
 {
     readonly Dictionary<long, long> pointers = new();
+    readonly Dictionary<long, long> relatives = new();
     readonly List<(long address, int size, long? source)> runs = new();
     bool loaded;
 
@@ -32,7 +33,7 @@ sealed class NativeMapHydration(NativeMapImage image, NativeMapReference.Blob? s
                 else if (command is 2 or 3)
                 {
                     long target = image.Relative(stream.rva + stream.bytes.Length + payload * 4L);
-                    if (command == 3) pointers.Add(destination, target);
+                    (command == 3 ? pointers : relatives).Add(destination, target);
                     destination += command == 3 ? image.PointerSize : 4;
                 }
                 else if (command is 4 or 5)
@@ -40,7 +41,8 @@ sealed class NativeMapHydration(NativeMapImage image, NativeMapReference.Blob? s
                     if (current + payload * 4L > bytes + stream.bytes.Length) throw new EndOfStreamException();
                     for (int index = 0; index < payload; index++, current += 4)
                     {
-                        if (command == 5) pointers.Add(destination, stream.rva + (current - bytes) + *(int*)current);
+                        (command == 5 ? pointers : relatives).Add(destination,
+                            stream.rva + (current - bytes) + *(int*)current);
                         destination += command == 5 ? image.PointerSize : 4;
                     }
                 }
@@ -57,6 +59,14 @@ sealed class NativeMapHydration(NativeMapImage image, NativeMapReference.Blob? s
             if (address >= run.address && address + image.PointerSize <= run.address + run.size)
                 return run.source.HasValue ? image.Absolute(run.source.Value + address - run.address) : null;
         return image.Absolute(address);
+    }
+
+    public long Relative(long address)
+    {
+        if (!loaded) Load();
+        if (relatives.TryGetValue(address, out long target)) return target;
+        if (pointers.ContainsKey(address)) throw new InvalidDataException("Absolute field used as relative");
+        return address + (int)Unsigned(address, 4);
     }
 
     byte ScalarByte(long address)
