@@ -16,6 +16,7 @@ void test("ReadyToRun exposes explained counts and section sizes instead of addr
   assert.equal(models[1]!.rowAt(5)!.cells[0]!.html, "&lt;unknown>");
   assert.deepEqual(models[1]!.columns.map(column => column.label), ["Section", "Blocks", "Encoded bytes"]);
   assert.equal(models[1]!.columns[1]!.className, "peNumeric");
+  assert.equal(models[1]!.columns[2]!.className, "peNumeric");
   assert.equal(models[1]!.rowAt(1)!.cells[0]!.className, "");
   assert.equal(models[1]!.rowAt(1)!.cells[2]!.className, "peNumeric");
   assert.equal(models[1]!.rowAt(-1), null);
@@ -69,5 +70,6 @@ void test("absent sections and compiler text do not produce empty raw-detail tab
   const data = { ...createReadyToRunRendererFixture(), sections: [] };
 
   assert.doesNotMatch(renderReadyToRunData(data), /<table|<dl>/);
+  assert.match(renderReadyToRunData(data), /^<p class="smallNote">/);
   assert.match(renderReadyToRunData(data), /precompiled managed code/);
 });

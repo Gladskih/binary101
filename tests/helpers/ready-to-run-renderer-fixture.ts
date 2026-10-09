@@ -26,4 +26,3 @@ export const createReadyToRunRendererFixture = (): PeClrReadyToRun => ({
     { type: 101, name: "EmptyImports", rva: 112, size: 0, decoded: {kind:"imports",imports:[]} }
   ]
 });
-

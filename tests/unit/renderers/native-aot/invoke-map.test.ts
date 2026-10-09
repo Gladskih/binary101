@@ -34,4 +34,5 @@ void test("missing invocation data is omitted while empty maps explain zero coun
   assert.doesNotMatch(html, /Stryker/);
   assert.match(renderNativeAotInvokeMap({ entries: [], warnings: [] }), /Distinct invocation stubs/);
   assert.doesNotMatch(renderNativeAotInvokeMap({ entries: [], warnings: [] }), /<ul/);
+  assert.match(renderNativeAotInvokeMap({ entries: [], warnings: [] }), /<\/h4><div class="tableWrap">/);
 });

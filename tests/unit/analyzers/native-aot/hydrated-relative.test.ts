@@ -51,6 +51,8 @@ void test("typed relocations independently reject invalid caller coordinates and
   await assert.rejects(read(fixture.image, [{ kind: "relative", rva: 1e20, size: 4, target: 0x40 }], 1e20), /mapped range/);
   await assert.rejects(read(fixture.image, [{ kind: "relative", rva: 0x180, size: 8, target: 0x40 }], 0x180),
     /complete relative field/);
+  await assert.rejects(read(fixture.image, [{ kind: "relative", rva: 0x17e, size: 4, target: 0x40 }], 0x180),
+    /complete relative field/);
   assert.equal(await read(fixture.image, [{ kind: "relative", rva: 0, size: 4, target: 0 }], 0), 0);
 });
 

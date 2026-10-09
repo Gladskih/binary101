@@ -35,4 +35,5 @@ void test("empty stack maps show meaningful zero counts and escaped warnings", (
   assert.match(html, /<li>bad &lt;target><\/li><li>another warning<\/li>/);
   assert.doesNotMatch(html, /Stryker/);
   assert.doesNotMatch(renderNativeAotStackTraceMap({ entries: [], warnings: [] }), /<ul/);
+  assert.match(renderNativeAotStackTraceMap({ entries: [], warnings: [] }), /<\/h4><div class="tableWrap">/);
 });

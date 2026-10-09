@@ -8,6 +8,9 @@ const distinct = (values: (number | null | undefined)[]): number =>
   new Set(values.filter(value => value != null)).size;
 
 const typeStatistics = (types: NativeAotRuntimeType[]): AnalysisStatistic[] => {
+  // HasFinalizer (0x00100000) and special dispatch slots (0xfffe/0xffff):
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Runtime/MethodTable.Constants.cs
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Runtime/RuntimeConstants.cs
   const slots = types.flatMap(type => type.slots);
   const sealed = types.flatMap(type => type.tail?.sealedSlots ?? []);
   const dispatch = types.flatMap(type => type.tail?.dispatchMap?.entries ?? []);
