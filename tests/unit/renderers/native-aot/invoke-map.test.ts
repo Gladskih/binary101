@@ -4,46 +4,34 @@ import { getNativeAotInvokeTableModel, renderNativeAotInvokeMap } from "../../..
 import { parseNativeAotInvokeMap } from "../../../../analyzers/native-aot/invoke-map.js";
 import { createNativeAotInvokeFixture } from "../../../helpers/native-aot-invoke-fixture.js";
 
-void test("NativeAOT invoke table shows numeric method/stub RVAs and bounds-checks row access", async () => {
+void test("invocation summaries count shared methods and stubs without exposing pointer rows", async () => {
   const fixture = createNativeAotInvokeFixture();
   const map = (await parseNativeAotInvokeMap(fixture.image, fixture.sections))!;
+  map.entries.push({ ...map.entries[0]!, entrypointRva: null, invokeStubRva: null, genericArgumentIndices: [] });
+  map.entries.push({ ...map.entries[0]! });
+  map.entries.push({ ...map.entries[0]!, entrypointRva: 0x400, invokeStubRva: 0x500, genericArgumentIndices: [] });
 
   const table = getNativeAotInvokeTableModel(map, "native-aot-invoke-map")!;
 
-  assert.equal(table.rowCount, 1);
-  assert.deepEqual(table.columns.map(column => column.label), ["Method metadata offset", "Flags",
-    "Declaring type index", "Entry point RVA", "Invoke stub RVA", "Generic type indices"]);
-  assert.deepEqual(table.rowAt(0)?.cells.map(cell => cell.html),
-    ["0x0000000a", "0x0022", "4", "0x00000040", "0x00000300", "3, 4"]);
-  assert.ok(table.columns.every(column => column.className === "peNumeric"));
-  assert.ok(table.rowAt(0)?.cells.every(cell => cell.className === "peNumeric"));
-  assert.equal(table.sortValueAt(0, 3), "0x00000040");
-  assert.equal(table.sortValueAt(2, 0), "");
-  assert.equal(table.rowAt(2), null);
+  assert.equal(table.rowCount, 4);
+  assert.deepEqual([0, 1, 2, 3].map(index => table.rowAt(index)?.cells[1]?.html), ["4", "2", "2", "2"]);
+  assert.deepEqual([0, 1, 2, 3].map(index => table.rowAt(index)?.cells[0]?.html), ["Reflection invocation records",
+    "Distinct method bodies", "Distinct invocation stubs", "Records with generic arguments"]);
+  assert.ok([0, 1, 2, 3].every(index => table.rowAt(index)!.cells[2]!.html.length > 20));
   assert.equal(getNativeAotInvokeTableModel(map, "other"), null);
   assert.equal(getNativeAotInvokeTableModel(undefined, "native-aot-invoke-map"), null);
+  assert.match(renderNativeAotInvokeMap(map), /Adapters that translate reflection arguments/);
+  assert.doesNotMatch(renderNativeAotInvokeMap(map), /RVA|0x0000|metadata offset/);
 });
 
-void test("NativeAOT invoke table renders missing addresses and escaped warnings without empty tables", () => {
-  const empty = { entries: [], warnings: ["bad <pointer>", "another warning"] };
+void test("missing invocation data is omitted while empty maps explain zero counts and escaped warnings", () => {
+  const html = renderNativeAotInvokeMap({ entries: [], warnings: ["bad <pointer>", "another warning"] });
 
   assert.equal(renderNativeAotInvokeMap(undefined), "");
-  assert.match(renderNativeAotInvokeMap(empty), /bad &lt;pointer>/);
-  assert.match(renderNativeAotInvokeMap(empty),
-    /<ul class="smallNote"><li>bad &lt;pointer><\/li><li>another warning<\/li><\/ul>$/);
-  assert.doesNotMatch(renderNativeAotInvokeMap(empty), /<table/);
-  const entry = { flags: 0, metadataOffset: 0, declaringTypeIndex: 0,
-    entrypointRva: null, invokeStubRva: null, genericArgumentIndices: [] };
-  const table = getNativeAotInvokeTableModel({ entries: [entry], warnings: [] }, "native-aot-invoke-map")!;
-  assert.deepEqual(table.rowAt(0)?.cells.slice(3).map(cell => cell.html), ["-", "-", "-"]);
-  assert.match(renderNativeAotInvokeMap({ entries: [entry], warnings: [] }), /<table/);
-});
-
-void test("NativeAOT invoke map explains metadata offsets and shared code even when no rows exist", () => {
-  const html = renderNativeAotInvokeMap({ entries: [], warnings: [] });
-
-  assert.match(html, /^<h4>NativeAOT invoke map<\/h4><p class="smallNote">Validated method and invoke-stub /);
-  assert.match(html, /addresses supply disassembly seeds/);
-  assert.match(html, /Method offsets refer to retained NativeFormat metadata/);
-  assert.match(html, /multiple entries may share the same native code\.<\/p>$/);
+  assert.match(html, /bad &lt;pointer>/);
+  assert.match(html, /NativeAOT reflection invocation/);
+  assert.match(html, /<li>bad &lt;pointer><\/li><li>another warning<\/li>/);
+  assert.doesNotMatch(html, /Stryker/);
+  assert.match(renderNativeAotInvokeMap({ entries: [], warnings: [] }), /Distinct invocation stubs/);
+  assert.doesNotMatch(renderNativeAotInvokeMap({ entries: [], warnings: [] }), /<ul/);
 });

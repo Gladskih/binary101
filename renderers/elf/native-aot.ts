@@ -14,18 +14,16 @@ import { renderNativeAotFunctionMaps } from "../native-aot/function-maps.js";
 
 const renderSections = (metadata: NativeAotMetadata): string => {
   const rows = metadata.sections.map(section =>
-    `<tr><td class="nativeAotTable__compact">${section.type}</td>` +
-    `<td>${escapeHtml(nativeAotSectionName(section.type))}</td>` +
-    `<td class="nativeAotTable__compact peNumeric">${hex(section.rva, 8)}</td>` +
+    `<tr><td>${escapeHtml(nativeAotSectionName(section.type))}</td>` +
     `<td class="nativeAotTable__compact peNumeric">` +
     `${section.size == null ? "-" : humanSize(section.size)}</td></tr>`
   ).join("");
   return `<h4>ReadyToRun sections</h4>` +
     `<p class="smallNote">These entries locate NativeAOT runtime payloads in the loaded ELF ` +
-    `image. The address is relative to the ELF load base. A dash means that the header names ` +
+    `image. Payload sizes show how much runtime metadata was retained. A dash means the header names ` +
     `one address rather than a byte range.</p>` +
     `<div class="tableWrap"><table class="table nativeAotSectionsTable">` +
-    `<thead><tr><th>Type</th><th>Name</th><th class="peNumeric">Image address</th>` +
+    `<thead><tr><th>Runtime payload</th>` +
     `<th class="peNumeric">Size</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 };
 
