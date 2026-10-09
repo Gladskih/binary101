@@ -9,13 +9,35 @@ import {
 import {
   createElfCompressedDwarfFile,
   createElfDwarfFile, createElfSemanticDwarfFile, createElfMacroDwarfFile, createElfFrameDwarfFile,
-  createElfPackageDwarfFile
+  createElfPackageDwarfFile, createElfZstdDwarfFile
 } from "../fixtures/elf-dwarf-file.js";
 
 const toUpload = (file: ReturnType<typeof createPeDwarfFile>) => ({
   name: file.name,
   mimeType: file.type,
   buffer: Buffer.from(file.data)
+});
+
+void test("decodes Zstandard DWARF in the browser without external requests", async ({ page }) => {
+  const externalRequests: string[] = [];
+  const browserErrors: string[] = [];
+  page.on("console", message => {
+    if (message.type() === "error") browserErrors.push(message.text());
+  });
+  page.on("request", request => {
+    if (!request.url().startsWith("http://127.0.0.1:4173/") && !request.url().startsWith("data:")) {
+      externalRequests.push(request.url());
+    }
+  });
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", toUpload(createElfZstdDwarfFile()));
+  await page.locator(".peSectionSummary").filter({ hasText: "Build / debug" }).click();
+  await page.getByText("DWARF debug information (1 unit)", { exact: true }).click();
+  await expect(page.getByText("main.c", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("fixture compiler", { exact: true })).toBeVisible();
+  await expect(page.getByText("decompressed; decoded", { exact: true }).first()).toBeVisible();
+  expect(externalRequests).toEqual([]);
+  expect(browserErrors).toEqual([]);
 });
 
 void test("renders PE DWARF analysis lazily from long COFF section names", async ({ page }) => {

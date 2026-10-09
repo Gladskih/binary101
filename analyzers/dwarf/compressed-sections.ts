@@ -130,11 +130,12 @@ const decompressCandidate = async (
   const compressed = await readCompressedBytes(reader, candidate.section, payload, issues);
   if (!compressed) return unavailable;
   try {
-    const bytes = await inflateZlib(compressed, payload.uncompressedSize);
+    const bytes = payload.codec === "zlib" ? await inflateZlib(compressed, payload.uncompressedSize)
+      : await (await import("./zstd.js")).decompressDwarfZstd(compressed, payload.uncompressedSize);
     return decodedSource(candidate.section, payload, bytes);
   } catch (error) {
     issues.push(
-      `${candidate.section.name}: zlib decompression failed: ` +
+      `${candidate.section.name}: ${payload.codec} decompression failed: ` +
       `${error instanceof Error ? error.message : String(error)}.`
     );
     return unavailable;
