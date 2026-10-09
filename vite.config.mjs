@@ -1,9 +1,10 @@
 import { defineConfig } from "vite";
 import { fileURLToPath, URL } from "node:url";
 import { readFileSync } from "node:fs";
+import { zstdWasmAsset } from "./scripts/zstd-wasm.ts";
 
 export default defineConfig({
-  plugins: [{
+  plugins: [zstdWasmAsset(), {
     name: "disassembler-notices",
     generateBundle() {
       for (const [packageName, names] of Object.entries({

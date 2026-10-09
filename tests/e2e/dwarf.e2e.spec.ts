@@ -21,11 +21,13 @@ const toUpload = (file: ReturnType<typeof createPeDwarfFile>) => ({
 void test("decodes Zstandard DWARF in the browser without external requests", async ({ page }) => {
   const externalRequests: string[] = [];
   const browserErrors: string[] = [];
+  const wasmRequests: string[] = [];
   page.on("console", message => {
     if (message.type() === "error") browserErrors.push(message.text());
   });
   page.on("request", request => {
-    if (!request.url().startsWith("http://127.0.0.1:4173/") && !request.url().startsWith("data:")) {
+    if (request.url().includes("zstddec") && request.url().endsWith(".wasm")) wasmRequests.push(request.url());
+    if (!request.url().startsWith("http://127.0.0.1:4173/")) {
       externalRequests.push(request.url());
     }
   });
@@ -38,6 +40,7 @@ void test("decodes Zstandard DWARF in the browser without external requests", as
   await expect(page.getByText("decompressed; decoded", { exact: true }).first()).toBeVisible();
   expect(externalRequests).toEqual([]);
   expect(browserErrors).toEqual([]);
+  expect(wasmRequests).toHaveLength(1);
 });
 
 void test("renders PE DWARF analysis lazily from long COFF section names", async ({ page }) => {
