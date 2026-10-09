@@ -56,6 +56,10 @@ void test("Zstandard validates empty output and default decode size", async () =
   await assert.rejects(decompressDwarfZstd(zstdCompressSync(new Uint8Array([1])), 0), /does not match/);
 });
 
+void test("Zstandard rejects a missing frame even when zero output is declared", async () => {
+  await assert.rejects(decompressDwarfZstd(new Uint8Array(), 0), /Zstandard payload is empty/);
+});
+
 void test("Zstandard rejects size mismatches and corruption, then remains usable", async () => {
   const contents = new TextEncoder().encode("DWARF");
   const compressed = zstdCompressSync(contents);
