@@ -8,6 +8,7 @@ export type DwarfSectionCompression =
   | { kind: "elf"; elfClass: "elf32" | "elf64"; byteOrder: "big" | "little" };
 
 export type DwarfCompressionPayload = {
+  codec: "zlib" | "Zstandard";
   name: string;
   offset: number;
   size: number;
@@ -24,6 +25,8 @@ const GNU_HEADER = {
 // ELFCOMPRESS_ZLIB. GNU .zdebug uses "ZLIB" plus an 8-byte big-endian size:
 // https://www.sco.com/developers/gabi/latest/ch4.sheader.html
 // https://gnu.googlesource.com/binutils-gdb/+/refs/heads/gdb-15-branch/bfd/compress.c
+// ELFCOMPRESS_ZSTD and header layouts: llvm/include/llvm/BinaryFormat/ELF.h
+// https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/BinaryFormat/ELF.h
 const ELF_COMPRESSION = {
   typeOffset: 0,
   zlib: 1,
@@ -85,6 +88,7 @@ const readGnuPayload = async (
     issues
   );
   return uncompressedSize == null ? null : {
+    codec: "zlib",
     name: canonicalDwarfSectionName(section.name),
     offset: section.offset + GNU_HEADER.byteLength,
     size: section.size - GNU_HEADER.byteLength,
@@ -112,10 +116,10 @@ const readElfPayload = async (
   );
   if (!view) return null;
   const type = view.getUint32(ELF_COMPRESSION.typeOffset, littleEndian);
-  if (type !== ELF_COMPRESSION.zlib) {
+  if (type !== ELF_COMPRESSION.zlib && type !== ELF_COMPRESSION.zstd) {
     issues.push(
       `${section.name}: unsupported ELF compression ` +
-      `${type === ELF_COMPRESSION.zstd ? "Zstandard" : `type ${type}`}.`
+      `type ${type}.`
     );
     return null;
   }
@@ -129,6 +133,7 @@ const readElfPayload = async (
     : BigInt(view.getUint32(layout.sizeOffset, littleEndian));
   const uncompressedSize = safeSize(sizeValue, `${section.name} uncompressed size`, issues);
   return uncompressedSize == null ? null : {
+    codec: type === ELF_COMPRESSION.zstd ? "Zstandard" : "zlib",
     name: section.name,
     offset: section.offset + layout.headerBytes,
     size: section.size - layout.headerBytes,

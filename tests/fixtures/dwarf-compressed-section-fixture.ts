@@ -1,6 +1,6 @@
 "use strict";
 
-import { deflateSync } from "node:zlib";
+import { deflateSync, zstdCompressSync } from "node:zlib";
 import type { DwarfSectionCompression } from "../../analyzers/dwarf/compression-headers.js";
 import type { DwarfSectionCandidate } from "../../analyzers/dwarf/compressed-sections.js";
 import { MockFile } from "../helpers/mock-file.js";
@@ -29,6 +29,10 @@ export type TestDwarfCompressionFormat =
   | "elf32-big-zlib"
   | "elf32-little-zlib"
   | "elf64-little-zlib"
+  | "elf32-big-zstd"
+  | "elf32-little-zstd"
+  | "elf64-big-zstd"
+  | "elf64-little-zstd"
   | "gnu-zlib";
 
 const endianUnsigned = (
@@ -75,18 +79,16 @@ export const encodeElfCompressedSection = (
       word(declaredSize),
       word(TEST_DWARF_COMPRESSION.elf.alignment)
     );
-  return concatenateBytes(header, compressedBytes(bytes));
+  return concatenateBytes(header, compressionType === TEST_DWARF_COMPRESSION.elf.zstdType
+    ? [...zstdCompressSync(bytes)] : compressedBytes(bytes));
 };
 
 const compressionFor = (format: TestDwarfCompressionFormat): DwarfSectionCompression => {
   if (format === "gnu-zlib") return { kind: "gnu-zlib" };
-  if (format === "elf32-big-zlib") {
-    return { kind: "elf", elfClass: "elf32", byteOrder: "big" };
-  }
   return {
     kind: "elf",
-    elfClass: format === "elf64-little-zlib" ? "elf64" : "elf32",
-    byteOrder: "little"
+    elfClass: format.startsWith("elf64") ? "elf64" : "elf32",
+    byteOrder: format.includes("-big-") ? "big" : "little"
   };
 };
 
@@ -97,7 +99,9 @@ const encodeSection = (
   if (format === "gnu-zlib") return encodeGnuCompressedSection(bytes);
   const compression = compressionFor(format);
   if (compression.kind !== "elf") return [];
-  return encodeElfCompressedSection(bytes, compression.elfClass, compression.byteOrder);
+  return encodeElfCompressedSection(bytes, compression.elfClass, compression.byteOrder,
+    BigInt(bytes.length), format.endsWith("-zstd")
+      ? TEST_DWARF_COMPRESSION.elf.zstdType : TEST_DWARF_COMPRESSION.elf.zlibType);
 };
 
 const compressedName = (name: string, format: TestDwarfCompressionFormat): string =>

@@ -11,7 +11,8 @@ import { analyzeDwarfSources } from "../../../../analyzers/dwarf/index.js";
 import {
   TEST_DWARF_COMPRESSION,
   createCompressedDwarfSectionsFixture,
-  encodeGnuCompressedSection
+  encodeGnuCompressedSection,
+  encodeElfCompressedSection
 } from "../../../fixtures/dwarf-compressed-section-fixture.js";
 import { TEST_DWARF } from "../../../fixtures/dwarf-fixture-encoding.js";
 import { MockFile } from "../../../helpers/mock-file.js";
@@ -177,4 +178,54 @@ void test("prepareDwarfSectionSources keeps ordinary sections on the original re
 
   assert.equal(prepared.sources[0]?.reader, file);
   assert.equal(prepared.sources[0]?.decoded, true);
+});
+
+for (const format of ["elf32-big-zstd", "elf32-little-zstd",
+  "elf64-big-zstd", "elf64-little-zstd"] as const) {
+  void test(`prepareDwarfSectionSources decodes ${format} locally`, async () => {
+    const fixture = createCompressedDwarfSectionsFixture(format);
+    const prepared = await prepareDwarfSectionSources(fixture.file, fixture.candidates);
+    const dwarf = await analyzeDwarfSources(prepared.sources, "little");
+    assert.deepEqual(prepared.issues, []);
+    assert.equal(dwarfUnitRoot(dwarf.units[0])?.name, "main.c");
+    assert.equal(dwarfUnitRoot(dwarf.units[0])?.producer, "fixture compiler");
+    assert.equal(dwarf.sections[0]?.status, "decoded");
+  });
+}
+
+const zstdCandidate = (contents: Uint8Array, declaredSize = contents.length) => {
+  const encoded = candidate(encodeElfCompressedSection(contents, "elf64", "little",
+    BigInt(declaredSize), TEST_DWARF_COMPRESSION.elf.zstdType), ".debug_info");
+  encoded.value.compression = { kind: "elf", elfClass: "elf64", byteOrder: "little" };
+  return encoded;
+};
+
+void test("Zstandard accepts a valid empty frame and rejects mismatched sizes", async () => {
+  const contents = new TextEncoder().encode("DWARF");
+  const empty = zstdCandidate(new Uint8Array());
+  const short = zstdCandidate(contents, contents.length + 1);
+  const long = zstdCandidate(contents, contents.length - 1);
+  const emptyResult = await prepareDwarfSectionSources(empty.file, [empty.value]);
+  const shortResult = await prepareDwarfSectionSources(short.file, [short.value]);
+  const longResult = await prepareDwarfSectionSources(long.file, [long.value]);
+  assert.deepEqual(emptyResult.issues, []);
+  assert.equal(emptyResult.sources[0]?.section.size, 0);
+  assert.equal(emptyResult.sources[0]?.decoded, true);
+  assert.equal(shortResult.sources[0]?.decoded, false);
+  assert.match(shortResult.issues[0]!, /does not match declared size/);
+  assert.equal(longResult.sources[0]?.decoded, false);
+  assert.match(longResult.issues[0]!, /Zstandard decompression failed/);
+});
+
+void test("Zstandard reports corruption even when the ELF header declares zero output", async () => {
+  const corrupt = zstdCandidate(new Uint8Array());
+  corrupt.file.data[TEST_DWARF_COMPRESSION.elf.elf64HeaderBytes] = 0;
+  const truncated = zstdCandidate(new TextEncoder().encode("DWARF"));
+  truncated.value.section.size -= 1;
+  const corruptResult = await prepareDwarfSectionSources(new MockFile(corrupt.file.data), [corrupt.value]);
+  const truncatedResult = await prepareDwarfSectionSources(truncated.file, [truncated.value]);
+  assert.equal(corruptResult.sources[0]?.decoded, false);
+  assert.match(corruptResult.issues[0]!, /Zstandard decompression failed/);
+  assert.equal(truncatedResult.sources[0]?.decoded, false);
+  assert.match(truncatedResult.issues[0]!, /Zstandard decompression failed/);
 });

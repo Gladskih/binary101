@@ -160,3 +160,10 @@ export const createElfFrameDwarfFile = (): MockFile => buildElfDwarfFile(createD
 
 export const createElfPackageDwarfFile = (): MockFile =>
   buildElfDwarfFile(createDwarfPackageFixture(), "split-package.elf", 0n);
+
+export const createElfZstdDwarfFile = (): MockFile => {
+  const dwarf = createCompressedDwarfSectionsFixture("elf64-little-zstd");
+  return buildElfDwarfFile({ file: dwarf.file,
+    sections: dwarf.candidates.map(candidate => candidate.section)
+  }, "zstd-dwarf.elf", ELF64.section.compressedFlag);
+};
