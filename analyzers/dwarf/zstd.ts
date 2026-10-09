@@ -74,6 +74,9 @@ export const decompressDwarfZstd = async (bytes: Uint8Array, expectedSize: numbe
   if (!Number.isSafeInteger(expectedSize) || expectedSize < 0 || expectedSize >= 2 ** 32 || bytes.length >= 2 ** 32) {
     throw new Error("section size is outside the Zstandard decoder's wasm32 address space");
   }
+  // The format requires at least one frame; ZSTD_decompress also accepts no frames.
+  // https://github.com/facebook/zstd/blob/v1.5.7/doc/zstd_compression_format.md#frames
+  if (!bytes.length) throw new Error("Zstandard payload is empty");
   decoder ??= initializeDecoder();
   return (await decoder).decode(bytes, expectedSize);
 };

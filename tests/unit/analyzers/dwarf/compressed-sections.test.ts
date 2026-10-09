@@ -229,3 +229,11 @@ void test("Zstandard reports corruption even when the ELF header declares zero o
   assert.equal(truncatedResult.sources[0]?.decoded, false);
   assert.match(truncatedResult.issues[0]!, /Zstandard decompression failed/);
 });
+
+void test("Zstandard reports an ELF compression header with no payload", async () => {
+  const empty = zstdCandidate(new Uint8Array());
+  empty.value.section.size = TEST_DWARF_COMPRESSION.elf.elf64HeaderBytes;
+  const result = await prepareDwarfSectionSources(empty.file, [empty.value]);
+  assert.equal(result.sources[0]?.decoded, false);
+  assert.match(result.issues[0]!, /Zstandard payload is empty/);
+});
