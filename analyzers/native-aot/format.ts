@@ -1,6 +1,8 @@
 "use strict";
 import type { NativeAotMethodSignature } from "./native-format-signatures.js";
 import type { NativeAotFunctionMaps } from "./function-map-types.js";
+import type { NativeAotAttribute } from "./native-format-attributes.js";
+import type { NativeAotConstant } from "./native-format-constant-nodes.js";
 
 // ModuleHeaders.h and ReadyToRunHeaderNode.cs define this header and its emitted layout:
 // https://github.com/dotnet/runtime/blob/main/src/coreclr/nativeaot/Runtime/inc/ModuleHeaders.h
@@ -63,14 +65,14 @@ export interface NativeAotInvokeMap {
   warnings: string[];
 }
 
-export interface NativeAotInvokeEntry {
-  metadataOffset: number;
+export type NativeAotInvokeEntry = ({ metadataOffset: number } | { nameAndSignatureOffset: number }) & {
   flags: number;
   declaringTypeIndex: number;
   entrypointRva: number | null;
   invokeStubRva: number | null;
   genericArgumentIndices: number[];
-}
+  genericMethodSignatureOffset?: number;
+};
 
 export interface NativeAotInitializerTable {
   sectionType: number;
@@ -83,6 +85,7 @@ export interface NativeAotReflectionType {
   name: string;
   methods: NativeAotReflectionMethod[];
   fields: NativeAotReflectionField[];
+  attributes?: NativeAotAttribute[];
   definition?: {
     flags: number; size: number; packingSize: number; baseType: string;
     interfaces: string[]; genericParameters: NativeAotGenericParameter[];
@@ -92,30 +95,39 @@ export interface NativeAotReflectionType {
 
 export interface NativeAotParameter {
   flags: number; sequence: number; name: string;
+  attributes?: NativeAotAttribute[];
+  defaultValue?: NativeAotConstant;
 }
 
 export interface NativeAotGenericParameter {
   number: number; flags: number; kind: number; name: string; constraints: string[];
+  attributes?: NativeAotAttribute[];
 }
 
 export interface NativeAotReflectionMethod {
   name: string; flags?: number; implementationFlags?: number;
   signature?: NativeAotMethodSignature;
   parameters?: NativeAotParameter[]; genericParameters?: NativeAotGenericParameter[];
+  attributes?: NativeAotAttribute[];
 }
 
 export interface NativeAotReflectionField {
   name: string; flags?: number; type?: string; offset?: number;
+  attributes?: NativeAotAttribute[];
+  defaultValue?: NativeAotConstant;
 }
 
 export interface NativeAotReflectionProperty {
   name: string; flags?: number; callingConvention?: number; type?: string;
   parameters?: string[]; semantics?: { attributes: number; method: string }[];
+  attributes?: NativeAotAttribute[];
+  defaultValue?: NativeAotConstant;
 }
 
 export interface NativeAotReflectionEvent {
   name: string; flags?: number; type?: string;
   semantics?: { attributes: number; method: string }[];
+  attributes?: NativeAotAttribute[];
 }
 
 export interface NativeAotReflectionScope {
@@ -123,6 +135,8 @@ export interface NativeAotReflectionScope {
   moduleName: string;
   version: { major: number; minor: number; build: number; revision: number };
   types: NativeAotReflectionType[];
+  attributes?: NativeAotAttribute[];
+  moduleAttributes?: NativeAotAttribute[];
 }
 
 export interface NativeAotReflectionMetadata {

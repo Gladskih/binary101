@@ -2,6 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readExactMethodEntry } from "../../../../analyzers/native-aot/exact-methods.js";
 import { createFunctionEntryFixture } from "../../../helpers/native-aot-function-map-fixture.js";
+import { createLegacyLayoutCursor } from "../../../helpers/native-layout-legacy-fixture.js";
+
+void test("legacy exact methods identify the name/signature record in NativeLayoutInfo", async () => {
+  const fixture = createFunctionEntryFixture(Uint8Array.of(0, 0, 0, 2));
+
+  assert.deepEqual(await readExactMethodEntry(fixture.cursor, fixture.references,
+    createLegacyLayoutCursor(Uint8Array.of(2, 77, 2, 0))),
+  { declaringTypeIndex: 0, methodName: "M", methodSignatureOffset: 3,
+    genericArgumentIndices: [], entrypointRva: fixture.codeRvas[1] });
+});
 
 void test("exact method instantiations resolve the function after the complete metadata signature", async () => {
   const fixture = createFunctionEntryFixture(Uint8Array.of(0, 20, 4, 0, 2, 2));

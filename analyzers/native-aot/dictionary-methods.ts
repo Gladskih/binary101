@@ -1,6 +1,7 @@
 import type { NativeFormatCursor } from "./native-format-cursor.js";
 import type { NativeLayoutTypeReader } from "./layout-type.js";
 import { readLayoutMethod } from "./layout-methods.js";
+import { relativeLayoutCursor } from "./layout-method-identity.js";
 
 // Dictionary cells are inline signatures, not pointers to cells. Resulting dictionaries can
 // contain data; only HasFunctionPointer fields inside method signatures describe code.
@@ -9,6 +10,28 @@ import { readLayoutMethod } from "./layout-methods.js";
 const readCell = (cursor: NativeFormatCursor, types: NativeLayoutTypeReader,
   issues: Set<string>): ReturnType<typeof readLayoutMethod> | null => {
   const kind = cursor.unsigned();
+  // .NET 9 ldtoken/constrained cells indirect their signatures; .NET 10 makes them inline.
+  // https://github.com/dotnet/runtime/blob/v9.0.0/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/GenericDictionaryCell.cs
+  if (cursor.reader.layout === "dotnet9") return readLegacyCell(kind, cursor, types, issues);
+  return readInlineCell(kind, cursor, types, issues);
+};
+
+const readLegacyCell = (kind: number, cursor: NativeFormatCursor, types: NativeLayoutTypeReader,
+  issues: Set<string>): ReturnType<typeof readLayoutMethod> | null => {
+  if (kind === 7) {
+    const signature = relativeLayoutCursor(cursor);
+    types.skip(signature);
+    signature.string();
+    return null;
+  }
+  if (kind === 8) return readLayoutMethod(relativeLayoutCursor(cursor), types);
+  if (kind === 34) { types.skip(cursor); return readLayoutMethod(relativeLayoutCursor(cursor), types); }
+  if (kind === 32) throw new Error("NativeLayout .NET 9 dictionary cell has an unknown kind.");
+  return readInlineCell(kind, cursor, types, issues);
+};
+
+const readInlineCell = (kind: number, cursor: NativeFormatCursor, types: NativeLayoutTypeReader,
+  issues: Set<string>): ReturnType<typeof readLayoutMethod> | null => {
   if ([4, 8, 13].includes(kind)) return readLayoutMethod(cursor, types);
   if (kind === 34) { types.skip(cursor); return readLayoutMethod(cursor, types); }
   if (kind === 238) {

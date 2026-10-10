@@ -9,11 +9,16 @@ sealed class NativeFunctionMapReference
     readonly NativeMapHydration hydration;
     readonly NativeRuntimeTypeReference runtimeTypes;
     readonly Dictionary<uint, object> layouts = new();
+    readonly NativeMapAbi abi;
+    readonly NativeMapLayout layoutReader;
 
-    public NativeFunctionMapReference(Dictionary<uint, Blob> blobs, NativeMapImage image)
+    public NativeFunctionMapReference(Dictionary<uint, Blob> blobs, NativeMapImage image,
+        NativeMapAbi abi = NativeMapAbi.DotNet10)
     {
         this.blobs = blobs;
         this.image = image;
+        this.abi = abi;
+        layoutReader = new(abi);
         blobs.TryGetValue(207, out var dehydrated);
         hydration = new(image, dehydrated);
         runtimeTypes = new(image, hydration);
@@ -53,8 +58,23 @@ sealed class NativeFunctionMapReference
     {
         uint declaringTypeIndex = cursor.UInt(), methodToken = cursor.UInt();
         var genericArgumentIndices = cursor.Indices();
-        return new { declaringTypeIndex, methodToken, genericArgumentIndices,
-            entrypointRva = Function(331, cursor.UInt()) };
+        var identity = abi == NativeMapAbi.DotNet9 ? IdentityAt(methodToken) :
+            new Dictionary<string, object?> { ["methodToken"] = methodToken };
+        identity["declaringTypeIndex"] = declaringTypeIndex;
+        identity["genericArgumentIndices"] = genericArgumentIndices;
+        identity["entrypointRva"] = Function(331, cursor.UInt());
+        return identity;
+    }
+
+    unsafe Dictionary<string, object?> IdentityAt(uint offset)
+    {
+        var bytes = blobs[330].bytes;
+        fixed (byte* data = bytes)
+        {
+            var parser = new Internal.NativeFormat.NativeParser(
+                new Internal.NativeFormat.NativeReader(data, (uint)bytes.Length), offset);
+            return layoutReader.Identity(ref parser);
+        }
     }
 
     object Cctor(NativeMapCursor cursor)
@@ -83,7 +103,7 @@ sealed class NativeFunctionMapReference
                 else if (kind == Internal.NativeFormat.BagElementKind.DictionaryLayout)
                 {
                     var dictionary = parser.GetParserFromRelativeOffset();
-                    dictionaryMethods = NativeMapLayout.Dictionary(ref dictionary, index => Function(331, index));
+                    dictionaryMethods = layoutReader.Dictionary(ref dictionary, index => Function(331, index));
                 }
                 else parser.SkipInteger();
             }
@@ -103,15 +123,22 @@ sealed class NativeFunctionMapReference
                 new Internal.NativeFormat.NativeReader(data, (uint)bytes.Length), signatureOffset);
             uint flags = parser.GetUnsigned();
             long? entrypointRva = (flags & 4) != 0 ? Function(331, parser.GetUnsigned()) : null;
-            uint declaringTypeIndex = NativeMapLayout.ExternalType(ref parser), methodToken = parser.GetUnsigned();
+            uint declaringTypeIndex = NativeMapLayout.ExternalType(ref parser);
+            var identity = layoutReader.Identity(ref parser);
             var genericArgumentIndices = new List<uint>();
             if ((flags & 1) != 0)
             {
                 uint count = parser.GetSequenceCount();
                 for (uint index = 0; index < count; index++) genericArgumentIndices.Add(NativeMapLayout.ExternalType(ref parser));
             }
-            return new { signatureOffset, layoutOffset, flags, declaringTypeIndex, methodToken,
-                genericArgumentIndices, entrypointRva, layout = Layout(layoutOffset) };
+            identity["signatureOffset"] = signatureOffset;
+            identity["layoutOffset"] = layoutOffset;
+            identity["flags"] = flags;
+            identity["declaringTypeIndex"] = declaringTypeIndex;
+            identity["genericArgumentIndices"] = genericArgumentIndices;
+            identity["entrypointRva"] = entrypointRva;
+            identity["layout"] = Layout(layoutOffset);
+            return identity;
         }
     }
 

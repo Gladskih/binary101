@@ -10,8 +10,10 @@ import {
 } from "../../../../analyzers/native-aot/ready-to-run.js";
 import {
   createNativeAotMetadataFixture,
+  setNativeAotReflectionMetadata,
   type NativeAotMetadataFixture
 } from "../../../helpers/pe-native-aot-metadata-fixture.js";
+import { createNativeFormatMetadataFixture } from "../../../helpers/native-format-metadata-fixture.js";
 
 const SECTION_RVA = 0x1000;
 
@@ -184,4 +186,31 @@ void test("logical ReadyToRun attempts a file-backed read beyond the former size
 
   assert.match(oversizedResult?.reflection?.warnings?.[0] ?? "", /could not be read/i);
   assert.match(boundaryResult?.reflection?.warnings?.[0] ?? "", /could not be read/i);
+});
+void test("legacy runtime headers select the .NET 9 reflection handle encoding", async () => {
+  const fixture = createNativeAotMetadataFixture();
+  const metadata = createNativeFormatMetadataFixture();
+  // The root typed ScopeDefinition handle has a 24-bit offset and high tag 0x38 in .NET 9.
+  metadata[9] = 0x38;
+  setNativeAotReflectionMetadata(fixture, metadata);
+  fixture.view.setUint16(fixture.headerRva - SECTION_RVA + 4, 10, true);
+  fixture.view.setUint16(fixture.headerRva - SECTION_RVA + 6, 1, true);
+
+  const header = await parseNativeAotReadyToRunHeader(createVirtualImage(fixture),
+    fixturePointerSites(fixture), fixture.headerRva);
+
+  assert.equal(header?.majorVersion, 10);
+  assert.equal(header?.reflection?.scopes[0]?.name, "HelloCSharp");
+});
+
+void test("unverified metadata ABI versions retain the runtime header and explain the missing reflection", async () => {
+  const fixture = createNativeAotMetadataFixture();
+  fixture.view.setUint16(fixture.headerRva - SECTION_RVA + 4, 65535, true);
+
+  const header = await parseNativeAotReadyToRunHeader(createVirtualImage(fixture),
+    fixturePointerSites(fixture), fixture.headerRva);
+
+  assert.equal(header?.majorVersion, 65535);
+  assert.deepEqual(header?.reflection?.scopes, []);
+  assert.match(header?.reflection?.warnings?.join(" ") ?? "", /not verified.*65535/);
 });

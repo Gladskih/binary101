@@ -20,7 +20,7 @@ static class NativeMapReference
         int offset = checked((int)index * 4);
         return table.rva + offset + (int)ReadyToRunReference.UInt32(table.bytes, offset);
     }
-    static object Invoke(Blob blob, Blob fixups)
+    static object Invoke(Blob blob, Blob fixups, NativeMapAbi abi)
     {
         var reader = new NativeReader(new MemoryStream(blob.bytes));
         var entries = new List<object>();
@@ -28,16 +28,25 @@ static class NativeMapReference
         {
             var cursor = new NativeMapCursor(reader, offset);
             uint flags = cursor.UInt(), metadataOffset = cursor.UInt(), declaringTypeIndex = cursor.UInt();
+            var entry = new Dictionary<string, object?> { ["flags"] = flags, ["declaringTypeIndex"] = declaringTypeIndex };
+            entry[abi == NativeMapAbi.DotNet9 && (flags & 4) == 0 ? "nameAndSignatureOffset" : "metadataOffset"] = metadataOffset;
             long? entrypointRva = (flags & 0x20) != 0 ? Fixup(fixups, cursor.UInt()) : null;
             long? invokeStubRva = (flags & 0x80) == 0 ? Fixup(fixups, cursor.UInt()) : null;
             var genericArgumentIndices = new List<uint>();
             if ((flags & 2) != 0)
             {
-                uint count = cursor.UInt();
-                for (uint index = 0; index < count; index++) genericArgumentIndices.Add(cursor.UInt());
+                if (abi == NativeMapAbi.DotNet9 && (flags & 0x10) != 0)
+                    entry["genericMethodSignatureOffset"] = cursor.UInt();
+                if (abi == NativeMapAbi.DotNet10 || (flags & 0x40) == 0)
+                {
+                    uint count = cursor.UInt();
+                    for (uint index = 0; index < count; index++) genericArgumentIndices.Add(cursor.UInt());
+                }
             }
-            entries.Add(new { flags, metadataOffset, declaringTypeIndex, entrypointRva,
-                invokeStubRva, genericArgumentIndices });
+            entry["entrypointRva"] = entrypointRva;
+            entry["invokeStubRva"] = invokeStubRva;
+            entry["genericArgumentIndices"] = genericArgumentIndices;
+            entries.Add(entry);
         }
         return new { entries, warnings = Array.Empty<string>() };
     }
@@ -72,10 +81,12 @@ static class NativeMapReference
                 blob => blob.GetProperty("type").GetUInt32(), blob => new Blob(
                     blob.GetProperty("rva").GetInt64(), Convert.FromBase64String(blob.GetProperty("data").GetString()!)));
             var result = new Dictionary<string, object?> { ["path"] = item.GetProperty("path").GetString() };
-            if (blobs.TryGetValue(306, out var invoke)) result["invokeMap"] = Invoke(invoke, blobs[308]);
+            NativeMapAbi abi = item.TryGetProperty("majorVersion", out var version) && version.GetUInt32() <= 10 ?
+                NativeMapAbi.DotNet9 : NativeMapAbi.DotNet10;
+            if (blobs.TryGetValue(306, out var invoke)) result["invokeMap"] = Invoke(invoke, blobs[308], abi);
             if (blobs.TryGetValue(327, out var stack)) result["stackTraceMap"] = StackTrace(stack);
             using var image = new NativeMapImage(item.GetProperty("path").GetString()!);
-            result["functionMaps"] = new NativeFunctionMapReference(blobs, image).Read();
+            result["functionMaps"] = new NativeFunctionMapReference(blobs, image, abi).Read();
             results.Add(result);
         }
         File.WriteAllText(outputPath, JsonSerializer.Serialize(results));

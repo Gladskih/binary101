@@ -179,3 +179,28 @@ void test("NativeFormatReader caches empty strings and bounds failures", context
   assert.throws(() => reader.string({ type: 0x1a, offset: 2 }), /outside the metadata/);
   assert.equal(reads.mock.callCount(), 2);
 });
+void test("64-bit integers accept short forms and reject invalid or truncated wide prefixes", () => {
+  const reader = new NativeFormatReader(Uint8Array.of(254, 84, 63, 31));
+
+  assert.deepEqual(reader.signed64(0), { value: "-1", nextOffset: 1 });
+  assert.deepEqual(reader.unsigned64(0), { value: "127", nextOffset: 1 });
+  assert.deepEqual(reader.signed64(1), { value: "42", nextOffset: 2 });
+  assert.throws(() => reader.unsigned64(2), /Invalid compressed 64-bit/);
+  assert.throws(() => reader.signed64(2), /Invalid compressed 64-bit/);
+  assert.throws(() => reader.unsigned64(3), /outside/);
+  assert.throws(() => reader.signed64(3), /outside/);
+  assert.throws(() => reader.float32(1), /outside/);
+  assert.throws(() => reader.float64(0), /outside/);
+});
+void test("metadata handles select the .NET 9 or .NET 10 wire layout explicitly", () => {
+  // MdBinaryReader: .NET 9 generic handle = (offset << 8) | kind.
+  const legacy = new NativeFormatReader(Uint8Array.of(15, 61, 1, 0, 0, 0, 0, 0), "dotnet9");
+  const modern = new NativeFormatReader(Uint8Array.of(15, 61, 1, 0, 0, 0, 0, 0), "dotnet10");
+  // Generated .NET 9 typed handle: (ConstantStringValue=0x1a << 24) | offset 8.
+  const tagged = new NativeFormatReader(Uint8Array.of(15, 8, 0, 0, 26, 0, 0, 0, 0), "dotnet9");
+
+  assert.deepEqual(legacy.handle(0, [0x3a, 0x3d]).value, { type: 0x3d, offset: 1 });
+  assert.deepEqual(modern.handle(0, [0x3a, 0x3d]).value, { type: 0x3d, offset: 2 });
+  assert.deepEqual(tagged.handle(0, [0x1a]).value, { type: 0x1a, offset: 8 });
+  assert.throws(() => tagged.handle(0, [0x28]), /Unexpected typed/);
+});

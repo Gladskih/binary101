@@ -3,6 +3,32 @@ import test from "node:test";
 import { readDictionaryMethods } from "../../../../analyzers/native-aot/dictionary-methods.js";
 import { NativeLayoutTypeReader } from "../../../../analyzers/native-aot/layout-type.js";
 import { createFunctionEntryFixture } from "../../../helpers/native-aot-function-map-fixture.js";
+import { createLegacyDictionaryFixture, createLegacyLayoutCursor } from "../../../helpers/native-layout-legacy-fixture.js";
+
+void test(".NET 9 dictionary ldtoken and constrained signatures follow relative targets", () => {
+  const fixture = createLegacyDictionaryFixture();
+
+  const methods = readDictionaryMethods(fixture.cursor, new NativeLayoutTypeReader(), fixture.issues);
+
+  assert.deepEqual(methods, [
+    { signatureOffset: 37, flags: 12, methodName: "M", methodSignatureOffset: 47, entrypointIndex: 1 },
+    { signatureOffset: 37, flags: 12, methodName: "M", methodSignatureOffset: 47, entrypointIndex: 1 },
+    { signatureOffset: 21, flags: 13, methodName: "M", methodSignatureOffset: 47, entrypointIndex: 0 }
+  ]);
+  assert.equal(fixture.cursor.offset, 33);
+  assert.equal(fixture.issues.size, 0);
+});
+
+void test("legacy dictionaries reject modern-only cells and malformed relative signatures", () => {
+  const issues = new Set<string>();
+
+  assert.deepEqual(readDictionaryMethods(createLegacyLayoutCursor(Uint8Array.of(2, 64)),
+    new NativeLayoutTypeReader(), issues), []);
+  assert.deepEqual(readDictionaryMethods(createLegacyLayoutCursor(Uint8Array.of(2, 16, 126)),
+    new NativeLayoutTypeReader(), issues), []);
+  assert.match([...issues].join(" "), /\.NET 9.*unknown/);
+  assert.match([...issues].join(" "), /outside/);
+});
 
 void test("dictionary cells yield only explicit method function indices", () => {
   // Three inline cells: type handle, Method(has pointer), static data(kind).

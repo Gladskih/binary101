@@ -9,7 +9,8 @@ void test("NativeFormat structures match the generated upstream .NET reader", as
   const reference = process.env["BINARY101_NATIVE_FORMAT_REFERENCE"];
   if (!blob || !reference) { context.skip("Set NativeFormat blob and reference JSON paths."); return; }
 
-  const compared = await compareNativeFormatReference(blob, reference);
+  const compared = await compareNativeFormatReference(blob, reference,
+    process.env["BINARY101_NATIVE_FORMAT_LAYOUT"] === "dotnet9" ? "dotnet9" : "dotnet10");
 
   assert.ok(compared.records > 0);
   assert.ok(compared.fields > compared.records);

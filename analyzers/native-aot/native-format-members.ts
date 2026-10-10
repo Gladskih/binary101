@@ -5,16 +5,19 @@ import type {
 import type { NativeFormatHandle } from "./native-format-reader.js";
 import { NativeFormatSignatures } from "./native-format-signatures.js";
 import type { NativeFormatRecord, NativeFormatStore } from "./native-format-store.js";
+import { NativeFormatAttributes } from "./native-format-attributes.js";
 
 type ReflectedMember = NativeAotReflectionMethod | NativeAotReflectionField |
   NativeAotReflectionProperty | NativeAotReflectionEvent;
 
 export class NativeFormatMembers {
   readonly signatures: NativeFormatSignatures;
+  readonly attributes: NativeFormatAttributes;
   readonly #members = new Map<string, ReflectedMember | null>();
 
   constructor(readonly store: NativeFormatStore) {
     this.signatures = new NativeFormatSignatures(store);
+    this.attributes = new NativeFormatAttributes(store, this.signatures);
   }
 
   #warning(kind: string, handle: NativeFormatHandle, error: unknown): void {
@@ -35,6 +38,7 @@ export class NativeFormatMembers {
       member = { name: this.store.reader.string(record.handle("name")) } as TMember;
       member.flags = record.number("flags");
       decode(record, member);
+      member.attributes = this.attributes.of(record);
     } catch (error) { if (!record.failure) this.#warning(kind, handle, error); }
     this.#members.set(key, member);
     return member;
@@ -55,6 +59,8 @@ export class NativeFormatMembers {
       const signature = record.handle("signature");
       if (signature.offset) member.type = this.signatures.type(signature);
       member.offset = record.number("offset");
+      const value = record.handle("defaultValue");
+      if (value.offset) member.defaultValue = this.attributes.constants.value(value);
     });
   }
 
@@ -68,6 +74,8 @@ export class NativeFormatMembers {
         member.parameters = shape.handles("parameters").map(handle => this.signatures.type(handle));
       }
       member.semantics = this.semantics(record.handles("semantics"));
+      const value = record.handle("defaultValue");
+      if (value.offset) member.defaultValue = this.attributes.constants.value(value);
     });
   }
 
@@ -93,7 +101,10 @@ export class NativeFormatMembers {
   parameters(handles: NativeFormatHandle[]): NativeAotParameter[] {
     return this.#records(handles, "parameter", record => ({
       flags: record.number("flags"), sequence: record.number("sequence"),
-      name: this.store.reader.string(record.handle("name"))
+      name: this.store.reader.string(record.handle("name")),
+      attributes: this.attributes.of(record),
+      ...(record.values["defaultValue"] && record.handle("defaultValue").offset
+        ? { defaultValue: this.attributes.constants.value(record.handle("defaultValue")) } : {})
     }));
   }
 
@@ -101,7 +112,8 @@ export class NativeFormatMembers {
     return this.#records(handles, "generic parameter", record => ({
       number: record.number("number"), flags: record.number("flags"), kind: record.number("kind"),
       name: this.store.reader.string(record.handle("name")),
-      constraints: record.handles("constraints").map(handle => this.signatures.type(handle))
+      constraints: record.handles("constraints").map(handle => this.signatures.type(handle)),
+      attributes: this.attributes.of(record)
     }));
   }
 

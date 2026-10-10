@@ -15,7 +15,7 @@ export const syntheticNativeAotScope = {
 export const nativeAotReflectionNames = (metadata: NativeAotReflectionMetadata) => ({
   ...metadata,
   scopes: metadata.scopes.map(scope => ({
-    ...scope,
+    name: scope.name, moduleName: scope.moduleName, version: scope.version,
     types: scope.types.map(type => ({
       namespace: type.namespace, name: type.name,
       methods: type.methods.map(method => method.name),

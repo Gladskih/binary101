@@ -111,3 +111,18 @@ void test("marshalling maps never request unused NativeLayout or NativeReference
 
   assert.deepEqual((await parseNativeAotFunctionMaps(fixture.image, fixture.sections))?.warnings, []);
 });
+
+for (const majorVersion of [9, 10]) {
+  void test(`legacy ABI ${majorVersion} exact maps load NativeLayoutInfo and retain method names`, async () => {
+    const fixture = createNativeAotFunctionMapFixture(336, [Uint8Array.of(0, 0, 0, 0)]);
+    fixture.bytes.set([2, 77, 2, 0], 0x340);
+    fixture.sections.push({ type: 330, rva: 0x340, size: 4 }, { ...fixture.sections[1]!, type: 331 });
+
+    const parsed = await parseNativeAotFunctionMaps(fixture.image, fixture.sections, { majorVersion, minorVersion: 1 });
+
+    assert.deepEqual(parsed?.maps[0]?.entries[0], { declaringTypeIndex: 0, methodName: "M",
+      methodSignatureOffset: 3, genericArgumentIndices: [], entrypointRva: fixture.codeRvas[0] });
+    assert.deepEqual(parsed?.warnings, []);
+    assert.deepEqual(parsed?.maps[0]?.warnings, []);
+  });
+}

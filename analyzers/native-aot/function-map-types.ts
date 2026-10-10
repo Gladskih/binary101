@@ -1,5 +1,6 @@
 import type { NativeAotTemplateLayout } from "./template-layout.js";
 import type { NativeAotTypeMapEntry } from "./runtime-type-map.js";
+import type { NativeAotMethodIdentity } from "./layout-method-identity.js";
 
 export interface NativeAotStructMarshallingEntry {
   typeIndex: number;
@@ -18,19 +19,18 @@ export interface NativeAotDelegateMarshallingEntry {
   forwardCreationRva: number | null;
 }
 
-export interface NativeAotExactMethodEntry {
+export type NativeAotExactMethodEntry = NativeAotMethodIdentity & {
   declaringTypeIndex: number;
-  methodToken: number;
   genericArgumentIndices: number[];
   entrypointRva: number | null;
-}
+};
 
-export interface NativeAotTemplateMethodEntry extends NativeAotExactMethodEntry {
+export type NativeAotTemplateMethodEntry = NativeAotExactMethodEntry & {
   signatureOffset: number;
   layoutOffset: number;
   flags: number;
   layout?: NativeAotTemplateLayout;
-}
+};
 
 export interface NativeAotTemplateTypeEntry {
   typeIndex: number;

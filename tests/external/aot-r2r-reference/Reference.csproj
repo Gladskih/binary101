@@ -5,6 +5,14 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(NativeFormatOnly)' == 'true'">
+    <DefineConstants>$(DefineConstants);NATIVE_FORMAT_ONLY</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(NativeFormatOnly)' == 'true'">
+    <Compile Remove="*.cs" />
+    <Compile Include="NativeFormatReference.cs" />
+    <Compile Include="Program.cs" />
+  </ItemGroup>
   <!-- Source directories contain unmodified dotnet/runtime v10.0.0 reader files.
        Supply them with -p:NativeFormatSourceDirectory=... -p:ReadyToRunSourceDirectory=... .
        The reference executable is a developer test tool, never a browser dependency. -->
@@ -13,6 +21,10 @@
     <Compile Include="$(NativeFormatSourceDirectory)/NativeFormat*.cs" />
     <Compile Include="$(NativeFormatSourceDirectory)/NativeMetadataReader.cs" />
     <Compile Include="$(NativeFormatSourceDirectory)/DehydratedData.cs" />
+  </ItemGroup>
+  <!-- NativeFormatOnly also accepts unmodified v9.0.0 metadata reader sources.
+       Runtime map tools use the v10 NativeLayout definitions and are omitted in this mode. -->
+  <ItemGroup Condition="'$(NativeFormatOnly)' != 'true'">
     <Compile Include="$(ReadyToRunSourceDirectory)/NativeReader.cs" />
     <Compile Include="$(ReadyToRunSourceDirectory)/NativeArray.cs" />
     <Compile Include="$(ReadyToRunSourceDirectory)/NativeHashtable.cs" />
@@ -22,7 +34,9 @@
     <Compile Include="$(ReadyToRunSourceDirectory)/RuntimeConstants.cs" />
   </ItemGroup>
   <Target Name="RequireUpstreamSources" BeforeTargets="BeforeBuild">
-    <Error Condition="'$(NativeFormatSourceDirectory)' == '' or '$(ReadyToRunSourceDirectory)' == ''"
-      Text="Supply NativeFormatSourceDirectory and ReadyToRunSourceDirectory with .NET v10.0.0 reader sources." />
+    <Error Condition="'$(NativeFormatSourceDirectory)' == ''"
+      Text="Supply NativeFormatSourceDirectory with upstream .NET metadata reader sources." />
+    <Error Condition="'$(NativeFormatOnly)' != 'true' and '$(ReadyToRunSourceDirectory)' == ''"
+      Text="Supply ReadyToRunSourceDirectory with .NET v10.0.0 runtime reader sources." />
   </Target>
 </Project>

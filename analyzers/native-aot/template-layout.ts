@@ -2,11 +2,12 @@ import type { NativeFormatCursor } from "./native-format-cursor.js";
 import type { NativeAotFunctionReferences } from "./function-references.js";
 import { NativeLayoutTypeReader } from "./layout-type.js";
 import { readDictionaryMethods } from "./dictionary-methods.js";
+import type { NativeAotMethodIdentity } from "./layout-method-identity.js";
 
 export interface NativeAotTemplateLayout {
   classConstructorRva: number | null;
-  dictionaryMethods: { signatureOffset: number; flags: number; methodToken: number;
-    entrypointRva: number | null }[];
+  dictionaryMethods: (NativeAotMethodIdentity & { signatureOffset: number; flags: number;
+    entrypointRva: number | null })[];
 }
 
 // BagElementKind: DictionaryLayout=0x40 (relative offset), ClassConstructorPointer=0x4e

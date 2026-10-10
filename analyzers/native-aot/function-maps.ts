@@ -2,7 +2,7 @@ import type { NativeAotFunctionMap, NativeAotFunctionMaps } from "./function-map
 import type { NativeAotMetadata, NativeAotMetadataSection } from "./format.js";
 import type { NativeAotVirtualImage } from "./virtual-image-types.js";
 import { NativeFormatCursor } from "./native-format-cursor.js";
-import { NativeFormatReader } from "./native-format-reader.js";
+import { NativeFormatReader, type NativeFormatLayout } from "./native-format-reader.js";
 import { NativeAotFunctionReferences } from "./function-references.js";
 import { NativeAotTemplateLayouts } from "./template-layout.js";
 import { readClassConstructor } from "./class-constructors.js";
@@ -20,7 +20,8 @@ const isFunctionMapType = (type: number): type is NativeAotFunctionMap["type"] =
   [301, 310, 316, 317, 321, 322, 336].includes(type);
 
 const loadLayout = async (
-  image: NativeAotVirtualImage, sections: NativeAotMetadataSection[], issues: Set<string>
+  image: NativeAotVirtualImage, sections: NativeAotMetadataSection[], issues: Set<string>,
+  wireLayout: NativeFormatLayout
 ): Promise<NativeFormatCursor> => {
   const layouts = sections.filter(section => section.type === 330);
   if (layouts.length !== 1) {
@@ -28,7 +29,7 @@ const loadLayout = async (
     return new NativeFormatCursor(new NativeFormatReader(new Uint8Array()), 0);
   }
   return new NativeFormatCursor(new NativeFormatReader(
-    await readNativeAotSectionBytes(image, layouts[0]!, issues)), 0);
+    await readNativeAotSectionBytes(image, layouts[0]!, issues), wireLayout), 0);
 };
 
 class FunctionMapReader {
@@ -67,7 +68,7 @@ class FunctionMapReader {
         return { ...entry, layout: await this.#layouts!.read(entry.layoutOffset) };
       }, issues), warnings: [...issues] };
     return { type, entries: await readNativeAotHashEntries(bytes,
-      cursor => readExactMethodEntry(cursor, this.#references.native), issues), warnings: [...issues] };
+      cursor => readExactMethodEntry(cursor, this.#references.native, this.layout), issues), warnings: [...issues] };
   }
 }
 
@@ -82,6 +83,9 @@ const groupMaps = (sections: NativeAotMetadataSection[]) => {
   return groups;
 };
 
+const needsLayout = (groups: ReturnType<typeof groupMaps>, wireLayout: NativeFormatLayout): boolean =>
+  groups.has(321) || groups.has(322) || (wireLayout === "dotnet9" && groups.has(336));
+
 export const parseNativeAotFunctionMaps = async (
   image: NativeAotVirtualImage, sections: NativeAotMetadataSection[],
   version?: Pick<NativeAotMetadata, "majorVersion" | "minorVersion">
@@ -89,7 +93,9 @@ export const parseNativeAotFunctionMaps = async (
   const groups = groupMaps(sections);
   if (!groups.size) return undefined;
   const issues = new Set<string>();
-  const layout = groups.has(321) || groups.has(322) ? await loadLayout(image, sections, issues) : undefined;
+  const wireLayout = version && [9, 10].includes(version.majorVersion) ? "dotnet9" : "dotnet10";
+  const layout = needsLayout(groups, wireLayout) ?
+    await loadLayout(image, sections, issues, wireLayout) : undefined;
   const reader = new FunctionMapReader(image, sections, layout, issues, version);
   const maps: NativeAotFunctionMap[] = [];
   for (const [type, group] of groups) {

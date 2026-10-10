@@ -35,7 +35,7 @@ void test("retains collection prefixes, skips nil handles and rejects unknown re
   const partial = store.record({ type: 0x3c, offset: 1 });
 
   assert.deepEqual(partial.handles("arguments"), [{ type: 0x2f, offset: 4 }]);
-  assert.equal(store.record({ type: 0x10, offset: 1 }).failure instanceof Error, true);
+  assert.equal(store.record({ type: 0x40, offset: 1 }).failure instanceof Error, true);
   assert.match([...warnings].join(" "), /Unsupported record type/);
   assert.deepEqual(new NativeFormatStore(new NativeFormatReader(Uint8Array.of(0, 0, 2, 0)),
     new Set()).record({ type: 0x3c, offset: 1 }).handles("arguments"), []);
@@ -51,4 +51,11 @@ void test("keeps byte blobs and unsigned dimensions distinct from signed bounds"
   assert.deepEqual(store.record({ type: 1, offset: 11 }).numbers("sizes"), [127]);
   assert.deepEqual(store.record({ type: 1, offset: 11 }).numbers("lowerBounds"), [-1]);
   assert.equal(warnings.size, 0);
+});
+void test("absent fields cannot resolve to inherited JavaScript object properties", () => {
+  const store = new NativeFormatStore(new NativeFormatReader(Uint8Array.of(0)), new Set());
+  const record = store.record({ type: 0x14, offset: 0 });
+
+  assert.throws(() => record.handle("constructor"), /could not be read/);
+  assert.throws(() => record.handle("toString"), /could not be read/);
 });

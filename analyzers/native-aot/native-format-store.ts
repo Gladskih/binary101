@@ -2,8 +2,10 @@ import {
   NativeFormatError, type NativeFormatHandle, type NativeFormatReader
 } from "./native-format-reader.js";
 import { nativeFormatSchemas, type NativeFormatField } from "./native-format-schema.js";
+import { isNativeFormatCollection, nativeFormatCollectionScalar,
+  readNativeFormatScalar, type NativeFormatScalar } from "./native-format-scalars.js";
 
-type RecordValue = number | Uint8Array | NativeFormatHandle | NativeFormatHandle[] | number[];
+type RecordValue = NativeFormatScalar | Uint8Array | NativeFormatHandle | NativeFormatHandle[] | NativeFormatScalar[];
 
 // HandleType is the contiguous range 1..63 in NativeFormatReaderCommonGen.cs.
 const handleTypes = Array.from({ length: 63 }, (_, index) => index + 1);
@@ -13,7 +15,7 @@ export class NativeFormatRecord {
   failure?: unknown;
 
   #value(name: string): RecordValue {
-    const value = this.values[name];
+    const value = Object.hasOwn(this.values, name) ? this.values[name] : undefined;
     if (value === undefined) throw new NativeFormatError(`Record field ${name} could not be read.`);
     return value;
   }
@@ -67,7 +69,7 @@ export class NativeFormatStore {
 
   #readField(record: NativeFormatRecord, field: NativeFormatField, offset: number): number {
     const [name, encoding, type] = field;
-    if (encoding === "handles" || encoding === "unsigneds" || encoding === "signeds") {
+    if (isNativeFormatCollection(encoding)) {
       return this.#readCollection(record, field, offset);
     }
     if (encoding === "handle") {
@@ -75,8 +77,7 @@ export class NativeFormatStore {
       record.values[name] = decoded.value;
       return decoded.nextOffset;
     }
-    const decoded = encoding === "bytes" ? this.reader.bytes(offset) :
-      encoding === "byte" ? this.reader.uint8(offset) : this.reader.unsigned(offset);
+    const decoded = encoding === "bytes" ? this.reader.bytes(offset) : readNativeFormatScalar(this.reader, encoding, offset);
     record.values[name] = decoded.value;
     return decoded.nextOffset;
   }
@@ -85,14 +86,14 @@ export class NativeFormatStore {
     const [name, encoding, type] = field;
     const count = this.reader.collectionCount(offset);
     let nextOffset = count.nextOffset;
-    const values: (NativeFormatHandle | number)[] = [];
+    const values: (NativeFormatHandle | NativeFormatScalar)[] = [];
     // Preserve successfully read elements when a later element is malformed.
-    record.values[name] = values as NativeFormatHandle[] | number[];
+    record.values[name] = values as NativeFormatHandle[] | NativeFormatScalar[];
     for (let index = 0; index < count.value; index += 1) {
-      const decoded = encoding === "handles" ?
+      const decoded = encoding === "handles" || encoding === "values" ?
         this.reader.handle(nextOffset, type ? [type] : handleTypes) :
-        encoding === "signeds" ? this.reader.signed(nextOffset) : this.reader.unsigned(nextOffset);
-      if (typeof decoded.value === "number" || decoded.value.offset) values.push(decoded.value);
+        readNativeFormatScalar(this.reader, nativeFormatCollectionScalar(encoding), nextOffset);
+      if (typeof decoded.value !== "object" || decoded.value.offset || encoding === "values") values.push(decoded.value);
       nextOffset = decoded.nextOffset;
     }
     return nextOffset;
