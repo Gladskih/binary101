@@ -62,3 +62,14 @@ void test("multiple component payloads aggregate matching metrics", () => {
   assert.equal(statistics.find(statistic => statistic.label === "Method-definition entry points")?.value, 4);
   assert.equal(statistics.find(statistic => statistic.label === "Methods with fixups")?.value, 2);
 });
+
+void test("summarizes GC records from runtime functions alongside debug information", () => {
+  const section = createReadyToRunRendererFixture().sections[2]!;
+  const statistics = readyToRunSectionStatistics({ ...section, decoded: { kind: "gc-methods", methods: [
+    { runtimeFunctionIndex: 0, startRva: 32, info: { header: { flags: 0, codeLength: 32 },
+      slots: [], safePoints: [], interruptibleRanges: [], transitions: [] } }
+  ] } });
+
+  assert.equal(statistics[0]?.label, "Methods with GC maps");
+  assert.equal(statistics[0]?.value, 1);
+});

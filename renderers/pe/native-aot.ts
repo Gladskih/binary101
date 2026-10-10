@@ -1,4 +1,5 @@
 "use strict";
+import { renderNativeAotMethodGc } from "../native-aot/method-gc.js";
 
 import { hex, humanSize } from "../../binary-utils.js";
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
@@ -55,6 +56,7 @@ const renderConfirmedMetadata = (metadata: NativeAotMetadata, out: string[]): vo
   out.push(renderNativeAotInvokeMap(metadata.invokeMap));
   out.push(renderNativeAotStackTraceMap(metadata.stackTraceMap));
   out.push(renderNativeAotFunctionMaps(metadata.functionMaps));
+  out.push(renderNativeAotMethodGc(metadata.methodGcMaps));
   out.push(renderPeSectionEnd());
 };
 

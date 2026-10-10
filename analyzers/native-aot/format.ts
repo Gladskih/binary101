@@ -3,6 +3,7 @@ import type { NativeAotMethodSignature } from "./native-format-signatures.js";
 import type { NativeAotFunctionMaps } from "./function-map-types.js";
 import type { NativeAotAttribute } from "./native-format-attributes.js";
 import type { NativeAotConstant } from "./native-format-constant-nodes.js";
+import type { NativeAotMethodGcMaps } from "./gc-info-types.js";
 
 // ModuleHeaders.h and ReadyToRunHeaderNode.cs define this header and its emitted layout:
 // https://github.com/dotnet/runtime/blob/main/src/coreclr/nativeaot/Runtime/inc/ModuleHeaders.h
@@ -44,6 +45,7 @@ export interface NativeAotMetadata {
   invokeMap?: NativeAotInvokeMap;
   stackTraceMap?: NativeAotStackTraceMap;
   functionMaps?: NativeAotFunctionMaps;
+  methodGcMaps?: NativeAotMethodGcMaps;
 }
 
 export interface NativeAotStackTraceMap {

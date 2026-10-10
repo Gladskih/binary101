@@ -1,4 +1,5 @@
 "use strict";
+import { renderNativeAotMethodGc } from "../native-aot/method-gc.js";
 
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { hex, humanSize } from "../../binary-utils.js";
@@ -56,5 +57,6 @@ export const renderElfNativeAot = (elf: ElfParseResult, out: string[]): void => 
   out.push(renderNativeAotInvokeMap(metadata.invokeMap));
   out.push(renderNativeAotStackTraceMap(metadata.stackTraceMap));
   out.push(renderNativeAotFunctionMaps(metadata.functionMaps));
+  out.push(renderNativeAotMethodGc(metadata.methodGcMaps));
   out.push(renderElfSectionEnd());
 };
