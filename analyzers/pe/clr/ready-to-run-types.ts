@@ -1,5 +1,7 @@
 "use strict";
 
+import type { ReadyToRunDebugMethod } from "./ready-to-run-debug-types.js";
+
 export interface PeClrReadyToRunSection {
   type: number;
   name: string;
@@ -42,6 +44,7 @@ export interface PeClrReadyToRunThunk {
 
 export type PeClrReadyToRunSectionData =
   | { kind: "text"; text: string }
+  | { kind: "debug-info"; methods: ReadyToRunDebugMethod[] }
   | { kind: "thunks"; entries: PeClrReadyToRunThunk[] }
   | { kind: "methods"; methods: PeClrReadyToRunMethod[] }
   | { kind: "instance-methods"; methods: PeClrReadyToRunInstanceMethod[] }

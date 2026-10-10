@@ -10,6 +10,7 @@ import { validateReadyToRunReferences } from "./ready-to-run-references.js";
 import type { PeClrReadyToRun } from "./ready-to-run-types.js";
 import { readReadyToRunDirectory } from "./ready-to-run-directory.js";
 import { decodeReadyToRunComponents } from "./ready-to-run-components.js";
+import { decodeReadyToRunDebugSections } from "./ready-to-run-debug-sections.js";
 
 const emptyReadyToRun = (
   status: PeClrReadyToRun["status"],
@@ -50,6 +51,7 @@ const decodeHeader = async (
     majorVersion: header.getUint16(4, true), minorVersion: header.getUint16(6, true),
     flags: header.getUint32(8, true), sectionCount, sections, issues };
   await decodeReadyToRunComponents(reader, mapper, data, machine, cache);
+  await decodeReadyToRunDebugSections(reader, mapper, data, machine);
   return data;
 };
 
