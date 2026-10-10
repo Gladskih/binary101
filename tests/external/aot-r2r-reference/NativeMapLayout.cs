@@ -7,6 +7,8 @@ enum NativeMapAbi { DotNet9, DotNet10 }
 
 sealed class NativeMapLayout(NativeMapAbi abi)
 {
+    enum Continuation { Lookback, ArrayDimensions }
+
     public Dictionary<string, object?> Identity(ref NativeParser parser)
     {
         if (abi == NativeMapAbi.DotNet10) return new() { ["methodToken"] = parser.GetUnsigned() };
@@ -16,43 +18,78 @@ sealed class NativeMapLayout(NativeMapAbi abi)
     }
     public static uint ExternalType(ref NativeParser parser)
     {
-        var kind = parser.GetTypeSignatureKind(out uint data);
-        if (kind == TypeSignatureKind.Lookback)
+        var current = parser;
+        bool first = true;
+        while (true)
         {
-            var lookback = parser.GetLookbackParser(data);
-            return ExternalType(ref lookback);
+            uint start = current.Offset;
+            var kind = current.GetTypeSignatureKind(out uint data);
+            if (first) { parser = current; first = false; }
+            if (kind != TypeSignatureKind.Lookback)
+            {
+                if (kind != TypeSignatureKind.External)
+                    throw new InvalidDataException("Expected external type");
+                return data;
+            }
+            var lookback = current.GetLookbackParser(data);
+            if (lookback.Offset >= start) throw new BadImageFormatException("Invalid type lookback");
+            current = lookback;
         }
-        if (kind != TypeSignatureKind.External) throw new InvalidDataException("Expected external type");
-        return data;
     }
 
     public static void Type(ref NativeParser parser)
     {
-        var kind = parser.GetTypeSignatureKind(out uint data);
-        switch (kind)
+        var frames = new Stack<(NativeParser parser, ulong pending,
+            Continuation kind, uint lookbackOffset)>();
+        var activeLookbacks = new HashSet<uint>();
+        ulong pending = 1;
+        while (pending != 0 || frames.Count != 0)
         {
-            case TypeSignatureKind.Lookback:
-                var lookback = parser.GetLookbackParser(data);
-                Type(ref lookback);
-                break;
-            case TypeSignatureKind.Variable:
-            case TypeSignatureKind.BuiltIn:
-            case TypeSignatureKind.External: break;
-            case TypeSignatureKind.Modifier: Type(ref parser); break;
-            case TypeSignatureKind.Instantiation:
-                for (uint index = 0; index <= data; index++) Type(ref parser);
-                break;
-            case TypeSignatureKind.MultiDimArray:
-                Type(ref parser);
-                Integers(ref parser);
-                Integers(ref parser);
-                break;
-            case TypeSignatureKind.FunctionPointer:
-                parser.GetUnsigned();
-                uint count = parser.GetSequenceCount();
-                for (uint index = 0; index <= count; index++) Type(ref parser);
-                break;
-            default: throw new InvalidDataException("Unknown type kind");
+            if (pending == 0)
+            {
+                var frame = frames.Pop();
+                if (frame.kind == Continuation.Lookback)
+                {
+                    activeLookbacks.Remove(frame.lookbackOffset);
+                    parser = frame.parser;
+                }
+                else
+                {
+                    Integers(ref parser);
+                    Integers(ref parser);
+                }
+                pending = frame.pending;
+                continue;
+            }
+            pending--;
+            uint start = parser.Offset;
+            var kind = parser.GetTypeSignatureKind(out uint data);
+            switch (kind)
+            {
+                case TypeSignatureKind.Lookback:
+                    var lookback = parser.GetLookbackParser(data);
+                    if (lookback.Offset >= start) throw new BadImageFormatException("Invalid type lookback");
+                    if (!activeLookbacks.Add(lookback.Offset))
+                        throw new BadImageFormatException("Cyclic type lookback");
+                    frames.Push((parser, pending, Continuation.Lookback, lookback.Offset));
+                    parser = lookback;
+                    pending = 1;
+                    break;
+                case TypeSignatureKind.Variable:
+                case TypeSignatureKind.BuiltIn:
+                case TypeSignatureKind.External: break;
+                case TypeSignatureKind.Modifier: pending++; break;
+                case TypeSignatureKind.Instantiation: pending += (ulong)data + 1; break;
+                case TypeSignatureKind.MultiDimArray:
+                    frames.Push((parser, pending, Continuation.ArrayDimensions, 0));
+                    pending = 1;
+                    break;
+                case TypeSignatureKind.FunctionPointer:
+                    parser.GetUnsigned();
+                    pending += (ulong)parser.GetSequenceCount() + 1;
+                    break;
+                default: throw new InvalidDataException("Unknown type kind");
+            }
         }
     }
 

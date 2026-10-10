@@ -3,6 +3,8 @@ using ILCompiler.Reflection.ReadyToRun;
 // Independent offset-only traversal of R2RSignatureDecoder.ParseType/ParseMethod, v10.0.0.
 // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/aot/ILCompiler.Reflection.ReadyToRun/ReadyToRunSignature.cs
 // It uses the upstream NativeReader's ECMA compressed integer reader.
+// Element codes follow the runtime's CorElementType, including ZapSig extensions:
+// https://source.dot.net/ILCompiler.ReadyToRun/parent/parent/Common/Internal/Runtime/CorConstants.cs.html
 sealed class R2RSignatureSkipper
 {
     readonly NativeReader reader;
@@ -10,8 +12,20 @@ sealed class R2RSignatureSkipper
     int position;
     enum TypeTask { Type, Types, GenericArguments, ArrayShape, FunctionArguments }
     readonly record struct Pending(TypeTask Task, uint Remaining = 0);
-    static readonly HashSet<int> primitives = new() {
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 22, 24, 25, 28, 62 };
+    enum Element : byte
+    {
+        Void = 1, Boolean, Char, I1, U1, I2, U2, I4, U4, I8, U8, R4, R8, String,
+        Ptr, ByRef, ValueType, Class, Var, Array, GenericInst, TypedByRef,
+        NativeInt = 24, NativeUInt, FunctionPointer = 27, Object, SzArray, MethodVar,
+        RequiredModifier, OptionalModifier, CanonZapSig = 62, ModuleZapSig,
+        Sentinel = 65, Pinned = 69
+    }
+    static readonly HashSet<Element> primitives = [
+        Element.Void, Element.Boolean, Element.Char, Element.I1, Element.U1,
+        Element.I2, Element.U2, Element.I4, Element.U4, Element.I8, Element.U8,
+        Element.R4, Element.R8, Element.String, Element.TypedByRef,
+        Element.NativeInt, Element.NativeUInt, Element.Object, Element.CanonZapSig
+    ];
 
     R2RSignatureSkipper(NativeReader reader, int offset, int end)
     {
@@ -49,16 +63,21 @@ sealed class R2RSignatureSkipper
     }
     void ReadType(Stack<Pending> pending)
     {
-        int element = Byte() & 0x7f;
+        Element element = (Element)(Byte() & 0x7f);
         if (primitives.Contains(element)) return;
         switch (element)
         {
-            case 15 or 16 or 29 or 69: pending.Push(new(TypeTask.Type)); break;
-            case 17 or 18 or 19 or 30: UInt(); break;
-            case 20: pending.Push(new(TypeTask.ArrayShape)); pending.Push(new(TypeTask.Type)); break;
-            case 21: pending.Push(new(TypeTask.GenericArguments)); pending.Push(new(TypeTask.Type)); break;
-            case 27: ReadFunction(pending); break;
-            case 31 or 32 or 63: UInt(); pending.Push(new(TypeTask.Type)); break;
+            case Element.Ptr or Element.ByRef or Element.SzArray or Element.Pinned:
+                pending.Push(new(TypeTask.Type)); break;
+            case Element.ValueType or Element.Class or Element.Var or Element.MethodVar:
+                UInt(); break;
+            case Element.Array:
+                pending.Push(new(TypeTask.ArrayShape)); pending.Push(new(TypeTask.Type)); break;
+            case Element.GenericInst:
+                pending.Push(new(TypeTask.GenericArguments)); pending.Push(new(TypeTask.Type)); break;
+            case Element.FunctionPointer: ReadFunction(pending); break;
+            case Element.RequiredModifier or Element.OptionalModifier or Element.ModuleZapSig:
+                UInt(); pending.Push(new(TypeTask.Type)); break;
             default: throw new InvalidDataException("Unknown R2R type");
         }
     }
@@ -86,7 +105,7 @@ sealed class R2RSignatureSkipper
     void ReadFunctionArguments(Stack<Pending> pending, uint remaining)
     {
         if (remaining == 0) return;
-        while (position < end && (reader[position] & 0x7f) == 0x41) Byte();
+        while (position < end && (Element)(reader[position] & 0x7f) == Element.Sentinel) Byte();
         pending.Push(new(TypeTask.FunctionArguments, remaining - 1));
         pending.Push(new(TypeTask.Type));
     }
