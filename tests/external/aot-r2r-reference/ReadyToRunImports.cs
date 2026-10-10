@@ -2,6 +2,8 @@ using System.Reflection.PortableExecutable;
 using System.Buffers.Binary;
 using static ReadyToRunReference;
 
+// 20-byte import descriptor and target-machine encoding:
+// https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/inc/readytorun.h
 static class ReadyToRunImports
 {
     static int PointerSize(PEReader pe)
@@ -33,10 +35,17 @@ static class ReadyToRunImports
                 value = cells.AsSpan(index * actualWidth, actualWidth).ToArray().Select(value => (int)value),
                 signatureRva = sigs == null ? (uint?)null : UInt32(sigs, index * 4)
             }).ToArray();
-            imports.Add(new { rva = cellsRva, size = cellsSize,
+            imports.Add(new
+            {
+                rva = cellsRva,
+                size = cellsSize,
                 flags = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(position + 8)),
-                type = bytes[position + 10], entrySize = width, signaturesRva = signatures,
-                auxiliaryDataRva = UInt32(bytes, position + 16), entries });
+                type = bytes[position + 10],
+                entrySize = width,
+                signaturesRva = signatures,
+                auxiliaryDataRva = UInt32(bytes, position + 16),
+                entries
+            });
         }
         return imports;
     }

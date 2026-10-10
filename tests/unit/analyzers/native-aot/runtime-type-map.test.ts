@@ -26,13 +26,15 @@ void test("runtime types retain GC layouts and preserve other fields when a desc
 for (const width of [4, 8] as const) {
   void test(`decodes ${width}-byte vtables and distinguishes methods, dictionaries and null slots`, async () => {
     const fixture = createNativeAotRuntimeTypeFixture(width);
+    // EETypeElementType.Class (0x14), shifted by ElementTypeShift=26.
+    // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Runtime/MethodTable.Constants.cs
 
     const entry = await new NativeAotRuntimeTypes(fixture.references).read(fixture.cursor);
 
     assert.deepEqual(entry, { typeIndex: 0, metadataHandle: 10, runtimeType: {
-      rva: 0x180, flags: 0x04000000, baseSize: 24, numVtableSlots: 3, numInterfaces: 1,
+      rva: fixture.typeRva, flags: 0x14 << 26, baseSize: 24, numVtableSlots: 3, numInterfaces: 1,
       hashCode: 0x12345678, slots: [{ kind: "method", rva: fixture.codeRvas[0] },
-        { kind: "data", rva: 0x220 }, { kind: "null" }]
+        { kind: "data", rva: fixture.dictionaryRva }, { kind: "null" }]
     } });
     assert.deepEqual([...fixture.issues], []);
   });
@@ -45,7 +47,7 @@ void test("aliases reuse decoded headers and slot reads", async context => {
   const first = await reader.read(fixture.cursor);
   const count = reads.mock.callCount();
 
-  const second = await reader.read(new NativeFormatCursor(new NativeFormatReader(Uint8Array.of(0, 22)), 0));
+  const second = await reader.read(new NativeFormatCursor(new NativeFormatReader(Uint8Array.of(0, 11 * 2)), 0));
 
   assert.equal(second.runtimeType, first.runtimeType);
   assert.equal(second.metadataHandle, 11);
@@ -54,11 +56,11 @@ void test("aliases reuse decoded headers and slot reads", async context => {
 
 void test("malformed fixed headers, I/O failures and unaligned type references warn", async context => {
   const fixture = createNativeAotRuntimeTypeFixture();
-  fixture.view.setInt32(fixture.fixupsRva, 0x181 - fixture.fixupsRva, true);
+  fixture.view.setInt32(fixture.fixupsRva, fixture.typeRva + 1 - fixture.fixupsRva, true);
 
   assert.equal((await new NativeAotRuntimeTypes(fixture.references).read(fixture.cursor)).runtimeType, null);
   assert.match([...fixture.issues].join(), /alignment/);
-  fixture.view.setInt32(fixture.fixupsRva, 0x180 - fixture.fixupsRva, true);
+  fixture.view.setInt32(fixture.fixupsRva, fixture.typeRva - fixture.fixupsRva, true);
   context.mock.method(fixture.image, "readData", async () => { throw "failure"; });
   const other = createNativeAotRuntimeTypeFixture();
   context.mock.method(other.references.data, "unsigned", async () => { throw "failure"; });
@@ -74,7 +76,7 @@ void test("unmapped header fields and missing reference indices preserve raw map
   assert.equal((await new NativeAotRuntimeTypes(fixture.references).read(fixture.cursor)).runtimeType, null);
   assert.match([...fixture.issues].join(), /fixed header/);
   const missing = createNativeAotRuntimeTypeFixture();
-  const cursor = new NativeFormatCursor(new NativeFormatReader(Uint8Array.of(4, 20)), 0);
+  const cursor = new NativeFormatCursor(new NativeFormatReader(Uint8Array.of(2 * 2, 10 * 2)), 0);
   assert.equal((await new NativeAotRuntimeTypes(missing.references).read(cursor)).runtimeType, null);
   assert.match([...missing.issues].join(), /data index/);
 });
@@ -82,26 +84,27 @@ void test("unmapped header fields and missing reference indices preserve raw map
 void test("retains complete vtable slots before an unmapped tail", async context => {
   const fixture = createNativeAotRuntimeTypeFixture();
   context.mock.method(fixture.image, "isMappedRange", (address: number, size: number) =>
-    address >= 0 && address + size <= 0x1a8);
+    address >= 0 && address + size <= fixture.vtableRva + fixture.image.pointerSize * 2);
 
   const type = (await new NativeAotRuntimeTypes(fixture.references).read(fixture.cursor)).runtimeType;
 
   assert.equal(type?.numVtableSlots, 3);
-  assert.deepEqual(type?.slots, [{ kind: "method", rva: fixture.codeRvas[0] }, { kind: "data", rva: 0x220 }]);
+  assert.deepEqual(type?.slots, [{ kind: "method", rva: fixture.codeRvas[0] }, { kind: "data", rva: fixture.dictionaryRva }]);
   assert.match([...fixture.issues].join(), /vtable is truncated/);
 });
 
 void test("visits all slots declared by the ushort count without a parser cap", async context => {
   const fixture = createNativeAotRuntimeTypeFixture();
   // MethodTable._usNumVtableSlots is ushort; this is the format's maximum count.
-  fixture.view.setUint16(0x190, 65535, true);
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/nativeaot/Common/src/Internal/Runtime/MethodTable.cs
+  fixture.view.setUint16(fixture.countsRva, 2 ** 16 - 1, true);
   context.mock.method(fixture.image, "isMappedRange", () => true);
   context.mock.method(fixture.image, "isDataRange", () => true);
   context.mock.method(fixture.image, "readPointerValue", async () => 0n);
 
   const type = (await new NativeAotRuntimeTypes(fixture.references).read(fixture.cursor)).runtimeType;
 
-  assert.equal(type?.slots.length, 65535);
+  assert.equal(type?.slots.length, 2 ** 16 - 1);
   assert.deepEqual(type?.slots.at(-1), { kind: "null" });
   assert.deepEqual([...fixture.issues], []);
 });
@@ -119,7 +122,7 @@ void test("executable or unmapped type headers cannot masquerade as runtime type
 void test("requires the complete fixed header to be mapped before interpreting its fields", async context => {
   const fixture = createNativeAotRuntimeTypeFixture();
   context.mock.method(fixture.image, "isMappedRange", (address: number, size: number) =>
-    address !== 0x180 || size <= 8);
+    address !== fixture.typeRva || size <= 8);
 
   const entry = await new NativeAotRuntimeTypes(fixture.references).read(fixture.cursor);
 

@@ -1,77 +1,86 @@
+import { nativeFormatFixtureKinds as kinds, nativeFormatSampleInteger } from "./native-format-wire-fixture.js";
 import { NativeFormatFixtureWriter } from "./native-format-metadata-fixture.js";
 import { nativeFormatWideBytes } from "./native-format-constant-fixture.js";
 
 const writeConstructor = (writer: NativeFormatFixtureWriter): void => {
+  // Record field order: TypeReference, TypeDefinition, Method, QualifiedMethod,
+  // MemberReference constructors in NativeFormatReaderGen.cs.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs
   writer.label("type");
   writer.unsigned(0);
-  writer.handle(0x1a, "type-name");
+  writer.handle(kinds.string, "type-name");
   writer.label("definition");
   writer.unsigned(0);
   writer.unsigned(0);
   writer.unsigned(0);
-  writer.handle(0x1a, "type-name");
-  for (let index = 0; index < 12; index++) writer.unsigned(0);
+  writer.handle(kinds.string, "type-name");
+  for (const _field of ["size", "packingSize", "enclosingType", "nestedTypes", "methods", "fields",
+    "properties", "events", "genericParameters", "interfaces", "customAttributes"]) writer.unsigned(0);
   writer.label("constructor");
   writer.unsigned(0);
   writer.unsigned(0);
-  writer.handle(0x1a, "constructor-name");
-  for (let index = 0; index < 4; index++) writer.unsigned(0);
+  writer.handle(kinds.string, "constructor-name");
+  for (const _field of ["signature", "parameters", "genericParameters", "customAttributes"]) writer.unsigned(0);
   writer.label("qualified");
-  writer.handle(0x28, "constructor");
-  writer.handle(0x3a, "definition");
+  writer.handle(kinds.method, "constructor");
+  writer.handle(kinds.typeDefinition, "definition");
   writer.label("member");
-  writer.variantHandle(0x3d, "type");
-  writer.handle(0x1a, "constructor-name");
+  writer.variantHandle(kinds.typeReference, "type");
+  writer.handle(kinds.string, "constructor-name");
   writer.unsigned(0);
 };
 
 const writeAttributes = (writer: NativeFormatFixtureWriter): void => {
+  // Five fixed arguments: long, enum, strings, Type, enum array. NamedArgument
+  // member kinds are Field=1 and Property=0 in NativeFormatReaderCommonGen.cs.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderCommonGen.cs
   writer.label("attribute");
-  writer.variantHandle(0x27, "member");
+  writer.variantHandle(kinds.member, "member");
   writer.unsigned(5);
-  writer.variantHandle(0x13, "long");
-  writer.variantHandle(0x0c, "enum");
-  writer.variantHandle(0x19, "strings");
-  writer.variantHandle(0x3d, "type");
-  writer.variantHandle(0x0b, "enum-array");
-  writer.collection([[0x2e, "named-field"], [0x2e, "named-property"]]);
+  writer.variantHandle(kinds.int64, "long");
+  writer.variantHandle(kinds.enum, "enum");
+  writer.variantHandle(kinds.stringArray, "strings");
+  writer.variantHandle(kinds.typeReference, "type");
+  writer.variantHandle(kinds.enumArray, "enum-array");
+  writer.collection([[kinds.namedArgument, "named-field"], [kinds.namedArgument, "named-property"]]);
   writer.label("qualified-attribute");
-  writer.variantHandle(0x36, "qualified");
+  writer.variantHandle(kinds.qualifiedMethod, "qualified");
   writer.unsigned(0);
   writer.unsigned(0);
   writer.label("named-field");
   writer.unsigned(1);
-  writer.handle(0x1a, "field-name");
-  writer.variantHandle(0x3d, "type");
-  writer.variantHandle(0x11, "integer");
+  writer.handle(kinds.string, "field-name");
+  writer.variantHandle(kinds.typeReference, "type");
+  writer.variantHandle(kinds.int32, "integer");
   writer.label("named-property");
   writer.unsigned(0);
-  writer.handle(0x1a, "property-name");
-  writer.variantHandle(0x3d, "type");
-  writer.variantHandle(0x04, "boolean");
+  writer.handle(kinds.string, "property-name");
+  writer.variantHandle(kinds.typeReference, "type");
+  writer.variantHandle(kinds.boolean, "boolean");
 };
 
 const writeValues = (writer: NativeFormatFixtureWriter): void => {
   writer.label("long");
-  writer.bytes.push(...nativeFormatWideBytes(9007199254740993n));
+  // First integer above the exact binary64 range; must retain its full decimal value.
+  writer.bytes.push(...nativeFormatWideBytes(2n ** 53n + 1n));
   writer.label("integer");
-  writer.unsigned(42);
+  writer.unsigned(nativeFormatSampleInteger);
   writer.label("boolean");
   writer.bytes.push(0);
   writer.label("enum");
-  writer.variantHandle(0x11, "integer");
-  writer.variantHandle(0x3d, "type");
+  writer.variantHandle(kinds.int32, "integer");
+  writer.variantHandle(kinds.typeReference, "type");
   writer.label("enum-array");
-  writer.variantHandle(0x3d, "type");
-  writer.variantHandle(0x10, "integers");
+  writer.variantHandle(kinds.typeReference, "type");
+  writer.variantHandle(kinds.int32Array, "integers");
   writer.label("integers");
   writer.unsigned(2);
-  writer.unsigned(42);
-  writer.unsigned(43);
+  writer.unsigned(nativeFormatSampleInteger);
+  writer.unsigned(nativeFormatSampleInteger + 1);
   writer.label("strings");
   writer.unsigned(3);
-  writer.variantHandle(0x1a, "text");
-  writer.variantHandle(0x14, "null");
+  writer.variantHandle(kinds.string, "text");
+  writer.variantHandle(kinds.reference, "null");
   writer.unsigned(0);
   writer.label("null");
   writer.string("text", "<hello>");
@@ -80,24 +89,24 @@ const writeValues = (writer: NativeFormatFixtureWriter): void => {
 const writeDefaultOwners = (writer: NativeFormatFixtureWriter): void => {
   writer.label("field");
   writer.unsigned(0);
-  writer.handle(0x1a, "field-name");
+  writer.handle(kinds.string, "field-name");
   writer.unsigned(0);
-  writer.variantHandle(0x13, "long");
+  writer.variantHandle(kinds.int64, "long");
   writer.unsigned(0);
-  writer.collection([[0x21, "attribute"]]);
+  writer.collection([[kinds.attribute, "attribute"]]);
   writer.label("property");
   writer.unsigned(0);
-  writer.handle(0x1a, "property-name");
+  writer.handle(kinds.string, "property-name");
   writer.unsigned(0);
   writer.unsigned(0);
-  writer.variantHandle(0x11, "integer");
-  writer.collection([[0x21, "attribute"]]);
+  writer.variantHandle(kinds.int32, "integer");
+  writer.collection([[kinds.attribute, "attribute"]]);
   writer.label("parameter");
   writer.unsigned(0);
   writer.unsigned(1);
-  writer.handle(0x1a, "field-name");
-  writer.variantHandle(0x04, "boolean");
-  writer.collection([[0x21, "attribute"]]);
+  writer.handle(kinds.string, "field-name");
+  writer.variantHandle(kinds.boolean, "boolean");
+  writer.collection([[kinds.attribute, "attribute"]]);
 };
 
 export const createNativeFormatAttributeFixture = () => {

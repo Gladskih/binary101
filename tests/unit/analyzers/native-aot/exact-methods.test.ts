@@ -4,9 +4,14 @@ import { readExactMethodEntry } from "../../../../analyzers/native-aot/exact-met
 import { createFunctionEntryFixture } from "../../../helpers/native-aot-function-map-fixture.js";
 import { createLegacyLayoutCursor } from "../../../helpers/native-layout-legacy-fixture.js";
 
+// Exact method tuple ordering is defined by ExactMethodInstantiationsNode.
+// https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/aot/ILCompiler.Compiler/Compiler/DependencyAnalysis/ExactMethodInstantiationsNode.cs
+
 void test("legacy exact methods identify the name/signature record in NativeLayoutInfo", async () => {
+  // Entry tuple is type index 0, NativeLayout offset 0, no generic args, NativeReferences index 1.
   const fixture = createFunctionEntryFixture(Uint8Array.of(0, 0, 0, 2));
 
+  // .NET 9 layout starts with one-byte string "M" then signed relative offset +1 to its signature.
   assert.deepEqual(await readExactMethodEntry(fixture.cursor, fixture.references,
     createLegacyLayoutCursor(Uint8Array.of(2, 77, 2, 0))),
   { declaringTypeIndex: 0, methodName: "M", methodSignatureOffset: 3,
@@ -14,6 +19,7 @@ void test("legacy exact methods identify the name/signature record in NativeLayo
 });
 
 void test("exact method instantiations resolve the function after the complete metadata signature", async () => {
+  // Entry fields: owner type 0, token 10, one generic arg [0,1], then NativeReferences index 1.
   const fixture = createFunctionEntryFixture(Uint8Array.of(0, 20, 4, 0, 2, 2));
 
   assert.deepEqual(await readExactMethodEntry(fixture.cursor, fixture.references),

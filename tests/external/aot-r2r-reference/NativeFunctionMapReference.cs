@@ -2,6 +2,9 @@
 using ILCompiler.Reflection.ReadyToRun;
 using Blob = NativeMapReference.Blob;
 
+// RhFindBlob IDs below are 300 + ReflectionMapBlob enum value (e.g. 316 is
+// StructMarshallingStubMap, 330 is NativeLayoutInfo, 336 is exact methods).
+// https://source.dot.net/System.Private.CoreLib/src/runtime/src/coreclr/tools/Common/Internal/Runtime/MetadataBlob.cs.html
 sealed class NativeFunctionMapReference
 {
     readonly Dictionary<uint, Blob> blobs;
@@ -28,8 +31,14 @@ sealed class NativeFunctionMapReference
     object Struct(NativeMapCursor cursor)
     {
         uint typeIndex = cursor.UInt(), header = cursor.UInt();
-        var entry = new Dictionary<string, object?> { ["typeIndex"] = typeIndex, ["header"] = header,
-            ["marshalRva"] = null, ["unmarshalRva"] = null, ["cleanupRva"] = null };
+        var entry = new Dictionary<string, object?>
+        {
+            ["typeIndex"] = typeIndex,
+            ["header"] = header,
+            ["marshalRva"] = null,
+            ["unmarshalRva"] = null,
+            ["cleanupRva"] = null
+        };
         var fields = new List<object>();
         if ((header & 2) == 0)
         {
@@ -50,8 +59,13 @@ sealed class NativeFunctionMapReference
     object Delegate(NativeMapCursor cursor)
     {
         uint typeIndex = cursor.UInt();
-        return new { typeIndex, openStaticRva = Function(308, cursor.UInt()),
-            closedRva = Function(308, cursor.UInt()), forwardCreationRva = Function(308, cursor.UInt()) };
+        return new
+        {
+            typeIndex,
+            openStaticRva = Function(308, cursor.UInt()),
+            closedRva = Function(308, cursor.UInt()),
+            forwardCreationRva = Function(308, cursor.UInt())
+        };
     }
 
     object Exact(NativeMapCursor cursor)
@@ -81,8 +95,12 @@ sealed class NativeFunctionMapReference
     {
         uint typeIndex = cursor.UInt(), staticBaseIndex = cursor.UInt();
         long baseRva = NativeMapReference.Fixup(blobs[308], staticBaseIndex);
-        return new { typeIndex, staticBaseIndex,
-            entrypointRva = hydration.Function(hydration.Pointer(baseRva - image.PointerSize)) };
+        return new
+        {
+            typeIndex,
+            staticBaseIndex,
+            entrypointRva = hydration.Function(hydration.Pointer(baseRva - image.PointerSize))
+        };
     }
 
     unsafe object Layout(uint offset)
@@ -151,16 +169,24 @@ sealed class NativeFunctionMapReference
     object Entry(uint type, NativeMapCursor cursor) => type switch
     {
         301 => TypeMetadata(cursor),
-        310 => Cctor(cursor), 316 => Struct(cursor), 317 => Delegate(cursor), 322 => Template(cursor),
+        310 => Cctor(cursor),
+        316 => Struct(cursor),
+        317 => Delegate(cursor),
+        322 => Template(cursor),
         321 => TypeTemplate(cursor),
-        336 => Exact(cursor), _ => throw new InvalidDataException()
+        336 => Exact(cursor),
+        _ => throw new InvalidDataException()
     };
 
     object TypeMetadata(NativeMapCursor cursor)
     {
         uint typeIndex = cursor.UInt(), metadataHandle = cursor.UInt();
-        return new { typeIndex, metadataHandle,
-            runtimeType = runtimeTypes.Read(NativeMapReference.Fixup(blobs[308], typeIndex)) };
+        return new
+        {
+            typeIndex,
+            metadataHandle,
+            runtimeType = runtimeTypes.Read(NativeMapReference.Fixup(blobs[308], typeIndex))
+        };
     }
 
     public object? Read()

@@ -6,8 +6,9 @@ import { NativeFormatReader } from "../../../../../analyzers/native-aot/native-f
 import { ReadyToRunSignatureCursor } from "../../../../../analyzers/pe/clr/ready-to-run-signature-cursor.js";
 
 void test("decodes a generic instance signature followed by its runtime-function index", () => {
-  // A generic method with two arguments; NativeFormat unsigned 12 encodes entry 6,
-  // whose low fixup bit is zero and runtime-function index is 3.
+  // The NativeHashtable payload holds signature flags 4, slot 1, two type arguments,
+  // then NativeFormat entry 6 (runtime-function index 3, no fixup).
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/aot/ILCompiler.Reflection.ReadyToRun/ReadyToRunSignature.cs
   const bytes = createNativeHashtableFixture([Uint8Array.of(4, 1, 2, 8, 14, 12)]);
   const issues = new Set<string>();
 
@@ -18,6 +19,7 @@ void test("decodes a generic instance signature followed by its runtime-function
 });
 
 void test("keeps other instances when one signature or entrypoint is malformed", () => {
+  // OwnerType signatures cannot end before an owner type; the third payload omits its entrypoint.
   const bytes = createNativeHashtableFixture([
     Uint8Array.of(0x40, 0x40), Uint8Array.of(0, 1, 4), Uint8Array.of(0, 1)
   ]);
@@ -32,6 +34,8 @@ void test("keeps other instances when one signature or entrypoint is malformed",
 });
 
 void test("reads inline and backward-reference fixups after instance signatures", () => {
+  // Each signature is flags 0 plus slot 1; entry bytes 18 and 22 encode runtime index 2,
+  // with inline payload 42 and a one-byte backward distance, respectively.
   const bytes = createNativeHashtableFixture([Uint8Array.of(0, 1, 18, 42), Uint8Array.of(0, 1, 22, 2)]);
   const issues = new Set<string>();
 
@@ -51,6 +55,7 @@ void test("reports corrupt hashtable headers without throwing", () => {
 
 void test("decodes aliased instance tuples and their failures only once", context => {
   const bytes = createNativeHashtableFixture([Uint8Array.of(0, 1, 4), Uint8Array.of(0, 1, 4)]);
+  // Rewrite the second 5-byte signed reference to alias the first payload's entry offset.
   new DataView(bytes.buffer).setInt32(11, 5, true);
   const reader = context.mock.method(NativeFormatReader.prototype, "unsigned");
   const issues = new Set<string>();
@@ -61,6 +66,7 @@ void test("decodes aliased instance tuples and their failures only once", contex
 
 void test("caches failed aliased instance tuples", context => {
   const bytes = createNativeHashtableFixture([Uint8Array.of(0x40, 0x40), Uint8Array.of(0x40, 0x40)]);
+  // Keep both bucket references aimed at the same unsupported owner-type signature.
   new DataView(bytes.buffer).setInt32(11, 5, true);
   const issues = new Set<string>();
   const bytesRead = context.mock.method(ReadyToRunSignatureCursor.prototype, "byte");

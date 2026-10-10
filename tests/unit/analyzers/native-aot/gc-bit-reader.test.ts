@@ -16,6 +16,9 @@ void test("reads little-endian fields across byte boundaries including UInt32", 
 });
 
 void test("decodes variable unsigned groups and sign-extended signed groups", () => {
+  // These are the UInt32/Int32 extrema and -1, ensuring continuation groups preserve
+  // the complete signed/unsigned range used by GCInfo.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/gcinfo/gcinfoencoder.cpp
   const bytes = new GcInfoBitsFixture().unsigned(0xffffffff, 6).signed(-2147483648, 6)
     .signed(2147483647, 6).signed(-1, 3).unsigned(0, 2).bytes();
   const reader = new GcBitReader(bytes);
@@ -41,6 +44,8 @@ void test("rejects invalid bit ranges and integers outside the encoded UInt32/In
 });
 
 void test("accepts wide pointer fields when their value is exactly representable", () => {
+  // Bit fields may span native pointer width; JavaScript's safe integer range ends
+  // at 2**53-1, so 2**53 is rejected while the sparse 41-bit value remains safe.
   const reader = new GcBitReader(new GcInfoBitsFixture().field(2 ** 40 + 1, 64).bytes());
 
   assert.equal(reader.bits(64), 2 ** 40 + 1);

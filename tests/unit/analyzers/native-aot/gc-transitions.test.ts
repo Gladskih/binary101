@@ -7,8 +7,9 @@ import { GcInfoBitsFixture } from "../../../helpers/gc-info-bits-fixture.js";
 void test("reconstructs initial live state from final state and transitions", () => {
   // one chunk, pointer width=1, pointer=1, padding=3, couldBeLive raw=[1],
   // final state=dead; one transition at pseudo offset five, then terminator.
-  const bytes = new GcInfoBitsFixture().unsigned(1, 3).field(1, 1).field(0, 3)
-    .field(0, 1).field(1, 1).field(0, 1).field(1, 1).field(5, 6).field(0, 1).bytes();
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/vm/gcinfodecoder.cpp
+  const bytes = new GcInfoBitsFixture().transitionTable(1, 1)
+    .transitionChunkLiveSlots(1, [0]).transitionChunkSlot(0, 5).bytes();
 
   assert.deepEqual(readGcTransitions(new GcBitReader(bytes),
     [{ startOffset: 10, endOffset: 30 }], 1), [
@@ -17,8 +18,8 @@ void test("reconstructs initial live state from final state and transitions", ()
 });
 
 void test("maps pseudo offsets across separated interruptible ranges", () => {
-  const bytes = new GcInfoBitsFixture().unsigned(1, 3).field(1, 1).field(0, 3)
-    .field(0, 1).field(1, 1).field(1, 1).field(1, 1).field(5, 6).field(0, 1).bytes();
+  const bytes = new GcInfoBitsFixture().transitionTable(1, 1)
+    .transitionChunkLiveSlots(1, [0]).transitionChunkSlot(1, 5).bytes();
 
   assert.deepEqual(readGcTransitions(new GcBitReader(bytes),
     [{ startOffset: 10, endOffset: 13 }, { startOffset: 40, endOffset: 50 }], 1), [
@@ -27,28 +28,31 @@ void test("maps pseudo offsets across separated interruptible ranges", () => {
 });
 
 void test("accepts empty transition tables and rejects non-increasing or out-of-range events", () => {
-  assert.deepEqual(readGcTransitions(new GcBitReader(new GcInfoBitsFixture().unsigned(0, 3).bytes()),
+  assert.deepEqual(readGcTransitions(new GcBitReader(new GcInfoBitsFixture().transitionTable(0).bytes()),
     [{ startOffset: 0, endOffset: 1 }], 1), []);
   assert.throws(() => readGcTransitions(new GcBitReader(new GcInfoBitsFixture()
-    .unsigned(1, 3).field(1, 1).field(0, 3).field(0, 1).field(1, 1).field(1, 1)
-    .field(1, 1).field(5, 6).field(1, 1).field(5, 6).field(0, 1).bytes()),
+    .transitionTable(1, 1).transitionChunkLiveSlots(1, [0])
+    .transitionChunkSlot(1, 5, 5).bytes()),
   [{ startOffset: 0, endOffset: 10 }], 1), /increasing/);
   assert.throws(() => readGcTransitions(new GcBitReader(new GcInfoBitsFixture()
-    .unsigned(1, 3).field(1, 1).field(0, 3).field(0, 1).field(1, 1).field(1, 1)
-    .field(1, 1).field(5, 6).field(0, 1).bytes()),
+    .transitionTable(1, 1).transitionChunkLiveSlots(1, [0])
+    .transitionChunkSlot(1, 5).bytes()),
   [{ startOffset: 0, endOffset: 4 }], 1), /range/);
 });
 
 void test("preserves state across empty chunks and reuses shared chunk payloads", () => {
   // Three chunks share one payload at bit offset 0; the middle chunk has no transitions.
-  const bytes = new GcInfoBitsFixture().unsigned(1, 3).field(1, 1).field(0, 1).field(1, 1)
-    .field(0, 1).field(0, 1).field(1, 1).field(1, 1).field(0, 1).bytes();
+  const bytes = new GcInfoBitsFixture().transitionTable(1, 1, 0, 1)
+    .transitionChunkLiveSlots(1, [0]).transitionChunkSlot(1).bytes();
 
   assert.deepEqual(readGcTransitions(new GcBitReader(bytes),
     [{ startOffset: 0, endOffset: 192 }], 1), [{ offset: 0, slot: 0, live: true }]);
 });
 
 void test("maps events exactly at range boundaries and sorts changes from different slots", () => {
+  // The two live final-state bits are followed by slot 0's delta 9 and slot 1's
+  // delta 2. The delta-2 transition lands at the next range's start; delta 9 maps
+  // five bytes into the final range after the preceding ranges' lengths are removed.
   const bytes = new GcInfoBitsFixture().unsigned(1, 3).field(1, 1).field(0, 3)
     .field(0, 1).field(3, 2).field(3, 2)
     .field(1, 1).field(9, 6).field(0, 1).field(1, 1).field(2, 6).field(0, 1).bytes();

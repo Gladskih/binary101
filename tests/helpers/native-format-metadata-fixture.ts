@@ -1,5 +1,7 @@
 "use strict";
 
+// HandleType definitions are test-side values, not analyzer imports.
+// https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderCommonGen.cs
 const HANDLE_TYPES = {
   constantString: 0x1a,
   field: 0x23, // NativeFormatReaderCommonGen.cs, HandleType.Field (.NET 10).
@@ -12,12 +14,17 @@ const HANDLE_TYPES = {
 type HandlePatch = { index: number; type: number | null };
 
 const encodeUnsigned = (value: number): number[] => {
-  if (value < 0x80) return [value << 1];
-  if (value < 0x4000) return [(value << 2 | 1) & 0xff, value >>> 6];
+  // DecodeUnsigned: one/two-byte forms carry 7/14 bits; 0x0f prefixes a UInt32.
+  // The high byte of the two-byte form starts after six first-byte payload bits.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/NativeFormat/NativeFormatReader.cs
+  if (value < 2 ** 7) return [value << 1];
+  if (value < 2 ** 14) return [(value << 2 | 1) & 0xff, value >>> 6];
   return [0x0f, value & 0xff, value >>> 8 & 0xff, value >>> 16 & 0xff, value >>> 24];
 };
 
 export class NativeFormatFixtureWriter {
+  // MetadataReader.Signature = 0xDEADDFFD, in little-endian byte order.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs
   readonly bytes: number[] = [0xfd, 0xdf, 0xad, 0xde];
   readonly patches = new Map<string, HandlePatch[]>();
   readonly labels = new Map<string, number>();
@@ -64,6 +71,8 @@ export class NativeFormatFixtureWriter {
   }
 
   private patch(target: HandlePatch, offset: number): void {
+    // Generic Handle packs its seven-bit type below its offset; a typed handle
+    // stores just the offset. The reserved five-byte integer allows forward patches.
     const token = target.type == null ? offset : (offset << 7) | target.type;
     this.bytes[target.index + 1] = token & 0xff;
     this.bytes[target.index + 2] = token >>> 8 & 0xff;
@@ -84,7 +93,9 @@ const nilHandle = (writer: NativeFormatFixtureWriter): void => writer.unsigned(0
 
 const writeMethod = (writer: NativeFormatFixtureWriter, label: string, name: string): void => {
   writer.label(label);
-  writer.unsigned(0x16);
+  // MethodAttributes.Public (6) | Static (0x10), ECMA-335 II.23.1.10.
+  // https://ecma-international.org/publications-and-standards/standards/ecma-335/
+  writer.unsigned(0x0006 | 0x0010);
   writer.unsigned(0);
   writer.handle(HANDLE_TYPES.constantString, `${label}-name`);
   nilHandle(writer);
@@ -115,7 +126,11 @@ const writeType = (
   writer.collection(nestedTypes.map(item => [HANDLE_TYPES.type, item]));
   writer.collection(methods.map(item => [HANDLE_TYPES.method, item]));
   writer.collection(fields.map(item => [HANDLE_TYPES.field, item]));
-  for (let index = 0; index < 5; index += 1) emptyCollection(writer);
+  // TypeDefinition's final five collections after fields, in generated reader order.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs
+  for (const _field of ["properties", "events", "genericParameters", "interfaces", "customAttributes"]) {
+    emptyCollection(writer);
+  }
   writer.string(`${label}-name`, name);
 };
 
@@ -124,6 +139,7 @@ const writeScope = (writer: NativeFormatFixtureWriter, majorVersion: number, sco
   writer.label("scope");
   writer.unsigned(0);
   writer.handle(HANDLE_TYPES.constantString, "assembly-name");
+  // AssemblyHashAlgorithm.SHA1, NativeFormatReaderCommonGen.cs.
   writer.unsigned(0x8004);
   [majorVersion, 2, 3, 4].forEach(value => writer.unsigned(value));
   emptyCollection(writer);
@@ -133,8 +149,10 @@ const writeScope = (writer: NativeFormatFixtureWriter, majorVersion: number, sco
   nilHandle(writer);
   emptyCollection(writer);
   writer.handle(HANDLE_TYPES.constantString, "module-name");
-  writer.unsigned(16);
-  for (let index = 0; index < 16; index += 1) writer.bytes.push(index);
+  // MVID is a GUID (128 bits), with distinct incidental bytes for identity checks.
+  // https://ecma-international.org/publications-and-standards/standards/ecma-335/ (II.24.2.5)
+  writer.unsigned(128 / 8);
+  for (let index = 0; index < 128 / 8; index += 1) writer.bytes.push(index);
   emptyCollection(writer);
 };
 

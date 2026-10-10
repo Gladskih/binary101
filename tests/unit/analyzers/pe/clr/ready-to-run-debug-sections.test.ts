@@ -16,6 +16,8 @@ void test("decodes shared root/component debug sections once per image", async (
   const reader = new MockFile(bytes);
   const calls = test.mock.method(reader, "read");
 
+  // PE/COFF IMAGE_FILE_MACHINE_AMD64 selects the concrete target used in this fixture.
+  // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types
   await decodeReadyToRunDebugSections(reader, rva => rva, data, 0x8664);
 
   assert.equal(calls.mock.calls.length, 1);
@@ -26,8 +28,9 @@ void test("decodes shared root/component debug sections once per image", async (
 
 void test("reports truncated storage and typed or untyped I/O failures", async () => {
   const data = createReadyToRunRendererFixture();
-  data.sections = [{ type: 105, name: "DebugInfo", rva: 0, size: 7 }];
-  const file = new MockFile(debugSection(new Uint8Array(), new Uint8Array()));
+  const bytes = debugSection(new Uint8Array(), new Uint8Array());
+  data.sections = [{ type: 105, name: "DebugInfo", rva: 0, size: bytes.length + 1 }];
+  const file = new MockFile(bytes);
 
   await decodeReadyToRunDebugSections(file, rva => rva, data, undefined);
   file.read = async () => { throw new Error("disk failure"); };

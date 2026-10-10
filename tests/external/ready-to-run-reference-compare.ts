@@ -97,6 +97,8 @@ const compareFile = async (
 const countSections = (sections: ReferenceSection[]) => {
   const counts = { methods: 0, debugMethods: 0, imports: 0, cells: 0 };
   for (const section of sections) {
+    // ReadyToRunSectionType::DebugInfo has the stable image-format value 105.
+    // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/inc/readytorun.h
     if (section.type === 105) counts.debugMethods += section.methods?.length ?? 0;
     else counts.methods += section.methods?.length ?? 0;
     for (const table of section.imports ?? []) { counts.imports++; counts.cells += table.entries.length; }

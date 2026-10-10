@@ -7,6 +7,8 @@ enum NativeMapAbi { DotNet9, DotNet10 }
 
 sealed class NativeMapLayout(NativeMapAbi abi)
 {
+    enum Continuation { Lookback, ArrayDimensions }
+
     public Dictionary<string, object?> Identity(ref NativeParser parser)
     {
         if (abi == NativeMapAbi.DotNet10) return new() { ["methodToken"] = parser.GetUnsigned() };
@@ -16,51 +18,27 @@ sealed class NativeMapLayout(NativeMapAbi abi)
     }
     public static uint ExternalType(ref NativeParser parser)
     {
-        var kind = parser.GetTypeSignatureKind(out uint data);
-        if (kind == TypeSignatureKind.Lookback)
+        var current = parser;
+        bool first = true;
+        while (true)
         {
-            var lookback = parser.GetLookbackParser(data);
-            return ExternalType(ref lookback);
-        }
-        if (kind != TypeSignatureKind.External) throw new InvalidDataException("Expected external type");
-        return data;
-    }
-
-    public static void Type(ref NativeParser parser)
-    {
-        var kind = parser.GetTypeSignatureKind(out uint data);
-        switch (kind)
-        {
-            case TypeSignatureKind.Lookback:
-                var lookback = parser.GetLookbackParser(data);
-                Type(ref lookback);
-                break;
-            case TypeSignatureKind.Variable:
-            case TypeSignatureKind.BuiltIn:
-            case TypeSignatureKind.External: break;
-            case TypeSignatureKind.Modifier: Type(ref parser); break;
-            case TypeSignatureKind.Instantiation:
-                for (uint index = 0; index <= data; index++) Type(ref parser);
-                break;
-            case TypeSignatureKind.MultiDimArray:
-                Type(ref parser);
-                Integers(ref parser);
-                Integers(ref parser);
-                break;
-            case TypeSignatureKind.FunctionPointer:
-                parser.GetUnsigned();
-                uint count = parser.GetSequenceCount();
-                for (uint index = 0; index <= count; index++) Type(ref parser);
-                break;
-            default: throw new InvalidDataException("Unknown type kind");
+            uint start = current.Offset;
+            var kind = current.GetTypeSignatureKind(out uint data);
+            if (first) { parser = current; first = false; }
+            if (kind != TypeSignatureKind.Lookback)
+            {
+                if (kind != TypeSignatureKind.External)
+                    throw new InvalidDataException("Expected external type");
+                return data;
+            }
+            var lookback = current.GetLookbackParser(data);
+            if (lookback.Offset >= start) throw new BadImageFormatException("Invalid type lookback");
+            current = lookback;
         }
     }
 
-    static void Integers(ref NativeParser parser)
-    {
-        uint count = parser.GetSequenceCount();
-        for (uint index = 0; index < count; index++) parser.GetUnsigned();
-    }
+    public static void Type(ref NativeParser parser) =>
+        parser = new NativeMapTypeTraversal(parser).Read();
 
     public Dictionary<string, object?> Method(ref NativeParser parser, Func<uint, long?> function)
     {

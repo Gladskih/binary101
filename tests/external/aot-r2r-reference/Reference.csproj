@@ -4,7 +4,15 @@
     <TargetFramework>net10.0</TargetFramework>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Pinned upstream NativeReader.cs emits CA2022. Keep it visible until upstream fixes it. -->
+    <WarningsNotAsErrors>CA2022</WarningsNotAsErrors>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="AotR2RReference.Tests" />
+  </ItemGroup>
   <PropertyGroup Condition="'$(NativeFormatOnly)' == 'true'">
     <DefineConstants>$(DefineConstants);NATIVE_FORMAT_ONLY</DefineConstants>
   </PropertyGroup>

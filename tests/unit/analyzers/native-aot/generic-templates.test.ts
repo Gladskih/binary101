@@ -6,10 +6,16 @@ import { NativeFormatReader } from "../../../../analyzers/native-aot/native-form
 import { NativeAotCodeReferences } from "../../../../analyzers/native-aot/code-references.js";
 import { createNativeAotTemplateFixture } from "../../../helpers/native-aot-function-map-fixture.js";
 
+// Template tuple offsets and method field order follow GenericMethodsTemplateMap.GetMethod.
+// https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/aot/ILCompiler.Compiler/Compiler/DependencyAnalysis/GenericMethodsTemplateMap.cs
+// https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/NativeLayoutInfoLoadContext.cs
+
 void test("generic templates resolve their function through NativeReferences rather than CommonFixups", async () => {
   const fixture = createNativeAotTemplateFixture();
   const issues = new Set<string>();
-  const layout = new NativeFormatCursor(new NativeFormatReader(fixture.bytes.subarray(0x340, 0x346)), 0);
+  const layout = new NativeFormatCursor(new NativeFormatReader(fixture.bytes.subarray(fixture.layoutRva,
+    fixture.layoutRva + fixture.templateSignatureLength)), 0);
+  // Template hash tuple: signature offset 0 and layout-bag offset 0.
   const tuple = new NativeFormatCursor(new NativeFormatReader(Uint8Array.of(0, 0)), 0);
   const references = new NativeAotCodeReferences(fixture.image, fixture.sections, issues, 331);
 
@@ -20,7 +26,8 @@ void test("generic templates resolve their function through NativeReferences rat
 
 void test("aliased template entries decode each shared signature once", async context => {
   const fixture = createNativeAotTemplateFixture();
-  const layout = new NativeFormatCursor(new NativeFormatReader(fixture.bytes.subarray(0x340, 0x346)), 0);
+  const layout = new NativeFormatCursor(new NativeFormatReader(fixture.bytes.subarray(fixture.layoutRva,
+    fixture.layoutRva + fixture.templateSignatureLength)), 0);
   const references = new NativeAotCodeReferences(fixture.image, fixture.sections, new Set(), 331);
   const types = new Map<number, number>();
   const reads = context.mock.method(layout.reader, "unsigned");
@@ -34,6 +41,7 @@ void test("aliased template entries decode each shared signature once", async co
 
 void test("shared malformed signatures retain their rejection without being decoded again", async context => {
   const fixture = createNativeAotTemplateFixture();
+  // NativeFormat flags 8 are outside the method-signature flags mask.
   const layout = new NativeFormatCursor(new NativeFormatReader(Uint8Array.of(16)), 0);
   const references = new NativeAotCodeReferences(fixture.image, fixture.sections, new Set(), 331);
   const reads = context.mock.method(layout.reader, "unsigned");
@@ -47,6 +55,7 @@ void test("shared malformed signatures retain their rejection without being deco
 void test("templates without HasFunctionPointer never promote their type reference", async () => {
   const fixture = createNativeAotTemplateFixture();
   const issues = new Set<string>();
+  // Method flags 0 mean no entrypoint; the hash tuple points to signature 0 and end-of-bag offset 3.
   const layout = new NativeFormatCursor(new NativeFormatReader(Uint8Array.of(0, 12, 20, 0)), 0);
   const tuple = new NativeFormatCursor(new NativeFormatReader(Uint8Array.of(0, 6)), 0);
 
@@ -61,6 +70,7 @@ void test("templates reject offsets beyond their layout and invalid flags", asyn
   const layout = new NativeFormatCursor(new NativeFormatReader(Uint8Array.of(16)), 0);
   const references = new NativeAotCodeReferences(fixture.image, fixture.sections, issues, 331);
 
+  // Hash tuple layout offset 1 equals the one-byte malformed layout's exclusive end.
   await assert.rejects(readTemplateMethodEntry(new NativeFormatCursor(
     new NativeFormatReader(Uint8Array.of(0, 2)), 0), layout, references, new Map()), /outside/);
   await assert.rejects(readTemplateMethodEntry(new NativeFormatCursor(
@@ -70,6 +80,7 @@ void test("templates validate their external owner and generic type indices", as
   const fixture = createNativeAotTemplateFixture();
   const issues = new Set<string>();
   const references = new NativeAotCodeReferences(fixture.image, fixture.sections, issues, 331);
+  // External type-reference bytes 76 decode to type index 2, outside the one-slot references table.
   const owner = new NativeFormatCursor(new NativeFormatReader(Uint8Array.of(0, 76, 20, 0)), 0);
   const argument = new NativeFormatCursor(new NativeFormatReader(Uint8Array.of(2, 12, 20, 2, 76, 0)), 0);
   const tuple = (): NativeFormatCursor => new NativeFormatCursor(new NativeFormatReader(Uint8Array.of(0, 0)), 0);

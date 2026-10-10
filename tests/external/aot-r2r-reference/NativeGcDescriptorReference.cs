@@ -20,29 +20,42 @@ sealed class NativeGcDescriptorReference(NativeMapImage image, NativeMapHydratio
         if (count == 0 || count > rva / width || count < -rva / width)
             throw new InvalidDataException("Invalid GC series count");
         uint element = (flags >> 26) & 31;
-        if (element is 0x17 or 0x18)
+        if (element is 0x17 or 0x18) return ReadArray(rva, baseSize, count, width);
+        return ReadObject(rva, baseSize, count, width);
+    }
+
+    object ReadArray(long rva, uint baseSize, long count, int width)
+    {
+        ulong first = Word(rva - 2 * width);
+        if (count > 0)
         {
-            ulong first = Word(rva - 2 * width);
-            if (count > 0)
-            {
-                if (count != 1 || Signed(rva - 3 * width) != -(long)baseSize || first != (ulong)(baseSize - width))
-                    throw new InvalidDataException("Invalid reference-array GCDesc");
-                return new { kind = "array-all-references", dataOffset = first };
-            }
-            var repeating = new List<object>();
-            for (long index = 0; index < -count; index++)
-            {
-                ulong packed = Word(rva - (3 + index) * width);
-                repeating.Add(new { pointerCount = packed & (width == 8 ? uint.MaxValue : ushort.MaxValue),
-                    skipBytes = packed >> (width * 4) });
-            }
-            return new { kind = "array-repeating", firstReferenceOffset = first, series = repeating };
+            if (count != 1 || Signed(rva - 3 * width) != -(long)baseSize || first != (ulong)(baseSize - width))
+                throw new InvalidDataException("Invalid reference-array GCDesc");
+            return new { kind = "array-all-references", dataOffset = first };
         }
+        var repeating = new List<object>();
+        for (long index = 0; index < -count; index++)
+        {
+            ulong packed = Word(rva - (3 + index) * width);
+            repeating.Add(new
+            {
+                pointerCount = packed & (width == 8 ? uint.MaxValue : ushort.MaxValue),
+                skipBytes = packed >> (width * 4)
+            });
+        }
+        return new { kind = "array-repeating", firstReferenceOffset = first, series = repeating };
+    }
+
+    object ReadObject(long rva, uint baseSize, long count, int width)
+    {
         if (count < 0) throw new InvalidDataException("Negative object GCDesc count");
         var series = new List<object>();
         for (long index = 0; index < count; index++)
-            series.Add(new { offset = Word(rva - (2 + 2 * index) * width),
-                bytes = Signed(rva - (3 + 2 * index) * width) + baseSize });
+            series.Add(new
+            {
+                offset = Word(rva - (2 + 2 * index) * width),
+                bytes = Signed(rva - (3 + 2 * index) * width) + baseSize
+            });
         return new { kind = "object", series };
     }
 }

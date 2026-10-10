@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readDebugBounds } from "../../../../../analyzers/pe/clr/ready-to-run-debug-bounds.js";
-import { nibbleIntegers, packedDebugBounds } from "../../../../helpers/ready-to-run-debug-fixture.js";
+import { nibbleIntegers, packedBounds, packedDebugBounds } from "../../../../helpers/ready-to-run-debug-fixture.js";
+
+// ReadyToRun SourceTypes wire values, independently mirrored from DebugInfoTypes.cs.
+// The v16 packed format remaps CallInstruction bit 0x10 to packed bit 0 and StackEmpty bit 0x02 to packed bit 1.
+// https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/aot/ILCompiler.Reflection.ReadyToRun/DebugInfoTypes.cs
+const sourceType = { stackEmpty: 0x02, callInstruction: 0x10 } as const;
 
 void test("decodes .NET 9 nibble bounds and IL prolog, epilog and unmapped sentinels", () => {
+  // Each legacy record is native delta, IL offset biased by three, and source flags.
   const bytes = nibbleIntegers([4, 0, 1, 1, 2, 2, 8, 3, 3, 2, 0, 7, 16]);
   const warnings = new Set<string>();
 
@@ -17,7 +23,8 @@ void test("decodes .NET 9 nibble bounds and IL prolog, epilog and unmapped senti
 });
 
 void test("decodes .NET 10 bit-packed bounds across byte and 32-bit boundaries", () => {
-  const bytes = packedDebugBounds([3n | (3n << 2n) | (9n << 34n)], 32, 32);
+  const bytes = packedBounds([{ nativeDelta: 3, ilOffset: 6,
+    source: sourceType.callInstruction | sourceType.stackEmpty }], 32, 32);
   const warnings = new Set<string>();
 
   assert.deepEqual(readDebugBounds(bytes, 16, warnings), [
@@ -47,14 +54,16 @@ void test("rejects bit widths beyond UInt32 and detects native offset overflow",
 
 void test("checks both packed widths, partial bit fields and cumulative UInt32 overflow", () => {
   const warnings = new Set<string>();
-  const overflow = packedDebugBounds([0xfffffffcn, 4n], 30, 1);
+  const overflow = packedBounds([{ nativeDelta: 0xffffffff, ilOffset: -3, source: 0 },
+    { nativeDelta: 1, ilOffset: -3, source: 0 }], 32, 1);
 
   assert.deepEqual(readDebugBounds(nibbleIntegers([1, 0, 32]), 16, warnings), []);
   assert.deepEqual(readDebugBounds(packedDebugBounds([0n], 1, 1).subarray(0, 2),
     16, warnings), []);
-  assert.equal(readDebugBounds(overflow, 16, warnings).length, 2);
-  assert.deepEqual(readDebugBounds(packedDebugBounds([0x3fffffffcn, 4n], 32, 1),
-    16, warnings), [{ nativeOffset: 0xffffffff, ilOffset: -3, source: 0 }]);
+  assert.equal(readDebugBounds(overflow, 16, warnings).length, 1);
+  assert.equal(readDebugBounds(packedBounds([{ nativeDelta: 0xffffffff, ilOffset: -3,
+    source: 0 }, { nativeDelta: 1, ilOffset: -3, source: 0 }], 32, 1),
+  16, warnings).length, 1);
   assert.match([...warnings].join(), /bit width/);
   assert.match([...warnings].join(), /truncated/);
   assert.match([...warnings].join(), /overflow/);
@@ -63,12 +72,17 @@ void test("checks both packed widths, partial bit fields and cumulative UInt32 o
 void test("advances through consecutive packed entries and accepts an exact byte ending", () => {
   const warnings = new Set<string>();
 
-  assert.deepEqual(readDebugBounds(packedDebugBounds([329n, 526n, 0n], 4, 4), 16, warnings), [
-    { nativeOffset: 2, ilOffset: 2, source: 16 },
-    { nativeOffset: 5, ilOffset: 5, source: 2 },
+  assert.deepEqual(readDebugBounds(packedBounds([{ nativeDelta: 2, ilOffset: 2,
+    source: sourceType.stackEmpty },
+  { nativeDelta: 3, ilOffset: 5, source: sourceType.callInstruction },
+  { nativeDelta: 0, ilOffset: -3, source: 0 }],
+  4, 4), 16, warnings), [
+    { nativeOffset: 2, ilOffset: 2, source: sourceType.stackEmpty },
+    { nativeOffset: 5, ilOffset: 5, source: sourceType.callInstruction },
     { nativeOffset: 5, ilOffset: -3, source: 0 }
   ]);
-  assert.deepEqual(readDebugBounds(packedDebugBounds([0n], 4, 2), 16, warnings), [
+  assert.deepEqual(readDebugBounds(packedBounds([{ nativeDelta: 0, ilOffset: -3, source: 0 }],
+    4, 2), 16, warnings), [
     { nativeOffset: 0, ilOffset: -3, source: 0 }
   ]);
   assert.deepEqual([...warnings], []);

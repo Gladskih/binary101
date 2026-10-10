@@ -6,26 +6,31 @@ import { createNativeAotRuntimeTypeFixture } from "../../../helpers/native-aot-r
 
 void test("reads fixed scalars across copied and zero-filled run boundaries", async () => {
   const fixture = createNativeAotRuntimeTypeFixture();
-  fixture.view.setUint8(0x380, 7);
-  const runs = [{ kind: "zero", rva: 0x181, size: 1 },
-    { kind: "copy", rva: 0x182, size: 1, sourceRva: 0x380 }] as const;
+  const sourceRva = fixture.bytes.length - fixture.image.pointerSize;
+  fixture.view.setUint8(sourceRva, 7); // Incidental replacement byte.
+  const runs = [{ kind: "zero", rva: fixture.typeRva + 1, size: 1 },
+    { kind: "copy", rva: fixture.typeRva + 2, size: 1, sourceRva }] as const;
 
-  assert.equal(await readNativeAotHydratedUnsigned(fixture.image, [...runs], 0x180, 4), 0x4070000);
-  assert.equal(await readNativeAotHydratedUnsigned(fixture.image, [], 0x184, 2), 24);
-  assert.equal(findNativeAotHydratedRun([...runs], 0x183), undefined);
-  assert.equal(findNativeAotHydratedRun([...runs], 0x180), undefined);
-  assert.equal(findNativeAotHydratedRun([...runs], 0x182), runs[1]);
+  // EETypeElementType.Class=0x14 in bits 26..30; overlay byte two in little-endian order.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Runtime/MethodTable.Constants.cs
+  assert.equal(await readNativeAotHydratedUnsigned(fixture.image, [...runs], fixture.typeRva, 4),
+    (0x14 << 26) | (7 << (2 * 8)));
+  assert.equal(await readNativeAotHydratedUnsigned(fixture.image, [], fixture.typeRva + 4, 2), 24);
+  assert.equal(findNativeAotHydratedRun([...runs], fixture.typeRva + 3), undefined);
+  assert.equal(findNativeAotHydratedRun([...runs], fixture.typeRva), undefined);
+  assert.equal(findNativeAotHydratedRun([...runs], fixture.typeRva + 2), runs[1]);
 });
 
 void test("rejects invalid coordinates and typed pointer runs instead of interpreting their bytes", async () => {
   const fixture = createNativeAotRuntimeTypeFixture();
 
   await assert.rejects(readNativeAotHydratedUnsigned(fixture.image, [], -1, 2), /invalid mapped range/);
-  await assert.rejects(readNativeAotHydratedUnsigned(fixture.image, [], 0x400, 2), /invalid mapped range/);
+  await assert.rejects(readNativeAotHydratedUnsigned(fixture.image, [], fixture.bytes.length, 2), /invalid mapped range/);
   await assert.rejects(readNativeAotHydratedUnsigned(fixture.image, [], NaN, 2), /invalid mapped range/);
   await assert.rejects(readNativeAotHydratedUnsigned(fixture.image, [], 0, 1 as 2), /invalid mapped range/);
   await assert.rejects(readNativeAotHydratedUnsigned(fixture.image,
-    [{ kind: "pointer", rva: 0x180, size: 8, target: 0x40 }], 0x180, 4), /overlaps/);
+    [{ kind: "pointer", rva: fixture.typeRva, size: fixture.image.pointerSize,
+      target: fixture.codeRvas[0]! }], fixture.typeRva, 4), /overlaps/);
 });
 
 void test("reports missing and truncated scalar bytes", async context => {

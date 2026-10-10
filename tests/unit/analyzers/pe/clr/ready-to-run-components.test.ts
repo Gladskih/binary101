@@ -15,8 +15,10 @@ void test("normal ReadyToRun analysis includes the decoded composite core header
   const decoded = data.sections[1]?.decoded;
   assert.ok(decoded?.kind === "components");
   assert.equal(decoded.entries[0]?.coreHeader?.sections[0]?.decoded?.kind, "methods");
+  // The fixture's only runtime-function row is index 0; this component map deliberately uses 1.
   assert.deepEqual(data.issues,
-    ["ReadyToRun component 1: ReadyToRun method map references a missing runtime-function index."]);
+    ["ReadyToRun component 1: ReadyToRun method map references a missing runtime-function index.",
+      "ReadyToRun GC method root is outside the runtime-function table."]);
 });
 
 void test("component core size bounds reads and mixed directories cannot hide image-wide tables", async context => {
@@ -33,10 +35,11 @@ void test("component core size bounds reads and mixed directories cannot hide im
 
 void test("truncated core directories retain valid sections without reading adjacent data", async () => {
   const fixture = createReadyToRunCompositeFixture();
-  fixture.view.setUint32(0x104, 2, true);
-  fixture.view.setUint32(0x114, 115, true);
-  fixture.view.setUint32(0x118, 0x80, true);
-  fixture.view.setUint32(0x11c, 16, true);
+  fixture.view.setUint32(fixture.coreHeaderRva + 4, 2, true);
+  fixture.view.setUint32(fixture.coreHeaderRva + fixture.coreHeaderSize, 115, true);
+  fixture.view.setUint32(fixture.coreHeaderRva + fixture.coreHeaderSize + 4,
+    fixture.componentTableRva, true);
+  fixture.view.setUint32(fixture.coreHeaderRva + fixture.coreHeaderSize + 8, 16, true);
   const reader = new MockFile(fixture.bytes);
 
   await decodeReadyToRunComponents(reader, identityRva, fixture.data, undefined);
@@ -57,7 +60,7 @@ void test("decodes per-assembly method maps and validates indices against the im
   await decodeReadyToRunComponents(fixture.reader, identityRva, fixture.data, 0x8664);
 
   assert.deepEqual(fixture.component.coreHeader, { flags: 32, sectionCount: 1, sections: [
-    { type: 103, name: "MethodDefEntryPoints", rva: 0x180, size: 4,
+      { type: 103, name: "MethodDefEntryPoints", rva: fixture.methodMapRva, size: 4,
       decoded: { kind: "methods", methods: [{ methodRid: 1, runtimeFunctionIndex: 1, fixupOffset: null }] } }
   ] });
   assert.match(fixture.data.issues.join(" "), /component 1.*missing runtime-function index/);
@@ -80,7 +83,7 @@ void test("truncated headers do not prevent later components from being decoded"
   const fixture = createReadyToRunCompositeFixture();
   const table = fixture.data.sections[1]!.decoded;
   assert.ok(table?.kind === "components");
-  table.entries.unshift({ ...fixture.component, coreHeaderRva: 0x3fc });
+  table.entries.unshift({ ...fixture.component, coreHeaderRva: fixture.bytes.length - 4 });
 
   await decodeReadyToRunComponents(fixture.reader, identityRva, fixture.data, undefined);
 
@@ -91,9 +94,9 @@ void test("truncated headers do not prevent later components from being decoded"
 
 void test("image-wide ComponentAssemblies inside a component header warns without recursion", async () => {
   const fixture = createReadyToRunCompositeFixture();
-  fixture.view.setUint32(0x108, 115, true);
-  fixture.view.setUint32(0x10c, 0x80, true);
-  fixture.view.setUint32(0x110, 16, true);
+  fixture.view.setUint32(fixture.coreHeaderRva + 8, 115, true);
+  fixture.view.setUint32(fixture.coreHeaderRva + 12, fixture.componentTableRva, true);
+  fixture.view.setUint32(fixture.coreHeaderRva + 16, 16, true);
 
   await decodeReadyToRunComponents(new MockFile(fixture.bytes), identityRva, fixture.data, undefined);
 
@@ -115,12 +118,14 @@ void test("conflicting sizes of a shared core header warn without losing consist
 
 void test("different component headers share decoding of identical section bytes", async context => {
   const fixture = createReadyToRunCompositeFixture();
-  fixture.bytes.copyWithin(0x140, 0x100, 0x114);
+  const duplicateCoreHeaderRva = fixture.coreHeaderRva + 0x40;
+  fixture.bytes.copyWithin(duplicateCoreHeaderRva, fixture.coreHeaderRva,
+    fixture.coreHeaderRva + fixture.coreHeaderSize);
   const reader = new MockFile(fixture.bytes);
   const reads = context.mock.method(reader, "read");
   const table = fixture.data.sections[1]!.decoded;
   assert.ok(table?.kind === "components");
-  table.entries.push({ ...fixture.component, coreHeaderRva: 0x140 });
+  table.entries.push({ ...fixture.component, coreHeaderRva: duplicateCoreHeaderRva });
 
   await decodeReadyToRunComponents(reader, identityRva, fixture.data, undefined);
 
@@ -151,7 +156,7 @@ void test("invalid component ranges and non-Error I/O failures warn", async cont
 
   await decodeReadyToRunComponents(fixture.reader, identityRva, fixture.data, undefined);
   assert.match(fixture.data.issues.join(), /invalid core header RVA range/);
-  fixture.component.coreHeaderRva = 0x100;
+  fixture.component.coreHeaderRva = fixture.coreHeaderRva;
   context.mock.method(fixture.reader, "read", async () => { throw "failure"; });
   await decodeReadyToRunComponents(fixture.reader, identityRva, fixture.data, undefined);
   assert.match(fixture.data.issues.join(), /decoding failed/);
@@ -159,9 +164,9 @@ void test("invalid component ranges and non-Error I/O failures warn", async cont
 
 void test("malformed nested components cannot alias the root table into a circular model", async () => {
   const fixture = createReadyToRunCompositeFixture();
-  fixture.view.setUint32(0x108, 115, true);
-  fixture.view.setUint32(0x10c, 0x80, true);
-  fixture.view.setUint32(0x110, 16, true);
+  fixture.view.setUint32(fixture.coreHeaderRva + 8, 115, true);
+  fixture.view.setUint32(fixture.coreHeaderRva + 12, fixture.componentTableRva, true);
+  fixture.view.setUint32(fixture.coreHeaderRva + 16, 16, true);
 
   const parsed = await parseReadyToRun(new MockFile(fixture.bytes), identityRva, fixture.clr);
 

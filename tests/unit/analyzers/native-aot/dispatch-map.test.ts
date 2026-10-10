@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { NativeAotDispatchMaps } from "../../../../analyzers/native-aot/dispatch-map.js";
-import { createNativeAotRuntimeTailFixture } from "../../../helpers/native-aot-runtime-tail-fixture.js";
+import { createNativeAotRuntimeTailFixture, runtimeTailFixtureLayout as layout } from
+  "../../../helpers/native-aot-runtime-tail-fixture.js";
 
 void test("dispatch maps retain all four groups and cache shared data", async context => {
   const fixture = createNativeAotRuntimeTailFixture();
@@ -18,9 +19,11 @@ void test("dispatch maps retain all four groups and cache shared data", async co
   assert.deepEqual([...fixture.issues], []);
 });
 
-for (const target of [0x261, 0x300, 0x400]) {
-  void test(`rejects and caches invalid dispatch map address ${target}`, async context => {
+for (const targetKind of ["unaligned", "executable", "outside"] as const) {
+  void test(`rejects and caches ${targetKind} dispatch map address`, async context => {
     const fixture = createNativeAotRuntimeTailFixture();
+    const target = { unaligned: fixture.dispatchRva + 1,
+      executable: fixture.codeRvas[1]!, outside: fixture.bytes.length }[targetKind];
     const reader = new NativeAotDispatchMaps(fixture.references);
     const reads = context.mock.method(fixture.image, "readData");
 
@@ -34,7 +37,7 @@ for (const target of [0x261, 0x300, 0x400]) {
 void test("truncated entries retain complete records and the declared counts", async context => {
   const fixture = createNativeAotRuntimeTailFixture();
   context.mock.method(fixture.image, "isMappedRange", (address: number, size: number) =>
-    address >= 0 && address + size <= fixture.dispatchRva + 15);
+    address >= 0 && address + size <= fixture.dispatchRva + layout.countsSize + layout.standardEntrySize + 1);
 
   const map = await new NativeAotDispatchMaps(fixture.references).read(fixture.dispatchRva);
 
@@ -46,7 +49,8 @@ void test("truncated entries retain complete records and the declared counts", a
 void test("a dispatch record must fit one mapped range even when its separate scalars are readable", async context => {
   const fixture = createNativeAotRuntimeTailFixture();
   context.mock.method(fixture.image, "isMappedRange", (address: number, size: number) =>
-    address !== fixture.dispatchRva + 14 || size !== 6);
+    address !== fixture.dispatchRva + layout.countsSize + layout.standardEntrySize ||
+      size !== layout.standardEntrySize);
 
   const map = await new NativeAotDispatchMaps(fixture.references).read(fixture.dispatchRva);
 
@@ -72,11 +76,12 @@ void test("empty maps are valid and the full ushort entry count is parsed withou
   assert.deepEqual(empty, { rva: fixture.dispatchRva, counts: [0, 0, 0, 0], entries: [] });
   context.mock.method(fixture.image, "isMappedRange", () => true);
   context.mock.method(fixture.references.data, "unsigned", async (address: number) =>
-    address === fixture.dispatchRva ? 65535 : 0);
+    address === fixture.dispatchRva ? 2 ** 16 - 1 : 0);
 
   const full = await new NativeAotDispatchMaps(fixture.references).read(fixture.dispatchRva);
 
-  assert.equal(full?.entries.length, 65535);
+  // Each dispatch count is UInt16: exercise its format maximum, not a parser cap.
+  assert.equal(full?.entries.length, 2 ** 16 - 1);
   assert.equal(full?.entries.at(-1)?.implementationSlot, 0);
   assert.deepEqual([...fixture.issues], []);
 });
