@@ -5,6 +5,8 @@ import { createNativeAotFunctionMapFixture, createNativeAotTemplateFixture } fro
   "../../../helpers/native-aot-function-map-fixture.js";
 import { createNativeAotTypeMapFixture } from "../../../helpers/native-aot-runtime-type-fixture.js";
 
+// These IDs are ReflectionMapBlob values from the NativeAOT ReadyToRun directory.
+// https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Runtime/MetadataBlob.cs
 for (const type of [301, 310, 316, 317, 321, 322, 336]) {
   void test(`function map ${type} forwards malformed entry warnings`, async () => {
     const fixture = createNativeAotFunctionMapFixture(type, [new Uint8Array()]);
@@ -27,6 +29,8 @@ void test("TypeMap connects metadata handles to runtime vtables without requirin
 });
 
 void test("NativeAOT function maps decode struct, delegate and exact method records", async () => {
+  // Delegate tuple: type index 0 and three code indices 1. Exact tuple: owner 0, token 10,
+  // generic args [0,1], and NativeReferences index 1.
   const struct = createNativeAotFunctionMapFixture(316, [Uint8Array.of(0, 10, 64, 2, 2, 2, 2, 65, 8)]);
   const delegate = createNativeAotFunctionMapFixture(317, [Uint8Array.of(0, 2, 2, 2)]);
   const exact = createNativeAotFunctionMapFixture(336, [Uint8Array.of(0, 20, 4, 0, 2, 2)]);
@@ -75,6 +79,7 @@ void test("function maps distinguish missing and ambiguous layouts and map secti
 });
 
 void test("cctor maps preserve invalid data references with visible warnings", async () => {
+  // Cctor tuple is type index 0 plus common-fixups data index 2, outside this one-slot table.
   const fixture = createNativeAotFunctionMapFixture(310, [Uint8Array.of(0, 4)]);
 
   const maps = await parseNativeAotFunctionMaps(fixture.image, fixture.sections);
@@ -96,6 +101,7 @@ void test("type templates decode their layouts and native statics function field
 });
 
 void test("type template owner indices are validated without reading the referenced type", async () => {
+  // Type index 2 exceeds the one-slot CommonFixups table; layout offset remains zero.
   const fixture = createNativeAotFunctionMapFixture(321, [Uint8Array.of(4, 0)]);
   fixture.bytes[0x340] = 0;
   fixture.sections.push({ type: 330, rva: 0x340, size: 1 });

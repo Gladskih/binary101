@@ -1,5 +1,7 @@
 import type { PeClrReadyToRun } from "../../analyzers/pe/clr/ready-to-run-types.js";
 export const createReadyToRunRendererFixture = (): PeClrReadyToRun => ({
+  // READYTORUN_SIGNATURE and section identifiers follow the v10 image-format header.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/inc/readytorun.h
   status: "ready-to-run", signature: 0x00525452, majorVersion: 16, minorVersion: 0,
   flags: 0, sectionCount: 7, issues: [], sections: [
     { type: 100, name: "CompilerIdentifier", rva: 16, size: 4,
@@ -7,6 +9,7 @@ export const createReadyToRunRendererFixture = (): PeClrReadyToRun => ({
     { type: 101, name: "ImportSections", rva: 32, size: 20, decoded: {
       kind: "imports", imports: [{ rva: 128, size: 8, flags: 1, type: 2, entrySize: 4,
         signaturesRva: 144, auxiliaryDataRva: 160, entries: [
+          // Distinct sentinel bytes make the renderer's raw-cell formatting visible.
           { value: Uint8Array.of(0x12, 0x34, 0x56, 0x78), signatureRva: 176 },
           { value: Uint8Array.of(0, 0, 0, 0), signatureRva: null }]
       }] } },
@@ -22,6 +25,7 @@ export const createReadyToRunRendererFixture = (): PeClrReadyToRun => ({
     { type: 120, name: "HotColdMap", rva: 96, size: 8, decoded: {
       kind: "hot-cold", entries: [{ coldRuntimeFunction: 3, hotRuntimeFunction: 1 }]
     } },
+    // Unassigned section type exercises the renderer's unknown-section label.
     { type: 999, name: "<unknown>", rva: 112, size: 0 },
     { type: 101, name: "EmptyImports", rva: 112, size: 0, decoded: {kind:"imports",imports:[]} }
   ]

@@ -12,6 +12,7 @@ export const createReadyToRunImportFixture = () => {
   view.setUint8(11, 8);
   view.setUint32(12, 96, true);
   view.setUint32(16, 112, true);
+  // Two recognizable nonzero cell values make little-endian cell decoding observable.
   view.setBigUint64(64, 0x1122334455667788n, true);
   view.setBigUint64(72, 0xaabbccddeeff0011n, true);
   view.setUint32(96, 112, true);

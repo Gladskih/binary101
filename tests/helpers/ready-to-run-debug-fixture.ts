@@ -31,7 +31,10 @@ export interface DebugBoundFixture {
   source: number;
 }
 
-// RTR v16 packs source flags in bits 0-1, native delta next, and IL+3 last.
+// RTR v16 keeps only STACK_EMPTY (0x02) and CALL_INSTRUCTION (0x10): their enum bits
+// become packed bits 1 and 0 respectively. IL offsets are stored as IL+3 because
+// cordebuginfo.h reserves -1/-2/-3 for no-mapping/prolog/epilog.
+// https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/inc/cordebuginfo.h
 // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/vm/debuginfostore.cpp
 export const packedBounds = (bounds: DebugBoundFixture[], nativeBits: number,
   ilBits: number): Uint8Array => packedDebugBounds(bounds.map(bound =>
@@ -47,8 +50,11 @@ export interface DebugVariableFixture {
   operands?: number[];
 }
 
-// cordebuginfo.h assigns the location tags; variable numbers are stored with a +4 bias.
+// VLT and implicit IL-number values follow cordebuginfo.h / DebugInfoTypes.cs. UNKNOWN_ILNUM=-4
+// is the bias origin, so adding four maps it to wire zero and an ordinary variable 0 to wire 4.
 // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/inc/cordebuginfo.h
+// https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/aot/ILCompiler.Reflection.ReadyToRun/DebugInfoTypes.cs
+// https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/aot/ILCompiler.Reflection.ReadyToRun/DebugInfo.cs
 export const debugVariables = (records: DebugVariableFixture[]): Uint8Array =>
   nibbleIntegers([records.length, ...records.flatMap(record => [record.start, record.length,
     record.variableNumber + 4, record.location, ...(record.operands ?? [])])]);

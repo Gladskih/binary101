@@ -1,7 +1,10 @@
 export const createNativeHashtableFixture = (payloads: Uint8Array[], width = 1): Uint8Array => {
   // One bucket; its directory includes start and end. Every reference is a five-byte
   // signed NativeFormat integer to keep fixture offsets independent of payload sizes.
-  // NativeHashtable.cs / NativeReader.DecodeSigned, dotnet/runtime v10.0.0.
+  // NativeHashtable.cs and DecodeSigned in dotnet/runtime v10.0.0.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/aot/ILCompiler.Reflection.ReadyToRun/NativeHashtable.cs
+  // Header values 0, 1, and 2 select one-, two-, and four-byte bucket indexes; lead byte 15
+  // starts a fixed-width five-byte signed relative reference after each one-byte hash code.
   const directoryEnd = 1 + width * 2;
   const bucketEnd = directoryEnd + payloads.length * 6;
   const bytes = new Uint8Array(bucketEnd + payloads.reduce((sum, item) => sum + item.length, 0));
