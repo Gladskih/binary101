@@ -32,6 +32,10 @@
     <Compile Include="$(ReadyToRunSourceDirectory)/ReadyToRunConstants.cs" />
     <Compile Include="$(ReadyToRunSourceDirectory)/ModuleHeaders.cs" />
     <Compile Include="$(ReadyToRunSourceDirectory)/RuntimeConstants.cs" />
+    <Compile Include="$(ReadyToRunSourceDirectory)/NibbleReader.cs" />
+    <Compile Include="$(ReadyToRunSourceDirectory)/DebugInfo.cs" />
+    <Compile Include="$(ReadyToRunSourceDirectory)/DebugInfoTypes.cs" />
+    <Compile Include="$(ReadyToRunSourceDirectory)/*/Registers.cs" />
   </ItemGroup>
   <Target Name="RequireUpstreamSources" BeforeTargets="BeforeBuild">
     <Error Condition="'$(NativeFormatSourceDirectory)' == ''"
