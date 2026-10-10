@@ -1,6 +1,7 @@
 import type { PeClrReadyToRunSection, PeClrReadyToRunSectionData } from
   "../../analyzers/pe/clr/ready-to-run-types.js";
 import type { AnalysisStatistic } from "../analysis-statistics.js";
+import { readyToRunDebugStatistics } from "./ready-to-run-debug-statistics.js";
 
 const fact = (label: string, value: number, description: string): AnalysisStatistic => ({ label, value, description });
 
@@ -24,6 +25,7 @@ const thunkStatistics = (data: Extract<PeClrReadyToRunSectionData, { kind: "thun
 export const readyToRunSectionStatistics = (section: PeClrReadyToRunSection): AnalysisStatistic[] => {
   const data = section.decoded;
   if (!data || data.kind === "text") return [];
+  if (data.kind === "debug-info") return readyToRunDebugStatistics(data.methods);
   if (data.kind === "components") return [
     fact("Component assemblies", data.entries.length, "A composite image can hold native code for several assemblies."),
     fact("Decoded component headers", data.entries.filter(entry => entry.coreHeader).length,
