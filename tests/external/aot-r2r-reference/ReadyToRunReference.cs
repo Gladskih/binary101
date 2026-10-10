@@ -18,14 +18,14 @@ static class ReadyToRunReference
     }
 
     internal static List<object> Sections(PEReader pe, byte[] header, SortedSet<uint> indices,
-        int start = 16, int countOffset = 12)
+        int start = 16, int countOffset = 12, int majorVersion = 16)
     {
         var sections = new List<object>();
         for (int index = 0; index < UInt32(header, countOffset); index++)
         {
             int offset = start + index * 12;
             uint type = UInt32(header, offset), rva = UInt32(header, offset + 4);
-            if (type is not (100 or 101 or 103 or 109 or 116)) continue;
+            if (type is not (100 or 101 or 103 or 105 or 109 or 116)) continue;
             var bytes = Data(pe, rva, UInt32(header, offset + 8));
             if (type == 100 || type == 116) sections.Add(new { type, text = Text(bytes) });
             else if (type == 103)
@@ -41,6 +41,8 @@ static class ReadyToRunReference
                 sections.Add(new { type, methods });
             }
             else if (type == 101) sections.Add(new { type, imports = ReadyToRunImports.Read(pe, bytes) });
+            else if (type == 105) sections.Add(new { type, methods = ReadyToRunDebug.Read(bytes,
+                majorVersion, (Machine)ReadyToRunSeeds.Machine(pe)) });
         }
         return sections;
     }
@@ -60,7 +62,8 @@ static class ReadyToRunReference
                 if (header.Length < 16) continue;
                 if (UInt32(header, 0) != 0x00525452) continue;
                 var indices = new SortedSet<uint>();
-                var sections = Sections(pe, header, indices);
+                var sections = Sections(pe, header, indices, majorVersion:
+                    BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(4)));
                 var components = ReadyToRunComposite.Components(pe, header, indices);
                 output.WriteLine(JsonSerializer.Serialize(new { path, sections, components,
                     methodRvas = ReadyToRunSeeds.Read(pe, header, indices) }));

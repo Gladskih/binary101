@@ -94,15 +94,19 @@ const compareFile = async (
   } finally { await disk.close(); }
 };
 
-const countSections = (sections: ReferenceSection[]) => sections.reduce((counts, section) => ({
-  methods: counts.methods + (section.methods?.length ?? 0),
-  imports: counts.imports + (section.imports?.length ?? 0),
-  cells: counts.cells + (section.imports?.reduce((count, table) => count + table.entries.length, 0) ?? 0)
-}), { methods: 0, imports: 0, cells: 0 });
+const countSections = (sections: ReferenceSection[]) => {
+  const counts = { methods: 0, debugMethods: 0, imports: 0, cells: 0 };
+  for (const section of sections) {
+    if (section.type === 105) counts.debugMethods += section.methods?.length ?? 0;
+    else counts.methods += section.methods?.length ?? 0;
+    for (const table of section.imports ?? []) { counts.imports++; counts.cells += table.entries.length; }
+  }
+  return counts;
+};
 
 export const compareReadyToRunReference = async (referencePath: string) => {
   const lines = createInterface({ input: createReadStream(referencePath), crlfDelay: Infinity });
-  const counts = { files: 0, methods: 0, imports: 0, cells: 0, seeds: 0, components: 0 };
+  const counts = { files: 0, methods: 0, debugMethods: 0, imports: 0, cells: 0, seeds: 0, components: 0 };
   for await (const line of lines) {
     const reference = JSON.parse(line) as {
       path: string; sections: ReferenceSection[]; methodRvas: number[]; components?: ReferenceComponent[]
@@ -114,6 +118,7 @@ export const compareReadyToRunReference = async (referencePath: string) => {
     const sections = countSections([...reference.sections,
       ...(reference.components ?? []).flatMap(component => component.sections)]);
     counts.methods += sections.methods;
+    counts.debugMethods += sections.debugMethods;
     counts.imports += sections.imports;
     counts.cells += sections.cells;
   }

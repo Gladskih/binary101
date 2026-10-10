@@ -4,7 +4,7 @@ static class ReadyToRunSeeds
 {
     // ReadyToRunReader.CalculateRuntimeFunctionSize / ReadyToRunMethod.ParseRuntimeFunctions.
     // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/aot/ILCompiler.Reflection.ReadyToRun/ReadyToRunMethod.cs
-    static ushort Machine(PEReader pe)
+    internal static ushort Machine(PEReader pe)
     {
         ushort raw = (ushort)pe.PEHeaders.CoffHeader.Machine;
         // pedecoder.h IMAGE_FILE_MACHINE_NATIVE_OS_OVERRIDE; Windows has no override.

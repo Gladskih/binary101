@@ -33,7 +33,8 @@ static class ReadyToRunComposite
                     ReadyToRunReference.UInt32(table, offset + 12));
                 components.Add(new { flags = ReadyToRunReference.UInt32(core, 0),
                     sectionCount = ReadyToRunReference.UInt32(core, 4),
-                    sections = ReadyToRunReference.Sections(pe, core, indices, 8, 4) });
+                    sections = ReadyToRunReference.Sections(pe, core, indices, 8, 4,
+                        System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(4))) });
             }
         }
         return components;
