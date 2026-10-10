@@ -1,7 +1,11 @@
 import { NativeFormatFixtureWriter } from "./native-format-metadata-fixture.js";
 
+type SignatureHandle = readonly [type: number, label: string];
+
+// NativeFormat type-signature records and typed-handle tags follow the generated metadata reader.
+// https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs
+// https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderCommonGen.cs
 const writeReferences = (writer: NativeFormatFixtureWriter): void => {
-  // Explicit handle kinds and field order are independent oracles from NativeFormatReaderGen.cs.
   writer.label("type");
   writer.variantHandle(0x30, "namespace");
   writer.handle(0x1a, "type-name");
@@ -14,7 +18,9 @@ const writeReferences = (writer: NativeFormatFixtureWriter): void => {
   writer.unsigned(1);
 };
 
-const writeElementSignatures = (writer: NativeFormatFixtureWriter): void => {
+const writeElementSignatures = (
+  writer: NativeFormatFixtureWriter, genericArguments: readonly SignatureHandle[]
+): void => {
   writer.label("array");
   writer.variantHandle(0x3d, "type");
   writer.label("byref");
@@ -23,31 +29,30 @@ const writeElementSignatures = (writer: NativeFormatFixtureWriter): void => {
   writer.variantHandle(0x3d, "type");
   writer.label("multi-array");
   writer.variantHandle(0x3d, "type");
-  writer.unsigned(2);
+  writer.unsigned(2); // Array rank 2.
   writer.unsigned(1);
-  writer.unsigned(3);
+  writer.unsigned(3); // One explicitly sized dimension of length 3.
   writer.unsigned(1);
-  writer.bytes.push(0xfe); // DecodeSigned: -1 in its one-byte representation.
+  writer.bytes.push(0xfe); // One lower bound, -1 in the one-byte DecodeSigned representation.
   writer.label("instantiation");
   writer.variantHandle(0x3d, "type");
-  writer.unsigned(2);
-  writer.variantHandle(0x3f, "variable");
-  writer.variantHandle(0x2c, "method-variable");
+  writer.unsigned(genericArguments.length);
+  genericArguments.forEach(([type, label]) => writer.variantHandle(type, label));
 };
 
 const writeMethodSignatures = (writer: NativeFormatFixtureWriter): void => {
   writer.label("modified");
-  writer.bytes.push(1); // MdBinaryReader.Read(bool) consumes a single byte.
+  writer.bytes.push(1); // The modifier's isOptional Boolean byte selects modopt.
   writer.variantHandle(0x3d, "type");
   writer.variantHandle(0x32, "pointer");
   writer.label("method");
-  writer.unsigned(0x20);
-  writer.unsigned(1);
+  writer.unsigned(0x20); // SignatureCallingConvention.HasThis.
+  writer.unsigned(1); // Generic method arity.
   writer.variantHandle(0x3d, "type");
-  writer.unsigned(2);
+  writer.unsigned(2); // Two fixed parameters.
   writer.variantHandle(0x37, "array");
   writer.variantHandle(0x02, "byref");
-  writer.unsigned(1);
+  writer.unsigned(1); // One optional vararg parameter after the sentinel.
   writer.variantHandle(0x3c, "instantiation");
   writer.label("function-pointer");
   writer.handle(0x2b, "method");
@@ -55,10 +60,10 @@ const writeMethodSignatures = (writer: NativeFormatFixtureWriter): void => {
   writer.variantHandle(0x25, "function-pointer");
 };
 
-export const createNativeFormatSignatureFixture = () => {
+const buildNativeFormatSignatureFixture = (genericArguments: readonly SignatureHandle[]) => {
   const writer = new NativeFormatFixtureWriter();
   writeReferences(writer);
-  writeElementSignatures(writer);
+  writeElementSignatures(writer, genericArguments);
   writeMethodSignatures(writer);
   writer.string("type-name", "Item");
   writer.string("namespace-name", "Demo");
@@ -66,12 +71,10 @@ export const createNativeFormatSignatureFixture = () => {
   return { bytes: Uint8Array.from(writer.bytes), handle, labels: writer.labels };
 };
 
+export const createNativeFormatSignatureFixture = () =>
+  buildNativeFormatSignatureFixture([[0x3f, "variable"], [0x2c, "method-variable"]]);
+
 export const createNativeFormatSharedSignatureFixture = () => {
-  const fixture = createNativeFormatSignatureFixture();
-  const offset = fixture.handle("instantiation", 0x3c).offset;
-  const view = new DataView(fixture.bytes.buffer);
-  // Instantiation: five-byte type handle, one-byte count, two five-byte argument handles.
-  view.setUint32(offset + 7, fixture.handle("type", 0x3d).offset * 128 + 0x3d, true);
-  view.setUint32(offset + 12, fixture.handle("pointer", 0x32).offset * 128 + 0x32, true);
-  return fixture;
+  // Both arguments are typed references to nodes already used elsewhere, forming a shared diamond.
+  return buildNativeFormatSignatureFixture([[0x3d, "type"], [0x32, "pointer"]]);
 };

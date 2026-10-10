@@ -5,8 +5,12 @@ import { readNativeFormatScalar, isNativeFormatCollection, nativeFormatCollectio
   "../../../../analyzers/native-aot/native-format-scalars.js";
 import { nativeFormatWideBytes, nativeFormatFloatBytes } from "../../../helpers/native-format-constant-fixture.js";
 
+// DecodeUnsigned uses the low bits to identify its compressed width; byte-backed fields remain raw bytes.
+// https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/NativeFormat/NativeFormatReader.Primitives.cs
 for (const [encoding, bytes, expected] of [
-  ["byte", [255], 255], ["unsigned", [84], 42], ["signed", [254], -1],
+  ["byte", [255], 255], // Raw byte is not compressed.
+  ["unsigned", [84], 42], // One-byte DecodeUnsigned value is stored shifted left by one.
+  ["signed", [254], -1], // One-byte signed value sign-extends after the shift.
   ["int64", nativeFormatWideBytes(-9223372036854775808n), "-9223372036854775808"],
   ["uint64", nativeFormatWideBytes(18446744073709551615n), "18446744073709551615"],
   ["float32", nativeFormatFloatBytes(-1.5, 4), -1.5], ["float64", nativeFormatFloatBytes(Math.PI, 8), Math.PI]

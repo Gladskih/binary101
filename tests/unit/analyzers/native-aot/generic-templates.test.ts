@@ -6,8 +6,8 @@ import { NativeFormatReader } from "../../../../analyzers/native-aot/native-form
 import { NativeAotCodeReferences } from "../../../../analyzers/native-aot/code-references.js";
 import { createNativeAotTemplateFixture } from "../../../helpers/native-aot-function-map-fixture.js";
 
-// Template tuple offsets and method field order follow GenericMethodsTemplateMapNode/GetMethod.
-// https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/aot/ILCompiler.Compiler/Compiler/DependencyAnalysis/GenericMethodsTemplateMapNode.cs
+// Template tuple offsets and method field order follow GenericMethodsTemplateMap.GetMethod.
+// https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/aot/ILCompiler.Compiler/Compiler/DependencyAnalysis/GenericMethodsTemplateMap.cs
 // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/NativeLayoutInfoLoadContext.cs
 
 void test("generic templates resolve their function through NativeReferences rather than CommonFixups", async () => {
