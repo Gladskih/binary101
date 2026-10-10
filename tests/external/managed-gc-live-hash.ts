@@ -5,10 +5,13 @@ import type { ManagedGcInfo } from "../../analyzers/native-aot/gc-info-types.js"
  * without transitions; the runtime oracle chooses its queries from its own decoded ranges.
  */
 export const managedGcLiveHash = (info: ManagedGcInfo, version: number): string => {
-  let hash = 2166136261;
+  // FNV-1a/32 offset basis and prime, as defined by the algorithm's authors.
+  // http://www.isthe.com/chongo/tech/comp/fnv/index.html#FNV-param
+  let hash = 0x811c9dc5;
   const word = (value: number) => {
-    for (let index = 0; index < 4; index++) {
-      hash = Math.imul(hash ^ ((value >>> (index * 8)) & 255), 16777619) >>> 0;
+    // Each query word is serialized as a little-endian UInt32, one byte at a time.
+    for (let index = 0; index < Uint32Array.BYTES_PER_ELEMENT; index++) {
+      hash = Math.imul(hash ^ ((value >>> (index * 8)) & 0xff), 0x01000193) >>> 0;
     }
   };
   const query = (offset: number, slots: number[]) => {

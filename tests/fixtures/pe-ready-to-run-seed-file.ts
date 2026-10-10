@@ -1,6 +1,7 @@
 import { createPePlusWithSection } from "./sample-files-pe.js";
 import { MockFile } from "../helpers/mock-file.js";
 import { createNativeHashtableFixture } from "../helpers/native-hashtable-fixture.js";
+import { GcInfoBitsFixture } from "../helpers/gc-info-bits-fixture.js";
 
 export const createPeReadyToRunSeedFile = (runtimeIndex = 0): MockFile => {
   const bytes = createPePlusWithSection();
@@ -38,6 +39,14 @@ export const createPeReadyToRunSeedFile = (runtimeIndex = 0): MockFile => {
   // NativeArray.cs and ReadyToRunReader.GetRuntimeFunctionIndexFromOffset, v10.0.0.
   bytes.set([8, 1, 0, runtimeIndex * 4], 0x360);
   bytes[0x380] = 1; // AMD64 UNWIND_INFO version 1, zero unwind codes.
+  // R2R always appends a personality UInt32 after the four-byte unwind header,
+  // then GCInfo v4 (R2R v16). Slim header, no frame register, three-byte method;
+  // zero safe points, no tracked slots, no untracked slots.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/aot/ILCompiler.Reflection.ReadyToRun/Amd64/UnwindInfo.cs
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/inc/gcinfotypes.h
+  const gc = new GcInfoBitsFixture().field(0, 1).field(0, 1).unsigned(3, 8)
+    .unsigned(0, 2).field(0, 1).field(0, 1).bytes();
+  bytes.set(gc, 0x380 + 4 + Uint32Array.BYTES_PER_ELEMENT);
   // Intel SDM: RET at the PE entrypoint; an unreachable SYSCALL + RET at the R2R root.
   bytes[0x200] = 0xc3;
   bytes.set([0x0f, 0x05, 0xc3], 0x220);
