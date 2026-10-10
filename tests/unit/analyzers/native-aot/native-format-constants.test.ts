@@ -1,11 +1,13 @@
+import { nativeFormatFixtureKinds as kinds, nativeFormatIntegerBytes, nativeFormatSampleInteger } from
+  "../../../helpers/native-format-wire-fixture.js";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { nativeFormatConstantFixture as fixture, createNativeFormatConstantGraph, nativeFormatConstantLeaf } from
+import { nativeFormatConstantFixture as fixture, createNativeFormatConstantGraph, nativeFormatConstantLeaf,
+  createNativeFormatSharedConstantFixture, createNativeFormatCyclicConstantFixture } from
   "../../../helpers/native-format-constant-fixture.js";
 
 void test("constant graphs keep null array positions, shared nodes and cached failures", () => {
-  // Two object-array entries share Int32 record 13: (13 << 7) | 0x11 = 0x691; the third is nil.
-  const repeated = fixture(0x0d, [6, 15, 145, 6, 0, 0, 15, 145, 6, 0, 0, 0, 84]);
+  const repeated = createNativeFormatSharedConstantFixture();
 
   const value = repeated.constants.value(repeated.handle);
 
@@ -19,18 +21,19 @@ void test("constant graphs keep null array positions, shared nodes and cached fa
 });
 
 void test("deep constant arrays use an explicit worklist without a nesting cap", () => {
-  const data = createNativeFormatConstantGraph(4096);
+  // Stress depth is a test choice, not a format limit: thousands of nested arrays.
+  const depth = 2 ** 12;
+  const data = createNativeFormatConstantGraph(depth);
   const value = data.constants.value(data.handle);
 
-  assert.deepEqual(nativeFormatConstantLeaf(value, 4096), { type: "int", value: 42 });
+  assert.deepEqual(nativeFormatConstantLeaf(value, depth), { type: "int", value: 42 });
   assert.equal(data.warnings.size, 0);
 });
 
 void test("constant cycles, unsupported kinds and unreadable values warn and stay cached", () => {
-  // Generic handle (offset 1 << 7) | ConstantHandleArray (0x0d).
-  const cycle = fixture(0x0d, [2, 15, 141, 0, 0, 0]);
-  const unreadable = fixture(0x0a, [0]);
-  const unknown = fixture(0x02, [0]);
+  const cycle = createNativeFormatCyclicConstantFixture();
+  const unreadable = fixture(kinds.double, [0]);
+  const unknown = fixture(kinds.byReference, [0]);
 
   assert.match(String(cycle.constants.value(cycle.handle).value), /cycle/);
   assert.equal(unreadable.constants.value(unreadable.handle).type, "<invalid>");
@@ -38,10 +41,10 @@ void test("constant cycles, unsupported kinds and unreadable values warn and sta
   assert.equal(cycle.constants.value(cycle.handle), cycle.constants.value(cycle.handle));
   assert.equal(cycle.warnings.size, 1);
   assert.match([...unreadable.warnings].join(" "), /outside/);
-  assert.deepEqual(cycle.constants.value({ type: 0x1a, offset: 0 }), { type: "string", value: null });
+  assert.deepEqual(cycle.constants.value({ type: kinds.string, offset: 0 }), { type: "string", value: null });
 });
 void test("constant graph warnings contain unexpected decoder failures", context => {
-  const data = fixture(0x11, [84]);
+  const data = fixture(kinds.int32, nativeFormatIntegerBytes(nativeFormatSampleInteger));
   context.mock.method(data.store, "record", () => { throw null; });
 
   assert.deepEqual(data.constants.value(data.handle), { type: "<invalid>", value: "Constant decoding failed." });
