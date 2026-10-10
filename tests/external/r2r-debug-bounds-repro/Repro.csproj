@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- CA2022 comes from the unmodified upstream NativeReader.cs. -->
+    <WarningsNotAsErrors>CA2022</WarningsNotAsErrors>
+    <UpstreamSourceDirectory Condition="'$(UpstreamSourceDirectory)' == ''">upstream</UpstreamSourceDirectory>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs;ReaderHost.cs;PackedBounds.cs" />
+    <Compile Include="$(UpstreamSourceDirectory)/**/*.cs" />
+  </ItemGroup>
+</Project>
