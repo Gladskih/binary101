@@ -4,6 +4,15 @@ static class NativeFunctionMapReferenceTests
 {
     public static void Run()
     {
+        AbsentFunctionMapBlobs();
+        StructMapFieldNameAndOffset();
+        TruncatedStructMapEntry();
+        DelegateMapResolvesThreeExecutableFixups();
+        ExactMethodMapCarriesGenericArgumentAndEntrypoint();
+        ClassConstructorMapReadsPrecedingExecutableCell();
+    }
+
+    static void AbsentFunctionMapBlobs() =>
         Test.Run("absent function map blobs", () =>
         {
             using var fixture = new ElfImageFixture();
@@ -11,6 +20,8 @@ static class NativeFunctionMapReferenceTests
             var reference = new NativeFunctionMapReference([], image);
             Test.Equal<object?>(null, reference.Read());
         });
+
+    static void StructMapFieldNameAndOffset() =>
         Test.Run("struct map field name and offset", () =>
         {
             using var fixture = new ElfImageFixture();
@@ -28,6 +39,8 @@ static class NativeFunctionMapReferenceTests
             Test.Equal("x", row.GetProperty("fields")[0].GetProperty("name").GetString());
             Test.Equal(8U, row.GetProperty("fields")[0].GetProperty("offset").GetUInt32());
         });
+
+    static void TruncatedStructMapEntry() =>
         Test.Run("truncated struct map entry", () =>
         {
             using var fixture = new ElfImageFixture();
@@ -40,6 +53,8 @@ static class NativeFunctionMapReferenceTests
             var reference = new NativeFunctionMapReference(blobs, image);
             Test.Throws<BadImageFormatException>(() => reference.Read());
         });
+
+    static void DelegateMapResolvesThreeExecutableFixups() =>
         Test.Run("delegate map resolves three executable fixups", () =>
         {
             using var fixture = new ElfImageFixture();
@@ -58,6 +73,8 @@ static class NativeFunctionMapReferenceTests
             Test.Equal(0x100L, row.GetProperty("closedRva").GetInt64());
             Test.Equal(0x100L, row.GetProperty("forwardCreationRva").GetInt64());
         });
+
+    static void ExactMethodMapCarriesGenericArgumentAndEntrypoint() =>
         Test.Run("exact method map carries generic argument and entrypoint", () =>
         {
             using var fixture = new ElfImageFixture();
@@ -77,6 +94,8 @@ static class NativeFunctionMapReferenceTests
             Test.Equal(2U, row.GetProperty("genericArgumentIndices")[0].GetUInt32());
             Test.Equal(0x100L, row.GetProperty("entrypointRva").GetInt64());
         });
+
+    static void ClassConstructorMapReadsPrecedingExecutableCell() =>
         Test.Run("class constructor map reads preceding executable cell", () =>
         {
             using var fixture = new ElfImageFixture();
@@ -95,5 +114,4 @@ static class NativeFunctionMapReferenceTests
             Test.Equal(0U, row.GetProperty("staticBaseIndex").GetUInt32());
             Test.Equal(0x100L, row.GetProperty("entrypointRva").GetInt64());
         });
-    }
 }

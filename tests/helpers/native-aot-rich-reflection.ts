@@ -16,7 +16,7 @@ export const createRichNativeAotScope = (): NativeAotReflectionScope => ({
     }, { name: "Unknown" }],
     // 6=mdPublic; offset 12 is a synthetic field location for the renderer's offset column.
     fields: [{ name: "Value", type: "System.Int32", flags: 6, offset: 12 }, { name: "Unknown" }],
-    // Public type flag and an intentionally synthetic 32-byte, 8-byte-packed value-type layout.
+    // Public type flag and an intentionally synthetic 32-byte, 8-byte-packed type layout.
     definition: { flags: 1, size: 32, packingSize: 8, baseType: "System.Object",
       interfaces: ["Demo.IMarker"], genericParameters: [
         // 4=ReferenceTypeConstraint, kind 0=type parameter.

@@ -4,6 +4,13 @@ static class NativeRuntimeTailReferenceTests
 {
     public static void Run()
     {
+        RuntimeTypeWithoutOptionalTailFields();
+        RuntimeTypeFinalizerRelativeCodePointer();
+        DispatchMapStandardAndStaticEntriesWithSealedSlot();
+        DispatchMapPointerOutsideImage();
+    }
+
+    static void RuntimeTypeWithoutOptionalTailFields() =>
         Test.Run("runtime type without optional tail fields", () =>
         {
             using var fixture = new ElfImageFixture();
@@ -14,6 +21,8 @@ static class NativeRuntimeTailReferenceTests
             Test.Equal(JsonValueKind.Null, result.GetProperty("dispatchMap").ValueKind);
             Test.Equal(0, result.GetProperty("sealedSlots").GetArrayLength());
         });
+
+    static void RuntimeTypeFinalizerRelativeCodePointer() =>
         Test.Run("runtime type finalizer relative code pointer", () =>
         {
             using var fixture = new ElfImageFixture();
@@ -26,6 +35,8 @@ static class NativeRuntimeTailReferenceTests
             var result = JsonSerializer.SerializeToElement(tail.Read(0x140, 0x100000, 0, 0));
             Test.Equal(0x180L, result.GetProperty("finalizerRva").GetInt64());
         });
+
+    static void DispatchMapStandardAndStaticEntriesWithSealedSlot() =>
         Test.Run("dispatch map standard and static entries with sealed slot", () =>
         {
             using var fixture = new ElfImageFixture();
@@ -56,6 +67,8 @@ static class NativeRuntimeTailReferenceTests
             Test.Equal(0x1d0L, result.GetProperty("sealedSlots")[0]
                 .GetProperty("targetRva").GetInt64());
         });
+
+    static void DispatchMapPointerOutsideImage() =>
         Test.Run("dispatch map pointer outside image", () =>
         {
             using var fixture = new ElfImageFixture();
@@ -65,5 +78,4 @@ static class NativeRuntimeTailReferenceTests
             var tail = new NativeRuntimeTailReference(image, new NativeMapHydration(image, null));
             Test.Throws<BadImageFormatException>(() => tail.Read(0x140, 0x40000, 0, 0));
         });
-    }
 }

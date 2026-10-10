@@ -10,6 +10,20 @@ static class NativeMapLayoutTests
 
     public static void Run()
     {
+        ExternalTypeSignatureIndex();
+        NonExternalTypeRejected();
+        ExternalTypeLookbackPreservesCallerPosition();
+        UnderflowingTypeLookbackIsRejected();
+        CyclicTypeLookbackThroughModifiersIsRejected();
+        DeepModifierChainConsumesFinalBuiltInType();
+        InstantiationArrayAndFunctionPointerTypes();
+        V10MethodIdentityAndFunctionFixup();
+        EmptyDictionaryLayout();
+        DictionarySkipsTypeHandleAndDecodesMethodToken();
+        DictionaryTruncatedMethodSignature();
+    }
+
+    static void ExternalTypeSignatureIndex() =>
         Test.Run("external type signature index", () =>
         {
             // NativeLayout TypeSignatureKind.External is 6, data is shifted left four.
@@ -18,9 +32,13 @@ static class NativeMapLayoutTests
                 NativeMapLayout.ExternalType(ref parser));
             Test.Equal(3U, index);
         });
+
+    static void NonExternalTypeRejected() =>
         Test.Run("non-external type rejected", () =>
             Test.Throws<InvalidDataException>(() => Parse([0x0a], (NativeParser parser) =>
                 NativeMapLayout.ExternalType(ref parser))));
+
+    static void ExternalTypeLookbackPreservesCallerPosition() =>
         Test.Run("external type lookback preserves caller position", () =>
         {
             // Lookback data 1 at offset 3 points back four bytes to offset 0.
@@ -33,12 +51,16 @@ static class NativeMapLayoutTests
             });
             Test.Equal(3U, index);
         });
+
+    static void UnderflowingTypeLookbackIsRejected() =>
         Test.Run("underflowing type lookback is rejected", () =>
             Test.Throws<BadImageFormatException>(() => Parse([0x02], (NativeParser parser) =>
             {
                 NativeMapLayout.Type(ref parser);
                 return parser.Offset;
             })));
+
+    static void CyclicTypeLookbackThroughModifiersIsRejected() =>
         Test.Run("cyclic type lookback through modifiers is rejected", () =>
             Test.Throws<BadImageFormatException>(() => Parse([0x04, 0x04, 0x02],
                 (NativeParser parser) =>
@@ -46,6 +68,8 @@ static class NativeMapLayoutTests
                     NativeMapLayout.Type(ref parser);
                     return parser.Offset;
                 })));
+
+    static void DeepModifierChainConsumesFinalBuiltInType() =>
         Test.Run("deep modifier chain consumes final built-in type", () =>
         {
             byte[] bytes = [.. Enumerable.Repeat((byte)0x04, 32768), 0x0a];
@@ -56,6 +80,8 @@ static class NativeMapLayoutTests
             });
             Test.Equal((uint)bytes.Length, offset);
         });
+
+    static void InstantiationArrayAndFunctionPointerTypes() =>
         Test.Run("instantiation array and function pointer types", () =>
         {
             // Instantiation with one argument: multidimensional array of a
@@ -69,6 +95,8 @@ static class NativeMapLayoutTests
             });
             Test.Equal((uint)bytes.Length, offset);
         });
+
+    static void V10MethodIdentityAndFunctionFixup() =>
         Test.Run("v10 method identity and function fixup", () =>
         {
             // flags=4, function index=1, external declaring type=3, method token=42.
@@ -78,12 +106,16 @@ static class NativeMapLayoutTests
             Test.Equal(4U, result["flags"]);
             Test.Equal(0x101L, result["entrypointRva"]);
         });
+
+    static void EmptyDictionaryLayout() =>
         Test.Run("empty dictionary layout", () =>
         {
             var result = Parse([0], (NativeParser parser) =>
                 new NativeMapLayout(NativeMapAbi.DotNet10).Dictionary(ref parser, _ => null));
             Test.Equal(0, result.Count);
         });
+
+    static void DictionarySkipsTypeHandleAndDecodesMethodToken() =>
         Test.Run("dictionary skips type handle and decodes method token", () =>
         {
             // Sequence of two fixups: TypeHandle=1 + BuiltIn type,
@@ -95,9 +127,10 @@ static class NativeMapLayoutTests
             var method = (Dictionary<string, object?>)result[0];
             Test.Equal(42U, method["methodToken"]);
         });
+
+    static void DictionaryTruncatedMethodSignature() =>
         Test.Run("dictionary truncated method signature", () =>
             Test.Throws<BadImageFormatException>(() => Parse([2, 0x10, 0],
                 (NativeParser parser) => new NativeMapLayout(NativeMapAbi.DotNet10)
                     .Dictionary(ref parser, _ => null))));
-    }
 }

@@ -37,67 +37,8 @@ sealed class NativeMapLayout(NativeMapAbi abi)
         }
     }
 
-    public static void Type(ref NativeParser parser)
-    {
-        var frames = new Stack<(NativeParser parser, ulong pending,
-            Continuation kind, uint lookbackOffset)>();
-        var activeLookbacks = new HashSet<uint>();
-        ulong pending = 1;
-        while (pending != 0 || frames.Count != 0)
-        {
-            if (pending == 0)
-            {
-                var frame = frames.Pop();
-                if (frame.kind == Continuation.Lookback)
-                {
-                    activeLookbacks.Remove(frame.lookbackOffset);
-                    parser = frame.parser;
-                }
-                else
-                {
-                    Integers(ref parser);
-                    Integers(ref parser);
-                }
-                pending = frame.pending;
-                continue;
-            }
-            pending--;
-            uint start = parser.Offset;
-            var kind = parser.GetTypeSignatureKind(out uint data);
-            switch (kind)
-            {
-                case TypeSignatureKind.Lookback:
-                    var lookback = parser.GetLookbackParser(data);
-                    if (lookback.Offset >= start) throw new BadImageFormatException("Invalid type lookback");
-                    if (!activeLookbacks.Add(lookback.Offset))
-                        throw new BadImageFormatException("Cyclic type lookback");
-                    frames.Push((parser, pending, Continuation.Lookback, lookback.Offset));
-                    parser = lookback;
-                    pending = 1;
-                    break;
-                case TypeSignatureKind.Variable:
-                case TypeSignatureKind.BuiltIn:
-                case TypeSignatureKind.External: break;
-                case TypeSignatureKind.Modifier: pending++; break;
-                case TypeSignatureKind.Instantiation: pending += (ulong)data + 1; break;
-                case TypeSignatureKind.MultiDimArray:
-                    frames.Push((parser, pending, Continuation.ArrayDimensions, 0));
-                    pending = 1;
-                    break;
-                case TypeSignatureKind.FunctionPointer:
-                    parser.GetUnsigned();
-                    pending += (ulong)parser.GetSequenceCount() + 1;
-                    break;
-                default: throw new InvalidDataException("Unknown type kind");
-            }
-        }
-    }
-
-    static void Integers(ref NativeParser parser)
-    {
-        uint count = parser.GetSequenceCount();
-        for (uint index = 0; index < count; index++) parser.GetUnsigned();
-    }
+    public static void Type(ref NativeParser parser) =>
+        parser = new NativeMapTypeTraversal(parser).Read();
 
     public Dictionary<string, object?> Method(ref NativeParser parser, Func<uint, long?> function)
     {
