@@ -27,7 +27,8 @@ const frameSlots = (reader: GcBitReader, header: ManagedGcHeader, version: 3 | 4
 const frameLayout = (reader: GcBitReader, header: ManagedGcHeader): void => {
   if (header.flags & 0x40) {
     const register = reader.unsigned(3);
-    if (register >= 16) throw new Error("GC frame register is outside the AMD64 register set.");
+    // GetRegisterSlot cannot obtain RSP; AMD64 normalizes it as 4 XOR 5 = 1.
+    if (register >= 16 || register === 1) throw new Error("GC frame register is invalid for AMD64 root storage.");
     header.stackBaseRegister = register ^ 5;
   }
   if (header.flags & 0x100) header.editAndContinueBytes = reader.unsigned(4);

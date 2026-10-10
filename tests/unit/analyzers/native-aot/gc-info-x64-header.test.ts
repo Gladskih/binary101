@@ -44,6 +44,9 @@ void test("rejects reserved flags and invalid cookie/prolog ranges", () => {
 });
 
 void test("rejects invalid frame registers, zero-length methods and scaled offset overflow", () => {
+  // AMD64 normalizes the frame register with XOR 5: encoded 1 means forbidden RSP.
+  assert.throws(() => readX64GcHeader(new GcBitReader(new GcInfoBitsFixture()
+    .field(1, 1).field(64, 10).unsigned(32, 8).unsigned(1, 3).bytes()), 4), /register/);
   assert.throws(() => readX64GcHeader(new GcBitReader(new GcInfoBitsFixture()
     .field(1, 1).field(64, 10).unsigned(32, 8).unsigned(16, 3).bytes()), 4), /register/);
   assert.throws(() => readX64GcHeader(new GcBitReader(new GcInfoBitsFixture()

@@ -41,6 +41,9 @@ void test("accepts empty slot tables and rejects unknown stack bases", () => {
 });
 
 void test("rejects register IDs and scaled stack offsets outside AMD64 storage", () => {
+  // Runtime GetRegisterSlot explicitly forbids regNum=4 (RSP) as a GC root.
+  assert.throws(() => readX64GcSlots(new GcBitReader(new GcInfoBitsFixture()
+    .field(1, 1).unsigned(1, 2).field(0, 1).unsigned(4, 3).field(0, 2).bytes())), /register/);
   assert.throws(() => readX64GcSlots(new GcBitReader(new GcInfoBitsFixture()
     .field(1, 1).unsigned(1, 2).field(0, 1).unsigned(16, 3).field(0, 2).bytes())), /register/);
   assert.throws(() => readX64GcSlots(new GcBitReader(new GcInfoBitsFixture()

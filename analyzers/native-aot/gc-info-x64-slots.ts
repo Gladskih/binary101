@@ -9,9 +9,9 @@ const registers = (reader: GcBitReader, count: number, slots: ManagedGcSlot[]): 
   for (let index = 0; index < count; index++) {
     if (index === 0 || flags) { register = reader.unsigned(3); flags = reader.bits(2); }
     else register += reader.unsigned(2) + 1;
-    // AMD64 has sixteen general-purpose registers; GC slots cannot name XMM storage.
-    // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/inc/corinfo.h
-    if (register >= 16) throw new Error("GC register is outside the AMD64 register set.");
+    // GetRegisterSlot forbids RSP (4); NativeAOT's register pointer array omits it.
+    // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/vm/gcinfodecoder.cpp
+    if (register >= 16 || register === 4) throw new Error("GC register is invalid for AMD64 root storage.");
     slots.push({ kind: "register", register, flags });
   }
 };
