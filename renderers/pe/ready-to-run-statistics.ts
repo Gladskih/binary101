@@ -2,6 +2,7 @@ import type { PeClrReadyToRunSection, PeClrReadyToRunSectionData } from
   "../../analyzers/pe/clr/ready-to-run-types.js";
 import type { AnalysisStatistic } from "../analysis-statistics.js";
 import { readyToRunDebugStatistics } from "./ready-to-run-debug-statistics.js";
+import { managedGcStatistics } from "../managed-gc-statistics.js";
 
 const fact = (label: string, value: number, description: string): AnalysisStatistic => ({ label, value, description });
 
@@ -22,10 +23,8 @@ const thunkStatistics = (data: Extract<PeClrReadyToRunSectionData, { kind: "thun
     "Validated instruction templates contribute code starts; their cells, literals and padding remain data."))];
 };
 
-export const readyToRunSectionStatistics = (section: PeClrReadyToRunSection): AnalysisStatistic[] => {
-  const data = section.decoded;
-  if (!data || data.kind === "text") return [];
-  if (data.kind === "debug-info") return readyToRunDebugStatistics(data.methods);
+const entryStatistics = (data: Exclude<PeClrReadyToRunSectionData,
+  { kind: "text" | "debug-info" | "gc-methods" }>): AnalysisStatistic[] => {
   if (data.kind === "components") return [
     fact("Component assemblies", data.entries.length, "A composite image can hold native code for several assemblies."),
     fact("Decoded component headers", data.entries.filter(entry => entry.coreHeader).length,
@@ -43,6 +42,14 @@ export const readyToRunSectionStatistics = (section: PeClrReadyToRunSection): An
     "Signatures describe which runtime dependency a cell needs.")
   ];
   return thunkStatistics(data);
+};
+
+export const readyToRunSectionStatistics = (section: PeClrReadyToRunSection): AnalysisStatistic[] => {
+  const data = section.decoded;
+  if (!data || data.kind === "text") return [];
+  if (data.kind === "debug-info") return readyToRunDebugStatistics(data.methods);
+  if (data.kind === "gc-methods") return managedGcStatistics(data.methods.map(method => method.info));
+  return entryStatistics(data);
 };
 
 export const readyToRunStatistics = (sections: PeClrReadyToRunSection[]): AnalysisStatistic[] => {

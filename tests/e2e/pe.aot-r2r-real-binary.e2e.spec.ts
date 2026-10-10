@@ -42,6 +42,8 @@ test("explains ReadyToRun methods and imports without dumping their encoded addr
   await expect(statistics).toContainText("Method-definition entry points");
   await expect(statistics).toContainText("Instantiated method entry points");
   await expect(statistics).toContainText("Import cells with signatures");
-  await expect(statistics).not.toContainText(/RVA|0x[0-9a-f]+/i);
+  await expect(statistics).toContainText("Methods with GC maps");
+  await expect(statistics).toContainText("GC safe points");
+  await expect(statistics).not.toContainText(/\bRVA\b|0x[0-9a-f]+/i);
   await expect(analysis.locator('[data-paged-sortable-table-id$="-cells"]')).toHaveCount(0);
 });

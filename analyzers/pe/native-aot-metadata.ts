@@ -10,6 +10,7 @@ import {
   indexPeNativeAotPointerSites
 } from "./native-aot/image.js";
 import type { PeWindowsCore } from "./types.js";
+import { readPeNativeAotGc } from "./native-aot-gc.js";
 
 export const analyzePeNativeAotMetadata = async (
   reader: FileRangeReader,
@@ -26,7 +27,9 @@ export const analyzePeNativeAotMetadata = async (
       architecture.relocationType
     );
     const sites = indexPeNativeAotPointerSites(relocations, image);
-    return sites ? await findNativeAotMetadata(image, sites) : null;
+    const metadata = sites ? await findNativeAotMetadata(image, sites) : null;
+    if (metadata) await readPeNativeAotGc(reader, core, metadata);
+    return metadata;
   } catch {
     // A relocation site is only a candidate; malformed/truncated candidates are expected.
   }

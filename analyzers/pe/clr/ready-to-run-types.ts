@@ -1,6 +1,7 @@
 "use strict";
 
 import type { ReadyToRunDebugMethod } from "./ready-to-run-debug-types.js";
+import type { ReadyToRunGcMethod } from "./ready-to-run-gc.js";
 
 export interface PeClrReadyToRunSection {
   type: number;
@@ -45,6 +46,7 @@ export interface PeClrReadyToRunThunk {
 export type PeClrReadyToRunSectionData =
   | { kind: "text"; text: string }
   | { kind: "debug-info"; methods: ReadyToRunDebugMethod[] }
+  | { kind: "gc-methods"; methods: ReadyToRunGcMethod[] }
   | { kind: "thunks"; entries: PeClrReadyToRunThunk[] }
   | { kind: "methods"; methods: PeClrReadyToRunMethod[] }
   | { kind: "instance-methods"; methods: PeClrReadyToRunInstanceMethod[] }

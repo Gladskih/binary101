@@ -60,12 +60,14 @@ const readDescriptor = async (reader: FileRangeReader, elf: ElfParseResult,
 };
 
 // GCC/LLVM Itanium LSDA layout, as consumed by libcxxabi cxa_personality.cpp.
-export const parseElfLsda = async (file: File, elf: ElfParseResult): Promise<ElfLsda[]> => {
+export const parseElfLsda = async (file: File, elf: ElfParseResult,
+  nativeAotLsdas: ReadonlySet<bigint> = new Set()): Promise<ElfLsda[]> => {
   const results: ElfLsda[] = [];
   const reader = createFileRangeReader(file, 0, file.size);
   const frames = lsdaFrames(elf);
   for (const [index, fde] of frames.entries()) {
     const address = fde.lsda!.address;
+    if (nativeAotLsdas.has(address)) continue;
     const section = elf.sections.find(item => item.name === ".gcc_except_table" &&
       address >= item.addr && address < item.addr + item.size);
     results.push(await readDescriptor(reader, elf, section, fde, frames[index + 1]?.lsda?.address));
