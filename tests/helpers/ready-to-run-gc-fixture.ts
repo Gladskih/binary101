@@ -7,7 +7,7 @@ export const readyToRunGcFixture = () => {
   const { exceptionDirectoryRva, methodRva, alignedGcInfoRva, rootUnwindRva,
     nativeOnlyMethodRva, runtimeFunctionBytes } = source.layout;
   // ReadyToRun section IDs 102/103 are RuntimeFunctions/MethodDefEntryPoints.
-  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/ReadyToRun/ReadyToRunSectionType.cs
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/ReadyToRun/ReadyToRunConstants.cs
   data.sections = [{ type: 102, name: "RuntimeFunctions", rva: exceptionDirectoryRva,
     size: runtimeFunctionBytes * 2 },
     { type: 103, name: "MethodDefEntryPoints", rva: 0, size: 0, decoded: { kind: "methods",

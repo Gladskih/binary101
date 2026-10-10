@@ -5,7 +5,8 @@ import { GcBitReader } from "../../../../analyzers/native-aot/gc-bit-reader.js";
 import { GcInfoBitsFixture } from "../../../helpers/gc-info-bits-fixture.js";
 
 void test("reads direct per-safepoint live bit vectors", () => {
-  const bytes = new GcInfoBitsFixture().field(0, 1).field(5, 3).field(2, 3).bytes();
+  // Three-bit vectors 0b101 and 0b010 distinguish slot numbering at two safepoints.
+  const bytes = new GcInfoBitsFixture().directSafePointStates(3, [0, 2], [1]).bytes();
 
   assert.deepEqual(readGcSafePointStates(new GcBitReader(bytes),
     [{ offset: 2, liveSlots: [] }, { offset: 7, liveSlots: [] }], 3), [
@@ -14,8 +15,8 @@ void test("reads direct per-safepoint live bit vectors", () => {
 });
 
 void test("reads shared indirect live states at byte-aligned relative bit offsets", () => {
-  const bytes = new GcInfoBitsFixture().field(1, 1).unsigned(2, 3)
-    .field(0, 3).field(0, 3).field(0, 5).field(0, 1).field(3, 2).bytes();
+  // Both table entries point to the same aligned bit vector [0,1].
+  const bytes = new GcInfoBitsFixture().sharedIndirectSafePointState(2, 2, [0, 1]).bytes();
   const states = readGcSafePointStates(new GcBitReader(bytes),
     [{ offset: 2, liveSlots: [] }, { offset: 7, liveSlots: [] }], 2);
 

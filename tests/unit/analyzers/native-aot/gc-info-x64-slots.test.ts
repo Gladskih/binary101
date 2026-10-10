@@ -5,11 +5,14 @@ import { GcBitReader } from "../../../../analyzers/native-aot/gc-bit-reader.js";
 import { GcInfoBitsFixture } from "../../../helpers/gc-info-bits-fixture.js";
 
 void test("decodes register deltas, flagged absolute registers and separate stack groups", () => {
-  const bytes = new GcInfoBitsFixture().field(1, 1).unsigned(4, 2)
-    .field(1, 1).unsigned(2, 2).unsigned(1, 1)
-    .unsigned(1, 3).field(0, 2).unsigned(1, 2).unsigned(2, 2).unsigned(3, 2)
-    .field(1, 2).signed(-4, 6).field(0, 2).field(2, 2).unsigned(8, 4)
-    .field(0, 2).signed(2, 6).field(3, 2).bytes();
+  // The fixture starts at AMD64 register 1, then encodes deltas 2/3/4; stack offsets
+  // are pointer-scaled (8-byte slots), so -4 and +2 become -32 and +16.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/inc/gcinfotypes.h
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/vm/gcinfodecoder.cpp
+  const bytes = new GcInfoBitsFixture().x64SlotCounts(4, 2, 1)
+    .x64Register(1, 0).x64RegisterDelta(2).x64RegisterDelta(3).x64RegisterDelta(4)
+    .x64StackSlot(1, -32, 0).x64StackSlotDelta(2, 64)
+    .x64StackSlot(0, 16, 3).bytes();
 
   assert.deepEqual(readX64GcSlots(new GcBitReader(bytes)), [
     { kind: "register", register: 1, flags: 0 }, { kind: "register", register: 3, flags: 0 },
@@ -21,10 +24,11 @@ void test("decodes register deltas, flagged absolute registers and separate stac
 });
 
 void test("flagged slots reset absolute offsets and flags, and registers reset absolute IDs", () => {
-  const bytes = new GcInfoBitsFixture().field(1, 1).unsigned(2, 2)
-    .field(1, 1).unsigned(2, 2).unsigned(0, 1)
-    .unsigned(1, 3).field(1, 2).unsigned(3, 3).field(2, 2)
-    .field(1, 2).signed(-2, 6).field(1, 2).field(2, 2).signed(3, 6).field(2, 2).bytes();
+  // Flagged entries switch the delta stream to absolute register/stack values; the
+  // exact two signed offsets assert reset behavior across the stack-base groups.
+  const bytes = new GcInfoBitsFixture().x64SlotCounts(2, 2, 0)
+    .x64Register(1, 1).x64Register(3, 2)
+    .x64StackSlot(1, -16, 1).x64StackSlot(2, 24, 2).bytes();
 
   assert.deepEqual(readX64GcSlots(new GcBitReader(bytes)), [
     { kind: "register", register: 1, flags: 1 }, { kind: "register", register: 3, flags: 2 },
@@ -36,23 +40,19 @@ void test("flagged slots reset absolute offsets and flags, and registers reset a
 void test("accepts empty slot tables and rejects unknown stack bases", () => {
   assert.deepEqual(readX64GcSlots(new GcBitReader(Uint8Array.of(0))), []);
   assert.throws(() => readX64GcSlots(new GcBitReader(new GcInfoBitsFixture()
-    .field(0, 1).field(1, 1).unsigned(1, 2).unsigned(0, 1)
-    .field(3, 2).signed(0, 6).field(0, 2).bytes())), /base/);
+    .x64SlotCounts(0, 1, 0).x64StackSlot(3, 0, 0).bytes())), /base/);
 });
 
 void test("rejects register IDs and scaled stack offsets outside AMD64 storage", () => {
   // Runtime GetRegisterSlot explicitly forbids regNum=4 (RSP) as a GC root.
   assert.throws(() => readX64GcSlots(new GcBitReader(new GcInfoBitsFixture()
-    .field(1, 1).unsigned(1, 2).field(0, 1).unsigned(4, 3).field(0, 2).bytes())), /register/);
+    .x64SlotCounts(1, 0, 0).x64Register(4, 0).bytes())), /register/);
   assert.throws(() => readX64GcSlots(new GcBitReader(new GcInfoBitsFixture()
-    .field(1, 1).unsigned(1, 2).field(0, 1).unsigned(16, 3).field(0, 2).bytes())), /register/);
+    .x64SlotCounts(1, 0, 0).x64Register(16, 0).bytes())), /register/);
   assert.throws(() => readX64GcSlots(new GcBitReader(new GcInfoBitsFixture()
-    .field(0, 1).field(1, 1).unsigned(1, 2).unsigned(0, 1).field(0, 2)
-    .signed(-(2 ** 29), 6).field(0, 2).bytes())), /Int32/);
+    .x64SlotCounts(0, 1, 0).x64StackSlot(0, -(2 ** 32), 0).bytes())), /Int32/);
   assert.throws(() => readX64GcSlots(new GcBitReader(new GcInfoBitsFixture()
-    .field(0, 1).field(1, 1).unsigned(1, 2).unsigned(0, 1).field(0, 2)
-    .signed(2 ** 28, 6).field(0, 2).bytes())), /Int32/);
+    .x64SlotCounts(0, 1, 0).x64StackSlot(0, 2 ** 31, 0).bytes())), /Int32/);
   assert.equal(readX64GcSlots(new GcBitReader(new GcInfoBitsFixture()
-    .field(0, 1).field(1, 1).unsigned(1, 2).unsigned(0, 1).field(0, 2)
-    .signed(-(2 ** 28), 6).field(0, 2).bytes()))[0]?.kind, "stack");
+    .x64SlotCounts(0, 1, 0).x64StackSlot(0, -(2 ** 31), 0).bytes()))[0]?.kind, "stack");
 });
