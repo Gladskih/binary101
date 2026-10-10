@@ -2,6 +2,8 @@ import type { ManagedGcInfo } from "../analyzers/native-aot/gc-info-types.js";
 import type { AnalysisStatistic } from "./analysis-statistics.js";
 
 export const managedGcStatistics = (methods: ManagedGcInfo[]): AnalysisStatistic[] => {
+  // GcSlotFlags: INTERIOR=1, PINNED=2, UNTRACKED=4.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/inc/gcinfotypes.h
   const counts = { registers: 0, stack: 0, interior: 0, pinned: 0, untracked: 0,
     points: 0, ranges: 0, transitions: 0, partial: 0 };
   for (const method of methods) {

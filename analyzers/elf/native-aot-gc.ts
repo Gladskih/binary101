@@ -29,6 +29,8 @@ export const readElfNativeAotGc = async (file: File, elf: ElfParseResult): Promi
   const nativeLsdas = new Set<bigint>();
   const metadata = elf.nativeAot;
   const imageBase = getElfImageBase(elf.programHeaders);
+  // ELF EM_X86_64 = 62. This decoder uses the AMD64 little-endian GC encoding.
+  // https://gabi.xinuos.com/elf/a-emachine.html
   if (!metadata || imageBase == null || elf.header.machine !== 62 || !elf.littleEndian) return nativeLsdas;
   const warnings = new Set<string>();
   metadata.methodGcMaps = { methods: [], warnings: [] };
@@ -36,6 +38,8 @@ export const readElfNativeAotGc = async (file: File, elf: ElfParseResult): Promi
   const allAddresses = new Set((elf.unwind ?? []).flatMap(section => section.fdes
     .flatMap(frame => frame.lsda && !frame.lsda.indirect ? [frame.lsda.address] : [])));
   const reader = createFileRangeReader(file, 0, file.size);
+  // GCInfoToken's runtime/R2R version mapping: v3 before major 11, v4 thereafter.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/inc/gcinfo.h
   const blobs = new ElfNativeAotGcBlobs(reader,
     elf.programHeaders, allAddresses, metadata.majorVersion >= 11 ? 4 : 3, warnings);
   await readMethods(blobs, frames, imageBase, metadata.methodGcMaps, nativeLsdas);

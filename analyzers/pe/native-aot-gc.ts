@@ -5,6 +5,10 @@ import { readMappedRvaPrefix } from "./rva-byte-reader.js";
 import { locateNativeAotGcInfo } from "./exception/amd64/managed-gc-locations.js";
 import { PeManagedGcBlobs } from "./exception/amd64/managed-gc-blobs.js";
 
+// AMD64 .pdata entries are three DWORDs (start/end/unwind RVA); exception directory
+// index 3 and Machine 0x8664 follow the PE/COFF specification.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#the-pdata-section
+
 const readMethod = async (blobs: PeManagedGcBlobs, core: PeWindowsCore,
   startRva: number, unwindRva: number, metadata: NativeAotMetadata): Promise<void> => {
   try {
@@ -24,6 +28,8 @@ const readMethods = async (reader: FileRangeReader, core: PeWindowsCore,
   for (let offset = 0; offset + 12 <= view.byteLength; offset += 12) {
     unwinds.add(view.getUint32(offset + 8, true));
   }
+  // GCInfo v4 accompanies .NET 10's R2R headers; v3 is retained for the .NET 9 layout.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/inc/gcinfo.h
   const blobs = new PeManagedGcBlobs(reader, core.rvaToOff, unwinds,
     metadata.majorVersion >= 11 ? 4 : 3, warnings);
   for (let offset = 0; offset + 12 <= view.byteLength; offset += 12) {

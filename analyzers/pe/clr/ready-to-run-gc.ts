@@ -16,6 +16,8 @@ const roots = (data: PeClrReadyToRun): Set<number> => new Set(readyToRunImageSec
 
 const readMethods = async (reader: FileRangeReader, mapper: RvaToOffset, view: DataView,
   data: PeClrReadyToRun, warnings: Set<string>): Promise<ReadyToRunGcMethod[]> => {
+  // AMD64 RUNTIME_FUNCTION is start/end/unwind, three DWORDs (12 bytes).
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/inc/readytorun.h
   const unwindRvas = new Set<number>();
   for (let offset = 0; offset + 12 <= view.byteLength; offset += 12) {
     unwindRvas.add(view.getUint32(offset + 8, true));
@@ -42,6 +44,7 @@ const readMethods = async (reader: FileRangeReader, mapper: RvaToOffset, view: D
 export const decodeReadyToRunGc = async (reader: FileRangeReader, mapper: RvaToOffset,
   data: PeClrReadyToRun, machine: number | undefined): Promise<void> => {
   if (machine === undefined || getCanonicalPeMachine(machine) !== 0x8664) return;
+  // readytorun.h: ReadyToRunSectionType::RuntimeFunctions = 102.
   const section = data.sections.find(section => section.type === 102);
   if (!section) return;
   const warnings = new Set<string>();
