@@ -4,7 +4,9 @@ import { nativeAotGcStatistics } from "../../../../renderers/native-aot/gc-stati
 import type { NativeAotRuntimeType } from "../../../../analyzers/native-aot/runtime-type-map.js";
 
 void test("GC summaries explain regions, repeating arrays and types without descriptors", () => {
-  const type: NativeAotRuntimeType = { rva: 0, flags: 0, baseSize: 24,
+  // BaseSize includes the object header, so 40 bytes leave 32 bytes for the two regions.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/gc/gcdesc.h
+  const type: NativeAotRuntimeType = { rva: 0, flags: 0, baseSize: 40,
     numVtableSlots: 1, numInterfaces: 0, hashCode: 0, slots: [] };
 
   const statistics = nativeAotGcStatistics([
