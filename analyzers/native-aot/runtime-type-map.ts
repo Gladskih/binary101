@@ -2,6 +2,7 @@ import type { NativeAotFunctionReferences } from "./function-references.js";
 import type { NativeFormatCursor } from "./native-format-cursor.js";
 import type { NativeAotMetadata } from "./format.js";
 import { NativeAotRuntimeTails, type NativeAotRuntimeTail } from "./runtime-type-tail.js";
+import { NativeAotGcDescriptors, type NativeAotGcDescriptor } from "./gc-descriptors.js";
 
 export type NativeAotVirtualSlot = { kind: "method" | "data"; rva: number } | { kind: "null" };
 export interface NativeAotRuntimeType {
@@ -13,6 +14,7 @@ export interface NativeAotRuntimeType {
   hashCode: number;
   slots: NativeAotVirtualSlot[];
   tail?: NativeAotRuntimeTail;
+  gcDescriptor?: NativeAotGcDescriptor;
 }
 export interface NativeAotTypeMapEntry {
   typeIndex: number;
@@ -23,9 +25,11 @@ export interface NativeAotTypeMapEntry {
 export class NativeAotRuntimeTypes {
   readonly #cache = new Map<number, Promise<NativeAotRuntimeType | null>>();
   readonly #tails: NativeAotRuntimeTails;
+  readonly #gc: NativeAotGcDescriptors;
   constructor(readonly references: NativeAotFunctionReferences,
     version?: Pick<NativeAotMetadata, "majorVersion" | "minorVersion">) {
     this.#tails = new NativeAotRuntimeTails(references, version);
+    this.#gc = new NativeAotGcDescriptors(references);
   }
   async read(cursor: NativeFormatCursor): Promise<NativeAotTypeMapEntry> {
     // TypeMetadataMapNode writes (CommonFixups type index, NativeMetadata handle).
@@ -63,6 +67,8 @@ export class NativeAotRuntimeTypes {
         slots: await this.#slots(rva + 16 + image.pointerSize, numVtableSlots) };
       const tail = await this.#tails.read(type);
       if (tail) type.tail = tail;
+      const descriptor = await this.#gc.read(type);
+      if (descriptor) type.gcDescriptor = descriptor;
       return type;
     } catch (error) {
       this.references.issues.add(error instanceof Error ? error.message : "MethodTable decoding failed.");

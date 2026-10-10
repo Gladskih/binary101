@@ -4,6 +4,24 @@ import { NativeAotRuntimeTypes } from "../../../../analyzers/native-aot/runtime-
 import { createNativeAotRuntimeTypeFixture } from "../../../helpers/native-aot-runtime-type-fixture.js";
 import { NativeFormatCursor } from "../../../../analyzers/native-aot/native-format-cursor.js";
 import { NativeFormatReader } from "../../../../analyzers/native-aot/native-format-reader.js";
+import { createNativeAotObjectGcFixture } from "../../../helpers/native-aot-gc-fixture.js";
+
+void test("runtime types retain GC layouts and preserve other fields when a descriptor is damaged", async () => {
+  const fixture = createNativeAotObjectGcFixture();
+  fixture.view.setUint32(fixture.type.rva, fixture.type.flags, true);
+  fixture.view.setUint32(fixture.type.rva + 4, fixture.type.baseSize, true);
+
+  const type = (await new NativeAotRuntimeTypes(fixture.references).read(fixture.cursor)).runtimeType;
+
+  assert.deepEqual(type?.gcDescriptor, { kind: "object", series: [{ offset: 8, bytes: 8 }, { offset: 24, bytes: 16 }] });
+  assert.equal(type?.slots[0]?.kind, "method");
+  fixture.word(fixture.type.rva - 8, 0n);
+  const damaged = await new NativeAotRuntimeTypes(fixture.references).read(new NativeFormatCursor(
+    new NativeFormatReader(Uint8Array.of(0, 20)), 0));
+  assert.equal(damaged.runtimeType?.gcDescriptor, undefined);
+  assert.deepEqual(damaged.runtimeType?.slots, type?.slots);
+  assert.match([...fixture.issues].join(" "), /series count/);
+});
 
 for (const width of [4, 8] as const) {
   void test(`decodes ${width}-byte vtables and distinguishes methods, dictionaries and null slots`, async () => {
