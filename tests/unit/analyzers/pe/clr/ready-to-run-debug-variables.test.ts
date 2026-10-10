@@ -1,15 +1,23 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readDebugVariables } from "../../../../../analyzers/pe/clr/ready-to-run-debug-variables.js";
-import { nibbleIntegers } from "../../../../helpers/ready-to-run-debug-fixture.js";
+import { debugVariables, nibbleIntegers } from "../../../../helpers/ready-to-run-debug-fixture.js";
 
 void test("decodes all eleven cordebuginfo variable location variants and implicit arguments", () => {
-  // count, (start, length, variable+4, location, operands), repeated for every location tag.
-  const bytes = nibbleIntegers([11,
-    0, 2, 0, 0, 1, 0, 2, 1, 1, 2, 0, 2, 2, 2, 3,
-    0, 2, 3, 3, 4, 7, 0, 2, 4, 4, 5, 6, 0, 2, 5, 5, 1, 2,
-    0, 2, 6, 6, 1, 2, 7, 0, 2, 7, 7, 7, 2, 1, 0, 2, 8, 8, 2, 6,
-    0, 2, 9, 9, 3, 0, 2, 10, 10, 8]);
+  // Tag and operand meanings follow VarLoc in the runtime's cordebuginfo.h.
+  const bytes = debugVariables([
+    { start: 0, length: 2, variableNumber: -4, location: 0, operands: [1] },
+    { start: 0, length: 2, variableNumber: -3, location: 1, operands: [2] },
+    { start: 0, length: 2, variableNumber: -2, location: 2, operands: [3] },
+    { start: 0, length: 2, variableNumber: -1, location: 3, operands: [4, 7] },
+    { start: 0, length: 2, variableNumber: 0, location: 4, operands: [5, 6] },
+    { start: 0, length: 2, variableNumber: 1, location: 5, operands: [1, 2] },
+    { start: 0, length: 2, variableNumber: 2, location: 6, operands: [1, 2, 7] },
+    { start: 0, length: 2, variableNumber: 3, location: 7, operands: [7, 2, 1] },
+    { start: 0, length: 2, variableNumber: 4, location: 8, operands: [2, 6] },
+    { start: 0, length: 2, variableNumber: 5, location: 9, operands: [3] },
+    { start: 0, length: 2, variableNumber: 6, location: 10, operands: [8] }
+  ]);
   const warnings = new Set<string>();
 
   assert.deepEqual(readDebugVariables(bytes, 0x8664, warnings).map(entry => entry.location), [
@@ -29,7 +37,11 @@ void test("decodes all eleven cordebuginfo variable location variants and implic
 void test("scales x86 stack offsets and decodes OS-overridden target machine IDs", () => {
   const warnings = new Set<string>();
 
-  assert.deepEqual(readDebugVariables(nibbleIntegers([1, 4, 5, 4, 3, 2, 7]),
+  // IMAGE_FILE_MACHINE_I386 XOR .NET's Linux override identifies the target; signed slot
+  // displacement -3 is scaled by the 4-byte x86 stack slot size.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/inc/pedecoder.h
+  assert.deepEqual(readDebugVariables(debugVariables([{ start: 4, length: 5, variableNumber: 0,
+    location: 3, operands: [2, 7] }]),
     0x14c ^ 0x7b79, warnings), [{ startOffset: 4, endOffset: 9, variableNumber: 0,
     location: { kind: "stack", baseRegister: 2, offset: -12 } }]);
   assert.deepEqual([...warnings], []);
@@ -38,6 +50,7 @@ void test("scales x86 stack offsets and decodes OS-overridden target machine IDs
 void test("keeps complete variable records before unknown locations and truncated operands", () => {
   const warnings = new Set<string>();
 
+  // Unknown tag 11 follows one complete register record; the second record then has no register.
   assert.equal(readDebugVariables(nibbleIntegers([2, 0, 1, 4, 0, 1, 0, 1, 4, 11]),
     undefined, warnings).length, 1);
   assert.deepEqual(readDebugVariables(nibbleIntegers([1, 0, 1, 4, 6]),
@@ -49,7 +62,8 @@ void test("keeps complete variable records before unknown locations and truncate
 void test("rejects overflowing variable lifetimes", () => {
   const warnings = new Set<string>();
 
-  assert.deepEqual(readDebugVariables(nibbleIntegers([1, 0xffffffff, 1, 4, 0, 1]),
+  assert.deepEqual(readDebugVariables(debugVariables([{ start: 0xffffffff, length: 1,
+    variableNumber: 0, location: 0, operands: [1] }]),
     undefined, warnings), []);
   assert.match([...warnings].join(), /overflow/);
 });
@@ -57,7 +71,8 @@ void test("rejects overflowing variable lifetimes", () => {
 void test("reports an unknown target instead of guessing stack-offset scaling", () => {
   const warnings = new Set<string>();
 
-  assert.deepEqual(readDebugVariables(nibbleIntegers([1, 0, 1, 4, 3, 2, 7]),
+  assert.deepEqual(readDebugVariables(debugVariables([{ start: 0, length: 1, variableNumber: 0,
+    location: 3, operands: [2, 7] }]),
     undefined, warnings), []);
   assert.match([...warnings].join(), /target machine/);
 });
@@ -65,7 +80,8 @@ void test("reports an unknown target instead of guessing stack-offset scaling", 
 void test("accepts the largest representable native lifetime endpoint", () => {
   const warnings = new Set<string>();
 
-  assert.equal(readDebugVariables(nibbleIntegers([1, 0xffffffff, 0, 4, 0, 1]),
+  assert.equal(readDebugVariables(debugVariables([{ start: 0xffffffff, length: 0,
+    variableNumber: 0, location: 0, operands: [1] }]),
     0x8664, warnings)[0]?.endOffset, 0xffffffff);
   assert.deepEqual([...warnings], []);
 });

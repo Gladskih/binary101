@@ -14,6 +14,8 @@ void test("reads low nibble first and big-endian base-eight unsigned integers", 
 });
 
 void test("reads signed magnitudes and the full UInt32 range", () => {
+  // Signed values use low-bit sign tagging; the maximum unsigned value is a format boundary.
+  // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/inc/nibblestream.h
   const signed = new NibbleReader(Uint8Array.of(0x67, 0));
   const maximum = new NibbleReader(Uint8Array.of(0xfb, 0xff, 0xff, 0xff, 0xff, 0x07));
 
@@ -24,6 +26,7 @@ void test("reads signed magnitudes and the full UInt32 range", () => {
 });
 
 void test("rejects truncated continuations and values outside the format's UInt32", () => {
+  // 0x8 continues into a missing nibble; six continuation nibbles exceed a 32-bit value.
   assert.throws(() => new NibbleReader(Uint8Array.of(0x88)).unsigned(), /truncated/);
   assert.throws(() => new NibbleReader(new Uint8Array(6).fill(0xff)).unsigned(), /UInt32/);
 });
