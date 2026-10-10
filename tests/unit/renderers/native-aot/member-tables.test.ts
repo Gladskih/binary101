@@ -84,3 +84,15 @@ void test("identifies field, property and event declarations with their accessor
   assert.deepEqual(model.rowAt(6)?.cells.slice(2).map(cell => cell.html),
     ["Event", "Changed", "System.EventHandler", "0x0", "add_Changed (0x8)"]);
 });
+void test("member metadata explains retained field, property and parameter defaults", () => {
+  const scope = createRichNativeAotScope();
+  scope.types[0]!.fields[0]!.defaultValue = { type: "long", value: "9007199254740993" };
+  scope.types[0]!.definition!.properties[0]!.defaultValue = { type: "string", value: "<default>" };
+  scope.types[0]!.methods[0]!.parameters![0]!.defaultValue = { type: "bool", value: false };
+
+  const model = createNativeAotMemberTable([scope]);
+
+  assert.match(model.rowAt(0)!.cells[6]!.html, /input.* = false \(bool\)/);
+  assert.match(model.rowAt(2)!.cells[6]!.html, /Default: 9007199254740993 \(long\)/);
+  assert.match(model.rowAt(4)!.cells[6]!.html, /Default: &quot;&lt;default>&quot;/);
+});

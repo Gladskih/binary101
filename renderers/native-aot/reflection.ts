@@ -2,6 +2,7 @@
 
 import { escapeHtml } from "../../html-utils.js";
 import { nativeAotFieldSignature, nativeAotMethodSignature } from "./member-signatures.js";
+import { createNativeAotAttributeTable } from "./attribute-tables.js";
 import {
   createNativeAotDefinitionTable, createNativeAotMemberTable, getNativeAotDefinitionTable
 } from "./member-tables.js";
@@ -106,7 +107,8 @@ export const getNativeAotReflectionTypeTableModel = (
 ): PagedSortableTableModel | null =>
   !metadata ? null : tableId === NATIVE_AOT_REFLECTION_TYPES_TABLE_ID
     ? createNativeAotReflectionTypeTableModel(metadata.scopes)
-    : getNativeAotDefinitionTable(metadata.scopes, tableId);
+    : tableId === "native-aot-custom-attributes" ? createNativeAotAttributeTable(metadata.scopes)
+      : getNativeAotDefinitionTable(metadata.scopes, tableId);
 
 const renderTypes = (scopes: NativeAotReflectionScope[]): string => {
   const model = createNativeAotReflectionTypeTableModel(scopes);
@@ -128,9 +130,14 @@ const renderWarnings = (warnings: string[] | undefined): string => {
 const renderDefinitions = (scopes: NativeAotReflectionScope[]): string => {
   const types = createNativeAotDefinitionTable(scopes);
   const members = createNativeAotMemberTable(scopes);
+  const attributes = createNativeAotAttributeTable(scopes);
   return (types.rowCount ? `<h4>Type definitions and layout</h4>` +
     renderAutoPagedSortableTable(types) : "") +
-    (members.rowCount ? `<h4>Member definitions</h4>` + renderAutoPagedSortableTable(members) : "");
+    (members.rowCount ? `<h4>Member definitions</h4>` + renderAutoPagedSortableTable(members) : "") +
+    (attributes.rowCount ? `<h4>Custom attributes</h4><p class="smallNote">Attributes attach declarations ` +
+      `and configuration to assemblies, types and members. Arguments retain their stored types; ` +
+      `array summaries show element counts. Trimming can remove attributes from the original program.</p>` +
+      renderAutoPagedSortableTable(attributes) : "");
 };
 
 export const renderNativeAotReflection = (

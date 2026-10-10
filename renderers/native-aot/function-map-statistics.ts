@@ -2,6 +2,7 @@ import type { NativeAotFunctionMap } from "../../analyzers/native-aot/function-m
 import type { NativeAotRuntimeType } from "../../analyzers/native-aot/runtime-type-map.js";
 import { collectNativeAotFunctionMapSeeds } from "../../analyzers/native-aot/function-map-seeds.js";
 import type { AnalysisStatistic } from "../analysis-statistics.js";
+import { nativeAotGcStatistics } from "./gc-statistics.js";
 
 const fact = (label: string, value: number, description: string): AnalysisStatistic => ({ label, value, description });
 const distinct = (values: (number | null | undefined)[]): number =>
@@ -37,7 +38,8 @@ const typeStatistics = (types: NativeAotRuntimeType[]): AnalysisStatistic[] => {
     fact("Distinct sealed methods", distinct(sealed.map(slot => slot.targetRva)),
       "Validated implementations omitted from ordinary virtual tables."),
     fact("Instantiating-thunk references", sealed.filter(slot => slot.requiresInstantiatingThunk).length,
-      "Tagged interface targets require generic context; the tag is removed before disassembly.")
+      "Tagged interface targets require generic context; the tag is removed before disassembly."),
+    ...nativeAotGcStatistics(types)
   ];
 };
 
