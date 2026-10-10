@@ -2,6 +2,8 @@
 using Internal.Runtime;
 
 // Decode command bytes with the unmodified runtime DehydratedDataCommand implementation.
+// Command low 3 bits and short-payload shift 3 come from:
+// https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Runtime/DehydratedData.cs
 sealed class NativeMapHydration(NativeMapImage image, NativeMapReference.Blob? stream)
 {
     readonly Dictionary<long, long> pointers = new();
@@ -13,6 +15,8 @@ sealed class NativeMapHydration(NativeMapImage image, NativeMapReference.Blob? s
     {
         loaded = true;
         if (stream == null || stream.bytes.Length == 0) return;
+        if (stream.bytes.Length < sizeof(int))
+            throw new BadImageFormatException("Truncated hydration destination offset");
         long destination = stream.rva + BitConverter.ToInt32(stream.bytes);
         fixed (byte* bytes = stream.bytes)
         {
@@ -22,32 +26,42 @@ sealed class NativeMapHydration(NativeMapImage image, NativeMapReference.Blob? s
                 int extra = Math.Max(0, (*current >> 3) - 28);
                 if (current + 1 + extra > bytes + stream.bytes.Length) throw new EndOfStreamException();
                 current = DehydratedDataCommand.Decode(current, out int command, out int payload);
+                if (payload < 0) throw new BadImageFormatException("Negative hydration command payload");
                 if (command is 0 or 1)
-                {
-                    if (command == 0 && current + payload > bytes + stream.bytes.Length)
-                        throw new EndOfStreamException();
-                    runs.Add((destination, payload, command == 0 ? stream.rva + (current - bytes) : null));
-                    destination += payload;
-                    if (command == 0) current += payload;
-                }
-                else if (command is 2 or 3)
-                {
-                    long target = image.Relative(stream.rva + stream.bytes.Length + payload * 4L);
-                    (command == 3 ? pointers : relatives).Add(destination, target);
-                    destination += command == 3 ? image.PointerSize : 4;
-                }
+                    ApplyRun(ref current, bytes, bytes + stream.bytes.Length, command, payload, ref destination);
+                else if (command is 2 or 3) ApplyRelative(command, payload, ref destination);
                 else if (command is 4 or 5)
-                {
-                    if (current + payload * 4L > bytes + stream.bytes.Length) throw new EndOfStreamException();
-                    for (int index = 0; index < payload; index++, current += 4)
-                    {
-                        (command == 5 ? pointers : relatives).Add(destination,
-                            stream.rva + (current - bytes) + *(int*)current);
-                        destination += command == 5 ? image.PointerSize : 4;
-                    }
-                }
+                    ApplyDirect(ref current, bytes, bytes + stream.bytes.Length, command, payload, ref destination);
                 else throw new InvalidDataException("Unknown hydration command");
             }
+        }
+    }
+
+    unsafe void ApplyRun(ref byte* current, byte* start, byte* end,
+        int command, int payload, ref long destination)
+    {
+        if (command == 0 && payload > end - current) throw new EndOfStreamException();
+        runs.Add((destination, payload, command == 0 ? stream!.rva + (current - start) : null));
+        destination += payload;
+        if (command == 0) current += payload;
+    }
+
+    void ApplyRelative(int command, int payload, ref long destination)
+    {
+        long target = image.Relative(stream!.rva + stream.bytes.Length + payload * 4L);
+        (command == 3 ? pointers : relatives).Add(destination, target);
+        destination += command == 3 ? image.PointerSize : 4;
+    }
+
+    unsafe void ApplyDirect(ref byte* current, byte* start, byte* end,
+        int command, int payload, ref long destination)
+    {
+        if (payload > (end - current) / 4) throw new EndOfStreamException();
+        for (int index = 0; index < payload; index++, current += 4)
+        {
+            (command == 5 ? pointers : relatives).Add(destination,
+                stream!.rva + (current - start) + *(int*)current);
+            destination += command == 5 ? image.PointerSize : 4;
         }
     }
 
@@ -80,6 +94,7 @@ sealed class NativeMapHydration(NativeMapImage image, NativeMapReference.Blob? s
 
     public uint Unsigned(long address, int size)
     {
+        if (size is < 1 or > sizeof(uint)) throw new ArgumentOutOfRangeException(nameof(size));
         uint value = 0;
         for (int index = 0; index < size; index++) value |= (uint)ScalarByte(address + index) << (index * 8);
         return value;

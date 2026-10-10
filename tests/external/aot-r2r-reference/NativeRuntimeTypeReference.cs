@@ -1,4 +1,6 @@
 #nullable enable
+// NativeAOT MethodTable flags and fixed fields:
+// https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/nativeaot/Common/src/Internal/Runtime/MethodTable.cs
 sealed class NativeRuntimeTypeReference(NativeMapImage image, NativeMapHydration hydration)
 {
     readonly Dictionary<long, object> cache = new();
@@ -20,9 +22,16 @@ sealed class NativeRuntimeTypeReference(NativeMapImage image, NativeMapHydration
             if (target == null) slots.Add(new { kind = "null" });
             else slots.Add(new { kind = image.Executable(target.Value) ? "method" : "data", rva = target.Value });
         }
-        var type = new Dictionary<string, object> { ["rva"] = rva, ["flags"] = flags,
-            ["baseSize"] = baseSize, ["numVtableSlots"] = numVtableSlots,
-            ["numInterfaces"] = numInterfaces, ["hashCode"] = hashCode, ["slots"] = slots };
+        var type = new Dictionary<string, object>
+        {
+            ["rva"] = rva,
+            ["flags"] = flags,
+            ["baseSize"] = baseSize,
+            ["numVtableSlots"] = numVtableSlots,
+            ["numInterfaces"] = numInterfaces,
+            ["hashCode"] = hashCode,
+            ["slots"] = slots
+        };
         if ((flags & 0x540000) != 0) type["tail"] = tails.Read(rva, flags, numVtableSlots, numInterfaces);
         object? descriptor = gc.Read(rva, flags, baseSize, numVtableSlots);
         if (descriptor != null) type["gcDescriptor"] = descriptor;

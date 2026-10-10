@@ -18,10 +18,13 @@ sealed class NativeRuntimeTailReference(NativeMapImage image, NativeMapHydration
         for (int group = 0; group < 4; group++)
             for (int index = 0; index < counts[group]; index++)
             {
-                var entry = new Dictionary<string, object> { ["kind"] = kinds[group],
+                var entry = new Dictionary<string, object>
+                {
+                    ["kind"] = kinds[group],
                     ["interfaceIndex"] = hydration.Unsigned(cursor, 2),
                     ["interfaceMethodSlot"] = hydration.Unsigned(cursor + 2, 2),
-                    ["implementationSlot"] = hydration.Unsigned(cursor + 4, 2) };
+                    ["implementationSlot"] = hydration.Unsigned(cursor + 4, 2)
+                };
                 if (group >= 2) entry["contextSource"] = hydration.Unsigned(cursor + 6, 2);
                 cursor += group >= 2 ? 8 : 6;
                 entries.Add(entry);
