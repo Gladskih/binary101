@@ -3,6 +3,7 @@ sealed class NativeRuntimeTypeReference(NativeMapImage image, NativeMapHydration
 {
     readonly Dictionary<long, object> cache = new();
     readonly NativeRuntimeTailReference tails = new(image, hydration);
+    readonly NativeGcDescriptorReference gc = new(image, hydration);
 
     public object Read(long rva)
     {
@@ -23,6 +24,8 @@ sealed class NativeRuntimeTypeReference(NativeMapImage image, NativeMapHydration
             ["baseSize"] = baseSize, ["numVtableSlots"] = numVtableSlots,
             ["numInterfaces"] = numInterfaces, ["hashCode"] = hashCode, ["slots"] = slots };
         if ((flags & 0x540000) != 0) type["tail"] = tails.Read(rva, flags, numVtableSlots, numInterfaces);
+        object? descriptor = gc.Read(rva, flags, baseSize, numVtableSlots);
+        if (descriptor != null) type["gcDescriptor"] = descriptor;
         cache.Add(rva, type);
         return type;
     }

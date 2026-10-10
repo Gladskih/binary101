@@ -4,6 +4,7 @@ import type {
 import { escapeHtml } from "../../html-utils.js";
 import type { PagedSortableTableModel } from "../paged-sortable-table.js";
 import { nativeAotFieldSignature, nativeAotMethodSignature } from "./member-signatures.js";
+import { nativeAotConstantText } from "./constant-values.js";
 
 const genericParameters = (parameters: NativeAotGenericParameter[]): string =>
   parameters.map(parameter => `${parameter.name} (#${parameter.number}, ` +
@@ -27,16 +28,18 @@ const memberRows = (scope: NativeAotReflectionScope, type: NativeAotReflectionTy
       [method.implementationFlags == null ? "" : `impl=0x${method.implementationFlags.toString(16)}`,
         method.signature ? `cc=0x${method.signature.callingConvention.toString(16)}` : "",
         method.parameters?.map(parameter => `${parameter.sequence}: ${parameter.name} ` +
-          `(flags=0x${parameter.flags.toString(16)})`).join("; ") ?? "",
+          `(flags=0x${parameter.flags.toString(16)})` +
+          (parameter.defaultValue ? ` = ${nativeAotConstantText(parameter.defaultValue)}` : "")).join("; ") ?? "",
         genericParameters(method.genericParameters ?? [])].filter(Boolean).join("; ")]),
     ...type.fields.map(field => [...owner, "Field", field.name, nativeAotFieldSignature(field),
       field.flags == null ? "" : `0x${field.flags.toString(16)}`,
-      field.offset == null ? "" : `offset=${field.offset}`]),
+      [field.offset == null ? "" : `offset=${field.offset}`,
+        field.defaultValue ? `Default: ${nativeAotConstantText(field.defaultValue)}` : ""].filter(Boolean).join("; ")]),
     ...(type.definition?.properties ?? []).map(property => [...owner, "Property", property.name,
       `${property.type ?? "?"} (${property.parameters?.join(", ") ?? ""})`,
       property.flags == null ? "" : `0x${property.flags.toString(16)}`,
-      property.semantics?.map(item => `${item.method} (0x${item.attributes.toString(16)})`)
-        .join("; ") ?? ""]),
+      [property.semantics?.map(item => `${item.method} (0x${item.attributes.toString(16)})`).join("; ") ?? "",
+        property.defaultValue ? `Default: ${nativeAotConstantText(property.defaultValue)}` : ""].filter(Boolean).join("; ")]),
     ...(type.definition?.events ?? []).map(event => [...owner, "Event", event.name,
       event.type ?? "?", event.flags == null ? "" : `0x${event.flags.toString(16)}`,
       event.semantics?.map(item => `${item.method} (0x${item.attributes.toString(16)})`)

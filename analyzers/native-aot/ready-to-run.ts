@@ -135,13 +135,19 @@ const findValidatedEmbeddedMetadata = async (
 
 const parseEmbeddedReflectionMetadata = async (
   image: NativeAotVirtualImage,
-  metadata: NativeAotMetadataSection & { size: number }
+  metadata: NativeAotMetadataSection & { size: number },
+  majorVersion: number
 ): Promise<NativeAotReflectionMetadata> => {
   try {
+    // ModuleHeaders.cs major 9/10 use the 24-bit NativeFormat offset ABI; major 16 uses 25 bits.
+    // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Runtime/ModuleHeaders.cs
+    if (![9, 10, 16].includes(majorVersion)) return { scopes: [],
+      warnings: [`NativeFormat handle encoding is not verified for NativeAOT header version ${majorVersion}.`] };
     const view = await image.readData(metadata.rva, metadata.size, 4);
     if (!view) return { scopes: [], warnings: ["NativeFormat metadata could not be read."] };
     const reflection = parseNativeAotReflectionMetadata(
-      new Uint8Array(view.buffer, view.byteOffset, view.byteLength)
+      new Uint8Array(view.buffer, view.byteOffset, view.byteLength),
+      majorVersion === 16 ? "dotnet10" : "dotnet9"
     );
     if (view.byteLength < metadata.size) {
       reflection.warnings = [...reflection.warnings ?? [], "NativeFormat metadata is truncated."];
@@ -188,7 +194,8 @@ export const parseNativeAotReadyToRunHeader = async (
     majorVersion: header.getUint16(4, true),
     minorVersion: header.getUint16(6, true),
     sections,
-    ...(metadata ? { reflection: await parseEmbeddedReflectionMetadata(image, metadata) } : {})
+    ...(metadata ? { reflection: await parseEmbeddedReflectionMetadata(
+      image, metadata, header.getUint16(4, true)) } : {})
   };
 };
 
@@ -203,7 +210,8 @@ export const findNativeAotMetadata = async (
     checkedHeaders.add(headerRva);
     const header = await parseNativeAotReadyToRunHeader(image, sites, headerRva);
     if (header) {
-      const invokeMap = await parseNativeAotInvokeMap(image, header.sections);
+      const invokeMap = await parseNativeAotInvokeMap(image, header.sections,
+        [9, 10].includes(header.majorVersion) ? "dotnet9" : "dotnet10");
       const stackTraceMap = await parseNativeAotStackTraceMap(image, header.sections);
       const functionMaps = await parseNativeAotFunctionMaps(image, header.sections, header);
       return { status: "confirmed", modulePointerRva, ...header,

@@ -17,9 +17,9 @@ void test("reads method flags, signatures, named parameters and generic constrai
   assert.equal(method?.flags, 6);
   assert.equal(method?.implementationFlags, 0);
   assert.deepEqual(method?.signature?.parameters, ["Demo.Item[]", "!0&"]);
-  assert.deepEqual(method?.parameters, [{ name: "input", flags: 16, sequence: 1 }]);
+  assert.deepEqual(method?.parameters, [{ name: "input", flags: 16, sequence: 1, attributes: [] }]);
   assert.deepEqual(method?.genericParameters,
-    [{ name: "T", number: 0, flags: 4, kind: 1, constraints: ["Demo.Item"] }]);
+    [{ name: "T", number: 0, flags: 4, kind: 1, constraints: ["Demo.Item"], attributes: [] }]);
   assert.equal(members.method(fixture.handle("method-member", 0x28)), method);
   assert.equal(warnings.size, 0);
 });
@@ -31,14 +31,14 @@ void test("reads field types, offsets, property index signatures and accessor se
     new NativeFormatReader(fixture.bytes), warnings));
 
   assert.deepEqual(members.field(fixture.handle("field", 0x23)),
-    { name: "Value", flags: 6, type: "Demo.Item", offset: 12 });
+    { name: "Value", flags: 6, type: "Demo.Item", offset: 12, attributes: [] });
   assert.deepEqual(members.property(fixture.handle("property", 0x33)), {
     name: "Item", flags: 0, callingConvention: 0x20, type: "Demo.Item", parameters: ["!!1"],
-    semantics: [{ attributes: 2, method: "Convert" }]
+    semantics: [{ attributes: 2, method: "Convert" }], attributes: []
   });
   assert.deepEqual(members.event(fixture.handle("event", 0x22)), {
     name: "Changed", flags: 0, type: "Demo.Item",
-    semantics: [{ attributes: 2, method: "Convert" }]
+    semantics: [{ attributes: 2, method: "Convert" }], attributes: []
   });
   assert.equal(warnings.size, 0);
 });

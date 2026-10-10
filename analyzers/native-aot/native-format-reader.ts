@@ -15,6 +15,7 @@ export interface NativeFormatValue<T> {
 }
 
 export class NativeFormatError extends Error {}
+export type NativeFormatLayout = "dotnet9" | "dotnet10";
 
 export class NativeFormatReader {
   readonly #bytes: Uint8Array;
@@ -22,7 +23,7 @@ export class NativeFormatReader {
   readonly #decoder = new TextDecoder("utf-8", { fatal: true });
   readonly #strings = new Map<number, { value: string } | { error: unknown }>();
 
-  constructor(bytes: Uint8Array) {
+  constructor(bytes: Uint8Array, readonly layout: NativeFormatLayout = "dotnet10") {
     this.#bytes = bytes;
     this.#view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   }
@@ -39,6 +40,42 @@ export class NativeFormatReader {
   uint8(offset: number): NativeFormatValue<number> {
     this.#requireRange(offset, 1);
     return { nextOffset: offset + 1, value: this.#view.getUint8(offset) };
+  }
+
+  float32(offset: number): NativeFormatValue<number> {
+    this.#requireRange(offset, 4);
+    return { nextOffset: offset + 4, value: this.#view.getFloat32(offset, true) };
+  }
+
+  float64(offset: number): NativeFormatValue<number> {
+    this.#requireRange(offset, 8);
+    return { nextOffset: offset + 8, value: this.#view.getFloat64(offset, true) };
+  }
+
+  unsigned64(offset: number): NativeFormatValue<string> {
+    if ((this.uint8(offset).value & 31) !== 31) {
+      const decoded = this.unsigned(offset);
+      return { nextOffset: decoded.nextOffset, value: String(decoded.value) };
+    }
+    const decoded = this.#wideInteger(offset);
+    return { nextOffset: decoded.nextOffset, value: String(decoded.value) };
+  }
+
+  signed64(offset: number): NativeFormatValue<string> {
+    if ((this.uint8(offset).value & 31) !== 31) {
+      const decoded = this.signed(offset);
+      return { nextOffset: decoded.nextOffset, value: String(decoded.value) };
+    }
+    const decoded = this.#wideInteger(offset);
+    return { nextOffset: decoded.nextOffset, value: String(BigInt.asIntN(64, decoded.value)) };
+  }
+
+  #wideInteger(offset: number): NativeFormatValue<bigint> {
+    // DecodeUnsignedLong/DecodeSignedLong: 0b0_11111 introduces a little-endian UInt64.
+    // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/NativeFormat/NativeFormatReader.Primitives.cs
+    if (this.uint8(offset).value & 32) throw new NativeFormatError("Invalid compressed 64-bit integer.");
+    this.#requireRange(offset + 1, 8);
+    return { nextOffset: offset + 9, value: this.#view.getBigUint64(offset + 1, true) };
   }
 
   signed(offset: number): NativeFormatValue<number> {
@@ -83,9 +120,12 @@ export class NativeFormatReader {
 
   handle(offset: number, permittedTypes: readonly number[]): NativeFormatValue<NativeFormatHandle> {
     const decoded = this.unsigned(offset);
+    // MdBinaryReader.Read(Handle): .NET 9 uses 8 tag bits; .NET 10 uses 7.
+    // https://github.com/dotnet/runtime/blob/v9.0.0/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/MdBinaryReader.cs
+    const tagBits = this.layout === "dotnet9" ? 8 : 7;
     const handle = permittedTypes.length === 1
       ? this.#typedHandle(decoded.value, permittedTypes[0]!)
-      : { type: decoded.value & 0x7f, offset: decoded.value >>> 7 };
+      : { type: decoded.value & (2 ** tagBits - 1), offset: decoded.value >>> tagBits };
     if (handle.offset && !permittedTypes.includes(handle.type)) {
       throw new NativeFormatError(`Unexpected handle type ${handle.type}.`);
     }
@@ -98,11 +138,13 @@ export class NativeFormatReader {
   #typedHandle(value: number, expectedType: number): NativeFormatHandle {
     // Generated typed-handle constructors accept an untagged offset or their own tag.
     // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs
-    const type = value >>> 25;
+    // Generated typed handles use 24 offset bits in .NET 9 and 25 in .NET 10.
+    const offsetBits = this.layout === "dotnet9" ? 24 : 25;
+    const type = value >>> offsetBits;
     if (type !== 0 && type !== expectedType) {
       throw new NativeFormatError(`Unexpected typed handle type ${type}.`);
     }
-    return { type: expectedType, offset: value & 0x01ffffff };
+    return { type: expectedType, offset: value & (2 ** offsetBits - 1) };
   }
 
   collectionCount(offset: number): NativeFormatValue<number> {

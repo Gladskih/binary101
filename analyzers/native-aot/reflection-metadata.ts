@@ -2,7 +2,7 @@ import {
   NATIVE_AOT_METADATA_SIGNATURE, type NativeAotReflectionMetadata,
   type NativeAotReflectionScope, type NativeAotReflectionType
 } from "./format.js";
-import { NativeFormatReader, type NativeFormatHandle } from "./native-format-reader.js";
+import { NativeFormatReader, type NativeFormatHandle, type NativeFormatLayout } from "./native-format-reader.js";
 import { NativeFormatStore, type NativeFormatRecord } from "./native-format-store.js";
 import { NativeFormatMembers } from "./native-format-members.js";
 
@@ -55,6 +55,7 @@ const readType = (
       .filter(field => field !== null)
   };
   output.push(type);
+  if (record.values["attributes"]) type.attributes = state.members.attributes.of(record);
   try { type.definition = typeDefinition(state, record); }
   catch (error) { warning(state, "type definition", entry.handle.offset, error); }
   return handles(record, "nestedTypes").map(handle => ({
@@ -121,15 +122,19 @@ const parseScope = (state: ParseState, handle: NativeFormatHandle): NativeAotRef
     const types: NativeAotReflectionType[] = [];
     const scope = { name: state.store.reader.string(record.handle("name")),
       moduleName: state.store.reader.string(record.handle("moduleName")),
-      version: scopeVersion(record), types };
+      version: scopeVersion(record), types,
+      attributes: state.members.attributes.of(record),
+      moduleAttributes: state.members.attributes.of(record, "moduleAttributes") };
     const root = record.handle("rootNamespace");
     if (root.offset) walkGraph(state, root, types);
     return scope;
   } catch (error) { warning(state, "scope", handle.offset, error); return null; }
 };
 
-export const parseNativeAotReflectionMetadata = (bytes: Uint8Array): NativeAotReflectionMetadata => {
-  const reader = new NativeFormatReader(bytes);
+export const parseNativeAotReflectionMetadata = (
+  bytes: Uint8Array, layout: NativeFormatLayout = "dotnet10"
+): NativeAotReflectionMetadata => {
+  const reader = new NativeFormatReader(bytes, layout);
   if (reader.size < 4 || reader.uint32(0) !== NATIVE_AOT_METADATA_SIGNATURE) {
     return { scopes: [], warnings: ["NativeFormat metadata signature is missing or truncated."] };
   }

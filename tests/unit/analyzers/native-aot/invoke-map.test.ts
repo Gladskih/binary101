@@ -21,6 +21,18 @@ void test("NativeAOT InvokeMap resolves method bodies and invoke stubs through c
   });
 });
 
+void test("InvokeMap accepts legacy metadata flags only for the .NET 9 ABI", async () => {
+  const fixture = createNativeAotInvokeFixture();
+  replaceMap(fixture, [Uint8Array.of(72, 20, 8, 0, 2)]);
+
+  const map = await parseNativeAotInvokeMap(fixture.image, fixture.sections, "dotnet9");
+
+  assert.deepEqual(map?.entries[0], { flags: 36, metadataOffset: 10, declaringTypeIndex: 4,
+    entrypointRva: fixture.codeRvas[0], invokeStubRva: fixture.codeRvas[1], genericArgumentIndices: [] });
+  assert.deepEqual(map?.warnings, []);
+  assert.deepEqual((await parseNativeAotInvokeMap(fixture.image, fixture.sections))?.entries, []);
+});
+
 void test("InvokeMap is absent when its section is not present", async () => {
   const fixture = createNativeAotInvokeFixture();
 

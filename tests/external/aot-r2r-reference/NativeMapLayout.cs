@@ -3,8 +3,17 @@ using Internal.NativeFormat;
 
 // Field grammar from NativeLayoutInfoLoadContext and GenericDictionaryCell, using upstream
 // NativeParser for integer, lookback and relative offset decoding.
-static class NativeMapLayout
+enum NativeMapAbi { DotNet9, DotNet10 }
+
+sealed class NativeMapLayout(NativeMapAbi abi)
 {
+    public Dictionary<string, object?> Identity(ref NativeParser parser)
+    {
+        if (abi == NativeMapAbi.DotNet10) return new() { ["methodToken"] = parser.GetUnsigned() };
+        string name = parser.GetString();
+        var signature = parser.GetParserFromRelativeOffset();
+        return new() { ["methodName"] = name, ["methodSignatureOffset"] = signature.Offset };
+    }
     public static uint ExternalType(ref NativeParser parser)
     {
         var kind = parser.GetTypeSignatureKind(out uint data);
@@ -53,29 +62,45 @@ static class NativeMapLayout
         for (uint index = 0; index < count; index++) parser.GetUnsigned();
     }
 
-    public static Dictionary<string, object?> Method(ref NativeParser parser, Func<uint, long?> function)
+    public Dictionary<string, object?> Method(ref NativeParser parser, Func<uint, long?> function)
     {
         uint signatureOffset = parser.Offset;
         uint flags = parser.GetUnsigned();
         long? entrypointRva = (flags & 4) != 0 ? function(parser.GetUnsigned()) : null;
         Type(ref parser);
-        uint methodToken = parser.GetUnsigned();
+        var identity = Identity(ref parser);
         if ((flags & 1) != 0)
         {
             uint count = parser.GetSequenceCount();
             for (uint index = 0; index < count; index++) Type(ref parser);
         }
-        return new() { ["signatureOffset"] = signatureOffset, ["flags"] = flags,
-            ["methodToken"] = methodToken, ["entrypointRva"] = entrypointRva };
+        identity["signatureOffset"] = signatureOffset;
+        identity["flags"] = flags;
+        identity["entrypointRva"] = entrypointRva;
+        return identity;
     }
 
-    public static List<object> Dictionary(ref NativeParser parser, Func<uint, long?> function)
+    public List<object> Dictionary(ref NativeParser parser, Func<uint, long?> function)
     {
         var methods = new List<object>();
         uint count = parser.GetSequenceCount();
         for (uint index = 0; index < count; index++)
         {
             var kind = parser.GetFixupSignatureKind();
+            if (abi == NativeMapAbi.DotNet9 && kind == FixupSignatureKind.FieldLdToken)
+            {
+                var signature = parser.GetParserFromRelativeOffset();
+                Type(ref signature);
+                signature.GetString();
+                continue;
+            }
+            if (abi == NativeMapAbi.DotNet9 && kind is FixupSignatureKind.MethodLdToken or FixupSignatureKind.GenericConstrainedMethod)
+            {
+                if (kind == FixupSignatureKind.GenericConstrainedMethod) Type(ref parser);
+                var signature = parser.GetParserFromRelativeOffset();
+                methods.Add(Method(ref signature, function));
+                continue;
+            }
             if (kind is FixupSignatureKind.MethodDictionary or FixupSignatureKind.MethodLdToken or FixupSignatureKind.Method)
                 methods.Add(Method(ref parser, function));
             else if (kind == FixupSignatureKind.GenericConstrainedMethod)

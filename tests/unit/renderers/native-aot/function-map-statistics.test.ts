@@ -15,11 +15,14 @@ void test("type statistics distinguish dictionaries, finalizers, sealed methods 
 
   const statistics = nativeAotFunctionMapStatistics(map);
 
-  assert.deepEqual(statistics.map(statistic => statistic.value), [3, 2, 1, 1, 1, 1, 1, 1, 5, 2, 2, 1, 1, 0]);
+  assert.deepEqual(statistics.map(statistic => statistic.value),
+    [3, 2, 1, 1, 1, 1, 1, 1, 5, 2, 2, 1, 1, 0, 0, 0, 0, 0, 0]);
   assert.deepEqual(statistics.map(statistic => statistic.label), ["Map records", "Distinct code entry points",
     "Decoded runtime types", "Virtual method slots", "Dictionary/data slots", "Empty virtual slots",
     "Finalizable types", "Distinct finalizer methods", "Interface dispatch records", "Static interface dispatch records",
-    "Special interface resolutions", "Referenced sealed slots", "Distinct sealed methods", "Instantiating-thunk references"]);
+    "Special interface resolutions", "Referenced sealed slots", "Distinct sealed methods", "Instantiating-thunk references",
+    "Decoded GC layouts", "Object reference regions", "Arrays containing only references", "Arrays with mixed value layouts",
+    "Metadata-only types with reference fields"]);
   assert.ok(statistics.every(statistic => statistic.description.length > 20));
 });
 
@@ -30,7 +33,8 @@ void test("unavailable tails and absent types produce honest zero counts", () =>
     { typeIndex: 1, metadataHandle: 11, runtimeType: null }
   ] });
 
-  assert.deepEqual(statistics.map(statistic => statistic.value), [2, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(statistics.map(statistic => statistic.value),
+    [2, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 });
 
 void test("interop and generic summaries count named roles rather than exposing numeric pointer fields", () => {
@@ -78,5 +82,5 @@ void test("nonempty cleanup, closed delegates, instantiations and thunk roles re
   const map = parsed!.maps[0]!;
   assert.equal(map.type, 301);
   map.entries[0]!.runtimeType!.tail!.sealedSlots[0]!.requiresInstantiatingThunk = true;
-  assert.equal(nativeAotFunctionMapStatistics(map).at(-1)?.value, 1);
+  assert.equal(nativeAotFunctionMapStatistics(map).find(item => item.label === "Instantiating-thunk references")?.value, 1);
 });
