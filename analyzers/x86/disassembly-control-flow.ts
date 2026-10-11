@@ -1,5 +1,6 @@
 "use strict";
 import { createCodeExclusionIndex } from "../code-exclusions.js";
+import { createX86RvaSet } from "./address-set.js";
 
 import type { IcedX86Module } from "./disassembly-iced.js";
 import { getNearBranchTarget } from "./disassembly-branch-targets.js";
@@ -25,8 +26,8 @@ type ControlFlowDecodeState = {
   imageBase: bigint;
   bytesSampled: number;
   decoders: DisassemblyDecoderEntry[];
-  visited: Set<number>;
-  queued: Set<number>;
+  visited: ReturnType<typeof createX86RvaSet>;
+  queued: ReturnType<typeof createX86RvaSet>;
   queue: number[];
   featureCounts: Map<number, number>;
   yieldEveryInstructions: number;
@@ -237,8 +238,8 @@ export async function disassembleControlFlowForInstructionSets(opts: {
     }
   };
 
-  const visited = new Set<number>();
-  const queued = new Set<number>();
+  const visited = createX86RvaSet();
+  const queued = createX86RvaSet();
   const queue = [...opts.entrypoints].reverse();
   for (const rva of queue) {
     queued.add(rva >>> 0);

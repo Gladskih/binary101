@@ -3,6 +3,7 @@
 import type { IcedX86Module } from "./disassembly-iced.js";
 import { getNearBranchTarget } from "./disassembly-branch-targets.js";
 import { createCodeExclusionIndex, type CodeExclusion } from "../code-exclusions.js";
+import { createX86VaddrSet } from "./address-set.js";
 
 type DisassemblySectionVaddr = {
   vaddrStart: bigint;
@@ -24,8 +25,8 @@ type ControlFlowDecodeStateVaddr = {
   iced: IcedX86Module;
   bytesSampled: number;
   decoders: DisassemblyDecoderEntryVaddr[];
-  visited: Set<bigint>;
-  queued: Set<bigint>;
+  visited: ReturnType<typeof createX86VaddrSet>;
+  queued: ReturnType<typeof createX86VaddrSet>;
   queue: bigint[];
   featureCounts: Map<number, number>;
   yieldEveryInstructions: number;
@@ -199,8 +200,8 @@ export async function disassembleControlFlowForInstructionSetsVaddr(opts: {
     }
   };
 
-  const visited = new Set<bigint>();
-  const queued = new Set<bigint>();
+  const visited = createX86VaddrSet();
+  const queued = createX86VaddrSet();
   const queue = [...opts.entrypoints].reverse();
   for (const vaddr of queue) {
     queued.add(vaddr);
