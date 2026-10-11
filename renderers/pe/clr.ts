@@ -5,7 +5,8 @@ import { renderDefinitionRow, renderFlagChips, escapeHtml } from "../../html-uti
 import type { PeClrHeader } from "../../analyzers/pe/clr/index.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import { renderClrMetadataTables } from "./clr-metadata.js";
-import { renderManagedResources, renderReadyToRun, renderStrongName } from "./clr-advanced.js";
+import { renderReadyToRun, renderStrongName } from "./clr-advanced.js";
+import { renderManagedResources } from "./managed-resources.js";
 
 const COMIMAGE_FLAGS_NATIVE_ENTRYPOINT = 0x00000010;
 

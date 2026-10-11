@@ -1,8 +1,9 @@
 "use strict";
 
 import type { PeClrMetadataIndex } from "./types.js";
+import type { ResourcePreviewData } from "../resources/preview/types.js";
 
-export interface PeClrManagedResourceEntry {
+export interface PeClrManagedResourceEntry extends Partial<ResourcePreviewData> {
   row: number;
   name: string | null;
   flags: number;
@@ -11,26 +12,14 @@ export interface PeClrManagedResourceEntry {
   storage: "embedded" | "external" | "unmapped" | "truncated";
   size: number | null;
   entries?: PeClrManagedResourceValue[];
-  previewKind?: string;
-  previewMime?: string;
-  previewDataUrl?: string;
-  textPreview?: string;
-  textEncoding?: string | null;
-  previewFields?: Array<{ label: string; value: string }>;
   issues?: string[];
 }
 
-export interface PeClrManagedResourceValue {
+export interface PeClrManagedResourceValue extends Partial<ResourcePreviewData> {
   name: string;
   type: string;
   value: string | number | boolean | null;
   opaque: boolean;
-  previewKind?: string;
-  previewMime?: string;
-  previewDataUrl?: string;
-  textPreview?: string;
-  textEncoding?: string | null;
-  previewFields?: Array<{ label: string; value: string }>;
   issues?: string[];
 }
 

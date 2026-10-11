@@ -50,6 +50,16 @@ export function addXmlResourcePreviewWithParser(
   if (error) issues.push(`${typeName} text could not be fully decoded.`);
   if (!text || !looksLikeXmlText(text)) return buildXmlSummaryPreview(typeName, data.length);
   if (terminated) issues.push(`${typeName} preview stopped at a NUL terminator before the declared data size.`);
+  return addXmlTextResourcePreviewWithParser(text, typeName, encoding, parseXmlDocument, issues);
+}
+
+export function addXmlTextResourcePreviewWithParser(
+  text: string,
+  typeName: string,
+  encoding: string | undefined,
+  parseXmlDocument: ManifestXmlDocumentParser,
+  issues: string[] = []
+): ResourcePreviewResult {
   try {
     const doc = parseXmlDocument(text);
     const parserIssue = readXmlParserIssue(doc, typeName);

@@ -3,8 +3,7 @@
 import { decodeDotNetResourceValue } from "./dotnet-resource-values.js";
 import type { PeClrManagedResourceValue } from "./managed-resource-types.js";
 
-const utf8Decoder = new TextDecoder("utf-8", { fatal: false });
-const utf16Decoder = new TextDecoder("utf-16le", { fatal: false });
+import { readSevenBitEncodedInt, readBinaryString, readUtf16Name } from "./dotnet-resource-encoding.js";
 
 type ResourceValueTable = {
   count: number;
@@ -13,52 +12,6 @@ type ResourceValueTable = {
   namePositionsOffset: number;
   userTypes: string[];
   version: number;
-};
-
-const readSevenBitEncodedInt = (
-  bytes: Uint8Array,
-  offset: number
-): { value: number; next: number } | null => {
-  let result = 0;
-  // ResourceReader uses BinaryReader 7-bit encoded integers for resource names and strings:
-  // https://github.com/dotnet/runtime/blob/main/src/libraries/System.Private.CoreLib/src/System/Resources/ResourceReader.cs
-  for (let shift = 0; shift < 35; shift += 7) {
-    const byte = bytes[offset + shift / 7];
-    if (byte == null) return null;
-    result += (byte & 0x7f) * 2 ** shift;
-    if (result > 0xffffffff) return null;
-    if ((byte & 0x80) === 0) {
-      return {
-        value: result > 0x7fffffff ? result - 0x100000000 : result,
-        next: offset + shift / 7 + 1
-      };
-    }
-  }
-  return null;
-};
-
-const readBinaryString = (
-  bytes: Uint8Array,
-  offset: number
-): { value: string; next: number } | null => {
-  const length = readSevenBitEncodedInt(bytes, offset);
-  if (!length || length.value < 0 || length.next + length.value > bytes.length) return null;
-  return {
-    value: utf8Decoder.decode(bytes.subarray(length.next, length.next + length.value)),
-    next: length.next + length.value
-  };
-};
-
-const readUtf16Name = (
-  bytes: Uint8Array,
-  offset: number
-): { value: string; dataOffsetPosition: number } | null => {
-  const length = readSevenBitEncodedInt(bytes, offset);
-  if (!length || length.value < 0 || length.next + length.value + 4 > bytes.length) return null;
-  return {
-    value: utf16Decoder.decode(bytes.subarray(length.next, length.next + length.value)),
-    dataOffsetPosition: length.next + length.value
-  };
 };
 
 export const parseDotNetResources = async (
@@ -84,14 +37,40 @@ const readResourceSetHeader = (
   issues: string[]
 ): number | null => {
   const resourceManagerHeaderSize = view.getInt32(8, true);
-  if (resourceManagerHeaderSize < 0 || 12 + resourceManagerHeaderSize > payload.length) {
+  if (view.getInt32(4, true) < 0) {
+    issues.push(".resources ResourceManager header version is invalid.");
+    return null;
+  }
+  if (resourceManagerHeaderSize < 0 || resourceManagerHeaderSize > payload.length - 12) {
     issues.push(".resources ResourceManager header extends past payload.");
     return null;
   }
-  const offset = 12 + resourceManagerHeaderSize;
+  let offset = 12 + resourceManagerHeaderSize;
+  if (view.getInt32(4, true) <= 1) {
+    const next = readReaderTypes(payload, offset, issues);
+    if (next == null) return null;
+    offset = next;
+  }
   if (offset + 12 <= payload.length) return offset;
   issues.push(".resources RuntimeResourceSet header extends past payload.");
   return null;
+};
+
+const readReaderTypes = (payload: Uint8Array, declaredEnd: number, issues: string[]): number | null => {
+  const reader = readBinaryString(payload, 12);
+  const resourceSet = reader && readBinaryString(payload, reader.next);
+  if (!reader || !resourceSet) {
+    issues.push(".resources ResourceReader/ResourceSet type names are truncated.");
+    return null;
+  }
+  if (!["System.Resources.ResourceReader", "System.Resources.Extensions.DeserializingResourceReader"]
+    .includes(reader.value.split(",", 1)[0]!.trim())) {
+    issues.push(`Unsupported .resources ResourceReader ${JSON.stringify(reader.value)}.`);
+    return null;
+  }
+  // ResourceReader ignores the declared skip count for v1 and consumes the two strings.
+  if (resourceSet.next !== declaredEnd) issues.push(".resources ResourceManager header size is inconsistent.");
+  return resourceSet.next;
 };
 
 const parseResourceSet = async (
@@ -103,7 +82,11 @@ const parseResourceSet = async (
   const version = view.getUint32(offset, true);
   const count = view.getInt32(offset + 4, true);
   const typeCount = view.getInt32(offset + 8, true);
-  if (version !== 1 && version !== 2) issues.push(`Unsupported .resources version ${version}.`);
+  if (version !== 1 && version !== 2) {
+    issues.push(`Unsupported .resources version ${version}.`);
+    return [];
+  }
+  // Local analysis policy: keep corrupt resource counts from allocating unbounded tables.
   if (count < 0 || typeCount < 0 || count > 10000 || typeCount > 10000) {
     issues.push(".resources declares an unreasonable entry or type count.");
     return [];
@@ -166,7 +149,7 @@ const parseNamedResourceValues = async (
     return [];
   }
   const dataSectionOffset = view.getUint32(dataSectionOffsetPosition, true);
-  if (dataSectionOffset > payload.length) {
+  if (dataSectionOffset < dataSectionOffsetPosition + 4 || dataSectionOffset > payload.length) {
     issues.push(".resources data section offset is outside the payload.");
     return [];
   }
@@ -184,27 +167,58 @@ const readResourceValues = async (
   table: ResourceValueTable,
   issues: string[]
 ): Promise<PeClrManagedResourceValue[]> => {
+  // ResourceReader.GetResourceData sorts data offsets to bound each serialized value.
+  // https://github.com/dotnet/runtime/blob/main/src/libraries/System.Private.CoreLib/src/System/Resources/ResourceReader.cs
+  const names = readResourceNames(payload, view, table, issues);
+  const starts = [...new Set(names.map(name => name.dataOffset))].sort((left, right) => left - right);
+  const ends = new Map(starts.map((start, index) => [start, starts[index + 1] ?? payload.length]));
+  const decoded = new Map<number, PeClrManagedResourceValue>();
   const values: PeClrManagedResourceValue[] = [];
-  for (let index = 0; index < table.count; index += 1) {
-    const namePosition = view.getUint32(table.namePositionsOffset + index * 4, true);
-    const name = readUtf16Name(payload, table.namesOffset + namePosition);
-    if (!name) {
-      issues.push(`.resources name ${index + 1} is truncated.`);
-      continue;
+  for (const name of names) {
+    let value = decoded.get(name.dataOffset);
+    if (!value) {
+      value = await readResourceValue(payload.subarray(0, ends.get(name.dataOffset)), table, name);
+      decoded.set(name.dataOffset, value);
     }
-    values.push(await readResourceValue(payload, view, table, name));
+    values.push({ ...value, name: name.value });
   }
   return values;
 };
 
-const readResourceValue = async (
+const readResourceNames = (
   payload: Uint8Array,
   view: DataView,
   table: ResourceValueTable,
-  name: { value: string; dataOffsetPosition: number }
+  issues: string[]
+): Array<{ value: string; dataOffset: number }> => {
+  const names: Array<{ value: string; dataOffset: number }> = [];
+  const seen = new Set<string>();
+  for (let index = 0; index < table.count; index += 1) {
+    const namePosition = view.getInt32(table.namePositionsOffset + index * 4, true);
+    const name = namePosition < 0 ? null :
+      readUtf16Name(payload, table.namesOffset + namePosition, table.dataSectionOffset);
+    if (!name) {
+      issues.push(`.resources name ${index + 1} is truncated.`);
+      continue;
+    }
+    const dataOffset = view.getInt32(name.dataOffsetPosition, true);
+    if (dataOffset < 0 || dataOffset >= payload.length - table.dataSectionOffset) {
+      issues.push(`.resources value for ${JSON.stringify(name.value)} has an invalid data offset.`);
+      continue;
+    }
+    if (seen.has(name.value)) issues.push(`.resources contains duplicate name ${JSON.stringify(name.value)}.`);
+    seen.add(name.value);
+    names.push({ value: name.value, dataOffset: table.dataSectionOffset + dataOffset });
+  }
+  return names;
+};
+
+const readResourceValue = async (
+  payload: Uint8Array,
+  table: ResourceValueTable,
+  name: { value: string; dataOffset: number }
 ): Promise<PeClrManagedResourceValue> => {
-  const dataOffset = view.getUint32(name.dataOffsetPosition, true);
-  const type = readSevenBitEncodedInt(payload, table.dataSectionOffset + dataOffset);
+  const type = readSevenBitEncodedInt(payload, name.dataOffset);
   if (!type) {
     return { name: name.value, type: "Unknown", value: null, opaque: true, issues: ["Resource value type code is truncated."] };
   }
@@ -213,7 +227,6 @@ const readResourceValue = async (
     type,
     name.value,
     table.version,
-    table.userTypes,
-    readSevenBitEncodedInt
+    table.userTypes
   );
 };

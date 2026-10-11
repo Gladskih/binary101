@@ -2,7 +2,7 @@
 import { escapeHtml } from "../../html-utils.js";
 import type {
   ResourceAcceleratorEntryPreview,
-  ResourceLangWithPreview,
+  ResourcePreviewWithIssues,
   ResourceMenuItemPreview
 } from "../../analyzers/pe/resources/preview/types.js";
 import { renderDialogPreview } from "./resource-preview-dialog.js";
@@ -11,13 +11,13 @@ import { renderMuiConfigPreview } from "./resource-preview-mui.js";
 import { renderStructuredPreview, renderStructuredPreviewSummary } from "./resource-preview-structured.js";
 import { renderVersionPreview } from "./resource-preview-version.js";
 
-const renderIssues = (langEntry: ResourceLangWithPreview): string => {
+const renderIssues = (langEntry: ResourcePreviewWithIssues): string => {
   const issues = (langEntry.previewIssues || []).filter((issue): issue is string => Boolean(issue));
   return issues.length
     ? `<div class="smallNote" style="color:var(--warning-text,#b45309)">WARNING: ${issues.map(escapeHtml).join(" - ")}</div>`
     : "";
 };
-const renderFields = (langEntry: ResourceLangWithPreview): string => {
+const renderFields = (langEntry: ResourcePreviewWithIssues): string => {
   const fields = langEntry.previewFields || [];
   if (!fields.length) return "";
   const rows = fields
@@ -45,10 +45,10 @@ const renderAcceleratorEntries = (entries: ResourceAcceleratorEntryPreview[]): s
   return `<table class="table peResourceNestedTable"><thead><tr><th>Shortcut</th>` +
     `<th>Command ID</th></tr></thead><tbody>${rows}</tbody></table>`;
 };
-const findDetectedPreviewField = (langEntry: ResourceLangWithPreview): string | null =>
+const findDetectedPreviewField = (langEntry: ResourcePreviewWithIssues): string | null =>
   langEntry.previewFields?.find(field => field.label === "Detected")?.value ?? null;
 
-const renderFontPreview = (langEntry: ResourceLangWithPreview): string => {
+const renderFontPreview = (langEntry: ResourcePreviewWithIssues): string => {
   if (!langEntry.previewDataUrl) return renderFields(langEntry) + renderIssues(langEntry);
   const family = "peResourceFontPreview";
   return [
@@ -60,7 +60,7 @@ const renderFontPreview = (langEntry: ResourceLangWithPreview): string => {
     renderIssues(langEntry)
   ].join("");
 };
-const renderStringTablePreview = (langEntry: ResourceLangWithPreview): string => {
+const renderStringTablePreview = (langEntry: ResourcePreviewWithIssues): string => {
   const rows = (langEntry.stringTable || [])
     .map(entry =>
       `<tr><td class="mono peNumeric">` +
@@ -72,7 +72,7 @@ const renderStringTablePreview = (langEntry: ResourceLangWithPreview): string =>
     `<thead><tr><th>ID</th><th>String</th></tr></thead><tbody>${rows}</tbody></table>` +
     `${renderFields(langEntry)}${renderIssues(langEntry)}`;
 };
-const renderMessageTablePreview = (langEntry: ResourceLangWithPreview): string => {
+const renderMessageTablePreview = (langEntry: ResourcePreviewWithIssues): string => {
   const rows = (langEntry.messageTable?.messages || [])
     .map(message => {
       const text = Array.isArray(message.strings) ? message.strings.join(" | ") : "";
@@ -88,7 +88,7 @@ const renderMessageTablePreview = (langEntry: ResourceLangWithPreview): string =
     `${truncated}${renderFields(langEntry)}${renderIssues(langEntry)}`;
 };
 export const renderPreviewSummary = (
-  langEntry: ResourceLangWithPreview | null | undefined
+  langEntry: ResourcePreviewWithIssues | null | undefined
 ): string => {
   if (!langEntry?.previewKind) return "-";
   if (langEntry.previewKind === "dialog" && langEntry.dialogPreview) {
@@ -118,7 +118,7 @@ export const renderPreviewSummary = (
   return langEntry.previewKind;
 };
 const renderTailPreview = (
-  langEntry: ResourceLangWithPreview, registryTableId?: string
+  langEntry: ResourcePreviewWithIssues, registryTableId?: string
 ): string | null => {
   if (langEntry.previewKind === "dialog" && langEntry.dialogPreview) {
     return renderDialogPreview(langEntry.dialogPreview) + renderFields(langEntry) + renderIssues(langEntry);
@@ -138,7 +138,7 @@ const renderTailPreview = (
 };
 
 export const renderPreviewCell = (
-  langEntry: ResourceLangWithPreview | null | undefined, registryTableId?: string
+  langEntry: ResourcePreviewWithIssues | null | undefined, registryTableId?: string
 ): string => {
   if (!langEntry) return "-";
   if (langEntry.previewKind === "image" && langEntry.previewDataUrl) {

@@ -15,6 +15,7 @@ import { getCoffDebugTableModel } from "../coff/debug.js";
 import { getPeDisassemblyStringTableModel } from "./disassembly-strings.js";
 import { createImportFunctionTableModel } from "./import-function-table.js";
 import { getPeResourceTableModel } from "./resources.js";
+import { getManagedResourceTableModel } from "./managed-resources.js";
 import { getMsvcRttiPagedTableModel } from "./msvc-rtti-table.js";
 import { getItaniumRttiTableModel } from "./itanium-rtti.js";
 import { getLoadConfigReferenceTableModel } from "./load-config-reference-tables.js";
@@ -134,7 +135,8 @@ const windowsTableResolvers: TableResolver[] = [
   getMsvcRttiPagedTableModel,
   (pe, id) => getItaniumRttiTableModel(pe.itaniumRtti, id),
   getImportFunctionTableModel, getNativeAotTableModel,
-  (pe, id) => getPeResourceTableModel(pe.resources, id)
+  (pe, id) => getPeResourceTableModel(pe.resources, id),
+  (pe, id) => getManagedResourceTableModel(pe.clr, id)
 ];
 
 export const getPePagedTableModel = (

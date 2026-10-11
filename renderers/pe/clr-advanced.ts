@@ -2,19 +2,12 @@
 
 import { humanSize, hex } from "../../binary-utils.js";
 import { renderDefinitionRow, renderFlagChips, escapeHtml } from "../../html-utils.js";
-import type { PeClrHeader, PeClrManagedResourceValue } from "../../analyzers/pe/clr/index.js";
-import type { PeClrManagedResourceEntry } from "../../analyzers/pe/clr/managed-resource-types.js";
-import type { PeClrMetadataIndex } from "../../analyzers/pe/clr/types.js";
-import type { ResourceLangWithPreview } from "../../analyzers/pe/resources/preview/types.js";
-import { renderPreviewCell } from "./resource-preview-cell.js";
+import type { PeClrHeader } from "../../analyzers/pe/clr/index.js";
 import { renderReadyToRunData } from "./ready-to-run-tables.js";
 import { renderPeSectionStart, renderPeSectionEnd } from "./collapsible-section.js";
 
 const formatClrDirectory = (rva: number, size: number): string =>
   rva || size ? `RVA ${hex(rva, 8)} Size ${humanSize(size)}` : "-";
-
-const indexText = (index: PeClrMetadataIndex): string =>
-  index.row === 0 ? "-" : `${index.table} #${index.row}${index.valid ? "" : " (invalid)"}`;
 
 const renderWarningList = (issues: string[]): string => {
   if (!issues.length) return "";
@@ -35,65 +28,6 @@ export const renderStrongName = (clrHeader: PeClrHeader, out: string[]): void =>
   out.push(`</dl><div class="smallNote">Strong names identify assemblies and provide integrity metadata; they are not publisher trust and are separate from Authenticode certificates.</div>`);
   out.push(renderWarningList(strongName.issues));
   out.push(`</details>`);
-};
-
-const hasManagedResourcePreview = (entry: PeClrManagedResourceEntry): boolean =>
-  Boolean(entry.previewKind || entry.previewFields?.length || entry.previewDataUrl || entry.textPreview);
-
-const renderManagedResourceMetadata = (entry: PeClrManagedResourceEntry): string =>
-  `<dl class="clrManagedResourceMeta">` +
-    renderDefinitionRow("Storage", escapeHtml(entry.storage)) +
-    renderDefinitionRow("Offset", hex(entry.offset, 8)) +
-    renderDefinitionRow("Flags", hex(entry.flags, 8)) +
-    renderDefinitionRow("Implementation", escapeHtml(indexText(entry.implementation))) +
-    renderDefinitionRow("Size", entry.size == null ? "-" : humanSize(entry.size)) +
-  `</dl>`;
-
-const hasVisiblePreview = (previewHtml: string): boolean => {
-  if (/<(?:img|audio)\b/i.test(previewHtml)) return true;
-  const textOnly = previewHtml.replace(/[<>]/g, "").trim();
-  return textOnly !== "" && previewHtml.trim() !== "-";
-};
-
-const renderManagedResourceValues = (values: PeClrManagedResourceValue[]): string => {
-  const tableClass = values.every(value => value.type === "String")
-    ? "table clrManagedResourceValuesTable clrManagedResourceStringsTable"
-    : "table clrManagedResourceValuesTable";
-  const rows = values.map(value => {
-    const previewHtml = renderPreviewCell(value as unknown as ResourceLangWithPreview);
-    const preview = hasVisiblePreview(previewHtml)
-      ? `<tr class="clrManagedResourceValuePreviewRow"><td colspan="3">` +
-        `${previewHtml}</td></tr>`
-      : "";
-    return `<tr><td>${escapeHtml(value.name)}</td><td>${escapeHtml(value.type)}</td>` +
-      `<td>${value.opaque ? "opaque" : escapeHtml(String(value.value ?? ""))}</td></tr>${preview}`;
-  }).join("");
-  return `<table class="${tableClass}">` +
-    `<thead><tr><th>Entry</th><th>Type</th><th>Value</th></tr></thead>` +
-    `<tbody>${rows}</tbody></table>`;
-};
-
-const renderManagedResourceEntry = (entry: PeClrManagedResourceEntry): string => {
-  const preview = hasManagedResourcePreview(entry)
-    ? `<div class="clrManagedResourcePreview">${renderPreviewCell(entry as unknown as ResourceLangWithPreview)}</div>`
-    : "";
-  const values = entry.entries?.length
-    ? `<div class="clrManagedResourceValues">${renderManagedResourceValues(entry.entries)}</div>`
-    : "";
-  return `<section class="clrManagedResourceBlock">` +
-    `<h4 class="clrManagedResourceTitle">${escapeHtml(entry.name || "(unnamed resource)")}</h4>` +
-    `<div class="clrManagedResourceSummary">${renderManagedResourceMetadata(entry)}${preview}</div>` +
-    `${values}${entry.issues?.length ? renderWarningList(entry.issues) : ""}</section>`;
-};
-
-export const renderManagedResources = (clrHeader: PeClrHeader, out: string[]): void => {
-  const resources = clrHeader.managedResources;
-  if (!resources) return;
-  out.push(`<details style="margin-top:.35rem" open><summary>Managed resources (${resources.entries.length})</summary>`);
-  out.push(`<div class="smallNote">CLR ManifestResource rows with embedded payload details; separate from the PE .rsrc tree.</div>`);
-  out.push(`<div class="clrManagedResourceList">`);
-  resources.entries.forEach(entry => out.push(renderManagedResourceEntry(entry)));
-  out.push(`</div>${renderWarningList(resources.issues)}</details>`);
 };
 
 export const renderReadyToRun = (clrHeader: Pick<PeClrHeader, "readyToRun">, out: string[]): void => {

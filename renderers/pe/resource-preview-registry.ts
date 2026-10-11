@@ -1,4 +1,4 @@
-import type { ResourceLangWithPreview } from "../../analyzers/pe/resources/preview/types.js";
+import type { ResourcePreviewWithIssues } from "../../analyzers/pe/resources/preview/types.js";
 import { registryParameters } from "../../analyzers/pe/resources/preview/registry-parameters.js";
 import { escapeHtml } from "../../html-utils.js";
 import { renderAutoPagedSortableTable } from "../paged-sortable-table.js";
@@ -14,7 +14,7 @@ const renderParameters = (text: string): string => {
 };
 
 export const renderRegistryPreview = (
-  entry: ResourceLangWithPreview | undefined, tableId = "pe-registry"
+  entry: ResourcePreviewWithIssues | undefined, tableId = "pe-registry"
 ): string => {
   if (!entry?.registry) return "";
   const source = entry.textPreview;

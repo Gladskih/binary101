@@ -2,8 +2,7 @@
 
 import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
-import { addHeuristicResourcePreview } from "../resources/preview/sniff.js";
-import type { ResourcePreviewData } from "../resources/preview/types.js";
+import { previewManagedResourceBytes } from "./managed-resource-preview.js";
 import type { RvaToOffset } from "../types.js";
 import type {
   PeClrHeader,
@@ -15,20 +14,16 @@ import type {
   PeClrManagedResources
 } from "./managed-resource-types.js";
 
-const previewFields = (preview: ResourcePreviewData): Partial<PeClrManagedResourceEntry> => ({
-  previewKind: preview.previewKind,
-  ...(preview.previewMime ? { previewMime: preview.previewMime } : {}),
-  ...(preview.previewDataUrl ? { previewDataUrl: preview.previewDataUrl } : {}),
-  ...(preview.textPreview ? { textPreview: preview.textPreview } : {}),
-  ...(preview.textEncoding !== undefined ? { textEncoding: preview.textEncoding } : {}),
-  ...(preview.previewFields ? { previewFields: preview.previewFields } : {})
-});
-
 const hasExternalImplementation = (row: PeClrManifestResourceInfo): boolean =>
   row.implementation.valid && row.implementation.row > 0 && row.implementation.table !== "null";
 
 const hasInvalidImplementation = (row: PeClrManifestResourceInfo): boolean =>
   row.implementation.raw !== 0 && !row.implementation.valid;
+
+const isResourceRvaValid = (rva: number): boolean => Number.isSafeInteger(rva) && rva <= 0xffffffff;
+
+const manifestResourceRows = (clr: PeClrHeader): PeClrManifestResourceInfo[] =>
+  clr.meta?.tables?.manifestResources ?? [];
 
 const readEmbeddedPayload = async (
   reader: FileRangeReader,
@@ -37,19 +32,25 @@ const readEmbeddedPayload = async (
   row: PeClrManifestResourceInfo,
   issues: string[]
 ): Promise<{ storage: PeClrManagedResourceEntry["storage"]; bytes: Uint8Array | null; size: number | null }> => {
-  if (row.offset < 0 || row.offset > clr.ResourcesSize || row.offset + 4 > clr.ResourcesSize) {
+  if (row.offset < 0 || row.offset + 4 > clr.ResourcesSize) {
     issues.push(`Managed resource row ${row.row} offset is outside the CLR Resources directory.`);
     return { storage: "truncated", bytes: null, size: null };
   }
   const resourceRva = clr.ResourcesRVA + row.offset;
-  if (!Number.isSafeInteger(resourceRva) || resourceRva > 0xffffffff) {
+  if (!isResourceRvaValid(resourceRva)) {
     issues.push(`Managed resource row ${row.row} RVA overflows 32-bit address space.`);
     return { storage: "unmapped", bytes: null, size: null };
   }
   const offset = rvaToOff(resourceRva);
-  if (offset == null) return { storage: "unmapped", bytes: null, size: null };
+  if (offset == null) {
+    issues.push(`Managed resource row ${row.row} length prefix is unmapped.`);
+    return { storage: "unmapped", bytes: null, size: null };
+  }
   const lengthView = await readMappedRvaPrefix(reader, resourceRva, 4, rvaToOff);
-  if (lengthView.byteLength < 4) return { storage: "truncated", bytes: null, size: null };
+  if (lengthView.byteLength < 4) {
+    issues.push(`Managed resource row ${row.row} length prefix is truncated.`);
+    return { storage: "truncated", bytes: null, size: null };
+  }
   const size = lengthView.getUint32(0, true);
   if (row.offset + 4 + size > clr.ResourcesSize) {
     issues.push(`Managed resource row ${row.row} payload extends past the CLR Resources directory.`);
@@ -62,8 +63,29 @@ const readEmbeddedPayload = async (
   }
   const view = await readMappedRvaPrefix(reader, resourceRva + 4, size, rvaToOff);
   const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-  if (bytes.length < size) return { storage: "truncated", bytes, size };
+  if (bytes.length < size) {
+    issues.push(`Managed resource row ${row.row} payload is truncated (${bytes.length} of ${size} bytes).`);
+    return { storage: "truncated", bytes: null, size };
+  }
   return { storage: "embedded", bytes, size };
+};
+
+const parseEmbeddedResource = async (
+  reader: FileRangeReader, rvaToOff: RvaToOffset, clr: PeClrHeader,
+  row: PeClrManifestResourceInfo, issues: string[]
+): Promise<PeClrManagedResourceEntry> => {
+  const payload = await readEmbeddedPayload(reader, rvaToOff, clr, row, issues);
+  const entryIssues: string[] = [];
+  const dotNetEntries = payload.bytes ? await parseDotNetResources(payload.bytes, entryIssues) : null;
+  const preview = payload.bytes && !dotNetEntries
+    ? await previewManagedResourceBytes(payload.bytes) : null;
+  entryIssues.push(...preview?.issues ?? []);
+  return {
+    ...row, storage: payload.storage, size: payload.size,
+    ...(dotNetEntries ? { entries: dotNetEntries } : {}),
+    ...preview?.preview,
+    ...(entryIssues.length ? { issues: entryIssues } : {})
+  };
 };
 
 export const parseManagedResources = async (
@@ -71,10 +93,11 @@ export const parseManagedResources = async (
   rvaToOff: RvaToOffset,
   clr: PeClrHeader
 ): Promise<PeClrManagedResources | null> => {
-  const rows = clr.meta?.tables?.manifestResources ?? [];
+  const rows = manifestResourceRows(clr);
   if (!rows.length && clr.ResourcesRVA === 0 && clr.ResourcesSize === 0) return null;
   const issues: string[] = [];
   const entries: PeClrManagedResourceEntry[] = [];
+  const embedded = new Map<number, PeClrManagedResourceEntry>();
   for (const row of rows) {
     if (hasExternalImplementation(row)) {
       entries.push({ ...row, storage: "external", size: null });
@@ -85,20 +108,14 @@ export const parseManagedResources = async (
       entries.push({ ...row, storage: "unmapped", size: null });
       continue;
     }
-    const payload = await readEmbeddedPayload(reader, rvaToOff, clr, row, issues);
-    const entryIssues: string[] = [];
-    const dotNetEntries = payload.bytes ? await parseDotNetResources(payload.bytes, entryIssues) : null;
-    const preview = payload.bytes && !dotNetEntries
-      ? (await addHeuristicResourcePreview(payload.bytes, undefined))?.preview
-      : null;
-    entries.push({
-      ...row,
-      storage: payload.storage,
-      size: payload.size,
-      ...(dotNetEntries ? { entries: dotNetEntries } : {}),
-      ...(preview ? previewFields(preview) : {}),
-      ...(entryIssues.length ? { issues: entryIssues } : {})
-    });
+    const cached = embedded.get(row.offset);
+    if (cached) {
+      entries.push({ ...cached, ...row });
+      continue;
+    }
+    const entry = await parseEmbeddedResource(reader, rvaToOff, clr, row, issues);
+    embedded.set(row.offset, entry);
+    entries.push(entry);
   }
   return { entries, issues };
 };

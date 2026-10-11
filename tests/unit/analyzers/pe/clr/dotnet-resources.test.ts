@@ -4,124 +4,91 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseDotNetResources } from "../../../../../analyzers/pe/clr/dotnet-resources.js";
 
-type ResourceEntrySpec = {
-  name: string;
-  value: number[];
-};
+import { makeDotNetResources, runtimeHeaderOffset, runtimeTableOffset, stringResourceValue }
+  from "../../../../fixtures/dotnet-resource-file.js";
 
-const textEncoder = new TextEncoder();
-// ResourceManager and ResourceReader constants come from dotnet/runtime ResourceReader/ResourceWriter:
-// https://github.com/dotnet/runtime/blob/main/src/libraries/System.Private.CoreLib/src/System/Resources/ResourceReader.cs
-// https://github.com/dotnet/runtime/blob/main/src/libraries/System.Private.CoreLib/src/System/Resources/ResourceWriter.cs
+// ResourceManager has three 32-bit header fields.
+const RESOURCE_MANAGER_FIXED_HEADER_SIZE = 12;
 const RESOURCE_MANAGER_MAGIC = 0xbeefcace;
-const RESOURCE_MANAGER_VERSION = 1;
-const RUNTIME_RESOURCE_SET_VERSION = 2;
-const RESOURCE_TYPE_CODE_STRING = 1;
-const RESOURCE_MANAGER_FIXED_HEADER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 3;
-const RUNTIME_RESOURCE_SET_FIXED_HEADER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 3;
-const RUNTIME_RESOURCE_SET_ALIGNMENT = Uint32Array.BYTES_PER_ELEMENT * 2;
-const RUNTIME_RESOURCE_READER_TYPE = "System.Resources.ResourceReader";
-const RUNTIME_RESOURCE_SET_TYPE = "System.Resources.RuntimeResourceSet";
-
 const generatedName = (index: number): string => `resource-${index.toString(36)}`;
 const generatedValue = (index: number): string => `value-${index.toString(36)}`;
 
-const alignRuntimeTable = (value: number): number =>
-  (value + RUNTIME_RESOURCE_SET_ALIGNMENT - 1) & ~(RUNTIME_RESOURCE_SET_ALIGNMENT - 1);
+void test("resource strings cannot consume a neighboring value", async () => {
+  const payload = makeDotNetResources([
+    { name: "broken", value: [1, 8, 65] }, // String claims eight bytes but owns only one.
+    { name: "intact", value: stringResourceValue("survives") }
+  ]);
+  const issues: string[] = [];
 
-const writeSevenBitInt = (value: number): number[] => {
-  const bytes: number[] = [];
-  let remaining = value;
-  do {
-    let byte = remaining & 0x7f;
-    remaining >>>= 7;
-    if (remaining) byte |= 0x80;
-    bytes.push(byte);
-  } while (remaining);
-  return bytes;
-};
+  const values = await parseDotNetResources(payload, issues);
 
-const binaryString = (value: string): number[] => {
-  const bytes = textEncoder.encode(value);
-  return [...writeSevenBitInt(bytes.length), ...bytes];
-};
+  assert.strictEqual(values?.[0]?.value, null);
+  assert.ok(values?.[0]?.issues?.length);
+  assert.strictEqual(values?.[1]?.value, "survives");
+});
 
-const utf16Name = (value: string): number[] => {
-  const bytes = new Uint8Array(value.length * Uint16Array.BYTES_PER_ELEMENT);
-  const view = new DataView(bytes.buffer);
-  for (let index = 0; index < value.length; index += 1) {
-    view.setUint16(index * Uint16Array.BYTES_PER_ELEMENT, value.charCodeAt(index), true);
-  }
-  return [...writeSevenBitInt(bytes.length), ...bytes];
-};
+void test("resource names cannot consume the data section", async () => {
+  const payload = makeDotNetResources([{ name: "name", value: stringResourceValue("text") }]);
+  const view = new DataView(payload.buffer);
+  const namesOffset = runtimeTableOffset() + 12;
+  payload[namesOffset] = view.getUint32(runtimeTableOffset() + 8, true) - namesOffset;
 
-const stringResourceValue = (value: string): number[] => [
-  ...writeSevenBitInt(RESOURCE_TYPE_CODE_STRING),
-  ...binaryString(value)
-];
+  const parsed = await parseWithIssues(payload);
 
-const writeResourceSetHeader = (
-  view: DataView,
-  runtimeHeaderOffset: number,
-  entryCount: number
-): void => {
-  view.setUint32(runtimeHeaderOffset, RUNTIME_RESOURCE_SET_VERSION, true);
-  view.setInt32(runtimeHeaderOffset + Uint32Array.BYTES_PER_ELEMENT, entryCount, true);
-  view.setInt32(runtimeHeaderOffset + Uint32Array.BYTES_PER_ELEMENT * 2, 0, true);
-};
+  assert.deepStrictEqual(parsed.values, []);
+  assert.ok(parsed.issues.length);
+});
 
-const makeDotNetResources = (entries: ResourceEntrySpec[]): Uint8Array => {
-  const readerType = binaryString(RUNTIME_RESOURCE_READER_TYPE);
-  const setType = binaryString(RUNTIME_RESOURCE_SET_TYPE);
-  const headerSize = readerType.length + setType.length;
-  const runtimeHeaderOffset = RESOURCE_MANAGER_FIXED_HEADER_SIZE + headerSize;
-  const runtimeTableOffset = alignRuntimeTable(runtimeHeaderOffset + RUNTIME_RESOURCE_SET_FIXED_HEADER_SIZE);
-  const namePayloads = entries.map(entry => utf16Name(entry.name));
-  const nameTableBytes = namePayloads.reduce(
-    (size, name) => size + name.length + Uint32Array.BYTES_PER_ELEMENT,
-    0
-  );
-  const dataSectionOffset =
-    runtimeTableOffset + entries.length * Uint32Array.BYTES_PER_ELEMENT * 2 +
-    Uint32Array.BYTES_PER_ELEMENT + nameTableBytes;
-  const valueBytes = entries.reduce((size, entry) => size + entry.value.length, 0);
-  const bytes = new Uint8Array(dataSectionOffset + valueBytes);
-  const view = new DataView(bytes.buffer);
-  view.setUint32(0, RESOURCE_MANAGER_MAGIC, true);
-  view.setUint32(Uint32Array.BYTES_PER_ELEMENT, RESOURCE_MANAGER_VERSION, true);
-  view.setUint32(Uint32Array.BYTES_PER_ELEMENT * 2, headerSize, true);
-  bytes.set(readerType, RESOURCE_MANAGER_FIXED_HEADER_SIZE);
-  bytes.set(setType, RESOURCE_MANAGER_FIXED_HEADER_SIZE + readerType.length);
-  writeResourceSetHeader(view, runtimeHeaderOffset, entries.length);
-  let nameOffset = runtimeTableOffset + entries.length * Uint32Array.BYTES_PER_ELEMENT * 2 +
-    Uint32Array.BYTES_PER_ELEMENT;
-  let dataOffset = dataSectionOffset;
-  view.setUint32(runtimeTableOffset + entries.length * Uint32Array.BYTES_PER_ELEMENT * 2, dataSectionOffset, true);
-  entries.forEach((entry, index) => {
-    view.setUint32(runtimeTableOffset + index * Uint32Array.BYTES_PER_ELEMENT, index, true);
-    view.setUint32(
-      runtimeTableOffset + (entries.length + index) * Uint32Array.BYTES_PER_ELEMENT,
-      nameOffset - runtimeTableOffset - entries.length * Uint32Array.BYTES_PER_ELEMENT * 2 -
-        Uint32Array.BYTES_PER_ELEMENT,
-      true
-    );
-    bytes.set(namePayloads[index] ?? [], nameOffset);
-    nameOffset += namePayloads[index]?.length ?? 0;
-    view.setUint32(nameOffset, dataOffset - dataSectionOffset, true);
-    nameOffset += Uint32Array.BYTES_PER_ELEMENT;
-    bytes.set(entry.value, dataOffset);
-    dataOffset += entry.value.length;
-  });
-  return bytes;
-};
+void test("unsupported resource-set versions are not decoded as v2", async () => {
+  const payload = makeDotNetResources([{ name: "name", value: stringResourceValue("text") }]);
+  new DataView(payload.buffer).setInt32(runtimeHeaderOffset(), 3, true);
 
-const runtimeHeaderOffset = (): number =>
-  RESOURCE_MANAGER_FIXED_HEADER_SIZE +
-  binaryString(RUNTIME_RESOURCE_READER_TYPE).length +
-  binaryString(RUNTIME_RESOURCE_SET_TYPE).length;
+  const parsed = await parseWithIssues(payload);
 
-const runtimeTableOffset = (): number =>
-  alignRuntimeTable(runtimeHeaderOffset() + RUNTIME_RESOURCE_SET_FIXED_HEADER_SIZE);
+  assert.deepStrictEqual(parsed.values, []);
+  assert.ok(parsed.issues.some(issue => issue.includes("Unsupported")));
+});
+
+void test("a backwards data section is rejected", async () => {
+  const payload = makeDotNetResources([{ name: "name", value: stringResourceValue("text") }]);
+  new DataView(payload.buffer).setInt32(runtimeTableOffset() + 8, 0, true);
+
+  const parsed = await parseWithIssues(payload);
+
+  assert.deepStrictEqual(parsed.values, []);
+  assert.ok(parsed.issues.length);
+});
+
+void test("custom ResourceReader headers are not decoded using the standard layout", async () => {
+  const payload = makeDotNetResources([{ name: "name", value: stringResourceValue("text") }]);
+  payload[13] = "X".charCodeAt(0);
+
+  const parsed = await parseWithIssues(payload);
+
+  assert.deepStrictEqual(parsed.values, []);
+  assert.match(parsed.issues.join(" "), /ResourceReader/);
+});
+
+void test("odd UTF-16 names are rejected", async () => {
+  const payload = makeDotNetResources([{ name: "name", value: stringResourceValue("text") }]);
+  payload[runtimeTableOffset() + 12] = 7;
+
+  const parsed = await parseWithIssues(payload);
+
+  assert.deepStrictEqual(parsed.values, []);
+  assert.ok(parsed.issues.length);
+});
+
+void test("duplicate names produce a diagnostic", async () => {
+  const payload = makeDotNetResources([
+    { name: "same", value: stringResourceValue("first") },
+    { name: "same", value: stringResourceValue("second") }
+  ]);
+
+  const parsed = await parseWithIssues(payload);
+
+  assert.match(parsed.issues.join(" "), /duplicate name/);
+});
 
 const parseWithIssues = async (payload: Uint8Array): Promise<{ issues: string[]; values: unknown }> => {
   const issues: string[] = [];
@@ -196,3 +163,106 @@ void test("parseDotNetResources reports truncated name tables", async () => {
   assert.deepStrictEqual(parsed.values, []);
   assert.ok(parsed.issues.some(issue => issue.includes("name 1 is truncated")));
 });
+
+void test("resource user types stay opaque and v1 integer types are decoded", async () => {
+  const issues: string[] = [];
+
+  const custom = await parseDotNetResources(makeDotNetResources(
+    [{ name: "custom", value: [64, 1, 2, 3] }], ["Example.Type, Example.Assembly"]), issues);
+  const integer = await parseDotNetResources(makeDotNetResources(
+    [{ name: "number", value: [0, 42, 0, 0, 0] }], ["System.Int32, mscorlib"], 1), issues);
+
+  assert.strictEqual(custom?.[0]?.type, "Example.Type, Example.Assembly");
+  assert.strictEqual(custom?.[0]?.opaque, true);
+  assert.strictEqual(integer?.[0]?.value, 42);
+  assert.deepStrictEqual(issues, []);
+});
+
+void test("negative data and name offsets are rejected", async () => {
+  const payload = makeDotNetResources([{ name: "name", value: stringResourceValue("text") }]);
+  new DataView(payload.buffer).setInt32(runtimeTableOffset() + 4, -1, true);
+
+  const parsed = await parseWithIssues(payload);
+
+  assert.deepStrictEqual(parsed.values, []);
+  assert.ok(parsed.issues.length);
+});
+
+void test("bad manager versions are rejected", async () => {
+  const payload = makeDotNetResources([]);
+  new DataView(payload.buffer).setInt32(4, -1, true);
+
+  const parsed = await parseWithIssues(payload);
+
+  assert.deepStrictEqual(parsed.values, []);
+  assert.match(parsed.issues.join(" "), /version/);
+});
+
+void test("shared data offsets preserve names while reusing the decoded value", async () => {
+  const payload = makeDotNetResources([
+    { name: "first", value: stringResourceValue("shared") },
+    { name: "second", value: stringResourceValue("shared") }
+  ]);
+  const view = new DataView(payload.buffer);
+  const namesOffset = runtimeTableOffset() + 20;
+  const secondOffset = view.getUint32(runtimeTableOffset() + 12, true);
+  const secondNameLength = payload[namesOffset + secondOffset]!;
+  view.setInt32(namesOffset + secondOffset + 1 + secondNameLength, 0, true);
+
+  const parsed = await parseDotNetResources(payload, []);
+
+  assert.deepStrictEqual(parsed?.map(value => value.name), ["first", "second"]);
+  assert.deepStrictEqual(parsed?.map(value => value.value), ["shared", "shared"]);
+});
+
+const truncatedFixture = makeDotNetResources([{ name: "entry", value: stringResourceValue("text") }]);
+
+void test("broken header strings and type names are diagnosed", async () => {
+  const header = makeDotNetResources([]);
+  header[12] = 255;
+  const types = makeDotNetResources([], ["Example.Type"]);
+  types[runtimeHeaderOffset() + 12] = 255;
+
+  const badHeader = await parseWithIssues(header);
+  const badTypes = await parseWithIssues(types);
+
+  assert.match(badHeader.issues.join(" "), /type names are truncated/);
+  assert.match(badTypes.issues.join(" "), /type-name table is truncated/);
+});
+
+void test("truncated type codes produce a value diagnostic", async () => {
+  const values = await parseDotNetResources(makeDotNetResources([{ name: "bad", value: [128] }]), []);
+
+  assert.strictEqual(values?.[0]?.value, null);
+  assert.match(values?.[0]?.issues?.join(" ") ?? "", /type code is truncated/);
+});
+
+void test("header versions above one skip their declared extension bytes", async () => {
+  const payload = makeDotNetResources([]);
+  new DataView(payload.buffer).setInt32(4, 2, true);
+
+  const parsed = await parseWithIssues(payload);
+
+  assert.deepStrictEqual(parsed.values, []);
+  assert.deepStrictEqual(parsed.issues, []);
+});
+
+void test("inconsistent v1 header lengths are warned about while reading actual strings", async () => {
+  const payload = makeDotNetResources([]);
+  new DataView(payload.buffer).setInt32(8, 0, true);
+
+  const parsed = await parseWithIssues(payload);
+
+  assert.deepStrictEqual(parsed.values, []);
+  assert.match(parsed.issues.join(" "), /inconsistent/);
+});
+
+for (let cut = 4; cut < truncatedFixture.length; cut += 1) {
+  void test(`resource truncation at byte ${cut} is diagnosed without throwing`, async () => {
+    const issues: string[] = [];
+
+    const values = await parseDotNetResources(truncatedFixture.subarray(0, cut), issues);
+
+    assert.ok(issues.length || values?.some(value => value.issues?.length));
+  });
+}

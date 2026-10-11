@@ -131,9 +131,8 @@ const hasValidIcoContainer = (data: Uint8Array): boolean => {
   return true;
 };
 
-export const addHeuristicResourcePreview = async (
-  data: Uint8Array,
-  codePage: number | undefined
+export const addHeuristicBinaryResourcePreview = async (
+  data: Uint8Array
 ): Promise<ResourcePreviewResult | null> => {
   if (!data.length) return null;
   if (hasPngSignature(data)) {
@@ -183,5 +182,10 @@ export const addHeuristicResourcePreview = async (
   if (hasRiffForm(data, "AVI ")) {
     return buildSummaryPreview([{ label: "Detected", value: "AVI container (heuristic)" }]);
   }
-  return addTextSniffPreview(data, codePage);
+  return null;
 };
+
+export const addHeuristicResourcePreview = async (
+  data: Uint8Array, codePage: number | undefined
+): Promise<ResourcePreviewResult | null> =>
+  await addHeuristicBinaryResourcePreview(data) ?? addTextSniffPreview(data, codePage);

@@ -1,6 +1,6 @@
 "use strict";
 
-import type { ResourceLangWithPreview } from "../../analyzers/pe/resources/preview/types.js";
+import type { ResourcePreviewWithIssues } from "../../analyzers/pe/resources/preview/types.js";
 import { renderInfPreview } from "./resource-preview-inf.js";
 import { renderRegistryPreview } from "./resource-preview-registry.js";
 import { escapeHtml } from "../../html-utils.js";
@@ -12,7 +12,7 @@ import { renderRibbonBmlPreview } from "./resource-preview-ribbon-bml.js";
 import { renderRibbonXmlPreview } from "./resource-preview-ribbon-xml.js";
 import { renderBinaryMofPreview } from "./resource-preview-mof.js";
 
-const renderFontAndMfcSummary = (langEntry: ResourceLangWithPreview): string | null => {
+const renderFontAndMfcSummary = (langEntry: ResourcePreviewWithIssues): string | null => {
   if (langEntry.fontDirectory) return `${langEntry.fontDirectory.entries.length} fonts`;
   if (langEntry.legacyFont) return `FNT ${langEntry.legacyFont.faceName || "font"}`;
   if (langEntry.dialogInit) return `${langEntry.dialogInit.entries.length} initialization records`;
@@ -22,7 +22,7 @@ const renderFontAndMfcSummary = (langEntry: ResourceLangWithPreview): string | n
 };
 
 export const renderStructuredPreviewSummary = (
-  langEntry: ResourceLangWithPreview
+  langEntry: ResourcePreviewWithIssues
 ): string | null => {
   if (langEntry.ribbonBml) return `${langEntry.ribbonBml.commands.length} Ribbon commands`;
   if (langEntry.binaryMof) return `${langEntry.binaryMof.classes.length} WMI classes`;
@@ -45,7 +45,7 @@ export const renderStructuredPreviewSummary = (
   return null;
 };
 
-const renderFontAndMfcPreview = (langEntry: ResourceLangWithPreview): string | null => {
+const renderFontAndMfcPreview = (langEntry: ResourcePreviewWithIssues): string | null => {
   if (langEntry.fontDirectory) return renderFontDirectoryPreview(langEntry.fontDirectory);
   if (langEntry.legacyFont) return renderLegacyFontPreview(langEntry.legacyFont);
   if (langEntry.dialogInit) return renderDialogInitPreview(langEntry.dialogInit);
@@ -55,7 +55,7 @@ const renderFontAndMfcPreview = (langEntry: ResourceLangWithPreview): string | n
 };
 
 export const renderStructuredPreview = (
-  langEntry: ResourceLangWithPreview, registryTableId?: string
+  langEntry: ResourcePreviewWithIssues, registryTableId?: string
 ): string | null => {
   if (langEntry.ribbonBml) return renderRibbonBmlPreview(langEntry.ribbonBml);
   if (langEntry.binaryMof) return renderBinaryMofPreview(langEntry.binaryMof);

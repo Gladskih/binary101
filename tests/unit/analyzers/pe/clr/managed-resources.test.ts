@@ -7,20 +7,9 @@ import type { PeClrHeader, PeClrManifestResourceInfo, PeClrMeta } from "../../..
 import { createPngFile } from "../../../../fixtures/image-sample-files.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
 
+import { makeDotNetResources, stringResourceValue } from "../../../../fixtures/dotnet-resource-file.js";
+
 const textEncoder = new TextEncoder();
-// ResourceManager header: magic, header version, and header byte count fields.
-const RESOURCE_MANAGER_FIXED_HEADER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 3;
-// RuntimeResourceSet header stores version, resource count, and type-name count.
-const RUNTIME_RESOURCE_SET_FIXED_HEADER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 3;
-// ResourceReader aligns the runtime data after the type-name table to 8 bytes.
-const RUNTIME_RESOURCE_SET_ALIGNMENT = 8;
-// .resources constants come from System.Resources.ResourceReader/ResourceWriter in dotnet/runtime:
-// https://github.com/dotnet/runtime/blob/main/src/libraries/System.Private.CoreLib/src/System/Resources/ResourceReader.cs
-// https://github.com/dotnet/runtime/blob/main/src/libraries/System.Private.CoreLib/src/System/Resources/ResourceWriter.cs
-const RESOURCE_MANAGER_MAGIC = 0xbeefcace;
-const RESOURCE_MANAGER_VERSION = 1;
-const RUNTIME_RESOURCE_SET_VERSION = 2;
-const RESOURCE_TYPE_CODE_STRING = 1;
 const CLR_FILE_TABLE_ID = 0x26; // ECMA-335 II.22.19 File table id.
 const CLR_ASSEMBLY_REF_TABLE_ID = 0x23; // ECMA-335 II.22.5 AssemblyRef table id.
 
@@ -85,68 +74,8 @@ const putPayload = (target: Uint8Array, offset: number, payload: Uint8Array): vo
   target.set(payload, offset + 4);
 };
 
-const writeSevenBitInt = (value: number): number[] => {
-  const bytes: number[] = [];
-  let remaining = value;
-  do {
-    let byte = remaining & 0x7f;
-    remaining >>>= 7;
-    if (remaining) byte |= 0x80;
-    bytes.push(byte);
-  } while (remaining);
-  return bytes;
-};
-
-const binaryString = (value: string): number[] => {
-  const bytes = textEncoder.encode(value);
-  return [...writeSevenBitInt(bytes.length), ...bytes];
-};
-
-const utf16Name = (value: string): number[] => {
-  const bytes = new Uint8Array(value.length * 2);
-  const view = new DataView(bytes.buffer);
-  for (let index = 0; index < value.length; index += 1) view.setUint16(index * 2, value.charCodeAt(index), true);
-  return [...writeSevenBitInt(bytes.length), ...bytes];
-};
-
 const generatedLabel = (prefix: string, index: number): string => `${prefix}-${index.toString(36)}`;
 const generatedTextPayload = (index: number): string => JSON.stringify({ value: generatedLabel("payload", index) });
-
-const makeDotNetResources = (): { bytes: Uint8Array; name: string; value: string } => {
-  const readerType = binaryString("System.Resources.ResourceReader");
-  const setType = binaryString("System.Resources.RuntimeResourceSet");
-  const resourceName = generatedLabel("resource", 0);
-  const resourceValue = generatedLabel("value", 0);
-  const name = utf16Name(resourceName);
-  const value = [
-    ...writeSevenBitInt(RESOURCE_TYPE_CODE_STRING),
-    ...binaryString(resourceValue)
-  ];
-  const headerSize = readerType.length + setType.length;
-  const runtimeHeaderOffset = RESOURCE_MANAGER_FIXED_HEADER_SIZE + headerSize;
-  const alignedHeaderEnd =
-    (runtimeHeaderOffset + RUNTIME_RESOURCE_SET_FIXED_HEADER_SIZE + RUNTIME_RESOURCE_SET_ALIGNMENT - 1) &
-    ~(RUNTIME_RESOURCE_SET_ALIGNMENT - 1);
-  const nameTableOffset = alignedHeaderEnd + RUNTIME_RESOURCE_SET_FIXED_HEADER_SIZE;
-  const dataSectionOffset = nameTableOffset + name.length + 4;
-  const bytes = new Uint8Array(dataSectionOffset + value.length);
-  const view = new DataView(bytes.buffer);
-  view.setUint32(0, RESOURCE_MANAGER_MAGIC, true);
-  view.setUint32(4, RESOURCE_MANAGER_VERSION, true);
-  view.setUint32(8, headerSize, true);
-  bytes.set(readerType, RESOURCE_MANAGER_FIXED_HEADER_SIZE);
-  bytes.set(setType, RESOURCE_MANAGER_FIXED_HEADER_SIZE + readerType.length);
-  view.setUint32(runtimeHeaderOffset, RUNTIME_RESOURCE_SET_VERSION, true);
-  view.setInt32(runtimeHeaderOffset + 4, 1, true);
-  view.setInt32(runtimeHeaderOffset + 8, 0, true);
-  view.setUint32(alignedHeaderEnd, bytes.byteLength, true);
-  view.setUint32(alignedHeaderEnd + 4, 0, true);
-  view.setUint32(alignedHeaderEnd + 8, dataSectionOffset, true);
-  bytes.set(name, nameTableOffset);
-  view.setUint32(nameTableOffset + name.length, 0, true);
-  bytes.set(value, dataSectionOffset);
-  return { bytes, name: resourceName, value: resourceValue };
-};
 
 void test("parseManagedResources renders direct text payloads through existing preview sniffing", async () => {
   const fixture = makeManagedResourceFixture();
@@ -205,7 +134,8 @@ void test("parseManagedResources treats nil Implementation coded indexes as embe
 
 void test("parseManagedResources decodes safe primitive .resources entries", async () => {
   const fixture = makeManagedResourceFixture();
-  const resources = makeDotNetResources();
+  const resources = { name: "resource-0", value: "value-0", bytes:
+    makeDotNetResources([{ name: "resource-0", value: stringResourceValue("value-0") }]) };
   putPayload(fixture.bytes, fixture.resourceRva, resources.bytes);
 
   const parsed = await parseManagedResources(
@@ -299,4 +229,64 @@ void test("parseManagedResources rejects payloads that exceed the CLR Resources 
 
   assert.strictEqual(parsed?.entries[0]?.storage, "truncated");
   assert.ok(parsed?.issues.some(issue => issue.includes("payload extends past")));
+});
+
+void test("missing resource tables and directories produce no resource analysis", async () => {
+  const parsed = await parseManagedResources(new MockFile(new Uint8Array()), () => null,
+    makeClr(0, [], 0));
+
+  assert.strictEqual(parsed, null);
+});
+
+void test("unmapped and truncated length prefixes have visible diagnostics", async () => {
+  const fixture = makeManagedResourceFixture();
+
+  const unmapped = await parseManagedResources(new MockFile(fixture.bytes), () => null,
+    makeClr(fixture.resourceRva, [makeRow("unmapped", 0)], fixture.directorySize));
+  const truncated = await parseManagedResources(new MockFile(new Uint8Array(2)), rva => rva,
+    makeClr(0, [makeRow("truncated", 0)], fixture.directorySize));
+
+  assert.strictEqual(unmapped?.entries[0]?.storage, "unmapped");
+  assert.match(unmapped?.issues.join(" ") ?? "", /unmapped/);
+  assert.strictEqual(truncated?.entries[0]?.storage, "truncated");
+  assert.match(truncated?.issues.join(" ") ?? "", /prefix is truncated/);
+});
+
+void test("RVA overflow is rejected before file reads", async () => {
+  const file = new MockFile(new Uint8Array());
+
+  const parsed = await parseManagedResources(file, rva => rva,
+    makeClr(0xffffffff, [makeRow("overflow", 4)], 16));
+
+  assert.strictEqual(parsed?.entries[0]?.storage, "unmapped");
+  assert.match(parsed?.issues.join(" ") ?? "", /overflows/);
+});
+
+void test("oversized payloads are not read merely to generate a preview", async context => {
+  const file = new MockFile(new Uint8Array(4));
+  new DataView(file.data.buffer).setUint32(0, 8 * 1024 * 1024 + 1, true);
+  // MockFile's Blob stores a copy, so use its bounded reader as the source here.
+  context.mock.method(file, "read", async () => new DataView(file.data.buffer));
+
+  const parsed = await parseManagedResources(file, rva => rva,
+    makeClr(0, [makeRow("large", 0)], 8 * 1024 * 1024 + 5));
+
+  assert.strictEqual(parsed?.entries[0]?.storage, "embedded");
+  assert.strictEqual(parsed?.entries[0]?.previewKind, undefined);
+  assert.match(parsed?.issues.join(" ") ?? "", /preview is capped/);
+});
+
+void test("aliasing ManifestResource rows reuse payload reads without losing row identity", async context => {
+  const fixture = makeManagedResourceFixture();
+  putPayload(fixture.bytes, fixture.resourceRva, textEncoder.encode("text"));
+  const file = new MockFile(fixture.bytes);
+  const read = context.mock.method(file, "read");
+
+  const parsed = await parseManagedResources(file, rva => rva,
+    makeClr(fixture.resourceRva, [makeRow("first", 0), { ...makeRow("second", 0), row: 2 }],
+      fixture.directorySize));
+
+  assert.strictEqual(read.mock.callCount(), 2);
+  assert.deepStrictEqual(parsed?.entries.map(entry => entry.name), ["first", "second"]);
+  assert.deepStrictEqual(parsed?.entries.map(entry => entry.row), [1, 2]);
 });

@@ -245,11 +245,11 @@ export interface ResourcePreviewResult {
   issues?: string[];
 }
 
-export type ResourceLangWithPreview =
-  ResourceLangEntry &
-  Partial<ResourcePreviewData> & {
+export type ResourcePreviewWithIssues = Partial<ResourcePreviewData> & {
     previewIssues?: string[];
   };
+
+export type ResourceLangWithPreview = ResourceLangEntry & ResourcePreviewWithIssues;
 
 export type ResourceDetailGroup = {
   typeName: string;
