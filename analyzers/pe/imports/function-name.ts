@@ -16,8 +16,8 @@ export const createImportFunctionNameDecoder = (
     message => addWarning("Import name demangling unavailable: " + message), loadDemangler
   );
   return async fn => {
-    const text = await decode(fn.name);
-    if (text !== null) displayNames.set(fn, text);
+    const decoded = await decode(fn.name);
+    if (decoded !== null) displayNames.set(fn, decoded.text);
   };
 };
 

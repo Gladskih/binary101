@@ -2,15 +2,55 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Demangler, DemangleWithTextResult } from "llvm-msvc-demangle";
+import type { AstNode, Demangler, DemangleWithTextResult } from "llvm-msvc-demangle";
 import { loadMsvcDemangler } from "../../../../../analyzers/pe/msvc-demangle/load.node.js";
 import {
-  createPeExportNameDecoder, getPeExportDisplayName
+  createPeExportNameDecoder, getPeExportDisplayName, isPeExportData
 } from "../../../../../analyzers/pe/directories/export-names.js";
 
 const stubDemangler = (result: DemangleWithTextResult): Demangler => ({
   demangle: () => result, demangleType: () => result,
   demangleWithText: () => result, demangleTypeWithText: () => result
+});
+
+for (const kind of ["VariableSymbol", "SpecialTableSymbol", "LocalStaticGuardVariable",
+  "EncodedStringLiteral", "FunctionSymbol", "Md5Symbol", undefined] as const) {
+  void test(`export data classification uses the fully decoded root kind ${kind}`, async () => {
+    const result = (await loadMsvcDemangler()).demangleWithText("?value@demo@@3HA");
+    assert.ok(result.status === "success");
+    const ast = { ...result.ast, nodes: kind === undefined ? [] :
+      [{ ...result.ast.nodes[result.ast.root], kind } as AstNode], root: 0 };
+    const names = ["?value@demo@@3HA", "?value@demo@@3HA"];
+
+    await createPeExportNameDecoder([], async () => stubDemangler({ ...result, ast }))(names, 0);
+
+    assert.equal(isPeExportData(names), kind !== undefined && kind !== "FunctionSymbol" && kind !== "Md5Symbol");
+    assert.equal(isPeExportData([names[1]!]), false);
+    assert.equal(isPeExportData([]), false);
+    assert.equal(getPeExportDisplayName(names, 1), names[1]);
+  });
+}
+
+for (const name of ["?value@demo@@3HAtrailing", "?broken", "PlainExport"]) {
+  void test(`unrecognized export ${name} remains eligible as code`, async () => {
+    const names = [name];
+
+    await createPeExportNameDecoder([])(names, 0);
+
+    assert.equal(isPeExportData(names), false);
+  });
+}
+
+void test("a truncated data alias does not borrow classification from an identical complete name", async () => {
+  const complete = ["?value@demo@@3HA"];
+  const truncated = [...complete];
+  const decode = createPeExportNameDecoder([]);
+
+  await decode(complete, 0);
+  await decode(truncated, 1);
+
+  assert.equal(isPeExportData(complete), true);
+  assert.equal(isPeExportData(truncated), false);
 });
 
 void test("display names stay attached to individual aliases with identical source text", async () => {

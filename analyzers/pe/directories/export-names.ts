@@ -2,17 +2,17 @@
 
 import type { Demangler } from "llvm-msvc-demangle";
 import { loadMsvcDemangler } from "#msvc-demangler-loader";
-import { createMsvcSymbolNameDecoder } from "../msvc-demangle/symbol-name.js";
+import { createMsvcSymbolNameDecoder, type MsvcSymbolName } from "../msvc-demangle/symbol-name.js";
 
-// Presentation follows the original names array through pagination and lazy remounts,
+// Decoding follows the original names array through pagination and lazy remounts,
 // without adding redundant fields to parsed exports or retaining previous files.
-const displayNames = new WeakMap<readonly string[], Map<number, string>>();
+const decodedNames = new WeakMap<readonly string[], Map<number, MsvcSymbolName>>();
 
-const storeDisplayName = (names: string[], index: number, text: string | null): void => {
-  if (text === null) return;
-  const displays = displayNames.get(names) ?? new Map<number, string>();
-  displays.set(index, text);
-  displayNames.set(names, displays);
+const storeDecodedName = (names: string[], index: number, decoded: MsvcSymbolName | null): void => {
+  if (decoded === null) return;
+  const entries = decodedNames.get(names) ?? new Map<number, MsvcSymbolName>();
+  entries.set(index, decoded);
+  decodedNames.set(names, entries);
 };
 
 export const createPeExportNameDecoder = (
@@ -22,9 +22,17 @@ export const createPeExportNameDecoder = (
     message => issues.push("Export name demangling unavailable: " + message), loadDemangler
   );
   return async (names: string[], index: number): Promise<void> => {
-    storeDisplayName(names, index, await decode(names[index]));
+    storeDecodedName(names, index, await decode(names[index]));
   };
 };
 
 export const getPeExportDisplayName = (names: readonly string[], index: number): string =>
-  displayNames.get(names)?.get(index) ?? names[index] ?? "";
+  decodedNames.get(names)?.get(index)?.text ?? names[index] ?? "";
+
+// Positive data kinds from LLVM's MicrosoftDemangleNodes.h; unknown kinds stay eligible.
+// https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/Demangle/MicrosoftDemangleNodes.h
+const dataSymbolKinds = new Set<MsvcSymbolName["symbolKind"]>(["VariableSymbol", "SpecialTableSymbol",
+  "LocalStaticGuardVariable", "EncodedStringLiteral"]);
+
+export const isPeExportData = (names: readonly string[]): boolean =>
+  names.some((_name, index) => dataSymbolKinds.has(decodedNames.get(names)?.get(index)?.symbolKind));

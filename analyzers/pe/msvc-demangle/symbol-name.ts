@@ -1,7 +1,9 @@
 "use strict";
 
-import type { Demangler } from "llvm-msvc-demangle";
+import type { AstNode, Demangler } from "llvm-msvc-demangle";
 import { loadMsvcDemangler } from "#msvc-demangler-loader";
+
+export type MsvcSymbolName = { text: string; symbolKind: AstNode["kind"] | undefined };
 
 export const createMsvcSymbolNameDecoder = (
   reportFailure: (message: string) => void,
@@ -9,8 +11,8 @@ export const createMsvcSymbolNameDecoder = (
 ) => {
   let pending: Promise<Demangler> | undefined;
   let unavailable = false;
-  const cache = new Map<string, string | null>();
-  return async (name: string | undefined): Promise<string | null> => {
+  const cache = new Map<string, MsvcSymbolName | null>();
+  return async (name: string | undefined): Promise<MsvcSymbolName | null> => {
     // Presentation resource policy, not an ABI limit. Raw names are retained.
     if (name == null || unavailable || !name.startsWith("?") || name.length > 16 * 1024) return null;
     if (cache.has(name)) return cache.get(name) ?? null;
@@ -20,9 +22,10 @@ export const createMsvcSymbolNameDecoder = (
       if (result.status === "error" || result.status === "limit") {
         throw new Error(result.warnings.join("; ") || result.status);
       }
-      const text = result.status === "success" ? result.text : null;
-      cache.set(name, text);
-      return text;
+      const decoded = result.status === "success"
+        ? { text: result.text, symbolKind: result.ast.nodes[result.ast.root]?.kind } : null;
+      cache.set(name, decoded);
+      return decoded;
     } catch (error) {
       unavailable = true;
       reportFailure(error instanceof Error ? error.message : String(error));

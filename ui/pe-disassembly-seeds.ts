@@ -22,6 +22,7 @@ import { collectLoadConfigPointerSeeds } from "./pe-disassembly-load-config-poin
 import { collectReadyToRunMethodRvas } from "../analyzers/pe/clr/ready-to-run-seeds.js";
 import { collectReadyToRunThunkRvas } from "../analyzers/pe/clr/ready-to-run-thunk-image.js";
 import { collectNativeAotMapSeeds } from "../analyzers/native-aot/disassembly-seeds.js";
+import { isPeExportData } from "../analyzers/pe/directories/export-names.js";
 
 type PeDisassemblySeedSet = {
   canonicalMachine: number;
@@ -37,7 +38,7 @@ type PeDisassemblySeedSet = {
   issues: string[];
 };
 
-const collectMsvcRttiFunctionRvas = (pe: PeWindowsParseResult | null): number[] => {
+const collectMsvcRttiFunctionRvas = (pe: PeWindowsParseResult | null, dataRvas: Set<number>): number[] => {
   if (!pe?.msvcRtti) return [];
   const imageSize = pe.opt.SizeOfImage >>> 0;
   if (!imageSize) return [];
@@ -47,7 +48,7 @@ const collectMsvcRttiFunctionRvas = (pe: PeWindowsParseResult | null): number[] 
     vftable.functionTargetRvas.forEach(rva => {
       if (!Number.isSafeInteger(rva) || rva <= 0 || rva >= PE_RVA_EXCLUSIVE_LIMIT) return;
       const normalized = rva >>> 0;
-      if (normalized >= imageSize || seen.has(normalized)) return;
+      if (normalized >= imageSize || seen.has(normalized) || dataRvas.has(normalized)) return;
       const section = findSectionContainingRva(pe.sections, normalized);
       if (!section || !isMemoryExecutableSection(section)) return;
       seen.add(normalized);
@@ -58,7 +59,7 @@ const collectMsvcRttiFunctionRvas = (pe: PeWindowsParseResult | null): number[] 
 };
 
 const collectBasicExtraEntrypoints = (
-  windowsPe: PeWindowsParseResult | null
+  windowsPe: PeWindowsParseResult | null, dataRvas: Set<number>
 ): Array<{ source: string; rvas: number[] }> => {
   const extraEntrypoints: Array<{ source: string; rvas: number[] }> = [];
   if (windowsPe?.nativeAotCandidate?.status === "confirmed") {
@@ -80,7 +81,7 @@ const collectBasicExtraEntrypoints = (
   if (dCallbackRvas.length) {
     extraEntrypoints.push({ source: "D runtime callbacks", rvas: dCallbackRvas });
   }
-  const msvcRttiRvas = collectMsvcRttiFunctionRvas(windowsPe);
+  const msvcRttiRvas = collectMsvcRttiFunctionRvas(windowsPe, dataRvas);
   if (msvcRttiRvas.length) {
     extraEntrypoints.push({ source: "MSVC RTTI vftables", rvas: msvcRttiRvas });
   }
@@ -97,11 +98,15 @@ const collectBasicPeDisassemblySeeds = (
   windowsPe: PeWindowsParseResult | null
 ): PeDisassemblySeedSet => {
   const windowsOpt = windowsPe?.opt ?? null;
+  const dataRvas = new Set(windowsPe?.exports?.entries
+    ?.filter(entry => !entry.forwarder && isPeExportData(entry.names ?? []))
+    .map(entry => entry.rva >>> 0));
   return {
     canonicalMachine: getCanonicalPeMachine(pe.coff.Machine),
     entrypointRva: pe.opt?.AddressOfEntryPoint ?? 0,
     exportRvas: windowsPe?.exports?.entries
-      ?.filter(entry => entry.rva && !entry.forwarder && isExecutableExportRva(pe, entry.rva))
+      ?.filter(entry => entry.rva && !entry.forwarder && !dataRvas.has(entry.rva >>> 0) &&
+        isExecutableExportRva(pe, entry.rva))
       .map(entry => entry.rva >>> 0) ?? [],
     unwindBeginRvas: windowsOpt?.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC &&
       Array.isArray(windowsPe?.exception?.beginRvas)
@@ -117,7 +122,7 @@ const collectBasicPeDisassemblySeeds = (
     guardCFFunctionRvas: [],
     safeSehHandlerRvas: [],
     instructionHintRvas: [],
-    extraEntrypoints: collectBasicExtraEntrypoints(windowsPe),
+    extraEntrypoints: collectBasicExtraEntrypoints(windowsPe, dataRvas),
     issues: []
   };
 };
