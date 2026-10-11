@@ -56,11 +56,6 @@ const readEmbeddedPayload = async (
     issues.push(`Managed resource row ${row.row} payload extends past the CLR Resources directory.`);
     return { storage: "truncated", bytes: null, size };
   }
-  // Local UI policy: match PE resource preview restraint by avoiding very large managed-resource reads.
-  if (size > 8 * 1024 * 1024) {
-    issues.push(`Managed resource payload is ${size} bytes; preview is capped.`);
-    return { storage: "embedded", bytes: null, size };
-  }
   const view = await readMappedRvaPrefix(reader, resourceRva + 4, size, rvaToOff);
   const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
   if (bytes.length < size) {

@@ -78,13 +78,15 @@ const metadata = (names: string[], offsets: number[]): Uint8Array => {
   return bytes;
 };
 
-export const createPeManagedResourceFile = (): MockFile => {
-  const payloads = resourcePayloads();
+export const createPeManagedResourceFile = (
+  payloads: Array<{ name: string; bytes: Uint8Array }> = resourcePayloads()
+): MockFile => {
   const offsets = payloads.map((_, index) => payloads.slice(0, index)
     .reduce((sum, payload) => sum + 4 + payload.bytes.length, 0));
   const resourcesSize = payloads.reduce((sum, payload) => sum + 4 + payload.bytes.length, 0);
   const meta = metadata(payloads.map(payload => payload.name), offsets);
-  const bytes = new Uint8Array(0x10200);
+  const sectionSize = Math.ceil((0x2000 + resourcesSize) / 0x1000) * 0x1000;
+  const bytes = new Uint8Array(0x200 + sectionSize);
   bytes.set(createPePlusWithSection());
   const view = new DataView(bytes.buffer);
   // Base fixture: PE32+, section RVA 0x1000, raw offset 0x200.
@@ -94,9 +96,9 @@ export const createPeManagedResourceFile = (): MockFile => {
   const section = optional + view.getUint16(coff + 16, true);
   bytes.fill(0, optional + 112, optional + 112 + 16 * 8);
   view.setUint32(optional + 16, 0, true); // DLL has no native entry point.
-  view.setUint32(optional + 56, 0x11000, true);
-  view.setUint32(section + 8, 0x10000, true);
-  view.setUint32(section + 16, 0x10000, true);
+  view.setUint32(optional + 56, 0x1000 + sectionSize, true);
+  view.setUint32(section + 8, sectionSize, true);
+  view.setUint32(section + 16, sectionSize, true);
   view.setUint32(section + 36, 0x40000040, true); // Initialized, readable data section.
   view.setUint32(optional + 112 + 14 * 8, 0x1000, true);
   view.setUint32(optional + 112 + 14 * 8 + 4, 72, true);

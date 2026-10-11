@@ -150,7 +150,7 @@ const previewDecodedValue = async (
 ): Promise<ResourcePreviewResult | null> => {
   if (decoded?.raw) return previewManagedResourceBytes(decoded.raw);
   if (primitiveCode !== 1 || typeof decoded?.value !== "string") return null;
-  return decoded.value.trimStart().startsWith("<") || decoded.value.length > 32 * 1024
+  return decoded.value.trimStart().startsWith("<")
     ? previewStringValue(decoded.value) : null;
 };
 

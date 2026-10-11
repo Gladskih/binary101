@@ -86,9 +86,15 @@ const parseResourceSet = async (
     issues.push(`Unsupported .resources version ${version}.`);
     return [];
   }
-  // Local analysis policy: keep corrupt resource counts from allocating unbounded tables.
-  if (count < 0 || typeCount < 0 || count > 10000 || typeCount > 10000) {
-    issues.push(".resources declares an unreasonable entry or type count.");
+  if (count < 0 || typeCount < 0) {
+    issues.push(".resources declares a negative entry or type count.");
+    return [];
+  }
+  // ResourceReader layout: each entry requires a 4-byte hash and a 4-byte name position,
+  // followed by a 4-byte data-section offset. Each type name needs at least its length byte.
+  // Counts are bounded by the actual payload, not an implementation limit.
+  if (count * 8 + 4 + typeCount > payload.length - offset - 12) {
+    issues.push(".resources type/hash/name-position tables cannot fit in the payload.");
     return [];
   }
   return parseResourceEntries(payload, view, offset + 12, version, count, typeCount, issues);
@@ -105,7 +111,8 @@ const parseResourceEntries = async (
 ): Promise<PeClrManagedResourceValue[]> => {
   const typeTable = readUserTypeTable(payload, offset, typeCount, issues);
   if (!typeTable) return [];
-  return parseNamedResourceValues(payload, view, (typeTable.next + 7) & ~7, {
+  // The table is 8-byte aligned; arithmetic must preserve offsets above signed Int32.
+  return parseNamedResourceValues(payload, view, Math.ceil(typeTable.next / 8) * 8, {
     count,
     dataSectionOffset: 0,
     namesOffset: 0,

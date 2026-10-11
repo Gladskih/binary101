@@ -285,17 +285,18 @@ void test("invalid direct offsets cannot throw a DataView exception", async () =
   assert.match(decoded.issues?.join(" ") ?? "", /outside/);
 });
 
-void test("string previews retain a single text source and show caps", async () => {
-  const xml = makeStringPayload("<root/>");
+void test("large resource strings retain a single complete text source", async () => {
+  const xmlText = "<root>" + "x".repeat(32 * 1024 + 1) + "</root>";
+  const xml = makeStringPayload(xmlText);
   const large = makeStringPayload("x".repeat(32 * 1024 + 1));
 
   const structured = await decodeDotNetResourceValue(xml.bytes, xml.type, "xml", 2, []);
-  const capped = await decodeDotNetResourceValue(large.bytes, large.type, "large", 2, []);
+  const decoded = await decodeDotNetResourceValue(large.bytes, large.type, "large", 2, []);
 
-  assert.strictEqual(structured.value, "<root/>");
+  assert.strictEqual(structured.value, xmlText);
   assert.strictEqual(structured.previewKind, "xml");
   assert.strictEqual(structured.textPreview, undefined);
-  assert.strictEqual(capped.value, "x".repeat(32 * 1024 + 1));
-  assert.strictEqual(capped.textPreview, undefined);
-  assert.match(capped.issues?.join(" ") ?? "", /capped/);
+  assert.strictEqual(decoded.value, "x".repeat(32 * 1024 + 1));
+  assert.strictEqual(decoded.textPreview, undefined);
+  assert.strictEqual(decoded.issues, undefined);
 });

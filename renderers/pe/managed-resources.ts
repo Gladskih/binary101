@@ -81,13 +81,12 @@ export const createManagedResourceTableModel = (clr: PeClrHeader): PagedSortable
 const valueText = (value: PeClrManagedResourceValue): string => value.opaque
   ? "Opaque serialized data" : value.value === null
     ? value.issues?.length ? "Unavailable" : "null"
-    : String(value.value).length > 1024 ? `${String(value.value).slice(0, 1024)}… (display capped)`
-      : String(value.value);
+    : String(value.value);
 
 const renderValuePreview = (value: PeClrManagedResourceValue): string => {
   if (!value.previewKind) return "";
   const source = value.textPreview ??
-    (typeof value.value === "string" ? value.value.slice(0, 32 * 1024) : null);
+    (typeof value.value === "string" ? value.value : null);
   return renderPreviewCell({ ...value, ...(source != null ? { textPreview: source } : {}) });
 };
 

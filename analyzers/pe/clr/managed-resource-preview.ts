@@ -27,11 +27,6 @@ const isPlainText = (text: string): boolean => {
 };
 
 export const previewManagedResourceText = (text: string): ResourcePreviewResult => {
-  // Local UI policy: bound displayed text and DOM parsing to 32 Ki characters.
-  if (text.length > 32 * 1024) return {
-    preview: { previewKind: "text", textPreview: text.slice(0, 32 * 1024) },
-    issues: ["Managed resource text preview is capped at 32 Ki characters."]
-  };
   // Require tag/declaration syntax before considering arbitrary managed strings XML candidates.
   // This is a candidate test; DOMParser validates the markup and reports malformed XML.
   if (/^(?:<\?xml\s|<!--|<!DOCTYPE\s|<[^\s<>?!/]+(?:\s*\/?>|\s+[^\s<>/=]+\s*=))/u
@@ -46,10 +41,6 @@ export const previewManagedResourceBytes = async (
 ): Promise<ResourcePreviewResult | null> => {
   const sniffed = await addHeuristicBinaryResourcePreview(bytes);
   if (sniffed) return sniffed;
-  // Local UI policy: avoid decoding multi-megabyte opaque blobs merely to sniff text.
-  if (bytes.length > 128 * 1024) return {
-    issues: ["Managed resource text detection is capped at 128 KiB."]
-  };
   const decoded = decodeManagedText(bytes);
   if (!decoded) return null;
   const result = previewManagedResourceText(decoded.text);

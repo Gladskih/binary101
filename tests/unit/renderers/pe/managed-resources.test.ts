@@ -125,12 +125,22 @@ void test("resource sections show warnings and only paginate when necessary", ()
   assert.strictEqual(createManagedResourceTableModel(createClrHeaderFixture(1)).rowCount, 0);
 });
 
-void test("long string cells are bounded without changing their parsed value", () => {
+void test("long string cells and sort keys retain the complete value", () => {
   const parsed = { ...value(), value: "x".repeat(2048) };
   const model = createManagedResourceValueTableModel([parsed], 1);
 
-  assert.match(model.rowAt(0)?.cells[2]?.html ?? "", /display capped/);
+  assert.strictEqual(model.rowAt(0)?.cells[2]?.html, parsed.value);
+  assert.strictEqual(model.sortValueAt(0, 2), parsed.value);
   assert.strictEqual(parsed.value.length, 2048);
+});
+
+void test("long string source previews include their trailing content", () => {
+  const text = "x".repeat(32 * 1024 + 1) + "<tail>";
+  const model = createManagedResourceValueTableModel([
+    { ...value(), value: text, previewKind: "text" }
+  ], 1);
+
+  assert.match(model.rowAt(0)?.additionalRowsHtml ?? "", /&lt;tail>/);
 });
 
 void test("string source previews are rendered from the value without a duplicate parsed field", () => {

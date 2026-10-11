@@ -7,7 +7,8 @@ import type { PeClrHeader, PeClrManifestResourceInfo, PeClrMeta } from "../../..
 import { createPngFile } from "../../../../fixtures/image-sample-files.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
 
-import { makeDotNetResources, stringResourceValue } from "../../../../fixtures/dotnet-resource-file.js";
+import { makeDotNetResources, makeDotNetByteArrayResource, stringResourceValue }
+  from "../../../../fixtures/dotnet-resource-file.js";
 
 const textEncoder = new TextEncoder();
 const CLR_FILE_TABLE_ID = 0x26; // ECMA-335 II.22.19 File table id.
@@ -82,11 +83,8 @@ void test("parseManagedResources renders direct text payloads through existing p
   const textPayload = `${generatedTextPayload(0)}\n`;
   putPayload(fixture.bytes, fixture.resourceRva, textEncoder.encode(textPayload));
 
-  const parsed = await parseManagedResources(
-    new MockFile(fixture.bytes),
-    rva => rva,
-    makeClr(fixture.resourceRva, [makeRow(generatedLabel("raw", 0), 0)], fixture.directorySize)
-  );
+  const parsed = await parseManagedResources(new MockFile(fixture.bytes), rva => rva,
+    makeClr(fixture.resourceRva, [makeRow(generatedLabel("raw", 0), 0)], fixture.directorySize));
 
   assert.strictEqual(parsed?.entries[0]?.storage, "embedded");
   assert.strictEqual(parsed?.entries[0]?.previewKind, "text");
@@ -97,11 +95,8 @@ void test("parseManagedResources renders direct PNG payloads through existing pr
   const fixture = makeManagedResourceFixture();
   putPayload(fixture.bytes, fixture.resourceRva, createPngFile().data);
 
-  const parsed = await parseManagedResources(
-    new MockFile(fixture.bytes),
-    rva => rva,
-    makeClr(fixture.resourceRva, [makeRow(generatedLabel("image", 0), 0)], fixture.directorySize)
-  );
+  const parsed = await parseManagedResources(new MockFile(fixture.bytes), rva => rva,
+    makeClr(fixture.resourceRva, [makeRow(generatedLabel("image", 0), 0)], fixture.directorySize));
 
   assert.strictEqual(parsed?.entries[0]?.previewKind, "image");
   assert.strictEqual(parsed?.entries[0]?.previewMime, "image/png");
@@ -262,18 +257,30 @@ void test("RVA overflow is rejected before file reads", async () => {
   assert.match(parsed?.issues.join(" ") ?? "", /overflows/);
 });
 
-void test("oversized payloads are not read merely to generate a preview", async context => {
-  const file = new MockFile(new Uint8Array(4));
-  new DataView(file.data.buffer).setUint32(0, 8 * 1024 * 1024 + 1, true);
-  // MockFile's Blob stores a copy, so use its bounded reader as the source here.
-  context.mock.method(file, "read", async () => new DataView(file.data.buffer));
+void test("resources above the former 8 MiB limit are parsed completely", async () => {
+  const payload = makeDotNetByteArrayResource(8 * 1024 * 1024 + 1);
+  const bytes = new Uint8Array(4 + payload.length);
+  putPayload(bytes, 0, payload);
 
-  const parsed = await parseManagedResources(file, rva => rva,
-    makeClr(0, [makeRow("large", 0)], 8 * 1024 * 1024 + 5));
+  const parsed = await parseManagedResources(new MockFile(bytes), rva => rva,
+    makeClr(0, [makeRow("large", 0)], bytes.length));
 
   assert.strictEqual(parsed?.entries[0]?.storage, "embedded");
+  assert.strictEqual(parsed?.entries[0]?.entries?.[0]?.value, "8388609 bytes");
+  assert.deepStrictEqual(parsed?.issues, []);
+  assert.strictEqual(parsed?.entries[0]?.issues, undefined);
+});
+
+void test("a large declared payload cannot bypass physical file bounds", async () => {
+  const bytes = new Uint8Array(4);
+  new DataView(bytes.buffer).setUint32(0, 0xfffffffb, true);
+
+  const parsed = await parseManagedResources(new MockFile(bytes), rva => rva,
+    makeClr(0, [makeRow("large", 0)], 0xffffffff));
+
+  assert.strictEqual(parsed?.entries[0]?.storage, "truncated");
   assert.strictEqual(parsed?.entries[0]?.previewKind, undefined);
-  assert.match(parsed?.issues.join(" ") ?? "", /preview is capped/);
+  assert.match(parsed?.issues.join(" ") ?? "", /payload is truncated/);
 });
 
 void test("aliasing ManifestResource rows reuse payload reads without losing row identity", async context => {

@@ -89,13 +89,27 @@ void test("ordinary managed text preserves whitespace", async () => {
   assert.strictEqual(result?.preview?.textPreview, "first\tvalue\r\nsecond\n");
 });
 
-void test("text display and text detection limits have visible warnings", async () => {
-  const display = previewManagedResourceText("x".repeat(32 * 1024 + 1));
-  const detection = await previewManagedResourceBytes(new Uint8Array(128 * 1024 + 1));
+void test("large text is detected and preserved beyond the former preview limits", async () => {
+  const text = "x".repeat(128 * 1024 + 1) + "end";
+  const display = previewManagedResourceText(text);
+  const detection = await previewManagedResourceBytes(encoder.encode(text));
 
-  assert.strictEqual(display.preview?.textPreview?.length, 32 * 1024);
-  assert.match(display.issues?.join(" ") ?? "", /capped/);
-  assert.match(detection?.issues?.join(" ") ?? "", /capped/);
+  assert.strictEqual(display.preview?.textPreview, text);
+  assert.strictEqual(detection?.preview?.textPreview, text);
+  assert.strictEqual(display.issues, undefined);
+  assert.strictEqual(detection?.issues, undefined);
+});
+
+void test("large XML retains its complete structured tree", context => {
+  installXmlParser(context);
+  const text = "<root><value>" + "x".repeat(32 * 1024 + 1) + "</value><tail/></root>";
+
+  const result = previewManagedResourceText(text);
+
+  assert.strictEqual(result.preview?.previewKind, "xml");
+  assert.strictEqual(result.preview?.textPreview, text);
+  assert.strictEqual(result.preview?.xmlTree?.children.at(-1)?.name, "tail");
+  assert.strictEqual(result.issues, undefined);
 });
 
 void test("XML parser failures remain visible with escaped-source data", context => {

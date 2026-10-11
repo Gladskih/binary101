@@ -140,16 +140,46 @@ void test("parseDotNetResources reports headers extending past payload", async (
   assert.ok(parsed.issues.some(issue => issue.includes("extends past payload")));
 });
 
-void test("parseDotNetResources rejects unreasonable entry counts", async () => {
-  const payload = makeDotNetResources([]);
-  const view = new DataView(payload.buffer);
-  view.setInt32(runtimeHeaderOffset() + Uint32Array.BYTES_PER_ELEMENT, Uint16Array.BYTES_PER_ELEMENT ** 14, true);
+void test("valid tables with more than 10000 entries are fully parsed", async () => {
+  // Cross the removed implementation limit; every null value has its own valid record.
+  const payload = makeDotNetResources(Array.from({ length: 10001 }, (_, index) =>
+    ({ name: generatedName(index), value: [0] })));
+  const issues: string[] = [];
 
-  const parsed = await parseWithIssues(payload);
+  const values = await parseDotNetResources(payload, issues);
 
-  assert.deepStrictEqual(parsed.values, []);
-  assert.ok(parsed.issues.some(issue => issue.includes("unreasonable")));
+  assert.strictEqual(values?.length, 10001);
+  assert.strictEqual(values?.at(-1)?.name, generatedName(10000));
+  assert.strictEqual(values?.at(-1)?.value, null);
+  assert.deepStrictEqual(issues, []);
 });
+
+void test("valid tables with more than 10000 user types are fully parsed", async () => {
+  const types = Array.from({ length: 10001 }, (_, index) => `Example.Type${index}`);
+  // V2 user type 64 + 10000 encoded as a 7-bit integer, per ResourceReader.cs.
+  const payload = makeDotNetResources([{ name: "last-type", value: [0xd0, 0x4e] }], types);
+  const issues: string[] = [];
+
+  const values = await parseDotNetResources(payload, issues);
+
+  assert.strictEqual(values?.[0]?.type, "Example.Type10000");
+  assert.strictEqual(values?.[0]?.opaque, true);
+  assert.deepStrictEqual(issues, []);
+});
+
+for (const [count, typeCount] of [[-1, 0], [0, -1], [0x7fffffff, 0], [0, 0x7fffffff]]) {
+  void test(`impossible table counts ${count}/${typeCount} are diagnosed`, async () => {
+    const payload = makeDotNetResources([]);
+    const view = new DataView(payload.buffer);
+    view.setInt32(runtimeHeaderOffset() + 4, count!, true);
+    view.setInt32(runtimeHeaderOffset() + 8, typeCount!, true);
+
+    const parsed = await parseWithIssues(payload);
+
+    assert.deepStrictEqual(parsed.values, []);
+    assert.ok(parsed.issues.length);
+  });
+}
 
 void test("parseDotNetResources reports truncated name tables", async () => {
   const payload = makeDotNetResources([

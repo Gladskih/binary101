@@ -121,5 +121,14 @@ export const runtimeHeaderOffset = (): number =>
   binaryString(RUNTIME_RESOURCE_READER_TYPE).length +
   binaryString(RUNTIME_RESOURCE_SET_TYPE).length;
 
+export const makeDotNetByteArrayResource = (byteLength: number): Uint8Array => {
+  // ResourceTypeCode.ByteArray (32), followed by a signed 32-bit byte length.
+  const header = makeDotNetResources([{ name: "bytes", value: [32, 0, 0, 0, 0] }]);
+  const payload = new Uint8Array(header.length + byteLength);
+  payload.set(header);
+  new DataView(payload.buffer).setInt32(header.length - 4, byteLength, true);
+  return payload;
+};
+
 export const runtimeTableOffset = (): number =>
   alignRuntimeTable(runtimeHeaderOffset() + RUNTIME_RESOURCE_SET_FIXED_HEADER_SIZE);
