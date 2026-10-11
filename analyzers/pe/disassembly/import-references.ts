@@ -147,7 +147,7 @@ const directIatReferenceKind = (
   return "jump";
 };
 
-const directIatReference = (
+export const getDirectIatReference = (
   iced: IcedX86Module,
   imageBase: bigint,
   instruction: IcedInstructionObject
@@ -170,7 +170,7 @@ export const createDirectIatReferenceCounter = (
   const counts = new Map<number, PeDirectIatReferenceCount>();
   return {
     record: instruction => {
-      const reference = directIatReference(iced, imageBase, instruction);
+      const reference = getDirectIatReference(iced, imageBase, instruction);
       if (reference == null || !slots.has(reference.slotRva)) return;
       const current = counts.get(reference.slotRva);
       counts.set(reference.slotRva, {

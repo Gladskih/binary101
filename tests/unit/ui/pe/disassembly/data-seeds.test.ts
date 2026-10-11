@@ -7,6 +7,8 @@ import { collectPeDisassemblySeeds } from "../../../../../ui/pe-disassembly-seed
 import { createPeDataSeedFixture } from "../../../../fixtures/pe-data-seeds.js";
 import { createFileRangeReader } from "../../../../../analyzers/file-range-reader.js";
 import { analyzePeInstructionSets } from "../../../../../analyzers/pe/disassembly/analyze.js";
+import { createPeFallthroughDataFile, createPeNoReturnFile } from "../../../../fixtures/pe-flow-stop-files.js";
+import { createWinapiImportMetadataEntry } from "../../../../fixtures/pe-import-api-metadata.js";
 
 void test("PE export and MSVC RTTI seeds omit demangled data while preserving unknown names", async context => {
   const { file, targets } = createPeDataSeedFixture();
@@ -18,6 +20,7 @@ void test("PE export and MSVC RTTI seeds omit demangled data while preserving un
   const seeds = await collectPeDisassemblySeeds(file, pe);
 
   assert.deepEqual(seeds.exportRvas, targets.filter((_rva, index) => index !== 1 && index !== 2));
+  assert.deepEqual(seeds.dataRvas, [targets[1], targets[2]]);
   assert.deepEqual(seeds.extraEntrypoints, [{ source: "MSVC RTTI vftables", rvas: seeds.exportRvas }]);
   assert.deepEqual(pe.msvcRtti.vftables[0]?.functionTargetRvas, targets);
   assert.equal(pe.exports?.entries[1]?.names[0], "?value@demo@@3HA");
@@ -36,7 +39,8 @@ void test("data seeds no longer introduce false AVX and SSE requirements", async
     imageBase: pe.opt.ImageBase, sections: pe.sections, rvaToOff: pe.rvaToOff
   };
   const reader = createFileRangeReader(file, 0, file.size);
-  const unfiltered = await analyzePeInstructionSets(reader, { ...options, exportRvas: targets });
+  const unfiltered = await analyzePeInstructionSets(reader,
+    { ...options, exportRvas: targets, dataRvas: [] });
   const report = await analyzePeInstructionSets(reader, options);
 
   assert.deepEqual(unfiltered.instructionSets.map(feature => feature.id), ["X64", "AVX", "SSE"]);
@@ -70,4 +74,40 @@ void test("an RTTI source with only known data does not create an empty seed gro
   const seeds = await collectPeDisassemblySeeds(file, pe);
 
   assert.deepEqual(seeds.extraEntrypoints, []);
+});
+
+void test("a parsed PE stops entrypoint fallthrough at its exported data object", async () => {
+  const file = await createPeFallthroughDataFile();
+  const pe = await parsePe(file);
+  assert.ok(pe && isPeWindowsParseResult(pe));
+  const seeds = await collectPeDisassemblySeeds(file, pe);
+
+  const report = await analyzePeInstructionSets(createFileRangeReader(file, 0, file.size), {
+    ...seeds, coffMachine: seeds.canonicalMachine, is64Bit: true,
+    imageBase: pe.opt.ImageBase, sections: pe.sections, rvaToOff: pe.rvaToOff
+  });
+
+  assert.equal(report.instructionCount, 20);
+  assert.deepEqual(report.instructionSets.map(feature => feature.id), ["INTEL8086", "X64"]);
+  assert.deepEqual(report.issues, ["Stopped before exported data at RVA 0x1010."]);
+});
+
+void test("a parsed PE resolves noReturn metadata at the second IAT slot", async () => {
+  const file = new File([createPeNoReturnFile()], "exit-process.exe");
+  const pe = await parsePe(file);
+  assert.ok(pe && isPeWindowsParseResult(pe) && pe.imports);
+  const exit = pe.imports.entries[0]!.functions[1]!;
+  assert.equal(exit.name, "ExitProcess");
+  exit.apiMetadata = { ...createWinapiImportMetadataEntry("kernel32.dll", "ExitProcess"), noReturn: true };
+  const seeds = await collectPeDisassemblySeeds(file, pe);
+
+  const report = await analyzePeInstructionSets(createFileRangeReader(file, 0, file.size), {
+    ...seeds, coffMachine: seeds.canonicalMachine, is64Bit: true, imports: pe.imports,
+    imageBase: pe.opt.ImageBase, sections: pe.sections, rvaToOff: pe.rvaToOff
+  });
+
+  assert.equal(report.instructionCount, 1);
+  assert.equal(report.bytesDecoded, 6);
+  assert.deepEqual(report.instructionSets.map(feature => feature.id), ["X64"]);
+  assert.equal(report.directIatReferences[0]?.callReferenceCount, 1);
 });

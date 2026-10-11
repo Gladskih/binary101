@@ -10,6 +10,7 @@ import { getCanonicalPeMachine } from "../machine.js";
 import { createX86InstructionSetUsageTracker } from "../../x86/instruction-set-usage.js";
 import {
   collectPeDisassemblySamples,
+  normalizeRvaList,
   type PeDisassemblySample,
   resolvePeDisassemblyEntrypoints
 } from "./sampling.js";
@@ -20,6 +21,7 @@ import {
 import { createPeApiStringReferenceCollector } from "./api-string-references.js";
 import { createPeCodeStringReferenceCollector } from "./code-string-references.js";
 import { createPeSpecialInstructionCollector } from "./special-instructions.js";
+import { createPeNoReturnCallPredicate } from "./no-return-calls.js";
 
 type PeInstructionSetDecodeRun = {
   reader: FileRangeReader;
@@ -217,6 +219,9 @@ const decodePeInstructionSetUsage = async (
       yieldEveryInstructions: run.yieldEveryInstructions,
       featureCounts: instructionSetUsage.featureCounts,
       issues: run.issues,
+      dataRvas: new Set(normalizeRvaList(run.opts.dataRvas)),
+      isNoReturnCall: createPeNoReturnCallPredicate(iced,
+        { ...run.opts, imageBase }, sampledSections),
       ...(run.opts.signal ? { signal: run.opts.signal } : {}),
       onInstruction: instruction => {
         specialInstructions.record(instruction);

@@ -149,6 +149,8 @@ export interface AnalyzePeInstructionSetOptions {
   imports?: PeImportParseResult;
   delayImports?: { entries: PeDelayImportEntry[] } | null;
   exportRvas?: number[];
+  /** Starts of fully demangled exported data objects, not guessed object extents. */
+  dataRvas?: number[];
   unwindBeginRvas?: number[];
   unwindHandlerRvas?: number[];
   guardCFFunctionRvas?: number[];

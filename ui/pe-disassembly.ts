@@ -156,6 +156,7 @@ export const createPeDisassemblyController = (
         entrypointRva: seeds.entrypointRva,
         ...(windowsPe ? { imports: windowsPe.imports, delayImports: windowsPe.delayImports } : {}),
         exportRvas: seeds.exportRvas,
+        dataRvas: seeds.dataRvas,
         unwindBeginRvas: seeds.unwindBeginRvas,
         unwindHandlerRvas: seeds.unwindHandlerRvas,
         guardCFFunctionRvas: seeds.guardCFFunctionRvas,

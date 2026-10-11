@@ -31,6 +31,8 @@ type ControlFlowDecodeState = {
   signal?: AbortSignal;
   onYield?: (snapshot: DisassemblyYieldSnapshot) => Promise<void>;
   onInstruction?: (instruction: InstanceType<IcedX86Module["Instruction"]>) => void;
+  isNoReturnCall?: (instruction: InstanceType<IcedX86Module["Instruction"]>) => boolean;
+  dataRvas?: ReadonlySet<number>;
   bytesDecoded: number;
   instructionCount: number;
   invalidInstructionCount: number;
@@ -93,6 +95,65 @@ const countInstructionFeatures = (state: ControlFlowDecodeState, instr: Instance
   }
 };
 
+const crossedDataRva = (state: ControlFlowDecodeState, rva: number, length: number): number | null => {
+  if (!state.dataRvas?.size) return null;
+  // Intel SDM: the maximum x86 instruction length is 15 bytes.
+  for (let offset = 0; offset < Math.min(length, 15); offset += 1) {
+    if (state.dataRvas.has(rva + offset)) return rva + offset;
+  }
+  return null;
+};
+
+const followInstructionControlFlow = (
+  state: ControlFlowDecodeState, instr: InstanceType<IcedX86Module["Instruction"]>
+): boolean => {
+  if (state.iced.FlowControl["UnconditionalBranch"] === instr.flowControl) {
+    const target = getNearBranchTarget(instr, state.iced.OpKind);
+    addControlFlowWork(state, target == null ? null : toRva(target, state.imageBase));
+    return false;
+  }
+  if (
+    state.iced.FlowControl["ConditionalBranch"] === instr.flowControl ||
+    state.iced.FlowControl["Call"] === instr.flowControl ||
+    state.iced.FlowControl["XbeginXabortXend"] === instr.flowControl
+  ) {
+    const target = getNearBranchTarget(instr, state.iced.OpKind);
+    addControlFlowWork(state, target == null ? null : toRva(target, state.imageBase));
+  } else if (
+    state.iced.FlowControl["IndirectBranch"] === instr.flowControl ||
+    state.iced.FlowControl["Return"] === instr.flowControl ||
+    state.iced.FlowControl["Interrupt"] === instr.flowControl
+  ) {
+    return false;
+  }
+  return !state.isNoReturnCall?.(instr);
+};
+
+const recordDecodedInstruction = (
+  state: ControlFlowDecodeState, instr: InstanceType<IcedX86Module["Instruction"]>, rva: number
+): boolean => {
+  state.instructionCount += 1;
+  const len = instr.length;
+  if (len <= 0) {
+    state.invalidInstructionCount += 1;
+    state.recordDecodeStopIssue("Stopping at a zero-length instruction decode.");
+    return false;
+  }
+  state.bytesDecoded = Math.min(state.bytesSampled, state.bytesDecoded + len);
+  if (instr.code === state.iced.Code["INVALID"]) {
+    state.invalidInstructionCount += 1;
+    state.recordDecodeStopIssue(`Stopping at an invalid instruction at RVA 0x${rva.toString(16)}.`);
+    return false;
+  }
+  state.onInstruction?.(instr);
+  // Explicit exception instructions are valid decodes and observable trap sites.
+  // iced FlowControl::Exception: https://docs.rs/iced-x86/1.21.0/iced_x86/enum.FlowControl.html
+  const isUd2Trap = instr.code === state.iced.Code["Ud2"];
+  if (instr.flowControl === state.iced.FlowControl["Exception"] && !isUd2Trap) return false;
+  if (!isUd2Trap) countInstructionFeatures(state, instr);
+  return true;
+};
+
 const decodeLinearRun = async (
   state: ControlFlowDecodeState,
   decoderEntry: DisassemblyDecoderEntry,
@@ -111,46 +172,13 @@ const decodeLinearRun = async (
     if (instrRva == null) break;
     if (state.visited.has(instrRva)) break;
     state.visited.add(instrRva);
-    state.instructionCount += 1;
-    const len = instr.length;
-    if (len <= 0) {
-      state.invalidInstructionCount += 1;
-      state.recordDecodeStopIssue("Stopping at a zero-length instruction decode.");
+    const dataRva = crossedDataRva(state, instrRva, instr.length);
+    if (dataRva != null) {
+      state.recordDecodeStopIssue(`Stopped before exported data at RVA 0x${dataRva.toString(16)}.`);
       break;
     }
-    state.bytesDecoded = Math.min(state.bytesSampled, state.bytesDecoded + len);
-    const isInvalidDecode = instr.code === state.iced.Code["INVALID"];
-    const isUd2Trap = instr.code === state.iced.Code["Ud2"];
-    const isHardException = instr.flowControl === state.iced.FlowControl["Exception"] && !isUd2Trap;
-    if (isInvalidDecode) {
-      state.invalidInstructionCount += 1;
-      state.recordDecodeStopIssue(`Stopping at an invalid instruction at RVA 0x${instrRva.toString(16)}.`);
-      break;
-    }
-    state.onInstruction?.(instr);
-    // Explicit exception instructions are valid decodes and observable trap sites.
-    // iced FlowControl::Exception: https://docs.rs/iced-x86/1.21.0/iced_x86/enum.FlowControl.html
-    if (isHardException) break;
-    if (!isUd2Trap) countInstructionFeatures(state, instr);
-    if (state.iced.FlowControl["UnconditionalBranch"] === instr.flowControl) {
-      const target = getNearBranchTarget(instr, state.iced.OpKind);
-      addControlFlowWork(state, target == null ? null : toRva(target, state.imageBase));
-      break;
-    }
-    if (
-      state.iced.FlowControl["ConditionalBranch"] === instr.flowControl ||
-      state.iced.FlowControl["Call"] === instr.flowControl ||
-      state.iced.FlowControl["XbeginXabortXend"] === instr.flowControl
-    ) {
-      const target = getNearBranchTarget(instr, state.iced.OpKind);
-      addControlFlowWork(state, target == null ? null : toRva(target, state.imageBase));
-    } else if (
-      state.iced.FlowControl["IndirectBranch"] === instr.flowControl ||
-      state.iced.FlowControl["Return"] === instr.flowControl ||
-      state.iced.FlowControl["Interrupt"] === instr.flowControl
-    ) {
-      break;
-    }
+    if (!recordDecodedInstruction(state, instr, instrRva)) break;
+    if (!followInstructionControlFlow(state, instr)) break;
     const nextRva = toRva(instr.nextIP, state.imageBase);
     if (nextRva == null) break;
     const nextDecoderEntry = getDecoderForRva(state.decoders, nextRva);
@@ -172,8 +200,9 @@ const decodeLinearRun = async (
  *   - Invalid instruction => stop (likely not code bytes).
  *   - Unconditional near jump => enqueue jump target and stop current linear run.
  *   - End of section => stop (we do not cross section boundaries).
+ *   - Known data at or inside the next instruction => stop before counting that instruction.
  * - Conditional near jump => enqueue branch target and continue decoding fallthrough.
- * - Near `CALL` => enqueue call target and continue decoding fallthrough.
+ * - Near `CALL` => enqueue call target; continue unless the supplied predicate proves noReturn.
  *   We do not try to "follow RET back to the caller": the return address is taken from the stack
  *   and is not statically knowable. Continuing after `CALL` is enough to cover the common case
  *   (return to next instruction).
@@ -190,6 +219,8 @@ export async function disassembleControlFlowForInstructionSets(opts: {
   signal?: AbortSignal;
   onYield?: (snapshot: DisassemblyYieldSnapshot) => Promise<void>;
   onInstruction?: (instruction: InstanceType<IcedX86Module["Instruction"]>) => void;
+  isNoReturnCall?: (instruction: InstanceType<IcedX86Module["Instruction"]>) => boolean;
+  dataRvas?: ReadonlySet<number>;
 }): Promise<DisassemblyYieldSnapshot> {
   const bytesSampled = opts.sections.reduce((sum, entry) => sum + entry.data.length, 0);
   const decoders = opts.sections.map(entry => ({
@@ -228,6 +259,8 @@ export async function disassembleControlFlowForInstructionSets(opts: {
     ...(opts.signal ? { signal: opts.signal } : {}),
     ...(opts.onYield ? { onYield: opts.onYield } : {}),
     ...(opts.onInstruction ? { onInstruction: opts.onInstruction } : {}),
+    ...(opts.isNoReturnCall ? { isNoReturnCall: opts.isNoReturnCall } : {}),
+    ...(opts.dataRvas ? { dataRvas: opts.dataRvas } : {}),
     bytesDecoded: 0,
     instructionCount: 0,
     invalidInstructionCount: 0,

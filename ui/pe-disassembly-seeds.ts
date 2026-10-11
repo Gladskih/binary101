@@ -28,6 +28,7 @@ type PeDisassemblySeedSet = {
   canonicalMachine: number;
   entrypointRva: number;
   exportRvas: number[];
+  dataRvas: number[];
   unwindBeginRvas: number[];
   unwindHandlerRvas: number[];
   tlsCallbackRvas: number[];
@@ -104,6 +105,7 @@ const collectBasicPeDisassemblySeeds = (
   return {
     canonicalMachine: getCanonicalPeMachine(pe.coff.Machine),
     entrypointRva: pe.opt?.AddressOfEntryPoint ?? 0,
+    dataRvas: [...dataRvas],
     exportRvas: windowsPe?.exports?.entries
       ?.filter(entry => entry.rva && !entry.forwarder && !dataRvas.has(entry.rva >>> 0) &&
         isExecutableExportRva(pe, entry.rva))
