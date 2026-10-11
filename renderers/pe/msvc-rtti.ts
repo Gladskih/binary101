@@ -31,6 +31,9 @@ export const renderMsvcRtti = (pe: PeWindowsParseResult, out: string[]): void =>
     "Microsoft C++ RTTI",
     `${counts.types} types, ${counts.completeObjectLocators} COL, ${counts.vftables} vftables`
   ));
+  analysis.warnings?.forEach(warning => {
+    out.push(`<p class="smallNote">${escapeHtml(warning)}</p>`);
+  });
   out.push("<dl>");
   out.push(renderDefinitionRow("Layout", escapeHtml(analysis.layout)));
   out.push(renderDefinitionRow("Unique types", String(counts.types)));

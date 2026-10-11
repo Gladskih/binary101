@@ -9,6 +9,12 @@ public:
     virtual int second() const { return 13; }
 };
 
+template <class Value>
+struct Box final : SimpleBase {
+    Value value{};
+    int first() const override { return static_cast<int>(value); }
+};
+
 class SingleDerived final : public SimpleBase {
 public:
     int first() const override { return 17; }
@@ -89,6 +95,7 @@ __declspec(noinline) int identify(SimpleBase& value) {
 int main() {
     using namespace Binary101RttiFixture;
     SimpleBase simple;
+    Box<int> box;
     SingleDerived single;
     LeftBase left;
     RightBase right;
@@ -97,8 +104,8 @@ int main() {
     VirtualLeft virtualLeft;
     VirtualRight virtualRight;
     VirtualDiamond diamond;
-    return callSimple(simple) + callSimple(single) + callLeft(left) + callRight(right) +
-        callLeft(multiple) + callRight(multiple) + crossCast(multiple) + identify(single) +
+    return callSimple(box) + callSimple(simple) + callSimple(single) + callLeft(left) +
+        callRight(right) + callLeft(multiple) + callRight(multiple) + crossCast(multiple) + identify(single) +
         callVirtualRoot(virtualBase) + callVirtualRoot(virtualLeft) +
         callVirtualRoot(virtualRight) + callVirtualRoot(diamond);
 }

@@ -8,6 +8,12 @@ export default defineConfig({
     name: "disassembler-notices",
     generateBundle() {
       for (const [packageName, names] of Object.entries({
+        "llvm-msvc-demangle": [
+          "LICENSE", "THIRD_PARTY_NOTICES.md", "licenses/LLVM.txt",
+          "licenses/emscripten-AUTHORS.txt", "licenses/emscripten-LICENSE.txt",
+          "licenses/libcxx.txt", "licenses/libcxxabi.txt", "licenses/libunwind.txt",
+          "licenses/compiler-rt.txt", "licenses/musl.txt", "upstream.json"
+        ],
         "llvm-aarch64-disasm": [
           "LICENSE", "THIRD_PARTY_NOTICES.md", "upstream.json", "licenses/LLVM.txt",
           "licenses/compiler-rt.txt", "licenses/emscripten-AUTHORS.txt",
@@ -31,6 +37,9 @@ export default defineConfig({
   base: "./",
   resolve: {
     alias: {
+      "#msvc-rtti-demangler-loader": fileURLToPath(
+        new URL("./analyzers/pe/msvc-rtti/load-demangler.browser.ts", import.meta.url)
+      ),
       "#aarch64-disassembler-loader": fileURLToPath(
         new URL("./analyzers/aarch64/load-disassembler.browser.ts", import.meta.url)
       )

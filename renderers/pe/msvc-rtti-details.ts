@@ -2,6 +2,7 @@
 
 import { hex, hex64 } from "../../binary-utils.js";
 import { escapeHtml } from "../../html-utils.js";
+import { msvcRttiTypeNameCell } from "./msvc-rtti-type-name.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/core/parse-result.js";
 import {
   BASE_CLASS_ATTRIBUTES,
@@ -100,11 +101,11 @@ const baseCells = (
   pe: PeWindowsParseResult,
   row: BaseRow
 ): PagedSortableTableCell[] => {
-  const decoratedName = pe.msvcRtti?.types.find(
+  const type = pe.msvcRtti?.types.find(
     type => type.rva === row.node.typeDescriptorRva
-  )?.decoratedName ?? "(unresolved)";
+  );
   return [
-    { html: `<code>${escapeHtml(decoratedName)}</code>`, sortValue: decoratedName },
+    msvcRttiTypeNameCell(type),
     { className: "peNumeric", html: String(row.depth), sortValue: String(row.depth) },
     {
       className: "peNumeric",
@@ -132,7 +133,7 @@ const createBaseTableModel = (
     pageSize: 250, // UI page size, not an ABI limit.
     rowCount: rows.length,
     columns: [
-      { label: "Decorated type name" },
+      { label: "Type" },
       { className: "peNumeric", label: "Depth" },
       { className: "peNumeric", label: "Contained bases" },
       { className: "peNumeric", label: "mdisp" },

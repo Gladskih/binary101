@@ -4,6 +4,7 @@ import type { PeWindowsParseResult } from "../../analyzers/pe/core/parse-result.
 import type {
   MsvcRttiClassHierarchy,
   MsvcRttiCompleteObjectLocator,
+  MsvcRttiTypeDescriptor,
   MsvcRttiVftable
 } from "../../analyzers/pe/msvc-rtti/types.js";
 import { escapeHtml } from "../../html-utils.js";
@@ -20,12 +21,13 @@ import {
   renderMsvcRttiVftableDetails
 } from "./msvc-rtti-details.js";
 import { collectPeExactSymbolNames } from "./msvc-rtti-symbols.js";
+import { msvcRttiTypeNameCell } from "./msvc-rtti-type-name.js";
 
 export const MSVC_RTTI_VFTABLE_TABLE_ID = "pe-msvc-rtti-vftables";
 
 type MsvcRttiTableRow = {
   baseDescriptorCount: number;
-  decoratedName: string;
+  type: MsvcRttiTypeDescriptor | null;
   hierarchy: MsvcRttiClassHierarchy | null;
   locator: MsvcRttiCompleteObjectLocator | null;
   vftable: MsvcRttiVftable;
@@ -42,7 +44,7 @@ const createRows = (pe: PeWindowsParseResult): MsvcRttiTableRow[] => {
     const locator = locators.get(vftable.completeObjectLocatorRva) ?? null;
     return {
       baseDescriptorCount: getMsvcRttiBaseDescriptorCount(pe, vftable),
-      decoratedName: types.get(locator?.typeDescriptorRva ?? -1)?.decoratedName ?? "(unresolved)",
+      type: types.get(locator?.typeDescriptorRva ?? -1) ?? null,
       hierarchy: hierarchies.get(locator?.classHierarchyDescriptorRva ?? -1) ?? null,
       locator,
       vftable,
@@ -75,10 +77,7 @@ const rowCells = (
 ): PagedSortableTableCell[] => {
   const attributes = formatMsvcRttiHierarchyAttributes(row.hierarchy?.attributes ?? 0);
   return [
-    {
-      html: `<code>${escapeHtml(row.decoratedName)}</code>`,
-      sortValue: row.decoratedName
-    },
+    msvcRttiTypeNameCell(row.type),
     vaCell(imageBase, row.locator?.rva ?? null),
     rvaCell(row.locator?.rva ?? null),
     numericCell(row.locator?.offset ?? 0),
@@ -96,10 +95,11 @@ const createMainTableModel = (pe: PeWindowsParseResult): PagedSortableTableModel
   const symbolNames = collectPeExactSymbolNames(pe);
   return {
     id: MSVC_RTTI_VFTABLE_TABLE_ID,
+    tableClassName: "peMsvcRttiTable",
     pageSize: 250, // UI page size, not an ABI limit.
     rowCount: rows.length,
     columns: [
-      { label: "Decorated type name" },
+      { label: "Type" },
       { className: "peNumeric", label: "COL VA" },
       { className: "peNumeric", label: "COL RVA" },
       { className: "peNumeric", label: "vfptr offset" },

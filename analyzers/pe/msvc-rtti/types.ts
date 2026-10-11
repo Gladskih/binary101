@@ -45,6 +45,7 @@ export interface MsvcRttiVftable {
 }
 
 export interface MsvcRttiAnalysis {
+  warnings?: string[];
   layout: typeof MSVC_RTTI_LAYOUT;
   types: MsvcRttiTypeDescriptor[];
   classHierarchies: MsvcRttiClassHierarchy[];

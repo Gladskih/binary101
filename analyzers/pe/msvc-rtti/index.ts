@@ -10,6 +10,8 @@ import { createMsvcRttiGraphParser } from "./graph-parser.js";
 import { createMsvcRttiImage } from "./image.js";
 import { indexMsvcRttiDir64Sites } from "./relocation-index.js";
 import type { MsvcRttiAnalysis } from "./types.js";
+import { MSVC_RTTI_LAYOUT } from "./layout.js";
+import { MsvcRttiDemangleError } from "./type-name.js";
 
 export const analyzePeMsvcRtti = async (
   reader: FileRangeReader,
@@ -29,7 +31,15 @@ export const analyzePeMsvcRtti = async (
     return dir64Sites
       ? await discoverMsvcRtti(image, dir64Sites, createMsvcRttiGraphParser(image))
       : null;
-  } catch {
+  } catch (error) {
+    if (error instanceof MsvcRttiDemangleError) return {
+      layout: MSVC_RTTI_LAYOUT,
+      types: [],
+      classHierarchies: [],
+      completeObjectLocators: [],
+      vftables: [],
+      warnings: [error.message]
+    };
     return null;
   }
 };

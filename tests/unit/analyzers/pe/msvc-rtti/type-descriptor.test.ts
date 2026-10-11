@@ -98,6 +98,17 @@ void test("parseMsvcRttiTypeDescriptor rejects an empty class encoding", async (
   assert.equal(parsed, null);
 });
 
+for (const name of [".?AV?$Box@?@ns@@", ".?AVClass@@tail@@"]) {
+  void test(`parseMsvcRttiTypeDescriptor rejects invalid LLVM grammar: ${name}`, async () => {
+    const builder = new MsvcRttiPeFixtureBuilder();
+    const type = builder.addType(name);
+
+    const parsed = await parseType(builder, type.rva);
+
+    assert.equal(parsed, null);
+  });
+}
+
 void test("parseMsvcRttiTypeDescriptor requires the complete name suffix", async () => {
   const builder = new MsvcRttiPeFixtureBuilder();
   const type = builder.addType(".?AVIncomplete@");

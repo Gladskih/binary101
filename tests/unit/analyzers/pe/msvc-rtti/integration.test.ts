@@ -6,6 +6,7 @@ import { IMAGE_FILE_MACHINE_ARM64 } from "../../../../../analyzers/coff/machine.
 import { createFileRangeReader } from "../../../../../analyzers/file-range-reader.js";
 import { isPeWindowsParseResult, parsePe } from "../../../../../analyzers/pe/index.js";
 import { analyzePeMsvcRtti } from "../../../../../analyzers/pe/msvc-rtti/index.js";
+import { MsvcRttiDemangleError } from "../../../../../analyzers/pe/msvc-rtti/type-name.js";
 import {
   createSimpleMsvcRttiFixture,
   MsvcRttiPeFixtureBuilder
@@ -97,5 +98,23 @@ void test("analyzePeMsvcRtti treats unexpected reader failures as no result", as
   const result = await analyzePeMsvcRtti(throwingReader, fixture.core, fixture.relocations);
 
   assert.equal(result, null);
+});
+
+void test("analyzePeMsvcRtti preserves demangler failures as analysis warnings", async () => {
+  const { builder } = createSimpleMsvcRttiFixture();
+  const fixture = builder.build();
+  const reader = createFileRangeReader(fixture.file, 0, fixture.file.size);
+  const failingReader = {
+    ...reader,
+    read: async (): Promise<DataView> => {
+      throw new MsvcRttiDemangleError("MSVC RTTI name analysis failed: WASM unavailable");
+    }
+  };
+
+  const result = await analyzePeMsvcRtti(failingReader, fixture.core, fixture.relocations);
+
+  assert.equal(result?.warnings?.[0], "MSVC RTTI name analysis failed: WASM unavailable");
+  assert.deepEqual(result?.types, []);
+  assert.deepEqual(result?.vftables, []);
 });
 

@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { parsePe, isPeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type { MsvcRttiAnalysis } from "../../analyzers/pe/msvc-rtti/types.js";
+import { getMsvcRttiTypeName } from "../../analyzers/pe/msvc-rtti/type-name.js";
 import {
   createVisualStudioStep,
   runStep
@@ -51,6 +52,10 @@ const buildFixture = async (
 
 const assertExpectedRtti = (analysis: MsvcRttiAnalysis): void => {
   assert.equal(analysis.layout, "microsoft-cxx-amd64-image-relative-rtti-rev1");
+  assert.equal(analysis.warnings, undefined);
+  assert.ok(analysis.types.some(type =>
+    getMsvcRttiTypeName(type) === "struct Binary101RttiFixture::Box<int>"
+  ));
   const typesByName = new Map(analysis.types.map(type => [type.decoratedName, type]));
   for (const decoratedName of [
     ".?AVSimpleBase@Binary101RttiFixture@@",

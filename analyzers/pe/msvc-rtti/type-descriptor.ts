@@ -6,6 +6,7 @@ import {
   TYPE_DESCRIPTOR_FIXED_SIZE
 } from "./layout.js";
 import type { MsvcRttiTypeDescriptor } from "./types.js";
+import { decodeMsvcRttiTypeName } from "./type-name.js";
 
 const hasSupportedDecoratedName = (value: string): boolean => {
   if (!(value.startsWith(".?AV") || value.startsWith(".?AU"))) return false;
@@ -39,6 +40,8 @@ export const parseMsvcRttiTypeDescriptor = async (
   const decoratedName = decodeDecoratedName(
     new Uint8Array(nameView.buffer, nameView.byteOffset, nameView.byteLength)
   );
-  return decoratedName ? { rva, decoratedName } : null;
+  if (!decoratedName) return null;
+  const type = { rva, decoratedName };
+  return await decodeMsvcRttiTypeName(image, type) ? type : null;
 };
 

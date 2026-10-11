@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "imports": {
+    "#msvc-rtti-demangler-loader": "./analyzers/pe/msvc-rtti/load-demangler.node.ts",
     "#aarch64-disassembler-loader": "./analyzers/aarch64/load-disassembler.node.ts"
   },
   "license": "MIT",
@@ -73,6 +74,7 @@
     "@noble/hashes": "2.4.0",
     "iced-x86-disasm": "^0.1.2",
     "llvm-aarch64-disasm": "^0.2.0",
+    "llvm-msvc-demangle": "0.2.0",
     "lzma-web": "^4.0.0-rc.5",
     "pkijs": "^3.4.0",
     "zstddec": "0.3.1"

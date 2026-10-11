@@ -1,6 +1,8 @@
 "use strict";
 
 import assert from "node:assert/strict";
+import { parsePe, isPeWindowsParseResult } from "../../../../analyzers/pe/index.js";
+import { MsvcRttiPeFixtureBuilder } from "../../../fixtures/pe-msvc-rtti-fixture.js";
 import { test } from "node:test";
 import { MSVC_RTTI_LAYOUT } from "../../../../analyzers/pe/msvc-rtti/layout.js";
 import type { PeWindowsParseResult } from "../../../../analyzers/pe/core/parse-result.js";
@@ -128,6 +130,34 @@ void test("renderMsvcRtti renders summary, COL relationships, bases, slots, and 
   assert.match(html, /\.\?AVDerived&lt;Widget>@@/);
   assert.ok(!html.includes("<Widget>"));
   assert.ok(!html.includes("export<target>"));
+});
+
+void test("RTTI tables show LLVM type names and keep decorated evidence after parsing", async () => {
+  const builder = new MsvcRttiPeFixtureBuilder();
+  const base = builder.addHierarchy(builder.addType(".?AUBase@demo@@"));
+  const derived = builder.addHierarchy(builder.addType(".?AV?$Box@H@demo@@"), [{ hierarchy: base }]);
+  builder.addVftable(derived, [builder.allocateFunctionTarget()]);
+
+  const pe = await parsePe(builder.build().file);
+
+  assert.ok(pe && isPeWindowsParseResult(pe));
+  const main = getMsvcRttiPagedTableModel(pe, MSVC_RTTI_VFTABLE_TABLE_ID);
+  const bases = getMsvcRttiPagedTableModel(pe, "pe-msvc-rtti-vftable-0-bases");
+  assert.equal(main?.sortValueAt(0, 0), "class demo::Box<int>");
+  assert.match(main?.rowAt(0)?.cells[0]?.html ?? "", /class demo::Box&lt;int>/);
+  assert.match(main?.rowAt(0)?.cells[0]?.html ?? "", /\.\?AV\?\$Box@H@demo@@/);
+  assert.equal(bases?.sortValueAt(1, 0), "struct demo::Base");
+  assert.match(bases?.rowAt(1)?.cells[0]?.html ?? "", /struct demo::Base/);
+});
+
+void test("RTTI shows a visible escaped warning when LLVM is unavailable", () => {
+  const pe = createMsvcRttiPe();
+  pe.msvcRtti!.warnings = ["MSVC RTTI name analysis failed: <unavailable>"];
+  const out: string[] = [];
+
+  renderMsvcRtti(pe, out);
+
+  assert.match(out.join(""), /MSVC RTTI name analysis failed: &lt;unavailable>/);
 });
 
 void test("RTTI table models preserve preorder rows and ordered duplicate slots", () => {
