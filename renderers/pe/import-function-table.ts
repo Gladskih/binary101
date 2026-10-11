@@ -1,5 +1,6 @@
 "use strict";
 
+import { getImportFunctionDisplayName } from "../../analyzers/pe/imports/function-name.js";
 import { getIatSlotRva } from "../../analyzers/pe/disassembly/import-references.js";
 import { escapeHtml } from "../../html-utils.js";
 import type { PeImportMetadataEntry } from "../../pe-import-metadata-schema.js";
@@ -31,8 +32,7 @@ const DIRECT_JUMP_TOOLTIP =
 const sourceLabel = (entry: PeImportMetadataEntry): string =>
   entry.sourceKind === "ucrt" ? "UCRT" : "Win32Metadata";
 
-const renderApiMetadataHtml = (entry: PeImportMetadataEntry | undefined): string => {
-  if (!entry) return "-";
+const renderApiMetadataHtml = (entry: PeImportMetadataEntry): string => {
   const callingConvention = entry.variadic
     ? `${entry.callingConvention}, variadic`
     : entry.callingConvention;
@@ -44,18 +44,31 @@ const renderApiMetadataHtml = (entry: PeImportMetadataEntry | undefined): string
   );
 };
 
-const renderImportName = (fn: ImportFunctionRow): string =>
-  fn.name
-    ? escapeHtml(fn.name)
-    : fn.ordinal != null
-      ? `ORD ${fn.ordinal}`
-      : "-";
+const importNameText = (value: string): string => escapeHtml(value.replaceAll("&", "&amp;"));
+
+const renderImportName = (fn: ImportFunctionRow): string => {
+  if (!fn.name) return fn.ordinal != null ? `ORD ${fn.ordinal}` : "-";
+  return importNameText(fn.name);
+};
+
+const renderImportApi = (fn: ImportFunctionRow): string => {
+  const metadata = fn.apiMetadata ?? fn.winapiMetadata;
+  if (metadata) return renderApiMetadataHtml(metadata);
+  const display = getImportFunctionDisplayName(fn);
+  if (!display || display === fn.name) return "-";
+  return `<code class="winapiMetadataSignature">${importNameText(display)}</code>` +
+    `<span class="winapiMetadataConvention">MSVC C++ (LLVM)</span>`;
+};
 
 const importNameSortValue = (fn: ImportFunctionRow): string =>
   fn.name ?? (fn.ordinal != null ? `ORD ${fn.ordinal}` : "");
 
-const apiMetadataSortValue = (entry: PeImportMetadataEntry | undefined): string =>
-  entry ? `${entry.namespace ?? sourceLabel(entry)} ${entry.signature}` : "";
+const importApiSortValue = (fn: ImportFunctionRow): string => {
+  const metadata = fn.apiMetadata ?? fn.winapiMetadata;
+  if (metadata) return `${metadata.namespace ?? sourceLabel(metadata)} ${metadata.signature}`;
+  const display = getImportFunctionDisplayName(fn);
+  return display === fn.name ? "" : display;
+};
 
 const directIatReferenceCount = (
   counts: ReadonlyMap<number, DirectIatReferenceCounts>,
@@ -81,7 +94,6 @@ const renderFunctionCells = (
   counts: ReadonlyMap<number, DirectIatReferenceCounts>,
   entrySize: number
 ): PagedSortableTableCell[] => {
-  const metadata = fn.apiMetadata ?? fn.winapiMetadata;
   const callCount = directIatReferenceCount(counts, iatRva, functionIndex, entrySize, "call");
   const jumpCount = directIatReferenceCount(counts, iatRva, functionIndex, entrySize, "jump");
   return [
@@ -90,8 +102,8 @@ const renderFunctionCells = (
     { html: renderImportName(fn), sortValue: importNameSortValue(fn) },
     {
       className: "winapiMetadataCell",
-      html: renderApiMetadataHtml(metadata),
-      sortValue: apiMetadataSortValue(metadata)
+      html: renderImportApi(fn),
+      sortValue: importApiSortValue(fn)
     },
     {
       className: "peNumeric",
@@ -114,7 +126,6 @@ const importFunctionSortValue = (
   counts: ReadonlyMap<number, DirectIatReferenceCounts>,
   entrySize: number
 ): string => {
-  const metadata = fn.apiMetadata ?? fn.winapiMetadata;
   switch (columnIndex) {
     case 0:
       return String(functionIndex + 1);
@@ -123,7 +134,7 @@ const importFunctionSortValue = (
     case 2:
       return importNameSortValue(fn);
     case 3:
-      return apiMetadataSortValue(metadata);
+      return importApiSortValue(fn);
     case 4:
       return String(directIatReferenceCount(counts, iatRva, functionIndex, entrySize, "call"));
     case 5:

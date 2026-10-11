@@ -1,5 +1,6 @@
 "use strict";
 
+import { createImportFunctionNameDecoder, type DecodeImportFunctionName } from "./function-name.js";
 import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeImportMetadataEntry } from "../../../pe-import-metadata-schema.js";
@@ -32,14 +33,16 @@ export type ReadDelayThunkFunctions = (
   rvaToOff: RvaToOffset,
   importNameTableRva: number,
   warnings: Set<string>,
-  maxThunkEntries: (entrySize: number) => number
+  maxThunkEntries: (entrySize: number) => number,
+  decodeName?: DecodeImportFunctionName
 ) => Promise<DelayThunkTable>;
 
 const readDelayImportHintName = async (
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
   hintNameRva: number,
-  warnings: Set<string>
+  warnings: Set<string>,
+  decodeName: DecodeImportFunctionName
 ): Promise<PeDelayImportFunction> => {
   const hintNameOff = rvaToOff(hintNameRva);
   if (hintNameOff == null || hintNameOff < 0 || hintNameOff >= reader.size) {
@@ -64,7 +67,9 @@ const readDelayImportHintName = async (
     return { hint, name: "" };
   }
   if (!result.terminated) warnings.add("Delay import name string truncated.");
-  return { hint, name: result.text };
+  const fn = { hint, name: result.text };
+  if (result.terminated) await decodeName(fn);
+  return fn;
 };
 
 export const readDelayThunkFunctions32: ReadDelayThunkFunctions = async (
@@ -72,7 +77,8 @@ export const readDelayThunkFunctions32: ReadDelayThunkFunctions = async (
   rvaToOff,
   importNameTableRva,
   warnings,
-  maxThunkEntries
+  maxThunkEntries,
+  decodeName = createImportFunctionNameDecoder(message => warnings.add(message))
 ) => {
   const functions: PeDelayImportFunction[] = [];
   for (let index = 0; index < maxThunkEntries(IMAGE_THUNK_DATA32_SIZE); index += 1) {
@@ -96,7 +102,7 @@ export const readDelayThunkFunctions32: ReadDelayThunkFunctions = async (
       functions.push({ ordinal: value & IMAGE_ORDINAL_MASK32 });
       continue;
     }
-    functions.push(await readDelayImportHintName(reader, rvaToOff, value, warnings));
+    functions.push(await readDelayImportHintName(reader, rvaToOff, value, warnings, decodeName));
   }
   return { functions, terminated: false };
 };
@@ -106,7 +112,8 @@ export const readDelayThunkFunctions64: ReadDelayThunkFunctions = async (
   rvaToOff,
   importNameTableRva,
   warnings,
-  maxThunkEntries
+  maxThunkEntries,
+  decodeName = createImportFunctionNameDecoder(message => warnings.add(message))
 ) => {
   const functions: PeDelayImportFunction[] = [];
   for (let index = 0; index < maxThunkEntries(IMAGE_THUNK_DATA64_SIZE); index += 1) {
@@ -138,7 +145,8 @@ export const readDelayThunkFunctions64: ReadDelayThunkFunctions = async (
         reader,
         rvaToOff,
         Number(value & IMAGE_DELAY_IMPORT_NAME_MASK64),
-        warnings
+        warnings,
+        decodeName
       )
     );
   }

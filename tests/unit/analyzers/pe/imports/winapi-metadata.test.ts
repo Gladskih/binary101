@@ -18,7 +18,16 @@ import type {
   WinapiMetadataEntry,
   WinapiMetadataManifest
 } from "../../../../../winapi-metadata-schema.js";
+import {
+  createWinapiImportMetadataEntry as createEntry, createUcrtImportMetadataEntry as createUcrtEntry
+} from "../../../../fixtures/pe-import-api-metadata.js";
 import { createPeWithImportLinking } from "../../../../fixtures/pe-import-linking-fixture.js";
+import { createPeImportNamesFile } from "../../../../fixtures/pe-import-names-file.js";
+import { parsePe, isPeWindowsParseResult } from "../../../../../analyzers/pe/index.js";
+import { getImportFunctionDisplayName } from "../../../../../analyzers/pe/imports/function-name.js";
+import {
+  createImportFunctionTableModel, renderImportFunctionTable
+} from "../../../../../renderers/pe/import-function-table.js";
 
 const source = {
   packageName: "Microsoft.Windows.SDK.Win32Metadata",
@@ -34,62 +43,6 @@ const ucrtSource = {
   importLibraryPath: "c/ucrt/x64/ucrt.lib",
   architecture: "x64"
 };
-
-const createEntry = (
-  module: string,
-  entrypoint: string,
-  namespace = "Windows.Win32.System.Threading"
-): WinapiMetadataEntry => ({
-  sourceKind: "winapi",
-  id: `MethodDef:${module}:${entrypoint}`,
-  module,
-  entrypoint,
-  namespace,
-  api: entrypoint,
-  signature: `void ${entrypoint}(u4 milliseconds)`,
-  returnType: "void",
-  rawReturnType: "void",
-  parameters: [{
-    name: "milliseconds",
-    type: "u4",
-    rawType: "u4",
-    direction: "in",
-    x86StackBytes: 4
-  }],
-  callingConvention: "winapi",
-  variadic: false,
-  noReturn: false,
-  setLastError: false,
-  characterSet: null,
-  architecture: [],
-  platform: ["windows5.1.2600"]
-});
-
-const createUcrtEntry = (module: string, entrypoint: string): UcrtMetadataEntry => ({
-  sourceKind: "ucrt",
-  id: `UCRT:${module}:${entrypoint}`,
-  module,
-  entrypoint,
-  namespace: "UCRT.stdio",
-  api: entrypoint,
-  signature: `int ${entrypoint}(const char * format, ...)`,
-  returnType: "int",
-  rawReturnType: "int",
-  parameters: [{
-    name: "format",
-    type: "const char *",
-    rawType: "const char *",
-    direction: "in",
-    x86StackBytes: 4
-  }],
-  callingConvention: "cdecl",
-  variadic: true,
-  noReturn: false,
-  setLastError: false,
-  characterSet: null,
-  architecture: [],
-  platform: []
-});
 
 const createChunk = (
   dll: string,
@@ -243,3 +196,70 @@ void test("enrichPeImportMetadata attaches UCRT metadata for api-ms-win-crt impo
   assert.ok(seenPaths.includes("ucrt-metadata/manifest.json"));
   assert.ok(!seenPaths.includes("winapi-metadata/entrypoint-index.json"));
 });
+
+void test("WinAPI and UCRT enrichment preserves unknown C++ import presentation and raw lookup keys", async () => {
+  const parsed = await parsePe(new File([createPeImportNamesFile()], "mixed-imports.exe"));
+  assert.ok(parsed && isPeWindowsParseResult(parsed) && parsed.delayImports);
+  parsed.imports.entries[0]!.dll = "KERNEL32.dll";
+  parsed.delayImports.entries[0]!.name = "ucrtbase.dll";
+  parsed.delayImports.entries[0]!.functions[0]!.name = "printf";
+  const sleep = createEntry("KERNEL32.dll", "Sleep");
+  const printf = createUcrtEntry("ucrtbase.dll", "printf");
+  const keys: string[] = [];
+
+  const enriched = await enrichPeImportMetadata(parsed, { findEntry: async (dll, name) => {
+    keys.push(`${dll}:${name}`);
+    if (dll === "KERNEL32.dll" && name === "Sleep") return sleep;
+    if (dll === "ucrtbase.dll" && name === "printf") return printf;
+    return null;
+  } });
+
+  assert.equal(enriched.imports.entries[0]?.functions[0]?.apiMetadata, sleep);
+  assert.equal(enriched.imports.entries[0]?.functions[0]?.winapiMetadata, sleep);
+  assert.equal(enriched.delayImports?.entries[0]?.functions[0]?.apiMetadata, printf);
+  assert.equal(enriched.delayImports?.entries[0]?.functions[0]?.winapiMetadata, undefined);
+  assert.equal(keys.filter(key => key === "KERNEL32.dll:Sleep").length, 1);
+  assert.ok(keys.includes("KERNEL32.dll:??$square@H@demo@@YAHH@Z"));
+  assert.ok(keys.includes("ucrtbase.dll:??$square@H@demo@@YAHH@Z"));
+  assert.ok(keys.every(key => !key.includes("__cdecl")));
+  for (const functions of [enriched.imports.entries[0]!.functions,
+    enriched.delayImports!.entries[0]!.functions]) {
+    assert.equal(getImportFunctionDisplayName(functions[250]!), "int __cdecl demo::square<int>(int)");
+  }
+  assert.match(renderImportFunctionTable([enriched.imports.entries[0]!.functions[0]!],
+    "winapi", 0, new Map(), 4), /Win32Metadata - winapi/);
+  assert.match(renderImportFunctionTable([enriched.delayImports!.entries[0]!.functions[0]!],
+    "ucrt", 0, new Map(), 4), /UCRT - cdecl, variadic/);
+});
+
+for (const metadataField of ["apiMetadata", "winapiMetadata"] as const) {
+  void test(`catalogue ${metadataField} takes precedence over a decoded C++ signature`, async () => {
+    const parsed = await parsePe(new File([createPeImportNamesFile()], "imports.exe"));
+    assert.ok(parsed && isPeWindowsParseResult(parsed));
+    const fn = parsed.imports.entries[0]!.functions[250]!;
+    fn[metadataField] = createEntry("eager.dll", fn.name!);
+
+    const html = renderImportFunctionTable([fn], "catalogue", 0, new Map(), 4);
+
+    assert.match(html, /Win32Metadata - winapi/);
+    assert.match(html, /milliseconds/);
+    assert.doesNotMatch(html, /int __cdecl demo::square/);
+    assert.doesNotMatch(html, /<code class="dim">/);
+    const model = createImportFunctionTableModel([fn], "catalogue", 0, new Map(), 4);
+    assert.equal(model.sortValueAt!(0, 3), `Windows.Win32.System.Threading void ${fn.name}(u4 milliseconds)`);
+  });
+}
+
+for (const [metadata, label] of [
+  [createEntry("KERNEL32.dll", "Sleep"), "Win32Metadata"],
+  [createUcrtEntry("ucrtbase.dll", "printf"), "UCRT"]
+] as const) {
+  void test(`${label} import API sorting retains the source label when no namespace is present`, () => {
+    const fn = { name: metadata.entrypoint, apiMetadata: { ...metadata, namespace: null } };
+
+    const model = createImportFunctionTableModel([fn], "metadata", 0, new Map(), 4);
+
+    assert.equal(model.rowAt(0)?.cells[3]?.sortValue, `${label} ${metadata.signature}`);
+    assert.equal(model.sortValueAt!(0, 3), `${label} ${metadata.signature}`);
+  });
+}

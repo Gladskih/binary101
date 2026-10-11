@@ -1,5 +1,6 @@
 "use strict";
 
+import { createImportFunctionNameDecoder, type DecodeImportFunctionName } from "./function-name.js";
 import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import { toHex32 } from "../../../binary-utils.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
@@ -26,6 +27,7 @@ type DelayImportReadState = {
   rvaToOff: RvaToOffset;
   readDelayThunkFunctions: ReadDelayThunkFunctions;
   warnings: Set<string>;
+  decodeName: DecodeImportFunctionName;
 };
 
 type DelayImportDescriptor = Omit<PeDelayImportEntry, "name" | "functions"> & {
@@ -141,7 +143,8 @@ const readDelayImportFunctions = async (
     state.rvaToOff,
     intRva,
     state.warnings,
-    maxThunkEntries
+    maxThunkEntries,
+    state.decodeName
   );
   if (!thunkTable.terminated) state.warnings.add("Delay-load thunk table is not terminated by a null entry.");
   return thunkTable;
@@ -171,7 +174,8 @@ const parseDelayImportsWithThunkReader = async (
   const availableDirSize = dir.size;
   const entries: PeDelayImportEntry[] = [];
   const warnings = new Set<string>();
-  const state = { reader, rvaToOff, readDelayThunkFunctions, warnings };
+  const decodeName = createImportFunctionNameDecoder(message => warnings.add(message));
+  const state = { reader, rvaToOff, readDelayThunkFunctions, warnings, decodeName };
   if (dir.size < IMAGE_DELAYLOAD_DESCRIPTOR_SIZE || availableDirSize < IMAGE_DELAYLOAD_DESCRIPTOR_SIZE) {
     warnings.add("Delay import directory is smaller than one descriptor; file may be truncated.");
     return { entries, warning: Array.from(warnings).join(" | ") };

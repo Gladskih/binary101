@@ -1,5 +1,6 @@
 "use strict";
 
+import { createImportFunctionNameDecoder, type DecodeImportFunctionName } from "./function-name.js";
 import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
@@ -45,6 +46,7 @@ type ImportDirectoryReadState = {
   rvaToOff: RvaToOffset;
   readThunkFunctions: ReadImportThunkFunctions;
   warnings: Set<string>;
+  decodeName: DecodeImportFunctionName;
 };
 
 type ImportDescriptor = {
@@ -133,7 +135,8 @@ const readImportFunctions = async (
         thunkRva,
         message => state.warnings.add(message),
         isReadableOffset,
-        maxThunkEntries
+        maxThunkEntries,
+        state.decodeName
       )
     : { functions: [], terminated: false };
   if (thunkRva && !thunkTable.terminated) {
@@ -152,7 +155,8 @@ const parseImportDirectoryWithThunkReader = async (
   const impDir = dataDirs.find(d => d.name === "IMPORT");
   const imports: PeImportEntry[] = [];
   const warnings = new Set<string>();
-  const state = { reader, rvaToOff, readThunkFunctions, warnings };
+  const decodeName = createImportFunctionNameDecoder(message => warnings.add(message));
+  const state = { reader, rvaToOff, readThunkFunctions, warnings, decodeName };
   const isReadableOffset = (offset: number | null): offset is number =>
     offset != null && offset >= 0 && offset < reader.size;
   if (!impDir || (impDir.rva === 0 && impDir.size === 0)) return { entries: imports, thunkEntrySize };

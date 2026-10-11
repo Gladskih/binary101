@@ -1,5 +1,6 @@
 "use strict";
 
+import { createImportFunctionNameDecoder, type DecodeImportFunctionName } from "./function-name.js";
 import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import { readMappedNullTerminatedAsciiString } from "../strings/mapped-ascii-string.js";
@@ -30,7 +31,8 @@ export type ReadImportThunkFunctions = (
   thunkRva: number,
   addWarning: (msg: string) => void,
   isReadableOffset: (offset: number | null) => offset is number,
-  maxThunkEntries: (entrySize: number) => number
+  maxThunkEntries: (entrySize: number) => number,
+  decodeName?: DecodeImportFunctionName
 ) => Promise<PeParsedThunkTable>;
 
 const readImportByName = async (
@@ -39,7 +41,8 @@ const readImportByName = async (
   rvaToOff: RvaToOffset,
   hintNameRva: number,
   addWarning: (msg: string) => void,
-  isReadableOffset: (offset: number | null) => offset is number
+  isReadableOffset: (offset: number | null) => offset is number,
+  decodeName: DecodeImportFunctionName
 ): Promise<PeImportFunction> => {
   const hintNameOffset = rvaToOff(hintNameRva);
   if (!isReadableOffset(hintNameOffset)) {
@@ -60,7 +63,9 @@ const readImportByName = async (
     fileSize
   );
   if (hintName && !hintName.terminated) addWarning("Import name string truncated.");
-  return { hint, name: hintName?.text ?? "" };
+  const fn = { hint, name: hintName?.text ?? "" };
+  if (hintName?.terminated) await decodeName(fn);
+  return fn;
 };
 
 export const readImportThunkFunctions32: ReadImportThunkFunctions = async (
@@ -70,7 +75,8 @@ export const readImportThunkFunctions32: ReadImportThunkFunctions = async (
   thunkRva,
   addWarning,
   isReadableOffset,
-  maxThunkEntries
+  maxThunkEntries,
+  decodeName = createImportFunctionNameDecoder(addWarning)
 ) => {
   const functions: PeImportFunction[] = [];
   for (let thunkIndex = 0; thunkIndex < maxThunkEntries(IMAGE_THUNK_DATA32_SIZE); thunkIndex += 1) {
@@ -95,7 +101,7 @@ export const readImportThunkFunctions32: ReadImportThunkFunctions = async (
       continue;
     }
     functions.push(
-      await readImportByName(reader, fileSize, rvaToOff, value, addWarning, isReadableOffset)
+      await readImportByName(reader, fileSize, rvaToOff, value, addWarning, isReadableOffset, decodeName)
     );
   }
   return { functions, terminated: false };
@@ -108,7 +114,8 @@ export const readImportThunkFunctions64: ReadImportThunkFunctions = async (
   thunkRva,
   addWarning,
   isReadableOffset,
-  maxThunkEntries
+  maxThunkEntries,
+  decodeName = createImportFunctionNameDecoder(addWarning)
 ) => {
   const functions: PeImportFunction[] = [];
   for (let thunkIndex = 0; thunkIndex < maxThunkEntries(IMAGE_THUNK_DATA64_SIZE); thunkIndex += 1) {
@@ -142,7 +149,8 @@ export const readImportThunkFunctions64: ReadImportThunkFunctions = async (
         rvaToOff,
         Number(value & IMAGE_IMPORT_NAME_MASK64),
         addWarning,
-        isReadableOffset
+        isReadableOffset,
+        decodeName
       )
     );
   }
