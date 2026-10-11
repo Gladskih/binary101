@@ -9,6 +9,18 @@ const fixedDemangler = (result: DemangleWithTextResult): Demangler => ({
   demangleWithText: () => result, demangleTypeWithText: () => result
 });
 
+void test("legacy Rust-shaped names cannot prove C++ data", async () => {
+  // rustc legacy.rs SymbolPath::finish appends a 16-digit hash, then E.
+  // https://doc.rust-lang.org/nightly/nightly-rustc/src/rustc_symbol_mangling/legacy.rs.html
+  const decoder = createItaniumNameDecoder(assert.fail);
+
+  assert.deepEqual(await decoder.symbol("_ZN4demo3run17h0123456789abcdefE"),
+    { text: "demo::run::h0123456789abcdef", symbolKind: undefined });
+  assert.equal((await decoder.symbol("_ZN4demo5valueE"))?.symbolKind, "ItaniumData");
+  assert.equal((await decoder.symbol("_Z1aI17h0123456789abcdefE"))?.symbolKind, "ItaniumData");
+  assert.equal((await decoder.symbol("_ZN4demo1aI17h0123456789abcdefEE"))?.symbolKind, "ItaniumData");
+});
+
 void test("symbols and bare types share lazy initialization and cache each parse", async () => {
   const api = await loadItaniumDemangler();
   let loads = 0;

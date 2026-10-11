@@ -11,8 +11,9 @@ import {
   type ElfExecutableRegion
 } from "./executable-regions.js";
 import type { ElfSampledSection } from "./disassembly-sampling.js";
+import { createCodeExclusionIndex } from "../code-exclusions.js";
 
-type ElfSeedAddResult = "added" | "duplicate" | "notExecutable" | "zero";
+type ElfSeedAddResult = "added" | "duplicate" | "notExecutable" | "zero" | "data";
 
 export type ElfInstructionSetSeeds = {
   entrypoints: bigint[];
@@ -24,15 +25,20 @@ export const collectElfInstructionSetSeeds = async (
   opts: AnalyzeElfInstructionSetOptions,
   regions: ElfExecutableRegion[],
   sampledSections: Pick<ElfSampledSection, "vaddrStart" | "label">[],
-  issues: string[]
+  issues: string[], crossedData = createCodeExclusionIndex(opts.dataRanges)
 ): Promise<ElfInstructionSetSeeds | null> => {
   const requestedEntrypointVaddr = typeof opts.entrypointVaddr === "bigint" ? opts.entrypointVaddr : 0n;
   const seedSources: ElfDisassemblySeedSourceStats[] = [];
   let fallbackSource: string | null = null;
   const entrypoints: bigint[] = [];
   const entrypointsSet = new Set<bigint>();
-  const addSeedVaddr = (vaddr: bigint): ElfSeedAddResult =>
-    addExecutableSeedVaddr(regions, entrypoints, entrypointsSet, vaddr);
+  const addSeedVaddr = (vaddr: bigint): ElfSeedAddResult => {
+    if (crossedData(vaddr, 1) != null) {
+      issues.push(`Skipped known-data seed at address 0x${vaddr.toString(16)}.`);
+      return "data";
+    }
+    return addExecutableSeedVaddr(regions, entrypoints, entrypointsSet, vaddr);
+  };
   addElfHeaderEntrypoint(requestedEntrypointVaddr, addSeedVaddr, seedSources, issues);
   for (const group of await collectElfDisassemblySeedGroups({
     file,
@@ -54,7 +60,7 @@ export const collectElfInstructionSetSeeds = async (
     if (!fallback) return null;
     fallbackSource = fallback.label;
     // Zero in metadata can mean "absent", but a validated executable range may start at zero.
-    if (fallback.vaddrStart === 0n) entrypoints.push(0n);
+    if (fallback.vaddrStart === 0n && crossedData(0n, 1) == null) entrypoints.push(0n);
     else addSeedVaddr(fallback.vaddrStart);
     issues.push(`Falling back to ${fallback.label} for disassembly sample.`);
   }
@@ -95,6 +101,7 @@ const addElfHeaderEntrypoint = (
   stats.candidates = 1;
   const result = addSeedVaddr(requestedEntrypointVaddr);
   if (result === "added") stats.added += 1;
+  else if (result === "data") stats.skippedData = 1;
   else if (result === "duplicate") stats.skippedDuplicate += 1;
   else if (result === "notExecutable") {
     stats.skippedNotExecutable += 1;
@@ -113,6 +120,7 @@ const addElfSeedGroup = (
     stats.candidates += 1;
     const result = addSeedVaddr(vaddr);
     if (result === "added") stats.added += 1;
+    else if (result === "data") stats.skippedData = (stats.skippedData ?? 0) + 1;
     else if (result === "duplicate") stats.skippedDuplicate += 1;
     else if (result === "zero") stats.skippedZero += 1;
     else stats.skippedNotExecutable += 1;

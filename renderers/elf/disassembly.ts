@@ -104,13 +104,13 @@ const renderSeedSummary = (disasm: NonNullable<ElfParseResult["disassembly"]>, o
     return;
   }
   out.push(
-    `<table class="table" style="margin-top:.35rem"><thead><tr><th>Source</th><th>Cand.</th><th>Added</th><th>Not exec</th><th>Dup.</th><th>Zero</th></tr></thead><tbody>`
+    `<table class="table" style="margin-top:.35rem"><thead><tr><th>Source</th><th>Cand.</th><th>Added</th><th>Not exec</th><th>Data</th><th>Dup.</th><th>Zero</th></tr></thead><tbody>`
   );
   for (const source of seeds.sources) {
     out.push(
       `<tr><td>${escapeHtml(source.source)}</td><td>${dimZero(source.candidates)}</td><td>${dimZero(
         source.added
-      )}</td><td>${dimZero(source.skippedNotExecutable)}</td><td>${dimZero(source.skippedDuplicate)}</td><td>${dimZero(
+      )}</td><td>${dimZero(source.skippedNotExecutable)}</td><td>${dimZero(source.skippedData ?? 0)}</td><td>${dimZero(source.skippedDuplicate)}</td><td>${dimZero(
         source.skippedZero
       )}</td></tr>`
     );

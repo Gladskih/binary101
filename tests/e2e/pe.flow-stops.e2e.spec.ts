@@ -13,7 +13,7 @@ test("PE ISA stops fallthrough before demangled exported data", async ({ page })
   await panel.getByRole("button", { name: "Analyze instruction sets", exact: true }).click();
 
   await expect(panel).toContainText("20 instruction(s) decoded");
-  await expect(panel).toContainText("Stopped before exported data at RVA 0x1010.");
+  await expect(panel).toContainText("Stopped before known data at RVA 0x1010.");
   await expect(panel.locator('[title="CpuidFeature.AVX"]')).not.toHaveClass(/sel/);
   await expect(panel.locator('[title="CpuidFeature.SSE"]')).not.toHaveClass(/sel/);
 });

@@ -5,7 +5,8 @@ import type { IcedInstructionObject, IcedX86Module } from "../../x86/disassembly
 import { getNearBranchTarget } from "../../x86/disassembly-branch-targets.js";
 import { getDirectIatReference, getIatSlotRva } from "./import-references.js";
 import type { AnalyzePeInstructionSetOptions } from "./types.js";
-import { normalizeRvaList, type PeDisassemblySample } from "./sampling.js";
+import type { PeDisassemblySample } from "./sampling.js";
+import { createPeCodeExclusionIndex } from "./code-exclusions.js";
 
 const collectNoReturnSlots = (opts: AnalyzePeInstructionSetOptions): Set<number> => {
   const slots = new Map<number, boolean>();
@@ -25,10 +26,10 @@ const collectNoReturnSlots = (opts: AnalyzePeInstructionSetOptions): Set<number>
 
 const createThunkResolver = (
   iced: IcedX86Module, opts: AnalyzePeInstructionSetOptions,
-  sections: PeDisassemblySample[], slots: ReadonlySet<number>
+  sections: PeDisassemblySample[], slots: ReadonlySet<number>,
+  crossedData: ReturnType<typeof createPeCodeExclusionIndex>
 ) => {
   const cache = new Map<bigint, boolean>();
-  const dataRvas = new Set(normalizeRvaList(opts.dataRvas));
   return (address: bigint): boolean => {
     const cached = cache.get(address);
     if (cached !== undefined) return cached;
@@ -49,8 +50,7 @@ const createThunkResolver = (
     try {
       instruction = decoder.decode();
       const reference = getDirectIatReference(iced, opts.imageBase, instruction);
-      const crossesData = Array.from({ length: instruction.length },
-        (_value, index) => Number(delta) + index).some(rva => dataRvas.has(rva));
+      const crossesData = crossedData(address, instruction.length) != null;
       const noReturn = !crossesData && reference?.kind === "jump" && slots.has(reference.slotRva);
       cache.set(address, noReturn);
       return noReturn;
@@ -62,10 +62,11 @@ const createThunkResolver = (
 };
 
 export const createPeNoReturnCallPredicate = (
-  iced: IcedX86Module, opts: AnalyzePeInstructionSetOptions, sections: PeDisassemblySample[]
+  iced: IcedX86Module, opts: AnalyzePeInstructionSetOptions, sections: PeDisassemblySample[],
+  crossedData = createPeCodeExclusionIndex(opts)
 ): ((instruction: IcedInstructionObject) => boolean) => {
   const slots = collectNoReturnSlots(opts);
-  const isNoReturnThunk = createThunkResolver(iced, opts, sections, slots);
+  const isNoReturnThunk = createThunkResolver(iced, opts, sections, slots, crossedData);
   return instruction => {
     if (!slots.size) return false;
     const reference = getDirectIatReference(iced, opts.imageBase, instruction);

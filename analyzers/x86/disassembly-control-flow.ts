@@ -1,4 +1,5 @@
 "use strict";
+import { createCodeExclusionIndex } from "../code-exclusions.js";
 
 import type { IcedX86Module } from "./disassembly-iced.js";
 import { getNearBranchTarget } from "./disassembly-branch-targets.js";
@@ -19,6 +20,7 @@ type DisassemblyDecoderEntry = DisassemblySection & {
 };
 
 type ControlFlowDecodeState = {
+  crossedData: ReturnType<typeof createCodeExclusionIndex>;
   iced: IcedX86Module;
   imageBase: bigint;
   bytesSampled: number;
@@ -32,7 +34,6 @@ type ControlFlowDecodeState = {
   onYield?: (snapshot: DisassemblyYieldSnapshot) => Promise<void>;
   onInstruction?: (instruction: InstanceType<IcedX86Module["Instruction"]>) => void;
   isNoReturnCall?: (instruction: InstanceType<IcedX86Module["Instruction"]>) => boolean;
-  dataRvas?: ReadonlySet<number>;
   bytesDecoded: number;
   instructionCount: number;
   invalidInstructionCount: number;
@@ -96,12 +97,8 @@ const countInstructionFeatures = (state: ControlFlowDecodeState, instr: Instance
 };
 
 const crossedDataRva = (state: ControlFlowDecodeState, rva: number, length: number): number | null => {
-  if (!state.dataRvas?.size) return null;
-  // Intel SDM: the maximum x86 instruction length is 15 bytes.
-  for (let offset = 0; offset < Math.min(length, 15); offset += 1) {
-    if (state.dataRvas.has(rva + offset)) return rva + offset;
-  }
-  return null;
+  const address = state.crossedData(state.imageBase + BigInt(rva), length);
+  return address == null ? null : Number(address - state.imageBase);
 };
 
 const followInstructionControlFlow = (
@@ -174,7 +171,7 @@ const decodeLinearRun = async (
     state.visited.add(instrRva);
     const dataRva = crossedDataRva(state, instrRva, instr.length);
     if (dataRva != null) {
-      state.recordDecodeStopIssue(`Stopped before exported data at RVA 0x${dataRva.toString(16)}.`);
+      state.recordDecodeStopIssue(`Stopped before known data at RVA 0x${dataRva.toString(16)}.`);
       break;
     }
     if (!recordDecodedInstruction(state, instr, instrRva)) break;
@@ -208,6 +205,7 @@ const decodeLinearRun = async (
  *   (return to next instruction).
  */
 export async function disassembleControlFlowForInstructionSets(opts: {
+  crossedData?: ReturnType<typeof createCodeExclusionIndex>;
   iced: IcedX86Module;
   bitness: 32 | 64;
   imageBase: bigint;
@@ -247,6 +245,9 @@ export async function disassembleControlFlowForInstructionSets(opts: {
   }
 
   const state: ControlFlowDecodeState = {
+    crossedData: opts.crossedData ?? createCodeExclusionIndex([...opts.dataRvas ?? []].map(rva => ({
+      start: opts.imageBase + BigInt(rva), end: opts.imageBase + BigInt(rva) + 1n
+    }))),
     iced: opts.iced,
     imageBase: opts.imageBase,
     bytesSampled,
@@ -260,7 +261,6 @@ export async function disassembleControlFlowForInstructionSets(opts: {
     ...(opts.onYield ? { onYield: opts.onYield } : {}),
     ...(opts.onInstruction ? { onInstruction: opts.onInstruction } : {}),
     ...(opts.isNoReturnCall ? { isNoReturnCall: opts.isNoReturnCall } : {}),
-    ...(opts.dataRvas ? { dataRvas: opts.dataRvas } : {}),
     bytesDecoded: 0,
     instructionCount: 0,
     invalidInstructionCount: 0,

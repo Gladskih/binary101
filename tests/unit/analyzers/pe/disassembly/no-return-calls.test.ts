@@ -57,7 +57,7 @@ void test("an exported data object cannot be inferred as a noReturn import thunk
 
   assert.equal(report.instructionCount, 3);
   assert.equal(report.instructionSets.some(feature => feature.id === "SSE"), true);
-  assert.deepEqual(report.issues, ["Stopped before exported data at RVA 0x1012."]);
+  assert.deepEqual(report.issues, ["Stopped before known data at RVA 0x1012."]);
 });
 
 void test("an unmapped direct call target does not suppress the caller continuation", async () => {

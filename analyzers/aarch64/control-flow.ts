@@ -8,6 +8,7 @@ import type {
 } from "../elf/disassembly-types.js";
 import { recordAarch64Requirements } from "./instruction-set-usage.js";
 import { createAarch64SpecialInstructionCollector } from "./special-instructions.js";
+import { createCodeExclusionIndex } from "../code-exclusions.js";
 
 type Aarch64ControlFlowReport = Pick<ElfInstructionSetReport,
   "bytesSampled" | "bytesDecoded" | "instructionCount" | "invalidInstructionCount" |
@@ -63,8 +64,10 @@ export const walkAarch64ControlFlow = async (
   decoder: Disassembler,
   readCode: (address: bigint) => Promise<Uint8Array>,
   entrypoints: bigint[],
-  opts: Pick<AnalyzeElfInstructionSetOptions, "signal" | "onProgress" | "yieldEveryInstructions">,
-  report: Aarch64ControlFlowReport
+  opts: Pick<AnalyzeElfInstructionSetOptions,
+    "signal" | "onProgress" | "yieldEveryInstructions" | "dataRanges">,
+  report: Aarch64ControlFlowReport,
+  crossedData = createCodeExclusionIndex(opts.dataRanges)
 ): Promise<void> => {
   const pending = [...entrypoints];
   const visit = createAarch64VisitedTracker();
@@ -80,6 +83,11 @@ export const walkAarch64ControlFlow = async (
     while (!opts.signal?.aborted) {
       const address = nextUnvisitedAddress(pending, visit, report.issues);
       if (address === undefined) break;
+      const dataAddress = crossedData(address, 4);
+      if (dataAddress != null) {
+        report.issues.push(`Stopped before known data at address 0x${dataAddress.toString(16)}.`);
+        continue;
+      }
       const bytes = readWindow(address);
       recordBytes(decode, bytes instanceof Uint8Array ? bytes : await bytes,
         address, pending, report, usage, special);

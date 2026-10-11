@@ -13,11 +13,17 @@ const dataSpecialNames = new Set(["vtable for ", "VTT for ", "typeinfo for ",
   "typeinfo name for ", "guard variable for ", "reference temporary for ",
   "template parameter object for "]);
 
-const decodedName = (result: DemangleWithTextResult): ItaniumName | null => {
+const decodedName = (result: DemangleWithTextResult, name: string): ItaniumName | null => {
   if (result.status === "error" || result.status === "limit") {
     throw new Error(result.warnings.join("; ") || result.status);
   }
   if (result.status !== "success") return null;
+  // Legacy Rust shares Itanium nested-name spelling but omits function signatures.
+  // Ambiguous names must not be promoted into positive data evidence.
+  // https://doc.rust-lang.org/nightly/nightly-rustc/src/rustc_symbol_mangling/legacy.rs.html
+  if (name.startsWith("_ZN") && /17h[0-9a-f]{16}E$/.test(name)) {
+    return { text: result.text, symbolKind: undefined };
+  }
   const root = result.ast.nodes[result.ast.root];
   return { text: result.text, symbolKind: root && (dataNames.has(root.kind) ||
     (root.kind === "SpecialName" && dataSpecialNames.has(root.special)))
@@ -41,7 +47,7 @@ export const createItaniumNameDecoder = (
     const result = (async () => {
       try {
         pending ??= loadDemangler();
-        return decodedName(parse(await pending));
+        return decodedName(parse(await pending), name);
       } catch (error) {
         if (!unavailable) {
           unavailable = true;

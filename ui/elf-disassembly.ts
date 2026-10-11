@@ -147,6 +147,10 @@ export const createElfDisassemblyController = (
       try {
         const report = await analyze(file, {
           machine: elf.header.machine,
+          fileType: elf.header.type,
+          ...(elf.dynSymbols ? { dynSymbols: elf.dynSymbols } : {}),
+          ...(elf.symbolTables ? { symbolTables: elf.symbolTables } : {}),
+          ...(elf.relocations ? { relocations: elf.relocations } : {}),
           is64Bit: elf.is64,
           littleEndian: elf.littleEndian,
           entrypointVaddr: elf.header.entry,

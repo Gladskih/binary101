@@ -1,7 +1,10 @@
 "use strict";
 
 import type { X86SpecialInstructionFinding } from "../x86/special-instructions.js";
-import type { ElfProgramHeader, ElfSectionHeader } from "./types.js";
+import type { ElfProgramHeader, ElfSectionHeader, ElfDynamicSymbolInfo } from "./types.js";
+import type { ElfSymbolTable } from "./symbol-tables.js";
+import type { ElfRelocationInfo } from "./relocation-types.js";
+import type { CodeExclusion } from "../code-exclusions.js";
 import type { NativeAotMetadata } from "../native-aot/format.js";
 import type { FeatureRequirements } from "llvm-aarch64-disasm";
 import type { Aarch64SpecialInstructionFinding } from "../aarch64/special-instructions.js";
@@ -15,6 +18,7 @@ export interface ElfInstructionSetUsage {
 }
 
 export interface ElfDisassemblySeedSourceStats {
+  skippedData?: number;
   source: string;
   candidates: number;
   added: number;
@@ -45,6 +49,11 @@ export interface ElfInstructionSetReport {
 }
 
 export interface AnalyzeElfInstructionSetOptions {
+  fileType?: number;
+  dynSymbols?: ElfDynamicSymbolInfo;
+  symbolTables?: ElfSymbolTable[];
+  relocations?: ElfRelocationInfo;
+  dataRanges?: readonly CodeExclusion[];
   machine: number;
   is64Bit: boolean;
   littleEndian: boolean;

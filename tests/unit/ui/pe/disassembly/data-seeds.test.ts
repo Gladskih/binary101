@@ -89,7 +89,7 @@ void test("a parsed PE stops entrypoint fallthrough at its exported data object"
 
   assert.equal(report.instructionCount, 20);
   assert.deepEqual(report.instructionSets.map(feature => feature.id), ["INTEL8086", "X64"]);
-  assert.deepEqual(report.issues, ["Stopped before exported data at RVA 0x1010."]);
+  assert.deepEqual(report.issues, ["Stopped before known data at RVA 0x1010."]);
 });
 
 void test("a parsed PE resolves noReturn metadata at the second IAT slot", async () => {

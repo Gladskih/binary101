@@ -62,11 +62,16 @@ void test("elf disassembly controller updates progress and renders when complete
     elfInstructionSetsProgressText: text
   });
   const elf = createMinimalElf();
+  elf.symbolTables = [];
+  elf.dynSymbols = { total: 0, importSymbols: [], exportSymbols: [], issues: [] };
+  elf.relocations = { tables: [], entries: [], issues: [] };
   const file = new MockFile(new Uint8Array([0x90]), "elf.bin");
   const parseResult: ParseForUiResult = { analyzer: "elf", parsed: elf };
   const renders: ParseForUiResult[] = [];
   const panelRenders: ElfParseResult[] = [];
   const analyze = async (_file: File, opts: AnalyzeElfInstructionSetOptions): Promise<ElfInstructionSetReport> => {
+    assert.deepEqual([opts.fileType, opts.symbolTables, opts.dynSymbols, opts.relocations],
+      [elf.header.type, elf.symbolTables, elf.dynSymbols, elf.relocations]);
     opts.onProgress?.({
       stage: "loading",
       bytesSampled: 10,

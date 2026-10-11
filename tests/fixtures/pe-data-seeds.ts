@@ -2,12 +2,12 @@
 
 import { MsvcRttiPeFixtureBuilder } from "./pe-msvc-rtti-fixture.js";
 
-export const createPeDataSeedFixture = () => {
+export const createPeDataSeedFixture = (names = [["?f@@YAHH@Z"],
+  ["?value@demo@@3HA", "PlainAlias"], ["??_7Widget@@6B@"],
+  ["?value@demo@@3HAtrailing"], ["PlainC"], [], ["?broken"]]) => {
   const builder = new MsvcRttiPeFixtureBuilder();
   const type = builder.addType(".?AVSeedFixture@@");
   const hierarchy = builder.addHierarchy(type);
-  const names = [["?f@@YAHH@Z"], ["?value@demo@@3HA", "PlainAlias"],
-    ["??_7Widget@@6B@"], ["?value@demo@@3HAtrailing"], ["PlainC"], [], ["?broken"]];
   const targets = names.map(() => builder.allocateFunctionTarget());
   builder.addVftable(hierarchy, targets);
   // Intentionally misleading data in executable .text: VADDPS / RET and MOVAPS / RET.

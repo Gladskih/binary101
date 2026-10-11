@@ -5,6 +5,7 @@ import { notifyAarch64Progress, walkAarch64ControlFlow } from "../aarch64/contro
 import type { AnalyzeElfInstructionSetOptions, ElfInstructionSetReport } from "./disassembly-types.js";
 import { collectElfInstructionSetSeeds } from "./disassembly-entrypoints.js";
 import { getElfExecutableRegions, findElfRegionContainingVaddr, type ElfExecutableRegion } from "./executable-regions.js";
+import { createCodeExclusionIndex } from "../code-exclusions.js";
 
 const boundRegions = (file: File, opts: AnalyzeElfInstructionSetOptions, issues: string[]) =>
   getElfExecutableRegions(opts.programHeaders, opts.sections).flatMap(region => {
@@ -35,14 +36,14 @@ const createCodeReader = (file: File, regions: ElfExecutableRegion[]) => {
 
 export const analyzeAarch64InstructionSets = async (
   file: File,
-  opts: AnalyzeElfInstructionSetOptions
+  opts: AnalyzeElfInstructionSetOptions, crossedData = createCodeExclusionIndex(opts.dataRanges)
 ): Promise<ElfInstructionSetReport> => {
   const report: ElfInstructionSetReport = {
     bitness: 64, decoderVersion: `LLVM ${llvmVersion}`, bytesSampled: 0, bytesDecoded: 0,
     instructionCount: 0, invalidInstructionCount: 0, instructionSets: [], issues: []
   };
   try {
-    await analyzeCode(file, opts, report);
+    await analyzeCode(file, opts, report, crossedData);
   } catch (error) {
     report.issues.push(`AArch64 disassembly failed (${String(error)}).`);
   }
@@ -51,7 +52,8 @@ export const analyzeAarch64InstructionSets = async (
 };
 
 const analyzeCode = async (
-  file: File, opts: AnalyzeElfInstructionSetOptions, report: ElfInstructionSetReport
+  file: File, opts: AnalyzeElfInstructionSetOptions, report: ElfInstructionSetReport,
+  crossedData: ReturnType<typeof createCodeExclusionIndex>
 ): Promise<void> => {
   const regions = boundRegions(file, opts, report.issues);
   report.bytesSampled = regions.reduce((sum, region) => sum + Number(region.fileSize), 0);
@@ -60,7 +62,7 @@ const analyzeCode = async (
     return;
   }
   const seeds = await collectElfInstructionSetSeeds(file, opts, regions,
-    regions.map(region => ({ vaddrStart: region.vaddr, label: region.label })), report.issues);
+    regions.map(region => ({ vaddrStart: region.vaddr, label: region.label })), report.issues, crossedData);
   if (!seeds) return;
   report.seedSummary = seeds.seedSummary;
   notifyAarch64Progress(opts, report, "loading");
@@ -69,5 +71,5 @@ const analyzeCode = async (
     return;
   }
   await walkAarch64ControlFlow(await loadAarch64Disassembler(), createCodeReader(file, regions),
-    seeds.entrypoints, opts, report);
+    seeds.entrypoints, opts, report, crossedData);
 };

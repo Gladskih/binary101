@@ -13,11 +13,14 @@ import { createX86InstructionSetUsageTracker } from "../x86/instruction-set-usag
 import { collectElfInstructionSetSeeds } from "./disassembly-entrypoints.js";
 import { sampleElfExecutableRegions, type ElfSampledSection } from "./disassembly-sampling.js";
 import { createX86SpecialInstructionCollector } from "../x86/special-instructions.js";
+import { collectElfCodeExclusions } from "./code-exclusions.js";
+import { createCodeExclusionIndex } from "../code-exclusions.js";
 
 const ELF_MACHINE_I386 = 3;
 const ELF_MACHINE_X86_64 = 62;
 
 type ElfInstructionSetDecodeRun = {
+  crossedData: ReturnType<typeof createCodeExclusionIndex>;
   iced: IcedX86Module;
   bitness: 32 | 64;
   sampledSections: ElfSampledSection[];
@@ -51,17 +54,26 @@ export async function analyzeElfInstructionSets(
   file: File,
   opts: AnalyzeElfInstructionSetOptions
 ): Promise<ElfInstructionSetReport> {
+  const dataIssues: string[] = [];
+  const prepared = { ...opts, dataRanges: [...opts.dataRanges ?? [],
+    ...collectElfCodeExclusions(opts, file.size, dataIssues)] };
+  const crossedData = createCodeExclusionIndex(prepared.dataRanges);
   // AAELF64, ELF Header: EM_AARCH64 = 183.
   // https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst
   if (opts.machine === 183) {
     const { analyzeAarch64InstructionSets } = await import("./disassembly-aarch64.js");
-    return analyzeAarch64InstructionSets(file, opts);
+    const report = await analyzeAarch64InstructionSets(file, prepared, crossedData);
+    report.issues.unshift(...dataIssues);
+    return report;
   }
-  return analyzeX86InstructionSets(file, opts);
+  const report = await analyzeX86InstructionSets(file, prepared, crossedData);
+  report.issues.unshift(...dataIssues);
+  return report;
 }
 
 async function analyzeX86InstructionSets(
-  file: File, opts: AnalyzeElfInstructionSetOptions
+  file: File, opts: AnalyzeElfInstructionSetOptions,
+  crossedData: ReturnType<typeof createCodeExclusionIndex>
 ): Promise<ElfInstructionSetReport> {
   const issues: string[] = [];
   const machine = opts.machine >>> 0;
@@ -107,7 +119,7 @@ async function analyzeX86InstructionSets(
     issues.push("No bytes available in selected executable segment(s)/section(s) for disassembly.");
     return emptyReport(0);
   }
-  const seeds = await collectElfInstructionSetSeeds(file, opts, regions, sampledSections, issues);
+  const seeds = await collectElfInstructionSetSeeds(file, opts, regions, sampledSections, issues, crossedData);
   if (!seeds) return emptyReport(0);
   const { entrypoints, seedSummary } = seeds;
 
@@ -135,6 +147,7 @@ async function analyzeX86InstructionSets(
     return emptyReport(bytesSampled, seedSummary);
   }
   const decoded = await decodeElfInstructionSetUsage({
+    crossedData,
     iced,
     bitness,
     sampledSections,
@@ -182,6 +195,7 @@ const decodeElfInstructionSetUsage = async (
       bitness: run.bitness,
       sections: run.sampledSections.map(entry => ({ vaddrStart: entry.vaddrStart, data: entry.data })),
       entrypoints: run.entrypoints,
+      crossedData: run.crossedData,
       yieldEveryInstructions: run.yieldEveryInstructions,
       featureCounts: instructionSetUsage.featureCounts,
       onInstruction: specialInstructions.record,

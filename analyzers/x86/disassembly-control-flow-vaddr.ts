@@ -2,6 +2,7 @@
 
 import type { IcedX86Module } from "./disassembly-iced.js";
 import { getNearBranchTarget } from "./disassembly-branch-targets.js";
+import { createCodeExclusionIndex, type CodeExclusion } from "../code-exclusions.js";
 
 type DisassemblySectionVaddr = {
   vaddrStart: bigint;
@@ -19,6 +20,7 @@ type DisassemblyDecoderEntryVaddr = DisassemblySectionVaddr & {
 };
 
 type ControlFlowDecodeStateVaddr = {
+  crossedData: ReturnType<typeof createCodeExclusionIndex>;
   iced: IcedX86Module;
   bytesSampled: number;
   decoders: DisassemblyDecoderEntryVaddr[];
@@ -109,6 +111,11 @@ const decodeLinearRun = async (
     const instrVaddr = BigInt.asUintN(64, instr.ip);
     if (state.visited.has(instrVaddr)) break;
     state.visited.add(instrVaddr);
+    const dataAddress = state.crossedData(instrVaddr, instr.length);
+    if (dataAddress != null) {
+      state.recordDecodeStopIssue(`Stopped before known data at address 0x${dataAddress.toString(16)}.`);
+      break;
+    }
     state.instructionCount += 1;
     const len = instr.length;
     if (len <= 0) {
@@ -162,6 +169,8 @@ const decodeLinearRun = async (
  * as long as the decoded addresses still map back into one of the sampled byte ranges.
  */
 export async function disassembleControlFlowForInstructionSetsVaddr(opts: {
+  crossedData?: ReturnType<typeof createCodeExclusionIndex>;
+  dataRanges?: readonly CodeExclusion[];
   iced: IcedX86Module;
   bitness: 32 | 64;
   sections: DisassemblySectionVaddr[];
@@ -198,6 +207,7 @@ export async function disassembleControlFlowForInstructionSetsVaddr(opts: {
   }
 
   const state: ControlFlowDecodeStateVaddr = {
+    crossedData: opts.crossedData ?? createCodeExclusionIndex(opts.dataRanges),
     iced: opts.iced,
     bytesSampled,
     decoders,

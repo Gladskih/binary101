@@ -31,7 +31,7 @@ void test("ISA stops before an exported data start reached by fallthrough", asyn
   assert.equal(report.instructionCount, 1);
   assert.equal(report.bytesDecoded, 1);
   assert.equal(report.instructionSets.some(feature => feature.id === "SSE"), false);
-  assert.deepEqual(report.issues, ["Stopped before exported data at RVA 0x1001."]);
+  assert.deepEqual(report.issues, ["Stopped before known data at RVA 0x1001."]);
 });
 
 void test("ISA rejects an instruction crossing an exported data start", async () => {
@@ -41,7 +41,7 @@ void test("ISA rejects an instruction crossing an exported data start", async ()
 
   assert.equal(report.instructionCount, 0);
   assert.equal(report.bytesDecoded, 0);
-  assert.deepEqual(report.issues, ["Stopped before exported data at RVA 0x1002."]);
+  assert.deepEqual(report.issues, ["Stopped before known data at RVA 0x1002."]);
 });
 
 void test("an unwind seed does not override exported data evidence, while unrelated code remains", async () => {
@@ -54,7 +54,7 @@ void test("an unwind seed does not override exported data evidence, while unrela
 
   assert.equal(report.instructionCount, 2);
   assert.equal(report.instructionSets.some(feature => feature.id === "SSE"), false);
-  assert.deepEqual(report.issues, ["Stopped before exported data at RVA 0x1001."]);
+  assert.deepEqual(report.issues, ["Unwind RVA 0x1001 points into known data; skipped."]);
 });
 
 void test("a direct call into known exported data is diagnosed instead of decoding the data", async () => {
@@ -66,7 +66,7 @@ void test("a direct call into known exported data is diagnosed instead of decodi
 
   assert.equal(report.instructionCount, 2);
   assert.equal(report.instructionSets.some(feature => feature.id === "SSE"), false);
-  assert.deepEqual(report.issues, ["Stopped before exported data at RVA 0x1008."]);
+  assert.deepEqual(report.issues, ["Stopped before known data at RVA 0x1008."]);
 });
 
 void test("invalid data RVAs are ignored without wrapping into code addresses", async () => {

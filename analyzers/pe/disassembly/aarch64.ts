@@ -7,6 +7,7 @@ import { peSectionNameValue } from "../sections/name.js";
 import { isRvaField, PE_RVA_EXCLUSIVE_LIMIT } from "../layout/rva-limits.js";
 import { isMemoryExecutableSection, resolvePeDisassemblyEntrypoints } from "./sampling.js";
 import type { AnalyzePeInstructionSetOptions, PeInstructionSetReport } from "./types.js";
+import { createPeCodeExclusionIndex } from "./code-exclusions.js";
 
 // PE/COFF: section RVAs and sizes are DWORDs; only raw bytes within VirtualSize are code.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-table-section-headers
@@ -45,8 +46,9 @@ const createCodeReader = (
 };
 
 const resolveSeeds = (
-  opts: AnalyzePeInstructionSetOptions, sections: PeSection[], issues: string[]
-): bigint[] => resolvePeDisassemblyEntrypoints({ ...opts, sections }, issues).flatMap(rva => {
+  opts: AnalyzePeInstructionSetOptions, sections: PeSection[], issues: string[],
+  crossedData: ReturnType<typeof createPeCodeExclusionIndex>
+): bigint[] => resolvePeDisassemblyEntrypoints({ ...opts, sections }, issues, crossedData).flatMap(rva => {
   if (!sections.some(section => rva >= section.virtualAddress &&
       rva < section.virtualAddress + section.sizeOfRawData)) {
     issues.push(`Skipped RVA 0x${rva.toString(16)} outside executable file-backed bytes.`);
@@ -71,14 +73,16 @@ const analyzeCode = async (
     report.issues.push("No executable bytes available for AArch64 disassembly.");
     return;
   }
-  const seeds = resolveSeeds(opts, sections, report.issues);
+  const crossedData = createPeCodeExclusionIndex(opts);
+  const seeds = resolveSeeds(opts, sections, report.issues, crossedData);
   notifyAarch64Progress(opts, report, "loading");
   if (opts.signal?.aborted) {
     report.issues.push("Disassembly cancelled.");
     return;
   }
   await walkAarch64ControlFlow(await loadAarch64Disassembler(),
-    createCodeReader(reader, sections, opts.imageBase), seeds, opts, report);
+    createCodeReader(reader, sections, opts.imageBase), seeds,
+    opts, report, crossedData);
 };
 
 export const analyzePeAarch64InstructionSets = async (

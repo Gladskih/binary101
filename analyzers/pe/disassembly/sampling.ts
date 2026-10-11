@@ -6,6 +6,7 @@ import { peSectionNameValue } from "../sections/name.js";
 import { isRvaField } from "../layout/rva-limits.js";
 import type { PeSection } from "../types.js";
 import type { AnalyzePeInstructionSetOptions } from "./types.js";
+import { createPeCodeExclusionIndex } from "./code-exclusions.js";
 
 const IMAGE_SCN_CNT_CODE = 0x00000020; // Microsoft PE format: IMAGE_SCN_CNT_CODE.
 const IMAGE_SCN_MEM_EXECUTE = 0x20000000; // Microsoft PE format: IMAGE_SCN_MEM_EXECUTE.
@@ -63,17 +64,20 @@ export const uniqueU32s = (values: number[]): number[] => {
   return out;
 };
 
-export const resolvePeDisassemblyEntrypoints = (
-  opts: AnalyzePeInstructionSetOptions,
-  issues: string[]
-): number[] => {
-  const resolvedEntrypoints: number[] = [];
+const createPeEntrypointAdder = (
+  opts: AnalyzePeInstructionSetOptions, resolvedEntrypoints: number[], issues: string[],
+  crossedData: ReturnType<typeof createPeCodeExclusionIndex>
+) => {
   const resolvedEntrypointsSet = new Set<number>();
   const firstSectionRva =
     opts.sections.reduce((min, section) => Math.min(min, section.virtualAddress >>> 0), 0xffff_ffff);
-  const addEntrypoint = (source: string, rva: number): void => {
+  return (source: string, rva: number): void => {
     const normalized = rva >>> 0;
     if (resolvedEntrypointsSet.has(normalized)) return;
+    if (crossedData(opts.imageBase + BigInt(normalized), 1) != null) {
+      issues.push(`${source} RVA 0x${normalized.toString(16)} points into known data; skipped.`);
+      return;
+    }
     const off = opts.rvaToOff(normalized);
     if (off == null) {
       issues.push(`${source} RVA 0x${normalized.toString(16)} could not be mapped to a file offset.`);
@@ -94,10 +98,24 @@ export const resolvePeDisassemblyEntrypoints = (
     resolvedEntrypointsSet.add(normalized);
     resolvedEntrypoints.push(normalized);
   };
+};
+
+export const resolvePeDisassemblyEntrypoints = (
+  opts: AnalyzePeInstructionSetOptions, issues: string[],
+  crossedData = createPeCodeExclusionIndex(opts)
+): number[] => {
+  const resolvedEntrypoints: number[] = [];
+  const addEntrypoint = createPeEntrypointAdder(opts, resolvedEntrypoints, issues, crossedData);
   for (const group of createPeEntrypointGroups(opts)) {
     for (const rva of group.rvas) addEntrypoint(group.source, rva);
   }
-  if (resolvedEntrypoints.length === 0) addFallbackEntrypoint(opts.sections, resolvedEntrypoints, issues);
+  if (resolvedEntrypoints.length === 0) {
+    addFallbackEntrypoint(opts.sections, resolvedEntrypoints, issues);
+    if (resolvedEntrypoints.some(rva => crossedData(opts.imageBase + BigInt(rva), 1) != null)) {
+      resolvedEntrypoints.length = 0;
+      issues.push("Fallback entry point is known data; skipped.");
+    }
+  }
   return resolvedEntrypoints;
 };
 

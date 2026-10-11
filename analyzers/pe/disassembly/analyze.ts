@@ -1,4 +1,5 @@
 "use strict";
+import { createPeCodeExclusionIndex } from "./code-exclusions.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { AnalyzePeInstructionSetOptions, PeInstructionSetProgress, PeInstructionSetReport } from "./types.js";
 import { disassembleControlFlowForInstructionSets } from "../../x86/disassembly-control-flow.js";
@@ -10,7 +11,6 @@ import { getCanonicalPeMachine } from "../machine.js";
 import { createX86InstructionSetUsageTracker } from "../../x86/instruction-set-usage.js";
 import {
   collectPeDisassemblySamples,
-  normalizeRvaList,
   type PeDisassemblySample,
   resolvePeDisassemblyEntrypoints
 } from "./sampling.js";
@@ -24,6 +24,7 @@ import { createPeSpecialInstructionCollector } from "./special-instructions.js";
 import { createPeNoReturnCallPredicate } from "./no-return-calls.js";
 
 type PeInstructionSetDecodeRun = {
+  crossedData: ReturnType<typeof createPeCodeExclusionIndex>;
   reader: FileRangeReader;
   iced: IcedX86Module;
   bitness: 32 | 64;
@@ -106,7 +107,9 @@ export async function analyzePeInstructionSets(
     issues.push("Machine is I386 but optional header reports 64-bit mode.");
   }
   const directIatSlotRvas = collectRequestedDirectIatSlots(opts, issues);
-  const resolvedEntrypoints = resolvePeDisassemblyEntrypoints(opts, issues);
+  const crossedData = createPeCodeExclusionIndex({ ...opts,
+    imageBase: opts.imageBase >= 0n ? opts.imageBase : 0n });
+  const resolvedEntrypoints = resolvePeDisassemblyEntrypoints(opts, issues, crossedData);
   if (!resolvedEntrypoints.length) return emptyReport(0);
   if (opts.signal?.aborted) {
     issues.push("Disassembly cancelled.");
@@ -149,6 +152,7 @@ export async function analyzePeInstructionSets(
     return emptyReport(bytesSampled);
   }
   const decoded = await decodePeInstructionSetUsage({
+    crossedData,
     reader,
     iced,
     bitness,
@@ -219,9 +223,9 @@ const decodePeInstructionSetUsage = async (
       yieldEveryInstructions: run.yieldEveryInstructions,
       featureCounts: instructionSetUsage.featureCounts,
       issues: run.issues,
-      dataRvas: new Set(normalizeRvaList(run.opts.dataRvas)),
+      crossedData: run.crossedData,
       isNoReturnCall: createPeNoReturnCallPredicate(iced,
-        { ...run.opts, imageBase }, sampledSections),
+        { ...run.opts, imageBase }, sampledSections, run.crossedData),
       ...(run.opts.signal ? { signal: run.opts.signal } : {}),
       onInstruction: instruction => {
         specialInstructions.record(instruction);
