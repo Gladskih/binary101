@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "imports": {
-    "#msvc-rtti-demangler-loader": "./analyzers/pe/msvc-rtti/load-demangler.node.ts",
+    "#msvc-demangler-loader": "./analyzers/pe/msvc-demangle/load.node.ts",
     "#aarch64-disassembler-loader": "./analyzers/aarch64/load-disassembler.node.ts"
   },
   "license": "MIT",

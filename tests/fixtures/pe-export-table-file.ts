@@ -2,7 +2,9 @@
 
 import { createHeadersOnlyPeWithAlignedImageSize } from "./minimal-pe-headers.js";
 
-export const createPagedPeExportsFile = (): Uint8Array<ArrayBuffer> => {
+export const createPagedPeExportsFile = (
+  names: readonly [string, string] = ["Alpha<", "Beta&lt;"]
+): Uint8Array<ArrayBuffer> => {
   const bytes = new Uint8Array(4096);
   bytes.set(createHeadersOnlyPeWithAlignedImageSize());
   const view = new DataView(bytes.buffer);
@@ -24,11 +26,11 @@ export const createPagedPeExportsFile = (): Uint8Array<ArrayBuffer> => {
   view.setUint32(directory + 32, namePointers, true);
   view.setUint32(directory + 36, ordinals, true);
   view.setUint32(namePointers, 2300, true);
-  view.setUint32(namePointers + 4, 2320, true);
+  view.setUint32(namePointers + 4, 2400, true);
   view.setUint16(ordinals, 250, true);
   view.setUint16(ordinals + 2, 250, true);
   view.setUint32(eat + 250 * 4, 3000, true);
-  bytes.set(new TextEncoder().encode("Alpha<\0"), 2300);
-  bytes.set(new TextEncoder().encode("Beta&lt;\0"), 2320);
+  bytes.set(new TextEncoder().encode(`${names[0]}\0`), 2300);
+  bytes.set(new TextEncoder().encode(`${names[1]}\0`), 2400);
   return bytes;
 };

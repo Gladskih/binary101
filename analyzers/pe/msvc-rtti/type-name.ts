@@ -1,7 +1,7 @@
 "use strict";
 
 import type { Demangler } from "llvm-msvc-demangle";
-import { loadMsvcRttiDemangler } from "#msvc-rtti-demangler-loader";
+import { loadMsvcDemangler } from "#msvc-demangler-loader";
 import type { MsvcRttiImage } from "./image.js";
 import type { MsvcRttiTypeDescriptor } from "./types.js";
 
@@ -12,7 +12,7 @@ const typeNames = new WeakMap<MsvcRttiTypeDescriptor, string>();
 export class MsvcRttiDemangleError extends Error {}
 
 export const createMsvcRttiTypeNameDecoder = (
-  loadDemangler: () => Promise<Demangler> = loadMsvcRttiDemangler
+  loadDemangler: () => Promise<Demangler> = loadMsvcDemangler
 ) => {
   // A trapped instance is quarantined by the package. Each image gets its own instance
   // so a malformed file cannot poison later analyses. Initialization is lazy and shared.

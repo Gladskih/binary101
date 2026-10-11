@@ -4,6 +4,7 @@ import type { FileRangeReader } from "../../file-range-reader.js";
 import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import { readMappedNullTerminatedAsciiString } from "../strings/mapped-ascii-string.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
+import { createPeExportNameDecoder } from "./export-names.js";
 
 export type PeExportEntry = {
   ordinal: number;
@@ -32,8 +33,6 @@ type ExportDirectoryHeader = {
   AddressOfFunctions: number; AddressOfNames: number;
   AddressOfNameOrdinals: number;
 };
-
-type ExportFunctionNameRead = { text: string; terminated: boolean };
 
 const createEmptyExportDirectory = (issues: string[]): PeExportDirectoryResult => ({
   flags: 0, timestamp: 0, version: 0, dllName: "", Base: 0,
@@ -76,6 +75,7 @@ const readExportNameMap = async (
   issues: string[]
 ): Promise<Map<number, string[]>> => {
   const functionNames = new Map<number, string[]>();
+  const decodeName = createPeExportNameDecoder(issues);
   let previousExportName: string | null = null;
   let canCheckNameSorting = header.NumberOfNames > 1;
   let namePointerTableIsSorted = true;
@@ -98,9 +98,10 @@ const readExportNameMap = async (
       continue;
     }
     if (exportName != null) {
-      const names = functionNames.get(funcIndex);
-      if (names) names.push(exportName.text);
-      else functionNames.set(funcIndex, [exportName.text]);
+      const names = functionNames.get(funcIndex) ?? [];
+      names.push(exportName.text);
+      functionNames.set(funcIndex, names);
+      if (exportName.terminated) await decodeName(names, names.length - 1);
     }
   }
   if (canCheckNameSorting && !namePointerTableIsSorted) {
@@ -114,7 +115,7 @@ const readExportFunctionName = async (
   rvaToOff: RvaToOffset,
   nameRva: number,
   issues: string[]
-): Promise<ExportFunctionNameRead | null> => {
+): Promise<{ text: string; terminated: boolean } | null> => {
   const nameOffset = rvaToOff(nameRva);
   if (nameOffset == null || nameOffset < 0 || nameOffset >= reader.size) {
     if (nameRva) issues.push("Export name RVA does not map to file data.");

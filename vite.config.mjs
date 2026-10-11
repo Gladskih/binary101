@@ -37,8 +37,8 @@ export default defineConfig({
   base: "./",
   resolve: {
     alias: {
-      "#msvc-rtti-demangler-loader": fileURLToPath(
-        new URL("./analyzers/pe/msvc-rtti/load-demangler.browser.ts", import.meta.url)
+      "#msvc-demangler-loader": fileURLToPath(
+        new URL("./analyzers/pe/msvc-demangle/load.browser.ts", import.meta.url)
       ),
       "#aarch64-disassembler-loader": fileURLToPath(
         new URL("./analyzers/aarch64/load-disassembler.browser.ts", import.meta.url)

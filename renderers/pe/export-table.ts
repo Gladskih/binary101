@@ -1,6 +1,7 @@
 "use strict";
 
 import type { PeExportEntry } from "../../analyzers/pe/directories/exports.js";
+import { getPeExportDisplayName } from "../../analyzers/pe/directories/export-names.js";
 import type { TypeLibraryExportMatch } from
   "../../analyzers/pe/resources/type-library-export-links.js";
 import { hex } from "../../binary-utils.js";
@@ -10,6 +11,11 @@ import type { PagedSortableTableModel } from "../paged-sortable-table.js";
 export const EXPORT_TABLE_ID = "pe-exports";
 // Preserve literal entity-like sequences in symbol names and forwarded targets.
 const exportText = (value: string): string => escapeHtml(value.replaceAll("&", "&amp;"));
+const renderExportName = (entry: PeExportEntry, name: string, index: number): string => {
+  const display = getPeExportDisplayName(entry.names, index);
+  return display === name ? exportText(name) :
+    `<code>${exportText(display)}</code><br><code class="dim">${exportText(name)}</code>`;
+};
 const exportSortValue = (
   entry: PeExportEntry, index: number, column: number, links: Map<number, string[]>
 ): string => {
@@ -51,7 +57,8 @@ export const createExportTableModel = (
     return { cells: [
       { html: String(index + 1), className: "peNumeric" },
       { html: String(entry.ordinal), className: "peNumeric" },
-      { html: entry.names.length ? entry.names.map(exportText).join("<br>") : "-" },
+      { html: entry.names.length
+        ? entry.names.map((name, index) => renderExportName(entry, name, index)).join("<br>") : "-" },
       { html: hex(entry.rva, 8), className: "peNumeric", sortValue: String(entry.rva) },
       { html: entry.forwarder ? exportText(entry.forwarder) : "-" },
       ...(matches.length ? [{ html: links.get(entry.ordinal)?.map(exportText).join("<br>") ?? "-" }] : [])

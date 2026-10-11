@@ -44,10 +44,10 @@ void test("initialization is shared within an image and isolated between images"
   let loads = 0;
   const decode = createMsvcRttiTypeNameDecoder(async () => {
     loads += 1;
-    const { loadMsvcRttiDemangler } = await import(
-      "../../../../../analyzers/pe/msvc-rtti/load-demangler.node.js"
+    const { loadMsvcDemangler } = await import(
+      "../../../../../analyzers/pe/msvc-demangle/load.node.js"
     );
-    return loadMsvcRttiDemangler();
+    return loadMsvcDemangler();
   });
   const image = createImage();
   const first = { rva: 0x2100, decoratedName: ".?AVFirst@@" };
@@ -124,10 +124,10 @@ void test("initialization errors are retained per image and a later file can rec
   const decode = createMsvcRttiTypeNameDecoder(async () => {
     loads += 1;
     if (loads === 1) throw new Error("WASM unavailable");
-    const { loadMsvcRttiDemangler } = await import(
-      "../../../../../analyzers/pe/msvc-rtti/load-demangler.node.js"
+    const { loadMsvcDemangler } = await import(
+      "../../../../../analyzers/pe/msvc-demangle/load.node.js"
     );
-    return loadMsvcRttiDemangler();
+    return loadMsvcDemangler();
   });
   const image = createImage();
   const type = { rva: 0x2100, decoratedName: ".?AVRecovered@@" };

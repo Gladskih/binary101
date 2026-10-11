@@ -4,6 +4,48 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createExportTableModel } from "../../../../renderers/pe/export-table.js";
 import { renderAutoPagedSortableTable } from "../../../../renderers/paged-sortable-table.js";
+import { parsePe, isPeWindowsParseResult } from "../../../../analyzers/pe/index.js";
+import { createPagedPeExportsFile } from "../../../fixtures/pe-export-table-file.js";
+
+void test("export table shows complete LLVM signatures while preserving original aliases", async () => {
+  const pe = await parsePe(new File([
+    createPagedPeExportsFile(["??$square@H@demo@@YAHH@Z", "?f@@YAHH@Ztail"])
+  ], "exports.dll"));
+  assert.ok(pe && isPeWindowsParseResult(pe) && pe.exports);
+
+  const model = createExportTableModel(pe.exports.entries);
+
+  assert.match(model.rowAt(250)?.cells[2]?.html ?? "", /int __cdecl demo::square&lt;int>\(int\)/);
+  assert.match(model.rowAt(250)?.cells[2]?.html ?? "", /\?\?\$square@H@demo@@YAHH@Z/);
+  assert.match(model.rowAt(250)?.cells[2]?.html ?? "", /\?f@@YAHH@Ztail/);
+  assert.doesNotMatch(model.rowAt(250)?.cells[2]?.html ?? "", /int __cdecl f\(int\)/);
+  assert.equal(model.sortValueAt(250, 2), "??$square@H@demo@@YAHH@Z\n?f@@YAHH@Ztail");
+});
+
+void test("an unterminated export name is preserved without a guessed signature", async () => {
+  const name = "?f@@YAHH@Z";
+  // The fixture places its first name at 2300. Remove its NUL and all later file data.
+  const bytes = createPagedPeExportsFile([name, "PlainAlias"]).slice(0, 2300 + name.length);
+
+  const pe = await parsePe(new File([bytes], "truncated-exports.dll"));
+
+  assert.ok(pe && isPeWindowsParseResult(pe) && pe.exports);
+  assert.equal(createExportTableModel(pe.exports.entries).rowAt(250)?.cells[2]?.html, name);
+  assert.ok(pe.exports.issues.includes("Export name string truncated."));
+});
+
+void test("a terminated alias does not hide an identical unterminated alias", async () => {
+  const name = "?f@@YAHH@Z";
+  // The second alias starts at 2400; leave the first terminated and truncate the second.
+  const bytes = createPagedPeExportsFile([name, name]).slice(0, 2400 + name.length);
+
+  const pe = await parsePe(new File([bytes], "truncated-alias.dll"));
+
+  assert.ok(pe && isPeWindowsParseResult(pe) && pe.exports);
+  assert.equal(createExportTableModel(pe.exports.entries).rowAt(250)?.cells[2]?.html,
+    "<code>int __cdecl f(int)</code><br><code class=\"dim\">?f@@YAHH@Z</code><br>?f@@YAHH@Z");
+  assert.ok(pe.exports.issues.includes("Export name string truncated."));
+});
 
 void test("export table preserves and escapes aliases and forwarders", () => {
   const model = createExportTableModel([
